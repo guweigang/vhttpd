@@ -1,0 +1,42 @@
+{
+    "name": "vhttpd/examples-codex-bot",
+    "description": "Codex bot example tests",
+    "type": "project",
+    "authors": [
+        {
+            "name": "weigang",
+            "email": "guweigang@bullsoft.org"
+        }
+    ],
+    "require-dev": {
+        "pestphp/pest": "^4.0"
+    },
+    "replace": {
+        "pestphp/pest-plugin-mutate": "4.0.1"
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "post-install-cmd": [
+            "@php scripts/disable-mutate-plugin.php"
+        ],
+        "post-update-cmd": [
+            "@php scripts/disable-mutate-plugin.php"
+        ],
+        "pest": [
+            "@php scripts/disable-mutate-plugin.php",
+            "vendor/bin/pest -c phpunit.xml"
+        ],
+        "test": [
+            "@pest"
+        ]
+    },
+    "config": {
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    }
+}

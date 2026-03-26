@@ -1,0 +1,195 @@
+<section class="hero">
+  <p class="eyebrow">CodexBot Admin Live</p>
+  <h1>{{ title }}</h1>
+  <p class="lede">{{ subtitle }}</p>
+  <p class="flash" data-vphp-flash="info">{{ flash_info }}</p>
+  <p class="flash" data-vphp-flash="error">{{ flash_error }}</p>
+  <div class="meta">
+    <span>request {{ request_path }}</span>
+    <span>generated {{ generated_at }}</span>
+    <span>db {{ db_path }}</span>
+    <span>project_root {{ project_root_dir }}</span>
+  </div>
+  <div class="actions">
+    <button type="button" vphp-click="refresh_dashboard">Refresh Status</button>
+    <button type="button" class="alt" vphp-click="refresh_dashboard">Sync View</button>
+  </div>
+</section>
+
+<section class="grid">
+  <article class="panel">
+    <h2>Projects</h2>
+    <p>{{ project_total }} project rows loaded for the dashboard.</p>
+  </article>
+  <article class="panel">
+    <h2>Bindings</h2>
+    <p>{{ binding_total }} channel bindings loaded.</p>
+  </article>
+  <article class="panel">
+    <h2>Tasks</h2>
+    <p>{{ task_total }} recent tasks loaded.</p>
+  </article>
+  <article class="panel">
+    <h2>Streams</h2>
+    <p>{{ stream_total }} recent stream rows loaded.</p>
+  </article>
+</section>
+
+<section class="grid">
+  <article class="panel">
+    <div class="section-title">
+      <h2>Create Project</h2>
+      <span>live mutation</span>
+    </div>
+    <form vphp-submit="create_project">
+      <label>
+        Project Key
+        <input name="project_key" value="{{ create_project_key }}" placeholder="demo-api">
+      </label>
+      <label>
+        Display Name
+        <input name="name" value="{{ create_project_name }}" placeholder="Demo API">
+      </label>
+      <label>
+        Repo Path
+        <input name="repo_path" value="{{ create_project_repo_path }}" placeholder="{{ empty_project_path_hint }}">
+      </label>
+      <p class="error">{{ create_project_error }}</p>
+      <p class="hint">Leave repo path empty to derive it from `project_root_dir`.</p>
+      <button type="submit" vphp-disable-with="Creating...">Create Project</button>
+    </form>
+  </article>
+
+  <article class="panel">
+    <div class="section-title">
+      <h2>Save Setting</h2>
+      <span>runtime config</span>
+    </div>
+    <form vphp-submit="save_setting">
+      <label>
+        Setting Name
+        <input name="name" value="{{ setting_name }}" placeholder="project_root_dir">
+      </label>
+      <label>
+        Setting Value
+        <textarea name="value">{{ setting_value }}</textarea>
+      </label>
+      <p class="error">{{ setting_error }}</p>
+      <p class="hint">This writes directly to the `settings` table used by the bot runtime.</p>
+      <button type="submit" vphp-disable-with="Saving...">Save Setting</button>
+    </form>
+  </article>
+
+  <article class="panel">
+    <div class="section-title">
+      <h2>Project Session</h2>
+      <span>model / thread / cwd</span>
+    </div>
+    <form vphp-submit="update_project_session">
+      <label>
+        Project Key
+        <input name="project_key" value="{{ project_session_key }}" placeholder="{{ project_session_hint }}">
+      </label>
+      <label>
+        Current Model
+        <input name="current_model" value="{{ project_session_model }}" placeholder="gpt-5.4-codex">
+      </label>
+      <label>
+        Current Thread ID
+        <input name="current_thread_id" value="{{ project_session_thread_id }}" placeholder="thread_abc123">
+      </label>
+      <label>
+        Current Cwd
+        <input name="current_cwd" value="{{ project_session_cwd }}" placeholder="/repo/path">
+      </label>
+      <p class="error">{{ project_session_error }}</p>
+      <p class="hint">This updates the project defaults that the bot and admin pages read back from SQLite.</p>
+      <button type="submit" vphp-disable-with="Updating...">Update Project Session</button>
+    </form>
+  </article>
+
+  <article class="panel">
+    <div class="section-title">
+      <h2>Task Status</h2>
+      <span>live counts</span>
+    </div>
+    <div class="stack">{{raw:task_status_cards_html}}</div>
+  </article>
+
+  <article class="panel">
+    <div class="section-title">
+      <h2>Stream Status</h2>
+      <span>live counts</span>
+    </div>
+    <div class="stack">{{raw:stream_status_cards_html}}</div>
+  </article>
+</section>
+
+<section class="grid">
+  <article class="panel">
+    <div class="section-title">
+      <h2>Projects</h2>
+      <span>latest records</span>
+    </div>
+    <div class="stack">{{raw:project_cards_html}}</div>
+  </article>
+
+  <article class="panel">
+    <div class="section-title">
+      <h2>Bindings</h2>
+      <span>channel routing</span>
+    </div>
+    <div class="stack">{{raw:binding_cards_html}}</div>
+  </article>
+</section>
+
+<section class="grid">
+  <article class="panel">
+    <div class="section-title">
+      <h2>Recent Tasks</h2>
+      <span>status {{ task_filter_label }} | project {{ task_filter_project_label }}</span>
+    </div>
+    <div class="actions">
+      <button type="button" class="alt" vphp-click="set_task_filter" vphp-value-status="all">All</button>
+      <button type="button" class="alt" vphp-click="set_task_filter" vphp-value-status="queued">Queued</button>
+      <button type="button" class="alt" vphp-click="set_task_filter" vphp-value-status="streaming">Streaming</button>
+      <button type="button" class="alt" vphp-click="set_task_filter" vphp-value-status="completed">Completed</button>
+      <button type="button" class="alt" vphp-click="set_task_filter" vphp-value-status="failed">Failed</button>
+      <button type="button" class="alt" vphp-click="filter_tasks_by_project" vphp-value-project_key="">All Projects</button>
+    </div>
+    <div class="stack">{{raw:task_cards_html}}</div>
+  </article>
+
+  <article class="panel">
+    <div class="section-title">
+      <h2>Recent Streams</h2>
+      <span>filter {{ stream_filter_label }}</span>
+    </div>
+    <div class="actions">
+      <button type="button" class="alt" vphp-click="set_stream_filter" vphp-value-status="all">All</button>
+      <button type="button" class="alt" vphp-click="set_stream_filter" vphp-value-status="opened">Opened</button>
+      <button type="button" class="alt" vphp-click="set_stream_filter" vphp-value-status="streaming">Streaming</button>
+      <button type="button" class="alt" vphp-click="set_stream_filter" vphp-value-status="completed">Completed</button>
+      <button type="button" class="alt" vphp-click="set_stream_filter" vphp-value-status="failed">Failed</button>
+    </div>
+    <div class="stack">{{raw:stream_cards_html}}</div>
+  </article>
+
+  <article class="panel">
+    <div class="section-title">
+      <h2>Settings</h2>
+      <span>runtime config</span>
+    </div>
+    <div class="stack">{{raw:setting_cards_html}}</div>
+  </article>
+</section>
+
+<section class="grid">
+  <article class="panel">
+    <div class="section-title">
+      <h2>Tables</h2>
+      <span>sqlite snapshot</span>
+    </div>
+    <div class="stack">{{raw:table_counts_html}}</div>
+  </article>
+</section>

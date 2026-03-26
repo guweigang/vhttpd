@@ -1,0 +1,53 @@
+[server]
+host = "127.0.0.1"
+port = 19881
+
+[files]
+pid_file = "/tmp/vhttpd_${server.port}.pid"
+event_log = "/tmp/vhttpd_${server.port}.events.ndjson"
+
+[runtime]
+timezone = "Asia/Shanghai"
+
+[worker]
+read_timeout_ms = 3000
+autostart = true
+pool_size = 4
+socket_prefix = "${env.VHTTPD_SOCKET_PREFIX:-/tmp/vslim_worker}"
+max_requests = 5000
+restart_backoff_ms = 500
+restart_backoff_max_ms = 8000
+cmd = "php -d extension=/Users/guweigang/Source/vphpx/vslim/vslim.so /Users/guweigang/Source/vhttpd/php/package/bin/php-worker"
+
+[worker.env]
+VHTTPD_APP = "/Users/guweigang/Source/vhttpd/examples/hello-app.php"
+
+[admin]
+host = "127.0.0.1"
+port = 19981
+token = "change-me"
+
+[assets]
+enabled = false
+prefix = "/assets"
+root = "/Users/guweigang/Source/vhttpd/examples/public"
+cache_control = "public, max-age=3600"
+
+[feishu]
+enabled = false
+open_base_url = "https://open.feishu.cn/open-apis"
+reconnect_delay_ms = 3000
+token_refresh_skew_seconds = 60
+recent_event_limit = 20
+
+[feishu.main]
+app_id = "${env.FEISHU_APP_ID:-}"
+app_secret = "${env.FEISHU_APP_SECRET:-}"
+verification_token = "${env.FEISHU_VERIFICATION_TOKEN:-}"
+encrypt_key = "${env.FEISHU_ENCRYPT_KEY:-}"
+
+[feishu.openclaw]
+app_id = "${env.FEISHU_OPENCLAW_APP_ID:-}"
+app_secret = "${env.FEISHU_OPENCLAW_APP_SECRET:-}"
+verification_token = "${env.FEISHU_OPENCLAW_VERIFICATION_TOKEN:-}"
+encrypt_key = "${env.FEISHU_OPENCLAW_ENCRYPT_KEY:-}"

@@ -1,0 +1,38 @@
+[server]
+host = "127.0.0.1"
+port = 19895
+
+[files]
+pid_file = "/tmp/vhttpd_mcp.pid"
+event_log = "/tmp/vhttpd_mcp.events.ndjson"
+
+[worker]
+autostart = true
+pool_size = 2
+socket = "/tmp/vhttpd_mcp_worker.sock"
+read_timeout_ms = 3000
+cmd = "php -d extension=/Users/guweigang/Source/vphpx/vslim/vslim.so /Users/guweigang/Source/vhttpd/php/package/bin/php-worker"
+
+[worker.env]
+VHTTPD_APP = "/Users/guweigang/Source/vhttpd/examples/mcp-app.php"
+
+[admin]
+host = "127.0.0.1"
+port = 19995
+token = ""
+
+[mcp]
+max_sessions = 1000
+max_pending_messages = 128
+session_ttl_seconds = 900
+sampling_capability_policy = "error"
+allowed_origins = [
+  "http://127.0.0.1:19895",
+  "http://localhost:19895",
+]
+
+[assets]
+enabled = false
+prefix = "/assets"
+root = "/Users/guweigang/Source/vhttpd/examples/public"
+cache_control = "public, max-age=3600"

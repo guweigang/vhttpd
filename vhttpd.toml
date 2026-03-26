@@ -1,0 +1,30 @@
+[server]
+host = "127.0.0.1"
+port = 8081
+
+[runtime]
+timezone = "Asia/Shanghai"
+
+[worker]
+autostart = true
+pool_size = 4
+cmd = "php -d extension=/Users/guweigang/Source/vphpx/vslim/vslim.so /Users/guweigang/Source/vhttpd/php/package/bin/php-worker"
+
+[worker.env]
+VHTTPD_APP = "/Users/guweigang/Source/vhttpd/examples/codexbot-app.php"
+
+[feishu]
+enabled = true
+
+[feishu.main]
+app_id = "${env.FEISHU_APP_ID:-}"
+app_secret = "${env.FEISHU_APP_SECRET:-}"
+verification_token = "${env.FEISHU_VERIFICATION_TOKEN:-}"
+encrypt_key = "${env.FEISHU_ENCRYPT_KEY:-}"
+
+[codex]
+enabled = true
+url = "${env.CODEX_URL:-ws://127.0.0.1:4500}"
+approval_policy = "never"
+sandbox = "workspaceWrite"
+flush_interval_ms = 400

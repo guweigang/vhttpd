@@ -1,0 +1,8 @@
+vhttpd
+vhttpd_prod
+.DS_Store
+*.log
+*.db
+*.db-shm
+*.db-wal
+.runtime/
