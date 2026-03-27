@@ -6,3 +6,5 @@ vhttpd_prod
 *.db-shm
 *.db-wal
 .runtime/
+tmp/
+*.vjsbuild/
