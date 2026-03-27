@@ -68,8 +68,11 @@ pub fn KernelDispatchEnvelope.from_websocket_dispatch(frame WorkerWebSocketFrame
 }
 
 fn (mut app App) kernel_dispatch_stream(req StreamDispatchRequest) !StreamDispatchResponse {
-	_ = KernelDispatchEnvelope.from_stream_dispatch(req)
-	return app.worker_backend_dispatch_stream(req)
+	_ = KernelDispatchEnvelope{
+		kind: .stream
+		context: DispatchContext.from_stream_dispatch_provider(req, app.logic_executor_provider())
+	}
+	return app.logic_executor.dispatch_stream(mut app, req)
 }
 
 fn kernel_stream_dispatch_failure(resp StreamDispatchResponse) ?KernelStreamDispatchFailure {
@@ -83,8 +86,11 @@ fn kernel_stream_dispatch_failure(resp StreamDispatchResponse) ?KernelStreamDisp
 }
 
 fn (mut app App) kernel_dispatch_mcp(req WorkerMcpDispatchRequest) !WorkerMcpDispatchResponse {
-	_ = KernelDispatchEnvelope.from_mcp_dispatch(req)
-	return app.worker_backend_dispatch_mcp(req)
+	_ = KernelDispatchEnvelope{
+		kind: .mcp
+		context: DispatchContext.from_mcp_dispatch_provider(req, app.logic_executor_provider())
+	}
+	return app.logic_executor.dispatch_mcp(mut app, req)
 }
 
 fn (mut app App) kernel_dispatch_mcp_handled(req WorkerMcpDispatchRequest) !KernelMcpDispatchOutcome {
@@ -96,7 +102,7 @@ fn (mut app App) kernel_dispatch_mcp_handled(req WorkerMcpDispatchRequest) !Kern
 			command_error:     ''
 		}
 	}
-	ctx := DispatchContext.from_mcp_dispatch(req)
+	ctx := DispatchContext.from_mcp_dispatch_provider(req, app.logic_executor_provider())
 	command_snapshots, command_error := app.execute_command_envelopes(req.id, ctx, resp.commands)
 	return KernelMcpDispatchOutcome{
 		response:          resp
@@ -107,7 +113,7 @@ fn (mut app App) kernel_dispatch_mcp_handled(req WorkerMcpDispatchRequest) !Kern
 
 fn (mut app App) kernel_dispatch_websocket_upstream(req WorkerWebSocketUpstreamDispatchRequest) !WorkerWebSocketUpstreamDispatchResponse {
 	_ = KernelDispatchEnvelope.from_websocket_upstream(req)
-	return app.worker_backend_dispatch_websocket_upstream(req)
+	return app.logic_executor.dispatch_websocket_upstream(mut app, req)
 }
 
 fn (mut app App) kernel_dispatch_websocket_upstream_handled(req WorkerWebSocketUpstreamDispatchRequest) !KernelWebSocketUpstreamDispatchOutcome {
@@ -129,8 +135,11 @@ fn (mut app App) kernel_dispatch_websocket_upstream_handled(req WorkerWebSocketU
 }
 
 fn (mut app App) kernel_dispatch_websocket_event(frame WorkerWebSocketFrame) !WorkerWebSocketDispatchResponse {
-	_ = KernelDispatchEnvelope.from_websocket_dispatch(frame)
-	return app.worker_backend_dispatch_websocket_event(frame)
+	_ = KernelDispatchEnvelope{
+		kind: .websocket_dispatch
+		context: DispatchContext.from_websocket_dispatch_provider(frame, app.logic_executor_provider())
+	}
+	return app.logic_executor.dispatch_websocket_event(mut app, frame)
 }
 
 fn kernel_dispatch_transport_failure(err_msg string) KernelDispatchTransportFailure {

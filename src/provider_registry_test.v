@@ -274,6 +274,33 @@ fn test_provider_runtime_upstream_launches_helper() {
 	assert launches[2].url == 'ws://codex.local/ws'
 }
 
+fn test_provider_runtime_helpers_skip_disabled_feishu_launch_and_gateway_count() {
+	mut app := App{
+		feishu_enabled: false
+		feishu_apps: {
+			'main': FeishuAppConfig{
+				app_id: 'test-app'
+			}
+		}
+		feishu_runtime: {
+			'main': FeishuProviderRuntime{
+				name: 'main'
+			}
+		}
+		codex_runtime: CodexProviderRuntime{
+			enabled: true
+			url:     'ws://codex.local/ws'
+		}
+	}
+	assert app.provider_runtime_instances('feishu') == ['main']
+	assert !app.provider_runtime_ready('feishu')
+	assert app.provider_runtime_gateway_count() == 1
+	assert app.provider_runtime_upstream_provider_names() == ['codex']
+	launches := app.provider_runtime_upstream_launches()
+	assert launches.len == 1
+	assert launches[0].provider == 'codex'
+}
+
 fn test_websocket_upstream_provider_helpers_delegate_to_host_facade() {
 	mut app := App{
 		feishu_enabled: true

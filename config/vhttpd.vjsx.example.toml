@@ -1,0 +1,36 @@
+[paths]
+root = ".."
+vjsx_app = "examples/vjsx/hello-handler.mts"
+vjsx_root = "examples/vjsx"
+web_root = "examples/public"
+
+[server]
+host = "127.0.0.1"
+port = 19882
+
+[files]
+pid_file = "tmp/vhttpd_vjsx_${server.port}.pid"
+event_log = "tmp/vhttpd_vjsx_${server.port}.events.ndjson"
+
+[runtime]
+timezone = "Asia/Shanghai"
+
+[executor]
+kind = "vjsx"
+
+[vjsx]
+app_entry = "${paths.vjsx_app}"
+module_root = "${paths.vjsx_root}"
+runtime_profile = "node"
+thread_count = 2
+
+[admin]
+host = "127.0.0.1"
+port = 19982
+token = "change-me"
+
+[assets]
+enabled = false
+prefix = "/assets"
+root = "${paths.web_root}"
+cache_control = "public, max-age=3600"

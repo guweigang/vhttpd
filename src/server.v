@@ -7,11 +7,12 @@ import veb
 import veb.request_id
 
 #include <time.h>
+
 fn C.tzset()
 
 const vhttpd_version = '0.1.0'
 
-	const known_long_flags = [
+const known_long_flags = [
 	'--help',
 	'--version',
 	'--config',
@@ -31,15 +32,25 @@ const vhttpd_version = '0.1.0'
 	'--worker-sockets',
 	'--worker-pool-size',
 	'--worker-socket-prefix',
+	'--executor',
+	'--php-bin',
+	'--php-worker-entry',
+	'--php-app-entry',
+	'--php-extension',
+	'--php-arg',
+	'--vjsx-entry',
+	'--vjsx-module-root',
+	'--vjsx-runtime-profile',
+	'--vjsx-thread-count',
 	'--admin-host',
 	'--admin-port',
 	'--admin-token',
 	'--feishu-enabled',
 	'--feishu-app-id',
 	'--feishu-app-secret',
-		'--feishu-open-base-url',
-		'--ollama-enabled',
-	]
+	'--feishu-open-base-url',
+	'--ollama-enabled',
+]
 
 fn has_flag(args []string, flags []string) bool {
 	for a in args {
@@ -77,6 +88,16 @@ fn print_vhttpd_help() {
 	println('  --worker-queue-capacity <N>  Max waiting requests before immediate 503')
 	println('  --worker-queue-timeout-ms <N> Max wait time for a worker before 504')
 	println('  --worker-socket-prefix <p>   Advanced override for pool socket prefix')
+	println('  --executor <kind>            php | vjsx')
+	println('  --php-bin <path>             PHP binary for generated php worker command')
+	println('  --php-worker-entry <path>    PHP worker bootstrap script')
+	println('  --php-app-entry <path>       PHP app/bootstrap entry (injects VHTTPD_APP)')
+	println('  --php-extension <path>       PHP extension; repeat to add multiple entries')
+	println('  --php-arg <value>            Extra PHP CLI arg; repeat to add multiple entries')
+	println('  --vjsx-entry <path>          In-proc vjsx app entry (.js/.mjs/.ts/.mts)')
+	println('  --vjsx-module-root <path>    Optional module root for in-proc vjsx')
+	println('  --vjsx-runtime-profile <p>   script | node')
+	println('  --vjsx-thread-count <N>      In-proc vjsx lane count')
 	println('  --feishu-enabled <0|1>')
 	println('  --feishu-app-id <id>')
 	println('  --feishu-app-secret <secret>')
@@ -109,6 +130,162 @@ fn validate_args(args []string) ! {
 	}
 }
 
+struct ExecutorRuntimeSelection {
+	executor               LogicExecutor
+	disable_worker_backend bool
+}
+
+fn shell_quote_arg(raw string) string {
+	if raw == '' {
+		return "''"
+	}
+	return "'" + raw.replace("'", "'\"'\"'") + "'"
+}
+
+fn validate_php_runtime_config(php_cfg PhpConfig) ! {
+	worker_entry := php_cfg.worker_entry.trim_space()
+	if worker_entry == '' {
+		return error('php_worker_entry_missing')
+	}
+	if !os.exists(worker_entry) {
+		return error('php_worker_entry_not_found:${worker_entry}')
+	}
+	app_entry := php_cfg.app_entry.trim_space()
+	if app_entry != '' && !os.exists(app_entry) {
+		return error('php_app_entry_not_found:${app_entry}')
+	}
+	for ext in php_cfg.extensions {
+		ext_path := ext.trim_space()
+		if ext_path == '' {
+			continue
+		}
+		if !os.exists(ext_path) {
+			return error('php_extension_not_found:${ext_path}')
+		}
+	}
+}
+
+fn build_php_runtime_config(args []string, cfg VhttpdConfig) !PhpConfig {
+	mut php_cfg := cfg.php
+	php_cfg.bin = arg_string_or(args, '--php-bin', php_cfg.bin).trim_space()
+	php_cfg.worker_entry = arg_string_or(args, '--php-worker-entry', php_cfg.worker_entry).trim_space()
+	php_cfg.app_entry = arg_string_or(args, '--php-app-entry', php_cfg.app_entry).trim_space()
+	if arg_has(args, '--php-extension') {
+		php_cfg.extensions = arg_string_list_or(args, '--php-extension', []string{})
+	}
+	if arg_has(args, '--php-arg') {
+		php_cfg.args = arg_string_list_or(args, '--php-arg', []string{})
+	}
+	validate_php_runtime_config(php_cfg)!
+	return php_cfg
+}
+
+fn build_php_worker_command(php_cfg PhpConfig) !string {
+	mut bin := php_cfg.bin.trim_space()
+	if bin == '' {
+		bin = 'php'
+	}
+	worker_entry := php_cfg.worker_entry.trim_space()
+	if worker_entry == '' {
+		return error('php_worker_entry_missing')
+	}
+	mut parts := []string{}
+	parts << bin
+	for ext in php_cfg.extensions {
+		ext_path := ext.trim_space()
+		if ext_path == '' {
+			continue
+		}
+		parts << '-d'
+		parts << 'extension=${ext_path}'
+	}
+	for arg in php_cfg.args {
+		if arg.trim_space() == '' {
+			continue
+		}
+		parts << arg
+	}
+	parts << worker_entry
+	return parts.map(shell_quote_arg(it)).join(' ')
+}
+
+fn build_php_worker_env(worker_env map[string]string, php_cfg PhpConfig) map[string]string {
+	mut env := worker_env.clone()
+	if php_cfg.app_entry.trim_space() != '' {
+		env['VHTTPD_APP'] = php_cfg.app_entry
+	}
+	return env
+}
+
+fn normalize_executor_kind(raw string) !string {
+	normalized := raw.trim_space().to_lower().replace('-', '_')
+	match normalized {
+		'', 'php' {
+			return 'php'
+		}
+		'vjsx' {
+			return 'vjsx'
+		}
+		else {
+			return error('unsupported executor kind: ${raw}')
+		}
+	}
+}
+
+fn build_vjsx_runtime_config(args []string, cfg VhttpdConfig) !VjsxRuntimeFacadeConfig {
+	mut app_entry := arg_string_or(args, '--vjsx-entry', cfg.vjsx.app_entry).trim_space()
+	if app_entry == '' {
+		return error('inproc_vjsx_executor_missing_app_entry')
+	}
+	app_entry = os.abs_path(app_entry)
+	if !os.exists(app_entry) {
+		return error('inproc_vjsx_executor_app_entry_not_found:${app_entry}')
+	}
+	mut module_root := arg_string_or(args, '--vjsx-module-root', cfg.vjsx.module_root).trim_space()
+	if module_root == '' {
+		module_root = os.dir(app_entry)
+	} else {
+		module_root = os.abs_path(module_root)
+	}
+	mut runtime_profile := arg_string_or(args, '--vjsx-runtime-profile', cfg.vjsx.runtime_profile).trim_space()
+	if runtime_profile == '' {
+		runtime_profile = 'script'
+	}
+	thread_count_raw := arg_int_or(args, '--vjsx-thread-count', cfg.vjsx.thread_count)
+	thread_count := if thread_count_raw > 0 { thread_count_raw } else { 1 }
+	return VjsxRuntimeFacadeConfig{
+		app_entry:       app_entry
+		module_root:     module_root
+		runtime_profile: runtime_profile
+		thread_count:    thread_count
+		max_requests:    cfg.vjsx.max_requests
+		enable_fs:       cfg.vjsx.enable_fs
+		enable_process:  cfg.vjsx.enable_process
+		enable_network:  cfg.vjsx.enable_network
+	}
+}
+
+fn resolve_executor_runtime(args []string, cfg VhttpdConfig) !ExecutorRuntimeSelection {
+	kind := normalize_executor_kind(arg_string_or(args, '--executor', cfg.executor.kind))!
+	match kind {
+		'php' {
+			return ExecutorRuntimeSelection{
+				executor: SocketWorkerExecutor{}
+			}
+		}
+		'vjsx' {
+			return ExecutorRuntimeSelection{
+				executor:               new_inproc_vjsx_executor(build_vjsx_runtime_config(args,
+					cfg)!)
+				disable_worker_backend: true
+			}
+		}
+		else {
+			return error('unsupported executor kind: ${kind}')
+		}
+	}
+}
+
 fn run_server(args []string) {
 	cfg := load_vhttpd_config(args) or {
 		log.error('config load failed: ${err}')
@@ -121,7 +298,7 @@ fn run_server(args []string) {
 	event_log := arg_string_or(args, '--event-log', cfg.files.event_log)
 	pid_file := arg_string_or(args, '--pid-file', cfg.files.pid_file)
 	worker_read_timeout_ms := arg_int_or(args, '--worker-read-timeout-ms', cfg.worker.read_timeout_ms)
-	worker_cmd := arg_string_or(args, '--worker-cmd', cfg.worker.cmd)
+	worker_cmd_override := arg_string_or(args, '--worker-cmd', cfg.worker.cmd)
 	worker_autostart := arg_bool_or(args, '--worker-autostart', cfg.worker.autostart)
 	worker_restart_backoff_ms := arg_int_or(args, '--worker-restart-backoff-ms', cfg.worker.restart_backoff_ms)
 	worker_restart_backoff_max_ms := arg_int_or(args, '--worker-restart-backoff-max-ms',
@@ -140,8 +317,37 @@ fn run_server(args []string) {
 	admin_enabled := admin_port > 0
 	admin_host := if admin_host_arg == '' { '127.0.0.1' } else { admin_host_arg }
 	provider_settings := resolve_provider_runtime_settings(args, cfg)
-	worker_sockets := resolve_worker_sockets_with_defaults(args, cfg.worker.socket, cfg.worker.pool_size,
-		cfg.worker.socket_prefix, cfg.worker.sockets.join(','))
+	executor_runtime := resolve_executor_runtime(args, cfg) or {
+		log.error('executor runtime resolve failed: ${err}')
+		return
+	}
+	mut worker_sockets := resolve_worker_sockets_with_defaults(args, cfg.worker.socket,
+		cfg.worker.pool_size, cfg.worker.socket_prefix, cfg.worker.sockets.join(','))
+	mut stream_dispatch := cfg.worker.stream_dispatch
+	mut websocket_dispatch_mode := cfg.worker.websocket_dispatch
+	mut worker_autostart_effective := worker_autostart
+	mut worker_cmd_effective := worker_cmd_override
+	mut worker_env_effective := cfg.worker.env.clone()
+	if executor_runtime.executor.kind() == 'php' {
+		php_cfg_effective := build_php_runtime_config(args, cfg) or {
+			log.error('php runtime config resolve failed: ${err}')
+			return
+		}
+		worker_env_effective = build_php_worker_env(cfg.worker.env, php_cfg_effective)
+		if worker_cmd_effective.trim_space() == '' {
+			worker_cmd_effective = build_php_worker_command(php_cfg_effective) or {
+				log.error('php worker command build failed: ${err}')
+				return
+			}
+		}
+	}
+	if executor_runtime.disable_worker_backend {
+		worker_sockets = []string{}
+		worker_autostart_effective = false
+		worker_cmd_effective = ''
+		stream_dispatch = false
+		websocket_dispatch_mode = false
+	}
 	workdir := os.getwd()
 
 	os.mkdir_all(os.dir(event_log)) or {}
@@ -150,15 +356,15 @@ fn run_server(args []string) {
 	internal_admin_socket := default_internal_admin_socket()
 
 	mut app := &App{
-		event_log:                         event_log
-		started_at_unix:                   time.now().unix()
-		worker_backend:                    WorkerBackendRuntime{
+		event_log:                                event_log
+		started_at_unix:                          time.now().unix()
+		worker_backend:                           WorkerBackendRuntime{
 			backend:                PhpWorkerBackend{}
 			sockets:                worker_sockets
 			read_timeout_ms:        worker_read_timeout_ms
-			autostart:              worker_autostart
-			cmd:                    worker_cmd
-			env:                    cfg.worker.env.clone()
+			autostart:              worker_autostart_effective
+			cmd:                    worker_cmd_effective
+			env:                    worker_env_effective
 			workdir:                workdir
 			restart_backoff_ms:     worker_restart_backoff_ms
 			restart_backoff_max_ms: worker_restart_backoff_max_ms
@@ -167,84 +373,85 @@ fn run_server(args []string) {
 			queue_timeout_ms:       worker_queue_timeout_ms
 			queue_poll_ms:          10
 		}
-		internal_admin_socket:             internal_admin_socket
-		stream_dispatch:                   cfg.worker.stream_dispatch
-		websocket_dispatch_mode:           cfg.worker.websocket_dispatch
-		admin_on_data_plane:               !admin_enabled
-		admin_token:                       admin_token
-		assets_enabled:                    assets_enabled
-		assets_prefix:                     assets_prefix
-		assets_root:                       assets_root
-		assets_root_real:                  assets_root_real
-		assets_cache_control:              assets_cache_control
-		mcp_max_sessions:                  if cfg.mcp.max_sessions > 0 {
+		logic_executor:                           executor_runtime.executor
+		internal_admin_socket:                    internal_admin_socket
+		stream_dispatch:                          stream_dispatch
+		websocket_dispatch_mode:                  websocket_dispatch_mode
+		admin_on_data_plane:                      !admin_enabled
+		admin_token:                              admin_token
+		assets_enabled:                           assets_enabled
+		assets_prefix:                            assets_prefix
+		assets_root:                              assets_root
+		assets_root_real:                         assets_root_real
+		assets_cache_control:                     assets_cache_control
+		mcp_max_sessions:                         if cfg.mcp.max_sessions > 0 {
 			cfg.mcp.max_sessions
 		} else {
 			1000
 		}
-		mcp_max_pending_messages:          if cfg.mcp.max_pending_messages > 0 {
+		mcp_max_pending_messages:                 if cfg.mcp.max_pending_messages > 0 {
 			cfg.mcp.max_pending_messages
 		} else {
 			128
 		}
-		mcp_session_ttl_seconds:           if cfg.mcp.session_ttl_seconds > 0 {
+		mcp_session_ttl_seconds:                  if cfg.mcp.session_ttl_seconds > 0 {
 			cfg.mcp.session_ttl_seconds
 		} else {
 			900
 		}
-		mcp_sampling_capability_policy:    normalize_mcp_sampling_capability_policy(cfg.mcp.sampling_capability_policy)
-		mcp_allowed_origins:               cfg.mcp.allowed_origins.clone()
-		feishu_enabled:                    provider_settings.feishu.enabled
-		feishu_open_base_url:              provider_settings.feishu.open_base_url
-		feishu_reconnect_delay_ms:         provider_settings.feishu.reconnect_delay_ms
-		feishu_token_refresh_skew_seconds: provider_settings.feishu.token_refresh_skew_seconds
-		feishu_recent_event_limit:         provider_settings.feishu.recent_event_limit
+		mcp_sampling_capability_policy:           normalize_mcp_sampling_capability_policy(cfg.mcp.sampling_capability_policy)
+		mcp_allowed_origins:                      cfg.mcp.allowed_origins.clone()
+		feishu_enabled:                           provider_settings.feishu.enabled
+		feishu_open_base_url:                     provider_settings.feishu.open_base_url
+		feishu_reconnect_delay_ms:                provider_settings.feishu.reconnect_delay_ms
+		feishu_token_refresh_skew_seconds:        provider_settings.feishu.token_refresh_skew_seconds
+		feishu_recent_event_limit:                provider_settings.feishu.recent_event_limit
 		websocket_upstream_recent_dispatch_limit: 50
-		feishu_apps:                       provider_settings.feishu.apps.clone()
-		upstream_sessions:                 map[string]UpstreamRuntimeSession{}
-		mcp_sessions:                      map[string]McpSession{}
-		ws_hub_conns:                      map[string]HubConn{}
-		ws_hub_room_members:               map[string]map[string]bool{}
-		ws_hub_conn_rooms:                 map[string]map[string]bool{}
-		ws_hub_conn_meta:                  map[string]map[string]string{}
-		ws_hub_pending:                    map[string][]HubPendingMessage{}
-		feishu_runtime:                    map[string]FeishuProviderRuntime{}
-		providers:                         ProviderHost{
+		feishu_apps:                              provider_settings.feishu.apps.clone()
+		upstream_sessions:                        map[string]UpstreamRuntimeSession{}
+		mcp_sessions:                             map[string]McpSession{}
+		ws_hub_conns:                             map[string]HubConn{}
+		ws_hub_room_members:                      map[string]map[string]bool{}
+		ws_hub_conn_rooms:                        map[string]map[string]bool{}
+		ws_hub_conn_meta:                         map[string]map[string]string{}
+		ws_hub_pending:                           map[string][]HubPendingMessage{}
+		feishu_runtime:                           map[string]FeishuProviderRuntime{}
+		providers:                                ProviderHost{
 			registry: map[string]Provider{}
 			specs:    map[string]ProviderSpec{}
 		}
-		ollama_enabled:                    provider_settings.ollama_enabled
-		fixture_websocket_runtime:         map[string]FixtureWebSocketUpstreamRuntime{}
-		websocket_upstream_recent_activities: []WebSocketUpstreamActivitySnapshot{}
+		ollama_enabled:                           provider_settings.ollama_enabled
+		fixture_websocket_runtime:                map[string]FixtureWebSocketUpstreamRuntime{}
+		websocket_upstream_recent_activities:     []WebSocketUpstreamActivitySnapshot{}
 		// codex upstream
-		codex_runtime:                     CodexProviderRuntime{
-			enabled:            provider_settings.codex.enabled
-			url:                provider_settings.codex.url
-			model:              provider_settings.codex.model
-			effort:             provider_settings.codex.effort
-			cwd:                provider_settings.codex.cwd
-			approval_policy:    provider_settings.codex.approval_policy
-			sandbox:            provider_settings.codex.sandbox
-			reconnect_delay_ms: provider_settings.codex.reconnect_delay_ms
-			flush_interval_ms:  provider_settings.codex.flush_interval_ms
-			pending_rpcs:       map[int]CodexPendingRpc{}
-			stream_map:         map[string][]CodexTarget{}
-			err_bursts:         map[string][]string{}
+		codex_runtime:  CodexProviderRuntime{
+			enabled:             provider_settings.codex.enabled
+			url:                 provider_settings.codex.url
+			model:               provider_settings.codex.model
+			effort:              provider_settings.codex.effort
+			cwd:                 provider_settings.codex.cwd
+			approval_policy:     provider_settings.codex.approval_policy
+			sandbox:             provider_settings.codex.sandbox
+			reconnect_delay_ms:  provider_settings.codex.reconnect_delay_ms
+			flush_interval_ms:   provider_settings.codex.flush_interval_ms
+			pending_rpcs:        map[int]CodexPendingRpc{}
+			stream_map:          map[string][]CodexTarget{}
+			err_bursts:          map[string][]string{}
 			err_pending_flushes: map[string]bool{}
-			thread_stream_map:  map[string]string{}
+			thread_stream_map:   map[string]string{}
 		}
-		feishu_buffers:                    map[string]FeishuStreamBuffer{}
+		feishu_buffers: map[string]FeishuStreamBuffer{}
 	}
 	defer {
 		app.emit('server.stopped', {
 			'pid': '${os.getpid()}'
 		})
-        stop_worker_pool(mut app.worker_backend.managed_workers)
-        // Graceful provider shutdown is now spec/runtime-driven.
-        app.stop_all_providers()
-        os.rm(internal_admin_socket) or {}
-        os.rm(pid_file) or {}
-    }
+		stop_worker_pool(mut app.worker_backend.managed_workers)
+		// Graceful provider shutdown is now spec/runtime-driven.
+		app.stop_all_providers()
+		os.rm(internal_admin_socket) or {}
+		os.rm(pid_file) or {}
+	}
 
 	app.worker_backend.env['VHTTPD_INTERNAL_ADMIN_SOCKET'] = internal_admin_socket
 	go run_internal_admin_server(mut app, internal_admin_socket)
@@ -253,14 +460,14 @@ fn run_server(args []string) {
 	}
 	bootstrap_providers(mut app)
 
-	if worker_autostart {
-		app.worker_backend.managed_workers = start_worker_pool(app.worker_backend.cmd, app.worker_backend.env, app.worker_backend.sockets,
-			app.worker_backend.workdir)
+	if worker_autostart_effective {
+		app.worker_backend.managed_workers = start_worker_pool(app.worker_backend.cmd,
+			app.worker_backend.env, app.worker_backend.sockets, app.worker_backend.workdir)
 		if app.worker_backend.managed_workers.len == 0 && app.worker_backend.sockets.len > 0 {
 			log.warn('worker pool is empty after startup; server will stay up and keep retrying')
 			app.emit('worker.pool.empty', {
 				'worker_pool_size': '${app.worker_backend.sockets.len}'
-				'worker_cmd': app.worker_backend.cmd
+				'worker_cmd':       app.worker_backend.cmd
 			})
 		}
 		for worker in app.worker_backend.managed_workers {
@@ -315,6 +522,8 @@ fn run_server(args []string) {
 		'port':             '${port}'
 		'pid':              '${os.getpid()}'
 		'worker_backend':   app.worker_backend.kind()
+		'logic_executor':   app.logic_executor_kind()
+		'logic_provider':   app.logic_executor_provider()
 		'worker_autostart': if app.worker_backend.autostart { 'true' } else { 'false' }
 		'worker_pool_size': '${app.worker_backend.sockets.len}'
 		'admin_enabled':    if admin_enabled { 'true' } else { 'false' }

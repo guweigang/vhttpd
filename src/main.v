@@ -26,6 +26,7 @@ pub:
 pub mut:
 	started_at_unix                             i64
 	worker_backend                              WorkerBackendRuntime
+	logic_executor                              LogicExecutor = SocketWorkerExecutor{}
 	internal_admin_socket                       string
 	stream_dispatch                             bool
 	websocket_dispatch_mode                     bool
@@ -754,7 +755,13 @@ fn proxy_worker_websocket(mut app App, mut ctx Context, method string, path stri
 		return ctx.text('Upgrade Required')
 	}
 	remote_addr := if isnil(ctx.conn) { '' } else { ctx.conn.peer_ip() or { '' } }
-	selected_socket := app.worker_backend_select_socket_queued() or {
+	mut ws_open := app.logic_executor.open_websocket_session(mut app, WebSocketSessionOpenRequest{
+		req: ctx.req
+		remote_addr: remote_addr
+		path: path
+		request_id: req_id
+		trace_id: trace_id
+	}) or {
 		err_msg := err.msg()
 		status, error_class := classify_worker_error(err_msg)
 		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
@@ -762,37 +769,18 @@ fn proxy_worker_websocket(mut app App, mut ctx Context, method string, path stri
 		ctx.res.set_status(http.status_from_int(status))
 		return ctx.text('Bad Gateway')
 	}
-	mut worker_conn := unix.connect_stream(selected_socket) or {
-		err_msg := err.msg()
-		status, error_class := classify_worker_error(err_msg)
+	if !ws_open.accepted {
 		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-		ctx.set_custom_header('x-vhttpd-error-class', error_class) or {}
-		ctx.res.set_status(http.status_from_int(status))
-		return ctx.text('Bad Gateway')
-	}
-	if app.worker_backend.read_timeout_ms > 0 {
-		worker_conn.set_read_timeout(time.millisecond * app.worker_backend.read_timeout_ms)
-	}
-	accepted, status, body := worker_websocket_open(mut app, mut worker_conn, ctx.req,
-		remote_addr, path, req_id, trace_id) or {
-		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-		ctx.set_custom_header('x-vhttpd-error-class', 'transport_error') or {}
-		ctx.res.set_status(http.status_from_int(502))
-		worker_conn.close() or {}
-		return ctx.text('Bad Gateway')
-	}
-	if !accepted {
-		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-		ctx.res.set_status(http.status_from_int(status))
-		worker_conn.close() or {}
-		return ctx.text(body)
+		ctx.res.set_status(http.status_from_int(ws_open.status))
+		return ctx.text(ws_open.body)
 	}
 
 	ctx.takeover_conn()
 	ctx.conn.set_write_timeout(time.infinite)
 	ctx.conn.set_read_timeout(time.infinite)
 	mut conn := ctx.conn
-	spawn handle_worker_websocket_session(mut app, mut conn, mut worker_conn, selected_socket,
+	mut worker_conn := ws_open.conn
+	spawn handle_worker_websocket_session(mut app, mut conn, mut worker_conn, ws_open.socket_path,
 		key, method.to_upper(), path, req_id, trace_id, start_ms)
 	return veb.no_result()
 }
@@ -1041,7 +1029,14 @@ fn proxy_worker_response(mut app App, mut ctx Context, method string, path strin
 			return result
 		}
 	}
-	selected_socket := app.worker_backend_select_socket_queued() or {
+	mut outcome := app.logic_executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+		method: method
+		path: path
+		req: ctx.req
+		remote_addr: remote_addr
+		trace_id: trace_id
+		request_id: req_id
+	}) or {
 		err_msg := err.msg()
 		status, error_class := classify_worker_error(err_msg)
 		app.emit('http.request', {
@@ -1059,52 +1054,14 @@ fn proxy_worker_response(mut app App, mut ctx Context, method string, path strin
 		ctx.res.set_status(http.status_from_int(status))
 		return ctx.text(body_on_head)
 	}
-	mut conn := unix.connect_stream(selected_socket) or {
-		err_msg := err.msg()
-		status, error_class := classify_worker_error(err_msg)
-		app.emit('http.request', {
-			'method':      method.to_upper()
-			'path':        normalize_path(path)
-			'status':      '${status}'
-			'request_id':  req_id
-			'trace_id':    trace_id
-			'duration_ms': '${time.now().unix_milli() - start_ms}'
-			'error_class': error_class
-			'error':       err_msg
-		})
-		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-		ctx.set_custom_header('x-vhttpd-error-class', error_class) or {}
-		ctx.res.set_status(http.status_from_int(status))
-		return ctx.text(body_on_head)
-	}
-	app.on_worker_request_started(selected_socket)
-	defer {
-		app.on_worker_request_finished(selected_socket)
-	}
-	defer {
-		conn.close() or {}
-	}
-	if app.worker_backend.read_timeout_ms > 0 {
-		conn.set_read_timeout(time.millisecond * app.worker_backend.read_timeout_ms)
-	}
-	payload := encode_worker_request(method, path, ctx.req, remote_addr, trace_id, req_id)
-	write_frame(mut conn, payload) or {
-		err_msg := err.msg()
-		status, error_class := classify_worker_error(err_msg)
-		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-		ctx.set_custom_header('x-vhttpd-error-class', error_class) or {}
-		ctx.res.set_status(http.status_from_int(status))
-		return ctx.text(body_on_head)
-	}
-	first_raw := read_frame(mut conn) or {
-		err_msg := err.msg()
-		status, error_class := classify_worker_error(err_msg)
-		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-		ctx.set_custom_header('x-vhttpd-error-class', error_class) or {}
-		ctx.res.set_status(http.status_from_int(status))
-		return ctx.text(body_on_head)
-	}
-	if start := try_decode_stream_start(first_raw) {
+	if outcome.kind == .stream {
+		mut conn := outcome.conn
+		selected_socket := outcome.socket_path
+		start := outcome.stream_start
+		defer {
+			conn.close() or {}
+			app.on_worker_request_finished(selected_socket)
+		}
 		if (start.stream_type == 'sse' || start.content_type.starts_with('text/event-stream'))
 			&& method.to_upper() != 'HEAD' {
 			return stream_via_sse(mut app, mut ctx, mut conn, start, method, path, req_id,
@@ -1113,17 +1070,11 @@ fn proxy_worker_response(mut app App, mut ctx Context, method string, path strin
 		return stream_via_passthrough(mut app, mut ctx, mut conn, start, method, path,
 			req_id, trace_id, start_ms)
 	}
-	if plan := try_decode_upstream_plan(first_raw) {
-		conn.close() or {}
-		return execute_upstream_plan(mut app, mut ctx, plan, method, path, req_id, trace_id,
+	if outcome.kind == .upstream_plan {
+		return execute_upstream_plan(mut app, mut ctx, outcome.upstream_plan, method, path, req_id, trace_id,
 			start_ms)
 	}
-	resp := json.decode(WorkerResponse, first_raw) or {
-		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-		ctx.set_custom_header('x-vhttpd-error-class', 'transport_error') or {}
-		ctx.res.set_status(http.status_from_int(502))
-		return ctx.text(body_on_head)
-	}
+	resp := outcome.response
 	app.emit('http.request', {
 		'method':      method.to_upper()
 		'path':        normalize_path(path)
@@ -1461,7 +1412,11 @@ pub fn (mut app App) provider_runtime_capabilities() map[string]bool {
 pub fn (mut app App) provider_runtime_gateway_count() int {
 	mut total := 0
 	for provider in ['feishu', 'codex'] {
-		total += app.provider_runtime_upstream_snapshots(provider).len
+		for instance in app.provider_runtime_instances(provider) {
+			if app.provider_runtime_upstream_enabled(provider, instance) {
+				total++
+			}
+		}
 	}
 	return total
 }
@@ -1469,7 +1424,7 @@ pub fn (mut app App) provider_runtime_gateway_count() int {
 pub fn (mut app App) provider_runtime_upstream_launches() []ProviderRuntimeUpstreamLaunch {
 	mut launches := []ProviderRuntimeUpstreamLaunch{}
 	feishu_instances := app.provider_runtime_instances('feishu')
-	if feishu_instances.len > 0 {
+	if app.provider_bootstrap_enabled('feishu') && feishu_instances.len > 0 {
 		launches << ProviderRuntimeUpstreamLaunch{
 			provider: 'feishu'
 			instance: ''
@@ -1507,7 +1462,14 @@ pub fn (mut app App) provider_runtime_upstream_enabled(name string, instance str
 pub fn (mut app App) provider_runtime_upstream_provider_names() []string {
 	mut names := []string{}
 	for name in ['feishu', 'codex'] {
-		if app.provider_runtime_instances(name).len > 0 {
+		mut has_enabled_instance := false
+		for instance in app.provider_runtime_instances(name) {
+			if app.provider_runtime_upstream_enabled(name, instance) {
+				has_enabled_instance = true
+				break
+			}
+		}
+		if has_enabled_instance {
 			names << name
 		}
 	}
@@ -1668,7 +1630,7 @@ pub fn (mut app App) dispatch(mut ctx Context) veb.Result {
 	method := ctx.query['method'] or { 'GET' }
 	path := ctx.query['path'] or { '/health' }
 	req_id := resolve_request_id(ctx, path)
-	if app.worker_backend.sockets.len > 0 {
+	if app.has_http_logic_executor() {
 		return proxy_worker_response(mut app, mut ctx, method, path, 'Bad Gateway')
 	}
 	mut status := 200
@@ -1693,7 +1655,7 @@ pub fn (mut app App) dispatch_head(mut ctx Context) veb.Result {
 	method := ctx.query['method'] or { 'GET' }
 	path := ctx.query['path'] or { '/health' }
 	req_id := resolve_request_id(ctx, path)
-	if app.worker_backend.sockets.len > 0 {
+	if app.has_http_logic_executor() {
 		return proxy_worker_response(mut app, mut ctx, method, path, '')
 	}
 	mut status := 200
@@ -1771,7 +1733,7 @@ pub fn (mut app App) proxy_get(mut ctx Context, path string) veb.Result {
 	if normalize_path(target) == '/mcp' {
 		return app.mcp_get(mut ctx)
 	}
-	if app.worker_backend.sockets.len == 0 {
+	if !app.has_http_logic_executor() {
 		ctx.res.set_status(.not_found)
 		return ctx.text('Not Found')
 	}
@@ -1784,7 +1746,7 @@ pub fn (mut app App) proxy_post(mut ctx Context, path string) veb.Result {
 	if normalize_path(target) == '/mcp' {
 		return app.mcp_post(mut ctx)
 	}
-	if app.worker_backend.sockets.len == 0 {
+	if !app.has_http_logic_executor() {
 		ctx.res.set_status(.not_found)
 		return ctx.text('Not Found')
 	}
@@ -1793,7 +1755,7 @@ pub fn (mut app App) proxy_post(mut ctx Context, path string) veb.Result {
 
 @['/:path...'; put]
 pub fn (mut app App) proxy_put(mut ctx Context, path string) veb.Result {
-	if app.worker_backend.sockets.len == 0 {
+	if !app.has_http_logic_executor() {
 		ctx.res.set_status(.not_found)
 		return ctx.text('Not Found')
 	}
@@ -1803,7 +1765,7 @@ pub fn (mut app App) proxy_put(mut ctx Context, path string) veb.Result {
 
 @['/:path...'; patch]
 pub fn (mut app App) proxy_patch(mut ctx Context, path string) veb.Result {
-	if app.worker_backend.sockets.len == 0 {
+	if !app.has_http_logic_executor() {
 		ctx.res.set_status(.not_found)
 		return ctx.text('Not Found')
 	}
@@ -1817,7 +1779,7 @@ pub fn (mut app App) proxy_delete(mut ctx Context, path string) veb.Result {
 	if normalize_path(target) == '/mcp' {
 		return app.mcp_delete(mut ctx)
 	}
-	if app.worker_backend.sockets.len == 0 {
+	if !app.has_http_logic_executor() {
 		ctx.res.set_status(.not_found)
 		return ctx.text('Not Found')
 	}
@@ -1826,7 +1788,7 @@ pub fn (mut app App) proxy_delete(mut ctx Context, path string) veb.Result {
 
 @['/:path...'; head]
 pub fn (mut app App) proxy_head(mut ctx Context, path string) veb.Result {
-	if app.worker_backend.sockets.len == 0 {
+	if !app.has_http_logic_executor() {
 		ctx.res.set_status(.not_found)
 		return ctx.text('')
 	}

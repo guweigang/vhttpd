@@ -1,10 +1,16 @@
+[paths]
+root = "../../"
+php_app = "examples/codexbot-app/app.php"
+php_worker = "php/package/bin/php-worker"
+vslim_ext = "../vphpx/vslim/vslim.so"
+
 [server]
 host = "127.0.0.1"
 port = 19881
 
 [files]
-pid_file = "/tmp/vhttpd_${server.port}.pid"
-event_log = "/tmp/vhttpd_${server.port}.events.ndjson"
+pid_file = "tmp/vhttpd_${server.port}.pid"
+event_log = "tmp/vhttpd_${server.port}.events.ndjson"
 
 [runtime]
 timezone = "Asia/Shanghai"
@@ -13,14 +19,22 @@ timezone = "Asia/Shanghai"
 read_timeout_ms = 3000
 autostart = true
 pool_size = 4
-socket_prefix = "/tmp/vslim_worker"
+socket_prefix = "tmp/vslim_worker"
 max_requests = 5000
 restart_backoff_ms = 500
 restart_backoff_max_ms = 8000
-cmd = "php -d extension=/Users/guweigang/Source/vphpx/vslim/vslim.so /Users/guweigang/Source/vhttpd/php/package/bin/php-worker"
+
+[executor]
+kind = "php"
+
+[php]
+bin = "php"
+worker_entry = "${paths.php_worker}"
+app_entry = "${paths.php_app}"
+extensions = ["${paths.vslim_ext}"]
+args = []
 
 [worker.env]
-VHTTPD_APP = "/Users/guweigang/Source/vhttpd/examples/codexbot-app.php"
 VHTTPD_BOT_TZ = "Asia/Shanghai"
 VHTTPD_ADMIN_BASE_URL = "http://127.0.0.1:19981"
 VHTTPD_ADMIN_TOKEN = "change-me"
@@ -48,10 +62,8 @@ enabled = true
 url = "${env.CODEX_URL:-ws://127.0.0.1:4500}"
 model = "gpt-5.4"
 effort = "medium"
-# fallback project folder
-cwd = "/Users/guweigang/codex/default"
+cwd = "${env.CODEX_CWD:-../../codex/default}"
 approval_policy = "never"
-#`dangerFullAccess`, `readOnly`, `externalSandbox`, `workspaceWrite`
 sandbox = "workspaceWrite"
 reconnect_delay_ms = 3000
 flush_interval_ms = 400
