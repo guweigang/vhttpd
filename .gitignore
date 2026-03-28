@@ -8,3 +8,5 @@ vhttpd_prod
 .runtime/
 tmp/
 *.vjsbuild/
+.vscode/
+examples/codexbot-app/codex.sqlite
