@@ -10,10 +10,11 @@ pub:
 
 pub struct AdminLogicExecutorSpecSnapshot {
 pub:
-	kind                 string
-	aliases              []string
-	logic_executor_model string @[json: 'logic_executor_model']
-	worker_backend_mode  string @[json: 'worker_backend_mode']
+	kind                     string
+	aliases                  []string
+	logic_executor_lifecycle string @[json: 'logic_executor_lifecycle']
+	logic_executor_model     string @[json: 'logic_executor_model']
+	worker_backend_mode      string @[json: 'worker_backend_mode']
 }
 
 fn builtin_logic_executor_specs() []BuiltinLogicExecutorSpec {
@@ -74,11 +75,13 @@ pub fn (mut app App) admin_logic_executor_specs_snapshot() []AdminLogicExecutorS
 	specs := builtin_logic_executor_specs()
 	mut snapshots := []AdminLogicExecutorSpecSnapshot{cap: specs.len}
 	for spec in specs {
+		lifecycle := build_builtin_logic_executor_lifecycle(spec.kind) or { panic(err) }
 		snapshots << AdminLogicExecutorSpecSnapshot{
-			kind:                 spec.kind
-			aliases:              spec.aliases.clone()
-			logic_executor_model: spec.logic_model.str()
-			worker_backend_mode:  spec.worker_backend_mode.str()
+			kind:                     spec.kind
+			aliases:                  spec.aliases.clone()
+			logic_executor_lifecycle: lifecycle.name()
+			logic_executor_model:     spec.logic_model.str()
+			worker_backend_mode:      spec.worker_backend_mode.str()
 		}
 	}
 	return snapshots

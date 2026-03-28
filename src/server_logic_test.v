@@ -357,10 +357,12 @@ fn test_admin_logic_executor_specs_snapshot_lists_builtin_executors() {
 	snapshot := app.admin_logic_executor_specs_snapshot()
 	assert snapshot.len == 2
 	assert snapshot[0].kind == 'php'
+	assert snapshot[0].logic_executor_lifecycle == 'php_worker_host'
 	assert snapshot[0].logic_executor_model == 'worker'
 	assert snapshot[0].worker_backend_mode == 'required'
 	assert 'php-worker' in snapshot[0].aliases
 	assert snapshot[1].kind == 'vjsx'
+	assert snapshot[1].logic_executor_lifecycle == 'embedded_host'
 	assert snapshot[1].logic_executor_model == 'embedded'
 	assert snapshot[1].worker_backend_mode == 'disabled'
 }
@@ -376,7 +378,9 @@ fn test_internal_admin_executors_returns_builtin_executor_specs() {
 	snapshot := json.decode([]AdminLogicExecutorSpecSnapshot, resp.body) or { panic(err) }
 	assert snapshot.len == 2
 	assert snapshot[0].kind == 'php'
+	assert snapshot[0].logic_executor_lifecycle == 'php_worker_host'
 	assert snapshot[1].kind == 'vjsx'
+	assert snapshot[1].logic_executor_lifecycle == 'embedded_host'
 }
 
 fn test_php_worker_executor_lifecycle_prepares_worker_command_and_env() {
