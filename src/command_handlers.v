@@ -276,17 +276,24 @@ pub fn (h FeishuCommandHandler) execute(command WorkerWebSocketUpstreamCommand, 
 		mut cleared := false
 		mut app := h.app
 		if normalized.target.type_ == 'message_id' && normalized.target.id != '' {
-			app.feishu_runtime_clear_buffer(normalized.target.id)
+			stream_id := app.feishu_runtime_stream_id_for_buffer(normalized.target.id)
+			cleared_count := app.feishu_runtime_clear_buffer_chain(normalized.target.id)
 			if normalized.correlation.stream_id != '' {
 				app.codex_mu.@lock()
-				cleared = app.codex_runtime.remove_stream_target(normalized.correlation.stream_id, 'feishu', normalized.target.id)
+				cleared = app.codex_runtime.clear_stream_targets(normalized.correlation.stream_id)
+				app.codex_mu.unlock()
+			} else if stream_id != '' {
+				app.codex_mu.@lock()
+				cleared = app.codex_runtime.clear_stream_targets(stream_id)
 				app.codex_mu.unlock()
 			}
-			cleared = true
+			cleared = cleared || cleared_count > 0
 		} else if normalized.correlation.stream_id != '' {
+			cleared_count := app.feishu_runtime_clear_stream_buffers(normalized.correlation.stream_id)
 			app.codex_mu.@lock()
 			cleared = app.codex_runtime.clear_stream_targets(normalized.correlation.stream_id)
 			app.codex_mu.unlock()
+			cleared = cleared || cleared_count > 0
 		}
 		if cleared {
 			snapshot.status = 'cleared'

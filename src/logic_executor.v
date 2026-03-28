@@ -190,3 +190,7 @@ pub fn (app &App) logic_executor_provider() string {
 pub fn (app &App) has_http_logic_executor() bool {
 	return app.worker_backend.sockets.len > 0 || app.logic_executor.kind() != 'php'
 }
+
+pub fn (app &App) has_websocket_upstream_logic_executor() bool {
+	return app.worker_backend.sockets.len > 0 || app.logic_executor.kind() != 'php'
+}

@@ -183,8 +183,9 @@ make prod
 make build-prod
 ```
 
-`make vhttpd` now builds with `-d mbedtls_client_read_timeout_ms=120000`, which is required for long-lived Feishu websocket connections on the current V/mbedtls stack.
-`make prod` / `make build-prod` use the same flags and additionally enable V `-prod`.
+`make vhttpd` now builds with `-d use_openssl` by default.
+If you need the previous mbedtls path, use `make vhttpd V_TLS_BACKEND=mbedtls`; that path still adds `-d mbedtls_client_read_timeout_ms=120000` for long-lived Feishu websocket connections.
+`make prod` / `make build-prod` use the same TLS backend selection and additionally enable V `-prod`.
 `prod` build defaults runtime logs to `warn` (warnings + errors). You can override with `VHTTPD_LOG_LEVEL=debug|info|warn|error|fatal`.
 
 ## CI Binaries
@@ -342,7 +343,7 @@ Mode-specific config guidance for both `php` and `vjsx` is available at [docs/EX
 - default mode is `php`
 - switch explicitly with `[executor].kind = "vjsx"` or `--executor vjsx`
 - in this mode, worker sockets and worker autostart are disabled automatically
-- current scope is one-shot HTTP dispatch; stream/websocket worker modes are intentionally disabled
+- current scope is HTTP dispatch plus `websocket_upstream` dispatch; stream/websocket session worker modes and MCP remain intentionally disabled
 - transpiled module cache is kept under the system temp directory instead of next to your source files
 - the in-proc facade exposes `ctx.runtime.emit()` and read-only `ctx.runtime.snapshot()`
 - the in-proc facade also exposes semantic response helpers like `ctx.created()`, `ctx.noContent()`, `ctx.badRequest()`, and `ctx.notFound()`
@@ -382,7 +383,7 @@ There is also a ready-to-run example config at [config/vhttpd.vjsx.example.toml]
 
 A step-by-step local verification guide is available at [docs/INPROC_VJSX_RUNBOOK.md](/Users/guweigang/Source/vhttpd/docs/INPROC_VJSX_RUNBOOK.md).
 
-A facade-level API summary is available at [docs/VJSX_FACADE_REFERENCE.md](/Users/guweigang/Source/vhttpd/docs/VJSX_FACADE_REFERENCE.md), and a richer example handler is available at [examples/vjsx/api-demo-handler.mts](/Users/guweigang/Source/vhttpd/examples/vjsx/api-demo-handler.mts).
+A facade-level API summary is available at [docs/VJSX_FACADE_REFERENCE.md](/Users/guweigang/Source/vhttpd/docs/VJSX_FACADE_REFERENCE.md), a richer HTTP example handler is available at [examples/vjsx/api-demo-handler.mts](/Users/guweigang/Source/vhttpd/examples/vjsx/api-demo-handler.mts), and a TS bot-shaped entry example is available at [examples/vjsx/bot-entry.mts](/Users/guweigang/Source/vhttpd/examples/vjsx/bot-entry.mts).
 
 ### WebSocket Upstream MVP
 

@@ -88,4 +88,4 @@ Press `Ctrl-C` in the `vhttpd` terminal.
 
 - If ports are already in use, override `--port` and `--admin-port`.
 - In `vjsx` executor mode, `vhttpd` disables worker autostart and worker sockets automatically.
-- Current scope is one-shot HTTP dispatch. Stream and websocket worker modes are intentionally off in this mode.
+- Current scope is HTTP dispatch plus `websocket_upstream` dispatch. Stream, websocket session, and MCP worker modes are intentionally off in this mode.

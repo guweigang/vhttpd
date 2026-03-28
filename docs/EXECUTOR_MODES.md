@@ -100,8 +100,8 @@ Behavior:
 
 - worker sockets are disabled automatically
 - worker autostart is ignored
-- current scope is one-shot HTTP dispatch
-- stream/websocket worker modes are intentionally off in this mode
+- current scope is HTTP dispatch plus `websocket_upstream` dispatch
+- stream/websocket session worker modes and MCP are intentionally off in this mode
 
 Ready-to-run example:
 

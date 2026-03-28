@@ -40,6 +40,9 @@ const known_long_flags = [
 	'--php-arg',
 	'--vjsx-entry',
 	'--vjsx-module-root',
+	'--vjsx-signature-root',
+	'--vjsx-signature-include',
+	'--vjsx-signature-exclude',
 	'--vjsx-runtime-profile',
 	'--vjsx-thread-count',
 	'--admin-host',
@@ -96,6 +99,9 @@ fn print_vhttpd_help() {
 	println('  --php-arg <value>            Extra PHP CLI arg; repeat to add multiple entries')
 	println('  --vjsx-entry <path>          In-proc vjsx app entry (.js/.mjs/.ts/.mts)')
 	println('  --vjsx-module-root <path>    Optional module root for in-proc vjsx')
+	println('  --vjsx-signature-root <path> Optional source signature root (defaults to module root)')
+	println('  --vjsx-signature-include <g> Comma-separated include globs for source signature')
+	println('  --vjsx-signature-exclude <g> Comma-separated exclude globs for source signature')
 	println('  --vjsx-runtime-profile <p>   script | node')
 	println('  --vjsx-thread-count <N>      In-proc vjsx lane count')
 	println('  --feishu-enabled <0|1>')
@@ -247,15 +253,26 @@ fn build_vjsx_runtime_config(args []string, cfg VhttpdConfig) !VjsxRuntimeFacade
 	} else {
 		module_root = os.abs_path(module_root)
 	}
+	mut signature_root := arg_string_or(args, '--vjsx-signature-root', cfg.vjsx.signature_root).trim_space()
+	if signature_root == '' {
+		signature_root = module_root
+	} else {
+		signature_root = os.abs_path(signature_root)
+	}
 	mut runtime_profile := arg_string_or(args, '--vjsx-runtime-profile', cfg.vjsx.runtime_profile).trim_space()
 	if runtime_profile == '' {
 		runtime_profile = 'script'
 	}
 	thread_count_raw := arg_int_or(args, '--vjsx-thread-count', cfg.vjsx.thread_count)
 	thread_count := if thread_count_raw > 0 { thread_count_raw } else { 1 }
+	signature_include := arg_string_list_or(args, '--vjsx-signature-include', cfg.vjsx.signature_include)
+	signature_exclude := arg_string_list_or(args, '--vjsx-signature-exclude', cfg.vjsx.signature_exclude)
 	return VjsxRuntimeFacadeConfig{
 		app_entry:       app_entry
 		module_root:     module_root
+		signature_root:  signature_root
+		signature_include: signature_include
+		signature_exclude: signature_exclude
 		runtime_profile: runtime_profile
 		thread_count:    thread_count
 		max_requests:    cfg.vjsx.max_requests

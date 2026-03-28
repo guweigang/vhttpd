@@ -7,7 +7,13 @@ VPHP_V_GC ?= auto
 VPHP_V_GC_STRIPPED := $(strip $(VPHP_V_GC))
 RESOLVED_VPHP_V_GC := $(shell if [ -n "$(VPHP_V_GC_STRIPPED)" ] && [ "$(VPHP_V_GC_STRIPPED)" != "auto" ]; then printf "%s" "$(VPHP_V_GC_STRIPPED)"; elif pkg-config --exists bdw-gc 2>/dev/null; then printf boehm; else printf none; fi)
 V_GC_FLAG := -gc $(RESOLVED_VPHP_V_GC)
-V_FLAGS ?= -d mbedtls_client_read_timeout_ms=120000
+V_TLS_BACKEND ?= openssl
+ifeq ($(V_TLS_BACKEND),openssl)
+V_TLS_FLAGS := -d use_openssl
+else
+V_TLS_FLAGS := -d mbedtls_client_read_timeout_ms=120000
+endif
+V_FLAGS ?= $(V_TLS_FLAGS)
 V_PROD_FLAGS ?= -prod
 V_NOCACHE_FLAGS ?= -nocache
 

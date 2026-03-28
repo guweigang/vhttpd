@@ -90,6 +90,7 @@ pub mut:
 	ollama_enabled          bool
 	feishu_buffers           map[string]FeishuStreamBuffer
 	feishu_http_lane         shared FeishuHttpLane
+	feishu_control_http_lane shared FeishuControlHttpLane
 	feishu_http_test_stub    bool
 	feishu_http_test_delay_ms int
 	feishu_http_test_inflight int

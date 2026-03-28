@@ -1,6 +1,69 @@
 module main
 
-import time
+struct CodexRuntimeTestDispatchState {
+mut:
+	dispatch_count int
+	last_req       WorkerWebSocketUpstreamDispatchRequest
+}
+
+struct CodexRuntimeTestExecutor {
+mut:
+	state &CodexRuntimeTestDispatchState = unsafe { nil }
+}
+
+pub fn (e CodexRuntimeTestExecutor) kind() string {
+	return 'vjsx'
+}
+
+pub fn (e CodexRuntimeTestExecutor) provider() string {
+	return 'vjsx'
+}
+
+pub fn (e CodexRuntimeTestExecutor) dispatch_http(mut app App, req HttpLogicDispatchRequest) !HttpLogicDispatchOutcome {
+	_ = app
+	_ = req
+	return error('not_used')
+}
+
+pub fn (e CodexRuntimeTestExecutor) open_websocket_session(mut app App, req WebSocketSessionOpenRequest) !WebSocketSessionOpenOutcome {
+	_ = app
+	_ = req
+	return error('not_used')
+}
+
+pub fn (e CodexRuntimeTestExecutor) dispatch_stream(mut app App, req StreamDispatchRequest) !StreamDispatchResponse {
+	_ = app
+	_ = req
+	return error('not_used')
+}
+
+pub fn (e CodexRuntimeTestExecutor) dispatch_mcp(mut app App, req WorkerMcpDispatchRequest) !WorkerMcpDispatchResponse {
+	_ = app
+	_ = req
+	return error('not_used')
+}
+
+pub fn (e CodexRuntimeTestExecutor) dispatch_websocket_upstream(mut app App, req WorkerWebSocketUpstreamDispatchRequest) !WorkerWebSocketUpstreamDispatchResponse {
+	_ = app
+	if !isnil(e.state) {
+		mut state := e.state
+		state.dispatch_count++
+		state.last_req = req
+	}
+	return WorkerWebSocketUpstreamDispatchResponse{
+		mode:     'websocket_upstream'
+		event:    'result'
+		id:       req.id
+		handled:  true
+		commands: []WorkerWebSocketUpstreamCommand{}
+	}
+}
+
+pub fn (e CodexRuntimeTestExecutor) dispatch_websocket_event(mut app App, frame WorkerWebSocketFrame) !WorkerWebSocketDispatchResponse {
+	_ = app
+	_ = frame
+	return error('not_used')
+}
 
 fn test_codex_encode_request_and_notification() {
     req := codex_encode_request('turn/start', 42, '{"a":1}')
@@ -128,4 +191,42 @@ fn test_codex_runtime_add_remove_and_clear_stream_targets() {
 	assert cleared == true
 	assert 'stream_001' !in rt.stream_map
 	assert rt.active_stream_id == ''
+}
+
+fn test_codex_dispatch_rpc_response_uses_logic_executor_without_worker_sockets() {
+	mut state := &CodexRuntimeTestDispatchState{}
+	mut app := App{
+		logic_executor: CodexRuntimeTestExecutor{
+			state: state
+		}
+	}
+	app.dispatch_codex_rpc_response(CodexPendingRpc{
+		method:     'thread/start'
+		stream_id:  'codex:task_001'
+		message_id: 'om_test_001'
+	}, '{"threadId":"thread_001"}', false, '{"id":1,"result":{"threadId":"thread_001"}}')
+	assert state.dispatch_count == 1
+	assert state.last_req.provider == 'codex'
+	assert state.last_req.event_type == 'codex.rpc.response'
+	assert state.last_req.trace_id == 'codex:task_001'
+	assert state.last_req.target == 'codex:task_001'
+}
+
+fn test_codex_notification_uses_logic_executor_without_worker_sockets() {
+	mut state := &CodexRuntimeTestDispatchState{}
+	mut app := App{
+		logic_executor: CodexRuntimeTestExecutor{
+			state: state
+		}
+		codex_runtime: CodexProviderRuntime{
+			active_stream_id: 'codex:task_002'
+		}
+	}
+	app.codex_handle_notification('item/agentMessage/delta',
+		'{"method":"item/agentMessage/delta","params":{"delta":"hello"}}')
+	assert state.dispatch_count == 1
+	assert state.last_req.provider == 'codex'
+	assert state.last_req.event_type == 'codex.notification'
+	assert state.last_req.trace_id == 'codex:task_002'
+	assert state.last_req.payload.contains('"delta":"hello"')
 }

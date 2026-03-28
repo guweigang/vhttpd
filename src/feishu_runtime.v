@@ -29,6 +29,7 @@ const feishu_runtime_message_card = 'card'
 const feishu_runtime_max_upload_image_bytes = 10 * 1024 * 1024
 
 struct FeishuHttpLane {}
+struct FeishuControlHttpLane {}
 
 
 struct FeishuRuntimeProtoHeader {
@@ -397,6 +398,14 @@ fn (mut app App) feishu_runtime_http_test_next_message_id() string {
 	return 'om_test_${id}'
 }
 
+fn (mut app App) feishu_runtime_http_test_next_reply_message_id() string {
+	app.feishu_http_test_mu.@lock()
+	app.feishu_http_test_message_seq++
+	id := app.feishu_http_test_message_seq
+	app.feishu_http_test_mu.unlock()
+	return 'om_reply_${id}'
+}
+
 fn (mut app App) feishu_runtime_http_test_fetch(cfg http.FetchConfig) !http.Response {
 	delay_ms := app.feishu_runtime_http_test_enter()
 	defer {
@@ -409,6 +418,12 @@ fn (mut app App) feishu_runtime_http_test_fetch(cfg http.FetchConfig) !http.Resp
 		return http.Response{
 			status_code: 200
 			body:        '{"code":0,"msg":"ok","tenant_access_token":"tenant_test_token","expire":7200}'
+		}
+	}
+	if cfg.url.contains('/im/v1/messages/') && cfg.url.contains('/reply') {
+		return http.Response{
+			status_code: 200
+			body:        '{"code":0,"msg":"ok","data":{"message_id":"${app.feishu_runtime_http_test_next_reply_message_id()}"}}'
 		}
 	}
 	if cfg.url.contains('/im/v1/messages?receive_id_type=') {
@@ -487,6 +502,40 @@ fn feishu_runtime_http_fetch_locked(app &App, cfg http.FetchConfig) !http.Respon
 
 fn (mut app App) feishu_runtime_http_fetch(cfg http.FetchConfig) !http.Response {
 	return feishu_runtime_http_fetch_locked(&app, cfg)
+}
+
+fn feishu_runtime_control_http_fetch_locked(app &App, cfg http.FetchConfig) !http.Response {
+	mut app_mut := unsafe { &App(app) }
+	mut resp := http.Response{}
+	mut fetch_err := ''
+	lock app_mut.feishu_control_http_lane {
+		$if test {
+			if app_mut.feishu_http_test_stub {
+				resp = app_mut.feishu_runtime_http_test_fetch(cfg) or {
+					fetch_err = err.msg()
+					http.Response{}
+				}
+			} else {
+				resp = http.fetch(cfg) or {
+					fetch_err = err.msg()
+					http.Response{}
+				}
+			}
+		} $else {
+			resp = http.fetch(cfg) or {
+				fetch_err = err.msg()
+				http.Response{}
+			}
+		}
+	}
+	if fetch_err != '' {
+		return error(fetch_err)
+	}
+	return resp
+}
+
+fn (mut app App) feishu_runtime_control_http_fetch(cfg http.FetchConfig) !http.Response {
+	return feishu_runtime_control_http_fetch_locked(&app, cfg)
 }
 
 fn feishu_runtime_http_post_multipart_form_locked(app &App, url string, cfg http.PostMultipartFormConfig) !http.Response {
@@ -1165,6 +1214,13 @@ fn feishu_runtime_event_summary(payload string) FeishuRuntimeEventSummary {
 	}
 }
 
+fn feishu_runtime_should_dispatch_upstream(summary FeishuRuntimeEventSummary) bool {
+	if summary.event_type == 'im.message.message_read_v1' {
+		return false
+	}
+	return true
+}
+
 fn (mut app App) feishu_runtime_snapshot() FeishuRuntimeSnapshot {
 	app.feishu_mu.@lock()
 	defer {
@@ -1475,6 +1531,10 @@ fn feishu_runtime_ping_loop(mut app App, instance string, ws_url string, mut ws 
 	if service_id <= 0 {
 		return
 	}
+	mut interval_seconds := app.feishu_runtime_ping_interval_seconds(instance)
+	if interval_seconds <= 0 {
+		interval_seconds = 5
+	}
 	for ws.get_state() == .open {
 		ping := feishu_runtime_build_client_ping(service_id)
 		ws.write(feishu_runtime_proto_frame_encode(ping), .binary_frame) or {
@@ -1485,7 +1545,7 @@ fn feishu_runtime_ping_loop(mut app App, instance string, ws_url string, mut ws 
 		if ws.get_state() != .open {
 			return
 		}
-		time.sleep(15 * time.second)
+		time.sleep(interval_seconds * time.second)
 	}
 }
 
@@ -1495,7 +1555,7 @@ fn (mut app App) feishu_provider_pull_ws_endpoint(app_name string) !string {
 	mut last_status := 0
 	mut last_error := ''
 	for endpoint_url in feishu_runtime_ws_endpoint_urls(app.feishu_open_base_url) {
-		resp := app.feishu_runtime_http_fetch(
+		resp := app.feishu_runtime_control_http_fetch(
 			url:    endpoint_url
 			method: .post
 			data:   body
@@ -1585,24 +1645,39 @@ fn (mut app App) feishu_runtime_send_message(req FeishuRuntimeSendMessageRequest
 	token := app.feishu_runtime_tenant_access_token(app_name)!
 	mut header := http.new_header(key: .content_type, value: 'application/json; charset=utf-8')
 	header.add_custom('authorization', 'Bearer ${token}') or {}
-	payload := json.encode({
-		'receive_id': req.receive_id
-		'msg_type':   msg_type
-		'content':    content
-		'uuid':       req.uuid
-	})
+	mut payload := ''
+	mut url := ''
+	if receive_id_type == 'message_id' {
+		payload = json.encode({
+			'msg_type': msg_type
+			'content':  content
+			'uuid':     req.uuid
+		})
+		url = '${app.feishu_open_base_url}/im/v1/messages/${req.receive_id.trim_space()}/reply'
+	} else {
+		payload = json.encode({
+			'receive_id': req.receive_id
+			'msg_type':   msg_type
+			'content':    content
+			'uuid':       req.uuid
+		})
+		url = '${app.feishu_open_base_url}/im/v1/messages?receive_id_type=${receive_id_type}'
+	}
+	log.info('[feishu] 📤 sending message: method=POST url=${url} payload=${payload.len} bytes')
 	resp := app.feishu_runtime_http_fetch(
-		url:    '${app.feishu_open_base_url}/im/v1/messages?receive_id_type=${receive_id_type}'
+		url:    url
 		method: .post
 		data:   payload
 		header: header
 	) or {
 		app.feishu_runtime_note_send(app_name, false)
+		log.error('[feishu] ❌ send fetch failed: ${err}')
 		return err
 	}
+	log.info('[feishu] 📩 send response: status=${resp.status_code} body=${resp.body}')
 	if resp.status_code != 200 {
 		app.feishu_runtime_note_send(app_name, false)
-		return error('feishu message send failed with status ${resp.status_code}')
+		return error('feishu message send failed with status ${resp.status_code}: ${resp.body}')
 	}
 	decoded := json.decode(FeishuRuntimeSendMessageResponse, resp.body) or {
 		app.feishu_runtime_note_send(app_name, false)
@@ -2105,6 +2180,62 @@ fn (mut app App) feishu_runtime_clear_buffer(message_id string) {
 	app.feishu_mu.unlock()
 }
 
+fn (mut app App) feishu_runtime_stream_id_for_buffer(message_id string) string {
+	if message_id == '' {
+		return ''
+	}
+	app.feishu_mu.@lock()
+	defer {
+		app.feishu_mu.unlock()
+	}
+	if buf := app.feishu_buffers[message_id] {
+		return buf.stream_id
+	}
+	return ''
+}
+
+fn (mut app App) feishu_runtime_clear_buffer_chain(message_id string) int {
+	if message_id == '' {
+		return 0
+	}
+	mut cleared := 0
+	mut current := message_id
+	for current != '' {
+		mut next := ''
+		app.feishu_mu.@lock()
+		if buf := app.feishu_buffers[current] {
+			next = buf.next_message_id
+			app.feishu_buffers.delete(current)
+			cleared++
+		}
+		app.feishu_mu.unlock()
+		current = next
+	}
+	return cleared
+}
+
+fn (mut app App) feishu_runtime_clear_stream_buffers(stream_id string) int {
+	if stream_id == '' {
+		return 0
+	}
+	app.feishu_mu.@lock()
+	keys := app.feishu_buffers.keys()
+	app.feishu_mu.unlock()
+	mut cleared := 0
+	for key in keys {
+		app.feishu_mu.@lock()
+		buf := app.feishu_buffers[key] or {
+			app.feishu_mu.unlock()
+			continue
+		}
+		app.feishu_mu.unlock()
+		if buf.stream_id == stream_id {
+			cleared += app.feishu_runtime_clear_buffer_chain(key)
+		}
+	}
+	return cleared
+}
+
 fn (mut app App) feishu_provider_handle_binary_message(instance string, mut ws websocket.Client, msg &websocket.Message) ! {
 	if msg.opcode != .binary_frame {
 		return
@@ -2194,8 +2325,8 @@ fn (mut app App) feishu_provider_handle_binary_message(instance string, mut ws w
 		'action_value':      summary.action_value
 		'token':             summary.token
 	})
-	if app.worker_backend.sockets.len > 0 {
-		log.info('[feishu] 📤 dispatching to PHP worker (${app.worker_backend.sockets.len} sockets available)')
+	if app.has_websocket_upstream_logic_executor() && feishu_runtime_should_dispatch_upstream(summary) {
+		log.info('[feishu] 📤 dispatching upstream event to logic executor kind=${app.logic_executor_kind()}')
 		mut activity_snapshot := WebSocketUpstreamActivitySnapshot{
 			provider:    websocket_upstream_provider_feishu
 			instance:    app_name
@@ -2264,7 +2395,7 @@ fn (mut app App) feishu_provider_handle_binary_message(instance string, mut ws w
 			return
 		}
 		activity_snapshot.worker_handled = resp.handled
-		log.info('[feishu] ✅ PHP returned: handled=${resp.handled} commands=${resp.commands.len} error=${resp.error}')
+		log.info('[feishu] ✅ logic executor returned: handled=${resp.handled} commands=${resp.commands.len} error=${resp.error}')
 		activity_snapshot.commands = outcome.command_snapshots
 		activity_snapshot.command_error = outcome.command_error
 		app.websocket_upstream_record_activity(activity_snapshot)
@@ -2430,7 +2561,7 @@ fn (mut app App) feishu_callback_by_app(mut ctx Context, raw_app string) veb.Res
 		received_at:       time.now().unix()
 		payload:           payload
 	})
-	if app.worker_backend.sockets.len > 0 {
+	if app.has_websocket_upstream_logic_executor() && feishu_runtime_should_dispatch_upstream(summary) {
 		activity_id := if summary.event_id != '' {
 			summary.event_id
 		} else {

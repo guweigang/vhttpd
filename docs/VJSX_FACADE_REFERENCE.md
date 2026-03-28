@@ -2,7 +2,7 @@
 
 This document summarizes the in-proc `vjsx` facade exposed by `vhttpd`.
 
-Current scope is request/response style HTTP handling in embedded `vjsx` mode.
+Current scope is request/response style HTTP handling plus `websocket_upstream` event dispatch in embedded `vjsx` mode.
 
 ## Entry Resolution
 
@@ -13,6 +13,12 @@ Current scope is request/response style HTTP handling in embedded `vjsx` mode.
 3. `globalThis.__vhttpd_handle`
 
 Recommended style is `export default`.
+
+For bot-style apps, a convenient TS entry shape is:
+
+1. `export default function http(ctx) {}`
+2. `export const websocket_upstream = (frame) => ({ handled, commands })`
+3. `export default { http(ctx) {}, websocket_upstream(frame) {} }`
 
 ## Runtime
 
@@ -40,6 +46,11 @@ Methods:
 - `runtime.error(...args)`
 - `runtime.emit(kind, fields)`
 - `runtime.snapshot()`
+
+Additional runtime fields:
+
+- `runtime.dispatchKind`
+- `runtime.upstream` when dispatch kind is `websocket_upstream`
 
 `runtime.request` exposes read-only request metadata:
 
@@ -153,4 +164,35 @@ Semantic helpers:
 - `ctx.target` preserves the full request target including query string when present.
 - `ctx.problem(...)` returns `application/problem+json; charset=utf-8`.
 - `runtime.snapshot()` is read-only and backed by `vhttpd` runtime/admin snapshot logic.
-- Current embedded `vjsx` scope is one-shot HTTP dispatch. Stream and websocket worker modes are not exposed through this facade.
+- Current embedded `vjsx` scope is HTTP dispatch plus `websocket_upstream` dispatch. Stream, websocket session, and MCP worker modes are not exposed through this facade.
+
+## WebSocket Upstream Frame
+
+When `dispatchKind === "websocket_upstream"`, the handler receives a frame object with:
+
+- `frame.mode`
+- `frame.event`
+- `frame.id`
+- `frame.provider`
+- `frame.instance`
+- `frame.traceId`
+- `frame.eventType`
+- `frame.messageId`
+- `frame.target`
+- `frame.targetType`
+- `frame.payload`
+- `frame.receivedAt`
+- `frame.metadata`
+- `frame.runtime`
+
+Helpers:
+
+- `frame.payloadText(fallbackValue)`
+- `frame.payloadJson(fallbackValue)`
+
+Return shape:
+
+- `false` or `null` for `{ handled: false, commands: [] }`
+- `true` for `{ handled: true, commands: [] }`
+- `Command[]` for `{ handled: true, commands }`
+- `{ handled?: boolean, commands?: Command[] }`

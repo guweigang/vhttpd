@@ -58,6 +58,9 @@ struct VjsxConfig {
 mut:
 	app_entry       string @[toml: 'app_entry']
 	module_root     string @[toml: 'module_root']
+	signature_root  string   @[toml: 'signature_root']
+	signature_include []string @[toml: 'signature_include']
+	signature_exclude []string @[toml: 'signature_exclude']
 	runtime_profile string = 'script' @[toml: 'runtime_profile']
 	thread_count    int    = 1    @[toml: 'thread_count']
 	max_requests    int    @[toml: 'max_requests']

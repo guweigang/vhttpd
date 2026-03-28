@@ -1,0 +1,54 @@
+[paths]
+root = "../../"
+vjsx_app = "examples/codexbot-app-ts/app.mts"
+vjsx_root = "examples/codexbot-app-ts"
+
+[server]
+host = "127.0.0.1"
+port = 19883
+
+[files]
+pid_file = "tmp/vhttpd_codexbot_ts_${server.port}.pid"
+event_log = "tmp/vhttpd_codexbot_ts_${server.port}.events.ndjson"
+
+[runtime]
+timezone = "Asia/Shanghai"
+
+[executor]
+kind = "vjsx"
+
+[vjsx]
+app_entry = "${paths.vjsx_app}"
+module_root = "${paths.vjsx_root}"
+runtime_profile = "node"
+thread_count = 2
+enable_fs = true
+
+[admin]
+host = "127.0.0.1"
+port = 19983
+token = "change-me"
+
+[feishu]
+enabled = true
+open_base_url = "https://open.feishu.cn/open-apis"
+reconnect_delay_ms = 3000
+token_refresh_skew_seconds = 60
+recent_event_limit = 20
+
+[feishu.main]
+app_id = "${env.FEISHU_APP_ID:-}"
+app_secret = "${env.FEISHU_APP_SECRET:-}"
+verification_token = "${env.FEISHU_VERIFICATION_TOKEN:-}"
+encrypt_key = "${env.FEISHU_ENCRYPT_KEY:-}"
+
+[codex]
+enabled = true
+url = "${env.CODEX_URL:-ws://127.0.0.1:4500}"
+model = "gpt-5.4"
+effort = "medium"
+cwd = "${env.CODEX_CWD:-../../codex/default}"
+approval_policy = "never"
+sandbox = "workspace-write"
+reconnect_delay_ms = 3000
+flush_interval_ms = 400
