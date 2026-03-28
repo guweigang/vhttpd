@@ -403,11 +403,18 @@ fn test_builtin_logic_executor_spec_exposes_runtime_models() {
 	assert php_spec.logic_model == .worker
 	assert php_spec.worker_backend_mode == .required
 	assert php_spec.lifecycle.name() == 'php_worker_host'
+	assert php_spec.config_surface.section == 'php'
+	assert php_spec.config_surface.app_entry_flag == '--php-app-entry'
+	assert php_spec.config_surface.worker_entry_flag == '--php-worker-entry'
 	vjsx_spec := builtin_logic_executor_spec('vjsx') or { panic(err) }
 	assert vjsx_spec.provider == 'vjsx'
 	assert vjsx_spec.logic_model == .embedded
 	assert vjsx_spec.worker_backend_mode == .disabled
 	assert vjsx_spec.lifecycle.name() == 'embedded_host'
+	assert vjsx_spec.config_surface.section == 'vjsx'
+	assert vjsx_spec.config_surface.app_entry_flag == '--vjsx-entry'
+	assert vjsx_spec.config_surface.module_root_flag == '--vjsx-module-root'
+	assert vjsx_spec.config_surface.lane_count_flag == '--vjsx-thread-count'
 }
 
 fn test_admin_logic_executor_specs_snapshot_lists_builtin_executors() {
@@ -419,12 +426,17 @@ fn test_admin_logic_executor_specs_snapshot_lists_builtin_executors() {
 	assert snapshot[0].logic_executor_lifecycle == 'php_worker_host'
 	assert snapshot[0].logic_executor_model == 'worker'
 	assert snapshot[0].worker_backend_mode == 'required'
+	assert snapshot[0].config_surface.section == 'php'
+	assert snapshot[0].config_surface.worker_entry_flag == '--php-worker-entry'
 	assert 'php-worker' in snapshot[0].aliases
 	assert snapshot[1].kind == 'vjsx'
 	assert snapshot[1].logic_provider == 'vjsx'
 	assert snapshot[1].logic_executor_lifecycle == 'embedded_host'
 	assert snapshot[1].logic_executor_model == 'embedded'
 	assert snapshot[1].worker_backend_mode == 'disabled'
+	assert snapshot[1].config_surface.section == 'vjsx'
+	assert snapshot[1].config_surface.app_entry_flag == '--vjsx-entry'
+	assert snapshot[1].config_surface.signature_root_flag == '--vjsx-signature-root'
 }
 
 fn test_internal_admin_executors_returns_builtin_executor_specs() {
@@ -440,9 +452,11 @@ fn test_internal_admin_executors_returns_builtin_executor_specs() {
 	assert snapshot[0].kind == 'php'
 	assert snapshot[0].logic_provider == 'php-worker'
 	assert snapshot[0].logic_executor_lifecycle == 'php_worker_host'
+	assert snapshot[0].config_surface.section == 'php'
 	assert snapshot[1].kind == 'vjsx'
 	assert snapshot[1].logic_provider == 'vjsx'
 	assert snapshot[1].logic_executor_lifecycle == 'embedded_host'
+	assert snapshot[1].config_surface.section == 'vjsx'
 }
 
 fn test_php_worker_executor_lifecycle_prepares_worker_command_and_env() {
