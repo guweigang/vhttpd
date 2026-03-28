@@ -313,7 +313,7 @@ fn test_build_php_worker_env_prefers_php_app_entry() {
 	assert env['VHTTPD_APP'] == '/tmp/from-php.php'
 }
 
-fn test_build_php_runtime_config_overrides_from_cli() {
+fn test_builtin_logic_executor_spec_resolves_php_runtime_config_overrides_from_cli() {
 	mut cfg := default_vhttpd_config()
 	cfg.php.bin = 'php'
 	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_php_cli_override_test')
@@ -335,9 +335,10 @@ fn test_build_php_runtime_config_overrides_from_cli() {
 	cfg.php.worker_entry = worker_entry
 	cfg.php.app_entry = app_entry
 	cfg.php.extensions = [ext_a]
-	php_cfg := build_php_runtime_config(['--php-bin', 'php82', '--php-worker-entry', worker_entry,
-		'--php-app-entry', app_entry, '--php-extension', ext_a, '--php-extension', ext_b, '--php-arg',
-		'-d', '--php-arg', 'memory_limit=512M'], cfg) or { panic(err) }
+	php_spec := builtin_logic_executor_spec('php') or { panic(err) }
+	php_cfg := php_spec.resolve_php_runtime_config(['--php-bin', 'php82', '--php-worker-entry',
+		worker_entry, '--php-app-entry', app_entry, '--php-extension', ext_a, '--php-extension',
+		ext_b, '--php-arg', '-d', '--php-arg', 'memory_limit=512M'], cfg) or { panic(err) }
 	assert php_cfg.bin == 'php82'
 	assert php_cfg.worker_entry == worker_entry
 	assert php_cfg.app_entry == app_entry
@@ -358,11 +359,12 @@ fn test_arg_string_list_or_supports_repeated_and_csv_values() {
 	assert values[2] == '/tmp/c.so'
 }
 
-fn test_build_php_runtime_config_reports_missing_paths() {
+fn test_builtin_logic_executor_spec_resolve_php_runtime_config_reports_missing_paths() {
 	mut cfg := default_vhttpd_config()
 	cfg.php.bin = 'php'
 	cfg.php.worker_entry = '/tmp/definitely-missing-worker'
-	build_php_runtime_config([]string{}, cfg) or {
+	php_spec := builtin_logic_executor_spec('php') or { panic(err) }
+	php_spec.resolve_php_runtime_config([]string{}, cfg) or {
 		assert err.msg() == 'php_worker_entry_not_found:/tmp/definitely-missing-worker'
 		return
 	}
@@ -589,6 +591,26 @@ fn test_builtin_logic_executor_spec_runtime_selection_builds_vjsx_executor() {
 	assert selection.executor.model() == .embedded
 	assert selection.worker_backend_mode == .disabled
 	assert selection.lifecycle.name() == 'embedded_host'
+}
+
+fn test_builtin_logic_executor_spec_resolves_vjsx_runtime_config_from_config_surface() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_executor_spec_vjsx_config_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	app_file := os.join_path(temp_dir, 'handler.mts')
+	os.write_file(app_file, 'export default {};') or { panic(err) }
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	vjsx_spec := builtin_logic_executor_spec('vjsx') or { panic(err) }
+	vjsx_cfg := vjsx_spec.resolve_vjsx_runtime_config(['--vjsx-entry', app_file,
+		'--vjsx-thread-count', '2', '--vjsx-runtime-profile', 'node'], default_vhttpd_config()) or {
+		panic(err)
+	}
+	assert vjsx_cfg.app_entry == app_file
+	assert vjsx_cfg.thread_count == 2
+	assert vjsx_cfg.runtime_profile == 'node'
+	assert vjsx_cfg.module_root == temp_dir
+	assert vjsx_cfg.signature_root == temp_dir
 }
 
 fn test_build_app_runtime_projects_executor_plan_into_app_state() {

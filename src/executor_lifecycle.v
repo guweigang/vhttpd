@@ -28,7 +28,8 @@ pub fn (l PhpWorkerExecutorLifecycle) name() string {
 
 pub fn (l PhpWorkerExecutorLifecycle) prepare_bootstrap(args []string, cfg VhttpdConfig, mut state ExecutorBootstrapState) ! {
 	_ = l
-	php_cfg := build_php_runtime_config(args, cfg)!
+	php_spec := builtin_logic_executor_spec('php')!
+	php_cfg := php_spec.resolve_php_runtime_config(args, cfg)!
 	state.worker_env = build_php_worker_env(state.worker_env, php_cfg)
 	if state.worker_cmd.trim_space() == '' {
 		state.worker_cmd = build_php_worker_command(php_cfg)!
