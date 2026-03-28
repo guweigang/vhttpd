@@ -1,14 +1,28 @@
-# VHTTPD (Standalone Runtime for PHP Apps)
+<p align="center">
+  <img src="assets/vhttpd_brand.png" alt="vhttpd brand" width="760" />
+</p>
 
-`vhttpd` is an independent HTTP runtime built on `veb`.
+# VHTTPD
+
+`vhttpd` is a standalone application runtime built on `veb`.
+
+It is no longer just a PHP app server.
+
+`vhttpd` is becoming a protocol and execution host for multiple logic models:
+
+- `php-worker` for external PHP application execution
+- `vjsx` for embedded TypeScript/JavaScript logic
+- WebSocket upstream integrations such as Feishu
+- stream-oriented runtimes such as SSE, text stream, and MCP streamable HTTP
 
 Documentation entry:
 
 - overview: [docs/OVERVIEW.md](/Users/guweigang/Source/vhttpd/docs/OVERVIEW.md)
 
 - HTTP server runs as a standalone V CLI process.
-- PHP userland controls app bootstrap and request handling through workers.
-- `vhttpd` can front any PHP application shape (custom app, framework app, or adapter-based app).
+- request logic is delegated to pluggable executors/hosts
+- PHP userland can still control app bootstrap and request handling through workers
+- `vhttpd` can front PHP apps, embedded `vjsx` apps, and future host types through the same runtime surface
 
 Core design rule:
 
@@ -45,6 +59,8 @@ On top of those connection protocols, `vhttpd` also provides runtime capabilitie
   - for example phase-3 `UpstreamPlan`, where `vhttpd` owns the live upstream stream
 - external worker orchestration
   - today primarily `php-worker`
+- embedded in-process host execution
+  - today `vjsx`
 - worker transport and worker pool management
 - runtime/admin observability
 - protocol adapters such as MCP Streamable HTTP
@@ -80,16 +96,19 @@ flowchart TB
             Pool["worker_backend_pool.v\nworker pool / restart / drain"]
             Admin["admin_runtime.v + admin_workers.v\nruntime admin / worker admin"]
         end
+        Exec["logic executors\nphp / vjsx / future hosts"]
     end
-    subgraph WorkerSide["external workers"]
+    subgraph WorkerSide["external workers / hosts"]
         PhpWorker["php-worker"]
         PhpApp["PHP app / framework / VSlim / ProviderApp"]
+        VjsxHost["vjsx embedded host"]
     end
     UpstreamApi["Upstream streaming APIs\nOllama / NDJSON / token streams"]
     AdminClient["Admin / Ops clients"]
 
     Client --> Ingress
     Ingress --> Main
+    Main --> Exec
     Main --> Transport
     Main --> Stream
     Main --> Upstream
@@ -97,6 +116,8 @@ flowchart TB
     Main --> Mcp
     Main --> Pool
     Main --> Admin
+    Exec --> VjsxHost
+    Exec --> PhpWorker
     Transport --> PhpWorker
     Pool --> PhpWorker
     PhpWorker --> PhpApp
@@ -145,8 +166,9 @@ Release rule:
 ```mermaid
 flowchart LR
     A["Client"] --> B["vhttpd (veb)"]
-    B --> C["php-worker"]
-    C --> D["PHP App / Framework"]
+    B --> C["logic executors"]
+    C --> D["php-worker -> PHP App / Framework"]
+    C --> E["vjsx embedded app"]
 ```
 
 ## Why this matters in PHP (vs nginx + PHP-FPM)
