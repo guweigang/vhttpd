@@ -63,6 +63,11 @@ pub enum LogicExecutorModel {
 	embedded
 }
 
+pub enum WorkerBackendMode {
+	required
+	disabled
+}
+
 pub interface LogicExecutor {
 	model() LogicExecutorModel
 	kind() string

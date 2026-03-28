@@ -137,8 +137,8 @@ fn validate_args(args []string) ! {
 }
 
 struct ExecutorRuntimeSelection {
-	executor               LogicExecutor
-	disable_worker_backend bool
+	executor            LogicExecutor
+	worker_backend_mode WorkerBackendMode = .required
 }
 
 fn shell_quote_arg(raw string) string {
@@ -292,9 +292,9 @@ fn resolve_executor_runtime(args []string, cfg VhttpdConfig) !ExecutorRuntimeSel
 		}
 		'vjsx' {
 			return ExecutorRuntimeSelection{
-				executor:               new_inproc_vjsx_executor(build_vjsx_runtime_config(args,
+				executor:            new_inproc_vjsx_executor(build_vjsx_runtime_config(args,
 					cfg)!)
-				disable_worker_backend: true
+				worker_backend_mode: .disabled
 			}
 		}
 		else {
@@ -358,7 +358,7 @@ fn run_server(args []string) {
 			}
 		}
 	}
-	if executor_runtime.disable_worker_backend {
+	if executor_runtime.worker_backend_mode == .disabled {
 		worker_sockets = []string{}
 		worker_autostart_effective = false
 		worker_cmd_effective = ''
@@ -390,6 +390,7 @@ fn run_server(args []string) {
 			queue_timeout_ms:       worker_queue_timeout_ms
 			queue_poll_ms:          10
 		}
+		worker_backend_mode:                      executor_runtime.worker_backend_mode
 		logic_executor:                           executor_runtime.executor
 		internal_admin_socket:                    internal_admin_socket
 		stream_dispatch:                          stream_dispatch
@@ -539,6 +540,7 @@ fn run_server(args []string) {
 		'port':                 '${port}'
 		'pid':                  '${os.getpid()}'
 		'worker_backend':       app.worker_backend.kind()
+		'worker_backend_mode':  '${app.worker_backend_mode}'
 		'logic_executor':       app.logic_executor_kind()
 		'logic_executor_model': '${app.logic_executor_model()}'
 		'logic_provider':       app.logic_executor_provider()

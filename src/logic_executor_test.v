@@ -20,7 +20,8 @@ fn test_logic_executor_can_hold_inproc_vjsx_executor() {
 
 fn test_admin_runtime_snapshot_exposes_embedded_logic_executor_identity() {
 	mut app := App{
-		logic_executor: new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
+		worker_backend_mode: .disabled
+		logic_executor:      new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
 			thread_count: 1
 		})
 	}
@@ -28,11 +29,13 @@ fn test_admin_runtime_snapshot_exposes_embedded_logic_executor_identity() {
 	assert snapshot.logic_executor == 'vjsx'
 	assert snapshot.logic_executor_model == 'embedded'
 	assert snapshot.logic_provider == 'vjsx'
+	assert snapshot.worker_backend_mode == 'disabled'
 }
 
 fn test_internal_admin_runtime_exposes_worker_logic_executor_identity() {
 	mut app := App{
-		logic_executor: SocketWorkerExecutor{}
+		worker_backend_mode: .required
+		logic_executor:      SocketWorkerExecutor{}
 	}
 	resp := app.internal_admin_dispatch(InternalAdminRequest{
 		mode:   'vhttpd_admin'
@@ -44,4 +47,5 @@ fn test_internal_admin_runtime_exposes_worker_logic_executor_identity() {
 	assert snapshot.logic_executor == 'php'
 	assert snapshot.logic_executor_model == 'worker'
 	assert snapshot.logic_provider == 'php-worker'
+	assert snapshot.worker_backend_mode == 'required'
 }

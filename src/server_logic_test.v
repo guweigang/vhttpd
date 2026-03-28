@@ -219,7 +219,7 @@ fn test_resolve_executor_runtime_defaults_to_php() {
 	assert selection.executor.model() == .worker
 	assert selection.executor.kind() == 'php'
 	assert selection.executor.provider() == 'php-worker'
-	assert !selection.disable_worker_backend
+	assert selection.worker_backend_mode == .required
 }
 
 fn test_build_php_worker_command_from_php_section() {
@@ -330,5 +330,5 @@ fn test_resolve_executor_runtime_builds_vjsx_executor() {
 	assert selection.executor.model() == .embedded
 	assert selection.executor.kind() == 'vjsx'
 	assert selection.executor.provider() == 'vjsx'
-	assert selection.disable_worker_backend
+	assert selection.worker_backend_mode == .disabled
 }

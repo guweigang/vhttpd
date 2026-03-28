@@ -16,6 +16,17 @@ Core design rule:
 - `vhttpd` stays thin and reuses `veb` / `http` / `urllib`.
 - `vhttpd` focuses on transport, worker orchestration, streaming, and observability.
 
+## Logic Executors
+
+`vhttpd` now treats request logic as an executor concern, not as something permanently tied to PHP workers.
+
+- `php` is the current worker-model logic executor
+- `vjsx` is the current embedded-model logic executor
+- the execution model is visible in runtime/admin surfaces as `logic_executor_model`
+- worker backend policy is surfaced separately as `worker_backend_mode`, so operators can distinguish "disabled by design" from "unexpectedly unavailable"
+
+This is the direction for future hosts too: if we add `lua` later, it should slot into the same executor model instead of forcing another round of one-off abstractions.
+
 ## What vhttpd Is
 
 `vhttpd` can be understood as an HTTP-family gateway/runtime.
