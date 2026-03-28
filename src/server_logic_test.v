@@ -399,6 +399,8 @@ fn test_normalize_executor_kind_accepts_aliases() {
 
 fn test_builtin_logic_executor_spec_exposes_runtime_models() {
 	php_spec := builtin_logic_executor_spec('php') or { panic(err) }
+	assert php_spec.matches_kind('')
+	assert php_spec.matches_kind('php-worker')
 	assert php_spec.provider == 'php-worker'
 	assert php_spec.logic_model == .worker
 	assert php_spec.worker_backend_mode == .required
@@ -407,6 +409,7 @@ fn test_builtin_logic_executor_spec_exposes_runtime_models() {
 	assert php_spec.config_surface.app_entry_flag == '--php-app-entry'
 	assert php_spec.config_surface.worker_entry_flag == '--php-worker-entry'
 	vjsx_spec := builtin_logic_executor_spec('vjsx') or { panic(err) }
+	assert vjsx_spec.matches_kind('vjsx')
 	assert vjsx_spec.provider == 'vjsx'
 	assert vjsx_spec.logic_model == .embedded
 	assert vjsx_spec.worker_backend_mode == .disabled
@@ -415,6 +418,11 @@ fn test_builtin_logic_executor_spec_exposes_runtime_models() {
 	assert vjsx_spec.config_surface.app_entry_flag == '--vjsx-entry'
 	assert vjsx_spec.config_surface.module_root_flag == '--vjsx-module-root'
 	assert vjsx_spec.config_surface.lane_count_flag == '--vjsx-thread-count'
+	vjsx_snapshot := vjsx_spec.admin_snapshot()
+	assert vjsx_snapshot.kind == 'vjsx'
+	assert vjsx_snapshot.logic_provider == 'vjsx'
+	assert vjsx_snapshot.logic_executor_lifecycle == 'embedded_host'
+	assert vjsx_snapshot.config_surface.section == 'vjsx'
 }
 
 fn test_admin_logic_executor_specs_snapshot_lists_builtin_executors() {
@@ -561,6 +569,26 @@ fn test_resolve_logic_executor_runtime_plan_for_vjsx_disables_worker_bootstrap()
 	assert !plan.bootstrap.worker_autostart
 	assert plan.bootstrap.worker_cmd == ''
 	assert plan.bootstrap.worker_env['VHTTPD_APP'] == '/tmp/app.php'
+}
+
+fn test_builtin_logic_executor_spec_runtime_selection_builds_vjsx_executor() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_executor_spec_selection_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	app_file := os.join_path(temp_dir, 'app.mts')
+	os.write_file(app_file, 'export default { async handle() { return { status: 200, body: "ok" }; } };') or {
+		panic(err)
+	}
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	spec := builtin_logic_executor_spec('vjsx') or { panic(err) }
+	selection := spec.runtime_selection(['--vjsx-entry', app_file], default_vhttpd_config()) or {
+		panic(err)
+	}
+	assert selection.executor.kind() == 'vjsx'
+	assert selection.executor.model() == .embedded
+	assert selection.worker_backend_mode == .disabled
+	assert selection.lifecycle.name() == 'embedded_host'
 }
 
 fn test_build_app_runtime_projects_executor_plan_into_app_state() {

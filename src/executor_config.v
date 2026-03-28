@@ -142,11 +142,6 @@ fn build_vjsx_runtime_config(args []string, cfg VhttpdConfig) !VjsxRuntimeFacade
 }
 
 fn resolve_executor_runtime(args []string, cfg VhttpdConfig) !ExecutorRuntimeSelection {
-	kind := normalize_executor_kind(arg_string_or(args, '--executor', cfg.executor.kind))!
-	spec := builtin_logic_executor_spec(kind)!
-	return ExecutorRuntimeSelection{
-		executor:            build_builtin_logic_executor(kind, args, cfg)!
-		worker_backend_mode: spec.worker_backend_mode
-		lifecycle:           build_builtin_logic_executor_lifecycle(kind)!
-	}
+	spec := builtin_logic_executor_spec(arg_string_or(args, '--executor', cfg.executor.kind))!
+	return spec.runtime_selection(args, cfg)
 }

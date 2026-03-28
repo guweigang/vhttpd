@@ -87,28 +87,65 @@ fn builtin_logic_executor_kinds_label() string {
 	return builtin_logic_executor_kinds().join(' | ')
 }
 
-fn normalize_executor_kind(raw string) !string {
-	normalized := raw.trim_space().to_lower().replace('-', '_')
-	for spec in builtin_logic_executor_specs() {
-		if normalized == '' && spec.kind == 'php' {
-			return spec.kind
-		}
-		if normalized == spec.kind {
-			return spec.kind
-		}
-		for alias in spec.aliases {
-			if normalized == alias.replace('-', '_') {
-				return spec.kind
-			}
+fn normalize_builtin_logic_executor_kind(raw string) string {
+	return raw.trim_space().to_lower().replace('-', '_')
+}
+
+fn (spec BuiltinLogicExecutorSpec) matches_kind(raw string) bool {
+	normalized := normalize_builtin_logic_executor_kind(raw)
+	if normalized == '' {
+		return spec.kind == 'php'
+	}
+	if normalized == spec.kind {
+		return true
+	}
+	for alias in spec.aliases {
+		if normalized == alias.replace('-', '_') {
+			return true
 		}
 	}
-	return error('unsupported executor kind: ${raw}')
+	return false
+}
+
+fn (spec BuiltinLogicExecutorSpec) admin_snapshot() AdminLogicExecutorSpecSnapshot {
+	return AdminLogicExecutorSpecSnapshot{
+		kind:                     spec.kind
+		aliases:                  spec.aliases.clone()
+		logic_provider:           spec.provider
+		logic_executor_lifecycle: spec.lifecycle.name()
+		logic_executor_model:     spec.logic_model.str()
+		worker_backend_mode:      spec.worker_backend_mode.str()
+		config_surface:           spec.config_surface
+	}
+}
+
+fn (spec BuiltinLogicExecutorSpec) build_executor(args []string, cfg VhttpdConfig) !LogicExecutor {
+	match spec.factory {
+		.socket_worker {
+			return SocketWorkerExecutor{}
+		}
+		.inproc_vjsx {
+			return new_inproc_vjsx_executor(build_vjsx_runtime_config(args, cfg)!)
+		}
+	}
+}
+
+fn (spec BuiltinLogicExecutorSpec) runtime_selection(args []string, cfg VhttpdConfig) !ExecutorRuntimeSelection {
+	return ExecutorRuntimeSelection{
+		executor:            spec.build_executor(args, cfg)!
+		worker_backend_mode: spec.worker_backend_mode
+		lifecycle:           spec.lifecycle
+	}
+}
+
+fn normalize_executor_kind(raw string) !string {
+	spec := builtin_logic_executor_spec(raw)!
+	return spec.kind
 }
 
 fn builtin_logic_executor_spec(kind string) !BuiltinLogicExecutorSpec {
-	normalized := normalize_executor_kind(kind)!
 	for spec in builtin_logic_executor_specs() {
-		if spec.kind == normalized {
+		if spec.matches_kind(kind) {
 			return spec
 		}
 	}
@@ -120,36 +157,7 @@ pub fn (mut app App) admin_logic_executor_specs_snapshot() []AdminLogicExecutorS
 	specs := builtin_logic_executor_specs()
 	mut snapshots := []AdminLogicExecutorSpecSnapshot{cap: specs.len}
 	for spec in specs {
-		snapshots << AdminLogicExecutorSpecSnapshot{
-			kind:                     spec.kind
-			aliases:                  spec.aliases.clone()
-			logic_provider:           spec.provider
-			logic_executor_lifecycle: spec.lifecycle.name()
-			logic_executor_model:     spec.logic_model.str()
-			worker_backend_mode:      spec.worker_backend_mode.str()
-			config_surface:           spec.config_surface
-		}
+		snapshots << spec.admin_snapshot()
 	}
 	return snapshots
-}
-
-fn build_builtin_logic_executor_from_spec(spec BuiltinLogicExecutorSpec, args []string, cfg VhttpdConfig) !LogicExecutor {
-	match spec.factory {
-		.socket_worker {
-			return SocketWorkerExecutor{}
-		}
-		.inproc_vjsx {
-			return new_inproc_vjsx_executor(build_vjsx_runtime_config(args, cfg)!)
-		}
-	}
-}
-
-fn build_builtin_logic_executor(kind string, args []string, cfg VhttpdConfig) !LogicExecutor {
-	spec := builtin_logic_executor_spec(kind)!
-	return build_builtin_logic_executor_from_spec(spec, args, cfg)
-}
-
-fn build_builtin_logic_executor_lifecycle(kind string) !LogicExecutorLifecycle {
-	spec := builtin_logic_executor_spec(kind)!
-	return spec.lifecycle
 }
