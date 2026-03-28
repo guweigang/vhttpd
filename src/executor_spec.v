@@ -1,17 +1,26 @@
 module main
 
+enum BuiltinLogicExecutorFactoryKind {
+	socket_worker
+	inproc_vjsx
+}
+
 struct BuiltinLogicExecutorSpec {
 pub:
 	kind                string
 	aliases             []string
+	provider            string
 	logic_model         LogicExecutorModel
 	worker_backend_mode WorkerBackendMode
+	lifecycle           LogicExecutorLifecycle
+	factory             BuiltinLogicExecutorFactoryKind
 }
 
 pub struct AdminLogicExecutorSpecSnapshot {
 pub:
 	kind                     string
 	aliases                  []string
+	logic_provider           string @[json: 'logic_provider']
 	logic_executor_lifecycle string @[json: 'logic_executor_lifecycle']
 	logic_executor_model     string @[json: 'logic_executor_model']
 	worker_backend_mode      string @[json: 'worker_backend_mode']
@@ -22,14 +31,20 @@ fn builtin_logic_executor_specs() []BuiltinLogicExecutorSpec {
 		BuiltinLogicExecutorSpec{
 			kind:                'php'
 			aliases:             ['php_worker', 'php-worker']
+			provider:            'php-worker'
 			logic_model:         .worker
 			worker_backend_mode: .required
+			lifecycle:           PhpWorkerExecutorLifecycle{}
+			factory:             .socket_worker
 		},
 		BuiltinLogicExecutorSpec{
 			kind:                'vjsx'
 			aliases:             []string{}
+			provider:            'vjsx'
 			logic_model:         .embedded
 			worker_backend_mode: .disabled
+			lifecycle:           EmbeddedExecutorLifecycle{}
+			factory:             .inproc_vjsx
 		},
 	]
 }
@@ -75,11 +90,11 @@ pub fn (mut app App) admin_logic_executor_specs_snapshot() []AdminLogicExecutorS
 	specs := builtin_logic_executor_specs()
 	mut snapshots := []AdminLogicExecutorSpecSnapshot{cap: specs.len}
 	for spec in specs {
-		lifecycle := build_builtin_logic_executor_lifecycle(spec.kind) or { panic(err) }
 		snapshots << AdminLogicExecutorSpecSnapshot{
 			kind:                     spec.kind
 			aliases:                  spec.aliases.clone()
-			logic_executor_lifecycle: lifecycle.name()
+			logic_provider:           spec.provider
+			logic_executor_lifecycle: spec.lifecycle.name()
 			logic_executor_model:     spec.logic_model.str()
 			worker_backend_mode:      spec.worker_backend_mode.str()
 		}
@@ -87,30 +102,23 @@ pub fn (mut app App) admin_logic_executor_specs_snapshot() []AdminLogicExecutorS
 	return snapshots
 }
 
-fn build_builtin_logic_executor(kind string, args []string, cfg VhttpdConfig) !LogicExecutor {
-	match normalize_executor_kind(kind)! {
-		'php' {
+fn build_builtin_logic_executor_from_spec(spec BuiltinLogicExecutorSpec, args []string, cfg VhttpdConfig) !LogicExecutor {
+	match spec.factory {
+		.socket_worker {
 			return SocketWorkerExecutor{}
 		}
-		'vjsx' {
+		.inproc_vjsx {
 			return new_inproc_vjsx_executor(build_vjsx_runtime_config(args, cfg)!)
-		}
-		else {
-			return error('unsupported executor kind: ${kind}')
 		}
 	}
 }
 
+fn build_builtin_logic_executor(kind string, args []string, cfg VhttpdConfig) !LogicExecutor {
+	spec := builtin_logic_executor_spec(kind)!
+	return build_builtin_logic_executor_from_spec(spec, args, cfg)
+}
+
 fn build_builtin_logic_executor_lifecycle(kind string) !LogicExecutorLifecycle {
-	match normalize_executor_kind(kind)! {
-		'php' {
-			return PhpWorkerExecutorLifecycle{}
-		}
-		'vjsx' {
-			return EmbeddedExecutorLifecycle{}
-		}
-		else {
-			return error('unsupported executor kind: ${kind}')
-		}
-	}
+	spec := builtin_logic_executor_spec(kind)!
+	return spec.lifecycle
 }
