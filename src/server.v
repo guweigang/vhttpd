@@ -2,8 +2,6 @@ module main
 
 import log
 import os
-import time
-import veb.request_id
 
 #include <time.h>
 
