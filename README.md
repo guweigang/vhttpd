@@ -23,6 +23,7 @@ Core design rule:
 - `php` is the current worker-model logic executor
 - `vjsx` is the current embedded-model logic executor
 - the execution model is visible in runtime/admin surfaces as `logic_executor_model`
+- the concrete host lifecycle is visible as `logic_executor_lifecycle`
 - worker backend policy is surfaced separately as `worker_backend_mode`, so operators can distinguish "disabled by design" from "unexpectedly unavailable"
 
 This is the direction for future hosts too: if we add `lua` later, it should slot into the same executor model instead of forcing another round of one-off abstractions.

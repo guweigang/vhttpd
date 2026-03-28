@@ -138,7 +138,8 @@ fn validate_args(args []string) ! {
 
 struct ExecutorRuntimeSelection {
 	executor            LogicExecutor
-	worker_backend_mode WorkerBackendMode = .required
+	worker_backend_mode WorkerBackendMode      = .required
+	lifecycle           LogicExecutorLifecycle = PhpWorkerExecutorLifecycle{}
 }
 
 fn shell_quote_arg(raw string) string {
@@ -273,6 +274,7 @@ fn resolve_executor_runtime(args []string, cfg VhttpdConfig) !ExecutorRuntimeSel
 	return ExecutorRuntimeSelection{
 		executor:            build_builtin_logic_executor(kind, args, cfg)!
 		worker_backend_mode: spec.worker_backend_mode
+		lifecycle:           build_builtin_logic_executor_lifecycle(kind)!
 	}
 }
 
@@ -315,28 +317,17 @@ fn run_server(args []string) {
 		cfg.worker.pool_size, cfg.worker.socket_prefix, cfg.worker.sockets.join(','))
 	mut stream_dispatch := cfg.worker.stream_dispatch
 	mut websocket_dispatch_mode := cfg.worker.websocket_dispatch
-	mut worker_autostart_effective := worker_autostart
-	mut worker_cmd_effective := worker_cmd_override
-	mut worker_env_effective := cfg.worker.env.clone()
-	if executor_runtime.executor.model() == .worker {
-		php_cfg_effective := build_php_runtime_config(args, cfg) or {
-			log.error('php runtime config resolve failed: ${err}')
-			return
-		}
-		worker_env_effective = build_php_worker_env(cfg.worker.env, php_cfg_effective)
-		if worker_cmd_effective.trim_space() == '' {
-			worker_cmd_effective = build_php_worker_command(php_cfg_effective) or {
-				log.error('php worker command build failed: ${err}')
-				return
-			}
-		}
+	mut executor_bootstrap := ExecutorBootstrapState{
+		worker_sockets:          worker_sockets
+		stream_dispatch:         stream_dispatch
+		websocket_dispatch_mode: websocket_dispatch_mode
+		worker_autostart:        worker_autostart
+		worker_cmd:              worker_cmd_override
+		worker_env:              cfg.worker.env.clone()
 	}
-	if executor_runtime.worker_backend_mode == .disabled {
-		worker_sockets = []string{}
-		worker_autostart_effective = false
-		worker_cmd_effective = ''
-		stream_dispatch = false
-		websocket_dispatch_mode = false
+	executor_runtime.lifecycle.prepare_bootstrap(args, cfg, mut executor_bootstrap) or {
+		log.error('executor lifecycle bootstrap failed: ${err}')
+		return
 	}
 	workdir := os.getwd()
 
@@ -350,11 +341,11 @@ fn run_server(args []string) {
 		started_at_unix:                          time.now().unix()
 		worker_backend:                           WorkerBackendRuntime{
 			backend:                PhpWorkerBackend{}
-			sockets:                worker_sockets
+			sockets:                executor_bootstrap.worker_sockets
 			read_timeout_ms:        worker_read_timeout_ms
-			autostart:              worker_autostart_effective
-			cmd:                    worker_cmd_effective
-			env:                    worker_env_effective
+			autostart:              executor_bootstrap.worker_autostart
+			cmd:                    executor_bootstrap.worker_cmd
+			env:                    executor_bootstrap.worker_env
 			workdir:                workdir
 			restart_backoff_ms:     worker_restart_backoff_ms
 			restart_backoff_max_ms: worker_restart_backoff_max_ms
@@ -365,9 +356,10 @@ fn run_server(args []string) {
 		}
 		worker_backend_mode:                      executor_runtime.worker_backend_mode
 		logic_executor:                           executor_runtime.executor
+		logic_executor_lifecycle:                 executor_runtime.lifecycle.name()
 		internal_admin_socket:                    internal_admin_socket
-		stream_dispatch:                          stream_dispatch
-		websocket_dispatch_mode:                  websocket_dispatch_mode
+		stream_dispatch:                          executor_bootstrap.stream_dispatch
+		websocket_dispatch_mode:                  executor_bootstrap.websocket_dispatch_mode
 		admin_on_data_plane:                      !admin_enabled
 		admin_token:                              admin_token
 		assets_enabled:                           assets_enabled
@@ -437,7 +429,7 @@ fn run_server(args []string) {
 		app.emit('server.stopped', {
 			'pid': '${os.getpid()}'
 		})
-		stop_worker_pool(mut app.worker_backend.managed_workers)
+		executor_runtime.lifecycle.stop(mut app)
 		// Graceful provider shutdown is now spec/runtime-driven.
 		app.stop_all_providers()
 		os.rm(internal_admin_socket) or {}
@@ -451,35 +443,7 @@ fn run_server(args []string) {
 	}
 	bootstrap_providers(mut app)
 
-	if worker_autostart_effective {
-		app.worker_backend.managed_workers = start_worker_pool(app.worker_backend.cmd,
-			app.worker_backend.env, app.worker_backend.sockets, app.worker_backend.workdir)
-		if app.worker_backend.managed_workers.len == 0 && app.worker_backend.sockets.len > 0 {
-			log.warn('worker pool is empty after startup; server will stay up and keep retrying')
-			app.emit('worker.pool.empty', {
-				'worker_pool_size': '${app.worker_backend.sockets.len}'
-				'worker_cmd':       app.worker_backend.cmd
-			})
-		}
-		for worker in app.worker_backend.managed_workers {
-			mut w := worker
-			if !isnil(w.proc) && w.proc.is_alive() {
-				app.emit('worker.started', {
-					'worker_id':     '${w.id}'
-					'socket':        w.socket_path
-					'restart_count': '${w.restart_count}'
-				})
-			} else {
-				app.emit('worker.restart_scheduled', {
-					'worker_id':     '${w.id}'
-					'socket':        w.socket_path
-					'restart_count': '${w.restart_count}'
-					'next_retry_ts': '${w.next_retry_ts}'
-					'reason':        'initial_start_failed'
-				})
-			}
-		}
-	}
+	executor_runtime.lifecycle.start(mut app)
 	if app.assets_enabled && app.assets_root_real != '' {
 		app.mount_static_folder_at(app.assets_root_real, app.assets_prefix) or {
 			log.error('assets mount failed: ${err}')
@@ -509,19 +473,20 @@ fn run_server(args []string) {
 		)
 	}
 	app.emit('server.started', {
-		'host':                 host
-		'port':                 '${port}'
-		'pid':                  '${os.getpid()}'
-		'worker_backend':       app.worker_backend.kind()
-		'worker_backend_mode':  '${app.worker_backend_mode}'
-		'logic_executor':       app.logic_executor_kind()
-		'logic_executor_model': '${app.logic_executor_model()}'
-		'logic_provider':       app.logic_executor_provider()
-		'worker_autostart':     if app.worker_backend.autostart { 'true' } else { 'false' }
-		'worker_pool_size':     '${app.worker_backend.sockets.len}'
-		'admin_enabled':        if admin_enabled { 'true' } else { 'false' }
-		'admin_host':           if admin_enabled { admin_host } else { '' }
-		'admin_port':           if admin_enabled { '${admin_port}' } else { '' }
+		'host':                     host
+		'port':                     '${port}'
+		'pid':                      '${os.getpid()}'
+		'worker_backend':           app.worker_backend.kind()
+		'worker_backend_mode':      '${app.worker_backend_mode}'
+		'logic_executor':           app.logic_executor_kind()
+		'logic_executor_lifecycle': app.logic_executor_lifecycle
+		'logic_executor_model':     '${app.logic_executor_model()}'
+		'logic_provider':           app.logic_executor_provider()
+		'worker_autostart':         if app.worker_backend.autostart { 'true' } else { 'false' }
+		'worker_pool_size':         '${app.worker_backend.sockets.len}'
+		'admin_enabled':            if admin_enabled { 'true' } else { 'false' }
+		'admin_host':               if admin_enabled { admin_host } else { '' }
+		'admin_port':               if admin_enabled { '${admin_port}' } else { '' }
 	})
 	if admin_enabled {
 		go run_admin_server(mut app, admin_host, admin_port, admin_token)

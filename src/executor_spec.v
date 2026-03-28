@@ -97,3 +97,17 @@ fn build_builtin_logic_executor(kind string, args []string, cfg VhttpdConfig) !L
 		}
 	}
 }
+
+fn build_builtin_logic_executor_lifecycle(kind string) !LogicExecutorLifecycle {
+	match normalize_executor_kind(kind)! {
+		'php' {
+			return PhpWorkerExecutorLifecycle{}
+		}
+		'vjsx' {
+			return EmbeddedExecutorLifecycle{}
+		}
+		else {
+			return error('unsupported executor kind: ${kind}')
+		}
+	}
+}

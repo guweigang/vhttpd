@@ -10,6 +10,8 @@ Each executor has two orthogonal traits:
 - `logic_executor_model`: `worker` or `embedded`
 - `worker_backend_mode`: `required` or `disabled`
 
+At runtime there is also a concrete host lifecycle label exposed as `logic_executor_lifecycle`, which tells you which launcher/shutdown path the selected executor is using.
+
 That split matters because future hosts such as `lua` should be able to join the same executor surface without forcing `vhttpd` to treat every new runtime as a special case.
 
 You can inspect the current built-in executor catalog through `/admin/executors`.

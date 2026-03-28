@@ -217,6 +217,7 @@ root = "\${paths.assets_root}"
 
 fn test_resolve_executor_runtime_defaults_to_php() {
 	selection := resolve_executor_runtime([]string{}, default_vhttpd_config()) or { panic(err) }
+	assert selection.lifecycle.name() == 'php_worker_host'
 	assert selection.executor.model() == .worker
 	assert selection.executor.kind() == 'php'
 	assert selection.executor.provider() == 'php-worker'
@@ -328,6 +329,7 @@ fn test_resolve_executor_runtime_builds_vjsx_executor() {
 		'--vjsx-thread-count', '2', '--vjsx-runtime-profile', 'script'], default_vhttpd_config()) or {
 		panic(err)
 	}
+	assert selection.lifecycle.name() == 'embedded_host'
 	assert selection.executor.model() == .embedded
 	assert selection.executor.kind() == 'vjsx'
 	assert selection.executor.provider() == 'vjsx'
@@ -375,4 +377,51 @@ fn test_internal_admin_executors_returns_builtin_executor_specs() {
 	assert snapshot.len == 2
 	assert snapshot[0].kind == 'php'
 	assert snapshot[1].kind == 'vjsx'
+}
+
+fn test_php_worker_executor_lifecycle_prepares_worker_command_and_env() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_php_executor_lifecycle_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	worker_entry := os.join_path(temp_dir, 'php-worker.php')
+	app_entry := os.join_path(temp_dir, 'app.php')
+	os.write_file(worker_entry, '<?php echo "worker";') or { panic(err) }
+	os.write_file(app_entry, '<?php echo "app";') or { panic(err) }
+	defer {
+		os.rm(worker_entry) or {}
+		os.rm(app_entry) or {}
+	}
+	mut cfg := default_vhttpd_config()
+	cfg.php.worker_entry = worker_entry
+	cfg.php.app_entry = app_entry
+	mut state := ExecutorBootstrapState{
+		worker_autostart: true
+		worker_env:       {
+			'APP_ENV': 'test'
+		}
+	}
+	PhpWorkerExecutorLifecycle{}.prepare_bootstrap([]string{}, cfg, mut state) or { panic(err) }
+	assert state.worker_env['APP_ENV'] == 'test'
+	assert state.worker_env['VHTTPD_APP'] == app_entry
+	assert state.worker_cmd.contains(worker_entry)
+}
+
+fn test_embedded_executor_lifecycle_disables_worker_backend_features() {
+	mut state := ExecutorBootstrapState{
+		worker_sockets:          ['/tmp/a.sock']
+		stream_dispatch:         true
+		websocket_dispatch_mode: true
+		worker_autostart:        true
+		worker_cmd:              'php worker.php'
+		worker_env:              {
+			'VHTTPD_APP': '/tmp/app.php'
+		}
+	}
+	EmbeddedExecutorLifecycle{}.prepare_bootstrap([]string{}, default_vhttpd_config(), mut
+		state) or { panic(err) }
+	assert state.worker_sockets.len == 0
+	assert !state.stream_dispatch
+	assert !state.websocket_dispatch_mode
+	assert !state.worker_autostart
+	assert state.worker_cmd == ''
+	assert state.worker_env['VHTTPD_APP'] == '/tmp/app.php'
 }

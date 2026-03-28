@@ -28,6 +28,7 @@ pub mut:
 	worker_backend                              WorkerBackendRuntime
 	worker_backend_mode                         WorkerBackendMode = .required
 	logic_executor                              LogicExecutor     = SocketWorkerExecutor{}
+	logic_executor_lifecycle                    string
 	internal_admin_socket                       string
 	stream_dispatch                             bool
 	websocket_dispatch_mode                     bool
@@ -1418,13 +1419,21 @@ pub fn (mut app App) provider_runtime_upstream_launches() []ProviderRuntimeUpstr
 
 pub fn (mut app App) provider_runtime_upstream_enabled(name string, instance string) bool {
 	return match name {
-		'feishu' { app.provider_runtime_ready('feishu')
-				&& instance in app.provider_runtime_instances('feishu') }
-		'codex' { app.provider_runtime_ready('codex')
-				&& instance in app.provider_runtime_instances('codex') }
-		'ollama' { app.provider_runtime_ready('ollama')
-				&& instance in app.provider_runtime_instances('ollama') }
-		else { false }
+		'feishu' {
+			app.provider_runtime_ready('feishu')
+				&& instance in app.provider_runtime_instances('feishu')
+		}
+		'codex' {
+			app.provider_runtime_ready('codex')
+				&& instance in app.provider_runtime_instances('codex')
+		}
+		'ollama' {
+			app.provider_runtime_ready('ollama')
+				&& instance in app.provider_runtime_instances('ollama')
+		}
+		else {
+			false
+		}
 	}
 }
 
