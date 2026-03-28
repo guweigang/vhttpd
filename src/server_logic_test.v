@@ -3,6 +3,54 @@ module main
 import json
 import os
 
+struct TestShutdownExecutorLifecycle {}
+
+fn (l TestShutdownExecutorLifecycle) name() string {
+	_ = l
+	return 'test_shutdown_lifecycle'
+}
+
+fn (l TestShutdownExecutorLifecycle) prepare_bootstrap(args []string, cfg VhttpdConfig, mut state ExecutorBootstrapState) ! {
+	_ = l
+	_ = args
+	_ = cfg
+	_ = state
+}
+
+fn (l TestShutdownExecutorLifecycle) start(mut app App) {
+	_ = l
+	_ = app
+}
+
+fn (l TestShutdownExecutorLifecycle) stop(mut app App) {
+	_ = l
+	app.emit('test.executor.stopped', {
+		'source': 'lifecycle'
+	})
+}
+
+struct TestShutdownProviderRuntime {}
+
+fn (r TestShutdownProviderRuntime) start(mut app App) ! {
+	_ = r
+	_ = app
+	return
+}
+
+fn (r TestShutdownProviderRuntime) stop(mut app App) ! {
+	_ = r
+	app.emit('test.provider.stopped', {
+		'source': 'provider'
+	})
+	return
+}
+
+fn (r TestShutdownProviderRuntime) snapshot(mut app App) string {
+	_ = r
+	_ = app
+	return '{}'
+}
+
 fn test_load_vhttpd_config_parses_executor_and_vjsx_sections() {
 	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_executor_config_test')
 	os.mkdir_all(temp_dir) or { panic(err) }
@@ -687,4 +735,55 @@ fn test_resolve_server_runtime_config_builds_vjsx_embedded_runtime_state() {
 	assert runtime_cfg.app_build_cfg.assets_root_real == os.real_path(assets_root)
 	assert runtime_cfg.app_build_cfg.assets_cache_control == 'public, max-age=300'
 	assert os.exists(pid_file)
+}
+
+fn test_shutdown_app_runtime_stops_lifecycle_and_cleans_runtime_files() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_shutdown_runtime_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	event_log := os.join_path(temp_dir, 'events.ndjson')
+	pid_file := os.join_path(temp_dir, 'vhttpd.pid')
+	internal_socket := os.join_path(temp_dir, 'internal-admin.sock')
+	os.write_file(event_log, '') or { panic(err) }
+	os.write_file(pid_file, '${os.getpid()}') or { panic(err) }
+	os.write_file(internal_socket, 'socket') or { panic(err) }
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	mut app := App{
+		event_log: event_log
+		providers: ProviderHost{
+			specs: {
+				'test': ProviderSpec{
+					name:        'test'
+					enabled:     true
+					has_runtime: true
+					runtime:     TestShutdownProviderRuntime{}
+				}
+			}
+		}
+	}
+	runtime_cfg := ServerRuntimeConfig{
+		pid_file:              pid_file
+		internal_admin_socket: internal_socket
+		executor_plan:         LogicExecutorRuntimePlan{
+			executor:            InProcVjsxExecutor{}
+			worker_backend_mode: .disabled
+			lifecycle:           TestShutdownExecutorLifecycle{}
+			bootstrap:           ExecutorBootstrapState{}
+		}
+	}
+	shutdown_app_runtime(mut app, runtime_cfg)
+	assert !os.exists(pid_file)
+	assert !os.exists(internal_socket)
+	rows := os.read_lines(event_log) or { panic(err) }
+	mut non_empty_rows := []string{}
+	for row in rows {
+		if row.trim_space() != '' {
+			non_empty_rows << row
+		}
+	}
+	assert non_empty_rows.len == 3
+	assert non_empty_rows[0].contains('"type":"server.stopped"')
+	assert non_empty_rows[1].contains('"type":"test.executor.stopped"')
+	assert non_empty_rows[2].contains('"type":"test.provider.stopped"')
 }

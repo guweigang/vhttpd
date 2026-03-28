@@ -150,14 +150,7 @@ fn run_server(args []string) {
 	mut app := build_app_runtime(runtime_cfg.provider_settings, runtime_cfg.executor_plan,
 		cfg, runtime_cfg.app_build_cfg)
 	defer {
-		app.emit('server.stopped', {
-			'pid': '${os.getpid()}'
-		})
-		runtime_cfg.executor_plan.lifecycle.stop(mut app)
-		// Graceful provider shutdown is now spec/runtime-driven.
-		app.stop_all_providers()
-		os.rm(runtime_cfg.internal_admin_socket) or {}
-		os.rm(runtime_cfg.pid_file) or {}
+		shutdown_app_runtime(mut app, runtime_cfg)
 	}
 
 	initialize_app_runtime(mut app, runtime_cfg.internal_admin_socket)
