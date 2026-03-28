@@ -486,3 +486,108 @@ fn test_resolve_logic_executor_runtime_plan_for_vjsx_disables_worker_bootstrap()
 	assert plan.bootstrap.worker_cmd == ''
 	assert plan.bootstrap.worker_env['VHTTPD_APP'] == '/tmp/app.php'
 }
+
+fn test_build_app_runtime_projects_executor_plan_into_app_state() {
+	mut cfg := default_vhttpd_config()
+	cfg.mcp.max_sessions = 55
+	cfg.mcp.max_pending_messages = 21
+	cfg.mcp.session_ttl_seconds = 77
+	provider_settings := ProviderRuntimeSettings{
+		feishu:         FeishuRuntimeSettings{
+			enabled:                    true
+			open_base_url:              'https://open.feishu.test'
+			reconnect_delay_ms:         1234
+			token_refresh_skew_seconds: 45
+			recent_event_limit:         67
+			apps:                       {
+				'main': FeishuAppConfig{
+					app_id: 'app-1'
+				}
+			}
+		}
+		codex:          CodexRuntimeSettings{
+			enabled:            true
+			url:                'ws://127.0.0.1:4500'
+			model:              'gpt-5.4'
+			effort:             'medium'
+			cwd:                '/tmp/demo'
+			approval_policy:    'never'
+			sandbox:            'workspace-write'
+			reconnect_delay_ms: 2222
+			flush_interval_ms:  3333
+		}
+		ollama_enabled: true
+	}
+	plan := LogicExecutorRuntimePlan{
+		executor:            SocketWorkerExecutor{}
+		worker_backend_mode: .required
+		lifecycle:           PhpWorkerExecutorLifecycle{}
+		bootstrap:           ExecutorBootstrapState{
+			worker_sockets:          ['/tmp/a.sock']
+			stream_dispatch:         true
+			websocket_dispatch_mode: false
+			worker_autostart:        true
+			worker_cmd:              'php worker.php'
+			worker_env:              {
+				'APP_ENV': 'dev'
+			}
+		}
+	}
+	app := build_app_runtime(provider_settings, plan, cfg, AppRuntimeBuildConfig{
+		event_log:                     '/tmp/events.ndjson'
+		internal_admin_socket:         '/tmp/internal.sock'
+		admin_enabled:                 true
+		admin_token:                   'secret'
+		assets_enabled:                true
+		assets_prefix:                 '/assets'
+		assets_root:                   '/tmp/assets'
+		assets_root_real:              '/private/tmp/assets'
+		assets_cache_control:          'public, max-age=60'
+		worker_read_timeout_ms:        900
+		worker_restart_backoff_ms:     100
+		worker_restart_backoff_max_ms: 500
+		worker_max_requests:           777
+		worker_queue_capacity:         12
+		worker_queue_timeout_ms:       34
+		workdir:                       '/tmp/workdir'
+	})
+	assert app.worker_backend.sockets == ['/tmp/a.sock']
+	assert app.worker_backend.cmd == 'php worker.php'
+	assert app.worker_backend.env['APP_ENV'] == 'dev'
+	assert app.worker_backend.read_timeout_ms == 900
+	assert app.worker_backend.max_requests == 777
+	assert app.worker_backend_mode == .required
+	assert app.logic_executor.kind() == 'php'
+	assert app.logic_executor_lifecycle == 'php_worker_host'
+	assert app.internal_admin_socket == '/tmp/internal.sock'
+	assert app.admin_token == 'secret'
+	assert app.assets_enabled
+	assert app.assets_root_real == '/private/tmp/assets'
+	assert app.mcp_max_sessions == 55
+	assert app.mcp_max_pending_messages == 21
+	assert app.mcp_session_ttl_seconds == 77
+	assert app.feishu_enabled
+	assert app.feishu_open_base_url == 'https://open.feishu.test'
+	assert app.feishu_apps['main'].app_id == 'app-1'
+	assert app.codex_runtime.enabled
+	assert app.codex_runtime.model == 'gpt-5.4'
+	assert app.codex_runtime.flush_interval_ms == 3333
+	assert app.ollama_enabled
+}
+
+fn test_prepare_server_runtime_files_creates_parent_dirs_and_pid_file() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_runtime_files_test')
+	event_log := os.join_path(temp_dir, 'logs', 'events.ndjson')
+	pid_file := os.join_path(temp_dir, 'run', 'vhttpd.pid')
+	internal_socket := prepare_server_runtime_files(event_log, pid_file) or { panic(err) }
+	defer {
+		os.rm(pid_file) or {}
+		os.rmdir_all(temp_dir) or {}
+	}
+	assert os.exists(os.dir(event_log))
+	assert os.exists(os.dir(pid_file))
+	assert os.exists(pid_file)
+	pid_text := os.read_file(pid_file) or { panic(err) }
+	assert pid_text.trim_space() == '${os.getpid()}'
+	assert internal_socket.starts_with('/tmp/vhttpd_admin_')
+}

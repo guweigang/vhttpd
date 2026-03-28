@@ -175,101 +175,28 @@ fn run_server(args []string) {
 		return
 	}
 	workdir := os.getwd()
-
-	os.mkdir_all(os.dir(event_log)) or {}
-	os.mkdir_all(os.dir(pid_file)) or {}
-	os.write_file(pid_file, '${os.getpid()}') or {}
-	internal_admin_socket := default_internal_admin_socket()
-
-	mut app := &App{
-		event_log:                                event_log
-		started_at_unix:                          time.now().unix()
-		worker_backend:                           WorkerBackendRuntime{
-			backend:                PhpWorkerBackend{}
-			sockets:                executor_plan.bootstrap.worker_sockets
-			read_timeout_ms:        worker_read_timeout_ms
-			autostart:              executor_plan.bootstrap.worker_autostart
-			cmd:                    executor_plan.bootstrap.worker_cmd
-			env:                    executor_plan.bootstrap.worker_env
-			workdir:                workdir
-			restart_backoff_ms:     worker_restart_backoff_ms
-			restart_backoff_max_ms: worker_restart_backoff_max_ms
-			max_requests:           worker_max_requests
-			queue_capacity:         worker_queue_capacity
-			queue_timeout_ms:       worker_queue_timeout_ms
-			queue_poll_ms:          10
-		}
-		worker_backend_mode:                      executor_plan.worker_backend_mode
-		logic_executor:                           executor_plan.executor
-		logic_executor_lifecycle:                 executor_plan.lifecycle.name()
-		internal_admin_socket:                    internal_admin_socket
-		stream_dispatch:                          executor_plan.bootstrap.stream_dispatch
-		websocket_dispatch_mode:                  executor_plan.bootstrap.websocket_dispatch_mode
-		admin_on_data_plane:                      !admin_enabled
-		admin_token:                              admin_token
-		assets_enabled:                           assets_enabled
-		assets_prefix:                            assets_prefix
-		assets_root:                              assets_root
-		assets_root_real:                         assets_root_real
-		assets_cache_control:                     assets_cache_control
-		mcp_max_sessions:                         if cfg.mcp.max_sessions > 0 {
-			cfg.mcp.max_sessions
-		} else {
-			1000
-		}
-		mcp_max_pending_messages:                 if cfg.mcp.max_pending_messages > 0 {
-			cfg.mcp.max_pending_messages
-		} else {
-			128
-		}
-		mcp_session_ttl_seconds:                  if cfg.mcp.session_ttl_seconds > 0 {
-			cfg.mcp.session_ttl_seconds
-		} else {
-			900
-		}
-		mcp_sampling_capability_policy:           normalize_mcp_sampling_capability_policy(cfg.mcp.sampling_capability_policy)
-		mcp_allowed_origins:                      cfg.mcp.allowed_origins.clone()
-		feishu_enabled:                           provider_settings.feishu.enabled
-		feishu_open_base_url:                     provider_settings.feishu.open_base_url
-		feishu_reconnect_delay_ms:                provider_settings.feishu.reconnect_delay_ms
-		feishu_token_refresh_skew_seconds:        provider_settings.feishu.token_refresh_skew_seconds
-		feishu_recent_event_limit:                provider_settings.feishu.recent_event_limit
-		websocket_upstream_recent_dispatch_limit: 50
-		feishu_apps:                              provider_settings.feishu.apps.clone()
-		upstream_sessions:                        map[string]UpstreamRuntimeSession{}
-		mcp_sessions:                             map[string]McpSession{}
-		ws_hub_conns:                             map[string]HubConn{}
-		ws_hub_room_members:                      map[string]map[string]bool{}
-		ws_hub_conn_rooms:                        map[string]map[string]bool{}
-		ws_hub_conn_meta:                         map[string]map[string]string{}
-		ws_hub_pending:                           map[string][]HubPendingMessage{}
-		feishu_runtime:                           map[string]FeishuProviderRuntime{}
-		providers:                                ProviderHost{
-			registry: map[string]Provider{}
-			specs:    map[string]ProviderSpec{}
-		}
-		ollama_enabled:                           provider_settings.ollama_enabled
-		fixture_websocket_runtime:                map[string]FixtureWebSocketUpstreamRuntime{}
-		websocket_upstream_recent_activities:     []WebSocketUpstreamActivitySnapshot{}
-		// codex upstream
-		codex_runtime:  CodexProviderRuntime{
-			enabled:             provider_settings.codex.enabled
-			url:                 provider_settings.codex.url
-			model:               provider_settings.codex.model
-			effort:              provider_settings.codex.effort
-			cwd:                 provider_settings.codex.cwd
-			approval_policy:     provider_settings.codex.approval_policy
-			sandbox:             provider_settings.codex.sandbox
-			reconnect_delay_ms:  provider_settings.codex.reconnect_delay_ms
-			flush_interval_ms:   provider_settings.codex.flush_interval_ms
-			pending_rpcs:        map[int]CodexPendingRpc{}
-			stream_map:          map[string][]CodexTarget{}
-			err_bursts:          map[string][]string{}
-			err_pending_flushes: map[string]bool{}
-			thread_stream_map:   map[string]string{}
-		}
-		feishu_buffers: map[string]FeishuStreamBuffer{}
+	internal_admin_socket := prepare_server_runtime_files(event_log, pid_file) or {
+		log.error('server runtime file setup failed: ${err}')
+		return
 	}
+	mut app := build_app_runtime(provider_settings, executor_plan, cfg, AppRuntimeBuildConfig{
+		event_log:                     event_log
+		internal_admin_socket:         internal_admin_socket
+		admin_enabled:                 admin_enabled
+		admin_token:                   admin_token
+		assets_enabled:                assets_enabled
+		assets_prefix:                 assets_prefix
+		assets_root:                   assets_root
+		assets_root_real:              assets_root_real
+		assets_cache_control:          assets_cache_control
+		worker_read_timeout_ms:        worker_read_timeout_ms
+		worker_restart_backoff_ms:     worker_restart_backoff_ms
+		worker_restart_backoff_max_ms: worker_restart_backoff_max_ms
+		worker_max_requests:           worker_max_requests
+		worker_queue_capacity:         worker_queue_capacity
+		worker_queue_timeout_ms:       worker_queue_timeout_ms
+		workdir:                       workdir
+	})
 	defer {
 		app.emit('server.stopped', {
 			'pid': '${os.getpid()}'
