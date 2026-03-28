@@ -126,16 +126,19 @@ fn vjsx_source_signature_collect(root string, include_globs []string, exclude_gl
 		if rel == '' {
 			continue
 		}
-		content := os.read_file(path) or { '' }
-		rows << '${rel}:${fnv1a.sum64_string(content).hex()}'
+		st := os.stat(path) or { continue }
+		rows << '${rel}:${st.mtime}:${st.size}'
 	}
 }
 
 fn vjsx_source_signature_for_config(config VjsxRuntimeFacadeConfig) string {
 	entry_abs := os.abs_path(config.app_entry)
 	mut signature_rows := ['entry:${entry_abs}']
-	entry_content := os.read_file(entry_abs) or { '' }
-	signature_rows << 'entry_content:${fnv1a.sum64_string(entry_content).hex()}'
+	mut entry_meta := 'entry_meta:missing'
+	if entry_stat := os.stat(entry_abs) {
+		entry_meta = 'entry_meta:${entry_stat.mtime}:${entry_stat.size}'
+	}
+	signature_rows << entry_meta
 	signature_root := vjsx_signature_root_for_config(config)
 	include_globs := vjsx_signature_include_globs(config)
 	exclude_globs := vjsx_signature_exclude_globs(config)

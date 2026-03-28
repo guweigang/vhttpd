@@ -90,7 +90,7 @@ fn test_inproc_vjsx_executor_source_signature_respects_include_and_exclude_globs
 	os.write_file(dep_file, 'export const value = "dep-v2";\n') or { panic(err) }
 	sig_after_dep := vjsx_source_signature_for_config(config)
 	assert sig_after_dep == sig_before
-	os.write_file(keep_file, 'export const value = "keep-v2";\n') or { panic(err) }
+	os.write_file(keep_file, 'export const value = "keep-v2-longer";\n') or { panic(err) }
 	sig_after_keep := vjsx_source_signature_for_config(config)
 	assert sig_after_keep != sig_before
 }
@@ -873,9 +873,7 @@ fn test_inproc_vjsx_executor_lane_error_marks_dirty_and_recovers_after_source_fi
 		remote_addr: '127.0.0.1'
 		trace_id:    'trace_lane_recover_1'
 		request_id:  'req_lane_recover_1'
-	}) or {
-		first_err = err.msg()
-	}
+	}) or { first_err = err.msg() }
 	assert first_err.starts_with('inproc_vjsx_executor_handler_failed:')
 	snapshot_after_error := executor.lane_snapshot()
 	assert snapshot_after_error[0].healthy == false
@@ -983,7 +981,7 @@ export function websocket_upstream(frame) {
 		target_type: 'chat_id'
 		payload:     '{"text":"ping"}'
 		received_at: 1710000000
-		metadata: {
+		metadata:    {
 			'source': 'test'
 		}
 	}) or { panic(err) }
@@ -1009,7 +1007,8 @@ fn test_inproc_vjsx_executor_dispatch_websocket_upstream_exposes_runtime_read_te
 	app_file := os.join_path(temp_dir, 'bot-handler.mts')
 	data_file := os.join_path(temp_dir, 'payload.txt')
 	os.write_file(data_file, 'hello from runtime.readTextFile') or { panic(err) }
-	os.write_file(app_file, '
+	os.write_file(app_file,
+		'
 export function websocket_upstream(frame) {
   return {
     handled: true,
@@ -1021,7 +1020,8 @@ export function websocket_upstream(frame) {
         target: frame.target,
         target_type: frame.targetType || "chat_id",
         message_type: "text",
-        text: frame.runtime.readTextFile("' + data_file.replace('\\', '\\\\').replace('"', '\\"') + '", "fallback")
+        text: frame.runtime.readTextFile("' +
+		data_file.replace('\\', '\\\\').replace('"', '\\"') + '", "fallback")
       }
     ]
   };
@@ -1068,7 +1068,8 @@ fn test_inproc_vjsx_executor_dispatch_websocket_upstream_can_parse_codex_session
 	os.write_file(session_file, '{"timestamp":"2026-03-27T14:00:02.896Z","type":"event_msg","payload":{"type":"agent_message","message":"final answer from parser test","phase":"final_answer"}}\n') or {
 		panic(err)
 	}
-	os.write_file(app_file, '
+	os.write_file(app_file,
+		'
 function readFinalAnswerFromSessionPath(runtime, sessionPath) {
   const raw = runtime.readTextFile(sessionPath, "");
   if (typeof raw !== "string" || raw.trim() === "") {
@@ -1104,7 +1105,8 @@ export function websocket_upstream(frame) {
         target: frame.target,
         target_type: frame.targetType || "chat_id",
         message_type: "text",
-        text: readFinalAnswerFromSessionPath(frame.runtime, "' + session_file.replace('\\', '\\\\').replace('"', '\\"') + '")
+        text: readFinalAnswerFromSessionPath(frame.runtime, "' +
+		session_file.replace('\\', '\\\\').replace('"', '\\"') + '")
       }
     ]
   };
@@ -1149,7 +1151,8 @@ fn test_inproc_vjsx_executor_dispatch_websocket_upstream_read_text_file_survives
 	app_file := os.join_path(temp_dir, 'bot-handler.mts')
 	data_file := os.join_path(temp_dir, 'payload.txt')
 	os.write_file(data_file, 'hello after await') or { panic(err) }
-	os.write_file(app_file, '
+	os.write_file(app_file,
+		'
 export async function websocket_upstream(frame) {
   await Promise.resolve();
   return {
@@ -1162,7 +1165,8 @@ export async function websocket_upstream(frame) {
         target: frame.target,
         target_type: frame.targetType || "chat_id",
         message_type: "text",
-        text: frame.runtime.readTextFile("' + data_file.replace('\\', '\\\\').replace('"', '\\"') + '", "fallback")
+        text: frame.runtime.readTextFile("' +
+		data_file.replace('\\', '\\\\').replace('"', '\\"') + '", "fallback")
       }
     ]
   };
@@ -1215,7 +1219,8 @@ export function readViaHelper(runtime, path) {
 ') or {
 		panic(err)
 	}
-	os.write_file(app_file, '
+	os.write_file(app_file,
+		'
 import { readViaHelper } from "./helper.mjs";
 
 export function websocket_upstream(frame) {
@@ -1229,7 +1234,8 @@ export function websocket_upstream(frame) {
         target: frame.target,
         target_type: frame.targetType || "chat_id",
         message_type: "text",
-        text: readViaHelper(frame.runtime, "' + data_file.replace('\\', '\\\\').replace('"', '\\"') + '")
+        text: readViaHelper(frame.runtime, "' +
+		data_file.replace('\\', '\\\\').replace('"', '\\"') + '")
       }
     ]
   };
@@ -1276,7 +1282,8 @@ fn test_inproc_vjsx_executor_dispatch_websocket_upstream_read_text_file_after_sq
 	data_file := os.join_path(temp_dir, 'payload.txt')
 	db_file := os.join_path(temp_dir, 'state.sqlite')
 	os.write_file(data_file, 'hello after sqlite await') or { panic(err) }
-	os.write_file(app_file, '
+	os.write_file(app_file,
+		'
 import { open } from "sqlite";
 
 let dbPromise;
@@ -1292,7 +1299,9 @@ async function db(path) {
 }
 
 export async function websocket_upstream(frame) {
-  const database = await db("' + db_file.replace('\\', '\\\\').replace('"', '\\"') + '");
+  const database = await db("' +
+		db_file.replace('\\', '\\\\').replace('"', '\\"') +
+		'");
   await database.exec("insert into test_state (value) values (?)", ["ok"]);
   return {
     handled: true,
@@ -1304,7 +1313,8 @@ export async function websocket_upstream(frame) {
         target: frame.target,
         target_type: frame.targetType || "chat_id",
         message_type: "text",
-        text: frame.runtime.readTextFile("' + data_file.replace('\\', '\\\\').replace('"', '\\"') + '", "fallback")
+        text: frame.runtime.readTextFile("' +
+		data_file.replace('\\', '\\\\').replace('"', '\\"') + '", "fallback")
       }
     ]
   };
@@ -1471,17 +1481,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_handles_help_and_task_flow() {
 		})
 		mut app := App{}
 		help_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-		mode:       'websocket_upstream'
-		event:      'message'
-		id:         'codexbot_ts_help'
-		provider:   'feishu'
-		instance:   'main'
-		trace_id:   'trace_codexbot_ts_help'
-		event_type: 'im.message.receive_v1'
-		message_id: 'om_codexbot_help'
-		target:     'chat_codexbot_ts'
-		target_type:'chat_id'
-		payload:    codexbot_ts_feishu_payload('/help', 'chat_codexbot_ts', 'om_codexbot_help')
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_help'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_help'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_help'
+			target:      'chat_codexbot_ts'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/help', 'chat_codexbot_ts', 'om_codexbot_help')
 		}) or { panic(err) }
 		assert help_resp.handled
 		assert help_resp.commands.len == 1
@@ -1490,18 +1500,18 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_handles_help_and_task_flow() {
 		assert help_resp.commands[0].text.contains('/project [project_key]')
 
 		task_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-		mode:       'websocket_upstream'
-		event:      'message'
-		id:         'codexbot_ts_task'
-		provider:   'feishu'
-		instance:   'main'
-		trace_id:   'trace_codexbot_ts_task'
-		event_type: 'im.message.receive_v1'
-		message_id: 'om_codexbot_task'
-		target:     'chat_codexbot_ts'
-		target_type:'chat_id'
-		payload:    codexbot_ts_feishu_payload('please inspect this bug', 'chat_codexbot_ts',
-			'om_codexbot_task')
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_task'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_task'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_task'
+			target:      'chat_codexbot_ts'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('please inspect this bug', 'chat_codexbot_ts',
+				'om_codexbot_task')
 		}) or { panic(err) }
 		assert task_resp.handled
 		assert task_resp.commands.len == 2
@@ -1527,31 +1537,31 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_handles_codex_callbacks() {
 		})
 		mut app := App{}
 		task_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-		mode:       'websocket_upstream'
-		event:      'message'
-		id:         'codexbot_ts_task_2'
-		provider:   'feishu'
-		instance:   'main'
-		trace_id:   'trace_codexbot_ts_task_2'
-		event_type: 'im.message.receive_v1'
-		message_id: 'om_codexbot_task_2'
-		target:     'chat_codexbot_ts_2'
-		target_type:'chat_id'
-		payload:    codexbot_ts_feishu_payload('run a task', 'chat_codexbot_ts_2',
-			'om_codexbot_task_2')
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_task_2'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_task_2'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_task_2'
+			target:      'chat_codexbot_ts_2'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('run a task', 'chat_codexbot_ts_2',
+				'om_codexbot_task_2')
 		}) or { panic(err) }
 		stream_id := task_resp.commands[0].stream_id
 		assert stream_id != ''
 
 		rpc_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-		mode:       'websocket_upstream'
-		event:      'message'
-		id:         'codexbot_ts_rpc'
-		provider:   'codex'
-		instance:   'main'
-		trace_id:   stream_id
-		event_type: 'codex.rpc.response'
-		payload:    '{"method":"thread/start","result":{"threadId":"thread_ts_001"},"has_error":false}'
+			mode:       'websocket_upstream'
+			event:      'message'
+			id:         'codexbot_ts_rpc'
+			provider:   'codex'
+			instance:   'main'
+			trace_id:   stream_id
+			event_type: 'codex.rpc.response'
+			payload:    '{"method":"thread/start","result":{"threadId":"thread_ts_001"},"has_error":false}'
 		}) or { panic(err) }
 		assert rpc_resp.handled
 		assert rpc_resp.commands.len == 2
@@ -1564,14 +1574,14 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_handles_codex_callbacks() {
 		assert rpc_resp.commands[1].stream_id == stream_id
 
 		turn_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-		mode:       'websocket_upstream'
-		event:      'message'
-		id:         'codexbot_ts_turn_rpc'
-		provider:   'codex'
-		instance:   'main'
-		trace_id:   stream_id
-		event_type: 'codex.rpc.response'
-		payload:    '{"method":"turn/start","result":{"turn":{"id":"turn_ts_001"}},"has_error":false}'
+			mode:       'websocket_upstream'
+			event:      'message'
+			id:         'codexbot_ts_turn_rpc'
+			provider:   'codex'
+			instance:   'main'
+			trace_id:   stream_id
+			event_type: 'codex.rpc.response'
+			payload:    '{"method":"turn/start","result":{"turn":{"id":"turn_ts_001"}},"has_error":false}'
 		}) or { panic(err) }
 		assert turn_resp.handled
 		assert turn_resp.commands.len == 1
@@ -1579,14 +1589,14 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_handles_codex_callbacks() {
 		assert turn_resp.commands[0].content.contains('**Running**')
 
 		notif_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-		mode:       'websocket_upstream'
-		event:      'message'
-		id:         'codexbot_ts_notif'
-		provider:   'codex'
-		instance:   'main'
-		trace_id:   stream_id
-		event_type: 'codex.notification'
-		payload:    '{"method":"item/agentMessage/delta","params":{"delta":"hello from codex"}}'
+			mode:       'websocket_upstream'
+			event:      'message'
+			id:         'codexbot_ts_notif'
+			provider:   'codex'
+			instance:   'main'
+			trace_id:   stream_id
+			event_type: 'codex.notification'
+			payload:    '{"method":"item/agentMessage/delta","params":{"delta":"hello from codex"}}'
 		}) or { panic(err) }
 		assert notif_resp.handled
 		assert notif_resp.commands.len == 1
@@ -1608,18 +1618,18 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_ignores_feishu_message_read_ev
 	})
 	mut app := App{}
 	resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-		mode:       'websocket_upstream'
-		event:      'event'
-		id:         'codexbot_ts_feishu_read'
-		provider:   'feishu'
-		instance:   'main'
-		trace_id:   'trace_codexbot_ts_feishu_read'
-		event_type: 'im.message.message_read_v1'
-		message_id: ''
-		target:     ''
-		target_type:''
-		payload:    '{"schema":"2.0","header":{"event_type":"im.message.message_read_v1"}}'
-		metadata: {
+		mode:        'websocket_upstream'
+		event:       'event'
+		id:          'codexbot_ts_feishu_read'
+		provider:    'feishu'
+		instance:    'main'
+		trace_id:    'trace_codexbot_ts_feishu_read'
+		event_type:  'im.message.message_read_v1'
+		message_id:  ''
+		target:      ''
+		target_type: ''
+		payload:     '{"schema":"2.0","header":{"event_type":"im.message.message_read_v1"}}'
+		metadata:    {
 			'event_id': 'evt_message_read_001'
 		}
 	}) or { panic(err) }
@@ -1639,31 +1649,31 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_message_read_after_codex_notif
 		})
 		mut app := App{}
 		task_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-		mode:       'websocket_upstream'
-		event:      'message'
-		id:         'codexbot_ts_task_3'
-		provider:   'feishu'
-		instance:   'main'
-		trace_id:   'trace_codexbot_ts_task_3'
-		event_type: 'im.message.receive_v1'
-		message_id: 'om_codexbot_task_3'
-		target:     'chat_codexbot_ts_3'
-		target_type:'chat_id'
-		payload:    codexbot_ts_feishu_payload('run another task', 'chat_codexbot_ts_3',
-			'om_codexbot_task_3')
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_task_3'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_task_3'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_task_3'
+			target:      'chat_codexbot_ts_3'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('run another task', 'chat_codexbot_ts_3',
+				'om_codexbot_task_3')
 		}) or { panic(err) }
 		stream_id := task_resp.commands[0].stream_id
 		assert stream_id != ''
 
 		notif_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-		mode:       'websocket_upstream'
-		event:      'message'
-		id:         'codexbot_ts_thread_started'
-		provider:   'codex'
-		instance:   'main'
-		trace_id:   stream_id
-		event_type: 'codex.notification'
-		payload:    '{"method":"thread/started","params":{"thread":{"id":"thread_ts_003","status":{"type":"idle"}}}}'
+			mode:       'websocket_upstream'
+			event:      'message'
+			id:         'codexbot_ts_thread_started'
+			provider:   'codex'
+			instance:   'main'
+			trace_id:   stream_id
+			event_type: 'codex.notification'
+			payload:    '{"method":"thread/started","params":{"thread":{"id":"thread_ts_003","status":{"type":"idle"}}}}'
 		}) or { panic(err) }
 		assert notif_resp.handled
 		assert notif_resp.commands.len == 1
@@ -1671,20 +1681,20 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_message_read_after_codex_notif
 		assert notif_resp.commands[0].content.contains('thread_ts_003')
 
 		read_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-		mode:       'websocket_upstream'
-		event:      'event'
-		id:         'codexbot_ts_feishu_read_after_notif'
-		provider:   'feishu'
-		instance:   'main'
-		trace_id:   'trace_codexbot_ts_feishu_read_after_notif'
-		event_type: 'im.message.message_read_v1'
-		message_id: ''
-		target:     ''
-		target_type:''
-		payload:    '{"schema":"2.0","header":{"event_type":"im.message.message_read_v1"}}'
-		metadata: {
-			'event_id': 'evt_message_read_after_notif_001'
-		}
+			mode:        'websocket_upstream'
+			event:       'event'
+			id:          'codexbot_ts_feishu_read_after_notif'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_feishu_read_after_notif'
+			event_type:  'im.message.message_read_v1'
+			message_id:  ''
+			target:      ''
+			target_type: ''
+			payload:     '{"schema":"2.0","header":{"event_type":"im.message.message_read_v1"}}'
+			metadata:    {
+				'event_id': 'evt_message_read_after_notif_001'
+			}
 		}) or { panic(err) }
 		assert !read_resp.handled
 		assert read_resp.commands.len == 0
@@ -1704,17 +1714,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_and_new_commands_show_s
 		})
 		mut app := App{}
 		task_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_thread_cmd_task'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_thread_cmd_task'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_thread_cmd_task'
-			target:     'chat_codexbot_ts_thread_cmd'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('thread aware task', 'chat_codexbot_ts_thread_cmd',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_thread_cmd_task'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_thread_cmd_task'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_thread_cmd_task'
+			target:      'chat_codexbot_ts_thread_cmd'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('thread aware task', 'chat_codexbot_ts_thread_cmd',
 				'om_codexbot_thread_cmd_task')
 		}) or { panic(err) }
 		stream_id := task_resp.commands[0].stream_id
@@ -1732,17 +1742,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_and_new_commands_show_s
 		}) or { panic(err) }
 
 		thread_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_thread_cmd_query'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_thread_cmd_query'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_thread_cmd_query'
-			target:     'chat_codexbot_ts_thread_cmd'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/thread', 'chat_codexbot_ts_thread_cmd',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_thread_cmd_query'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_thread_cmd_query'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_thread_cmd_query'
+			target:      'chat_codexbot_ts_thread_cmd'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/thread', 'chat_codexbot_ts_thread_cmd',
 				'om_codexbot_thread_cmd_query')
 		}) or { panic(err) }
 		assert thread_resp.handled
@@ -1752,17 +1762,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_and_new_commands_show_s
 		assert thread_resp.commands[0].text.contains('Last Status: `thread_ready`')
 
 		new_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_thread_cmd_new'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_thread_cmd_new'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_thread_cmd_new'
-			target:     'chat_codexbot_ts_thread_cmd'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/new', 'chat_codexbot_ts_thread_cmd',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_thread_cmd_new'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_thread_cmd_new'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_thread_cmd_new'
+			target:      'chat_codexbot_ts_thread_cmd'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/new', 'chat_codexbot_ts_thread_cmd',
 				'om_codexbot_thread_cmd_new')
 		}) or { panic(err) }
 		assert new_resp.handled
@@ -1864,9 +1874,8 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_scopes_sessions_by_feishu_thre
 			message_id:  'om_codexbot_thread_scope_first'
 			target:      'chat_codexbot_ts_thread_scope'
 			target_type: 'chat_id'
-			payload:     codexbot_ts_feishu_thread_payload('thread A task',
-				'chat_codexbot_ts_thread_scope', 'om_codexbot_thread_scope_first',
-				'om_thread_root_A', 'om_thread_parent_A')
+			payload:     codexbot_ts_feishu_thread_payload('thread A task', 'chat_codexbot_ts_thread_scope',
+				'om_codexbot_thread_scope_first', 'om_thread_root_A', 'om_thread_parent_A')
 		}) or { panic(err) }
 		assert first_resp.handled
 		assert first_resp.commands.len == 2
@@ -1885,9 +1894,8 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_scopes_sessions_by_feishu_thre
 			message_id:  'om_codexbot_thread_scope_second'
 			target:      'chat_codexbot_ts_thread_scope'
 			target_type: 'chat_id'
-			payload:     codexbot_ts_feishu_thread_payload('thread B task',
-				'chat_codexbot_ts_thread_scope', 'om_codexbot_thread_scope_second',
-				'om_thread_root_B', 'om_thread_parent_B')
+			payload:     codexbot_ts_feishu_thread_payload('thread B task', 'chat_codexbot_ts_thread_scope',
+				'om_codexbot_thread_scope_second', 'om_thread_root_B', 'om_thread_parent_B')
 		}) or { panic(err) }
 		assert second_resp.handled
 		assert second_resp.commands.len == 2
@@ -1937,9 +1945,8 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_busy_guard_stays_within_same_f
 			message_id:  'om_codexbot_thread_busy_first'
 			target:      'chat_codexbot_ts_thread_busy'
 			target_type: 'chat_id'
-			payload:     codexbot_ts_feishu_thread_payload('thread busy first',
-				'chat_codexbot_ts_thread_busy', 'om_codexbot_thread_busy_first',
-				'om_thread_busy_root', 'om_thread_busy_parent')
+			payload:     codexbot_ts_feishu_thread_payload('thread busy first', 'chat_codexbot_ts_thread_busy',
+				'om_codexbot_thread_busy_first', 'om_thread_busy_root', 'om_thread_busy_parent')
 		}) or { panic(err) }
 		assert first_resp.handled
 		assert first_resp.commands.len == 2
@@ -1955,9 +1962,8 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_busy_guard_stays_within_same_f
 			message_id:  'om_codexbot_thread_busy_second'
 			target:      'chat_codexbot_ts_thread_busy'
 			target_type: 'chat_id'
-			payload:     codexbot_ts_feishu_thread_payload('thread busy second',
-				'chat_codexbot_ts_thread_busy', 'om_codexbot_thread_busy_second',
-				'om_thread_busy_root', 'om_thread_busy_parent_2')
+			payload:     codexbot_ts_feishu_thread_payload('thread busy second', 'chat_codexbot_ts_thread_busy',
+				'om_codexbot_thread_busy_second', 'om_thread_busy_root', 'om_thread_busy_parent_2')
 		}) or { panic(err) }
 		assert second_resp.handled
 		assert second_resp.commands.len == 1
@@ -1991,9 +1997,8 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_command_reports_thread_
 			message_id:  'om_codexbot_thread_scope_cmd_task'
 			target:      'chat_codexbot_ts_thread_scope_cmd'
 			target_type: 'chat_id'
-			payload:     codexbot_ts_feishu_thread_payload('thread scoped task',
-				'chat_codexbot_ts_thread_scope_cmd', 'om_codexbot_thread_scope_cmd_task',
-				'om_thread_scope_cmd_root', 'om_thread_scope_cmd_parent')
+			payload:     codexbot_ts_feishu_thread_payload('thread scoped task', 'chat_codexbot_ts_thread_scope_cmd',
+				'om_codexbot_thread_scope_cmd_task', 'om_thread_scope_cmd_root', 'om_thread_scope_cmd_parent')
 		}) or { panic(err) }
 		stream_id := task_resp.commands[0].stream_id
 		assert stream_id != ''
@@ -2020,9 +2025,8 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_command_reports_thread_
 			message_id:  'om_codexbot_thread_scope_cmd_query'
 			target:      'chat_codexbot_ts_thread_scope_cmd'
 			target_type: 'chat_id'
-			payload:     codexbot_ts_feishu_thread_payload('/thread',
-				'chat_codexbot_ts_thread_scope_cmd', 'om_codexbot_thread_scope_cmd_query',
-				'om_thread_scope_cmd_root', 'om_thread_scope_cmd_parent_2')
+			payload:     codexbot_ts_feishu_thread_payload('/thread', 'chat_codexbot_ts_thread_scope_cmd',
+				'om_codexbot_thread_scope_cmd_query', 'om_thread_scope_cmd_root', 'om_thread_scope_cmd_parent_2')
 		}) or { panic(err) }
 		assert thread_resp.handled
 		assert thread_resp.commands.len == 1
@@ -2047,17 +2051,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_threads_command_lists_recent_p
 		})
 		mut app := App{}
 		first_task := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_threads_list_task_1'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_threads_list_task_1'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_threads_list_task_1'
-			target:     'chat_codexbot_ts_threads_list'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('inspect bug one', 'chat_codexbot_ts_threads_list',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_threads_list_task_1'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_threads_list_task_1'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_threads_list_task_1'
+			target:      'chat_codexbot_ts_threads_list'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('inspect bug one', 'chat_codexbot_ts_threads_list',
 				'om_codexbot_threads_list_task_1')
 		}) or { panic(err) }
 		first_stream_id := first_task.commands[0].stream_id
@@ -2084,33 +2088,33 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_threads_command_lists_recent_p
 		}) or { panic(err) }
 
 		second_task := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_threads_list_task_2'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_threads_list_task_2'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_threads_list_task_2'
-			target:     'chat_codexbot_ts_threads_list'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/new', 'chat_codexbot_ts_threads_list',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_threads_list_task_2'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_threads_list_task_2'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_threads_list_task_2'
+			target:      'chat_codexbot_ts_threads_list'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/new', 'chat_codexbot_ts_threads_list',
 				'om_codexbot_threads_list_task_2')
 		}) or { panic(err) }
 		assert second_task.commands.len == 1
 
 		third_task := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_threads_list_task_3'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_threads_list_task_3'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_threads_list_task_3'
-			target:     'chat_codexbot_ts_threads_list'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('inspect bug two', 'chat_codexbot_ts_threads_list',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_threads_list_task_3'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_threads_list_task_3'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_threads_list_task_3'
+			target:      'chat_codexbot_ts_threads_list'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('inspect bug two', 'chat_codexbot_ts_threads_list',
 				'om_codexbot_threads_list_task_3')
 		}) or { panic(err) }
 		second_stream_id := third_task.commands[0].stream_id
@@ -2137,17 +2141,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_threads_command_lists_recent_p
 		}) or { panic(err) }
 
 		threads_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_threads_list_query'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_threads_list_query'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_threads_list_query'
-			target:     'chat_codexbot_ts_threads_list'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/threads', 'chat_codexbot_ts_threads_list',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_threads_list_query'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_threads_list_query'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_threads_list_query'
+			target:      'chat_codexbot_ts_threads_list'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/threads', 'chat_codexbot_ts_threads_list',
 				'om_codexbot_threads_list_query')
 		}) or { panic(err) }
 		assert threads_resp.handled
@@ -2172,17 +2176,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_use_latest_and_thread_switch_r
 		})
 		mut app := App{}
 		first_task := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_use_latest_task_1'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_use_latest_task_1'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_use_latest_task_1'
-			target:     'chat_codexbot_ts_use_latest'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('first thread seed', 'chat_codexbot_ts_use_latest',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_use_latest_task_1'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_use_latest_task_1'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_use_latest_task_1'
+			target:      'chat_codexbot_ts_use_latest'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('first thread seed', 'chat_codexbot_ts_use_latest',
 				'om_codexbot_use_latest_task_1')
 		}) or { panic(err) }
 		first_stream_id := first_task.commands[0].stream_id
@@ -2209,32 +2213,32 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_use_latest_and_thread_switch_r
 		}) or { panic(err) }
 
 		_ = executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_use_latest_new'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_use_latest_new'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_use_latest_new'
-			target:     'chat_codexbot_ts_use_latest'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/new', 'chat_codexbot_ts_use_latest',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_use_latest_new'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_use_latest_new'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_use_latest_new'
+			target:      'chat_codexbot_ts_use_latest'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/new', 'chat_codexbot_ts_use_latest',
 				'om_codexbot_use_latest_new')
 		}) or { panic(err) }
 
 		use_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_use_latest_cmd'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_use_latest_cmd'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_use_latest_cmd'
-			target:     'chat_codexbot_ts_use_latest'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/use latest', 'chat_codexbot_ts_use_latest',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_use_latest_cmd'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_use_latest_cmd'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_use_latest_cmd'
+			target:      'chat_codexbot_ts_use_latest'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/use latest', 'chat_codexbot_ts_use_latest',
 				'om_codexbot_use_latest_cmd')
 		}) or { panic(err) }
 		assert use_resp.handled
@@ -2264,17 +2268,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_use_latest_and_thread_switch_r
 		assert read_resp.commands[0].content.contains('hello from latest thread')
 
 		second_task := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_use_latest_task_2'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_use_latest_task_2'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_use_latest_task_2'
-			target:     'chat_codexbot_ts_use_latest'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('continue latest', 'chat_codexbot_ts_use_latest',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_use_latest_task_2'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_use_latest_task_2'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_use_latest_task_2'
+			target:      'chat_codexbot_ts_use_latest'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('continue latest', 'chat_codexbot_ts_use_latest',
 				'om_codexbot_use_latest_task_2')
 		}) or { panic(err) }
 		assert second_task.handled
@@ -2283,17 +2287,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_use_latest_and_thread_switch_r
 		assert second_task.commands[1].params.contains('"threadId":"thread_use_latest_001"')
 
 		thread_switch_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_thread_switch_cmd'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_thread_switch_cmd'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_thread_switch_cmd'
-			target:     'chat_codexbot_ts_use_latest'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/thread thread_use_latest_001', 'chat_codexbot_ts_use_latest',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_thread_switch_cmd'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_thread_switch_cmd'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_thread_switch_cmd'
+			target:      'chat_codexbot_ts_use_latest'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/thread thread_use_latest_001', 'chat_codexbot_ts_use_latest',
 				'om_codexbot_thread_switch_cmd')
 		}) or { panic(err) }
 		assert thread_switch_resp.handled
@@ -2325,17 +2329,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_projects_and_models_commands_u
 		mut app := App{}
 
 		setting_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_projects_models_setting'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_projects_models_setting'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_projects_models_setting'
-			target:     'chat_codexbot_ts_projects_models'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/setting project_root_dir ' + project_root,
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_projects_models_setting'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_projects_models_setting'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_projects_models_setting'
+			target:      'chat_codexbot_ts_projects_models'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/setting project_root_dir ' + project_root,
 				'chat_codexbot_ts_projects_models', 'om_codexbot_ts_projects_models_setting')
 		}) or { panic(err) }
 		assert setting_resp.handled
@@ -2343,17 +2347,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_projects_and_models_commands_u
 		assert setting_resp.commands[0].text.contains('**Setting Updated**')
 
 		create_alpha := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_projects_models_create_alpha'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_projects_models_create_alpha'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_projects_models_create_alpha'
-			target:     'chat_codexbot_ts_projects_models'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/create alpha', 'chat_codexbot_ts_projects_models',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_projects_models_create_alpha'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_projects_models_create_alpha'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_projects_models_create_alpha'
+			target:      'chat_codexbot_ts_projects_models'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/create alpha', 'chat_codexbot_ts_projects_models',
 				'om_codexbot_ts_projects_models_create_alpha')
 		}) or { panic(err) }
 		assert create_alpha.handled
@@ -2362,17 +2366,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_projects_and_models_commands_u
 		assert create_alpha.commands[0].text.contains('Project: `alpha`')
 
 		bind_beta := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_projects_models_bind_beta'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_projects_models_bind_beta'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_projects_models_bind_beta'
-			target:     'chat_codexbot_ts_projects_models'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/bind beta', 'chat_codexbot_ts_projects_models',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_projects_models_bind_beta'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_projects_models_bind_beta'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_projects_models_bind_beta'
+			target:      'chat_codexbot_ts_projects_models'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/bind beta', 'chat_codexbot_ts_projects_models',
 				'om_codexbot_ts_projects_models_bind_beta')
 		}) or { panic(err) }
 		assert bind_beta.handled
@@ -2380,17 +2384,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_projects_and_models_commands_u
 		assert bind_beta.commands[0].text.contains('Project: `beta`')
 
 		alpha_task := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_alpha_task'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_alpha_task'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_alpha_task'
-			target:     'chat_codexbot_ts_projects_models'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('alpha task', 'chat_codexbot_ts_projects_models',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_alpha_task'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_alpha_task'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_alpha_task'
+			target:      'chat_codexbot_ts_projects_models'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('alpha task', 'chat_codexbot_ts_projects_models',
 				'om_codexbot_ts_alpha_task')
 		}) or { panic(err) }
 		alpha_stream_id := alpha_task.commands[0].stream_id
@@ -2417,33 +2421,33 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_projects_and_models_commands_u
 		}) or { panic(err) }
 
 		switch_beta := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_switch_beta'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_switch_beta'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_switch_beta'
-			target:     'chat_codexbot_ts_projects_models'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/project beta', 'chat_codexbot_ts_projects_models',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_switch_beta'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_switch_beta'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_switch_beta'
+			target:      'chat_codexbot_ts_projects_models'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/project beta', 'chat_codexbot_ts_projects_models',
 				'om_codexbot_ts_switch_beta')
 		}) or { panic(err) }
 		assert switch_beta.commands[0].text.contains('Project: `beta`')
 
 		beta_task := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_beta_task'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_beta_task'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_beta_task'
-			target:     'chat_codexbot_ts_projects_models'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('beta task', 'chat_codexbot_ts_projects_models',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_beta_task'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_beta_task'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_beta_task'
+			target:      'chat_codexbot_ts_projects_models'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('beta task', 'chat_codexbot_ts_projects_models',
 				'om_codexbot_ts_beta_task')
 		}) or { panic(err) }
 		beta_stream_id := beta_task.commands[0].stream_id
@@ -2470,17 +2474,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_projects_and_models_commands_u
 		}) or { panic(err) }
 
 		projects_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_projects_list'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_projects_list'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_projects_list'
-			target:     'chat_codexbot_ts_projects_models'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/projects', 'chat_codexbot_ts_projects_models',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_projects_list'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_projects_list'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_projects_list'
+			target:      'chat_codexbot_ts_projects_models'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/projects', 'chat_codexbot_ts_projects_models',
 				'om_codexbot_ts_projects_list')
 		}) or { panic(err) }
 		assert projects_resp.handled
@@ -2491,17 +2495,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_projects_and_models_commands_u
 		assert projects_resp.commands[0].text.contains('`beta` current')
 
 		use_project_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_projects_use_alpha'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_projects_use_alpha'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_projects_use_alpha'
-			target:     'chat_codexbot_ts_projects_models'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/use alpha', 'chat_codexbot_ts_projects_models',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_projects_use_alpha'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_projects_use_alpha'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_projects_use_alpha'
+			target:      'chat_codexbot_ts_projects_models'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/use alpha', 'chat_codexbot_ts_projects_models',
 				'om_codexbot_ts_projects_use_alpha')
 		}) or { panic(err) }
 		assert use_project_resp.handled
@@ -2509,17 +2513,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_projects_and_models_commands_u
 		assert use_project_resp.commands[0].text.contains('Project: `alpha`')
 
 		use_project_resp_2 := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_projects_use_beta_again'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_projects_use_beta_again'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_projects_use_beta_again'
-			target:     'chat_codexbot_ts_projects_models'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/use beta', 'chat_codexbot_ts_projects_models',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_projects_use_beta_again'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_projects_use_beta_again'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_projects_use_beta_again'
+			target:      'chat_codexbot_ts_projects_models'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/use beta', 'chat_codexbot_ts_projects_models',
 				'om_codexbot_ts_projects_use_beta_again')
 		}) or { panic(err) }
 		assert use_project_resp_2.handled
@@ -2527,17 +2531,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_projects_and_models_commands_u
 		assert use_project_resp_2.commands[0].text.contains('Project: `beta`')
 
 		models_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_models_list'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_models_list'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_models_list'
-			target:     'chat_codexbot_ts_projects_models'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/models', 'chat_codexbot_ts_projects_models',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_models_list'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_models_list'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_models_list'
+			target:      'chat_codexbot_ts_projects_models'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/models', 'chat_codexbot_ts_projects_models',
 				'om_codexbot_ts_models_list')
 		}) or { panic(err) }
 		assert models_resp.handled
@@ -2547,17 +2551,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_projects_and_models_commands_u
 		assert models_resp.commands[0].text.contains('gpt-5.3-codex')
 
 		use_model_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_models_use'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_models_use'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_models_use'
-			target:     'chat_codexbot_ts_projects_models'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/use gpt-5.3-codex', 'chat_codexbot_ts_projects_models',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_models_use'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_models_use'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_models_use'
+			target:      'chat_codexbot_ts_projects_models'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/use gpt-5.3-codex', 'chat_codexbot_ts_projects_models',
 				'om_codexbot_ts_models_use')
 		}) or { panic(err) }
 		assert use_model_resp.handled
@@ -2566,17 +2570,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_projects_and_models_commands_u
 		assert use_model_resp.commands[0].text.contains('`gpt-5.3-codex`')
 
 		use_model_resp_2 := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_models_use_default_again'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_models_use_default_again'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_models_use_default_again'
-			target:     'chat_codexbot_ts_projects_models'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/use gpt-5.4', 'chat_codexbot_ts_projects_models',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_models_use_default_again'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_models_use_default_again'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_models_use_default_again'
+			target:      'chat_codexbot_ts_projects_models'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/use gpt-5.4', 'chat_codexbot_ts_projects_models',
 				'om_codexbot_ts_models_use_default_again')
 		}) or { panic(err) }
 		assert use_model_resp_2.handled
@@ -2585,17 +2589,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_projects_and_models_commands_u
 		assert use_model_resp_2.commands[0].text.contains('`gpt-5.4`')
 
 		current_project_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_projects_scope_clear'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_projects_scope_clear'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_projects_scope_clear'
-			target:     'chat_codexbot_ts_projects_models'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/project', 'chat_codexbot_ts_projects_models',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_projects_scope_clear'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_projects_scope_clear'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_projects_scope_clear'
+			target:      'chat_codexbot_ts_projects_models'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/project', 'chat_codexbot_ts_projects_models',
 				'om_codexbot_ts_projects_scope_clear')
 		}) or { panic(err) }
 		assert current_project_resp.handled
@@ -2603,17 +2607,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_projects_and_models_commands_u
 		assert current_project_resp.commands[0].text.contains('**Current Project**')
 
 		use_after_scope_cleared := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_projects_use_after_scope_cleared'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_projects_use_after_scope_cleared'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_projects_use_after_scope_cleared'
-			target:     'chat_codexbot_ts_projects_models'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/use alpha', 'chat_codexbot_ts_projects_models',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_projects_use_after_scope_cleared'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_projects_use_after_scope_cleared'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_projects_use_after_scope_cleared'
+			target:      'chat_codexbot_ts_projects_models'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/use alpha', 'chat_codexbot_ts_projects_models',
 				'om_codexbot_ts_projects_use_after_scope_cleared')
 		}) or { panic(err) }
 		assert use_after_scope_cleared.handled
@@ -2624,18 +2628,18 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_projects_and_models_commands_u
 		assert use_after_scope_cleared.commands[1].params.contains('"threadId":"alpha"')
 
 		next_task := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_model_applied_task'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_model_applied_task'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_model_applied_task'
-			target:     'chat_codexbot_ts_projects_models'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('task after model switch',
-				'chat_codexbot_ts_projects_models', 'om_codexbot_ts_model_applied_task')
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_model_applied_task'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_model_applied_task'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_model_applied_task'
+			target:      'chat_codexbot_ts_projects_models'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('task after model switch', 'chat_codexbot_ts_projects_models',
+				'om_codexbot_ts_model_applied_task')
 		}) or { panic(err) }
 		assert next_task.handled
 		assert next_task.commands.len == 2
@@ -2660,17 +2664,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_new_command_can_switch_model_a
 		mut app := App{}
 
 		task_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_new_model_task'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_new_model_task'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_new_model_task'
-			target:     'chat_codexbot_ts_new_model'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('seed thread', 'chat_codexbot_ts_new_model',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_new_model_task'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_new_model_task'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_new_model_task'
+			target:      'chat_codexbot_ts_new_model'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('seed thread', 'chat_codexbot_ts_new_model',
 				'om_codexbot_ts_new_model_task')
 		}) or { panic(err) }
 		stream_id := task_resp.commands[0].stream_id
@@ -2688,17 +2692,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_new_command_can_switch_model_a
 		}) or { panic(err) }
 
 		reset_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_new_model_reset'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_new_model_reset'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_new_model_reset'
-			target:     'chat_codexbot_ts_new_model'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/new gpt-5.3-codex', 'chat_codexbot_ts_new_model',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_new_model_reset'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_new_model_reset'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_new_model_reset'
+			target:      'chat_codexbot_ts_new_model'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/new gpt-5.3-codex', 'chat_codexbot_ts_new_model',
 				'om_codexbot_ts_new_model_reset')
 		}) or { panic(err) }
 		assert reset_resp.handled
@@ -2708,17 +2712,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_new_command_can_switch_model_a
 		assert reset_resp.commands[0].text.contains('Model switched: `gpt-5.4` -> `gpt-5.3-codex`')
 
 		thread_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_new_model_thread'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_new_model_thread'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_new_model_thread'
-			target:     'chat_codexbot_ts_new_model'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/thread', 'chat_codexbot_ts_new_model',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_new_model_thread'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_new_model_thread'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_new_model_thread'
+			target:      'chat_codexbot_ts_new_model'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/thread', 'chat_codexbot_ts_new_model',
 				'om_codexbot_ts_new_model_thread')
 		}) or { panic(err) }
 		assert thread_resp.handled
@@ -2726,17 +2730,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_new_command_can_switch_model_a
 		assert thread_resp.commands[0].text.contains('No thread is currently bound.')
 
 		model_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_new_model_model'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_new_model_model'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_new_model_model'
-			target:     'chat_codexbot_ts_new_model'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/model', 'chat_codexbot_ts_new_model',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_new_model_model'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_new_model_model'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_new_model_model'
+			target:      'chat_codexbot_ts_new_model'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/model', 'chat_codexbot_ts_new_model',
 				'om_codexbot_ts_new_model_model')
 		}) or { panic(err) }
 		assert model_resp.handled
@@ -2770,17 +2774,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_create_import_and_bind_project
 		mut app := App{}
 
 		setting_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_setting_project_root'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_setting_project_root'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_setting_project_root'
-			target:     'chat_codexbot_ts_project_registry'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/setting project_root_dir ' + project_root,
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_setting_project_root'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_setting_project_root'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_setting_project_root'
+			target:      'chat_codexbot_ts_project_registry'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/setting project_root_dir ' + project_root,
 				'chat_codexbot_ts_project_registry', 'om_codexbot_ts_setting_project_root')
 		}) or { panic(err) }
 		assert setting_resp.handled
@@ -2789,17 +2793,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_create_import_and_bind_project
 		assert setting_resp.commands[0].text.contains('`project_root_dir` = `' + project_root + '`')
 
 		create_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_create_project'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_create_project'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_create_project'
-			target:     'chat_codexbot_ts_project_registry'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/create alpha', 'chat_codexbot_ts_project_registry',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_create_project'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_create_project'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_create_project'
+			target:      'chat_codexbot_ts_project_registry'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/create alpha', 'chat_codexbot_ts_project_registry',
 				'om_codexbot_ts_create_project')
 		}) or { panic(err) }
 		assert create_resp.handled
@@ -2810,18 +2814,18 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_create_import_and_bind_project
 		assert os.is_dir(os.join_path(project_root, 'alpha'))
 
 		import_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_import_project'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_import_project'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_import_project'
-			target:     'chat_codexbot_ts_project_registry'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/import beta ' + import_root,
-				'chat_codexbot_ts_project_registry', 'om_codexbot_ts_import_project')
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_import_project'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_import_project'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_import_project'
+			target:      'chat_codexbot_ts_project_registry'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/import beta ' + import_root, 'chat_codexbot_ts_project_registry',
+				'om_codexbot_ts_import_project')
 		}) or { panic(err) }
 		assert import_resp.handled
 		assert import_resp.commands.len == 1
@@ -2830,18 +2834,18 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_create_import_and_bind_project
 		assert import_resp.commands[0].text.contains('/bind [project_key] [path]')
 
 		bind_import_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_bind_import_project'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_bind_import_project'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_bind_import_project'
-			target:     'chat_codexbot_ts_project_registry'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/bind beta ' + import_root,
-				'chat_codexbot_ts_project_registry', 'om_codexbot_ts_bind_import_project')
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_bind_import_project'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_bind_import_project'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_bind_import_project'
+			target:      'chat_codexbot_ts_project_registry'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/bind beta ' + import_root, 'chat_codexbot_ts_project_registry',
+				'om_codexbot_ts_bind_import_project')
 		}) or { panic(err) }
 		assert bind_import_resp.handled
 		assert bind_import_resp.commands.len == 1
@@ -2849,17 +2853,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_create_import_and_bind_project
 		assert bind_import_resp.commands[0].text.contains(import_root)
 
 		switch_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_switch_to_alpha'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_switch_to_alpha'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_switch_to_alpha'
-			target:     'chat_codexbot_ts_project_registry'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/project alpha', 'chat_codexbot_ts_project_registry',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_switch_to_alpha'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_switch_to_alpha'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_switch_to_alpha'
+			target:      'chat_codexbot_ts_project_registry'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/project alpha', 'chat_codexbot_ts_project_registry',
 				'om_codexbot_ts_switch_to_alpha')
 		}) or { panic(err) }
 		assert switch_resp.handled
@@ -2867,17 +2871,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_create_import_and_bind_project
 		assert switch_resp.commands[0].text.contains('Project: `alpha`')
 
 		bind_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_bind_beta'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_bind_beta'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_bind_beta'
-			target:     'chat_codexbot_ts_project_registry'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/bind beta', 'chat_codexbot_ts_project_registry',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_bind_beta'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_bind_beta'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_bind_beta'
+			target:      'chat_codexbot_ts_project_registry'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/bind beta', 'chat_codexbot_ts_project_registry',
 				'om_codexbot_ts_bind_beta')
 		}) or { panic(err) }
 		assert bind_resp.handled
@@ -2886,17 +2890,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_create_import_and_bind_project
 		assert bind_resp.commands[0].text.contains(os.join_path(project_root, 'beta'))
 
 		current_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_project_current'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_project_current'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_project_current'
-			target:     'chat_codexbot_ts_project_registry'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/project', 'chat_codexbot_ts_project_registry',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_project_current'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_project_current'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_project_current'
+			target:      'chat_codexbot_ts_project_registry'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/project', 'chat_codexbot_ts_project_registry',
 				'om_codexbot_ts_project_current')
 		}) or { panic(err) }
 		assert current_resp.handled
@@ -2905,17 +2909,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_create_import_and_bind_project
 		assert current_resp.commands[0].text.contains('Project: `alpha`')
 
 		projects_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_project_list'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_project_list'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_project_list'
-			target:     'chat_codexbot_ts_project_registry'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/projects', 'chat_codexbot_ts_project_registry',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_project_list'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_project_list'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_project_list'
+			target:      'chat_codexbot_ts_project_registry'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/projects', 'chat_codexbot_ts_project_registry',
 				'om_codexbot_ts_project_list')
 		}) or { panic(err) }
 		assert projects_resp.handled
@@ -2966,66 +2970,66 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_unbind_blocks_current_project_
 		mut app := App{}
 
 		_ = executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_unbind_setting_project_root'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_unbind_setting_project_root'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_unbind_setting_project_root'
-			target:     'chat_codexbot_ts_unbind'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/setting project_root_dir ' + project_root,
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_unbind_setting_project_root'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_unbind_setting_project_root'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_unbind_setting_project_root'
+			target:      'chat_codexbot_ts_unbind'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/setting project_root_dir ' + project_root,
 				'chat_codexbot_ts_unbind', 'om_codexbot_ts_unbind_setting_project_root')
 		}) or { panic(err) }
 
 		create_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_unbind_create_alpha'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_unbind_create_alpha'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_unbind_create_alpha'
-			target:     'chat_codexbot_ts_unbind'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/create alpha', 'chat_codexbot_ts_unbind',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_unbind_create_alpha'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_unbind_create_alpha'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_unbind_create_alpha'
+			target:      'chat_codexbot_ts_unbind'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/create alpha', 'chat_codexbot_ts_unbind',
 				'om_codexbot_ts_unbind_create_alpha')
 		}) or { panic(err) }
 		assert create_resp.handled
 		assert create_resp.commands[0].text.contains('Project: `alpha`')
 
 		bind_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_unbind_bind_beta'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_unbind_bind_beta'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_unbind_bind_beta'
-			target:     'chat_codexbot_ts_unbind'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/bind beta', 'chat_codexbot_ts_unbind',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_unbind_bind_beta'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_unbind_bind_beta'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_unbind_bind_beta'
+			target:      'chat_codexbot_ts_unbind'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/bind beta', 'chat_codexbot_ts_unbind',
 				'om_codexbot_ts_unbind_bind_beta')
 		}) or { panic(err) }
 		assert bind_resp.handled
 		assert bind_resp.commands[0].text.contains('Project: `beta`')
 
 		blocked_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_unbind_alpha_blocked'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_unbind_alpha_blocked'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_unbind_alpha_blocked'
-			target:     'chat_codexbot_ts_unbind'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/unbind alpha', 'chat_codexbot_ts_unbind',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_unbind_alpha_blocked'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_unbind_alpha_blocked'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_unbind_alpha_blocked'
+			target:      'chat_codexbot_ts_unbind'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/unbind alpha', 'chat_codexbot_ts_unbind',
 				'om_codexbot_ts_unbind_alpha_blocked')
 		}) or { panic(err) }
 		assert blocked_resp.handled
@@ -3034,17 +3038,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_unbind_blocks_current_project_
 		assert blocked_resp.commands[0].text.contains('Project: `alpha`')
 
 		unbind_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_unbind_beta'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_unbind_beta'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_unbind_beta'
-			target:     'chat_codexbot_ts_unbind'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/unbind beta', 'chat_codexbot_ts_unbind',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_unbind_beta'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_unbind_beta'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_unbind_beta'
+			target:      'chat_codexbot_ts_unbind'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/unbind beta', 'chat_codexbot_ts_unbind',
 				'om_codexbot_ts_unbind_beta')
 		}) or { panic(err) }
 		assert unbind_resp.handled
@@ -3053,17 +3057,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_unbind_blocks_current_project_
 		assert unbind_resp.commands[0].text.contains('Project: `beta`')
 
 		projects_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_unbind_projects'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_unbind_projects'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_unbind_projects'
-			target:     'chat_codexbot_ts_unbind'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/projects', 'chat_codexbot_ts_unbind',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_unbind_projects'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_unbind_projects'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_unbind_projects'
+			target:      'chat_codexbot_ts_unbind'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/projects', 'chat_codexbot_ts_unbind',
 				'om_codexbot_ts_unbind_projects')
 		}) or { panic(err) }
 		assert projects_resp.handled
@@ -3076,9 +3080,12 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_unbind_blocks_current_project_
 fn test_inproc_vjsx_executor_repo_codexbot_app_ts_create_and_bind_failure_paths() {
 	codexbot_ts_with_temp_db('codexbot_ts_create_bind_failures.sqlite', fn (_ string) {
 		suffix := '${time.now().unix_milli()}'
-		project_root := os.join_path(os.temp_dir(), 'codexbot_ts_create_bind_failures_root_' + suffix)
-		explicit_bind_root := os.join_path(os.temp_dir(), 'codexbot_ts_create_bind_failures_bind_' + suffix)
-		missing_bind_root := os.join_path(os.temp_dir(), 'codexbot_ts_create_bind_failures_missing_' + suffix)
+		project_root := os.join_path(os.temp_dir(), 'codexbot_ts_create_bind_failures_root_' +
+			suffix)
+		explicit_bind_root := os.join_path(os.temp_dir(),
+			'codexbot_ts_create_bind_failures_bind_' + suffix)
+		missing_bind_root := os.join_path(os.temp_dir(),
+			'codexbot_ts_create_bind_failures_missing_' + suffix)
 		os.mkdir_all(project_root) or { panic(err) }
 		os.mkdir_all(explicit_bind_root) or { panic(err) }
 		os.mkdir_all(os.join_path(project_root, 'gamma')) or { panic(err) }
@@ -3100,69 +3107,70 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_create_and_bind_failure_paths(
 		mut app := App{}
 
 		_ = executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_create_bind_failures_setting'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_create_bind_failures_setting'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_create_bind_failures_setting'
-			target:     'chat_codexbot_ts_create_bind_failures'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/setting project_root_dir ' + project_root,
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_create_bind_failures_setting'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_create_bind_failures_setting'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_create_bind_failures_setting'
+			target:      'chat_codexbot_ts_create_bind_failures'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/setting project_root_dir ' + project_root,
 				'chat_codexbot_ts_create_bind_failures', 'om_codexbot_ts_create_bind_failures_setting')
 		}) or { panic(err) }
 
 		create_alpha := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_create_bind_failures_create_alpha'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_create_bind_failures_create_alpha'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_create_bind_failures_create_alpha'
-			target:     'chat_codexbot_ts_create_bind_failures'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/create alpha', 'chat_codexbot_ts_create_bind_failures',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_create_bind_failures_create_alpha'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_create_bind_failures_create_alpha'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_create_bind_failures_create_alpha'
+			target:      'chat_codexbot_ts_create_bind_failures'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/create alpha', 'chat_codexbot_ts_create_bind_failures',
 				'om_codexbot_ts_create_bind_failures_create_alpha')
 		}) or { panic(err) }
 		assert create_alpha.handled
 		assert create_alpha.commands[0].text.contains('**Project Created**')
 
 		create_alpha_again := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_create_bind_failures_create_alpha_again'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_create_bind_failures_create_alpha_again'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_create_bind_failures_create_alpha_again'
-			target:     'chat_codexbot_ts_create_bind_failures'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/create alpha', 'chat_codexbot_ts_create_bind_failures',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_create_bind_failures_create_alpha_again'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_create_bind_failures_create_alpha_again'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_create_bind_failures_create_alpha_again'
+			target:      'chat_codexbot_ts_create_bind_failures'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/create alpha', 'chat_codexbot_ts_create_bind_failures',
 				'om_codexbot_ts_create_bind_failures_create_alpha_again')
 		}) or { panic(err) }
 		assert create_alpha_again.handled
 		assert create_alpha_again.commands.len == 1
 		assert create_alpha_again.commands[0].text.contains('**Project Exists**')
 		assert create_alpha_again.commands[0].text.contains('Project: `alpha`')
-		assert create_alpha_again.commands[0].text.contains(os.join_path(project_root, 'alpha'))
+		assert create_alpha_again.commands[0].text.contains(os.join_path(project_root,
+			'alpha'))
 
 		create_gamma := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_create_bind_failures_create_gamma'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_create_bind_failures_create_gamma'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_create_bind_failures_create_gamma'
-			target:     'chat_codexbot_ts_create_bind_failures'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/create gamma', 'chat_codexbot_ts_create_bind_failures',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_create_bind_failures_create_gamma'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_create_bind_failures_create_gamma'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_create_bind_failures_create_gamma'
+			target:      'chat_codexbot_ts_create_bind_failures'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/create gamma', 'chat_codexbot_ts_create_bind_failures',
 				'om_codexbot_ts_create_bind_failures_create_gamma')
 		}) or { panic(err) }
 		assert create_gamma.handled
@@ -3172,17 +3180,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_create_and_bind_failure_paths(
 		assert create_gamma.commands[0].text.contains(os.join_path(project_root, 'gamma'))
 
 		bind_beta := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_create_bind_failures_bind_beta'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_create_bind_failures_bind_beta'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_create_bind_failures_bind_beta'
-			target:     'chat_codexbot_ts_create_bind_failures'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/bind beta ' + explicit_bind_root,
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_create_bind_failures_bind_beta'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_create_bind_failures_bind_beta'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_create_bind_failures_bind_beta'
+			target:      'chat_codexbot_ts_create_bind_failures'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/bind beta ' + explicit_bind_root,
 				'chat_codexbot_ts_create_bind_failures', 'om_codexbot_ts_create_bind_failures_bind_beta')
 		}) or { panic(err) }
 		assert bind_beta.handled
@@ -3191,17 +3199,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_create_and_bind_failure_paths(
 		assert bind_beta.commands[0].text.contains(explicit_bind_root)
 
 		bind_beta_again := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_create_bind_failures_bind_beta_again'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_create_bind_failures_bind_beta_again'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_create_bind_failures_bind_beta_again'
-			target:     'chat_codexbot_ts_create_bind_failures'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/bind beta ' + explicit_bind_root,
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_create_bind_failures_bind_beta_again'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_create_bind_failures_bind_beta_again'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_create_bind_failures_bind_beta_again'
+			target:      'chat_codexbot_ts_create_bind_failures'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/bind beta ' + explicit_bind_root,
 				'chat_codexbot_ts_create_bind_failures', 'om_codexbot_ts_create_bind_failures_bind_beta_again')
 		}) or { panic(err) }
 		assert bind_beta_again.handled
@@ -3211,17 +3219,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_create_and_bind_failure_paths(
 		assert bind_beta_again.commands[0].text.contains(explicit_bind_root)
 
 		bind_missing := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_create_bind_failures_bind_missing'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_create_bind_failures_bind_missing'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_create_bind_failures_bind_missing'
-			target:     'chat_codexbot_ts_create_bind_failures'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/bind delta ' + missing_bind_root,
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_create_bind_failures_bind_missing'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_create_bind_failures_bind_missing'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_create_bind_failures_bind_missing'
+			target:      'chat_codexbot_ts_create_bind_failures'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/bind delta ' + missing_bind_root,
 				'chat_codexbot_ts_create_bind_failures', 'om_codexbot_ts_create_bind_failures_bind_missing')
 		}) or { panic(err) }
 		assert bind_missing.handled
@@ -3252,17 +3260,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_settings_command_controls_proj
 		mut app := App{}
 
 		empty_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_settings_empty'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_settings_empty'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_settings_empty'
-			target:     'chat_codexbot_ts_settings'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/settings', 'chat_codexbot_ts_settings',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_settings_empty'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_settings_empty'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_settings_empty'
+			target:      'chat_codexbot_ts_settings'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/settings', 'chat_codexbot_ts_settings',
 				'om_codexbot_ts_settings_empty')
 		}) or { panic(err) }
 		assert empty_resp.handled
@@ -3271,17 +3279,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_settings_command_controls_proj
 		assert empty_resp.commands[0].text.contains('No settings configured yet.')
 
 		create_without_setting := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_settings_create_fail'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_settings_create_fail'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_settings_create_fail'
-			target:     'chat_codexbot_ts_settings'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/create gamma', 'chat_codexbot_ts_settings',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_settings_create_fail'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_settings_create_fail'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_settings_create_fail'
+			target:      'chat_codexbot_ts_settings'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/create gamma', 'chat_codexbot_ts_settings',
 				'om_codexbot_ts_settings_create_fail')
 		}) or { panic(err) }
 		assert create_without_setting.handled
@@ -3289,17 +3297,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_settings_command_controls_proj
 		assert create_without_setting.commands[0].text.contains('**Project Root Missing**')
 
 		setting_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_settings_update'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_settings_update'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_settings_update'
-			target:     'chat_codexbot_ts_settings'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/setting project_root_dir ' + project_root,
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_settings_update'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_settings_update'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_settings_update'
+			target:      'chat_codexbot_ts_settings'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/setting project_root_dir ' + project_root,
 				'chat_codexbot_ts_settings', 'om_codexbot_ts_settings_update')
 		}) or { panic(err) }
 		assert setting_resp.handled
@@ -3307,17 +3315,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_settings_command_controls_proj
 		assert setting_resp.commands[0].text.contains('`project_root_dir` = `' + project_root + '`')
 
 		list_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_settings_list'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_settings_list'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_settings_list'
-			target:     'chat_codexbot_ts_settings'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/settings', 'chat_codexbot_ts_settings',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_settings_list'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_settings_list'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_settings_list'
+			target:      'chat_codexbot_ts_settings'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/settings', 'chat_codexbot_ts_settings',
 				'om_codexbot_ts_settings_list')
 		}) or { panic(err) }
 		assert list_resp.handled
@@ -3326,17 +3334,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_settings_command_controls_proj
 		assert list_resp.commands[0].text.contains('`project_root_dir` = `' + project_root + '`')
 
 		create_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_settings_create_ok'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_settings_create_ok'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_settings_create_ok'
-			target:     'chat_codexbot_ts_settings'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/create gamma', 'chat_codexbot_ts_settings',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_settings_create_ok'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_settings_create_ok'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_settings_create_ok'
+			target:      'chat_codexbot_ts_settings'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/create gamma', 'chat_codexbot_ts_settings',
 				'om_codexbot_ts_settings_create_ok')
 		}) or { panic(err) }
 		assert create_resp.handled
@@ -3361,17 +3369,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_codex_query_command_runs_rpc_a
 		mut app := App{}
 
 		query_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_codex_query'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_codex_query'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_codex_query'
-			target:     'chat_codexbot_ts_codex_query'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/codex model/list', 'chat_codexbot_ts_codex_query',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_codex_query'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_codex_query'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_codex_query'
+			target:      'chat_codexbot_ts_codex_query'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/codex model/list', 'chat_codexbot_ts_codex_query',
 				'om_codexbot_ts_codex_query')
 		}) or { panic(err) }
 		assert query_resp.handled
@@ -3418,17 +3426,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_empty_and_error_ar
 		mut app := App{}
 
 		seed_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_thread_read_fallbacks_seed'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_thread_read_fallbacks_seed'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_thread_read_fallbacks_seed'
-			target:     'chat_codexbot_ts_thread_read_fallbacks'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('seed latest thread', 'chat_codexbot_ts_thread_read_fallbacks',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_thread_read_fallbacks_seed'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_thread_read_fallbacks_seed'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_thread_read_fallbacks_seed'
+			target:      'chat_codexbot_ts_thread_read_fallbacks'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('seed latest thread', 'chat_codexbot_ts_thread_read_fallbacks',
 				'om_codexbot_ts_thread_read_fallbacks_seed')
 		}) or { panic(err) }
 		seed_stream_id := seed_resp.commands[0].stream_id
@@ -3454,32 +3462,32 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_empty_and_error_ar
 			payload:    '{"method":"turn/completed","params":{}}'
 		}) or { panic(err) }
 		_ = executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_thread_read_fallbacks_new'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_thread_read_fallbacks_new'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_thread_read_fallbacks_new'
-			target:     'chat_codexbot_ts_thread_read_fallbacks'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/new', 'chat_codexbot_ts_thread_read_fallbacks',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_thread_read_fallbacks_new'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_thread_read_fallbacks_new'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_thread_read_fallbacks_new'
+			target:      'chat_codexbot_ts_thread_read_fallbacks'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/new', 'chat_codexbot_ts_thread_read_fallbacks',
 				'om_codexbot_ts_thread_read_fallbacks_new')
 		}) or { panic(err) }
 
 		use_empty := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_thread_read_fallbacks_use_empty'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_thread_read_fallbacks_use_empty'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_thread_read_fallbacks_use_empty'
-			target:     'chat_codexbot_ts_thread_read_fallbacks'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/use latest', 'chat_codexbot_ts_thread_read_fallbacks',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_thread_read_fallbacks_use_empty'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_thread_read_fallbacks_use_empty'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_thread_read_fallbacks_use_empty'
+			target:      'chat_codexbot_ts_thread_read_fallbacks'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/use latest', 'chat_codexbot_ts_thread_read_fallbacks',
 				'om_codexbot_ts_thread_read_fallbacks_use_empty')
 		}) or { panic(err) }
 		assert use_empty.handled
@@ -3506,17 +3514,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_empty_and_error_ar
 		assert empty_rpc.commands[0].content.contains('No assistant reply was found in this thread yet.')
 
 		use_error := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_thread_read_fallbacks_use_error'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_thread_read_fallbacks_use_error'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_thread_read_fallbacks_use_error'
-			target:     'chat_codexbot_ts_thread_read_fallbacks'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/use latest', 'chat_codexbot_ts_thread_read_fallbacks',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_thread_read_fallbacks_use_error'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_thread_read_fallbacks_use_error'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_thread_read_fallbacks_use_error'
+			target:      'chat_codexbot_ts_thread_read_fallbacks'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/use latest', 'chat_codexbot_ts_thread_read_fallbacks',
 				'om_codexbot_ts_thread_read_fallbacks_use_error')
 		}) or { panic(err) }
 		assert use_error.handled
@@ -3557,17 +3565,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_codex_thread_read_uses_bound_t
 		mut app := App{}
 
 		task_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_codex_thread_seed'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_codex_thread_seed'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_codex_thread_seed'
-			target:     'chat_codexbot_ts_codex_thread'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('seed thread', 'chat_codexbot_ts_codex_thread',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_codex_thread_seed'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_codex_thread_seed'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_codex_thread_seed'
+			target:      'chat_codexbot_ts_codex_thread'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('seed thread', 'chat_codexbot_ts_codex_thread',
 				'om_codexbot_ts_codex_thread_seed')
 		}) or { panic(err) }
 		stream_id := task_resp.commands[0].stream_id
@@ -3584,17 +3592,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_codex_thread_read_uses_bound_t
 		}) or { panic(err) }
 
 		read_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_codex_thread_read'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_codex_thread_read'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_codex_thread_read'
-			target:     'chat_codexbot_ts_codex_thread'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/codex thread/read', 'chat_codexbot_ts_codex_thread',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_codex_thread_read'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_codex_thread_read'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_codex_thread_read'
+			target:      'chat_codexbot_ts_codex_thread'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/codex thread/read', 'chat_codexbot_ts_codex_thread',
 				'om_codexbot_ts_codex_thread_read')
 		}) or { panic(err) }
 		assert read_resp.handled
@@ -3604,17 +3612,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_codex_thread_read_uses_bound_t
 		assert read_resp.commands[1].params.contains('"includeTurns":true')
 
 		bad_json_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_codex_bad_json'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_codex_bad_json'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_codex_bad_json'
-			target:     'chat_codexbot_ts_codex_thread'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/codex model/list {oops}', 'chat_codexbot_ts_codex_thread',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_codex_bad_json'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_codex_bad_json'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_codex_bad_json'
+			target:      'chat_codexbot_ts_codex_thread'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/codex model/list {oops}', 'chat_codexbot_ts_codex_thread',
 				'om_codexbot_ts_codex_bad_json')
 		}) or { panic(err) }
 		assert bad_json_resp.handled
@@ -3637,17 +3645,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_codex_alias_commands_are_mobil
 		mut app := App{}
 
 		models_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_codex_models_alias'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_codex_models_alias'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_codex_models_alias'
-			target:     'chat_codexbot_ts_codex_aliases'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/codex models', 'chat_codexbot_ts_codex_aliases',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_codex_models_alias'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_codex_models_alias'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_codex_models_alias'
+			target:      'chat_codexbot_ts_codex_aliases'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/codex models', 'chat_codexbot_ts_codex_aliases',
 				'om_codexbot_ts_codex_models_alias')
 		}) or { panic(err) }
 		assert models_resp.handled
@@ -3655,17 +3663,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_codex_alias_commands_are_mobil
 		assert models_resp.commands[1].method == 'model/list'
 
 		no_thread_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_codex_thread_alias_no_thread'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_codex_thread_alias_no_thread'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_codex_thread_alias_no_thread'
-			target:     'chat_codexbot_ts_codex_aliases'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/codex thread', 'chat_codexbot_ts_codex_aliases',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_codex_thread_alias_no_thread'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_codex_thread_alias_no_thread'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_codex_thread_alias_no_thread'
+			target:      'chat_codexbot_ts_codex_aliases'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/codex thread', 'chat_codexbot_ts_codex_aliases',
 				'om_codexbot_ts_codex_thread_alias_no_thread')
 		}) or { panic(err) }
 		assert no_thread_resp.handled
@@ -3673,17 +3681,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_codex_alias_commands_are_mobil
 		assert no_thread_resp.commands[0].text.contains('**Thread Required**')
 
 		seed_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_codex_thread_alias_seed'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_codex_thread_alias_seed'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_codex_thread_alias_seed'
-			target:     'chat_codexbot_ts_codex_aliases'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('seed alias thread', 'chat_codexbot_ts_codex_aliases',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_codex_thread_alias_seed'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_codex_thread_alias_seed'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_codex_thread_alias_seed'
+			target:      'chat_codexbot_ts_codex_aliases'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('seed alias thread', 'chat_codexbot_ts_codex_aliases',
 				'om_codexbot_ts_codex_thread_alias_seed')
 		}) or { panic(err) }
 		seed_stream_id := seed_resp.commands[0].stream_id
@@ -3700,17 +3708,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_codex_alias_commands_are_mobil
 		}) or { panic(err) }
 
 		thread_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_codex_thread_alias_bound'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_codex_thread_alias_bound'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_codex_thread_alias_bound'
-			target:     'chat_codexbot_ts_codex_aliases'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/codex thread', 'chat_codexbot_ts_codex_aliases',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_codex_thread_alias_bound'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_codex_thread_alias_bound'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_codex_thread_alias_bound'
+			target:      'chat_codexbot_ts_codex_aliases'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/codex thread', 'chat_codexbot_ts_codex_aliases',
 				'om_codexbot_ts_codex_thread_alias_bound')
 		}) or { panic(err) }
 		assert thread_resp.handled
@@ -3720,17 +3728,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_codex_alias_commands_are_mobil
 		assert thread_resp.commands[1].params.contains('"threadId":"thread_codex_alias_001"')
 
 		unsupported_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_codex_unsupported'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_codex_unsupported'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_codex_unsupported'
-			target:     'chat_codexbot_ts_codex_aliases'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('/codex turn/start {"threadId":"x"}',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_codex_unsupported'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_codex_unsupported'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_codex_unsupported'
+			target:      'chat_codexbot_ts_codex_aliases'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/codex turn/start {"threadId":"x"}',
 				'chat_codexbot_ts_codex_aliases', 'om_codexbot_ts_codex_unsupported')
 		}) or { panic(err) }
 		assert unsupported_resp.handled
@@ -3754,17 +3762,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_projects_assistant
 		mut app := App{}
 
 		task_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_thread_read_content_projection_task'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_thread_read_content_projection_task'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_ts_thread_read_content_projection_task'
-			target:     'chat_codexbot_ts_thread_read_content_projection'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('project this thread read', 'chat_codexbot_ts_thread_read_content_projection',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_thread_read_content_projection_task'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_thread_read_content_projection_task'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_thread_read_content_projection_task'
+			target:      'chat_codexbot_ts_thread_read_content_projection'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('project this thread read', 'chat_codexbot_ts_thread_read_content_projection',
 				'om_codexbot_ts_thread_read_content_projection_task')
 		}) or { panic(err) }
 		stream_id := task_resp.commands[0].stream_id
@@ -3841,9 +3849,8 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_cancel_in_other_thread_does_no
 			message_id:  'om_codexbot_thread_cancel_active'
 			target:      'chat_codexbot_ts_thread_cancel'
 			target_type: 'chat_id'
-			payload:     codexbot_ts_feishu_thread_payload('active thread task',
-				'chat_codexbot_ts_thread_cancel', 'om_codexbot_thread_cancel_active',
-				'om_thread_cancel_root_A', 'om_thread_cancel_parent_A')
+			payload:     codexbot_ts_feishu_thread_payload('active thread task', 'chat_codexbot_ts_thread_cancel',
+				'om_codexbot_thread_cancel_active', 'om_thread_cancel_root_A', 'om_thread_cancel_parent_A')
 		}) or { panic(err) }
 		assert first_resp.handled
 		assert first_resp.commands.len == 2
@@ -3859,9 +3866,8 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_cancel_in_other_thread_does_no
 			message_id:  'om_codexbot_thread_cancel_other'
 			target:      'chat_codexbot_ts_thread_cancel'
 			target_type: 'chat_id'
-			payload:     codexbot_ts_feishu_thread_payload('/cancel',
-				'chat_codexbot_ts_thread_cancel', 'om_codexbot_thread_cancel_other',
-				'om_thread_cancel_root_B', 'om_thread_cancel_parent_B')
+			payload:     codexbot_ts_feishu_thread_payload('/cancel', 'chat_codexbot_ts_thread_cancel',
+				'om_codexbot_thread_cancel_other', 'om_thread_cancel_root_B', 'om_thread_cancel_parent_B')
 		}) or { panic(err) }
 		assert cancel_resp.handled
 		assert cancel_resp.commands.len == 1
@@ -4092,17 +4098,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_existing_thread_starts_turn_di
 		})
 		mut app := App{}
 		first_task := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_existing_thread_first'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_existing_thread_first'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_existing_thread_first'
-			target:     'chat_codexbot_ts_existing_thread'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('first turn', 'chat_codexbot_ts_existing_thread',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_existing_thread_first'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_existing_thread_first'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_existing_thread_first'
+			target:      'chat_codexbot_ts_existing_thread'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('first turn', 'chat_codexbot_ts_existing_thread',
 				'om_codexbot_existing_thread_first')
 		}) or { panic(err) }
 		first_stream_id := first_task.commands[0].stream_id
@@ -4142,17 +4148,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_existing_thread_starts_turn_di
 		}) or { panic(err) }
 
 		second_task := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_existing_thread_second'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_existing_thread_second'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_existing_thread_second'
-			target:     'chat_codexbot_ts_existing_thread'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('second turn', 'chat_codexbot_ts_existing_thread',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_existing_thread_second'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_existing_thread_second'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_existing_thread_second'
+			target:      'chat_codexbot_ts_existing_thread'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('second turn', 'chat_codexbot_ts_existing_thread',
 				'om_codexbot_existing_thread_second')
 		}) or { panic(err) }
 		assert second_task.handled
@@ -4176,17 +4182,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_reuses_thread_after_restart() 
 		})
 		mut app := App{}
 		first_task := executor_a.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_reuse_task_1'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_reuse_task_1'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_reuse_task_1'
-			target:     'chat_codexbot_ts_reuse'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('first task', 'chat_codexbot_ts_reuse',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_reuse_task_1'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_reuse_task_1'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_reuse_task_1'
+			target:      'chat_codexbot_ts_reuse'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('first task', 'chat_codexbot_ts_reuse',
 				'om_codexbot_reuse_task_1')
 		}) or { panic(err) }
 		first_stream_id := first_task.commands[0].stream_id
@@ -4229,17 +4235,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_reuses_thread_after_restart() 
 			runtime_profile: 'node'
 		})
 		second_task := executor_b.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_reuse_task_2'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_reuse_task_2'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_reuse_task_2'
-			target:     'chat_codexbot_ts_reuse'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('second task', 'chat_codexbot_ts_reuse',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_reuse_task_2'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_reuse_task_2'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_reuse_task_2'
+			target:      'chat_codexbot_ts_reuse'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('second task', 'chat_codexbot_ts_reuse',
 				'om_codexbot_reuse_task_2')
 		}) or { panic(err) }
 		assert second_task.handled
@@ -4262,17 +4268,17 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_restores_stream_draft_after_re
 		})
 		mut app := App{}
 		task_resp := executor_a.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
-			mode:       'websocket_upstream'
-			event:      'message'
-			id:         'codexbot_ts_restore_task_1'
-			provider:   'feishu'
-			instance:   'main'
-			trace_id:   'trace_codexbot_ts_restore_task_1'
-			event_type: 'im.message.receive_v1'
-			message_id: 'om_codexbot_restore_task_1'
-			target:     'chat_codexbot_ts_restore'
-			target_type:'chat_id'
-			payload:    codexbot_ts_feishu_payload('draft task', 'chat_codexbot_ts_restore',
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_restore_task_1'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_restore_task_1'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_restore_task_1'
+			target:      'chat_codexbot_ts_restore'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('draft task', 'chat_codexbot_ts_restore',
 				'om_codexbot_restore_task_1')
 		}) or { panic(err) }
 		stream_id := task_resp.commands[0].stream_id
@@ -4641,8 +4647,8 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_raw_response_final_answer_comp
 			message_id:  'om_codexbot_raw_response_final_task'
 			target:      'chat_codexbot_ts_raw_response_final'
 			target_type: 'chat_id'
-			payload:     codexbot_ts_feishu_payload('raw response final task',
-				'chat_codexbot_ts_raw_response_final', 'om_codexbot_raw_response_final_task')
+			payload:     codexbot_ts_feishu_payload('raw response final task', 'chat_codexbot_ts_raw_response_final',
+				'om_codexbot_raw_response_final_task')
 		}) or { panic(err) }
 		stream_id := task_resp.commands[0].stream_id
 		assert stream_id != ''
@@ -4706,8 +4712,8 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_commentary_after_final_answer_
 			message_id:  'om_codexbot_commentary_after_final_task'
 			target:      'chat_codexbot_ts_commentary_after_final'
 			target_type: 'chat_id'
-			payload:     codexbot_ts_feishu_payload('commentary after final task',
-				'chat_codexbot_ts_commentary_after_final', 'om_codexbot_commentary_after_final_task')
+			payload:     codexbot_ts_feishu_payload('commentary after final task', 'chat_codexbot_ts_commentary_after_final',
+				'om_codexbot_commentary_after_final_task')
 		}) or { panic(err) }
 		stream_id := task_resp.commands[0].stream_id
 		assert stream_id != ''
@@ -4817,7 +4823,8 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_persists_thread_path_from_thre
 			instance:   'main'
 			trace_id:   stream_id
 			event_type: 'codex.rpc.response'
-			payload:    '{"method":"thread/start","result":{"threadId":"thread_idle_001","thread":{"path":"' +
+			payload:
+				'{"method":"thread/start","result":{"threadId":"thread_idle_001","thread":{"path":"' +
 				session_file.replace('\\', '\\\\').replace('"', '\\"') + '"}},"has_error":false}'
 		}) or { panic(err) }
 		_ := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
@@ -4875,7 +4882,8 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_idle_status_resolves_session_f
 			os.rmdir_all(session_root) or {}
 		}
 		thread_id := '019d2f8a-0265-71f2-b541-cc2d94783ec0'
-		session_file := os.join_path(session_day, 'rollout-2026-03-27T21-44-26-' + thread_id + '.jsonl')
+		session_file := os.join_path(session_day, 'rollout-2026-03-27T21-44-26-' + thread_id +
+			'.jsonl')
 		os.write_file(session_file, '{"timestamp":"2026-03-27T14:00:02.896Z","type":"event_msg","payload":{"type":"agent_message","message":"final answer from session lookup","phase":"final_answer"}}\n') or {
 			panic(err)
 		}
@@ -4905,7 +4913,8 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_idle_status_resolves_session_f
 			instance:   'main'
 			trace_id:   stream_id
 			event_type: 'codex.rpc.response'
-			payload:    '{"method":"thread/start","result":{"threadId":"' + thread_id + '"},"has_error":false}'
+			payload:    '{"method":"thread/start","result":{"threadId":"' + thread_id +
+				'"},"has_error":false}'
 		}) or { panic(err) }
 		_ := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
 			mode:       'websocket_upstream'
