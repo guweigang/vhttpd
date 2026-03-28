@@ -91,7 +91,7 @@ fn print_vhttpd_help() {
 	println('  --worker-queue-capacity <N>  Max waiting requests before immediate 503')
 	println('  --worker-queue-timeout-ms <N> Max wait time for a worker before 504')
 	println('  --worker-socket-prefix <p>   Advanced override for pool socket prefix')
-	println('  --executor <kind>            php | vjsx')
+	println('  --executor <kind>            ${builtin_logic_executor_kinds_label()}')
 	println('  --php-bin <path>             PHP binary for generated php worker command')
 	println('  --php-worker-entry <path>    PHP worker bootstrap script')
 	println('  --php-app-entry <path>       PHP app/bootstrap entry (injects VHTTPD_APP)')
@@ -223,21 +223,6 @@ fn build_php_worker_env(worker_env map[string]string, php_cfg PhpConfig) map[str
 	return env
 }
 
-fn normalize_executor_kind(raw string) !string {
-	normalized := raw.trim_space().to_lower().replace('-', '_')
-	match normalized {
-		'', 'php' {
-			return 'php'
-		}
-		'vjsx' {
-			return 'vjsx'
-		}
-		else {
-			return error('unsupported executor kind: ${raw}')
-		}
-	}
-}
-
 fn build_vjsx_runtime_config(args []string, cfg VhttpdConfig) !VjsxRuntimeFacadeConfig {
 	mut app_entry := arg_string_or(args, '--vjsx-entry', cfg.vjsx.app_entry).trim_space()
 	if app_entry == '' {
@@ -284,22 +269,10 @@ fn build_vjsx_runtime_config(args []string, cfg VhttpdConfig) !VjsxRuntimeFacade
 
 fn resolve_executor_runtime(args []string, cfg VhttpdConfig) !ExecutorRuntimeSelection {
 	kind := normalize_executor_kind(arg_string_or(args, '--executor', cfg.executor.kind))!
-	match kind {
-		'php' {
-			return ExecutorRuntimeSelection{
-				executor: SocketWorkerExecutor{}
-			}
-		}
-		'vjsx' {
-			return ExecutorRuntimeSelection{
-				executor:            new_inproc_vjsx_executor(build_vjsx_runtime_config(args,
-					cfg)!)
-				worker_backend_mode: .disabled
-			}
-		}
-		else {
-			return error('unsupported executor kind: ${kind}')
-		}
+	spec := builtin_logic_executor_spec(kind)!
+	return ExecutorRuntimeSelection{
+		executor:            build_builtin_logic_executor(kind, args, cfg)!
+		worker_backend_mode: spec.worker_backend_mode
 	}
 }
 

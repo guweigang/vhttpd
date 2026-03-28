@@ -332,3 +332,19 @@ fn test_resolve_executor_runtime_builds_vjsx_executor() {
 	assert selection.executor.provider() == 'vjsx'
 	assert selection.worker_backend_mode == .disabled
 }
+
+fn test_normalize_executor_kind_accepts_aliases() {
+	assert normalize_executor_kind('') or { panic(err) } == 'php'
+	assert normalize_executor_kind('php-worker') or { panic(err) } == 'php'
+	assert normalize_executor_kind('php_worker') or { panic(err) } == 'php'
+	assert normalize_executor_kind('vjsx') or { panic(err) } == 'vjsx'
+}
+
+fn test_builtin_logic_executor_spec_exposes_runtime_models() {
+	php_spec := builtin_logic_executor_spec('php') or { panic(err) }
+	assert php_spec.logic_model == .worker
+	assert php_spec.worker_backend_mode == .required
+	vjsx_spec := builtin_logic_executor_spec('vjsx') or { panic(err) }
+	assert vjsx_spec.logic_model == .embedded
+	assert vjsx_spec.worker_backend_mode == .disabled
+}

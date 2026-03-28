@@ -1,9 +1,16 @@
 # Executor Modes
 
-`vhttpd` currently supports two logic execution modes:
+`vhttpd` currently ships with two built-in logic executors:
 
 - `php`: dispatch through PHP workers over Unix sockets
 - `vjsx`: dispatch in-process through embedded `vjsx`
+
+Each executor has two orthogonal traits:
+
+- `logic_executor_model`: `worker` or `embedded`
+- `worker_backend_mode`: `required` or `disabled`
+
+That split matters because future hosts such as `lua` should be able to join the same executor surface without forcing `vhttpd` to treat every new runtime as a special case.
 
 Shared config such as `[server]`, `[files]`, `[runtime]`, `[admin]`, and `[assets]` works the same in both modes.
 
