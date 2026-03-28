@@ -87,6 +87,7 @@ fn test_load_vhttpd_config_supports_paths_root_and_aliases() {
 	expected_php_app := os.join_path(expected_root, 'apps', 'hello.php')
 	expected_vjsx_app := os.join_path(expected_root, 'apps', 'hello.mts')
 	expected_vjsx_root := os.join_path(expected_root, 'apps')
+	expected_vjsx_sig_root := os.join_path(expected_root, 'sig')
 	expected_assets_root := os.join_path(expected_root, 'public')
 	expected_socket_prefix := os.join_path(expected_root, 'run', 'worker')
 	expected_pid := os.join_path(expected_root, 'tmp', 'vhttpd.pid')
@@ -97,6 +98,7 @@ root = ".."
 php_app = "apps/hello.php"
 vjsx_app = "apps/hello.mts"
 vjsx_root = "apps"
+vjsx_sig_root = "sig"
 assets_root = "public"
 socket_prefix = "run/worker"
 
@@ -116,6 +118,8 @@ kind = "vjsx"
 [vjsx]
 app_entry = "\${paths.vjsx_app}"
 module_root = "\${paths.vjsx_root}"
+signature_root = "\${paths.vjsx_sig_root}"
+signature_include = ["\${paths.vjsx_root}/**/*.mts"]
 runtime_profile = "node"
 thread_count = 2
 
@@ -138,6 +142,8 @@ root = "\${paths.assets_root}"
 	assert cfg.worker.env['VHTTPD_APP'] == expected_php_app
 	assert cfg.vjsx.app_entry == expected_vjsx_app
 	assert cfg.vjsx.module_root == expected_vjsx_root
+	assert cfg.vjsx.signature_root == expected_vjsx_sig_root
+	assert cfg.vjsx.signature_include[0] == 'apps/**/*.mts'
 	assert cfg.assets.root == expected_assets_root
 }
 
@@ -735,6 +741,46 @@ fn test_resolve_server_runtime_config_builds_vjsx_embedded_runtime_state() {
 	assert runtime_cfg.app_build_cfg.assets_root_real == os.real_path(assets_root)
 	assert runtime_cfg.app_build_cfg.assets_cache_control == 'public, max-age=300'
 	assert os.exists(pid_file)
+}
+
+fn test_resolve_embedded_host_runtime_config_normalizes_paths_and_lane_defaults() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_embedded_host_runtime_test')
+	os.mkdir_all(os.join_path(temp_dir, 'sig')) or { panic(err) }
+	app_file := os.join_path(temp_dir, 'app.mts')
+	os.write_file(app_file, 'export default {};') or { panic(err) }
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	cfg := resolve_embedded_host_runtime_config(['--app', app_file, '--module-root',
+		os.join_path(temp_dir, 'modules'), '--signature-root', os.join_path(temp_dir, 'sig'),
+		'--signature-include', '**/*.mts', '--signature-exclude', 'tmp/**', '--profile', 'node',
+		'--lanes', '0'], EmbeddedHostRuntimeConfig{
+		runtime_profile: 'script'
+		lane_count:      3
+		max_requests:    9
+		enable_fs:       true
+		enable_process:  true
+		enable_network:  true
+	}, EmbeddedHostCliOverrides{
+		app_entry_flag:         '--app'
+		module_root_flag:       '--module-root'
+		signature_root_flag:    '--signature-root'
+		signature_include_flag: '--signature-include'
+		signature_exclude_flag: '--signature-exclude'
+		runtime_profile_flag:   '--profile'
+		lane_count_flag:        '--lanes'
+	}) or { panic(err) }
+	assert cfg.app_entry == app_file
+	assert cfg.module_root == os.join_path(temp_dir, 'modules')
+	assert cfg.signature_root == os.join_path(temp_dir, 'sig')
+	assert cfg.signature_include == ['**/*.mts']
+	assert cfg.signature_exclude == ['tmp/**']
+	assert cfg.runtime_profile == 'node'
+	assert cfg.lane_count == 1
+	assert cfg.max_requests == 9
+	assert cfg.enable_fs
+	assert cfg.enable_process
+	assert cfg.enable_network
 }
 
 fn test_shutdown_app_runtime_stops_lifecycle_and_cleans_runtime_files() {

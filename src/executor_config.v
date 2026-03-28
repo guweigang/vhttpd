@@ -92,46 +92,52 @@ fn build_php_worker_env(worker_env map[string]string, php_cfg PhpConfig) map[str
 }
 
 fn build_vjsx_runtime_config(args []string, cfg VhttpdConfig) !VjsxRuntimeFacadeConfig {
-	mut app_entry := arg_string_or(args, '--vjsx-entry', cfg.vjsx.app_entry).trim_space()
-	if app_entry == '' {
-		return error('inproc_vjsx_executor_missing_app_entry')
-	}
-	app_entry = os.abs_path(app_entry)
-	if !os.exists(app_entry) {
-		return error('inproc_vjsx_executor_app_entry_not_found:${app_entry}')
-	}
-	mut module_root := arg_string_or(args, '--vjsx-module-root', cfg.vjsx.module_root).trim_space()
-	if module_root == '' {
-		module_root = os.dir(app_entry)
-	} else {
-		module_root = os.abs_path(module_root)
-	}
-	mut signature_root := arg_string_or(args, '--vjsx-signature-root', cfg.vjsx.signature_root).trim_space()
-	if signature_root == '' {
-		signature_root = module_root
-	} else {
-		signature_root = os.abs_path(signature_root)
-	}
-	mut runtime_profile := arg_string_or(args, '--vjsx-runtime-profile', cfg.vjsx.runtime_profile).trim_space()
-	if runtime_profile == '' {
-		runtime_profile = 'script'
-	}
-	thread_count_raw := arg_int_or(args, '--vjsx-thread-count', cfg.vjsx.thread_count)
-	thread_count := if thread_count_raw > 0 { thread_count_raw } else { 1 }
-	signature_include := arg_string_list_or(args, '--vjsx-signature-include', cfg.vjsx.signature_include)
-	signature_exclude := arg_string_list_or(args, '--vjsx-signature-exclude', cfg.vjsx.signature_exclude)
-	return VjsxRuntimeFacadeConfig{
-		app_entry:         app_entry
-		module_root:       module_root
-		signature_root:    signature_root
-		signature_include: signature_include
-		signature_exclude: signature_exclude
-		runtime_profile:   runtime_profile
-		thread_count:      thread_count
+	embedded_cfg := resolve_embedded_host_runtime_config(args, EmbeddedHostRuntimeConfig{
+		app_entry:         cfg.vjsx.app_entry
+		module_root:       cfg.vjsx.module_root
+		signature_root:    cfg.vjsx.signature_root
+		signature_include: cfg.vjsx.signature_include.clone()
+		signature_exclude: cfg.vjsx.signature_exclude.clone()
+		runtime_profile:   cfg.vjsx.runtime_profile
+		lane_count:        cfg.vjsx.thread_count
 		max_requests:      cfg.vjsx.max_requests
 		enable_fs:         cfg.vjsx.enable_fs
 		enable_process:    cfg.vjsx.enable_process
 		enable_network:    cfg.vjsx.enable_network
+	}, EmbeddedHostCliOverrides{
+		app_entry_flag:         '--vjsx-entry'
+		module_root_flag:       '--vjsx-module-root'
+		signature_root_flag:    '--vjsx-signature-root'
+		signature_include_flag: '--vjsx-signature-include'
+		signature_exclude_flag: '--vjsx-signature-exclude'
+		runtime_profile_flag:   '--vjsx-runtime-profile'
+		lane_count_flag:        '--vjsx-thread-count'
+	}) or {
+		match err.msg() {
+			'embedded_host_missing_app_entry' {
+				return error('inproc_vjsx_executor_missing_app_entry')
+			}
+			else {
+				if err.msg().starts_with('embedded_host_app_entry_not_found:') {
+					return error(err.msg().replace('embedded_host_app_entry_not_found:',
+						'inproc_vjsx_executor_app_entry_not_found:'))
+				}
+				return error(err.msg())
+			}
+		}
+	}
+	return VjsxRuntimeFacadeConfig{
+		app_entry:         embedded_cfg.app_entry
+		module_root:       embedded_cfg.module_root
+		signature_root:    embedded_cfg.signature_root
+		signature_include: embedded_cfg.signature_include.clone()
+		signature_exclude: embedded_cfg.signature_exclude.clone()
+		runtime_profile:   embedded_cfg.runtime_profile
+		thread_count:      embedded_cfg.lane_count
+		max_requests:      embedded_cfg.max_requests
+		enable_fs:         embedded_cfg.enable_fs
+		enable_process:    embedded_cfg.enable_process
+		enable_network:    embedded_cfg.enable_network
 	}
 }
 

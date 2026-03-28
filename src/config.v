@@ -56,17 +56,17 @@ mut:
 
 struct VjsxConfig {
 mut:
-	app_entry       string @[toml: 'app_entry']
-	module_root     string @[toml: 'module_root']
-	signature_root  string   @[toml: 'signature_root']
+	app_entry         string   @[toml: 'app_entry']
+	module_root       string   @[toml: 'module_root']
+	signature_root    string   @[toml: 'signature_root']
 	signature_include []string @[toml: 'signature_include']
 	signature_exclude []string @[toml: 'signature_exclude']
-	runtime_profile string = 'script' @[toml: 'runtime_profile']
-	thread_count    int    = 1    @[toml: 'thread_count']
-	max_requests    int    @[toml: 'max_requests']
-	enable_fs       bool   @[toml: 'enable_fs']
-	enable_process  bool   @[toml: 'enable_process']
-	enable_network  bool   @[toml: 'enable_network']
+	runtime_profile   string = 'script'   @[toml: 'runtime_profile']
+	thread_count      int    = 1      @[toml: 'thread_count']
+	max_requests      int      @[toml: 'max_requests']
+	enable_fs         bool     @[toml: 'enable_fs']
+	enable_process    bool     @[toml: 'enable_process']
+	enable_network    bool     @[toml: 'enable_network']
 }
 
 struct AdminConfig {
@@ -319,7 +319,8 @@ fn resolve_config_variables(mut cfg VhttpdConfig, config_path string) ! {
 	for _ in 0 .. max_passes {
 		mut changed := false
 		vars := build_config_variable_map(cfg)
-		cfg.paths.root, changed = expand_config_string(cfg.paths.root, vars, env_map, changed)!
+		cfg.paths.root, changed = expand_config_string(cfg.paths.root, vars, env_map,
+			changed)!
 		mut next_paths := map[string]string{}
 		for key, value in cfg.paths.values {
 			next, c := expand_config_string(value, vars, env_map, false)!
@@ -347,15 +348,31 @@ fn resolve_config_variables(mut cfg VhttpdConfig, config_path string) ! {
 			changed)!
 		cfg.vjsx.module_root, changed = expand_config_string(cfg.vjsx.module_root, vars,
 			env_map, changed)!
+		cfg.vjsx.signature_root, changed = expand_config_string(cfg.vjsx.signature_root,
+			vars, env_map, changed)!
 		cfg.vjsx.runtime_profile, changed = expand_config_string(cfg.vjsx.runtime_profile,
 			vars, env_map, changed)!
+		for i, raw in cfg.vjsx.signature_include {
+			next, c := expand_config_string(raw, vars, env_map, false)!
+			if c {
+				cfg.vjsx.signature_include[i] = next
+				changed = true
+			}
+		}
+		for i, raw in cfg.vjsx.signature_exclude {
+			next, c := expand_config_string(raw, vars, env_map, false)!
+			if c {
+				cfg.vjsx.signature_exclude[i] = next
+				changed = true
+			}
+		}
 		for i, raw in cfg.worker.sockets {
 			next, c := expand_config_string(raw, vars, env_map, false)!
 			if c {
-			cfg.worker.sockets[i] = next
-			changed = true
+				cfg.worker.sockets[i] = next
+				changed = true
+			}
 		}
-	}
 		cfg.php.bin, changed = expand_config_string(cfg.php.bin, vars, env_map, changed)!
 		cfg.php.worker_entry, changed = expand_config_string(cfg.php.worker_entry, vars,
 			env_map, changed)!
@@ -493,6 +510,7 @@ fn resolve_config_paths(mut cfg VhttpdConfig, config_path string) {
 	}
 	cfg.vjsx.app_entry = resolve_config_path(cfg.paths.root, cfg.vjsx.app_entry)
 	cfg.vjsx.module_root = resolve_config_path(cfg.paths.root, cfg.vjsx.module_root)
+	cfg.vjsx.signature_root = resolve_config_path(cfg.paths.root, cfg.vjsx.signature_root)
 	cfg.assets.root = resolve_config_path(cfg.paths.root, cfg.assets.root)
 	cfg.codex.cwd = resolve_config_path(cfg.paths.root, cfg.codex.cwd)
 }
@@ -519,6 +537,7 @@ fn build_config_variable_map(cfg VhttpdConfig) map[string]string {
 		'php.app_entry':                  cfg.php.app_entry
 		'vjsx.app_entry':                 cfg.vjsx.app_entry
 		'vjsx.module_root':               cfg.vjsx.module_root
+		'vjsx.signature_root':            cfg.vjsx.signature_root
 		'vjsx.runtime_profile':           cfg.vjsx.runtime_profile
 		'vjsx.thread_count':              '${cfg.vjsx.thread_count}'
 		'vjsx.max_requests':              '${cfg.vjsx.max_requests}'
