@@ -1,5 +1,6 @@
 module main
 
+import json
 import os
 
 fn test_load_vhttpd_config_parses_executor_and_vjsx_sections() {
@@ -347,4 +348,31 @@ fn test_builtin_logic_executor_spec_exposes_runtime_models() {
 	vjsx_spec := builtin_logic_executor_spec('vjsx') or { panic(err) }
 	assert vjsx_spec.logic_model == .embedded
 	assert vjsx_spec.worker_backend_mode == .disabled
+}
+
+fn test_admin_logic_executor_specs_snapshot_lists_builtin_executors() {
+	mut app := App{}
+	snapshot := app.admin_logic_executor_specs_snapshot()
+	assert snapshot.len == 2
+	assert snapshot[0].kind == 'php'
+	assert snapshot[0].logic_executor_model == 'worker'
+	assert snapshot[0].worker_backend_mode == 'required'
+	assert 'php-worker' in snapshot[0].aliases
+	assert snapshot[1].kind == 'vjsx'
+	assert snapshot[1].logic_executor_model == 'embedded'
+	assert snapshot[1].worker_backend_mode == 'disabled'
+}
+
+fn test_internal_admin_executors_returns_builtin_executor_specs() {
+	mut app := App{}
+	resp := app.internal_admin_dispatch(InternalAdminRequest{
+		mode:   'vhttpd_admin'
+		method: 'GET'
+		path:   '/admin/executors'
+	})
+	assert resp.status == 200
+	snapshot := json.decode([]AdminLogicExecutorSpecSnapshot, resp.body) or { panic(err) }
+	assert snapshot.len == 2
+	assert snapshot[0].kind == 'php'
+	assert snapshot[1].kind == 'vjsx'
 }

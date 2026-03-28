@@ -8,6 +8,14 @@ pub:
 	worker_backend_mode WorkerBackendMode
 }
 
+pub struct AdminLogicExecutorSpecSnapshot {
+pub:
+	kind                 string
+	aliases              []string
+	logic_executor_model string @[json: 'logic_executor_model']
+	worker_backend_mode  string @[json: 'worker_backend_mode']
+}
+
 fn builtin_logic_executor_specs() []BuiltinLogicExecutorSpec {
 	return [
 		BuiltinLogicExecutorSpec{
@@ -59,6 +67,21 @@ fn builtin_logic_executor_spec(kind string) !BuiltinLogicExecutorSpec {
 		}
 	}
 	return error('unsupported executor kind: ${kind}')
+}
+
+pub fn (mut app App) admin_logic_executor_specs_snapshot() []AdminLogicExecutorSpecSnapshot {
+	_ = app
+	specs := builtin_logic_executor_specs()
+	mut snapshots := []AdminLogicExecutorSpecSnapshot{cap: specs.len}
+	for spec in specs {
+		snapshots << AdminLogicExecutorSpecSnapshot{
+			kind:                 spec.kind
+			aliases:              spec.aliases.clone()
+			logic_executor_model: spec.logic_model.str()
+			worker_backend_mode:  spec.worker_backend_mode.str()
+		}
+	}
+	return snapshots
 }
 
 fn build_builtin_logic_executor(kind string, args []string, cfg VhttpdConfig) !LogicExecutor {

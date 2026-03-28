@@ -53,24 +53,24 @@ fn internal_gateway_normalize_path(raw string) string {
 
 fn internal_admin_json_response(body string) InternalAdminResponse {
 	return InternalAdminResponse{
-		status: 200
+		status:  200
 		headers: {
 			'content-type': 'application/json; charset=utf-8'
 		}
-		body: body
+		body:    body
 	}
 }
 
 fn internal_admin_error_response(status int, message string) InternalAdminResponse {
 	return InternalAdminResponse{
-		status: status
+		status:  status
 		headers: {
 			'content-type': 'application/json; charset=utf-8'
 		}
-		body: json.encode({
+		body:    json.encode({
 			'error': message
 		})
-		error: message
+		error:   message
 	}
 }
 
@@ -87,6 +87,9 @@ fn (mut app App) internal_admin_dispatch(req InternalAdminRequest) InternalAdmin
 	}
 	path := internal_admin_normalize_path(req.path)
 	match path {
+		'/executors' {
+			return internal_admin_json_response(json.encode(app.admin_logic_executor_specs_snapshot()))
+		}
 		'/runtime' {
 			return internal_admin_json_response(json.encode(app.admin_runtime_snapshot()))
 		}
@@ -152,52 +155,52 @@ fn (mut app App) internal_gateway_dispatch(req InternalAdminRequest, binary_payl
 			}
 			result := app.websocket_upstream_send(send_req) or {
 				return InternalAdminResponse{
-					status: 502
+					status:  502
 					headers: {
 						'content-type': 'application/json; charset=utf-8'
 					}
-					body: json.encode({
+					body:    json.encode({
 						'error': err.msg()
 					})
-					error: err.msg()
+					error:   err.msg()
 				}
 			}
 			return internal_admin_json_response(json.encode(result))
 		}
-			'/feishu/images' {
-				upload_req := internal_gateway_upload_request_from_body(req.body) or {
-					return internal_gateway_bad_request('invalid_json')
-				}
-				mut result := FeishuRuntimeUploadImageResult{}
-				if binary_payload.len > 0 {
-			result = app.feishu_runtime_upload_image_bytes(upload_req, binary_payload) or {
-						return InternalAdminResponse{
-							status: 502
-							headers: {
-								'content-type': 'application/json; charset=utf-8'
-							}
-							body: json.encode({
-								'error': err.msg()
-							})
-							error: err.msg()
-						}
-					}
-				} else {
-			result = app.feishu_runtime_upload_image(upload_req) or {
-						return InternalAdminResponse{
-							status: 502
-							headers: {
-								'content-type': 'application/json; charset=utf-8'
-							}
-							body: json.encode({
-								'error': err.msg()
-							})
-							error: err.msg()
-						}
-					}
-				}
-				return internal_admin_json_response(json.encode(result))
+		'/feishu/images' {
+			upload_req := internal_gateway_upload_request_from_body(req.body) or {
+				return internal_gateway_bad_request('invalid_json')
 			}
+			mut result := FeishuRuntimeUploadImageResult{}
+			if binary_payload.len > 0 {
+				result = app.feishu_runtime_upload_image_bytes(upload_req, binary_payload) or {
+					return InternalAdminResponse{
+						status:  502
+						headers: {
+							'content-type': 'application/json; charset=utf-8'
+						}
+						body:    json.encode({
+							'error': err.msg()
+						})
+						error:   err.msg()
+					}
+				}
+			} else {
+				result = app.feishu_runtime_upload_image(upload_req) or {
+					return InternalAdminResponse{
+						status:  502
+						headers: {
+							'content-type': 'application/json; charset=utf-8'
+						}
+						body:    json.encode({
+							'error': err.msg()
+						})
+						error:   err.msg()
+					}
+				}
+			}
+			return internal_admin_json_response(json.encode(result))
+		}
 		else {
 			return internal_admin_error_response(404, 'not_found')
 		}
@@ -245,7 +248,8 @@ fn run_internal_admin_server(mut app App, socket_path string) {
 			continue
 		}
 		mut binary_payload := []u8{}
-		if req.mode == 'vhttpd_gateway' && internal_gateway_normalize_path(req.path) == '/feishu/images' {
+		if req.mode == 'vhttpd_gateway'
+			&& internal_gateway_normalize_path(req.path) == '/feishu/images' {
 			upload_req := internal_gateway_upload_request_from_body(req.body) or {
 				write_frame(mut conn, json.encode(internal_admin_error_response(400, 'invalid_json'))) or {}
 				conn.close() or {}
@@ -253,7 +257,8 @@ fn run_internal_admin_server(mut app App, socket_path string) {
 			}
 			if upload_req.content_length > 0 {
 				binary_payload = read_frame_bytes(mut conn) or {
-					write_frame(mut conn, json.encode(internal_admin_error_response(400, 'missing_binary_payload'))) or {}
+					write_frame(mut conn, json.encode(internal_admin_error_response(400,
+						'missing_binary_payload'))) or {}
 					conn.close() or {}
 					continue
 				}

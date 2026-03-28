@@ -12,6 +12,8 @@ Each executor has two orthogonal traits:
 
 That split matters because future hosts such as `lua` should be able to join the same executor surface without forcing `vhttpd` to treat every new runtime as a special case.
 
+You can inspect the current built-in executor catalog through `/admin/executors`.
+
 Shared config such as `[server]`, `[files]`, `[runtime]`, `[admin]`, and `[assets]` works the same in both modes.
 
 If you use `[paths]`, values that start with `/` are treated as absolute paths and kept as-is. Other aliases resolve against `[paths].root`, and `[paths].root` itself resolves against the config file directory.
