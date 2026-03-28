@@ -591,3 +591,100 @@ fn test_prepare_server_runtime_files_creates_parent_dirs_and_pid_file() {
 	assert pid_text.trim_space() == '${os.getpid()}'
 	assert internal_socket.starts_with('/tmp/vhttpd_admin_')
 }
+
+fn test_resolve_server_runtime_config_builds_php_runtime_state() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_server_runtime_php_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	worker_entry := os.join_path(temp_dir, 'php-worker.php')
+	app_entry := os.join_path(temp_dir, 'app.php')
+	event_log := os.join_path(temp_dir, 'logs', 'events.ndjson')
+	pid_file := os.join_path(temp_dir, 'run', 'vhttpd.pid')
+	os.write_file(worker_entry, '<?php echo "worker";') or { panic(err) }
+	os.write_file(app_entry, '<?php echo "app";') or { panic(err) }
+	defer {
+		os.rm(worker_entry) or {}
+		os.rm(app_entry) or {}
+		os.rm(pid_file) or {}
+		os.rmdir_all(temp_dir) or {}
+	}
+	mut cfg := default_vhttpd_config()
+	cfg.server.host = '0.0.0.0'
+	cfg.server.port = 19881
+	cfg.files.event_log = event_log
+	cfg.files.pid_file = pid_file
+	cfg.php.worker_entry = worker_entry
+	cfg.php.app_entry = app_entry
+	cfg.worker.autostart = true
+	cfg.worker.stream_dispatch = true
+	cfg.worker.websocket_dispatch = true
+	cfg.worker.queue_capacity = 9
+	cfg.worker.queue_timeout_ms = 88
+	runtime_cfg := resolve_server_runtime_config([]string{}, cfg) or { panic(err) }
+	assert runtime_cfg.host == '0.0.0.0'
+	assert runtime_cfg.port == 19881
+	assert runtime_cfg.admin_host == '127.0.0.1'
+	assert !runtime_cfg.admin_enabled
+	assert runtime_cfg.executor_plan.executor.kind() == 'php'
+	assert runtime_cfg.executor_plan.lifecycle.name() == 'php_worker_host'
+	assert runtime_cfg.executor_plan.bootstrap.worker_autostart
+	assert runtime_cfg.executor_plan.bootstrap.stream_dispatch
+	assert runtime_cfg.executor_plan.bootstrap.websocket_dispatch_mode
+	assert runtime_cfg.executor_plan.bootstrap.worker_env['VHTTPD_APP'] == app_entry
+	assert runtime_cfg.executor_plan.bootstrap.worker_cmd.contains(worker_entry)
+	assert runtime_cfg.app_build_cfg.event_log == event_log
+	assert runtime_cfg.app_build_cfg.worker_queue_capacity == 9
+	assert runtime_cfg.internal_admin_socket.starts_with('/tmp/vhttpd_admin_')
+	assert os.exists(pid_file)
+}
+
+fn test_resolve_server_runtime_config_builds_vjsx_embedded_runtime_state() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_server_runtime_vjsx_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	app_file := os.join_path(temp_dir, 'app.mts')
+	assets_root := os.join_path(temp_dir, 'public')
+	event_log := os.join_path(temp_dir, 'logs', 'events.ndjson')
+	pid_file := os.join_path(temp_dir, 'run', 'vhttpd.pid')
+	os.mkdir_all(assets_root) or { panic(err) }
+	os.write_file(app_file, 'export default { async handle() { return { status: 200, body: "ok" }; } };') or {
+		panic(err)
+	}
+	defer {
+		os.rm(app_file) or {}
+		os.rm(pid_file) or {}
+		os.rmdir_all(temp_dir) or {}
+	}
+	mut cfg := default_vhttpd_config()
+	cfg.server.host = '127.0.0.9'
+	cfg.server.port = 18888
+	cfg.files.event_log = event_log
+	cfg.files.pid_file = pid_file
+	cfg.executor.kind = 'vjsx'
+	cfg.vjsx.app_entry = app_file
+	cfg.vjsx.module_root = temp_dir
+	cfg.assets.enabled = true
+	cfg.assets.prefix = '/static'
+	cfg.assets.root = assets_root
+	cfg.assets.cache_control = 'public, max-age=300'
+	cfg.admin.host = ''
+	cfg.admin.port = 19983
+	cfg.admin.token = 'admin-secret'
+	runtime_cfg := resolve_server_runtime_config([]string{}, cfg) or { panic(err) }
+	assert runtime_cfg.host == '127.0.0.9'
+	assert runtime_cfg.port == 18888
+	assert runtime_cfg.admin_enabled
+	assert runtime_cfg.admin_host == '127.0.0.1'
+	assert runtime_cfg.admin_port == 19983
+	assert runtime_cfg.admin_token == 'admin-secret'
+	assert runtime_cfg.executor_plan.executor.kind() == 'vjsx'
+	assert runtime_cfg.executor_plan.lifecycle.name() == 'embedded_host'
+	assert runtime_cfg.executor_plan.bootstrap.worker_sockets.len == 0
+	assert !runtime_cfg.executor_plan.bootstrap.worker_autostart
+	assert !runtime_cfg.executor_plan.bootstrap.stream_dispatch
+	assert !runtime_cfg.executor_plan.bootstrap.websocket_dispatch_mode
+	assert runtime_cfg.app_build_cfg.assets_enabled
+	assert runtime_cfg.app_build_cfg.assets_prefix == '/static'
+	assert runtime_cfg.app_build_cfg.assets_root == assets_root
+	assert runtime_cfg.app_build_cfg.assets_root_real == os.real_path(assets_root)
+	assert runtime_cfg.app_build_cfg.assets_cache_control == 'public, max-age=300'
+	assert os.exists(pid_file)
+}
