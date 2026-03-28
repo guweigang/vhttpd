@@ -68,10 +68,26 @@ pub enum WorkerBackendMode {
 	disabled
 }
 
+pub struct LogicExecutorAdminDetails {
+pub:
+	kind            string
+	provider        string
+	model           string
+	runtime_profile string
+	lane_count      int
+	module_root     string
+	signature_root  string
+	max_requests    int
+	enable_fs       bool
+	enable_process  bool
+	enable_network  bool
+}
+
 pub interface LogicExecutor {
 	model() LogicExecutorModel
 	kind() string
 	provider() string
+	admin_details() LogicExecutorAdminDetails
 	dispatch_http(mut app App, req HttpLogicDispatchRequest) !HttpLogicDispatchOutcome
 	open_websocket_session(mut app App, req WebSocketSessionOpenRequest) !WebSocketSessionOpenOutcome
 	dispatch_stream(mut app App, req StreamDispatchRequest) !StreamDispatchResponse
@@ -95,6 +111,15 @@ pub fn (e SocketWorkerExecutor) kind() string {
 pub fn (e SocketWorkerExecutor) provider() string {
 	_ = e
 	return 'php-worker'
+}
+
+pub fn (e SocketWorkerExecutor) admin_details() LogicExecutorAdminDetails {
+	_ = e
+	return LogicExecutorAdminDetails{
+		kind:     'php'
+		provider: 'php-worker'
+		model:    LogicExecutorModel.worker.str()
+	}
 }
 
 pub fn (e SocketWorkerExecutor) dispatch_http(mut app App, req HttpLogicDispatchRequest) !HttpLogicDispatchOutcome {
@@ -205,6 +230,10 @@ pub fn (app &App) logic_executor_model() LogicExecutorModel {
 
 pub fn (app &App) logic_executor_provider() string {
 	return app.logic_executor.provider()
+}
+
+pub fn (app &App) logic_executor_admin_details() LogicExecutorAdminDetails {
+	return app.logic_executor.admin_details()
 }
 
 pub fn (app &App) has_http_logic_executor() bool {

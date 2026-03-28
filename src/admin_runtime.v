@@ -43,6 +43,7 @@ struct AdminRuntimeSummary {
 	logic_executor_lifecycle string
 	logic_executor_model     string
 	logic_provider           string
+	logic_executor_details   LogicExecutorAdminDetails
 	capabilities             map[string]bool
 	active_websockets        int
 	active_upstreams         int
@@ -120,6 +121,7 @@ fn (mut app App) admin_runtime_snapshot() AdminRuntimeSummary {
 	for key, value in app.provider_runtime_capabilities() {
 		capabilities[key] = value
 	}
+	logic_details := app.logic_executor_admin_details()
 	return AdminRuntimeSummary{
 		started_at_unix:          stats.started_at_unix
 		uptime_seconds:           stats.uptime_seconds
@@ -132,6 +134,7 @@ fn (mut app App) admin_runtime_snapshot() AdminRuntimeSummary {
 		logic_executor_lifecycle: app.logic_executor_lifecycle
 		logic_executor_model:     '${app.logic_executor_model()}'
 		logic_provider:           app.logic_executor_provider()
+		logic_executor_details:   logic_details
 		capabilities:             capabilities
 		active_websockets:        active_websockets
 		active_upstreams:         active_upstreams

@@ -23,7 +23,11 @@ fn test_admin_runtime_snapshot_exposes_embedded_logic_executor_identity() {
 		worker_backend_mode:      .disabled
 		logic_executor_lifecycle: 'embedded_host'
 		logic_executor:           new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
-			thread_count: 1
+			thread_count:    1
+			module_root:     '/tmp/demo'
+			signature_root:  '/tmp/demo'
+			runtime_profile: 'node'
+			enable_fs:       true
 		})
 	}
 	snapshot := app.admin_runtime_snapshot()
@@ -32,6 +36,12 @@ fn test_admin_runtime_snapshot_exposes_embedded_logic_executor_identity() {
 	assert snapshot.logic_executor_model == 'embedded'
 	assert snapshot.logic_provider == 'vjsx'
 	assert snapshot.worker_backend_mode == 'disabled'
+	assert snapshot.logic_executor_details.kind == 'vjsx'
+	assert snapshot.logic_executor_details.model == 'embedded'
+	assert snapshot.logic_executor_details.runtime_profile == 'node'
+	assert snapshot.logic_executor_details.lane_count == 1
+	assert snapshot.logic_executor_details.module_root == '/tmp/demo'
+	assert snapshot.logic_executor_details.enable_fs
 }
 
 fn test_internal_admin_runtime_exposes_worker_logic_executor_identity() {
@@ -52,4 +62,8 @@ fn test_internal_admin_runtime_exposes_worker_logic_executor_identity() {
 	assert snapshot.logic_executor_model == 'worker'
 	assert snapshot.logic_provider == 'php-worker'
 	assert snapshot.worker_backend_mode == 'required'
+	assert snapshot.logic_executor_details.kind == 'php'
+	assert snapshot.logic_executor_details.model == 'worker'
+	assert snapshot.logic_executor_details.runtime_profile == ''
+	assert snapshot.logic_executor_details.lane_count == 0
 }

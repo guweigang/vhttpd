@@ -23,6 +23,15 @@ pub fn (e CodexRuntimeTestExecutor) provider() string {
 	return 'vjsx'
 }
 
+pub fn (e CodexRuntimeTestExecutor) admin_details() LogicExecutorAdminDetails {
+	_ = e
+	return LogicExecutorAdminDetails{
+		kind:     'vjsx'
+		provider: 'vjsx'
+		model:    LogicExecutorModel.embedded.str()
+	}
+}
+
 pub fn (e CodexRuntimeTestExecutor) dispatch_http(mut app App, req HttpLogicDispatchRequest) !HttpLogicDispatchOutcome {
 	_ = app
 	_ = req

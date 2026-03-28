@@ -216,6 +216,23 @@ pub fn (e InProcVjsxExecutor) provider() string {
 	return e.provider_name
 }
 
+pub fn (e InProcVjsxExecutor) admin_details() LogicExecutorAdminDetails {
+	config := e.facade_snapshot().config
+	return LogicExecutorAdminDetails{
+		kind:            e.kind()
+		provider:        e.provider()
+		model:           LogicExecutorModel.embedded.str()
+		runtime_profile: config.runtime_profile
+		lane_count:      config.thread_count
+		module_root:     config.module_root
+		signature_root:  config.signature_root
+		max_requests:    config.max_requests
+		enable_fs:       config.enable_fs
+		enable_process:  config.enable_process
+		enable_network:  config.enable_network
+	}
+}
+
 pub fn (e InProcVjsxExecutor) lane_count() int {
 	if isnil(e.state) {
 		return 0
