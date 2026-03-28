@@ -216,6 +216,7 @@ root = "\${paths.assets_root}"
 
 fn test_resolve_executor_runtime_defaults_to_php() {
 	selection := resolve_executor_runtime([]string{}, default_vhttpd_config()) or { panic(err) }
+	assert selection.executor.model() == .worker
 	assert selection.executor.kind() == 'php'
 	assert selection.executor.provider() == 'php-worker'
 	assert !selection.disable_worker_backend
@@ -278,9 +279,9 @@ fn test_build_php_runtime_config_overrides_from_cli() {
 	cfg.php.worker_entry = worker_entry
 	cfg.php.app_entry = app_entry
 	cfg.php.extensions = [ext_a]
-	php_cfg := build_php_runtime_config(['--php-bin', 'php82', '--php-worker-entry',
-		worker_entry, '--php-app-entry', app_entry, '--php-extension', ext_a, '--php-extension',
-		ext_b, '--php-arg', '-d', '--php-arg', 'memory_limit=512M'], cfg) or { panic(err) }
+	php_cfg := build_php_runtime_config(['--php-bin', 'php82', '--php-worker-entry', worker_entry,
+		'--php-app-entry', app_entry, '--php-extension', ext_a, '--php-extension', ext_b, '--php-arg',
+		'-d', '--php-arg', 'memory_limit=512M'], cfg) or { panic(err) }
 	assert php_cfg.bin == 'php82'
 	assert php_cfg.worker_entry == worker_entry
 	assert php_cfg.app_entry == app_entry
@@ -293,7 +294,8 @@ fn test_build_php_runtime_config_overrides_from_cli() {
 }
 
 fn test_arg_string_list_or_supports_repeated_and_csv_values() {
-	values := arg_string_list_or(['--php-extension', '/tmp/a.so', '--php-extension=/tmp/b.so,/tmp/c.so'], '--php-extension', [])
+	values := arg_string_list_or(['--php-extension', '/tmp/a.so',
+		'--php-extension=/tmp/b.so,/tmp/c.so'], '--php-extension', [])
 	assert values.len == 3
 	assert values[0] == '/tmp/a.so'
 	assert values[1] == '/tmp/b.so'
@@ -325,6 +327,7 @@ fn test_resolve_executor_runtime_builds_vjsx_executor() {
 		'--vjsx-thread-count', '2', '--vjsx-runtime-profile', 'script'], default_vhttpd_config()) or {
 		panic(err)
 	}
+	assert selection.executor.model() == .embedded
 	assert selection.executor.kind() == 'vjsx'
 	assert selection.executor.provider() == 'vjsx'
 	assert selection.disable_worker_backend

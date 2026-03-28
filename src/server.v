@@ -145,7 +145,7 @@ fn shell_quote_arg(raw string) string {
 	if raw == '' {
 		return "''"
 	}
-	return "'" + raw.replace("'", "'\"'\"'") + "'"
+	return "'" + raw.replace("'", '\'"\'"\'') + "'"
 }
 
 fn validate_php_runtime_config(php_cfg PhpConfig) ! {
@@ -268,17 +268,17 @@ fn build_vjsx_runtime_config(args []string, cfg VhttpdConfig) !VjsxRuntimeFacade
 	signature_include := arg_string_list_or(args, '--vjsx-signature-include', cfg.vjsx.signature_include)
 	signature_exclude := arg_string_list_or(args, '--vjsx-signature-exclude', cfg.vjsx.signature_exclude)
 	return VjsxRuntimeFacadeConfig{
-		app_entry:       app_entry
-		module_root:     module_root
-		signature_root:  signature_root
+		app_entry:         app_entry
+		module_root:       module_root
+		signature_root:    signature_root
 		signature_include: signature_include
 		signature_exclude: signature_exclude
-		runtime_profile: runtime_profile
-		thread_count:    thread_count
-		max_requests:    cfg.vjsx.max_requests
-		enable_fs:       cfg.vjsx.enable_fs
-		enable_process:  cfg.vjsx.enable_process
-		enable_network:  cfg.vjsx.enable_network
+		runtime_profile:   runtime_profile
+		thread_count:      thread_count
+		max_requests:      cfg.vjsx.max_requests
+		enable_fs:         cfg.vjsx.enable_fs
+		enable_process:    cfg.vjsx.enable_process
+		enable_network:    cfg.vjsx.enable_network
 	}
 }
 
@@ -345,7 +345,7 @@ fn run_server(args []string) {
 	mut worker_autostart_effective := worker_autostart
 	mut worker_cmd_effective := worker_cmd_override
 	mut worker_env_effective := cfg.worker.env.clone()
-	if executor_runtime.executor.kind() == 'php' {
+	if executor_runtime.executor.model() == .worker {
 		php_cfg_effective := build_php_runtime_config(args, cfg) or {
 			log.error('php runtime config resolve failed: ${err}')
 			return
@@ -535,17 +535,18 @@ fn run_server(args []string) {
 		)
 	}
 	app.emit('server.started', {
-		'host':             host
-		'port':             '${port}'
-		'pid':              '${os.getpid()}'
-		'worker_backend':   app.worker_backend.kind()
-		'logic_executor':   app.logic_executor_kind()
-		'logic_provider':   app.logic_executor_provider()
-		'worker_autostart': if app.worker_backend.autostart { 'true' } else { 'false' }
-		'worker_pool_size': '${app.worker_backend.sockets.len}'
-		'admin_enabled':    if admin_enabled { 'true' } else { 'false' }
-		'admin_host':       if admin_enabled { admin_host } else { '' }
-		'admin_port':       if admin_enabled { '${admin_port}' } else { '' }
+		'host':                 host
+		'port':                 '${port}'
+		'pid':                  '${os.getpid()}'
+		'worker_backend':       app.worker_backend.kind()
+		'logic_executor':       app.logic_executor_kind()
+		'logic_executor_model': '${app.logic_executor_model()}'
+		'logic_provider':       app.logic_executor_provider()
+		'worker_autostart':     if app.worker_backend.autostart { 'true' } else { 'false' }
+		'worker_pool_size':     '${app.worker_backend.sockets.len}'
+		'admin_enabled':        if admin_enabled { 'true' } else { 'false' }
+		'admin_host':           if admin_enabled { admin_host } else { '' }
+		'admin_port':           if admin_enabled { '${admin_port}' } else { '' }
 	})
 	if admin_enabled {
 		go run_admin_server(mut app, admin_host, admin_port, admin_token)

@@ -58,7 +58,13 @@ mut:
 	conn &unix.StreamConn = unsafe { nil }
 }
 
+pub enum LogicExecutorModel {
+	worker
+	embedded
+}
+
 pub interface LogicExecutor {
+	model() LogicExecutorModel
 	kind() string
 	provider() string
 	dispatch_http(mut app App, req HttpLogicDispatchRequest) !HttpLogicDispatchOutcome
@@ -70,6 +76,11 @@ pub interface LogicExecutor {
 }
 
 pub struct SocketWorkerExecutor {}
+
+pub fn (e SocketWorkerExecutor) model() LogicExecutorModel {
+	_ = e
+	return .worker
+}
 
 pub fn (e SocketWorkerExecutor) kind() string {
 	_ = e
@@ -183,14 +194,18 @@ pub fn (app &App) logic_executor_kind() string {
 	return app.logic_executor.kind()
 }
 
+pub fn (app &App) logic_executor_model() LogicExecutorModel {
+	return app.logic_executor.model()
+}
+
 pub fn (app &App) logic_executor_provider() string {
 	return app.logic_executor.provider()
 }
 
 pub fn (app &App) has_http_logic_executor() bool {
-	return app.worker_backend.sockets.len > 0 || app.logic_executor.kind() != 'php'
+	return app.worker_backend.sockets.len > 0 || app.logic_executor.model() == .embedded
 }
 
 pub fn (app &App) has_websocket_upstream_logic_executor() bool {
-	return app.worker_backend.sockets.len > 0 || app.logic_executor.kind() != 'php'
+	return app.worker_backend.sockets.len > 0 || app.logic_executor.model() == .embedded
 }

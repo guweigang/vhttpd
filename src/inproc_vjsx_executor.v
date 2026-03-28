@@ -80,17 +80,17 @@ fn inproc_vjsx_find_codex_session_file(thread_id string) string {
 
 pub struct VjsxRuntimeFacadeConfig {
 pub:
-	app_entry       string
-	module_root     string
-	signature_root  string
+	app_entry         string
+	module_root       string
+	signature_root    string
 	signature_include []string
 	signature_exclude []string
-	runtime_profile string
-	thread_count    int
-	max_requests    int
-	enable_fs       bool
-	enable_process  bool
-	enable_network  bool
+	runtime_profile   string
+	thread_count      int
+	max_requests      int
+	enable_fs         bool
+	enable_process    bool
+	enable_network    bool
 }
 
 pub struct VjsxRuntimeFacade {
@@ -139,37 +139,37 @@ pub mut:
 }
 
 struct InProcVjsxRuntimeMeta {
-	provider        string
-	executor        string
-	dispatch_kind   string @[json: 'dispatchKind']
-	lane_id         string @[json: 'laneId']
-	request_id      string @[json: 'requestId']
-	trace_id        string @[json: 'traceId']
-	app_entry       string @[json: 'appEntry']
-	module_root     string @[json: 'moduleRoot']
-	runtime_profile string @[json: 'runtimeProfile']
-	thread_count    int    @[json: 'threadCount']
-	enable_fs       bool   @[json: 'enableFs']
-	enable_process  bool   @[json: 'enableProcess']
-	enable_network  bool   @[json: 'enableNetwork']
-	request_scheme  string @[json: 'requestScheme']
-	request_host    string @[json: 'requestHost']
-	request_port    string @[json: 'requestPort']
-	request_target  string @[json: 'requestTarget']
-	request_protocol_version string @[json: 'requestProtocolVersion']
-	request_remote_addr string @[json: 'requestRemoteAddr']
-	request_server  map[string]string @[json: 'requestServer']
-	upstream_provider string @[json: 'upstreamProvider']
-	upstream_instance string @[json: 'upstreamInstance']
-	upstream_event string @[json: 'upstreamEvent']
-	upstream_event_type string @[json: 'upstreamEventType']
-	upstream_message_id string @[json: 'upstreamMessageId']
-	upstream_target string @[json: 'upstreamTarget']
-	upstream_target_type string @[json: 'upstreamTargetType']
-	upstream_received_at i64 @[json: 'upstreamReceivedAt']
-	upstream_metadata map[string]string @[json: 'upstreamMetadata']
-	method          string
-	path            string
+	provider                 string
+	executor                 string
+	dispatch_kind            string            @[json: 'dispatchKind']
+	lane_id                  string            @[json: 'laneId']
+	request_id               string            @[json: 'requestId']
+	trace_id                 string            @[json: 'traceId']
+	app_entry                string            @[json: 'appEntry']
+	module_root              string            @[json: 'moduleRoot']
+	runtime_profile          string            @[json: 'runtimeProfile']
+	thread_count             int               @[json: 'threadCount']
+	enable_fs                bool              @[json: 'enableFs']
+	enable_process           bool              @[json: 'enableProcess']
+	enable_network           bool              @[json: 'enableNetwork']
+	request_scheme           string            @[json: 'requestScheme']
+	request_host             string            @[json: 'requestHost']
+	request_port             string            @[json: 'requestPort']
+	request_target           string            @[json: 'requestTarget']
+	request_protocol_version string            @[json: 'requestProtocolVersion']
+	request_remote_addr      string            @[json: 'requestRemoteAddr']
+	request_server           map[string]string @[json: 'requestServer']
+	upstream_provider        string            @[json: 'upstreamProvider']
+	upstream_instance        string            @[json: 'upstreamInstance']
+	upstream_event           string            @[json: 'upstreamEvent']
+	upstream_event_type      string            @[json: 'upstreamEventType']
+	upstream_message_id      string            @[json: 'upstreamMessageId']
+	upstream_target          string            @[json: 'upstreamTarget']
+	upstream_target_type     string            @[json: 'upstreamTargetType']
+	upstream_received_at     i64               @[json: 'upstreamReceivedAt']
+	upstream_metadata        map[string]string @[json: 'upstreamMetadata']
+	method                   string
+	path                     string
 }
 
 struct InProcVjsxRequestContext {
@@ -205,6 +205,11 @@ pub fn new_inproc_vjsx_executor(config VjsxRuntimeFacadeConfig) InProcVjsxExecut
 
 pub fn (e InProcVjsxExecutor) kind() string {
 	return e.kind_name
+}
+
+pub fn (e InProcVjsxExecutor) model() LogicExecutorModel {
+	_ = e
+	return .embedded
 }
 
 pub fn (e InProcVjsxExecutor) provider() string {
@@ -590,10 +595,11 @@ fn vjsx_source_signature_for_config(config VjsxRuntimeFacadeConfig) string {
 	include_globs := vjsx_signature_include_globs(config)
 	exclude_globs := vjsx_signature_exclude_globs(config)
 	signature_rows << 'signature_root:${signature_root}'
-	signature_rows << 'signature_include:${include_globs.join(",")}'
-	signature_rows << 'signature_exclude:${exclude_globs.join(",")}'
+	signature_rows << 'signature_include:${include_globs.join(',')}'
+	signature_rows << 'signature_exclude:${exclude_globs.join(',')}'
 	if signature_root != '' {
-		vjsx_source_signature_collect(signature_root, include_globs, exclude_globs, mut signature_rows)
+		vjsx_source_signature_collect(signature_root, include_globs, exclude_globs, mut
+			signature_rows)
 	}
 	return fnv1a.sum64_string(signature_rows.join('|')).hex()
 }
@@ -1614,7 +1620,8 @@ fn (e InProcVjsxExecutor) ensure_lane_host(idx int) ! {
 	}
 	install_inproc_http_facade(mut ctx)!
 	install_inproc_runtime_host_bridge(mut ctx, mut state, idx)
-	mut entry_exports := load_inproc_vjsx_entry(mut ctx, config, idx, source_signature, as_module) or {
+	mut entry_exports := load_inproc_vjsx_entry(mut ctx, config, idx, source_signature,
+		as_module) or {
 		ctx.free()
 		rt.free()
 		return error('inproc_vjsx_executor_bootstrap_failed:${err.msg()}')
@@ -1720,65 +1727,65 @@ fn (e InProcVjsxExecutor) build_runtime_payload(lane VjsxExecutionLane, req Http
 	scheme := req.req.header.get(.x_forwarded_proto) or { 'http' }
 	target := server['url'] or { req.path }
 	return json.encode(InProcVjsxRuntimeMeta{
-		provider:        e.provider()
-		executor:        e.kind()
-		dispatch_kind:   'http'
-		lane_id:         lane.id
-		request_id:      req.request_id
-		trace_id:        req.trace_id
-		app_entry:       config.app_entry
-		module_root:     config.module_root
-		runtime_profile: config.runtime_profile
-		thread_count:    config.thread_count
-		enable_fs:       config.enable_fs
-		enable_process:  config.enable_process
-		enable_network:  config.enable_network
-		request_scheme:  scheme
-		request_host:    host
-		request_port:    port
-		request_target:  target
+		provider:                 e.provider()
+		executor:                 e.kind()
+		dispatch_kind:            'http'
+		lane_id:                  lane.id
+		request_id:               req.request_id
+		trace_id:                 req.trace_id
+		app_entry:                config.app_entry
+		module_root:              config.module_root
+		runtime_profile:          config.runtime_profile
+		thread_count:             config.thread_count
+		enable_fs:                config.enable_fs
+		enable_process:           config.enable_process
+		enable_network:           config.enable_network
+		request_scheme:           scheme
+		request_host:             host
+		request_port:             port
+		request_target:           target
 		request_protocol_version: req.req.version.str().trim_left('HTTP/')
-		request_remote_addr: req.remote_addr
-		request_server:  server
-		method:          req.method.to_upper()
-		path:            normalized_path
+		request_remote_addr:      req.remote_addr
+		request_server:           server
+		method:                   req.method.to_upper()
+		path:                     normalized_path
 	})
 }
 
 fn (e InProcVjsxExecutor) build_websocket_upstream_runtime_payload(lane VjsxExecutionLane, req WorkerWebSocketUpstreamDispatchRequest) string {
 	config := e.facade_snapshot().config
 	return json.encode(InProcVjsxRuntimeMeta{
-		provider:               e.provider()
-		executor:               e.kind()
-		dispatch_kind:          'websocket_upstream'
-		lane_id:                lane.id
-		request_id:             req.id
-		trace_id:               req.trace_id
-		app_entry:              config.app_entry
-		module_root:            config.module_root
-		runtime_profile:        config.runtime_profile
-		thread_count:           config.thread_count
-		enable_fs:              config.enable_fs
-		enable_process:         config.enable_process
-		enable_network:         config.enable_network
-		request_scheme:         ''
-		request_host:           ''
-		request_port:           ''
-		request_target:         req.target
+		provider:                 e.provider()
+		executor:                 e.kind()
+		dispatch_kind:            'websocket_upstream'
+		lane_id:                  lane.id
+		request_id:               req.id
+		trace_id:                 req.trace_id
+		app_entry:                config.app_entry
+		module_root:              config.module_root
+		runtime_profile:          config.runtime_profile
+		thread_count:             config.thread_count
+		enable_fs:                config.enable_fs
+		enable_process:           config.enable_process
+		enable_network:           config.enable_network
+		request_scheme:           ''
+		request_host:             ''
+		request_port:             ''
+		request_target:           req.target
 		request_protocol_version: ''
-		request_remote_addr:    ''
-		request_server:         map[string]string{}
-		upstream_provider:      req.provider
-		upstream_instance:      req.instance
-		upstream_event:         req.event
-		upstream_event_type:    req.event_type
-		upstream_message_id:    req.message_id
-		upstream_target:        req.target
-		upstream_target_type:   req.target_type
-		upstream_received_at:   req.received_at
-		upstream_metadata:      req.metadata.clone()
-		method:                 ''
-		path:                   req.target
+		request_remote_addr:      ''
+		request_server:           map[string]string{}
+		upstream_provider:        req.provider
+		upstream_instance:        req.instance
+		upstream_event:           req.event
+		upstream_event_type:      req.event_type
+		upstream_message_id:      req.message_id
+		upstream_target:          req.target
+		upstream_target_type:     req.target_type
+		upstream_received_at:     req.received_at
+		upstream_metadata:        req.metadata.clone()
+		method:                   ''
+		path:                     req.target
 	})
 }
 
@@ -2030,7 +2037,7 @@ fn (e InProcVjsxExecutor) dispatch_websocket_upstream_once(mut app App, req Work
 		path:       req.target
 		trace_id:   req.trace_id
 		request_id: req.id
-	}) 
+	})
 	defer {
 		e.clear_lane_request_context(idx)
 	}
@@ -2042,7 +2049,8 @@ fn (e InProcVjsxExecutor) dispatch_websocket_upstream_once(mut app App, req Work
 	defer {
 		frame_obj.free()
 	}
-	runtime_obj := host.ctx.json_parse(e.build_websocket_upstream_runtime_payload(lane, req))
+	runtime_obj := host.ctx.json_parse(e.build_websocket_upstream_runtime_payload(lane,
+		req))
 	defer {
 		runtime_obj.free()
 	}
