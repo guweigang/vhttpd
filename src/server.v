@@ -309,24 +309,11 @@ fn run_server(args []string) {
 	admin_enabled := admin_port > 0
 	admin_host := if admin_host_arg == '' { '127.0.0.1' } else { admin_host_arg }
 	provider_settings := resolve_provider_runtime_settings(args, cfg)
-	executor_runtime := resolve_executor_runtime(args, cfg) or {
-		log.error('executor runtime resolve failed: ${err}')
-		return
-	}
-	mut worker_sockets := resolve_worker_sockets_with_defaults(args, cfg.worker.socket,
-		cfg.worker.pool_size, cfg.worker.socket_prefix, cfg.worker.sockets.join(','))
-	mut stream_dispatch := cfg.worker.stream_dispatch
-	mut websocket_dispatch_mode := cfg.worker.websocket_dispatch
-	mut executor_bootstrap := ExecutorBootstrapState{
-		worker_sockets:          worker_sockets
-		stream_dispatch:         stream_dispatch
-		websocket_dispatch_mode: websocket_dispatch_mode
-		worker_autostart:        worker_autostart
-		worker_cmd:              worker_cmd_override
-		worker_env:              cfg.worker.env.clone()
-	}
-	executor_runtime.lifecycle.prepare_bootstrap(args, cfg, mut executor_bootstrap) or {
-		log.error('executor lifecycle bootstrap failed: ${err}')
+	executor_plan := resolve_logic_executor_runtime_plan(args, cfg, resolve_worker_sockets_with_defaults(args,
+		cfg.worker.socket, cfg.worker.pool_size, cfg.worker.socket_prefix, cfg.worker.sockets.join(',')),
+		cfg.worker.stream_dispatch, cfg.worker.websocket_dispatch, worker_autostart, worker_cmd_override,
+		cfg.worker.env.clone()) or {
+		log.error('executor runtime plan resolve failed: ${err}')
 		return
 	}
 	workdir := os.getwd()
@@ -341,11 +328,11 @@ fn run_server(args []string) {
 		started_at_unix:                          time.now().unix()
 		worker_backend:                           WorkerBackendRuntime{
 			backend:                PhpWorkerBackend{}
-			sockets:                executor_bootstrap.worker_sockets
+			sockets:                executor_plan.bootstrap.worker_sockets
 			read_timeout_ms:        worker_read_timeout_ms
-			autostart:              executor_bootstrap.worker_autostart
-			cmd:                    executor_bootstrap.worker_cmd
-			env:                    executor_bootstrap.worker_env
+			autostart:              executor_plan.bootstrap.worker_autostart
+			cmd:                    executor_plan.bootstrap.worker_cmd
+			env:                    executor_plan.bootstrap.worker_env
 			workdir:                workdir
 			restart_backoff_ms:     worker_restart_backoff_ms
 			restart_backoff_max_ms: worker_restart_backoff_max_ms
@@ -354,12 +341,12 @@ fn run_server(args []string) {
 			queue_timeout_ms:       worker_queue_timeout_ms
 			queue_poll_ms:          10
 		}
-		worker_backend_mode:                      executor_runtime.worker_backend_mode
-		logic_executor:                           executor_runtime.executor
-		logic_executor_lifecycle:                 executor_runtime.lifecycle.name()
+		worker_backend_mode:                      executor_plan.worker_backend_mode
+		logic_executor:                           executor_plan.executor
+		logic_executor_lifecycle:                 executor_plan.lifecycle.name()
 		internal_admin_socket:                    internal_admin_socket
-		stream_dispatch:                          executor_bootstrap.stream_dispatch
-		websocket_dispatch_mode:                  executor_bootstrap.websocket_dispatch_mode
+		stream_dispatch:                          executor_plan.bootstrap.stream_dispatch
+		websocket_dispatch_mode:                  executor_plan.bootstrap.websocket_dispatch_mode
 		admin_on_data_plane:                      !admin_enabled
 		admin_token:                              admin_token
 		assets_enabled:                           assets_enabled
@@ -429,7 +416,7 @@ fn run_server(args []string) {
 		app.emit('server.stopped', {
 			'pid': '${os.getpid()}'
 		})
-		executor_runtime.lifecycle.stop(mut app)
+		executor_plan.lifecycle.stop(mut app)
 		// Graceful provider shutdown is now spec/runtime-driven.
 		app.stop_all_providers()
 		os.rm(internal_admin_socket) or {}
@@ -443,7 +430,7 @@ fn run_server(args []string) {
 	}
 	bootstrap_providers(mut app)
 
-	executor_runtime.lifecycle.start(mut app)
+	executor_plan.lifecycle.start(mut app)
 	if app.assets_enabled && app.assets_root_real != '' {
 		app.mount_static_folder_at(app.assets_root_real, app.assets_prefix) or {
 			log.error('assets mount failed: ${err}')

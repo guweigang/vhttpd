@@ -429,3 +429,60 @@ fn test_embedded_executor_lifecycle_disables_worker_backend_features() {
 	assert state.worker_cmd == ''
 	assert state.worker_env['VHTTPD_APP'] == '/tmp/app.php'
 }
+
+fn test_resolve_logic_executor_runtime_plan_defaults_to_php_worker_host() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_executor_runtime_plan_php_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	worker_entry := os.join_path(temp_dir, 'php-worker.php')
+	app_entry := os.join_path(temp_dir, 'app.php')
+	os.write_file(worker_entry, '<?php echo "worker";') or { panic(err) }
+	os.write_file(app_entry, '<?php echo "app";') or { panic(err) }
+	defer {
+		os.rm(worker_entry) or {}
+		os.rm(app_entry) or {}
+	}
+	mut cfg := default_vhttpd_config()
+	cfg.php.worker_entry = worker_entry
+	cfg.php.app_entry = app_entry
+	plan := resolve_logic_executor_runtime_plan([]string{}, cfg, [
+		'/tmp/a.sock',
+	], true, true, true, '', {
+		'APP_ENV': 'dev'
+	}) or { panic(err) }
+	assert plan.executor.kind() == 'php'
+	assert plan.lifecycle.name() == 'php_worker_host'
+	assert plan.worker_backend_mode == .required
+	assert plan.bootstrap.worker_sockets == ['/tmp/a.sock']
+	assert plan.bootstrap.stream_dispatch
+	assert plan.bootstrap.websocket_dispatch_mode
+	assert plan.bootstrap.worker_autostart
+	assert plan.bootstrap.worker_env['APP_ENV'] == 'dev'
+	assert plan.bootstrap.worker_env['VHTTPD_APP'] == app_entry
+	assert plan.bootstrap.worker_cmd.contains(worker_entry)
+}
+
+fn test_resolve_logic_executor_runtime_plan_for_vjsx_disables_worker_bootstrap() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_executor_runtime_plan_vjsx_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	app_file := os.join_path(temp_dir, 'app.mts')
+	os.write_file(app_file, 'export default { async handle() { return { status: 200, body: "ok" }; } };') or {
+		panic(err)
+	}
+	defer {
+		os.rm(app_file) or {}
+	}
+	plan := resolve_logic_executor_runtime_plan(['--executor', 'vjsx', '--vjsx-entry', app_file],
+		default_vhttpd_config(), ['/tmp/a.sock'], true, true, true, 'php worker.php',
+		{
+		'VHTTPD_APP': '/tmp/app.php'
+	}) or { panic(err) }
+	assert plan.executor.kind() == 'vjsx'
+	assert plan.lifecycle.name() == 'embedded_host'
+	assert plan.worker_backend_mode == .disabled
+	assert plan.bootstrap.worker_sockets.len == 0
+	assert !plan.bootstrap.stream_dispatch
+	assert !plan.bootstrap.websocket_dispatch_mode
+	assert !plan.bootstrap.worker_autostart
+	assert plan.bootstrap.worker_cmd == ''
+	assert plan.bootstrap.worker_env['VHTTPD_APP'] == '/tmp/app.php'
+}
