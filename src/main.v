@@ -26,6 +26,9 @@ pub:
 pub mut:
 	started_at_unix                             i64
 	worker_backend                              WorkerBackendRuntime
+	worker_backend_mode                         WorkerBackendMode = .required
+	logic_executor                              LogicExecutor     = SocketWorkerExecutor{}
+	logic_executor_lifecycle                    string
 	internal_admin_socket                       string
 	stream_dispatch                             bool
 	websocket_dispatch_mode                     bool
@@ -84,15 +87,16 @@ pub mut:
 	fixture_websocket_runtime                   map[string]FixtureWebSocketUpstreamRuntime
 	websocket_upstream_recent_activities        []WebSocketUpstreamActivitySnapshot
 	// codex upstream
-	codex_mu                 sync.Mutex
-	codex_runtime            CodexProviderRuntime
-	ollama_enabled          bool
-	feishu_buffers           map[string]FeishuStreamBuffer
-	feishu_http_lane         shared FeishuHttpLane
-	feishu_http_test_stub    bool
-	feishu_http_test_delay_ms int
-	feishu_http_test_inflight int
-	feishu_http_test_calls int
+	codex_mu                     sync.Mutex
+	codex_runtime                CodexProviderRuntime
+	ollama_enabled               bool
+	feishu_buffers               map[string]FeishuStreamBuffer
+	feishu_http_lane             shared FeishuHttpLane
+	feishu_control_http_lane     shared FeishuControlHttpLane
+	feishu_http_test_stub        bool
+	feishu_http_test_delay_ms    int
+	feishu_http_test_inflight    int
+	feishu_http_test_calls       int
 	feishu_http_test_message_seq int
 }
 
@@ -569,9 +573,9 @@ fn worker_websocket_open(mut app App, mut conn unix.StreamConn, req http.Request
 fn worker_websocket_message_cb(mut ws websocket.Client, msg &websocket.Message, ref voidptr) ! {
 	mut state := unsafe { &WebSocketBridgeState(ref) }
 	runtime_trace('ws.message.enter', {
-		'conn_id': state.conn_id
-		'request_id': state.request_id
-		'opcode': '${msg.opcode}'
+		'conn_id':     state.conn_id
+		'request_id':  state.request_id
+		'opcode':      '${msg.opcode}'
 		'payload_len': '${msg.payload.len}'
 	})
 	state.cb_mu.@lock()
@@ -579,7 +583,7 @@ fn worker_websocket_message_cb(mut ws websocket.Client, msg &websocket.Message, 
 	state.cb_mu.unlock()
 	if already_closed {
 		runtime_trace('ws.message.ignored.closed', {
-			'conn_id': state.conn_id
+			'conn_id':    state.conn_id
 			'request_id': state.request_id
 		})
 		return
@@ -587,9 +591,9 @@ fn worker_websocket_message_cb(mut ws websocket.Client, msg &websocket.Message, 
 	if msg.opcode != .text_frame {
 		ws.close(1003, 'Only text frames are supported') or {
 			runtime_trace('ws.message.invalid.close.error', {
-				'conn_id': state.conn_id
+				'conn_id':    state.conn_id
 				'request_id': state.request_id
-				'error': err.msg()
+				'error':      err.msg()
 			})
 		}
 		return
@@ -613,9 +617,9 @@ fn worker_websocket_message_cb(mut ws websocket.Client, msg &websocket.Message, 
 		state.close_notified = true
 		state.cb_mu.unlock()
 		runtime_trace('ws.message.forward.error', {
-			'conn_id': state.conn_id
+			'conn_id':    state.conn_id
 			'request_id': state.request_id
-			'error': err.msg()
+			'error':      err.msg()
 		})
 		ws.close(1011, 'Worker bridge write failed') or {}
 		state.app.ws_hub_unregister_conn(state.conn_id)
@@ -624,7 +628,7 @@ fn worker_websocket_message_cb(mut ws websocket.Client, msg &websocket.Message, 
 	}
 	state.cb_mu.unlock()
 	runtime_trace('ws.message.forwarded', {
-		'conn_id': state.conn_id
+		'conn_id':    state.conn_id
 		'request_id': state.request_id
 	})
 	for {
@@ -634,9 +638,9 @@ fn worker_websocket_message_cb(mut ws websocket.Client, msg &websocket.Message, 
 			state.close_notified = true
 			state.cb_mu.unlock()
 			runtime_trace('ws.message.reply.error', {
-				'conn_id': state.conn_id
+				'conn_id':    state.conn_id
 				'request_id': state.request_id
-				'error': err.msg()
+				'error':      err.msg()
 			})
 			ws.close(1011, 'Worker bridge read failed') or {}
 			state.app.ws_hub_unregister_conn(state.conn_id)
@@ -653,10 +657,10 @@ fn worker_websocket_message_cb(mut ws websocket.Client, msg &websocket.Message, 
 		match reply.event {
 			'close' {
 				runtime_trace('ws.message.reply.close', {
-					'conn_id': state.conn_id
+					'conn_id':    state.conn_id
 					'request_id': state.request_id
-					'code': '${reply.code}'
-					'reason': reply.reason
+					'code':       '${reply.code}'
+					'reason':     reply.reason
 				})
 				state.cb_mu.@lock()
 				state.worker_initiated_close = true
@@ -665,9 +669,9 @@ fn worker_websocket_message_cb(mut ws websocket.Client, msg &websocket.Message, 
 				code := if reply.code > 0 { reply.code } else { 1000 }
 				ws.close(code, reply.reason) or {
 					runtime_trace('ws.message.reply.close.error', {
-						'conn_id': state.conn_id
+						'conn_id':    state.conn_id
 						'request_id': state.request_id
-						'error': err.msg()
+						'error':      err.msg()
 					})
 				}
 				return
@@ -675,7 +679,7 @@ fn worker_websocket_message_cb(mut ws websocket.Client, msg &websocket.Message, 
 			'error' {}
 			'done' {
 				runtime_trace('ws.message.reply.done', {
-					'conn_id': state.conn_id
+					'conn_id':    state.conn_id
 					'request_id': state.request_id
 				})
 				break
@@ -689,10 +693,10 @@ fn worker_websocket_close_cb(mut ws websocket.Client, code int, reason string, r
 	mut state := unsafe { &WebSocketBridgeState(ref) }
 	state.cb_mu.@lock()
 	runtime_trace('ws.close.enter', {
-		'conn_id': state.conn_id
-		'request_id': state.request_id
-		'code': '${code}'
-		'reason': reason
+		'conn_id':          state.conn_id
+		'request_id':       state.request_id
+		'code':             '${code}'
+		'reason':           reason
 		'worker_initiated': if state.worker_initiated_close { 'true' } else { 'false' }
 	})
 	if state.close_notified {
@@ -734,7 +738,7 @@ fn worker_websocket_close_cb(mut ws websocket.Client, code int, reason string, r
 	state.worker_conn.close() or {}
 	state.cb_mu.unlock()
 	runtime_trace('ws.close.exit', {
-		'conn_id': state.conn_id
+		'conn_id':    state.conn_id
 		'request_id': state.request_id
 	})
 }
@@ -754,7 +758,13 @@ fn proxy_worker_websocket(mut app App, mut ctx Context, method string, path stri
 		return ctx.text('Upgrade Required')
 	}
 	remote_addr := if isnil(ctx.conn) { '' } else { ctx.conn.peer_ip() or { '' } }
-	selected_socket := app.worker_backend_select_socket_queued() or {
+	mut ws_open := app.logic_executor.open_websocket_session(mut app, WebSocketSessionOpenRequest{
+		req:         ctx.req
+		remote_addr: remote_addr
+		path:        path
+		request_id:  req_id
+		trace_id:    trace_id
+	}) or {
 		err_msg := err.msg()
 		status, error_class := classify_worker_error(err_msg)
 		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
@@ -762,37 +772,18 @@ fn proxy_worker_websocket(mut app App, mut ctx Context, method string, path stri
 		ctx.res.set_status(http.status_from_int(status))
 		return ctx.text('Bad Gateway')
 	}
-	mut worker_conn := unix.connect_stream(selected_socket) or {
-		err_msg := err.msg()
-		status, error_class := classify_worker_error(err_msg)
+	if !ws_open.accepted {
 		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-		ctx.set_custom_header('x-vhttpd-error-class', error_class) or {}
-		ctx.res.set_status(http.status_from_int(status))
-		return ctx.text('Bad Gateway')
-	}
-	if app.worker_backend.read_timeout_ms > 0 {
-		worker_conn.set_read_timeout(time.millisecond * app.worker_backend.read_timeout_ms)
-	}
-	accepted, status, body := worker_websocket_open(mut app, mut worker_conn, ctx.req,
-		remote_addr, path, req_id, trace_id) or {
-		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-		ctx.set_custom_header('x-vhttpd-error-class', 'transport_error') or {}
-		ctx.res.set_status(http.status_from_int(502))
-		worker_conn.close() or {}
-		return ctx.text('Bad Gateway')
-	}
-	if !accepted {
-		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-		ctx.res.set_status(http.status_from_int(status))
-		worker_conn.close() or {}
-		return ctx.text(body)
+		ctx.res.set_status(http.status_from_int(ws_open.status))
+		return ctx.text(ws_open.body)
 	}
 
 	ctx.takeover_conn()
 	ctx.conn.set_write_timeout(time.infinite)
 	ctx.conn.set_read_timeout(time.infinite)
 	mut conn := ctx.conn
-	spawn handle_worker_websocket_session(mut app, mut conn, mut worker_conn, selected_socket,
+	mut worker_conn := ws_open.conn
+	spawn handle_worker_websocket_session(mut app, mut conn, mut worker_conn, ws_open.socket_path,
 		key, method.to_upper(), path, req_id, trace_id, start_ms)
 	return veb.no_result()
 }
@@ -806,26 +797,10 @@ fn proxy_worker_websocket_dispatch(mut app App, mut ctx Context, method string, 
 	normalized_path, query_string := normalize_request_target(path)
 	query := parse_query_map(query_string)
 	headers := header_map_from_request(ctx.req)
-	open_frame := app.kernel_websocket_dispatch_frame(
-		'open',
-		method,
-		normalized_path,
-		query,
-		headers,
-		remote_addr,
-		req_id,
-		trace_id,
-		'',
-		'',
-		0,
-		'',
-		app.ws_hub_rooms_snapshot(req_id),
-		app.ws_hub_meta_snapshot(req_id),
-		map[string][]string{},
-		map[string]map[string]string{},
-		map[string]int{},
-		map[string][]string{},
-	)
+	open_frame := app.kernel_websocket_dispatch_frame('open', method, normalized_path,
+		query, headers, remote_addr, req_id, trace_id, '', '', 0, '', app.ws_hub_rooms_snapshot(req_id),
+		app.ws_hub_meta_snapshot(req_id), map[string][]string{}, map[string]map[string]string{},
+		map[string]int{}, map[string][]string{})
 	resp := app.kernel_dispatch_websocket_event(open_frame) or {
 		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
 		ctx.set_custom_header('x-vhttpd-error-class', 'transport_error') or {}
@@ -860,17 +835,17 @@ fn proxy_worker_websocket_dispatch(mut app App, mut ctx Context, method string, 
 
 fn handle_worker_websocket_session(mut app App, mut client_conn net.TcpConn, mut worker_conn unix.StreamConn, selected_socket string, key string, method string, path string, req_id string, trace_id string, start_ms i64) {
 	runtime_trace('ws.session.start', {
-		'request_id': req_id
-		'trace_id': trace_id
-		'path': path
+		'request_id':    req_id
+		'trace_id':      trace_id
+		'path':          path
 		'worker_socket': selected_socket
 	})
 	app.on_worker_request_started(selected_socket)
 	defer {
 		runtime_trace('ws.session.defer', {
-			'request_id': req_id
-			'trace_id': trace_id
-			'path': path
+			'request_id':    req_id
+			'trace_id':      trace_id
+			'path':          path
 			'worker_socket': selected_socket
 		})
 		app.on_worker_request_finished(selected_socket)
@@ -889,13 +864,14 @@ fn handle_worker_websocket_session(mut app App, mut client_conn net.TcpConn, mut
 	}
 	ws_server.on_connect(fn [mut app, state] (mut sc websocket.ServerClient) !bool {
 		runtime_trace('ws.session.connect', {
-			'conn_id': state.conn_id
-			'request_id': state.request_id
-			'path': state.path
+			'conn_id':       state.conn_id
+			'request_id':    state.request_id
+			'path':          state.path
 			'worker_socket': state.worker_socket
 		})
 		app.ws_hub_register_conn(state.conn_id, state.worker_socket, state.method, state.request_id,
-			state.trace_id, state.path, map[string]string{}, map[string]string{}, '', sc.client)
+			state.trace_id, state.path, map[string]string{}, map[string]string{}, '',
+			sc.client)
 		spawn delayed_ws_hub_flush(mut app, state.conn_id)
 		return true
 	}) or {}
@@ -903,25 +879,25 @@ fn handle_worker_websocket_session(mut app App, mut client_conn net.TcpConn, mut
 	ws_server.on_close_ref(worker_websocket_close_cb, state)
 	ws_server.handle_handshake(mut client_conn, key) or {
 		runtime_trace('ws.session.handshake.error', {
-			'conn_id': state.conn_id
+			'conn_id':    state.conn_id
 			'request_id': state.request_id
-			'path': state.path
-			'error': err.msg()
+			'path':       state.path
+			'error':      err.msg()
 		})
 		app.ws_hub_unregister_conn(state.conn_id)
 		state.worker_conn.close() or {}
 		return
 	}
 	runtime_trace('ws.session.handshake.done', {
-		'conn_id': state.conn_id
-		'request_id': state.request_id
+		'conn_id':        state.conn_id
+		'request_id':     state.request_id
 		'close_notified': if state.close_notified { 'true' } else { 'false' }
 	})
 	if !state.close_notified {
 		app.ws_hub_unregister_conn(state.conn_id)
 		state.worker_conn.close() or {}
 		runtime_trace('ws.session.cleanup.no_close', {
-			'conn_id': state.conn_id
+			'conn_id':    state.conn_id
 			'request_id': state.request_id
 		})
 	}
@@ -963,26 +939,11 @@ fn worker_websocket_dispatch_message_cb(mut ws websocket.Client, msg &websocket.
 		return
 	}
 	room_members, member_metadata, room_counts, presence_users := state.app.ws_hub_presence_snapshot(state.conn_id)
-	resp := state.app.kernel_dispatch_websocket_event(state.app.kernel_websocket_dispatch_frame(
-		'message',
-		state.method,
-		state.path,
-		state.query,
-		state.headers,
-		state.remote_addr,
-		state.request_id,
-		state.trace_id,
-		'text',
-		msg.payload.bytestr(),
-		0,
-		'',
-		state.app.ws_hub_rooms_snapshot(state.conn_id),
-		state.app.ws_hub_meta_snapshot(state.conn_id),
-		room_members,
-		member_metadata,
-		room_counts,
-		presence_users,
-	))!
+	resp := state.app.kernel_dispatch_websocket_event(state.app.kernel_websocket_dispatch_frame('message',
+		state.method, state.path, state.query, state.headers, state.remote_addr, state.request_id,
+		state.trace_id, 'text', msg.payload.bytestr(), 0, '', state.app.ws_hub_rooms_snapshot(state.conn_id),
+		state.app.ws_hub_meta_snapshot(state.conn_id), room_members, member_metadata,
+		room_counts, presence_users))!
 	if resp.event == 'error' {
 		ws.close(1011, 'worker error')!
 		return
@@ -997,26 +958,11 @@ fn worker_websocket_dispatch_message_cb(mut ws websocket.Client, msg &websocket.
 fn worker_websocket_dispatch_close_cb(mut ws websocket.Client, code int, reason string, ref voidptr) ! {
 	mut state := unsafe { &WebSocketDispatchBridgeState(ref) }
 	room_members, member_metadata, room_counts, presence_users := state.app.ws_hub_presence_snapshot(state.conn_id)
-	resp := state.app.kernel_dispatch_websocket_event(state.app.kernel_websocket_dispatch_frame(
-		'close',
-		state.method,
-		state.path,
-		state.query,
-		state.headers,
-		state.remote_addr,
-		state.request_id,
-		state.trace_id,
-		'',
-		'',
-		code,
-		reason,
-		state.app.ws_hub_rooms_snapshot(state.conn_id),
-		state.app.ws_hub_meta_snapshot(state.conn_id),
-		room_members,
-		member_metadata,
-		room_counts,
-		presence_users,
-	)) or {
+	resp := state.app.kernel_dispatch_websocket_event(state.app.kernel_websocket_dispatch_frame('close',
+		state.method, state.path, state.query, state.headers, state.remote_addr, state.request_id,
+		state.trace_id, '', '', code, reason, state.app.ws_hub_rooms_snapshot(state.conn_id),
+		state.app.ws_hub_meta_snapshot(state.conn_id), room_members, member_metadata,
+		room_counts, presence_users)) or {
 		state.app.ws_hub_unregister_conn(state.conn_id)
 		return
 	}
@@ -1041,7 +987,14 @@ fn proxy_worker_response(mut app App, mut ctx Context, method string, path strin
 			return result
 		}
 	}
-	selected_socket := app.worker_backend_select_socket_queued() or {
+	mut outcome := app.logic_executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+		method:      method
+		path:        path
+		req:         ctx.req
+		remote_addr: remote_addr
+		trace_id:    trace_id
+		request_id:  req_id
+	}) or {
 		err_msg := err.msg()
 		status, error_class := classify_worker_error(err_msg)
 		app.emit('http.request', {
@@ -1059,52 +1012,14 @@ fn proxy_worker_response(mut app App, mut ctx Context, method string, path strin
 		ctx.res.set_status(http.status_from_int(status))
 		return ctx.text(body_on_head)
 	}
-	mut conn := unix.connect_stream(selected_socket) or {
-		err_msg := err.msg()
-		status, error_class := classify_worker_error(err_msg)
-		app.emit('http.request', {
-			'method':      method.to_upper()
-			'path':        normalize_path(path)
-			'status':      '${status}'
-			'request_id':  req_id
-			'trace_id':    trace_id
-			'duration_ms': '${time.now().unix_milli() - start_ms}'
-			'error_class': error_class
-			'error':       err_msg
-		})
-		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-		ctx.set_custom_header('x-vhttpd-error-class', error_class) or {}
-		ctx.res.set_status(http.status_from_int(status))
-		return ctx.text(body_on_head)
-	}
-	app.on_worker_request_started(selected_socket)
-	defer {
-		app.on_worker_request_finished(selected_socket)
-	}
-	defer {
-		conn.close() or {}
-	}
-	if app.worker_backend.read_timeout_ms > 0 {
-		conn.set_read_timeout(time.millisecond * app.worker_backend.read_timeout_ms)
-	}
-	payload := encode_worker_request(method, path, ctx.req, remote_addr, trace_id, req_id)
-	write_frame(mut conn, payload) or {
-		err_msg := err.msg()
-		status, error_class := classify_worker_error(err_msg)
-		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-		ctx.set_custom_header('x-vhttpd-error-class', error_class) or {}
-		ctx.res.set_status(http.status_from_int(status))
-		return ctx.text(body_on_head)
-	}
-	first_raw := read_frame(mut conn) or {
-		err_msg := err.msg()
-		status, error_class := classify_worker_error(err_msg)
-		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-		ctx.set_custom_header('x-vhttpd-error-class', error_class) or {}
-		ctx.res.set_status(http.status_from_int(status))
-		return ctx.text(body_on_head)
-	}
-	if start := try_decode_stream_start(first_raw) {
+	if outcome.kind == .stream {
+		mut conn := outcome.conn
+		selected_socket := outcome.socket_path
+		start := outcome.stream_start
+		defer {
+			conn.close() or {}
+			app.on_worker_request_finished(selected_socket)
+		}
 		if (start.stream_type == 'sse' || start.content_type.starts_with('text/event-stream'))
 			&& method.to_upper() != 'HEAD' {
 			return stream_via_sse(mut app, mut ctx, mut conn, start, method, path, req_id,
@@ -1113,17 +1028,11 @@ fn proxy_worker_response(mut app App, mut ctx Context, method string, path strin
 		return stream_via_passthrough(mut app, mut ctx, mut conn, start, method, path,
 			req_id, trace_id, start_ms)
 	}
-	if plan := try_decode_upstream_plan(first_raw) {
-		conn.close() or {}
-		return execute_upstream_plan(mut app, mut ctx, plan, method, path, req_id, trace_id,
-			start_ms)
+	if outcome.kind == .upstream_plan {
+		return execute_upstream_plan(mut app, mut ctx, outcome.upstream_plan, method,
+			path, req_id, trace_id, start_ms)
 	}
-	resp := json.decode(WorkerResponse, first_raw) or {
-		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-		ctx.set_custom_header('x-vhttpd-error-class', 'transport_error') or {}
-		ctx.res.set_status(http.status_from_int(502))
-		return ctx.text(body_on_head)
-	}
+	resp := outcome.response
 	app.emit('http.request', {
 		'method':      method.to_upper()
 		'path':        normalize_path(path)
@@ -1178,7 +1087,8 @@ fn apply_worker_headers(mut ctx Context, headers map[string]string) {
 }
 
 fn (mut app App) emit(kind string, fields map[string]string) {
-	if kind in ['server.started', 'server.failed', 'server.stopped', 'admin.started', 'admin.failed', 'internal_admin.started', 'internal_admin.error', 'worker.select.failed'] {
+	if kind in ['server.started', 'server.failed', 'server.stopped', 'admin.started', 'admin.failed',
+		'internal_admin.started', 'internal_admin.error', 'worker.select.failed'] {
 		runtime_trace('emit.${kind}', fields)
 	}
 	app.mu.@lock()
@@ -1237,7 +1147,7 @@ pub fn (mut app App) register_provider(name string, p Provider) {
 		route_kind:       .generic
 		provider:         p
 		handler:          NoopProviderCommandHandler{}
-		runtime: ProviderRuntimeAdapter{
+		runtime:          ProviderRuntimeAdapter{
 			provider: p
 		}
 	}
@@ -1347,7 +1257,9 @@ pub fn (mut app App) provider_runtime_upstream_snapshot(name string, instance st
 				received_frames:         state.received_frames
 			}
 		}
-		else { none }
+		else {
+			none
+		}
 	}
 }
 
@@ -1380,7 +1292,7 @@ pub fn (mut app App) provider_runtime_upstream_events(name string, instance_filt
 						trace_id:    event.trace_id
 						received_at: event.received_at
 						payload:     event.payload
-						metadata: {
+						metadata:    {
 							'action':            event.action
 							'event_id':          event.event_id
 							'event_kind':        event.event_kind
@@ -1402,8 +1314,12 @@ pub fn (mut app App) provider_runtime_upstream_events(name string, instance_filt
 			}
 			events
 		}
-		'codex' { []WebSocketUpstreamEventSnapshot{} }
-		else { []WebSocketUpstreamEventSnapshot{} }
+		'codex' {
+			[]WebSocketUpstreamEventSnapshot{}
+		}
+		else {
+			[]WebSocketUpstreamEventSnapshot{}
+		}
 	}
 }
 
@@ -1446,7 +1362,9 @@ pub fn (mut app App) provider_runtime_metrics(name string) ProviderRuntimeMetric
 				received_frames:   state.received_frames
 			}
 		}
-		else { ProviderRuntimeMetrics{} }
+		else {
+			ProviderRuntimeMetrics{}
+		}
 	}
 }
 
@@ -1461,7 +1379,11 @@ pub fn (mut app App) provider_runtime_capabilities() map[string]bool {
 pub fn (mut app App) provider_runtime_gateway_count() int {
 	mut total := 0
 	for provider in ['feishu', 'codex'] {
-		total += app.provider_runtime_upstream_snapshots(provider).len
+		for instance in app.provider_runtime_instances(provider) {
+			if app.provider_runtime_upstream_enabled(provider, instance) {
+				total++
+			}
+		}
 	}
 	return total
 }
@@ -1469,7 +1391,7 @@ pub fn (mut app App) provider_runtime_gateway_count() int {
 pub fn (mut app App) provider_runtime_upstream_launches() []ProviderRuntimeUpstreamLaunch {
 	mut launches := []ProviderRuntimeUpstreamLaunch{}
 	feishu_instances := app.provider_runtime_instances('feishu')
-	if feishu_instances.len > 0 {
+	if app.provider_bootstrap_enabled('feishu') && feishu_instances.len > 0 {
 		launches << ProviderRuntimeUpstreamLaunch{
 			provider: 'feishu'
 			instance: ''
@@ -1497,17 +1419,35 @@ pub fn (mut app App) provider_runtime_upstream_launches() []ProviderRuntimeUpstr
 
 pub fn (mut app App) provider_runtime_upstream_enabled(name string, instance string) bool {
 	return match name {
-		'feishu' { app.provider_runtime_ready('feishu') && instance in app.provider_runtime_instances('feishu') }
-		'codex' { app.provider_runtime_ready('codex') && instance in app.provider_runtime_instances('codex') }
-		'ollama' { app.provider_runtime_ready('ollama') && instance in app.provider_runtime_instances('ollama') }
-		else { false }
+		'feishu' {
+			app.provider_runtime_ready('feishu')
+				&& instance in app.provider_runtime_instances('feishu')
+		}
+		'codex' {
+			app.provider_runtime_ready('codex')
+				&& instance in app.provider_runtime_instances('codex')
+		}
+		'ollama' {
+			app.provider_runtime_ready('ollama')
+				&& instance in app.provider_runtime_instances('ollama')
+		}
+		else {
+			false
+		}
 	}
 }
 
 pub fn (mut app App) provider_runtime_upstream_provider_names() []string {
 	mut names := []string{}
 	for name in ['feishu', 'codex'] {
-		if app.provider_runtime_instances(name).len > 0 {
+		mut has_enabled_instance := false
+		for instance in app.provider_runtime_instances(name) {
+			if app.provider_runtime_upstream_enabled(name, instance) {
+				has_enabled_instance = true
+				break
+			}
+		}
+		if has_enabled_instance {
 			names << name
 		}
 	}
@@ -1543,7 +1483,9 @@ pub fn (mut app App) provider_runtime_default_instance(name string) string {
 
 pub fn (mut app App) provider_runtime_instances(name string) []string {
 	return match name {
-		'feishu' { app.feishu_runtime_app_names() }
+		'feishu' {
+			app.feishu_runtime_app_names()
+		}
 		'codex' {
 			if app.provider_runtime_ready('codex') {
 				['main']
@@ -1558,7 +1500,9 @@ pub fn (mut app App) provider_runtime_instances(name string) []string {
 				[]string{}
 			}
 		}
-		else { []string{} }
+		else {
+			[]string{}
+		}
 	}
 }
 
@@ -1580,8 +1524,12 @@ pub fn (mut app App) provider_runtime_reconnect_delay_ms(name string, instance s
 				3000
 			}
 		}
-		'codex' { app.codex_provider_reconnect_delay_ms() }
-		else { 3000 }
+		'codex' {
+			app.codex_provider_reconnect_delay_ms()
+		}
+		else {
+			3000
+		}
 	}
 }
 
@@ -1640,11 +1588,9 @@ pub fn (mut app App) stop_all_providers() {
 	}
 	app.mu.unlock()
 	for runtime in runtimes {
-		runtime.stop(mut app) or {
-			app.emit('provider.stop_failed', {
-				'error': err.msg()
-			})
-		}
+		runtime.stop(mut app) or { app.emit('provider.stop_failed', {
+			'error': err.msg()
+		}) }
 	}
 }
 
@@ -1668,7 +1614,7 @@ pub fn (mut app App) dispatch(mut ctx Context) veb.Result {
 	method := ctx.query['method'] or { 'GET' }
 	path := ctx.query['path'] or { '/health' }
 	req_id := resolve_request_id(ctx, path)
-	if app.worker_backend.sockets.len > 0 {
+	if app.has_http_logic_executor() {
 		return proxy_worker_response(mut app, mut ctx, method, path, 'Bad Gateway')
 	}
 	mut status := 200
@@ -1693,7 +1639,7 @@ pub fn (mut app App) dispatch_head(mut ctx Context) veb.Result {
 	method := ctx.query['method'] or { 'GET' }
 	path := ctx.query['path'] or { '/health' }
 	req_id := resolve_request_id(ctx, path)
-	if app.worker_backend.sockets.len > 0 {
+	if app.has_http_logic_executor() {
 		return proxy_worker_response(mut app, mut ctx, method, path, '')
 	}
 	mut status := 200
@@ -1771,7 +1717,7 @@ pub fn (mut app App) proxy_get(mut ctx Context, path string) veb.Result {
 	if normalize_path(target) == '/mcp' {
 		return app.mcp_get(mut ctx)
 	}
-	if app.worker_backend.sockets.len == 0 {
+	if !app.has_http_logic_executor() {
 		ctx.res.set_status(.not_found)
 		return ctx.text('Not Found')
 	}
@@ -1784,7 +1730,7 @@ pub fn (mut app App) proxy_post(mut ctx Context, path string) veb.Result {
 	if normalize_path(target) == '/mcp' {
 		return app.mcp_post(mut ctx)
 	}
-	if app.worker_backend.sockets.len == 0 {
+	if !app.has_http_logic_executor() {
 		ctx.res.set_status(.not_found)
 		return ctx.text('Not Found')
 	}
@@ -1793,7 +1739,7 @@ pub fn (mut app App) proxy_post(mut ctx Context, path string) veb.Result {
 
 @['/:path...'; put]
 pub fn (mut app App) proxy_put(mut ctx Context, path string) veb.Result {
-	if app.worker_backend.sockets.len == 0 {
+	if !app.has_http_logic_executor() {
 		ctx.res.set_status(.not_found)
 		return ctx.text('Not Found')
 	}
@@ -1803,7 +1749,7 @@ pub fn (mut app App) proxy_put(mut ctx Context, path string) veb.Result {
 
 @['/:path...'; patch]
 pub fn (mut app App) proxy_patch(mut ctx Context, path string) veb.Result {
-	if app.worker_backend.sockets.len == 0 {
+	if !app.has_http_logic_executor() {
 		ctx.res.set_status(.not_found)
 		return ctx.text('Not Found')
 	}
@@ -1817,7 +1763,7 @@ pub fn (mut app App) proxy_delete(mut ctx Context, path string) veb.Result {
 	if normalize_path(target) == '/mcp' {
 		return app.mcp_delete(mut ctx)
 	}
-	if app.worker_backend.sockets.len == 0 {
+	if !app.has_http_logic_executor() {
 		ctx.res.set_status(.not_found)
 		return ctx.text('Not Found')
 	}
@@ -1826,7 +1772,7 @@ pub fn (mut app App) proxy_delete(mut ctx Context, path string) veb.Result {
 
 @['/:path...'; head]
 pub fn (mut app App) proxy_head(mut ctx Context, path string) veb.Result {
-	if app.worker_backend.sockets.len == 0 {
+	if !app.has_http_logic_executor() {
 		ctx.res.set_status(.not_found)
 		return ctx.text('')
 	}

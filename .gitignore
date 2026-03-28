@@ -6,3 +6,7 @@ vhttpd_prod
 *.db-shm
 *.db-wal
 .runtime/
+tmp/
+*.vjsbuild/
+.vscode/
+examples/codexbot-app/codex.sqlite

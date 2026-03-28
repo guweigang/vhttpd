@@ -5,10 +5,10 @@ import log
 import time
 
 fn (mut app App) dispatch_feishu_message_sent(stream_id string, message_id string) {
-	log.info('[feishu] 📨 dispatching sent notification to PHP worker: stream_id=${stream_id} message_id=${message_id}')
+	log.info('[feishu] 📨 dispatching sent notification to logic executor kind=${app.logic_executor_kind()}: stream_id=${stream_id} message_id=${message_id}')
 	
-	if app.worker_backend.sockets.len == 0 {
-		log.warn('[feishu] ⚠️ no worker sockets, skipping sent notification dispatch')
+	if !app.has_websocket_upstream_logic_executor() {
+		log.warn('[feishu] ⚠️ websocket_upstream logic executor unavailable, skipping sent notification dispatch')
 		return
 	}
 
@@ -35,10 +35,10 @@ fn (mut app App) dispatch_feishu_message_sent(stream_id string, message_id strin
 }
 
 fn (mut app App) dispatch_feishu_message_updated(stream_id string, message_id string) {
-	log.info('[feishu] 📨 dispatching update notification to PHP worker: stream_id=${stream_id} message_id=${message_id}')
+	log.info('[feishu] 📨 dispatching update notification to logic executor kind=${app.logic_executor_kind()}: stream_id=${stream_id} message_id=${message_id}')
 	
-	if app.worker_backend.sockets.len == 0 {
-		log.warn('[feishu] ⚠️ no worker sockets, skipping update notification dispatch')
+	if !app.has_websocket_upstream_logic_executor() {
+		log.warn('[feishu] ⚠️ websocket_upstream logic executor unavailable, skipping update notification dispatch')
 		return
 	}
 

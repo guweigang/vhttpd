@@ -304,6 +304,36 @@ fn test_feishu_runtime_send_and_update_share_one_http_lane() {
 	assert app.feishu_http_test_inflight == 0
 }
 
+fn test_feishu_runtime_send_message_supports_message_reply_target() {
+	mut app := new_feishu_http_test_app()
+	send_result := app.feishu_runtime_send_message(FeishuRuntimeSendMessageRequest{
+		app:             'main'
+		receive_id_type: 'message_id'
+		receive_id:      'om_source_1'
+		msg_type:        'text'
+		text:            'reply in thread'
+	}) or {
+		panic(err)
+	}
+	assert send_result.ok
+	assert send_result.message_id.starts_with('om_reply_')
+}
+
+fn test_feishu_runtime_followup_segment_supports_message_reply_target() {
+	mut app := new_feishu_http_test_app()
+	followup_id := app.feishu_runtime_send_followup_segment(FeishuStreamBuffer{
+		message_id:      'om_placeholder_1'
+		app:             'main'
+		stream_id:       'codex:ts_test_followup_reply'
+		receive_id:      'om_source_2'
+		receive_id_type: 'message_id'
+		segment_index:   2
+	}, 'followup in thread', false, '') or {
+		panic(err)
+	}
+	assert followup_id.starts_with('om_reply_')
+}
+
 fn test_feishu_runtime_normalize_streaming_send_wraps_text_as_interactive_card() {
 	req := WebSocketUpstreamSendRequest{
 		provider:     'feishu'
@@ -834,4 +864,13 @@ fn test_feishu_update_message_rejects_non_interactive_message_id_updates_locally
 		return
 	}
 	assert false
+}
+
+fn test_feishu_runtime_should_dispatch_upstream_ignores_message_read_event() {
+	assert !feishu_runtime_should_dispatch_upstream(FeishuRuntimeEventSummary{
+		event_type: 'im.message.message_read_v1'
+	})
+	assert feishu_runtime_should_dispatch_upstream(FeishuRuntimeEventSummary{
+		event_type: 'im.message.receive_v1'
+	})
 }

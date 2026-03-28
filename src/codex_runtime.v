@@ -781,8 +781,8 @@ fn (mut app App) dispatch_codex_rpc_response(pending CodexPendingRpc, result_raw
 	log.info('[codex] 🏁 dispatch_codex_rpc_response method=${pending.method} stream_id=${pending.stream_id} error=${has_error}')
 	codex_debug_log('rpc.dispatch.raw_response', raw)
 	codex_debug_log('rpc.dispatch.result_raw', result_raw)
-	if app.worker_backend.sockets.len == 0 {
-		log.warn('[codex] ⚠️ no worker sockets, skipping dispatch')
+	if !app.has_websocket_upstream_logic_executor() {
+		log.warn('[codex] ⚠️ websocket_upstream logic executor unavailable, skipping dispatch')
 		return
 	}
 
@@ -929,8 +929,8 @@ fn (mut app App) codex_handle_notification(method string, raw string) {
 		else {}
 	}
 
-	// 3. Dispatch raw payload to PHP for business logic
-	if app.worker_backend.sockets.len > 0 {
+	// 3. Dispatch raw payload to business logic executor.
+	if app.has_websocket_upstream_logic_executor() {
 		mut stream_id := app.codex_get_active_stream_id()
 		if stream_id == '' {
 			app.codex_mu.@lock()
@@ -956,6 +956,10 @@ fn (mut app App) codex_handle_notification(method string, raw string) {
 			return
 		}
 		resp := outcome.response
+		if resp.error != '' {
+			log.error('[codex] ❌ codex notification worker error: ${resp.error}')
+		}
+		log.info('[codex] 🧾 codex notification result: method=${method} handled=${resp.handled} commands=${resp.commands.len} error=${resp.error}')
 		if resp.commands.len > 0 {
 			if outcome.command_error != '' {
 				log.error('[codex] ❌ codex notification command execution error: ${outcome.command_error}')

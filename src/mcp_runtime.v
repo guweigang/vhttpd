@@ -524,7 +524,7 @@ fn proxy_worker_mcp(mut app App, mut ctx Context) veb.Result {
 			'response_mode': 'mcp'
 			'error_class': 'worker_unavailable'
 		})
-		return ctx.text('{"error":"MCP requires php-worker mode"}')
+		return ctx.text('{"error":"MCP requires a configured logic executor"}')
 	}
 	if !app.mcp_origin_allowed(headers) {
 		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}

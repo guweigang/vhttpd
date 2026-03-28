@@ -544,3 +544,100 @@ fn test_feishu_handler_session_clear_message_removes_buffer_and_stream_target() 
 	assert 'om_reply_002' !in app.feishu_buffers
 	assert 'codex:task_003' !in app.codex_runtime.stream_map
 }
+
+fn test_feishu_handler_session_clear_message_removes_buffer_chain() {
+	mut app := &App{
+		codex_runtime: CodexProviderRuntime{
+			thread_stream_map: map[string]string{}
+			stream_map: {
+				'codex:task_chain': [
+					CodexTarget{
+						platform:   'feishu'
+						message_id: 'om_chain_1'
+					},
+					CodexTarget{
+						platform:   'feishu'
+						message_id: 'om_chain_2'
+					},
+				]
+			}
+		}
+		feishu_buffers: {
+			'om_chain_1': FeishuStreamBuffer{
+				message_id:    'om_chain_1'
+				stream_id:     'codex:task_chain'
+				next_message_id:'om_chain_2'
+			}
+			'om_chain_2': FeishuStreamBuffer{
+				message_id: 'om_chain_2'
+				stream_id:  'codex:task_chain'
+			}
+		}
+	}
+	mut handler := FeishuCommandHandler.new(mut app)
+	cmd := WorkerWebSocketUpstreamCommand{
+		type_:      'session.clear'
+		provider:   'feishu'
+		target:     'om_chain_1'
+		target_type:'message_id'
+	}
+	normalized := NormalizedCommand.from_worker_command(cmd)
+	mut snapshot := WebSocketUpstreamCommandActivity{}
+	handled, err := handler.execute(cmd, normalized, mut snapshot)
+	assert handled == true
+	assert err == ''
+	assert snapshot.status == 'cleared'
+	assert 'om_chain_1' !in app.feishu_buffers
+	assert 'om_chain_2' !in app.feishu_buffers
+	assert 'codex:task_chain' !in app.codex_runtime.stream_map
+}
+
+fn test_feishu_handler_session_clear_stream_id_removes_all_stream_buffers() {
+	mut app := &App{
+		codex_runtime: CodexProviderRuntime{
+			thread_stream_map: map[string]string{}
+			stream_map: {
+				'codex:task_stream_clear': [
+					CodexTarget{
+						platform:   'feishu'
+						message_id: 'om_stream_1'
+					},
+					CodexTarget{
+						platform:   'feishu'
+						message_id: 'om_stream_2'
+					},
+				]
+			}
+		}
+		feishu_buffers: {
+			'om_stream_1': FeishuStreamBuffer{
+				message_id: 'om_stream_1'
+				stream_id:  'codex:task_stream_clear'
+			}
+			'om_stream_2': FeishuStreamBuffer{
+				message_id: 'om_stream_2'
+				stream_id:  'codex:task_stream_clear'
+			}
+			'om_other': FeishuStreamBuffer{
+				message_id: 'om_other'
+				stream_id:  'codex:other'
+			}
+		}
+	}
+	mut handler := FeishuCommandHandler.new(mut app)
+	cmd := WorkerWebSocketUpstreamCommand{
+		type_:     'session.clear'
+		provider:  'feishu'
+		stream_id: 'codex:task_stream_clear'
+	}
+	normalized := NormalizedCommand.from_worker_command(cmd)
+	mut snapshot := WebSocketUpstreamCommandActivity{}
+	handled, err := handler.execute(cmd, normalized, mut snapshot)
+	assert handled == true
+	assert err == ''
+	assert snapshot.status == 'cleared'
+	assert 'om_stream_1' !in app.feishu_buffers
+	assert 'om_stream_2' !in app.feishu_buffers
+	assert 'om_other' in app.feishu_buffers
+	assert 'codex:task_stream_clear' !in app.codex_runtime.stream_map
+}
