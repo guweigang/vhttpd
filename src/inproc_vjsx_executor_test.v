@@ -3077,6 +3077,139 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_unbind_blocks_current_project_
 	})
 }
 
+fn test_inproc_vjsx_executor_repo_codexbot_app_ts_projects_self_heal_legacy_binding_state() {
+	codexbot_ts_with_temp_db('codexbot_ts_legacy_project_bindings.sqlite', fn (_ string) {
+		suffix := '${time.now().unix_milli()}'
+		project_root := os.join_path(os.temp_dir(), 'codexbot_ts_legacy_bindings_root_' + suffix)
+		mutator_dir := os.join_path(os.temp_dir(), 'codexbot_ts_legacy_bindings_mutator_' + suffix)
+		os.mkdir_all(project_root) or { panic(err) }
+		os.mkdir_all(mutator_dir) or { panic(err) }
+		defer {
+			os.rmdir_all(project_root) or {}
+			os.rmdir_all(mutator_dir) or {}
+		}
+
+		mutator_file := os.join_path(mutator_dir, 'mutator.mts')
+		mutator_source := 'import { open } from "sqlite";\n' +
+			'\n' +
+			'globalThis.__vhttpd_handle = async (ctx) => {\n' +
+			'  const dbPath = process.env.CODEXBOT_TS_DB_PATH;\n' +
+			'  const db = await open({ path: dbPath, busyTimeout: 5000 });\n' +
+			'  await db.exec("delete from project_binding_state where chat_id = \'chat_codexbot_ts_legacy_projects\'");\n' +
+			'  await db.exec("delete from project_registry where project_key = \'alpha\'");\n' +
+			'  await db.close();\n' +
+			'  return ctx.json({ ok: true, dbPath });\n' +
+			'};\n'
+		os.write_file(mutator_file, mutator_source) or {
+			panic(err)
+		}
+
+		app_file := os.join_path(os.dir(@FILE), '..', 'examples', 'codexbot-app-ts', 'app.mts')
+		assert os.exists(app_file)
+		mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
+			thread_count:    1
+			app_entry:       app_file
+			module_root:     os.dir(app_file)
+			runtime_profile: 'node'
+			enable_fs:       true
+		})
+		mut mutator := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
+			thread_count:    1
+			app_entry:       mutator_file
+			module_root:     mutator_dir
+			runtime_profile: 'node'
+			enable_fs:       true
+		})
+		mut app := App{}
+
+		_ = executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_legacy_bindings_setting_project_root'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_legacy_bindings_setting_project_root'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_legacy_bindings_setting_project_root'
+			target:      'chat_codexbot_ts_legacy_projects'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/setting project_root_dir ' + project_root,
+				'chat_codexbot_ts_legacy_projects', 'om_codexbot_ts_legacy_bindings_setting_project_root')
+		}) or { panic(err) }
+
+		create_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_legacy_bindings_create_alpha'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_legacy_bindings_create_alpha'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_legacy_bindings_create_alpha'
+			target:      'chat_codexbot_ts_legacy_projects'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/create alpha', 'chat_codexbot_ts_legacy_projects',
+				'om_codexbot_ts_legacy_bindings_create_alpha')
+		}) or { panic(err) }
+		assert create_resp.handled
+		assert create_resp.commands.len == 1
+		assert create_resp.commands[0].text.contains('Project: `alpha`')
+
+		mutator_resp := mutator.dispatch_http(mut app, HttpLogicDispatchRequest{
+			method: 'POST'
+			path:   '/mutate'
+			req:    http.Request{
+				method: .post
+				url:    '/mutate'
+				host:   'example.test'
+			}
+			remote_addr: '127.0.0.1'
+			trace_id:    'trace_codexbot_ts_legacy_bindings_mutator'
+			request_id:  'req_codexbot_ts_legacy_bindings_mutator'
+		}) or { panic(err) }
+		assert mutator_resp.response.status == 200
+		assert mutator_resp.response.body.contains('"ok":true')
+
+		current_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_legacy_bindings_project_current'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_legacy_bindings_project_current'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_legacy_bindings_project_current'
+			target:      'chat_codexbot_ts_legacy_projects'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/project', 'chat_codexbot_ts_legacy_projects',
+				'om_codexbot_ts_legacy_bindings_project_current')
+		}) or { panic(err) }
+		assert current_resp.handled
+		assert current_resp.commands.len == 1
+		assert current_resp.commands[0].text.contains('Project: `alpha`')
+
+		projects_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_legacy_bindings_projects'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_legacy_bindings_projects'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_legacy_bindings_projects'
+			target:      'chat_codexbot_ts_legacy_projects'
+			target_type: 'chat_id'
+			payload:     codexbot_ts_feishu_payload('/projects', 'chat_codexbot_ts_legacy_projects',
+				'om_codexbot_ts_legacy_bindings_projects')
+		}) or { panic(err) }
+		assert projects_resp.handled
+		assert projects_resp.commands.len == 1
+		assert projects_resp.commands[0].text.contains('**Projects**')
+		assert projects_resp.commands[0].text.contains('`alpha` current')
+		assert !projects_resp.commands[0].text.contains('No bound projects yet')
+	})
+}
+
 fn test_inproc_vjsx_executor_repo_codexbot_app_ts_create_and_bind_failure_paths() {
 	codexbot_ts_with_temp_db('codexbot_ts_create_bind_failures.sqlite', fn (_ string) {
 		suffix := '${time.now().unix_milli()}'

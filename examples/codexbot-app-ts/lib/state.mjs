@@ -243,6 +243,15 @@ function nextStreamId() {
 export async function ensureChatState(sessionKey, chatId) {
   const existing = await selectChatState(sessionKey);
   if (existing) {
+    const resolvedChatId = existing.chatId || chatId;
+    if (existing.projectKey && existing.cwd && resolvedChatId) {
+      await ensureProjectRecord(existing.projectKey, existing.cwd, { defaultModel: existing.model });
+      await bindProjectToChat(resolvedChatId, existing.projectKey, true);
+      return (await selectChatState(sessionKey)) || {
+        ...existing,
+        chatId: resolvedChatId,
+      };
+    }
     return existing;
   }
   const defaults = botDefaults();
