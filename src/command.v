@@ -36,6 +36,8 @@ pub:
 	prompt       string
 	method       string
 	params       string
+	config_raw   string
+	desired_state string
 	working_dir  string
 	response_message_id string
 	rpc_id       string
@@ -149,6 +151,12 @@ pub fn NormalizedCommand.from_worker_command(cmd WorkerWebSocketUpstreamCommand)
 		prompt:    cmd.prompt
 		method:    cmd.method
 		params:    cmd.params
+		config_raw: if normalized_command_kind_for_legacy_type(cmd.type_) == 'provider.instance.upsert' {
+			cmd.content
+		} else {
+			''
+		}
+		desired_state: cmd.metadata['desired_state'] or { '' }
 		working_dir: working_dir
 		response_message_id: response_message_id
 		rpc_id:     rpc_id
@@ -186,6 +194,18 @@ pub fn (cmd NormalizedCommand) is_provider_rpc_call() bool {
 
 pub fn (cmd NormalizedCommand) is_provider_rpc_reply() bool {
 	return cmd.kind == 'provider.rpc.reply'
+}
+
+pub fn (cmd NormalizedCommand) is_provider_instance_command() bool {
+	return cmd.kind.starts_with('provider.instance.')
+}
+
+pub fn (cmd NormalizedCommand) is_provider_instance_upsert() bool {
+	return cmd.kind == 'provider.instance.upsert'
+}
+
+pub fn (cmd NormalizedCommand) is_provider_instance_ensure() bool {
+	return cmd.kind == 'provider.instance.ensure'
 }
 
 pub fn (cmd NormalizedCommand) is_stream_command() bool {

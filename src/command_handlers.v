@@ -20,42 +20,34 @@ pub fn (h CodexCommandHandler) execute(command WorkerWebSocketUpstreamCommand, n
 		return false, ''
 	}
 	if normalized.is_session_bind() {
+		instance := codex_runtime_instance_name(normalized.instance)
 		if normalized.correlation.stream_id != '' && normalized.target.type_ == 'thread_id'
 			&& normalized.target.id != '' {
-			app.codex_mu.@lock()
-			app.codex_runtime.bind_stream_to_thread(normalized.target.id, normalized.correlation.stream_id)
-			app.codex_mu.unlock()
+			app.codex_bind_stream_to_thread(instance, normalized.target.id, normalized.correlation.stream_id)
 			snapshot.status = 'bound'
 			return true, ''
 		}
 		if normalized.correlation.stream_id != '' && normalized.target.type_ == 'message_id'
 			&& normalized.target.id != '' {
-			app.codex_mu.@lock()
-			app.codex_runtime.add_stream_target(normalized.correlation.stream_id, CodexTarget{
+			app.codex_add_stream_target(instance, normalized.correlation.stream_id, CodexTarget{
 				platform:   'feishu'
 				message_id: normalized.target.id
 			})
-			app.codex_mu.unlock()
 			snapshot.status = 'bound'
 			return true, ''
 		}
 		return false, ''
 	}
 	if normalized.is_session_clear() {
+		instance := codex_runtime_instance_name(normalized.instance)
 		mut cleared := false
 		if normalized.target.type_ == 'thread_id' && normalized.target.id != '' {
-			app.codex_mu.@lock()
-			cleared = app.codex_runtime.clear_thread_binding(normalized.target.id)
-			app.codex_mu.unlock()
+			cleared = app.codex_clear_thread_binding(instance, normalized.target.id)
 		} else if normalized.correlation.thread_id != '' {
-			app.codex_mu.@lock()
-			cleared = app.codex_runtime.clear_thread_binding(normalized.correlation.thread_id)
-			app.codex_mu.unlock()
+			cleared = app.codex_clear_thread_binding(instance, normalized.correlation.thread_id)
 		}
 		if !cleared && normalized.correlation.stream_id != '' {
-			app.codex_mu.@lock()
-			cleared = app.codex_runtime.clear_stream_targets(normalized.correlation.stream_id)
-			app.codex_mu.unlock()
+			cleared = app.codex_clear_stream_targets(instance, normalized.correlation.stream_id)
 		}
 		if cleared {
 			snapshot.status = 'cleared'
@@ -78,7 +70,7 @@ pub fn (h CodexCommandHandler) execute(command WorkerWebSocketUpstreamCommand, n
 	if normalized.is_provider_rpc_reply() {
 		id_raw := normalized.rpc_id
 		result := normalized.rpc_result
-		app.codex_reply_rpc(id_raw, result) or {
+		app.codex_reply_rpc(normalized.instance, id_raw, result) or {
 			log.error('[ws-cmd]   codex.rpc.reply FAILED: ${err}')
 			snapshot.status = 'error'
 			snapshot.error = err.msg()
@@ -92,7 +84,7 @@ pub fn (h CodexCommandHandler) execute(command WorkerWebSocketUpstreamCommand, n
 	if normalized.is_provider_rpc_call() {
 		method := normalized.method
 		params := normalized.params
-		app.codex_send_rpc(method, params, normalized.correlation.stream_id, '') or {
+		app.codex_send_rpc(normalized.instance, method, params, normalized.correlation.stream_id, '') or {
 			log.error('[ws-cmd]   codex.rpc.send FAILED: ${err}')
 			snapshot.status = 'error'
 			snapshot.error = err.msg()
@@ -143,9 +135,7 @@ fn (h FeishuCommandHandler) resolve_target(normalized NormalizedCommand, mut req
 		return
 	}
 	mut app := h.app
-	app.codex_mu.@lock()
-	targets := app.codex_runtime.stream_map[normalized.correlation.stream_id].clone()
-	app.codex_mu.unlock()
+	targets := app.codex_find_stream_targets(normalized.correlation.stream_id)
 	platform := normalized.normalized_provider('feishu')
 	for t in targets.reverse() {
 		if t.platform == platform {
@@ -179,22 +169,20 @@ fn (h FeishuCommandHandler) execute_provider_message_send(normalized NormalizedC
 	log.info('[ws-cmd]   send OK: msg_id=${result.message_id}')
 	if normalized.correlation.stream_id != '' {
 		log.info('[ws-cmd]   🔗 registering stream_id=${normalized.correlation.stream_id} → platform=${normalized.provider} message_id=${result.message_id}')
-		app.codex_mu.@lock()
 		mut found := false
 		platform := normalized.provider
-		for t in app.codex_runtime.stream_map[normalized.correlation.stream_id] {
+		for t in app.codex_find_stream_targets(normalized.correlation.stream_id) {
 			if t.platform == platform && t.message_id == result.message_id {
 				found = true
 				break
 			}
 		}
 		if !found {
-			app.codex_runtime.stream_map[normalized.correlation.stream_id] << CodexTarget{
+			app.codex_add_stream_target(app.codex_resolve_instance_for_stream(normalized.correlation.stream_id), normalized.correlation.stream_id, CodexTarget{
 				platform:   platform
 				message_id: result.message_id
-			}
+			})
 		}
-		app.codex_mu.unlock()
 		app.feishu_runtime_register_stream_buffer(result.message_id, normalized.correlation.stream_id, req.instance, req.target, req.target_type)
 	}
 	app.dispatch_feishu_message_sent(normalized.correlation.stream_id, result.message_id)
@@ -259,12 +247,10 @@ pub fn (h FeishuCommandHandler) execute(command WorkerWebSocketUpstreamCommand, 
 		if normalized.correlation.stream_id != '' && normalized.target.type_ == 'message_id'
 			&& normalized.target.id != '' {
 			mut app := h.app
-			app.codex_mu.@lock()
-			app.codex_runtime.add_stream_target(normalized.correlation.stream_id, CodexTarget{
+			app.codex_add_stream_target(app.codex_resolve_instance_for_stream(normalized.correlation.stream_id), normalized.correlation.stream_id, CodexTarget{
 				platform:   'feishu'
 				message_id: normalized.target.id
 			})
-			app.codex_mu.unlock()
 			app.feishu_runtime_register_stream_buffer(normalized.target.id, normalized.correlation.stream_id, normalized.instance, '', '')
 			snapshot.status = 'bound'
 			snapshot.message_id = normalized.target.id
@@ -279,20 +265,14 @@ pub fn (h FeishuCommandHandler) execute(command WorkerWebSocketUpstreamCommand, 
 			stream_id := app.feishu_runtime_stream_id_for_buffer(normalized.target.id)
 			cleared_count := app.feishu_runtime_clear_buffer_chain(normalized.target.id)
 			if normalized.correlation.stream_id != '' {
-				app.codex_mu.@lock()
-				cleared = app.codex_runtime.clear_stream_targets(normalized.correlation.stream_id)
-				app.codex_mu.unlock()
+				cleared = app.codex_clear_stream_targets_any(normalized.correlation.stream_id)
 			} else if stream_id != '' {
-				app.codex_mu.@lock()
-				cleared = app.codex_runtime.clear_stream_targets(stream_id)
-				app.codex_mu.unlock()
+				cleared = app.codex_clear_stream_targets_any(stream_id)
 			}
 			cleared = cleared || cleared_count > 0
 		} else if normalized.correlation.stream_id != '' {
 			cleared_count := app.feishu_runtime_clear_stream_buffers(normalized.correlation.stream_id)
-			app.codex_mu.@lock()
-			cleared = app.codex_runtime.clear_stream_targets(normalized.correlation.stream_id)
-			app.codex_mu.unlock()
+			cleared = app.codex_clear_stream_targets_any(normalized.correlation.stream_id)
 			cleared = cleared || cleared_count > 0
 		}
 		if cleared {

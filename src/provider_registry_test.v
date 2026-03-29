@@ -108,8 +108,37 @@ fn test_provider_bootstrap_and_runtime_ready_helpers() {
 	assert app.provider_runtime_default_instance('feishu') == 'main'
 	assert app.provider_runtime_instances('feishu') == ['main']
 	assert app.provider_runtime_feishu_snapshot().apps.len == 1
-	assert (app.provider_runtime_feishu_app_snapshot('main') or { FeishuRuntimeAppSnapshot{} }).name == 'main'
+	app_snapshot := app.provider_runtime_feishu_app_snapshot('main') or { FeishuRuntimeAppSnapshot{} }
+	assert app_snapshot.name == 'main'
+	assert app_snapshot.source == 'static'
+	assert app_snapshot.static_configured
+	assert !app_snapshot.dynamic_configured
 	assert !app.provider_runtime_ready('codex')
+}
+
+fn test_provider_runtime_dynamic_feishu_instance_is_bootstrapped_and_ready() {
+	mut app := App{
+		provider_instance_specs: {
+			'feishu/main': ProviderInstanceSpec{
+				provider:      'feishu'
+				instance:      'main'
+				config_json:   '{"app_id":"cli_main","app_secret":"cli_secret"}'
+				desired_state: 'connected'
+			}
+		}
+		feishu_apps: map[string]FeishuAppConfig{}
+		feishu_runtime: map[string]FeishuProviderRuntime{}
+	}
+	spec := app.provider_instance_ensure('feishu', 'main') or { ProviderInstanceSpec{} }
+	assert spec.provider == 'feishu'
+	assert app.provider_bootstrap_enabled('feishu')
+	assert app.provider_runtime_ready('feishu')
+	assert app.provider_runtime_default_instance('feishu') == 'main'
+	assert app.provider_runtime_instances('feishu') == ['main']
+	app_snapshot := app.provider_runtime_feishu_app_snapshot('main') or { FeishuRuntimeAppSnapshot{} }
+	assert app_snapshot.source == 'dynamic'
+	assert !app_snapshot.static_configured
+	assert app_snapshot.dynamic_configured
 }
 
 fn test_provider_runtime_pull_url_and_reconnect_delay_helpers() {
@@ -124,6 +153,114 @@ fn test_provider_runtime_pull_url_and_reconnect_delay_helpers() {
 	assert app.provider_runtime_pull_url('codex', 'main') or { '' } == 'ws://codex.local/ws'
 	assert app.provider_runtime_reconnect_delay_ms('codex', 'main') == 9876
 	assert app.provider_runtime_reconnect_delay_ms('feishu', 'main') == 4321
+}
+
+fn test_provider_runtime_dynamic_codex_instance_is_bootstrapped_and_enabled() {
+	mut app := App{
+		codex_runtime: CodexProviderRuntime{}
+		provider_instance_specs: {
+			'codex/main': ProviderInstanceSpec{
+				provider:      'codex'
+				instance:      'main'
+				config_json:   '{"url":"ws://codex.local/main"}'
+				desired_state: 'connected'
+			}
+			'codex/project_demo': ProviderInstanceSpec{
+				provider:      'codex'
+				instance:      'project_demo'
+				config_json:   '{"url":"ws://codex.local/project-demo"}'
+				desired_state: 'connected'
+			}
+		}
+	}
+	assert app.provider_bootstrap_enabled('codex')
+	assert app.provider_runtime_instances('codex') == ['main', 'project_demo']
+	assert app.provider_runtime_upstream_enabled('codex', 'project_demo')
+	assert app.provider_runtime_pull_url('codex', 'project_demo') or { '' } == 'ws://codex.local/project-demo'
+}
+
+fn test_admin_provider_instance_snapshots_include_dynamic_and_static_compat_rows() {
+	mut app := App{
+		feishu_static_apps: {
+			'legacy': FeishuAppConfig{
+				app_id:     'legacy_app'
+				app_secret: 'legacy_secret'
+			}
+		}
+		feishu_apps: {
+			'legacy': FeishuAppConfig{
+				app_id:     'legacy_app'
+				app_secret: 'legacy_secret'
+			}
+			'main': FeishuAppConfig{
+				app_id:     'dyn_app'
+				app_secret: 'dyn_secret'
+			}
+		}
+		feishu_runtime: {
+			'legacy': FeishuProviderRuntime{
+				name:      'legacy'
+				connected: true
+				ws_url:    'wss://feishu.local/legacy'
+			}
+			'main': FeishuProviderRuntime{
+				name:      'main'
+				connected: false
+				ws_url:    'wss://feishu.local/main'
+			}
+		}
+		codex_runtime: CodexProviderRuntime{}
+		codex_instances: {
+			'project_demo': CodexProviderRuntime{
+				instance:  'project_demo'
+				connected: true
+				ws_url:    'ws://codex.local/project-demo/live'
+			}
+		}
+		provider_instance_specs: {
+			'feishu/main': ProviderInstanceSpec{
+				provider:      'feishu'
+				instance:      'main'
+				config_json:   '{"app_id":"dyn_app","app_secret":"dyn_secret"}'
+				desired_state: 'connected'
+				created_at:    10
+				updated_at:    20
+			}
+			'codex/project_demo': ProviderInstanceSpec{
+				provider:      'codex'
+				instance:      'project_demo'
+				config_json:   '{"url":"ws://codex.local/project-demo","model":"o4-mini"}'
+				desired_state: 'connected'
+				created_at:    30
+				updated_at:    40
+			}
+		}
+	}
+	snapshots := app.admin_provider_instance_snapshots('')
+	assert snapshots.len == 3
+	assert snapshots[0].provider == 'codex'
+	assert snapshots[0].instance == 'project_demo'
+	assert snapshots[0].source == 'dynamic'
+	assert snapshots[0].runtime_configured
+	assert snapshots[0].runtime_connected
+	assert snapshots[0].runtime_url == 'ws://codex.local/project-demo/live'
+	assert snapshots[0].config_fields == ['model', 'url']
+	assert snapshots[1].provider == 'feishu'
+	assert snapshots[1].instance == 'legacy'
+	assert snapshots[1].source == 'static'
+	assert !snapshots[1].stored
+	assert snapshots[1].runtime_configured
+	assert snapshots[1].runtime_connected
+	assert snapshots[1].runtime_url == 'wss://feishu.local/legacy'
+	assert snapshots[1].config_present
+	assert snapshots[2].provider == 'feishu'
+	assert snapshots[2].instance == 'main'
+	assert snapshots[2].source == 'dynamic'
+	assert snapshots[2].stored
+	assert snapshots[2].runtime_configured
+	assert !snapshots[2].runtime_connected
+	assert snapshots[2].runtime_url == 'wss://feishu.local/main'
+	assert snapshots[2].config_fields == ['app_id', 'app_secret']
 }
 
 fn test_provider_runtime_upstream_snapshot_helpers() {

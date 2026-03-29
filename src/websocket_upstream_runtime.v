@@ -45,10 +45,10 @@ pub struct WebSocketUpstreamSendRequest {
 pub mut:
 	provider       string
 	instance       string
-	app            string            @[json: 'app']
-	target_type    string            @[json: 'target_type']
+	app            string @[json: 'app']
+	target_type    string @[json: 'target_type']
 	target         string
-	message_type   string            @[json: 'message_type']
+	message_type   string @[json: 'message_type']
 	content        string
 	content_fields map[string]string @[json: 'content_fields']
 	text           string
@@ -227,10 +227,26 @@ fn (mut app App) fixture_websocket_update(req WebSocketUpstreamSendRequest) !Web
 
 fn (mut app App) fixture_websocket_emit(req WebSocketUpstreamFixtureEmitRequest) !WebSocketUpstreamActivitySnapshot {
 	instance := if req.instance.trim_space() == '' { 'main' } else { req.instance.trim_space() }
-	event_type := if req.event_type.trim_space() == '' { 'fixture.message' } else { req.event_type.trim_space() }
-	target_type := if req.target_type.trim_space() == '' { 'fixture_target' } else { req.target_type.trim_space() }
-	trace_id := if req.trace_id.trim_space() == '' { 'fixture-trace-${time.now().unix_micro()}' } else { req.trace_id.trim_space() }
-	message_id := if req.message_id.trim_space() == '' { 'fixture-event-${time.now().unix_micro()}' } else { req.message_id.trim_space() }
+	event_type := if req.event_type.trim_space() == '' {
+		'fixture.message'
+	} else {
+		req.event_type.trim_space()
+	}
+	target_type := if req.target_type.trim_space() == '' {
+		'fixture_target'
+	} else {
+		req.target_type.trim_space()
+	}
+	trace_id := if req.trace_id.trim_space() == '' {
+		'fixture-trace-${time.now().unix_micro()}'
+	} else {
+		req.trace_id.trim_space()
+	}
+	message_id := if req.message_id.trim_space() == '' {
+		'fixture-event-${time.now().unix_micro()}'
+	} else {
+		req.message_id.trim_space()
+	}
 	activity_id := 'fixture-activity-${time.now().unix_micro()}'
 	received_at := time.now().unix()
 	event := WebSocketUpstreamEventSnapshot{
@@ -263,19 +279,9 @@ fn (mut app App) fixture_websocket_emit(req WebSocketUpstreamFixtureEmitRequest)
 		app.websocket_upstream_record_activity(snapshot)
 		return snapshot
 	}
-	outcome := app.kernel_dispatch_websocket_upstream_handled(app.kernel_websocket_upstream_dispatch_request(
-		activity_id,
-		websocket_upstream_provider_fixture,
-		instance,
-		trace_id,
-		event_type,
-		message_id,
-		req.target,
-		target_type,
-		req.payload,
-		received_at,
-		req.metadata,
-	)) or {
+	outcome := app.kernel_dispatch_websocket_upstream_handled(app.kernel_websocket_upstream_dispatch_request(activity_id,
+		websocket_upstream_provider_fixture, instance, trace_id, event_type, message_id,
+		req.target, target_type, req.payload, received_at, req.metadata)) or {
 		snapshot.worker_error = err.msg()
 		snapshot.error_class = 'transport_error'
 		app.websocket_upstream_record_activity(snapshot)
@@ -297,49 +303,49 @@ fn (mut app App) fixture_websocket_emit(req WebSocketUpstreamFixtureEmitRequest)
 
 struct WebSocketUpstreamCommandActivity {
 mut:
-	event        string
-	provider     string
-	instance     string
-	target_type  string @[json: 'target_type']
-	target       string
-	message_type string @[json: 'message_type']
-	content      string
+	event          string
+	provider       string
+	instance       string
+	target_type    string @[json: 'target_type']
+	target         string
+	message_type   string @[json: 'message_type']
+	content        string
 	content_fields map[string]string @[json: 'content_fields']
-	text         string
-	uuid         string
-	metadata     map[string]string
-	
-	type_        string @[json: 'type']
-	stream_id    string @[json: 'stream_id']
-	session_key  string @[json: 'session_key']
-	task_type    string @[json: 'task_type']
-	prompt       string
-	source_activity_id string @[json: 'source_activity_id']
-	source_command_index int @[json: 'source_command_index']
-	status       string
-	error        string
-	message_id   string @[json: 'message_id']
-	executed_at  i64    @[json: 'executed_at']
+	text           string
+	uuid           string
+	metadata       map[string]string
+
+	type_                string @[json: 'type']
+	stream_id            string @[json: 'stream_id']
+	session_key          string @[json: 'session_key']
+	task_type            string @[json: 'task_type']
+	prompt               string
+	source_activity_id   string @[json: 'source_activity_id']
+	source_command_index int    @[json: 'source_command_index']
+	status               string
+	error                string
+	message_id           string @[json: 'message_id']
+	executed_at          i64    @[json: 'executed_at']
 }
 
 struct WebSocketUpstreamActivitySnapshot {
 mut:
-	provider        string
-	instance        string
-	trace_id        string @[json: 'trace_id']
-	activity_id     string @[json: 'activity_id']
-	event_type      string @[json: 'event_type']
-	message_id      string @[json: 'message_id']
-	target_type     string @[json: 'target_type']
-	target          string
-	payload         string
-	received_at     i64    @[json: 'received_at']
-	worker_handled  bool   @[json: 'worker_handled']
-	worker_error    string @[json: 'worker_error']
-	error_class     string @[json: 'error_class']
-	command_error   string @[json: 'command_error']
-	commands        []WebSocketUpstreamCommandActivity
-	recorded_at     i64 @[json: 'recorded_at']
+	provider       string
+	instance       string
+	trace_id       string @[json: 'trace_id']
+	activity_id    string @[json: 'activity_id']
+	event_type     string @[json: 'event_type']
+	message_id     string @[json: 'message_id']
+	target_type    string @[json: 'target_type']
+	target         string
+	payload        string
+	received_at    i64    @[json: 'received_at']
+	worker_handled bool   @[json: 'worker_handled']
+	worker_error   string @[json: 'worker_error']
+	error_class    string @[json: 'error_class']
+	command_error  string @[json: 'command_error']
+	commands       []WebSocketUpstreamCommandActivity
+	recorded_at    i64 @[json: 'recorded_at']
 }
 
 struct AdminWebSocketUpstreamActivitySnapshot {
@@ -415,11 +421,15 @@ fn (app &App) websocket_upstream_provider_enabled(provider string, instance stri
 
 fn (mut app App) websocket_upstream_snapshot(provider string, instance string) ?WebSocketUpstreamSnapshot {
 	return match provider {
-		websocket_upstream_provider_feishu { app.provider_runtime_upstream_snapshot('feishu', instance) }
+		websocket_upstream_provider_feishu {
+			app.provider_runtime_upstream_snapshot('feishu', instance)
+		}
 		websocket_upstream_provider_fixture {
 			return app.fixture_websocket_snapshot(instance)
 		}
-		websocket_upstream_provider_codex { app.provider_runtime_upstream_snapshot('codex', instance) }
+		websocket_upstream_provider_codex {
+			app.provider_runtime_upstream_snapshot('codex', instance)
+		}
 		else {
 			none
 		}
@@ -533,7 +543,7 @@ fn websocket_upstream_provider_handle_message(mut app App, provider string, inst
 		}
 		websocket_upstream_provider_codex {
 			if msg.opcode == .text_frame {
-				app.codex_provider_handle_text_message(msg.payload.bytestr())
+				app.codex_provider_handle_text_message(instance, msg.payload.bytestr())
 			}
 		}
 		else {}
@@ -543,7 +553,7 @@ fn websocket_upstream_provider_handle_message(mut app App, provider string, inst
 fn websocket_upstream_provider_send(mut app App, provider string, req WebSocketUpstreamSendRequest) !WebSocketUpstreamSendResult {
 	return match provider {
 		websocket_upstream_provider_feishu {
-	result := app.feishu_runtime_send_message(FeishuRuntimeSendMessageRequest{
+			result := app.feishu_runtime_send_message(FeishuRuntimeSendMessageRequest{
 				app:             req.instance
 				receive_id_type: req.target_type
 				receive_id:      req.target
@@ -556,7 +566,7 @@ fn websocket_upstream_provider_send(mut app App, provider string, req WebSocketU
 			return WebSocketUpstreamSendResult{
 				ok:         result.ok
 				provider:   provider
-		instance:   app.feishu_runtime_resolve_app_name(req.instance)!
+				instance:   app.feishu_runtime_resolve_app_name(req.instance)!
 				message_id: result.message_id
 				error:      result.error
 			}
@@ -576,7 +586,7 @@ fn websocket_upstream_provider_send(mut app App, provider string, req WebSocketU
 fn websocket_upstream_provider_update(mut app App, provider string, req WebSocketUpstreamSendRequest) !WebSocketUpstreamUpdateResult {
 	return match provider {
 		websocket_upstream_provider_feishu {
-	result := app.feishu_runtime_update_message(FeishuRuntimeUpdateMessageRequest{
+			result := app.feishu_runtime_update_message(FeishuRuntimeUpdateMessageRequest{
 				app:             req.instance
 				message_id:      req.target
 				message_id_type: req.target_type
@@ -589,7 +599,7 @@ fn websocket_upstream_provider_update(mut app App, provider string, req WebSocke
 			return WebSocketUpstreamUpdateResult{
 				ok:         result.ok
 				provider:   provider
-		instance:   app.feishu_runtime_resolve_app_name(req.instance)!
+				instance:   app.feishu_runtime_resolve_app_name(req.instance)!
 				message_id: result.message_id
 				error:      result.error
 			}
@@ -613,21 +623,21 @@ fn (mut app App) websocket_upstream_send(req WebSocketUpstreamSendRequest) !WebS
 		req.provider.trim_space()
 	}
 	normalized := WebSocketUpstreamSendRequest{
-		provider:     provider
-		instance:     if req.instance.trim_space() != '' {
+		provider:       provider
+		instance:       if req.instance.trim_space() != '' {
 			req.instance.trim_space()
 		} else {
 			req.app.trim_space()
 		}
-		app:          req.app
-		target_type:  req.target_type
-		target:       req.target
-		message_type: req.message_type
-		content:      req.content
+		app:            req.app
+		target_type:    req.target_type
+		target:         req.target
+		message_type:   req.message_type
+		content:        req.content
 		content_fields: req.content_fields.clone()
-		text:         req.text
-		uuid:         req.uuid
-		metadata:     req.metadata.clone()
+		text:           req.text
+		uuid:           req.uuid
+		metadata:       req.metadata.clone()
 	}
 	return websocket_upstream_provider_send(mut app, provider, normalized)
 }
@@ -719,6 +729,51 @@ fn websocket_upstream_close_cb(mut _ws websocket.Client, code int, reason string
 		'close:${code}:${reason}')
 }
 
+fn websocket_upstream_started_key(provider string, instance string) string {
+	return '${provider.trim_space()}/${instance.trim_space()}'
+}
+
+fn (mut app App) websocket_upstream_mark_started(provider string, instance string) bool {
+	key := websocket_upstream_started_key(provider, instance)
+	if key == '/' || provider.trim_space() == '' || instance.trim_space() == '' {
+		return false
+	}
+	app.upstream_mu.@lock()
+	defer {
+		app.upstream_mu.unlock()
+	}
+	if key in app.websocket_upstream_started {
+		return false
+	}
+	app.websocket_upstream_started[key] = true
+	return true
+}
+
+fn (mut app App) ensure_websocket_upstream_provider_running(provider string, instance string) bool {
+	resolved_provider := provider.trim_space()
+	mut resolved_instance := instance.trim_space()
+	if resolved_provider == '' {
+		return false
+	}
+	if !app.auto_start_dynamic_upstreams {
+		return false
+	}
+	if resolved_instance == '' {
+		resolved_instance = app.provider_runtime_default_instance(resolved_provider)
+	}
+	if resolved_instance == '' {
+		return false
+	}
+	if !app.provider_runtime_upstream_enabled(resolved_provider, resolved_instance) {
+		return false
+	}
+	if !app.websocket_upstream_mark_started(resolved_provider, resolved_instance) {
+		return false
+	}
+	go run_websocket_upstream_provider(mut app, resolved_provider, resolved_instance)
+	return true
+}
+
 fn run_websocket_upstream_provider(mut app App, provider string, instance string) {
 	if !app.websocket_upstream_provider_enabled(provider, instance) {
 		return
@@ -760,10 +815,10 @@ fn run_websocket_upstream_provider(mut app App, provider string, instance string
 		})
 		if provider == websocket_upstream_provider_feishu {
 			mut feishu_app_ref := unsafe { &app }
-	go feishu_runtime_ping_loop(mut feishu_app_ref, instance, ws_url, mut client)
+			go feishu_runtime_ping_loop(mut feishu_app_ref, instance, ws_url, mut client)
 		} else if provider == websocket_upstream_provider_codex {
 			mut codex_app_ref := unsafe { &app }
-			go codex_app_ref.codex_post_connect_handshake(mut client)
+			go codex_app_ref.codex_post_connect_handshake(instance, mut client)
 			go codex_ping_loop(mut client)
 		}
 		client.listen() or {
@@ -834,7 +889,11 @@ pub fn (mut app App) admin_runtime_websocket_upstream_activities(mut ctx Context
 		ctx.res.set_status(.not_found)
 		return ctx.text('Not Found')
 	}
-	path := if ctx.req.url == '' { '/admin/runtime/upstreams/websocket/activities' } else { ctx.req.url }
+	path := if ctx.req.url == '' {
+		'/admin/runtime/upstreams/websocket/activities'
+	} else {
+		ctx.req.url
+	}
 	req_id := resolve_request_id(ctx, path)
 	trace_id := resolve_trace_id(ctx, path)
 	limit := admin_query_limit(ctx.query['limit'] or { '' }, 100, 1000)
@@ -861,7 +920,11 @@ pub fn (mut app App) admin_runtime_websocket_upstream_fixture_emit(mut ctx Conte
 		ctx.res.set_status(.not_found)
 		return ctx.text('Not Found')
 	}
-	path := if ctx.req.url == '' { '/admin/runtime/upstreams/websocket/fixture/emit' } else { ctx.req.url }
+	path := if ctx.req.url == '' {
+		'/admin/runtime/upstreams/websocket/fixture/emit'
+	} else {
+		ctx.req.url
+	}
 	req_id := resolve_request_id(ctx, path)
 	trace_id := resolve_trace_id(ctx, path)
 	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
@@ -1024,7 +1087,11 @@ pub fn (mut app AdminApp) admin_runtime_websocket_upstream_events(mut ctx Contex
 
 @['/admin/runtime/upstreams/websocket/activities'; get]
 pub fn (mut app AdminApp) admin_runtime_websocket_upstream_activities(mut ctx Context) veb.Result {
-	path := if ctx.req.url == '' { '/admin/runtime/upstreams/websocket/activities' } else { ctx.req.url }
+	path := if ctx.req.url == '' {
+		'/admin/runtime/upstreams/websocket/activities'
+	} else {
+		ctx.req.url
+	}
 	req_id := resolve_request_id(ctx, path)
 	trace_id := resolve_trace_id(ctx, path)
 	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
@@ -1054,7 +1121,11 @@ pub fn (mut app AdminApp) admin_runtime_websocket_upstream_activities(mut ctx Co
 
 @['/admin/runtime/upstreams/websocket/fixture/emit'; post]
 pub fn (mut app AdminApp) admin_runtime_websocket_upstream_fixture_emit(mut ctx Context) veb.Result {
-	path := if ctx.req.url == '' { '/admin/runtime/upstreams/websocket/fixture/emit' } else { ctx.req.url }
+	path := if ctx.req.url == '' {
+		'/admin/runtime/upstreams/websocket/fixture/emit'
+	} else {
+		ctx.req.url
+	}
 	req_id := resolve_request_id(ctx, path)
 	trace_id := resolve_trace_id(ctx, path)
 	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}

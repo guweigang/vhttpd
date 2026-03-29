@@ -6,11 +6,63 @@ Current files:
 
 - `app.mts`: app entry
 - `codexbot.toml`: example `vjsx` executor config
+- `config/config.mts`: base TS runtime defaults
+- `config/provider-config.mts`: explicit TS-side Codex and Feishu provider instance config plus project mapping
 - `lib/bot-runtime.mjs`: bot composition root
 - `lib/commands.mts`: upstream command helpers
 - `lib/feishu.mts`: Feishu inbound parsing
 - `lib/codex.mts`: Codex callback parsing
 - `lib/state.mjs`: SQLite-backed chat/stream state
+
+## Lifecycle Hooks
+
+`vjsx` app entries can now expose two optional startup hooks:
+
+- `startup(runtime)`: lane-local hook, runs once per executor lane
+- `app_startup(runtime)`: app-global hook, runs once per app load and is serialized by `vhttpd`
+
+`examples/codexbot-app-ts` already implements both inside `createBotApp()`, so the default `app.mts` does not need any extra code:
+
+```ts
+import { createBotApp } from "./lib/bot-runtime.mjs";
+
+const app = createBotApp();
+
+export default app;
+```
+
+If you want to customize them in `app.mts`, override the exported object methods:
+
+```ts
+import { createBotApp } from "./lib/bot-runtime.mjs";
+
+const base = createBotApp();
+
+export default {
+  ...base,
+
+  async startup(runtime) {
+    await base.startup?.(runtime);
+    return { commands: [] };
+  },
+
+  async app_startup(runtime) {
+    const baseResult = await base.app_startup?.(runtime);
+    return baseResult || { commands: [] };
+  },
+};
+```
+
+For this example bot:
+
+- `startup(runtime)` is currently lane-local and does no side effects
+- `app_startup(runtime)` preflights provider instances for `codex` and `feishu`
+- `app_startup(runtime)` may emit `provider.instance.upsert` and `provider.instance.ensure`
+- additional Codex instances come from `config/provider-config.mts`; `[codex]` in `codexbot.toml` remains the base runtime default
+- Feishu instance config also comes from `config/provider-config.mts`, while sensitive values still come from env-backed defaults in `config/config.mts`
+- `feishu` is now started only from TS-side dynamic config; static `feishu.main` is no longer used by this example
+- `app_startup(runtime)` only emits Feishu startup commands for instances declared in `config/provider-config.mts`
+- the checked-in Feishu example declares `feishu.main`, with credentials coming from `FEISHU_APP_ID`, `FEISHU_APP_SECRET`, `FEISHU_VERIFICATION_TOKEN`, and `FEISHU_ENCRYPT_KEY`
 
 Current bot flow:
 
@@ -48,6 +100,11 @@ Notes:
 - `/bind <project_key> [path]` binds a project record to the chat without switching the current session; if `path` is omitted, the bot resolves it from `project_root_dir/<project_key>`
 - `/unbind <project_key>` removes the explicit chat binding, but it refuses to unbind the current session project
 - `/new [model_id]` clears the current thread and optionally switches model for the next run
+- `config/provider-config.mts` is the explicit place to add extra local Codex servers and Feishu instances
+- project-to-Codex routing now comes from `project_registry.default_codex_instance`, managed by chat commands instead of static config
+- Feishu rendering currently uses `stream -> one interactive card`: one bot stream owns one Feishu interactive message and later states patch that same message
+- the TS example does not currently model `item -> one interactive card`; commentary, running status, final answer, and error states all converge onto the same stream card
+- this is an explicit tradeoff for now: we keep the simpler single-card model until real usage shows that intermediate messages need to be preserved independently
 
 ## Run
 
@@ -74,12 +131,41 @@ Usually optional:
 
 - `CODEX_URL`: defaults to `ws://127.0.0.1:4500` in `codexbot.toml`
 - `CODEXBOT_TS_DEFAULT_CWD`: defaults to `process.cwd()`
-- `CODEXBOT_TS_DEFAULT_PROJECT`: defaults to `demo`
+- `CODEXBOT_TS_DEFAULT_PROJECT`: defaults to `vhttpd`
 - `CODEXBOT_TS_DEFAULT_MODEL`: defaults to `gpt-5.4`
+- `CODEXBOT_TS_DEFAULT_CODEX_INSTANCE`: defaults to `main`
+- `CODEXBOT_TS_DEFAULT_FEISHU_INSTANCE`: defaults to `main`
 - `CODEXBOT_TS_SUPPORTED_MODELS`: defaults to `gpt-5.4,gpt-5.3-codex`
 - `CODEXBOT_TS_DB_PATH`: defaults to `tmp/codexbot-app-ts.sqlite`
 - `CODEXBOT_TS_APPROVAL_POLICY`: defaults to `never`
 - `CODEXBOT_TS_SANDBOX`: defaults to `workspace-write`
+
+## Multi-Codex Example
+
+This example keeps only one static `[codex]` block in `codexbot.toml`.
+Treat that block as the base runtime default for `codex.main`.
+
+Additional local Codex servers are configured in `config/provider-config.mts`.
+The checked-in example includes:
+
+- `codex.main` -> `ws://127.0.0.1:4500`
+- `codex.local_4501` -> `ws://127.0.0.1:4501`
+- `codex.local_4502` -> `ws://127.0.0.1:4502`
+
+By default only `main` is started during `app_startup()`.
+Set `startup: true` on additional instances when you want them connected immediately at boot.
+Even with `startup: false`, configured non-default instances can still be materialized by TS-side preflight before the first routed request that uses them.
+
+Project routing no longer lives in static config.
+Each project stores its default Codex instance in SQLite under `project_registry.default_codex_instance`.
+Use `/project-instance [project_key] [instance]` to update that default, and `/instance [name]` to override only the current session.
+
+## Feishu Example
+
+The checked-in example also declares `feishu.main` in `config/provider-config.mts`.
+That instance is started from TS-side config, while credentials still come from env via `config/config.mts`.
+
+If you later need multiple Feishu apps, add more instances in `config/provider-config.mts` the same way as Codex.
 
 ## Commands
 
@@ -93,12 +179,17 @@ Usually optional:
 - `/projects`: list projects explicitly bound to this Feishu chat and enter project selection scope
 - `/project`: show the current project and cwd
 - `/project <project_key>`: switch to a bound project, reset thread binding, and update cwd
+- `/project-instance <project_key> <instance>`: set the default Codex instance for a bound project
+- `/instances`: list known Codex instances
+- `/instance`: show the current session instance and current project default
+- `/instance <name>`: switch only the current session to another configured Codex instance
 - `/models`: list configured models and enter model selection scope
 - `/model`: show the current model
 - `/model <model_id>`: switch model and clear the current thread binding
 - `/threads`: list recent threads for the current project and enter thread selection scope
-- `/thread`: show the current bound thread plus last stream summary
+- `/thread`: show the current bound thread plus last stream summary and recent interaction summaries
 - `/thread <thread_id>`: bind the current session to a known thread id
+- `/thread rename <title>`: rename the current bound Codex thread via `thread/name/set`
 - `/use latest`: in thread scope, bind the latest known thread for the current project and immediately read it
 - `/use <value>`: reuse the last listing scope to switch project/model/thread; the scope stays active until the next non-`/use` command
 - `/new [model_id]`: clear the current thread; with a model id, switch model too
@@ -109,9 +200,16 @@ Useful checks:
 
 ```bash
 curl --noproxy '*' -sS http://127.0.0.1:19883/health
+curl --noproxy '*' -sS 'http://127.0.0.1:19883/dispatch?path=/health'
 curl --noproxy '*' -sS http://127.0.0.1:19883/admin/state
 curl --noproxy '*' -sS -H 'x-vhttpd-admin-token: change-me' http://127.0.0.1:19983/admin/runtime
 ```
+
+Notes:
+
+- `GET /health` is host-level health and does not enter the TS/vjsx app
+- `GET /dispatch?path=/health` enters the TS/vjsx app and will trigger `startup(runtime)` and `app_startup(runtime)` on first dispatch
+- `GET /admin/state` on the data plane also enters the TS/vjsx app in this example
 
 What to look for in `/admin/state`:
 

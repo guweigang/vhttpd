@@ -86,6 +86,26 @@ fn test_normalized_command_extracts_rpc_reply_fields_and_finish_semantics() {
 	assert stream_normalized.stream_finish == true
 }
 
+fn test_normalized_command_extracts_provider_instance_upsert_fields() {
+	cmd := WorkerWebSocketUpstreamCommand{
+		type_:    'provider.instance.upsert'
+		provider: 'codex'
+		instance: 'project_demo'
+		content:  '{"url":"ws://127.0.0.1:4500"}'
+		metadata: {
+			'desired_state': 'connected'
+		}
+	}
+	normalized := NormalizedCommand.from_worker_command(cmd)
+	assert normalized.kind == 'provider.instance.upsert'
+	assert normalized.is_provider_instance_command()
+	assert normalized.is_provider_instance_upsert()
+	assert normalized.provider == 'codex'
+	assert normalized.instance == 'project_demo'
+	assert normalized.config_raw == '{"url":"ws://127.0.0.1:4500"}'
+	assert normalized.desired_state == 'connected'
+}
+
 fn test_normalized_command_response_message_id_prefers_target_message_id() {
 	cmd := WorkerWebSocketUpstreamCommand{
 		type_:       'codex.turn.start'

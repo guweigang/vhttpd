@@ -93,6 +93,10 @@ fn (mut app App) internal_admin_dispatch(req InternalAdminRequest) InternalAdmin
 		'/runtime' {
 			return internal_admin_json_response(json.encode(app.admin_runtime_snapshot()))
 		}
+		'/runtime/provider-instances' {
+			provider := (req.query['provider'] or { '' }).trim_space()
+			return internal_admin_json_response(json.encode(app.admin_provider_instance_snapshots(provider)))
+		}
 		'/runtime/feishu' {
 			return internal_admin_json_response(app.provider_runtime_snapshot('feishu') or { '{}' })
 		}

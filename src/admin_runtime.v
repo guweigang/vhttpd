@@ -273,6 +273,29 @@ pub fn (mut app App) admin_runtime_mcp(mut ctx Context) veb.Result {
 	return ctx.text(body)
 }
 
+@['/admin/runtime/provider-instances'; get]
+pub fn (mut app App) admin_runtime_provider_instances(mut ctx Context) veb.Result {
+	if !app.admin_on_data_plane {
+		ctx.res.set_status(.not_found)
+		return ctx.text('Not Found')
+	}
+	path := if ctx.req.url == '' { '/admin/runtime/provider-instances' } else { ctx.req.url }
+	req_id := resolve_request_id(ctx, path)
+	trace_id := resolve_trace_id(ctx, path)
+	provider_filter := (ctx.query['provider'] or { '' }).trim_space()
+	body := json.encode(app.admin_provider_instance_snapshots(provider_filter))
+	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
+	ctx.set_content_type('application/json; charset=utf-8')
+	app.emit('http.request', {
+		'method':     'GET'
+		'path':       '/admin/runtime/provider-instances'
+		'status':     '200'
+		'request_id': req_id
+		'trace_id':   trace_id
+	})
+	return ctx.text(body)
+}
+
 @['/admin/providers/specs'; get]
 pub fn (mut app App) admin_provider_specs(mut ctx Context) veb.Result {
 	if !app.admin_on_data_plane {

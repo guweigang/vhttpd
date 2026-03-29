@@ -1,10 +1,21 @@
 import { open } from "sqlite";
-import { botDefaults } from "./config.mts";
+import { botDefaults } from "../config/config.mts";
 
 let dbPromise;
 
 function now() {
   return Date.now();
+}
+
+function normalizeMainInstanceAlias(value, fallbackValue = "") {
+  const text = typeof value === "string" ? value.trim() : "";
+  if (text === "default") {
+    return "main";
+  }
+  if (text !== "") {
+    return text;
+  }
+  return fallbackValue;
 }
 
 function dbPath() {
@@ -22,7 +33,7 @@ async function tableColumns(database, tableName) {
 
 async function ensureChatStateTable(database) {
   if (!(await tableExists(database, "chat_state"))) {
-    await database.exec("create table chat_state (session_key text primary key, chat_id text not null, project_key text not null, model text not null, cwd text not null, thread_id text not null default '', thread_path text not null default '', last_stream_id text not null default '', updated_at integer not null)");
+    await database.exec("create table chat_state (session_key text primary key, chat_id text not null, project_key text not null, model text not null, cwd text not null, codex_instance text not null default '', thread_id text not null default '', thread_path text not null default '', last_stream_id text not null default '', updated_at integer not null)");
     return;
   }
   const columns = await tableColumns(database, "chat_state");
@@ -32,8 +43,8 @@ async function ensureChatStateTable(database) {
     await database.exec("begin immediate");
     try {
       await database.exec("alter table chat_state rename to chat_state_legacy");
-      await database.exec("create table chat_state (session_key text primary key, chat_id text not null, project_key text not null, model text not null, cwd text not null, thread_id text not null default '', thread_path text not null default '', last_stream_id text not null default '', updated_at integer not null)");
-      await database.exec(`insert into chat_state (session_key, chat_id, project_key, model, cwd, thread_id, thread_path, last_stream_id, updated_at) select chat_id, chat_id, project_key, model, cwd, thread_id, ${legacyThreadPathExpr}, last_stream_id, updated_at from chat_state_legacy`);
+      await database.exec("create table chat_state (session_key text primary key, chat_id text not null, project_key text not null, model text not null, cwd text not null, codex_instance text not null default '', thread_id text not null default '', thread_path text not null default '', last_stream_id text not null default '', updated_at integer not null)");
+      await database.exec(`insert into chat_state (session_key, chat_id, project_key, model, cwd, codex_instance, thread_id, thread_path, last_stream_id, updated_at) select chat_id, chat_id, project_key, model, cwd, '', thread_id, ${legacyThreadPathExpr}, last_stream_id, updated_at from chat_state_legacy`);
       await database.exec("drop table chat_state_legacy");
       await database.exec("commit");
     } catch (error) {
@@ -49,11 +60,14 @@ async function ensureChatStateTable(database) {
   if (!names.has("thread_path")) {
     await database.exec("alter table chat_state add column thread_path text not null default ''");
   }
+  if (!names.has("codex_instance")) {
+    await database.exec("alter table chat_state add column codex_instance text not null default ''");
+  }
 }
 
 async function ensureStreamStateTable(database) {
   if (!(await tableExists(database, "stream_state"))) {
-    await database.exec("create table stream_state (stream_id text primary key, session_key text not null, chat_id text not null, prompt text not null, project_key text not null, model text not null, cwd text not null, thread_id text not null default '', thread_path text not null default '', turn_id text not null default '', draft text not null default '', status text not null default 'queued', result_text text not null default '', completed_at integer not null default 0, last_event text not null default '', created_at integer not null, updated_at integer not null)");
+    await database.exec("create table stream_state (stream_id text primary key, session_key text not null, chat_id text not null, prompt text not null, project_key text not null, model text not null, cwd text not null, codex_instance text not null default '', thread_id text not null default '', thread_path text not null default '', turn_id text not null default '', draft text not null default '', status text not null default 'queued', result_text text not null default '', completed_at integer not null default 0, last_event text not null default '', created_at integer not null, updated_at integer not null)");
     return;
   }
   const columns = await tableColumns(database, "stream_state");
@@ -80,6 +94,9 @@ async function ensureStreamStateTable(database) {
   if (!names.has("last_event")) {
     await database.exec("alter table stream_state add column last_event text not null default ''");
   }
+  if (!names.has("codex_instance")) {
+    await database.exec("alter table stream_state add column codex_instance text not null default ''");
+  }
 }
 
 async function ensureCommandContextStateTable(database) {
@@ -97,7 +114,7 @@ async function ensureCommandContextStateTable(database) {
 
 async function ensureProjectRegistryTable(database) {
   if (!(await tableExists(database, "project_registry"))) {
-    await database.exec("create table project_registry (project_key text primary key, repo_path text not null, default_branch text not null default 'main', default_model text not null default '', created_at integer not null, updated_at integer not null)");
+    await database.exec("create table project_registry (project_key text primary key, repo_path text not null, default_branch text not null default 'main', default_model text not null default '', default_codex_instance text not null default '', created_at integer not null, updated_at integer not null)");
     return;
   }
   const columns = await tableColumns(database, "project_registry");
@@ -107,6 +124,9 @@ async function ensureProjectRegistryTable(database) {
   }
   if (!names.has("default_model")) {
     await database.exec("alter table project_registry add column default_model text not null default ''");
+  }
+  if (!names.has("default_codex_instance")) {
+    await database.exec("alter table project_registry add column default_codex_instance text not null default ''");
   }
 }
 
@@ -128,6 +148,62 @@ async function ensureSettingsTable(database) {
   }
 }
 
+async function ensureInstanceRegistryTable(database) {
+  if (!(await tableExists(database, "instance_registry"))) {
+    await database.exec("create table instance_registry (provider text not null, instance text not null, config_json text not null default '{}', desired_state text not null default 'connected', created_at integer not null, updated_at integer not null, primary key (provider, instance))");
+  }
+}
+
+async function reconcileMainInstanceAliases(database) {
+  await database.exec("update chat_state set codex_instance = 'main' where codex_instance = 'default'");
+  await database.exec("update stream_state set codex_instance = 'main' where codex_instance = 'default'");
+  await database.exec("update project_registry set default_codex_instance = 'main' where default_codex_instance = 'default'");
+  await database.exec(`
+    update instance_registry
+    set
+      config_json = (
+        select legacy.config_json
+        from instance_registry legacy
+        where legacy.provider = instance_registry.provider
+          and legacy.instance = 'default'
+      ),
+      desired_state = (
+        select legacy.desired_state
+        from instance_registry legacy
+        where legacy.provider = instance_registry.provider
+          and legacy.instance = 'default'
+      ),
+      updated_at = max(
+        updated_at,
+        coalesce((
+          select legacy.updated_at
+          from instance_registry legacy
+          where legacy.provider = instance_registry.provider
+            and legacy.instance = 'default'
+        ), updated_at)
+      )
+    where instance = 'main'
+      and exists (
+        select 1
+        from instance_registry legacy
+        where legacy.provider = instance_registry.provider
+          and legacy.instance = 'default'
+      )
+      and coalesce(config_json, '') in ('', '{}')
+  `);
+  await database.exec(`
+    delete from instance_registry
+    where instance = 'default'
+      and exists (
+        select 1
+        from instance_registry current
+        where current.provider = instance_registry.provider
+          and current.instance = 'main'
+      )
+  `);
+  await database.exec("update instance_registry set instance = 'main' where instance = 'default'");
+}
+
 async function db() {
   if (dbPromise) {
     return dbPromise;
@@ -141,6 +217,7 @@ async function db() {
     await ensureProjectRegistryTable(database);
     await ensureProjectBindingStateTable(database);
     await ensureSettingsTable(database);
+    await ensureInstanceRegistryTable(database);
     await database.exec("create index if not exists idx_chat_state_chat_id on chat_state(chat_id)");
     await database.exec("create index if not exists idx_chat_state_updated_at on chat_state(updated_at desc)");
     await database.exec("create index if not exists idx_stream_state_session_key on stream_state(session_key)");
@@ -151,6 +228,9 @@ async function db() {
     await database.exec("create index if not exists idx_project_registry_updated_at on project_registry(updated_at desc)");
     await database.exec("create index if not exists idx_project_binding_state_chat_id on project_binding_state(chat_id)");
     await database.exec("create index if not exists idx_project_binding_state_updated_at on project_binding_state(updated_at desc)");
+    await database.exec("create index if not exists idx_instance_registry_provider on instance_registry(provider)");
+    await database.exec("create index if not exists idx_instance_registry_updated_at on instance_registry(updated_at desc)");
+    await reconcileMainInstanceAliases(database);
     return database;
   });
   return dbPromise;
@@ -166,6 +246,7 @@ function asChatState(row) {
     projectKey: row.project_key,
     model: row.model,
     cwd: row.cwd,
+    codexInstance: normalizeMainInstanceAlias(row.codex_instance || ""),
     threadId: row.thread_id,
     threadPath: row.thread_path || "",
     lastStreamId: row.last_stream_id,
@@ -197,6 +278,7 @@ function asStreamState(row) {
     projectKey: row.project_key,
     model: row.model,
     cwd: row.cwd,
+    codexInstance: normalizeMainInstanceAlias(row.codex_instance || ""),
     threadId: row.thread_id,
     threadPath: row.thread_path || "",
     turnId: row.turn_id || "",
@@ -219,6 +301,7 @@ function asProjectRecord(row) {
     repoPath: row.repo_path,
     defaultBranch: row.default_branch || "main",
     defaultModel: row.default_model || "",
+    defaultCodexInstance: normalizeMainInstanceAlias(row.default_codex_instance || ""),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -226,13 +309,13 @@ function asProjectRecord(row) {
 
 async function selectChatState(sessionKey) {
   const database = await db();
-  const rows = await database.query("select session_key, chat_id, project_key, model, cwd, thread_id, thread_path, last_stream_id, updated_at from chat_state where session_key = ? limit 1", [sessionKey]);
+  const rows = await database.query("select session_key, chat_id, project_key, model, cwd, codex_instance, thread_id, thread_path, last_stream_id, updated_at from chat_state where session_key = ? limit 1", [sessionKey]);
   return asChatState(rows[0]);
 }
 
 async function selectStreamState(streamId) {
   const database = await db();
-  const rows = await database.query("select stream_id, session_key, chat_id, prompt, project_key, model, cwd, thread_id, thread_path, turn_id, draft, status, result_text, completed_at, last_event, created_at, updated_at from stream_state where stream_id = ? limit 1", [streamId]);
+  const rows = await database.query("select stream_id, session_key, chat_id, prompt, project_key, model, cwd, codex_instance, thread_id, thread_path, turn_id, draft, status, result_text, completed_at, last_event, created_at, updated_at from stream_state where stream_id = ? limit 1", [streamId]);
   return asStreamState(rows[0]);
 }
 
@@ -245,7 +328,10 @@ export async function ensureChatState(sessionKey, chatId) {
   if (existing) {
     const resolvedChatId = existing.chatId || chatId;
     if (existing.projectKey && existing.cwd && resolvedChatId) {
-      await ensureProjectRecord(existing.projectKey, existing.cwd, { defaultModel: existing.model });
+      await ensureProjectRecord(existing.projectKey, existing.cwd, {
+        defaultModel: existing.model,
+        defaultCodexInstance: existing.codexInstance,
+      });
       await bindProjectToChat(resolvedChatId, existing.projectKey, true);
       return (await selectChatState(sessionKey)) || {
         ...existing,
@@ -261,49 +347,61 @@ export async function ensureChatState(sessionKey, chatId) {
     projectKey: defaults.projectKey,
     model: defaults.model,
     cwd: defaults.cwd,
+    codexInstance: normalizeMainInstanceAlias(defaults.defaultCodexInstance, "main"),
     threadId: "",
     threadPath: "",
     lastStreamId: "",
     updatedAt: now(),
   };
   const database = await db();
-  await database.exec("insert or ignore into chat_state (session_key, chat_id, project_key, model, cwd, thread_id, thread_path, last_stream_id, updated_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?)", [
+  await database.exec("insert or ignore into chat_state (session_key, chat_id, project_key, model, cwd, codex_instance, thread_id, thread_path, last_stream_id, updated_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", [
     state.sessionKey,
     state.chatId,
     state.projectKey,
     state.model,
     state.cwd,
+    state.codexInstance,
     state.threadId,
     state.threadPath,
     state.lastStreamId,
     state.updatedAt,
   ]);
-  await ensureProjectRecord(state.projectKey, state.cwd, { defaultModel: state.model });
+  await ensureProjectRecord(state.projectKey, state.cwd, {
+    defaultModel: state.model,
+    defaultCodexInstance: state.codexInstance,
+  });
   await bindProjectToChat(chatId, state.projectKey, true);
   return (await selectChatState(sessionKey)) || state;
 }
 
-export async function updateChatState(sessionKey, chatId, patch) {
+export async function updateChatState(sessionKey, chatId, patch, options = {}) {
   const state = await ensureChatState(sessionKey, chatId);
   const next = {
     ...state,
     ...patch,
     chatId: patch?.chatId || chatId || state.chatId,
+    codexInstance: normalizeMainInstanceAlias(patch?.codexInstance, state.codexInstance || ""),
     updatedAt: now(),
   };
   const database = await db();
-  await database.exec("insert into chat_state (session_key, chat_id, project_key, model, cwd, thread_id, thread_path, last_stream_id, updated_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?) on conflict(session_key) do update set chat_id = excluded.chat_id, project_key = excluded.project_key, model = excluded.model, cwd = excluded.cwd, thread_id = excluded.thread_id, thread_path = excluded.thread_path, last_stream_id = excluded.last_stream_id, updated_at = excluded.updated_at", [
+  await database.exec("insert into chat_state (session_key, chat_id, project_key, model, cwd, codex_instance, thread_id, thread_path, last_stream_id, updated_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) on conflict(session_key) do update set chat_id = excluded.chat_id, project_key = excluded.project_key, model = excluded.model, cwd = excluded.cwd, codex_instance = excluded.codex_instance, thread_id = excluded.thread_id, thread_path = excluded.thread_path, last_stream_id = excluded.last_stream_id, updated_at = excluded.updated_at", [
     next.sessionKey,
     next.chatId,
     next.projectKey,
     next.model,
     next.cwd,
+    next.codexInstance || "",
     next.threadId || "",
     next.threadPath || "",
     next.lastStreamId || "",
     next.updatedAt,
   ]);
-  await ensureProjectRecord(next.projectKey, next.cwd, { defaultModel: next.model });
+  if (options.syncProjectDefaults !== false) {
+    await ensureProjectRecord(next.projectKey, next.cwd, {
+      defaultModel: next.model,
+      defaultCodexInstance: next.codexInstance,
+    });
+  }
   await bindProjectToChat(next.chatId, next.projectKey, true);
   return (await selectChatState(sessionKey)) || next;
 }
@@ -318,6 +416,7 @@ export async function createStreamState(sessionKey, chatId, prompt) {
     projectKey: state.projectKey,
     model: state.model,
     cwd: state.cwd,
+    codexInstance: state.codexInstance || "",
     threadId: state.threadId || "",
     threadPath: state.threadPath || "",
     turnId: "",
@@ -332,7 +431,7 @@ export async function createStreamState(sessionKey, chatId, prompt) {
   const database = await db();
   await database.exec("begin immediate");
   try {
-    await database.exec("insert into stream_state (stream_id, session_key, chat_id, prompt, project_key, model, cwd, thread_id, thread_path, turn_id, draft, status, result_text, completed_at, last_event, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", [
+    await database.exec("insert into stream_state (stream_id, session_key, chat_id, prompt, project_key, model, cwd, codex_instance, thread_id, thread_path, turn_id, draft, status, result_text, completed_at, last_event, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", [
       stream.streamId,
       stream.sessionKey,
       stream.chatId,
@@ -340,6 +439,7 @@ export async function createStreamState(sessionKey, chatId, prompt) {
       stream.projectKey,
       stream.model,
       stream.cwd,
+      stream.codexInstance,
       stream.threadId,
       stream.threadPath,
       stream.turnId,
@@ -377,7 +477,7 @@ export async function listRecentProjectThreads(projectKey, limit = 8) {
     return [];
   }
   const database = await db();
-  const rows = await database.query("select stream_id, session_key, chat_id, prompt, project_key, model, cwd, thread_id, thread_path, turn_id, draft, status, result_text, completed_at, last_event, created_at, updated_at from stream_state where project_key = ? and coalesce(thread_id, '') <> '' order by updated_at desc, stream_id asc", [projectKey]);
+  const rows = await database.query("select stream_id, session_key, chat_id, prompt, project_key, model, cwd, codex_instance, thread_id, thread_path, turn_id, draft, status, result_text, completed_at, last_event, created_at, updated_at from stream_state where project_key = ? and coalesce(thread_id, '') <> '' order by updated_at desc, stream_id asc", [projectKey]);
   const threads = [];
   const seen = new Set();
   for (const row of rows) {
@@ -394,6 +494,18 @@ export async function listRecentProjectThreads(projectKey, limit = 8) {
   return threads;
 }
 
+export async function listRecentThreadStreams(threadId, limit = 3) {
+  if (!threadId) {
+    return [];
+  }
+  const database = await db();
+  const rows = await database.query(
+    "select stream_id, session_key, chat_id, prompt, project_key, model, cwd, codex_instance, thread_id, thread_path, turn_id, draft, status, result_text, completed_at, last_event, created_at, updated_at from stream_state where thread_id = ? order by updated_at desc, stream_id desc limit ?",
+    [threadId, limit],
+  );
+  return rows.map(asStreamState).filter(Boolean);
+}
+
 export async function getLatestProjectThread(projectKey) {
   const threads = await listRecentProjectThreads(projectKey, 1);
   return threads[0];
@@ -404,7 +516,7 @@ export async function listChatProjects(chatId, limit = 8) {
     return [];
   }
   const database = await db();
-  const rows = await database.query("select '' as session_key, pbs.chat_id as chat_id, pr.project_key as project_key, coalesce(pr.default_model, '') as model, pr.repo_path as cwd, '' as thread_id, '' as thread_path, '' as last_stream_id, pbs.updated_at as updated_at, pbs.is_primary as is_primary from project_binding_state pbs join project_registry pr on pr.project_key = pbs.project_key where pbs.chat_id = ? union all select session_key, chat_id, project_key, model, cwd, thread_id, thread_path, last_stream_id, updated_at, 0 as is_primary from chat_state where chat_id = ? union all select session_key, chat_id, project_key, model, cwd, thread_id, thread_path, '' as last_stream_id, updated_at, 0 as is_primary from stream_state where chat_id = ? order by is_primary desc, updated_at desc, session_key asc", [chatId, chatId, chatId]);
+  const rows = await database.query("select '' as session_key, pbs.chat_id as chat_id, pr.project_key as project_key, coalesce(pr.default_model, '') as model, pr.repo_path as cwd, coalesce(pr.default_codex_instance, '') as codex_instance, '' as thread_id, '' as thread_path, '' as last_stream_id, pbs.updated_at as updated_at, pbs.is_primary as is_primary from project_binding_state pbs join project_registry pr on pr.project_key = pbs.project_key where pbs.chat_id = ? union all select session_key, chat_id, project_key, model, cwd, coalesce(codex_instance, '') as codex_instance, thread_id, thread_path, last_stream_id, updated_at, 0 as is_primary from chat_state where chat_id = ? union all select session_key, chat_id, project_key, model, cwd, coalesce(codex_instance, '') as codex_instance, thread_id, thread_path, '' as last_stream_id, updated_at, 0 as is_primary from stream_state where chat_id = ? order by is_primary desc, updated_at desc, session_key asc", [chatId, chatId, chatId]);
   const projects = [];
   const seen = new Set();
   for (const row of rows) {
@@ -427,11 +539,12 @@ export async function ensureProjectRecord(projectKey, repoPath, options = {}) {
   }
   const timestamp = now();
   const database = await db();
-  await database.exec("insert into project_registry (project_key, repo_path, default_branch, default_model, created_at, updated_at) values (?, ?, ?, ?, ?, ?) on conflict(project_key) do update set repo_path = excluded.repo_path, default_branch = excluded.default_branch, default_model = excluded.default_model, updated_at = excluded.updated_at", [
+  await database.exec("insert into project_registry (project_key, repo_path, default_branch, default_model, default_codex_instance, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?) on conflict(project_key) do update set repo_path = excluded.repo_path, default_branch = excluded.default_branch, default_model = excluded.default_model, default_codex_instance = excluded.default_codex_instance, updated_at = excluded.updated_at", [
     projectKey,
     repoPath,
     options.defaultBranch || "main",
     options.defaultModel || "",
+    normalizeMainInstanceAlias(options.defaultCodexInstance || ""),
     timestamp,
     timestamp,
   ]);
@@ -452,12 +565,26 @@ export async function updateProjectRecordPath(projectKey, repoPath) {
   return getProjectRecord(projectKey);
 }
 
+export async function updateProjectDefaultCodexInstance(projectKey, codexInstance) {
+  if (!projectKey) {
+    return undefined;
+  }
+  const timestamp = now();
+  const database = await db();
+  await database.exec("update project_registry set default_codex_instance = ?, updated_at = ? where project_key = ?", [
+    normalizeMainInstanceAlias(codexInstance || ""),
+    timestamp,
+    projectKey,
+  ]);
+  return getProjectRecord(projectKey);
+}
+
 export async function getProjectRecord(projectKey) {
   if (!projectKey) {
     return undefined;
   }
   const database = await db();
-  const rows = await database.query("select project_key, repo_path, default_branch, default_model, created_at, updated_at from project_registry where project_key = ? limit 1", [projectKey]);
+  const rows = await database.query("select project_key, repo_path, default_branch, default_model, default_codex_instance, created_at, updated_at from project_registry where project_key = ? limit 1", [projectKey]);
   return asProjectRecord(rows[0]);
 }
 
@@ -502,11 +629,95 @@ export async function listBoundChatProjects(chatId, limit = 8) {
     return [];
   }
   const database = await db();
-  const rows = await database.query("select pr.project_key, pr.repo_path, pr.default_branch, pr.default_model, pbs.created_at, pbs.updated_at, pbs.is_primary from project_binding_state pbs join project_registry pr on pr.project_key = pbs.project_key where pbs.chat_id = ? order by pbs.is_primary desc, pbs.updated_at desc, pr.project_key asc limit ?", [chatId, limit]);
+  const rows = await database.query("select pr.project_key, pr.repo_path, pr.default_branch, pr.default_model, pr.default_codex_instance, pbs.created_at, pbs.updated_at, pbs.is_primary from project_binding_state pbs join project_registry pr on pr.project_key = pbs.project_key where pbs.chat_id = ? order by pbs.is_primary desc, pbs.updated_at desc, pr.project_key asc limit ?", [chatId, limit]);
   return rows.map((row) => ({
     ...asProjectRecord(row),
     isPrimary: row.is_primary === 1,
   }));
+}
+
+export async function getInstanceSpec(provider, instance) {
+  const normalizedProvider = typeof provider === "string" ? provider.trim() : "";
+  const normalizedInstance = normalizeMainInstanceAlias(instance);
+  if (!normalizedProvider || !normalizedInstance) {
+    return undefined;
+  }
+  const database = await db();
+  const rows = await database.query("select provider, instance, config_json, desired_state, created_at, updated_at from instance_registry where provider = ? and instance = ? limit 1", [normalizedProvider, normalizedInstance]);
+  const row = rows[0];
+  if (!row) {
+    return undefined;
+  }
+  return {
+    provider: row.provider,
+    instance: normalizeMainInstanceAlias(row.instance),
+    config: JSON.parse(row.config_json || "{}"),
+    desiredState: row.desired_state || "connected",
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export async function upsertInstanceSpec(provider, instance, config, desiredState = "connected") {
+  const normalizedProvider = typeof provider === "string" ? provider.trim() : "";
+  const normalizedInstance = normalizeMainInstanceAlias(instance);
+  if (!normalizedProvider || !normalizedInstance) {
+    return undefined;
+  }
+  const database = await db();
+  const timestamp = now();
+  await database.exec("insert into instance_registry (provider, instance, config_json, desired_state, created_at, updated_at) values (?, ?, ?, ?, ?, ?) on conflict(provider, instance) do update set config_json = excluded.config_json, desired_state = excluded.desired_state, updated_at = excluded.updated_at", [
+    normalizedProvider,
+    normalizedInstance,
+    JSON.stringify(config || {}),
+    desiredState || "connected",
+    timestamp,
+    timestamp,
+  ]);
+  return getInstanceSpec(normalizedProvider, normalizedInstance);
+}
+
+export async function listInstanceSpecs(provider = "") {
+  const database = await db();
+  const normalizedProvider = typeof provider === "string" ? provider.trim() : "";
+  const rows = normalizedProvider
+    ? await database.query("select provider, instance, config_json, desired_state, created_at, updated_at from instance_registry where provider = ? order by provider asc, instance asc", [normalizedProvider])
+    : await database.query("select provider, instance, config_json, desired_state, created_at, updated_at from instance_registry order by provider asc, instance asc");
+  const deduped = new Map();
+  for (const row of rows) {
+    const normalizedInstance = normalizeMainInstanceAlias(row.instance);
+    const key = `${row.provider}/${normalizedInstance}`;
+    const next = {
+      provider: row.provider,
+      instance: normalizedInstance,
+      config: JSON.parse(row.config_json || "{}"),
+      desiredState: row.desired_state || "connected",
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+    const existing = deduped.get(key);
+    if (!existing || existing.updatedAt <= next.updatedAt) {
+      deduped.set(key, next);
+    }
+  }
+  return Array.from(deduped.values()).sort((left, right) => {
+    const leftKey = `${left.provider}/${left.instance}`;
+    const rightKey = `${right.provider}/${right.instance}`;
+    return leftKey.localeCompare(rightKey);
+  });
+}
+
+export async function resolveProjectCodexInstance(projectKey) {
+  const project = await getProjectRecord(projectKey);
+  return project?.defaultCodexInstance || "";
+}
+
+export async function resolveChatCodexInstance(sessionKey, chatId) {
+  const state = await ensureChatState(sessionKey, chatId);
+  if (state?.codexInstance) {
+    return state.codexInstance;
+  }
+  return resolveProjectCodexInstance(state?.projectKey || "");
 }
 
 export async function listSettings() {
@@ -580,13 +791,14 @@ export async function updateStreamState(streamId, patch) {
     updatedAt: now(),
   };
   const database = await db();
-  await database.exec("update stream_state set session_key = ?, chat_id = ?, prompt = ?, project_key = ?, model = ?, cwd = ?, thread_id = ?, thread_path = ?, turn_id = ?, draft = ?, status = ?, result_text = ?, completed_at = ?, last_event = ?, updated_at = ? where stream_id = ?", [
+  await database.exec("update stream_state set session_key = ?, chat_id = ?, prompt = ?, project_key = ?, model = ?, cwd = ?, codex_instance = ?, thread_id = ?, thread_path = ?, turn_id = ?, draft = ?, status = ?, result_text = ?, completed_at = ?, last_event = ?, updated_at = ? where stream_id = ?", [
     next.sessionKey,
     next.chatId,
     next.prompt,
     next.projectKey,
     next.model,
     next.cwd,
+    next.codexInstance || "",
     next.threadId || "",
     next.threadPath || "",
     next.turnId || "",
@@ -644,12 +856,13 @@ export function resetChatThread(sessionKey, chatId) {
 
 export async function runtimeSnapshot() {
   const database = await db();
-  const chats = await database.query("select session_key, chat_id, project_key, model, cwd, thread_id, thread_path, last_stream_id, updated_at from chat_state order by updated_at desc, session_key asc");
-  const streams = await database.query("select stream_id, session_key, chat_id, prompt, project_key, model, cwd, thread_id, thread_path, turn_id, draft, status, result_text, completed_at, last_event, created_at, updated_at from stream_state order by updated_at desc, stream_id asc");
+  const chats = await database.query("select session_key, chat_id, project_key, model, cwd, codex_instance, thread_id, thread_path, last_stream_id, updated_at from chat_state order by updated_at desc, session_key asc");
+  const streams = await database.query("select stream_id, session_key, chat_id, prompt, project_key, model, cwd, codex_instance, thread_id, thread_path, turn_id, draft, status, result_text, completed_at, last_event, created_at, updated_at from stream_state order by updated_at desc, stream_id asc");
   const commandContexts = await database.query("select session_key, chat_id, scope, updated_at from command_context_state order by updated_at desc, session_key asc");
-  const projects = await database.query("select project_key, repo_path, default_branch, default_model, created_at, updated_at from project_registry order by updated_at desc, project_key asc");
+  const projects = await database.query("select project_key, repo_path, default_branch, default_model, default_codex_instance, created_at, updated_at from project_registry order by updated_at desc, project_key asc");
   const bindings = await database.query("select chat_id, project_key, is_primary, created_at, updated_at from project_binding_state order by updated_at desc, chat_id asc, project_key asc");
   const settings = await database.query("select name, value, created_at, updated_at from settings order by name asc");
+  const instances = await database.query("select provider, instance, config_json, desired_state, created_at, updated_at from instance_registry order by provider asc, instance asc");
   return {
     dbPath: dbPath(),
     chats: chats.map(asChatState),
@@ -669,5 +882,13 @@ export async function runtimeSnapshot() {
       updatedAt: row.updated_at,
     })),
     settings: settings.map(asSettingRecord),
+    instances: instances.map((row) => ({
+      provider: row.provider,
+      instance: normalizeMainInstanceAlias(row.instance),
+      config: JSON.parse(row.config_json || "{}"),
+      desiredState: row.desired_state || "connected",
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    })),
   };
 }

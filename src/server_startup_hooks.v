@@ -90,8 +90,12 @@ fn start_upstream_providers(mut app App) {
 			}
 			continue
 		}
+		if launch.provider == 'codex' && app.logic_executor_kind() == 'vjsx' {
+			log.info('[vhttpd] WebSocket Upstream: codex deferred to vjsx app_startup (${launch.label})')
+			continue
+		}
 		started_any_upstream = true
-		go run_websocket_upstream_provider(mut app, launch.provider, launch.instance)
+		_ = app.ensure_websocket_upstream_provider_running(launch.provider, launch.instance)
 		if launch.provider == 'codex' {
 			log.info('[vhttpd] WebSocket Upstream: codex enabled (${launch.url})')
 		}

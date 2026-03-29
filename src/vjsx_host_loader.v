@@ -67,14 +67,14 @@ fn vjsx_lane_temp_root(app_entry string, idx int) string {
 	entry_name := os.base(entry_abs).trim_space().replace(' ', '_')
 	entry_hash := fnv1a.sum64_string(entry_abs).hex()
 	cache_root := os.join_path(os.temp_dir(), 'vhttpd_vjsx')
-	return os.join_path(cache_root, '${entry_name}.${entry_hash}.lane_${idx}.vjsbuild')
+	return os.join_path(cache_root, '${entry_name}.${entry_hash}.pid_${os.getpid()}.lane_${idx}.vjsbuild')
 }
 
 fn vjsx_lane_temp_root_for_signature(config VjsxRuntimeFacadeConfig, idx int, source_signature string) string {
 	entry_abs := os.abs_path(config.app_entry)
 	entry_name := os.base(entry_abs).trim_space().replace(' ', '_')
 	cache_root := os.join_path(os.temp_dir(), 'vhttpd_vjsx')
-	return os.join_path(cache_root, '${entry_name}.${source_signature}.lane_${idx}.vjsbuild')
+	return os.join_path(cache_root, '${entry_name}.${source_signature}.pid_${os.getpid()}.lane_${idx}.vjsbuild')
 }
 
 fn load_inproc_vjsx_entry(mut ctx vjsx.Context, config VjsxRuntimeFacadeConfig, idx int, source_signature string, as_module bool) !vjsx.Value {

@@ -78,6 +78,8 @@ fn build_app_runtime(provider_settings ProviderRuntimeSettings, executor_plan Lo
 		feishu_token_refresh_skew_seconds:        provider_settings.feishu.token_refresh_skew_seconds
 		feishu_recent_event_limit:                provider_settings.feishu.recent_event_limit
 		websocket_upstream_recent_dispatch_limit: 50
+		auto_start_dynamic_upstreams:             true
+		feishu_static_apps:                       provider_settings.feishu.apps.clone()
 		feishu_apps:                              provider_settings.feishu.apps.clone()
 		upstream_sessions:                        map[string]UpstreamRuntimeSession{}
 		mcp_sessions:                             map[string]McpSession{}
@@ -87,6 +89,7 @@ fn build_app_runtime(provider_settings ProviderRuntimeSettings, executor_plan Lo
 		ws_hub_conn_meta:                         map[string]map[string]string{}
 		ws_hub_pending:                           map[string][]HubPendingMessage{}
 		feishu_runtime:                           map[string]FeishuProviderRuntime{}
+		websocket_upstream_started:               map[string]bool{}
 		providers:                                ProviderHost{
 			registry: map[string]Provider{}
 			specs:    map[string]ProviderSpec{}
@@ -94,6 +97,7 @@ fn build_app_runtime(provider_settings ProviderRuntimeSettings, executor_plan Lo
 		ollama_enabled:                           provider_settings.ollama_enabled
 		fixture_websocket_runtime:                map[string]FixtureWebSocketUpstreamRuntime{}
 		websocket_upstream_recent_activities:     []WebSocketUpstreamActivitySnapshot{}
+		provider_instance_specs:                  map[string]ProviderInstanceSpec{}
 		codex_runtime:                            CodexProviderRuntime{
 			enabled:             provider_settings.codex.enabled
 			url:                 provider_settings.codex.url
@@ -110,6 +114,7 @@ fn build_app_runtime(provider_settings ProviderRuntimeSettings, executor_plan Lo
 			err_pending_flushes: map[string]bool{}
 			thread_stream_map:   map[string]string{}
 		}
+		codex_instances:                          map[string]CodexProviderRuntime{}
 		feishu_buffers:                           map[string]FeishuStreamBuffer{}
 	}
 }

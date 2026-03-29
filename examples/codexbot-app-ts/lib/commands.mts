@@ -44,30 +44,57 @@ export function feishuUpdateText(streamId, text) {
   };
 }
 
-export function codexRpcCall(method, params, streamId) {
+export function providerInstanceUpsert(provider, instance, config, desiredState = "connected") {
   return {
+    type: "provider.instance.upsert",
+    provider,
+    instance,
+    content: json(config || {}),
+    metadata: {
+      desired_state: desiredState,
+    },
+  };
+}
+
+export function providerInstanceEnsure(provider, instance) {
+  return {
+    type: "provider.instance.ensure",
+    provider,
+    instance,
+  };
+}
+
+export function codexRpcCall(method, params, streamId, instance = "") {
+  const command = {
     type: "provider.rpc.call",
     provider: "codex",
     method,
     params: typeof params === "string" ? params : json(params),
     stream_id: streamId,
   };
+  if (instance) {
+    command.instance = instance;
+  }
+  return command;
 }
 
-export function codexTurnStart(params, streamId) {
-  return codexRpcCall("turn/start", params, streamId);
+export function codexTurnStart(params, streamId, instance = "") {
+  return codexRpcCall("turn/start", params, streamId, instance);
 }
 
-export function codexTurnInterrupt(threadId, turnId, streamId) {
-  return codexRpcCall("turn/interrupt", { threadId, turnId }, streamId);
+export function codexTurnInterrupt(threadId, turnId, streamId, instance = "") {
+  return codexRpcCall("turn/interrupt", { threadId, turnId }, streamId, instance);
 }
 
-export function codexSessionClear(streamId, threadId = "") {
+export function codexSessionClear(streamId, threadId = "", instance = "") {
   const command = {
     type: "session.clear",
     provider: "codex",
     stream_id: streamId,
   };
+  if (instance) {
+    command.instance = instance;
+  }
   if (threadId) {
     command.target = threadId;
     command.target_type = "thread_id";

@@ -115,6 +115,31 @@ fn test_command_route_from_normalized_stream_fail_for_feishu() {
 	assert exec.route_from_specs(cmd) == ProviderRouteKind.feishu
 }
 
+fn test_execute_provider_instance_upsert_applies_feishu_app_config() {
+	mut app := &App{
+		feishu_apps: map[string]FeishuAppConfig{}
+		feishu_runtime: map[string]FeishuProviderRuntime{}
+		providers: ProviderHost{
+			specs: map[string]ProviderSpec{}
+		}
+	}
+	mut exec := CommandExecutor.new(mut app)
+	mut snapshot := WebSocketUpstreamCommandActivity{}
+	normalized := NormalizedCommand{
+		kind:          'provider.instance.upsert'
+		provider:      'feishu'
+		instance:      'main'
+		config_raw:    '{"app_id":"bot_app","app_secret":"bot_secret"}'
+		desired_state: 'connected'
+	}
+	handled, exec_err := exec.execute_provider_instance_command(normalized, mut snapshot)
+	assert handled
+	assert exec_err == ''
+	assert snapshot.status == 'upserted'
+	assert app.feishu_apps['main'].app_id == 'bot_app'
+	assert app.feishu_apps['main'].app_secret == 'bot_secret'
+}
+
 fn test_command_route_from_command_codex_control() {
 	$if no_codex_routes ? {
 		return
@@ -423,6 +448,33 @@ fn test_websocket_upstream_request_from_normalized_prefers_declared_provider() {
 	}
 	req := websocket_upstream_request_from_normalized(normalized, 'generic')
 	assert req.provider == 'ollama'
+}
+
+fn test_command_executor_handles_provider_instance_upsert() {
+	mut app := &App{}
+	mut executor := CommandExecutor.new(mut app)
+	commands := [
+		WorkerWebSocketUpstreamCommand{
+			type_:    'provider.instance.upsert'
+			provider: 'codex'
+			instance: 'project_demo'
+			content:  '{"url":"ws://127.0.0.1:4500","model":"gpt-5.4"}'
+			metadata: {
+				'desired_state': 'connected'
+			}
+		},
+	]
+	snapshots, last_error := executor.execute_websocket_upstream_commands('unit-upsert', commands)
+	assert last_error == ''
+	assert snapshots.len == 1
+	assert snapshots[0].status == 'upserted'
+	spec := app.provider_instance_get('codex', 'project_demo') or {
+		panic('missing provider instance spec')
+	}
+	assert spec.provider == 'codex'
+	assert spec.instance == 'project_demo'
+	assert spec.desired_state == 'connected'
+	assert spec.config_json.contains('"model":"gpt-5.4"')
 }
 
 fn test_codex_handler_session_bind_thread_updates_runtime_binding() {

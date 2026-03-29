@@ -36,11 +36,6 @@ reconnect_delay_ms = 3000
 token_refresh_skew_seconds = 60
 recent_event_limit = 20
 
-[feishu.main]
-app_id = "${env.FEISHU_APP_ID:-}"
-app_secret = "${env.FEISHU_APP_SECRET:-}"
-verification_token = "${env.FEISHU_VERIFICATION_TOKEN:-}"
-encrypt_key = "${env.FEISHU_ENCRYPT_KEY:-}"
 
 [codex]
 enabled = true

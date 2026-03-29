@@ -50,6 +50,8 @@ pub mut:
 	feishu_token_refresh_skew_seconds           int
 	feishu_recent_event_limit                   int
 	websocket_upstream_recent_dispatch_limit    int
+	auto_start_dynamic_upstreams                bool
+	feishu_static_apps                          map[string]FeishuAppConfig
 	feishu_apps                                 map[string]FeishuAppConfig
 	stat_http_requests_total                    i64
 	stat_http_errors_total                      i64
@@ -83,12 +85,15 @@ pub mut:
 	ws_hub_conn_meta                            map[string]map[string]string
 	ws_hub_pending                              map[string][]HubPendingMessage
 	feishu_runtime                              map[string]FeishuProviderRuntime
+	websocket_upstream_started                  map[string]bool
 	providers                                   ProviderHost
 	fixture_websocket_runtime                   map[string]FixtureWebSocketUpstreamRuntime
 	websocket_upstream_recent_activities        []WebSocketUpstreamActivitySnapshot
+	provider_instance_specs                     map[string]ProviderInstanceSpec = map[string]ProviderInstanceSpec{}
 	// codex upstream
 	codex_mu                     sync.Mutex
 	codex_runtime                CodexProviderRuntime
+	codex_instances              map[string]CodexProviderRuntime = map[string]CodexProviderRuntime{}
 	ollama_enabled               bool
 	feishu_buffers               map[string]FeishuStreamBuffer
 	feishu_http_lane             shared FeishuHttpLane
@@ -1238,15 +1243,18 @@ pub fn (mut app App) provider_runtime_upstream_snapshot(name string, instance st
 			}
 		}
 		'codex' {
-			if instance != '' && instance != 'main' {
-				return none
+			mut resolved_instance := instance.trim_space()
+			if resolved_instance == '' {
+				resolved_instance = 'main'
 			}
-			state := app.codex_runtime_state_view()
+			state := app.codex_runtime_state_view(resolved_instance)
 			return WebSocketUpstreamSnapshot{
 				provider:                'codex'
-				instance:                'main'
-				enabled:                 app.provider_enabled('codex')
-				configured:              app.provider_enabled('codex')
+				instance:                resolved_instance
+				enabled:                 app.provider_runtime_upstream_enabled('codex',
+					resolved_instance)
+				configured:              app.provider_runtime_upstream_enabled('codex',
+					resolved_instance)
 				connected:               state.connected
 				url:                     state.ws_url
 				last_connect_at_unix:    state.last_connect_at
@@ -1355,11 +1363,23 @@ pub fn (mut app App) provider_runtime_metrics(name string) ProviderRuntimeMetric
 			}
 		}
 		'codex' {
-			state := app.codex_runtime_state_view()
+			mut connect_attempts := i64(0)
+			mut connect_successes := i64(0)
+			mut received_frames := i64(0)
+			mut instances := app.provider_runtime_instances('codex')
+			if instances.len == 0 {
+				instances = ['main']
+			}
+			for instance in instances {
+				state := app.codex_runtime_state_view(instance)
+				connect_attempts += state.connect_attempts
+				connect_successes += state.connect_successes
+				received_frames += state.received_frames
+			}
 			ProviderRuntimeMetrics{
-				connect_attempts:  state.connect_attempts
-				connect_successes: state.connect_successes
-				received_frames:   state.received_frames
+				connect_attempts:  connect_attempts
+				connect_successes: connect_successes
+				received_frames:   received_frames
 			}
 		}
 		else {
@@ -1424,8 +1444,7 @@ pub fn (mut app App) provider_runtime_upstream_enabled(name string, instance str
 				&& instance in app.provider_runtime_instances('feishu')
 		}
 		'codex' {
-			app.provider_runtime_ready('codex')
-				&& instance in app.provider_runtime_instances('codex')
+			instance in app.provider_runtime_instances('codex')
 		}
 		'ollama' {
 			app.provider_runtime_ready('ollama')
@@ -1456,8 +1475,8 @@ pub fn (mut app App) provider_runtime_upstream_provider_names() []string {
 
 pub fn (app &App) provider_bootstrap_enabled(name string) bool {
 	return match name {
-		'feishu' { app.feishu_enabled }
-		'codex' { app.codex_runtime.enabled }
+		'feishu' { app.feishu_runtime_enabled() }
+		'codex' { app.codex_runtime.enabled || app.provider_instance_list('codex').len > 0 }
 		'ollama' { app.ollama_enabled }
 		else { false }
 	}
@@ -1487,11 +1506,17 @@ pub fn (mut app App) provider_runtime_instances(name string) []string {
 			app.feishu_runtime_app_names()
 		}
 		'codex' {
-			if app.provider_runtime_ready('codex') {
-				['main']
-			} else {
-				[]string{}
+			mut out := []string{}
+			if app.provider_enabled('codex') {
+				out << 'main'
 			}
+			for spec in app.provider_instance_list('codex') {
+				if spec.instance !in out {
+					out << spec.instance
+				}
+			}
+			out.sort()
+			out
 		}
 		'ollama' {
 			if app.provider_runtime_ready('ollama') {
@@ -1509,13 +1534,12 @@ pub fn (mut app App) provider_runtime_instances(name string) []string {
 pub fn (mut app App) provider_runtime_pull_url(name string, instance string) !string {
 	return match name {
 		'feishu' { app.feishu_provider_pull_ws_endpoint(instance) }
-		'codex' { app.codex_provider_pull_url() }
+		'codex' { app.codex_provider_pull_url(instance) }
 		else { error('unknown provider ${name}') }
 	}
 }
 
 pub fn (mut app App) provider_runtime_reconnect_delay_ms(name string, instance string) int {
-	_ = instance
 	return match name {
 		'feishu' {
 			if app.feishu_reconnect_delay_ms > 0 {
@@ -1525,7 +1549,7 @@ pub fn (mut app App) provider_runtime_reconnect_delay_ms(name string, instance s
 			}
 		}
 		'codex' {
-			app.codex_provider_reconnect_delay_ms()
+			app.codex_provider_reconnect_delay_ms(instance)
 		}
 		else {
 			3000
@@ -1539,7 +1563,7 @@ pub fn (mut app App) provider_runtime_on_connecting(name string, instance string
 			app.feishu_runtime_note_connecting(instance)
 		}
 		'codex' {
-			app.codex_provider_on_connecting()
+			app.codex_provider_on_connecting(instance)
 		}
 		else {}
 	}
@@ -1551,7 +1575,7 @@ pub fn (mut app App) provider_runtime_on_connected(name string, instance string,
 			app.feishu_runtime_note_connected(instance, ws_url)
 		}
 		'codex' {
-			app.codex_provider_on_connected(ws_url)
+			app.codex_provider_on_connected(instance, ws_url)
 		}
 		else {}
 	}
@@ -1563,7 +1587,7 @@ pub fn (mut app App) provider_runtime_on_disconnected(name string, instance stri
 			app.feishu_runtime_note_disconnected(instance, reason)
 		}
 		'codex' {
-			app.codex_provider_on_disconnected(reason)
+			app.codex_provider_on_disconnected(instance, reason)
 		}
 		else {}
 	}

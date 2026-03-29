@@ -51,6 +51,95 @@ fn (r TestShutdownProviderRuntime) snapshot(mut app App) string {
 	return '{}'
 }
 
+struct TestShutdownLogicExecutorState {
+mut:
+	close_called bool
+}
+
+struct TestShutdownLogicExecutor {
+mut:
+	state &TestShutdownLogicExecutorState = unsafe { nil }
+}
+
+fn (e TestShutdownLogicExecutor) model() LogicExecutorModel {
+	_ = e
+	return .embedded
+}
+
+fn (e TestShutdownLogicExecutor) kind() string {
+	_ = e
+	return 'test_shutdown_executor'
+}
+
+fn (e TestShutdownLogicExecutor) provider() string {
+	_ = e
+	return 'test_shutdown_executor'
+}
+
+fn (e TestShutdownLogicExecutor) admin_details() LogicExecutorAdminDetails {
+	_ = e
+	return LogicExecutorAdminDetails{
+		kind:     'test_shutdown_executor'
+		provider: 'test_shutdown_executor'
+		model:    LogicExecutorModel.embedded.str()
+	}
+}
+
+fn (e TestShutdownLogicExecutor) warmup(mut app App) ! {
+	_ = e
+	_ = app
+}
+
+fn (e TestShutdownLogicExecutor) close() {
+	if isnil(e.state) {
+		return
+	}
+	mut state := e.state
+	state.close_called = true
+}
+
+fn (e TestShutdownLogicExecutor) dispatch_http(mut app App, req HttpLogicDispatchRequest) !HttpLogicDispatchOutcome {
+	_ = e
+	_ = app
+	_ = req
+	return error('not_used')
+}
+
+fn (e TestShutdownLogicExecutor) open_websocket_session(mut app App, req WebSocketSessionOpenRequest) !WebSocketSessionOpenOutcome {
+	_ = e
+	_ = app
+	_ = req
+	return error('not_used')
+}
+
+fn (e TestShutdownLogicExecutor) dispatch_stream(mut app App, req StreamDispatchRequest) !StreamDispatchResponse {
+	_ = e
+	_ = app
+	_ = req
+	return error('not_used')
+}
+
+fn (e TestShutdownLogicExecutor) dispatch_mcp(mut app App, req WorkerMcpDispatchRequest) !WorkerMcpDispatchResponse {
+	_ = e
+	_ = app
+	_ = req
+	return error('not_used')
+}
+
+fn (e TestShutdownLogicExecutor) dispatch_websocket_upstream(mut app App, req WorkerWebSocketUpstreamDispatchRequest) !WorkerWebSocketUpstreamDispatchResponse {
+	_ = e
+	_ = app
+	_ = req
+	return error('not_used')
+}
+
+fn (e TestShutdownLogicExecutor) dispatch_websocket_event(mut app App, frame WorkerWebSocketFrame) !WorkerWebSocketDispatchResponse {
+	_ = e
+	_ = app
+	_ = frame
+	return error('not_used')
+}
+
 fn test_load_vhttpd_config_parses_executor_and_vjsx_sections() {
 	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_executor_config_test')
 	os.mkdir_all(temp_dir) or { panic(err) }
@@ -867,8 +956,12 @@ fn test_shutdown_app_runtime_stops_lifecycle_and_cleans_runtime_files() {
 	defer {
 		os.rmdir_all(temp_dir) or {}
 	}
+	mut executor_state := &TestShutdownLogicExecutorState{}
 	mut app := App{
 		event_log: event_log
+		logic_executor: TestShutdownLogicExecutor{
+			state: executor_state
+		}
 		providers: ProviderHost{
 			specs: {
 				'test': ProviderSpec{
@@ -884,13 +977,16 @@ fn test_shutdown_app_runtime_stops_lifecycle_and_cleans_runtime_files() {
 		pid_file:              pid_file
 		internal_admin_socket: internal_socket
 		executor_plan:         LogicExecutorRuntimePlan{
-			executor:            InProcVjsxExecutor{}
+			executor:            TestShutdownLogicExecutor{
+				state: executor_state
+			}
 			worker_backend_mode: .disabled
 			lifecycle:           TestShutdownExecutorLifecycle{}
 			bootstrap:           ExecutorBootstrapState{}
 		}
 	}
 	shutdown_app_runtime(mut app, runtime_cfg)
+	assert executor_state.close_called
 	assert !os.exists(pid_file)
 	assert !os.exists(internal_socket)
 	rows := os.read_lines(event_log) or { panic(err) }

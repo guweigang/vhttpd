@@ -343,6 +343,32 @@ pub fn (mut app AdminApp) admin_runtime_mcp(mut ctx Context) veb.Result {
 	return ctx.text(body)
 }
 
+@['/admin/runtime/provider-instances'; get]
+pub fn (mut app AdminApp) admin_runtime_provider_instances(mut ctx Context) veb.Result {
+	path := if ctx.req.url == '' { '/admin/runtime/provider-instances' } else { ctx.req.url }
+	req_id := resolve_request_id(ctx, path)
+	trace_id := resolve_trace_id(ctx, path)
+	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
+	ctx.set_content_type('application/json; charset=utf-8')
+	if !app.admin_authorized(ctx) {
+		ctx.res.set_status(http.status_from_int(403))
+		return ctx.text(json.encode(AdminErrorResponse{
+			error: 'forbidden'
+		}))
+	}
+	provider_filter := (ctx.query['provider'] or { '' }).trim_space()
+	body := json.encode(app.shared.admin_provider_instance_snapshots(provider_filter))
+	app.shared.emit('http.request', {
+		'method':     'GET'
+		'path':       '/admin/runtime/provider-instances'
+		'status':     '200'
+		'request_id': req_id
+		'trace_id':   trace_id
+		'plane':      'admin'
+	})
+	return ctx.text(body)
+}
+
 @['/admin/runtime/feishu'; get]
 pub fn (mut app AdminApp) admin_runtime_feishu(mut ctx Context) veb.Result {
 	path := if ctx.req.url == '' { '/admin/runtime/feishu' } else { ctx.req.url }

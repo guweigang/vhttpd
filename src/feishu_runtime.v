@@ -173,6 +173,9 @@ const feishu_stream_buffer_rollover_runes = 4200
 pub struct FeishuRuntimeAppSnapshot {
 pub:
 	name                    string
+	source                  string
+	static_configured       bool @[json: 'static_configured']
+	dynamic_configured      bool @[json: 'dynamic_configured']
 	enabled                 bool
 	configured              bool
 	connected               bool
@@ -240,9 +243,16 @@ fn (rt FeishuProviderRuntime) ping_interval_seconds_value() int {
 }
 
 fn (rt FeishuProviderRuntime) app_snapshot(name string, enabled bool, open_base_url string) FeishuRuntimeAppSnapshot {
+	return rt.app_snapshot_with_source(name, enabled, open_base_url, 'runtime', false, false)
+}
+
+fn (rt FeishuProviderRuntime) app_snapshot_with_source(name string, enabled bool, open_base_url string, source string, static_configured bool, dynamic_configured bool) FeishuRuntimeAppSnapshot {
 	resolved_name := if rt.name.trim_space() != '' { rt.name } else { name }
 	return FeishuRuntimeAppSnapshot{
 		name:                    resolved_name
+		source:                  source
+		static_configured:       static_configured
+		dynamic_configured:      dynamic_configured
 		enabled:                 enabled
 		configured:              true
 		connected:               rt.connected
@@ -780,8 +790,44 @@ fn feishu_runtime_ws_endpoint_body(app_id string, app_secret string) string {
 	})
 }
 
+fn (app &App) feishu_runtime_enabled() bool {
+	return app.feishu_enabled || app.provider_instance_list('feishu').len > 0
+}
+
+fn (app &App) feishu_runtime_has_dynamic_app(name string) bool {
+	return app.provider_instance_get('feishu', name) != none
+}
+
+fn (app &App) feishu_runtime_has_static_app(name string) bool {
+	if name in app.feishu_static_apps {
+		return true
+	}
+	if app.feishu_static_apps.len == 0 && name in app.feishu_apps && !app.feishu_runtime_has_dynamic_app(name) {
+		return true
+	}
+	return false
+}
+
+fn (app &App) feishu_runtime_app_source(name string) string {
+	has_static := app.feishu_runtime_has_static_app(name)
+	has_dynamic := app.feishu_runtime_has_dynamic_app(name)
+	if has_static && has_dynamic {
+		return 'mixed'
+	}
+	if has_dynamic {
+		return 'dynamic'
+	}
+	if has_static {
+		return 'static'
+	}
+	if name in app.feishu_apps {
+		return 'runtime'
+	}
+	return 'unknown'
+}
+
 fn (app &App) feishu_runtime_ready() bool {
-	return app.feishu_enabled && app.feishu_runtime_app_names().len > 0
+	return app.feishu_runtime_enabled() && app.feishu_runtime_app_names().len > 0
 }
 
 fn (app &App) feishu_runtime_default_app_name() string {
@@ -1233,10 +1279,17 @@ fn (mut app App) feishu_runtime_snapshot() FeishuRuntimeSnapshot {
 		if runtime.is_connected() {
 			connected_count++
 		}
-		apps << runtime.app_snapshot(name, app.feishu_enabled, app.feishu_open_base_url)
+		apps << runtime.app_snapshot_with_source(
+			name,
+			app.feishu_runtime_enabled(),
+			app.feishu_open_base_url,
+			app.feishu_runtime_app_source(name),
+			app.feishu_runtime_has_static_app(name),
+			app.feishu_runtime_has_dynamic_app(name),
+		)
 	}
 	return FeishuRuntimeSnapshot{
-		enabled:         app.feishu_enabled
+		enabled:         app.feishu_runtime_enabled()
 		configured:      app.feishu_runtime_ready()
 		app_count:       apps.len
 		connected_count: connected_count
@@ -1931,12 +1984,10 @@ fn (mut app App) feishu_runtime_buffer_patch(req WebSocketUpstreamSendRequest) {
 		}
 		app.feishu_mu.unlock()
 		if stream_id != '' {
-			app.codex_mu.@lock()
-			app.codex_runtime.stream_map[stream_id] << CodexTarget{
+			app.codex_add_stream_target(app.codex_resolve_instance_for_stream(stream_id), stream_id, CodexTarget{
 				platform:   'feishu'
 				message_id: send_result.message_id
-			}
-			app.codex_mu.unlock()
+			})
 			app.dispatch_feishu_message_sent(stream_id, send_result.message_id)
 		}
 		return
@@ -2032,12 +2083,10 @@ fn (mut app App) feishu_runtime_send_followup_segment(buf FeishuStreamBuffer, ma
 		content:         card_payload
 	})!
 	if buf.stream_id.trim_space() != '' {
-		app.codex_mu.@lock()
-		app.codex_runtime.stream_map[buf.stream_id] << CodexTarget{
+		app.codex_add_stream_target(app.codex_resolve_instance_for_stream(buf.stream_id), buf.stream_id, CodexTarget{
 			platform:   'feishu'
 			message_id: send_result.message_id
-		}
-		app.codex_mu.unlock()
+		})
 		app.dispatch_feishu_message_sent(buf.stream_id, send_result.message_id)
 	}
 	return send_result.message_id

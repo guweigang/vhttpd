@@ -7,6 +7,9 @@ import veb
 fn start_server_runtime(mut app App, runtime_cfg ServerRuntimeConfig) {
 	initialize_app_runtime(mut app, runtime_cfg.internal_admin_socket)
 	runtime_cfg.executor_plan.lifecycle.start(mut app)
+	app.logic_executor.warmup(mut app) or {
+		log.error('[vhttpd] logic executor warmup failed: ${err}')
+	}
 	mount_app_assets(mut app)
 	install_app_middleware(mut app)
 	emit_server_started_event(mut app, runtime_cfg.host, runtime_cfg.port, runtime_cfg.admin_enabled,

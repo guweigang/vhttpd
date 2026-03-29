@@ -133,6 +133,16 @@ pub fn (mut exec CommandExecutor) execute_websocket_upstream_commands(source_act
 		normalized := NormalizedCommand.from_worker_command(command)
 		log.info('[ws-cmd]   #${index}: type=${normalized.routing_type()} kind=${normalized.kind} event=${normalized.normalized_event('')} provider=${normalized.normalized_provider('')} stream_id=${normalized.correlation.stream_id}')
 		mut snapshot := exec.new_snapshot(source_activity_id, index, command)
+		if normalized.is_provider_instance_command() {
+			handled, exec_err := exec.execute_provider_instance_command(normalized, mut snapshot)
+			if handled {
+				if exec_err != '' {
+					last_error = exec_err
+				}
+				snapshots << snapshot
+				continue
+			}
+		}
 		route := exec.route_from_normalized(normalized)
 		handled, exec_err := exec.execute_routed_command(route, command, normalized, mut snapshot)
 		if handled {
@@ -151,6 +161,39 @@ pub fn (mut exec CommandExecutor) execute_websocket_upstream_commands(source_act
 		snapshots << snapshot
 	}
 	return snapshots, last_error
+}
+
+fn (mut exec CommandExecutor) execute_provider_instance_command(normalized NormalizedCommand, mut snapshot WebSocketUpstreamCommandActivity) (bool, string) {
+	mut app := exec.app
+	if normalized.is_provider_instance_upsert() {
+		spec := app.provider_instance_upsert(ProviderInstanceSpec{
+			provider:      normalized.provider
+			instance:      normalized.instance
+			config_json:   normalized.config_raw
+			desired_state: normalized.desired_state
+		})
+		app.provider_instance_apply(spec) or {
+			snapshot.status = 'error'
+			snapshot.error = err.msg()
+			return true, err.msg()
+		}
+		snapshot.status = 'upserted'
+		snapshot.provider = spec.provider
+		snapshot.instance = spec.instance
+		return true, ''
+	}
+	if normalized.is_provider_instance_ensure() {
+		spec := app.provider_instance_ensure(normalized.provider, normalized.instance) or {
+			snapshot.status = 'error'
+			snapshot.error = err.msg()
+			return true, err.msg()
+		}
+		snapshot.status = 'ensured'
+		snapshot.provider = spec.provider
+		snapshot.instance = spec.instance
+		return true, ''
+	}
+	return false, ''
 }
 
 fn (mut exec CommandExecutor) execute_routed_command(route ProviderRouteKind, command WorkerWebSocketUpstreamCommand, normalized NormalizedCommand, mut snapshot WebSocketUpstreamCommandActivity) (bool, string) {

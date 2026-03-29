@@ -1,9 +1,10 @@
 import { mkdir, stat } from "fs";
 import * as path from "path";
-import { feishuText, feishuUpdateText, codexRpcCall, codexTurnStart, codexTurnInterrupt, codexSessionClear, feishuSessionClear } from "./commands.mts";
+import { feishuText, feishuUpdateText, codexRpcCall, codexTurnStart, codexTurnInterrupt, codexSessionClear, feishuSessionClear, providerInstanceUpsert, providerInstanceEnsure } from "./commands.mts";
 import { parseFeishuInboundFrame } from "./feishu.mts";
 import { parseCodexRpcResponse, parseCodexNotification } from "./codex.mts";
-import { botDefaults } from "./config.mts";
+import { botDefaults } from "../config/config.mts";
+import providerConfig from "../config/provider-config.mts";
 import {
   appendStreamDraft,
   bindProjectToChat,
@@ -18,6 +19,8 @@ import {
   getSelectionScope,
   getLatestProjectThread,
   getStreamState,
+  listRecentThreadStreams,
+  listInstanceSpecs,
   listBoundChatProjects,
   listChatProjects,
   listRecentProjectThreads,
@@ -26,13 +29,55 @@ import {
   resetChatThread,
   runtimeSnapshot,
   unbindProjectFromChat,
+  upsertInstanceSpec,
   upsertSetting,
+  updateProjectDefaultCodexInstance,
   updateProjectRecordPath,
   updateStreamState,
   updateChatState,
 } from "./state.mjs";
 
 const CODEXBOT_TS_BUILD = "codexbot-ts-2026-03-28-idle-thread-read-v2";
+const threadNameCache = new Map();
+const pendingThreadRenameCache = new Map();
+
+function rememberThreadName(threadId, value) {
+  const key = typeof threadId === "string" ? threadId.trim() : "";
+  const name = typeof value === "string" ? value.trim() : "";
+  if (!key || !name) {
+    return;
+  }
+  threadNameCache.set(key, name);
+}
+
+function lookupThreadName(threadId) {
+  const key = typeof threadId === "string" ? threadId.trim() : "";
+  if (!key) {
+    return "";
+  }
+  return threadNameCache.get(key) || "";
+}
+
+function rememberPendingThreadRename(threadId, previousName, nextName) {
+  const key = typeof threadId === "string" ? threadId.trim() : "";
+  if (!key) {
+    return;
+  }
+  pendingThreadRenameCache.set(key, {
+    previousName: typeof previousName === "string" ? previousName.trim() : "",
+    nextName: typeof nextName === "string" ? nextName.trim() : "",
+  });
+}
+
+function consumePendingThreadRename(threadId) {
+  const key = typeof threadId === "string" ? threadId.trim() : "";
+  if (!key) {
+    return undefined;
+  }
+  const pending = pendingThreadRenameCache.get(key);
+  pendingThreadRenameCache.delete(key);
+  return pending;
+}
 
 function mdInline(value) {
   const text = typeof value === "string" ? value.trim() : String(value ?? "").trim();
@@ -60,6 +105,17 @@ function mdBullet(label, value, { code = false } = {}) {
     return "";
   }
   return `- ${label}: ${code ? mdInline(text) : text}`;
+}
+
+function normalizeMainInstanceAlias(value, fallbackValue = "") {
+  const text = typeof value === "string" ? value.trim() : "";
+  if (text === "default") {
+    return "main";
+  }
+  if (text !== "") {
+    return text;
+  }
+  return fallbackValue;
 }
 
 function containsMarkdownSyntax(text) {
@@ -301,6 +357,11 @@ function helpText() {
       "- `/unbind [project_key]`",
       "- `/projects`",
       "- `/project` / `/project [project_key]`",
+      "- `/project-instance [project_key] [instance]`",
+    ]),
+    mdSection("Instance", [
+      "- `/instances`",
+      "- `/instance` / `/instance [name]`",
     ]),
     mdSection("Model", [
       "- `/models` / `/model [model_id]`",
@@ -308,6 +369,7 @@ function helpText() {
     mdSection("Thread", [
       "- `/threads`",
       "- `/thread` / `/thread [thread_id]`",
+      "- `/thread rename [title]`",
       "- `/use [project_key|model_id|thread_id]`",
       "- `/use latest`",
       "- `/new [model_id]`",
@@ -368,6 +430,7 @@ function currentProjectText(state) {
   return mdSection("Current Project", [
     mdBullet("Project", state.projectKey, { code: true }),
     mdBullet("CWD", state.cwd, { code: true }),
+    mdBullet("Codex Instance", state.codexInstance || botDefaults().defaultCodexInstance || "main", { code: true }),
   ]);
 }
 
@@ -375,6 +438,7 @@ function projectSelectedText(state) {
   return mdSection("Project Updated", [
     mdBullet("Project", state.projectKey, { code: true }),
     mdBullet("CWD", state.cwd, { code: true }),
+    mdBullet("Codex Instance", state.codexInstance || botDefaults().defaultCodexInstance || "main", { code: true }),
   ]);
 }
 
@@ -384,7 +448,41 @@ function projectCreatedText(project, state) {
     mdBullet("Path", project.repoPath, { code: true }),
     mdBullet("Current Project", state.projectKey, { code: true }),
     mdBullet("Model", state.model, { code: true }),
+    mdBullet("Codex Instance", state.codexInstance || botDefaults().defaultCodexInstance || "main", { code: true }),
   ]);
+}
+
+function currentInstanceText(state, project = undefined) {
+  return mdSection("Current Instance", [
+    mdBullet("Session", state.codexInstance || botDefaults().defaultCodexInstance || "main", { code: true }),
+    mdBullet("Project", state.projectKey, { code: true }),
+    mdBullet("Project Default", project?.defaultCodexInstance || botDefaults().defaultCodexInstance || "main", { code: true }),
+  ]);
+}
+
+function instanceSelectedText(state, previousInstance, project = undefined) {
+  const nextInstance = state.codexInstance || botDefaults().defaultCodexInstance || "main";
+  return mdSection("Instance Updated", [
+    mdBullet("Previous", previousInstance || "main", { code: true }),
+    mdBullet("Session", nextInstance, { code: true }),
+    mdBullet("Project", state.projectKey, { code: true }),
+    mdBullet("Project Default", project?.defaultCodexInstance || botDefaults().defaultCodexInstance || "main", { code: true }),
+    "- Current thread binding cleared.",
+  ]);
+}
+
+function projectInstanceUpdatedText(project, currentProjectKey = "", currentSessionInstance = "") {
+  const lines = [
+    mdBullet("Project", project.projectKey, { code: true }),
+    mdBullet("Project Default", project.defaultCodexInstance || "main", { code: true }),
+  ];
+  if (project.projectKey === currentProjectKey) {
+    lines.push(mdBullet("Current Session", currentSessionInstance || project.defaultCodexInstance || "main", { code: true }));
+    lines.push("- Current thread binding cleared.");
+  } else {
+    lines.push("- Current session project is unchanged.");
+  }
+  return mdSection("Project Instance Updated", lines);
 }
 
 function settingsEmptyText() {
@@ -469,6 +567,23 @@ function threadReadQueuedText() {
   return "Reading the latest assistant reply from this thread.";
 }
 
+function threadRenameQueuedText(threadId, title) {
+  return mdSection("Thread Rename", [
+    mdBullet("Thread", threadId || "unknown", { code: true }),
+    mdBullet("New Title", title),
+    "- Rename request sent to Codex.",
+  ]);
+}
+
+function threadRenamedText(threadId, previousTitle, nextTitle) {
+  const lines = [mdBullet("Thread", threadId || "unknown", { code: true })];
+  if (previousTitle) {
+    lines.push(mdBullet("Previous", previousTitle));
+  }
+  lines.push(mdBullet("Current", nextTitle || previousTitle || "renamed"));
+  return mdSection("Thread Renamed", lines);
+}
+
 function codexRpcErrorText(method, message) {
   return mdSection("Codex RPC Error", [
     mdBullet("Method", method, { code: true }),
@@ -502,6 +617,13 @@ function codexErrorText(method) {
   ]);
 }
 
+function threadExpiredRestartingText(threadId) {
+  return mdSection("Thread Restarting", [
+    mdBullet("Previous Thread", threadId || "unknown", { code: true }),
+    "- The saved Codex thread is no longer available. Starting a new thread automatically.",
+  ]);
+}
+
 function truncateText(text, maxLength = 3500) {
   if (typeof text !== "string") {
     return "";
@@ -531,6 +653,51 @@ function extractThreadRows(result) {
     return result;
   }
   return [];
+}
+
+function codexRpcDebugText(response) {
+  const parts = [];
+  if (typeof response?.errorMessage === "string" && response.errorMessage.trim() !== "") {
+    parts.push(response.errorMessage.trim());
+  }
+  if (Array.isArray(response?.result)) {
+    for (const entry of response.result) {
+      if (typeof entry === "string" && entry.trim() !== "") {
+        parts.push(entry.trim());
+      } else if (entry && typeof entry === "object") {
+        parts.push(prettyJson(entry));
+      }
+    }
+  } else if (response?.result && typeof response.result === "object") {
+    parts.push(prettyJson(response.result));
+  }
+  if (response?.raw && typeof response.raw === "object") {
+    if (typeof response.raw.raw_response === "string" && response.raw.raw_response.trim() !== "") {
+      parts.push(response.raw.raw_response.trim());
+    }
+    if (response.raw.error && typeof response.raw.error === "object") {
+      parts.push(prettyJson(response.raw.error));
+    }
+  }
+  return parts.join("\n").toLowerCase();
+}
+
+function codexRpcIndicatesMissingThread(response) {
+  return codexRpcDebugText(response).includes("thread not found");
+}
+
+function extractThreadNameFromResult(result) {
+  if (!result || typeof result !== "object") {
+    return "";
+  }
+  const thread = result.thread && typeof result.thread === "object" ? result.thread : {};
+  if (typeof thread.name === "string" && thread.name.trim() !== "") {
+    return thread.name.trim();
+  }
+  if (typeof thread.title === "string" && thread.title.trim() !== "") {
+    return thread.title.trim();
+  }
+  return "";
 }
 
 function summarizeThreadRow(thread, index) {
@@ -707,6 +874,70 @@ function projectNotBoundText(projectKey) {
   ]);
 }
 
+function codexInstanceUnknownText(instance, knownInstances) {
+  const lines = [mdBullet("Instance", instance, { code: true })];
+  if (knownInstances.length) {
+    lines.push(mdBullet("Known", knownInstances.join(", "), { code: true }));
+  }
+  lines.push("- Use `/instances` to inspect configured Codex instances.");
+  return mdSection("Unknown Codex Instance", lines);
+}
+
+function codexInstancesEmptyText() {
+  return mdSection("Codex Instances", [
+    "- No Codex instances are configured.",
+  ]);
+}
+
+function formatCodexInstanceEntry(entry, index, currentInstance, projectDefaultInstance) {
+  const badges = [];
+  if (entry.name === currentInstance) {
+    badges.push("session");
+  }
+  if (entry.name === projectDefaultInstance) {
+    badges.push("project");
+  }
+  const suffix = badges.length ? ` ${badges.join(",")}` : "";
+  const lines = [
+    `**${index}. ${mdInline(entry.name)}${suffix}**`,
+    mdBullet("URL", entry.url, { code: true }),
+    mdBullet("CWD", entry.cwd, { code: true }),
+    mdBullet("Startup", entry.startup, { code: true }),
+  ];
+  if (entry.desiredState) {
+    lines.push(mdBullet("Desired", entry.desiredState, { code: true }));
+  }
+  if (entry.source) {
+    lines.push(mdBullet("Source", entry.source, { code: true }));
+  }
+  return lines.join("\n");
+}
+
+function codexInstancesListText(state, project, entries) {
+  const lines = [
+    mdBullet("Session", state.codexInstance || botDefaults().defaultCodexInstance || "main", { code: true }),
+    mdBullet("Project", state.projectKey, { code: true }),
+    mdBullet("Project Default", project?.defaultCodexInstance || botDefaults().defaultCodexInstance || "main", { code: true }),
+  ];
+  if (!entries.length) {
+    lines.push("- No Codex instances are configured.");
+    return mdSection("Codex Instances", lines);
+  }
+  lines.push("");
+  for (let i = 0; i < entries.length; i += 1) {
+    lines.push(formatCodexInstanceEntry(
+      entries[i],
+      i + 1,
+      state.codexInstance || botDefaults().defaultCodexInstance || "main",
+      project?.defaultCodexInstance || botDefaults().defaultCodexInstance || "main",
+    ));
+    if (i < entries.length - 1) {
+      lines.push("");
+    }
+  }
+  return mdSection("Codex Instances", lines);
+}
+
 function projectUnbindCurrentBlockedText(projectKey) {
   return mdSection("Cannot Unbind Current Project", [
     mdBullet("Project", projectKey, { code: true }),
@@ -730,12 +961,54 @@ function currentThreadText(state) {
   return state.threadId ? `Current thread: ${mdInline(state.threadId)}` : "No thread is currently bound.";
 }
 
-function currentThreadSummaryText(state, stream) {
+function summarizeInteractionText(text, maxLength = 140) {
+  const raw = typeof text === "string" ? text.replace(/\s+/g, " ").trim() : "";
+  if (!raw) {
+    return "";
+  }
+  if (raw.length <= maxLength) {
+    return raw;
+  }
+  return `${raw.slice(0, maxLength - 3)}...`;
+}
+
+function formatThreadInteractionEntry(stream, index) {
+  const lines = [`**${index}. ${mdInline(stream.streamId)}**`, mdBullet("Status", stream.status || "queued", { code: true })];
+  if (stream.prompt) {
+    lines.push(mdBullet("Prompt", summarizeInteractionText(stream.prompt)));
+  }
+  const answer = stream.resultText || stream.draft || "";
+  if (answer) {
+    lines.push(mdBullet("Reply", summarizeInteractionText(answer)));
+  }
+  return lines.join("\n");
+}
+
+function appendThreadInteractionSummary(lines, streams = []) {
+  if (!Array.isArray(streams) || streams.length === 0) {
+    return lines;
+  }
+  lines.push("");
+  lines.push("Recent Interactions:");
+  for (let i = 0; i < streams.length; i += 1) {
+    lines.push(formatThreadInteractionEntry(streams[i], i + 1));
+    if (i < streams.length - 1) {
+      lines.push("");
+    }
+  }
+  return lines;
+}
+
+function currentThreadSummaryText(state, stream, interactions = []) {
   const lines = [
     mdBullet("Session Scope", sessionScopeText(state.sessionKey)),
     currentThreadText(state),
     mdBullet("Next Prompt", state.threadId ? "reuse current thread" : "start new thread"),
   ];
+  const threadName = lookupThreadName(state.threadId || "");
+  if (threadName) {
+    lines.push(mdBullet("Name", threadName));
+  }
   if (stream) {
     lines.push(mdBullet("Last Stream", stream.streamId, { code: true }));
     lines.push(mdBullet("Last Status", stream.status || "queued", { code: true }));
@@ -743,6 +1016,7 @@ function currentThreadSummaryText(state, stream) {
       lines.push(mdBullet("Last Prompt", stream.prompt));
     }
   }
+  appendThreadInteractionSummary(lines, interactions);
   return mdSection("Current Thread", lines);
 }
 
@@ -751,6 +1025,10 @@ function formatThreadEntry(stream, index, currentThreadId = "") {
     `**${index}. ${mdInline(stream.threadId)}${stream.threadId === currentThreadId ? " current" : ""}**`,
     mdBullet("Status", stream.status || "queued", { code: true }),
   ];
+  const threadName = lookupThreadName(stream.threadId || "");
+  if (threadName) {
+    lines.push(mdBullet("Name", threadName));
+  }
   if (stream.prompt) {
     lines.push(mdBullet("Prompt", stream.prompt));
   }
@@ -763,6 +1041,7 @@ function formatProjectEntry(project, currentProjectKey, index) {
     `**${index}. ${mdInline(project.projectKey)}${badge}**`,
     mdBullet("Model", project.model, { code: true }),
     mdBullet("Path", project.cwd, { code: true }),
+    mdBullet("Codex", project.codexInstance || botDefaults().defaultCodexInstance || "main", { code: true }),
   ];
   lines.push(mdBullet("Thread", project.threadId || "not bound", { code: true }));
   return lines.join("\n");
@@ -824,8 +1103,12 @@ function threadsListText(state, streams) {
   return mdSection("Recent Threads", lines);
 }
 
-function threadSelectedText(state, threadId, sourceStream) {
+function threadSelectedText(state, threadId, sourceStream, interactions = []) {
   const lines = [mdBullet("Thread", threadId, { code: true }), mdBullet("Session Scope", sessionScopeText(state.sessionKey))];
+  const threadName = lookupThreadName(threadId);
+  if (threadName) {
+    lines.push(mdBullet("Name", threadName));
+  }
   if (sourceStream?.prompt) {
     lines.push(mdBullet("Latest Prompt", sourceStream.prompt));
   }
@@ -834,6 +1117,7 @@ function threadSelectedText(state, threadId, sourceStream) {
   }
   lines.push(mdBullet("Next Prompt", "reuse current thread"));
   lines.push("- Next prompt will continue on this thread.");
+  appendThreadInteractionSummary(lines, interactions);
   return mdSection("Thread Selected", lines);
 }
 
@@ -861,7 +1145,14 @@ function isActiveStream(stream) {
     return false;
   }
   const status = typeof stream.status === "string" ? stream.status.trim().toLowerCase() : "";
-  return ["queued", "thread_ready", "running", "streaming"].includes(status);
+  return [
+    "queued",
+    "thread_ready",
+    "thread_ready_notified",
+    "starting_turn",
+    "running",
+    "streaming",
+  ].includes(status);
 }
 
 function busyText(stream) {
@@ -931,6 +1222,14 @@ function codexStatusText(status, detail) {
 
 function isTerminalIdleStatus(status) {
   return typeof status === "string" && status.trim().toLowerCase() === "idle";
+}
+
+function normalizeCodexRuntimeStatus(status) {
+  const text = typeof status === "string" ? status.trim().toLowerCase() : "";
+  if (text === "active" || text === "inprogress" || text === "in_progress") {
+    return "running";
+  }
+  return text || status || "";
 }
 
 function sandboxPolicyType(sandbox) {
@@ -1116,6 +1415,228 @@ function buildTurnStartParams(stream, state, defaults) {
   };
 }
 
+function resolveConfiguredRuntimePath(value) {
+  const text = typeof value === "string" ? value.trim() : "";
+  if (!text) {
+    return "";
+  }
+  return path.isAbsolute(text) ? text : path.resolve(process.cwd(), text);
+}
+
+function configuredCodexInstance(instance) {
+  const name = normalizeMainInstanceAlias(instance);
+  if (!name) {
+    return undefined;
+  }
+  return providerConfig.providers?.codex?.instances?.[name];
+}
+
+function configuredCodexStartupInstances() {
+  const instances = providerConfig.providers?.codex?.instances || {};
+  return Object.keys(instances)
+    .sort()
+    .filter((name) => instances[name]?.startup !== false);
+}
+
+function configuredCodexInstanceNames() {
+  return Object.keys(providerConfig.providers?.codex?.instances || {}).sort();
+}
+
+function configuredFeishuInstance(instance) {
+  const name = normalizeMainInstanceAlias(instance);
+  if (!name) {
+    return undefined;
+  }
+  return providerConfig.providers?.feishu?.instances?.[name];
+}
+
+function configuredFeishuStartupInstances() {
+  const instances = providerConfig.providers?.feishu?.instances || {};
+  return Object.keys(instances)
+    .sort()
+    .filter((name) => instances[name]?.startup !== false);
+}
+
+function fallbackCodexInstance(value, defaults = botDefaults()) {
+  return normalizeMainInstanceAlias(value, normalizeMainInstanceAlias(defaults.defaultCodexInstance, "main"));
+}
+
+function fallbackFeishuInstance(value, defaults = botDefaults()) {
+  return normalizeMainInstanceAlias(value, normalizeMainInstanceAlias(defaults.defaultFeishuInstance, "main"));
+}
+
+async function resolveCodexInstance(state, stream = undefined, project = undefined) {
+  const defaults = botDefaults();
+  if (stream?.codexInstance) {
+    return fallbackCodexInstance(stream.codexInstance, defaults);
+  }
+  if (state?.codexInstance) {
+    return fallbackCodexInstance(state.codexInstance, defaults);
+  }
+  const resolvedProject = project || (state?.projectKey ? await getProjectRecord(state.projectKey) : undefined);
+  if (resolvedProject?.defaultCodexInstance) {
+    return fallbackCodexInstance(resolvedProject.defaultCodexInstance, defaults);
+  }
+  return fallbackCodexInstance("", defaults);
+}
+
+function buildCodexInstanceSpec(state, stream = undefined, defaults = botDefaults(), instance = "") {
+  const source = stream || state || {};
+  const configured = configuredCodexInstance(fallbackCodexInstance(instance, defaults)) || {};
+  const configuredCwd = resolveConfiguredRuntimePath(configured.cwd || "");
+  return {
+    url: configured.url || defaults.codexUrl,
+    model: source.model || state?.model || configured.model || defaults.model,
+    effort: configured.effort || defaults.effort,
+    cwd: source.cwd || state?.cwd || configuredCwd || defaults.cwd,
+    approval_policy: configured.approval_policy || defaults.approvalPolicy,
+    sandbox: configured.sandbox || defaults.sandbox,
+    reconnect_delay_ms: Number(configured.reconnect_delay_ms) > 0 ? Number(configured.reconnect_delay_ms) : defaults.codexReconnectDelay,
+    flush_interval_ms: Number(configured.flush_interval_ms) > 0 ? Number(configured.flush_interval_ms) : defaults.codexFlushInterval,
+  };
+}
+
+function buildFeishuInstanceSpec(defaults = botDefaults(), instance = "") {
+  const configured = configuredFeishuInstance(fallbackFeishuInstance(instance, defaults)) || {};
+  return {
+    app_id: configured.app_id || "",
+    app_secret: configured.app_secret || "",
+    verification_token: configured.verification_token || "",
+    encrypt_key: configured.encrypt_key || "",
+  };
+}
+
+function hasFeishuConnectionCredentials(spec) {
+  if (!spec || typeof spec !== "object") {
+    return false;
+  }
+  const appId = typeof spec.app_id === "string" ? spec.app_id.trim() : "";
+  const appSecret = typeof spec.app_secret === "string" ? spec.app_secret.trim() : "";
+  return appId !== "" && appSecret !== "";
+}
+
+function hasConfiguredInstanceSpec(spec) {
+  if (!spec || typeof spec !== "object") {
+    return false;
+  }
+  return Object.values(spec).some((value) => typeof value === "string" && value.trim() !== "");
+}
+
+async function buildProviderInstanceCommands(provider, instance, spec, desiredState = "connected", options = {}) {
+  const commands = [];
+  if (hasConfiguredInstanceSpec(spec)) {
+    await upsertInstanceSpec(provider, instance, spec, desiredState);
+    commands.push(providerInstanceUpsert(provider, instance, spec, desiredState));
+  } else if (!options.allowEnsureWithoutStoredSpec) {
+    return [];
+  }
+  commands.push(providerInstanceEnsure(provider, instance));
+  return commands;
+}
+
+async function ensureStreamCodexInstance(stream, state, project = undefined) {
+  const resolved = await resolveCodexInstance(state, stream, project);
+  if (stream?.codexInstance === resolved) {
+    return stream;
+  }
+  return updateStreamState(stream.streamId, { codexInstance: resolved });
+}
+
+async function buildCodexPreflightCommands(state, stream, project = undefined) {
+  const defaults = botDefaults();
+  const instance = await resolveCodexInstance(state, stream, project);
+  const normalizedInstance = fallbackCodexInstance(instance, defaults);
+  const defaultInstance = fallbackCodexInstance("", defaults);
+  const explicitNonDefaultInstance = normalizedInstance !== defaultInstance && configuredCodexInstance(normalizedInstance);
+  if (!defaults.enableProviderInstancePreflight && !explicitNonDefaultInstance) {
+    return [];
+  }
+  const spec = buildCodexInstanceSpec(state, stream, defaults, normalizedInstance);
+  return buildProviderInstanceCommands("codex", instance, spec, "connected");
+}
+
+async function buildAppStartupCommands(runtime = undefined) {
+  const defaults = botDefaults();
+  const commands = [];
+  const startedCodexInstances = new Set();
+  for (const instance of configuredCodexStartupInstances()) {
+    const resolvedInstance = fallbackCodexInstance(instance, defaults);
+    const codexSpec = buildCodexInstanceSpec(undefined, undefined, defaults, resolvedInstance);
+    commands.push(...await buildProviderInstanceCommands("codex", resolvedInstance, codexSpec, "connected"));
+    startedCodexInstances.add(resolvedInstance);
+  }
+  const codexInstance = fallbackCodexInstance("", defaults);
+  if (!startedCodexInstances.has(codexInstance)) {
+    const codexSpec = buildCodexInstanceSpec(undefined, undefined, defaults, codexInstance);
+    commands.push(...await buildProviderInstanceCommands("codex", codexInstance, codexSpec, "connected"));
+  }
+
+  for (const instance of configuredFeishuStartupInstances()) {
+    const resolvedInstance = fallbackFeishuInstance(instance, defaults);
+    const feishuSpec = buildFeishuInstanceSpec(defaults, resolvedInstance);
+    if (hasFeishuConnectionCredentials(feishuSpec)) {
+      commands.push(...await buildProviderInstanceCommands("feishu", resolvedInstance, feishuSpec, "connected"));
+    } else if (runtime && typeof runtime.log === "function") {
+      runtime.log("codexbot-app-ts app_startup", CODEXBOT_TS_BUILD, `skip feishu startup for ${resolvedInstance}: missing FEISHU_APP_ID or FEISHU_APP_SECRET`);
+    }
+  }
+
+  if (runtime && typeof runtime.log === "function") {
+    runtime.log("codexbot-app-ts app_startup", CODEXBOT_TS_BUILD, `commands=${commands.length}`);
+  }
+  return commands;
+}
+
+async function runLaneStartup(runtime = undefined) {
+  if (runtime && typeof runtime.log === "function") {
+    runtime.log("codexbot-app-ts startup", CODEXBOT_TS_BUILD);
+  }
+  return [];
+}
+
+async function continueQueuedTurnStart(streamId, threadId, threadPath = "") {
+  if (!streamId || !threadId) {
+    return [];
+  }
+  const bound = await bindThreadToStream(streamId, threadId, threadPath || "");
+  const latest = bound?.stream || await getStreamState(streamId);
+  if (!latest) {
+    return [];
+  }
+  if (latest.turnId) {
+    return [];
+  }
+  if (latest.status && !["queued", "thread_ready", "thread_ready_notified"].includes(latest.status)) {
+    return [];
+  }
+  await finalizeStreamState(streamId, {
+    status: "starting_turn",
+    threadPath: threadPath || latest.threadPath || "",
+    lastEvent: "turn/start.requested",
+  });
+  const chat = await ensureChatState(latest.sessionKey, latest.chatId);
+  const defaults = botDefaults();
+  const instance = fallbackCodexInstance(latest.codexInstance || chat.codexInstance, defaults);
+  return [
+    feishuUpdateText(streamId, threadBoundText(threadId)),
+    codexTurnStart(
+      buildTurnStartParams(
+        {
+          ...latest,
+          threadId,
+        },
+        {
+          ...chat,
+          threadId,
+        },
+        defaults,
+      ),
+      streamId,
+      instance,
+    ),
+  ];
+}
+
 function readFinalAnswerFromSessionPath(runtime, sessionPath) {
   if (typeof sessionPath !== "string" || sessionPath.trim() === "") {
     return "";
@@ -1173,6 +1694,24 @@ function resolveSessionPath(runtime, stream, latest) {
   }
 }
 
+function logCodexRoute(runtime, stage, options = {}) {
+  if (!runtime || typeof runtime.log !== "function") {
+    return;
+  }
+  const instance = fallbackCodexInstance(options.instance || "", botDefaults());
+  const spec = buildCodexInstanceSpec(options.state, options.stream, botDefaults(), instance);
+  runtime.log(
+    "codexbot-app-ts codex route",
+    CODEXBOT_TS_BUILD,
+    stage,
+    `instance=${instance}`,
+    `url=${spec?.url || ""}`,
+    `threadId=${options.threadId || ""}`,
+    `sessionPath=${options.sessionPath || ""}`,
+    `streamId=${options.streamId || ""}`,
+  );
+}
+
 async function persistNotificationContext(streamId, notification, stream) {
   const patch = {};
   if (notification.turnId && notification.turnId !== stream.turnId) {
@@ -1225,6 +1764,115 @@ async function handleSettingsCommand(session, text) {
   };
 }
 
+async function handleInstancesCommand(session) {
+  const state = await ensureChatState(session.sessionKey, session.chatId);
+  const project = await getProjectRecord(state.projectKey);
+  const configuredInstances = providerConfig.providers?.codex?.instances || {};
+  const persisted = await listInstanceSpecs("codex");
+  const persistedMap = new Map(persisted.map((entry) => [entry.instance, entry]));
+  const names = new Set([...Object.keys(configuredInstances), ...persisted.map((entry) => entry.instance)]);
+  const defaults = botDefaults();
+  const entries = Array.from(names)
+    .sort()
+    .map((name) => {
+      const configured = configuredInstances[name] || {};
+      const stored = persistedMap.get(name);
+      return {
+        name,
+        url: configured.url || stored?.config?.url || (name === "main" ? defaults.codexUrl : ""),
+        cwd: configured.cwd || stored?.config?.cwd || (name === "main" ? defaults.cwd : ""),
+        startup: configuredInstances[name] ? (configured.startup === false ? "false" : "true") : "dynamic",
+        desiredState: stored?.desiredState || "",
+        source: configuredInstances[name] ? "config" : "registry",
+      };
+    });
+  return {
+    handled: true,
+    commands: [feishuReplyText(session, codexInstancesListText(state, project, entries))],
+  };
+}
+
+async function handleInstanceCommand(session, text) {
+  const state = await ensureChatState(session.sessionKey, session.chatId);
+  const project = await getProjectRecord(state.projectKey);
+  const parts = text.split(/\s+/).filter(Boolean);
+  if (parts.length === 1) {
+    return {
+      handled: true,
+      commands: [feishuReplyText(session, currentInstanceText(state, project))],
+    };
+  }
+  const instance = fallbackCodexInstance(parts.slice(1).join(" ").trim(), botDefaults());
+  if (!configuredCodexInstance(instance)) {
+    return {
+      handled: true,
+      commands: [feishuReplyText(session, codexInstanceUnknownText(instance, configuredCodexInstanceNames()))],
+    };
+  }
+  const next = await updateChatState(session.sessionKey, session.chatId, {
+    codexInstance: instance,
+    threadId: "",
+    threadPath: "",
+  }, {
+    syncProjectDefaults: false,
+  });
+  return {
+    handled: true,
+    commands: [feishuReplyText(session, instanceSelectedText(next, state.codexInstance || "", project))],
+  };
+}
+
+async function handleProjectInstanceCommand(session, text) {
+  const state = await ensureChatState(session.sessionKey, session.chatId);
+  const match = text.match(/^\/project-instance\s+(\S+)\s+(\S+)\s*$/);
+  if (!match) {
+    return {
+      handled: true,
+      commands: [feishuReplyText(session, usageText("/project-instance", "[project_key] [instance]"))],
+    };
+  }
+  const projectKey = match[1].trim();
+  const instance = fallbackCodexInstance(match[2].trim(), botDefaults());
+  if (!configuredCodexInstance(instance)) {
+    return {
+      handled: true,
+      commands: [feishuReplyText(session, codexInstanceUnknownText(instance, configuredCodexInstanceNames()))],
+    };
+  }
+  const boundProjects = await listBoundChatProjects(session.chatId, 128);
+  const bound = boundProjects.find((item) => item.projectKey === projectKey);
+  if (!bound) {
+    return {
+      handled: true,
+      commands: [feishuReplyText(session, projectNotBoundText(projectKey))],
+    };
+  }
+  const updatedProject = await updateProjectDefaultCodexInstance(projectKey, instance);
+  if (!updatedProject) {
+    return {
+      handled: true,
+      commands: [feishuReplyText(session, projectMissingText(projectKey))],
+    };
+  }
+  if (state.projectKey === projectKey) {
+    const next = await updateChatState(session.sessionKey, session.chatId, {
+      codexInstance: instance,
+      threadId: "",
+      threadPath: "",
+    }, {
+      syncProjectDefaults: false,
+    });
+    return {
+      handled: true,
+      commands: [feishuReplyText(session, projectInstanceUpdatedText(updatedProject, state.projectKey, next.codexInstance))],
+    };
+  }
+  return {
+    handled: true,
+    commands: [feishuReplyText(session, projectInstanceUpdatedText(updatedProject, state.projectKey, state.codexInstance))],
+  };
+}
+
 async function handleProjectCommand(session, text) {
   const state = await ensureChatState(session.sessionKey, session.chatId);
   const parts = text.split(/\s+/).filter(Boolean);
@@ -1243,11 +1891,18 @@ async function handleProjectCommand(session, text) {
       commands: [feishuReplyText(session, projectNotBoundText(projectKey))],
     };
   }
+  const nextInstance = fallbackCodexInstance(
+    bound.defaultCodexInstance || botDefaults().defaultCodexInstance,
+    botDefaults(),
+  );
   const next = await updateChatState(session.sessionKey, session.chatId, {
     projectKey,
     cwd: bound.repoPath || resolveProjectCwd(state, projectKey),
+    codexInstance: nextInstance,
     threadId: "",
     threadPath: "",
+  }, {
+    syncProjectDefaults: false,
   });
   return {
     handled: true,
@@ -1287,9 +1942,11 @@ async function handleCreateCommand(session, text) {
     };
   }
   await mkdir(repoPath, { recursive: true });
+  const nextInstance = fallbackCodexInstance(state.codexInstance, botDefaults());
   const next = await updateChatState(session.sessionKey, session.chatId, {
     projectKey,
     cwd: repoPath,
+    codexInstance: nextInstance,
     threadId: "",
     threadPath: "",
   });
@@ -1343,7 +2000,11 @@ async function handleBindCommand(session, text) {
   }
   const project = await getProjectRecord(projectKey);
   if (!project) {
-    await ensureProjectRecord(projectKey, repoPath, { defaultModel: state.model });
+    const defaultCodexInstance = fallbackCodexInstance(state.codexInstance, botDefaults());
+    await ensureProjectRecord(projectKey, repoPath, {
+      defaultModel: state.model,
+      defaultCodexInstance,
+    });
     await bindProjectToChat(session.chatId, projectKey, false);
     return {
       handled: true,
@@ -1427,15 +2088,20 @@ async function handleCodexCommand(session) {
     };
   }
   const stream = await createStreamState(session.sessionKey, session.chatId, session.text || `/codex ${parsed.method}`);
+  const project = await getProjectRecord(state.projectKey);
+  const streamWithInstance = await ensureStreamCodexInstance(stream, state, project);
   await updateStreamState(stream.streamId, {
     status: "rpc_query",
     lastEvent: `codex.rpc.query.${normalized.method}`,
   });
+  const preflight = await buildCodexPreflightCommands(state, streamWithInstance, project);
+  const instance = streamWithInstance.codexInstance || await resolveCodexInstance(state, streamWithInstance, project);
   return {
     handled: true,
     commands: [
+      ...preflight,
       feishuReplyText(session, codexRpcQueuedText(normalized.method), stream.streamId),
-      codexRpcCall(normalized.method, params, stream.streamId),
+      codexRpcCall(normalized.method, params, stream.streamId, instance),
     ],
   };
 }
@@ -1489,22 +2155,61 @@ async function handleThreadCommand(session) {
   const state = await ensureChatState(session.sessionKey, session.chatId);
   const parts = (session.text || "").split(/\s+/).filter(Boolean);
   if (parts.length > 1) {
+    if (parts[1] === "rename") {
+      const title = parts.slice(2).join(" ").trim();
+      if (!title) {
+        return {
+          handled: true,
+          commands: [feishuReplyText(session, usageText("/thread rename", "[title]"))],
+        };
+      }
+      if (!state.threadId) {
+        return {
+          handled: true,
+          commands: [feishuReplyText(session, codexThreadRequiredText())],
+        };
+      }
+      const previousName = lookupThreadName(state.threadId);
+      rememberPendingThreadRename(state.threadId, previousName, title);
+      rememberThreadName(state.threadId, title);
+      const project = await getProjectRecord(state.projectKey);
+      const stream = await createStreamState(session.sessionKey, session.chatId, session.text || `/thread rename ${title}`);
+      const streamWithInstance = await ensureStreamCodexInstance(stream, state, project);
+      await updateStreamState(stream.streamId, {
+        threadId: state.threadId,
+        threadPath: state.threadPath || "",
+        status: "rpc_query",
+        lastEvent: "thread/rename.requested",
+      });
+      const preflight = await buildCodexPreflightCommands(state, streamWithInstance, project);
+      const instance = streamWithInstance.codexInstance || await resolveCodexInstance(state, streamWithInstance, project);
+      return {
+        handled: true,
+        commands: [
+          ...preflight,
+          feishuReplyText(session, threadRenameQueuedText(state.threadId, title), stream.streamId),
+          codexRpcCall("thread/name/set", { threadId: state.threadId, name: title }, stream.streamId, instance),
+        ],
+      };
+    }
     const threadId = parts.slice(1).join(" ").trim();
     const recentThreads = await listRecentProjectThreads(state.projectKey, 32);
     const selected = recentThreads.find((stream) => stream.threadId === threadId);
+    const interactions = await listRecentThreadStreams(threadId, 3);
     const next = await updateChatState(session.sessionKey, session.chatId, {
       threadId,
       threadPath: selected?.threadPath || "",
     });
     return {
       handled: true,
-      commands: [feishuReplyText(session, threadSelectedText(next, threadId, selected))],
+      commands: [feishuReplyText(session, threadSelectedText(next, threadId, selected, interactions))],
     };
   }
   const lastStream = state.lastStreamId ? await getStreamState(state.lastStreamId) : undefined;
+  const interactions = state.threadId ? await listRecentThreadStreams(state.threadId, 3) : [];
   return {
     handled: true,
-    commands: [feishuReplyText(session, currentThreadSummaryText(state, lastStream))],
+    commands: [feishuReplyText(session, currentThreadSummaryText(state, lastStream, interactions))],
   };
 }
 
@@ -1540,8 +2245,14 @@ async function handleUseCommand(session) {
     const next = await updateChatState(session.sessionKey, session.chatId, {
       projectKey: value,
       cwd: project.repoPath || resolveProjectCwd(state, value),
+      codexInstance: fallbackCodexInstance(
+        project.defaultCodexInstance || botDefaults().defaultCodexInstance,
+        botDefaults(),
+      ),
       threadId: "",
       threadPath: "",
+    }, {
+      syncProjectDefaults: false,
     });
     return {
       handled: true,
@@ -1571,18 +2282,23 @@ async function handleUseCommand(session) {
       threadId: latest.threadId,
       threadPath: latest.threadPath || "",
     });
+    const project = await getProjectRecord(next.projectKey);
     const stream = await createStreamState(session.sessionKey, session.chatId, session.text || "/use latest");
+    const streamWithInstance = await ensureStreamCodexInstance(stream, next, project);
     await updateStreamState(stream.streamId, {
       threadId: latest.threadId,
       threadPath: latest.threadPath || "",
       status: "rpc_query",
       lastEvent: "thread/read.requested",
     });
+    const preflight = await buildCodexPreflightCommands(next, streamWithInstance, project);
+    const instance = streamWithInstance.codexInstance || await resolveCodexInstance(next, streamWithInstance, project);
     return {
       handled: true,
       commands: [
+        ...preflight,
         feishuReplyText(session, `${threadSelectedText(next, latest.threadId, latest)}\n- ${threadReadQueuedText()}`, stream.streamId),
-        codexRpcCall("thread/read", { threadId: latest.threadId, includeTurns: true }, stream.streamId),
+        codexRpcCall("thread/read", { threadId: latest.threadId, includeTurns: true }, stream.streamId, instance),
       ],
     };
   }
@@ -1592,18 +2308,23 @@ async function handleUseCommand(session) {
     threadId: value,
     threadPath: selected?.threadPath || "",
   });
+  const project = await getProjectRecord(next.projectKey);
   const stream = await createStreamState(session.sessionKey, session.chatId, session.text || `/use ${value}`);
+  const streamWithInstance = await ensureStreamCodexInstance(stream, next, project);
   await updateStreamState(stream.streamId, {
     threadId: value,
     threadPath: selected?.threadPath || "",
     status: "rpc_query",
     lastEvent: "thread/read.requested",
   });
+  const preflight = await buildCodexPreflightCommands(next, streamWithInstance, project);
+  const instance = streamWithInstance.codexInstance || await resolveCodexInstance(next, streamWithInstance, project);
   return {
     handled: true,
     commands: [
+      ...preflight,
       feishuReplyText(session, `${threadSelectedText(next, value, selected)}\n- ${threadReadQueuedText()}`, stream.streamId),
-      codexRpcCall("thread/read", { threadId: value, includeTurns: true }, stream.streamId),
+      codexRpcCall("thread/read", { threadId: value, includeTurns: true }, stream.streamId, instance),
     ],
   };
 }
@@ -1626,6 +2347,7 @@ async function handleNewCommand(session) {
 async function handleCancelCommand(session) {
   const state = await ensureChatState(session.sessionKey, session.chatId);
   const lastStream = state.lastStreamId ? await getStreamState(state.lastStreamId) : undefined;
+  const instance = fallbackCodexInstance(lastStream?.codexInstance || state.codexInstance, botDefaults());
   if (!lastStream || !isActiveStream(lastStream)) {
     return {
       handled: true,
@@ -1645,9 +2367,9 @@ async function handleCancelCommand(session) {
       handled: true,
       commands: [
         feishuUpdateText(lastStream.streamId, interruptingText),
-        codexTurnInterrupt(lastStream.threadId, lastStream.turnId, lastStream.streamId),
+        codexTurnInterrupt(lastStream.threadId, lastStream.turnId, lastStream.streamId, instance),
         feishuSessionClear(lastStream.streamId),
-        codexSessionClear(lastStream.streamId, lastStream.threadId),
+        codexSessionClear(lastStream.streamId, lastStream.threadId, instance),
       ],
     };
   }
@@ -1664,7 +2386,7 @@ async function handleCancelCommand(session) {
     commands: [
       feishuUpdateText(lastStream.streamId, detachedText),
       feishuSessionClear(lastStream.streamId),
-      codexSessionClear(lastStream.streamId, state.threadId || lastStream.threadId || ""),
+      codexSessionClear(lastStream.streamId, state.threadId || lastStream.threadId || "", instance),
     ],
   };
 }
@@ -1678,13 +2400,17 @@ async function handleRegularTask(session, prompt) {
       commands: [feishuReplyText(session, busyText(lastStream))],
     };
   }
+  const project = await getProjectRecord(state.projectKey);
   const stream = await createStreamState(session.sessionKey, session.chatId, prompt);
+  const streamWithInstance = await ensureStreamCodexInstance(stream, state, project);
   const defaults = botDefaults();
-  const commands = [feishuReplyText(session, taskQueuedText(stream), stream.streamId)];
+  const preflight = await buildCodexPreflightCommands(state, streamWithInstance, project);
+  const instance = streamWithInstance.codexInstance || await resolveCodexInstance(state, streamWithInstance, project);
+  const commands = [...preflight, feishuReplyText(session, taskQueuedText(streamWithInstance), stream.streamId)];
   if (state.threadId) {
-    commands.push(codexTurnStart(buildTurnStartParams(stream, state, defaults), stream.streamId));
+    commands.push(codexTurnStart(buildTurnStartParams(streamWithInstance, state, defaults), stream.streamId, instance));
   } else {
-    commands.push(codexRpcCall("thread/start", buildThreadStartParams(state, defaults), stream.streamId));
+    commands.push(codexRpcCall("thread/start", buildThreadStartParams(state, defaults), stream.streamId, instance));
   }
   return {
     handled: true,
@@ -1719,6 +2445,15 @@ async function routeFeishuCommand(frame) {
   }
   if (text === "/settings" || text === "/setting" || text.startsWith("/setting ")) {
     return handleSettingsCommand(session, text);
+  }
+  if (text === "/instances") {
+    return handleInstancesCommand(session);
+  }
+  if (text === "/instance" || text.startsWith("/instance ")) {
+    return handleInstanceCommand(session, text);
+  }
+  if (text === "/project-instance" || text.startsWith("/project-instance ")) {
+    return handleProjectInstanceCommand(session, text);
   }
   if (text === "/create" || text.startsWith("/create ")) {
     return handleCreateCommand(session, text);
@@ -1772,32 +2507,35 @@ async function handleCodexRpcResponse(frame) {
     };
   }
   if (response.method === "thread/start" && !response.hasError && response.threadId) {
-    await bindThreadToStream(response.streamId, response.threadId, response.threadPath || "");
+    const commands = await continueQueuedTurnStart(response.streamId, response.threadId, response.threadPath || "");
     await finalizeStreamState(response.streamId, {
-      status: "thread_ready",
+      status: commands.length ? "starting_turn" : "thread_ready",
       threadPath: response.threadPath || "",
       lastEvent: "thread/start",
     });
-    const chat = await ensureChatState(stream.sessionKey, stream.chatId);
+    return {
+      handled: true,
+      commands,
+    };
+  }
+  if (!stream.prompt.startsWith("/codex") && response.hasError && codexRpcIndicatesMissingThread(response)) {
+    const recoveredChat = await resetChatThread(stream.sessionKey, stream.chatId);
+    await updateStreamState(response.streamId, {
+      threadId: "",
+      threadPath: "",
+      turnId: "",
+      status: "queued",
+      resultText: "",
+      completedAt: 0,
+      lastEvent: "thread/restart.requested",
+    });
     const defaults = botDefaults();
+    const instance = fallbackCodexInstance(stream.codexInstance || recoveredChat?.codexInstance, defaults);
     return {
       handled: true,
       commands: [
-        feishuUpdateText(response.streamId, threadBoundText(response.threadId)),
-        codexTurnStart(
-          buildTurnStartParams(
-            {
-              ...stream,
-              threadId: response.threadId,
-            },
-            {
-              ...chat,
-              threadId: response.threadId,
-            },
-            defaults,
-          ),
-          response.streamId,
-        ),
+        feishuUpdateText(response.streamId, threadExpiredRestartingText(stream.threadId || recoveredChat?.threadId || "")),
+        codexRpcCall("thread/start", buildThreadStartParams(recoveredChat || stream, defaults), response.streamId, instance),
       ],
     };
   }
@@ -1815,6 +2553,8 @@ async function handleCodexRpcResponse(frame) {
         commands: [feishuUpdateText(response.streamId, errorText)],
       };
     }
+    const threadName = extractThreadNameFromResult(response.result);
+    rememberThreadName(response.threadId || stream.threadId || "", threadName);
     const readAnswer = extractAnswerFromThreadReadResult(response.result);
     const resultText = readAnswer || threadReadEmptyText(response.threadId || stream.threadId || "");
     await finalizeStreamState(response.streamId, {
@@ -1828,6 +2568,43 @@ async function handleCodexRpcResponse(frame) {
     return {
       handled: true,
       commands: renderedReadAnswer ? [feishuUpdateText(response.streamId, renderedReadAnswer)] : [],
+    };
+  }
+  if (response.method === "thread/name/set" && !stream.prompt.startsWith("/codex")) {
+    const renameThreadId = response.threadId || stream.threadId || "";
+    if (response.hasError) {
+      const pendingRename = consumePendingThreadRename(renameThreadId);
+      if (pendingRename?.previousName) {
+        rememberThreadName(renameThreadId, pendingRename.previousName);
+      } else if (renameThreadId) {
+        threadNameCache.delete(renameThreadId);
+      }
+      const errorText = codexRpcErrorText(response.method, response.errorMessage || truncateText(prettyJson(response.raw)));
+      await finalizeStreamState(response.streamId, {
+        status: "error",
+        resultText: errorText,
+        completedAt: Date.now(),
+        lastEvent: response.method || "codex.rpc.response",
+      });
+      return {
+        handled: true,
+        commands: [feishuUpdateText(response.streamId, errorText)],
+      };
+    }
+    consumePendingThreadRename(renameThreadId);
+    const previousTitle = stream.prompt.replace(/^\/thread\s+rename\s+/i, "").trim();
+    const nextTitle = extractThreadNameFromResult(response.result) || previousTitle;
+    rememberThreadName(renameThreadId, nextTitle);
+    const resultText = threadRenamedText(renameThreadId, previousTitle, nextTitle);
+    await finalizeStreamState(response.streamId, {
+      status: "completed",
+      resultText,
+      completedAt: Date.now(),
+      lastEvent: response.method || "codex.rpc.response",
+    });
+    return {
+      handled: true,
+      commands: [feishuUpdateText(response.streamId, resultText)],
     };
   }
   if (stream.prompt && stream.prompt.startsWith("/codex")) {
@@ -1922,6 +2699,15 @@ async function handleCodexNotification(frame) {
       "resolvedSessionPath=" + resolvedSessionPath,
     );
     if (!settledText && lookupThreadId) {
+      const instance = fallbackCodexInstance(latest?.codexInstance || stream.codexInstance, botDefaults());
+      logCodexRoute(frame.runtime, "thread/read.idle_fallback", {
+        state: latest,
+        stream,
+        instance,
+        threadId: lookupThreadId,
+        sessionPath: resolvedSessionPath,
+        streamId: notification.streamId || "",
+      });
       frame.runtime.log("codexbot-app-ts idle -> thread/read", CODEXBOT_TS_BUILD, lookupThreadId, notification.streamId || "");
       await updateStreamState(notification.streamId, {
         turnId: notification.turnId || latest?.turnId || stream.turnId || "",
@@ -1933,21 +2719,22 @@ async function handleCodexNotification(frame) {
         handled: true,
         commands: [
           feishuUpdateText(notification.streamId, codexFinalizingText()),
-          codexRpcCall("thread/read", { threadId: lookupThreadId, includeTurns: true }, notification.streamId),
+          codexRpcCall("thread/read", { threadId: lookupThreadId, includeTurns: true }, notification.streamId, instance),
         ],
       };
     }
     frame.runtime.log("codexbot-app-ts idle -> no-op", CODEXBOT_TS_BUILD, "settledTextLen=" + String(settledText.length), "lookupThreadId=" + lookupThreadId);
   }
   if (notification.method === "thread/started" && notification.threadId) {
+    const commands = await continueQueuedTurnStart(notification.streamId, notification.threadId, notification.threadPath || stream.threadPath || "");
     await finalizeStreamState(notification.streamId, {
-      status: "thread_ready",
+      status: commands.length ? "starting_turn" : "thread_ready_notified",
       threadPath: notification.threadPath || stream.threadPath || "",
       lastEvent: "thread/started",
     });
     return {
       handled: true,
-      commands: [feishuUpdateText(notification.streamId, threadBoundText(notification.threadId))],
+      commands,
     };
   }
   if (notification.method === "turn/started") {
@@ -2026,6 +2813,15 @@ async function handleCodexNotification(frame) {
     const completedText = latest?.resultText || latest?.draft || notification.message || "";
     const lookupThreadId = latest?.threadId || stream.threadId || notification.threadId || "";
     if (!completedText && lookupThreadId) {
+      const instance = fallbackCodexInstance(latest?.codexInstance || stream.codexInstance, botDefaults());
+      logCodexRoute(frame.runtime, "thread/read.turn_completed_fallback", {
+        state: latest,
+        stream,
+        instance,
+        threadId: lookupThreadId,
+        sessionPath: resolvedSessionPath,
+        streamId: notification.streamId || "",
+      });
       await updateStreamState(notification.streamId, {
         turnId: notification.turnId || latest?.turnId || stream.turnId || "",
         threadPath: resolvedSessionPath || latest?.threadPath || stream.threadPath || "",
@@ -2036,7 +2832,7 @@ async function handleCodexNotification(frame) {
         handled: true,
         commands: [
           feishuUpdateText(notification.streamId, codexFinalizingText()),
-          codexRpcCall("thread/read", { threadId: lookupThreadId, includeTurns: true }, notification.streamId),
+          codexRpcCall("thread/read", { threadId: lookupThreadId, includeTurns: true }, notification.streamId, instance),
         ],
       };
     }
@@ -2058,6 +2854,7 @@ async function handleCodexNotification(frame) {
   if (notification.status) {
     const latest = await getStreamState(notification.streamId);
     const resolvedSessionPath = resolveSessionPath(frame.runtime, stream, latest);
+    const normalizedStatus = normalizeCodexRuntimeStatus(notification.status);
     if (resolvedSessionPath && !latest?.threadPath && (latest?.threadId || stream.threadId)) {
       await bindThreadToStream(notification.streamId, latest?.threadId || stream.threadId, resolvedSessionPath);
     }
@@ -2080,6 +2877,15 @@ async function handleCodexNotification(frame) {
     if (isTerminalIdleStatus(notification.status) && !settledText) {
       const lookupThreadId = latest?.threadId || stream.threadId || notification.threadId || "";
       if (lookupThreadId) {
+        const instance = fallbackCodexInstance(latest?.codexInstance || stream.codexInstance, botDefaults());
+        logCodexRoute(frame.runtime, "thread/read.status_fallback", {
+          state: latest,
+          stream,
+          instance,
+          threadId: lookupThreadId,
+          sessionPath: resolvedSessionPath,
+          streamId: notification.streamId || "",
+        });
         await updateStreamState(notification.streamId, {
           turnId: notification.turnId || latest?.turnId || stream.turnId || "",
           threadPath: resolvedSessionPath || latest?.threadPath || stream.threadPath || "",
@@ -2090,7 +2896,7 @@ async function handleCodexNotification(frame) {
           handled: true,
           commands: [
             feishuUpdateText(notification.streamId, codexFinalizingText()),
-            codexRpcCall("thread/read", { threadId: lookupThreadId, includeTurns: true }, notification.streamId),
+            codexRpcCall("thread/read", { threadId: lookupThreadId, includeTurns: true }, notification.streamId, instance),
           ],
         };
       }
@@ -2098,16 +2904,22 @@ async function handleCodexNotification(frame) {
     await finalizeStreamState(notification.streamId, {
       turnId: notification.turnId || latest?.turnId || stream.turnId || "",
       threadPath: resolvedSessionPath || latest?.threadPath || stream.threadPath || "",
-      status: notification.status,
+      status: normalizedStatus,
       resultText: latest?.resultText || stream.resultText || "",
       lastEvent: notification.method || "codex.notification",
-      completedAt: notification.status === "completed" ? Date.now() : 0,
+      completedAt: normalizedStatus === "completed" ? Date.now() : 0,
     });
+    if (normalizedStatus === "running" && !notification.message) {
+      return {
+        handled: true,
+        commands: [],
+      };
+    }
     return {
       handled: true,
       commands: settledText && !notification.message
         ? []
-        : [feishuUpdateText(notification.streamId, codexStatusText(notification.status, notification.message || ""))],
+        : [feishuUpdateText(notification.streamId, codexStatusText(normalizedStatus, notification.message || ""))],
     };
   }
   return {
@@ -2118,6 +2930,18 @@ async function handleCodexNotification(frame) {
 
 export function createBotApp() {
   return {
+    async startup(runtime) {
+      return {
+        commands: await runLaneStartup(runtime),
+      };
+    },
+
+    async app_startup(runtime) {
+      return {
+        commands: await buildAppStartupCommands(runtime),
+      };
+    },
+
     async http(ctx) {
       if (ctx.path === "/health") {
         return ctx.text("OK", 200);

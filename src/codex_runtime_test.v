@@ -32,6 +32,15 @@ pub fn (e CodexRuntimeTestExecutor) admin_details() LogicExecutorAdminDetails {
 	}
 }
 
+pub fn (e CodexRuntimeTestExecutor) warmup(mut app App) ! {
+	_ = e
+	_ = app
+}
+
+pub fn (e CodexRuntimeTestExecutor) close() {
+	_ = e
+}
+
 pub fn (e CodexRuntimeTestExecutor) dispatch_http(mut app App, req HttpLogicDispatchRequest) !HttpLogicDispatchOutcome {
 	_ = app
 	_ = req
@@ -145,8 +154,8 @@ fn test_codex_next_rpc_id_increment() {
 	mut app := App{
 		codex_runtime: CodexProviderRuntime{}
 	}
-	id1 := app.codex_next_rpc_id()
-	id2 := app.codex_next_rpc_id()
+	id1 := app.codex_next_rpc_id('main')
+	id2 := app.codex_next_rpc_id('main')
 	assert id2 == id1 + 1
 }
 
@@ -168,7 +177,7 @@ fn test_codex_get_active_stream_id_and_set() {
 		codex_runtime: CodexProviderRuntime{}
 	}
 	app.codex_runtime.active_stream_id = 'stream-1'
-	assert app.codex_get_active_stream_id() == 'stream-1'
+	assert app.codex_get_active_stream_id_for_instance('main') == 'stream-1'
 }
 
 fn test_codex_runtime_bind_and_clear_thread_binding() {
@@ -185,6 +194,43 @@ fn test_codex_runtime_bind_and_clear_thread_binding() {
 	assert cleared == true
 	assert rt.thread_id == ''
 	assert 'thread_001' !in rt.thread_stream_map
+}
+
+fn test_codex_notification_active_schedules_read_fallback() {
+	mut app := App{
+		codex_runtime: CodexProviderRuntime{
+			thread_stream_map: map[string]string{}
+			stream_map:        map[string][]CodexTarget{}
+			pending_rpcs:      map[int]CodexPendingRpc{}
+			err_bursts:        map[string][]string{}
+			err_pending_flushes: map[string]bool{}
+			read_fallbacks:    map[string]CodexReadFallback{}
+		}
+	}
+	app.codex_bind_stream_to_thread('main', 'thread_watchdog_001', 'stream_watchdog_001')
+	app.codex_handle_notification('main', 'thread/status/changed', '{"method":"thread/status/changed","params":{"threadId":"thread_watchdog_001","status":{"type":"active","activeFlags":[]}}}')
+	fallback, ok := app.codex_read_fallback('main', 'stream_watchdog_001')
+	assert ok
+	assert fallback.stream_id == 'stream_watchdog_001'
+	assert fallback.thread_id == 'thread_watchdog_001'
+}
+
+fn test_codex_notification_delta_clears_read_fallback() {
+	mut app := App{
+		codex_runtime: CodexProviderRuntime{
+			thread_stream_map: map[string]string{}
+			stream_map:        map[string][]CodexTarget{}
+			pending_rpcs:      map[int]CodexPendingRpc{}
+			err_bursts:        map[string][]string{}
+			err_pending_flushes: map[string]bool{}
+			read_fallbacks:    map[string]CodexReadFallback{}
+		}
+	}
+	app.codex_bind_stream_to_thread('main', 'thread_watchdog_002', 'stream_watchdog_002')
+	_, _ = app.codex_schedule_read_fallback('main', 'stream_watchdog_002', 'thread_watchdog_002')
+	app.codex_handle_notification('main', 'item/agentMessage/delta', '{"method":"item/agentMessage/delta","params":{"threadId":"thread_watchdog_002","delta":"hello"}}')
+	_, ok := app.codex_read_fallback('main', 'stream_watchdog_002')
+	assert !ok
 }
 
 fn test_codex_runtime_add_remove_and_clear_stream_targets() {
@@ -221,7 +267,8 @@ fn test_codex_dispatch_rpc_response_uses_logic_executor_without_worker_sockets()
 			state: state
 		}
 	}
-	app.dispatch_codex_rpc_response(CodexPendingRpc{
+	app.dispatch_codex_rpc_response('main', CodexPendingRpc{
+		instance:   'main'
 		method:     'thread/start'
 		stream_id:  'codex:task_001'
 		message_id: 'om_test_001'
@@ -243,7 +290,7 @@ fn test_codex_notification_uses_logic_executor_without_worker_sockets() {
 			active_stream_id: 'codex:task_002'
 		}
 	}
-	app.codex_handle_notification('item/agentMessage/delta', '{"method":"item/agentMessage/delta","params":{"delta":"hello"}}')
+	app.codex_handle_notification('main', 'item/agentMessage/delta', '{"method":"item/agentMessage/delta","params":{"delta":"hello"}}')
 	assert state.dispatch_count == 1
 	assert state.last_req.provider == 'codex'
 	assert state.last_req.event_type == 'codex.notification'

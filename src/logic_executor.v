@@ -88,6 +88,8 @@ pub interface LogicExecutor {
 	kind() string
 	provider() string
 	admin_details() LogicExecutorAdminDetails
+	warmup(mut app App) !
+	close()
 	dispatch_http(mut app App, req HttpLogicDispatchRequest) !HttpLogicDispatchOutcome
 	open_websocket_session(mut app App, req WebSocketSessionOpenRequest) !WebSocketSessionOpenOutcome
 	dispatch_stream(mut app App, req StreamDispatchRequest) !StreamDispatchResponse
@@ -120,6 +122,15 @@ pub fn (e SocketWorkerExecutor) admin_details() LogicExecutorAdminDetails {
 		provider: 'php-worker'
 		model:    LogicExecutorModel.worker.str()
 	}
+}
+
+pub fn (e SocketWorkerExecutor) warmup(mut app App) ! {
+	_ = e
+	_ = app
+}
+
+pub fn (e SocketWorkerExecutor) close() {
+	_ = e
 }
 
 pub fn (e SocketWorkerExecutor) dispatch_http(mut app App, req HttpLogicDispatchRequest) !HttpLogicDispatchOutcome {
