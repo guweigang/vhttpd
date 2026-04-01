@@ -6,19 +6,19 @@ namespace VPhp\VSlim;
 
 final class Psr7Adapter
 {
-    public static function dispatch(\VSlim\App $app, object $request): \VSlim\Response
+    public static function dispatch(\VSlim\App $app, object $request): \VSlim\Vhttpd\Response
     {
         $vRequest = self::toVSlimRequest($request);
         return $app->dispatch_request($vRequest);
     }
 
-    public static function toVSlimRequest(object $request): \VSlim\Request
+    public static function toVSlimRequest(object $request): \VSlim\Vhttpd\Request
     {
         $method = self::readRequestMethod($request);
         $target = self::readRequestTarget($request);
         $body = self::readBody($request);
 
-        $vRequest = new \VSlim\Request($method, $target, $body);
+        $vRequest = new \VSlim\Vhttpd\Request($method, $target, $body);
         $vRequest->scheme = self::readUriPart($request, 'getScheme', 'scheme', 'http');
         $vRequest->host = self::readUriPart($request, 'getHost', 'host', '');
         $vRequest->port = self::readUriPart($request, 'getPort', 'port', '');
