@@ -1,21 +1,11 @@
 import { open } from "sqlite";
 import { botDefaults } from "../config/config.mts";
+import { normalizeMainInstanceAlias } from "./instance-alias.mjs";
 
 let dbPromise;
 
 function now() {
   return Date.now();
-}
-
-function normalizeMainInstanceAlias(value, fallbackValue = "") {
-  const text = typeof value === "string" ? value.trim() : "";
-  if (text === "default") {
-    return "main";
-  }
-  if (text !== "") {
-    return text;
-  }
-  return fallbackValue;
 }
 
 function dbPath() {
@@ -154,6 +144,18 @@ async function ensureInstanceRegistryTable(database) {
   }
 }
 
+async function ensureItemRenderStateTable(database) {
+  if (!(await tableExists(database, "item_render_state"))) {
+    await database.exec("create table item_render_state (parent_stream_id text not null, item_key text not null, item_id text not null default '', turn_id text not null default '', phase text not null default '', item_stream_id text not null, status text not null default 'open', created_at integer not null, updated_at integer not null, primary key (parent_stream_id, item_key))");
+  }
+}
+
+async function ensureInboundEventStateTable(database) {
+  if (!(await tableExists(database, "inbound_event_state"))) {
+    await database.exec("create table inbound_event_state (dedupe_key text primary key, seen_at integer not null)");
+  }
+}
+
 async function reconcileMainInstanceAliases(database) {
   await database.exec("update chat_state set codex_instance = 'main' where codex_instance = 'default'");
   await database.exec("update stream_state set codex_instance = 'main' where codex_instance = 'default'");
@@ -218,6 +220,8 @@ async function db() {
     await ensureProjectBindingStateTable(database);
     await ensureSettingsTable(database);
     await ensureInstanceRegistryTable(database);
+    await ensureItemRenderStateTable(database);
+    await ensureInboundEventStateTable(database);
     await database.exec("create index if not exists idx_chat_state_chat_id on chat_state(chat_id)");
     await database.exec("create index if not exists idx_chat_state_updated_at on chat_state(updated_at desc)");
     await database.exec("create index if not exists idx_stream_state_session_key on stream_state(session_key)");
@@ -230,6 +234,9 @@ async function db() {
     await database.exec("create index if not exists idx_project_binding_state_updated_at on project_binding_state(updated_at desc)");
     await database.exec("create index if not exists idx_instance_registry_provider on instance_registry(provider)");
     await database.exec("create index if not exists idx_instance_registry_updated_at on instance_registry(updated_at desc)");
+    await database.exec("create index if not exists idx_item_render_state_item_stream_id on item_render_state(item_stream_id)");
+    await database.exec("create index if not exists idx_item_render_state_updated_at on item_render_state(updated_at desc)");
+    await database.exec("create index if not exists idx_inbound_event_state_seen_at on inbound_event_state(seen_at desc)");
     await reconcileMainInstanceAliases(database);
     return database;
   });
@@ -307,6 +314,23 @@ function asProjectRecord(row) {
   };
 }
 
+function asItemRenderState(row) {
+  if (!row) {
+    return undefined;
+  }
+  return {
+    parentStreamId: row.parent_stream_id,
+    itemKey: row.item_key,
+    itemId: row.item_id || "",
+    turnId: row.turn_id || "",
+    phase: row.phase || "",
+    itemStreamId: row.item_stream_id,
+    status: row.status || "open",
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 async function selectChatState(sessionKey) {
   const database = await db();
   const rows = await database.query("select session_key, chat_id, project_key, model, cwd, codex_instance, thread_id, thread_path, last_stream_id, updated_at from chat_state where session_key = ? limit 1", [sessionKey]);
@@ -317,6 +341,12 @@ async function selectStreamState(streamId) {
   const database = await db();
   const rows = await database.query("select stream_id, session_key, chat_id, prompt, project_key, model, cwd, codex_instance, thread_id, thread_path, turn_id, draft, status, result_text, completed_at, last_event, created_at, updated_at from stream_state where stream_id = ? limit 1", [streamId]);
   return asStreamState(rows[0]);
+}
+
+async function selectItemRenderState(parentStreamId, itemKey) {
+  const database = await db();
+  const rows = await database.query("select parent_stream_id, item_key, item_id, turn_id, phase, item_stream_id, status, created_at, updated_at from item_render_state where parent_stream_id = ? and item_key = ? limit 1", [parentStreamId, itemKey]);
+  return asItemRenderState(rows[0]);
 }
 
 function nextStreamId() {
@@ -465,11 +495,129 @@ export async function createStreamState(sessionKey, chatId, prompt) {
   return (await selectStreamState(stream.streamId)) || stream;
 }
 
+export async function createDerivedStreamState(parentStreamId, options = {}) {
+  const parent = await getStreamState(parentStreamId);
+  if (!parent) {
+    return undefined;
+  }
+  const timestamp = now();
+  const stream = {
+    streamId: nextStreamId(),
+    sessionKey: parent.sessionKey,
+    chatId: parent.chatId,
+    prompt: typeof options.prompt === "string" && options.prompt.trim() !== "" ? options.prompt : parent.prompt,
+    projectKey: parent.projectKey,
+    model: parent.model,
+    cwd: parent.cwd,
+    codexInstance: normalizeMainInstanceAlias(options.codexInstance, parent.codexInstance || ""),
+    threadId: typeof options.threadId === "string" ? options.threadId : parent.threadId || "",
+    threadPath: typeof options.threadPath === "string" ? options.threadPath : parent.threadPath || "",
+    turnId: typeof options.turnId === "string" ? options.turnId : parent.turnId || "",
+    draft: "",
+    status: typeof options.status === "string" && options.status.trim() !== "" ? options.status : "queued",
+    resultText: "",
+    completedAt: 0,
+    lastEvent: typeof options.lastEvent === "string" && options.lastEvent.trim() !== "" ? options.lastEvent : parent.lastEvent || "",
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+  const database = await db();
+  await database.exec("insert into stream_state (stream_id, session_key, chat_id, prompt, project_key, model, cwd, codex_instance, thread_id, thread_path, turn_id, draft, status, result_text, completed_at, last_event, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", [
+    stream.streamId,
+    stream.sessionKey,
+    stream.chatId,
+    stream.prompt,
+    stream.projectKey,
+    stream.model,
+    stream.cwd,
+    stream.codexInstance,
+    stream.threadId,
+    stream.threadPath,
+    stream.turnId,
+    stream.draft,
+    stream.status,
+    stream.resultText,
+    stream.completedAt,
+    stream.lastEvent,
+    stream.createdAt,
+    stream.updatedAt,
+  ]);
+  return (await selectStreamState(stream.streamId)) || stream;
+}
+
 export async function getStreamState(streamId) {
   if (!streamId) {
     return undefined;
   }
   return selectStreamState(streamId);
+}
+
+export async function getItemRenderState(parentStreamId, itemKey) {
+  if (!parentStreamId || !itemKey) {
+    return undefined;
+  }
+  return selectItemRenderState(parentStreamId, itemKey);
+}
+
+export async function upsertItemRenderState(parentStreamId, itemKey, patch) {
+  if (!parentStreamId || !itemKey) {
+    return undefined;
+  }
+  const existing = await selectItemRenderState(parentStreamId, itemKey);
+  const timestamp = now();
+  const next = {
+    parentStreamId,
+    itemKey,
+    itemId: typeof patch?.itemId === "string" ? patch.itemId : existing?.itemId || "",
+    turnId: typeof patch?.turnId === "string" ? patch.turnId : existing?.turnId || "",
+    phase: typeof patch?.phase === "string" ? patch.phase : existing?.phase || "",
+    itemStreamId: typeof patch?.itemStreamId === "string" ? patch.itemStreamId : existing?.itemStreamId || "",
+    status: typeof patch?.status === "string" && patch.status.trim() !== "" ? patch.status : existing?.status || "open",
+    createdAt: existing?.createdAt || timestamp,
+    updatedAt: timestamp,
+  };
+  if (!next.itemStreamId) {
+    return existing;
+  }
+  const database = await db();
+  await database.exec("insert into item_render_state (parent_stream_id, item_key, item_id, turn_id, phase, item_stream_id, status, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?) on conflict(parent_stream_id, item_key) do update set item_id = excluded.item_id, turn_id = excluded.turn_id, phase = excluded.phase, item_stream_id = excluded.item_stream_id, status = excluded.status, updated_at = excluded.updated_at", [
+    next.parentStreamId,
+    next.itemKey,
+    next.itemId,
+    next.turnId,
+    next.phase,
+    next.itemStreamId,
+    next.status,
+    next.createdAt,
+    next.updatedAt,
+  ]);
+  return (await selectItemRenderState(parentStreamId, itemKey)) || next;
+}
+
+export async function rememberInboundEvent(dedupeKey, windowMs = 2 * 60 * 1000) {
+  const key = typeof dedupeKey === "string" ? dedupeKey.trim() : "";
+  if (!key) {
+    return false;
+  }
+  const database = await db();
+  const nowMs = now();
+  const cutoff = Math.max(0, nowMs - Math.max(0, Number(windowMs) || 0));
+  await database.exec("begin immediate");
+  try {
+    await database.exec("delete from inbound_event_state where seen_at < ?", [cutoff]);
+    const rows = await database.query("select seen_at from inbound_event_state where dedupe_key = ? limit 1", [key]);
+    const existingSeenAt = Number(rows[0]?.seen_at || 0);
+    if (existingSeenAt >= cutoff) {
+      await database.exec("rollback");
+      return true;
+    }
+    await database.exec("insert into inbound_event_state (dedupe_key, seen_at) values (?, ?) on conflict(dedupe_key) do update set seen_at = excluded.seen_at", [key, nowMs]);
+    await database.exec("commit");
+    return false;
+  } catch (error) {
+    await database.exec("rollback");
+    throw error;
+  }
 }
 
 export async function listRecentProjectThreads(projectKey, limit = 8) {
@@ -494,14 +642,27 @@ export async function listRecentProjectThreads(projectKey, limit = 8) {
   return threads;
 }
 
-export async function listRecentThreadStreams(threadId, limit = 3) {
+export async function listRecentThreadStreams(threadId, limit = 3, filters = {}) {
   if (!threadId) {
     return [];
   }
   const database = await db();
+  const clauses = ["thread_id = ?"];
+  const params = [threadId];
+  const sessionKey = typeof filters?.sessionKey === "string" ? filters.sessionKey.trim() : "";
+  const projectKey = typeof filters?.projectKey === "string" ? filters.projectKey.trim() : "";
+  if (sessionKey) {
+    clauses.push("session_key = ?");
+    params.push(sessionKey);
+  }
+  if (projectKey) {
+    clauses.push("project_key = ?");
+    params.push(projectKey);
+  }
+  params.push(limit);
   const rows = await database.query(
-    "select stream_id, session_key, chat_id, prompt, project_key, model, cwd, codex_instance, thread_id, thread_path, turn_id, draft, status, result_text, completed_at, last_event, created_at, updated_at from stream_state where thread_id = ? order by updated_at desc, stream_id desc limit ?",
-    [threadId, limit],
+    `select stream_id, session_key, chat_id, prompt, project_key, model, cwd, codex_instance, thread_id, thread_path, turn_id, draft, status, result_text, completed_at, last_event, created_at, updated_at from stream_state where ${clauses.join(" and ")} order by updated_at desc, stream_id desc limit ?`,
+    params,
   );
   return rows.map(asStreamState).filter(Boolean);
 }
@@ -863,6 +1024,7 @@ export async function runtimeSnapshot() {
   const bindings = await database.query("select chat_id, project_key, is_primary, created_at, updated_at from project_binding_state order by updated_at desc, chat_id asc, project_key asc");
   const settings = await database.query("select name, value, created_at, updated_at from settings order by name asc");
   const instances = await database.query("select provider, instance, config_json, desired_state, created_at, updated_at from instance_registry order by provider asc, instance asc");
+  const itemRenders = await database.query("select parent_stream_id, item_key, item_id, turn_id, phase, item_stream_id, status, created_at, updated_at from item_render_state order by updated_at desc, parent_stream_id asc, item_key asc");
   return {
     dbPath: dbPath(),
     chats: chats.map(asChatState),
@@ -890,5 +1052,6 @@ export async function runtimeSnapshot() {
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     })),
+    itemRenders: itemRenders.map(asItemRenderState),
   };
 }

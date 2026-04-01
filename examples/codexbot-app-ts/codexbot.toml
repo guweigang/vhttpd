@@ -2,6 +2,7 @@
 root = "../../"
 vjsx_app = "examples/codexbot-app-ts/app.mts"
 vjsx_root = "examples/codexbot-app-ts"
+vjsx_build_root = "tmp/codexbot-vjsx-build"
 
 [server]
 host = "127.0.0.1"
@@ -20,6 +21,7 @@ kind = "vjsx"
 [vjsx]
 app_entry = "${paths.vjsx_app}"
 module_root = "${paths.vjsx_root}"
+build_root = "${paths.vjsx_build_root}"
 runtime_profile = "node"
 thread_count = 2
 enable_fs = true

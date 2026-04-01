@@ -8,11 +8,84 @@ Current files:
 - `codexbot.toml`: example `vjsx` executor config
 - `config/config.mts`: base TS runtime defaults
 - `config/provider-config.mts`: explicit TS-side Codex and Feishu provider instance config plus project mapping
+- `codex/`: vendored Codex protocol subset plus local semantic adapter
+- `feishu/`: Feishu inbound and card-policy package boundary for the TS app
 - `lib/bot-runtime.mjs`: bot composition root
+- `lib/command-router.mjs`: Feishu inbound command routing boundary
+- `lib/codex-instance-policy.mjs`: Codex instance resolution and preflight policy boundary
+- `lib/codex-query-command.mjs`: `/codex` query command boundary
+- `lib/codex-protocol.mts`: compatibility re-export for the Codex semantic adapter
+- `lib/bot-text-helpers.mjs`: user-facing text and status rendering boundary
+- `lib/busy-guard.mts`: busy/stale-run policy helpers for stream state gating
 - `lib/commands.mts`: upstream command helpers
-- `lib/feishu.mts`: Feishu inbound parsing
+- `lib/feishu.mts`: compatibility re-export for Feishu inbound parsing
+- `lib/feishu-card-policy.mts`: compatibility re-export for Feishu thread/item card routing policy
+- `lib/item-render-coordinator.mjs`: Feishu item stream / card fan-out coordination boundary
 - `lib/codex.mts`: Codex callback parsing
+- `lib/notification-router.mjs`: Codex notification routing boundary
+- `lib/provider-runtime.mjs`: provider instance config, preflight, and startup boundary
+- `lib/project-admin-commands.mjs`: `/create`, `/bind`, and `/unbind` command boundary
+- `lib/rpc-router.mjs`: Codex RPC response routing boundary
+- `lib/selection-commands.mjs`: project/model/instance selection command boundary
+- `lib/session-commands.mjs`: `/settings`, `/threads`, and `/new` command boundary
 - `lib/state.mjs`: SQLite-backed chat/stream state
+- `lib/thread-task-commands.mjs`: thread selection, busy/cancel, and regular task command boundary
+
+## Module Layers
+
+The TS app is now intentionally split by responsibility instead of growing a single runtime file.
+
+### Composition Root
+
+- `lib/bot-runtime.mjs`: composition root only
+- wires helpers, routers, command handlers, and state access together
+- should stay thin; it is the assembly point, not the place for protocol or business rules
+
+### Protocol / Rendering Helpers
+
+- `lib/assistant-text-renderer.mjs`: normalizes Codex text into Feishu-safe markdown-ish output
+- `lib/bot-text-helpers.mjs`: user-facing status/help/result text builders
+- `lib/codex-rpc-helpers.mjs`: `/codex` parsing, default params, result formatting, thread-read extraction
+- `lib/codex-start-params.mjs`: `thread/start` and `turn/start` request param builders
+- `lib/codex-status-helpers.mjs`: Codex finalizing and terminal-status helpers
+- `lib/command-text-rules.mjs`: lightweight command text classifiers like `/use`
+- `lib/project-paths.mjs`: cwd/path derivation and directory existence helpers
+- `lib/instance-alias.mjs`: shared `default -> main` alias normalization
+- `lib/feishu-session-helpers.mjs`: Feishu reply/help session adapter helpers
+
+### Stateful Coordination
+
+- `lib/thread-session-coordinator.mjs`: thread-name cache, pending rename state, queued thread->turn continuation
+- `lib/item-render-coordinator.mjs`: Feishu parent/item stream fan-out and item lifecycle coordination
+- `lib/provider-runtime.mjs`: provider instance config materialization and startup orchestration
+- `lib/state.mjs`: SQLite persistence and state transitions
+
+### Routing / Command Boundaries
+
+- `lib/command-router.mjs`: top-level Feishu command dispatch
+- `lib/notification-router.mjs`: Codex notification routing
+- `lib/rpc-router.mjs`: Codex RPC response routing
+- `lib/codex-query-command.mjs`: guarded `/codex` query command handling
+- `lib/project-admin-commands.mjs`: `/create`, `/bind`, `/unbind`
+- `lib/selection-commands.mjs`: project/model/instance/session selection
+- `lib/session-commands.mjs`: `/settings`, `/threads`, `/new`
+- `lib/thread-task-commands.mjs`: busy/cancel/thread/use/plain-text task flow
+
+### External Semantics
+
+- `codex/`: vendored Codex TS semantics used as the source of truth for status/error interpretation
+- `feishu/`: Feishu inbound parsing, dedupe, and card policy boundary
+
+## Dependency Direction
+
+Prefer this direction when adding new code:
+
+- composition root -> routers / command handlers / coordinators / helpers
+- routers / command handlers -> state + narrow helper modules
+- helper modules -> pure formatting / parsing / policy logic
+- state stays below command handlers and should not import app-specific routing logic
+
+When a piece of logic starts needing its own vocabulary, tests, or reused dependency injection shape, that is usually the signal to create another helper/coordinator module instead of putting it back into `bot-runtime.mjs`.
 
 ## Lifecycle Hooks
 
@@ -102,9 +175,12 @@ Notes:
 - `/new [model_id]` clears the current thread and optionally switches model for the next run
 - `config/provider-config.mts` is the explicit place to add extra local Codex servers and Feishu instances
 - project-to-Codex routing now comes from `project_registry.default_codex_instance`, managed by chat commands instead of static config
-- Feishu rendering currently uses `stream -> one interactive card`: one bot stream owns one Feishu interactive message and later states patch that same message
-- the TS example does not currently model `item -> one interactive card`; commentary, running status, final answer, and error states all converge onto the same stream card
-- this is an explicit tradeoff for now: we keep the simpler single-card model until real usage shows that intermediate messages need to be preserved independently
+- Feishu rendering now uses a hybrid model:
+- the parent bot stream still owns the session-level status card and state bookkeeping
+- Codex `item/*` notifications fan out into derived item streams, so one turn can render multiple Feishu interactive cards
+- `item/agentMessage/delta` uses `stream.append`, and `item/completed` / `rawResponseItem/completed` use `stream.finish`, so vhttpd's built-in Feishu buffering still applies
+- parent stream state remains the canonical place for `/thread`, admin snapshots, and project/thread continuity
+- Codex status semantics are intentionally aligned with `~/codex/ts`: thread-level `active/systemError` are not treated as turn-level busy states, and structured turn errors are rendered from `TurnError` / `CodexErrorInfo`
 
 ## Run
 

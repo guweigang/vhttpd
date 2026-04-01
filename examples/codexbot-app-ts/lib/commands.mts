@@ -44,6 +44,32 @@ export function feishuUpdateText(streamId, text) {
   };
 }
 
+export function feishuStreamAppendText(streamId, text) {
+  return {
+    type: "stream.append",
+    provider: "feishu",
+    stream_id: streamId,
+    text,
+    metadata: {
+      mode: "append",
+    },
+  };
+}
+
+export function feishuStreamFinish(streamId, templateContent = "") {
+  return {
+    type: "stream.finish",
+    provider: "feishu",
+    stream_id: streamId,
+    message_type: "interactive",
+    content: templateContent,
+    metadata: {
+      mode: "finish",
+      finish: "true",
+    },
+  };
+}
+
 export function providerInstanceUpsert(provider, instance, config, desiredState = "connected") {
   return {
     type: "provider.instance.upsert",
