@@ -260,6 +260,46 @@ fn test_codex_runtime_add_remove_and_clear_stream_targets() {
 	assert rt.active_stream_id == ''
 }
 
+fn test_codex_find_stream_targets_scans_across_instances() {
+	mut app := App{
+		codex_runtime: CodexProviderRuntime{
+			instance:          'main'
+			thread_stream_map: map[string]string{}
+			stream_map: {
+				'codex:stream_001': [
+					CodexTarget{
+						platform:   'feishu'
+						message_id: 'om_main_001'
+					},
+				]
+			}
+			pending_rpcs:      map[int]CodexPendingRpc{}
+			err_bursts:        map[string][]string{}
+			err_pending_flushes: map[string]bool{}
+			read_fallbacks:    map[string]CodexReadFallback{}
+		}
+		codex_instances: {
+			'local4501': CodexProviderRuntime{
+				instance:          'local4501'
+				active_stream_id:  'codex:stream_001'
+				thread_stream_map: {
+					'thread_local_001': 'codex:stream_001'
+				}
+				stream_map: map[string][]CodexTarget{}
+				pending_rpcs:      map[int]CodexPendingRpc{}
+				err_bursts:        map[string][]string{}
+				err_pending_flushes: map[string]bool{}
+				read_fallbacks:    map[string]CodexReadFallback{}
+			}
+		}
+	}
+	assert app.codex_resolve_instance_for_stream('codex:stream_001') == 'local4501'
+	targets := app.codex_find_stream_targets('codex:stream_001')
+	assert targets.len == 1
+	assert targets[0].platform == 'feishu'
+	assert targets[0].message_id == 'om_main_001'
+}
+
 fn test_codex_dispatch_rpc_response_uses_logic_executor_without_worker_sockets() {
 	mut state := &CodexRuntimeTestDispatchState{}
 	mut app := App{

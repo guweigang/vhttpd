@@ -365,6 +365,20 @@ fn test_feishu_runtime_normalize_streaming_send_preserves_existing_interactive_c
 	assert normalized.content == req.content
 }
 
+fn test_feishu_runtime_streaming_preview_markdown_keeps_short_content() {
+	content := 'short preview'
+	preview := feishu_runtime_streaming_preview_markdown(content)
+	assert preview == content
+}
+
+fn test_feishu_runtime_streaming_preview_markdown_truncates_long_content() {
+	content := 'A'.repeat(feishu_stream_buffer_rollover_runes + 500)
+	preview := feishu_runtime_streaming_preview_markdown(content)
+	assert preview.contains('预览已截断')
+	assert preview.contains('完整结果会在结束时自动分段发送')
+	assert preview.runes().len <= feishu_stream_buffer_rollover_runes
+}
+
 fn test_feishu_runtime_delay_update_card_body() {
 	body := feishu_runtime_delay_update_card_body('callback-token-1',
 		'{"config":{"wide_screen_mode":true},"elements":[{"tag":"markdown","content":"approved"}]}') or {

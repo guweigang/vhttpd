@@ -151,6 +151,7 @@ kind = "vjsx"
 [vjsx]
 app_entry = "\${env.VHTTPD_VJSX_ENTRY:-/tmp/app.mts}"
 module_root = "\${env.VHTTPD_VJSX_ROOT:-/tmp}"
+build_root = "\${env.VHTTPD_VJSX_BUILD_ROOT:-/tmp/vjsx-cache}"
 runtime_profile = "node"
 thread_count = 3
 ') or {
@@ -163,6 +164,7 @@ thread_count = 3
 	assert cfg.executor.kind == 'vjsx'
 	assert cfg.vjsx.app_entry == '/tmp/app.mts'
 	assert cfg.vjsx.module_root == '/tmp'
+	assert cfg.vjsx.build_root == '/tmp/vjsx-cache'
 	assert cfg.vjsx.runtime_profile == 'node'
 	assert cfg.vjsx.thread_count == 3
 }
@@ -176,6 +178,7 @@ fn test_load_vhttpd_config_supports_paths_root_and_aliases() {
 	expected_php_app := os.join_path(expected_root, 'apps', 'hello.php')
 	expected_vjsx_app := os.join_path(expected_root, 'apps', 'hello.mts')
 	expected_vjsx_root := os.join_path(expected_root, 'apps')
+	expected_vjsx_build_root := os.join_path(expected_root, 'build-cache')
 	expected_vjsx_sig_root := os.join_path(expected_root, 'sig')
 	expected_assets_root := os.join_path(expected_root, 'public')
 	expected_socket_prefix := os.join_path(expected_root, 'run', 'worker')
@@ -187,6 +190,7 @@ root = ".."
 php_app = "apps/hello.php"
 vjsx_app = "apps/hello.mts"
 vjsx_root = "apps"
+vjsx_build_root = "build-cache"
 vjsx_sig_root = "sig"
 assets_root = "public"
 socket_prefix = "run/worker"
@@ -207,6 +211,7 @@ kind = "vjsx"
 [vjsx]
 app_entry = "\${paths.vjsx_app}"
 module_root = "\${paths.vjsx_root}"
+build_root = "\${paths.vjsx_build_root}"
 signature_root = "\${paths.vjsx_sig_root}"
 signature_include = ["\${paths.vjsx_root}/**/*.mts"]
 runtime_profile = "node"
@@ -231,6 +236,7 @@ root = "\${paths.assets_root}"
 	assert cfg.worker.env['VHTTPD_APP'] == expected_php_app
 	assert cfg.vjsx.app_entry == expected_vjsx_app
 	assert cfg.vjsx.module_root == expected_vjsx_root
+	assert cfg.vjsx.build_root == expected_vjsx_build_root
 	assert cfg.vjsx.signature_root == expected_vjsx_sig_root
 	assert cfg.vjsx.signature_include[0] == 'apps/**/*.mts'
 	assert cfg.assets.root == expected_assets_root
@@ -508,6 +514,7 @@ fn test_builtin_logic_executor_spec_exposes_runtime_models() {
 	assert vjsx_spec.config_surface.section == 'vjsx'
 	assert vjsx_spec.config_surface.app_entry_flag == '--vjsx-entry'
 	assert vjsx_spec.config_surface.module_root_flag == '--vjsx-module-root'
+	assert vjsx_spec.config_surface.build_root_flag == '--vjsx-build-root'
 	assert vjsx_spec.config_surface.lane_count_flag == '--vjsx-thread-count'
 	vjsx_snapshot := vjsx_spec.admin_snapshot()
 	assert vjsx_snapshot.kind == 'vjsx'
@@ -535,6 +542,7 @@ fn test_admin_logic_executor_specs_snapshot_lists_builtin_executors() {
 	assert snapshot[1].worker_backend_mode == 'disabled'
 	assert snapshot[1].config_surface.section == 'vjsx'
 	assert snapshot[1].config_surface.app_entry_flag == '--vjsx-entry'
+	assert snapshot[1].config_surface.build_root_flag == '--vjsx-build-root'
 	assert snapshot[1].config_surface.signature_root_flag == '--vjsx-signature-root'
 }
 
@@ -691,14 +699,14 @@ fn test_builtin_logic_executor_spec_resolves_vjsx_runtime_config_from_config_sur
 		os.rmdir_all(temp_dir) or {}
 	}
 	vjsx_spec := builtin_logic_executor_spec('vjsx') or { panic(err) }
-	vjsx_cfg := vjsx_spec.resolve_vjsx_runtime_config(['--vjsx-entry', app_file,
-		'--vjsx-thread-count', '2', '--vjsx-runtime-profile', 'node'], default_vhttpd_config()) or {
-		panic(err)
-	}
+	vjsx_cfg := vjsx_spec.resolve_vjsx_runtime_config(['--vjsx-entry', app_file, '--vjsx-build-root',
+		os.join_path(temp_dir, 'lane-cache'), '--vjsx-thread-count', '2', '--vjsx-runtime-profile',
+		'node'], default_vhttpd_config()) or { panic(err) }
 	assert vjsx_cfg.app_entry == app_file
 	assert vjsx_cfg.thread_count == 2
 	assert vjsx_cfg.runtime_profile == 'node'
 	assert vjsx_cfg.module_root == temp_dir
+	assert vjsx_cfg.build_root == os.join_path(temp_dir, 'lane-cache')
 	assert vjsx_cfg.signature_root == temp_dir
 }
 
@@ -913,9 +921,9 @@ fn test_resolve_embedded_host_runtime_config_normalizes_paths_and_lane_defaults(
 		os.rmdir_all(temp_dir) or {}
 	}
 	cfg := resolve_embedded_host_runtime_config(['--app', app_file, '--module-root',
-		os.join_path(temp_dir, 'modules'), '--signature-root', os.join_path(temp_dir, 'sig'),
-		'--signature-include', '**/*.mts', '--signature-exclude', 'tmp/**', '--profile', 'node',
-		'--lanes', '0'], EmbeddedHostRuntimeConfig{
+		os.join_path(temp_dir, 'modules'), '--build-root', os.join_path(temp_dir, 'cache'),
+		'--signature-root', os.join_path(temp_dir, 'sig'), '--signature-include', '**/*.mts',
+		'--signature-exclude', 'tmp/**', '--profile', 'node', '--lanes', '0'], EmbeddedHostRuntimeConfig{
 		runtime_profile: 'script'
 		lane_count:      3
 		max_requests:    9
@@ -925,6 +933,7 @@ fn test_resolve_embedded_host_runtime_config_normalizes_paths_and_lane_defaults(
 	}, EmbeddedHostCliOverrides{
 		app_entry_flag:         '--app'
 		module_root_flag:       '--module-root'
+		build_root_flag:        '--build-root'
 		signature_root_flag:    '--signature-root'
 		signature_include_flag: '--signature-include'
 		signature_exclude_flag: '--signature-exclude'
@@ -933,6 +942,7 @@ fn test_resolve_embedded_host_runtime_config_normalizes_paths_and_lane_defaults(
 	}) or { panic(err) }
 	assert cfg.app_entry == app_file
 	assert cfg.module_root == os.join_path(temp_dir, 'modules')
+	assert cfg.build_root == os.join_path(temp_dir, 'cache')
 	assert cfg.signature_root == os.join_path(temp_dir, 'sig')
 	assert cfg.signature_include == ['**/*.mts']
 	assert cfg.signature_exclude == ['tmp/**']
@@ -958,11 +968,11 @@ fn test_shutdown_app_runtime_stops_lifecycle_and_cleans_runtime_files() {
 	}
 	mut executor_state := &TestShutdownLogicExecutorState{}
 	mut app := App{
-		event_log: event_log
+		event_log:      event_log
 		logic_executor: TestShutdownLogicExecutor{
 			state: executor_state
 		}
-		providers: ProviderHost{
+		providers:      ProviderHost{
 			specs: {
 				'test': ProviderSpec{
 					name:        'test'

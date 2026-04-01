@@ -58,6 +58,7 @@ struct VjsxConfig {
 mut:
 	app_entry         string   @[toml: 'app_entry']
 	module_root       string   @[toml: 'module_root']
+	build_root        string   @[toml: 'build_root']
 	signature_root    string   @[toml: 'signature_root']
 	signature_include []string @[toml: 'signature_include']
 	signature_exclude []string @[toml: 'signature_exclude']
@@ -348,6 +349,8 @@ fn resolve_config_variables(mut cfg VhttpdConfig, config_path string) ! {
 			changed)!
 		cfg.vjsx.module_root, changed = expand_config_string(cfg.vjsx.module_root, vars,
 			env_map, changed)!
+		cfg.vjsx.build_root, changed = expand_config_string(cfg.vjsx.build_root, vars,
+			env_map, changed)!
 		cfg.vjsx.signature_root, changed = expand_config_string(cfg.vjsx.signature_root,
 			vars, env_map, changed)!
 		cfg.vjsx.runtime_profile, changed = expand_config_string(cfg.vjsx.runtime_profile,
@@ -510,6 +513,7 @@ fn resolve_config_paths(mut cfg VhttpdConfig, config_path string) {
 	}
 	cfg.vjsx.app_entry = resolve_config_path(cfg.paths.root, cfg.vjsx.app_entry)
 	cfg.vjsx.module_root = resolve_config_path(cfg.paths.root, cfg.vjsx.module_root)
+	cfg.vjsx.build_root = resolve_config_path(cfg.paths.root, cfg.vjsx.build_root)
 	cfg.vjsx.signature_root = resolve_config_path(cfg.paths.root, cfg.vjsx.signature_root)
 	cfg.assets.root = resolve_config_path(cfg.paths.root, cfg.assets.root)
 	cfg.codex.cwd = resolve_config_path(cfg.paths.root, cfg.codex.cwd)
@@ -537,6 +541,7 @@ fn build_config_variable_map(cfg VhttpdConfig) map[string]string {
 		'php.app_entry':                  cfg.php.app_entry
 		'vjsx.app_entry':                 cfg.vjsx.app_entry
 		'vjsx.module_root':               cfg.vjsx.module_root
+		'vjsx.build_root':                cfg.vjsx.build_root
 		'vjsx.signature_root':            cfg.vjsx.signature_root
 		'vjsx.runtime_profile':           cfg.vjsx.runtime_profile
 		'vjsx.thread_count':              '${cfg.vjsx.thread_count}'

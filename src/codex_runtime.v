@@ -681,8 +681,32 @@ fn (mut app App) codex_get_active_stream_id_for_instance(instance string) string
 }
 
 fn (mut app App) codex_find_stream_targets(stream_id string) []CodexTarget {
-	instance := app.codex_resolve_instance_for_stream(stream_id)
-	return app.codex_stream_targets(instance, stream_id)
+	if stream_id.trim_space() == '' {
+		return []CodexTarget{}
+	}
+	resolved := app.codex_resolve_instance_for_stream(stream_id)
+	mut seen := map[string]bool{}
+	mut targets := []CodexTarget{}
+	mut instances := []string{}
+	if resolved != '' {
+		instances << resolved
+		seen[resolved] = true
+	}
+	for instance in app.codex_runtime_known_instances() {
+		if seen[instance] {
+			continue
+		}
+		instances << instance
+		seen[instance] = true
+	}
+	for instance in instances {
+		candidates := app.codex_stream_targets(instance, stream_id)
+		if candidates.len == 0 {
+			continue
+		}
+		targets << candidates
+	}
+	return targets
 }
 
 // ── Provider lifecycle callbacks ────────────────────────────────────────

@@ -62,19 +62,30 @@ fn runtime_import_specifier(from_path string, to_path string) string {
 	return rel.replace('\\', '/')
 }
 
+fn vjsx_default_build_root() string {
+	return os.join_path(os.temp_dir(), 'vhttpd_vjsx')
+}
+
+fn vjsx_build_root_for_config(config VjsxRuntimeFacadeConfig) string {
+	if config.build_root.trim_space() != '' {
+		return os.abs_path(config.build_root)
+	}
+	return vjsx_default_build_root()
+}
+
 fn vjsx_lane_temp_root(app_entry string, idx int) string {
 	entry_abs := os.abs_path(app_entry)
 	entry_name := os.base(entry_abs).trim_space().replace(' ', '_')
 	entry_hash := fnv1a.sum64_string(entry_abs).hex()
-	cache_root := os.join_path(os.temp_dir(), 'vhttpd_vjsx')
-	return os.join_path(cache_root, '${entry_name}.${entry_hash}.pid_${os.getpid()}.lane_${idx}.vjsbuild')
+	cache_root := vjsx_default_build_root()
+	return os.join_path(cache_root, '${entry_name}.${entry_hash}.pid_${os.getpid()}.lane_${idx}.vjsxbuild')
 }
 
 fn vjsx_lane_temp_root_for_signature(config VjsxRuntimeFacadeConfig, idx int, source_signature string) string {
 	entry_abs := os.abs_path(config.app_entry)
 	entry_name := os.base(entry_abs).trim_space().replace(' ', '_')
-	cache_root := os.join_path(os.temp_dir(), 'vhttpd_vjsx')
-	return os.join_path(cache_root, '${entry_name}.${source_signature}.pid_${os.getpid()}.lane_${idx}.vjsbuild')
+	cache_root := vjsx_build_root_for_config(config)
+	return os.join_path(cache_root, '${entry_name}.${source_signature}.pid_${os.getpid()}.lane_${idx}.vjsxbuild')
 }
 
 fn load_inproc_vjsx_entry(mut ctx vjsx.Context, config VjsxRuntimeFacadeConfig, idx int, source_signature string, as_module bool) !vjsx.Value {

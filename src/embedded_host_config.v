@@ -6,6 +6,7 @@ pub struct EmbeddedHostRuntimeConfig {
 pub:
 	app_entry         string
 	module_root       string
+	build_root        string
 	signature_root    string
 	signature_include []string
 	signature_exclude []string
@@ -21,6 +22,7 @@ pub struct EmbeddedHostCliOverrides {
 pub:
 	app_entry_flag         string
 	module_root_flag       string
+	build_root_flag        string
 	signature_root_flag    string
 	signature_include_flag string
 	signature_exclude_flag string
@@ -43,6 +45,10 @@ fn resolve_embedded_host_runtime_config(args []string, defaults EmbeddedHostRunt
 	} else {
 		module_root = os.abs_path(module_root)
 	}
+	mut build_root := arg_string_or(args, cli.build_root_flag, defaults.build_root).trim_space()
+	if build_root != '' {
+		build_root = os.abs_path(build_root)
+	}
 	mut signature_root := arg_string_or(args, cli.signature_root_flag, defaults.signature_root).trim_space()
 	if signature_root == '' {
 		signature_root = module_root
@@ -60,6 +66,7 @@ fn resolve_embedded_host_runtime_config(args []string, defaults EmbeddedHostRunt
 	return EmbeddedHostRuntimeConfig{
 		app_entry:         app_entry
 		module_root:       module_root
+		build_root:        build_root
 		signature_root:    signature_root
 		signature_include: signature_include
 		signature_exclude: signature_exclude

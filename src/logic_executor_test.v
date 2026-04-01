@@ -25,6 +25,7 @@ fn test_admin_runtime_snapshot_exposes_embedded_logic_executor_identity() {
 		logic_executor:           new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
 			thread_count:    1
 			module_root:     '/tmp/demo'
+			build_root:      '/tmp/demo-build'
 			signature_root:  '/tmp/demo'
 			runtime_profile: 'node'
 			enable_fs:       true
@@ -41,6 +42,7 @@ fn test_admin_runtime_snapshot_exposes_embedded_logic_executor_identity() {
 	assert snapshot.logic_executor_details.runtime_profile == 'node'
 	assert snapshot.logic_executor_details.lane_count == 1
 	assert snapshot.logic_executor_details.module_root == '/tmp/demo'
+	assert snapshot.logic_executor_details.build_root == '/tmp/demo-build'
 	assert snapshot.logic_executor_details.enable_fs
 }
 

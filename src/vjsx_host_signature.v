@@ -21,6 +21,11 @@ const vjsx_default_signature_excludes = [
 
 const vjsx_signature_source_exts = ['.js', '.mjs', '.cjs', '.ts', '.mts', '.cts', '.json']
 
+fn vjsx_signature_file_hash(path string) string {
+	bytes := os.read_bytes(path) or { return 'read_error' }
+	return fnv1a.sum64_string(bytes.bytestr()).hex()
+}
+
 fn normalize_vjsx_signature_glob(raw string) string {
 	return raw.trim_space().replace('\\', '/').trim_left('/')
 }
@@ -127,7 +132,7 @@ fn vjsx_source_signature_collect(root string, include_globs []string, exclude_gl
 			continue
 		}
 		st := os.stat(path) or { continue }
-		rows << '${rel}:${st.mtime}:${st.size}'
+		rows << '${rel}:${st.mtime}:${st.size}:${vjsx_signature_file_hash(path)}'
 	}
 }
 

@@ -2053,6 +2053,33 @@ fn feishu_runtime_split_content_runes(content string, limit int) (string, string
 	return head, tail
 }
 
+fn feishu_runtime_streaming_preview_markdown(content string) string {
+	trimmed := content.trim_space()
+	if trimmed == '' {
+		return ''
+	}
+	head, tail := feishu_runtime_split_content_runes(trimmed, feishu_stream_buffer_rollover_runes)
+	if tail == '' {
+		return head
+	}
+	note := '\n\n_内容过长，预览已截断，完整结果会在结束时自动分段发送。_'
+	mut preview := head.trim_space()
+	if preview == '' {
+		return note.trim_space()
+	}
+	if (preview + note).runes().len <= feishu_stream_buffer_rollover_runes {
+		return preview + note
+	}
+	note_runes := note.runes().len
+	head_limit := if feishu_stream_buffer_rollover_runes > note_runes {
+		feishu_stream_buffer_rollover_runes - note_runes
+	} else {
+		feishu_stream_buffer_rollover_runes
+	}
+	short_head, _ := feishu_runtime_split_content_runes(preview, head_limit)
+	return short_head.trim_space() + note
+}
+
 fn feishu_runtime_render_final_card(markdown string, template_content string) string {
 	if template_content.trim_space() == '' {
 		return feishu_runtime_interactive_markdown_card(markdown)
@@ -2113,7 +2140,20 @@ fn (mut app App) feishu_runtime_flush_pending_buffers() {
 	app.feishu_mu.unlock()
 
 	for buf in to_flush {
-		card_payload := feishu_runtime_streaming_card(buf.content, 1)
+		preview_markdown := feishu_runtime_streaming_preview_markdown(buf.content)
+		if preview_markdown == '' {
+			continue
+		}
+		if preview_markdown == buf.rendered_content {
+			app.feishu_mu.@lock()
+			if mut active := app.feishu_buffers[buf.message_id] {
+				active.last_flush = time.now().unix_milli()
+				app.feishu_buffers[buf.message_id] = active
+			}
+			app.feishu_mu.unlock()
+			continue
+		}
+		card_payload := feishu_runtime_streaming_card(preview_markdown, 1)
 		app.feishu_runtime_update_message(FeishuRuntimeUpdateMessageRequest{
 			app:        buf.app
 			message_id: buf.message_id
@@ -2126,7 +2166,7 @@ fn (mut app App) feishu_runtime_flush_pending_buffers() {
 		app.feishu_mu.@lock()
 		if mut active := app.feishu_buffers[buf.message_id] {
 			active.last_flush = time.now().unix_milli()
-			active.rendered_content = active.content
+			active.rendered_content = preview_markdown
 			app.feishu_buffers[buf.message_id] = active
 		}
 		app.feishu_mu.unlock()
@@ -2208,16 +2248,20 @@ fn (mut app App) feishu_runtime_flush_buffer(message_id string, template_content
 	if buf.content.trim_space() == '' {
 		return
 	}
+	preview_markdown := feishu_runtime_streaming_preview_markdown(buf.content)
+	if preview_markdown == '' {
+		return
+	}
 	app.feishu_runtime_update_message(FeishuRuntimeUpdateMessageRequest{
 		app:        buf.app
 		message_id: buf.message_id
 		msg_type:   'interactive'
-		content:    feishu_runtime_streaming_card(buf.content, 1)
+		content:    feishu_runtime_streaming_card(preview_markdown, 1)
 	})!
 	app.feishu_mu.@lock()
 	if mut active := app.feishu_buffers[buf.message_id] {
 		active.last_flush = time.now().unix_milli()
-		active.rendered_content = active.content
+		active.rendered_content = preview_markdown
 		app.feishu_buffers[buf.message_id] = active
 	}
 	app.feishu_mu.unlock()

@@ -37,6 +37,7 @@ const known_long_flags = [
 	'--php-arg',
 	'--vjsx-entry',
 	'--vjsx-module-root',
+	'--vjsx-build-root',
 	'--vjsx-signature-root',
 	'--vjsx-signature-include',
 	'--vjsx-signature-exclude',
@@ -96,6 +97,7 @@ fn print_vhttpd_help() {
 	println('  --php-arg <value>            Extra PHP CLI arg; repeat to add multiple entries')
 	println('  --vjsx-entry <path>          In-proc vjsx app entry (.js/.mjs/.ts/.mts)')
 	println('  --vjsx-module-root <path>    Optional module root for in-proc vjsx')
+	println('  --vjsx-build-root <path>     Optional .vjsxbuild root (defaults to /tmp cache)')
 	println('  --vjsx-signature-root <path> Optional source signature root (defaults to module root)')
 	println('  --vjsx-signature-include <g> Comma-separated include globs for source signature')
 	println('  --vjsx-signature-exclude <g> Comma-separated exclude globs for source signature')
