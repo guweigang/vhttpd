@@ -392,6 +392,7 @@ Minimal config example:
 root = "."
 vjsx_app = "examples/vjsx/hello-handler.mts"
 vjsx_root = "examples/vjsx"
+vjsx_build_root = "tmp/vjsx-build"
 
 [executor]
 kind = "vjsx"
@@ -399,9 +400,13 @@ kind = "vjsx"
 [vjsx]
 app_entry = "${paths.vjsx_app}"
 module_root = "${paths.vjsx_root}"
+build_root = "${paths.vjsx_build_root}"
 runtime_profile = "node"
 thread_count = 2
 ```
+
+If `build_root` is omitted, `.vjsxbuild` lanes default to `/tmp/vhttpd_vjsx`.
+Setting `build_root` is useful when you want stable on-disk build artifacts for debugging.
 
 You can also start it from CLI:
 
@@ -409,6 +414,7 @@ You can also start it from CLI:
 ./vhttpd \
   --executor vjsx \
   --vjsx-entry /Users/guweigang/Source/vhttpd/examples/vjsx/hello-handler.mts \
+  --vjsx-build-root /Users/guweigang/Source/vhttpd/tmp/vjsx-build \
   --vjsx-runtime-profile node \
   --vjsx-thread-count 2
 ```

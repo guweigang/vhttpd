@@ -88,6 +88,7 @@ Minimal shape:
 root = "."
 vjsx_app = "examples/vjsx/hello-handler.mts"
 vjsx_root = "examples/vjsx"
+vjsx_build_root = "tmp/vjsx-build"
 
 [executor]
 kind = "vjsx"
@@ -95,6 +96,7 @@ kind = "vjsx"
 [vjsx]
 app_entry = "${paths.vjsx_app}"
 module_root = "${paths.vjsx_root}"
+build_root = "${paths.vjsx_build_root}"
 runtime_profile = "node"
 thread_count = 2
 ```
@@ -104,6 +106,7 @@ Important fields:
 - `[executor].kind = "vjsx"`
 - `[vjsx].app_entry`: JS/TS entry file
 - `[vjsx].module_root`: module resolution root
+- `[vjsx].build_root`: optional `.vjsxbuild` root; defaults to `/tmp/vhttpd_vjsx`
 - `[vjsx].runtime_profile`: `script` or `node`
 - `[vjsx].thread_count`: embedded execution lane count
 
