@@ -135,13 +135,7 @@ fn validate_args(args []string) ! {
 	}
 }
 
-fn run_server(args []string) {
-	cfg := load_vhttpd_config(args) or {
-		log.error('config load failed: ${err}')
-		return
-	}
-	configure_runtime_timezone(cfg.runtime.timezone)
-	os.signal_ignore(.pipe)
+fn run_single_server(args []string, cfg VhttpdConfig) {
 	runtime_cfg := resolve_server_runtime_config(args, cfg) or {
 		log.error('server runtime config resolve failed: ${err}')
 		return
@@ -154,6 +148,20 @@ fn run_server(args []string) {
 
 	start_server_runtime(mut app, runtime_cfg)
 	serve_server_runtime(mut app, runtime_cfg)
+}
+
+fn run_server(args []string) {
+	cfg := load_vhttpd_config(args) or {
+		log.error('config load failed: ${err}')
+		return
+	}
+	configure_runtime_timezone(cfg.runtime.timezone)
+	os.signal_ignore(.pipe)
+	if config_uses_multi_listener(cfg) {
+		run_multi_server(args, cfg)
+		return
+	}
+	run_single_server(args, cfg)
 }
 
 fn configure_runtime_timezone(config_tz string) {

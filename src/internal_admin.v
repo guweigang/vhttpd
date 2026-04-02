@@ -23,6 +23,34 @@ fn default_internal_admin_socket() string {
 	return '/tmp/vhttpd_admin_${os.getpid()}.sock'
 }
 
+fn default_internal_admin_socket_for(label string) string {
+	safe_label := sanitize_internal_admin_socket_label(label)
+	if safe_label == '' {
+		return default_internal_admin_socket()
+	}
+	return '/tmp/vhttpd_admin_${os.getpid()}_${safe_label}.sock'
+}
+
+fn sanitize_internal_admin_socket_label(raw string) string {
+	if raw.trim_space() == '' {
+		return ''
+	}
+	mut out := []u8{}
+	for ch in raw.bytes() {
+		if (ch >= `a` && ch <= `z`) || (ch >= `A` && ch <= `Z`) || (ch >= `0` && ch <= `9`) {
+			out << ch
+			continue
+		}
+		if ch in [`-`, `_`, `.`, `:`] {
+			out << `_`
+		}
+	}
+	if out.len == 0 {
+		return ''
+	}
+	return out.bytestr()
+}
+
 fn internal_admin_normalize_path(raw string) string {
 	mut path := normalize_path(raw)
 	if path == '/admin' {

@@ -31,6 +31,32 @@ fn (l TestShutdownExecutorLifecycle) stop(mut app App) {
 
 struct TestShutdownProviderRuntime {}
 
+struct TestShutdownProvider {}
+
+fn (p TestShutdownProvider) init(mut app App) ! {
+	_ = p
+	_ = app
+	return
+}
+
+fn (p TestShutdownProvider) start(mut app App) ! {
+	_ = p
+	_ = app
+	return
+}
+
+fn (p TestShutdownProvider) stop(mut app App) ! {
+	_ = p
+	_ = app
+	return
+}
+
+fn (p TestShutdownProvider) snapshot(mut app App) string {
+	_ = p
+	_ = app
+	return '{}'
+}
+
 fn (r TestShutdownProviderRuntime) start(mut app App) ! {
 	_ = r
 	_ = app
@@ -240,6 +266,310 @@ root = "\${paths.assets_root}"
 	assert cfg.vjsx.signature_root == expected_vjsx_sig_root
 	assert cfg.vjsx.signature_include[0] == 'apps/**/*.mts'
 	assert cfg.assets.root == expected_assets_root
+}
+
+fn test_load_vhttpd_config_supports_multi_listener_sites() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_multi_listener_toml_test')
+	config_dir := os.join_path(temp_dir, 'config')
+	project_a_dir := os.join_path(temp_dir, 'project-a')
+	project_b_dir := os.join_path(temp_dir, 'project-b')
+	os.mkdir_all(config_dir) or { panic(err) }
+	os.mkdir_all(project_a_dir) or { panic(err) }
+	os.mkdir_all(project_b_dir) or { panic(err) }
+	config_file := os.join_path(config_dir, 'vhttpd.toml')
+	php_worker := os.join_path(project_a_dir, 'php-worker.php')
+	php_app := os.join_path(project_a_dir, 'app.php')
+	vjsx_app := os.join_path(project_b_dir, 'app.mts')
+	os.write_file(php_worker, '<?php echo "worker";') or { panic(err) }
+	os.write_file(php_app, '<?php echo "app";') or { panic(err) }
+	os.write_file(vjsx_app, 'export default { async handle() { return { status: 200, body: "ok" }; } };') or {
+		panic(err)
+	}
+	os.write_file(config_file, '
+[paths]
+root = ".."
+project_a_root = "project-a"
+project_b_root = "project-b"
+project_a_php_worker = "\${paths.project_a_root}/php-worker.php"
+project_a_php_app = "\${paths.project_a_root}/app.php"
+project_b_vjsx_app = "\${paths.project_b_root}/app.mts"
+
+[files]
+pid_file = "run/vhttpd.pid"
+event_log = "logs/vhttpd.events.ndjson"
+
+[assets]
+enabled = true
+prefix = "/assets"
+root = "public"
+
+[codex]
+enabled = true
+model = "gpt-5.4"
+
+[listeners.project_a]
+host = "127.0.0.1"
+port = 18081
+site = "project_a"
+
+[listeners.project_b]
+host = "127.0.0.1"
+port = 18082
+site = "project_b"
+
+[sites.project_a]
+project_root = "\${paths.project_a_root}"
+executor = "php"
+php.worker_entry = "\${paths.project_a_php_worker}"
+php.app_entry = "\${paths.project_a_php_app}"
+
+[sites.project_b]
+project_root = "\${paths.project_b_root}"
+executor = "vjsx"
+vjsx.app_entry = "\${paths.project_b_vjsx_app}"
+vjsx.module_root = "\${paths.project_b_root}"
+vjsx.runtime_profile = "node"
+vjsx.thread_count = 2
+') or {
+		panic(err)
+	}
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	cfg := load_vhttpd_config(['--config', config_file]) or { panic(err) }
+	assert cfg.listeners.len == 2
+	assert cfg.sites.len == 2
+	assert cfg.listeners['project_a'].site == 'project_a'
+	assert cfg.listeners['project_b'].port == 18082
+	assert cfg.assets.enabled
+	assert cfg.assets.root == os.join_path(temp_dir, 'public')
+	assert cfg.codex.enabled
+	assert cfg.codex.model == 'gpt-5.4'
+	multi_cfg := resolve_multi_server_runtime_config([]string{}, cfg) or { panic(err) }
+	assert multi_cfg.listeners.len == 2
+	assert multi_cfg.listeners[0].site_cfg.paths.root == project_a_dir
+	assert multi_cfg.listeners[0].site_cfg.php.worker_entry == php_worker
+	assert multi_cfg.listeners[0].site_cfg.php.app_entry == php_app
+	assert multi_cfg.listeners[1].site_cfg.vjsx.app_entry == vjsx_app
+	assert multi_cfg.listeners[1].site_cfg.vjsx.module_root == project_b_dir
+}
+
+fn test_load_vhttpd_config_supports_site_executor_shorthand() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_site_executor_shorthand_test')
+	config_dir := os.join_path(temp_dir, 'config')
+	os.mkdir_all(config_dir) or { panic(err) }
+	config_file := os.join_path(config_dir, 'vhttpd.toml')
+	os.write_file(config_file, '
+[listeners.demo]
+host = "127.0.0.1"
+port = 19881
+site = "demo"
+
+[sites.demo]
+project_root = "."
+executor = "vjsx"
+') or {
+		panic(err)
+	}
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	cfg := load_vhttpd_config(['--config', config_file]) or { panic(err) }
+	assert cfg.sites['demo'].executor.kind == 'vjsx'
+}
+
+fn test_load_vhttpd_config_supports_site_host_port_shorthand() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_site_host_port_shorthand_test')
+	config_dir := os.join_path(temp_dir, 'config')
+	project_dir := os.join_path(temp_dir, 'project')
+	os.mkdir_all(config_dir) or { panic(err) }
+	os.mkdir_all(project_dir) or { panic(err) }
+	config_file := os.join_path(config_dir, 'vhttpd.toml')
+	app_file := os.join_path(project_dir, 'app.mts')
+	os.write_file(app_file, 'export default { async handle() { return { status: 200, body: "ok" }; } };') or {
+		panic(err)
+	}
+	os.write_file(config_file, '
+[paths]
+root = ".."
+project_root = "project"
+app_entry = "project/app.mts"
+
+[sites.demo]
+host = "127.0.0.1"
+port = 19883
+root = "\${paths.project_root}"
+executor = "vjsx"
+app = "\${paths.app_entry}"
+vjsx.runtime_profile = "node"
+') or {
+		panic(err)
+	}
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	cfg := load_vhttpd_config(['--config', config_file]) or { panic(err) }
+	assert cfg.listeners.len == 0
+	assert cfg.sites['demo'].host == '127.0.0.1'
+	assert cfg.sites['demo'].port == 19883
+	multi_cfg := resolve_multi_server_runtime_config([]string{}, cfg) or { panic(err) }
+	assert multi_cfg.listeners.len == 1
+	assert multi_cfg.listeners[0].id == 'demo'
+	assert multi_cfg.listeners[0].site_id == 'demo'
+	assert multi_cfg.listeners[0].runtime_cfg.host == '127.0.0.1'
+	assert multi_cfg.listeners[0].runtime_cfg.port == 19883
+	assert multi_cfg.listeners[0].runtime_cfg.executor_plan.executor.kind() == 'vjsx'
+	assert multi_cfg.listeners[0].site_cfg.vjsx.app_entry == app_file
+	assert multi_cfg.listeners[0].site_cfg.vjsx.module_root == project_dir
+}
+
+fn test_load_vhttpd_config_supports_site_root_alias() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_site_root_alias_test')
+	config_dir := os.join_path(temp_dir, 'config')
+	project_dir := os.join_path(temp_dir, 'project')
+	os.mkdir_all(config_dir) or { panic(err) }
+	os.mkdir_all(project_dir) or { panic(err) }
+	config_file := os.join_path(config_dir, 'vhttpd.toml')
+	app_file := os.join_path(project_dir, 'app.mts')
+	os.write_file(app_file, 'export default { async handle() { return { status: 200, body: "ok" }; } };') or {
+		panic(err)
+	}
+	os.write_file(config_file, '
+[paths]
+root = ".."
+site_root = "project"
+site_app = "project/app.mts"
+
+[sites.demo]
+host = "127.0.0.1"
+port = 19884
+root = "\${paths.site_root}"
+executor = "vjsx"
+app = "\${paths.site_app}"
+') or {
+		panic(err)
+	}
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	cfg := load_vhttpd_config(['--config', config_file]) or { panic(err) }
+	assert cfg.sites['demo'].project_root == '\${paths.site_root}'
+	multi_cfg := resolve_multi_server_runtime_config([]string{}, cfg) or { panic(err) }
+	assert multi_cfg.listeners.len == 1
+	assert multi_cfg.listeners[0].site_cfg.paths.root == project_dir
+	assert multi_cfg.listeners[0].site_cfg.vjsx.app_entry == app_file
+}
+
+fn test_site_config_as_vhttpd_config_defaults_vjsx_module_root_to_site_root() {
+	cfg := site_config_as_vhttpd_config(default_vhttpd_config(), SiteConfig{
+		project_root: '/tmp/site-root'
+		executor: ExecutorConfig{
+			kind: 'vjsx'
+		}
+		vjsx: VjsxConfig{
+			app_entry: './app.mts'
+		}
+	})
+	assert cfg.paths.root == '/tmp/site-root'
+	assert cfg.vjsx.module_root == '/tmp/site-root'
+}
+
+fn test_site_config_as_vhttpd_config_routes_app_alias_to_vjsx() {
+	cfg := site_config_as_vhttpd_config(default_vhttpd_config(), SiteConfig{
+		project_root: '/tmp/site-root'
+		executor: ExecutorConfig{
+			kind: 'vjsx'
+		}
+		app: './app.mts'
+	})
+	assert cfg.vjsx.app_entry == './app.mts'
+	assert cfg.php.app_entry == ''
+}
+
+fn test_site_config_as_vhttpd_config_routes_app_alias_to_php() {
+	cfg := site_config_as_vhttpd_config(default_vhttpd_config(), SiteConfig{
+		project_root: '/tmp/site-root'
+		executor: ExecutorConfig{
+			kind: 'php'
+		}
+		app: './app.php'
+	})
+	assert cfg.php.app_entry == './app.php'
+	assert cfg.vjsx.app_entry == ''
+}
+
+fn test_site_config_as_vhttpd_config_routes_worker_entry_alias_to_php() {
+	cfg := site_config_as_vhttpd_config(default_vhttpd_config(), SiteConfig{
+		project_root: '/tmp/site-root'
+		executor: ExecutorConfig{
+			kind: 'php'
+		}
+		worker_entry: './php-worker'
+	})
+	assert cfg.php.worker_entry == './php-worker'
+}
+
+fn test_site_config_as_vhttpd_config_infers_executor_from_app_alias() {
+	php_cfg := site_config_as_vhttpd_config(default_vhttpd_config(), SiteConfig{
+		project_root: '/tmp/site-root'
+		app:          './app.php'
+	})
+	assert php_cfg.executor.kind == 'php'
+	assert php_cfg.php.app_entry == './app.php'
+	vjsx_cfg := site_config_as_vhttpd_config(default_vhttpd_config(), SiteConfig{
+		project_root: '/tmp/site-root'
+		app:          './app.mts'
+	})
+	assert vjsx_cfg.executor.kind == 'vjsx'
+	assert vjsx_cfg.vjsx.app_entry == './app.mts'
+}
+
+fn test_load_vhttpd_config_supports_merged_site_worker_and_php_tables() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_site_merged_tables_test')
+	config_dir := os.join_path(temp_dir, 'config')
+	php_worker_dir := os.join_path(temp_dir, 'config', 'php', 'package', 'bin')
+	examples_dir := os.join_path(temp_dir, 'config', 'examples')
+	os.mkdir_all(config_dir) or { panic(err) }
+	os.mkdir_all(php_worker_dir) or { panic(err) }
+	os.mkdir_all(examples_dir) or { panic(err) }
+	config_file := os.join_path(config_dir, 'vhttpd.toml')
+	php_worker := os.join_path(php_worker_dir, 'php-worker')
+	php_app := os.join_path(examples_dir, 'hello-app.php')
+	os.write_file(php_worker, '#!/usr/bin/env php') or { panic(err) }
+	os.write_file(php_app, '<?php echo "hello";') or { panic(err) }
+	os.write_file(config_file, '
+[listeners.demo]
+host = "127.0.0.1"
+port = 19881
+site = "demo"
+
+[sites.demo]
+project_root = "."
+executor = "php"
+worker.entry = "php/package/bin/php-worker"
+worker.autostart = true
+worker.pool_size = 2
+worker.socket_prefix = "tmp/demo-worker"
+php.bin = "php"
+app = "examples/hello-app.php"
+') or {
+		panic(err)
+	}
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	cfg := load_vhttpd_config(['--config', config_file]) or { panic(err) }
+	assert cfg.sites['demo'].executor.kind == 'php'
+	assert cfg.sites['demo'].worker.autostart
+	assert cfg.sites['demo'].worker.pool_size == 2
+	assert cfg.sites['demo'].worker.socket_prefix == 'tmp/demo-worker'
+	assert cfg.sites['demo'].php.bin == 'php'
+	multi_cfg := resolve_multi_server_runtime_config([]string{}, cfg) or { panic(err) }
+	assert multi_cfg.listeners.len == 1
+	assert multi_cfg.listeners[0].site_cfg.worker.socket_prefix == os.join_path(config_dir, 'tmp',
+		'demo-worker')
+	assert multi_cfg.listeners[0].site_cfg.php.worker_entry == php_worker
+	assert multi_cfg.listeners[0].site_cfg.php.app_entry == php_app
 }
 
 fn test_load_vhttpd_config_parses_php_section_and_resolves_paths() {
@@ -912,6 +1242,161 @@ fn test_resolve_server_runtime_config_builds_vjsx_embedded_runtime_state() {
 	assert os.exists(pid_file)
 }
 
+fn test_resolve_multi_server_runtime_config_keeps_single_site_compatibility() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_multi_listener_single_compat_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	worker_entry := os.join_path(temp_dir, 'php-worker.php')
+	app_entry := os.join_path(temp_dir, 'app.php')
+	event_log := os.join_path(temp_dir, 'logs', 'events.ndjson')
+	pid_file := os.join_path(temp_dir, 'run', 'vhttpd.pid')
+	os.write_file(worker_entry, '<?php echo "worker";') or { panic(err) }
+	os.write_file(app_entry, '<?php echo "app";') or { panic(err) }
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	mut cfg := default_vhttpd_config()
+	cfg.server.host = '127.0.0.7'
+	cfg.server.port = 18181
+	cfg.files.event_log = event_log
+	cfg.files.pid_file = pid_file
+	cfg.php.worker_entry = worker_entry
+	cfg.php.app_entry = app_entry
+	multi_cfg := resolve_multi_server_runtime_config([]string{}, cfg) or { panic(err) }
+	assert multi_cfg.single_mode
+	assert multi_cfg.listeners.len == 1
+	assert multi_cfg.listeners[0].id == 'default'
+	assert multi_cfg.listeners[0].site_id == 'default'
+	assert multi_cfg.listeners[0].runtime_cfg.host == '127.0.0.7'
+	assert multi_cfg.listeners[0].runtime_cfg.port == 18181
+	assert multi_cfg.listeners[0].runtime_cfg.executor_plan.executor.kind() == 'php'
+}
+
+fn test_resolve_multi_server_runtime_config_builds_listener_bound_sites() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_multi_listener_runtime_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	php_worker := os.join_path(temp_dir, 'php-worker.php')
+	php_app := os.join_path(temp_dir, 'project-a.php')
+	vjsx_root := os.join_path(temp_dir, 'project-b')
+	vjsx_app := os.join_path(vjsx_root, 'app.mts')
+	event_log := os.join_path(temp_dir, 'logs', 'events.ndjson')
+	pid_file := os.join_path(temp_dir, 'run', 'vhttpd.pid')
+	os.mkdir_all(vjsx_root) or { panic(err) }
+	os.write_file(php_worker, '<?php echo "worker";') or { panic(err) }
+	os.write_file(php_app, '<?php echo "app";') or { panic(err) }
+	os.write_file(vjsx_app, 'export default { async handle() { return { status: 200, body: "ok" }; } };') or {
+		panic(err)
+	}
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	mut cfg := default_vhttpd_config()
+	cfg.files.event_log = event_log
+	cfg.files.pid_file = pid_file
+	cfg.config_path = os.join_path(temp_dir, 'vhttpd.toml')
+	cfg.listeners = {
+		'project_a': ListenerConfig{
+			host: '127.0.0.1'
+			port: 18081
+			site: 'project_a'
+		}
+		'project_b': ListenerConfig{
+			host: '127.0.0.1'
+			port: 18082
+			site: 'project_b'
+		}
+	}
+	cfg.sites = {
+		'project_a': SiteConfig{
+			project_root: temp_dir
+			executor: ExecutorConfig{
+				kind: 'php'
+			}
+			php: PhpConfig{
+				worker_entry: php_worker
+				app_entry:    php_app
+			}
+		}
+		'project_b': SiteConfig{
+			project_root: vjsx_root
+			executor: ExecutorConfig{
+				kind: 'vjsx'
+			}
+			vjsx: VjsxConfig{
+				app_entry:       './app.mts'
+				module_root:     '.'
+				runtime_profile: 'node'
+				thread_count:    2
+			}
+		}
+	}
+	multi_cfg := resolve_multi_server_runtime_config([]string{}, cfg) or { panic(err) }
+	assert !multi_cfg.single_mode
+	assert multi_cfg.listeners.len == 2
+	assert multi_cfg.listeners[0].id == 'project_a'
+	assert multi_cfg.listeners[0].site_id == 'project_a'
+	assert multi_cfg.listeners[0].runtime_cfg.host == '127.0.0.1'
+	assert multi_cfg.listeners[0].runtime_cfg.port == 18081
+	assert multi_cfg.listeners[0].runtime_cfg.executor_plan.executor.kind() == 'php'
+	assert multi_cfg.listeners[0].site_cfg.php.app_entry == php_app
+	assert multi_cfg.listeners[1].id == 'project_b'
+	assert multi_cfg.listeners[1].site_id == 'project_b'
+	assert multi_cfg.listeners[1].runtime_cfg.host == '127.0.0.1'
+	assert multi_cfg.listeners[1].runtime_cfg.port == 18082
+	assert multi_cfg.listeners[1].runtime_cfg.executor_plan.executor.kind() == 'vjsx'
+	assert multi_cfg.listeners[1].site_cfg.vjsx.app_entry == vjsx_app
+	assert multi_cfg.listeners[1].site_cfg.vjsx.module_root == vjsx_root
+	assert !multi_cfg.listeners[1].runtime_cfg.admin_enabled
+	assert os.exists(pid_file)
+}
+
+fn test_resolve_multi_server_runtime_config_rejects_unknown_site_binding() {
+	mut cfg := default_vhttpd_config()
+	cfg.listeners = {
+		'broken': ListenerConfig{
+			host: '127.0.0.1'
+			port: 19001
+			site: 'missing'
+		}
+	}
+	cfg.sites = {
+		'other': SiteConfig{}
+	}
+	resolve_multi_server_runtime_config([]string{}, cfg) or {
+		assert err.msg() == 'multi_listener_unknown_site:broken:missing'
+		return
+	}
+	assert false
+}
+
+fn test_site_config_as_vhttpd_config_inherits_global_defaults() {
+	mut cfg := default_vhttpd_config()
+	cfg.executor.kind = 'vjsx'
+	cfg.assets.enabled = true
+	cfg.assets.prefix = '/shared'
+	cfg.assets.root = '/tmp/shared-assets'
+	cfg.codex.enabled = true
+	cfg.codex.model = 'gpt-5.4'
+	cfg.mcp.max_sessions = 77
+	site_cfg := SiteConfig{
+		project_root: '/tmp/project-a'
+		vjsx: VjsxConfig{
+			app_entry: './app.mts'
+		}
+	}
+	derived := site_config_as_vhttpd_config(cfg, site_cfg)
+	assert derived.paths.root == '/tmp/project-a'
+	assert derived.executor.kind == 'vjsx'
+	assert derived.vjsx.app_entry == './app.mts'
+	assert derived.assets.enabled
+	assert derived.assets.prefix == '/shared'
+	assert derived.assets.root == '/tmp/shared-assets'
+	assert derived.codex.enabled
+	assert derived.codex.model == 'gpt-5.4'
+	assert derived.mcp.max_sessions == 77
+	assert derived.listeners.len == 0
+	assert derived.sites.len == 0
+}
+
 fn test_resolve_embedded_host_runtime_config_normalizes_paths_and_lane_defaults() {
 	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_embedded_host_runtime_test')
 	os.mkdir_all(os.join_path(temp_dir, 'sig')) or { panic(err) }
@@ -978,6 +1463,8 @@ fn test_shutdown_app_runtime_stops_lifecycle_and_cleans_runtime_files() {
 					name:        'test'
 					enabled:     true
 					has_runtime: true
+					provider:    TestShutdownProvider{}
+					handler:     NoopProviderCommandHandler{}
 					runtime:     TestShutdownProviderRuntime{}
 				}
 			}

@@ -18,6 +18,8 @@ You can inspect the current built-in executor catalog through `/admin/executors`
 
 Shared config such as `[server]`, `[files]`, `[runtime]`, `[admin]`, and `[assets]` works the same in both modes.
 
+If you are using multi-site mode, the site-level shorthand and alias rules are summarized in [SITE_CONFIG_DSL.md](/Users/guweigang/Source/vhttpd/docs/SITE_CONFIG_DSL.md).
+
 If you use `[paths]`, values that start with `/` are treated as absolute paths and kept as-is. Other aliases resolve against `[paths].root`, and `[paths].root` itself resolves against the config file directory.
 
 ## PHP Mode

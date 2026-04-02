@@ -18,6 +18,7 @@ make build vhttpd
 已提供配置：
 
 - `/Users/guweigang/Source/vhttpd/examples/config/hello.toml`
+- `/Users/guweigang/Source/vhttpd/config/vhttpd.multi.example.toml`
 - `/Users/guweigang/Source/vhttpd/examples/config/websocket-echo.toml`
 - `/Users/guweigang/Source/vhttpd/examples/config/ai-stream.toml`
 - `/Users/guweigang/Source/vhttpd/examples/config/stream-bench.toml`
@@ -29,6 +30,7 @@ make build vhttpd
 
 说明：
 
+- `vhttpd.multi.example.toml` 演示一个进程同时监听两个端口，分别跑 PHP 和 vjsx site
 - `symfony.toml` / `laravel.toml` 需要先安装各自 `vendor` 依赖
 - `wordpress.toml` 需要把 `VSLIM_WP_ROOT=/ABS/PATH/TO/WORDPRESS` 改成真实路径
 - `ollama-proxy.toml` 里 `OLLAMA_CHAT_URL / OLLAMA_MODEL / OLLAMA_API_KEY` 可按需改

@@ -4,6 +4,8 @@ import os
 
 pub struct ServerRuntimeConfig {
 pub:
+	listener_id           string
+	site_id               string
 	host                  string
 	port                  int
 	pid_file              string
@@ -20,6 +22,10 @@ pub:
 fn resolve_server_runtime_config(args []string, cfg VhttpdConfig) !ServerRuntimeConfig {
 	host := arg_string_or(args, '--host', cfg.server.host)
 	port := arg_int_or(args, '--port', cfg.server.port)
+	return resolve_server_runtime_config_for_target(args, cfg, '', '', host, port, true)
+}
+
+fn resolve_server_runtime_config_for_target(args []string, cfg VhttpdConfig, listener_id string, site_id string, host string, port int, admin_enabled_override bool) !ServerRuntimeConfig {
 	event_log := arg_string_or(args, '--event-log', cfg.files.event_log)
 	pid_file := arg_string_or(args, '--pid-file', cfg.files.pid_file)
 	worker_read_timeout_ms := arg_int_or(args, '--worker-read-timeout-ms', cfg.worker.read_timeout_ms)
@@ -39,7 +45,7 @@ fn resolve_server_runtime_config(args []string, cfg VhttpdConfig) !ServerRuntime
 	admin_host_arg := arg_string_or(args, '--admin-host', cfg.admin.host).trim_space()
 	admin_port := arg_int_or(args, '--admin-port', cfg.admin.port)
 	admin_token := arg_string_or(args, '--admin-token', cfg.admin.token)
-	admin_enabled := admin_port > 0
+	admin_enabled := admin_enabled_override && admin_port > 0
 	admin_host := if admin_host_arg == '' { '127.0.0.1' } else { admin_host_arg }
 	provider_settings := resolve_provider_runtime_settings(args, cfg)
 	executor_plan := resolve_logic_executor_runtime_plan(args, cfg, resolve_worker_sockets_with_defaults(args,
@@ -47,8 +53,18 @@ fn resolve_server_runtime_config(args []string, cfg VhttpdConfig) !ServerRuntime
 		cfg.worker.stream_dispatch, cfg.worker.websocket_dispatch, worker_autostart, worker_cmd_override,
 		cfg.worker.env.clone())!
 	workdir := os.getwd()
-	internal_admin_socket := prepare_server_runtime_files(event_log, pid_file)!
+	socket_label := if listener_id != '' {
+		listener_id
+	} else if site_id != '' {
+		site_id
+	} else {
+		''
+	}
+	internal_admin_socket := prepare_server_runtime_files_for_label(event_log, pid_file,
+		socket_label)!
 	return ServerRuntimeConfig{
+		listener_id:           listener_id
+		site_id:               site_id
 		host:                  host
 		port:                  port
 		pid_file:              pid_file

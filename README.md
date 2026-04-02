@@ -356,6 +356,79 @@ Shorthand is also supported:
 ./vhttpd /Users/guweigang/Source/vhttpd/config/vhttpd.example.toml
 ```
 
+Multi-listener mode is also supported. In that mode:
+
+- one `vhttpd` process can listen on multiple `host:port` bindings
+- each `[listeners.<id>]` entry points to exactly one `[sites.<id>]`
+- each site gets its own isolated app runtime and executor selection
+- phase 1 is listener-based routing only, not same-port host-based virtualhost routing yet
+
+Minimal multi-listener example:
+
+```toml
+[paths]
+root = "."
+php_app = "examples/hello-app.php"
+php_worker = "php/package/bin/php-worker"
+vslim_ext = "../vphpx/vslim/vslim.so"
+vjsx_root = "examples/codexbot-app-ts"
+vjsx_app = "examples/codexbot-app-ts/app.mts"
+
+[files]
+pid_file = "tmp/vhttpd_multi.pid"
+event_log = "tmp/vhttpd_multi.events.ndjson"
+
+[sites.php_demo]
+host = "127.0.0.1"
+port = 19881
+root = "."
+executor = "php"
+worker.entry = "${paths.php_worker}"
+app = "${paths.php_app}"
+php.extensions = ["${paths.vslim_ext}"]
+
+[sites.codexbot]
+host = "127.0.0.1"
+port = 19883
+root = "${paths.vjsx_root}"
+executor = "vjsx"
+app = "${paths.vjsx_app}"
+vjsx.runtime_profile = "node"
+vjsx.thread_count = 2
+```
+
+Site config is layered on top of the global config, so shared sections like `[files]`, `[assets]`, `[codex]`, `[feishu]`, and `[mcp]` can stay global while each site only overrides what it needs.
+
+If you omit `[listeners]`, `vhttpd` will synthesize one listener per site from `host` + `port` on `[sites.<id>]`.
+
+At site level, `root = "..."` is accepted as a shorter alias for `project_root = "..."`.
+
+For executor selection, both forms are accepted:
+
+- shorthand: `executor = "vjsx"`
+- expanded: `[sites.demo.executor] kind = "vjsx"`
+
+Nested site sections can also be written inline inside `[sites.demo]`, for example:
+
+- `worker.autostart = true`
+- `app = "..."`
+- `php.worker_entry = "..."`
+- `vjsx.build_root = "..."`
+
+For `vjsx` sites, `vjsx.module_root` defaults to the site `root` when omitted.
+
+At site level, `app = "..."` is accepted as a unified alias for the executor entry file:
+
+- for `php`, it maps to `php.app_entry`
+- for `vjsx`, it maps to `vjsx.app_entry`
+- if `executor` is omitted, `.php` infers `php`, otherwise it falls back to `vjsx`
+
+For `php` sites, `worker.entry = "..."` is accepted as a shorter alias for `php.worker_entry`.
+
+There is a ready-to-run multi-listener example at [config/vhttpd.multi.example.toml](/Users/guweigang/Source/vhttpd/config/vhttpd.multi.example.toml).
+
+A focused site-DSL reference is available at [SITE_CONFIG_DSL.md](/Users/guweigang/Source/vhttpd/docs/SITE_CONFIG_DSL.md).
+
 `[php]` defines the PHP runtime bootstrap. When `worker.cmd` is empty and `[executor].kind = "php"`, `vhttpd` builds the worker command automatically from `[php]`. If `worker.cmd` is set, it stays an explicit override.
 
 PHP-specific CLI overrides are also available: `--php-bin`, `--php-worker-entry`, `--php-app-entry`, repeatable `--php-extension`, and repeatable `--php-arg`.
