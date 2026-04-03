@@ -1293,6 +1293,9 @@ fn test_resolve_multi_server_runtime_config_builds_listener_bound_sites() {
 	cfg.files.event_log = event_log
 	cfg.files.pid_file = pid_file
 	cfg.config_path = os.join_path(temp_dir, 'vhttpd.toml')
+	cfg.admin.host = '127.0.0.1'
+	cfg.admin.port = 19983
+	cfg.admin.token = 'admin-secret'
 	cfg.listeners = {
 		'project_a': ListenerConfig{
 			host: '127.0.0.1'
@@ -1338,6 +1341,8 @@ fn test_resolve_multi_server_runtime_config_builds_listener_bound_sites() {
 	assert multi_cfg.listeners[0].runtime_cfg.port == 18081
 	assert multi_cfg.listeners[0].runtime_cfg.executor_plan.executor.kind() == 'php'
 	assert multi_cfg.listeners[0].site_cfg.php.app_entry == php_app
+	assert multi_cfg.listeners[0].runtime_cfg.admin_enabled
+	assert multi_cfg.listeners[0].runtime_cfg.admin_port == 19983
 	assert multi_cfg.listeners[1].id == 'project_b'
 	assert multi_cfg.listeners[1].site_id == 'project_b'
 	assert multi_cfg.listeners[1].runtime_cfg.host == '127.0.0.1'

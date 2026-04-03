@@ -481,12 +481,11 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_projects_assistant
 			payload:    '{"method":"thread/read","result":{"thread":{"id":"thread_read_content_projection_001","turns":[{"id":"turn_read_content_projection_001","items":[{"type":"agentMessage","id":"item_read_content_projection_001","text":"line one\\nline two","phase":"final_answer","memoryCitation":null}],"status":"completed","error":null}]}},"has_error":false}'
 		}) or { panic(err) }
 		assert read_resp.handled
-		assert read_resp.commands.len == 3
+		assert read_resp.commands.len == 2
 		assert read_resp.commands[0].type_ == 'provider.message.send'
-		assert read_resp.commands[1].type_ == 'stream.append'
-		assert read_resp.commands[1].text.contains('line one')
-		assert read_resp.commands[1].text.contains('line two')
-		assert read_resp.commands[2].type_ == 'stream.finish'
+		assert read_resp.commands[0].text.contains('line one')
+		assert read_resp.commands[0].text.contains('line two')
+		assert read_resp.commands[1].type_ == 'stream.finish'
 	})
 }
 
@@ -554,12 +553,11 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_prefers_current_tu
 			payload:    '{"method":"thread/read","result":{"thread":{"id":"thread_read_current_turn_001","turns":[{"id":"turn_old_current_turn_001","items":[{"type":"agentMessage","id":"item_old_current_turn_001","text":"old final answer","phase":"final_answer","memoryCitation":null}],"status":"completed","error":null},{"id":"turn_read_current_turn_001","items":[{"type":"agentMessage","id":"item_read_current_turn_001","text":"new answer from latest turn","phase":"commentary","memoryCitation":null}],"status":"completed","error":null}]}},"has_error":false}'
 		}) or { panic(err) }
 		assert read_resp.handled
-		assert read_resp.commands.len == 3
+		assert read_resp.commands.len == 2
 		assert read_resp.commands[0].type_ == 'provider.message.send'
-		assert read_resp.commands[1].type_ == 'stream.append'
-		assert read_resp.commands[1].text.contains('new answer from latest turn')
-		assert !read_resp.commands[1].text.contains('old final answer')
-		assert read_resp.commands[2].type_ == 'stream.finish'
+		assert read_resp.commands[0].text.contains('new answer from latest turn')
+		assert !read_resp.commands[0].text.contains('old final answer')
+		assert read_resp.commands[1].type_ == 'stream.finish'
 	})
 }
 
@@ -627,11 +625,13 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_combines_multiple_
 			payload:    '{"method":"thread/read","result":{"thread":{"id":"thread_read_multi_item_001","turns":[{"id":"turn_read_multi_item_001","items":[{"type":"agentMessage","id":"item_read_multi_item_001","text":"第一段：进度总览。","phase":"commentary","memoryCitation":null},{"type":"agentMessage","id":"item_read_multi_item_002","text":"第二段：剩余风险和下一步。","phase":"commentary","memoryCitation":null}],"status":"completed","error":null}]}},"has_error":false}'
 		}) or { panic(err) }
 		assert read_resp.handled
-		assert read_resp.commands.len == 3
+		assert read_resp.commands.len == 4
 		assert read_resp.commands[0].type_ == 'provider.message.send'
-		assert read_resp.commands[1].type_ == 'stream.append'
-		assert read_resp.commands[1].text == '第一段：进度总览。\n\n第二段：剩余风险和下一步。'
-		assert read_resp.commands[2].type_ == 'stream.finish'
+		assert read_resp.commands[0].text == '第一段：进度总览。'
+		assert read_resp.commands[1].type_ == 'stream.finish'
+		assert read_resp.commands[2].type_ == 'provider.message.send'
+		assert read_resp.commands[2].text == '第二段：剩余风险和下一步。'
+		assert read_resp.commands[3].type_ == 'stream.finish'
 	})
 }
 

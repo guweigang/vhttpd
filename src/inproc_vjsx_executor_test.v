@@ -19,6 +19,18 @@ fn inproc_vjsx_test_lane_host_signature(executor InProcVjsxExecutor, idx int) st
 	return state.hosts[idx].source_signature
 }
 
+fn inproc_vjsx_wait_for_signature_refresh(executor InProcVjsxExecutor, previous string, timeout_ms int) bool {
+	deadline := time.now().add(time.millisecond * timeout_ms)
+	for time.now() < deadline {
+		current := executor.current_source_signature()
+		if current != '' && current != previous {
+			return true
+		}
+		time.sleep(25 * time.millisecond)
+	}
+	return false
+}
+
 fn test_inproc_vjsx_executor_lane_temp_root_uses_system_temp_cache() {
 	app_entry := '/tmp/demo/hello-handler.mts'
 	temp_root := vjsx_lane_temp_root(app_entry, 2)
@@ -888,6 +900,7 @@ fn test_inproc_vjsx_executor_rebuilds_lane_host_when_source_signature_changes() 
 	first_signature := inproc_vjsx_test_lane_host_signature(executor, 0)
 	assert first_signature != ''
 	os.write_file(helper_file, 'export const message = "v2";\n') or { panic(err) }
+	assert inproc_vjsx_wait_for_signature_refresh(executor, first_signature, 1500)
 	second := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/hello'
@@ -945,6 +958,7 @@ fn test_inproc_vjsx_executor_rebuilds_lane_host_when_mjs_dependency_changes_with
 	os.write_file(helper_file, 'export function renderValue() { return "new-value"; }\n') or {
 		panic(err)
 	}
+	assert inproc_vjsx_wait_for_signature_refresh(executor, first_signature, 1500)
 	second := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/mjs'

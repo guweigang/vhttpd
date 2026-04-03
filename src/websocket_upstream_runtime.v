@@ -1,6 +1,7 @@
 module main
 
 import json
+import log
 import net.http
 import net.websocket
 import time
@@ -537,6 +538,14 @@ fn websocket_upstream_provider_reconnect_delay_ms(app &App, provider string, ins
 }
 
 fn websocket_upstream_provider_handle_message(mut app App, provider string, instance string, mut ws websocket.Client, msg &websocket.Message) ! {
+	if provider == websocket_upstream_provider_codex {
+		mut payload_preview := ''
+		if msg.opcode == .text_frame || msg.opcode == .binary_frame || msg.opcode == .continuation {
+			raw := msg.payload.bytestr()
+			payload_preview = if raw.len > 200 { raw[..200] + '...' } else { raw }
+		}
+		log.info('[codex][ws] 📨 opcode=${msg.opcode} payload_len=${msg.payload.len} instance=${instance} preview=${payload_preview}')
+	}
 	match provider {
 		websocket_upstream_provider_feishu {
 			app.feishu_provider_handle_binary_message(instance, mut ws, msg)!
@@ -544,6 +553,8 @@ fn websocket_upstream_provider_handle_message(mut app App, provider string, inst
 		websocket_upstream_provider_codex {
 			if msg.opcode == .text_frame {
 				app.codex_provider_handle_text_message(instance, msg.payload.bytestr())
+			} else {
+				log.warn('[codex][ws] ignored non-text opcode=${msg.opcode} payload_len=${msg.payload.len} instance=${instance}')
 			}
 		}
 		else {}

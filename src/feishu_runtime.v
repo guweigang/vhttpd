@@ -1994,10 +1994,11 @@ fn (mut app App) feishu_runtime_buffer_patch(req WebSocketUpstreamSendRequest) {
 	}
 }
 
-fn (mut app App) feishu_runtime_register_stream_buffer(message_id string, stream_id string, app_name string, receive_id string, receive_id_type string) {
+fn (mut app App) feishu_runtime_register_stream_buffer(message_id string, stream_id string, app_name string, receive_id string, receive_id_type string, initial_content string) {
 	if message_id == '' {
 		return
 	}
+	now := time.now().unix_milli()
 	app.feishu_mu.@lock()
 	defer {
 		app.feishu_mu.unlock()
@@ -2006,7 +2007,7 @@ fn (mut app App) feishu_runtime_register_stream_buffer(message_id string, stream
 		FeishuStreamBuffer{
 			message_id: message_id
 			app:        app_name
-			last_flush: time.now().unix_milli()
+			last_flush: now
 		}
 	}
 	if app_name != '' {
@@ -2023,6 +2024,12 @@ fn (mut app App) feishu_runtime_register_stream_buffer(message_id string, stream
 	}
 	if buf.segment_index <= 0 {
 		buf.segment_index = 1
+	}
+	if initial_content != '' {
+		buf.content = initial_content
+		buf.rendered_content = initial_content
+		buf.last_delta = now
+		buf.last_flush = now
 	}
 	app.feishu_buffers[message_id] = buf
 }
@@ -2133,7 +2140,7 @@ fn (mut app App) feishu_runtime_flush_pending_buffers() {
 
 	app.feishu_mu.@lock()
 	for _, buf in app.feishu_buffers {
-		if buf.last_delta > buf.last_flush && now - buf.last_flush >= 400 && buf.content.trim_space() != '' {
+		if buf.last_delta >= buf.last_flush && now - buf.last_flush >= 400 && buf.content.trim_space() != '' {
 			to_flush << buf
 		}
 	}

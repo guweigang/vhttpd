@@ -11,6 +11,9 @@ const inproc_vjsx_lane_wait_timeout_ms = 1000
 const inproc_vjsx_lane_wait_poll_ms = 5
 const inproc_vjsx_dispatch_retry_attempts = 2
 const inproc_vjsx_startup_wait_poll_ms = 5
+const inproc_vjsx_signature_probe_poll_ms = 100
+const inproc_vjsx_signature_refresh_debounce_ms = 200
+const inproc_vjsx_signature_full_refresh_ms = 3000
 
 fn inproc_vjsx_codex_sessions_root() string {
 	override_root := os.getenv('VHTTPD_CODEX_SESSIONS_ROOT').trim_space()
@@ -103,6 +106,14 @@ mut:
 	lanes                        []VjsxExecutionLane
 	hosts                        []VjsxLaneHost
 	rr_index                     int
+	cached_source_probe          string
+	cached_source_signature      string
+	signature_refresh_started    bool
+	signature_refresh_stop       bool
+	signature_last_checked_at    i64
+	signature_last_probe_at      i64
+	signature_pending_since      i64
+	signature_last_error         string
 	warmup_source_signature      string
 	warmup_running               bool
 	warmup_completed             bool
@@ -189,13 +200,36 @@ pub fn new_inproc_vjsx_executor(config VjsxRuntimeFacadeConfig) InProcVjsxExecut
 			}
 		}
 	}
+	initial_probe := if config.app_entry.trim_space() != '' {
+		vjsx_source_probe_for_config(config)
+	} else {
+		''
+	}
+	initial_signature := if config.app_entry.trim_space() != '' {
+		vjsx_source_signature_for_config(config)
+	} else {
+		''
+	}
+	now_ms := time.now().unix_milli()
 	return InProcVjsxExecutor{
 		state: &VjsxExecutorState{
 			facade: VjsxRuntimeFacade{
 				config: config
 			}
-			lanes:  lanes
-			hosts:  []VjsxLaneHost{len: lanes.len}
+			lanes:                    lanes
+			hosts:                    []VjsxLaneHost{len: lanes.len}
+			cached_source_probe:      initial_probe
+			cached_source_signature:  initial_signature
+			signature_last_checked_at: if initial_signature != '' {
+				now_ms
+			} else {
+				0
+			}
+			signature_last_probe_at: if initial_probe != '' {
+				now_ms
+			} else {
+				0
+			}
 		}
 	}
 }
@@ -364,8 +398,101 @@ pub fn (e InProcVjsxExecutor) bootstrap_placeholder() ! {
 		state.facade.last_error = 'inproc_vjsx_executor_missing_app_entry'
 		return error(state.facade.last_error)
 	}
+	if !state.signature_refresh_started {
+		state.signature_refresh_started = true
+		go inproc_vjsx_signature_refresh_loop(mut state)
+	}
 	state.facade.bootstrapped = true
 	state.facade.last_error = ''
+}
+
+fn inproc_vjsx_signature_refresh_loop(mut state VjsxExecutorState) {
+	if isnil(state) {
+		return
+	}
+	mut last_probe := ''
+	mut pending_since := i64(0)
+	for {
+		mut stop := false
+		mut config := VjsxRuntimeFacadeConfig{}
+		mut last_checked_at := i64(0)
+		state.mu.@lock()
+		stop = state.signature_refresh_stop
+		config = state.facade.config
+		last_probe = if last_probe != '' { last_probe } else { state.cached_source_probe }
+		pending_since = if pending_since > 0 { pending_since } else { state.signature_pending_since }
+		last_checked_at = state.signature_last_checked_at
+		state.mu.unlock()
+		if stop {
+			return
+		}
+		now := time.now().unix_milli()
+		next_probe := if config.app_entry.trim_space() != '' {
+			vjsx_source_probe_for_config(config)
+		} else {
+			''
+		}
+		probe_changed := next_probe != last_probe
+		if probe_changed {
+			last_probe = next_probe
+			pending_since = now
+		}
+		needs_full_refresh := probe_changed
+			|| (pending_since > 0 && now - pending_since >= inproc_vjsx_signature_refresh_debounce_ms)
+			|| (last_checked_at <= 0 || now - last_checked_at >= inproc_vjsx_signature_full_refresh_ms)
+		mut next_signature := ''
+		if needs_full_refresh {
+			next_signature = if config.app_entry.trim_space() != '' {
+				vjsx_source_signature_for_config(config)
+			} else {
+				''
+			}
+		}
+		state.mu.@lock()
+		if state.signature_refresh_stop {
+			state.mu.unlock()
+			return
+		}
+		state.cached_source_probe = next_probe
+		state.signature_last_probe_at = now
+		state.signature_pending_since = pending_since
+		if needs_full_refresh {
+			state.cached_source_signature = next_signature
+			state.signature_last_checked_at = now
+			state.signature_pending_since = 0
+			pending_since = 0
+		}
+		state.signature_last_error = ''
+		state.mu.unlock()
+		time.sleep(time.millisecond * inproc_vjsx_signature_probe_poll_ms)
+	}
+}
+
+fn (e InProcVjsxExecutor) current_source_signature() string {
+	if isnil(e.state) {
+		return ''
+	}
+	mut state := e.state
+	state.mu.@lock()
+	mut cached := state.cached_source_signature
+	config := state.facade.config
+	state.mu.unlock()
+	if cached != '' {
+		return cached
+	}
+	if config.app_entry.trim_space() == '' {
+		return ''
+	}
+	cached = vjsx_source_signature_for_config(config)
+	state.mu.@lock()
+	if state.cached_source_signature == '' {
+		state.cached_source_signature = cached
+		state.signature_last_checked_at = time.now().unix_milli()
+		state.signature_last_error = ''
+	}
+	result := state.cached_source_signature
+	state.mu.unlock()
+	return result
 }
 
 pub fn (e InProcVjsxExecutor) select_next_lane() !VjsxExecutionLane {
@@ -1708,6 +1835,14 @@ pub fn (e InProcVjsxExecutor) close() {
 	state.app_startup_last_error = ''
 	state.facade.bootstrapped = false
 	state.facade.last_error = ''
+	state.signature_refresh_stop = true
+	state.signature_refresh_started = false
+	state.cached_source_probe = ''
+	state.cached_source_signature = ''
+	state.signature_last_checked_at = 0
+	state.signature_last_probe_at = 0
+	state.signature_pending_since = 0
+	state.signature_last_error = ''
 	state.mu.unlock()
 	for mut host in stale_hosts {
 		inproc_vjsx_destroy_lane_host(mut host)
@@ -1743,7 +1878,7 @@ fn (e InProcVjsxExecutor) ensure_lane_host(idx int) ! {
 	}
 	mut state := e.state
 	config := e.facade_snapshot().config
-	source_signature := vjsx_source_signature_for_config(config)
+	source_signature := e.current_source_signature()
 	mut needs_reset := false
 	state.mu.@lock()
 	if idx < 0 || idx >= state.hosts.len || idx >= state.lanes.len {

@@ -379,6 +379,30 @@ fn test_feishu_runtime_streaming_preview_markdown_truncates_long_content() {
 	assert preview.runes().len <= feishu_stream_buffer_rollover_runes
 }
 
+fn test_feishu_runtime_flush_pending_buffers_flushes_same_tick_first_delta() {
+	mut app := new_feishu_http_test_app()
+	now := time.now().unix_milli()
+	app.feishu_buffers['om_buffer_1'] = FeishuStreamBuffer{
+		message_id:       'om_buffer_1'
+		app:              'main'
+		content:          'hello first delta'
+		rendered_content: ''
+		last_delta:       now - 500
+		last_flush:       now - 500
+		stream_id:        'codex:stream_buffer_1'
+		receive_id:       'oc_buffer_1'
+		receive_id_type:  'chat_id'
+		segment_index:    1
+	}
+	app.feishu_runtime_flush_pending_buffers()
+	app.feishu_mu.@lock()
+	buf := app.feishu_buffers['om_buffer_1']
+	app.feishu_mu.unlock()
+	assert buf.rendered_content == 'hello first delta'
+	assert buf.last_flush >= now - 500
+	assert app.feishu_http_test_calls >= 2
+}
+
 fn test_feishu_runtime_delay_update_card_body() {
 	body := feishu_runtime_delay_update_card_body('callback-token-1',
 		'{"config":{"wide_screen_mode":true},"elements":[{"tag":"markdown","content":"approved"}]}') or {

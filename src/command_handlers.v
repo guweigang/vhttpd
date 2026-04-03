@@ -183,7 +183,7 @@ fn (h FeishuCommandHandler) execute_provider_message_send(normalized NormalizedC
 				message_id: result.message_id
 			})
 		}
-		app.feishu_runtime_register_stream_buffer(result.message_id, normalized.correlation.stream_id, req.instance, req.target, req.target_type)
+		app.feishu_runtime_register_stream_buffer(result.message_id, normalized.correlation.stream_id, req.instance, req.target, req.target_type, req.text)
 	}
 	app.dispatch_feishu_message_sent(normalized.correlation.stream_id, result.message_id)
 	return true, ''
@@ -251,7 +251,7 @@ pub fn (h FeishuCommandHandler) execute(command WorkerWebSocketUpstreamCommand, 
 				platform:   'feishu'
 				message_id: normalized.target.id
 			})
-			app.feishu_runtime_register_stream_buffer(normalized.target.id, normalized.correlation.stream_id, normalized.instance, '', '')
+			app.feishu_runtime_register_stream_buffer(normalized.target.id, normalized.correlation.stream_id, normalized.instance, '', '', '')
 			snapshot.status = 'bound'
 			snapshot.message_id = normalized.target.id
 			return true, ''

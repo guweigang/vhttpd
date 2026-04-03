@@ -196,7 +196,7 @@ fn test_codex_runtime_bind_and_clear_thread_binding() {
 	assert 'thread_001' !in rt.thread_stream_map
 }
 
-fn test_codex_notification_active_schedules_read_fallback() {
+fn test_codex_notification_active_does_not_schedule_read_fallback() {
 	mut app := App{
 		codex_runtime: CodexProviderRuntime{
 			thread_stream_map: map[string]string{}
@@ -209,10 +209,8 @@ fn test_codex_notification_active_schedules_read_fallback() {
 	}
 	app.codex_bind_stream_to_thread('main', 'thread_watchdog_001', 'stream_watchdog_001')
 	app.codex_handle_notification('main', 'thread/status/changed', '{"method":"thread/status/changed","params":{"threadId":"thread_watchdog_001","status":{"type":"active","activeFlags":[]}}}')
-	fallback, ok := app.codex_read_fallback('main', 'stream_watchdog_001')
-	assert ok
-	assert fallback.stream_id == 'stream_watchdog_001'
-	assert fallback.thread_id == 'thread_watchdog_001'
+	_, ok := app.codex_read_fallback('main', 'stream_watchdog_001')
+	assert !ok
 }
 
 fn test_codex_notification_delta_clears_read_fallback() {
@@ -230,6 +228,48 @@ fn test_codex_notification_delta_clears_read_fallback() {
 	_, _ = app.codex_schedule_read_fallback('main', 'stream_watchdog_002', 'thread_watchdog_002')
 	app.codex_handle_notification('main', 'item/agentMessage/delta', '{"method":"item/agentMessage/delta","params":{"threadId":"thread_watchdog_002","delta":"hello"}}')
 	_, ok := app.codex_read_fallback('main', 'stream_watchdog_002')
+	assert !ok
+}
+
+fn test_codex_notification_reasoning_delta_clears_read_fallback() {
+	mut app := App{
+		codex_runtime: CodexProviderRuntime{
+			thread_stream_map: map[string]string{}
+			stream_map:        map[string][]CodexTarget{}
+			pending_rpcs:      map[int]CodexPendingRpc{}
+			err_bursts:        map[string][]string{}
+			err_pending_flushes: map[string]bool{}
+			read_fallbacks:    map[string]CodexReadFallback{}
+		}
+	}
+	app.codex_bind_stream_to_thread('main', 'thread_watchdog_reasoning_001', 'stream_watchdog_reasoning_001')
+	_, _ = app.codex_schedule_read_fallback('main', 'stream_watchdog_reasoning_001', 'thread_watchdog_reasoning_001')
+	app.codex_handle_notification('main', 'item/reasoning/textDelta', '{"method":"item/reasoning/textDelta","params":{"threadId":"thread_watchdog_reasoning_001","itemId":"item_reasoning_001","delta":"thinking"}}')
+	_, ok := app.codex_read_fallback('main', 'stream_watchdog_reasoning_001')
+	assert !ok
+}
+
+fn test_codex_turn_start_response_does_not_schedule_read_fallback() {
+	mut app := App{
+		codex_runtime: CodexProviderRuntime{
+			thread_stream_map: map[string]string{}
+			stream_map:        map[string][]CodexTarget{}
+			pending_rpcs:      map[int]CodexPendingRpc{}
+			err_bursts:        map[string][]string{}
+			err_pending_flushes: map[string]bool{}
+			read_fallbacks:    map[string]CodexReadFallback{}
+		}
+	}
+	app.codex_remember_pending_rpc('main', 7, CodexPendingRpc{
+		instance:  'main'
+		method:    'turn/start'
+		stream_id: 'stream_turn_start_001'
+	})
+	app.codex_handle_response('main', CodexRpcClassification{
+		id_raw:      '7'
+		is_response: true
+	}, '{"id":7,"result":{"turn":{"id":"turn_001","status":"inProgress","error":null}}}')
+	_, ok := app.codex_read_fallback('main', 'stream_turn_start_001')
 	assert !ok
 }
 
@@ -336,4 +376,29 @@ fn test_codex_notification_uses_logic_executor_without_worker_sockets() {
 	assert state.last_req.event_type == 'codex.notification'
 	assert state.last_req.trace_id == 'codex:task_002'
 	assert state.last_req.payload.contains('"delta":"hello"')
+}
+
+fn test_codex_notification_prefers_thread_bound_stream_over_active_stream() {
+	mut state := &CodexRuntimeTestDispatchState{}
+	mut app := App{
+		logic_executor: CodexRuntimeTestExecutor{
+			state: state
+		}
+		codex_runtime:  CodexProviderRuntime{
+			active_stream_id: 'codex:wrong_active'
+			thread_stream_map: {
+				'thread_live_001': 'codex:thread_bound_001'
+			}
+			stream_map:          map[string][]CodexTarget{}
+			pending_rpcs:        map[int]CodexPendingRpc{}
+			err_bursts:          map[string][]string{}
+			err_pending_flushes: map[string]bool{}
+			read_fallbacks:      map[string]CodexReadFallback{}
+		}
+	}
+	app.codex_handle_notification('main', 'thread/realtime/itemAdded', '{"method":"thread/realtime/itemAdded","params":{"threadId":"thread_live_001","item":{"id":"item_live_001","type":"reasoning"}}}')
+	assert state.dispatch_count == 1
+	assert state.last_req.event_type == 'codex.notification'
+	assert state.last_req.trace_id == 'codex:thread_bound_001'
+	assert state.last_req.payload.contains('"threadId":"thread_live_001"')
 }

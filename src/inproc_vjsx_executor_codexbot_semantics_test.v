@@ -202,6 +202,71 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_structured_error_notification_
 	})
 }
 
+fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_realtime_error_is_treated_as_error() {
+	codexbot_semantics_with_temp_db('codexbot_ts_semantics_thread_realtime_error.sqlite', fn () {
+		app_file := codexbot_semantics_app_file()
+		assert os.exists(app_file)
+		mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
+			thread_count:    1
+			app_entry:       app_file
+			module_root:     os.dir(app_file)
+			runtime_profile: 'node'
+			enable_fs:       true
+		})
+		defer {
+			executor.close()
+		}
+		mut app := App{}
+		task_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_semantics_thread_realtime_error_task'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_semantics_thread_realtime_error_task'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_semantics_thread_realtime_error_task'
+			target:      'chat_codexbot_ts_semantics_thread_realtime_error'
+			target_type: 'chat_id'
+			payload:     codexbot_semantics_payload('start realtime error semantics task', 'chat_codexbot_ts_semantics_thread_realtime_error',
+				'om_codexbot_ts_semantics_thread_realtime_error_task')
+		}) or { panic(err) }
+		stream_id := task_resp.commands[0].stream_id
+		assert stream_id != ''
+
+		error_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+			mode:       'websocket_upstream'
+			event:      'message'
+			id:         'codexbot_ts_semantics_thread_realtime_error_notif'
+			provider:   'codex'
+			instance:   'main'
+			trace_id:   stream_id
+			event_type: 'codex.notification'
+			payload:    '{"method":"thread/realtime/error","params":{"threadId":"thread_semantics_realtime_error_001","message":"realtime transport failed"}}'
+		}) or { panic(err) }
+		assert error_resp.handled
+		assert error_resp.commands.len == 1
+		assert error_resp.commands[0].type_ == 'provider.message.send'
+		assert error_resp.commands[0].content.contains('realtime transport failed')
+
+		state_resp := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+			method:      'GET'
+			path:        '/admin/state'
+			req:         http.Request{
+				method: .get
+				url:    '/admin/state'
+				host:   'example.test'
+			}
+			remote_addr: '127.0.0.1'
+			trace_id:    'trace_codexbot_ts_semantics_thread_realtime_error_state'
+			request_id:  'req_codexbot_ts_semantics_thread_realtime_error_state'
+		}) or { panic(err) }
+		assert state_resp.response.status == 200
+		assert state_resp.response.body.contains('"status":"error"')
+		assert state_resp.response.body.contains('realtime transport failed')
+	})
+}
+
 fn test_inproc_vjsx_executor_repo_codexbot_app_ts_system_error_status_uses_thread_level_fallback_text() {
 	codexbot_semantics_with_temp_db('codexbot_ts_semantics_system_error.sqlite', fn () {
 		app_file := codexbot_semantics_app_file()

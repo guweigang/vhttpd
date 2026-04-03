@@ -355,6 +355,11 @@ fn resolve_multi_server_runtime_config(args []string, cfg VhttpdConfig) !MultiSe
 	listeners := resolve_multi_listener_specs(cfg)!
 	mut listener_ids := listeners.keys()
 	listener_ids.sort()
+	admin_owner_listener_id := if cfg.admin.port > 0 && listener_ids.len > 0 {
+		listener_ids[0]
+	} else {
+		''
+	}
 	mut used_bindings := map[string]bool{}
 	mut bindings := []ListenerRuntimeBinding{cap: listener_ids.len}
 	for listener_id in listener_ids {
@@ -375,8 +380,9 @@ fn resolve_multi_server_runtime_config(args []string, cfg VhttpdConfig) !MultiSe
 		if site_runtime_cfg.config_path != '' {
 			resolve_config_variables(mut site_runtime_cfg, site_runtime_cfg.config_path)!
 		}
+		admin_enabled_override := listener_id == admin_owner_listener_id
 		runtime_cfg := resolve_server_runtime_config_for_target(args, site_runtime_cfg, listener_id,
-			site_id, listener_cfg.host, listener_cfg.port, false)!
+			site_id, listener_cfg.host, listener_cfg.port, admin_enabled_override)!
 		bindings << ListenerRuntimeBinding{
 			id:          listener_id
 			site_id:     site_id

@@ -136,6 +136,49 @@ fn vjsx_source_signature_collect(root string, include_globs []string, exclude_gl
 	}
 }
 
+fn vjsx_source_probe_collect(root string, include_globs []string, exclude_globs []string, mut rows []string) {
+	if root.trim_space() == '' || !os.exists(root) {
+		return
+	}
+	include_matches := vjsx_signature_expand_globs(root, vjsx_signature_glob_patterns(include_globs))
+	exclude_matches := vjsx_signature_expand_globs(root, exclude_globs)
+	mut exclude_set := map[string]bool{}
+	for path in exclude_matches {
+		exclude_set[path] = true
+	}
+	for path in include_matches {
+		if path in exclude_set {
+			continue
+		}
+		rel := normalize_vjsx_signature_rel_path(runtime_relative_path(root, path))
+		if rel == '' {
+			continue
+		}
+		st := os.stat(path) or { continue }
+		rows << '${rel}:${st.mtime}:${st.size}'
+	}
+}
+
+fn vjsx_source_probe_for_config(config VjsxRuntimeFacadeConfig) string {
+	entry_abs := os.abs_path(config.app_entry)
+	mut probe_rows := ['entry:${entry_abs}']
+	mut entry_meta := 'entry_meta:missing'
+	if entry_stat := os.stat(entry_abs) {
+		entry_meta = 'entry_meta:${entry_stat.mtime}:${entry_stat.size}'
+	}
+	probe_rows << entry_meta
+	signature_root := vjsx_signature_root_for_config(config)
+	include_globs := vjsx_signature_include_globs(config)
+	exclude_globs := vjsx_signature_exclude_globs(config)
+	probe_rows << 'signature_root:${signature_root}'
+	probe_rows << 'signature_include:${include_globs.join(',')}'
+	probe_rows << 'signature_exclude:${exclude_globs.join(',')}'
+	if signature_root != '' {
+		vjsx_source_probe_collect(signature_root, include_globs, exclude_globs, mut probe_rows)
+	}
+	return fnv1a.sum64_string(probe_rows.join('|')).hex()
+}
+
 fn vjsx_source_signature_for_config(config VjsxRuntimeFacadeConfig) string {
 	entry_abs := os.abs_path(config.app_entry)
 	mut signature_rows := ['entry:${entry_abs}']
