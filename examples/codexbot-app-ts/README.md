@@ -5,7 +5,7 @@ TypeScript-first `vjsx` bot example scaffold for `vhttpd`.
 Current files:
 
 - `app.mts`: app entry
-- `codexbot.toml`: example `vjsx` executor config
+- `codexbot.toml`: example site-based `vjsx` bot config
 - `config/config.mts`: base TS runtime defaults
 - `config/provider-config.mts`: explicit TS-side Codex and Feishu provider instance config plus project mapping
 - `codex/`: vendored Codex protocol subset plus local semantic adapter
@@ -131,6 +131,7 @@ For this example bot:
 - `startup(runtime)` is currently lane-local and does no side effects
 - `app_startup(runtime)` preflights provider instances for `codex` and `feishu`
 - `app_startup(runtime)` may emit `provider.instance.upsert` and `provider.instance.ensure`
+- checked-in `codexbot.toml` uses the site DSL: global `[files]`, `[admin]`, and `[codex]` plus per-app `[sites.codexbot]`
 - additional Codex instances come from `config/provider-config.mts`; `[codex]` in `codexbot.toml` remains the base runtime default
 - Feishu instance config also comes from `config/provider-config.mts`, while sensitive values still come from env-backed defaults in `config/config.mts`
 - `feishu` is now started only from TS-side dynamic config; static `feishu.main` is no longer used by this example

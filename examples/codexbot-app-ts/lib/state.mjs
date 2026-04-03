@@ -349,6 +349,12 @@ async function selectItemRenderState(parentStreamId, itemKey) {
   return asItemRenderState(rows[0]);
 }
 
+async function selectItemRenderStates(parentStreamId) {
+  const database = await db();
+  const rows = await database.query("select parent_stream_id, item_key, item_id, turn_id, phase, item_stream_id, status, created_at, updated_at from item_render_state where parent_stream_id = ? order by created_at asc, item_key asc", [parentStreamId]);
+  return rows.map(asItemRenderState).filter(Boolean);
+}
+
 function nextStreamId() {
   return `codex:ts_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
@@ -557,6 +563,13 @@ export async function getItemRenderState(parentStreamId, itemKey) {
     return undefined;
   }
   return selectItemRenderState(parentStreamId, itemKey);
+}
+
+export async function listItemRenderStates(parentStreamId) {
+  if (!parentStreamId) {
+    return [];
+  }
+  return selectItemRenderStates(parentStreamId);
 }
 
 export async function upsertItemRenderState(parentStreamId, itemKey, patch) {

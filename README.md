@@ -134,6 +134,7 @@ flowchart TB
 - Runtime module map: [RUNTIME_MODULE_MAP.md](/Users/guweigang/Source/vhttpd/docs/RUNTIME_MODULE_MAP.md)
 - Major struct relationship map: [STRUCT_RELATIONSHIP_MAP.md](/Users/guweigang/Source/vhttpd/docs/STRUCT_RELATIONSHIP_MAP.md)
 - Architecture refactor baseline: [ARCHITECTURE_REFACTOR_BASELINE.md](/Users/guweigang/Source/vhttpd/docs/ARCHITECTURE_REFACTOR_BASELINE.md)
+- Plugin / worker evolution model: [PLUGIN_WORKER_MODEL.md](/Users/guweigang/Source/vhttpd/docs/PLUGIN_WORKER_MODEL.md)
 - Feishu runtime compatibility plan: [FEISHU_RUNTIME_COMPATIBILITY_PLAN.md](/Users/guweigang/Source/vhttpd/docs/FEISHU_RUNTIME_COMPATIBILITY_PLAN.md)
 - Feishu gateway removal batches: [FEISHU_GATEWAY_REMOVAL_PLAN.md](/Users/guweigang/Source/vhttpd/docs/FEISHU_GATEWAY_REMOVAL_PLAN.md)
 - VSlim envelope/map contract: [/Users/guweigang/Source/vphpx/vslim/docs/protocol.md](/Users/guweigang/Source/vphpx/vslim/docs/protocol.md)
@@ -371,7 +372,6 @@ root = "."
 php_app = "examples/hello-app.php"
 php_worker = "php/package/bin/php-worker"
 vslim_ext = "../vphpx/vslim/vslim.so"
-vjsx_root = "examples/codexbot-app-ts"
 vjsx_app = "examples/codexbot-app-ts/app.mts"
 
 [files]
@@ -390,7 +390,7 @@ php.extensions = ["${paths.vslim_ext}"]
 [sites.codexbot]
 host = "127.0.0.1"
 port = 19883
-root = "${paths.vjsx_root}"
+root = "examples/codexbot-app-ts"
 executor = "vjsx"
 app = "${paths.vjsx_app}"
 vjsx.runtime_profile = "node"

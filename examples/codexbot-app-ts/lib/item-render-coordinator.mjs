@@ -1,4 +1,26 @@
 export function createItemRenderCoordinator(deps) {
+  function itemStreamOpeningText(notification) {
+    const method = typeof notification?.method === "string" ? notification.method.trim() : "";
+    const itemType = typeof notification?.itemType === "string" ? notification.itemType.trim() : "";
+    const phase = typeof notification?.phase === "string" ? notification.phase.trim() : "";
+    if (itemType === "reasoning" || method.startsWith("item/reasoning/")) {
+      return "### 思考中...\n\n";
+    }
+    if (itemType === "plan" || method.startsWith("item/plan/")) {
+      return "### 计划中\n\n";
+    }
+    if (phase === "commentary") {
+      return "### 处理中\n\n";
+    }
+    if (phase === "final_answer") {
+      return "### 最终回答\n\n";
+    }
+    if (itemType === "agentMessage" || method.startsWith("item/agentMessage/")) {
+      return "### 助手回复\n\n";
+    }
+    return "### 处理中\n\n";
+  }
+
   function itemStreamPrompt(parentStream, notification) {
     const labels = [];
     if (notification?.phase) {
@@ -13,12 +35,13 @@ export function createItemRenderCoordinator(deps) {
     return `${parentStream.prompt || "codex item"}${suffix}`;
   }
 
-  function openItemStreamCard(parentStream, itemStreamId) {
+  function openItemStreamCard(parentStream, itemStreamId, notification) {
+    const openingText = itemStreamOpeningText(notification);
     const threadRootId = deps.threadRootIdFromSessionKey(parentStream?.sessionKey || "");
     if (threadRootId) {
-      return deps.feishuText(threadRootId, " ", itemStreamId, "message_id");
+      return deps.feishuText(threadRootId, openingText, itemStreamId, "message_id");
     }
-    return deps.feishuText(parentStream.chatId, " ", itemStreamId, "chat_id");
+    return deps.feishuText(parentStream.chatId, openingText, itemStreamId, "chat_id");
   }
 
   async function ensureNotificationItemRender(parentStream, notification) {
@@ -104,16 +127,45 @@ export function createItemRenderCoordinator(deps) {
     return "";
   }
 
+  function placeholderPulseTail(itemStream, notification, normalizedText) {
+    if (typeof normalizedText === "string" && normalizedText.trim() !== "") {
+      return "";
+    }
+    const method = typeof notification?.method === "string" ? notification.method.trim() : "";
+    const itemType = typeof notification?.itemType === "string" ? notification.itemType.trim() : "";
+    const openingText = itemStreamOpeningText(notification);
+    const current = typeof itemStream?.draft === "string" && itemStream.draft !== ""
+      ? itemStream.draft
+      : typeof itemStream?.resultText === "string"
+        ? itemStream.resultText
+        : "";
+    const isThinkingPlaceholder = itemType === "reasoning" || method.startsWith("item/reasoning/");
+    if (!isThinkingPlaceholder || !current.startsWith(openingText)) {
+      return "";
+    }
+    const suffix = current.slice(openingText.length);
+    if (suffix.includes("...")) {
+      return "";
+    }
+    return "...";
+  }
+
   function isCompletedItemNotification(notification) {
     const method = typeof notification?.method === "string" ? notification.method : "";
     return method === "item/completed" || method === "rawResponseItem/completed";
   }
 
   async function renderAssistantContentToItemStream(parentStream, notification, text, options = {}) {
-    if (deps.isPlainPromptStream && deps.isPlainPromptStream(parentStream)) {
+    if (!deps.shouldRenderAssistantContentInItemStream(notification, deps.enableItemRenderStreams)) {
       return undefined;
     }
-    if (!deps.shouldRenderAssistantContentInItemStream(notification, deps.enableItemRenderStreams)) {
+    const plainPromptParent = deps.isPlainPromptStream && deps.isPlainPromptStream(parentStream);
+    const itemKey = deps.notificationItemKey(notification);
+    const existingItemRender = itemKey
+      ? await deps.getItemRenderState(parentStream.streamId, itemKey)
+      : undefined;
+    if (plainPromptParent && !existingItemRender && !options.allowSyntheticOpen
+      && !deps.shouldRenderPlainPromptItemStream(notification)) {
       return undefined;
     }
     const itemRender = await ensureNotificationItemRender(parentStream, notification);
@@ -122,14 +174,15 @@ export function createItemRenderCoordinator(deps) {
     }
     const commands = [];
     const normalizedText = typeof text === "string" ? text : "";
+    const pulseTail = placeholderPulseTail(itemRender.itemStream, notification, normalizedText);
     const appendText = options.forceAppend
       ? normalizedText
-      : itemStreamTail(itemRender.itemStream, normalizedText);
+      : (itemStreamTail(itemRender.itemStream, normalizedText) || pulseTail);
     const shouldAppend = options.forceAppend
       ? normalizedText.trim() !== ""
       : appendText.trim() !== "" || shouldAppendItemText(itemRender.itemStream, normalizedText);
     if (itemRender.opened) {
-      commands.push(openItemStreamCard(parentStream, itemRender.itemStream.streamId));
+      commands.push(openItemStreamCard(parentStream, itemRender.itemStream.streamId, notification));
     }
     if (shouldAppend) {
       await deps.appendStreamDraft(itemRender.itemStream.streamId, appendText, {

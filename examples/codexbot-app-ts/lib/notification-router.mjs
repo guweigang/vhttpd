@@ -1,6 +1,153 @@
 import { parseCodexNotification } from "./codex.mts";
 import { normalizeCodexRuntimeStatus } from "../codex/protocol.mts";
 
+function turnLifecycleText(stage, notification = {}) {
+  const activeFlags = Array.isArray(notification?.activeFlags)
+    ? notification.activeFlags.filter((flag) => typeof flag === "string" && flag.trim() !== "")
+    : [];
+  if (stage === "started") {
+    return "### 本轮处理中\n\n思考中...";
+  }
+  if (stage === "active") {
+    if (activeFlags.length) {
+      return `### 本轮处理中\n\n状态：${activeFlags.join(", ")}`;
+    }
+    return "### 本轮处理中\n\n仍在执行中...";
+  }
+  if (stage === "finalizing") {
+    return "### 本轮处理中\n\n正在收尾...";
+  }
+  if (stage === "completed") {
+    return "### 本轮已完成\n\n本轮输出结束。";
+  }
+  return "### 本轮处理中\n\n处理中...";
+}
+
+function openParentLifecycleCommands(stream, streamId, notification, deps = {}) {
+  if (!streamId) {
+    return [];
+  }
+  return [deps.openParentStreamCard(stream, streamId, turnLifecycleText("started", notification))];
+}
+
+function updateParentLifecycleCommands(streamId, text, deps = {}, options = {}) {
+  if (!streamId || typeof text !== "string" || text.trim() === "") {
+    return [];
+  }
+  const commands = [deps.feishuUpdateText(streamId, text)];
+  if (options.finish) {
+    commands.push(deps.feishuStreamFinish(streamId));
+  }
+  return commands;
+}
+
+function recoveredItemNotification(stream, notification, item = {}, index = 0) {
+  const phase = typeof item?.phase === "string" ? item.phase.trim() : "";
+  const method = phase === "final_answer" ? "rawResponseItem/completed" : "item/completed";
+  const turnId = typeof item?.turnId === "string" && item.turnId.trim() !== ""
+    ? item.turnId.trim()
+    : (notification?.turnId || stream?.turnId || "");
+  const threadId = notification?.threadId || stream?.threadId || "";
+  const itemId = typeof item?.itemId === "string" ? item.itemId.trim() : "";
+  const text = typeof item?.text === "string" ? item.text : "";
+  return {
+    method,
+    streamId: notification?.streamId || stream?.streamId || "",
+    threadId,
+    turnId,
+    itemId,
+    itemType: "agentMessage",
+    itemRole: "assistant",
+    phase,
+    threadPath: notification?.threadPath || stream?.threadPath || "",
+    message: text,
+    finalText: phase === "final_answer" ? text : "",
+  };
+}
+
+async function finishOutstandingItemStreams(parentStream, keepItemKeys, deps = {}, options = {}) {
+  const renders = typeof deps.listItemRenderStates === "function"
+    ? await deps.listItemRenderStates(parentStream?.streamId || "")
+    : [];
+  if (!renders.length) {
+    return [];
+  }
+  const keep = keepItemKeys instanceof Set ? keepItemKeys : new Set(Array.isArray(keepItemKeys) ? keepItemKeys : []);
+  const targetTurnId = typeof options.turnId === "string" ? options.turnId.trim() : "";
+  const commands = [];
+  for (const render of renders) {
+    if (!render || render.status === "finished" || !render.itemStreamId) {
+      continue;
+    }
+    if (keep.has(render.itemKey)) {
+      continue;
+    }
+    if (targetTurnId && render.turnId && render.turnId !== targetTurnId) {
+      continue;
+    }
+    const itemStream = await deps.getStreamState(render.itemStreamId);
+    if (itemStream) {
+      await deps.finalizeStreamState(render.itemStreamId, {
+        turnId: render.turnId || itemStream.turnId || targetTurnId,
+        threadPath: itemStream.threadPath || parentStream?.threadPath || "",
+        status: "completed",
+        resultText: itemStream.resultText || itemStream.draft || "",
+        completedAt: Date.now(),
+        lastEvent: options.lastEvent || "thread/read.recovered_finish",
+      });
+    }
+    await deps.upsertItemRenderState(parentStream.streamId, render.itemKey, {
+      itemId: render.itemId || "",
+      turnId: render.turnId || targetTurnId,
+      phase: render.phase || "",
+      itemStreamId: render.itemStreamId,
+      status: "finished",
+    });
+    commands.push(deps.feishuStreamFinish(render.itemStreamId));
+  }
+  return commands;
+}
+
+async function recoverPlainPromptTextToItems(parentStream, notification, items, deps = {}, options = {}) {
+  const normalizedItems = Array.isArray(items)
+    ? items
+      .map((item, index) => ({
+        itemId: typeof item?.itemId === "string" ? item.itemId : "",
+        turnId: typeof item?.turnId === "string" ? item.turnId : (notification?.turnId || parentStream?.turnId || ""),
+        phase: typeof item?.phase === "string" ? item.phase : "",
+        text: typeof item?.text === "string" ? item.text : "",
+        index,
+      }))
+      .filter((item) => item.text.trim() !== "")
+    : [];
+  const commands = [];
+  const keepItemKeys = new Set();
+  for (const item of normalizedItems) {
+    const itemNotification = recoveredItemNotification(parentStream, notification, item, item.index);
+    const itemKey = deps.notificationItemKey?.(itemNotification);
+    if (itemKey) {
+      keepItemKeys.add(itemKey);
+    }
+    const itemCommands = await deps.renderAssistantContentToItemStream(parentStream, itemNotification, item.text, {
+      finish: true,
+      allowSyntheticOpen: true,
+    });
+    if (Array.isArray(itemCommands) && itemCommands.length) {
+      commands.push(...itemCommands);
+    }
+  }
+  if (options.closeOutstanding !== false) {
+    const finishCommands = await finishOutstandingItemStreams(parentStream, keepItemKeys, deps, {
+      turnId: notification?.turnId || parentStream?.turnId || "",
+      lastEvent: options.lastEvent || "thread/read.recovered_finish",
+    });
+    if (finishCommands.length) {
+      commands.push(...finishCommands);
+    }
+  }
+  return commands;
+}
+
 function streamTextCommand(stream, streamId, text, deps) {
   if (deps.isPlainPromptStream(stream)) {
     return deps.sendStreamText(stream, text, streamId);
@@ -210,6 +357,10 @@ function preferredIdleText(settledText, sessionAnswer) {
   return current;
 }
 
+function shouldPreferItemCommands(itemCommands) {
+  return Array.isArray(itemCommands) && itemCommands.length > 0;
+}
+
 export async function routeCodexNotification(frame, deps) {
   const notification = parseCodexNotification(frame);
   frame.runtime.log("codexbot-app-ts notification", deps.buildTag, notification.method, notification.status || "", notification.threadId || "", notification.streamId || "");
@@ -262,12 +413,22 @@ export async function routeCodexNotification(frame, deps) {
         completedAt: Date.now(),
         lastEvent: notification.method || "codex.notification",
       });
-      const parentCommands = isPlainPrompt
-        ? parentStreamTextCommands(latest || stream, notification.streamId, preferredText, deps, { finish: true })
-        : [deps.feishuUpdateText(notification.streamId, deps.renderCodexAssistantText(preferredText))];
+      const recoveredItemCommands = isPlainPrompt
+        ? await recoverPlainPromptTextToItems(latest || stream, notification, [{
+            turnId: preferredTurnId,
+            phase: "final_answer",
+            text: preferredText,
+          }], deps, {
+            closeOutstanding: true,
+            lastEvent: "idle.session_answer",
+          })
+        : [];
       return {
         handled: true,
-        commands: parentCommands,
+        commands: isPlainPrompt
+          ? updateParentLifecycleCommands(notification.streamId, turnLifecycleText("completed", notification), deps, { finish: true })
+            .concat(recoveredItemCommands)
+          : [deps.feishuUpdateText(notification.streamId, deps.renderCodexAssistantText(preferredText))],
       };
     }
     if (isPlainPrompt && preferredText && preferredText !== settledText) {
@@ -279,9 +440,18 @@ export async function routeCodexNotification(frame, deps) {
         completedAt: Date.now(),
         lastEvent: notification.method || "codex.notification",
       });
+      const recoveredItemCommands = await recoverPlainPromptTextToItems(latest || stream, notification, [{
+        turnId: preferredTurnId,
+        phase: "final_answer",
+        text: preferredText,
+      }], deps, {
+        closeOutstanding: true,
+        lastEvent: "idle.session_answer",
+      });
       return {
         handled: true,
-        commands: parentStreamTextCommands(latest || stream, notification.streamId, preferredText, deps, { finish: true }),
+        commands: updateParentLifecycleCommands(notification.streamId, turnLifecycleText("completed", notification), deps, { finish: true })
+          .concat(recoveredItemCommands),
       };
     }
     if (shouldReadFinal && lookupThreadId) {
@@ -334,13 +504,15 @@ export async function routeCodexNotification(frame, deps) {
       });
       return {
         handled: true,
-        commands: [],
+        commands: deps.isPlainPromptStream(stream)
+          ? openParentLifecycleCommands(stream, notification.streamId, notification, deps)
+          : [],
       };
     }
     if (notification.method === "thread/status/changed" && notification.threadStatusType === "active") {
       return {
         handled: true,
-        commands: deps.isPlainPromptStream(stream) && !(stream.draft || stream.resultText)
+        commands: deps.isPlainPromptStream(stream)
           ? []
           : (notification.activeFlags?.length ? [deps.feishuUpdateText(notification.streamId, deps.codexActiveStatusText(notification.activeFlags))] : []),
       };
@@ -360,6 +532,21 @@ export async function routeCodexNotification(frame, deps) {
         commands: [streamTextCommand(stream, notification.streamId, errorText, deps)],
       };
     }
+    if (
+      deps.isItemLifecycleNotification(notification)
+      && !notification.delta
+      && !notification.message
+      && !notification.finalText
+      && !deps.isCompletedItemNotification(notification)
+    ) {
+      const itemCommands = await deps.renderAssistantContentToItemStream(stream, notification, "", {
+        finish: false,
+      });
+      return {
+        handled: true,
+        commands: itemCommands || [],
+      };
+    }
     if (notification.delta) {
       const next = await deps.appendStreamDraft(notification.streamId, notification.delta, {
         turnId: notification.turnId || stream.turnId || "",
@@ -374,9 +561,13 @@ export async function routeCodexNotification(frame, deps) {
         "draftLen=" + String((latestDraft || "").length),
       );
       if (deps.isPlainPromptStream(next || stream)) {
+        const itemCommands = await deps.renderAssistantContentToItemStream(next || stream, notification, notification.delta, {
+          forceAppend: true,
+          finish: false,
+        });
         return {
           handled: true,
-          commands: parentStreamTextCommands(stream, notification.streamId, latestDraft, deps),
+          commands: itemCommands || [],
         };
       }
       const itemCommands = await deps.renderAssistantContentToItemStream(stream, notification, notification.delta, {
@@ -414,6 +605,18 @@ export async function routeCodexNotification(frame, deps) {
       const itemCommands = await deps.renderAssistantContentToItemStream(stream, notification, mergedFinalText, {
         finish: true,
       });
+      if (isPlainPrompt && shouldPreferItemCommands(itemCommands)) {
+        return {
+          handled: true,
+          commands: itemCommands,
+        };
+      }
+      if (isPlainPrompt) {
+        return {
+          handled: true,
+          commands: itemCommands || [],
+        };
+      }
       const parentCommands = shouldFinalizeParent
         ? (isPlainPrompt
             ? parentStreamTextCommands(stream, notification.streamId, mergedFinalText, deps, { finish: true })
@@ -436,7 +639,12 @@ export async function routeCodexNotification(frame, deps) {
         commands: parentCommands,
       };
     }
-    if (notification.method === "error" || notification.turnStatus === "failed" || (notification.errorMessage && notification.status === "error")) {
+    if (
+      notification.method === "error"
+      || notification.method === "thread/realtime/error"
+      || notification.turnStatus === "failed"
+      || (notification.errorMessage && notification.status === "error")
+    ) {
       const errorText = deps.codexStructuredErrorText(notification);
       await deps.finalizeStreamState(notification.streamId, {
         turnId: notification.turnId || stream.turnId || "",
@@ -481,9 +689,12 @@ export async function routeCodexNotification(frame, deps) {
           status: "streaming",
           lastEvent: notification.method || "codex.notification",
         });
+        const itemCommands = await deps.renderAssistantContentToItemStream(latest || stream, notification, notification.message, {
+          finish: deps.isCompletedItemNotification(notification),
+        });
         return {
           handled: true,
-          commands: parentStreamTextCommands(latest || stream, notification.streamId, mergedMessage, deps),
+          commands: itemCommands || [],
         };
       }
       const itemCommands = await deps.renderAssistantContentToItemStream(stream, notification, notification.message, {
@@ -513,21 +724,18 @@ export async function routeCodexNotification(frame, deps) {
       const lookupThreadId = latest?.threadId || stream.threadId || notification.threadId || "";
       if (!completedText && lookupThreadId) {
         if (deps.isPlainPromptStream(latest || stream)) {
-          const existingPlainText = latest?.resultText || latest?.draft || stream.resultText || stream.draft || "";
-          await deps.finalizeStreamState(notification.streamId, {
+          await deps.updateStreamState(notification.streamId, {
             turnId: notification.turnId || latest?.turnId || stream.turnId || "",
             threadPath: resolvedSessionPath || latest?.threadPath || stream.threadPath || "",
-            status: "completed",
-            draft: existingPlainText,
-            resultText: existingPlainText,
-            completedAt: existingPlainText ? Date.now() : 0,
+            status: "reading_final",
             lastEvent: "turn/completed",
           });
           return {
             handled: true,
-            commands: existingPlainText
-              ? parentStreamTextCommands(latest || stream, notification.streamId, existingPlainText, deps, { finish: true })
-              : [],
+            commands: [
+              ...updateParentLifecycleCommands(notification.streamId, turnLifecycleText("finalizing", notification), deps),
+              deps.codexRpcCall("thread/read", { threadId: lookupThreadId, includeTurns: true }, notification.streamId, deps.fallbackCodexInstance(latest?.codexInstance || stream.codexInstance, deps.botDefaults())),
+            ],
           };
         }
         const instance = deps.fallbackCodexInstance(latest?.codexInstance || stream.codexInstance, deps.botDefaults());
@@ -568,6 +776,12 @@ export async function routeCodexNotification(frame, deps) {
         completedAt: Date.now(),
         lastEvent: "turn/completed",
       });
+      if (deps.isPlainPromptStream(latest || stream)) {
+        return {
+          handled: true,
+          commands: updateParentLifecycleCommands(notification.streamId, turnLifecycleText("completed", notification), deps, { finish: true }),
+        };
+      }
       const itemCommands = await deps.renderAssistantContentToItemStream(latest || stream, notification, parentCompletedText, {
         finish: true,
       });
@@ -654,14 +868,25 @@ export async function routeCodexNotification(frame, deps) {
           lastEvent: notification.method || "codex.notification",
         });
         const renderedSettled = deps.renderCodexAssistantText(preferredText);
+        const recoveredItemCommands = isPlainPrompt
+          ? await recoverPlainPromptTextToItems(latest || stream, notification, [{
+              turnId: preferredTurnId,
+              phase: "final_answer",
+              text: preferredText,
+            }], deps, {
+              closeOutstanding: true,
+              lastEvent: "idle.session_answer",
+            })
+          : [];
         const parentCommands = isPlainPrompt
-          ? parentStreamTextCommands(latest || stream, notification.streamId, preferredText, deps, { finish: true })
+          ? updateParentLifecycleCommands(notification.streamId, turnLifecycleText("completed", notification), deps, { finish: true })
+            .concat(recoveredItemCommands)
           : (preferredText !== settledText
               ? [deps.feishuUpdateText(notification.streamId, renderedSettled)]
               : finishParentStreamCommands(latest || stream, renderedSettled, deps));
         return {
           handled: true,
-          commands: !renderedSettled ? [] : parentCommands,
+          commands: isPlainPrompt || renderedSettled ? parentCommands : [],
         };
       }
       if (deps.isTerminalIdleStatus(notification.status) && !settledText && !isPlainPrompt) {

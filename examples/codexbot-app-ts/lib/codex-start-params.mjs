@@ -17,6 +17,8 @@ export function buildThreadStartParams(state, defaults) {
     model: state.model,
     approvalPolicy: defaults.approvalPolicy,
     sandbox: defaults.sandbox,
+    experimentalRawEvents: true,
+    persistExtendedHistory: true,
   };
 }
 

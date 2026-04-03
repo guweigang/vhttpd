@@ -256,8 +256,6 @@ export function createCodexRpcHelpers(deps) {
       }
       const lines = raw.split(/\r?\n/).filter(Boolean);
       let matchedTurnSeen = false;
-      let matchedTurnAssistant = "";
-      let fallbackAssistant = "";
       for (let i = lines.length - 1; i >= 0; i -= 1) {
         let row;
         try {
@@ -284,12 +282,12 @@ export function createCodexRpcHelpers(deps) {
             if (payload.phase === "final_answer") {
               return message;
             }
-            if (!matchedTurnAssistant) {
-              matchedTurnAssistant = message;
-            }
             continue;
           }
-          return message;
+          if (payload.phase === "final_answer") {
+            return message;
+          }
+          continue;
         }
         if (row.type === "response_item" && payload.type === "message" && payload.role === "assistant" && Array.isArray(payload.content)) {
           let message = "";
@@ -309,25 +307,17 @@ export function createCodexRpcHelpers(deps) {
             if (payload.phase === "final_answer") {
               return message;
             }
-            if (!matchedTurnAssistant) {
-              matchedTurnAssistant = message;
-            }
             continue;
           }
-          if (!fallbackAssistant) {
-            fallbackAssistant = message;
+          if (payload.phase === "final_answer") {
+            return message;
           }
         }
       }
       if (normalizedTurnId) {
-        if (matchedTurnAssistant) {
-          return matchedTurnAssistant;
-        }
-        if (matchedTurnSeen) {
-          return "";
-        }
+        return matchedTurnSeen ? "" : "";
       }
-      return fallbackAssistant;
+      return "";
     } catch (_) {
       return "";
     }

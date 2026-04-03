@@ -1,5 +1,26 @@
 import { parseCodexRpcResponse } from "./codex.mts";
 
+function turnLifecycleText(stage) {
+  if (stage === "finalizing") {
+    return "### 本轮处理中\n\n正在收尾...";
+  }
+  if (stage === "completed") {
+    return "### 本轮已完成\n\n本轮输出结束。";
+  }
+  return "### 本轮处理中\n\n处理中...";
+}
+
+function updateParentLifecycleCommands(streamId, text, deps = {}, options = {}) {
+  if (!streamId || typeof text !== "string" || text.trim() === "") {
+    return [];
+  }
+  const commands = [deps.feishuUpdateText(streamId, text)];
+  if (options.finish) {
+    commands.push(deps.feishuStreamFinish(streamId));
+  }
+  return commands;
+}
+
 function normalizedThreadReadStatus(result) {
   const status = result?.thread?.status;
   if (typeof status === "string") {
@@ -16,48 +37,6 @@ function streamTextCommand(stream, streamId, text, deps) {
     return deps.sendStreamText(stream, text, streamId);
   }
   return deps.feishuUpdateText(streamId, text);
-}
-
-function streamTail(currentText, nextText) {
-  const current = typeof currentText === "string" ? currentText : "";
-  const next = typeof nextText === "string" ? nextText : "";
-  if (!next) {
-    return "";
-  }
-  if (!current) {
-    return next;
-  }
-  if (next === current) {
-    return "";
-  }
-  if (next.startsWith(current)) {
-    return next.slice(current.length);
-  }
-  return "";
-}
-
-function plainPromptParentTextCommands(stream, streamId, text, deps, options = {}) {
-  const nextText = typeof text === "string" ? text : "";
-  if (!nextText.trim()) {
-    return [];
-  }
-  const currentText = typeof stream?.draft === "string" && stream.draft !== ""
-    ? stream.draft
-    : (typeof stream?.resultText === "string" ? stream.resultText : "");
-  const tail = streamTail(currentText, nextText);
-  const commands = [];
-  if (!currentText) {
-    commands.push(deps.openParentStreamCard(stream, streamId));
-    commands.push(deps.feishuStreamAppendText(streamId, nextText));
-  } else if (tail) {
-    commands.push(deps.feishuStreamAppendText(streamId, tail));
-  } else if (nextText !== currentText) {
-    commands.push(deps.feishuUpdateText(streamId, deps.renderCodexAssistantText(nextText)));
-  }
-  if (options.finish && streamId && commands[commands.length - 1]?.type !== "provider.message.update") {
-    commands.push(deps.feishuStreamFinish(streamId));
-  }
-  return commands;
 }
 
 function joinPlainPromptAssistantItems(items) {
@@ -83,6 +62,107 @@ function joinPlainPromptAssistantItems(items) {
     }
   }
   return blocks.join("\n\n").trim();
+}
+
+function recoveredItemNotification(response, stream, item = {}) {
+  const preferredTurnId = typeof item?.turnId === "string" && item.turnId.trim() !== ""
+    ? item.turnId.trim()
+    : (stream?.turnId || response?.turnId || "");
+  const preferredThreadId = response?.threadId || stream?.threadId || "";
+  const phase = typeof item?.phase === "string" ? item.phase.trim() : "";
+  return {
+    method: phase === "final_answer" ? "rawResponseItem/completed" : "item/completed",
+    streamId: response?.streamId || stream?.streamId || "",
+    threadId: preferredThreadId,
+    turnId: preferredTurnId,
+    itemId: typeof item?.itemId === "string" ? item.itemId.trim() : "",
+    itemType: "agentMessage",
+    itemRole: "assistant",
+    phase,
+    threadPath: response?.threadPath || stream?.threadPath || "",
+    message: typeof item?.text === "string" ? item.text : "",
+    finalText: phase === "final_answer" && typeof item?.text === "string" ? item.text : "",
+  };
+}
+
+async function finishOutstandingItemStreams(parentStream, keepItemKeys, deps = {}, options = {}) {
+  const renders = typeof deps.listItemRenderStates === "function"
+    ? await deps.listItemRenderStates(parentStream?.streamId || "")
+    : [];
+  if (!renders.length) {
+    return [];
+  }
+  const keep = keepItemKeys instanceof Set ? keepItemKeys : new Set(Array.isArray(keepItemKeys) ? keepItemKeys : []);
+  const targetTurnId = typeof options.turnId === "string" ? options.turnId.trim() : "";
+  const commands = [];
+  for (const render of renders) {
+    if (!render || render.status === "finished" || !render.itemStreamId) {
+      continue;
+    }
+    if (keep.has(render.itemKey)) {
+      continue;
+    }
+    if (targetTurnId && render.turnId && render.turnId !== targetTurnId) {
+      continue;
+    }
+    const itemStream = await deps.getStreamState(render.itemStreamId);
+    if (itemStream) {
+      await deps.finalizeStreamState(render.itemStreamId, {
+        turnId: render.turnId || itemStream.turnId || targetTurnId,
+        threadPath: itemStream.threadPath || parentStream?.threadPath || "",
+        status: "completed",
+        resultText: itemStream.resultText || itemStream.draft || "",
+        completedAt: Date.now(),
+        lastEvent: options.lastEvent || "thread/read.recovered_finish",
+      });
+    }
+    await deps.upsertItemRenderState(parentStream.streamId, render.itemKey, {
+      itemId: render.itemId || "",
+      turnId: render.turnId || targetTurnId,
+      phase: render.phase || "",
+      itemStreamId: render.itemStreamId,
+      status: "finished",
+    });
+    commands.push(deps.feishuStreamFinish(render.itemStreamId));
+  }
+  return commands;
+}
+
+async function recoverPlainPromptReadItems(stream, response, items, deps = {}) {
+  const normalizedItems = Array.isArray(items)
+    ? items
+      .map((item) => ({
+        itemId: typeof item?.itemId === "string" ? item.itemId : "",
+        turnId: typeof item?.turnId === "string" ? item.turnId : (stream?.turnId || response?.turnId || ""),
+        phase: typeof item?.phase === "string" ? item.phase : "",
+        text: typeof item?.text === "string" ? item.text : "",
+      }))
+      .filter((item) => item.text.trim() !== "")
+    : [];
+  const commands = [];
+  const keepItemKeys = new Set();
+  for (const item of normalizedItems) {
+    const itemNotification = recoveredItemNotification(response, stream, item);
+    const itemKey = deps.notificationItemKey?.(itemNotification);
+    if (itemKey) {
+      keepItemKeys.add(itemKey);
+    }
+    const itemCommands = await deps.renderAssistantContentToItemStream(stream, itemNotification, item.text, {
+      finish: true,
+      allowSyntheticOpen: true,
+    });
+    if (Array.isArray(itemCommands) && itemCommands.length) {
+      commands.push(...itemCommands);
+    }
+  }
+  const finishCommands = await finishOutstandingItemStreams(stream, keepItemKeys, deps, {
+    turnId: stream?.turnId || response?.turnId || "",
+    lastEvent: "thread/read.recovered_finish",
+  });
+  if (finishCommands.length) {
+    commands.push(...finishCommands);
+  }
+  return commands;
 }
 
 export function createCodexRpcResponseRouter(deps) {
@@ -178,7 +258,7 @@ export function createCodexRpcResponseRouter(deps) {
       const exactReadAnswer = preferredTurnId
         ? deps.extractExactAnswerFromThreadReadResult(response.result, preferredTurnId)
         : "";
-      if (deps.isPlainPromptStream(stream) && preferredTurnId && !exactReadAnswer) {
+      if (deps.isPlainPromptStream(stream) && preferredTurnId && !exactReadAnswer && !readItems.length) {
         await deps.updateStreamState(response.streamId, {
           threadPath: response.threadPath || stream.threadPath || "",
           lastEvent: "thread/read",
@@ -200,9 +280,25 @@ export function createCodexRpcResponseRouter(deps) {
         lastEvent: "thread/read",
       });
       const renderedReadAnswer = readAnswer ? deps.renderCodexAssistantText(readAnswer) : resultText;
-      const readCommands = deps.isPlainPromptStream(stream)
-        ? plainPromptParentTextCommands(stream, response.streamId, readAnswer || "", deps, { finish: true })
-        : (renderedReadAnswer ? [streamTextCommand(stream, response.streamId, renderedReadAnswer, deps)] : []);
+      if (deps.isPlainPromptStream(stream)) {
+        const recoveredItems = readItems.length
+          ? readItems
+          : (readAnswer
+              ? [{
+                  itemId: "",
+                  turnId: preferredTurnId,
+                  phase: exactReadAnswer ? "final_answer" : "",
+                  text: readAnswer,
+                }]
+              : []);
+        const itemCommands = await recoverPlainPromptReadItems(stream, response, recoveredItems, deps);
+        return {
+          handled: true,
+          commands: updateParentLifecycleCommands(response.streamId, turnLifecycleText("completed"), deps, { finish: true })
+            .concat(itemCommands || []),
+        };
+      }
+      const readCommands = renderedReadAnswer ? [streamTextCommand(stream, response.streamId, renderedReadAnswer, deps)] : [];
       return {
         handled: true,
         commands: readAnswer ? readCommands : (renderedReadAnswer ? [streamTextCommand(stream, response.streamId, renderedReadAnswer, deps)] : []),

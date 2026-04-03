@@ -79,6 +79,32 @@ function safeJsonParse(text) {
   }
 }
 
+function safeBase64DecodeUtf8(raw) {
+  if (typeof raw !== "string" || raw.trim() === "") {
+    return "";
+  }
+  try {
+    if (typeof Buffer !== "undefined" && typeof Buffer.from === "function") {
+      return Buffer.from(raw, "base64").toString("utf8");
+    }
+  } catch (_) {
+    // fall through to browser-compatible path
+  }
+  try {
+    if (typeof atob === "function") {
+      const binary = atob(raw);
+      if (typeof TextDecoder === "function") {
+        const bytes = Uint8Array.from(binary, (ch) => ch.charCodeAt(0));
+        return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+      }
+      return binary;
+    }
+  } catch (_) {
+    return "";
+  }
+  return "";
+}
+
 function extractTextCandidate(value) {
   if (typeof value === "string" && value.trim() !== "") {
     return value.trim();
@@ -502,6 +528,28 @@ function decodeFinalText(payload, params) {
   return "";
 }
 
+function decodeNotificationDelta(payload, params) {
+  const delta = typeof params?.delta === "string"
+    ? params.delta
+    : typeof payload?.delta === "string"
+      ? payload.delta
+      : "";
+  if (delta !== "") {
+    return delta;
+  }
+  const method = typeof payload?.method === "string" ? payload.method : "";
+  if (method === "command/exec/outputDelta") {
+    return safeBase64DecodeUtf8(
+      typeof params?.deltaBase64 === "string"
+        ? params.deltaBase64
+        : typeof payload?.deltaBase64 === "string"
+          ? payload.deltaBase64
+          : "",
+    );
+  }
+  return "";
+}
+
 function decodeNotificationMessage(payload, params) {
   const finalText = decodeFinalText(payload, params);
   if (finalText) {
@@ -514,7 +562,9 @@ function decodeNotificationMessage(payload, params) {
   }
   return pickFirstString(
     params?.message,
+    params?.reason,
     payload?.message,
+    payload?.reason,
     params?.error?.message,
     params?.status?.error?.message,
     payload?.error?.message,
@@ -603,7 +653,7 @@ export function parseCodexNotification(frame) {
     method: typeof payload.method === "string" ? payload.method : "",
     params,
     raw: payload,
-    delta: typeof params.delta === "string" ? params.delta : "",
+    delta: decodeNotificationDelta(payload, params),
     message,
     finalText,
     status: decodeNotificationStatus(params),
