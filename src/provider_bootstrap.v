@@ -53,6 +53,26 @@ fn bootstrap_providers(mut app App) {
 		}
 	}
 
+
+	// Database upstream (runtime skeleton)
+	if app.provider_bootstrap_enabled('db') {
+		p := DbProvider{}
+		provider_register_and_start(mut app, 'db', p)
+		app.register_provider_spec(ProviderSpec{
+			name:        'db'
+			enabled:     true
+			has_handler: false
+			has_runtime: true
+			command_matchers: []CommandMatcher{}
+			route_kind: .generic
+			provider:    p
+			handler:     NoopProviderCommandHandler{}
+			runtime:     ProviderRuntimeAdapter{
+				provider: p
+			}
+		})
+	}
+
 	// Ollama (currently skeleton adapter)
 	$if !no_ollama_routes ? {
 		if app.provider_bootstrap_enabled('ollama') {

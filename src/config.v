@@ -130,6 +130,35 @@ mut:
 	flush_interval_ms  int    = 400    @[toml: 'flush_interval_ms']
 }
 
+struct DbMysqlConfig {
+mut:
+	host      string = '127.0.0.1'
+	port      int    = 3306
+	username  string
+	password  string
+	database  string = 'mysql'
+	pool_size int    = 5 @[toml: 'pool_size']
+}
+
+struct DbPgsqlConfig {
+mut:
+	host      string = '127.0.0.1'
+	port      int    = 5432
+	username  string
+	password  string
+	database  string = 'postgres'
+	pool_size int    = 5 @[toml: 'pool_size']
+}
+
+struct DbConfig {
+mut:
+	enabled bool
+	socket  string = 'tmp/vhttpd-db.sock'
+	driver  string = 'mysql'
+	mysql   DbMysqlConfig
+	pgsql   DbPgsqlConfig
+}
+
 struct ListenerConfig {
 mut:
 	host string = '127.0.0.1'
@@ -154,25 +183,27 @@ mut:
 	mcp          McpConfig
 	feishu       FeishuConfig
 	codex        CodexConfig
+	db           DbConfig
 }
 
 struct VhttpdConfig {
 mut:
-	server   ServerConfig
-	files    FilesConfig
-	paths    PathsConfig
-	worker   WorkerConfig
-	executor ExecutorConfig
-	php      PhpConfig
-	vjsx     VjsxConfig
-	admin    AdminConfig
-	assets   AssetsConfig
-	runtime  RuntimeConfig
-	mcp      McpConfig
-	feishu   FeishuConfig
-	codex    CodexConfig
-	listeners map[string]ListenerConfig
-	sites     map[string]SiteConfig
+	server      ServerConfig
+	files       FilesConfig
+	paths       PathsConfig
+	worker      WorkerConfig
+	executor    ExecutorConfig
+	php         PhpConfig
+	vjsx        VjsxConfig
+	admin       AdminConfig
+	assets      AssetsConfig
+	runtime     RuntimeConfig
+	mcp         McpConfig
+	feishu      FeishuConfig
+	codex       CodexConfig
+	db          DbConfig
+	listeners   map[string]ListenerConfig
+	sites       map[string]SiteConfig
 	config_path string
 }
 
@@ -445,8 +476,7 @@ fn decode_worker_config_map(entry map[string]toml.Any) WorkerConfig {
 		cfg.pool_size = toml_int_from_map(entry, 'pool_size', cfg.pool_size)
 	}
 	if 'websocket_dispatch' in entry {
-		cfg.websocket_dispatch = toml_bool_from_map(entry, 'websocket_dispatch',
-			cfg.websocket_dispatch)
+		cfg.websocket_dispatch = toml_bool_from_map(entry, 'websocket_dispatch', cfg.websocket_dispatch)
 	}
 	if 'socket_prefix' in entry {
 		cfg.socket_prefix = toml_string_from_map(entry, 'socket_prefix', cfg.socket_prefix)
@@ -548,12 +578,10 @@ fn decode_mcp_config_map(entry map[string]toml.Any) McpConfig {
 		cfg.max_sessions = toml_int_from_map(entry, 'max_sessions', cfg.max_sessions)
 	}
 	if 'max_pending_messages' in entry {
-		cfg.max_pending_messages = toml_int_from_map(entry, 'max_pending_messages',
-			cfg.max_pending_messages)
+		cfg.max_pending_messages = toml_int_from_map(entry, 'max_pending_messages', cfg.max_pending_messages)
 	}
 	if 'session_ttl_seconds' in entry {
-		cfg.session_ttl_seconds = toml_int_from_map(entry, 'session_ttl_seconds',
-			cfg.session_ttl_seconds)
+		cfg.session_ttl_seconds = toml_int_from_map(entry, 'session_ttl_seconds', cfg.session_ttl_seconds)
 	}
 	cfg.allowed_origins = toml_string_list_from_map(entry, 'allowed_origins')
 	if 'sampling_capability_policy' in entry {

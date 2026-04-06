@@ -95,6 +95,7 @@ fn build_app_runtime(provider_settings ProviderRuntimeSettings, executor_plan Lo
 			specs:    map[string]ProviderSpec{}
 		}
 		ollama_enabled:                           provider_settings.ollama_enabled
+		db_runtime:                                build_db_runtime(provider_settings.db)
 		fixture_websocket_runtime:                map[string]FixtureWebSocketUpstreamRuntime{}
 		websocket_upstream_recent_activities:     []WebSocketUpstreamActivitySnapshot{}
 		provider_instance_specs:                  map[string]ProviderInstanceSpec{}

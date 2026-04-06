@@ -27,6 +27,8 @@ make build vhttpd
 - `/Users/guweigang/Source/vhttpd/examples/config/symfony.toml`
 - `/Users/guweigang/Source/vhttpd/examples/config/laravel.toml`
 - `/Users/guweigang/Source/vhttpd/examples/config/wordpress.toml`
+- `/Users/guweigang/Source/vhttpd/examples/config/db-upstream.toml`
+- `/Users/guweigang/Source/vhttpd/examples/config/db-upstream-pg.toml`
 
 说明：
 
@@ -35,6 +37,8 @@ make build vhttpd
 - `wordpress.toml` 需要把 `VSLIM_WP_ROOT=/ABS/PATH/TO/WORDPRESS` 改成真实路径
 - `ollama-proxy.toml` 里 `OLLAMA_CHAT_URL / OLLAMA_MODEL / OLLAMA_API_KEY` 可按需改
 - `ollama-proxy.toml` 也支持 `OLLAMA_STREAM_FIXTURE`，可离线验证 phase-3 upstream plan
+- `db-upstream.toml` 演示 `vhttpd` 托管 mysql 连接池，并通过 unix socket 暴露 `db` runtime，上游可通过 `/admin/runtime/db` 查看状态
+- `db-upstream-pg.toml` 演示 `vhttpd` 托管 postgresql 连接池，配置写在 `[db.pgsql]`
 - 这些变量都在 `[worker.env]`，会传给 php-worker，可在 PHP 里直接 `getenv('KEY')`
 
 ## 快速开始（VSlim 原生）

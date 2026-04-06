@@ -1,0 +1,44 @@
+[paths]
+root = "../.."
+php_project_root = "examples"
+php_app = "examples/hello-app.php"
+php_worker = "php/package/bin/php-worker"
+vslim_ext = "../vphpx/vslim/vslim.so"
+
+[files]
+pid_file = "tmp/vhttpd_db_upstream.pid"
+event_log = "tmp/vhttpd_db_upstream.events.ndjson"
+
+[runtime]
+timezone = "Asia/Shanghai"
+
+[db]
+enabled = true
+socket = "/tmp/vhttpd_db.sock"
+driver = "mysql"
+
+[db.mysql]
+host = "127.0.0.1"
+port = 3306
+username = "root"
+password = "Abcd.1234"
+database = "kaikuhang"
+pool_size = 5
+
+[admin]
+host = "127.0.0.1"
+port = 19990
+token = "change-me"
+
+[sites.db_upstream]
+host = "127.0.0.1"
+port = 19890
+root = "${paths.php_project_root}"
+executor = "php"
+worker.entry = "${paths.php_worker}"
+worker.autostart = true
+worker.read_timeout_ms = 3000
+worker.socket_prefix = "tmp/vslim_db_upstream_worker"
+php.bin = "php"
+app = "${paths.php_app}"
+php.extensions = ["${paths.vslim_ext}"]

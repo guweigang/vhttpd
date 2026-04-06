@@ -128,6 +128,9 @@ fn (mut app App) internal_admin_dispatch(req InternalAdminRequest) InternalAdmin
 		'/runtime/feishu' {
 			return internal_admin_json_response(app.provider_runtime_snapshot('feishu') or { '{}' })
 		}
+		'/runtime/db' {
+			return internal_admin_json_response(app.provider_runtime_snapshot('db') or { '{}' })
+		}
 		'/runtime/feishu/chats' {
 			limit := admin_query_limit(req.query['limit'] or { '' }, 100, 1000)
 			offset := admin_query_offset(req.query['offset'] or { '' })

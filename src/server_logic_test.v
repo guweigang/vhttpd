@@ -268,6 +268,29 @@ root = "\${paths.assets_root}"
 	assert cfg.assets.root == expected_assets_root
 }
 
+fn test_resolve_provider_runtime_settings_supports_pgsql_db_config() {
+	mut cfg := default_vhttpd_config()
+	cfg.db.enabled = true
+	cfg.db.driver = 'pgsql'
+	cfg.db.socket = '/tmp/vhttpd-db-pg.sock'
+	cfg.db.pgsql.host = '127.0.0.1'
+	cfg.db.pgsql.port = 5433
+	cfg.db.pgsql.username = 'postgres'
+	cfg.db.pgsql.password = 'secret'
+	cfg.db.pgsql.database = 'appdb'
+	cfg.db.pgsql.pool_size = 9
+	settings := resolve_provider_runtime_settings([]string{}, cfg)
+	assert settings.db.enabled
+	assert settings.db.driver == 'pgsql'
+	assert settings.db.socket == '/tmp/vhttpd-db-pg.sock'
+	assert settings.db.host == '127.0.0.1'
+	assert settings.db.port == 5433
+	assert settings.db.username == 'postgres'
+	assert settings.db.password == 'secret'
+	assert settings.db.database == 'appdb'
+	assert settings.db.pool_size == 9
+}
+
 fn test_load_vhttpd_config_supports_multi_listener_sites() {
 	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_multi_listener_toml_test')
 	config_dir := os.join_path(temp_dir, 'config')
@@ -463,10 +486,10 @@ app = "\${paths.site_app}"
 fn test_site_config_as_vhttpd_config_defaults_vjsx_module_root_to_site_root() {
 	cfg := site_config_as_vhttpd_config(default_vhttpd_config(), SiteConfig{
 		project_root: '/tmp/site-root'
-		executor: ExecutorConfig{
+		executor:     ExecutorConfig{
 			kind: 'vjsx'
 		}
-		vjsx: VjsxConfig{
+		vjsx:         VjsxConfig{
 			app_entry: './app.mts'
 		}
 	})
@@ -477,10 +500,10 @@ fn test_site_config_as_vhttpd_config_defaults_vjsx_module_root_to_site_root() {
 fn test_site_config_as_vhttpd_config_routes_app_alias_to_vjsx() {
 	cfg := site_config_as_vhttpd_config(default_vhttpd_config(), SiteConfig{
 		project_root: '/tmp/site-root'
-		executor: ExecutorConfig{
+		executor:     ExecutorConfig{
 			kind: 'vjsx'
 		}
-		app: './app.mts'
+		app:          './app.mts'
 	})
 	assert cfg.vjsx.app_entry == './app.mts'
 	assert cfg.php.app_entry == ''
@@ -489,10 +512,10 @@ fn test_site_config_as_vhttpd_config_routes_app_alias_to_vjsx() {
 fn test_site_config_as_vhttpd_config_routes_app_alias_to_php() {
 	cfg := site_config_as_vhttpd_config(default_vhttpd_config(), SiteConfig{
 		project_root: '/tmp/site-root'
-		executor: ExecutorConfig{
+		executor:     ExecutorConfig{
 			kind: 'php'
 		}
-		app: './app.php'
+		app:          './app.php'
 	})
 	assert cfg.php.app_entry == './app.php'
 	assert cfg.vjsx.app_entry == ''
@@ -501,7 +524,7 @@ fn test_site_config_as_vhttpd_config_routes_app_alias_to_php() {
 fn test_site_config_as_vhttpd_config_routes_worker_entry_alias_to_php() {
 	cfg := site_config_as_vhttpd_config(default_vhttpd_config(), SiteConfig{
 		project_root: '/tmp/site-root'
-		executor: ExecutorConfig{
+		executor:     ExecutorConfig{
 			kind: 'php'
 		}
 		worker_entry: './php-worker'
@@ -566,8 +589,8 @@ app = "examples/hello-app.php"
 	assert cfg.sites['demo'].php.bin == 'php'
 	multi_cfg := resolve_multi_server_runtime_config([]string{}, cfg) or { panic(err) }
 	assert multi_cfg.listeners.len == 1
-	assert multi_cfg.listeners[0].site_cfg.worker.socket_prefix == os.join_path(config_dir, 'tmp',
-		'demo-worker')
+	assert multi_cfg.listeners[0].site_cfg.worker.socket_prefix == os.join_path(config_dir,
+		'tmp', 'demo-worker')
 	assert multi_cfg.listeners[0].site_cfg.php.worker_entry == php_worker
 	assert multi_cfg.listeners[0].site_cfg.php.app_entry == php_app
 }
@@ -1311,20 +1334,20 @@ fn test_resolve_multi_server_runtime_config_builds_listener_bound_sites() {
 	cfg.sites = {
 		'project_a': SiteConfig{
 			project_root: temp_dir
-			executor: ExecutorConfig{
+			executor:     ExecutorConfig{
 				kind: 'php'
 			}
-			php: PhpConfig{
+			php:          PhpConfig{
 				worker_entry: php_worker
 				app_entry:    php_app
 			}
 		}
 		'project_b': SiteConfig{
 			project_root: vjsx_root
-			executor: ExecutorConfig{
+			executor:     ExecutorConfig{
 				kind: 'vjsx'
 			}
-			vjsx: VjsxConfig{
+			vjsx:         VjsxConfig{
 				app_entry:       './app.mts'
 				module_root:     '.'
 				runtime_profile: 'node'
@@ -1384,7 +1407,7 @@ fn test_site_config_as_vhttpd_config_inherits_global_defaults() {
 	cfg.mcp.max_sessions = 77
 	site_cfg := SiteConfig{
 		project_root: '/tmp/project-a'
-		vjsx: VjsxConfig{
+		vjsx:         VjsxConfig{
 			app_entry: './app.mts'
 		}
 	}

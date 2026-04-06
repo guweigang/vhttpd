@@ -95,6 +95,7 @@ pub mut:
 	codex_runtime                CodexProviderRuntime
 	codex_instances              map[string]CodexProviderRuntime = map[string]CodexProviderRuntime{}
 	ollama_enabled               bool
+	db_runtime                   DbProviderRuntime
 	feishu_buffers               map[string]FeishuStreamBuffer
 	feishu_http_lane             shared FeishuHttpLane
 	feishu_control_http_lane     shared FeishuControlHttpLane
@@ -1478,6 +1479,7 @@ pub fn (app &App) provider_bootstrap_enabled(name string) bool {
 		'feishu' { app.feishu_runtime_enabled() }
 		'codex' { app.codex_runtime.enabled || app.provider_instance_list('codex').len > 0 }
 		'ollama' { app.ollama_enabled }
+		'db' { app.db_runtime.enabled }
 		else { false }
 	}
 }
@@ -1487,6 +1489,7 @@ pub fn (mut app App) provider_runtime_ready(name string) bool {
 		'feishu' { app.feishu_runtime_ready() }
 		'codex' { app.provider_enabled('codex') }
 		'ollama' { app.provider_enabled('ollama') }
+		'db' { app.provider_enabled('db') }
 		else { false }
 	}
 }
@@ -1496,6 +1499,7 @@ pub fn (mut app App) provider_runtime_default_instance(name string) string {
 		'feishu' { app.feishu_runtime_default_app_name() }
 		'codex' { 'main' }
 		'ollama' { 'main' }
+		'db' { 'main' }
 		else { '' }
 	}
 }
@@ -1520,6 +1524,13 @@ pub fn (mut app App) provider_runtime_instances(name string) []string {
 		}
 		'ollama' {
 			if app.provider_runtime_ready('ollama') {
+				['main']
+			} else {
+				[]string{}
+			}
+		}
+		'db' {
+			if app.provider_runtime_ready('db') {
 				['main']
 			} else {
 				[]string{}
