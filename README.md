@@ -147,7 +147,7 @@ flowchart TB
 - MCP runbook: [MCP_RUNBOOK.md](/Users/guweigang/Source/vhttpd/docs/MCP_RUNBOOK.md)
 - MCP MVP plan: [MCP_MVP_PLAN.md](/Users/guweigang/Source/vhttpd/docs/MCP_MVP_PLAN.md)
 - WebSocket upstream plan: [WEBSOCKET_UPSTREAM_PLAN.md](/Users/guweigang/Source/vhttpd/docs/WEBSOCKET_UPSTREAM_PLAN.md)
-- Binary build workflow: pending re-home into this split repo
+- Binary build workflow: [`.github/workflows/vhttpd-binaries.yml`](/Users/guweigang/Source/vhttpd/.github/workflows/vhttpd-binaries.yml)
 
 ## Why vhttpd stays close to veb
 
@@ -235,6 +235,8 @@ Workflow file:
 ```text
 .github/workflows/vhttpd-binaries.yml
 ```
+
+The workflow installs the `guweigang.vjsx` module before building so the split repo can resolve its embedded runtime dependency in CI.
 
 Release options:
 

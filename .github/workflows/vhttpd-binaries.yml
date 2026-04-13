@@ -1,0 +1,114 @@
+name: Build vhttpd binaries
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - 'dbsrc/**'
+      - 'Makefile'
+      - 'v.mod'
+      - '.github/workflows/vhttpd-binaries.yml'
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'dbsrc/**'
+      - 'Makefile'
+      - 'v.mod'
+      - '.github/workflows/vhttpd-binaries.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux-amd64
+          - os: macos-15-intel
+            target: macos-amd64
+          - os: macos-15
+            target: macos-arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build deps (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config \
+            libssl-dev
+
+      - name: Install build deps (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          brew install openssl@3 pkg-config
+
+      - name: Install V compiler
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --depth=1 https://github.com/vlang/v /tmp/v
+          make -C /tmp/v
+          echo "/tmp/v" >> "$GITHUB_PATH"
+
+      - name: Install V module deps
+        shell: bash
+        run: |
+          set -euo pipefail
+          v install guweigang.vjsx
+
+      - name: Show toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          v version
+          cc --version || clang --version
+          pkg-config --modversion openssl
+
+      - name: Build production binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          make prod
+
+      - name: Smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./vhttpd --help >/dev/null
+          if ./vhttpd -1 >/dev/null 2>&1; then
+            echo "expected unknown option to fail"
+            exit 1
+          fi
+
+      - name: Package artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle="vhttpd-${{ matrix.target }}"
+          mkdir -p "$bundle"
+          cp ./vhttpd "$bundle/"
+          cp ./README.md "$bundle/README.md"
+          tar -czf "$bundle.tar.gz" "$bundle"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vhttpd-${{ matrix.target }}
+          path: vhttpd-${{ matrix.target }}.tar.gz
+          if-no-files-found: error
