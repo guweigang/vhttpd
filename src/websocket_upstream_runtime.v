@@ -1,6 +1,7 @@
 module main
 
 import json
+import log
 import net.http
 import net.websocket
 import time
@@ -537,6 +538,14 @@ fn websocket_upstream_provider_reconnect_delay_ms(app &App, provider string, ins
 }
 
 fn websocket_upstream_provider_handle_message(mut app App, provider string, instance string, mut ws websocket.Client, msg &websocket.Message) ! {
+	if provider == websocket_upstream_provider_codex {
+		mut payload_preview := ''
+		if msg.opcode == .text_frame || msg.opcode == .binary_frame || msg.opcode == .continuation {
+			raw := msg.payload.bytestr()
+			payload_preview = if raw.len > 200 { raw[..200] + '...' } else { raw }
+		}
+		log.info('[codex][ws] 📨 opcode=${msg.opcode} payload_len=${msg.payload.len} instance=${instance} preview=${payload_preview}')
+	}
 	match provider {
 		websocket_upstream_provider_feishu {
 			app.feishu_provider_handle_binary_message(instance, mut ws, msg)!
@@ -544,6 +553,8 @@ fn websocket_upstream_provider_handle_message(mut app App, provider string, inst
 		websocket_upstream_provider_codex {
 			if msg.opcode == .text_frame {
 				app.codex_provider_handle_text_message(instance, msg.payload.bytestr())
+			} else {
+				log.warn('[codex][ws] ignored non-text opcode=${msg.opcode} payload_len=${msg.payload.len} instance=${instance}')
 			}
 		}
 		else {}
@@ -553,6 +564,9 @@ fn websocket_upstream_provider_handle_message(mut app App, provider string, inst
 fn websocket_upstream_provider_send(mut app App, provider string, req WebSocketUpstreamSendRequest) !WebSocketUpstreamSendResult {
 	return match provider {
 		websocket_upstream_provider_feishu {
+			if app.feishu_card_bridge_enabled() {
+				return app.feishu_card_bridge_proxy_send(req)
+			}
 			result := app.feishu_runtime_send_message(FeishuRuntimeSendMessageRequest{
 				app:             req.instance
 				receive_id_type: req.target_type
@@ -586,6 +600,9 @@ fn websocket_upstream_provider_send(mut app App, provider string, req WebSocketU
 fn websocket_upstream_provider_update(mut app App, provider string, req WebSocketUpstreamSendRequest) !WebSocketUpstreamUpdateResult {
 	return match provider {
 		websocket_upstream_provider_feishu {
+			if app.feishu_card_bridge_enabled() {
+				return app.feishu_card_bridge_proxy_update(req)
+			}
 			result := app.feishu_runtime_update_message(FeishuRuntimeUpdateMessageRequest{
 				app:             req.instance
 				message_id:      req.target

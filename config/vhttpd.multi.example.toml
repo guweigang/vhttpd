@@ -1,0 +1,72 @@
+[paths]
+root = ".."
+php_project_root = "examples"
+php_app = "examples/hello-app.php"
+php_worker = "php/package/bin/php-worker"
+vslim_ext = "../vphpx/vslim/vslim.so"
+ts_project_root = "examples/codexbot-app-ts"
+ts_app = "examples/codexbot-app-ts/app.mts"
+ts_build_root = "tmp/codexbot-vjsx-build"
+
+[files]
+pid_file = "tmp/vhttpd_multi.pid"
+event_log = "tmp/vhttpd_multi.events.ndjson"
+
+[runtime]
+timezone = "Asia/Shanghai"
+
+[assets]
+enabled = false
+prefix = "/assets"
+root = "examples/public"
+
+[codex]
+enabled = true
+url = "${env.CODEX_URL:-ws://127.0.0.1:4500}"
+model = "gpt-5.4"
+effort = "medium"
+cwd = "${env.CODEX_CWD:-../codex/default}"
+approval_policy = "never"
+sandbox = "workspace-write"
+reconnect_delay_ms = 3000
+flush_interval_ms = 400
+
+[feishu]
+enabled = false
+
+# Site DSL summary:
+# - omit [listeners], host/port live on [sites.<id>]
+# - root = project_root alias
+# - app = php.app_entry / vjsx.app_entry alias
+# - worker.entry = php.worker_entry alias
+# - vjsx.module_root defaults to site root
+
+[sites.php_demo]
+host = "127.0.0.1"
+port = 19881
+root = "${paths.php_project_root}"
+executor = "php"
+worker.entry = "${paths.php_worker}"
+worker.autostart = true
+worker.pool_size = 2
+worker.socket_prefix = "tmp/vslim_multi_demo"
+php.bin = "php"
+app = "${paths.php_app}"
+php.extensions = ["${paths.vslim_ext}"]
+
+[sites.codexbot]
+host = "127.0.0.1"
+port = 19883
+root = "${paths.ts_project_root}"
+executor = "vjsx"
+app = "${paths.ts_app}"
+# vjsx.module_root is omitted on purpose; it defaults to site root.
+vjsx.build_root = "${paths.ts_build_root}"
+vjsx.runtime_profile = "node"
+vjsx.thread_count = 2
+vjsx.enable_fs = true
+feishu.enabled = true
+feishu.open_base_url = "https://open.feishu.cn/open-apis"
+feishu.reconnect_delay_ms = 3000
+feishu.token_refresh_skew_seconds = 60
+feishu.recent_event_limit = 20

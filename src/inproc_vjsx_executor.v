@@ -1,15 +1,21 @@
 module main
 
 import json
+import net.http
 import os
 import sync
 import time
 import vjsx
+import vjsx.runtimejs
+import x.json2
 
 const inproc_vjsx_lane_wait_timeout_ms = 1000
 const inproc_vjsx_lane_wait_poll_ms = 5
 const inproc_vjsx_dispatch_retry_attempts = 2
 const inproc_vjsx_startup_wait_poll_ms = 5
+const inproc_vjsx_signature_probe_poll_ms = 100
+const inproc_vjsx_signature_refresh_debounce_ms = 200
+const inproc_vjsx_signature_full_refresh_ms = 3000
 
 fn inproc_vjsx_codex_sessions_root() string {
 	override_root := os.getenv('VHTTPD_CODEX_SESSIONS_ROOT').trim_space()
@@ -65,6 +71,7 @@ pub struct VjsxRuntimeFacadeConfig {
 pub:
 	app_entry         string
 	module_root       string
+	build_root        string
 	signature_root    string
 	signature_include []string
 	signature_exclude []string
@@ -101,6 +108,14 @@ mut:
 	lanes                        []VjsxExecutionLane
 	hosts                        []VjsxLaneHost
 	rr_index                     int
+	cached_source_probe          string
+	cached_source_signature      string
+	signature_refresh_started    bool
+	signature_refresh_stop       bool
+	signature_last_checked_at    i64
+	signature_last_probe_at      i64
+	signature_pending_since      i64
+	signature_last_error         string
 	warmup_source_signature      string
 	warmup_running               bool
 	warmup_completed             bool
@@ -117,7 +132,10 @@ mut:
 	startup_completed bool
 	dirty             bool
 	source_signature  string
+	is_module_entry   bool
+	temp_root         string
 	session           &vjsx.RuntimeSession = unsafe { nil }
+	module_binding    &vjsx.ScriptModule   = unsafe { nil }
 	request_ctx       InProcVjsxRequestContext
 }
 
@@ -129,6 +147,31 @@ pub mut:
 	state &VjsxExecutorState = unsafe { nil }
 }
 
+struct InProcVjsxHostHttpFetchResponse {
+	ok      bool
+	status  int
+	body    string
+	headers map[string]string
+	error   string
+}
+
+struct InProcVjsxHostHttpFetchRequest {
+	url     string
+	method  string
+	body    string
+	headers map[string]string
+}
+
+struct InProcVjsxHostBridgeDispatchRequest {
+	app         string
+	trace_id    string            @[json: 'trace_id']
+	event_type  string            @[json: 'event_type']
+	message_id  string            @[json: 'message_id']
+	target      string
+	target_type string            @[json: 'target_type']
+	payload     string
+}
+
 struct InProcVjsxRuntimeMeta {
 	provider                 string
 	executor                 string
@@ -138,6 +181,7 @@ struct InProcVjsxRuntimeMeta {
 	trace_id                 string            @[json: 'traceId']
 	app_entry                string            @[json: 'appEntry']
 	module_root              string            @[json: 'moduleRoot']
+	build_root               string            @[json: 'buildRoot']
 	runtime_profile          string            @[json: 'runtimeProfile']
 	thread_count             int               @[json: 'threadCount']
 	enable_fs                bool              @[json: 'enableFs']
@@ -183,13 +227,36 @@ pub fn new_inproc_vjsx_executor(config VjsxRuntimeFacadeConfig) InProcVjsxExecut
 			}
 		}
 	}
+	initial_probe := if config.app_entry.trim_space() != '' {
+		vjsx_source_probe_for_config(config)
+	} else {
+		''
+	}
+	initial_signature := if config.app_entry.trim_space() != '' {
+		vjsx_source_signature_for_config(config)
+	} else {
+		''
+	}
+	now_ms := time.now().unix_milli()
 	return InProcVjsxExecutor{
 		state: &VjsxExecutorState{
 			facade: VjsxRuntimeFacade{
 				config: config
 			}
-			lanes:  lanes
-			hosts:  []VjsxLaneHost{len: lanes.len}
+			lanes:                    lanes
+			hosts:                    []VjsxLaneHost{len: lanes.len}
+			cached_source_probe:      initial_probe
+			cached_source_signature:  initial_signature
+			signature_last_checked_at: if initial_signature != '' {
+				now_ms
+			} else {
+				0
+			}
+			signature_last_probe_at: if initial_probe != '' {
+				now_ms
+			} else {
+				0
+			}
 		}
 	}
 }
@@ -216,6 +283,7 @@ pub fn (e InProcVjsxExecutor) admin_details() LogicExecutorAdminDetails {
 		runtime_profile: config.runtime_profile
 		lane_count:      config.thread_count
 		module_root:     config.module_root
+		build_root:      config.build_root
 		signature_root:  config.signature_root
 		max_requests:    config.max_requests
 		enable_fs:       config.enable_fs
@@ -238,6 +306,16 @@ pub fn (e InProcVjsxExecutor) lane_count() int {
 
 pub fn (e InProcVjsxExecutor) warmup(mut app App) ! {
 	e.bootstrap_placeholder()!
+	lane_count := e.lane_count()
+	if lane_count <= 0 {
+		return
+	}
+	for idx in 0 .. lane_count {
+		e.ensure_lane_host(idx) or {
+			e.record_lane_error('lane_${idx}', err.msg())
+			return error(err.msg())
+		}
+	}
 	lane := e.acquire_next_lane(inproc_vjsx_lane_wait_timeout_ms)!
 	defer {
 		e.release_lane(lane.id)
@@ -246,10 +324,6 @@ pub fn (e InProcVjsxExecutor) warmup(mut app App) ! {
 	if idx < 0 {
 		e.record_lane_error(lane.id, 'inproc_vjsx_executor_lane_not_found')
 		return error('inproc_vjsx_executor_lane_not_found')
-	}
-	e.ensure_lane_host(idx) or {
-		e.record_lane_error(lane.id, err.msg())
-		return error(err.msg())
 	}
 	mut source_signature := ''
 	mut state := e.state
@@ -351,8 +425,101 @@ pub fn (e InProcVjsxExecutor) bootstrap_placeholder() ! {
 		state.facade.last_error = 'inproc_vjsx_executor_missing_app_entry'
 		return error(state.facade.last_error)
 	}
+	if !state.signature_refresh_started {
+		state.signature_refresh_started = true
+		go inproc_vjsx_signature_refresh_loop(mut state)
+	}
 	state.facade.bootstrapped = true
 	state.facade.last_error = ''
+}
+
+fn inproc_vjsx_signature_refresh_loop(mut state VjsxExecutorState) {
+	if isnil(state) {
+		return
+	}
+	mut last_probe := ''
+	mut pending_since := i64(0)
+	for {
+		mut stop := false
+		mut config := VjsxRuntimeFacadeConfig{}
+		mut last_checked_at := i64(0)
+		state.mu.@lock()
+		stop = state.signature_refresh_stop
+		config = state.facade.config
+		last_probe = if last_probe != '' { last_probe } else { state.cached_source_probe }
+		pending_since = if pending_since > 0 { pending_since } else { state.signature_pending_since }
+		last_checked_at = state.signature_last_checked_at
+		state.mu.unlock()
+		if stop {
+			return
+		}
+		now := time.now().unix_milli()
+		next_probe := if config.app_entry.trim_space() != '' {
+			vjsx_source_probe_for_config(config)
+		} else {
+			''
+		}
+		probe_changed := next_probe != last_probe
+		if probe_changed {
+			last_probe = next_probe
+			pending_since = now
+		}
+		needs_full_refresh := probe_changed
+			|| (pending_since > 0 && now - pending_since >= inproc_vjsx_signature_refresh_debounce_ms)
+			|| (last_checked_at <= 0 || now - last_checked_at >= inproc_vjsx_signature_full_refresh_ms)
+		mut next_signature := ''
+		if needs_full_refresh {
+			next_signature = if config.app_entry.trim_space() != '' {
+				vjsx_source_signature_for_config(config)
+			} else {
+				''
+			}
+		}
+		state.mu.@lock()
+		if state.signature_refresh_stop {
+			state.mu.unlock()
+			return
+		}
+		state.cached_source_probe = next_probe
+		state.signature_last_probe_at = now
+		state.signature_pending_since = pending_since
+		if needs_full_refresh {
+			state.cached_source_signature = next_signature
+			state.signature_last_checked_at = now
+			state.signature_pending_since = 0
+			pending_since = 0
+		}
+		state.signature_last_error = ''
+		state.mu.unlock()
+		time.sleep(time.millisecond * inproc_vjsx_signature_probe_poll_ms)
+	}
+}
+
+fn (e InProcVjsxExecutor) current_source_signature() string {
+	if isnil(e.state) {
+		return ''
+	}
+	mut state := e.state
+	state.mu.@lock()
+	mut cached := state.cached_source_signature
+	config := state.facade.config
+	state.mu.unlock()
+	if cached != '' {
+		return cached
+	}
+	if config.app_entry.trim_space() == '' {
+		return ''
+	}
+	cached = vjsx_source_signature_for_config(config)
+	state.mu.@lock()
+	if state.cached_source_signature == '' {
+		state.cached_source_signature = cached
+		state.signature_last_checked_at = time.now().unix_milli()
+		state.signature_last_error = ''
+	}
+	result := state.cached_source_signature
+	state.mu.unlock()
+	return result
 }
 
 pub fn (e InProcVjsxExecutor) select_next_lane() !VjsxExecutionLane {
@@ -534,10 +701,14 @@ globalThis.__vhttpd_create_runtime = function(meta) {
     const requestTarget = typeof meta.requestTarget === "string" && meta.requestTarget ? meta.requestTarget : requestPath;
     const requestOrigin = requestHost ? requestScheme + "://" + requestHost + (requestPort ? ":" + requestPort : "") : "";
     const requestHref = requestOrigin ? requestOrigin + requestTarget : requestTarget;
-    const hostEmit = typeof globalThis.__vhttpd_host_emit === "function" ? globalThis.__vhttpd_host_emit : undefined;
-    const hostSnapshot = typeof globalThis.__vhttpd_host_snapshot === "function" ? globalThis.__vhttpd_host_snapshot : undefined;
-    const hostReadFile = typeof globalThis.__vhttpd_host_read_file === "function" ? globalThis.__vhttpd_host_read_file : undefined;
-    const hostFindCodexSession = typeof globalThis.__vhttpd_host_find_codex_session === "function" ? globalThis.__vhttpd_host_find_codex_session : undefined;
+    const hostApi = globalThis.vhttpdHost && typeof globalThis.vhttpdHost === "object" ? globalThis.vhttpdHost : undefined;
+    const hostEmit = hostApi && typeof hostApi.emit === "function" ? hostApi.emit.bind(hostApi) : undefined;
+    const hostSnapshot = hostApi && typeof hostApi.snapshot === "function" ? hostApi.snapshot.bind(hostApi) : undefined;
+    const hostConfig = hostApi && typeof hostApi.config === "function" ? hostApi.config.bind(hostApi) : undefined;
+    const hostReadFile = hostApi && typeof hostApi.readTextFile === "function" ? hostApi.readTextFile.bind(hostApi) : undefined;
+    const hostFindCodexSession = hostApi && typeof hostApi.findCodexSessionPath === "function" ? hostApi.findCodexSessionPath.bind(hostApi) : undefined;
+    const hostHttpFetch = hostApi && typeof hostApi.httpFetch === "function" ? hostApi.httpFetch.bind(hostApi) : undefined;
+    const hostBridgeDispatch = hostApi && typeof hostApi.bridgeDispatch === "function" ? hostApi.bridgeDispatch.bind(hostApi) : undefined;
     const capabilities = freezeValue({
       http: dispatchKind === "http",
       stream: false,
@@ -645,6 +816,43 @@ globalThis.__vhttpd_create_runtime = function(meta) {
           return undefined;
         }
       },
+      config(fallbackValue = undefined) {
+        if (typeof hostConfig !== "function") {
+          return fallbackValue;
+        }
+        const raw = hostConfig("");
+        if (raw === undefined || raw === null || raw === "") {
+          return fallbackValue;
+        }
+        try {
+          const parsed = JSON.parse(String(raw));
+          if (parsed && typeof parsed === "object") {
+            return freezeValue(parsed);
+          }
+          return parsed;
+        } catch (_) {
+          return fallbackValue;
+        }
+      },
+      getConfig(path, fallbackValue = undefined) {
+        if (typeof hostConfig !== "function") {
+          return fallbackValue;
+        }
+        const key = path == null ? "" : String(path);
+        const raw = hostConfig(key);
+        if (raw === undefined || raw === null || raw === "") {
+          return fallbackValue;
+        }
+        try {
+          const parsed = JSON.parse(String(raw));
+          if (parsed && typeof parsed === "object") {
+            return freezeValue(parsed);
+          }
+          return parsed;
+        } catch (_) {
+          return fallbackValue;
+        }
+      },
       readTextFile(path, fallbackValue = "") {
         if (!this.capabilities || !this.capabilities.fs || typeof hostReadFile !== "function") {
           return fallbackValue;
@@ -664,6 +872,49 @@ globalThis.__vhttpd_create_runtime = function(meta) {
           return fallbackValue;
         }
         return String(raw);
+      },
+      httpFetch(input, fallbackValue = undefined) {
+        if (!this.capabilities || !this.capabilities.network || typeof hostHttpFetch !== "function") {
+          return fallbackValue;
+        }
+        const request = input && typeof input === "object" ? input : {};
+        const raw = hostHttpFetch(JSON.stringify({
+          url: typeof request.url === "string" ? request.url : "",
+          method: typeof request.method === "string" ? request.method : "GET",
+          body: request.body == null ? "" : String(request.body),
+          headers: request.headers && typeof request.headers === "object" ? request.headers : {},
+        }));
+        if (raw === undefined || raw === null || raw === "") {
+          return fallbackValue;
+        }
+        try {
+          return JSON.parse(String(raw));
+        } catch (_) {
+          return fallbackValue;
+        }
+      },
+      bridgeDispatch(input, fallbackValue = undefined) {
+        if (typeof hostBridgeDispatch !== "function") {
+          return fallbackValue;
+        }
+        const request = input && typeof input === "object" ? input : {};
+        const raw = hostBridgeDispatch(JSON.stringify({
+          app: typeof request.app === "string" ? request.app : "",
+          trace_id: typeof request.trace_id === "string" ? request.trace_id : "",
+          event_type: typeof request.event_type === "string" ? request.event_type : "",
+          message_id: typeof request.message_id === "string" ? request.message_id : "",
+          target: typeof request.target === "string" ? request.target : "",
+          target_type: typeof request.target_type === "string" ? request.target_type : "",
+          payload: typeof request.payload === "string" ? request.payload : "",
+        }));
+        if (raw === undefined || raw === null || raw === "") {
+          return fallbackValue;
+        }
+        try {
+          return JSON.parse(String(raw));
+        } catch (_) {
+          return fallbackValue;
+        }
       },
       toJSON() {
         return {
@@ -773,10 +1024,22 @@ globalThis.__vhttpd_create_runtime = function(meta) {
       snapshot() {
         return undefined;
       },
+      config(fallbackValue = undefined) {
+        return fallbackValue;
+      },
+      getConfig(_path, fallbackValue = undefined) {
+        return fallbackValue;
+      },
       readTextFile(_path, fallbackValue = "") {
         return fallbackValue;
       },
       findCodexSessionPath(_threadId, fallbackValue = "") {
+        return fallbackValue;
+      },
+      httpFetch(_input, fallbackValue = undefined) {
+        return fallbackValue;
+      },
+      bridgeDispatch(_input, fallbackValue = undefined) {
         return fallbackValue;
       },
       toJSON() {
@@ -1312,161 +1575,528 @@ globalThis.__vhttpd_normalize_websocket_upstream_result = function(frame, result
   if (result === undefined || result === null || result === false) {
     return {
       handled: false,
-      commands: []
+      commands: [],
+      response: { status: 200, headers: {}, body: "" }
     };
   }
   if (result === true) {
     return {
       handled: true,
-      commands: []
+      commands: [],
+      response: { status: 200, headers: {}, body: "" }
     };
   }
   if (Array.isArray(result)) {
     return {
       handled: true,
-      commands: result
+      commands: result,
+      response: { status: 200, headers: {}, body: "" }
     };
   }
   if (typeof result !== "object") {
     throw new TypeError("Invalid websocket_upstream result type");
   }
+  const response = result.response && typeof result.response === "object" ? result.response : {};
   return {
     handled: Object.prototype.hasOwnProperty.call(result, "handled") ? !!result.handled : true,
-    commands: Array.isArray(result.commands) ? result.commands : []
+    commands: Array.isArray(result.commands) ? result.commands : [],
+    response: {
+      status: typeof response.status === "number" ? response.status : 200,
+      headers: response.headers && typeof response.headers === "object" && !Array.isArray(response.headers) ? response.headers : {},
+      body: response.body == null ? "" : String(response.body)
+    }
   };
 };
 ')!
 	ctx.end()
 }
 
-fn install_inproc_runtime_host_bridge(mut ctx vjsx.Context, mut state VjsxExecutorState, idx int) {
-	global := ctx.js_global()
-	mut host_emit := ctx.js_function(fn [ctx, mut state, idx] (args []vjsx.Value) vjsx.Value {
-		if args.len == 0 {
-			return ctx.js_bool(false)
-		}
-		kind := normalize_vjsx_runtime_event_kind(args[0].to_string())
-		if kind == '' {
-			return ctx.js_bool(false)
-		}
-		fields := if args.len > 1 {
-			runtime_event_fields_from_js_value(args[1])
-		} else {
-			map[string]string{}
-		}
-		mut app_ref := &App(unsafe { nil })
-		mut lane_id := ''
-		mut request_id := ''
-		mut trace_id := ''
-		mut method := ''
-		mut path := ''
-		state.mu.@lock()
-		if idx >= 0 && idx < state.hosts.len && state.hosts[idx].request_ctx.active {
-			request_ctx := state.hosts[idx].request_ctx
-			app_ref = request_ctx.app
-			lane_id = request_ctx.lane_id
-			request_id = request_ctx.request_id
-			trace_id = request_ctx.trace_id
-			method = request_ctx.method
-			path = request_ctx.path
-		}
-		state.mu.unlock()
-		if isnil(app_ref) {
-			return ctx.js_bool(false)
-		}
-		mut row := map[string]string{}
-		row['lane_id'] = lane_id
-		row['request_id'] = request_id
-		row['trace_id'] = trace_id
-		row['method'] = method
-		row['path'] = path
-		row['executor'] = 'vjsx'
-		row['provider'] = 'vjsx'
-		for key, value in fields {
-			row[key] = value
-		}
-		mut app := app_ref
-		app.emit(kind, row)
-		return ctx.js_bool(true)
-	})
-	mut host_snapshot := ctx.js_function(fn [ctx, mut state, idx] (args []vjsx.Value) vjsx.Value {
-		_ = args
-		mut app_ref := &App(unsafe { nil })
-		state.mu.@lock()
-		if idx >= 0 && idx < state.hosts.len && state.hosts[idx].request_ctx.active {
-			app_ref = state.hosts[idx].request_ctx.app
-		}
-		state.mu.unlock()
-		if isnil(app_ref) {
-			return ctx.js_undefined()
-		}
-		mut app := app_ref
-		return ctx.js_string(json.encode(app.admin_runtime_snapshot()))
-	})
-	mut host_read_file := ctx.js_function(fn [ctx, mut state, idx] (args []vjsx.Value) vjsx.Value {
-		_ = idx
-		if args.len == 0 {
-			return ctx.js_string('')
-		}
-		path := args[0].to_string().trim_space()
-		if path == '' {
-			return ctx.js_string('')
-		}
-		mut enable_fs := false
-		state.mu.@lock()
-		enable_fs = state.facade.config.enable_fs
-		state.mu.unlock()
-		if !enable_fs {
-			return ctx.js_string('')
-		}
-		content := os.read_file(path) or {
-			resolved := os.real_path(path)
-			if resolved != '' && resolved != path {
-				return ctx.js_string(os.read_file(resolved) or { '' })
+fn inproc_vjsx_host_emit_builder(mut state VjsxExecutorState, idx int) vjsx.HostValueBuilder {
+	return fn [mut state, idx] (ctx &vjsx.Context) vjsx.Value {
+		return ctx.js_function(fn [ctx, mut state, idx] (args []vjsx.Value) vjsx.Value {
+			if args.len == 0 {
+				return ctx.js_bool(false)
 			}
-			return ctx.js_string('')
+			kind := normalize_vjsx_runtime_event_kind(args[0].to_string())
+			if kind == '' {
+				return ctx.js_bool(false)
+			}
+			fields := if args.len > 1 {
+				runtime_event_fields_from_js_value(args[1])
+			} else {
+				map[string]string{}
+			}
+			mut app_ref := &App(unsafe { nil })
+			mut lane_id := ''
+			mut request_id := ''
+			mut trace_id := ''
+			mut method := ''
+			mut path := ''
+			state.mu.@lock()
+			if idx >= 0 && idx < state.hosts.len && state.hosts[idx].request_ctx.active {
+				request_ctx := state.hosts[idx].request_ctx
+				app_ref = request_ctx.app
+				lane_id = request_ctx.lane_id
+				request_id = request_ctx.request_id
+				trace_id = request_ctx.trace_id
+				method = request_ctx.method
+				path = request_ctx.path
+			}
+			state.mu.unlock()
+			if isnil(app_ref) {
+				return ctx.js_bool(false)
+			}
+			mut row := map[string]string{}
+			row['lane_id'] = lane_id
+			row['request_id'] = request_id
+			row['trace_id'] = trace_id
+			row['method'] = method
+			row['path'] = path
+			row['executor'] = 'vjsx'
+			row['provider'] = 'vjsx'
+			for key, value in fields {
+				row[key] = value
+			}
+			mut app := app_ref
+			app.emit(kind, row)
+			return ctx.js_bool(true)
+		})
+	}
+}
+
+fn inproc_vjsx_host_snapshot_builder(mut state VjsxExecutorState, idx int) vjsx.HostValueBuilder {
+	return fn [mut state, idx] (ctx &vjsx.Context) vjsx.Value {
+		return ctx.js_function(fn [ctx, mut state, idx] (args []vjsx.Value) vjsx.Value {
+			_ = args
+			mut app_ref := &App(unsafe { nil })
+			state.mu.@lock()
+			if idx >= 0 && idx < state.hosts.len && state.hosts[idx].request_ctx.active {
+				app_ref = state.hosts[idx].request_ctx.app
+			}
+			state.mu.unlock()
+			if isnil(app_ref) {
+				return ctx.js_undefined()
+			}
+			mut app := app_ref
+			return ctx.js_string(json.encode(app.admin_runtime_snapshot()))
+		})
+	}
+}
+
+fn inproc_vjsx_config_lookup(raw_json string, path string) string {
+	if raw_json.trim_space() == '' {
+		return ''
+	}
+	if path.trim_space() == '' {
+		return raw_json
+	}
+	parsed := json2.decode[json2.Any](raw_json) or { return '' }
+	mut current := parsed
+	for raw_part in path.split('.') {
+		part := raw_part.trim_space()
+		if part == '' {
+			continue
 		}
-		return ctx.js_string(content)
+		root := current.as_map()
+		if part !in root {
+			return ''
+		}
+		current = root[part] or { return '' }
+	}
+	return current.json_str()
+}
+
+fn inproc_vjsx_host_config_builder(mut state VjsxExecutorState, idx int) vjsx.HostValueBuilder {
+	return fn [mut state, idx] (ctx &vjsx.Context) vjsx.Value {
+		return ctx.js_function(fn [ctx, mut state, idx] (args []vjsx.Value) vjsx.Value {
+			mut app_ref := &App(unsafe { nil })
+			state.mu.@lock()
+			if idx >= 0 && idx < state.hosts.len && state.hosts[idx].request_ctx.active {
+				app_ref = state.hosts[idx].request_ctx.app
+			}
+			state.mu.unlock()
+			if isnil(app_ref) {
+				return ctx.js_string('')
+			}
+			mut app := app_ref
+			path := if args.len > 0 { args[0].to_string().trim_space() } else { '' }
+			return ctx.js_string(inproc_vjsx_config_lookup(app.runtime_config_json, path))
+		})
+	}
+}
+
+fn inproc_vjsx_host_read_text_file_builder(mut state VjsxExecutorState, idx int) vjsx.HostValueBuilder {
+	return fn [mut state, idx] (ctx &vjsx.Context) vjsx.Value {
+		return ctx.js_function(fn [ctx, mut state, idx] (args []vjsx.Value) vjsx.Value {
+			_ = idx
+			if args.len == 0 {
+				return ctx.js_string('')
+			}
+			path := args[0].to_string().trim_space()
+			if path == '' {
+				return ctx.js_string('')
+			}
+			mut enable_fs := false
+			state.mu.@lock()
+			enable_fs = state.facade.config.enable_fs
+			state.mu.unlock()
+			if !enable_fs {
+				return ctx.js_string('')
+			}
+			content := os.read_file(path) or {
+				resolved := os.real_path(path)
+				if resolved != '' && resolved != path {
+					return ctx.js_string(os.read_file(resolved) or { '' })
+				}
+				return ctx.js_string('')
+			}
+			return ctx.js_string(content)
+		})
+	}
+}
+
+fn inproc_vjsx_host_find_codex_session_builder(mut state VjsxExecutorState, idx int) vjsx.HostValueBuilder {
+	return fn [mut state, idx] (ctx &vjsx.Context) vjsx.Value {
+		return ctx.js_function(fn [ctx, mut state, idx] (args []vjsx.Value) vjsx.Value {
+			_ = idx
+			if args.len == 0 {
+				return ctx.js_string('')
+			}
+			thread_id := args[0].to_string().trim_space()
+			if thread_id == '' {
+				return ctx.js_string('')
+			}
+			mut enable_fs := false
+			state.mu.@lock()
+			enable_fs = state.facade.config.enable_fs
+			state.mu.unlock()
+			if !enable_fs {
+				return ctx.js_string('')
+			}
+			return ctx.js_string(inproc_vjsx_find_codex_session_file(thread_id))
+		})
+	}
+}
+
+fn inproc_vjsx_host_http_fetch_builder(mut state VjsxExecutorState, idx int) vjsx.HostValueBuilder {
+	return fn [mut state, idx] (ctx &vjsx.Context) vjsx.Value {
+		return ctx.js_function(fn [ctx, mut state, idx] (args []vjsx.Value) vjsx.Value {
+			_ = idx
+			if args.len == 0 {
+				return ctx.js_string('')
+			}
+			raw := args[0].to_string().trim_space()
+			if raw == '' {
+				return ctx.js_string('')
+			}
+			mut enable_network := false
+			state.mu.@lock()
+			enable_network = state.facade.config.enable_network
+			state.mu.unlock()
+			if !enable_network {
+				return ctx.js_string(json.encode(InProcVjsxHostHttpFetchResponse{
+					ok:    false
+					error: 'network_disabled'
+				}))
+			}
+			parsed := json.decode(InProcVjsxHostHttpFetchRequest, raw) or {
+				return ctx.js_string(json.encode(InProcVjsxHostHttpFetchResponse{
+					ok:    false
+					error: 'invalid_fetch_request'
+				}))
+			}
+			url := parsed.url.trim_space()
+			if url == '' {
+				return ctx.js_string(json.encode(InProcVjsxHostHttpFetchResponse{
+					ok:    false
+					error: 'missing_url'
+				}))
+			}
+			method_raw := parsed.method.trim_space()
+			method := match method_raw.to_upper() {
+				'POST' { http.Method.post }
+				'PUT' { http.Method.put }
+				'PATCH' { http.Method.patch }
+				'DELETE' { http.Method.delete }
+				'HEAD' { http.Method.head }
+				'OPTIONS' { http.Method.options }
+				else { http.Method.get }
+			}
+			body := parsed.body
+			mut header := http.new_header()
+			for name, value in parsed.headers {
+				header.add_custom(name, value) or {}
+			}
+			resp := http.fetch(http.FetchConfig{
+				url:    url
+				method: method
+				data:   body
+				header: header
+			}) or {
+				return ctx.js_string(json.encode(InProcVjsxHostHttpFetchResponse{
+					ok:    false
+					error: err.msg()
+				}))
+			}
+			mut response_headers := map[string]string{}
+			for key in resp.header.keys() {
+				response_headers[key] = resp.header.get_custom(key) or { '' }
+			}
+			return ctx.js_string(json.encode(InProcVjsxHostHttpFetchResponse{
+				ok:      true
+				status:  resp.status_code
+				body:    resp.body
+				headers: response_headers
+			}))
+		})
+	}
+}
+
+fn inproc_vjsx_host_bridge_dispatch_builder(mut state VjsxExecutorState, idx int) vjsx.HostValueBuilder {
+	return fn [mut state, idx] (ctx &vjsx.Context) vjsx.Value {
+		return ctx.js_function(fn [ctx, mut state, idx] (args []vjsx.Value) vjsx.Value {
+			if args.len == 0 {
+				return ctx.js_string('')
+			}
+			raw := args[0].to_string().trim_space()
+			if raw == '' {
+				return ctx.js_string('')
+			}
+			req := json.decode(InProcVjsxHostBridgeDispatchRequest, raw) or {
+				return ctx.js_string(json.encode(FeishuCardBridgeResult{
+					error: 'invalid_bridge_dispatch_request'
+				}))
+			}
+			mut app_ref := &App(unsafe { nil })
+			mut request_trace_id := ''
+			state.mu.@lock()
+			if idx >= 0 && idx < state.hosts.len && state.hosts[idx].request_ctx.active {
+				app_ref = state.hosts[idx].request_ctx.app
+				request_trace_id = state.hosts[idx].request_ctx.trace_id
+			}
+			state.mu.unlock()
+			if isnil(app_ref) {
+				return ctx.js_string(json.encode(FeishuCardBridgeResult{
+					error: 'bridge_dispatch_app_missing'
+				}))
+			}
+			mut app := app_ref
+			summary := feishu_runtime_event_summary(req.payload)
+			trace_id := if req.trace_id.trim_space() != '' { req.trace_id } else { request_trace_id }
+			result := app.feishu_card_bridge_dispatch_callback(req.app, trace_id, FeishuRuntimeEventSummary{
+				event_id:        summary.event_id
+				event_kind:      if summary.event_kind != '' { summary.event_kind } else { 'action' }
+				event_type:      if req.event_type.trim_space() != '' { req.event_type } else { summary.event_type }
+				message_id:      if req.message_id.trim_space() != '' { req.message_id } else { summary.message_id }
+				target:          if req.target.trim_space() != '' { req.target } else { summary.target }
+				target_type:     if req.target_type.trim_space() != '' { req.target_type } else { summary.target_type }
+				open_message_id: summary.open_message_id
+				action_tag:      summary.action_tag
+			}, req.payload) or {
+				return ctx.js_string(json.encode(FeishuCardBridgeResult{
+					error: err.msg()
+				}))
+			}
+			return ctx.js_string(json.encode(result))
+		})
+	}
+}
+
+fn inproc_vjsx_host_api_builder(mut state VjsxExecutorState, idx int) vjsx.HostValueBuilder {
+	return vjsx.host_object(vjsx.HostObjectField{
+		name:  'emit'
+		value: inproc_vjsx_host_emit_builder(mut state, idx)
+	}, vjsx.HostObjectField{
+		name:  'snapshot'
+		value: inproc_vjsx_host_snapshot_builder(mut state, idx)
+	}, vjsx.HostObjectField{
+		name:  'config'
+		value: inproc_vjsx_host_config_builder(mut state, idx)
+	}, vjsx.HostObjectField{
+		name:  'readTextFile'
+		value: inproc_vjsx_host_read_text_file_builder(mut state, idx)
+	}, vjsx.HostObjectField{
+		name:  'findCodexSessionPath'
+		value: inproc_vjsx_host_find_codex_session_builder(mut state, idx)
+	}, vjsx.HostObjectField{
+		name:  'httpFetch'
+		value: inproc_vjsx_host_http_fetch_builder(mut state, idx)
+	}, vjsx.HostObjectField{
+		name:  'bridgeDispatch'
+		value: inproc_vjsx_host_bridge_dispatch_builder(mut state, idx)
 	})
-	mut host_find_codex_session := ctx.js_function(fn [ctx, mut state, idx] (args []vjsx.Value) vjsx.Value {
-		_ = idx
-		if args.len == 0 {
-			return ctx.js_string('')
-		}
-		thread_id := args[0].to_string().trim_space()
-		if thread_id == '' {
-			return ctx.js_string('')
-		}
-		mut enable_fs := false
-		state.mu.@lock()
-		enable_fs = state.facade.config.enable_fs
-		state.mu.unlock()
-		if !enable_fs {
-			return ctx.js_string('')
-		}
-		return ctx.js_string(inproc_vjsx_find_codex_session_file(thread_id))
+}
+
+fn install_inproc_host_api(mut ctx vjsx.Context, mut state VjsxExecutorState, idx int) {
+	ctx.install_host_api(vjsx.HostApiConfig{
+		globals: [
+			vjsx.HostGlobalBinding{
+				name:  'vhttpdHost'
+				value: inproc_vjsx_host_api_builder(mut state, idx)
+			},
+		]
 	})
-	global.set('__vhttpd_host_emit', host_emit)
-	global.set('__vhttpd_host_snapshot', host_snapshot)
-	global.set('__vhttpd_host_read_file', host_read_file)
-	global.set('__vhttpd_host_find_codex_session', host_find_codex_session)
-	host_emit.free()
-	host_snapshot.free()
-	host_read_file.free()
-	host_find_codex_session.free()
-	global.free()
 }
 
 fn inproc_vjsx_destroy_lane_host(mut host VjsxLaneHost) {
+	if host.is_module_entry && !isnil(host.module_binding) && !host.module_binding.is_closed() {
+		host.module_binding.close()
+		host.module_binding = unsafe { nil }
+	}
 	if host.initialized && !isnil(host.session) && !host.session.is_closed() {
 		host.session.close()
 		host.session = unsafe { nil }
+	}
+	if host.temp_root.trim_space() != '' {
+		os.rmdir_all(host.temp_root) or {}
 	}
 	host.initialized = false
 	host.startup_completed = false
 	host.dirty = false
 	host.source_signature = ''
+	host.is_module_entry = false
+	host.temp_root = ''
 	host.request_ctx = InProcVjsxRequestContext{}
+}
+
+fn inproc_vjsx_module_aliases(kind string) []string {
+	return match kind {
+		'http' {
+			['handle', 'http', 'handleHttp', 'handle_http']
+		}
+		'websocket_upstream' {
+			['websocket_upstream', 'websocketUpstream', 'handleWebSocketUpstream',
+				'handle_websocket_upstream']
+		}
+		'startup' {
+			['startup', 'lane_startup', 'laneStartup']
+		}
+		'app_startup' {
+			['app_startup', 'appStartup']
+		}
+		else {
+			[]string{}
+		}
+	}
+}
+
+fn inproc_vjsx_module_has_default_function(kind string) bool {
+	return kind == 'http'
+}
+
+fn inproc_vjsx_global_handler_name(kind string) string {
+	return match kind {
+		'http' { '__vhttpd_handle' }
+		'websocket_upstream' { '__vhttpd_websocket_upstream_handle' }
+		'startup' { '__vhttpd_startup_handle' }
+		'app_startup' { '__vhttpd_app_startup_handle' }
+		else { '' }
+	}
+}
+
+fn inproc_vjsx_global_has_callable(ctx vjsx.Context, kind string) bool {
+	global_name := inproc_vjsx_global_handler_name(kind)
+	if global_name == '' {
+		return false
+	}
+	handler := ctx.js_global(global_name)
+	defer {
+		handler.free()
+	}
+	return !handler.is_undefined() && handler.is_function()
+}
+
+fn inproc_vjsx_call_global_entry(ctx vjsx.Context, kind string, arg vjsx.Value) !vjsx.Value {
+	global_name := inproc_vjsx_global_handler_name(kind)
+	if global_name == '' {
+		return error('inproc_vjsx_executor_missing_${kind}_handler')
+	}
+	handler := ctx.js_global(global_name)
+	defer {
+		handler.free()
+	}
+	if handler.is_undefined() || !handler.is_function() {
+		return error('inproc_vjsx_executor_missing_${kind}_handler')
+	}
+	return ctx.call(handler, arg)
+}
+
+fn inproc_vjsx_module_has_callable(module_binding &vjsx.ScriptModule, kind string) bool {
+	aliases := inproc_vjsx_module_aliases(kind)
+	if module_binding.has_export('default') {
+		default_export := module_binding.default_export() or { return false }
+		defer {
+			default_export.free()
+		}
+		if inproc_vjsx_module_has_default_function(kind) && default_export.is_function() {
+			return true
+		}
+		if default_export.is_object() {
+			for alias in aliases {
+				if !default_export.has(alias) {
+					continue
+				}
+				method := default_export.get(alias)
+				is_callable := method.is_function()
+				method.free()
+				if is_callable {
+					return true
+				}
+			}
+		}
+	}
+	for alias in aliases {
+		if !module_binding.has_export(alias) {
+			continue
+		}
+		export_value := module_binding.get_export(alias) or { continue }
+		is_callable := export_value.is_function()
+		export_value.free()
+		if is_callable {
+			return true
+		}
+	}
+	return false
+}
+
+fn inproc_vjsx_call_module_entry(module_binding &vjsx.ScriptModule, kind string, arg vjsx.Value) !vjsx.Value {
+	aliases := inproc_vjsx_module_aliases(kind)
+	if module_binding.has_export('default') {
+		default_export := module_binding.default_export() or {
+			return error('inproc_vjsx_executor_missing_${kind}_handler')
+		}
+		if inproc_vjsx_module_has_default_function(kind) && default_export.is_function() {
+			default_export.free()
+			return module_binding.call_export('default', arg)
+		}
+		if default_export.is_object() {
+			for alias in aliases {
+				if !default_export.has(alias) {
+					continue
+				}
+				method := default_export.get(alias)
+				is_callable := method.is_function()
+				method.free()
+				if is_callable {
+					default_export.free()
+					return module_binding.call_default_method(alias, arg)
+				}
+			}
+		}
+		default_export.free()
+	}
+	for alias in aliases {
+		if !module_binding.has_export(alias) {
+			continue
+		}
+		export_value := module_binding.get_export(alias) or { continue }
+		is_callable := export_value.is_function()
+		export_value.free()
+		if is_callable {
+			return module_binding.call_export(alias, arg)
+		}
+	}
+	return error('inproc_vjsx_executor_missing_${kind}_handler')
 }
 
 fn (e InProcVjsxExecutor) reset_lane_host(idx int) {
@@ -1511,6 +2141,14 @@ pub fn (e InProcVjsxExecutor) close() {
 	state.app_startup_last_error = ''
 	state.facade.bootstrapped = false
 	state.facade.last_error = ''
+	state.signature_refresh_stop = true
+	state.signature_refresh_started = false
+	state.cached_source_probe = ''
+	state.cached_source_signature = ''
+	state.signature_last_checked_at = 0
+	state.signature_last_probe_at = 0
+	state.signature_pending_since = 0
+	state.signature_last_error = ''
 	state.mu.unlock()
 	for mut host in stale_hosts {
 		inproc_vjsx_destroy_lane_host(mut host)
@@ -1520,13 +2158,13 @@ pub fn (e InProcVjsxExecutor) close() {
 fn inproc_vjsx_new_runtime_session_ptr(config VjsxRuntimeFacadeConfig) !&vjsx.RuntimeSession {
 	session_value := match config.runtime_profile {
 		'', 'script' {
-			vjsx.new_script_runtime_session(vjsx.ContextConfig{}, vjsx.ScriptRuntimeConfig{
+			runtimejs.new_script_runtime_session(vjsx.ContextConfig{}, vjsx.ScriptRuntimeConfig{
 				fs_roots:     vjsx_fs_roots(config)
 				process_args: [config.app_entry]
 			})
 		}
 		'node' {
-			vjsx.new_node_runtime_session(vjsx.ContextConfig{}, vjsx.NodeRuntimeConfig{
+			runtimejs.new_node_runtime_session(vjsx.ContextConfig{}, vjsx.NodeRuntimeConfig{
 				fs_roots:     vjsx_fs_roots(config)
 				process_args: [config.app_entry]
 			})
@@ -1546,7 +2184,7 @@ fn (e InProcVjsxExecutor) ensure_lane_host(idx int) ! {
 	}
 	mut state := e.state
 	config := e.facade_snapshot().config
-	source_signature := vjsx_source_signature_for_config(config)
+	source_signature := e.current_source_signature()
 	mut needs_reset := false
 	state.mu.@lock()
 	if idx < 0 || idx >= state.hosts.len || idx >= state.lanes.len {
@@ -1566,44 +2204,83 @@ fn (e InProcVjsxExecutor) ensure_lane_host(idx int) ! {
 	}
 
 	as_module := vjsx_entry_runs_as_module(config.app_entry)!
+	temp_root := vjsx_lane_temp_root_for_signature(config, idx, source_signature)
 	mut session := inproc_vjsx_new_runtime_session_ptr(config)!
 	mut ctx := session.context()
 	install_inproc_http_facade(mut ctx)!
-	install_inproc_runtime_host_bridge(mut ctx, mut state, idx)
-	mut entry_exports := load_inproc_vjsx_entry(mut ctx, config, idx, source_signature,
-		as_module) or {
-		session.close()
-		return error('inproc_vjsx_executor_bootstrap_failed:${err.msg()}')
-	}
-	defer {
-		entry_exports.free()
-	}
-	bind_handler := ctx.js_global('__vhttpd_bind_handler')
-	defer {
-		bind_handler.free()
-	}
-	bind_handlers := ctx.js_global('__vhttpd_bind_handlers')
-	defer {
-		bind_handlers.free()
-	}
-	if !bind_handlers.is_undefined() && bind_handlers.is_function() {
-		mut bound := ctx.call(bind_handlers, entry_exports) or {
+	install_inproc_host_api(mut ctx, mut state, idx)
+	mut module_binding_ptr := &vjsx.ScriptModule(unsafe { nil })
+	mut has_http_handler := false
+	mut has_upstream_handler := false
+	if as_module {
+		if vjsx.is_typescript_file(config.app_entry)
+			|| vjsx.is_runtime_module_file(config.app_entry) {
+			runtimejs.install_typescript_runtime(ctx)!
+		}
+		module_entry_path := runtimejs.build_runtime_module_entry(ctx, config.app_entry,
+			true, temp_root) or {
 			session.close()
-			return error('inproc_vjsx_executor_export_bind_failed:${err.msg()}')
+			os.rmdir_all(temp_root) or {}
+			return error('inproc_vjsx_executor_bootstrap_failed:${err.msg()}')
+		}
+		module_binding_value := session.import_module(module_entry_path) or {
+			session.close()
+			os.rmdir_all(temp_root) or {}
+			return error('inproc_vjsx_executor_module_import_failed:${err.msg()}')
+		}
+		has_http_handler = inproc_vjsx_module_has_callable(&module_binding_value, 'http')
+			|| inproc_vjsx_global_has_callable(ctx, 'http')
+		has_upstream_handler =
+			inproc_vjsx_module_has_callable(&module_binding_value, 'websocket_upstream')
+			|| inproc_vjsx_global_has_callable(ctx, 'websocket_upstream')
+		if !has_http_handler && !has_upstream_handler {
+			mut cleanup_binding := module_binding_value
+			cleanup_binding.close()
+			session.close()
+			os.rmdir_all(temp_root) or {}
+			return error('inproc_vjsx_executor_missing_handler')
+		}
+		mut module_binding := module_binding_value
+		module_binding_ptr = &module_binding
+	} else {
+		mut entry_exports := load_inproc_vjsx_entry(mut ctx, config, idx, source_signature,
+			false) or {
+			session.close()
+			os.rmdir_all(temp_root) or {}
+			return error('inproc_vjsx_executor_bootstrap_failed:${err.msg()}')
 		}
 		defer {
-			bound.free()
+			entry_exports.free()
 		}
-	}
-	http_handler := ctx.js_global('__vhttpd_handle')
-	upstream_handler := ctx.js_global('__vhttpd_websocket_upstream_handle')
-	has_http_handler := !http_handler.is_undefined() && http_handler.is_function()
-	has_upstream_handler := !upstream_handler.is_undefined() && upstream_handler.is_function()
-	http_handler.free()
-	upstream_handler.free()
-	if !has_http_handler && !has_upstream_handler {
-		session.close()
-		return error('inproc_vjsx_executor_missing_handler')
+		bind_handler := ctx.js_global('__vhttpd_bind_handler')
+		defer {
+			bind_handler.free()
+		}
+		bind_handlers := ctx.js_global('__vhttpd_bind_handlers')
+		defer {
+			bind_handlers.free()
+		}
+		if !bind_handlers.is_undefined() && bind_handlers.is_function() {
+			mut bound := ctx.call(bind_handlers, entry_exports) or {
+				session.close()
+				os.rmdir_all(temp_root) or {}
+				return error('inproc_vjsx_executor_export_bind_failed:${err.msg()}')
+			}
+			defer {
+				bound.free()
+			}
+		}
+		http_handler := ctx.js_global('__vhttpd_handle')
+		upstream_handler := ctx.js_global('__vhttpd_websocket_upstream_handle')
+		has_http_handler = !http_handler.is_undefined() && http_handler.is_function()
+		has_upstream_handler = !upstream_handler.is_undefined() && upstream_handler.is_function()
+		http_handler.free()
+		upstream_handler.free()
+		if !has_http_handler && !has_upstream_handler {
+			session.close()
+			os.rmdir_all(temp_root) or {}
+			return error('inproc_vjsx_executor_missing_handler')
+		}
 	}
 
 	state.mu.@lock()
@@ -1615,7 +2292,10 @@ fn (e InProcVjsxExecutor) ensure_lane_host(idx int) ! {
 		startup_completed: false
 		dirty:             false
 		source_signature:  source_signature
+		is_module_entry:   as_module
+		temp_root:         temp_root
 		session:           session
+		module_binding:    module_binding_ptr
 	}
 	state.lanes[idx].healthy = true
 	state.lanes[idx].dirty = false
@@ -1682,6 +2362,7 @@ fn (e InProcVjsxExecutor) build_runtime_payload(lane VjsxExecutionLane, req Http
 		trace_id:                 req.trace_id
 		app_entry:                config.app_entry
 		module_root:              config.module_root
+		build_root:               config.build_root
 		runtime_profile:          config.runtime_profile
 		thread_count:             config.thread_count
 		enable_fs:                config.enable_fs
@@ -1710,6 +2391,7 @@ fn (e InProcVjsxExecutor) build_websocket_upstream_runtime_payload(lane VjsxExec
 		trace_id:                 req.trace_id
 		app_entry:                config.app_entry
 		module_root:              config.module_root
+		build_root:               config.build_root
 		runtime_profile:          config.runtime_profile
 		thread_count:             config.thread_count
 		enable_fs:                config.enable_fs
@@ -1801,6 +2483,7 @@ fn inproc_vjsx_not_ready_error(op string) IError {
 struct InProcVjsxWebSocketUpstreamResult {
 	handled  bool
 	commands []WorkerWebSocketUpstreamCommand
+	response WorkerResponse
 }
 
 struct InProcVjsxStartupResult {
@@ -1816,6 +2499,9 @@ fn websocket_upstream_response_from_js_value(val vjsx.Value, req WorkerWebSocket
 			id:       req.id
 			handled:  false
 			commands: []WorkerWebSocketUpstreamCommand{}
+			status:   200
+			headers:  map[string]string{}
+			body:     ''
 		}
 	}
 	normalized := json.decode(InProcVjsxWebSocketUpstreamResult, raw) or {
@@ -1827,6 +2513,9 @@ fn websocket_upstream_response_from_js_value(val vjsx.Value, req WorkerWebSocket
 		id:       req.id
 		handled:  normalized.handled
 		commands: normalized.commands
+		status:   if normalized.response.status > 0 { normalized.response.status } else { 200 }
+		headers:  normalized.response.headers.clone()
+		body:     normalized.response.body
 	}
 }
 
@@ -1864,6 +2553,7 @@ fn (e InProcVjsxExecutor) build_startup_runtime_payload(lane VjsxExecutionLane, 
 		trace_id:                 request_id
 		app_entry:                config.app_entry
 		module_root:              config.module_root
+		build_root:               config.build_root
 		runtime_profile:          config.runtime_profile
 		thread_count:             config.thread_count
 		enable_fs:                config.enable_fs
@@ -1881,7 +2571,7 @@ fn (e InProcVjsxExecutor) build_startup_runtime_payload(lane VjsxExecutionLane, 
 	})
 }
 
-fn (e InProcVjsxExecutor) execute_startup_hook(mut app App, idx int, lane VjsxExecutionLane, hook_global_name string, kind string) ! {
+fn (e InProcVjsxExecutor) execute_startup_hook(mut app App, idx int, lane VjsxExecutionLane, kind string) ! {
 	if isnil(e.state) {
 		return error('inproc_vjsx_executor_state_missing')
 	}
@@ -1900,13 +2590,6 @@ fn (e InProcVjsxExecutor) execute_startup_hook(mut app App, idx int, lane VjsxEx
 	mut host := state.hosts[idx]
 	state.mu.unlock()
 	js_ctx_host := host.session.context()
-	hook := js_ctx_host.js_global(hook_global_name)
-	defer {
-		hook.free()
-	}
-	if hook.is_undefined() || !hook.is_function() {
-		return
-	}
 	runtime_obj := js_ctx_host.json_parse(e.build_startup_runtime_payload(lane, kind))
 	defer {
 		runtime_obj.free()
@@ -1921,8 +2604,34 @@ fn (e InProcVjsxExecutor) execute_startup_hook(mut app App, idx int, lane VjsxEx
 	defer {
 		js_runtime.free()
 	}
-	mut result := js_ctx_host.call(hook, js_runtime) or {
-		return error('inproc_vjsx_executor_${kind}_failed:${err.msg()}')
+	mut result := if host.is_module_entry && !isnil(host.module_binding) {
+		inproc_vjsx_call_module_entry(host.module_binding, kind, js_runtime) or {
+			if err.msg() != 'inproc_vjsx_executor_missing_${kind}_handler' {
+				return error('inproc_vjsx_executor_${kind}_failed:${err.msg()}')
+			}
+			inproc_vjsx_call_global_entry(js_ctx_host, kind, js_runtime) or {
+				if err.msg() == 'inproc_vjsx_executor_missing_${kind}_handler' {
+					return
+				}
+				return error('inproc_vjsx_executor_${kind}_failed:${err.msg()}')
+			}
+		}
+	} else {
+		hook_global_name := if kind == 'app_startup' {
+			'__vhttpd_app_startup_handle'
+		} else {
+			'__vhttpd_startup_handle'
+		}
+		hook := js_ctx_host.js_global(hook_global_name)
+		defer {
+			hook.free()
+		}
+		if hook.is_undefined() || !hook.is_function() {
+			return
+		}
+		js_ctx_host.call(hook, js_runtime) or {
+			return error('inproc_vjsx_executor_${kind}_failed:${err.msg()}')
+		}
 	}
 	defer {
 		result.free()
@@ -1997,7 +2706,7 @@ fn (e InProcVjsxExecutor) run_lane_startup(mut app App, idx int, lane VjsxExecut
 	if !should_run {
 		return
 	}
-	e.execute_startup_hook(mut app, idx, lane, '__vhttpd_startup_handle', 'startup')!
+	e.execute_startup_hook(mut app, idx, lane, 'startup')!
 	state.mu.@lock()
 	if idx >= 0 && idx < state.hosts.len {
 		state.hosts[idx].startup_completed = true
@@ -2042,7 +2751,7 @@ fn (e InProcVjsxExecutor) run_app_startup(mut app App, idx int, lane VjsxExecuti
 		state.app_startup_running = true
 		state.app_startup_last_error = ''
 		state.mu.unlock()
-		e.execute_startup_hook(mut app, idx, lane, '__vhttpd_app_startup_handle', 'app_startup') or {
+		e.execute_startup_hook(mut app, idx, lane, 'app_startup') or {
 			state.mu.@lock()
 			state.app_startup_running = false
 			state.app_startup_completed = false
@@ -2122,17 +2831,30 @@ fn (e InProcVjsxExecutor) dispatch_http_once(mut app App, req HttpLogicDispatchR
 	defer {
 		js_ctx.free()
 	}
-	handler := ctx.js_global('__vhttpd_handle')
-	defer {
-		handler.free()
-	}
-	if handler.is_undefined() || !handler.is_function() {
-		e.record_lane_error(lane.id, 'inproc_vjsx_executor_missing_handler')
-		return error('inproc_vjsx_executor_missing_handler')
-	}
-	mut result := ctx.call(handler, js_ctx) or {
-		e.record_lane_error(lane.id, err.msg())
-		return error('inproc_vjsx_executor_handler_failed:${err.msg()}')
+	mut result := if host.is_module_entry && !isnil(host.module_binding) {
+		inproc_vjsx_call_module_entry(host.module_binding, 'http', js_ctx) or {
+			if err.msg() != 'inproc_vjsx_executor_missing_http_handler' {
+				e.record_lane_error(lane.id, err.msg())
+				return error('inproc_vjsx_executor_handler_failed:${err.msg()}')
+			}
+			inproc_vjsx_call_global_entry(ctx, 'http', js_ctx) or {
+				e.record_lane_error(lane.id, err.msg())
+				return error('inproc_vjsx_executor_handler_failed:${err.msg()}')
+			}
+		}
+	} else {
+		handler := ctx.js_global('__vhttpd_handle')
+		defer {
+			handler.free()
+		}
+		if handler.is_undefined() || !handler.is_function() {
+			e.record_lane_error(lane.id, 'inproc_vjsx_executor_missing_handler')
+			return error('inproc_vjsx_executor_missing_handler')
+		}
+		ctx.call(handler, js_ctx) or {
+			e.record_lane_error(lane.id, err.msg())
+			return error('inproc_vjsx_executor_handler_failed:${err.msg()}')
+		}
 	}
 	defer {
 		result.free()
@@ -2244,8 +2966,7 @@ fn (e InProcVjsxExecutor) dispatch_websocket_upstream_once(mut app App, req Work
 	defer {
 		frame_obj.free()
 	}
-	runtime_obj := ctx.json_parse(e.build_websocket_upstream_runtime_payload(lane,
-		req))
+	runtime_obj := ctx.json_parse(e.build_websocket_upstream_runtime_payload(lane, req))
 	defer {
 		runtime_obj.free()
 	}
@@ -2271,23 +2992,46 @@ fn (e InProcVjsxExecutor) dispatch_websocket_upstream_once(mut app App, req Work
 	defer {
 		js_frame.free()
 	}
-	handler := ctx.js_global('__vhttpd_websocket_upstream_handle')
-	defer {
-		handler.free()
-	}
-	if handler.is_undefined() || !handler.is_function() {
-		e.record_lane_success(lane.id)
-		return WorkerWebSocketUpstreamDispatchResponse{
-			mode:     'websocket_upstream'
-			event:    'result'
-			id:       req.id
-			handled:  false
-			commands: []WorkerWebSocketUpstreamCommand{}
+	mut result := if host.is_module_entry && !isnil(host.module_binding) {
+		inproc_vjsx_call_module_entry(host.module_binding, 'websocket_upstream', js_frame) or {
+			if err.msg() != 'inproc_vjsx_executor_missing_websocket_upstream_handler' {
+				e.record_lane_error(lane.id, err.msg())
+				return error('inproc_vjsx_executor_websocket_upstream_handler_failed:${err.msg()}')
+			}
+			inproc_vjsx_call_global_entry(ctx, 'websocket_upstream', js_frame) or {
+				if err.msg() == 'inproc_vjsx_executor_missing_websocket_upstream_handler' {
+					e.record_lane_success(lane.id)
+					return WorkerWebSocketUpstreamDispatchResponse{
+						mode:     'websocket_upstream'
+						event:    'result'
+						id:       req.id
+						handled:  false
+						commands: []WorkerWebSocketUpstreamCommand{}
+					}
+				}
+				e.record_lane_error(lane.id, err.msg())
+				return error('inproc_vjsx_executor_websocket_upstream_handler_failed:${err.msg()}')
+			}
 		}
-	}
-	mut result := ctx.call(handler, js_frame) or {
-		e.record_lane_error(lane.id, err.msg())
-		return error('inproc_vjsx_executor_websocket_upstream_handler_failed:${err.msg()}')
+	} else {
+		handler := ctx.js_global('__vhttpd_websocket_upstream_handle')
+		defer {
+			handler.free()
+		}
+		if handler.is_undefined() || !handler.is_function() {
+			e.record_lane_success(lane.id)
+			return WorkerWebSocketUpstreamDispatchResponse{
+				mode:     'websocket_upstream'
+				event:    'result'
+				id:       req.id
+				handled:  false
+				commands: []WorkerWebSocketUpstreamCommand{}
+			}
+		}
+		ctx.call(handler, js_frame) or {
+			e.record_lane_error(lane.id, err.msg())
+			return error('inproc_vjsx_executor_websocket_upstream_handler_failed:${err.msg()}')
+		}
 	}
 	defer {
 		result.free()

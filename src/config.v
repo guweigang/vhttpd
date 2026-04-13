@@ -58,6 +58,7 @@ struct VjsxConfig {
 mut:
 	app_entry         string   @[toml: 'app_entry']
 	module_root       string   @[toml: 'module_root']
+	build_root        string   @[toml: 'build_root']
 	signature_root    string   @[toml: 'signature_root']
 	signature_include []string @[toml: 'signature_include']
 	signature_exclude []string @[toml: 'signature_exclude']
@@ -106,6 +107,7 @@ mut:
 	token_refresh_skew_seconds int    = 60    @[toml: 'token_refresh_skew_seconds']
 	recent_event_limit         int    = 20    @[toml: 'recent_event_limit']
 	apps                       map[string]FeishuAppConfig
+	bridge                     BridgeConfig
 }
 
 struct FeishuAppConfig {
@@ -129,21 +131,90 @@ mut:
 	flush_interval_ms  int    = 400    @[toml: 'flush_interval_ms']
 }
 
+struct BridgeConfig {
+mut:
+	enabled   bool
+	ws_url    string @[toml: 'ws_url']
+	client_id string @[toml: 'client_id']
+	token     string
+	target_id string @[toml: 'target_id']
+}
+
+struct DbMysqlConfig {
+mut:
+	host      string = '127.0.0.1'
+	port      int    = 3306
+	username  string
+	password  string
+	database  string = 'mysql'
+	pool_size int    = 5 @[toml: 'pool_size']
+}
+
+struct DbPgsqlConfig {
+mut:
+	host      string = '127.0.0.1'
+	port      int    = 5432
+	username  string
+	password  string
+	database  string = 'postgres'
+	pool_size int    = 5 @[toml: 'pool_size']
+}
+
+struct DbConfig {
+mut:
+	enabled bool
+	socket  string = 'tmp/vhttpd-db.sock'
+	driver  string = 'mysql'
+	mysql   DbMysqlConfig
+	pgsql   DbPgsqlConfig
+}
+
+struct ListenerConfig {
+mut:
+	host string = '127.0.0.1'
+	port int
+	site string
+}
+
+struct SiteConfig {
+mut:
+	project_root string @[toml: 'project_root']
+	host         string = '127.0.0.1'
+	port         int
+	app          string
+	worker_entry string
+	paths        PathsConfig
+	worker       WorkerConfig
+	executor     ExecutorConfig
+	php          PhpConfig
+	vjsx         VjsxConfig
+	assets       AssetsConfig
+	runtime      RuntimeConfig
+	mcp          McpConfig
+	feishu       FeishuConfig
+	codex        CodexConfig
+	db           DbConfig
+}
+
 struct VhttpdConfig {
 mut:
-	server   ServerConfig
-	files    FilesConfig
-	paths    PathsConfig
-	worker   WorkerConfig
-	executor ExecutorConfig
-	php      PhpConfig
-	vjsx     VjsxConfig
-	admin    AdminConfig
-	assets   AssetsConfig
-	runtime  RuntimeConfig
-	mcp      McpConfig
-	feishu   FeishuConfig
-	codex    CodexConfig
+	server      ServerConfig
+	files       FilesConfig
+	paths       PathsConfig
+	worker      WorkerConfig
+	executor    ExecutorConfig
+	php         PhpConfig
+	vjsx        VjsxConfig
+	admin       AdminConfig
+	assets      AssetsConfig
+	runtime     RuntimeConfig
+	mcp         McpConfig
+	feishu      FeishuConfig
+	codex       CodexConfig
+	db          DbConfig
+	listeners   map[string]ListenerConfig
+	sites       map[string]SiteConfig
+	config_path string
 }
 
 fn default_vhttpd_config() VhttpdConfig {
@@ -245,7 +316,17 @@ fn load_vhttpd_config(args []string) !VhttpdConfig {
 	doc := toml.parse_text(text)!
 	decode_paths_config(doc, mut cfg)!
 	decode_feishu_config(doc, mut cfg)!
+	if root_any := doc.value_opt('bridge') {
+		root := root_any.as_map()
+		if cfg.feishu.bridge.ws_url.trim_space() == '' && cfg.feishu.bridge.client_id.trim_space() == ''
+			&& cfg.feishu.bridge.token.trim_space() == '' && cfg.feishu.bridge.target_id.trim_space() == ''
+			&& !cfg.feishu.bridge.enabled {
+			cfg.feishu.bridge = decode_bridge_config_map(root)
+		}
+	}
+	decode_multi_listener_config(doc, mut cfg)!
 	resolve_config_variables(mut cfg, config_path)!
+	cfg.config_path = if config_path.trim_space() != '' { os.abs_path(config_path) } else { '' }
 	return cfg
 }
 
@@ -313,6 +394,441 @@ fn decode_feishu_config(doc toml.Doc, mut cfg VhttpdConfig) ! {
 	cfg.feishu.apps = apps.clone()
 }
 
+fn toml_string_from_map(entry map[string]toml.Any, key string, default_val string) string {
+	return (entry[key] or { toml.Any(default_val) }).string()
+}
+
+fn toml_int_from_map(entry map[string]toml.Any, key string, default_val int) int {
+	raw_any := entry[key] or { return default_val }
+	raw := raw_any.string().trim_space()
+	if raw == '' || raw == 'toml.Any()' {
+		return default_val
+	}
+	return raw_any.int()
+}
+
+fn toml_bool_from_map(entry map[string]toml.Any, key string, default_val bool) bool {
+	raw_any := entry[key] or { return default_val }
+	raw := raw_any.string().trim_space()
+	if raw == '' || raw == 'toml.Any()' {
+		return default_val
+	}
+	return raw_any.bool()
+}
+
+fn toml_string_list_from_map(entry map[string]toml.Any, key string) []string {
+	mut values := []string{}
+	raw_any := entry[key] or { return values }
+	if raw_any is []toml.Any {
+		for item in raw_any {
+			value := item.string().trim_space()
+			if value != '' {
+				values << value
+			}
+		}
+	}
+	return values
+}
+
+fn toml_string_map_from_map(entry map[string]toml.Any, key string) map[string]string {
+	mut values := map[string]string{}
+	raw_any := entry[key] or { return values }
+	if raw_any is map[string]toml.Any {
+		for name, value in raw_any {
+			values[name] = value.string()
+		}
+	}
+	return values
+}
+
+fn decode_paths_config_map(entry map[string]toml.Any) PathsConfig {
+	mut cfg := PathsConfig{}
+	if 'root' in entry {
+		cfg.root = toml_string_from_map(entry, 'root', cfg.root)
+	}
+	mut values := map[string]string{}
+	for name, value in entry {
+		if name == 'root' {
+			continue
+		}
+		values[name] = value.string()
+	}
+	cfg.values = values.clone()
+	return cfg
+}
+
+fn decode_worker_config_map(entry map[string]toml.Any) WorkerConfig {
+	mut cfg := WorkerConfig{}
+	if 'read_timeout_ms' in entry {
+		cfg.read_timeout_ms = toml_int_from_map(entry, 'read_timeout_ms', cfg.read_timeout_ms)
+	}
+	if 'autostart' in entry {
+		cfg.autostart = toml_bool_from_map(entry, 'autostart', cfg.autostart)
+	}
+	if 'cmd' in entry {
+		cfg.cmd = toml_string_from_map(entry, 'cmd', cfg.cmd)
+	}
+	if 'stream_dispatch' in entry {
+		cfg.stream_dispatch = toml_bool_from_map(entry, 'stream_dispatch', cfg.stream_dispatch)
+	}
+	if 'queue_capacity' in entry {
+		cfg.queue_capacity = toml_int_from_map(entry, 'queue_capacity', cfg.queue_capacity)
+	}
+	if 'queue_timeout_ms' in entry {
+		cfg.queue_timeout_ms = toml_int_from_map(entry, 'queue_timeout_ms', cfg.queue_timeout_ms)
+	}
+	if 'restart_backoff_ms' in entry {
+		cfg.restart_backoff_ms = toml_int_from_map(entry, 'restart_backoff_ms', cfg.restart_backoff_ms)
+	}
+	if 'restart_backoff_max_ms' in entry {
+		cfg.restart_backoff_max_ms = toml_int_from_map(entry, 'restart_backoff_max_ms',
+			cfg.restart_backoff_max_ms)
+	}
+	if 'max_requests' in entry {
+		cfg.max_requests = toml_int_from_map(entry, 'max_requests', cfg.max_requests)
+	}
+	if 'socket' in entry {
+		cfg.socket = toml_string_from_map(entry, 'socket', cfg.socket)
+	}
+	if 'pool_size' in entry {
+		cfg.pool_size = toml_int_from_map(entry, 'pool_size', cfg.pool_size)
+	}
+	if 'websocket_dispatch' in entry {
+		cfg.websocket_dispatch = toml_bool_from_map(entry, 'websocket_dispatch', cfg.websocket_dispatch)
+	}
+	if 'socket_prefix' in entry {
+		cfg.socket_prefix = toml_string_from_map(entry, 'socket_prefix', cfg.socket_prefix)
+	}
+	cfg.sockets = toml_string_list_from_map(entry, 'sockets')
+	cfg.env = toml_string_map_from_map(entry, 'env')
+	return cfg
+}
+
+fn decode_executor_config_map(entry map[string]toml.Any) ExecutorConfig {
+	mut cfg := ExecutorConfig{}
+	if 'kind' in entry {
+		cfg.kind = toml_string_from_map(entry, 'kind', cfg.kind)
+	}
+	return cfg
+}
+
+fn decode_php_config_map(entry map[string]toml.Any) PhpConfig {
+	mut cfg := PhpConfig{}
+	if 'bin' in entry {
+		cfg.bin = toml_string_from_map(entry, 'bin', cfg.bin)
+	}
+	if 'worker_entry' in entry {
+		cfg.worker_entry = toml_string_from_map(entry, 'worker_entry', cfg.worker_entry)
+	}
+	if 'app_entry' in entry {
+		cfg.app_entry = toml_string_from_map(entry, 'app_entry', cfg.app_entry)
+	}
+	cfg.extensions = toml_string_list_from_map(entry, 'extensions')
+	cfg.args = toml_string_list_from_map(entry, 'args')
+	return cfg
+}
+
+fn decode_vjsx_config_map(entry map[string]toml.Any) VjsxConfig {
+	mut cfg := VjsxConfig{}
+	if 'app_entry' in entry {
+		cfg.app_entry = toml_string_from_map(entry, 'app_entry', cfg.app_entry)
+	}
+	if 'module_root' in entry {
+		cfg.module_root = toml_string_from_map(entry, 'module_root', cfg.module_root)
+	}
+	if 'build_root' in entry {
+		cfg.build_root = toml_string_from_map(entry, 'build_root', cfg.build_root)
+	}
+	if 'signature_root' in entry {
+		cfg.signature_root = toml_string_from_map(entry, 'signature_root', cfg.signature_root)
+	}
+	cfg.signature_include = toml_string_list_from_map(entry, 'signature_include')
+	cfg.signature_exclude = toml_string_list_from_map(entry, 'signature_exclude')
+	if 'runtime_profile' in entry {
+		cfg.runtime_profile = toml_string_from_map(entry, 'runtime_profile', cfg.runtime_profile)
+	}
+	if 'thread_count' in entry {
+		cfg.thread_count = toml_int_from_map(entry, 'thread_count', cfg.thread_count)
+	}
+	if 'max_requests' in entry {
+		cfg.max_requests = toml_int_from_map(entry, 'max_requests', cfg.max_requests)
+	}
+	if 'enable_fs' in entry {
+		cfg.enable_fs = toml_bool_from_map(entry, 'enable_fs', cfg.enable_fs)
+	}
+	if 'enable_process' in entry {
+		cfg.enable_process = toml_bool_from_map(entry, 'enable_process', cfg.enable_process)
+	}
+	if 'enable_network' in entry {
+		cfg.enable_network = toml_bool_from_map(entry, 'enable_network', cfg.enable_network)
+	}
+	return cfg
+}
+
+fn decode_assets_config_map(entry map[string]toml.Any) AssetsConfig {
+	mut cfg := AssetsConfig{}
+	if 'enabled' in entry {
+		cfg.enabled = toml_bool_from_map(entry, 'enabled', cfg.enabled)
+	}
+	if 'prefix' in entry {
+		cfg.prefix = toml_string_from_map(entry, 'prefix', cfg.prefix)
+	}
+	if 'root' in entry {
+		cfg.root = toml_string_from_map(entry, 'root', cfg.root)
+	}
+	if 'cache_control' in entry {
+		cfg.cache_control = toml_string_from_map(entry, 'cache_control', cfg.cache_control)
+	}
+	return cfg
+}
+
+fn decode_runtime_config_map(entry map[string]toml.Any) RuntimeConfig {
+	mut cfg := RuntimeConfig{}
+	if 'timezone' in entry {
+		cfg.timezone = toml_string_from_map(entry, 'timezone', cfg.timezone)
+	}
+	return cfg
+}
+
+fn decode_mcp_config_map(entry map[string]toml.Any) McpConfig {
+	mut cfg := McpConfig{}
+	if 'max_sessions' in entry {
+		cfg.max_sessions = toml_int_from_map(entry, 'max_sessions', cfg.max_sessions)
+	}
+	if 'max_pending_messages' in entry {
+		cfg.max_pending_messages = toml_int_from_map(entry, 'max_pending_messages', cfg.max_pending_messages)
+	}
+	if 'session_ttl_seconds' in entry {
+		cfg.session_ttl_seconds = toml_int_from_map(entry, 'session_ttl_seconds', cfg.session_ttl_seconds)
+	}
+	cfg.allowed_origins = toml_string_list_from_map(entry, 'allowed_origins')
+	if 'sampling_capability_policy' in entry {
+		cfg.sampling_capability_policy = toml_string_from_map(entry, 'sampling_capability_policy',
+			cfg.sampling_capability_policy)
+	}
+	return cfg
+}
+
+fn decode_feishu_app_config_map(entry map[string]toml.Any) FeishuAppConfig {
+	return FeishuAppConfig{
+		app_id:             toml_string_from_map(entry, 'app_id', '')
+		app_secret:         toml_string_from_map(entry, 'app_secret', '')
+		verification_token: toml_string_from_map(entry, 'verification_token', '')
+		encrypt_key:        toml_string_from_map(entry, 'encrypt_key', '')
+	}
+}
+
+fn decode_feishu_config_map(entry map[string]toml.Any) FeishuConfig {
+	mut cfg := FeishuConfig{}
+	if 'enabled' in entry {
+		cfg.enabled = toml_bool_from_map(entry, 'enabled', cfg.enabled)
+	}
+	if 'open_base_url' in entry {
+		cfg.open_base_url = toml_string_from_map(entry, 'open_base_url', cfg.open_base_url)
+	}
+	if 'reconnect_delay_ms' in entry {
+		cfg.reconnect_delay_ms = toml_int_from_map(entry, 'reconnect_delay_ms', cfg.reconnect_delay_ms)
+	}
+	if 'token_refresh_skew_seconds' in entry {
+		cfg.token_refresh_skew_seconds = toml_int_from_map(entry, 'token_refresh_skew_seconds',
+			cfg.token_refresh_skew_seconds)
+	}
+	if 'recent_event_limit' in entry {
+		cfg.recent_event_limit = toml_int_from_map(entry, 'recent_event_limit', cfg.recent_event_limit)
+	}
+	mut apps := map[string]FeishuAppConfig{}
+	root_app := decode_feishu_app_config_map(entry)
+	if root_app.app_id != '' || root_app.app_secret != '' || root_app.verification_token != ''
+		|| root_app.encrypt_key != '' {
+		apps['main'] = root_app
+	}
+	for name, value in entry {
+		if name in ['enabled', 'open_base_url', 'reconnect_delay_ms', 'token_refresh_skew_seconds',
+			'recent_event_limit', 'app_id', 'app_secret', 'verification_token', 'encrypt_key'] {
+			continue
+		}
+		if value is map[string]toml.Any {
+			app_cfg := decode_feishu_app_config_map(value)
+			if app_cfg.app_id == '' && app_cfg.app_secret == '' && app_cfg.verification_token == ''
+				&& app_cfg.encrypt_key == '' {
+				continue
+			}
+			apps[name] = app_cfg
+		}
+	}
+	cfg.apps = apps.clone()
+	if bridge_any := entry['bridge'] {
+		if bridge_any is map[string]toml.Any {
+			cfg.bridge = decode_bridge_config_map(bridge_any)
+		}
+	}
+	return cfg
+}
+
+fn decode_codex_config_map(entry map[string]toml.Any) CodexConfig {
+	mut cfg := CodexConfig{}
+	if 'enabled' in entry {
+		cfg.enabled = toml_bool_from_map(entry, 'enabled', cfg.enabled)
+	}
+	if 'url' in entry {
+		cfg.url = toml_string_from_map(entry, 'url', cfg.url)
+	}
+	if 'model' in entry {
+		cfg.model = toml_string_from_map(entry, 'model', cfg.model)
+	}
+	if 'effort' in entry {
+		cfg.effort = toml_string_from_map(entry, 'effort', cfg.effort)
+	}
+	if 'cwd' in entry {
+		cfg.cwd = toml_string_from_map(entry, 'cwd', cfg.cwd)
+	}
+	if 'approval_policy' in entry {
+		cfg.approval_policy = toml_string_from_map(entry, 'approval_policy', cfg.approval_policy)
+	}
+	if 'sandbox' in entry {
+		cfg.sandbox = toml_string_from_map(entry, 'sandbox', cfg.sandbox)
+	}
+	if 'reconnect_delay_ms' in entry {
+		cfg.reconnect_delay_ms = toml_int_from_map(entry, 'reconnect_delay_ms', cfg.reconnect_delay_ms)
+	}
+	if 'flush_interval_ms' in entry {
+		cfg.flush_interval_ms = toml_int_from_map(entry, 'flush_interval_ms', cfg.flush_interval_ms)
+	}
+	return cfg
+}
+
+fn decode_bridge_config_map(entry map[string]toml.Any) BridgeConfig {
+	mut cfg := BridgeConfig{}
+	if 'enabled' in entry {
+		cfg.enabled = toml_bool_from_map(entry, 'enabled', cfg.enabled)
+	}
+	if 'ws_url' in entry {
+		cfg.ws_url = toml_string_from_map(entry, 'ws_url', cfg.ws_url)
+	}
+	if 'client_id' in entry {
+		cfg.client_id = toml_string_from_map(entry, 'client_id', cfg.client_id)
+	}
+	if 'token' in entry {
+		cfg.token = toml_string_from_map(entry, 'token', cfg.token)
+	}
+	if 'target_id' in entry {
+		cfg.target_id = toml_string_from_map(entry, 'target_id', cfg.target_id)
+	}
+	return cfg
+}
+
+fn decode_listener_config_map(entry map[string]toml.Any) ListenerConfig {
+	mut cfg := ListenerConfig{}
+	if 'host' in entry {
+		cfg.host = toml_string_from_map(entry, 'host', cfg.host)
+	}
+	if 'port' in entry {
+		cfg.port = toml_int_from_map(entry, 'port', cfg.port)
+	}
+	if 'site' in entry {
+		cfg.site = toml_string_from_map(entry, 'site', cfg.site)
+	}
+	return cfg
+}
+
+fn decode_site_config_map(entry map[string]toml.Any) SiteConfig {
+	mut cfg := SiteConfig{}
+	if 'root' in entry {
+		cfg.project_root = toml_string_from_map(entry, 'root', cfg.project_root)
+	}
+	if 'project_root' in entry {
+		cfg.project_root = toml_string_from_map(entry, 'project_root', cfg.project_root)
+	}
+	if 'host' in entry {
+		cfg.host = toml_string_from_map(entry, 'host', cfg.host)
+	}
+	if 'port' in entry {
+		cfg.port = toml_int_from_map(entry, 'port', cfg.port)
+	}
+	if 'app' in entry {
+		cfg.app = toml_string_from_map(entry, 'app', cfg.app)
+	}
+	if paths_any := entry['paths'] {
+		if paths_any is map[string]toml.Any {
+			cfg.paths = decode_paths_config_map(paths_any)
+		}
+	}
+	if worker_any := entry['worker'] {
+		if worker_any is map[string]toml.Any {
+			cfg.worker = decode_worker_config_map(worker_any)
+			if 'entry' in worker_any {
+				cfg.worker_entry = toml_string_from_map(worker_any, 'entry', cfg.worker_entry)
+			}
+		}
+	}
+	if executor_any := entry['executor'] {
+		if executor_any is map[string]toml.Any {
+			cfg.executor = decode_executor_config_map(executor_any)
+		} else {
+			cfg.executor.kind = executor_any.string()
+		}
+	}
+	if php_any := entry['php'] {
+		if php_any is map[string]toml.Any {
+			cfg.php = decode_php_config_map(php_any)
+		}
+	}
+	if vjsx_any := entry['vjsx'] {
+		if vjsx_any is map[string]toml.Any {
+			cfg.vjsx = decode_vjsx_config_map(vjsx_any)
+		}
+	}
+	if assets_any := entry['assets'] {
+		if assets_any is map[string]toml.Any {
+			cfg.assets = decode_assets_config_map(assets_any)
+		}
+	}
+	if runtime_any := entry['runtime'] {
+		if runtime_any is map[string]toml.Any {
+			cfg.runtime = decode_runtime_config_map(runtime_any)
+		}
+	}
+	if mcp_any := entry['mcp'] {
+		if mcp_any is map[string]toml.Any {
+			cfg.mcp = decode_mcp_config_map(mcp_any)
+		}
+	}
+	if feishu_any := entry['feishu'] {
+		if feishu_any is map[string]toml.Any {
+			cfg.feishu = decode_feishu_config_map(feishu_any)
+		}
+	}
+	if codex_any := entry['codex'] {
+		if codex_any is map[string]toml.Any {
+			cfg.codex = decode_codex_config_map(codex_any)
+		}
+	}
+	return cfg
+}
+
+fn decode_multi_listener_config(doc toml.Doc, mut cfg VhttpdConfig) ! {
+	mut listeners := map[string]ListenerConfig{}
+	if root_any := doc.value_opt('listeners') {
+		root := root_any.as_map()
+		for name, value in root {
+			if value is map[string]toml.Any {
+				listeners[name] = decode_listener_config_map(value)
+			}
+		}
+	}
+	cfg.listeners = listeners.clone()
+	mut sites := map[string]SiteConfig{}
+	if root_any := doc.value_opt('sites') {
+		root := root_any.as_map()
+		for name, value in root {
+			if value is map[string]toml.Any {
+				sites[name] = decode_site_config_map(value)
+			}
+		}
+	}
+	cfg.sites = sites.clone()
+}
+
 fn resolve_config_variables(mut cfg VhttpdConfig, config_path string) ! {
 	env_map := os.environ()
 	max_passes := 12
@@ -347,6 +863,8 @@ fn resolve_config_variables(mut cfg VhttpdConfig, config_path string) ! {
 		cfg.vjsx.app_entry, changed = expand_config_string(cfg.vjsx.app_entry, vars, env_map,
 			changed)!
 		cfg.vjsx.module_root, changed = expand_config_string(cfg.vjsx.module_root, vars,
+			env_map, changed)!
+		cfg.vjsx.build_root, changed = expand_config_string(cfg.vjsx.build_root, vars,
 			env_map, changed)!
 		cfg.vjsx.signature_root, changed = expand_config_string(cfg.vjsx.signature_root,
 			vars, env_map, changed)!
@@ -442,6 +960,14 @@ fn resolve_config_variables(mut cfg VhttpdConfig, config_path string) ! {
 			vars, env_map, changed)!
 		cfg.codex.sandbox, changed = expand_config_string(cfg.codex.sandbox, vars, env_map,
 			changed)!
+		cfg.feishu.bridge.ws_url, changed = expand_config_string(cfg.feishu.bridge.ws_url, vars, env_map,
+			changed)!
+		cfg.feishu.bridge.client_id, changed = expand_config_string(cfg.feishu.bridge.client_id, vars,
+			env_map, changed)!
+		cfg.feishu.bridge.token, changed = expand_config_string(cfg.feishu.bridge.token, vars, env_map,
+			changed)!
+		cfg.feishu.bridge.target_id, changed = expand_config_string(cfg.feishu.bridge.target_id, vars,
+			env_map, changed)!
 
 		if !changed {
 			resolve_config_paths(mut cfg, config_path)
@@ -510,6 +1036,7 @@ fn resolve_config_paths(mut cfg VhttpdConfig, config_path string) {
 	}
 	cfg.vjsx.app_entry = resolve_config_path(cfg.paths.root, cfg.vjsx.app_entry)
 	cfg.vjsx.module_root = resolve_config_path(cfg.paths.root, cfg.vjsx.module_root)
+	cfg.vjsx.build_root = resolve_config_path(cfg.paths.root, cfg.vjsx.build_root)
 	cfg.vjsx.signature_root = resolve_config_path(cfg.paths.root, cfg.vjsx.signature_root)
 	cfg.assets.root = resolve_config_path(cfg.paths.root, cfg.assets.root)
 	cfg.codex.cwd = resolve_config_path(cfg.paths.root, cfg.codex.cwd)
@@ -537,6 +1064,7 @@ fn build_config_variable_map(cfg VhttpdConfig) map[string]string {
 		'php.app_entry':                  cfg.php.app_entry
 		'vjsx.app_entry':                 cfg.vjsx.app_entry
 		'vjsx.module_root':               cfg.vjsx.module_root
+		'vjsx.build_root':                cfg.vjsx.build_root
 		'vjsx.signature_root':            cfg.vjsx.signature_root
 		'vjsx.runtime_profile':           cfg.vjsx.runtime_profile
 		'vjsx.thread_count':              '${cfg.vjsx.thread_count}'
@@ -555,6 +1083,11 @@ fn build_config_variable_map(cfg VhttpdConfig) map[string]string {
 		'mcp.sampling_capability_policy': cfg.mcp.sampling_capability_policy
 		'feishu.enabled':                 '${cfg.feishu.enabled}'
 		'feishu.open_base_url':           cfg.feishu.open_base_url
+		'feishu.bridge.enabled':          '${cfg.feishu.bridge.enabled}'
+		'feishu.bridge.ws_url':           cfg.feishu.bridge.ws_url
+		'feishu.bridge.client_id':        cfg.feishu.bridge.client_id
+		'feishu.bridge.token':            cfg.feishu.bridge.token
+		'feishu.bridge.target_id':        cfg.feishu.bridge.target_id
 	}
 	for key, value in cfg.paths.values {
 		vars['paths.${key}'] = value
@@ -589,7 +1122,11 @@ fn expand_config_string(raw string, vars map[string]string, env map[string]strin
 			return error('invalid empty variable expression in config string')
 		}
 		replacement := resolve_config_variable(expr, vars, env)!
-		out = out[..start] + replacement + out[end + 1..]
+		next := out[..start] + replacement + out[end + 1..]
+		if next == out {
+			break
+		}
+		out = next
 		any_change = true
 	}
 	return out, any_change

@@ -134,6 +134,7 @@ flowchart TB
 - Runtime module map: [RUNTIME_MODULE_MAP.md](/Users/guweigang/Source/vhttpd/docs/RUNTIME_MODULE_MAP.md)
 - Major struct relationship map: [STRUCT_RELATIONSHIP_MAP.md](/Users/guweigang/Source/vhttpd/docs/STRUCT_RELATIONSHIP_MAP.md)
 - Architecture refactor baseline: [ARCHITECTURE_REFACTOR_BASELINE.md](/Users/guweigang/Source/vhttpd/docs/ARCHITECTURE_REFACTOR_BASELINE.md)
+- Plugin / worker evolution model: [PLUGIN_WORKER_MODEL.md](/Users/guweigang/Source/vhttpd/docs/PLUGIN_WORKER_MODEL.md)
 - Feishu runtime compatibility plan: [FEISHU_RUNTIME_COMPATIBILITY_PLAN.md](/Users/guweigang/Source/vhttpd/docs/FEISHU_RUNTIME_COMPATIBILITY_PLAN.md)
 - Feishu gateway removal batches: [FEISHU_GATEWAY_REMOVAL_PLAN.md](/Users/guweigang/Source/vhttpd/docs/FEISHU_GATEWAY_REMOVAL_PLAN.md)
 - VSlim envelope/map contract: [/Users/guweigang/Source/vphpx/vslim/docs/protocol.md](/Users/guweigang/Source/vphpx/vslim/docs/protocol.md)
@@ -146,7 +147,7 @@ flowchart TB
 - MCP runbook: [MCP_RUNBOOK.md](/Users/guweigang/Source/vhttpd/docs/MCP_RUNBOOK.md)
 - MCP MVP plan: [MCP_MVP_PLAN.md](/Users/guweigang/Source/vhttpd/docs/MCP_MVP_PLAN.md)
 - WebSocket upstream plan: [WEBSOCKET_UPSTREAM_PLAN.md](/Users/guweigang/Source/vhttpd/docs/WEBSOCKET_UPSTREAM_PLAN.md)
-- Binary build workflow: pending re-home into this split repo
+- Binary build workflow: [`.github/workflows/vhttpd-binaries.yml`](/Users/guweigang/Source/vhttpd/.github/workflows/vhttpd-binaries.yml)
 
 ## Why vhttpd stays close to veb
 
@@ -234,6 +235,8 @@ Workflow file:
 ```text
 .github/workflows/vhttpd-binaries.yml
 ```
+
+The workflow installs the `guweigang.vjsx` module before building so the split repo can resolve its embedded runtime dependency in CI.
 
 Release options:
 
@@ -356,6 +359,78 @@ Shorthand is also supported:
 ./vhttpd /Users/guweigang/Source/vhttpd/config/vhttpd.example.toml
 ```
 
+Multi-listener mode is also supported. In that mode:
+
+- one `vhttpd` process can listen on multiple `host:port` bindings
+- each `[listeners.<id>]` entry points to exactly one `[sites.<id>]`
+- each site gets its own isolated app runtime and executor selection
+- phase 1 is listener-based routing only, not same-port host-based virtualhost routing yet
+
+Minimal multi-listener example:
+
+```toml
+[paths]
+root = "."
+php_app = "examples/hello-app.php"
+php_worker = "php/package/bin/php-worker"
+vslim_ext = "../vphpx/vslim/vslim.so"
+vjsx_app = "examples/codexbot-app-ts/app.mts"
+
+[files]
+pid_file = "tmp/vhttpd_multi.pid"
+event_log = "tmp/vhttpd_multi.events.ndjson"
+
+[sites.php_demo]
+host = "127.0.0.1"
+port = 19881
+root = "."
+executor = "php"
+worker.entry = "${paths.php_worker}"
+app = "${paths.php_app}"
+php.extensions = ["${paths.vslim_ext}"]
+
+[sites.codexbot]
+host = "127.0.0.1"
+port = 19883
+root = "examples/codexbot-app-ts"
+executor = "vjsx"
+app = "${paths.vjsx_app}"
+vjsx.runtime_profile = "node"
+vjsx.thread_count = 2
+```
+
+Site config is layered on top of the global config, so shared sections like `[files]`, `[assets]`, `[codex]`, `[feishu]`, and `[mcp]` can stay global while each site only overrides what it needs.
+
+If you omit `[listeners]`, `vhttpd` will synthesize one listener per site from `host` + `port` on `[sites.<id>]`.
+
+At site level, `root = "..."` is accepted as a shorter alias for `project_root = "..."`.
+
+For executor selection, both forms are accepted:
+
+- shorthand: `executor = "vjsx"`
+- expanded: `[sites.demo.executor] kind = "vjsx"`
+
+Nested site sections can also be written inline inside `[sites.demo]`, for example:
+
+- `worker.autostart = true`
+- `app = "..."`
+- `php.worker_entry = "..."`
+- `vjsx.build_root = "..."`
+
+For `vjsx` sites, `vjsx.module_root` defaults to the site `root` when omitted.
+
+At site level, `app = "..."` is accepted as a unified alias for the executor entry file:
+
+- for `php`, it maps to `php.app_entry`
+- for `vjsx`, it maps to `vjsx.app_entry`
+- if `executor` is omitted, `.php` infers `php`, otherwise it falls back to `vjsx`
+
+For `php` sites, `worker.entry = "..."` is accepted as a shorter alias for `php.worker_entry`.
+
+There is a ready-to-run multi-listener example at [config/vhttpd.multi.example.toml](/Users/guweigang/Source/vhttpd/config/vhttpd.multi.example.toml).
+
+A focused site-DSL reference is available at [SITE_CONFIG_DSL.md](/Users/guweigang/Source/vhttpd/docs/SITE_CONFIG_DSL.md).
+
 `[php]` defines the PHP runtime bootstrap. When `worker.cmd` is empty and `[executor].kind = "php"`, `vhttpd` builds the worker command automatically from `[php]`. If `worker.cmd` is set, it stays an explicit override.
 
 PHP-specific CLI overrides are also available: `--php-bin`, `--php-worker-entry`, `--php-app-entry`, repeatable `--php-extension`, and repeatable `--php-arg`.
@@ -392,6 +467,7 @@ Minimal config example:
 root = "."
 vjsx_app = "examples/vjsx/hello-handler.mts"
 vjsx_root = "examples/vjsx"
+vjsx_build_root = "tmp/vjsx-build"
 
 [executor]
 kind = "vjsx"
@@ -399,9 +475,13 @@ kind = "vjsx"
 [vjsx]
 app_entry = "${paths.vjsx_app}"
 module_root = "${paths.vjsx_root}"
+build_root = "${paths.vjsx_build_root}"
 runtime_profile = "node"
 thread_count = 2
 ```
+
+If `build_root` is omitted, `.vjsxbuild` lanes default to `/tmp/vhttpd_vjsx`.
+Setting `build_root` is useful when you want stable on-disk build artifacts for debugging.
 
 You can also start it from CLI:
 
@@ -409,6 +489,7 @@ You can also start it from CLI:
 ./vhttpd \
   --executor vjsx \
   --vjsx-entry /Users/guweigang/Source/vhttpd/examples/vjsx/hello-handler.mts \
+  --vjsx-build-root /Users/guweigang/Source/vhttpd/tmp/vjsx-build \
   --vjsx-runtime-profile node \
   --vjsx-thread-count 2
 ```

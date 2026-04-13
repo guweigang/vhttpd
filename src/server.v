@@ -37,6 +37,7 @@ const known_long_flags = [
 	'--php-arg',
 	'--vjsx-entry',
 	'--vjsx-module-root',
+	'--vjsx-build-root',
 	'--vjsx-signature-root',
 	'--vjsx-signature-include',
 	'--vjsx-signature-exclude',
@@ -96,6 +97,7 @@ fn print_vhttpd_help() {
 	println('  --php-arg <value>            Extra PHP CLI arg; repeat to add multiple entries')
 	println('  --vjsx-entry <path>          In-proc vjsx app entry (.js/.mjs/.ts/.mts)')
 	println('  --vjsx-module-root <path>    Optional module root for in-proc vjsx')
+	println('  --vjsx-build-root <path>     Optional .vjsxbuild root (defaults to /tmp cache)')
 	println('  --vjsx-signature-root <path> Optional source signature root (defaults to module root)')
 	println('  --vjsx-signature-include <g> Comma-separated include globs for source signature')
 	println('  --vjsx-signature-exclude <g> Comma-separated exclude globs for source signature')
@@ -133,13 +135,7 @@ fn validate_args(args []string) ! {
 	}
 }
 
-fn run_server(args []string) {
-	cfg := load_vhttpd_config(args) or {
-		log.error('config load failed: ${err}')
-		return
-	}
-	configure_runtime_timezone(cfg.runtime.timezone)
-	os.signal_ignore(.pipe)
+fn run_single_server(args []string, cfg VhttpdConfig) {
 	runtime_cfg := resolve_server_runtime_config(args, cfg) or {
 		log.error('server runtime config resolve failed: ${err}')
 		return
@@ -152,6 +148,20 @@ fn run_server(args []string) {
 
 	start_server_runtime(mut app, runtime_cfg)
 	serve_server_runtime(mut app, runtime_cfg)
+}
+
+fn run_server(args []string) {
+	cfg := load_vhttpd_config(args) or {
+		log.error('config load failed: ${err}')
+		return
+	}
+	configure_runtime_timezone(cfg.runtime.timezone)
+	os.signal_ignore(.pipe)
+	if config_uses_multi_listener(cfg) {
+		run_multi_server(args, cfg)
+		return
+	}
+	run_single_server(args, cfg)
 }
 
 fn configure_runtime_timezone(config_tz string) {

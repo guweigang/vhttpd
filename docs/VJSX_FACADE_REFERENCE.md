@@ -52,6 +52,22 @@ Additional runtime fields:
 - `runtime.dispatchKind`
 - `runtime.upstream` when dispatch kind is `websocket_upstream`
 
+## Host API
+
+`vhttpd` now installs its embedder-facing host surface through `vjsx.HostApiConfig`
+rather than ad-hoc global callbacks.
+
+Current host globals:
+
+- `globalThis.vhttpdHost`
+
+Current host helpers:
+
+- `vhttpdHost.emit(kind, fields)`
+- `vhttpdHost.snapshot()`
+- `vhttpdHost.readTextFile(path, fallbackValue?)`
+- `vhttpdHost.findCodexSessionPath(threadId, fallbackValue?)`
+
 `runtime.request` exposes read-only request metadata:
 
 - `id`

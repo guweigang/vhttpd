@@ -87,7 +87,7 @@ fn test_feishu_runtime_build_ack_preserves_message_type() {
 			},
 		]
 	}
-	ack := feishu_runtime_build_ack(frame)
+	ack := feishu_runtime_build_ack(frame, 200, map[string]string{}, '')
 	ack_headers := feishu_runtime_header_map(ack.headers)
 	assert ack.seq_id == 42
 	assert ack.log_id == 9
@@ -96,6 +96,27 @@ fn test_feishu_runtime_build_ack_preserves_message_type() {
 	assert ack_headers[feishu_runtime_header_type] == feishu_runtime_message_event
 	assert ack_headers[feishu_runtime_header_biz_rt] == '0'
 	assert ack.payload.bytestr().contains('"code":200')
+}
+
+fn test_feishu_runtime_build_ack_carries_custom_response_payload() {
+	frame := FeishuRuntimeProtoFrame{
+		seq_id:    7
+		log_id:    3
+		service:   11
+		method:    feishu_runtime_frame_type_data
+		log_id_str: 'log-3'
+		headers:   [
+			FeishuRuntimeProtoHeader{
+				key:   feishu_runtime_header_type
+				value: feishu_runtime_message_card
+			},
+		]
+	}
+	ack := feishu_runtime_build_ack(frame, 200, {
+		'content-type': 'application/json'
+	}, '{"elements":[]}')
+	assert ack.payload.bytestr().contains('"data":"{\\"elements\\":[]}"')
+	assert ack.payload.bytestr().contains('"content-type":"application/json"')
 }
 
 fn test_feishu_runtime_build_pong_preserves_frame_metadata() {
@@ -363,6 +384,44 @@ fn test_feishu_runtime_normalize_streaming_send_preserves_existing_interactive_c
 	normalized := feishu_runtime_normalize_streaming_send(req)
 	assert normalized.message_type == 'interactive'
 	assert normalized.content == req.content
+}
+
+fn test_feishu_runtime_streaming_preview_markdown_keeps_short_content() {
+	content := 'short preview'
+	preview := feishu_runtime_streaming_preview_markdown(content)
+	assert preview == content
+}
+
+fn test_feishu_runtime_streaming_preview_markdown_truncates_long_content() {
+	content := 'A'.repeat(feishu_stream_buffer_rollover_runes + 500)
+	preview := feishu_runtime_streaming_preview_markdown(content)
+	assert preview.contains('预览已截断')
+	assert preview.contains('完整结果会在结束时自动分段发送')
+	assert preview.runes().len <= feishu_stream_buffer_rollover_runes
+}
+
+fn test_feishu_runtime_flush_pending_buffers_flushes_same_tick_first_delta() {
+	mut app := new_feishu_http_test_app()
+	now := time.now().unix_milli()
+	app.feishu_buffers['om_buffer_1'] = FeishuStreamBuffer{
+		message_id:       'om_buffer_1'
+		app:              'main'
+		content:          'hello first delta'
+		rendered_content: ''
+		last_delta:       now - 500
+		last_flush:       now - 500
+		stream_id:        'codex:stream_buffer_1'
+		receive_id:       'oc_buffer_1'
+		receive_id_type:  'chat_id'
+		segment_index:    1
+	}
+	app.feishu_runtime_flush_pending_buffers()
+	app.feishu_mu.@lock()
+	buf := app.feishu_buffers['om_buffer_1']
+	app.feishu_mu.unlock()
+	assert buf.rendered_content == 'hello first delta'
+	assert buf.last_flush >= now - 500
+	assert app.feishu_http_test_calls >= 2
 }
 
 fn test_feishu_runtime_delay_update_card_body() {

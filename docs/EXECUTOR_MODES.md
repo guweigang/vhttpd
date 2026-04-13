@@ -18,6 +18,8 @@ You can inspect the current built-in executor catalog through `/admin/executors`
 
 Shared config such as `[server]`, `[files]`, `[runtime]`, `[admin]`, and `[assets]` works the same in both modes.
 
+If you are using multi-site mode, the site-level shorthand and alias rules are summarized in [SITE_CONFIG_DSL.md](/Users/guweigang/Source/vhttpd/docs/SITE_CONFIG_DSL.md).
+
 If you use `[paths]`, values that start with `/` are treated as absolute paths and kept as-is. Other aliases resolve against `[paths].root`, and `[paths].root` itself resolves against the config file directory.
 
 ## PHP Mode
@@ -88,6 +90,7 @@ Minimal shape:
 root = "."
 vjsx_app = "examples/vjsx/hello-handler.mts"
 vjsx_root = "examples/vjsx"
+vjsx_build_root = "tmp/vjsx-build"
 
 [executor]
 kind = "vjsx"
@@ -95,6 +98,7 @@ kind = "vjsx"
 [vjsx]
 app_entry = "${paths.vjsx_app}"
 module_root = "${paths.vjsx_root}"
+build_root = "${paths.vjsx_build_root}"
 runtime_profile = "node"
 thread_count = 2
 ```
@@ -104,6 +108,7 @@ Important fields:
 - `[executor].kind = "vjsx"`
 - `[vjsx].app_entry`: JS/TS entry file
 - `[vjsx].module_root`: module resolution root
+- `[vjsx].build_root`: optional `.vjsxbuild` root; defaults to `/tmp/vhttpd_vjsx`
 - `[vjsx].runtime_profile`: `script` or `node`
 - `[vjsx].thread_count`: embedded execution lane count
 

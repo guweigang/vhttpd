@@ -107,3 +107,35 @@ pub fn (p OllamaProvider) snapshot(mut app App) string {
 	// return an empty object representation so admin tooling can display it.
 	return json.encode(map[string]string{})
 }
+
+// Db adapter skeleton — runtime-owned unix socket upstream for database access.
+pub struct DbProvider {}
+
+pub fn (p DbProvider) init(mut app App) ! {
+	_ = app
+	return
+}
+
+pub fn (p DbProvider) start(mut app App) ! {
+	if !app.db_runtime.enabled || app.db_runtime.socket.trim_space() == '' {
+		return
+	}
+	go run_db_runtime_server(mut app, app.db_runtime.socket)
+	return
+}
+
+pub fn (p DbProvider) stop(mut app App) ! {
+	app.mu.@lock()
+	app.db_runtime.stop_requested = true
+	mut listener := app.db_runtime.listener
+	app.db_runtime.started = false
+	app.mu.unlock()
+	if !isnil(listener) {
+		listener.close() or {}
+	}
+	return
+}
+
+pub fn (p DbProvider) snapshot(mut app App) string {
+	return app.db_runtime_snapshot()
+}

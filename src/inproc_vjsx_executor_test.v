@@ -2,26 +2,7 @@ module main
 
 import net.http
 import os
-import json
 import time
-
-fn codexbot_ts_feishu_payload(text string, chat_id string, message_id string) string {
-	content_json := json.encode({
-		'text': text
-	})
-	return '{"event":{"sender":{"sender_id":{"open_id":"ou_test_user"}},"message":{"message_id":"${message_id}","chat_id":"${chat_id}","message_type":"text","content":${json.encode(content_json)}}}}'
-}
-
-fn codexbot_ts_feishu_thread_payload(text string, chat_id string, message_id string, root_id string, parent_id string) string {
-	content_json := json.encode({
-		'text': text
-	})
-	return '{"event":{"sender":{"sender_id":{"open_id":"ou_test_user"}},"message":{"message_id":"${message_id}","chat_id":"${chat_id}","message_type":"text","root_id":"${root_id}","parent_id":"${parent_id}","content":${json.encode(content_json)}}}}'
-}
-
-fn codexbot_ts_with_temp_db(db_name string, run fn (string)) {
-	with_temp_sqlite_db_env('CODEXBOT_TS_DB_PATH', db_name, run)
-}
 
 fn inproc_vjsx_test_lane_host_signature(executor InProcVjsxExecutor, idx int) string {
 	if isnil(executor.state) {
@@ -38,13 +19,37 @@ fn inproc_vjsx_test_lane_host_signature(executor InProcVjsxExecutor, idx int) st
 	return state.hosts[idx].source_signature
 }
 
+fn inproc_vjsx_wait_for_signature_refresh(executor InProcVjsxExecutor, previous string, timeout_ms int) bool {
+	deadline := time.now().add(time.millisecond * timeout_ms)
+	for time.now() < deadline {
+		current := executor.current_source_signature()
+		if current != '' && current != previous {
+			return true
+		}
+		time.sleep(25 * time.millisecond)
+	}
+	return false
+}
+
 fn test_inproc_vjsx_executor_lane_temp_root_uses_system_temp_cache() {
 	app_entry := '/tmp/demo/hello-handler.mts'
 	temp_root := vjsx_lane_temp_root(app_entry, 2)
 	assert temp_root.starts_with(os.join_path(os.temp_dir(), 'vhttpd_vjsx'))
 	assert temp_root.contains('hello-handler.mts')
-	assert temp_root.ends_with('lane_2.vjsbuild')
-	assert !temp_root.contains(app_entry + '.lane_2.vjsbuild')
+	assert temp_root.ends_with('lane_2.vjsxbuild')
+	assert !temp_root.contains(app_entry + '.lane_2.vjsxbuild')
+}
+
+fn test_inproc_vjsx_executor_lane_temp_root_uses_configured_build_root() {
+	config := VjsxRuntimeFacadeConfig{
+		app_entry:    '/tmp/demo/hello-handler.mts'
+		build_root:   '/tmp/custom-vjsx-cache'
+		thread_count: 1
+	}
+	temp_root := vjsx_lane_temp_root_for_signature(config, 0, 'sig123')
+	assert temp_root.starts_with('/tmp/custom-vjsx-cache')
+	assert temp_root.ends_with('lane_0.vjsxbuild')
+	assert temp_root.contains('.sig123.')
 }
 
 fn test_inproc_vjsx_executor_source_signature_respects_include_and_exclude_globs() {
@@ -81,6 +86,29 @@ fn test_inproc_vjsx_executor_source_signature_respects_include_and_exclude_globs
 	os.write_file(keep_file, 'export const value = "keep-v2-longer";\n') or { panic(err) }
 	sig_after_keep := vjsx_source_signature_for_config(config)
 	assert sig_after_keep != sig_before
+}
+
+fn test_inproc_vjsx_executor_source_signature_changes_when_file_content_changes_without_size_change() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_vjsx_signature_same_size_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	app_file := os.join_path(temp_dir, 'app.mts')
+	helper_file := os.join_path(temp_dir, 'helper.mts')
+	os.write_file(app_file, 'export default function handle(ctx) { return ctx.text("ok"); }\n') or {
+		panic(err)
+	}
+	os.write_file(helper_file, 'export const value = "A1";\n') or { panic(err) }
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	config := VjsxRuntimeFacadeConfig{
+		app_entry:    app_file
+		module_root:  temp_dir
+		thread_count: 1
+	}
+	sig_before := vjsx_source_signature_for_config(config)
+	os.write_file(helper_file, 'export const value = "B2";\n') or { panic(err) }
+	sig_after := vjsx_source_signature_for_config(config)
+	assert sig_after != sig_before
 }
 
 fn test_inproc_vjsx_executor_repo_api_demo_handler_runs() {
@@ -872,6 +900,7 @@ fn test_inproc_vjsx_executor_rebuilds_lane_host_when_source_signature_changes() 
 	first_signature := inproc_vjsx_test_lane_host_signature(executor, 0)
 	assert first_signature != ''
 	os.write_file(helper_file, 'export const message = "v2";\n') or { panic(err) }
+	assert inproc_vjsx_wait_for_signature_refresh(executor, first_signature, 1500)
 	second := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/hello'
@@ -881,6 +910,64 @@ fn test_inproc_vjsx_executor_rebuilds_lane_host_when_source_signature_changes() 
 		request_id:  'req_signature_rebuild_2'
 	}) or { panic(err) }
 	assert second.response.body == 'v2'
+	second_signature := inproc_vjsx_test_lane_host_signature(executor, 0)
+	assert second_signature != ''
+	assert second_signature != first_signature
+}
+
+fn test_inproc_vjsx_executor_rebuilds_lane_host_when_mjs_dependency_changes_without_size_change() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_vjsx_signature_rebuild_mjs_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	app_file := os.join_path(temp_dir, 'app.mts')
+	helper_file := os.join_path(temp_dir, 'thread-task-commands.mjs')
+	os.write_file(helper_file, 'export function renderValue() { return "old-value"; }\n') or {
+		panic(err)
+	}
+	os.write_file(app_file, 'import { renderValue } from "./thread-task-commands.mjs";\nexport default function handle(ctx) { return ctx.text(renderValue(), 200); }\n') or {
+		panic(err)
+	}
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
+		thread_count:    1
+		app_entry:       app_file
+		module_root:     temp_dir
+		runtime_profile: 'node'
+	})
+	defer {
+		executor.close()
+	}
+	mut app := App{}
+	req := http.Request{
+		method: .get
+		url:    '/mjs'
+		host:   'example.test'
+	}
+	first := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+		method:      'GET'
+		path:        '/mjs'
+		req:         req
+		remote_addr: '127.0.0.1'
+		trace_id:    'trace_signature_rebuild_mjs_1'
+		request_id:  'req_signature_rebuild_mjs_1'
+	}) or { panic(err) }
+	assert first.response.body == 'old-value'
+	first_signature := inproc_vjsx_test_lane_host_signature(executor, 0)
+	assert first_signature != ''
+	os.write_file(helper_file, 'export function renderValue() { return "new-value"; }\n') or {
+		panic(err)
+	}
+	assert inproc_vjsx_wait_for_signature_refresh(executor, first_signature, 1500)
+	second := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+		method:      'GET'
+		path:        '/mjs'
+		req:         req
+		remote_addr: '127.0.0.1'
+		trace_id:    'trace_signature_rebuild_mjs_2'
+		request_id:  'req_signature_rebuild_mjs_2'
+	}) or { panic(err) }
+	assert second.response.body == 'new-value'
 	second_signature := inproc_vjsx_test_lane_host_signature(executor, 0)
 	assert second_signature != ''
 	assert second_signature != first_signature
@@ -1056,6 +1143,61 @@ export function websocket_upstream(frame) {
 	assert resp.commands[0].text == 'echo ping'
 	assert resp.commands[0].metadata['event_type'] == 'im.message.receive_v1'
 	assert resp.commands[0].metadata['dispatch_kind'] == 'websocket_upstream'
+}
+
+fn test_inproc_vjsx_executor_dispatch_websocket_upstream_supports_response_payload() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_vjsx_executor_ws_upstream_response_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	app_file := os.join_path(temp_dir, 'bot-handler.mts')
+	os.write_file(app_file, '
+export function websocket_upstream(frame) {
+  return {
+    handled: true,
+    commands: [],
+    response: {
+      status: 202,
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({ ok: true, eventType: frame.eventType })
+    }
+  };
+}
+') or {
+		panic(err)
+	}
+	defer {
+		os.rm(app_file) or {}
+	}
+	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
+		thread_count:    1
+		app_entry:       app_file
+		module_root:     temp_dir
+		runtime_profile: 'node'
+	})
+	defer {
+		executor.close()
+	}
+	mut app := App{}
+	resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		mode:        'websocket_upstream'
+		event:       'action'
+		id:          'upstream_req_response_001'
+		provider:    'feishu'
+		instance:    'main'
+		trace_id:    'trace_upstream_response_001'
+		event_type:  'card.action.trigger'
+		message_id:  'om_test_response_001'
+		target:      'chat_test_response_001'
+		target_type: 'chat_id'
+		payload:     '{"text":"ping"}'
+		received_at: 1710000000
+	}) or { panic(err) }
+	assert resp.handled
+	assert resp.commands.len == 0
+	assert resp.status == 202
+	assert resp.headers['content-type'] == 'application/json'
+	assert resp.body.contains('"eventType":"card.action.trigger"')
 }
 
 fn test_inproc_vjsx_executor_dispatch_websocket_upstream_exposes_runtime_read_text_file() {

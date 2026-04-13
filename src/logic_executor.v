@@ -76,6 +76,7 @@ pub:
 	runtime_profile string
 	lane_count      int
 	module_root     string
+	build_root      string
 	signature_root  string
 	max_requests    int
 	enable_fs       bool

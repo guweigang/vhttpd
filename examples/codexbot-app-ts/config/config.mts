@@ -1,9 +1,26 @@
+import fs from "fs";
+
 function env(name, fallbackValue) {
   const value = process.env[name];
   if (typeof value === "string" && value.trim() !== "") {
     return value;
   }
   return fallbackValue;
+}
+
+function readCodexbotTomlApprovalPolicy() {
+  const cwd = typeof process?.cwd === "function" ? process.cwd() : ".";
+  const filePath = `${cwd.replace(/\/+$/, "")}/examples/codexbot-app-ts/codexbot.toml`;
+  try {
+    const text = fs.readFileSync(filePath, "utf8");
+    const codexSectionMatch = text.match(/^\[codex\]\s*([\s\S]*?)(?=^\[|\Z)/m);
+    const codexSection = codexSectionMatch?.[1] || "";
+    const policyMatch = codexSection.match(/^\s*approval_policy\s*=\s*"([^"]+)"/m);
+    const policy = typeof policyMatch?.[1] === "string" ? policyMatch[1].trim() : "";
+    return policy || "never";
+  } catch (_) {
+    return "never";
+  }
 }
 
 function envList(name, fallbackValue) {
@@ -16,6 +33,7 @@ function envList(name, fallbackValue) {
 
 export function botDefaults() {
   const defaults = {};
+  const tomlApprovalPolicy = readCodexbotTomlApprovalPolicy();
 
   defaults.projectKey = env("CODEXBOT_TS_DEFAULT_PROJECT", "vhttpd");
   defaults.model = env("CODEXBOT_TS_DEFAULT_MODEL", "gpt-5.4");
@@ -51,7 +69,7 @@ export function botDefaults() {
   defaults.feishuEncryptKey = env("FEISHU_ENCRYPT_KEY", "");
   defaults.enableProviderInstancePreflight =
     env("CODEXBOT_TS_ENABLE_PROVIDER_INSTANCE_PREFLIGHT", "0") === "1";
-  defaults.approvalPolicy = env("CODEXBOT_TS_APPROVAL_POLICY", "never");
+  defaults.approvalPolicy = env("CODEXBOT_TS_APPROVAL_POLICY", tomlApprovalPolicy);
   defaults.sandbox = env("CODEXBOT_TS_SANDBOX", "workspace-write");
 
   return defaults;

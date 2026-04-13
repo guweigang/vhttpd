@@ -11,6 +11,7 @@ pub:
 	app_entry_flag         string @[json: 'app_entry_flag']
 	worker_entry_flag      string @[json: 'worker_entry_flag']
 	module_root_flag       string @[json: 'module_root_flag']
+	build_root_flag        string @[json: 'build_root_flag']
 	signature_root_flag    string @[json: 'signature_root_flag']
 	signature_include_flag string @[json: 'signature_include_flag']
 	signature_exclude_flag string @[json: 'signature_exclude_flag']
@@ -69,6 +70,7 @@ fn builtin_logic_executor_specs() []BuiltinLogicExecutorSpec {
 				section:                'vjsx'
 				app_entry_flag:         '--vjsx-entry'
 				module_root_flag:       '--vjsx-module-root'
+				build_root_flag:        '--vjsx-build-root'
 				signature_root_flag:    '--vjsx-signature-root'
 				signature_include_flag: '--vjsx-signature-include'
 				signature_exclude_flag: '--vjsx-signature-exclude'
@@ -145,6 +147,7 @@ fn (spec BuiltinLogicExecutorSpec) resolve_embedded_host_runtime_config(args []s
 	return resolve_embedded_host_runtime_config(args, EmbeddedHostRuntimeConfig{
 		app_entry:         cfg.vjsx.app_entry
 		module_root:       cfg.vjsx.module_root
+		build_root:        cfg.vjsx.build_root
 		signature_root:    cfg.vjsx.signature_root
 		signature_include: cfg.vjsx.signature_include.clone()
 		signature_exclude: cfg.vjsx.signature_exclude.clone()
@@ -157,6 +160,7 @@ fn (spec BuiltinLogicExecutorSpec) resolve_embedded_host_runtime_config(args []s
 	}, EmbeddedHostCliOverrides{
 		app_entry_flag:         spec.config_surface.app_entry_flag
 		module_root_flag:       spec.config_surface.module_root_flag
+		build_root_flag:        spec.config_surface.build_root_flag
 		signature_root_flag:    spec.config_surface.signature_root_flag
 		signature_include_flag: spec.config_surface.signature_include_flag
 		signature_exclude_flag: spec.config_surface.signature_exclude_flag
@@ -186,6 +190,7 @@ fn (spec BuiltinLogicExecutorSpec) resolve_vjsx_runtime_config(args []string, cf
 	return VjsxRuntimeFacadeConfig{
 		app_entry:         embedded_cfg.app_entry
 		module_root:       embedded_cfg.module_root
+		build_root:        embedded_cfg.build_root
 		signature_root:    embedded_cfg.signature_root
 		signature_include: embedded_cfg.signature_include.clone()
 		signature_exclude: embedded_cfg.signature_exclude.clone()
