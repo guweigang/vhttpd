@@ -8,6 +8,9 @@ function isSelfFeishuInbound(inbound) {
 export function createFeishuCommandRouter(deps) {
   return async function routeFeishuCommand(frame) {
     const inbound = parseFeishuInboundFrame(frame);
+    if (inbound.eventType === "card.action.trigger" || inbound.eventKind === "action") {
+      return deps.handleApprovalAction(inbound, frame);
+    }
     if (inbound.chatId === "" || inbound.text === "") {
       return {
         handled: false,

@@ -10,7 +10,9 @@ require_once __DIR__ . '/VHttpd/VHttpd.php';
 require_once __DIR__ . '/VHttpd/Psr7Adapter.php';
 require_once __DIR__ . '/VHttpd/Attribute/Dispatchable.php';
 require_once __DIR__ . '/VHttpd/Upstream/Plan.php';
-require_once __DIR__ . '/VSlim/Psr7Adapter.php';
+if (!class_exists('VPhp\VSlim\Psr7Adapter', false)) {
+    require_once __DIR__ . '/VSlim/Psr7Adapter.php';
+}
 require_once __DIR__ . '/VHttpd/PhpWorker/Client.php';
 require_once __DIR__ . '/VHttpd/PhpWorker/StreamResponse.php';
 require_once __DIR__ . '/VHttpd/PhpWorker/StreamApp.php';

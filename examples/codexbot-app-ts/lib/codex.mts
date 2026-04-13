@@ -68,6 +68,11 @@ function pickFirstString(...values) {
   return "";
 }
 
+function finiteNumber(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
 function safeJsonParse(text) {
   if (typeof text !== "string" || text.trim() === "") {
     return undefined;
@@ -211,6 +216,33 @@ function extractAssistantNotificationText(item: ThreadItem | ResponseItem | Reco
     );
   }
   return outputTextOnly;
+}
+
+function extractCommandExecutionFailureText(item: ThreadItem | ResponseItem | Record<string, unknown> | undefined | null) {
+  if (!item || typeof item !== "object") {
+    return "";
+  }
+  const type = typeof item.type === "string" ? item.type.trim() : "";
+  const status = typeof item.status === "string" ? item.status.trim().toLowerCase() : "";
+  if (type !== "commandExecution" || (status !== "failed" && status !== "declined")) {
+    return "";
+  }
+  const aggregatedOutput = typeof item.aggregatedOutput === "string" ? item.aggregatedOutput.trim() : "";
+  if (aggregatedOutput) {
+    return aggregatedOutput;
+  }
+  const exitCode = finiteNumber(item.exitCode);
+  const command = typeof item.command === "string" ? item.command.trim() : "";
+  if (exitCode !== undefined && command) {
+    return `Command failed with exit code ${exitCode}: ${command}`;
+  }
+  if (exitCode !== undefined) {
+    return `Command failed with exit code ${exitCode}.`;
+  }
+  if (command) {
+    return `Command failed: ${command}`;
+  }
+  return "Command execution failed.";
 }
 
 export function extractAssistantTextFromThreadItem(item: ThreadItem | ResponseItem | undefined | null) {
@@ -397,6 +429,17 @@ function decodeNotificationThreadPath(payload, params) {
   );
 }
 
+function decodeRequestId(payload, params) {
+  return pickFirstString(
+    typeof payload?.id === "string" ? payload.id : "",
+    typeof payload?.id === "number" ? String(payload.id) : "",
+    params?.requestId,
+    typeof params?.requestId === "number" ? String(params.requestId) : "",
+    params?.request_id,
+    typeof params?.request_id === "number" ? String(params.request_id) : "",
+  );
+}
+
 function decodeItemType(payload, params) {
   return pickFirstString(
     params?.item?.type,
@@ -556,6 +599,10 @@ function decodeNotificationMessage(payload, params) {
     return finalText;
   }
   const item = params?.item && typeof params.item === "object" ? params.item : payload?.item;
+  const commandFailureText = extractCommandExecutionFailureText(item);
+  if (commandFailureText) {
+    return commandFailureText;
+  }
   const assistantItemText = extractAssistantNotificationText(item);
   if (assistantItemText) {
     return assistantItemText;
@@ -666,6 +713,7 @@ export function parseCodexNotification(frame) {
     itemType: decodeItemType(payload, params),
     itemRole: decodeItemRole(payload, params),
     phase: decodeNotificationPhase(payload, params),
+    requestId: decodeRequestId(payload, params),
     threadPath: decodeNotificationThreadPath(payload, params),
     turnError,
     errorMessage: pickFirstString(
@@ -675,5 +723,21 @@ export function parseCodexNotification(frame) {
       payload?.error?.message,
       message,
     ),
+  };
+}
+
+export function parseCodexServerRequest(frame) {
+  const payload = frame.payloadJson({});
+  const params = payload.params && typeof payload.params === "object" ? payload.params : {};
+  return {
+    streamId: frame.traceId || "",
+    method: typeof payload.method === "string" ? payload.method : "",
+    id: decodeRequestId(payload, params),
+    raw: payload,
+    params,
+    threadId: decodeNotificationThreadId(payload, params),
+    turnId: decodeNotificationTurnId(payload, params),
+    itemId: decodeNotificationItemId(payload, params),
+    threadPath: decodeNotificationThreadPath(payload, params),
   };
 }

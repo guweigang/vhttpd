@@ -291,6 +291,46 @@ fn test_resolve_provider_runtime_settings_supports_pgsql_db_config() {
 	assert settings.db.pool_size == 9
 }
 
+fn test_load_vhttpd_config_supports_bridge_config() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_bridge_toml_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	config_file := os.join_path(temp_dir, 'vhttpd.toml')
+	os.write_file(config_file, '
+[feishu.bridge]
+enabled = true
+ws_url = "wss://bridge.example/ws"
+client_id = "local-main"
+token = "bridge-secret"
+target_id = "remote-main"
+') or {
+		panic(err)
+	}
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	cfg := load_vhttpd_config(['--config', config_file]) or { panic(err) }
+	assert cfg.feishu.bridge.enabled
+	assert cfg.feishu.bridge.ws_url == 'wss://bridge.example/ws'
+	assert cfg.feishu.bridge.client_id == 'local-main'
+	assert cfg.feishu.bridge.token == 'bridge-secret'
+	assert cfg.feishu.bridge.target_id == 'remote-main'
+}
+
+fn test_resolve_provider_runtime_settings_supports_bridge_config() {
+	mut cfg := default_vhttpd_config()
+	cfg.feishu.bridge.enabled = true
+	cfg.feishu.bridge.ws_url = 'wss://bridge.example/ws'
+	cfg.feishu.bridge.client_id = 'local-main'
+	cfg.feishu.bridge.token = 'bridge-secret'
+	cfg.feishu.bridge.target_id = 'remote-main'
+	settings := resolve_provider_runtime_settings([]string{}, cfg)
+	assert settings.bridge.enabled
+	assert settings.bridge.ws_url == 'wss://bridge.example/ws'
+	assert settings.bridge.client_id == 'local-main'
+	assert settings.bridge.token == 'bridge-secret'
+	assert settings.bridge.target_id == 'remote-main'
+}
+
 fn test_load_vhttpd_config_supports_multi_listener_sites() {
 	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_multi_listener_toml_test')
 	config_dir := os.join_path(temp_dir, 'config')

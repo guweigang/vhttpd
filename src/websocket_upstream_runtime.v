@@ -564,6 +564,9 @@ fn websocket_upstream_provider_handle_message(mut app App, provider string, inst
 fn websocket_upstream_provider_send(mut app App, provider string, req WebSocketUpstreamSendRequest) !WebSocketUpstreamSendResult {
 	return match provider {
 		websocket_upstream_provider_feishu {
+			if app.feishu_card_bridge_enabled() {
+				return app.feishu_card_bridge_proxy_send(req)
+			}
 			result := app.feishu_runtime_send_message(FeishuRuntimeSendMessageRequest{
 				app:             req.instance
 				receive_id_type: req.target_type
@@ -597,6 +600,9 @@ fn websocket_upstream_provider_send(mut app App, provider string, req WebSocketU
 fn websocket_upstream_provider_update(mut app App, provider string, req WebSocketUpstreamSendRequest) !WebSocketUpstreamUpdateResult {
 	return match provider {
 		websocket_upstream_provider_feishu {
+			if app.feishu_card_bridge_enabled() {
+				return app.feishu_card_bridge_proxy_update(req)
+			}
 			result := app.feishu_runtime_update_message(FeishuRuntimeUpdateMessageRequest{
 				app:             req.instance
 				message_id:      req.target

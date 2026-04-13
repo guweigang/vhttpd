@@ -96,8 +96,20 @@ pub fn CommandExecutor.ollama_route_enabled() bool {
 
 // Object method: execute command envelopes against current runtime.
 pub fn (mut exec CommandExecutor) execute(source_activity_id string, ctx DispatchContext, commands []WorkerWebSocketUpstreamCommand) ([]WebSocketUpstreamCommandActivity, string) {
-	_ = ctx
-	return exec.execute_websocket_upstream_commands(source_activity_id, commands)
+	mut enriched := []WorkerWebSocketUpstreamCommand{cap: commands.len}
+	for command in commands {
+		mut next := command
+		mut metadata := command.metadata.clone()
+		if (metadata['trace_id'] or { '' }).trim_space() == '' && ctx.session.trace_id.trim_space() != '' {
+			metadata['trace_id'] = ctx.session.trace_id
+		}
+		if (metadata['request_id'] or { '' }).trim_space() == '' && ctx.session.request_id.trim_space() != '' {
+			metadata['request_id'] = ctx.session.request_id
+		}
+		next.metadata = metadata.clone()
+		enriched << next
+	}
+	return exec.execute_websocket_upstream_commands(source_activity_id, enriched)
 }
 
 fn (exec CommandExecutor) new_snapshot(source_activity_id string, index int, command WorkerWebSocketUpstreamCommand) WebSocketUpstreamCommandActivity {
@@ -131,7 +143,7 @@ pub fn (mut exec CommandExecutor) execute_websocket_upstream_commands(source_act
 	log.info('[ws-cmd] executing ${commands.len} commands from ${source_activity_id}')
 	for index, command in commands {
 		normalized := NormalizedCommand.from_worker_command(command)
-		log.info('[ws-cmd]   #${index}: type=${normalized.routing_type()} kind=${normalized.kind} event=${normalized.normalized_event('')} provider=${normalized.normalized_provider('')} stream_id=${normalized.correlation.stream_id}')
+		log.info('[ws-cmd]   #${index}: type=${normalized.routing_type()} kind=${normalized.kind} event=${normalized.normalized_event('')} provider=${normalized.normalized_provider('')} stream_id=${normalized.correlation.stream_id} trace_id=${normalized.metadata['trace_id'] or { '' }} request_id=${normalized.correlation.request_id}')
 		mut snapshot := exec.new_snapshot(source_activity_id, index, command)
 		if normalized.is_provider_instance_command() {
 			handled, exec_err := exec.execute_provider_instance_command(normalized, mut snapshot)

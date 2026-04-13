@@ -26,7 +26,9 @@ if ($autoload !== null) {
     require_once __DIR__ . '/../src/VHttpd/VHttpd.php';
     require_once __DIR__ . '/../src/VHttpd/Attribute/Dispatchable.php';
     require_once __DIR__ . '/../src/VHttpd/Upstream/Plan.php';
-    require_once __DIR__ . '/../src/VSlim/Psr7Adapter.php';
+    if (!class_exists('VPhp\VSlim\Psr7Adapter', false)) {
+        require_once __DIR__ . '/../src/VSlim/Psr7Adapter.php';
+    }
     require_once __DIR__ . '/../src/VHttpd/PhpWorker/StreamResponse.php';
     require_once __DIR__ . '/../src/VHttpd/PhpWorker/StreamApp.php';
     require_once __DIR__ . '/../src/VHttpd/Upstream/WebSocket/Feishu/Event.php';

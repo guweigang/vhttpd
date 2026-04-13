@@ -402,3 +402,25 @@ fn test_codex_notification_prefers_thread_bound_stream_over_active_stream() {
 	assert state.last_req.trace_id == 'codex:thread_bound_001'
 	assert state.last_req.payload.contains('"threadId":"thread_live_001"')
 }
+
+fn test_codex_server_request_uses_logic_executor_without_worker_sockets() {
+	mut state := &CodexRuntimeTestDispatchState{}
+	mut app := App{
+		logic_executor: CodexRuntimeTestExecutor{
+			state: state
+		}
+		codex_runtime:  CodexProviderRuntime{
+			active_stream_id: 'codex:task_approval_001'
+		}
+	}
+	app.codex_handle_server_request('main', CodexRpcClassification{
+		is_request: true
+		method:     'item/commandExecution/requestApproval'
+		id_raw:     '991'
+	}, '{"method":"item/commandExecution/requestApproval","id":991,"params":{"threadId":"thread_approval_001","turnId":"turn_approval_001","itemId":"item_approval_001","command":"rm foo"}}')
+	assert state.dispatch_count == 1
+	assert state.last_req.provider == 'codex'
+	assert state.last_req.event_type == 'codex.server_request'
+	assert state.last_req.trace_id == 'codex:task_approval_001'
+	assert state.last_req.payload.contains('"command":"rm foo"')
+}

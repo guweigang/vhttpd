@@ -1,6 +1,13 @@
 import * as path from "path";
 
 export function createProviderRuntimeHelpers(deps) {
+  function runtimeConfigValue(runtime, path, fallbackValue) {
+    if (!runtime || typeof runtime.getConfig !== "function") {
+      return fallbackValue;
+    }
+    return runtime.getConfig(path, fallbackValue);
+  }
+
   function resolveConfiguredRuntimePath(value) {
     const text = typeof value === "string" ? value.trim() : "";
     if (!text) {
@@ -108,6 +115,8 @@ export function createProviderRuntimeHelpers(deps) {
   async function buildAppStartupCommands(runtime = undefined) {
     const defaults = deps.botDefaults();
     const commands = [];
+    const runtimeFeishuEnabled = runtimeConfigValue(runtime, "feishu.enabled", true) !== false;
+    const runtimeFeishuBridgeEnabled = runtimeConfigValue(runtime, "feishu.bridge.enabled", false) === true;
     const startedCodexInstances = new Set();
     for (const instance of configuredCodexStartupInstances()) {
       const resolvedInstance = fallbackCodexInstance(instance, defaults);
@@ -121,13 +130,23 @@ export function createProviderRuntimeHelpers(deps) {
       commands.push(...await buildProviderInstanceCommands("codex", codexInstance, codexSpec, "connected"));
     }
 
-    for (const instance of configuredFeishuStartupInstances()) {
-      const resolvedInstance = fallbackFeishuInstance(instance, defaults);
-      const feishuSpec = buildFeishuInstanceSpec(defaults, resolvedInstance);
-      if (hasFeishuConnectionCredentials(feishuSpec)) {
-        commands.push(...await buildProviderInstanceCommands("feishu", resolvedInstance, feishuSpec, "connected"));
-      } else if (runtime && typeof runtime.log === "function") {
-        runtime.log("codexbot-app-ts app_startup", deps.buildTag, `skip feishu startup for ${resolvedInstance}: missing FEISHU_APP_ID or FEISHU_APP_SECRET`);
+    if (!runtimeFeishuEnabled) {
+      if (runtime && typeof runtime.log === "function") {
+        runtime.log("codexbot-app-ts app_startup", deps.buildTag, "skip feishu startup: feishu.enabled=false");
+      }
+    } else if (runtimeFeishuBridgeEnabled) {
+      if (runtime && typeof runtime.log === "function") {
+        runtime.log("codexbot-app-ts app_startup", deps.buildTag, "skip feishu startup: feishu.bridge.enabled=true");
+      }
+    } else {
+      for (const instance of configuredFeishuStartupInstances()) {
+        const resolvedInstance = fallbackFeishuInstance(instance, defaults);
+        const feishuSpec = buildFeishuInstanceSpec(defaults, resolvedInstance);
+        if (hasFeishuConnectionCredentials(feishuSpec)) {
+          commands.push(...await buildProviderInstanceCommands("feishu", resolvedInstance, feishuSpec, "connected"));
+        } else if (runtime && typeof runtime.log === "function") {
+          runtime.log("codexbot-app-ts app_startup", deps.buildTag, `skip feishu startup for ${resolvedInstance}: missing FEISHU_APP_ID or FEISHU_APP_SECRET`);
+        }
       }
     }
 

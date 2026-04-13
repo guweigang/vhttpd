@@ -156,6 +156,18 @@ async function ensureInboundEventStateTable(database) {
   }
 }
 
+async function ensureApprovalRequestStateTable(database) {
+  if (!(await tableExists(database, "approval_request_state"))) {
+    await database.exec("create table approval_request_state (request_id text primary key, rpc_request_id text not null default '', parent_stream_id text not null default '', approval_stream_id text not null default '', session_key text not null default '', chat_id text not null default '', codex_instance text not null default '', method text not null default '', thread_id text not null default '', turn_id text not null default '', item_id text not null default '', status text not null default 'pending', decision text not null default '', payload_json text not null default '{}', created_at integer not null, updated_at integer not null)");
+    return;
+  }
+  const columns = await tableColumns(database, "approval_request_state");
+  const names = new Set(columns.map((column) => column.name));
+  if (!names.has("rpc_request_id")) {
+    await database.exec("alter table approval_request_state add column rpc_request_id text not null default ''");
+  }
+}
+
 async function reconcileMainInstanceAliases(database) {
   await database.exec("update chat_state set codex_instance = 'main' where codex_instance = 'default'");
   await database.exec("update stream_state set codex_instance = 'main' where codex_instance = 'default'");
@@ -222,6 +234,7 @@ async function db() {
     await ensureInstanceRegistryTable(database);
     await ensureItemRenderStateTable(database);
     await ensureInboundEventStateTable(database);
+    await ensureApprovalRequestStateTable(database);
     await database.exec("create index if not exists idx_chat_state_chat_id on chat_state(chat_id)");
     await database.exec("create index if not exists idx_chat_state_updated_at on chat_state(updated_at desc)");
     await database.exec("create index if not exists idx_stream_state_session_key on stream_state(session_key)");
@@ -237,6 +250,10 @@ async function db() {
     await database.exec("create index if not exists idx_item_render_state_item_stream_id on item_render_state(item_stream_id)");
     await database.exec("create index if not exists idx_item_render_state_updated_at on item_render_state(updated_at desc)");
     await database.exec("create index if not exists idx_inbound_event_state_seen_at on inbound_event_state(seen_at desc)");
+    await database.exec("create index if not exists idx_approval_request_state_parent_stream_id on approval_request_state(parent_stream_id)");
+    await database.exec("create index if not exists idx_approval_request_state_rpc_request_id on approval_request_state(thread_id, rpc_request_id)");
+    await database.exec("create index if not exists idx_approval_request_state_status on approval_request_state(status)");
+    await database.exec("create index if not exists idx_approval_request_state_updated_at on approval_request_state(updated_at desc)");
     await reconcileMainInstanceAliases(database);
     return database;
   });
@@ -331,6 +348,30 @@ function asItemRenderState(row) {
   };
 }
 
+function asApprovalRequestState(row) {
+  if (!row) {
+    return undefined;
+  }
+  return {
+    requestId: row.request_id,
+    rpcRequestId: row.rpc_request_id || "",
+    parentStreamId: row.parent_stream_id || "",
+    approvalStreamId: row.approval_stream_id || "",
+    sessionKey: row.session_key || "",
+    chatId: row.chat_id || "",
+    codexInstance: normalizeMainInstanceAlias(row.codex_instance || ""),
+    method: row.method || "",
+    threadId: row.thread_id || "",
+    turnId: row.turn_id || "",
+    itemId: row.item_id || "",
+    status: row.status || "pending",
+    decision: row.decision || "",
+    payload: JSON.parse(row.payload_json || "{}"),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 async function selectChatState(sessionKey) {
   const database = await db();
   const rows = await database.query("select session_key, chat_id, project_key, model, cwd, codex_instance, thread_id, thread_path, last_stream_id, updated_at from chat_state where session_key = ? limit 1", [sessionKey]);
@@ -353,6 +394,18 @@ async function selectItemRenderStates(parentStreamId) {
   const database = await db();
   const rows = await database.query("select parent_stream_id, item_key, item_id, turn_id, phase, item_stream_id, status, created_at, updated_at from item_render_state where parent_stream_id = ? order by created_at asc, item_key asc", [parentStreamId]);
   return rows.map(asItemRenderState).filter(Boolean);
+}
+
+async function selectApprovalRequestState(requestId) {
+  const database = await db();
+  const rows = await database.query("select request_id, rpc_request_id, parent_stream_id, approval_stream_id, session_key, chat_id, codex_instance, method, thread_id, turn_id, item_id, status, decision, payload_json, created_at, updated_at from approval_request_state where request_id = ? limit 1", [requestId]);
+  return asApprovalRequestState(rows[0]);
+}
+
+async function selectApprovalRequestStateByRpcRequestId(threadId, rpcRequestId) {
+  const database = await db();
+  const rows = await database.query("select request_id, rpc_request_id, parent_stream_id, approval_stream_id, session_key, chat_id, codex_instance, method, thread_id, turn_id, item_id, status, decision, payload_json, created_at, updated_at from approval_request_state where thread_id = ? and rpc_request_id = ? order by updated_at desc, request_id asc limit 1", [threadId, rpcRequestId]);
+  return asApprovalRequestState(rows[0]);
 }
 
 function nextStreamId() {
@@ -631,6 +684,66 @@ export async function rememberInboundEvent(dedupeKey, windowMs = 2 * 60 * 1000) 
     await database.exec("rollback");
     throw error;
   }
+}
+
+export async function getApprovalRequestState(requestId) {
+  if (!requestId) {
+    return undefined;
+  }
+  return selectApprovalRequestState(requestId);
+}
+
+export async function findApprovalRequestStateByRpcRequestId(threadId, rpcRequestId) {
+  if (!threadId || !rpcRequestId) {
+    return undefined;
+  }
+  return selectApprovalRequestStateByRpcRequestId(threadId, rpcRequestId);
+}
+
+export async function upsertApprovalRequestState(requestId, patch) {
+  if (!requestId) {
+    return undefined;
+  }
+  const existing = await selectApprovalRequestState(requestId);
+  const timestamp = now();
+  const next = {
+    requestId,
+    rpcRequestId: typeof patch?.rpcRequestId === "string" ? patch.rpcRequestId : existing?.rpcRequestId || "",
+    parentStreamId: typeof patch?.parentStreamId === "string" ? patch.parentStreamId : existing?.parentStreamId || "",
+    approvalStreamId: typeof patch?.approvalStreamId === "string" ? patch.approvalStreamId : existing?.approvalStreamId || "",
+    sessionKey: typeof patch?.sessionKey === "string" ? patch.sessionKey : existing?.sessionKey || "",
+    chatId: typeof patch?.chatId === "string" ? patch.chatId : existing?.chatId || "",
+    codexInstance: normalizeMainInstanceAlias(patch?.codexInstance, existing?.codexInstance || ""),
+    method: typeof patch?.method === "string" ? patch.method : existing?.method || "",
+    threadId: typeof patch?.threadId === "string" ? patch.threadId : existing?.threadId || "",
+    turnId: typeof patch?.turnId === "string" ? patch.turnId : existing?.turnId || "",
+    itemId: typeof patch?.itemId === "string" ? patch.itemId : existing?.itemId || "",
+    status: typeof patch?.status === "string" && patch.status.trim() !== "" ? patch.status : existing?.status || "pending",
+    decision: typeof patch?.decision === "string" ? patch.decision : existing?.decision || "",
+    payload: patch && Object.prototype.hasOwnProperty.call(patch, "payload") ? (patch.payload || {}) : existing?.payload || {},
+    createdAt: existing?.createdAt || timestamp,
+    updatedAt: timestamp,
+  };
+  const database = await db();
+  await database.exec("insert into approval_request_state (request_id, rpc_request_id, parent_stream_id, approval_stream_id, session_key, chat_id, codex_instance, method, thread_id, turn_id, item_id, status, decision, payload_json, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) on conflict(request_id) do update set rpc_request_id = excluded.rpc_request_id, parent_stream_id = excluded.parent_stream_id, approval_stream_id = excluded.approval_stream_id, session_key = excluded.session_key, chat_id = excluded.chat_id, codex_instance = excluded.codex_instance, method = excluded.method, thread_id = excluded.thread_id, turn_id = excluded.turn_id, item_id = excluded.item_id, status = excluded.status, decision = excluded.decision, payload_json = excluded.payload_json, updated_at = excluded.updated_at", [
+    next.requestId,
+    next.rpcRequestId,
+    next.parentStreamId,
+    next.approvalStreamId,
+    next.sessionKey,
+    next.chatId,
+    next.codexInstance || "",
+    next.method,
+    next.threadId,
+    next.turnId,
+    next.itemId,
+    next.status,
+    next.decision,
+    JSON.stringify(next.payload || {}),
+    next.createdAt,
+    next.updatedAt,
+  ]);
+  return selectApprovalRequestState(requestId);
 }
 
 export async function listRecentProjectThreads(projectKey, limit = 8) {
@@ -1038,6 +1151,7 @@ export async function runtimeSnapshot() {
   const settings = await database.query("select name, value, created_at, updated_at from settings order by name asc");
   const instances = await database.query("select provider, instance, config_json, desired_state, created_at, updated_at from instance_registry order by provider asc, instance asc");
   const itemRenders = await database.query("select parent_stream_id, item_key, item_id, turn_id, phase, item_stream_id, status, created_at, updated_at from item_render_state order by updated_at desc, parent_stream_id asc, item_key asc");
+  const approvals = await database.query("select request_id, rpc_request_id, parent_stream_id, approval_stream_id, session_key, chat_id, codex_instance, method, thread_id, turn_id, item_id, status, decision, payload_json, created_at, updated_at from approval_request_state order by updated_at desc, request_id asc");
   return {
     dbPath: dbPath(),
     chats: chats.map(asChatState),
@@ -1066,5 +1180,6 @@ export async function runtimeSnapshot() {
       updatedAt: row.updated_at,
     })),
     itemRenders: itemRenders.map(asItemRenderState),
+    approvals: approvals.map(asApprovalRequestState),
   };
 }

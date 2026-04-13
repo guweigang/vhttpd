@@ -1114,13 +1114,7 @@ fn (mut app App) codex_provider_handle_text_message(instance string, raw string)
 		return
 	}
 	if classification.is_request {
-		// Server-initiated requests (e.g. approval requests)
-		// MVP: auto-decline or ignore
-		app.emit('codex.server_request', {
-			'method':   classification.method
-			'id':       classification.id_raw
-			'instance': codex_runtime_instance_name(instance)
-		})
+		app.codex_handle_server_request(instance, classification, raw)
 		return
 	}
 	log.warn('[codex] ⚠️ instance=${codex_runtime_instance_name(instance)} frame #${frame_count} unclassified')
@@ -1353,6 +1347,68 @@ fn (mut app App) codex_reply_rpc(instance string, id string, result string) ! {
 	log.info('[codex] 📤 sending rpc reply: ${msg}')
 	codex_debug_log('rpc.reply.result', result)
 	conn.write_string(msg)!
+}
+
+fn (mut app App) codex_handle_server_request(instance string, cls CodexRpcClassification, raw string) {
+	log.info('[codex] 🙋 instance=${codex_runtime_instance_name(instance)} server request: method=${cls.method} id=${cls.id_raw}')
+	codex_debug_log('server_request.raw.${cls.method}', raw)
+
+	detected_thread_id := codex_extract_string_field(raw, 'threadId')
+	mut target_stream_id := ''
+	if detected_thread_id != '' {
+		target_stream_id = app.codex_repair_thread_stream_binding(instance, detected_thread_id)
+		if target_stream_id != '' {
+			log.info('[codex] 🔗 request bind: thread=${detected_thread_id} → stream=${target_stream_id}')
+		}
+	}
+	active_stream_id := app.codex_get_active_stream_id_for_instance(instance)
+	pending_stream_id := app.codex_pending_stream_id(instance)
+	mut stream_id := target_stream_id
+	if stream_id == '' {
+		stream_id = active_stream_id
+	}
+	if stream_id == '' {
+		stream_id = pending_stream_id
+	}
+
+	app.emit('codex.server_request', {
+		'method':   cls.method
+		'id':       cls.id_raw
+		'instance': codex_runtime_instance_name(instance)
+		'thread_id': detected_thread_id
+		'stream_id': stream_id
+	})
+
+	if !app.has_websocket_upstream_logic_executor() {
+		return
+	}
+
+	log.info('[codex] 🚚 request dispatch instance=${codex_runtime_instance_name(instance)} method=${cls.method} chosen_stream=${stream_id} source=${if target_stream_id != '' { 'thread_binding' } else if active_stream_id != '' { 'active_stream' } else if pending_stream_id != '' { 'pending_stream' } else { 'none' }}')
+	req := app.kernel_websocket_upstream_dispatch_request(
+		'codex-request-${time.now().unix_milli()}',
+		'codex',
+		codex_runtime_instance_name(instance),
+		stream_id,
+		'codex.server_request',
+		'',
+		'',
+		'',
+		raw,
+		time.now().unix(),
+		map[string]string{},
+	)
+	outcome := app.kernel_dispatch_websocket_upstream_handled(req) or {
+		log.error('[codex] ❌ failed to dispatch codex server request: ${err}')
+		return
+	}
+	resp := outcome.response
+	if resp.error != '' {
+		log.error('[codex] ❌ codex server request worker error: ${resp.error}')
+	}
+	log.info('[codex] 🧾 codex server request result: method=${cls.method} handled=${resp.handled} commands=${resp.commands.len} error=${resp.error}')
+	if resp.commands.len > 0 && outcome.command_error != '' {
+		log.error('[codex] ❌ codex server request command execution error: ${outcome.command_error}')
+	}
 }
 
 // ── Notification routing ────────────────────────────────────────────────

@@ -364,6 +364,12 @@ function shouldPreferItemCommands(itemCommands) {
 export async function routeCodexNotification(frame, deps) {
   const notification = parseCodexNotification(frame);
   frame.runtime.log("codexbot-app-ts notification", deps.buildTag, notification.method, notification.status || "", notification.threadId || "", notification.streamId || "");
+  if (notification.method === "serverRequest/resolved" && typeof deps.handleServerRequestResolved === "function") {
+    const resolvedOutcome = await deps.handleServerRequestResolved(notification, frame);
+    if (resolvedOutcome?.handled) {
+      return resolvedOutcome;
+    }
+  }
   let stream = await deps.getStreamState(notification.streamId);
   if (!stream) {
     frame.runtime.warn("codexbot-app-ts notification missing stream", deps.buildTag, notification.streamId || "");
@@ -565,6 +571,15 @@ export async function routeCodexNotification(frame, deps) {
           forceAppend: true,
           finish: false,
         });
+        if (!Array.isArray(itemCommands) || itemCommands.length === 0) {
+          return {
+            handled: true,
+            commands: [
+              deps.openParentStreamCard(next || stream, notification.streamId, " "),
+              deps.feishuStreamAppendText(notification.streamId, notification.delta),
+            ],
+          };
+        }
         return {
           handled: true,
           commands: itemCommands || [],

@@ -35,6 +35,15 @@ fn codexbot_ts_feishu_payload_with_event(text string, chat_id string, message_id
 	return '{"header":{"event_id":"${event_id}","event_type":"im.message.receive_v1"},"event":{"sender":{"sender_id":{"open_id":"ou_test_user"}},"message":{"message_id":"${message_id}","chat_id":"${chat_id}","message_type":"text","create_time":"${create_time}","content":${json.encode(content_json)}}}}'
 }
 
+fn codexbot_ts_feishu_action_payload(request_id string, decision string, open_message_id string, event_id string) string {
+	value_json := {
+		'kind':      'codex_approval'
+		'requestId': request_id
+		'decision':  decision
+	}
+	return '{"header":{"event_id":"${event_id}","event_type":"card.action.trigger"},"event":{"open_message_id":"${open_message_id}","action":{"tag":"button","value":${json.encode(value_json)}}}}'
+}
+
 fn codexbot_ts_with_temp_db(db_name string, run fn (string)) {
 	with_temp_sqlite_db_env('CODEXBOT_TS_DB_PATH', db_name, run)
 }
@@ -157,6 +166,21 @@ fn (mut h CodexbotTsTestHarness) dispatch_feishu_thread_message(id string, trace
 		target:      chat_id
 		target_type: 'chat_id'
 		payload:     codexbot_ts_feishu_thread_payload(text, chat_id, message_id, root_id, parent_id)
+	})
+}
+
+fn (mut h CodexbotTsTestHarness) dispatch_feishu_action(id string, trace_id string, open_message_id string, request_id string, decision string, event_id string) !WorkerWebSocketUpstreamDispatchResponse {
+	return h.executor.dispatch_websocket_upstream(mut h.app, WorkerWebSocketUpstreamDispatchRequest{
+		mode:        'websocket_upstream'
+		event:       'action'
+		id:          id
+		provider:    'feishu'
+		instance:    'main'
+		trace_id:    trace_id
+		event_type:  'card.action.trigger'
+		target:      open_message_id
+		target_type: 'open_message_id'
+		payload:     codexbot_ts_feishu_action_payload(request_id, decision, open_message_id, event_id)
 	})
 }
 

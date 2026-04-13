@@ -1,11 +1,13 @@
 module main
 
 import json
+import net.http
 import os
 import sync
 import time
 import vjsx
 import vjsx.runtimejs
+import x.json2
 
 const inproc_vjsx_lane_wait_timeout_ms = 1000
 const inproc_vjsx_lane_wait_poll_ms = 5
@@ -143,6 +145,31 @@ pub:
 	kind_name     string = 'vjsx'
 pub mut:
 	state &VjsxExecutorState = unsafe { nil }
+}
+
+struct InProcVjsxHostHttpFetchResponse {
+	ok      bool
+	status  int
+	body    string
+	headers map[string]string
+	error   string
+}
+
+struct InProcVjsxHostHttpFetchRequest {
+	url     string
+	method  string
+	body    string
+	headers map[string]string
+}
+
+struct InProcVjsxHostBridgeDispatchRequest {
+	app         string
+	trace_id    string            @[json: 'trace_id']
+	event_type  string            @[json: 'event_type']
+	message_id  string            @[json: 'message_id']
+	target      string
+	target_type string            @[json: 'target_type']
+	payload     string
 }
 
 struct InProcVjsxRuntimeMeta {
@@ -677,8 +704,11 @@ globalThis.__vhttpd_create_runtime = function(meta) {
     const hostApi = globalThis.vhttpdHost && typeof globalThis.vhttpdHost === "object" ? globalThis.vhttpdHost : undefined;
     const hostEmit = hostApi && typeof hostApi.emit === "function" ? hostApi.emit.bind(hostApi) : undefined;
     const hostSnapshot = hostApi && typeof hostApi.snapshot === "function" ? hostApi.snapshot.bind(hostApi) : undefined;
+    const hostConfig = hostApi && typeof hostApi.config === "function" ? hostApi.config.bind(hostApi) : undefined;
     const hostReadFile = hostApi && typeof hostApi.readTextFile === "function" ? hostApi.readTextFile.bind(hostApi) : undefined;
     const hostFindCodexSession = hostApi && typeof hostApi.findCodexSessionPath === "function" ? hostApi.findCodexSessionPath.bind(hostApi) : undefined;
+    const hostHttpFetch = hostApi && typeof hostApi.httpFetch === "function" ? hostApi.httpFetch.bind(hostApi) : undefined;
+    const hostBridgeDispatch = hostApi && typeof hostApi.bridgeDispatch === "function" ? hostApi.bridgeDispatch.bind(hostApi) : undefined;
     const capabilities = freezeValue({
       http: dispatchKind === "http",
       stream: false,
@@ -786,6 +816,43 @@ globalThis.__vhttpd_create_runtime = function(meta) {
           return undefined;
         }
       },
+      config(fallbackValue = undefined) {
+        if (typeof hostConfig !== "function") {
+          return fallbackValue;
+        }
+        const raw = hostConfig("");
+        if (raw === undefined || raw === null || raw === "") {
+          return fallbackValue;
+        }
+        try {
+          const parsed = JSON.parse(String(raw));
+          if (parsed && typeof parsed === "object") {
+            return freezeValue(parsed);
+          }
+          return parsed;
+        } catch (_) {
+          return fallbackValue;
+        }
+      },
+      getConfig(path, fallbackValue = undefined) {
+        if (typeof hostConfig !== "function") {
+          return fallbackValue;
+        }
+        const key = path == null ? "" : String(path);
+        const raw = hostConfig(key);
+        if (raw === undefined || raw === null || raw === "") {
+          return fallbackValue;
+        }
+        try {
+          const parsed = JSON.parse(String(raw));
+          if (parsed && typeof parsed === "object") {
+            return freezeValue(parsed);
+          }
+          return parsed;
+        } catch (_) {
+          return fallbackValue;
+        }
+      },
       readTextFile(path, fallbackValue = "") {
         if (!this.capabilities || !this.capabilities.fs || typeof hostReadFile !== "function") {
           return fallbackValue;
@@ -805,6 +872,49 @@ globalThis.__vhttpd_create_runtime = function(meta) {
           return fallbackValue;
         }
         return String(raw);
+      },
+      httpFetch(input, fallbackValue = undefined) {
+        if (!this.capabilities || !this.capabilities.network || typeof hostHttpFetch !== "function") {
+          return fallbackValue;
+        }
+        const request = input && typeof input === "object" ? input : {};
+        const raw = hostHttpFetch(JSON.stringify({
+          url: typeof request.url === "string" ? request.url : "",
+          method: typeof request.method === "string" ? request.method : "GET",
+          body: request.body == null ? "" : String(request.body),
+          headers: request.headers && typeof request.headers === "object" ? request.headers : {},
+        }));
+        if (raw === undefined || raw === null || raw === "") {
+          return fallbackValue;
+        }
+        try {
+          return JSON.parse(String(raw));
+        } catch (_) {
+          return fallbackValue;
+        }
+      },
+      bridgeDispatch(input, fallbackValue = undefined) {
+        if (typeof hostBridgeDispatch !== "function") {
+          return fallbackValue;
+        }
+        const request = input && typeof input === "object" ? input : {};
+        const raw = hostBridgeDispatch(JSON.stringify({
+          app: typeof request.app === "string" ? request.app : "",
+          trace_id: typeof request.trace_id === "string" ? request.trace_id : "",
+          event_type: typeof request.event_type === "string" ? request.event_type : "",
+          message_id: typeof request.message_id === "string" ? request.message_id : "",
+          target: typeof request.target === "string" ? request.target : "",
+          target_type: typeof request.target_type === "string" ? request.target_type : "",
+          payload: typeof request.payload === "string" ? request.payload : "",
+        }));
+        if (raw === undefined || raw === null || raw === "") {
+          return fallbackValue;
+        }
+        try {
+          return JSON.parse(String(raw));
+        } catch (_) {
+          return fallbackValue;
+        }
       },
       toJSON() {
         return {
@@ -914,10 +1024,22 @@ globalThis.__vhttpd_create_runtime = function(meta) {
       snapshot() {
         return undefined;
       },
+      config(fallbackValue = undefined) {
+        return fallbackValue;
+      },
+      getConfig(_path, fallbackValue = undefined) {
+        return fallbackValue;
+      },
       readTextFile(_path, fallbackValue = "") {
         return fallbackValue;
       },
       findCodexSessionPath(_threadId, fallbackValue = "") {
+        return fallbackValue;
+      },
+      httpFetch(_input, fallbackValue = undefined) {
+        return fallbackValue;
+      },
+      bridgeDispatch(_input, fallbackValue = undefined) {
         return fallbackValue;
       },
       toJSON() {
@@ -1453,27 +1575,36 @@ globalThis.__vhttpd_normalize_websocket_upstream_result = function(frame, result
   if (result === undefined || result === null || result === false) {
     return {
       handled: false,
-      commands: []
+      commands: [],
+      response: { status: 200, headers: {}, body: "" }
     };
   }
   if (result === true) {
     return {
       handled: true,
-      commands: []
+      commands: [],
+      response: { status: 200, headers: {}, body: "" }
     };
   }
   if (Array.isArray(result)) {
     return {
       handled: true,
-      commands: result
+      commands: result,
+      response: { status: 200, headers: {}, body: "" }
     };
   }
   if (typeof result !== "object") {
     throw new TypeError("Invalid websocket_upstream result type");
   }
+  const response = result.response && typeof result.response === "object" ? result.response : {};
   return {
     handled: Object.prototype.hasOwnProperty.call(result, "handled") ? !!result.handled : true,
-    commands: Array.isArray(result.commands) ? result.commands : []
+    commands: Array.isArray(result.commands) ? result.commands : [],
+    response: {
+      status: typeof response.status === "number" ? response.status : 200,
+      headers: response.headers && typeof response.headers === "object" && !Array.isArray(response.headers) ? response.headers : {},
+      body: response.body == null ? "" : String(response.body)
+    }
   };
 };
 ')!
@@ -1552,6 +1683,48 @@ fn inproc_vjsx_host_snapshot_builder(mut state VjsxExecutorState, idx int) vjsx.
 	}
 }
 
+fn inproc_vjsx_config_lookup(raw_json string, path string) string {
+	if raw_json.trim_space() == '' {
+		return ''
+	}
+	if path.trim_space() == '' {
+		return raw_json
+	}
+	parsed := json2.decode[json2.Any](raw_json) or { return '' }
+	mut current := parsed
+	for raw_part in path.split('.') {
+		part := raw_part.trim_space()
+		if part == '' {
+			continue
+		}
+		root := current.as_map()
+		if part !in root {
+			return ''
+		}
+		current = root[part] or { return '' }
+	}
+	return current.json_str()
+}
+
+fn inproc_vjsx_host_config_builder(mut state VjsxExecutorState, idx int) vjsx.HostValueBuilder {
+	return fn [mut state, idx] (ctx &vjsx.Context) vjsx.Value {
+		return ctx.js_function(fn [ctx, mut state, idx] (args []vjsx.Value) vjsx.Value {
+			mut app_ref := &App(unsafe { nil })
+			state.mu.@lock()
+			if idx >= 0 && idx < state.hosts.len && state.hosts[idx].request_ctx.active {
+				app_ref = state.hosts[idx].request_ctx.app
+			}
+			state.mu.unlock()
+			if isnil(app_ref) {
+				return ctx.js_string('')
+			}
+			mut app := app_ref
+			path := if args.len > 0 { args[0].to_string().trim_space() } else { '' }
+			return ctx.js_string(inproc_vjsx_config_lookup(app.runtime_config_json, path))
+		})
+	}
+}
+
 fn inproc_vjsx_host_read_text_file_builder(mut state VjsxExecutorState, idx int) vjsx.HostValueBuilder {
 	return fn [mut state, idx] (ctx &vjsx.Context) vjsx.Value {
 		return ctx.js_function(fn [ctx, mut state, idx] (args []vjsx.Value) vjsx.Value {
@@ -1605,6 +1778,130 @@ fn inproc_vjsx_host_find_codex_session_builder(mut state VjsxExecutorState, idx 
 	}
 }
 
+fn inproc_vjsx_host_http_fetch_builder(mut state VjsxExecutorState, idx int) vjsx.HostValueBuilder {
+	return fn [mut state, idx] (ctx &vjsx.Context) vjsx.Value {
+		return ctx.js_function(fn [ctx, mut state, idx] (args []vjsx.Value) vjsx.Value {
+			_ = idx
+			if args.len == 0 {
+				return ctx.js_string('')
+			}
+			raw := args[0].to_string().trim_space()
+			if raw == '' {
+				return ctx.js_string('')
+			}
+			mut enable_network := false
+			state.mu.@lock()
+			enable_network = state.facade.config.enable_network
+			state.mu.unlock()
+			if !enable_network {
+				return ctx.js_string(json.encode(InProcVjsxHostHttpFetchResponse{
+					ok:    false
+					error: 'network_disabled'
+				}))
+			}
+			parsed := json.decode(InProcVjsxHostHttpFetchRequest, raw) or {
+				return ctx.js_string(json.encode(InProcVjsxHostHttpFetchResponse{
+					ok:    false
+					error: 'invalid_fetch_request'
+				}))
+			}
+			url := parsed.url.trim_space()
+			if url == '' {
+				return ctx.js_string(json.encode(InProcVjsxHostHttpFetchResponse{
+					ok:    false
+					error: 'missing_url'
+				}))
+			}
+			method_raw := parsed.method.trim_space()
+			method := match method_raw.to_upper() {
+				'POST' { http.Method.post }
+				'PUT' { http.Method.put }
+				'PATCH' { http.Method.patch }
+				'DELETE' { http.Method.delete }
+				'HEAD' { http.Method.head }
+				'OPTIONS' { http.Method.options }
+				else { http.Method.get }
+			}
+			body := parsed.body
+			mut header := http.new_header()
+			for name, value in parsed.headers {
+				header.add_custom(name, value) or {}
+			}
+			resp := http.fetch(http.FetchConfig{
+				url:    url
+				method: method
+				data:   body
+				header: header
+			}) or {
+				return ctx.js_string(json.encode(InProcVjsxHostHttpFetchResponse{
+					ok:    false
+					error: err.msg()
+				}))
+			}
+			mut response_headers := map[string]string{}
+			for key in resp.header.keys() {
+				response_headers[key] = resp.header.get_custom(key) or { '' }
+			}
+			return ctx.js_string(json.encode(InProcVjsxHostHttpFetchResponse{
+				ok:      true
+				status:  resp.status_code
+				body:    resp.body
+				headers: response_headers
+			}))
+		})
+	}
+}
+
+fn inproc_vjsx_host_bridge_dispatch_builder(mut state VjsxExecutorState, idx int) vjsx.HostValueBuilder {
+	return fn [mut state, idx] (ctx &vjsx.Context) vjsx.Value {
+		return ctx.js_function(fn [ctx, mut state, idx] (args []vjsx.Value) vjsx.Value {
+			if args.len == 0 {
+				return ctx.js_string('')
+			}
+			raw := args[0].to_string().trim_space()
+			if raw == '' {
+				return ctx.js_string('')
+			}
+			req := json.decode(InProcVjsxHostBridgeDispatchRequest, raw) or {
+				return ctx.js_string(json.encode(FeishuCardBridgeResult{
+					error: 'invalid_bridge_dispatch_request'
+				}))
+			}
+			mut app_ref := &App(unsafe { nil })
+			mut request_trace_id := ''
+			state.mu.@lock()
+			if idx >= 0 && idx < state.hosts.len && state.hosts[idx].request_ctx.active {
+				app_ref = state.hosts[idx].request_ctx.app
+				request_trace_id = state.hosts[idx].request_ctx.trace_id
+			}
+			state.mu.unlock()
+			if isnil(app_ref) {
+				return ctx.js_string(json.encode(FeishuCardBridgeResult{
+					error: 'bridge_dispatch_app_missing'
+				}))
+			}
+			mut app := app_ref
+			summary := feishu_runtime_event_summary(req.payload)
+			trace_id := if req.trace_id.trim_space() != '' { req.trace_id } else { request_trace_id }
+			result := app.feishu_card_bridge_dispatch_callback(req.app, trace_id, FeishuRuntimeEventSummary{
+				event_id:        summary.event_id
+				event_kind:      if summary.event_kind != '' { summary.event_kind } else { 'action' }
+				event_type:      if req.event_type.trim_space() != '' { req.event_type } else { summary.event_type }
+				message_id:      if req.message_id.trim_space() != '' { req.message_id } else { summary.message_id }
+				target:          if req.target.trim_space() != '' { req.target } else { summary.target }
+				target_type:     if req.target_type.trim_space() != '' { req.target_type } else { summary.target_type }
+				open_message_id: summary.open_message_id
+				action_tag:      summary.action_tag
+			}, req.payload) or {
+				return ctx.js_string(json.encode(FeishuCardBridgeResult{
+					error: err.msg()
+				}))
+			}
+			return ctx.js_string(json.encode(result))
+		})
+	}
+}
+
 fn inproc_vjsx_host_api_builder(mut state VjsxExecutorState, idx int) vjsx.HostValueBuilder {
 	return vjsx.host_object(vjsx.HostObjectField{
 		name:  'emit'
@@ -1613,11 +1910,20 @@ fn inproc_vjsx_host_api_builder(mut state VjsxExecutorState, idx int) vjsx.HostV
 		name:  'snapshot'
 		value: inproc_vjsx_host_snapshot_builder(mut state, idx)
 	}, vjsx.HostObjectField{
+		name:  'config'
+		value: inproc_vjsx_host_config_builder(mut state, idx)
+	}, vjsx.HostObjectField{
 		name:  'readTextFile'
 		value: inproc_vjsx_host_read_text_file_builder(mut state, idx)
 	}, vjsx.HostObjectField{
 		name:  'findCodexSessionPath'
 		value: inproc_vjsx_host_find_codex_session_builder(mut state, idx)
+	}, vjsx.HostObjectField{
+		name:  'httpFetch'
+		value: inproc_vjsx_host_http_fetch_builder(mut state, idx)
+	}, vjsx.HostObjectField{
+		name:  'bridgeDispatch'
+		value: inproc_vjsx_host_bridge_dispatch_builder(mut state, idx)
 	})
 }
 
@@ -2177,6 +2483,7 @@ fn inproc_vjsx_not_ready_error(op string) IError {
 struct InProcVjsxWebSocketUpstreamResult {
 	handled  bool
 	commands []WorkerWebSocketUpstreamCommand
+	response WorkerResponse
 }
 
 struct InProcVjsxStartupResult {
@@ -2192,6 +2499,9 @@ fn websocket_upstream_response_from_js_value(val vjsx.Value, req WorkerWebSocket
 			id:       req.id
 			handled:  false
 			commands: []WorkerWebSocketUpstreamCommand{}
+			status:   200
+			headers:  map[string]string{}
+			body:     ''
 		}
 	}
 	normalized := json.decode(InProcVjsxWebSocketUpstreamResult, raw) or {
@@ -2203,6 +2513,9 @@ fn websocket_upstream_response_from_js_value(val vjsx.Value, req WorkerWebSocket
 		id:       req.id
 		handled:  normalized.handled
 		commands: normalized.commands
+		status:   if normalized.response.status > 0 { normalized.response.status } else { 200 }
+		headers:  normalized.response.headers.clone()
+		body:     normalized.response.body
 	}
 }
 

@@ -87,7 +87,7 @@ fn test_feishu_runtime_build_ack_preserves_message_type() {
 			},
 		]
 	}
-	ack := feishu_runtime_build_ack(frame)
+	ack := feishu_runtime_build_ack(frame, 200, map[string]string{}, '')
 	ack_headers := feishu_runtime_header_map(ack.headers)
 	assert ack.seq_id == 42
 	assert ack.log_id == 9
@@ -96,6 +96,27 @@ fn test_feishu_runtime_build_ack_preserves_message_type() {
 	assert ack_headers[feishu_runtime_header_type] == feishu_runtime_message_event
 	assert ack_headers[feishu_runtime_header_biz_rt] == '0'
 	assert ack.payload.bytestr().contains('"code":200')
+}
+
+fn test_feishu_runtime_build_ack_carries_custom_response_payload() {
+	frame := FeishuRuntimeProtoFrame{
+		seq_id:    7
+		log_id:    3
+		service:   11
+		method:    feishu_runtime_frame_type_data
+		log_id_str: 'log-3'
+		headers:   [
+			FeishuRuntimeProtoHeader{
+				key:   feishu_runtime_header_type
+				value: feishu_runtime_message_card
+			},
+		]
+	}
+	ack := feishu_runtime_build_ack(frame, 200, {
+		'content-type': 'application/json'
+	}, '{"elements":[]}')
+	assert ack.payload.bytestr().contains('"data":"{\\"elements\\":[]}"')
+	assert ack.payload.bytestr().contains('"content-type":"application/json"')
 }
 
 fn test_feishu_runtime_build_pong_preserves_frame_metadata() {

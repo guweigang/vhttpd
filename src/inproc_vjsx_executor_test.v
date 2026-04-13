@@ -1145,6 +1145,61 @@ export function websocket_upstream(frame) {
 	assert resp.commands[0].metadata['dispatch_kind'] == 'websocket_upstream'
 }
 
+fn test_inproc_vjsx_executor_dispatch_websocket_upstream_supports_response_payload() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_vjsx_executor_ws_upstream_response_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	app_file := os.join_path(temp_dir, 'bot-handler.mts')
+	os.write_file(app_file, '
+export function websocket_upstream(frame) {
+  return {
+    handled: true,
+    commands: [],
+    response: {
+      status: 202,
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({ ok: true, eventType: frame.eventType })
+    }
+  };
+}
+') or {
+		panic(err)
+	}
+	defer {
+		os.rm(app_file) or {}
+	}
+	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
+		thread_count:    1
+		app_entry:       app_file
+		module_root:     temp_dir
+		runtime_profile: 'node'
+	})
+	defer {
+		executor.close()
+	}
+	mut app := App{}
+	resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		mode:        'websocket_upstream'
+		event:       'action'
+		id:          'upstream_req_response_001'
+		provider:    'feishu'
+		instance:    'main'
+		trace_id:    'trace_upstream_response_001'
+		event_type:  'card.action.trigger'
+		message_id:  'om_test_response_001'
+		target:      'chat_test_response_001'
+		target_type: 'chat_id'
+		payload:     '{"text":"ping"}'
+		received_at: 1710000000
+	}) or { panic(err) }
+	assert resp.handled
+	assert resp.commands.len == 0
+	assert resp.status == 202
+	assert resp.headers['content-type'] == 'application/json'
+	assert resp.body.contains('"eventType":"card.action.trigger"')
+}
+
 fn test_inproc_vjsx_executor_dispatch_websocket_upstream_exposes_runtime_read_text_file() {
 	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_vjsx_executor_ws_upstream_fs_test')
 	os.mkdir_all(temp_dir) or { panic(err) }

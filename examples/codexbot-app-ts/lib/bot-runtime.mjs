@@ -1,4 +1,4 @@
-import { feishuText, feishuUpdateText, feishuStreamAppendText, feishuStreamFinish, codexRpcCall, codexTurnStart, codexTurnInterrupt, codexSessionClear, feishuSessionClear, providerInstanceUpsert, providerInstanceEnsure } from "./commands.mts";
+import { feishuText, feishuCard, feishuUpdateText, feishuUpdateCard, feishuStreamAppendText, feishuStreamFinish, codexRpcCall, codexRpcReply, codexTurnStart, codexTurnInterrupt, codexSessionClear, feishuSessionClear, providerInstanceUpsert, providerInstanceEnsure } from "./commands.mts";
 import { isUseCommandText } from "./command-text-rules.mjs";
 import { createFeishuInboundDeduper } from "../feishu/dedupe.mts";
 import { createFeishuCommandRouter } from "./command-router.mjs";
@@ -22,6 +22,7 @@ import { createSessionCommandHandlers } from "./session-commands.mjs";
 import { createThreadTaskCommandHandlers } from "./thread-task-commands.mjs";
 import { renderCodexAssistantText } from "./assistant-text-renderer.mjs";
 import { createThreadSessionCoordinator } from "./thread-session-coordinator.mjs";
+import { createCodexApprovalRouter } from "./approval-router.mjs";
 import {
   formatCodexErrorCodeLabel,
   isCodexThreadIdleStatus,
@@ -53,6 +54,8 @@ import {
   getItemRenderState,
   getSettingValue,
   getSelectionScope,
+  getApprovalRequestState,
+  findApprovalRequestStateByRpcRequestId,
   getLatestProjectThread,
   getStreamState,
   listItemRenderStates,
@@ -66,6 +69,7 @@ import {
   rememberSelectionScope,
   resetChatThread,
   runtimeSnapshot,
+  upsertApprovalRequestState,
   unbindProjectFromChat,
   upsertItemRenderState,
   upsertInstanceSpec,
@@ -280,6 +284,7 @@ const handleCodexNotification = createCodexNotificationRouter({
   feishuUpdateText,
   finalizeStreamState,
   getStreamState,
+  handleServerRequestResolved: (...args) => codexApprovalRouter.handleServerRequestResolved(...args),
   isItemLifecycleNotification,
   isPlainPromptStream,
   isCompletedItemNotification,
@@ -335,6 +340,20 @@ const handleCodexRpcResponse = createCodexRpcResponseRouter({
   truncateText,
   upsertItemRenderState,
   updateStreamState,
+});
+
+const codexApprovalRouter = createCodexApprovalRouter({
+  buildTag: CODEXBOT_TS_BUILD,
+  codexRpcReply,
+  createDerivedStreamState,
+  feishuCard,
+  feishuUpdateCard,
+  getApprovalRequestState,
+  findApprovalRequestStateByRpcRequestId,
+  getStreamState,
+  updateStreamState,
+  finalizeStreamState,
+  upsertApprovalRequestState,
 });
 
 const threadTaskCommandHandlers = createThreadTaskCommandHandlers({
@@ -546,6 +565,7 @@ const routeFeishuCommand = createFeishuCommandRouter({
   handleThreadsCommand,
   handleUnbindCommand,
   handleUseCommand,
+  handleApprovalAction: codexApprovalRouter.handleApprovalAction,
   isUseCommandText,
   shouldIgnoreInbound: (inbound) => feishuInboundDeduper.shouldIgnore(inbound),
 });
@@ -592,11 +612,14 @@ export function createBotApp() {
 
     async websocket_upstream(frame) {
       frame.runtime.log("codexbot-app-ts upstream", CODEXBOT_TS_BUILD, frame.provider, frame.eventType, frame.target);
-      if (frame.provider === "feishu" && frame.eventType === "im.message.receive_v1") {
+      if (frame.provider === "feishu" && (frame.eventType === "im.message.receive_v1" || frame.eventType === "card.action.trigger")) {
         return routeFeishuCommand(frame);
       }
       if (frame.provider === "codex" && frame.eventType === "codex.rpc.response") {
         return handleCodexRpcResponse(frame);
+      }
+      if (frame.provider === "codex" && frame.eventType === "codex.server_request") {
+        return codexApprovalRouter.handleCodexServerRequest(frame);
       }
       if (frame.provider === "codex" && frame.eventType === "codex.notification") {
         return handleCodexNotification(frame);

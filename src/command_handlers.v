@@ -155,6 +155,9 @@ fn feishu_command_normalize_stream_send(normalized NormalizedCommand, req WebSoc
 
 fn (h FeishuCommandHandler) execute_provider_message_send(normalized NormalizedCommand, mut req WebSocketUpstreamSendRequest, mut snapshot WebSocketUpstreamCommandActivity) (bool, string) {
 	req = feishu_command_normalize_stream_send(normalized, req)
+	if normalized.correlation.stream_id.trim_space() != '' {
+		req.metadata['stream_id'] = normalized.correlation.stream_id
+	}
 	if normalized.correlation.stream_id != '' && req.message_type == 'interactive' {
 		log.info('[ws-cmd]   🎴 normalized feishu stream send to interactive placeholder')
 	}
@@ -191,6 +194,39 @@ fn (h FeishuCommandHandler) execute_provider_message_send(normalized NormalizedC
 
 fn (h FeishuCommandHandler) execute_stream_command(normalized NormalizedCommand, req WebSocketUpstreamSendRequest, mut snapshot WebSocketUpstreamCommandActivity) (bool, string) {
 	mut app := h.app
+	if app.feishu_card_bridge_enabled() && req.target != '' {
+		if normalized.is_stream_append() {
+			result := app.feishu_card_bridge_proxy_append(req) or {
+				snapshot.status = 'error'
+				snapshot.error = err.msg()
+				return true, err.msg()
+			}
+			snapshot.status = 'buffered'
+			snapshot.message_id = result.message_id
+			return true, ''
+		}
+		if normalized.is_stream_finish() {
+			result := app.feishu_card_bridge_proxy_finish(req) or {
+				snapshot.status = 'error'
+				snapshot.error = err.msg()
+				return true, err.msg()
+			}
+			snapshot.status = if normalized.stream_finish { 'finished' } else { 'flushed' }
+			snapshot.message_id = result.message_id
+			return true, ''
+		}
+		if normalized.is_stream_fail() {
+			result := app.feishu_card_bridge_proxy_fail(req) or {
+				snapshot.status = 'error'
+				snapshot.error = err.msg()
+				return true, err.msg()
+			}
+			snapshot.status = 'failed'
+			snapshot.message_id = result.message_id
+			app.dispatch_feishu_message_updated(normalized.correlation.stream_id, result.message_id)
+			return true, ''
+		}
+	}
 	if normalized.is_stream_append() && req.target != '' {
 		log.info('[ws-cmd]   📥 buffering patch for target=${req.target}')
 		app.feishu_runtime_buffer_patch(req)
