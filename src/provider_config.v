@@ -36,9 +36,18 @@ struct DbRuntimeSettings {
 	pool_size int
 }
 
+struct BridgeRuntimeSettings {
+	enabled   bool
+	ws_url    string
+	client_id string
+	token     string
+	target_id string
+}
+
 struct ProviderRuntimeSettings {
 	feishu         FeishuRuntimeSettings
 	codex          CodexRuntimeSettings
+	bridge         BridgeRuntimeSettings
 	db             DbRuntimeSettings
 	ollama_enabled bool
 }
@@ -147,6 +156,13 @@ fn resolve_provider_runtime_settings(args []string, cfg VhttpdConfig) ProviderRu
 			} else {
 				400
 			}
+		}
+		bridge:         BridgeRuntimeSettings{
+			enabled:   cfg.feishu.bridge.enabled
+			ws_url:    cfg.feishu.bridge.ws_url
+			client_id: cfg.feishu.bridge.client_id
+			token:     cfg.feishu.bridge.token
+			target_id: cfg.feishu.bridge.target_id
 		}
 		db:             DbRuntimeSettings{
 			enabled:   cfg.db.enabled

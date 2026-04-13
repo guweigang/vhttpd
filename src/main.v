@@ -1,6 +1,7 @@
 module main
 
 import json
+import log
 import net
 import net.http
 import net.urllib
@@ -34,6 +35,7 @@ pub mut:
 	websocket_dispatch_mode                     bool
 	admin_on_data_plane                         bool
 	admin_token                                 string
+	runtime_config_json                         string
 	assets_enabled                              bool
 	assets_prefix                               string
 	assets_root                                 string
@@ -104,6 +106,17 @@ pub mut:
 	feishu_http_test_inflight    int
 	feishu_http_test_calls       int
 	feishu_http_test_message_seq int
+	feishu_card_bridge_mu        sync.Mutex
+	feishu_card_bridge_send_mu   sync.Mutex
+	feishu_card_bridge_clients   map[string]&websocket.Client = map[string]&websocket.Client{}
+	feishu_card_bridge_pending   map[string]chan FeishuCardBridgeResult = map[string]chan FeishuCardBridgeResult{}
+	feishu_card_bridge_proxy_pending map[string]chan FeishuBridgeProxyResult = map[string]chan FeishuBridgeProxyResult{}
+	feishu_card_bridge_client_conn   &websocket.Client = unsafe { nil }
+	feishu_card_bridge_enabled_flag  bool
+	feishu_card_bridge_ws_url    string
+	feishu_card_bridge_client_id string
+	feishu_card_bridge_token     string
+	feishu_card_bridge_target_id string
 }
 
 struct CodexTarget {
@@ -360,6 +373,9 @@ struct WorkerWebSocketUpstreamDispatchResponse {
 	id          string
 	handled     bool
 	commands    []WorkerWebSocketUpstreamCommand
+	status      int
+	headers     map[string]string
+	body        string
 	error       string
 	error_class string @[json: 'error_class']
 }
@@ -986,6 +1002,7 @@ fn proxy_worker_response(mut app App, mut ctx Context, method string, path strin
 	remote_addr := if isnil(ctx.conn) { '' } else { ctx.conn.peer_ip() or { '' } }
 	req_id := resolve_request_id(ctx, path)
 	trace_id := resolve_trace_id(ctx, path)
+	log.info('[http] ⇢ dispatch method=${method.to_upper()} path=${path} trace_id=${trace_id} request_id=${req_id} body_len=${ctx.req.data.len} executor=${app.logic_executor_kind()}')
 	if app.stream_dispatch {
 		if result := stream_via_dispatch(mut app, mut ctx, method, path, req_id, trace_id,
 			remote_addr)
@@ -1003,6 +1020,7 @@ fn proxy_worker_response(mut app App, mut ctx Context, method string, path strin
 	}) or {
 		err_msg := err.msg()
 		status, error_class := classify_worker_error(err_msg)
+		log.error('[http] ⇠ dispatch error method=${method.to_upper()} path=${path} trace_id=${trace_id} request_id=${req_id} status=${status} duration_ms=${time.now().unix_milli() - start_ms} error=${err_msg}')
 		app.emit('http.request', {
 			'method':      method.to_upper()
 			'path':        normalize_path(path)
@@ -1019,6 +1037,7 @@ fn proxy_worker_response(mut app App, mut ctx Context, method string, path strin
 		return ctx.text(body_on_head)
 	}
 	if outcome.kind == .stream {
+		log.info('[http] ⇠ dispatch stream method=${method.to_upper()} path=${path} trace_id=${trace_id} request_id=${req_id} socket=${outcome.socket_path} duration_ms=${time.now().unix_milli() - start_ms}')
 		mut conn := outcome.conn
 		selected_socket := outcome.socket_path
 		start := outcome.stream_start
@@ -1035,10 +1054,12 @@ fn proxy_worker_response(mut app App, mut ctx Context, method string, path strin
 			req_id, trace_id, start_ms)
 	}
 	if outcome.kind == .upstream_plan {
+		log.info('[http] ⇠ dispatch upstream_plan method=${method.to_upper()} path=${path} trace_id=${trace_id} request_id=${req_id} duration_ms=${time.now().unix_milli() - start_ms}')
 		return execute_upstream_plan(mut app, mut ctx, outcome.upstream_plan, method,
 			path, req_id, trace_id, start_ms)
 	}
 	resp := outcome.response
+	log.info('[http] ⇠ dispatch response method=${method.to_upper()} path=${path} trace_id=${trace_id} request_id=${req_id} status=${resp.status} body_len=${resp.body.len} duration_ms=${time.now().unix_milli() - start_ms}')
 	app.emit('http.request', {
 		'method':      method.to_upper()
 		'path':        normalize_path(path)
@@ -1212,6 +1233,9 @@ pub fn (mut app App) get_provider_runtime(name string) ?ProviderRuntime {
 }
 
 pub fn (mut app App) provider_runtime_snapshot(name string) ?string {
+	if name == 'db' {
+		return app.db_runtime_snapshot()
+	}
 	runtime := app.get_provider_runtime(name) or { return none }
 	return runtime.snapshot(mut app)
 }
@@ -1479,7 +1503,7 @@ pub fn (app &App) provider_bootstrap_enabled(name string) bool {
 		'feishu' { app.feishu_runtime_enabled() }
 		'codex' { app.codex_runtime.enabled || app.provider_instance_list('codex').len > 0 }
 		'ollama' { app.ollama_enabled }
-		'db' { app.db_runtime.enabled }
+		'db' { app.db_runtime.enabled && db_runtime_compiled() }
 		else { false }
 	}
 }
@@ -1631,6 +1655,7 @@ pub fn (mut app App) stop_all_providers() {
 
 @[get]
 pub fn (mut app App) health(mut ctx Context) veb.Result {
+	log.info('[http] route health url=${ctx.req.url} method=GET')
 	req_id := resolve_request_id(ctx, '/health')
 	status, body, _ := dispatch_core('GET', '/health')
 	app.emit('http.request', {
@@ -1748,8 +1773,11 @@ pub fn (mut app App) events_stream(mut ctx Context) veb.Result {
 
 @['/:path...'; get]
 pub fn (mut app App) proxy_get(mut ctx Context, path string) veb.Result {
+	log.info('[http] route proxy_get path=${path} url=${ctx.req.url}')
 	target := if ctx.req.url == '' { path } else { ctx.req.url }
-	if normalize_path(target) == '/mcp' {
+	request_path, _ := normalize_request_target(target)
+	normalized_target := normalize_path(request_path)
+	if normalized_target == '/mcp' {
 		return app.mcp_get(mut ctx)
 	}
 	if !app.has_http_logic_executor() {
@@ -1761,8 +1789,11 @@ pub fn (mut app App) proxy_get(mut ctx Context, path string) veb.Result {
 
 @['/:path...'; post]
 pub fn (mut app App) proxy_post(mut ctx Context, path string) veb.Result {
+	log.info('[http] route proxy_post path=${path} url=${ctx.req.url} body_len=${ctx.req.data.len}')
 	target := if ctx.req.url == '' { path } else { ctx.req.url }
-	if normalize_path(target) == '/mcp' {
+	request_path, _ := normalize_request_target(target)
+	normalized_target := normalize_path(request_path)
+	if normalized_target == '/mcp' {
 		return app.mcp_post(mut ctx)
 	}
 	if !app.has_http_logic_executor() {

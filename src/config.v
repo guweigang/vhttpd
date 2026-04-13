@@ -107,6 +107,7 @@ mut:
 	token_refresh_skew_seconds int    = 60    @[toml: 'token_refresh_skew_seconds']
 	recent_event_limit         int    = 20    @[toml: 'recent_event_limit']
 	apps                       map[string]FeishuAppConfig
+	bridge                     BridgeConfig
 }
 
 struct FeishuAppConfig {
@@ -128,6 +129,15 @@ mut:
 	sandbox            string = 'workspaceWrite' @[toml: 'sandbox']
 	reconnect_delay_ms int    = 3000    @[toml: 'reconnect_delay_ms']
 	flush_interval_ms  int    = 400    @[toml: 'flush_interval_ms']
+}
+
+struct BridgeConfig {
+mut:
+	enabled   bool
+	ws_url    string @[toml: 'ws_url']
+	client_id string @[toml: 'client_id']
+	token     string
+	target_id string @[toml: 'target_id']
 }
 
 struct DbMysqlConfig {
@@ -306,6 +316,14 @@ fn load_vhttpd_config(args []string) !VhttpdConfig {
 	doc := toml.parse_text(text)!
 	decode_paths_config(doc, mut cfg)!
 	decode_feishu_config(doc, mut cfg)!
+	if root_any := doc.value_opt('bridge') {
+		root := root_any.as_map()
+		if cfg.feishu.bridge.ws_url.trim_space() == '' && cfg.feishu.bridge.client_id.trim_space() == ''
+			&& cfg.feishu.bridge.token.trim_space() == '' && cfg.feishu.bridge.target_id.trim_space() == ''
+			&& !cfg.feishu.bridge.enabled {
+			cfg.feishu.bridge = decode_bridge_config_map(root)
+		}
+	}
 	decode_multi_listener_config(doc, mut cfg)!
 	resolve_config_variables(mut cfg, config_path)!
 	cfg.config_path = if config_path.trim_space() != '' { os.abs_path(config_path) } else { '' }
@@ -639,6 +657,11 @@ fn decode_feishu_config_map(entry map[string]toml.Any) FeishuConfig {
 		}
 	}
 	cfg.apps = apps.clone()
+	if bridge_any := entry['bridge'] {
+		if bridge_any is map[string]toml.Any {
+			cfg.bridge = decode_bridge_config_map(bridge_any)
+		}
+	}
 	return cfg
 }
 
@@ -670,6 +693,26 @@ fn decode_codex_config_map(entry map[string]toml.Any) CodexConfig {
 	}
 	if 'flush_interval_ms' in entry {
 		cfg.flush_interval_ms = toml_int_from_map(entry, 'flush_interval_ms', cfg.flush_interval_ms)
+	}
+	return cfg
+}
+
+fn decode_bridge_config_map(entry map[string]toml.Any) BridgeConfig {
+	mut cfg := BridgeConfig{}
+	if 'enabled' in entry {
+		cfg.enabled = toml_bool_from_map(entry, 'enabled', cfg.enabled)
+	}
+	if 'ws_url' in entry {
+		cfg.ws_url = toml_string_from_map(entry, 'ws_url', cfg.ws_url)
+	}
+	if 'client_id' in entry {
+		cfg.client_id = toml_string_from_map(entry, 'client_id', cfg.client_id)
+	}
+	if 'token' in entry {
+		cfg.token = toml_string_from_map(entry, 'token', cfg.token)
+	}
+	if 'target_id' in entry {
+		cfg.target_id = toml_string_from_map(entry, 'target_id', cfg.target_id)
 	}
 	return cfg
 }
@@ -917,6 +960,14 @@ fn resolve_config_variables(mut cfg VhttpdConfig, config_path string) ! {
 			vars, env_map, changed)!
 		cfg.codex.sandbox, changed = expand_config_string(cfg.codex.sandbox, vars, env_map,
 			changed)!
+		cfg.feishu.bridge.ws_url, changed = expand_config_string(cfg.feishu.bridge.ws_url, vars, env_map,
+			changed)!
+		cfg.feishu.bridge.client_id, changed = expand_config_string(cfg.feishu.bridge.client_id, vars,
+			env_map, changed)!
+		cfg.feishu.bridge.token, changed = expand_config_string(cfg.feishu.bridge.token, vars, env_map,
+			changed)!
+		cfg.feishu.bridge.target_id, changed = expand_config_string(cfg.feishu.bridge.target_id, vars,
+			env_map, changed)!
 
 		if !changed {
 			resolve_config_paths(mut cfg, config_path)
@@ -1032,6 +1083,11 @@ fn build_config_variable_map(cfg VhttpdConfig) map[string]string {
 		'mcp.sampling_capability_policy': cfg.mcp.sampling_capability_policy
 		'feishu.enabled':                 '${cfg.feishu.enabled}'
 		'feishu.open_base_url':           cfg.feishu.open_base_url
+		'feishu.bridge.enabled':          '${cfg.feishu.bridge.enabled}'
+		'feishu.bridge.ws_url':           cfg.feishu.bridge.ws_url
+		'feishu.bridge.client_id':        cfg.feishu.bridge.client_id
+		'feishu.bridge.token':            cfg.feishu.bridge.token
+		'feishu.bridge.target_id':        cfg.feishu.bridge.target_id
 	}
 	for key, value in cfg.paths.values {
 		vars['paths.${key}'] = value
@@ -1066,7 +1122,11 @@ fn expand_config_string(raw string, vars map[string]string, env map[string]strin
 			return error('invalid empty variable expression in config string')
 		}
 		replacement := resolve_config_variable(expr, vars, env)!
-		out = out[..start] + replacement + out[end + 1..]
+		next := out[..start] + replacement + out[end + 1..]
+		if next == out {
+			break
+		}
+		out = next
 		any_change = true
 	}
 	return out, any_change

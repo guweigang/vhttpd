@@ -270,6 +270,27 @@ fn merge_codex_config(base CodexConfig, override CodexConfig) CodexConfig {
 	return cfg
 }
 
+fn merge_bridge_config(base BridgeConfig, override BridgeConfig) BridgeConfig {
+	defaults := default_vhttpd_config().feishu.bridge
+	mut cfg := base
+	if override.enabled != defaults.enabled {
+		cfg.enabled = override.enabled
+	}
+	if override.ws_url != defaults.ws_url {
+		cfg.ws_url = override.ws_url
+	}
+	if override.client_id != defaults.client_id {
+		cfg.client_id = override.client_id
+	}
+	if override.token != defaults.token {
+		cfg.token = override.token
+	}
+	if override.target_id != defaults.target_id {
+		cfg.target_id = override.target_id
+	}
+	return cfg
+}
+
 fn site_config_as_vhttpd_config(global_cfg VhttpdConfig, site_cfg SiteConfig) VhttpdConfig {
 	mut cfg := global_cfg
 	cfg.listeners = map[string]ListenerConfig{}
@@ -305,6 +326,7 @@ fn site_config_as_vhttpd_config(global_cfg VhttpdConfig, site_cfg SiteConfig) Vh
 	cfg.mcp = merge_mcp_config(global_cfg.mcp, site_cfg.mcp)
 	cfg.feishu = merge_feishu_config(global_cfg.feishu, site_cfg.feishu)
 	cfg.codex = merge_codex_config(global_cfg.codex, site_cfg.codex)
+	cfg.feishu.bridge = merge_bridge_config(global_cfg.feishu.bridge, site_cfg.feishu.bridge)
 	cfg.config_path = global_cfg.config_path
 	return cfg
 }

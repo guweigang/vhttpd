@@ -1,4 +1,4 @@
-.PHONY: build vhttpd prod build-prod demo-vslim demo-ai demo-symfony demo-laravel demo-wordpress psr-matrix test test-fast test-inproc test-codexbot test-codexbot-fast test-codexbot-lifecycle test-profile-codexbot test-all
+.PHONY: build vhttpd prod build-prod build-db prepare-build-src demo-vslim demo-ai demo-symfony demo-laravel demo-wordpress psr-matrix test test-fast test-inproc test-codexbot test-codexbot-fast test-codexbot-lifecycle test-profile-codexbot test-all
 
 ROOT := $(CURDIR)
 SRC_DIR := $(ROOT)/src
@@ -16,6 +16,17 @@ endif
 V_FLAGS ?= $(V_TLS_FLAGS)
 V_PROD_FLAGS ?= -prod
 V_NOCACHE_FLAGS ?= -nocache
+WITH_DB ?= 0
+
+DB_IMPL_DIR := $(ROOT)/dbsrc
+BUILD_STAGE_ROOT := $(ROOT)/tmp/vbuildsrc
+BUILD_STAGE_DIR := $(BUILD_STAGE_ROOT)
+
+ifeq ($(WITH_DB),1)
+V_DB_FLAGS := -d enable_db
+else
+V_DB_FLAGS :=
+endif
 
 FAST_TEST_FILES := \
 	$(SRC_DIR)/codex_runtime_test.v \
@@ -55,16 +66,26 @@ CODEXBOT_FAST_TEST_FILES := \
 	$(SRC_DIR)/inproc_vjsx_executor_codexbot_semantics_test.v \
 	$(SRC_DIR)/inproc_vjsx_executor_codexbot_threads_test.v
 
-build:
-	v $(V_FLAGS) $(V_GC_FLAG) -o $(VHTTPD_BIN) $(SRC_DIR)
+prepare-build-src:
+	@rm -rf $(BUILD_STAGE_ROOT)
+	@mkdir -p $(BUILD_STAGE_DIR)
+	@ditto $(SRC_DIR) $(BUILD_STAGE_DIR)
+ifeq ($(WITH_DB),1)
+	@cp $(DB_IMPL_DIR)/*.v $(BUILD_STAGE_DIR)/
+endif
 
-vhttpd:
-	v $(V_FLAGS) $(V_GC_FLAG) -o $(VHTTPD_BIN) $(SRC_DIR)
+build: prepare-build-src
+	v $(V_FLAGS) $(V_DB_FLAGS) $(V_GC_FLAG) -o $(VHTTPD_BIN) $(BUILD_STAGE_DIR)
 
-prod:
-	v $(V_FLAGS) $(V_GC_FLAG) $(V_PROD_FLAGS) $(V_NOCACHE_FLAGS) -o $(VHTTPD_BIN) $(SRC_DIR)
+vhttpd: build
+
+prod: prepare-build-src
+	v $(V_FLAGS) $(V_DB_FLAGS) $(V_GC_FLAG) $(V_PROD_FLAGS) $(V_NOCACHE_FLAGS) -o $(VHTTPD_BIN) $(BUILD_STAGE_DIR)
 
 build-prod: prod
+
+build-db:
+	$(MAKE) build WITH_DB=1
 
 demo-vslim:
 	@$(ROOT)/examples/run_demo.sh vslim

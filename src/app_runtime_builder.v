@@ -1,5 +1,6 @@
 module main
 
+import json
 import os
 import time
 
@@ -62,6 +63,7 @@ fn build_app_runtime(provider_settings ProviderRuntimeSettings, executor_plan Lo
 		websocket_dispatch_mode:                  executor_plan.bootstrap.websocket_dispatch_mode
 		admin_on_data_plane:                      !build_cfg.admin_enabled
 		admin_token:                              build_cfg.admin_token
+		runtime_config_json:                      json.encode(cfg)
 		assets_enabled:                           build_cfg.assets_enabled
 		assets_prefix:                            build_cfg.assets_prefix
 		assets_root:                              build_cfg.assets_root
@@ -117,6 +119,11 @@ fn build_app_runtime(provider_settings ProviderRuntimeSettings, executor_plan Lo
 		}
 		codex_instances:                          map[string]CodexProviderRuntime{}
 		feishu_buffers:                           map[string]FeishuStreamBuffer{}
+		feishu_card_bridge_enabled_flag:          provider_settings.bridge.enabled
+		feishu_card_bridge_ws_url:                provider_settings.bridge.ws_url
+		feishu_card_bridge_client_id:             provider_settings.bridge.client_id
+		feishu_card_bridge_token:                 provider_settings.bridge.token
+		feishu_card_bridge_target_id:             provider_settings.bridge.target_id
 	}
 }
 

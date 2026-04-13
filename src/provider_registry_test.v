@@ -1,20 +1,5 @@
 module main
 
-import db.mysql
-import net.unix
-import os
-import time
-
-fn wait_for_db_runtime_socket_state(socket_path string, want_exists bool) bool {
-	for _ in 0 .. 200 {
-		if os.exists(socket_path) == want_exists {
-			return true
-		}
-		time.sleep(10 * time.millisecond)
-	}
-	return os.exists(socket_path) == want_exists
-}
-
 fn test_provider_registry_smoke() {
 	// Basic smoke assertions for provider registry API surface
 	// provider spec creation via provider_specs_copy should compile (no global state mutation)
@@ -503,45 +488,23 @@ fn test_provider_runtime_lifecycle_helpers_delegate_codex_runtime() {
 	assert app.codex_runtime.last_error == 'test-close'
 }
 
-fn test_db_provider_bootstrap_and_runtime_snapshot_helpers() {
+fn test_db_runtime_snapshot_without_compiled_support() {
 	mut app := App{
-		db_runtime: DbProviderRuntime{
+		db_runtime: build_db_runtime(DbRuntimeSettings{
 			enabled: true
 			socket:  'tmp/vhttpd-db.sock'
 			driver:  'mysql'
-		}
-		providers:  ProviderHost{
-			specs: map[string]ProviderSpec{}
-		}
+		})
 	}
-	assert app.provider_bootstrap_enabled('db')
-	app.register_provider_spec(ProviderSpec{
-		name:             'db'
-		enabled:          true
-		has_handler:      false
-		has_runtime:      true
-		command_matchers: []CommandMatcher{}
-		route_kind:       .generic
-		provider:         DbProvider{}
-		handler:          NoopProviderCommandHandler{}
-		runtime:          NoopProviderRuntime{}
-	})
-	assert app.provider_enabled('db')
-	assert app.provider_runtime_ready('db')
-	assert app.provider_runtime_default_instance('db') == 'main'
-	assert app.provider_runtime_instances('db') == ['main']
+	assert !db_runtime_compiled()
+	assert !app.provider_bootstrap_enabled('db')
 	snapshot := app.db_runtime_snapshot()
 	assert snapshot.contains('tmp/vhttpd-db.sock')
-	assert snapshot.contains('mysql')
-	assert snapshot.contains('"capabilities"')
-	assert snapshot.contains('"pool":true')
-	assert snapshot.contains('"transactions":true')
-	assert snapshot.contains('"parameters":true')
-	assert snapshot.contains('"prepared":true')
-	assert snapshot.contains('"savepoints":true')
+	assert snapshot.contains('"compiled":false')
+	assert snapshot.contains('"last_error":"db_not_compiled"')
 }
 
-fn test_db_runtime_dispatch_helpers() {
+fn test_db_runtime_dispatch_reports_not_compiled() {
 	mut app := App{
 		db_runtime: DbProviderRuntime{
 			enabled: true
@@ -556,77 +519,11 @@ fn test_db_runtime_dispatch_helpers() {
 	assert !invalid.ok
 	assert invalid.error == 'invalid_mode'
 	assert invalid.driver == 'mysql'
-	ping := app.db_runtime_dispatch(DbUpstreamRequest{
+	resp := app.db_runtime_dispatch(DbUpstreamRequest{
 		mode: 'db'
 		op:   'ping'
 	})
-	assert ping.driver == 'mysql'
-	if ping.ok {
-		assert ping.pong
-	} else {
-		assert ping.error != ''
-	}
-	query_resp := app.db_runtime_dispatch(DbUpstreamRequest{
-		mode:     'db'
-		op:       'query'
-		sql_text: 'select 1 as ok'
-	})
-	assert query_resp.driver == 'mysql'
-	if query_resp.ok {
-		assert query_resp.rows.len >= 0
-	} else {
-		assert query_resp.error != ''
-	}
-	unsupported := app.db_runtime_dispatch(DbUpstreamRequest{
-		mode: 'db'
-		op:   'noop'
-	})
-	assert !unsupported.ok
-	assert unsupported.error == 'unsupported_op'
-}
-
-fn test_db_runtime_finalize_failed_transaction_cleans_transaction_session() {
-	mut app := App{
-		db_runtime: DbProviderRuntime{
-			enabled:             true
-			driver:              'mysql'
-			active_transactions: 1
-			tx_sessions:         {
-				'bad-session': DbSessionHandle{
-					driver:     'mysql'
-					mysql_conn: mysql.DB{}
-				}
-			}
-		}
-	}
-	mut conn := DbSessionHandle{
-		driver:     'mysql'
-		mysql_conn: mysql.DB{}
-	}
-	app.db_runtime_finalize_tx_session('bad-session', mut conn, false) or { panic(err) }
-	assert app.db_runtime.tx_sessions.len == 0
-	assert app.db_runtime.active_transactions == 0
-}
-
-fn test_db_provider_stop_closes_listener_and_unlinks_socket() {
-	socket_dir := os.join_path(os.getwd(), 'tmp')
-	os.mkdir_all(socket_dir) or { panic(err) }
-	socket_path := os.join_path(socket_dir, 'vhttpd_db_runtime_stop_${time.now().unix_micro()}.sock')
-	os.rm(socket_path) or {}
-	mut listener := unix.listen_stream(socket_path) or { panic(err) }
-	mut app := App{
-		db_runtime: DbProviderRuntime{
-			enabled:  true
-			socket:   socket_path
-			driver:   'mysql'
-			started:  true
-			listener: listener
-		}
-	}
-	p := DbProvider{}
-	assert os.exists(socket_path)
-	p.stop(mut app) or { panic(err) }
-	assert app.db_runtime.stop_requested
-	assert !app.db_runtime.started
-	assert wait_for_db_runtime_socket_state(socket_path, false)
+	assert !resp.ok
+	assert resp.error == 'db_not_compiled'
+	assert resp.driver == 'mysql'
 }
