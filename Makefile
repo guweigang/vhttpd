@@ -69,7 +69,11 @@ CODEXBOT_FAST_TEST_FILES := \
 prepare-build-src:
 	@rm -rf $(BUILD_STAGE_ROOT)
 	@mkdir -p $(BUILD_STAGE_DIR)
-	@ditto $(SRC_DIR) $(BUILD_STAGE_DIR)
+	@if command -v rsync >/dev/null 2>&1; then \
+		rsync -a $(SRC_DIR)/ $(BUILD_STAGE_DIR)/; \
+	else \
+		cp -R $(SRC_DIR)/. $(BUILD_STAGE_DIR)/; \
+	fi
 ifeq ($(WITH_DB),1)
 	@cp $(DB_IMPL_DIR)/*.v $(BUILD_STAGE_DIR)/
 endif
