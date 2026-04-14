@@ -66,11 +66,19 @@ jobs:
           make -C /tmp/v
           echo "/tmp/v" >> "$GITHUB_PATH"
 
-      - name: Install V module deps
+      - name: Checkout vjsx module
         shell: bash
         run: |
           set -euo pipefail
-          v install guweigang.vjsx
+          git clone --depth=1 https://github.com/guweigang/vjsx /tmp/vjsx
+
+      - name: Link vjsx module
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.vmodules"
+          rm -rf "$HOME/.vmodules/vjsx"
+          ln -s /tmp/vjsx "$HOME/.vmodules/vjsx"
 
       - name: Show toolchain
         shell: bash
