@@ -234,6 +234,10 @@ pub fn new_inproc_vjsx_executor(config VjsxRuntimeFacadeConfig) InProcVjsxExecut
 			}
 		}
 	}
+	mut hosts := []VjsxLaneHost{}
+	for _ in 0 .. lanes.len {
+		hosts << vjsx_empty_lane_host()
+	}
 	initial_probe := if config.app_entry.trim_space() != '' {
 		vjsx_source_probe_for_config(config)
 	} else {
@@ -251,7 +255,7 @@ pub fn new_inproc_vjsx_executor(config VjsxRuntimeFacadeConfig) InProcVjsxExecut
 				config: config
 			}
 			lanes:                    lanes
-			hosts:                    []VjsxLaneHost{len: lanes.len, init: vjsx_empty_lane_host()}
+			hosts:                    hosts
 			cached_source_probe:      initial_probe
 			cached_source_signature:  initial_signature
 			signature_last_checked_at: if initial_signature != '' {
@@ -2127,10 +2131,14 @@ pub fn (e InProcVjsxExecutor) close() {
 		return
 	}
 	mut stale_hosts := []VjsxLaneHost{}
+	mut reset_hosts := []VjsxLaneHost{}
 	mut state := e.state
 	state.mu.@lock()
 	stale_hosts = state.hosts.clone()
-	state.hosts = []VjsxLaneHost{len: stale_hosts.len, init: vjsx_empty_lane_host()}
+	for _ in 0 .. stale_hosts.len {
+		reset_hosts << vjsx_empty_lane_host()
+	}
+	state.hosts = reset_hosts
 	for i in 0 .. state.lanes.len {
 		state.lanes[i].healthy = true
 		state.lanes[i].dirty = false
