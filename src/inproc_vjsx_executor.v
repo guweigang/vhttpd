@@ -139,6 +139,13 @@ mut:
 	request_ctx       InProcVjsxRequestContext
 }
 
+fn vjsx_empty_lane_host() VjsxLaneHost {
+	return VjsxLaneHost{
+		session:        unsafe { nil }
+		module_binding: unsafe { nil }
+	}
+}
+
 pub struct InProcVjsxExecutor {
 pub:
 	provider_name string = 'vjsx'
@@ -244,7 +251,7 @@ pub fn new_inproc_vjsx_executor(config VjsxRuntimeFacadeConfig) InProcVjsxExecut
 				config: config
 			}
 			lanes:                    lanes
-			hosts:                    []VjsxLaneHost{len: lanes.len}
+			hosts:                    []VjsxLaneHost{len: lanes.len, init: vjsx_empty_lane_host()}
 			cached_source_probe:      initial_probe
 			cached_source_signature:  initial_signature
 			signature_last_checked_at: if initial_signature != '' {
@@ -2110,7 +2117,7 @@ fn (e InProcVjsxExecutor) reset_lane_host(idx int) {
 		return
 	}
 	mut stale := state.hosts[idx]
-	state.hosts[idx] = VjsxLaneHost{}
+	state.hosts[idx] = vjsx_empty_lane_host()
 	state.mu.unlock()
 	inproc_vjsx_destroy_lane_host(mut stale)
 }
@@ -2123,7 +2130,7 @@ pub fn (e InProcVjsxExecutor) close() {
 	mut state := e.state
 	state.mu.@lock()
 	stale_hosts = state.hosts.clone()
-	state.hosts = []VjsxLaneHost{len: stale_hosts.len}
+	state.hosts = []VjsxLaneHost{len: stale_hosts.len, init: vjsx_empty_lane_host()}
 	for i in 0 .. state.lanes.len {
 		state.lanes[i].healthy = true
 		state.lanes[i].dirty = false
