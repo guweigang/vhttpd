@@ -62,15 +62,38 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git clone --depth=1 https://github.com/vlang/v /tmp/v
-          make -C /tmp/v
+          case "${{ matrix.target }}" in
+            linux-amd64) v_url="https://github.com/vlang/v/releases/download/0.5.1/v_linux.zip" ;;
+            macos-amd64) v_url="https://github.com/vlang/v/releases/download/0.5.1/v_macos_x86_64.zip" ;;
+            macos-arm64) v_url="https://github.com/vlang/v/releases/download/0.5.1/v_macos_arm64.zip" ;;
+            *) echo "unsupported target: ${{ matrix.target }}"; exit 1 ;;
+          esac
+          curl -fsSL "$v_url" -o /tmp/v.zip
+          rm -rf /tmp/v
+          unzip -q /tmp/v.zip -d /tmp
+          chmod +x /tmp/v/v
           echo "/tmp/v" >> "$GITHUB_PATH"
 
-      - name: Install V module deps
+      - name: Checkout vjsx module
         shell: bash
         run: |
           set -euo pipefail
-          v install guweigang.vjsx
+          git clone --depth=1 https://github.com/guweigang/vjsx /tmp/vjsx
+
+      - name: Checkout QuickJS source (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --depth=1 https://github.com/bellard/quickjs /tmp/quickjs
+
+      - name: Link vjsx module
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.vmodules"
+          rm -rf "$HOME/.vmodules/vjsx"
+          ln -s /tmp/vjsx "$HOME/.vmodules/vjsx"
 
       - name: Show toolchain
         shell: bash
@@ -84,7 +107,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          make prod
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            VJS_QUICKJS_PATH=/tmp/quickjs \
+            make prod V_FLAGS="-d use_openssl -d build_quickjs"
+          else
+            make prod
+          fi
 
       - name: Smoke test
         shell: bash
