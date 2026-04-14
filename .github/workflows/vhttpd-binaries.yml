@@ -63,6 +63,8 @@ jobs:
         run: |
           set -euo pipefail
           git clone --depth=1 https://github.com/vlang/v /tmp/v
+          git -C /tmp/v fetch --depth=1 origin c4d051b
+          git -C /tmp/v checkout c4d051b
           make -C /tmp/v
           echo "/tmp/v" >> "$GITHUB_PATH"
 
