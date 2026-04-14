@@ -62,9 +62,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git clone https://github.com/vlang/v /tmp/v
-          git -C /tmp/v checkout c4d051b4c2e6e7ad292e52b8ef560679dc0fb03a
-          make -C /tmp/v
+          case "${{ matrix.target }}" in
+            linux-amd64) v_url="https://github.com/vlang/v/releases/download/0.5.1/v_linux.zip" ;;
+            macos-amd64) v_url="https://github.com/vlang/v/releases/download/0.5.1/v_macos_x86_64.zip" ;;
+            macos-arm64) v_url="https://github.com/vlang/v/releases/download/0.5.1/v_macos_arm64.zip" ;;
+            *) echo "unsupported target: ${{ matrix.target }}"; exit 1 ;;
+          esac
+          curl -fsSL "$v_url" -o /tmp/v.zip
+          rm -rf /tmp/v
+          unzip -q /tmp/v.zip -d /tmp
+          chmod +x /tmp/v/v
           echo "/tmp/v" >> "$GITHUB_PATH"
 
       - name: Checkout vjsx module
