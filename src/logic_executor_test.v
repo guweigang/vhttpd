@@ -2,6 +2,13 @@ module main
 
 import json
 
+fn test_disabled_logic_executor_identity() {
+	executor := DisabledLogicExecutor{}
+	assert executor.model() == .worker
+	assert executor.kind() == 'none'
+	assert executor.provider() == 'none'
+}
+
 fn test_socket_worker_executor_identity() {
 	executor := SocketWorkerExecutor{}
 	assert executor.model() == .worker

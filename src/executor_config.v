@@ -76,7 +76,22 @@ fn build_php_worker_env(worker_env map[string]string, php_cfg PhpConfig) map[str
 	return env
 }
 
+fn infer_executor_kind_from_config(cfg VhttpdConfig) string {
+	if cfg.php.worker_entry.trim_space() != '' || cfg.php.app_entry.trim_space() != '' {
+		return 'php'
+	}
+	if cfg.vjsx.app_entry.trim_space() != '' || cfg.vjsx.module_root.trim_space() != ''
+		|| cfg.vjsx.build_root.trim_space() != '' {
+		return 'vjsx'
+	}
+	return 'none'
+}
+
 fn resolve_executor_runtime(args []string, cfg VhttpdConfig) !ExecutorRuntimeSelection {
-	spec := builtin_logic_executor_spec(arg_string_or(args, '--executor', cfg.executor.kind))!
+	mut kind := arg_string_or(args, '--executor', cfg.executor.kind).trim_space()
+	if kind == '' {
+		kind = infer_executor_kind_from_config(cfg)
+	}
+	spec := builtin_logic_executor_spec(kind)!
 	return spec.runtime_selection(args, cfg)
 }
