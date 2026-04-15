@@ -26,6 +26,8 @@ jobs:
   build:
     name: ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
+    env:
+      VHTTPD_VJSX_ROOT: /usr/local/share/vhttpd/vjsx
     strategy:
       fail-fast: false
       matrix:
@@ -79,9 +81,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          sudo mkdir -p "$(dirname "$VHTTPD_VJSX_ROOT")"
+          sudo chown "$USER" "$(dirname "$VHTTPD_VJSX_ROOT")"
+          rm -rf "$VHTTPD_VJSX_ROOT"
+          git clone --depth=1 https://github.com/guweigang/vjsx "$VHTTPD_VJSX_ROOT"
           mkdir -p "$HOME/.vmodules"
           rm -rf "$HOME/.vmodules/vjsx"
-          git clone --depth=1 https://github.com/guweigang/vjsx "$HOME/.vmodules/vjsx"
+          ln -s "$VHTTPD_VJSX_ROOT" "$HOME/.vmodules/vjsx"
 
       - name: Checkout QuickJS source (Linux)
         if: runner.os == 'Linux'
@@ -96,7 +102,7 @@ jobs:
         run: |
           set -euo pipefail
           make -C /tmp/quickjs libquickjs.a
-          cp /tmp/quickjs/libquickjs.a "$HOME/.vmodules/vjsx/libs/qjs_linux_x64.a"
+          cp /tmp/quickjs/libquickjs.a "$VHTTPD_VJSX_ROOT/libs/qjs_linux_x64.a"
 
       - name: Show toolchain
         shell: bash
@@ -132,11 +138,13 @@ jobs:
         run: |
           set -euo pipefail
           bundle="vhttpd-${{ matrix.target }}"
-          mkdir -p "$bundle/scripts"
+          mkdir -p "$bundle/scripts" "$bundle/runtime"
           cp ./vhttpd "$bundle/"
           cp ./README.md "$bundle/README.md"
           cp ./scripts/install_runtime.sh "$bundle/scripts/install_runtime.sh"
           cp ./scripts/runtime_doctor.sh "$bundle/scripts/runtime_doctor.sh"
+          cp -R "$VHTTPD_VJSX_ROOT" "$bundle/runtime/vjsx"
+          rm -rf "$bundle/runtime/vjsx/.git"
           chmod +x "$bundle/scripts/install_runtime.sh" "$bundle/scripts/runtime_doctor.sh"
           tar -czf "$bundle.tar.gz" "$bundle"
 

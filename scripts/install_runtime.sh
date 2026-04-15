@@ -3,11 +3,13 @@ set -euo pipefail
 
 profile="${1:-core}"
 prefix="${VHTTPD_PREFIX:-$HOME/.local}"
+share_root="${VHTTPD_SHARE_ROOT:-/usr/local/share/vhttpd}"
 
 os_name="$(uname -s)"
 script_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 bundle_root="$(CDPATH= cd -- "${script_dir}/.." && pwd)"
 src_bin="${bundle_root}/vhttpd"
+src_vjsx_runtime="${bundle_root}/runtime/vjsx"
 
 log() {
   printf '[install-runtime] %s\n' "$*"
@@ -37,6 +39,23 @@ apt_install() {
   else
     sudo apt-get update
     sudo apt-get install -y --no-install-recommends "$@"
+  fi
+}
+
+copy_dir_to_stable_path() {
+  local src="$1"
+  local dst="$2"
+  local dst_parent
+  dst_parent="$(dirname "$dst")"
+  if [ "$(id -u)" -eq 0 ]; then
+    mkdir -p "$dst_parent"
+    rm -rf "$dst"
+    cp -R "$src" "$dst"
+  else
+    sudo mkdir -p "$dst_parent"
+    sudo rm -rf "$dst"
+    sudo cp -R "$src" "$dst"
+    sudo chown -R "$(id -u):$(id -g)" "$dst"
   fi
 }
 
@@ -88,6 +107,15 @@ install_binary() {
   log "installed ${prefix}/bin/vhttpd"
 }
 
+install_runtime_assets() {
+  if [ ! -d "$src_vjsx_runtime" ]; then
+    log "no bundled vjsx runtime assets found; skipping ${share_root}/vjsx"
+    return
+  fi
+  copy_dir_to_stable_path "$src_vjsx_runtime" "${share_root}/vjsx"
+  log "installed ${share_root}/vjsx"
+}
+
 case "$profile" in
   none)
     ;;
@@ -104,6 +132,7 @@ case "$profile" in
 esac
 
 install_binary
+install_runtime_assets
 "${prefix}/libexec/vhttpd/runtime_doctor.sh" "${prefix}/bin/vhttpd" || true
 
 log "done: profile=${profile} prefix=${prefix}"

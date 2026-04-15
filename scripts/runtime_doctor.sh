@@ -3,6 +3,7 @@ set -euo pipefail
 
 bin_path="${1:-./vhttpd}"
 os_name="$(uname -s)"
+share_root="${VHTTPD_SHARE_ROOT:-/usr/local/share/vhttpd}"
 status=0
 
 ok() {
@@ -83,6 +84,12 @@ if command -v pg_config >/dev/null 2>&1; then
   ok "command pg_config"
 else
   warn "command pg_config is absent; PostgreSQL client environments may be incomplete"
+fi
+
+if [ -f "${share_root}/vjsx/web/js/buffer.js" ]; then
+  ok "vjsx runtime assets ${share_root}/vjsx"
+else
+  warn "vjsx runtime assets are absent at ${share_root}/vjsx; browser/node runtime profiles may fail to load bundled JS shims"
 fi
 
 if [ "$status" -ne 0 ]; then

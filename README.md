@@ -305,6 +305,7 @@ Each packaged artifact should now contain:
 - `README.md`
 - `scripts/install_runtime.sh`
 - `scripts/runtime_doctor.sh`
+- `runtime/vjsx`
 
 Suggested install flow for end users:
 
@@ -326,6 +327,14 @@ Runtime profile notes:
 - `db`: additionally installs SQLite/MySQL/PostgreSQL client packages so DB-enabled deployments are less likely to fail on missing client libraries
 - `full`: same as `db` today, reserved for future expansion
 - `none`: install the binary only and skip system package installation
+
+The packaged binary is built against a stable `vjsx` runtime asset root:
+
+```text
+/usr/local/share/vhttpd/vjsx
+```
+
+`scripts/install_runtime.sh` copies bundled `runtime/vjsx` there. This avoids baking GitHub runner paths such as `/home/runner/.vmodules/vjsx` into distributed binaries.
 
 After installation, users can verify the machine with:
 
