@@ -92,6 +92,12 @@ else
   warn "vjsx runtime assets are absent at ${share_root}/vjsx; browser/node runtime profiles may fail to load bundled JS shims"
 fi
 
+if [ -L "${HOME}/.vmodules/vjsx" ]; then
+  ok "vjsx compatibility symlink ${HOME}/.vmodules/vjsx"
+else
+  warn "vjsx compatibility symlink ${HOME}/.vmodules/vjsx is absent"
+fi
+
 if [ "$status" -ne 0 ]; then
   printf '[runtime-doctor] one or more runtime dependencies are unresolved\n' >&2
 fi

@@ -335,6 +335,11 @@ The packaged binary is built against a stable `vjsx` runtime asset root:
 ```
 
 `scripts/install_runtime.sh` copies bundled `runtime/vjsx` there. This avoids baking GitHub runner paths such as `/home/runner/.vmodules/vjsx` into distributed binaries.
+For compatibility with local tooling, it also creates:
+
+```text
+~/.vmodules/vjsx -> /usr/local/share/vhttpd/vjsx
+```
 
 After installation, users can verify the machine with:
 

@@ -4,6 +4,7 @@ set -euo pipefail
 profile="${1:-core}"
 prefix="${VHTTPD_PREFIX:-$HOME/.local}"
 share_root="${VHTTPD_SHARE_ROOT:-/usr/local/share/vhttpd}"
+home_vmodules="${HOME}/.vmodules"
 
 os_name="$(uname -s)"
 script_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
@@ -113,7 +114,11 @@ install_runtime_assets() {
     return
   fi
   copy_dir_to_stable_path "$src_vjsx_runtime" "${share_root}/vjsx"
+  mkdir -p "$home_vmodules"
+  rm -rf "${home_vmodules}/vjsx"
+  ln -s "${share_root}/vjsx" "${home_vmodules}/vjsx"
   log "installed ${share_root}/vjsx"
+  log "linked ${home_vmodules}/vjsx -> ${share_root}/vjsx"
 }
 
 case "$profile" in
