@@ -89,20 +89,31 @@ jobs:
           rm -rf "$HOME/.vmodules/vjsx"
           ln -s "$VHTTPD_VJSX_ROOT" "$HOME/.vmodules/vjsx"
 
-      - name: Checkout QuickJS source (Linux)
-        if: runner.os == 'Linux'
+      - name: Checkout QuickJS source
+        if: runner.os == 'Linux' || matrix.target == 'macos-amd64'
         shell: bash
         run: |
           set -euo pipefail
           git clone --depth=1 https://github.com/bellard/quickjs /tmp/quickjs
 
-      - name: Install QuickJS archive into vjsx libs (Linux)
-        if: runner.os == 'Linux'
+      - name: Install QuickJS archive into vjsx libs
+        if: runner.os == 'Linux' || matrix.target == 'macos-amd64'
         shell: bash
         run: |
           set -euo pipefail
           make -C /tmp/quickjs libquickjs.a
-          cp /tmp/quickjs/libquickjs.a "$VHTTPD_VJSX_ROOT/libs/qjs_linux_x64.a"
+          case "${{ matrix.target }}" in
+            linux-amd64)
+              cp /tmp/quickjs/libquickjs.a "$VHTTPD_VJSX_ROOT/libs/qjs_linux_x64.a"
+              ;;
+            macos-amd64)
+              cp /tmp/quickjs/libquickjs.a "$VHTTPD_VJSX_ROOT/libs/qjs_macos_x64.a"
+              ;;
+            *)
+              echo "unsupported quickjs archive install target: ${{ matrix.target }}"
+              exit 1
+              ;;
+          esac
 
       - name: Show toolchain
         shell: bash

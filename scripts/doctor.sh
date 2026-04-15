@@ -39,6 +39,20 @@ check_file() {
   fi
 }
 
+check_macos_archive_arch() {
+  local file_path="$1"
+  local expected_arch="$2"
+  if ! command -v lipo >/dev/null 2>&1; then
+    warn "lipo is unavailable; skipping architecture check for ${file_path}"
+    return
+  fi
+  if lipo -info "$file_path" 2>/dev/null | grep -q "architecture: ${expected_arch}"; then
+    ok "archive ${file_path} has architecture ${expected_arch}"
+  else
+    bad "archive ${file_path} does not match architecture ${expected_arch}"
+  fi
+}
+
 check_pkg() {
   local pkg_name="$1"
   if command -v pkg-config >/dev/null 2>&1 && pkg-config --exists "$pkg_name"; then
@@ -65,9 +79,11 @@ if [ -e "$vjsx_dir" ]; then
       case "$arch_name" in
         arm64)
           check_file "${vjsx_dir}/libs/qjs_macos_arm64.a"
+          check_macos_archive_arch "${vjsx_dir}/libs/qjs_macos_arm64.a" "arm64"
           ;;
         x86_64)
           check_file "${vjsx_dir}/libs/qjs_macos_x64.a"
+          check_macos_archive_arch "${vjsx_dir}/libs/qjs_macos_x64.a" "x86_64"
           ;;
         *)
           warn "unsupported macOS arch for vjsx quickjs archive checks: ${arch_name}"
