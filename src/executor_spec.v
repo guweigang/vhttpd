@@ -1,6 +1,7 @@
 module main
 
 enum BuiltinLogicExecutorFactoryKind {
+	noop
 	socket_worker
 	inproc_vjsx
 }
@@ -44,6 +45,18 @@ pub:
 
 fn builtin_logic_executor_specs() []BuiltinLogicExecutorSpec {
 	return [
+		BuiltinLogicExecutorSpec{
+			kind:                'none'
+			aliases:             ['noop', 'disabled']
+			provider:            'none'
+			logic_model:         .worker
+			worker_backend_mode: .disabled
+			lifecycle:           DisabledExecutorLifecycle{}
+			factory:             .noop
+			config_surface:      LogicExecutorConfigSurface{
+				section: 'none'
+			}
+		},
 		BuiltinLogicExecutorSpec{
 			kind:                'php'
 			aliases:             ['php_worker', 'php-worker']
@@ -95,9 +108,6 @@ fn normalize_builtin_logic_executor_kind(raw string) string {
 
 fn (spec BuiltinLogicExecutorSpec) matches_kind(raw string) bool {
 	normalized := normalize_builtin_logic_executor_kind(raw)
-	if normalized == '' {
-		return spec.kind == 'php'
-	}
 	if normalized == spec.kind {
 		return true
 	}
@@ -205,6 +215,9 @@ fn (spec BuiltinLogicExecutorSpec) resolve_vjsx_runtime_config(args []string, cf
 
 fn (spec BuiltinLogicExecutorSpec) build_executor(args []string, cfg VhttpdConfig) !LogicExecutor {
 	match spec.factory {
+		.noop {
+			return DisabledLogicExecutor{}
+		}
 		.socket_worker {
 			return SocketWorkerExecutor{}
 		}

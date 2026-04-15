@@ -757,13 +757,13 @@ root = "\${paths.assets_root}"
 	assert cfg.assets.root == expected_assets_root
 }
 
-fn test_resolve_executor_runtime_defaults_to_php() {
+fn test_resolve_executor_runtime_defaults_to_disabled_executor() {
 	selection := resolve_executor_runtime([]string{}, default_vhttpd_config()) or { panic(err) }
-	assert selection.lifecycle.name() == 'php_worker_host'
+	assert selection.lifecycle.name() == 'disabled'
 	assert selection.executor.model() == .worker
-	assert selection.executor.kind() == 'php'
-	assert selection.executor.provider() == 'php-worker'
-	assert selection.worker_backend_mode == .required
+	assert selection.executor.kind() == 'none'
+	assert selection.executor.provider() == 'none'
+	assert selection.worker_backend_mode == .disabled
 }
 
 fn test_build_php_worker_command_from_php_section() {
@@ -881,15 +881,24 @@ fn test_resolve_executor_runtime_builds_vjsx_executor() {
 }
 
 fn test_normalize_executor_kind_accepts_aliases() {
-	assert normalize_executor_kind('') or { panic(err) } == 'php'
+	assert normalize_executor_kind('none') or { panic(err) } == 'none'
+	assert normalize_executor_kind('disabled') or { panic(err) } == 'none'
+	assert normalize_executor_kind('noop') or { panic(err) } == 'none'
 	assert normalize_executor_kind('php-worker') or { panic(err) } == 'php'
 	assert normalize_executor_kind('php_worker') or { panic(err) } == 'php'
 	assert normalize_executor_kind('vjsx') or { panic(err) } == 'vjsx'
 }
 
 fn test_builtin_logic_executor_spec_exposes_runtime_models() {
+	none_spec := builtin_logic_executor_spec('none') or { panic(err) }
+	assert none_spec.matches_kind('none')
+	assert none_spec.matches_kind('disabled')
+	assert none_spec.provider == 'none'
+	assert none_spec.logic_model == .worker
+	assert none_spec.worker_backend_mode == .disabled
+	assert none_spec.lifecycle.name() == 'disabled'
+	assert none_spec.config_surface.section == 'none'
 	php_spec := builtin_logic_executor_spec('php') or { panic(err) }
-	assert php_spec.matches_kind('')
 	assert php_spec.matches_kind('php-worker')
 	assert php_spec.provider == 'php-worker'
 	assert php_spec.logic_model == .worker
@@ -919,24 +928,31 @@ fn test_builtin_logic_executor_spec_exposes_runtime_models() {
 fn test_admin_logic_executor_specs_snapshot_lists_builtin_executors() {
 	mut app := App{}
 	snapshot := app.admin_logic_executor_specs_snapshot()
-	assert snapshot.len == 2
-	assert snapshot[0].kind == 'php'
-	assert snapshot[0].logic_provider == 'php-worker'
-	assert snapshot[0].logic_executor_lifecycle == 'php_worker_host'
+	assert snapshot.len == 3
+	assert snapshot[0].kind == 'none'
+	assert snapshot[0].logic_provider == 'none'
+	assert snapshot[0].logic_executor_lifecycle == 'disabled'
 	assert snapshot[0].logic_executor_model == 'worker'
-	assert snapshot[0].worker_backend_mode == 'required'
-	assert snapshot[0].config_surface.section == 'php'
-	assert snapshot[0].config_surface.worker_entry_flag == '--php-worker-entry'
-	assert 'php-worker' in snapshot[0].aliases
-	assert snapshot[1].kind == 'vjsx'
-	assert snapshot[1].logic_provider == 'vjsx'
-	assert snapshot[1].logic_executor_lifecycle == 'embedded_host'
-	assert snapshot[1].logic_executor_model == 'embedded'
-	assert snapshot[1].worker_backend_mode == 'disabled'
-	assert snapshot[1].config_surface.section == 'vjsx'
-	assert snapshot[1].config_surface.app_entry_flag == '--vjsx-entry'
-	assert snapshot[1].config_surface.build_root_flag == '--vjsx-build-root'
-	assert snapshot[1].config_surface.signature_root_flag == '--vjsx-signature-root'
+	assert snapshot[0].worker_backend_mode == 'disabled'
+	assert snapshot[0].config_surface.section == 'none'
+	assert 'disabled' in snapshot[0].aliases
+	assert snapshot[1].kind == 'php'
+	assert snapshot[1].logic_provider == 'php-worker'
+	assert snapshot[1].logic_executor_lifecycle == 'php_worker_host'
+	assert snapshot[1].logic_executor_model == 'worker'
+	assert snapshot[1].worker_backend_mode == 'required'
+	assert snapshot[1].config_surface.section == 'php'
+	assert snapshot[1].config_surface.worker_entry_flag == '--php-worker-entry'
+	assert 'php-worker' in snapshot[1].aliases
+	assert snapshot[2].kind == 'vjsx'
+	assert snapshot[2].logic_provider == 'vjsx'
+	assert snapshot[2].logic_executor_lifecycle == 'embedded_host'
+	assert snapshot[2].logic_executor_model == 'embedded'
+	assert snapshot[2].worker_backend_mode == 'disabled'
+	assert snapshot[2].config_surface.section == 'vjsx'
+	assert snapshot[2].config_surface.app_entry_flag == '--vjsx-entry'
+	assert snapshot[2].config_surface.build_root_flag == '--vjsx-build-root'
+	assert snapshot[2].config_surface.signature_root_flag == '--vjsx-signature-root'
 }
 
 fn test_internal_admin_executors_returns_builtin_executor_specs() {
@@ -948,15 +964,19 @@ fn test_internal_admin_executors_returns_builtin_executor_specs() {
 	})
 	assert resp.status == 200
 	snapshot := json.decode([]AdminLogicExecutorSpecSnapshot, resp.body) or { panic(err) }
-	assert snapshot.len == 2
-	assert snapshot[0].kind == 'php'
-	assert snapshot[0].logic_provider == 'php-worker'
-	assert snapshot[0].logic_executor_lifecycle == 'php_worker_host'
-	assert snapshot[0].config_surface.section == 'php'
-	assert snapshot[1].kind == 'vjsx'
-	assert snapshot[1].logic_provider == 'vjsx'
-	assert snapshot[1].logic_executor_lifecycle == 'embedded_host'
-	assert snapshot[1].config_surface.section == 'vjsx'
+	assert snapshot.len == 3
+	assert snapshot[0].kind == 'none'
+	assert snapshot[0].logic_provider == 'none'
+	assert snapshot[0].logic_executor_lifecycle == 'disabled'
+	assert snapshot[0].config_surface.section == 'none'
+	assert snapshot[1].kind == 'php'
+	assert snapshot[1].logic_provider == 'php-worker'
+	assert snapshot[1].logic_executor_lifecycle == 'php_worker_host'
+	assert snapshot[1].config_surface.section == 'php'
+	assert snapshot[2].kind == 'vjsx'
+	assert snapshot[2].logic_provider == 'vjsx'
+	assert snapshot[2].logic_executor_lifecycle == 'embedded_host'
+	assert snapshot[2].config_surface.section == 'vjsx'
 }
 
 fn test_php_worker_executor_lifecycle_prepares_worker_command_and_env() {
@@ -1035,6 +1055,23 @@ fn test_resolve_logic_executor_runtime_plan_defaults_to_php_worker_host() {
 	assert plan.bootstrap.worker_env['APP_ENV'] == 'dev'
 	assert plan.bootstrap.worker_env['VHTTPD_APP'] == app_entry
 	assert plan.bootstrap.worker_cmd.contains(worker_entry)
+}
+
+fn test_resolve_logic_executor_runtime_plan_defaults_to_disabled_executor() {
+	plan := resolve_logic_executor_runtime_plan([]string{}, default_vhttpd_config(), [
+		'/tmp/a.sock',
+	], true, true, true, 'php worker.php', {
+		'APP_ENV': 'dev'
+	}) or { panic(err) }
+	assert plan.executor.kind() == 'none'
+	assert plan.lifecycle.name() == 'disabled'
+	assert plan.worker_backend_mode == .disabled
+	assert plan.bootstrap.worker_sockets.len == 0
+	assert !plan.bootstrap.stream_dispatch
+	assert !plan.bootstrap.websocket_dispatch_mode
+	assert !plan.bootstrap.worker_autostart
+	assert plan.bootstrap.worker_cmd == ''
+	assert plan.bootstrap.worker_env['APP_ENV'] == 'dev'
 }
 
 fn test_resolve_logic_executor_runtime_plan_for_vjsx_disables_worker_bootstrap() {
@@ -1250,6 +1287,30 @@ fn test_resolve_server_runtime_config_builds_php_runtime_state() {
 	assert runtime_cfg.app_build_cfg.event_log == event_log
 	assert runtime_cfg.app_build_cfg.worker_queue_capacity == 9
 	assert runtime_cfg.internal_admin_socket.starts_with('/tmp/vhttpd_admin_')
+	assert os.exists(pid_file)
+}
+
+fn test_resolve_server_runtime_config_defaults_to_disabled_executor_without_app_logic() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_server_runtime_disabled_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	event_log := os.join_path(temp_dir, 'logs', 'events.ndjson')
+	pid_file := os.join_path(temp_dir, 'run', 'vhttpd.pid')
+	defer {
+		os.rm(pid_file) or {}
+		os.rmdir_all(temp_dir) or {}
+	}
+	mut cfg := default_vhttpd_config()
+	cfg.server.host = '127.0.0.1'
+	cfg.server.port = 18081
+	cfg.files.event_log = event_log
+	cfg.files.pid_file = pid_file
+	runtime_cfg := resolve_server_runtime_config([]string{}, cfg) or { panic(err) }
+	assert runtime_cfg.executor_plan.executor.kind() == 'none'
+	assert runtime_cfg.executor_plan.lifecycle.name() == 'disabled'
+	assert runtime_cfg.executor_plan.worker_backend_mode == .disabled
+	assert runtime_cfg.executor_plan.bootstrap.worker_sockets.len == 0
+	assert !runtime_cfg.executor_plan.bootstrap.worker_autostart
+	assert runtime_cfg.executor_plan.bootstrap.worker_cmd == ''
 	assert os.exists(pid_file)
 }
 

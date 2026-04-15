@@ -19,6 +19,34 @@ pub interface LogicExecutorLifecycle {
 	stop(mut app App)
 }
 
+pub struct DisabledExecutorLifecycle {}
+
+pub fn (l DisabledExecutorLifecycle) name() string {
+	_ = l
+	return 'disabled'
+}
+
+pub fn (l DisabledExecutorLifecycle) prepare_bootstrap(args []string, cfg VhttpdConfig, mut state ExecutorBootstrapState) ! {
+	_ = l
+	_ = args
+	_ = cfg
+	state.worker_sockets = []string{}
+	state.worker_autostart = false
+	state.worker_cmd = ''
+	state.stream_dispatch = false
+	state.websocket_dispatch_mode = false
+}
+
+pub fn (l DisabledExecutorLifecycle) start(mut app App) {
+	_ = l
+	_ = app
+}
+
+pub fn (l DisabledExecutorLifecycle) stop(mut app App) {
+	_ = l
+	_ = app
+}
+
 pub struct PhpWorkerExecutorLifecycle {}
 
 pub fn (l PhpWorkerExecutorLifecycle) name() string {

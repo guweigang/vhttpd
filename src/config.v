@@ -42,7 +42,7 @@ mut:
 
 struct ExecutorConfig {
 mut:
-	kind string = 'php'
+	kind string
 }
 
 struct PhpConfig {

@@ -99,6 +99,83 @@ pub interface LogicExecutor {
 	dispatch_websocket_event(mut app App, frame WorkerWebSocketFrame) !WorkerWebSocketDispatchResponse
 }
 
+pub struct DisabledLogicExecutor {}
+
+pub fn (e DisabledLogicExecutor) model() LogicExecutorModel {
+	_ = e
+	return .worker
+}
+
+pub fn (e DisabledLogicExecutor) kind() string {
+	_ = e
+	return 'none'
+}
+
+pub fn (e DisabledLogicExecutor) provider() string {
+	_ = e
+	return 'none'
+}
+
+pub fn (e DisabledLogicExecutor) admin_details() LogicExecutorAdminDetails {
+	_ = e
+	return LogicExecutorAdminDetails{
+		kind:     'none'
+		provider: 'none'
+		model:    LogicExecutorModel.worker.str()
+	}
+}
+
+pub fn (e DisabledLogicExecutor) warmup(mut app App) ! {
+	_ = e
+	_ = app
+}
+
+pub fn (e DisabledLogicExecutor) close() {
+	_ = e
+}
+
+pub fn (e DisabledLogicExecutor) dispatch_http(mut app App, req HttpLogicDispatchRequest) !HttpLogicDispatchOutcome {
+	_ = e
+	_ = app
+	_ = req
+	return error('logic_executor_disabled')
+}
+
+pub fn (e DisabledLogicExecutor) open_websocket_session(mut app App, req WebSocketSessionOpenRequest) !WebSocketSessionOpenOutcome {
+	_ = e
+	_ = app
+	_ = req
+	return error('logic_executor_disabled')
+}
+
+pub fn (e DisabledLogicExecutor) dispatch_stream(mut app App, req StreamDispatchRequest) !StreamDispatchResponse {
+	_ = e
+	_ = app
+	_ = req
+	return error('logic_executor_disabled')
+}
+
+pub fn (e DisabledLogicExecutor) dispatch_mcp(mut app App, req WorkerMcpDispatchRequest) !WorkerMcpDispatchResponse {
+	_ = e
+	_ = app
+	_ = req
+	return error('logic_executor_disabled')
+}
+
+pub fn (e DisabledLogicExecutor) dispatch_websocket_upstream(mut app App, req WorkerWebSocketUpstreamDispatchRequest) !WorkerWebSocketUpstreamDispatchResponse {
+	_ = e
+	_ = app
+	_ = req
+	return error('logic_executor_disabled')
+}
+
+pub fn (e DisabledLogicExecutor) dispatch_websocket_event(mut app App, frame WorkerWebSocketFrame) !WorkerWebSocketDispatchResponse {
+	_ = e
+	_ = app
+	_ = frame
+	return error('logic_executor_disabled')
+}
+
 pub struct SocketWorkerExecutor {}
 
 pub fn (e SocketWorkerExecutor) model() LogicExecutorModel {
