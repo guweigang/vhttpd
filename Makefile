@@ -1,4 +1,4 @@
-.PHONY: build vhttpd prod build-prod build-db prepare-build-src demo-vslim demo-ai demo-symfony demo-laravel demo-wordpress psr-matrix test test-fast test-inproc test-codexbot test-codexbot-fast test-codexbot-lifecycle test-profile-codexbot test-all
+.PHONY: build vhttpd prod build-prod build-db prepare-build-src deps-core deps-vjsx deps-db deps-full doctor demo-vslim demo-ai demo-symfony demo-laravel demo-wordpress psr-matrix test test-fast test-inproc test-codexbot test-codexbot-fast test-codexbot-lifecycle test-profile-codexbot test-all
 
 ROOT := $(CURDIR)
 SRC_DIR := $(ROOT)/src
@@ -90,6 +90,21 @@ build-prod: prod
 
 build-db:
 	$(MAKE) build WITH_DB=1
+
+deps-core:
+	@./scripts/install_deps.sh core
+
+deps-vjsx:
+	@./scripts/install_deps.sh vjsx
+
+deps-db:
+	@./scripts/install_deps.sh db
+
+deps-full:
+	@./scripts/install_deps.sh full
+
+doctor:
+	@./scripts/doctor.sh
 
 demo-vslim:
 	@$(ROOT)/examples/run_demo.sh vslim

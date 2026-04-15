@@ -207,10 +207,55 @@ Practical summary:
 - phase 2 modes decouple the client-side connection from worker lifetime
 - stream phase 3 also decouples the upstream live stream from worker lifetime
 
+## Dependencies
+
+`vhttpd` now splits local dependencies into install profiles so you do not need to guess the full system package list up front.
+
+- `core`: base build dependencies for `vhttpd`
+- `vjsx`: embedded runtime support, including the required QuickJS archive placement under `~/.vmodules/vjsx/libs/`
+- `db`: optional database client libraries for `WITH_DB=1`
+- `full`: everything above
+
+Recommended entry points:
+
+```bash
+make deps-core
+make doctor
+```
+
+If you need embedded `vjsx` runtime support:
+
+```bash
+make deps-vjsx
+make doctor
+```
+
+If you also need DB support:
+
+```bash
+make deps-db
+# or install everything in one pass
+make deps-full
+```
+
+What these targets do:
+
+- `make deps-core`: installs `openssl`, `Boehm GC`, `pkg-config`, and basic build tooling
+- `make deps-vjsx`: ensures `~/.vmodules/vjsx` exists and, on Linux, builds QuickJS and places it at `~/.vmodules/vjsx/libs/qjs_linux_x64.a`
+- `make deps-db`: installs optional SQLite/MySQL/PostgreSQL client development packages
+- `make doctor`: checks the current machine for the required commands, `pkg-config` entries, and `vjsx` QuickJS archive placement
+
+Important `vjsx` note:
+
+- On Linux, `vjsx` does not just need "QuickJS installed somewhere".
+- The archive must exist at [~/.vmodules/vjsx/libs/qjs_linux_x64.a](/Users/guweigang/.vmodules/vjsx/libs/qjs_linux_x64.a).
+- `make deps-vjsx` is the supported way to prepare that path locally.
+
 ## Build
 
 ```bash
 cd vhttpd
+make deps-core
 make vhttpd
 # or build production binary
 make prod
@@ -222,6 +267,13 @@ make build-prod
 If you need the previous mbedtls path, use `make vhttpd V_TLS_BACKEND=mbedtls`; that path still adds `-d mbedtls_client_read_timeout_ms=120000` for long-lived Feishu websocket connections.
 `make prod` / `make build-prod` use the same TLS backend selection and additionally enable V `-prod`.
 `prod` build defaults runtime logs to `warn` (warnings + errors). You can override with `VHTTPD_LOG_LEVEL=debug|info|warn|error|fatal`.
+
+To build with DB support enabled:
+
+```bash
+make deps-db
+make build WITH_DB=1
+```
 
 ## CI Binaries
 
@@ -236,7 +288,56 @@ Workflow file:
 .github/workflows/vhttpd-binaries.yml
 ```
 
-The workflow installs the `guweigang.vjsx` module before building so the split repo can resolve its embedded runtime dependency in CI.
+The workflow now mirrors the local `vjsx` dependency layout:
+
+- it checks out `vjsx`
+- on Linux it builds QuickJS from source
+- it installs the archive into `vjsx/libs/qjs_linux_x64.a`
+- it builds `vhttpd` with `VPHP_V_GC=boehm`
+
+## Distribution
+
+If you are distributing `vhttpd`, prefer shipping the packaged workflow artifacts instead of asking users to compile locally.
+
+Each packaged artifact should now contain:
+
+- `vhttpd`
+- `README.md`
+- `scripts/install_runtime.sh`
+- `scripts/runtime_doctor.sh`
+
+Suggested install flow for end users:
+
+```bash
+tar -xzf vhttpd-linux-amd64.tar.gz
+cd vhttpd-linux-amd64
+./scripts/install_runtime.sh core
+```
+
+If the runtime environment also needs DB client support:
+
+```bash
+./scripts/install_runtime.sh db
+```
+
+Runtime profile notes:
+
+- `core`: installs the base runtime library surface needed by the packaged binary
+- `db`: additionally installs SQLite/MySQL/PostgreSQL client packages so DB-enabled deployments are less likely to fail on missing client libraries
+- `full`: same as `db` today, reserved for future expansion
+- `none`: install the binary only and skip system package installation
+
+After installation, users can verify the machine with:
+
+```bash
+~/.local/libexec/vhttpd/runtime_doctor.sh ~/.local/bin/vhttpd
+```
+
+Important packaging note:
+
+- `mysql`, `pgsql`, and `sqlite` are not all equal here.
+- `sqlite3` is commonly present already, but MySQL and PostgreSQL client libraries are often missing on fresh machines.
+- If you expect DB usage in the field, distribute instructions around the `db` runtime profile instead of assuming `core` is enough.
 
 Release options:
 
