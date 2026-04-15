@@ -79,7 +79,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git clone --depth=1 https://github.com/guweigang/vjsx /tmp/vjsx
+          mkdir -p "$HOME/.vmodules"
+          rm -rf "$HOME/.vmodules/vjsx"
+          git clone --depth=1 https://github.com/guweigang/vjsx "$HOME/.vmodules/vjsx"
 
       - name: Checkout QuickJS source (Linux)
         if: runner.os == 'Linux'
@@ -88,13 +90,13 @@ jobs:
           set -euo pipefail
           git clone --depth=1 https://github.com/bellard/quickjs /tmp/quickjs
 
-      - name: Link vjsx module
+      - name: Install QuickJS archive into vjsx libs (Linux)
+        if: runner.os == 'Linux'
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "$HOME/.vmodules"
-          rm -rf "$HOME/.vmodules/vjsx"
-          ln -s /tmp/vjsx "$HOME/.vmodules/vjsx"
+          make -C /tmp/quickjs libquickjs.a
+          cp /tmp/quickjs/libquickjs.a "$HOME/.vmodules/vjsx/libs/qjs_linux_x64.a"
 
       - name: Show toolchain
         shell: bash
@@ -110,8 +112,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ "${{ runner.os }}" = "Linux" ]; then
-            VJS_QUICKJS_PATH=/tmp/quickjs \
-            make prod VPHP_V_GC=boehm V_FLAGS="-d use_openssl -d build_quickjs"
+            make prod VPHP_V_GC=boehm
           else
             make prod VPHP_V_GC=boehm
           fi
@@ -131,9 +132,12 @@ jobs:
         run: |
           set -euo pipefail
           bundle="vhttpd-${{ matrix.target }}"
-          mkdir -p "$bundle"
+          mkdir -p "$bundle/scripts"
           cp ./vhttpd "$bundle/"
           cp ./README.md "$bundle/README.md"
+          cp ./scripts/install_runtime.sh "$bundle/scripts/install_runtime.sh"
+          cp ./scripts/runtime_doctor.sh "$bundle/scripts/runtime_doctor.sh"
+          chmod +x "$bundle/scripts/install_runtime.sh" "$bundle/scripts/runtime_doctor.sh"
           tar -czf "$bundle.tar.gz" "$bundle"
 
       - name: Upload artifact
