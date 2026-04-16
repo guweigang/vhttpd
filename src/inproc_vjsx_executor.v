@@ -82,6 +82,7 @@ pub:
 	enable_fs         bool
 	enable_process    bool
 	enable_network    bool
+	websocket_affinity WebSocketAffinityConfig
 }
 
 pub struct VjsxRuntimeFacade {
@@ -109,6 +110,10 @@ mut:
 	lanes                        []VjsxExecutionLane
 	hosts                        []VjsxLaneHost
 	rr_index                     int
+	websocket_affinity_lane_by_key map[string]string
+	websocket_affinity_ref_count_by_key map[string]int
+	websocket_connection_lane_by_id map[string]string
+	websocket_connection_affinity_key_by_id map[string]string
 	cached_source_probe          string
 	cached_source_signature      string
 	signature_refresh_started    bool
@@ -270,10 +275,14 @@ pub fn new_inproc_vjsx_executor(config VjsxRuntimeFacadeConfig) InProcVjsxExecut
 			facade: VjsxRuntimeFacade{
 				config: config
 			}
-			lanes:                    lanes
-			hosts:                    hosts
-			cached_source_probe:      initial_probe
-			cached_source_signature:  initial_signature
+			lanes:                               lanes
+			hosts:                               hosts
+			websocket_affinity_lane_by_key:      map[string]string{}
+			websocket_affinity_ref_count_by_key: map[string]int{}
+			websocket_connection_lane_by_id:     map[string]string{}
+			websocket_connection_affinity_key_by_id: map[string]string{}
+			cached_source_probe:                 initial_probe
+			cached_source_signature:             initial_signature
 			signature_last_checked_at: if initial_signature != '' {
 				now_ms
 			} else {
@@ -549,6 +558,56 @@ fn (e InProcVjsxExecutor) current_source_signature() string {
 	return result
 }
 
+fn normalize_websocket_affinity_source(raw string) string {
+	source := raw.trim_space().to_lower()
+	return match source {
+		'header', 'headers' { 'header' }
+		'path_param', 'path-param', 'pathparam' { 'path_param' }
+		else { 'query' }
+	}
+}
+
+fn normalize_websocket_affinity_scope(raw string) string {
+	scope := raw.trim_space().to_lower()
+	return if scope == '' { 'lane' } else { scope }
+}
+
+fn normalize_websocket_affinity_fallback(raw string) string {
+	fallback := raw.trim_space().to_lower()
+	return if fallback == 'reject' { 'reject' } else { 'round_robin' }
+}
+
+fn websocket_affinity_header_lookup(headers map[string]string, key string) string {
+	if key == '' {
+		return ''
+	}
+	if key in headers {
+		return headers[key]
+	}
+	lower_key := key.to_lower()
+	for name, value in headers {
+		if name.to_lower() == lower_key {
+			return value
+		}
+	}
+	return ''
+}
+
+fn websocket_affinity_value(frame WorkerWebSocketFrame, config WebSocketAffinityConfig) string {
+	if !config.enabled || normalize_websocket_affinity_scope(config.scope) != 'lane' {
+		return ''
+	}
+	key := config.key.trim_space()
+	if key == '' {
+		return ''
+	}
+	return match normalize_websocket_affinity_source(config.source) {
+		'header' { websocket_affinity_header_lookup(frame.headers, key).trim_space() }
+		'path_param' { '' }
+		else { (frame.query[key] or { '' }).trim_space() }
+	}
+}
+
 pub fn (e InProcVjsxExecutor) select_next_lane() !VjsxExecutionLane {
 	if isnil(e.state) {
 		return error('inproc_vjsx_executor_state_missing')
@@ -576,6 +635,35 @@ pub fn (e InProcVjsxExecutor) select_next_lane() !VjsxExecutionLane {
 	return error('inproc_vjsx_executor_no_available_lane')
 }
 
+fn (e InProcVjsxExecutor) select_lane_by_id(lane_id string) !VjsxExecutionLane {
+	if isnil(e.state) {
+		return error('inproc_vjsx_executor_state_missing')
+	}
+	if lane_id.trim_space() == '' {
+		return error('inproc_vjsx_executor_lane_id_missing')
+	}
+	mut state := e.state
+	state.mu.@lock()
+	defer {
+		state.mu.unlock()
+	}
+	for idx, lane in state.lanes {
+		if lane.id != lane_id {
+			continue
+		}
+		if state.lanes[idx].inflight > 0 {
+			return error('inproc_vjsx_executor_no_available_lane')
+		}
+		if !state.lanes[idx].healthy && !state.lanes[idx].dirty {
+			return error('inproc_vjsx_executor_no_available_lane')
+		}
+		state.lanes[idx].inflight++
+		state.rr_index = (idx + 1) % state.lanes.len
+		return state.lanes[idx]
+	}
+	return error('inproc_vjsx_executor_lane_not_found')
+}
+
 fn (e InProcVjsxExecutor) acquire_next_lane(timeout_ms int) !VjsxExecutionLane {
 	mut remaining_ms := if timeout_ms > 0 { timeout_ms } else { 0 }
 	deadline := time.now().add(time.millisecond * remaining_ms)
@@ -594,6 +682,113 @@ fn (e InProcVjsxExecutor) acquire_next_lane(timeout_ms int) !VjsxExecutionLane {
 		return lane
 	}
 	return error('inproc_vjsx_executor_no_available_lane')
+}
+
+fn (e InProcVjsxExecutor) acquire_lane_by_id(lane_id string, timeout_ms int) !VjsxExecutionLane {
+	mut remaining_ms := if timeout_ms > 0 { timeout_ms } else { 0 }
+	deadline := time.now().add(time.millisecond * remaining_ms)
+	for {
+		lane := e.select_lane_by_id(lane_id) or {
+			if err.msg() == 'inproc_vjsx_executor_lane_not_found' {
+				return error(err.msg())
+			}
+			if err.msg() != 'inproc_vjsx_executor_no_available_lane' {
+				return error(err.msg())
+			}
+			if remaining_ms <= 0 || time.now() >= deadline {
+				return error(err.msg())
+			}
+			time.sleep(time.millisecond * inproc_vjsx_lane_wait_poll_ms)
+			remaining_ms -= inproc_vjsx_lane_wait_poll_ms
+			continue
+		}
+		return lane
+	}
+	return error('inproc_vjsx_executor_no_available_lane')
+}
+
+fn (e InProcVjsxExecutor) release_websocket_connection_affinity(frame WorkerWebSocketFrame) {
+	if isnil(e.state) || frame.id.trim_space() == '' {
+		return
+	}
+	mut state := e.state
+	state.mu.@lock()
+	defer {
+		state.mu.unlock()
+	}
+	state.websocket_connection_lane_by_id.delete(frame.id)
+	affinity_key := state.websocket_connection_affinity_key_by_id[frame.id] or { '' }
+	if affinity_key == '' {
+		state.websocket_connection_affinity_key_by_id.delete(frame.id)
+		return
+	}
+	state.websocket_connection_affinity_key_by_id.delete(frame.id)
+	if affinity_key !in state.websocket_affinity_ref_count_by_key {
+		state.websocket_affinity_lane_by_key.delete(affinity_key)
+		return
+	}
+	mut remaining := state.websocket_affinity_ref_count_by_key[affinity_key] - 1
+	if remaining <= 0 {
+		state.websocket_affinity_ref_count_by_key.delete(affinity_key)
+		state.websocket_affinity_lane_by_key.delete(affinity_key)
+		return
+	}
+	state.websocket_affinity_ref_count_by_key[affinity_key] = remaining
+}
+
+fn (e InProcVjsxExecutor) acquire_websocket_lane(frame WorkerWebSocketFrame) !(VjsxExecutionLane, string) {
+	if isnil(e.state) {
+		return error('inproc_vjsx_executor_state_missing')
+	}
+	mut state := e.state
+	config := state.facade.config.websocket_affinity
+	state.mu.@lock()
+	existing_lane_id := state.websocket_connection_lane_by_id[frame.id] or { '' }
+	state.mu.unlock()
+	if existing_lane_id != '' {
+		return e.acquire_lane_by_id(existing_lane_id, inproc_vjsx_lane_wait_timeout_ms)!, ''
+	}
+	affinity_key := websocket_affinity_value(frame, config)
+	if affinity_key == '' {
+		if config.enabled && normalize_websocket_affinity_fallback(config.fallback) == 'reject' {
+			return error('inproc_vjsx_executor_websocket_affinity_key_missing')
+		}
+		lane := e.acquire_next_lane(inproc_vjsx_lane_wait_timeout_ms)!
+		if frame.id.trim_space() != '' {
+			state.mu.@lock()
+			state.websocket_connection_lane_by_id[frame.id] = lane.id
+			state.mu.unlock()
+		}
+		return lane, ''
+	}
+	state.mu.@lock()
+	mapped_lane_id := state.websocket_affinity_lane_by_key[affinity_key] or { '' }
+	state.mu.unlock()
+	if mapped_lane_id != '' {
+		lane := e.acquire_lane_by_id(mapped_lane_id, inproc_vjsx_lane_wait_timeout_ms)!
+		if frame.id.trim_space() != '' {
+			state.mu.@lock()
+			state.websocket_connection_lane_by_id[frame.id] = lane.id
+			state.websocket_connection_affinity_key_by_id[frame.id] = affinity_key
+			state.websocket_affinity_ref_count_by_key[affinity_key] = (state.websocket_affinity_ref_count_by_key[affinity_key] or {
+				0
+			}) + 1
+			state.mu.unlock()
+		}
+		return lane, affinity_key
+	}
+	lane := e.acquire_next_lane(inproc_vjsx_lane_wait_timeout_ms)!
+	state.mu.@lock()
+	state.websocket_affinity_lane_by_key[affinity_key] = lane.id
+	state.websocket_affinity_ref_count_by_key[affinity_key] = (state.websocket_affinity_ref_count_by_key[affinity_key] or {
+		0
+	}) + 1
+	if frame.id.trim_space() != '' {
+		state.websocket_connection_lane_by_id[frame.id] = lane.id
+		state.websocket_connection_affinity_key_by_id[frame.id] = affinity_key
+	}
+	state.mu.unlock()
+	return lane, affinity_key
 }
 
 fn inproc_vjsx_should_retry_dispatch(err_msg string) bool {
@@ -2450,17 +2645,20 @@ pub fn (e InProcVjsxExecutor) close() {
 }
 
 fn inproc_vjsx_new_runtime_session_ptr(config VjsxRuntimeFacadeConfig) !&vjsx.RuntimeSession {
+	asset_root := vjsx_runtime_asset_root()
 	session_value := match config.runtime_profile {
 		'', 'script' {
 			runtimejs.new_script_runtime_session(vjsx.ContextConfig{}, vjsx.ScriptRuntimeConfig{
 				fs_roots:     vjsx_fs_roots(config)
 				process_args: [config.app_entry]
+				asset_root:   asset_root
 			})
 		}
 		'node' {
 			runtimejs.new_node_runtime_session(vjsx.ContextConfig{}, vjsx.NodeRuntimeConfig{
 				fs_roots:     vjsx_fs_roots(config)
 				process_args: [config.app_entry]
+				asset_root:   asset_root
 			})
 		}
 		else {
@@ -3491,7 +3689,21 @@ pub fn (e InProcVjsxExecutor) dispatch_websocket_upstream(mut app App, req Worke
 
 fn (e InProcVjsxExecutor) dispatch_websocket_event_once(mut app App, frame WorkerWebSocketFrame) !WorkerWebSocketDispatchResponse {
 	e.bootstrap_placeholder()!
-	lane := e.acquire_next_lane(inproc_vjsx_lane_wait_timeout_ms)!
+	lane, _ := e.acquire_websocket_lane(frame) or {
+		if err.msg() == 'inproc_vjsx_executor_websocket_affinity_key_missing' {
+			return WorkerWebSocketDispatchResponse{
+				mode:        'websocket_dispatch'
+				event:       'result'
+				id:          frame.id
+				accepted:    false
+				closed:      true
+				commands:    []WorkerWebSocketFrame{}
+				error:       'websocket_affinity_key_missing'
+				error_class: 'websocket_affinity_key_missing'
+			}
+		}
+		return error(err.msg())
+	}
 	defer {
 		e.release_lane(lane.id)
 	}
@@ -3614,6 +3826,9 @@ fn (e InProcVjsxExecutor) dispatch_websocket_event_once(mut app App, frame Worke
 		defer {
 			normalized.free()
 		}
+		if frame.event == 'close' {
+			e.release_websocket_connection_affinity(frame)
+		}
 		e.record_lane_success(lane.id)
 		return websocket_response_from_js_value(normalized, frame)
 	}
@@ -3623,6 +3838,9 @@ fn (e InProcVjsxExecutor) dispatch_websocket_event_once(mut app App, frame Worke
 	}
 	defer {
 		normalized.free()
+	}
+	if frame.event == 'close' {
+		e.release_websocket_connection_affinity(frame)
 	}
 	e.record_lane_success(lane.id)
 	return websocket_response_from_js_value(normalized, frame)

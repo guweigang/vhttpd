@@ -328,14 +328,20 @@ Runtime profile notes:
 - `full`: same as `db` today, reserved for future expansion
 - `none`: install the binary only and skip system package installation
 
-The packaged binary is built against a stable `vjsx` runtime asset root:
+The packaged binary now resolves `vjsx` runtime assets in this order:
+
+1. `VJSX_ASSET_ROOT`
+2. bundled `runtime/vjsx` next to the installed binary
+3. `${VHTTPD_SHARE_ROOT:-/usr/local/share/vhttpd}/vjsx`
+4. `~/.vmodules/vjsx`
+
+`scripts/install_runtime.sh` still copies bundled `runtime/vjsx` to the stable shared location:
 
 ```text
 /usr/local/share/vhttpd/vjsx
 ```
 
-`scripts/install_runtime.sh` copies bundled `runtime/vjsx` there. This avoids baking GitHub runner paths such as `/home/runner/.vmodules/vjsx` into distributed binaries.
-For compatibility with local tooling, it also creates:
+This keeps the installed layout predictable and avoids baking GitHub runner paths such as `/home/runner/.vmodules/vjsx` into distributed binaries. For compatibility with local tooling, it also creates:
 
 ```text
 ~/.vmodules/vjsx -> /usr/local/share/vhttpd/vjsx
@@ -345,6 +351,12 @@ After installation, users can verify the machine with:
 
 ```bash
 ~/.local/libexec/vhttpd/runtime_doctor.sh ~/.local/bin/vhttpd
+```
+
+If you want to override the runtime asset directory without reinstalling, export:
+
+```bash
+export VJSX_ASSET_ROOT=/path/to/runtime/vjsx
 ```
 
 Important packaging note:

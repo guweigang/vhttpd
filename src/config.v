@@ -70,6 +70,15 @@ mut:
 	enable_network    bool     @[toml: 'enable_network']
 }
 
+struct WebSocketAffinityConfig {
+mut:
+	enabled  bool
+	source   string
+	key      string
+	scope    string
+	fallback string
+}
+
 struct AdminConfig {
 mut:
 	host  string = '127.0.0.1'
@@ -188,6 +197,7 @@ mut:
 	executor     ExecutorConfig
 	php          PhpConfig
 	vjsx         VjsxConfig
+	websocket_affinity WebSocketAffinityConfig @[toml: 'websocket_affinity']
 	assets       AssetsConfig
 	runtime      RuntimeConfig
 	mcp          McpConfig
@@ -205,6 +215,7 @@ mut:
 	executor    ExecutorConfig
 	php         PhpConfig
 	vjsx        VjsxConfig
+	websocket_affinity WebSocketAffinityConfig @[toml: 'websocket_affinity']
 	admin       AdminConfig
 	assets      AssetsConfig
 	runtime     RuntimeConfig
@@ -565,6 +576,26 @@ fn decode_vjsx_config_map(entry map[string]toml.Any) VjsxConfig {
 	return cfg
 }
 
+fn decode_websocket_affinity_config_map(entry map[string]toml.Any) WebSocketAffinityConfig {
+	mut cfg := WebSocketAffinityConfig{}
+	if 'enabled' in entry {
+		cfg.enabled = toml_bool_from_map(entry, 'enabled', cfg.enabled)
+	}
+	if 'source' in entry {
+		cfg.source = toml_string_from_map(entry, 'source', cfg.source)
+	}
+	if 'key' in entry {
+		cfg.key = toml_string_from_map(entry, 'key', cfg.key)
+	}
+	if 'scope' in entry {
+		cfg.scope = toml_string_from_map(entry, 'scope', cfg.scope)
+	}
+	if 'fallback' in entry {
+		cfg.fallback = toml_string_from_map(entry, 'fallback', cfg.fallback)
+	}
+	return cfg
+}
+
 fn decode_assets_config_map(entry map[string]toml.Any) AssetsConfig {
 	mut cfg := AssetsConfig{}
 	if 'enabled' in entry {
@@ -776,6 +807,11 @@ fn decode_site_config_map(entry map[string]toml.Any) SiteConfig {
 	if vjsx_any := entry['vjsx'] {
 		if vjsx_any is map[string]toml.Any {
 			cfg.vjsx = decode_vjsx_config_map(vjsx_any)
+		}
+	}
+	if websocket_affinity_any := entry['websocket_affinity'] {
+		if websocket_affinity_any is map[string]toml.Any {
+			cfg.websocket_affinity = decode_websocket_affinity_config_map(websocket_affinity_any)
 		}
 	}
 	if assets_any := entry['assets'] {

@@ -53,6 +53,25 @@ fn test_inproc_vjsx_executor_lane_temp_root_uses_configured_build_root() {
 	assert temp_root.contains('.sig123.')
 }
 
+fn test_vjsx_runtime_asset_root_prefers_env_override() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_vjsx_asset_root_env_test')
+	os.mkdir_all(os.join_path(temp_dir, 'web', 'js')) or { panic(err) }
+	os.write_file(os.join_path(temp_dir, 'web', 'js', 'buffer.js'), '// test asset\n') or {
+		panic(err)
+	}
+	old_root := os.getenv('VJSX_ASSET_ROOT')
+	os.setenv('VJSX_ASSET_ROOT', temp_dir, true)
+	defer {
+		if old_root == '' {
+			os.unsetenv('VJSX_ASSET_ROOT')
+		} else {
+			os.setenv('VJSX_ASSET_ROOT', old_root, true)
+		}
+		os.rmdir_all(temp_dir) or {}
+	}
+	assert vjsx_runtime_asset_root() == temp_dir
+}
+
 fn test_inproc_vjsx_executor_source_signature_respects_include_and_exclude_globs() {
 	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_vjsx_signature_scope_test')
 	os.mkdir_all(os.join_path(temp_dir, 'node_modules')) or { panic(err) }
@@ -1054,6 +1073,106 @@ fn test_inproc_vjsx_executor_acquire_next_lane_waits_for_release() {
 	releaser.wait()
 	snapshot := executor.lane_snapshot()
 	assert snapshot[0].inflight == 0
+}
+
+fn test_inproc_vjsx_executor_websocket_affinity_sticks_same_key_to_same_lane() {
+	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
+		thread_count: 2
+		app_entry:    'app/main.ts'
+		websocket_affinity: WebSocketAffinityConfig{
+			enabled:  true
+			source:   'query'
+			key:      'serverId'
+			scope:    'lane'
+			fallback: 'reject'
+		}
+	})
+	defer {
+		executor.close()
+	}
+	executor.bootstrap_placeholder() or { assert false }
+	first, first_key := executor.acquire_websocket_lane(WorkerWebSocketFrame{
+		id:    'conn_a'
+		event: 'open'
+		query: {
+			'serverId': 'srv_same'
+		}
+	}) or { panic(err) }
+	assert first_key == 'srv_same'
+	executor.release_lane(first.id)
+	second, second_key := executor.acquire_websocket_lane(WorkerWebSocketFrame{
+		id:    'conn_b'
+		event: 'open'
+		query: {
+			'serverId': 'srv_same'
+		}
+	}) or { panic(err) }
+	assert second_key == 'srv_same'
+	assert second.id == first.id
+	executor.release_lane(second.id)
+	executor.release_websocket_connection_affinity(WorkerWebSocketFrame{
+		id: 'conn_a'
+	})
+	executor.release_websocket_connection_affinity(WorkerWebSocketFrame{
+		id: 'conn_b'
+	})
+}
+
+fn test_inproc_vjsx_executor_websocket_affinity_can_use_header_source() {
+	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
+		thread_count: 2
+		app_entry:    'app/main.ts'
+		websocket_affinity: WebSocketAffinityConfig{
+			enabled:  true
+			source:   'header'
+			key:      'x-session-id'
+			scope:    'lane'
+			fallback: 'reject'
+		}
+	})
+	defer {
+		executor.close()
+	}
+	executor.bootstrap_placeholder() or { assert false }
+	lane, affinity_key := executor.acquire_websocket_lane(WorkerWebSocketFrame{
+		id:      'conn_header'
+		event:   'open'
+		headers: {
+			'X-Session-Id': 'session_123'
+		}
+	}) or { panic(err) }
+	assert affinity_key == 'session_123'
+	assert lane.id == 'lane_0'
+	executor.release_lane(lane.id)
+	executor.release_websocket_connection_affinity(WorkerWebSocketFrame{
+		id: 'conn_header'
+	})
+}
+
+fn test_inproc_vjsx_executor_websocket_affinity_rejects_missing_key_when_configured() {
+	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
+		thread_count: 2
+		app_entry:    'app/main.ts'
+		websocket_affinity: WebSocketAffinityConfig{
+			enabled:  true
+			source:   'query'
+			key:      'serverId'
+			scope:    'lane'
+			fallback: 'reject'
+		}
+	})
+	defer {
+		executor.close()
+	}
+	executor.bootstrap_placeholder() or { assert false }
+	executor.acquire_websocket_lane(WorkerWebSocketFrame{
+		id:    'conn_missing'
+		event: 'open'
+	}) or {
+		assert err.msg() == 'inproc_vjsx_executor_websocket_affinity_key_missing'
+		return
+	}
+	assert false
 }
 
 fn test_inproc_vjsx_executor_bootstrap_requires_app_entry() {

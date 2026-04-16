@@ -165,6 +165,27 @@ fn merge_vjsx_config(base VjsxConfig, override VjsxConfig) VjsxConfig {
 	return cfg
 }
 
+fn merge_websocket_affinity_config(base WebSocketAffinityConfig, override WebSocketAffinityConfig) WebSocketAffinityConfig {
+	defaults := default_vhttpd_config().websocket_affinity
+	mut cfg := base
+	if override.enabled != defaults.enabled {
+		cfg.enabled = override.enabled
+	}
+	if override.source != defaults.source {
+		cfg.source = override.source
+	}
+	if override.key != defaults.key {
+		cfg.key = override.key
+	}
+	if override.scope != defaults.scope {
+		cfg.scope = override.scope
+	}
+	if override.fallback != defaults.fallback {
+		cfg.fallback = override.fallback
+	}
+	return cfg
+}
+
 fn merge_assets_config(base AssetsConfig, override AssetsConfig) AssetsConfig {
 	defaults := default_vhttpd_config().assets
 	mut cfg := base
@@ -306,6 +327,8 @@ fn site_config_as_vhttpd_config(global_cfg VhttpdConfig, site_cfg SiteConfig) Vh
 	cfg.executor = merge_executor_config(global_cfg.executor, site_cfg.executor, site_cfg)
 	cfg.php = merge_php_config(global_cfg.php, site_cfg.php)
 	cfg.vjsx = merge_vjsx_config(global_cfg.vjsx, site_cfg.vjsx)
+	cfg.websocket_affinity = merge_websocket_affinity_config(global_cfg.websocket_affinity,
+		site_cfg.websocket_affinity)
 	if site_cfg.worker_entry.trim_space() != '' && cfg.executor.kind == 'php'
 		&& cfg.php.worker_entry.trim_space() == '' {
 		cfg.php.worker_entry = site_cfg.worker_entry

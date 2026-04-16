@@ -5,6 +5,40 @@ import os
 import vjsx
 import vjsx.runtimejs
 
+const vhttpd_vjsx_asset_env = 'VJSX_ASSET_ROOT'
+const vhttpd_share_root_env = 'VHTTPD_SHARE_ROOT'
+const vhttpd_default_share_root = '/usr/local/share/vhttpd'
+
+fn vjsx_has_runtime_assets(root string) bool {
+	target := root.trim_space()
+	if target == '' {
+		return false
+	}
+	return os.is_file(os.join_path(target, 'web', 'js', 'buffer.js'))
+}
+
+fn vjsx_runtime_asset_root() string {
+	override := os.getenv(vhttpd_vjsx_asset_env).trim_space()
+	if vjsx_has_runtime_assets(override) {
+		return override
+	}
+	exe_dir := os.dir(os.executable())
+	share_root := os.getenv(vhttpd_share_root_env).trim_space()
+	candidates := [
+		os.join_path(exe_dir, 'runtime', 'vjsx'),
+		os.join_path(exe_dir, '..', 'runtime', 'vjsx'),
+		os.join_path(share_root, 'vjsx'),
+		os.join_path(vhttpd_default_share_root, 'vjsx'),
+		os.join_path(os.home_dir(), '.vmodules', 'vjsx'),
+	]
+	for candidate in candidates {
+		if vjsx_has_runtime_assets(candidate) {
+			return candidate
+		}
+	}
+	return override
+}
+
 fn vjsx_entry_runs_as_module(app_entry string) !bool {
 	if vjsx.is_typescript_file(app_entry) {
 		return true
