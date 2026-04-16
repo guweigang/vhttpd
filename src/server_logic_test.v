@@ -1020,7 +1020,7 @@ fn test_embedded_executor_lifecycle_disables_worker_backend_features() {
 		state) or { panic(err) }
 	assert state.worker_sockets.len == 0
 	assert !state.stream_dispatch
-	assert !state.websocket_dispatch_mode
+	assert state.websocket_dispatch_mode
 	assert !state.worker_autostart
 	assert state.worker_cmd == ''
 	assert state.worker_env['VHTTPD_APP'] == '/tmp/app.php'
@@ -1094,7 +1094,7 @@ fn test_resolve_logic_executor_runtime_plan_for_vjsx_disables_worker_bootstrap()
 	assert plan.worker_backend_mode == .disabled
 	assert plan.bootstrap.worker_sockets.len == 0
 	assert !plan.bootstrap.stream_dispatch
-	assert !plan.bootstrap.websocket_dispatch_mode
+	assert plan.bootstrap.websocket_dispatch_mode
 	assert !plan.bootstrap.worker_autostart
 	assert plan.bootstrap.worker_cmd == ''
 	assert plan.bootstrap.worker_env['VHTTPD_APP'] == '/tmp/app.php'
@@ -1626,4 +1626,15 @@ fn test_shutdown_app_runtime_stops_lifecycle_and_cleans_runtime_files() {
 	assert non_empty_rows[0].contains('"type":"server.stopped"')
 	assert non_empty_rows[1].contains('"type":"test.executor.stopped"')
 	assert non_empty_rows[2].contains('"type":"test.provider.stopped"')
+}
+
+fn test_paseo_relay_example_config_enables_websocket_dispatch() {
+	config_path := os.join_path(os.dir(@FILE), '..', 'examples', 'paseo-relay', 'paseo-relay.toml')
+	cfg := load_vhttpd_config(['--config', config_path]) or { panic(err) }
+	assert cfg.worker.websocket_dispatch
+	runtime := resolve_multi_server_runtime_config(['--config', config_path], cfg) or {
+		panic(err)
+	}
+	assert runtime.listeners.len == 1
+	assert runtime.listeners[0].runtime_cfg.executor_plan.bootstrap.websocket_dispatch_mode
 }

@@ -1,5 +1,6 @@
 module main
 
+import encoding.base64
 import json
 import log
 import net
@@ -292,6 +293,26 @@ struct WorkerWebSocketDispatchResponse {
 	error_class string @[json: 'error_class']
 }
 
+struct WorkerWebSocketDispatchCommandFailure {
+	event       string
+	id          string
+	target_id   string @[json: 'target_id']
+	opcode      string
+	error       string
+	error_class string @[json: 'error_class']
+}
+
+struct WorkerWebSocketDispatchCommandsResult {
+	close_frame WorkerWebSocketFrame
+	has_close   bool
+	failures    []WorkerWebSocketDispatchCommandFailure
+}
+
+struct WorkerWebSocketDispatchFailureEnvelope {
+	event    string
+	failures []WorkerWebSocketDispatchCommandFailure
+}
+
 struct WorkerMcpDispatchRequest {
 	mode                     string
 	event                    string
@@ -564,7 +585,7 @@ fn worker_websocket_open(mut app App, mut conn unix.StreamConn, req http.Request
 		if reply.mode != 'websocket' {
 			continue
 		}
-		if app.process_worker_websocket_hub_frame(reply) {
+		if _ := app.process_worker_websocket_hub_frame(reply) {
 			continue
 		}
 		match reply.event {
@@ -610,8 +631,9 @@ fn worker_websocket_message_cb(mut ws websocket.Client, msg &websocket.Message, 
 		})
 		return
 	}
-	if msg.opcode != .text_frame {
-		ws.close(1003, 'Only text frames are supported') or {
+	opcode, payload, supported := websocket_dispatch_payload_from_message(msg)
+	if !supported {
+		ws.close(1003, 'Only text and binary frames are supported') or {
 			runtime_trace('ws.message.invalid.close.error', {
 				'conn_id':    state.conn_id
 				'request_id': state.request_id
@@ -626,8 +648,8 @@ fn worker_websocket_message_cb(mut ws websocket.Client, msg &websocket.Message, 
 		mode:            'websocket'
 		event:           'message'
 		id:              state.request_id
-		opcode:          'text'
-		data:            msg.payload.bytestr()
+		opcode:          opcode
+		data:            payload
 		rooms:           state.app.ws_hub_rooms_snapshot(state.conn_id)
 		metadata:        state.app.ws_hub_meta_snapshot(state.conn_id)
 		room_members:    room_members
@@ -673,7 +695,7 @@ fn worker_websocket_message_cb(mut ws websocket.Client, msg &websocket.Message, 
 		if reply.mode != 'websocket' {
 			continue
 		}
-		if state.app.process_worker_websocket_hub_frame(reply) {
+		if _ := state.app.process_worker_websocket_hub_frame(reply) {
 			continue
 		}
 		match reply.event {
@@ -746,7 +768,7 @@ fn worker_websocket_close_cb(mut ws websocket.Client, code int, reason string, r
 			if reply.mode != 'websocket' {
 				continue
 			}
-			if state.app.process_worker_websocket_hub_frame(reply) {
+			if _ := state.app.process_worker_websocket_hub_frame(reply) {
 				continue
 			}
 			if reply.event == 'done' {
@@ -845,6 +867,11 @@ fn proxy_worker_websocket_dispatch(mut app App, mut ctx Context, method string, 
 		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
 		ctx.res.set_status(http.status_from_int(status))
 		return ctx.text(body)
+	}
+	if !resp.accepted {
+		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
+		ctx.res.set_status(http.status_from_int(403))
+		return ctx.text('Forbidden')
 	}
 	ctx.takeover_conn()
 	ctx.conn.set_write_timeout(time.infinite)
@@ -956,24 +983,48 @@ fn handle_worker_websocket_dispatch_session(mut app App, mut client_conn net.Tcp
 
 fn worker_websocket_dispatch_message_cb(mut ws websocket.Client, msg &websocket.Message, ref voidptr) ! {
 	mut state := unsafe { &WebSocketDispatchBridgeState(ref) }
-	if msg.opcode != .text_frame {
-		ws.close(1003, 'Only text frames are supported')!
+	opcode, payload, supported := websocket_dispatch_payload_from_message(msg)
+	if !supported {
+		ws.close(1003, 'Only text and binary frames are supported')!
 		return
 	}
 	room_members, member_metadata, room_counts, presence_users := state.app.ws_hub_presence_snapshot(state.conn_id)
 	resp := state.app.kernel_dispatch_websocket_event(state.app.kernel_websocket_dispatch_frame('message',
 		state.method, state.path, state.query, state.headers, state.remote_addr, state.request_id,
-		state.trace_id, 'text', msg.payload.bytestr(), 0, '', state.app.ws_hub_rooms_snapshot(state.conn_id),
+		state.trace_id, opcode, payload, 0, '', state.app.ws_hub_rooms_snapshot(state.conn_id),
 		state.app.ws_hub_meta_snapshot(state.conn_id), room_members, member_metadata,
 		room_counts, presence_users))!
 	if resp.event == 'error' {
 		ws.close(1011, 'worker error')!
 		return
 	}
-	if close_frame := state.app.execute_websocket_dispatch_commands(resp.commands) {
+	result := state.app.execute_websocket_dispatch_commands_result(resp.commands)
+	if result.has_close {
+		close_frame := result.close_frame
 		code := if close_frame.code > 0 { close_frame.code } else { 1000 }
 		ws.close(code, close_frame.reason)!
 		return
+	}
+	if result.failures.len > 0 {
+		if close_frame := state.app.websocket_dispatch_followup_failures(state.conn_id, state.method, state.path, state.query, state.headers, state.remote_addr, state.request_id, state.trace_id, result.failures) {
+			code := if close_frame.code > 0 { close_frame.code } else { 1000 }
+			ws.close(code, close_frame.reason)!
+			return
+		}
+	}
+}
+
+fn websocket_dispatch_payload_from_message(msg &websocket.Message) (string, string, bool) {
+	return match msg.opcode {
+		.text_frame {
+			'text', msg.payload.bytestr(), true
+		}
+		.binary_frame {
+			'binary', base64.encode(msg.payload), true
+		}
+		else {
+			'', '', false
+		}
 	}
 }
 
