@@ -29,6 +29,7 @@ make build vhttpd
 - `/Users/guweigang/Source/vhttpd/examples/config/wordpress.toml`
 - `/Users/guweigang/Source/vhttpd/examples/config/db-upstream.toml`
 - `/Users/guweigang/Source/vhttpd/examples/config/db-upstream-pg.toml`
+- `/Users/guweigang/Source/vhttpd/examples/config/paseo-relay.toml`
 
 说明：
 
@@ -39,7 +40,30 @@ make build vhttpd
 - `ollama-proxy.toml` 也支持 `OLLAMA_STREAM_FIXTURE`，可离线验证 phase-3 upstream plan
 - `db-upstream.toml` 演示 `vhttpd` 托管 mysql 连接池，并通过 unix socket 暴露 `db` runtime，上游可通过 `/admin/runtime/db` 查看状态
 - `db-upstream-pg.toml` 演示 `vhttpd` 托管 postgresql 连接池，配置写在 `[db.pgsql]`
+- `paseo-relay.toml` 演示一个 `vhttpd + vjsx` 的 Paseo relay skeleton，建议保持 `vjsx.thread_count = 1`
 - 这些变量都在 `[worker.env]`，会传给 php-worker，可在 PHP 里直接 `getenv('KEY')`
+
+## Paseo Relay Skeleton
+
+直接启动：
+
+```bash
+cd /Users/guweigang/Source/vhttpd
+./vhttpd --config /Users/guweigang/Source/vhttpd/examples/config/paseo-relay.toml
+```
+
+可用端点：
+
+- `GET /healthz`
+- `GET /state`
+- `GET /ws?serverId=<id>&role=<server|client>&v=2`
+
+这个示例当前是一个贴近官方 `cloudflare-adapter.ts` 行为的骨架：
+
+- 支持 v2 的 `server-control` / `server-data(connectionId)` / `client(connectionId)`
+- 控制消息支持 `sync` / `connected` / `disconnected`
+- client 先到、server-data 后到时会先做内存 buffer
+- relay state 保存在 `vjsx` 进程内存中，所以应保持 `vjsx.thread_count = 1`
 
 ## 快速开始（VSlim 原生）
 

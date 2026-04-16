@@ -1,0 +1,29 @@
+[paths]
+root = "../../"
+vjsx_app = "examples/paseo-relay/app.mts"
+vjsx_build_root = "tmp/paseo-relay-vjsx-build"
+
+[files]
+pid_file = "tmp/vhttpd_paseo_relay_19901.pid"
+event_log = "tmp/vhttpd_paseo_relay_19901.events.ndjson"
+
+[runtime]
+timezone = "Asia/Shanghai"
+
+[worker]
+websocket_dispatch = true
+
+[admin]
+host = "127.0.0.1"
+port = 20001
+token = "change-me"
+
+[sites.paseo_relay]
+host = "0.0.0.0"
+port = 19901
+root = "examples/paseo-relay"
+executor = "vjsx"
+app = "${paths.vjsx_app}"
+vjsx.build_root = "${paths.vjsx_build_root}"
+vjsx.runtime_profile = "node"
+vjsx.thread_count = 1

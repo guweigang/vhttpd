@@ -1,5 +1,6 @@
 module main
 
+import encoding.base64
 import net.http
 import os
 import time
@@ -1825,4 +1826,1290 @@ export default app;
 	assert spec.provider == 'demo'
 	assert spec.instance == 'main'
 	assert spec.config_json.contains('"value":"startup_value"')
+}
+
+fn test_inproc_vjsx_executor_dispatch_websocket_event_runs_script_handler() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_vjsx_executor_websocket_script_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	app_file := os.join_path(temp_dir, 'websocket-handler.js')
+	os.write_file(app_file, 'globalThis.__vhttpd_websocket_handle = (frame) => [{ event: "set_meta", key: "relay_server_id", value: frame.query.serverId || "" }, { event: "join", room: "relay:session:" + (frame.query.serverId || "") }, { event: "send", targetId: frame.id, data: JSON.stringify({ ok: true, event: frame.event }), opcode: "text" }];') or {
+		panic(err)
+	}
+	defer {
+		os.rm(app_file) or {}
+	}
+	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
+		thread_count:    1
+		app_entry:       app_file
+		module_root:     temp_dir
+		runtime_profile: 'script'
+	})
+	defer {
+		executor.close()
+	}
+	mut app := App{}
+	resp := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+		mode:       'websocket_dispatch'
+		event:      'open'
+		id:         'ws_conn_script'
+		path:       '/ws'
+		query:      {'serverId': 'srv_demo'}
+		headers:    {'host': 'relay.test'}
+		remote_addr: '127.0.0.1'
+		request_id: 'req_ws_script'
+		trace_id:   'trace_ws_script'
+		rooms:      []string{}
+		metadata:   map[string]string{}
+	}) or { panic(err) }
+	assert resp.mode == 'websocket_dispatch'
+	assert resp.accepted
+	assert !resp.closed
+	assert resp.commands.len == 3
+	assert resp.commands[0].event == 'set_meta'
+	assert resp.commands[0].id == 'ws_conn_script'
+	assert resp.commands[0].key == 'relay_server_id'
+	assert resp.commands[0].value == 'srv_demo'
+	assert resp.commands[1].event == 'join'
+	assert resp.commands[1].room == 'relay:session:srv_demo'
+	assert resp.commands[2].event == 'send'
+	assert resp.commands[2].target_id == 'ws_conn_script'
+	assert resp.commands[2].data.contains('"ok":true')
+	assert executor.lane_snapshot()[0].served_requests == 1
+}
+
+fn test_inproc_vjsx_executor_dispatch_websocket_event_runs_module_handler() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_vjsx_executor_websocket_module_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	app_file := os.join_path(temp_dir, 'websocket-handler.mts')
+	os.write_file(app_file, '
+const app = {
+  websocket(frame) {
+    return {
+      accepted: true,
+      closed: frame.event === "close",
+      errorClass: "relay_state",
+      commands: [
+        { event: "close", code: 1011, reason: "relay_reset" }
+      ]
+    };
+  }
+};
+
+export default app;
+') or {
+		panic(err)
+	}
+	defer {
+		os.rm(app_file) or {}
+	}
+	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
+		thread_count:    1
+		app_entry:       app_file
+		module_root:     temp_dir
+		runtime_profile: 'node'
+	})
+	defer {
+		executor.close()
+	}
+	mut app := App{}
+	resp := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+		mode:       'websocket_dispatch'
+		event:      'close'
+		id:         'ws_conn_module'
+		path:       '/ws'
+		query:      map[string]string{}
+		headers:    {'host': 'relay.test'}
+		remote_addr: '127.0.0.1'
+		request_id: 'req_ws_module'
+		trace_id:   'trace_ws_module'
+		code:       1001
+		reason:     'client_closed'
+		rooms:      []string{}
+		metadata:   map[string]string{}
+	}) or { panic(err) }
+	assert resp.accepted
+	assert resp.closed
+	assert resp.error_class == 'relay_state'
+	assert resp.commands.len == 1
+	assert resp.commands[0].event == 'close'
+	assert resp.commands[0].id == 'ws_conn_module'
+	assert resp.commands[0].code == 1011
+	assert resp.commands[0].reason == 'relay_reset'
+}
+
+fn test_inproc_vjsx_executor_dispatch_websocket_event_exposes_binary_helpers() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_vjsx_executor_websocket_binary_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	app_file := os.join_path(temp_dir, 'websocket-binary-handler.mts')
+	os.write_file(app_file, '
+const app = {
+  websocket(frame) {
+    return {
+      accepted: true,
+      commands: [
+        {
+          event: "send",
+          targetId: frame.id,
+          opcode: frame.opcode,
+          data: frame.opcode === "binary" ? frame.dataBase64("") : frame.dataText("")
+        }
+      ]
+    };
+  }
+};
+
+export default app;
+') or {
+		panic(err)
+	}
+	defer {
+		os.rm(app_file) or {}
+	}
+	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
+		thread_count:    1
+		app_entry:       app_file
+		module_root:     temp_dir
+		runtime_profile: 'node'
+	})
+	defer {
+		executor.close()
+	}
+	mut app := App{}
+	encoded := base64.encode([u8(1), 2, 3, 4])
+	resp := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+		mode:       'websocket_dispatch'
+		event:      'message'
+		id:         'ws_conn_binary'
+		path:       '/ws'
+		query:      map[string]string{}
+		headers:    {'host': 'relay.test'}
+		remote_addr: '127.0.0.1'
+		request_id: 'req_ws_binary'
+		trace_id:   'trace_ws_binary'
+		opcode:     'binary'
+		data:       encoded
+		rooms:      []string{}
+		metadata:   map[string]string{}
+	}) or { panic(err) }
+	assert resp.accepted
+	assert resp.commands.len == 1
+	assert resp.commands[0].event == 'send'
+	assert resp.commands[0].opcode == 'binary'
+	assert resp.commands[0].data == encoded
+}
+
+fn test_inproc_vjsx_executor_runtime_websocket_dispatch_supports_timer_commands() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_vjsx_executor_websocket_runtime_dispatch_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	app_file := os.join_path(temp_dir, 'websocket-runtime-dispatch.mts')
+	os.write_file(app_file, '
+const app = {
+  websocket(frame) {
+    if (frame.event === "open") {
+      setTimeout(() => {
+        frame.runtime.websocketDispatch([
+          { event: "set_meta", id: frame.id, key: "timer_ready", value: "1" },
+          { event: "join", id: frame.id, room: "timer:room" }
+        ]);
+      }, 20);
+    }
+    return { accepted: true, commands: [] };
+  }
+};
+
+export default app;
+') or {
+		panic(err)
+	}
+	defer {
+		os.rm(app_file) or {}
+	}
+	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
+		thread_count:    1
+		app_entry:       app_file
+		module_root:     temp_dir
+		runtime_profile: 'node'
+	})
+	defer {
+		executor.close()
+	}
+	mut app := App{
+		ws_hub_conns:        map[string]HubConn{}
+		ws_hub_room_members: map[string]map[string]bool{}
+		ws_hub_conn_rooms:   map[string]map[string]bool{}
+		ws_hub_conn_meta:    map[string]map[string]string{}
+		ws_hub_pending:      map[string][]HubPendingMessage{}
+	}
+	app.ws_hub_conns['ws_timer'] = HubConn{
+		id:         'ws_timer'
+		request_id: 'req_ws_timer'
+		trace_id:   'trace_ws_timer'
+		path:       '/ws'
+		client:     unsafe { nil }
+	}
+	resp := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+		mode:       'websocket_dispatch'
+		event:      'open'
+		id:         'ws_timer'
+		path:       '/ws'
+		query:      map[string]string{}
+		headers:    {'host': 'relay.test'}
+		remote_addr: '127.0.0.1'
+		request_id: 'req_ws_timer'
+		trace_id:   'trace_ws_timer'
+		rooms:      []string{}
+		metadata:   map[string]string{}
+	}) or { panic(err) }
+	assert resp.accepted
+	time.sleep(80 * time.millisecond)
+	snapshot := app.admin_websockets_snapshot(true, 10, 0, '', 'ws_timer')
+	assert snapshot.connections.len == 1
+	assert snapshot.connections[0].metadata['timer_ready'] == '1'
+	assert 'timer:room' in snapshot.connections[0].rooms
+}
+
+fn test_inproc_vjsx_executor_runtime_websocket_dispatch_returns_failures() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_vjsx_executor_websocket_runtime_dispatch_failure_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	app_file := os.join_path(temp_dir, 'websocket-runtime-dispatch-failure.mts')
+	os.write_file(app_file, '
+const app = {
+  websocket(frame) {
+    if (frame.event === "open") {
+      setTimeout(() => {
+        const result = frame.runtime.websocketDispatch([
+          { event: "send", targetId: "missing_conn", data: "ping" }
+        ], { ok: false, failures: [] });
+        const failures = Array.isArray(result?.failures) ? result.failures.length : 0;
+        frame.runtime.websocketDispatch([
+          { event: "set_meta", id: frame.id, key: "dispatch_failure_count", value: String(failures) }
+        ]);
+      }, 20);
+    }
+    return { accepted: true, commands: [] };
+  }
+};
+
+export default app;
+') or {
+		panic(err)
+	}
+	defer {
+		os.rm(app_file) or {}
+	}
+	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
+		thread_count:    1
+		app_entry:       app_file
+		module_root:     temp_dir
+		runtime_profile: 'node'
+	})
+	defer {
+		executor.close()
+	}
+	mut app := App{
+		ws_hub_conns:        map[string]HubConn{}
+		ws_hub_room_members: map[string]map[string]bool{}
+		ws_hub_conn_rooms:   map[string]map[string]bool{}
+		ws_hub_conn_meta:    map[string]map[string]string{}
+		ws_hub_pending:      map[string][]HubPendingMessage{}
+	}
+	app.ws_hub_conns['ws_timer_failure'] = HubConn{
+		id:         'ws_timer_failure'
+		request_id: 'req_ws_timer_failure'
+		trace_id:   'trace_ws_timer_failure'
+		path:       '/ws'
+		client:     unsafe { nil }
+	}
+	resp := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+		mode:       'websocket_dispatch'
+		event:      'open'
+		id:         'ws_timer_failure'
+		path:       '/ws'
+		query:      map[string]string{}
+		headers:    {'host': 'relay.test'}
+		remote_addr: '127.0.0.1'
+		request_id: 'req_ws_timer_failure'
+		trace_id:   'trace_ws_timer_failure'
+		rooms:      []string{}
+		metadata:   map[string]string{}
+	}) or { panic(err) }
+	assert resp.accepted
+	time.sleep(80 * time.millisecond)
+	snapshot := app.admin_websockets_snapshot(true, 10, 0, '', 'ws_timer_failure')
+	assert snapshot.connections.len == 1
+	assert snapshot.connections[0].metadata['dispatch_failure_count'] == '1'
+}
+
+fn test_inproc_vjsx_executor_websocket_dispatch_main_chain_returns_failures_via_info() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_vjsx_executor_websocket_dispatch_main_failure_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	app_file := os.join_path(temp_dir, 'websocket-dispatch-main-failure.mts')
+	os.write_file(app_file, '
+const app = {
+  websocket(frame) {
+    if (frame.event === "message") {
+      return {
+        accepted: true,
+        commands: [
+          { event: "send", targetId: "missing_conn", data: "ping" }
+        ]
+      };
+    }
+    if (frame.event === "info") {
+      const payload = frame.dataJson({ failures: [] });
+      const failures = Array.isArray(payload?.failures) ? payload.failures.length : 0;
+      return {
+        accepted: true,
+        commands: [
+          { event: "set_meta", id: frame.id, key: "main_dispatch_failure_count", value: String(failures) }
+        ]
+      };
+    }
+    return { accepted: true, commands: [] };
+  }
+};
+
+export default app;
+') or {
+		panic(err)
+	}
+	defer {
+		os.rm(app_file) or {}
+	}
+	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
+		thread_count:    1
+		app_entry:       app_file
+		module_root:     temp_dir
+		runtime_profile: 'node'
+	})
+	defer {
+		executor.close()
+	}
+	mut app := App{
+		ws_hub_conns:        map[string]HubConn{}
+		ws_hub_room_members: map[string]map[string]bool{}
+		ws_hub_conn_rooms:   map[string]map[string]bool{}
+		ws_hub_conn_meta:    map[string]map[string]string{}
+		ws_hub_pending:      map[string][]HubPendingMessage{}
+	}
+	app.ws_hub_conns['ws_main_failure'] = HubConn{
+		id:         'ws_main_failure'
+		request_id: 'req_ws_main_failure'
+		trace_id:   'trace_ws_main_failure'
+		path:       '/ws'
+		client:     unsafe { nil }
+	}
+	open_resp := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+		mode:       'websocket_dispatch'
+		event:      'open'
+		id:         'ws_main_failure'
+		path:       '/ws'
+		query:      map[string]string{}
+		headers:    {'host': 'relay.test'}
+		remote_addr: '127.0.0.1'
+		request_id: 'req_ws_main_failure'
+		trace_id:   'trace_ws_main_failure'
+		rooms:      []string{}
+		metadata:   map[string]string{}
+	}) or { panic(err) }
+	assert open_resp.accepted
+	room_members, member_metadata, room_counts, presence_users := app.ws_hub_presence_snapshot('ws_main_failure')
+	msg_resp := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+		mode:       'websocket_dispatch'
+		event:      'message'
+		id:         'ws_main_failure'
+		path:       '/ws'
+		query:      map[string]string{}
+		headers:    {'host': 'relay.test'}
+		remote_addr: '127.0.0.1'
+		request_id: 'req_ws_main_failure'
+		trace_id:   'trace_ws_main_failure'
+		opcode:     'text'
+		data:       'hello'
+		rooms:      app.ws_hub_rooms_snapshot('ws_main_failure')
+		metadata:   app.ws_hub_meta_snapshot('ws_main_failure')
+		room_members: room_members
+		member_metadata: member_metadata
+		room_counts: room_counts
+		presence_users: presence_users
+	}) or { panic(err) }
+	assert msg_resp.accepted
+	result := app.execute_websocket_dispatch_commands_result(msg_resp.commands)
+	assert !result.has_close
+	if result.failures.len > 0 {
+		app.websocket_dispatch_followup_failures('ws_main_failure', 'GET', '/ws', map[string]string{}, {
+			'host': 'relay.test'
+		}, '127.0.0.1', 'req_ws_main_failure', 'trace_ws_main_failure', result.failures) or {}
+	}
+	snapshot := app.admin_websockets_snapshot(true, 10, 0, '', 'ws_main_failure')
+	assert snapshot.connections.len == 1
+	assert snapshot.connections[0].metadata['main_dispatch_failure_count'] == '1'
+}
+
+fn test_inproc_vjsx_executor_repo_paseo_relay_skeleton_boots() {
+	app_file := os.join_path(os.dir(@FILE), '..', 'examples', 'paseo-relay', 'app.mts')
+	assert os.exists(app_file)
+	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
+		thread_count:    1
+		app_entry:       app_file
+		module_root:     os.dir(app_file)
+		runtime_profile: 'node'
+	})
+	defer {
+		executor.close()
+	}
+	mut app := App{}
+	health := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+		method:      'GET'
+		path:        '/healthz'
+		req:         http.Request{
+			method: .get
+			url:    '/healthz'
+			host:   'relay.test'
+		}
+		remote_addr: '127.0.0.1'
+		trace_id:    'trace_paseo_health'
+		request_id:  'req_paseo_health'
+	}) or { panic(err) }
+	assert health.response.status == 200
+	assert health.response.body.contains('"app":"paseo-relay"')
+	health_alias := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+		method:      'GET'
+		path:        '/health'
+		req:         http.Request{
+			method: .get
+			url:    '/health'
+			host:   'relay.test'
+		}
+		remote_addr: '127.0.0.1'
+		trace_id:    'trace_paseo_health_alias'
+		request_id:  'req_paseo_health_alias'
+	}) or { panic(err) }
+	assert health_alias.response.status == 200
+	assert health_alias.response.body.contains('"app":"paseo-relay"')
+	control_open := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+		mode:       'websocket_dispatch'
+		event:      'open'
+		id:         'ws_control'
+		path:       '/ws'
+		query:      {'serverId': 'srv_repo_demo', 'role': 'server', 'v': '2'}
+		headers:    {'host': 'relay.test'}
+		remote_addr: '127.0.0.1'
+		request_id: 'req_ws_control'
+		trace_id:   'trace_ws_control'
+		rooms:      []string{}
+		metadata:   map[string]string{}
+	}) or { panic(err) }
+	assert control_open.accepted
+	assert control_open.commands.any(it.event == 'set_meta' && it.key == 'relay_role'
+		&& it.value == 'server-control')
+	assert control_open.commands.any(it.event == 'send' && it.target_id == 'ws_control'
+		&& it.data.contains('"type":"sync"'))
+	client_open := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+		mode:       'websocket_dispatch'
+		event:      'open'
+		id:         'ws_client'
+		path:       '/ws'
+		query:      {'serverId': 'srv_repo_demo', 'role': 'client', 'v': '2'}
+		headers:    {'host': 'relay.test'}
+		remote_addr: '127.0.0.1'
+		request_id: 'req_ws_client'
+		trace_id:   'trace_ws_client'
+		rooms:      []string{}
+		metadata:   map[string]string{}
+	}) or { panic(err) }
+	assert client_open.accepted
+	assert client_open.commands.any(it.event == 'set_meta' && it.key == 'relay_role'
+		&& it.value == 'client')
+	assert client_open.commands.any(it.event == 'set_meta' && it.key == 'relay_connection_id'
+		&& it.value.starts_with('conn_'))
+	assert client_open.commands.any(it.event == 'send' && it.target_id == 'ws_control'
+		&& it.data.contains('"type":"connected"'))
+}
+
+fn test_inproc_vjsx_executor_repo_paseo_relay_isolates_versions_by_server_id() {
+	app_file := os.join_path(os.dir(@FILE), '..', 'examples', 'paseo-relay', 'app.mts')
+	assert os.exists(app_file)
+	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
+		thread_count:    1
+		app_entry:       app_file
+		module_root:     os.dir(app_file)
+		runtime_profile: 'node'
+	})
+	defer {
+		executor.close()
+	}
+	mut app := App{}
+	server_id := 'srv_version_isolation'
+	legacy_open := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+		mode:       'websocket_dispatch'
+		event:      'open'
+		id:         'ws_legacy_server'
+		path:       '/ws'
+		query:      {'serverId': server_id, 'role': 'server', 'v': '1'}
+		headers:    {'host': 'relay.test'}
+		remote_addr: '127.0.0.1'
+		request_id: 'req_ws_legacy_server'
+		trace_id:   'trace_ws_legacy_server'
+		rooms:      []string{}
+		metadata:   map[string]string{}
+	}) or { panic(err) }
+	assert legacy_open.accepted
+	control_open := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+		mode:       'websocket_dispatch'
+		event:      'open'
+		id:         'ws_v2_control'
+		path:       '/ws'
+		query:      {'serverId': server_id, 'role': 'server', 'v': '2'}
+		headers:    {'host': 'relay.test'}
+		remote_addr: '127.0.0.1'
+		request_id: 'req_ws_v2_control'
+		trace_id:   'trace_ws_v2_control'
+		rooms:      []string{}
+		metadata:   map[string]string{}
+	}) or { panic(err) }
+	assert control_open.accepted
+	assert !control_open.commands.any(it.event == 'close' && it.target_id == 'ws_legacy_server')
+	state := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+		method:      'GET'
+		path:        '/state'
+		req:         http.Request{
+			method: .get
+			url:    '/state'
+			host:   'relay.test'
+		}
+		remote_addr: '127.0.0.1'
+		trace_id:    'trace_version_isolation_state'
+		request_id:  'req_version_isolation_state'
+	}) or { panic(err) }
+	assert state.response.status == 200
+	assert state.response.body.contains('"sessionCount":2')
+	assert state.response.body.contains('"sessionKey":"relay-v1:${server_id}"')
+	assert state.response.body.contains('"sessionKey":"relay-v2:${server_id}"')
+}
+
+fn test_inproc_vjsx_executor_repo_paseo_relay_buffers_and_flushes_client_frames() {
+	app_file := os.join_path(os.dir(@FILE), '..', 'examples', 'paseo-relay', 'app.mts')
+	assert os.exists(app_file)
+	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
+		thread_count:    1
+		app_entry:       app_file
+		module_root:     os.dir(app_file)
+		runtime_profile: 'node'
+	})
+	defer {
+		executor.close()
+	}
+	mut app := App{}
+	server_id := 'srv_buffer_demo'
+	connection_id := 'conn_buffer_demo'
+	control_open := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+		mode:       'websocket_dispatch'
+		event:      'open'
+		id:         'ws_control_buffer'
+		path:       '/ws'
+		query:      {'serverId': server_id, 'role': 'server', 'v': '2'}
+		headers:    {'host': 'relay.test'}
+		remote_addr: '127.0.0.1'
+		request_id: 'req_ws_control_buffer'
+		trace_id:   'trace_ws_control_buffer'
+		rooms:      []string{}
+		metadata:   map[string]string{}
+	}) or { panic(err) }
+	assert control_open.accepted
+	client_open := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+		mode:       'websocket_dispatch'
+		event:      'open'
+		id:         'ws_client_buffer'
+		path:       '/ws'
+		query:      {'serverId': server_id, 'role': 'client', 'v': '2', 'connectionId': connection_id}
+		headers:    {'host': 'relay.test'}
+		remote_addr: '127.0.0.1'
+		request_id: 'req_ws_client_buffer'
+		trace_id:   'trace_ws_client_buffer'
+		rooms:      []string{}
+		metadata:   map[string]string{}
+	}) or { panic(err) }
+	assert client_open.accepted
+	client_message := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+		mode:       'websocket_dispatch'
+		event:      'message'
+		id:         'ws_client_buffer'
+		path:       '/ws'
+		query:      {'serverId': server_id, 'role': 'client', 'v': '2', 'connectionId': connection_id}
+		headers:    {'host': 'relay.test'}
+		remote_addr: '127.0.0.1'
+		request_id: 'req_ws_client_buffer'
+		trace_id:   'trace_ws_client_buffer'
+		opcode:     'text'
+		data:       '{"type":"hello"}'
+		rooms:      ['relay:session:${server_id}', 'relay:conn:${server_id}:${connection_id}']
+		metadata:   {'relay_server_id': server_id, 'relay_version': '2', 'relay_role': 'client', 'relay_connection_id': connection_id}
+	}) or { panic(err) }
+	assert client_message.accepted
+	assert client_message.commands.len == 0
+	state_before := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+		method:      'GET'
+		path:        '/state'
+		req:         http.Request{
+			method: .get
+			url:    '/state'
+			host:   'relay.test'
+		}
+		remote_addr: '127.0.0.1'
+		trace_id:    'trace_state_before_flush'
+		request_id:  'req_state_before_flush'
+	}) or { panic(err) }
+	assert state_before.response.body.contains('"pendingCount":1')
+	server_data_open := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+		mode:       'websocket_dispatch'
+		event:      'open'
+		id:         'ws_server_data_buffer'
+		path:       '/ws'
+		query:      {'serverId': server_id, 'role': 'server', 'v': '2', 'connectionId': connection_id}
+		headers:    {'host': 'relay.test'}
+		remote_addr: '127.0.0.1'
+		request_id: 'req_ws_server_data_buffer'
+		trace_id:   'trace_ws_server_data_buffer'
+		rooms:      []string{}
+		metadata:   map[string]string{}
+	}) or { panic(err) }
+	assert server_data_open.accepted
+	assert server_data_open.commands.any(it.event == 'send' && it.target_id == 'ws_server_data_buffer'
+		&& it.data.contains('"type":"hello"'))
+	state_after := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+		method:      'GET'
+		path:        '/state'
+		req:         http.Request{
+			method: .get
+			url:    '/state'
+			host:   'relay.test'
+		}
+		remote_addr: '127.0.0.1'
+		trace_id:    'trace_state_after_flush'
+		request_id:  'req_state_after_flush'
+	}) or { panic(err) }
+	assert state_after.response.body.contains('"pendingCount":0')
+	assert state_after.response.body.contains('"drainingCount":1')
+}
+
+fn test_inproc_vjsx_executor_repo_paseo_relay_nudges_control_when_server_data_does_not_arrive() {
+	app_file := os.join_path(os.dir(@FILE), '..', 'examples', 'paseo-relay', 'app.mts')
+	assert os.exists(app_file)
+	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
+		thread_count:    1
+		app_entry:       app_file
+		module_root:     os.dir(app_file)
+		runtime_profile: 'node'
+	})
+	defer {
+		executor.close()
+	}
+	mut app := App{
+		runtime_config_json: '{"relay":{"controlNudgeDelayMs":20,"controlResetDelayMs":20}}'
+		ws_hub_conns:        map[string]HubConn{}
+		ws_hub_room_members: map[string]map[string]bool{}
+		ws_hub_conn_rooms:   map[string]map[string]bool{}
+		ws_hub_conn_meta:    map[string]map[string]string{}
+		ws_hub_pending:      map[string][]HubPendingMessage{}
+	}
+	server_id := 'srv_nudge_demo'
+	control_open := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+		mode:       'websocket_dispatch'
+		event:      'open'
+		id:         'ws_control_nudge'
+		path:       '/ws'
+		query:      {'serverId': server_id, 'role': 'server', 'v': '2'}
+		headers:    {'host': 'relay.test'}
+		remote_addr: '127.0.0.1'
+		request_id: 'req_ws_control_nudge'
+		trace_id:   'trace_ws_control_nudge'
+		rooms:      []string{}
+		metadata:   map[string]string{}
+	}) or { panic(err) }
+	assert control_open.accepted
+	client_open := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+		mode:       'websocket_dispatch'
+		event:      'open'
+		id:         'ws_client_nudge'
+		path:       '/ws'
+		query:      {'serverId': server_id, 'role': 'client', 'v': '2', 'connectionId': 'conn_nudge_demo'}
+		headers:    {'host': 'relay.test'}
+		remote_addr: '127.0.0.1'
+		request_id: 'req_ws_client_nudge'
+		trace_id:   'trace_ws_client_nudge'
+		rooms:      []string{}
+		metadata:   map[string]string{}
+	}) or { panic(err) }
+	assert client_open.accepted
+	time.sleep(80 * time.millisecond)
+	pending := app.ws_hub_pending['ws_control_nudge'] or { []HubPendingMessage{} }
+	assert pending.any(it.data.contains('"type":"connected"'))
+	assert pending.any(it.data.contains('"type":"sync"'))
+}
+
+fn test_inproc_vjsx_executor_repo_paseo_relay_disconnects_server_data_on_last_client_close() {
+	app_file := os.join_path(os.dir(@FILE), '..', 'examples', 'paseo-relay', 'app.mts')
+	assert os.exists(app_file)
+	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
+		thread_count:    1
+		app_entry:       app_file
+		module_root:     os.dir(app_file)
+		runtime_profile: 'node'
+	})
+	defer {
+		executor.close()
+	}
+	mut app := App{}
+	server_id := 'srv_disconnect_demo'
+	connection_id := 'conn_disconnect_demo'
+	_ = executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+		mode:       'websocket_dispatch'
+		event:      'open'
+		id:         'ws_control_disconnect'
+		path:       '/ws'
+		query:      {'serverId': server_id, 'role': 'server', 'v': '2'}
+		headers:    {'host': 'relay.test'}
+		remote_addr: '127.0.0.1'
+		request_id: 'req_ws_control_disconnect'
+		trace_id:   'trace_ws_control_disconnect'
+		rooms:      []string{}
+		metadata:   map[string]string{}
+	}) or { panic(err) }
+	_ = executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+		mode:       'websocket_dispatch'
+		event:      'open'
+		id:         'ws_server_data_disconnect'
+		path:       '/ws'
+		query:      {'serverId': server_id, 'role': 'server', 'v': '2', 'connectionId': connection_id}
+		headers:    {'host': 'relay.test'}
+		remote_addr: '127.0.0.1'
+		request_id: 'req_ws_server_data_disconnect'
+		trace_id:   'trace_ws_server_data_disconnect'
+		rooms:      []string{}
+		metadata:   map[string]string{}
+	}) or { panic(err) }
+	_ = executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+		mode:       'websocket_dispatch'
+		event:      'open'
+		id:         'ws_client_disconnect'
+		path:       '/ws'
+		query:      {'serverId': server_id, 'role': 'client', 'v': '2', 'connectionId': connection_id}
+		headers:    {'host': 'relay.test'}
+		remote_addr: '127.0.0.1'
+		request_id: 'req_ws_client_disconnect'
+		trace_id:   'trace_ws_client_disconnect'
+		rooms:      []string{}
+		metadata:   map[string]string{}
+	}) or { panic(err) }
+	client_close := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+		mode:       'websocket_dispatch'
+		event:      'close'
+		id:         'ws_client_disconnect'
+		path:       '/ws'
+		query:      map[string]string{}
+		headers:    {'host': 'relay.test'}
+		remote_addr: '127.0.0.1'
+		request_id: 'req_ws_client_disconnect'
+		trace_id:   'trace_ws_client_disconnect'
+		code:       1000
+		reason:     'Normal closure'
+		rooms:      ['relay:session:${server_id}', 'relay:conn:${server_id}:${connection_id}']
+		metadata:   {'relay_server_id': server_id, 'relay_version': '2', 'relay_role': 'client', 'relay_connection_id': connection_id}
+	}) or { panic(err) }
+	assert client_close.closed
+	assert client_close.commands.any(it.event == 'close' && it.target_id == 'ws_server_data_disconnect'
+		&& it.reason == 'Client disconnected')
+	assert client_close.commands.any(it.event == 'send' && it.target_id == 'ws_control_disconnect'
+		&& it.data.contains('"type":"disconnected"'))
+}
+
+fn test_inproc_vjsx_executor_repo_paseo_relay_disconnects_clients_when_server_data_closes() {
+	app_file := os.join_path(os.dir(@FILE), '..', 'examples', 'paseo-relay', 'app.mts')
+	assert os.exists(app_file)
+	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
+		thread_count:    1
+		app_entry:       app_file
+		module_root:     os.dir(app_file)
+		runtime_profile: 'node'
+	})
+	defer {
+		executor.close()
+	}
+	mut app := App{}
+	server_id := 'srv_server_close_demo'
+	connection_id := 'conn_server_close_demo'
+	_ = executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+		mode:       'websocket_dispatch'
+		event:      'open'
+		id:         'ws_server_data_server_close'
+		path:       '/ws'
+		query:      {'serverId': server_id, 'role': 'server', 'v': '2', 'connectionId': connection_id}
+		headers:    {'host': 'relay.test'}
+		remote_addr: '127.0.0.1'
+		request_id: 'req_ws_server_data_server_close'
+		trace_id:   'trace_ws_server_data_server_close'
+		rooms:      []string{}
+		metadata:   map[string]string{}
+	}) or { panic(err) }
+	_ = executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+		mode:       'websocket_dispatch'
+		event:      'open'
+		id:         'ws_client_server_close'
+		path:       '/ws'
+		query:      {'serverId': server_id, 'role': 'client', 'v': '2', 'connectionId': connection_id}
+		headers:    {'host': 'relay.test'}
+		remote_addr: '127.0.0.1'
+		request_id: 'req_ws_client_server_close'
+		trace_id:   'trace_ws_client_server_close'
+		rooms:      []string{}
+		metadata:   map[string]string{}
+	}) or { panic(err) }
+	server_close := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+		mode:       'websocket_dispatch'
+		event:      'close'
+		id:         'ws_server_data_server_close'
+		path:       '/ws'
+		query:      map[string]string{}
+		headers:    {'host': 'relay.test'}
+		remote_addr: '127.0.0.1'
+		request_id: 'req_ws_server_data_server_close'
+		trace_id:   'trace_ws_server_data_server_close'
+		code:       1001
+		reason:     'Server disconnected'
+		rooms:      ['relay:session:${server_id}', 'relay:conn:${server_id}:${connection_id}']
+		metadata:   {'relay_server_id': server_id, 'relay_version': '2', 'relay_role': 'server-data', 'relay_connection_id': connection_id}
+	}) or { panic(err) }
+	assert server_close.closed
+	assert server_close.commands.any(it.event == 'close' && it.target_id == 'ws_client_server_close'
+		&& it.code == 1012)
+}
+
+fn test_inproc_vjsx_executor_repo_paseo_relay_preserves_binary_opcode_on_flush() {
+	app_file := os.join_path(os.dir(@FILE), '..', 'examples', 'paseo-relay', 'app.mts')
+	assert os.exists(app_file)
+	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
+		thread_count:    1
+		app_entry:       app_file
+		module_root:     os.dir(app_file)
+		runtime_profile: 'node'
+	})
+	defer {
+		executor.close()
+	}
+	mut app := App{}
+	server_id := 'srv_binary_demo'
+	connection_id := 'conn_binary_demo'
+	_ = executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+		mode:       'websocket_dispatch'
+		event:      'open'
+		id:         'ws_control_binary'
+		path:       '/ws'
+		query:      {'serverId': server_id, 'role': 'server', 'v': '2'}
+		headers:    {'host': 'relay.test'}
+		remote_addr: '127.0.0.1'
+		request_id: 'req_ws_control_binary'
+		trace_id:   'trace_ws_control_binary'
+		rooms:      []string{}
+		metadata:   map[string]string{}
+	}) or { panic(err) }
+	_ = executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+		mode:       'websocket_dispatch'
+		event:      'open'
+		id:         'ws_client_binary'
+		path:       '/ws'
+		query:      {'serverId': server_id, 'role': 'client', 'v': '2', 'connectionId': connection_id}
+		headers:    {'host': 'relay.test'}
+		remote_addr: '127.0.0.1'
+		request_id: 'req_ws_client_binary'
+		trace_id:   'trace_ws_client_binary'
+		rooms:      []string{}
+		metadata:   map[string]string{}
+	}) or { panic(err) }
+	binary_data := base64.encode([u8(222), 173, 190, 239])
+	buffered := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+		mode:       'websocket_dispatch'
+		event:      'message'
+		id:         'ws_client_binary'
+		path:       '/ws'
+		query:      {'serverId': server_id, 'role': 'client', 'v': '2', 'connectionId': connection_id}
+		headers:    {'host': 'relay.test'}
+		remote_addr: '127.0.0.1'
+		request_id: 'req_ws_client_binary'
+		trace_id:   'trace_ws_client_binary'
+		opcode:     'binary'
+		data:       binary_data
+		rooms:      ['relay:session:${server_id}', 'relay:conn:${server_id}:${connection_id}']
+		metadata:   {'relay_server_id': server_id, 'relay_version': '2', 'relay_role': 'client', 'relay_connection_id': connection_id}
+	}) or { panic(err) }
+	assert buffered.accepted
+	assert buffered.commands.len == 0
+	flushed := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+		mode:       'websocket_dispatch'
+		event:      'open'
+		id:         'ws_server_data_binary'
+		path:       '/ws'
+		query:      {'serverId': server_id, 'role': 'server', 'v': '2', 'connectionId': connection_id}
+		headers:    {'host': 'relay.test'}
+		remote_addr: '127.0.0.1'
+		request_id: 'req_ws_server_data_binary'
+		trace_id:   'trace_ws_server_data_binary'
+		rooms:      []string{}
+		metadata:   map[string]string{}
+	}) or { panic(err) }
+	assert flushed.accepted
+	assert flushed.commands.any(it.event == 'send' && it.target_id == 'ws_server_data_binary'
+		&& it.opcode == 'binary' && it.data == binary_data)
+}
+
+fn test_inproc_vjsx_executor_repo_paseo_relay_restores_draining_frames_when_server_data_closes() {
+	app_file := os.join_path(os.dir(@FILE), '..', 'examples', 'paseo-relay', 'app.mts')
+	assert os.exists(app_file)
+	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
+		thread_count:    1
+		app_entry:       app_file
+		module_root:     os.dir(app_file)
+		runtime_profile: 'node'
+	})
+	defer {
+		executor.close()
+	}
+	mut app := App{}
+	server_id := 'srv_drain_restore_demo'
+	connection_id := 'conn_drain_restore_demo'
+	_ = executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+		mode:       'websocket_dispatch'
+		event:      'open'
+		id:         'ws_control_drain_restore'
+		path:       '/ws'
+		query:      {'serverId': server_id, 'role': 'server', 'v': '2'}
+		headers:    {'host': 'relay.test'}
+		remote_addr: '127.0.0.1'
+		request_id: 'req_ws_control_drain_restore'
+		trace_id:   'trace_ws_control_drain_restore'
+		rooms:      []string{}
+		metadata:   map[string]string{}
+	}) or { panic(err) }
+	_ = executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+		mode:       'websocket_dispatch'
+		event:      'open'
+		id:         'ws_client_drain_restore'
+		path:       '/ws'
+		query:      {'serverId': server_id, 'role': 'client', 'v': '2', 'connectionId': connection_id}
+		headers:    {'host': 'relay.test'}
+		remote_addr: '127.0.0.1'
+		request_id: 'req_ws_client_drain_restore'
+		trace_id:   'trace_ws_client_drain_restore'
+		rooms:      []string{}
+		metadata:   map[string]string{}
+	}) or { panic(err) }
+	_ = executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+		mode:       'websocket_dispatch'
+		event:      'message'
+		id:         'ws_client_drain_restore'
+		path:       '/ws'
+		query:      {'serverId': server_id, 'role': 'client', 'v': '2', 'connectionId': connection_id}
+		headers:    {'host': 'relay.test'}
+		remote_addr: '127.0.0.1'
+		request_id: 'req_ws_client_drain_restore'
+		trace_id:   'trace_ws_client_drain_restore'
+		opcode:     'text'
+		data:       '{"type":"restore-me"}'
+		rooms:      ['relay:session:${server_id}', 'relay:conn:${server_id}:${connection_id}']
+		metadata:   {'relay_server_id': server_id, 'relay_version': '2', 'relay_role': 'client', 'relay_connection_id': connection_id}
+	}) or { panic(err) }
+	_ = executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+		mode:       'websocket_dispatch'
+		event:      'open'
+		id:         'ws_server_data_drain_restore'
+		path:       '/ws'
+		query:      {'serverId': server_id, 'role': 'server', 'v': '2', 'connectionId': connection_id}
+		headers:    {'host': 'relay.test'}
+		remote_addr: '127.0.0.1'
+		request_id: 'req_ws_server_data_drain_restore'
+		trace_id:   'trace_ws_server_data_drain_restore'
+		rooms:      []string{}
+		metadata:   map[string]string{}
+	}) or { panic(err) }
+	before_close := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+		method:      'GET'
+		path:        '/state'
+		req:         http.Request{
+			method: .get
+			url:    '/state'
+			host:   'relay.test'
+		}
+		remote_addr: '127.0.0.1'
+		trace_id:    'trace_state_before_drain_restore_close'
+		request_id:  'req_state_before_drain_restore_close'
+	}) or { panic(err) }
+	assert before_close.response.body.contains('"pendingCount":0')
+	assert before_close.response.body.contains('"drainingCount":1')
+	_ = executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+		mode:       'websocket_dispatch'
+		event:      'close'
+		id:         'ws_server_data_drain_restore'
+		path:       '/ws'
+		query:      map[string]string{}
+		headers:    {'host': 'relay.test'}
+		remote_addr: '127.0.0.1'
+		request_id: 'req_ws_server_data_drain_restore'
+		trace_id:   'trace_ws_server_data_drain_restore'
+		code:       1001
+		reason:     'Server disconnected'
+		rooms:      ['relay:session:${server_id}', 'relay:conn:${server_id}:${connection_id}']
+		metadata:   {'relay_server_id': server_id, 'relay_version': '2', 'relay_role': 'server-data', 'relay_connection_id': connection_id}
+	}) or { panic(err) }
+	after_close := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+		method:      'GET'
+		path:        '/state'
+		req:         http.Request{
+			method: .get
+			url:    '/state'
+			host:   'relay.test'
+		}
+		remote_addr: '127.0.0.1'
+		trace_id:    'trace_state_after_drain_restore_close'
+		request_id:  'req_state_after_drain_restore_close'
+	}) or { panic(err) }
+	assert after_close.response.body.contains('"pendingCount":1')
+	assert after_close.response.body.contains('"drainingCount":0')
+}
+
+fn test_inproc_vjsx_executor_repo_paseo_relay_replaces_existing_control_socket() {
+	app_file := os.join_path(os.dir(@FILE), '..', 'examples', 'paseo-relay', 'app.mts')
+	assert os.exists(app_file)
+	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
+		thread_count:    1
+		app_entry:       app_file
+		module_root:     os.dir(app_file)
+		runtime_profile: 'node'
+	})
+	defer {
+		executor.close()
+	}
+	mut app := App{}
+	server_id := 'srv_replace_control'
+	_ = executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+		mode:       'websocket_dispatch'
+		event:      'open'
+		id:         'ws_control_old'
+		path:       '/ws'
+		query:      {'serverId': server_id, 'role': 'server', 'v': '2'}
+		headers:    {'host': 'relay.test'}
+		remote_addr: '127.0.0.1'
+		request_id: 'req_ws_control_old'
+		trace_id:   'trace_ws_control_old'
+		rooms:      []string{}
+		metadata:   map[string]string{}
+	}) or { panic(err) }
+	replaced := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+		mode:       'websocket_dispatch'
+		event:      'open'
+		id:         'ws_control_new'
+		path:       '/ws'
+		query:      {'serverId': server_id, 'role': 'server', 'v': '2'}
+		headers:    {'host': 'relay.test'}
+		remote_addr: '127.0.0.1'
+		request_id: 'req_ws_control_new'
+		trace_id:   'trace_ws_control_new'
+		rooms:      []string{}
+		metadata:   map[string]string{}
+	}) or { panic(err) }
+	assert replaced.accepted
+	assert replaced.commands.any(it.event == 'close' && it.target_id == 'ws_control_old'
+		&& it.code == 1008)
+}
+
+fn test_inproc_vjsx_executor_repo_paseo_relay_replaces_existing_server_data_socket() {
+	app_file := os.join_path(os.dir(@FILE), '..', 'examples', 'paseo-relay', 'app.mts')
+	assert os.exists(app_file)
+	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
+		thread_count:    1
+		app_entry:       app_file
+		module_root:     os.dir(app_file)
+		runtime_profile: 'node'
+	})
+	defer {
+		executor.close()
+	}
+	mut app := App{}
+	server_id := 'srv_replace_data'
+	connection_id := 'conn_replace_data'
+	_ = executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+		mode:       'websocket_dispatch'
+		event:      'open'
+		id:         'ws_server_data_old'
+		path:       '/ws'
+		query:      {'serverId': server_id, 'role': 'server', 'v': '2', 'connectionId': connection_id}
+		headers:    {'host': 'relay.test'}
+		remote_addr: '127.0.0.1'
+		request_id: 'req_ws_server_data_old'
+		trace_id:   'trace_ws_server_data_old'
+		rooms:      []string{}
+		metadata:   map[string]string{}
+	}) or { panic(err) }
+	replaced := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+		mode:       'websocket_dispatch'
+		event:      'open'
+		id:         'ws_server_data_new'
+		path:       '/ws'
+		query:      {'serverId': server_id, 'role': 'server', 'v': '2', 'connectionId': connection_id}
+		headers:    {'host': 'relay.test'}
+		remote_addr: '127.0.0.1'
+		request_id: 'req_ws_server_data_new'
+		trace_id:   'trace_ws_server_data_new'
+		rooms:      []string{}
+		metadata:   map[string]string{}
+	}) or { panic(err) }
+	assert replaced.accepted
+	assert replaced.commands.any(it.event == 'close' && it.target_id == 'ws_server_data_old'
+		&& it.code == 1008)
+}
+
+fn test_inproc_vjsx_executor_repo_paseo_relay_allows_multiple_clients_same_connection() {
+	app_file := os.join_path(os.dir(@FILE), '..', 'examples', 'paseo-relay', 'app.mts')
+	assert os.exists(app_file)
+	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
+		thread_count:    1
+		app_entry:       app_file
+		module_root:     os.dir(app_file)
+		runtime_profile: 'node'
+	})
+	defer {
+		executor.close()
+	}
+	mut app := App{}
+	server_id := 'srv_multi_client'
+	connection_id := 'conn_multi_client'
+	first := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+		mode:       'websocket_dispatch'
+		event:      'open'
+		id:         'ws_client_one'
+		path:       '/ws'
+		query:      {'serverId': server_id, 'role': 'client', 'v': '2', 'connectionId': connection_id}
+		headers:    {'host': 'relay.test'}
+		remote_addr: '127.0.0.1'
+		request_id: 'req_ws_client_one'
+		trace_id:   'trace_ws_client_one'
+		rooms:      []string{}
+		metadata:   map[string]string{}
+	}) or { panic(err) }
+	assert first.accepted
+	second := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+		mode:       'websocket_dispatch'
+		event:      'open'
+		id:         'ws_client_two'
+		path:       '/ws'
+		query:      {'serverId': server_id, 'role': 'client', 'v': '2', 'connectionId': connection_id}
+		headers:    {'host': 'relay.test'}
+		remote_addr: '127.0.0.1'
+		request_id: 'req_ws_client_two'
+		trace_id:   'trace_ws_client_two'
+		rooms:      []string{}
+		metadata:   map[string]string{}
+	}) or { panic(err) }
+	assert second.accepted
+	assert !second.commands.any(it.event == 'close' && it.target_id == 'ws_client_one')
+	state := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+		method:      'GET'
+		path:        '/state'
+		req:         http.Request{
+			method: .get
+			url:    '/state'
+			host:   'relay.test'
+		}
+		remote_addr: '127.0.0.1'
+		trace_id:    'trace_multi_client_state'
+		request_id:  'req_multi_client_state'
+	}) or { panic(err) }
+	assert state.response.body.contains('"clientCount":2')
+}
+
+fn test_inproc_vjsx_executor_repo_paseo_relay_keeps_server_data_alive_if_other_clients_remain() {
+	app_file := os.join_path(os.dir(@FILE), '..', 'examples', 'paseo-relay', 'app.mts')
+	assert os.exists(app_file)
+	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
+		thread_count:    1
+		app_entry:       app_file
+		module_root:     os.dir(app_file)
+		runtime_profile: 'node'
+	})
+	defer {
+		executor.close()
+	}
+	mut app := App{}
+	server_id := 'srv_keep_data'
+	connection_id := 'conn_keep_data'
+	_ = executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+		mode:       'websocket_dispatch'
+		event:      'open'
+		id:         'ws_control_keep'
+		path:       '/ws'
+		query:      {'serverId': server_id, 'role': 'server', 'v': '2'}
+		headers:    {'host': 'relay.test'}
+		remote_addr: '127.0.0.1'
+		request_id: 'req_ws_control_keep'
+		trace_id:   'trace_ws_control_keep'
+		rooms:      []string{}
+		metadata:   map[string]string{}
+	}) or { panic(err) }
+	_ = executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+		mode:       'websocket_dispatch'
+		event:      'open'
+		id:         'ws_server_data_keep'
+		path:       '/ws'
+		query:      {'serverId': server_id, 'role': 'server', 'v': '2', 'connectionId': connection_id}
+		headers:    {'host': 'relay.test'}
+		remote_addr: '127.0.0.1'
+		request_id: 'req_ws_server_data_keep'
+		trace_id:   'trace_ws_server_data_keep'
+		rooms:      []string{}
+		metadata:   map[string]string{}
+	}) or { panic(err) }
+	_ = executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+		mode:       'websocket_dispatch'
+		event:      'open'
+		id:         'ws_client_keep_one'
+		path:       '/ws'
+		query:      {'serverId': server_id, 'role': 'client', 'v': '2', 'connectionId': connection_id}
+		headers:    {'host': 'relay.test'}
+		remote_addr: '127.0.0.1'
+		request_id: 'req_ws_client_keep_one'
+		trace_id:   'trace_ws_client_keep_one'
+		rooms:      []string{}
+		metadata:   map[string]string{}
+	}) or { panic(err) }
+	_ = executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+		mode:       'websocket_dispatch'
+		event:      'open'
+		id:         'ws_client_keep_two'
+		path:       '/ws'
+		query:      {'serverId': server_id, 'role': 'client', 'v': '2', 'connectionId': connection_id}
+		headers:    {'host': 'relay.test'}
+		remote_addr: '127.0.0.1'
+		request_id: 'req_ws_client_keep_two'
+		trace_id:   'trace_ws_client_keep_two'
+		rooms:      []string{}
+		metadata:   map[string]string{}
+	}) or { panic(err) }
+	closed_one := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+		mode:       'websocket_dispatch'
+		event:      'close'
+		id:         'ws_client_keep_one'
+		path:       '/ws'
+		query:      map[string]string{}
+		headers:    {'host': 'relay.test'}
+		remote_addr: '127.0.0.1'
+		request_id: 'req_ws_client_keep_one'
+		trace_id:   'trace_ws_client_keep_one'
+		code:       1000
+		reason:     'Normal closure'
+		rooms:      ['relay:session:${server_id}', 'relay:conn:${server_id}:${connection_id}']
+		metadata:   {'relay_server_id': server_id, 'relay_version': '2', 'relay_role': 'client', 'relay_connection_id': connection_id}
+	}) or { panic(err) }
+	assert closed_one.closed
+	assert !closed_one.commands.any(it.event == 'close' && it.target_id == 'ws_server_data_keep')
+	assert !closed_one.commands.any(it.event == 'send' && it.target_id == 'ws_control_keep'
+		&& it.data.contains('"type":"disconnected"'))
 }
