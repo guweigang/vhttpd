@@ -4,6 +4,7 @@ set -euo pipefail
 bin_path="${1:-./vhttpd}"
 os_name="$(uname -s)"
 share_root="${VHTTPD_SHARE_ROOT:-/usr/local/share/vhttpd}"
+vjsx_asset_root_override="${VJSX_ASSET_ROOT:-}"
 status=0
 
 ok() {
@@ -17,6 +18,30 @@ warn() {
 bad() {
   printf '[runtime-doctor] missing: %s\n' "$*" >&2
   status=1
+}
+
+has_vjsx_runtime_assets() {
+  local root="$1"
+  [ -n "$root" ] && [ -f "$root/web/js/buffer.js" ]
+}
+
+resolve_vjsx_asset_root() {
+  local bin_dir
+  bin_dir="$(CDPATH= cd -- "$(dirname -- "$bin_path")" && pwd)"
+  local candidate
+  for candidate in \
+    "$vjsx_asset_root_override" \
+    "$bin_dir/runtime/vjsx" \
+    "$bin_dir/../runtime/vjsx" \
+    "$share_root/vjsx" \
+    "$HOME/.vmodules/vjsx"
+  do
+    if has_vjsx_runtime_assets "$candidate"; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+  return 1
 }
 
 [ -f "$bin_path" ] || {
@@ -86,16 +111,17 @@ else
   warn "command pg_config is absent; PostgreSQL client environments may be incomplete"
 fi
 
-if [ -f "${share_root}/vjsx/web/js/buffer.js" ]; then
-  ok "vjsx runtime assets ${share_root}/vjsx"
+resolved_vjsx_asset_root="$(resolve_vjsx_asset_root || true)"
+if [ -n "$resolved_vjsx_asset_root" ]; then
+  ok "vjsx runtime assets ${resolved_vjsx_asset_root}"
 else
-  warn "vjsx runtime assets are absent at ${share_root}/vjsx; browser/node runtime profiles may fail to load bundled JS shims"
+  warn "vjsx runtime assets are unresolved; checked VJSX_ASSET_ROOT, bundle-relative runtime/vjsx, ${share_root}/vjsx, and ~/.vmodules/vjsx"
 fi
 
 if [ -L "${HOME}/.vmodules/vjsx" ]; then
   ok "vjsx compatibility symlink ${HOME}/.vmodules/vjsx"
 else
-  warn "vjsx compatibility symlink ${HOME}/.vmodules/vjsx is absent"
+  warn "vjsx compatibility symlink ${HOME}/.vmodules/vjsx is absent; this is optional when VJSX_ASSET_ROOT or bundled runtime/vjsx is used"
 fi
 
 if [ "$status" -ne 0 ]; then

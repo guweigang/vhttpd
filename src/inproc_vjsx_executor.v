@@ -2,6 +2,7 @@ module main
 
 import json
 import net.http
+import net.urllib
 import os
 import sync
 import time
@@ -81,6 +82,7 @@ pub:
 	enable_fs         bool
 	enable_process    bool
 	enable_network    bool
+	websocket_affinity WebSocketAffinityConfig
 }
 
 pub struct VjsxRuntimeFacade {
@@ -108,6 +110,10 @@ mut:
 	lanes                        []VjsxExecutionLane
 	hosts                        []VjsxLaneHost
 	rr_index                     int
+	websocket_affinity_lane_by_key map[string]string
+	websocket_affinity_ref_count_by_key map[string]int
+	websocket_connection_lane_by_id map[string]string
+	websocket_connection_affinity_key_by_id map[string]string
 	cached_source_probe          string
 	cached_source_signature      string
 	signature_refresh_started    bool
@@ -134,6 +140,7 @@ mut:
 	source_signature  string
 	is_module_entry   bool
 	temp_root         string
+	app_ref           &App = unsafe { nil }
 	session           &vjsx.RuntimeSession = unsafe { nil }
 	module_binding    &vjsx.ScriptModule   = unsafe { nil }
 	request_ctx       InProcVjsxRequestContext
@@ -177,6 +184,20 @@ struct InProcVjsxHostBridgeDispatchRequest {
 	target      string
 	target_type string            @[json: 'target_type']
 	payload     string
+}
+
+struct InProcVjsxHostWebSocketDispatchRequest {
+	commands []WorkerWebSocketFrame
+}
+
+struct InProcVjsxHostWebSocketDispatchResponse {
+	ok         bool
+	has_close  bool              @[json: 'has_close']
+	close_code int               @[json: 'close_code']
+	close_reason string          @[json: 'close_reason']
+	close_target_id string       @[json: 'close_target_id']
+	failures   []WorkerWebSocketDispatchCommandFailure
+	error      string
 }
 
 struct InProcVjsxRuntimeMeta {
@@ -254,10 +275,14 @@ pub fn new_inproc_vjsx_executor(config VjsxRuntimeFacadeConfig) InProcVjsxExecut
 			facade: VjsxRuntimeFacade{
 				config: config
 			}
-			lanes:                    lanes
-			hosts:                    hosts
-			cached_source_probe:      initial_probe
-			cached_source_signature:  initial_signature
+			lanes:                               lanes
+			hosts:                               hosts
+			websocket_affinity_lane_by_key:      map[string]string{}
+			websocket_affinity_ref_count_by_key: map[string]int{}
+			websocket_connection_lane_by_id:     map[string]string{}
+			websocket_connection_affinity_key_by_id: map[string]string{}
+			cached_source_probe:                 initial_probe
+			cached_source_signature:             initial_signature
 			signature_last_checked_at: if initial_signature != '' {
 				now_ms
 			} else {
@@ -533,6 +558,56 @@ fn (e InProcVjsxExecutor) current_source_signature() string {
 	return result
 }
 
+fn normalize_websocket_affinity_source(raw string) string {
+	source := raw.trim_space().to_lower()
+	return match source {
+		'header', 'headers' { 'header' }
+		'path_param', 'path-param', 'pathparam' { 'path_param' }
+		else { 'query' }
+	}
+}
+
+fn normalize_websocket_affinity_scope(raw string) string {
+	scope := raw.trim_space().to_lower()
+	return if scope == '' { 'lane' } else { scope }
+}
+
+fn normalize_websocket_affinity_fallback(raw string) string {
+	fallback := raw.trim_space().to_lower()
+	return if fallback == 'reject' { 'reject' } else { 'round_robin' }
+}
+
+fn websocket_affinity_header_lookup(headers map[string]string, key string) string {
+	if key == '' {
+		return ''
+	}
+	if key in headers {
+		return headers[key]
+	}
+	lower_key := key.to_lower()
+	for name, value in headers {
+		if name.to_lower() == lower_key {
+			return value
+		}
+	}
+	return ''
+}
+
+fn websocket_affinity_value(frame WorkerWebSocketFrame, config WebSocketAffinityConfig) string {
+	if !config.enabled || normalize_websocket_affinity_scope(config.scope) != 'lane' {
+		return ''
+	}
+	key := config.key.trim_space()
+	if key == '' {
+		return ''
+	}
+	return match normalize_websocket_affinity_source(config.source) {
+		'header' { websocket_affinity_header_lookup(frame.headers, key).trim_space() }
+		'path_param' { '' }
+		else { (frame.query[key] or { '' }).trim_space() }
+	}
+}
+
 pub fn (e InProcVjsxExecutor) select_next_lane() !VjsxExecutionLane {
 	if isnil(e.state) {
 		return error('inproc_vjsx_executor_state_missing')
@@ -560,6 +635,35 @@ pub fn (e InProcVjsxExecutor) select_next_lane() !VjsxExecutionLane {
 	return error('inproc_vjsx_executor_no_available_lane')
 }
 
+fn (e InProcVjsxExecutor) select_lane_by_id(lane_id string) !VjsxExecutionLane {
+	if isnil(e.state) {
+		return error('inproc_vjsx_executor_state_missing')
+	}
+	if lane_id.trim_space() == '' {
+		return error('inproc_vjsx_executor_lane_id_missing')
+	}
+	mut state := e.state
+	state.mu.@lock()
+	defer {
+		state.mu.unlock()
+	}
+	for idx, lane in state.lanes {
+		if lane.id != lane_id {
+			continue
+		}
+		if state.lanes[idx].inflight > 0 {
+			return error('inproc_vjsx_executor_no_available_lane')
+		}
+		if !state.lanes[idx].healthy && !state.lanes[idx].dirty {
+			return error('inproc_vjsx_executor_no_available_lane')
+		}
+		state.lanes[idx].inflight++
+		state.rr_index = (idx + 1) % state.lanes.len
+		return state.lanes[idx]
+	}
+	return error('inproc_vjsx_executor_lane_not_found')
+}
+
 fn (e InProcVjsxExecutor) acquire_next_lane(timeout_ms int) !VjsxExecutionLane {
 	mut remaining_ms := if timeout_ms > 0 { timeout_ms } else { 0 }
 	deadline := time.now().add(time.millisecond * remaining_ms)
@@ -578,6 +682,113 @@ fn (e InProcVjsxExecutor) acquire_next_lane(timeout_ms int) !VjsxExecutionLane {
 		return lane
 	}
 	return error('inproc_vjsx_executor_no_available_lane')
+}
+
+fn (e InProcVjsxExecutor) acquire_lane_by_id(lane_id string, timeout_ms int) !VjsxExecutionLane {
+	mut remaining_ms := if timeout_ms > 0 { timeout_ms } else { 0 }
+	deadline := time.now().add(time.millisecond * remaining_ms)
+	for {
+		lane := e.select_lane_by_id(lane_id) or {
+			if err.msg() == 'inproc_vjsx_executor_lane_not_found' {
+				return error(err.msg())
+			}
+			if err.msg() != 'inproc_vjsx_executor_no_available_lane' {
+				return error(err.msg())
+			}
+			if remaining_ms <= 0 || time.now() >= deadline {
+				return error(err.msg())
+			}
+			time.sleep(time.millisecond * inproc_vjsx_lane_wait_poll_ms)
+			remaining_ms -= inproc_vjsx_lane_wait_poll_ms
+			continue
+		}
+		return lane
+	}
+	return error('inproc_vjsx_executor_no_available_lane')
+}
+
+fn (e InProcVjsxExecutor) release_websocket_connection_affinity(frame WorkerWebSocketFrame) {
+	if isnil(e.state) || frame.id.trim_space() == '' {
+		return
+	}
+	mut state := e.state
+	state.mu.@lock()
+	defer {
+		state.mu.unlock()
+	}
+	state.websocket_connection_lane_by_id.delete(frame.id)
+	affinity_key := state.websocket_connection_affinity_key_by_id[frame.id] or { '' }
+	if affinity_key == '' {
+		state.websocket_connection_affinity_key_by_id.delete(frame.id)
+		return
+	}
+	state.websocket_connection_affinity_key_by_id.delete(frame.id)
+	if affinity_key !in state.websocket_affinity_ref_count_by_key {
+		state.websocket_affinity_lane_by_key.delete(affinity_key)
+		return
+	}
+	mut remaining := state.websocket_affinity_ref_count_by_key[affinity_key] - 1
+	if remaining <= 0 {
+		state.websocket_affinity_ref_count_by_key.delete(affinity_key)
+		state.websocket_affinity_lane_by_key.delete(affinity_key)
+		return
+	}
+	state.websocket_affinity_ref_count_by_key[affinity_key] = remaining
+}
+
+fn (e InProcVjsxExecutor) acquire_websocket_lane(frame WorkerWebSocketFrame) !(VjsxExecutionLane, string) {
+	if isnil(e.state) {
+		return error('inproc_vjsx_executor_state_missing')
+	}
+	mut state := e.state
+	config := state.facade.config.websocket_affinity
+	state.mu.@lock()
+	existing_lane_id := state.websocket_connection_lane_by_id[frame.id] or { '' }
+	state.mu.unlock()
+	if existing_lane_id != '' {
+		return e.acquire_lane_by_id(existing_lane_id, inproc_vjsx_lane_wait_timeout_ms)!, ''
+	}
+	affinity_key := websocket_affinity_value(frame, config)
+	if affinity_key == '' {
+		if config.enabled && normalize_websocket_affinity_fallback(config.fallback) == 'reject' {
+			return error('inproc_vjsx_executor_websocket_affinity_key_missing')
+		}
+		lane := e.acquire_next_lane(inproc_vjsx_lane_wait_timeout_ms)!
+		if frame.id.trim_space() != '' {
+			state.mu.@lock()
+			state.websocket_connection_lane_by_id[frame.id] = lane.id
+			state.mu.unlock()
+		}
+		return lane, ''
+	}
+	state.mu.@lock()
+	mapped_lane_id := state.websocket_affinity_lane_by_key[affinity_key] or { '' }
+	state.mu.unlock()
+	if mapped_lane_id != '' {
+		lane := e.acquire_lane_by_id(mapped_lane_id, inproc_vjsx_lane_wait_timeout_ms)!
+		if frame.id.trim_space() != '' {
+			state.mu.@lock()
+			state.websocket_connection_lane_by_id[frame.id] = lane.id
+			state.websocket_connection_affinity_key_by_id[frame.id] = affinity_key
+			state.websocket_affinity_ref_count_by_key[affinity_key] = (state.websocket_affinity_ref_count_by_key[affinity_key] or {
+				0
+			}) + 1
+			state.mu.unlock()
+		}
+		return lane, affinity_key
+	}
+	lane := e.acquire_next_lane(inproc_vjsx_lane_wait_timeout_ms)!
+	state.mu.@lock()
+	state.websocket_affinity_lane_by_key[affinity_key] = lane.id
+	state.websocket_affinity_ref_count_by_key[affinity_key] = (state.websocket_affinity_ref_count_by_key[affinity_key] or {
+		0
+	}) + 1
+	if frame.id.trim_space() != '' {
+		state.websocket_connection_lane_by_id[frame.id] = lane.id
+		state.websocket_connection_affinity_key_by_id[frame.id] = affinity_key
+	}
+	state.mu.unlock()
+	return lane, affinity_key
 }
 
 fn inproc_vjsx_should_retry_dispatch(err_msg string) bool {
@@ -720,11 +931,13 @@ globalThis.__vhttpd_create_runtime = function(meta) {
     const hostFindCodexSession = hostApi && typeof hostApi.findCodexSessionPath === "function" ? hostApi.findCodexSessionPath.bind(hostApi) : undefined;
     const hostHttpFetch = hostApi && typeof hostApi.httpFetch === "function" ? hostApi.httpFetch.bind(hostApi) : undefined;
     const hostBridgeDispatch = hostApi && typeof hostApi.bridgeDispatch === "function" ? hostApi.bridgeDispatch.bind(hostApi) : undefined;
+    const hostWebSocketDispatch = hostApi && typeof hostApi.websocketDispatch === "function" ? hostApi.websocketDispatch.bind(hostApi) : undefined;
     const capabilities = freezeValue({
       http: dispatchKind === "http",
       stream: false,
-      websocket: false,
+      websocket: dispatchKind === "websocket",
       websocketUpstream: dispatchKind === "websocket_upstream",
+      websocketDispatch: typeof hostWebSocketDispatch === "function",
       fs: !!meta.enableFs,
       process: !!meta.enableProcess,
       network: !!meta.enableNetwork
@@ -927,6 +1140,32 @@ globalThis.__vhttpd_create_runtime = function(meta) {
           return fallbackValue;
         }
       },
+      websocketDispatch(input, fallbackValue = undefined) {
+        if (typeof hostWebSocketDispatch !== "function") {
+          return fallbackValue;
+        }
+        let commands = [];
+        if (Array.isArray(input)) {
+          commands = input;
+        } else if (input && typeof input === "object") {
+          if (Array.isArray(input.commands)) {
+            commands = input.commands;
+          } else {
+            commands = [input];
+          }
+        }
+        const raw = hostWebSocketDispatch(JSON.stringify({
+          commands: commands.map((item) => globalThis.__vhttpd_normalize_websocket_command(item, {}))
+        }));
+        if (raw === undefined || raw === null || raw === "") {
+          return fallbackValue;
+        }
+        try {
+          return JSON.parse(String(raw));
+        } catch (_) {
+          return fallbackValue;
+        }
+      },
       toJSON() {
         return {
           provider: this.provider,
@@ -970,6 +1209,7 @@ globalThis.__vhttpd_create_runtime = function(meta) {
         stream: false,
         websocket: false,
         websocketUpstream: dispatchKind === "websocket_upstream",
+        websocketDispatch: false,
         fs: !!meta.enableFs,
         process: !!meta.enableProcess,
         network: !!meta.enableNetwork
@@ -1051,6 +1291,9 @@ globalThis.__vhttpd_create_runtime = function(meta) {
         return fallbackValue;
       },
       bridgeDispatch(_input, fallbackValue = undefined) {
+        return fallbackValue;
+      },
+      websocketDispatch(_input, fallbackValue = undefined) {
         return fallbackValue;
       },
       toJSON() {
@@ -1435,6 +1678,72 @@ globalThis.__vhttpd_create_websocket_upstream_frame = function(raw, runtime) {
   };
   return Object.freeze(frame);
 };
+globalThis.__vhttpd_create_websocket_frame = function(raw, runtime) {
+  raw = raw && typeof raw === "object" ? raw : {};
+  runtime = runtime && typeof runtime === "object" ? runtime : {};
+  const frame = {
+    mode: typeof raw.mode === "string" && raw.mode ? raw.mode : "websocket_dispatch",
+    event: typeof raw.event === "string" && raw.event ? raw.event : "message",
+    id: typeof raw.id === "string" ? raw.id : runtime.requestId,
+    path: typeof raw.path === "string" ? raw.path : runtime.path,
+    query: raw.query && typeof raw.query === "object" ? Object.freeze(raw.query) : Object.freeze({}),
+    headers: raw.headers && typeof raw.headers === "object" ? Object.freeze(raw.headers) : Object.freeze({}),
+    remoteAddr: typeof raw.remote_addr === "string" ? raw.remote_addr : (runtime.request?.remoteAddr || ""),
+    requestId: typeof raw.request_id === "string" ? raw.request_id : runtime.requestId,
+    traceId: typeof raw.trace_id === "string" ? raw.trace_id : runtime.traceId,
+    targetId: typeof raw.target_id === "string" ? raw.target_id : "",
+    room: typeof raw.room === "string" ? raw.room : "",
+    key: typeof raw.key === "string" ? raw.key : "",
+    value: typeof raw.value === "string" ? raw.value : "",
+    exceptId: typeof raw.except_id === "string" ? raw.except_id : "",
+    rooms: Array.isArray(raw.rooms) ? Object.freeze(raw.rooms.slice()) : Object.freeze([]),
+    metadata: raw.metadata && typeof raw.metadata === "object" ? Object.freeze(raw.metadata) : Object.freeze({}),
+    roomMembers: raw.room_members && typeof raw.room_members === "object" ? Object.freeze(raw.room_members) : Object.freeze({}),
+    memberMetadata: raw.member_metadata && typeof raw.member_metadata === "object" ? Object.freeze(raw.member_metadata) : Object.freeze({}),
+    roomCounts: raw.room_counts && typeof raw.room_counts === "object" ? Object.freeze(raw.room_counts) : Object.freeze({}),
+    presenceUsers: raw.presence_users && typeof raw.presence_users === "object" ? Object.freeze(raw.presence_users) : Object.freeze({}),
+    status: typeof raw.status === "number" ? raw.status : 0,
+    code: typeof raw.code === "number" ? raw.code : 0,
+    reason: typeof raw.reason === "string" ? raw.reason : "",
+    opcode: typeof raw.opcode === "string" ? raw.opcode : "",
+    data: raw.data == null ? "" : String(raw.data),
+    error: typeof raw.error === "string" ? raw.error : "",
+    errorClass: typeof raw.error_class === "string" ? raw.error_class : "",
+    runtime,
+    dataText(fallbackValue) {
+      if (this.opcode === "binary") {
+        return fallbackValue;
+      }
+      if (this.data === "") {
+        return fallbackValue;
+      }
+      return this.data;
+    },
+    dataBase64(fallbackValue) {
+      if (this.opcode !== "binary") {
+        return fallbackValue;
+      }
+      if (this.data === "") {
+        return fallbackValue;
+      }
+      return this.data;
+    },
+    dataJson(fallbackValue) {
+      if (this.opcode === "binary") {
+        return fallbackValue;
+      }
+      if (this.data == null || String(this.data).trim() === "") {
+        return fallbackValue;
+      }
+      try {
+        return JSON.parse(String(this.data));
+      } catch (_) {
+        return fallbackValue;
+      }
+    }
+  };
+  return Object.freeze(frame);
+};
 globalThis.__vhttpd_normalize_result = function(ctx, result) {
   if (result === undefined || result === null) {
     return ctx.response;
@@ -1467,15 +1776,23 @@ globalThis.__vhttpd_bind_method = function(target, key) {
 };
 globalThis.__vhttpd_resolve_handler_for_kind = function(exportsValue, kind) {
   const httpAliases = ["http", "handle", "handleHttp", "handle_http"];
+  const websocketAliases = ["websocket", "handleWebSocket", "handle_websocket"];
   const upstreamAliases = ["websocket_upstream", "websocketUpstream", "handleWebSocketUpstream", "handle_websocket_upstream"];
-  const aliases = kind === "websocket_upstream" ? upstreamAliases : httpAliases;
+  const aliases = kind === "websocket"
+    ? websocketAliases
+    : kind === "websocket_upstream"
+      ? upstreamAliases
+      : httpAliases;
   if (exportsValue && typeof exportsValue === "object") {
-    if (kind === "http") {
+    if (kind === "http" || kind === "websocket") {
       if (typeof exportsValue.default === "function") {
         return exportsValue.default;
       }
-      if (typeof exportsValue.handle === "function") {
+      if (kind === "http" && typeof exportsValue.handle === "function") {
         return exportsValue.handle;
+      }
+      if (kind === "websocket" && typeof exportsValue.websocket === "function") {
+        return exportsValue.websocket;
       }
     } else {
       for (const key of upstreamAliases) {
@@ -1502,6 +1819,9 @@ globalThis.__vhttpd_resolve_handler_for_kind = function(exportsValue, kind) {
   }
   if (kind === "http" && typeof globalThis.__vhttpd_handle === "function") {
     return globalThis.__vhttpd_handle;
+  }
+  if (kind === "websocket" && typeof globalThis.__vhttpd_websocket_handle === "function") {
+    return globalThis.__vhttpd_websocket_handle;
   }
   if (kind === "websocket_upstream" && typeof globalThis.__vhttpd_websocket_upstream_handle === "function") {
     return globalThis.__vhttpd_websocket_upstream_handle;
@@ -1554,11 +1874,15 @@ globalThis.__vhttpd_bind_handler = function(exportsValue) {
 };
 globalThis.__vhttpd_bind_handlers = function(exportsValue) {
   const httpHandler = globalThis.__vhttpd_resolve_handler_for_kind(exportsValue, "http");
+  const websocketHandler = globalThis.__vhttpd_resolve_handler_for_kind(exportsValue, "websocket");
   const websocketUpstreamHandler = globalThis.__vhttpd_resolve_handler_for_kind(exportsValue, "websocket_upstream");
   const startupHandler = globalThis.__vhttpd_resolve_hook_for_kind(exportsValue, "startup");
   const appStartupHandler = globalThis.__vhttpd_resolve_hook_for_kind(exportsValue, "app_startup");
   if (typeof httpHandler === "function") {
     globalThis.__vhttpd_handle = httpHandler;
+  }
+  if (typeof websocketHandler === "function") {
+    globalThis.__vhttpd_websocket_handle = websocketHandler;
   }
   if (typeof websocketUpstreamHandler === "function") {
     globalThis.__vhttpd_websocket_upstream_handle = websocketUpstreamHandler;
@@ -1571,6 +1895,7 @@ globalThis.__vhttpd_bind_handlers = function(exportsValue) {
   }
   return {
     http: httpHandler,
+    websocket: websocketHandler,
     websocket_upstream: websocketUpstreamHandler,
     startup: startupHandler,
     app_startup: appStartupHandler
@@ -1581,6 +1906,97 @@ globalThis.__vhttpd_register_exports = function(exportsValue) {
     return globalThis.__vhttpd_bind_handlers(undefined);
   }
   return globalThis.__vhttpd_bind_handlers(exportsValue);
+};
+globalThis.__vhttpd_normalize_websocket_command = function(command, frame) {
+  const raw = command && typeof command === "object" ? command : {};
+  const source = frame && typeof frame === "object" ? frame : {};
+  return {
+    mode: typeof raw.mode === "string" && raw.mode ? raw.mode : "websocket_dispatch",
+    event: typeof raw.event === "string" ? raw.event : "",
+    id: typeof raw.id === "string" && raw.id ? raw.id : (typeof source.id === "string" ? source.id : ""),
+    path: typeof raw.path === "string" ? raw.path : (typeof source.path === "string" ? source.path : ""),
+    query: raw.query && typeof raw.query === "object" && !Array.isArray(raw.query) ? raw.query : {},
+    headers: raw.headers && typeof raw.headers === "object" && !Array.isArray(raw.headers) ? raw.headers : {},
+    remote_addr: typeof raw.remote_addr === "string" ? raw.remote_addr : "",
+    request_id: typeof raw.request_id === "string" ? raw.request_id : (typeof source.requestId === "string" ? source.requestId : ""),
+    trace_id: typeof raw.trace_id === "string" ? raw.trace_id : (typeof source.traceId === "string" ? source.traceId : ""),
+    target_id: typeof raw.target_id === "string"
+      ? raw.target_id
+      : typeof raw.targetId === "string"
+        ? raw.targetId
+        : "",
+    room: typeof raw.room === "string" ? raw.room : "",
+    key: typeof raw.key === "string" ? raw.key : "",
+    value: typeof raw.value === "string" ? raw.value : "",
+    except_id: typeof raw.except_id === "string"
+      ? raw.except_id
+      : typeof raw.exceptId === "string"
+        ? raw.exceptId
+        : "",
+    rooms: Array.isArray(raw.rooms) ? raw.rooms : [],
+    metadata: raw.metadata && typeof raw.metadata === "object" && !Array.isArray(raw.metadata) ? raw.metadata : {},
+    room_members: raw.room_members && typeof raw.room_members === "object" && !Array.isArray(raw.room_members) ? raw.room_members : {},
+    member_metadata: raw.member_metadata && typeof raw.member_metadata === "object" && !Array.isArray(raw.member_metadata) ? raw.member_metadata : {},
+    room_counts: raw.room_counts && typeof raw.room_counts === "object" && !Array.isArray(raw.room_counts) ? raw.room_counts : {},
+    presence_users: raw.presence_users && typeof raw.presence_users === "object" && !Array.isArray(raw.presence_users) ? raw.presence_users : {},
+    status: typeof raw.status === "number" ? raw.status : 0,
+    code: typeof raw.code === "number" ? raw.code : 0,
+    reason: typeof raw.reason === "string" ? raw.reason : "",
+    opcode: typeof raw.opcode === "string" ? raw.opcode : "text",
+    data: raw.data == null ? "" : String(raw.data),
+    error: typeof raw.error === "string" ? raw.error : "",
+    error_class: typeof raw.error_class === "string"
+      ? raw.error_class
+      : typeof raw.errorClass === "string"
+        ? raw.errorClass
+        : ""
+  };
+};
+globalThis.__vhttpd_normalize_websocket_result = function(frame, result) {
+  if (result === undefined || result === null || result === false) {
+    return {
+      accepted: false,
+      closed: false,
+      commands: [],
+      error: "",
+      error_class: ""
+    };
+  }
+  if (result === true) {
+    return {
+      accepted: true,
+      closed: false,
+      commands: [],
+      error: "",
+      error_class: ""
+    };
+  }
+  if (Array.isArray(result)) {
+    return {
+      accepted: true,
+      closed: false,
+      commands: result.map((item) => globalThis.__vhttpd_normalize_websocket_command(item, frame)),
+      error: "",
+      error_class: ""
+    };
+  }
+  if (typeof result !== "object") {
+    throw new TypeError("Invalid websocket result type");
+  }
+  const commands = Array.isArray(result.commands)
+    ? result.commands.map((item) => globalThis.__vhttpd_normalize_websocket_command(item, frame))
+    : [];
+  return {
+    accepted: Object.prototype.hasOwnProperty.call(result, "accepted") ? !!result.accepted : true,
+    closed: !!result.closed,
+    commands,
+    error: typeof result.error === "string" ? result.error : "",
+    error_class: typeof result.error_class === "string"
+      ? result.error_class
+      : typeof result.errorClass === "string"
+        ? result.errorClass
+        : ""
+  };
 };
 globalThis.__vhttpd_normalize_websocket_upstream_result = function(frame, result) {
   if (result === undefined || result === null || result === false) {
@@ -1913,6 +2329,56 @@ fn inproc_vjsx_host_bridge_dispatch_builder(mut state VjsxExecutorState, idx int
 	}
 }
 
+fn inproc_vjsx_host_websocket_dispatch_builder(mut state VjsxExecutorState, idx int) vjsx.HostValueBuilder {
+	return fn [mut state, idx] (ctx &vjsx.Context) vjsx.Value {
+		return ctx.js_function(fn [ctx, mut state, idx] (args []vjsx.Value) vjsx.Value {
+			if args.len == 0 {
+				return ctx.js_string('')
+			}
+			raw := args[0].to_string().trim_space()
+			if raw == '' {
+				return ctx.js_string('')
+			}
+			req := json.decode(InProcVjsxHostWebSocketDispatchRequest, raw) or {
+				return ctx.js_string(json.encode(InProcVjsxHostWebSocketDispatchResponse{
+					error: 'invalid_websocket_dispatch_request'
+				}))
+			}
+			mut app_ref := &App(unsafe { nil })
+			state.mu.@lock()
+			if idx >= 0 && idx < state.hosts.len {
+				if state.hosts[idx].request_ctx.active {
+					app_ref = state.hosts[idx].request_ctx.app
+				} else {
+					app_ref = state.hosts[idx].app_ref
+				}
+			}
+			state.mu.unlock()
+			if isnil(app_ref) {
+				return ctx.js_string(json.encode(InProcVjsxHostWebSocketDispatchResponse{
+					error: 'websocket_dispatch_app_missing'
+				}))
+			}
+			mut app := app_ref
+			result := app.execute_websocket_dispatch_commands_result(req.commands)
+			if result.has_close {
+				return ctx.js_string(json.encode(InProcVjsxHostWebSocketDispatchResponse{
+					ok:              true
+					has_close:       true
+					close_code:      result.close_frame.code
+					close_reason:    result.close_frame.reason
+					close_target_id: if result.close_frame.target_id != '' { result.close_frame.target_id } else { result.close_frame.id }
+					failures:        result.failures
+				}))
+			}
+			return ctx.js_string(json.encode(InProcVjsxHostWebSocketDispatchResponse{
+				ok: true
+				failures: result.failures
+			}))
+		})
+	}
+}
+
 fn inproc_vjsx_host_api_builder(mut state VjsxExecutorState, idx int) vjsx.HostValueBuilder {
 	return vjsx.host_object(vjsx.HostObjectField{
 		name:  'emit'
@@ -1935,6 +2401,9 @@ fn inproc_vjsx_host_api_builder(mut state VjsxExecutorState, idx int) vjsx.HostV
 	}, vjsx.HostObjectField{
 		name:  'bridgeDispatch'
 		value: inproc_vjsx_host_bridge_dispatch_builder(mut state, idx)
+	}, vjsx.HostObjectField{
+		name:  'websocketDispatch'
+		value: inproc_vjsx_host_websocket_dispatch_builder(mut state, idx)
 	})
 }
 
@@ -1967,6 +2436,7 @@ fn inproc_vjsx_destroy_lane_host(mut host VjsxLaneHost) {
 	host.source_signature = ''
 	host.is_module_entry = false
 	host.temp_root = ''
+	host.app_ref = unsafe { nil }
 	host.request_ctx = InProcVjsxRequestContext{}
 }
 
@@ -1974,6 +2444,9 @@ fn inproc_vjsx_module_aliases(kind string) []string {
 	return match kind {
 		'http' {
 			['handle', 'http', 'handleHttp', 'handle_http']
+		}
+		'websocket' {
+			['websocket', 'handleWebSocket', 'handle_websocket']
 		}
 		'websocket_upstream' {
 			['websocket_upstream', 'websocketUpstream', 'handleWebSocketUpstream',
@@ -1992,12 +2465,13 @@ fn inproc_vjsx_module_aliases(kind string) []string {
 }
 
 fn inproc_vjsx_module_has_default_function(kind string) bool {
-	return kind == 'http'
+	return kind in ['http', 'websocket']
 }
 
 fn inproc_vjsx_global_handler_name(kind string) string {
 	return match kind {
 		'http' { '__vhttpd_handle' }
+		'websocket' { '__vhttpd_websocket_handle' }
 		'websocket_upstream' { '__vhttpd_websocket_upstream_handle' }
 		'startup' { '__vhttpd_startup_handle' }
 		'app_startup' { '__vhttpd_app_startup_handle' }
@@ -2171,17 +2645,20 @@ pub fn (e InProcVjsxExecutor) close() {
 }
 
 fn inproc_vjsx_new_runtime_session_ptr(config VjsxRuntimeFacadeConfig) !&vjsx.RuntimeSession {
+	asset_root := vjsx_runtime_asset_root()
 	session_value := match config.runtime_profile {
 		'', 'script' {
 			runtimejs.new_script_runtime_session(vjsx.ContextConfig{}, vjsx.ScriptRuntimeConfig{
 				fs_roots:     vjsx_fs_roots(config)
 				process_args: [config.app_entry]
+				asset_root:   asset_root
 			})
 		}
 		'node' {
 			runtimejs.new_node_runtime_session(vjsx.ContextConfig{}, vjsx.NodeRuntimeConfig{
 				fs_roots:     vjsx_fs_roots(config)
 				process_args: [config.app_entry]
+				asset_root:   asset_root
 			})
 		}
 		else {
@@ -2226,6 +2703,7 @@ fn (e InProcVjsxExecutor) ensure_lane_host(idx int) ! {
 	install_inproc_host_api(mut ctx, mut state, idx)
 	mut module_binding_ptr := &vjsx.ScriptModule(unsafe { nil })
 	mut has_http_handler := false
+	mut has_websocket_handler := false
 	mut has_upstream_handler := false
 	if as_module {
 		if vjsx.is_typescript_file(config.app_entry)
@@ -2245,10 +2723,12 @@ fn (e InProcVjsxExecutor) ensure_lane_host(idx int) ! {
 		}
 		has_http_handler = inproc_vjsx_module_has_callable(&module_binding_value, 'http')
 			|| inproc_vjsx_global_has_callable(ctx, 'http')
+		has_websocket_handler = inproc_vjsx_module_has_callable(&module_binding_value, 'websocket')
+			|| inproc_vjsx_global_has_callable(ctx, 'websocket')
 		has_upstream_handler =
 			inproc_vjsx_module_has_callable(&module_binding_value, 'websocket_upstream')
 			|| inproc_vjsx_global_has_callable(ctx, 'websocket_upstream')
-		if !has_http_handler && !has_upstream_handler {
+		if !has_http_handler && !has_websocket_handler && !has_upstream_handler {
 			mut cleanup_binding := module_binding_value
 			cleanup_binding.close()
 			session.close()
@@ -2286,12 +2766,15 @@ fn (e InProcVjsxExecutor) ensure_lane_host(idx int) ! {
 			}
 		}
 		http_handler := ctx.js_global('__vhttpd_handle')
+		websocket_handler := ctx.js_global('__vhttpd_websocket_handle')
 		upstream_handler := ctx.js_global('__vhttpd_websocket_upstream_handle')
 		has_http_handler = !http_handler.is_undefined() && http_handler.is_function()
+		has_websocket_handler = !websocket_handler.is_undefined() && websocket_handler.is_function()
 		has_upstream_handler = !upstream_handler.is_undefined() && upstream_handler.is_function()
 		http_handler.free()
+		websocket_handler.free()
 		upstream_handler.free()
-		if !has_http_handler && !has_upstream_handler {
+		if !has_http_handler && !has_websocket_handler && !has_upstream_handler {
 			session.close()
 			os.rmdir_all(temp_root) or {}
 			return error('inproc_vjsx_executor_missing_handler')
@@ -2338,6 +2821,7 @@ fn (e InProcVjsxExecutor) activate_lane_request_context(idx int, mut app App, la
 		method:     req.method.to_upper()
 		path:       normalized_path
 	}
+	state.hosts[idx].app_ref = app
 }
 
 fn (e InProcVjsxExecutor) clear_lane_request_context(idx int) {
@@ -2433,6 +2917,79 @@ fn (e InProcVjsxExecutor) build_websocket_upstream_runtime_payload(lane VjsxExec
 	})
 }
 
+fn websocket_request_target_from_frame(frame WorkerWebSocketFrame) string {
+	if frame.query.len == 0 {
+		return frame.path
+	}
+	mut keys := frame.query.keys()
+	keys.sort()
+	mut parts := []string{cap: keys.len}
+	for key in keys {
+		parts << '${urllib.query_escape(key)}=${urllib.query_escape(frame.query[key] or { '' })}'
+	}
+	query := parts.join('&')
+	if query == '' {
+		return frame.path
+	}
+	return '${frame.path}?${query}'
+}
+
+fn websocket_request_server_map(frame WorkerWebSocketFrame) map[string]string {
+	mut server := map[string]string{}
+	host_header := frame.headers['host'] or { '' }
+	host_name, port := urllib.split_host_port(host_header)
+	server['host'] = host_name
+	server['port'] = port
+	server['remote_addr'] = frame.remote_addr
+	server['url'] = websocket_request_target_from_frame(frame)
+	return server
+}
+
+fn websocket_request_scheme_from_frame(frame WorkerWebSocketFrame) string {
+	for key in ['x-forwarded-proto', 'x-scheme'] {
+		if raw := frame.headers[key] {
+			normalized := raw.trim_space().to_lower()
+			if normalized != '' {
+				return normalized
+			}
+		}
+	}
+	return 'ws'
+}
+
+fn (e InProcVjsxExecutor) build_websocket_runtime_payload(lane VjsxExecutionLane, frame WorkerWebSocketFrame) string {
+	config := e.facade_snapshot().config
+	server := websocket_request_server_map(frame)
+	host := server['host'] or { '' }
+	port := server['port'] or { '' }
+	target := server['url'] or { frame.path }
+	return json.encode(InProcVjsxRuntimeMeta{
+		provider:                 e.provider()
+		executor:                 e.kind()
+		dispatch_kind:            'websocket'
+		lane_id:                  lane.id
+		request_id:               frame.request_id
+		trace_id:                 frame.trace_id
+		app_entry:                config.app_entry
+		module_root:              config.module_root
+		build_root:               config.build_root
+		runtime_profile:          config.runtime_profile
+		thread_count:             config.thread_count
+		enable_fs:                config.enable_fs
+		enable_process:           config.enable_process
+		enable_network:           config.enable_network
+		request_scheme:           websocket_request_scheme_from_frame(frame)
+		request_host:             host
+		request_port:             port
+		request_target:           target
+		request_protocol_version: ''
+		request_remote_addr:      frame.remote_addr
+		request_server:           server
+		method:                   frame.event.to_upper()
+		path:                     frame.path
+	})
+}
+
 fn response_headers_from_js_value(val vjsx.Value) map[string]string {
 	mut out := map[string]string{}
 	if val.is_undefined() || val.is_null() {
@@ -2501,6 +3058,14 @@ struct InProcVjsxWebSocketUpstreamResult {
 	response WorkerResponse
 }
 
+struct InProcVjsxWebSocketResult {
+	accepted    bool
+	closed      bool
+	commands    []WorkerWebSocketFrame
+	error       string
+	error_class string @[json: 'error_class']
+}
+
 struct InProcVjsxStartupResult {
 	commands []WorkerWebSocketUpstreamCommand
 }
@@ -2531,6 +3096,31 @@ fn websocket_upstream_response_from_js_value(val vjsx.Value, req WorkerWebSocket
 		status:   if normalized.response.status > 0 { normalized.response.status } else { 200 }
 		headers:  normalized.response.headers.clone()
 		body:     normalized.response.body
+	}
+}
+
+fn websocket_response_from_js_value(val vjsx.Value, frame WorkerWebSocketFrame) WorkerWebSocketDispatchResponse {
+	raw := val.json_stringify()
+	if raw.trim_space() == '' || raw.trim_space() == 'undefined' || raw.trim_space() == 'null' {
+		return WorkerWebSocketDispatchResponse{
+			mode:     'websocket_dispatch'
+			event:    'result'
+			id:       frame.id
+			accepted: false
+			closed:   false
+			commands: []WorkerWebSocketFrame{}
+		}
+	}
+	normalized := json.decode(InProcVjsxWebSocketResult, raw) or { InProcVjsxWebSocketResult{} }
+	return WorkerWebSocketDispatchResponse{
+		mode:        'websocket_dispatch'
+		event:       'result'
+		id:          frame.id
+		accepted:    normalized.accepted
+		closed:      normalized.closed
+		commands:    normalized.commands
+		error:       normalized.error
+		error_class: normalized.error_class
 	}
 }
 
@@ -3097,8 +3687,177 @@ pub fn (e InProcVjsxExecutor) dispatch_websocket_upstream(mut app App, req Worke
 	return error(last_err)
 }
 
+fn (e InProcVjsxExecutor) dispatch_websocket_event_once(mut app App, frame WorkerWebSocketFrame) !WorkerWebSocketDispatchResponse {
+	e.bootstrap_placeholder()!
+	lane, _ := e.acquire_websocket_lane(frame) or {
+		if err.msg() == 'inproc_vjsx_executor_websocket_affinity_key_missing' {
+			return WorkerWebSocketDispatchResponse{
+				mode:        'websocket_dispatch'
+				event:       'result'
+				id:          frame.id
+				accepted:    false
+				closed:      true
+				commands:    []WorkerWebSocketFrame{}
+				error:       'websocket_affinity_key_missing'
+				error_class: 'websocket_affinity_key_missing'
+			}
+		}
+		return error(err.msg())
+	}
+	defer {
+		e.release_lane(lane.id)
+	}
+	idx := e.lane_index_by_id(lane.id)
+	if idx < 0 {
+		e.record_lane_error(lane.id, 'inproc_vjsx_executor_lane_not_found')
+		return error('inproc_vjsx_executor_lane_not_found')
+	}
+	e.ensure_lane_host(idx) or {
+		e.record_lane_error(lane.id, err.msg())
+		return error(err.msg())
+	}
+	e.run_startup_hooks(mut app, idx, lane) or {
+		e.record_lane_error(lane.id, err.msg())
+		return error(err.msg())
+	}
+	e.activate_lane_request_context(idx, mut app, lane.id, HttpLogicDispatchRequest{
+		method:     frame.event
+		path:       frame.path
+		trace_id:   frame.trace_id
+		request_id: frame.request_id
+	})
+	defer {
+		e.clear_lane_request_context(idx)
+	}
+	mut state := e.state
+	state.mu.@lock()
+	mut host := state.hosts[idx]
+	state.mu.unlock()
+	ctx := host.session.context()
+	frame_obj := ctx.json_parse(json.encode(frame))
+	defer {
+		frame_obj.free()
+	}
+	runtime_obj := ctx.json_parse(e.build_websocket_runtime_payload(lane, frame))
+	defer {
+		runtime_obj.free()
+	}
+	create_runtime_fn := ctx.js_global('__vhttpd_create_runtime')
+	defer {
+		create_runtime_fn.free()
+	}
+	mut js_runtime := ctx.call(create_runtime_fn, runtime_obj) or {
+		e.record_lane_error(lane.id, err.msg())
+		return error('inproc_vjsx_executor_websocket_runtime_create_failed:${err.msg()}')
+	}
+	defer {
+		js_runtime.free()
+	}
+	create_frame_fn := ctx.js_global('__vhttpd_create_websocket_frame')
+	defer {
+		create_frame_fn.free()
+	}
+	mut js_frame := ctx.call(create_frame_fn, frame_obj, js_runtime) or {
+		e.record_lane_error(lane.id, err.msg())
+		return error('inproc_vjsx_executor_websocket_frame_create_failed:${err.msg()}')
+	}
+	defer {
+		js_frame.free()
+	}
+	mut result := if host.is_module_entry && !isnil(host.module_binding) {
+		inproc_vjsx_call_module_entry(host.module_binding, 'websocket', js_frame) or {
+			if err.msg() != 'inproc_vjsx_executor_missing_websocket_handler' {
+				e.record_lane_error(lane.id, err.msg())
+				return error('inproc_vjsx_executor_websocket_handler_failed:${err.msg()}')
+			}
+			inproc_vjsx_call_global_entry(ctx, 'websocket', js_frame) or {
+				if err.msg() == 'inproc_vjsx_executor_missing_websocket_handler' {
+					e.record_lane_success(lane.id)
+					return WorkerWebSocketDispatchResponse{
+						mode:     'websocket_dispatch'
+						event:    'result'
+						id:       frame.id
+						accepted: false
+						closed:   false
+						commands: []WorkerWebSocketFrame{}
+					}
+				}
+				e.record_lane_error(lane.id, err.msg())
+				return error('inproc_vjsx_executor_websocket_handler_failed:${err.msg()}')
+			}
+		}
+	} else {
+		handler := ctx.js_global('__vhttpd_websocket_handle')
+		defer {
+			handler.free()
+		}
+		if handler.is_undefined() || !handler.is_function() {
+			e.record_lane_success(lane.id)
+			return WorkerWebSocketDispatchResponse{
+				mode:     'websocket_dispatch'
+				event:    'result'
+				id:       frame.id
+				accepted: false
+				closed:   false
+				commands: []WorkerWebSocketFrame{}
+			}
+		}
+		ctx.call(handler, js_frame) or {
+			e.record_lane_error(lane.id, err.msg())
+			return error('inproc_vjsx_executor_websocket_handler_failed:${err.msg()}')
+		}
+	}
+	defer {
+		result.free()
+	}
+	normalize_fn := ctx.js_global('__vhttpd_normalize_websocket_result')
+	defer {
+		normalize_fn.free()
+	}
+	if result.instanceof('Promise') {
+		mut awaited := result.await()
+		defer {
+			awaited.free()
+		}
+		mut normalized := ctx.call(normalize_fn, js_frame, awaited) or {
+			e.record_lane_error(lane.id, err.msg())
+			return error('inproc_vjsx_executor_websocket_normalize_failed:${err.msg()}')
+		}
+		defer {
+			normalized.free()
+		}
+		if frame.event == 'close' {
+			e.release_websocket_connection_affinity(frame)
+		}
+		e.record_lane_success(lane.id)
+		return websocket_response_from_js_value(normalized, frame)
+	}
+	mut normalized := ctx.call(normalize_fn, js_frame, result) or {
+		e.record_lane_error(lane.id, err.msg())
+		return error('inproc_vjsx_executor_websocket_normalize_failed:${err.msg()}')
+	}
+	defer {
+		normalized.free()
+	}
+	if frame.event == 'close' {
+		e.release_websocket_connection_affinity(frame)
+	}
+	e.record_lane_success(lane.id)
+	return websocket_response_from_js_value(normalized, frame)
+}
+
 pub fn (e InProcVjsxExecutor) dispatch_websocket_event(mut app App, frame WorkerWebSocketFrame) !WorkerWebSocketDispatchResponse {
-	_ = app
-	_ = frame
-	return inproc_vjsx_not_ready_error('dispatch_websocket_event')
+	mut last_err := 'inproc_vjsx_executor_dispatch_failed'
+	for attempt in 0 .. inproc_vjsx_dispatch_retry_attempts {
+		outcome := e.dispatch_websocket_event_once(mut app, frame) or {
+			last_err = err.msg()
+			if attempt + 1 < inproc_vjsx_dispatch_retry_attempts
+				&& inproc_vjsx_should_retry_dispatch(last_err) {
+				continue
+			}
+			return error(last_err)
+		}
+		return outcome
+	}
+	return error(last_err)
 }

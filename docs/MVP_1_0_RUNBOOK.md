@@ -22,6 +22,23 @@ cd /Users/guweigang/Source/vhttpd
 ./vhttpd /Users/guweigang/Source/vhttpd/examples/config/laravel.toml
 ```
 
+生产环境建议不要自己做 shell 后台化，而是交给外部 service manager：
+
+- Linux: `systemd`, template at [deploy/systemd/vhttpd@.service](/Users/guweigang/Source/vhttpd/deploy/systemd/vhttpd@.service)
+- macOS: `launchd`, template at [deploy/launchd/io.guweigang.vhttpd.plist](/Users/guweigang/Source/vhttpd/deploy/launchd/io.guweigang.vhttpd.plist)
+
+Linux 推荐直接按配置名启实例，比如：
+
+```bash
+sudo systemctl enable --now vhttpd@prod
+sudo systemctl enable --now vhttpd@staging
+```
+
+它们分别对应：
+
+- `/etc/vhttpd/prod.toml`
+- `/etc/vhttpd/staging.toml`
+
 ## 3. Data plane smoke
 
 ```bash

@@ -1,5 +1,7 @@
 module main
 
+import encoding.base64
+import json
 import net.websocket
 import net.unix
 import sync
@@ -100,6 +102,84 @@ struct AdminWebSocketRuntimeSnapshot {
 	conn_id              string
 	connections          []AdminWebSocketConnSnapshot
 	rooms                []AdminWebSocketRoomSnapshot
+}
+
+const websocket_dispatch_failure_followup_limit = 2
+
+fn websocket_hub_payload_bytes(data string, opcode string) ?([]u8, websocket.OPCode) {
+	return match opcode {
+		'', 'text' {
+			data.bytes(), websocket.OPCode.text_frame
+		}
+		'binary' {
+			base64.decode(data), websocket.OPCode.binary_frame
+		}
+		else {
+			none
+		}
+	}
+}
+
+fn (mut app App) websocket_dispatch_command_failures_frame(conn_id string, method string, path string, query map[string]string, headers map[string]string, remote_addr string, req_id string, trace_id string, failures []WorkerWebSocketDispatchCommandFailure) WorkerWebSocketFrame {
+	room_members, member_metadata, room_counts, presence_users := app.ws_hub_presence_snapshot(conn_id)
+	base_frame := app.kernel_websocket_dispatch_frame(
+		'info',
+		method,
+		path,
+		query,
+		headers,
+		remote_addr,
+		req_id,
+		trace_id,
+		'text',
+		json.encode(WorkerWebSocketDispatchFailureEnvelope{
+			event: 'command_failures'
+			failures: failures
+		}),
+		0,
+		'',
+		app.ws_hub_rooms_snapshot(conn_id),
+		app.ws_hub_meta_snapshot(conn_id),
+		room_members,
+		member_metadata,
+		room_counts,
+		presence_users,
+	)
+	return WorkerWebSocketFrame{
+		...base_frame
+		error: 'websocket_dispatch_command_failed'
+		error_class: 'websocket_send_failed'
+	}
+}
+
+fn (mut app App) websocket_dispatch_followup_failures(conn_id string, method string, path string, query map[string]string, headers map[string]string, remote_addr string, req_id string, trace_id string, failures []WorkerWebSocketDispatchCommandFailure) ?WorkerWebSocketFrame {
+	mut pending := failures.clone()
+	mut depth := 0
+	for pending.len > 0 && depth < websocket_dispatch_failure_followup_limit {
+		depth++
+		resp := app.kernel_dispatch_websocket_event(app.websocket_dispatch_command_failures_frame(
+			conn_id,
+			method,
+			path,
+			query,
+			headers,
+			remote_addr,
+			req_id,
+			trace_id,
+			pending,
+		)) or {
+			return none
+		}
+		if resp.event == 'error' {
+			return none
+		}
+		result := app.execute_websocket_dispatch_commands_result(resp.commands)
+		if result.has_close {
+			return result.close_frame
+		}
+		pending = result.failures.clone()
+	}
+	return none
 }
 
 fn (mut app App) ws_hub_register_conn(conn_id string, worker_socket string, method string, req_id string, trace_id string, path string, query map[string]string, headers map[string]string, remote_addr string, client &websocket.Client) {
@@ -327,10 +407,15 @@ fn (mut app App) ws_hub_send_client(conn_id string, client &websocket.Client, da
 		app.ws_hub_send_mu.unlock()
 	}
 	mut c := unsafe { client }
-	if opcode != '' && opcode != 'text' {
-		return false
+	payload, code := websocket_hub_payload_bytes(data, opcode) or { return false }
+	if code == .text_frame {
+		c.write_string(data) or {
+			app.ws_hub_unregister_conn(conn_id)
+			return false
+		}
+		return true
 	}
-	c.write_string(data) or {
+	c.write(payload, code) or {
 		app.ws_hub_unregister_conn(conn_id)
 		return false
 	}
@@ -468,9 +553,18 @@ fn (mut app App) ws_hub_broadcast_dispatch(room string, data string, except_id s
 		if resp.event == 'error' {
 			continue
 		}
-		if close_frame := app.execute_websocket_dispatch_commands(forwarded_commands) {
+		result := app.execute_websocket_dispatch_commands_result(forwarded_commands)
+		if result.has_close {
+			close_frame := result.close_frame
 			code := if close_frame.code > 0 { close_frame.code } else { 1000 }
 			app.ws_hub_close_target(target.id, code, close_frame.reason)
+			continue
+		}
+		if result.failures.len > 0 {
+			if close_frame := app.websocket_dispatch_followup_failures(target.id, target.method, target.path, target.query, target.headers, target.remote_addr, target.request_id, target.trace_id, result.failures) {
+				code := if close_frame.code > 0 { close_frame.code } else { 1000 }
+				app.ws_hub_close_target(target.id, code, close_frame.reason)
+			}
 		}
 		delivered++
 	}
@@ -494,45 +588,63 @@ fn (mut app App) ws_hub_close_target(conn_id string, code int, reason string) {
 	c.close(code, reason) or {}
 }
 
-fn (mut app App) process_worker_websocket_hub_frame(frame WorkerWebSocketFrame) bool {
+fn (mut app App) process_worker_websocket_hub_frame(frame WorkerWebSocketFrame) ?WorkerWebSocketDispatchCommandFailure {
 	match frame.event {
 		'send' {
 			target := if frame.target_id != '' { frame.target_id } else { frame.id }
-			app.ws_hub_send_to(target, frame.data, frame.opcode)
-			return true
+			if !app.ws_hub_send_to(target, frame.data, frame.opcode) {
+				return WorkerWebSocketDispatchCommandFailure{
+					event: frame.event
+					id: frame.id
+					target_id: target
+					opcode: frame.opcode
+					error: 'websocket_send_failed'
+					error_class: 'websocket_send_failed'
+				}
+			}
+			return none
 		}
 		'send_to' {
 			target := if frame.target_id != '' { frame.target_id } else { frame.id }
-			app.ws_hub_send_to(target, frame.data, frame.opcode)
-			return true
+			if !app.ws_hub_send_to(target, frame.data, frame.opcode) {
+				return WorkerWebSocketDispatchCommandFailure{
+					event: frame.event
+					id: frame.id
+					target_id: target
+					opcode: frame.opcode
+					error: 'websocket_send_failed'
+					error_class: 'websocket_send_failed'
+				}
+			}
+			return none
 		}
 		'join' {
 			app.ws_hub_join(frame.id, frame.room)
-			return true
+			return none
 		}
 		'leave' {
 			app.ws_hub_leave(frame.id, frame.room)
-			return true
+			return none
 		}
 		'set_meta' {
 			app.ws_hub_set_meta(frame.id, frame.key, frame.value)
-			return true
+			return none
 		}
 		'clear_meta' {
 			app.ws_hub_clear_meta(frame.id, frame.key)
-			return true
+			return none
 		}
 		'broadcast' {
 			app.ws_hub_broadcast(frame.room, frame.data, frame.opcode, frame.except_id)
-			return true
+			return none
 		}
 		'broadcast_dispatch' {
 			app.ws_hub_broadcast_dispatch(frame.room, frame.data, frame.except_id)
-			return true
+			return none
 		}
 		else {}
 	}
-	return false
+	return none
 }
 
 fn (mut app App) admin_websockets_snapshot(details bool, limit int, offset int, room_filter string, conn_filter string) AdminWebSocketRuntimeSnapshot {

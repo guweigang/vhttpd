@@ -2,7 +2,8 @@
 
 This document summarizes the in-proc `vjsx` facade exposed by `vhttpd`.
 
-Current scope is request/response style HTTP handling plus `websocket_upstream` event dispatch in embedded `vjsx` mode.
+Current scope is request/response style HTTP handling plus websocket event
+dispatch in embedded `vjsx` mode.
 
 ## Entry Resolution
 
@@ -17,8 +18,9 @@ Recommended style is `export default`.
 For bot-style apps, a convenient TS entry shape is:
 
 1. `export default function http(ctx) {}`
-2. `export const websocket_upstream = (frame) => ({ handled, commands })`
-3. `export default { http(ctx) {}, websocket_upstream(frame) {} }`
+2. `export const websocket = (frame) => ({ accepted, commands })`
+3. `export const websocket_upstream = (frame) => ({ handled, commands })`
+4. `export default { http(ctx) {}, websocket(frame) {}, websocket_upstream(frame) {} }`
 
 ## Runtime
 
@@ -46,6 +48,11 @@ Methods:
 - `runtime.error(...args)`
 - `runtime.emit(kind, fields)`
 - `runtime.snapshot()`
+- `runtime.readTextFile(path, fallbackValue?)`
+- `runtime.findCodexSessionPath(threadId, fallbackValue?)`
+- `runtime.httpFetch(input, fallbackValue?)`
+- `runtime.bridgeDispatch(input, fallbackValue?)`
+- `runtime.websocketDispatch(input, fallbackValue?)`
 
 Additional runtime fields:
 
@@ -67,6 +74,9 @@ Current host helpers:
 - `vhttpdHost.snapshot()`
 - `vhttpdHost.readTextFile(path, fallbackValue?)`
 - `vhttpdHost.findCodexSessionPath(threadId, fallbackValue?)`
+- `vhttpdHost.httpFetch(input)`
+- `vhttpdHost.bridgeDispatch(input)`
+- `vhttpdHost.websocketDispatch(input)`
 
 `runtime.request` exposes read-only request metadata:
 
@@ -180,7 +190,55 @@ Semantic helpers:
 - `ctx.target` preserves the full request target including query string when present.
 - `ctx.problem(...)` returns `application/problem+json; charset=utf-8`.
 - `runtime.snapshot()` is read-only and backed by `vhttpd` runtime/admin snapshot logic.
-- Current embedded `vjsx` scope is HTTP dispatch plus `websocket_upstream` dispatch. Stream, websocket session, and MCP worker modes are not exposed through this facade.
+- `runtime.websocketDispatch(...)` executes websocket hub commands from host-side async
+  callbacks such as `setTimeout(...)`.
+- Current embedded `vjsx` scope is HTTP dispatch plus websocket event dispatch and `websocket_upstream` dispatch. Stream and MCP worker modes are not exposed through this facade.
+
+## WebSocket Frame
+
+When `dispatchKind === "websocket"`, the handler receives a frame object with:
+
+- `frame.mode`
+- `frame.event`
+- `frame.id`
+- `frame.path`
+- `frame.query`
+- `frame.headers`
+- `frame.remoteAddr`
+- `frame.requestId`
+- `frame.traceId`
+- `frame.targetId`
+- `frame.room`
+- `frame.key`
+- `frame.value`
+- `frame.exceptId`
+- `frame.rooms`
+- `frame.metadata`
+- `frame.roomMembers`
+- `frame.memberMetadata`
+- `frame.roomCounts`
+- `frame.presenceUsers`
+- `frame.status`
+- `frame.code`
+- `frame.reason`
+- `frame.opcode`
+- `frame.data`
+- `frame.error`
+- `frame.errorClass`
+- `frame.runtime`
+
+Helpers:
+
+- `frame.dataText(fallbackValue)`
+- `frame.dataBase64(fallbackValue)`
+- `frame.dataJson(fallbackValue)`
+
+Return shape:
+
+- `false` or `null` for `{ accepted: false, commands: [] }`
+- `true` for `{ accepted: true, commands: [] }`
+- `Command[]` for `{ accepted: true, commands }`
+- `{ accepted?: boolean, closed?: boolean, commands?: Command[], error?: string, errorClass?: string }`
 
 ## WebSocket Upstream Frame
 

@@ -210,6 +210,7 @@ fn (spec BuiltinLogicExecutorSpec) resolve_vjsx_runtime_config(args []string, cf
 		enable_fs:         embedded_cfg.enable_fs
 		enable_process:    embedded_cfg.enable_process
 		enable_network:    embedded_cfg.enable_network
+		websocket_affinity: cfg.websocket_affinity
 	}
 }
 

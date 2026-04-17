@@ -118,7 +118,6 @@ pub fn (l EmbeddedExecutorLifecycle) prepare_bootstrap(args []string, cfg Vhttpd
 	state.worker_autostart = false
 	state.worker_cmd = ''
 	state.stream_dispatch = false
-	state.websocket_dispatch_mode = false
 }
 
 pub fn (l EmbeddedExecutorLifecycle) start(mut app App) {

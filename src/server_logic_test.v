@@ -1020,7 +1020,7 @@ fn test_embedded_executor_lifecycle_disables_worker_backend_features() {
 		state) or { panic(err) }
 	assert state.worker_sockets.len == 0
 	assert !state.stream_dispatch
-	assert !state.websocket_dispatch_mode
+	assert state.websocket_dispatch_mode
 	assert !state.worker_autostart
 	assert state.worker_cmd == ''
 	assert state.worker_env['VHTTPD_APP'] == '/tmp/app.php'
@@ -1094,7 +1094,7 @@ fn test_resolve_logic_executor_runtime_plan_for_vjsx_disables_worker_bootstrap()
 	assert plan.worker_backend_mode == .disabled
 	assert plan.bootstrap.worker_sockets.len == 0
 	assert !plan.bootstrap.stream_dispatch
-	assert !plan.bootstrap.websocket_dispatch_mode
+	assert plan.bootstrap.websocket_dispatch_mode
 	assert !plan.bootstrap.worker_autostart
 	assert plan.bootstrap.worker_cmd == ''
 	assert plan.bootstrap.worker_env['VHTTPD_APP'] == '/tmp/app.php'
@@ -1526,6 +1526,59 @@ fn test_site_config_as_vhttpd_config_inherits_global_defaults() {
 	assert derived.sites.len == 0
 }
 
+fn test_load_vhttpd_config_supports_site_websocket_affinity() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_site_websocket_affinity_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	config_file := os.join_path(temp_dir, 'vhttpd.toml')
+	os.write_file(config_file, '
+[sites.relay]
+host = "0.0.0.0"
+port = 19901
+executor = "vjsx"
+websocket_dispatch = true
+websocket_affinity.enabled = true
+websocket_affinity.source = "query"
+websocket_affinity.key = "serverId"
+websocket_affinity.scope = "lane"
+websocket_affinity.fallback = "reject"
+') or { panic(err) }
+	defer {
+		os.rm(config_file) or {}
+	}
+	cfg := load_vhttpd_config(['--config', config_file]) or { panic(err) }
+	site := cfg.sites['relay']
+	assert site.websocket_affinity.enabled
+	assert site.websocket_affinity.source == 'query'
+	assert site.websocket_affinity.key == 'serverId'
+	assert site.websocket_affinity.scope == 'lane'
+	assert site.websocket_affinity.fallback == 'reject'
+}
+
+fn test_site_config_as_vhttpd_config_merges_site_websocket_affinity() {
+	mut base := default_vhttpd_config()
+	base.websocket_affinity = WebSocketAffinityConfig{
+		enabled:  true
+		source:   'header'
+		key:      'x-session-id'
+		scope:    'lane'
+		fallback: 'round_robin'
+	}
+	derived := site_config_as_vhttpd_config(base, SiteConfig{
+		websocket_affinity: WebSocketAffinityConfig{
+			enabled:  true
+			source:   'query'
+			key:      'serverId'
+			scope:    'lane'
+			fallback: 'reject'
+		}
+	})
+	assert derived.websocket_affinity.enabled
+	assert derived.websocket_affinity.source == 'query'
+	assert derived.websocket_affinity.key == 'serverId'
+	assert derived.websocket_affinity.scope == 'lane'
+	assert derived.websocket_affinity.fallback == 'reject'
+}
+
 fn test_resolve_embedded_host_runtime_config_normalizes_paths_and_lane_defaults() {
 	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_embedded_host_runtime_test')
 	os.mkdir_all(os.join_path(temp_dir, 'sig')) or { panic(err) }
@@ -1626,4 +1679,21 @@ fn test_shutdown_app_runtime_stops_lifecycle_and_cleans_runtime_files() {
 	assert non_empty_rows[0].contains('"type":"server.stopped"')
 	assert non_empty_rows[1].contains('"type":"test.executor.stopped"')
 	assert non_empty_rows[2].contains('"type":"test.provider.stopped"')
+}
+
+fn test_paseo_relay_example_config_enables_websocket_dispatch() {
+	config_path := os.join_path(os.dir(@FILE), '..', 'examples', 'paseo-relay', 'paseo-relay.toml')
+	cfg := load_vhttpd_config(['--config', config_path]) or { panic(err) }
+	assert cfg.worker.websocket_dispatch
+	assert cfg.sites['paseo_relay'].websocket_affinity.enabled
+	assert cfg.sites['paseo_relay'].websocket_affinity.source == 'query'
+	assert cfg.sites['paseo_relay'].websocket_affinity.key == 'serverId'
+	assert cfg.sites['paseo_relay'].websocket_affinity.fallback == 'reject'
+	runtime := resolve_multi_server_runtime_config(['--config', config_path], cfg) or {
+		panic(err)
+	}
+	assert runtime.listeners.len == 1
+	assert runtime.listeners[0].runtime_cfg.executor_plan.bootstrap.websocket_dispatch_mode
+	assert runtime.listeners[0].site_cfg.websocket_affinity.enabled
+	assert runtime.listeners[0].site_cfg.websocket_affinity.key == 'serverId'
 }

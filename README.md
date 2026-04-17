@@ -328,14 +328,20 @@ Runtime profile notes:
 - `full`: same as `db` today, reserved for future expansion
 - `none`: install the binary only and skip system package installation
 
-The packaged binary is built against a stable `vjsx` runtime asset root:
+The packaged binary now resolves `vjsx` runtime assets in this order:
+
+1. `VJSX_ASSET_ROOT`
+2. bundled `runtime/vjsx` next to the installed binary
+3. `${VHTTPD_SHARE_ROOT:-/usr/local/share/vhttpd}/vjsx`
+4. `~/.vmodules/vjsx`
+
+`scripts/install_runtime.sh` still copies bundled `runtime/vjsx` to the stable shared location:
 
 ```text
 /usr/local/share/vhttpd/vjsx
 ```
 
-`scripts/install_runtime.sh` copies bundled `runtime/vjsx` there. This avoids baking GitHub runner paths such as `/home/runner/.vmodules/vjsx` into distributed binaries.
-For compatibility with local tooling, it also creates:
+This keeps the installed layout predictable and avoids baking GitHub runner paths such as `/home/runner/.vmodules/vjsx` into distributed binaries. For compatibility with local tooling, it also creates:
 
 ```text
 ~/.vmodules/vjsx -> /usr/local/share/vhttpd/vjsx
@@ -347,11 +353,62 @@ After installation, users can verify the machine with:
 ~/.local/libexec/vhttpd/runtime_doctor.sh ~/.local/bin/vhttpd
 ```
 
+If you want to override the runtime asset directory without reinstalling, export:
+
+```bash
+export VJSX_ASSET_ROOT=/path/to/runtime/vjsx
+```
+
 Important packaging note:
 
 - `mysql`, `pgsql`, and `sqlite` are not all equal here.
 - `sqlite3` is commonly present already, but MySQL and PostgreSQL client libraries are often missing on fresh machines.
 - If you expect DB usage in the field, distribute instructions around the `db` runtime profile instead of assuming `core` is enough.
+
+## Service Management
+
+`vhttpd` currently runs in the foreground and is best managed by an external service manager rather than a built-in daemon mode.
+
+Official starter templates are included in this repo:
+
+- systemd: [deploy/systemd/vhttpd@.service](/Users/guweigang/Source/vhttpd/deploy/systemd/vhttpd@.service)
+- launchd: [deploy/launchd/io.guweigang.vhttpd.plist](/Users/guweigang/Source/vhttpd/deploy/launchd/io.guweigang.vhttpd.plist)
+
+Recommended deployment model:
+
+- Linux: use `systemd`
+- macOS: use `launchd`
+- keep `vhttpd` itself in foreground mode
+
+Minimal Linux setup:
+
+```bash
+sudo install -d /etc/vhttpd /var/lib/vhttpd/prod /var/log/vhttpd
+sudo install -m 0644 deploy/systemd/vhttpd@.service /etc/systemd/system/vhttpd@.service
+sudo cp /path/to/prod.toml /etc/vhttpd/prod.toml
+sudo systemctl daemon-reload
+sudo systemctl enable --now vhttpd@prod
+```
+
+Minimal macOS setup:
+
+```bash
+sudo install -d /usr/local/etc/vhttpd /usr/local/var/vhttpd/default /usr/local/var/log/vhttpd
+sudo cp /path/to/default.toml /usr/local/etc/vhttpd/default.toml
+cp deploy/launchd/io.guweigang.vhttpd.plist ~/Library/LaunchAgents/io.guweigang.vhttpd.plist
+plutil -replace EnvironmentVariables.VHTTPD_CONFIG -string /usr/local/etc/vhttpd/default.toml ~/Library/LaunchAgents/io.guweigang.vhttpd.plist
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/io.guweigang.vhttpd.plist
+launchctl enable gui/$(id -u)/io.guweigang.vhttpd
+```
+
+Notes:
+
+- Both templates assume the binary lives at `/usr/local/bin/vhttpd`
+- `systemd` now uses instance units, so `vhttpd@prod` maps to `/etc/vhttpd/prod.toml`
+- You can run multiple Linux instances at once, for example `vhttpd@prod` and `vhttpd@staging`
+- On macOS, duplicate the plist under a new label when you want multiple concurrent configs, and set each `EnvironmentVariables.VHTTPD_CONFIG` separately
+- Adjust config paths, user/group, and working directory to match your packaging layout
+- For privileged ports or system-wide launchd usage, switch from `~/Library/LaunchAgents` to the appropriate `LaunchDaemons` path
 
 Release options:
 

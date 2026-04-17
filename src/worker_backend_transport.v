@@ -341,19 +341,31 @@ fn (mut app App) worker_backend_dispatch_websocket_event(frame WorkerWebSocketFr
 	return read_worker_websocket_dispatch_response(mut conn)!
 }
 
-fn (mut app App) execute_websocket_dispatch_commands(commands []WorkerWebSocketFrame) ?WorkerWebSocketFrame {
+fn (mut app App) execute_websocket_dispatch_commands_result(commands []WorkerWebSocketFrame) WorkerWebSocketDispatchCommandsResult {
 	mut close_frame := WorkerWebSocketFrame{}
 	mut has_close := false
+	mut failures := []WorkerWebSocketDispatchCommandFailure{}
 	for cmd in commands {
 		if cmd.event == 'close' {
 			close_frame = cmd
 			has_close = true
 			continue
 		}
-		app.process_worker_websocket_hub_frame(cmd)
+		if failure := app.process_worker_websocket_hub_frame(cmd) {
+			failures << failure
+		}
 	}
-	if has_close {
-		return close_frame
+	return WorkerWebSocketDispatchCommandsResult{
+		close_frame: close_frame
+		has_close: has_close
+		failures: failures
+	}
+}
+
+fn (mut app App) execute_websocket_dispatch_commands(commands []WorkerWebSocketFrame) ?WorkerWebSocketFrame {
+	result := app.execute_websocket_dispatch_commands_result(commands)
+	if result.has_close {
+		return result.close_frame
 	}
 	return none
 }
