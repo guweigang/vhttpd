@@ -924,14 +924,30 @@ globalThis.__vhttpd_create_runtime = function(meta) {
     const requestOrigin = requestHost ? requestScheme + "://" + requestHost + (requestPort ? ":" + requestPort : "") : "";
     const requestHref = requestOrigin ? requestOrigin + requestTarget : requestTarget;
     const hostApi = globalThis.vhttpdHost && typeof globalThis.vhttpdHost === "object" ? globalThis.vhttpdHost : undefined;
-    const hostEmit = hostApi && typeof hostApi.emit === "function" ? hostApi.emit.bind(hostApi) : undefined;
-    const hostSnapshot = hostApi && typeof hostApi.snapshot === "function" ? hostApi.snapshot.bind(hostApi) : undefined;
-    const hostConfig = hostApi && typeof hostApi.config === "function" ? hostApi.config.bind(hostApi) : undefined;
-    const hostReadFile = hostApi && typeof hostApi.readTextFile === "function" ? hostApi.readTextFile.bind(hostApi) : undefined;
-    const hostFindCodexSession = hostApi && typeof hostApi.findCodexSessionPath === "function" ? hostApi.findCodexSessionPath.bind(hostApi) : undefined;
-    const hostHttpFetch = hostApi && typeof hostApi.httpFetch === "function" ? hostApi.httpFetch.bind(hostApi) : undefined;
-    const hostBridgeDispatch = hostApi && typeof hostApi.bridgeDispatch === "function" ? hostApi.bridgeDispatch.bind(hostApi) : undefined;
-    const hostWebSocketDispatch = hostApi && typeof hostApi.websocketDispatch === "function" ? hostApi.websocketDispatch.bind(hostApi) : undefined;
+    const hostEmit = hostApi && typeof hostApi.emit === "function"
+      ? (...args) => hostApi.emit(...args)
+      : undefined;
+    const hostSnapshot = hostApi && typeof hostApi.snapshot === "function"
+      ? (...args) => hostApi.snapshot(...args)
+      : undefined;
+    const hostConfig = hostApi && typeof hostApi.config === "function"
+      ? (...args) => hostApi.config(...args)
+      : undefined;
+    const hostReadFile = hostApi && typeof hostApi.readTextFile === "function"
+      ? (...args) => hostApi.readTextFile(...args)
+      : undefined;
+    const hostFindCodexSession = hostApi && typeof hostApi.findCodexSessionPath === "function"
+      ? (...args) => hostApi.findCodexSessionPath(...args)
+      : undefined;
+    const hostHttpFetch = hostApi && typeof hostApi.httpFetch === "function"
+      ? (...args) => hostApi.httpFetch(...args)
+      : undefined;
+    const hostBridgeDispatch = hostApi && typeof hostApi.bridgeDispatch === "function"
+      ? (...args) => hostApi.bridgeDispatch(...args)
+      : undefined;
+    const hostWebSocketDispatch = hostApi && typeof hostApi.websocketDispatch === "function"
+      ? (...args) => hostApi.websocketDispatch(...args)
+      : undefined;
     const capabilities = freezeValue({
       http: dispatchKind === "http",
       stream: false,
