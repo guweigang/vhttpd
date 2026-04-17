@@ -795,6 +795,14 @@ fn inproc_vjsx_should_retry_dispatch(err_msg string) bool {
 	return err_msg.starts_with('inproc_vjsx_executor_runtime_create_failed:')
 }
 
+fn inproc_vjsx_normalize_error_message(err_msg string, fallback string) string {
+	normalized := err_msg.trim_space()
+	if normalized != '' {
+		return normalized
+	}
+	return fallback
+}
+
 pub fn (e InProcVjsxExecutor) release_lane(lane_id string) {
 	if isnil(e.state) || lane_id == '' {
 		return
@@ -857,6 +865,30 @@ pub fn (e InProcVjsxExecutor) record_lane_error(lane_id string, err_msg string) 
 		state.lanes[i].last_error = err_msg
 		if i < state.hosts.len {
 			state.hosts[i].dirty = true
+		}
+		break
+	}
+}
+
+pub fn (e InProcVjsxExecutor) record_lane_soft_error(lane_id string, err_msg string) {
+	if isnil(e.state) || lane_id == '' {
+		return
+	}
+	normalized := inproc_vjsx_normalize_error_message(err_msg, 'inproc_vjsx_executor_unknown_error')
+	mut state := e.state
+	state.mu.@lock()
+	defer {
+		state.mu.unlock()
+	}
+	for i, lane in state.lanes {
+		if lane.id != lane_id {
+			continue
+		}
+		state.lanes[i].healthy = true
+		state.lanes[i].dirty = false
+		state.lanes[i].last_error = normalized
+		if i < state.hosts.len {
+			state.hosts[i].dirty = false
 		}
 		break
 	}
@@ -3763,8 +3795,10 @@ fn (e InProcVjsxExecutor) dispatch_websocket_event_once(mut app App, frame Worke
 		create_runtime_fn.free()
 	}
 	mut js_runtime := ctx.call(create_runtime_fn, runtime_obj) or {
-		e.record_lane_error(lane.id, err.msg())
-		return error('inproc_vjsx_executor_websocket_runtime_create_failed:${err.msg()}')
+		err_msg := inproc_vjsx_normalize_error_message(err.msg(),
+			'inproc_vjsx_executor_websocket_runtime_create_failed')
+		e.record_lane_soft_error(lane.id, err_msg)
+		return error('inproc_vjsx_executor_websocket_runtime_create_failed:${err_msg}')
 	}
 	defer {
 		js_runtime.free()
@@ -3774,8 +3808,10 @@ fn (e InProcVjsxExecutor) dispatch_websocket_event_once(mut app App, frame Worke
 		create_frame_fn.free()
 	}
 	mut js_frame := ctx.call(create_frame_fn, frame_obj, js_runtime) or {
-		e.record_lane_error(lane.id, err.msg())
-		return error('inproc_vjsx_executor_websocket_frame_create_failed:${err.msg()}')
+		err_msg := inproc_vjsx_normalize_error_message(err.msg(),
+			'inproc_vjsx_executor_websocket_frame_create_failed')
+		e.record_lane_soft_error(lane.id, err_msg)
+		return error('inproc_vjsx_executor_websocket_frame_create_failed:${err_msg}')
 	}
 	defer {
 		js_frame.free()
@@ -3783,8 +3819,10 @@ fn (e InProcVjsxExecutor) dispatch_websocket_event_once(mut app App, frame Worke
 	mut result := if host.is_module_entry && !isnil(host.module_binding) {
 		inproc_vjsx_call_module_entry(host.module_binding, 'websocket', js_frame) or {
 			if err.msg() != 'inproc_vjsx_executor_missing_websocket_handler' {
-				e.record_lane_error(lane.id, err.msg())
-				return error('inproc_vjsx_executor_websocket_handler_failed:${err.msg()}')
+				err_msg := inproc_vjsx_normalize_error_message(err.msg(),
+					'inproc_vjsx_executor_websocket_handler_failed')
+				e.record_lane_soft_error(lane.id, err_msg)
+				return error('inproc_vjsx_executor_websocket_handler_failed:${err_msg}')
 			}
 			inproc_vjsx_call_global_entry(ctx, 'websocket', js_frame) or {
 				if err.msg() == 'inproc_vjsx_executor_missing_websocket_handler' {
@@ -3798,8 +3836,10 @@ fn (e InProcVjsxExecutor) dispatch_websocket_event_once(mut app App, frame Worke
 						commands: []WorkerWebSocketFrame{}
 					}
 				}
-				e.record_lane_error(lane.id, err.msg())
-				return error('inproc_vjsx_executor_websocket_handler_failed:${err.msg()}')
+				err_msg := inproc_vjsx_normalize_error_message(err.msg(),
+					'inproc_vjsx_executor_websocket_handler_failed')
+				e.record_lane_soft_error(lane.id, err_msg)
+				return error('inproc_vjsx_executor_websocket_handler_failed:${err_msg}')
 			}
 		}
 	} else {
@@ -3819,8 +3859,10 @@ fn (e InProcVjsxExecutor) dispatch_websocket_event_once(mut app App, frame Worke
 			}
 		}
 		ctx.call(handler, js_frame) or {
-			e.record_lane_error(lane.id, err.msg())
-			return error('inproc_vjsx_executor_websocket_handler_failed:${err.msg()}')
+			err_msg := inproc_vjsx_normalize_error_message(err.msg(),
+				'inproc_vjsx_executor_websocket_handler_failed')
+			e.record_lane_soft_error(lane.id, err_msg)
+			return error('inproc_vjsx_executor_websocket_handler_failed:${err_msg}')
 		}
 	}
 	defer {
@@ -3836,8 +3878,10 @@ fn (e InProcVjsxExecutor) dispatch_websocket_event_once(mut app App, frame Worke
 			awaited.free()
 		}
 		mut normalized := ctx.call(normalize_fn, js_frame, awaited) or {
-			e.record_lane_error(lane.id, err.msg())
-			return error('inproc_vjsx_executor_websocket_normalize_failed:${err.msg()}')
+			err_msg := inproc_vjsx_normalize_error_message(err.msg(),
+				'inproc_vjsx_executor_websocket_normalize_failed')
+			e.record_lane_soft_error(lane.id, err_msg)
+			return error('inproc_vjsx_executor_websocket_normalize_failed:${err_msg}')
 		}
 		defer {
 			normalized.free()
@@ -3849,8 +3893,10 @@ fn (e InProcVjsxExecutor) dispatch_websocket_event_once(mut app App, frame Worke
 		return websocket_response_from_js_value(normalized, frame)
 	}
 	mut normalized := ctx.call(normalize_fn, js_frame, result) or {
-		e.record_lane_error(lane.id, err.msg())
-		return error('inproc_vjsx_executor_websocket_normalize_failed:${err.msg()}')
+		err_msg := inproc_vjsx_normalize_error_message(err.msg(),
+			'inproc_vjsx_executor_websocket_normalize_failed')
+		e.record_lane_soft_error(lane.id, err_msg)
+		return error('inproc_vjsx_executor_websocket_normalize_failed:${err_msg}')
 	}
 	defer {
 		normalized.free()
