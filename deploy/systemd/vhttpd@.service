@@ -1,0 +1,26 @@
+[Unit]
+Description=vhttpd application runtime (%i)
+Documentation=https://github.com/guweigang/vhttpd
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=vhttpd
+Group=vhttpd
+WorkingDirectory=/var/lib/vhttpd/%i
+Environment=VHTTPD_CONFIG=/etc/vhttpd/%i.toml
+Environment=VHTTPD_LOG_LEVEL=info
+ExecStart=/usr/local/bin/vhttpd --config /etc/vhttpd/%i.toml
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=2s
+LimitNOFILE=65535
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/var/lib/vhttpd /var/log/vhttpd /run
+
+[Install]
+WantedBy=multi-user.target
