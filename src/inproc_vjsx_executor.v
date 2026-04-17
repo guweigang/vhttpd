@@ -1979,9 +1979,16 @@ globalThis.__vhttpd_create_websocket_upstream_frame = function(raw, runtime) {
   };
   return Object.freeze(frame);
 };
-globalThis.__vhttpd_create_websocket_frame = function(raw, runtime) {
+globalThis.__vhttpd_create_websocket_frame = function(raw, runtimeMeta) {
   raw = raw && typeof raw === "object" ? raw : {};
-  runtime = runtime && typeof runtime === "object" ? runtime : {};
+  let runtime = runtimeMeta && typeof runtimeMeta === "object" ? runtimeMeta : {};
+  try {
+    if (typeof globalThis.__vhttpd_create_websocket_runtime === "function") {
+      runtime = globalThis.__vhttpd_create_websocket_runtime(runtimeMeta);
+    }
+  } catch (_) {
+    runtime = runtimeMeta && typeof runtimeMeta === "object" ? runtimeMeta : {};
+  }
   const frame = {
     mode: typeof raw.mode === "string" && raw.mode ? raw.mode : "websocket_dispatch",
     event: typeof raw.event === "string" && raw.event ? raw.event : "message",
@@ -4043,24 +4050,11 @@ fn (e InProcVjsxExecutor) dispatch_websocket_event_once(mut app App, frame Worke
 	defer {
 		runtime_obj.free()
 	}
-	create_runtime_fn := ctx.js_global('__vhttpd_create_runtime')
-	defer {
-		create_runtime_fn.free()
-	}
-	mut js_runtime := ctx.call(create_runtime_fn, runtime_obj) or {
-		err_msg := inproc_vjsx_normalize_error_message(err.msg(),
-			'inproc_vjsx_executor_websocket_runtime_create_failed')
-		e.record_lane_soft_error(lane.id, err_msg)
-		return error('inproc_vjsx_executor_websocket_runtime_create_failed:${err_msg}')
-	}
-	defer {
-		js_runtime.free()
-	}
 	create_frame_fn := ctx.js_global('__vhttpd_create_websocket_frame')
 	defer {
 		create_frame_fn.free()
 	}
-	mut js_frame := ctx.call(create_frame_fn, frame_obj, js_runtime) or {
+	mut js_frame := ctx.call(create_frame_fn, frame_obj, runtime_obj) or {
 		err_msg := inproc_vjsx_normalize_error_message(err.msg(),
 			'inproc_vjsx_executor_websocket_frame_create_failed')
 		e.record_lane_soft_error(lane.id, err_msg)
