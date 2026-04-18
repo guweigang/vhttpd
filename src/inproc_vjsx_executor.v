@@ -1994,8 +1994,8 @@ globalThis.__vhttpd_create_websocket_frame = function(raw, runtimeMeta) {
     event: typeof raw.event === "string" && raw.event ? raw.event : "message",
     id: typeof raw.id === "string" ? raw.id : runtime.requestId,
     path: typeof raw.path === "string" ? raw.path : runtime.path,
-    query: raw.query && typeof raw.query === "object" ? Object.freeze(raw.query) : Object.freeze({}),
-    headers: raw.headers && typeof raw.headers === "object" ? Object.freeze(raw.headers) : Object.freeze({}),
+    query: raw.query && typeof raw.query === "object" ? raw.query : {},
+    headers: raw.headers && typeof raw.headers === "object" ? raw.headers : {},
     remoteAddr: typeof raw.remote_addr === "string" ? raw.remote_addr : (runtime.request?.remoteAddr || ""),
     requestId: typeof raw.request_id === "string" ? raw.request_id : runtime.requestId,
     traceId: typeof raw.trace_id === "string" ? raw.trace_id : runtime.traceId,
@@ -2004,12 +2004,12 @@ globalThis.__vhttpd_create_websocket_frame = function(raw, runtimeMeta) {
     key: typeof raw.key === "string" ? raw.key : "",
     value: typeof raw.value === "string" ? raw.value : "",
     exceptId: typeof raw.except_id === "string" ? raw.except_id : "",
-    rooms: Array.isArray(raw.rooms) ? Object.freeze(raw.rooms.slice()) : Object.freeze([]),
-    metadata: raw.metadata && typeof raw.metadata === "object" ? Object.freeze(raw.metadata) : Object.freeze({}),
-    roomMembers: raw.room_members && typeof raw.room_members === "object" ? Object.freeze(raw.room_members) : Object.freeze({}),
-    memberMetadata: raw.member_metadata && typeof raw.member_metadata === "object" ? Object.freeze(raw.member_metadata) : Object.freeze({}),
-    roomCounts: raw.room_counts && typeof raw.room_counts === "object" ? Object.freeze(raw.room_counts) : Object.freeze({}),
-    presenceUsers: raw.presence_users && typeof raw.presence_users === "object" ? Object.freeze(raw.presence_users) : Object.freeze({}),
+    rooms: Array.isArray(raw.rooms) ? raw.rooms.slice() : [],
+    metadata: raw.metadata && typeof raw.metadata === "object" ? raw.metadata : {},
+    roomMembers: raw.room_members && typeof raw.room_members === "object" ? raw.room_members : {},
+    memberMetadata: raw.member_metadata && typeof raw.member_metadata === "object" ? raw.member_metadata : {},
+    roomCounts: raw.room_counts && typeof raw.room_counts === "object" ? raw.room_counts : {},
+    presenceUsers: raw.presence_users && typeof raw.presence_users === "object" ? raw.presence_users : {},
     status: typeof raw.status === "number" ? raw.status : 0,
     code: typeof raw.code === "number" ? raw.code : 0,
     reason: typeof raw.reason === "string" ? raw.reason : "",
@@ -2050,7 +2050,7 @@ globalThis.__vhttpd_create_websocket_frame = function(raw, runtimeMeta) {
       }
     }
   };
-  return Object.freeze(frame);
+  return frame;
 };
 globalThis.__vhttpd_normalize_result = function(ctx, result) {
   if (result === undefined || result === null) {
