@@ -2347,6 +2347,38 @@ globalThis.__vhttpd_wrap_handler = function(kind, handler) {
     }
   };
 };
+globalThis.__vhttpd_invoke_wrapped_handler = function(kind, handler, arg) {
+  if (typeof handler !== "function") {
+    throw new TypeError("handler is not a function");
+  }
+  try {
+    const result = handler(arg);
+    if (result && typeof result.then === "function") {
+      return Promise.resolve(result).catch((error) => {
+        const rendered = error && typeof error === "object" && typeof error.stack === "string" && error.stack
+          ? error.stack
+          : error && typeof error === "object" && typeof error.message === "string" && error.message
+            ? error.message
+            : String(error);
+        if (typeof console !== "undefined" && console && typeof console.error === "function") {
+          console.error("[vhttpd] " + kind + " handler error", rendered);
+        }
+        throw error;
+      });
+    }
+    return result;
+  } catch (error) {
+    const rendered = error && typeof error === "object" && typeof error.stack === "string" && error.stack
+      ? error.stack
+      : error && typeof error === "object" && typeof error.message === "string" && error.message
+        ? error.message
+        : String(error);
+    if (typeof console !== "undefined" && console && typeof console.error === "function") {
+      console.error("[vhttpd] " + kind + " handler error", rendered);
+    }
+    throw error;
+  }
+};
 globalThis.__vhttpd_bind_handlers = function(exportsValue) {
   const httpHandler = globalThis.__vhttpd_resolve_handler_for_kind(exportsValue, "http");
   const websocketHandler = globalThis.__vhttpd_resolve_handler_for_kind(exportsValue, "websocket");
@@ -4493,7 +4525,11 @@ fn (e InProcVjsxExecutor) dispatch_websocket_event_once(mut app App, frame Worke
 			commands: []WorkerWebSocketFrame{}
 		}
 	}
-	mut result := ctx.call(handler, js_frame) or {
+	invoke_handler := ctx.js_global('__vhttpd_invoke_wrapped_handler')
+	defer {
+		invoke_handler.free()
+	}
+	mut result := ctx.call(invoke_handler, 'websocket', handler, js_frame) or {
 		err_msg := inproc_vjsx_context_error_message(ctx, err.msg(),
 			'inproc_vjsx_executor_websocket_handler_failed')
 		e.record_lane_soft_error(lane.id, err_msg)
