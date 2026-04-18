@@ -917,6 +917,23 @@ fn (e InProcVjsxExecutor) lane_worker_by_id(lane_id string) ?VjsxLaneWorker {
 	return none
 }
 
+fn (e InProcVjsxExecutor) lane_snapshot_by_id(lane_id string) ?VjsxExecutionLane {
+	if isnil(e.state) || lane_id == '' {
+		return none
+	}
+	mut state := e.state
+	state.mu.@lock()
+	defer {
+		state.mu.unlock()
+	}
+	for lane in state.lanes {
+		if lane.id == lane_id {
+			return lane
+		}
+	}
+	return none
+}
+
 fn inproc_vjsx_lane_worker_loop(state &VjsxExecutorState, lane_id string, task_ch chan InProcVjsxWebSocketTask, stop_ch chan bool) {
 	worker_executor := InProcVjsxExecutor{
 		state: state
@@ -930,7 +947,7 @@ fn inproc_vjsx_lane_worker_loop(state &VjsxExecutorState, lane_id string, task_c
 				mut response := WorkerWebSocketDispatchResponse{}
 				mut err_msg := ''
 				mut task_app := task.app
-				lane := worker_executor.select_lane_by_id(lane_id) or {
+				lane := worker_executor.lane_snapshot_by_id(lane_id) or {
 					err_msg = err.msg()
 					task.reply <- InProcVjsxWebSocketTaskResult{
 						ok: false
@@ -944,10 +961,8 @@ fn inproc_vjsx_lane_worker_loop(state &VjsxExecutorState, lane_id string, task_c
 						ok: false
 						error: err_msg
 					}
-					worker_executor.release_lane(lane.id)
 					continue
 				}
-				worker_executor.release_lane(lane.id)
 				task.reply <- InProcVjsxWebSocketTaskResult{
 					ok: true
 					response: response
