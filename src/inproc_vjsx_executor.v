@@ -4429,54 +4429,26 @@ fn (e InProcVjsxExecutor) dispatch_websocket_event_once(mut app App, frame Worke
 	defer {
 		js_frame.free()
 	}
-	mut result := if host.is_module_entry && !isnil(host.module_binding) {
-		inproc_vjsx_call_module_entry(host.module_binding, 'websocket', js_frame) or {
-			if err.msg() != 'inproc_vjsx_executor_missing_websocket_handler' {
-				err_msg := inproc_vjsx_context_error_message(ctx, err.msg(),
-					'inproc_vjsx_executor_websocket_handler_failed')
-				e.record_lane_soft_error(lane.id, err_msg)
-				return error('inproc_vjsx_executor_websocket_handler_failed:${err_msg}')
-			}
-			inproc_vjsx_call_global_entry(ctx, 'websocket', js_frame) or {
-				if err.msg() == 'inproc_vjsx_executor_missing_websocket_handler' {
-					e.record_lane_success(lane.id)
-					return WorkerWebSocketDispatchResponse{
-						mode:     'websocket_dispatch'
-						event:    'result'
-						id:       frame.id
-						accepted: false
-						closed:   false
-						commands: []WorkerWebSocketFrame{}
-					}
-				}
-				err_msg := inproc_vjsx_context_error_message(ctx, err.msg(),
-					'inproc_vjsx_executor_websocket_handler_failed')
-				e.record_lane_soft_error(lane.id, err_msg)
-				return error('inproc_vjsx_executor_websocket_handler_failed:${err_msg}')
-			}
+	handler := ctx.js_global('__vhttpd_websocket_handle')
+	defer {
+		handler.free()
+	}
+	if handler.is_undefined() || !handler.is_function() {
+		e.record_lane_success(lane.id)
+		return WorkerWebSocketDispatchResponse{
+			mode:     'websocket_dispatch'
+			event:    'result'
+			id:       frame.id
+			accepted: false
+			closed:   false
+			commands: []WorkerWebSocketFrame{}
 		}
-	} else {
-		handler := ctx.js_global('__vhttpd_websocket_handle')
-		defer {
-			handler.free()
-		}
-		if handler.is_undefined() || !handler.is_function() {
-			e.record_lane_success(lane.id)
-			return WorkerWebSocketDispatchResponse{
-				mode:     'websocket_dispatch'
-				event:    'result'
-				id:       frame.id
-				accepted: false
-				closed:   false
-				commands: []WorkerWebSocketFrame{}
-			}
-		}
-		ctx.call(handler, js_frame) or {
-			err_msg := inproc_vjsx_context_error_message(ctx, err.msg(),
-				'inproc_vjsx_executor_websocket_handler_failed')
-			e.record_lane_soft_error(lane.id, err_msg)
-			return error('inproc_vjsx_executor_websocket_handler_failed:${err_msg}')
-		}
+	}
+	mut result := ctx.call(handler, js_frame) or {
+		err_msg := inproc_vjsx_context_error_message(ctx, err.msg(),
+			'inproc_vjsx_executor_websocket_handler_failed')
+		e.record_lane_soft_error(lane.id, err_msg)
+		return error('inproc_vjsx_executor_websocket_handler_failed:${err_msg}')
 	}
 	defer {
 		result.free()
