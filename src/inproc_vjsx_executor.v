@@ -3569,6 +3569,7 @@ fn websocket_log_args(args []vjsx.Value) string {
 
 fn build_websocket_js_runtime(ctx &vjsx.Context, runtime_meta InProcVjsxRuntimeMeta, runtime_config_json string, mut app App) vjsx.Value {
 	mut runtime := ctx.js_object()
+	minimal_runtime := os.getenv('VHTTPD_VJSX_WS_MINIMAL_RUNTIME').trim_space().to_lower() in ['1', 'true', 'yes', 'on']
 	mut capabilities := ctx.js_object()
 	capabilities.set('http', false)
 	capabilities.set('fetch', false)
@@ -3609,6 +3610,9 @@ fn build_websocket_js_runtime(ctx &vjsx.Context, runtime_meta InProcVjsxRuntimeM
 	runtime.set('method', runtime_meta.method)
 	runtime.set('path', runtime_meta.path)
 	runtime.set('runtimeInitError', '')
+	if minimal_runtime {
+		return runtime
+	}
 	runtime.set('now', ctx.js_function(fn [ctx] (args []vjsx.Value) vjsx.Value {
 		_ = args
 		return ctx.js_i64(time.now().unix_milli())
