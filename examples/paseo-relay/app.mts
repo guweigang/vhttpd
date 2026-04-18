@@ -6,6 +6,7 @@ const DEFAULT_SERVER_DATA_CLOSE_CODE = 1012;
 const DEFAULT_CONTROL_NUDGE_DELAY_MS = 10_000;
 const DEFAULT_CONTROL_RESET_DELAY_MS = 5_000;
 const DEFAULT_PENDING_FLUSH_SETTLE_DELAY_MS = 250;
+const DEFAULT_PENDING_FLUSH_DISPATCH_DELAY_MS = 1;
 const DEFAULT_DEBUG_MESSAGE_LIMIT = 6;
 
 function nowMs() {
@@ -201,6 +202,7 @@ function ensureSession(serverId, version) {
       controlIds: new Set(),
       serverDataByConnection: new Map(),
       clientIdsByConnection: new Map(),
+      announcedConnections: new Set(),
       pendingFramesByConnection: new Map(),
       pendingDrainByConnection: new Map(),
       controlNudgeTokensByConnection: new Map(),
@@ -255,6 +257,24 @@ function clearControlNudge(session, connectionId) {
 
 function listConnectedConnectionIds(session) {
   return Array.from(session.clientIdsByConnection.keys()).sort();
+}
+
+function markConnectionAnnounced(session, connectionId) {
+  if (!session || !connectionId) {
+    return false;
+  }
+  if (session.announcedConnections.has(connectionId)) {
+    return false;
+  }
+  session.announcedConnections.add(connectionId);
+  return true;
+}
+
+function clearConnectionAnnounced(session, connectionId) {
+  if (!session || !connectionId) {
+    return;
+  }
+  session.announcedConnections.delete(connectionId);
 }
 
 function notifyControls(session, payload) {
@@ -486,6 +506,39 @@ function flushPendingFrames(session, connectionId, targetId, runtime) {
   );
 }
 
+function schedulePendingFlush(session, connectionId, targetId, runtime) {
+  if (
+    !session ||
+    !connectionId ||
+    !targetId ||
+    !runtime ||
+    typeof runtime.websocketDispatch !== "function" ||
+    typeof setTimeout !== "function"
+  ) {
+    return;
+  }
+  const relaySessionKey = session.key;
+  const delayMs = numberConfig(
+    runtime,
+    "relay.pendingFlushDispatchDelayMs",
+    DEFAULT_PENDING_FLUSH_DISPATCH_DELAY_MS,
+  );
+  setTimeout(() => {
+    const current = relayState().sessions.get(relaySessionKey);
+    if (!current) {
+      return;
+    }
+    if ((current.serverDataByConnection.get(connectionId) || "") !== targetId) {
+      return;
+    }
+    const commands = flushPendingFrames(current, connectionId, targetId, runtime);
+    if (commands.length === 0) {
+      return;
+    }
+    runtime.websocketDispatch(commands, { ok: false, failures: [] });
+  }, delayMs);
+}
+
 function sessionSnapshot() {
   const state = relayState();
   const sessions = [];
@@ -583,9 +636,7 @@ function handleOpenV2(frame, session, role, rawConnectionId) {
     relayLog(frame.runtime, "open_client", sessionDebugState(session, resolvedConnectionId), `socket=${frame.id}`);
     commands.push(
       ...registerCommonOpenMetadata(frame, session.serverId, CURRENT_RELAY_VERSION, "client", resolvedConnectionId),
-      ...notifyControls(session, { type: "connected", connectionId: resolvedConnectionId }),
     );
-    scheduleControlNudge(session, resolvedConnectionId, frame.runtime);
     return {
       accepted: true,
       commands,
@@ -602,11 +653,6 @@ function handleOpenV2(frame, session, role, rawConnectionId) {
     relayLog(frame.runtime, "open_control", sessionDebugState(session), `socket=${frame.id}`);
     commands.push(
       ...registerCommonOpenMetadata(frame, session.serverId, CURRENT_RELAY_VERSION, "server-control", ""),
-      textCommand(
-        "send",
-        json({ type: "sync", connectionIds: listConnectedConnectionIds(session) }),
-        { targetId: frame.id },
-      ),
     );
     return {
       accepted: true,
@@ -622,9 +668,9 @@ function handleOpenV2(frame, session, role, rawConnectionId) {
   clearControlNudge(session, connectionId);
   session.serverDataByConnection.set(connectionId, frame.id);
   relayLog(frame.runtime, "open_server_data", sessionDebugState(session, connectionId), `socket=${frame.id}`);
+  schedulePendingFlush(session, connectionId, frame.id, frame.runtime);
   commands.push(
     ...registerCommonOpenMetadata(frame, session.serverId, CURRENT_RELAY_VERSION, "server-data", connectionId),
-    ...flushPendingFrames(session, connectionId, frame.id, frame.runtime),
   );
   return {
     accepted: true,
@@ -694,6 +740,11 @@ function handleMessageV2(frame, session, role, connectionId) {
         accepted: true,
         commands: [
           textCommand("send", json({ type: "pong", ts: nowMs() }), { targetId: frame.id }),
+          textCommand(
+            "send",
+            json({ type: "sync", connectionIds: listConnectedConnectionIds(session) }),
+            { targetId: frame.id },
+          ),
         ],
       };
     }
@@ -714,7 +765,12 @@ function handleMessageV2(frame, session, role, connectionId) {
         sessionDebugState(session, connectionId),
         previewPayload(frame.data, frame.opcode || "text"),
       );
-      return { accepted: true, commands: [] };
+      const commands = [];
+      if (markConnectionAnnounced(session, connectionId)) {
+        commands.push(...notifyControls(session, { type: "connected", connectionId }));
+      }
+      scheduleControlNudge(session, connectionId, frame.runtime);
+      return { accepted: true, commands };
     }
     return {
       accepted: true,
@@ -794,6 +850,7 @@ function handleClose(frame) {
     clientIds.delete(frame.id);
     if (clientIds.size === 0) {
       session.clientIdsByConnection.delete(connectionId);
+      clearConnectionAnnounced(session, connectionId);
       session.pendingFramesByConnection.delete(connectionId);
       session.pendingDrainByConnection.delete(connectionId);
       ensureDebugCounters(session).delete(connectionId);
