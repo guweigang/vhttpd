@@ -2379,6 +2379,10 @@ globalThis.__vhttpd_invoke_wrapped_handler = function(kind, handler, arg) {
     throw error;
   }
 };
+globalThis.__vhttpd_invoke_websocket_handle = function(frame) {
+  const handler = globalThis.__vhttpd_websocket_handle;
+  return globalThis.__vhttpd_invoke_wrapped_handler("websocket", handler, frame);
+};
 globalThis.__vhttpd_bind_handlers = function(exportsValue) {
   const httpHandler = globalThis.__vhttpd_resolve_handler_for_kind(exportsValue, "http");
   const websocketHandler = globalThis.__vhttpd_resolve_handler_for_kind(exportsValue, "websocket");
@@ -4525,11 +4529,11 @@ fn (e InProcVjsxExecutor) dispatch_websocket_event_once(mut app App, frame Worke
 			commands: []WorkerWebSocketFrame{}
 		}
 	}
-	invoke_handler := ctx.js_global('__vhttpd_invoke_wrapped_handler')
+	invoke_handler := ctx.js_global('__vhttpd_invoke_websocket_handle')
 	defer {
 		invoke_handler.free()
 	}
-	mut result := ctx.call(invoke_handler, 'websocket', handler, js_frame) or {
+	mut result := ctx.call(invoke_handler, js_frame) or {
 		err_msg := inproc_vjsx_context_error_message(ctx, err.msg(),
 			'inproc_vjsx_executor_websocket_handler_failed')
 		e.record_lane_soft_error(lane.id, err_msg)
