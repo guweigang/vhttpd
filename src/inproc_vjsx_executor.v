@@ -3700,16 +3700,7 @@ fn build_websocket_js_frame(ctx &vjsx.Context, frame WorkerWebSocketFrame, runti
 	js_frame.set('requestId', frame.request_id)
 	js_frame.set('traceId', frame.trace_id)
 	js_frame.set('targetId', frame.target_id)
-	js_frame.set('room', frame.room)
-	js_frame.set('key', frame.key)
-	js_frame.set('value', frame.value)
-	js_frame.set('exceptId', frame.except_id)
-	js_frame.set('rooms', websocket_js_value_from_json(ctx, json.encode(frame.rooms)))
 	js_frame.set('metadata', websocket_js_value_from_json(ctx, json.encode(frame.metadata)))
-	js_frame.set('roomMembers', websocket_js_value_from_json(ctx, json.encode(frame.room_members)))
-	js_frame.set('memberMetadata', websocket_js_value_from_json(ctx, json.encode(frame.member_metadata)))
-	js_frame.set('roomCounts', websocket_js_value_from_json(ctx, json.encode(frame.room_counts)))
-	js_frame.set('presenceUsers', websocket_js_value_from_json(ctx, json.encode(frame.presence_users)))
 	js_frame.set('status', frame.status)
 	js_frame.set('code', frame.code)
 	js_frame.set('reason', frame.reason)
@@ -3718,60 +3709,6 @@ fn build_websocket_js_frame(ctx &vjsx.Context, frame WorkerWebSocketFrame, runti
 	js_frame.set('error', frame.error)
 	js_frame.set('errorClass', frame.error_class)
 	js_frame.set('runtime', runtime)
-	js_frame.set('dataText', ctx.js_function_this(fn [ctx] (this vjsx.Value, args []vjsx.Value) vjsx.Value {
-		fallback := if args.len > 0 { args[0].dup_value() } else { ctx.js_undefined() }
-		opcode := this.get('opcode')
-		defer {
-			opcode.free()
-		}
-		if opcode.str() == 'binary' {
-			return fallback
-		}
-		data := this.get('data')
-		defer {
-			data.free()
-		}
-		if data.is_null() || data.is_undefined() || data.str() == '' {
-			return fallback
-		}
-		return ctx.js_string(data.str())
-	}))
-	js_frame.set('dataBase64', ctx.js_function_this(fn [ctx] (this vjsx.Value, args []vjsx.Value) vjsx.Value {
-		fallback := if args.len > 0 { args[0].dup_value() } else { ctx.js_undefined() }
-		opcode := this.get('opcode')
-		defer {
-			opcode.free()
-		}
-		if opcode.str() != 'binary' {
-			return fallback
-		}
-		data := this.get('data')
-		defer {
-			data.free()
-		}
-		if data.is_null() || data.is_undefined() || data.str() == '' {
-			return fallback
-		}
-		return ctx.js_string(data.str())
-	}))
-	js_frame.set('dataJson', ctx.js_function_this(fn [ctx] (this vjsx.Value, args []vjsx.Value) vjsx.Value {
-		fallback := if args.len > 0 { args[0].dup_value() } else { ctx.js_undefined() }
-		opcode := this.get('opcode')
-		defer {
-			opcode.free()
-		}
-		if opcode.str() == 'binary' {
-			return fallback
-		}
-		data := this.get('data')
-		defer {
-			data.free()
-		}
-		if data.is_null() || data.is_undefined() || data.str().trim_space() == '' {
-			return fallback
-		}
-		return ctx.json_parse(data.str())
-	}))
 	return js_frame
 }
 
