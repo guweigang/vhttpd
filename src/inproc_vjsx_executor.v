@@ -3187,6 +3187,32 @@ fn (e InProcVjsxExecutor) ensure_lane_host(idx int) ! {
 			os.rmdir_all(temp_root) or {}
 			return error('inproc_vjsx_executor_missing_handler')
 		}
+		bind_handlers := ctx.js_global('__vhttpd_bind_handlers')
+		defer {
+			bind_handlers.free()
+		}
+		if !bind_handlers.is_undefined() && bind_handlers.is_function() {
+			entry_exports := module_binding_value.namespace() or {
+				mut cleanup_binding := module_binding_value
+				cleanup_binding.close()
+				session.close()
+				os.rmdir_all(temp_root) or {}
+				return error('inproc_vjsx_executor_module_namespace_failed:${err.msg()}')
+			}
+			defer {
+				entry_exports.free()
+			}
+			mut bound := ctx.call(bind_handlers, entry_exports) or {
+				mut cleanup_binding := module_binding_value
+				cleanup_binding.close()
+				session.close()
+				os.rmdir_all(temp_root) or {}
+				return error('inproc_vjsx_executor_export_bind_failed:${err.msg()}')
+			}
+			defer {
+				bound.free()
+			}
+		}
 		mut module_binding := module_binding_value
 		module_binding_ptr = &module_binding
 	} else {
