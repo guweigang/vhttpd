@@ -4020,11 +4020,6 @@ fn (e InProcVjsxExecutor) dispatch_websocket_event_once(mut app App, frame Worke
 		e.record_lane_error(lane.id, 'inproc_vjsx_executor_lane_not_found')
 		return error('inproc_vjsx_executor_lane_not_found')
 	}
-	$if linux {
-		if frame.event == 'open' {
-			e.reset_lane_host(idx)
-		}
-	}
 	e.ensure_lane_host(idx) or {
 		e.record_lane_error(lane.id, err.msg())
 		return error(err.msg())
