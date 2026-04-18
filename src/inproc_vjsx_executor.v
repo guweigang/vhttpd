@@ -2324,6 +2324,29 @@ globalThis.__vhttpd_bind_handler = function(exportsValue) {
   }
   return handler;
 };
+globalThis.__vhttpd_wrap_handler = function(kind, handler) {
+  if (typeof handler !== "function") {
+    return handler;
+  }
+  if (kind !== "websocket" && kind !== "websocket_upstream") {
+    return handler;
+  }
+  return function(...args) {
+    try {
+      return handler(...args);
+    } catch (error) {
+      const rendered = error && typeof error === "object" && typeof error.stack === "string" && error.stack
+        ? error.stack
+        : error && typeof error === "object" && typeof error.message === "string" && error.message
+          ? error.message
+          : String(error);
+      if (typeof console !== "undefined" && console && typeof console.error === "function") {
+        console.error("[vhttpd] " + kind + " handler error", rendered);
+      }
+      throw error;
+    }
+  };
+};
 globalThis.__vhttpd_bind_handlers = function(exportsValue) {
   const httpHandler = globalThis.__vhttpd_resolve_handler_for_kind(exportsValue, "http");
   const websocketHandler = globalThis.__vhttpd_resolve_handler_for_kind(exportsValue, "websocket");
@@ -2334,10 +2357,10 @@ globalThis.__vhttpd_bind_handlers = function(exportsValue) {
     globalThis.__vhttpd_handle = httpHandler;
   }
   if (typeof websocketHandler === "function") {
-    globalThis.__vhttpd_websocket_handle = websocketHandler;
+    globalThis.__vhttpd_websocket_handle = globalThis.__vhttpd_wrap_handler("websocket", websocketHandler);
   }
   if (typeof websocketUpstreamHandler === "function") {
-    globalThis.__vhttpd_websocket_upstream_handle = websocketUpstreamHandler;
+    globalThis.__vhttpd_websocket_upstream_handle = globalThis.__vhttpd_wrap_handler("websocket_upstream", websocketUpstreamHandler);
   }
   if (typeof startupHandler === "function") {
     globalThis.__vhttpd_startup_handle = startupHandler;
