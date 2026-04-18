@@ -4455,6 +4455,7 @@ fn (e InProcVjsxExecutor) dispatch_websocket_event_once(mut app App, frame Worke
 	defer {
 		js_frame.free()
 	}
+	minimal_arg_probe := os.getenv('VHTTPD_VJSX_WS_PRIMITIVE_ARG').trim_space().to_lower() in ['1', 'true', 'yes', 'on']
 	handler := ctx.js_global('__vhttpd_websocket_handle')
 	defer {
 		handler.free()
@@ -4474,7 +4475,15 @@ fn (e InProcVjsxExecutor) dispatch_websocket_event_once(mut app App, frame Worke
 	defer {
 		invoke_handler.free()
 	}
-	mut result := ctx.call(invoke_handler, js_frame) or {
+	invoke_arg := if minimal_arg_probe {
+		ctx.js_string('vhttpd_ws_probe')
+	} else {
+		js_frame.dup_value()
+	}
+	defer {
+		invoke_arg.free()
+	}
+	mut result := ctx.call(invoke_handler, invoke_arg) or {
 		err_msg := inproc_vjsx_context_error_message(ctx, err.msg(),
 			'inproc_vjsx_executor_websocket_handler_failed')
 		e.record_lane_soft_error(lane.id, err_msg)
