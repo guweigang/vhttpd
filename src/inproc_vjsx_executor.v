@@ -3454,6 +3454,229 @@ fn response_headers_from_js_value(val vjsx.Value) map[string]string {
 	}
 }
 
+fn websocket_js_value_from_json(ctx &vjsx.Context, raw string) vjsx.Value {
+	if raw.trim_space() == '' {
+		return ctx.js_object()
+	}
+	return ctx.json_parse(raw)
+}
+
+fn websocket_log_args(args []vjsx.Value) string {
+	mut parts := []string{cap: args.len}
+	for arg in args {
+		parts << arg.to_string()
+	}
+	return parts.join(' ')
+}
+
+fn build_websocket_js_runtime(ctx &vjsx.Context, runtime_meta InProcVjsxRuntimeMeta, runtime_config_json string, mut app App) vjsx.Value {
+	mut runtime := ctx.js_object()
+	mut capabilities := ctx.js_object()
+	capabilities.set('http', false)
+	capabilities.set('fetch', false)
+	capabilities.set('bridgeDispatch', false)
+	capabilities.set('websocketUpstream', false)
+	capabilities.set('websocketDispatch', true)
+	capabilities.set('fs', false)
+	capabilities.set('process', false)
+	capabilities.set('network', false)
+	runtime.set('provider', runtime_meta.provider)
+	runtime.set('executor', runtime_meta.executor)
+	runtime.set('dispatchKind', 'websocket')
+	runtime.set('laneId', runtime_meta.lane_id)
+	runtime.set('requestId', runtime_meta.request_id)
+	runtime.set('traceId', runtime_meta.trace_id)
+	runtime.set('appEntry', runtime_meta.app_entry)
+	runtime.set('moduleRoot', runtime_meta.module_root)
+	runtime.set('runtimeProfile', runtime_meta.runtime_profile)
+	runtime.set('threadCount', runtime_meta.thread_count)
+	runtime.set('capabilities', capabilities)
+	mut request := ctx.js_object()
+	request.set('id', runtime_meta.request_id)
+	request.set('traceId', runtime_meta.trace_id)
+	request.set('method', runtime_meta.method)
+	request.set('path', runtime_meta.path)
+	request.set('url', runtime_meta.path)
+	request.set('target', runtime_meta.request_target)
+	request.set('href', runtime_meta.request_target)
+	request.set('origin', '')
+	request.set('scheme', runtime_meta.request_scheme)
+	request.set('host', runtime_meta.request_host)
+	request.set('port', runtime_meta.request_port)
+	request.set('protocolVersion', runtime_meta.request_protocol_version)
+	request.set('remoteAddr', runtime_meta.request_remote_addr)
+	request.set('ip', runtime_meta.request_remote_addr)
+	request.set('server', websocket_js_value_from_json(ctx, json.encode(runtime_meta.request_server)))
+	runtime.set('request', request)
+	runtime.set('method', runtime_meta.method)
+	runtime.set('path', runtime_meta.path)
+	runtime.set('runtimeInitError', '')
+	runtime.set('now', ctx.js_function(fn [ctx] (args []vjsx.Value) vjsx.Value {
+		_ = args
+		return ctx.js_i64(time.now().unix_milli())
+	}))
+	runtime.set('log', ctx.js_function(fn [ctx, runtime_meta] (args []vjsx.Value) vjsx.Value {
+		println('[vhttpd] ${runtime_meta.lane_id} ${runtime_meta.request_id} ${runtime_meta.trace_id} ${websocket_log_args(args)}')
+		return ctx.js_undefined()
+	}))
+	runtime.set('warn', ctx.js_function(fn [ctx, runtime_meta] (args []vjsx.Value) vjsx.Value {
+		eprintln('[vhttpd] ${runtime_meta.lane_id} ${runtime_meta.request_id} ${runtime_meta.trace_id} ${websocket_log_args(args)}')
+		return ctx.js_undefined()
+	}))
+	runtime.set('error', ctx.js_function(fn [ctx, runtime_meta] (args []vjsx.Value) vjsx.Value {
+		eprintln('[vhttpd] ${runtime_meta.lane_id} ${runtime_meta.request_id} ${runtime_meta.trace_id} ${websocket_log_args(args)}')
+		return ctx.js_undefined()
+	}))
+	runtime.set('config', ctx.js_function(fn [ctx, runtime_config_json] (args []vjsx.Value) vjsx.Value {
+		path := if args.len > 0 { args[0].to_string().trim_space() } else { '' }
+		fallback := if args.len > 1 { args[1].dup_value() } else { ctx.js_undefined() }
+		raw := inproc_vjsx_config_lookup(runtime_config_json, path)
+		if raw.trim_space() == '' {
+			return fallback
+		}
+		return ctx.js_string(raw)
+	}))
+	runtime.set('getConfig', ctx.js_function(fn [ctx, runtime_config_json] (args []vjsx.Value) vjsx.Value {
+		path := if args.len > 0 { args[0].to_string().trim_space() } else { '' }
+		fallback := if args.len > 1 { args[1].dup_value() } else { ctx.js_undefined() }
+		raw := inproc_vjsx_config_lookup(runtime_config_json, path)
+		if raw.trim_space() == '' {
+			return fallback
+		}
+		return ctx.json_parse(raw)
+	}))
+	runtime.set('websocketDispatch', ctx.js_function(fn [ctx, mut app] (args []vjsx.Value) vjsx.Value {
+		fallback := if args.len > 1 { args[1].dup_value() } else { ctx.js_undefined() }
+		if args.len == 0 {
+			return fallback
+		}
+		raw := args[0].json_stringify().trim_space()
+		if raw == '' || raw == 'undefined' || raw == 'null' {
+			return fallback
+		}
+		req_raw := if raw.starts_with('[') {
+			'{"commands":${raw}}'
+		} else {
+			decoded := json.decode(InProcVjsxHostWebSocketDispatchRequest, raw) or {
+				InProcVjsxHostWebSocketDispatchRequest{}
+			}
+			if decoded.commands.len > 0 {
+				raw
+			} else {
+				'{"commands":[${raw}]}'
+			}
+		}
+		req := json.decode(InProcVjsxHostWebSocketDispatchRequest, req_raw) or {
+			return fallback
+		}
+		result := app.execute_websocket_dispatch_commands_result(req.commands)
+		response := if result.has_close {
+			InProcVjsxHostWebSocketDispatchResponse{
+				ok:              true
+				has_close:       true
+				close_code:      result.close_frame.code
+				close_reason:    result.close_frame.reason
+				close_target_id: if result.close_frame.target_id != '' { result.close_frame.target_id } else { result.close_frame.id }
+				failures:        result.failures
+			}
+		} else {
+			InProcVjsxHostWebSocketDispatchResponse{
+				ok:       true
+				failures: result.failures
+			}
+		}
+		return ctx.json_parse(json.encode(response))
+	}))
+	return runtime
+}
+
+fn build_websocket_js_frame(ctx &vjsx.Context, frame WorkerWebSocketFrame, runtime vjsx.Value) vjsx.Value {
+	mut js_frame := ctx.js_object()
+	js_frame.set('mode', if frame.mode != '' { frame.mode } else { 'websocket_dispatch' })
+	js_frame.set('event', if frame.event != '' { frame.event } else { 'message' })
+	js_frame.set('id', frame.id)
+	js_frame.set('path', frame.path)
+	js_frame.set('query', websocket_js_value_from_json(ctx, json.encode(frame.query)))
+	js_frame.set('headers', websocket_js_value_from_json(ctx, json.encode(frame.headers)))
+	js_frame.set('remoteAddr', frame.remote_addr)
+	js_frame.set('requestId', frame.request_id)
+	js_frame.set('traceId', frame.trace_id)
+	js_frame.set('targetId', frame.target_id)
+	js_frame.set('room', frame.room)
+	js_frame.set('key', frame.key)
+	js_frame.set('value', frame.value)
+	js_frame.set('exceptId', frame.except_id)
+	js_frame.set('rooms', websocket_js_value_from_json(ctx, json.encode(frame.rooms)))
+	js_frame.set('metadata', websocket_js_value_from_json(ctx, json.encode(frame.metadata)))
+	js_frame.set('roomMembers', websocket_js_value_from_json(ctx, json.encode(frame.room_members)))
+	js_frame.set('memberMetadata', websocket_js_value_from_json(ctx, json.encode(frame.member_metadata)))
+	js_frame.set('roomCounts', websocket_js_value_from_json(ctx, json.encode(frame.room_counts)))
+	js_frame.set('presenceUsers', websocket_js_value_from_json(ctx, json.encode(frame.presence_users)))
+	js_frame.set('status', frame.status)
+	js_frame.set('code', frame.code)
+	js_frame.set('reason', frame.reason)
+	js_frame.set('opcode', frame.opcode)
+	js_frame.set('data', frame.data)
+	js_frame.set('error', frame.error)
+	js_frame.set('errorClass', frame.error_class)
+	js_frame.set('runtime', runtime)
+	js_frame.set('dataText', ctx.js_function_this(fn [ctx] (this vjsx.Value, args []vjsx.Value) vjsx.Value {
+		fallback := if args.len > 0 { args[0].dup_value() } else { ctx.js_undefined() }
+		opcode := this.get('opcode')
+		defer {
+			opcode.free()
+		}
+		if opcode.str() == 'binary' {
+			return fallback
+		}
+		data := this.get('data')
+		defer {
+			data.free()
+		}
+		if data.is_null() || data.is_undefined() || data.str() == '' {
+			return fallback
+		}
+		return ctx.js_string(data.str())
+	}))
+	js_frame.set('dataBase64', ctx.js_function_this(fn [ctx] (this vjsx.Value, args []vjsx.Value) vjsx.Value {
+		fallback := if args.len > 0 { args[0].dup_value() } else { ctx.js_undefined() }
+		opcode := this.get('opcode')
+		defer {
+			opcode.free()
+		}
+		if opcode.str() != 'binary' {
+			return fallback
+		}
+		data := this.get('data')
+		defer {
+			data.free()
+		}
+		if data.is_null() || data.is_undefined() || data.str() == '' {
+			return fallback
+		}
+		return ctx.js_string(data.str())
+	}))
+	js_frame.set('dataJson', ctx.js_function_this(fn [ctx] (this vjsx.Value, args []vjsx.Value) vjsx.Value {
+		fallback := if args.len > 0 { args[0].dup_value() } else { ctx.js_undefined() }
+		opcode := this.get('opcode')
+		defer {
+			opcode.free()
+		}
+		if opcode.str() == 'binary' {
+			return fallback
+		}
+		data := this.get('data')
+		defer {
+			data.free()
+		}
+		if data.is_null() || data.is_undefined() || data.str().trim_space() == '' {
+			return fallback
+		}
+		return ctx.json_parse(data.str())
+	}))
+	return js_frame
+}
+
 fn response_from_js_value(val vjsx.Value, req_id string) WorkerResponse {
 	if val.is_string() {
 		return WorkerResponse{
@@ -4184,20 +4407,12 @@ fn (e InProcVjsxExecutor) dispatch_websocket_event_once(mut app App, frame Worke
 	mut host := state.hosts[idx]
 	state.mu.unlock()
 	ctx := host.session.context()
-	bundle_obj := ctx.json_parse(e.build_websocket_frame_bundle_payload(lane, frame))
+	runtime_meta := e.websocket_runtime_meta(lane, frame)
+	mut js_runtime := build_websocket_js_runtime(ctx, runtime_meta, app.runtime_config_json, mut app)
 	defer {
-		bundle_obj.free()
+		js_runtime.free()
 	}
-	create_frame_fn := ctx.js_global('__vhttpd_create_websocket_frame')
-	defer {
-		create_frame_fn.free()
-	}
-	mut js_frame := ctx.call(create_frame_fn, bundle_obj) or {
-		err_msg := inproc_vjsx_normalize_error_message(err.msg(),
-			'inproc_vjsx_executor_websocket_frame_create_failed')
-		e.record_lane_soft_error(lane.id, err_msg)
-		return error('inproc_vjsx_executor_websocket_frame_create_failed:${err_msg}')
-	}
+	mut js_frame := build_websocket_js_frame(ctx, frame, js_runtime)
 	defer {
 		js_frame.free()
 	}
