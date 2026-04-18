@@ -235,6 +235,11 @@ struct InProcVjsxRuntimeMeta {
 	path                     string
 }
 
+struct InProcVjsxWebSocketFrameBundle {
+	raw     WorkerWebSocketFrame
+	runtime InProcVjsxRuntimeMeta
+}
+
 struct InProcVjsxRequestContext {
 mut:
 	active     bool
@@ -797,8 +802,21 @@ fn inproc_vjsx_should_retry_dispatch(err_msg string) bool {
 
 fn inproc_vjsx_normalize_error_message(err_msg string, fallback string) string {
 	normalized := err_msg.trim_space()
+	if normalized != '' && normalized != '{}' {
+		return normalized
+	}
+	return fallback
+}
+
+fn inproc_vjsx_context_error_message(ctx &vjsx.Context, err_msg string, fallback string) string {
+	normalized := inproc_vjsx_normalize_error_message(err_msg, '')
 	if normalized != '' {
 		return normalized
+	}
+	js_err := ctx.js_exception()
+	js_msg := js_err.msg().trim_space()
+	if js_msg != '' {
+		return js_msg
 	}
 	return fallback
 }
@@ -1979,16 +1997,142 @@ globalThis.__vhttpd_create_websocket_upstream_frame = function(raw, runtime) {
   };
   return Object.freeze(frame);
 };
-globalThis.__vhttpd_create_websocket_frame = function(raw, runtimeMeta) {
-  raw = raw && typeof raw === "object" ? raw : {};
-  let runtime = runtimeMeta && typeof runtimeMeta === "object" ? runtimeMeta : {};
-  try {
-    if (typeof globalThis.__vhttpd_create_websocket_runtime === "function") {
-      runtime = globalThis.__vhttpd_create_websocket_runtime(runtimeMeta);
+globalThis.__vhttpd_create_websocket_frame = function(bundle) {
+  bundle = bundle && typeof bundle === "object" ? bundle : {};
+  const raw = bundle.raw && typeof bundle.raw === "object" ? bundle.raw : {};
+  const meta = bundle.runtime && typeof bundle.runtime === "object" ? bundle.runtime : {};
+  const hostApi = globalThis.vhttpdHost && typeof globalThis.vhttpdHost === "object" ? globalThis.vhttpdHost : undefined;
+  const hostConfig = hostApi && typeof hostApi.config === "function"
+    ? (...args) => hostApi.config(...args)
+    : undefined;
+  const hostWebSocketDispatch = hostApi && typeof hostApi.websocketDispatch === "function"
+    ? (...args) => hostApi.websocketDispatch(...args)
+    : undefined;
+  const requestPath = typeof meta.path === "string" ? meta.path : "";
+  const requestTarget = typeof meta.requestTarget === "string" && meta.requestTarget ? meta.requestTarget : requestPath;
+  const requestScheme = typeof meta.requestScheme === "string" && meta.requestScheme ? meta.requestScheme : "ws";
+  const requestHost = typeof meta.requestHost === "string" ? meta.requestHost : "";
+  const requestPort = typeof meta.requestPort === "string" ? meta.requestPort : "";
+  const requestOrigin = requestHost ? requestScheme + "://" + requestHost + (requestPort ? ":" + requestPort : "") : "";
+  const requestHref = requestOrigin ? requestOrigin + requestTarget : requestTarget;
+  const runtime = {
+    provider: typeof meta.provider === "string" ? meta.provider : "",
+    executor: typeof meta.executor === "string" ? meta.executor : "",
+    dispatchKind: "websocket",
+    laneId: typeof meta.laneId === "string" ? meta.laneId : "",
+    requestId: typeof meta.requestId === "string" ? meta.requestId : "",
+    traceId: typeof meta.traceId === "string" ? meta.traceId : "",
+    appEntry: typeof meta.appEntry === "string" ? meta.appEntry : "",
+    moduleRoot: typeof meta.moduleRoot === "string" ? meta.moduleRoot : "",
+    runtimeProfile: typeof meta.runtimeProfile === "string" ? meta.runtimeProfile : "",
+    threadCount: typeof meta.threadCount === "number" ? meta.threadCount : 0,
+    capabilities: {
+      http: false,
+      stream: false,
+      websocket: true,
+      websocketUpstream: false,
+      websocketDispatch: typeof hostWebSocketDispatch === "function",
+      fs: !!meta.enableFs,
+      process: !!meta.enableProcess,
+      network: !!meta.enableNetwork
+    },
+    request: {
+      id: typeof meta.requestId === "string" ? meta.requestId : "",
+      traceId: typeof meta.traceId === "string" ? meta.traceId : "",
+      method: typeof meta.method === "string" ? meta.method : "",
+      path: requestPath,
+      url: requestPath,
+      target: requestTarget,
+      href: requestHref,
+      origin: requestOrigin,
+      scheme: requestScheme,
+      host: requestHost,
+      port: requestPort,
+      protocolVersion: typeof meta.requestProtocolVersion === "string" ? meta.requestProtocolVersion : "",
+      remoteAddr: typeof meta.requestRemoteAddr === "string" ? meta.requestRemoteAddr : "",
+      ip: typeof meta.requestRemoteAddr === "string" ? meta.requestRemoteAddr : "",
+      server: meta.requestServer && typeof meta.requestServer === "object" ? meta.requestServer : {}
+    },
+    method: typeof meta.method === "string" ? meta.method : "",
+    path: requestPath,
+    now() {
+      return Date.now();
+    },
+    log(...args) {
+      if (typeof console !== "undefined" && console && typeof console.log === "function") {
+        console.log("[vhttpd]", this.laneId, this.requestId || "", this.traceId || "", ...args);
+      }
+    },
+    warn(...args) {
+      if (typeof console !== "undefined" && console && typeof console.warn === "function") {
+        console.warn("[vhttpd]", this.laneId, this.requestId || "", this.traceId || "", ...args);
+      } else {
+        this.log(...args);
+      }
+    },
+    error(...args) {
+      if (typeof console !== "undefined" && console && typeof console.error === "function") {
+        console.error("[vhttpd]", this.laneId, this.requestId || "", this.traceId || "", ...args);
+      } else {
+        this.log(...args);
+      }
+    },
+    config(fallbackValue = undefined) {
+      if (typeof hostConfig !== "function") {
+        return fallbackValue;
+      }
+      const rawConfig = hostConfig("");
+      if (rawConfig === undefined || rawConfig === null || rawConfig === "") {
+        return fallbackValue;
+      }
+      try {
+        return JSON.parse(String(rawConfig));
+      } catch (_) {
+        return fallbackValue;
+      }
+    },
+    getConfig(path, fallbackValue = undefined) {
+      if (typeof hostConfig !== "function") {
+        return fallbackValue;
+      }
+      const key = path == null ? "" : String(path);
+      const rawConfig = hostConfig(key);
+      if (rawConfig === undefined || rawConfig === null || rawConfig === "") {
+        return fallbackValue;
+      }
+      try {
+        return JSON.parse(String(rawConfig));
+      } catch (_) {
+        return fallbackValue;
+      }
+    },
+    websocketDispatch(input, fallbackValue = undefined) {
+      if (typeof hostWebSocketDispatch !== "function") {
+        return fallbackValue;
+      }
+      let commands = [];
+      if (Array.isArray(input)) {
+        commands = input;
+      } else if (input && typeof input === "object") {
+        if (Array.isArray(input.commands)) {
+          commands = input.commands;
+        } else {
+          commands = [input];
+        }
+      }
+      const rawResult = hostWebSocketDispatch(JSON.stringify({
+        commands: commands.map((item) => globalThis.__vhttpd_normalize_websocket_command(item, {}))
+      }));
+      if (rawResult === undefined || rawResult === null || rawResult === "") {
+        return fallbackValue;
+      }
+      try {
+        return JSON.parse(String(rawResult));
+      } catch (_) {
+        return fallbackValue;
+      }
     }
-  } catch (_) {
-    runtime = runtimeMeta && typeof runtimeMeta === "object" ? runtimeMeta : {};
-  }
+  };
   const frame = {
     mode: typeof raw.mode === "string" && raw.mode ? raw.mode : "websocket_dispatch",
     event: typeof raw.event === "string" && raw.event ? raw.event : "message",
@@ -2180,6 +2324,65 @@ globalThis.__vhttpd_bind_handler = function(exportsValue) {
   }
   return handler;
 };
+globalThis.__vhttpd_wrap_handler = function(kind, handler) {
+  if (typeof handler !== "function") {
+    return handler;
+  }
+  if (kind !== "websocket" && kind !== "websocket_upstream") {
+    return handler;
+  }
+  return function(...args) {
+    try {
+      return handler(...args);
+    } catch (error) {
+      const rendered = error && typeof error === "object" && typeof error.stack === "string" && error.stack
+        ? error.stack
+        : error && typeof error === "object" && typeof error.message === "string" && error.message
+          ? error.message
+          : String(error);
+      if (typeof console !== "undefined" && console && typeof console.error === "function") {
+        console.error("[vhttpd] " + kind + " handler error", rendered);
+      }
+      throw error;
+    }
+  };
+};
+globalThis.__vhttpd_invoke_wrapped_handler = function(kind, handler, arg) {
+  if (typeof handler !== "function") {
+    throw new TypeError("handler is not a function");
+  }
+  try {
+    const result = handler(arg);
+    if (result && typeof result.then === "function") {
+      return Promise.resolve(result).catch((error) => {
+        const rendered = error && typeof error === "object" && typeof error.stack === "string" && error.stack
+          ? error.stack
+          : error && typeof error === "object" && typeof error.message === "string" && error.message
+            ? error.message
+            : String(error);
+        if (typeof console !== "undefined" && console && typeof console.error === "function") {
+          console.error("[vhttpd] " + kind + " handler error", rendered);
+        }
+        throw error;
+      });
+    }
+    return result;
+  } catch (error) {
+    const rendered = error && typeof error === "object" && typeof error.stack === "string" && error.stack
+      ? error.stack
+      : error && typeof error === "object" && typeof error.message === "string" && error.message
+        ? error.message
+        : String(error);
+    if (typeof console !== "undefined" && console && typeof console.error === "function") {
+      console.error("[vhttpd] " + kind + " handler error", rendered);
+    }
+    throw error;
+  }
+};
+globalThis.__vhttpd_invoke_websocket_handle = function(frame) {
+  const handler = globalThis.__vhttpd_websocket_handle;
+  return globalThis.__vhttpd_invoke_wrapped_handler("websocket", handler, frame);
+};
 globalThis.__vhttpd_bind_handlers = function(exportsValue) {
   const httpHandler = globalThis.__vhttpd_resolve_handler_for_kind(exportsValue, "http");
   const websocketHandler = globalThis.__vhttpd_resolve_handler_for_kind(exportsValue, "websocket");
@@ -2190,10 +2393,10 @@ globalThis.__vhttpd_bind_handlers = function(exportsValue) {
     globalThis.__vhttpd_handle = httpHandler;
   }
   if (typeof websocketHandler === "function") {
-    globalThis.__vhttpd_websocket_handle = websocketHandler;
+    globalThis.__vhttpd_websocket_handle = globalThis.__vhttpd_wrap_handler("websocket", websocketHandler);
   }
   if (typeof websocketUpstreamHandler === "function") {
-    globalThis.__vhttpd_websocket_upstream_handle = websocketUpstreamHandler;
+    globalThis.__vhttpd_websocket_upstream_handle = globalThis.__vhttpd_wrap_handler("websocket_upstream", websocketUpstreamHandler);
   }
   if (typeof startupHandler === "function") {
     globalThis.__vhttpd_startup_handle = startupHandler;
@@ -3043,6 +3246,32 @@ fn (e InProcVjsxExecutor) ensure_lane_host(idx int) ! {
 			os.rmdir_all(temp_root) or {}
 			return error('inproc_vjsx_executor_missing_handler')
 		}
+		bind_handlers := ctx.js_global('__vhttpd_bind_handlers')
+		defer {
+			bind_handlers.free()
+		}
+		if !bind_handlers.is_undefined() && bind_handlers.is_function() {
+			entry_exports := module_binding_value.namespace() or {
+				mut cleanup_binding := module_binding_value
+				cleanup_binding.close()
+				session.close()
+				os.rmdir_all(temp_root) or {}
+				return error('inproc_vjsx_executor_module_namespace_failed:${err.msg()}')
+			}
+			defer {
+				entry_exports.free()
+			}
+			mut bound := ctx.call(bind_handlers, entry_exports) or {
+				mut cleanup_binding := module_binding_value
+				cleanup_binding.close()
+				session.close()
+				os.rmdir_all(temp_root) or {}
+				return error('inproc_vjsx_executor_export_bind_failed:${err.msg()}')
+			}
+			defer {
+				bound.free()
+			}
+		}
 		mut module_binding := module_binding_value
 		module_binding_ptr = &module_binding
 	} else {
@@ -3265,13 +3494,13 @@ fn websocket_request_scheme_from_frame(frame WorkerWebSocketFrame) string {
 	return 'ws'
 }
 
-fn (e InProcVjsxExecutor) build_websocket_runtime_payload(lane VjsxExecutionLane, frame WorkerWebSocketFrame) string {
+fn (e InProcVjsxExecutor) websocket_runtime_meta(lane VjsxExecutionLane, frame WorkerWebSocketFrame) InProcVjsxRuntimeMeta {
 	config := e.facade_snapshot().config
 	server := websocket_request_server_map(frame)
 	host := server['host'] or { '' }
 	port := server['port'] or { '' }
 	target := server['url'] or { frame.path }
-	return json.encode(InProcVjsxRuntimeMeta{
+	return InProcVjsxRuntimeMeta{
 		provider:                 e.provider()
 		executor:                 e.kind()
 		dispatch_kind:            'websocket'
@@ -3295,6 +3524,17 @@ fn (e InProcVjsxExecutor) build_websocket_runtime_payload(lane VjsxExecutionLane
 		request_server:           server
 		method:                   frame.event.to_upper()
 		path:                     frame.path
+	}
+}
+
+fn (e InProcVjsxExecutor) build_websocket_runtime_payload(lane VjsxExecutionLane, frame WorkerWebSocketFrame) string {
+	return json.encode(e.websocket_runtime_meta(lane, frame))
+}
+
+fn (e InProcVjsxExecutor) build_websocket_frame_bundle_payload(lane VjsxExecutionLane, frame WorkerWebSocketFrame) string {
+	return json.encode(InProcVjsxWebSocketFrameBundle{
+		raw: frame
+		runtime: e.websocket_runtime_meta(lane, frame)
 	})
 }
 
@@ -3310,6 +3550,229 @@ fn response_headers_from_js_value(val vjsx.Value) map[string]string {
 	return json.decode(map[string]string, raw) or {
 		map[string]string{}
 	}
+}
+
+fn websocket_js_value_from_json(ctx &vjsx.Context, raw string) vjsx.Value {
+	if raw.trim_space() == '' {
+		return ctx.js_object()
+	}
+	return ctx.json_parse(raw)
+}
+
+fn websocket_log_args(args []vjsx.Value) string {
+	mut parts := []string{cap: args.len}
+	for arg in args {
+		parts << arg.to_string()
+	}
+	return parts.join(' ')
+}
+
+fn build_websocket_js_runtime(ctx &vjsx.Context, runtime_meta InProcVjsxRuntimeMeta, runtime_config_json string, mut app App) vjsx.Value {
+	mut runtime := ctx.js_object()
+	mut capabilities := ctx.js_object()
+	capabilities.set('http', false)
+	capabilities.set('fetch', false)
+	capabilities.set('bridgeDispatch', false)
+	capabilities.set('websocketUpstream', false)
+	capabilities.set('websocketDispatch', true)
+	capabilities.set('fs', false)
+	capabilities.set('process', false)
+	capabilities.set('network', false)
+	runtime.set('provider', runtime_meta.provider)
+	runtime.set('executor', runtime_meta.executor)
+	runtime.set('dispatchKind', 'websocket')
+	runtime.set('laneId', runtime_meta.lane_id)
+	runtime.set('requestId', runtime_meta.request_id)
+	runtime.set('traceId', runtime_meta.trace_id)
+	runtime.set('appEntry', runtime_meta.app_entry)
+	runtime.set('moduleRoot', runtime_meta.module_root)
+	runtime.set('runtimeProfile', runtime_meta.runtime_profile)
+	runtime.set('threadCount', runtime_meta.thread_count)
+	runtime.set('capabilities', capabilities)
+	mut request := ctx.js_object()
+	request.set('id', runtime_meta.request_id)
+	request.set('traceId', runtime_meta.trace_id)
+	request.set('method', runtime_meta.method)
+	request.set('path', runtime_meta.path)
+	request.set('url', runtime_meta.path)
+	request.set('target', runtime_meta.request_target)
+	request.set('href', runtime_meta.request_target)
+	request.set('origin', '')
+	request.set('scheme', runtime_meta.request_scheme)
+	request.set('host', runtime_meta.request_host)
+	request.set('port', runtime_meta.request_port)
+	request.set('protocolVersion', runtime_meta.request_protocol_version)
+	request.set('remoteAddr', runtime_meta.request_remote_addr)
+	request.set('ip', runtime_meta.request_remote_addr)
+	request.set('server', websocket_js_value_from_json(ctx, json.encode(runtime_meta.request_server)))
+	runtime.set('request', request)
+	runtime.set('method', runtime_meta.method)
+	runtime.set('path', runtime_meta.path)
+	runtime.set('runtimeInitError', '')
+	runtime.set('now', ctx.js_function(fn [ctx] (args []vjsx.Value) vjsx.Value {
+		_ = args
+		return ctx.js_i64(time.now().unix_milli())
+	}))
+	runtime.set('log', ctx.js_function(fn [ctx, runtime_meta] (args []vjsx.Value) vjsx.Value {
+		println('[vhttpd] ${runtime_meta.lane_id} ${runtime_meta.request_id} ${runtime_meta.trace_id} ${websocket_log_args(args)}')
+		return ctx.js_undefined()
+	}))
+	runtime.set('warn', ctx.js_function(fn [ctx, runtime_meta] (args []vjsx.Value) vjsx.Value {
+		eprintln('[vhttpd] ${runtime_meta.lane_id} ${runtime_meta.request_id} ${runtime_meta.trace_id} ${websocket_log_args(args)}')
+		return ctx.js_undefined()
+	}))
+	runtime.set('error', ctx.js_function(fn [ctx, runtime_meta] (args []vjsx.Value) vjsx.Value {
+		eprintln('[vhttpd] ${runtime_meta.lane_id} ${runtime_meta.request_id} ${runtime_meta.trace_id} ${websocket_log_args(args)}')
+		return ctx.js_undefined()
+	}))
+	runtime.set('config', ctx.js_function(fn [ctx, runtime_config_json] (args []vjsx.Value) vjsx.Value {
+		path := if args.len > 0 { args[0].to_string().trim_space() } else { '' }
+		fallback := if args.len > 1 { args[1].dup_value() } else { ctx.js_undefined() }
+		raw := inproc_vjsx_config_lookup(runtime_config_json, path)
+		if raw.trim_space() == '' {
+			return fallback
+		}
+		return ctx.js_string(raw)
+	}))
+	runtime.set('getConfig', ctx.js_function(fn [ctx, runtime_config_json] (args []vjsx.Value) vjsx.Value {
+		path := if args.len > 0 { args[0].to_string().trim_space() } else { '' }
+		fallback := if args.len > 1 { args[1].dup_value() } else { ctx.js_undefined() }
+		raw := inproc_vjsx_config_lookup(runtime_config_json, path)
+		if raw.trim_space() == '' {
+			return fallback
+		}
+		return ctx.json_parse(raw)
+	}))
+	runtime.set('websocketDispatch', ctx.js_function(fn [ctx, mut app] (args []vjsx.Value) vjsx.Value {
+		fallback := if args.len > 1 { args[1].dup_value() } else { ctx.js_undefined() }
+		if args.len == 0 {
+			return fallback
+		}
+		raw := args[0].json_stringify().trim_space()
+		if raw == '' || raw == 'undefined' || raw == 'null' {
+			return fallback
+		}
+		req_raw := if raw.starts_with('[') {
+			'{"commands":${raw}}'
+		} else {
+			decoded := json.decode(InProcVjsxHostWebSocketDispatchRequest, raw) or {
+				InProcVjsxHostWebSocketDispatchRequest{}
+			}
+			if decoded.commands.len > 0 {
+				raw
+			} else {
+				'{"commands":[${raw}]}'
+			}
+		}
+		req := json.decode(InProcVjsxHostWebSocketDispatchRequest, req_raw) or {
+			return fallback
+		}
+		result := app.execute_websocket_dispatch_commands_result(req.commands)
+		response := if result.has_close {
+			InProcVjsxHostWebSocketDispatchResponse{
+				ok:              true
+				has_close:       true
+				close_code:      result.close_frame.code
+				close_reason:    result.close_frame.reason
+				close_target_id: if result.close_frame.target_id != '' { result.close_frame.target_id } else { result.close_frame.id }
+				failures:        result.failures
+			}
+		} else {
+			InProcVjsxHostWebSocketDispatchResponse{
+				ok:       true
+				failures: result.failures
+			}
+		}
+		return ctx.json_parse(json.encode(response))
+	}))
+	return runtime
+}
+
+fn build_websocket_js_frame(ctx &vjsx.Context, frame WorkerWebSocketFrame, runtime vjsx.Value) vjsx.Value {
+	mut js_frame := ctx.js_object()
+	js_frame.set('mode', if frame.mode != '' { frame.mode } else { 'websocket_dispatch' })
+	js_frame.set('event', if frame.event != '' { frame.event } else { 'message' })
+	js_frame.set('id', frame.id)
+	js_frame.set('path', frame.path)
+	js_frame.set('query', websocket_js_value_from_json(ctx, json.encode(frame.query)))
+	js_frame.set('headers', websocket_js_value_from_json(ctx, json.encode(frame.headers)))
+	js_frame.set('remoteAddr', frame.remote_addr)
+	js_frame.set('requestId', frame.request_id)
+	js_frame.set('traceId', frame.trace_id)
+	js_frame.set('targetId', frame.target_id)
+	js_frame.set('room', frame.room)
+	js_frame.set('key', frame.key)
+	js_frame.set('value', frame.value)
+	js_frame.set('exceptId', frame.except_id)
+	js_frame.set('rooms', websocket_js_value_from_json(ctx, json.encode(frame.rooms)))
+	js_frame.set('metadata', websocket_js_value_from_json(ctx, json.encode(frame.metadata)))
+	js_frame.set('roomMembers', websocket_js_value_from_json(ctx, json.encode(frame.room_members)))
+	js_frame.set('memberMetadata', websocket_js_value_from_json(ctx, json.encode(frame.member_metadata)))
+	js_frame.set('roomCounts', websocket_js_value_from_json(ctx, json.encode(frame.room_counts)))
+	js_frame.set('presenceUsers', websocket_js_value_from_json(ctx, json.encode(frame.presence_users)))
+	js_frame.set('status', frame.status)
+	js_frame.set('code', frame.code)
+	js_frame.set('reason', frame.reason)
+	js_frame.set('opcode', frame.opcode)
+	js_frame.set('data', frame.data)
+	js_frame.set('error', frame.error)
+	js_frame.set('errorClass', frame.error_class)
+	js_frame.set('runtime', runtime)
+	js_frame.set('dataText', ctx.js_function_this(fn [ctx] (this vjsx.Value, args []vjsx.Value) vjsx.Value {
+		fallback := if args.len > 0 { args[0].dup_value() } else { ctx.js_undefined() }
+		opcode := this.get('opcode')
+		defer {
+			opcode.free()
+		}
+		if opcode.str() == 'binary' {
+			return fallback
+		}
+		data := this.get('data')
+		defer {
+			data.free()
+		}
+		if data.is_null() || data.is_undefined() || data.str() == '' {
+			return fallback
+		}
+		return ctx.js_string(data.str())
+	}))
+	js_frame.set('dataBase64', ctx.js_function_this(fn [ctx] (this vjsx.Value, args []vjsx.Value) vjsx.Value {
+		fallback := if args.len > 0 { args[0].dup_value() } else { ctx.js_undefined() }
+		opcode := this.get('opcode')
+		defer {
+			opcode.free()
+		}
+		if opcode.str() != 'binary' {
+			return fallback
+		}
+		data := this.get('data')
+		defer {
+			data.free()
+		}
+		if data.is_null() || data.is_undefined() || data.str() == '' {
+			return fallback
+		}
+		return ctx.js_string(data.str())
+	}))
+	js_frame.set('dataJson', ctx.js_function_this(fn [ctx] (this vjsx.Value, args []vjsx.Value) vjsx.Value {
+		fallback := if args.len > 0 { args[0].dup_value() } else { ctx.js_undefined() }
+		opcode := this.get('opcode')
+		defer {
+			opcode.free()
+		}
+		if opcode.str() == 'binary' {
+			return fallback
+		}
+		data := this.get('data')
+		defer {
+			data.free()
+		}
+		if data.is_null() || data.is_undefined() || data.str().trim_space() == '' {
+			return fallback
+		}
+		return ctx.json_parse(data.str())
+	}))
+	return js_frame
 }
 
 fn response_from_js_value(val vjsx.Value, req_id string) WorkerResponse {
@@ -4020,11 +4483,6 @@ fn (e InProcVjsxExecutor) dispatch_websocket_event_once(mut app App, frame Worke
 		e.record_lane_error(lane.id, 'inproc_vjsx_executor_lane_not_found')
 		return error('inproc_vjsx_executor_lane_not_found')
 	}
-	$if linux {
-		if frame.event == 'open' {
-			e.reset_lane_host(idx)
-		}
-	}
 	e.ensure_lane_host(idx) or {
 		e.record_lane_error(lane.id, err.msg())
 		return error(err.msg())
@@ -4047,75 +4505,39 @@ fn (e InProcVjsxExecutor) dispatch_websocket_event_once(mut app App, frame Worke
 	mut host := state.hosts[idx]
 	state.mu.unlock()
 	ctx := host.session.context()
-	frame_obj := ctx.json_parse(json.encode(frame))
+	runtime_meta := e.websocket_runtime_meta(lane, frame)
+	mut js_runtime := build_websocket_js_runtime(ctx, runtime_meta, app.runtime_config_json, mut app)
 	defer {
-		frame_obj.free()
+		js_runtime.free()
 	}
-	runtime_obj := ctx.json_parse(e.build_websocket_runtime_payload(lane, frame))
-	defer {
-		runtime_obj.free()
-	}
-	create_frame_fn := ctx.js_global('__vhttpd_create_websocket_frame')
-	defer {
-		create_frame_fn.free()
-	}
-	mut js_frame := ctx.call(create_frame_fn, frame_obj, runtime_obj) or {
-		err_msg := inproc_vjsx_normalize_error_message(err.msg(),
-			'inproc_vjsx_executor_websocket_frame_create_failed')
-		e.record_lane_soft_error(lane.id, err_msg)
-		return error('inproc_vjsx_executor_websocket_frame_create_failed:${err_msg}')
-	}
+	mut js_frame := build_websocket_js_frame(ctx, frame, js_runtime)
 	defer {
 		js_frame.free()
 	}
-	mut result := if host.is_module_entry && !isnil(host.module_binding) {
-		inproc_vjsx_call_module_entry(host.module_binding, 'websocket', js_frame) or {
-			if err.msg() != 'inproc_vjsx_executor_missing_websocket_handler' {
-				err_msg := inproc_vjsx_normalize_error_message(err.msg(),
-					'inproc_vjsx_executor_websocket_handler_failed')
-				e.record_lane_soft_error(lane.id, err_msg)
-				return error('inproc_vjsx_executor_websocket_handler_failed:${err_msg}')
-			}
-			inproc_vjsx_call_global_entry(ctx, 'websocket', js_frame) or {
-				if err.msg() == 'inproc_vjsx_executor_missing_websocket_handler' {
-					e.record_lane_success(lane.id)
-					return WorkerWebSocketDispatchResponse{
-						mode:     'websocket_dispatch'
-						event:    'result'
-						id:       frame.id
-						accepted: false
-						closed:   false
-						commands: []WorkerWebSocketFrame{}
-					}
-				}
-				err_msg := inproc_vjsx_normalize_error_message(err.msg(),
-					'inproc_vjsx_executor_websocket_handler_failed')
-				e.record_lane_soft_error(lane.id, err_msg)
-				return error('inproc_vjsx_executor_websocket_handler_failed:${err_msg}')
-			}
+	handler := ctx.js_global('__vhttpd_websocket_handle')
+	defer {
+		handler.free()
+	}
+	if handler.is_undefined() || !handler.is_function() {
+		e.record_lane_success(lane.id)
+		return WorkerWebSocketDispatchResponse{
+			mode:     'websocket_dispatch'
+			event:    'result'
+			id:       frame.id
+			accepted: false
+			closed:   false
+			commands: []WorkerWebSocketFrame{}
 		}
-	} else {
-		handler := ctx.js_global('__vhttpd_websocket_handle')
-		defer {
-			handler.free()
-		}
-		if handler.is_undefined() || !handler.is_function() {
-			e.record_lane_success(lane.id)
-			return WorkerWebSocketDispatchResponse{
-				mode:     'websocket_dispatch'
-				event:    'result'
-				id:       frame.id
-				accepted: false
-				closed:   false
-				commands: []WorkerWebSocketFrame{}
-			}
-		}
-		ctx.call(handler, js_frame) or {
-			err_msg := inproc_vjsx_normalize_error_message(err.msg(),
-				'inproc_vjsx_executor_websocket_handler_failed')
-			e.record_lane_soft_error(lane.id, err_msg)
-			return error('inproc_vjsx_executor_websocket_handler_failed:${err_msg}')
-		}
+	}
+	invoke_handler := ctx.js_global('__vhttpd_invoke_websocket_handle')
+	defer {
+		invoke_handler.free()
+	}
+	mut result := ctx.call(invoke_handler, js_frame) or {
+		err_msg := inproc_vjsx_context_error_message(ctx, err.msg(),
+			'inproc_vjsx_executor_websocket_handler_failed')
+		e.record_lane_soft_error(lane.id, err_msg)
+		return error('inproc_vjsx_executor_websocket_handler_failed:${err_msg}')
 	}
 	defer {
 		result.free()
