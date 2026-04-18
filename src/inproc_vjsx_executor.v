@@ -235,6 +235,11 @@ struct InProcVjsxRuntimeMeta {
 	path                     string
 }
 
+struct InProcVjsxWebSocketFrameBundle {
+	raw     WorkerWebSocketFrame
+	runtime InProcVjsxRuntimeMeta
+}
+
 struct InProcVjsxRequestContext {
 mut:
 	active     bool
@@ -1979,9 +1984,10 @@ globalThis.__vhttpd_create_websocket_upstream_frame = function(raw, runtime) {
   };
   return Object.freeze(frame);
 };
-globalThis.__vhttpd_create_websocket_frame = function(raw, runtimeMeta) {
-  raw = raw && typeof raw === "object" ? raw : {};
-  const meta = runtimeMeta && typeof runtimeMeta === "object" ? runtimeMeta : {};
+globalThis.__vhttpd_create_websocket_frame = function(bundle) {
+  bundle = bundle && typeof bundle === "object" ? bundle : {};
+  const raw = bundle.raw && typeof bundle.raw === "object" ? bundle.raw : {};
+  const meta = bundle.runtime && typeof bundle.runtime === "object" ? bundle.runtime : {};
   const hostApi = globalThis.vhttpdHost && typeof globalThis.vhttpdHost === "object" ? globalThis.vhttpdHost : undefined;
   const hostConfig = hostApi && typeof hostApi.config === "function"
     ? (...args) => hostApi.config(...args)
@@ -3390,13 +3396,13 @@ fn websocket_request_scheme_from_frame(frame WorkerWebSocketFrame) string {
 	return 'ws'
 }
 
-fn (e InProcVjsxExecutor) build_websocket_runtime_payload(lane VjsxExecutionLane, frame WorkerWebSocketFrame) string {
+fn (e InProcVjsxExecutor) websocket_runtime_meta(lane VjsxExecutionLane, frame WorkerWebSocketFrame) InProcVjsxRuntimeMeta {
 	config := e.facade_snapshot().config
 	server := websocket_request_server_map(frame)
 	host := server['host'] or { '' }
 	port := server['port'] or { '' }
 	target := server['url'] or { frame.path }
-	return json.encode(InProcVjsxRuntimeMeta{
+	return InProcVjsxRuntimeMeta{
 		provider:                 e.provider()
 		executor:                 e.kind()
 		dispatch_kind:            'websocket'
@@ -3420,6 +3426,17 @@ fn (e InProcVjsxExecutor) build_websocket_runtime_payload(lane VjsxExecutionLane
 		request_server:           server
 		method:                   frame.event.to_upper()
 		path:                     frame.path
+	}
+}
+
+fn (e InProcVjsxExecutor) build_websocket_runtime_payload(lane VjsxExecutionLane, frame WorkerWebSocketFrame) string {
+	return json.encode(e.websocket_runtime_meta(lane, frame))
+}
+
+fn (e InProcVjsxExecutor) build_websocket_frame_bundle_payload(lane VjsxExecutionLane, frame WorkerWebSocketFrame) string {
+	return json.encode(InProcVjsxWebSocketFrameBundle{
+		raw: frame
+		runtime: e.websocket_runtime_meta(lane, frame)
 	})
 }
 
@@ -4167,19 +4184,15 @@ fn (e InProcVjsxExecutor) dispatch_websocket_event_once(mut app App, frame Worke
 	mut host := state.hosts[idx]
 	state.mu.unlock()
 	ctx := host.session.context()
-	frame_obj := ctx.json_parse(json.encode(frame))
+	bundle_obj := ctx.json_parse(e.build_websocket_frame_bundle_payload(lane, frame))
 	defer {
-		frame_obj.free()
-	}
-	runtime_obj := ctx.json_parse(e.build_websocket_runtime_payload(lane, frame))
-	defer {
-		runtime_obj.free()
+		bundle_obj.free()
 	}
 	create_frame_fn := ctx.js_global('__vhttpd_create_websocket_frame')
 	defer {
 		create_frame_fn.free()
 	}
-	mut js_frame := ctx.call(create_frame_fn, frame_obj, runtime_obj) or {
+	mut js_frame := ctx.call(create_frame_fn, bundle_obj) or {
 		err_msg := inproc_vjsx_normalize_error_message(err.msg(),
 			'inproc_vjsx_executor_websocket_frame_create_failed')
 		e.record_lane_soft_error(lane.id, err_msg)
