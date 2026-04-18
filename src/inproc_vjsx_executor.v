@@ -1981,14 +1981,139 @@ globalThis.__vhttpd_create_websocket_upstream_frame = function(raw, runtime) {
 };
 globalThis.__vhttpd_create_websocket_frame = function(raw, runtimeMeta) {
   raw = raw && typeof raw === "object" ? raw : {};
-  let runtime = runtimeMeta && typeof runtimeMeta === "object" ? runtimeMeta : {};
-  try {
-    if (typeof globalThis.__vhttpd_create_websocket_runtime === "function") {
-      runtime = globalThis.__vhttpd_create_websocket_runtime(runtimeMeta);
+  const meta = runtimeMeta && typeof runtimeMeta === "object" ? runtimeMeta : {};
+  const hostApi = globalThis.vhttpdHost && typeof globalThis.vhttpdHost === "object" ? globalThis.vhttpdHost : undefined;
+  const hostConfig = hostApi && typeof hostApi.config === "function"
+    ? (...args) => hostApi.config(...args)
+    : undefined;
+  const hostWebSocketDispatch = hostApi && typeof hostApi.websocketDispatch === "function"
+    ? (...args) => hostApi.websocketDispatch(...args)
+    : undefined;
+  const requestPath = typeof meta.path === "string" ? meta.path : "";
+  const requestTarget = typeof meta.requestTarget === "string" && meta.requestTarget ? meta.requestTarget : requestPath;
+  const requestScheme = typeof meta.requestScheme === "string" && meta.requestScheme ? meta.requestScheme : "ws";
+  const requestHost = typeof meta.requestHost === "string" ? meta.requestHost : "";
+  const requestPort = typeof meta.requestPort === "string" ? meta.requestPort : "";
+  const requestOrigin = requestHost ? requestScheme + "://" + requestHost + (requestPort ? ":" + requestPort : "") : "";
+  const requestHref = requestOrigin ? requestOrigin + requestTarget : requestTarget;
+  const runtime = {
+    provider: typeof meta.provider === "string" ? meta.provider : "",
+    executor: typeof meta.executor === "string" ? meta.executor : "",
+    dispatchKind: "websocket",
+    laneId: typeof meta.laneId === "string" ? meta.laneId : "",
+    requestId: typeof meta.requestId === "string" ? meta.requestId : "",
+    traceId: typeof meta.traceId === "string" ? meta.traceId : "",
+    appEntry: typeof meta.appEntry === "string" ? meta.appEntry : "",
+    moduleRoot: typeof meta.moduleRoot === "string" ? meta.moduleRoot : "",
+    runtimeProfile: typeof meta.runtimeProfile === "string" ? meta.runtimeProfile : "",
+    threadCount: typeof meta.threadCount === "number" ? meta.threadCount : 0,
+    capabilities: {
+      http: false,
+      stream: false,
+      websocket: true,
+      websocketUpstream: false,
+      websocketDispatch: typeof hostWebSocketDispatch === "function",
+      fs: !!meta.enableFs,
+      process: !!meta.enableProcess,
+      network: !!meta.enableNetwork
+    },
+    request: {
+      id: typeof meta.requestId === "string" ? meta.requestId : "",
+      traceId: typeof meta.traceId === "string" ? meta.traceId : "",
+      method: typeof meta.method === "string" ? meta.method : "",
+      path: requestPath,
+      url: requestPath,
+      target: requestTarget,
+      href: requestHref,
+      origin: requestOrigin,
+      scheme: requestScheme,
+      host: requestHost,
+      port: requestPort,
+      protocolVersion: typeof meta.requestProtocolVersion === "string" ? meta.requestProtocolVersion : "",
+      remoteAddr: typeof meta.requestRemoteAddr === "string" ? meta.requestRemoteAddr : "",
+      ip: typeof meta.requestRemoteAddr === "string" ? meta.requestRemoteAddr : "",
+      server: meta.requestServer && typeof meta.requestServer === "object" ? meta.requestServer : {}
+    },
+    method: typeof meta.method === "string" ? meta.method : "",
+    path: requestPath,
+    now() {
+      return Date.now();
+    },
+    log(...args) {
+      if (typeof console !== "undefined" && console && typeof console.log === "function") {
+        console.log("[vhttpd]", this.laneId, this.requestId || "", this.traceId || "", ...args);
+      }
+    },
+    warn(...args) {
+      if (typeof console !== "undefined" && console && typeof console.warn === "function") {
+        console.warn("[vhttpd]", this.laneId, this.requestId || "", this.traceId || "", ...args);
+      } else {
+        this.log(...args);
+      }
+    },
+    error(...args) {
+      if (typeof console !== "undefined" && console && typeof console.error === "function") {
+        console.error("[vhttpd]", this.laneId, this.requestId || "", this.traceId || "", ...args);
+      } else {
+        this.log(...args);
+      }
+    },
+    config(fallbackValue = undefined) {
+      if (typeof hostConfig !== "function") {
+        return fallbackValue;
+      }
+      const rawConfig = hostConfig("");
+      if (rawConfig === undefined || rawConfig === null || rawConfig === "") {
+        return fallbackValue;
+      }
+      try {
+        return JSON.parse(String(rawConfig));
+      } catch (_) {
+        return fallbackValue;
+      }
+    },
+    getConfig(path, fallbackValue = undefined) {
+      if (typeof hostConfig !== "function") {
+        return fallbackValue;
+      }
+      const key = path == null ? "" : String(path);
+      const rawConfig = hostConfig(key);
+      if (rawConfig === undefined || rawConfig === null || rawConfig === "") {
+        return fallbackValue;
+      }
+      try {
+        return JSON.parse(String(rawConfig));
+      } catch (_) {
+        return fallbackValue;
+      }
+    },
+    websocketDispatch(input, fallbackValue = undefined) {
+      if (typeof hostWebSocketDispatch !== "function") {
+        return fallbackValue;
+      }
+      let commands = [];
+      if (Array.isArray(input)) {
+        commands = input;
+      } else if (input && typeof input === "object") {
+        if (Array.isArray(input.commands)) {
+          commands = input.commands;
+        } else {
+          commands = [input];
+        }
+      }
+      const rawResult = hostWebSocketDispatch(JSON.stringify({
+        commands: commands.map((item) => globalThis.__vhttpd_normalize_websocket_command(item, {}))
+      }));
+      if (rawResult === undefined || rawResult === null || rawResult === "") {
+        return fallbackValue;
+      }
+      try {
+        return JSON.parse(String(rawResult));
+      } catch (_) {
+        return fallbackValue;
+      }
     }
-  } catch (_) {
-    runtime = runtimeMeta && typeof runtimeMeta === "object" ? runtimeMeta : {};
-  }
+  };
   const frame = {
     mode: typeof raw.mode === "string" && raw.mode ? raw.mode : "websocket_dispatch",
     event: typeof raw.event === "string" && raw.event ? raw.event : "message",
