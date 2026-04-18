@@ -841,38 +841,6 @@ fn proxy_worker_websocket_dispatch(mut app App, mut ctx Context, method string, 
 	normalized_path, query_string := normalize_request_target(path)
 	query := parse_query_map(query_string)
 	headers := header_map_from_request(ctx.req)
-	open_frame := app.kernel_websocket_dispatch_frame('open', method, normalized_path,
-		query, headers, remote_addr, req_id, trace_id, '', '', 0, '', app.ws_hub_rooms_snapshot(req_id),
-		app.ws_hub_meta_snapshot(req_id), map[string][]string{}, map[string]map[string]string{},
-		map[string]int{}, map[string][]string{})
-	resp := app.kernel_dispatch_websocket_event(open_frame) or {
-		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-		ctx.set_custom_header('x-vhttpd-error-class', 'transport_error') or {}
-		ctx.res.set_status(http.status_from_int(502))
-		return ctx.text('Bad Gateway')
-	}
-	if resp.event == 'error' {
-		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-		ctx.set_custom_header('x-vhttpd-error-class', if resp.error_class != '' {
-			resp.error_class
-		} else {
-			'worker_runtime_error'
-		}) or {}
-		ctx.res.set_status(http.status_from_int(500))
-		return ctx.text('WebSocket open failed')
-	}
-	if close_frame := app.execute_websocket_dispatch_commands(resp.commands) {
-		status := if close_frame.status > 0 { close_frame.status } else { 403 }
-		body := if close_frame.reason != '' { close_frame.reason } else { 'Forbidden' }
-		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-		ctx.res.set_status(http.status_from_int(status))
-		return ctx.text(body)
-	}
-	if !resp.accepted {
-		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-		ctx.res.set_status(http.status_from_int(403))
-		return ctx.text('Forbidden')
-	}
 	ctx.takeover_conn()
 	ctx.conn.set_write_timeout(time.infinite)
 	ctx.conn.set_read_timeout(time.infinite)
@@ -966,10 +934,33 @@ fn handle_worker_websocket_dispatch_session(mut app App, mut client_conn net.Tcp
 		trace_id:    trace_id
 		start_ms:    start_ms
 	}
-	ws_server.on_connect(fn [mut app, state] (mut sc websocket.ServerClient) !bool {
-		app.ws_hub_register_conn(state.conn_id, '', state.method, state.request_id, state.trace_id,
-			state.path, state.query, state.headers, state.remote_addr, sc.client)
-		spawn delayed_ws_hub_flush(mut app, state.conn_id)
+	conn_id := state.conn_id
+	conn_method := state.method
+	conn_path := state.path
+	conn_query := state.query.clone()
+	conn_headers := state.headers.clone()
+	conn_remote_addr := state.remote_addr
+	conn_request_id := state.request_id
+	conn_trace_id := state.trace_id
+	ws_server.on_connect(fn [mut app, conn_id, conn_method, conn_path, conn_query, conn_headers, conn_remote_addr, conn_request_id, conn_trace_id] (mut sc websocket.ServerClient) !bool {
+		open_frame := app.kernel_websocket_dispatch_frame('open', conn_method, conn_path,
+			conn_query, conn_headers, conn_remote_addr, conn_request_id, conn_trace_id, '',
+			'', 0, '', app.ws_hub_rooms_snapshot(conn_id),
+			app.ws_hub_meta_snapshot(conn_id), map[string][]string{},
+			map[string]map[string]string{}, map[string]int{}, map[string][]string{})
+		resp := app.kernel_dispatch_websocket_event(open_frame) or {
+			return false
+		}
+		if resp.event == 'error' || !resp.accepted {
+			return false
+		}
+		app.ws_hub_register_conn(conn_id, '', conn_method, conn_request_id, conn_trace_id,
+			conn_path, conn_query, conn_headers, conn_remote_addr, sc.client)
+		if app.execute_websocket_dispatch_commands(resp.commands) != none {
+			app.ws_hub_unregister_conn(conn_id)
+			return false
+		}
+		spawn delayed_ws_hub_flush(mut app, conn_id)
 		return true
 	}) or {}
 	ws_server.on_message_ref(worker_websocket_dispatch_message_cb, state)
