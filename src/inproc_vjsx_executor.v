@@ -802,8 +802,21 @@ fn inproc_vjsx_should_retry_dispatch(err_msg string) bool {
 
 fn inproc_vjsx_normalize_error_message(err_msg string, fallback string) string {
 	normalized := err_msg.trim_space()
+	if normalized != '' && normalized != '{}' {
+		return normalized
+	}
+	return fallback
+}
+
+fn inproc_vjsx_context_error_message(ctx &vjsx.Context, err_msg string, fallback string) string {
+	normalized := inproc_vjsx_normalize_error_message(err_msg, '')
 	if normalized != '' {
 		return normalized
+	}
+	js_err := ctx.js_exception()
+	js_msg := js_err.msg().trim_space()
+	if js_msg != '' {
+		return js_msg
 	}
 	return fallback
 }
@@ -4419,7 +4432,7 @@ fn (e InProcVjsxExecutor) dispatch_websocket_event_once(mut app App, frame Worke
 	mut result := if host.is_module_entry && !isnil(host.module_binding) {
 		inproc_vjsx_call_module_entry(host.module_binding, 'websocket', js_frame) or {
 			if err.msg() != 'inproc_vjsx_executor_missing_websocket_handler' {
-				err_msg := inproc_vjsx_normalize_error_message(err.msg(),
+				err_msg := inproc_vjsx_context_error_message(ctx, err.msg(),
 					'inproc_vjsx_executor_websocket_handler_failed')
 				e.record_lane_soft_error(lane.id, err_msg)
 				return error('inproc_vjsx_executor_websocket_handler_failed:${err_msg}')
@@ -4436,7 +4449,7 @@ fn (e InProcVjsxExecutor) dispatch_websocket_event_once(mut app App, frame Worke
 						commands: []WorkerWebSocketFrame{}
 					}
 				}
-				err_msg := inproc_vjsx_normalize_error_message(err.msg(),
+				err_msg := inproc_vjsx_context_error_message(ctx, err.msg(),
 					'inproc_vjsx_executor_websocket_handler_failed')
 				e.record_lane_soft_error(lane.id, err_msg)
 				return error('inproc_vjsx_executor_websocket_handler_failed:${err_msg}')
@@ -4459,7 +4472,7 @@ fn (e InProcVjsxExecutor) dispatch_websocket_event_once(mut app App, frame Worke
 			}
 		}
 		ctx.call(handler, js_frame) or {
-			err_msg := inproc_vjsx_normalize_error_message(err.msg(),
+			err_msg := inproc_vjsx_context_error_message(ctx, err.msg(),
 				'inproc_vjsx_executor_websocket_handler_failed')
 			e.record_lane_soft_error(lane.id, err_msg)
 			return error('inproc_vjsx_executor_websocket_handler_failed:${err_msg}')
