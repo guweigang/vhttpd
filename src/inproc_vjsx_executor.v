@@ -2799,11 +2799,26 @@ globalThis.__vhttpd_normalize_websocket_upstream_result = function(frame, result
     }
   };
 };
-') or {
+	') or {
 		eprintln('[vhttpd] ERROR: js_bootstrap eval failed: ${err.msg()}')
 		return err
 	}
 	defer { eval_res.free() }
+
+	unsafe {
+		// Probe 1: String
+		s_res := ctx.eval('"hello"') or { ctx.js_undefined() }
+		ps := &u8(&s_res.ref)
+		eprintln('[vhttpd] DEBUG: probe_type=string val="hello" tag=${s_res.ref.tag} bytes=${ps[0].hex()}${ps[1].hex()}${ps[2].hex()}${ps[3].hex()}${ps[4].hex()}${ps[5].hex()}${ps[6].hex()}${ps[7].hex()} | ${ps[8].hex()}${ps[9].hex()}${ps[10].hex()}${ps[11].hex()}${ps[12].hex()}${ps[13].hex()}${ps[14].hex()}${ps[15].hex()}')
+		s_res.free()
+		
+		// Probe 2: Bool
+		b_res := ctx.eval('true') or { ctx.js_undefined() }
+		pb := &u8(&b_res.ref)
+		eprintln('[vhttpd] DEBUG: probe_type=bool val=true tag=${b_res.ref.tag} bytes=${pb[0].hex()}${pb[1].hex()}${pb[2].hex()}${pb[3].hex()}${pb[4].hex()}${pb[5].hex()}${pb[6].hex()}${pb[7].hex()} | ${pb[8].hex()}${pb[9].hex()}${pb[10].hex()}${pb[11].hex()}${pb[12].hex()}${pb[13].hex()}${pb[14].hex()}${pb[15].hex()}')
+		b_res.free()
+	}
+
 	eprintln('[vhttpd] DEBUG: js_bootstrap eval success, res_tag=${eval_res.ref.tag.hex()}')
 	ctx.end()
 }
@@ -4980,13 +4995,43 @@ fn (e InProcVjsxExecutor) dispatch_websocket_event_on_lane(mut app App, frame Wo
 	defer { invoke_handler.free() }
 	
 	unsafe {
-		p := &u8(&invoke_handler.ref)
-		eprintln('[vhttpd] DEBUG: phase=resolve_invoker name=__vhttpd_invoke_websocket_handle is_fn=${invoke_handler.is_function()} raw_bytes=${p[0].hex()}${p[1].hex()}${p[2].hex()}${p[3].hex()}${p[4].hex()}${p[5].hex()}${p[6].hex()}${p[7].hex()} | ${p[8].hex()}${p[9].hex()}${p[10].hex()}${p[11].hex()}${p[12].hex()}${p[13].hex()}${p[14].hex()}${p[15].hex()}')
+		eprintln('[vhttpd] DEBUG: --- START FULL ABI DIAGNOSTIC ---')
 		
-		int_val := ctx.js_int(123)
-		pi := &u8(&int_val.ref)
-		eprintln('[vhttpd] DEBUG: phase=abi_probe_int val=123 raw_bytes=${pi[0].hex()}${pi[1].hex()}${pi[2].hex()}${pi[3].hex()}${pi[4].hex()}${pi[5].hex()}${pi[6].hex()}${pi[7].hex()} | ${pi[8].hex()}${pi[9].hex()}${pi[10].hex()}${pi[11].hex()}${pi[12].hex()}${pi[13].hex()}${pi[14].hex()}${pi[15].hex()}')
-		int_val.free()
+		// 1. Resolve invoker bytes
+		pi := &u8(&invoke_handler.ref)
+		eprintln('[vhttpd] DEBUG: diag=invoker_obj is_fn=${invoke_handler.is_function()} bytes=${pi[0].hex()}${pi[1].hex()}${pi[2].hex()}${pi[3].hex()}${pi[4].hex()}${pi[5].hex()}${pi[6].hex()}${pi[7].hex()} | ${pi[8].hex()}${pi[9].hex()}${pi[10].hex()}${pi[11].hex()}${pi[12].hex()}${pi[13].hex()}${pi[14].hex()}${pi[15].hex()}')
+
+		// 2. Int 123
+		v_int := ctx.js_int(123)
+		p_int := &u8(&v_int.ref)
+		eprintln('[vhttpd] DEBUG: diag=int(123) tag=${v_int.ref.tag} bytes=${p_int[0].hex()}${p_int[1].hex()}${p_int[2].hex()}${p_int[3].hex()}${p_int[4].hex()}${p_int[5].hex()}${p_int[6].hex()}${p_int[7].hex()} | ${p_int[8].hex()}${p_int[9].hex()}${p_int[10].hex()}${p_int[11].hex()}${p_int[12].hex()}${p_int[13].hex()}${p_int[14].hex()}${p_int[15].hex()}')
+		v_int.free()
+
+		// 3. String "hello"
+		v_str := ctx.js_string('hello')
+		p_str := &u8(&v_str.ref)
+		eprintln('[vhttpd] DEBUG: diag=string("hello") tag=${v_str.ref.tag} bytes=${p_str[0].hex()}${p_str[1].hex()}${p_str[2].hex()}${p_str[3].hex()}${p_str[4].hex()}${p_str[5].hex()}${p_str[6].hex()}${p_str[7].hex()} | ${p_str[8].hex()}${p_str[9].hex()}${p_str[10].hex()}${p_str[11].hex()}${p_str[12].hex()}${p_str[13].hex()}${p_str[14].hex()}${p_str[15].hex()}')
+		v_str.free()
+
+		// 4. Bool true
+		v_bool := ctx.js_bool(true)
+		p_bool := &u8(&v_bool.ref)
+		eprintln('[vhttpd] DEBUG: diag=bool(true) tag=${v_bool.ref.tag} bytes=${p_bool[0].hex()}${p_bool[1].hex()}${p_bool[2].hex()}${p_bool[3].hex()}${p_bool[4].hex()}${p_bool[5].hex()}${p_bool[6].hex()}${p_bool[7].hex()} | ${p_bool[8].hex()}${p_bool[9].hex()}${p_bool[10].hex()}${p_bool[11].hex()}${p_bool[12].hex()}${p_bool[13].hex()}${p_bool[14].hex()}${p_bool[15].hex()}')
+		v_bool.free()
+
+		// 5. Null
+		v_null := ctx.js_null()
+		p_null := &u8(&v_null.ref)
+		eprintln('[vhttpd] DEBUG: diag=null tag=${v_null.ref.tag} bytes=${p_null[0].hex()}${p_null[1].hex()}${p_null[2].hex()}${p_null[3].hex()}${p_null[4].hex()}${p_null[5].hex()}${p_null[6].hex()}${p_null[7].hex()} | ${p_null[8].hex()}${p_null[9].hex()}${p_null[10].hex()}${p_null[11].hex()}${p_null[12].hex()}${p_null[13].hex()}${p_null[14].hex()}${p_null[15].hex()}')
+		v_null.free()
+
+		// 6. Undefined
+		v_undef := ctx.js_undefined()
+		p_undef := &u8(&v_undef.ref)
+		eprintln('[vhttpd] DEBUG: diag=undefined tag=${v_undef.ref.tag} bytes=${p_undef[0].hex()}${p_undef[1].hex()}${p_undef[2].hex()}${p_undef[3].hex()}${p_undef[4].hex()}${p_undef[5].hex()}${p_undef[6].hex()}${p_undef[7].hex()} | ${p_undef[8].hex()}${p_undef[9].hex()}${p_undef[10].hex()}${p_undef[11].hex()}${p_undef[12].hex()}${p_undef[13].hex()}${p_undef[14].hex()}${p_undef[15].hex()}')
+		v_undef.free()
+
+		eprintln('[vhttpd] DEBUG: --- END FULL ABI DIAGNOSTIC ---')
 	}
 	
 	if !invoke_handler.is_function() {
