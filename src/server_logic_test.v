@@ -523,6 +523,88 @@ app = "\${paths.site_app}"
 	assert multi_cfg.listeners[0].site_cfg.vjsx.app_entry == app_file
 }
 
+fn test_resolve_multi_server_runtime_config_keeps_global_path_aliases_stable_when_site_root_is_set() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_site_root_global_paths_stable_test')
+	config_dir := os.join_path(temp_dir, 'config')
+	project_dir := os.join_path(temp_dir, 'project')
+	build_dir := os.join_path(temp_dir, 'tmp', 'vjsx-build')
+	os.mkdir_all(config_dir) or { panic(err) }
+	os.mkdir_all(project_dir) or { panic(err) }
+	os.mkdir_all(build_dir) or { panic(err) }
+	config_file := os.join_path(config_dir, 'vhttpd.toml')
+	app_file := os.join_path(project_dir, 'app.mts')
+	os.write_file(app_file, 'export default { async handle() { return { status: 200, body: "ok" }; } };') or {
+		panic(err)
+	}
+	os.write_file(config_file, '
+[paths]
+root = ".."
+vjsx_app = "project/app.mts"
+vjsx_build_root = "tmp/vjsx-build"
+
+[sites.demo]
+host = "127.0.0.1"
+port = 19885
+root = "project"
+executor = "vjsx"
+app = "\${paths.vjsx_app}"
+vjsx.build_root = "\${paths.vjsx_build_root}"
+') or {
+		panic(err)
+	}
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	cfg := load_vhttpd_config(['--config', config_file]) or { panic(err) }
+	multi_cfg := resolve_multi_server_runtime_config([]string{}, cfg) or { panic(err) }
+	assert multi_cfg.listeners.len == 1
+	assert multi_cfg.listeners[0].site_cfg.paths.root == project_dir
+	assert multi_cfg.listeners[0].site_cfg.vjsx.app_entry == app_file
+	assert multi_cfg.listeners[0].site_cfg.vjsx.module_root == project_dir
+	assert multi_cfg.listeners[0].site_cfg.vjsx.build_root == build_dir
+}
+
+fn test_resolve_multi_server_runtime_config_does_not_double_prefix_site_root_for_global_app_alias() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_site_root_double_prefix_test')
+	config_dir := os.join_path(temp_dir, 'config')
+	project_dir := os.join_path(temp_dir, 'examples', 'paseo-relay')
+	build_dir := os.join_path(temp_dir, 'tmp', 'paseo-relay-vjsx-build')
+	os.mkdir_all(config_dir) or { panic(err) }
+	os.mkdir_all(project_dir) or { panic(err) }
+	os.mkdir_all(build_dir) or { panic(err) }
+	config_file := os.join_path(config_dir, 'vhttpd.toml')
+	app_file := os.join_path(project_dir, 'app.mts')
+	os.write_file(app_file, 'export default { async handle() { return { status: 200, body: "ok" }; } };') or {
+		panic(err)
+	}
+	os.write_file(config_file, '
+[paths]
+root = ".."
+vjsx_app = "examples/paseo-relay/app.mts"
+vjsx_build_root = "tmp/paseo-relay-vjsx-build"
+
+[sites.paseo_relay]
+host = "127.0.0.1"
+port = 19901
+root = "examples/paseo-relay"
+executor = "vjsx"
+app = "\${paths.vjsx_app}"
+vjsx.build_root = "\${paths.vjsx_build_root}"
+') or {
+		panic(err)
+	}
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	cfg := load_vhttpd_config(['--config', config_file]) or { panic(err) }
+	multi_cfg := resolve_multi_server_runtime_config([]string{}, cfg) or { panic(err) }
+	assert multi_cfg.listeners.len == 1
+	assert multi_cfg.listeners[0].site_cfg.paths.root == project_dir
+	assert multi_cfg.listeners[0].site_cfg.vjsx.app_entry == app_file
+	assert multi_cfg.listeners[0].site_cfg.vjsx.module_root == project_dir
+	assert multi_cfg.listeners[0].site_cfg.vjsx.build_root == build_dir
+}
+
 fn test_site_config_as_vhttpd_config_defaults_vjsx_module_root_to_site_root() {
 	cfg := site_config_as_vhttpd_config(default_vhttpd_config(), SiteConfig{
 		project_root: '/tmp/site-root'
@@ -678,6 +760,61 @@ args = ["-d", "memory_limit=512M"]
 	assert cfg.php.args.len == 2
 	assert cfg.php.args[0] == '-d'
 	assert cfg.php.args[1] == 'memory_limit=512M'
+}
+
+fn test_load_vhttpd_config_expands_same_section_paths_short_reference() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_paths_same_section_short_reference_test')
+	config_dir := os.join_path(temp_dir, 'config')
+	os.mkdir_all(config_dir) or { panic(err) }
+	config_file := os.join_path(config_dir, 'vhttpd.toml')
+	expected_root := os.abs_path(temp_dir)
+	expected_app := os.join_path(expected_root, 'examples', 'paseo-relay', 'app.mts')
+	expected_build_root := os.join_path(expected_root, 'tmp', 'paseo-relay-vjsx-build')
+	os.write_file(config_file, '
+[paths]
+root = ".."
+vjsx_app = "\${root}/examples/paseo-relay/app.mts"
+vjsx_build_root = "\${root}/tmp/paseo-relay-vjsx-build"
+
+[executor]
+kind = "vjsx"
+
+[vjsx]
+app_entry = "\${paths.vjsx_app}"
+build_root = "\${paths.vjsx_build_root}"
+') or {
+		panic(err)
+	}
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	cfg := load_vhttpd_config(['--config', config_file]) or { panic(err) }
+	assert cfg.paths.root == expected_root
+	assert cfg.paths.values['vjsx_app'] == expected_app
+	assert cfg.paths.values['vjsx_build_root'] == expected_build_root
+	assert cfg.vjsx.app_entry == expected_app
+	assert cfg.vjsx.build_root == expected_build_root
+}
+
+fn test_load_vhttpd_config_prefers_same_section_variable_over_global_fallback() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_same_section_precedence_test')
+	config_dir := os.join_path(temp_dir, 'config')
+	os.mkdir_all(config_dir) or { panic(err) }
+	config_file := os.join_path(config_dir, 'vhttpd.toml')
+	expected_root := '/assets-prefix'
+	os.write_file(config_file, '
+[assets]
+prefix = "/assets-prefix"
+root = "\${prefix}"
+') or {
+		panic(err)
+	}
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	cfg := load_vhttpd_config(['--config', config_file]) or { panic(err) }
+	assert cfg.assets.prefix == expected_root
+	assert cfg.assets.root == expected_root
 }
 
 fn test_load_vhttpd_config_keeps_absolute_paths_outside_paths_root() {

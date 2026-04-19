@@ -20,7 +20,8 @@ For bot-style apps, a convenient TS entry shape is:
 1. `export default function http(ctx) {}`
 2. `export const websocket = (frame) => ({ accepted, commands })`
 3. `export const websocket_upstream = (frame) => ({ handled, commands })`
-4. `export default { http(ctx) {}, websocket(frame) {}, websocket_upstream(frame) {} }`
+4. `export const snapshot = (runtime) => ({ ... })`
+5. `export default { http(ctx) {}, websocket(frame) {}, websocket_upstream(frame) {}, snapshot(runtime) {} }`
 
 ## Runtime
 
@@ -47,7 +48,7 @@ Methods:
 - `runtime.warn(...args)`
 - `runtime.error(...args)`
 - `runtime.emit(kind, fields)`
-- `runtime.snapshot()`
+- `runtime.snapshot(input?, fallbackValue?)`
 - `runtime.readTextFile(path, fallbackValue?)`
 - `runtime.findCodexSessionPath(threadId, fallbackValue?)`
 - `runtime.httpFetch(input, fallbackValue?)`
@@ -190,6 +191,8 @@ Semantic helpers:
 - `ctx.target` preserves the full request target including query string when present.
 - `ctx.problem(...)` returns `application/problem+json; charset=utf-8`.
 - `runtime.snapshot()` is read-only and backed by `vhttpd` runtime/admin snapshot logic.
+- `runtime.snapshot({ scope: "all_lanes", kind: "app" })` aggregates the optional `snapshot(runtime)` hook across all embedded `vjsx` lanes and returns `{ scope, kind, currentLaneId, lanes: [{ laneId, available, snapshot, error }] }`.
+- `runtime.snapshot({ scope: "other_lanes", kind: "app" })` aggregates the optional `snapshot(runtime)` hook across every other embedded `vjsx` lane and is the safer choice from inside an active handler when the app already has direct access to its current-lane local state.
 - `runtime.websocketDispatch(...)` executes websocket hub commands from host-side async
   callbacks such as `setTimeout(...)`.
 - Current embedded `vjsx` scope is HTTP dispatch plus websocket event dispatch and `websocket_upstream` dispatch. Stream and MCP worker modes are not exposed through this facade.

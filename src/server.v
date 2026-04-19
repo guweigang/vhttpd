@@ -156,11 +156,14 @@ fn run_server(args []string) {
 		return
 	}
 	configure_runtime_timezone(cfg.runtime.timezone)
+	log.debug('[vhttpd] run_server: timezone configured')
 	os.signal_ignore(.pipe)
 	if config_uses_multi_listener(cfg) {
+		log.debug('[vhttpd] run_server: entering multi_server mode')
 		run_multi_server(args, cfg)
 		return
 	}
+	log.debug('[vhttpd] run_server: entering single_server mode')
 	run_single_server(args, cfg)
 }
 

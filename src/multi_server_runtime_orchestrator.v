@@ -21,15 +21,18 @@ fn build_multi_server_apps(runtime_cfg MultiServerRuntimeConfig) []MultiServerAp
 }
 
 fn run_multi_server(args []string, cfg VhttpdConfig) {
+	log.debug('[vhttpd] run_multi_server: resolving multi-server config')
 	runtime_cfg := resolve_multi_server_runtime_config(args, cfg) or {
 		log.error('multi server runtime config resolve failed: ${err}')
 		return
 	}
 	if runtime_cfg.single_mode {
+		log.debug('[vhttpd] run_multi_server: fallback to single mode')
 		run_single_server(args, cfg)
 		return
 	}
 	mut apps := build_multi_server_apps(runtime_cfg)
+	log.debug('[vhttpd] run_multi_server: apps built count=${apps.len}')
 	defer {
 		for mut binding in apps {
 			shutdown_app_runtime(mut binding.app, binding.listener.runtime_cfg)
@@ -40,6 +43,7 @@ fn run_multi_server(args []string, cfg VhttpdConfig) {
 		return
 	}
 	for mut binding in apps {
+		log.debug('[vhttpd] run_multi_server: starting app site=${binding.listener.site_id} listener=${binding.listener.id}')
 		start_server_runtime(mut binding.app, binding.listener.runtime_cfg)
 	}
 	for i in 0 .. apps.len - 1 {

@@ -1,0 +1,15 @@
+[paths]
+root = "../../"
+vjsx_app = "${root}/examples/ws-min/app.mts"
+
+[worker]
+websocket_dispatch = true
+
+[sites.ws_min]
+host = "127.0.0.1"
+port = 19091
+root = "${paths.root}/examples/ws-min"
+executor = "vjsx"
+app = "${paths.vjsx_app}"
+vjsx.runtime_profile = "node"
+vjsx.thread_count = 1

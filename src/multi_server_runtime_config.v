@@ -93,7 +93,8 @@ fn merge_executor_config(base ExecutorConfig, override ExecutorConfig, site_cfg 
 		cfg.kind = 'php'
 	} else if site_cfg.app.trim_space().to_lower().ends_with('.php') {
 		cfg.kind = 'php'
-	} else if site_cfg.vjsx.app_entry.trim_space() != '' || site_cfg.vjsx.module_root.trim_space() != ''
+	} else if site_cfg.vjsx.app_entry.trim_space() != ''
+		|| site_cfg.vjsx.module_root.trim_space() != ''
 		|| site_cfg.vjsx.build_root.trim_space() != '' {
 		cfg.kind = 'vjsx'
 	} else if site_cfg.app.trim_space() != '' {
@@ -318,8 +319,13 @@ fn site_config_as_vhttpd_config(global_cfg VhttpdConfig, site_cfg SiteConfig) Vh
 	cfg.sites = map[string]SiteConfig{}
 	cfg.paths = merge_paths_config(global_cfg.paths, site_cfg.paths)
 	if site_cfg.project_root.trim_space() != '' {
+		mut project_root := site_cfg.project_root
+		global_vars := build_config_variable_map(global_cfg)
+		env_map := map[string]string{}
+		project_root, _ = expand_config_string(project_root, '', global_vars, env_map,
+			false) or { site_cfg.project_root, false }
 		cfg.paths = PathsConfig{
-			root:   site_cfg.project_root
+			root:   project_root
 			values: cfg.paths.values.clone()
 		}
 	}
@@ -382,7 +388,7 @@ fn resolve_multi_server_runtime_config(args []string, cfg VhttpdConfig) !MultiSe
 	if !config_uses_multi_listener(cfg) {
 		return MultiServerRuntimeConfig{
 			single_mode: true
-			listeners: [
+			listeners:   [
 				ListenerRuntimeBinding{
 					id:          'default'
 					site_id:     'default'
@@ -426,8 +432,8 @@ fn resolve_multi_server_runtime_config(args []string, cfg VhttpdConfig) !MultiSe
 			resolve_config_variables(mut site_runtime_cfg, site_runtime_cfg.config_path)!
 		}
 		admin_enabled_override := listener_id == admin_owner_listener_id
-		runtime_cfg := resolve_server_runtime_config_for_target(args, site_runtime_cfg, listener_id,
-			site_id, listener_cfg.host, listener_cfg.port, admin_enabled_override)!
+		runtime_cfg := resolve_server_runtime_config_for_target(args, site_runtime_cfg,
+			listener_id, site_id, listener_cfg.host, listener_cfg.port, admin_enabled_override)!
 		bindings << ListenerRuntimeBinding{
 			id:          listener_id
 			site_id:     site_id
