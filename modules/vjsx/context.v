@@ -14,11 +14,15 @@ mut:
 }
 
 pub struct Context {
+pub:
 	ref                &C.JSContext
-	rt                 Runtime
+	rt                 &Runtime
 	host_cleanup_state &HostCleanupState
-mut:
-	asset_root string
+	asset_root         string
+}
+
+pub fn (ctx &Context) ref_ptr() voidptr {
+	return voidptr(ctx.ref)
 }
 
 type SetMeta = fn (Context, JSValueConst)
