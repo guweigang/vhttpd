@@ -1000,7 +1000,7 @@ fn (e InProcVjsxExecutor) drive_lane_event_loop(lane_id string) {
 	state.mu.unlock()
 	
 	if !isnil(host.session) && !host.session.is_closed() {
-		host.session.context.end()
+		host.session.context().end()
 	}
 }
 
