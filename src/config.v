@@ -1008,33 +1008,33 @@ fn resolve_config_variables(mut cfg VhttpdConfig, config_path string) ! {
 			env_map, changed)!
 
 		for name, mut site_cfg in cfg.sites {
-			site_cfg.project_root, changed = expand_config_string(site_cfg.project_root, 'sites.${name}',
+			site_cfg.project_root, changed = expand_config_string(site_cfg.project_root, '',
 				vars, env_map, changed)!
-			site_cfg.host, changed = expand_config_string(site_cfg.host, 'sites.${name}', vars,
+			site_cfg.host, changed = expand_config_string(site_cfg.host, '', vars,
 				env_map, changed)!
-			site_cfg.app, changed = expand_config_string(site_cfg.app, 'sites.${name}', vars, env_map,
+			site_cfg.app, changed = expand_config_string(site_cfg.app, '', vars, env_map,
 				changed)!
-			site_cfg.worker_entry, changed = expand_config_string(site_cfg.worker_entry, 'sites.${name}',
+			site_cfg.worker_entry, changed = expand_config_string(site_cfg.worker_entry, '',
 				vars, env_map, changed)!
 			for key, value in site_cfg.paths.values {
-				next, c := expand_config_string(value, 'sites.${name}.paths', vars, env_map,
+				next, c := expand_config_string(value, '', vars, env_map,
 					false)!
 				if c {
 					site_cfg.paths.values[key] = next
 					changed = true
 				}
 			}
-			site_cfg.vjsx.app_entry, changed = expand_config_string(site_cfg.vjsx.app_entry, 'sites.${name}.vjsx',
+			site_cfg.vjsx.app_entry, changed = expand_config_string(site_cfg.vjsx.app_entry, '',
 				vars, env_map, changed)!
 			site_cfg.vjsx.module_root, changed = expand_config_string(site_cfg.vjsx.module_root,
-				'sites.${name}.vjsx', vars, env_map, changed)!
+				'', vars, env_map, changed)!
 			site_cfg.vjsx.build_root, changed = expand_config_string(site_cfg.vjsx.build_root,
-				'sites.${name}.vjsx', vars, env_map, changed)!
-			site_cfg.php.bin, changed = expand_config_string(site_cfg.php.bin, 'sites.${name}.php',
+				'', vars, env_map, changed)!
+			site_cfg.php.bin, changed = expand_config_string(site_cfg.php.bin, '',
 				vars, env_map, changed)!
 			site_cfg.php.worker_entry, changed = expand_config_string(site_cfg.php.worker_entry,
-				'sites.${name}.php', vars, env_map, changed)!
-			site_cfg.php.app_entry, changed = expand_config_string(site_cfg.php.app_entry, 'sites.${name}.php',
+				'', vars, env_map, changed)!
+			site_cfg.php.app_entry, changed = expand_config_string(site_cfg.php.app_entry, '',
 				vars, env_map, changed)!
 		}
 
@@ -1129,7 +1129,6 @@ fn resolve_config_paths(mut cfg VhttpdConfig, config_path string) {
 
 fn build_config_variable_map(cfg VhttpdConfig) map[string]string {
 	mut vars := {
-		'root':                           cfg.paths.root
 		'server.host':                    cfg.server.host
 		'server.port':                    '${cfg.server.port}'
 		'files.event_log':                cfg.files.event_log
