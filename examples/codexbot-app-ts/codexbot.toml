@@ -1,11 +1,11 @@
 [paths]
 root = "../../"
-vjsx_app = "examples/codexbot-app-ts/app.mts"
-vjsx_build_root = "tmp/codexbot-vjsx-build"
+vjsx_app = "${root}/examples/codexbot-app-ts/app.mts"
+vjsx_build_root = "${root}/tmp/codexbot-vjsx-build"
 
 [files]
-pid_file = "tmp/vhttpd_codexbot_ts_19883.pid"
-event_log = "tmp/vhttpd_codexbot_ts_19883.events.ndjson"
+pid_file = "${paths.root}/tmp/vhttpd_codexbot_ts_19883.pid"
+event_log = "${paths.root}/tmp/vhttpd_codexbot_ts_19883.events.ndjson"
 
 [runtime]
 timezone = "Asia/Shanghai"
@@ -37,7 +37,7 @@ flush_interval_ms = 400
 [sites.codexbot]
 host = "127.0.0.1"
 port = 19883
-root = "examples/codexbot-app-ts"
+root = "${paths.root}/examples/codexbot-app-ts"
 executor = "vjsx"
 app = "${paths.vjsx_app}"
 vjsx.build_root = "${paths.vjsx_build_root}"
