@@ -4915,110 +4915,31 @@ fn (e InProcVjsxExecutor) dispatch_websocket_event_on_lane(mut app App, frame Wo
 			commands: []WorkerWebSocketFrame{}
 		}
 	}
-	eprintln('[vhttpd] DEBUG: --- START DISPATCH [lane=${lane.id} event=${frame.event} thread_id=${voidptr(C.pthread_self())}] ---')
-	
 	// 1. Resolve invoker
 	invoke_handler := ctx.js_global('__vhttpd_invoke_websocket_handle')
 	defer { invoke_handler.free() }
-	
-	unsafe {
-		eprintln('[vhttpd] DEBUG: --- START FULL ABI DIAGNOSTIC ---')
-		
-		// 1. Resolve invoker bytes
-		pi := &u8(&invoke_handler.ref)
-		eprintln('[vhttpd] DEBUG: diag=invoker_obj is_fn=${invoke_handler.is_function()} bytes=${pi[0].hex()}${pi[1].hex()}${pi[2].hex()}${pi[3].hex()}${pi[4].hex()}${pi[5].hex()}${pi[6].hex()}${pi[7].hex()} | ${pi[8].hex()}${pi[9].hex()}${pi[10].hex()}${pi[11].hex()}${pi[12].hex()}${pi[13].hex()}${pi[14].hex()}${pi[15].hex()}')
-
-		// 2. Int 123
-		v_int := ctx.js_int(123)
-		p_int := &u8(&v_int.ref)
-		eprintln('[vhttpd] DEBUG: diag=int(123) tag=${v_int.ref.tag} bytes=${p_int[0].hex()}${p_int[1].hex()}${p_int[2].hex()}${p_int[3].hex()}${p_int[4].hex()}${p_int[5].hex()}${p_int[6].hex()}${p_int[7].hex()} | ${p_int[8].hex()}${p_int[9].hex()}${p_int[10].hex()}${p_int[11].hex()}${p_int[12].hex()}${p_int[13].hex()}${p_int[14].hex()}${p_int[15].hex()}')
-		v_int.free()
-
-		// 3. String "hello"
-		v_str := ctx.js_string('hello')
-		p_str := &u8(&v_str.ref)
-		eprintln('[vhttpd] DEBUG: diag=string("hello") tag=${v_str.ref.tag} bytes=${p_str[0].hex()}${p_str[1].hex()}${p_str[2].hex()}${p_str[3].hex()}${p_str[4].hex()}${p_str[5].hex()}${p_str[6].hex()}${p_str[7].hex()} | ${p_str[8].hex()}${p_str[9].hex()}${p_str[10].hex()}${p_str[11].hex()}${p_str[12].hex()}${p_str[13].hex()}${p_str[14].hex()}${p_str[15].hex()}')
-		v_str.free()
-
-		// 4. Bool true
-		v_bool := ctx.js_bool(true)
-		p_bool := &u8(&v_bool.ref)
-		eprintln('[vhttpd] DEBUG: diag=bool(true) tag=${v_bool.ref.tag} bytes=${p_bool[0].hex()}${p_bool[1].hex()}${p_bool[2].hex()}${p_bool[3].hex()}${p_bool[4].hex()}${p_bool[5].hex()}${p_bool[6].hex()}${p_bool[7].hex()} | ${p_bool[8].hex()}${p_bool[9].hex()}${p_bool[10].hex()}${p_bool[11].hex()}${p_bool[12].hex()}${p_bool[13].hex()}${p_bool[14].hex()}${p_bool[15].hex()}')
-		v_bool.free()
-
-		// 5. Null
-		v_null := ctx.js_null()
-		p_null := &u8(&v_null.ref)
-		eprintln('[vhttpd] DEBUG: diag=null tag=${v_null.ref.tag} bytes=${p_null[0].hex()}${p_null[1].hex()}${p_null[2].hex()}${p_null[3].hex()}${p_null[4].hex()}${p_null[5].hex()}${p_null[6].hex()}${p_null[7].hex()} | ${p_null[8].hex()}${p_null[9].hex()}${p_null[10].hex()}${p_null[11].hex()}${p_null[12].hex()}${p_null[13].hex()}${p_null[14].hex()}${p_null[15].hex()}')
-		v_null.free()
-
-		// 6. Undefined
-		v_undef := ctx.js_undefined()
-		p_undef := &u8(&v_undef.ref)
-		eprintln('[vhttpd] DEBUG: diag=undefined tag=${v_undef.ref.tag} bytes=${p_undef[0].hex()}${p_undef[1].hex()}${p_undef[2].hex()}${p_undef[3].hex()}${p_undef[4].hex()}${p_undef[5].hex()}${p_undef[6].hex()}${p_undef[7].hex()} | ${p_undef[8].hex()}${p_undef[9].hex()}${p_undef[10].hex()}${p_undef[11].hex()}${p_undef[12].hex()}${p_undef[13].hex()}${p_undef[14].hex()}${p_undef[15].hex()}')
-		v_undef.free()
-
-		eprintln('[vhttpd] DEBUG: --- END FULL ABI DIAGNOSTIC ---')
-	}
 	
 	if !invoke_handler.is_function() {
 		return error('inproc_vjsx_executor_websocket_invoker_missing')
 	}
 	
 	// 2. Prepare Argument
-	invoke_arg := if minimal_arg_probe {
-		ctx.js_string('vhttpd_ws_probe')
-	} else {
-		js_frame.dup_value()
-	}
+	invoke_arg := js_frame.dup_value()
 	defer { invoke_arg.free() }
 	
-	eprintln('[vhttpd] DEBUG: phase=prepare_arg is_obj=${invoke_arg.is_object()} tag=${invoke_arg.ref.tag.hex()} ptr=${unsafe { voidptr(invoke_arg.ref.u.ptr) }}')
-	
-	// 3. ABI and Context State
-	unsafe {
-		v_bool_true := ctx.js_bool(true)
-		bool_res := C.JS_ToBool(ctx.ref, v_bool_true.ref)
-		eprintln('[vhttpd] DEBUG: abi_probe_bool_true: expect=1 got=${bool_res}')
-		v_bool_true.free()
-
-		v_int_123 := ctx.js_int(123)
-		mut int_out := 0
-		C.JS_ToInt32(ctx.ref, &int_out, v_int_123.ref)
-		eprintln('[vhttpd] DEBUG: abi_probe_int_123: expect=123 got=${int_out}')
-		v_int_123.free()
-	}
-
-	eprintln('[vhttpd] DEBUG: phase=abi_check sizeof(JSValue)=${sizeof(C.JSValue)} ctx_ptr=${ctx.ref_ptr()}')
-	
-	// 4. Actual Call
-	if ctx.js_exception_value().is_exception() {
-		eprintln('[vhttpd] DEBUG: pending exception BEFORE call detected!')
-		ex := ctx.js_exception()
-		eprintln('[vhttpd] DEBUG: pending exception: ${ex.msg()}')
-	}
-
-	raw_handler_ptr := C.JS_ToCString(ctx.ref, invoke_handler.ref)
-	eprintln('[vhttpd] DEBUG: phase=pre_call raw_handler_str_ptr=${voidptr(raw_handler_ptr)}')
-	if !isnil(raw_handler_ptr) { C.JS_FreeCString(ctx.ref, raw_handler_ptr) }
-	
-	// Try JSON as fallback
-	json_str := ctx.json_stringify(invoke_handler)
-	eprintln('[vhttpd] DEBUG: phase=pre_call_json invoker_json=${json_str}')
-	
-	eprintln('[vhttpd] DEBUG: phase=pre_call_str invoker_to_string=${invoke_handler.to_string()} arg_to_string=${invoke_arg.to_string()}')
-	
+	// 3. Call
 	mut result := ctx.call(invoke_handler, invoke_arg) or {
-		eprintln('[vhttpd] DEBUG: phase=call_failed raw_err=${err.msg()}')
-		// Try to see if there is a pending exception in QJS
 		err_msg := inproc_vjsx_context_error_message(ctx, err.msg(), 'inproc_vjsx_executor_websocket_handler_failed')
-		e.record_lane_soft_error(lane.id, err_msg)
-		return error('inproc_vjsx_executor_websocket_handler_failed:${err_msg}')
+		return error(err_msg)
 	}
 	defer { result.free() }
-
-	eprintln('[vhttpd] DEBUG: phase=call_success res_tag=${result.ref.tag.hex()} res_ptr=${unsafe { voidptr(result.ref.u.ptr) }} res_to_string=${result.to_string()}')
-
+	
+	// 4. Result Processing
+	if result.is_exception() {
+		err_msg := inproc_vjsx_context_error_message(ctx, 'exception', 'inproc_vjsx_executor_websocket_handler_failed')
+		return error(err_msg)
+	}
+	
 	normalize_fn := ctx.js_global('__vhttpd_normalize_websocket_result')
 	defer {
 		normalize_fn.free()
@@ -5031,32 +4952,26 @@ fn (e InProcVjsxExecutor) dispatch_websocket_event_on_lane(mut app App, frame Wo
 		mut normalized := ctx.call(normalize_fn, js_frame, awaited) or {
 			err_msg := inproc_vjsx_normalize_error_message(err.msg(),
 				'inproc_vjsx_executor_websocket_normalize_failed')
-			e.record_lane_soft_error(lane.id, err_msg)
 			return error('inproc_vjsx_executor_websocket_normalize_failed:${err_msg}')
 		}
 		defer {
 			normalized.free()
 		}
-		if frame.event == 'close' {
-			e.release_websocket_connection_affinity(frame)
+		return worker_websocket_dispatch_response_from_js_value(normalized) or {
+			return error('inproc_vjsx_executor_websocket_handler_result_failed:${err.msg()}')
 		}
-		e.record_lane_success(lane.id)
-		return websocket_response_from_js_value(normalized, frame)
 	}
 	mut normalized := ctx.call(normalize_fn, js_frame, result) or {
 		err_msg := inproc_vjsx_normalize_error_message(err.msg(),
 			'inproc_vjsx_executor_websocket_normalize_failed')
-		e.record_lane_soft_error(lane.id, err_msg)
 		return error('inproc_vjsx_executor_websocket_normalize_failed:${err_msg}')
 	}
 	defer {
 		normalized.free()
 	}
-	if frame.event == 'close' {
-		e.release_websocket_connection_affinity(frame)
+	return worker_websocket_dispatch_response_from_js_value(normalized) or {
+		return error('inproc_vjsx_executor_websocket_handler_result_failed:${err.msg()}')
 	}
-	e.record_lane_success(lane.id)
-	return websocket_response_from_js_value(normalized, frame)
 }
 
 pub fn (e InProcVjsxExecutor) dispatch_websocket_event(mut app App, frame WorkerWebSocketFrame) !WorkerWebSocketDispatchResponse {
