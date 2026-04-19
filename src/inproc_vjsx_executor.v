@@ -872,14 +872,14 @@ fn inproc_vjsx_normalize_error_message(err_msg string, fallback string) string {
 }
 
 fn inproc_vjsx_context_error_message(ctx &vjsx.Context, err_msg string, fallback string) string {
-	normalized := inproc_vjsx_normalize_error_message(err_msg, '')
-	if normalized != '' {
-		return normalized
-	}
 	js_err := ctx.js_exception()
 	js_msg := js_err.msg().trim_space()
 	if js_msg != '' {
 		return js_msg
+	}
+	normalized := inproc_vjsx_normalize_error_message(err_msg, '')
+	if normalized != '' {
+		return normalized
 	}
 	return fallback
 }
