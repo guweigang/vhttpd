@@ -2819,7 +2819,7 @@ globalThis.__vhttpd_normalize_websocket_upstream_result = function(frame, result
 		b_res.free()
 	}
 
-	eprintln('[vhttpd] DEBUG: js_bootstrap eval success, res_tag=${eval_res.ref.tag.hex()} thread_id=${C.pthread_self()}')
+	eprintln('[vhttpd] DEBUG: js_bootstrap eval success, res_tag=${eval_res.ref.tag.hex()} thread_id=${voidptr(C.pthread_self())}')
 	ctx.end()
 }
 
@@ -4988,7 +4988,7 @@ fn (e InProcVjsxExecutor) dispatch_websocket_event_on_lane(mut app App, frame Wo
 			commands: []WorkerWebSocketFrame{}
 		}
 	}
-	eprintln('[vhttpd] DEBUG: --- START DISPATCH [lane=${lane.id} event=${frame.event} thread_id=${C.pthread_self()}] ---')
+	eprintln('[vhttpd] DEBUG: --- START DISPATCH [lane=${lane.id} event=${frame.event} thread_id=${voidptr(C.pthread_self())}] ---')
 	
 	// 1. Resolve invoker
 	invoke_handler := ctx.js_global('__vhttpd_invoke_websocket_handle')
