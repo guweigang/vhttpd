@@ -983,7 +983,24 @@ fn inproc_vjsx_lane_worker_loop(state &VjsxExecutorState, lane_id string, task_c
 					raw: raw
 				}
 			}
+			50 * time.millisecond {
+				worker_executor.drive_lane_event_loop(lane_id)
+			}
 		}
+	}
+}
+
+fn (e InProcVjsxExecutor) drive_lane_event_loop(lane_id string) {
+	idx := e.lane_index_by_id(lane_id)
+	if idx < 0 { return }
+	
+	mut state := e.state
+	state.mu.@lock()
+	mut host := state.hosts[idx]
+	state.mu.unlock()
+	
+	if !isnil(host.session) && !host.session.is_closed() {
+		host.session.ctx.end()
 	}
 }
 
