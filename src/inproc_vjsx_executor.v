@@ -4973,13 +4973,13 @@ fn (e InProcVjsxExecutor) dispatch_websocket_event_on_lane(mut app App, frame Wo
 			commands: []WorkerWebSocketFrame{}
 		}
 	}
-	eprintln('[vhttpd] DEBUG: --- START DISPATCH [lane=${lane.id} event=${event.str()}] ---')
+	eprintln('[vhttpd] DEBUG: --- START DISPATCH [lane=${lane.id} event=${frame.event}] ---')
 	
 	// 1. Resolve invoker
 	invoke_handler := ctx.js_global('__vhttpd_invoke_websocket_handle')
 	defer { invoke_handler.free() }
 	
-	eprintln('[vhttpd] DEBUG: phase=resolve_invoker name=__vhttpd_invoke_websocket_handle is_fn=${invoke_handler.is_function()} tag=${invoke_handler.ref.tag.hex()} ptr=${voidptr(invoke_handler.ref.u.ptr)}')
+	eprintln('[vhttpd] DEBUG: phase=resolve_invoker name=__vhttpd_invoke_websocket_handle is_fn=${invoke_handler.is_function()} tag=${invoke_handler.ref.tag.hex()} ptr=${unsafe { voidptr(invoke_handler.ref.u.ptr) }}')
 	
 	if !invoke_handler.is_function() {
 		return error('inproc_vjsx_executor_websocket_invoker_missing')
@@ -4993,7 +4993,7 @@ fn (e InProcVjsxExecutor) dispatch_websocket_event_on_lane(mut app App, frame Wo
 	}
 	defer { invoke_arg.free() }
 	
-	eprintln('[vhttpd] DEBUG: phase=prepare_arg is_obj=${invoke_arg.is_object()} tag=${invoke_arg.ref.tag.hex()} ptr=${voidptr(invoke_arg.ref.u.ptr)}')
+	eprintln('[vhttpd] DEBUG: phase=prepare_arg is_obj=${invoke_arg.is_object()} tag=${invoke_arg.ref.tag.hex()} ptr=${unsafe { voidptr(invoke_arg.ref.u.ptr) }}')
 	
 	// 3. ABI and Context State
 	eprintln('[vhttpd] DEBUG: phase=abi_check sizeof(JSValue)=${sizeof(C.JSValue)} ctx_ptr=${ctx.ref_ptr()}')
@@ -5010,7 +5010,7 @@ fn (e InProcVjsxExecutor) dispatch_websocket_event_on_lane(mut app App, frame Wo
 	}
 	defer { result.free() }
 
-	eprintln('[vhttpd] DEBUG: phase=call_success res_tag=${result.ref.tag.hex()} res_ptr=${voidptr(result.ref.u.ptr)} res_to_string=${result.to_string()}')
+	eprintln('[vhttpd] DEBUG: phase=call_success res_tag=${result.ref.tag.hex()} res_ptr=${unsafe { voidptr(result.ref.u.ptr) }} res_to_string=${result.to_string()}')
 
 	normalize_fn := ctx.js_global('__vhttpd_normalize_websocket_result')
 	defer {
