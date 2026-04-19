@@ -4982,6 +4982,11 @@ fn (e InProcVjsxExecutor) dispatch_websocket_event_on_lane(mut app App, frame Wo
 	unsafe {
 		p := &u8(&invoke_handler.ref)
 		eprintln('[vhttpd] DEBUG: phase=resolve_invoker name=__vhttpd_invoke_websocket_handle is_fn=${invoke_handler.is_function()} raw_bytes=${p[0].hex()}${p[1].hex()}${p[2].hex()}${p[3].hex()}${p[4].hex()}${p[5].hex()}${p[6].hex()}${p[7].hex()} | ${p[8].hex()}${p[9].hex()}${p[10].hex()}${p[11].hex()}${p[12].hex()}${p[13].hex()}${p[14].hex()}${p[15].hex()}')
+		
+		int_val := ctx.js_int(123)
+		pi := &u8(&int_val.ref)
+		eprintln('[vhttpd] DEBUG: phase=abi_probe_int val=123 raw_bytes=${pi[0].hex()}${pi[1].hex()}${pi[2].hex()}${pi[3].hex()}${pi[4].hex()}${pi[5].hex()}${pi[6].hex()}${pi[7].hex()} | ${pi[8].hex()}${pi[9].hex()}${pi[10].hex()}${pi[11].hex()}${pi[12].hex()}${pi[13].hex()}${pi[14].hex()}${pi[15].hex()}')
+		int_val.free()
 	}
 	
 	if !invoke_handler.is_function() {
