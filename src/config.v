@@ -1129,6 +1129,7 @@ fn resolve_config_paths(mut cfg VhttpdConfig, config_path string) {
 
 fn build_config_variable_map(cfg VhttpdConfig) map[string]string {
 	mut vars := {
+		'root':                           cfg.paths.root
 		'server.host':                    cfg.server.host
 		'server.port':                    '${cfg.server.port}'
 		'files.event_log':                cfg.files.event_log

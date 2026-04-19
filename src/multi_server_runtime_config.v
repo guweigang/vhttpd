@@ -1,7 +1,5 @@
 module main
 
-import os
-
 pub struct ListenerRuntimeBinding {
 pub:
 	id          string
@@ -95,7 +93,8 @@ fn merge_executor_config(base ExecutorConfig, override ExecutorConfig, site_cfg 
 		cfg.kind = 'php'
 	} else if site_cfg.app.trim_space().to_lower().ends_with('.php') {
 		cfg.kind = 'php'
-	} else if site_cfg.vjsx.app_entry.trim_space() != '' || site_cfg.vjsx.module_root.trim_space() != ''
+	} else if site_cfg.vjsx.app_entry.trim_space() != ''
+		|| site_cfg.vjsx.module_root.trim_space() != ''
 		|| site_cfg.vjsx.build_root.trim_space() != '' {
 		cfg.kind = 'vjsx'
 	} else if site_cfg.app.trim_space() != '' {
@@ -384,7 +383,7 @@ fn resolve_multi_server_runtime_config(args []string, cfg VhttpdConfig) !MultiSe
 	if !config_uses_multi_listener(cfg) {
 		return MultiServerRuntimeConfig{
 			single_mode: true
-			listeners: [
+			listeners:   [
 				ListenerRuntimeBinding{
 					id:          'default'
 					site_id:     'default'
@@ -428,8 +427,8 @@ fn resolve_multi_server_runtime_config(args []string, cfg VhttpdConfig) !MultiSe
 			resolve_config_variables(mut site_runtime_cfg, site_runtime_cfg.config_path)!
 		}
 		admin_enabled_override := listener_id == admin_owner_listener_id
-		runtime_cfg := resolve_server_runtime_config_for_target(args, site_runtime_cfg, listener_id,
-			site_id, listener_cfg.host, listener_cfg.port, admin_enabled_override)!
+		runtime_cfg := resolve_server_runtime_config_for_target(args, site_runtime_cfg,
+			listener_id, site_id, listener_cfg.host, listener_cfg.port, admin_enabled_override)!
 		bindings << ListenerRuntimeBinding{
 			id:          listener_id
 			site_id:     site_id
