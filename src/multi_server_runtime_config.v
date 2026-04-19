@@ -1,5 +1,7 @@
 module main
 
+import os
+
 pub struct ListenerRuntimeBinding {
 pub:
 	id          string

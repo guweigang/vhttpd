@@ -867,12 +867,14 @@ fn decode_multi_listener_config(doc toml.Doc, mut cfg VhttpdConfig) ! {
 
 fn resolve_config_variables(mut cfg VhttpdConfig, config_path string) ! {
 	env_map := os.environ()
+	base_dir := resolve_config_base_dir(config_path)
 	max_passes := 12
 	for _ in 0 .. max_passes {
 		mut changed := false
-		vars := build_config_variable_map(cfg)
+		mut vars := build_config_variable_map(cfg)
 		cfg.paths.root, changed = expand_config_string(cfg.paths.root, 'paths', vars, env_map,
 			changed)!
+		vars['paths.root'] = resolve_config_path(base_dir, cfg.paths.root)
 		mut next_paths := map[string]string{}
 		for key, value in cfg.paths.values {
 			next, c := expand_config_string(value, 'paths', vars, env_map, false)!
@@ -1005,6 +1007,37 @@ fn resolve_config_variables(mut cfg VhttpdConfig, config_path string) ! {
 		cfg.feishu.bridge.target_id, changed = expand_config_string(cfg.feishu.bridge.target_id, 'feishu.bridge', vars,
 			env_map, changed)!
 
+		for name, mut site_cfg in cfg.sites {
+			site_cfg.project_root, changed = expand_config_string(site_cfg.project_root, 'sites.${name}',
+				vars, env_map, changed)!
+			site_cfg.host, changed = expand_config_string(site_cfg.host, 'sites.${name}', vars,
+				env_map, changed)!
+			site_cfg.app, changed = expand_config_string(site_cfg.app, 'sites.${name}', vars, env_map,
+				changed)!
+			site_cfg.worker_entry, changed = expand_config_string(site_cfg.worker_entry, 'sites.${name}',
+				vars, env_map, changed)!
+			for key, value in site_cfg.paths.values {
+				next, c := expand_config_string(value, 'sites.${name}.paths', vars, env_map,
+					false)!
+				if c {
+					site_cfg.paths.values[key] = next
+					changed = true
+				}
+			}
+			site_cfg.vjsx.app_entry, changed = expand_config_string(site_cfg.vjsx.app_entry, 'sites.${name}.vjsx',
+				vars, env_map, changed)!
+			site_cfg.vjsx.module_root, changed = expand_config_string(site_cfg.vjsx.module_root,
+				'sites.${name}.vjsx', vars, env_map, changed)!
+			site_cfg.vjsx.build_root, changed = expand_config_string(site_cfg.vjsx.build_root,
+				'sites.${name}.vjsx', vars, env_map, changed)!
+			site_cfg.php.bin, changed = expand_config_string(site_cfg.php.bin, 'sites.${name}.php',
+				vars, env_map, changed)!
+			site_cfg.php.worker_entry, changed = expand_config_string(site_cfg.php.worker_entry,
+				'sites.${name}.php', vars, env_map, changed)!
+			site_cfg.php.app_entry, changed = expand_config_string(site_cfg.php.app_entry, 'sites.${name}.php',
+				vars, env_map, changed)!
+		}
+
 		if !changed {
 			resolve_config_paths(mut cfg, config_path)
 			return
@@ -1076,6 +1109,22 @@ fn resolve_config_paths(mut cfg VhttpdConfig, config_path string) {
 	cfg.vjsx.signature_root = resolve_config_path(cfg.paths.root, cfg.vjsx.signature_root)
 	cfg.assets.root = resolve_config_path(cfg.paths.root, cfg.assets.root)
 	cfg.codex.cwd = resolve_config_path(cfg.paths.root, cfg.codex.cwd)
+
+	for _, mut site_cfg in cfg.sites {
+		if site_cfg.project_root.trim_space() != '' {
+			site_cfg.project_root = resolve_config_path(base_dir, site_cfg.project_root)
+		}
+		site_cfg.app = resolve_config_path(cfg.paths.root, site_cfg.app)
+		site_cfg.worker_entry = resolve_config_path(cfg.paths.root, site_cfg.worker_entry)
+		for key, value in site_cfg.paths.values {
+			site_cfg.paths.values[key] = resolve_config_path(cfg.paths.root, value)
+		}
+		site_cfg.vjsx.app_entry = resolve_config_path(cfg.paths.root, site_cfg.vjsx.app_entry)
+		site_cfg.vjsx.module_root = resolve_config_path(cfg.paths.root, site_cfg.vjsx.module_root)
+		site_cfg.vjsx.build_root = resolve_config_path(cfg.paths.root, site_cfg.vjsx.build_root)
+		site_cfg.php.worker_entry = resolve_config_path(cfg.paths.root, site_cfg.php.worker_entry)
+		site_cfg.php.app_entry = resolve_config_path(cfg.paths.root, site_cfg.php.app_entry)
+	}
 }
 
 fn build_config_variable_map(cfg VhttpdConfig) map[string]string {
