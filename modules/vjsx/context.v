@@ -16,8 +16,9 @@ mut:
 pub struct Context {
 pub:
 	ref                &C.JSContext
-	rt                 &Runtime
+	rt                 Runtime
 	host_cleanup_state &HostCleanupState
+mut:
 	asset_root         string
 }
 
