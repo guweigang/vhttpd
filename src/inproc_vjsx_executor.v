@@ -5052,11 +5052,20 @@ fn (e InProcVjsxExecutor) dispatch_websocket_event_on_lane(mut app App, frame Wo
 	eprintln('[vhttpd] DEBUG: phase=abi_check sizeof(JSValue)=${sizeof(C.JSValue)} ctx_ptr=${ctx.ref_ptr()}')
 	
 	// 4. Actual Call
+	if ctx.js_exception_occurred() {
+		eprintln('[vhttpd] DEBUG: pending exception BEFORE call detected!')
+		ex := ctx.js_exception()
+		eprintln('[vhttpd] DEBUG: pending exception: ${ex.to_string()}')
+		ex.free()
+	}
+
 	raw_handler_ptr := C.JS_ToCString(ctx.ref, invoke_handler.ref)
-	raw_arg_ptr := C.JS_ToCString(ctx.ref, invoke_arg.ref)
-	eprintln('[vhttpd] DEBUG: phase=pre_call raw_handler_str_ptr=${voidptr(raw_handler_ptr)} raw_arg_str_ptr=${voidptr(raw_arg_ptr)}')
+	eprintln('[vhttpd] DEBUG: phase=pre_call raw_handler_str_ptr=${voidptr(raw_handler_ptr)}')
 	if !isnil(raw_handler_ptr) { C.JS_FreeCString(ctx.ref, raw_handler_ptr) }
-	if !isnil(raw_arg_ptr) { C.JS_FreeCString(ctx.ref, raw_arg_ptr) }
+	
+	// Try JSON as fallback
+	json_str := ctx.json_stringify(invoke_handler)
+	eprintln('[vhttpd] DEBUG: phase=pre_call_json invoker_json=${json_str}')
 	
 	eprintln('[vhttpd] DEBUG: phase=pre_call_str invoker_to_string=${invoke_handler.to_string()} arg_to_string=${invoke_arg.to_string()}')
 	
