@@ -5052,11 +5052,10 @@ fn (e InProcVjsxExecutor) dispatch_websocket_event_on_lane(mut app App, frame Wo
 	eprintln('[vhttpd] DEBUG: phase=abi_check sizeof(JSValue)=${sizeof(C.JSValue)} ctx_ptr=${ctx.ref_ptr()}')
 	
 	// 4. Actual Call
-	if ctx.js_exception_occurred() {
+	if ctx.js_exception_value().is_exception() {
 		eprintln('[vhttpd] DEBUG: pending exception BEFORE call detected!')
 		ex := ctx.js_exception()
-		eprintln('[vhttpd] DEBUG: pending exception: ${ex.to_string()}')
-		ex.free()
+		eprintln('[vhttpd] DEBUG: pending exception: ${ex.msg()}')
 	}
 
 	raw_handler_ptr := C.JS_ToCString(ctx.ref, invoke_handler.ref)
