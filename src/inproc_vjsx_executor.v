@@ -4974,9 +4974,11 @@ fn (e InProcVjsxExecutor) dispatch_websocket_event_on_lane(mut app App, frame Wo
 		defer {
 			normalized.free()
 		}
-		return worker_websocket_dispatch_response_from_js_value(normalized) or {
-			return error('inproc_vjsx_executor_websocket_handler_result_failed:${err.msg()}')
+		if frame.event == 'close' {
+			e.release_websocket_connection_affinity(frame)
 		}
+		e.record_lane_success(lane.id)
+		return websocket_response_from_js_value(normalized, frame)
 	}
 	mut normalized := ctx.call(normalize_fn, js_frame, result) or {
 		err_msg := inproc_vjsx_normalize_error_message(err.msg(),
@@ -4986,9 +4988,11 @@ fn (e InProcVjsxExecutor) dispatch_websocket_event_on_lane(mut app App, frame Wo
 	defer {
 		normalized.free()
 	}
-	return worker_websocket_dispatch_response_from_js_value(normalized) or {
-		return error('inproc_vjsx_executor_websocket_handler_result_failed:${err.msg()}')
+	if frame.event == 'close' {
+		e.release_websocket_connection_affinity(frame)
 	}
+	e.record_lane_success(lane.id)
+	return websocket_response_from_js_value(normalized, frame)
 }
 
 pub fn (e InProcVjsxExecutor) dispatch_websocket_event(mut app App, frame WorkerWebSocketFrame) !WorkerWebSocketDispatchResponse {
