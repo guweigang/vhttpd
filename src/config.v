@@ -871,76 +871,76 @@ fn resolve_config_variables(mut cfg VhttpdConfig, config_path string) ! {
 	for _ in 0 .. max_passes {
 		mut changed := false
 		vars := build_config_variable_map(cfg)
-		cfg.paths.root, changed = expand_config_string(cfg.paths.root, vars, env_map,
+		cfg.paths.root, changed = expand_config_string(cfg.paths.root, 'paths', vars, env_map,
 			changed)!
 		mut next_paths := map[string]string{}
 		for key, value in cfg.paths.values {
-			next, c := expand_config_string(value, vars, env_map, false)!
+			next, c := expand_config_string(value, 'paths', vars, env_map, false)!
 			next_paths[key] = next
 			if c {
 				changed = true
 			}
 		}
 		cfg.paths.values = next_paths.clone()
-		cfg.server.host, changed = expand_config_string(cfg.server.host, vars, env_map,
+		cfg.server.host, changed = expand_config_string(cfg.server.host, 'server', vars, env_map,
 			changed)!
-		cfg.files.event_log, changed = expand_config_string(cfg.files.event_log, vars,
+		cfg.files.event_log, changed = expand_config_string(cfg.files.event_log, 'files', vars,
 			env_map, changed)!
-		cfg.files.pid_file, changed = expand_config_string(cfg.files.pid_file, vars, env_map,
+		cfg.files.pid_file, changed = expand_config_string(cfg.files.pid_file, 'files', vars, env_map,
 			changed)!
-		cfg.worker.cmd, changed = expand_config_string(cfg.worker.cmd, vars, env_map,
+		cfg.worker.cmd, changed = expand_config_string(cfg.worker.cmd, 'worker', vars, env_map,
 			changed)!
-		cfg.worker.socket, changed = expand_config_string(cfg.worker.socket, vars, env_map,
+		cfg.worker.socket, changed = expand_config_string(cfg.worker.socket, 'worker', vars, env_map,
 			changed)!
-		cfg.worker.socket_prefix, changed = expand_config_string(cfg.worker.socket_prefix,
+		cfg.worker.socket_prefix, changed = expand_config_string(cfg.worker.socket_prefix, 'worker',
 			vars, env_map, changed)!
-		cfg.executor.kind, changed = expand_config_string(cfg.executor.kind, vars, env_map,
+		cfg.executor.kind, changed = expand_config_string(cfg.executor.kind, 'executor', vars, env_map,
 			changed)!
-		cfg.vjsx.app_entry, changed = expand_config_string(cfg.vjsx.app_entry, vars, env_map,
+		cfg.vjsx.app_entry, changed = expand_config_string(cfg.vjsx.app_entry, 'vjsx', vars, env_map,
 			changed)!
-		cfg.vjsx.module_root, changed = expand_config_string(cfg.vjsx.module_root, vars,
+		cfg.vjsx.module_root, changed = expand_config_string(cfg.vjsx.module_root, 'vjsx', vars,
 			env_map, changed)!
-		cfg.vjsx.build_root, changed = expand_config_string(cfg.vjsx.build_root, vars,
+		cfg.vjsx.build_root, changed = expand_config_string(cfg.vjsx.build_root, 'vjsx', vars,
 			env_map, changed)!
-		cfg.vjsx.signature_root, changed = expand_config_string(cfg.vjsx.signature_root,
+		cfg.vjsx.signature_root, changed = expand_config_string(cfg.vjsx.signature_root, 'vjsx',
 			vars, env_map, changed)!
-		cfg.vjsx.runtime_profile, changed = expand_config_string(cfg.vjsx.runtime_profile,
+		cfg.vjsx.runtime_profile, changed = expand_config_string(cfg.vjsx.runtime_profile, 'vjsx',
 			vars, env_map, changed)!
 		for i, raw in cfg.vjsx.signature_include {
-			next, c := expand_config_string(raw, vars, env_map, false)!
+			next, c := expand_config_string(raw, 'vjsx', vars, env_map, false)!
 			if c {
 				cfg.vjsx.signature_include[i] = next
 				changed = true
 			}
 		}
 		for i, raw in cfg.vjsx.signature_exclude {
-			next, c := expand_config_string(raw, vars, env_map, false)!
+			next, c := expand_config_string(raw, 'vjsx', vars, env_map, false)!
 			if c {
 				cfg.vjsx.signature_exclude[i] = next
 				changed = true
 			}
 		}
 		for i, raw in cfg.worker.sockets {
-			next, c := expand_config_string(raw, vars, env_map, false)!
+			next, c := expand_config_string(raw, 'worker', vars, env_map, false)!
 			if c {
 				cfg.worker.sockets[i] = next
 				changed = true
 			}
 		}
-		cfg.php.bin, changed = expand_config_string(cfg.php.bin, vars, env_map, changed)!
-		cfg.php.worker_entry, changed = expand_config_string(cfg.php.worker_entry, vars,
+		cfg.php.bin, changed = expand_config_string(cfg.php.bin, 'php', vars, env_map, changed)!
+		cfg.php.worker_entry, changed = expand_config_string(cfg.php.worker_entry, 'php', vars,
 			env_map, changed)!
-		cfg.php.app_entry, changed = expand_config_string(cfg.php.app_entry, vars, env_map,
+		cfg.php.app_entry, changed = expand_config_string(cfg.php.app_entry, 'php', vars, env_map,
 			changed)!
 		for i, raw in cfg.php.extensions {
-			next, c := expand_config_string(raw, vars, env_map, false)!
+			next, c := expand_config_string(raw, 'php', vars, env_map, false)!
 			if c {
 				cfg.php.extensions[i] = next
 				changed = true
 			}
 		}
 		for i, raw in cfg.php.args {
-			next, c := expand_config_string(raw, vars, env_map, false)!
+			next, c := expand_config_string(raw, 'php', vars, env_map, false)!
 			if c {
 				cfg.php.args[i] = next
 				changed = true
@@ -948,32 +948,32 @@ fn resolve_config_variables(mut cfg VhttpdConfig, config_path string) ! {
 		}
 		mut next_env := map[string]string{}
 		for key, value in cfg.worker.env {
-			next, c := expand_config_string(value, vars, env_map, false)!
+			next, c := expand_config_string(value, 'worker', vars, env_map, false)!
 			next_env[key] = next
 			if c {
 				changed = true
 			}
 		}
 		cfg.worker.env = next_env.clone()
-		cfg.admin.host, changed = expand_config_string(cfg.admin.host, vars, env_map,
+		cfg.admin.host, changed = expand_config_string(cfg.admin.host, 'admin', vars, env_map,
 			changed)!
-		cfg.admin.token, changed = expand_config_string(cfg.admin.token, vars, env_map,
+		cfg.admin.token, changed = expand_config_string(cfg.admin.token, 'admin', vars, env_map,
 			changed)!
-		cfg.assets.prefix, changed = expand_config_string(cfg.assets.prefix, vars, env_map,
+		cfg.assets.prefix, changed = expand_config_string(cfg.assets.prefix, 'assets', vars, env_map,
 			changed)!
-		cfg.assets.root, changed = expand_config_string(cfg.assets.root, vars, env_map,
+		cfg.assets.root, changed = expand_config_string(cfg.assets.root, 'assets', vars, env_map,
 			changed)!
-		cfg.assets.cache_control, changed = expand_config_string(cfg.assets.cache_control,
+		cfg.assets.cache_control, changed = expand_config_string(cfg.assets.cache_control, 'assets',
 			vars, env_map, changed)!
-		cfg.runtime.timezone, changed = expand_config_string(cfg.runtime.timezone, vars,
+		cfg.runtime.timezone, changed = expand_config_string(cfg.runtime.timezone, 'runtime', vars,
 			env_map, changed)!
-		cfg.feishu.open_base_url, changed = expand_config_string(cfg.feishu.open_base_url,
+		cfg.feishu.open_base_url, changed = expand_config_string(cfg.feishu.open_base_url, 'feishu',
 			vars, env_map, changed)!
 		mut next_apps := map[string]FeishuAppConfig{}
 		for name, app_cfg in cfg.feishu.apps {
-			app_id, app_id_changed := expand_config_string(app_cfg.app_id, vars, env_map,
+			app_id, app_id_changed := expand_config_string(app_cfg.app_id, 'feishu.${name}', vars, env_map,
 				false)!
-			app_secret, app_secret_changed := expand_config_string(app_cfg.app_secret,
+			app_secret, app_secret_changed := expand_config_string(app_cfg.app_secret, 'feishu.${name}',
 				vars, env_map, false)!
 			next_apps[name] = FeishuAppConfig{
 				app_id:     app_id
@@ -986,23 +986,23 @@ fn resolve_config_variables(mut cfg VhttpdConfig, config_path string) ! {
 		cfg.feishu.apps = next_apps.clone()
 
 		// codex
-		cfg.codex.url, changed = expand_config_string(cfg.codex.url, vars, env_map, changed)!
-		cfg.codex.model, changed = expand_config_string(cfg.codex.model, vars, env_map,
+		cfg.codex.url, changed = expand_config_string(cfg.codex.url, 'codex', vars, env_map, changed)!
+		cfg.codex.model, changed = expand_config_string(cfg.codex.model, 'codex', vars, env_map,
 			changed)!
-		cfg.codex.effort, changed = expand_config_string(cfg.codex.effort, vars, env_map,
+		cfg.codex.effort, changed = expand_config_string(cfg.codex.effort, 'codex', vars, env_map,
 			changed)!
-		cfg.codex.cwd, changed = expand_config_string(cfg.codex.cwd, vars, env_map, changed)!
-		cfg.codex.approval_policy, changed = expand_config_string(cfg.codex.approval_policy,
+		cfg.codex.cwd, changed = expand_config_string(cfg.codex.cwd, 'codex', vars, env_map, changed)!
+		cfg.codex.approval_policy, changed = expand_config_string(cfg.codex.approval_policy, 'codex',
 			vars, env_map, changed)!
-		cfg.codex.sandbox, changed = expand_config_string(cfg.codex.sandbox, vars, env_map,
+		cfg.codex.sandbox, changed = expand_config_string(cfg.codex.sandbox, 'codex', vars, env_map,
 			changed)!
-		cfg.feishu.bridge.ws_url, changed = expand_config_string(cfg.feishu.bridge.ws_url, vars, env_map,
+		cfg.feishu.bridge.ws_url, changed = expand_config_string(cfg.feishu.bridge.ws_url, 'feishu.bridge', vars, env_map,
 			changed)!
-		cfg.feishu.bridge.client_id, changed = expand_config_string(cfg.feishu.bridge.client_id, vars,
+		cfg.feishu.bridge.client_id, changed = expand_config_string(cfg.feishu.bridge.client_id, 'feishu.bridge', vars,
 			env_map, changed)!
-		cfg.feishu.bridge.token, changed = expand_config_string(cfg.feishu.bridge.token, vars, env_map,
+		cfg.feishu.bridge.token, changed = expand_config_string(cfg.feishu.bridge.token, 'feishu.bridge', vars, env_map,
 			changed)!
-		cfg.feishu.bridge.target_id, changed = expand_config_string(cfg.feishu.bridge.target_id, vars,
+		cfg.feishu.bridge.target_id, changed = expand_config_string(cfg.feishu.bridge.target_id, 'feishu.bridge', vars,
 			env_map, changed)!
 
 		if !changed {
@@ -1141,7 +1141,7 @@ fn build_config_variable_map(cfg VhttpdConfig) map[string]string {
 	return vars
 }
 
-fn expand_config_string(raw string, vars map[string]string, env map[string]string, changed bool) !(string, bool) {
+fn expand_config_string(raw string, scope string, vars map[string]string, env map[string]string, changed bool) !(string, bool) {
 	if !raw.contains('\${') {
 		return raw, changed
 	}
@@ -1157,7 +1157,7 @@ fn expand_config_string(raw string, vars map[string]string, env map[string]strin
 		if expr == '' {
 			return error('invalid empty variable expression in config string')
 		}
-		replacement := resolve_config_variable(expr, vars, env)!
+		replacement := resolve_config_variable(expr, scope, vars, env)!
 		next := out[..start] + replacement + out[end + 1..]
 		if next == out {
 			break
@@ -1168,7 +1168,7 @@ fn expand_config_string(raw string, vars map[string]string, env map[string]strin
 	return out, any_change
 }
 
-fn resolve_config_variable(expr string, vars map[string]string, env map[string]string) !string {
+fn resolve_config_variable(expr string, scope string, vars map[string]string, env map[string]string) !string {
 	mut key := expr
 	mut has_default := false
 	mut default_raw := ''
@@ -1193,6 +1193,12 @@ fn resolve_config_variable(expr string, vars map[string]string, env map[string]s
 			return default_raw
 		}
 		return error('missing environment variable "${env_key}"')
+	}
+	if !key.contains('.') && scope.trim_space() != '' {
+		scoped_key := '${scope}.${key}'
+		if scoped_key in vars {
+			return vars[scoped_key]
+		}
 	}
 	if key in vars {
 		return vars[key]

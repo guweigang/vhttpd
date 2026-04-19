@@ -1004,6 +1004,7 @@ fn inproc_vjsx_lane_worker_loop(state &VjsxExecutorState, lane_id string, task_c
 				}
 				response = worker_executor.dispatch_websocket_event_on_lane(mut task_app, task.frame, lane) or {
 					err_msg = err.msg()
+					eprintln('[vhttpd] websocket lane worker error lane=${lane_id} event=${task.frame.event} path=${task.frame.path} request_id=${task.frame.request_id} trace_id=${task.frame.trace_id} query=${task.frame.query} error=${err_msg}')
 					task.reply <- InProcVjsxWebSocketTaskResult{
 						ok: false
 						error: err_msg
