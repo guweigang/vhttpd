@@ -4979,7 +4979,10 @@ fn (e InProcVjsxExecutor) dispatch_websocket_event_on_lane(mut app App, frame Wo
 	invoke_handler := ctx.js_global('__vhttpd_invoke_websocket_handle')
 	defer { invoke_handler.free() }
 	
-	eprintln('[vhttpd] DEBUG: phase=resolve_invoker name=__vhttpd_invoke_websocket_handle is_fn=${invoke_handler.is_function()} tag=${invoke_handler.ref.tag.hex()} ptr=${unsafe { voidptr(invoke_handler.ref.u.ptr) }}')
+	unsafe {
+		p := &u8(&invoke_handler.ref)
+		eprintln('[vhttpd] DEBUG: phase=resolve_invoker name=__vhttpd_invoke_websocket_handle is_fn=${invoke_handler.is_function()} raw_bytes=${p[0].hex()}${p[1].hex()}${p[2].hex()}${p[3].hex()}${p[4].hex()}${p[5].hex()}${p[6].hex()}${p[7].hex()} | ${p[8].hex()}${p[9].hex()}${p[10].hex()}${p[11].hex()}${p[12].hex()}${p[13].hex()}${p[14].hex()}${p[15].hex()}')
+	}
 	
 	if !invoke_handler.is_function() {
 		return error('inproc_vjsx_executor_websocket_invoker_missing')
