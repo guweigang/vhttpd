@@ -875,6 +875,7 @@ fn inproc_vjsx_context_error_message(ctx &vjsx.Context, err_msg string, fallback
 	js_err := ctx.js_exception()
 	js_msg := js_err.msg().trim_space()
 	if js_msg != '' {
+		eprintln('[vhttpd] DEBUG: captured js_msg=${js_msg}')
 		return js_msg
 	}
 	normalized := inproc_vjsx_normalize_error_message(err_msg, '')
@@ -4952,6 +4953,7 @@ fn (e InProcVjsxExecutor) dispatch_websocket_event_on_lane(mut app App, frame Wo
 		invoke_arg.free()
 	}
 	mut result := ctx.call(invoke_handler, invoke_arg) or {
+		eprintln('[vhttpd] DEBUG: ctx.call failed raw_err=${err.msg()}')
 		err_msg := inproc_vjsx_context_error_message(ctx, err.msg(),
 			'inproc_vjsx_executor_websocket_handler_failed')
 		e.record_lane_soft_error(lane.id, err_msg)
