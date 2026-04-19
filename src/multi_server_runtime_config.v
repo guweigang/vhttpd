@@ -1,5 +1,7 @@
 module main
 
+import os
+
 pub struct ListenerRuntimeBinding {
 pub:
 	id          string
@@ -322,9 +324,8 @@ fn site_config_as_vhttpd_config(global_cfg VhttpdConfig, site_cfg SiteConfig) Vh
 		mut project_root := site_cfg.project_root
 		global_vars := build_config_variable_map(global_cfg)
 		env_map := os.environ()
-		project_root, _ = expand_config_string(project_root, '', global_vars, env_map, false) or {
-			site_cfg.project_root, false
-		}
+		project_root, _ = expand_config_string(project_root, '', global_vars, env_map,
+			false) or { site_cfg.project_root, false }
 		cfg.paths = PathsConfig{
 			root:   project_root
 			values: cfg.paths.values.clone()
