@@ -106,6 +106,7 @@ mut:
 pub struct VjsxExecutorState {
 mut:
 	mu                           sync.Mutex
+	app_ref                      &App = unsafe { nil }
 	facade                       VjsxRuntimeFacade
 	lanes                        []VjsxExecutionLane
 	hosts                        []VjsxLaneHost
@@ -160,6 +161,16 @@ pub:
 	kind_name     string = 'vjsx'
 pub mut:
 	state &VjsxExecutorState = unsafe { nil }
+}
+
+fn (e InProcVjsxExecutor) remember_app(mut app App) {
+	if isnil(e.state) {
+		return
+	}
+	mut state := e.state
+	state.mu.@lock()
+	state.app_ref = app
+	state.mu.unlock()
 }
 
 struct InProcVjsxHostHttpFetchResponse {
@@ -264,10 +275,27 @@ struct InProcVjsxWebSocketTask {
 	reply chan InProcVjsxWebSocketTaskResult
 }
 
+struct InProcVjsxLaneSnapshotTaskResult {
+	ok    bool
+	raw   string
+	error string
+}
+
+struct InProcVjsxLaneSnapshotTask {
+	app   &App = unsafe { nil }
+	reply chan InProcVjsxLaneSnapshotTaskResult
+}
+
+struct InProcVjsxHostSnapshotRequest {
+	scope string
+	kind  string
+}
+
 struct VjsxLaneWorker {
 mut:
 	lane_id         string
 	websocket_tasks chan InProcVjsxWebSocketTask
+	snapshot_tasks  chan InProcVjsxLaneSnapshotTask
 	stop_ch         chan bool
 	thread          thread
 	started         bool
@@ -291,6 +319,7 @@ pub fn new_inproc_vjsx_executor(config VjsxRuntimeFacadeConfig) InProcVjsxExecut
 		lane_workers << VjsxLaneWorker{
 			lane_id: lane.id
 			websocket_tasks: chan InProcVjsxWebSocketTask{cap: 64}
+			snapshot_tasks: chan InProcVjsxLaneSnapshotTask{cap: 16}
 			stop_ch: chan bool{cap: 1}
 		}
 	}
@@ -379,6 +408,7 @@ pub fn (e InProcVjsxExecutor) lane_count() int {
 }
 
 pub fn (e InProcVjsxExecutor) warmup(mut app App) ! {
+	e.remember_app(mut app)
 	e.bootstrap_placeholder()!
 	lane_count := e.lane_count()
 	if lane_count <= 0 {
@@ -888,9 +918,10 @@ fn (e InProcVjsxExecutor) start_lane_workers() {
 			continue
 		}
 		task_ch := worker.websocket_tasks
+		snapshot_ch := worker.snapshot_tasks
 		stop_ch := worker.stop_ch
 		lane_id := worker.lane_id
-		mut thr := spawn inproc_vjsx_lane_worker_loop(e.state, lane_id, task_ch, stop_ch)
+		mut thr := spawn inproc_vjsx_lane_worker_loop(e.state, lane_id, task_ch, snapshot_ch, stop_ch)
 		state.mu.@lock()
 		if idx >= 0 && idx < state.lane_workers.len {
 			state.lane_workers[idx].thread = thr
@@ -934,7 +965,23 @@ fn (e InProcVjsxExecutor) lane_snapshot_by_id(lane_id string) ?VjsxExecutionLane
 	return none
 }
 
-fn inproc_vjsx_lane_worker_loop(state &VjsxExecutorState, lane_id string, task_ch chan InProcVjsxWebSocketTask, stop_ch chan bool) {
+fn (e InProcVjsxExecutor) request_lane_snapshot(mut app App, lane VjsxExecutionLane) !string {
+	worker := e.lane_worker_by_id(lane.id) or {
+		return error('inproc_vjsx_executor_lane_worker_missing')
+	}
+	reply_ch := chan InProcVjsxLaneSnapshotTaskResult{cap: 1}
+	worker.snapshot_tasks <- InProcVjsxLaneSnapshotTask{
+		app: app
+		reply: reply_ch
+	}
+	result := <-reply_ch
+	if !result.ok {
+		return error(result.error)
+	}
+	return result.raw
+}
+
+fn inproc_vjsx_lane_worker_loop(state &VjsxExecutorState, lane_id string, task_ch chan InProcVjsxWebSocketTask, snapshot_ch chan InProcVjsxLaneSnapshotTask, stop_ch chan bool) {
 	worker_executor := InProcVjsxExecutor{
 		state: state
 	}
@@ -966,6 +1013,35 @@ fn inproc_vjsx_lane_worker_loop(state &VjsxExecutorState, lane_id string, task_c
 				task.reply <- InProcVjsxWebSocketTaskResult{
 					ok: true
 					response: response
+				}
+			}
+			task := <-snapshot_ch {
+				mut task_app := task.app
+				lane := worker_executor.lane_snapshot_by_id(lane_id) or {
+					task.reply <- InProcVjsxLaneSnapshotTaskResult{
+						ok: false
+						error: err.msg()
+					}
+					continue
+				}
+				idx := worker_executor.lane_index_by_id(lane.id)
+				if idx < 0 {
+					task.reply <- InProcVjsxLaneSnapshotTaskResult{
+						ok: false
+						error: 'inproc_vjsx_executor_lane_not_found'
+					}
+					continue
+				}
+				raw := worker_executor.execute_snapshot_hook(mut task_app, idx, lane) or {
+					task.reply <- InProcVjsxLaneSnapshotTaskResult{
+						ok: false
+						error: err.msg()
+					}
+					continue
+				}
+				task.reply <- InProcVjsxLaneSnapshotTaskResult{
+					ok:  true
+					raw: raw
 				}
 			}
 		}
@@ -1219,13 +1295,17 @@ globalThis.__vhttpd_create_runtime = function(meta) {
         }
         return !!hostEmit(String(kind), normalizedFields);
       },
-      snapshot() {
+      snapshot(input = undefined, fallbackValue = undefined) {
         if (typeof hostSnapshot !== "function") {
-          return undefined;
+          return fallbackValue;
         }
-        const raw = hostSnapshot();
+        const request = input && typeof input === "object" ? input : {};
+        const raw = hostSnapshot(JSON.stringify({
+          scope: typeof request.scope === "string" ? request.scope : "",
+          kind: typeof request.kind === "string" ? request.kind : ""
+        }));
         if (raw === undefined || raw === null || raw === "") {
-          return undefined;
+          return fallbackValue;
         }
         try {
           const snapshot = JSON.parse(String(raw));
@@ -1234,7 +1314,7 @@ globalThis.__vhttpd_create_runtime = function(meta) {
           }
           return snapshot;
         } catch (_) {
-          return undefined;
+          return fallbackValue;
         }
       },
       config(fallbackValue = undefined) {
@@ -1469,8 +1549,8 @@ globalThis.__vhttpd_create_runtime = function(meta) {
       emit() {
         return false;
       },
-      snapshot() {
-        return undefined;
+      snapshot(_input = undefined, fallbackValue = undefined) {
+        return fallbackValue;
       },
       config(fallbackValue = undefined) {
         return fallbackValue;
@@ -2417,7 +2497,12 @@ globalThis.__vhttpd_resolve_handler = function(exportsValue) {
 globalThis.__vhttpd_resolve_hook_for_kind = function(exportsValue, kind) {
   const startupAliases = ["startup", "lane_startup", "laneStartup"];
   const appStartupAliases = ["app_startup", "appStartup"];
-  const aliases = kind === "app_startup" ? appStartupAliases : startupAliases;
+  const snapshotAliases = ["snapshot", "lane_snapshot", "laneSnapshot"];
+  const aliases = kind === "app_startup"
+    ? appStartupAliases
+    : kind === "snapshot"
+      ? snapshotAliases
+      : startupAliases;
   if (exportsValue && typeof exportsValue === "object") {
     for (const key of aliases) {
       if (typeof exportsValue[key] === "function") {
@@ -2445,6 +2530,9 @@ globalThis.__vhttpd_resolve_hook_for_kind = function(exportsValue, kind) {
   }
   if (kind === "app_startup" && typeof globalThis.__vhttpd_app_startup_handle === "function") {
     return globalThis.__vhttpd_app_startup_handle;
+  }
+  if (kind === "snapshot" && typeof globalThis.__vhttpd_snapshot_handle === "function") {
+    return globalThis.__vhttpd_snapshot_handle;
   }
   return undefined;
 };
@@ -2520,6 +2608,7 @@ globalThis.__vhttpd_bind_handlers = function(exportsValue) {
   const websocketUpstreamHandler = globalThis.__vhttpd_resolve_handler_for_kind(exportsValue, "websocket_upstream");
   const startupHandler = globalThis.__vhttpd_resolve_hook_for_kind(exportsValue, "startup");
   const appStartupHandler = globalThis.__vhttpd_resolve_hook_for_kind(exportsValue, "app_startup");
+  const snapshotHandler = globalThis.__vhttpd_resolve_hook_for_kind(exportsValue, "snapshot");
   if (typeof httpHandler === "function") {
     globalThis.__vhttpd_handle = httpHandler;
   }
@@ -2535,12 +2624,16 @@ globalThis.__vhttpd_bind_handlers = function(exportsValue) {
   if (typeof appStartupHandler === "function") {
     globalThis.__vhttpd_app_startup_handle = appStartupHandler;
   }
+  if (typeof snapshotHandler === "function") {
+    globalThis.__vhttpd_snapshot_handle = snapshotHandler;
+  }
   return {
     http: httpHandler,
     websocket: websocketHandler,
     websocket_upstream: websocketUpstreamHandler,
     startup: startupHandler,
-    app_startup: appStartupHandler
+    app_startup: appStartupHandler,
+    snapshot: snapshotHandler
   };
 };
 globalThis.__vhttpd_register_exports = function(exportsValue) {
@@ -2733,20 +2826,82 @@ fn inproc_vjsx_host_emit_builder(mut state VjsxExecutorState, idx int) vjsx.Host
 	}
 }
 
-fn inproc_vjsx_host_snapshot_builder(mut state VjsxExecutorState, idx int) vjsx.HostValueBuilder {
+fn inproc_vjsx_host_snapshot_builder(state_ptr &VjsxExecutorState, idx int) vjsx.HostValueBuilder {
+	mut state := unsafe { state_ptr }
 	return fn [mut state, idx] (ctx &vjsx.Context) vjsx.Value {
 		return ctx.js_function(fn [ctx, mut state, idx] (args []vjsx.Value) vjsx.Value {
 			_ = args
 			mut app_ref := &App(unsafe { nil })
+			mut lane_id := ''
 			state.mu.@lock()
 			if idx >= 0 && idx < state.hosts.len && state.hosts[idx].request_ctx.active {
 				app_ref = state.hosts[idx].request_ctx.app
+				lane_id = state.hosts[idx].request_ctx.lane_id
+			}
+			if isnil(app_ref) && !isnil(state.app_ref) {
+				app_ref = state.app_ref
+			}
+			if lane_id == '' && idx >= 0 && idx < state.lanes.len {
+				lane_id = state.lanes[idx].id
 			}
 			state.mu.unlock()
 			if isnil(app_ref) {
 				return ctx.js_undefined()
 			}
 			mut app := app_ref
+			mut req := InProcVjsxHostSnapshotRequest{
+				scope: 'lane'
+				kind:  'runtime'
+			}
+			if args.len > 0 {
+				raw := if args[0].is_string() {
+					args[0].to_string().trim_space()
+				} else {
+					args[0].json_stringify().trim_space()
+				}
+				if raw != '' && raw != 'undefined' && raw != 'null' {
+					req = json.decode(InProcVjsxHostSnapshotRequest, raw) or { req }
+				}
+			}
+			if req.kind == 'app' {
+				executor := InProcVjsxExecutor{
+					state: state
+				}
+				if req.scope == 'all_lanes' {
+					raw := executor.aggregate_app_lane_snapshots(mut app, lane_id, true)
+					if raw.trim_space() == '' {
+						return ctx.js_undefined()
+					}
+					return ctx.js_string(raw)
+				}
+				if req.scope == 'other_lanes' {
+					raw := executor.aggregate_app_lane_snapshots(mut app, lane_id, false)
+					if raw.trim_space() == '' {
+						return ctx.js_undefined()
+					}
+					return ctx.js_string(raw)
+				}
+				if lane_id == '' {
+					return ctx.js_undefined()
+				}
+				lane := executor.lane_snapshot_by_id(lane_id) or {
+					return ctx.js_undefined()
+				}
+				raw := executor.execute_snapshot_hook(mut app, executor.lane_index_by_id(lane.id), lane) or {
+					return ctx.js_undefined()
+				}
+				if raw.trim_space() == '' || raw.trim_space() == 'undefined' || raw.trim_space() == 'null' {
+					return ctx.js_undefined()
+				}
+				return ctx.js_string(raw)
+			}
+			if req.scope == 'all_lanes' {
+				executor := InProcVjsxExecutor{
+					state: state
+				}
+				raw := executor.aggregate_runtime_lane_snapshots(mut app, lane_id)
+				return ctx.js_string(raw)
+			}
 			return ctx.js_string(json.encode(app.admin_runtime_snapshot()))
 		})
 	}
@@ -3027,7 +3182,7 @@ fn inproc_vjsx_host_api_builder(mut state VjsxExecutorState, idx int) vjsx.HostV
 		value: inproc_vjsx_host_emit_builder(mut state, idx)
 	}, vjsx.HostObjectField{
 		name:  'snapshot'
-		value: inproc_vjsx_host_snapshot_builder(mut state, idx)
+		value: inproc_vjsx_host_snapshot_builder(state, idx)
 	}, vjsx.HostObjectField{
 		name:  'config'
 		value: inproc_vjsx_host_config_builder(mut state, idx)
@@ -3100,6 +3255,9 @@ fn inproc_vjsx_module_aliases(kind string) []string {
 		'app_startup' {
 			['app_startup', 'appStartup']
 		}
+		'snapshot' {
+			['snapshot', 'lane_snapshot', 'laneSnapshot']
+		}
 		else {
 			[]string{}
 		}
@@ -3117,6 +3275,7 @@ fn inproc_vjsx_global_handler_name(kind string) string {
 		'websocket_upstream' { '__vhttpd_websocket_upstream_handle' }
 		'startup' { '__vhttpd_startup_handle' }
 		'app_startup' { '__vhttpd_app_startup_handle' }
+		'snapshot' { '__vhttpd_snapshot_handle' }
 		else { '' }
 	}
 }
@@ -3556,6 +3715,178 @@ fn (e InProcVjsxExecutor) build_runtime_payload(lane VjsxExecutionLane, req Http
 		method:                   req.method.to_upper()
 		path:                     normalized_path
 	})
+}
+
+fn (e InProcVjsxExecutor) build_snapshot_runtime_payload(lane VjsxExecutionLane) string {
+	config := e.facade_snapshot().config
+	return json.encode(InProcVjsxRuntimeMeta{
+		provider:                 e.provider()
+		executor:                 e.kind()
+		dispatch_kind:            'snapshot'
+		lane_id:                  lane.id
+		request_id:               'snapshot_${lane.id}'
+		trace_id:                 'snapshot_${lane.id}'
+		app_entry:                config.app_entry
+		module_root:              config.module_root
+		build_root:               config.build_root
+		runtime_profile:          config.runtime_profile
+		thread_count:             config.thread_count
+		enable_fs:                config.enable_fs
+		enable_process:           config.enable_process
+		enable_network:           config.enable_network
+		request_scheme:           ''
+		request_host:             ''
+		request_port:             ''
+		request_target:           '/.well-known/vhttpd/snapshot'
+		request_protocol_version: ''
+		request_remote_addr:      ''
+		request_server:           map[string]string{}
+		method:                   'SNAPSHOT'
+		path:                     '/.well-known/vhttpd/snapshot'
+	})
+}
+
+fn inproc_vjsx_json_or_null(raw string) string {
+	trimmed := raw.trim_space()
+	if trimmed == '' || trimmed == 'undefined' {
+		return 'null'
+	}
+	return trimmed
+}
+
+fn inproc_vjsx_aggregated_snapshot_item_json(lane_id string, available bool, snapshot_raw string, err_msg string) string {
+	return '{"laneId":${json.encode(lane_id)},"available":${if available { 'true' } else { 'false' }},"snapshot":${inproc_vjsx_json_or_null(snapshot_raw)},"error":${json.encode(err_msg)}}'
+}
+
+fn inproc_vjsx_aggregated_snapshot_json(scope string, kind string, current_lane_id string, item_jsons []string) string {
+	return '{"scope":${json.encode(scope)},"kind":${json.encode(kind)},"currentLaneId":${json.encode(current_lane_id)},"lanes":[${item_jsons.join(',')}]}'
+}
+
+fn (e InProcVjsxExecutor) execute_snapshot_hook(mut app App, idx int, lane VjsxExecutionLane) !string {
+	if isnil(e.state) {
+		return error('inproc_vjsx_executor_state_missing')
+	}
+	e.ensure_lane_host(idx)!
+	e.run_app_startup(mut app, idx, lane)!
+	request_id := 'snapshot_${lane.id}'
+	e.activate_lane_request_context(idx, mut app, lane.id, HttpLogicDispatchRequest{
+		method:     'SNAPSHOT'
+		path:       '/.well-known/vhttpd/snapshot'
+		trace_id:   request_id
+		request_id: request_id
+	})
+	defer {
+		e.clear_lane_request_context(idx)
+	}
+	mut state := e.state
+	state.mu.@lock()
+	host := state.hosts[idx]
+	state.mu.unlock()
+	js_ctx_host := host.session.context()
+	runtime_obj := js_ctx_host.json_parse(e.build_snapshot_runtime_payload(lane))
+	defer {
+		runtime_obj.free()
+	}
+	create_runtime_fn := js_ctx_host.js_global('__vhttpd_create_runtime')
+	defer {
+		create_runtime_fn.free()
+	}
+	mut js_runtime := js_ctx_host.call(create_runtime_fn, runtime_obj) or {
+		return error('inproc_vjsx_executor_snapshot_runtime_create_failed:${err.msg()}')
+	}
+	defer {
+		js_runtime.free()
+	}
+	mut result := if host.is_module_entry && !isnil(host.module_binding) {
+		inproc_vjsx_call_module_entry(host.module_binding, 'snapshot', js_runtime) or {
+			if err.msg() != 'inproc_vjsx_executor_missing_snapshot_handler' {
+				return error('inproc_vjsx_executor_snapshot_failed:${err.msg()}')
+			}
+			inproc_vjsx_call_global_entry(js_ctx_host, 'snapshot', js_runtime) or {
+				if err.msg() == 'inproc_vjsx_executor_missing_snapshot_handler' {
+					return ''
+				}
+				return error('inproc_vjsx_executor_snapshot_failed:${err.msg()}')
+			}
+		}
+	} else {
+		hook := js_ctx_host.js_global('__vhttpd_snapshot_handle')
+		defer {
+			hook.free()
+		}
+		if hook.is_undefined() || !hook.is_function() {
+			return ''
+		}
+		js_ctx_host.call(hook, js_runtime) or {
+			return error('inproc_vjsx_executor_snapshot_failed:${err.msg()}')
+		}
+	}
+	defer {
+		result.free()
+	}
+	if result.instanceof('Promise') {
+		mut awaited := result.await()
+		defer {
+			awaited.free()
+		}
+		raw := awaited.json_stringify().trim_space()
+		if raw == '' || raw == 'undefined' || raw == 'null' {
+			return ''
+		}
+		return raw
+	}
+	raw := result.json_stringify().trim_space()
+	if raw == '' || raw == 'undefined' || raw == 'null' {
+		return ''
+	}
+	return raw
+}
+
+fn (e InProcVjsxExecutor) aggregate_runtime_lane_snapshots(mut app App, current_lane_id string) string {
+	if isnil(e.state) {
+		return inproc_vjsx_aggregated_snapshot_json('all_lanes', 'runtime', current_lane_id, []string{})
+	}
+	mut state := e.state
+	state.mu.@lock()
+	lanes := state.lanes.clone()
+	state.mu.unlock()
+	mut items := []string{}
+	for lane in lanes {
+		items << inproc_vjsx_aggregated_snapshot_item_json(lane.id, true, json.encode(app.admin_runtime_snapshot()), '')
+	}
+	return inproc_vjsx_aggregated_snapshot_json('all_lanes', 'runtime', current_lane_id, items)
+}
+
+fn (e InProcVjsxExecutor) aggregate_app_lane_snapshots(mut app App, current_lane_id string, include_current bool) string {
+	scope := if include_current { 'all_lanes' } else { 'other_lanes' }
+	if isnil(e.state) {
+		return inproc_vjsx_aggregated_snapshot_json(scope, 'app', current_lane_id, []string{})
+	}
+	mut state := e.state
+	state.mu.@lock()
+	lanes := state.lanes.clone()
+	state.mu.unlock()
+	mut items := []string{}
+	for lane in lanes {
+		if !include_current && lane.id == current_lane_id {
+			continue
+		}
+		idx := e.lane_index_by_id(lane.id)
+		if idx < 0 {
+			items << inproc_vjsx_aggregated_snapshot_item_json(lane.id, false, '', 'lane_not_found')
+			continue
+		}
+		lane_snapshot := e.request_lane_snapshot(mut app, lane) or {
+			items << inproc_vjsx_aggregated_snapshot_item_json(lane.id, false, '', err.msg())
+			continue
+		}
+		if lane_snapshot.trim_space() == '' {
+			items << inproc_vjsx_aggregated_snapshot_item_json(lane.id, false, '', '')
+			continue
+		}
+		items << inproc_vjsx_aggregated_snapshot_item_json(lane.id, true, lane_snapshot, '')
+	}
+	return inproc_vjsx_aggregated_snapshot_json(scope, 'app', current_lane_id, items)
 }
 
 fn (e InProcVjsxExecutor) build_websocket_upstream_runtime_payload(lane VjsxExecutionLane, req WorkerWebSocketUpstreamDispatchRequest) string {
@@ -4034,6 +4365,23 @@ fn (e InProcVjsxExecutor) execute_startup_hook(mut app App, idx int, lane VjsxEx
 	if isnil(e.state) {
 		return error('inproc_vjsx_executor_state_missing')
 	}
+	e.ensure_lane_host(idx)!
+	mut state := e.state
+	state.mu.@lock()
+	host := state.hosts[idx]
+	state.mu.unlock()
+	js_ctx_host := host.session.context()
+	hook_global_name := if kind == 'app_startup' {
+		'__vhttpd_app_startup_handle'
+	} else {
+		'__vhttpd_startup_handle'
+	}
+	hook_probe := js_ctx_host.js_global(hook_global_name)
+	if hook_probe.is_undefined() || !hook_probe.is_function() {
+		hook_probe.free()
+		return
+	}
+	hook_probe.free()
 	request_id := inproc_vjsx_startup_request_id(kind, lane.id)
 	e.activate_lane_request_context(idx, mut app, lane.id, HttpLogicDispatchRequest{
 		method:     inproc_vjsx_startup_method(kind)
@@ -4044,11 +4392,6 @@ fn (e InProcVjsxExecutor) execute_startup_hook(mut app App, idx int, lane VjsxEx
 	defer {
 		e.clear_lane_request_context(idx)
 	}
-	mut state := e.state
-	state.mu.@lock()
-	mut host := state.hosts[idx]
-	state.mu.unlock()
-	js_ctx_host := host.session.context()
 	runtime_obj := js_ctx_host.json_parse(e.build_startup_runtime_payload(lane, kind))
 	defer {
 		runtime_obj.free()
@@ -4076,11 +4419,6 @@ fn (e InProcVjsxExecutor) execute_startup_hook(mut app App, idx int, lane VjsxEx
 			}
 		}
 	} else {
-		hook_global_name := if kind == 'app_startup' {
-			'__vhttpd_app_startup_handle'
-		} else {
-			'__vhttpd_startup_handle'
-		}
 		hook := js_ctx_host.js_global(hook_global_name)
 		defer {
 			hook.free()
@@ -4268,7 +4606,7 @@ fn (e InProcVjsxExecutor) dispatch_http_once(mut app App, req HttpLogicDispatchR
 	defer {
 		runtime_obj.free()
 	}
-	create_runtime_fn := ctx.js_global('__vhttpd_create_websocket_runtime')
+	create_runtime_fn := ctx.js_global('__vhttpd_create_runtime')
 	defer {
 		create_runtime_fn.free()
 	}
@@ -4355,6 +4693,7 @@ fn (e InProcVjsxExecutor) dispatch_http_once(mut app App, req HttpLogicDispatchR
 }
 
 pub fn (e InProcVjsxExecutor) dispatch_http(mut app App, req HttpLogicDispatchRequest) !HttpLogicDispatchOutcome {
+	e.remember_app(mut app)
 	mut last_err := 'inproc_vjsx_executor_dispatch_failed'
 	for attempt in 0 .. inproc_vjsx_dispatch_retry_attempts {
 		outcome := e.dispatch_http_once(mut app, req) or {
@@ -4371,18 +4710,21 @@ pub fn (e InProcVjsxExecutor) dispatch_http(mut app App, req HttpLogicDispatchRe
 }
 
 pub fn (e InProcVjsxExecutor) open_websocket_session(mut app App, req WebSocketSessionOpenRequest) !WebSocketSessionOpenOutcome {
+	e.remember_app(mut app)
 	_ = app
 	_ = req
 	return inproc_vjsx_not_ready_error('open_websocket_session')
 }
 
 pub fn (e InProcVjsxExecutor) dispatch_stream(mut app App, req StreamDispatchRequest) !StreamDispatchResponse {
+	e.remember_app(mut app)
 	_ = app
 	_ = req
 	return inproc_vjsx_not_ready_error('dispatch_stream')
 }
 
 pub fn (e InProcVjsxExecutor) dispatch_mcp(mut app App, req WorkerMcpDispatchRequest) !WorkerMcpDispatchResponse {
+	e.remember_app(mut app)
 	_ = app
 	_ = req
 	return inproc_vjsx_not_ready_error('dispatch_mcp')
@@ -4526,6 +4868,7 @@ fn (e InProcVjsxExecutor) dispatch_websocket_upstream_once(mut app App, req Work
 }
 
 pub fn (e InProcVjsxExecutor) dispatch_websocket_upstream(mut app App, req WorkerWebSocketUpstreamDispatchRequest) !WorkerWebSocketUpstreamDispatchResponse {
+	e.remember_app(mut app)
 	mut last_err := 'inproc_vjsx_executor_dispatch_failed'
 	for attempt in 0 .. inproc_vjsx_dispatch_retry_attempts {
 		outcome := e.dispatch_websocket_upstream_once(mut app, req) or {
@@ -4657,6 +5000,7 @@ fn (e InProcVjsxExecutor) dispatch_websocket_event_on_lane(mut app App, frame Wo
 }
 
 pub fn (e InProcVjsxExecutor) dispatch_websocket_event(mut app App, frame WorkerWebSocketFrame) !WorkerWebSocketDispatchResponse {
+	e.remember_app(mut app)
 	e.bootstrap_placeholder()!
 	lane, _ := e.acquire_websocket_lane(frame) or {
 		if err.msg() == 'inproc_vjsx_executor_websocket_affinity_key_missing' {
@@ -4673,8 +5017,10 @@ pub fn (e InProcVjsxExecutor) dispatch_websocket_event(mut app App, frame Worker
 		}
 		return error(err.msg())
 	}
-	worker := e.lane_worker_by_id(lane.id) or {
+	defer {
 		e.release_lane(lane.id)
+	}
+	worker := e.lane_worker_by_id(lane.id) or {
 		return error('inproc_vjsx_executor_lane_worker_missing')
 	}
 	reply_ch := chan InProcVjsxWebSocketTaskResult{cap: 1}

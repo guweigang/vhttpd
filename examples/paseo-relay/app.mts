@@ -574,6 +574,122 @@ function sessionSnapshot() {
   };
 }
 
+function mergeRelaySnapshotPayloads(payloads) {
+  const mergedBySessionKey = new Map();
+  for (const payload of payloads) {
+    if (!payload || typeof payload !== "object" || !Array.isArray(payload.sessions)) {
+      continue;
+    }
+    for (const session of payload.sessions) {
+      if (!session || typeof session !== "object") {
+        continue;
+      }
+      const sessionKey = trimString(session.sessionKey);
+      if (!sessionKey) {
+        continue;
+      }
+      const current = mergedBySessionKey.get(sessionKey) || {
+        sessionKey,
+        serverId: trimString(session.serverId),
+        version: trimString(session.version),
+        controlCount: 0,
+        v1ServerId: trimString(session.v1ServerId),
+        v1ClientCount: 0,
+        connections: new Map(),
+        updatedAt: 0,
+      };
+      current.serverId = current.serverId || trimString(session.serverId);
+      current.version = current.version || trimString(session.version);
+      current.v1ServerId = current.v1ServerId || trimString(session.v1ServerId);
+      current.controlCount += Number(session.controlCount || 0);
+      current.v1ClientCount += Number(session.v1ClientCount || 0);
+      current.updatedAt = Math.max(current.updatedAt, Number(session.updatedAt || 0));
+      for (const connection of Array.isArray(session.connections) ? session.connections : []) {
+        const connectionId = trimString(connection?.connectionId);
+        if (!connectionId) {
+          continue;
+        }
+        const existing = current.connections.get(connectionId) || {
+          connectionId,
+          clientCount: 0,
+          serverDataId: "",
+          pendingCount: 0,
+          drainingCount: 0,
+        };
+        existing.clientCount += Number(connection?.clientCount || 0);
+        existing.serverDataId = existing.serverDataId || trimString(connection?.serverDataId);
+        existing.pendingCount += Number(connection?.pendingCount || 0);
+        existing.drainingCount += Number(connection?.drainingCount || 0);
+        current.connections.set(connectionId, existing);
+      }
+      mergedBySessionKey.set(sessionKey, current);
+    }
+  }
+  const sessions = Array.from(mergedBySessionKey.values())
+    .map((session) => ({
+      sessionKey: session.sessionKey,
+      serverId: session.serverId,
+      version: session.version,
+      controlCount: session.controlCount,
+      v1ServerId: session.v1ServerId,
+      v1ClientCount: session.v1ClientCount,
+      connections: Array.from(session.connections.values()).sort((a, b) =>
+        a.connectionId.localeCompare(b.connectionId),
+      ),
+      updatedAt: session.updatedAt,
+    }))
+    .sort((a, b) => a.serverId.localeCompare(b.serverId));
+  return {
+    ok: true,
+    app: "paseo-relay",
+    sessionCount: sessions.length,
+    sessions,
+  };
+}
+
+function aggregateLaneSnapshots(runtime, fallbackValue) {
+  if (!runtime || typeof runtime.snapshot !== "function") {
+    return {
+      merged: fallbackValue,
+      local: fallbackValue,
+      aggregated: null,
+    };
+  }
+  const payloads = [fallbackValue];
+  const aggregated = runtime.snapshot(
+    {
+      scope: "other_lanes",
+      kind: "app",
+    },
+    null,
+  );
+  if (!aggregated || typeof aggregated !== "object" || !Array.isArray(aggregated.lanes)) {
+    return {
+      merged: mergeRelaySnapshotPayloads(payloads),
+      local: fallbackValue,
+      aggregated,
+    };
+  }
+  for (const lane of aggregated.lanes) {
+    if (!lane || typeof lane !== "object" || !lane.available || !lane.snapshot) {
+      continue;
+    }
+    payloads.push(lane.snapshot);
+  }
+  if (payloads.length === 0) {
+    return {
+      merged: fallbackValue,
+      local: fallbackValue,
+      aggregated,
+    };
+  }
+  return {
+    merged: mergeRelaySnapshotPayloads(payloads),
+    local: fallbackValue,
+    aggregated,
+  };
+}
+
 function rejectOpen(reason, status = 400, code = 1008) {
   return {
     accepted: false,
@@ -917,7 +1033,8 @@ const app = {
       });
     }
     if (ctx.path === "/state") {
-      return okJson(sessionSnapshot());
+      const snapshots = aggregateLaneSnapshots(ctx.runtime, sessionSnapshot());
+      return okJson(snapshots.merged);
     }
     return ctx.notFound({
       ok: false,
@@ -937,6 +1054,10 @@ const app = {
       return handleClose(frame);
     }
     return { accepted: true, commands: [] };
+  },
+
+  snapshot() {
+    return sessionSnapshot();
   },
 };
 

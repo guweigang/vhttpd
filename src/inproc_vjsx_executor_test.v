@@ -425,6 +425,86 @@ fn test_inproc_vjsx_executor_dispatch_http_exposes_runtime_snapshot() {
 	assert outcome.response.body.contains('"stats":{')
 }
 
+fn test_inproc_vjsx_executor_dispatch_http_exposes_cross_lane_app_snapshot() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_vjsx_executor_cross_lane_snapshot_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	app_file := os.join_path(temp_dir, 'handler.js')
+	os.write_file(app_file, 'globalThis.__laneCounter = globalThis.__laneCounter || 0;\n' +
+		'globalThis.__vhttpd_handle = (ctx) => {\n' +
+		'  if (ctx.path === "/touch") {\n' +
+		'    globalThis.__laneCounter += 1;\n' +
+		'    return ctx.json({ laneId: ctx.runtime.laneId, count: globalThis.__laneCounter }, 200);\n' +
+		'  }\n' +
+		'  if (ctx.path === "/state") {\n' +
+		'    return ctx.json({\n' +
+		'      local: { laneId: ctx.runtime.laneId, count: globalThis.__laneCounter || 0 },\n' +
+		'      aggregated: ctx.runtime.snapshot({ scope: "other_lanes", kind: "app" }, null),\n' +
+		'    }, 200);\n' +
+		'  }\n' +
+		'  return ctx.notFound({ ok: false });\n' +
+		'};\n' +
+		'globalThis.__vhttpd_snapshot_handle = (runtime) => ({ laneId: runtime.laneId, count: globalThis.__laneCounter || 0 });\n') or {
+		panic(err)
+	}
+	defer {
+		os.rm(app_file) or {}
+	}
+	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
+		thread_count:    2
+		app_entry:       app_file
+		runtime_profile: 'script'
+	})
+	defer {
+		executor.close()
+	}
+	mut app := App{}
+	base_req := http.Request{
+		method: .get
+		url:    '/touch'
+		host:   'example.test'
+	}
+	first := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+		method:      'GET'
+		path:        '/touch'
+		req:         base_req
+		remote_addr: '127.0.0.1'
+		trace_id:    'trace_cross_lane_1'
+		request_id:  'req_cross_lane_1'
+	}) or { panic(err) }
+	second := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+		method:      'GET'
+		path:        '/touch'
+		req:         base_req
+		remote_addr: '127.0.0.1'
+		trace_id:    'trace_cross_lane_2'
+		request_id:  'req_cross_lane_2'
+	}) or { panic(err) }
+	assert first.response.status == 200
+	assert second.response.status == 200
+	assert first.response.body.contains('"laneId":"lane_0"')
+	assert second.response.body.contains('"laneId":"lane_1"')
+	state_req := http.Request{
+		method: .get
+		url:    '/state'
+		host:   'example.test'
+	}
+	snapshot_resp := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+		method:      'GET'
+		path:        '/state'
+		req:         state_req
+		remote_addr: '127.0.0.1'
+		trace_id:    'trace_cross_lane_state'
+		request_id:  'req_cross_lane_state'
+	}) or { panic(err) }
+	assert snapshot_resp.response.status == 200
+	assert snapshot_resp.response.body.contains('"local"')
+	assert snapshot_resp.response.body.contains('"scope":"other_lanes"')
+	assert snapshot_resp.response.body.contains('"kind":"app"')
+	assert snapshot_resp.response.body.contains('"laneId":"lane_0"')
+	assert snapshot_resp.response.body.contains('"laneId":"lane_1"')
+	assert snapshot_resp.response.body.contains('"count":1')
+}
+
 fn test_inproc_vjsx_executor_dispatch_http_supports_ctx_aliases() {
 	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_vjsx_executor_alias_test')
 	os.mkdir_all(temp_dir) or { panic(err) }
