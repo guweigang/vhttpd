@@ -71,10 +71,8 @@ prepare-build-src:
 	@mkdir -p $(BUILD_STAGE_DIR)
 	@if command -v rsync >/dev/null 2>&1; then \
 		rsync -a $(SRC_DIR)/ $(BUILD_STAGE_DIR)/; \
-		if [ -d "$(ROOT)/modules" ]; then rsync -a $(ROOT)/modules/ $(BUILD_STAGE_DIR)/modules/; fi; \
 	else \
 		cp -R $(SRC_DIR)/. $(BUILD_STAGE_DIR)/; \
-		if [ -d "$(ROOT)/modules" ]; then cp -R $(ROOT)/modules/. $(BUILD_STAGE_DIR)/modules/; fi; \
 	fi
 ifeq ($(WITH_DB),1)
 	@cp $(DB_IMPL_DIR)/*.v $(BUILD_STAGE_DIR)/
