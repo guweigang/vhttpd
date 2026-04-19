@@ -4999,7 +4999,13 @@ fn (e InProcVjsxExecutor) dispatch_websocket_event_on_lane(mut app App, frame Wo
 	eprintln('[vhttpd] DEBUG: phase=abi_check sizeof(JSValue)=${sizeof(C.JSValue)} ctx_ptr=${ctx.ref_ptr()}')
 	
 	// 4. Actual Call
-	eprintln('[vhttpd] DEBUG: phase=pre_call invoker_to_string=${invoke_handler.to_string()} arg_to_string=${invoke_arg.to_string()}')
+	raw_handler_ptr := C.JS_ToCString(ctx.ref, invoke_handler.ref)
+	raw_arg_ptr := C.JS_ToCString(ctx.ref, invoke_arg.ref)
+	eprintln('[vhttpd] DEBUG: phase=pre_call raw_handler_str_ptr=${voidptr(raw_handler_ptr)} raw_arg_str_ptr=${voidptr(raw_arg_ptr)}')
+	if !isnil(raw_handler_ptr) { C.JS_FreeCString(ctx.ref, raw_handler_ptr) }
+	if !isnil(raw_arg_ptr) { C.JS_FreeCString(ctx.ref, raw_arg_ptr) }
+	
+	eprintln('[vhttpd] DEBUG: phase=pre_call_str invoker_to_string=${invoke_handler.to_string()} arg_to_string=${invoke_arg.to_string()}')
 	
 	mut result := ctx.call(invoke_handler, invoke_arg) or {
 		eprintln('[vhttpd] DEBUG: phase=call_failed raw_err=${err.msg()}')
