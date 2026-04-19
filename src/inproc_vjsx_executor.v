@@ -11,8 +11,6 @@ import vjsx.runtimejs
 import x.json2
 import log
 
-fn C.JS_GetException(ctx &voidptr) C.JSValue
-
 const inproc_vjsx_lane_wait_timeout_ms = 1000
 const inproc_vjsx_lane_wait_poll_ms = 5
 const inproc_vjsx_dispatch_retry_attempts = 2
@@ -881,23 +879,12 @@ fn inproc_vjsx_context_error_message(ctx &vjsx.Context, err_msg string, fallback
 		return js_msg
 	}
 	
-	// Hack: try to get raw exception as Value and stringify it
-	struct ContextMirror {
-		ref voidptr
-	}
-	mirror := unsafe { &ContextMirror(voidptr(ctx)) }
-	// Re-declare C function to get exception
-	// We need to use the same tag-system as vjsx. Value layout is C.JSValue (16 bytes) + Context pointer
-	raw_val := C.JS_GetException(mirror.ref)
-	val := vjsx.Value{
-		ref: raw_val
-		ctx: *ctx
-	}
+	val := ctx.js_exception_value()
 	defer {
 		val.free()
 	}
 	json_msg := val.json_stringify()
-	if json_msg != '' && json_msg != 'undefined' && json_msg != 'null' {
+	if json_msg != '' && json_msg != 'undefined' && json_msg != 'null' && json_msg != '{}' {
 		eprintln('[vhttpd] DEBUG: captured raw js exception json=${json_msg}')
 		return json_msg
 	}
