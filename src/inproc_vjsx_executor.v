@@ -1174,7 +1174,7 @@ fn runtime_event_fields_from_js_value(val vjsx.Value) map[string]string {
 }
 
 fn install_inproc_http_facade(mut ctx vjsx.Context) ! {
-	ctx.eval('
+	ctx.eval(r'
 globalThis.__vhttpd_create_runtime = function(meta) {
   meta = meta && typeof meta === "object" ? meta : {};
   const freezeValue = (value) => {
