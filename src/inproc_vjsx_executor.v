@@ -9,6 +9,9 @@ import time
 import vjsx
 import vjsx.runtimejs
 import x.json2
+import log
+
+fn C.JS_GetException(ctx &voidptr) C.JSValue
 
 const inproc_vjsx_lane_wait_timeout_ms = 1000
 const inproc_vjsx_lane_wait_poll_ms = 5
@@ -874,10 +877,31 @@ fn inproc_vjsx_normalize_error_message(err_msg string, fallback string) string {
 fn inproc_vjsx_context_error_message(ctx &vjsx.Context, err_msg string, fallback string) string {
 	js_err := ctx.js_exception()
 	js_msg := js_err.msg().trim_space()
-	if js_msg != '' {
-		eprintln('[vhttpd] DEBUG: captured js_msg=${js_msg}')
+	if js_msg != '' && js_msg != '{}' {
 		return js_msg
 	}
+	
+	// Hack: try to get raw exception as Value and stringify it
+	struct ContextMirror {
+		ref voidptr
+	}
+	mirror := unsafe { &ContextMirror(voidptr(ctx)) }
+	// Re-declare C function to get exception
+	// We need to use the same tag-system as vjsx. Value layout is C.JSValue (16 bytes) + Context pointer
+	raw_val := C.JS_GetException(mirror.ref)
+	val := vjsx.Value{
+		ref: raw_val
+		ctx: *ctx
+	}
+	defer {
+		val.free()
+	}
+	json_msg := val.json_stringify()
+	if json_msg != '' && json_msg != 'undefined' && json_msg != 'null' {
+		eprintln('[vhttpd] DEBUG: captured raw js exception json=${json_msg}')
+		return json_msg
+	}
+
 	normalized := inproc_vjsx_normalize_error_message(err_msg, '')
 	if normalized != '' {
 		return normalized
