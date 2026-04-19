@@ -4916,7 +4916,6 @@ fn (e InProcVjsxExecutor) dispatch_websocket_event_on_lane(mut app App, frame Wo
 	defer {
 		js_frame.free()
 	}
-	minimal_arg_probe := os.getenv('VHTTPD_VJSX_WS_PRIMITIVE_ARG').trim_space().to_lower() in ['1', 'true', 'yes', 'on']
 	handler := ctx.js_global('__vhttpd_websocket_handle')
 	defer {
 		handler.free()
