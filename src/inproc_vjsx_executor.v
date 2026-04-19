@@ -5049,6 +5049,19 @@ fn (e InProcVjsxExecutor) dispatch_websocket_event_on_lane(mut app App, frame Wo
 	eprintln('[vhttpd] DEBUG: phase=prepare_arg is_obj=${invoke_arg.is_object()} tag=${invoke_arg.ref.tag.hex()} ptr=${unsafe { voidptr(invoke_arg.ref.u.ptr) }}')
 	
 	// 3. ABI and Context State
+	unsafe {
+		v_bool_true := ctx.js_bool(true)
+		bool_res := C.JS_ToBool(ctx.ref, v_bool_true.ref)
+		eprintln('[vhttpd] DEBUG: abi_probe_bool_true: expect=1 got=${bool_res}')
+		v_bool_true.free()
+
+		v_int_123 := ctx.js_int(123)
+		mut int_out := 0
+		C.JS_ToInt32(ctx.ref, &int_out, v_int_123.ref)
+		eprintln('[vhttpd] DEBUG: abi_probe_int_123: expect=123 got=${int_out}')
+		v_int_123.free()
+	}
+
 	eprintln('[vhttpd] DEBUG: phase=abi_check sizeof(JSValue)=${sizeof(C.JSValue)} ctx_ptr=${ctx.ref_ptr()}')
 	
 	// 4. Actual Call
