@@ -2592,8 +2592,17 @@ globalThis.__vhttpd_invoke_wrapped_handler = function(kind, handler, arg) {
           : error && typeof error === "object" && typeof error.message === "string" && error.message
             ? error.message
             : String(error);
+        let detailed = rendered;
+        try {
+          if (error && typeof error === "object") {
+            detailed += "\nJSON: " + JSON.stringify(error);
+          }
+        } catch (e) {}
         if (typeof console !== "undefined" && console && typeof console.error === "function") {
-          console.error("[vhttpd] " + kind + " handler error", rendered);
+          console.error("[vhttpd] " + kind + " handler error", detailed);
+        }
+        if (error && typeof error === "object" && !error.message && !error.stack) {
+            error.message = rendered || "Unknown error";
         }
         throw error;
       });
@@ -2605,8 +2614,17 @@ globalThis.__vhttpd_invoke_wrapped_handler = function(kind, handler, arg) {
       : error && typeof error === "object" && typeof error.message === "string" && error.message
         ? error.message
         : String(error);
+    let detailed = rendered;
+    try {
+      if (error && typeof error === "object") {
+        detailed += "\nJSON: " + JSON.stringify(error);
+      }
+    } catch (e) {}
     if (typeof console !== "undefined" && console && typeof console.error === "function") {
-      console.error("[vhttpd] " + kind + " handler error", rendered);
+      console.error("[vhttpd] " + kind + " handler error", detailed);
+    }
+    if (error && typeof error === "object" && !error.message && !error.stack) {
+        error.message = rendered || "Unknown error";
     }
     throw error;
   }
@@ -4955,6 +4973,11 @@ fn (e InProcVjsxExecutor) dispatch_websocket_event_on_lane(mut app App, frame Wo
 	defer {
 		invoke_handler.free()
 	}
+	if invoke_handler.is_undefined() || !invoke_handler.is_function() {
+		eprintln('[vhttpd] ERROR: __vhttpd_invoke_websocket_handle is missing or not a function (type=${invoke_handler.to_string()})')
+		return error('inproc_vjsx_executor_websocket_invoker_missing')
+	}
+	
 	invoke_arg := if minimal_arg_probe {
 		ctx.js_string('vhttpd_ws_probe')
 	} else {
@@ -4963,6 +4986,9 @@ fn (e InProcVjsxExecutor) dispatch_websocket_event_on_lane(mut app App, frame Wo
 	defer {
 		invoke_arg.free()
 	}
+
+	eprintln('[vhttpd] DEBUG: ready to call invoke_handler type=${invoke_handler.to_string()} arg=${invoke_arg.to_string()}')
+
 	mut result := ctx.call(invoke_handler, invoke_arg) or {
 		eprintln('[vhttpd] DEBUG: ctx.call failed raw_err=${err.msg()}')
 		err_msg := inproc_vjsx_context_error_message(ctx, err.msg(),
