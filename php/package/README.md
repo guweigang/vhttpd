@@ -547,7 +547,21 @@ echo $global->get('app.name') . PHP_EOL;
 ## Publish workflow
 
 ```bash
-cd /Users/guweigang/Source/vhttpd/php/package
+cd /Users/guweigang/Source/vhttpd
 composer validate
-# tag and push from the dedicated vhttpd package repository, then let Packagist sync
 ```
+
+This repository now syncs `php/package` to
+`https://github.com/guweigang/vphp-package` through
+[`.github/workflows/sync-vphp-package.yml`](/Users/guweigang/Source/vhttpd/.github/workflows/sync-vphp-package.yml).
+
+Required GitHub Actions secret:
+
+- `VPHP_PACKAGE_PUSH_TOKEN`
+
+Automatic behavior:
+
+- pushes to `main` that touch `php/package/**` trigger a subtree sync to `vphp-package:main`
+- manual `workflow_dispatch` can optionally pass `release_tag` to also force-push a tag in `vphp-package`
+
+Packagist should follow the dedicated `vphp-package` repository rather than this mono-repo path.

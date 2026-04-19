@@ -1,0 +1,47 @@
+name: Sync vphp-package
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "php/package/**"
+      - "scripts/publish-vphp-package.sh"
+      - ".github/workflows/sync-vphp-package.yml"
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Optional tag for vphp-package (e.g. v0.1.1)"
+        required: false
+        type: string
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Sync package subtree to vphp-package
+        env:
+          TARGET_REPO_TOKEN: ${{ secrets.VPHP_PACKAGE_PUSH_TOKEN }}
+          SOURCE_PREFIX: php/package
+          TARGET_BRANCH: main
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          if [[ -z "${TARGET_REPO_TOKEN}" ]]; then
+            echo "Missing required secret: VPHP_PACKAGE_PUSH_TOKEN" >&2
+            exit 1
+          fi
+          export TARGET_REPO="https://x-access-token:${TARGET_REPO_TOKEN}@github.com/guweigang/vphp-package.git"
+          bash scripts/publish-vphp-package.sh
