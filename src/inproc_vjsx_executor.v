@@ -4987,6 +4987,8 @@ fn (e InProcVjsxExecutor) dispatch_websocket_event_on_lane(mut app App, frame Wo
 		invoke_arg.free()
 	}
 
+	eprintln('[vhttpd] DEBUG: invoke_handler state: is_fn=${invoke_handler.is_function()} is_obj=${invoke_handler.is_object()} is_null=${invoke_handler.is_null()}')
+	eprintln('[vhttpd] DEBUG: invoke_arg state: is_obj=${invoke_arg.is_object()} is_null=${invoke_arg.is_null()}')
 	eprintln('[vhttpd] DEBUG: ready to call invoke_handler type=${invoke_handler.to_string()} arg=${invoke_arg.to_string()}')
 
 	mut result := ctx.call(invoke_handler, invoke_arg) or {
