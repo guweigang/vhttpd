@@ -1173,7 +1173,7 @@ fn runtime_event_fields_from_js_value(val vjsx.Value) map[string]string {
 }
 
 fn install_inproc_http_facade(mut ctx vjsx.Context) ! {
-	ctx.eval(r'
+	eval_res := ctx.eval(r'
 globalThis.__vhttpd_create_runtime = function(meta) {
   meta = meta && typeof meta === "object" ? meta : {};
   const freezeValue = (value) => {
@@ -2799,7 +2799,12 @@ globalThis.__vhttpd_normalize_websocket_upstream_result = function(frame, result
     }
   };
 };
-')!
+') or {
+		eprintln('[vhttpd] ERROR: js_bootstrap eval failed: ${err.msg()}')
+		return err
+	}
+	defer { eval_res.free() }
+	eprintln('[vhttpd] DEBUG: js_bootstrap eval success, res_tag=${eval_res.ref.tag.hex()}')
 	ctx.end()
 }
 
@@ -4968,41 +4973,45 @@ fn (e InProcVjsxExecutor) dispatch_websocket_event_on_lane(mut app App, frame Wo
 			commands: []WorkerWebSocketFrame{}
 		}
 	}
+	eprintln('[vhttpd] DEBUG: --- START DISPATCH [lane=${lane.id} event=${event.str()}] ---')
+	
+	// 1. Resolve invoker
 	invoke_handler := ctx.js_global('__vhttpd_invoke_websocket_handle')
-	defer {
-		invoke_handler.free()
-	}
-	if invoke_handler.is_undefined() || !invoke_handler.is_function() {
-		eprintln('[vhttpd] ERROR: __vhttpd_invoke_websocket_handle is missing or not a function (type=${invoke_handler.to_string()})')
+	defer { invoke_handler.free() }
+	
+	eprintln('[vhttpd] DEBUG: phase=resolve_invoker name=__vhttpd_invoke_websocket_handle is_fn=${invoke_handler.is_function()} tag=${invoke_handler.ref.tag.hex()} ptr=${voidptr(invoke_handler.ref.u.ptr)}')
+	
+	if !invoke_handler.is_function() {
 		return error('inproc_vjsx_executor_websocket_invoker_missing')
 	}
 	
+	// 2. Prepare Argument
 	invoke_arg := if minimal_arg_probe {
 		ctx.js_string('vhttpd_ws_probe')
 	} else {
 		js_frame.dup_value()
 	}
-	defer {
-		invoke_arg.free()
-	}
-
-	eprintln('[vhttpd] DEBUG: ABI check: sizeof(JSValue)=${sizeof(C.JSValue)} ctx_ptr=${ctx.ref_ptr()}')
-	eprintln('[vhttpd] DEBUG: invoke_handler hex: tag=${invoke_handler.ref.tag.hex()} ptr=${voidptr(invoke_handler.ref.u.ptr)}')
-	eprintln('[vhttpd] DEBUG: invoke_handler state: is_fn=${invoke_handler.is_function()} is_obj=${invoke_handler.is_object()} is_null=${invoke_handler.is_null()}')
-	eprintln('[vhttpd] DEBUG: invoke_arg hex: tag=${invoke_arg.ref.tag.hex()} ptr=${voidptr(invoke_arg.ref.u.ptr)}')
-	eprintln('[vhttpd] DEBUG: invoke_arg state: is_obj=${invoke_arg.is_object()} is_null=${invoke_arg.is_null()}')
-	eprintln('[vhttpd] DEBUG: ready to call invoke_handler type=${invoke_handler.to_string()} arg=${invoke_arg.to_string()}')
-
+	defer { invoke_arg.free() }
+	
+	eprintln('[vhttpd] DEBUG: phase=prepare_arg is_obj=${invoke_arg.is_object()} tag=${invoke_arg.ref.tag.hex()} ptr=${voidptr(invoke_arg.ref.u.ptr)}')
+	
+	// 3. ABI and Context State
+	eprintln('[vhttpd] DEBUG: phase=abi_check sizeof(JSValue)=${sizeof(C.JSValue)} ctx_ptr=${ctx.ref_ptr()}')
+	
+	// 4. Actual Call
+	eprintln('[vhttpd] DEBUG: phase=pre_call invoker_to_string=${invoke_handler.to_string()} arg_to_string=${invoke_arg.to_string()}')
+	
 	mut result := ctx.call(invoke_handler, invoke_arg) or {
-		eprintln('[vhttpd] DEBUG: ctx.call failed raw_err=${err.msg()}')
-		err_msg := inproc_vjsx_context_error_message(ctx, err.msg(),
-			'inproc_vjsx_executor_websocket_handler_failed')
+		eprintln('[vhttpd] DEBUG: phase=call_failed raw_err=${err.msg()}')
+		// Try to see if there is a pending exception in QJS
+		err_msg := inproc_vjsx_context_error_message(ctx, err.msg(), 'inproc_vjsx_executor_websocket_handler_failed')
 		e.record_lane_soft_error(lane.id, err_msg)
 		return error('inproc_vjsx_executor_websocket_handler_failed:${err_msg}')
 	}
-	defer {
-		result.free()
-	}
+	defer { result.free() }
+
+	eprintln('[vhttpd] DEBUG: phase=call_success res_tag=${result.ref.tag.hex()} res_ptr=${voidptr(result.ref.u.ptr)} res_to_string=${result.to_string()}')
+
 	normalize_fn := ctx.js_global('__vhttpd_normalize_websocket_result')
 	defer {
 		normalize_fn.free()
