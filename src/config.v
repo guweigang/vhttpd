@@ -1007,36 +1007,8 @@ fn resolve_config_variables(mut cfg VhttpdConfig, config_path string) ! {
 		cfg.feishu.bridge.target_id, changed = expand_config_string(cfg.feishu.bridge.target_id, 'feishu.bridge', vars,
 			env_map, changed)!
 
-		for name, mut site_cfg in cfg.sites {
-			site_cfg.project_root, changed = expand_config_string(site_cfg.project_root, '',
-				vars, env_map, changed)!
-			site_cfg.host, changed = expand_config_string(site_cfg.host, '', vars,
-				env_map, changed)!
-			site_cfg.app, changed = expand_config_string(site_cfg.app, '', vars, env_map,
-				changed)!
-			site_cfg.worker_entry, changed = expand_config_string(site_cfg.worker_entry, '',
-				vars, env_map, changed)!
-			for key, value in site_cfg.paths.values {
-				next, c := expand_config_string(value, '', vars, env_map,
-					false)!
-				if c {
-					site_cfg.paths.values[key] = next
-					changed = true
-				}
-			}
-			site_cfg.vjsx.app_entry, changed = expand_config_string(site_cfg.vjsx.app_entry, '',
-				vars, env_map, changed)!
-			site_cfg.vjsx.module_root, changed = expand_config_string(site_cfg.vjsx.module_root,
-				'', vars, env_map, changed)!
-			site_cfg.vjsx.build_root, changed = expand_config_string(site_cfg.vjsx.build_root,
-				'', vars, env_map, changed)!
-			site_cfg.php.bin, changed = expand_config_string(site_cfg.php.bin, '',
-				vars, env_map, changed)!
-			site_cfg.php.worker_entry, changed = expand_config_string(site_cfg.php.worker_entry,
-				'', vars, env_map, changed)!
-			site_cfg.php.app_entry, changed = expand_config_string(site_cfg.php.app_entry, '',
-				vars, env_map, changed)!
-		}
+		cfg.feishu.bridge.target_id, changed = expand_config_string(cfg.feishu.bridge.target_id, 'feishu.bridge', vars,
+			env_map, changed)!
 
 		if !changed {
 			resolve_config_paths(mut cfg, config_path)
@@ -1109,22 +1081,6 @@ fn resolve_config_paths(mut cfg VhttpdConfig, config_path string) {
 	cfg.vjsx.signature_root = resolve_config_path(cfg.paths.root, cfg.vjsx.signature_root)
 	cfg.assets.root = resolve_config_path(cfg.paths.root, cfg.assets.root)
 	cfg.codex.cwd = resolve_config_path(cfg.paths.root, cfg.codex.cwd)
-
-	for _, mut site_cfg in cfg.sites {
-		if site_cfg.project_root.trim_space() != '' {
-			site_cfg.project_root = resolve_config_path(base_dir, site_cfg.project_root)
-		}
-		site_cfg.app = resolve_config_path(cfg.paths.root, site_cfg.app)
-		site_cfg.worker_entry = resolve_config_path(cfg.paths.root, site_cfg.worker_entry)
-		for key, value in site_cfg.paths.values {
-			site_cfg.paths.values[key] = resolve_config_path(cfg.paths.root, value)
-		}
-		site_cfg.vjsx.app_entry = resolve_config_path(cfg.paths.root, site_cfg.vjsx.app_entry)
-		site_cfg.vjsx.module_root = resolve_config_path(cfg.paths.root, site_cfg.vjsx.module_root)
-		site_cfg.vjsx.build_root = resolve_config_path(cfg.paths.root, site_cfg.vjsx.build_root)
-		site_cfg.php.worker_entry = resolve_config_path(cfg.paths.root, site_cfg.php.worker_entry)
-		site_cfg.php.app_entry = resolve_config_path(cfg.paths.root, site_cfg.php.app_entry)
-	}
 }
 
 fn build_config_variable_map(cfg VhttpdConfig) map[string]string {
