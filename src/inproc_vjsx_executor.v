@@ -4390,6 +4390,7 @@ fn websocket_upstream_response_from_js_value(val vjsx.Value, req WorkerWebSocket
 
 fn websocket_response_from_js_value(val vjsx.Value, frame WorkerWebSocketFrame) WorkerWebSocketDispatchResponse {
 	raw := val.json_stringify()
+	eprintln('[vhttpd] DEBUG: lane=${frame.id} raw js response: ${raw}')
 	if raw.trim_space() == '' || raw.trim_space() == 'undefined' || raw.trim_space() == 'null' {
 		return WorkerWebSocketDispatchResponse{
 			mode:     'websocket_dispatch'
@@ -5134,9 +5135,16 @@ pub fn (e InProcVjsxExecutor) dispatch_websocket_event(mut app App, frame Worker
 		frame: frame
 		reply: reply_ch
 	}
-	result := <-reply_ch
-	if !result.ok {
-		return error(result.error)
+	select {
+		res := <-reply_ch {
+			if !res.ok {
+				return error(res.error)
+			}
+			return res.response
+		}
+		10 * time.second {
+			e.record_lane_error(lane.id, 'inproc_vjsx_executor_worker_timeout')
+			return error('inproc_vjsx_executor_worker_timeout')
+		}
 	}
-	return result.response
 }
