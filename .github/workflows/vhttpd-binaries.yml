@@ -166,7 +166,7 @@ jobs:
           bundle="vhttpd-${{ matrix.target }}"
           mkdir -p "$bundle/scripts" "$bundle/runtime"
           cp ./vhttpd "$bundle/"
-          ./scripts/bundle_runtime_libs.sh "$bundle/vhttpd" "$bundle/runtime/libs"
+          bash ./scripts/bundle_runtime_libs.sh "$bundle/vhttpd" "$bundle/runtime/libs"
           cp ./README.md "$bundle/README.md"
           cp ./scripts/install_runtime.sh "$bundle/scripts/install_runtime.sh"
           cp ./scripts/runtime_doctor.sh "$bundle/scripts/runtime_doctor.sh"
