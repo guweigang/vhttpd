@@ -4277,10 +4277,10 @@ fn build_websocket_js_frame(ctx &vjsx.Context, frame WorkerWebSocketFrame, runti
 	js_frame.set('path', frame.path)
 	js_frame.set('query', websocket_js_value_from_json(ctx, json.encode(frame.query)))
 	js_frame.set('headers', websocket_js_value_from_json(ctx, json.encode(frame.headers)))
-	js_frame.set('remoteAddr', frame.remote_addr)
-	js_frame.set('requestId', frame.request_id)
-	js_frame.set('traceId', frame.trace_id)
-	js_frame.set('targetId', frame.target_id)
+	js_frame.set('remote_addr', frame.remote_addr)
+	js_frame.set('request_id', frame.request_id)
+	js_frame.set('trace_id', frame.trace_id)
+	js_frame.set('target_id', frame.target_id)
 	js_frame.set('metadata', websocket_js_value_from_json(ctx, json.encode(frame.metadata)))
 	js_frame.set('status', frame.status)
 	js_frame.set('code', frame.code)
@@ -4288,7 +4288,7 @@ fn build_websocket_js_frame(ctx &vjsx.Context, frame WorkerWebSocketFrame, runti
 	js_frame.set('opcode', frame.opcode)
 	js_frame.set('data', frame.data)
 	js_frame.set('error', frame.error)
-	js_frame.set('errorClass', frame.error_class)
+	js_frame.set('error_class', frame.error_class)
 	js_frame.set('runtime', runtime)
 	return js_frame
 }
@@ -4402,6 +4402,7 @@ fn websocket_response_from_js_value(val vjsx.Value, frame WorkerWebSocketFrame) 
 		}
 	}
 	normalized := json.decode(InProcVjsxWebSocketResult, raw) or { InProcVjsxWebSocketResult{} }
+	eprintln('[vhttpd] DEBUG: lane=${frame.id} decoded response accepted=${normalized.accepted} commands=${normalized.commands.len}')
 	return WorkerWebSocketDispatchResponse{
 		mode:        'websocket_dispatch'
 		event:       'result'
