@@ -647,7 +647,7 @@ fn worker_websocket_message_cb(mut ws websocket.Client, msg &websocket.Message, 
 	write_worker_websocket_frame(mut state.worker_conn, WorkerWebSocketFrame{
 		mode:            'websocket'
 		event:           'message'
-		id:              state.request_id
+		id:              state.conn_id
 		opcode:          opcode
 		data:            payload
 		rooms:           state.app.ws_hub_rooms_snapshot(state.conn_id)
@@ -753,7 +753,7 @@ fn worker_websocket_close_cb(mut ws websocket.Client, code int, reason string, r
 		write_worker_websocket_frame(mut state.worker_conn, WorkerWebSocketFrame{
 			mode:            'websocket'
 			event:           'close'
-			id:              state.request_id
+			id:              state.conn_id
 			code:            code
 			reason:          reason
 			rooms:           state.app.ws_hub_rooms_snapshot(state.conn_id)
