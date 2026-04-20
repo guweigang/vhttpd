@@ -5147,4 +5147,5 @@ pub fn (e InProcVjsxExecutor) dispatch_websocket_event(mut app App, frame Worker
 			return error('inproc_vjsx_executor_worker_timeout')
 		}
 	}
+	return error('inproc_vjsx_executor_dispatch_unreachable')
 }
