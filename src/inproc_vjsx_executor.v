@@ -4406,7 +4406,14 @@ fn websocket_response_from_js_value(val vjsx.Value, frame WorkerWebSocketFrame) 
 			commands: []WorkerWebSocketFrame{}
 		}
 	}
-	normalized := json.decode(InProcVjsxWebSocketResult, raw) or { InProcVjsxWebSocketResult{} }
+	// Normalize CamelCase to SnakeCase for V struct compatibility
+	mut raw_normalized := raw.replace('"targetId":', '"target_id":')
+	raw_normalized = raw_normalized.replace('"requestId":', '"request_id":')
+	raw_normalized = raw_normalized.replace('"traceId":', '"trace_id":')
+	raw_normalized = raw_normalized.replace('"errorClass":', '"error_class":')
+	raw_normalized = raw_normalized.replace('"remoteAddr":', '"remote_addr":')
+
+	normalized := json.decode(InProcVjsxWebSocketResult, raw_normalized) or { InProcVjsxWebSocketResult{} }
 	eprintln('[vhttpd] DEBUG: lane=${frame.id} decoded response accepted=${normalized.accepted} commands=${normalized.commands.len}')
 	return WorkerWebSocketDispatchResponse{
 		mode:        'websocket_dispatch'
