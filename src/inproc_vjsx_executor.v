@@ -446,7 +446,9 @@ pub fn (e InProcVjsxExecutor) warmup(mut app App) ! {
 	e.remember_app(mut app)
 	e.bootstrap_placeholder()!
 	for lane in e.lane_snapshot() {
+		log.debug('[vhttpd] warmup request begin lane=${lane.id}')
 		e.request_lane_warmup(mut app, lane)!
+		log.debug('[vhttpd] warmup request done lane=${lane.id}')
 	}
 }
 
@@ -992,6 +994,7 @@ fn (e InProcVjsxExecutor) request_lane_warmup(mut app App, lane VjsxExecutionLan
 		return error('inproc_vjsx_executor_lane_worker_missing')
 	}
 	reply_ch := chan InProcVjsxLaneWarmupTaskResult{cap: 1}
+	log.debug('[vhttpd] warmup enqueue lane=${lane.id}')
 	worker.warmup_tasks <- InProcVjsxLaneWarmupTask{
 		app: unsafe { &app }
 		reply: reply_ch
@@ -999,6 +1002,7 @@ fn (e InProcVjsxExecutor) request_lane_warmup(mut app App, lane VjsxExecutionLan
 	mut result := InProcVjsxLaneWarmupTaskResult{}
 	select {
 		result = <-reply_ch {
+			log.debug('[vhttpd] warmup reply lane=${lane.id} ok=${result.ok} error=${result.error}')
 		}
 		inproc_vjsx_lane_task_timeout {
 			return error('inproc_vjsx_executor_lane_warmup_timeout')
@@ -1022,9 +1026,11 @@ fn inproc_vjsx_lane_worker_loop(state &VjsxExecutorState, lane_id string, task_c
 				mut response := WorkerWebSocketDispatchResponse{}
 				mut err_msg := ''
 				mut task_app := task.app
+				log.debug('[vhttpd] lane worker recv lane=${lane_id} event=${task.frame.event} request_id=${task.frame.request_id} trace_id=${task.frame.trace_id}')
 				lane := worker_executor.lane_snapshot_by_id(lane_id) or {
 					err_msg = inproc_vjsx_normalize_error_message(err.msg(),
 						'inproc_vjsx_executor_lane_not_found')
+					log.debug('[vhttpd] lane worker reply_error lane=${lane_id} event=${task.frame.event} request_id=${task.frame.request_id} error=${err_msg}')
 					task.reply <- InProcVjsxWebSocketTaskResult{
 						ok: false
 						error: err_msg
@@ -1035,12 +1041,14 @@ fn inproc_vjsx_lane_worker_loop(state &VjsxExecutorState, lane_id string, task_c
 					err_msg = inproc_vjsx_normalize_error_message(err.msg(),
 						'inproc_vjsx_executor_websocket_dispatch_failed')
 					eprintln('[vhttpd] websocket lane worker error lane=${lane_id} event=${task.frame.event} path=${task.frame.path} request_id=${task.frame.request_id} trace_id=${task.frame.trace_id} query=${task.frame.query} error=${err_msg}')
+					log.debug('[vhttpd] lane worker reply_error lane=${lane_id} event=${task.frame.event} request_id=${task.frame.request_id} error=${err_msg}')
 					task.reply <- InProcVjsxWebSocketTaskResult{
 						ok: false
 						error: err_msg
 					}
 					continue
 				}
+				log.debug('[vhttpd] lane worker reply_ok lane=${lane_id} event=${task.frame.event} request_id=${task.frame.request_id} accepted=${response.accepted} closed=${response.closed} commands=${response.commands.len} error=${response.error} error_class=${response.error_class}')
 				task.reply <- InProcVjsxWebSocketTaskResult{
 					ok: true
 					response: response
@@ -5631,6 +5639,7 @@ pub fn (e InProcVjsxExecutor) dispatch_websocket_event(mut app App, frame Worker
 		return error('inproc_vjsx_executor_lane_worker_missing')
 	}
 	reply_ch := chan InProcVjsxWebSocketTaskResult{cap: 1}
+	log.debug('[vhttpd] websocket dispatch enqueue lane=${lane.id} event=${frame.event} request_id=${frame.request_id} trace_id=${frame.trace_id}')
 	worker.websocket_tasks <- InProcVjsxWebSocketTask{
 		app: app
 		frame: frame
@@ -5639,6 +5648,7 @@ pub fn (e InProcVjsxExecutor) dispatch_websocket_event(mut app App, frame Worker
 	mut result := InProcVjsxWebSocketTaskResult{}
 	select {
 		result = <-reply_ch {
+			log.debug('[vhttpd] websocket dispatch reply lane=${lane.id} event=${frame.event} request_id=${frame.request_id} ok=${result.ok} error=${result.error} accepted=${result.response.accepted} closed=${result.response.closed} commands=${result.response.commands.len} response_error=${result.response.error} response_error_class=${result.response.error_class}')
 		}
 		inproc_vjsx_lane_task_timeout {
 			return error('inproc_vjsx_executor_lane_task_timeout')
