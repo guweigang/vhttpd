@@ -200,6 +200,7 @@ fn (mut app App) ws_hub_register_conn(conn_id string, worker_socket string, meth
 		client: unsafe { client }
 	}
 	app.ws_hub_mu.unlock()
+	eprintln('[vhttpd] DEBUG: ws_hub_register_conn: id=${conn_id} total_conns=${app.ws_hub_conns.len}')
 }
 
 fn (mut app App) ws_hub_flush_pending(conn_id string) {
