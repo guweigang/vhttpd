@@ -1022,7 +1022,8 @@ fn inproc_vjsx_lane_worker_loop(state &VjsxExecutorState, lane_id string, task_c
 				mut err_msg := ''
 				mut task_app := task.app
 				lane := worker_executor.lane_snapshot_by_id(lane_id) or {
-					err_msg = err.msg()
+					err_msg = inproc_vjsx_normalize_error_message(err.msg(),
+						'inproc_vjsx_executor_lane_not_found')
 					task.reply <- InProcVjsxWebSocketTaskResult{
 						ok: false
 						error: err_msg
@@ -1030,7 +1031,8 @@ fn inproc_vjsx_lane_worker_loop(state &VjsxExecutorState, lane_id string, task_c
 					continue
 				}
 				response = worker_executor.dispatch_websocket_event_on_lane(mut task_app, task.frame, lane) or {
-					err_msg = err.msg()
+					err_msg = inproc_vjsx_normalize_error_message(err.msg(),
+						'inproc_vjsx_executor_websocket_dispatch_failed')
 					eprintln('[vhttpd] websocket lane worker error lane=${lane_id} event=${task.frame.event} path=${task.frame.path} request_id=${task.frame.request_id} trace_id=${task.frame.trace_id} query=${task.frame.query} error=${err_msg}')
 					task.reply <- InProcVjsxWebSocketTaskResult{
 						ok: false
@@ -1048,7 +1050,8 @@ fn inproc_vjsx_lane_worker_loop(state &VjsxExecutorState, lane_id string, task_c
 				lane := worker_executor.lane_snapshot_by_id(lane_id) or {
 					task.reply <- InProcVjsxLaneSnapshotTaskResult{
 						ok: false
-						error: err.msg()
+						error: inproc_vjsx_normalize_error_message(err.msg(),
+							'inproc_vjsx_executor_lane_not_found')
 					}
 					continue
 				}
@@ -1063,7 +1066,8 @@ fn inproc_vjsx_lane_worker_loop(state &VjsxExecutorState, lane_id string, task_c
 				raw := worker_executor.execute_snapshot_hook(mut task_app, idx, lane) or {
 					task.reply <- InProcVjsxLaneSnapshotTaskResult{
 						ok: false
-						error: err.msg()
+						error: inproc_vjsx_normalize_error_message(err.msg(),
+							'inproc_vjsx_executor_snapshot_failed')
 					}
 					continue
 				}
@@ -1077,7 +1081,8 @@ fn inproc_vjsx_lane_worker_loop(state &VjsxExecutorState, lane_id string, task_c
 				lane := worker_executor.lane_snapshot_by_id(lane_id) or {
 					task.reply <- InProcVjsxLaneWarmupTaskResult{
 						ok: false
-						error: err.msg()
+						error: inproc_vjsx_normalize_error_message(err.msg(),
+							'inproc_vjsx_executor_lane_not_found')
 					}
 					continue
 				}
@@ -1092,14 +1097,16 @@ fn inproc_vjsx_lane_worker_loop(state &VjsxExecutorState, lane_id string, task_c
 				worker_executor.ensure_lane_host(idx) or {
 					task.reply <- InProcVjsxLaneWarmupTaskResult{
 						ok: false
-						error: err.msg()
+						error: inproc_vjsx_normalize_error_message(err.msg(),
+							'inproc_vjsx_executor_warmup_host_failed')
 					}
 					continue
 				}
 				worker_executor.run_startup_hooks(mut task_app, idx, lane) or {
 					task.reply <- InProcVjsxLaneWarmupTaskResult{
 						ok: false
-						error: err.msg()
+						error: inproc_vjsx_normalize_error_message(err.msg(),
+							'inproc_vjsx_executor_warmup_startup_failed')
 					}
 					continue
 				}

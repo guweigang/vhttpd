@@ -846,7 +846,9 @@ fn proxy_worker_websocket_dispatch(mut app App, mut ctx Context, method string, 
 		app.ws_hub_meta_snapshot(req_id), map[string][]string{}, map[string]map[string]string{},
 		map[string]int{}, map[string][]string{})
 	resp := app.kernel_dispatch_websocket_event(open_frame) or {
-		log.error('[vhttpd] kernel_dispatch_websocket_event failed trace_id=${trace_id} path=${normalized_path} error=${err}')
+		err_msg := inproc_vjsx_normalize_error_message(err.msg(),
+			'inproc_vjsx_executor_websocket_open_failed')
+		log.error('[vhttpd] kernel_dispatch_websocket_event failed trace_id=${trace_id} path=${normalized_path} error=${err_msg}')
 		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
 		ctx.set_custom_header('x-vhttpd-error-class', 'transport_error') or {}
 		ctx.res.set_status(http.status_from_int(502))
