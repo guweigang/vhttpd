@@ -1028,30 +1028,37 @@ fn inproc_vjsx_lane_worker_loop(state &VjsxExecutorState, lane_id string, task_c
 				}
 			}
 			task := <-task_ch {
+				mut task_app := task.app
 				mut response := WorkerWebSocketDispatchResponse{}
 				mut err_msg := ''
-				mut task_app := task.app
 				lane := worker_executor.lane_snapshot_by_id(lane_id) or {
-					err_msg = err.msg()
 					task.reply <- InProcVjsxWebSocketTaskResult{
 						ok: false
-						error: err_msg
+						error: err.msg()
 					}
 					continue
 				}
+				
+				eprintln('[vhttpd] DEBUG: lane=${lane_id} start dispatch event=${task.frame.event}')
 				response = worker_executor.dispatch_websocket_event_on_lane(mut task_app, task.frame, lane) or {
 					err_msg = err.msg()
+					WorkerWebSocketDispatchResponse{}
+				}
+				eprintln('[vhttpd] DEBUG: lane=${lane_id} finish dispatch event=${task.frame.event} ok=${err_msg == ""}')
+
+				if err_msg != '' {
 					eprintln('[vhttpd] websocket lane worker error lane=${lane_id} event=${task.frame.event} path=${task.frame.path} request_id=${task.frame.request_id} trace_id=${task.frame.trace_id} query=${task.frame.query} error=${err_msg}')
 					task.reply <- InProcVjsxWebSocketTaskResult{
 						ok: false
 						error: err_msg
 					}
-					continue
+				} else {
+					task.reply <- InProcVjsxWebSocketTaskResult{
+						ok: true
+						response: response
+					}
 				}
-				task.reply <- InProcVjsxWebSocketTaskResult{
-					ok: true
-					response: response
-				}
+				eprintln('[vhttpd] DEBUG: lane=${lane_id} reply sent')
 			}
 			task := <-snapshot_ch {
 				mut task_app := task.app
