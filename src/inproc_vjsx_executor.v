@@ -5134,9 +5134,16 @@ pub fn (e InProcVjsxExecutor) dispatch_websocket_event(mut app App, frame Worker
 		frame: frame
 		reply: reply_ch
 	}
-	result := <-reply_ch
-	if !result.ok {
-		return error(result.error)
+	select {
+		res := <-reply_ch {
+			if !res.ok {
+				return error(res.error)
+			}
+			return res.response
+		}
+		10 * time.second {
+			e.record_lane_error(lane.id, 'inproc_vjsx_executor_worker_timeout')
+			return error('inproc_vjsx_executor_worker_timeout')
+		}
 	}
-	return result.response
 }
