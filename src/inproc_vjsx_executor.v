@@ -429,7 +429,7 @@ pub fn (e InProcVjsxExecutor) warmup(mut app App) ! {
 		return
 	}
 	mut reply_channels := []chan InProcVjsxWarmupTaskResult{}
-	state := e.state
+	mut state := e.state
 	state.mu.@lock()
 	for idx in 0 .. lane_count {
 		worker := state.lane_workers[idx]
@@ -976,7 +976,6 @@ fn inproc_vjsx_lane_worker_loop(state &VjsxExecutorState, lane_id string, task_c
 				return
 			}
 			task := <-warmup_ch {
-				mut task_app := task.app
 				lane := worker_executor.lane_snapshot_by_id(lane_id) or {
 					task.reply <- InProcVjsxWarmupTaskResult{
 						ok: false
