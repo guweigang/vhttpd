@@ -360,7 +360,6 @@ pub fn new_inproc_vjsx_executor(config VjsxRuntimeFacadeConfig) InProcVjsxExecut
 			}
 		}
 	}
-	executor.start_lane_workers()
 	return executor
 }
 
@@ -846,27 +845,25 @@ fn (e InProcVjsxExecutor) start_lane_workers() {
 	if isnil(e.state) {
 		return
 	}
-	mut workers := []VjsxLaneWorker{}
 	mut state := e.state
 	state.mu.@lock()
-	workers = state.lane_workers.clone()
-	state.mu.unlock()
-	for idx, worker in workers {
-		if worker.started {
+	for idx in 0 .. state.lane_workers.len {
+		if state.lane_workers[idx].started {
 			continue
 		}
-		task_ch := worker.websocket_tasks
-		snapshot_ch := worker.snapshot_tasks
-		stop_ch := worker.stop_ch
-		lane_id := worker.lane_id
+		task_ch := state.lane_workers[idx].websocket_tasks
+		snapshot_ch := state.lane_workers[idx].snapshot_tasks
+		stop_ch := state.lane_workers[idx].stop_ch
+		lane_id := state.lane_workers[idx].lane_id
 		mut thr := spawn inproc_vjsx_lane_worker_loop(e.state, lane_id, task_ch, snapshot_ch, stop_ch)
-		state.mu.@lock()
-		if idx >= 0 && idx < state.lane_workers.len {
-			state.lane_workers[idx].thread = thr
-			state.lane_workers[idx].started = true
-		}
-		state.mu.unlock()
+		state.lane_workers[idx].thread = thr
+		state.lane_workers[idx].started = true
 	}
+	state.mu.unlock()
+}
+
+fn (e InProcVjsxExecutor) ensure_lane_workers_started() {
+	e.start_lane_workers()
 }
 
 fn (e InProcVjsxExecutor) lane_worker_by_id(lane_id string) ?VjsxLaneWorker {
@@ -904,6 +901,7 @@ fn (e InProcVjsxExecutor) lane_snapshot_by_id(lane_id string) ?VjsxExecutionLane
 }
 
 fn (e InProcVjsxExecutor) request_lane_snapshot(mut app App, lane VjsxExecutionLane) !string {
+	e.ensure_lane_workers_started()
 	worker := e.lane_worker_by_id(lane.id) or {
 		return error('inproc_vjsx_executor_lane_worker_missing')
 	}
@@ -4997,6 +4995,7 @@ fn (e InProcVjsxExecutor) dispatch_websocket_event_on_lane(mut app App, frame Wo
 pub fn (e InProcVjsxExecutor) dispatch_websocket_event(mut app App, frame WorkerWebSocketFrame) !WorkerWebSocketDispatchResponse {
 	e.remember_app(mut app)
 	e.bootstrap_placeholder()!
+	e.ensure_lane_workers_started()
 	lane, _ := e.acquire_websocket_lane(frame) or {
 		if err.msg() == 'inproc_vjsx_executor_websocket_affinity_key_missing' {
 			return WorkerWebSocketDispatchResponse{

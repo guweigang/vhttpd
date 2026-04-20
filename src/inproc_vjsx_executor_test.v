@@ -20,6 +20,18 @@ fn inproc_vjsx_test_lane_host_signature(executor InProcVjsxExecutor, idx int) st
 	return state.hosts[idx].source_signature
 }
 
+fn inproc_vjsx_test_started_lane_worker_count(executor InProcVjsxExecutor) int {
+	if isnil(executor.state) {
+		return 0
+	}
+	mut state := executor.state
+	state.mu.@lock()
+	defer {
+		state.mu.unlock()
+	}
+	return state.lane_workers.count(it.started)
+}
+
 fn inproc_vjsx_wait_for_signature_refresh(executor InProcVjsxExecutor, previous string, timeout_ms int) bool {
 	deadline := time.now().add(time.millisecond * timeout_ms)
 	for time.now() < deadline {
@@ -39,6 +51,17 @@ fn test_inproc_vjsx_executor_lane_temp_root_uses_system_temp_cache() {
 	assert temp_root.contains('hello-handler.mts')
 	assert temp_root.ends_with('lane_2.vjsxbuild')
 	assert !temp_root.contains(app_entry + '.lane_2.vjsxbuild')
+}
+
+fn test_inproc_vjsx_executor_defers_lane_worker_start_until_needed() {
+	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
+		thread_count:    2
+		runtime_profile: 'node'
+	})
+	defer {
+		executor.close()
+	}
+	assert inproc_vjsx_test_started_lane_worker_count(executor) == 0
 }
 
 fn test_inproc_vjsx_executor_lane_temp_root_uses_configured_build_root() {
@@ -70,6 +93,41 @@ fn test_vjsx_runtime_asset_root_prefers_env_override() {
 		os.rmdir_all(temp_dir) or {}
 	}
 	assert vjsx_runtime_asset_root() == temp_dir
+}
+
+fn test_vjsx_runtime_asset_root_prefers_bundle_relative_runtime_dir() {
+	root_dir := os.join_path(os.temp_dir(), 'vhttpd_vjsx_asset_root_bundle_test')
+	exe_dir := os.join_path(root_dir, 'bin')
+	runtime_dir := os.join_path(exe_dir, 'runtime', 'vjsx')
+	share_dir := os.join_path(root_dir, 'share', 'vjsx')
+	fake_exe := os.join_path(exe_dir, 'vhttpd')
+	os.mkdir_all(os.join_path(runtime_dir, 'web', 'js')) or { panic(err) }
+	os.mkdir_all(os.join_path(share_dir, 'web', 'js')) or { panic(err) }
+	os.write_file(os.join_path(runtime_dir, 'web', 'js', 'buffer.js'), '// bundle asset\n') or {
+		panic(err)
+	}
+	os.write_file(os.join_path(share_dir, 'web', 'js', 'buffer.js'), '// share asset\n') or {
+		panic(err)
+	}
+	os.write_file(fake_exe, '') or { panic(err) }
+	old_root := os.getenv('VJSX_ASSET_ROOT')
+	old_share_root := os.getenv('VHTTPD_SHARE_ROOT')
+	os.unsetenv('VJSX_ASSET_ROOT')
+	os.setenv('VHTTPD_SHARE_ROOT', os.join_path(root_dir, 'share'), true)
+	defer {
+		if old_root == '' {
+			os.unsetenv('VJSX_ASSET_ROOT')
+		} else {
+			os.setenv('VJSX_ASSET_ROOT', old_root, true)
+		}
+		if old_share_root == '' {
+			os.unsetenv('VHTTPD_SHARE_ROOT')
+		} else {
+			os.setenv('VHTTPD_SHARE_ROOT', old_share_root, true)
+		}
+		os.rmdir_all(root_dir) or {}
+	}
+	assert vjsx_runtime_asset_root_for_executable(fake_exe) == runtime_dir
 }
 
 fn test_inproc_vjsx_executor_source_signature_respects_include_and_exclude_globs() {

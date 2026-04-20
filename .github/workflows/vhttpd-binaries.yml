@@ -54,6 +54,7 @@ jobs:
             libpq-dev \
             libsqlite3-dev \
             libgc-dev \
+            patchelf \
             pkg-config \
             libssl-dev
 
@@ -165,12 +166,14 @@ jobs:
           bundle="vhttpd-${{ matrix.target }}"
           mkdir -p "$bundle/scripts" "$bundle/runtime"
           cp ./vhttpd "$bundle/"
+          ./scripts/bundle_runtime_libs.sh "$bundle/vhttpd" "$bundle/runtime/libs"
           cp ./README.md "$bundle/README.md"
           cp ./scripts/install_runtime.sh "$bundle/scripts/install_runtime.sh"
           cp ./scripts/runtime_doctor.sh "$bundle/scripts/runtime_doctor.sh"
+          cp ./scripts/bundle_runtime_libs.sh "$bundle/scripts/bundle_runtime_libs.sh"
           cp -R "$VHTTPD_VJSX_ROOT" "$bundle/runtime/vjsx"
           rm -rf "$bundle/runtime/vjsx/.git"
-          chmod +x "$bundle/scripts/install_runtime.sh" "$bundle/scripts/runtime_doctor.sh"
+          chmod +x "$bundle/scripts/install_runtime.sh" "$bundle/scripts/runtime_doctor.sh" "$bundle/scripts/bundle_runtime_libs.sh"
           tar -czf "$bundle.tar.gz" "$bundle"
 
       - name: Upload artifact

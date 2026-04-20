@@ -305,6 +305,8 @@ Each packaged artifact should now contain:
 - `README.md`
 - `scripts/install_runtime.sh`
 - `scripts/runtime_doctor.sh`
+- `scripts/bundle_runtime_libs.sh`
+- `runtime/libs`
 - `runtime/vjsx`
 
 Suggested install flow for end users:
@@ -323,29 +325,44 @@ If the runtime environment also needs DB client support:
 
 Runtime profile notes:
 
-- `core`: installs the base runtime library surface needed by the packaged binary
-- `core`: now also installs SQLite/MySQL/PostgreSQL client packages because default distributed binaries include DB support
-- `db`: alias for the same default DB-capable runtime dependency set
+- `core`: installs the binary, bundled native runtime libraries, and `vjsx` runtime assets
+- `db`: alias for the same default DB-capable bundle layout
 - `full`: same as `db` today, reserved for future expansion
 - `none`: install the binary only and skip system package installation
+
+The packaged workflow artifacts now bundle non-system native client libraries next to the binary when they are detected from the built executable. Today that includes the DB/TLS/runtime set that tends to be missing on fresh machines:
+
+- `libmysqlclient` or `libmariadb`
+- `libpq`
+- `libssl`
+- `libcrypto`
+- `libgc`
+
+The binary is rewritten during packaging so it prefers these bundled copies:
+
+- Linux: `RPATH=$ORIGIN/runtime/libs`
+- macOS: `@loader_path/runtime/libs/...`
+
+That means end users no longer need to preinstall MySQL/PostgreSQL/OpenSSL/Boehm runtime packages just to launch the release binary.
 
 The packaged binary now resolves `vjsx` runtime assets in this order:
 
 1. `VJSX_ASSET_ROOT`
 2. bundled `runtime/vjsx` next to the installed binary
-3. `${VHTTPD_SHARE_ROOT:-/usr/local/share/vhttpd}/vjsx`
-4. `~/.vmodules/vjsx`
+3. `${VHTTPD_SHARE_ROOT}/vjsx` when explicitly configured
+4. legacy shared fallback `/usr/local/share/vhttpd/vjsx`
+5. `~/.vmodules/vjsx`
 
-`scripts/install_runtime.sh` still copies bundled `runtime/vjsx` to the stable shared location:
+`scripts/install_runtime.sh` now installs bundled `vjsx` assets directly next to the binary:
 
 ```text
-/usr/local/share/vhttpd/vjsx
+${VHTTPD_PREFIX:-~/.local}/bin/runtime/vjsx
 ```
 
-This keeps the installed layout predictable and avoids baking GitHub runner paths such as `/home/runner/.vmodules/vjsx` into distributed binaries. For compatibility with local tooling, it also creates:
+This keeps the installed layout self-contained and aligned with the runtime search order. For compatibility with local tooling, it also creates:
 
 ```text
-~/.vmodules/vjsx -> /usr/local/share/vhttpd/vjsx
+~/.vmodules/vjsx -> ${VHTTPD_PREFIX:-~/.local}/bin/runtime/vjsx
 ```
 
 After installation, users can verify the machine with:

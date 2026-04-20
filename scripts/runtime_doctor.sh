@@ -3,7 +3,7 @@ set -euo pipefail
 
 bin_path="${1:-./vhttpd}"
 os_name="$(uname -s)"
-share_root="${VHTTPD_SHARE_ROOT:-/usr/local/share/vhttpd}"
+share_root="${VHTTPD_SHARE_ROOT:-$(CDPATH= cd -- "$(dirname -- "$bin_path")/runtime" && pwd 2>/dev/null || printf '%s' /usr/local/share/vhttpd)}"
 vjsx_asset_root_override="${VJSX_ASSET_ROOT:-}"
 status=0
 
@@ -44,6 +44,23 @@ resolve_vjsx_asset_root() {
   return 1
 }
 
+resolve_loader_path() {
+  local dep_path="$1"
+  local bin_dir
+  bin_dir="$(CDPATH= cd -- "$(dirname -- "$bin_path")" && pwd)"
+  case "$dep_path" in
+    @loader_path/*)
+      printf '%s\n' "${bin_dir}/${dep_path#@loader_path/}"
+      ;;
+    @executable_path/*)
+      printf '%s\n' "${bin_dir}/${dep_path#@executable_path/}"
+      ;;
+    *)
+      printf '%s\n' "$dep_path"
+      ;;
+  esac
+}
+
 [ -f "$bin_path" ] || {
   bad "binary ${bin_path}"
   exit 1
@@ -76,7 +93,8 @@ case "$os_name" in
             continue
             ;;
         esac
-        if [ -e "$dep_path" ]; then
+        resolved_dep_path="$(resolve_loader_path "$dep_path")"
+        if [ -e "$resolved_dep_path" ]; then
           ok "linked library ${dep_path}"
         else
           bad "linked library ${dep_path}"
