@@ -428,11 +428,15 @@ pub fn (e InProcVjsxExecutor) warmup(mut app App) ! {
 	if lane_count <= 0 {
 		return
 	}
-	mut reply_channels := []chan InProcVjsxWarmupTaskResult{}
+	
 	mut state := e.state
 	state.mu.@lock()
+	workers := state.lane_workers.clone()
+	state.mu.unlock()
+
+	mut reply_channels := []chan InProcVjsxWarmupTaskResult{}
 	for idx in 0 .. lane_count {
-		worker := state.lane_workers[idx]
+		worker := workers[idx]
 		reply_ch := chan InProcVjsxWarmupTaskResult{cap: 1}
 		worker.warmup_tasks <- InProcVjsxWarmupTask{
 			app:   app
@@ -440,7 +444,6 @@ pub fn (e InProcVjsxExecutor) warmup(mut app App) ! {
 		}
 		reply_channels << reply_ch
 	}
-	state.mu.unlock()
 
 	mut last_error := ''
 	for reply_ch in reply_channels {
@@ -672,6 +675,28 @@ pub fn (e InProcVjsxExecutor) select_next_lane() !VjsxExecutionLane {
 	return error('inproc_vjsx_executor_no_available_lane')
 }
 
+fn (e InProcVjsxExecutor) force_select_lane_by_id(lane_id string) !VjsxExecutionLane {
+	if isnil(e.state) {
+		return error('inproc_vjsx_executor_state_missing')
+	}
+	if lane_id.trim_space() == '' {
+		return error('inproc_vjsx_executor_lane_id_missing')
+	}
+	mut state := e.state
+	state.mu.@lock()
+	defer {
+		state.mu.unlock()
+	}
+	for idx, lane in state.lanes {
+		if lane.id != lane_id {
+			continue
+		}
+		state.lanes[idx].inflight++
+		return state.lanes[idx]
+	}
+	return error('inproc_vjsx_executor_lane_not_found')
+}
+
 fn (e InProcVjsxExecutor) select_lane_by_id(lane_id string) !VjsxExecutionLane {
 	if isnil(e.state) {
 		return error('inproc_vjsx_executor_state_missing')
@@ -783,7 +808,7 @@ fn (e InProcVjsxExecutor) acquire_websocket_lane(frame WorkerWebSocketFrame) !(V
 	existing_lane_id := state.websocket_connection_lane_by_id[frame.id] or { '' }
 	state.mu.unlock()
 	if existing_lane_id != '' {
-		return e.acquire_lane_by_id(existing_lane_id, inproc_vjsx_lane_wait_timeout_ms)!, ''
+		return e.force_select_lane_by_id(existing_lane_id)!, ''
 	}
 	affinity_key := websocket_affinity_value(frame, config)
 	if affinity_key == '' {
@@ -802,7 +827,7 @@ fn (e InProcVjsxExecutor) acquire_websocket_lane(frame WorkerWebSocketFrame) !(V
 	mapped_lane_id := state.websocket_affinity_lane_by_key[affinity_key] or { '' }
 	state.mu.unlock()
 	if mapped_lane_id != '' {
-		lane := e.acquire_lane_by_id(mapped_lane_id, inproc_vjsx_lane_wait_timeout_ms)!
+		lane := e.force_select_lane_by_id(mapped_lane_id)!
 		if frame.id.trim_space() != '' {
 			state.mu.@lock()
 			state.websocket_connection_lane_by_id[frame.id] = lane.id
