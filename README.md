@@ -213,7 +213,7 @@ Practical summary:
 
 - `core`: base build dependencies for `vhttpd`
 - `vjsx`: embedded runtime support, including the required QuickJS archive placement under `~/.vmodules/vjsx/libs/`
-- `db`: optional database client libraries for `WITH_DB=1`
+- `db`: alias for the default DB-capable dependency surface
 - `full`: everything above
 
 Recommended entry points:
@@ -241,8 +241,9 @@ make deps-full
 What these targets do:
 
 - `make deps-core`: installs `openssl`, `Boehm GC`, `pkg-config`, and basic build tooling
+- `make deps-core` also installs SQLite/MySQL/PostgreSQL client development packages because default `vhttpd` builds now include DB support
 - `make deps-vjsx`: ensures `~/.vmodules/vjsx` exists and, on Linux, builds QuickJS and places it at `~/.vmodules/vjsx/libs/qjs_linux_x64.a`
-- `make deps-db`: installs optional SQLite/MySQL/PostgreSQL client development packages
+- `make deps-db`: alias for the same default DB-capable build dependency set
 - `make doctor`: checks the current machine for the required commands, `pkg-config` entries, and `vjsx` QuickJS archive placement
 
 Important `vjsx` note:
@@ -263,16 +264,15 @@ make prod
 make build-prod
 ```
 
-`make vhttpd` now builds with `-d use_openssl` by default.
+`make vhttpd` now builds with `-d use_openssl` and DB support by default.
 If you need the previous mbedtls path, use `make vhttpd V_TLS_BACKEND=mbedtls`; that path still adds `-d mbedtls_client_read_timeout_ms=120000` for long-lived Feishu websocket connections.
 `make prod` / `make build-prod` use the same TLS backend selection and additionally enable V `-prod`.
 `prod` build defaults runtime logs to `warn` (warnings + errors). You can override with `VHTTPD_LOG_LEVEL=debug|info|warn|error|fatal`.
 
-To build with DB support enabled:
+If you want to turn DB support off explicitly:
 
 ```bash
-make deps-db
-make build WITH_DB=1
+make build WITH_DB=0
 ```
 
 ## CI Binaries
@@ -324,7 +324,8 @@ If the runtime environment also needs DB client support:
 Runtime profile notes:
 
 - `core`: installs the base runtime library surface needed by the packaged binary
-- `db`: additionally installs SQLite/MySQL/PostgreSQL client packages so DB-enabled deployments are less likely to fail on missing client libraries
+- `core`: now also installs SQLite/MySQL/PostgreSQL client packages because default distributed binaries include DB support
+- `db`: alias for the same default DB-capable runtime dependency set
 - `full`: same as `db` today, reserved for future expansion
 - `none`: install the binary only and skip system package installation
 

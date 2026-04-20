@@ -65,32 +65,16 @@ install_runtime_core_packages() {
     Darwin)
       need_cmd brew
       brew_install_if_missing bdw-gc
-      brew_install_if_missing openssl@3
-      ;;
-    Linux)
-      need_cmd apt-get
-      # Install runtime libs directly when package names are stable.
-      # libgc-dev is used here instead of a narrower runtime package to keep distro variance low.
-      apt_install libgc-dev libssl-dev sqlite3 libsqlite3-dev
-      ;;
-    *)
-      fail "unsupported OS: ${os_name}"
-      ;;
-  esac
-}
-
-install_runtime_db_packages() {
-  case "$os_name" in
-    Darwin)
-      need_cmd brew
-      brew_install_if_missing sqlite
-      brew_install_if_missing mysql-client
       brew_install_if_missing libpq
+      brew_install_if_missing mysql-client
+      brew_install_if_missing openssl@3
+      brew_install_if_missing sqlite
       ;;
     Linux)
       need_cmd apt-get
-      # Use dev packages here so build and runtime users get the same linker surface.
-      apt_install default-libmysqlclient-dev libpq-dev libsqlite3-dev sqlite3
+      # Default distributed builds now include DB support, so runtime installs
+      # need the client library surface too.
+      apt_install default-libmysqlclient-dev libgc-dev libpq-dev libsqlite3-dev libssl-dev sqlite3
       ;;
     *)
       fail "unsupported OS: ${os_name}"
@@ -129,7 +113,6 @@ case "$profile" in
     ;;
   db|full)
     install_runtime_core_packages
-    install_runtime_db_packages
     ;;
   *)
     fail "unknown profile: ${profile} (expected: none | core | db | full)"

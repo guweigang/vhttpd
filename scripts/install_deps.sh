@@ -45,8 +45,11 @@ install_core_packages() {
     Darwin)
       need_cmd brew
       brew_install_if_missing bdw-gc
+      brew_install_if_missing libpq
+      brew_install_if_missing mysql-client
       brew_install_if_missing openssl@3
       brew_install_if_missing pkg-config
+      brew_install_if_missing sqlite
       brew_install_if_missing git
       brew_install_if_missing curl
       brew_install_if_missing unzip
@@ -57,33 +60,15 @@ install_core_packages() {
         build-essential \
         ca-certificates \
         curl \
+        default-libmysqlclient-dev \
         git \
         libgc-dev \
-        libssl-dev \
-        pkg-config \
-        unzip
-      ;;
-    *)
-      fail "unsupported OS: ${os_name}"
-      ;;
-  esac
-}
-
-install_db_packages() {
-  case "$os_name" in
-    Darwin)
-      need_cmd brew
-      brew_install_if_missing sqlite
-      brew_install_if_missing mysql-client
-      brew_install_if_missing libpq
-      ;;
-    Linux)
-      need_cmd apt-get
-      apt_install \
-        default-libmysqlclient-dev \
         libpq-dev \
         libsqlite3-dev \
-        sqlite3
+        libssl-dev \
+        pkg-config \
+        sqlite3 \
+        unzip
       ;;
     *)
       fail "unsupported OS: ${os_name}"
@@ -166,11 +151,10 @@ case "$mode" in
     ensure_vjsx_runtime_assets
     ;;
   db)
-    install_db_packages
+    install_core_packages
     ;;
   full)
     install_core_packages
-    install_db_packages
     ensure_vjsx_runtime_assets
     ;;
   *)

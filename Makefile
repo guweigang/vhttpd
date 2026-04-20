@@ -16,7 +16,7 @@ endif
 V_FLAGS ?= $(V_TLS_FLAGS)
 V_PROD_FLAGS ?= -prod
 V_NOCACHE_FLAGS ?= -nocache
-WITH_DB ?= 0
+WITH_DB ?= 1
 
 DB_IMPL_DIR := $(ROOT)/dbsrc
 BUILD_STAGE_ROOT := $(ROOT)/tmp/vbuildsrc

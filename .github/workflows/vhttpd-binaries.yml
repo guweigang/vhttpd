@@ -50,6 +50,9 @@ jobs:
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
+            default-libmysqlclient-dev \
+            libpq-dev \
+            libsqlite3-dev \
             libgc-dev \
             pkg-config \
             libssl-dev
@@ -59,7 +62,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          brew install bdw-gc openssl@3 pkg-config
+          brew install bdw-gc libpq mysql-client openssl@3 pkg-config sqlite
 
       - name: Install V compiler
         shell: bash
@@ -129,11 +132,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ "${{ runner.os }}" = "Linux" ]; then
-            make prod VPHP_V_GC=boehm
-          else
-            make prod VPHP_V_GC=boehm
-          fi
+          make prod VPHP_V_GC=boehm WITH_DB=1
 
       - name: Smoke test
         shell: bash
