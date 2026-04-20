@@ -991,7 +991,7 @@ fn worker_websocket_dispatch_message_cb(mut ws websocket.Client, msg &websocket.
 	}
 	room_members, member_metadata, room_counts, presence_users := state.app.ws_hub_presence_snapshot(state.conn_id)
 	resp := state.app.kernel_dispatch_websocket_event(state.app.kernel_websocket_dispatch_frame('message',
-		state.method, state.path, state.query, state.headers, state.remote_addr, state.request_id,
+		state.method, state.path, state.query, state.headers, state.remote_addr, state.conn_id,
 		state.trace_id, opcode, payload, 0, '', state.app.ws_hub_rooms_snapshot(state.conn_id),
 		state.app.ws_hub_meta_snapshot(state.conn_id), room_members, member_metadata,
 		room_counts, presence_users))!
@@ -1033,7 +1033,7 @@ fn worker_websocket_dispatch_close_cb(mut ws websocket.Client, code int, reason 
 	mut state := unsafe { &WebSocketDispatchBridgeState(ref) }
 	room_members, member_metadata, room_counts, presence_users := state.app.ws_hub_presence_snapshot(state.conn_id)
 	resp := state.app.kernel_dispatch_websocket_event(state.app.kernel_websocket_dispatch_frame('close',
-		state.method, state.path, state.query, state.headers, state.remote_addr, state.request_id,
+		state.method, state.path, state.query, state.headers, state.remote_addr, state.conn_id,
 		state.trace_id, '', '', code, reason, state.app.ws_hub_rooms_snapshot(state.conn_id),
 		state.app.ws_hub_meta_snapshot(state.conn_id), room_members, member_metadata,
 		room_counts, presence_users)) or {
