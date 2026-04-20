@@ -429,7 +429,7 @@ pub fn (e InProcVjsxExecutor) warmup(mut app App) ! {
 		return
 	}
 	mut reply_channels := []chan InProcVjsxWarmupTaskResult{}
-	state := e.state
+	mut state := e.state
 	state.mu.@lock()
 	for idx in 0 .. lane_count {
 		worker := state.lane_workers[idx]
