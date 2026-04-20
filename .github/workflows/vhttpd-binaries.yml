@@ -64,6 +64,20 @@ jobs:
           set -euo pipefail
           brew install bdw-gc libpq mysql-client openssl@3 pkg-config sqlite
 
+      - name: Configure Homebrew build env (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mysql_prefix="$(brew --prefix mysql-client)"
+          libpq_prefix="$(brew --prefix libpq)"
+          openssl_prefix="$(brew --prefix openssl@3)"
+          {
+            echo "PKG_CONFIG_PATH=${mysql_prefix}/lib/pkgconfig:${libpq_prefix}/lib/pkgconfig:${openssl_prefix}/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+            echo "CPPFLAGS=-I${mysql_prefix}/include/mysql -I${libpq_prefix}/include -I${openssl_prefix}/include ${CPPFLAGS:-}"
+            echo "LDFLAGS=-L${mysql_prefix}/lib -L${libpq_prefix}/lib -L${openssl_prefix}/lib ${LDFLAGS:-}"
+          } >> "$GITHUB_ENV"
+
       - name: Install V compiler
         shell: bash
         run: |
