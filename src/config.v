@@ -1173,6 +1173,16 @@ fn expand_config_string(raw string, scope string, vars map[string]string, env ma
 	return out, any_change
 }
 
+fn config_variable_scope(key string, fallback_scope string) string {
+	if key.contains('.') {
+		parts := key.split('.')
+		if parts.len > 1 {
+			return parts[..parts.len - 1].join('.')
+		}
+	}
+	return fallback_scope
+}
+
 fn resolve_config_variable(expr string, scope string, vars map[string]string, env map[string]string) !string {
 	mut key := expr
 	mut has_default := false
@@ -1202,11 +1212,20 @@ fn resolve_config_variable(expr string, scope string, vars map[string]string, en
 	if !key.contains('.') && scope.trim_space() != '' {
 		scoped_key := '${scope}.${key}'
 		if scoped_key in vars {
-			return vars[scoped_key]
+			mut value := vars[scoped_key]
+			if value.contains('\${') {
+				value, _ = expand_config_string(value, scope, vars, env, false)!
+			}
+			return value
 		}
 	}
 	if key in vars {
-		return vars[key]
+		mut value := vars[key]
+		if value.contains('\${') {
+			value_scope := config_variable_scope(key, scope)
+			value, _ = expand_config_string(value, value_scope, vars, env, false)!
+		}
+		return value
 	}
 	if has_default {
 		return default_raw

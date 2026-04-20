@@ -12,6 +12,7 @@ import x.json2
 
 const inproc_vjsx_lane_wait_timeout_ms = 1000
 const inproc_vjsx_lane_wait_poll_ms = 5
+const inproc_vjsx_lane_task_timeout = 10 * time.second
 const inproc_vjsx_dispatch_retry_attempts = 2
 const inproc_vjsx_startup_wait_poll_ms = 5
 const inproc_vjsx_signature_probe_poll_ms = 100
@@ -108,6 +109,7 @@ mut:
 	mu                           sync.Mutex
 	app_ref                      &App = unsafe { nil }
 	facade                       VjsxRuntimeFacade
+	session_store                MemoryStateStore[string]
 	lanes                        []VjsxExecutionLane
 	hosts                        []VjsxLaneHost
 	lane_workers                 []VjsxLaneWorker
@@ -286,9 +288,38 @@ struct InProcVjsxLaneSnapshotTask {
 	reply chan InProcVjsxLaneSnapshotTaskResult
 }
 
+struct InProcVjsxLaneWarmupTaskResult {
+	ok    bool
+	error string
+}
+
+struct InProcVjsxLaneWarmupTask {
+	app   &App = unsafe { nil }
+	reply chan InProcVjsxLaneWarmupTaskResult
+}
+
 struct InProcVjsxHostSnapshotRequest {
 	scope string
 	kind  string
+}
+
+struct InProcVjsxHostSessionStoreRequest {
+	namespace string
+	op        string
+	key       string
+	value     string
+	expected_value string @[json: 'expected_value']
+	expected_found bool   @[json: 'expected_found']
+	delete_value bool     @[json: 'delete_value']
+	ttl_ms    i64 @[json: 'ttl_ms']
+}
+
+struct InProcVjsxHostSessionStoreResponse {
+	ok    bool
+	found bool
+	conflict bool
+	value string
+	error string
 }
 
 struct VjsxLaneWorker {
@@ -296,6 +327,7 @@ mut:
 	lane_id         string
 	websocket_tasks chan InProcVjsxWebSocketTask
 	snapshot_tasks  chan InProcVjsxLaneSnapshotTask
+	warmup_tasks    chan InProcVjsxLaneWarmupTask
 	stop_ch         chan bool
 	thread          thread
 	started         bool
@@ -320,6 +352,7 @@ pub fn new_inproc_vjsx_executor(config VjsxRuntimeFacadeConfig) InProcVjsxExecut
 			lane_id: lane.id
 			websocket_tasks: chan InProcVjsxWebSocketTask{cap: 64}
 			snapshot_tasks: chan InProcVjsxLaneSnapshotTask{cap: 16}
+			warmup_tasks: chan InProcVjsxLaneWarmupTask{cap: 4}
 			stop_ch: chan bool{cap: 1}
 		}
 	}
@@ -339,6 +372,7 @@ pub fn new_inproc_vjsx_executor(config VjsxRuntimeFacadeConfig) InProcVjsxExecut
 			facade: VjsxRuntimeFacade{
 				config: config
 			}
+			session_store:                       new_memory_state_store[string]()
 			lanes:                               lanes
 			hosts:                               hosts
 			lane_workers:                        lane_workers
@@ -410,6 +444,9 @@ pub fn (e InProcVjsxExecutor) lane_count() int {
 pub fn (e InProcVjsxExecutor) warmup(mut app App) ! {
 	e.remember_app(mut app)
 	e.bootstrap_placeholder()!
+	for lane in e.lane_snapshot() {
+		e.request_lane_warmup(mut app, lane)!
+	}
 }
 
 pub fn (e InProcVjsxExecutor) facade_snapshot() VjsxRuntimeFacade {
@@ -630,6 +667,28 @@ pub fn (e InProcVjsxExecutor) select_next_lane() !VjsxExecutionLane {
 	return error('inproc_vjsx_executor_no_available_lane')
 }
 
+fn (e InProcVjsxExecutor) force_select_lane_by_id(lane_id string) !VjsxExecutionLane {
+	if isnil(e.state) {
+		return error('inproc_vjsx_executor_state_missing')
+	}
+	if lane_id.trim_space() == '' {
+		return error('inproc_vjsx_executor_lane_id_missing')
+	}
+	mut state := e.state
+	state.mu.@lock()
+	defer {
+		state.mu.unlock()
+	}
+	for idx, lane in state.lanes {
+		if lane.id != lane_id {
+			continue
+		}
+		state.lanes[idx].inflight++
+		return state.lanes[idx]
+	}
+	return error('inproc_vjsx_executor_lane_not_found')
+}
+
 fn (e InProcVjsxExecutor) select_lane_by_id(lane_id string) !VjsxExecutionLane {
 	if isnil(e.state) {
 		return error('inproc_vjsx_executor_state_missing')
@@ -741,7 +800,7 @@ fn (e InProcVjsxExecutor) acquire_websocket_lane(frame WorkerWebSocketFrame) !(V
 	existing_lane_id := state.websocket_connection_lane_by_id[frame.id] or { '' }
 	state.mu.unlock()
 	if existing_lane_id != '' {
-		return e.acquire_lane_by_id(existing_lane_id, inproc_vjsx_lane_wait_timeout_ms)!, ''
+		return e.force_select_lane_by_id(existing_lane_id)!, ''
 	}
 	affinity_key := websocket_affinity_value(frame, config)
 	if affinity_key == '' {
@@ -760,7 +819,7 @@ fn (e InProcVjsxExecutor) acquire_websocket_lane(frame WorkerWebSocketFrame) !(V
 	mapped_lane_id := state.websocket_affinity_lane_by_key[affinity_key] or { '' }
 	state.mu.unlock()
 	if mapped_lane_id != '' {
-		lane := e.acquire_lane_by_id(mapped_lane_id, inproc_vjsx_lane_wait_timeout_ms)!
+		lane := e.force_select_lane_by_id(mapped_lane_id)!
 		if frame.id.trim_space() != '' {
 			state.mu.@lock()
 			state.websocket_connection_lane_by_id[frame.id] = lane.id
@@ -857,9 +916,10 @@ fn (e InProcVjsxExecutor) start_lane_workers() {
 		}
 		task_ch := worker.websocket_tasks
 		snapshot_ch := worker.snapshot_tasks
+		warmup_ch := worker.warmup_tasks
 		stop_ch := worker.stop_ch
 		lane_id := worker.lane_id
-		mut thr := spawn inproc_vjsx_lane_worker_loop(e.state, lane_id, task_ch, snapshot_ch, stop_ch)
+		mut thr := spawn inproc_vjsx_lane_worker_loop(e.state, lane_id, task_ch, snapshot_ch, warmup_ch, stop_ch)
 		state.mu.@lock()
 		if idx >= 0 && idx < state.lane_workers.len {
 			state.lane_workers[idx].thread = thr
@@ -912,14 +972,43 @@ fn (e InProcVjsxExecutor) request_lane_snapshot(mut app App, lane VjsxExecutionL
 		app: app
 		reply: reply_ch
 	}
-	result := <-reply_ch
+	mut result := InProcVjsxLaneSnapshotTaskResult{}
+	select {
+		result = <-reply_ch {
+		}
+		inproc_vjsx_lane_task_timeout {
+			return error('inproc_vjsx_executor_lane_snapshot_timeout')
+		}
+	}
 	if !result.ok {
 		return error(result.error)
 	}
 	return result.raw
 }
 
-fn inproc_vjsx_lane_worker_loop(state &VjsxExecutorState, lane_id string, task_ch chan InProcVjsxWebSocketTask, snapshot_ch chan InProcVjsxLaneSnapshotTask, stop_ch chan bool) {
+fn (e InProcVjsxExecutor) request_lane_warmup(mut app App, lane VjsxExecutionLane) ! {
+	worker := e.lane_worker_by_id(lane.id) or {
+		return error('inproc_vjsx_executor_lane_worker_missing')
+	}
+	reply_ch := chan InProcVjsxLaneWarmupTaskResult{cap: 1}
+	worker.warmup_tasks <- InProcVjsxLaneWarmupTask{
+		app: unsafe { &app }
+		reply: reply_ch
+	}
+	mut result := InProcVjsxLaneWarmupTaskResult{}
+	select {
+		result = <-reply_ch {
+		}
+		inproc_vjsx_lane_task_timeout {
+			return error('inproc_vjsx_executor_lane_warmup_timeout')
+		}
+	}
+	if !result.ok {
+		return error(result.error)
+	}
+}
+
+fn inproc_vjsx_lane_worker_loop(state &VjsxExecutorState, lane_id string, task_ch chan InProcVjsxWebSocketTask, snapshot_ch chan InProcVjsxLaneSnapshotTask, warmup_ch chan InProcVjsxLaneWarmupTask, stop_ch chan bool) {
 	worker_executor := InProcVjsxExecutor{
 		state: state
 	}
@@ -981,6 +1070,41 @@ fn inproc_vjsx_lane_worker_loop(state &VjsxExecutorState, lane_id string, task_c
 				task.reply <- InProcVjsxLaneSnapshotTaskResult{
 					ok:  true
 					raw: raw
+				}
+			}
+			task := <-warmup_ch {
+				mut task_app := task.app
+				lane := worker_executor.lane_snapshot_by_id(lane_id) or {
+					task.reply <- InProcVjsxLaneWarmupTaskResult{
+						ok: false
+						error: err.msg()
+					}
+					continue
+				}
+				idx := worker_executor.lane_index_by_id(lane.id)
+				if idx < 0 {
+					task.reply <- InProcVjsxLaneWarmupTaskResult{
+						ok: false
+						error: 'inproc_vjsx_executor_lane_not_found'
+					}
+					continue
+				}
+				worker_executor.ensure_lane_host(idx) or {
+					task.reply <- InProcVjsxLaneWarmupTaskResult{
+						ok: false
+						error: err.msg()
+					}
+					continue
+				}
+				worker_executor.run_startup_hooks(mut task_app, idx, lane) or {
+					task.reply <- InProcVjsxLaneWarmupTaskResult{
+						ok: false
+						error: err.msg()
+					}
+					continue
+				}
+				task.reply <- InProcVjsxLaneWarmupTaskResult{
+					ok: true
 				}
 			}
 			50 * time.millisecond {
@@ -1143,6 +1267,9 @@ globalThis.__vhttpd_create_runtime = function(meta) {
     const hostSnapshot = hostApi && typeof hostApi.snapshot === "function"
       ? (...args) => hostApi.snapshot(...args)
       : undefined;
+    const hostSessionStore = hostApi && typeof hostApi.sessionStore === "function"
+      ? (...args) => hostApi.sessionStore(...args)
+      : undefined;
     const hostConfig = hostApi && typeof hostApi.config === "function"
       ? (...args) => hostApi.config(...args)
       : undefined;
@@ -1272,6 +1399,136 @@ globalThis.__vhttpd_create_runtime = function(meta) {
         } catch (_) {
           return fallbackValue;
         }
+      },
+      sessionStore(namespace) {
+        const ns = namespace == null ? "" : String(namespace).trim();
+        const callStore = (payload, fallbackValue) => {
+          if (typeof hostSessionStore !== "function" || !ns) {
+            return fallbackValue;
+          }
+          const raw = hostSessionStore(JSON.stringify({
+            namespace: ns,
+            ...payload
+          }));
+          if (raw === undefined || raw === null || raw === "") {
+            return fallbackValue;
+          }
+          try {
+            return JSON.parse(String(raw));
+          } catch (_) {
+            return fallbackValue;
+          }
+        };
+        return freezeValue({
+          namespace: ns,
+          get(key, fallbackValue = undefined) {
+            const resp = callStore({
+              op: "get",
+              key: key == null ? "" : String(key)
+            }, undefined);
+            if (!resp || !resp.ok || !resp.found) {
+              return fallbackValue;
+            }
+            try {
+              return JSON.parse(String(resp.value));
+            } catch (_) {
+              return fallbackValue;
+            }
+          },
+          set(key, value, options = undefined) {
+            const ttlMs = options && typeof options === "object" && typeof options.ttlMs === "number"
+              ? Math.max(0, Math.trunc(options.ttlMs))
+              : 0;
+            const resp = callStore({
+              op: "set",
+              key: key == null ? "" : String(key),
+              value: JSON.stringify(value),
+              ttl_ms: ttlMs
+            }, undefined);
+            return !!(resp && resp.ok);
+          },
+          patch(key, updater, fallbackValue = undefined, options = undefined) {
+            if (typeof updater !== "function") {
+              return fallbackValue;
+            }
+            const normalizedKey = key == null ? "" : String(key);
+            const ttlMs = options && typeof options === "object" && typeof options.ttlMs === "number"
+              ? Math.max(0, Math.trunc(options.ttlMs))
+              : 0;
+            const maxRetries = 8;
+            for (let attempt = 0; attempt < maxRetries; attempt += 1) {
+              const currentResp = callStore({
+                op: "get",
+                key: normalizedKey
+              }, undefined);
+              const found = !!(currentResp && currentResp.ok && currentResp.found);
+              const currentRaw = found && typeof currentResp.value === "string" ? currentResp.value : "";
+              let currentValue = fallbackValue;
+              if (found) {
+                try {
+                  currentValue = JSON.parse(String(currentRaw));
+                } catch (_) {
+                  currentValue = fallbackValue;
+                }
+              }
+              let draft = currentValue;
+              let nextValue;
+              try {
+                nextValue = updater(draft);
+              } catch (_) {
+                return fallbackValue;
+              }
+              if (nextValue === undefined) {
+                nextValue = draft;
+              }
+              const patchResp = callStore({
+                op: "patch",
+                key: normalizedKey,
+                value: nextValue == null ? "" : JSON.stringify(nextValue),
+                expected_found: found,
+                expected_value: currentRaw,
+                delete_value: nextValue == null,
+                ttl_ms: ttlMs
+              }, undefined);
+              if (patchResp && patchResp.ok) {
+                return nextValue;
+              }
+              if (!patchResp || !patchResp.conflict) {
+                return fallbackValue;
+              }
+            }
+            return fallbackValue;
+          },
+          delete(key) {
+            const resp = callStore({
+              op: "delete",
+              key: key == null ? "" : String(key)
+            }, undefined);
+            return !!(resp && resp.ok);
+          },
+          exists(key) {
+            const resp = callStore({
+              op: "exists",
+              key: key == null ? "" : String(key)
+            }, undefined);
+            return !!(resp && resp.ok && resp.found);
+          },
+          keys(fallbackValue = []) {
+            const resp = callStore({
+              op: "keys",
+              key: ""
+            }, undefined);
+            if (!resp || !resp.ok || typeof resp.value !== "string" || !resp.value) {
+              return fallbackValue;
+            }
+            try {
+              const parsed = JSON.parse(String(resp.value));
+              return Array.isArray(parsed) ? parsed : fallbackValue;
+            } catch (_) {
+              return fallbackValue;
+            }
+          }
+        });
       },
       config(fallbackValue = undefined) {
         if (typeof hostConfig !== "function") {
@@ -2924,6 +3181,141 @@ fn inproc_vjsx_config_lookup(raw_json string, path string) string {
 	return current.json_str()
 }
 
+fn inproc_vjsx_host_session_store_builder(mut state VjsxExecutorState, idx int) vjsx.HostValueBuilder {
+	_ = idx
+	return fn [mut state] (ctx &vjsx.Context) vjsx.Value {
+		return ctx.js_function(fn [ctx, mut state] (args []vjsx.Value) vjsx.Value {
+			if args.len == 0 {
+				return ctx.js_string(json.encode(InProcVjsxHostSessionStoreResponse{
+					error: 'missing_session_store_request'
+				}))
+			}
+			raw := args[0].to_string().trim_space()
+			if raw == '' {
+				return ctx.js_string(json.encode(InProcVjsxHostSessionStoreResponse{
+					error: 'missing_session_store_request'
+				}))
+			}
+			req := json.decode(InProcVjsxHostSessionStoreRequest, raw) or {
+				return ctx.js_string(json.encode(InProcVjsxHostSessionStoreResponse{
+					error: 'invalid_session_store_request'
+				}))
+			}
+			namespace := req.namespace.trim_space()
+			key := req.key.trim_space()
+			if namespace == '' {
+				return ctx.js_string(json.encode(InProcVjsxHostSessionStoreResponse{
+					error: 'session_store_namespace_missing'
+				}))
+			}
+			if key == '' && req.op !in ['keys'] {
+				return ctx.js_string(json.encode(InProcVjsxHostSessionStoreResponse{
+					error: 'session_store_key_missing'
+				}))
+			}
+			full_key := '${namespace}:${key}'
+			return match req.op {
+				'get' {
+					value := state.session_store.get(full_key) or {
+						return ctx.js_string(json.encode(InProcVjsxHostSessionStoreResponse{
+							ok:    true
+							found: false
+						}))
+					}
+					ctx.js_string(json.encode(InProcVjsxHostSessionStoreResponse{
+						ok:    true
+						found: true
+						value: value
+					}))
+				}
+				'set' {
+					if req.ttl_ms > 0 {
+						state.session_store.set_with_ttl(full_key, req.value, req.ttl_ms * time.millisecond) or {
+							return ctx.js_string(json.encode(InProcVjsxHostSessionStoreResponse{
+								error: err.msg()
+							}))
+						}
+					} else {
+						state.session_store.set(full_key, req.value) or {
+							return ctx.js_string(json.encode(InProcVjsxHostSessionStoreResponse{
+								error: err.msg()
+							}))
+						}
+					}
+					ctx.js_string(json.encode(InProcVjsxHostSessionStoreResponse{
+						ok: true
+					}))
+				}
+				'patch' {
+					mut swapped := false
+					if req.delete_value {
+						swapped = state.session_store.compare_and_swap_delete(
+							full_key,
+							req.expected_found,
+							req.expected_value,
+						) or {
+							return ctx.js_string(json.encode(InProcVjsxHostSessionStoreResponse{
+								error: err.msg()
+							}))
+						}
+					} else {
+						swapped = state.session_store.compare_and_swap_set_with_ttl(
+							full_key,
+							req.expected_found,
+							req.expected_value,
+							req.value,
+							req.ttl_ms * time.millisecond,
+						) or {
+							return ctx.js_string(json.encode(InProcVjsxHostSessionStoreResponse{
+								error: err.msg()
+							}))
+						}
+					}
+					if !swapped {
+						return ctx.js_string(json.encode(InProcVjsxHostSessionStoreResponse{
+							ok:       false
+							conflict: true
+						}))
+					}
+					ctx.js_string(json.encode(InProcVjsxHostSessionStoreResponse{
+						ok: true
+					}))
+				}
+				'delete' {
+					state.session_store.delete(full_key) or {
+						return ctx.js_string(json.encode(InProcVjsxHostSessionStoreResponse{
+							error: err.msg()
+						}))
+					}
+					ctx.js_string(json.encode(InProcVjsxHostSessionStoreResponse{
+						ok: true
+					}))
+				}
+				'exists' {
+					ctx.js_string(json.encode(InProcVjsxHostSessionStoreResponse{
+						ok:    true
+						found: state.session_store.exists(full_key)
+					}))
+				}
+				'keys' {
+					prefix := '${namespace}:'
+					keys := state.session_store.keys().filter(it.starts_with(prefix)).map(it[prefix.len..])
+					ctx.js_string(json.encode(InProcVjsxHostSessionStoreResponse{
+						ok:    true
+						found: keys.len > 0
+						value: json.encode(keys)
+					}))
+				}
+				else {
+					ctx.js_string(json.encode(InProcVjsxHostSessionStoreResponse{
+						error: 'unsupported_session_store_op:${req.op}'
+					}))
+				}
+			}
+		})
+	}
+}
+
 fn inproc_vjsx_host_config_builder(mut state VjsxExecutorState, idx int) vjsx.HostValueBuilder {
 	return fn [mut state, idx] (ctx &vjsx.Context) vjsx.Value {
 		return ctx.js_function(fn [ctx, mut state, idx] (args []vjsx.Value) vjsx.Value {
@@ -3178,6 +3570,9 @@ fn inproc_vjsx_host_api_builder(mut state VjsxExecutorState, idx int) vjsx.HostV
 		name:  'snapshot'
 		value: inproc_vjsx_host_snapshot_builder(state, idx)
 	}, vjsx.HostObjectField{
+		name:  'sessionStore'
+		value: inproc_vjsx_host_session_store_builder(mut state, idx)
+	}, vjsx.HostObjectField{
 		name:  'config'
 		value: inproc_vjsx_host_config_builder(mut state, idx)
 	}, vjsx.HostObjectField{
@@ -3401,12 +3796,10 @@ pub fn (e InProcVjsxExecutor) close() {
 	}
 	mut stale_hosts := []VjsxLaneHost{}
 	mut reset_hosts := []VjsxLaneHost{}
-	mut worker_threads := []thread{}
 	mut state := e.state
 	state.mu.@lock()
 	for i in 0 .. state.lane_workers.len {
 		if state.lane_workers[i].started {
-			worker_threads << state.lane_workers[i].thread
 			state.lane_workers[i].stop_ch <- true
 			state.lane_workers[i].started = false
 		}
@@ -3442,9 +3835,6 @@ pub fn (e InProcVjsxExecutor) close() {
 	state.signature_pending_since = 0
 	state.signature_last_error = ''
 	state.mu.unlock()
-	for mut thr in worker_threads {
-		thr.wait()
-	}
 	for mut host in stale_hosts {
 		inproc_vjsx_destroy_lane_host(mut host)
 	}
@@ -4113,6 +4503,196 @@ fn build_websocket_js_runtime(ctx &vjsx.Context, runtime_meta InProcVjsxRuntimeM
 			return fallback
 		}
 		return ctx.json_parse(raw)
+	}))
+	runtime.set('sessionStore', ctx.js_function(fn [ctx] (args []vjsx.Value) vjsx.Value {
+		namespace := if args.len > 0 { args[0].to_string().trim_space() } else { '' }
+		mut store := ctx.js_object()
+		store.set('namespace', namespace)
+		store.set('get', ctx.js_function(fn [ctx, namespace] (args []vjsx.Value) vjsx.Value {
+			key := if args.len > 0 { args[0].to_string().trim_space() } else { '' }
+			fallback := if args.len > 1 { args[1].dup_value() } else { ctx.js_undefined() }
+			if namespace == '' {
+				return fallback
+			}
+			host_api := ctx.js_global('vhttpdHost')
+			defer {
+				host_api.free()
+			}
+			if host_api.is_undefined() || !host_api.is_object() || !host_api.has('sessionStore') {
+				return fallback
+			}
+			host_fn := host_api.get('sessionStore')
+			defer {
+				host_fn.free()
+			}
+			if !host_fn.is_function() {
+				return fallback
+			}
+			payload := ctx.js_string(json.encode(InProcVjsxHostSessionStoreRequest{
+				namespace: namespace
+				op:        'get'
+				key:       key
+			}))
+			defer {
+				payload.free()
+			}
+			resp_raw := ctx.call(host_fn, payload) or { return fallback }
+			defer {
+				resp_raw.free()
+			}
+			resp := json.decode(InProcVjsxHostSessionStoreResponse, resp_raw.to_string()) or {
+				return fallback
+			}
+			if !resp.ok || !resp.found || resp.value.trim_space() == '' {
+				return fallback
+			}
+			return ctx.json_parse(resp.value)
+		}))
+		store.set('set', ctx.js_function(fn [ctx, namespace] (args []vjsx.Value) vjsx.Value {
+			if namespace == '' || args.len == 0 {
+				return ctx.js_bool(false)
+			}
+			key := args[0].to_string().trim_space()
+			value := if args.len > 1 { args[1].json_stringify() } else { 'null' }
+			mut ttl_ms := i64(0)
+			if args.len > 2 && args[2].is_object() && args[2].has('ttlMs') {
+				ttl_ms = args[2].get('ttlMs').to_i64()
+			}
+			host_api := ctx.js_global('vhttpdHost')
+			defer {
+				host_api.free()
+			}
+			if host_api.is_undefined() || !host_api.is_object() || !host_api.has('sessionStore') {
+				return ctx.js_bool(false)
+			}
+			host_fn := host_api.get('sessionStore')
+			defer {
+				host_fn.free()
+			}
+			if !host_fn.is_function() {
+				return ctx.js_bool(false)
+			}
+			payload := ctx.js_string(json.encode(InProcVjsxHostSessionStoreRequest{
+				namespace: namespace
+				op:        'set'
+				key:       key
+				value:     value
+				ttl_ms:    ttl_ms
+			}))
+			defer {
+				payload.free()
+			}
+			resp_raw := ctx.call(host_fn, payload) or { return ctx.js_bool(false) }
+			defer {
+				resp_raw.free()
+			}
+			resp := json.decode(InProcVjsxHostSessionStoreResponse, resp_raw.to_string()) or {
+				return ctx.js_bool(false)
+			}
+			return ctx.js_bool(resp.ok)
+		}))
+		store.set('delete', ctx.js_function(fn [ctx, namespace] (args []vjsx.Value) vjsx.Value {
+			key := if args.len > 0 { args[0].to_string().trim_space() } else { '' }
+			host_api := ctx.js_global('vhttpdHost')
+			defer {
+				host_api.free()
+			}
+			if namespace == '' || host_api.is_undefined() || !host_api.is_object() || !host_api.has('sessionStore') {
+				return ctx.js_bool(false)
+			}
+			host_fn := host_api.get('sessionStore')
+			defer {
+				host_fn.free()
+			}
+			if !host_fn.is_function() {
+				return ctx.js_bool(false)
+			}
+			payload := ctx.js_string(json.encode(InProcVjsxHostSessionStoreRequest{
+				namespace: namespace
+				op:        'delete'
+				key:       key
+			}))
+			defer {
+				payload.free()
+			}
+			resp_raw := ctx.call(host_fn, payload) or { return ctx.js_bool(false) }
+			defer {
+				resp_raw.free()
+			}
+			resp := json.decode(InProcVjsxHostSessionStoreResponse, resp_raw.to_string()) or {
+				return ctx.js_bool(false)
+			}
+			return ctx.js_bool(resp.ok)
+		}))
+		store.set('exists', ctx.js_function(fn [ctx, namespace] (args []vjsx.Value) vjsx.Value {
+			key := if args.len > 0 { args[0].to_string().trim_space() } else { '' }
+			host_api := ctx.js_global('vhttpdHost')
+			defer {
+				host_api.free()
+			}
+			if namespace == '' || host_api.is_undefined() || !host_api.is_object() || !host_api.has('sessionStore') {
+				return ctx.js_bool(false)
+			}
+			host_fn := host_api.get('sessionStore')
+			defer {
+				host_fn.free()
+			}
+			if !host_fn.is_function() {
+				return ctx.js_bool(false)
+			}
+			payload := ctx.js_string(json.encode(InProcVjsxHostSessionStoreRequest{
+				namespace: namespace
+				op:        'exists'
+				key:       key
+			}))
+			defer {
+				payload.free()
+			}
+			resp_raw := ctx.call(host_fn, payload) or { return ctx.js_bool(false) }
+			defer {
+				resp_raw.free()
+			}
+			resp := json.decode(InProcVjsxHostSessionStoreResponse, resp_raw.to_string()) or {
+				return ctx.js_bool(false)
+			}
+			return ctx.js_bool(resp.ok && resp.found)
+		}))
+		store.set('keys', ctx.js_function(fn [ctx, namespace] (args []vjsx.Value) vjsx.Value {
+			fallback := if args.len > 0 { args[0].dup_value() } else { ctx.js_array() }
+			host_api := ctx.js_global('vhttpdHost')
+			defer {
+				host_api.free()
+			}
+			if namespace == '' || host_api.is_undefined() || !host_api.is_object() || !host_api.has('sessionStore') {
+				return fallback
+			}
+			host_fn := host_api.get('sessionStore')
+			defer {
+				host_fn.free()
+			}
+			if !host_fn.is_function() {
+				return fallback
+			}
+			payload := ctx.js_string(json.encode(InProcVjsxHostSessionStoreRequest{
+				namespace: namespace
+				op:        'keys'
+			}))
+			defer {
+				payload.free()
+			}
+			resp_raw := ctx.call(host_fn, payload) or { return fallback }
+			defer {
+				resp_raw.free()
+			}
+			resp := json.decode(InProcVjsxHostSessionStoreResponse, resp_raw.to_string()) or {
+				return fallback
+			}
+			if !resp.ok || resp.value.trim_space() == '' {
+				return fallback
+			}
+			return ctx.json_parse(resp.value)
+		}))
+		return store
 	}))
 	runtime.set('websocketDispatch', ctx.js_function(fn [ctx, mut app] (args []vjsx.Value) vjsx.Value {
 		fallback := if args.len > 1 { args[1].dup_value() } else { ctx.js_undefined() }
@@ -5024,7 +5604,14 @@ pub fn (e InProcVjsxExecutor) dispatch_websocket_event(mut app App, frame Worker
 		frame: frame
 		reply: reply_ch
 	}
-	result := <-reply_ch
+	mut result := InProcVjsxWebSocketTaskResult{}
+	select {
+		result = <-reply_ch {
+		}
+		inproc_vjsx_lane_task_timeout {
+			return error('inproc_vjsx_executor_lane_task_timeout')
+		}
+	}
 	if !result.ok {
 		return error(result.error)
 	}

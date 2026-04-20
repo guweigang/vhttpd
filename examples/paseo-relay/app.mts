@@ -175,7 +175,6 @@ function relayState() {
   if (!globalThis.__paseoRelayState) {
     globalThis.__paseoRelayState = {
       createdAt: nowMs(),
-      sessions: new Map(),
     };
   }
   return globalThis.__paseoRelayState;
@@ -185,34 +184,209 @@ function sessionKey(serverId, version) {
   return `relay-v${version || CURRENT_RELAY_VERSION}:${serverId}`;
 }
 
-function ensureSession(serverId, version) {
-  const state = relayState();
-  const resolvedVersion = version || CURRENT_RELAY_VERSION;
-  const key = sessionKey(serverId, resolvedVersion);
-  let session = state.sessions.get(key);
-  if (!session) {
-    session = {
-      key,
-      serverId,
-      version: resolvedVersion,
-      createdAt: nowMs(),
-      updatedAt: nowMs(),
-      v1ServerId: "",
-      v1ClientIds: new Set(),
-      controlIds: new Set(),
-      serverDataByConnection: new Map(),
-      clientIdsByConnection: new Map(),
-      announcedConnections: new Set(),
-      pendingFramesByConnection: new Map(),
-      pendingDrainByConnection: new Map(),
-      controlNudgeTokensByConnection: new Map(),
-      debugMessageCountByConnection: new Map(),
-    };
-    state.sessions.set(key, session);
+function relayStore(runtime) {
+  if (!runtime || typeof runtime.sessionStore !== "function") {
+    return null;
   }
-  session.version = resolvedVersion;
+  return runtime.sessionStore("relay");
+}
+
+function relaySessionStoreKey(serverId, version) {
+  return `session:${serverId}:${version || CURRENT_RELAY_VERSION}`;
+}
+
+function createEmptySession(serverId, version) {
+  const resolvedVersion = version || CURRENT_RELAY_VERSION;
+  return {
+    key: sessionKey(serverId, resolvedVersion),
+    serverId,
+    version: resolvedVersion,
+    createdAt: nowMs(),
+    updatedAt: nowMs(),
+    v1ServerId: "",
+    v1ClientIds: new Set(),
+    controlIds: new Set(),
+    serverDataByConnection: new Map(),
+    clientIdsByConnection: new Map(),
+    announcedConnections: new Set(),
+    pendingFramesByConnection: new Map(),
+    pendingDrainByConnection: new Map(),
+    controlNudgeTokensByConnection: new Map(),
+    debugMessageCountByConnection: new Map(),
+  };
+}
+
+function serializeSession(session) {
+  return {
+    key: session.key,
+    serverId: session.serverId,
+    version: session.version,
+    createdAt: Number(session.createdAt || 0),
+    updatedAt: Number(session.updatedAt || 0),
+    v1ServerId: trimString(session.v1ServerId),
+    v1ClientIds: Array.from(session.v1ClientIds || []).sort(),
+    controlIds: Array.from(session.controlIds || []).sort(),
+    serverDataByConnection: Array.from(session.serverDataByConnection?.entries?.() || []).sort((a, b) =>
+      String(a[0]).localeCompare(String(b[0])),
+    ),
+    clientIdsByConnection: Array.from(session.clientIdsByConnection?.entries?.() || [])
+      .map(([connectionId, ids]) => [connectionId, Array.from(ids || []).sort()])
+      .sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
+    announcedConnections: Array.from(session.announcedConnections || []).sort(),
+    pendingFramesByConnection: Array.from(session.pendingFramesByConnection?.entries?.() || []).sort((a, b) =>
+      String(a[0]).localeCompare(String(b[0])),
+    ),
+    pendingDrainByConnection: Array.from(session.pendingDrainByConnection?.entries?.() || []).sort((a, b) =>
+      String(a[0]).localeCompare(String(b[0])),
+    ),
+    controlNudgeTokensByConnection: Array.from(
+      session.controlNudgeTokensByConnection?.entries?.() || [],
+    ).sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
+    debugMessageCountByConnection: Array.from(
+      session.debugMessageCountByConnection?.entries?.() || [],
+    ).sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
+  };
+}
+
+function hydrateSession(raw, serverId, version) {
+  const session = createEmptySession(serverId, version);
+  if (!raw || typeof raw !== "object") {
+    return session;
+  }
+  session.key = trimString(raw.key) || session.key;
+  session.serverId = trimString(raw.serverId) || serverId;
+  session.version = resolveRelayVersion(raw.version) || version || CURRENT_RELAY_VERSION;
+  session.createdAt = Number(raw.createdAt || session.createdAt);
+  session.updatedAt = Number(raw.updatedAt || session.updatedAt);
+  session.v1ServerId = trimString(raw.v1ServerId);
+  session.v1ClientIds = new Set(Array.isArray(raw.v1ClientIds) ? raw.v1ClientIds.map(trimString).filter(Boolean) : []);
+  session.controlIds = new Set(Array.isArray(raw.controlIds) ? raw.controlIds.map(trimString).filter(Boolean) : []);
+  session.serverDataByConnection = new Map(
+    Array.isArray(raw.serverDataByConnection)
+      ? raw.serverDataByConnection.map(([connectionId, socketId]) => [trimString(connectionId), trimString(socketId)])
+      : [],
+  );
+  session.clientIdsByConnection = new Map(
+    Array.isArray(raw.clientIdsByConnection)
+      ? raw.clientIdsByConnection.map(([connectionId, ids]) => [
+          trimString(connectionId),
+          new Set(Array.isArray(ids) ? ids.map(trimString).filter(Boolean) : []),
+        ])
+      : [],
+  );
+  session.announcedConnections = new Set(
+    Array.isArray(raw.announcedConnections) ? raw.announcedConnections.map(trimString).filter(Boolean) : [],
+  );
+  session.pendingFramesByConnection = new Map(
+    Array.isArray(raw.pendingFramesByConnection)
+      ? raw.pendingFramesByConnection.map(([connectionId, frames]) => [
+          trimString(connectionId),
+          Array.isArray(frames) ? frames.map((frame) => ({
+            data: String(frame?.data ?? ""),
+            opcode: trimString(frame?.opcode) || "text",
+          })) : [],
+        ])
+      : [],
+  );
+  session.pendingDrainByConnection = new Map(
+    Array.isArray(raw.pendingDrainByConnection)
+      ? raw.pendingDrainByConnection.map(([connectionId, drain]) => [
+          trimString(connectionId),
+          drain && typeof drain === "object"
+            ? {
+                targetId: trimString(drain.targetId),
+                token: trimString(drain.token),
+                createdAt: Number(drain.createdAt || 0),
+                frames: Array.isArray(drain.frames) ? drain.frames.map((frame) => ({
+                  data: String(frame?.data ?? ""),
+                  opcode: trimString(frame?.opcode) || "text",
+                })) : [],
+              }
+            : null,
+        ]).filter(([connectionId, drain]) => connectionId && drain)
+      : [],
+  );
+  session.controlNudgeTokensByConnection = new Map(
+    Array.isArray(raw.controlNudgeTokensByConnection)
+      ? raw.controlNudgeTokensByConnection.map(([connectionId, token]) => [trimString(connectionId), trimString(token)])
+      : [],
+  );
+  session.debugMessageCountByConnection = new Map(
+    Array.isArray(raw.debugMessageCountByConnection)
+      ? raw.debugMessageCountByConnection.map(([connectionId, count]) => [trimString(connectionId), Number(count || 0)])
+      : [],
+  );
+  return session;
+}
+
+function saveSession(runtime, session) {
+  const store = relayStore(runtime);
+  if (!store || !session) {
+    return false;
+  }
+  return !!store.set(relaySessionStoreKey(session.serverId, session.version), serializeSession(session), {
+    ttlMs: 24 * 60 * 60 * 1000,
+  });
+}
+
+function loadSession(runtime, serverId, version) {
+  const store = relayStore(runtime);
+  if (!store) {
+    return createEmptySession(serverId, version);
+  }
+  const raw = store.get(relaySessionStoreKey(serverId, version), null);
+  return hydrateSession(raw, serverId, version);
+}
+
+function deleteSession(runtime, serverId, version) {
+  const store = relayStore(runtime);
+  if (!store) {
+    return false;
+  }
+  return !!store.delete(relaySessionStoreKey(serverId, version));
+}
+
+function ensureSession(runtime, serverId, version) {
+  const session = loadSession(runtime, serverId, version);
+  session.version = version || CURRENT_RELAY_VERSION;
   session.updatedAt = nowMs();
   return session;
+}
+
+function patchSession(runtime, serverId, version, updater) {
+  const store = relayStore(runtime);
+  if (!store || typeof store.patch !== "function") {
+    const session = ensureSession(runtime, serverId, version);
+    const next = updater(session);
+    if (next == null) {
+      deleteSession(runtime, serverId, version);
+      return null;
+    }
+    const resolved = next && typeof next === "object" ? next : session;
+    saveSession(runtime, resolved);
+    return resolved;
+  }
+  const fallback = serializeSession(createEmptySession(serverId, version));
+  const raw = store.patch(
+    relaySessionStoreKey(serverId, version),
+    (stored) => {
+      const session = hydrateSession(stored, serverId, version);
+      session.version = version || CURRENT_RELAY_VERSION;
+      session.updatedAt = nowMs();
+      const next = updater(session);
+      if (next == null) {
+        return null;
+      }
+      const resolved = next && typeof next === "object" ? next : session;
+      return serializeSession(resolved);
+    },
+    fallback,
+    { ttlMs: 24 * 60 * 60 * 1000 },
+  );
+  if (raw == null) {
+    return null;
+  }
+  return hydrateSession(raw, serverId, version);
 }
 
 function touchSession(session) {
@@ -222,12 +396,9 @@ function touchSession(session) {
   session.updatedAt = nowMs();
 }
 
-function maybeDeleteSession(serverId, version) {
-  const state = relayState();
-  const key = sessionKey(serverId, version);
-  const session = state.sessions.get(key);
+function maybeDeleteSession(runtime, session) {
   if (!session) {
-    return;
+    return false;
   }
   const hasV1 = !!session.v1ServerId || session.v1ClientIds.size > 0;
   const hasV2 =
@@ -235,8 +406,39 @@ function maybeDeleteSession(serverId, version) {
     session.serverDataByConnection.size > 0 ||
     session.clientIdsByConnection.size > 0;
   if (!hasV1 && !hasV2) {
-    state.sessions.delete(key);
+    return deleteSession(runtime, session.serverId, session.version);
   }
+  return saveSession(runtime, session);
+}
+
+function persistMaybeDeleteSession(runtime, session) {
+  if (!session) {
+    return null;
+  }
+  const hasV1 = !!session.v1ServerId || session.v1ClientIds.size > 0;
+  const hasV2 =
+    session.controlIds.size > 0 ||
+    session.serverDataByConnection.size > 0 ||
+    session.clientIdsByConnection.size > 0;
+  if (!hasV1 && !hasV2) {
+    return null;
+  }
+  return session;
+}
+
+function persistMaybeDeleteSessionValue(session) {
+  if (!session) {
+    return null;
+  }
+  const hasV1 = !!session.v1ServerId || session.v1ClientIds.size > 0;
+  const hasV2 =
+    session.controlIds.size > 0 ||
+    session.serverDataByConnection.size > 0 ||
+    session.clientIdsByConnection.size > 0;
+  if (!hasV1 && !hasV2) {
+    return null;
+  }
+  return session;
 }
 
 function setForConnection(session, connectionId) {
@@ -322,20 +524,27 @@ function scheduleControlNudge(session, connectionId, runtime) {
   );
   session.controlNudgeTokensByConnection.set(connectionId, token);
   setTimeout(() => {
-    const current = relayState().sessions.get(relaySessionKey);
-    if (!current) {
-      return;
-    }
-    if (current.controlNudgeTokensByConnection.get(connectionId) !== token) {
-      return;
-    }
-    const clients = current.clientIdsByConnection.get(connectionId);
-    if (!clients || clients.size === 0) {
-      current.controlNudgeTokensByConnection.delete(connectionId);
-      return;
-    }
-    if (current.serverDataByConnection.get(connectionId)) {
-      current.controlNudgeTokensByConnection.delete(connectionId);
+    let shouldSync = false;
+    const current = patchSession(runtime, session.serverId, session.version, (draft) => {
+      if (!draft || draft.key !== relaySessionKey) {
+        return draft;
+      }
+      if (draft.controlNudgeTokensByConnection.get(connectionId) !== token) {
+        return draft;
+      }
+      const clients = draft.clientIdsByConnection.get(connectionId);
+      if (!clients || clients.size === 0) {
+        draft.controlNudgeTokensByConnection.delete(connectionId);
+        return persistMaybeDeleteSessionValue(draft);
+      }
+      if (draft.serverDataByConnection.get(connectionId)) {
+        draft.controlNudgeTokensByConnection.delete(connectionId);
+        return persistMaybeDeleteSessionValue(draft);
+      }
+      shouldSync = true;
+      return draft;
+    });
+    if (!current || !shouldSync) {
       return;
     }
     relayLog(runtime, "control_nudge_sync", sessionDebugState(current, connectionId));
@@ -359,23 +568,30 @@ function scheduleControlNudge(session, connectionId, runtime) {
       );
     }
     setTimeout(() => {
-      const latest = relayState().sessions.get(relaySessionKey);
-      if (!latest) {
+      let shouldReset = false;
+      const latest = patchSession(runtime, session.serverId, session.version, (draft) => {
+        if (!draft || draft.key !== relaySessionKey) {
+          return draft;
+        }
+        if (draft.controlNudgeTokensByConnection.get(connectionId) !== token) {
+          return draft;
+        }
+        const latestClients = draft.clientIdsByConnection.get(connectionId);
+        if (!latestClients || latestClients.size === 0) {
+          draft.controlNudgeTokensByConnection.delete(connectionId);
+          return persistMaybeDeleteSessionValue(draft);
+        }
+        if (draft.serverDataByConnection.get(connectionId)) {
+          draft.controlNudgeTokensByConnection.delete(connectionId);
+          return persistMaybeDeleteSessionValue(draft);
+        }
+        draft.controlNudgeTokensByConnection.delete(connectionId);
+        shouldReset = true;
+        return draft;
+      });
+      if (!latest || !shouldReset) {
         return;
       }
-      if (latest.controlNudgeTokensByConnection.get(connectionId) !== token) {
-        return;
-      }
-      const latestClients = latest.clientIdsByConnection.get(connectionId);
-      if (!latestClients || latestClients.size === 0) {
-        latest.controlNudgeTokensByConnection.delete(connectionId);
-        return;
-      }
-      if (latest.serverDataByConnection.get(connectionId)) {
-        latest.controlNudgeTokensByConnection.delete(connectionId);
-        return;
-      }
-      latest.controlNudgeTokensByConnection.delete(connectionId);
       relayLog(runtime, "control_nudge_reset", sessionDebugState(latest, connectionId));
       runtime.websocketDispatch(
         Array.from(latest.controlIds).map((controlId) =>
@@ -455,22 +671,24 @@ function schedulePendingDrainFinalize(session, connectionId, token, targetId, ru
     DEFAULT_PENDING_FLUSH_SETTLE_DELAY_MS,
   );
   setTimeout(() => {
-    const current = relayState().sessions.get(relaySessionKey);
-    if (!current) {
-      return;
-    }
-    const drain = current.pendingDrainByConnection.get(connectionId);
-    if (!drain) {
-      return;
-    }
-    if (drain.token !== token) {
-      return;
-    }
-    if (trimString(drain.targetId) !== trimString(targetId)) {
-      return;
-    }
-    current.pendingDrainByConnection.delete(connectionId);
-    touchSession(current);
+    patchSession(runtime, session.serverId, session.version, (current) => {
+      if (!current || current.key !== relaySessionKey) {
+        return current;
+      }
+      const drain = current.pendingDrainByConnection.get(connectionId);
+      if (!drain) {
+        return current;
+      }
+      if (drain.token !== token) {
+        return current;
+      }
+      if (trimString(drain.targetId) !== trimString(targetId)) {
+        return current;
+      }
+      current.pendingDrainByConnection.delete(connectionId);
+      touchSession(current);
+      return persistMaybeDeleteSessionValue(current);
+    });
   }, settleDelayMs);
 }
 
@@ -524,25 +742,67 @@ function schedulePendingFlush(session, connectionId, targetId, runtime) {
     DEFAULT_PENDING_FLUSH_DISPATCH_DELAY_MS,
   );
   setTimeout(() => {
-    const current = relayState().sessions.get(relaySessionKey);
+    const token = nextConnectionId();
+    let commands = [];
+    const current = patchSession(runtime, session.serverId, session.version, (draft) => {
+      if (!draft || draft.key !== relaySessionKey) {
+        return draft;
+      }
+      if ((draft.serverDataByConnection.get(connectionId) || "") !== targetId) {
+        return draft;
+      }
+      restorePendingDrain(draft, connectionId);
+      const frames = draft.pendingFramesByConnection.get(connectionId) || [];
+      if (frames.length === 0) {
+        commands = [];
+        return draft;
+      }
+      const clonedFrames = frames.map((frame) => ({
+        data: String(frame?.data ?? ""),
+        opcode: trimString(frame?.opcode) || "text",
+      }));
+      draft.pendingDrainByConnection.set(connectionId, {
+        targetId,
+        token,
+        frames: clonedFrames,
+        createdAt: nowMs(),
+      });
+      draft.pendingFramesByConnection.delete(connectionId);
+      touchSession(draft);
+      commands = clonedFrames.map((frame) =>
+        relaySendCommand("send", frame?.data ?? "", frame?.opcode ?? "text", { targetId }),
+      );
+      return draft;
+    });
     if (!current) {
       return;
     }
-    if ((current.serverDataByConnection.get(connectionId) || "") !== targetId) {
-      return;
-    }
-    const commands = flushPendingFrames(current, connectionId, targetId, runtime);
     if (commands.length === 0) {
       return;
     }
+    relayLog(
+      runtime,
+      "pending_flush_start",
+      sessionDebugState(current, connectionId),
+      `targetId=${targetId}`,
+      `frames=${commands.length}`,
+    );
+    schedulePendingDrainFinalize(current, connectionId, token, targetId, runtime);
     runtime.websocketDispatch(commands, { ok: false, failures: [] });
   }, delayMs);
 }
 
-function sessionSnapshot() {
-  const state = relayState();
+function sessionSnapshot(runtime) {
+  const store = relayStore(runtime);
+  const keys = store && typeof store.keys === "function" ? store.keys([]) : [];
   const sessions = [];
-  for (const session of state.sessions.values()) {
+  for (const key of keys) {
+    if (!String(key).startsWith("session:")) {
+      continue;
+    }
+    const raw = store.get(key, null);
+    const [_, serverId = "", version = CURRENT_RELAY_VERSION] = String(key).split(":");
+    const session = hydrateSession(raw, serverId, version);
     const connectionRows = [];
     for (const [connectionId, clientIds] of session.clientIdsByConnection.entries()) {
       connectionRows.push({
@@ -753,6 +1013,10 @@ function handleOpenV2(frame, session, role, rawConnectionId) {
     commands.push(
       ...registerCommonOpenMetadata(frame, session.serverId, CURRENT_RELAY_VERSION, "client", resolvedConnectionId),
     );
+    if (markConnectionAnnounced(session, resolvedConnectionId)) {
+      commands.push(...notifyControls(session, { type: "connected", connectionId: resolvedConnectionId }));
+    }
+    scheduleControlNudge(session, resolvedConnectionId, frame.runtime);
     return {
       accepted: true,
       commands,
@@ -769,6 +1033,11 @@ function handleOpenV2(frame, session, role, rawConnectionId) {
     relayLog(frame.runtime, "open_control", sessionDebugState(session), `socket=${frame.id}`);
     commands.push(
       ...registerCommonOpenMetadata(frame, session.serverId, CURRENT_RELAY_VERSION, "server-control", ""),
+      textCommand(
+        "send",
+        json({ type: "sync", connectionIds: listConnectedConnectionIds(session) }),
+        { targetId: frame.id },
+      ),
     );
     return {
       accepted: true,
@@ -784,7 +1053,7 @@ function handleOpenV2(frame, session, role, rawConnectionId) {
   clearControlNudge(session, connectionId);
   session.serverDataByConnection.set(connectionId, frame.id);
   relayLog(frame.runtime, "open_server_data", sessionDebugState(session, connectionId), `socket=${frame.id}`);
-  schedulePendingFlush(session, connectionId, frame.id, frame.runtime);
+  commands.push(...flushPendingFrames(session, connectionId, frame.id, frame.runtime));
   commands.push(
     ...registerCommonOpenMetadata(frame, session.serverId, CURRENT_RELAY_VERSION, "server-data", connectionId),
   );
@@ -811,11 +1080,14 @@ function handleOpen(frame) {
   if (!version) {
     return rejectOpen("Invalid v parameter (expected 1 or 2)", 400);
   }
-  const session = ensureSession(serverId, version);
-  if (version === LEGACY_RELAY_VERSION) {
-    return handleOpenV1(frame, session, role);
-  }
-  return handleOpenV2(frame, session, role, query.connectionId);
+  let response = null;
+  patchSession(frame.runtime, serverId, version, (session) => {
+    response = version === LEGACY_RELAY_VERSION
+      ? handleOpenV1(frame, session, role)
+      : handleOpenV2(frame, session, role, query.connectionId);
+    return session;
+  });
+  return response || { accepted: true, commands: [] };
 }
 
 function handleMessageV1(frame, session, role) {
@@ -916,11 +1188,14 @@ function handleMessage(frame) {
       errorClass: "relay_state",
     };
   }
-  const session = ensureSession(serverId, version);
-  if (version === LEGACY_RELAY_VERSION) {
-    return handleMessageV1(frame, session, role);
-  }
-  return handleMessageV2(frame, session, role, connectionId);
+  let response = null;
+  patchSession(frame.runtime, serverId, version, (session) => {
+    response = version === LEGACY_RELAY_VERSION
+      ? handleMessageV1(frame, session, role)
+      : handleMessageV2(frame, session, role, connectionId);
+    return session;
+  });
+  return response || { accepted: true, commands: [] };
 }
 
 function handleClose(frame) {
@@ -932,81 +1207,84 @@ function handleClose(frame) {
   if (!serverId || !role) {
     return { accepted: true, closed: true, commands: [] };
   }
-  const session = ensureSession(serverId, version);
-  touchSession(session);
-  relayLog(
-    frame.runtime,
-    "close_event",
-    `role=${role}`,
-    connectionId ? sessionDebugState(session, connectionId) : sessionDebugState(session),
-    `code=${frame.code || ""}`,
-    `reason=${trimString(frame.reason)}`,
-  );
-  const commands = [];
+  let response = { accepted: true, closed: true, commands: [] };
+  patchSession(frame.runtime, serverId, version, (session) => {
+    touchSession(session);
+    relayLog(
+      frame.runtime,
+      "close_event",
+      `role=${role}`,
+      connectionId ? sessionDebugState(session, connectionId) : sessionDebugState(session),
+      `code=${frame.code || ""}`,
+      `reason=${trimString(frame.reason)}`,
+    );
+    const commands = [];
 
-  if (version === LEGACY_RELAY_VERSION) {
-    if (role === "server" && session.v1ServerId === frame.id) {
-      session.v1ServerId = "";
+    if (version === LEGACY_RELAY_VERSION) {
+      if (role === "server" && session.v1ServerId === frame.id) {
+        session.v1ServerId = "";
+      }
+      if (role === "client") {
+        session.v1ClientIds.delete(frame.id);
+      }
+      response = { accepted: true, closed: true, commands };
+      return persistMaybeDeleteSession(frame.runtime, session);
     }
-    if (role === "client") {
-      session.v1ClientIds.delete(frame.id);
+
+    if (role === "server-control") {
+      session.controlIds.delete(frame.id);
+      response = { accepted: true, closed: true, commands };
+      return persistMaybeDeleteSession(frame.runtime, session);
     }
-    maybeDeleteSession(serverId, version);
-    return { accepted: true, closed: true, commands };
-  }
 
-  if (role === "server-control") {
-    session.controlIds.delete(frame.id);
-    maybeDeleteSession(serverId, version);
-    return { accepted: true, closed: true, commands };
-  }
+    if (role === "client" && connectionId) {
+      const clientIds = session.clientIdsByConnection.get(connectionId) || new Set();
+      clientIds.delete(frame.id);
+      if (clientIds.size === 0) {
+        session.clientIdsByConnection.delete(connectionId);
+        clearConnectionAnnounced(session, connectionId);
+        session.pendingFramesByConnection.delete(connectionId);
+        session.pendingDrainByConnection.delete(connectionId);
+        ensureDebugCounters(session).delete(connectionId);
+        clearControlNudge(session, connectionId);
+        const serverDataId = session.serverDataByConnection.get(connectionId) || "";
+        if (serverDataId) {
+          commands.push(closeCommand("Client disconnected", {
+            targetId: serverDataId,
+            code: 1001,
+          }));
+          session.serverDataByConnection.delete(connectionId);
+        }
+        commands.push(...notifyControls(session, { type: "disconnected", connectionId }));
+      } else {
+        session.clientIdsByConnection.set(connectionId, clientIds);
+      }
+      response = { accepted: true, closed: true, commands };
+      return persistMaybeDeleteSession(frame.runtime, session);
+    }
 
-  if (role === "client" && connectionId) {
-    const clientIds = session.clientIdsByConnection.get(connectionId) || new Set();
-    clientIds.delete(frame.id);
-    if (clientIds.size === 0) {
-      session.clientIdsByConnection.delete(connectionId);
-      clearConnectionAnnounced(session, connectionId);
-      session.pendingFramesByConnection.delete(connectionId);
-      session.pendingDrainByConnection.delete(connectionId);
-      ensureDebugCounters(session).delete(connectionId);
+    if (role === "server-data" && connectionId) {
       clearControlNudge(session, connectionId);
-      const serverDataId = session.serverDataByConnection.get(connectionId) || "";
-      if (serverDataId) {
-        commands.push(closeCommand("Client disconnected", {
-          targetId: serverDataId,
-          code: 1001,
-        }));
+      const currentId = session.serverDataByConnection.get(connectionId) || "";
+      if (currentId === frame.id) {
         session.serverDataByConnection.delete(connectionId);
       }
-      commands.push(...notifyControls(session, { type: "disconnected", connectionId }));
-    } else {
-      session.clientIdsByConnection.set(connectionId, clientIds);
+      restorePendingDrain(session, connectionId, frame.id);
+      const clientIds = Array.from(session.clientIdsByConnection.get(connectionId) || []);
+      for (const clientId of clientIds) {
+        commands.push(closeCommand("Server disconnected", {
+          targetId: clientId,
+          code: DEFAULT_SERVER_DATA_CLOSE_CODE,
+        }));
+      }
+      response = { accepted: true, closed: true, commands };
+      return persistMaybeDeleteSession(frame.runtime, session);
     }
-    maybeDeleteSession(serverId, version);
-    return { accepted: true, closed: true, commands };
-  }
 
-  if (role === "server-data" && connectionId) {
-    clearControlNudge(session, connectionId);
-    const currentId = session.serverDataByConnection.get(connectionId) || "";
-    if (currentId === frame.id) {
-      session.serverDataByConnection.delete(connectionId);
-    }
-    restorePendingDrain(session, connectionId, frame.id);
-    const clientIds = Array.from(session.clientIdsByConnection.get(connectionId) || []);
-    for (const clientId of clientIds) {
-      commands.push(closeCommand("Server disconnected", {
-        targetId: clientId,
-        code: DEFAULT_SERVER_DATA_CLOSE_CODE,
-      }));
-    }
-    maybeDeleteSession(serverId, version);
-    return { accepted: true, closed: true, commands };
-  }
-
-  maybeDeleteSession(serverId, version);
-  return { accepted: true, closed: true, commands };
+    response = { accepted: true, closed: true, commands };
+    return persistMaybeDeleteSession(frame.runtime, session);
+  });
+  return response;
 }
 
 const app = {
@@ -1033,8 +1311,7 @@ const app = {
       });
     }
     if (ctx.path === "/state") {
-      const snapshots = aggregateLaneSnapshots(ctx.runtime, sessionSnapshot());
-      return okJson(snapshots.merged);
+      return okJson(sessionSnapshot(ctx.runtime));
     }
     return ctx.notFound({
       ok: false,
@@ -1056,8 +1333,8 @@ const app = {
     return { accepted: true, commands: [] };
   },
 
-  snapshot() {
-    return sessionSnapshot();
+  snapshot(runtime) {
+    return sessionSnapshot(runtime);
   },
 };
 
