@@ -1028,30 +1028,37 @@ fn inproc_vjsx_lane_worker_loop(state &VjsxExecutorState, lane_id string, task_c
 				}
 			}
 			task := <-task_ch {
+				mut task_app := task.app
 				mut response := WorkerWebSocketDispatchResponse{}
 				mut err_msg := ''
-				mut task_app := task.app
 				lane := worker_executor.lane_snapshot_by_id(lane_id) or {
-					err_msg = err.msg()
 					task.reply <- InProcVjsxWebSocketTaskResult{
 						ok: false
-						error: err_msg
+						error: err.msg()
 					}
 					continue
 				}
+				
+				eprintln('[vhttpd] DEBUG: lane=${lane_id} start dispatch event=${task.frame.event}')
 				response = worker_executor.dispatch_websocket_event_on_lane(mut task_app, task.frame, lane) or {
 					err_msg = err.msg()
+					WorkerWebSocketDispatchResponse{}
+				}
+				eprintln('[vhttpd] DEBUG: lane=${lane_id} finish dispatch event=${task.frame.event} ok=${err_msg == ""}')
+
+				if err_msg != '' {
 					eprintln('[vhttpd] websocket lane worker error lane=${lane_id} event=${task.frame.event} path=${task.frame.path} request_id=${task.frame.request_id} trace_id=${task.frame.trace_id} query=${task.frame.query} error=${err_msg}')
 					task.reply <- InProcVjsxWebSocketTaskResult{
 						ok: false
 						error: err_msg
 					}
-					continue
+				} else {
+					task.reply <- InProcVjsxWebSocketTaskResult{
+						ok: true
+						response: response
+					}
 				}
-				task.reply <- InProcVjsxWebSocketTaskResult{
-					ok: true
-					response: response
-				}
+				eprintln('[vhttpd] DEBUG: lane=${lane_id} reply sent')
 			}
 			task := <-snapshot_ch {
 				mut task_app := task.app
@@ -4263,40 +4270,27 @@ fn build_websocket_js_runtime(ctx &vjsx.Context, runtime_meta InProcVjsxRuntimeM
 }
 
 fn build_websocket_js_frame(ctx &vjsx.Context, frame WorkerWebSocketFrame, runtime vjsx.Value) vjsx.Value {
-	mut bundle := ctx.js_object()
-	mut raw := ctx.js_object()
-	raw.set('mode', if frame.mode != '' { frame.mode } else { 'websocket_dispatch' })
-	raw.set('event', if frame.event != '' { frame.event } else { 'message' })
-	raw.set('id', frame.id)
-	raw.set('path', frame.path)
-	raw.set('query', websocket_js_value_from_json(ctx, json.encode(frame.query)))
-	raw.set('headers', websocket_js_value_from_json(ctx, json.encode(frame.headers)))
-	raw.set('remote_addr', frame.remote_addr)
-	raw.set('request_id', frame.request_id)
-	raw.set('trace_id', frame.trace_id)
-	raw.set('target_id', frame.target_id)
-	raw.set('metadata', websocket_js_value_from_json(ctx, json.encode(frame.metadata)))
-	raw.set('status', frame.status)
-	raw.set('code', frame.code)
-	raw.set('reason', frame.reason)
-	raw.set('opcode', frame.opcode)
-	raw.set('data', frame.data)
-	raw.set('error', frame.error)
-	raw.set('error_class', frame.error_class)
-	bundle.set('raw', raw)
-	bundle.set('runtime', runtime)
-	defer {
-		raw.free()
-		bundle.free()
-	}
-	create_frame := ctx.js_global('__vhttpd_create_websocket_frame')
-	defer {
-		create_frame.free()
-	}
-	if create_frame.is_function() {
-		return ctx.call(create_frame, bundle) or { ctx.js_undefined() }
-	}
-	return raw.dup_value()
+	mut js_frame := ctx.js_object()
+	js_frame.set('mode', if frame.mode != '' { frame.mode } else { 'websocket_dispatch' })
+	js_frame.set('event', if frame.event != '' { frame.event } else { 'message' })
+	js_frame.set('id', frame.id)
+	js_frame.set('path', frame.path)
+	js_frame.set('query', websocket_js_value_from_json(ctx, json.encode(frame.query)))
+	js_frame.set('headers', websocket_js_value_from_json(ctx, json.encode(frame.headers)))
+	js_frame.set('remoteAddr', frame.remote_addr)
+	js_frame.set('requestId', frame.request_id)
+	js_frame.set('traceId', frame.trace_id)
+	js_frame.set('targetId', frame.target_id)
+	js_frame.set('metadata', websocket_js_value_from_json(ctx, json.encode(frame.metadata)))
+	js_frame.set('status', frame.status)
+	js_frame.set('code', frame.code)
+	js_frame.set('reason', frame.reason)
+	js_frame.set('opcode', frame.opcode)
+	js_frame.set('data', frame.data)
+	js_frame.set('error', frame.error)
+	js_frame.set('errorClass', frame.error_class)
+	js_frame.set('runtime', runtime)
+	return js_frame
 }
 
 fn response_from_js_value(val vjsx.Value, req_id string) WorkerResponse {
