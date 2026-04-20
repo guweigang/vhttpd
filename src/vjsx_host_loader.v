@@ -17,12 +17,12 @@ fn vjsx_has_runtime_assets(root string) bool {
 	return os.is_file(os.join_path(target, 'web', 'js', 'buffer.js'))
 }
 
-fn vjsx_runtime_asset_root_for_executable(exe_path string) string {
+fn vjsx_runtime_asset_root() string {
 	override := os.getenv(vhttpd_vjsx_asset_env).trim_space()
 	if vjsx_has_runtime_assets(override) {
 		return override
 	}
-	exe_dir := os.dir(exe_path)
+	exe_dir := os.dir(os.executable())
 	share_root := os.getenv(vhttpd_share_root_env).trim_space()
 	candidates := [
 		os.join_path(exe_dir, 'runtime', 'vjsx'),
@@ -37,10 +37,6 @@ fn vjsx_runtime_asset_root_for_executable(exe_path string) string {
 		}
 	}
 	return override
-}
-
-fn vjsx_runtime_asset_root() string {
-	return vjsx_runtime_asset_root_for_executable(os.executable())
 }
 
 fn vjsx_entry_runs_as_module(app_entry string) !bool {

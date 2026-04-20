@@ -200,7 +200,6 @@ fn (mut app App) ws_hub_register_conn(conn_id string, worker_socket string, meth
 		client: unsafe { client }
 	}
 	app.ws_hub_mu.unlock()
-	eprintln('[vhttpd] DEBUG: ws_hub_register_conn: id=${conn_id} total_conns=${app.ws_hub_conns.len}')
 }
 
 fn (mut app App) ws_hub_flush_pending(conn_id string) {
@@ -410,14 +409,12 @@ fn (mut app App) ws_hub_send_client(conn_id string, client &websocket.Client, da
 	mut c := unsafe { client }
 	payload, code := websocket_hub_payload_bytes(data, opcode) or { return false }
 	if code == .text_frame {
-		eprintln('[vhttpd] DEBUG: ws_hub_send_client writing text: conn=${conn_id} len=${data.len}')
 		c.write_string(data) or {
 			app.ws_hub_unregister_conn(conn_id)
 			return false
 		}
 		return true
 	}
-	eprintln('[vhttpd] DEBUG: ws_hub_send_client writing binary: conn=${conn_id} len=${payload.len}')
 	c.write(payload, code) or {
 		app.ws_hub_unregister_conn(conn_id)
 		return false

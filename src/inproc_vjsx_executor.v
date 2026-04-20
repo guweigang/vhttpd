@@ -286,16 +286,6 @@ struct InProcVjsxLaneSnapshotTask {
 	reply chan InProcVjsxLaneSnapshotTaskResult
 }
 
-struct InProcVjsxWarmupTaskResult {
-	ok    bool
-	error string
-}
-
-struct InProcVjsxWarmupTask {
-	app   &App = unsafe { nil }
-	reply chan InProcVjsxWarmupTaskResult
-}
-
 struct InProcVjsxHostSnapshotRequest {
 	scope string
 	kind  string
@@ -306,9 +296,7 @@ mut:
 	lane_id         string
 	websocket_tasks chan InProcVjsxWebSocketTask
 	snapshot_tasks  chan InProcVjsxLaneSnapshotTask
-	warmup_tasks    chan InProcVjsxWarmupTask
 	stop_ch         chan bool
-	stopped_ch      chan bool
 	thread          thread
 	started         bool
 }
@@ -332,9 +320,7 @@ pub fn new_inproc_vjsx_executor(config VjsxRuntimeFacadeConfig) InProcVjsxExecut
 			lane_id: lane.id
 			websocket_tasks: chan InProcVjsxWebSocketTask{cap: 64}
 			snapshot_tasks: chan InProcVjsxLaneSnapshotTask{cap: 16}
-			warmup_tasks: chan InProcVjsxWarmupTask{cap: 1}
 			stop_ch: chan bool{cap: 1}
-			stopped_ch: chan bool{cap: 1}
 		}
 	}
 	initial_probe := if config.app_entry.trim_space() != '' {
@@ -424,37 +410,6 @@ pub fn (e InProcVjsxExecutor) lane_count() int {
 pub fn (e InProcVjsxExecutor) warmup(mut app App) ! {
 	e.remember_app(mut app)
 	e.bootstrap_placeholder()!
-	lane_count := e.lane_count()
-	if lane_count <= 0 {
-		return
-	}
-	
-	mut state := e.state
-	state.mu.@lock()
-	workers := state.lane_workers.clone()
-	state.mu.unlock()
-
-	mut reply_channels := []chan InProcVjsxWarmupTaskResult{}
-	for idx in 0 .. lane_count {
-		worker := workers[idx]
-		reply_ch := chan InProcVjsxWarmupTaskResult{cap: 1}
-		worker.warmup_tasks <- InProcVjsxWarmupTask{
-			app:   app
-			reply: reply_ch
-		}
-		reply_channels << reply_ch
-	}
-
-	mut last_error := ''
-	for reply_ch in reply_channels {
-		res := <-reply_ch
-		if !res.ok {
-			last_error = res.error
-		}
-	}
-	if last_error != '' {
-		return error(last_error)
-	}
 }
 
 pub fn (e InProcVjsxExecutor) facade_snapshot() VjsxRuntimeFacade {
@@ -675,28 +630,6 @@ pub fn (e InProcVjsxExecutor) select_next_lane() !VjsxExecutionLane {
 	return error('inproc_vjsx_executor_no_available_lane')
 }
 
-fn (e InProcVjsxExecutor) force_select_lane_by_id(lane_id string) !VjsxExecutionLane {
-	if isnil(e.state) {
-		return error('inproc_vjsx_executor_state_missing')
-	}
-	if lane_id.trim_space() == '' {
-		return error('inproc_vjsx_executor_lane_id_missing')
-	}
-	mut state := e.state
-	state.mu.@lock()
-	defer {
-		state.mu.unlock()
-	}
-	for idx, lane in state.lanes {
-		if lane.id != lane_id {
-			continue
-		}
-		state.lanes[idx].inflight++
-		return state.lanes[idx]
-	}
-	return error('inproc_vjsx_executor_lane_not_found')
-}
-
 fn (e InProcVjsxExecutor) select_lane_by_id(lane_id string) !VjsxExecutionLane {
 	if isnil(e.state) {
 		return error('inproc_vjsx_executor_state_missing')
@@ -808,7 +741,7 @@ fn (e InProcVjsxExecutor) acquire_websocket_lane(frame WorkerWebSocketFrame) !(V
 	existing_lane_id := state.websocket_connection_lane_by_id[frame.id] or { '' }
 	state.mu.unlock()
 	if existing_lane_id != '' {
-		return e.force_select_lane_by_id(existing_lane_id)!, ''
+		return e.acquire_lane_by_id(existing_lane_id, inproc_vjsx_lane_wait_timeout_ms)!, ''
 	}
 	affinity_key := websocket_affinity_value(frame, config)
 	if affinity_key == '' {
@@ -827,7 +760,7 @@ fn (e InProcVjsxExecutor) acquire_websocket_lane(frame WorkerWebSocketFrame) !(V
 	mapped_lane_id := state.websocket_affinity_lane_by_key[affinity_key] or { '' }
 	state.mu.unlock()
 	if mapped_lane_id != '' {
-		lane := e.force_select_lane_by_id(mapped_lane_id)!
+		lane := e.acquire_lane_by_id(mapped_lane_id, inproc_vjsx_lane_wait_timeout_ms)!
 		if frame.id.trim_space() != '' {
 			state.mu.@lock()
 			state.websocket_connection_lane_by_id[frame.id] = lane.id
@@ -924,11 +857,9 @@ fn (e InProcVjsxExecutor) start_lane_workers() {
 		}
 		task_ch := worker.websocket_tasks
 		snapshot_ch := worker.snapshot_tasks
-		warmup_ch := worker.warmup_tasks
 		stop_ch := worker.stop_ch
-		stopped_ch := worker.stopped_ch
 		lane_id := worker.lane_id
-		mut thr := spawn inproc_vjsx_lane_worker_loop(e.state, lane_id, task_ch, snapshot_ch, warmup_ch, stop_ch, stopped_ch)
+		mut thr := spawn inproc_vjsx_lane_worker_loop(e.state, lane_id, task_ch, snapshot_ch, stop_ch)
 		state.mu.@lock()
 		if idx >= 0 && idx < state.lane_workers.len {
 			state.lane_workers[idx].thread = thr
@@ -988,10 +919,7 @@ fn (e InProcVjsxExecutor) request_lane_snapshot(mut app App, lane VjsxExecutionL
 	return result.raw
 }
 
-fn inproc_vjsx_lane_worker_loop(state &VjsxExecutorState, lane_id string, task_ch chan InProcVjsxWebSocketTask, snapshot_ch chan InProcVjsxLaneSnapshotTask, warmup_ch chan InProcVjsxWarmupTask, stop_ch chan bool, stopped_ch chan bool) {
-	defer {
-		stopped_ch <- true
-	}
+fn inproc_vjsx_lane_worker_loop(state &VjsxExecutorState, lane_id string, task_ch chan InProcVjsxWebSocketTask, snapshot_ch chan InProcVjsxLaneSnapshotTask, stop_ch chan bool) {
 	worker_executor := InProcVjsxExecutor{
 		state: state
 	}
@@ -1000,65 +928,31 @@ fn inproc_vjsx_lane_worker_loop(state &VjsxExecutorState, lane_id string, task_c
 			_ := <-stop_ch {
 				return
 			}
-			task := <-warmup_ch {
-				lane := worker_executor.lane_snapshot_by_id(lane_id) or {
-					task.reply <- InProcVjsxWarmupTaskResult{
-						ok: false
-						error: err.msg()
-					}
-					continue
-				}
-				idx := worker_executor.lane_index_by_id(lane.id)
-				if idx < 0 {
-					task.reply <- InProcVjsxWarmupTaskResult{
-						ok: false
-						error: 'inproc_vjsx_executor_lane_not_found'
-					}
-					continue
-				}
-				worker_executor.ensure_lane_host(idx) or {
-					task.reply <- InProcVjsxWarmupTaskResult{
-						ok: false
-						error: err.msg()
-					}
-					continue
-				}
-				task.reply <- InProcVjsxWarmupTaskResult{
-					ok: true
-				}
-			}
 			task := <-task_ch {
-				mut task_app := task.app
 				mut response := WorkerWebSocketDispatchResponse{}
 				mut err_msg := ''
+				mut task_app := task.app
 				lane := worker_executor.lane_snapshot_by_id(lane_id) or {
+					err_msg = err.msg()
 					task.reply <- InProcVjsxWebSocketTaskResult{
 						ok: false
-						error: err.msg()
+						error: err_msg
 					}
 					continue
 				}
-				
-				eprintln('[vhttpd] DEBUG: lane=${lane_id} start dispatch event=${task.frame.event}')
 				response = worker_executor.dispatch_websocket_event_on_lane(mut task_app, task.frame, lane) or {
 					err_msg = err.msg()
-					WorkerWebSocketDispatchResponse{}
-				}
-				eprintln('[vhttpd] DEBUG: lane=${lane_id} finish dispatch event=${task.frame.event} ok=${err_msg == ""}')
-
-				if err_msg != '' {
 					eprintln('[vhttpd] websocket lane worker error lane=${lane_id} event=${task.frame.event} path=${task.frame.path} request_id=${task.frame.request_id} trace_id=${task.frame.trace_id} query=${task.frame.query} error=${err_msg}')
 					task.reply <- InProcVjsxWebSocketTaskResult{
 						ok: false
 						error: err_msg
 					}
-				} else {
-					task.reply <- InProcVjsxWebSocketTaskResult{
-						ok: true
-						response: response
-					}
+					continue
 				}
-				eprintln('[vhttpd] DEBUG: lane=${lane_id} reply sent')
+				task.reply <- InProcVjsxWebSocketTaskResult{
+					ok: true
+					response: response
+				}
 			}
 			task := <-snapshot_ch {
 				mut task_app := task.app
@@ -3507,14 +3401,13 @@ pub fn (e InProcVjsxExecutor) close() {
 	}
 	mut stale_hosts := []VjsxLaneHost{}
 	mut reset_hosts := []VjsxLaneHost{}
-	mut worker_stop_channels := []chan bool{}
-	mut worker_stopped_channels := []chan bool{}
+	mut worker_threads := []thread{}
 	mut state := e.state
 	state.mu.@lock()
 	for i in 0 .. state.lane_workers.len {
 		if state.lane_workers[i].started {
-			worker_stop_channels << state.lane_workers[i].stop_ch
-			worker_stopped_channels << state.lane_workers[i].stopped_ch
+			worker_threads << state.lane_workers[i].thread
+			state.lane_workers[i].stop_ch <- true
 			state.lane_workers[i].started = false
 		}
 	}
@@ -3549,11 +3442,8 @@ pub fn (e InProcVjsxExecutor) close() {
 	state.signature_pending_since = 0
 	state.signature_last_error = ''
 	state.mu.unlock()
-	for stop_ch in worker_stop_channels {
-		stop_ch <- true
-	}
-	for stopped_ch in worker_stopped_channels {
-		_ = <-stopped_ch
+	for mut thr in worker_threads {
+		thr.wait()
 	}
 	for mut host in stale_hosts {
 		inproc_vjsx_destroy_lane_host(mut host)
@@ -4278,13 +4168,9 @@ fn build_websocket_js_frame(ctx &vjsx.Context, frame WorkerWebSocketFrame, runti
 	js_frame.set('query', websocket_js_value_from_json(ctx, json.encode(frame.query)))
 	js_frame.set('headers', websocket_js_value_from_json(ctx, json.encode(frame.headers)))
 	js_frame.set('remoteAddr', frame.remote_addr)
-	js_frame.set('remote_addr', frame.remote_addr)
 	js_frame.set('requestId', frame.request_id)
-	js_frame.set('request_id', frame.request_id)
 	js_frame.set('traceId', frame.trace_id)
-	js_frame.set('trace_id', frame.trace_id)
 	js_frame.set('targetId', frame.target_id)
-	js_frame.set('target_id', frame.target_id)
 	js_frame.set('metadata', websocket_js_value_from_json(ctx, json.encode(frame.metadata)))
 	js_frame.set('status', frame.status)
 	js_frame.set('code', frame.code)
@@ -4293,7 +4179,6 @@ fn build_websocket_js_frame(ctx &vjsx.Context, frame WorkerWebSocketFrame, runti
 	js_frame.set('data', frame.data)
 	js_frame.set('error', frame.error)
 	js_frame.set('errorClass', frame.error_class)
-	js_frame.set('error_class', frame.error_class)
 	js_frame.set('runtime', runtime)
 	return js_frame
 }
@@ -4395,7 +4280,6 @@ fn websocket_upstream_response_from_js_value(val vjsx.Value, req WorkerWebSocket
 
 fn websocket_response_from_js_value(val vjsx.Value, frame WorkerWebSocketFrame) WorkerWebSocketDispatchResponse {
 	raw := val.json_stringify()
-	eprintln('[vhttpd] DEBUG: lane=${frame.id} raw js response: ${raw}')
 	if raw.trim_space() == '' || raw.trim_space() == 'undefined' || raw.trim_space() == 'null' {
 		return WorkerWebSocketDispatchResponse{
 			mode:     'websocket_dispatch'
@@ -4406,17 +4290,7 @@ fn websocket_response_from_js_value(val vjsx.Value, frame WorkerWebSocketFrame) 
 			commands: []WorkerWebSocketFrame{}
 		}
 	}
-	// Robust normalization for CamelCase to SnakeCase (handling potential spaces)
-	mut raw_normalized := raw.replace('"targetId"', '"target_id"')
-	raw_normalized = raw_normalized.replace('"requestId"', '"request_id"')
-	raw_normalized = raw_normalized.replace('"traceId"', '"trace_id"')
-	raw_normalized = raw_normalized.replace('"errorClass"', '"error_class"')
-	raw_normalized = raw_normalized.replace('"remoteAddr"', '"remote_addr"')
-	// Ensure colons are correctly associated if we replaced without them
-	raw_normalized = raw_normalized.replace('"target_id":', '"target_id":')
-
-	normalized := json.decode(InProcVjsxWebSocketResult, raw_normalized) or { InProcVjsxWebSocketResult{} }
-	eprintln('[vhttpd] DEBUG: lane=${frame.id} decoded response accepted=${normalized.accepted} commands=${normalized.commands.len}')
+	normalized := json.decode(InProcVjsxWebSocketResult, raw) or { InProcVjsxWebSocketResult{} }
 	return WorkerWebSocketDispatchResponse{
 		mode:        'websocket_dispatch'
 		event:       'result'
@@ -5150,17 +5024,9 @@ pub fn (e InProcVjsxExecutor) dispatch_websocket_event(mut app App, frame Worker
 		frame: frame
 		reply: reply_ch
 	}
-	select {
-		res := <-reply_ch {
-			if !res.ok {
-				return error(res.error)
-			}
-			return res.response
-		}
-		10 * time.second {
-			e.record_lane_error(lane.id, 'inproc_vjsx_executor_worker_timeout')
-			return error('inproc_vjsx_executor_worker_timeout')
-		}
+	result := <-reply_ch
+	if !result.ok {
+		return error(result.error)
 	}
-	return error('inproc_vjsx_executor_dispatch_unreachable')
+	return result.response
 }

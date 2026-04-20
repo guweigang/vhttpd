@@ -32,72 +32,6 @@ fn inproc_vjsx_wait_for_signature_refresh(executor InProcVjsxExecutor, previous 
 	return false
 }
 
-fn paseo_relay_wait_for_state_body(mut executor InProcVjsxExecutor, mut app App, trace_prefix string, needles []string, timeout_ms int) string {
-	deadline := time.now().add(time.millisecond * timeout_ms)
-	mut last_body := ''
-	for time.now() < deadline {
-		resp := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
-			method:      'GET'
-			path:        '/state'
-			req:         http.Request{
-				method: .get
-				url:    '/state'
-				host:   'relay.test'
-			}
-			remote_addr: '127.0.0.1'
-			trace_id:    '${trace_prefix}_trace'
-			request_id:  '${trace_prefix}_request'
-		}) or {
-			time.sleep(10 * time.millisecond)
-			continue
-		}
-		last_body = resp.response.body
-		mut matched := true
-		for needle in needles {
-			if !last_body.contains(needle) {
-				matched = false
-				break
-			}
-		}
-		if matched {
-			return last_body
-		}
-		time.sleep(10 * time.millisecond)
-	}
-	return last_body
-}
-
-fn paseo_relay_wait_for_pending_messages(mut app App, conn_id string, timeout_ms int) []HubPendingMessage {
-	deadline := time.now().add(time.millisecond * timeout_ms)
-	for time.now() < deadline {
-		pending := app.ws_hub_pending[conn_id] or { []HubPendingMessage{} }
-		if pending.len > 0 {
-			return pending.clone()
-		}
-		time.sleep(10 * time.millisecond)
-	}
-	return app.ws_hub_pending[conn_id] or { []HubPendingMessage{} }
-}
-
-fn paseo_relay_wait_for_snapshot_meta(mut app App, conn_id string, key string, expected string, timeout_ms int) string {
-	deadline := time.now().add(time.millisecond * timeout_ms)
-	for time.now() < deadline {
-		snapshot := app.admin_websockets_snapshot(true, 10, 0, '', conn_id)
-		if snapshot.connections.len == 1 {
-			value := snapshot.connections[0].metadata[key]
-			if value == expected {
-				return value
-			}
-		}
-		time.sleep(10 * time.millisecond)
-	}
-	snapshot := app.admin_websockets_snapshot(true, 10, 0, '', conn_id)
-	if snapshot.connections.len == 1 {
-		return snapshot.connections[0].metadata[key]
-	}
-	return ''
-}
-
 fn test_inproc_vjsx_executor_lane_temp_root_uses_system_temp_cache() {
 	app_entry := '/tmp/demo/hello-handler.mts'
 	temp_root := vjsx_lane_temp_root(app_entry, 2)
@@ -136,41 +70,6 @@ fn test_vjsx_runtime_asset_root_prefers_env_override() {
 		os.rmdir_all(temp_dir) or {}
 	}
 	assert vjsx_runtime_asset_root() == temp_dir
-}
-
-fn test_vjsx_runtime_asset_root_prefers_bundle_relative_runtime_dir() {
-	root_dir := os.join_path(os.temp_dir(), 'vhttpd_vjsx_asset_root_bundle_test')
-	exe_dir := os.join_path(root_dir, 'bin')
-	runtime_dir := os.join_path(exe_dir, 'runtime', 'vjsx')
-	share_dir := os.join_path(root_dir, 'share', 'vjsx')
-	fake_exe := os.join_path(exe_dir, 'vhttpd')
-	os.mkdir_all(os.join_path(runtime_dir, 'web', 'js')) or { panic(err) }
-	os.mkdir_all(os.join_path(share_dir, 'web', 'js')) or { panic(err) }
-	os.write_file(os.join_path(runtime_dir, 'web', 'js', 'buffer.js'), '// bundle asset\n') or {
-		panic(err)
-	}
-	os.write_file(os.join_path(share_dir, 'web', 'js', 'buffer.js'), '// share asset\n') or {
-		panic(err)
-	}
-	os.write_file(fake_exe, '') or { panic(err) }
-	old_root := os.getenv('VJSX_ASSET_ROOT')
-	old_share_root := os.getenv('VHTTPD_SHARE_ROOT')
-	os.unsetenv('VJSX_ASSET_ROOT')
-	os.setenv('VHTTPD_SHARE_ROOT', os.join_path(root_dir, 'share'), true)
-	defer {
-		if old_root == '' {
-			os.unsetenv('VJSX_ASSET_ROOT')
-		} else {
-			os.setenv('VJSX_ASSET_ROOT', old_root, true)
-		}
-		if old_share_root == '' {
-			os.unsetenv('VHTTPD_SHARE_ROOT')
-		} else {
-			os.setenv('VHTTPD_SHARE_ROOT', old_share_root, true)
-		}
-		os.rmdir_all(root_dir) or {}
-	}
-	assert vjsx_runtime_asset_root_for_executable(fake_exe) == runtime_dir
 }
 
 fn test_inproc_vjsx_executor_source_signature_respects_include_and_exclude_globs() {
@@ -423,10 +322,7 @@ fn test_inproc_vjsx_executor_dispatch_http_exposes_runtime_facade() {
 	assert outcome.response.body.contains('"method":"GET"')
 	assert outcome.response.body.contains('"path":"/hello"')
 	assert outcome.response.body.contains('"url":"/hello"')
-	assert outcome.response.body.contains('"capabilities":{')
-	assert outcome.response.body.contains('"http":true')
-	assert outcome.response.body.contains('"websocket"')
-	assert outcome.response.body.contains('"network"')
+	assert outcome.response.body.contains('"capabilities":{"http":true,"stream":false,"websocket":false,"websocketUpstream":false,"fs":false,"process":false,"network":false}')
 	assert outcome.response.body.contains('"method":"GET"')
 	assert outcome.response.body.contains('"path":"/hello"')
 	assert outcome.response.body.contains('"nowType":"number"')
@@ -2539,13 +2435,14 @@ export default app;
 	assert msg_resp.accepted
 	result := app.execute_websocket_dispatch_commands_result(msg_resp.commands)
 	assert !result.has_close
-	assert result.failures.len == 1
 	if result.failures.len > 0 {
 		app.websocket_dispatch_followup_failures('ws_main_failure', 'GET', '/ws', map[string]string{}, {
 			'host': 'relay.test'
 		}, '127.0.0.1', 'req_ws_main_failure', 'trace_ws_main_failure', result.failures) or {}
 	}
-	assert paseo_relay_wait_for_snapshot_meta(mut app, 'ws_main_failure', 'main_dispatch_failure_count', '', 80) == ''
+	snapshot := app.admin_websockets_snapshot(true, 10, 0, '', 'ws_main_failure')
+	assert snapshot.connections.len == 1
+	assert snapshot.connections[0].metadata['main_dispatch_failure_count'] == '1'
 }
 
 fn test_inproc_vjsx_executor_repo_paseo_relay_skeleton_boots() {
@@ -2605,6 +2502,8 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_skeleton_boots() {
 	assert control_open.accepted
 	assert control_open.commands.any(it.event == 'set_meta' && it.key == 'relay_role'
 		&& it.value == 'server-control')
+	assert control_open.commands.any(it.event == 'send' && it.target_id == 'ws_control'
+		&& it.data.contains('"type":"sync"'))
 	client_open := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
 		mode:       'websocket_dispatch'
 		event:      'open'
@@ -2623,6 +2522,8 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_skeleton_boots() {
 		&& it.value == 'client')
 	assert client_open.commands.any(it.event == 'set_meta' && it.key == 'relay_connection_id'
 		&& it.value.starts_with('conn_'))
+	assert client_open.commands.any(it.event == 'send' && it.target_id == 'ws_control'
+		&& it.data.contains('"type":"connected"'))
 }
 
 fn test_inproc_vjsx_executor_repo_paseo_relay_isolates_versions_by_server_id() {
@@ -2668,6 +2569,22 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_isolates_versions_by_server_id() {
 	}) or { panic(err) }
 	assert control_open.accepted
 	assert !control_open.commands.any(it.event == 'close' && it.target_id == 'ws_legacy_server')
+	state := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+		method:      'GET'
+		path:        '/state'
+		req:         http.Request{
+			method: .get
+			url:    '/state'
+			host:   'relay.test'
+		}
+		remote_addr: '127.0.0.1'
+		trace_id:    'trace_version_isolation_state'
+		request_id:  'req_version_isolation_state'
+	}) or { panic(err) }
+	assert state.response.status == 200
+	assert state.response.body.contains('"sessionCount":2')
+	assert state.response.body.contains('"sessionKey":"relay-v1:${server_id}"')
+	assert state.response.body.contains('"sessionKey":"relay-v2:${server_id}"')
 }
 
 fn test_inproc_vjsx_executor_repo_paseo_relay_buffers_and_flushes_client_frames() {
@@ -2729,8 +2646,20 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_buffers_and_flushes_client_frames(
 		metadata:   {'relay_server_id': server_id, 'relay_version': '2', 'relay_role': 'client', 'relay_connection_id': connection_id}
 	}) or { panic(err) }
 	assert client_message.accepted
-	assert client_message.commands.any(it.event == 'send' && it.target_id == 'ws_control_buffer'
-		&& it.data.contains('"type":"connected"'))
+	assert client_message.commands.len == 0
+	state_before := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+		method:      'GET'
+		path:        '/state'
+		req:         http.Request{
+			method: .get
+			url:    '/state'
+			host:   'relay.test'
+		}
+		remote_addr: '127.0.0.1'
+		trace_id:    'trace_state_before_flush'
+		request_id:  'req_state_before_flush'
+	}) or { panic(err) }
+	assert state_before.response.body.contains('"pendingCount":1')
 	server_data_open := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
 		mode:       'websocket_dispatch'
 		event:      'open'
@@ -2745,8 +2674,22 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_buffers_and_flushes_client_frames(
 		metadata:   map[string]string{}
 	}) or { panic(err) }
 	assert server_data_open.accepted
-	pending_server_data := paseo_relay_wait_for_pending_messages(mut app, 'ws_server_data_buffer', 300)
-	assert pending_server_data.any(it.data.contains('"type":"hello"'))
+	assert server_data_open.commands.any(it.event == 'send' && it.target_id == 'ws_server_data_buffer'
+		&& it.data.contains('"type":"hello"'))
+	state_after := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+		method:      'GET'
+		path:        '/state'
+		req:         http.Request{
+			method: .get
+			url:    '/state'
+			host:   'relay.test'
+		}
+		remote_addr: '127.0.0.1'
+		trace_id:    'trace_state_after_flush'
+		request_id:  'req_state_after_flush'
+	}) or { panic(err) }
+	assert state_after.response.body.contains('"pendingCount":0')
+	assert state_after.response.body.contains('"drainingCount":1')
 }
 
 fn test_inproc_vjsx_executor_repo_paseo_relay_nudges_control_when_server_data_does_not_arrive() {
@@ -2798,11 +2741,10 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_nudges_control_when_server_data_do
 		metadata:   map[string]string{}
 	}) or { panic(err) }
 	assert client_open.accepted
-	// Timer-driven dispatches are not surfaced deterministically by the direct inproc test harness.
-	pending := paseo_relay_wait_for_pending_messages(mut app, 'ws_control_nudge', 1000)
-	if pending.len > 0 {
-		assert pending.any(it.data.contains('"type":"sync"'))
-	}
+	time.sleep(80 * time.millisecond)
+	pending := app.ws_hub_pending['ws_control_nudge'] or { []HubPendingMessage{} }
+	assert pending.any(it.data.contains('"type":"connected"'))
+	assert pending.any(it.data.contains('"type":"sync"'))
 }
 
 fn test_inproc_vjsx_executor_repo_paseo_relay_disconnects_server_data_on_last_client_close() {
@@ -3000,8 +2942,7 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_preserves_binary_opcode_on_flush()
 		metadata:   {'relay_server_id': server_id, 'relay_version': '2', 'relay_role': 'client', 'relay_connection_id': connection_id}
 	}) or { panic(err) }
 	assert buffered.accepted
-	assert buffered.commands.any(it.event == 'send' && it.target_id == 'ws_control_binary'
-		&& it.data.contains('"type":"connected"'))
+	assert buffered.commands.len == 0
 	flushed := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
 		mode:       'websocket_dispatch'
 		event:      'open'
@@ -3016,8 +2957,8 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_preserves_binary_opcode_on_flush()
 		metadata:   map[string]string{}
 	}) or { panic(err) }
 	assert flushed.accepted
-	pending_binary := paseo_relay_wait_for_pending_messages(mut app, 'ws_server_data_binary', 300)
-	assert pending_binary.any(it.opcode == 'binary' && it.data == binary_data)
+	assert flushed.commands.any(it.event == 'send' && it.target_id == 'ws_server_data_binary'
+		&& it.opcode == 'binary' && it.data == binary_data)
 }
 
 fn test_inproc_vjsx_executor_repo_paseo_relay_restores_draining_frames_when_server_data_closes() {
@@ -3089,8 +3030,20 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_restores_draining_frames_when_serv
 		rooms:      []string{}
 		metadata:   map[string]string{}
 	}) or { panic(err) }
-	initial_pending := paseo_relay_wait_for_pending_messages(mut app, 'ws_server_data_drain_restore', 80)
-	assert initial_pending.any(it.data.contains('"type":"restore-me"'))
+	before_close := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+		method:      'GET'
+		path:        '/state'
+		req:         http.Request{
+			method: .get
+			url:    '/state'
+			host:   'relay.test'
+		}
+		remote_addr: '127.0.0.1'
+		trace_id:    'trace_state_before_drain_restore_close'
+		request_id:  'req_state_before_drain_restore_close'
+	}) or { panic(err) }
+	assert before_close.response.body.contains('"pendingCount":0')
+	assert before_close.response.body.contains('"drainingCount":1')
 	_ = executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
 		mode:       'websocket_dispatch'
 		event:      'close'
@@ -3106,26 +3059,20 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_restores_draining_frames_when_serv
 		rooms:      ['relay:session:${server_id}', 'relay:conn:${server_id}:${connection_id}']
 		metadata:   {'relay_server_id': server_id, 'relay_version': '2', 'relay_role': 'server-data', 'relay_connection_id': connection_id}
 	}) or { panic(err) }
-	reopened := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
-		mode:       'websocket_dispatch'
-		event:      'open'
-		id:         'ws_server_data_drain_restore_reopened'
-		path:       '/ws'
-		query:      {'serverId': server_id, 'role': 'server', 'v': '2', 'connectionId': connection_id}
-		headers:    {'host': 'relay.test'}
+	after_close := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+		method:      'GET'
+		path:        '/state'
+		req:         http.Request{
+			method: .get
+			url:    '/state'
+			host:   'relay.test'
+		}
 		remote_addr: '127.0.0.1'
-		request_id: 'req_ws_server_data_drain_restore_reopened'
-		trace_id:   'trace_ws_server_data_drain_restore_reopened'
-		rooms:      []string{}
-		metadata:   map[string]string{}
+		trace_id:    'trace_state_after_drain_restore_close'
+		request_id:  'req_state_after_drain_restore_close'
 	}) or { panic(err) }
-	assert reopened.accepted
-	// Re-delivery may be consumed inside the reopened lane before the hub-facing harness can observe it.
-	restored_pending := paseo_relay_wait_for_pending_messages(mut app, 'ws_server_data_drain_restore_reopened',
-		300)
-	if restored_pending.len > 0 {
-		assert restored_pending.any(it.data.contains('"type":"restore-me"'))
-	}
+	assert after_close.response.body.contains('"pendingCount":1')
+	assert after_close.response.body.contains('"drainingCount":0')
 }
 
 fn test_inproc_vjsx_executor_repo_paseo_relay_replaces_existing_control_socket() {
@@ -3263,6 +3210,19 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_allows_multiple_clients_same_conne
 	}) or { panic(err) }
 	assert second.accepted
 	assert !second.commands.any(it.event == 'close' && it.target_id == 'ws_client_one')
+	state := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+		method:      'GET'
+		path:        '/state'
+		req:         http.Request{
+			method: .get
+			url:    '/state'
+			host:   'relay.test'
+		}
+		remote_addr: '127.0.0.1'
+		trace_id:    'trace_multi_client_state'
+		request_id:  'req_multi_client_state'
+	}) or { panic(err) }
+	assert state.response.body.contains('"clientCount":2')
 }
 
 fn test_inproc_vjsx_executor_repo_paseo_relay_keeps_server_data_alive_if_other_clients_remain() {
