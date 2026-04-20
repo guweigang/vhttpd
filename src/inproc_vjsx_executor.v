@@ -428,11 +428,15 @@ pub fn (e InProcVjsxExecutor) warmup(mut app App) ! {
 	if lane_count <= 0 {
 		return
 	}
-	mut reply_channels := []chan InProcVjsxWarmupTaskResult{}
+	
 	mut state := e.state
 	state.mu.@lock()
+	workers := state.lane_workers.clone()
+	state.mu.unlock()
+
+	mut reply_channels := []chan InProcVjsxWarmupTaskResult{}
 	for idx in 0 .. lane_count {
-		worker := state.lane_workers[idx]
+		worker := workers[idx]
 		reply_ch := chan InProcVjsxWarmupTaskResult{cap: 1}
 		worker.warmup_tasks <- InProcVjsxWarmupTask{
 			app:   app
@@ -440,7 +444,6 @@ pub fn (e InProcVjsxExecutor) warmup(mut app App) ! {
 		}
 		reply_channels << reply_ch
 	}
-	state.mu.unlock()
 
 	mut last_error := ''
 	for reply_ch in reply_channels {
