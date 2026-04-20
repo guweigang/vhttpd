@@ -4390,6 +4390,7 @@ fn websocket_upstream_response_from_js_value(val vjsx.Value, req WorkerWebSocket
 
 fn websocket_response_from_js_value(val vjsx.Value, frame WorkerWebSocketFrame) WorkerWebSocketDispatchResponse {
 	raw := val.json_stringify()
+	eprintln('[vhttpd] DEBUG: lane=${frame.id} raw js response: ${raw}')
 	if raw.trim_space() == '' || raw.trim_space() == 'undefined' || raw.trim_space() == 'null' {
 		return WorkerWebSocketDispatchResponse{
 			mode:     'websocket_dispatch'
