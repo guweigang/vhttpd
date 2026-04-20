@@ -352,6 +352,7 @@ fn (mut app App) execute_websocket_dispatch_commands_result(commands []WorkerWeb
 			continue
 		}
 		if failure := app.process_worker_websocket_hub_frame(cmd) {
+			eprintln('[vhttpd] ERROR: execute_websocket_dispatch_command failed: event=${cmd.event} target=${cmd.target_id} error=${failure.error}')
 			failures << failure
 		}
 	}
