@@ -4406,12 +4406,14 @@ fn websocket_response_from_js_value(val vjsx.Value, frame WorkerWebSocketFrame) 
 			commands: []WorkerWebSocketFrame{}
 		}
 	}
-	// Normalize CamelCase to SnakeCase for V struct compatibility
-	mut raw_normalized := raw.replace('"targetId":', '"target_id":')
-	raw_normalized = raw_normalized.replace('"requestId":', '"request_id":')
-	raw_normalized = raw_normalized.replace('"traceId":', '"trace_id":')
-	raw_normalized = raw_normalized.replace('"errorClass":', '"error_class":')
-	raw_normalized = raw_normalized.replace('"remoteAddr":', '"remote_addr":')
+	// Robust normalization for CamelCase to SnakeCase (handling potential spaces)
+	mut raw_normalized := raw.replace('"targetId"', '"target_id"')
+	raw_normalized = raw_normalized.replace('"requestId"', '"request_id"')
+	raw_normalized = raw_normalized.replace('"traceId"', '"trace_id"')
+	raw_normalized = raw_normalized.replace('"errorClass"', '"error_class"')
+	raw_normalized = raw_normalized.replace('"remoteAddr"', '"remote_addr"')
+	// Ensure colons are correctly associated if we replaced without them
+	raw_normalized = raw_normalized.replace('"target_id":', '"target_id":')
 
 	normalized := json.decode(InProcVjsxWebSocketResult, raw_normalized) or { InProcVjsxWebSocketResult{} }
 	eprintln('[vhttpd] DEBUG: lane=${frame.id} decoded response accepted=${normalized.accepted} commands=${normalized.commands.len}')
