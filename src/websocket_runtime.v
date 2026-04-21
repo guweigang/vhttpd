@@ -414,6 +414,7 @@ fn (mut app App) ws_hub_send_to(conn_id string, data string, opcode string) bool
 		return false
 	}
 	mut client := &websocket.Client(unsafe { nil })
+	mut queued := false
 	app.ws_hub_mu.@lock()
 	if hub_conn := app.ws_hub_conns[conn_id] {
 		client = hub_conn.client
@@ -424,10 +425,11 @@ fn (mut app App) ws_hub_send_to(conn_id string, data string, opcode string) bool
 			opcode: if opcode == '' { 'text' } else { opcode }
 		}
 		app.ws_hub_pending[conn_id] = pending
+		queued = true
 	}
 	app.ws_hub_mu.unlock()
 	if isnil(client) {
-		return false
+		return queued
 	}
 	return app.ws_hub_send_client(conn_id, client, data, opcode)
 }

@@ -14,6 +14,7 @@ import x.json2
 const inproc_vjsx_lane_wait_timeout_ms = 1000
 const inproc_vjsx_lane_wait_poll_ms = 5
 const inproc_vjsx_lane_task_timeout = 10 * time.second
+const inproc_vjsx_websocket_queue_wait_timeout = 30 * time.second
 const inproc_vjsx_dispatch_retry_attempts = 2
 const inproc_vjsx_startup_wait_poll_ms = 5
 const inproc_vjsx_signature_probe_poll_ms = 100
@@ -286,6 +287,7 @@ struct InProcVjsxWebSocketTask {
 	app   &App = unsafe { nil }
 	frame WorkerWebSocketFrame
 	done  chan bool
+	started chan bool
 	affinity_key string
 	affinity_priority int
 mut:
@@ -1285,6 +1287,7 @@ fn (e InProcVjsxExecutor) dispatch_websocket_task_to_lane(task InProcVjsxWebSock
 	worker := e.lane_worker_by_id(lane_id) or {
 		return error('inproc_vjsx_executor_lane_worker_missing')
 	}
+	task.started <- true
 	log.debug('[vhttpd] websocket dispatch enqueue lane=${lane_id} event=${task.frame.event} request_id=${task.frame.request_id} trace_id=${task.frame.trace_id}')
 	worker.websocket_tasks <- task
 }
@@ -6431,6 +6434,16 @@ fn inproc_vjsx_await_websocket_task_result(done_ch chan bool, mut slot InProcVjs
 	return result
 }
 
+fn inproc_vjsx_await_websocket_task_start(started_ch chan bool) ! {
+	select {
+		_ := <-started_ch {
+		}
+		inproc_vjsx_websocket_queue_wait_timeout {
+			return error('inproc_vjsx_executor_websocket_queue_timeout')
+		}
+	}
+}
+
 fn (e InProcVjsxExecutor) finalize_websocket_dispatch_response(frame WorkerWebSocketFrame, affinity_key string, lane_id string, result InProcVjsxWebSocketTaskResult) WorkerWebSocketDispatchResponse {
 	response := websocket_response_from_json(result.response_json, frame)
 	log.debug('[vhttpd] websocket dispatch reply affinity_key=${affinity_key} event=${frame.event} request_id=${frame.request_id} ok=${result.ok} error=${result.error} accepted=${response.accepted} closed=${response.closed} commands=${response.commands.len} response_affinity_key=${response.affinity_key} response_error=${response.error} response_error_class=${response.error_class}')
@@ -6470,6 +6483,7 @@ pub fn (e InProcVjsxExecutor) dispatch_websocket_event(mut app App, frame Worker
 		return error(err.msg())
 	}
 	done_ch := chan bool{cap: 1}
+	started_ch := chan bool{cap: 1}
 	mut slot := &InProcVjsxWebSocketTaskSlot{}
 	if should_queue {
 		task := InProcVjsxWebSocketTask{
@@ -6477,10 +6491,12 @@ pub fn (e InProcVjsxExecutor) dispatch_websocket_event(mut app App, frame Worker
 			frame:             frame
 			slot:              slot
 			done:              done_ch
+			started:           started_ch
 			affinity_key:      affinity_key
 			affinity_priority: affinity_priority
 		}
 		e.enqueue_websocket_mailbox_task(task)
+		inproc_vjsx_await_websocket_task_start(started_ch)!
 		result := inproc_vjsx_await_websocket_task_result(done_ch, mut slot)!
 		mut state := e.state
 		state.mu.@lock()
@@ -6508,6 +6524,7 @@ pub fn (e InProcVjsxExecutor) dispatch_websocket_event(mut app App, frame Worker
 		frame:             frame
 		slot:              slot
 		done:              done_ch
+		started:           started_ch
 		affinity_key:      direct_affinity_key
 		affinity_priority: affinity_priority
 	}
