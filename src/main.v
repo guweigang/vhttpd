@@ -925,6 +925,7 @@ fn handle_worker_websocket_session(mut app App, mut client_conn net.TcpConn, mut
 		app.ws_hub_register_conn(state.conn_id, state.worker_socket, state.method, state.request_id,
 			state.trace_id, state.path, map[string]string{}, map[string]string{}, '',
 			sc.client)
+		app.ws_hub_flush_pending(state.conn_id)
 		spawn delayed_ws_hub_flush(mut app, state.conn_id)
 		return true
 	}) or {}
@@ -973,6 +974,7 @@ fn handle_worker_websocket_dispatch_session(mut app App, mut client_conn net.Tcp
 	ws_server.on_connect(fn [mut app, state] (mut sc websocket.ServerClient) !bool {
 		app.ws_hub_register_conn(state.conn_id, '', state.method, state.request_id, state.trace_id,
 			state.path, state.query, state.headers, state.remote_addr, sc.client)
+		app.ws_hub_flush_pending(state.conn_id)
 		spawn delayed_ws_hub_flush(mut app, state.conn_id)
 		return true
 	}) or {}
