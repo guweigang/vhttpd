@@ -1287,7 +1287,6 @@ fn (e InProcVjsxExecutor) dispatch_websocket_task_to_lane(task InProcVjsxWebSock
 	worker := e.lane_worker_by_id(lane_id) or {
 		return error('inproc_vjsx_executor_lane_worker_missing')
 	}
-	task.started <- true
 	log.debug('[vhttpd] websocket dispatch enqueue lane=${lane_id} event=${task.frame.event} request_id=${task.frame.request_id} trace_id=${task.frame.trace_id}')
 	worker.websocket_tasks <- task
 }
@@ -1541,6 +1540,7 @@ fn inproc_vjsx_lane_worker_loop(state &VjsxExecutorState, lane_id string, task_c
 					}
 					worker_executor.release_lane(lane_id)
 				}
+				task.started <- true
 				log.debug('[vhttpd] lane worker recv lane=${lane_id} event=${task.frame.event} request_id=${task.frame.request_id} trace_id=${task.frame.trace_id}')
 				lane := worker_executor.lane_snapshot_by_id(lane_id) or {
 					err_msg = inproc_vjsx_normalize_error_message(err.msg(),
