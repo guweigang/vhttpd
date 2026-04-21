@@ -153,32 +153,19 @@ fn (mut app App) websocket_dispatch_command_failures_frame(conn_id string, metho
 }
 
 fn (mut app App) websocket_dispatch_followup_failures(conn_id string, method string, path string, query map[string]string, headers map[string]string, remote_addr string, req_id string, trace_id string, failures []WorkerWebSocketDispatchCommandFailure) ?WorkerWebSocketFrame {
-	mut pending := failures.clone()
-	mut depth := 0
-	for pending.len > 0 && depth < websocket_dispatch_failure_followup_limit {
-		depth++
-		resp := app.kernel_dispatch_websocket_event(app.websocket_dispatch_command_failures_frame(
-			conn_id,
-			method,
-			path,
-			query,
-			headers,
-			remote_addr,
-			req_id,
-			trace_id,
-			pending,
-		)) or {
-			return none
-		}
-		if resp.event == 'error' {
-			return none
-		}
-		result := app.execute_websocket_dispatch_commands_result(resp.commands)
-		if result.has_close {
-			return result.close_frame
-		}
-		pending = result.failures.clone()
-	}
+	_ = app
+	_ = conn_id
+	_ = method
+	_ = path
+	_ = query
+	_ = headers
+	_ = remote_addr
+	_ = req_id
+	_ = trace_id
+	_ = failures
+	// Upstream relay keeps transport-level send failures out of the session actor.
+	// Mirror that here by not feeding command failures back into the app's
+	// websocket handler as synthetic `info` events.
 	return none
 }
 

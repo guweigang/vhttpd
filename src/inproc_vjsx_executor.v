@@ -119,6 +119,9 @@ mut:
 	websocket_affinity_ref_count_by_key map[string]int
 	websocket_connection_lane_by_id map[string]string
 	websocket_connection_affinity_key_by_id map[string]string
+	websocket_mailbox_by_key       map[string][]InProcVjsxWebSocketTask
+	websocket_mailbox_pending_keys []string
+	websocket_mailbox_running_by_key map[string]bool
 	cached_source_probe          string
 	cached_source_signature      string
 	signature_refresh_started    bool
@@ -267,9 +270,9 @@ mut:
 }
 
 struct InProcVjsxWebSocketTaskResult {
-	ok       bool
-	response WorkerWebSocketDispatchResponse
-	error    string
+	ok            bool
+	response_json string
+	error         string
 }
 
 struct InProcVjsxWebSocketTaskSlot {
@@ -283,6 +286,8 @@ struct InProcVjsxWebSocketTask {
 	app   &App = unsafe { nil }
 	frame WorkerWebSocketFrame
 	done  chan bool
+	affinity_key string
+	affinity_priority int
 mut:
 	slot &InProcVjsxWebSocketTaskSlot = unsafe { nil }
 }
@@ -326,6 +331,27 @@ mut:
 	slot &InProcVjsxLaneWarmupTaskSlot = unsafe { nil }
 }
 
+struct InProcVjsxLaneAffinityTaskResult {
+	ok    bool
+	value WebSocketAffinityDecision
+	error string
+}
+
+struct InProcVjsxLaneAffinityTaskSlot {
+mut:
+	mu     sync.Mutex
+	result InProcVjsxLaneAffinityTaskResult
+	ready  bool
+}
+
+struct InProcVjsxLaneAffinityTask {
+	app   &App = unsafe { nil }
+	frame WorkerWebSocketFrame
+	done  chan bool
+mut:
+	slot &InProcVjsxLaneAffinityTaskSlot = unsafe { nil }
+}
+
 struct InProcVjsxHostSnapshotRequest {
 	scope string
 	kind  string
@@ -356,6 +382,7 @@ mut:
 	websocket_tasks chan InProcVjsxWebSocketTask
 	snapshot_tasks  chan InProcVjsxLaneSnapshotTask
 	warmup_tasks    chan InProcVjsxLaneWarmupTask
+	affinity_tasks  chan InProcVjsxLaneAffinityTask
 	stop_ch         chan bool
 	thread          thread
 	started         bool
@@ -381,6 +408,7 @@ pub fn new_inproc_vjsx_executor(config VjsxRuntimeFacadeConfig) InProcVjsxExecut
 			websocket_tasks: chan InProcVjsxWebSocketTask{cap: 64}
 			snapshot_tasks: chan InProcVjsxLaneSnapshotTask{cap: 16}
 			warmup_tasks: chan InProcVjsxLaneWarmupTask{cap: 4}
+			affinity_tasks: chan InProcVjsxLaneAffinityTask{cap: 16}
 			stop_ch: chan bool{cap: 1}
 		}
 	}
@@ -408,6 +436,9 @@ pub fn new_inproc_vjsx_executor(config VjsxRuntimeFacadeConfig) InProcVjsxExecut
 			websocket_affinity_ref_count_by_key: map[string]int{}
 			websocket_connection_lane_by_id:     map[string]string{}
 			websocket_connection_affinity_key_by_id: map[string]string{}
+			websocket_mailbox_by_key:            map[string][]InProcVjsxWebSocketTask{}
+			websocket_mailbox_pending_keys:      []string{}
+			websocket_mailbox_running_by_key:    map[string]bool{}
 			cached_source_probe:                 initial_probe
 			cached_source_signature:             initial_signature
 			signature_last_checked_at: if initial_signature != '' {
@@ -623,6 +654,7 @@ fn (e InProcVjsxExecutor) current_source_signature() string {
 fn normalize_websocket_affinity_source(raw string) string {
 	source := raw.trim_space().to_lower()
 	return match source {
+		'app', 'hook', 'runtime' { 'app' }
 		'header', 'headers' { 'header' }
 		'path_param', 'path-param', 'pathparam' { 'path_param' }
 		else { 'query' }
@@ -664,10 +696,54 @@ fn websocket_affinity_value(frame WorkerWebSocketFrame, config WebSocketAffinity
 		return ''
 	}
 	return match normalize_websocket_affinity_source(config.source) {
+		'app' { '' }
 		'header' { websocket_affinity_header_lookup(frame.headers, key).trim_space() }
 		'path_param' { '' }
 		else { (frame.query[key] or { '' }).trim_space() }
 	}
+}
+
+struct WebSocketAffinityDecision {
+mut:
+	key      string
+	priority int
+}
+
+fn websocket_affinity_priority_from_string(raw string) int {
+	return match raw.trim_space().to_lower() {
+		'high' { 100 }
+		'low' { -100 }
+		else { 0 }
+	}
+}
+
+fn websocket_affinity_decision_from_app_result(val vjsx.Value) WebSocketAffinityDecision {
+	if val.is_undefined() || val.is_null() {
+		return WebSocketAffinityDecision{}
+	}
+	if val.is_string() {
+		return WebSocketAffinityDecision{
+			key: val.to_string().trim_space()
+		}
+	}
+	key_val := val.get('key')
+	priority_val := val.get('priority')
+	defer {
+		key_val.free()
+		priority_val.free()
+	}
+	mut decision := WebSocketAffinityDecision{}
+	if !key_val.is_undefined() && !key_val.is_null() {
+		decision.key = key_val.to_string().trim_space()
+	}
+	if !priority_val.is_undefined() && !priority_val.is_null() {
+		if priority_val.is_number() {
+			decision.priority = int(priority_val.to_i64())
+		} else {
+			decision.priority = websocket_affinity_priority_from_string(priority_val.to_string())
+		}
+	}
+	return decision
 }
 
 pub fn (e InProcVjsxExecutor) select_next_lane() !VjsxExecutionLane {
@@ -800,24 +876,169 @@ fn (e InProcVjsxExecutor) release_websocket_connection_affinity(frame WorkerWebS
 	defer {
 		state.mu.unlock()
 	}
-	state.websocket_connection_lane_by_id.delete(frame.id)
+	lane_id := state.websocket_connection_lane_by_id[frame.id] or { '' }
 	affinity_key := state.websocket_connection_affinity_key_by_id[frame.id] or { '' }
-	if affinity_key == '' {
-		state.websocket_connection_affinity_key_by_id.delete(frame.id)
-		return
-	}
+	state.websocket_connection_lane_by_id.delete(frame.id)
 	state.websocket_connection_affinity_key_by_id.delete(frame.id)
-	if affinity_key !in state.websocket_affinity_ref_count_by_key {
-		state.websocket_affinity_lane_by_key.delete(affinity_key)
+	if affinity_key == '' {
 		return
 	}
-	mut remaining := state.websocket_affinity_ref_count_by_key[affinity_key] - 1
-	if remaining <= 0 {
-		state.websocket_affinity_ref_count_by_key.delete(affinity_key)
-		state.websocket_affinity_lane_by_key.delete(affinity_key)
+	if affinity_key in state.websocket_affinity_ref_count_by_key {
+		mut remaining := state.websocket_affinity_ref_count_by_key[affinity_key] - 1
+		if remaining <= 0 {
+			state.websocket_affinity_ref_count_by_key.delete(affinity_key)
+			if lane_id != '' {
+				state.websocket_affinity_lane_by_key.delete(affinity_key)
+			}
+		} else {
+			state.websocket_affinity_ref_count_by_key[affinity_key] = remaining
+		}
+	}
+}
+
+fn (e InProcVjsxExecutor) release_websocket_affinity_key(affinity_key string) {
+	if isnil(e.state) {
 		return
 	}
-	state.websocket_affinity_ref_count_by_key[affinity_key] = remaining
+	key := affinity_key.trim_space()
+	if key == '' {
+		return
+	}
+	mut state := e.state
+	state.mu.@lock()
+	defer {
+		state.mu.unlock()
+	}
+	if key in state.websocket_affinity_ref_count_by_key {
+		mut remaining := state.websocket_affinity_ref_count_by_key[key] - 1
+		if remaining <= 0 {
+			state.websocket_affinity_ref_count_by_key.delete(key)
+			state.websocket_affinity_lane_by_key.delete(key)
+		} else {
+			state.websocket_affinity_ref_count_by_key[key] = remaining
+		}
+	}
+}
+
+fn (e InProcVjsxExecutor) migrate_websocket_connection_affinity(frame WorkerWebSocketFrame, affinity_key string) {
+	if isnil(e.state) || frame.id.trim_space() == '' {
+		return
+	}
+	new_key := affinity_key.trim_space()
+	if new_key == '' {
+		return
+	}
+	mut state := e.state
+	state.mu.@lock()
+	defer {
+		state.mu.unlock()
+	}
+	old_key := state.websocket_connection_affinity_key_by_id[frame.id] or { '' }
+	if old_key == new_key {
+		return
+	}
+	old_lane := state.websocket_connection_lane_by_id[frame.id] or { '' }
+	if old_key != '' && old_key in state.websocket_affinity_ref_count_by_key {
+		mut remaining := state.websocket_affinity_ref_count_by_key[old_key] - 1
+		if remaining <= 0 {
+			state.websocket_affinity_ref_count_by_key.delete(old_key)
+			if old_lane != '' {
+				state.websocket_affinity_lane_by_key.delete(old_key)
+			}
+		} else {
+			state.websocket_affinity_ref_count_by_key[old_key] = remaining
+		}
+	}
+	new_lane := if old_lane != '' {
+		old_lane
+	} else {
+		state.websocket_affinity_lane_by_key[new_key] or { '' }
+	}
+	state.websocket_connection_affinity_key_by_id[frame.id] = new_key
+	if new_lane != '' {
+		state.websocket_connection_lane_by_id[frame.id] = new_lane
+		state.websocket_affinity_lane_by_key[new_key] = new_lane
+	}
+	state.websocket_affinity_ref_count_by_key[new_key] = (state.websocket_affinity_ref_count_by_key[new_key] or {
+		0
+	}) + 1
+	log.debug('[vhttpd] websocket affinity migrated socket=${frame.id} request_id=${frame.request_id} old_key=${old_key} new_key=${new_key} lane=${new_lane}')
+}
+
+fn (e InProcVjsxExecutor) websocket_affinity_probe_lane() !VjsxExecutionLane {
+	return e.acquire_next_lane(inproc_vjsx_lane_wait_timeout_ms)
+}
+
+fn (e InProcVjsxExecutor) request_lane_affinity(mut app App, lane VjsxExecutionLane, frame WorkerWebSocketFrame) !WebSocketAffinityDecision {
+	worker := e.lane_worker_by_id(lane.id) or {
+		return error('inproc_vjsx_executor_lane_worker_missing')
+	}
+	done_ch := chan bool{cap: 1}
+	mut slot := &InProcVjsxLaneAffinityTaskSlot{}
+	worker.affinity_tasks <- InProcVjsxLaneAffinityTask{
+		app:   app
+		frame: frame
+		slot:  slot
+		done:  done_ch
+	}
+	select {
+		_ := <-done_ch {
+		}
+		inproc_vjsx_lane_task_timeout {
+			return error('inproc_vjsx_executor_websocket_affinity_timeout')
+		}
+	}
+	slot.mu.@lock()
+	result := slot.result
+	ready := slot.ready
+	slot.mu.unlock()
+	if !ready {
+		return error('inproc_vjsx_executor_websocket_affinity_not_ready')
+	}
+	if !result.ok {
+		return error(result.error)
+	}
+	return result.value
+}
+
+fn (e InProcVjsxExecutor) resolve_websocket_affinity_key_from_app(mut app App, frame WorkerWebSocketFrame) !WebSocketAffinityDecision {
+	lane := e.websocket_affinity_probe_lane()!
+	return e.request_lane_affinity(mut app, lane, frame)
+}
+
+fn (e InProcVjsxExecutor) resolve_websocket_affinity(frame WorkerWebSocketFrame) !WebSocketAffinityDecision {
+	if isnil(e.state) {
+		return error('inproc_vjsx_executor_state_missing')
+	}
+	mut state := e.state
+	config := state.facade.config.websocket_affinity
+	state.mu.@lock()
+	existing_affinity_key := state.websocket_connection_affinity_key_by_id[frame.id] or { '' }
+	state.mu.unlock()
+	mut decision := WebSocketAffinityDecision{
+		key: existing_affinity_key
+	}
+	if decision.key == '' {
+		if normalize_websocket_affinity_source(config.source) == 'app' {
+			mut app_ref := &App(unsafe { nil })
+			state.mu.@lock()
+			app_ref = state.app_ref
+			state.mu.unlock()
+			if isnil(app_ref) {
+				return error('inproc_vjsx_executor_app_missing')
+			}
+			decision = e.resolve_websocket_affinity_key_from_app(mut app_ref, frame) or {
+				return error(err.msg())
+			}
+		} else {
+			decision.key = websocket_affinity_value(frame, config)
+		}
+	}
+	if decision.key == '' && config.enabled
+		&& normalize_websocket_affinity_fallback(config.fallback) == 'reject' {
+		return error('inproc_vjsx_executor_websocket_affinity_key_missing')
+	}
+	return decision
 }
 
 fn (e InProcVjsxExecutor) acquire_websocket_lane(frame WorkerWebSocketFrame) !(VjsxExecutionLane, string) {
@@ -827,52 +1048,77 @@ fn (e InProcVjsxExecutor) acquire_websocket_lane(frame WorkerWebSocketFrame) !(V
 	mut state := e.state
 	config := state.facade.config.websocket_affinity
 	state.mu.@lock()
-	existing_lane_id := state.websocket_connection_lane_by_id[frame.id] or { '' }
+	existing_affinity_key := state.websocket_connection_affinity_key_by_id[frame.id] or { '' }
 	state.mu.unlock()
-	if existing_lane_id != '' {
-		return e.force_select_lane_by_id(existing_lane_id)!, ''
+	mut affinity := WebSocketAffinityDecision{
+		key: existing_affinity_key
 	}
-	affinity_key := websocket_affinity_value(frame, config)
+	if affinity.key == '' {
+		if normalize_websocket_affinity_source(config.source) == 'app' {
+			mut app_ref := &App(unsafe { nil })
+			state.mu.@lock()
+			app_ref = state.app_ref
+			state.mu.unlock()
+			if isnil(app_ref) {
+				return error('inproc_vjsx_executor_app_missing')
+			}
+			affinity = e.resolve_websocket_affinity_key_from_app(mut app_ref, frame) or {
+				return error(err.msg())
+			}
+		} else {
+			affinity.key = websocket_affinity_value(frame, config)
+		}
+	}
+	affinity_key := affinity.key
 	if affinity_key == '' {
 		if config.enabled && normalize_websocket_affinity_fallback(config.fallback) == 'reject' {
 			return error('inproc_vjsx_executor_websocket_affinity_key_missing')
 		}
 		lane := e.acquire_next_lane(inproc_vjsx_lane_wait_timeout_ms)!
-		if frame.id.trim_space() != '' {
-			state.mu.@lock()
-			state.websocket_connection_lane_by_id[frame.id] = lane.id
-			state.mu.unlock()
-		}
 		return lane, ''
 	}
+	should_pin_lane := websocket_should_pin_affinity_lane(frame, affinity_key)
+	if !should_pin_lane {
+		lane := e.acquire_next_lane(inproc_vjsx_lane_wait_timeout_ms)!
+		return lane, affinity_key
+	}
 	state.mu.@lock()
-	mapped_lane_id := state.websocket_affinity_lane_by_key[affinity_key] or { '' }
+	mut mapped_lane_id := state.websocket_connection_lane_by_id[frame.id] or { '' }
+	if mapped_lane_id == '' {
+		mapped_lane_id = state.websocket_affinity_lane_by_key[affinity_key] or { '' }
+	}
 	state.mu.unlock()
-	if mapped_lane_id != '' {
-		lane := e.force_select_lane_by_id(mapped_lane_id)!
-		if frame.id.trim_space() != '' {
-			state.mu.@lock()
-			state.websocket_connection_lane_by_id[frame.id] = lane.id
-			state.websocket_connection_affinity_key_by_id[frame.id] = affinity_key
+	lane := if mapped_lane_id != '' {
+		e.acquire_lane_by_id(mapped_lane_id, inproc_vjsx_lane_wait_timeout_ms)!
+	} else {
+		e.acquire_next_lane(inproc_vjsx_lane_wait_timeout_ms)!
+	}
+	if frame.id.trim_space() != '' {
+		state.mu.@lock()
+		state.websocket_affinity_lane_by_key[affinity_key] = lane.id
+		existing_key := state.websocket_connection_affinity_key_by_id[frame.id] or { '' }
+		if existing_key == '' {
 			state.websocket_affinity_ref_count_by_key[affinity_key] = (state.websocket_affinity_ref_count_by_key[affinity_key] or {
 				0
 			}) + 1
-			state.mu.unlock()
 		}
-		return lane, affinity_key
-	}
-	lane := e.acquire_next_lane(inproc_vjsx_lane_wait_timeout_ms)!
-	state.mu.@lock()
-	state.websocket_affinity_lane_by_key[affinity_key] = lane.id
-	state.websocket_affinity_ref_count_by_key[affinity_key] = (state.websocket_affinity_ref_count_by_key[affinity_key] or {
-		0
-	}) + 1
-	if frame.id.trim_space() != '' {
 		state.websocket_connection_lane_by_id[frame.id] = lane.id
 		state.websocket_connection_affinity_key_by_id[frame.id] = affinity_key
+		state.mu.unlock()
 	}
-	state.mu.unlock()
 	return lane, affinity_key
+}
+
+fn websocket_should_pin_affinity_lane(frame WorkerWebSocketFrame, affinity_key string) bool {
+	key := affinity_key.trim_space()
+	if key == '' {
+		return false
+	}
+	server_id := (frame.query['serverId'] or { '' }).trim_space()
+	if server_id != '' && key == server_id {
+		return false
+	}
+	return true
 }
 
 fn inproc_vjsx_should_retry_dispatch(err_msg string) bool {
@@ -917,9 +1163,6 @@ pub fn (e InProcVjsxExecutor) release_lane(lane_id string) {
 	}
 	mut state := e.state
 	state.mu.@lock()
-	defer {
-		state.mu.unlock()
-	}
 	for i, lane in state.lanes {
 		if lane.id != lane_id {
 			continue
@@ -929,6 +1172,7 @@ pub fn (e InProcVjsxExecutor) release_lane(lane_id string) {
 		}
 		break
 	}
+	state.mu.unlock()
 }
 
 fn (e InProcVjsxExecutor) start_lane_workers() {
@@ -947,9 +1191,10 @@ fn (e InProcVjsxExecutor) start_lane_workers() {
 		task_ch := worker.websocket_tasks
 		snapshot_ch := worker.snapshot_tasks
 		warmup_ch := worker.warmup_tasks
+		affinity_ch := worker.affinity_tasks
 		stop_ch := worker.stop_ch
 		lane_id := worker.lane_id
-		mut thr := spawn inproc_vjsx_lane_worker_loop(e.state, lane_id, task_ch, snapshot_ch, warmup_ch, stop_ch)
+		mut thr := spawn inproc_vjsx_lane_worker_loop(e.state, lane_id, task_ch, snapshot_ch, warmup_ch, affinity_ch, stop_ch)
 		state.mu.@lock()
 		if idx >= 0 && idx < state.lane_workers.len {
 			state.lane_workers[idx].thread = thr
@@ -991,6 +1236,181 @@ fn (e InProcVjsxExecutor) lane_snapshot_by_id(lane_id string) ?VjsxExecutionLane
 		}
 	}
 	return none
+}
+
+fn (e InProcVjsxExecutor) dispatch_websocket_task_to_lane(task InProcVjsxWebSocketTask, lane_id string) ! {
+	worker := e.lane_worker_by_id(lane_id) or {
+		return error('inproc_vjsx_executor_lane_worker_missing')
+	}
+	log.debug('[vhttpd] websocket dispatch enqueue lane=${lane_id} event=${task.frame.event} request_id=${task.frame.request_id} trace_id=${task.frame.trace_id}')
+	worker.websocket_tasks <- task
+}
+
+fn (e InProcVjsxExecutor) bind_websocket_task_lane(task InProcVjsxWebSocketTask, lane_id string) {
+	if isnil(e.state) || lane_id.trim_space() == '' {
+		return
+	}
+	key := task.affinity_key.trim_space()
+	if !websocket_should_pin_affinity_lane(task.frame, key) {
+		return
+	}
+	if key == '' && task.frame.id.trim_space() == '' {
+		return
+	}
+	mut state := e.state
+	state.mu.@lock()
+	defer {
+		state.mu.unlock()
+	}
+	if key != '' {
+		state.websocket_affinity_lane_by_key[key] = lane_id
+	}
+	if task.frame.id.trim_space() != '' {
+		state.websocket_connection_lane_by_id[task.frame.id] = lane_id
+		if key != '' {
+			state.websocket_connection_affinity_key_by_id[task.frame.id] = key
+		}
+	}
+}
+
+fn (e InProcVjsxExecutor) try_schedule_websocket_mailboxes() {
+	if isnil(e.state) {
+		return
+	}
+	for {
+		mut selected_key := ''
+		mut selected_task := InProcVjsxWebSocketTask{}
+		mut selected_lane_id := ''
+		mut selected_priority := -1000000000
+		mut state := e.state
+		state.mu.@lock()
+		if state.websocket_mailbox_pending_keys.len == 0 {
+			state.mu.unlock()
+			return
+		}
+		for idx, key in state.websocket_mailbox_pending_keys {
+			if state.websocket_mailbox_running_by_key[key] or { false } {
+				continue
+			}
+			queue := state.websocket_mailbox_by_key[key] or { []InProcVjsxWebSocketTask{} }
+			if queue.len == 0 {
+				state.websocket_mailbox_pending_keys.delete(idx)
+				continue
+			}
+			priority := queue[0].affinity_priority
+			if selected_key == '' || priority > selected_priority {
+				selected_key = key
+				selected_task = queue[0]
+				selected_priority = priority
+			}
+		}
+		if selected_key != '' {
+			idx := state.websocket_mailbox_pending_keys.index(selected_key)
+			queue := state.websocket_mailbox_by_key[selected_key] or { []InProcVjsxWebSocketTask{} }
+			remaining := if queue.len > 1 { queue[1..] } else { []InProcVjsxWebSocketTask{} }
+			if remaining.len == 0 {
+				state.websocket_mailbox_by_key.delete(selected_key)
+				if idx >= 0 {
+					state.websocket_mailbox_pending_keys.delete(idx)
+				}
+			} else {
+				state.websocket_mailbox_by_key[selected_key] = remaining
+			}
+			state.websocket_mailbox_running_by_key[selected_key] = true
+		}
+		state.mu.unlock()
+		if selected_key == '' {
+			return
+		}
+		mut preferred_lane_id := ''
+		mut state_lane := e.state
+		state_lane.mu.@lock()
+		preferred_lane_id = state_lane.websocket_affinity_lane_by_key[selected_key] or { '' }
+		state_lane.mu.unlock()
+		lane := if preferred_lane_id != '' {
+			e.acquire_lane_by_id(preferred_lane_id, 0) or {
+				mut state_retry := e.state
+				state_retry.mu.@lock()
+				queue := state_retry.websocket_mailbox_by_key[selected_key] or { []InProcVjsxWebSocketTask{} }
+				mut restored := [selected_task]
+				restored << queue
+				state_retry.websocket_mailbox_by_key[selected_key] = restored
+				if selected_key !in state_retry.websocket_mailbox_pending_keys {
+					state_retry.websocket_mailbox_pending_keys << selected_key
+				}
+				state_retry.websocket_mailbox_running_by_key.delete(selected_key)
+				state_retry.mu.unlock()
+				return
+			}
+		} else {
+			e.acquire_next_lane(0) or {
+				mut state_retry := e.state
+				state_retry.mu.@lock()
+				queue := state_retry.websocket_mailbox_by_key[selected_key] or { []InProcVjsxWebSocketTask{} }
+				mut restored := [selected_task]
+				restored << queue
+				state_retry.websocket_mailbox_by_key[selected_key] = restored
+				if selected_key !in state_retry.websocket_mailbox_pending_keys {
+					state_retry.websocket_mailbox_pending_keys << selected_key
+				}
+				state_retry.websocket_mailbox_running_by_key.delete(selected_key)
+				state_retry.mu.unlock()
+				return
+			}
+		}
+		selected_lane_id = lane.id
+		e.bind_websocket_task_lane(selected_task, selected_lane_id)
+		e.dispatch_websocket_task_to_lane(selected_task, selected_lane_id) or {
+			e.release_lane(selected_lane_id)
+			mut state_retry := e.state
+			state_retry.mu.@lock()
+			queue := state_retry.websocket_mailbox_by_key[selected_key] or { []InProcVjsxWebSocketTask{} }
+			mut restored := [selected_task]
+			restored << queue
+			state_retry.websocket_mailbox_by_key[selected_key] = restored
+			if selected_key !in state_retry.websocket_mailbox_pending_keys {
+				state_retry.websocket_mailbox_pending_keys << selected_key
+			}
+			state_retry.websocket_mailbox_running_by_key.delete(selected_key)
+			state_retry.mu.unlock()
+			return
+		}
+	}
+}
+
+fn (e InProcVjsxExecutor) enqueue_websocket_mailbox_task(task InProcVjsxWebSocketTask) {
+	if isnil(e.state) {
+		return
+	}
+	key := task.affinity_key.trim_space()
+	if key == '' {
+		return
+	}
+	mut state := e.state
+	state.mu.@lock()
+	mut queue := state.websocket_mailbox_by_key[key] or { []InProcVjsxWebSocketTask{} }
+	queue << task
+	state.websocket_mailbox_by_key[key] = queue
+	if key !in state.websocket_mailbox_pending_keys {
+		state.websocket_mailbox_pending_keys << key
+	}
+	state.mu.unlock()
+	e.try_schedule_websocket_mailboxes()
+}
+
+fn (e InProcVjsxExecutor) finish_websocket_mailbox_task(affinity_key string) {
+	if isnil(e.state) {
+		return
+	}
+	key := affinity_key.trim_space()
+	if key == '' {
+		return
+	}
+	mut state := e.state
+	state.mu.@lock()
+	state.websocket_mailbox_running_by_key.delete(key)
+	state.mu.unlock()
+	e.try_schedule_websocket_mailboxes()
 }
 
 fn (e InProcVjsxExecutor) request_lane_snapshot(mut app App, lane VjsxExecutionLane) !string {
@@ -1056,7 +1476,7 @@ fn (e InProcVjsxExecutor) request_lane_warmup(mut app App, lane VjsxExecutionLan
 	}
 }
 
-fn inproc_vjsx_lane_worker_loop(state &VjsxExecutorState, lane_id string, task_ch chan InProcVjsxWebSocketTask, snapshot_ch chan InProcVjsxLaneSnapshotTask, warmup_ch chan InProcVjsxLaneWarmupTask, stop_ch chan bool) {
+fn inproc_vjsx_lane_worker_loop(state &VjsxExecutorState, lane_id string, task_ch chan InProcVjsxWebSocketTask, snapshot_ch chan InProcVjsxLaneSnapshotTask, warmup_ch chan InProcVjsxLaneWarmupTask, affinity_ch chan InProcVjsxLaneAffinityTask, stop_ch chan bool) {
 	worker_executor := InProcVjsxExecutor{
 		state: state
 	}
@@ -1066,9 +1486,12 @@ fn inproc_vjsx_lane_worker_loop(state &VjsxExecutorState, lane_id string, task_c
 				return
 			}
 			mut task := <-task_ch {
-				mut response := WorkerWebSocketDispatchResponse{}
+				mut response_json := ''
 				mut err_msg := ''
 				mut task_app := task.app
+				defer {
+					worker_executor.release_lane(lane_id)
+				}
 				log.debug('[vhttpd] lane worker recv lane=${lane_id} event=${task.frame.event} request_id=${task.frame.request_id} trace_id=${task.frame.trace_id}')
 				lane := worker_executor.lane_snapshot_by_id(lane_id) or {
 					err_msg = inproc_vjsx_normalize_error_message(err.msg(),
@@ -1084,7 +1507,7 @@ fn inproc_vjsx_lane_worker_loop(state &VjsxExecutorState, lane_id string, task_c
 					task.done <- true
 					continue
 				}
-				response = worker_executor.dispatch_websocket_event_on_lane(mut task_app, task.frame, lane) or {
+				response_json = worker_executor.dispatch_websocket_callback_on_lane(mut task_app, task.frame, lane) or {
 					err_msg = inproc_vjsx_normalize_error_message(err.msg(),
 						'inproc_vjsx_executor_websocket_dispatch_failed')
 					eprintln('[vhttpd] websocket lane worker error lane=${lane_id} event=${task.frame.event} path=${task.frame.path} request_id=${task.frame.request_id} trace_id=${task.frame.trace_id} query=${task.frame.query} error=${err_msg}')
@@ -1099,11 +1522,11 @@ fn inproc_vjsx_lane_worker_loop(state &VjsxExecutorState, lane_id string, task_c
 					task.done <- true
 					continue
 				}
-				log.debug('[vhttpd] lane worker reply_ok lane=${lane_id} event=${task.frame.event} request_id=${task.frame.request_id} accepted=${response.accepted} closed=${response.closed} commands=${response.commands.len} error=${response.error} error_class=${response.error_class}')
+				log.debug('[vhttpd] lane worker reply_ok lane=${lane_id} event=${task.frame.event} request_id=${task.frame.request_id} response_len=${response_json.len}')
 				task.slot.mu.@lock()
 				task.slot.result = InProcVjsxWebSocketTaskResult{
-					ok: true
-					response: response
+					ok:            true
+					response_json: response_json
 				}
 				task.slot.ready = true
 				task.slot.mu.unlock()
@@ -1211,6 +1634,45 @@ fn inproc_vjsx_lane_worker_loop(state &VjsxExecutorState, lane_id string, task_c
 				task.slot.mu.@lock()
 				task.slot.result = InProcVjsxLaneWarmupTaskResult{
 					ok: true
+				}
+				task.slot.ready = true
+				task.slot.mu.unlock()
+				task.done <- true
+			}
+			mut task := <-affinity_ch {
+				mut task_app := task.app
+				defer {
+					worker_executor.release_lane(lane_id)
+				}
+				lane := worker_executor.lane_snapshot_by_id(lane_id) or {
+					task.slot.mu.@lock()
+					task.slot.result = InProcVjsxLaneAffinityTaskResult{
+						ok: false
+						error: inproc_vjsx_normalize_error_message(err.msg(),
+							'inproc_vjsx_executor_lane_not_found')
+					}
+					task.slot.ready = true
+					task.slot.mu.unlock()
+					task.done <- true
+					continue
+				}
+				decision := worker_executor.resolve_websocket_affinity_on_lane(mut task_app, task.frame,
+					lane) or {
+					task.slot.mu.@lock()
+					task.slot.result = InProcVjsxLaneAffinityTaskResult{
+						ok: false
+						error: inproc_vjsx_normalize_error_message(err.msg(),
+							'inproc_vjsx_executor_websocket_affinity_failed')
+					}
+					task.slot.ready = true
+					task.slot.mu.unlock()
+					task.done <- true
+					continue
+				}
+				task.slot.mu.@lock()
+				task.slot.result = InProcVjsxLaneAffinityTaskResult{
+					ok:    true
+					value: decision
 				}
 				task.slot.ready = true
 				task.slot.mu.unlock()
@@ -2820,10 +3282,13 @@ globalThis.__vhttpd_resolve_hook_for_kind = function(exportsValue, kind) {
   const startupAliases = ["startup", "lane_startup", "laneStartup"];
   const appStartupAliases = ["app_startup", "appStartup"];
   const snapshotAliases = ["snapshot", "lane_snapshot", "laneSnapshot"];
+  const websocketAffinityAliases = ["websocket_affinity", "websocketAffinity", "getWebSocketAffinity", "get_websocket_affinity"];
   const aliases = kind === "app_startup"
     ? appStartupAliases
     : kind === "snapshot"
       ? snapshotAliases
+      : kind === "websocket_affinity"
+        ? websocketAffinityAliases
       : startupAliases;
   if (exportsValue && typeof exportsValue === "object") {
     for (const key of aliases) {
@@ -2855,6 +3320,9 @@ globalThis.__vhttpd_resolve_hook_for_kind = function(exportsValue, kind) {
   }
   if (kind === "snapshot" && typeof globalThis.__vhttpd_snapshot_handle === "function") {
     return globalThis.__vhttpd_snapshot_handle;
+  }
+  if (kind === "websocket_affinity" && typeof globalThis.__vhttpd_websocket_affinity_handle === "function") {
+    return globalThis.__vhttpd_websocket_affinity_handle;
   }
   return undefined;
 };
@@ -2949,6 +3417,7 @@ globalThis.__vhttpd_bind_handlers = function(exportsValue) {
   const startupHandler = globalThis.__vhttpd_resolve_hook_for_kind(exportsValue, "startup");
   const appStartupHandler = globalThis.__vhttpd_resolve_hook_for_kind(exportsValue, "app_startup");
   const snapshotHandler = globalThis.__vhttpd_resolve_hook_for_kind(exportsValue, "snapshot");
+  const websocketAffinityHandler = globalThis.__vhttpd_resolve_hook_for_kind(exportsValue, "websocket_affinity");
   if (typeof httpHandler === "function") {
     globalThis.__vhttpd_handle = httpHandler;
   }
@@ -2967,13 +3436,17 @@ globalThis.__vhttpd_bind_handlers = function(exportsValue) {
   if (typeof snapshotHandler === "function") {
     globalThis.__vhttpd_snapshot_handle = snapshotHandler;
   }
+  if (typeof websocketAffinityHandler === "function") {
+    globalThis.__vhttpd_websocket_affinity_handle = websocketAffinityHandler;
+  }
   return {
     http: httpHandler,
     websocket: websocketHandler,
     websocket_upstream: websocketUpstreamHandler,
     startup: startupHandler,
     app_startup: appStartupHandler,
-    snapshot: snapshotHandler
+    snapshot: snapshotHandler,
+    websocket_affinity: websocketAffinityHandler
   };
 };
 globalThis.__vhttpd_register_exports = function(exportsValue) {
@@ -3033,6 +3506,7 @@ globalThis.__vhttpd_normalize_websocket_result = function(frame, result) {
       accepted: false,
       closed: false,
       commands: [],
+      affinity_key: "",
       error: "",
       error_class: ""
     };
@@ -3042,6 +3516,7 @@ globalThis.__vhttpd_normalize_websocket_result = function(frame, result) {
       accepted: true,
       closed: false,
       commands: [],
+      affinity_key: "",
       error: "",
       error_class: ""
     };
@@ -3051,6 +3526,7 @@ globalThis.__vhttpd_normalize_websocket_result = function(frame, result) {
       accepted: true,
       closed: false,
       commands: result.map((item) => globalThis.__vhttpd_normalize_websocket_command(item, frame)),
+      affinity_key: "",
       error: "",
       error_class: ""
     };
@@ -3065,6 +3541,11 @@ globalThis.__vhttpd_normalize_websocket_result = function(frame, result) {
     accepted: Object.prototype.hasOwnProperty.call(result, "accepted") ? !!result.accepted : true,
     closed: !!result.closed,
     commands,
+    affinity_key: typeof result.affinity_key === "string"
+      ? result.affinity_key
+      : typeof result.affinityKey === "string"
+        ? result.affinityKey
+        : "",
     error: typeof result.error === "string" ? result.error : "",
     error_class: typeof result.error_class === "string"
       ? result.error_class
@@ -3743,6 +4224,10 @@ fn inproc_vjsx_module_aliases(kind string) []string {
 		'websocket' {
 			['websocket', 'handleWebSocket', 'handle_websocket']
 		}
+		'websocket_affinity' {
+			['websocket_affinity', 'websocketAffinity', 'getWebSocketAffinity',
+				'get_websocket_affinity']
+		}
 		'websocket_upstream' {
 			['websocket_upstream', 'websocketUpstream', 'handleWebSocketUpstream',
 				'handle_websocket_upstream']
@@ -3770,6 +4255,7 @@ fn inproc_vjsx_global_handler_name(kind string) string {
 	return match kind {
 		'http' { '__vhttpd_handle' }
 		'websocket' { '__vhttpd_websocket_handle' }
+		'websocket_affinity' { '__vhttpd_websocket_affinity_handle' }
 		'websocket_upstream' { '__vhttpd_websocket_upstream_handle' }
 		'startup' { '__vhttpd_startup_handle' }
 		'app_startup' { '__vhttpd_app_startup_handle' }
@@ -4937,6 +5423,7 @@ struct InProcVjsxWebSocketResult {
 	accepted    bool
 	closed      bool
 	commands    []WorkerWebSocketFrame
+	affinity_key string @[json: 'affinity_key']
 	error       string
 	error_class string @[json: 'error_class']
 }
@@ -4974,8 +5461,10 @@ fn websocket_upstream_response_from_js_value(val vjsx.Value, req WorkerWebSocket
 	}
 }
 
-fn websocket_response_from_js_value(val vjsx.Value, frame WorkerWebSocketFrame) WorkerWebSocketDispatchResponse {
-	raw := val.json_stringify()
+fn websocket_response_from_json(raw string, frame WorkerWebSocketFrame) WorkerWebSocketDispatchResponse {
+	if frame.event == 'message' {
+		log.debug('[vhttpd] websocket_response decode_begin event=${frame.event} request_id=${frame.request_id} raw_len=${raw.len}')
+	}
 	if raw.trim_space() == '' || raw.trim_space() == 'undefined' || raw.trim_space() == 'null' {
 		return WorkerWebSocketDispatchResponse{
 			mode:     'websocket_dispatch'
@@ -4987,6 +5476,9 @@ fn websocket_response_from_js_value(val vjsx.Value, frame WorkerWebSocketFrame) 
 		}
 	}
 	normalized := json.decode(InProcVjsxWebSocketResult, raw) or { InProcVjsxWebSocketResult{} }
+	if frame.event == 'message' {
+		log.debug('[vhttpd] websocket_response decode_done event=${frame.event} request_id=${frame.request_id} accepted=${normalized.accepted} closed=${normalized.closed} commands=${normalized.commands.len} error=${normalized.error} error_class=${normalized.error_class}')
+	}
 	return WorkerWebSocketDispatchResponse{
 		mode:        'websocket_dispatch'
 		event:       'result'
@@ -4994,9 +5486,273 @@ fn websocket_response_from_js_value(val vjsx.Value, frame WorkerWebSocketFrame) 
 		accepted:    normalized.accepted
 		closed:      normalized.closed
 		commands:    normalized.commands
+		affinity_key: normalized.affinity_key
 		error:       normalized.error
 		error_class: normalized.error_class
 	}
+}
+
+fn websocket_response_from_js_value(val vjsx.Value, frame WorkerWebSocketFrame) WorkerWebSocketDispatchResponse {
+	return websocket_response_from_json(val.json_stringify(), frame)
+}
+
+fn inproc_vjsx_websocket_handler_missing_result(frame WorkerWebSocketFrame) string {
+	return json.encode(WorkerWebSocketDispatchResponse{
+		mode:     'websocket_dispatch'
+		event:    'result'
+		id:       frame.id
+		accepted: false
+		closed:   false
+		commands: []WorkerWebSocketFrame{}
+	})
+}
+
+struct InProcVjsxWebSocketCallbackContext {
+	idx        int
+	lane_id    string
+	frame      WorkerWebSocketFrame
+	ctx        &vjsx.Context
+	js_runtime vjsx.Value
+	js_frame   vjsx.Value
+}
+
+struct InProcVjsxWebSocketCallbackInput {
+	request_ctx HttpLogicDispatchRequest
+	runtime_meta InProcVjsxRuntimeMeta
+	frame       WorkerWebSocketFrame
+}
+
+fn (mut c InProcVjsxWebSocketCallbackContext) free() {
+	c.js_frame.free()
+	c.js_runtime.free()
+}
+
+fn (e InProcVjsxExecutor) websocket_callback_input(lane VjsxExecutionLane, frame WorkerWebSocketFrame) InProcVjsxWebSocketCallbackInput {
+	return InProcVjsxWebSocketCallbackInput{
+		request_ctx: HttpLogicDispatchRequest{
+			method:     frame.event
+			path:       frame.path
+			trace_id:   frame.trace_id
+			request_id: frame.request_id
+		}
+		runtime_meta: e.websocket_runtime_meta(lane, frame)
+		frame:        frame
+	}
+}
+
+fn build_websocket_callback_payload(ctx &vjsx.Context, input InProcVjsxWebSocketCallbackInput, runtime_config_json string, mut app App) (vjsx.Value, vjsx.Value) {
+	mut js_runtime := build_websocket_js_runtime(ctx, input.runtime_meta, runtime_config_json, mut app)
+	mut js_frame := build_websocket_js_frame(ctx, input.frame, js_runtime)
+	return js_runtime, js_frame
+}
+
+fn (e InProcVjsxExecutor) prepare_websocket_callback_on_lane(mut app App, frame WorkerWebSocketFrame, lane VjsxExecutionLane) !InProcVjsxWebSocketCallbackContext {
+	idx := e.lane_index_by_id(lane.id)
+	if idx < 0 {
+		e.record_lane_error(lane.id, 'inproc_vjsx_executor_lane_not_found')
+		return error('inproc_vjsx_executor_lane_not_found')
+	}
+	e.ensure_lane_host(idx) or {
+		e.record_lane_error(lane.id, err.msg())
+		return error(err.msg())
+	}
+	e.run_startup_hooks(mut app, idx, lane) or {
+		e.record_lane_error(lane.id, err.msg())
+		return error(err.msg())
+	}
+	callback_input := e.websocket_callback_input(lane, frame)
+	e.activate_lane_request_context(idx, mut app, lane.id, callback_input.request_ctx)
+	mut state := e.state
+	state.mu.@lock()
+	mut host := state.hosts[idx]
+	state.mu.unlock()
+	ctx := host.session.context()
+	log.debug('[vhttpd] websocket_on_lane runtime_build lane=${lane.id} idx=${idx} event=${frame.event}')
+	log.debug('[vhttpd] websocket_on_lane frame_build lane=${lane.id} idx=${idx} event=${frame.event}')
+	mut js_runtime, mut js_frame := build_websocket_callback_payload(ctx, callback_input, app.runtime_config_json, mut app)
+	return InProcVjsxWebSocketCallbackContext{
+		idx:        idx
+		lane_id:    lane.id
+		frame:      frame
+		ctx:        ctx
+		js_runtime: js_runtime
+		js_frame:   js_frame
+	}
+}
+
+fn inproc_vjsx_invoke_websocket_callback(ctx &vjsx.Context, js_frame vjsx.Value, lane VjsxExecutionLane, idx int, frame WorkerWebSocketFrame) !vjsx.Value {
+	handler := ctx.js_global('__vhttpd_websocket_handle')
+	defer {
+		handler.free()
+	}
+	if handler.is_undefined() || !handler.is_function() {
+		return error('inproc_vjsx_executor_missing_websocket_handler')
+	}
+	invoke_handler := ctx.js_global('__vhttpd_invoke_websocket_handle')
+	defer {
+		invoke_handler.free()
+	}
+	if !invoke_handler.is_function() {
+		return error('inproc_vjsx_executor_websocket_invoker_missing')
+	}
+	log.debug('[vhttpd] websocket_on_lane invoke lane=${lane.id} idx=${idx} event=${frame.event}')
+	invoke_arg := js_frame.dup_value()
+	defer {
+		invoke_arg.free()
+	}
+	mut result := ctx.call(invoke_handler, invoke_arg) or {
+		err_msg := inproc_vjsx_context_error_message(ctx, err.msg(),
+			'inproc_vjsx_executor_websocket_handler_failed')
+		return error(err_msg)
+	}
+	if result.is_exception() {
+		result.free()
+		err_msg := inproc_vjsx_context_error_message(ctx, 'exception',
+			'inproc_vjsx_executor_websocket_handler_failed')
+		return error(err_msg)
+	}
+	return result
+}
+
+fn inproc_vjsx_normalize_websocket_callback_result(ctx &vjsx.Context, js_frame vjsx.Value, mut result vjsx.Value, lane VjsxExecutionLane, idx int, frame WorkerWebSocketFrame) !string {
+	normalize_fn := ctx.js_global('__vhttpd_normalize_websocket_result')
+	defer {
+		normalize_fn.free()
+	}
+	log.debug('[vhttpd] websocket_on_lane handler_ok lane=${lane.id} idx=${idx} event=${frame.event} promise=${result.instanceof('Promise')}')
+	if result.instanceof('Promise') {
+		mut awaited := result.await()
+		defer {
+			awaited.free()
+		}
+		mut normalized := ctx.call(normalize_fn, js_frame, awaited) or {
+			err_msg := inproc_vjsx_normalize_error_message(err.msg(),
+				'inproc_vjsx_executor_websocket_normalize_failed')
+			return error('inproc_vjsx_executor_websocket_normalize_failed:${err_msg}')
+		}
+		defer {
+			normalized.free()
+		}
+		return normalized.json_stringify()
+	}
+	mut normalized := ctx.call(normalize_fn, js_frame, result) or {
+		err_msg := inproc_vjsx_normalize_error_message(err.msg(),
+			'inproc_vjsx_executor_websocket_normalize_failed')
+		return error('inproc_vjsx_executor_websocket_normalize_failed:${err_msg}')
+	}
+	defer {
+		normalized.free()
+	}
+	return normalized.json_stringify()
+}
+
+fn (e InProcVjsxExecutor) execute_websocket_callback_on_lane(callback_ctx InProcVjsxWebSocketCallbackContext) !string {
+	lane := VjsxExecutionLane{
+		id: callback_ctx.lane_id
+	}
+	frame := callback_ctx.frame
+	mut callback_result := inproc_vjsx_invoke_websocket_callback(callback_ctx.ctx, callback_ctx.js_frame, lane,
+		callback_ctx.idx, frame) or {
+		if err.msg() == 'inproc_vjsx_executor_missing_websocket_handler' {
+			e.record_lane_success(callback_ctx.lane_id)
+			log.debug('[vhttpd] websocket_on_lane done lane=${callback_ctx.lane_id} idx=${callback_ctx.idx} event=${frame.event}')
+			return inproc_vjsx_websocket_handler_missing_result(frame)
+		}
+		return error(err.msg())
+	}
+	defer {
+		callback_result.free()
+	}
+	response_json := inproc_vjsx_normalize_websocket_callback_result(callback_ctx.ctx, callback_ctx.js_frame,
+		mut callback_result, lane, callback_ctx.idx, frame) or {
+		return error(err.msg())
+	}
+	e.record_lane_success(callback_ctx.lane_id)
+	log.debug('[vhttpd] websocket_on_lane done lane=${callback_ctx.lane_id} idx=${callback_ctx.idx} event=${frame.event}')
+	return response_json
+}
+
+fn (e InProcVjsxExecutor) resolve_websocket_affinity_on_lane(mut app App, frame WorkerWebSocketFrame, lane VjsxExecutionLane) !WebSocketAffinityDecision {
+	e.bootstrap_placeholder()!
+	idx := e.lane_index_by_id(lane.id)
+	if idx < 0 {
+		e.record_lane_error(lane.id, 'inproc_vjsx_executor_lane_not_found')
+		return error('inproc_vjsx_executor_lane_not_found')
+	}
+	e.ensure_lane_host(idx) or {
+		e.record_lane_error(lane.id, err.msg())
+		return error(err.msg())
+	}
+	e.run_startup_hooks(mut app, idx, lane) or {
+		e.record_lane_error(lane.id, err.msg())
+		return error(err.msg())
+	}
+	e.activate_lane_request_context(idx, mut app, lane.id, HttpLogicDispatchRequest{
+		method:     'affinity'
+		path:       frame.path
+		trace_id:   frame.trace_id
+		request_id: frame.request_id
+	})
+	defer {
+		e.clear_lane_request_context(idx)
+	}
+	mut state := e.state
+	state.mu.@lock()
+	host := state.hosts[idx]
+	state.mu.unlock()
+	ctx := host.session.context()
+	runtime_meta := e.websocket_runtime_meta(lane, frame)
+	mut js_runtime := build_websocket_js_runtime(ctx, runtime_meta, app.runtime_config_json, mut app)
+	defer {
+		js_runtime.free()
+	}
+	mut js_frame := build_websocket_js_frame(ctx, frame, js_runtime)
+	defer {
+		js_frame.free()
+	}
+	mut result := if host.is_module_entry && !isnil(host.module_binding) {
+		inproc_vjsx_call_module_entry(host.module_binding, 'websocket_affinity', js_frame) or {
+			if err.msg() == 'inproc_vjsx_executor_missing_websocket_affinity_handler' {
+				e.record_lane_success(lane.id)
+				return WebSocketAffinityDecision{}
+			}
+			err_msg := inproc_vjsx_context_error_message(ctx, err.msg(),
+				'inproc_vjsx_executor_websocket_affinity_failed')
+			e.record_lane_error(lane.id, err_msg)
+			return error(err_msg)
+		}
+	} else {
+		inproc_vjsx_call_global_entry(ctx, 'websocket_affinity', js_frame) or {
+			if err.msg() == 'inproc_vjsx_executor_missing_websocket_affinity_handler' {
+				e.record_lane_success(lane.id)
+				return WebSocketAffinityDecision{}
+			}
+			err_msg := inproc_vjsx_context_error_message(ctx, err.msg(),
+				'inproc_vjsx_executor_websocket_affinity_failed')
+			e.record_lane_error(lane.id, err_msg)
+			return error(err_msg)
+		}
+	}
+	defer {
+		result.free()
+	}
+	if result.is_exception() {
+		err_msg := inproc_vjsx_context_error_message(ctx, 'exception',
+			'inproc_vjsx_executor_websocket_affinity_failed')
+		e.record_lane_error(lane.id, err_msg)
+		return error(err_msg)
+	}
+	decision := if result.instanceof('Promise') {
+		mut awaited := result.await()
+		defer {
+			awaited.free()
+		}
+		websocket_affinity_decision_from_app_result(awaited)
+	} else {
+		websocket_affinity_decision_from_app_result(result)
+	}
+	e.record_lane_success(lane.id)
+	return decision
 }
 
 fn startup_result_commands_from_js_value(val vjsx.Value) []WorkerWebSocketUpstreamCommand {
@@ -5582,162 +6338,27 @@ pub fn (e InProcVjsxExecutor) dispatch_websocket_upstream(mut app App, req Worke
 	return error(last_err)
 }
 
-fn (e InProcVjsxExecutor) dispatch_websocket_event_on_lane(mut app App, frame WorkerWebSocketFrame, lane VjsxExecutionLane) !WorkerWebSocketDispatchResponse {
+fn (e InProcVjsxExecutor) dispatch_websocket_callback_on_lane(mut app App, frame WorkerWebSocketFrame, lane VjsxExecutionLane) !string {
 	e.bootstrap_placeholder()!
 	idx := e.lane_index_by_id(lane.id)
 	log.debug('[vhttpd] websocket_on_lane begin lane=${lane.id} idx=${idx} event=${frame.event} path=${frame.path} request_id=${frame.request_id} trace_id=${frame.trace_id}')
-	if idx < 0 {
-		e.record_lane_error(lane.id, 'inproc_vjsx_executor_lane_not_found')
-		return error('inproc_vjsx_executor_lane_not_found')
-	}
-	e.ensure_lane_host(idx) or {
-		e.record_lane_error(lane.id, err.msg())
+	mut callback_ctx := e.prepare_websocket_callback_on_lane(mut app, frame, lane) or {
 		return error(err.msg())
 	}
-	e.run_startup_hooks(mut app, idx, lane) or {
-		e.record_lane_error(lane.id, err.msg())
-		return error(err.msg())
-	}
-	e.activate_lane_request_context(idx, mut app, lane.id, HttpLogicDispatchRequest{
-		method:     frame.event
-		path:       frame.path
-		trace_id:   frame.trace_id
-		request_id: frame.request_id
-	})
 	defer {
-		e.clear_lane_request_context(idx)
+		callback_ctx.free()
+		e.clear_lane_request_context(callback_ctx.idx)
 	}
-	mut state := e.state
-	state.mu.@lock()
-	mut host := state.hosts[idx]
-	state.mu.unlock()
-	ctx := host.session.context()
-	runtime_meta := e.websocket_runtime_meta(lane, frame)
-	log.debug('[vhttpd] websocket_on_lane runtime_build lane=${lane.id} idx=${idx} event=${frame.event}')
-	mut js_runtime := build_websocket_js_runtime(ctx, runtime_meta, app.runtime_config_json, mut app)
-	defer {
-		js_runtime.free()
-	}
-	log.debug('[vhttpd] websocket_on_lane frame_build lane=${lane.id} idx=${idx} event=${frame.event}')
-	mut js_frame := build_websocket_js_frame(ctx, frame, js_runtime)
-	defer {
-		js_frame.free()
-	}
-	handler := ctx.js_global('__vhttpd_websocket_handle')
-	defer {
-		handler.free()
-	}
-	if handler.is_undefined() || !handler.is_function() {
-		e.record_lane_success(lane.id)
-		return WorkerWebSocketDispatchResponse{
-			mode:     'websocket_dispatch'
-			event:    'result'
-			id:       frame.id
-			accepted: false
-			closed:   false
-			commands: []WorkerWebSocketFrame{}
-		}
-	}
-	// 1. Resolve invoker
-	invoke_handler := ctx.js_global('__vhttpd_invoke_websocket_handle')
-	defer { invoke_handler.free() }
-	
-	if !invoke_handler.is_function() {
-		return error('inproc_vjsx_executor_websocket_invoker_missing')
-	}
-	
-	// 2. Prepare Argument
-	log.debug('[vhttpd] websocket_on_lane invoke lane=${lane.id} idx=${idx} event=${frame.event}')
-	invoke_arg := js_frame.dup_value()
-	defer { invoke_arg.free() }
-	
-	// 3. Call
-	mut result := ctx.call(invoke_handler, invoke_arg) or {
-		err_msg := inproc_vjsx_context_error_message(ctx, err.msg(), 'inproc_vjsx_executor_websocket_handler_failed')
-		return error(err_msg)
-	}
-	defer { result.free() }
-	
-	// 4. Result Processing
-	if result.is_exception() {
-		err_msg := inproc_vjsx_context_error_message(ctx, 'exception', 'inproc_vjsx_executor_websocket_handler_failed')
-		return error(err_msg)
-	}
-	
-	normalize_fn := ctx.js_global('__vhttpd_normalize_websocket_result')
-	defer {
-		normalize_fn.free()
-	}
-	log.debug('[vhttpd] websocket_on_lane handler_ok lane=${lane.id} idx=${idx} event=${frame.event} promise=${result.instanceof('Promise')}')
-	if result.instanceof('Promise') {
-		mut awaited := result.await()
-		defer {
-			awaited.free()
-		}
-		mut normalized := ctx.call(normalize_fn, js_frame, awaited) or {
-			err_msg := inproc_vjsx_normalize_error_message(err.msg(),
-				'inproc_vjsx_executor_websocket_normalize_failed')
-			return error('inproc_vjsx_executor_websocket_normalize_failed:${err_msg}')
-		}
-		defer {
-			normalized.free()
-		}
-		if frame.event == 'close' {
-			e.release_websocket_connection_affinity(frame)
-		}
-		e.record_lane_success(lane.id)
-		log.debug('[vhttpd] websocket_on_lane done lane=${lane.id} idx=${idx} event=${frame.event}')
-		return websocket_response_from_js_value(normalized, frame)
-	}
-	mut normalized := ctx.call(normalize_fn, js_frame, result) or {
-		err_msg := inproc_vjsx_normalize_error_message(err.msg(),
-			'inproc_vjsx_executor_websocket_normalize_failed')
-		return error('inproc_vjsx_executor_websocket_normalize_failed:${err_msg}')
-	}
-	defer {
-		normalized.free()
-	}
-	if frame.event == 'close' {
-		e.release_websocket_connection_affinity(frame)
-	}
-	e.record_lane_success(lane.id)
-	log.debug('[vhttpd] websocket_on_lane done lane=${lane.id} idx=${idx} event=${frame.event}')
-	return websocket_response_from_js_value(normalized, frame)
+	return e.execute_websocket_callback_on_lane(callback_ctx)
 }
 
-pub fn (e InProcVjsxExecutor) dispatch_websocket_event(mut app App, frame WorkerWebSocketFrame) !WorkerWebSocketDispatchResponse {
-	e.remember_app(mut app)
-	e.bootstrap_placeholder()!
-	lane, _ := e.acquire_websocket_lane(frame) or {
-		if err.msg() == 'inproc_vjsx_executor_websocket_affinity_key_missing' {
-			return WorkerWebSocketDispatchResponse{
-				mode:        'websocket_dispatch'
-				event:       'result'
-				id:          frame.id
-				accepted:    false
-				closed:      true
-				commands:    []WorkerWebSocketFrame{}
-				error:       'websocket_affinity_key_missing'
-				error_class: 'websocket_affinity_key_missing'
-			}
-		}
-		return error(err.msg())
-	}
-	defer {
-		e.release_lane(lane.id)
-	}
-	worker := e.lane_worker_by_id(lane.id) or {
-		return error('inproc_vjsx_executor_lane_worker_missing')
-	}
-	done_ch := chan bool{cap: 1}
-	mut slot := &InProcVjsxWebSocketTaskSlot{}
-	log.debug('[vhttpd] websocket dispatch enqueue lane=${lane.id} event=${frame.event} request_id=${frame.request_id} trace_id=${frame.trace_id}')
-	worker.websocket_tasks <- InProcVjsxWebSocketTask{
-		app:  app
-		frame: frame
-		slot: slot
-		done: done_ch
-	}
+fn (e InProcVjsxExecutor) enqueue_websocket_task(task InProcVjsxWebSocketTask) ! {
+	lane, _ := e.acquire_websocket_lane(task.frame)!
+	e.bind_websocket_task_lane(task, lane.id)
+	e.dispatch_websocket_task_to_lane(task, lane.id)!
+}
+
+fn inproc_vjsx_await_websocket_task_result(done_ch chan bool, mut slot InProcVjsxWebSocketTaskSlot) !InProcVjsxWebSocketTaskResult {
 	select {
 		_ := <-done_ch {
 		}
@@ -5752,9 +6373,53 @@ pub fn (e InProcVjsxExecutor) dispatch_websocket_event(mut app App, frame Worker
 	if !ready {
 		return error('inproc_vjsx_executor_lane_task_not_ready')
 	}
-	log.debug('[vhttpd] websocket dispatch reply lane=${lane.id} event=${frame.event} request_id=${frame.request_id} ok=${result.ok} error=${result.error} accepted=${result.response.accepted} closed=${result.response.closed} commands=${result.response.commands.len} response_error=${result.response.error} response_error_class=${result.response.error_class}')
 	if !result.ok {
 		return error(result.error)
 	}
-	return result.response
+	return result
+}
+
+fn (e InProcVjsxExecutor) finalize_websocket_dispatch_response(frame WorkerWebSocketFrame, affinity_key string, result InProcVjsxWebSocketTaskResult) WorkerWebSocketDispatchResponse {
+	response := websocket_response_from_json(result.response_json, frame)
+	log.debug('[vhttpd] websocket dispatch reply affinity_key=${affinity_key} event=${frame.event} request_id=${frame.request_id} ok=${result.ok} error=${result.error} accepted=${response.accepted} closed=${response.closed} commands=${response.commands.len} response_error=${response.error} response_error_class=${response.error_class}')
+	if response.affinity_key.trim_space() != '' {
+		e.migrate_websocket_connection_affinity(frame, response.affinity_key)
+	}
+	if frame.event == 'close' {
+		e.release_websocket_connection_affinity(frame)
+	}
+	return response
+}
+
+pub fn (e InProcVjsxExecutor) dispatch_websocket_event(mut app App, frame WorkerWebSocketFrame) !WorkerWebSocketDispatchResponse {
+	e.remember_app(mut app)
+	e.bootstrap_placeholder()!
+	lane, affinity_key := e.acquire_websocket_lane(frame) or {
+		if err.msg() == 'inproc_vjsx_executor_websocket_affinity_key_missing' {
+			return WorkerWebSocketDispatchResponse{
+				mode:        'websocket_dispatch'
+				event:       'result'
+				id:          frame.id
+				accepted:    false
+				closed:      true
+				commands:    []WorkerWebSocketFrame{}
+				error:       'websocket_affinity_key_missing'
+				error_class: 'websocket_affinity_key_missing'
+			}
+		}
+		return error(err.msg())
+	}
+	done_ch := chan bool{cap: 1}
+	mut slot := &InProcVjsxWebSocketTaskSlot{}
+	task := InProcVjsxWebSocketTask{
+		app:  app
+		frame: frame
+		slot: slot
+		done: done_ch
+		affinity_key: affinity_key
+	}
+	e.bind_websocket_task_lane(task, lane.id)
+	e.dispatch_websocket_task_to_lane(task, lane.id)!
+	result := inproc_vjsx_await_websocket_task_result(done_ch, mut slot)!
+	return e.finalize_websocket_dispatch_response(frame, affinity_key, result)
 }

@@ -1180,6 +1180,7 @@ fn test_inproc_vjsx_executor_websocket_affinity_sticks_same_key_to_same_lane() {
 	}) or { panic(err) }
 	assert first_key == 'srv_same'
 	executor.release_lane(first.id)
+	executor.release_websocket_affinity_key(first_key)
 	second, second_key := executor.acquire_websocket_lane(WorkerWebSocketFrame{
 		id:    'conn_b'
 		event: 'open'
@@ -1224,8 +1225,49 @@ fn test_inproc_vjsx_executor_websocket_affinity_can_use_header_source() {
 	assert affinity_key == 'session_123'
 	assert lane.id == 'lane_0'
 	executor.release_lane(lane.id)
+	executor.release_websocket_affinity_key(affinity_key)
 	executor.release_websocket_connection_affinity(WorkerWebSocketFrame{
 		id: 'conn_header'
+	})
+}
+
+fn test_inproc_vjsx_executor_websocket_affinity_migration_keeps_existing_lane() {
+	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
+		thread_count: 4
+		app_entry:    'app/main.ts'
+		websocket_affinity: WebSocketAffinityConfig{
+			enabled:  true
+			source:   'query'
+			key:      'serverId'
+			scope:    'lane'
+			fallback: 'reject'
+		}
+	})
+	defer {
+		executor.close()
+	}
+	executor.bootstrap_placeholder() or { assert false }
+	lane, affinity_key := executor.acquire_websocket_lane(WorkerWebSocketFrame{
+		id:    'conn_migrate'
+		event: 'open'
+		query: {
+			'serverId': 'srv_hot'
+		}
+	}) or { panic(err) }
+	old_lane := lane.id
+	assert affinity_key == 'srv_hot'
+	executor.release_lane(old_lane)
+	executor.migrate_websocket_connection_affinity(WorkerWebSocketFrame{
+		id: 'conn_migrate'
+	}, 'conn_migrate_key')
+	mut state := executor.state
+	state.mu.@lock()
+	migrated_lane := state.websocket_connection_lane_by_id['conn_migrate'] or { '' }
+	state.mu.unlock()
+	assert migrated_lane == old_lane
+	assert migrated_lane != ''
+	executor.release_websocket_connection_affinity(WorkerWebSocketFrame{
+		id: 'conn_migrate'
 	})
 }
 
@@ -1253,6 +1295,48 @@ fn test_inproc_vjsx_executor_websocket_affinity_rejects_missing_key_when_configu
 		return
 	}
 	assert false
+}
+
+fn test_inproc_vjsx_executor_websocket_affinity_releases_key_when_lane_acquire_fails() {
+	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
+		thread_count: 1
+		app_entry:    'app/main.ts'
+		websocket_affinity: WebSocketAffinityConfig{
+			enabled:  true
+			source:   'query'
+			key:      'serverId'
+			scope:    'lane'
+			fallback: 'reject'
+		}
+	})
+	defer {
+		executor.close()
+	}
+	executor.bootstrap_placeholder() or { assert false }
+	lane := executor.select_next_lane() or { panic(err) }
+	executor.acquire_websocket_lane(WorkerWebSocketFrame{
+		id:    'conn_busy'
+		event: 'open'
+		query: {
+			'serverId': 'srv_busy'
+		}
+	}) or {
+		assert err.msg() == 'inproc_vjsx_executor_no_available_lane'
+	} 
+	executor.release_lane(lane.id)
+	again, again_key := executor.acquire_websocket_lane(WorkerWebSocketFrame{
+		id:    'conn_again'
+		event: 'open'
+		query: {
+			'serverId': 'srv_busy'
+		}
+	}) or { panic(err) }
+	assert again_key == 'srv_busy'
+	executor.release_lane(again.id)
+	executor.release_websocket_affinity_key(again_key)
+	executor.release_websocket_connection_affinity(WorkerWebSocketFrame{
+		id: 'conn_again'
+	})
 }
 
 fn test_inproc_vjsx_executor_bootstrap_requires_app_entry() {
@@ -2339,7 +2423,7 @@ export default app;
 	assert snapshot.connections[0].metadata['dispatch_failure_count'] == '1'
 }
 
-fn test_inproc_vjsx_executor_websocket_dispatch_main_chain_returns_failures_via_info() {
+fn test_inproc_vjsx_executor_websocket_dispatch_main_chain_keeps_failures_out_of_info_followups() {
 	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_vjsx_executor_websocket_dispatch_main_failure_test')
 	os.mkdir_all(temp_dir) or { panic(err) }
 	app_file := os.join_path(temp_dir, 'websocket-dispatch-main-failure.mts')
@@ -2351,16 +2435,6 @@ const app = {
         accepted: true,
         commands: [
           { event: "send", targetId: "missing_conn", data: "ping" }
-        ]
-      };
-    }
-    if (frame.event === "info") {
-      const payload = frame.dataJson({ failures: [] });
-      const failures = Array.isArray(payload?.failures) ? payload.failures.length : 0;
-      return {
-        accepted: true,
-        commands: [
-          { event: "set_meta", id: frame.id, key: "main_dispatch_failure_count", value: String(failures) }
         ]
       };
     }
@@ -2435,6 +2509,7 @@ export default app;
 	assert msg_resp.accepted
 	result := app.execute_websocket_dispatch_commands_result(msg_resp.commands)
 	assert !result.has_close
+	assert result.failures.len == 1
 	if result.failures.len > 0 {
 		app.websocket_dispatch_followup_failures('ws_main_failure', 'GET', '/ws', map[string]string{}, {
 			'host': 'relay.test'
@@ -2442,7 +2517,7 @@ export default app;
 	}
 	snapshot := app.admin_websockets_snapshot(true, 10, 0, '', 'ws_main_failure')
 	assert snapshot.connections.len == 1
-	assert snapshot.connections[0].metadata['main_dispatch_failure_count'] == '1'
+	assert snapshot.connections[0].metadata['main_dispatch_failure_count'] == ''
 }
 
 fn test_inproc_vjsx_executor_repo_paseo_relay_skeleton_boots() {

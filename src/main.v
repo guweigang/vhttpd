@@ -289,6 +289,7 @@ struct WorkerWebSocketDispatchResponse {
 	accepted    bool
 	closed      bool
 	commands    []WorkerWebSocketFrame
+	affinity_key string @[json: 'affinity_key']
 	error       string
 	error_class string @[json: 'error_class']
 }
@@ -1001,7 +1002,9 @@ fn worker_websocket_dispatch_message_cb(mut ws websocket.Client, msg &websocket.
 		ws.close(1011, 'worker error')!
 		return
 	}
+	log.debug('[vhttpd] websocket message commands begin conn_id=${state.conn_id} request_id=${state.request_id} commands=${resp.commands.len}')
 	result := state.app.execute_websocket_dispatch_commands_result(resp.commands)
+	log.debug('[vhttpd] websocket message commands done conn_id=${state.conn_id} request_id=${state.request_id} has_close=${result.has_close} failures=${result.failures.len}')
 	if result.has_close {
 		close_frame := result.close_frame
 		code := if close_frame.code > 0 { close_frame.code } else { 1000 }

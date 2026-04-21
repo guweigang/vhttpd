@@ -1020,6 +1020,7 @@ function handleOpenV2(frame, session, role, rawConnectionId) {
     return {
       accepted: true,
       commands,
+      affinityKey: resolvedConnectionId,
     };
   }
 
@@ -1060,6 +1061,7 @@ function handleOpenV2(frame, session, role, rawConnectionId) {
   return {
     accepted: true,
     commands,
+    affinityKey: connectionId,
   };
 }
 
@@ -1088,6 +1090,20 @@ function handleOpen(frame) {
     return session;
   });
   return response || { accepted: true, commands: [] };
+}
+
+export function websocket_affinity(frame) {
+  const query = frame?.query || {};
+  const role = normalizeRole(query.role);
+  const connectionId = trimString(query.connectionId);
+  const serverId = trimString(query.serverId);
+  if (role === "server-control") {
+    return { key: serverId, priority: "high" };
+  }
+  if (connectionId) {
+    return { key: connectionId, priority: "normal" };
+  }
+  return { key: serverId, priority: "normal" };
 }
 
 function handleMessageV1(frame, session, role) {

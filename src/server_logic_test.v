@@ -1674,7 +1674,7 @@ port = 19901
 executor = "vjsx"
 websocket_dispatch = true
 websocket_affinity.enabled = true
-websocket_affinity.source = "query"
+websocket_affinity.source = "app"
 websocket_affinity.key = "serverId"
 websocket_affinity.scope = "lane"
 websocket_affinity.fallback = "reject"
@@ -1685,7 +1685,7 @@ websocket_affinity.fallback = "reject"
 	cfg := load_vhttpd_config(['--config', config_file]) or { panic(err) }
 	site := cfg.sites['relay']
 	assert site.websocket_affinity.enabled
-	assert site.websocket_affinity.source == 'query'
+	assert site.websocket_affinity.source == 'app'
 	assert site.websocket_affinity.key == 'serverId'
 	assert site.websocket_affinity.scope == 'lane'
 	assert site.websocket_affinity.fallback == 'reject'
@@ -1703,14 +1703,14 @@ fn test_site_config_as_vhttpd_config_merges_site_websocket_affinity() {
 	derived := site_config_as_vhttpd_config(base, SiteConfig{
 		websocket_affinity: WebSocketAffinityConfig{
 			enabled:  true
-			source:   'query'
+			source:   'app'
 			key:      'serverId'
 			scope:    'lane'
 			fallback: 'reject'
 		}
 	})
 	assert derived.websocket_affinity.enabled
-	assert derived.websocket_affinity.source == 'query'
+	assert derived.websocket_affinity.source == 'app'
 	assert derived.websocket_affinity.key == 'serverId'
 	assert derived.websocket_affinity.scope == 'lane'
 	assert derived.websocket_affinity.fallback == 'reject'
@@ -1823,7 +1823,7 @@ fn test_paseo_relay_example_config_enables_websocket_dispatch() {
 	cfg := load_vhttpd_config(['--config', config_path]) or { panic(err) }
 	assert cfg.worker.websocket_dispatch
 	assert cfg.sites['paseo_relay'].websocket_affinity.enabled
-	assert cfg.sites['paseo_relay'].websocket_affinity.source == 'query'
+	assert cfg.sites['paseo_relay'].websocket_affinity.source == 'app'
 	assert cfg.sites['paseo_relay'].websocket_affinity.key == 'serverId'
 	assert cfg.sites['paseo_relay'].websocket_affinity.fallback == 'reject'
 	runtime := resolve_multi_server_runtime_config(['--config', config_path], cfg) or {
