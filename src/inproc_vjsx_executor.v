@@ -920,7 +920,7 @@ fn (e InProcVjsxExecutor) release_websocket_affinity_key(affinity_key string) {
 	}
 }
 
-fn (e InProcVjsxExecutor) migrate_websocket_connection_affinity(frame WorkerWebSocketFrame, affinity_key string) {
+fn (e InProcVjsxExecutor) migrate_websocket_connection_affinity(frame WorkerWebSocketFrame, affinity_key string, current_lane_id string) {
 	if isnil(e.state) || frame.id.trim_space() == '' {
 		return
 	}
@@ -949,10 +949,14 @@ fn (e InProcVjsxExecutor) migrate_websocket_connection_affinity(frame WorkerWebS
 			state.websocket_affinity_ref_count_by_key[old_key] = remaining
 		}
 	}
-	new_lane := if old_lane != '' {
+	mut new_lane := if old_lane != '' {
 		old_lane
 	} else {
 		state.websocket_affinity_lane_by_key[new_key] or { '' }
+	}
+	if new_lane == '' && current_lane_id.trim_space() != ''
+		&& websocket_should_pin_affinity_lane(frame, new_key) {
+		new_lane = current_lane_id.trim_space()
 	}
 	state.websocket_connection_affinity_key_by_id[frame.id] = new_key
 	if new_lane != '' {
@@ -6379,11 +6383,11 @@ fn inproc_vjsx_await_websocket_task_result(done_ch chan bool, mut slot InProcVjs
 	return result
 }
 
-fn (e InProcVjsxExecutor) finalize_websocket_dispatch_response(frame WorkerWebSocketFrame, affinity_key string, result InProcVjsxWebSocketTaskResult) WorkerWebSocketDispatchResponse {
+fn (e InProcVjsxExecutor) finalize_websocket_dispatch_response(frame WorkerWebSocketFrame, affinity_key string, lane_id string, result InProcVjsxWebSocketTaskResult) WorkerWebSocketDispatchResponse {
 	response := websocket_response_from_json(result.response_json, frame)
 	log.debug('[vhttpd] websocket dispatch reply affinity_key=${affinity_key} event=${frame.event} request_id=${frame.request_id} ok=${result.ok} error=${result.error} accepted=${response.accepted} closed=${response.closed} commands=${response.commands.len} response_error=${response.error} response_error_class=${response.error_class}')
 	if response.affinity_key.trim_space() != '' {
-		e.migrate_websocket_connection_affinity(frame, response.affinity_key)
+		e.migrate_websocket_connection_affinity(frame, response.affinity_key, lane_id)
 	}
 	if frame.event == 'close' {
 		e.release_websocket_connection_affinity(frame)
@@ -6421,5 +6425,5 @@ pub fn (e InProcVjsxExecutor) dispatch_websocket_event(mut app App, frame Worker
 	e.bind_websocket_task_lane(task, lane.id)
 	e.dispatch_websocket_task_to_lane(task, lane.id)!
 	result := inproc_vjsx_await_websocket_task_result(done_ch, mut slot)!
-	return e.finalize_websocket_dispatch_response(frame, affinity_key, result)
+	return e.finalize_websocket_dispatch_response(frame, affinity_key, lane.id, result)
 }

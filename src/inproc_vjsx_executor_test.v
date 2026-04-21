@@ -1259,7 +1259,7 @@ fn test_inproc_vjsx_executor_websocket_affinity_migration_keeps_existing_lane() 
 	executor.release_lane(old_lane)
 	executor.migrate_websocket_connection_affinity(WorkerWebSocketFrame{
 		id: 'conn_migrate'
-	}, 'conn_migrate_key')
+	}, 'conn_migrate_key', old_lane)
 	mut state := executor.state
 	state.mu.@lock()
 	migrated_lane := state.websocket_connection_lane_by_id['conn_migrate'] or { '' }
