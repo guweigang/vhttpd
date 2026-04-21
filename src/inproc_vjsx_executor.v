@@ -5466,8 +5466,11 @@ fn websocket_upstream_response_from_js_value(val vjsx.Value, req WorkerWebSocket
 }
 
 fn websocket_response_from_json(raw string, frame WorkerWebSocketFrame) WorkerWebSocketDispatchResponse {
-	if frame.event == 'message' {
+	if frame.event in ['open', 'message'] {
 		log.debug('[vhttpd] websocket_response decode_begin event=${frame.event} request_id=${frame.request_id} raw_len=${raw.len}')
+		if frame.event == 'open' {
+			log.debug('[vhttpd] websocket_response decode_raw event=${frame.event} request_id=${frame.request_id} raw=${raw}')
+		}
 	}
 	if raw.trim_space() == '' || raw.trim_space() == 'undefined' || raw.trim_space() == 'null' {
 		return WorkerWebSocketDispatchResponse{
@@ -5480,8 +5483,8 @@ fn websocket_response_from_json(raw string, frame WorkerWebSocketFrame) WorkerWe
 		}
 	}
 	normalized := json.decode(InProcVjsxWebSocketResult, raw) or { InProcVjsxWebSocketResult{} }
-	if frame.event == 'message' {
-		log.debug('[vhttpd] websocket_response decode_done event=${frame.event} request_id=${frame.request_id} accepted=${normalized.accepted} closed=${normalized.closed} commands=${normalized.commands.len} error=${normalized.error} error_class=${normalized.error_class}')
+	if frame.event in ['open', 'message'] {
+		log.debug('[vhttpd] websocket_response decode_done event=${frame.event} request_id=${frame.request_id} accepted=${normalized.accepted} closed=${normalized.closed} commands=${normalized.commands.len} affinity_key=${normalized.affinity_key} error=${normalized.error} error_class=${normalized.error_class}')
 	}
 	return WorkerWebSocketDispatchResponse{
 		mode:        'websocket_dispatch'
@@ -5670,6 +5673,9 @@ fn (e InProcVjsxExecutor) execute_websocket_callback_on_lane(callback_ctx InProc
 	response_json := inproc_vjsx_normalize_websocket_callback_result(callback_ctx.ctx, callback_ctx.js_frame,
 		mut callback_result, lane, callback_ctx.idx, frame) or {
 		return error(err.msg())
+	}
+	if frame.event == 'open' {
+		log.debug('[vhttpd] websocket_on_lane normalized event=${frame.event} lane=${callback_ctx.lane_id} idx=${callback_ctx.idx} request_id=${frame.request_id} response_json=${response_json}')
 	}
 	e.record_lane_success(callback_ctx.lane_id)
 	log.debug('[vhttpd] websocket_on_lane done lane=${callback_ctx.lane_id} idx=${callback_ctx.idx} event=${frame.event}')
@@ -6385,9 +6391,17 @@ fn inproc_vjsx_await_websocket_task_result(done_ch chan bool, mut slot InProcVjs
 
 fn (e InProcVjsxExecutor) finalize_websocket_dispatch_response(frame WorkerWebSocketFrame, affinity_key string, lane_id string, result InProcVjsxWebSocketTaskResult) WorkerWebSocketDispatchResponse {
 	response := websocket_response_from_json(result.response_json, frame)
-	log.debug('[vhttpd] websocket dispatch reply affinity_key=${affinity_key} event=${frame.event} request_id=${frame.request_id} ok=${result.ok} error=${result.error} accepted=${response.accepted} closed=${response.closed} commands=${response.commands.len} response_error=${response.error} response_error_class=${response.error_class}')
+	log.debug('[vhttpd] websocket dispatch reply affinity_key=${affinity_key} event=${frame.event} request_id=${frame.request_id} ok=${result.ok} error=${result.error} accepted=${response.accepted} closed=${response.closed} commands=${response.commands.len} response_affinity_key=${response.affinity_key} response_error=${response.error} response_error_class=${response.error_class}')
+	if frame.event == 'open' {
+		log.debug('[vhttpd] websocket finalize event=${frame.event} request_id=${frame.request_id} lane=${lane_id} input_affinity_key=${affinity_key} response_affinity_key=${response.affinity_key}')
+	}
 	if response.affinity_key.trim_space() != '' {
+		if frame.event == 'open' {
+			log.debug('[vhttpd] websocket finalize migrate event=${frame.event} request_id=${frame.request_id} lane=${lane_id} old_affinity_key=${affinity_key} new_affinity_key=${response.affinity_key}')
+		}
 		e.migrate_websocket_connection_affinity(frame, response.affinity_key, lane_id)
+	} else if frame.event == 'open' {
+		log.debug('[vhttpd] websocket finalize migrate_skip event=${frame.event} request_id=${frame.request_id} lane=${lane_id} old_affinity_key=${affinity_key} reason=empty_response_affinity_key')
 	}
 	if frame.event == 'close' {
 		e.release_websocket_connection_affinity(frame)
