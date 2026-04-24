@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace VPhp\VSlim\Stream;
+namespace VSlim\Stream;
 
-use VPhp\VHttpd\Upstream\Plan;
-use VPhp\VHttpd\PhpWorker\StreamApp;
+use VHttpd\Upstream\Plan;
+use VHttpd\PhpWorker\StreamApp;
 
 final class Factory
 {

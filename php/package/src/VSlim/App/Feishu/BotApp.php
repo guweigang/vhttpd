@@ -2,22 +2,22 @@
 
 declare(strict_types=1);
 
-namespace VPhp\VSlim\App\Feishu;
+namespace VSlim\App\Feishu;
 
-use VPhp\VHttpd\Upstream\WebSocket\Feishu\Command;
-use VPhp\VHttpd\Upstream\WebSocket\Feishu\Event as FeishuEvent;
-use VPhp\VHttpd\Upstream\WebSocket\Feishu\Event\CardActionEvent;
-use VPhp\VHttpd\Upstream\WebSocket\Feishu\Event\Factory as EventFactory;
-use VPhp\VHttpd\Upstream\WebSocket\Feishu\Message as FeishuMessage;
-use VPhp\VHttpd\Upstream\WebSocket\Feishu\Message\AbstractMessage;
-use VPhp\VHttpd\Upstream\WebSocket\Feishu\Message\AudioMessage;
-use VPhp\VHttpd\Upstream\WebSocket\Feishu\Message\Factory as MessageFactory;
-use VPhp\VHttpd\Upstream\WebSocket\Feishu\Message\FileMessage;
-use VPhp\VHttpd\Upstream\WebSocket\Feishu\Message\ImageMessage;
-use VPhp\VHttpd\Upstream\WebSocket\Feishu\Message\MediaMessage;
-use VPhp\VHttpd\Upstream\WebSocket\Feishu\Message\PostMessage;
-use VPhp\VHttpd\Upstream\WebSocket\Feishu\Message\StickerMessage;
-use VPhp\VHttpd\Upstream\WebSocket\Feishu\Message\TextMessage;
+use VHttpd\Upstream\WebSocket\Feishu\Command;
+use VHttpd\Upstream\WebSocket\Feishu\Event as FeishuEvent;
+use VHttpd\Upstream\WebSocket\Feishu\Event\CardActionEvent;
+use VHttpd\Upstream\WebSocket\Feishu\Event\Factory as EventFactory;
+use VHttpd\Upstream\WebSocket\Feishu\Message as FeishuMessage;
+use VHttpd\Upstream\WebSocket\Feishu\Message\AbstractMessage;
+use VHttpd\Upstream\WebSocket\Feishu\Message\AudioMessage;
+use VHttpd\Upstream\WebSocket\Feishu\Message\Factory as MessageFactory;
+use VHttpd\Upstream\WebSocket\Feishu\Message\FileMessage;
+use VHttpd\Upstream\WebSocket\Feishu\Message\ImageMessage;
+use VHttpd\Upstream\WebSocket\Feishu\Message\MediaMessage;
+use VHttpd\Upstream\WebSocket\Feishu\Message\PostMessage;
+use VHttpd\Upstream\WebSocket\Feishu\Message\StickerMessage;
+use VHttpd\Upstream\WebSocket\Feishu\Message\TextMessage;
 
 final class BotApp
 {

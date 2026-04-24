@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace VPhp\VSlim\DbGateway;
+namespace VSlim\DbGateway;
 
 use RuntimeException;
-use VPhp\VHttpd\PhpWorker\Client as WorkerClient;
+use VHttpd\PhpWorker\Client as WorkerClient;
 
 class PDO
 {

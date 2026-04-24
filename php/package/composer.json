@@ -1,5 +1,5 @@
 {
-  "name": "vphp/vhttpd",
+  "name": "vphp/runtime",
   "description": "VPhp Vhttpd PHP Runtime",
   "type": "library",
   "license": "MIT",
@@ -14,14 +14,16 @@
   },
   "autoload": {
     "psr-4": {
-      "VPhp\\": "src/"
+      "VHttpd\\": "src/VHttpd/",
+      "VSlim\\": "src/VSlim/",
+      "VPhp\\Provider\\": "src/Provider/"
     },
     "files": [
       "src/legacy_aliases.php"
     ]
   },
   "bin": [
-    "bin/php-worker",
-    "bin/php-worker-client"
+    "bin/vphp-worker",
+    "bin/vphp-worker-client"
   ]
 }
