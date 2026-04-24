@@ -6,7 +6,6 @@ const DEFAULT_SERVER_DATA_CLOSE_CODE = 1012;
 const DEFAULT_CONTROL_NUDGE_DELAY_MS = 10_000;
 const DEFAULT_CONTROL_RESET_DELAY_MS = 5_000;
 const DEFAULT_PENDING_FLUSH_SETTLE_DELAY_MS = 250;
-const DEFAULT_PENDING_FLUSH_DISPATCH_DELAY_MS = 1;
 const DEFAULT_DEBUG_MESSAGE_LIMIT = 6;
 
 function nowMs() {
@@ -211,6 +210,8 @@ function createEmptySession(serverId, version) {
     announcedConnections: new Set(),
     pendingFramesByConnection: new Map(),
     pendingDrainByConnection: new Map(),
+    recentLiveHelloByConnection: new Map(),
+    recentReadyByConnection: new Map(),
     controlNudgeTokensByConnection: new Map(),
     debugMessageCountByConnection: new Map(),
   };
@@ -237,6 +238,12 @@ function serializeSession(session) {
       String(a[0]).localeCompare(String(b[0])),
     ),
     pendingDrainByConnection: Array.from(session.pendingDrainByConnection?.entries?.() || []).sort((a, b) =>
+      String(a[0]).localeCompare(String(b[0])),
+    ),
+    recentLiveHelloByConnection: Array.from(session.recentLiveHelloByConnection?.entries?.() || []).sort((a, b) =>
+      String(a[0]).localeCompare(String(b[0])),
+    ),
+    recentReadyByConnection: Array.from(session.recentReadyByConnection?.entries?.() || []).sort((a, b) =>
       String(a[0]).localeCompare(String(b[0])),
     ),
     controlNudgeTokensByConnection: Array.from(
@@ -304,6 +311,37 @@ function hydrateSession(raw, serverId, version) {
               }
             : null,
         ]).filter(([connectionId, drain]) => connectionId && drain)
+      : [],
+  );
+  session.recentLiveHelloByConnection = new Map(
+    Array.isArray(raw.recentLiveHelloByConnection)
+      ? raw.recentLiveHelloByConnection.map(([connectionId, entry]) => [
+          trimString(connectionId),
+          entry && typeof entry === "object"
+            ? {
+                key: trimString(entry?.key),
+                data: String(entry?.data ?? ""),
+                opcode: trimString(entry?.opcode) || "text",
+                targetId: trimString(entry?.targetId),
+                at: Number(entry?.at || 0),
+              }
+            : null,
+        ]).filter(([connectionId, entry]) => connectionId && entry)
+      : [],
+  );
+  session.recentReadyByConnection = new Map(
+    Array.isArray(raw.recentReadyByConnection)
+      ? raw.recentReadyByConnection.map(([connectionId, entry]) => [
+          trimString(connectionId),
+          entry && typeof entry === "object"
+            ? {
+                data: String(entry?.data ?? ""),
+                opcode: trimString(entry?.opcode) || "text",
+                targetId: trimString(entry?.targetId),
+                at: Number(entry?.at || 0),
+              }
+            : null,
+        ]).filter(([connectionId, entry]) => connectionId && entry)
       : [],
   );
   session.controlNudgeTokensByConnection = new Map(
@@ -500,6 +538,111 @@ function failedTargetIdsFromDispatchResult(result) {
   return failed;
 }
 
+function isHandshakeHelloFrame(data, opcode) {
+  if (trimString(opcode || "text") !== "text") {
+    return false;
+  }
+  const payload = safeJsonParse(data, null);
+  return !!(payload && payload.type === "e2ee_hello" && typeof payload.key === "string" && payload.key.trim());
+}
+
+function handshakeHelloKey(data, opcode) {
+  if (!isHandshakeHelloFrame(data, opcode)) {
+    return "";
+  }
+  const payload = safeJsonParse(data, null);
+  return trimString(payload?.key);
+}
+
+function isReadyPayload(data, opcode) {
+  if (trimString(opcode || "text") !== "text") {
+    return false;
+  }
+  const payload = safeJsonParse(data, null);
+  return !!(payload && payload.type === "e2ee_ready");
+}
+
+function rememberLiveHandshakeHello(session, connectionId, frame, targetId) {
+  if (!session || !connectionId) {
+    return;
+  }
+  const key = handshakeHelloKey(frame?.data ?? "", frame?.opcode ?? "text");
+  if (!key) {
+    return;
+  }
+  session.recentLiveHelloByConnection.set(connectionId, {
+    key,
+    data: String(frame?.data ?? ""),
+    opcode: trimString(frame?.opcode) || "text",
+    targetId: trimString(targetId),
+    at: nowMs(),
+  });
+  touchSession(session);
+}
+
+function clearLiveHandshakeHello(session, connectionId) {
+  if (!session || !connectionId || !session.recentLiveHelloByConnection?.has?.(connectionId)) {
+    return;
+  }
+  session.recentLiveHelloByConnection.delete(connectionId);
+  touchSession(session);
+}
+
+function rememberServerReady(session, connectionId, frame, targetId) {
+  if (!session || !connectionId || !frame) {
+    return;
+  }
+  session.recentReadyByConnection.set(connectionId, {
+    data: String(frame?.data ?? ""),
+    opcode: trimString(frame?.opcode) || "text",
+    targetId: trimString(targetId),
+    at: nowMs(),
+  });
+  touchSession(session);
+}
+
+function clearServerReady(session, connectionId) {
+  if (!session || !connectionId || !session.recentReadyByConnection?.has?.(connectionId)) {
+    return;
+  }
+  session.recentReadyByConnection.delete(connectionId);
+  touchSession(session);
+}
+
+function isDuplicateLiveHandshakeHello(session, connectionId, frame, targetId) {
+  if (!session || !connectionId) {
+    return false;
+  }
+  const key = handshakeHelloKey(frame?.data ?? "", frame?.opcode ?? "text");
+  if (!key) {
+    return false;
+  }
+  const previous = session.recentLiveHelloByConnection.get(connectionId);
+  if (!previous) {
+    return false;
+  }
+  return (
+    trimString(previous.key) === key &&
+    String(previous.data || "") === String(frame?.data ?? "") &&
+    (trimString(previous.opcode) || "text") === (trimString(frame?.opcode) || "text") &&
+    trimString(previous.targetId) === trimString(targetId)
+  );
+}
+
+function cachedServerReady(session, connectionId, targetId) {
+  if (!session || !connectionId) {
+    return null;
+  }
+  const entry = session.recentReadyByConnection?.get?.(connectionId);
+  if (!entry) {
+    return null;
+  }
+  if (trimString(entry.targetId) !== trimString(targetId)) {
+    return null;
+  }
+  return entry;
+}
+
 function scheduleControlNudge(session, connectionId, runtime) {
   if (
     !session ||
@@ -607,11 +750,22 @@ function scheduleControlNudge(session, connectionId, runtime) {
 
 function bufferFrame(session, connectionId, message) {
   const existing = session.pendingFramesByConnection.get(connectionId) || [];
-  existing.push({
+  const nextFrame = {
     data: message && typeof message === "object" ? String(message.data ?? "") : String(message ?? ""),
     opcode:
       message && typeof message === "object" ? trimString(message.opcode) || "text" : "text",
-  });
+  };
+  if (isHandshakeHelloFrame(nextFrame.data, nextFrame.opcode)) {
+    const deduped = existing.filter((frame) => !isHandshakeHelloFrame(frame?.data ?? "", frame?.opcode ?? "text"));
+    deduped.push(nextFrame);
+    if (deduped.length > MAX_PENDING_FRAMES) {
+      deduped.splice(0, deduped.length - MAX_PENDING_FRAMES);
+    }
+    session.pendingFramesByConnection.set(connectionId, deduped);
+    touchSession(session);
+    return;
+  }
+  existing.push(nextFrame);
   if (existing.length > MAX_PENDING_FRAMES) {
     existing.splice(0, existing.length - MAX_PENDING_FRAMES);
   }
@@ -685,6 +839,9 @@ function schedulePendingDrainFinalize(session, connectionId, token, targetId, ru
       if (trimString(drain.targetId) !== trimString(targetId)) {
         return current;
       }
+      if ((current.serverDataByConnection.get(connectionId) || "") !== trimString(targetId)) {
+        return current;
+      }
       current.pendingDrainByConnection.delete(connectionId);
       touchSession(current);
       return persistMaybeDeleteSessionValue(current);
@@ -722,74 +879,6 @@ function flushPendingFrames(session, connectionId, targetId, runtime) {
   return clonedFrames.map((frame) =>
     relaySendCommand("send", frame?.data ?? "", frame?.opcode ?? "text", { targetId }),
   );
-}
-
-function schedulePendingFlush(session, connectionId, targetId, runtime) {
-  if (
-    !session ||
-    !connectionId ||
-    !targetId ||
-    !runtime ||
-    typeof runtime.websocketDispatch !== "function" ||
-    typeof setTimeout !== "function"
-  ) {
-    return;
-  }
-  const relaySessionKey = session.key;
-  const delayMs = numberConfig(
-    runtime,
-    "relay.pendingFlushDispatchDelayMs",
-    DEFAULT_PENDING_FLUSH_DISPATCH_DELAY_MS,
-  );
-  setTimeout(() => {
-    const token = nextConnectionId();
-    let commands = [];
-    const current = patchSession(runtime, session.serverId, session.version, (draft) => {
-      if (!draft || draft.key !== relaySessionKey) {
-        return draft;
-      }
-      if ((draft.serverDataByConnection.get(connectionId) || "") !== targetId) {
-        return draft;
-      }
-      restorePendingDrain(draft, connectionId);
-      const frames = draft.pendingFramesByConnection.get(connectionId) || [];
-      if (frames.length === 0) {
-        commands = [];
-        return draft;
-      }
-      const clonedFrames = frames.map((frame) => ({
-        data: String(frame?.data ?? ""),
-        opcode: trimString(frame?.opcode) || "text",
-      }));
-      draft.pendingDrainByConnection.set(connectionId, {
-        targetId,
-        token,
-        frames: clonedFrames,
-        createdAt: nowMs(),
-      });
-      draft.pendingFramesByConnection.delete(connectionId);
-      touchSession(draft);
-      commands = clonedFrames.map((frame) =>
-        relaySendCommand("send", frame?.data ?? "", frame?.opcode ?? "text", { targetId }),
-      );
-      return draft;
-    });
-    if (!current) {
-      return;
-    }
-    if (commands.length === 0) {
-      return;
-    }
-    relayLog(
-      runtime,
-      "pending_flush_start",
-      sessionDebugState(current, connectionId),
-      `targetId=${targetId}`,
-      `frames=${commands.length}`,
-    );
-    schedulePendingDrainFinalize(current, connectionId, token, targetId, runtime);
-    runtime.websocketDispatch(commands, { ok: false, failures: [] });
-  }, delayMs);
 }
 
 function sessionSnapshot(runtime) {
@@ -1106,6 +1195,20 @@ export function websocket_affinity(frame) {
   return { key: serverId, priority: "normal" };
 }
 
+export function websocket_actor(frame) {
+  const query = frame?.query || {};
+  const role = normalizeRole(query.role);
+  const connectionId = trimString(query.connectionId);
+  const serverId = trimString(query.serverId);
+  if (role === "server" && !connectionId && serverId) {
+    return { key: serverId, class: "session", priority: "high", persist: true };
+  }
+  if (connectionId) {
+    return { key: connectionId, class: "conn", priority: "normal", persist: true };
+  }
+  return null;
+}
+
 function handleMessageV1(frame, session, role) {
   touchSession(session);
   relayLog(frame.runtime, "message_v1", `role=${role}`, previewPayload(frame.data, frame.opcode || "text"));
@@ -1162,6 +1265,8 @@ function handleMessageV2(frame, session, role, connectionId) {
   if (role === "client") {
     const targetId = session.serverDataByConnection.get(connectionId) || "";
     if (!targetId) {
+      clearLiveHandshakeHello(session, connectionId);
+      clearServerReady(session, connectionId);
       bufferFrame(session, connectionId, { data: frame.data, opcode: frame.opcode || "text" });
       relayLog(
         frame.runtime,
@@ -1261,6 +1366,8 @@ function handleClose(frame) {
         clearConnectionAnnounced(session, connectionId);
         session.pendingFramesByConnection.delete(connectionId);
         session.pendingDrainByConnection.delete(connectionId);
+        clearLiveHandshakeHello(session, connectionId);
+        clearServerReady(session, connectionId);
         ensureDebugCounters(session).delete(connectionId);
         clearControlNudge(session, connectionId);
         const serverDataId = session.serverDataByConnection.get(connectionId) || "";
@@ -1281,6 +1388,8 @@ function handleClose(frame) {
 
     if (role === "server-data" && connectionId) {
       clearControlNudge(session, connectionId);
+      clearLiveHandshakeHello(session, connectionId);
+      clearServerReady(session, connectionId);
       const currentId = session.serverDataByConnection.get(connectionId) || "";
       if (currentId === frame.id) {
         session.serverDataByConnection.delete(connectionId);

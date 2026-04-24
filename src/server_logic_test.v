@@ -195,6 +195,39 @@ thread_count = 3
 	assert cfg.vjsx.thread_count == 3
 }
 
+fn test_execute_websocket_dispatch_commands_result_treats_targeted_close_as_hub_command() {
+	mut app := App{}
+	result := app.execute_websocket_dispatch_commands_result([
+		WorkerWebSocketFrame{
+			event:     'close'
+			id:        'source_conn'
+			target_id: 'target_conn'
+			code:      1001
+			reason:    'Client disconnected'
+		},
+	])
+	assert !result.has_close
+	assert result.failures.len == 0
+	assert result.close_frame.event == ''
+}
+
+fn test_execute_websocket_dispatch_commands_result_keeps_current_socket_close_as_return_close() {
+	mut app := App{}
+	result := app.execute_websocket_dispatch_commands_result([
+		WorkerWebSocketFrame{
+			event:  'close'
+			id:     'source_conn'
+			code:   1000
+			reason: 'done'
+		},
+	])
+	assert result.has_close
+	assert result.failures.len == 0
+	assert result.close_frame.event == 'close'
+	assert result.close_frame.id == 'source_conn'
+	assert result.close_frame.target_id == ''
+}
+
 fn test_load_vhttpd_config_supports_paths_root_and_aliases() {
 	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_paths_config_test')
 	config_dir := os.join_path(temp_dir, 'config')
@@ -1691,6 +1724,45 @@ websocket_affinity.fallback = "reject"
 	assert site.websocket_affinity.fallback == 'reject'
 }
 
+fn test_load_vhttpd_config_supports_site_websocket_actor() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_site_websocket_actor_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	config_file := os.join_path(temp_dir, 'vhttpd.toml')
+	os.write_file(config_file, '
+[sites.relay]
+host = "0.0.0.0"
+port = 19901
+executor = "vjsx"
+websocket_dispatch = true
+websocket_actor.enabled = true
+websocket_actor.fallback = "reject"
+websocket_actor.queue_timeout_ms = 1234
+websocket_actor.max_queue_per_key = 77
+websocket_actor.events = ["open", "message"]
+websocket_actor.sources = [
+  { type = "connection_cache" },
+  { type = "query", key = "connectionId", class = "conn" },
+  { type = "app" },
+]
+') or { panic(err) }
+	defer {
+		os.rm(config_file) or {}
+	}
+	cfg := load_vhttpd_config(['--config', config_file]) or { panic(err) }
+	site := cfg.sites['relay']
+	assert site.websocket_actor.enabled
+	assert site.websocket_actor.fallback == 'reject'
+	assert site.websocket_actor.queue_timeout_ms == 1234
+	assert site.websocket_actor.max_queue_per_key == 77
+	assert site.websocket_actor.events == ['open', 'message']
+	assert site.websocket_actor.sources.len == 3
+	assert site.websocket_actor.sources[0].typ == 'connection_cache'
+	assert site.websocket_actor.sources[1].typ == 'query'
+	assert site.websocket_actor.sources[1].key == 'connectionId'
+	assert site.websocket_actor.sources[1].class_name == 'conn'
+	assert site.websocket_actor.sources[2].typ == 'app'
+}
+
 fn test_site_config_as_vhttpd_config_merges_site_websocket_affinity() {
 	mut base := default_vhttpd_config()
 	base.websocket_affinity = WebSocketAffinityConfig{
@@ -1714,6 +1786,52 @@ fn test_site_config_as_vhttpd_config_merges_site_websocket_affinity() {
 	assert derived.websocket_affinity.key == 'serverId'
 	assert derived.websocket_affinity.scope == 'lane'
 	assert derived.websocket_affinity.fallback == 'reject'
+}
+
+fn test_site_config_as_vhttpd_config_merges_site_websocket_actor() {
+	mut base := default_vhttpd_config()
+	base.websocket_actor = WebSocketActorConfig{
+		enabled:          true
+		fallback:         'unkeyed'
+		queue_timeout_ms: 1000
+		max_queue_per_key: 16
+		events:           ['open']
+		sources: [
+			WebSocketActorSourceConfig{
+				typ: 'query'
+				key: 'serverId'
+				class_name: 'session'
+			},
+		]
+	}
+	derived := site_config_as_vhttpd_config(base, SiteConfig{
+		websocket_actor: WebSocketActorConfig{
+			enabled:          true
+			fallback:         'reject'
+			queue_timeout_ms: 30000
+			max_queue_per_key: 1024
+			events:           ['open', 'message', 'close']
+			sources: [
+				WebSocketActorSourceConfig{
+					typ: 'connection_cache'
+				},
+				WebSocketActorSourceConfig{
+					typ:        'query'
+					key:        'connectionId'
+					class_name: 'conn'
+				},
+			]
+		}
+	})
+	assert derived.websocket_actor.enabled
+	assert derived.websocket_actor.fallback == 'reject'
+	assert derived.websocket_actor.queue_timeout_ms == 30000
+	assert derived.websocket_actor.max_queue_per_key == 1024
+	assert derived.websocket_actor.events == ['open', 'message', 'close']
+	assert derived.websocket_actor.sources.len == 2
+	assert derived.websocket_actor.sources[0].typ == 'connection_cache'
+	assert derived.websocket_actor.sources[1].key == 'connectionId'
+	assert derived.websocket_actor.sources[1].class_name == 'conn'
 }
 
 fn test_resolve_embedded_host_runtime_config_normalizes_paths_and_lane_defaults() {
@@ -1826,6 +1944,11 @@ fn test_paseo_relay_example_config_enables_websocket_dispatch() {
 	assert cfg.sites['paseo_relay'].websocket_affinity.source == 'app'
 	assert cfg.sites['paseo_relay'].websocket_affinity.key == 'serverId'
 	assert cfg.sites['paseo_relay'].websocket_affinity.fallback == 'reject'
+	assert cfg.sites['paseo_relay'].websocket_actor.enabled
+	assert cfg.sites['paseo_relay'].websocket_actor.sources.len == 3
+	assert cfg.sites['paseo_relay'].websocket_actor.sources[0].typ == 'connection_cache'
+	assert cfg.sites['paseo_relay'].websocket_actor.sources[1].key == 'connectionId'
+	assert cfg.sites['paseo_relay'].websocket_actor.sources[1].class_name == 'conn'
 	runtime := resolve_multi_server_runtime_config(['--config', config_path], cfg) or {
 		panic(err)
 	}
@@ -1833,4 +1956,6 @@ fn test_paseo_relay_example_config_enables_websocket_dispatch() {
 	assert runtime.listeners[0].runtime_cfg.executor_plan.bootstrap.websocket_dispatch_mode
 	assert runtime.listeners[0].site_cfg.websocket_affinity.enabled
 	assert runtime.listeners[0].site_cfg.websocket_affinity.key == 'serverId'
+	assert runtime.listeners[0].site_cfg.websocket_actor.enabled
+	assert runtime.listeners[0].site_cfg.websocket_actor.sources.len == 3
 }

@@ -865,14 +865,14 @@ fn proxy_worker_websocket_dispatch(mut app App, mut ctx Context, method string, 
 		ctx.res.set_status(http.status_from_int(500))
 		return ctx.text('WebSocket open failed')
 	}
-	if close_frame := app.execute_websocket_dispatch_commands(resp.commands) {
-		status := if close_frame.status > 0 { close_frame.status } else { 403 }
-		body := if close_frame.reason != '' { close_frame.reason } else { 'Forbidden' }
-		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-		ctx.res.set_status(http.status_from_int(status))
-		return ctx.text(body)
-	}
 	if !resp.accepted {
+		if close_frame := app.execute_websocket_dispatch_commands(resp.commands) {
+			status := if close_frame.status > 0 { close_frame.status } else { 403 }
+			body := if close_frame.reason != '' { close_frame.reason } else { 'Forbidden' }
+			ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
+			ctx.res.set_status(http.status_from_int(status))
+			return ctx.text(body)
+		}
 		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
 		ctx.res.set_status(http.status_from_int(403))
 		return ctx.text('Forbidden')
@@ -882,7 +882,8 @@ fn proxy_worker_websocket_dispatch(mut app App, mut ctx Context, method string, 
 	ctx.conn.set_read_timeout(time.infinite)
 	mut conn := ctx.conn
 	spawn handle_worker_websocket_dispatch_session(mut app, mut conn, key, method.to_upper(),
-		normalized_path, query, headers, remote_addr, req_id, trace_id, start_ms)
+		normalized_path, query, headers, remote_addr, req_id, trace_id, start_ms,
+		resp.commands.clone())
 	return veb.no_result()
 }
 
@@ -915,7 +916,7 @@ fn handle_worker_websocket_session(mut app App, mut client_conn net.TcpConn, mut
 		trace_id:      trace_id
 		start_ms:      start_ms
 	}
-	ws_server.on_connect(fn [mut app, state] (mut sc websocket.ServerClient) !bool {
+	ws_server.on_connect(fn [mut app, mut state] (mut sc websocket.ServerClient) !bool {
 		runtime_trace('ws.session.connect', {
 			'conn_id':       state.conn_id
 			'request_id':    state.request_id
@@ -924,8 +925,7 @@ fn handle_worker_websocket_session(mut app App, mut client_conn net.TcpConn, mut
 		})
 		app.ws_hub_register_conn(state.conn_id, state.worker_socket, state.method, state.request_id,
 			state.trace_id, state.path, map[string]string{}, map[string]string{}, '',
-			sc.client)
-		spawn delayed_ws_hub_flush(mut app, state.conn_id)
+			sc.client, unsafe { nil })
 		return true
 	}) or {}
 	ws_server.on_message_ref(worker_websocket_message_cb, state)
@@ -957,10 +957,13 @@ fn handle_worker_websocket_session(mut app App, mut client_conn net.TcpConn, mut
 	}
 }
 
-fn handle_worker_websocket_dispatch_session(mut app App, mut client_conn net.TcpConn, key string, method string, path string, query map[string]string, headers map[string]string, remote_addr string, req_id string, trace_id string, start_ms i64) {
+fn handle_worker_websocket_dispatch_session(mut app App, mut client_conn net.TcpConn, key string, method string, path string, query map[string]string, headers map[string]string, remote_addr string, req_id string, trace_id string, start_ms i64, open_commands []WorkerWebSocketFrame) {
 	mut ws_server := websocket.new_server(.ip, 0, '')
+	mut lifecycle := &WebSocketDispatchConnState{}
 	mut state := &WebSocketDispatchBridgeState{
 		app:         &app
+		lifecycle:   lifecycle
+		open_commands: open_commands.clone()
 		conn_id:     req_id
 		method:      method
 		path:        path
@@ -971,26 +974,116 @@ fn handle_worker_websocket_dispatch_session(mut app App, mut client_conn net.Tcp
 		trace_id:    trace_id
 		start_ms:    start_ms
 	}
-	ws_server.on_connect(fn [mut app, state] (mut sc websocket.ServerClient) !bool {
-		app.ws_hub_register_conn(state.conn_id, '', state.method, state.request_id, state.trace_id,
-			state.path, state.query, state.headers, state.remote_addr, sc.client)
-		spawn delayed_ws_hub_flush(mut app, state.conn_id)
-		return true
-	}) or {}
 	ws_server.on_message_ref(worker_websocket_dispatch_message_cb, state)
 	ws_server.on_close_ref(worker_websocket_dispatch_close_cb, state)
+	ws_server.on_attached_ref(worker_websocket_dispatch_attached_cb, state)
+	defer {
+		worker_websocket_dispatch_finalize(state)
+	}
 	ws_server.handle_handshake(mut client_conn, key) or {
-		app.ws_hub_unregister_conn(state.conn_id)
 		return
 	}
-	app.ws_hub_flush_pending(state.conn_id)
-	app.ws_hub_unregister_conn(state.conn_id)
+}
+
+fn worker_websocket_dispatch_attached_cb(mut sc websocket.ServerClient, ref voidptr) ! {
+	if ref == unsafe { nil } {
+		return
+	}
+	unsafe {
+		mut state := &WebSocketDispatchBridgeState(ref)
+		state.app.ws_hub_register_conn(state.conn_id, '', state.method, state.request_id,
+			state.trace_id, state.path, state.query, state.headers, state.remote_addr, sc.client,
+			state.lifecycle)
+		worker_websocket_dispatch_process_open(state)
+		worker_websocket_dispatch_activate(state)
+	}
+}
+
+fn worker_websocket_dispatch_begin_local_close(mut state WebSocketDispatchBridgeState) {
+	_ = ws_dispatch_conn_begin_worker_close(state.lifecycle)
+	state.app.ws_hub_mark_closing(state.conn_id)
+}
+
+fn worker_websocket_dispatch_close_current(state &WebSocketDispatchBridgeState, code int, reason string) {
+	if isnil(state) {
+		return
+	}
+	unsafe {
+		mut current := state
+		worker_websocket_dispatch_begin_local_close(mut current)
+		current.app.ws_hub_close_target(current.conn_id, code, reason)
+	}
+}
+
+fn worker_websocket_dispatch_followup_close(state &WebSocketDispatchBridgeState, failures []WorkerWebSocketDispatchCommandFailure) ?WorkerWebSocketFrame {
+	if isnil(state) {
+		return none
+	}
+	unsafe {
+		current := state
+		return current.app.websocket_dispatch_followup_failures(current.conn_id, current.method,
+			current.path, current.query, current.headers, current.remote_addr, current.request_id,
+			current.trace_id, failures)
+	}
+}
+
+fn worker_websocket_dispatch_activate(state &WebSocketDispatchBridgeState) {
+	if isnil(state) {
+		return
+	}
+	unsafe {
+		current := state
+		if !ws_dispatch_conn_mark_open(current.lifecycle) {
+			return
+		}
+		current.app.ws_hub_flush_pending(current.conn_id)
+	}
+}
+
+fn worker_websocket_dispatch_process_open(state &WebSocketDispatchBridgeState) {
+	if isnil(state) {
+		return
+	}
+	unsafe {
+		current := state
+		result := current.app.execute_websocket_dispatch_commands_result(current.open_commands)
+		if result.has_close {
+			close_frame := result.close_frame
+			code := if close_frame.code > 0 { close_frame.code } else { 1000 }
+			worker_websocket_dispatch_close_current(current, code, close_frame.reason)
+			return
+		}
+		if result.failures.len > 0 {
+			if close_frame := worker_websocket_dispatch_followup_close(current, result.failures) {
+				code := if close_frame.code > 0 { close_frame.code } else { 1000 }
+				worker_websocket_dispatch_close_current(current, code, close_frame.reason)
+			}
+		}
+	}
+}
+
+fn worker_websocket_dispatch_finalize(state &WebSocketDispatchBridgeState) {
+	if isnil(state) {
+		return
+	}
+	unsafe {
+		mut current := state
+		current.app.ws_hub_mark_closing(current.conn_id)
+		if ws_dispatch_conn_begin_cleanup(current.lifecycle) {
+			current.app.ws_hub_cleanup_conn(current.conn_id)
+		}
+	}
 }
 
 fn worker_websocket_dispatch_message_cb(mut ws websocket.Client, msg &websocket.Message, ref voidptr) ! {
 	mut state := unsafe { &WebSocketDispatchBridgeState(ref) }
+	if !ws_dispatch_conn_can_process_messages(state.lifecycle) {
+		log.debug('[vhttpd] websocket dispatch message ignored conn_id=${state.conn_id} request_id=${state.request_id} reason=closed')
+		return
+	}
 	opcode, payload, supported := websocket_dispatch_payload_from_message(msg)
 	if !supported {
+		worker_websocket_dispatch_begin_local_close(mut state)
 		ws.close(1003, 'Only text and binary frames are supported')!
 		return
 	}
@@ -1001,6 +1094,7 @@ fn worker_websocket_dispatch_message_cb(mut ws websocket.Client, msg &websocket.
 		state.app.ws_hub_meta_snapshot(state.conn_id), room_members, member_metadata,
 		room_counts, presence_users))!
 	if resp.event == 'error' {
+		worker_websocket_dispatch_begin_local_close(mut state)
 		ws.close(1011, 'worker error')!
 		return
 	}
@@ -1010,12 +1104,14 @@ fn worker_websocket_dispatch_message_cb(mut ws websocket.Client, msg &websocket.
 	if result.has_close {
 		close_frame := result.close_frame
 		code := if close_frame.code > 0 { close_frame.code } else { 1000 }
+		worker_websocket_dispatch_begin_local_close(mut state)
 		ws.close(code, close_frame.reason)!
 		return
 	}
 	if result.failures.len > 0 {
 		if close_frame := state.app.websocket_dispatch_followup_failures(state.conn_id, state.method, state.path, state.query, state.headers, state.remote_addr, state.request_id, state.trace_id, result.failures) {
 			code := if close_frame.code > 0 { close_frame.code } else { 1000 }
+			worker_websocket_dispatch_begin_local_close(mut state)
 			ws.close(code, close_frame.reason)!
 			return
 		}
@@ -1038,19 +1134,25 @@ fn websocket_dispatch_payload_from_message(msg &websocket.Message) (string, stri
 
 fn worker_websocket_dispatch_close_cb(mut ws websocket.Client, code int, reason string, ref voidptr) ! {
 	mut state := unsafe { &WebSocketDispatchBridgeState(ref) }
+	_ = ws
+	should_process, worker_initiated := ws_dispatch_conn_begin_peer_close(state.lifecycle)
+	if !should_process {
+		return
+	}
+	state.app.ws_hub_mark_closing(state.conn_id)
 	room_members, member_metadata, room_counts, presence_users := state.app.ws_hub_presence_snapshot(state.conn_id)
 	resp := state.app.kernel_dispatch_websocket_event(state.app.kernel_websocket_dispatch_frame('close',
 		state.method, state.path, state.query, state.headers, state.remote_addr, state.request_id,
 		state.trace_id, '', '', code, reason, state.app.ws_hub_rooms_snapshot(state.conn_id),
 		state.app.ws_hub_meta_snapshot(state.conn_id), room_members, member_metadata,
 		room_counts, presence_users)) or {
-		state.app.ws_hub_unregister_conn(state.conn_id)
+		worker_websocket_dispatch_finalize(state)
 		return
 	}
-	if resp.event != 'error' {
+	if !worker_initiated && resp.event != 'error' {
 		state.app.execute_websocket_dispatch_commands(resp.commands)
 	}
-	state.app.ws_hub_unregister_conn(state.conn_id)
+	worker_websocket_dispatch_finalize(state)
 }
 
 fn proxy_worker_response(mut app App, mut ctx Context, method string, path string, body_on_head string) veb.Result {

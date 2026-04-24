@@ -1,11 +1,11 @@
 [paths]
 root = "../../"
 vjsx_app = "${root}/examples/paseo-relay/app.mts"
-vjsx_build_root = "${root}/tmp/paseo-relay-vjsx-build"
+vjsx_build_root = "${root}/tmp/paseo-relay-vjsx-build-no-sticky"
 
 [files]
-pid_file = "${paths.root}/tmp/vhttpd_paseo_relay_19901.pid"
-event_log = "${paths.root}/tmp/vhttpd_paseo_relay_19901.events.ndjson"
+pid_file = "${paths.root}/tmp/vhttpd_paseo_relay_19931.pid"
+event_log = "${paths.root}/tmp/vhttpd_paseo_relay_19931.events.ndjson"
 
 [runtime]
 timezone = "Asia/Shanghai"
@@ -15,15 +15,16 @@ websocket_dispatch = true
 
 [admin]
 host = "127.0.0.1"
-port = 20001
+port = 20031
 token = "change-me"
 
 [sites.paseo_relay]
 host = "0.0.0.0"
-port = 19901
+port = 19931
 root = "${paths.root}/examples/paseo-relay"
 executor = "vjsx"
 app = "${paths.vjsx_app}"
+websocket_affinity.enabled = false
 websocket_actor.enabled = true
 websocket_actor.fallback = "unkeyed"
 websocket_actor.queue_timeout_ms = 30000

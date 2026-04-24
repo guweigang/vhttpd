@@ -27,8 +27,15 @@ Current scope:
 Important constraints:
 
 - this example currently relies on in-memory relay state
-- use `vjsx.thread_count = 1`
-  - multi-lane `vjsx` would split relay state across lanes
+- relay correctness now relies on `websocket_actor` serialization
+  - the default config uses actor-style serialization by `connectionId`
+  - multi-lane `vjsx` is supported, but ordering correctness should come from
+    actor serialization rather than sticky lane affinity
+- relay session state lives in host-managed memory rather than lane-local memory
+  - because state is stored outside a specific lane, fixed-lane execution is no
+    longer required for correctness
+  - `websocket_affinity` should be treated as an optional scheduling optimization,
+    not as a correctness mechanism for the relay
 - control-channel sync/reset nudges now use `runtime.websocketDispatch(...)` so
   `setTimeout(...)` callbacks can emit websocket hub commands after the original
   event handler has returned
@@ -37,8 +44,22 @@ Run:
 
 ```bash
 cd /Users/guweigang/Source/vhttpd
-./vhttpd --config /Users/guweigang/Source/vhttpd/examples/config/paseo-relay.toml
+./vhttpd --config /Users/guweigang/Source/vhttpd/examples/paseo-relay/paseo-relay.toml
 ```
+
+Actor-only comparison config:
+
+```bash
+./vhttpd --config /Users/guweigang/Source/vhttpd/examples/paseo-relay/paseo-relay-no-sticky.toml
+```
+
+Design note:
+
+- the relay keeps an application-level buffer by `connectionId` until `server-data`
+  exists for that connection
+- the websocket hub keeps a lower-level pending buffer only for already-resolved
+  socket targets that are not yet ready to write
+- these two buffers serve different layers and should not be treated as interchangeable
 
 Endpoints:
 

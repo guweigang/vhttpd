@@ -88,24 +88,112 @@ fn vjsx_signature_glob_patterns(include_globs []string) []string {
 	return patterns
 }
 
+fn vjsx_signature_match_segment(path_segment string, pattern_segment string) bool {
+	mut pi := 0
+	mut si := 0
+	mut star := -1
+	mut matched_idx := 0
+	for si < path_segment.len {
+		if pi < pattern_segment.len && (pattern_segment[pi] == `?` || pattern_segment[pi] == path_segment[si]) {
+			pi++
+			si++
+			continue
+		}
+		if pi < pattern_segment.len && pattern_segment[pi] == `*` {
+			star = pi
+			matched_idx = si
+			pi++
+			continue
+		}
+		if star >= 0 {
+			pi = star + 1
+			matched_idx++
+			si = matched_idx
+			continue
+		}
+		return false
+	}
+	for pi < pattern_segment.len && pattern_segment[pi] == `*` {
+		pi++
+	}
+	return pi == pattern_segment.len
+}
+
+fn vjsx_signature_match_segments(path_segments []string, pattern_segments []string) bool {
+	if pattern_segments.len == 0 {
+		return path_segments.len == 0
+	}
+	if pattern_segments[0] == '**' {
+		if vjsx_signature_match_segments(path_segments, pattern_segments[1..]) {
+			return true
+		}
+		for i := 0; i < path_segments.len; i++ {
+			if vjsx_signature_match_segments(path_segments[i + 1..], pattern_segments[1..]) {
+				return true
+			}
+		}
+		return false
+	}
+	if path_segments.len == 0 {
+		return false
+	}
+	if !vjsx_signature_match_segment(path_segments[0], pattern_segments[0]) {
+		return false
+	}
+	return vjsx_signature_match_segments(path_segments[1..], pattern_segments[1..])
+}
+
+fn vjsx_signature_path_matches(rel_path string, pattern string) bool {
+	normalized_path := normalize_vjsx_signature_rel_path(rel_path)
+	normalized_pattern := normalize_vjsx_signature_glob(pattern)
+	if normalized_path == '' || normalized_pattern == '' {
+		return false
+	}
+	path_segments := normalized_path.split('/')
+	pattern_segments := normalized_pattern.split('/')
+	return vjsx_signature_match_segments(path_segments, pattern_segments)
+}
+
+fn vjsx_signature_collect_files(root string, current string, mut out []string) {
+	entries := os.ls(current) or { return }
+	for entry in entries {
+		path := os.join_path(current, entry)
+		if os.is_dir(path) && !os.is_link(path) {
+			vjsx_signature_collect_files(root, path, mut out)
+			continue
+		}
+		if os.is_dir(path) {
+			continue
+		}
+		out << os.abs_path(path)
+	}
+}
+
 fn vjsx_signature_expand_globs(root string, globs []string) []string {
 	if root.trim_space() == '' || !os.exists(root) {
 		return []string{}
 	}
+	mut files := []string{}
+	vjsx_signature_collect_files(root, root, mut files)
 	mut matches := map[string]bool{}
-	for pattern in globs {
-		normalized := normalize_vjsx_signature_glob(pattern)
-		if normalized == '' {
+	for raw_path in files {
+		path := os.abs_path(raw_path)
+		if !os.exists(path) || os.is_dir(path) {
 			continue
 		}
-		abs_pattern := os.join_path(root, normalized)
-		expanded := os.glob(abs_pattern) or { continue }
-		for raw_path in expanded {
-			path := os.abs_path(raw_path)
-			if !os.exists(path) || os.is_dir(path) {
+		rel := normalize_vjsx_signature_rel_path(runtime_relative_path(root, path))
+		if rel == '' {
+			continue
+		}
+		for pattern in globs {
+			normalized := normalize_vjsx_signature_glob(pattern)
+			if normalized == '' {
 				continue
 			}
-			matches[path] = true
+			if vjsx_signature_path_matches(rel, normalized) {
+				matches[path] = true
+				break
+			}
 		}
 	}
 	mut out := matches.keys()
