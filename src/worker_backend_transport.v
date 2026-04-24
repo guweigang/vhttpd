@@ -346,7 +346,7 @@ fn (mut app App) execute_websocket_dispatch_commands_result(commands []WorkerWeb
 	mut has_close := false
 	mut failures := []WorkerWebSocketDispatchCommandFailure{}
 	for cmd in commands {
-		if cmd.event == 'close' {
+		if cmd.event == 'close' && cmd.target_id == '' {
 			close_frame = cmd
 			has_close = true
 			continue

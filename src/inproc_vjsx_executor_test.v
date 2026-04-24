@@ -1339,6 +1339,186 @@ fn test_inproc_vjsx_executor_websocket_affinity_releases_key_when_lane_acquire_f
 	})
 }
 
+fn test_inproc_vjsx_executor_websocket_actor_resolves_query_source_and_connection_cache() {
+	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
+		thread_count: 2
+		app_entry:    'app/main.ts'
+		websocket_actor: WebSocketActorConfig{
+			enabled:          true
+			fallback:         'reject'
+			queue_timeout_ms: 30000
+			max_queue_per_key: 128
+			events:           ['open', 'message', 'close']
+			sources: [
+				WebSocketActorSourceConfig{
+					typ: 'connection_cache'
+				},
+				WebSocketActorSourceConfig{
+					typ:        'query'
+					key:        'connectionId'
+					class_name: 'conn'
+				},
+			]
+		}
+	})
+	defer {
+		executor.close()
+	}
+	open_actor := executor.resolve_websocket_actor(WorkerWebSocketFrame{
+		id:    'conn_actor_open'
+		event: 'open'
+		query: {
+			'connectionId': 'abc123'
+		}
+	}) or { panic(err) }
+	assert open_actor.key == 'abc123'
+	assert open_actor.class_name == 'conn'
+	assert open_actor.persist
+	executor.cache_websocket_actor(WorkerWebSocketFrame{
+		id: 'conn_actor_open'
+	}, open_actor.key, open_actor.class_name)
+	cached_actor := executor.resolve_websocket_actor(WorkerWebSocketFrame{
+		id:    'conn_actor_open'
+		event: 'message'
+	}) or { panic(err) }
+	assert cached_actor.key == 'abc123'
+	assert cached_actor.class_name == 'conn'
+	executor.release_websocket_actor(WorkerWebSocketFrame{
+		id: 'conn_actor_open'
+	})
+}
+
+fn test_inproc_vjsx_executor_websocket_actor_dispatch_caches_and_releases_connection_key() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_websocket_actor_dispatch_cache_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	app_file := os.join_path(temp_dir, 'app.mts')
+	os.write_file(app_file, '
+export function websocket_actor(frame) {
+  return frame.query && frame.query.connectionId
+    ? { key: frame.query.connectionId, class: "conn", persist: true }
+    : null;
+}
+
+export default {
+  websocket(_frame) {
+    return { accepted: true, commands: [] };
+  },
+};
+') or { panic(err) }
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
+		thread_count: 2
+		app_entry:    app_file
+		module_root:  temp_dir
+		build_root:   os.join_path(temp_dir, 'build')
+		websocket_actor: WebSocketActorConfig{
+			enabled:          true
+			fallback:         'reject'
+			queue_timeout_ms: 30000
+			max_queue_per_key: 128
+			events:           ['open', 'message', 'close']
+			sources: [
+				WebSocketActorSourceConfig{
+					typ: 'connection_cache'
+				},
+				WebSocketActorSourceConfig{
+					typ: 'app'
+				},
+			]
+		}
+	})
+	defer {
+		executor.close()
+	}
+	mut app := App{}
+	open_resp := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+		id:    'conn_actor_cache'
+		event: 'open'
+		query: {
+			'connectionId': 'cached_1'
+		}
+	}) or { panic(err) }
+	assert open_resp.accepted
+	mut state := executor.state
+	state.mu.@lock()
+	cached_key := state.websocket_connection_actor_key_by_id['conn_actor_cache'] or { '' }
+	cached_class := state.websocket_connection_actor_class_by_id['conn_actor_cache'] or { '' }
+	state.mu.unlock()
+	assert cached_key == 'cached_1'
+	assert cached_class == 'conn'
+	msg_resp := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+		id:    'conn_actor_cache'
+		event: 'message'
+		data:  'hello'
+	}) or { panic(err) }
+	assert msg_resp.accepted
+	close_resp := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+		id:    'conn_actor_cache'
+		event: 'close'
+		code:  1000
+	}) or { panic(err) }
+	assert close_resp.accepted
+	state.mu.@lock()
+	after_close_key := state.websocket_connection_actor_key_by_id['conn_actor_cache'] or { '' }
+	state.mu.unlock()
+	assert after_close_key == ''
+}
+
+fn test_inproc_vjsx_executor_websocket_actor_app_hook_rejects_async_handler() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_websocket_actor_async_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	app_file := os.join_path(temp_dir, 'app.mts')
+	os.write_file(app_file, '
+export function websocket_actor(frame) {
+  return Promise.resolve({ key: frame.query.connectionId, class: "conn" });
+}
+
+export default {
+  websocket(_frame) {
+    return { accepted: true, commands: [] };
+  },
+};
+') or { panic(err) }
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
+		thread_count: 1
+		app_entry:    app_file
+		module_root:  temp_dir
+		build_root:   os.join_path(temp_dir, 'build')
+		websocket_actor: WebSocketActorConfig{
+			enabled:          true
+			fallback:         'reject'
+			queue_timeout_ms: 30000
+			max_queue_per_key: 128
+			events:           ['open']
+			sources: [
+				WebSocketActorSourceConfig{
+					typ: 'app'
+				},
+			]
+		}
+	})
+	defer {
+		executor.close()
+	}
+	mut app := App{}
+	executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+		id:    'conn_actor_async'
+		event: 'open'
+		query: {
+			'connectionId': 'async_1'
+		}
+	}) or {
+		assert err.msg() == 'inproc_vjsx_executor_websocket_actor_async_not_supported'
+		return
+	}
+	assert false
+}
+
 fn test_inproc_vjsx_executor_bootstrap_requires_app_entry() {
 	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
 		thread_count: 1
@@ -2421,6 +2601,212 @@ export default app;
 	snapshot := app.admin_websockets_snapshot(true, 10, 0, '', 'ws_timer_failure')
 	assert snapshot.connections.len == 1
 	assert snapshot.connections[0].metadata['dispatch_failure_count'] == '1'
+}
+
+fn test_inproc_vjsx_executor_runtime_timer_preserves_drain_when_target_changes() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_vjsx_executor_drain_preserve_on_target_change_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	app_file := os.join_path(temp_dir, 'drain-preserve-on-target-change.mts')
+	os.write_file(app_file, '
+const storeName = "drain_guard";
+const storeKey = "state";
+
+function clone(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+const app = {
+  websocket(frame) {
+    if (frame.event === "open") {
+      const store = frame.runtime.sessionStore(storeName);
+      const state = {
+        serverDataByConnection: { conn_demo: "new_target" },
+        pendingDrainByConnection: {
+          conn_demo: {
+            token: "tok_demo",
+            targetId: "old_target",
+            frames: [{ data: "hello", opcode: "text" }]
+          }
+        }
+      };
+      store.set(storeKey, state);
+      setTimeout(() => {
+        const current = clone(store.get(storeKey, {}));
+        const drain = current?.pendingDrainByConnection?.conn_demo;
+        if (!drain) {
+          return;
+        }
+        if (drain.token !== "tok_demo") {
+          return;
+        }
+        if ((drain.targetId || "") !== "old_target") {
+          return;
+        }
+        if (((current?.serverDataByConnection?.conn_demo) || "") !== "old_target") {
+          return;
+        }
+        delete current.pendingDrainByConnection.conn_demo;
+        store.set(storeKey, current);
+      }, 20);
+    }
+    return { accepted: true, commands: [] };
+  },
+  http(ctx) {
+    const store = ctx.runtime.sessionStore(storeName);
+    return ctx.json(store.get(storeKey, {}), 200);
+  }
+};
+
+export default app;
+') or {
+		panic(err)
+	}
+	defer {
+		os.rm(app_file) or {}
+	}
+	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
+		thread_count:    1
+		app_entry:       app_file
+		module_root:     temp_dir
+		runtime_profile: 'node'
+	})
+	defer {
+		executor.close()
+	}
+	mut app := App{}
+	resp := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+		mode:        'websocket_dispatch'
+		event:       'open'
+		id:          'ws_drain_guard_preserve'
+		path:        '/ws'
+		query:       map[string]string{}
+		headers:     {'host': 'relay.test'}
+		remote_addr: '127.0.0.1'
+		request_id:  'req_ws_drain_guard_preserve'
+		trace_id:    'trace_ws_drain_guard_preserve'
+		rooms:       []string{}
+		metadata:    map[string]string{}
+	}) or { panic(err) }
+	assert resp.accepted
+	time.sleep(80 * time.millisecond)
+	state := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+		method:      'GET'
+		path:        '/state'
+		req:         http.Request{
+			method: .get
+			url:    '/state'
+			host:   'relay.test'
+		}
+		remote_addr: '127.0.0.1'
+		trace_id:    'trace_drain_guard_preserve_state'
+		request_id:  'req_drain_guard_preserve_state'
+	}) or { panic(err) }
+	assert state.response.status == 200
+	assert state.response.body.contains('"conn_demo":{"token":"tok_demo"')
+	assert state.response.body.contains('"serverDataByConnection":{"conn_demo":"new_target"}')
+}
+
+fn test_inproc_vjsx_executor_runtime_timer_finalizes_drain_when_target_still_matches() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_vjsx_executor_drain_finalize_match_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	app_file := os.join_path(temp_dir, 'drain-finalize-match.mts')
+	os.write_file(app_file, '
+const storeName = "drain_guard_match";
+const storeKey = "state";
+
+function clone(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+const app = {
+  websocket(frame) {
+    if (frame.event === "open") {
+      const store = frame.runtime.sessionStore(storeName);
+      const state = {
+        serverDataByConnection: { conn_demo: "same_target" },
+        pendingDrainByConnection: {
+          conn_demo: {
+            token: "tok_demo",
+            targetId: "same_target",
+            frames: [{ data: "hello", opcode: "text" }]
+          }
+        }
+      };
+      store.set(storeKey, state);
+      setTimeout(() => {
+        const current = clone(store.get(storeKey, {}));
+        const drain = current?.pendingDrainByConnection?.conn_demo;
+        if (!drain) {
+          return;
+        }
+        if (drain.token !== "tok_demo") {
+          return;
+        }
+        if ((drain.targetId || "") !== "same_target") {
+          return;
+        }
+        if (((current?.serverDataByConnection?.conn_demo) || "") !== "same_target") {
+          return;
+        }
+        delete current.pendingDrainByConnection.conn_demo;
+        store.set(storeKey, current);
+      }, 20);
+    }
+    return { accepted: true, commands: [] };
+  },
+  http(ctx) {
+    const store = ctx.runtime.sessionStore(storeName);
+    return ctx.json(store.get(storeKey, {}), 200);
+  }
+};
+
+export default app;
+') or {
+		panic(err)
+	}
+	defer {
+		os.rm(app_file) or {}
+	}
+	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
+		thread_count:    1
+		app_entry:       app_file
+		module_root:     temp_dir
+		runtime_profile: 'node'
+	})
+	defer {
+		executor.close()
+	}
+	mut app := App{}
+	resp := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+		mode:        'websocket_dispatch'
+		event:       'open'
+		id:          'ws_drain_guard_finalize'
+		path:        '/ws'
+		query:       map[string]string{}
+		headers:     {'host': 'relay.test'}
+		remote_addr: '127.0.0.1'
+		request_id:  'req_ws_drain_guard_finalize'
+		trace_id:    'trace_ws_drain_guard_finalize'
+		rooms:       []string{}
+		metadata:    map[string]string{}
+	}) or { panic(err) }
+	assert resp.accepted
+	time.sleep(80 * time.millisecond)
+	state := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+		method:      'GET'
+		path:        '/state'
+		req:         http.Request{
+			method: .get
+			url:    '/state'
+			host:   'relay.test'
+		}
+		remote_addr: '127.0.0.1'
+		trace_id:    'trace_drain_guard_finalize_state'
+		request_id:  'req_drain_guard_finalize_state'
+	}) or { panic(err) }
+	assert state.response.status == 200
+	assert state.response.body.contains('"pendingDrainByConnection":{}')
+	assert state.response.body.contains('"serverDataByConnection":{"conn_demo":"same_target"}')
 }
 
 fn test_inproc_vjsx_executor_websocket_dispatch_main_chain_keeps_failures_out_of_info_followups() {

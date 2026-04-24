@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace VPhp\VSlim\WebSocket;
+namespace VSlim\WebSocket;
 
-use VPhp\VHttpd\Attribute\Dispatchable;
-use VPhp\VHttpd\PhpWorker\WebSocket\CommandSink;
+use VHttpd\Attribute\Dispatchable;
+use VHttpd\PhpWorker\WebSocket\CommandSink;
 
 #[Dispatchable('websocket')]
 final class App

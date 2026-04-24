@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace VPhp\Provider\Codex;
 
-use VPhp\VHttpd\Upstream\WebSocket\Feishu\Command as FeishuCommand;
+use VHttpd\Upstream\WebSocket\Feishu\Command as FeishuCommand;
 
 class StreamHandler
 {

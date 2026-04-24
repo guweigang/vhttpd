@@ -79,6 +79,23 @@ mut:
 	fallback string
 }
 
+struct WebSocketActorSourceConfig {
+mut:
+	typ        string @[toml: 'type']
+	key        string
+	class_name string @[toml: 'class']
+}
+
+struct WebSocketActorConfig {
+mut:
+	enabled          bool
+	sources          []WebSocketActorSourceConfig
+	fallback         string
+	queue_timeout_ms int      @[toml: 'queue_timeout_ms']
+	max_queue_per_key int     @[toml: 'max_queue_per_key']
+	events           []string
+}
+
 struct AdminConfig {
 mut:
 	host  string = '127.0.0.1'
@@ -198,6 +215,7 @@ mut:
 	php          PhpConfig
 	vjsx         VjsxConfig
 	websocket_affinity WebSocketAffinityConfig @[toml: 'websocket_affinity']
+	websocket_actor WebSocketActorConfig @[toml: 'websocket_actor']
 	assets       AssetsConfig
 	runtime      RuntimeConfig
 	mcp          McpConfig
@@ -216,6 +234,7 @@ mut:
 	php         PhpConfig
 	vjsx        VjsxConfig
 	websocket_affinity WebSocketAffinityConfig @[toml: 'websocket_affinity']
+	websocket_actor WebSocketActorConfig @[toml: 'websocket_actor']
 	admin       AdminConfig
 	assets      AssetsConfig
 	runtime     RuntimeConfig
@@ -596,6 +615,52 @@ fn decode_websocket_affinity_config_map(entry map[string]toml.Any) WebSocketAffi
 	return cfg
 }
 
+fn decode_websocket_actor_source_config(value toml.Any) WebSocketActorSourceConfig {
+	if value is map[string]toml.Any {
+		return WebSocketActorSourceConfig{
+			typ:        toml_string_from_map(value, 'type', '')
+			key:        toml_string_from_map(value, 'key', '')
+			class_name: toml_string_from_map(value, 'class', '')
+		}
+	}
+	if value.str().trim_space() != '' {
+		return WebSocketActorSourceConfig{
+			typ: value.str().trim_space()
+		}
+	}
+	return WebSocketActorSourceConfig{}
+}
+
+fn decode_websocket_actor_config_map(entry map[string]toml.Any) WebSocketActorConfig {
+	mut cfg := WebSocketActorConfig{}
+	if 'enabled' in entry {
+		cfg.enabled = toml_bool_from_map(entry, 'enabled', cfg.enabled)
+	}
+	if 'fallback' in entry {
+		cfg.fallback = toml_string_from_map(entry, 'fallback', cfg.fallback)
+	}
+	if 'queue_timeout_ms' in entry {
+		cfg.queue_timeout_ms = toml_int_from_map(entry, 'queue_timeout_ms', cfg.queue_timeout_ms)
+	}
+	if 'max_queue_per_key' in entry {
+		cfg.max_queue_per_key = toml_int_from_map(entry, 'max_queue_per_key', cfg.max_queue_per_key)
+	}
+	cfg.events = toml_string_list_from_map(entry, 'events')
+	if sources_any := entry['sources'] {
+		if sources_any is []toml.Any {
+			mut sources := []WebSocketActorSourceConfig{}
+			for source_any in sources_any {
+				source := decode_websocket_actor_source_config(source_any)
+				if source.typ.trim_space() != '' {
+					sources << source
+				}
+			}
+			cfg.sources = sources
+		}
+	}
+	return cfg
+}
+
 fn decode_assets_config_map(entry map[string]toml.Any) AssetsConfig {
 	mut cfg := AssetsConfig{}
 	if 'enabled' in entry {
@@ -812,6 +877,11 @@ fn decode_site_config_map(entry map[string]toml.Any) SiteConfig {
 	if websocket_affinity_any := entry['websocket_affinity'] {
 		if websocket_affinity_any is map[string]toml.Any {
 			cfg.websocket_affinity = decode_websocket_affinity_config_map(websocket_affinity_any)
+		}
+	}
+	if websocket_actor_any := entry['websocket_actor'] {
+		if websocket_actor_any is map[string]toml.Any {
+			cfg.websocket_actor = decode_websocket_actor_config_map(websocket_actor_any)
 		}
 	}
 	if assets_any := entry['assets'] {

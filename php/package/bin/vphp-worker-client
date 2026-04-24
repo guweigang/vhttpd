@@ -49,7 +49,7 @@ $request = [
 ];
 
 try {
-    $client = new \VPhp\VHttpd\PhpWorker\Client($socket);
+    $client = new \VHttpd\PhpWorker\Client($socket);
     $response = $client->request($request);
     echo json_encode($response, JSON_UNESCAPED_UNICODE) . PHP_EOL;
 } catch (Throwable $e) {

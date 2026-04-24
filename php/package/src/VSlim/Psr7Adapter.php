@@ -2,16 +2,10 @@
 
 declare(strict_types=1);
 
-namespace VPhp\VSlim;
+namespace VSlim;
 
 final class Psr7Adapter
 {
-    public static function dispatch(\VSlim\App $app, object $request): \VSlim\Vhttpd\Response
-    {
-        $vRequest = self::toVSlimRequest($request);
-        return $app->dispatch_request($vRequest);
-    }
-
     public static function toVSlimRequest(object $request): \VSlim\Vhttpd\Request
     {
         $method = self::readRequestMethod($request);

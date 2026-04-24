@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace VPhp\VSlim\DbGateway;
+namespace VSlim\DbGateway;
 
 final class PDOStatement
 {

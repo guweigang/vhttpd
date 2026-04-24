@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace VPhp\VSlim\Stream;
+namespace VSlim\Stream;
 
 final class Response
 {

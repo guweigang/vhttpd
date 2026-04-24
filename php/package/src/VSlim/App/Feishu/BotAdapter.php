@@ -2,18 +2,18 @@
 
 declare(strict_types=1);
 
-namespace VPhp\VSlim\App\Feishu;
+namespace VSlim\App\Feishu;
 
-use VPhp\VHttpd\Upstream\WebSocket\Feishu\Event;
-use VPhp\VHttpd\Upstream\WebSocket\Feishu\Event\CardActionEvent;
-use VPhp\VHttpd\Upstream\WebSocket\Feishu\Message;
-use VPhp\VHttpd\Upstream\WebSocket\Feishu\Message\AudioMessage;
-use VPhp\VHttpd\Upstream\WebSocket\Feishu\Message\FileMessage;
-use VPhp\VHttpd\Upstream\WebSocket\Feishu\Message\ImageMessage;
-use VPhp\VHttpd\Upstream\WebSocket\Feishu\Message\MediaMessage;
-use VPhp\VHttpd\Upstream\WebSocket\Feishu\Message\PostMessage;
-use VPhp\VHttpd\Upstream\WebSocket\Feishu\Message\StickerMessage;
-use VPhp\VHttpd\Upstream\WebSocket\Feishu\Message\TextMessage;
+use VHttpd\Upstream\WebSocket\Feishu\Event;
+use VHttpd\Upstream\WebSocket\Feishu\Event\CardActionEvent;
+use VHttpd\Upstream\WebSocket\Feishu\Message;
+use VHttpd\Upstream\WebSocket\Feishu\Message\AudioMessage;
+use VHttpd\Upstream\WebSocket\Feishu\Message\FileMessage;
+use VHttpd\Upstream\WebSocket\Feishu\Message\ImageMessage;
+use VHttpd\Upstream\WebSocket\Feishu\Message\MediaMessage;
+use VHttpd\Upstream\WebSocket\Feishu\Message\PostMessage;
+use VHttpd\Upstream\WebSocket\Feishu\Message\StickerMessage;
+use VHttpd\Upstream\WebSocket\Feishu\Message\TextMessage;
 
 final class BotAdapter
 {

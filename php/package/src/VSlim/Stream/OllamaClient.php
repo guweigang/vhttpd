@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace VPhp\VSlim\Stream;
+namespace VSlim\Stream;
 
-use VPhp\VHttpd\Upstream\Plan;
+use VHttpd\Upstream\Plan;
 
 final class OllamaClient
 {
@@ -250,12 +250,12 @@ final class OllamaClient
         ];
     }
 
-    public function textResponseFromRequest(\VSlim\Request $req): \VPhp\VSlim\Stream\Response|array
+    public function textResponseFromRequest(\VSlim\Request $req): \VSlim\Stream\Response|array
     {
         return $this->responseFromRequest('text', $req);
     }
 
-    public function sseResponseFromRequest(\VSlim\Request $req): \VPhp\VSlim\Stream\Response|array
+    public function sseResponseFromRequest(\VSlim\Request $req): \VSlim\Stream\Response|array
     {
         return $this->responseFromRequest('sse', $req);
     }
@@ -328,7 +328,7 @@ final class OllamaClient
         );
     }
 
-    public function responseFromRequest(string $mode, \VSlim\Request $req): \VPhp\VSlim\Stream\Response|array
+    public function responseFromRequest(string $mode, \VSlim\Request $req): \VSlim\Stream\Response|array
     {
         $payload = $this->payloadFromRequest($req);
         $opened = $this->openStream($payload);

@@ -31,56 +31,56 @@
 
 ### `Model`
 
-- `VPhp\VHttpd\Upstream\Plan`
-- `VPhp\VHttpd\Upstream\WebSocket\Feishu\Command`
-- `VPhp\VHttpd\Upstream\WebSocket\Feishu\Command\AbstractCommand`
-- `VPhp\VHttpd\Upstream\WebSocket\Feishu\Command\SendCommand`
-- `VPhp\VHttpd\Upstream\WebSocket\Feishu\Command\UpdateCommand`
-- `VPhp\VHttpd\Upstream\WebSocket\Feishu\Event`
-- `VPhp\VHttpd\Upstream\WebSocket\Feishu\Event\AbstractEvent`
-- `VPhp\VHttpd\Upstream\WebSocket\Feishu\Event\CardActionEvent`
-- `VPhp\VHttpd\Upstream\WebSocket\Feishu\Message`
-- `VPhp\VHttpd\Upstream\WebSocket\Feishu\Message\AbstractMessage`
-- `VPhp\VHttpd\Upstream\WebSocket\Feishu\Message\TextMessage`
-- `VPhp\VHttpd\Upstream\WebSocket\Feishu\Message\ImageMessage`
-- `VPhp\VHttpd\Upstream\WebSocket\Feishu\Message\PostMessage`
-- `VPhp\VHttpd\Upstream\WebSocket\Feishu\Message\FileMessage`
-- `VPhp\VHttpd\Upstream\WebSocket\Feishu\Message\AudioMessage`
-- `VPhp\VHttpd\Upstream\WebSocket\Feishu\Message\MediaMessage`
-- `VPhp\VHttpd\Upstream\WebSocket\Feishu\Message\StickerMessage`
-- `VPhp\VHttpd\Upstream\WebSocket\Feishu\Content\*`
+- `VHttpd\Upstream\Plan`
+- `VHttpd\Upstream\WebSocket\Feishu\Command`
+- `VHttpd\Upstream\WebSocket\Feishu\Command\AbstractCommand`
+- `VHttpd\Upstream\WebSocket\Feishu\Command\SendCommand`
+- `VHttpd\Upstream\WebSocket\Feishu\Command\UpdateCommand`
+- `VHttpd\Upstream\WebSocket\Feishu\Event`
+- `VHttpd\Upstream\WebSocket\Feishu\Event\AbstractEvent`
+- `VHttpd\Upstream\WebSocket\Feishu\Event\CardActionEvent`
+- `VHttpd\Upstream\WebSocket\Feishu\Message`
+- `VHttpd\Upstream\WebSocket\Feishu\Message\AbstractMessage`
+- `VHttpd\Upstream\WebSocket\Feishu\Message\TextMessage`
+- `VHttpd\Upstream\WebSocket\Feishu\Message\ImageMessage`
+- `VHttpd\Upstream\WebSocket\Feishu\Message\PostMessage`
+- `VHttpd\Upstream\WebSocket\Feishu\Message\FileMessage`
+- `VHttpd\Upstream\WebSocket\Feishu\Message\AudioMessage`
+- `VHttpd\Upstream\WebSocket\Feishu\Message\MediaMessage`
+- `VHttpd\Upstream\WebSocket\Feishu\Message\StickerMessage`
+- `VHttpd\Upstream\WebSocket\Feishu\Content\*`
 
 这些类主要是在表达协议对象或平台对象，本身不负责 app 注册或 runtime orchestration。
 
 ### `Runtime`
 
-- `VPhp\VHttpd\Manager`
-- `VPhp\VHttpd\VHttpd`
-- `VPhp\VHttpd\AdminClient`
-- `VPhp\VHttpd\GatewayClient`
-- `VPhp\VHttpd\PhpWorker\Server`
-- `VPhp\VHttpd\PhpWorker\Client`
-- `VPhp\VHttpd\PhpWorker\StreamResponse`
-- `VPhp\VHttpd\PhpWorker\WebSocket\Connection`
-- `VPhp\VHttpd\PhpWorker\WebSocket\CommandSink`
-- `VPhp\VHttpd\PhpWorker\WebSocket\CommandBuffer`
+- `VHttpd\Manager`
+- `VHttpd\VHttpd`
+- `VHttpd\AdminClient`
+- `VHttpd\GatewayClient`
+- `VHttpd\PhpWorker\Server`
+- `VHttpd\PhpWorker\Client`
+- `VHttpd\PhpWorker\StreamResponse`
+- `VHttpd\PhpWorker\WebSocket\Connection`
+- `VHttpd\PhpWorker\WebSocket\CommandSink`
+- `VHttpd\PhpWorker\WebSocket\CommandBuffer`
 
 这些类的核心是“怎么跑起来”和“怎么和宿主边界说话”。
 
 这里还多了一层显式语义：
 
-- `VPhp\VHttpd\Attribute\Dispatchable`
+- `VHttpd\Attribute\Dispatchable`
   - 它不是 runtime primitive
   - 但它定义了“哪些类是 PhpWorker 直接可识别的 dispatch surface”
 
 ### `App`
 
-- `VPhp\VSlim\App\Feishu\BotApp`
-- `VPhp\VSlim\App\Feishu\BotHandler`
-- `VPhp\VSlim\App\Feishu\AbstractBotHandler`
-- `VPhp\VSlim\App\Feishu\BotAdapter`
-- `VPhp\VSlim\WebSocket\App`
-- `VPhp\VSlim\Mcp\App`
+- `VSlim\App\Feishu\BotApp`
+- `VSlim\App\Feishu\BotHandler`
+- `VSlim\App\Feishu\AbstractBotHandler`
+- `VSlim\App\Feishu\BotAdapter`
+- `VSlim\WebSocket\App`
+- `VSlim\Mcp\App`
 
 这组类定义的是开发者面向 worker dispatch 时可用的 app shape。
 
@@ -101,16 +101,16 @@
 
 ### `Integration`
 
-- `VPhp\VHttpd\Upstream\WebSocket\Feishu\McpToolset`
-- `VPhp\VHttpd\Upstream\WebSocket\Feishu\Command\Factory`
-- `VPhp\VHttpd\Upstream\WebSocket\Feishu\Event\Factory`
-- `VPhp\VHttpd\Upstream\WebSocket\Feishu\Message\Factory`
-- `VPhp\VHttpd\Psr7Adapter`
-- `VPhp\VSlim\Psr7Adapter`
-- `VPhp\VSlim\Stream\Factory`
-- `VPhp\VSlim\Stream\OllamaClient`
-- `VPhp\VSlim\DbGateway\PDO`
-- `VPhp\VSlim\DbGateway\PDOStatement`
+- `VHttpd\Upstream\WebSocket\Feishu\McpToolset`
+- `VHttpd\Upstream\WebSocket\Feishu\Command\Factory`
+- `VHttpd\Upstream\WebSocket\Feishu\Event\Factory`
+- `VHttpd\Upstream\WebSocket\Feishu\Message\Factory`
+- `VHttpd\Psr7Adapter`
+- `VSlim\Psr7Adapter`
+- `VSlim\Stream\Factory`
+- `VSlim\Stream\OllamaClient`
+- `VSlim\DbGateway\PDO`
+- `VSlim\DbGateway\PDOStatement`
 
 这组类的共同点是：
 
@@ -131,7 +131,7 @@
 
 下面这些类即使现在目录已经比以前清楚，角色表达上仍然值得再收敛。
 
-### `VPhp\VSlim\Mcp\App`
+### `VSlim\Mcp\App`
 
 现状：
 
@@ -142,7 +142,7 @@
 它现在放在 `VSlim` 是合理的，因为它表达的是一类 app shape，同时 worker dispatch 会直接消费它。
 但从角色上说，它也不是典型的 transport primitive，而是一个 protocol-app builder / registrar host。
 
-### `VPhp\VSlim\WebSocket\App`
+### `VSlim\WebSocket\App`
 
 现状：
 
@@ -154,7 +154,7 @@
 - 应该保留在 `VSlim`
 - 但应和 `Connection` / `CommandSink` / `CommandBuffer` 这种 transport contract 分层看待
 
-### `VPhp\VHttpd\Upstream\WebSocket\Feishu\McpToolset`
+### `VHttpd\Upstream\WebSocket\Feishu\McpToolset`
 
 现状：
 
@@ -174,7 +174,7 @@
 
 如果后面还要继续收敛命名，这个类最值得继续推敲。
 
-### `VPhp\VSlim\Stream\Factory`
+### `VSlim\Stream\Factory`
 
 现状：
 
@@ -195,7 +195,7 @@
 
 分成更清楚的角色。
 
-### `VPhp\VHttpd\GatewayClient`
+### `VHttpd\GatewayClient`
 
 现状：
 
@@ -241,4 +241,4 @@
 如果答案是“是”，那它应该：
 
 - 要么是已有内建 dispatchable
-- 要么显式加上 `VPhp\VHttpd\Attribute\Dispatchable`
+- 要么显式加上 `VHttpd\Attribute\Dispatchable`

@@ -13,12 +13,12 @@ Project overview:
 - 安装了 `vslim.so`
   优先使用扩展暴露的 `VSlim\*`
 - 没有安装 `vslim.so`，只使用 Composer package
-  使用这里提供的 `VPhp\VHttpd\*` 和 `VPhp\VSlim\*`
+  使用这里提供的 `VHttpd\*` 和 `VSlim\*`
 
 最重要的一条边界是：
 
 - 扩展模式下的流式响应类型：`VSlim\Stream\Response`
-- 纯 PHP package 模式下的流式组件：`VPhp\VSlim\Stream\*`
+- 纯 PHP package 模式下的流式组件：`VSlim\Stream\*`
 
 ## Install
 
@@ -35,7 +35,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/vendor/autoload.php';
 
-$mgr = new VPhp\VHttpd\Manager(
+$mgr = new VHttpd\Manager(
     '/path/to/vhttpd',
     '127.0.0.1',
     19881,
@@ -96,8 +96,8 @@ the worker returns a plan, and `vhttpd` owns the live upstream stream.
 
 Composer bin entrypoints:
 
-- `vendor/bin/php-worker`
-- `vendor/bin/php-worker-client`
+- `vendor/bin/vphp-worker`
+- `vendor/bin/vphp-worker-client`
 
 Internal host socket protocol:
 
@@ -163,9 +163,9 @@ PHP package 现在也开始提供一层更稳定的 websocket upstream command/e
 ```php
 <?php
 
-use VPhp\VHttpd\Upstream\WebSocket\CommandBus;
-use VPhp\VHttpd\Upstream\WebSocket\CommandFactory;
-use VPhp\VHttpd\Upstream\WebSocket\Event;
+use VHttpd\Upstream\WebSocket\CommandBus;
+use VHttpd\Upstream\WebSocket\CommandFactory;
+use VHttpd\Upstream\WebSocket\Event;
 
 $event = Event::fromDispatchRequest($request);
 $bus = new CommandBus();
@@ -186,14 +186,14 @@ return $bus->export();
 
 - [`/Users/guweigang/Source/vhttpd/docs/MCP_APP_API.md`](/Users/guweigang/Source/vhttpd/docs/MCP_APP_API.md)
 
-`VPhp\VSlim\Mcp\App` 现在可以直接注册工具，不用手写 `tools/list` / `tools/call`：
+`VSlim\Mcp\App` 现在可以直接注册工具，不用手写 `tools/list` / `tools/call`：
 
 ```php
 <?php
 
 declare(strict_types=1);
 
-use VPhp\VSlim\Mcp\App;
+use VSlim\Mcp\App;
 
 $mcp = (new App(
     ['name' => 'demo-mcp', 'version' => '0.1.0'],
@@ -301,8 +301,8 @@ $mcp->register('debug/notify', static function (array $request, array $frame): a
 如果你想显式启用 Feishu MCP 工具，而不是把 Feishu 语义绑定到所有 MCP app，可以单独注册：
 
 ```php
-use VPhp\VHttpd\Upstream\WebSocket\Feishu\McpToolset;
-use VPhp\VSlim\Mcp\App;
+use VHttpd\Upstream\WebSocket\Feishu\McpToolset;
+use VSlim\Mcp\App;
 
 $mcp = McpToolset::register(
     new App(['name' => 'demo-mcp-feishu', 'version' => '0.1.0'])
@@ -320,7 +320,7 @@ $mcp = McpToolset::register(
 
 去读取 `vhttpd` 宿主的运行态快照。所以只有显式启用了 Feishu MCP 工具集的 app，才会接触到 Feishu chats 语义。
 
-`VPhp\VHttpd\VHttpd::gateway('feishu')` also uses the same internal unix socket. The current host gateway helpers support:
+`VHttpd\VHttpd::gateway('feishu')` also uses the same internal unix socket. The current host gateway helpers support:
 
 - `sendText(...)`
 - `sendImage(...)`
@@ -427,8 +427,8 @@ $mcp->register('debug/request', static function (array $request, array $frame): 
 
 如果你在写的是纯 PHP package app，用：
 
-- `VPhp\VHttpd\PhpWorker\StreamResponse`
-- `VPhp\VSlim\Stream\*`
+- `VHttpd\PhpWorker\StreamResponse`
+- `VSlim\Stream\*`
 
 如果你写的是安装了 `vslim.so` 的 VSlim app，用：
 
@@ -441,7 +441,7 @@ $mcp->register('debug/request', static function (array $request, array $frame): 
 
 declare(strict_types=1);
 
-use VPhp\VHttpd\PhpWorker\StreamResponse;
+use VHttpd\PhpWorker\StreamResponse;
 
 return function (array $envelope) {
     $prompt = (string)($envelope['query']['prompt'] ?? 'hello');
@@ -466,7 +466,7 @@ return function (array $envelope) {
 declare(strict_types=1);
 
 use Illuminate\Http\Request;
-use VPhp\VHttpd\PhpWorker\StreamResponse;
+use VHttpd\PhpWorker\StreamResponse;
 
 Route::get('/ai/stream', function (Request $request) {
     $prompt = (string)$request->query('prompt', 'hello');
@@ -505,7 +505,7 @@ $app->get('/stream/text', function () {
 
 declare(strict_types=1);
 
-use VPhp\VSlim\DbGateway\PDO;
+use VSlim\DbGateway\PDO;
 
 $db = new PDO('/tmp/vhttpd_db.sock');
 $db->ping();

@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace VPhp\VSlim\Mcp;
+namespace VSlim\Mcp;
 
 use RuntimeException;
-use VPhp\VHttpd\Attribute\Dispatchable;
+use VHttpd\Attribute\Dispatchable;
 
 #[Dispatchable('mcp')]
 final class App

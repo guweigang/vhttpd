@@ -9,8 +9,8 @@ if (!function_exists('vhttpd_stream_sse')) {
         iterable $events,
         int $status = 200,
         array $headers = [],
-    ): \VPhp\VHttpd\PhpWorker\StreamResponse {
-        return \VPhp\VHttpd\PhpWorker\StreamResponse::sse($events, $status, $headers);
+    ): \VHttpd\PhpWorker\StreamResponse {
+        return \VHttpd\PhpWorker\StreamResponse::sse($events, $status, $headers);
     }
 }
 
@@ -20,7 +20,7 @@ if (!function_exists('vhttpd_stream_text')) {
         int $status = 200,
         string $contentType = 'text/plain; charset=utf-8',
         array $headers = [],
-    ): \VPhp\VHttpd\PhpWorker\StreamResponse {
-        return \VPhp\VHttpd\PhpWorker\StreamResponse::text($chunks, $status, $contentType, $headers);
+    ): \VHttpd\PhpWorker\StreamResponse {
+        return \VHttpd\PhpWorker\StreamResponse::text($chunks, $status, $contentType, $headers);
     }
 }

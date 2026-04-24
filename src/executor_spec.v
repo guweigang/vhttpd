@@ -207,12 +207,13 @@ fn (spec BuiltinLogicExecutorSpec) resolve_vjsx_runtime_config(args []string, cf
 		runtime_profile:   embedded_cfg.runtime_profile
 		thread_count:      embedded_cfg.lane_count
 		max_requests:      embedded_cfg.max_requests
-		enable_fs:         embedded_cfg.enable_fs
-		enable_process:    embedded_cfg.enable_process
-		enable_network:    embedded_cfg.enable_network
-		websocket_affinity: cfg.websocket_affinity
+			enable_fs:         embedded_cfg.enable_fs
+			enable_process:    embedded_cfg.enable_process
+			enable_network:    embedded_cfg.enable_network
+			websocket_affinity: cfg.websocket_affinity
+			websocket_actor:   cfg.websocket_actor
+		}
 	}
-}
 
 fn (spec BuiltinLogicExecutorSpec) build_executor(args []string, cfg VhttpdConfig) !LogicExecutor {
 	match spec.factory {
