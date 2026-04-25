@@ -307,7 +307,6 @@ Each packaged artifact should now contain:
 - `scripts/runtime_doctor.sh`
 - `scripts/bundle_runtime_libs.sh`
 - `runtime/libs`
-- `runtime/vjsx`
 
 Suggested install flow for end users:
 
@@ -325,7 +324,7 @@ If the runtime environment also needs DB client support:
 
 Runtime profile notes:
 
-- `core`: installs the binary, bundled native runtime libraries, and `vjsx` runtime assets
+- `core`: installs the binary and bundled native runtime libraries
 - `db`: alias for the same default DB-capable bundle layout
 - `full`: same as `db` today, reserved for future expansion
 - `none`: install the binary only and skip system package installation
@@ -345,25 +344,7 @@ The binary is rewritten during packaging so it prefers these bundled copies:
 
 That means end users no longer need to preinstall MySQL/PostgreSQL/OpenSSL/Boehm runtime packages just to launch the release binary.
 
-The packaged binary now resolves `vjsx` runtime assets in this order:
-
-1. `VJSX_ASSET_ROOT`
-2. bundled `runtime/vjsx` next to the installed binary
-3. `${VHTTPD_SHARE_ROOT}/vjsx` when explicitly configured
-4. legacy shared fallback `/usr/local/share/vhttpd/vjsx`
-5. `~/.vmodules/vjsx`
-
-`scripts/install_runtime.sh` now installs bundled `vjsx` assets directly next to the binary:
-
-```text
-${VHTTPD_PREFIX:-~/.local}/bin/runtime/vjsx
-```
-
-This keeps the installed layout self-contained and aligned with the runtime search order. For compatibility with local tooling, it also creates:
-
-```text
-~/.vmodules/vjsx -> ${VHTTPD_PREFIX:-~/.local}/bin/runtime/vjsx
-```
+`vjsx` runtime JS assets are embedded into the `vjsx` binary integration, so packaged `vhttpd` releases no longer need to ship `runtime/vjsx` JS files. `VJSX_ASSET_ROOT` is still supported as an explicit development override when you need to test a local replacement for built-in `vjsx` runtime JS.
 
 After installation, users can verify the machine with:
 

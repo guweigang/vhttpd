@@ -3,7 +3,6 @@ set -euo pipefail
 
 bin_path="${1:-./vhttpd}"
 os_name="$(uname -s)"
-share_root="${VHTTPD_SHARE_ROOT:-$(CDPATH= cd -- "$(dirname -- "$bin_path")/runtime" && pwd 2>/dev/null || printf '%s' /usr/local/share/vhttpd)}"
 vjsx_asset_root_override="${VJSX_ASSET_ROOT:-}"
 status=0
 
@@ -18,30 +17,6 @@ warn() {
 bad() {
   printf '[runtime-doctor] missing: %s\n' "$*" >&2
   status=1
-}
-
-has_vjsx_runtime_assets() {
-  local root="$1"
-  [ -n "$root" ] && [ -f "$root/web/js/buffer.js" ]
-}
-
-resolve_vjsx_asset_root() {
-  local bin_dir
-  bin_dir="$(CDPATH= cd -- "$(dirname -- "$bin_path")" && pwd)"
-  local candidate
-  for candidate in \
-    "$vjsx_asset_root_override" \
-    "$bin_dir/runtime/vjsx" \
-    "$bin_dir/../runtime/vjsx" \
-    "$share_root/vjsx" \
-    "$HOME/.vmodules/vjsx"
-  do
-    if has_vjsx_runtime_assets "$candidate"; then
-      printf '%s\n' "$candidate"
-      return 0
-    fi
-  done
-  return 1
 }
 
 resolve_loader_path() {
@@ -119,8 +94,10 @@ fi
 
 if command -v mysql_config >/dev/null 2>&1; then
   ok "command mysql_config"
+elif command -v mariadb_config >/dev/null 2>&1; then
+  ok "command mariadb_config (MySQL client compatible)"
 else
-  warn "command mysql_config is absent; MySQL client environments may be incomplete"
+  warn "command mysql_config or mariadb_config is absent; MySQL/MariaDB client environments may be incomplete"
 fi
 
 if command -v pg_config >/dev/null 2>&1; then
@@ -129,17 +106,16 @@ else
   warn "command pg_config is absent; PostgreSQL client environments may be incomplete"
 fi
 
-resolved_vjsx_asset_root="$(resolve_vjsx_asset_root || true)"
-if [ -n "$resolved_vjsx_asset_root" ]; then
-  ok "vjsx runtime assets ${resolved_vjsx_asset_root}"
+if [ -n "$vjsx_asset_root_override" ]; then
+  ok "vjsx runtime asset override ${vjsx_asset_root_override}"
 else
-  warn "vjsx runtime assets are unresolved; checked VJSX_ASSET_ROOT, bundle-relative runtime/vjsx, ${share_root}/vjsx, and ~/.vmodules/vjsx"
+  ok "vjsx runtime assets are embedded; VJSX_ASSET_ROOT is unset"
 fi
 
 if [ -L "${HOME}/.vmodules/vjsx" ]; then
-  ok "vjsx compatibility symlink ${HOME}/.vmodules/vjsx"
+  warn "legacy vjsx compatibility symlink ${HOME}/.vmodules/vjsx is present but no longer required"
 else
-  warn "vjsx compatibility symlink ${HOME}/.vmodules/vjsx is absent; this is optional when VJSX_ASSET_ROOT or bundled runtime/vjsx is used"
+  ok "legacy vjsx compatibility symlink ${HOME}/.vmodules/vjsx is absent"
 fi
 
 if [ "$status" -ne 0 ]; then

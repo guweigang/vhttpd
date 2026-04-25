@@ -54,22 +54,28 @@ fn test_inproc_vjsx_executor_lane_temp_root_uses_configured_build_root() {
 }
 
 fn test_vjsx_runtime_asset_root_prefers_env_override() {
-	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_vjsx_asset_root_env_test')
-	os.mkdir_all(os.join_path(temp_dir, 'web', 'js')) or { panic(err) }
-	os.write_file(os.join_path(temp_dir, 'web', 'js', 'buffer.js'), '// test asset\n') or {
-		panic(err)
-	}
 	old_root := os.getenv('VJSX_ASSET_ROOT')
-	os.setenv('VJSX_ASSET_ROOT', temp_dir, true)
+	override := os.join_path(os.temp_dir(), 'vhttpd_vjsx_asset_root_env_test')
+	os.setenv('VJSX_ASSET_ROOT', override, true)
 	defer {
 		if old_root == '' {
 			os.unsetenv('VJSX_ASSET_ROOT')
 		} else {
 			os.setenv('VJSX_ASSET_ROOT', old_root, true)
 		}
-		os.rmdir_all(temp_dir) or {}
 	}
-	assert vjsx_runtime_asset_root() == temp_dir
+	assert vjsx_runtime_asset_root() == override
+}
+
+fn test_vjsx_runtime_asset_root_is_empty_without_env_override() {
+	old_root := os.getenv('VJSX_ASSET_ROOT')
+	os.unsetenv('VJSX_ASSET_ROOT')
+	defer {
+		if old_root != '' {
+			os.setenv('VJSX_ASSET_ROOT', old_root, true)
+		}
+	}
+	assert vjsx_runtime_asset_root() == ''
 }
 
 fn test_inproc_vjsx_executor_source_signature_respects_include_and_exclude_globs() {

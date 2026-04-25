@@ -110,7 +110,7 @@ ensure_linux_quickjs_archive() {
   log "installed ${vjsx_dir}/libs/qjs_linux_x64.a"
 }
 
-ensure_vjsx_runtime_assets() {
+ensure_vjsx_quickjs_archive() {
   ensure_vjsx_checkout
   case "$os_name" in
     Darwin)
@@ -148,14 +148,14 @@ case "$mode" in
     ;;
   vjsx)
     install_core_packages
-    ensure_vjsx_runtime_assets
+    ensure_vjsx_quickjs_archive
     ;;
   db)
     install_core_packages
     ;;
   full)
     install_core_packages
-    ensure_vjsx_runtime_assets
+    ensure_vjsx_quickjs_archive
     ;;
   *)
     fail "unknown mode: ${mode} (expected: core | vjsx | db | full)"
