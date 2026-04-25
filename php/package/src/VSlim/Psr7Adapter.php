@@ -6,13 +6,13 @@ namespace VSlim;
 
 final class Psr7Adapter
 {
-    public static function toVSlimRequest(object $request): \VSlim\Vhttpd\Request
+    public static function toVSlimRequest(object $request): \VSlim\VHttpd\Request
     {
         $method = self::readRequestMethod($request);
         $target = self::readRequestTarget($request);
         $body = self::readBody($request);
 
-        $vRequest = new \VSlim\Vhttpd\Request($method, $target, $body);
+        $vRequest = new \VSlim\VHttpd\Request($method, $target, $body);
         $vRequest->scheme = self::readUriPart($request, 'getScheme', 'scheme', 'http');
         $vRequest->host = self::readUriPart($request, 'getHost', 'host', '');
         $vRequest->port = self::readUriPart($request, 'getPort', 'port', '');
