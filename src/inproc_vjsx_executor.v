@@ -127,7 +127,7 @@ mut:
 	websocket_mailbox_by_key                map[string][]InProcVjsxWebSocketTask
 	websocket_mailbox_pending_keys          []string
 	websocket_mailbox_running_by_key        map[string]bool
-	lane_wakeup_at_by_id                    map[string]i64
+	lane_wakeup_by_id                       map[string]VjsxLaneWakeup
 	cached_source_probe                     string
 	cached_source_signature                 string
 	signature_refresh_started               bool
@@ -144,6 +144,11 @@ mut:
 	app_startup_running                     bool
 	app_startup_completed                   bool
 	app_startup_last_error                  string
+}
+
+struct VjsxLaneWakeup {
+	wake_at_ms i64
+	generation u64
 }
 
 struct VjsxLaneHost {
@@ -483,7 +488,7 @@ pub fn new_inproc_vjsx_executor(config VjsxRuntimeFacadeConfig) InProcVjsxExecut
 			websocket_mailbox_by_key:                map[string][]InProcVjsxWebSocketTask{}
 			websocket_mailbox_pending_keys:          []string{}
 			websocket_mailbox_running_by_key:        map[string]bool{}
-			lane_wakeup_at_by_id:                    map[string]i64{}
+			lane_wakeup_by_id:                       map[string]VjsxLaneWakeup{}
 			cached_source_probe:                     initial_probe
 			cached_source_signature:                 initial_signature
 			signature_last_checked_at:               if initial_signature != '' {
@@ -1602,28 +1607,37 @@ fn (e InProcVjsxExecutor) lane_worker_by_id(lane_id string) ?VjsxLaneWorker {
 	return none
 }
 
-fn inproc_vjsx_schedule_lane_wakeup(state &VjsxExecutorState, lane_id string, wake_at_ms i64) {
+fn (state &VjsxExecutorState) schedule_lane_wakeup(lane_id string, wake_at_ms i64, generation u64) {
 	if isnil(state) || lane_id.trim_space() == '' {
 		return
 	}
 	mut state_ref := state
 	state_ref.mu.@lock()
-	state_ref.lane_wakeup_at_by_id[lane_id] = wake_at_ms
+	state_ref.lane_wakeup_by_id[lane_id] = VjsxLaneWakeup{
+		wake_at_ms: wake_at_ms
+		generation: generation
+	}
 	state_ref.mu.unlock()
-	go inproc_vjsx_deliver_lane_wakeup(state, lane_id, wake_at_ms)
+	go state.deliver_lane_wakeup(lane_id, wake_at_ms, generation)
 }
 
-fn inproc_vjsx_cancel_lane_wakeup(state &VjsxExecutorState, lane_id string) {
+fn (state &VjsxExecutorState) cancel_lane_wakeup(lane_id string, generation u64) {
 	if isnil(state) || lane_id.trim_space() == '' {
 		return
 	}
 	mut state_ref := state
 	state_ref.mu.@lock()
-	state_ref.lane_wakeup_at_by_id.delete(lane_id)
+	current_wakeup := state_ref.lane_wakeup_by_id[lane_id] or {
+		state_ref.mu.unlock()
+		return
+	}
+	if current_wakeup.generation == generation {
+		state_ref.lane_wakeup_by_id.delete(lane_id)
+	}
 	state_ref.mu.unlock()
 }
 
-fn inproc_vjsx_deliver_lane_wakeup(state &VjsxExecutorState, lane_id string, wake_at_ms i64) {
+fn (state &VjsxExecutorState) deliver_lane_wakeup(lane_id string, wake_at_ms i64, generation u64) {
 	if isnil(state) || lane_id.trim_space() == '' {
 		return
 	}
@@ -1633,15 +1647,15 @@ fn inproc_vjsx_deliver_lane_wakeup(state &VjsxExecutorState, lane_id string, wak
 	}
 	mut state_ref := state
 	state_ref.mu.@lock()
-	current_wakeup := state_ref.lane_wakeup_at_by_id[lane_id] or {
+	current_wakeup := state_ref.lane_wakeup_by_id[lane_id] or {
 		state_ref.mu.unlock()
 		return
 	}
-	if current_wakeup != wake_at_ms {
+	if current_wakeup.wake_at_ms != wake_at_ms || current_wakeup.generation != generation {
 		state_ref.mu.unlock()
 		return
 	}
-	state_ref.lane_wakeup_at_by_id.delete(lane_id)
+	state_ref.lane_wakeup_by_id.delete(lane_id)
 	state_ref.mu.unlock()
 	executor := InProcVjsxExecutor{
 		state: state
@@ -3205,7 +3219,7 @@ fn (e InProcVjsxExecutor) reset_lane_host(idx int) {
 	}
 	lane_id := if idx < state.lanes.len { state.lanes[idx].id } else { '' }
 	if lane_id != '' {
-		state.lane_wakeup_at_by_id.delete(lane_id)
+		state.lane_wakeup_by_id.delete(lane_id)
 	}
 	mut stale := state.hosts[idx]
 	state.hosts[idx] = vjsx_empty_lane_host()
@@ -3249,7 +3263,7 @@ pub fn (e InProcVjsxExecutor) close() {
 	state.app_startup_last_error = ''
 	state.facade.bootstrapped = false
 	state.facade.last_error = ''
-	state.lane_wakeup_at_by_id = map[string]i64{}
+	state.lane_wakeup_by_id = map[string]VjsxLaneWakeup{}
 	state.signature_refresh_stop = true
 	state.signature_refresh_started = false
 	state.cached_source_probe = ''
@@ -3290,6 +3304,36 @@ fn inproc_vjsx_new_runtime_session_ptr(config VjsxRuntimeFacadeConfig) !&vjsx.Ru
 	return &session
 }
 
+fn inproc_vjsx_runtime_profile_kind_name(kind vjsx.RuntimeProfileKind) string {
+	return match kind {
+		.unknown { 'unknown' }
+		.runtime_minimal { 'runtime_minimal' }
+		.script { 'script' }
+		.node_minimal { 'node_minimal' }
+		.node { 'node' }
+	}
+}
+
+fn inproc_vjsx_log_runtime_profile(lane_id string, idx int, runtime_profile string, ctx &vjsx.Context) {
+	snapshot := vjsx.runtime_profile_snapshot(ctx)
+	kind := snapshot.infer_kind()
+	expected_kind := match runtime_profile {
+		'', 'script' { vjsx.RuntimeProfileKind.script }
+		'node' { vjsx.RuntimeProfileKind.node }
+		else { vjsx.RuntimeProfileKind.unknown }
+	}
+	missing := if expected_kind == .unknown {
+		[]string{}
+	} else {
+		snapshot.missing_for(expected_kind)
+	}
+	log.debug('[vhttpd] vjsx runtime profile lane=${lane_id} idx=${idx} configured=${runtime_profile} inferred=${inproc_vjsx_runtime_profile_kind_name(kind)} expected=${inproc_vjsx_runtime_profile_kind_name(expected_kind)} missing=${missing.join(',')} modules=${ctx.runtime_modules().join(',')}')
+}
+
+fn inproc_vjsx_log_runtime_diagnostic(diagnostic vjsx.RuntimeSessionDiagnostic) {
+	log.warn('[vhttpd] vjsx runtime diagnostic session=${diagnostic.session_id} kind=${diagnostic.kind} generation=${diagnostic.wakeup_generation} at_ms=${diagnostic.at_ms} message=${diagnostic.message}')
+}
+
 fn (e InProcVjsxExecutor) ensure_lane_host(idx int) ! {
 	if isnil(e.state) {
 		return error('inproc_vjsx_executor_state_missing')
@@ -3321,21 +3365,21 @@ fn (e InProcVjsxExecutor) ensure_lane_host(idx int) ! {
 	as_module := vjsx_entry_runs_as_module(config.app_entry)!
 	temp_root := vjsx_lane_temp_root_for_signature(config, idx, source_signature)
 	mut session := inproc_vjsx_new_runtime_session_ptr(config)!
+	session.set_diagnostic_handler(inproc_vjsx_log_runtime_diagnostic)
 	session.configure_event_loop(vjsx.RuntimeSessionEventLoopConfig{
 		session_id:     lane_id
 		wake_fn:        fn [state, lane_id] (req vjsx.RuntimeSessionWakeRequest) {
-			inproc_vjsx_schedule_lane_wakeup(state, lane_id, req.wake_at_ms)
+			state.schedule_lane_wakeup(lane_id, req.wake_at_ms, req.generation)
 		}
 		cancel_wake_fn: fn [state, lane_id] (req vjsx.RuntimeSessionWakeCancelRequest) {
-			_ = req
-			inproc_vjsx_cancel_lane_wakeup(state, lane_id)
+			state.cancel_lane_wakeup(lane_id, req.generation)
 		}
 	})
-	session.install_timer_wakeup_bridge()
 	log.debug('[vhttpd] ensure_lane_host runtime ready lane=${lane_id} idx=${idx} module=${as_module} temp_root=${temp_root}')
 	mut ctx := session.context()
 	install_inproc_http_facade(mut ctx)!
 	install_inproc_host_api(mut ctx, mut state, idx)
+	inproc_vjsx_log_runtime_profile(lane_id, idx, config.runtime_profile, ctx)
 	mut module_binding_ptr := &vjsx.ScriptModule(unsafe { nil })
 	mut has_http_handler := false
 	mut has_websocket_handler := false
