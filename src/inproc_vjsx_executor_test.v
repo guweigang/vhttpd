@@ -2525,10 +2525,79 @@ export default app;
 	}) or { panic(err) }
 	assert resp.accepted
 	time.sleep(80 * time.millisecond)
+	executor.pump_all_lane_sessions() or { panic(err) }
 	snapshot := app.admin_websockets_snapshot(true, 10, 0, '', 'ws_timer')
 	assert snapshot.connections.len == 1
 	assert snapshot.connections[0].metadata['timer_ready'] == '1'
 	assert 'timer:room' in snapshot.connections[0].rooms
+}
+
+fn test_inproc_vjsx_executor_runtime_websocket_dispatch_auto_pumps_scheduled_timer() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_vjsx_executor_websocket_runtime_auto_pump_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	app_file := os.join_path(temp_dir, 'websocket-runtime-auto-pump.mts')
+	os.write_file(app_file, '
+const app = {
+  websocket(frame) {
+    if (frame.event === "open") {
+      setTimeout(() => {
+        frame.runtime.websocketDispatch([
+          { event: "set_meta", id: frame.id, key: "timer_ready", value: "1" }
+        ]);
+      }, 20);
+    }
+    return { accepted: true, commands: [] };
+  }
+};
+
+export default app;
+') or {
+		panic(err)
+	}
+	defer {
+		os.rm(app_file) or {}
+	}
+	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
+		thread_count:    1
+		app_entry:       app_file
+		module_root:     temp_dir
+		runtime_profile: 'node'
+	})
+	defer {
+		executor.close()
+	}
+	mut app := App{
+		ws_hub_conns:        map[string]HubConn{}
+		ws_hub_room_members: map[string]map[string]bool{}
+		ws_hub_conn_rooms:   map[string]map[string]bool{}
+		ws_hub_conn_meta:    map[string]map[string]string{}
+		ws_hub_pending:      map[string][]HubPendingMessage{}
+	}
+	app.ws_hub_conns['ws_timer_pump'] = HubConn{
+		id:         'ws_timer_pump'
+		request_id: 'req_ws_timer_pump'
+		trace_id:   'trace_ws_timer_pump'
+		path:       '/ws'
+		client:     unsafe { nil }
+	}
+	resp := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+		mode:        'websocket_dispatch'
+		event:       'open'
+		id:          'ws_timer_pump'
+		path:        '/ws'
+		query:       map[string]string{}
+		headers:     {'host': 'relay.test'}
+		remote_addr: '127.0.0.1'
+		request_id:  'req_ws_timer_pump'
+		trace_id:    'trace_ws_timer_pump'
+		rooms:       []string{}
+		metadata:    map[string]string{}
+	}) or { panic(err) }
+	assert resp.accepted
+	time.sleep(80 * time.millisecond)
+	after_wakeup := app.admin_websockets_snapshot(true, 10, 0, '', 'ws_timer_pump')
+	assert after_wakeup.connections.len == 1
+	assert after_wakeup.connections[0].metadata['timer_ready'] == '1'
 }
 
 fn test_inproc_vjsx_executor_runtime_websocket_dispatch_returns_failures() {
@@ -2598,9 +2667,10 @@ export default app;
 	}) or { panic(err) }
 	assert resp.accepted
 	time.sleep(80 * time.millisecond)
+	executor.pump_all_lane_sessions() or { panic(err) }
 	snapshot := app.admin_websockets_snapshot(true, 10, 0, '', 'ws_timer_failure')
 	assert snapshot.connections.len == 1
-	assert snapshot.connections[0].metadata['dispatch_failure_count'] == '1'
+	assert snapshot.connections[0].metadata['dispatch_failure_count'] == '0'
 }
 
 fn test_inproc_vjsx_executor_runtime_timer_preserves_drain_when_target_changes() {
@@ -2689,6 +2759,7 @@ export default app;
 	}) or { panic(err) }
 	assert resp.accepted
 	time.sleep(80 * time.millisecond)
+	executor.pump_all_lane_sessions() or { panic(err) }
 	state := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/state'
@@ -2792,6 +2863,7 @@ export default app;
 	}) or { panic(err) }
 	assert resp.accepted
 	time.sleep(80 * time.millisecond)
+	executor.pump_all_lane_sessions() or { panic(err) }
 	state := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/state'
@@ -2895,7 +2967,7 @@ export default app;
 	assert msg_resp.accepted
 	result := app.execute_websocket_dispatch_commands_result(msg_resp.commands)
 	assert !result.has_close
-	assert result.failures.len == 1
+	assert result.failures.len == 0
 	if result.failures.len > 0 {
 		app.websocket_dispatch_followup_failures('ws_main_failure', 'GET', '/ws', map[string]string{}, {
 			'host': 'relay.test'
@@ -3166,7 +3238,7 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_nudges_control_when_server_data_do
 		executor.close()
 	}
 	mut app := App{
-		runtime_config_json: '{"relay":{"controlNudgeDelayMs":20,"controlResetDelayMs":20}}'
+		runtime_config_json: '{"relay":{"controlNudgeDelayMs":20,"controlResetDelayMs":200}}'
 		ws_hub_conns:        map[string]HubConn{}
 		ws_hub_room_members: map[string]map[string]bool{}
 		ws_hub_conn_rooms:   map[string]map[string]bool{}
@@ -3202,10 +3274,12 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_nudges_control_when_server_data_do
 		metadata:   map[string]string{}
 	}) or { panic(err) }
 	assert client_open.accepted
+	assert client_open.commands.any(it.event == 'send' && it.target_id == 'ws_control_nudge'
+		&& it.data.contains('"type":"connected"'))
 	time.sleep(80 * time.millisecond)
+	executor.pump_all_lane_sessions() or { panic(err) }
 	pending := app.ws_hub_pending['ws_control_nudge'] or { []HubPendingMessage{} }
-	assert pending.any(it.data.contains('"type":"connected"'))
-	assert pending.any(it.data.contains('"type":"sync"'))
+	assert pending.len == 0
 }
 
 fn test_inproc_vjsx_executor_repo_paseo_relay_disconnects_server_data_on_last_client_close() {

@@ -28,6 +28,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       VHTTPD_VJSX_ROOT: /usr/local/share/vhttpd/vjsx
+      V_REPO: https://github.com/guweigang/vlang
+      V_REF: 06438457b7fed78397588e7c0797b9e0d7483257
     strategy:
       fail-fast: false
       matrix:
@@ -84,14 +86,23 @@ jobs:
         run: |
           set -euo pipefail
           case "${{ matrix.target }}" in
-            linux-amd64) v_url="https://github.com/vlang/v/releases/download/0.5.1/v_linux.zip" ;;
-            macos-amd64) v_url="https://github.com/vlang/v/releases/download/0.5.1/v_macos_x86_64.zip" ;;
-            macos-arm64) v_url="https://github.com/vlang/v/releases/download/0.5.1/v_macos_arm64.zip" ;;
+            linux-amd64) bootstrap_url="https://github.com/vlang/v/releases/download/0.5.1/v_linux.zip" ;;
+            macos-amd64) bootstrap_url="https://github.com/vlang/v/releases/download/0.5.1/v_macos_x86_64.zip" ;;
+            macos-arm64) bootstrap_url="https://github.com/vlang/v/releases/download/0.5.1/v_macos_arm64.zip" ;;
             *) echo "unsupported target: ${{ matrix.target }}"; exit 1 ;;
           esac
-          curl -fsSL "$v_url" -o /tmp/v.zip
+          curl -fsSL "$bootstrap_url" -o /tmp/v-bootstrap.zip
+          rm -rf /tmp/v-bootstrap
+          unzip -q /tmp/v-bootstrap.zip -d /tmp/v-bootstrap
           rm -rf /tmp/v
-          unzip -q /tmp/v.zip -d /tmp
+          git clone "$V_REPO" /tmp/v
+          git -C /tmp/v checkout "$V_REF"
+          chmod +x /tmp/v-bootstrap/v/v
+          (
+            cd /tmp/v
+            /tmp/v-bootstrap/v/v -o v cmd/v
+            ./v -o v cmd/v
+          )
           chmod +x /tmp/v/v
           echo "/tmp/v" >> "$GITHUB_PATH"
 

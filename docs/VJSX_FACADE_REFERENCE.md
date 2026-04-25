@@ -195,6 +195,10 @@ Semantic helpers:
 - `runtime.snapshot({ scope: "other_lanes", kind: "app" })` aggregates the optional `snapshot(runtime)` hook across every other embedded `vjsx` lane and is the safer choice from inside an active handler when the app already has direct access to its current-lane local state.
 - `runtime.websocketDispatch(...)` executes websocket hub commands from host-side async
   callbacks such as `setTimeout(...)`.
+- Embedded websocket timers are not driven by a background poller. After host-side
+  async sources such as `setTimeout(...)` become ready, the embedder must
+  explicitly pump the owning lane session, for example via
+  `InProcVjsxExecutor.pump_all_lane_sessions()`.
 - Current embedded `vjsx` scope is HTTP dispatch plus websocket event dispatch and `websocket_upstream` dispatch. Stream and MCP worker modes are not exposed through this facade.
 
 ## WebSocket Frame
