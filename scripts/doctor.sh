@@ -114,8 +114,10 @@ fi
 
 if command -v mysql_config >/dev/null 2>&1; then
   ok "command mysql_config"
+elif command -v mariadb_config >/dev/null 2>&1; then
+  ok "command mariadb_config (MySQL client compatible)"
 else
-  warn "command mysql_config (needed when building WITH_DB=1 against MySQL client libs)"
+  warn "command mysql_config or mariadb_config (needed when building WITH_DB=1 against MySQL/MariaDB client libs)"
 fi
 
 if command -v pg_config >/dev/null 2>&1; then
