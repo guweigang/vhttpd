@@ -1,0 +1,64 @@
+[server]
+host = "127.0.0.1"
+port = 18081
+
+[openai]
+enabled = true
+base_path = "/v1"
+default_backend = "openai"
+plugin = "openai_gateway"
+
+[plugins.openai_gateway]
+kind = "vjsx"
+entry = "${paths.root}/examples/vjsx/openai-gateway-plugin.mts"
+runtime_profile = "node"
+thread_count = 1
+enable_network = false
+
+[plugins.custom_executor]
+kind = "vjsx"
+entry = "${paths.root}/examples/vjsx/openai-executor-app.mts"
+runtime_profile = "node"
+thread_count = 2
+enable_network = true
+
+[openai.backends.openai]
+kind = "openai_http"
+base_url = "https://api.openai.com/v1"
+api_key_env = "OPENAI_API_KEY"
+timeout_ms = 60000
+
+[openai.backends.ollama]
+kind = "http"
+base_url = "http://127.0.0.1:11434"
+timeout_ms = 60000
+
+[openai.backends.custom]
+kind = "http"
+base_url = "http://127.0.0.1:19090"
+timeout_ms = 60000
+
+[openai.backends.custom_executor]
+kind = "executor"
+executor = "custom_executor"
+timeout_ms = 60000
+
+[openai.routes.gpt_4o_mini]
+models = ["gpt-4o-mini"]
+backend = "openai"
+
+[openai.routes.gpt_4_1_mini]
+models = ["gpt-4.1-mini"]
+backend = "openai"
+
+[openai.routes.llama3_1]
+models = ["llama3.1"]
+backend = "ollama"
+
+[openai.routes.custom_agent]
+models = ["custom-agent"]
+backend = "custom"
+
+[openai.routes.executor_agent]
+models = ["executor-agent"]
+backend = "custom_executor"
