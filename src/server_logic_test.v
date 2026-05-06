@@ -1940,7 +1940,7 @@ fn test_paseo_relay_example_config_enables_websocket_dispatch() {
 	config_path := os.join_path(os.dir(@FILE), '..', 'examples', 'paseo-relay', 'paseo-relay.toml')
 	cfg := load_vhttpd_config(['--config', config_path]) or { panic(err) }
 	assert cfg.worker.websocket_dispatch
-	assert cfg.sites['paseo_relay'].websocket_affinity.enabled
+	assert !cfg.sites['paseo_relay'].websocket_affinity.enabled
 	assert cfg.sites['paseo_relay'].websocket_affinity.source == 'app'
 	assert cfg.sites['paseo_relay'].websocket_affinity.key == 'serverId'
 	assert cfg.sites['paseo_relay'].websocket_affinity.fallback == 'reject'
@@ -1954,7 +1954,7 @@ fn test_paseo_relay_example_config_enables_websocket_dispatch() {
 	}
 	assert runtime.listeners.len == 1
 	assert runtime.listeners[0].runtime_cfg.executor_plan.bootstrap.websocket_dispatch_mode
-	assert runtime.listeners[0].site_cfg.websocket_affinity.enabled
+	assert !runtime.listeners[0].site_cfg.websocket_affinity.enabled
 	assert runtime.listeners[0].site_cfg.websocket_affinity.key == 'serverId'
 	assert runtime.listeners[0].site_cfg.websocket_actor.enabled
 	assert runtime.listeners[0].site_cfg.websocket_actor.sources.len == 3

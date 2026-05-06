@@ -70,6 +70,24 @@ mut:
 	enable_network    bool     @[toml: 'enable_network']
 }
 
+struct PluginConfig {
+mut:
+	kind              string = 'vjsx'
+	entry             string
+	app_entry         string   @[toml: 'app_entry']
+	module_root       string   @[toml: 'module_root']
+	build_root        string   @[toml: 'build_root']
+	signature_root    string   @[toml: 'signature_root']
+	signature_include []string @[toml: 'signature_include']
+	signature_exclude []string @[toml: 'signature_exclude']
+	runtime_profile   string = 'script'   @[toml: 'runtime_profile']
+	thread_count      int    = 1      @[toml: 'thread_count']
+	max_requests      int      @[toml: 'max_requests']
+	enable_fs         bool     @[toml: 'enable_fs']
+	enable_process    bool     @[toml: 'enable_process']
+	enable_network    bool     @[toml: 'enable_network']
+}
+
 struct WebSocketAffinityConfig {
 mut:
 	enabled  bool
@@ -88,12 +106,12 @@ mut:
 
 struct WebSocketActorConfig {
 mut:
-	enabled          bool
-	sources          []WebSocketActorSourceConfig
-	fallback         string
-	queue_timeout_ms int      @[toml: 'queue_timeout_ms']
-	max_queue_per_key int     @[toml: 'max_queue_per_key']
-	events           []string
+	enabled           bool
+	sources           []WebSocketActorSourceConfig
+	fallback          string
+	queue_timeout_ms  int @[toml: 'queue_timeout_ms']
+	max_queue_per_key int @[toml: 'max_queue_per_key']
+	events            []string
 }
 
 struct AdminConfig {
@@ -157,6 +175,43 @@ mut:
 	flush_interval_ms  int    = 400    @[toml: 'flush_interval_ms']
 }
 
+struct OpenAIEndpointsConfig {
+mut:
+	models           bool = true @[toml: 'models']
+	chat_completions bool = true @[toml: 'chat_completions']
+	responses        bool = true @[toml: 'responses']
+	embeddings       bool @[toml: 'embeddings']
+}
+
+struct OpenAIBackendConfig {
+mut:
+	kind        string = 'openai_http'
+	base_url    string @[toml: 'base_url']
+	executor    string
+	api_key     string @[toml: 'api_key']
+	api_key_env string = 'OPENAI_API_KEY' @[toml: 'api_key_env']
+	timeout_ms  int    = 60000    @[toml: 'timeout_ms']
+}
+
+struct OpenAIRouteConfig {
+mut:
+	model          string
+	models         []string
+	backend        string
+	upstream_model string @[toml: 'upstream_model']
+}
+
+struct OpenAIConfig {
+mut:
+	enabled         bool
+	base_path       string = '/v1' @[toml: 'base_path']
+	default_backend string @[toml: 'default_backend']
+	plugin          string
+	endpoints       OpenAIEndpointsConfig
+	backends        map[string]OpenAIBackendConfig
+	routes          map[string]OpenAIRouteConfig
+}
+
 struct BridgeConfig {
 mut:
 	enabled   bool
@@ -204,47 +259,51 @@ mut:
 
 struct SiteConfig {
 mut:
-	project_root string @[toml: 'project_root']
-	host         string = '127.0.0.1'
-	port         int
-	app          string
-	worker_entry string
-	paths        PathsConfig
-	worker       WorkerConfig
-	executor     ExecutorConfig
-	php          PhpConfig
-	vjsx         VjsxConfig
+	project_root       string @[toml: 'project_root']
+	host               string = '127.0.0.1'
+	port               int
+	app                string
+	worker_entry       string
+	paths              PathsConfig
+	worker             WorkerConfig
+	executor           ExecutorConfig
+	php                PhpConfig
+	vjsx               VjsxConfig
+	plugins            map[string]PluginConfig
 	websocket_affinity WebSocketAffinityConfig @[toml: 'websocket_affinity']
-	websocket_actor WebSocketActorConfig @[toml: 'websocket_actor']
-	assets       AssetsConfig
-	runtime      RuntimeConfig
-	mcp          McpConfig
-	feishu       FeishuConfig
-	codex        CodexConfig
-	db           DbConfig
+	websocket_actor    WebSocketActorConfig    @[toml: 'websocket_actor']
+	assets             AssetsConfig
+	runtime            RuntimeConfig
+	mcp                McpConfig
+	feishu             FeishuConfig
+	codex              CodexConfig
+	openai             OpenAIConfig
+	db                 DbConfig
 }
 
 struct VhttpdConfig {
 mut:
-	server      ServerConfig
-	files       FilesConfig
-	paths       PathsConfig
-	worker      WorkerConfig
-	executor    ExecutorConfig
-	php         PhpConfig
-	vjsx        VjsxConfig
+	server             ServerConfig
+	files              FilesConfig
+	paths              PathsConfig
+	worker             WorkerConfig
+	executor           ExecutorConfig
+	php                PhpConfig
+	vjsx               VjsxConfig
+	plugins            map[string]PluginConfig
 	websocket_affinity WebSocketAffinityConfig @[toml: 'websocket_affinity']
-	websocket_actor WebSocketActorConfig @[toml: 'websocket_actor']
-	admin       AdminConfig
-	assets      AssetsConfig
-	runtime     RuntimeConfig
-	mcp         McpConfig
-	feishu      FeishuConfig
-	codex       CodexConfig
-	db          DbConfig
-	listeners   map[string]ListenerConfig
-	sites       map[string]SiteConfig
-	config_path string
+	websocket_actor    WebSocketActorConfig    @[toml: 'websocket_actor']
+	admin              AdminConfig
+	assets             AssetsConfig
+	runtime            RuntimeConfig
+	mcp                McpConfig
+	feishu             FeishuConfig
+	codex              CodexConfig
+	openai             OpenAIConfig
+	db                 DbConfig
+	listeners          map[string]ListenerConfig
+	sites              map[string]SiteConfig
+	config_path        string
 }
 
 fn default_vhttpd_config() VhttpdConfig {
@@ -346,11 +405,14 @@ fn load_vhttpd_config(args []string) !VhttpdConfig {
 	doc := toml.parse_text(text)!
 	decode_paths_config(doc, mut cfg)!
 	decode_feishu_config(doc, mut cfg)!
+	decode_openai_root_config(doc, mut cfg)!
+	decode_plugins_root_config(doc, mut cfg)!
 	if root_any := doc.value_opt('bridge') {
 		root := root_any.as_map()
-		if cfg.feishu.bridge.ws_url.trim_space() == '' && cfg.feishu.bridge.client_id.trim_space() == ''
-			&& cfg.feishu.bridge.token.trim_space() == '' && cfg.feishu.bridge.target_id.trim_space() == ''
-			&& !cfg.feishu.bridge.enabled {
+		if cfg.feishu.bridge.ws_url.trim_space() == ''
+			&& cfg.feishu.bridge.client_id.trim_space() == ''
+			&& cfg.feishu.bridge.token.trim_space() == ''
+			&& cfg.feishu.bridge.target_id.trim_space() == '' && !cfg.feishu.bridge.enabled {
 			cfg.feishu.bridge = decode_bridge_config_map(root)
 		}
 	}
@@ -422,6 +484,20 @@ fn decode_feishu_config(doc toml.Doc, mut cfg VhttpdConfig) ! {
 		}
 	}
 	cfg.feishu.apps = apps.clone()
+}
+
+fn decode_openai_root_config(doc toml.Doc, mut cfg VhttpdConfig) ! {
+	if root_any := doc.value_opt('openai') {
+		root := root_any.as_map()
+		cfg.openai = decode_openai_config_map(root)
+	}
+}
+
+fn decode_plugins_root_config(doc toml.Doc, mut cfg VhttpdConfig) ! {
+	if root_any := doc.value_opt('plugins') {
+		root := root_any.as_map()
+		cfg.plugins = decode_plugins_config_map(root)
+	}
 }
 
 fn toml_string_from_map(entry map[string]toml.Any, key string, default_val string) string {
@@ -593,6 +669,62 @@ fn decode_vjsx_config_map(entry map[string]toml.Any) VjsxConfig {
 		cfg.enable_network = toml_bool_from_map(entry, 'enable_network', cfg.enable_network)
 	}
 	return cfg
+}
+
+fn decode_plugin_config_map(entry map[string]toml.Any) PluginConfig {
+	mut cfg := PluginConfig{}
+	if 'kind' in entry {
+		cfg.kind = toml_string_from_map(entry, 'kind', cfg.kind)
+	}
+	if 'entry' in entry {
+		cfg.entry = toml_string_from_map(entry, 'entry', cfg.entry)
+	}
+	if 'app_entry' in entry {
+		cfg.app_entry = toml_string_from_map(entry, 'app_entry', cfg.app_entry)
+	}
+	if cfg.app_entry.trim_space() == '' && cfg.entry.trim_space() != '' {
+		cfg.app_entry = cfg.entry
+	}
+	if 'module_root' in entry {
+		cfg.module_root = toml_string_from_map(entry, 'module_root', cfg.module_root)
+	}
+	if 'build_root' in entry {
+		cfg.build_root = toml_string_from_map(entry, 'build_root', cfg.build_root)
+	}
+	if 'signature_root' in entry {
+		cfg.signature_root = toml_string_from_map(entry, 'signature_root', cfg.signature_root)
+	}
+	cfg.signature_include = toml_string_list_from_map(entry, 'signature_include')
+	cfg.signature_exclude = toml_string_list_from_map(entry, 'signature_exclude')
+	if 'runtime_profile' in entry {
+		cfg.runtime_profile = toml_string_from_map(entry, 'runtime_profile', cfg.runtime_profile)
+	}
+	if 'thread_count' in entry {
+		cfg.thread_count = toml_int_from_map(entry, 'thread_count', cfg.thread_count)
+	}
+	if 'max_requests' in entry {
+		cfg.max_requests = toml_int_from_map(entry, 'max_requests', cfg.max_requests)
+	}
+	if 'enable_fs' in entry {
+		cfg.enable_fs = toml_bool_from_map(entry, 'enable_fs', cfg.enable_fs)
+	}
+	if 'enable_process' in entry {
+		cfg.enable_process = toml_bool_from_map(entry, 'enable_process', cfg.enable_process)
+	}
+	if 'enable_network' in entry {
+		cfg.enable_network = toml_bool_from_map(entry, 'enable_network', cfg.enable_network)
+	}
+	return cfg
+}
+
+fn decode_plugins_config_map(entry map[string]toml.Any) map[string]PluginConfig {
+	mut plugins := map[string]PluginConfig{}
+	for name, value in entry {
+		if value is map[string]toml.Any {
+			plugins[name] = decode_plugin_config_map(value)
+		}
+	}
+	return plugins
 }
 
 fn decode_websocket_affinity_config_map(entry map[string]toml.Any) WebSocketAffinityConfig {
@@ -793,6 +925,112 @@ fn decode_codex_config_map(entry map[string]toml.Any) CodexConfig {
 	return cfg
 }
 
+fn decode_openai_endpoints_config_map(entry map[string]toml.Any) OpenAIEndpointsConfig {
+	mut cfg := OpenAIEndpointsConfig{}
+	if 'models' in entry {
+		cfg.models = toml_bool_from_map(entry, 'models', cfg.models)
+	}
+	if 'chat_completions' in entry {
+		cfg.chat_completions = toml_bool_from_map(entry, 'chat_completions', cfg.chat_completions)
+	}
+	if 'responses' in entry {
+		cfg.responses = toml_bool_from_map(entry, 'responses', cfg.responses)
+	}
+	if 'embeddings' in entry {
+		cfg.embeddings = toml_bool_from_map(entry, 'embeddings', cfg.embeddings)
+	}
+	return cfg
+}
+
+fn decode_openai_backend_config_map(entry map[string]toml.Any) OpenAIBackendConfig {
+	mut cfg := OpenAIBackendConfig{}
+	if 'kind' in entry {
+		cfg.kind = toml_string_from_map(entry, 'kind', cfg.kind)
+	}
+	if 'base_url' in entry {
+		cfg.base_url = toml_string_from_map(entry, 'base_url', cfg.base_url)
+	}
+	if 'executor' in entry {
+		cfg.executor = toml_string_from_map(entry, 'executor', cfg.executor)
+	}
+	if 'api_key' in entry {
+		cfg.api_key = toml_string_from_map(entry, 'api_key', cfg.api_key)
+	}
+	if 'api_key_env' in entry {
+		cfg.api_key_env = toml_string_from_map(entry, 'api_key_env', cfg.api_key_env)
+	}
+	if 'timeout_ms' in entry {
+		cfg.timeout_ms = toml_int_from_map(entry, 'timeout_ms', cfg.timeout_ms)
+	}
+	return cfg
+}
+
+fn decode_openai_route_config_map(entry map[string]toml.Any) OpenAIRouteConfig {
+	mut cfg := OpenAIRouteConfig{}
+	if 'model' in entry {
+		cfg.model = toml_string_from_map(entry, 'model', cfg.model)
+	}
+	cfg.models = toml_string_list_from_map(entry, 'models')
+	if 'backend' in entry {
+		cfg.backend = toml_string_from_map(entry, 'backend', cfg.backend)
+	}
+	if 'upstream_model' in entry {
+		cfg.upstream_model = toml_string_from_map(entry, 'upstream_model', cfg.upstream_model)
+	}
+	return cfg
+}
+
+fn decode_openai_config_map(entry map[string]toml.Any) OpenAIConfig {
+	mut cfg := OpenAIConfig{}
+	if 'enabled' in entry {
+		cfg.enabled = toml_bool_from_map(entry, 'enabled', cfg.enabled)
+	}
+	if 'base_path' in entry {
+		cfg.base_path = toml_string_from_map(entry, 'base_path', cfg.base_path)
+	}
+	if 'default_backend' in entry {
+		cfg.default_backend = toml_string_from_map(entry, 'default_backend', cfg.default_backend)
+	}
+	if 'plugin' in entry {
+		cfg.plugin = toml_string_from_map(entry, 'plugin', cfg.plugin)
+	}
+	if endpoints_any := entry['endpoints'] {
+		if endpoints_any is map[string]toml.Any {
+			cfg.endpoints = decode_openai_endpoints_config_map(endpoints_any)
+		}
+	}
+	mut backends := map[string]OpenAIBackendConfig{}
+	if backends_any := entry['backends'] {
+		if backends_any is map[string]toml.Any {
+			for name, value in backends_any {
+				if value is map[string]toml.Any {
+					backends[name] = decode_openai_backend_config_map(value)
+				}
+			}
+		}
+	}
+	cfg.backends = backends.clone()
+	mut routes := map[string]OpenAIRouteConfig{}
+	if routes_any := entry['routes'] {
+		if routes_any is map[string]toml.Any {
+			for name, value in routes_any {
+				if value is map[string]toml.Any {
+					mut route := decode_openai_route_config_map(value)
+					if route.model.trim_space() == '' {
+						route.model = name
+					}
+					if route.models.len == 0 && route.model.trim_space() != '' {
+						route.models = [route.model]
+					}
+					routes[name] = route
+				}
+			}
+		}
+	}
+	cfg.routes = routes.clone()
+	return cfg
+}
+
 fn decode_bridge_config_map(entry map[string]toml.Any) BridgeConfig {
 	mut cfg := BridgeConfig{}
 	if 'enabled' in entry {
@@ -874,6 +1112,11 @@ fn decode_site_config_map(entry map[string]toml.Any) SiteConfig {
 			cfg.vjsx = decode_vjsx_config_map(vjsx_any)
 		}
 	}
+	if plugins_any := entry['plugins'] {
+		if plugins_any is map[string]toml.Any {
+			cfg.plugins = decode_plugins_config_map(plugins_any)
+		}
+	}
 	if websocket_affinity_any := entry['websocket_affinity'] {
 		if websocket_affinity_any is map[string]toml.Any {
 			cfg.websocket_affinity = decode_websocket_affinity_config_map(websocket_affinity_any)
@@ -909,6 +1152,11 @@ fn decode_site_config_map(entry map[string]toml.Any) SiteConfig {
 			cfg.codex = decode_codex_config_map(codex_any)
 		}
 	}
+	if openai_any := entry['openai'] {
+		if openai_any is map[string]toml.Any {
+			cfg.openai = decode_openai_config_map(openai_any)
+		}
+	}
 	return cfg
 }
 
@@ -942,8 +1190,8 @@ fn resolve_config_variables(mut cfg VhttpdConfig, config_path string) ! {
 	for _ in 0 .. max_passes {
 		mut changed := false
 		mut vars := build_config_variable_map(cfg)
-		cfg.paths.root, changed = expand_config_string(cfg.paths.root, 'paths', vars, env_map,
-			changed)!
+		cfg.paths.root, changed = expand_config_string(cfg.paths.root, 'paths', vars,
+			env_map, changed)!
 		vars['paths.root'] = resolve_config_path(base_dir, cfg.paths.root)
 		mut next_paths := map[string]string{}
 		for key, value in cfg.paths.values {
@@ -954,30 +1202,30 @@ fn resolve_config_variables(mut cfg VhttpdConfig, config_path string) ! {
 			}
 		}
 		cfg.paths.values = next_paths.clone()
-		cfg.server.host, changed = expand_config_string(cfg.server.host, 'server', vars, env_map,
-			changed)!
-		cfg.files.event_log, changed = expand_config_string(cfg.files.event_log, 'files', vars,
+		cfg.server.host, changed = expand_config_string(cfg.server.host, 'server', vars,
 			env_map, changed)!
-		cfg.files.pid_file, changed = expand_config_string(cfg.files.pid_file, 'files', vars, env_map,
-			changed)!
-		cfg.worker.cmd, changed = expand_config_string(cfg.worker.cmd, 'worker', vars, env_map,
-			changed)!
-		cfg.worker.socket, changed = expand_config_string(cfg.worker.socket, 'worker', vars, env_map,
-			changed)!
-		cfg.worker.socket_prefix, changed = expand_config_string(cfg.worker.socket_prefix, 'worker',
+		cfg.files.event_log, changed = expand_config_string(cfg.files.event_log, 'files',
 			vars, env_map, changed)!
-		cfg.executor.kind, changed = expand_config_string(cfg.executor.kind, 'executor', vars, env_map,
-			changed)!
-		cfg.vjsx.app_entry, changed = expand_config_string(cfg.vjsx.app_entry, 'vjsx', vars, env_map,
-			changed)!
-		cfg.vjsx.module_root, changed = expand_config_string(cfg.vjsx.module_root, 'vjsx', vars,
+		cfg.files.pid_file, changed = expand_config_string(cfg.files.pid_file, 'files',
+			vars, env_map, changed)!
+		cfg.worker.cmd, changed = expand_config_string(cfg.worker.cmd, 'worker', vars,
 			env_map, changed)!
-		cfg.vjsx.build_root, changed = expand_config_string(cfg.vjsx.build_root, 'vjsx', vars,
-			env_map, changed)!
-		cfg.vjsx.signature_root, changed = expand_config_string(cfg.vjsx.signature_root, 'vjsx',
+		cfg.worker.socket, changed = expand_config_string(cfg.worker.socket, 'worker',
 			vars, env_map, changed)!
-		cfg.vjsx.runtime_profile, changed = expand_config_string(cfg.vjsx.runtime_profile, 'vjsx',
+		cfg.worker.socket_prefix, changed = expand_config_string(cfg.worker.socket_prefix,
+			'worker', vars, env_map, changed)!
+		cfg.executor.kind, changed = expand_config_string(cfg.executor.kind, 'executor',
 			vars, env_map, changed)!
+		cfg.vjsx.app_entry, changed = expand_config_string(cfg.vjsx.app_entry, 'vjsx',
+			vars, env_map, changed)!
+		cfg.vjsx.module_root, changed = expand_config_string(cfg.vjsx.module_root, 'vjsx',
+			vars, env_map, changed)!
+		cfg.vjsx.build_root, changed = expand_config_string(cfg.vjsx.build_root, 'vjsx',
+			vars, env_map, changed)!
+		cfg.vjsx.signature_root, changed = expand_config_string(cfg.vjsx.signature_root,
+			'vjsx', vars, env_map, changed)!
+		cfg.vjsx.runtime_profile, changed = expand_config_string(cfg.vjsx.runtime_profile,
+			'vjsx', vars, env_map, changed)!
 		for i, raw in cfg.vjsx.signature_include {
 			next, c := expand_config_string(raw, 'vjsx', vars, env_map, false)!
 			if c {
@@ -992,6 +1240,60 @@ fn resolve_config_variables(mut cfg VhttpdConfig, config_path string) ! {
 				changed = true
 			}
 		}
+		mut next_plugins := map[string]PluginConfig{}
+		for name, plugin in cfg.plugins {
+			entry, entry_changed := expand_config_string(plugin.entry, 'plugins.${name}',
+				vars, env_map, false)!
+			app_entry, app_entry_changed := expand_config_string(plugin.app_entry, 'plugins.${name}',
+				vars, env_map, false)!
+			module_root, module_root_changed := expand_config_string(plugin.module_root,
+				'plugins.${name}', vars, env_map, false)!
+			build_root, build_root_changed := expand_config_string(plugin.build_root,
+				'plugins.${name}', vars, env_map, false)!
+			signature_root, signature_root_changed := expand_config_string(plugin.signature_root,
+				'plugins.${name}', vars, env_map, false)!
+			runtime_profile, runtime_profile_changed := expand_config_string(plugin.runtime_profile,
+				'plugins.${name}', vars, env_map, false)!
+			mut signature_include := plugin.signature_include.clone()
+			for i, raw in signature_include {
+				next, c := expand_config_string(raw, 'plugins.${name}', vars, env_map,
+					false)!
+				if c {
+					signature_include[i] = next
+					changed = true
+				}
+			}
+			mut signature_exclude := plugin.signature_exclude.clone()
+			for i, raw in signature_exclude {
+				next, c := expand_config_string(raw, 'plugins.${name}', vars, env_map,
+					false)!
+				if c {
+					signature_exclude[i] = next
+					changed = true
+				}
+			}
+			next_plugins[name] = PluginConfig{
+				kind:              plugin.kind
+				entry:             entry
+				app_entry:         app_entry
+				module_root:       module_root
+				build_root:        build_root
+				signature_root:    signature_root
+				signature_include: signature_include
+				signature_exclude: signature_exclude
+				runtime_profile:   runtime_profile
+				thread_count:      plugin.thread_count
+				max_requests:      plugin.max_requests
+				enable_fs:         plugin.enable_fs
+				enable_process:    plugin.enable_process
+				enable_network:    plugin.enable_network
+			}
+			if entry_changed || app_entry_changed || module_root_changed || build_root_changed
+				|| signature_root_changed || runtime_profile_changed {
+				changed = true
+			}
+		}
+		cfg.plugins = next_plugins.clone()
 		for i, raw in cfg.worker.sockets {
 			next, c := expand_config_string(raw, 'worker', vars, env_map, false)!
 			if c {
@@ -999,11 +1301,12 @@ fn resolve_config_variables(mut cfg VhttpdConfig, config_path string) ! {
 				changed = true
 			}
 		}
-		cfg.php.bin, changed = expand_config_string(cfg.php.bin, 'php', vars, env_map, changed)!
-		cfg.php.worker_entry, changed = expand_config_string(cfg.php.worker_entry, 'php', vars,
-			env_map, changed)!
-		cfg.php.app_entry, changed = expand_config_string(cfg.php.app_entry, 'php', vars, env_map,
+		cfg.php.bin, changed = expand_config_string(cfg.php.bin, 'php', vars, env_map,
 			changed)!
+		cfg.php.worker_entry, changed = expand_config_string(cfg.php.worker_entry, 'php',
+			vars, env_map, changed)!
+		cfg.php.app_entry, changed = expand_config_string(cfg.php.app_entry, 'php', vars,
+			env_map, changed)!
 		for i, raw in cfg.php.extensions {
 			next, c := expand_config_string(raw, 'php', vars, env_map, false)!
 			if c {
@@ -1027,26 +1330,26 @@ fn resolve_config_variables(mut cfg VhttpdConfig, config_path string) ! {
 			}
 		}
 		cfg.worker.env = next_env.clone()
-		cfg.admin.host, changed = expand_config_string(cfg.admin.host, 'admin', vars, env_map,
-			changed)!
-		cfg.admin.token, changed = expand_config_string(cfg.admin.token, 'admin', vars, env_map,
-			changed)!
-		cfg.assets.prefix, changed = expand_config_string(cfg.assets.prefix, 'assets', vars, env_map,
-			changed)!
-		cfg.assets.root, changed = expand_config_string(cfg.assets.root, 'assets', vars, env_map,
-			changed)!
-		cfg.assets.cache_control, changed = expand_config_string(cfg.assets.cache_control, 'assets',
-			vars, env_map, changed)!
-		cfg.runtime.timezone, changed = expand_config_string(cfg.runtime.timezone, 'runtime', vars,
+		cfg.admin.host, changed = expand_config_string(cfg.admin.host, 'admin', vars,
 			env_map, changed)!
-		cfg.feishu.open_base_url, changed = expand_config_string(cfg.feishu.open_base_url, 'feishu',
+		cfg.admin.token, changed = expand_config_string(cfg.admin.token, 'admin', vars,
+			env_map, changed)!
+		cfg.assets.prefix, changed = expand_config_string(cfg.assets.prefix, 'assets',
 			vars, env_map, changed)!
+		cfg.assets.root, changed = expand_config_string(cfg.assets.root, 'assets', vars,
+			env_map, changed)!
+		cfg.assets.cache_control, changed = expand_config_string(cfg.assets.cache_control,
+			'assets', vars, env_map, changed)!
+		cfg.runtime.timezone, changed = expand_config_string(cfg.runtime.timezone, 'runtime',
+			vars, env_map, changed)!
+		cfg.feishu.open_base_url, changed = expand_config_string(cfg.feishu.open_base_url,
+			'feishu', vars, env_map, changed)!
 		mut next_apps := map[string]FeishuAppConfig{}
 		for name, app_cfg in cfg.feishu.apps {
-			app_id, app_id_changed := expand_config_string(app_cfg.app_id, 'feishu.${name}', vars, env_map,
-				false)!
-			app_secret, app_secret_changed := expand_config_string(app_cfg.app_secret, 'feishu.${name}',
+			app_id, app_id_changed := expand_config_string(app_cfg.app_id, 'feishu.${name}',
 				vars, env_map, false)!
+			app_secret, app_secret_changed := expand_config_string(app_cfg.app_secret,
+				'feishu.${name}', vars, env_map, false)!
 			next_apps[name] = FeishuAppConfig{
 				app_id:     app_id
 				app_secret: app_secret
@@ -1058,27 +1361,86 @@ fn resolve_config_variables(mut cfg VhttpdConfig, config_path string) ! {
 		cfg.feishu.apps = next_apps.clone()
 
 		// codex
-		cfg.codex.url, changed = expand_config_string(cfg.codex.url, 'codex', vars, env_map, changed)!
-		cfg.codex.model, changed = expand_config_string(cfg.codex.model, 'codex', vars, env_map,
+		cfg.codex.url, changed = expand_config_string(cfg.codex.url, 'codex', vars, env_map,
 			changed)!
-		cfg.codex.effort, changed = expand_config_string(cfg.codex.effort, 'codex', vars, env_map,
+		cfg.codex.model, changed = expand_config_string(cfg.codex.model, 'codex', vars,
+			env_map, changed)!
+		cfg.codex.effort, changed = expand_config_string(cfg.codex.effort, 'codex', vars,
+			env_map, changed)!
+		cfg.codex.cwd, changed = expand_config_string(cfg.codex.cwd, 'codex', vars, env_map,
 			changed)!
-		cfg.codex.cwd, changed = expand_config_string(cfg.codex.cwd, 'codex', vars, env_map, changed)!
-		cfg.codex.approval_policy, changed = expand_config_string(cfg.codex.approval_policy, 'codex',
+		cfg.codex.approval_policy, changed = expand_config_string(cfg.codex.approval_policy,
+			'codex', vars, env_map, changed)!
+		cfg.codex.sandbox, changed = expand_config_string(cfg.codex.sandbox, 'codex',
 			vars, env_map, changed)!
-		cfg.codex.sandbox, changed = expand_config_string(cfg.codex.sandbox, 'codex', vars, env_map,
-			changed)!
-		cfg.feishu.bridge.ws_url, changed = expand_config_string(cfg.feishu.bridge.ws_url, 'feishu.bridge', vars, env_map,
-			changed)!
-		cfg.feishu.bridge.client_id, changed = expand_config_string(cfg.feishu.bridge.client_id, 'feishu.bridge', vars,
-			env_map, changed)!
-		cfg.feishu.bridge.token, changed = expand_config_string(cfg.feishu.bridge.token, 'feishu.bridge', vars, env_map,
-			changed)!
-		cfg.feishu.bridge.target_id, changed = expand_config_string(cfg.feishu.bridge.target_id, 'feishu.bridge', vars,
-			env_map, changed)!
+		cfg.openai.base_path, changed = expand_config_string(cfg.openai.base_path, 'openai',
+			vars, env_map, changed)!
+		cfg.openai.default_backend, changed = expand_config_string(cfg.openai.default_backend,
+			'openai', vars, env_map, changed)!
+		cfg.openai.plugin, changed = expand_config_string(cfg.openai.plugin, 'openai',
+			vars, env_map, changed)!
+		mut next_openai_backends := map[string]OpenAIBackendConfig{}
+		for name, backend in cfg.openai.backends {
+			base_url, base_url_changed := expand_config_string(backend.base_url, 'openai.backends.${name}',
+				vars, env_map, false)!
+			api_key, api_key_changed := expand_config_string(backend.api_key, 'openai.backends.${name}',
+				vars, env_map, false)!
+			executor, executor_changed := expand_config_string(backend.executor, 'openai.backends.${name}',
+				vars, env_map, false)!
+			api_key_env, api_key_env_changed := expand_config_string(backend.api_key_env,
+				'openai.backends.${name}', vars, env_map, false)!
+			next_openai_backends[name] = OpenAIBackendConfig{
+				kind:        backend.kind
+				base_url:    base_url
+				executor:    executor
+				api_key:     api_key
+				api_key_env: api_key_env
+				timeout_ms:  backend.timeout_ms
+			}
+			if base_url_changed || executor_changed || api_key_changed || api_key_env_changed {
+				changed = true
+			}
+		}
+		cfg.openai.backends = next_openai_backends.clone()
+		mut next_openai_routes := map[string]OpenAIRouteConfig{}
+		for name, route in cfg.openai.routes {
+			model, model_changed := expand_config_string(route.model, 'openai.routes.${name}',
+				vars, env_map, false)!
+			backend, backend_changed := expand_config_string(route.backend, 'openai.routes.${name}',
+				vars, env_map, false)!
+			upstream_model, upstream_model_changed := expand_config_string(route.upstream_model,
+				'openai.routes.${name}', vars, env_map, false)!
+			mut models := route.models.clone()
+			for i, raw in models {
+				next, c := expand_config_string(raw, 'openai.routes.${name}', vars, env_map,
+					false)!
+				if c {
+					models[i] = next
+					changed = true
+				}
+			}
+			next_openai_routes[name] = OpenAIRouteConfig{
+				model:          model
+				models:         models
+				backend:        backend
+				upstream_model: upstream_model
+			}
+			if model_changed || backend_changed || upstream_model_changed {
+				changed = true
+			}
+		}
+		cfg.openai.routes = next_openai_routes.clone()
+		cfg.feishu.bridge.ws_url, changed = expand_config_string(cfg.feishu.bridge.ws_url,
+			'feishu.bridge', vars, env_map, changed)!
+		cfg.feishu.bridge.client_id, changed = expand_config_string(cfg.feishu.bridge.client_id,
+			'feishu.bridge', vars, env_map, changed)!
+		cfg.feishu.bridge.token, changed = expand_config_string(cfg.feishu.bridge.token,
+			'feishu.bridge', vars, env_map, changed)!
+		cfg.feishu.bridge.target_id, changed = expand_config_string(cfg.feishu.bridge.target_id,
+			'feishu.bridge', vars, env_map, changed)!
 
-		cfg.feishu.bridge.target_id, changed = expand_config_string(cfg.feishu.bridge.target_id, 'feishu.bridge', vars,
-			env_map, changed)!
+		cfg.feishu.bridge.target_id, changed = expand_config_string(cfg.feishu.bridge.target_id,
+			'feishu.bridge', vars, env_map, changed)!
 
 		if !changed {
 			resolve_config_paths(mut cfg, config_path)
@@ -1149,6 +1511,14 @@ fn resolve_config_paths(mut cfg VhttpdConfig, config_path string) {
 	cfg.vjsx.module_root = resolve_config_path(cfg.paths.root, cfg.vjsx.module_root)
 	cfg.vjsx.build_root = resolve_config_path(cfg.paths.root, cfg.vjsx.build_root)
 	cfg.vjsx.signature_root = resolve_config_path(cfg.paths.root, cfg.vjsx.signature_root)
+	for name, mut plugin in cfg.plugins {
+		plugin.entry = resolve_config_path(cfg.paths.root, plugin.entry)
+		plugin.app_entry = resolve_config_path(cfg.paths.root, plugin.app_entry)
+		plugin.module_root = resolve_config_path(cfg.paths.root, plugin.module_root)
+		plugin.build_root = resolve_config_path(cfg.paths.root, plugin.build_root)
+		plugin.signature_root = resolve_config_path(cfg.paths.root, plugin.signature_root)
+		cfg.plugins[name] = plugin
+	}
 	cfg.assets.root = resolve_config_path(cfg.paths.root, cfg.assets.root)
 	cfg.codex.cwd = resolve_config_path(cfg.paths.root, cfg.codex.cwd)
 }
@@ -1199,6 +1569,10 @@ fn build_config_variable_map(cfg VhttpdConfig) map[string]string {
 		'feishu.bridge.client_id':        cfg.feishu.bridge.client_id
 		'feishu.bridge.token':            cfg.feishu.bridge.token
 		'feishu.bridge.target_id':        cfg.feishu.bridge.target_id
+		'openai.enabled':                 '${cfg.openai.enabled}'
+		'openai.base_path':               cfg.openai.base_path
+		'openai.default_backend':         cfg.openai.default_backend
+		'openai.plugin':                  cfg.openai.plugin
 	}
 	for key, value in cfg.paths.values {
 		vars['paths.${key}'] = value
@@ -1212,6 +1586,25 @@ fn build_config_variable_map(cfg VhttpdConfig) map[string]string {
 	for name, app_cfg in cfg.feishu.apps {
 		vars['feishu.${name}.app_id'] = app_cfg.app_id
 		vars['feishu.${name}.app_secret'] = app_cfg.app_secret
+	}
+	for name, backend in cfg.openai.backends {
+		vars['openai.backends.${name}.kind'] = backend.kind
+		vars['openai.backends.${name}.base_url'] = backend.base_url
+		vars['openai.backends.${name}.api_key_env'] = backend.api_key_env
+	}
+	for name, route in cfg.openai.routes {
+		vars['openai.routes.${name}.model'] = route.model
+		vars['openai.routes.${name}.backend'] = route.backend
+		vars['openai.routes.${name}.upstream_model'] = route.upstream_model
+	}
+	for name, plugin in cfg.plugins {
+		vars['plugins.${name}.kind'] = plugin.kind
+		vars['plugins.${name}.entry'] = plugin.entry
+		vars['plugins.${name}.app_entry'] = plugin.app_entry
+		vars['plugins.${name}.module_root'] = plugin.module_root
+		vars['plugins.${name}.build_root'] = plugin.build_root
+		vars['plugins.${name}.signature_root'] = plugin.signature_root
+		vars['plugins.${name}.runtime_profile'] = plugin.runtime_profile
 	}
 	return vars
 }

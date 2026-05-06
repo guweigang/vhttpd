@@ -166,6 +166,13 @@ fn merge_vjsx_config(base VjsxConfig, override VjsxConfig) VjsxConfig {
 	return cfg
 }
 
+fn merge_plugins_config(base map[string]PluginConfig, override map[string]PluginConfig) map[string]PluginConfig {
+	if override.len == 0 {
+		return base.clone()
+	}
+	return override.clone()
+}
+
 fn merge_websocket_affinity_config(base WebSocketAffinityConfig, override WebSocketAffinityConfig) WebSocketAffinityConfig {
 	defaults := default_vhttpd_config().websocket_affinity
 	mut cfg := base
@@ -337,6 +344,39 @@ fn merge_bridge_config(base BridgeConfig, override BridgeConfig) BridgeConfig {
 	return cfg
 }
 
+fn merge_openai_config(base OpenAIConfig, override OpenAIConfig) OpenAIConfig {
+	defaults := default_vhttpd_config().openai
+	mut cfg := base
+	if override.enabled != defaults.enabled {
+		cfg.enabled = override.enabled
+	}
+	if override.base_path != defaults.base_path {
+		cfg.base_path = override.base_path
+	}
+	if override.default_backend != defaults.default_backend {
+		cfg.default_backend = override.default_backend
+	}
+	if override.endpoints.models != defaults.endpoints.models {
+		cfg.endpoints.models = override.endpoints.models
+	}
+	if override.endpoints.chat_completions != defaults.endpoints.chat_completions {
+		cfg.endpoints.chat_completions = override.endpoints.chat_completions
+	}
+	if override.endpoints.responses != defaults.endpoints.responses {
+		cfg.endpoints.responses = override.endpoints.responses
+	}
+	if override.endpoints.embeddings != defaults.endpoints.embeddings {
+		cfg.endpoints.embeddings = override.endpoints.embeddings
+	}
+	if override.backends.len > 0 {
+		cfg.backends = override.backends.clone()
+	}
+	if override.routes.len > 0 {
+		cfg.routes = override.routes.clone()
+	}
+	return cfg
+}
+
 fn site_config_as_vhttpd_config(global_cfg VhttpdConfig, site_cfg SiteConfig) VhttpdConfig {
 	mut cfg := global_cfg
 	cfg.listeners = map[string]ListenerConfig{}
@@ -348,6 +388,7 @@ fn site_config_as_vhttpd_config(global_cfg VhttpdConfig, site_cfg SiteConfig) Vh
 		env_map := map[string]string{}
 		project_root, _ = expand_config_string(project_root, '', global_vars, env_map,
 			false) or { site_cfg.project_root, false }
+		project_root = resolve_config_path(global_cfg.paths.root, project_root)
 		cfg.paths = PathsConfig{
 			root:   project_root
 			values: cfg.paths.values.clone()
@@ -357,10 +398,10 @@ fn site_config_as_vhttpd_config(global_cfg VhttpdConfig, site_cfg SiteConfig) Vh
 	cfg.executor = merge_executor_config(global_cfg.executor, site_cfg.executor, site_cfg)
 	cfg.php = merge_php_config(global_cfg.php, site_cfg.php)
 	cfg.vjsx = merge_vjsx_config(global_cfg.vjsx, site_cfg.vjsx)
+	cfg.plugins = merge_plugins_config(global_cfg.plugins, site_cfg.plugins)
 	cfg.websocket_affinity = merge_websocket_affinity_config(global_cfg.websocket_affinity,
 		site_cfg.websocket_affinity)
-	cfg.websocket_actor = merge_websocket_actor_config(global_cfg.websocket_actor,
-		site_cfg.websocket_actor)
+	cfg.websocket_actor = merge_websocket_actor_config(global_cfg.websocket_actor, site_cfg.websocket_actor)
 	if site_cfg.worker_entry.trim_space() != '' && cfg.executor.kind == 'php'
 		&& cfg.php.worker_entry.trim_space() == '' {
 		cfg.php.worker_entry = site_cfg.worker_entry
@@ -381,6 +422,7 @@ fn site_config_as_vhttpd_config(global_cfg VhttpdConfig, site_cfg SiteConfig) Vh
 	cfg.mcp = merge_mcp_config(global_cfg.mcp, site_cfg.mcp)
 	cfg.feishu = merge_feishu_config(global_cfg.feishu, site_cfg.feishu)
 	cfg.codex = merge_codex_config(global_cfg.codex, site_cfg.codex)
+	cfg.openai = merge_openai_config(global_cfg.openai, site_cfg.openai)
 	cfg.feishu.bridge = merge_bridge_config(global_cfg.feishu.bridge, site_cfg.feishu.bridge)
 	cfg.config_path = global_cfg.config_path
 	return cfg

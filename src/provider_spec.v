@@ -3,6 +3,7 @@ module main
 pub enum ProviderRouteKind {
 	codex
 	feishu
+	openai
 	ollama
 	generic
 }
