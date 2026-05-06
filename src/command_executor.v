@@ -100,10 +100,12 @@ pub fn (mut exec CommandExecutor) execute(source_activity_id string, ctx Dispatc
 	for command in commands {
 		mut next := command
 		mut metadata := command.metadata.clone()
-		if (metadata['trace_id'] or { '' }).trim_space() == '' && ctx.session.trace_id.trim_space() != '' {
+		if (metadata['trace_id'] or { '' }).trim_space() == ''
+			&& ctx.session.trace_id.trim_space() != '' {
 			metadata['trace_id'] = ctx.session.trace_id
 		}
-		if (metadata['request_id'] or { '' }).trim_space() == '' && ctx.session.request_id.trim_space() != '' {
+		if (metadata['request_id'] or { '' }).trim_space() == ''
+			&& ctx.session.request_id.trim_space() != '' {
 			metadata['request_id'] = ctx.session.request_id
 		}
 		next.metadata = metadata.clone()
@@ -143,10 +145,13 @@ pub fn (mut exec CommandExecutor) execute_websocket_upstream_commands(source_act
 	log.info('[ws-cmd] executing ${commands.len} commands from ${source_activity_id}')
 	for index, command in commands {
 		normalized := NormalizedCommand.from_worker_command(command)
-		log.info('[ws-cmd]   #${index}: type=${normalized.routing_type()} kind=${normalized.kind} event=${normalized.normalized_event('')} provider=${normalized.normalized_provider('')} stream_id=${normalized.correlation.stream_id} trace_id=${normalized.metadata['trace_id'] or { '' }} request_id=${normalized.correlation.request_id}')
+		log.info('[ws-cmd]   #${index}: type=${normalized.routing_type()} kind=${normalized.kind} event=${normalized.normalized_event('')} provider=${normalized.normalized_provider('')} stream_id=${normalized.correlation.stream_id} trace_id=${normalized.metadata['trace_id'] or {
+			''
+		}} request_id=${normalized.correlation.request_id}')
 		mut snapshot := exec.new_snapshot(source_activity_id, index, command)
 		if normalized.is_provider_instance_command() {
-			handled, exec_err := exec.execute_provider_instance_command(normalized, mut snapshot)
+			handled, exec_err := exec.execute_provider_instance_command(normalized, mut
+				snapshot)
 			if handled {
 				if exec_err != '' {
 					last_error = exec_err
@@ -156,7 +161,8 @@ pub fn (mut exec CommandExecutor) execute_websocket_upstream_commands(source_act
 			}
 		}
 		route := exec.route_from_normalized(normalized)
-		handled, exec_err := exec.execute_routed_command(route, command, normalized, mut snapshot)
+		handled, exec_err := exec.execute_routed_command(route, command, normalized, mut
+			snapshot)
 		if handled {
 			if exec_err != '' {
 				last_error = exec_err
@@ -231,11 +237,15 @@ fn (mut exec CommandExecutor) execute_routed_command(route ProviderRouteKind, co
 				false, ''
 			}
 		}
+		.openai {
+			false, ''
+		}
 		.generic {
 			exec.generic.execute(command, normalized, mut snapshot)
 		}
 	}
 }
+
 // Unified App-level entrypoint, now backed by CommandExecutor object.
 fn (mut app App) execute_command_envelopes(source_activity_id string, ctx DispatchContext, commands []WorkerWebSocketUpstreamCommand) ([]WebSocketUpstreamCommandActivity, string) {
 	mut executor := CommandExecutor.new(mut app)
