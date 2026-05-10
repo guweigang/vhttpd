@@ -3,6 +3,7 @@
 ROOT := $(CURDIR)
 SRC_DIR := $(ROOT)/src
 VHTTPD_BIN ?= $(ROOT)/vhttpd
+V_CC ?= cc
 VPHP_V_GC ?= auto
 VPHP_V_GC_STRIPPED := $(strip $(VPHP_V_GC))
 RESOLVED_VPHP_V_GC := $(shell if [ -n "$(VPHP_V_GC_STRIPPED)" ] && [ "$(VPHP_V_GC_STRIPPED)" != "auto" ]; then printf "%s" "$(VPHP_V_GC_STRIPPED)"; elif pkg-config --exists bdw-gc 2>/dev/null; then printf boehm; else printf none; fi)
@@ -79,12 +80,12 @@ ifeq ($(WITH_DB),1)
 endif
 
 build: prepare-build-src
-	v $(V_FLAGS) $(V_DB_FLAGS) $(V_GC_FLAG) -o $(VHTTPD_BIN) $(BUILD_STAGE_DIR)
+	v -cc $(V_CC) $(V_FLAGS) $(V_DB_FLAGS) $(V_GC_FLAG) -o $(VHTTPD_BIN) $(BUILD_STAGE_DIR)
 
 vhttpd: build
 
 prod: prepare-build-src
-	v $(V_FLAGS) $(V_DB_FLAGS) $(V_GC_FLAG) $(V_PROD_FLAGS) $(V_NOCACHE_FLAGS) -o $(VHTTPD_BIN) $(BUILD_STAGE_DIR)
+	v -cc $(V_CC) $(V_FLAGS) $(V_DB_FLAGS) $(V_GC_FLAG) $(V_PROD_FLAGS) $(V_NOCACHE_FLAGS) -o $(VHTTPD_BIN) $(BUILD_STAGE_DIR)
 
 build-prod: prod
 
@@ -127,22 +128,22 @@ psr-matrix:
 test: test-fast
 
 test-fast:
-	v test $(FAST_TEST_FILES)
+	v -cc $(V_CC) test $(FAST_TEST_FILES)
 
 test-inproc:
-	v test $(INPROC_TEST_FILES)
+	v -cc $(V_CC) test $(INPROC_TEST_FILES)
 
 test-codexbot:
-	v test $(CODEXBOT_TEST_FILES)
+	v -cc $(V_CC) test $(CODEXBOT_TEST_FILES)
 
 test-codexbot-fast:
-	v test $(CODEXBOT_FAST_TEST_FILES)
+	v -cc $(V_CC) test $(CODEXBOT_FAST_TEST_FILES)
 
 test-codexbot-lifecycle:
-	v test $(CODEXBOT_LIFECYCLE_TEST_FILES)
+	v -cc $(V_CC) test $(CODEXBOT_LIFECYCLE_TEST_FILES)
 
 test-profile-codexbot:
 	@/bin/zsh $(ROOT)/tools/profile_codexbot_tests.sh $(ROOT)
 
 test-all:
-	v test $(SRC_DIR)
+	v -cc $(V_CC) test $(SRC_DIR)

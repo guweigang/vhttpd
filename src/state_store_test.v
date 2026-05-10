@@ -2,6 +2,12 @@ module main
 
 import time
 
+struct MemoryStateStoreTestRecord {
+	id     string
+	status string
+	count  int
+}
+
 fn test_memory_state_store_set_get_and_keys() {
 	mut store := new_memory_state_store[string]()
 	store.set('alpha', 'a') or { panic(err) }
@@ -12,6 +18,20 @@ fn test_memory_state_store_set_get_and_keys() {
 	assert store.exists('alpha')
 	assert store.keys() == ['alpha', 'beta']
 	assert store.list().len == 2
+}
+
+fn test_memory_state_store_roundtrips_struct_values() {
+	mut store := new_memory_state_store[MemoryStateStoreTestRecord]()
+	store.set('resp', MemoryStateStoreTestRecord{
+		id:     'resp_1'
+		status: 'completed'
+		count:  2
+	}) or { panic(err) }
+
+	record := store.get('resp') or { panic(err) }
+	assert record.id == 'resp_1'
+	assert record.status == 'completed'
+	assert record.count == 2
 }
 
 fn test_memory_state_store_ttl_expiry_and_prune() {

@@ -10,7 +10,8 @@ import time
 
 fn write_frame(mut conn unix.StreamConn, payload string) ! {
 	size := payload.len
-	header := [u8((size >> 24) & 0xff), u8((size >> 16) & 0xff), u8((size >> 8) & 0xff), u8(size & 0xff)]
+	header := [u8((size >> 24) & 0xff), u8((size >> 16) & 0xff), u8((size >> 8) & 0xff),
+		u8(size & 0xff)]
 	conn.write_ptr(&header[0], 4)!
 	conn.write_string(payload)!
 }
@@ -99,7 +100,8 @@ fn try_decode_stream_start(raw string) ?WorkerStreamFrame {
 
 fn try_decode_upstream_plan(raw string) ?WorkerUpstreamPlanFrame {
 	frame := json.decode(WorkerUpstreamPlanFrame, raw) or { return none }
-	if ((frame.mode == 'stream' && frame.strategy == 'upstream_plan') || frame.mode == 'upstream_plan') && frame.event == 'start' {
+	if ((frame.mode == 'stream' && frame.strategy == 'upstream_plan')
+		|| frame.mode == 'upstream_plan') && frame.event == 'start' {
 		return frame
 	}
 	return none
@@ -198,7 +200,7 @@ fn read_websocket_upstream_response(mut conn unix.StreamConn) !WorkerWebSocketUp
 
 fn (mut app App) worker_backend_dispatch_websocket_upstream(req WorkerWebSocketUpstreamDispatchRequest) !WorkerWebSocketUpstreamDispatchResponse {
 	socket, mut conn := app.worker_backend_connect_selected()!
-	
+
 	app.on_worker_request_started(socket)
 	defer {
 		app.on_worker_request_finished(socket)
@@ -238,7 +240,7 @@ fn status_reason_phrase(status int) string {
 	}
 }
 
-fn write_http_stream_headers_conn(mut conn net.TcpConn, status int, content_type string, extra_headers map[string]string, chunked bool) ! {
+fn write_http_stream_headers_conn_with_close(mut conn net.TcpConn, status int, content_type string, extra_headers map[string]string, chunked bool, close_conn bool) ! {
 	mut code := status
 	if code <= 0 {
 		code = 200
@@ -246,7 +248,9 @@ fn write_http_stream_headers_conn(mut conn net.TcpConn, status int, content_type
 	mut sb := strings.new_builder(512)
 	sb.write_string('HTTP/1.1 ${code} ${status_reason_phrase(code)}\r\n')
 	sb.write_string('Server: vhttpd\r\n')
-	sb.write_string('Connection: close\r\n')
+	if close_conn {
+		sb.write_string('Connection: close\r\n')
+	}
 	if chunked {
 		sb.write_string('Transfer-Encoding: chunked\r\n')
 	}
@@ -265,8 +269,14 @@ fn write_http_stream_headers_conn(mut conn net.TcpConn, status int, content_type
 	conn.write_string(sb.str())!
 }
 
+fn write_http_stream_headers_conn(mut conn net.TcpConn, status int, content_type string, extra_headers map[string]string, chunked bool) ! {
+	write_http_stream_headers_conn_with_close(mut conn, status, content_type, extra_headers,
+		chunked, true)!
+}
+
 fn write_http_stream_headers(mut ctx Context, status int, content_type string, extra_headers map[string]string, chunked bool) ! {
-	write_http_stream_headers_conn(mut ctx.conn, status, content_type, extra_headers, chunked)!
+	write_http_stream_headers_conn(mut ctx.conn, status, content_type, extra_headers,
+		chunked)!
 }
 
 fn write_chunk(mut conn net.TcpConn, data string) ! {
@@ -276,6 +286,10 @@ fn write_chunk(mut conn net.TcpConn, data string) ! {
 	conn.write_string('${data.len:x}\r\n')!
 	conn.write_string(data)!
 	conn.write_string('\r\n')!
+}
+
+fn write_final_chunk(mut conn net.TcpConn) ! {
+	conn.write_string('0\r\n\r\n')!
 }
 
 fn write_sse_message(mut conn net.TcpConn, frame WorkerStreamFrame) ! {
@@ -357,8 +371,8 @@ fn (mut app App) execute_websocket_dispatch_commands_result(commands []WorkerWeb
 	}
 	return WorkerWebSocketDispatchCommandsResult{
 		close_frame: close_frame
-		has_close: has_close
-		failures: failures
+		has_close:   has_close
+		failures:    failures
 	}
 }
 

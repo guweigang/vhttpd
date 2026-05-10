@@ -1,0 +1,45 @@
+[server]
+host = "127.0.0.1"
+port = 18082
+
+[paths]
+root = "../.."
+
+[openai]
+enabled = true
+base_path = "/v1"
+default_backend = "bailian_coding"
+plugin = "openai_gateway"
+
+[plugins.openai_gateway]
+kind = "vjsx"
+entry = "${paths.root}/examples/vjsx/openai-dashscope-coding-plugin.mts"
+runtime_profile = "node"
+thread_count = 1
+enable_network = false
+
+[openai.backends.bailian_coding]
+kind = "openai_http"
+base_url = "https://coding.dashscope.aliyuncs.com/v1"
+api_key_env = "BAILIAN_CODING_API_KEY"
+timeout_ms = 60000
+
+[openai.backends.ollama]
+kind = "http"
+base_url = "http://127.0.0.1:11434"
+timeout_ms = 60000
+
+[openai.routes.bailian_coding_models]
+models = [
+  "qwen3.6-plus",
+  "qwen3.5-plus",
+  "qwen3-coder-plus",
+  "glm-5",
+  "kimi-k2.5",
+  "MiniMax-M2.5",
+]
+backend = "bailian_coding"
+
+[openai.routes.minimax_m2]
+models = ["minimax-m2:cloud"]
+backend = "ollama"

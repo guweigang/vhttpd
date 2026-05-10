@@ -1,7 +1,9 @@
 module main
 
+import json
 import sync
 import time
+import x.json2
 
 pub interface StateStore[T] {
 mut:
@@ -17,23 +19,23 @@ mut:
 	clear()
 }
 
-struct StoredValue[T] {
+struct StoredValue {
 mut:
-	value          T
-	created_at_ms  i64
-	updated_at_ms  i64
-	expires_at_ms  i64
+	value         json2.Any
+	created_at_ms i64
+	updated_at_ms i64
+	expires_at_ms i64
 }
 
 pub struct MemoryStateStore[T] {
 mut:
 	mu   sync.Mutex
-	data map[string]StoredValue[T]
+	data map[string]StoredValue
 }
 
 pub fn new_memory_state_store[T]() MemoryStateStore[T] {
 	return MemoryStateStore[T]{
-		data: map[string]StoredValue[T]{}
+		data: map[string]StoredValue{}
 	}
 }
 
@@ -48,8 +50,22 @@ fn state_store_expires_at_ms(ttl time.Duration) i64 {
 	return state_store_now_ms() + ttl.milliseconds()
 }
 
-fn state_store_is_expired[T](record StoredValue[T], now_ms i64) bool {
+fn state_store_is_expired(record StoredValue, now_ms i64) bool {
 	return record.expires_at_ms > 0 && record.expires_at_ms <= now_ms
+}
+
+fn state_store_encode_value[T](val T) !json2.Any {
+	$if T is string {
+		return json2.Any(val)
+	} $else $if T is $struct {
+		return json2.Any(json2.map_from[T](val))
+	} $else {
+		return json2.decode[json2.Any](json.encode(val))!
+	}
+}
+
+fn state_store_decode_value[T](val json2.Any) !T {
+	return json2.decode[T](val.json_str())!
 }
 
 pub fn (mut store MemoryStateStore[T]) get(key string) !T {
@@ -59,11 +75,11 @@ pub fn (mut store MemoryStateStore[T]) get(key string) !T {
 	}
 	if record := store.data[key] {
 		now_ms := state_store_now_ms()
-		if state_store_is_expired[T](record, now_ms) {
+		if state_store_is_expired(record, now_ms) {
 			store.data.delete(key)
 			return error('state_store_key_expired:${key}')
 		}
-		return record.value
+		return state_store_decode_value[T](record.value)!
 	}
 	return error('state_store_key_missing:${key}')
 }
@@ -79,15 +95,15 @@ pub fn (mut store MemoryStateStore[T]) set_with_ttl(key string, val T, ttl time.
 		store.mu.unlock()
 	}
 	if existing := store.data[key] {
-		store.data[key] = StoredValue[T]{
-			value:         val
+		store.data[key] = StoredValue{
+			value:         state_store_encode_value[T](val)!
 			created_at_ms: existing.created_at_ms
 			updated_at_ms: now_ms
 			expires_at_ms: state_store_expires_at_ms(ttl)
 		}
 	} else {
-		store.data[key] = StoredValue[T]{
-			value:         val
+		store.data[key] = StoredValue{
+			value:         state_store_encode_value[T](val)!
 			created_at_ms: now_ms
 			updated_at_ms: now_ms
 			expires_at_ms: state_store_expires_at_ms(ttl)
@@ -110,7 +126,7 @@ pub fn (mut store MemoryStateStore[T]) exists(key string) bool {
 	}
 	if record := store.data[key] {
 		now_ms := state_store_now_ms()
-		if state_store_is_expired[T](record, now_ms) {
+		if state_store_is_expired(record, now_ms) {
 			store.data.delete(key)
 			return false
 		}
@@ -128,7 +144,7 @@ pub fn (mut store MemoryStateStore[T]) keys() []string {
 	mut keys := []string{}
 	mut expired := []string{}
 	for key, record in store.data {
-		if state_store_is_expired[T](record, now_ms) {
+		if state_store_is_expired(record, now_ms) {
 			expired << key
 			continue
 		}
@@ -150,11 +166,11 @@ pub fn (mut store MemoryStateStore[T]) list() []T {
 	mut values := []T{}
 	mut expired := []string{}
 	for key, record in store.data {
-		if state_store_is_expired[T](record, now_ms) {
+		if state_store_is_expired(record, now_ms) {
 			expired << key
 			continue
 		}
-		values << record.value
+		values << state_store_decode_value[T](record.value) or { continue }
 	}
 	for key in expired {
 		store.data.delete(key)
@@ -169,11 +185,13 @@ pub fn (mut store MemoryStateStore[T]) patch(key string, updater fn (mut T) !) !
 	}
 	if mut record := store.data[key] {
 		now_ms := state_store_now_ms()
-		if state_store_is_expired[T](record, now_ms) {
+		if state_store_is_expired(record, now_ms) {
 			store.data.delete(key)
 			return error('state_store_key_expired:${key}')
 		}
-		updater(mut record.value)!
+		mut value := state_store_decode_value[T](record.value)!
+		updater(mut value)!
+		record.value = state_store_encode_value[T](value)!
 		record.updated_at_ms = now_ms
 		store.data[key] = record
 		return
@@ -189,7 +207,7 @@ pub fn (mut store MemoryStateStore[T]) prune_expired() int {
 	now_ms := state_store_now_ms()
 	mut expired := []string{}
 	for key, record in store.data {
-		if state_store_is_expired[T](record, now_ms) {
+		if state_store_is_expired(record, now_ms) {
 			expired << key
 		}
 	}
@@ -214,7 +232,7 @@ pub fn (mut store MemoryStateStore[string]) compare_and_swap_set_with_ttl(key st
 		store.mu.unlock()
 	}
 	if mut existing := store.data[key] {
-		if state_store_is_expired[string](existing, now_ms) {
+		if state_store_is_expired(existing, now_ms) {
 			store.data.delete(key)
 			if expected_found {
 				return false
@@ -223,11 +241,11 @@ pub fn (mut store MemoryStateStore[string]) compare_and_swap_set_with_ttl(key st
 			if !expected_found {
 				return false
 			}
-			if existing.value != expected_value {
+			if state_store_decode_value[string](existing.value)! != expected_value {
 				return false
 			}
-			store.data[key] = StoredValue[string]{
-				value:         next_value
+			store.data[key] = StoredValue{
+				value:         state_store_encode_value[string](next_value)!
 				created_at_ms: existing.created_at_ms
 				updated_at_ms: now_ms
 				expires_at_ms: state_store_expires_at_ms(ttl)
@@ -238,8 +256,8 @@ pub fn (mut store MemoryStateStore[string]) compare_and_swap_set_with_ttl(key st
 	if expected_found {
 		return false
 	}
-	store.data[key] = StoredValue[string]{
-		value:         next_value
+	store.data[key] = StoredValue{
+		value:         state_store_encode_value[string](next_value)!
 		created_at_ms: now_ms
 		updated_at_ms: now_ms
 		expires_at_ms: state_store_expires_at_ms(ttl)
@@ -254,14 +272,14 @@ pub fn (mut store MemoryStateStore[string]) compare_and_swap_delete(key string, 
 		store.mu.unlock()
 	}
 	if existing := store.data[key] {
-		if state_store_is_expired[string](existing, now_ms) {
+		if state_store_is_expired(existing, now_ms) {
 			store.data.delete(key)
 			return !expected_found
 		}
 		if !expected_found {
 			return false
 		}
-		if existing.value != expected_value {
+		if state_store_decode_value[string](existing.value)! != expected_value {
 			return false
 		}
 		store.data.delete(key)

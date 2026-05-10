@@ -862,13 +862,22 @@ fn test_inproc_vjsx_executor_dispatch_http_supports_redirect_helper() {
 
 fn test_inproc_vjsx_executor_dispatch_http_supports_typescript_module_entry() {
 	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_vjsx_executor_ts_test')
+	asset_root := os.join_path(temp_dir, 'empty-asset-root')
 	os.mkdir_all(temp_dir) or { panic(err) }
+	os.mkdir_all(asset_root) or { panic(err) }
 	app_file := os.join_path(temp_dir, 'handler.mts')
 	os.write_file(app_file, 'function handler(ctx) { return { status: 206, headers: { "content-type": "application/json; charset=utf-8" }, body: JSON.stringify({ ok: true, message: "hello " + ctx.queryParam("name", "guest"), laneId: ctx.runtime.laneId }) }; }\nglobalThis.__vhttpd_handle = handler;\nexport default handler;\n') or {
 		panic(err)
 	}
+	old_asset_root := os.getenv('VJSX_ASSET_ROOT')
+	os.setenv('VJSX_ASSET_ROOT', asset_root, true)
 	defer {
-		os.rm(app_file) or {}
+		if old_asset_root == '' {
+			os.unsetenv('VJSX_ASSET_ROOT')
+		} else {
+			os.setenv('VJSX_ASSET_ROOT', old_asset_root, true)
+		}
+		os.rmdir_all(temp_dir) or {}
 	}
 	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
 		thread_count:    1

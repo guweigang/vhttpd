@@ -37,6 +37,8 @@ pub mut:
 	admin_on_data_plane                         bool
 	admin_token                                 string
 	runtime_config_json                         string
+	plugin_configs                              map[string]PluginConfig
+	plugin_vjsx                                 map[string]InProcVjsxExecutor
 	assets_enabled                              bool
 	assets_prefix                               string
 	assets_root                                 string
@@ -52,6 +54,14 @@ pub mut:
 	feishu_reconnect_delay_ms                   int
 	feishu_token_refresh_skew_seconds           int
 	feishu_recent_event_limit                   int
+	openai_enabled                              bool
+	openai_base_path                            string
+	openai_default_backend                      string
+	openai_plugin                               string
+	openai_endpoints                            OpenAIEndpointsConfig
+	openai_backends                             map[string]OpenAIBackendConfig
+	openai_routes                               map[string]OpenAIRouteConfig
+	openai_responses                            MemoryStateStore[OpenAIResponseRecord]
 	websocket_upstream_recent_dispatch_limit    int
 	auto_start_dynamic_upstreams                bool
 	feishu_static_apps                          map[string]FeishuAppConfig
@@ -94,30 +104,30 @@ pub mut:
 	websocket_upstream_recent_activities        []WebSocketUpstreamActivitySnapshot
 	provider_instance_specs                     map[string]ProviderInstanceSpec = map[string]ProviderInstanceSpec{}
 	// codex upstream
-	codex_mu                     sync.Mutex
-	codex_runtime                CodexProviderRuntime
-	codex_instances              map[string]CodexProviderRuntime = map[string]CodexProviderRuntime{}
-	ollama_enabled               bool
-	db_runtime                   DbProviderRuntime
-	feishu_buffers               map[string]FeishuStreamBuffer
-	feishu_http_lane             shared FeishuHttpLane
-	feishu_control_http_lane     shared FeishuControlHttpLane
-	feishu_http_test_stub        bool
-	feishu_http_test_delay_ms    int
-	feishu_http_test_inflight    int
-	feishu_http_test_calls       int
-	feishu_http_test_message_seq int
-	feishu_card_bridge_mu        sync.Mutex
-	feishu_card_bridge_send_mu   sync.Mutex
-	feishu_card_bridge_clients   map[string]&websocket.Client = map[string]&websocket.Client{}
-	feishu_card_bridge_pending   map[string]chan FeishuCardBridgeResult = map[string]chan FeishuCardBridgeResult{}
+	codex_mu                         sync.Mutex
+	codex_runtime                    CodexProviderRuntime
+	codex_instances                  map[string]CodexProviderRuntime = map[string]CodexProviderRuntime{}
+	ollama_enabled                   bool
+	db_runtime                       DbProviderRuntime
+	feishu_buffers                   map[string]FeishuStreamBuffer
+	feishu_http_lane                 shared FeishuHttpLane
+	feishu_control_http_lane         shared FeishuControlHttpLane
+	feishu_http_test_stub            bool
+	feishu_http_test_delay_ms        int
+	feishu_http_test_inflight        int
+	feishu_http_test_calls           int
+	feishu_http_test_message_seq     int
+	feishu_card_bridge_mu            sync.Mutex
+	feishu_card_bridge_send_mu       sync.Mutex
+	feishu_card_bridge_clients       map[string]&websocket.Client            = map[string]&websocket.Client{}
+	feishu_card_bridge_pending       map[string]chan FeishuCardBridgeResult  = map[string]chan FeishuCardBridgeResult{}
 	feishu_card_bridge_proxy_pending map[string]chan FeishuBridgeProxyResult = map[string]chan FeishuBridgeProxyResult{}
-	feishu_card_bridge_client_conn   &websocket.Client = unsafe { nil }
+	feishu_card_bridge_client_conn   &websocket.Client                       = unsafe { nil }
 	feishu_card_bridge_enabled_flag  bool
-	feishu_card_bridge_ws_url    string
-	feishu_card_bridge_client_id string
-	feishu_card_bridge_token     string
-	feishu_card_bridge_target_id string
+	feishu_card_bridge_ws_url        string
+	feishu_card_bridge_client_id     string
+	feishu_card_bridge_token         string
+	feishu_card_bridge_target_id     string
 }
 
 struct CodexTarget {
@@ -283,15 +293,15 @@ struct WorkerWebSocketFrame {
 }
 
 struct WorkerWebSocketDispatchResponse {
-	mode        string
-	event       string
-	id          string
-	accepted    bool
-	closed      bool
-	commands    []WorkerWebSocketFrame
+	mode         string
+	event        string
+	id           string
+	accepted     bool
+	closed       bool
+	commands     []WorkerWebSocketFrame
 	affinity_key string @[json: 'affinity_key']
-	error       string
-	error_class string @[json: 'error_class']
+	error        string
+	error_class  string @[json: 'error_class']
 }
 
 struct WorkerWebSocketDispatchCommandFailure {
@@ -847,8 +857,7 @@ fn proxy_worker_websocket_dispatch(mut app App, mut ctx Context, method string, 
 		app.ws_hub_meta_snapshot(req_id), map[string][]string{}, map[string]map[string]string{},
 		map[string]int{}, map[string][]string{})
 	resp := app.kernel_dispatch_websocket_event(open_frame) or {
-		err_msg := inproc_vjsx_normalize_error_message(err.msg(),
-			'inproc_vjsx_executor_websocket_open_failed')
+		err_msg := inproc_vjsx_normalize_error_message(err.msg(), 'inproc_vjsx_executor_websocket_open_failed')
 		log.error('[vhttpd] kernel_dispatch_websocket_event failed trace_id=${trace_id} path=${normalized_path} error=${err_msg}')
 		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
 		ctx.set_custom_header('x-vhttpd-error-class', 'transport_error') or {}
@@ -882,8 +891,7 @@ fn proxy_worker_websocket_dispatch(mut app App, mut ctx Context, method string, 
 	ctx.conn.set_read_timeout(time.infinite)
 	mut conn := ctx.conn
 	spawn handle_worker_websocket_dispatch_session(mut app, mut conn, key, method.to_upper(),
-		normalized_path, query, headers, remote_addr, req_id, trace_id, start_ms,
-		resp.commands.clone())
+		normalized_path, query, headers, remote_addr, req_id, trace_id, start_ms, resp.commands.clone())
 	return veb.no_result()
 }
 
@@ -961,18 +969,18 @@ fn handle_worker_websocket_dispatch_session(mut app App, mut client_conn net.Tcp
 	mut ws_server := websocket.new_server(.ip, 0, '')
 	mut lifecycle := &WebSocketDispatchConnState{}
 	mut state := &WebSocketDispatchBridgeState{
-		app:         &app
-		lifecycle:   lifecycle
+		app:           &app
+		lifecycle:     lifecycle
 		open_commands: open_commands.clone()
-		conn_id:     req_id
-		method:      method
-		path:        path
-		query:       query.clone()
-		headers:     headers.clone()
-		remote_addr: remote_addr
-		request_id:  req_id
-		trace_id:    trace_id
-		start_ms:    start_ms
+		conn_id:       req_id
+		method:        method
+		path:          path
+		query:         query.clone()
+		headers:       headers.clone()
+		remote_addr:   remote_addr
+		request_id:    req_id
+		trace_id:      trace_id
+		start_ms:      start_ms
 	}
 	ws_server.on_message_ref(worker_websocket_dispatch_message_cb, state)
 	ws_server.on_close_ref(worker_websocket_dispatch_close_cb, state)
@@ -980,9 +988,7 @@ fn handle_worker_websocket_dispatch_session(mut app App, mut client_conn net.Tcp
 	defer {
 		worker_websocket_dispatch_finalize(state)
 	}
-	ws_server.handle_handshake(mut client_conn, key) or {
-		return
-	}
+	ws_server.handle_handshake(mut client_conn, key) or { return }
 }
 
 fn worker_websocket_dispatch_attached_cb(mut sc websocket.ServerClient, ref voidptr) ! {
@@ -992,8 +998,8 @@ fn worker_websocket_dispatch_attached_cb(mut sc websocket.ServerClient, ref void
 	unsafe {
 		mut state := &WebSocketDispatchBridgeState(ref)
 		state.app.ws_hub_register_conn(state.conn_id, '', state.method, state.request_id,
-			state.trace_id, state.path, state.query, state.headers, state.remote_addr, sc.client,
-			state.lifecycle)
+			state.trace_id, state.path, state.query, state.headers, state.remote_addr,
+			sc.client, state.lifecycle)
 		worker_websocket_dispatch_process_open(state)
 		worker_websocket_dispatch_activate(state)
 	}
@@ -1109,7 +1115,10 @@ fn worker_websocket_dispatch_message_cb(mut ws websocket.Client, msg &websocket.
 		return
 	}
 	if result.failures.len > 0 {
-		if close_frame := state.app.websocket_dispatch_followup_failures(state.conn_id, state.method, state.path, state.query, state.headers, state.remote_addr, state.request_id, state.trace_id, result.failures) {
+		if close_frame := state.app.websocket_dispatch_followup_failures(state.conn_id,
+			state.method, state.path, state.query, state.headers, state.remote_addr, state.request_id,
+			state.trace_id, result.failures)
+		{
 			code := if close_frame.code > 0 { close_frame.code } else { 1000 }
 			worker_websocket_dispatch_begin_local_close(mut state)
 			ws.close(code, close_frame.reason)!
@@ -1934,8 +1943,14 @@ pub fn (mut app App) events_stream(mut ctx Context) veb.Result {
 
 @['/:path...'; get]
 pub fn (mut app App) proxy_get(mut ctx Context, path string) veb.Result {
+	start_ms := time.now().unix_milli()
 	log.info('[http] route proxy_get path=${path} url=${ctx.req.url}')
 	target := if ctx.req.url == '' { path } else { ctx.req.url }
+	req_id := resolve_request_id(ctx, target)
+	trace_id := resolve_trace_id(ctx, target)
+	if result := app.openai_try_handle(mut ctx, 'GET', target, req_id, trace_id, start_ms) {
+		return result
+	}
 	request_path, _ := normalize_request_target(target)
 	normalized_target := normalize_path(request_path)
 	if normalized_target == '/mcp' {
@@ -1950,8 +1965,14 @@ pub fn (mut app App) proxy_get(mut ctx Context, path string) veb.Result {
 
 @['/:path...'; post]
 pub fn (mut app App) proxy_post(mut ctx Context, path string) veb.Result {
+	start_ms := time.now().unix_milli()
 	log.info('[http] route proxy_post path=${path} url=${ctx.req.url} body_len=${ctx.req.data.len}')
 	target := if ctx.req.url == '' { path } else { ctx.req.url }
+	req_id := resolve_request_id(ctx, target)
+	trace_id := resolve_trace_id(ctx, target)
+	if result := app.openai_try_handle(mut ctx, 'POST', target, req_id, trace_id, start_ms) {
+		return result
+	}
 	request_path, _ := normalize_request_target(target)
 	normalized_target := normalize_path(request_path)
 	if normalized_target == '/mcp' {
@@ -1966,27 +1987,45 @@ pub fn (mut app App) proxy_post(mut ctx Context, path string) veb.Result {
 
 @['/:path...'; put]
 pub fn (mut app App) proxy_put(mut ctx Context, path string) veb.Result {
+	start_ms := time.now().unix_milli()
+	target := if ctx.req.url == '' { path } else { ctx.req.url }
+	req_id := resolve_request_id(ctx, target)
+	trace_id := resolve_trace_id(ctx, target)
+	if result := app.openai_try_handle(mut ctx, 'PUT', target, req_id, trace_id, start_ms) {
+		return result
+	}
 	if !app.has_http_logic_executor() {
 		ctx.res.set_status(.not_found)
 		return ctx.text('Not Found')
 	}
-	target := if ctx.req.url == '' { path } else { ctx.req.url }
 	return proxy_worker_response(mut app, mut ctx, 'PUT', target, '')
 }
 
 @['/:path...'; patch]
 pub fn (mut app App) proxy_patch(mut ctx Context, path string) veb.Result {
+	start_ms := time.now().unix_milli()
+	target := if ctx.req.url == '' { path } else { ctx.req.url }
+	req_id := resolve_request_id(ctx, target)
+	trace_id := resolve_trace_id(ctx, target)
+	if result := app.openai_try_handle(mut ctx, 'PATCH', target, req_id, trace_id, start_ms) {
+		return result
+	}
 	if !app.has_http_logic_executor() {
 		ctx.res.set_status(.not_found)
 		return ctx.text('Not Found')
 	}
-	target := if ctx.req.url == '' { path } else { ctx.req.url }
 	return proxy_worker_response(mut app, mut ctx, 'PATCH', target, '')
 }
 
 @['/:path...'; delete]
 pub fn (mut app App) proxy_delete(mut ctx Context, path string) veb.Result {
+	start_ms := time.now().unix_milli()
 	target := if ctx.req.url == '' { path } else { ctx.req.url }
+	req_id := resolve_request_id(ctx, target)
+	trace_id := resolve_trace_id(ctx, target)
+	if result := app.openai_try_handle(mut ctx, 'DELETE', target, req_id, trace_id, start_ms) {
+		return result
+	}
 	if normalize_path(target) == '/mcp' {
 		return app.mcp_delete(mut ctx)
 	}
@@ -1999,10 +2038,16 @@ pub fn (mut app App) proxy_delete(mut ctx Context, path string) veb.Result {
 
 @['/:path...'; head]
 pub fn (mut app App) proxy_head(mut ctx Context, path string) veb.Result {
+	start_ms := time.now().unix_milli()
+	target := if ctx.req.url == '' { path } else { ctx.req.url }
+	req_id := resolve_request_id(ctx, target)
+	trace_id := resolve_trace_id(ctx, target)
+	if result := app.openai_try_handle(mut ctx, 'HEAD', target, req_id, trace_id, start_ms) {
+		return result
+	}
 	if !app.has_http_logic_executor() {
 		ctx.res.set_status(.not_found)
 		return ctx.text('')
 	}
-	target := if ctx.req.url == '' { path } else { ctx.req.url }
 	return proxy_worker_response(mut app, mut ctx, 'HEAD', target, '')
 }
