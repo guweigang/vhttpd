@@ -109,13 +109,13 @@ fi
 if [ -n "$vjsx_asset_root_override" ]; then
   ok "vjsx runtime asset override ${vjsx_asset_root_override}"
 else
-  ok "vjsx runtime assets are embedded; VJSX_ASSET_ROOT is unset"
+  ok "vjsx runtime assets, including TypeScript runtime assets, are embedded; VJSX_ASSET_ROOT is unset"
 fi
 
 if [ -L "${HOME}/.vmodules/vjsx" ]; then
-  warn "legacy vjsx compatibility symlink ${HOME}/.vmodules/vjsx is present but no longer required"
+  warn "legacy vjsx compatibility symlink ${HOME}/.vmodules/vjsx is present but no longer required at runtime"
 else
-  ok "legacy vjsx compatibility symlink ${HOME}/.vmodules/vjsx is absent"
+  ok "legacy vjsx compatibility symlink ${HOME}/.vmodules/vjsx is absent; runtime assets are embedded"
 fi
 
 if [ "$status" -ne 0 ]; then

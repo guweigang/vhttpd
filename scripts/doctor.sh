@@ -68,9 +68,9 @@ check_pkg openssl
 check_pkg bdw-gc
 
 if [ -e "$vjsx_dir" ]; then
-  ok "vjsx module path ${vjsx_dir}"
+  ok "vjsx build module path ${vjsx_dir}"
 else
-  warn "vjsx module path ${vjsx_dir} is absent; run ./scripts/install_deps.sh vjsx if you need embedded runtime support"
+  warn "vjsx build module path ${vjsx_dir} is absent; run ./scripts/install_deps.sh vjsx before building embedded runtime support"
 fi
 
 if [ -e "$vjsx_dir" ]; then

@@ -212,7 +212,7 @@ Practical summary:
 `vhttpd` now splits local dependencies into install profiles so you do not need to guess the full system package list up front.
 
 - `core`: base build dependencies for `vhttpd`
-- `vjsx`: embedded runtime support, including the required QuickJS archive placement under `~/.vmodules/vjsx/libs/`
+- `vjsx`: embedded runtime build support, including the required QuickJS archive placement under `~/.vmodules/vjsx/libs/`
 - `db`: alias for the default DB-capable dependency surface
 - `full`: everything above
 
@@ -242,15 +242,16 @@ What these targets do:
 
 - `make deps-core`: installs `openssl`, `Boehm GC`, `pkg-config`, and basic build tooling
 - `make deps-core` also installs SQLite/MySQL/PostgreSQL client development packages because default `vhttpd` builds now include DB support
-- `make deps-vjsx`: ensures `~/.vmodules/vjsx` exists and, on Linux, builds QuickJS and places it at `~/.vmodules/vjsx/libs/qjs_linux_x64.a`
+- `make deps-vjsx`: ensures the local `vjsx` module checkout exists for builds and, on Linux, builds QuickJS and places it at `~/.vmodules/vjsx/libs/qjs_linux_x64.a`
 - `make deps-db`: alias for the same default DB-capable build dependency set
 - `make doctor`: checks the current machine for the required commands, `pkg-config` entries, and `vjsx` QuickJS archive placement
 
-Important `vjsx` note:
+Important `vjsx` build note:
 
 - On Linux, `vjsx` does not just need "QuickJS installed somewhere".
 - The archive must exist at [~/.vmodules/vjsx/libs/qjs_linux_x64.a](/Users/guweigang/.vmodules/vjsx/libs/qjs_linux_x64.a).
 - `make deps-vjsx` is the supported way to prepare that path locally.
+- This is a build-time module layout. Packaged `vhttpd` binaries do not need a local `~/.vmodules/vjsx` checkout just to load embedded JavaScript or TypeScript runtime assets.
 
 ## Build
 
@@ -344,7 +345,7 @@ The binary is rewritten during packaging so it prefers these bundled copies:
 
 That means end users no longer need to preinstall MySQL/PostgreSQL/OpenSSL/Boehm runtime packages just to launch the release binary.
 
-`vjsx` runtime JS assets are embedded into the `vjsx` binary integration, so packaged `vhttpd` releases no longer need to ship `runtime/vjsx` JS files. `VJSX_ASSET_ROOT` is still supported as an explicit development override when you need to test a local replacement for built-in `vjsx` runtime JS.
+`vjsx` runtime assets, including the TypeScript compiler runtime under `thirdparty/typescript/lib`, are embedded into the `vjsx` binary integration. Packaged `vhttpd` releases no longer need to ship `runtime/vjsx` JS files or a local `~/.vmodules/vjsx/thirdparty/typescript` tree. `VJSX_ASSET_ROOT` is still supported as an explicit development override when you need to test a local replacement for built-in `vjsx` runtime assets.
 
 After installation, users can verify the machine with:
 
