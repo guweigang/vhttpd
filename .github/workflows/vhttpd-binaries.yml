@@ -156,7 +156,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          make prod VPHP_V_GC=boehm WITH_DB=1
+          make prod V_CC=cc VPHP_V_GC=boehm WITH_DB=1
 
       - name: Smoke test
         shell: bash
