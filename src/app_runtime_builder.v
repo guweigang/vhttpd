@@ -137,10 +137,6 @@ fn build_app_runtime(provider_settings ProviderRuntimeSettings, executor_plan Lo
 	}
 }
 
-fn prepare_server_runtime_files(event_log string, pid_file string) !string {
-	return prepare_server_runtime_files_for_label(event_log, pid_file, '')
-}
-
 fn prepare_server_runtime_files_for_label(event_log string, pid_file string, socket_label string) !string {
 	os.mkdir_all(os.dir(event_log))!
 	os.mkdir_all(os.dir(pid_file))!

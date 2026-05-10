@@ -12,13 +12,13 @@ struct ManagedWorker {
 	worker_cmd  string
 	worker_env  map[string]string
 mut:
-	proc          &os.Process = unsafe { nil }
-	restart_count int
-	last_exit_ts  i64
-	next_retry_ts i64
-	served_requests i64
+	proc              &os.Process = unsafe { nil }
+	restart_count     int
+	last_exit_ts      i64
+	next_retry_ts     i64
+	served_requests   i64
 	inflight_requests i64
-	draining bool
+	draining          bool
 }
 
 struct WorkerSelectionDiagnostic {
@@ -94,16 +94,16 @@ fn start_managed_worker(id int, worker_cmd string, worker_env map[string]string,
 	proc.run()
 	wait_for_worker(worker_socket, 5000)!
 	return ManagedWorker{
-		id: id
-		socket_path: worker_socket
-		worker_cmd: cmd
-		worker_env: merged_env
-		proc: proc
-		last_exit_ts: 0
-		next_retry_ts: 0
-		served_requests: 0
+		id:                id
+		socket_path:       worker_socket
+		worker_cmd:        cmd
+		worker_env:        merged_env
+		proc:              proc
+		last_exit_ts:      0
+		next_retry_ts:     0
+		served_requests:   0
 		inflight_requests: 0
-		draining: false
+		draining:          false
 	}
 }
 
@@ -112,15 +112,15 @@ fn build_managed_worker_slot(id int, worker_cmd string, worker_env map[string]st
 	mut merged_env := merge_worker_env(os.environ(), worker_env)
 	merged_env['VHTTPD_PARENT_PID'] = '${os.getpid()}'
 	return ManagedWorker{
-		id: id
-		socket_path: worker_socket
-		worker_cmd: cmd
-		worker_env: merged_env
-		last_exit_ts: 0
-		next_retry_ts: 0
-		served_requests: 0
+		id:                id
+		socket_path:       worker_socket
+		worker_cmd:        cmd
+		worker_env:        merged_env
+		last_exit_ts:      0
+		next_retry_ts:     0
+		served_requests:   0
 		inflight_requests: 0
-		draining: false
+		draining:          false
 	}
 }
 
@@ -160,10 +160,6 @@ fn socket_prefix(worker_socket string) string {
 	return '/tmp/vslim_worker'
 }
 
-fn resolve_worker_sockets(args []string) []string {
-	return resolve_worker_sockets_with_defaults(args, '', 1, '', '')
-}
-
 fn resolve_worker_sockets_with_defaults(args []string, default_worker_socket string, default_pool_size int, default_socket_prefix string, default_worker_sockets string) []string {
 	worker_sockets_arg := arg_string_or(args, '--worker-sockets', default_worker_sockets)
 	if worker_sockets_arg != '' {
@@ -198,11 +194,13 @@ fn start_worker_pool(worker_cmd string, worker_env map[string]string, worker_soc
 	}
 	mut workers := []ManagedWorker{}
 	for i, socket_path in worker_sockets {
-		mut slot := build_managed_worker_slot(i, worker_cmd, worker_env, socket_path, worker_sockets.len) or {
+		mut slot := build_managed_worker_slot(i, worker_cmd, worker_env, socket_path,
+			worker_sockets.len) or {
 			log.error('worker slot init failed [${i}] ${socket_path}: ${err.msg()}')
 			continue
 		}
-		worker := start_managed_worker(i, worker_cmd, worker_env, socket_path, workdir, worker_sockets.len) or {
+		worker := start_managed_worker(i, worker_cmd, worker_env, socket_path, workdir,
+			worker_sockets.len) or {
 			now := time.now().unix_milli()
 			slot.restart_count = 1
 			slot.last_exit_ts = now
@@ -257,7 +255,8 @@ fn (mut app App) ensure_worker_slot(idx int) {
 		app.pool_mu.unlock()
 		return
 	}
-	delay_ms := restart_backoff_ms(w.restart_count, app.worker_backend.restart_backoff_ms, app.worker_backend.restart_backoff_max_ms)
+	delay_ms := restart_backoff_ms(w.restart_count, app.worker_backend.restart_backoff_ms,
+		app.worker_backend.restart_backoff_max_ms)
 	mut proc := os.new_process('/bin/sh')
 	proc.set_args(['-lc', w.worker_cmd])
 	proc.set_environment(w.worker_env)
@@ -270,11 +269,11 @@ fn (mut app App) ensure_worker_slot(idx int) {
 		w.next_retry_ts = now + delay_ms
 		app.worker_backend.managed_workers[idx] = w
 		app.emit('worker.restart_scheduled', {
-			'worker_id': '${w.id}'
-			'socket': w.socket_path
+			'worker_id':     '${w.id}'
+			'socket':        w.socket_path
 			'restart_count': '${w.restart_count}'
 			'next_retry_ts': '${w.next_retry_ts}'
-			'reason': err.msg()
+			'reason':        err.msg()
 		})
 		app.pool_mu.unlock()
 		return
@@ -286,8 +285,8 @@ fn (mut app App) ensure_worker_slot(idx int) {
 	w.served_requests = 0
 	app.worker_backend.managed_workers[idx] = w
 	app.emit('worker.started', {
-		'worker_id': '${w.id}'
-		'socket': w.socket_path
+		'worker_id':     '${w.id}'
+		'socket':        w.socket_path
 		'restart_count': '${w.restart_count}'
 	})
 	app.pool_mu.unlock()
@@ -319,7 +318,8 @@ fn (mut app App) restart_worker_slot_now(idx int, reason string) {
 	}
 	w.proc.close()
 	now := time.now().unix_milli()
-	delay_ms := restart_backoff_ms(w.restart_count, app.worker_backend.restart_backoff_ms, app.worker_backend.restart_backoff_max_ms)
+	delay_ms := restart_backoff_ms(w.restart_count, app.worker_backend.restart_backoff_ms,
+		app.worker_backend.restart_backoff_max_ms)
 	mut proc := os.new_process('/bin/sh')
 	proc.set_args(['-lc', w.worker_cmd])
 	proc.set_environment(w.worker_env)
@@ -332,11 +332,11 @@ fn (mut app App) restart_worker_slot_now(idx int, reason string) {
 		w.next_retry_ts = now + delay_ms
 		app.worker_backend.managed_workers[idx] = w
 		app.emit('worker.restart_scheduled', {
-			'worker_id': '${w.id}'
-			'socket': w.socket_path
+			'worker_id':     '${w.id}'
+			'socket':        w.socket_path
 			'restart_count': '${w.restart_count}'
 			'next_retry_ts': '${w.next_retry_ts}'
-			'reason': '${reason}; ${err.msg()}'
+			'reason':        '${reason}; ${err.msg()}'
 		})
 		app.pool_mu.unlock()
 		return
@@ -350,10 +350,10 @@ fn (mut app App) restart_worker_slot_now(idx int, reason string) {
 	w.draining = false
 	app.worker_backend.managed_workers[idx] = w
 	app.emit('worker.restarted', {
-		'worker_id': '${w.id}'
-		'socket': w.socket_path
+		'worker_id':     '${w.id}'
+		'socket':        w.socket_path
 		'restart_count': '${w.restart_count}'
-		'reason': reason
+		'reason':        reason
 	})
 	app.pool_mu.unlock()
 }
@@ -392,13 +392,14 @@ fn (mut app App) on_worker_request_finished(socket_path string) {
 		w.inflight_requests--
 	}
 	w.served_requests++
-	if app.worker_backend.max_requests > 0 && !w.draining && w.served_requests >= app.worker_backend.max_requests {
+	if app.worker_backend.max_requests > 0 && !w.draining
+		&& w.served_requests >= app.worker_backend.max_requests {
 		w.draining = true
 		app.emit('worker.max_requests_reached', {
-			'worker_id': '${w.id}'
-			'socket': w.socket_path
+			'worker_id':       '${w.id}'
+			'socket':          w.socket_path
 			'served_requests': '${w.served_requests}'
-			'max_requests': '${app.worker_backend.max_requests}'
+			'max_requests':    '${app.worker_backend.max_requests}'
 		})
 	}
 	app.worker_backend.managed_workers[idx] = w
@@ -497,22 +498,22 @@ fn (mut app App) worker_selection_diagnostics() []WorkerSelectionDiagnostic {
 			mut probe_conn := unix.connect_stream(socket_path) or {
 				probe_error = err.msg()
 				diagnostics << WorkerSelectionDiagnostic{
-					socket_path: socket_path
-					proc_alive: !isnil(w.proc) && w.proc.is_alive()
-					draining: w.draining
+					socket_path:       socket_path
+					proc_alive:        !isnil(w.proc) && w.proc.is_alive()
+					draining:          w.draining
 					inflight_requests: w.inflight_requests
-					probe_error: probe_error
+					probe_error:       probe_error
 				}
 				continue
 			}
 			probe_conn.close() or {}
 		}
 		diagnostics << WorkerSelectionDiagnostic{
-			socket_path: socket_path
-			proc_alive: !isnil(w.proc) && w.proc.is_alive()
-			draining: w.draining
+			socket_path:       socket_path
+			proc_alive:        !isnil(w.proc) && w.proc.is_alive()
+			draining:          w.draining
 			inflight_requests: w.inflight_requests
-			probe_error: probe_error
+			probe_error:       probe_error
 		}
 	}
 	return diagnostics
@@ -532,9 +533,7 @@ fn (mut app App) worker_backend_select_socket() !string {
 	mut draining_ready := []int{}
 	if autostart && managed_worker_len > 0 {
 		for _ in 0 .. socket_len {
-			socket_path := app.next_idle_worker_socket() or {
-				break
-			}
+			socket_path := app.next_idle_worker_socket() or { break }
 			mut probe_conn := unix.connect_stream(socket_path) or {
 				last_err = err.msg()
 				continue
@@ -556,7 +555,7 @@ fn (mut app App) worker_backend_select_socket() !string {
 			last_err = 'all workers busy'
 		}
 		app.emit('worker.select.failed', {
-			'error': last_err
+			'error':            last_err
 			'diagnostics_json': json.encode(app.worker_selection_diagnostics())
 		})
 		return error(last_err)
@@ -593,7 +592,7 @@ fn (mut app App) worker_backend_select_socket() !string {
 		}
 	}
 	app.emit('worker.select.failed', {
-		'error': last_err
+		'error':            last_err
 		'diagnostics_json': json.encode(app.worker_selection_diagnostics())
 	})
 	return error(last_err)
@@ -602,16 +601,16 @@ fn (mut app App) worker_backend_select_socket() !string {
 fn worker_admin_status_from(mut w ManagedWorker) WorkerAdminStatus {
 	pid := if isnil(w.proc) { 0 } else { w.proc.pid }
 	return WorkerAdminStatus{
-		id: w.id
-		socket: w.socket_path
-		alive: if isnil(w.proc) { false } else { w.proc.is_alive() }
-		pid: pid
-		rss_kb: worker_rss_kb(pid)
-		draining: w.draining
+		id:                w.id
+		socket:            w.socket_path
+		alive:             if isnil(w.proc) { false } else { w.proc.is_alive() }
+		pid:               pid
+		rss_kb:            worker_rss_kb(pid)
+		draining:          w.draining
 		inflight_requests: w.inflight_requests
-		served_requests: w.served_requests
-		restart_count: w.restart_count
-		next_retry_ts: w.next_retry_ts
+		served_requests:   w.served_requests
+		restart_count:     w.restart_count
+		next_retry_ts:     w.next_retry_ts
 	}
 }
 
@@ -683,11 +682,11 @@ fn (mut app App) worker_admin_snapshot() WorkerPoolAdminStatus {
 		workers << worker_admin_status_from(mut w)
 	}
 	return WorkerPoolAdminStatus{
-		worker_autostart: app.worker_backend.autostart
-		worker_pool_size: app.worker_backend.sockets.len
-		worker_rr_index: app.worker_backend.rr_index
+		worker_autostart:    app.worker_backend.autostart
+		worker_pool_size:    app.worker_backend.sockets.len
+		worker_rr_index:     app.worker_backend.rr_index
 		worker_max_requests: app.worker_backend.max_requests
-		worker_sockets: app.worker_backend.sockets.clone()
-		workers: workers
+		worker_sockets:      app.worker_backend.sockets.clone()
+		workers:             workers
 	}
 }

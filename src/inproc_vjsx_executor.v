@@ -774,20 +774,6 @@ fn websocket_actor_queue_key(class_name string, key string) string {
 	return '${trimmed_class}:${trimmed_key}'
 }
 
-fn websocket_actor_key_parts(canonical string) (string, string) {
-	trimmed := canonical.trim_space()
-	if trimmed == '' {
-		return '', ''
-	}
-	if idx := trimmed.index(':') {
-		if idx <= 0 || idx + 1 >= trimmed.len {
-			return '', trimmed
-		}
-		return trimmed[..idx], trimmed[idx + 1..]
-	}
-	return '', trimmed
-}
-
 fn websocket_affinity_header_lookup(headers map[string]string, key string) string {
 	if key == '' {
 		return ''
@@ -1496,7 +1482,7 @@ fn (e InProcVjsxExecutor) resolve_websocket_dispatch_affinity(frame WorkerWebSoc
 	return affinity_key, affinity.priority, websocket_should_pin_affinity_lane(frame, affinity_key)
 }
 
-fn websocket_should_pin_affinity_lane(frame WorkerWebSocketFrame, affinity_key string) bool {
+fn websocket_should_pin_affinity_lane(_frame WorkerWebSocketFrame, affinity_key string) bool {
 	key := affinity_key.trim_space()
 	if key == '' {
 		return false
@@ -4428,10 +4414,6 @@ fn websocket_response_from_json(raw string, frame WorkerWebSocketFrame) WorkerWe
 		error:        normalized.error
 		error_class:  normalized.error_class
 	}
-}
-
-fn websocket_response_from_js_value(val vjsx.Value, frame WorkerWebSocketFrame) WorkerWebSocketDispatchResponse {
-	return websocket_response_from_json(val.json_stringify(), frame)
 }
 
 fn inproc_vjsx_websocket_handler_missing_result(frame WorkerWebSocketFrame) string {

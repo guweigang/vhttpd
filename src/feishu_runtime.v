@@ -13,13 +13,12 @@ import veb
 import x.json2
 import log
 
+@[markused]
 const feishu_runtime_frame_type_control = 0
 const feishu_runtime_frame_type_data = 1
 const feishu_runtime_header_type = 'type'
 const feishu_runtime_header_seq = 'seq'
 const feishu_runtime_header_trace = 'trace_id'
-const feishu_runtime_header_message_id = 'message_id'
-const feishu_runtime_header_sum = 'sum'
 const feishu_runtime_header_biz_rt = 'biz_rt'
 const feishu_runtime_message_ping = 'ping'
 const feishu_runtime_message_pong = 'pong'
@@ -29,8 +28,8 @@ const feishu_runtime_message_card = 'card'
 const feishu_runtime_max_upload_image_bytes = 10 * 1024 * 1024
 
 struct FeishuHttpLane {}
-struct FeishuControlHttpLane {}
 
+struct FeishuControlHttpLane {}
 
 struct FeishuRuntimeProtoHeader {
 mut:
@@ -700,9 +699,7 @@ fn feishu_runtime_extract_markdown_text(raw_content string, text string, content
 	if content == '' {
 		return ''
 	}
-	decoded := json.decode(FeishuRuntimeTextContent, content) or {
-		return content
-	}
+	decoded := json.decode(FeishuRuntimeTextContent, content) or { return content }
 	if decoded.text.trim_space() != '' {
 		return decoded.text
 	}
@@ -802,7 +799,8 @@ fn (app &App) feishu_runtime_has_static_app(name string) bool {
 	if name in app.feishu_static_apps {
 		return true
 	}
-	if app.feishu_static_apps.len == 0 && name in app.feishu_apps && !app.feishu_runtime_has_dynamic_app(name) {
+	if app.feishu_static_apps.len == 0 && name in app.feishu_apps
+		&& !app.feishu_runtime_has_dynamic_app(name) {
 		return true
 	}
 	return false
@@ -1030,7 +1028,7 @@ fn feishu_runtime_proto_frame_encode(frame FeishuRuntimeProtoFrame) []u8 {
 	}
 	feishu_runtime_encode_field_key(mut out, 4, 0)
 	feishu_runtime_varint_encode(mut out, u64(frame.method))
-	
+
 	for header in frame.headers {
 		encoded := feishu_runtime_proto_header_encode(header)
 		if encoded.len > 0 {
@@ -1115,6 +1113,7 @@ fn feishu_runtime_proto_header_decode(buf []u8) !FeishuRuntimeProtoHeader {
 			2 { out.value = value }
 			else {}
 		}
+
 		idx = end
 	}
 	return out
@@ -1138,6 +1137,7 @@ fn feishu_runtime_proto_frame_decode(buf []u8) !FeishuRuntimeProtoFrame {
 					4 { out.method = i32(value) }
 					else {}
 				}
+
 				idx = next_val
 			}
 			5, 6, 7, 8, 9 {
@@ -1169,6 +1169,7 @@ fn feishu_runtime_proto_frame_decode(buf []u8) !FeishuRuntimeProtoFrame {
 					}
 					else {}
 				}
+
 				idx = end
 			}
 			else {
@@ -1301,14 +1302,9 @@ fn (mut app App) feishu_runtime_snapshot() FeishuRuntimeSnapshot {
 		if runtime.is_connected() {
 			connected_count++
 		}
-		apps << runtime.app_snapshot_with_source(
-			name,
-			app.feishu_runtime_enabled(),
-			app.feishu_open_base_url,
-			app.feishu_runtime_app_source(name),
-			app.feishu_runtime_has_static_app(name),
-			app.feishu_runtime_has_dynamic_app(name),
-		)
+		apps << runtime.app_snapshot_with_source(name, app.feishu_runtime_enabled(),
+			app.feishu_open_base_url, app.feishu_runtime_app_source(name),
+			app.feishu_runtime_has_static_app(name), app.feishu_runtime_has_dynamic_app(name))
 	}
 	return FeishuRuntimeSnapshot{
 		enabled:         app.feishu_runtime_enabled()
@@ -1716,7 +1712,8 @@ fn (mut app App) feishu_runtime_send_message(req FeishuRuntimeSendMessageRequest
 		return error('missing receive_id')
 	}
 	msg_type := if req.msg_type.trim_space() == '' { 'text' } else { req.msg_type.trim_space() }
-	content := feishu_runtime_build_message_content(msg_type, req.content, req.text, req.content_fields)!
+	content := feishu_runtime_build_message_content(msg_type, req.content, req.text,
+		req.content_fields)!
 	token := app.feishu_runtime_tenant_access_token(app_name)!
 	mut header := http.new_header(key: .content_type, value: 'application/json; charset=utf-8')
 	header.add_custom('authorization', 'Bearer ${token}') or {}
@@ -1806,8 +1803,7 @@ fn (mut app App) feishu_runtime_upload_image_bytes(req FeishuRuntimeUploadImageR
 	}
 	mut header := http.new_header()
 	header.set(.authorization, 'Bearer ${token}')
-	resp := app.feishu_runtime_http_post_multipart_form('${app.feishu_open_base_url}/im/v1/images',
-		http.PostMultipartFormConfig{
+	resp := app.feishu_runtime_http_post_multipart_form('${app.feishu_open_base_url}/im/v1/images', http.PostMultipartFormConfig{
 		form:   {
 			'image_type': image_type
 		}
@@ -1862,13 +1858,14 @@ fn (mut app App) feishu_runtime_update_message(req FeishuRuntimeUpdateMessageReq
 			return error('message_id-based feishu update only supports interactive cards')
 		}
 	}
-	
+
 	// Support buffer placeholder replacement or auto-append
 	if target != '' {
 		app.feishu_mu.@lock()
 		if buf := app.feishu_buffers[target] {
 			if content_raw.contains('{{content}}') {
-				escaped := buf.content.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n')
+				escaped := buf.content.replace('\\', '\\\\').replace('"', '\\"').replace('\n',
+					'\\n')
 				content_raw = content_raw.replace('{{content}}', escaped)
 				log.info('[feishu] 🧩 replaced {{content}} placeholder')
 			}
@@ -2006,7 +2003,8 @@ fn (mut app App) feishu_runtime_buffer_patch(req WebSocketUpstreamSendRequest) {
 		}
 		app.feishu_mu.unlock()
 		if stream_id != '' {
-			app.codex_add_stream_target(app.codex_resolve_instance_for_stream(stream_id), stream_id, CodexTarget{
+			app.codex_add_stream_target(app.codex_resolve_instance_for_stream(stream_id),
+				stream_id, CodexTarget{
 				platform:   'feishu'
 				message_id: send_result.message_id
 			})
@@ -2139,7 +2137,8 @@ fn (mut app App) feishu_runtime_send_followup_segment(buf FeishuStreamBuffer, ma
 		content:         card_payload
 	})!
 	if buf.stream_id.trim_space() != '' {
-		app.codex_add_stream_target(app.codex_resolve_instance_for_stream(buf.stream_id), buf.stream_id, CodexTarget{
+		app.codex_add_stream_target(app.codex_resolve_instance_for_stream(buf.stream_id),
+			buf.stream_id, CodexTarget{
 			platform:   'feishu'
 			message_id: send_result.message_id
 		})
@@ -2165,7 +2164,8 @@ fn (mut app App) feishu_runtime_flush_pending_buffers() {
 
 	app.feishu_mu.@lock()
 	for _, buf in app.feishu_buffers {
-		if buf.last_delta >= buf.last_flush && now - buf.last_flush >= 400 && buf.content.trim_space() != '' {
+		if buf.last_delta >= buf.last_flush && now - buf.last_flush >= 400
+			&& buf.content.trim_space() != '' {
 			to_flush << buf
 		}
 	}
@@ -2242,7 +2242,8 @@ fn (mut app App) feishu_runtime_flush_buffer(message_id string, template_content
 			log.info('[feishu] 🚿 finish flush skipped for msg_id=${message_id} (empty buffer)')
 			return
 		}
-		head, mut tail := feishu_runtime_split_content_runes(content, feishu_stream_buffer_rollover_runes)
+		head, mut tail := feishu_runtime_split_content_runes(content,
+			feishu_stream_buffer_rollover_runes)
 		final_head := if tail == '' {
 			feishu_runtime_render_final_card(head, content_raw)
 		} else {
@@ -2257,12 +2258,13 @@ fn (mut app App) feishu_runtime_flush_buffer(message_id string, template_content
 		mut segment := 2
 		mut last_message_id := buf.message_id
 		for tail != '' {
-			head_chunk, next_tail := feishu_runtime_split_content_runes(tail, feishu_stream_buffer_rollover_runes)
+			head_chunk, next_tail := feishu_runtime_split_content_runes(tail,
+				feishu_stream_buffer_rollover_runes)
 			is_last := next_tail == ''
 			mut followup_buf := buf
 			followup_buf.segment_index = segment
-			last_message_id = app.feishu_runtime_send_followup_segment(followup_buf, head_chunk, is_last,
-				content_raw)!
+			last_message_id = app.feishu_runtime_send_followup_segment(followup_buf, head_chunk,
+				is_last, content_raw)!
 			tail = next_tail
 			segment++
 		}
@@ -2459,9 +2461,11 @@ fn (mut app App) feishu_provider_handle_binary_message(instance string, mut ws w
 	mut ack_headers := map[string]string{}
 	mut ack_data := ''
 	mut bridged := false
-	if app.feishu_card_bridge_target_id.trim_space() != '' && feishu_runtime_should_dispatch_upstream(summary) {
+	if app.feishu_card_bridge_target_id.trim_space() != ''
+		&& feishu_runtime_should_dispatch_upstream(summary) {
 		log.info('[feishu] 🔁 bridging upstream event to local runtime target=${app.feishu_card_bridge_target_id} trace_id=${trace_id} event_type=${summary.event_type} message_id=${summary.message_id}')
-		bridge_resp := app.feishu_card_bridge_dispatch_callback(app_name, trace_id, summary, payload) or {
+		bridge_resp := app.feishu_card_bridge_dispatch_callback(app_name, trace_id, summary,
+			payload) or {
 			log.error('[feishu] ❌ bridge upstream dispatch failed: trace_id=${trace_id} event_type=${summary.event_type} message_id=${summary.message_id} ${err}')
 			FeishuCardBridgeResult{
 				error: err.msg()
@@ -2476,7 +2480,8 @@ fn (mut app App) feishu_provider_handle_binary_message(instance string, mut ws w
 			}
 		}
 	}
-	if !bridged && app.has_websocket_upstream_logic_executor() && feishu_runtime_should_dispatch_upstream(summary) {
+	if !bridged && app.has_websocket_upstream_logic_executor()
+		&& feishu_runtime_should_dispatch_upstream(summary) {
 		log.info('[feishu] 📤 dispatching upstream event to logic executor kind=${app.logic_executor_kind()}')
 		mut activity_snapshot := WebSocketUpstreamActivitySnapshot{
 			provider:    websocket_upstream_provider_feishu
@@ -2491,34 +2496,23 @@ fn (mut app App) feishu_provider_handle_binary_message(instance string, mut ws w
 			received_at: time.now().unix()
 			recorded_at: time.now().unix()
 		}
-		outcome := app.kernel_dispatch_websocket_upstream_handled(app.kernel_websocket_upstream_dispatch_request_with_event(
-			summary.event_kind,
-			seq_id,
-			websocket_upstream_provider_feishu,
-			app_name,
-			trace_id,
-			summary.event_type,
-			summary.message_id,
-			summary.target,
-			summary.target_type,
-			payload,
-			time.now().unix(),
-			{
-				'event_id':          summary.event_id
-				'chat_type':         summary.chat_type
-				'message_type':      summary.message_type
-				'open_message_id':   summary.open_message_id
-				'root_id':           summary.root_id
-				'parent_id':         summary.parent_id
-				'create_time':       summary.create_time
-				'sender_id':         summary.sender_id
-				'sender_id_type':    summary.sender_id_type
-				'sender_tenant_key': summary.sender_tenant_key
-				'action_tag':        summary.action_tag
-				'action_value':      summary.action_value
-				'token':             summary.token
-			},
-		)) or {
+		outcome := app.kernel_dispatch_websocket_upstream_handled(app.kernel_websocket_upstream_dispatch_request_with_event(summary.event_kind,
+			seq_id, websocket_upstream_provider_feishu, app_name, trace_id, summary.event_type,
+			summary.message_id, summary.target, summary.target_type, payload, time.now().unix(), {
+			'event_id':          summary.event_id
+			'chat_type':         summary.chat_type
+			'message_type':      summary.message_type
+			'open_message_id':   summary.open_message_id
+			'root_id':           summary.root_id
+			'parent_id':         summary.parent_id
+			'create_time':       summary.create_time
+			'sender_id':         summary.sender_id
+			'sender_id_type':    summary.sender_id_type
+			'sender_tenant_key': summary.sender_tenant_key
+			'action_tag':        summary.action_tag
+			'action_value':      summary.action_value
+			'token':             summary.token
+		})) or {
 			log.error('[feishu] ❌ dispatch error: ${err}')
 			app.emit('websocket_upstream.dispatch.error', {
 				'provider': websocket_upstream_provider_feishu
@@ -2722,8 +2716,10 @@ fn (mut app App) feishu_callback_by_app(mut ctx Context, raw_app string) veb.Res
 	})
 	log.info('[feishu] 📩 callback received: type=${summary.event_type} kind=${summary.event_kind} chat_id=${summary.chat_id} msg_id=${summary.message_id}')
 	log.info('[feishu][debug] callback.payload.${summary.event_type}: ${payload}')
-	if summary.event_type == 'card.action.trigger' && app.feishu_card_bridge_target_id.trim_space() != '' {
-		bridge_resp := app.feishu_card_bridge_dispatch_callback(app_name, trace_id, summary, payload) or {
+	if summary.event_type == 'card.action.trigger'
+		&& app.feishu_card_bridge_target_id.trim_space() != '' {
+		bridge_resp := app.feishu_card_bridge_dispatch_callback(app_name, trace_id, summary,
+			payload) or {
 			log.error('[feishu] ❌ bridge callback dispatch failed: ${err}')
 			ctx.res.set_status(http.status_from_int(502))
 			return ctx.text(json.encode(AdminErrorResponse{
@@ -2736,7 +2732,11 @@ fn (mut app App) feishu_callback_by_app(mut ctx Context, raw_app string) veb.Res
 			}
 			ctx.set_custom_header(name, value) or {}
 		}
-		ctx.res.set_status(http.status_from_int(if bridge_resp.status > 0 { bridge_resp.status } else { 200 }))
+		ctx.res.set_status(http.status_from_int(if bridge_resp.status > 0 {
+			bridge_resp.status
+		} else {
+			200
+		}))
 		ctype := bridge_resp.headers['content-type'] or { 'application/json; charset=utf-8' }
 		ctx.set_content_type(ctype)
 		app.emit('http.request', {
@@ -2751,7 +2751,8 @@ fn (mut app App) feishu_callback_by_app(mut ctx Context, raw_app string) veb.Res
 		})
 		return ctx.text(bridge_resp.body)
 	}
-	if app.has_websocket_upstream_logic_executor() && feishu_runtime_should_dispatch_upstream(summary) {
+	if app.has_websocket_upstream_logic_executor()
+		&& feishu_runtime_should_dispatch_upstream(summary) {
 		activity_id := if summary.event_id != '' {
 			summary.event_id
 		} else {
@@ -2770,36 +2771,26 @@ fn (mut app App) feishu_callback_by_app(mut ctx Context, raw_app string) veb.Res
 			received_at: time.now().unix()
 			recorded_at: time.now().unix()
 		}
-		outcome := app.kernel_dispatch_websocket_upstream_handled(app.kernel_websocket_upstream_dispatch_request_with_event(
-			summary.event_kind,
-			activity_id,
-			websocket_upstream_provider_feishu,
-			app_name,
-			trace_id,
-			summary.event_type,
-			summary.message_id,
-			summary.target,
-			summary.target_type,
-			payload,
-			time.now().unix(),
-			{
-				'action':            'callback'
-				'event_id':          summary.event_id
-				'event_kind':        summary.event_kind
-				'chat_type':         summary.chat_type
-				'message_type':      summary.message_type
-				'open_message_id':   summary.open_message_id
-				'root_id':           summary.root_id
-				'parent_id':         summary.parent_id
-				'create_time':       summary.create_time
-				'sender_id':         summary.sender_id
-				'sender_id_type':    summary.sender_id_type
-				'sender_tenant_key': summary.sender_tenant_key
-				'action_tag':        summary.action_tag
-				'action_value':      summary.action_value
-				'token':             summary.token
-			},
-		)) or {
+		outcome := app.kernel_dispatch_websocket_upstream_handled(app.kernel_websocket_upstream_dispatch_request_with_event(summary.event_kind,
+			activity_id, websocket_upstream_provider_feishu, app_name, trace_id,
+			summary.event_type, summary.message_id, summary.target, summary.target_type, payload,
+			time.now().unix(), {
+			'action':            'callback'
+			'event_id':          summary.event_id
+			'event_kind':        summary.event_kind
+			'chat_type':         summary.chat_type
+			'message_type':      summary.message_type
+			'open_message_id':   summary.open_message_id
+			'root_id':           summary.root_id
+			'parent_id':         summary.parent_id
+			'create_time':       summary.create_time
+			'sender_id':         summary.sender_id
+			'sender_id_type':    summary.sender_id_type
+			'sender_tenant_key': summary.sender_tenant_key
+			'action_tag':        summary.action_tag
+			'action_value':      summary.action_value
+			'token':             summary.token
+		})) or {
 			activity_snapshot.worker_error = err.msg()
 			activity_snapshot.error_class = 'transport_error'
 			app.websocket_upstream_record_activity(activity_snapshot)

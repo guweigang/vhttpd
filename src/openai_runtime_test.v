@@ -55,8 +55,10 @@ fn test_openai_responses_builtin_plan_uses_responses_path() {
 			}
 		}
 	}
-	plan := app.openai_resolve_responses_plan('public-model', '{"model":"public-model","input":"hi"}',
-		'POST', '/v1/responses', 'req_resp', 'trace_resp') or { panic(err) }
+	plan := app.openai_resolve_responses_plan('public-model',
+		'{"model":"public-model","input":"hi"}', 'POST', '/v1/responses', 'req_resp', 'trace_resp') or {
+		panic(err)
+	}
 	assert plan.path == '/responses'
 	assert plan.output_protocol == 'openai.response'
 	assert plan.body.contains('"model":"upstream-model"')
@@ -278,11 +280,13 @@ export function openai(_req) {
 
 fn test_openai_plugin_plan_validation_rejects_missing_backend() {
 	raw := '{"method":"POST","path":"/chat/completions","body":"{}"}'
-	plan := openai_upstream_plan_from_plugin_json(raw) or { panic(err) }
+	plan := openai_upstream_plan_from_plugin_json_with_defaults(raw, '/chat/completions',
+		'openai.chat.completion') or { panic(err) }
 	mut app := App{}
 	_ := app
 	if plan.backend.trim_space() == '' {
-		err := openai_plan_error('openai_plugin_plan_missing_backend', 'plugin plan must include backend')
+		err := openai_plan_error('openai_plugin_plan_missing_backend',
+			'plugin plan must include backend')
 		assert openai_plan_error_code(err.msg()) == 'openai_plugin_plan_missing_backend'
 		assert openai_plan_error_message(err.msg()) == 'plugin plan must include backend'
 		return

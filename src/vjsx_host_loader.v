@@ -1,6 +1,5 @@
 module main
 
-import hash.fnv1a
 import os
 import vjsx
 import vjsx.runtimejs
@@ -79,19 +78,12 @@ fn vjsx_build_root_for_config(config VjsxRuntimeFacadeConfig) string {
 	return vjsx_default_build_root()
 }
 
-fn vjsx_lane_temp_root(app_entry string, idx int) string {
-	entry_abs := os.abs_path(app_entry)
-	entry_name := os.base(entry_abs).trim_space().replace(' ', '_')
-	entry_hash := fnv1a.sum64_string(entry_abs).hex()
-	cache_root := vjsx_default_build_root()
-	return os.join_path(cache_root, '${entry_name}.${entry_hash}.pid_${os.getpid()}.lane_${idx}.vjsxbuild')
-}
-
 fn vjsx_lane_temp_root_for_signature(config VjsxRuntimeFacadeConfig, idx int, source_signature string) string {
 	entry_abs := os.abs_path(config.app_entry)
 	entry_name := os.base(entry_abs).trim_space().replace(' ', '_')
 	cache_root := vjsx_build_root_for_config(config)
-	return os.join_path(cache_root, '${entry_name}.${source_signature}.pid_${os.getpid()}.lane_${idx}.vjsxbuild')
+	return os.join_path(cache_root,
+		'${entry_name}.${source_signature}.pid_${os.getpid()}.lane_${idx}.vjsxbuild')
 }
 
 fn load_inproc_vjsx_entry(mut ctx vjsx.Context, config VjsxRuntimeFacadeConfig, idx int, source_signature string, as_module bool) !vjsx.Value {

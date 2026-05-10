@@ -44,21 +44,6 @@ fn read_frame_bytes(mut conn unix.StreamConn) ![]u8 {
 	return read_exact(mut conn, size)!
 }
 
-fn dispatch_via_worker(socket_path string, method string, path string, req http.Request, remote_addr string, trace_id string, req_id string, read_timeout_ms int) !WorkerResponse {
-	mut conn := unix.connect_stream(socket_path)!
-	if read_timeout_ms > 0 {
-		conn.set_read_timeout(time.millisecond * read_timeout_ms)
-	}
-	defer {
-		conn.close() or {}
-	}
-	payload := encode_worker_request(method, path, req, remote_addr, trace_id, req_id)
-	write_frame(mut conn, payload)!
-	resp_raw := read_frame(mut conn)!
-	resp := json.decode(WorkerResponse, resp_raw)!
-	return resp
-}
-
 fn encode_worker_request(method string, path string, req http.Request, remote_addr string, trace_id string, req_id string) string {
 	normalized_path, query_string := normalize_request_target(path)
 	query := parse_query_map(query_string)
@@ -275,8 +260,7 @@ fn write_http_stream_headers_conn(mut conn net.TcpConn, status int, content_type
 }
 
 fn write_http_stream_headers(mut ctx Context, status int, content_type string, extra_headers map[string]string, chunked bool) ! {
-	write_http_stream_headers_conn(mut ctx.conn, status, content_type, extra_headers,
-		chunked)!
+	write_http_stream_headers_conn(mut ctx.conn, status, content_type, extra_headers, chunked)!
 }
 
 fn write_chunk(mut conn net.TcpConn, data string) ! {
