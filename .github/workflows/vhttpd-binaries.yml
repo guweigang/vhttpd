@@ -98,8 +98,8 @@ jobs:
           chmod +x /tmp/v-bootstrap/v/v
           (
             cd /tmp/v
-            /tmp/v-bootstrap/v/v -o v cmd/v
-            ./v -o v cmd/v
+            /tmp/v-bootstrap/v/v -cc cc -o v cmd/v
+            ./v -cc cc -o v cmd/v
           )
           chmod +x /tmp/v/v
           echo "/tmp/v" >> "$GITHUB_PATH"
