@@ -29,7 +29,6 @@ jobs:
     env:
       VHTTPD_VJSX_ROOT: /usr/local/share/vhttpd/vjsx
       V_REPO: https://github.com/guweigang/vlang
-      V_REF: 06438457b7fed78397588e7c0797b9e0d7483257
     strategy:
       fail-fast: false
       matrix:
@@ -96,7 +95,6 @@ jobs:
           unzip -q /tmp/v-bootstrap.zip -d /tmp/v-bootstrap
           rm -rf /tmp/v
           git clone "$V_REPO" /tmp/v
-          git -C /tmp/v checkout "$V_REF"
           chmod +x /tmp/v-bootstrap/v/v
           (
             cd /tmp/v
