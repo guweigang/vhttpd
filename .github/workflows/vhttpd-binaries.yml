@@ -84,22 +84,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          case "${{ matrix.target }}" in
-            linux-amd64) bootstrap_url="https://github.com/vlang/v/releases/download/0.5.1/v_linux.zip" ;;
-            macos-amd64) bootstrap_url="https://github.com/vlang/v/releases/download/0.5.1/v_macos_x86_64.zip" ;;
-            macos-arm64) bootstrap_url="https://github.com/vlang/v/releases/download/0.5.1/v_macos_arm64.zip" ;;
-            *) echo "unsupported target: ${{ matrix.target }}"; exit 1 ;;
-          esac
-          curl -fsSL "$bootstrap_url" -o /tmp/v-bootstrap.zip
-          rm -rf /tmp/v-bootstrap
-          unzip -q /tmp/v-bootstrap.zip -d /tmp/v-bootstrap
           rm -rf /tmp/v
           git clone "$V_REPO" /tmp/v
-          chmod +x /tmp/v-bootstrap/v/v
           (
             cd /tmp/v
-            /tmp/v-bootstrap/v/v -cc cc -o v cmd/v
-            ./v -cc cc -o v cmd/v
+            git log -1 --oneline
+            make CC=cc
           )
           chmod +x /tmp/v/v
           echo "/tmp/v" >> "$GITHUB_PATH"
