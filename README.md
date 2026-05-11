@@ -212,7 +212,7 @@ Practical summary:
 `vhttpd` now splits local dependencies into install profiles so you do not need to guess the full system package list up front.
 
 - `core`: base build dependencies for `vhttpd`
-- `vjsx`: embedded runtime build support, including the required QuickJS archive placement under `~/.vmodules/vjsx/libs/`
+- `vjsx`: embedded runtime build support, including the managed QuickJS source checkout used by `vjsx`
 - `db`: alias for the default DB-capable dependency surface
 - `full`: everything above
 
@@ -242,16 +242,16 @@ What these targets do:
 
 - `make deps-core`: installs `openssl`, `Boehm GC`, `pkg-config`, and basic build tooling
 - `make deps-core` also installs SQLite/MySQL/PostgreSQL client development packages because default `vhttpd` builds now include DB support
-- `make deps-vjsx`: ensures the local `vjsx` module checkout exists for builds and, on Linux, builds QuickJS and places it at `~/.vmodules/vjsx/libs/qjs_linux_x64.a`
+- `make deps-vjsx`: ensures the local `vjsx` module checkout exists for builds and prepares the managed QuickJS source checkout
 - `make deps-db`: alias for the same default DB-capable build dependency set
-- `make doctor`: checks the current machine for the required commands, `pkg-config` entries, and `vjsx` QuickJS archive placement
+- `make doctor`: checks the current machine for the required commands, `pkg-config` entries, and `vjsx` managed QuickJS source checkout
 
 Important `vjsx` build note:
 
-- On Linux, `vjsx` does not just need "QuickJS installed somewhere".
-- The archive must exist at [~/.vmodules/vjsx/libs/qjs_linux_x64.a](/Users/guweigang/.vmodules/vjsx/libs/qjs_linux_x64.a).
-- `make deps-vjsx` is the supported way to prepare that path locally.
-- This is a build-time module layout. Packaged `vhttpd` binaries do not need a local `~/.vmodules/vjsx` checkout just to load embedded JavaScript or TypeScript runtime assets.
+- New builds use `vjsx`'s managed QuickJS source checkout instead of bundled `qjs_*.a` archives.
+- Local development first uses a compatible sibling checkout at `../quickjs` when present.
+- Otherwise `vjsx/scripts/ensure-quickjs.sh` prepares `${PWD}/.deps/quickjs` for the host repository.
+- This is a build-time module layout. Packaged `vhttpd` binaries do not need a local `~/.vmodules/vjsx` checkout or `.deps/quickjs` directory just to load embedded JavaScript or TypeScript runtime assets.
 
 ## Build
 
@@ -292,8 +292,7 @@ Workflow file:
 The workflow now mirrors the local `vjsx` dependency layout:
 
 - it checks out `vjsx`
-- on Linux it builds QuickJS from source
-- it installs the archive into `vjsx/libs/qjs_linux_x64.a`
+- it asks `vjsx/scripts/ensure-quickjs.sh` to prepare the managed QuickJS source under the workflow workspace
 - it builds `vhttpd` with `VPHP_V_GC=boehm`
 
 ## Distribution

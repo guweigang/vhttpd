@@ -2,12 +2,12 @@
 set -euo pipefail
 
 mode="${1:-core}"
+repo_root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 
 os_name="$(uname -s)"
-arch_name="$(uname -m)"
 home_vmodules="${HOME}/.vmodules"
 vjsx_dir="${home_vmodules}/vjsx"
-quickjs_cache_dir="${HOME}/.cache/vhttpd/quickjs"
+local_quickjs_dir=$(CDPATH= cd -- "${repo_root}/../quickjs" 2>/dev/null && pwd || true)
 
 log() {
   printf '[deps] %s\n' "$*"
@@ -20,6 +20,13 @@ fail() {
 
 need_cmd() {
   command -v "$1" >/dev/null 2>&1 || fail "missing required command: $1"
+}
+
+is_quickjs_ng_checkout() {
+  [ -n "$1" ] &&
+    [ -f "$1/quickjs.c" ] &&
+    [ -f "$1/quickjs-c-atomics.h" ] &&
+    grep -q 'QJS_VERSION_MAJOR' "$1/quickjs.h" 2>/dev/null
 }
 
 brew_install_if_missing() {
@@ -94,52 +101,17 @@ ensure_vjsx_checkout() {
   git clone --depth=1 https://github.com/guweigang/vjsx "$vjsx_dir"
 }
 
-ensure_linux_quickjs_archive() {
-  [ "$os_name" = "Linux" ] || return
-  mkdir -p "${vjsx_dir}/libs" "$(dirname "$quickjs_cache_dir")"
-  need_cmd git
-  need_cmd make
-  if [ ! -d "$quickjs_cache_dir/.git" ]; then
-    log "cloning QuickJS into ${quickjs_cache_dir}"
-    rm -rf "$quickjs_cache_dir"
-    git clone --depth=1 https://github.com/bellard/quickjs "$quickjs_cache_dir"
-  fi
-  log "building QuickJS static archive"
-  make -C "$quickjs_cache_dir" libquickjs.a
-  cp "$quickjs_cache_dir/libquickjs.a" "${vjsx_dir}/libs/qjs_linux_x64.a"
-  log "installed ${vjsx_dir}/libs/qjs_linux_x64.a"
-}
-
-ensure_vjsx_quickjs_archive() {
+ensure_vjsx_quickjs_source() {
   ensure_vjsx_checkout
-  case "$os_name" in
-    Darwin)
-      case "$arch_name" in
-        arm64)
-          [ -f "${vjsx_dir}/libs/qjs_macos_arm64.a" ] || fail "missing ${vjsx_dir}/libs/qjs_macos_arm64.a"
-          ;;
-        x86_64)
-          [ -f "${vjsx_dir}/libs/qjs_macos_x64.a" ] || fail "missing ${vjsx_dir}/libs/qjs_macos_x64.a"
-          ;;
-        *)
-          fail "unsupported macOS arch: ${arch_name}"
-          ;;
-      esac
-      ;;
-    Linux)
-      case "$arch_name" in
-        x86_64|amd64)
-          ensure_linux_quickjs_archive
-          ;;
-        *)
-          fail "unsupported Linux arch for bundled QuickJS archive: ${arch_name}"
-          ;;
-      esac
-      ;;
-    *)
-      fail "unsupported OS: ${os_name}"
-      ;;
-  esac
+  need_cmd git
+  [ -x "${vjsx_dir}/scripts/ensure-quickjs.sh" ] || fail "missing ${vjsx_dir}/scripts/ensure-quickjs.sh"
+  if is_quickjs_ng_checkout "$local_quickjs_dir"; then
+    log "using local QuickJS source at ${local_quickjs_dir}"
+    return
+  fi
+  log "ensuring vjsx managed QuickJS source"
+  quickjs_path="$(VJS_QUICKJS_WORK_ROOT="$repo_root" "${vjsx_dir}/scripts/ensure-quickjs.sh")"
+  log "using QuickJS source at ${quickjs_path}"
 }
 
 case "$mode" in
@@ -148,14 +120,14 @@ case "$mode" in
     ;;
   vjsx)
     install_core_packages
-    ensure_vjsx_quickjs_archive
+    ensure_vjsx_quickjs_source
     ;;
   db)
     install_core_packages
     ;;
   full)
     install_core_packages
-    ensure_vjsx_quickjs_archive
+    ensure_vjsx_quickjs_source
     ;;
   *)
     fail "unknown mode: ${mode} (expected: core | vjsx | db | full)"
