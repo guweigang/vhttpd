@@ -18,9 +18,9 @@ struct CodexPendingRpc {
 }
 
 struct CodexReadFallback {
-	token               int
-	stream_id           string
-	thread_id           string
+	token                int
+	stream_id            string
+	thread_id            string
 	scheduled_at_unix_ms i64
 }
 
@@ -28,7 +28,7 @@ struct CodexReadFallback {
 
 struct CodexProviderRuntime {
 mut:
-	instance           string
+	instance string
 	// ── config (from TOML / CLI) ──
 	enabled            bool
 	url                string
@@ -54,14 +54,14 @@ mut:
 	active_stream_id        string // current stream being processed
 	conn                    &ws.Client = unsafe { nil }
 	// ── runtime state ──
-	stream_map              map[string][]CodexTarget // stream_id -> list of targets
-	rpc_id_counter          int
-	pending_rpcs            map[int]CodexPendingRpc
-	err_bursts              map[string][]string
-	err_pending_flushes     map[string]bool
-	thread_stream_map       map[string]string // thread_id -> stream_id (deterministic mapping)
-	read_fallback_seq       int
-	read_fallbacks          map[string]CodexReadFallback
+	stream_map          map[string][]CodexTarget // stream_id -> list of targets
+	rpc_id_counter      int
+	pending_rpcs        map[int]CodexPendingRpc
+	err_bursts          map[string][]string
+	err_pending_flushes map[string]bool
+	thread_stream_map   map[string]string // thread_id -> stream_id (deterministic mapping)
+	read_fallback_seq   int
+	read_fallbacks      map[string]CodexReadFallback
 }
 
 struct AdminCodexRuntimeSnapshot {
@@ -388,22 +388,22 @@ fn codex_runtime_instance_name(instance string) string {
 fn codex_runtime_build_instance_from_base(base CodexProviderRuntime, instance string) CodexProviderRuntime {
 	resolved := codex_runtime_instance_name(instance)
 	return CodexProviderRuntime{
-		instance:              resolved
-		enabled:               base.enabled
-		url:                   base.url
-		model:                 base.model
-		effort:                base.effort
-		cwd:                   base.cwd
-		approval_policy:       base.approval_policy
-		sandbox:               base.sandbox
-		reconnect_delay_ms:    base.reconnect_delay_ms
-		flush_interval_ms:     base.flush_interval_ms
-		stream_map:            map[string][]CodexTarget{}
-		pending_rpcs:          map[int]CodexPendingRpc{}
-		err_bursts:            map[string][]string{}
-		err_pending_flushes:   map[string]bool{}
-		thread_stream_map:     map[string]string{}
-		read_fallbacks:        map[string]CodexReadFallback{}
+		instance:            resolved
+		enabled:             base.enabled
+		url:                 base.url
+		model:               base.model
+		effort:              base.effort
+		cwd:                 base.cwd
+		approval_policy:     base.approval_policy
+		sandbox:             base.sandbox
+		reconnect_delay_ms:  base.reconnect_delay_ms
+		flush_interval_ms:   base.flush_interval_ms
+		stream_map:          map[string][]CodexTarget{}
+		pending_rpcs:        map[int]CodexPendingRpc{}
+		err_bursts:          map[string][]string{}
+		err_pending_flushes: map[string]bool{}
+		thread_stream_map:   map[string]string{}
+		read_fallbacks:      map[string]CodexReadFallback{}
 	}
 }
 
@@ -420,7 +420,9 @@ fn (mut app App) codex_runtime_ensure_instance(instance string) CodexProviderRun
 		return app.codex_runtime
 	}
 	if resolved in app.codex_instances {
-		return app.codex_instances[resolved] or { codex_runtime_build_instance_from_base(app.codex_runtime, resolved) }
+		return app.codex_instances[resolved] or {
+			codex_runtime_build_instance_from_base(app.codex_runtime, resolved)
+		}
 	}
 	mut next := codex_runtime_build_instance_from_base(app.codex_runtime, resolved)
 	if spec := app.provider_instance_get('codex', resolved) {
@@ -469,7 +471,9 @@ fn (mut app App) codex_runtime_snapshot(instance string) CodexProviderRuntime {
 		return app.codex_runtime
 	}
 	if resolved in app.codex_instances {
-		return app.codex_instances[resolved] or { codex_runtime_build_instance_from_base(app.codex_runtime, resolved) }
+		return app.codex_instances[resolved] or {
+			codex_runtime_build_instance_from_base(app.codex_runtime, resolved)
+		}
 	}
 	return codex_runtime_build_instance_from_base(app.codex_runtime, resolved)
 }
@@ -763,7 +767,6 @@ fn codex_ping_loop(mut client ws.Client) {
 	}
 }
 
-
 fn (mut app App) codex_provider_on_disconnected(instance string, reason string) {
 	log.error('[codex] ❌ disconnected instance=${codex_runtime_instance_name(instance)}: ${reason}')
 	mut rt := app.codex_runtime_ensure_instance(instance)
@@ -883,16 +886,12 @@ struct CodexJsonRpcMessage {
 	error  string
 }
 
-fn codex_is_response(msg CodexJsonRpcMessage) bool {
-	return msg.id != none && msg.method == ''
-}
-
 fn codex_classify_rpc(raw string) CodexRpcClassification {
-    // Use top-level field detection to avoid matching nested keys like thread.id
-    has_method := vhttpd_has_any_top_level_key(raw, ['method'])
-    has_id := vhttpd_has_any_top_level_key(raw, ['id'])
-    has_result := vhttpd_has_any_top_level_key(raw, ['result'])
-    has_error := vhttpd_has_any_top_level_key(raw, ['error'])
+	// Use top-level field detection to avoid matching nested keys like thread.id
+	has_method := vhttpd_has_any_top_level_key(raw, ['method'])
+	has_id := vhttpd_has_any_top_level_key(raw, ['id'])
+	has_result := vhttpd_has_any_top_level_key(raw, ['result'])
+	has_error := vhttpd_has_any_top_level_key(raw, ['error'])
 
 	method := if has_method { codex_extract_string_field(raw, 'method') } else { '' }
 	id_raw := if has_id { codex_extract_raw_field(raw, 'id') } else { '' }
@@ -966,7 +965,8 @@ fn codex_extract_string_field(raw string, field string) string {
 	mut idx := raw.index(marker) or { return '' }
 	idx += marker.len
 	// skip : and optional whitespace
-	for idx < raw.len && (raw[idx] == `:` || raw[idx] == ` ` || raw[idx] == `\t` || raw[idx] == `\n` || raw[idx] == `\r`) {
+	for idx < raw.len && (raw[idx] == `:` || raw[idx] == ` ` || raw[idx] == `\t`
+		|| raw[idx] == `\n` || raw[idx] == `\r`) {
 		idx++
 	}
 	if idx >= raw.len || raw[idx] != `"` {
@@ -1066,12 +1066,6 @@ fn codex_extract_raw_field(raw string, field string) string {
 	return raw[start..idx].trim_space()
 }
 
-// Detect if a top-level field exists (naive but avoids nested matches)
-// Deprecated: use the shared top-level JSON key helpers instead.
-fn codex_has_top_level_field(raw string, field string) bool {
-    return vhttpd_has_top_level_key(raw, field)
-}
-
 fn codex_debug_enabled() bool {
 	$if prod {
 		return false
@@ -1103,7 +1097,8 @@ fn (mut app App) codex_provider_handle_text_message(instance string, raw string)
 	codex_debug_log('frame.raw', raw)
 
 	classification := codex_classify_rpc(raw)
-	log.info('[codex] 🔎 instance=${codex_runtime_instance_name(instance)} frame #${frame_count} ${codex_frame_summary(raw, classification)}')
+	log.info('[codex] 🔎 instance=${codex_runtime_instance_name(instance)} frame #${frame_count} ${codex_frame_summary(raw,
+		classification)}')
 
 	if classification.is_response {
 		app.codex_handle_response(instance, classification, raw)
@@ -1125,7 +1120,7 @@ fn (mut app App) codex_provider_handle_text_message(instance string, raw string)
 fn (mut app App) codex_handle_response(instance string, cls CodexRpcClassification, raw string) {
 	log.info('[codex] 📨 instance=${codex_runtime_instance_name(instance)} response id=${cls.id_raw} has_error=${cls.has_error}')
 	codex_debug_log('response.raw', raw)
-	
+
 	// Check for pending RPCs FIRST so we know the stream_id
 	id := cls.id_raw.int()
 	pending, _ := app.codex_take_pending_rpc(instance, id)
@@ -1141,13 +1136,14 @@ fn (mut app App) codex_handle_response(instance string, cls CodexRpcClassificati
 			'error':    error_msg
 			'instance': codex_runtime_instance_name(instance)
 		})
-		
+
 		// If we have a pending rpc with a stream_id, aggregate this error
 		if pending.stream_id != '' {
 			app.codex_queue_error_dispatch(instance, pending.stream_id, raw)
 		} else {
 			// Fallback: use active stream
-			app.codex_queue_error_dispatch(instance, app.codex_get_active_stream_id_for_instance(instance), raw)
+			app.codex_queue_error_dispatch(instance,
+				app.codex_get_active_stream_id_for_instance(instance), raw)
 		}
 		return
 	}
@@ -1184,7 +1180,11 @@ fn (mut app App) codex_handle_response(instance string, cls CodexRpcClassificati
 
 	if pending.method != '' {
 		// Route result back to PHP
-		result_raw := if cls.has_error { codex_extract_raw_field(raw, 'error') } else { codex_extract_raw_field(raw, 'result') }
+		result_raw := if cls.has_error {
+			codex_extract_raw_field(raw, 'error')
+		} else {
+			codex_extract_raw_field(raw, 'result')
+		}
 		app.dispatch_codex_rpc_response(instance, pending, result_raw, cls.has_error, raw)
 		if pending.method == 'thread/read' {
 			app.codex_clear_read_fallback(instance, pending.stream_id)
@@ -1201,19 +1201,11 @@ fn (mut app App) dispatch_codex_rpc_response(instance string, pending CodexPendi
 		return
 	}
 
-	req := app.kernel_websocket_upstream_dispatch_request(
-		'codex-rpc-${time.now().unix_milli()}',
-		'codex',
-		codex_runtime_instance_name(instance),
-		pending.stream_id,
-		'codex.rpc.response',
-		pending.message_id,
-		pending.stream_id,
-		'stream_id',
+	req := app.kernel_websocket_upstream_dispatch_request('codex-rpc-${time.now().unix_milli()}',
+		'codex', codex_runtime_instance_name(instance), pending.stream_id, 'codex.rpc.response',
+		pending.message_id, pending.stream_id, 'stream_id',
 		'{"method":"${pending.method}","result":${result_raw},"has_error":${has_error},"raw_response":${raw}}',
-		time.now().unix(),
-		map[string]string{},
-	)
+		time.now().unix(), map[string]string{})
 
 	outcome := app.kernel_dispatch_websocket_upstream_handled(req) or {
 		log.error('[codex] ❌ failed to dispatch websocket_upstream: ${err}')
@@ -1300,7 +1292,7 @@ fn (mut app App) codex_send_rpc(instance string, method string, params string, s
 		stream_id:  stream_id
 		message_id: message_id
 	})
-	
+
 	// 🚨 航空级堵漏：确保 RPC 调用也能建立物理绑定
 	if stream_id != '' {
 		bound_thread_id := if explicit_thread_id != '' {
@@ -1316,7 +1308,7 @@ fn (mut app App) codex_send_rpc(instance string, method string, params string, s
 			}
 		}
 	}
-	
+
 	rt := app.codex_runtime_snapshot(resolved_instance)
 	mut conn := rt.connection()
 	connected := rt.is_connected()
@@ -1372,9 +1364,9 @@ fn (mut app App) codex_handle_server_request(instance string, cls CodexRpcClassi
 	}
 
 	app.emit('codex.server_request', {
-		'method':   cls.method
-		'id':       cls.id_raw
-		'instance': codex_runtime_instance_name(instance)
+		'method':    cls.method
+		'id':        cls.id_raw
+		'instance':  codex_runtime_instance_name(instance)
 		'thread_id': detected_thread_id
 		'stream_id': stream_id
 	})
@@ -1383,20 +1375,18 @@ fn (mut app App) codex_handle_server_request(instance string, cls CodexRpcClassi
 		return
 	}
 
-	log.info('[codex] 🚚 request dispatch instance=${codex_runtime_instance_name(instance)} method=${cls.method} chosen_stream=${stream_id} source=${if target_stream_id != '' { 'thread_binding' } else if active_stream_id != '' { 'active_stream' } else if pending_stream_id != '' { 'pending_stream' } else { 'none' }}')
-	req := app.kernel_websocket_upstream_dispatch_request(
-		'codex-request-${time.now().unix_milli()}',
-		'codex',
-		codex_runtime_instance_name(instance),
-		stream_id,
-		'codex.server_request',
-		'',
-		'',
-		'',
-		raw,
-		time.now().unix(),
-		map[string]string{},
-	)
+	log.info('[codex] 🚚 request dispatch instance=${codex_runtime_instance_name(instance)} method=${cls.method} chosen_stream=${stream_id} source=${if target_stream_id != '' {
+		'thread_binding'
+	} else if active_stream_id != '' {
+		'active_stream'
+	} else if pending_stream_id != '' {
+		'pending_stream'
+	} else {
+		'none'
+	}}')
+	req := app.kernel_websocket_upstream_dispatch_request('codex-request-${time.now().unix_milli()}',
+		'codex', codex_runtime_instance_name(instance), stream_id, 'codex.server_request', '', '',
+		'', raw, time.now().unix(), map[string]string{})
 	outcome := app.kernel_dispatch_websocket_upstream_handled(req) or {
 		log.error('[codex] ❌ failed to dispatch codex server request: ${err}')
 		return
@@ -1420,7 +1410,7 @@ fn (mut app App) codex_handle_notification(instance string, method string, raw s
 
 	// 2. Minimal gateway-level state sync & Mapping Lookups
 	detected_thread_id := codex_extract_string_field(raw, 'threadId')
-	
+
 	mut target_stream_id := ''
 	if detected_thread_id != '' {
 		target_stream_id = app.codex_repair_thread_stream_binding(instance, detected_thread_id)
@@ -1447,7 +1437,7 @@ fn (mut app App) codex_handle_notification(instance string, method string, raw s
 			log.error('[codex] 🚨 DETERMINISTIC ERROR: type=${method} thread=${detected_thread_id} → stream=${t_id}')
 		}
 		app.codex_queue_error_dispatch(instance, t_id, raw)
-		return // Intercepted
+		return
 	}
 
 	match method {
@@ -1502,21 +1492,19 @@ fn (mut app App) codex_handle_notification(instance string, method string, raw s
 		if stream_id == '' {
 			stream_id = pending_stream_id
 		}
-		log.info('[codex] 🚚 notif dispatch instance=${codex_runtime_instance_name(instance)} method=${method} chosen_stream=${stream_id} source=${if target_stream_id != '' { 'thread_binding' } else if active_stream_id != '' { 'active_stream' } else if pending_stream_id != '' { 'pending_stream' } else { 'none' }}')
+		log.info('[codex] 🚚 notif dispatch instance=${codex_runtime_instance_name(instance)} method=${method} chosen_stream=${stream_id} source=${if target_stream_id != '' {
+			'thread_binding'
+		} else if active_stream_id != '' {
+			'active_stream'
+		} else if pending_stream_id != '' {
+			'pending_stream'
+		} else {
+			'none'
+		}}')
 
-		req := app.kernel_websocket_upstream_dispatch_request(
-			'codex-notif-${time.now().unix_milli()}',
-			'codex',
-			codex_runtime_instance_name(instance),
-			stream_id,
-			'codex.notification',
-			'',
-			'',
-			'',
-			raw,
-			time.now().unix(),
-			map[string]string{},
-		)
+		req := app.kernel_websocket_upstream_dispatch_request('codex-notif-${time.now().unix_milli()}',
+			'codex', codex_runtime_instance_name(instance), stream_id, 'codex.notification', '',
+			'', '', raw, time.now().unix(), map[string]string{})
 		outcome := app.kernel_dispatch_websocket_upstream_handled(req) or {
 			log.error('[codex] ❌ failed to dispatch codex notification: ${err}')
 			return
@@ -1533,7 +1521,6 @@ fn (mut app App) codex_handle_notification(instance string, method string, raw s
 		}
 	}
 }
-
 
 // ── Initialize handshake ────────────────────────────────────────────────
 // Must be called right after WebSocket connect, before any other RPC.

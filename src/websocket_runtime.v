@@ -5,7 +5,6 @@ import json
 import net.websocket
 import net.unix
 import sync
-import time
 
 @[heap]
 struct WebSocketBridgeState {
@@ -27,18 +26,18 @@ mut:
 @[heap]
 struct WebSocketDispatchBridgeState {
 mut:
-	app                    &App = unsafe { nil }
-	lifecycle              &WebSocketDispatchConnState = unsafe { nil }
-	open_commands          []WorkerWebSocketFrame
-	conn_id                string
-	method                 string
-	path                   string
-	query                  map[string]string
-	headers                map[string]string
-	remote_addr            string
-	request_id             string
-	trace_id               string
-	start_ms               i64
+	app           &App                        = unsafe { nil }
+	lifecycle     &WebSocketDispatchConnState = unsafe { nil }
+	open_commands []WorkerWebSocketFrame
+	conn_id       string
+	method        string
+	path          string
+	query         map[string]string
+	headers       map[string]string
+	remote_addr   string
+	request_id    string
+	trace_id      string
+	start_ms      i64
 }
 
 @[heap]
@@ -84,13 +83,13 @@ mut:
 }
 
 struct HubDispatchTarget {
-	id         string
-	method     string
-	request_id string
-	trace_id   string
-	path       string
-	query      map[string]string
-	headers    map[string]string
+	id          string
+	method      string
+	request_id  string
+	trace_id    string
+	path        string
+	query       map[string]string
+	headers     map[string]string
 	remote_addr string
 }
 
@@ -123,8 +122,6 @@ struct AdminWebSocketRuntimeSnapshot {
 	rooms                []AdminWebSocketRoomSnapshot
 }
 
-const websocket_dispatch_failure_followup_limit = 2
-
 fn websocket_hub_payload_bytes(data string, opcode string) ?([]u8, websocket.OPCode) {
 	return match opcode {
 		'', 'text' {
@@ -140,33 +137,17 @@ fn websocket_hub_payload_bytes(data string, opcode string) ?([]u8, websocket.OPC
 }
 
 fn (mut app App) websocket_dispatch_command_failures_frame(conn_id string, method string, path string, query map[string]string, headers map[string]string, remote_addr string, req_id string, trace_id string, failures []WorkerWebSocketDispatchCommandFailure) WorkerWebSocketFrame {
-	room_members, member_metadata, room_counts, presence_users := app.ws_hub_presence_snapshot(conn_id)
-	base_frame := app.kernel_websocket_dispatch_frame(
-		'info',
-		method,
-		path,
-		query,
-		headers,
-		remote_addr,
-		req_id,
-		trace_id,
-		'text',
-		json.encode(WorkerWebSocketDispatchFailureEnvelope{
-			event: 'command_failures'
-			failures: failures
-		}),
-		0,
-		'',
-		app.ws_hub_rooms_snapshot(conn_id),
-		app.ws_hub_meta_snapshot(conn_id),
-		room_members,
-		member_metadata,
-		room_counts,
-		presence_users,
-	)
+	room_members, member_metadata, room_counts, presence_users :=
+		app.ws_hub_presence_snapshot(conn_id)
+	base_frame := app.kernel_websocket_dispatch_frame('info', method, path, query, headers,
+		remote_addr, req_id, trace_id, 'text', json.encode(WorkerWebSocketDispatchFailureEnvelope{
+		event:    'command_failures'
+		failures: failures
+	}), 0, '', app.ws_hub_rooms_snapshot(conn_id), app.ws_hub_meta_snapshot(conn_id), room_members,
+		member_metadata, room_counts, presence_users)
 	return WorkerWebSocketFrame{
 		...base_frame
-		error: 'websocket_dispatch_command_failed'
+		error:       'websocket_dispatch_command_failed'
 		error_class: 'websocket_send_failed'
 	}
 }
@@ -220,27 +201,6 @@ fn ws_dispatch_conn_can_queue(state &WebSocketDispatchConnState) bool {
 		return false
 	}
 	return ws_dispatch_conn_phase(state) == .opening
-}
-
-fn ws_dispatch_conn_wait_until_open(state &WebSocketDispatchConnState, timeout_ms int) bool {
-	if isnil(state) {
-		return true
-	}
-	deadline_ms := time.now().unix_milli() + i64(if timeout_ms > 0 { timeout_ms } else { 0 })
-	for {
-		phase := ws_dispatch_conn_phase(state)
-		if phase == .open {
-			return true
-		}
-		if phase == .closing || phase == .closed {
-			return false
-		}
-		if time.now().unix_milli() >= deadline_ms {
-			return false
-		}
-		time.sleep(1 * time.millisecond)
-	}
-	return false
 }
 
 fn ws_dispatch_conn_mark_open(state &WebSocketDispatchConnState) bool {
@@ -342,7 +302,9 @@ fn (mut app App) ws_hub_cleanup_conn(conn_id string) {
 	app.ws_hub_conns.delete(conn_id)
 	if rooms := app.ws_hub_conn_rooms[conn_id] {
 		for room, _ in rooms.clone() {
-			mut members := (app.ws_hub_room_members[room] or { map[string]bool{} }).clone()
+			mut members := (app.ws_hub_room_members[room] or {
+				map[string]bool{}
+			}).clone()
 			members.delete(conn_id)
 			if members.len == 0 {
 				app.ws_hub_room_members.delete(room)
@@ -363,17 +325,17 @@ fn (mut app App) ws_hub_register_conn(conn_id string, worker_socket string, meth
 	}
 	app.ws_hub_mu.@lock()
 	app.ws_hub_conns[conn_id] = HubConn{
-		id: conn_id
+		id:            conn_id
 		worker_socket: worker_socket
-		method: method
-		request_id: req_id
-		trace_id: trace_id
-		path: path
-		query: query.clone()
-		headers: headers.clone()
-		remote_addr: remote_addr
-		client: unsafe { client }
-		lifecycle: lifecycle
+		method:        method
+		request_id:    req_id
+		trace_id:      trace_id
+		path:          path
+		query:         query.clone()
+		headers:       headers.clone()
+		remote_addr:   remote_addr
+		client:        unsafe { client }
+		lifecycle:     lifecycle
 	}
 	app.ws_hub_mu.unlock()
 }
@@ -454,7 +416,9 @@ fn (mut app App) ws_hub_meta_snapshot(conn_id string) map[string]string {
 	defer {
 		app.ws_hub_mu.unlock()
 	}
-	return (app.ws_hub_conn_meta[conn_id] or { map[string]string{} }).clone()
+	return (app.ws_hub_conn_meta[conn_id] or {
+		map[string]string{}
+	}).clone()
 }
 
 fn (mut app App) ws_hub_set_meta(conn_id string, key string, value string) bool {
@@ -462,7 +426,9 @@ fn (mut app App) ws_hub_set_meta(conn_id string, key string, value string) bool 
 		return false
 	}
 	app.ws_hub_mu.@lock()
-	mut meta := (app.ws_hub_conn_meta[conn_id] or { map[string]string{} }).clone()
+	mut meta := (app.ws_hub_conn_meta[conn_id] or {
+		map[string]string{}
+	}).clone()
 	meta[key] = value
 	app.ws_hub_conn_meta[conn_id] = meta.clone()
 	app.ws_hub_mu.unlock()
@@ -551,10 +517,14 @@ fn (mut app App) ws_hub_join(conn_id string, room string) bool {
 		return false
 	}
 	app.ws_hub_mu.@lock()
-	mut members := (app.ws_hub_room_members[room] or { map[string]bool{} }).clone()
+	mut members := (app.ws_hub_room_members[room] or {
+		map[string]bool{}
+	}).clone()
 	members[conn_id] = true
 	app.ws_hub_room_members[room] = members.clone()
-	mut rooms := (app.ws_hub_conn_rooms[conn_id] or { map[string]bool{} }).clone()
+	mut rooms := (app.ws_hub_conn_rooms[conn_id] or {
+		map[string]bool{}
+	}).clone()
 	rooms[room] = true
 	app.ws_hub_conn_rooms[conn_id] = rooms.clone()
 	app.ws_hub_mu.unlock()
@@ -597,7 +567,7 @@ fn (mut app App) ws_hub_send_client(conn_id string, client &websocket.Client, da
 				if ws_dispatch_conn_can_queue(hub_conn.lifecycle) {
 					mut pending := app.ws_hub_pending[conn_id] or { []HubPendingMessage{} }
 					pending << HubPendingMessage{
-						data: data
+						data:   data
 						opcode: if opcode == '' { 'text' } else { opcode }
 					}
 					app.ws_hub_pending[conn_id] = pending
@@ -617,14 +587,10 @@ fn (mut app App) ws_hub_send_client(conn_id string, client &websocket.Client, da
 	mut c := unsafe { client }
 	payload, code := websocket_hub_payload_bytes(data, opcode) or { return false }
 	if code == .text_frame {
-		c.write_string(data) or {
-			return false
-		}
+		c.write_string(data) or { return false }
 		return true
 	}
-	c.write(payload, code) or {
-		return false
-	}
+	c.write(payload, code) or { return false }
 	return true
 }
 
@@ -640,7 +606,7 @@ fn (mut app App) ws_hub_send_to(conn_id string, data string, opcode string) bool
 			if ws_dispatch_conn_can_queue(hub_conn.lifecycle) {
 				mut pending := app.ws_hub_pending[conn_id] or { []HubPendingMessage{} }
 				pending << HubPendingMessage{
-					data: data
+					data:   data
 					opcode: if opcode == '' { 'text' } else { opcode }
 				}
 				app.ws_hub_pending[conn_id] = pending
@@ -655,7 +621,7 @@ fn (mut app App) ws_hub_send_to(conn_id string, data string, opcode string) bool
 	} else {
 		mut pending := app.ws_hub_pending[conn_id] or { []HubPendingMessage{} }
 		pending << HubPendingMessage{
-			data: data
+			data:   data
 			opcode: if opcode == '' { 'text' } else { opcode }
 		}
 		app.ws_hub_pending[conn_id] = pending
@@ -681,13 +647,13 @@ fn (mut app App) ws_hub_broadcast(room string, data string, opcode string, excep
 			}
 			if hub_conn := app.ws_hub_conns[conn_id] {
 				targets << HubSendTarget{
-					id: conn_id
+					id:     conn_id
 					client: unsafe { hub_conn.client }
 				}
 			} else {
 				mut pending := app.ws_hub_pending[conn_id] or { []HubPendingMessage{} }
 				pending << HubPendingMessage{
-					data: data
+					data:   data
 					opcode: if opcode == '' { 'text' } else { opcode }
 				}
 				app.ws_hub_pending[conn_id] = pending
@@ -717,13 +683,13 @@ fn (mut app App) ws_hub_broadcast_dispatch(room string, data string, except_id s
 			}
 			if hub_conn := app.ws_hub_conns[conn_id] {
 				targets << HubDispatchTarget{
-					id: conn_id
-					method: if hub_conn.method == '' { 'GET' } else { hub_conn.method }
-					request_id: hub_conn.request_id
-					trace_id: hub_conn.trace_id
-					path: hub_conn.path
-					query: hub_conn.query.clone()
-					headers: hub_conn.headers.clone()
+					id:          conn_id
+					method:      if hub_conn.method == '' { 'GET' } else { hub_conn.method }
+					request_id:  hub_conn.request_id
+					trace_id:    hub_conn.trace_id
+					path:        hub_conn.path
+					query:       hub_conn.query.clone()
+					headers:     hub_conn.headers.clone()
 					remote_addr: hub_conn.remote_addr
 				}
 			}
@@ -732,39 +698,24 @@ fn (mut app App) ws_hub_broadcast_dispatch(room string, data string, except_id s
 	app.ws_hub_mu.unlock()
 	mut delivered := 0
 	for target in targets {
-		room_members, member_metadata, room_counts, presence_users := app.ws_hub_presence_snapshot(target.id)
-		base_frame := app.kernel_websocket_dispatch_frame(
-			'info',
-			target.method,
-			target.path,
-			target.query,
-			target.headers,
-			target.remote_addr,
-			target.request_id,
-			target.trace_id,
-			'text',
-			data,
-			0,
-			'',
-			app.ws_hub_rooms_snapshot(target.id),
-			app.ws_hub_meta_snapshot(target.id),
-			room_members,
-			member_metadata,
-			room_counts,
-			presence_users,
-		)
+		room_members, member_metadata, room_counts, presence_users :=
+			app.ws_hub_presence_snapshot(target.id)
+		base_frame := app.kernel_websocket_dispatch_frame('info', target.method, target.path,
+			target.query, target.headers, target.remote_addr, target.request_id, target.trace_id,
+			'text', data, 0, '', app.ws_hub_rooms_snapshot(target.id),
+			app.ws_hub_meta_snapshot(target.id), room_members, member_metadata, room_counts,
+			presence_users)
 		info_frame := WorkerWebSocketFrame{
 			...base_frame
 			room: room
 		}
-		resp := app.kernel_dispatch_websocket_event(info_frame) or {
-			continue
-		}
+		resp := app.kernel_dispatch_websocket_event(info_frame) or { continue }
 		mut forwarded_commands := []WorkerWebSocketFrame{cap: resp.commands.len}
 		for cmd in resp.commands {
-			if cmd.event == 'send' || cmd.event == 'send_to' || cmd.event == 'join' || cmd.event == 'leave'
-				|| cmd.event == 'set_meta' || cmd.event == 'clear_meta' || cmd.event == 'broadcast'
-				|| cmd.event == 'broadcast_dispatch' || cmd.event == 'close' {
+			if cmd.event == 'send' || cmd.event == 'send_to' || cmd.event == 'join'
+				|| cmd.event == 'leave' || cmd.event == 'set_meta' || cmd.event == 'clear_meta'
+				|| cmd.event == 'broadcast' || cmd.event == 'broadcast_dispatch'
+				|| cmd.event == 'close' {
 				forwarded_commands << WorkerWebSocketFrame{
 					...cmd
 					id: target.id
@@ -784,7 +735,10 @@ fn (mut app App) ws_hub_broadcast_dispatch(room string, data string, except_id s
 			continue
 		}
 		if result.failures.len > 0 {
-			if close_frame := app.websocket_dispatch_followup_failures(target.id, target.method, target.path, target.query, target.headers, target.remote_addr, target.request_id, target.trace_id, result.failures) {
+			if close_frame := app.websocket_dispatch_followup_failures(target.id, target.method,
+				target.path, target.query, target.headers, target.remote_addr, target.request_id,
+				target.trace_id, result.failures)
+			{
 				code := if close_frame.code > 0 { close_frame.code } else { 1000 }
 				app.ws_hub_close_target(target.id, code, close_frame.reason)
 			}
@@ -833,11 +787,11 @@ fn (mut app App) process_worker_websocket_hub_frame(frame WorkerWebSocketFrame) 
 			target := if frame.target_id != '' { frame.target_id } else { frame.id }
 			if !app.ws_hub_send_to(target, frame.data, frame.opcode) {
 				return WorkerWebSocketDispatchCommandFailure{
-					event: frame.event
-					id: frame.id
-					target_id: target
-					opcode: frame.opcode
-					error: 'websocket_send_failed'
+					event:       frame.event
+					id:          frame.id
+					target_id:   target
+					opcode:      frame.opcode
+					error:       'websocket_send_failed'
 					error_class: 'websocket_send_failed'
 				}
 			}
@@ -847,11 +801,11 @@ fn (mut app App) process_worker_websocket_hub_frame(frame WorkerWebSocketFrame) 
 			target := if frame.target_id != '' { frame.target_id } else { frame.id }
 			if !app.ws_hub_send_to(target, frame.data, frame.opcode) {
 				return WorkerWebSocketDispatchCommandFailure{
-					event: frame.event
-					id: frame.id
-					target_id: target
-					opcode: frame.opcode
-					error: 'websocket_send_failed'
+					event:       frame.event
+					id:          frame.id
+					target_id:   target
+					opcode:      frame.opcode
+					error:       'websocket_send_failed'
 					error_class: 'websocket_send_failed'
 				}
 			}
@@ -883,11 +837,13 @@ fn (mut app App) process_worker_websocket_hub_frame(frame WorkerWebSocketFrame) 
 		}
 		'close' {
 			target := if frame.target_id != '' { frame.target_id } else { frame.id }
-			app.ws_hub_close_target(target, if frame.code > 0 { frame.code } else { 1000 }, frame.reason)
+			app.ws_hub_close_target(target, if frame.code > 0 { frame.code } else { 1000 },
+				frame.reason)
 			return none
 		}
 		else {}
 	}
+
 	return none
 }
 
@@ -914,12 +870,14 @@ fn (mut app App) admin_websockets_snapshot(details bool, limit int, offset int, 
 			continue
 		}
 		connections << AdminWebSocketConnSnapshot{
-			id: socket_conn_id
+			id:         socket_conn_id
 			request_id: conn.request_id
-			trace_id: conn.trace_id
-			path: conn.path
-			rooms: joined_rooms
-			metadata: (app.ws_hub_conn_meta[socket_conn_id] or { map[string]string{} }).clone()
+			trace_id:   conn.trace_id
+			path:       conn.path
+			rooms:      joined_rooms
+			metadata:   (app.ws_hub_conn_meta[socket_conn_id] or {
+				map[string]string{}
+			}).clone()
 		}
 	}
 	mut ordered_connections := []AdminWebSocketConnSnapshot{}
@@ -953,9 +911,9 @@ fn (mut app App) admin_websockets_snapshot(details bool, limit int, offset int, 
 		}
 		members.sort()
 		rooms << AdminWebSocketRoomSnapshot{
-			name: room_name
+			name:         room_name
 			member_count: members.len
-			members: members
+			members:      members
 		}
 	}
 	mut ordered_rooms := []AdminWebSocketRoomSnapshot{}
@@ -971,22 +929,26 @@ fn (mut app App) admin_websockets_snapshot(details bool, limit int, offset int, 
 	}
 	if !details {
 		return AdminWebSocketRuntimeSnapshot{
-			active_connections: app.ws_hub_conns.len
-			active_rooms: app.ws_hub_room_members.len
+			active_connections:   app.ws_hub_conns.len
+			active_rooms:         app.ws_hub_room_members.len
 			returned_connections: 0
-			returned_rooms: 0
-			details: false
-			limit: limit
-			offset: offset
-			room_filter: room_filter
-			conn_id: conn_filter
-			connections: []AdminWebSocketConnSnapshot{}
-			rooms: []AdminWebSocketRoomSnapshot{}
+			returned_rooms:       0
+			details:              false
+			limit:                limit
+			offset:               offset
+			room_filter:          room_filter
+			conn_id:              conn_filter
+			connections:          []AdminWebSocketConnSnapshot{}
+			rooms:                []AdminWebSocketRoomSnapshot{}
 		}
 	}
 	mut sliced_connections := []AdminWebSocketConnSnapshot{}
 	if offset < ordered_connections.len {
-		end := if offset + limit < ordered_connections.len { offset + limit } else { ordered_connections.len }
+		end := if offset + limit < ordered_connections.len {
+			offset + limit
+		} else {
+			ordered_connections.len
+		}
 		for i in offset .. end {
 			sliced_connections << ordered_connections[i]
 		}
@@ -999,16 +961,16 @@ fn (mut app App) admin_websockets_snapshot(details bool, limit int, offset int, 
 		}
 	}
 	return AdminWebSocketRuntimeSnapshot{
-		active_connections: app.ws_hub_conns.len
-		active_rooms: app.ws_hub_room_members.len
+		active_connections:   app.ws_hub_conns.len
+		active_rooms:         app.ws_hub_room_members.len
 		returned_connections: sliced_connections.len
-		returned_rooms: sliced_rooms.len
-		details: true
-		limit: limit
-		offset: offset
-		room_filter: room_filter
-		conn_id: conn_filter
-		connections: sliced_connections
-		rooms: sliced_rooms
+		returned_rooms:       sliced_rooms.len
+		details:              true
+		limit:                limit
+		offset:               offset
+		room_filter:          room_filter
+		conn_id:              conn_filter
+		connections:          sliced_connections
+		rooms:                sliced_rooms
 	}
 }

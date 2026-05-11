@@ -648,7 +648,8 @@ fn openai_validate_plan_method(raw string) !string {
 	if method in ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'] {
 		return method
 	}
-	return openai_plan_error('openai_plugin_plan_invalid_method', 'unsupported upstream method ${method}')
+	return openai_plan_error('openai_plugin_plan_invalid_method',
+		'unsupported upstream method ${method}')
 }
 
 fn openai_validate_plan_path(raw string) !string {
@@ -657,10 +658,12 @@ fn openai_validate_plan_path(raw string) !string {
 		return '/chat/completions'
 	}
 	if !path.starts_with('/') {
-		return openai_plan_error('openai_plugin_plan_invalid_path', 'upstream path must start with /')
+		return openai_plan_error('openai_plugin_plan_invalid_path',
+			'upstream path must start with /')
 	}
 	if path.contains('\r') || path.contains('\n') {
-		return openai_plan_error('openai_plugin_plan_invalid_path', 'upstream path must not contain newlines')
+		return openai_plan_error('openai_plugin_plan_invalid_path',
+			'upstream path must not contain newlines')
 	}
 	return path
 }
@@ -673,7 +676,8 @@ fn openai_validate_stream_mode(raw string) !string {
 	if mode in ['passthrough', 'mapped', 'executor'] {
 		return mode
 	}
-	return openai_plan_error('openai_plugin_plan_unsupported_stream_mode', 'unsupported stream_mode ${mode}')
+	return openai_plan_error('openai_plugin_plan_unsupported_stream_mode',
+		'unsupported stream_mode ${mode}')
 }
 
 fn openai_validate_response_codec(raw string, stream_mode string) !string {
@@ -684,7 +688,8 @@ fn openai_validate_response_codec(raw string, stream_mode string) !string {
 	if codec in ['sse', 'json', 'ndjson', 'text'] {
 		return codec
 	}
-	return openai_plan_error('openai_plugin_plan_unsupported_response_codec', 'unsupported response_codec ${codec}')
+	return openai_plan_error('openai_plugin_plan_unsupported_response_codec',
+		'unsupported response_codec ${codec}')
 }
 
 fn openai_validate_output_protocol(raw string, stream_mode string) !string {
@@ -693,7 +698,8 @@ fn openai_validate_output_protocol(raw string, stream_mode string) !string {
 		return 'openai.chat.completion'
 	}
 	if stream_mode == 'mapped' && protocol != 'openai.chat.completion' {
-		return openai_plan_error('openai_plugin_plan_unsupported_output_protocol', 'unsupported output_protocol ${protocol}')
+		return openai_plan_error('openai_plugin_plan_unsupported_output_protocol',
+			'unsupported output_protocol ${protocol}')
 	}
 	return protocol
 }
@@ -706,7 +712,8 @@ fn openai_validate_mapper(raw string) !string {
 	if mapper in ['builtin', 'plugin'] {
 		return mapper
 	}
-	return openai_plan_error('openai_plugin_plan_unsupported_mapper', 'unsupported mapper ${mapper}')
+	return openai_plan_error('openai_plugin_plan_unsupported_mapper',
+		'unsupported mapper ${mapper}')
 }
 
 fn openai_sanitize_plan_headers(headers map[string]string) map[string]string {
@@ -757,11 +764,6 @@ fn openai_upstream_plan_from_plugin_json_with_defaults(raw string, default_path 
 		mapper:          openai_json_string_field(root, 'mapper', '')
 		headers:         openai_json_string_map_field(root, 'headers')
 	}
-}
-
-fn openai_upstream_plan_from_plugin_json(raw string) !OpenAIUpstreamPlan {
-	return openai_upstream_plan_from_plugin_json_with_defaults(raw, '/chat/completions',
-		'openai.chat.completion')
 }
 
 fn openai_models_from_plugin_json(raw string) ![]string {
@@ -823,13 +825,16 @@ fn (mut app App) openai_plugin_models(method string, path string, req_id string,
 }
 
 fn (mut app App) openai_resolved_plan_from_plugin_result_with_defaults(model string, body string, raw string, default_path string, default_output_protocol string) !OpenAIResolvedPlan {
-	plan := openai_upstream_plan_from_plugin_json_with_defaults(raw, default_path, default_output_protocol)!
+	plan := openai_upstream_plan_from_plugin_json_with_defaults(raw, default_path,
+		default_output_protocol)!
 	backend_name := plan.backend.trim_space()
 	if backend_name == '' {
-		return openai_plan_error('openai_plugin_plan_missing_backend', 'plugin plan must include backend')
+		return openai_plan_error('openai_plugin_plan_missing_backend',
+			'plugin plan must include backend')
 	}
 	backend := app.openai_backends[backend_name] or {
-		return openai_plan_error('openai_plugin_plan_unknown_backend', 'unknown backend ${backend_name}')
+		return openai_plan_error('openai_plugin_plan_unknown_backend',
+			'unknown backend ${backend_name}')
 	}
 	plan_method := openai_validate_plan_method(plan.method)!
 	plan_path := openai_validate_plan_path(plan.path)!
@@ -1003,8 +1008,8 @@ fn (mut app App) openai_call_executor_stream_op(plan OpenAIResolvedPlan, op stri
 }
 
 fn (mut app App) openai_call_executor_stream(plan OpenAIResolvedPlan, method string, path string, req_id string, trace_id string, on_frame PluginStreamFrameFn) !PluginStreamCallResponse {
-	return app.openai_call_executor_stream_op(plan, 'chat.execute', method, path, req_id,
-		trace_id, on_frame)
+	return app.openai_call_executor_stream_op(plan, 'chat.execute', method, path, req_id, trace_id,
+		on_frame)
 }
 
 fn (mut app App) openai_resolve_plan(model string, body string, method string, path string, req_id string, trace_id string) !OpenAIResolvedPlan {
@@ -1020,8 +1025,7 @@ fn (mut app App) openai_resolve_plan(model string, body string, method string, p
 
 fn (mut app App) openai_resolve_responses_plan(model string, body string, method string, path string, req_id string, trace_id string) !OpenAIResolvedPlan {
 	if app.openai_plugin.trim_space() != '' {
-		result := app.openai_plugin_responses_plan(model, body, method, path, req_id,
-			trace_id)!
+		result := app.openai_plugin_responses_plan(model, body, method, path, req_id, trace_id)!
 		if result.handled {
 			return result.plan
 		}
@@ -1060,8 +1064,8 @@ fn (mut app App) openai_resolve_responses_passthrough_plan(relative_target strin
 }
 
 fn openai_error(mut app App, mut ctx Context, status int, path string, method string, req_id string, trace_id string, start_ms i64, code string, message string) veb.Result {
-	return openai_error_typed(mut app, mut ctx, status, path, method, req_id, trace_id,
-		start_ms, code, message, 'invalid_request_error')
+	return openai_error_typed(mut app, mut ctx, status, path, method, req_id, trace_id, start_ms,
+		code, message, 'invalid_request_error')
 }
 
 fn openai_error_typed(mut app App, mut ctx Context, status int, path string, method string, req_id string, trace_id string, start_ms i64, code string, message string, typ string) veb.Result {
@@ -1132,8 +1136,8 @@ fn openai_upstream_error_from_body(body string, fallback_code string, fallback_m
 }
 
 fn openai_write_error_response_conn(mut conn net.TcpConn, status int, headers map[string]string, code string, message string, typ string) {
-	write_http_stream_headers_conn(mut conn, status, 'application/json; charset=utf-8',
-		headers, false) or {}
+	write_http_stream_headers_conn(mut conn, status, 'application/json; charset=utf-8', headers,
+		false) or {}
 	conn.write_string(openai_error_body_json(code, message, typ)) or {}
 }
 
@@ -1239,8 +1243,8 @@ fn ensure_openai_stream_headers_written(mut state OpenAIStreamProxyState) ! {
 	}
 	mut headers := state.response_headers.clone()
 	headers['x-accel-buffering'] = 'no'
-	write_http_stream_headers_conn_with_close(mut state.conn, state.status_code, state.content_type,
-		headers, true, false)!
+	write_http_stream_headers_conn_with_close(mut state.conn, state.status_code,
+		state.content_type, headers, true, false)!
 	state.headers_written = true
 }
 
@@ -1276,8 +1280,8 @@ fn ensure_openai_mapped_stream_headers_written(mut state OpenAIMappedStreamProxy
 	}
 	mut headers := state.response_headers.clone()
 	headers['x-accel-buffering'] = 'no'
-	write_http_stream_headers_conn_with_close(mut state.conn, state.status_code, 'text/event-stream',
-		headers, true, false)!
+	write_http_stream_headers_conn_with_close(mut state.conn, state.status_code,
+		'text/event-stream', headers, true, false)!
 	state.headers_written = true
 }
 
@@ -1654,8 +1658,7 @@ fn openai_fetch_mapped_stream(mut ctx Context, mut state OpenAIMappedStreamProxy
 	_ := http.fetch(
 		url:                openai_build_upstream_url(plan.backend.base_url, plan.path)
 		method:             openai_http_method(plan.method, method)
-		header:             openai_build_headers(mut ctx, plan.backend, req_id, true,
-			plan.headers)
+		header:             openai_build_headers(mut ctx, plan.backend, req_id, true, plan.headers)
 		data:               plan.body
 		on_progress_body:   openai_mapped_progress_body_cb
 		user_ptr:           state
@@ -1672,7 +1675,8 @@ fn openai_fetch_mapped_stream(mut ctx Context, mut state OpenAIMappedStreamProxy
 fn openai_proxy_mapped_stream(mut app App, mut ctx Context, plan OpenAIResolvedPlan, method string, path string, req_id string, trace_id string, start_ms i64) veb.Result {
 	if plan.response_codec != 'ndjson' || plan.output_protocol != 'openai.chat.completion' {
 		return openai_error(mut app, mut ctx, 502, path, method, req_id, trace_id, start_ms,
-			'openai_plugin_plan_unsupported_mapper', 'unsupported mapper ${plan.response_codec} -> ${plan.output_protocol}')
+			'openai_plugin_plan_unsupported_mapper',
+			'unsupported mapper ${plan.response_codec} -> ${plan.output_protocol}')
 	}
 	if plan.backend.kind.trim_space() !in ['', 'openai_http', 'http'] {
 		return openai_error(mut app, mut ctx, 502, path, method, req_id, trace_id, start_ms,
@@ -1704,11 +1708,10 @@ fn openai_proxy_mapped_stream(mut app App, mut ctx Context, plan OpenAIResolvedP
 		output_protocol:  plan.output_protocol
 		created:          int(time.now().unix())
 	}
-	mut fetch_err_msg := openai_fetch_mapped_stream(mut ctx, mut state, plan, method,
-		req_id)
+	mut fetch_err_msg := openai_fetch_mapped_stream(mut ctx, mut state, plan, method, req_id)
 	if fetch_err_msg != '' && !state.headers_written {
-		fallback := app.openai_plugin_fallback_plan(plan.model, plan.body, method, path,
-			plan, 502, 'upstream_fetch_failed', fetch_err_msg, req_id, trace_id) or {
+		fallback := app.openai_plugin_fallback_plan(plan.model, plan.body, method, path, plan, 502,
+			'upstream_fetch_failed', fetch_err_msg, req_id, trace_id) or {
 			OpenAIPluginPlanResult{}
 		}
 		if fallback.handled && fallback.plan.stream_mode == 'mapped' {
@@ -1728,18 +1731,16 @@ fn openai_proxy_mapped_stream(mut app App, mut ctx Context, plan OpenAIResolvedP
 			'x-vhttpd-trace-id':    trace_id
 			'x-vhttpd-error-class': 'openai_upstream_fetch_failed'
 		}
-		openai_write_error_response_conn(mut client_conn, 502, err_headers, 'upstream_fetch_failed',
-			fetch_err_msg, 'server_error')
+		openai_write_error_response_conn(mut client_conn, 502, err_headers,
+			'upstream_fetch_failed', fetch_err_msg, 'server_error')
 		client_conn.close() or {}
 		return veb.no_result()
 	}
 	if state.status_code >= 400 && !state.headers_written {
 		code, message, _ := openai_upstream_error_from_body(state.error_body, 'upstream_error',
 			'upstream returned HTTP ${state.status_code}')
-		fallback := app.openai_plugin_fallback_plan(plan.model, plan.body, method, path,
-			plan, state.status_code, code, message, req_id, trace_id) or {
-			OpenAIPluginPlanResult{}
-		}
+		fallback := app.openai_plugin_fallback_plan(plan.model, plan.body, method, path, plan,
+			state.status_code, code, message, req_id, trace_id) or { OpenAIPluginPlanResult{} }
 		if fallback.handled && fallback.plan.stream_mode == 'mapped' {
 			openai_reset_mapped_stream_state_for_plan(mut state, fallback.plan)
 			fallback_err_msg := openai_fetch_mapped_stream(mut ctx, mut state, fallback.plan,
@@ -1750,8 +1751,8 @@ fn openai_proxy_mapped_stream(mut app App, mut ctx Context, plan OpenAIResolvedP
 					'x-vhttpd-trace-id':    trace_id
 					'x-vhttpd-error-class': 'openai_upstream_fetch_failed'
 				}
-				openai_write_error_response_conn(mut client_conn, 502, err_headers, 'upstream_fetch_failed',
-					fallback_err_msg, 'server_error')
+				openai_write_error_response_conn(mut client_conn, 502, err_headers,
+					'upstream_fetch_failed', fallback_err_msg, 'server_error')
 				client_conn.close() or {}
 				return veb.no_result()
 			}
@@ -1765,8 +1766,8 @@ fn openai_proxy_mapped_stream(mut app App, mut ctx Context, plan OpenAIResolvedP
 			'x-vhttpd-trace-id':    trace_id
 			'x-vhttpd-error-class': 'openai_upstream_error'
 		}
-		openai_write_error_response_conn(mut client_conn, state.status_code, err_headers,
-			code, message, typ)
+		openai_write_error_response_conn(mut client_conn, state.status_code, err_headers, code,
+			message, typ)
 		client_conn.close() or {}
 		return veb.no_result()
 	}
@@ -1807,8 +1808,7 @@ fn openai_fetch_passthrough_stream(mut ctx Context, mut state OpenAIStreamProxyS
 	_ := http.fetch(
 		url:                openai_build_upstream_url(plan.backend.base_url, plan.path)
 		method:             openai_http_method(plan.method, method)
-		header:             openai_build_headers(mut ctx, plan.backend, req_id, true,
-			plan.headers)
+		header:             openai_build_headers(mut ctx, plan.backend, req_id, true, plan.headers)
 		data:               plan.body
 		on_progress_body:   openai_progress_body_cb
 		user_ptr:           state
@@ -1846,8 +1846,7 @@ fn openai_proxy_stream(mut app App, mut ctx Context, plan OpenAIResolvedPlan, me
 	_ := http.fetch(
 		url:                openai_build_upstream_url(plan.backend.base_url, plan.path)
 		method:             fetch_method
-		header:             openai_build_headers(mut ctx, plan.backend, req_id, true,
-			plan.headers)
+		header:             openai_build_headers(mut ctx, plan.backend, req_id, true, plan.headers)
 		data:               plan.body
 		on_progress_body:   openai_progress_body_cb
 		user_ptr:           state
@@ -1861,8 +1860,8 @@ fn openai_proxy_stream(mut app App, mut ctx Context, plan OpenAIResolvedPlan, me
 		http.Response{}
 	}
 	if fetch_err_msg != '' && !state.headers_written {
-		fallback := app.openai_plugin_fallback_plan(plan.model, plan.body, method, path,
-			plan, 502, 'upstream_fetch_failed', fetch_err_msg, req_id, trace_id) or {
+		fallback := app.openai_plugin_fallback_plan(plan.model, plan.body, method, path, plan, 502,
+			'upstream_fetch_failed', fetch_err_msg, req_id, trace_id) or {
 			OpenAIPluginPlanResult{}
 		}
 		if fallback.handled && fallback.plan.stream_mode == 'passthrough' {
@@ -1888,18 +1887,16 @@ fn openai_proxy_stream(mut app App, mut ctx Context, plan OpenAIResolvedPlan, me
 			'x-vhttpd-trace-id':    trace_id
 			'x-vhttpd-error-class': 'openai_upstream_fetch_failed'
 		}
-		openai_write_error_response_conn(mut client_conn, 502, err_headers, 'upstream_fetch_failed',
-			fetch_err_msg, 'server_error')
+		openai_write_error_response_conn(mut client_conn, 502, err_headers,
+			'upstream_fetch_failed', fetch_err_msg, 'server_error')
 		client_conn.close() or {}
 		return veb.no_result()
 	}
 	if state.status_code >= 400 && !state.headers_written {
 		code, message, typ := openai_upstream_error_from_body(state.error_body, 'upstream_error',
 			'upstream returned HTTP ${state.status_code}')
-		fallback := app.openai_plugin_fallback_plan(plan.model, plan.body, method, path,
-			plan, state.status_code, code, message, req_id, trace_id) or {
-			OpenAIPluginPlanResult{}
-		}
+		fallback := app.openai_plugin_fallback_plan(plan.model, plan.body, method, path, plan,
+			state.status_code, code, message, req_id, trace_id) or { OpenAIPluginPlanResult{} }
 		if fallback.handled && fallback.plan.stream_mode == 'passthrough' {
 			state.status_code = 200
 			state.error_body = ''
@@ -1938,8 +1935,8 @@ fn openai_proxy_stream(mut app App, mut ctx Context, plan OpenAIResolvedPlan, me
 			'x-vhttpd-trace-id':    trace_id
 			'x-vhttpd-error-class': 'openai_upstream_error'
 		}
-		openai_write_error_response_conn(mut client_conn, state.status_code, err_headers,
-			code, message, typ)
+		openai_write_error_response_conn(mut client_conn, state.status_code, err_headers, code,
+			message, typ)
 		client_conn.close() or {}
 		return veb.no_result()
 	}
@@ -1969,8 +1966,8 @@ fn openai_proxy_once(mut app App, mut ctx Context, plan OpenAIResolvedPlan, meth
 
 fn openai_proxy_once_attempt(mut app App, mut ctx Context, plan OpenAIResolvedPlan, method string, path string, req_id string, trace_id string, start_ms i64, allow_fallback bool) veb.Result {
 	if plan.backend.kind.trim_space() == 'executor' {
-		return openai_proxy_executor_once(mut app, mut ctx, plan, method, path, req_id,
-			trace_id, start_ms)
+		return openai_proxy_executor_once(mut app, mut ctx, plan, method, path, req_id, trace_id,
+			start_ms)
 	}
 	if plan.backend.kind.trim_space() !in ['', 'openai_http', 'http'] {
 		return openai_error(mut app, mut ctx, 502, path, method, req_id, trace_id, start_ms,
@@ -1987,13 +1984,13 @@ fn openai_proxy_once_attempt(mut app App, mut ctx Context, plan OpenAIResolvedPl
 		data:   plan.body
 	) or {
 		if allow_fallback {
-			fallback := app.openai_plugin_fallback_plan(plan.model, plan.body, method,
-				path, plan, 502, 'upstream_fetch_failed', err.msg(), req_id, trace_id) or {
+			fallback := app.openai_plugin_fallback_plan(plan.model, plan.body, method, path, plan,
+				502, 'upstream_fetch_failed', err.msg(), req_id, trace_id) or {
 				OpenAIPluginPlanResult{}
 			}
 			if fallback.handled {
-				return openai_proxy_once_attempt(mut app, mut ctx, fallback.plan, method,
-					path, req_id, trace_id, start_ms, false)
+				return openai_proxy_once_attempt(mut app, mut ctx, fallback.plan, method, path,
+					req_id, trace_id, start_ms, false)
 			}
 		}
 		return openai_error(mut app, mut ctx, 502, path, method, req_id, trace_id, start_ms,
@@ -2003,13 +2000,11 @@ fn openai_proxy_once_attempt(mut app App, mut ctx Context, plan OpenAIResolvedPl
 		code, message, typ := openai_upstream_error_from_body(resp.body, 'upstream_error',
 			'upstream returned HTTP ${resp.status_code}')
 		if allow_fallback {
-			fallback := app.openai_plugin_fallback_plan(plan.model, plan.body, method,
-				path, plan, resp.status_code, code, message, req_id, trace_id) or {
-				OpenAIPluginPlanResult{}
-			}
+			fallback := app.openai_plugin_fallback_plan(plan.model, plan.body, method, path, plan,
+				resp.status_code, code, message, req_id, trace_id) or { OpenAIPluginPlanResult{} }
 			if fallback.handled {
-				return openai_proxy_once_attempt(mut app, mut ctx, fallback.plan, method,
-					path, req_id, trace_id, start_ms, false)
+				return openai_proxy_once_attempt(mut app, mut ctx, fallback.plan, method, path,
+					req_id, trace_id, start_ms, false)
 			}
 		}
 		return openai_error_typed(mut app, mut ctx, resp.status_code, path, method, req_id,
@@ -2036,8 +2031,8 @@ fn openai_proxy_once_attempt(mut app App, mut ctx Context, plan OpenAIResolvedPl
 	})
 	if plan.stream_mode == 'mapped' {
 		mapped_body := openai_map_once_response(plan, resp.body, req_id, int(time.now().unix())) or {
-			return openai_error(mut app, mut ctx, 502, path, method, req_id, trace_id,
-				start_ms, openai_plan_error_code(err.msg()), openai_plan_error_message(err.msg()))
+			return openai_error(mut app, mut ctx, 502, path, method, req_id, trace_id, start_ms,
+				openai_plan_error_code(err.msg()), openai_plan_error_message(err.msg()))
 		}
 		return ctx.text(if method.to_upper() == 'HEAD' { '' } else { mapped_body })
 	}
@@ -2047,7 +2042,8 @@ fn openai_proxy_once_attempt(mut app App, mut ctx Context, plan OpenAIResolvedPl
 fn openai_map_once_response(plan OpenAIResolvedPlan, body string, req_id string, created int) !string {
 	if plan.response_codec !in ['ndjson', 'json']
 		|| plan.output_protocol != 'openai.chat.completion' {
-		return openai_plan_error('openai_plugin_plan_unsupported_mapper', 'unsupported mapper ${plan.response_codec} -> ${plan.output_protocol}')
+		return openai_plan_error('openai_plugin_plan_unsupported_mapper',
+			'unsupported mapper ${plan.response_codec} -> ${plan.output_protocol}')
 	}
 	mut content := ''
 	mut tool_calls := []json2.Any{}
@@ -2229,8 +2225,7 @@ fn openai_proxy_executor_once(mut app App, mut ctx Context, plan OpenAIResolvedP
 }
 
 fn openai_proxy_responses_executor_once(mut app App, mut ctx Context, plan OpenAIResolvedPlan, method string, path string, req_id string, trace_id string, start_ms i64) veb.Result {
-	resp := app.openai_call_executor_op(plan, 'responses.execute', method, path, req_id,
-		trace_id) or {
+	resp := app.openai_call_executor_op(plan, 'responses.execute', method, path, req_id, trace_id) or {
 		return openai_error(mut app, mut ctx, 502, path, method, req_id, trace_id, start_ms,
 			'openai_executor_failed', err.msg())
 	}
@@ -2321,11 +2316,10 @@ fn openai_proxy_responses_executor_stream(mut app App, mut ctx Context, plan Ope
 		'x-vhttpd-openai-executor': plan.backend.executor
 		'x-accel-buffering':        'no'
 	}
-	write_http_stream_headers_conn(mut client_conn, 200, 'text/event-stream', headers,
-		true) or {}
+	write_http_stream_headers_conn(mut client_conn, 200, 'text/event-stream', headers, true) or {}
 	mut registry_state := &OpenAIResponsesStreamRegistryState{}
-	stream_resp := app.openai_call_executor_stream_op(plan, 'responses.execute', method,
-		path, req_id, trace_id, fn [mut client_conn, mut registry_state] (raw string) !bool {
+	stream_resp := app.openai_call_executor_stream_op(plan, 'responses.execute', method, path,
+		req_id, trace_id, fn [mut client_conn, mut registry_state] (raw string) !bool {
 		if registry_state.completed_body == '' {
 			registry_state.completed_body = openai_response_body_from_completed_event(raw)
 		}
@@ -2364,23 +2358,25 @@ fn openai_proxy_responses_executor_stream(mut app App, mut ctx Context, plan Ope
 				'sequence_number': json2.Any(1)
 			}
 			if mapping.content != '' {
-				write_chunk(mut client_conn, openai_response_stream_event_from_raw(json2.Any(event).json_str())) or {}
+				write_chunk(mut client_conn,
+					openai_response_stream_event_from_raw(json2.Any(event).json_str())) or {}
 				wrote_frame = true
 			}
 			if mapping.done {
 				registry_state.completed_body = '{"id":"resp_${req_id}","object":"response","status":"completed","model":"${plan.model}"}'
-				write_chunk(mut client_conn, openai_response_stream_event_from_raw('{"type":"response.completed","sequence_number":2,"response":${registry_state.completed_body}}')) or {}
+				write_chunk(mut client_conn,
+					openai_response_stream_event_from_raw('{"type":"response.completed","sequence_number":2,"response":${registry_state.completed_body}}')) or {}
 				wrote_frame = true
 			}
 		}
 		if !wrote_frame {
 			registry_state.completed_body = '{"id":"resp_${req_id}","object":"response","status":"completed","model":"${plan.model}"}'
-			write_chunk(mut client_conn, openai_response_stream_event_from_raw('{"type":"response.completed","sequence_number":1,"response":${registry_state.completed_body}}')) or {}
+			write_chunk(mut client_conn,
+				openai_response_stream_event_from_raw('{"type":"response.completed","sequence_number":1,"response":${registry_state.completed_body}}')) or {}
 		}
 	}
 	if registry_state.completed_body != '' {
-		app.openai_store_response_record(plan, registry_state.completed_body, req_id,
-			trace_id)
+		app.openai_store_response_record(plan, registry_state.completed_body, req_id, trace_id)
 	}
 	write_final_chunk(mut client_conn) or {}
 	app.emit('http.request', {
@@ -2421,8 +2417,7 @@ fn openai_proxy_executor_stream(mut app App, mut ctx Context, plan OpenAIResolve
 		output_protocol:  plan.output_protocol
 		created:          int(time.now().unix())
 	}
-	stream_resp := app.openai_call_executor_stream(plan, method, path, req_id, trace_id,
-		fn [mut state, mut client_conn] (raw string) !bool {
+	stream_resp := app.openai_call_executor_stream(plan, method, path, req_id, trace_id, fn [mut state, mut client_conn] (raw string) !bool {
 		mapping := openai_plugin_map_frame_result(raw)
 		if mapping.error != '' {
 			ensure_openai_mapped_stream_headers_written(mut state)!
@@ -2481,8 +2476,8 @@ fn openai_proxy_executor_stream(mut app App, mut ctx Context, plan OpenAIResolve
 			}
 			if mapping.content != '' || mapping.tool_calls.len > 0 {
 				ensure_openai_mapped_stream_headers_written(mut state) or {}
-				write_chunk(mut client_conn, 'data: ${openai_stream_chunk_json(state,
-					mapping)}\n\n') or {}
+				write_chunk(mut client_conn,
+					'data: ${openai_stream_chunk_json(state, mapping)}\n\n') or {}
 			}
 			openai_merge_usage(mut state.usage, mapping.usage)
 			if mapping.done && !state.done {
@@ -2523,8 +2518,8 @@ fn (mut app App) openai_handle_models(mut ctx Context, method string, path strin
 	}
 	models := if app.openai_plugin.trim_space() != '' {
 		result := app.openai_plugin_models(method, path, req_id, trace_id) or {
-			return openai_error(mut app, mut ctx, 500, path, method, req_id, trace_id,
-				start_ms, 'plugin_error', err.msg())
+			return openai_error(mut app, mut ctx, 500, path, method, req_id, trace_id, start_ms,
+				'plugin_error', err.msg())
 		}
 		if result.handled {
 			result.models
@@ -2569,20 +2564,19 @@ fn (mut app App) openai_handle_chat(mut ctx Context, method string, path string,
 	plan := app.openai_resolve_plan(model, ctx.req.data, method, path, req_id, trace_id) or {
 		err_msg := err.msg()
 		status := if err_msg.starts_with('openai_plugin_') { 502 } else { 400 }
-		return openai_error(mut app, mut ctx, status, path, method, req_id, trace_id,
-			start_ms, openai_plan_error_code(err_msg), openai_plan_error_message(err_msg))
+		return openai_error(mut app, mut ctx, status, path, method, req_id, trace_id, start_ms,
+			openai_plan_error_code(err_msg), openai_plan_error_message(err_msg))
 	}
 	if openai_is_stream_request(ctx.req.data) {
 		if plan.backend.kind.trim_space() == 'executor' {
-			return openai_proxy_executor_stream(mut app, mut ctx, plan, method, path,
-				req_id, trace_id, start_ms)
+			return openai_proxy_executor_stream(mut app, mut ctx, plan, method, path, req_id,
+				trace_id, start_ms)
 		}
 		if plan.stream_mode == 'mapped' {
 			return openai_proxy_mapped_stream(mut app, mut ctx, plan, method, path, req_id,
 				trace_id, start_ms)
 		}
-		return openai_proxy_stream(mut app, mut ctx, plan, method, path, req_id, trace_id,
-			start_ms)
+		return openai_proxy_stream(mut app, mut ctx, plan, method, path, req_id, trace_id, start_ms)
 	}
 	return openai_proxy_once(mut app, mut ctx, plan, method, path, req_id, trace_id, start_ms)
 }
@@ -2593,24 +2587,22 @@ fn (mut app App) openai_handle_responses(mut ctx Context, method string, path st
 			'method_not_allowed', 'method ${method} is not allowed for ${path}')
 	}
 	model := openai_request_model(ctx.req.data)
-	plan := app.openai_resolve_responses_plan(model, ctx.req.data, method, path, req_id,
-		trace_id) or {
+	plan := app.openai_resolve_responses_plan(model, ctx.req.data, method, path, req_id, trace_id) or {
 		err_msg := err.msg()
 		status := if err_msg.starts_with('openai_plugin_') { 502 } else { 400 }
-		return openai_error(mut app, mut ctx, status, path, method, req_id, trace_id,
-			start_ms, openai_plan_error_code(err_msg), openai_plan_error_message(err_msg))
+		return openai_error(mut app, mut ctx, status, path, method, req_id, trace_id, start_ms,
+			openai_plan_error_code(err_msg), openai_plan_error_message(err_msg))
 	}
 	if openai_is_stream_request(ctx.req.data) {
 		if plan.backend.kind.trim_space() == 'executor' {
-			return openai_proxy_responses_executor_stream(mut app, mut ctx, plan, method,
-				path, req_id, trace_id, start_ms)
+			return openai_proxy_responses_executor_stream(mut app, mut ctx, plan, method, path,
+				req_id, trace_id, start_ms)
 		}
-		return openai_proxy_stream(mut app, mut ctx, plan, method, path, req_id, trace_id,
-			start_ms)
+		return openai_proxy_stream(mut app, mut ctx, plan, method, path, req_id, trace_id, start_ms)
 	}
 	if plan.backend.kind.trim_space() == 'executor' {
-		return openai_proxy_responses_executor_once(mut app, mut ctx, plan, method, path,
-			req_id, trace_id, start_ms)
+		return openai_proxy_responses_executor_once(mut app, mut ctx, plan, method, path, req_id,
+			trace_id, start_ms)
 	}
 	return openai_proxy_once(mut app, mut ctx, plan, method, path, req_id, trace_id, start_ms)
 }
@@ -2645,20 +2637,19 @@ fn (mut app App) openai_handle_responses_passthrough(mut ctx Context, method str
 			return ctx.text(if method.to_upper() == 'HEAD' { '' } else { record.body })
 		}
 	}
-	plan := app.openai_resolve_responses_passthrough_plan(relative_target, ctx.req.data,
-		method) or {
+	plan := app.openai_resolve_responses_passthrough_plan(relative_target, ctx.req.data, method) or {
 		err_msg := err.msg()
 		status := if err_msg.starts_with('openai_plugin_') { 502 } else { 400 }
-		return openai_error(mut app, mut ctx, status, path, method, req_id, trace_id,
-			start_ms, openai_plan_error_code(err_msg), openai_plan_error_message(err_msg))
+		return openai_error(mut app, mut ctx, status, path, method, req_id, trace_id, start_ms,
+			openai_plan_error_code(err_msg), openai_plan_error_message(err_msg))
 	}
 	if plan.backend.kind.trim_space() == 'executor' {
 		return openai_error(mut app, mut ctx, 502, path, method, req_id, trace_id, start_ms,
-			'unsupported_backend', 'Responses passthrough endpoint ${relative_target} requires an HTTP backend')
+			'unsupported_backend',
+			'Responses passthrough endpoint ${relative_target} requires an HTTP backend')
 	}
 	if openai_is_stream_request(ctx.req.data) || openai_is_stream_target(path) {
-		return openai_proxy_stream(mut app, mut ctx, plan, method, path, req_id, trace_id,
-			start_ms)
+		return openai_proxy_stream(mut app, mut ctx, plan, method, path, req_id, trace_id, start_ms)
 	}
 	return openai_proxy_once_attempt(mut app, mut ctx, plan, method, path, req_id, trace_id,
 		start_ms, false)
@@ -2672,30 +2663,29 @@ fn (mut app App) openai_try_handle(mut ctx Context, method string, target string
 	relative_target := openai_relative_target(target, app.openai_base_path) or { return none }
 	if relative == '/models' {
 		if !app.openai_endpoints.models {
-			return openai_error(mut app, mut ctx, 404, target, method, req_id, trace_id,
-				start_ms, 'endpoint_disabled', 'OpenAI models endpoint is disabled')
+			return openai_error(mut app, mut ctx, 404, target, method, req_id, trace_id, start_ms,
+				'endpoint_disabled', 'OpenAI models endpoint is disabled')
 		}
 		return app.openai_handle_models(mut ctx, method, target, req_id, trace_id, start_ms)
 	}
 	if relative == '/chat/completions' {
 		if !app.openai_endpoints.chat_completions {
-			return openai_error(mut app, mut ctx, 404, target, method, req_id, trace_id,
-				start_ms, 'endpoint_disabled', 'OpenAI chat completions endpoint is disabled')
+			return openai_error(mut app, mut ctx, 404, target, method, req_id, trace_id, start_ms,
+				'endpoint_disabled', 'OpenAI chat completions endpoint is disabled')
 		}
 		return app.openai_handle_chat(mut ctx, method, target, req_id, trace_id, start_ms)
 	}
 	if relative == '/responses' {
 		if !app.openai_endpoints.responses {
-			return openai_error(mut app, mut ctx, 404, target, method, req_id, trace_id,
-				start_ms, 'endpoint_disabled', 'OpenAI responses endpoint is disabled')
+			return openai_error(mut app, mut ctx, 404, target, method, req_id, trace_id, start_ms,
+				'endpoint_disabled', 'OpenAI responses endpoint is disabled')
 		}
-		return app.openai_handle_responses(mut ctx, method, target, req_id, trace_id,
-			start_ms)
+		return app.openai_handle_responses(mut ctx, method, target, req_id, trace_id, start_ms)
 	}
 	if relative.starts_with('/responses/') {
 		if !app.openai_endpoints.responses {
-			return openai_error(mut app, mut ctx, 404, target, method, req_id, trace_id,
-				start_ms, 'endpoint_disabled', 'OpenAI responses endpoint is disabled')
+			return openai_error(mut app, mut ctx, 404, target, method, req_id, trace_id, start_ms,
+				'endpoint_disabled', 'OpenAI responses endpoint is disabled')
 		}
 		return app.openai_handle_responses_passthrough(mut ctx, method, target, relative_target,
 			req_id, trace_id, start_ms)

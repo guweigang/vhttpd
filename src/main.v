@@ -571,7 +571,8 @@ fn is_websocket_upgrade(req http.Request) bool {
 fn worker_websocket_open(mut app App, mut conn unix.StreamConn, req http.Request, remote_addr string, path string, req_id string, trace_id string) !(bool, int, string) {
 	normalized_path, query_string := normalize_request_target(path)
 	query := parse_query_map(query_string)
-	room_members, member_metadata, room_counts, presence_users := app.ws_hub_presence_snapshot(req_id)
+	room_members, member_metadata, room_counts, presence_users :=
+		app.ws_hub_presence_snapshot(req_id)
 	frame := WorkerWebSocketFrame{
 		mode:            'websocket'
 		event:           'open'
@@ -653,7 +654,8 @@ fn worker_websocket_message_cb(mut ws websocket.Client, msg &websocket.Message, 
 		}
 		return
 	}
-	room_members, member_metadata, room_counts, presence_users := state.app.ws_hub_presence_snapshot(state.conn_id)
+	room_members, member_metadata, room_counts, presence_users :=
+		state.app.ws_hub_presence_snapshot(state.conn_id)
 	state.cb_mu.@lock()
 	write_worker_websocket_frame(mut state.worker_conn, WorkerWebSocketFrame{
 		mode:            'websocket'
@@ -744,7 +746,7 @@ fn worker_websocket_message_cb(mut ws websocket.Client, msg &websocket.Message, 
 	}
 }
 
-fn worker_websocket_close_cb(mut ws websocket.Client, code int, reason string, ref voidptr) ! {
+fn worker_websocket_close_cb(mut _ws websocket.Client, code int, reason string, ref voidptr) ! {
 	mut state := unsafe { &WebSocketBridgeState(ref) }
 	state.cb_mu.@lock()
 	runtime_trace('ws.close.enter', {
@@ -760,7 +762,8 @@ fn worker_websocket_close_cb(mut ws websocket.Client, code int, reason string, r
 	}
 	state.close_notified = true
 	if !state.worker_initiated_close {
-		room_members, member_metadata, room_counts, presence_users := state.app.ws_hub_presence_snapshot(state.conn_id)
+		room_members, member_metadata, room_counts, presence_users :=
+			state.app.ws_hub_presence_snapshot(state.conn_id)
 		write_worker_websocket_frame(mut state.worker_conn, WorkerWebSocketFrame{
 			mode:            'websocket'
 			event:           'close'
@@ -852,12 +855,13 @@ fn proxy_worker_websocket_dispatch(mut app App, mut ctx Context, method string, 
 	normalized_path, query_string := normalize_request_target(path)
 	query := parse_query_map(query_string)
 	headers := header_map_from_request(ctx.req)
-	open_frame := app.kernel_websocket_dispatch_frame('open', method, normalized_path,
-		query, headers, remote_addr, req_id, trace_id, '', '', 0, '', app.ws_hub_rooms_snapshot(req_id),
+	open_frame := app.kernel_websocket_dispatch_frame('open', method, normalized_path, query,
+		headers, remote_addr, req_id, trace_id, '', '', 0, '', app.ws_hub_rooms_snapshot(req_id),
 		app.ws_hub_meta_snapshot(req_id), map[string][]string{}, map[string]map[string]string{},
 		map[string]int{}, map[string][]string{})
 	resp := app.kernel_dispatch_websocket_event(open_frame) or {
-		err_msg := inproc_vjsx_normalize_error_message(err.msg(), 'inproc_vjsx_executor_websocket_open_failed')
+		err_msg := inproc_vjsx_normalize_error_message(err.msg(),
+			'inproc_vjsx_executor_websocket_open_failed')
 		log.error('[vhttpd] kernel_dispatch_websocket_event failed trace_id=${trace_id} path=${normalized_path} error=${err_msg}')
 		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
 		ctx.set_custom_header('x-vhttpd-error-class', 'transport_error') or {}
@@ -891,7 +895,8 @@ fn proxy_worker_websocket_dispatch(mut app App, mut ctx Context, method string, 
 	ctx.conn.set_read_timeout(time.infinite)
 	mut conn := ctx.conn
 	spawn handle_worker_websocket_dispatch_session(mut app, mut conn, key, method.to_upper(),
-		normalized_path, query, headers, remote_addr, req_id, trace_id, start_ms, resp.commands.clone())
+		normalized_path, query, headers, remote_addr, req_id, trace_id, start_ms,
+		resp.commands.clone())
 	return veb.no_result()
 }
 
@@ -931,9 +936,9 @@ fn handle_worker_websocket_session(mut app App, mut client_conn net.TcpConn, mut
 			'path':          state.path
 			'worker_socket': state.worker_socket
 		})
-		app.ws_hub_register_conn(state.conn_id, state.worker_socket, state.method, state.request_id,
-			state.trace_id, state.path, map[string]string{}, map[string]string{}, '',
-			sc.client, unsafe { nil })
+		app.ws_hub_register_conn(state.conn_id, state.worker_socket, state.method,
+			state.request_id, state.trace_id, state.path, map[string]string{}, map[string]string{},
+			'', sc.client, unsafe { nil })
 		return true
 	}) or {}
 	ws_server.on_message_ref(worker_websocket_message_cb, state)
@@ -998,8 +1003,8 @@ fn worker_websocket_dispatch_attached_cb(mut sc websocket.ServerClient, ref void
 	unsafe {
 		mut state := &WebSocketDispatchBridgeState(ref)
 		state.app.ws_hub_register_conn(state.conn_id, '', state.method, state.request_id,
-			state.trace_id, state.path, state.query, state.headers, state.remote_addr,
-			sc.client, state.lifecycle)
+			state.trace_id, state.path, state.query, state.headers, state.remote_addr, sc.client,
+			state.lifecycle)
 		worker_websocket_dispatch_process_open(state)
 		worker_websocket_dispatch_activate(state)
 	}
@@ -1093,12 +1098,13 @@ fn worker_websocket_dispatch_message_cb(mut ws websocket.Client, msg &websocket.
 		ws.close(1003, 'Only text and binary frames are supported')!
 		return
 	}
-	room_members, member_metadata, room_counts, presence_users := state.app.ws_hub_presence_snapshot(state.conn_id)
+	room_members, member_metadata, room_counts, presence_users :=
+		state.app.ws_hub_presence_snapshot(state.conn_id)
 	resp := state.app.kernel_dispatch_websocket_event(state.app.kernel_websocket_dispatch_frame('message',
 		state.method, state.path, state.query, state.headers, state.remote_addr, state.request_id,
 		state.trace_id, opcode, payload, 0, '', state.app.ws_hub_rooms_snapshot(state.conn_id),
-		state.app.ws_hub_meta_snapshot(state.conn_id), room_members, member_metadata,
-		room_counts, presence_users))!
+		state.app.ws_hub_meta_snapshot(state.conn_id), room_members, member_metadata, room_counts,
+		presence_users))!
 	if resp.event == 'error' {
 		worker_websocket_dispatch_begin_local_close(mut state)
 		ws.close(1011, 'worker error')!
@@ -1116,8 +1122,8 @@ fn worker_websocket_dispatch_message_cb(mut ws websocket.Client, msg &websocket.
 	}
 	if result.failures.len > 0 {
 		if close_frame := state.app.websocket_dispatch_followup_failures(state.conn_id,
-			state.method, state.path, state.query, state.headers, state.remote_addr, state.request_id,
-			state.trace_id, result.failures)
+			state.method, state.path, state.query, state.headers, state.remote_addr,
+			state.request_id, state.trace_id, result.failures)
 		{
 			code := if close_frame.code > 0 { close_frame.code } else { 1000 }
 			worker_websocket_dispatch_begin_local_close(mut state)
@@ -1149,12 +1155,13 @@ fn worker_websocket_dispatch_close_cb(mut ws websocket.Client, code int, reason 
 		return
 	}
 	state.app.ws_hub_mark_closing(state.conn_id)
-	room_members, member_metadata, room_counts, presence_users := state.app.ws_hub_presence_snapshot(state.conn_id)
+	room_members, member_metadata, room_counts, presence_users :=
+		state.app.ws_hub_presence_snapshot(state.conn_id)
 	resp := state.app.kernel_dispatch_websocket_event(state.app.kernel_websocket_dispatch_frame('close',
 		state.method, state.path, state.query, state.headers, state.remote_addr, state.request_id,
 		state.trace_id, '', '', code, reason, state.app.ws_hub_rooms_snapshot(state.conn_id),
-		state.app.ws_hub_meta_snapshot(state.conn_id), room_members, member_metadata,
-		room_counts, presence_users)) or {
+		state.app.ws_hub_meta_snapshot(state.conn_id), room_members, member_metadata, room_counts,
+		presence_users)) or {
 		worker_websocket_dispatch_finalize(state)
 		return
 	}
@@ -1220,13 +1227,13 @@ fn proxy_worker_response(mut app App, mut ctx Context, method string, path strin
 			return stream_via_sse(mut app, mut ctx, mut conn, start, method, path, req_id,
 				trace_id, start_ms)
 		}
-		return stream_via_passthrough(mut app, mut ctx, mut conn, start, method, path,
-			req_id, trace_id, start_ms)
+		return stream_via_passthrough(mut app, mut ctx, mut conn, start, method, path, req_id,
+			trace_id, start_ms)
 	}
 	if outcome.kind == .upstream_plan {
 		log.info('[http] ⇠ dispatch upstream_plan method=${method.to_upper()} path=${path} trace_id=${trace_id} request_id=${req_id} duration_ms=${time.now().unix_milli() - start_ms}')
-		return execute_upstream_plan(mut app, mut ctx, outcome.upstream_plan, method,
-			path, req_id, trace_id, start_ms)
+		return execute_upstream_plan(mut app, mut ctx, outcome.upstream_plan, method, path, req_id,
+			trace_id, start_ms)
 	}
 	resp := outcome.response
 	log.info('[http] ⇠ dispatch response method=${method.to_upper()} path=${path} trace_id=${trace_id} request_id=${req_id} status=${resp.status} body_len=${resp.body.len} duration_ms=${time.now().unix_milli() - start_ms}')
@@ -1547,7 +1554,8 @@ pub:
 pub fn (mut app App) provider_runtime_metrics(name string) ProviderRuntimeMetrics {
 	return match name {
 		'feishu' {
-			connect_attempts, connect_successes, received_frames, acked_events, messages_sent, send_errors := app.feishu_runtime_totals()
+			connect_attempts, connect_successes, received_frames, acked_events, messages_sent, send_errors :=
+				app.feishu_runtime_totals()
 			ProviderRuntimeMetrics{
 				connect_attempts:  connect_attempts
 				connect_successes: connect_successes

@@ -378,7 +378,8 @@ fn test_load_vhttpd_config_supports_multi_listener_sites() {
 	vjsx_app := os.join_path(project_b_dir, 'app.mts')
 	os.write_file(php_worker, '<?php echo "worker";') or { panic(err) }
 	os.write_file(php_app, '<?php echo "app";') or { panic(err) }
-	os.write_file(vjsx_app, 'export default { async handle() { return { status: 200, body: "ok" }; } };') or {
+	os.write_file(vjsx_app,
+		'export default { async handle() { return { status: 200, body: "ok" }; } };') or {
 		panic(err)
 	}
 	os.write_file(config_file, '
@@ -482,7 +483,8 @@ fn test_load_vhttpd_config_supports_site_host_port_shorthand() {
 	os.mkdir_all(project_dir) or { panic(err) }
 	config_file := os.join_path(config_dir, 'vhttpd.toml')
 	app_file := os.join_path(project_dir, 'app.mts')
-	os.write_file(app_file, 'export default { async handle() { return { status: 200, body: "ok" }; } };') or {
+	os.write_file(app_file,
+		'export default { async handle() { return { status: 200, body: "ok" }; } };') or {
 		panic(err)
 	}
 	os.write_file(config_file, '
@@ -527,7 +529,8 @@ fn test_load_vhttpd_config_supports_site_root_alias() {
 	os.mkdir_all(project_dir) or { panic(err) }
 	config_file := os.join_path(config_dir, 'vhttpd.toml')
 	app_file := os.join_path(project_dir, 'app.mts')
-	os.write_file(app_file, 'export default { async handle() { return { status: 200, body: "ok" }; } };') or {
+	os.write_file(app_file,
+		'export default { async handle() { return { status: 200, body: "ok" }; } };') or {
 		panic(err)
 	}
 	os.write_file(config_file, '
@@ -566,7 +569,8 @@ fn test_resolve_multi_server_runtime_config_keeps_global_path_aliases_stable_whe
 	os.mkdir_all(build_dir) or { panic(err) }
 	config_file := os.join_path(config_dir, 'vhttpd.toml')
 	app_file := os.join_path(project_dir, 'app.mts')
-	os.write_file(app_file, 'export default { async handle() { return { status: 200, body: "ok" }; } };') or {
+	os.write_file(app_file,
+		'export default { async handle() { return { status: 200, body: "ok" }; } };') or {
 		panic(err)
 	}
 	os.write_file(config_file, '
@@ -607,7 +611,8 @@ fn test_resolve_multi_server_runtime_config_does_not_double_prefix_site_root_for
 	os.mkdir_all(build_dir) or { panic(err) }
 	config_file := os.join_path(config_dir, 'vhttpd.toml')
 	app_file := os.join_path(project_dir, 'app.mts')
-	os.write_file(app_file, 'export default { async handle() { return { status: 200, body: "ok" }; } };') or {
+	os.write_file(app_file,
+		'export default { async handle() { return { status: 200, body: "ok" }; } };') or {
 		panic(err)
 	}
 	os.write_file(config_file, '
@@ -744,8 +749,8 @@ app = "examples/hello-app.php"
 	assert cfg.sites['demo'].php.bin == 'php'
 	multi_cfg := resolve_multi_server_runtime_config([]string{}, cfg) or { panic(err) }
 	assert multi_cfg.listeners.len == 1
-	assert multi_cfg.listeners[0].site_cfg.worker.socket_prefix == os.join_path(config_dir,
-		'tmp', 'demo-worker')
+	assert multi_cfg.listeners[0].site_cfg.worker.socket_prefix == os.join_path(config_dir, 'tmp',
+		'demo-worker')
 	assert multi_cfg.listeners[0].site_cfg.php.worker_entry == php_worker
 	assert multi_cfg.listeners[0].site_cfg.php.app_entry == php_app
 }
@@ -1051,12 +1056,12 @@ fn test_resolve_executor_runtime_builds_vjsx_executor() {
 }
 
 fn test_normalize_executor_kind_accepts_aliases() {
-	assert normalize_executor_kind('none') or { panic(err) } == 'none'
-	assert normalize_executor_kind('disabled') or { panic(err) } == 'none'
-	assert normalize_executor_kind('noop') or { panic(err) } == 'none'
-	assert normalize_executor_kind('php-worker') or { panic(err) } == 'php'
-	assert normalize_executor_kind('php_worker') or { panic(err) } == 'php'
-	assert normalize_executor_kind('vjsx') or { panic(err) } == 'vjsx'
+	assert (builtin_logic_executor_spec('none') or { panic(err) }).kind == 'none'
+	assert (builtin_logic_executor_spec('disabled') or { panic(err) }).kind == 'none'
+	assert (builtin_logic_executor_spec('noop') or { panic(err) }).kind == 'none'
+	assert (builtin_logic_executor_spec('php-worker') or { panic(err) }).kind == 'php'
+	assert (builtin_logic_executor_spec('php_worker') or { panic(err) }).kind == 'php'
+	assert (builtin_logic_executor_spec('vjsx') or { panic(err) }).kind == 'vjsx'
 }
 
 fn test_builtin_logic_executor_spec_exposes_runtime_models() {
@@ -1186,8 +1191,9 @@ fn test_embedded_executor_lifecycle_disables_worker_backend_features() {
 			'VHTTPD_APP': '/tmp/app.php'
 		}
 	}
-	EmbeddedExecutorLifecycle{}.prepare_bootstrap([]string{}, default_vhttpd_config(), mut
-		state) or { panic(err) }
+	EmbeddedExecutorLifecycle{}.prepare_bootstrap([]string{}, default_vhttpd_config(), mut state) or {
+		panic(err)
+	}
 	assert state.worker_sockets.len == 0
 	assert !state.stream_dispatch
 	assert state.websocket_dispatch_mode
@@ -1248,15 +1254,15 @@ fn test_resolve_logic_executor_runtime_plan_for_vjsx_disables_worker_bootstrap()
 	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_executor_runtime_plan_vjsx_test')
 	os.mkdir_all(temp_dir) or { panic(err) }
 	app_file := os.join_path(temp_dir, 'app.mts')
-	os.write_file(app_file, 'export default { async handle() { return { status: 200, body: "ok" }; } };') or {
+	os.write_file(app_file,
+		'export default { async handle() { return { status: 200, body: "ok" }; } };') or {
 		panic(err)
 	}
 	defer {
 		os.rm(app_file) or {}
 	}
 	plan := resolve_logic_executor_runtime_plan(['--executor', 'vjsx', '--vjsx-entry', app_file],
-		default_vhttpd_config(), ['/tmp/a.sock'], true, true, true, 'php worker.php',
-		{
+		default_vhttpd_config(), ['/tmp/a.sock'], true, true, true, 'php worker.php', {
 		'VHTTPD_APP': '/tmp/app.php'
 	}) or { panic(err) }
 	assert plan.executor.kind() == 'vjsx'
@@ -1274,7 +1280,8 @@ fn test_builtin_logic_executor_spec_runtime_selection_builds_vjsx_executor() {
 	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_executor_spec_selection_test')
 	os.mkdir_all(temp_dir) or { panic(err) }
 	app_file := os.join_path(temp_dir, 'app.mts')
-	os.write_file(app_file, 'export default { async handle() { return { status: 200, body: "ok" }; } };') or {
+	os.write_file(app_file,
+		'export default { async handle() { return { status: 200, body: "ok" }; } };') or {
 		panic(err)
 	}
 	defer {
@@ -1402,7 +1409,9 @@ fn test_prepare_server_runtime_files_creates_parent_dirs_and_pid_file() {
 	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_runtime_files_test')
 	event_log := os.join_path(temp_dir, 'logs', 'events.ndjson')
 	pid_file := os.join_path(temp_dir, 'run', 'vhttpd.pid')
-	internal_socket := prepare_server_runtime_files(event_log, pid_file) or { panic(err) }
+	internal_socket := prepare_server_runtime_files_for_label(event_log, pid_file, '') or {
+		panic(err)
+	}
 	defer {
 		os.rm(pid_file) or {}
 		os.rmdir_all(temp_dir) or {}
@@ -1492,7 +1501,8 @@ fn test_resolve_server_runtime_config_builds_vjsx_embedded_runtime_state() {
 	event_log := os.join_path(temp_dir, 'logs', 'events.ndjson')
 	pid_file := os.join_path(temp_dir, 'run', 'vhttpd.pid')
 	os.mkdir_all(assets_root) or { panic(err) }
-	os.write_file(app_file, 'export default { async handle() { return { status: 200, body: "ok" }; } };') or {
+	os.write_file(app_file,
+		'export default { async handle() { return { status: 200, body: "ok" }; } };') or {
 		panic(err)
 	}
 	defer {
@@ -1577,7 +1587,8 @@ fn test_resolve_multi_server_runtime_config_builds_listener_bound_sites() {
 	os.mkdir_all(vjsx_root) or { panic(err) }
 	os.write_file(php_worker, '<?php echo "worker";') or { panic(err) }
 	os.write_file(php_app, '<?php echo "app";') or { panic(err) }
-	os.write_file(vjsx_app, 'export default { async handle() { return { status: 200, body: "ok" }; } };') or {
+	os.write_file(vjsx_app,
+		'export default { async handle() { return { status: 200, body: "ok" }; } };') or {
 		panic(err)
 	}
 	defer {
@@ -1711,7 +1722,9 @@ websocket_affinity.source = "app"
 websocket_affinity.key = "serverId"
 websocket_affinity.scope = "lane"
 websocket_affinity.fallback = "reject"
-') or { panic(err) }
+') or {
+		panic(err)
+	}
 	defer {
 		os.rm(config_file) or {}
 	}
@@ -1744,7 +1757,9 @@ websocket_actor.sources = [
   { type = "query", key = "connectionId", class = "conn" },
   { type = "app" },
 ]
-') or { panic(err) }
+') or {
+		panic(err)
+	}
 	defer {
 		os.rm(config_file) or {}
 	}
@@ -1791,27 +1806,27 @@ fn test_site_config_as_vhttpd_config_merges_site_websocket_affinity() {
 fn test_site_config_as_vhttpd_config_merges_site_websocket_actor() {
 	mut base := default_vhttpd_config()
 	base.websocket_actor = WebSocketActorConfig{
-		enabled:          true
-		fallback:         'unkeyed'
-		queue_timeout_ms: 1000
+		enabled:           true
+		fallback:          'unkeyed'
+		queue_timeout_ms:  1000
 		max_queue_per_key: 16
-		events:           ['open']
-		sources: [
+		events:            ['open']
+		sources:           [
 			WebSocketActorSourceConfig{
-				typ: 'query'
-				key: 'serverId'
+				typ:        'query'
+				key:        'serverId'
 				class_name: 'session'
 			},
 		]
 	}
 	derived := site_config_as_vhttpd_config(base, SiteConfig{
 		websocket_actor: WebSocketActorConfig{
-			enabled:          true
-			fallback:         'reject'
-			queue_timeout_ms: 30000
+			enabled:           true
+			fallback:          'reject'
+			queue_timeout_ms:  30000
 			max_queue_per_key: 1024
-			events:           ['open', 'message', 'close']
-			sources: [
+			events:            ['open', 'message', 'close']
+			sources:           [
 				WebSocketActorSourceConfig{
 					typ: 'connection_cache'
 				},
@@ -1949,9 +1964,7 @@ fn test_paseo_relay_example_config_enables_websocket_dispatch() {
 	assert cfg.sites['paseo_relay'].websocket_actor.sources[0].typ == 'connection_cache'
 	assert cfg.sites['paseo_relay'].websocket_actor.sources[1].key == 'connectionId'
 	assert cfg.sites['paseo_relay'].websocket_actor.sources[1].class_name == 'conn'
-	runtime := resolve_multi_server_runtime_config(['--config', config_path], cfg) or {
-		panic(err)
-	}
+	runtime := resolve_multi_server_runtime_config(['--config', config_path], cfg) or { panic(err) }
 	assert runtime.listeners.len == 1
 	assert runtime.listeners[0].runtime_cfg.executor_plan.bootstrap.websocket_dispatch_mode
 	assert !runtime.listeners[0].site_cfg.websocket_affinity.enabled

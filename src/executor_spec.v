@@ -139,7 +139,8 @@ fn (spec BuiltinLogicExecutorSpec) resolve_php_runtime_config(args []string, cfg
 	php_cfg.bin = arg_string_or(args, '--php-bin', php_cfg.bin).trim_space()
 	php_cfg.worker_entry = arg_string_or(args, spec.config_surface.worker_entry_flag,
 		php_cfg.worker_entry).trim_space()
-	php_cfg.app_entry = arg_string_or(args, spec.config_surface.app_entry_flag, php_cfg.app_entry).trim_space()
+	php_cfg.app_entry =
+		arg_string_or(args, spec.config_surface.app_entry_flag, php_cfg.app_entry).trim_space()
 	if arg_has(args, '--php-extension') {
 		php_cfg.extensions = arg_string_list_or(args, '--php-extension', []string{})
 	}
@@ -198,22 +199,22 @@ fn (spec BuiltinLogicExecutorSpec) resolve_vjsx_runtime_config(args []string, cf
 		}
 	}
 	return VjsxRuntimeFacadeConfig{
-		app_entry:         embedded_cfg.app_entry
-		module_root:       embedded_cfg.module_root
-		build_root:        embedded_cfg.build_root
-		signature_root:    embedded_cfg.signature_root
-		signature_include: embedded_cfg.signature_include.clone()
-		signature_exclude: embedded_cfg.signature_exclude.clone()
-		runtime_profile:   embedded_cfg.runtime_profile
-		thread_count:      embedded_cfg.lane_count
-		max_requests:      embedded_cfg.max_requests
-			enable_fs:         embedded_cfg.enable_fs
-			enable_process:    embedded_cfg.enable_process
-			enable_network:    embedded_cfg.enable_network
-			websocket_affinity: cfg.websocket_affinity
-			websocket_actor:   cfg.websocket_actor
-		}
+		app_entry:          embedded_cfg.app_entry
+		module_root:        embedded_cfg.module_root
+		build_root:         embedded_cfg.build_root
+		signature_root:     embedded_cfg.signature_root
+		signature_include:  embedded_cfg.signature_include.clone()
+		signature_exclude:  embedded_cfg.signature_exclude.clone()
+		runtime_profile:    embedded_cfg.runtime_profile
+		thread_count:       embedded_cfg.lane_count
+		max_requests:       embedded_cfg.max_requests
+		enable_fs:          embedded_cfg.enable_fs
+		enable_process:     embedded_cfg.enable_process
+		enable_network:     embedded_cfg.enable_network
+		websocket_affinity: cfg.websocket_affinity
+		websocket_actor:    cfg.websocket_actor
 	}
+}
 
 fn (spec BuiltinLogicExecutorSpec) build_executor(args []string, cfg VhttpdConfig) !LogicExecutor {
 	match spec.factory {
@@ -235,11 +236,6 @@ fn (spec BuiltinLogicExecutorSpec) runtime_selection(args []string, cfg VhttpdCo
 		worker_backend_mode: spec.worker_backend_mode
 		lifecycle:           spec.lifecycle
 	}
-}
-
-fn normalize_executor_kind(raw string) !string {
-	spec := builtin_logic_executor_spec(raw)!
-	return spec.kind
 }
 
 fn builtin_logic_executor_spec(kind string) !BuiltinLogicExecutorSpec {
