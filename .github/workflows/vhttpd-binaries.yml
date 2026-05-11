@@ -74,10 +74,11 @@ jobs:
           mysql_prefix="$(brew --prefix mysql-client)"
           libpq_prefix="$(brew --prefix libpq)"
           openssl_prefix="$(brew --prefix openssl@3)"
+          sqlite_prefix="$(brew --prefix sqlite)"
           {
-            echo "PKG_CONFIG_PATH=${mysql_prefix}/lib/pkgconfig:${libpq_prefix}/lib/pkgconfig:${openssl_prefix}/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
-            echo "CPPFLAGS=-I${mysql_prefix}/include/mysql -I${libpq_prefix}/include -I${openssl_prefix}/include ${CPPFLAGS:-}"
-            echo "LDFLAGS=-L${mysql_prefix}/lib -L${libpq_prefix}/lib -L${openssl_prefix}/lib ${LDFLAGS:-}"
+            echo "PKG_CONFIG_PATH=${mysql_prefix}/lib/pkgconfig:${libpq_prefix}/lib/pkgconfig:${openssl_prefix}/lib/pkgconfig:${sqlite_prefix}/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+            echo "CPPFLAGS=-I${mysql_prefix}/include/mysql -I${libpq_prefix}/include -I${openssl_prefix}/include -I${sqlite_prefix}/include ${CPPFLAGS:-}"
+            echo "LDFLAGS=-L${mysql_prefix}/lib -L${libpq_prefix}/lib -L${openssl_prefix}/lib -L${sqlite_prefix}/lib ${LDFLAGS:-}"
           } >> "$GITHUB_ENV"
 
       - name: Install V compiler
@@ -121,6 +122,7 @@ jobs:
           cc --version || clang --version
           pkg-config --modversion bdw-gc
           pkg-config --modversion openssl
+          pkg-config --modversion sqlite3
 
       - name: Build production binary
         shell: bash
