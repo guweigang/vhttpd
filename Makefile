@@ -18,6 +18,11 @@ V_FLAGS ?= $(V_TLS_FLAGS)
 V_PROD_FLAGS ?= -prod
 V_NOCACHE_FLAGS ?= -nocache
 WITH_DB ?= 1
+VJSX_DIR ?= $(shell if [ -x "$(ROOT)/../vjsx/scripts/ensure-quickjs.sh" ]; then printf "%s" "$(abspath $(ROOT)/../vjsx)"; else printf "%s" "$(HOME)/.vmodules/vjsx"; fi)
+LOCAL_QUICKJS ?= $(abspath $(ROOT)/../quickjs)
+VJS_QUICKJS_PATH ?= $(shell if [ -f "$(LOCAL_QUICKJS)/quickjs.c" ] && [ -f "$(LOCAL_QUICKJS)/quickjs-c-atomics.h" ] && grep -q 'QJS_VERSION_MAJOR' "$(LOCAL_QUICKJS)/quickjs.h" 2>/dev/null; then printf "%s" "$(LOCAL_QUICKJS)"; else VJS_QUICKJS_WORK_ROOT="$(ROOT)" "$(VJSX_DIR)/scripts/ensure-quickjs.sh"; fi)
+VJSX_FLAGS ?= -d build_quickjs
+V_ENV = VJS_QUICKJS_PATH="$(VJS_QUICKJS_PATH)"
 
 DB_IMPL_DIR := $(ROOT)/dbsrc
 BUILD_STAGE_ROOT := $(ROOT)/tmp/vbuildsrc
@@ -82,12 +87,12 @@ ifeq ($(WITH_DB),1)
 endif
 
 build: prepare-build-src
-	v -cc $(V_CC) $(V_FLAGS) $(V_DB_FLAGS) $(V_GC_FLAG) -o $(VHTTPD_BIN) $(BUILD_STAGE_DIR)
+	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_FLAGS) $(V_DB_FLAGS) $(V_GC_FLAG) -o $(VHTTPD_BIN) $(BUILD_STAGE_DIR)
 
 vhttpd: build
 
 prod: prepare-build-src
-	v -cc $(V_CC) $(V_FLAGS) $(V_DB_FLAGS) $(V_GC_FLAG) $(V_PROD_FLAGS) $(V_NOCACHE_FLAGS) -o $(VHTTPD_BIN) $(BUILD_STAGE_DIR)
+	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_FLAGS) $(V_DB_FLAGS) $(V_GC_FLAG) $(V_PROD_FLAGS) $(V_NOCACHE_FLAGS) -o $(VHTTPD_BIN) $(BUILD_STAGE_DIR)
 
 build-prod: prod
 
@@ -130,22 +135,22 @@ psr-matrix:
 test: test-fast
 
 test-fast:
-	v -cc $(V_CC) test $(FAST_TEST_FILES)
+	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) test $(FAST_TEST_FILES)
 
 test-inproc:
-	v -cc $(V_CC) test $(INPROC_TEST_FILES)
+	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) test $(INPROC_TEST_FILES)
 
 test-codexbot:
-	v -cc $(V_CC) test $(CODEXBOT_TEST_FILES)
+	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) test $(CODEXBOT_TEST_FILES)
 
 test-codexbot-fast:
-	v -cc $(V_CC) test $(CODEXBOT_FAST_TEST_FILES)
+	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) test $(CODEXBOT_FAST_TEST_FILES)
 
 test-codexbot-lifecycle:
-	v -cc $(V_CC) test $(CODEXBOT_LIFECYCLE_TEST_FILES)
+	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) test $(CODEXBOT_LIFECYCLE_TEST_FILES)
 
 test-profile-codexbot:
 	@/bin/zsh $(ROOT)/tools/profile_codexbot_tests.sh $(ROOT)
 
 test-all:
-	v -cc $(V_CC) test $(SRC_DIR)
+	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) test $(SRC_DIR)
