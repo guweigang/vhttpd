@@ -89,20 +89,20 @@
 
 ### 第五部分：架构与高级篇
 
-10. **10-architecture.md** （待写）
+10. **[10-architecture.md](10-architecture.md)** ✅
     - 深入理解 vhttpd 架构：从协议层到运行时
     - 整体架构图解读
     - Worker 池和队列管理
     - Stream 执行的三个阶段
     - Provider 模型
 
-11. **11-observability.md** （待写）
+11. **[11-observability.md](11-observability.md)** ✅
     - 可观测性实战：监控、调试和运维
     - Admin Plane 深入使用
     - Runtime stats 和 metrics
     - Event log 和故障排查
 
-12. **12-advanced-patterns.md** （待写）
+12. **[12-advanced-patterns.md](12-advanced-patterns.md)** ✅
     - 高级模式：多监听器、数据库连接池、Paseo Relay
     - 多站点配置
     - DB 连接池托管
@@ -110,15 +110,21 @@
 
 ### 第六部分：案例与未来篇
 
-13. **13-real-world.md** （待写）
+13. **[13-real-world.md](13-real-world.md)** ✅
     - 真实案例：生产环境中的 vhttpd 应用
     - 整合多个案例
     - 性能对比数据
 
-14. **14-future.md** （待写）
+14. **[14-future.md](14-future.md)** ✅
     - 展望未来：vhttpd 的演进路线和生态愿景
     - Roadmap 介绍
     - 如何参与贡献
+
+---
+
+## 🎉 系列文章完成！
+
+感谢阅读整个 vhttpd 系列文章！
 
 ## 市场定位
 
