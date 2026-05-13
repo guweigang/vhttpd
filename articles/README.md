@@ -67,7 +67,7 @@
    - 注册 tools/resources/prompts
    - 与 Cherry Studio 集成演示
 
-7. **07-feishu-bot.md** （待写）
+7. **[07-feishu-bot.md](07-feishu-bot.md)** ✅
    - 飞书机器人实战：从简单回落到智能对话
    - 飞书长连接集成
    - 互动卡片开发
