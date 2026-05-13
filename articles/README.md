@@ -32,7 +32,7 @@
    - 解释为什么 vhttpd 是一个 transport runtime，而不仅仅是 HTTP 服务器
    - 介绍 PHP worker、vjsx 插件、WebSocket/stream/MCP 能力以及运行时可观测性
 
-### 第二部分：实战入门篇（进行中）
+### 第二部分：实战入门篇（3/4 完成）
 
 2. **[02-getting-started.md](02-getting-started.md)** ✅
    - 从零开始：5分钟运行你的第一个 vhttpd 应用
@@ -41,7 +41,7 @@
    - Hello World 示例
    - Admin Plane 探索
 
-3. **03-php-apps.md** （待写）
+3. **[03-php-apps.md](03-php-apps.md)** ✅
    - 让 PHP 应用重获新生：Laravel/Symfony/WordPress 迁移指南
    - Laravel 集成实战
    - Symfony 集成实战
