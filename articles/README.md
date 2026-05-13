@@ -56,7 +56,7 @@
 
 ### 第三部分：核心功能实战篇
 
-5. **05-ollama-proxy.md** （待写）
+5. **[05-ollama-proxy.md](05-ollama-proxy.md)** ✅
    - 构建你的专属 AI Gateway：Ollama 代理实战
    - 理解 phase 3 upstream plan 架构
    - 本地和云端 Ollama 集成
