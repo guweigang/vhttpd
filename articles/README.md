@@ -81,7 +81,7 @@
    - 第一个 vjsx handler
    - 与 PHP 的关系和分工
 
-9. **09-codexbot.md** （待写）
+9. **[09-codexbot.md](09-codexbot.md)** ✅
    - 从零构建一个 AI 编程助手：codexbot 案例深度解析
    - codexbot 架构解析
    - Codex 协议集成
