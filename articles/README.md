@@ -75,7 +75,7 @@
 
 ### 第四部分：TypeScript 插件篇
 
-8. **08-vjsx-intro.md** （待写）
+8. **[08-vjsx-intro.md](08-vjsx-intro.md)** ✅
    - vjsx 入门：用 TypeScript 快速扩展 vhttpd
    - vjsx 是什么
    - 第一个 vjsx handler
