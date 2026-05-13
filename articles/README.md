@@ -48,11 +48,11 @@
    - WordPress 集成实战
    - 与传统 nginx + PHP-FPM 的对比
 
-4. **04-ai-streaming.md** （待写）
+4. **[04-ai-streaming.md](04-ai-streaming.md)** ✅
    - AI 流式应用入门：从简单 SSE 到智能对话
    - 基础 AI token streaming
    - SSE vs text stream
-   - 使用示例应用
+   - 连接真实 AI 服务（Ollama）
 
 ### 第三部分：核心功能实战篇
 
