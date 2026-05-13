@@ -61,7 +61,7 @@
    - 理解 phase 3 upstream plan 架构
    - 本地和云端 Ollama 集成
 
-6. **06-mcp-server.md** （待写）
+6. **[06-mcp-server.md](06-mcp-server.md)** ✅
    - MCP 服务端实践：构建可扩展的 AI 工具平台
    - MCP Streamable HTTP 介绍
    - 注册 tools/resources/prompts
