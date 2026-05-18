@@ -11,3 +11,5 @@ tmp/
 *.vjsbuild/
 .vscode/
 examples/codexbot-app/codex.sqlite
+php/package/composer.lock
+php/package/vendor/
