@@ -86,14 +86,14 @@ final class AdminHttpApp
 
         $app = $this->app();
 
-        if (method_exists($app, 'dispatch_envelope_map')) {
-            return $this->normalizeEnvelopeMap($app->dispatch_envelope_map($request));
+        if (method_exists($app, 'dispatchEnvelopeMap')) {
+            return $this->normalizeEnvelopeMap($app->dispatchEnvelopeMap($request));
         }
 
-        if (method_exists($app, 'dispatch_envelope_worker')) {
-            $app->dispatch_envelope_worker($request);
-            if (method_exists($app, 'dispatch_envelope')) {
-                return $this->normalizeResponse($app->dispatch_envelope($request));
+        if (method_exists($app, 'dispatchEnvelopeWorker')) {
+            $app->dispatchEnvelopeWorker($request);
+            if (method_exists($app, 'dispatchEnvelope')) {
+                return $this->normalizeResponse($app->dispatchEnvelope($request));
             }
             return [
                 'status' => 500,
@@ -102,8 +102,8 @@ final class AdminHttpApp
             ];
         }
 
-        if (method_exists($app, 'dispatch_envelope')) {
-            return $this->normalizeResponse($app->dispatch_envelope($request));
+        if (method_exists($app, 'dispatchEnvelope')) {
+            return $this->normalizeResponse($app->dispatchEnvelope($request));
         }
 
         return [

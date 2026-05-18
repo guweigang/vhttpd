@@ -1,9 +1,9 @@
 <?php
 declare(strict_types=1);
 
-use VPhp\VSlim\Stream\OllamaClient;
+use VSlim\Stream\OllamaClient;
 
-return static function (mixed $request, array $envelope = []): array|\VPhp\VHttpd\Upstream\Plan {
+return static function (mixed $request, array $envelope = []): array|\VHttpd\Upstream\Plan {
     $src = is_array($request) ? $request : $envelope;
     $method = strtoupper((string) ($src['method'] ?? 'GET'));
     $pathWithQuery = (string) ($src['path'] ?? '/');

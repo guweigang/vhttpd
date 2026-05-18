@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use VPhp\VSlim\Mcp\App;
+use VSlim\Mcp\App;
 
 $mcp = (new App(
     ['name' => 'vhttpd-mcp-demo', 'version' => '0.1.0'],

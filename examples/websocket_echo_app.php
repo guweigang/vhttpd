@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-use VPhp\VSlim\WebSocket\App;
-use VPhp\VHttpd\PhpWorker\WebSocket\Connection;
+use VSlim\WebSocket\App;
+use VHttpd\PhpWorker\WebSocket\Connection;
 
 $html = <<<'HTML'
 <!doctype html>

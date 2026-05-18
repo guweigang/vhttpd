@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace CodexBot\Upstream;
 
-use VPhp\VHttpd\Upstream\WebSocket\CommandBus;
+use VHttpd\Upstream\WebSocket\CommandBus;
 
 final class BotResponseHelper
 {

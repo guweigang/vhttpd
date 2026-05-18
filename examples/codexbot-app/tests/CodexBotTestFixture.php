@@ -16,7 +16,7 @@ use CodexBot\Upstream\RpcResponseRouter;
 use CodexBot\Upstream\RpcResultProjector;
 use CodexBot\Upstream\ThreadViewHelper;
 use CodexBot\Upstream\UpstreamGraphFactory;
-use VPhp\VHttpd\Upstream\WebSocket\EventRouter;
+use VHttpd\Upstream\WebSocket\EventRouter;
 use PDO;
 
 final class CodexBotTestFixture

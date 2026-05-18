@@ -15,14 +15,16 @@ require_once __DIR__ .
 require_once __DIR__ .
     "/../php/package/src/VSlim/App/Feishu/AbstractBotHandler.php";
 require_once __DIR__ . "/../php/package/src/VSlim/App/Feishu/BotApp.php";
-require_once __DIR__ . "/../php/package/src/VSlim/Mcp/App.php";
+if (!class_exists(\VSlim\Mcp\App::class, false)) {
+    require_once __DIR__ . "/../php/package/src/VSlim/Mcp/App.php";
+}
 require_once __DIR__ .
     "/../php/package/src/VHttpd/Upstream/WebSocket/Feishu/McpToolset.php";
 require_once __DIR__ . "/../php/app/MyFeishuBot.php";
 
-use VPhp\VSlim\App\Feishu\BotApp;
-use VPhp\VHttpd\Upstream\WebSocket\Feishu\McpToolset;
-use VPhp\VSlim\Mcp\App;
+use VSlim\App\Feishu\BotApp;
+use VHttpd\Upstream\WebSocket\Feishu\McpToolset;
+use VSlim\Mcp\App;
 
 $app = VSlim\App::demo();
 $feishuBotApp = new BotApp(new \VHttpd\App\MyFeishuBot());
@@ -42,7 +44,7 @@ $app->get("/debug/feishu-send", function () {
         ];
     }
 
-    $resp = \VPhp\VHttpd\VHttpd::gateway("feishu")->sendText(
+    $resp = \VHttpd\VHttpd::gateway("feishu")->sendText(
         instance: "main",
         chatId: $chatId,
         text: "hello from VHttpd::gateway()",
@@ -70,7 +72,7 @@ $app->get("/debug/feishu-image", function () {
         ];
     }
 
-    $resp = \VPhp\VHttpd\VHttpd::gateway("feishu")->sendLocalImage(
+    $resp = \VHttpd\VHttpd::gateway("feishu")->sendLocalImage(
         instance: "main",
         chatId: $chatId,
         filePath: $filePath,
@@ -98,7 +100,7 @@ $app->get("/debug/feishu-image-url", function () {
         ];
     }
 
-    $resp = \VPhp\VHttpd\VHttpd::gateway("feishu")->sendRemoteImage(
+    $resp = \VHttpd\VHttpd::gateway("feishu")->sendRemoteImage(
         instance: "main",
         chatId: $chatId,
         imageUrl: $imageUrl,
@@ -117,24 +119,24 @@ $http = static function (mixed $request, array $envelope = []) use (
     $app,
 ): mixed {
     if (is_object($request)) {
-        return \VPhp\VSlim\Psr7Adapter::dispatch($app, $request);
+        return \VSlim\Psr7Adapter::dispatch($app, $request);
     }
 
     if (is_array($request)) {
-        if (method_exists($app, "dispatch_envelope_worker")) {
-            return $app->dispatch_envelope_worker($request);
+        if (method_exists($app, "dispatchEnvelopeWorker")) {
+            return $app->dispatchEnvelopeWorker($request);
         }
-        if (method_exists($app, "dispatch_envelope")) {
-            return $app->dispatch_envelope($request);
+        if (method_exists($app, "dispatchEnvelope")) {
+            return $app->dispatchEnvelope($request);
         }
     }
 
     if ($envelope !== []) {
-        if (method_exists($app, "dispatch_envelope_worker")) {
-            return $app->dispatch_envelope_worker($envelope);
+        if (method_exists($app, "dispatchEnvelopeWorker")) {
+            return $app->dispatchEnvelopeWorker($envelope);
         }
-        if (method_exists($app, "dispatch_envelope")) {
-            return $app->dispatch_envelope($envelope);
+        if (method_exists($app, "dispatchEnvelope")) {
+            return $app->dispatchEnvelope($envelope);
         }
     }
 

@@ -2,7 +2,7 @@
 
 namespace CodexBot\Service;
 
-use VPhp\VHttpd\Upstream\WebSocket\CommandFactory as PackageCommandFactory;
+use VHttpd\Upstream\WebSocket\CommandFactory as PackageCommandFactory;
 
 final class CommandFactory {
     public static function providerMessageSend(string $provider, array $payload): array {
