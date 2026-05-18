@@ -6,8 +6,8 @@ namespace CodexBot;
 
 use CodexBot\Admin\AdminHttpApp;
 use CodexBot\Upstream\UpstreamGraphFactory;
-use VPhp\VHttpd\Upstream\WebSocket\CommandBus;
-use VPhp\VHttpd\Upstream\WebSocket\Event;
+use VHttpd\Upstream\WebSocket\CommandBus;
+use VHttpd\Upstream\WebSocket\Event;
 
 final class AppRuntime
 {

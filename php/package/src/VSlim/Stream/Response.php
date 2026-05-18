@@ -92,7 +92,7 @@ final class Response
         return array_key_exists(self::normalizeHeaderName($name), $this->headers);
     }
 
-    public function set_header(string $name, string $value): self
+    public function setHeader(string $name, string $value): self
     {
         $normalized = self::normalizeHeaderName($name);
         $this->headers[$normalized] = $value;

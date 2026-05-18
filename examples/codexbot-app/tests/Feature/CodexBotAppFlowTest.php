@@ -440,7 +440,7 @@ it('dispatches feishu inbound events through named event handlers', function ():
     $fixture = codex_bot_test_fixture();
     $fixture->bootstrap();
     $router = $fixture->eventRouter();
-    $event = VPhp\VHttpd\Upstream\WebSocket\Event::fromDispatchRequest(codex_bot_test_inbound('/help'));
+    $event = VHttpd\Upstream\WebSocket\Event::fromDispatchRequest(codex_bot_test_inbound('/help'));
 
     $response = $router->dispatch($event)->export();
 
@@ -619,7 +619,7 @@ it('wraps single and multiple commands through response helper', function (): vo
 
 it('appends commands into command bus through response helper', function (): void {
     $helper = codex_bot_test_fixture()->responseHelper();
-    $bus = new VPhp\VHttpd\Upstream\WebSocket\CommandBus();
+    $bus = new VHttpd\Upstream\WebSocket\CommandBus();
 
     $result = $helper->appendToBus([
         'commands' => [
@@ -695,11 +695,11 @@ it('dispatches provider upstream events through named event handlers', function 
     $router = $fixture->eventRouter();
 
     $taskResponse = $router->dispatch(
-        VPhp\VHttpd\Upstream\WebSocket\Event::fromDispatchRequest(codex_bot_test_inbound('请创建一个测试任务'))
+        VHttpd\Upstream\WebSocket\Event::fromDispatchRequest(codex_bot_test_inbound('请创建一个测试任务'))
     )->export();
 
     $streamId = (string) ($taskResponse['commands'][1]['stream_id'] ?? '');
-    $rpcEvent = VPhp\VHttpd\Upstream\WebSocket\Event::fromDispatchRequest([
+    $rpcEvent = VHttpd\Upstream\WebSocket\Event::fromDispatchRequest([
         'mode' => 'websocket_upstream',
         'provider' => 'codex',
         'event_type' => 'codex.rpc.response',

@@ -15,7 +15,7 @@ final class DashboardController
 {
     public function __construct(private ?object $app = null) {}
 
-    public function index(\VSlim\Request $req): \VSlim\Response
+    public function index(\VSlim\Request $req): \VSlim\VHttpd\Response
     {
         if (!$this->app || !method_exists($this->app, 'view')) {
             throw new \RuntimeException('VSlim app is not available for dashboard rendering');

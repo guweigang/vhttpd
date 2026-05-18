@@ -16,7 +16,7 @@ use CodexBot\Upstream\RpcResponseRouter;
 use CodexBot\Upstream\RpcResultProjector;
 use CodexBot\Upstream\ThreadViewHelper;
 use CodexBot\Upstream\UpstreamGraphFactory;
-use VPhp\VHttpd\Upstream\WebSocket\EventRouter;
+use VHttpd\Upstream\WebSocket\EventRouter;
 use PDO;
 
 final class CodexBotTestFixture
@@ -33,7 +33,7 @@ final class CodexBotTestFixture
             codex_bot_test_init_schema($dbPath);
 
             putenv('VHTTPD_BOT_DB_PATH=' . $dbPath);
-            $app = require dirname(codex_bot_test_app_dir()) . '/codexbot-app.php';
+            $app = require codex_bot_test_app_dir() . '/app.php';
 
             self::$booted[$dbSuffix] = [
                 'db_path' => $dbPath,

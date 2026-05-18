@@ -8,7 +8,7 @@ declare(strict_types=1);
  * - GET /bench/health
  * - GET /bench/stream?mode=sse|text&tokens=80&interval_ms=5&chunk_size=24
  */
-return static function (mixed $request, array $envelope = []): array|\VPhp\VHttpd\PhpWorker\StreamResponse {
+return static function (mixed $request, array $envelope = []): array|\VHttpd\PhpWorker\StreamResponse {
     $src = is_array($request) ? $request : $envelope;
     $pathWithQuery = (string) ($src['path'] ?? '/');
     $path = (string) (parse_url($pathWithQuery, PHP_URL_PATH) ?? '/');

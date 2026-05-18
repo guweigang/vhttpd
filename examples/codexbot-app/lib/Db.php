@@ -34,7 +34,7 @@ class Db
     {
         $pdo->exec("PRAGMA foreign_keys = ON;");
 
-        $schemaPath = dirname(__DIR__) . "/codex.sql";
+        $schemaPath = dirname(__DIR__) . "/data/codex.sql";
         if (!is_file($schemaPath)) {
             return;
         }

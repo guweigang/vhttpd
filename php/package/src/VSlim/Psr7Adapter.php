@@ -18,7 +18,7 @@ final class Psr7Adapter
         $vRequest->port = self::readUriPart($request, 'getPort', 'port', '');
         $vRequest->protocol_version = self::readProtocolVersion($request);
         $vRequest->remote_addr = self::readServerValue($request, 'REMOTE_ADDR');
-        $vRequest->set_headers(self::readHeaders($request));
+        $vRequest->setHeaders(self::readHeaders($request));
         $vRequest->set_cookies(self::normalizeMap(self::readMap($request, 'getCookieParams', 'cookies')));
         $vRequest->set_query(self::normalizeMap(self::readMap($request, 'getQueryParams', 'query')));
         $vRequest->set_attributes(self::normalizeMap(self::readAttributes($request)));

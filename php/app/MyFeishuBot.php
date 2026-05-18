@@ -4,15 +4,15 @@ declare(strict_types=1);
 
 namespace VHttpd\App;
 
-use VPhp\VHttpd\Upstream\WebSocket\Feishu\Command;
-use VPhp\VHttpd\Upstream\WebSocket\Feishu\Content\CardActionValue;
-use VPhp\VHttpd\Upstream\WebSocket\Feishu\Content\CardButton;
-use VPhp\VHttpd\Upstream\WebSocket\Feishu\Content\CardHeader;
-use VPhp\VHttpd\Upstream\WebSocket\Feishu\Content\InteractiveCard;
-use VPhp\VHttpd\Upstream\WebSocket\Feishu\Content\PlainText;
-use VPhp\VHttpd\Upstream\WebSocket\Feishu\Event\CardActionEvent;
-use VPhp\VHttpd\Upstream\WebSocket\Feishu\Message\TextMessage;
-use VPhp\VSlim\App\Feishu\AbstractBotHandler;
+use VHttpd\Upstream\WebSocket\Feishu\Command;
+use VHttpd\Upstream\WebSocket\Feishu\Content\CardActionValue;
+use VHttpd\Upstream\WebSocket\Feishu\Content\CardButton;
+use VHttpd\Upstream\WebSocket\Feishu\Content\CardHeader;
+use VHttpd\Upstream\WebSocket\Feishu\Content\InteractiveCard;
+use VHttpd\Upstream\WebSocket\Feishu\Content\PlainText;
+use VHttpd\Upstream\WebSocket\Feishu\Event\CardActionEvent;
+use VHttpd\Upstream\WebSocket\Feishu\Message\TextMessage;
+use VSlim\App\Feishu\AbstractBotHandler;
 
 class MyFeishuBot extends AbstractBotHandler
 {

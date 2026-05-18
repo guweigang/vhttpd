@@ -14,7 +14,7 @@ use CodexBot\Service\CodexSessionService;
 use CodexBot\Service\StreamService;
 use CodexBot\Service\TaskStateService;
 use CodexBot\Service\WorkerAdminService;
-use VPhp\VHttpd\Upstream\WebSocket\EventRouter;
+use VHttpd\Upstream\WebSocket\EventRouter;
 
 final class UpstreamGraphFactory
 {

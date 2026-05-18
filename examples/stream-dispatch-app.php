@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use VPhp\VSlim\Stream\Factory as StreamFactory;
+use VSlim\Stream\Factory as StreamFactory;
 
 $html = <<<'HTML'
 <!doctype html>

@@ -23,14 +23,14 @@
 
 现在已经明确进入 package 的，是 websocket upstream 的 normalized contract：
 
-- `VPhp\VHttpd\Upstream\WebSocket\Command`
-- `VPhp\VHttpd\Upstream\WebSocket\CommandFactory`
-- `VPhp\VHttpd\Upstream\WebSocket\CommandBatch`
-- `VPhp\VHttpd\Upstream\WebSocket\CommandBus`
-- `VPhp\VHttpd\Upstream\WebSocket\Event`
-- `VPhp\VHttpd\Upstream\WebSocket\EventHandler`
-- `VPhp\VHttpd\Upstream\WebSocket\EventRouter`
-- `VPhp\VHttpd\Upstream\WebSocket\Feishu\*`
+- `VHttpd\Upstream\WebSocket\Command`
+- `VHttpd\Upstream\WebSocket\CommandFactory`
+- `VHttpd\Upstream\WebSocket\CommandBatch`
+- `VHttpd\Upstream\WebSocket\CommandBus`
+- `VHttpd\Upstream\WebSocket\Event`
+- `VHttpd\Upstream\WebSocket\EventHandler`
+- `VHttpd\Upstream\WebSocket\EventRouter`
+- `VHttpd\Upstream\WebSocket\Feishu\*`
 
 这层边界是对的，因为它们表达的是 provider-neutral 或 provider-facing contract，
 不依赖 codexbot 的业务表结构。
@@ -140,8 +140,8 @@
 
 更合适的 package 名字：
 
-- `VPhp\VHttpd\Upstream\Support\JsonDecoder`
-- `VPhp\VHttpd\Upstream\Support\NestedJsonDecoder`
+- `VHttpd\Upstream\Support\JsonDecoder`
+- `VHttpd\Upstream\Support\NestedJsonDecoder`
 
 好的 package API 例子：
 
@@ -172,7 +172,7 @@ $payload = $decoder->decode($raw, 'codex.raw_response');
 好的 package API 例子：
 
 ```php
-$message = VPhp\VHttpd\Upstream\WebSocket\Feishu\Message\Factory::fromPayload($payload);
+$message = VHttpd\Upstream\WebSocket\Feishu\Message\Factory::fromPayload($payload);
 $text = $message->plainText();
 ```
 

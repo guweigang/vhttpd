@@ -10,7 +10,7 @@ declare(strict_types=1);
  * - GET /ai/sse?prompt=...
  *   SSE chunks (stream_type=sse)
  */
-return static function (mixed $request, array $envelope = []): array|\VPhp\VHttpd\PhpWorker\StreamResponse {
+return static function (mixed $request, array $envelope = []): array|\VHttpd\PhpWorker\StreamResponse {
     $req = is_array($request) ? $request : $envelope;
     $method = strtoupper((string) ($req['method'] ?? 'GET'));
     $target = (string) ($req['path'] ?? '/');
