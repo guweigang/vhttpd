@@ -27,7 +27,7 @@ function codex_bot_test_init_schema(string $dbPath): void
     }
 
     $pdo = codex_bot_test_db($dbPath);
-    $pdo->exec((string) file_get_contents(codex_bot_test_app_dir() . '/codex.sql'));
+    $pdo->exec((string) file_get_contents(codex_bot_test_app_dir() . '/data/codex.sql'));
 }
 
 function codex_bot_test_seed_default_binding(PDO $pdo): void
