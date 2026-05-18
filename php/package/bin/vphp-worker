@@ -8,9 +8,13 @@ error_log("[vphp-worker] Booting up! VHTTPD_APP is: '" . getenv('VHTTPD_APP') . 
 $autoload = null;
 $dir = __DIR__;
 for ($i = 0; $i < 6; $i++) {
-    $candidate = $dir . '/autoload.php';
-    if (is_file($candidate)) {
-        $autoload = $candidate;
+    foreach ([$dir . '/autoload.php', $dir . '/vendor/autoload.php'] as $candidate) {
+        if (is_file($candidate)) {
+            $autoload = $candidate;
+            break 2;
+        }
+    }
+    if ($autoload !== null) {
         break;
     }
     $dir = dirname($dir);

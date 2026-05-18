@@ -342,14 +342,14 @@ class Client implements ClientInterface, \Psr\Http\Client\ClientInterface
     private function applyOptions(RequestInterface $request, array &$options): RequestInterface
     {
         $modify = [
-            'set_headers' => [],
+            'setHeaders' => [],
         ];
 
         if (isset($options['headers'])) {
             if (array_keys($options['headers']) === range(0, count($options['headers']) - 1)) {
                 throw new InvalidArgumentException('The headers array must have header name as keys.');
             }
-            $modify['set_headers'] = $options['headers'];
+            $modify['setHeaders'] = $options['headers'];
             unset($options['headers']);
         }
 
@@ -386,7 +386,7 @@ class Client implements ClientInterface, \Psr\Http\Client\ClientInterface
         ) {
             // Ensure that we don't have the header in different case and set the new value.
             $options['_conditional'] = Psr7\Utils::caselessRemove(['Accept-Encoding'], $options['_conditional']);
-            $modify['set_headers']['Accept-Encoding'] = $options['decode_content'];
+            $modify['setHeaders']['Accept-Encoding'] = $options['decode_content'];
         }
 
         if (isset($options['body'])) {
@@ -403,8 +403,8 @@ class Client implements ClientInterface, \Psr\Http\Client\ClientInterface
             switch ($type) {
                 case 'basic':
                     // Ensure that we don't have the header in different case and set the new value.
-                    $modify['set_headers'] = Psr7\Utils::caselessRemove(['Authorization'], $modify['set_headers']);
-                    $modify['set_headers']['Authorization'] = 'Basic '
+                    $modify['setHeaders'] = Psr7\Utils::caselessRemove(['Authorization'], $modify['setHeaders']);
+                    $modify['setHeaders']['Authorization'] = 'Basic '
                         .\base64_encode("$value[0]:$value[1]");
                     break;
                 case 'digest':
@@ -458,7 +458,7 @@ class Client implements ClientInterface, \Psr\Http\Client\ClientInterface
             $modify = [];
             foreach ($options['_conditional'] as $k => $v) {
                 if (!$request->hasHeader($k)) {
-                    $modify['set_headers'][$k] = $v;
+                    $modify['setHeaders'][$k] = $v;
                 }
             }
             $request = Psr7\Utils::modifyRequest($request, $modify);

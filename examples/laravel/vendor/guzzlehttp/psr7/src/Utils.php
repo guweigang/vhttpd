@@ -146,7 +146,7 @@ final class Utils
      *
      * The changes can be one of:
      * - method: (string) Changes the HTTP method.
-     * - set_headers: (array) Sets the given headers.
+     * - setHeaders: (array) Sets the given headers.
      * - remove_headers: (array) Remove the given headers.
      * - body: (mixed) Sets the given body.
      * - uri: (UriInterface) Set the URI.
@@ -169,13 +169,13 @@ final class Utils
         } else {
             // Remove the host header if one is on the URI
             if ($host = $changes['uri']->getHost()) {
-                $changes['set_headers']['Host'] = $host;
+                $changes['setHeaders']['Host'] = $host;
 
                 if ($port = $changes['uri']->getPort()) {
                     $standardPorts = ['http' => 80, 'https' => 443];
                     $scheme = $changes['uri']->getScheme();
                     if (isset($standardPorts[$scheme]) && $port != $standardPorts[$scheme]) {
-                        $changes['set_headers']['Host'] .= ':'.$port;
+                        $changes['setHeaders']['Host'] .= ':'.$port;
                     }
                 }
             }
@@ -186,9 +186,9 @@ final class Utils
             $headers = self::caselessRemove($changes['remove_headers'], $headers);
         }
 
-        if (!empty($changes['set_headers'])) {
-            $headers = self::caselessRemove(array_keys($changes['set_headers']), $headers);
-            $headers = $changes['set_headers'] + $headers;
+        if (!empty($changes['setHeaders'])) {
+            $headers = self::caselessRemove(array_keys($changes['setHeaders']), $headers);
+            $headers = $changes['setHeaders'] + $headers;
         }
 
         if (isset($changes['query'])) {

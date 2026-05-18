@@ -488,7 +488,7 @@ This method is useful for reducing the number of clones needed to mutate
 a message.
 
 - method: (string) Changes the HTTP method.
-- set_headers: (array) Sets the given headers.
+- setHeaders: (array) Sets the given headers.
 - remove_headers: (array) Remove the given headers.
 - body: (mixed) Sets the given body.
 - uri: (UriInterface) Set the URI.

@@ -41,7 +41,7 @@ class PrepareBodyMiddleware
         if (!$request->hasHeader('Content-Type')) {
             if ($uri = $request->getBody()->getMetadata('uri')) {
                 if (is_string($uri) && $type = Psr7\MimeType::fromFilename($uri)) {
-                    $modify['set_headers']['Content-Type'] = $type;
+                    $modify['setHeaders']['Content-Type'] = $type;
                 }
             }
         }
@@ -52,9 +52,9 @@ class PrepareBodyMiddleware
         ) {
             $size = $request->getBody()->getSize();
             if ($size !== null) {
-                $modify['set_headers']['Content-Length'] = $size;
+                $modify['setHeaders']['Content-Length'] = $size;
             } else {
-                $modify['set_headers']['Transfer-Encoding'] = 'chunked';
+                $modify['setHeaders']['Transfer-Encoding'] = 'chunked';
             }
         }
 
@@ -83,7 +83,7 @@ class PrepareBodyMiddleware
 
         // The expect header is unconditionally enabled
         if ($expect === true) {
-            $modify['set_headers']['Expect'] = '100-Continue';
+            $modify['setHeaders']['Expect'] = '100-Continue';
 
             return;
         }
@@ -99,7 +99,7 @@ class PrepareBodyMiddleware
         $size = $body->getSize();
 
         if ($size === null || $size >= (int) $expect || !$body->isSeekable()) {
-            $modify['set_headers']['Expect'] = '100-Continue';
+            $modify['setHeaders']['Expect'] = '100-Continue';
         }
     }
 }
