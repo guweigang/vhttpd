@@ -36,22 +36,22 @@ endif
 
 # Auto-discover test files so new *_test.v files under src/ are picked up automatically.
 # Unit tests: exclude inproc (heavy) and db (needs network) tests.
-FAST_TEST_FILES := $(shell find $(SRC_DIR) -maxdepth 1 -name '*_test.v' \
+FAST_TEST_FILES := $(shell find $(SRC_DIR) -name '*_test.v' \
 	! -name 'inproc_*' \
 	! -name 'db_*')
 
 # In-proc vjsx tests (non-codexbot).
-INPROC_TEST_FILES := $(shell find $(SRC_DIR) -maxdepth 1 -name 'inproc_*_test.v' \
+INPROC_TEST_FILES := $(shell find $(SRC_DIR) -name 'inproc_*_test.v' \
 	! -name '*codexbot*')
 
 # Codexbot in-proc tests (full suite).
-CODEXBOT_TEST_FILES := $(shell find $(SRC_DIR) -maxdepth 1 -name 'inproc_*codexbot*_test.v')
+CODEXBOT_TEST_FILES := $(shell find $(SRC_DIR) -name 'inproc_*codexbot*_test.v')
 
 # Codexbot lifecycle only.
-CODEXBOT_LIFECYCLE_TEST_FILES := $(shell find $(SRC_DIR) -maxdepth 1 -name '*codexbot_lifecycle_test.v')
+CODEXBOT_LIFECYCLE_TEST_FILES := $(shell find $(SRC_DIR) -name '*codexbot_lifecycle_test.v')
 
 # Codexbot fast suite (excludes lifecycle).
-CODEXBOT_FAST_TEST_FILES := $(shell find $(SRC_DIR) -maxdepth 1 -name 'inproc_*codexbot*_test.v' \
+CODEXBOT_FAST_TEST_FILES := $(shell find $(SRC_DIR) -name 'inproc_*codexbot*_test.v' \
 	! -name '*codexbot_lifecycle_test.v')
 
 prepare-build-src:

@@ -7,6 +7,7 @@ import net.urllib
 import os
 import sync
 import time
+import state_store
 import vjsx
 import vjsx.runtimejs
 import x.json2
@@ -113,7 +114,7 @@ mut:
 	mu                                      sync.Mutex
 	app_ref                                 &App = unsafe { nil }
 	facade                                  VjsxRuntimeFacade
-	session_store                           MemoryStateStore[string]
+	session_store                           state_store.MemoryStateStore[string]
 	lanes                                   []VjsxExecutionLane
 	hosts                                   []VjsxLaneHost
 	lane_workers                            []VjsxLaneWorker
@@ -475,7 +476,7 @@ pub fn new_inproc_vjsx_executor(config VjsxRuntimeFacadeConfig) InProcVjsxExecut
 			facade:                                  VjsxRuntimeFacade{
 				config: config
 			}
-			session_store:                           new_memory_state_store[string]()
+			session_store:                           state_store.new_memory_state_store[string]()
 			lanes:                                   lanes
 			hosts:                                   hosts
 			lane_workers:                            lane_workers

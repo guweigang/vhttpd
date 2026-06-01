@@ -12,6 +12,7 @@ import os
 import sync
 import time
 import veb
+import state_store
 import veb.request_id
 import veb.sse
 
@@ -61,7 +62,7 @@ pub mut:
 	openai_endpoints                            OpenAIEndpointsConfig
 	openai_backends                             map[string]OpenAIBackendConfig
 	openai_routes                               map[string]OpenAIRouteConfig
-	openai_responses                            MemoryStateStore[OpenAIResponseRecord]
+	openai_responses                            state_store.MemoryStateStore[OpenAIResponseRecord]
 	websocket_upstream_recent_dispatch_limit    int
 	auto_start_dynamic_upstreams                bool
 	feishu_static_apps                          map[string]FeishuAppConfig

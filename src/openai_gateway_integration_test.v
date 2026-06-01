@@ -3,6 +3,7 @@ module main
 import net
 import net.http
 import os
+import state_store
 import time
 import veb
 
@@ -263,7 +264,7 @@ fn openai_integration_start_gateway(port int, upstream_port int, plugin_file str
 		}
 		plugin_configs:             plugins
 		plugin_vjsx:                build_vjsx_plugin_runtimes(plugins)
-		openai_responses:           new_memory_state_store[OpenAIResponseRecord]()
+		openai_responses:           state_store.new_memory_state_store[OpenAIResponseRecord]()
 		upstream_sessions:          map[string]UpstreamRuntimeSession{}
 		mcp_sessions:               map[string]McpSession{}
 		ws_hub_conns:               map[string]HubConn{}
