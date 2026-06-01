@@ -1,5 +1,7 @@
 module main
 
+import common
+
 enum BuiltinLogicExecutorFactoryKind {
 	noop
 	socket_worker
@@ -136,16 +138,16 @@ fn (spec BuiltinLogicExecutorSpec) resolve_php_runtime_config(args []string, cfg
 		return error('builtin_logic_executor_php_runtime_config_unsupported:${spec.kind}')
 	}
 	mut php_cfg := cfg.php
-	php_cfg.bin = arg_string_or(args, '--php-bin', php_cfg.bin).trim_space()
-	php_cfg.worker_entry = arg_string_or(args, spec.config_surface.worker_entry_flag,
+	php_cfg.bin = common.arg_string_or(args, '--php-bin', php_cfg.bin).trim_space()
+	php_cfg.worker_entry = common.arg_string_or(args, spec.config_surface.worker_entry_flag,
 		php_cfg.worker_entry).trim_space()
 	php_cfg.app_entry =
-		arg_string_or(args, spec.config_surface.app_entry_flag, php_cfg.app_entry).trim_space()
-	if arg_has(args, '--php-extension') {
-		php_cfg.extensions = arg_string_list_or(args, '--php-extension', []string{})
+		common.arg_string_or(args, spec.config_surface.app_entry_flag, php_cfg.app_entry).trim_space()
+	if common.arg_has(args, '--php-extension') {
+		php_cfg.extensions = common.arg_string_list_or(args, '--php-extension', []string{})
 	}
-	if arg_has(args, '--php-arg') {
-		php_cfg.args = arg_string_list_or(args, '--php-arg', []string{})
+	if common.arg_has(args, '--php-arg') {
+		php_cfg.args = common.arg_string_list_or(args, '--php-arg', []string{})
 	}
 	validate_php_runtime_config(php_cfg)!
 	return php_cfg

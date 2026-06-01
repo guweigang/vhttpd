@@ -1,5 +1,7 @@
 module main
 
+import common
+
 // Provider runtime settings are resolved here so server.v can stay focused on
 // transport/process orchestration instead of provider-specific defaults.
 
@@ -84,10 +86,10 @@ fn resolve_provider_runtime_settings(args []string, cfg VhttpdConfig) ProviderRu
 	} else {
 		if cfg.db.mysql.pool_size > 0 { cfg.db.mysql.pool_size } else { 5 }
 	}
-	feishu_enabled := arg_bool_or(args, '--feishu-enabled', cfg.feishu.enabled)
-	feishu_app_id := arg_string_or(args, '--feishu-app-id', '')
-	feishu_app_secret := arg_string_or(args, '--feishu-app-secret', '')
-	feishu_open_base_url := normalize_feishu_open_base(arg_string_or(args, '--feishu-open-base-url',
+	feishu_enabled := common.arg_bool_or(args, '--feishu-enabled', cfg.feishu.enabled)
+	feishu_app_id := common.arg_string_or(args, '--feishu-app-id', '')
+	feishu_app_secret := common.arg_string_or(args, '--feishu-app-secret', '')
+	feishu_open_base_url := normalize_feishu_open_base(common.arg_string_or(args, '--feishu-open-base-url',
 		cfg.feishu.open_base_url))
 	mut feishu_apps := cfg.feishu.apps.clone()
 	if feishu_app_id.trim_space() != '' || feishu_app_secret.trim_space() != '' {
@@ -179,6 +181,6 @@ fn resolve_provider_runtime_settings(args []string, cfg VhttpdConfig) ProviderRu
 			database:  db_database
 			pool_size: db_pool_size
 		}
-		ollama_enabled: arg_bool_or(args, '--ollama-enabled', false)
+		ollama_enabled: common.arg_bool_or(args, '--ollama-enabled', false)
 	}
 }

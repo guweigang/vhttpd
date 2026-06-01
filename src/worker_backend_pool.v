@@ -1,5 +1,7 @@
 module main
 
+import common
+
 import json
 import log
 import net.unix
@@ -27,19 +29,6 @@ struct WorkerSelectionDiagnostic {
 	draining          bool
 	inflight_requests i64
 	probe_error       string
-}
-
-fn get_arg(args []string, key string, default_val string) string {
-	for i, a in args {
-		if a == key && i + 1 < args.len {
-			return args[i + 1]
-		}
-		prefix := '${key}='
-		if a.starts_with(prefix) {
-			return a.all_after(prefix)
-		}
-	}
-	return default_val
 }
 
 fn wait_for_worker(socket_path string, timeout_ms int) ! {
@@ -161,7 +150,7 @@ fn socket_prefix(worker_socket string) string {
 }
 
 fn resolve_worker_sockets_with_defaults(args []string, default_worker_socket string, default_pool_size int, default_socket_prefix string, default_worker_sockets string) []string {
-	worker_sockets_arg := arg_string_or(args, '--worker-sockets', default_worker_sockets)
+	worker_sockets_arg := common.arg_string_or(args, '--worker-sockets', default_worker_sockets)
 	if worker_sockets_arg != '' {
 		mut sockets := []string{}
 		for raw in worker_sockets_arg.split(',') {
@@ -172,12 +161,12 @@ fn resolve_worker_sockets_with_defaults(args []string, default_worker_socket str
 		}
 		return sockets
 	}
-	worker_socket := arg_string_or(args, '--worker-socket', default_worker_socket)
-	pool_size := arg_int_or(args, '--worker-pool-size', default_pool_size)
+	worker_socket := common.arg_string_or(args, '--worker-socket', default_worker_socket)
+	pool_size := common.arg_int_or(args, '--worker-pool-size', default_pool_size)
 	if pool_size <= 1 {
 		return if worker_socket == '' { []string{} } else { [worker_socket] }
 	}
-	mut prefix := arg_string_or(args, '--worker-socket-prefix', default_socket_prefix)
+	mut prefix := common.arg_string_or(args, '--worker-socket-prefix', default_socket_prefix)
 	if prefix == '' {
 		prefix = socket_prefix(worker_socket)
 	}

@@ -1,5 +1,7 @@
 module main
 
+import common
+
 import os
 
 pub struct ExecutorRuntimeSelection {
@@ -88,7 +90,7 @@ fn infer_executor_kind_from_config(cfg VhttpdConfig) string {
 }
 
 fn resolve_executor_runtime(args []string, cfg VhttpdConfig) !ExecutorRuntimeSelection {
-	mut kind := arg_string_or(args, '--executor', cfg.executor.kind).trim_space()
+	mut kind := common.arg_string_or(args, '--executor', cfg.executor.kind).trim_space()
 	if kind == '' {
 		kind = infer_executor_kind_from_config(cfg)
 	}

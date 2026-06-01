@@ -1,5 +1,7 @@
 module main
 
+import common
+
 import json
 import os
 
@@ -1014,7 +1016,7 @@ fn test_builtin_logic_executor_spec_resolves_php_runtime_config_overrides_from_c
 }
 
 fn test_arg_string_list_or_supports_repeated_and_csv_values() {
-	values := arg_string_list_or(['--php-extension', '/tmp/a.so',
+	values := common.arg_string_list_or(['--php-extension', '/tmp/a.so',
 		'--php-extension=/tmp/b.so,/tmp/c.so'], '--php-extension', [])
 	assert values.len == 3
 	assert values[0] == '/tmp/a.so'
