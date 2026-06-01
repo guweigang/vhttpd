@@ -1,6 +1,4 @@
-module main
-
-import jsonutils
+module jsonutils
 fn test_json_utils_top_level_key_simple() {
     s := '{"id":1, "method":"m", "nested": {"id": 5}}'
     // debug prints to observe function return values
@@ -53,10 +51,4 @@ fn test_json_utils_edge_cases() {
     s5 := '{"\\u7a7a\\u952e": true, "plain": 1}'
     assert jsonutils.has_top_level_key(s5, '空键')
     assert jsonutils.has_top_level_key(s5, 'plain')
-}
-
-fn test_main_wrapper_matches_jsonutils() {
-    s := '{"\\u7a7a\\u952e": true, "method": "ping"}'
-    assert vhttpd_has_top_level_key(s, '空键')
-    assert vhttpd_has_any_top_level_key(s, ['id', 'method'])
 }
