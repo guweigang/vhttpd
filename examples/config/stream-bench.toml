@@ -10,10 +10,10 @@ event_log = "/tmp/vhttpd_stream_bench.events.ndjson"
 autostart = true
 read_timeout_ms = 15000
 socket = "/tmp/vslim_stream_bench.sock"
-cmd = "php -d extension=/Users/guweigang/Source/vphpx/vslim/vslim.so /Users/guweigang/Source/vhttpd/php/package/bin/php-worker"
+cmd = "php -d extension=${env.VSLIM_EXT:-} ./php/package/bin/php-worker"
 
 [worker.env]
-VHTTPD_APP = "/Users/guweigang/Source/vhttpd/examples/stream-bench-app.php"
+VHTTPD_APP = "./examples/stream-bench-app.php"
 
 [admin]
 host = "127.0.0.1"

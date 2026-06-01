@@ -53,6 +53,13 @@ const known_long_flags = [
 	'--ollama-enabled',
 ]
 
+// ── Global Lock Order ──
+// When acquiring multiple locks, always follow this hierarchy to avoid deadlocks:
+//   app.mu > app.feishu_mu > app.ws_hub_mu > app.upstream_mu > app.mcp_mu > app.pool_mu
+// Any function that needs more than one lock MUST acquire them in the above order
+// and release them in reverse order. Prefer defer for unlocks.
+// Reviewers: reject PRs that introduce out-of-order locking.
+
 fn has_flag(args []string, flags []string) bool {
 	for a in args {
 		for f in flags {

@@ -21,21 +21,8 @@ pub interface Provider {
 
 // NOTE: App now exposes methods to register and query providers via
 // ProviderHost on App, instead of top-level mutable globals.
-
-pub fn register_provider(name string, p Provider) {
-	// Backwards-compatible global registration is not supported anymore.
-	// Callers should use app.register_provider(name, p). Keep this function
-	// as a panic to surface incorrect usage during compile-time tests.
-	panic('register_provider(name, p) is deprecated; use app.register_provider(name, p)')
-}
-
-pub fn get_provider(name string) ?Provider {
-	panic('get_provider(name) is deprecated; use app.get_provider(name)')
-}
-
-pub fn provider_names() []string {
-	panic('provider_names() is deprecated; use app.provider_names()')
-}
+// The old global helpers (register_provider, get_provider, provider_names)
+// have been removed to eliminate unrecoverable panics in production code.
 
 // Simple Feishu adapter implementing Provider by delegating to existing functions.
 pub struct FeishuProvider {}
