@@ -54,15 +54,17 @@ fn codexbot_ts_app_file() string {
 }
 
 fn codexbot_ts_new_executor_with_options(thread_count int, enable_fs bool) InProcVjsxExecutor {
+	os.setenv('VHTTPD_VJSX_ENABLE_ITEM_RENDER_STREAMS', 'false', true)
 	app_file := codexbot_ts_app_file()
 	assert os.exists(app_file)
 	return new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
-		thread_count:    thread_count
-		app_entry:       app_file
-		module_root:     os.dir(app_file)
-		build_root:      codexbot_ts_build_root()
-		runtime_profile: 'node'
-		enable_fs:       enable_fs
+		thread_count:               thread_count
+		app_entry:                  app_file
+		module_root:                os.dir(app_file)
+		build_root:                 codexbot_ts_build_root()
+		runtime_profile:            'node'
+		enable_fs:                  enable_fs
+		enable_item_render_streams: false
 	})
 }
 

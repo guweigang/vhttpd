@@ -203,20 +203,21 @@ fn (spec BuiltinLogicExecutorSpec) resolve_vjsx_runtime_config(args []string, cf
 		}
 	}
 	return VjsxRuntimeFacadeConfig{
-		app_entry:          embedded_cfg.app_entry
-		module_root:        embedded_cfg.module_root
-		build_root:         embedded_cfg.build_root
-		signature_root:     embedded_cfg.signature_root
-		signature_include:  embedded_cfg.signature_include.clone()
-		signature_exclude:  embedded_cfg.signature_exclude.clone()
-		runtime_profile:    embedded_cfg.runtime_profile
-		thread_count:       embedded_cfg.lane_count
-		max_requests:       embedded_cfg.max_requests
-		enable_fs:          embedded_cfg.enable_fs
-		enable_process:     embedded_cfg.enable_process
-		enable_network:     embedded_cfg.enable_network
-		websocket_affinity: cfg.websocket_affinity
-		websocket_actor:    cfg.websocket_actor
+		app_entry:                  embedded_cfg.app_entry
+		module_root:                embedded_cfg.module_root
+		build_root:                 embedded_cfg.build_root
+		signature_root:             embedded_cfg.signature_root
+		signature_include:          embedded_cfg.signature_include.clone()
+		signature_exclude:          embedded_cfg.signature_exclude.clone()
+		runtime_profile:            embedded_cfg.runtime_profile
+		thread_count:               embedded_cfg.lane_count
+		max_requests:               embedded_cfg.max_requests
+		enable_fs:                  embedded_cfg.enable_fs
+		enable_process:             embedded_cfg.enable_process
+		enable_network:             embedded_cfg.enable_network
+		enable_item_render_streams: true
+		websocket_affinity:         cfg.websocket_affinity
+		websocket_actor:            cfg.websocket_actor
 	}
 }
 

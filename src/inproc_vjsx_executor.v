@@ -82,13 +82,14 @@ pub:
 	signature_include  []string
 	signature_exclude  []string
 	runtime_profile    string
-	thread_count       int
-	max_requests       int
-	enable_fs          bool
-	enable_process     bool
-	enable_network     bool
-	websocket_affinity WebSocketAffinityConfig
-	websocket_actor    WebSocketActorConfig
+	thread_count             int
+	max_requests             int
+	enable_fs                bool
+	enable_process           bool
+	enable_network           bool
+	enable_item_render_streams bool = true
+	websocket_affinity       WebSocketAffinityConfig
+	websocket_actor          WebSocketActorConfig
 }
 
 pub struct VjsxRuntimeFacade {
@@ -3400,6 +3401,10 @@ fn (e InProcVjsxExecutor) ensure_lane_host(idx int) ! {
 			runtimejs.install_typescript_runtime(ctx)!
 		}
 		log.debug('[vhttpd] ensure_lane_host importing module lane=${lane_id} idx=${idx}')
+		js_flag_eval := ctx.eval('var __vhttpd_enable_item_render_streams__ = ${config.enable_item_render_streams};')!
+		defer {
+			js_flag_eval.free()
+		}
 		module_entry_path := runtimejs.build_runtime_module_entry(ctx, config.app_entry, true,
 			temp_root) or {
 			session.close()
