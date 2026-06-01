@@ -1,4 +1,4 @@
-module main
+module config
 
 import common
 
@@ -32,7 +32,7 @@ pub:
 	lane_count_flag        string
 }
 
-fn resolve_embedded_host_runtime_config(args []string, defaults EmbeddedHostRuntimeConfig, cli EmbeddedHostCliOverrides) !EmbeddedHostRuntimeConfig {
+pub fn resolve_embedded_host_runtime_config(args []string, defaults EmbeddedHostRuntimeConfig, cli EmbeddedHostCliOverrides) !EmbeddedHostRuntimeConfig {
 	mut app_entry := common.arg_string_or(args, cli.app_entry_flag, defaults.app_entry).trim_space()
 	if app_entry == '' {
 		return error('embedded_host_missing_app_entry')

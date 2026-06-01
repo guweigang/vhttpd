@@ -1,5 +1,7 @@
 module main
 
+import config
+
 import common
 
 import json
@@ -188,7 +190,7 @@ thread_count = 3
 	defer {
 		os.rm(config_file) or {}
 	}
-	cfg := load_vhttpd_config(['--config', config_file]) or { panic(err) }
+	cfg := config.load_vhttpd_config(['--config', config_file]) or { panic(err) }
 	assert cfg.executor.kind == 'vjsx'
 	assert cfg.vjsx.app_entry == '/tmp/app.mts'
 	assert cfg.vjsx.module_root == '/tmp'
@@ -286,7 +288,7 @@ root = "\${paths.assets_root}"
 	defer {
 		os.rm(config_file) or {}
 	}
-	cfg := load_vhttpd_config(['--config', config_file]) or { panic(err) }
+	cfg := config.load_vhttpd_config(['--config', config_file]) or { panic(err) }
 	assert cfg.paths.root == expected_root
 	assert cfg.paths.values['php_app'] == expected_php_app
 	assert cfg.paths.values['vjsx_app'] == expected_vjsx_app
@@ -304,7 +306,7 @@ root = "\${paths.assets_root}"
 }
 
 fn test_resolve_provider_runtime_settings_supports_pgsql_db_config() {
-	mut cfg := default_vhttpd_config()
+	mut cfg := config.default_vhttpd_config()
 	cfg.db.enabled = true
 	cfg.db.driver = 'pgsql'
 	cfg.db.socket = '/tmp/vhttpd-db-pg.sock'
@@ -343,7 +345,7 @@ target_id = "remote-main"
 	defer {
 		os.rmdir_all(temp_dir) or {}
 	}
-	cfg := load_vhttpd_config(['--config', config_file]) or { panic(err) }
+	cfg := config.load_vhttpd_config(['--config', config_file]) or { panic(err) }
 	assert cfg.feishu.bridge.enabled
 	assert cfg.feishu.bridge.ws_url == 'wss://bridge.example/ws'
 	assert cfg.feishu.bridge.client_id == 'local-main'
@@ -352,7 +354,7 @@ target_id = "remote-main"
 }
 
 fn test_resolve_provider_runtime_settings_supports_bridge_config() {
-	mut cfg := default_vhttpd_config()
+	mut cfg := config.default_vhttpd_config()
 	cfg.feishu.bridge.enabled = true
 	cfg.feishu.bridge.ws_url = 'wss://bridge.example/ws'
 	cfg.feishu.bridge.client_id = 'local-main'
@@ -435,7 +437,7 @@ vjsx.thread_count = 2
 	defer {
 		os.rmdir_all(temp_dir) or {}
 	}
-	cfg := load_vhttpd_config(['--config', config_file]) or { panic(err) }
+	cfg := config.load_vhttpd_config(['--config', config_file]) or { panic(err) }
 	assert cfg.listeners.len == 2
 	assert cfg.sites.len == 2
 	assert cfg.listeners['project_a'].site == 'project_a'
@@ -473,7 +475,7 @@ executor = "vjsx"
 	defer {
 		os.rmdir_all(temp_dir) or {}
 	}
-	cfg := load_vhttpd_config(['--config', config_file]) or { panic(err) }
+	cfg := config.load_vhttpd_config(['--config', config_file]) or { panic(err) }
 	assert cfg.sites['demo'].executor.kind == 'vjsx'
 }
 
@@ -508,7 +510,7 @@ vjsx.runtime_profile = "node"
 	defer {
 		os.rmdir_all(temp_dir) or {}
 	}
-	cfg := load_vhttpd_config(['--config', config_file]) or { panic(err) }
+	cfg := config.load_vhttpd_config(['--config', config_file]) or { panic(err) }
 	assert cfg.listeners.len == 0
 	assert cfg.sites['demo'].host == '127.0.0.1'
 	assert cfg.sites['demo'].port == 19883
@@ -553,7 +555,7 @@ app = "\${paths.site_app}"
 	defer {
 		os.rmdir_all(temp_dir) or {}
 	}
-	cfg := load_vhttpd_config(['--config', config_file]) or { panic(err) }
+	cfg := config.load_vhttpd_config(['--config', config_file]) or { panic(err) }
 	assert cfg.sites['demo'].project_root == '\${paths.site_root}'
 	multi_cfg := resolve_multi_server_runtime_config([]string{}, cfg) or { panic(err) }
 	assert multi_cfg.listeners.len == 1
@@ -594,7 +596,7 @@ vjsx.build_root = "\${paths.vjsx_build_root}"
 	defer {
 		os.rmdir_all(temp_dir) or {}
 	}
-	cfg := load_vhttpd_config(['--config', config_file]) or { panic(err) }
+	cfg := config.load_vhttpd_config(['--config', config_file]) or { panic(err) }
 	multi_cfg := resolve_multi_server_runtime_config([]string{}, cfg) or { panic(err) }
 	assert multi_cfg.listeners.len == 1
 	assert multi_cfg.listeners[0].site_cfg.paths.root == project_dir
@@ -636,7 +638,7 @@ vjsx.build_root = "\${paths.vjsx_build_root}"
 	defer {
 		os.rmdir_all(temp_dir) or {}
 	}
-	cfg := load_vhttpd_config(['--config', config_file]) or { panic(err) }
+	cfg := config.load_vhttpd_config(['--config', config_file]) or { panic(err) }
 	multi_cfg := resolve_multi_server_runtime_config([]string{}, cfg) or { panic(err) }
 	assert multi_cfg.listeners.len == 1
 	assert multi_cfg.listeners[0].site_cfg.paths.root == project_dir
@@ -646,7 +648,7 @@ vjsx.build_root = "\${paths.vjsx_build_root}"
 }
 
 fn test_site_config_as_vhttpd_config_defaults_vjsx_module_root_to_site_root() {
-	cfg := site_config_as_vhttpd_config(default_vhttpd_config(), SiteConfig{
+	cfg := site_config_as_vhttpd_config(config.default_vhttpd_config(), SiteConfig{
 		project_root: '/tmp/site-root'
 		executor:     ExecutorConfig{
 			kind: 'vjsx'
@@ -660,7 +662,7 @@ fn test_site_config_as_vhttpd_config_defaults_vjsx_module_root_to_site_root() {
 }
 
 fn test_site_config_as_vhttpd_config_routes_app_alias_to_vjsx() {
-	cfg := site_config_as_vhttpd_config(default_vhttpd_config(), SiteConfig{
+	cfg := site_config_as_vhttpd_config(config.default_vhttpd_config(), SiteConfig{
 		project_root: '/tmp/site-root'
 		executor:     ExecutorConfig{
 			kind: 'vjsx'
@@ -672,7 +674,7 @@ fn test_site_config_as_vhttpd_config_routes_app_alias_to_vjsx() {
 }
 
 fn test_site_config_as_vhttpd_config_routes_app_alias_to_php() {
-	cfg := site_config_as_vhttpd_config(default_vhttpd_config(), SiteConfig{
+	cfg := site_config_as_vhttpd_config(config.default_vhttpd_config(), SiteConfig{
 		project_root: '/tmp/site-root'
 		executor:     ExecutorConfig{
 			kind: 'php'
@@ -684,7 +686,7 @@ fn test_site_config_as_vhttpd_config_routes_app_alias_to_php() {
 }
 
 fn test_site_config_as_vhttpd_config_routes_worker_entry_alias_to_php() {
-	cfg := site_config_as_vhttpd_config(default_vhttpd_config(), SiteConfig{
+	cfg := site_config_as_vhttpd_config(config.default_vhttpd_config(), SiteConfig{
 		project_root: '/tmp/site-root'
 		executor:     ExecutorConfig{
 			kind: 'php'
@@ -695,13 +697,13 @@ fn test_site_config_as_vhttpd_config_routes_worker_entry_alias_to_php() {
 }
 
 fn test_site_config_as_vhttpd_config_infers_executor_from_app_alias() {
-	php_cfg := site_config_as_vhttpd_config(default_vhttpd_config(), SiteConfig{
+	php_cfg := site_config_as_vhttpd_config(config.default_vhttpd_config(), SiteConfig{
 		project_root: '/tmp/site-root'
 		app:          './app.php'
 	})
 	assert php_cfg.executor.kind == 'php'
 	assert php_cfg.php.app_entry == './app.php'
-	vjsx_cfg := site_config_as_vhttpd_config(default_vhttpd_config(), SiteConfig{
+	vjsx_cfg := site_config_as_vhttpd_config(config.default_vhttpd_config(), SiteConfig{
 		project_root: '/tmp/site-root'
 		app:          './app.mts'
 	})
@@ -743,7 +745,7 @@ app = "examples/hello-app.php"
 	defer {
 		os.rmdir_all(temp_dir) or {}
 	}
-	cfg := load_vhttpd_config(['--config', config_file]) or { panic(err) }
+	cfg := config.load_vhttpd_config(['--config', config_file]) or { panic(err) }
 	assert cfg.sites['demo'].executor.kind == 'php'
 	assert cfg.sites['demo'].worker.autostart
 	assert cfg.sites['demo'].worker.pool_size == 2
@@ -789,7 +791,7 @@ args = ["-d", "memory_limit=512M"]
 	defer {
 		os.rm(config_file) or {}
 	}
-	cfg := load_vhttpd_config(['--config', config_file]) or { panic(err) }
+	cfg := config.load_vhttpd_config(['--config', config_file]) or { panic(err) }
 	assert cfg.paths.root == expected_root
 	assert cfg.php.bin == 'php'
 	assert cfg.php.worker_entry == expected_worker_entry
@@ -828,7 +830,7 @@ build_root = "\${paths.vjsx_build_root}"
 	defer {
 		os.rmdir_all(temp_dir) or {}
 	}
-	cfg := load_vhttpd_config(['--config', config_file]) or { panic(err) }
+	cfg := config.load_vhttpd_config(['--config', config_file]) or { panic(err) }
 	assert cfg.paths.root == expected_root
 	assert cfg.paths.values['vjsx_app'] == expected_app
 	assert cfg.paths.values['vjsx_build_root'] == expected_build_root
@@ -852,7 +854,7 @@ root = "\${prefix}"
 	defer {
 		os.rmdir_all(temp_dir) or {}
 	}
-	cfg := load_vhttpd_config(['--config', config_file]) or { panic(err) }
+	cfg := config.load_vhttpd_config(['--config', config_file]) or { panic(err) }
 	assert cfg.assets.prefix == expected_root
 	assert cfg.assets.root == expected_root
 }
@@ -882,7 +884,7 @@ VHTTPD_APP = "\${paths.php_app}"
 	defer {
 		os.rm(config_file) or {}
 	}
-	cfg := load_vhttpd_config(['--config', config_file]) or { panic(err) }
+	cfg := config.load_vhttpd_config(['--config', config_file]) or { panic(err) }
 	assert cfg.paths.root == expected_root
 	assert cfg.paths.values['php_app'] == expected_php_app
 	assert cfg.paths.values['socket_prefix'] == expected_socket_prefix
@@ -924,7 +926,7 @@ root = "\${paths.assets_root}"
 	defer {
 		os.rm(config_file) or {}
 	}
-	cfg := load_vhttpd_config(['--config', config_file]) or { panic(err) }
+	cfg := config.load_vhttpd_config(['--config', config_file]) or { panic(err) }
 	assert cfg.paths.root == expected_root
 	assert cfg.paths.values['assets_root'] == expected_assets_root
 	assert cfg.paths.values['vjsx_root'] == expected_vjsx_root
@@ -935,7 +937,7 @@ root = "\${paths.assets_root}"
 }
 
 fn test_resolve_executor_runtime_defaults_to_disabled_executor() {
-	selection := resolve_executor_runtime([]string{}, default_vhttpd_config()) or { panic(err) }
+	selection := resolve_executor_runtime([]string{}, config.default_vhttpd_config()) or { panic(err) }
 	assert selection.lifecycle.name() == 'disabled'
 	assert selection.executor.model() == .worker
 	assert selection.executor.kind() == 'none'
@@ -979,7 +981,7 @@ fn test_build_php_worker_env_prefers_php_app_entry() {
 }
 
 fn test_builtin_logic_executor_spec_resolves_php_runtime_config_overrides_from_cli() {
-	mut cfg := default_vhttpd_config()
+	mut cfg := config.default_vhttpd_config()
 	cfg.php.bin = 'php'
 	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_php_cli_override_test')
 	os.mkdir_all(temp_dir) or { panic(err) }
@@ -1025,7 +1027,7 @@ fn test_arg_string_list_or_supports_repeated_and_csv_values() {
 }
 
 fn test_builtin_logic_executor_spec_resolve_php_runtime_config_reports_missing_paths() {
-	mut cfg := default_vhttpd_config()
+	mut cfg := config.default_vhttpd_config()
 	cfg.php.bin = 'php'
 	cfg.php.worker_entry = '/tmp/definitely-missing-worker'
 	php_spec := builtin_logic_executor_spec('php') or { panic(err) }
@@ -1047,7 +1049,7 @@ fn test_resolve_executor_runtime_builds_vjsx_executor() {
 		os.rm(app_file) or {}
 	}
 	selection := resolve_executor_runtime(['--executor', 'vjsx', '--vjsx-entry', app_file,
-		'--vjsx-thread-count', '2', '--vjsx-runtime-profile', 'script'], default_vhttpd_config()) or {
+		'--vjsx-thread-count', '2', '--vjsx-runtime-profile', 'script'], config.default_vhttpd_config()) or {
 		panic(err)
 	}
 	assert selection.lifecycle.name() == 'embedded_host'
@@ -1167,7 +1169,7 @@ fn test_php_worker_executor_lifecycle_prepares_worker_command_and_env() {
 		os.rm(worker_entry) or {}
 		os.rm(app_entry) or {}
 	}
-	mut cfg := default_vhttpd_config()
+	mut cfg := config.default_vhttpd_config()
 	cfg.php.worker_entry = worker_entry
 	cfg.php.app_entry = app_entry
 	mut state := ExecutorBootstrapState{
@@ -1193,7 +1195,7 @@ fn test_embedded_executor_lifecycle_disables_worker_backend_features() {
 			'VHTTPD_APP': '/tmp/app.php'
 		}
 	}
-	EmbeddedExecutorLifecycle{}.prepare_bootstrap([]string{}, default_vhttpd_config(), mut state) or {
+	EmbeddedExecutorLifecycle{}.prepare_bootstrap([]string{}, config.default_vhttpd_config(), mut state) or {
 		panic(err)
 	}
 	assert state.worker_sockets.len == 0
@@ -1215,7 +1217,7 @@ fn test_resolve_logic_executor_runtime_plan_defaults_to_php_worker_host() {
 		os.rm(worker_entry) or {}
 		os.rm(app_entry) or {}
 	}
-	mut cfg := default_vhttpd_config()
+	mut cfg := config.default_vhttpd_config()
 	cfg.php.worker_entry = worker_entry
 	cfg.php.app_entry = app_entry
 	plan := resolve_logic_executor_runtime_plan([]string{}, cfg, [
@@ -1236,7 +1238,7 @@ fn test_resolve_logic_executor_runtime_plan_defaults_to_php_worker_host() {
 }
 
 fn test_resolve_logic_executor_runtime_plan_defaults_to_disabled_executor() {
-	plan := resolve_logic_executor_runtime_plan([]string{}, default_vhttpd_config(), [
+	plan := resolve_logic_executor_runtime_plan([]string{}, config.default_vhttpd_config(), [
 		'/tmp/a.sock',
 	], true, true, true, 'php worker.php', {
 		'APP_ENV': 'dev'
@@ -1264,7 +1266,7 @@ fn test_resolve_logic_executor_runtime_plan_for_vjsx_disables_worker_bootstrap()
 		os.rm(app_file) or {}
 	}
 	plan := resolve_logic_executor_runtime_plan(['--executor', 'vjsx', '--vjsx-entry', app_file],
-		default_vhttpd_config(), ['/tmp/a.sock'], true, true, true, 'php worker.php', {
+		config.default_vhttpd_config(), ['/tmp/a.sock'], true, true, true, 'php worker.php', {
 		'VHTTPD_APP': '/tmp/app.php'
 	}) or { panic(err) }
 	assert plan.executor.kind() == 'vjsx'
@@ -1290,7 +1292,7 @@ fn test_builtin_logic_executor_spec_runtime_selection_builds_vjsx_executor() {
 		os.rmdir_all(temp_dir) or {}
 	}
 	spec := builtin_logic_executor_spec('vjsx') or { panic(err) }
-	selection := spec.runtime_selection(['--vjsx-entry', app_file], default_vhttpd_config()) or {
+	selection := spec.runtime_selection(['--vjsx-entry', app_file], config.default_vhttpd_config()) or {
 		panic(err)
 	}
 	assert selection.executor.kind() == 'vjsx'
@@ -1310,7 +1312,7 @@ fn test_builtin_logic_executor_spec_resolves_vjsx_runtime_config_from_config_sur
 	vjsx_spec := builtin_logic_executor_spec('vjsx') or { panic(err) }
 	vjsx_cfg := vjsx_spec.resolve_vjsx_runtime_config(['--vjsx-entry', app_file, '--vjsx-build-root',
 		os.join_path(temp_dir, 'lane-cache'), '--vjsx-thread-count', '2', '--vjsx-runtime-profile',
-		'node'], default_vhttpd_config()) or { panic(err) }
+		'node'], config.default_vhttpd_config()) or { panic(err) }
 	assert vjsx_cfg.app_entry == app_file
 	assert vjsx_cfg.thread_count == 2
 	assert vjsx_cfg.runtime_profile == 'node'
@@ -1320,7 +1322,7 @@ fn test_builtin_logic_executor_spec_resolves_vjsx_runtime_config_from_config_sur
 }
 
 fn test_build_app_runtime_projects_executor_plan_into_app_state() {
-	mut cfg := default_vhttpd_config()
+	mut cfg := config.default_vhttpd_config()
 	cfg.mcp.max_sessions = 55
 	cfg.mcp.max_pending_messages = 21
 	cfg.mcp.session_ttl_seconds = 77
@@ -1441,7 +1443,7 @@ fn test_resolve_server_runtime_config_builds_php_runtime_state() {
 		os.rm(pid_file) or {}
 		os.rmdir_all(temp_dir) or {}
 	}
-	mut cfg := default_vhttpd_config()
+	mut cfg := config.default_vhttpd_config()
 	cfg.server.host = '0.0.0.0'
 	cfg.server.port = 19881
 	cfg.files.event_log = event_log
@@ -1480,7 +1482,7 @@ fn test_resolve_server_runtime_config_defaults_to_disabled_executor_without_app_
 		os.rm(pid_file) or {}
 		os.rmdir_all(temp_dir) or {}
 	}
-	mut cfg := default_vhttpd_config()
+	mut cfg := config.default_vhttpd_config()
 	cfg.server.host = '127.0.0.1'
 	cfg.server.port = 18081
 	cfg.files.event_log = event_log
@@ -1512,7 +1514,7 @@ fn test_resolve_server_runtime_config_builds_vjsx_embedded_runtime_state() {
 		os.rm(pid_file) or {}
 		os.rmdir_all(temp_dir) or {}
 	}
-	mut cfg := default_vhttpd_config()
+	mut cfg := config.default_vhttpd_config()
 	cfg.server.host = '127.0.0.9'
 	cfg.server.port = 18888
 	cfg.files.event_log = event_log
@@ -1560,7 +1562,7 @@ fn test_resolve_multi_server_runtime_config_keeps_single_site_compatibility() {
 	defer {
 		os.rmdir_all(temp_dir) or {}
 	}
-	mut cfg := default_vhttpd_config()
+	mut cfg := config.default_vhttpd_config()
 	cfg.server.host = '127.0.0.7'
 	cfg.server.port = 18181
 	cfg.files.event_log = event_log
@@ -1596,7 +1598,7 @@ fn test_resolve_multi_server_runtime_config_builds_listener_bound_sites() {
 	defer {
 		os.rmdir_all(temp_dir) or {}
 	}
-	mut cfg := default_vhttpd_config()
+	mut cfg := config.default_vhttpd_config()
 	cfg.files.event_log = event_log
 	cfg.files.pid_file = pid_file
 	cfg.config_path = os.join_path(temp_dir, 'vhttpd.toml')
@@ -1662,7 +1664,7 @@ fn test_resolve_multi_server_runtime_config_builds_listener_bound_sites() {
 }
 
 fn test_resolve_multi_server_runtime_config_rejects_unknown_site_binding() {
-	mut cfg := default_vhttpd_config()
+	mut cfg := config.default_vhttpd_config()
 	cfg.listeners = {
 		'broken': ListenerConfig{
 			host: '127.0.0.1'
@@ -1681,7 +1683,7 @@ fn test_resolve_multi_server_runtime_config_rejects_unknown_site_binding() {
 }
 
 fn test_site_config_as_vhttpd_config_inherits_global_defaults() {
-	mut cfg := default_vhttpd_config()
+	mut cfg := config.default_vhttpd_config()
 	cfg.executor.kind = 'vjsx'
 	cfg.assets.enabled = true
 	cfg.assets.prefix = '/shared'
@@ -1730,7 +1732,7 @@ websocket_affinity.fallback = "reject"
 	defer {
 		os.rm(config_file) or {}
 	}
-	cfg := load_vhttpd_config(['--config', config_file]) or { panic(err) }
+	cfg := config.load_vhttpd_config(['--config', config_file]) or { panic(err) }
 	site := cfg.sites['relay']
 	assert site.websocket_affinity.enabled
 	assert site.websocket_affinity.source == 'app'
@@ -1765,7 +1767,7 @@ websocket_actor.sources = [
 	defer {
 		os.rm(config_file) or {}
 	}
-	cfg := load_vhttpd_config(['--config', config_file]) or { panic(err) }
+	cfg := config.load_vhttpd_config(['--config', config_file]) or { panic(err) }
 	site := cfg.sites['relay']
 	assert site.websocket_actor.enabled
 	assert site.websocket_actor.fallback == 'reject'
@@ -1781,7 +1783,7 @@ websocket_actor.sources = [
 }
 
 fn test_site_config_as_vhttpd_config_merges_site_websocket_affinity() {
-	mut base := default_vhttpd_config()
+	mut base := config.default_vhttpd_config()
 	base.websocket_affinity = WebSocketAffinityConfig{
 		enabled:  true
 		source:   'header'
@@ -1806,7 +1808,7 @@ fn test_site_config_as_vhttpd_config_merges_site_websocket_affinity() {
 }
 
 fn test_site_config_as_vhttpd_config_merges_site_websocket_actor() {
-	mut base := default_vhttpd_config()
+	mut base := config.default_vhttpd_config()
 	base.websocket_actor = WebSocketActorConfig{
 		enabled:           true
 		fallback:          'unkeyed'
@@ -1859,7 +1861,7 @@ fn test_resolve_embedded_host_runtime_config_normalizes_paths_and_lane_defaults(
 	defer {
 		os.rmdir_all(temp_dir) or {}
 	}
-	cfg := resolve_embedded_host_runtime_config(['--app', app_file, '--module-root',
+	cfg := config.resolve_embedded_host_runtime_config(['--app', app_file, '--module-root',
 		os.join_path(temp_dir, 'modules'), '--build-root', os.join_path(temp_dir, 'cache'),
 		'--signature-root', os.join_path(temp_dir, 'sig'), '--signature-include', '**/*.mts',
 		'--signature-exclude', 'tmp/**', '--profile', 'node', '--lanes', '0'], EmbeddedHostRuntimeConfig{
@@ -1955,7 +1957,7 @@ fn test_shutdown_app_runtime_stops_lifecycle_and_cleans_runtime_files() {
 
 fn test_paseo_relay_example_config_enables_websocket_dispatch() {
 	config_path := os.join_path(os.dir(@FILE), '..', 'examples', 'paseo-relay', 'paseo-relay.toml')
-	cfg := load_vhttpd_config(['--config', config_path]) or { panic(err) }
+	cfg := config.load_vhttpd_config(['--config', config_path]) or { panic(err) }
 	assert cfg.worker.websocket_dispatch
 	assert !cfg.sites['paseo_relay'].websocket_affinity.enabled
 	assert cfg.sites['paseo_relay'].websocket_affinity.source == 'app'

@@ -1,5 +1,7 @@
 module main
 
+import config
+
 import json
 import crypto.sha256
 import net.http
@@ -241,8 +243,8 @@ encrypt_key = "encrypt_openclaw"
 ') or {
 		panic(err)
 	}
-	mut cfg := default_vhttpd_config()
-	decode_feishu_config(doc, mut cfg) or { panic(err) }
+	mut cfg := config.default_vhttpd_config()
+	config.decode_feishu_config(doc, mut cfg) or { panic(err) }
 	assert cfg.feishu.apps['main']!.app_id == 'cli_main'
 	assert cfg.feishu.apps['main']!.app_secret == 'sec_main'
 	assert cfg.feishu.apps['main']!.verification_token == 'verify_main'

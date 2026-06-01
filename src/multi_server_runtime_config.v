@@ -1,5 +1,7 @@
 module main
 
+import config
+
 pub struct ListenerRuntimeBinding {
 pub:
 	id          string
@@ -19,7 +21,7 @@ fn config_uses_multi_listener(cfg VhttpdConfig) bool {
 }
 
 fn merge_paths_config(base PathsConfig, override PathsConfig) PathsConfig {
-	defaults := default_vhttpd_config().paths
+	defaults := config.default_vhttpd_config().paths
 	mut cfg := base
 	if override.root.trim_space() != '' && override.root != defaults.root {
 		cfg.root = override.root
@@ -31,7 +33,7 @@ fn merge_paths_config(base PathsConfig, override PathsConfig) PathsConfig {
 }
 
 fn merge_worker_config(base WorkerConfig, override WorkerConfig) WorkerConfig {
-	defaults := default_vhttpd_config().worker
+	defaults := config.default_vhttpd_config().worker
 	mut cfg := base
 	if override.read_timeout_ms != defaults.read_timeout_ms {
 		cfg.read_timeout_ms = override.read_timeout_ms
@@ -82,7 +84,7 @@ fn merge_worker_config(base WorkerConfig, override WorkerConfig) WorkerConfig {
 }
 
 fn merge_executor_config(base ExecutorConfig, override ExecutorConfig, site_cfg SiteConfig) ExecutorConfig {
-	defaults := default_vhttpd_config().executor
+	defaults := config.default_vhttpd_config().executor
 	mut cfg := base
 	if override.kind != defaults.kind {
 		cfg.kind = override.kind
@@ -104,7 +106,7 @@ fn merge_executor_config(base ExecutorConfig, override ExecutorConfig, site_cfg 
 }
 
 fn merge_php_config(base PhpConfig, override PhpConfig) PhpConfig {
-	defaults := default_vhttpd_config().php
+	defaults := config.default_vhttpd_config().php
 	mut cfg := base
 	if override.bin != defaults.bin {
 		cfg.bin = override.bin
@@ -125,7 +127,7 @@ fn merge_php_config(base PhpConfig, override PhpConfig) PhpConfig {
 }
 
 fn merge_vjsx_config(base VjsxConfig, override VjsxConfig) VjsxConfig {
-	defaults := default_vhttpd_config().vjsx
+	defaults := config.default_vhttpd_config().vjsx
 	mut cfg := base
 	if override.app_entry != defaults.app_entry {
 		cfg.app_entry = override.app_entry
@@ -174,7 +176,7 @@ fn merge_plugins_config(base map[string]PluginConfig, override map[string]Plugin
 }
 
 fn merge_websocket_affinity_config(base WebSocketAffinityConfig, override WebSocketAffinityConfig) WebSocketAffinityConfig {
-	defaults := default_vhttpd_config().websocket_affinity
+	defaults := config.default_vhttpd_config().websocket_affinity
 	mut cfg := base
 	if override.enabled != defaults.enabled {
 		cfg.enabled = override.enabled
@@ -195,7 +197,7 @@ fn merge_websocket_affinity_config(base WebSocketAffinityConfig, override WebSoc
 }
 
 fn merge_websocket_actor_config(base WebSocketActorConfig, override WebSocketActorConfig) WebSocketActorConfig {
-	defaults := default_vhttpd_config().websocket_actor
+	defaults := config.default_vhttpd_config().websocket_actor
 	mut cfg := base
 	if override.enabled != defaults.enabled {
 		cfg.enabled = override.enabled
@@ -219,7 +221,7 @@ fn merge_websocket_actor_config(base WebSocketActorConfig, override WebSocketAct
 }
 
 fn merge_assets_config(base AssetsConfig, override AssetsConfig) AssetsConfig {
-	defaults := default_vhttpd_config().assets
+	defaults := config.default_vhttpd_config().assets
 	mut cfg := base
 	if override.enabled != defaults.enabled {
 		cfg.enabled = override.enabled
@@ -237,7 +239,7 @@ fn merge_assets_config(base AssetsConfig, override AssetsConfig) AssetsConfig {
 }
 
 fn merge_runtime_config(base RuntimeConfig, override RuntimeConfig) RuntimeConfig {
-	defaults := default_vhttpd_config().runtime
+	defaults := config.default_vhttpd_config().runtime
 	mut cfg := base
 	if override.timezone != defaults.timezone {
 		cfg.timezone = override.timezone
@@ -246,7 +248,7 @@ fn merge_runtime_config(base RuntimeConfig, override RuntimeConfig) RuntimeConfi
 }
 
 fn merge_mcp_config(base McpConfig, override McpConfig) McpConfig {
-	defaults := default_vhttpd_config().mcp
+	defaults := config.default_vhttpd_config().mcp
 	mut cfg := base
 	if override.max_sessions != defaults.max_sessions {
 		cfg.max_sessions = override.max_sessions
@@ -267,7 +269,7 @@ fn merge_mcp_config(base McpConfig, override McpConfig) McpConfig {
 }
 
 fn merge_feishu_config(base FeishuConfig, override FeishuConfig) FeishuConfig {
-	defaults := default_vhttpd_config().feishu
+	defaults := config.default_vhttpd_config().feishu
 	mut cfg := base
 	if override.enabled != defaults.enabled {
 		cfg.enabled = override.enabled
@@ -291,7 +293,7 @@ fn merge_feishu_config(base FeishuConfig, override FeishuConfig) FeishuConfig {
 }
 
 fn merge_codex_config(base CodexConfig, override CodexConfig) CodexConfig {
-	defaults := default_vhttpd_config().codex
+	defaults := config.default_vhttpd_config().codex
 	mut cfg := base
 	if override.enabled != defaults.enabled {
 		cfg.enabled = override.enabled
@@ -324,7 +326,7 @@ fn merge_codex_config(base CodexConfig, override CodexConfig) CodexConfig {
 }
 
 fn merge_bridge_config(base BridgeConfig, override BridgeConfig) BridgeConfig {
-	defaults := default_vhttpd_config().feishu.bridge
+	defaults := config.default_vhttpd_config().feishu.bridge
 	mut cfg := base
 	if override.enabled != defaults.enabled {
 		cfg.enabled = override.enabled
@@ -345,7 +347,7 @@ fn merge_bridge_config(base BridgeConfig, override BridgeConfig) BridgeConfig {
 }
 
 fn merge_openai_config(base OpenAIConfig, override OpenAIConfig) OpenAIConfig {
-	defaults := default_vhttpd_config().openai
+	defaults := config.default_vhttpd_config().openai
 	mut cfg := base
 	if override.enabled != defaults.enabled {
 		cfg.enabled = override.enabled
@@ -384,11 +386,11 @@ fn site_config_as_vhttpd_config(global_cfg VhttpdConfig, site_cfg SiteConfig) Vh
 	cfg.paths = merge_paths_config(global_cfg.paths, site_cfg.paths)
 	if site_cfg.project_root.trim_space() != '' {
 		mut project_root := site_cfg.project_root
-		global_vars := build_config_variable_map(global_cfg)
+		global_vars := config.build_config_variable_map(global_cfg)
 		env_map := map[string]string{}
-		project_root, _ = expand_config_string(project_root, '', global_vars, env_map,
+		project_root, _ = config.expand_config_string(project_root, '', global_vars, env_map,
 			false) or { site_cfg.project_root, false }
-		project_root = resolve_config_path(global_cfg.paths.root, project_root)
+		project_root = config.resolve_config_path(global_cfg.paths.root, project_root)
 		cfg.paths = PathsConfig{
 			root:   project_root
 			values: cfg.paths.values.clone()
@@ -497,7 +499,7 @@ fn resolve_multi_server_runtime_config(args []string, cfg VhttpdConfig) !MultiSe
 		used_bindings[binding_key] = true
 		mut site_runtime_cfg := site_config_as_vhttpd_config(cfg, cfg.sites[site_id])
 		if site_runtime_cfg.config_path != '' {
-			resolve_config_variables(mut site_runtime_cfg, site_runtime_cfg.config_path)!
+			config.resolve_config_variables(mut site_runtime_cfg, site_runtime_cfg.config_path)!
 		}
 		admin_enabled_override := listener_id == admin_owner_listener_id
 		runtime_cfg := resolve_server_runtime_config_for_target(args, site_runtime_cfg,

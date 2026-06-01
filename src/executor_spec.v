@@ -1,5 +1,7 @@
 module main
 
+import config
+
 import common
 
 enum BuiltinLogicExecutorFactoryKind {
@@ -157,7 +159,7 @@ fn (spec BuiltinLogicExecutorSpec) resolve_embedded_host_runtime_config(args []s
 	if spec.factory != .inproc_vjsx {
 		return error('builtin_logic_executor_embedded_host_runtime_config_unsupported:${spec.kind}')
 	}
-	return resolve_embedded_host_runtime_config(args, EmbeddedHostRuntimeConfig{
+	return config.resolve_embedded_host_runtime_config(args, EmbeddedHostRuntimeConfig{
 		app_entry:         cfg.vjsx.app_entry
 		module_root:       cfg.vjsx.module_root
 		build_root:        cfg.vjsx.build_root

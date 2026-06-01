@@ -1,29 +1,29 @@
-module main
+module config
 
 import common
 import os
 import toml
 
-struct ServerConfig {
-mut:
+pub struct ServerConfig {
+pub mut:
 	host string = '127.0.0.1'
 	port int    = 18081
 }
 
-struct FilesConfig {
-mut:
+pub struct FilesConfig {
+pub mut:
 	event_log string = '/tmp/vhttpd.events.ndjson'
 	pid_file  string = '/tmp/vhttpd.pid'
 }
 
-struct PathsConfig {
-mut:
+pub struct PathsConfig {
+pub mut:
 	root   string = '.'
 	values map[string]string
 }
 
-struct WorkerConfig {
-mut:
+pub struct WorkerConfig {
+pub mut:
 	read_timeout_ms        int = 3000 @[toml: 'read_timeout_ms']
 	autostart              bool
 	cmd                    string
@@ -41,13 +41,13 @@ mut:
 	env                    map[string]string
 }
 
-struct ExecutorConfig {
-mut:
+pub struct ExecutorConfig {
+pub mut:
 	kind string
 }
 
-struct PhpConfig {
-mut:
+pub struct PhpConfig {
+pub mut:
 	bin          string = 'php'
 	worker_entry string @[toml: 'worker_entry']
 	app_entry    string @[toml: 'app_entry']
@@ -55,8 +55,8 @@ mut:
 	args         []string
 }
 
-struct VjsxConfig {
-mut:
+pub struct VjsxConfig {
+pub mut:
 	app_entry         string   @[toml: 'app_entry']
 	module_root       string   @[toml: 'module_root']
 	build_root        string   @[toml: 'build_root']
@@ -71,8 +71,8 @@ mut:
 	enable_network    bool     @[toml: 'enable_network']
 }
 
-struct PluginConfig {
-mut:
+pub struct PluginConfig {
+pub mut:
 	kind              string = 'vjsx'
 	entry             string
 	app_entry         string   @[toml: 'app_entry']
@@ -89,8 +89,8 @@ mut:
 	enable_network    bool     @[toml: 'enable_network']
 }
 
-struct WebSocketAffinityConfig {
-mut:
+pub struct WebSocketAffinityConfig {
+pub mut:
 	enabled  bool
 	source   string
 	key      string
@@ -98,15 +98,15 @@ mut:
 	fallback string
 }
 
-struct WebSocketActorSourceConfig {
-mut:
+pub struct WebSocketActorSourceConfig {
+pub mut:
 	typ        string @[toml: 'type']
 	key        string
 	class_name string @[toml: 'class']
 }
 
-struct WebSocketActorConfig {
-mut:
+pub struct WebSocketActorConfig {
+pub mut:
 	enabled           bool
 	sources           []WebSocketActorSourceConfig
 	fallback          string
@@ -115,28 +115,28 @@ mut:
 	events            []string
 }
 
-struct AdminConfig {
-mut:
+pub struct AdminConfig {
+pub mut:
 	host  string = '127.0.0.1'
 	port  int
 	token string
 }
 
-struct AssetsConfig {
-mut:
+pub struct AssetsConfig {
+pub mut:
 	enabled       bool
 	prefix        string = '/assets'
 	root          string
 	cache_control string = 'public, max-age=3600' @[toml: 'cache_control']
 }
 
-struct RuntimeConfig {
-mut:
+pub struct RuntimeConfig {
+pub mut:
 	timezone string = 'Asia/Shanghai'
 }
 
-struct McpConfig {
-mut:
+pub struct McpConfig {
+pub mut:
 	max_sessions               int = 1000      @[toml: 'max_sessions']
 	max_pending_messages       int = 128      @[toml: 'max_pending_messages']
 	session_ttl_seconds        int = 900      @[toml: 'session_ttl_seconds']
@@ -144,8 +144,8 @@ mut:
 	sampling_capability_policy string = 'warn'   @[toml: 'sampling_capability_policy']
 }
 
-struct FeishuConfig {
-mut:
+pub struct FeishuConfig {
+pub mut:
 	enabled                    bool
 	open_base_url              string = 'https://open.feishu.cn/open-apis' @[toml: 'open_base_url']
 	reconnect_delay_ms         int    = 3000    @[toml: 'reconnect_delay_ms']
@@ -155,16 +155,16 @@ mut:
 	bridge                     BridgeConfig
 }
 
-struct FeishuAppConfig {
-mut:
+pub struct FeishuAppConfig {
+pub mut:
 	app_id             string @[toml: 'app_id']
 	app_secret         string @[toml: 'app_secret']
 	verification_token string @[toml: 'verification_token']
 	encrypt_key        string @[toml: 'encrypt_key']
 }
 
-struct CodexConfig {
-mut:
+pub struct CodexConfig {
+pub mut:
 	enabled            bool
 	url                string = 'ws://127.0.0.1:4500' @[toml: 'url']
 	model              string = 'o4-mini' @[toml: 'model']
@@ -176,16 +176,16 @@ mut:
 	flush_interval_ms  int    = 400    @[toml: 'flush_interval_ms']
 }
 
-struct OpenAIEndpointsConfig {
-mut:
+pub struct OpenAIEndpointsConfig {
+pub mut:
 	models           bool = true @[toml: 'models']
 	chat_completions bool = true @[toml: 'chat_completions']
 	responses        bool = true @[toml: 'responses']
 	embeddings       bool @[toml: 'embeddings']
 }
 
-struct OpenAIBackendConfig {
-mut:
+pub struct OpenAIBackendConfig {
+pub mut:
 	kind        string = 'openai_http'
 	base_url    string @[toml: 'base_url']
 	executor    string
@@ -194,16 +194,16 @@ mut:
 	timeout_ms  int    = 60000    @[toml: 'timeout_ms']
 }
 
-struct OpenAIRouteConfig {
-mut:
+pub struct OpenAIRouteConfig {
+pub mut:
 	model          string
 	models         []string
 	backend        string
 	upstream_model string @[toml: 'upstream_model']
 }
 
-struct OpenAIConfig {
-mut:
+pub struct OpenAIConfig {
+pub mut:
 	enabled         bool
 	base_path       string = '/v1' @[toml: 'base_path']
 	default_backend string @[toml: 'default_backend']
@@ -213,8 +213,8 @@ mut:
 	routes          map[string]OpenAIRouteConfig
 }
 
-struct BridgeConfig {
-mut:
+pub struct BridgeConfig {
+pub mut:
 	enabled   bool
 	ws_url    string @[toml: 'ws_url']
 	client_id string @[toml: 'client_id']
@@ -222,8 +222,8 @@ mut:
 	target_id string @[toml: 'target_id']
 }
 
-struct DbMysqlConfig {
-mut:
+pub struct DbMysqlConfig {
+pub mut:
 	host      string = '127.0.0.1'
 	port      int    = 3306
 	username  string
@@ -232,8 +232,8 @@ mut:
 	pool_size int    = 5 @[toml: 'pool_size']
 }
 
-struct DbPgsqlConfig {
-mut:
+pub struct DbPgsqlConfig {
+pub mut:
 	host      string = '127.0.0.1'
 	port      int    = 5432
 	username  string
@@ -242,8 +242,8 @@ mut:
 	pool_size int    = 5 @[toml: 'pool_size']
 }
 
-struct DbConfig {
-mut:
+pub struct DbConfig {
+pub mut:
 	enabled bool
 	socket  string = 'tmp/vhttpd-db.sock'
 	driver  string = 'mysql'
@@ -251,15 +251,15 @@ mut:
 	pgsql   DbPgsqlConfig
 }
 
-struct ListenerConfig {
-mut:
+pub struct ListenerConfig {
+pub mut:
 	host string = '127.0.0.1'
 	port int
 	site string
 }
 
-struct SiteConfig {
-mut:
+pub struct SiteConfig {
+pub mut:
 	project_root       string @[toml: 'project_root']
 	host               string = '127.0.0.1'
 	port               int
@@ -282,8 +282,8 @@ mut:
 	db                 DbConfig
 }
 
-struct VhttpdConfig {
-mut:
+pub struct VhttpdConfig {
+pub mut:
 	server             ServerConfig
 	files              FilesConfig
 	paths              PathsConfig
@@ -307,11 +307,11 @@ mut:
 	config_path        string
 }
 
-fn default_vhttpd_config() VhttpdConfig {
+pub fn default_vhttpd_config() VhttpdConfig {
 	return VhttpdConfig{}
 }
 
-fn load_vhttpd_config(args []string) !VhttpdConfig {
+pub fn load_vhttpd_config(args []string) !VhttpdConfig {
 	mut config_path := common.arg_string_or(args, '--config', '')
 	if config_path == '' {
 		config_path = os.getenv('VHTTPD_CONFIG')
@@ -372,7 +372,7 @@ fn decode_paths_config(doc toml.Doc, mut cfg VhttpdConfig) ! {
 	cfg.paths.values = values.clone()
 }
 
-fn decode_feishu_config(doc toml.Doc, mut cfg VhttpdConfig) ! {
+pub fn decode_feishu_config(doc toml.Doc, mut cfg VhttpdConfig) ! {
 	mut apps := map[string]FeishuAppConfig{}
 	if root_any := doc.value_opt('feishu') {
 		root := root_any.as_map()
@@ -1113,7 +1113,7 @@ fn decode_multi_listener_config(doc toml.Doc, mut cfg VhttpdConfig) ! {
 	cfg.sites = sites.clone()
 }
 
-fn resolve_config_variables(mut cfg VhttpdConfig, config_path string) ! {
+pub fn resolve_config_variables(mut cfg VhttpdConfig, config_path string) ! {
 	env_map := os.environ()
 	base_dir := resolve_config_base_dir(config_path)
 	max_passes := 12
@@ -1399,7 +1399,7 @@ fn normalize_config_path_value(raw string) string {
 	return normalized
 }
 
-fn resolve_config_path(root string, raw string) string {
+pub fn resolve_config_path(root string, raw string) string {
 	value := normalize_config_path_value(raw)
 	if value == '' {
 		return raw
@@ -1453,7 +1453,7 @@ fn resolve_config_paths(mut cfg VhttpdConfig, config_path string) {
 	cfg.codex.cwd = resolve_config_path(cfg.paths.root, cfg.codex.cwd)
 }
 
-fn build_config_variable_map(cfg VhttpdConfig) map[string]string {
+pub fn build_config_variable_map(cfg VhttpdConfig) map[string]string {
 	mut vars := {
 		'server.host':                    cfg.server.host
 		'server.port':                    '${cfg.server.port}'
@@ -1539,7 +1539,7 @@ fn build_config_variable_map(cfg VhttpdConfig) map[string]string {
 	return vars
 }
 
-fn expand_config_string(raw string, scope string, vars map[string]string, env map[string]string, changed bool) !(string, bool) {
+pub fn expand_config_string(raw string, scope string, vars map[string]string, env map[string]string, changed bool) !(string, bool) {
 	if !raw.contains('\${') {
 		return raw, changed
 	}

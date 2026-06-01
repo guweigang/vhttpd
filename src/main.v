@@ -12,6 +12,7 @@ import os
 import sync
 import time
 import veb
+import config
 import state_store
 import veb.request_id
 import veb.sse
@@ -160,6 +161,43 @@ pub type WorkerMcpDispatchResponse = worker_protocol.WorkerMcpDispatchResponse
 pub type WorkerWebSocketUpstreamDispatchRequest = worker_protocol.WorkerWebSocketUpstreamDispatchRequest
 pub type WorkerWebSocketUpstreamCommand = worker_protocol.WorkerWebSocketUpstreamCommand
 pub type WorkerWebSocketUpstreamDispatchResponse = worker_protocol.WorkerWebSocketUpstreamDispatchResponse
+
+// ── TODO: Transitional type aliases for config module ────────────────────
+// These aliases exist only to avoid touching every call site during the
+// config module extraction.  Once all callers are updated to use
+// config.QualifiedName directly, these aliases should be deleted.
+// ──────────────────────────────────────────────────────────────────────────
+pub type AdminConfig = config.AdminConfig
+pub type AssetsConfig = config.AssetsConfig
+pub type BridgeConfig = config.BridgeConfig
+pub type CodexConfig = config.CodexConfig
+pub type DbConfig = config.DbConfig
+pub type DbMysqlConfig = config.DbMysqlConfig
+pub type DbPgsqlConfig = config.DbPgsqlConfig
+pub type EmbeddedHostCliOverrides = config.EmbeddedHostCliOverrides
+pub type EmbeddedHostRuntimeConfig = config.EmbeddedHostRuntimeConfig
+pub type ExecutorConfig = config.ExecutorConfig
+pub type FeishuAppConfig = config.FeishuAppConfig
+pub type FeishuConfig = config.FeishuConfig
+pub type FilesConfig = config.FilesConfig
+pub type ListenerConfig = config.ListenerConfig
+pub type McpConfig = config.McpConfig
+pub type OpenAIBackendConfig = config.OpenAIBackendConfig
+pub type OpenAIConfig = config.OpenAIConfig
+pub type OpenAIEndpointsConfig = config.OpenAIEndpointsConfig
+pub type OpenAIRouteConfig = config.OpenAIRouteConfig
+pub type PathsConfig = config.PathsConfig
+pub type PhpConfig = config.PhpConfig
+pub type PluginConfig = config.PluginConfig
+pub type RuntimeConfig = config.RuntimeConfig
+pub type ServerConfig = config.ServerConfig
+pub type SiteConfig = config.SiteConfig
+pub type VhttpdConfig = config.VhttpdConfig
+pub type VjsxConfig = config.VjsxConfig
+pub type WebSocketActorConfig = config.WebSocketActorConfig
+pub type WebSocketActorSourceConfig = config.WebSocketActorSourceConfig
+pub type WebSocketAffinityConfig = config.WebSocketAffinityConfig
+pub type WorkerConfig = config.WorkerConfig
 
 struct OllamaNdjsonMessage {
 	content string

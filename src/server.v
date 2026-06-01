@@ -1,5 +1,6 @@
 module main
 
+import config
 import log
 import os
 
@@ -158,7 +159,7 @@ fn run_single_server(args []string, cfg VhttpdConfig) {
 }
 
 fn run_server(args []string) {
-	cfg := load_vhttpd_config(args) or {
+	cfg := config.load_vhttpd_config(args) or {
 		log.error('config load failed: ${err}')
 		return
 	}

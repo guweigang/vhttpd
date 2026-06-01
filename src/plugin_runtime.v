@@ -1,5 +1,7 @@
 module main
 
+import config
+
 import log
 
 pub struct PluginCallRequest {
@@ -37,7 +39,7 @@ fn plugin_config_app_entry(cfg PluginConfig) string {
 
 fn vjsx_plugin_runtime_config(name string, cfg PluginConfig) !VjsxRuntimeFacadeConfig {
 	app_entry := plugin_config_app_entry(cfg)
-	embedded_cfg := resolve_embedded_host_runtime_config([]string{}, EmbeddedHostRuntimeConfig{
+	embedded_cfg := config.resolve_embedded_host_runtime_config([]string{}, EmbeddedHostRuntimeConfig{
 		app_entry:         app_entry
 		module_root:       cfg.module_root
 		build_root:        cfg.build_root

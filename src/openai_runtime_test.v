@@ -1,5 +1,7 @@
 module main
 
+import config
+
 import os
 import x.json2
 
@@ -109,7 +111,7 @@ upstream_model = "gpt-4o-mini"
 		os.rm(config_file) or {}
 		os.rmdir_all(temp_dir) or {}
 	}
-	cfg := load_vhttpd_config(['--config', config_file]) or { panic(err) }
+	cfg := config.load_vhttpd_config(['--config', config_file]) or { panic(err) }
 	assert cfg.openai.enabled
 	assert cfg.openai.base_path == '/openai/v1'
 	assert cfg.openai.plugin == 'planner'
