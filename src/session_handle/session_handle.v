@@ -1,4 +1,6 @@
-module main
+module session_handle
+
+import worker_protocol
 
 pub enum RuntimeRole {
 	ingress
@@ -19,7 +21,7 @@ pub:
 	instance   string
 }
 
-pub fn SessionHandle.from_websocket_upstream(req WorkerWebSocketUpstreamDispatchRequest) SessionHandle {
+pub fn SessionHandle.from_websocket_upstream(req worker_protocol.WorkerWebSocketUpstreamDispatchRequest) SessionHandle {
 	return SessionHandle{
 		id:          req.id
 		request_id:  req.id
@@ -33,11 +35,11 @@ pub fn SessionHandle.from_websocket_upstream(req WorkerWebSocketUpstreamDispatch
 	}
 }
 
-pub fn SessionHandle.from_stream_dispatch(req StreamDispatchRequest) SessionHandle {
+pub fn SessionHandle.from_stream_dispatch(req worker_protocol.StreamDispatchRequest) SessionHandle {
 	return SessionHandle.from_stream_dispatch_provider(req, 'php-worker')
 }
 
-pub fn SessionHandle.from_stream_dispatch_provider(req StreamDispatchRequest, provider string) SessionHandle {
+pub fn SessionHandle.from_stream_dispatch_provider(req worker_protocol.StreamDispatchRequest, provider string) SessionHandle {
 	return SessionHandle{
 		id:          req.id
 		request_id:  req.request_id
@@ -51,11 +53,11 @@ pub fn SessionHandle.from_stream_dispatch_provider(req StreamDispatchRequest, pr
 	}
 }
 
-pub fn SessionHandle.from_mcp_dispatch(req WorkerMcpDispatchRequest) SessionHandle {
+pub fn SessionHandle.from_mcp_dispatch(req worker_protocol.WorkerMcpDispatchRequest) SessionHandle {
 	return SessionHandle.from_mcp_dispatch_provider(req, 'php-worker')
 }
 
-pub fn SessionHandle.from_mcp_dispatch_provider(req WorkerMcpDispatchRequest, provider string) SessionHandle {
+pub fn SessionHandle.from_mcp_dispatch_provider(req worker_protocol.WorkerMcpDispatchRequest, provider string) SessionHandle {
 	return SessionHandle{
 		id:          req.id
 		request_id:  req.request_id
@@ -69,11 +71,11 @@ pub fn SessionHandle.from_mcp_dispatch_provider(req WorkerMcpDispatchRequest, pr
 	}
 }
 
-pub fn SessionHandle.from_websocket_dispatch(frame WorkerWebSocketFrame) SessionHandle {
+pub fn SessionHandle.from_websocket_dispatch(frame worker_protocol.WorkerWebSocketFrame) SessionHandle {
 	return SessionHandle.from_websocket_dispatch_provider(frame, 'php-worker')
 }
 
-pub fn SessionHandle.from_websocket_dispatch_provider(frame WorkerWebSocketFrame, provider string) SessionHandle {
+pub fn SessionHandle.from_websocket_dispatch_provider(frame worker_protocol.WorkerWebSocketFrame, provider string) SessionHandle {
 	return SessionHandle{
 		id:          frame.id
 		request_id:  frame.request_id

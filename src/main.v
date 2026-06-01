@@ -137,7 +137,12 @@ struct CodexTarget {
 	message_id string
 }
 
-// Type aliases for worker_protocol module (backward compatibility during migration)
+// ── TODO: Transitional type aliases ────────────────────────────────────────
+// These aliases exist only to avoid touching every call site during the
+// worker_protocol module extraction.  Once all callers in module main are
+// updated to use worker_protocol.QualifiedName directly, these aliases
+// should be deleted.  See TODO_REFACTOR.md for tracking.
+// ──────────────────────────────────────────────────────────────────────────
 pub type WorkerResponse = worker_protocol.WorkerResponse
 pub type WorkerStreamFrame = worker_protocol.WorkerStreamFrame
 pub type StreamDispatchRequest = worker_protocol.StreamDispatchRequest
