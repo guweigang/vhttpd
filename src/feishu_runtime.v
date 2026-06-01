@@ -1716,7 +1716,7 @@ fn (mut app App) feishu_runtime_send_message(req FeishuRuntimeSendMessageRequest
 		req.content_fields)!
 	token := app.feishu_runtime_tenant_access_token(app_name)!
 	mut header := http.new_header(key: .content_type, value: 'application/json; charset=utf-8')
-	header.add_custom('authorization', 'Bearer ${token}') or {}
+	header.add_custom('authorization', 'Bearer ${token}') or {} // safe to ignore: header append on detached request
 	mut payload := ''
 	mut url := ''
 	if receive_id_type == 'message_id' {
@@ -1875,7 +1875,7 @@ fn (mut app App) feishu_runtime_update_message(req FeishuRuntimeUpdateMessageReq
 
 	token := app.feishu_runtime_tenant_access_token(app_name)!
 	mut header := http.new_header(key: .content_type, value: 'application/json; charset=utf-8')
-	header.add_custom('authorization', 'Bearer ${token}') or {}
+	header.add_custom('authorization', 'Bearer ${token}') or {} // safe to ignore: header append on detached request
 	mut payload := ''
 	mut url := ''
 	mut method := http.Method.post
@@ -2573,7 +2573,7 @@ pub fn (mut app App) admin_runtime_feishu(mut ctx Context) veb.Result {
 	req_id := resolve_request_id(ctx, path)
 	trace_id := resolve_trace_id(ctx, path)
 	body := app.provider_runtime_snapshot('feishu') or { '{}' }
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
+	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
 	ctx.set_content_type('application/json; charset=utf-8')
 	app.emit('http.request', {
 		'method':     'GET'
@@ -2601,7 +2601,7 @@ pub fn (mut app App) admin_runtime_feishu_chats(mut ctx Context) veb.Result {
 	chat_id_filter := (ctx.query['chat_id'] or { '' }).trim_space()
 	body := json.encode(app.feishu_runtime_chats_snapshot(limit, offset, instance_filter,
 		chat_type_filter, chat_id_filter))
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
+	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
 	ctx.set_content_type('application/json; charset=utf-8')
 	app.emit('http.request', {
 		'method':     'GET'
@@ -2631,7 +2631,7 @@ fn (mut app App) feishu_callback_by_app(mut ctx Context, raw_app string) veb.Res
 	}
 	req_id := resolve_request_id(ctx, path)
 	trace_id := resolve_trace_id(ctx, path)
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
+	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
 	ctx.set_content_type('application/json; charset=utf-8')
 	app_name := app.feishu_runtime_resolve_app_name(raw_app) or {
 		ctx.res.set_status(http.status_from_int(404))
@@ -2730,7 +2730,7 @@ fn (mut app App) feishu_callback_by_app(mut ctx Context, raw_app string) veb.Res
 			if name.to_lower() == 'content-type' {
 				continue
 			}
-			ctx.set_custom_header(name, value) or {}
+			ctx.set_custom_header(name, value) or {} // safe to ignore: client may have disconnected
 		}
 		ctx.res.set_status(http.status_from_int(if bridge_resp.status > 0 {
 			bridge_resp.status
@@ -2839,7 +2839,7 @@ pub fn (mut app App) admin_runtime_feishu_send(mut ctx Context) veb.Result {
 	path := if ctx.req.url == '' { '/admin/runtime/feishu/messages' } else { ctx.req.url }
 	req_id := resolve_request_id(ctx, path)
 	trace_id := resolve_trace_id(ctx, path)
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
+	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
 	ctx.set_content_type('application/json; charset=utf-8')
 	req := json.decode(FeishuRuntimeSendMessageRequest, ctx.req.data) or {
 		ctx.res.set_status(http.status_from_int(400))
@@ -2870,7 +2870,7 @@ pub fn (mut app App) gateway_feishu_send(mut ctx Context) veb.Result {
 	path := if ctx.req.url == '' { '/gateway/feishu/messages' } else { ctx.req.url }
 	req_id := resolve_request_id(ctx, path)
 	trace_id := resolve_trace_id(ctx, path)
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
+	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
 	ctx.set_content_type('application/json; charset=utf-8')
 	if !app.api_authorized(ctx) {
 		ctx.res.set_status(http.status_from_int(403))

@@ -2,6 +2,7 @@ module main
 
 import json
 import os
+import state_store
 import time
 
 pub struct AppRuntimeBuildConfig {
@@ -88,7 +89,7 @@ fn build_app_runtime(provider_settings ProviderRuntimeSettings, executor_plan Lo
 		openai_endpoints:                         cfg.openai.endpoints
 		openai_backends:                          cfg.openai.backends.clone()
 		openai_routes:                            cfg.openai.routes.clone()
-		openai_responses:                         new_memory_state_store[OpenAIResponseRecord]()
+		openai_responses:                         state_store.new_memory_state_store[OpenAIResponseRecord]()
 		websocket_upstream_recent_dispatch_limit: 50
 		auto_start_dynamic_upstreams:             true
 		feishu_static_apps:                       provider_settings.feishu.apps.clone()

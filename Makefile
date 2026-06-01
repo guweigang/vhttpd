@@ -34,43 +34,25 @@ else
 V_DB_FLAGS :=
 endif
 
-FAST_TEST_FILES := \
-	$(SRC_DIR)/codex_runtime_test.v \
-	$(SRC_DIR)/command_executor_test.v \
-	$(SRC_DIR)/command_test.v \
-	$(SRC_DIR)/feishu_runtime_test.v \
-	$(SRC_DIR)/json_utils_test.v \
-	$(SRC_DIR)/kernel_dispatch_test.v \
-	$(SRC_DIR)/logic_executor_test.v \
-	$(SRC_DIR)/provider_bootstrap_test.v \
-	$(SRC_DIR)/provider_registry_test.v \
-	$(SRC_DIR)/server_logic_test.v \
-	$(SRC_DIR)/websocket_upstream_runtime_test.v \
-	$(SRC_DIR)/worker_backend_runtime_test.v
+# Auto-discover test files so new *_test.v files under src/ are picked up automatically.
+# Unit tests: exclude inproc (heavy) and db (needs network) tests.
+FAST_TEST_FILES := $(shell find $(SRC_DIR) -name '*_test.v' \
+	! -name 'inproc_*' \
+	! -name 'db_*')
 
-INPROC_TEST_FILES := \
-	$(SRC_DIR)/inproc_vjsx_executor_test.v \
-	$(SRC_DIR)/inproc_vjsx_host_api_test.v \
-	$(SRC_DIR)/inproc_vjsx_startup_sequence_test.v \
-	$(SRC_DIR)/inproc_vjsx_warmup_test.v
+# In-proc vjsx tests (non-codexbot).
+INPROC_TEST_FILES := $(shell find $(SRC_DIR) -name 'inproc_*_test.v' \
+	! -name '*codexbot*')
 
-CODEXBOT_TEST_FILES := \
-	$(SRC_DIR)/inproc_vjsx_executor_codexbot_core_test.v \
-	$(SRC_DIR)/inproc_vjsx_executor_codexbot_lifecycle_test.v \
-	$(SRC_DIR)/inproc_vjsx_executor_codexbot_projects_test.v \
-	$(SRC_DIR)/inproc_vjsx_executor_codexbot_read_rpc_test.v \
-	$(SRC_DIR)/inproc_vjsx_executor_codexbot_semantics_test.v \
-	$(SRC_DIR)/inproc_vjsx_executor_codexbot_threads_test.v
+# Codexbot in-proc tests (full suite).
+CODEXBOT_TEST_FILES := $(shell find $(SRC_DIR) -name 'inproc_*codexbot*_test.v')
 
-CODEXBOT_LIFECYCLE_TEST_FILES := \
-	$(SRC_DIR)/inproc_vjsx_executor_codexbot_lifecycle_test.v
+# Codexbot lifecycle only.
+CODEXBOT_LIFECYCLE_TEST_FILES := $(shell find $(SRC_DIR) -name '*codexbot_lifecycle_test.v')
 
-CODEXBOT_FAST_TEST_FILES := \
-	$(SRC_DIR)/inproc_vjsx_executor_codexbot_core_test.v \
-	$(SRC_DIR)/inproc_vjsx_executor_codexbot_projects_test.v \
-	$(SRC_DIR)/inproc_vjsx_executor_codexbot_read_rpc_test.v \
-	$(SRC_DIR)/inproc_vjsx_executor_codexbot_semantics_test.v \
-	$(SRC_DIR)/inproc_vjsx_executor_codexbot_threads_test.v
+# Codexbot fast suite (excludes lifecycle).
+CODEXBOT_FAST_TEST_FILES := $(shell find $(SRC_DIR) -name 'inproc_*codexbot*_test.v' \
+	! -name '*codexbot_lifecycle_test.v')
 
 prepare-build-src:
 	@rm -rf $(BUILD_STAGE_ROOT)
@@ -133,6 +115,9 @@ psr-matrix:
 	@$(MAKE) -C $(ROOT)/../vphpx/vslim psr-matrix
 
 test: test-fast
+
+test-e2e:
+	@bash $(ROOT)/tests/e2e/run.sh
 
 test-fast:
 	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) test $(FAST_TEST_FILES)

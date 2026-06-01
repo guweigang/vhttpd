@@ -1,6 +1,7 @@
 module main
 
 import json
+import jsonutils
 import log
 import time
 import net.websocket as ws
@@ -888,10 +889,10 @@ struct CodexJsonRpcMessage {
 
 fn codex_classify_rpc(raw string) CodexRpcClassification {
 	// Use top-level field detection to avoid matching nested keys like thread.id
-	has_method := vhttpd_has_any_top_level_key(raw, ['method'])
-	has_id := vhttpd_has_any_top_level_key(raw, ['id'])
-	has_result := vhttpd_has_any_top_level_key(raw, ['result'])
-	has_error := vhttpd_has_any_top_level_key(raw, ['error'])
+	has_method := jsonutils.has_any_top_level_key(raw, ['method'])
+	has_id := jsonutils.has_any_top_level_key(raw, ['id'])
+	has_result := jsonutils.has_any_top_level_key(raw, ['result'])
+	has_error := jsonutils.has_any_top_level_key(raw, ['error'])
 
 	method := if has_method { codex_extract_string_field(raw, 'method') } else { '' }
 	id_raw := if has_id { codex_extract_raw_field(raw, 'id') } else { '' }

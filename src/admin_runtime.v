@@ -177,7 +177,7 @@ pub fn (mut app App) admin_runtime(mut ctx Context) veb.Result {
 	req_id := resolve_request_id(ctx, path)
 	trace_id := resolve_trace_id(ctx, path)
 	body := json.encode(app.admin_runtime_snapshot())
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
+	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
 	ctx.set_content_type('application/json; charset=utf-8')
 	app.emit('http.request', {
 		'method':     'GET'
@@ -205,7 +205,7 @@ pub fn (mut app App) admin_runtime_upstreams(mut ctx Context) veb.Result {
 	provider_filter := (ctx.query['provider'] or { '' }).trim_space()
 	body := json.encode(app.admin_upstreams_snapshot(details, limit, offset, role_filter,
 		provider_filter))
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
+	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
 	ctx.set_content_type('application/json; charset=utf-8')
 	app.emit('http.request', {
 		'method':     'GET'
@@ -233,7 +233,7 @@ pub fn (mut app App) admin_runtime_websockets(mut ctx Context) veb.Result {
 	conn_filter := (ctx.query['conn_id'] or { '' }).trim_space()
 	body := json.encode(app.admin_websockets_snapshot(details, limit, offset, room_filter,
 		conn_filter))
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
+	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
 	ctx.set_content_type('application/json; charset=utf-8')
 	app.emit('http.request', {
 		'method':     'GET'
@@ -261,7 +261,7 @@ pub fn (mut app App) admin_runtime_mcp(mut ctx Context) veb.Result {
 	protocol_filter := (ctx.query['protocol_version'] or { '' }).trim_space()
 	body := json.encode(app.admin_mcp_snapshot(details, limit, offset, session_filter,
 		protocol_filter))
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
+	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
 	ctx.set_content_type('application/json; charset=utf-8')
 	app.emit('http.request', {
 		'method':     'GET'
@@ -284,7 +284,7 @@ pub fn (mut app App) admin_runtime_provider_instances(mut ctx Context) veb.Resul
 	trace_id := resolve_trace_id(ctx, path)
 	provider_filter := (ctx.query['provider'] or { '' }).trim_space()
 	body := json.encode(app.admin_provider_instance_snapshots(provider_filter))
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
+	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
 	ctx.set_content_type('application/json; charset=utf-8')
 	app.emit('http.request', {
 		'method':     'GET'
@@ -306,7 +306,7 @@ pub fn (mut app App) admin_provider_specs(mut ctx Context) veb.Result {
 	req_id := resolve_request_id(ctx, path)
 	trace_id := resolve_trace_id(ctx, path)
 	body := json.encode(app.admin_provider_specs_snapshot())
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
+	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
 	ctx.set_content_type('application/json; charset=utf-8')
 	app.emit('http.request', {
 		'method':     'GET'
@@ -328,7 +328,7 @@ pub fn (mut app App) admin_provider_runtimes(mut ctx Context) veb.Result {
 	req_id := resolve_request_id(ctx, path)
 	trace_id := resolve_trace_id(ctx, path)
 	body := json.encode(app.admin_provider_runtimes_snapshot())
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
+	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
 	ctx.set_content_type('application/json; charset=utf-8')
 	app.emit('http.request', {
 		'method':     'GET'

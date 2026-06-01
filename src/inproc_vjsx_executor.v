@@ -7,6 +7,7 @@ import net.urllib
 import os
 import sync
 import time
+import state_store
 import vjsx
 import vjsx.runtimejs
 import x.json2
@@ -113,7 +114,7 @@ mut:
 	mu                                      sync.Mutex
 	app_ref                                 &App = unsafe { nil }
 	facade                                  VjsxRuntimeFacade
-	session_store                           MemoryStateStore[string]
+	session_store                           state_store.MemoryStateStore[string]
 	lanes                                   []VjsxExecutionLane
 	hosts                                   []VjsxLaneHost
 	lane_workers                            []VjsxLaneWorker
@@ -475,7 +476,7 @@ pub fn new_inproc_vjsx_executor(config VjsxRuntimeFacadeConfig) InProcVjsxExecut
 			facade:                                  VjsxRuntimeFacade{
 				config: config
 			}
-			session_store:                           new_memory_state_store[string]()
+			session_store:                           state_store.new_memory_state_store[string]()
 			lanes:                                   lanes
 			hosts:                                   hosts
 			lane_workers:                            lane_workers
@@ -1644,7 +1645,7 @@ fn (mut state VjsxExecutorState) deliver_lane_wakeup(lane_id string, wake_at_ms 
 		state: state
 	}
 	lane := executor.lane_snapshot_by_id(lane_id) or { return }
-	executor.request_lane_pump(lane) or {}
+	executor.request_lane_pump(lane) or {} // safe to ignore: lane shutdown in progress
 }
 
 fn (e InProcVjsxExecutor) lane_snapshot_by_id(lane_id string) ?VjsxExecutionLane {
@@ -2752,7 +2753,7 @@ fn inproc_vjsx_host_http_fetch_builder(mut state VjsxExecutorState, idx int) vjs
 			body := parsed.body
 			mut header := http.new_header()
 			for name, value in parsed.headers {
-				header.add_custom(name, value) or {}
+				header.add_custom(name, value) or {} // safe to ignore: response already committed
 			}
 			resp := http.fetch(http.FetchConfig{
 				url:    url
@@ -2951,7 +2952,7 @@ fn inproc_vjsx_destroy_lane_host(mut host VjsxLaneHost) {
 		host.session = unsafe { nil }
 	}
 	if host.temp_root.trim_space() != '' {
-		os.rmdir_all(host.temp_root) or {}
+		os.rmdir_all(host.temp_root) or {} // safe to ignore: temp dir may already be removed
 	}
 	host.initialized = false
 	host.startup_completed = false
@@ -3402,12 +3403,12 @@ fn (e InProcVjsxExecutor) ensure_lane_host(idx int) ! {
 		module_entry_path := runtimejs.build_runtime_module_entry(ctx, config.app_entry, true,
 			temp_root) or {
 			session.close()
-			os.rmdir_all(temp_root) or {}
+			os.rmdir_all(temp_root) or {} // safe to ignore: temp dir may already be removed
 			return error('inproc_vjsx_executor_bootstrap_failed:${err.msg()}')
 		}
 		module_binding_value := session.import_module(module_entry_path) or {
 			session.close()
-			os.rmdir_all(temp_root) or {}
+			os.rmdir_all(temp_root) or {} // safe to ignore: temp dir may already be removed
 			return error('inproc_vjsx_executor_module_import_failed:${err.msg()}')
 		}
 		has_http_handler = inproc_vjsx_module_has_callable(&module_binding_value, 'http')
@@ -3426,7 +3427,7 @@ fn (e InProcVjsxExecutor) ensure_lane_host(idx int) ! {
 			mut cleanup_binding := module_binding_value
 			cleanup_binding.close()
 			session.close()
-			os.rmdir_all(temp_root) or {}
+			os.rmdir_all(temp_root) or {} // safe to ignore: temp dir may already be removed
 			return error('inproc_vjsx_executor_missing_handler')
 		}
 		bind_handlers := ctx.js_global('__vhttpd_bind_handlers')
@@ -3438,7 +3439,7 @@ fn (e InProcVjsxExecutor) ensure_lane_host(idx int) ! {
 				mut cleanup_binding := module_binding_value
 				cleanup_binding.close()
 				session.close()
-				os.rmdir_all(temp_root) or {}
+				os.rmdir_all(temp_root) or {} // safe to ignore: temp dir may already be removed
 				return error('inproc_vjsx_executor_module_namespace_failed:${err.msg()}')
 			}
 			defer {
@@ -3448,7 +3449,7 @@ fn (e InProcVjsxExecutor) ensure_lane_host(idx int) ! {
 				mut cleanup_binding := module_binding_value
 				cleanup_binding.close()
 				session.close()
-				os.rmdir_all(temp_root) or {}
+				os.rmdir_all(temp_root) or {} // safe to ignore: temp dir may already be removed
 				return error('inproc_vjsx_executor_export_bind_failed:${err.msg()}')
 			}
 			defer {
@@ -3461,7 +3462,7 @@ fn (e InProcVjsxExecutor) ensure_lane_host(idx int) ! {
 		log.debug('[vhttpd] ensure_lane_host loading script entry lane=${lane_id} idx=${idx}')
 		mut entry_exports := load_inproc_vjsx_entry(mut ctx, config, idx, source_signature, false) or {
 			session.close()
-			os.rmdir_all(temp_root) or {}
+			os.rmdir_all(temp_root) or {} // safe to ignore: temp dir may already be removed
 			return error('inproc_vjsx_executor_bootstrap_failed:${err.msg()}')
 		}
 		defer {
@@ -3478,7 +3479,7 @@ fn (e InProcVjsxExecutor) ensure_lane_host(idx int) ! {
 		if !bind_handlers.is_undefined() && bind_handlers.is_function() {
 			mut bound := session.call(bind_handlers, entry_exports) or {
 				session.close()
-				os.rmdir_all(temp_root) or {}
+				os.rmdir_all(temp_root) or {} // safe to ignore: temp dir may already be removed
 				return error('inproc_vjsx_executor_export_bind_failed:${err.msg()}')
 			}
 			defer {
@@ -3503,7 +3504,7 @@ fn (e InProcVjsxExecutor) ensure_lane_host(idx int) ! {
 		if !has_http_handler && !has_websocket_handler && !has_upstream_handler
 			&& !has_plugin_handler {
 			session.close()
-			os.rmdir_all(temp_root) or {}
+			os.rmdir_all(temp_root) or {} // safe to ignore: temp dir may already be removed
 			return error('inproc_vjsx_executor_missing_handler')
 		}
 	}

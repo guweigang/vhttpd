@@ -52,7 +52,7 @@ pub fn (mut app App) admin_workers(mut ctx Context) veb.Result {
 	req_id := resolve_request_id(ctx, path)
 	trace_id := resolve_trace_id(ctx, path)
 	body := json.encode(app.worker_admin_snapshot())
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
+	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
 	ctx.set_content_type('application/json; charset=utf-8')
 	app.emit('http.request', {
 		'method':     'GET'
@@ -74,7 +74,7 @@ pub fn (mut app App) admin_stats(mut ctx Context) veb.Result {
 	req_id := resolve_request_id(ctx, path)
 	trace_id := resolve_trace_id(ctx, path)
 	body := json.encode(app.admin_stats_snapshot())
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
+	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
 	ctx.set_content_type('application/json; charset=utf-8')
 	app.emit('http.request', {
 		'method':     'GET'
@@ -95,7 +95,7 @@ pub fn (mut app App) admin_restart_worker(mut ctx Context) veb.Result {
 	path := if ctx.req.url == '' { '/admin/workers/restart' } else { ctx.req.url }
 	req_id := resolve_request_id(ctx, path)
 	trace_id := resolve_trace_id(ctx, path)
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
+	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
 	ctx.set_content_type('application/json; charset=utf-8')
 	id_raw := (ctx.query['id'] or { '' }).trim_space()
 	if id_raw == '' {
@@ -135,7 +135,7 @@ pub fn (mut app App) admin_restart_all_workers(mut ctx Context) veb.Result {
 	path := if ctx.req.url == '' { '/admin/workers/restart/all' } else { ctx.req.url }
 	req_id := resolve_request_id(ctx, path)
 	trace_id := resolve_trace_id(ctx, path)
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
+	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
 	ctx.set_content_type('application/json; charset=utf-8')
 	restarted := app.restart_all_workers()
 	app.emit('admin.worker.restart', {

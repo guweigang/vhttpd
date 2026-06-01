@@ -479,7 +479,7 @@ fn feishu_card_bridge_client_message_cb(mut _ws websocket.Client, msg &websocket
 			error:      err.msg()
 		}
 		mut ws2 := unsafe { _ws }
-		ws2.write_string(json.encode(result)) or {}
+		ws2.write_string(json.encode(result)) or {} // safe to ignore: write failure usually means peer disconnected
 		return
 	}
 	resp := outcome.response
@@ -600,7 +600,7 @@ fn feishu_card_bridge_server_message_cb(mut _ws websocket.Client, msg &websocket
 			request_id: hb.request_id
 			trace_id:   hb.trace_id
 			sent_at:    time.now().unix_milli()
-		})) or {}
+		})) or {} // safe to ignore: write failure usually means peer disconnected
 		return
 	}
 	if envelope.type_ == feishu_card_bridge_result_type {
@@ -628,7 +628,7 @@ fn feishu_card_bridge_server_message_cb(mut _ws websocket.Client, msg &websocket
 			send_result := state.app.websocket_upstream_send(req.request) or {
 				result.error = err.msg()
 				mut ws_err := unsafe { _ws }
-				ws_err.write_string(json.encode(result)) or {}
+				ws_err.write_string(json.encode(result)) or {} // safe to ignore: write failure usually means peer disconnected
 				return
 			}
 			result.ok = send_result.ok
@@ -652,7 +652,7 @@ fn feishu_card_bridge_server_message_cb(mut _ws websocket.Client, msg &websocket
 			update_result := state.app.websocket_upstream_update(req.request) or {
 				result.error = err.msg()
 				mut ws_err := unsafe { _ws }
-				ws_err.write_string(json.encode(result)) or {}
+				ws_err.write_string(json.encode(result)) or {} // safe to ignore: write failure usually means peer disconnected
 				return
 			}
 			result.ok = update_result.ok
@@ -672,7 +672,7 @@ fn feishu_card_bridge_server_message_cb(mut _ws websocket.Client, msg &websocket
 			state.app.feishu_runtime_flush_buffer(req.request.target, req.request.content, true) or {
 				result.error = err.msg()
 				mut ws_err := unsafe { _ws }
-				ws_err.write_string(json.encode(result)) or {}
+				ws_err.write_string(json.encode(result)) or {} // safe to ignore: write failure usually means peer disconnected
 				return
 			}
 			result.ok = true
@@ -685,7 +685,7 @@ fn feishu_card_bridge_server_message_cb(mut _ws websocket.Client, msg &websocket
 			update_result := state.app.websocket_upstream_update(req.request) or {
 				result.error = err.msg()
 				mut ws_err := unsafe { _ws }
-				ws_err.write_string(json.encode(result)) or {}
+				ws_err.write_string(json.encode(result)) or {} // safe to ignore: write failure usually means peer disconnected
 				return
 			}
 			result.ok = update_result.ok
@@ -719,7 +719,7 @@ fn handle_feishu_card_bridge_server_session(mut app App, mut conn net.TcpConn, k
 	server.on_connect(fn [mut app, state] (mut sc websocket.ServerClient) !bool {
 		app.feishu_card_bridge_register_client(state.client_id, sc.client)
 		return true
-	}) or {}
+	}) or {} // safe to ignore: write failure usually means peer disconnected
 	server.on_message_ref(feishu_card_bridge_server_message_cb, state)
 	server.on_close_ref(feishu_card_bridge_server_close_cb, state)
 	server.handle_handshake(mut conn, key) or {
@@ -742,9 +742,9 @@ pub fn (mut app App) feishu_card_bridge_ws(mut ctx Context) veb.Result {
 	trace_id := resolve_trace_id(ctx, path)
 	key := websocket_upgrade_key(ctx.req)
 	if ctx.req.method.str().to_upper() != 'GET' || key == '' || !is_websocket_upgrade(ctx.req) {
-		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
+		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: write failure usually means peer disconnected
 		ctx.res.set_status(http.status_from_int(426))
-		ctx.set_custom_header('upgrade', 'websocket') or {}
+		ctx.set_custom_header('upgrade', 'websocket') or {} // safe to ignore: write failure usually means peer disconnected
 		return ctx.text('Upgrade Required')
 	}
 	_, query_string := normalize_request_target(path)
@@ -753,7 +753,7 @@ pub fn (mut app App) feishu_card_bridge_ws(mut ctx Context) veb.Result {
 	token := (query['token'] or { '' }).trim_space()
 	expected := app.feishu_card_bridge_token.trim_space()
 	if client_id == '' || (expected != '' && token != expected) {
-		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
+		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: write failure usually means peer disconnected
 		ctx.res.set_status(http.status_from_int(403))
 		return ctx.text('Forbidden')
 	}
@@ -769,7 +769,7 @@ pub fn (mut app App) feishu_card_bridge_ws(mut ctx Context) veb.Result {
 pub fn (mut app App) feishu_card_bridge_gateway_dispatch(mut ctx Context) veb.Result {
 	path := if ctx.req.url == '' { '/gateway/bridge/dispatch' } else { ctx.req.url }
 	trace_id := resolve_trace_id(ctx, path)
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
+	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: write failure usually means peer disconnected
 	ctx.set_content_type('application/json; charset=utf-8')
 	if !app.api_authorized(ctx) {
 		ctx.res.set_status(http.status_from_int(403))
@@ -804,7 +804,7 @@ pub fn (mut app App) feishu_card_bridge_gateway_dispatch(mut ctx Context) veb.Re
 		if name.to_lower() == 'content-type' {
 			continue
 		}
-		ctx.set_custom_header(name, value) or {}
+		ctx.set_custom_header(name, value) or {} // safe to ignore: write failure usually means peer disconnected
 	}
 	ctx.res.set_status(http.status_from_int(if result.status > 0 { result.status } else { 200 }))
 	ctx.set_content_type(result.headers['content-type'] or { 'application/json; charset=utf-8' })

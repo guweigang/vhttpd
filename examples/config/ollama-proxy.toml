@@ -10,14 +10,14 @@ event_log = "/tmp/vhttpd_ollama_proxy.events.ndjson"
 autostart = true
 read_timeout_ms = 60000
 socket = "/tmp/vslim_ollama_proxy.sock"
-cmd = "php /Users/guweigang/Source/vhttpd/php/package/bin/php-worker"
+cmd = "php ./php/package/bin/php-worker"
 
 [worker.env]
-VHTTPD_APP = "/Users/guweigang/Source/vhttpd/examples/ollama-proxy-app.php"
+VHTTPD_APP = "./examples/ollama-proxy-app.php"
 OLLAMA_CHAT_URL = "http://localhost:11434/api/chat"
 OLLAMA_MODEL = "minimax-m2:cloud"
 OLLAMA_API_KEY = ""
-# OLLAMA_STREAM_FIXTURE = "/Users/guweigang/Source/vphpx/vslim/tests/fixtures/ollama_stream_fixture.ndjson"
+# OLLAMA_STREAM_FIXTURE = "${env.VPHPX_ROOT:-./}/tests/fixtures/ollama_stream_fixture.ndjson"
 
 [admin]
 host = "127.0.0.1"

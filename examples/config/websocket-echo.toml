@@ -10,10 +10,10 @@ event_log = "/tmp/vhttpd_websocket_echo.events.ndjson"
 autostart = true
 read_timeout_ms = 60000
 socket = "/tmp/vhttpd_websocket_echo.sock"
-cmd = "php /Users/guweigang/Source/vhttpd/php/package/bin/php-worker"
+cmd = "php ./php/package/bin/php-worker"
 
 [worker.env]
-VHTTPD_APP = "/Users/guweigang/Source/vhttpd/examples/websocket_echo_app.php"
+VHTTPD_APP = "./examples/websocket_echo_app.php"
 
 [admin]
 host = "127.0.0.1"
@@ -23,5 +23,5 @@ token = ""
 [assets]
 enabled = true
 prefix = "/assets"
-root = "/Users/guweigang/Source/vhttpd/examples/public"
+root = "./examples/public"
 cache_control = "public, max-age=3600"

@@ -78,12 +78,12 @@ pub fn (mut app AdminApp) admin_workers(mut ctx Context) veb.Result {
 	req_id := resolve_request_id(ctx, path)
 	trace_id := resolve_trace_id(ctx, path)
 	if !app.admin_authorized(ctx) {
-		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
+		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
 		ctx.res.set_status(http.status_from_int(403))
 		return ctx.text('Forbidden')
 	}
 	body := json.encode(app.shared.worker_admin_snapshot())
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
+	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
 	ctx.set_content_type('application/json; charset=utf-8')
 	app.shared.emit('http.request', {
 		'method':     'GET'
@@ -101,7 +101,7 @@ pub fn (mut app AdminApp) admin_stats(mut ctx Context) veb.Result {
 	path := if ctx.req.url == '' { '/admin/stats' } else { ctx.req.url }
 	req_id := resolve_request_id(ctx, path)
 	trace_id := resolve_trace_id(ctx, path)
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
+	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
 	ctx.set_content_type('application/json; charset=utf-8')
 	if !app.admin_authorized(ctx) {
 		ctx.res.set_status(http.status_from_int(403))
@@ -126,7 +126,7 @@ pub fn (mut app AdminApp) admin_runtime(mut ctx Context) veb.Result {
 	path := if ctx.req.url == '' { '/admin/runtime' } else { ctx.req.url }
 	req_id := resolve_request_id(ctx, path)
 	trace_id := resolve_trace_id(ctx, path)
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
+	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
 	ctx.set_content_type('application/json; charset=utf-8')
 	if !app.admin_authorized(ctx) {
 		ctx.res.set_status(http.status_from_int(403))
@@ -154,7 +154,7 @@ pub fn (mut app AdminApp) admin_providers(mut ctx Context) veb.Result {
 	path := if ctx.req.url == '' { '/admin/providers' } else { ctx.req.url }
 	req_id := resolve_request_id(ctx, path)
 	trace_id := resolve_trace_id(ctx, path)
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
+	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
 	ctx.set_content_type('application/json; charset=utf-8')
 	if !app.admin_authorized(ctx) {
 		ctx.res.set_status(http.status_from_int(403))
@@ -180,7 +180,7 @@ pub fn (mut app AdminApp) admin_executors(mut ctx Context) veb.Result {
 	path := if ctx.req.url == '' { '/admin/executors' } else { ctx.req.url }
 	req_id := resolve_request_id(ctx, path)
 	trace_id := resolve_trace_id(ctx, path)
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
+	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
 	ctx.set_content_type('application/json; charset=utf-8')
 	if !app.admin_authorized(ctx) {
 		ctx.res.set_status(http.status_from_int(403))
@@ -205,7 +205,7 @@ pub fn (mut app AdminApp) admin_provider_specs(mut ctx Context) veb.Result {
 	path := if ctx.req.url == '' { '/admin/providers/specs' } else { ctx.req.url }
 	req_id := resolve_request_id(ctx, path)
 	trace_id := resolve_trace_id(ctx, path)
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
+	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
 	ctx.set_content_type('application/json; charset=utf-8')
 	if !app.admin_authorized(ctx) {
 		ctx.res.set_status(http.status_from_int(403))
@@ -230,7 +230,7 @@ pub fn (mut app AdminApp) admin_provider_runtimes(mut ctx Context) veb.Result {
 	path := if ctx.req.url == '' { '/admin/providers/runtimes' } else { ctx.req.url }
 	req_id := resolve_request_id(ctx, path)
 	trace_id := resolve_trace_id(ctx, path)
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
+	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
 	ctx.set_content_type('application/json; charset=utf-8')
 	if !app.admin_authorized(ctx) {
 		ctx.res.set_status(http.status_from_int(403))
@@ -255,7 +255,7 @@ pub fn (mut app AdminApp) admin_runtime_upstreams(mut ctx Context) veb.Result {
 	path := if ctx.req.url == '' { '/admin/runtime/upstreams' } else { ctx.req.url }
 	req_id := resolve_request_id(ctx, path)
 	trace_id := resolve_trace_id(ctx, path)
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
+	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
 	ctx.set_content_type('application/json; charset=utf-8')
 	if !app.admin_authorized(ctx) {
 		ctx.res.set_status(http.status_from_int(403))
@@ -286,7 +286,7 @@ pub fn (mut app AdminApp) admin_runtime_websockets(mut ctx Context) veb.Result {
 	path := if ctx.req.url == '' { '/admin/runtime/websockets' } else { ctx.req.url }
 	req_id := resolve_request_id(ctx, path)
 	trace_id := resolve_trace_id(ctx, path)
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
+	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
 	ctx.set_content_type('application/json; charset=utf-8')
 	if !app.admin_authorized(ctx) {
 		ctx.res.set_status(http.status_from_int(403))
@@ -317,7 +317,7 @@ pub fn (mut app AdminApp) admin_runtime_mcp(mut ctx Context) veb.Result {
 	path := if ctx.req.url == '' { '/admin/runtime/mcp' } else { ctx.req.url }
 	req_id := resolve_request_id(ctx, path)
 	trace_id := resolve_trace_id(ctx, path)
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
+	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
 	ctx.set_content_type('application/json; charset=utf-8')
 	if !app.admin_authorized(ctx) {
 		ctx.res.set_status(http.status_from_int(403))
@@ -348,7 +348,7 @@ pub fn (mut app AdminApp) admin_runtime_provider_instances(mut ctx Context) veb.
 	path := if ctx.req.url == '' { '/admin/runtime/provider-instances' } else { ctx.req.url }
 	req_id := resolve_request_id(ctx, path)
 	trace_id := resolve_trace_id(ctx, path)
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
+	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
 	ctx.set_content_type('application/json; charset=utf-8')
 	if !app.admin_authorized(ctx) {
 		ctx.res.set_status(http.status_from_int(403))
@@ -374,7 +374,7 @@ pub fn (mut app AdminApp) admin_runtime_feishu(mut ctx Context) veb.Result {
 	path := if ctx.req.url == '' { '/admin/runtime/feishu' } else { ctx.req.url }
 	req_id := resolve_request_id(ctx, path)
 	trace_id := resolve_trace_id(ctx, path)
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
+	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
 	ctx.set_content_type('application/json; charset=utf-8')
 	if !app.admin_authorized(ctx) {
 		ctx.res.set_status(http.status_from_int(403))
@@ -399,7 +399,7 @@ pub fn (mut app AdminApp) admin_runtime_db(mut ctx Context) veb.Result {
 	path := if ctx.req.url == '' { '/admin/runtime/db' } else { ctx.req.url }
 	req_id := resolve_request_id(ctx, path)
 	trace_id := resolve_trace_id(ctx, path)
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
+	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
 	ctx.set_content_type('application/json; charset=utf-8')
 	if !app.admin_authorized(ctx) {
 		ctx.res.set_status(http.status_from_int(403))
@@ -424,7 +424,7 @@ pub fn (mut app AdminApp) admin_runtime_feishu_chats(mut ctx Context) veb.Result
 	path := if ctx.req.url == '' { '/admin/runtime/feishu/chats' } else { ctx.req.url }
 	req_id := resolve_request_id(ctx, path)
 	trace_id := resolve_trace_id(ctx, path)
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
+	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
 	ctx.set_content_type('application/json; charset=utf-8')
 	if !app.admin_authorized(ctx) {
 		ctx.res.set_status(http.status_from_int(403))
@@ -455,7 +455,7 @@ pub fn (mut app AdminApp) admin_runtime_feishu_send(mut ctx Context) veb.Result 
 	path := if ctx.req.url == '' { '/admin/runtime/feishu/messages' } else { ctx.req.url }
 	req_id := resolve_request_id(ctx, path)
 	trace_id := resolve_trace_id(ctx, path)
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
+	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
 	ctx.set_content_type('application/json; charset=utf-8')
 	if !app.admin_authorized(ctx) {
 		ctx.res.set_status(http.status_from_int(403))
@@ -495,7 +495,7 @@ pub fn (mut app AdminApp) admin_restart_worker(mut ctx Context) veb.Result {
 	path := if ctx.req.url == '' { '/admin/workers/restart' } else { ctx.req.url }
 	req_id := resolve_request_id(ctx, path)
 	trace_id := resolve_trace_id(ctx, path)
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
+	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
 	ctx.set_content_type('application/json; charset=utf-8')
 	if !app.admin_authorized(ctx) {
 		ctx.res.set_status(http.status_from_int(403))
@@ -537,7 +537,7 @@ pub fn (mut app AdminApp) admin_restart_all_workers(mut ctx Context) veb.Result 
 	path := if ctx.req.url == '' { '/admin/workers/restart/all' } else { ctx.req.url }
 	req_id := resolve_request_id(ctx, path)
 	trace_id := resolve_trace_id(ctx, path)
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
+	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
 	ctx.set_content_type('application/json; charset=utf-8')
 	if !app.admin_authorized(ctx) {
 		ctx.res.set_status(http.status_from_int(403))
