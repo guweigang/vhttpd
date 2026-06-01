@@ -648,7 +648,7 @@ vjsx.build_root = "\${paths.vjsx_build_root}"
 }
 
 fn test_site_config_as_vhttpd_config_defaults_vjsx_module_root_to_site_root() {
-	cfg := site_config_as_vhttpd_config(config.default_vhttpd_config(), SiteConfig{
+	cfg := config.site_config_as_vhttpd_config(config.default_vhttpd_config(), SiteConfig{
 		project_root: '/tmp/site-root'
 		executor:     ExecutorConfig{
 			kind: 'vjsx'
@@ -662,7 +662,7 @@ fn test_site_config_as_vhttpd_config_defaults_vjsx_module_root_to_site_root() {
 }
 
 fn test_site_config_as_vhttpd_config_routes_app_alias_to_vjsx() {
-	cfg := site_config_as_vhttpd_config(config.default_vhttpd_config(), SiteConfig{
+	cfg := config.site_config_as_vhttpd_config(config.default_vhttpd_config(), SiteConfig{
 		project_root: '/tmp/site-root'
 		executor:     ExecutorConfig{
 			kind: 'vjsx'
@@ -674,7 +674,7 @@ fn test_site_config_as_vhttpd_config_routes_app_alias_to_vjsx() {
 }
 
 fn test_site_config_as_vhttpd_config_routes_app_alias_to_php() {
-	cfg := site_config_as_vhttpd_config(config.default_vhttpd_config(), SiteConfig{
+	cfg := config.site_config_as_vhttpd_config(config.default_vhttpd_config(), SiteConfig{
 		project_root: '/tmp/site-root'
 		executor:     ExecutorConfig{
 			kind: 'php'
@@ -686,7 +686,7 @@ fn test_site_config_as_vhttpd_config_routes_app_alias_to_php() {
 }
 
 fn test_site_config_as_vhttpd_config_routes_worker_entry_alias_to_php() {
-	cfg := site_config_as_vhttpd_config(config.default_vhttpd_config(), SiteConfig{
+	cfg := config.site_config_as_vhttpd_config(config.default_vhttpd_config(), SiteConfig{
 		project_root: '/tmp/site-root'
 		executor:     ExecutorConfig{
 			kind: 'php'
@@ -697,13 +697,13 @@ fn test_site_config_as_vhttpd_config_routes_worker_entry_alias_to_php() {
 }
 
 fn test_site_config_as_vhttpd_config_infers_executor_from_app_alias() {
-	php_cfg := site_config_as_vhttpd_config(config.default_vhttpd_config(), SiteConfig{
+	php_cfg := config.site_config_as_vhttpd_config(config.default_vhttpd_config(), SiteConfig{
 		project_root: '/tmp/site-root'
 		app:          './app.php'
 	})
 	assert php_cfg.executor.kind == 'php'
 	assert php_cfg.php.app_entry == './app.php'
-	vjsx_cfg := site_config_as_vhttpd_config(config.default_vhttpd_config(), SiteConfig{
+	vjsx_cfg := config.site_config_as_vhttpd_config(config.default_vhttpd_config(), SiteConfig{
 		project_root: '/tmp/site-root'
 		app:          './app.mts'
 	})
@@ -1697,7 +1697,7 @@ fn test_site_config_as_vhttpd_config_inherits_global_defaults() {
 			app_entry: './app.mts'
 		}
 	}
-	derived := site_config_as_vhttpd_config(cfg, site_cfg)
+	derived := config.site_config_as_vhttpd_config(cfg, site_cfg)
 	assert derived.paths.root == '/tmp/project-a'
 	assert derived.executor.kind == 'vjsx'
 	assert derived.vjsx.app_entry == './app.mts'
@@ -1791,7 +1791,7 @@ fn test_site_config_as_vhttpd_config_merges_site_websocket_affinity() {
 		scope:    'lane'
 		fallback: 'round_robin'
 	}
-	derived := site_config_as_vhttpd_config(base, SiteConfig{
+	derived := config.site_config_as_vhttpd_config(base, SiteConfig{
 		websocket_affinity: WebSocketAffinityConfig{
 			enabled:  true
 			source:   'app'
@@ -1823,7 +1823,7 @@ fn test_site_config_as_vhttpd_config_merges_site_websocket_actor() {
 			},
 		]
 	}
-	derived := site_config_as_vhttpd_config(base, SiteConfig{
+	derived := config.site_config_as_vhttpd_config(base, SiteConfig{
 		websocket_actor: WebSocketActorConfig{
 			enabled:           true
 			fallback:          'reject'
