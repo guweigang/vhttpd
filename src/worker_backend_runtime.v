@@ -1,4 +1,5 @@
 module main
+import transport
 
 pub interface WorkerBackend {
 	kind() string
@@ -27,7 +28,7 @@ pub mut:
 	queue_capacity        int
 	queue_timeout_ms      int
 	queue_poll_ms         int
-	managed_workers       []ManagedWorker
+	managed_workers       []transport.ManagedWorker
 	queue_waiting_requests int
 }
 

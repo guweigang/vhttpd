@@ -1624,3 +1624,45 @@ fn resolve_config_variable(expr string, scope string, vars map[string]string, en
 	}
 	return error('unknown config variable "${key}"')
 }
+
+// resolve_worker_sockets_with_defaults resolves the worker socket list from CLI args.
+// Returns explicit list if --worker-sockets is provided, otherwise expands --worker-socket
+// with --worker-pool-size using --worker-socket-prefix.
+pub fn resolve_worker_sockets_with_defaults(args []string, default_worker_socket string, default_pool_size int, default_socket_prefix string, default_worker_sockets string) []string {
+	worker_sockets_arg := arg_string_or(args, '--worker-sockets', default_worker_sockets)
+	if worker_sockets_arg != '' {
+		mut sockets := []string{}
+		for raw in worker_sockets_arg.split(',') {
+			s := raw.trim_space()
+			if s != '' {
+				sockets << s
+			}
+		}
+		return sockets
+	}
+	worker_socket := arg_string_or(args, '--worker-socket', default_worker_socket)
+	pool_size := arg_int_or(args, '--worker-pool-size', default_pool_size)
+	if pool_size <= 1 {
+		return if worker_socket == '' { []string{} } else { [worker_socket] }
+	}
+	mut prefix := arg_string_or(args, '--worker-socket-prefix', default_socket_prefix)
+	if prefix == '' {
+		prefix = socket_prefix(worker_socket)
+	}
+	mut sockets := []string{cap: pool_size}
+	for i in 0 .. pool_size {
+		sockets << '${prefix}_${i}.sock'
+	}
+	return sockets
+}
+
+// socket_prefix strips the .sock extension from a worker socket path.
+pub fn socket_prefix(worker_socket string) string {
+	if worker_socket.len >= 5 && worker_socket.ends_with('.sock') {
+		return worker_socket[..worker_socket.len - 5]
+	}
+	if worker_socket != '' {
+		return worker_socket
+	}
+	return '/tmp/vslim_worker'
+}

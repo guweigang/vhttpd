@@ -1,4 +1,5 @@
 module main
+import transport
 import config
 
 import log
@@ -70,7 +71,7 @@ pub fn (l PhpWorkerExecutorLifecycle) start(mut app App) {
 	if !app.worker_backend.autostart {
 		return
 	}
-	app.worker_backend.managed_workers = start_worker_pool(app.worker_backend.cmd, app.worker_backend.env,
+	app.worker_backend.managed_workers = transport.start_worker_pool(app.worker_backend.cmd, app.worker_backend.env,
 		app.worker_backend.sockets, app.worker_backend.workdir)
 	if app.worker_backend.managed_workers.len == 0 && app.worker_backend.sockets.len > 0 {
 		log.warn('worker pool is empty after startup; server will stay up and keep retrying')
@@ -101,7 +102,7 @@ pub fn (l PhpWorkerExecutorLifecycle) start(mut app App) {
 
 pub fn (l PhpWorkerExecutorLifecycle) stop(mut app App) {
 	_ = l
-	stop_worker_pool(mut app.worker_backend.managed_workers)
+	transport.stop_worker_pool(mut app.worker_backend.managed_workers)
 }
 
 pub struct EmbeddedExecutorLifecycle {}

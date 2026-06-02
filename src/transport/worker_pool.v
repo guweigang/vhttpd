@@ -1,28 +1,27 @@
 module transport
 
-import config
-
 import log
 import net.unix
 import os
 import time
 
 pub struct ManagedWorker {
-	id          int
-	socket_path string
-	worker_cmd  string
-	worker_env  map[string]string
-mut:
-	proc              &os.Process = unsafe { nil }
-	restart_count     int
-	last_exit_ts      i64
-	next_retry_ts     i64
-	served_requests   i64
+pub mut:
+	id               int
+	socket_path      string
+	worker_cmd       string
+	worker_env       map[string]string
+	proc             &os.Process = unsafe { nil }
+	restart_count    int
+	last_exit_ts     i64
+	next_retry_ts    i64
+	served_requests  i64
 	inflight_requests i64
-	draining          bool
+	draining         bool
 }
 
-struct WorkerSelectionDiagnostic {
+pub struct WorkerSelectionDiagnostic {
+pub:
 	socket_path       string
 	proc_alive        bool
 	draining          bool
@@ -112,7 +111,7 @@ pub fn build_managed_worker_slot(id int, worker_cmd string, worker_env map[strin
 	}
 }
 
-fn (mut w ManagedWorker) stop() {
+pub fn (mut w ManagedWorker) stop() {
 	if isnil(w.proc) {
 		return
 	}
@@ -136,44 +135,6 @@ pub fn stop_worker_pool(mut workers []ManagedWorker) {
 		mut w := workers[i]
 		w.stop()
 	}
-}
-
-pub fn socket_prefix(worker_socket string) string {
-	if worker_socket.len >= 5 && worker_socket.ends_with('.sock') {
-		return worker_socket[..worker_socket.len - 5]
-	}
-	if worker_socket != '' {
-		return worker_socket
-	}
-	return '/tmp/vslim_worker'
-}
-
-pub fn resolve_worker_sockets_with_defaults(args []string, default_worker_socket string, default_pool_size int, default_socket_prefix string, default_worker_sockets string) []string {
-	worker_sockets_arg := config.arg_string_or(args, '--worker-sockets', default_worker_sockets)
-	if worker_sockets_arg != '' {
-		mut sockets := []string{}
-		for raw in worker_sockets_arg.split(',') {
-			s := raw.trim_space()
-			if s != '' {
-				sockets << s
-			}
-		}
-		return sockets
-	}
-	worker_socket := config.arg_string_or(args, '--worker-socket', default_worker_socket)
-	pool_size := config.arg_int_or(args, '--worker-pool-size', default_pool_size)
-	if pool_size <= 1 {
-		return if worker_socket == '' { []string{} } else { [worker_socket] }
-	}
-	mut prefix := config.arg_string_or(args, '--worker-socket-prefix', default_socket_prefix)
-	if prefix == '' {
-		prefix = socket_prefix(worker_socket)
-	}
-	mut sockets := []string{cap: pool_size}
-	for i in 0 .. pool_size {
-		sockets << '${prefix}_${i}.sock'
-	}
-	return sockets
 }
 
 pub fn start_worker_pool(worker_cmd string, worker_env map[string]string, worker_sockets []string, workdir string) []ManagedWorker {

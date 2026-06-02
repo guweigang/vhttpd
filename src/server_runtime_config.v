@@ -1,4 +1,5 @@
 module main
+import transport
 
 import config
 
@@ -50,7 +51,7 @@ fn resolve_server_runtime_config_for_target(args []string, cfg config.VhttpdConf
 	admin_enabled := admin_enabled_override && admin_port > 0
 	admin_host := if admin_host_arg == '' { '127.0.0.1' } else { admin_host_arg }
 	provider_settings := resolve_provider_runtime_settings(args, cfg)
-	executor_plan := resolve_logic_executor_runtime_plan(args, cfg, resolve_worker_sockets_with_defaults(args,
+	executor_plan := resolve_logic_executor_runtime_plan(args, cfg, config.resolve_worker_sockets_with_defaults(args,
 		cfg.worker.socket, cfg.worker.pool_size, cfg.worker.socket_prefix, cfg.worker.sockets.join(',')),
 		cfg.worker.stream_dispatch, cfg.worker.websocket_dispatch, worker_autostart, worker_cmd_override,
 		cfg.worker.env.clone())!
