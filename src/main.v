@@ -1844,3 +1844,4 @@ pub fn (mut app App) proxy_head(mut ctx Context, path string) veb.Result {
 	}
 	return proxy_worker_response(mut app, mut ctx, 'HEAD', target, '')
 }
+
