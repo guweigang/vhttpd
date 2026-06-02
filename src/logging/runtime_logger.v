@@ -1,16 +1,16 @@
-module main
+module logging
 
 import log
 import os
 
-fn runtime_default_log_level() log.Level {
+pub fn runtime_default_log_level() log.Level {
 	$if prod {
 		return .warn
 	}
 	return .info
 }
 
-fn runtime_parse_log_level(raw string) ?log.Level {
+pub fn runtime_parse_log_level(raw string) ?log.Level {
 	name := raw.trim_space().to_lower()
 	return match name {
 		'debug' { log.Level.debug }
@@ -22,7 +22,7 @@ fn runtime_parse_log_level(raw string) ?log.Level {
 	}
 }
 
-fn runtime_effective_log_level() log.Level {
+pub fn runtime_effective_log_level() log.Level {
 	if from_env := os.getenv_opt('VHTTPD_LOG_LEVEL') {
 		if parsed := runtime_parse_log_level(from_env) {
 			return parsed
@@ -31,7 +31,7 @@ fn runtime_effective_log_level() log.Level {
 	return runtime_default_log_level()
 }
 
-fn runtime_configure_logger() {
+pub fn runtime_configure_logger() {
 	mut local_logger := &log.Log{}
 	local_logger.set_level(runtime_effective_log_level())
 	local_logger.set_local_time(true)

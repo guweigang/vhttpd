@@ -3,6 +3,7 @@ module main
 import config
 import log
 import os
+import logging
 
 #include <time.h>
 
@@ -188,7 +189,7 @@ fn configure_runtime_timezone(config_tz string) {
 	}
 	os.setenv('TZ', tz, true)
 	C.tzset()
-	runtime_configure_logger()
+	logging.runtime_configure_logger()
 	log.info('vhttpd timezone: ${tz}')
 }
 
