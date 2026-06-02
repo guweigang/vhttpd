@@ -1,4 +1,5 @@
 module main
+import config
 
 import log
 
@@ -14,7 +15,7 @@ pub mut:
 
 pub interface LogicExecutorLifecycle {
 	name() string
-	prepare_bootstrap(args []string, cfg VhttpdConfig, mut state ExecutorBootstrapState) !
+	prepare_bootstrap(args []string, cfg config.VhttpdConfig, mut state ExecutorBootstrapState) !
 	start(mut app App)
 	stop(mut app App)
 }
@@ -26,7 +27,7 @@ pub fn (l DisabledExecutorLifecycle) name() string {
 	return 'disabled'
 }
 
-pub fn (l DisabledExecutorLifecycle) prepare_bootstrap(args []string, cfg VhttpdConfig, mut state ExecutorBootstrapState) ! {
+pub fn (l DisabledExecutorLifecycle) prepare_bootstrap(args []string, cfg config.VhttpdConfig, mut state ExecutorBootstrapState) ! {
 	_ = l
 	_ = args
 	_ = cfg
@@ -54,7 +55,7 @@ pub fn (l PhpWorkerExecutorLifecycle) name() string {
 	return 'php_worker_host'
 }
 
-pub fn (l PhpWorkerExecutorLifecycle) prepare_bootstrap(args []string, cfg VhttpdConfig, mut state ExecutorBootstrapState) ! {
+pub fn (l PhpWorkerExecutorLifecycle) prepare_bootstrap(args []string, cfg config.VhttpdConfig, mut state ExecutorBootstrapState) ! {
 	_ = l
 	php_spec := builtin_logic_executor_spec('php')!
 	php_cfg := php_spec.resolve_php_runtime_config(args, cfg)!
@@ -110,7 +111,7 @@ pub fn (l EmbeddedExecutorLifecycle) name() string {
 	return 'embedded_host'
 }
 
-pub fn (l EmbeddedExecutorLifecycle) prepare_bootstrap(args []string, cfg VhttpdConfig, mut state ExecutorBootstrapState) ! {
+pub fn (l EmbeddedExecutorLifecycle) prepare_bootstrap(args []string, cfg config.VhttpdConfig, mut state ExecutorBootstrapState) ! {
 	_ = l
 	_ = args
 	_ = cfg

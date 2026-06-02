@@ -1,4 +1,5 @@
 module main
+import transport
 
 import os
 
@@ -25,7 +26,7 @@ fn test_inproc_vjsx_executor_feishu_cb_app_handles_card_action() {
 		executor.close()
 	}
 	mut app := App{}
-	resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+	resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 		mode:        'websocket_upstream'
 		event:       'action'
 		id:          'req_feishu_cb_action'

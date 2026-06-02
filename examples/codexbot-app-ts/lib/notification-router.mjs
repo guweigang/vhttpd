@@ -109,10 +109,16 @@ async function finishOutstandingItemStreams(parentStream, keepItemKeys, deps = {
 }
 
 async function recoverPlainPromptTextToItems(parentStream, notification, items, deps = {}, options = {}) {
+  const existingRenders = deps.listItemRenderStates
+    ? await deps.listItemRenderStates(parentStream.streamId)
+    : [];
+  const primaryItem = existingRenders.find((r) => typeof r?.itemId === "string" && r.itemId !== "");
+  const fallbackItemId = primaryItem ? primaryItem.itemId : "";
+
   const normalizedItems = Array.isArray(items)
     ? items
       .map((item, index) => ({
-        itemId: typeof item?.itemId === "string" ? item.itemId : "",
+        itemId: typeof item?.itemId === "string" && item.itemId !== "" ? item.itemId : fallbackItemId,
         turnId: typeof item?.turnId === "string" ? item.turnId : (notification?.turnId || parentStream?.turnId || ""),
         phase: typeof item?.phase === "string" ? item.phase : "",
         text: typeof item?.text === "string" ? item.text : "",
@@ -620,16 +626,19 @@ export async function routeCodexNotification(frame, deps) {
       const itemCommands = await deps.renderAssistantContentToItemStream(stream, notification, mergedFinalText, {
         finish: true,
       });
-      if (isPlainPrompt && shouldPreferItemCommands(itemCommands)) {
-        return {
-          handled: true,
-          commands: itemCommands,
-        };
-      }
       if (isPlainPrompt) {
+        if (shouldPreferItemCommands(itemCommands)) {
+          return {
+            handled: true,
+            commands: itemCommands,
+          };
+        }
+        const plainFallbackCommands = shouldFinalizeParent
+          ? parentStreamTextCommands(stream, notification.streamId, mergedFinalText, deps, { finish: true })
+          : [];
         return {
           handled: true,
-          commands: itemCommands || [],
+          commands: plainFallbackCommands,
         };
       }
       const parentCommands = shouldFinalizeParent
@@ -737,6 +746,7 @@ export async function routeCodexNotification(frame, deps) {
       const resolvedSessionPath = resolveSessionPath(frame.runtime, stream, latest);
       const completedText = notification.finalText || notification.message || latest?.resultText || latest?.draft || "";
       const lookupThreadId = latest?.threadId || stream.threadId || notification.threadId || "";
+      frame.runtime.log("DEBUG turn/completed completedText=" + completedText + " lookupThreadId=" + lookupThreadId + " isPlain=" + deps.isPlainPromptStream(latest || stream));
       if (!completedText && lookupThreadId) {
         if (deps.isPlainPromptStream(latest || stream)) {
           await deps.updateStreamState(notification.streamId, {

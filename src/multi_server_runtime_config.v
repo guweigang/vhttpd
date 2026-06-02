@@ -6,7 +6,7 @@ pub struct ListenerRuntimeBinding {
 pub:
 	id          string
 	site_id     string
-	site_cfg    VhttpdConfig
+	site_cfg    config.VhttpdConfig
 	runtime_cfg ServerRuntimeConfig
 }
 
@@ -16,7 +16,7 @@ pub:
 	listeners   []ListenerRuntimeBinding
 }
 
-fn resolve_multi_server_runtime_config(args []string, cfg VhttpdConfig) !MultiServerRuntimeConfig {
+fn resolve_multi_server_runtime_config(args []string, cfg config.VhttpdConfig) !MultiServerRuntimeConfig {
 	if !config.config_uses_multi_listener(cfg) {
 		return MultiServerRuntimeConfig{
 			single_mode: true

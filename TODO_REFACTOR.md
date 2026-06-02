@@ -2,66 +2,41 @@
 
 ## Phase 2: Modularization (in progress)
 
-### Completed extractions
+### 2.1 Utility module reorganization ✅
 
 | Module | Directory | Files | Status |
 |--------|-----------|-------|--------|
-| state_store | `src/state_store/` | state_store.v, state_store_test.v | ✅ Merged to refactor/v2 |
-| jsonutils | `src/jsonutils/` | json_utils.v, json_utils_test.v | ✅ Merged to refactor/v2 |
-| worker_protocol | `src/worker_protocol/` | worker_protocol.v | ✅ Merged to refactor/v2 |
+| config | `src/config/` | config.v, args.v, embedded_host.v, runtime_config.v | ✅ Merged (common/args.v → config/) |
+| transport | `src/transport/` | worker_protocol.v, session_handle.v, transport_handle.v | ✅ Merged (3 modules → 1) |
+| state_store | `src/state_store/` | state_store.v, state_store_test.v | ✅ |
+| jsonutils | `src/jsonutils/` | json_utils.v, json_utils_test.v | ✅ |
 
-### Transitional type aliases (tech debt)
+**Changes in this round:**
+- `common/args.v` (87 lines) → `config/args.v`: CLI arg parsing is config-adjacent. `module common` deleted.
+- `worker_protocol/` + `session_handle/` + `transport_handle/` → `transport/`: All three are worker transport layer types. `session_handle` already imported `worker_protocol`, so consolidation eliminates cross-module imports.
+- Module count: 7 → 4 utility modules.
 
-**Location**: `src/main.v` (~L145)
+### Transitional type aliases
 
-`worker_protocol` structs are aliased back into `module main` so existing
-callers don't need to change yet.  Once the remaining `module main` files
-are updated to `import worker_protocol` and use qualified names, these aliases
-must be removed:
+**transport aliases** → ✅ Cleaned up. 28 `module main` files + main.v itself now use `transport.X` directly. 17 aliases deleted from main.v.
 
-- `pub type WorkerResponse = worker_protocol.WorkerResponse`
-- `pub type WorkerStreamFrame = worker_protocol.WorkerStreamFrame`
-- `pub type StreamDispatchRequest = worker_protocol.StreamDispatchRequest`
-- `pub type StreamDispatchChunk = worker_protocol.StreamDispatchChunk`
-- `pub type StreamDispatchResponse = worker_protocol.StreamDispatchResponse`
-- `pub type WorkerUpstreamPlanFrame = worker_protocol.WorkerUpstreamPlanFrame`
-- `pub type WorkerRequestPayload = worker_protocol.WorkerRequestPayload`
-- `pub type WorkerWebSocketFrame = worker_protocol.WorkerWebSocketFrame`
-- `pub type WorkerWebSocketDispatchResponse = worker_protocol.WorkerWebSocketDispatchResponse`
-- `pub type WorkerWebSocketDispatchCommandFailure = worker_protocol.WorkerWebSocketDispatchCommandFailure`
-- `pub type WorkerWebSocketDispatchCommandsResult = worker_protocol.WorkerWebSocketDispatchCommandsResult`
-- `pub type WorkerWebSocketDispatchFailureEnvelope = worker_protocol.WorkerWebSocketDispatchFailureEnvelope`
-- `pub type WorkerMcpDispatchRequest = worker_protocol.WorkerMcpDispatchRequest`
-- `pub type WorkerMcpDispatchResponse = worker_protocol.WorkerMcpDispatchResponse`
-- `pub type WorkerWebSocketUpstreamDispatchRequest = worker_protocol.WorkerWebSocketUpstreamDispatchRequest`
-- `pub type WorkerWebSocketUpstreamCommand = worker_protocol.WorkerWebSocketUpstreamCommand`
-- `pub type WorkerWebSocketUpstreamDispatchResponse = worker_protocol.WorkerWebSocketUpstreamDispatchResponse`
+**config aliases** → still pending. 27 config type aliases remain in main.v (`pub type VhttpdConfig = config.VhttpdConfig` etc.). These should be cleaned up once all callers use `config.X` directly.
 
-### Next candidates for extraction
+### 2.1 Remaining: domain module extraction
 
-1. **embedded_host_config** (`src/embedded_host_config.v`)
-   - Pure config parsing, zero `App` dependency
-   - Used by `executor_spec.v`, `plugin_runtime.v`
+| Priority | Candidate | Coupling | Notes |
+|----------|-----------|----------|-------|
+| 🟡 | executor_config | Zero `App` dependency | PHP worker command/env builder. Blocked by type deps on LogicExecutor/LogicExecutorLifecycle in main module. |
+| 🔴 | command (command.v, command_executor.v, command_handlers.v) | Heavily coupled to `App` | Handlers call `app.codex_*`, `app.feishu_*`. Needs ExecutorHost interface extraction first. |
+| 🔴 | worker_backend (worker_backend_*.v) | Lifecycle methods are `App` methods | Core infrastructure. Needs App struct decomposition first. |
+| 🔴 | executor family (logic_executor.v, executor_*.v) | `LogicExecutor` interface takes `mut app App` | Circular import blocker. Needs interface extraction. |
 
-2. **executor_config** (`src/executor_config.v`)
-   - PHP worker command builder, env builder
-   - Zero `App` dependency
+### 2.2 App struct decomposition (not started)
 
-3. **session_handle** (`src/session_handle.v`)
-   - Pure data structures + factory functions
-   - Zero `App` dependency
-
-4. **transport_handle** (`src/transport_handle.v`)
-   - Pure data structures + factory functions
-   - Zero `App` dependency
-
-5. **command** (`src/command.v`, `src/command_executor.v`, `src/command_handlers.v`)
-   - High-value but deeply coupled to `App` (handlers call `app.codex_*`, `app.feishu_*`)
-   - Needs interface extraction before module split
-
-6. **worker_backend** (`src/worker_backend_*.v`)
-   - Core infrastructure, but lifecycle methods are `App` methods
-   - Needs structural refactoring first
+Per the roadmap, after domain modules are extracted:
+- Extract subsystem state from `App` into independent structs (`WorkerState`, `FeishuState`, etc.)
+- Define `ExecutorHost` context interface to break circular dep
+- Provider bootstrap → iterate `app.providers` list
 
 ## Phase 3: Memory safety & concurrency (pending)
 

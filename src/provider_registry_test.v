@@ -1,4 +1,5 @@
 module main
+import config
 
 fn test_provider_registry_smoke() {
 	// Basic smoke assertions for provider registry API surface
@@ -90,7 +91,7 @@ fn test_provider_bootstrap_and_runtime_ready_helpers() {
 		feishu_enabled: true
 		ollama_enabled: true
 		feishu_apps:    {
-			'main': FeishuAppConfig{
+			'main': config.FeishuAppConfig{
 				app_id: 'test-app'
 			}
 		}
@@ -129,7 +130,7 @@ fn test_provider_runtime_dynamic_feishu_instance_is_bootstrapped_and_ready() {
 				desired_state: 'connected'
 			}
 		}
-		feishu_apps:             map[string]FeishuAppConfig{}
+		feishu_apps:             map[string]config.FeishuAppConfig{}
 		feishu_runtime:          map[string]FeishuProviderRuntime{}
 	}
 	spec := app.provider_instance_ensure('feishu', 'main') or { ProviderInstanceSpec{} }
@@ -187,17 +188,17 @@ fn test_provider_runtime_dynamic_codex_instance_is_bootstrapped_and_enabled() {
 fn test_admin_provider_instance_snapshots_include_dynamic_and_static_compat_rows() {
 	mut app := App{
 		feishu_static_apps:      {
-			'legacy': FeishuAppConfig{
+			'legacy': config.FeishuAppConfig{
 				app_id:     'legacy_app'
 				app_secret: 'legacy_secret'
 			}
 		}
 		feishu_apps:             {
-			'legacy': FeishuAppConfig{
+			'legacy': config.FeishuAppConfig{
 				app_id:     'legacy_app'
 				app_secret: 'legacy_secret'
 			}
-			'main':   FeishuAppConfig{
+			'main':   config.FeishuAppConfig{
 				app_id:     'dyn_app'
 				app_secret: 'dyn_secret'
 			}
@@ -272,7 +273,7 @@ fn test_provider_runtime_upstream_snapshot_helpers() {
 	mut app := App{
 		feishu_enabled: true
 		feishu_apps:    {
-			'main': FeishuAppConfig{
+			'main': config.FeishuAppConfig{
 				app_id: 'test-app'
 			}
 		}
@@ -310,7 +311,7 @@ fn test_provider_runtime_upstream_events_helper() {
 	mut app := App{
 		feishu_enabled: true
 		feishu_apps:    {
-			'main': FeishuAppConfig{
+			'main': config.FeishuAppConfig{
 				app_id: 'test-app'
 			}
 		}
@@ -367,7 +368,7 @@ fn test_provider_runtime_capabilities_and_gateway_count_helpers() {
 	mut app := App{
 		feishu_enabled: true
 		feishu_apps:    {
-			'main': FeishuAppConfig{
+			'main': config.FeishuAppConfig{
 				app_id: 'test-app'
 			}
 		}
@@ -393,7 +394,7 @@ fn test_provider_runtime_upstream_launches_helper() {
 	mut app := App{
 		feishu_enabled: true
 		feishu_apps:    {
-			'main': FeishuAppConfig{
+			'main': config.FeishuAppConfig{
 				app_id: 'test-app'
 			}
 		}
@@ -420,7 +421,7 @@ fn test_provider_runtime_helpers_skip_disabled_feishu_launch_and_gateway_count()
 	mut app := App{
 		feishu_enabled: false
 		feishu_apps:    {
-			'main': FeishuAppConfig{
+			'main': config.FeishuAppConfig{
 				app_id: 'test-app'
 			}
 		}
@@ -447,7 +448,7 @@ fn test_websocket_upstream_provider_helpers_delegate_to_host_facade() {
 	mut app := App{
 		feishu_enabled: true
 		feishu_apps:    {
-			'main': FeishuAppConfig{
+			'main': config.FeishuAppConfig{
 				app_id: 'test-app'
 			}
 		}

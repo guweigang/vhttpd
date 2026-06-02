@@ -2,7 +2,6 @@ module main
 
 import config
 
-import common
 
 enum BuiltinLogicExecutorFactoryKind {
 	noop
@@ -135,31 +134,31 @@ fn (spec BuiltinLogicExecutorSpec) admin_snapshot() AdminLogicExecutorSpecSnapsh
 	}
 }
 
-fn (spec BuiltinLogicExecutorSpec) resolve_php_runtime_config(args []string, cfg VhttpdConfig) !PhpConfig {
+fn (spec BuiltinLogicExecutorSpec) resolve_php_runtime_config(args []string, cfg config.VhttpdConfig) !config.PhpConfig {
 	if spec.factory != .socket_worker {
 		return error('builtin_logic_executor_php_runtime_config_unsupported:${spec.kind}')
 	}
 	mut php_cfg := cfg.php
-	php_cfg.bin = common.arg_string_or(args, '--php-bin', php_cfg.bin).trim_space()
-	php_cfg.worker_entry = common.arg_string_or(args, spec.config_surface.worker_entry_flag,
+	php_cfg.bin = config.arg_string_or(args, '--php-bin', php_cfg.bin).trim_space()
+	php_cfg.worker_entry = config.arg_string_or(args, spec.config_surface.worker_entry_flag,
 		php_cfg.worker_entry).trim_space()
 	php_cfg.app_entry =
-		common.arg_string_or(args, spec.config_surface.app_entry_flag, php_cfg.app_entry).trim_space()
-	if common.arg_has(args, '--php-extension') {
-		php_cfg.extensions = common.arg_string_list_or(args, '--php-extension', []string{})
+		config.arg_string_or(args, spec.config_surface.app_entry_flag, php_cfg.app_entry).trim_space()
+	if config.arg_has(args, '--php-extension') {
+		php_cfg.extensions = config.arg_string_list_or(args, '--php-extension', []string{})
 	}
-	if common.arg_has(args, '--php-arg') {
-		php_cfg.args = common.arg_string_list_or(args, '--php-arg', []string{})
+	if config.arg_has(args, '--php-arg') {
+		php_cfg.args = config.arg_string_list_or(args, '--php-arg', []string{})
 	}
 	validate_php_runtime_config(php_cfg)!
 	return php_cfg
 }
 
-fn (spec BuiltinLogicExecutorSpec) resolve_embedded_host_runtime_config(args []string, cfg VhttpdConfig) !EmbeddedHostRuntimeConfig {
+fn (spec BuiltinLogicExecutorSpec) resolve_embedded_host_runtime_config(args []string, cfg config.VhttpdConfig) !config.EmbeddedHostRuntimeConfig {
 	if spec.factory != .inproc_vjsx {
 		return error('builtin_logic_executor_embedded_host_runtime_config_unsupported:${spec.kind}')
 	}
-	return config.resolve_embedded_host_runtime_config(args, EmbeddedHostRuntimeConfig{
+	return config.resolve_embedded_host_runtime_config(args, config.EmbeddedHostRuntimeConfig{
 		app_entry:         cfg.vjsx.app_entry
 		module_root:       cfg.vjsx.module_root
 		build_root:        cfg.vjsx.build_root
@@ -172,7 +171,7 @@ fn (spec BuiltinLogicExecutorSpec) resolve_embedded_host_runtime_config(args []s
 		enable_fs:         cfg.vjsx.enable_fs
 		enable_process:    cfg.vjsx.enable_process
 		enable_network:    cfg.vjsx.enable_network
-	}, EmbeddedHostCliOverrides{
+	}, config.EmbeddedHostCliOverrides{
 		app_entry_flag:         spec.config_surface.app_entry_flag
 		module_root_flag:       spec.config_surface.module_root_flag
 		build_root_flag:        spec.config_surface.build_root_flag
@@ -184,7 +183,7 @@ fn (spec BuiltinLogicExecutorSpec) resolve_embedded_host_runtime_config(args []s
 	})!
 }
 
-fn (spec BuiltinLogicExecutorSpec) resolve_vjsx_runtime_config(args []string, cfg VhttpdConfig) !VjsxRuntimeFacadeConfig {
+fn (spec BuiltinLogicExecutorSpec) resolve_vjsx_runtime_config(args []string, cfg config.VhttpdConfig) !VjsxRuntimeFacadeConfig {
 	if spec.factory != .inproc_vjsx {
 		return error('builtin_logic_executor_vjsx_runtime_config_unsupported:${spec.kind}')
 	}
@@ -221,7 +220,7 @@ fn (spec BuiltinLogicExecutorSpec) resolve_vjsx_runtime_config(args []string, cf
 	}
 }
 
-fn (spec BuiltinLogicExecutorSpec) build_executor(args []string, cfg VhttpdConfig) !LogicExecutor {
+fn (spec BuiltinLogicExecutorSpec) build_executor(args []string, cfg config.VhttpdConfig) !LogicExecutor {
 	match spec.factory {
 		.noop {
 			return DisabledLogicExecutor{}
@@ -235,7 +234,7 @@ fn (spec BuiltinLogicExecutorSpec) build_executor(args []string, cfg VhttpdConfi
 	}
 }
 
-fn (spec BuiltinLogicExecutorSpec) runtime_selection(args []string, cfg VhttpdConfig) !ExecutorRuntimeSelection {
+fn (spec BuiltinLogicExecutorSpec) runtime_selection(args []string, cfg config.VhttpdConfig) !ExecutorRuntimeSelection {
 	return ExecutorRuntimeSelection{
 		executor:            spec.build_executor(args, cfg)!
 		worker_backend_mode: spec.worker_backend_mode

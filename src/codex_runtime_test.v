@@ -1,9 +1,10 @@
 module main
+import transport
 
 struct CodexRuntimeTestDispatchState {
 mut:
 	dispatch_count int
-	last_req       WorkerWebSocketUpstreamDispatchRequest
+	last_req       transport.WorkerWebSocketUpstreamDispatchRequest
 }
 
 struct CodexRuntimeTestExecutor {
@@ -53,35 +54,35 @@ pub fn (e CodexRuntimeTestExecutor) open_websocket_session(mut app App, req WebS
 	return error('not_used')
 }
 
-pub fn (e CodexRuntimeTestExecutor) dispatch_stream(mut app App, req StreamDispatchRequest) !StreamDispatchResponse {
+pub fn (e CodexRuntimeTestExecutor) dispatch_stream(mut app App, req transport.StreamDispatchRequest) !transport.StreamDispatchResponse {
 	_ = app
 	_ = req
 	return error('not_used')
 }
 
-pub fn (e CodexRuntimeTestExecutor) dispatch_mcp(mut app App, req WorkerMcpDispatchRequest) !WorkerMcpDispatchResponse {
+pub fn (e CodexRuntimeTestExecutor) dispatch_mcp(mut app App, req transport.WorkerMcpDispatchRequest) !transport.WorkerMcpDispatchResponse {
 	_ = app
 	_ = req
 	return error('not_used')
 }
 
-pub fn (e CodexRuntimeTestExecutor) dispatch_websocket_upstream(mut app App, req WorkerWebSocketUpstreamDispatchRequest) !WorkerWebSocketUpstreamDispatchResponse {
+pub fn (e CodexRuntimeTestExecutor) dispatch_websocket_upstream(mut app App, req transport.WorkerWebSocketUpstreamDispatchRequest) !transport.WorkerWebSocketUpstreamDispatchResponse {
 	_ = app
 	if !isnil(e.state) {
 		mut state := e.state
 		state.dispatch_count++
 		state.last_req = req
 	}
-	return WorkerWebSocketUpstreamDispatchResponse{
+	return transport.WorkerWebSocketUpstreamDispatchResponse{
 		mode:     'websocket_upstream'
 		event:    'result'
 		id:       req.id
 		handled:  true
-		commands: []WorkerWebSocketUpstreamCommand{}
+		commands: []transport.WorkerWebSocketUpstreamCommand{}
 	}
 }
 
-pub fn (e CodexRuntimeTestExecutor) dispatch_websocket_event(mut app App, frame WorkerWebSocketFrame) !WorkerWebSocketDispatchResponse {
+pub fn (e CodexRuntimeTestExecutor) dispatch_websocket_event(mut app App, frame transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse {
 	_ = app
 	_ = frame
 	return error('not_used')

@@ -1,4 +1,5 @@
 module main
+import transport
 
 import json
 import os
@@ -75,7 +76,7 @@ export default app;
 		}
 		mut repo_app := App{}
 		resp := repo_executor.dispatch_websocket_upstream(mut repo_app,
-			WorkerWebSocketUpstreamDispatchRequest{
+			transport.WorkerWebSocketUpstreamDispatchRequest{
 				mode:        'websocket_upstream'
 				event:       'message'
 				id:          'codexbot_ts_startup_sequence'

@@ -1,6 +1,6 @@
 module main
 
-import common
+import config
 
 import os
 
@@ -18,7 +18,7 @@ fn shell_quote_arg(raw string) string {
 	return "'" + raw.replace("'", '\'"\'"\'') + "'"
 }
 
-fn validate_php_runtime_config(php_cfg PhpConfig) ! {
+fn validate_php_runtime_config(php_cfg config.PhpConfig) ! {
 	worker_entry := php_cfg.worker_entry.trim_space()
 	if worker_entry == '' {
 		return error('php_worker_entry_missing')
@@ -41,7 +41,7 @@ fn validate_php_runtime_config(php_cfg PhpConfig) ! {
 	}
 }
 
-fn build_php_worker_command(php_cfg PhpConfig) !string {
+fn build_php_worker_command(php_cfg config.PhpConfig) !string {
 	mut bin := php_cfg.bin.trim_space()
 	if bin == '' {
 		bin = 'php'
@@ -70,7 +70,7 @@ fn build_php_worker_command(php_cfg PhpConfig) !string {
 	return parts.map(shell_quote_arg(it)).join(' ')
 }
 
-fn build_php_worker_env(worker_env map[string]string, php_cfg PhpConfig) map[string]string {
+fn build_php_worker_env(worker_env map[string]string, php_cfg config.PhpConfig) map[string]string {
 	mut env := worker_env.clone()
 	if php_cfg.app_entry.trim_space() != '' {
 		env['VHTTPD_APP'] = php_cfg.app_entry
@@ -78,7 +78,7 @@ fn build_php_worker_env(worker_env map[string]string, php_cfg PhpConfig) map[str
 	return env
 }
 
-fn infer_executor_kind_from_config(cfg VhttpdConfig) string {
+fn infer_executor_kind_from_config(cfg config.VhttpdConfig) string {
 	if cfg.php.worker_entry.trim_space() != '' || cfg.php.app_entry.trim_space() != '' {
 		return 'php'
 	}
@@ -89,8 +89,8 @@ fn infer_executor_kind_from_config(cfg VhttpdConfig) string {
 	return 'none'
 }
 
-fn resolve_executor_runtime(args []string, cfg VhttpdConfig) !ExecutorRuntimeSelection {
-	mut kind := common.arg_string_or(args, '--executor', cfg.executor.kind).trim_space()
+fn resolve_executor_runtime(args []string, cfg config.VhttpdConfig) !ExecutorRuntimeSelection {
+	mut kind := config.arg_string_or(args, '--executor', cfg.executor.kind).trim_space()
 	if kind == '' {
 		kind = infer_executor_kind_from_config(cfg)
 	}

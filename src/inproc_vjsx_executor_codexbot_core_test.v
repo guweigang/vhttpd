@@ -1,4 +1,5 @@
 module main
+import transport
 
 import net.http
 import os
@@ -177,7 +178,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_ignores_feishu_message_read_ev
 		executor.close()
 	}
 	mut app := App{}
-	resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+	resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 		mode:        'websocket_upstream'
 		event:       'event'
 		id:          'codexbot_ts_feishu_read'
@@ -221,7 +222,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_message_read_after_codex_notif
 		assert notif_resp.commands[0].method == 'turn/start'
 		assert notif_resp.commands[0].params.contains('"threadId":"thread_ts_003"')
 
-		read_resp := harness.executor.dispatch_websocket_upstream(mut harness.app, WorkerWebSocketUpstreamDispatchRequest{
+		read_resp := harness.executor.dispatch_websocket_upstream(mut harness.app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'event'
 			id:          'codexbot_ts_feishu_read_after_notif'

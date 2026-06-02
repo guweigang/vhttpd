@@ -1,8 +1,8 @@
 module main
+import transport
 
 import config
 
-import common
 
 import json
 import os
@@ -14,7 +14,7 @@ fn (l TestShutdownExecutorLifecycle) name() string {
 	return 'test_shutdown_lifecycle'
 }
 
-fn (l TestShutdownExecutorLifecycle) prepare_bootstrap(args []string, cfg VhttpdConfig, mut state ExecutorBootstrapState) ! {
+fn (l TestShutdownExecutorLifecycle) prepare_bootstrap(args []string, cfg config.VhttpdConfig, mut state ExecutorBootstrapState) ! {
 	_ = l
 	_ = args
 	_ = cfg
@@ -142,28 +142,28 @@ fn (e TestShutdownLogicExecutor) open_websocket_session(mut app App, req WebSock
 	return error('not_used')
 }
 
-fn (e TestShutdownLogicExecutor) dispatch_stream(mut app App, req StreamDispatchRequest) !StreamDispatchResponse {
+fn (e TestShutdownLogicExecutor) dispatch_stream(mut app App, req transport.StreamDispatchRequest) !transport.StreamDispatchResponse {
 	_ = e
 	_ = app
 	_ = req
 	return error('not_used')
 }
 
-fn (e TestShutdownLogicExecutor) dispatch_mcp(mut app App, req WorkerMcpDispatchRequest) !WorkerMcpDispatchResponse {
+fn (e TestShutdownLogicExecutor) dispatch_mcp(mut app App, req transport.WorkerMcpDispatchRequest) !transport.WorkerMcpDispatchResponse {
 	_ = e
 	_ = app
 	_ = req
 	return error('not_used')
 }
 
-fn (e TestShutdownLogicExecutor) dispatch_websocket_upstream(mut app App, req WorkerWebSocketUpstreamDispatchRequest) !WorkerWebSocketUpstreamDispatchResponse {
+fn (e TestShutdownLogicExecutor) dispatch_websocket_upstream(mut app App, req transport.WorkerWebSocketUpstreamDispatchRequest) !transport.WorkerWebSocketUpstreamDispatchResponse {
 	_ = e
 	_ = app
 	_ = req
 	return error('not_used')
 }
 
-fn (e TestShutdownLogicExecutor) dispatch_websocket_event(mut app App, frame WorkerWebSocketFrame) !WorkerWebSocketDispatchResponse {
+fn (e TestShutdownLogicExecutor) dispatch_websocket_event(mut app App, frame transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse {
 	_ = e
 	_ = app
 	_ = frame
@@ -202,7 +202,7 @@ thread_count = 3
 fn test_execute_websocket_dispatch_commands_result_treats_targeted_close_as_hub_command() {
 	mut app := App{}
 	result := app.execute_websocket_dispatch_commands_result([
-		WorkerWebSocketFrame{
+		transport.WorkerWebSocketFrame{
 			event:     'close'
 			id:        'source_conn'
 			target_id: 'target_conn'
@@ -218,7 +218,7 @@ fn test_execute_websocket_dispatch_commands_result_treats_targeted_close_as_hub_
 fn test_execute_websocket_dispatch_commands_result_keeps_current_socket_close_as_return_close() {
 	mut app := App{}
 	result := app.execute_websocket_dispatch_commands_result([
-		WorkerWebSocketFrame{
+		transport.WorkerWebSocketFrame{
 			event:  'close'
 			id:     'source_conn'
 			code:   1000
@@ -648,12 +648,12 @@ vjsx.build_root = "\${paths.vjsx_build_root}"
 }
 
 fn test_site_config_as_vhttpd_config_defaults_vjsx_module_root_to_site_root() {
-	cfg := config.site_config_as_vhttpd_config(config.default_vhttpd_config(), SiteConfig{
+	cfg := config.site_config_as_vhttpd_config(config.default_vhttpd_config(), config.SiteConfig{
 		project_root: '/tmp/site-root'
-		executor:     ExecutorConfig{
+		executor:     config.ExecutorConfig{
 			kind: 'vjsx'
 		}
-		vjsx:         VjsxConfig{
+		vjsx:         config.VjsxConfig{
 			app_entry: './app.mts'
 		}
 	})
@@ -662,9 +662,9 @@ fn test_site_config_as_vhttpd_config_defaults_vjsx_module_root_to_site_root() {
 }
 
 fn test_site_config_as_vhttpd_config_routes_app_alias_to_vjsx() {
-	cfg := config.site_config_as_vhttpd_config(config.default_vhttpd_config(), SiteConfig{
+	cfg := config.site_config_as_vhttpd_config(config.default_vhttpd_config(), config.SiteConfig{
 		project_root: '/tmp/site-root'
-		executor:     ExecutorConfig{
+		executor:     config.ExecutorConfig{
 			kind: 'vjsx'
 		}
 		app:          './app.mts'
@@ -674,9 +674,9 @@ fn test_site_config_as_vhttpd_config_routes_app_alias_to_vjsx() {
 }
 
 fn test_site_config_as_vhttpd_config_routes_app_alias_to_php() {
-	cfg := config.site_config_as_vhttpd_config(config.default_vhttpd_config(), SiteConfig{
+	cfg := config.site_config_as_vhttpd_config(config.default_vhttpd_config(), config.SiteConfig{
 		project_root: '/tmp/site-root'
-		executor:     ExecutorConfig{
+		executor:     config.ExecutorConfig{
 			kind: 'php'
 		}
 		app:          './app.php'
@@ -686,9 +686,9 @@ fn test_site_config_as_vhttpd_config_routes_app_alias_to_php() {
 }
 
 fn test_site_config_as_vhttpd_config_routes_worker_entry_alias_to_php() {
-	cfg := config.site_config_as_vhttpd_config(config.default_vhttpd_config(), SiteConfig{
+	cfg := config.site_config_as_vhttpd_config(config.default_vhttpd_config(), config.SiteConfig{
 		project_root: '/tmp/site-root'
-		executor:     ExecutorConfig{
+		executor:     config.ExecutorConfig{
 			kind: 'php'
 		}
 		worker_entry: './php-worker'
@@ -697,13 +697,13 @@ fn test_site_config_as_vhttpd_config_routes_worker_entry_alias_to_php() {
 }
 
 fn test_site_config_as_vhttpd_config_infers_executor_from_app_alias() {
-	php_cfg := config.site_config_as_vhttpd_config(config.default_vhttpd_config(), SiteConfig{
+	php_cfg := config.site_config_as_vhttpd_config(config.default_vhttpd_config(), config.SiteConfig{
 		project_root: '/tmp/site-root'
 		app:          './app.php'
 	})
 	assert php_cfg.executor.kind == 'php'
 	assert php_cfg.php.app_entry == './app.php'
-	vjsx_cfg := config.site_config_as_vhttpd_config(config.default_vhttpd_config(), SiteConfig{
+	vjsx_cfg := config.site_config_as_vhttpd_config(config.default_vhttpd_config(), config.SiteConfig{
 		project_root: '/tmp/site-root'
 		app:          './app.mts'
 	})
@@ -946,7 +946,7 @@ fn test_resolve_executor_runtime_defaults_to_disabled_executor() {
 }
 
 fn test_build_php_worker_command_from_php_section() {
-	php_cfg := PhpConfig{
+	php_cfg := config.PhpConfig{
 		bin:          'php'
 		worker_entry: '/tmp/php-worker'
 		extensions:   ['/tmp/a.so', '/tmp/b.so']
@@ -957,7 +957,7 @@ fn test_build_php_worker_command_from_php_section() {
 }
 
 fn test_build_php_worker_command_requires_worker_entry() {
-	php_cfg := PhpConfig{
+	php_cfg := config.PhpConfig{
 		bin: 'php'
 	}
 	build_php_worker_command(php_cfg) or {
@@ -972,7 +972,7 @@ fn test_build_php_worker_env_prefers_php_app_entry() {
 		'APP_ENV':    'dev'
 		'VHTTPD_APP': '/tmp/from-env.php'
 	}
-	php_cfg := PhpConfig{
+	php_cfg := config.PhpConfig{
 		app_entry: '/tmp/from-php.php'
 	}
 	env := build_php_worker_env(worker_env, php_cfg)
@@ -1018,7 +1018,7 @@ fn test_builtin_logic_executor_spec_resolves_php_runtime_config_overrides_from_c
 }
 
 fn test_arg_string_list_or_supports_repeated_and_csv_values() {
-	values := common.arg_string_list_or(['--php-extension', '/tmp/a.so',
+	values := config.arg_string_list_or(['--php-extension', '/tmp/a.so',
 		'--php-extension=/tmp/b.so,/tmp/c.so'], '--php-extension', [])
 	assert values.len == 3
 	assert values[0] == '/tmp/a.so'
@@ -1334,7 +1334,7 @@ fn test_build_app_runtime_projects_executor_plan_into_app_state() {
 			token_refresh_skew_seconds: 45
 			recent_event_limit:         67
 			apps:                       {
-				'main': FeishuAppConfig{
+				'main': config.FeishuAppConfig{
 					app_id: 'app-1'
 				}
 			}
@@ -1606,34 +1606,34 @@ fn test_resolve_multi_server_runtime_config_builds_listener_bound_sites() {
 	cfg.admin.port = 19983
 	cfg.admin.token = 'admin-secret'
 	cfg.listeners = {
-		'project_a': ListenerConfig{
+		'project_a': config.ListenerConfig{
 			host: '127.0.0.1'
 			port: 18081
 			site: 'project_a'
 		}
-		'project_b': ListenerConfig{
+		'project_b': config.ListenerConfig{
 			host: '127.0.0.1'
 			port: 18082
 			site: 'project_b'
 		}
 	}
 	cfg.sites = {
-		'project_a': SiteConfig{
+		'project_a': config.SiteConfig{
 			project_root: temp_dir
-			executor:     ExecutorConfig{
+			executor:     config.ExecutorConfig{
 				kind: 'php'
 			}
-			php:          PhpConfig{
+			php:          config.PhpConfig{
 				worker_entry: php_worker
 				app_entry:    php_app
 			}
 		}
-		'project_b': SiteConfig{
+		'project_b': config.SiteConfig{
 			project_root: vjsx_root
-			executor:     ExecutorConfig{
+			executor:     config.ExecutorConfig{
 				kind: 'vjsx'
 			}
-			vjsx:         VjsxConfig{
+			vjsx:         config.VjsxConfig{
 				app_entry:       './app.mts'
 				module_root:     '.'
 				runtime_profile: 'node'
@@ -1666,14 +1666,14 @@ fn test_resolve_multi_server_runtime_config_builds_listener_bound_sites() {
 fn test_resolve_multi_server_runtime_config_rejects_unknown_site_binding() {
 	mut cfg := config.default_vhttpd_config()
 	cfg.listeners = {
-		'broken': ListenerConfig{
+		'broken': config.ListenerConfig{
 			host: '127.0.0.1'
 			port: 19001
 			site: 'missing'
 		}
 	}
 	cfg.sites = {
-		'other': SiteConfig{}
+		'other': config.SiteConfig{}
 	}
 	resolve_multi_server_runtime_config([]string{}, cfg) or {
 		assert err.msg() == 'multi_listener_unknown_site:broken:missing'
@@ -1691,9 +1691,9 @@ fn test_site_config_as_vhttpd_config_inherits_global_defaults() {
 	cfg.codex.enabled = true
 	cfg.codex.model = 'gpt-5.4'
 	cfg.mcp.max_sessions = 77
-	site_cfg := SiteConfig{
+	site_cfg := config.SiteConfig{
 		project_root: '/tmp/project-a'
-		vjsx:         VjsxConfig{
+		vjsx:         config.VjsxConfig{
 			app_entry: './app.mts'
 		}
 	}
@@ -1784,15 +1784,15 @@ websocket_actor.sources = [
 
 fn test_site_config_as_vhttpd_config_merges_site_websocket_affinity() {
 	mut base := config.default_vhttpd_config()
-	base.websocket_affinity = WebSocketAffinityConfig{
+	base.websocket_affinity = config.WebSocketAffinityConfig{
 		enabled:  true
 		source:   'header'
 		key:      'x-session-id'
 		scope:    'lane'
 		fallback: 'round_robin'
 	}
-	derived := config.site_config_as_vhttpd_config(base, SiteConfig{
-		websocket_affinity: WebSocketAffinityConfig{
+	derived := config.site_config_as_vhttpd_config(base, config.SiteConfig{
+		websocket_affinity: config.WebSocketAffinityConfig{
 			enabled:  true
 			source:   'app'
 			key:      'serverId'
@@ -1809,32 +1809,32 @@ fn test_site_config_as_vhttpd_config_merges_site_websocket_affinity() {
 
 fn test_site_config_as_vhttpd_config_merges_site_websocket_actor() {
 	mut base := config.default_vhttpd_config()
-	base.websocket_actor = WebSocketActorConfig{
+	base.websocket_actor = config.WebSocketActorConfig{
 		enabled:           true
 		fallback:          'unkeyed'
 		queue_timeout_ms:  1000
 		max_queue_per_key: 16
 		events:            ['open']
 		sources:           [
-			WebSocketActorSourceConfig{
+			config.WebSocketActorSourceConfig{
 				typ:        'query'
 				key:        'serverId'
 				class_name: 'session'
 			},
 		]
 	}
-	derived := config.site_config_as_vhttpd_config(base, SiteConfig{
-		websocket_actor: WebSocketActorConfig{
+	derived := config.site_config_as_vhttpd_config(base, config.SiteConfig{
+		websocket_actor: config.WebSocketActorConfig{
 			enabled:           true
 			fallback:          'reject'
 			queue_timeout_ms:  30000
 			max_queue_per_key: 1024
 			events:            ['open', 'message', 'close']
 			sources:           [
-				WebSocketActorSourceConfig{
+				config.WebSocketActorSourceConfig{
 					typ: 'connection_cache'
 				},
-				WebSocketActorSourceConfig{
+				config.WebSocketActorSourceConfig{
 					typ:        'query'
 					key:        'connectionId'
 					class_name: 'conn'
@@ -1864,14 +1864,14 @@ fn test_resolve_embedded_host_runtime_config_normalizes_paths_and_lane_defaults(
 	cfg := config.resolve_embedded_host_runtime_config(['--app', app_file, '--module-root',
 		os.join_path(temp_dir, 'modules'), '--build-root', os.join_path(temp_dir, 'cache'),
 		'--signature-root', os.join_path(temp_dir, 'sig'), '--signature-include', '**/*.mts',
-		'--signature-exclude', 'tmp/**', '--profile', 'node', '--lanes', '0'], EmbeddedHostRuntimeConfig{
+		'--signature-exclude', 'tmp/**', '--profile', 'node', '--lanes', '0'], config.EmbeddedHostRuntimeConfig{
 		runtime_profile: 'script'
 		lane_count:      3
 		max_requests:    9
 		enable_fs:       true
 		enable_process:  true
 		enable_network:  true
-	}, EmbeddedHostCliOverrides{
+	}, config.EmbeddedHostCliOverrides{
 		app_entry_flag:         '--app'
 		module_root_flag:       '--module-root'
 		build_root_flag:        '--build-root'

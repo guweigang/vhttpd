@@ -1,4 +1,5 @@
 module main
+import config
 
 import json
 import time
@@ -185,7 +186,7 @@ pub fn (mut app App) provider_instance_apply(spec ProviderInstanceSpec) ! {
 			if spec.config_json.trim_space() == '' {
 				return
 			}
-			cfg := json.decode(FeishuAppConfig, spec.config_json) or {
+			cfg := json.decode(config.FeishuAppConfig, spec.config_json) or {
 				return error('provider_instance_invalid_feishu_config:${err}')
 			}
 			app.feishu_apps[spec.instance] = cfg
@@ -196,7 +197,7 @@ pub fn (mut app App) provider_instance_apply(spec ProviderInstanceSpec) ! {
 			if spec.config_json.trim_space() == '' {
 				return
 			}
-			cfg := json.decode(CodexConfig, spec.config_json) or {
+			cfg := json.decode(config.CodexConfig, spec.config_json) or {
 				return error('provider_instance_invalid_codex_config:${err}')
 			}
 			mut rt := app.codex_runtime_ensure_instance(spec.instance)

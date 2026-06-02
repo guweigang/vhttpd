@@ -1,6 +1,6 @@
 module main
 
-import common
+import config
 
 import json
 import log
@@ -150,7 +150,7 @@ fn socket_prefix(worker_socket string) string {
 }
 
 fn resolve_worker_sockets_with_defaults(args []string, default_worker_socket string, default_pool_size int, default_socket_prefix string, default_worker_sockets string) []string {
-	worker_sockets_arg := common.arg_string_or(args, '--worker-sockets', default_worker_sockets)
+	worker_sockets_arg := config.arg_string_or(args, '--worker-sockets', default_worker_sockets)
 	if worker_sockets_arg != '' {
 		mut sockets := []string{}
 		for raw in worker_sockets_arg.split(',') {
@@ -161,12 +161,12 @@ fn resolve_worker_sockets_with_defaults(args []string, default_worker_socket str
 		}
 		return sockets
 	}
-	worker_socket := common.arg_string_or(args, '--worker-socket', default_worker_socket)
-	pool_size := common.arg_int_or(args, '--worker-pool-size', default_pool_size)
+	worker_socket := config.arg_string_or(args, '--worker-socket', default_worker_socket)
+	pool_size := config.arg_int_or(args, '--worker-pool-size', default_pool_size)
 	if pool_size <= 1 {
 		return if worker_socket == '' { []string{} } else { [worker_socket] }
 	}
-	mut prefix := common.arg_string_or(args, '--worker-socket-prefix', default_socket_prefix)
+	mut prefix := config.arg_string_or(args, '--worker-socket-prefix', default_socket_prefix)
 	if prefix == '' {
 		prefix = socket_prefix(worker_socket)
 	}

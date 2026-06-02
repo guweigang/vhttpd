@@ -21,12 +21,12 @@ fn test_openai_route_resolution_maps_public_model_to_upstream_model() {
 		openai_base_path:       '/v1'
 		openai_default_backend: 'default'
 		openai_backends:        {
-			'default': OpenAIBackendConfig{
+			'default': config.OpenAIBackendConfig{
 				base_url: 'https://upstream.test/v1'
 			}
 		}
 		openai_routes:          {
-			'gpt-4o-mini': OpenAIRouteConfig{
+			'gpt-4o-mini': config.OpenAIRouteConfig{
 				models:         ['gpt-4o-mini', 'mini']
 				backend:        'default'
 				upstream_model: 'upstream-mini'
@@ -45,12 +45,12 @@ fn test_openai_responses_builtin_plan_uses_responses_path() {
 		openai_base_path:       '/v1'
 		openai_default_backend: 'default'
 		openai_backends:        {
-			'default': OpenAIBackendConfig{
+			'default': config.OpenAIBackendConfig{
 				base_url: 'https://upstream.test/v1'
 			}
 		}
 		openai_routes:          {
-			'public': OpenAIRouteConfig{
+			'public': config.OpenAIRouteConfig{
 				models:         ['public-model']
 				backend:        'default'
 				upstream_model: 'upstream-model'
@@ -153,7 +153,7 @@ export function openai(req) {
 		os.rmdir_all(temp_dir) or {}
 	}
 	plugins := {
-		'planner': PluginConfig{
+		'planner': config.PluginConfig{
 			kind:            'vjsx'
 			app_entry:       plugin_file
 			runtime_profile: 'node'
@@ -167,7 +167,7 @@ export function openai(req) {
 		openai_plugin:          'planner'
 		openai_default_backend: 'mock'
 		openai_backends:        {
-			'mock': OpenAIBackendConfig{
+			'mock': config.OpenAIBackendConfig{
 				base_url: 'https://mock.openai.test/v1'
 			}
 		}
@@ -204,7 +204,7 @@ export function openai(req) {
 		os.rmdir_all(temp_dir) or {}
 	}
 	plugins := {
-		'planner': PluginConfig{
+		'planner': config.PluginConfig{
 			kind:            'vjsx'
 			app_entry:       plugin_file
 			runtime_profile: 'node'
@@ -243,7 +243,7 @@ export function openai(_req) {
 		os.rmdir_all(temp_dir) or {}
 	}
 	plugins := {
-		'planner': PluginConfig{
+		'planner': config.PluginConfig{
 			kind:            'vjsx'
 			app_entry:       plugin_file
 			runtime_profile: 'node'
@@ -256,12 +256,12 @@ export function openai(_req) {
 		openai_plugin:          'planner'
 		openai_default_backend: 'mock'
 		openai_backends:        {
-			'mock': OpenAIBackendConfig{
+			'mock': config.OpenAIBackendConfig{
 				base_url: 'https://mock.openai.test/v1'
 			}
 		}
 		openai_routes:          {
-			'public': OpenAIRouteConfig{
+			'public': config.OpenAIRouteConfig{
 				models:         ['public-model']
 				backend:        'mock'
 				upstream_model: 'builtin-upstream-model'

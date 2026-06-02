@@ -143,7 +143,7 @@ fn validate_args(args []string) ! {
 	}
 }
 
-fn run_single_server(args []string, cfg VhttpdConfig) {
+fn run_single_server(args []string, cfg config.VhttpdConfig) {
 	runtime_cfg := resolve_server_runtime_config(args, cfg) or {
 		log.error('server runtime config resolve failed: ${err}')
 		return

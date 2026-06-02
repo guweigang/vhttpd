@@ -30,16 +30,16 @@ pub:
 	response PluginCallResponse
 }
 
-fn plugin_config_app_entry(cfg PluginConfig) string {
+fn plugin_config_app_entry(cfg config.PluginConfig) string {
 	if cfg.app_entry.trim_space() != '' {
 		return cfg.app_entry.trim_space()
 	}
 	return cfg.entry.trim_space()
 }
 
-fn vjsx_plugin_runtime_config(name string, cfg PluginConfig) !VjsxRuntimeFacadeConfig {
+fn vjsx_plugin_runtime_config(name string, cfg config.PluginConfig) !VjsxRuntimeFacadeConfig {
 	app_entry := plugin_config_app_entry(cfg)
-	embedded_cfg := config.resolve_embedded_host_runtime_config([]string{}, EmbeddedHostRuntimeConfig{
+	embedded_cfg := config.resolve_embedded_host_runtime_config([]string{}, config.EmbeddedHostRuntimeConfig{
 		app_entry:         app_entry
 		module_root:       cfg.module_root
 		build_root:        cfg.build_root
@@ -52,7 +52,7 @@ fn vjsx_plugin_runtime_config(name string, cfg PluginConfig) !VjsxRuntimeFacadeC
 		enable_fs:         cfg.enable_fs
 		enable_process:    cfg.enable_process
 		enable_network:    cfg.enable_network
-	}, EmbeddedHostCliOverrides{}) or {
+	}, config.EmbeddedHostCliOverrides{}) or {
 		return error('plugin_runtime_config_failed:${name}:${err.msg()}')
 	}
 	return VjsxRuntimeFacadeConfig{
@@ -71,7 +71,7 @@ fn vjsx_plugin_runtime_config(name string, cfg PluginConfig) !VjsxRuntimeFacadeC
 	}
 }
 
-fn build_vjsx_plugin_runtimes(configs map[string]PluginConfig) map[string]InProcVjsxExecutor {
+fn build_vjsx_plugin_runtimes(configs map[string]config.PluginConfig) map[string]InProcVjsxExecutor {
 	mut runtimes := map[string]InProcVjsxExecutor{}
 	for name, cfg in configs {
 		if cfg.kind.trim_space().to_lower() !in ['', 'vjsx'] {

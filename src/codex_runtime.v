@@ -1,4 +1,6 @@
 module main
+import config
+import transport
 
 import json
 import jsonutils
@@ -428,7 +430,7 @@ fn (mut app App) codex_runtime_ensure_instance(instance string) CodexProviderRun
 	mut next := codex_runtime_build_instance_from_base(app.codex_runtime, resolved)
 	if spec := app.provider_instance_get('codex', resolved) {
 		if spec.config_json.trim_space() != '' {
-			cfg := json.decode(CodexConfig, spec.config_json) or { CodexConfig{} }
+			cfg := json.decode(config.CodexConfig, spec.config_json) or { config.CodexConfig{} }
 			if cfg.url.trim_space() != '' {
 				next.url = cfg.url
 			}
@@ -1652,7 +1654,7 @@ fn (mut app App) codex_provider_update(req WebSocketUpstreamSendRequest) !WebSoc
 
 // ── Turn Management ─────────────────────────────────────────────────────
 
-fn (mut app App) codex_start_turn(cmd WorkerWebSocketUpstreamCommand) ! {
+fn (mut app App) codex_start_turn(cmd transport.WorkerWebSocketUpstreamCommand) ! {
 	return app.codex_start_turn_normalized(NormalizedCommand.from_worker_command(cmd))
 }
 

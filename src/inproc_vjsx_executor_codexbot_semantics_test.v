@@ -1,4 +1,5 @@
 module main
+import transport
 
 import net.http
 import os
@@ -63,7 +64,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_active_thread_status_does_not_
 			executor.close()
 		}
 		mut app := App{}
-		task_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		task_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_semantics_active_task'
@@ -80,7 +81,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_active_thread_status_does_not_
 		stream_id := task_resp.commands[0].stream_id
 		assert stream_id != ''
 
-		_ = executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		_ = executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:       'websocket_upstream'
 			event:      'message'
 			id:         'codexbot_ts_semantics_active_thread_started'
@@ -91,7 +92,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_active_thread_status_does_not_
 			payload:    '{"method":"thread/start","result":{"threadId":"thread_semantics_active_001"},"has_error":false}'
 		}) or { panic(err) }
 
-		_ = executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		_ = executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:       'websocket_upstream'
 			event:      'message'
 			id:         'codexbot_ts_semantics_active_turn_started'
@@ -102,7 +103,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_active_thread_status_does_not_
 			payload:    '{"method":"turn/start","result":{"turn":{"id":"turn_semantics_active_001"}},"has_error":false}'
 		}) or { panic(err) }
 
-		active_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		active_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:       'websocket_upstream'
 			event:      'message'
 			id:         'codexbot_ts_semantics_active_status'
@@ -149,7 +150,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_structured_error_notification_
 			executor.close()
 		}
 		mut app := App{}
-		task_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		task_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_semantics_error_task'
@@ -166,7 +167,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_structured_error_notification_
 		stream_id := task_resp.commands[0].stream_id
 		assert stream_id != ''
 
-		error_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		error_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:       'websocket_upstream'
 			event:      'message'
 			id:         'codexbot_ts_semantics_error_notif'
@@ -217,7 +218,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_realtime_error_is_treat
 			executor.close()
 		}
 		mut app := App{}
-		task_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		task_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_semantics_thread_realtime_error_task'
@@ -234,7 +235,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_realtime_error_is_treat
 		stream_id := task_resp.commands[0].stream_id
 		assert stream_id != ''
 
-		error_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		error_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:       'websocket_upstream'
 			event:      'message'
 			id:         'codexbot_ts_semantics_thread_realtime_error_notif'
@@ -282,7 +283,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_system_error_status_uses_threa
 			executor.close()
 		}
 		mut app := App{}
-		task_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		task_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_semantics_system_error_task'
@@ -299,7 +300,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_system_error_status_uses_threa
 		stream_id := task_resp.commands[0].stream_id
 		assert stream_id != ''
 
-		error_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		error_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:       'websocket_upstream'
 			event:      'message'
 			id:         'codexbot_ts_semantics_system_error_notif'
@@ -349,7 +350,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_item_cards_reply_in_thr
 			executor.close()
 		}
 		mut app := App{}
-		task_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		task_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_semantics_thread_task'
@@ -366,7 +367,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_item_cards_reply_in_thr
 		stream_id := task_resp.commands[0].stream_id
 		assert stream_id != ''
 
-		delta_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		delta_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:       'websocket_upstream'
 			event:      'message'
 			id:         'codexbot_ts_semantics_thread_delta'
@@ -402,7 +403,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_commentary_after_final_answer_
 			executor.close()
 		}
 		mut app := App{}
-		task_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		task_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_semantics_commentary_after_final_task'
@@ -419,7 +420,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_commentary_after_final_answer_
 		stream_id := task_resp.commands[0].stream_id
 		assert stream_id != ''
 
-		final_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		final_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:       'websocket_upstream'
 			event:      'message'
 			id:         'codexbot_ts_semantics_commentary_after_final_final'
@@ -438,7 +439,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_commentary_after_final_answer_
 		final_item_stream_id := final_resp.commands[1].stream_id
 		assert final_item_stream_id != ''
 
-		commentary_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		commentary_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:       'websocket_upstream'
 			event:      'message'
 			id:         'codexbot_ts_semantics_commentary_after_final_commentary'
@@ -457,7 +458,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_commentary_after_final_answer_
 		commentary_item_stream_id := commentary_resp.commands[1].stream_id
 		assert commentary_item_stream_id != final_item_stream_id
 
-		idle_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		idle_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:       'websocket_upstream'
 			event:      'message'
 			id:         'codexbot_ts_semantics_commentary_after_final_idle'
@@ -506,7 +507,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_start_continues_into_tu
 			executor.close()
 		}
 		mut app := App{}
-		task_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		task_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_semantics_continue_task'
@@ -523,7 +524,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_start_continues_into_tu
 		stream_id := task_resp.commands[0].stream_id
 		assert stream_id != ''
 
-		rpc_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		rpc_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:       'websocket_upstream'
 			event:      'message'
 			id:         'codexbot_ts_semantics_continue_thread_started'
@@ -575,7 +576,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_prefers_current_tu
 			executor.close()
 		}
 		mut app := App{}
-		task_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		task_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_semantics_thread_read_current_turn_task'
@@ -592,7 +593,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_prefers_current_tu
 		stream_id := task_resp.commands[0].stream_id
 		assert stream_id != ''
 
-		_ = executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		_ = executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:       'websocket_upstream'
 			event:      'message'
 			id:         'codexbot_ts_semantics_thread_read_current_turn_thread'
@@ -603,7 +604,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_prefers_current_tu
 			payload:    '{"method":"thread/start","result":{"threadId":"thread_semantics_thread_read_current_turn_001"},"has_error":false}'
 		}) or { panic(err) }
 
-		_ = executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		_ = executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:       'websocket_upstream'
 			event:      'message'
 			id:         'codexbot_ts_semantics_thread_read_current_turn_turn'
@@ -614,7 +615,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_prefers_current_tu
 			payload:    '{"method":"turn/start","result":{"turn":{"id":"turn_semantics_thread_read_current_turn_001"}},"has_error":false}'
 		}) or { panic(err) }
 
-		read_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		read_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:       'websocket_upstream'
 			event:      'message'
 			id:         'codexbot_ts_semantics_thread_read_current_turn_response'
@@ -673,7 +674,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_stale_busy_stream_detaches_bef
 			executor.close()
 		}
 		mut app := App{}
-		first_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		first_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_semantics_stale_busy_first'
@@ -692,7 +693,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_stale_busy_stream_detaches_bef
 
 		time.sleep(5 * time.millisecond)
 
-		second_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		second_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_semantics_stale_busy_second'
@@ -744,7 +745,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_busy_guard_isolated_to_same_fe
 			executor.close()
 		}
 		mut app := App{}
-		first_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		first_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_semantics_thread_busy_first'
@@ -762,7 +763,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_busy_guard_isolated_to_same_fe
 		assert first_resp.handled
 		assert first_resp.commands.len == 1
 
-		second_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		second_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_semantics_thread_busy_second'
@@ -801,7 +802,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_dedupes_replayed_feishu_messag
 			executor.close()
 		}
 		mut app := App{}
-		first_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		first_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_semantics_dedup_message_first'
@@ -819,7 +820,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_dedupes_replayed_feishu_messag
 		assert first_resp.commands.len == 1
 		assert first_resp.commands[0].stream_id != ''
 
-		replay_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		replay_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_semantics_dedup_message_replay'
@@ -869,7 +870,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_dedupes_replayed_feishu_messag
 			executor.close()
 		}
 		mut app := App{}
-		first_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		first_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_semantics_dedup_event_first'
@@ -888,7 +889,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_dedupes_replayed_feishu_messag
 		assert first_resp.commands.len == 1
 		assert first_resp.commands[0].stream_id != ''
 
-		replay_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		replay_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_semantics_dedup_event_replay'
@@ -924,7 +925,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_turn_completed_prefers_final_a
 			executor.close()
 		}
 		mut app := App{}
-		task_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		task_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_semantics_turn_completed_task'
@@ -941,7 +942,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_turn_completed_prefers_final_a
 		stream_id := task_resp.commands[0].stream_id
 		assert stream_id != ''
 
-		_ = executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		_ = executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:       'websocket_upstream'
 			event:      'message'
 			id:         'codexbot_ts_semantics_turn_completed_thread'
@@ -952,7 +953,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_turn_completed_prefers_final_a
 			payload:    '{"method":"thread/start","result":{"threadId":"thread_semantics_turn_items_001"},"has_error":false}'
 		}) or { panic(err) }
 
-		_ = executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		_ = executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:       'websocket_upstream'
 			event:      'message'
 			id:         'codexbot_ts_semantics_turn_completed_turn'
@@ -963,7 +964,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_turn_completed_prefers_final_a
 			payload:    '{"method":"turn/start","result":{"turn":{"id":"turn_semantics_turn_items_001"}},"has_error":false}'
 		}) or { panic(err) }
 
-		_ = executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		_ = executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:       'websocket_upstream'
 			event:      'message'
 			id:         'codexbot_ts_semantics_turn_completed_delta'
@@ -974,7 +975,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_turn_completed_prefers_final_a
 			payload:    '{"method":"item/agentMessage/delta","params":{"threadId":"thread_semantics_turn_items_001","turnId":"turn_semantics_turn_items_001","delta":"draft commentary"}}'
 		}) or { panic(err) }
 
-		completed_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		completed_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:       'websocket_upstream'
 			event:      'message'
 			id:         'codexbot_ts_semantics_turn_completed_done'
@@ -1022,7 +1023,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_rename_error_restores_p
 			executor.close()
 		}
 		mut app := App{}
-		first_task := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		first_task := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_semantics_rename_seed'
@@ -1039,7 +1040,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_rename_error_restores_p
 		first_stream_id := first_task.commands[0].stream_id
 		assert first_stream_id != ''
 
-		_ = executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		_ = executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:       'websocket_upstream'
 			event:      'message'
 			id:         'codexbot_ts_semantics_rename_seed_thread'
@@ -1050,7 +1051,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_rename_error_restores_p
 			payload:    '{"method":"thread/start","result":{"threadId":"thread_semantics_rename_001"},"has_error":false}'
 		}) or { panic(err) }
 
-		rename_original := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		rename_original := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_semantics_rename_original_cmd'
@@ -1067,7 +1068,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_rename_error_restores_p
 		original_rename_stream_id := rename_original.commands[0].stream_id
 		assert original_rename_stream_id != ''
 
-		_ = executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		_ = executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:       'websocket_upstream'
 			event:      'message'
 			id:         'codexbot_ts_semantics_rename_original_done'
@@ -1078,7 +1079,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_rename_error_restores_p
 			payload:    '{"method":"thread/name/set","result":{"thread":{"id":"thread_semantics_rename_001","name":"Original Name"}},"has_error":false}'
 		}) or { panic(err) }
 
-		rename_broken := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		rename_broken := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_semantics_rename_broken_cmd'
@@ -1099,7 +1100,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_rename_error_restores_p
 		broken_rename_stream_id := rename_broken.commands[0].stream_id
 		assert broken_rename_stream_id != ''
 
-		pending_thread_view := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		pending_thread_view := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_semantics_rename_pending_view'
@@ -1117,7 +1118,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_rename_error_restores_p
 		assert pending_thread_view.commands.len == 1
 		assert pending_thread_view.commands[0].text.contains('Broken Name')
 
-		error_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		error_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:       'websocket_upstream'
 			event:      'message'
 			id:         'codexbot_ts_semantics_rename_broken_error'
@@ -1132,7 +1133,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_rename_error_restores_p
 		assert error_resp.commands[0].type_ == 'provider.message.update'
 		assert error_resp.commands[0].content.contains('rename failed')
 
-		thread_view := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		thread_view := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_semantics_rename_view_after_error'

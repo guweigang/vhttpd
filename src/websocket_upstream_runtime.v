@@ -1,4 +1,5 @@
 module main
+import transport
 
 import json
 import log
@@ -406,7 +407,7 @@ fn (mut app App) admin_websocket_upstream_activities_snapshot(limit int, offset 
 	}
 }
 
-fn (mut app App) execute_websocket_upstream_commands(source_activity_id string, commands []WorkerWebSocketUpstreamCommand) ([]WebSocketUpstreamCommandActivity, string) {
+fn (mut app App) execute_websocket_upstream_commands(source_activity_id string, commands []transport.WorkerWebSocketUpstreamCommand) ([]WebSocketUpstreamCommandActivity, string) {
 	mut exec := CommandExecutor.new(mut app)
 	ctx := DispatchContext{}
 	return exec.execute(source_activity_id, ctx, commands)

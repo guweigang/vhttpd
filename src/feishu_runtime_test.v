@@ -1,4 +1,5 @@
 module main
+import transport
 
 import config
 
@@ -13,7 +14,7 @@ fn new_feishu_http_test_app() App {
 		feishu_enabled:       true
 		feishu_open_base_url: 'https://open.feishu.test/open-apis'
 		feishu_apps: {
-			'main': FeishuAppConfig{
+			'main': config.FeishuAppConfig{
 				app_id:             'cli_main'
 				app_secret:         'sec_main'
 				verification_token: 'verify_main'
@@ -197,7 +198,7 @@ fn test_feishu_runtime_callback_challenge_and_token_validation() {
 	app := App{
 		feishu_enabled: true
 		feishu_apps: {
-			'main': FeishuAppConfig{
+			'main': config.FeishuAppConfig{
 				app_id:             'cli_main'
 				app_secret:         'sec_main'
 				verification_token: 'verify_main'
@@ -471,7 +472,7 @@ fn test_feishu_runtime_note_client_config() {
 	mut app := App{
 		feishu_enabled: true
 		feishu_apps: {
-			'main': FeishuAppConfig{
+			'main': config.FeishuAppConfig{
 				app_id:     'cli_main'
 				app_secret: 'sec_main'
 			}
@@ -589,11 +590,11 @@ fn test_feishu_runtime_resolve_named_apps() {
 	app := App{
 		feishu_enabled: true
 		feishu_apps: {
-			'main': FeishuAppConfig{
+			'main': config.FeishuAppConfig{
 				app_id:     'cli_main'
 				app_secret: 'sec_main'
 			}
-			'openclaw': FeishuAppConfig{
+			'openclaw': config.FeishuAppConfig{
 				app_id:     'cli_openclaw'
 				app_secret: 'sec_openclaw'
 			}
@@ -647,14 +648,14 @@ fn test_websocket_upstream_activity_snapshot_filters_and_limit() {
 fn test_execute_websocket_upstream_commands_skips_and_reports_errors() {
 	mut app := App{
 		feishu_apps: {
-			'main': FeishuAppConfig{
+			'main': config.FeishuAppConfig{
 				app_id:     'cli_main'
 				app_secret: 'sec_main'
 			}
 		}
 	}
 	snapshots, last_error := app.execute_websocket_upstream_commands('dispatch-test', [
-		WorkerWebSocketUpstreamCommand{
+		transport.WorkerWebSocketUpstreamCommand{
 			event:    'noop'
 			provider: 'feishu'
 			instance: 'main'
@@ -662,7 +663,7 @@ fn test_execute_websocket_upstream_commands_skips_and_reports_errors() {
 				'source': 'unit-test'
 			}
 		},
-		WorkerWebSocketUpstreamCommand{
+		transport.WorkerWebSocketUpstreamCommand{
 			event:    'send'
 			provider: 'unknown'
 			instance: 'main'
@@ -687,7 +688,7 @@ fn test_execute_websocket_upstream_commands_preserves_content_fields() {
 		fixture_websocket_runtime: map[string]FixtureWebSocketUpstreamRuntime{}
 	}
 	snapshots, last_error := app.execute_websocket_upstream_commands('dispatch-content-fields', [
-		WorkerWebSocketUpstreamCommand{
+		transport.WorkerWebSocketUpstreamCommand{
 			event:        'send'
 			provider:     websocket_upstream_provider_fixture
 			instance:     'demo'
@@ -715,7 +716,7 @@ fn test_execute_websocket_upstream_commands_updates_fixture_messages() {
 		fixture_websocket_runtime: map[string]FixtureWebSocketUpstreamRuntime{}
 	}
 	snapshots, last_error := app.execute_websocket_upstream_commands('dispatch-update', [
-		WorkerWebSocketUpstreamCommand{
+		transport.WorkerWebSocketUpstreamCommand{
 			event:        'update'
 			provider:     websocket_upstream_provider_fixture
 			instance:     'demo'
@@ -843,7 +844,7 @@ fn test_admin_websocket_upstream_events_snapshot_projects_feishu_metadata() {
 	mut app := App{
 		feishu_enabled: true
 		feishu_apps: {
-			'main': FeishuAppConfig{
+			'main': config.FeishuAppConfig{
 				app_id:     'cli_main'
 				app_secret: 'sec_main'
 			}
@@ -904,7 +905,7 @@ fn test_feishu_update_message_rejects_non_interactive_message_id_updates_locally
 	mut app := App{
 		feishu_enabled: true
 		feishu_apps: {
-			'main': FeishuAppConfig{
+			'main': config.FeishuAppConfig{
 				app_id: 'cli_main'
 			}
 		}

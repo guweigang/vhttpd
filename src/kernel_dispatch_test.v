@@ -1,7 +1,8 @@
 module main
+import transport
 
 fn test_kernel_dispatch_envelope_from_websocket_upstream() {
-	req := WorkerWebSocketUpstreamDispatchRequest{
+	req := transport.WorkerWebSocketUpstreamDispatchRequest{
 		id: 'evt-1'
 		provider: 'feishu'
 		instance: 'main'
@@ -16,7 +17,7 @@ fn test_kernel_dispatch_envelope_from_websocket_upstream() {
 }
 
 fn test_kernel_dispatch_envelope_from_stream_dispatch() {
-	req := StreamDispatchRequest{
+	req := transport.StreamDispatchRequest{
 		id: 'stream-1'
 		request_id: 'req-1'
 		trace_id: 'trace-1'

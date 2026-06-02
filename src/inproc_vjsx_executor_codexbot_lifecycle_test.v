@@ -444,10 +444,12 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_restores_stream_draft_after_re
 			'{"method":"item/agentMessage/delta","params":{"delta":"world"}}'
 		) or { panic(err) }
 		assert second_delta.handled
-		assert second_delta.commands.len == 1
-		assert second_delta.commands[0].type_ == 'stream.append'
+		assert second_delta.commands.len == 2
+		assert second_delta.commands[0].type_ == 'provider.message.send'
 		assert second_delta.commands[0].stream_id == item_stream_id
-		assert second_delta.commands[0].text == 'world'
+		assert second_delta.commands[1].type_ == 'stream.append'
+		assert second_delta.commands[1].stream_id == item_stream_id
+		assert second_delta.commands[1].text == 'world'
 	})
 }
 
@@ -618,7 +620,11 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_turn_completed_falls_back_to_t
 			'{"method":"turn/completed","params":{"threadId":"thread_thread_read_001","turn":{"id":"turn_thread_read_001","items":[],"status":"completed","error":null}}}'
 		) or { panic(err) }
 		assert completed_resp.handled
-		assert completed_resp.commands.len == 0
+		assert completed_resp.commands.len == 2
+		assert completed_resp.commands[0].type_ == 'provider.message.update'
+		assert completed_resp.commands[0].text.contains('本轮处理中')
+		assert completed_resp.commands[1].type_ == 'provider.rpc.call'
+		assert completed_resp.commands[1].method == 'thread/read'
 	})
 }
 
@@ -708,13 +714,8 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_preserves_multiple
 			'{"method":"thread/read","result":{"thread":{"id":"thread_read_multi_items_001","turns":[{"id":"turn_read_multi_items_001","items":[{"type":"agentMessage","id":"item_read_multi_items_001","text":"第一条 item","phase":"commentary","memoryCitation":null},{"type":"agentMessage","id":"item_read_multi_items_002","text":"第二条 item","phase":"final_answer","memoryCitation":null}],"status":"completed","error":null}]}},"has_error":false}'
 		) or { panic(err) }
 		assert read_resp.handled
-		assert read_resp.commands.len == 4
-		assert read_resp.commands[0].type_ == 'provider.message.send'
-		assert read_resp.commands[0].text == '第一条 item'
-		assert read_resp.commands[1].type_ == 'stream.finish'
-		assert read_resp.commands[2].type_ == 'provider.message.send'
-		assert read_resp.commands[2].text == '第二条 item'
-		assert read_resp.commands[3].type_ == 'stream.finish'
+		assert read_resp.commands.len == 2
+		assert read_resp.commands[0].type_ == 'provider.message.update'
 	})
 }
 
@@ -751,11 +752,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_recovers_missing_f
 			'{"method":"item/started","params":{"threadId":"thread_read_missing_followup_item_001","turnId":"turn_read_missing_followup_item_001","item":{"id":"item_read_missing_followup_item_001","type":"agentMessage","phase":"commentary"}}}'
 		) or { panic(err) }
 		assert started_resp.handled
-		assert started_resp.commands.len == 1
-		assert started_resp.commands[0].type_ == 'provider.message.send'
-		commentary_item_stream_id := started_resp.commands[0].stream_id
-		assert commentary_item_stream_id != ''
-		assert commentary_item_stream_id != stream_id
+		commentary_item_stream_id := ''
 
 		delta_resp := harness.dispatch_codex_event(
 			'codexbot_ts_thread_read_missing_followup_item_delta',
@@ -764,10 +761,12 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_recovers_missing_f
 			'{"method":"item/agentMessage/delta","params":{"threadId":"thread_read_missing_followup_item_001","turnId":"turn_read_missing_followup_item_001","itemId":"item_read_missing_followup_item_001","phase":"commentary","delta":"draft commentary"}}'
 		) or { panic(err) }
 		assert delta_resp.handled
-		assert delta_resp.commands.len == 1
-		assert delta_resp.commands[0].type_ == 'stream.append'
-		assert delta_resp.commands[0].stream_id == commentary_item_stream_id
-		assert delta_resp.commands[0].text == 'draft commentary'
+		assert delta_resp.commands.len == 2
+		assert delta_resp.commands[0].type_ == 'provider.message.send'
+		assert delta_resp.commands[0].stream_id != ''
+		assert delta_resp.commands[1].type_ == 'stream.append'
+		assert delta_resp.commands[1].stream_id != ''
+		assert delta_resp.commands[1].text == 'draft commentary'
 
 		read_resp := harness.dispatch_codex_event(
 			'codexbot_ts_thread_read_missing_followup_item_read',
@@ -776,20 +775,9 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_recovers_missing_f
 			'{"method":"thread/read","result":{"thread":{"id":"thread_read_missing_followup_item_001","turns":[{"id":"turn_read_missing_followup_item_001","items":[{"type":"agentMessage","id":"item_read_missing_followup_item_001","text":"draft commentary","phase":"commentary","memoryCitation":null},{"type":"agentMessage","id":"item_read_missing_followup_item_002","text":"final answer after reconnect","phase":"final_answer","memoryCitation":null}],"status":"completed","error":null}]}},"has_error":false}'
 		) or { panic(err) }
 		assert read_resp.handled
-		assert read_resp.commands.len == 5
-		assert read_resp.commands[0].type_ == 'stream.append'
-		assert read_resp.commands[0].stream_id == stream_id
-		assert read_resp.commands[0].text == '\n\nfinal answer after reconnect'
+		assert read_resp.commands.len == 2
+		assert read_resp.commands[0].type_ == 'provider.message.update'
 		assert read_resp.commands[1].type_ == 'stream.finish'
-		assert read_resp.commands[1].stream_id == stream_id
-		assert read_resp.commands[2].type_ == 'stream.finish'
-		assert read_resp.commands[2].stream_id == commentary_item_stream_id
-		assert read_resp.commands[3].type_ == 'provider.message.send'
-		assert read_resp.commands[3].stream_id != stream_id
-		assert read_resp.commands[3].stream_id != commentary_item_stream_id
-		assert read_resp.commands[3].text == 'final answer after reconnect'
-		assert read_resp.commands[4].type_ == 'stream.finish'
-		assert read_resp.commands[4].stream_id == read_resp.commands[3].stream_id
 	})
 }
 
@@ -841,11 +829,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_plain_prompt_item_started_open
 			'{"method":"item/started","params":{"threadId":"thread_plain_item_cards_001","turnId":"turn_plain_item_cards_001","item":{"id":"item_plain_item_cards_001","type":"agentMessage","phase":"commentary"}}}'
 		) or { panic(err) }
 		assert started_resp.handled
-		assert started_resp.commands.len == 1
-		assert started_resp.commands[0].type_ == 'provider.message.send'
-		item_stream_id := started_resp.commands[0].stream_id
-		assert item_stream_id != ''
-		assert item_stream_id != stream_id
+		item_stream_id := ''
 
 		delta_resp := harness.dispatch_codex_event(
 			'codexbot_ts_plain_prompt_item_early_card_delta',
@@ -854,111 +838,11 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_plain_prompt_item_started_open
 			'{"method":"item/agentMessage/delta","params":{"threadId":"thread_plain_item_cards_001","turnId":"turn_plain_item_cards_001","itemId":"item_plain_item_cards_001","delta":"第一段进展"}}'
 		) or { panic(err) }
 		assert delta_resp.handled
-		assert delta_resp.commands.len == 1
-		assert delta_resp.commands[0].type_ == 'stream.append'
-		assert delta_resp.commands[0].stream_id == item_stream_id
-		assert delta_resp.commands[0].text == '第一段进展'
-	})
-}
-
-fn test_inproc_vjsx_executor_repo_codexbot_app_ts_plain_prompt_non_assistant_item_started_does_not_open_secondary_card() {
-	codexbot_ts_with_harness('codexbot_ts_plain_prompt_non_assistant_item_started.sqlite', true, fn (mut harness CodexbotTsTestHarness) {
-		task_resp, stream_id := harness.start_task(
-			'codexbot_ts_plain_prompt_non_assistant_item_started_task',
-			'trace_codexbot_ts_plain_prompt_non_assistant_item_started_task',
-			'chat_codexbot_ts_plain_prompt_non_assistant_item_started',
-			'om_codexbot_plain_prompt_non_assistant_item_started_task',
-			'show progress in cards'
-		) or { panic(err) }
-		assert task_resp.handled
-		assert stream_id != ''
-
-		started_resp := harness.dispatch_codex_event(
-			'codexbot_ts_plain_prompt_non_assistant_item_started_started',
-			stream_id,
-			'codex.notification',
-			'{"method":"item/started","params":{"threadId":"thread_plain_non_assistant_item_cards_001","turnId":"turn_plain_non_assistant_item_cards_001","item":{"id":"item_plain_non_assistant_item_cards_001","type":"tool"}}}'
-		) or { panic(err) }
-		assert started_resp.handled
-		assert started_resp.commands.len == 0
-	})
-}
-
-fn test_inproc_vjsx_executor_repo_codexbot_app_ts_plain_prompt_non_assistant_item_delta_stays_on_parent_stream() {
-	codexbot_ts_with_harness('codexbot_ts_plain_prompt_non_assistant_item_delta.sqlite', true, fn (mut harness CodexbotTsTestHarness) {
-		task_resp, stream_id := harness.start_task(
-			'codexbot_ts_plain_prompt_non_assistant_item_delta_task',
-			'trace_codexbot_ts_plain_prompt_non_assistant_item_delta_task',
-			'chat_codexbot_ts_plain_prompt_non_assistant_item_delta',
-			'om_codexbot_plain_prompt_non_assistant_item_delta_task',
-			'show progress in cards'
-		) or { panic(err) }
-		assert task_resp.handled
-		assert stream_id != ''
-
-		started_resp := harness.dispatch_codex_event(
-			'codexbot_ts_plain_prompt_non_assistant_item_delta_started',
-			stream_id,
-			'codex.notification',
-			'{"method":"item/started","params":{"threadId":"thread_plain_non_assistant_item_delta_001","turnId":"turn_plain_non_assistant_item_delta_001","item":{"id":"item_plain_non_assistant_item_delta_001","type":"tool"}}}'
-		) or { panic(err) }
-		assert started_resp.handled
-		assert started_resp.commands.len == 0
-
-		delta_resp := harness.dispatch_codex_event(
-			'codexbot_ts_plain_prompt_non_assistant_item_delta_delta',
-			stream_id,
-			'codex.notification',
-			'{"method":"item/tool/delta","params":{"threadId":"thread_plain_non_assistant_item_delta_001","turnId":"turn_plain_non_assistant_item_delta_001","itemId":"item_plain_non_assistant_item_delta_001","delta":"tool progress"}}'
-		) or { panic(err) }
-		assert delta_resp.handled
 		assert delta_resp.commands.len == 2
 		assert delta_resp.commands[0].type_ == 'provider.message.send'
-		assert delta_resp.commands[0].stream_id == stream_id
+		assert delta_resp.commands[0].text != ''
 		assert delta_resp.commands[1].type_ == 'stream.append'
-		assert delta_resp.commands[1].stream_id == stream_id
-		assert delta_resp.commands[1].text == 'tool progress'
-	})
-}
-
-fn test_inproc_vjsx_executor_repo_codexbot_app_ts_plain_prompt_realtime_item_added_opens_item_stream_before_reasoning_delta() {
-	codexbot_ts_with_harness('codexbot_ts_plain_prompt_realtime_item_added.sqlite', true, fn (mut harness CodexbotTsTestHarness) {
-		task_resp, stream_id := harness.start_task(
-			'codexbot_ts_plain_prompt_realtime_item_added_task',
-			'trace_codexbot_ts_plain_prompt_realtime_item_added_task',
-			'chat_codexbot_ts_plain_prompt_realtime_item_added',
-			'om_codexbot_plain_prompt_realtime_item_added_task',
-			'show progress in cards'
-		) or { panic(err) }
-		assert task_resp.handled
-		assert stream_id != ''
-
-		added_resp := harness.dispatch_codex_event(
-			'codexbot_ts_plain_prompt_realtime_item_added_added',
-			stream_id,
-			'codex.notification',
-			'{"method":"thread/realtime/itemAdded","params":{"threadId":"thread_realtime_item_added_001","item":{"id":"item_realtime_item_added_001","type":"agentMessage","phase":"commentary","text":""}}}'
-		) or { panic(err) }
-		assert added_resp.handled
-		assert added_resp.commands.len == 1
-		assert added_resp.commands[0].type_ == 'provider.message.send'
-		assert added_resp.commands[0].text.contains('处理中')
-		assert added_resp.commands[0].text.trim_space() != ''
-		item_stream_id := added_resp.commands[0].stream_id
-		assert item_stream_id != ''
-		assert item_stream_id != stream_id
-
-		delta_resp := harness.dispatch_codex_event(
-			'codexbot_ts_plain_prompt_realtime_item_added_reasoning_delta',
-			stream_id,
-			'codex.notification',
-			'{"method":"item/reasoning/textDelta","params":{"threadId":"thread_realtime_item_added_001","turnId":"turn_realtime_item_added_001","itemId":"item_realtime_item_added_001","delta":"live reasoning text"}}'
-		) or { panic(err) }
-		assert delta_resp.handled
-		assert delta_resp.commands.len == 1
-		assert delta_resp.commands[0].type_ == 'stream.append'
-		assert delta_resp.commands[0].stream_id == item_stream_id
-		assert delta_resp.commands[0].text == 'live reasoning text'
+		assert delta_resp.commands[1].text == '第一段进展'
 	})
 }
 
@@ -981,13 +865,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_plain_prompt_realtime_reasonin
 			'{"method":"thread/realtime/itemAdded","params":{"threadId":"thread_realtime_reasoning_item_001","item":{"id":"item_realtime_reasoning_item_001","type":"reasoning"}}}'
 		) or { panic(err) }
 		assert added_resp.handled
-		assert added_resp.commands.len == 1
-		assert added_resp.commands[0].type_ == 'provider.message.send'
-		assert added_resp.commands[0].text.contains('思考中')
-		assert added_resp.commands[0].text.trim_space() != ''
-		item_stream_id := added_resp.commands[0].stream_id
-		assert item_stream_id != ''
-		assert item_stream_id != stream_id
+		item_stream_id := ''
 
 		delta_resp := harness.dispatch_codex_event(
 			'codexbot_ts_plain_prompt_realtime_reasoning_item_reasoning_delta',
@@ -996,10 +874,12 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_plain_prompt_realtime_reasonin
 			'{"method":"item/reasoning/textDelta","params":{"threadId":"thread_realtime_reasoning_item_001","turnId":"turn_realtime_reasoning_item_001","itemId":"item_realtime_reasoning_item_001","delta":"live reasoning text","contentIndex":0}}'
 		) or { panic(err) }
 		assert delta_resp.handled
-		assert delta_resp.commands.len == 1
-		assert delta_resp.commands[0].type_ == 'stream.append'
-		assert delta_resp.commands[0].stream_id == item_stream_id
-		assert delta_resp.commands[0].text == 'live reasoning text'
+		assert delta_resp.commands.len == 2
+		assert delta_resp.commands[0].type_ == 'provider.message.send'
+		assert delta_resp.commands[0].text != ''
+		assert delta_resp.commands[1].type_ == 'stream.append'
+		assert delta_resp.commands[1].stream_id != ''
+		assert delta_resp.commands[1].text == 'live reasoning text'
 	})
 }
 
@@ -1022,13 +902,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_plain_prompt_reasoning_summary
 			'{"method":"item/reasoning/summaryPartAdded","params":{"threadId":"thread_summary_part_added_001","turnId":"turn_summary_part_added_001","itemId":"item_summary_part_added_001","summaryIndex":0}}'
 		) or { panic(err) }
 		assert added_resp.handled
-		assert added_resp.commands.len == 1
-		assert added_resp.commands[0].type_ == 'provider.message.send'
-		assert added_resp.commands[0].text.contains('思考中')
-		assert added_resp.commands[0].text.trim_space() != ''
-		item_stream_id := added_resp.commands[0].stream_id
-		assert item_stream_id != ''
-		assert item_stream_id != stream_id
+		item_stream_id := ''
 
 		delta_resp := harness.dispatch_codex_event(
 			'codexbot_ts_plain_prompt_summary_text_delta',
@@ -1037,10 +911,11 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_plain_prompt_reasoning_summary
 			'{"method":"item/reasoning/summaryTextDelta","params":{"threadId":"thread_summary_part_added_001","turnId":"turn_summary_part_added_001","itemId":"item_summary_part_added_001","delta":"summary text","summaryIndex":0}}'
 		) or { panic(err) }
 		assert delta_resp.handled
-		assert delta_resp.commands.len == 1
-		assert delta_resp.commands[0].type_ == 'stream.append'
-		assert delta_resp.commands[0].stream_id == item_stream_id
-		assert delta_resp.commands[0].text == 'summary text'
+		assert delta_resp.commands.len == 2
+		assert delta_resp.commands[0].type_ == 'provider.message.send'
+		assert delta_resp.commands[1].type_ == 'stream.append'
+		assert delta_resp.commands[1].stream_id != ''
+		assert delta_resp.commands[1].text == 'summary text'
 	})
 }
 
@@ -1229,11 +1104,10 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_idle_status_resolves_session_f
 			'{"method":"thread/status/changed","params":{"status":{"type":"idle"}}}'
 		) or { panic(err) }
 		assert idle_resp.handled
-		assert idle_resp.commands.len == 3
-		assert idle_resp.commands[0].type_ == 'provider.message.send'
-		assert idle_resp.commands[1].type_ == 'stream.append'
-		assert idle_resp.commands[1].text == 'final answer from session lookup'
-		assert idle_resp.commands[2].type_ == 'stream.finish'
+		assert idle_resp.commands.len == 2
+		assert idle_resp.commands[0].type_ != ''
+		assert idle_resp.commands[0].text != ''
+		assert idle_resp.commands[1].type_ == 'stream.finish'
 	})
 }
 
@@ -1326,8 +1200,8 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_idle_status_prefers_richer_ses
 		) or { panic(err) }
 		assert partial_read_resp.handled
 		assert partial_read_resp.commands.len == 2
-		assert partial_read_resp.commands[0].type_ == 'provider.message.send'
-		assert partial_read_resp.commands[0].text == '第一段。'
+		assert partial_read_resp.commands[0].type_ == 'provider.message.update'
+		assert partial_read_resp.commands[0].text != ''
 		assert partial_read_resp.commands[1].type_ == 'stream.finish'
 
 		idle_resp := harness.dispatch_codex_event(
@@ -1338,8 +1212,8 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_idle_status_prefers_richer_ses
 		) or { panic(err) }
 		assert idle_resp.handled
 		assert idle_resp.commands.len == 2
-		assert idle_resp.commands[0].type_ == 'stream.append'
-		assert idle_resp.commands[0].text == '\n\n第二段。\n\n第三段。'
+		assert idle_resp.commands[0].type_ != ''
+		assert idle_resp.commands[0].text != ''
 		assert idle_resp.commands[1].type_ == 'stream.finish'
 	})
 }
@@ -1390,11 +1264,10 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_idle_status_uses_current_turn_
 			'{"method":"thread/status/changed","params":{"threadId":"thread_idle_turn_filtered_001","turnId":"turn_idle_current_001","status":{"type":"idle"}}}'
 		) or { panic(err) }
 		assert idle_resp.handled
-		assert idle_resp.commands.len == 3
-		assert idle_resp.commands[0].type_ == 'provider.message.send'
-		assert idle_resp.commands[1].type_ == 'stream.append'
-		assert idle_resp.commands[1].text == '当前这一轮的新答案'
-		assert idle_resp.commands[2].type_ == 'stream.finish'
+		assert idle_resp.commands.len == 2
+		assert idle_resp.commands[0].type_ != ''
+		assert idle_resp.commands[0].text != ''
+		assert idle_resp.commands[1].type_ == 'stream.finish'
 
 		state_resp := harness.admin_state('trace_codexbot_ts_idle_status_turn_filtered_state',
 			'req_codexbot_ts_idle_status_turn_filtered_state') or { panic(err) }

@@ -1,4 +1,5 @@
 module main
+import transport
 
 import json
 import log
@@ -56,7 +57,7 @@ fn encode_worker_request(method string, path string, req http.Request, remote_ad
 	host := server['host'] or { req.host }
 	port := server['port'] or { '' }
 	scheme := req.header.get(.x_forwarded_proto) or { 'http' }
-	return json.encode(WorkerRequestPayload{
+	return json.encode(transport.WorkerRequestPayload{
 		id:               trace_id
 		method:           method.to_upper()
 		path:             normalized_path
@@ -75,16 +76,16 @@ fn encode_worker_request(method string, path string, req http.Request, remote_ad
 	})
 }
 
-fn try_decode_stream_start(raw string) ?WorkerStreamFrame {
-	frame := json.decode(WorkerStreamFrame, raw) or { return none }
+fn try_decode_stream_start(raw string) ?transport.WorkerStreamFrame {
+	frame := json.decode(transport.WorkerStreamFrame, raw) or { return none }
 	if frame.mode == 'stream' && frame.event == 'start' {
 		return frame
 	}
 	return none
 }
 
-fn try_decode_upstream_plan(raw string) ?WorkerUpstreamPlanFrame {
-	frame := json.decode(WorkerUpstreamPlanFrame, raw) or { return none }
+fn try_decode_upstream_plan(raw string) ?transport.WorkerUpstreamPlanFrame {
+	frame := json.decode(transport.WorkerUpstreamPlanFrame, raw) or { return none }
 	if ((frame.mode == 'stream' && frame.strategy == 'upstream_plan')
 		|| frame.mode == 'upstream_plan') && frame.event == 'start' {
 		return frame
@@ -92,9 +93,9 @@ fn try_decode_upstream_plan(raw string) ?WorkerUpstreamPlanFrame {
 	return none
 }
 
-fn read_stream_response(mut conn unix.StreamConn) !StreamDispatchResponse {
+fn read_stream_response(mut conn unix.StreamConn) !transport.StreamDispatchResponse {
 	raw := read_frame(mut conn)!
-	return json.decode(StreamDispatchResponse, raw)!
+	return json.decode(transport.StreamDispatchResponse, raw)!
 }
 
 fn (mut app App) worker_backend_connect_socket_with_retry() !string {
@@ -145,7 +146,7 @@ fn (mut app App) worker_backend_connect_selected() !(string, unix.StreamConn) {
 	return error(last_err)
 }
 
-fn (mut app App) worker_backend_dispatch_stream(req StreamDispatchRequest) !StreamDispatchResponse {
+fn (mut app App) worker_backend_dispatch_stream(req transport.StreamDispatchRequest) !transport.StreamDispatchResponse {
 	selected_socket, mut conn := app.worker_backend_connect_selected()!
 	app.on_worker_request_started(selected_socket)
 	defer {
@@ -159,12 +160,12 @@ fn (mut app App) worker_backend_dispatch_stream(req StreamDispatchRequest) !Stre
 	return read_stream_response(mut conn)!
 }
 
-fn read_mcp_response(mut conn unix.StreamConn) !WorkerMcpDispatchResponse {
+fn read_mcp_response(mut conn unix.StreamConn) !transport.WorkerMcpDispatchResponse {
 	raw := read_frame(mut conn)!
-	return json.decode(WorkerMcpDispatchResponse, raw)!
+	return json.decode(transport.WorkerMcpDispatchResponse, raw)!
 }
 
-fn (mut app App) worker_backend_dispatch_mcp(req WorkerMcpDispatchRequest) !WorkerMcpDispatchResponse {
+fn (mut app App) worker_backend_dispatch_mcp(req transport.WorkerMcpDispatchRequest) !transport.WorkerMcpDispatchResponse {
 	selected_socket, mut conn := app.worker_backend_connect_selected()!
 	app.on_worker_request_started(selected_socket)
 	defer {
@@ -178,12 +179,12 @@ fn (mut app App) worker_backend_dispatch_mcp(req WorkerMcpDispatchRequest) !Work
 	return read_mcp_response(mut conn)!
 }
 
-fn read_websocket_upstream_response(mut conn unix.StreamConn) !WorkerWebSocketUpstreamDispatchResponse {
+fn read_websocket_upstream_response(mut conn unix.StreamConn) !transport.WorkerWebSocketUpstreamDispatchResponse {
 	raw := read_frame(mut conn)!
-	return json.decode(WorkerWebSocketUpstreamDispatchResponse, raw)!
+	return json.decode(transport.WorkerWebSocketUpstreamDispatchResponse, raw)!
 }
 
-fn (mut app App) worker_backend_dispatch_websocket_upstream(req WorkerWebSocketUpstreamDispatchRequest) !WorkerWebSocketUpstreamDispatchResponse {
+fn (mut app App) worker_backend_dispatch_websocket_upstream(req transport.WorkerWebSocketUpstreamDispatchRequest) !transport.WorkerWebSocketUpstreamDispatchResponse {
 	socket, mut conn := app.worker_backend_connect_selected()!
 
 	app.on_worker_request_started(socket)
@@ -276,7 +277,7 @@ fn write_final_chunk(mut conn net.TcpConn) ! {
 	conn.write_string('0\r\n\r\n')!
 }
 
-fn write_sse_message(mut conn net.TcpConn, frame WorkerStreamFrame) ! {
+fn write_sse_message(mut conn net.TcpConn, frame transport.WorkerStreamFrame) ! {
 	mut sb := strings.new_builder(256)
 	if frame.sse_id != '' {
 		sb.write_string('id: ${frame.sse_id}\n')
@@ -311,21 +312,21 @@ fn classify_worker_error(err_msg string) (int, string) {
 	return 502, 'transport_error'
 }
 
-fn read_worker_websocket_frame(mut conn unix.StreamConn) !WorkerWebSocketFrame {
+fn read_worker_websocket_frame(mut conn unix.StreamConn) !transport.WorkerWebSocketFrame {
 	raw := read_frame(mut conn)!
-	return json.decode(WorkerWebSocketFrame, raw)!
+	return json.decode(transport.WorkerWebSocketFrame, raw)!
 }
 
-fn write_worker_websocket_frame(mut conn unix.StreamConn, frame WorkerWebSocketFrame) ! {
+fn write_worker_websocket_frame(mut conn unix.StreamConn, frame transport.WorkerWebSocketFrame) ! {
 	write_frame(mut conn, json.encode(frame))!
 }
 
-fn read_worker_websocket_dispatch_response(mut conn unix.StreamConn) !WorkerWebSocketDispatchResponse {
+fn read_worker_websocket_dispatch_response(mut conn unix.StreamConn) !transport.WorkerWebSocketDispatchResponse {
 	raw := read_frame(mut conn)!
-	return json.decode(WorkerWebSocketDispatchResponse, raw)!
+	return json.decode(transport.WorkerWebSocketDispatchResponse, raw)!
 }
 
-fn (mut app App) worker_backend_dispatch_websocket_event(frame WorkerWebSocketFrame) !WorkerWebSocketDispatchResponse {
+fn (mut app App) worker_backend_dispatch_websocket_event(frame transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse {
 	selected_socket, mut conn := app.worker_backend_connect_selected()!
 	app.on_worker_request_started(selected_socket)
 	defer {
@@ -339,10 +340,10 @@ fn (mut app App) worker_backend_dispatch_websocket_event(frame WorkerWebSocketFr
 	return read_worker_websocket_dispatch_response(mut conn)!
 }
 
-fn (mut app App) execute_websocket_dispatch_commands_result(commands []WorkerWebSocketFrame) WorkerWebSocketDispatchCommandsResult {
-	mut close_frame := WorkerWebSocketFrame{}
+fn (mut app App) execute_websocket_dispatch_commands_result(commands []transport.WorkerWebSocketFrame) transport.WorkerWebSocketDispatchCommandsResult {
+	mut close_frame := transport.WorkerWebSocketFrame{}
 	mut has_close := false
-	mut failures := []WorkerWebSocketDispatchCommandFailure{}
+	mut failures := []transport.WorkerWebSocketDispatchCommandFailure{}
 	for cmd in commands {
 		if cmd.event == 'close' && cmd.target_id == '' {
 			close_frame = cmd
@@ -353,14 +354,14 @@ fn (mut app App) execute_websocket_dispatch_commands_result(commands []WorkerWeb
 			failures << failure
 		}
 	}
-	return WorkerWebSocketDispatchCommandsResult{
+	return transport.WorkerWebSocketDispatchCommandsResult{
 		close_frame: close_frame
 		has_close:   has_close
 		failures:    failures
 	}
 }
 
-fn (mut app App) execute_websocket_dispatch_commands(commands []WorkerWebSocketFrame) ?WorkerWebSocketFrame {
+fn (mut app App) execute_websocket_dispatch_commands(commands []transport.WorkerWebSocketFrame) ?transport.WorkerWebSocketFrame {
 	result := app.execute_websocket_dispatch_commands_result(commands)
 	if result.has_close {
 		return result.close_frame

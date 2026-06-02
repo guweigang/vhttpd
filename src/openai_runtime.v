@@ -1,4 +1,5 @@
 module main
+import config
 
 import json
 import net
@@ -38,7 +39,7 @@ struct OpenAIResolvedRoute {
 	model          string
 	backend_name   string
 	upstream_model string
-	backend        OpenAIBackendConfig
+	backend        config.OpenAIBackendConfig
 }
 
 struct OpenAIUpstreamPlan {
@@ -56,7 +57,7 @@ struct OpenAIUpstreamPlan {
 
 struct OpenAIResolvedPlan {
 	backend_name    string
-	backend         OpenAIBackendConfig
+	backend         config.OpenAIBackendConfig
 	method          string
 	path            string
 	body            string
@@ -495,7 +496,7 @@ fn openai_replace_model_in_body(body string, upstream_model string) string {
 	return json2.Any(root).json_str()
 }
 
-fn openai_route_models(route OpenAIRouteConfig, route_name string) []string {
+fn openai_route_models(route config.OpenAIRouteConfig, route_name string) []string {
 	mut models := []string{}
 	for raw in route.models {
 		model := raw.trim_space()
@@ -1181,7 +1182,7 @@ fn openai_build_upstream_url(base_url string, relative string) string {
 	return '${base}${relative}'
 }
 
-fn openai_backend_auth_key(backend OpenAIBackendConfig) string {
+fn openai_backend_auth_key(backend config.OpenAIBackendConfig) string {
 	if backend.api_key.trim_space() != '' {
 		return backend.api_key.trim_space()
 	}
@@ -1217,7 +1218,7 @@ fn openai_http_method(raw string, fallback string) http.Method {
 	}
 }
 
-fn openai_build_headers(mut ctx Context, backend OpenAIBackendConfig, req_id string, stream bool, extra map[string]string) http.Header {
+fn openai_build_headers(mut ctx Context, backend config.OpenAIBackendConfig, req_id string, stream bool, extra map[string]string) http.Header {
 	mut header := http.new_header()
 	content_type := ctx.req.header.get(.content_type) or { 'application/json' }
 	accept := if stream { 'text/event-stream' } else { ctx.req.header.get(.accept) or {

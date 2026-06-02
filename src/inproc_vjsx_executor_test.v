@@ -1,4 +1,6 @@
 module main
+import config
+import transport
 
 import encoding.base64
 import net.http
@@ -1187,7 +1189,7 @@ fn test_inproc_vjsx_executor_websocket_affinity_sticks_same_key_to_same_lane() {
 	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
 		thread_count:       2
 		app_entry:          'app/main.ts'
-		websocket_affinity: WebSocketAffinityConfig{
+		websocket_affinity: config.WebSocketAffinityConfig{
 			enabled:  true
 			source:   'query'
 			key:      'serverId'
@@ -1199,7 +1201,7 @@ fn test_inproc_vjsx_executor_websocket_affinity_sticks_same_key_to_same_lane() {
 		executor.close()
 	}
 	executor.bootstrap_placeholder() or { assert false }
-	first, first_key := executor.acquire_websocket_lane(WorkerWebSocketFrame{
+	first, first_key := executor.acquire_websocket_lane(transport.WorkerWebSocketFrame{
 		id:    'conn_a'
 		event: 'open'
 		query: {
@@ -1209,7 +1211,7 @@ fn test_inproc_vjsx_executor_websocket_affinity_sticks_same_key_to_same_lane() {
 	assert first_key == 'srv_same'
 	executor.release_lane(first.id)
 	executor.release_websocket_affinity_key(first_key)
-	second, second_key := executor.acquire_websocket_lane(WorkerWebSocketFrame{
+	second, second_key := executor.acquire_websocket_lane(transport.WorkerWebSocketFrame{
 		id:    'conn_b'
 		event: 'open'
 		query: {
@@ -1219,10 +1221,10 @@ fn test_inproc_vjsx_executor_websocket_affinity_sticks_same_key_to_same_lane() {
 	assert second_key == 'srv_same'
 	assert second.id == first.id
 	executor.release_lane(second.id)
-	executor.release_websocket_connection_affinity(WorkerWebSocketFrame{
+	executor.release_websocket_connection_affinity(transport.WorkerWebSocketFrame{
 		id: 'conn_a'
 	})
-	executor.release_websocket_connection_affinity(WorkerWebSocketFrame{
+	executor.release_websocket_connection_affinity(transport.WorkerWebSocketFrame{
 		id: 'conn_b'
 	})
 }
@@ -1231,7 +1233,7 @@ fn test_inproc_vjsx_executor_websocket_affinity_can_use_header_source() {
 	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
 		thread_count:       2
 		app_entry:          'app/main.ts'
-		websocket_affinity: WebSocketAffinityConfig{
+		websocket_affinity: config.WebSocketAffinityConfig{
 			enabled:  true
 			source:   'header'
 			key:      'x-session-id'
@@ -1243,7 +1245,7 @@ fn test_inproc_vjsx_executor_websocket_affinity_can_use_header_source() {
 		executor.close()
 	}
 	executor.bootstrap_placeholder() or { assert false }
-	lane, affinity_key := executor.acquire_websocket_lane(WorkerWebSocketFrame{
+	lane, affinity_key := executor.acquire_websocket_lane(transport.WorkerWebSocketFrame{
 		id:      'conn_header'
 		event:   'open'
 		headers: {
@@ -1254,7 +1256,7 @@ fn test_inproc_vjsx_executor_websocket_affinity_can_use_header_source() {
 	assert lane.id == 'lane_0'
 	executor.release_lane(lane.id)
 	executor.release_websocket_affinity_key(affinity_key)
-	executor.release_websocket_connection_affinity(WorkerWebSocketFrame{
+	executor.release_websocket_connection_affinity(transport.WorkerWebSocketFrame{
 		id: 'conn_header'
 	})
 }
@@ -1263,7 +1265,7 @@ fn test_inproc_vjsx_executor_websocket_affinity_migration_keeps_existing_lane() 
 	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
 		thread_count:       4
 		app_entry:          'app/main.ts'
-		websocket_affinity: WebSocketAffinityConfig{
+		websocket_affinity: config.WebSocketAffinityConfig{
 			enabled:  true
 			source:   'query'
 			key:      'serverId'
@@ -1275,7 +1277,7 @@ fn test_inproc_vjsx_executor_websocket_affinity_migration_keeps_existing_lane() 
 		executor.close()
 	}
 	executor.bootstrap_placeholder() or { assert false }
-	lane, affinity_key := executor.acquire_websocket_lane(WorkerWebSocketFrame{
+	lane, affinity_key := executor.acquire_websocket_lane(transport.WorkerWebSocketFrame{
 		id:    'conn_migrate'
 		event: 'open'
 		query: {
@@ -1285,7 +1287,7 @@ fn test_inproc_vjsx_executor_websocket_affinity_migration_keeps_existing_lane() 
 	old_lane := lane.id
 	assert affinity_key == 'srv_hot'
 	executor.release_lane(old_lane)
-	executor.migrate_websocket_connection_affinity(WorkerWebSocketFrame{
+	executor.migrate_websocket_connection_affinity(transport.WorkerWebSocketFrame{
 		id: 'conn_migrate'
 	}, 'conn_migrate_key', old_lane)
 	mut state := executor.state
@@ -1294,7 +1296,7 @@ fn test_inproc_vjsx_executor_websocket_affinity_migration_keeps_existing_lane() 
 	state.mu.unlock()
 	assert migrated_lane == old_lane
 	assert migrated_lane != ''
-	executor.release_websocket_connection_affinity(WorkerWebSocketFrame{
+	executor.release_websocket_connection_affinity(transport.WorkerWebSocketFrame{
 		id: 'conn_migrate'
 	})
 }
@@ -1303,7 +1305,7 @@ fn test_inproc_vjsx_executor_websocket_affinity_rejects_missing_key_when_configu
 	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
 		thread_count:       2
 		app_entry:          'app/main.ts'
-		websocket_affinity: WebSocketAffinityConfig{
+		websocket_affinity: config.WebSocketAffinityConfig{
 			enabled:  true
 			source:   'query'
 			key:      'serverId'
@@ -1315,7 +1317,7 @@ fn test_inproc_vjsx_executor_websocket_affinity_rejects_missing_key_when_configu
 		executor.close()
 	}
 	executor.bootstrap_placeholder() or { assert false }
-	executor.acquire_websocket_lane(WorkerWebSocketFrame{
+	executor.acquire_websocket_lane(transport.WorkerWebSocketFrame{
 		id:    'conn_missing'
 		event: 'open'
 	}) or {
@@ -1329,7 +1331,7 @@ fn test_inproc_vjsx_executor_websocket_affinity_releases_key_when_lane_acquire_f
 	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
 		thread_count:       1
 		app_entry:          'app/main.ts'
-		websocket_affinity: WebSocketAffinityConfig{
+		websocket_affinity: config.WebSocketAffinityConfig{
 			enabled:  true
 			source:   'query'
 			key:      'serverId'
@@ -1342,7 +1344,7 @@ fn test_inproc_vjsx_executor_websocket_affinity_releases_key_when_lane_acquire_f
 	}
 	executor.bootstrap_placeholder() or { assert false }
 	lane := executor.select_next_lane() or { panic(err) }
-	executor.acquire_websocket_lane(WorkerWebSocketFrame{
+	executor.acquire_websocket_lane(transport.WorkerWebSocketFrame{
 		id:    'conn_busy'
 		event: 'open'
 		query: {
@@ -1350,7 +1352,7 @@ fn test_inproc_vjsx_executor_websocket_affinity_releases_key_when_lane_acquire_f
 		}
 	}) or { assert err.msg() == 'inproc_vjsx_executor_no_available_lane' }
 	executor.release_lane(lane.id)
-	again, again_key := executor.acquire_websocket_lane(WorkerWebSocketFrame{
+	again, again_key := executor.acquire_websocket_lane(transport.WorkerWebSocketFrame{
 		id:    'conn_again'
 		event: 'open'
 		query: {
@@ -1360,7 +1362,7 @@ fn test_inproc_vjsx_executor_websocket_affinity_releases_key_when_lane_acquire_f
 	assert again_key == 'srv_busy'
 	executor.release_lane(again.id)
 	executor.release_websocket_affinity_key(again_key)
-	executor.release_websocket_connection_affinity(WorkerWebSocketFrame{
+	executor.release_websocket_connection_affinity(transport.WorkerWebSocketFrame{
 		id: 'conn_again'
 	})
 }
@@ -1369,17 +1371,17 @@ fn test_inproc_vjsx_executor_websocket_actor_resolves_query_source_and_connectio
 	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
 		thread_count:    2
 		app_entry:       'app/main.ts'
-		websocket_actor: WebSocketActorConfig{
+		websocket_actor: config.WebSocketActorConfig{
 			enabled:           true
 			fallback:          'reject'
 			queue_timeout_ms:  30000
 			max_queue_per_key: 128
 			events:            ['open', 'message', 'close']
 			sources:           [
-				WebSocketActorSourceConfig{
+				config.WebSocketActorSourceConfig{
 					typ: 'connection_cache'
 				},
-				WebSocketActorSourceConfig{
+				config.WebSocketActorSourceConfig{
 					typ:        'query'
 					key:        'connectionId'
 					class_name: 'conn'
@@ -1390,7 +1392,7 @@ fn test_inproc_vjsx_executor_websocket_actor_resolves_query_source_and_connectio
 	defer {
 		executor.close()
 	}
-	open_actor := executor.resolve_websocket_actor(WorkerWebSocketFrame{
+	open_actor := executor.resolve_websocket_actor(transport.WorkerWebSocketFrame{
 		id:    'conn_actor_open'
 		event: 'open'
 		query: {
@@ -1400,16 +1402,16 @@ fn test_inproc_vjsx_executor_websocket_actor_resolves_query_source_and_connectio
 	assert open_actor.key == 'abc123'
 	assert open_actor.class_name == 'conn'
 	assert open_actor.persist
-	executor.cache_websocket_actor(WorkerWebSocketFrame{
+	executor.cache_websocket_actor(transport.WorkerWebSocketFrame{
 		id: 'conn_actor_open'
 	}, open_actor.key, open_actor.class_name)
-	cached_actor := executor.resolve_websocket_actor(WorkerWebSocketFrame{
+	cached_actor := executor.resolve_websocket_actor(transport.WorkerWebSocketFrame{
 		id:    'conn_actor_open'
 		event: 'message'
 	}) or { panic(err) }
 	assert cached_actor.key == 'abc123'
 	assert cached_actor.class_name == 'conn'
-	executor.release_websocket_actor(WorkerWebSocketFrame{
+	executor.release_websocket_actor(transport.WorkerWebSocketFrame{
 		id: 'conn_actor_open'
 	})
 }
@@ -1441,17 +1443,17 @@ export default {
 		app_entry:       app_file
 		module_root:     temp_dir
 		build_root:      os.join_path(temp_dir, 'build')
-		websocket_actor: WebSocketActorConfig{
+		websocket_actor: config.WebSocketActorConfig{
 			enabled:           true
 			fallback:          'reject'
 			queue_timeout_ms:  30000
 			max_queue_per_key: 128
 			events:            ['open', 'message', 'close']
 			sources:           [
-				WebSocketActorSourceConfig{
+				config.WebSocketActorSourceConfig{
 					typ: 'connection_cache'
 				},
-				WebSocketActorSourceConfig{
+				config.WebSocketActorSourceConfig{
 					typ: 'app'
 				},
 			]
@@ -1461,7 +1463,7 @@ export default {
 		executor.close()
 	}
 	mut app := App{}
-	open_resp := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+	open_resp := executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		id:    'conn_actor_cache'
 		event: 'open'
 		query: {
@@ -1476,13 +1478,13 @@ export default {
 	state.mu.unlock()
 	assert cached_key == 'cached_1'
 	assert cached_class == 'conn'
-	msg_resp := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+	msg_resp := executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		id:    'conn_actor_cache'
 		event: 'message'
 		data:  'hello'
 	}) or { panic(err) }
 	assert msg_resp.accepted
-	close_resp := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+	close_resp := executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		id:    'conn_actor_cache'
 		event: 'close'
 		code:  1000
@@ -1519,14 +1521,14 @@ export default {
 		app_entry:       app_file
 		module_root:     temp_dir
 		build_root:      os.join_path(temp_dir, 'build')
-		websocket_actor: WebSocketActorConfig{
+		websocket_actor: config.WebSocketActorConfig{
 			enabled:           true
 			fallback:          'reject'
 			queue_timeout_ms:  30000
 			max_queue_per_key: 128
 			events:            ['open']
 			sources:           [
-				WebSocketActorSourceConfig{
+				config.WebSocketActorSourceConfig{
 					typ: 'app'
 				},
 			]
@@ -1536,7 +1538,7 @@ export default {
 		executor.close()
 	}
 	mut app := App{}
-	executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+	executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		id:    'conn_actor_async'
 		event: 'open'
 		query: {
@@ -1606,7 +1608,7 @@ export function websocket_upstream(frame) {
 		executor.close()
 	}
 	mut app := App{}
-	resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+	resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 		mode:        'websocket_upstream'
 		event:       'message'
 		id:          'upstream_req_001'
@@ -1673,7 +1675,7 @@ export function websocket_upstream(frame) {
 		executor.close()
 	}
 	mut app := App{}
-	resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+	resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 		mode:        'websocket_upstream'
 		event:       'action'
 		id:          'upstream_req_response_001'
@@ -1737,7 +1739,7 @@ export function websocket_upstream(frame) {
 		executor.close()
 	}
 	mut app := App{}
-	resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+	resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 		mode:        'websocket_upstream'
 		event:       'message'
 		id:          'upstream_fs_req_001'
@@ -1826,7 +1828,7 @@ export function websocket_upstream(frame) {
 		executor.close()
 	}
 	mut app := App{}
-	resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+	resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 		mode:        'websocket_upstream'
 		event:       'message'
 		id:          'upstream_session_parse_req_001'
@@ -1889,7 +1891,7 @@ export async function websocket_upstream(frame) {
 		executor.close()
 	}
 	mut app := App{}
-	resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+	resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 		mode:        'websocket_upstream'
 		event:       'message'
 		id:          'upstream_fs_await_req_001'
@@ -1962,7 +1964,7 @@ export function websocket_upstream(frame) {
 		executor.close()
 	}
 	mut app := App{}
-	resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+	resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 		mode:        'websocket_upstream'
 		event:       'message'
 		id:          'upstream_fs_import_req_001'
@@ -2042,7 +2044,7 @@ export async function websocket_upstream(frame) {
 		executor.close()
 	}
 	mut app := App{}
-	resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+	resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 		mode:        'websocket_upstream'
 		event:       'message'
 		id:          'upstream_fs_sqlite_req_001'
@@ -2082,7 +2084,7 @@ fn test_inproc_vjsx_executor_dispatch_websocket_upstream_returns_unhandled_when_
 		executor.close()
 	}
 	mut app := App{}
-	resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+	resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 		mode:       'websocket_upstream'
 		event:      'message'
 		id:         'upstream_req_002'
@@ -2162,7 +2164,7 @@ export default bot;
 	assert http_outcome.response.body.contains('"prefix":"bot"')
 	assert http_outcome.response.body.contains('"dispatchKind":"http"')
 
-	upstream_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+	upstream_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 		mode:        'websocket_upstream'
 		event:       'message'
 		id:          'upstream_req_003'
@@ -2298,7 +2300,7 @@ export default app;
 		executor.close()
 	}
 	mut app := App{
-		feishu_apps:    map[string]FeishuAppConfig{}
+		feishu_apps:    map[string]config.FeishuAppConfig{}
 		feishu_runtime: map[string]FeishuProviderRuntime{}
 	}
 	resp := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
@@ -2342,7 +2344,7 @@ fn test_inproc_vjsx_executor_dispatch_websocket_event_runs_script_handler() {
 		executor.close()
 	}
 	mut app := App{}
-	resp := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+	resp := executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		mode:        'websocket_dispatch'
 		event:       'open'
 		id:          'ws_conn_script'
@@ -2410,7 +2412,7 @@ export default app;
 		executor.close()
 	}
 	mut app := App{}
-	resp := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+	resp := executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		mode:        'websocket_dispatch'
 		event:       'close'
 		id:          'ws_conn_module'
@@ -2476,7 +2478,7 @@ export default app;
 	}
 	mut app := App{}
 	encoded := base64.encode([u8(1), 2, 3, 4])
-	resp := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+	resp := executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		mode:        'websocket_dispatch'
 		event:       'message'
 		id:          'ws_conn_binary'
@@ -2549,7 +2551,7 @@ export default app;
 		path:       '/ws'
 		client:     unsafe { nil }
 	}
-	resp := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+	resp := executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		mode:        'websocket_dispatch'
 		event:       'open'
 		id:          'ws_timer'
@@ -2621,7 +2623,7 @@ export default app;
 		path:       '/ws'
 		client:     unsafe { nil }
 	}
-	resp := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+	resp := executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		mode:        'websocket_dispatch'
 		event:       'open'
 		id:          'ws_timer_pump'
@@ -2696,7 +2698,7 @@ export default app;
 		path:       '/ws'
 		client:     unsafe { nil }
 	}
-	resp := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+	resp := executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		mode:        'websocket_dispatch'
 		event:       'open'
 		id:          'ws_timer_failure'
@@ -2791,7 +2793,7 @@ export default app;
 		executor.close()
 	}
 	mut app := App{}
-	resp := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+	resp := executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		mode:        'websocket_dispatch'
 		event:       'open'
 		id:          'ws_drain_guard_preserve'
@@ -2897,7 +2899,7 @@ export default app;
 		executor.close()
 	}
 	mut app := App{}
-	resp := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+	resp := executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		mode:        'websocket_dispatch'
 		event:       'open'
 		id:          'ws_drain_guard_finalize'
@@ -2982,7 +2984,7 @@ export default app;
 		path:       '/ws'
 		client:     unsafe { nil }
 	}
-	open_resp := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+	open_resp := executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		mode:        'websocket_dispatch'
 		event:       'open'
 		id:          'ws_main_failure'
@@ -3000,7 +3002,7 @@ export default app;
 	assert open_resp.accepted
 	room_members, member_metadata, room_counts, presence_users :=
 		app.ws_hub_presence_snapshot('ws_main_failure')
-	msg_resp := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+	msg_resp := executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		mode:            'websocket_dispatch'
 		event:           'message'
 		id:              'ws_main_failure'
@@ -3077,7 +3079,7 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_skeleton_boots() {
 	}) or { panic(err) }
 	assert health_alias.response.status == 200
 	assert health_alias.response.body.contains('"app":"paseo-relay"')
-	control_open := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+	control_open := executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		mode:        'websocket_dispatch'
 		event:       'open'
 		id:          'ws_control'
@@ -3101,7 +3103,7 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_skeleton_boots() {
 		&& it.value == 'server-control')
 	assert control_open.commands.any(it.event == 'send' && it.target_id == 'ws_control'
 		&& it.data.contains('"type":"sync"'))
-	client_open := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+	client_open := executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		mode:        'websocket_dispatch'
 		event:       'open'
 		id:          'ws_client'
@@ -3143,7 +3145,7 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_isolates_versions_by_server_id() {
 	}
 	mut app := App{}
 	server_id := 'srv_version_isolation'
-	legacy_open := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+	legacy_open := executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		mode:        'websocket_dispatch'
 		event:       'open'
 		id:          'ws_legacy_server'
@@ -3163,7 +3165,7 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_isolates_versions_by_server_id() {
 		metadata:    map[string]string{}
 	}) or { panic(err) }
 	assert legacy_open.accepted
-	control_open := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+	control_open := executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		mode:        'websocket_dispatch'
 		event:       'open'
 		id:          'ws_v2_control'
@@ -3217,7 +3219,7 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_buffers_and_flushes_client_frames(
 	mut app := App{}
 	server_id := 'srv_buffer_demo'
 	connection_id := 'conn_buffer_demo'
-	control_open := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+	control_open := executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		mode:        'websocket_dispatch'
 		event:       'open'
 		id:          'ws_control_buffer'
@@ -3237,7 +3239,7 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_buffers_and_flushes_client_frames(
 		metadata:    map[string]string{}
 	}) or { panic(err) }
 	assert control_open.accepted
-	client_open := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+	client_open := executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		mode:        'websocket_dispatch'
 		event:       'open'
 		id:          'ws_client_buffer'
@@ -3258,7 +3260,7 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_buffers_and_flushes_client_frames(
 		metadata:    map[string]string{}
 	}) or { panic(err) }
 	assert client_open.accepted
-	client_message := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+	client_message := executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		mode:        'websocket_dispatch'
 		event:       'message'
 		id:          'ws_client_buffer'
@@ -3300,7 +3302,7 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_buffers_and_flushes_client_frames(
 		request_id:  'req_state_before_flush'
 	}) or { panic(err) }
 	assert state_before.response.body.contains('"pendingCount":1')
-	server_data_open := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+	server_data_open := executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		mode:        'websocket_dispatch'
 		event:       'open'
 		id:          'ws_server_data_buffer'
@@ -3360,7 +3362,7 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_nudges_control_when_server_data_do
 		ws_hub_pending:      map[string][]HubPendingMessage{}
 	}
 	server_id := 'srv_nudge_demo'
-	control_open := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+	control_open := executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		mode:        'websocket_dispatch'
 		event:       'open'
 		id:          'ws_control_nudge'
@@ -3380,7 +3382,7 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_nudges_control_when_server_data_do
 		metadata:    map[string]string{}
 	}) or { panic(err) }
 	assert control_open.accepted
-	client_open := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+	client_open := executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		mode:        'websocket_dispatch'
 		event:       'open'
 		id:          'ws_client_nudge'
@@ -3424,7 +3426,7 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_disconnects_server_data_on_last_cl
 	mut app := App{}
 	server_id := 'srv_disconnect_demo'
 	connection_id := 'conn_disconnect_demo'
-	_ = executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+	_ = executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		mode:        'websocket_dispatch'
 		event:       'open'
 		id:          'ws_control_disconnect'
@@ -3443,7 +3445,7 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_disconnects_server_data_on_last_cl
 		rooms:       []string{}
 		metadata:    map[string]string{}
 	}) or { panic(err) }
-	_ = executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+	_ = executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		mode:        'websocket_dispatch'
 		event:       'open'
 		id:          'ws_server_data_disconnect'
@@ -3463,7 +3465,7 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_disconnects_server_data_on_last_cl
 		rooms:       []string{}
 		metadata:    map[string]string{}
 	}) or { panic(err) }
-	_ = executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+	_ = executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		mode:        'websocket_dispatch'
 		event:       'open'
 		id:          'ws_client_disconnect'
@@ -3483,7 +3485,7 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_disconnects_server_data_on_last_cl
 		rooms:       []string{}
 		metadata:    map[string]string{}
 	}) or { panic(err) }
-	client_close := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+	client_close := executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		mode:        'websocket_dispatch'
 		event:       'close'
 		id:          'ws_client_disconnect'
@@ -3527,7 +3529,7 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_disconnects_clients_when_server_da
 	mut app := App{}
 	server_id := 'srv_server_close_demo'
 	connection_id := 'conn_server_close_demo'
-	_ = executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+	_ = executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		mode:        'websocket_dispatch'
 		event:       'open'
 		id:          'ws_server_data_server_close'
@@ -3547,7 +3549,7 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_disconnects_clients_when_server_da
 		rooms:       []string{}
 		metadata:    map[string]string{}
 	}) or { panic(err) }
-	_ = executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+	_ = executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		mode:        'websocket_dispatch'
 		event:       'open'
 		id:          'ws_client_server_close'
@@ -3567,7 +3569,7 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_disconnects_clients_when_server_da
 		rooms:       []string{}
 		metadata:    map[string]string{}
 	}) or { panic(err) }
-	server_close := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+	server_close := executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		mode:        'websocket_dispatch'
 		event:       'close'
 		id:          'ws_server_data_server_close'
@@ -3609,7 +3611,7 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_preserves_binary_opcode_on_flush()
 	mut app := App{}
 	server_id := 'srv_binary_demo'
 	connection_id := 'conn_binary_demo'
-	_ = executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+	_ = executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		mode:        'websocket_dispatch'
 		event:       'open'
 		id:          'ws_control_binary'
@@ -3628,7 +3630,7 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_preserves_binary_opcode_on_flush()
 		rooms:       []string{}
 		metadata:    map[string]string{}
 	}) or { panic(err) }
-	_ = executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+	_ = executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		mode:        'websocket_dispatch'
 		event:       'open'
 		id:          'ws_client_binary'
@@ -3649,7 +3651,7 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_preserves_binary_opcode_on_flush()
 		metadata:    map[string]string{}
 	}) or { panic(err) }
 	binary_data := base64.encode([u8(222), 173, 190, 239])
-	buffered := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+	buffered := executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		mode:        'websocket_dispatch'
 		event:       'message'
 		id:          'ws_client_binary'
@@ -3678,7 +3680,7 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_preserves_binary_opcode_on_flush()
 	}) or { panic(err) }
 	assert buffered.accepted
 	assert buffered.commands.len == 0
-	flushed := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+	flushed := executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		mode:        'websocket_dispatch'
 		event:       'open'
 		id:          'ws_server_data_binary'
@@ -3718,7 +3720,7 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_restores_draining_frames_when_serv
 	mut app := App{}
 	server_id := 'srv_drain_restore_demo'
 	connection_id := 'conn_drain_restore_demo'
-	_ = executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+	_ = executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		mode:        'websocket_dispatch'
 		event:       'open'
 		id:          'ws_control_drain_restore'
@@ -3737,7 +3739,7 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_restores_draining_frames_when_serv
 		rooms:       []string{}
 		metadata:    map[string]string{}
 	}) or { panic(err) }
-	_ = executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+	_ = executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		mode:        'websocket_dispatch'
 		event:       'open'
 		id:          'ws_client_drain_restore'
@@ -3757,7 +3759,7 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_restores_draining_frames_when_serv
 		rooms:       []string{}
 		metadata:    map[string]string{}
 	}) or { panic(err) }
-	_ = executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+	_ = executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		mode:        'websocket_dispatch'
 		event:       'message'
 		id:          'ws_client_drain_restore'
@@ -3784,7 +3786,7 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_restores_draining_frames_when_serv
 			'relay_connection_id': connection_id
 		}
 	}) or { panic(err) }
-	_ = executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+	_ = executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		mode:        'websocket_dispatch'
 		event:       'open'
 		id:          'ws_server_data_drain_restore'
@@ -3818,7 +3820,7 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_restores_draining_frames_when_serv
 	}) or { panic(err) }
 	assert before_close.response.body.contains('"pendingCount":0')
 	assert before_close.response.body.contains('"drainingCount":1')
-	_ = executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+	_ = executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		mode:        'websocket_dispatch'
 		event:       'close'
 		id:          'ws_server_data_drain_restore'
@@ -3870,7 +3872,7 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_replaces_existing_control_socket()
 	}
 	mut app := App{}
 	server_id := 'srv_replace_control'
-	_ = executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+	_ = executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		mode:        'websocket_dispatch'
 		event:       'open'
 		id:          'ws_control_old'
@@ -3889,7 +3891,7 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_replaces_existing_control_socket()
 		rooms:       []string{}
 		metadata:    map[string]string{}
 	}) or { panic(err) }
-	replaced := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+	replaced := executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		mode:        'websocket_dispatch'
 		event:       'open'
 		id:          'ws_control_new'
@@ -3928,7 +3930,7 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_replaces_existing_server_data_sock
 	mut app := App{}
 	server_id := 'srv_replace_data'
 	connection_id := 'conn_replace_data'
-	_ = executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+	_ = executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		mode:        'websocket_dispatch'
 		event:       'open'
 		id:          'ws_server_data_old'
@@ -3948,7 +3950,7 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_replaces_existing_server_data_sock
 		rooms:       []string{}
 		metadata:    map[string]string{}
 	}) or { panic(err) }
-	replaced := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+	replaced := executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		mode:        'websocket_dispatch'
 		event:       'open'
 		id:          'ws_server_data_new'
@@ -3988,7 +3990,7 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_allows_multiple_clients_same_conne
 	mut app := App{}
 	server_id := 'srv_multi_client'
 	connection_id := 'conn_multi_client'
-	first := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+	first := executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		mode:        'websocket_dispatch'
 		event:       'open'
 		id:          'ws_client_one'
@@ -4009,7 +4011,7 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_allows_multiple_clients_same_conne
 		metadata:    map[string]string{}
 	}) or { panic(err) }
 	assert first.accepted
-	second := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+	second := executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		mode:        'websocket_dispatch'
 		event:       'open'
 		id:          'ws_client_two'
@@ -4061,7 +4063,7 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_keeps_server_data_alive_if_other_c
 	mut app := App{}
 	server_id := 'srv_keep_data'
 	connection_id := 'conn_keep_data'
-	_ = executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+	_ = executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		mode:        'websocket_dispatch'
 		event:       'open'
 		id:          'ws_control_keep'
@@ -4080,7 +4082,7 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_keeps_server_data_alive_if_other_c
 		rooms:       []string{}
 		metadata:    map[string]string{}
 	}) or { panic(err) }
-	_ = executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+	_ = executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		mode:        'websocket_dispatch'
 		event:       'open'
 		id:          'ws_server_data_keep'
@@ -4100,7 +4102,7 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_keeps_server_data_alive_if_other_c
 		rooms:       []string{}
 		metadata:    map[string]string{}
 	}) or { panic(err) }
-	_ = executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+	_ = executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		mode:        'websocket_dispatch'
 		event:       'open'
 		id:          'ws_client_keep_one'
@@ -4120,7 +4122,7 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_keeps_server_data_alive_if_other_c
 		rooms:       []string{}
 		metadata:    map[string]string{}
 	}) or { panic(err) }
-	_ = executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+	_ = executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		mode:        'websocket_dispatch'
 		event:       'open'
 		id:          'ws_client_keep_two'
@@ -4140,7 +4142,7 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_keeps_server_data_alive_if_other_c
 		rooms:       []string{}
 		metadata:    map[string]string{}
 	}) or { panic(err) }
-	closed_one := executor.dispatch_websocket_event(mut app, WorkerWebSocketFrame{
+	closed_one := executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		mode:        'websocket_dispatch'
 		event:       'close'
 		id:          'ws_client_keep_one'

@@ -1,4 +1,5 @@
 module main
+import transport
 
 fn test_provider_noop_handlers_and_runtime_smoke() {
 	// Ensure NoopProviderCommandHandler and NoopProviderRuntime behave as expected
@@ -6,7 +7,7 @@ fn test_provider_noop_handlers_and_runtime_smoke() {
 	r := NoopProviderRuntime{}
 
 	// execute should return (false, '')
-	cmd := WorkerWebSocketUpstreamCommand{}
+	cmd := transport.WorkerWebSocketUpstreamCommand{}
 	normalized := NormalizedCommand.from_worker_command(cmd)
 	mut snap := WebSocketUpstreamCommandActivity{}
 	ok, msg := h.execute(cmd, normalized, mut snap)

@@ -1,4 +1,5 @@
 module main
+import transport
 
 import os
 import json
@@ -89,8 +90,8 @@ fn codexbot_ts_with_harness_config(db_name string, thread_count int, enable_fs b
 	})
 }
 
-fn codexbot_ts_dispatch_feishu_message(mut executor InProcVjsxExecutor, mut app App, id string, trace_id string, chat_id string, message_id string, text string) !WorkerWebSocketUpstreamDispatchResponse {
-	return executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+fn codexbot_ts_dispatch_feishu_message(mut executor InProcVjsxExecutor, mut app App, id string, trace_id string, chat_id string, message_id string, text string) !transport.WorkerWebSocketUpstreamDispatchResponse {
+	return executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 		mode:        'websocket_upstream'
 		event:       'message'
 		id:          id
@@ -105,8 +106,8 @@ fn codexbot_ts_dispatch_feishu_message(mut executor InProcVjsxExecutor, mut app 
 	})
 }
 
-fn codexbot_ts_dispatch_feishu_message_with_event(mut executor InProcVjsxExecutor, mut app App, id string, trace_id string, chat_id string, message_id string, text string, event_id string, create_time string) !WorkerWebSocketUpstreamDispatchResponse {
-	return executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+fn codexbot_ts_dispatch_feishu_message_with_event(mut executor InProcVjsxExecutor, mut app App, id string, trace_id string, chat_id string, message_id string, text string, event_id string, create_time string) !transport.WorkerWebSocketUpstreamDispatchResponse {
+	return executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 		mode:        'websocket_upstream'
 		event:       'message'
 		id:          id
@@ -122,13 +123,13 @@ fn codexbot_ts_dispatch_feishu_message_with_event(mut executor InProcVjsxExecuto
 	})
 }
 
-fn codexbot_ts_start_task(mut executor InProcVjsxExecutor, mut app App, id string, trace_id string, chat_id string, message_id string, text string) !(WorkerWebSocketUpstreamDispatchResponse, string) {
+fn codexbot_ts_start_task(mut executor InProcVjsxExecutor, mut app App, id string, trace_id string, chat_id string, message_id string, text string) !(transport.WorkerWebSocketUpstreamDispatchResponse, string) {
 	resp := codexbot_ts_dispatch_feishu_message(mut executor, mut app, id, trace_id, chat_id, message_id, text)!
 	return resp, codexbot_ts_first_stream_id(resp.commands)
 }
 
-fn codexbot_ts_dispatch_codex_event(mut executor InProcVjsxExecutor, mut app App, id string, stream_id string, event_type string, payload string) !WorkerWebSocketUpstreamDispatchResponse {
-	return executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+fn codexbot_ts_dispatch_codex_event(mut executor InProcVjsxExecutor, mut app App, id string, stream_id string, event_type string, payload string) !transport.WorkerWebSocketUpstreamDispatchResponse {
+	return executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 		mode:       'websocket_upstream'
 		event:      'message'
 		id:         id
@@ -140,23 +141,23 @@ fn codexbot_ts_dispatch_codex_event(mut executor InProcVjsxExecutor, mut app App
 	})
 }
 
-fn (mut h CodexbotTsTestHarness) dispatch_feishu_message(id string, trace_id string, chat_id string, message_id string, text string) !WorkerWebSocketUpstreamDispatchResponse {
+fn (mut h CodexbotTsTestHarness) dispatch_feishu_message(id string, trace_id string, chat_id string, message_id string, text string) !transport.WorkerWebSocketUpstreamDispatchResponse {
 	return codexbot_ts_dispatch_feishu_message(mut h.executor, mut h.app, id, trace_id, chat_id,
 		message_id, text)
 }
 
-fn (mut h CodexbotTsTestHarness) dispatch_feishu_message_with_event(id string, trace_id string, chat_id string, message_id string, text string, event_id string, create_time string) !WorkerWebSocketUpstreamDispatchResponse {
+fn (mut h CodexbotTsTestHarness) dispatch_feishu_message_with_event(id string, trace_id string, chat_id string, message_id string, text string, event_id string, create_time string) !transport.WorkerWebSocketUpstreamDispatchResponse {
 	return codexbot_ts_dispatch_feishu_message_with_event(mut h.executor, mut h.app, id, trace_id,
 		chat_id, message_id, text, event_id, create_time)
 }
 
-fn (mut h CodexbotTsTestHarness) start_task(id string, trace_id string, chat_id string, message_id string, text string) !(WorkerWebSocketUpstreamDispatchResponse, string) {
+fn (mut h CodexbotTsTestHarness) start_task(id string, trace_id string, chat_id string, message_id string, text string) !(transport.WorkerWebSocketUpstreamDispatchResponse, string) {
 	return codexbot_ts_start_task(mut h.executor, mut h.app, id, trace_id, chat_id, message_id,
 		text)
 }
 
-fn (mut h CodexbotTsTestHarness) dispatch_feishu_thread_message(id string, trace_id string, chat_id string, message_id string, text string, root_id string, parent_id string) !WorkerWebSocketUpstreamDispatchResponse {
-	return h.executor.dispatch_websocket_upstream(mut h.app, WorkerWebSocketUpstreamDispatchRequest{
+fn (mut h CodexbotTsTestHarness) dispatch_feishu_thread_message(id string, trace_id string, chat_id string, message_id string, text string, root_id string, parent_id string) !transport.WorkerWebSocketUpstreamDispatchResponse {
+	return h.executor.dispatch_websocket_upstream(mut h.app, transport.WorkerWebSocketUpstreamDispatchRequest{
 		mode:        'websocket_upstream'
 		event:       'message'
 		id:          id
@@ -171,8 +172,8 @@ fn (mut h CodexbotTsTestHarness) dispatch_feishu_thread_message(id string, trace
 	})
 }
 
-fn (mut h CodexbotTsTestHarness) dispatch_feishu_action(id string, trace_id string, open_message_id string, request_id string, decision string, event_id string) !WorkerWebSocketUpstreamDispatchResponse {
-	return h.executor.dispatch_websocket_upstream(mut h.app, WorkerWebSocketUpstreamDispatchRequest{
+fn (mut h CodexbotTsTestHarness) dispatch_feishu_action(id string, trace_id string, open_message_id string, request_id string, decision string, event_id string) !transport.WorkerWebSocketUpstreamDispatchResponse {
+	return h.executor.dispatch_websocket_upstream(mut h.app, transport.WorkerWebSocketUpstreamDispatchRequest{
 		mode:        'websocket_upstream'
 		event:       'action'
 		id:          id
@@ -186,7 +187,7 @@ fn (mut h CodexbotTsTestHarness) dispatch_feishu_action(id string, trace_id stri
 	})
 }
 
-fn (mut h CodexbotTsTestHarness) dispatch_codex_event(id string, stream_id string, event_type string, payload string) !WorkerWebSocketUpstreamDispatchResponse {
+fn (mut h CodexbotTsTestHarness) dispatch_codex_event(id string, stream_id string, event_type string, payload string) !transport.WorkerWebSocketUpstreamDispatchResponse {
 	return codexbot_ts_dispatch_codex_event(mut h.executor, mut h.app, id, stream_id, event_type,
 		payload)
 }
@@ -206,17 +207,17 @@ fn (mut h CodexbotTsTestHarness) admin_state(trace_id string, request_id string)
 	})
 }
 
-fn codexbot_ts_command_by_type(commands []WorkerWebSocketUpstreamCommand, type_ string) WorkerWebSocketUpstreamCommand {
+fn codexbot_ts_command_by_type(commands []transport.WorkerWebSocketUpstreamCommand, type_ string) transport.WorkerWebSocketUpstreamCommand {
 	for command in commands {
 		if command.type_ == type_ {
 			return command
 		}
 	}
 	assert false, 'missing command type ${type_}'
-	return WorkerWebSocketUpstreamCommand{}
+	return transport.WorkerWebSocketUpstreamCommand{}
 }
 
-fn codexbot_ts_first_stream_id(commands []WorkerWebSocketUpstreamCommand) string {
+fn codexbot_ts_first_stream_id(commands []transport.WorkerWebSocketUpstreamCommand) string {
 	for command in commands {
 		if command.stream_id != '' {
 			return command.stream_id

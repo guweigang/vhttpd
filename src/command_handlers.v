@@ -1,4 +1,5 @@
 module main
+import transport
 
 import log
 
@@ -13,7 +14,7 @@ pub fn CodexCommandHandler.new(mut app App) CodexCommandHandler {
 	}
 }
 
-pub fn (h CodexCommandHandler) execute(command WorkerWebSocketUpstreamCommand, normalized NormalizedCommand, mut snapshot WebSocketUpstreamCommandActivity) (bool, string) {
+pub fn (h CodexCommandHandler) execute(command transport.WorkerWebSocketUpstreamCommand, normalized NormalizedCommand, mut snapshot WebSocketUpstreamCommandActivity) (bool, string) {
 	mut app := h.app
 	_ = command
 	if normalized.provider != 'codex' {
@@ -274,7 +275,7 @@ fn (h FeishuCommandHandler) execute_provider_message_update(normalized Normalize
 	return true, ''
 }
 
-pub fn (h FeishuCommandHandler) execute(command WorkerWebSocketUpstreamCommand, normalized NormalizedCommand, mut snapshot WebSocketUpstreamCommandActivity) (bool, string) {
+pub fn (h FeishuCommandHandler) execute(command transport.WorkerWebSocketUpstreamCommand, normalized NormalizedCommand, mut snapshot WebSocketUpstreamCommandActivity) (bool, string) {
 	_ = command
 	if normalized.normalized_provider('') != 'feishu' {
 		return false, ''
@@ -352,7 +353,7 @@ pub fn GenericUpstreamCommandHandler.new(mut app App) GenericUpstreamCommandHand
 	}
 }
 
-pub fn (h GenericUpstreamCommandHandler) execute(command WorkerWebSocketUpstreamCommand, normalized NormalizedCommand, mut snapshot WebSocketUpstreamCommandActivity) (bool, string) {
+pub fn (h GenericUpstreamCommandHandler) execute(command transport.WorkerWebSocketUpstreamCommand, normalized NormalizedCommand, mut snapshot WebSocketUpstreamCommandActivity) (bool, string) {
 	_ = command
 	if normalized.kind == 'admin.worker.restart_all' {
 		mut app := h.app

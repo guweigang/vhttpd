@@ -50,7 +50,9 @@ export function feishuUpdateCard(streamId, content) {
 }
 
 export function feishuUpdateText(streamId, text) {
-  return feishuUpdateCard(streamId, interactiveMarkdownCard(text));
+  const command = feishuUpdateCard(streamId, interactiveMarkdownCard(text));
+  command.text = text;
+  return command;
 }
 
 export function feishuStreamAppendText(streamId, text) {

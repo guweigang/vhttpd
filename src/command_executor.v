@@ -1,4 +1,5 @@
 module main
+import transport
 
 import log
 import time
@@ -69,7 +70,7 @@ fn (mut exec CommandExecutor) route_from_normalized(normalized NormalizedCommand
 	return .generic
 }
 
-fn (mut exec CommandExecutor) route_from_specs(command WorkerWebSocketUpstreamCommand) ProviderRouteKind {
+fn (mut exec CommandExecutor) route_from_specs(command transport.WorkerWebSocketUpstreamCommand) ProviderRouteKind {
 	return exec.route_from_normalized(NormalizedCommand.from_worker_command(command))
 }
 
@@ -95,8 +96,8 @@ pub fn CommandExecutor.ollama_route_enabled() bool {
 }
 
 // Object method: execute command envelopes against current runtime.
-pub fn (mut exec CommandExecutor) execute(source_activity_id string, ctx DispatchContext, commands []WorkerWebSocketUpstreamCommand) ([]WebSocketUpstreamCommandActivity, string) {
-	mut enriched := []WorkerWebSocketUpstreamCommand{cap: commands.len}
+pub fn (mut exec CommandExecutor) execute(source_activity_id string, ctx DispatchContext, commands []transport.WorkerWebSocketUpstreamCommand) ([]WebSocketUpstreamCommandActivity, string) {
+	mut enriched := []transport.WorkerWebSocketUpstreamCommand{cap: commands.len}
 	for command in commands {
 		mut next := command
 		mut metadata := command.metadata.clone()
@@ -114,7 +115,7 @@ pub fn (mut exec CommandExecutor) execute(source_activity_id string, ctx Dispatc
 	return exec.execute_websocket_upstream_commands(source_activity_id, enriched)
 }
 
-fn (exec CommandExecutor) new_snapshot(source_activity_id string, index int, command WorkerWebSocketUpstreamCommand) WebSocketUpstreamCommandActivity {
+fn (exec CommandExecutor) new_snapshot(source_activity_id string, index int, command transport.WorkerWebSocketUpstreamCommand) WebSocketUpstreamCommandActivity {
 	return WebSocketUpstreamCommandActivity{
 		event:                command.event
 		provider:             command.provider
@@ -139,7 +140,7 @@ fn (exec CommandExecutor) new_snapshot(source_activity_id string, index int, com
 	}
 }
 
-pub fn (mut exec CommandExecutor) execute_websocket_upstream_commands(source_activity_id string, commands []WorkerWebSocketUpstreamCommand) ([]WebSocketUpstreamCommandActivity, string) {
+pub fn (mut exec CommandExecutor) execute_websocket_upstream_commands(source_activity_id string, commands []transport.WorkerWebSocketUpstreamCommand) ([]WebSocketUpstreamCommandActivity, string) {
 	mut last_error := ''
 	mut snapshots := []WebSocketUpstreamCommandActivity{}
 	log.info('[ws-cmd] executing ${commands.len} commands from ${source_activity_id}')
@@ -214,7 +215,7 @@ fn (mut exec CommandExecutor) execute_provider_instance_command(normalized Norma
 	return false, ''
 }
 
-fn (mut exec CommandExecutor) execute_routed_command(route ProviderRouteKind, command WorkerWebSocketUpstreamCommand, normalized NormalizedCommand, mut snapshot WebSocketUpstreamCommandActivity) (bool, string) {
+fn (mut exec CommandExecutor) execute_routed_command(route ProviderRouteKind, command transport.WorkerWebSocketUpstreamCommand, normalized NormalizedCommand, mut snapshot WebSocketUpstreamCommandActivity) (bool, string) {
 	return match route {
 		.codex {
 			if exec.codex_enabled {
@@ -247,7 +248,7 @@ fn (mut exec CommandExecutor) execute_routed_command(route ProviderRouteKind, co
 }
 
 // Unified App-level entrypoint, now backed by CommandExecutor object.
-fn (mut app App) execute_command_envelopes(source_activity_id string, ctx DispatchContext, commands []WorkerWebSocketUpstreamCommand) ([]WebSocketUpstreamCommandActivity, string) {
+fn (mut app App) execute_command_envelopes(source_activity_id string, ctx DispatchContext, commands []transport.WorkerWebSocketUpstreamCommand) ([]WebSocketUpstreamCommandActivity, string) {
 	mut executor := CommandExecutor.new(mut app)
 	return executor.execute(source_activity_id, ctx, commands)
 }

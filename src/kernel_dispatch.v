@@ -1,4 +1,5 @@
 module main
+import transport
 
 pub enum KernelDispatchKind {
 	stream
@@ -21,14 +22,14 @@ pub:
 
 pub struct KernelWebSocketUpstreamDispatchOutcome {
 pub:
-	response          WorkerWebSocketUpstreamDispatchResponse
+	response          transport.WorkerWebSocketUpstreamDispatchResponse
 	command_snapshots []WebSocketUpstreamCommandActivity
 	command_error     string
 }
 
 pub struct KernelMcpDispatchOutcome {
 pub:
-	response          WorkerMcpDispatchResponse
+	response          transport.WorkerMcpDispatchResponse
 	command_snapshots []WebSocketUpstreamCommandActivity
 	command_error     string
 }
@@ -39,35 +40,35 @@ pub:
 	error_class string
 }
 
-pub fn KernelDispatchEnvelope.from_stream_dispatch(req StreamDispatchRequest) KernelDispatchEnvelope {
+pub fn KernelDispatchEnvelope.from_stream_dispatch(req transport.StreamDispatchRequest) KernelDispatchEnvelope {
 	return KernelDispatchEnvelope{
 		kind:    .stream
 		context: DispatchContext.from_stream_dispatch(req)
 	}
 }
 
-pub fn KernelDispatchEnvelope.from_mcp_dispatch(req WorkerMcpDispatchRequest) KernelDispatchEnvelope {
+pub fn KernelDispatchEnvelope.from_mcp_dispatch(req transport.WorkerMcpDispatchRequest) KernelDispatchEnvelope {
 	return KernelDispatchEnvelope{
 		kind:    .mcp
 		context: DispatchContext.from_mcp_dispatch(req)
 	}
 }
 
-pub fn KernelDispatchEnvelope.from_websocket_upstream(req WorkerWebSocketUpstreamDispatchRequest) KernelDispatchEnvelope {
+pub fn KernelDispatchEnvelope.from_websocket_upstream(req transport.WorkerWebSocketUpstreamDispatchRequest) KernelDispatchEnvelope {
 	return KernelDispatchEnvelope{
 		kind:    .websocket_upstream
 		context: DispatchContext.from_websocket_upstream(req)
 	}
 }
 
-pub fn KernelDispatchEnvelope.from_websocket_dispatch(frame WorkerWebSocketFrame) KernelDispatchEnvelope {
+pub fn KernelDispatchEnvelope.from_websocket_dispatch(frame transport.WorkerWebSocketFrame) KernelDispatchEnvelope {
 	return KernelDispatchEnvelope{
 		kind:    .websocket_dispatch
 		context: DispatchContext.from_websocket_dispatch(frame)
 	}
 }
 
-fn (mut app App) kernel_dispatch_stream(req StreamDispatchRequest) !StreamDispatchResponse {
+fn (mut app App) kernel_dispatch_stream(req transport.StreamDispatchRequest) !transport.StreamDispatchResponse {
 	_ = KernelDispatchEnvelope{
 		kind:    .stream
 		context: DispatchContext.from_stream_dispatch_provider(req, app.logic_executor_provider())
@@ -75,7 +76,7 @@ fn (mut app App) kernel_dispatch_stream(req StreamDispatchRequest) !StreamDispat
 	return app.logic_executor.dispatch_stream(mut app, req)
 }
 
-fn kernel_stream_dispatch_failure(resp StreamDispatchResponse) ?KernelStreamDispatchFailure {
+fn kernel_stream_dispatch_failure(resp transport.StreamDispatchResponse) ?KernelStreamDispatchFailure {
 	if resp.event != 'error' {
 		return none
 	}
@@ -85,7 +86,7 @@ fn kernel_stream_dispatch_failure(resp StreamDispatchResponse) ?KernelStreamDisp
 	}
 }
 
-fn (mut app App) kernel_dispatch_mcp(req WorkerMcpDispatchRequest) !WorkerMcpDispatchResponse {
+fn (mut app App) kernel_dispatch_mcp(req transport.WorkerMcpDispatchRequest) !transport.WorkerMcpDispatchResponse {
 	_ = KernelDispatchEnvelope{
 		kind:    .mcp
 		context: DispatchContext.from_mcp_dispatch_provider(req, app.logic_executor_provider())
@@ -93,7 +94,7 @@ fn (mut app App) kernel_dispatch_mcp(req WorkerMcpDispatchRequest) !WorkerMcpDis
 	return app.logic_executor.dispatch_mcp(mut app, req)
 }
 
-fn (mut app App) kernel_dispatch_mcp_handled(req WorkerMcpDispatchRequest) !KernelMcpDispatchOutcome {
+fn (mut app App) kernel_dispatch_mcp_handled(req transport.WorkerMcpDispatchRequest) !KernelMcpDispatchOutcome {
 	resp := app.kernel_dispatch_mcp(req)!
 	if resp.error != '' || resp.commands.len == 0 {
 		return KernelMcpDispatchOutcome{
@@ -111,12 +112,12 @@ fn (mut app App) kernel_dispatch_mcp_handled(req WorkerMcpDispatchRequest) !Kern
 	}
 }
 
-fn (mut app App) kernel_dispatch_websocket_upstream(req WorkerWebSocketUpstreamDispatchRequest) !WorkerWebSocketUpstreamDispatchResponse {
+fn (mut app App) kernel_dispatch_websocket_upstream(req transport.WorkerWebSocketUpstreamDispatchRequest) !transport.WorkerWebSocketUpstreamDispatchResponse {
 	_ = KernelDispatchEnvelope.from_websocket_upstream(req)
 	return app.logic_executor.dispatch_websocket_upstream(mut app, req)
 }
 
-fn (mut app App) kernel_dispatch_websocket_upstream_handled(req WorkerWebSocketUpstreamDispatchRequest) !KernelWebSocketUpstreamDispatchOutcome {
+fn (mut app App) kernel_dispatch_websocket_upstream_handled(req transport.WorkerWebSocketUpstreamDispatchRequest) !KernelWebSocketUpstreamDispatchOutcome {
 	resp := app.kernel_dispatch_websocket_upstream(req)!
 	if resp.error != '' || resp.commands.len == 0 {
 		return KernelWebSocketUpstreamDispatchOutcome{
@@ -134,7 +135,7 @@ fn (mut app App) kernel_dispatch_websocket_upstream_handled(req WorkerWebSocketU
 	}
 }
 
-fn (mut app App) kernel_dispatch_websocket_event(frame WorkerWebSocketFrame) !WorkerWebSocketDispatchResponse {
+fn (mut app App) kernel_dispatch_websocket_event(frame transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse {
 	_ = KernelDispatchEnvelope{
 		kind:    .websocket_dispatch
 		context: DispatchContext.from_websocket_dispatch_provider(frame,
@@ -151,8 +152,8 @@ fn kernel_dispatch_transport_failure(err_msg string) KernelDispatchTransportFail
 	}
 }
 
-fn (mut app App) kernel_stream_dispatch_open_request(method string, path string, body string, remote_addr string, req_id string, trace_id string, query map[string]string, headers map[string]string) StreamDispatchRequest {
-	return StreamDispatchRequest{
+fn (mut app App) kernel_stream_dispatch_open_request(method string, path string, body string, remote_addr string, req_id string, trace_id string, query map[string]string, headers map[string]string) transport.StreamDispatchRequest {
+	return transport.StreamDispatchRequest{
 		mode:        'stream'
 		strategy:    'dispatch'
 		event:       'open'
@@ -169,13 +170,13 @@ fn (mut app App) kernel_stream_dispatch_open_request(method string, path string,
 	}
 }
 
-fn (mut app App) kernel_stream_dispatch_open(method string, path string, body string, remote_addr string, req_id string, trace_id string, query map[string]string, headers map[string]string) !StreamDispatchResponse {
+fn (mut app App) kernel_stream_dispatch_open(method string, path string, body string, remote_addr string, req_id string, trace_id string, query map[string]string, headers map[string]string) !transport.StreamDispatchResponse {
 	return app.kernel_dispatch_stream(app.kernel_stream_dispatch_open_request(method, path, body,
 		remote_addr, req_id, trace_id, query, headers))
 }
 
-fn (mut app App) kernel_stream_dispatch_next_request(method string, path string, remote_addr string, req_id string, trace_id string, query map[string]string, headers map[string]string, state map[string]string) StreamDispatchRequest {
-	return StreamDispatchRequest{
+fn (mut app App) kernel_stream_dispatch_next_request(method string, path string, remote_addr string, req_id string, trace_id string, query map[string]string, headers map[string]string, state map[string]string) transport.StreamDispatchRequest {
+	return transport.StreamDispatchRequest{
 		mode:        'stream'
 		strategy:    'dispatch'
 		event:       'next'
@@ -192,13 +193,13 @@ fn (mut app App) kernel_stream_dispatch_next_request(method string, path string,
 	}
 }
 
-fn (mut app App) kernel_stream_dispatch_next(method string, path string, remote_addr string, req_id string, trace_id string, query map[string]string, headers map[string]string, state map[string]string) !StreamDispatchResponse {
+fn (mut app App) kernel_stream_dispatch_next(method string, path string, remote_addr string, req_id string, trace_id string, query map[string]string, headers map[string]string, state map[string]string) !transport.StreamDispatchResponse {
 	return app.kernel_dispatch_stream(app.kernel_stream_dispatch_next_request(method, path,
 		remote_addr, req_id, trace_id, query, headers, state))
 }
 
-fn (mut app App) kernel_stream_dispatch_close_request(req_id string, trace_id string, state map[string]string, reason string) StreamDispatchRequest {
-	return StreamDispatchRequest{
+fn (mut app App) kernel_stream_dispatch_close_request(req_id string, trace_id string, state map[string]string, reason string) transport.StreamDispatchRequest {
+	return transport.StreamDispatchRequest{
 		mode:       'stream'
 		strategy:   'dispatch'
 		event:      'close'
@@ -210,13 +211,13 @@ fn (mut app App) kernel_stream_dispatch_close_request(req_id string, trace_id st
 	}
 }
 
-fn (mut app App) kernel_stream_dispatch_close(req_id string, trace_id string, state map[string]string, reason string) !StreamDispatchResponse {
+fn (mut app App) kernel_stream_dispatch_close(req_id string, trace_id string, state map[string]string, reason string) !transport.StreamDispatchResponse {
 	return app.kernel_dispatch_stream(app.kernel_stream_dispatch_close_request(req_id, trace_id,
 		state, reason))
 }
 
-fn (mut app App) kernel_mcp_dispatch_request(method string, path string, headers map[string]string, protocol_version string, body string, remote_addr string, req_id string, trace_id string, session_id string, client_capabilities_json string) WorkerMcpDispatchRequest {
-	return WorkerMcpDispatchRequest{
+fn (mut app App) kernel_mcp_dispatch_request(method string, path string, headers map[string]string, protocol_version string, body string, remote_addr string, req_id string, trace_id string, session_id string, client_capabilities_json string) transport.WorkerMcpDispatchRequest {
+	return transport.WorkerMcpDispatchRequest{
 		mode:                     'mcp'
 		event:                    'message'
 		id:                       req_id
@@ -236,14 +237,14 @@ fn (mut app App) kernel_mcp_dispatch_request(method string, path string, headers
 	}
 }
 
-fn (mut app App) kernel_websocket_upstream_dispatch_request(activity_id string, provider string, instance string, trace_id string, event_type string, message_id string, target string, target_type string, payload string, received_at i64, metadata map[string]string) WorkerWebSocketUpstreamDispatchRequest {
+fn (mut app App) kernel_websocket_upstream_dispatch_request(activity_id string, provider string, instance string, trace_id string, event_type string, message_id string, target string, target_type string, payload string, received_at i64, metadata map[string]string) transport.WorkerWebSocketUpstreamDispatchRequest {
 	return app.kernel_websocket_upstream_dispatch_request_with_event('message', activity_id,
 		provider, instance, trace_id, event_type, message_id, target, target_type, payload,
 		received_at, metadata)
 }
 
-fn (mut app App) kernel_websocket_upstream_dispatch_request_with_event(event string, activity_id string, provider string, instance string, trace_id string, event_type string, message_id string, target string, target_type string, payload string, received_at i64, metadata map[string]string) WorkerWebSocketUpstreamDispatchRequest {
-	return WorkerWebSocketUpstreamDispatchRequest{
+fn (mut app App) kernel_websocket_upstream_dispatch_request_with_event(event string, activity_id string, provider string, instance string, trace_id string, event_type string, message_id string, target string, target_type string, payload string, received_at i64, metadata map[string]string) transport.WorkerWebSocketUpstreamDispatchRequest {
+	return transport.WorkerWebSocketUpstreamDispatchRequest{
 		mode:        'websocket_upstream'
 		event:       event
 		id:          activity_id
@@ -260,8 +261,8 @@ fn (mut app App) kernel_websocket_upstream_dispatch_request_with_event(event str
 	}
 }
 
-fn (mut app App) kernel_websocket_dispatch_frame(event string, _method string, path string, query map[string]string, headers map[string]string, remote_addr string, req_id string, trace_id string, opcode string, data string, code int, reason string, rooms []string, metadata map[string]string, room_members map[string][]string, member_metadata map[string]map[string]string, room_counts map[string]int, presence_users map[string][]string) WorkerWebSocketFrame {
-	return WorkerWebSocketFrame{
+fn (mut app App) kernel_websocket_dispatch_frame(event string, _method string, path string, query map[string]string, headers map[string]string, remote_addr string, req_id string, trace_id string, opcode string, data string, code int, reason string, rooms []string, metadata map[string]string, room_members map[string][]string, member_metadata map[string]map[string]string, room_counts map[string]int, presence_users map[string][]string) transport.WorkerWebSocketFrame {
+	return transport.WorkerWebSocketFrame{
 		mode:            'websocket_dispatch'
 		event:           event
 		id:              req_id

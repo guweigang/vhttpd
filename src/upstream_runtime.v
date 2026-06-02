@@ -1,4 +1,5 @@
 module main
+import transport
 
 import json
 import net
@@ -39,7 +40,7 @@ fn write_upstream_output(mut conn net.TcpConn, method string, stream_type string
 		return
 	}
 	if stream_type == 'sse' {
-		write_sse_message(mut conn, WorkerStreamFrame{
+		write_sse_message(mut conn, transport.WorkerStreamFrame{
 			sse_id:    if token_index > 0 { 'tok-${token_index}' } else { '' }
 			sse_event: if mapper != '' { mapper } else { 'message' }
 			data:      piece
@@ -61,7 +62,7 @@ fn write_upstream_done(mut conn net.TcpConn, method string, stream_type string, 
 	if method.to_upper() == 'HEAD' || stream_type != 'sse' {
 		return
 	}
-	write_sse_message(mut conn, WorkerStreamFrame{
+	write_sse_message(mut conn, transport.WorkerStreamFrame{
 		sse_id:    'done-${token_index + 1}'
 		sse_event: 'done'
 		data:      'done'
@@ -73,7 +74,7 @@ fn write_upstream_error_notice(mut conn net.TcpConn, method string, stream_type 
 		return
 	}
 	if stream_type == 'sse' {
-		write_sse_message(mut conn, WorkerStreamFrame{
+		write_sse_message(mut conn, transport.WorkerStreamFrame{
 			sse_event: 'error'
 			data:      err_msg
 		})!
@@ -161,7 +162,7 @@ fn upstream_http_method(method string) http.Method {
 	}
 }
 
-fn validate_upstream_plan(plan WorkerUpstreamPlanFrame) ?string {
+fn validate_upstream_plan(plan transport.WorkerUpstreamPlanFrame) ?string {
 	if plan.transport != 'http' {
 		return 'unsupported_transport'
 	}
@@ -174,7 +175,7 @@ fn validate_upstream_plan(plan WorkerUpstreamPlanFrame) ?string {
 	return none
 }
 
-fn execute_upstream_plan_fixture(mut state UpstreamExecState, plan WorkerUpstreamPlanFrame) ! {
+fn execute_upstream_plan_fixture(mut state UpstreamExecState, plan transport.WorkerUpstreamPlanFrame) ! {
 	lines := os.read_lines(plan.fixture_path)!
 	for line in lines {
 		consume_upstream_chunk(mut state, line + '\n')!
@@ -182,7 +183,7 @@ fn execute_upstream_plan_fixture(mut state UpstreamExecState, plan WorkerUpstrea
 	flush_upstream_buffer(mut state)!
 }
 
-fn execute_upstream_plan_http(mut state UpstreamExecState, plan WorkerUpstreamPlanFrame) ! {
+fn execute_upstream_plan_http(mut state UpstreamExecState, plan transport.WorkerUpstreamPlanFrame) ! {
 	mut header := http.new_header()
 	for name, value in plan.request_headers {
 		header.add_custom(name, value) or {}
@@ -201,7 +202,7 @@ fn execute_upstream_plan_http(mut state UpstreamExecState, plan WorkerUpstreamPl
 	flush_upstream_buffer(mut state)!
 }
 
-fn execute_upstream_plan(mut app App, mut ctx Context, plan WorkerUpstreamPlanFrame, method string, path string, req_id string, trace_id string, start_ms i64) veb.Result {
+fn execute_upstream_plan(mut app App, mut ctx Context, plan transport.WorkerUpstreamPlanFrame, method string, path string, req_id string, trace_id string, start_ms i64) veb.Result {
 	if error_class := validate_upstream_plan(plan) {
 		app.upstream_runtime_note_error()
 		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
@@ -329,7 +330,7 @@ fn execute_upstream_plan(mut app App, mut ctx Context, plan WorkerUpstreamPlanFr
 	return veb.no_result()
 }
 
-fn (mut app App) upstream_runtime_register(plan WorkerUpstreamPlanFrame, method string, path string, req_id string, trace_id string) {
+fn (mut app App) upstream_runtime_register(plan transport.WorkerUpstreamPlanFrame, method string, path string, req_id string, trace_id string) {
 	if req_id == '' {
 		return
 	}

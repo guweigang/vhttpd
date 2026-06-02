@@ -1,6 +1,6 @@
 module main
 
-import common
+import config
 
 // Provider runtime settings are resolved here so server.v can stay focused on
 // transport/process orchestration instead of provider-specific defaults.
@@ -11,7 +11,7 @@ struct FeishuRuntimeSettings {
 	reconnect_delay_ms         int
 	token_refresh_skew_seconds int
 	recent_event_limit         int
-	apps                       map[string]FeishuAppConfig
+	apps                       map[string]config.FeishuAppConfig
 }
 
 struct CodexRuntimeSettings {
@@ -54,7 +54,7 @@ struct ProviderRuntimeSettings {
 	ollama_enabled bool
 }
 
-fn resolve_provider_runtime_settings(args []string, cfg VhttpdConfig) ProviderRuntimeSettings {
+fn resolve_provider_runtime_settings(args []string, cfg config.VhttpdConfig) ProviderRuntimeSettings {
 	db_driver := normalize_db_driver_name(cfg.db.driver)
 	db_host := if db_driver in ['pgsql', 'pg', 'postgres', 'postgresql'] {
 		if cfg.db.pgsql.host.trim_space() != '' { cfg.db.pgsql.host } else { '127.0.0.1' }
@@ -86,14 +86,14 @@ fn resolve_provider_runtime_settings(args []string, cfg VhttpdConfig) ProviderRu
 	} else {
 		if cfg.db.mysql.pool_size > 0 { cfg.db.mysql.pool_size } else { 5 }
 	}
-	feishu_enabled := common.arg_bool_or(args, '--feishu-enabled', cfg.feishu.enabled)
-	feishu_app_id := common.arg_string_or(args, '--feishu-app-id', '')
-	feishu_app_secret := common.arg_string_or(args, '--feishu-app-secret', '')
-	feishu_open_base_url := normalize_feishu_open_base(common.arg_string_or(args, '--feishu-open-base-url',
+	feishu_enabled := config.arg_bool_or(args, '--feishu-enabled', cfg.feishu.enabled)
+	feishu_app_id := config.arg_string_or(args, '--feishu-app-id', '')
+	feishu_app_secret := config.arg_string_or(args, '--feishu-app-secret', '')
+	feishu_open_base_url := normalize_feishu_open_base(config.arg_string_or(args, '--feishu-open-base-url',
 		cfg.feishu.open_base_url))
 	mut feishu_apps := cfg.feishu.apps.clone()
 	if feishu_app_id.trim_space() != '' || feishu_app_secret.trim_space() != '' {
-		feishu_apps['main'] = FeishuAppConfig{
+		feishu_apps['main'] = config.FeishuAppConfig{
 			app_id:     feishu_app_id
 			app_secret: feishu_app_secret
 		}
@@ -181,6 +181,6 @@ fn resolve_provider_runtime_settings(args []string, cfg VhttpdConfig) ProviderRu
 			database:  db_database
 			pool_size: db_pool_size
 		}
-		ollama_enabled: common.arg_bool_or(args, '--ollama-enabled', false)
+		ollama_enabled: config.arg_bool_or(args, '--ollama-enabled', false)
 	}
 }

@@ -1,4 +1,5 @@
 module main
+import transport
 
 fn test_normalized_command_kind_for_legacy_type_mappings() {
 	assert normalized_command_kind_for_legacy_type('codex.rpc.send') == 'provider.rpc.call'
@@ -22,7 +23,7 @@ fn test_normalized_command_infer_provider_prefers_declared_provider() {
 }
 
 fn test_normalized_command_from_worker_command_preserves_correlation_and_metadata() {
-	cmd := WorkerWebSocketUpstreamCommand{
+	cmd := transport.WorkerWebSocketUpstreamCommand{
 		type_:       'codex.turn.start'
 		provider:    'codex'
 		instance:    'main'
@@ -63,7 +64,7 @@ fn test_normalized_command_from_worker_command_preserves_correlation_and_metadat
 }
 
 fn test_normalized_command_extracts_rpc_reply_fields_and_finish_semantics() {
-	rpc_cmd := WorkerWebSocketUpstreamCommand{
+	rpc_cmd := transport.WorkerWebSocketUpstreamCommand{
 		type_: 'codex.rpc.reply'
 		metadata: {
 			'id':     '42'
@@ -75,7 +76,7 @@ fn test_normalized_command_extracts_rpc_reply_fields_and_finish_semantics() {
 	assert rpc_normalized.rpc_result == '{"ok":true}'
 	assert rpc_normalized.stream_finish == false
 
-	stream_cmd := WorkerWebSocketUpstreamCommand{
+	stream_cmd := transport.WorkerWebSocketUpstreamCommand{
 		type_: 'feishu.message.flush'
 		metadata: {
 			'finish': 'true'
@@ -87,7 +88,7 @@ fn test_normalized_command_extracts_rpc_reply_fields_and_finish_semantics() {
 }
 
 fn test_normalized_command_extracts_provider_instance_upsert_fields() {
-	cmd := WorkerWebSocketUpstreamCommand{
+	cmd := transport.WorkerWebSocketUpstreamCommand{
 		type_:    'provider.instance.upsert'
 		provider: 'codex'
 		instance: 'project_demo'
@@ -107,7 +108,7 @@ fn test_normalized_command_extracts_provider_instance_upsert_fields() {
 }
 
 fn test_normalized_command_response_message_id_prefers_target_message_id() {
-	cmd := WorkerWebSocketUpstreamCommand{
+	cmd := transport.WorkerWebSocketUpstreamCommand{
 		type_:       'codex.turn.start'
 		target:      'om_target_001'
 		target_type: 'message_id'
@@ -118,7 +119,7 @@ fn test_normalized_command_response_message_id_prefers_target_message_id() {
 	normalized := NormalizedCommand.from_worker_command(cmd)
 	assert normalized.response_message_id == 'om_target_001'
 
-	cmd_without_target := WorkerWebSocketUpstreamCommand{
+	cmd_without_target := transport.WorkerWebSocketUpstreamCommand{
 		type_: 'codex.turn.start'
 		metadata: {
 			'message_id': 'om_meta_002'
@@ -241,7 +242,7 @@ fn test_normalized_command_routing_type_prefers_legacy_type_for_compatibility() 
 }
 
 fn test_command_envelope_legacy_helpers_remain_stable() {
-	cmd := WorkerWebSocketUpstreamCommand{
+	cmd := transport.WorkerWebSocketUpstreamCommand{
 		type_:    'feishu.message.send'
 		provider: ''
 		instance: 'main'

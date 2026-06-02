@@ -1,4 +1,4 @@
-module worker_protocol
+module transport
 
 // Worker HTTP/Stream communication protocol structures.
 pub struct WorkerResponse {

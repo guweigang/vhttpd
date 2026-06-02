@@ -1,6 +1,5 @@
 module config
 
-import common
 import os
 import toml
 
@@ -312,7 +311,7 @@ pub fn default_vhttpd_config() VhttpdConfig {
 }
 
 pub fn load_vhttpd_config(args []string) !VhttpdConfig {
-	mut config_path := common.arg_string_or(args, '--config', '')
+	mut config_path := arg_string_or(args, '--config', '')
 	if config_path == '' {
 		config_path = os.getenv('VHTTPD_CONFIG')
 	}

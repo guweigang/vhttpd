@@ -1,4 +1,5 @@
 module main
+import transport
 
 import json
 import net.http
@@ -25,9 +26,9 @@ pub struct HttpLogicDispatchOutcome {
 pub:
 	kind          HttpLogicDispatchKind
 	socket_path   string
-	response      WorkerResponse
-	stream_start  WorkerStreamFrame
-	upstream_plan WorkerUpstreamPlanFrame
+	response      transport.WorkerResponse
+	stream_start  transport.WorkerStreamFrame
+	upstream_plan transport.WorkerUpstreamPlanFrame
 mut:
 	conn &unix.StreamConn = unsafe { nil }
 }
@@ -93,10 +94,10 @@ pub interface LogicExecutor {
 	close()
 	dispatch_http(mut app App, req HttpLogicDispatchRequest) !HttpLogicDispatchOutcome
 	open_websocket_session(mut app App, req WebSocketSessionOpenRequest) !WebSocketSessionOpenOutcome
-	dispatch_stream(mut app App, req StreamDispatchRequest) !StreamDispatchResponse
-	dispatch_mcp(mut app App, req WorkerMcpDispatchRequest) !WorkerMcpDispatchResponse
-	dispatch_websocket_upstream(mut app App, req WorkerWebSocketUpstreamDispatchRequest) !WorkerWebSocketUpstreamDispatchResponse
-	dispatch_websocket_event(mut app App, frame WorkerWebSocketFrame) !WorkerWebSocketDispatchResponse
+	dispatch_stream(mut app App, req transport.StreamDispatchRequest) !transport.StreamDispatchResponse
+	dispatch_mcp(mut app App, req transport.WorkerMcpDispatchRequest) !transport.WorkerMcpDispatchResponse
+	dispatch_websocket_upstream(mut app App, req transport.WorkerWebSocketUpstreamDispatchRequest) !transport.WorkerWebSocketUpstreamDispatchResponse
+	dispatch_websocket_event(mut app App, frame transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse
 }
 
 pub struct DisabledLogicExecutor {}
@@ -148,28 +149,28 @@ pub fn (e DisabledLogicExecutor) open_websocket_session(mut app App, req WebSock
 	return error('logic_executor_disabled')
 }
 
-pub fn (e DisabledLogicExecutor) dispatch_stream(mut app App, req StreamDispatchRequest) !StreamDispatchResponse {
+pub fn (e DisabledLogicExecutor) dispatch_stream(mut app App, req transport.StreamDispatchRequest) !transport.StreamDispatchResponse {
 	_ = e
 	_ = app
 	_ = req
 	return error('logic_executor_disabled')
 }
 
-pub fn (e DisabledLogicExecutor) dispatch_mcp(mut app App, req WorkerMcpDispatchRequest) !WorkerMcpDispatchResponse {
+pub fn (e DisabledLogicExecutor) dispatch_mcp(mut app App, req transport.WorkerMcpDispatchRequest) !transport.WorkerMcpDispatchResponse {
 	_ = e
 	_ = app
 	_ = req
 	return error('logic_executor_disabled')
 }
 
-pub fn (e DisabledLogicExecutor) dispatch_websocket_upstream(mut app App, req WorkerWebSocketUpstreamDispatchRequest) !WorkerWebSocketUpstreamDispatchResponse {
+pub fn (e DisabledLogicExecutor) dispatch_websocket_upstream(mut app App, req transport.WorkerWebSocketUpstreamDispatchRequest) !transport.WorkerWebSocketUpstreamDispatchResponse {
 	_ = e
 	_ = app
 	_ = req
 	return error('logic_executor_disabled')
 }
 
-pub fn (e DisabledLogicExecutor) dispatch_websocket_event(mut app App, frame WorkerWebSocketFrame) !WorkerWebSocketDispatchResponse {
+pub fn (e DisabledLogicExecutor) dispatch_websocket_event(mut app App, frame transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse {
 	_ = e
 	_ = app
 	_ = frame
@@ -247,7 +248,7 @@ pub fn (e SocketWorkerExecutor) dispatch_http(mut app App, req HttpLogicDispatch
 			upstream_plan: plan
 		}
 	}
-	resp := json.decode(WorkerResponse, first_raw) or {
+	resp := json.decode(transport.WorkerResponse, first_raw) or {
 		conn.close() or {}
 		app.on_worker_request_finished(selected_socket)
 		return error('transport_error: decode worker response failed')
@@ -289,22 +290,22 @@ pub fn (e SocketWorkerExecutor) open_websocket_session(mut app App, req WebSocke
 	}
 }
 
-pub fn (e SocketWorkerExecutor) dispatch_stream(mut app App, req StreamDispatchRequest) !StreamDispatchResponse {
+pub fn (e SocketWorkerExecutor) dispatch_stream(mut app App, req transport.StreamDispatchRequest) !transport.StreamDispatchResponse {
 	_ = e
 	return app.worker_backend_dispatch_stream(req)
 }
 
-pub fn (e SocketWorkerExecutor) dispatch_mcp(mut app App, req WorkerMcpDispatchRequest) !WorkerMcpDispatchResponse {
+pub fn (e SocketWorkerExecutor) dispatch_mcp(mut app App, req transport.WorkerMcpDispatchRequest) !transport.WorkerMcpDispatchResponse {
 	_ = e
 	return app.worker_backend_dispatch_mcp(req)
 }
 
-pub fn (e SocketWorkerExecutor) dispatch_websocket_upstream(mut app App, req WorkerWebSocketUpstreamDispatchRequest) !WorkerWebSocketUpstreamDispatchResponse {
+pub fn (e SocketWorkerExecutor) dispatch_websocket_upstream(mut app App, req transport.WorkerWebSocketUpstreamDispatchRequest) !transport.WorkerWebSocketUpstreamDispatchResponse {
 	_ = e
 	return app.worker_backend_dispatch_websocket_upstream(req)
 }
 
-pub fn (e SocketWorkerExecutor) dispatch_websocket_event(mut app App, frame WorkerWebSocketFrame) !WorkerWebSocketDispatchResponse {
+pub fn (e SocketWorkerExecutor) dispatch_websocket_event(mut app App, frame transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse {
 	_ = e
 	return app.worker_backend_dispatch_websocket_event(frame)
 }

@@ -1,6 +1,6 @@
 module main
 
-import common
+import config
 
 import os
 
@@ -21,32 +21,32 @@ pub:
 	app_build_cfg         AppRuntimeBuildConfig
 }
 
-fn resolve_server_runtime_config(args []string, cfg VhttpdConfig) !ServerRuntimeConfig {
-	host := common.arg_string_or(args, '--host', cfg.server.host)
-	port := common.arg_int_or(args, '--port', cfg.server.port)
+fn resolve_server_runtime_config(args []string, cfg config.VhttpdConfig) !ServerRuntimeConfig {
+	host := config.arg_string_or(args, '--host', cfg.server.host)
+	port := config.arg_int_or(args, '--port', cfg.server.port)
 	return resolve_server_runtime_config_for_target(args, cfg, '', '', host, port, true)
 }
 
-fn resolve_server_runtime_config_for_target(args []string, cfg VhttpdConfig, listener_id string, site_id string, host string, port int, admin_enabled_override bool) !ServerRuntimeConfig {
-	event_log := common.arg_string_or(args, '--event-log', cfg.files.event_log)
-	pid_file := common.arg_string_or(args, '--pid-file', cfg.files.pid_file)
-	worker_read_timeout_ms := common.arg_int_or(args, '--worker-read-timeout-ms', cfg.worker.read_timeout_ms)
-	worker_cmd_override := common.arg_string_or(args, '--worker-cmd', cfg.worker.cmd)
-	worker_autostart := common.arg_bool_or(args, '--worker-autostart', cfg.worker.autostart)
-	worker_restart_backoff_ms := common.arg_int_or(args, '--worker-restart-backoff-ms', cfg.worker.restart_backoff_ms)
-	worker_restart_backoff_max_ms := common.arg_int_or(args, '--worker-restart-backoff-max-ms',
+fn resolve_server_runtime_config_for_target(args []string, cfg config.VhttpdConfig, listener_id string, site_id string, host string, port int, admin_enabled_override bool) !ServerRuntimeConfig {
+	event_log := config.arg_string_or(args, '--event-log', cfg.files.event_log)
+	pid_file := config.arg_string_or(args, '--pid-file', cfg.files.pid_file)
+	worker_read_timeout_ms := config.arg_int_or(args, '--worker-read-timeout-ms', cfg.worker.read_timeout_ms)
+	worker_cmd_override := config.arg_string_or(args, '--worker-cmd', cfg.worker.cmd)
+	worker_autostart := config.arg_bool_or(args, '--worker-autostart', cfg.worker.autostart)
+	worker_restart_backoff_ms := config.arg_int_or(args, '--worker-restart-backoff-ms', cfg.worker.restart_backoff_ms)
+	worker_restart_backoff_max_ms := config.arg_int_or(args, '--worker-restart-backoff-max-ms',
 		cfg.worker.restart_backoff_max_ms)
-	worker_max_requests := common.arg_int_or(args, '--worker-max-requests', cfg.worker.max_requests)
-	worker_queue_capacity := common.arg_int_or(args, '--worker-queue-capacity', cfg.worker.queue_capacity)
-	worker_queue_timeout_ms := common.arg_int_or(args, '--worker-queue-timeout-ms', cfg.worker.queue_timeout_ms)
+	worker_max_requests := config.arg_int_or(args, '--worker-max-requests', cfg.worker.max_requests)
+	worker_queue_capacity := config.arg_int_or(args, '--worker-queue-capacity', cfg.worker.queue_capacity)
+	worker_queue_timeout_ms := config.arg_int_or(args, '--worker-queue-timeout-ms', cfg.worker.queue_timeout_ms)
 	assets_enabled := cfg.assets.enabled
 	assets_prefix := normalize_assets_prefix(cfg.assets.prefix)
 	assets_root := cfg.assets.root
 	assets_root_real := if assets_root.trim_space() == '' { '' } else { os.real_path(assets_root) }
 	assets_cache_control := cfg.assets.cache_control
-	admin_host_arg := common.arg_string_or(args, '--admin-host', cfg.admin.host).trim_space()
-	admin_port := common.arg_int_or(args, '--admin-port', cfg.admin.port)
-	admin_token := common.arg_string_or(args, '--admin-token', cfg.admin.token)
+	admin_host_arg := config.arg_string_or(args, '--admin-host', cfg.admin.host).trim_space()
+	admin_port := config.arg_int_or(args, '--admin-port', cfg.admin.port)
+	admin_token := config.arg_string_or(args, '--admin-token', cfg.admin.token)
 	admin_enabled := admin_enabled_override && admin_port > 0
 	admin_host := if admin_host_arg == '' { '127.0.0.1' } else { admin_host_arg }
 	provider_settings := resolve_provider_runtime_settings(args, cfg)

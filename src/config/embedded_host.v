@@ -1,6 +1,5 @@
 module config
 
-import common
 
 import os
 
@@ -33,7 +32,7 @@ pub:
 }
 
 pub fn resolve_embedded_host_runtime_config(args []string, defaults EmbeddedHostRuntimeConfig, cli EmbeddedHostCliOverrides) !EmbeddedHostRuntimeConfig {
-	mut app_entry := common.arg_string_or(args, cli.app_entry_flag, defaults.app_entry).trim_space()
+	mut app_entry := arg_string_or(args, cli.app_entry_flag, defaults.app_entry).trim_space()
 	if app_entry == '' {
 		return error('embedded_host_missing_app_entry')
 	}
@@ -41,30 +40,30 @@ pub fn resolve_embedded_host_runtime_config(args []string, defaults EmbeddedHost
 	if !os.exists(app_entry) {
 		return error('embedded_host_app_entry_not_found:${app_entry}')
 	}
-	mut module_root := common.arg_string_or(args, cli.module_root_flag, defaults.module_root).trim_space()
+	mut module_root := arg_string_or(args, cli.module_root_flag, defaults.module_root).trim_space()
 	if module_root == '' {
 		module_root = os.dir(app_entry)
 	} else {
 		module_root = os.abs_path(module_root)
 	}
-	mut build_root := common.arg_string_or(args, cli.build_root_flag, defaults.build_root).trim_space()
+	mut build_root := arg_string_or(args, cli.build_root_flag, defaults.build_root).trim_space()
 	if build_root != '' {
 		build_root = os.abs_path(build_root)
 	}
-	mut signature_root := common.arg_string_or(args, cli.signature_root_flag, defaults.signature_root).trim_space()
+	mut signature_root := arg_string_or(args, cli.signature_root_flag, defaults.signature_root).trim_space()
 	if signature_root == '' {
 		signature_root = module_root
 	} else {
 		signature_root = os.abs_path(signature_root)
 	}
-	mut runtime_profile := common.arg_string_or(args, cli.runtime_profile_flag, defaults.runtime_profile).trim_space()
+	mut runtime_profile := arg_string_or(args, cli.runtime_profile_flag, defaults.runtime_profile).trim_space()
 	if runtime_profile == '' {
 		runtime_profile = 'script'
 	}
-	lane_count_raw := common.arg_int_or(args, cli.lane_count_flag, defaults.lane_count)
+	lane_count_raw := arg_int_or(args, cli.lane_count_flag, defaults.lane_count)
 	lane_count := if lane_count_raw > 0 { lane_count_raw } else { 1 }
-	signature_include := common.arg_string_list_or(args, cli.signature_include_flag, defaults.signature_include)
-	signature_exclude := common.arg_string_list_or(args, cli.signature_exclude_flag, defaults.signature_exclude)
+	signature_include := arg_string_list_or(args, cli.signature_include_flag, defaults.signature_include)
+	signature_exclude := arg_string_list_or(args, cli.signature_exclude_flag, defaults.signature_exclude)
 	return EmbeddedHostRuntimeConfig{
 		app_entry:         app_entry
 		module_root:       module_root

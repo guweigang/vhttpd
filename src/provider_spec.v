@@ -1,4 +1,5 @@
 module main
+import transport
 
 pub enum ProviderRouteKind {
 	codex
@@ -31,7 +32,7 @@ pub fn (m CommandMatcher) matches(command_type string) bool {
 
 // ProviderCommandHandler bridges provider-specific command execution.
 pub interface ProviderCommandHandler {
-	execute(command WorkerWebSocketUpstreamCommand, normalized NormalizedCommand, mut snapshot WebSocketUpstreamCommandActivity) (bool, string)
+	execute(command transport.WorkerWebSocketUpstreamCommand, normalized NormalizedCommand, mut snapshot WebSocketUpstreamCommandActivity) (bool, string)
 }
 
 // ProviderRuntime represents optional provider-owned runtime lifecycle hooks.
@@ -150,7 +151,7 @@ pub fn (mut app App) admin_provider_runtimes_snapshot() []AdminProviderRuntimeSn
 // No-op defaults let specs be constructed safely while keeping behavior stable.
 pub struct NoopProviderCommandHandler {}
 
-pub fn (h NoopProviderCommandHandler) execute(command WorkerWebSocketUpstreamCommand, normalized NormalizedCommand, mut snapshot WebSocketUpstreamCommandActivity) (bool, string) {
+pub fn (h NoopProviderCommandHandler) execute(command transport.WorkerWebSocketUpstreamCommand, normalized NormalizedCommand, mut snapshot WebSocketUpstreamCommandActivity) (bool, string) {
 	_ = command
 	_ = normalized
 	_ = snapshot

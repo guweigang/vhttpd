@@ -1,4 +1,5 @@
 module main
+import config
 
 import net
 import net.http
@@ -224,10 +225,10 @@ fn openai_integration_mock_fallback_upstream(port int, request_log string, ready
 
 fn openai_integration_start_gateway(port int, upstream_port int, plugin_file string) {
 	plugins := if plugin_file.trim_space() == '' {
-		map[string]PluginConfig{}
+		map[string]config.PluginConfig{}
 	} else {
 		{
-			'planner': PluginConfig{
+			'planner': config.PluginConfig{
 				kind:            'vjsx'
 				app_entry:       plugin_file
 				runtime_profile: 'node'
@@ -242,21 +243,21 @@ fn openai_integration_start_gateway(port int, upstream_port int, plugin_file str
 		openai_base_path:           '/v1'
 		openai_plugin:              if plugin_file.trim_space() == '' { '' } else { 'planner' }
 		openai_default_backend:     'mock'
-		openai_endpoints:           OpenAIEndpointsConfig{}
+		openai_endpoints:           config.OpenAIEndpointsConfig{}
 		openai_backends:            {
-			'mock':   OpenAIBackendConfig{
+			'mock':   config.OpenAIBackendConfig{
 				base_url: 'http://127.0.0.1:${upstream_port}/v1'
 			}
-			'backup': OpenAIBackendConfig{
+			'backup': config.OpenAIBackendConfig{
 				base_url: 'http://127.0.0.1:${upstream_port}/v1'
 			}
-			'exec':   OpenAIBackendConfig{
+			'exec':   config.OpenAIBackendConfig{
 				kind:     'executor'
 				executor: 'planner'
 			}
 		}
 		openai_routes:              {
-			'public': OpenAIRouteConfig{
+			'public': config.OpenAIRouteConfig{
 				models:         ['public-model']
 				backend:        'mock'
 				upstream_model: 'builtin-upstream-model'

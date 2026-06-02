@@ -126,13 +126,13 @@ test-inproc:
 	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) test $(INPROC_TEST_FILES)
 
 test-codexbot:
-	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) test $(CODEXBOT_TEST_FILES)
+	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) -d vjsx_sqlite test $(CODEXBOT_TEST_FILES)
 
 test-codexbot-fast:
-	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) test $(CODEXBOT_FAST_TEST_FILES)
+	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) -d vjsx_sqlite test $(CODEXBOT_FAST_TEST_FILES)
 
 test-codexbot-lifecycle:
-	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) test $(CODEXBOT_LIFECYCLE_TEST_FILES)
+	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) -d vjsx_sqlite test $(CODEXBOT_LIFECYCLE_TEST_FILES)
 
 test-profile-codexbot:
 	@/bin/zsh $(ROOT)/tools/profile_codexbot_tests.sh $(ROOT)

@@ -16,7 +16,7 @@ import config
 import state_store
 import veb.request_id
 import veb.sse
-import worker_protocol
+import transport
 
 pub struct Context {
 	veb.Context
@@ -40,7 +40,7 @@ pub mut:
 	admin_on_data_plane                         bool
 	admin_token                                 string
 	runtime_config_json                         string
-	plugin_configs                              map[string]PluginConfig
+	plugin_configs                              map[string]config.PluginConfig
 	plugin_vjsx                                 map[string]InProcVjsxExecutor
 	assets_enabled                              bool
 	assets_prefix                               string
@@ -61,14 +61,14 @@ pub mut:
 	openai_base_path                            string
 	openai_default_backend                      string
 	openai_plugin                               string
-	openai_endpoints                            OpenAIEndpointsConfig
-	openai_backends                             map[string]OpenAIBackendConfig
-	openai_routes                               map[string]OpenAIRouteConfig
+	openai_endpoints                            config.OpenAIEndpointsConfig
+	openai_backends                             map[string]config.OpenAIBackendConfig
+	openai_routes                               map[string]config.OpenAIRouteConfig
 	openai_responses                            state_store.MemoryStateStore[OpenAIResponseRecord]
 	websocket_upstream_recent_dispatch_limit    int
 	auto_start_dynamic_upstreams                bool
-	feishu_static_apps                          map[string]FeishuAppConfig
-	feishu_apps                                 map[string]FeishuAppConfig
+	feishu_static_apps                          map[string]config.FeishuAppConfig
+	feishu_apps                                 map[string]config.FeishuAppConfig
 	stat_http_requests_total                    i64
 	stat_http_errors_total                      i64
 	stat_http_timeouts_total                    i64
@@ -138,35 +138,7 @@ struct CodexTarget {
 	message_id string
 }
 
-// ── TODO: Transitional type aliases ────────────────────────────────────────
-// These aliases exist only to avoid touching every call site during the
-// worker_protocol module extraction.  Once all callers in module main are
-// updated to use worker_protocol.QualifiedName directly, these aliases
-// should be deleted.  See TODO_REFACTOR.md for tracking.
-// ──────────────────────────────────────────────────────────────────────────
-pub type WorkerResponse = worker_protocol.WorkerResponse
-pub type WorkerStreamFrame = worker_protocol.WorkerStreamFrame
-pub type StreamDispatchRequest = worker_protocol.StreamDispatchRequest
-pub type StreamDispatchChunk = worker_protocol.StreamDispatchChunk
-pub type StreamDispatchResponse = worker_protocol.StreamDispatchResponse
-pub type WorkerUpstreamPlanFrame = worker_protocol.WorkerUpstreamPlanFrame
-pub type WorkerRequestPayload = worker_protocol.WorkerRequestPayload
-pub type WorkerWebSocketFrame = worker_protocol.WorkerWebSocketFrame
-pub type WorkerWebSocketDispatchResponse = worker_protocol.WorkerWebSocketDispatchResponse
-pub type WorkerWebSocketDispatchCommandFailure = worker_protocol.WorkerWebSocketDispatchCommandFailure
-pub type WorkerWebSocketDispatchCommandsResult = worker_protocol.WorkerWebSocketDispatchCommandsResult
-pub type WorkerWebSocketDispatchFailureEnvelope = worker_protocol.WorkerWebSocketDispatchFailureEnvelope
-pub type WorkerMcpDispatchRequest = worker_protocol.WorkerMcpDispatchRequest
-pub type WorkerMcpDispatchResponse = worker_protocol.WorkerMcpDispatchResponse
-pub type WorkerWebSocketUpstreamDispatchRequest = worker_protocol.WorkerWebSocketUpstreamDispatchRequest
-pub type WorkerWebSocketUpstreamCommand = worker_protocol.WorkerWebSocketUpstreamCommand
-pub type WorkerWebSocketUpstreamDispatchResponse = worker_protocol.WorkerWebSocketUpstreamDispatchResponse
-
-// ── TODO: Transitional type aliases for config module ────────────────────
-// These aliases exist only to avoid touching every call site during the
-// config module extraction.  Once all callers are updated to use
-// config.QualifiedName directly, these aliases should be deleted.
-// ──────────────────────────────────────────────────────────────────────────
+// ── Transitional config type aliases (for files where config var conflicts with import) ─
 pub type AdminConfig = config.AdminConfig
 pub type AssetsConfig = config.AssetsConfig
 pub type BridgeConfig = config.BridgeConfig
@@ -385,7 +357,7 @@ fn worker_websocket_open(mut app App, mut conn unix.StreamConn, req http.Request
 	query := parse_query_map(query_string)
 	room_members, member_metadata, room_counts, presence_users :=
 		app.ws_hub_presence_snapshot(req_id)
-	frame := WorkerWebSocketFrame{
+	frame := transport.WorkerWebSocketFrame{
 		mode:            'websocket'
 		event:           'open'
 		id:              req_id
@@ -469,7 +441,7 @@ fn worker_websocket_message_cb(mut ws websocket.Client, msg &websocket.Message, 
 	room_members, member_metadata, room_counts, presence_users :=
 		state.app.ws_hub_presence_snapshot(state.conn_id)
 	state.cb_mu.@lock()
-	write_worker_websocket_frame(mut state.worker_conn, WorkerWebSocketFrame{
+	write_worker_websocket_frame(mut state.worker_conn, transport.WorkerWebSocketFrame{
 		mode:            'websocket'
 		event:           'message'
 		id:              state.request_id
@@ -576,7 +548,7 @@ fn worker_websocket_close_cb(mut _ws websocket.Client, code int, reason string, 
 	if !state.worker_initiated_close {
 		room_members, member_metadata, room_counts, presence_users :=
 			state.app.ws_hub_presence_snapshot(state.conn_id)
-		write_worker_websocket_frame(mut state.worker_conn, WorkerWebSocketFrame{
+		write_worker_websocket_frame(mut state.worker_conn, transport.WorkerWebSocketFrame{
 			mode:            'websocket'
 			event:           'close'
 			id:              state.request_id
@@ -782,7 +754,7 @@ fn handle_worker_websocket_session(mut app App, mut client_conn net.TcpConn, mut
 	}
 }
 
-fn handle_worker_websocket_dispatch_session(mut app App, mut client_conn net.TcpConn, key string, method string, path string, query map[string]string, headers map[string]string, remote_addr string, req_id string, trace_id string, start_ms i64, open_commands []WorkerWebSocketFrame) {
+fn handle_worker_websocket_dispatch_session(mut app App, mut client_conn net.TcpConn, key string, method string, path string, query map[string]string, headers map[string]string, remote_addr string, req_id string, trace_id string, start_ms i64, open_commands []transport.WorkerWebSocketFrame) {
 	mut ws_server := websocket.new_server(.ip, 0, '')
 	mut lifecycle := &WebSocketDispatchConnState{}
 	mut state := &WebSocketDispatchBridgeState{
@@ -838,7 +810,7 @@ fn worker_websocket_dispatch_close_current(state &WebSocketDispatchBridgeState, 
 	}
 }
 
-fn worker_websocket_dispatch_followup_close(state &WebSocketDispatchBridgeState, failures []WorkerWebSocketDispatchCommandFailure) ?WorkerWebSocketFrame {
+fn worker_websocket_dispatch_followup_close(state &WebSocketDispatchBridgeState, failures []transport.WorkerWebSocketDispatchCommandFailure) ?transport.WorkerWebSocketFrame {
 	if isnil(state) {
 		return none
 	}

@@ -1,4 +1,5 @@
 module main
+import transport
 
 import net.http
 import os
@@ -200,7 +201,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_projects_and_models_commands_u
 		assert models_resp.commands[0].text.contains('`gpt-5.4` current')
 		assert models_resp.commands[0].text.contains('gpt-5.3-codex')
 
-		use_model_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		use_model_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_models_use'
@@ -219,7 +220,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_projects_and_models_commands_u
 		assert use_model_resp.commands[0].text.contains('**Model Updated**')
 		assert use_model_resp.commands[0].text.contains('`gpt-5.3-codex`')
 
-		use_model_resp_2 := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		use_model_resp_2 := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_models_use_default_again'
@@ -238,7 +239,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_projects_and_models_commands_u
 		assert use_model_resp_2.commands[0].text.contains('**Model Updated**')
 		assert use_model_resp_2.commands[0].text.contains('`gpt-5.4`')
 
-		current_project_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		current_project_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_projects_scope_clear'
@@ -256,7 +257,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_projects_and_models_commands_u
 		assert current_project_resp.commands.len == 1
 		assert current_project_resp.commands[0].text.contains('**Current Project**')
 
-		use_after_scope_cleared := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		use_after_scope_cleared := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_projects_use_after_scope_cleared'
@@ -278,7 +279,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_projects_and_models_commands_u
 		assert use_after_scope_cleared.commands[1].params.contains('"threadId":"alpha"')
 		use_after_scope_cleared_stream_id := codexbot_ts_first_stream_id(use_after_scope_cleared.commands)
 		assert use_after_scope_cleared_stream_id != ''
-		_ = executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		_ = executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:       'websocket_upstream'
 			event:      'message'
 			id:         'codexbot_ts_projects_use_after_scope_cleared_read'
@@ -289,7 +290,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_projects_and_models_commands_u
 			payload:    '{"method":"thread/read","result":{"thread":{"id":"alpha","turns":[{"id":"turn_alpha_thread_restored","items":[{"type":"agentMessage","id":"item_alpha_thread_restored","text":"alpha thread restored","phase":"final_answer","memoryCitation":null}],"status":"completed","error":null}]}},"has_error":false}'
 		}) or { panic(err) }
 
-		next_task := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		next_task := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_model_applied_task'
@@ -448,7 +449,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_create_import_and_bind_project
 		assert import_resp.commands[0].text.contains('/import')
 		assert import_resp.commands[0].text.contains('/bind [project_key] [path]')
 
-		bind_import_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		bind_import_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_bind_import_project'
@@ -467,7 +468,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_create_import_and_bind_project
 		assert bind_import_resp.commands[0].text.contains('Project: `beta`')
 		assert bind_import_resp.commands[0].text.contains(import_root)
 
-		switch_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		switch_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_switch_to_alpha'
@@ -485,7 +486,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_create_import_and_bind_project
 		assert switch_resp.commands.len == 1
 		assert switch_resp.commands[0].text.contains('Project: `alpha`')
 
-		bind_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		bind_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_bind_beta'
@@ -504,7 +505,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_create_import_and_bind_project
 		assert bind_resp.commands[0].text.contains('**Import Path Invalid**')
 		assert bind_resp.commands[0].text.contains(os.join_path(project_root, 'beta'))
 
-		current_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		current_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_project_current'
@@ -523,7 +524,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_create_import_and_bind_project
 		assert current_resp.commands[0].text.contains('**Current Project**')
 		assert current_resp.commands[0].text.contains('Project: `alpha`')
 
-		projects_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		projects_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_project_list'
@@ -703,7 +704,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_projects_self_heal_legacy_bind
 		}
 		mut app := App{}
 
-		_ = executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		_ = executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_legacy_bindings_setting_project_root'
@@ -718,7 +719,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_projects_self_heal_legacy_bind
 				'chat_codexbot_ts_legacy_projects', 'om_codexbot_ts_legacy_bindings_setting_project_root')
 		}) or { panic(err) }
 
-		create_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		create_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_legacy_bindings_create_alpha'
@@ -751,7 +752,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_projects_self_heal_legacy_bind
 		assert mutator_resp.response.status == 200
 		assert mutator_resp.response.body.contains('"ok":true')
 
-		current_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		current_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_legacy_bindings_project_current'
@@ -769,7 +770,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_projects_self_heal_legacy_bind
 		assert current_resp.commands.len == 1
 		assert current_resp.commands[0].text.contains('Project: `alpha`')
 
-		projects_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		projects_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_legacy_bindings_projects'
@@ -1042,7 +1043,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_instances_command_normalizes_l
 		}
 		mut app := App{}
 
-		warm_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		warm_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_instances_legacy_alias_warm'
@@ -1072,7 +1073,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_instances_command_normalizes_l
 		}) or { panic(err) }
 		assert seed_resp.response.status == 200
 
-		resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_instances_legacy_alias'

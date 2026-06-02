@@ -1,4 +1,5 @@
 module main
+import transport
 
 import encoding.base64
 import json
@@ -28,7 +29,7 @@ struct WebSocketDispatchBridgeState {
 mut:
 	app           &App                        = unsafe { nil }
 	lifecycle     &WebSocketDispatchConnState = unsafe { nil }
-	open_commands []WorkerWebSocketFrame
+	open_commands []transport.WorkerWebSocketFrame
 	conn_id       string
 	method        string
 	path          string
@@ -136,23 +137,23 @@ fn websocket_hub_payload_bytes(data string, opcode string) ?([]u8, websocket.OPC
 	}
 }
 
-fn (mut app App) websocket_dispatch_command_failures_frame(conn_id string, method string, path string, query map[string]string, headers map[string]string, remote_addr string, req_id string, trace_id string, failures []WorkerWebSocketDispatchCommandFailure) WorkerWebSocketFrame {
+fn (mut app App) websocket_dispatch_command_failures_frame(conn_id string, method string, path string, query map[string]string, headers map[string]string, remote_addr string, req_id string, trace_id string, failures []transport.WorkerWebSocketDispatchCommandFailure) transport.WorkerWebSocketFrame {
 	room_members, member_metadata, room_counts, presence_users :=
 		app.ws_hub_presence_snapshot(conn_id)
 	base_frame := app.kernel_websocket_dispatch_frame('info', method, path, query, headers,
-		remote_addr, req_id, trace_id, 'text', json.encode(WorkerWebSocketDispatchFailureEnvelope{
+		remote_addr, req_id, trace_id, 'text', json.encode(transport.WorkerWebSocketDispatchFailureEnvelope{
 		event:    'command_failures'
 		failures: failures
 	}), 0, '', app.ws_hub_rooms_snapshot(conn_id), app.ws_hub_meta_snapshot(conn_id), room_members,
 		member_metadata, room_counts, presence_users)
-	return WorkerWebSocketFrame{
+	return transport.WorkerWebSocketFrame{
 		...base_frame
 		error:       'websocket_dispatch_command_failed'
 		error_class: 'websocket_send_failed'
 	}
 }
 
-fn (mut app App) websocket_dispatch_followup_failures(conn_id string, method string, path string, query map[string]string, headers map[string]string, remote_addr string, req_id string, trace_id string, failures []WorkerWebSocketDispatchCommandFailure) ?WorkerWebSocketFrame {
+fn (mut app App) websocket_dispatch_followup_failures(conn_id string, method string, path string, query map[string]string, headers map[string]string, remote_addr string, req_id string, trace_id string, failures []transport.WorkerWebSocketDispatchCommandFailure) ?transport.WorkerWebSocketFrame {
 	_ = app
 	_ = conn_id
 	_ = method
@@ -705,18 +706,18 @@ fn (mut app App) ws_hub_broadcast_dispatch(room string, data string, except_id s
 			'text', data, 0, '', app.ws_hub_rooms_snapshot(target.id),
 			app.ws_hub_meta_snapshot(target.id), room_members, member_metadata, room_counts,
 			presence_users)
-		info_frame := WorkerWebSocketFrame{
+		info_frame := transport.WorkerWebSocketFrame{
 			...base_frame
 			room: room
 		}
 		resp := app.kernel_dispatch_websocket_event(info_frame) or { continue }
-		mut forwarded_commands := []WorkerWebSocketFrame{cap: resp.commands.len}
+		mut forwarded_commands := []transport.WorkerWebSocketFrame{cap: resp.commands.len}
 		for cmd in resp.commands {
 			if cmd.event == 'send' || cmd.event == 'send_to' || cmd.event == 'join'
 				|| cmd.event == 'leave' || cmd.event == 'set_meta' || cmd.event == 'clear_meta'
 				|| cmd.event == 'broadcast' || cmd.event == 'broadcast_dispatch'
 				|| cmd.event == 'close' {
-				forwarded_commands << WorkerWebSocketFrame{
+				forwarded_commands << transport.WorkerWebSocketFrame{
 					...cmd
 					id: target.id
 				}
@@ -781,12 +782,12 @@ fn ws_hub_close_client(mut app App, client &websocket.Client, code int, reason s
 	c.close(code, reason) or {}
 }
 
-fn (mut app App) process_worker_websocket_hub_frame(frame WorkerWebSocketFrame) ?WorkerWebSocketDispatchCommandFailure {
+fn (mut app App) process_worker_websocket_hub_frame(frame transport.WorkerWebSocketFrame) ?transport.WorkerWebSocketDispatchCommandFailure {
 	match frame.event {
 		'send' {
 			target := if frame.target_id != '' { frame.target_id } else { frame.id }
 			if !app.ws_hub_send_to(target, frame.data, frame.opcode) {
-				return WorkerWebSocketDispatchCommandFailure{
+				return transport.WorkerWebSocketDispatchCommandFailure{
 					event:       frame.event
 					id:          frame.id
 					target_id:   target
@@ -800,7 +801,7 @@ fn (mut app App) process_worker_websocket_hub_frame(frame WorkerWebSocketFrame) 
 		'send_to' {
 			target := if frame.target_id != '' { frame.target_id } else { frame.id }
 			if !app.ws_hub_send_to(target, frame.data, frame.opcode) {
-				return WorkerWebSocketDispatchCommandFailure{
+				return transport.WorkerWebSocketDispatchCommandFailure{
 					event:       frame.event
 					id:          frame.id
 					target_id:   target

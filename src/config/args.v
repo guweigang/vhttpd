@@ -1,4 +1,4 @@
-module common
+module config
 
 // CLI argument parsing helpers used across vhttpd.
 

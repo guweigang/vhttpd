@@ -29,14 +29,14 @@ pub struct DbPoolHandle {
 pub mut:
 	driver     string
 	mysql_pool mysql.ConnectionPool
-	pg_pool    pg.ConnectionPool
+	pg_pool    &pg.DB = unsafe { nil }
 }
 
 pub struct DbSessionHandle {
 pub mut:
 	driver     string
 	mysql_conn mysql.DB
-	pg_conn    pg.DB
+	pg_conn    &pg.Conn = unsafe { nil }
 }
 
 fn normalize_db_driver_name(name string) string {
@@ -112,13 +112,15 @@ fn db_open_pool(settings DbRuntimeSettings) !DbPoolHandle {
 		'pgsql', 'pg', 'postgres', 'postgresql' {
 			DbPoolHandle{
 				driver:  'pgsql'
-				pg_pool: pg.new_connection_pool(pg.Config{
+				pg_pool: pg.connect(pg.Config{
 					host:     host
 					port:     int(port)
 					user:     settings.username
 					password: settings.password
 					dbname:   database
-				}, pool_size)!
+				}, pg.PoolConfig{
+					max_open_conns: pool_size
+				})!
 			}
 		}
 		else {
@@ -133,7 +135,7 @@ fn db_pool_close(mut pool DbPoolHandle) {
 			pool.mysql_pool.close()
 		}
 		'pgsql' {
-			pool.pg_pool.close()
+			pool.pg_pool.close() or {}
 		}
 		else {}
 	}
@@ -150,7 +152,7 @@ fn db_pool_acquire(mut pool DbPoolHandle) !DbSessionHandle {
 		'pgsql' {
 			DbSessionHandle{
 				driver:  'pgsql'
-				pg_conn: pool.pg_pool.acquire()!
+				pg_conn: pool.pg_pool.conn()!
 			}
 		}
 		else {
@@ -168,7 +170,7 @@ fn db_pool_release(mut pool DbPoolHandle, session DbSessionHandle) {
 		}
 		'pgsql' {
 			if session.driver == 'pgsql' {
-				pool.pg_pool.release(session.pg_conn)
+				session.pg_conn.close() or {}
 			}
 		}
 		else {}
@@ -211,7 +213,7 @@ fn db_session_begin(mut session DbSessionHandle) ! {
 			session.mysql_conn.begin()!
 		}
 		'pgsql' {
-			session.pg_conn.begin(pg.PQTransactionParam{})!
+			session.pg_conn.begin_on_conn(pg.PQTransactionParam{})!
 		}
 		else {
 			return error('unsupported_driver')

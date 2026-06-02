@@ -1,4 +1,5 @@
 module main
+import config
 
 import json
 import os
@@ -25,19 +26,19 @@ pub:
 	workdir                       string
 }
 
-fn app_runtime_default_mcp_max_sessions(cfg VhttpdConfig) int {
+fn app_runtime_default_mcp_max_sessions(cfg config.VhttpdConfig) int {
 	return if cfg.mcp.max_sessions > 0 { cfg.mcp.max_sessions } else { 1000 }
 }
 
-fn app_runtime_default_mcp_max_pending_messages(cfg VhttpdConfig) int {
+fn app_runtime_default_mcp_max_pending_messages(cfg config.VhttpdConfig) int {
 	return if cfg.mcp.max_pending_messages > 0 { cfg.mcp.max_pending_messages } else { 128 }
 }
 
-fn app_runtime_default_mcp_session_ttl_seconds(cfg VhttpdConfig) int {
+fn app_runtime_default_mcp_session_ttl_seconds(cfg config.VhttpdConfig) int {
 	return if cfg.mcp.session_ttl_seconds > 0 { cfg.mcp.session_ttl_seconds } else { 900 }
 }
 
-fn build_app_runtime(provider_settings ProviderRuntimeSettings, executor_plan LogicExecutorRuntimePlan, cfg VhttpdConfig, build_cfg AppRuntimeBuildConfig) &App {
+fn build_app_runtime(provider_settings ProviderRuntimeSettings, executor_plan LogicExecutorRuntimePlan, cfg config.VhttpdConfig, build_cfg AppRuntimeBuildConfig) &App {
 	return &App{
 		event_log:                                build_cfg.event_log
 		started_at_unix:                          time.now().unix()

@@ -1,4 +1,5 @@
 module main
+import transport
 
 import os
 
@@ -18,7 +19,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_codex_query_command_runs_rpc_a
 		}
 		mut app := App{}
 
-		query_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		query_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_codex_query'
@@ -42,7 +43,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_codex_query_command_runs_rpc_a
 		stream_id := query_resp.commands[0].stream_id
 		assert stream_id != ''
 
-		rpc_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		rpc_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:       'websocket_upstream'
 			event:      'message'
 			id:         'codexbot_ts_codex_query_rpc'
@@ -78,7 +79,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_empty_and_error_ar
 		}
 		mut app := App{}
 
-		seed_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		seed_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_thread_read_fallbacks_seed'
@@ -94,7 +95,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_empty_and_error_ar
 		}) or { panic(err) }
 		seed_stream_id := seed_resp.commands[0].stream_id
 		assert seed_stream_id != ''
-		_ = executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		_ = executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:       'websocket_upstream'
 			event:      'message'
 			id:         'codexbot_ts_thread_read_fallbacks_seed_rpc'
@@ -104,7 +105,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_empty_and_error_ar
 			event_type: 'codex.rpc.response'
 			payload:    '{"method":"thread/start","result":{"threadId":"thread_read_fallback_001"},"has_error":false}'
 		}) or { panic(err) }
-		_ = executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		_ = executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:       'websocket_upstream'
 			event:      'message'
 			id:         'codexbot_ts_thread_read_fallbacks_seed_done'
@@ -114,7 +115,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_empty_and_error_ar
 			event_type: 'codex.notification'
 			payload:    '{"method":"turn/completed","params":{}}'
 		}) or { panic(err) }
-		_ = executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		_ = executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_thread_read_fallbacks_new'
@@ -129,7 +130,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_empty_and_error_ar
 				'om_codexbot_ts_thread_read_fallbacks_new')
 		}) or { panic(err) }
 
-		use_empty := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		use_empty := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_thread_read_fallbacks_use_empty'
@@ -149,7 +150,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_empty_and_error_ar
 		assert use_empty_stream_id != ''
 		assert use_empty.commands[1].method == 'thread/read'
 
-		empty_rpc := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		empty_rpc := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:       'websocket_upstream'
 			event:      'message'
 			id:         'codexbot_ts_thread_read_fallbacks_empty_rpc'
@@ -166,7 +167,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_empty_and_error_ar
 		assert empty_rpc.commands[0].content.contains('thread_read_fallback_001')
 		assert empty_rpc.commands[0].content.contains('No assistant reply was found in this thread yet.')
 
-		use_error := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		use_error := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_thread_read_fallbacks_use_error'
@@ -185,7 +186,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_empty_and_error_ar
 		use_error_stream_id := use_error.commands[0].stream_id
 		assert use_error_stream_id != ''
 
-		error_rpc := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		error_rpc := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:       'websocket_upstream'
 			event:      'message'
 			id:         'codexbot_ts_thread_read_fallbacks_error_rpc'
@@ -220,7 +221,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_codex_thread_read_uses_bound_t
 		}
 		mut app := App{}
 
-		task_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		task_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_codex_thread_seed'
@@ -236,7 +237,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_codex_thread_read_uses_bound_t
 		}) or { panic(err) }
 		stream_id := task_resp.commands[0].stream_id
 		assert stream_id != ''
-		_ = executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		_ = executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:       'websocket_upstream'
 			event:      'message'
 			id:         'codexbot_ts_codex_thread_seed_rpc'
@@ -247,7 +248,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_codex_thread_read_uses_bound_t
 			payload:    '{"method":"thread/start","result":{"threadId":"thread_codex_query_001"},"has_error":false}'
 		}) or { panic(err) }
 
-		read_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		read_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_codex_thread_read'
@@ -267,7 +268,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_codex_thread_read_uses_bound_t
 		assert read_resp.commands[1].params.contains('"threadId":"thread_codex_query_001"')
 		assert read_resp.commands[1].params.contains('"includeTurns":true')
 
-		bad_json_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		bad_json_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_codex_bad_json'
@@ -303,7 +304,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_codex_alias_commands_are_mobil
 		}
 		mut app := App{}
 
-		models_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		models_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_codex_models_alias'
@@ -321,7 +322,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_codex_alias_commands_are_mobil
 		assert models_resp.commands.len == 2
 		assert models_resp.commands[1].method == 'model/list'
 
-		no_thread_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		no_thread_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_codex_thread_alias_no_thread'
@@ -339,7 +340,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_codex_alias_commands_are_mobil
 		assert no_thread_resp.commands.len == 1
 		assert no_thread_resp.commands[0].text.contains('**Thread Required**')
 
-		seed_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		seed_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_codex_thread_alias_seed'
@@ -355,7 +356,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_codex_alias_commands_are_mobil
 		}) or { panic(err) }
 		seed_stream_id := seed_resp.commands[0].stream_id
 		assert seed_stream_id != ''
-		_ = executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		_ = executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:       'websocket_upstream'
 			event:      'message'
 			id:         'codexbot_ts_codex_thread_alias_seed_rpc'
@@ -366,7 +367,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_codex_alias_commands_are_mobil
 			payload:    '{"method":"thread/start","result":{"threadId":"thread_codex_alias_001"},"has_error":false}'
 		}) or { panic(err) }
 
-		thread_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		thread_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_codex_thread_alias_bound'
@@ -386,7 +387,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_codex_alias_commands_are_mobil
 		assert thread_resp.commands[1].method == 'thread/read'
 		assert thread_resp.commands[1].params.contains('"threadId":"thread_codex_alias_001"')
 
-		unsupported_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		unsupported_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_codex_unsupported'
@@ -423,7 +424,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_projects_assistant
 		}
 		mut app := App{}
 
-		task_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		task_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_thread_read_content_projection_task'
@@ -439,7 +440,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_projects_assistant
 		}) or { panic(err) }
 		stream_id := task_resp.commands[0].stream_id
 		assert stream_id != ''
-		_ = executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		_ = executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:       'websocket_upstream'
 			event:      'message'
 			id:         'codexbot_ts_thread_read_content_projection_thread'
@@ -449,7 +450,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_projects_assistant
 			event_type: 'codex.rpc.response'
 			payload:    '{"method":"thread/start","result":{"threadId":"thread_read_content_projection_001"},"has_error":false}'
 		}) or { panic(err) }
-		_ = executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		_ = executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:       'websocket_upstream'
 			event:      'message'
 			id:         'codexbot_ts_thread_read_content_projection_turn'
@@ -459,7 +460,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_projects_assistant
 			event_type: 'codex.rpc.response'
 			payload:    '{"method":"turn/start","result":{"turnId":"turn_read_content_projection_001","status":"inProgress","items":[]},"has_error":false}'
 		}) or { panic(err) }
-		_ = executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		_ = executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:       'websocket_upstream'
 			event:      'message'
 			id:         'codexbot_ts_thread_read_content_projection_completed'
@@ -470,7 +471,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_projects_assistant
 			payload:    '{"method":"turn/completed","params":{"threadId":"thread_read_content_projection_001","turn":{"id":"turn_read_content_projection_001","items":[],"status":"completed","error":null}}}'
 		}) or { panic(err) }
 
-		read_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		read_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:       'websocket_upstream'
 			event:      'message'
 			id:         'codexbot_ts_thread_read_content_projection_response'
@@ -505,7 +506,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_prefers_current_tu
 		}
 		mut app := App{}
 
-		task_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		task_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_thread_read_current_turn_task'
@@ -521,7 +522,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_prefers_current_tu
 		}) or { panic(err) }
 		stream_id := task_resp.commands[0].stream_id
 		assert stream_id != ''
-		_ = executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		_ = executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:       'websocket_upstream'
 			event:      'message'
 			id:         'codexbot_ts_thread_read_current_turn_thread'
@@ -531,7 +532,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_prefers_current_tu
 			event_type: 'codex.rpc.response'
 			payload:    '{"method":"thread/start","result":{"threadId":"thread_read_current_turn_001"},"has_error":false}'
 		}) or { panic(err) }
-		_ = executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		_ = executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:       'websocket_upstream'
 			event:      'message'
 			id:         'codexbot_ts_thread_read_current_turn_turn'
@@ -542,7 +543,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_prefers_current_tu
 			payload:    '{"method":"turn/start","result":{"turnId":"turn_read_current_turn_001","status":"inProgress","items":[]},"has_error":false}'
 		}) or { panic(err) }
 
-		read_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		read_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:       'websocket_upstream'
 			event:      'message'
 			id:         'codexbot_ts_thread_read_current_turn_response'
@@ -577,7 +578,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_combines_multiple_
 		}
 		mut app := App{}
 
-		task_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		task_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_thread_read_multi_item_task'
@@ -593,7 +594,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_combines_multiple_
 		}) or { panic(err) }
 		stream_id := codexbot_ts_first_stream_id(task_resp.commands)
 		assert stream_id != ''
-		_ = executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		_ = executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:       'websocket_upstream'
 			event:      'message'
 			id:         'codexbot_ts_thread_read_multi_item_thread'
@@ -603,7 +604,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_combines_multiple_
 			event_type: 'codex.rpc.response'
 			payload:    '{"method":"thread/start","result":{"threadId":"thread_read_multi_item_001"},"has_error":false}'
 		}) or { panic(err) }
-		_ = executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		_ = executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:       'websocket_upstream'
 			event:      'message'
 			id:         'codexbot_ts_thread_read_multi_item_turn'
@@ -614,7 +615,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_combines_multiple_
 			payload:    '{"method":"turn/start","result":{"turnId":"turn_read_multi_item_001","status":"inProgress","items":[]},"has_error":false}'
 		}) or { panic(err) }
 
-		read_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		read_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:       'websocket_upstream'
 			event:      'message'
 			id:         'codexbot_ts_thread_read_multi_item_response'
@@ -651,7 +652,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_does_not_surface_p
 		}
 		mut app := App{}
 
-		task_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		task_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_thread_read_preferred_turn_fallback_task'
@@ -667,7 +668,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_does_not_surface_p
 		}) or { panic(err) }
 		stream_id := codexbot_ts_first_stream_id(task_resp.commands)
 		assert stream_id != ''
-		_ = executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		_ = executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:       'websocket_upstream'
 			event:      'message'
 			id:         'codexbot_ts_thread_read_preferred_turn_fallback_thread'
@@ -677,7 +678,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_does_not_surface_p
 			event_type: 'codex.rpc.response'
 			payload:    '{"method":"thread/start","result":{"threadId":"thread_read_preferred_turn_fallback_001"},"has_error":false}'
 		}) or { panic(err) }
-		_ = executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		_ = executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:       'websocket_upstream'
 			event:      'message'
 			id:         'codexbot_ts_thread_read_preferred_turn_fallback_turn'
@@ -688,7 +689,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_does_not_surface_p
 			payload:    '{"method":"turn/start","result":{"turnId":"turn_read_preferred_turn_fallback_002","status":"inProgress","items":[]},"has_error":false}'
 		}) or { panic(err) }
 
-		read_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		read_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:       'websocket_upstream'
 			event:      'message'
 			id:         'codexbot_ts_thread_read_preferred_turn_fallback_response'
@@ -719,7 +720,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_does_not_surface_p
 		}
 		mut app := App{}
 
-		task_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		task_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
 			event:       'message'
 			id:          'codexbot_ts_thread_read_active_partial_task'
@@ -735,7 +736,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_does_not_surface_p
 		}) or { panic(err) }
 		stream_id := codexbot_ts_first_stream_id(task_resp.commands)
 		assert stream_id != ''
-		_ = executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		_ = executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:       'websocket_upstream'
 			event:      'message'
 			id:         'codexbot_ts_thread_read_active_partial_thread'
@@ -745,7 +746,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_does_not_surface_p
 			event_type: 'codex.rpc.response'
 			payload:    '{"method":"thread/start","result":{"threadId":"thread_read_active_partial_001"},"has_error":false}'
 		}) or { panic(err) }
-		_ = executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		_ = executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:       'websocket_upstream'
 			event:      'message'
 			id:         'codexbot_ts_thread_read_active_partial_turn'
@@ -756,7 +757,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_does_not_surface_p
 			payload:    '{"method":"turn/start","result":{"turnId":"turn_read_active_partial_001","status":"inProgress","items":[]},"has_error":false}'
 		}) or { panic(err) }
 
-		read_resp := executor.dispatch_websocket_upstream(mut app, WorkerWebSocketUpstreamDispatchRequest{
+		read_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:       'websocket_upstream'
 			event:      'message'
 			id:         'codexbot_ts_thread_read_active_partial_response'

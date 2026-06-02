@@ -1,4 +1,5 @@
 module main
+import config
 
 import json
 import crypto.aes
@@ -871,7 +872,7 @@ fn (app &App) feishu_runtime_resolve_app_name(raw string) !string {
 	return default_name
 }
 
-fn (app &App) feishu_runtime_app_config(name string) !FeishuAppConfig {
+fn (app &App) feishu_runtime_app_config(name string) !config.FeishuAppConfig {
 	resolved := app.feishu_runtime_resolve_app_name(name)!
 	if cfg := app.feishu_apps[resolved] {
 		return cfg

@@ -1,4 +1,5 @@
 module main
+import transport
 
 pub struct CommandTarget {
 pub:
@@ -55,7 +56,7 @@ pub:
 	metadata  map[string]string
 }
 
-pub fn CommandEnvelope.from_worker_command(cmd WorkerWebSocketUpstreamCommand) CommandEnvelope {
+pub fn CommandEnvelope.from_worker_command(cmd transport.WorkerWebSocketUpstreamCommand) CommandEnvelope {
 	return CommandEnvelope{
 		type_:    cmd.type_
 		provider: cmd.provider
@@ -102,7 +103,7 @@ fn normalized_command_string_bool(raw string) bool {
 	return value in ['1', 'true', 'yes', 'on']
 }
 
-pub fn NormalizedCommand.from_worker_command(cmd WorkerWebSocketUpstreamCommand) NormalizedCommand {
+pub fn NormalizedCommand.from_worker_command(cmd transport.WorkerWebSocketUpstreamCommand) NormalizedCommand {
 	thread_id := cmd.metadata['thread_id'] or { '' }
 	turn_id := cmd.metadata['turn_id'] or { '' }
 	request_id := cmd.metadata['request_id'] or { '' }

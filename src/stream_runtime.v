@@ -1,4 +1,5 @@
 module main
+import transport
 
 import json
 import net
@@ -7,7 +8,7 @@ import net.unix
 import time
 import veb
 
-fn stream_via_sse(mut app App, mut ctx Context, mut conn unix.StreamConn, start WorkerStreamFrame, method string, path string, req_id string, trace_id string, start_ms i64) veb.Result {
+fn stream_via_sse(mut app App, mut ctx Context, mut conn unix.StreamConn, start transport.WorkerStreamFrame, method string, path string, req_id string, trace_id string, start_ms i64) veb.Result {
 	ctx.takeover_conn()
 	mut status := start.status
 	if status <= 0 {
@@ -22,7 +23,7 @@ fn stream_via_sse(mut app App, mut ctx Context, mut conn unix.StreamConn, start 
 	write_http_stream_headers(mut ctx, status, ctype, headers, false) or { return veb.no_result() }
 	for {
 		raw := read_frame(mut conn) or { break }
-		frame := json.decode(WorkerStreamFrame, raw) or { continue }
+		frame := json.decode(transport.WorkerStreamFrame, raw) or { continue }
 		if frame.mode != 'stream' {
 			continue
 		}
@@ -62,7 +63,7 @@ fn stream_via_sse(mut app App, mut ctx Context, mut conn unix.StreamConn, start 
 	return veb.no_result()
 }
 
-fn stream_via_passthrough(mut app App, mut ctx Context, mut conn unix.StreamConn, start WorkerStreamFrame, method string, path string, req_id string, trace_id string, start_ms i64) veb.Result {
+fn stream_via_passthrough(mut app App, mut ctx Context, mut conn unix.StreamConn, start transport.WorkerStreamFrame, method string, path string, req_id string, trace_id string, start_ms i64) veb.Result {
 	ctx.takeover_conn()
 	mut status := start.status
 	if status <= 0 {
@@ -76,7 +77,7 @@ fn stream_via_passthrough(mut app App, mut ctx Context, mut conn unix.StreamConn
 	write_http_stream_headers(mut ctx, status, ctype, headers, true) or { return veb.no_result() }
 	for {
 		raw := read_frame(mut conn) or { break }
-		frame := json.decode(WorkerStreamFrame, raw) or { continue }
+		frame := json.decode(transport.WorkerStreamFrame, raw) or { continue }
 		if frame.mode != 'stream' {
 			continue
 		}
@@ -117,10 +118,10 @@ fn stream_via_passthrough(mut app App, mut ctx Context, mut conn unix.StreamConn
 	return veb.no_result()
 }
 
-fn write_stream_chunks(mut conn net.TcpConn, stream_type string, chunks []StreamDispatchChunk) ! {
+fn write_stream_chunks(mut conn net.TcpConn, stream_type string, chunks []transport.StreamDispatchChunk) ! {
 	for chunk in chunks {
 		if stream_type == 'sse' {
-			write_sse_message(mut conn, WorkerStreamFrame{
+			write_sse_message(mut conn, transport.WorkerStreamFrame{
 				sse_id: chunk.id
 				sse_event: chunk.event
 				sse_retry: chunk.retry
