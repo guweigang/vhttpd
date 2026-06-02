@@ -1,4 +1,5 @@
 module main
+import executor
 import transport
 
 import net.http
@@ -543,7 +544,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_create_import_and_bind_project
 		assert projects_resp.commands[0].text.contains('`alpha` current')
 		assert projects_resp.commands[0].text.contains('beta')
 
-		state_resp := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+		state_resp := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 			method:      'GET'
 			path:        '/admin/state'
 			req:         http.Request{
@@ -737,7 +738,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_projects_self_heal_legacy_bind
 		assert create_resp.commands.len == 1
 		assert create_resp.commands[0].text.contains('Project: `alpha`')
 
-		mutator_resp := mutator.dispatch_http(mut app, HttpLogicDispatchRequest{
+		mutator_resp := mutator.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 			method:      'POST'
 			path:        '/mutate'
 			req:         http.Request{
@@ -1059,7 +1060,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_instances_command_normalizes_l
 		}) or { panic(err) }
 		assert warm_resp.handled
 
-		seed_resp := mutator.dispatch_http(mut app, HttpLogicDispatchRequest{
+		seed_resp := mutator.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 			method:      'GET'
 			path:        '/seed'
 			req:         http.Request{

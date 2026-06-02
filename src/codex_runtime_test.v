@@ -1,4 +1,5 @@
 module main
+import executor
 import transport
 
 struct CodexRuntimeTestDispatchState {
@@ -16,7 +17,7 @@ pub fn (e CodexRuntimeTestExecutor) kind() string {
 	return 'vjsx'
 }
 
-pub fn (e CodexRuntimeTestExecutor) model() LogicExecutorModel {
+pub fn (e CodexRuntimeTestExecutor) model() executor.LogicExecutorModel {
 	return .embedded
 }
 
@@ -24,12 +25,12 @@ pub fn (e CodexRuntimeTestExecutor) provider() string {
 	return 'vjsx'
 }
 
-pub fn (e CodexRuntimeTestExecutor) admin_details() LogicExecutorAdminDetails {
+pub fn (e CodexRuntimeTestExecutor) admin_details() executor.LogicExecutorAdminDetails {
 	_ = e
-	return LogicExecutorAdminDetails{
+	return executor.LogicExecutorAdminDetails{
 		kind:     'vjsx'
 		provider: 'vjsx'
-		model:    LogicExecutorModel.embedded.str()
+		model:    executor.LogicExecutorModel.embedded.str()
 	}
 }
 
@@ -42,13 +43,13 @@ pub fn (e CodexRuntimeTestExecutor) close() {
 	_ = e
 }
 
-pub fn (e CodexRuntimeTestExecutor) dispatch_http(mut app App, req HttpLogicDispatchRequest) !HttpLogicDispatchOutcome {
+pub fn (e CodexRuntimeTestExecutor) dispatch_http(mut app App, req executor.HttpLogicDispatchRequest) !executor.HttpLogicDispatchOutcome {
 	_ = app
 	_ = req
 	return error('not_used')
 }
 
-pub fn (e CodexRuntimeTestExecutor) open_websocket_session(mut app App, req WebSocketSessionOpenRequest) !WebSocketSessionOpenOutcome {
+pub fn (e CodexRuntimeTestExecutor) open_websocket_session(mut app App, req executor.WebSocketSessionOpenRequest) !executor.WebSocketSessionOpenOutcome {
 	_ = app
 	_ = req
 	return error('not_used')

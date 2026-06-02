@@ -1,4 +1,5 @@
 module main
+import executor as exec
 import transport
 
 import os
@@ -192,8 +193,8 @@ fn (mut h CodexbotTsTestHarness) dispatch_codex_event(id string, stream_id strin
 		payload)
 }
 
-fn (mut h CodexbotTsTestHarness) admin_state(trace_id string, request_id string) !HttpLogicDispatchOutcome {
-	return h.executor.dispatch_http(mut h.app, HttpLogicDispatchRequest{
+fn (mut h CodexbotTsTestHarness) admin_state(trace_id string, request_id string) !exec.HttpLogicDispatchOutcome {
+	return h.executor.dispatch_http(mut h.app, exec.HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/admin/state'
 		req:         http.Request{

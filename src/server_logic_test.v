@@ -1,4 +1,5 @@
 module main
+import executor
 import transport
 
 import config
@@ -91,7 +92,7 @@ mut:
 	state &TestShutdownLogicExecutorState = unsafe { nil }
 }
 
-fn (e TestShutdownLogicExecutor) model() LogicExecutorModel {
+fn (e TestShutdownLogicExecutor) model() executor.LogicExecutorModel {
 	_ = e
 	return .embedded
 }
@@ -106,12 +107,12 @@ fn (e TestShutdownLogicExecutor) provider() string {
 	return 'test_shutdown_executor'
 }
 
-fn (e TestShutdownLogicExecutor) admin_details() LogicExecutorAdminDetails {
+fn (e TestShutdownLogicExecutor) admin_details() executor.LogicExecutorAdminDetails {
 	_ = e
-	return LogicExecutorAdminDetails{
+	return executor.LogicExecutorAdminDetails{
 		kind:     'test_shutdown_executor'
 		provider: 'test_shutdown_executor'
-		model:    LogicExecutorModel.embedded.str()
+		model:    executor.LogicExecutorModel.embedded.str()
 	}
 }
 
@@ -128,14 +129,14 @@ fn (e TestShutdownLogicExecutor) close() {
 	state.close_called = true
 }
 
-fn (e TestShutdownLogicExecutor) dispatch_http(mut app App, req HttpLogicDispatchRequest) !HttpLogicDispatchOutcome {
+fn (e TestShutdownLogicExecutor) dispatch_http(mut app App, req executor.HttpLogicDispatchRequest) !executor.HttpLogicDispatchOutcome {
 	_ = e
 	_ = app
 	_ = req
 	return error('not_used')
 }
 
-fn (e TestShutdownLogicExecutor) open_websocket_session(mut app App, req WebSocketSessionOpenRequest) !WebSocketSessionOpenOutcome {
+fn (e TestShutdownLogicExecutor) open_websocket_session(mut app App, req executor.WebSocketSessionOpenRequest) !executor.WebSocketSessionOpenOutcome {
 	_ = e
 	_ = app
 	_ = req

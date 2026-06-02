@@ -1,4 +1,5 @@
 module main
+import executor
 
 import net.http
 import os
@@ -23,7 +24,7 @@ fn test_inproc_vjsx_runtime_exposes_http_fetch_capability() {
 		executor.close()
 	}
 	mut app := App{}
-	outcome := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	outcome := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/capabilities'
 		req:         http.Request{

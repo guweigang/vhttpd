@@ -1,4 +1,5 @@
 module main
+import executor as exec
 
 import json
 import log
@@ -514,7 +515,7 @@ pub fn (e InProcVjsxExecutor) kind() string {
 	return e.kind_name
 }
 
-pub fn (e InProcVjsxExecutor) model() LogicExecutorModel {
+pub fn (e InProcVjsxExecutor) model() exec.LogicExecutorModel {
 	_ = e
 	return .embedded
 }
@@ -523,12 +524,12 @@ pub fn (e InProcVjsxExecutor) provider() string {
 	return e.provider_name
 }
 
-pub fn (e InProcVjsxExecutor) admin_details() LogicExecutorAdminDetails {
+pub fn (e InProcVjsxExecutor) admin_details() exec.LogicExecutorAdminDetails {
 	config := e.facade_snapshot().config
-	return LogicExecutorAdminDetails{
+	return exec.LogicExecutorAdminDetails{
 		kind:            e.kind()
 		provider:        e.provider()
-		model:           LogicExecutorModel.embedded.str()
+		model:           exec.LogicExecutorModel.embedded.str()
 		runtime_profile: config.runtime_profile
 		lane_count:      config.thread_count
 		module_root:     config.module_root
@@ -3534,7 +3535,7 @@ fn (e InProcVjsxExecutor) ensure_lane_host(idx int) ! {
 	log.debug('[vhttpd] ensure_lane_host ready lane=${lane_id} idx=${idx} http=${has_http_handler} websocket=${has_websocket_handler} upstream=${has_upstream_handler} plugin=${has_plugin_handler}')
 }
 
-fn (e InProcVjsxExecutor) activate_lane_request_context(idx int, mut app App, lane_id string, req HttpLogicDispatchRequest) {
+fn (e InProcVjsxExecutor) activate_lane_request_context(idx int, mut app App, lane_id string, req exec.HttpLogicDispatchRequest) {
 	if isnil(e.state) || idx < 0 {
 		return
 	}
@@ -3590,12 +3591,12 @@ fn (e InProcVjsxExecutor) pump_all_lane_sessions() ! {
 	}
 }
 
-fn build_inproc_request_payload(req HttpLogicDispatchRequest) string {
+fn build_inproc_request_payload(req exec.HttpLogicDispatchRequest) string {
 	return encode_worker_request(req.method, req.path, req.req, req.remote_addr, req.trace_id,
 		req.request_id)
 }
 
-fn (e InProcVjsxExecutor) build_runtime_payload(lane VjsxExecutionLane, req HttpLogicDispatchRequest) string {
+fn (e InProcVjsxExecutor) build_runtime_payload(lane VjsxExecutionLane, req exec.HttpLogicDispatchRequest) string {
 	normalized_path, _ := normalize_request_target(req.path)
 	config := e.facade_snapshot().config
 	server := server_map_from_request(req.req, req.remote_addr)
@@ -3686,7 +3687,7 @@ fn (e InProcVjsxExecutor) execute_snapshot_hook(mut app App, idx int, lane VjsxE
 	e.ensure_lane_host(idx)!
 	e.run_app_startup(mut app, idx, lane)!
 	request_id := 'snapshot_${lane.id}'
-	e.activate_lane_request_context(idx, mut app, lane.id, HttpLogicDispatchRequest{
+	e.activate_lane_request_context(idx, mut app, lane.id, exec.HttpLogicDispatchRequest{
 		method:     'SNAPSHOT'
 		path:       '/.well-known/vhttpd/snapshot'
 		trace_id:   request_id
@@ -4444,7 +4445,7 @@ struct InProcVjsxWebSocketCallbackContext {
 }
 
 struct InProcVjsxWebSocketCallbackInput {
-	request_ctx  HttpLogicDispatchRequest
+	request_ctx  exec.HttpLogicDispatchRequest
 	runtime_meta InProcVjsxRuntimeMeta
 	frame        transport.WorkerWebSocketFrame
 }
@@ -4456,7 +4457,7 @@ fn (mut c InProcVjsxWebSocketCallbackContext) free() {
 
 fn (e InProcVjsxExecutor) websocket_callback_input(lane VjsxExecutionLane, frame transport.WorkerWebSocketFrame) InProcVjsxWebSocketCallbackInput {
 	return InProcVjsxWebSocketCallbackInput{
-		request_ctx:  HttpLogicDispatchRequest{
+		request_ctx:  exec.HttpLogicDispatchRequest{
 			method:     frame.event
 			path:       frame.path
 			trace_id:   frame.trace_id
@@ -4641,7 +4642,7 @@ fn (e InProcVjsxExecutor) resolve_websocket_affinity_on_lane(mut app App, frame 
 		e.record_lane_error(lane.id, err.msg())
 		return error(err.msg())
 	}
-	e.activate_lane_request_context(idx, mut app, lane.id, HttpLogicDispatchRequest{
+	e.activate_lane_request_context(idx, mut app, lane.id, exec.HttpLogicDispatchRequest{
 		method:     'affinity'
 		path:       frame.path
 		trace_id:   frame.trace_id
@@ -4713,7 +4714,7 @@ fn (e InProcVjsxExecutor) resolve_websocket_actor_on_lane(mut app App, frame tra
 		e.record_lane_error(lane.id, err.msg())
 		return error(err.msg())
 	}
-	e.activate_lane_request_context(idx, mut app, lane.id, HttpLogicDispatchRequest{
+	e.activate_lane_request_context(idx, mut app, lane.id, exec.HttpLogicDispatchRequest{
 		method:     'actor'
 		path:       frame.path
 		trace_id:   frame.trace_id
@@ -4842,7 +4843,7 @@ fn (e InProcVjsxExecutor) execute_startup_hook(mut app App, idx int, lane VjsxEx
 	}
 	hook_probe.free()
 	request_id := inproc_vjsx_startup_request_id(kind, lane.id)
-	e.activate_lane_request_context(idx, mut app, lane.id, HttpLogicDispatchRequest{
+	e.activate_lane_request_context(idx, mut app, lane.id, exec.HttpLogicDispatchRequest{
 		method:     inproc_vjsx_startup_method(kind)
 		path:       inproc_vjsx_startup_path(kind)
 		trace_id:   request_id
@@ -5007,7 +5008,7 @@ fn (e InProcVjsxExecutor) run_startup_hooks(mut app App, idx int, lane VjsxExecu
 	log.debug('[vhttpd] startup_hooks done lane=${lane.id} idx=${idx}')
 }
 
-fn (e InProcVjsxExecutor) dispatch_http_once(mut app App, req HttpLogicDispatchRequest) !HttpLogicDispatchOutcome {
+fn (e InProcVjsxExecutor) dispatch_http_once(mut app App, req exec.HttpLogicDispatchRequest) !exec.HttpLogicDispatchOutcome {
 	e.bootstrap_placeholder()!
 	lane := e.acquire_next_lane(inproc_vjsx_lane_wait_timeout_ms)!
 	defer {
@@ -5096,13 +5097,13 @@ fn (e InProcVjsxExecutor) dispatch_http_once(mut app App, req HttpLogicDispatchR
 		normalized.free()
 	}
 	e.record_lane_success(lane.id)
-	return HttpLogicDispatchOutcome{
+	return exec.HttpLogicDispatchOutcome{
 		kind:     .response
 		response: response_from_js_value(normalized, req.request_id)
 	}
 }
 
-pub fn (e InProcVjsxExecutor) dispatch_http(mut app App, req HttpLogicDispatchRequest) !HttpLogicDispatchOutcome {
+pub fn (e InProcVjsxExecutor) dispatch_http(mut app App, req exec.HttpLogicDispatchRequest) !exec.HttpLogicDispatchOutcome {
 	e.remember_app(mut app)
 	mut last_err := 'inproc_vjsx_executor_dispatch_failed'
 	for attempt in 0 .. inproc_vjsx_dispatch_retry_attempts {
@@ -5138,7 +5139,7 @@ fn (e InProcVjsxExecutor) call_plugin_once(mut app App, req PluginCallRequest) !
 		e.record_lane_error(lane.id, err.msg())
 		return error(err.msg())
 	}
-	e.activate_lane_request_context(idx, mut app, lane.id, HttpLogicDispatchRequest{
+	e.activate_lane_request_context(idx, mut app, lane.id, exec.HttpLogicDispatchRequest{
 		method:     req.op
 		path:       '/_plugin/${req.capability}'
 		trace_id:   req.trace_id
@@ -5226,7 +5227,7 @@ fn (e InProcVjsxExecutor) call_plugin_stream_once(mut app App, req PluginCallReq
 		e.record_lane_error(lane.id, err.msg())
 		return error(err.msg())
 	}
-	e.activate_lane_request_context(idx, mut app, lane.id, HttpLogicDispatchRequest{
+	e.activate_lane_request_context(idx, mut app, lane.id, exec.HttpLogicDispatchRequest{
 		method:     req.op
 		path:       '/_plugin/${req.capability}'
 		trace_id:   req.trace_id
@@ -5303,7 +5304,7 @@ pub fn (e InProcVjsxExecutor) call_plugin_stream(mut app App, req PluginCallRequ
 	return e.call_plugin_stream_once(mut app, req, on_frame)
 }
 
-pub fn (e InProcVjsxExecutor) open_websocket_session(mut app App, req WebSocketSessionOpenRequest) !WebSocketSessionOpenOutcome {
+pub fn (e InProcVjsxExecutor) open_websocket_session(mut app App, req exec.WebSocketSessionOpenRequest) !exec.WebSocketSessionOpenOutcome {
 	e.remember_app(mut app)
 	_ = app
 	_ = req
@@ -5343,7 +5344,7 @@ fn (e InProcVjsxExecutor) dispatch_websocket_upstream_once(mut app App, req tran
 		e.record_lane_error(lane.id, err.msg())
 		return error(err.msg())
 	}
-	e.activate_lane_request_context(idx, mut app, lane.id, HttpLogicDispatchRequest{
+	e.activate_lane_request_context(idx, mut app, lane.id, exec.HttpLogicDispatchRequest{
 		method:     req.event
 		path:       req.target
 		trace_id:   req.trace_id

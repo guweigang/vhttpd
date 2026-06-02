@@ -1,4 +1,5 @@
 module main
+import executor
 
 import json
 import time
@@ -43,7 +44,7 @@ struct AdminRuntimeSummary {
 	logic_executor_lifecycle string
 	logic_executor_model     string
 	logic_provider           string
-	logic_executor_details   LogicExecutorAdminDetails
+	logic_executor_details   executor.LogicExecutorAdminDetails
 	capabilities             map[string]bool
 	active_websockets        int
 	active_upstreams         int

@@ -1,4 +1,5 @@
 module main
+import executor
 
 import config
 
@@ -28,8 +29,8 @@ pub:
 	kind                string
 	aliases             []string
 	provider            string
-	logic_model         LogicExecutorModel
-	worker_backend_mode WorkerBackendMode
+	logic_model         executor.LogicExecutorModel
+	worker_backend_mode executor.WorkerBackendMode
 	lifecycle           LogicExecutorLifecycle
 	factory             BuiltinLogicExecutorFactoryKind
 	config_surface      LogicExecutorConfigSurface

@@ -1,4 +1,5 @@
 module main
+import executor
 import config
 import transport
 
@@ -160,7 +161,7 @@ fn test_inproc_vjsx_executor_repo_api_demo_handler_runs() {
 		url:    '/hello?name=repo-demo'
 		host:   'example.test'
 	}
-	outcome := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	outcome := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/hello?name=repo-demo'
 		req:         req
@@ -198,7 +199,7 @@ fn test_inproc_vjsx_executor_methods_are_explicitly_not_ready() {
 	defer {
 		executor.close()
 	}
-	req := HttpLogicDispatchRequest{}
+	req := executor.HttpLogicDispatchRequest{}
 	executor.dispatch_http(mut app, req) or {
 		assert err.msg() == 'inproc_vjsx_executor_no_lanes'
 		return
@@ -233,7 +234,7 @@ fn test_inproc_vjsx_executor_dispatch_http_runs_js_handler() {
 		data:   '{"x":1}'
 	}
 	req.add_custom_header('content-type', 'application/json') or { panic(err) }
-	outcome := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	outcome := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 		method:      'POST'
 		path:        '/hello?name=codex'
 		req:         req
@@ -276,7 +277,7 @@ fn test_inproc_vjsx_executor_dispatch_http_supports_implicit_ctx_response() {
 		url:    '/hello?name=codex'
 		host:   'example.test'
 	}
-	outcome := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	outcome := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/hello?name=codex'
 		req:         req
@@ -315,7 +316,7 @@ fn test_inproc_vjsx_executor_dispatch_http_exposes_runtime_facade() {
 		url:    '/hello?name=codex'
 		host:   'example.test'
 	}
-	outcome := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	outcome := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/hello?name=codex'
 		req:         req
@@ -369,7 +370,7 @@ fn test_inproc_vjsx_executor_dispatch_http_exposes_request_environment_facade() 
 		host:   'example.test:8443'
 	}
 	req.add_custom_header('x-forwarded-proto', 'https') or { panic(err) }
-	outcome := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	outcome := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/hello?name=codex'
 		req:         req
@@ -424,7 +425,7 @@ fn test_inproc_vjsx_executor_dispatch_http_exposes_runtime_snapshot() {
 		url:    '/snapshot'
 		host:   'example.test'
 	}
-	outcome := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	outcome := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/snapshot'
 		req:         req
@@ -473,7 +474,7 @@ fn test_inproc_vjsx_executor_dispatch_http_exposes_cross_lane_app_snapshot() {
 		url:    '/touch'
 		host:   'example.test'
 	}
-	first := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	first := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/touch'
 		req:         base_req
@@ -481,7 +482,7 @@ fn test_inproc_vjsx_executor_dispatch_http_exposes_cross_lane_app_snapshot() {
 		trace_id:    'trace_cross_lane_1'
 		request_id:  'req_cross_lane_1'
 	}) or { panic(err) }
-	second := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	second := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/touch'
 		req:         base_req
@@ -498,7 +499,7 @@ fn test_inproc_vjsx_executor_dispatch_http_exposes_cross_lane_app_snapshot() {
 		url:    '/state'
 		host:   'example.test'
 	}
-	snapshot_resp := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	snapshot_resp := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/state'
 		req:         state_req
@@ -540,7 +541,7 @@ fn test_inproc_vjsx_executor_dispatch_http_supports_ctx_aliases() {
 		url:    '/hello?name=codex'
 		host:   'example.test'
 	}
-	outcome := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	outcome := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/hello?name=codex'
 		req:         req
@@ -582,7 +583,7 @@ fn test_inproc_vjsx_executor_dispatch_http_supports_ctx_helper_methods() {
 		data:   '{"name":"codex"}'
 	}
 	req.add_custom_header('content-type', 'application/json') or { panic(err) }
-	outcome := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	outcome := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 		method:      'POST'
 		path:        '/helpers'
 		req:         req
@@ -636,7 +637,7 @@ fn test_inproc_vjsx_executor_dispatch_http_supports_semantic_response_helpers() 
 			url:    '/semantic?mode=${mode}'
 			host:   'example.test'
 		}
-		outcome := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+		outcome := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 			method:      'GET'
 			path:        '/semantic?mode=${mode}'
 			req:         req
@@ -713,7 +714,7 @@ fn test_inproc_vjsx_executor_dispatch_http_supports_typed_request_helpers() {
 	req.add_custom_header('x-retry-count', '3') or { panic(err) }
 	req.add_custom_header('x-dry-run', 'yes') or { panic(err) }
 	req.add_custom_header('cookie', 'sid=abc123') or { panic(err) }
-	outcome := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	outcome := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 		method:      'POST'
 		path:        '/typed?limit=7&debug=true'
 		req:         req
@@ -765,7 +766,7 @@ fn test_inproc_vjsx_executor_dispatch_http_supports_request_negotiation_helpers(
 		panic(err)
 	}
 	req.add_custom_header('accept', 'text/html, application/json;q=0.9') or { panic(err) }
-	outcome := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	outcome := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 		method:      'POST'
 		path:        '/negotiate'
 		req:         req
@@ -812,7 +813,7 @@ fn test_inproc_vjsx_executor_runtime_emit_writes_event_log() {
 		url:    '/emit'
 		host:   'example.test'
 	}
-	outcome := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	outcome := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/emit'
 		req:         req
@@ -856,7 +857,7 @@ fn test_inproc_vjsx_executor_dispatch_http_supports_redirect_helper() {
 		url:    '/redirect'
 		host:   'example.test'
 	}
-	outcome := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	outcome := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/redirect'
 		req:         req
@@ -904,7 +905,7 @@ fn test_inproc_vjsx_executor_dispatch_http_supports_typescript_module_entry() {
 		url:    '/hello?name=typescript'
 		host:   'example.test'
 	}
-	outcome := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	outcome := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/hello?name=typescript'
 		req:         req
@@ -943,7 +944,7 @@ fn test_inproc_vjsx_executor_prefers_module_exports_over_compat_global_handle() 
 		url:    '/entry'
 		host:   'example.test'
 	}
-	outcome := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	outcome := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/entry'
 		req:         req
@@ -1016,7 +1017,7 @@ fn test_inproc_vjsx_executor_rebuilds_lane_host_when_source_signature_changes() 
 		url:    '/hello'
 		host:   'example.test'
 	}
-	first := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	first := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/hello'
 		req:         req
@@ -1029,7 +1030,7 @@ fn test_inproc_vjsx_executor_rebuilds_lane_host_when_source_signature_changes() 
 	assert first_signature != ''
 	os.write_file(helper_file, 'export const message = "v2";\n') or { panic(err) }
 	assert inproc_vjsx_wait_for_signature_refresh(executor, first_signature, 1500)
-	second := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	second := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/hello'
 		req:         req
@@ -1073,7 +1074,7 @@ fn test_inproc_vjsx_executor_rebuilds_lane_host_when_mjs_dependency_changes_with
 		url:    '/mjs'
 		host:   'example.test'
 	}
-	first := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	first := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/mjs'
 		req:         req
@@ -1088,7 +1089,7 @@ fn test_inproc_vjsx_executor_rebuilds_lane_host_when_mjs_dependency_changes_with
 		panic(err)
 	}
 	assert inproc_vjsx_wait_for_signature_refresh(executor, first_signature, 1500)
-	second := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	second := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/mjs'
 		req:         req
@@ -1131,7 +1132,7 @@ fn test_inproc_vjsx_executor_lane_error_marks_dirty_and_recovers_after_source_fi
 		host:   'example.test'
 	}
 	mut first_err := ''
-	executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/recover'
 		req:         req
@@ -1145,7 +1146,7 @@ fn test_inproc_vjsx_executor_lane_error_marks_dirty_and_recovers_after_source_fi
 	assert snapshot_after_error[0].dirty == true
 	assert snapshot_after_error[0].last_error.contains('boom')
 	os.write_file(state_file, 'export const mode = "ok";\n') or { panic(err) }
-	recovered := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	recovered := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/recover'
 		req:         req
@@ -2148,7 +2149,7 @@ export default bot;
 		executor.close()
 	}
 	mut app := App{}
-	http_outcome := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	http_outcome := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/bot'
 		req:         http.Request{
@@ -2228,7 +2229,7 @@ export default app;
 		executor.close()
 	}
 	mut app := App{}
-	first := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	first := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/startup'
 		req:         http.Request{
@@ -2240,7 +2241,7 @@ export default app;
 		trace_id:    'trace_startup_1'
 		request_id:  'req_startup_1'
 	}) or { panic(err) }
-	second := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	second := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/startup'
 		req:         http.Request{
@@ -2303,7 +2304,7 @@ export default app;
 		feishu_apps:    map[string]config.FeishuAppConfig{}
 		feishu_runtime: map[string]FeishuProviderRuntime{}
 	}
-	resp := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	resp := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/startup-command'
 		req:         http.Request{
@@ -2811,7 +2812,7 @@ export default app;
 	assert resp.accepted
 	time.sleep(80 * time.millisecond)
 	executor.pump_all_lane_sessions() or { panic(err) }
-	state := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	state := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/state'
 		req:         http.Request{
@@ -2917,7 +2918,7 @@ export default app;
 	assert resp.accepted
 	time.sleep(80 * time.millisecond)
 	executor.pump_all_lane_sessions() or { panic(err) }
-	state := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	state := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/state'
 		req:         http.Request{
@@ -3051,7 +3052,7 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_skeleton_boots() {
 		executor.close()
 	}
 	mut app := App{}
-	health := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	health := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/healthz'
 		req:         http.Request{
@@ -3065,7 +3066,7 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_skeleton_boots() {
 	}) or { panic(err) }
 	assert health.response.status == 200
 	assert health.response.body.contains('"app":"paseo-relay"')
-	health_alias := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	health_alias := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/health'
 		req:         http.Request{
@@ -3186,7 +3187,7 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_isolates_versions_by_server_id() {
 	}) or { panic(err) }
 	assert control_open.accepted
 	assert !control_open.commands.any(it.event == 'close' && it.target_id == 'ws_legacy_server')
-	state := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	state := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/state'
 		req:         http.Request{
@@ -3289,7 +3290,7 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_buffers_and_flushes_client_frames(
 	}) or { panic(err) }
 	assert client_message.accepted
 	assert client_message.commands.len == 0
-	state_before := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	state_before := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/state'
 		req:         http.Request{
@@ -3325,7 +3326,7 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_buffers_and_flushes_client_frames(
 	assert server_data_open.accepted
 	assert server_data_open.commands.any(it.event == 'send'
 		&& it.target_id == 'ws_server_data_buffer' && it.data.contains('"type":"hello"'))
-	state_after := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	state_after := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/state'
 		req:         http.Request{
@@ -3806,7 +3807,7 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_restores_draining_frames_when_serv
 		rooms:       []string{}
 		metadata:    map[string]string{}
 	}) or { panic(err) }
-	before_close := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	before_close := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/state'
 		req:         http.Request{
@@ -3842,7 +3843,7 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_restores_draining_frames_when_serv
 			'relay_connection_id': connection_id
 		}
 	}) or { panic(err) }
-	after_close := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	after_close := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/state'
 		req:         http.Request{
@@ -4033,7 +4034,7 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_allows_multiple_clients_same_conne
 	}) or { panic(err) }
 	assert second.accepted
 	assert !second.commands.any(it.event == 'close' && it.target_id == 'ws_client_one')
-	state := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	state := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/state'
 		req:         http.Request{

@@ -1,4 +1,5 @@
 module main
+import executor
 
 import encoding.base64
 import json
@@ -31,7 +32,7 @@ pub:
 pub mut:
 	started_at_unix                             i64
 	worker_backend                              WorkerBackendRuntime
-	worker_backend_mode                         WorkerBackendMode = .required
+	worker_backend_mode                         executor.WorkerBackendMode = .required
 	logic_executor                              LogicExecutor     = SocketWorkerExecutor{}
 	logic_executor_lifecycle                    string
 	internal_admin_socket                       string
@@ -600,7 +601,7 @@ fn proxy_worker_websocket(mut app App, mut ctx Context, method string, path stri
 		return ctx.text('Upgrade Required')
 	}
 	remote_addr := if isnil(ctx.conn) { '' } else { ctx.conn.peer_ip() or { '' } }
-	mut ws_open := app.logic_executor.open_websocket_session(mut app, WebSocketSessionOpenRequest{
+	mut ws_open := app.logic_executor.open_websocket_session(mut app, executor.WebSocketSessionOpenRequest{
 		req:         ctx.req
 		remote_addr: remote_addr
 		path:        path
@@ -971,7 +972,7 @@ fn proxy_worker_response(mut app App, mut ctx Context, method string, path strin
 			return result
 		}
 	}
-	mut outcome := app.logic_executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	mut outcome := app.logic_executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 		method:      method
 		path:        path
 		req:         ctx.req

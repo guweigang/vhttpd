@@ -1,99 +1,21 @@
 module main
 import transport
+import executor
 
 import json
 import net.http
 import net.unix
 import time
 
-pub enum HttpLogicDispatchKind {
-	response
-	stream
-	upstream_plan
-}
-
-pub struct HttpLogicDispatchRequest {
-pub:
-	method      string
-	path        string
-	req         http.Request
-	remote_addr string
-	trace_id    string
-	request_id  string
-}
-
-pub struct HttpLogicDispatchOutcome {
-pub:
-	kind          HttpLogicDispatchKind
-	socket_path   string
-	response      transport.WorkerResponse
-	stream_start  transport.WorkerStreamFrame
-	upstream_plan transport.WorkerUpstreamPlanFrame
-mut:
-	conn &unix.StreamConn = unsafe { nil }
-}
-
-pub fn (mut outcome HttpLogicDispatchOutcome) close_live_conn() {
-	if isnil(outcome.conn) {
-		return
-	}
-	outcome.conn.close() or {}
-}
-
-pub struct WebSocketSessionOpenRequest {
-pub:
-	req         http.Request
-	remote_addr string
-	path        string
-	request_id  string
-	trace_id    string
-}
-
-pub struct WebSocketSessionOpenOutcome {
-pub:
-	accepted    bool
-	status      int
-	body        string
-	socket_path string
-mut:
-	conn &unix.StreamConn = unsafe { nil }
-}
-
-pub enum LogicExecutorModel {
-	worker
-	embedded
-}
-
-pub enum WorkerBackendMode {
-	required
-	disabled
-}
-
-pub struct LogicExecutorAdminDetails {
-pub:
-	kind            string
-	provider        string
-	model           string
-	runtime_profile string
-	lane_count      int
-	module_root     string
-	build_root      string
-	signature_root  string
-	max_requests    int
-	enable_fs       bool
-	enable_process  bool
-	enable_network  bool
-}
-
 pub interface LogicExecutor {
-	model() LogicExecutorModel
+	model() executor.LogicExecutorModel
 	kind() string
 	provider() string
-	admin_details() LogicExecutorAdminDetails
+	admin_details() executor.LogicExecutorAdminDetails
 	warmup(mut app App) !
 	close()
-	dispatch_http(mut app App, req HttpLogicDispatchRequest) !HttpLogicDispatchOutcome
-	open_websocket_session(mut app App, req WebSocketSessionOpenRequest) !WebSocketSessionOpenOutcome
+	dispatch_http(mut app App, req executor.HttpLogicDispatchRequest) !executor.HttpLogicDispatchOutcome
+	open_websocket_session(mut app App, req executor.WebSocketSessionOpenRequest) !executor.WebSocketSessionOpenOutcome
 	dispatch_stream(mut app App, req transport.StreamDispatchRequest) !transport.StreamDispatchResponse
 	dispatch_mcp(mut app App, req transport.WorkerMcpDispatchRequest) !transport.WorkerMcpDispatchResponse
 	dispatch_websocket_upstream(mut app App, req transport.WorkerWebSocketUpstreamDispatchRequest) !transport.WorkerWebSocketUpstreamDispatchResponse
@@ -102,7 +24,7 @@ pub interface LogicExecutor {
 
 pub struct DisabledLogicExecutor {}
 
-pub fn (e DisabledLogicExecutor) model() LogicExecutorModel {
+pub fn (e DisabledLogicExecutor) model() executor.LogicExecutorModel {
 	_ = e
 	return .worker
 }
@@ -117,12 +39,12 @@ pub fn (e DisabledLogicExecutor) provider() string {
 	return 'none'
 }
 
-pub fn (e DisabledLogicExecutor) admin_details() LogicExecutorAdminDetails {
+pub fn (e DisabledLogicExecutor) admin_details() executor.LogicExecutorAdminDetails {
 	_ = e
-	return LogicExecutorAdminDetails{
+	return executor.LogicExecutorAdminDetails{
 		kind:     'none'
 		provider: 'none'
-		model:    LogicExecutorModel.worker.str()
+		model:    executor.LogicExecutorModel.worker.str()
 	}
 }
 
@@ -135,14 +57,14 @@ pub fn (e DisabledLogicExecutor) close() {
 	_ = e
 }
 
-pub fn (e DisabledLogicExecutor) dispatch_http(mut app App, req HttpLogicDispatchRequest) !HttpLogicDispatchOutcome {
+pub fn (e DisabledLogicExecutor) dispatch_http(mut app App, req executor.HttpLogicDispatchRequest) !executor.HttpLogicDispatchOutcome {
 	_ = e
 	_ = app
 	_ = req
 	return error('logic_executor_disabled')
 }
 
-pub fn (e DisabledLogicExecutor) open_websocket_session(mut app App, req WebSocketSessionOpenRequest) !WebSocketSessionOpenOutcome {
+pub fn (e DisabledLogicExecutor) open_websocket_session(mut app App, req executor.WebSocketSessionOpenRequest) !executor.WebSocketSessionOpenOutcome {
 	_ = e
 	_ = app
 	_ = req
@@ -179,7 +101,7 @@ pub fn (e DisabledLogicExecutor) dispatch_websocket_event(mut app App, frame tra
 
 pub struct SocketWorkerExecutor {}
 
-pub fn (e SocketWorkerExecutor) model() LogicExecutorModel {
+pub fn (e SocketWorkerExecutor) model() executor.LogicExecutorModel {
 	_ = e
 	return .worker
 }
@@ -194,12 +116,12 @@ pub fn (e SocketWorkerExecutor) provider() string {
 	return 'php-worker'
 }
 
-pub fn (e SocketWorkerExecutor) admin_details() LogicExecutorAdminDetails {
+pub fn (e SocketWorkerExecutor) admin_details() executor.LogicExecutorAdminDetails {
 	_ = e
-	return LogicExecutorAdminDetails{
+	return executor.LogicExecutorAdminDetails{
 		kind:     'php'
 		provider: 'php-worker'
-		model:    LogicExecutorModel.worker.str()
+		model:    executor.LogicExecutorModel.worker.str()
 	}
 }
 
@@ -212,7 +134,7 @@ pub fn (e SocketWorkerExecutor) close() {
 	_ = e
 }
 
-pub fn (e SocketWorkerExecutor) dispatch_http(mut app App, req HttpLogicDispatchRequest) !HttpLogicDispatchOutcome {
+pub fn (e SocketWorkerExecutor) dispatch_http(mut app App, req executor.HttpLogicDispatchRequest) !executor.HttpLogicDispatchOutcome {
 	_ = e
 	selected_socket := app.worker_backend_select_socket_queued()!
 	mut conn := unix.connect_stream(selected_socket)!
@@ -233,7 +155,7 @@ pub fn (e SocketWorkerExecutor) dispatch_http(mut app App, req HttpLogicDispatch
 		return error(err.msg())
 	}
 	if start := try_decode_stream_start(first_raw) {
-		return HttpLogicDispatchOutcome{
+		return executor.HttpLogicDispatchOutcome{
 			kind:         .stream
 			socket_path:  selected_socket
 			stream_start: start
@@ -243,7 +165,7 @@ pub fn (e SocketWorkerExecutor) dispatch_http(mut app App, req HttpLogicDispatch
 	if plan := try_decode_upstream_plan(first_raw) {
 		conn.close() or {}
 		app.on_worker_request_finished(selected_socket)
-		return HttpLogicDispatchOutcome{
+		return executor.HttpLogicDispatchOutcome{
 			kind:          .upstream_plan
 			upstream_plan: plan
 		}
@@ -255,13 +177,13 @@ pub fn (e SocketWorkerExecutor) dispatch_http(mut app App, req HttpLogicDispatch
 	}
 	conn.close() or {}
 	app.on_worker_request_finished(selected_socket)
-	return HttpLogicDispatchOutcome{
+	return executor.HttpLogicDispatchOutcome{
 		kind:     .response
 		response: resp
 	}
 }
 
-pub fn (e SocketWorkerExecutor) open_websocket_session(mut app App, req WebSocketSessionOpenRequest) !WebSocketSessionOpenOutcome {
+pub fn (e SocketWorkerExecutor) open_websocket_session(mut app App, req executor.WebSocketSessionOpenRequest) !executor.WebSocketSessionOpenOutcome {
 	_ = e
 	selected_socket := app.worker_backend_select_socket_queued()!
 	mut worker_conn := unix.connect_stream(selected_socket)!
@@ -275,13 +197,13 @@ pub fn (e SocketWorkerExecutor) open_websocket_session(mut app App, req WebSocke
 	}
 	if !accepted {
 		worker_conn.close() or {}
-		return WebSocketSessionOpenOutcome{
+		return executor.WebSocketSessionOpenOutcome{
 			accepted: false
 			status:   status
 			body:     body
 		}
 	}
-	return WebSocketSessionOpenOutcome{
+	return executor.WebSocketSessionOpenOutcome{
 		accepted:    true
 		status:      status
 		body:        body
@@ -314,7 +236,7 @@ pub fn (app &App) logic_executor_kind() string {
 	return app.logic_executor.kind()
 }
 
-pub fn (app &App) logic_executor_model() LogicExecutorModel {
+pub fn (app &App) logic_executor_model() executor.LogicExecutorModel {
 	return app.logic_executor.model()
 }
 
@@ -322,7 +244,7 @@ pub fn (app &App) logic_executor_provider() string {
 	return app.logic_executor.provider()
 }
 
-pub fn (app &App) logic_executor_admin_details() LogicExecutorAdminDetails {
+pub fn (app &App) logic_executor_admin_details() executor.LogicExecutorAdminDetails {
 	return app.logic_executor.admin_details()
 }
 

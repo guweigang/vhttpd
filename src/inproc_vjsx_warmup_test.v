@@ -1,4 +1,5 @@
 module main
+import executor
 
 import net.http
 import os
@@ -39,7 +40,7 @@ export default app;
 	mut app := App{}
 	executor.warmup(mut app) or { panic(err) }
 	executor.warmup(mut app) or { panic(err) }
-	resp := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	resp := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/warmup'
 		req:         http.Request{

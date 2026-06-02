@@ -1,4 +1,5 @@
 module main
+import executor
 
 import net.http
 import os
@@ -38,7 +39,7 @@ export default function handle(ctx) {
 		url:    '/host-api'
 		host:   'example.test'
 	}
-	outcome := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	outcome := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/host-api'
 		req:         req
@@ -88,7 +89,7 @@ export default function handle(ctx) {
 		executor.close()
 	}
 	mut app := App{}
-	set_outcome := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	set_outcome := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/set'
 		req:         http.Request{
@@ -104,7 +105,7 @@ export default function handle(ctx) {
 	assert set_outcome.response.body.contains('"ok":true')
 	assert set_outcome.response.body.contains('"existsAfterSet":true')
 
-	get_outcome := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	get_outcome := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/get'
 		req:         http.Request{
@@ -168,7 +169,7 @@ export default function handle(ctx) {
 		executor.close()
 	}
 	mut app := App{}
-	_ := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	_ := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/seed'
 		req:         http.Request{
@@ -181,7 +182,7 @@ export default function handle(ctx) {
 		request_id:  'req_session_store_patch_seed'
 	}) or { panic(err) }
 
-	patch_outcome := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	patch_outcome := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/patch'
 		req:         http.Request{
@@ -197,7 +198,7 @@ export default function handle(ctx) {
 	assert patch_outcome.response.body.contains('"status":"patched"')
 	assert patch_outcome.response.body.contains('"count":2')
 
-	get_outcome := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	get_outcome := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/get'
 		req:         http.Request{
