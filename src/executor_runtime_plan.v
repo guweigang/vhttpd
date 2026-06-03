@@ -4,7 +4,7 @@ import config
 
 pub struct LogicExecutorRuntimePlan {
 pub:
-	executor            LogicExecutor
+	executor            executor.LogicExecutor
 	worker_backend_mode executor.WorkerBackendMode
 	lifecycle           LogicExecutorLifecycle
 	bootstrap           ExecutorBootstrapState

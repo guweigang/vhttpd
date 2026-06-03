@@ -7,6 +7,7 @@ import net.urllib
 import os
 import sync
 import time
+import config as app_config
 import state_store
 import transport
 import vjsx
@@ -89,8 +90,8 @@ pub:
 	enable_process           bool
 	enable_network           bool
 	enable_item_render_streams bool = true
-	websocket_affinity       WebSocketAffinityConfig
-	websocket_actor          WebSocketActorConfig
+	websocket_affinity       app_config.WebSocketAffinityConfig
+	websocket_actor          app_config.WebSocketActorConfig
 }
 
 pub struct VjsxRuntimeFacade {
@@ -114,7 +115,7 @@ mut:
 pub struct VjsxExecutorState {
 mut:
 	mu                                      sync.Mutex
-	app_ref AppFacade = unsafe { nil }
+	app_ref AppFacade
 	facade                                  VjsxRuntimeFacade
 	session_store                           state_store.MemoryStateStore[string]
 	lanes                                   []VjsxExecutionLane
@@ -162,7 +163,7 @@ mut:
 	source_signature  string
 	is_module_entry   bool
 	temp_root         string
-	app_ref AppFacade                 = unsafe { nil }
+	app_ref AppFacade
 	session           &vjsx.RuntimeSession = unsafe { nil }
 	module_binding    &vjsx.ScriptModule   = unsafe { nil }
 	request_ctx       InProcVjsxRequestContext
@@ -275,7 +276,7 @@ struct InProcVjsxWebSocketFrameBundle {
 struct InProcVjsxRequestContext {
 mut:
 	active     bool
-	app AppFacade = unsafe { nil }
+	app AppFacade
 	lane_id    string
 	request_id string
 	trace_id   string
@@ -297,7 +298,7 @@ mut:
 }
 
 struct InProcVjsxWebSocketTask {
-	app AppFacade = unsafe { nil }
+	app AppFacade
 	frame             transport.WorkerWebSocketFrame
 	done              chan bool
 	started           chan bool
@@ -334,7 +335,7 @@ mut:
 }
 
 struct InProcVjsxLaneSnapshotTask {
-	app AppFacade = unsafe { nil }
+	app AppFacade
 	done chan bool
 mut:
 	slot &InProcVjsxLaneSnapshotTaskSlot = unsafe { nil }
@@ -353,7 +354,7 @@ mut:
 }
 
 struct InProcVjsxLaneWarmupTask {
-	app AppFacade = unsafe { nil }
+	app AppFacade
 	done chan bool
 mut:
 	slot &InProcVjsxLaneWarmupTaskSlot = unsafe { nil }
@@ -392,7 +393,7 @@ mut:
 }
 
 struct InProcVjsxLaneAffinityTask {
-	app AppFacade = unsafe { nil }
+	app AppFacade
 	frame transport.WorkerWebSocketFrame
 	done  chan bool
 	kind  string
@@ -793,7 +794,7 @@ fn websocket_affinity_header_lookup(headers map[string]string, key string) strin
 	return ''
 }
 
-fn websocket_affinity_value(frame transport.WorkerWebSocketFrame, config WebSocketAffinityConfig) string {
+fn websocket_affinity_value(frame transport.WorkerWebSocketFrame, config app_config.WebSocketAffinityConfig) string {
 	if !config.enabled || normalize_websocket_affinity_scope(config.scope) != 'lane' {
 		return ''
 	}
@@ -1285,7 +1286,7 @@ fn (e InProcVjsxExecutor) websocket_actor_connection_cache(frame transport.Worke
 	}
 }
 
-fn websocket_actor_value_from_source(frame transport.WorkerWebSocketFrame, source WebSocketActorSourceConfig) WebSocketActorDecision {
+fn websocket_actor_value_from_source(frame transport.WorkerWebSocketFrame, source app_config.WebSocketActorSourceConfig) WebSocketActorDecision {
 	key_name := source.key.trim_space()
 	if key_name == '' {
 		return WebSocketActorDecision{}
@@ -2649,7 +2650,7 @@ fn inproc_vjsx_host_config_builder(mut state VjsxExecutorState, idx int) vjsx.Ho
 			}
 			mut app := app_ref
 			path := if args.len > 0 { args[0].to_string().trim_space() } else { '' }
-			return ctx.js_string(inproc_vjsx_config_lookup(app.runtime_config_json(), path))
+			return ctx.js_string(inproc_vjsx_config_lookup(app.get_runtime_config_json(), path))
 		})
 	}
 }
@@ -3546,7 +3547,7 @@ fn (e InProcVjsxExecutor) activate_lane_request_context(idx int, mut app AppFaca
 	if idx >= state.hosts.len {
 		return
 	}
-	normalized_path, _ := normalize_request_target(req.path)
+	normalized_path, _ := transport.normalize_request_target(req.path)
 	state.hosts[idx].request_ctx = InProcVjsxRequestContext{
 		active:     true
 		app:        app
@@ -3591,14 +3592,14 @@ fn (e InProcVjsxExecutor) pump_all_lane_sessions() ! {
 }
 
 fn build_inproc_request_payload(req HttpLogicDispatchRequest) string {
-	return encode_worker_request(req.method, req.path, req.req, req.remote_addr, req.trace_id,
+	return transport.encode_worker_request(req.method, req.path, req.req, req.remote_addr, req.trace_id,
 		req.request_id)
 }
 
 fn (e InProcVjsxExecutor) build_runtime_payload(lane VjsxExecutionLane, req HttpLogicDispatchRequest) string {
-	normalized_path, _ := normalize_request_target(req.path)
+	normalized_path, _ := transport.normalize_request_target(req.path)
 	config := e.facade_snapshot().config
-	server := server_map_from_request(req.req, req.remote_addr)
+	server := transport.server_map_from_request(req.req, req.remote_addr)
 	host := server['host'] or { req.req.host }
 	port := server['port'] or { '' }
 	scheme := req.req.header.get(.x_forwarded_proto) or { 'http' }
@@ -4515,7 +4516,7 @@ fn (e InProcVjsxExecutor) prepare_websocket_callback_on_lane(mut app AppFacade, 
 	log.debug('[vhttpd] websocket_on_lane runtime_build lane=${lane.id} idx=${idx} event=${frame.event}')
 	log.debug('[vhttpd] websocket_on_lane frame_build lane=${lane.id} idx=${idx} event=${frame.event}')
 	mut js_runtime, mut js_frame := build_websocket_callback_payload(ctx, callback_input,
-		app.runtime_config_json(), mut app)
+		app.get_runtime_config_json(), mut app)
 	return InProcVjsxWebSocketCallbackContext{
 		idx:        idx
 		lane_id:    lane.id
@@ -4657,7 +4658,7 @@ fn (e InProcVjsxExecutor) resolve_websocket_affinity_on_lane(mut app AppFacade, 
 	ctx := host.context()
 	runtime_meta := e.websocket_runtime_meta(lane, frame)
 	mut js_runtime :=
-		build_websocket_js_runtime(ctx, runtime_meta, app.runtime_config_json(), mut app)
+		build_websocket_js_runtime(ctx, runtime_meta, app.get_runtime_config_json(), mut app)
 	defer {
 		js_runtime.free()
 	}
@@ -4729,7 +4730,7 @@ fn (e InProcVjsxExecutor) resolve_websocket_actor_on_lane(mut app AppFacade, fra
 	ctx := host.context()
 	runtime_meta := e.websocket_runtime_meta(lane, frame)
 	mut js_runtime :=
-		build_websocket_js_runtime(ctx, runtime_meta, app.runtime_config_json(), mut app)
+		build_websocket_js_runtime(ctx, runtime_meta, app.get_runtime_config_json(), mut app)
 	defer {
 		js_runtime.free()
 	}
@@ -4916,7 +4917,7 @@ fn (e InProcVjsxExecutor) execute_startup_hook(mut app AppFacade, idx int, lane 
 		}
 		event:    kind
 	}
-	_, command_error := app.execute_command_envelopes(request_id, dispatch_ctx, commands)
+	command_error := app.run_command_envelopes(request_id, dispatch_ctx, commands)
 	if command_error != '' {
 		return error('inproc_vjsx_executor_${kind}_command_failed:${command_error}')
 	}

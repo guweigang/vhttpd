@@ -248,7 +248,14 @@ fn (mut exec CommandExecutor) execute_routed_command(route ProviderRouteKind, co
 }
 
 // Unified App-level entrypoint, now backed by CommandExecutor object.
-fn (mut app App) execute_command_envelopes(source_activity_id string, ctx DispatchContext, commands []transport.WorkerWebSocketUpstreamCommand) ([]WebSocketUpstreamCommandActivity, string) {
-	mut executor := CommandExecutor.new(mut app)
-	return executor.execute(source_activity_id, ctx, commands)
+pub fn (mut app App) execute_command_envelopes(source_activity_id string, ctx DispatchContext, commands []transport.WorkerWebSocketUpstreamCommand) string {
+	mut ce := CommandExecutor.new(mut app)
+	_, err_msg := ce.execute(source_activity_id, ctx, commands)
+	return err_msg
+}
+
+// App-level entrypoint that also returns command snapshots for kernel dispatch.
+fn (mut app App) execute_command_envelopes_with_snapshots(source_activity_id string, ctx DispatchContext, commands []transport.WorkerWebSocketUpstreamCommand) ([]WebSocketUpstreamCommandActivity, string) {
+	mut ce := CommandExecutor.new(mut app)
+	return ce.execute(source_activity_id, ctx, commands)
 }

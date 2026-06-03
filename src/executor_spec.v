@@ -221,13 +221,13 @@ fn (spec BuiltinLogicExecutorSpec) resolve_vjsx_runtime_config(args []string, cf
 	}
 }
 
-fn (spec BuiltinLogicExecutorSpec) build_executor(args []string, cfg config.VhttpdConfig) !LogicExecutor {
+fn (spec BuiltinLogicExecutorSpec) build_executor(args []string, cfg config.VhttpdConfig) !executor.LogicExecutor {
 	match spec.factory {
 		.noop {
-			return DisabledLogicExecutor{}
+			return executor.DisabledLogicExecutor{}
 		}
 		.socket_worker {
-			return SocketWorkerExecutor{}
+			return executor.SocketWorkerExecutor{}
 		}
 		.inproc_vjsx {
 			return new_inproc_vjsx_executor(spec.resolve_vjsx_runtime_config(args, cfg)!)

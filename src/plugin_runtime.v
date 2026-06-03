@@ -79,7 +79,8 @@ fn (mut app App) call_plugin(req PluginCallRequest) !PluginCallResponse {
 		return error('plugin_unsupported_kind:${name}:${cfg.kind}')
 	}
 	executor := app.plugin_vjsx[name] or { return error('plugin_runtime_unavailable:${name}') }
-	return executor.call_plugin(mut app, req)
+	mut facade := app.as_facade()
+	return executor.call_plugin(mut facade, req)
 }
 
 fn (mut app App) call_plugin_stream(req PluginCallRequest, on_frame PluginStreamFrameFn) !PluginStreamCallResponse {
@@ -92,5 +93,6 @@ fn (mut app App) call_plugin_stream(req PluginCallRequest, on_frame PluginStream
 		return error('plugin_unsupported_kind:${name}:${cfg.kind}')
 	}
 	executor := app.plugin_vjsx[name] or { return error('plugin_runtime_unavailable:${name}') }
-	return executor.call_plugin_stream(mut app, req, on_frame)
+	mut facade := app.as_facade()
+	return executor.call_plugin_stream(mut facade, req, on_frame)
 }

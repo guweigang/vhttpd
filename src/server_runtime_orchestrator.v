@@ -11,7 +11,8 @@ fn start_server_runtime(mut app App, runtime_cfg ServerRuntimeConfig) {
 	log.debug('[vhttpd] start_server_runtime: starting executor lifecycle')
 	runtime_cfg.executor_plan.lifecycle.start(mut app)
 	log.debug('[vhttpd] start_server_runtime: warming up executor kind=${app.logic_executor_kind()}')
-	app.logic_executor.warmup(mut app) or {
+	mut facade := app.as_facade()
+	app.logic_executor.warmup(mut facade) or {
 		err_msg := executor.inproc_vjsx_normalize_error_message(err.msg(),
 			'logic_executor_warmup_failed')
 		log.error('[vhttpd] logic executor warmup failed: ${err_msg}')

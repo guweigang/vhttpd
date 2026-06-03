@@ -142,19 +142,19 @@ pub fn (e SocketWorkerExecutor) dispatch_http(mut app AppFacade, req HttpLogicDi
 	if read_timeout > 0 {
 		conn.set_read_timeout(time.millisecond * read_timeout)
 	}
-	payload := encode_worker_request(req.method, req.path, req.req, req.remote_addr, req.trace_id,
+	payload := transport.encode_worker_request(req.method, req.path, req.req, req.remote_addr, req.trace_id,
 		req.request_id)
-	write_frame(mut conn, payload) or {
+	transport.write_frame(mut conn, payload) or {
 		conn.close() or {}
 		app.on_worker_request_finished(selected_socket)
 		return error(err.msg())
 	}
-	first_raw := read_frame(mut conn) or {
+	first_raw := transport.read_frame(mut conn) or {
 		conn.close() or {}
 		app.on_worker_request_finished(selected_socket)
 		return error(err.msg())
 	}
-	if start := try_decode_stream_start(first_raw) {
+	if start := transport.try_decode_stream_start(first_raw) {
 		return HttpLogicDispatchOutcome{
 			kind:         .stream
 			socket_path:  selected_socket
@@ -162,7 +162,7 @@ pub fn (e SocketWorkerExecutor) dispatch_http(mut app AppFacade, req HttpLogicDi
 			conn:         conn
 		}
 	}
-	if plan := try_decode_upstream_plan(first_raw) {
+	if plan := transport.try_decode_upstream_plan(first_raw) {
 		conn.close() or {}
 		app.on_worker_request_finished(selected_socket)
 		return HttpLogicDispatchOutcome{

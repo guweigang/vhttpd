@@ -11,7 +11,7 @@ pub mut:
 	mu                  sync.Mutex // 即原 pool_mu
 	worker_backend      WorkerBackendRuntime
 	worker_backend_mode executor.WorkerBackendMode = .required
-	logic_executor      LogicExecutor     = SocketWorkerExecutor{}
+	logic_executor      executor.LogicExecutor     = executor.SocketWorkerExecutor{}
 	lifecycle           string
 	stream_dispatch     bool
 	// 统计指标

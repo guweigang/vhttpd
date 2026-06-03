@@ -24,6 +24,7 @@ pub struct Context {
 	request_id.RequestIdContext
 }
 
+@[heap]
 pub struct App {
 	veb.Middleware[Context]
 	veb.StaticHandler
@@ -562,7 +563,8 @@ fn proxy_worker_websocket(mut app App, mut ctx Context, method string, path stri
 		return ctx.text('Upgrade Required')
 	}
 	remote_addr := if isnil(ctx.conn) { '' } else { ctx.conn.peer_ip() or { '' } }
-	mut ws_open := app.logic_executor.open_websocket_session(mut app, executor.WebSocketSessionOpenRequest{
+	mut facade := app.as_facade()
+	mut ws_open := app.logic_executor.open_websocket_session(mut facade, executor.WebSocketSessionOpenRequest{
 		req:         ctx.req
 		remote_addr: remote_addr
 		path:        path
@@ -933,7 +935,8 @@ fn proxy_worker_response(mut app App, mut ctx Context, method string, path strin
 			return result
 		}
 	}
-	mut outcome := app.logic_executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
+	mut facade := app.as_facade()
+	mut outcome := app.logic_executor.dispatch_http(mut facade, executor.HttpLogicDispatchRequest{
 		method:      method
 		path:        path
 		req:         ctx.req
