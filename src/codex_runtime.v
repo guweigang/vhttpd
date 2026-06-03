@@ -27,33 +27,11 @@ type AdminCodexRuntimeSnapshot = codex.AdminRuntimeSnapshot
 type AdminCodexConfigSnapshot = codex.AdminConfigSnapshot
 
 fn codex_runtime_instance_name(instance string) string {
-	name := instance.trim_space()
-	if name == '' || name == 'default' {
-		return 'main'
-	}
-	return name
+	return codex.instance_name(instance)
 }
 
 fn codex_runtime_build_instance_from_base(base CodexProviderRuntime, instance string) CodexProviderRuntime {
-	resolved := codex_runtime_instance_name(instance)
-	return CodexProviderRuntime{
-		instance:            resolved
-		enabled:             base.enabled
-		url:                 base.url
-		model:               base.model
-		effort:              base.effort
-		cwd:                 base.cwd
-		approval_policy:     base.approval_policy
-		sandbox:             base.sandbox
-		reconnect_delay_ms:  base.reconnect_delay_ms
-		flush_interval_ms:   base.flush_interval_ms
-		stream_map:          map[string][]CodexTarget{}
-		pending_rpcs:        map[int]CodexPendingRpc{}
-		err_bursts:          map[string][]string{}
-		err_pending_flushes: map[string]bool{}
-		thread_stream_map:   map[string]string{}
-		read_fallbacks:      map[string]CodexReadFallback{}
-	}
+	return codex.build_provider_runtime_from_base(base, instance)
 }
 
 fn (mut app App) codex_runtime_ensure_instance(instance string) CodexProviderRuntime {
@@ -108,39 +86,11 @@ fn (mut app App) codex_runtime_ensure_instance(instance string) CodexProviderRun
 }
 
 fn (mut app App) codex_runtime_snapshot(instance string) CodexProviderRuntime {
-	resolved := codex_runtime_instance_name(instance)
-	app.codex.mu.@lock()
-	defer {
-		app.codex.mu.unlock()
-	}
-	if resolved == 'main' {
-		if app.codex.runtime.instance == '' {
-			app.codex.runtime.instance = 'main'
-		}
-		return app.codex.runtime
-	}
-	if resolved in app.codex.instances {
-		return app.codex.instances[resolved] or {
-			codex_runtime_build_instance_from_base(app.codex.runtime, resolved)
-		}
-	}
-	return codex_runtime_build_instance_from_base(app.codex.runtime, resolved)
+	return app.codex.snapshot(instance)
 }
 
 fn (mut app App) codex_runtime_update(instance string, rt CodexProviderRuntime) {
-	resolved := codex_runtime_instance_name(instance)
-	app.codex.mu.@lock()
-	defer {
-		app.codex.mu.unlock()
-	}
-	if resolved == 'main' {
-		app.codex.runtime = rt
-		if app.codex.runtime.instance == '' {
-			app.codex.runtime.instance = 'main'
-		}
-		return
-	}
-	app.codex.instances[resolved] = rt
+	app.codex.update(instance, rt)
 }
 
 fn (app &App) codex_runtime_known_instances() []string {
