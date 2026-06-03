@@ -1,4 +1,5 @@
 module main
+import mcp_protocol
 import executor
 import config
 import stats
@@ -88,22 +89,7 @@ pub mut:
 	db_runtime      DbProviderRuntime
 }
 
-pub struct McpState {
-pub mut:
-	mu                                      sync.Mutex
-	max_sessions                            int
-	max_pending_messages                    int
-	session_ttl_seconds                     int
-	sampling_capability_policy              string
-	allowed_origins                         []string
-	sessions                                map[string]McpSession
-	stat_sessions_expired_total             i64
-	stat_sessions_evicted_total             i64
-	stat_pending_dropped_total              i64
-	stat_sampling_capability_warnings_total i64
-	stat_sampling_capability_dropped_total  i64
-	stat_sampling_capability_errors_total   i64
-}
+type McpState = mcp_protocol.McpState
 
 type AdminState = admin.AdminState
 

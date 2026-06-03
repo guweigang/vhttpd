@@ -1,6 +1,7 @@
 module mcp_protocol
 
 import net
+import sync
 import time
 
 // ── MCP Session ──
@@ -77,4 +78,22 @@ pub fn normalize_sampling_capability_policy(raw string) string {
 		'drop', 'error' { policy }
 		else { 'warn' }
 	}
+}
+
+
+pub struct McpState {
+pub mut:
+	mu                                      sync.Mutex
+	max_sessions                            int
+	max_pending_messages                    int
+	session_ttl_seconds                     int
+	sampling_capability_policy              string
+	allowed_origins                         []string
+	sessions                                map[string]Session
+	stat_sessions_expired_total             i64
+	stat_sessions_evicted_total             i64
+	stat_pending_dropped_total              i64
+	stat_sampling_capability_warnings_total i64
+	stat_sampling_capability_dropped_total  i64
+	stat_sampling_capability_errors_total   i64
 }

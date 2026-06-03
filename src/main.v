@@ -6,6 +6,7 @@ import stats
 import assets
 import plugins
 import admin
+import mcp_protocol
 
 import encoding.base64
 import json
@@ -43,7 +44,7 @@ pub mut:
 	runtime_config_json                         string
 	plugins                                     plugins.PluginState
 	assets                                      assets.AssetsState
-	mcp                                        McpState
+	mcp                                         mcp_protocol.McpState
 	openai                                      OpenaiState
 	http_stats                                  stats.HttpStats
 	mu                                          sync.Mutex
