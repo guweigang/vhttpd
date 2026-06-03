@@ -144,7 +144,7 @@ pub fn (mut app App) admin_provider_instance_snapshots(provider_filter string) [
 		}
 	}
 	if filter == '' || filter == 'feishu' {
-		for name, cfg in app.feishu_static_apps {
+		for name, cfg in app.feishu.static_apps {
 			if app.provider_instance_get('feishu', name) != none {
 				continue
 			}
@@ -189,7 +189,7 @@ pub fn (mut app App) provider_instance_apply(spec ProviderInstanceSpec) ! {
 			cfg := json.decode(config.FeishuAppConfig, spec.config_json) or {
 				return error('provider_instance_invalid_feishu_config:${err}')
 			}
-			app.feishu_apps[spec.instance] = cfg
+			app.feishu.apps[spec.instance] = cfg
 			app.feishu_runtime_ensure(spec.instance)
 			_ = app.ensure_websocket_upstream_provider_running('feishu', spec.instance)
 		}
@@ -241,7 +241,7 @@ pub fn (mut app App) provider_instance_ensure(provider string, instance string) 
 		return spec
 	}
 	if provider == 'feishu' {
-		if cfg := app.feishu_apps[normalized_instance] {
+		if cfg := app.feishu.apps[normalized_instance] {
 			spec := app.provider_instance_upsert(ProviderInstanceSpec{
 				provider:      'feishu'
 				instance:      normalized_instance

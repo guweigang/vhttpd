@@ -11,20 +11,22 @@ import toml
 
 fn new_feishu_http_test_app() App {
 	return App{
-		feishu_enabled:       true
-		feishu_open_base_url: 'https://open.feishu.test/open-apis'
-		feishu_apps: {
-			'main': config.FeishuAppConfig{
-				app_id:             'cli_main'
-				app_secret:         'sec_main'
-				verification_token: 'verify_main'
-				encrypt_key:        'encrypt_main'
+		feishu: FeishuState{
+			enabled:       true
+			open_base_url: 'https://open.feishu.test/open-apis'
+			apps: {
+				'main': config.FeishuAppConfig{
+					app_id:             'cli_main'
+					app_secret:         'sec_main'
+					verification_token: 'verify_main'
+					encrypt_key:        'encrypt_main'
+				}
 			}
+			runtime: map[string]FeishuProviderRuntime{}
+			buffers: map[string]FeishuStreamBuffer{}
+			http_test_stub: true
+			http_test_delay_ms: 40
 		}
-		feishu_runtime: map[string]FeishuProviderRuntime{}
-		feishu_buffers: map[string]FeishuStreamBuffer{}
-		feishu_http_test_stub: true
-		feishu_http_test_delay_ms: 40
 	}
 }
 
@@ -196,13 +198,15 @@ fn test_feishu_runtime_callback_challenge_and_token_validation() {
 	payload := '{"type":"url_verification","challenge":"challenge_value","token":"verify_main"}'
 	assert feishu_runtime_callback_challenge(payload) == 'challenge_value'
 	app := App{
-		feishu_enabled: true
-		feishu_apps: {
-			'main': config.FeishuAppConfig{
-				app_id:             'cli_main'
-				app_secret:         'sec_main'
-				verification_token: 'verify_main'
-				encrypt_key:        'encrypt_main'
+		feishu: FeishuState{
+			enabled: true
+			apps: {
+				'main': config.FeishuAppConfig{
+					app_id:             'cli_main'
+					app_secret:         'sec_main'
+					verification_token: 'verify_main'
+					encrypt_key:        'encrypt_main'
+				}
 			}
 		}
 	}
@@ -299,7 +303,7 @@ fn test_feishu_runtime_http_fetch_serializes_parallel_requests() {
 	assert t2.wait() == 200
 	assert t3.wait() == 200
 	elapsed_ms := time.since(start).milliseconds()
-	assert app.feishu_http_test_calls == 3
+	assert app.feishu.http_test_calls == 3
 	assert elapsed_ms >= 100
 }
 
@@ -324,8 +328,8 @@ fn test_feishu_runtime_send_and_update_share_one_http_lane() {
 	}
 	assert send_result.message_id.starts_with('om_test_')
 	assert update_result.message_id == 'om_updated'
-	assert app.feishu_http_test_calls >= 3
-	assert app.feishu_http_test_inflight == 0
+	assert app.feishu.http_test_calls >= 3
+	assert app.feishu.http_test_inflight == 0
 }
 
 fn test_feishu_runtime_send_message_supports_message_reply_target() {
@@ -406,7 +410,7 @@ fn test_feishu_runtime_streaming_preview_markdown_truncates_long_content() {
 fn test_feishu_runtime_flush_pending_buffers_flushes_same_tick_first_delta() {
 	mut app := new_feishu_http_test_app()
 	now := time.now().unix_milli()
-	app.feishu_buffers['om_buffer_1'] = FeishuStreamBuffer{
+	app.feishu.buffers['om_buffer_1'] = FeishuStreamBuffer{
 		message_id:       'om_buffer_1'
 		app:              'main'
 		content:          'hello first delta'
@@ -419,12 +423,12 @@ fn test_feishu_runtime_flush_pending_buffers_flushes_same_tick_first_delta() {
 		segment_index:    1
 	}
 	app.feishu_runtime_flush_pending_buffers()
-	app.feishu_mu.@lock()
-	buf := app.feishu_buffers['om_buffer_1']
-	app.feishu_mu.unlock()
+	app.feishu.mu.@lock()
+	buf := app.feishu.buffers['om_buffer_1']
+	app.feishu.mu.unlock()
 	assert buf.rendered_content == 'hello first delta'
 	assert buf.last_flush >= now - 500
-	assert app.feishu_http_test_calls >= 2
+	assert app.feishu.http_test_calls >= 2
 }
 
 fn test_feishu_runtime_delay_update_card_body() {
@@ -470,14 +474,16 @@ fn test_feishu_runtime_ws_endpoint_response_decode() {
 
 fn test_feishu_runtime_note_client_config() {
 	mut app := App{
-		feishu_enabled: true
-		feishu_apps: {
-			'main': config.FeishuAppConfig{
-				app_id:     'cli_main'
-				app_secret: 'sec_main'
+		feishu: FeishuState{
+			enabled: true
+			apps: {
+				'main': config.FeishuAppConfig{
+					app_id:     'cli_main'
+					app_secret: 'sec_main'
+				}
 			}
+			runtime: map[string]FeishuProviderRuntime{}
 		}
-		feishu_runtime: map[string]FeishuProviderRuntime{}
 	}
 	app.feishu_runtime_note_client_config('main', FeishuRuntimeClientConfig{
 		ping_interval:      15
@@ -488,56 +494,58 @@ fn test_feishu_runtime_note_client_config() {
 
 fn test_admin_feishu_runtime_chats_snapshot_dedupes_by_instance_and_chat() {
 	mut app := App{
-		feishu_runtime: {
-			'main': FeishuProviderRuntime{
-				name: 'main'
-				recent_events: [
-					FeishuRuntimeEventSnapshot{
-						chat_id:      'oc_chat_a'
-						chat_type:    'p2p'
-						event_type:   'im.message.receive_v1'
-						message_id:   'om_1'
-						message_type: 'text'
-						sender_id:    'ou_1'
-						create_time:  '1710000001'
-						received_at:  1710000001
-					},
-					FeishuRuntimeEventSnapshot{
-						chat_id:      'oc_chat_a'
-						chat_type:    'p2p'
-						event_type:   'im.message.receive_v1'
-						message_id:   'om_2'
-						message_type: 'text'
-						sender_id:    'ou_2'
-						create_time:  '1710000002'
-						received_at:  1710000002
-					},
-					FeishuRuntimeEventSnapshot{
-						chat_id:      'oc_chat_b'
-						chat_type:    'group'
-						event_type:   'im.message.receive_v1'
-						message_id:   'om_3'
-						message_type: 'image'
-						sender_id:    'ou_3'
-						create_time:  '1710000003'
-						received_at:  1710000003
-					},
-				]
-			}
-			'mac': FeishuProviderRuntime{
-				name: 'mac'
-				recent_events: [
-					FeishuRuntimeEventSnapshot{
-						chat_id:      'oc_chat_a'
-						chat_type:    'group'
-						event_type:   'im.message.receive_v1'
-						message_id:   'om_4'
-						message_type: 'post'
-						sender_id:    'ou_4'
-						create_time:  '1710000004'
-						received_at:  1710000004
-					},
-				]
+		feishu: FeishuState{
+			runtime: {
+				'main': FeishuProviderRuntime{
+					name: 'main'
+					recent_events: [
+						FeishuRuntimeEventSnapshot{
+							chat_id:      'oc_chat_a'
+							chat_type:    'p2p'
+							event_type:   'im.message.receive_v1'
+							message_id:   'om_1'
+							message_type: 'text'
+							sender_id:    'ou_1'
+							create_time:  '1710000001'
+							received_at:  1710000001
+						},
+						FeishuRuntimeEventSnapshot{
+							chat_id:      'oc_chat_a'
+							chat_type:    'p2p'
+							event_type:   'im.message.receive_v1'
+							message_id:   'om_2'
+							message_type: 'text'
+							sender_id:    'ou_2'
+							create_time:  '1710000002'
+							received_at:  1710000002
+						},
+						FeishuRuntimeEventSnapshot{
+							chat_id:      'oc_chat_b'
+							chat_type:    'group'
+							event_type:   'im.message.receive_v1'
+							message_id:   'om_3'
+							message_type: 'image'
+							sender_id:    'ou_3'
+							create_time:  '1710000003'
+							received_at:  1710000003
+						},
+					]
+				}
+				'mac': FeishuProviderRuntime{
+					name: 'mac'
+					recent_events: [
+						FeishuRuntimeEventSnapshot{
+							chat_id:      'oc_chat_a'
+							chat_type:    'group'
+							event_type:   'im.message.receive_v1'
+							message_id:   'om_4'
+							message_type: 'post'
+							sender_id:    'ou_4'
+							create_time:  '1710000004'
+							received_at:  1710000004
+						},
+					]
+				}
 			}
 		}
 	}
@@ -558,21 +566,23 @@ fn test_admin_feishu_runtime_chats_snapshot_dedupes_by_instance_and_chat() {
 
 fn test_admin_feishu_runtime_chats_snapshot_json_shape() {
 	mut app := App{
-		feishu_runtime: {
-			'main': FeishuProviderRuntime{
-				name: 'main'
-				recent_events: [
-					FeishuRuntimeEventSnapshot{
-						chat_id:      'oc_chat_a'
-						chat_type:    'p2p'
-						event_type:   'im.message.receive_v1'
-						message_id:   'om_1'
-						message_type: 'text'
-						sender_id:    'ou_1'
-						create_time:  '1710000001'
-						received_at:  1710000001
-					},
-				]
+		feishu: FeishuState{
+			runtime: {
+				'main': FeishuProviderRuntime{
+					name: 'main'
+					recent_events: [
+						FeishuRuntimeEventSnapshot{
+							chat_id:      'oc_chat_a'
+							chat_type:    'p2p'
+							event_type:   'im.message.receive_v1'
+							message_id:   'om_1'
+							message_type: 'text'
+							sender_id:    'ou_1'
+							create_time:  '1710000001'
+							received_at:  1710000001
+						},
+					]
+				}
 			}
 		}
 	}
@@ -588,15 +598,17 @@ fn test_admin_feishu_runtime_chats_snapshot_json_shape() {
 
 fn test_feishu_runtime_resolve_named_apps() {
 	app := App{
-		feishu_enabled: true
-		feishu_apps: {
-			'main': config.FeishuAppConfig{
-				app_id:     'cli_main'
-				app_secret: 'sec_main'
-			}
-			'openclaw': config.FeishuAppConfig{
-				app_id:     'cli_openclaw'
-				app_secret: 'sec_openclaw'
+		feishu: FeishuState{
+			enabled: true
+			apps: {
+				'main': config.FeishuAppConfig{
+					app_id:     'cli_main'
+					app_secret: 'sec_main'
+				}
+				'openclaw': config.FeishuAppConfig{
+					app_id:     'cli_openclaw'
+					app_secret: 'sec_openclaw'
+				}
 			}
 		}
 	}
@@ -647,10 +659,12 @@ fn test_websocket_upstream_activity_snapshot_filters_and_limit() {
 
 fn test_execute_websocket_upstream_commands_skips_and_reports_errors() {
 	mut app := App{
-		feishu_apps: {
-			'main': config.FeishuAppConfig{
-				app_id:     'cli_main'
-				app_secret: 'sec_main'
+		feishu: FeishuState{
+			apps: {
+				'main': config.FeishuAppConfig{
+					app_id:     'cli_main'
+					app_secret: 'sec_main'
+				}
 			}
 		}
 	}
@@ -842,44 +856,46 @@ fn test_fixture_websocket_provider_emit_and_send() {
 
 fn test_admin_websocket_upstream_events_snapshot_projects_feishu_metadata() {
 	mut app := App{
-		feishu_enabled: true
-		feishu_apps: {
-			'main': config.FeishuAppConfig{
-				app_id:     'cli_main'
-				app_secret: 'sec_main'
+		feishu: FeishuState{
+			enabled: true
+			apps: {
+				'main': config.FeishuAppConfig{
+					app_id:     'cli_main'
+					app_secret: 'sec_main'
+				}
 			}
-		}
-		feishu_runtime: {
-			'main': FeishuProviderRuntime{
-				name: 'main'
-				recent_events: [
-					FeishuRuntimeEventSnapshot{
-						seq_id:            'seq-1'
-						trace_id:          'trace-1'
-						action:            'im.message.receive_v1'
-						event_id:          'evt-1'
-						event_kind:        'message'
-						event_type:        'im.message.receive_v1'
-						message_id:        'om_1'
-						message_type:      'text'
-						chat_id:           'oc_1'
-						chat_type:         'group'
-						target_type:       'chat_id'
-						target:            'oc_1'
-						open_message_id:   ''
-						root_id:           'om_root'
-						parent_id:         'om_parent'
-						create_time:       '1710000000'
-						sender_id:         'ou_sender'
-						sender_id_type:    'open_id'
-						sender_tenant_key: 'tenant_a'
-						action_tag:        ''
-						action_value:      ''
-						token:             'token_a'
-						received_at:       100
-						payload:           '{"ok":true}'
-					},
-				]
+			runtime: {
+				'main': FeishuProviderRuntime{
+					name: 'main'
+					recent_events: [
+						FeishuRuntimeEventSnapshot{
+							seq_id:            'seq-1'
+							trace_id:          'trace-1'
+							action:            'im.message.receive_v1'
+							event_id:          'evt-1'
+							event_kind:        'message'
+							event_type:        'im.message.receive_v1'
+							message_id:        'om_1'
+							message_type:      'text'
+							chat_id:           'oc_1'
+							chat_type:         'group'
+							target_type:       'chat_id'
+							target:            'oc_1'
+							open_message_id:   ''
+							root_id:           'om_root'
+							parent_id:         'om_parent'
+							create_time:       '1710000000'
+							sender_id:         'ou_sender'
+							sender_id_type:    'open_id'
+							sender_tenant_key: 'tenant_a'
+							action_tag:        ''
+							action_value:      ''
+							token:             'token_a'
+							received_at:       100
+							payload:           '{"ok":true}'
+						},
+					]
+				}
 			}
 		}
 	}
@@ -903,15 +919,17 @@ fn test_admin_websocket_upstream_events_snapshot_projects_feishu_metadata() {
 
 fn test_feishu_update_message_rejects_non_interactive_message_id_updates_locally() {
 	mut app := App{
-		feishu_enabled: true
-		feishu_apps: {
-			'main': config.FeishuAppConfig{
-				app_id: 'cli_main'
+		feishu: FeishuState{
+			enabled: true
+			apps: {
+				'main': config.FeishuAppConfig{
+					app_id: 'cli_main'
+				}
 			}
-		}
-		feishu_runtime: {
-			'main': FeishuProviderRuntime{
-				name: 'main'
+			runtime: {
+				'main': FeishuProviderRuntime{
+					name: 'main'
+				}
 			}
 		}
 	}

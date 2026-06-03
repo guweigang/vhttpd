@@ -1401,9 +1401,9 @@ fn test_build_app_runtime_projects_executor_plan_into_app_state() {
 	assert app.mcp_max_sessions == 55
 	assert app.mcp_max_pending_messages == 21
 	assert app.mcp_session_ttl_seconds == 77
-	assert app.feishu_enabled
-	assert app.feishu_open_base_url == 'https://open.feishu.test'
-	assert app.feishu_apps['main'].app_id == 'app-1'
+	assert app.feishu.enabled
+	assert app.feishu.open_base_url == 'https://open.feishu.test'
+	assert app.feishu.apps['main'].app_id == 'app-1'
 	assert app.codex.runtime.enabled
 	assert app.codex.runtime.model == 'gpt-5.4'
 	assert app.codex.runtime.flush_interval_ms == 3333

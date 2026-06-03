@@ -79,11 +79,6 @@ fn build_app_runtime(provider_settings ProviderRuntimeSettings, executor_plan Lo
 		mcp_session_ttl_seconds:                  app_runtime_default_mcp_session_ttl_seconds(cfg)
 		mcp_sampling_capability_policy:           normalize_mcp_sampling_capability_policy(cfg.mcp.sampling_capability_policy)
 		mcp_allowed_origins:                      cfg.mcp.allowed_origins.clone()
-		feishu_enabled:                           provider_settings.feishu.enabled
-		feishu_open_base_url:                     provider_settings.feishu.open_base_url
-		feishu_reconnect_delay_ms:                provider_settings.feishu.reconnect_delay_ms
-		feishu_token_refresh_skew_seconds:        provider_settings.feishu.token_refresh_skew_seconds
-		feishu_recent_event_limit:                provider_settings.feishu.recent_event_limit
 		openai:                                   OpenaiState{
 			enabled:          cfg.openai.enabled
 			base_path:        cfg.openai.base_path
@@ -96,8 +91,6 @@ fn build_app_runtime(provider_settings ProviderRuntimeSettings, executor_plan Lo
 		}
 		websocket_upstream_recent_dispatch_limit: 50
 		auto_start_dynamic_upstreams:             true
-		feishu_static_apps:                       provider_settings.feishu.apps.clone()
-		feishu_apps:                              provider_settings.feishu.apps.clone()
 		upstream_sessions:                        map[string]UpstreamRuntimeSession{}
 		mcp_sessions:                             map[string]McpSession{}
 		ws_hub_conns:                             map[string]HubConn{}
@@ -105,7 +98,6 @@ fn build_app_runtime(provider_settings ProviderRuntimeSettings, executor_plan Lo
 		ws_hub_conn_rooms:                        map[string]map[string]bool{}
 		ws_hub_conn_meta:                         map[string]map[string]string{}
 		ws_hub_pending:                           map[string][]HubPendingMessage{}
-		feishu_runtime:                           map[string]FeishuProviderRuntime{}
 		websocket_upstream_started:               map[string]bool{}
 		providers:                                ProviderHost{
 			registry: map[string]Provider{}
@@ -135,12 +127,22 @@ fn build_app_runtime(provider_settings ProviderRuntimeSettings, executor_plan Lo
 		fixture_websocket_runtime:                map[string]FixtureWebSocketUpstreamRuntime{}
 		websocket_upstream_recent_activities:     []WebSocketUpstreamActivitySnapshot{}
 		provider_instance_specs:                  map[string]ProviderInstanceSpec{}
-		feishu_buffers:                           map[string]FeishuStreamBuffer{}
-		feishu_card_bridge_enabled_flag:          provider_settings.bridge.enabled
-		feishu_card_bridge_ws_url:                provider_settings.bridge.ws_url
-		feishu_card_bridge_client_id:             provider_settings.bridge.client_id
-		feishu_card_bridge_token:                 provider_settings.bridge.token
-		feishu_card_bridge_target_id:             provider_settings.bridge.target_id
+		feishu:                                   FeishuState{
+			enabled:                    provider_settings.feishu.enabled
+			open_base_url:              provider_settings.feishu.open_base_url
+			reconnect_delay_ms:         provider_settings.feishu.reconnect_delay_ms
+			token_refresh_skew_seconds: provider_settings.feishu.token_refresh_skew_seconds
+			recent_event_limit:         provider_settings.feishu.recent_event_limit
+			static_apps:                provider_settings.feishu.apps.clone()
+			apps:                       provider_settings.feishu.apps.clone()
+			runtime:                    map[string]FeishuProviderRuntime{}
+			buffers:                    map[string]FeishuStreamBuffer{}
+			card_bridge_enabled_flag:   provider_settings.bridge.enabled
+			card_bridge_ws_url:         provider_settings.bridge.ws_url
+			card_bridge_client_id:      provider_settings.bridge.client_id
+			card_bridge_token:          provider_settings.bridge.token
+			card_bridge_target_id:      provider_settings.bridge.target_id
+		}
 	}
 }
 

@@ -182,7 +182,7 @@ fn (mut app App) fixture_websocket_push_event(instance string, event WebSocketUp
 	mut runtime := app.fixture_websocket_runtime_ensure(instance)
 	mut events := runtime.recent_events.clone()
 	events << event
-	limit := if app.feishu_recent_event_limit > 0 { app.feishu_recent_event_limit } else { 20 }
+	limit := if app.feishu.recent_event_limit > 0 { app.feishu.recent_event_limit } else { 20 }
 	if events.len > limit {
 		events = events[events.len - limit..].clone()
 	}

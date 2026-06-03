@@ -53,16 +53,9 @@ pub mut:
 	mcp_session_ttl_seconds                     int
 	mcp_sampling_capability_policy              string
 	mcp_allowed_origins                         []string
-	feishu_enabled                              bool
-	feishu_open_base_url                        string
-	feishu_reconnect_delay_ms                   int
-	feishu_token_refresh_skew_seconds           int
-	feishu_recent_event_limit                   int
 	openai                                      OpenaiState
 	websocket_upstream_recent_dispatch_limit    int
 	auto_start_dynamic_upstreams                bool
-	feishu_static_apps                          map[string]config.FeishuAppConfig
-	feishu_apps                                 map[string]config.FeishuAppConfig
 	stat_http_requests_total                    i64
 	stat_http_errors_total                      i64
 	stat_http_timeouts_total                    i64
@@ -85,8 +78,6 @@ pub mut:
 	mcp_mu                                      sync.Mutex
 	ws_hub_mu                                   sync.Mutex
 	ws_hub_send_mu                              sync.Mutex
-	feishu_mu                                   sync.Mutex
-	feishu_http_test_mu                         sync.Mutex
 	upstream_sessions                           map[string]UpstreamRuntimeSession
 	mcp_sessions                                map[string]McpSession
 	ws_hub_conns                                map[string]HubConn
@@ -94,7 +85,6 @@ pub mut:
 	ws_hub_conn_rooms                           map[string]map[string]bool
 	ws_hub_conn_meta                            map[string]map[string]string
 	ws_hub_pending                              map[string][]HubPendingMessage
-	feishu_runtime                              map[string]FeishuProviderRuntime
 	websocket_upstream_started                  map[string]bool
 	providers                                   ProviderHost
 	fixture_websocket_runtime                   map[string]FixtureWebSocketUpstreamRuntime
@@ -102,25 +92,7 @@ pub mut:
 	provider_instance_specs                     map[string]ProviderInstanceSpec = map[string]ProviderInstanceSpec{}
 	// codex upstream
 	codex                            CodexState
-	feishu_buffers                   map[string]FeishuStreamBuffer
-	feishu_http_lane                 shared FeishuHttpLane
-	feishu_control_http_lane         shared FeishuControlHttpLane
-	feishu_http_test_stub            bool
-	feishu_http_test_delay_ms        int
-	feishu_http_test_inflight        int
-	feishu_http_test_calls           int
-	feishu_http_test_message_seq     int
-	feishu_card_bridge_mu            sync.Mutex
-	feishu_card_bridge_send_mu       sync.Mutex
-	feishu_card_bridge_clients       map[string]&websocket.Client            = map[string]&websocket.Client{}
-	feishu_card_bridge_pending       map[string]chan FeishuCardBridgeResult  = map[string]chan FeishuCardBridgeResult{}
-	feishu_card_bridge_proxy_pending map[string]chan FeishuBridgeProxyResult = map[string]chan FeishuBridgeProxyResult{}
-	feishu_card_bridge_client_conn   &websocket.Client                       = unsafe { nil }
-	feishu_card_bridge_enabled_flag  bool
-	feishu_card_bridge_ws_url        string
-	feishu_card_bridge_client_id     string
-	feishu_card_bridge_token         string
-	feishu_card_bridge_target_id     string
+	feishu                           FeishuState
 }
 
 struct CodexTarget {
@@ -1529,8 +1501,8 @@ pub fn (mut app App) provider_runtime_pull_url(name string, instance string) !st
 pub fn (mut app App) provider_runtime_reconnect_delay_ms(name string, instance string) int {
 	return match name {
 		'feishu' {
-			if app.feishu_reconnect_delay_ms > 0 {
-				app.feishu_reconnect_delay_ms
+			if app.feishu.reconnect_delay_ms > 0 {
+				app.feishu.reconnect_delay_ms
 			} else {
 				3000
 			}

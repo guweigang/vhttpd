@@ -103,40 +103,40 @@ fn feishu_card_bridge_default_client_id() string {
 }
 
 fn (mut app App) feishu_card_bridge_apply_env_fallbacks() {
-	if app.feishu_card_bridge_ws_url.trim_space() == '' {
-		app.feishu_card_bridge_ws_url = os.getenv('VHTTPD_FEISHU_CARD_BRIDGE_WS_URL').trim_space()
+	if app.feishu.card_bridge_ws_url.trim_space() == '' {
+		app.feishu.card_bridge_ws_url = os.getenv('VHTTPD_FEISHU_CARD_BRIDGE_WS_URL').trim_space()
 	}
-	if app.feishu_card_bridge_client_id.trim_space() == '' {
-		app.feishu_card_bridge_client_id = os.getenv('VHTTPD_FEISHU_CARD_BRIDGE_CLIENT_ID').trim_space()
+	if app.feishu.card_bridge_client_id.trim_space() == '' {
+		app.feishu.card_bridge_client_id = os.getenv('VHTTPD_FEISHU_CARD_BRIDGE_CLIENT_ID').trim_space()
 	}
-	if app.feishu_card_bridge_client_id.trim_space() == '' {
-		app.feishu_card_bridge_client_id = feishu_card_bridge_default_client_id()
+	if app.feishu.card_bridge_client_id.trim_space() == '' {
+		app.feishu.card_bridge_client_id = feishu_card_bridge_default_client_id()
 	}
-	if app.feishu_card_bridge_token.trim_space() == '' {
-		app.feishu_card_bridge_token = os.getenv('VHTTPD_FEISHU_CARD_BRIDGE_TOKEN').trim_space()
+	if app.feishu.card_bridge_token.trim_space() == '' {
+		app.feishu.card_bridge_token = os.getenv('VHTTPD_FEISHU_CARD_BRIDGE_TOKEN').trim_space()
 	}
-	if app.feishu_card_bridge_target_id.trim_space() == '' {
-		app.feishu_card_bridge_target_id = os.getenv('VHTTPD_FEISHU_CARD_BRIDGE_TARGET_ID').trim_space()
+	if app.feishu.card_bridge_target_id.trim_space() == '' {
+		app.feishu.card_bridge_target_id = os.getenv('VHTTPD_FEISHU_CARD_BRIDGE_TARGET_ID').trim_space()
 	}
-	if app.feishu_card_bridge_target_id == '' {
-		app.feishu_card_bridge_target_id = app.feishu_card_bridge_client_id
+	if app.feishu.card_bridge_target_id == '' {
+		app.feishu.card_bridge_target_id = app.feishu.card_bridge_client_id
 	}
 }
 
 fn (app &App) feishu_card_bridge_enabled() bool {
-	return app.feishu_card_bridge_enabled_flag && app.feishu_card_bridge_ws_url.trim_space() != ''
+	return app.feishu.card_bridge_enabled_flag && app.feishu.card_bridge_ws_url.trim_space() != ''
 }
 
 fn (mut app App) feishu_card_bridge_set_client_conn(client &websocket.Client) {
-	app.feishu_card_bridge_mu.@lock()
-	app.feishu_card_bridge_client_conn = unsafe { client }
-	app.feishu_card_bridge_mu.unlock()
+	app.feishu.card_bridge_mu.@lock()
+	app.feishu.card_bridge_client_conn = unsafe { client }
+	app.feishu.card_bridge_mu.unlock()
 }
 
 fn (mut app App) feishu_card_bridge_clear_client_conn() {
-	app.feishu_card_bridge_mu.@lock()
-	app.feishu_card_bridge_client_conn = unsafe { nil }
-	app.feishu_card_bridge_mu.unlock()
+	app.feishu.card_bridge_mu.@lock()
+	app.feishu.card_bridge_client_conn = unsafe { nil }
+	app.feishu.card_bridge_mu.unlock()
 }
 
 fn (mut app App) feishu_card_bridge_send_to_server(payload string) bool {
@@ -144,17 +144,17 @@ fn (mut app App) feishu_card_bridge_send_to_server(payload string) bool {
 		return false
 	}
 	mut client := &websocket.Client(unsafe { nil })
-	app.feishu_card_bridge_mu.@lock()
-	if !isnil(app.feishu_card_bridge_client_conn) {
-		client = unsafe { app.feishu_card_bridge_client_conn }
+	app.feishu.card_bridge_mu.@lock()
+	if !isnil(app.feishu.card_bridge_client_conn) {
+		client = unsafe { app.feishu.card_bridge_client_conn }
 	}
-	app.feishu_card_bridge_mu.unlock()
+	app.feishu.card_bridge_mu.unlock()
 	if isnil(client) {
 		return false
 	}
-	app.feishu_card_bridge_send_mu.@lock()
+	app.feishu.card_bridge_send_mu.@lock()
 	defer {
-		app.feishu_card_bridge_send_mu.unlock()
+		app.feishu.card_bridge_send_mu.unlock()
 	}
 	client.write_string(payload) or {
 		log.error('[bridge] ❌ send to server failed: ${err}')
@@ -168,9 +168,9 @@ fn (mut app App) feishu_card_bridge_register_client(client_id string, client &we
 	if client_id == '' || isnil(client) {
 		return
 	}
-	app.feishu_card_bridge_mu.@lock()
-	app.feishu_card_bridge_clients[client_id] = unsafe { client }
-	app.feishu_card_bridge_mu.unlock()
+	app.feishu.card_bridge_mu.@lock()
+	app.feishu.card_bridge_clients[client_id] = unsafe { client }
+	app.feishu.card_bridge_mu.unlock()
 	log.info('[bridge] ✅ feishu card bridge client connected: ${client_id}')
 }
 
@@ -178,9 +178,9 @@ fn (mut app App) feishu_card_bridge_unregister_client(client_id string) {
 	if client_id == '' {
 		return
 	}
-	app.feishu_card_bridge_mu.@lock()
-	app.feishu_card_bridge_clients.delete(client_id)
-	app.feishu_card_bridge_mu.unlock()
+	app.feishu.card_bridge_mu.@lock()
+	app.feishu.card_bridge_clients.delete(client_id)
+	app.feishu.card_bridge_mu.unlock()
 	log.info('[bridge] ℹ️ feishu card bridge client disconnected: ${client_id}')
 }
 
@@ -188,11 +188,11 @@ fn (mut app App) feishu_card_bridge_has_client(client_id string) bool {
 	if client_id == '' {
 		return false
 	}
-	app.feishu_card_bridge_mu.@lock()
+	app.feishu.card_bridge_mu.@lock()
 	defer {
-		app.feishu_card_bridge_mu.unlock()
+		app.feishu.card_bridge_mu.unlock()
 	}
-	return client_id in app.feishu_card_bridge_clients
+	return client_id in app.feishu.card_bridge_clients
 }
 
 fn (mut app App) feishu_card_bridge_send(client_id string, payload string) bool {
@@ -200,17 +200,17 @@ fn (mut app App) feishu_card_bridge_send(client_id string, payload string) bool 
 		return false
 	}
 	mut client := &websocket.Client(unsafe { nil })
-	app.feishu_card_bridge_mu.@lock()
-	if conn := app.feishu_card_bridge_clients[client_id] {
+	app.feishu.card_bridge_mu.@lock()
+	if conn := app.feishu.card_bridge_clients[client_id] {
 		client = unsafe { conn }
 	}
-	app.feishu_card_bridge_mu.unlock()
+	app.feishu.card_bridge_mu.unlock()
 	if isnil(client) {
 		return false
 	}
-	app.feishu_card_bridge_send_mu.@lock()
+	app.feishu.card_bridge_send_mu.@lock()
 	defer {
-		app.feishu_card_bridge_send_mu.unlock()
+		app.feishu.card_bridge_send_mu.unlock()
 	}
 	mut c := unsafe { client }
 	c.write_string(payload) or {
@@ -222,40 +222,40 @@ fn (mut app App) feishu_card_bridge_send(client_id string, payload string) bool 
 }
 
 fn (mut app App) feishu_card_bridge_store_pending(request_id string, ch chan FeishuCardBridgeResult) {
-	app.feishu_card_bridge_mu.@lock()
-	app.feishu_card_bridge_pending[request_id] = ch
-	app.feishu_card_bridge_mu.unlock()
+	app.feishu.card_bridge_mu.@lock()
+	app.feishu.card_bridge_pending[request_id] = ch
+	app.feishu.card_bridge_mu.unlock()
 }
 
 fn (mut app App) feishu_card_bridge_take_pending(request_id string) ?chan FeishuCardBridgeResult {
-	app.feishu_card_bridge_mu.@lock()
+	app.feishu.card_bridge_mu.@lock()
 	defer {
-		app.feishu_card_bridge_mu.unlock()
+		app.feishu.card_bridge_mu.unlock()
 	}
-	if request_id !in app.feishu_card_bridge_pending {
+	if request_id !in app.feishu.card_bridge_pending {
 		return none
 	}
-	ch := app.feishu_card_bridge_pending[request_id]
-	app.feishu_card_bridge_pending.delete(request_id)
+	ch := app.feishu.card_bridge_pending[request_id]
+	app.feishu.card_bridge_pending.delete(request_id)
 	return ch
 }
 
 fn (mut app App) feishu_card_bridge_store_proxy_pending(request_id string, ch chan FeishuBridgeProxyResult) {
-	app.feishu_card_bridge_mu.@lock()
-	app.feishu_card_bridge_proxy_pending[request_id] = ch
-	app.feishu_card_bridge_mu.unlock()
+	app.feishu.card_bridge_mu.@lock()
+	app.feishu.card_bridge_proxy_pending[request_id] = ch
+	app.feishu.card_bridge_mu.unlock()
 }
 
 fn (mut app App) feishu_card_bridge_take_proxy_pending(request_id string) ?chan FeishuBridgeProxyResult {
-	app.feishu_card_bridge_mu.@lock()
+	app.feishu.card_bridge_mu.@lock()
 	defer {
-		app.feishu_card_bridge_mu.unlock()
+		app.feishu.card_bridge_mu.unlock()
 	}
-	if request_id !in app.feishu_card_bridge_proxy_pending {
+	if request_id !in app.feishu.card_bridge_proxy_pending {
 		return none
 	}
-	ch := app.feishu_card_bridge_proxy_pending[request_id]
-	app.feishu_card_bridge_proxy_pending.delete(request_id)
+	ch := app.feishu.card_bridge_proxy_pending[request_id]
+	app.feishu.card_bridge_proxy_pending.delete(request_id)
 	return ch
 }
 
@@ -270,7 +270,7 @@ fn (mut app App) feishu_card_bridge_resolve_pending(result FeishuCardBridgeDispa
 }
 
 fn (mut app App) feishu_card_bridge_dispatch_callback(app_name string, trace_id string, summary FeishuRuntimeEventSummary, payload string) !FeishuCardBridgeResult {
-	client_id := app.feishu_card_bridge_target_id.trim_space()
+	client_id := app.feishu.card_bridge_target_id.trim_space()
 	if client_id == '' {
 		return error('bridge_target_unconfigured')
 	}
@@ -534,25 +534,25 @@ fn feishu_card_bridge_client_heartbeat_loop(mut app App) {
 fn run_feishu_card_bridge_client(mut app App) {
 	spawn feishu_card_bridge_client_heartbeat_loop(mut app)
 	for {
-		ws_url := app.feishu_card_bridge_ws_url.trim_space()
+		ws_url := app.feishu.card_bridge_ws_url.trim_space()
 		if ws_url == '' {
 			return
 		}
 		mut endpoint := ws_url
 		parsed := urllib.parse(endpoint) or { urllib.URL{} }
 		existing_query := if parsed.raw_query != '' { parsed.raw_query } else { '' }
-		if !existing_query.contains('client_id=') && app.feishu_card_bridge_client_id.trim_space() != '' {
+		if !existing_query.contains('client_id=') && app.feishu.card_bridge_client_id.trim_space() != '' {
 			endpoint += if endpoint.contains('?') {
-				'&client_id=${urllib.query_escape(app.feishu_card_bridge_client_id)}'
+				'&client_id=${urllib.query_escape(app.feishu.card_bridge_client_id)}'
 			} else {
-				'?client_id=${urllib.query_escape(app.feishu_card_bridge_client_id)}'
+				'?client_id=${urllib.query_escape(app.feishu.card_bridge_client_id)}'
 			}
 		}
-		if !existing_query.contains('token=') && app.feishu_card_bridge_token.trim_space() != '' {
+		if !existing_query.contains('token=') && app.feishu.card_bridge_token.trim_space() != '' {
 			endpoint += if endpoint.contains('?') {
-				'&token=${urllib.query_escape(app.feishu_card_bridge_token)}'
+				'&token=${urllib.query_escape(app.feishu.card_bridge_token)}'
 			} else {
-				'?token=${urllib.query_escape(app.feishu_card_bridge_token)}'
+				'?token=${urllib.query_escape(app.feishu.card_bridge_token)}'
 			}
 		}
 		log.info('[bridge] 🔌 connecting feishu card bridge client -> ${endpoint}')
@@ -751,7 +751,7 @@ pub fn (mut app App) feishu_card_bridge_ws(mut ctx Context) veb.Result {
 	query := parse_query_map(query_string)
 	client_id := (query['client_id'] or { '' }).trim_space()
 	token := (query['token'] or { '' }).trim_space()
-	expected := app.feishu_card_bridge_token.trim_space()
+	expected := app.feishu.card_bridge_token.trim_space()
 	if client_id == '' || (expected != '' && token != expected) {
 		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: write failure usually means peer disconnected
 		ctx.res.set_status(http.status_from_int(403))

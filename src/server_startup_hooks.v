@@ -10,7 +10,7 @@ fn initialize_app_runtime(mut app App, internal_admin_socket string) {
 	}
 	app.feishu_card_bridge_apply_env_fallbacks()
 	go run_internal_admin_server(mut app, internal_admin_socket)
-	if app.feishu_enabled {
+	if app.feishu.enabled {
 		go app.feishu_runtime_run_buffer_flusher()
 	}
 	if app.feishu_card_bridge_enabled() {

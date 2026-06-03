@@ -119,8 +119,10 @@ fn test_command_route_from_normalized_stream_fail_for_feishu() {
 
 fn test_execute_provider_instance_upsert_applies_feishu_app_config() {
 	mut app := &App{
-		feishu_apps: map[string]config.FeishuAppConfig{}
-		feishu_runtime: map[string]FeishuProviderRuntime{}
+		feishu: FeishuState{
+			apps: map[string]config.FeishuAppConfig{}
+			runtime: map[string]FeishuProviderRuntime{}
+		}
 		providers: ProviderHost{
 			specs: map[string]ProviderSpec{}
 		}
@@ -138,8 +140,8 @@ fn test_execute_provider_instance_upsert_applies_feishu_app_config() {
 	assert handled
 	assert exec_err == ''
 	assert snapshot.status == 'upserted'
-	assert app.feishu_apps['main'].app_id == 'bot_app'
-	assert app.feishu_apps['main'].app_secret == 'bot_secret'
+	assert app.feishu.apps['main'].app_id == 'bot_app'
+	assert app.feishu.apps['main'].app_secret == 'bot_secret'
 }
 
 fn test_command_route_from_command_codex_control() {
@@ -543,7 +545,9 @@ fn test_feishu_handler_session_bind_message_registers_stream_target_and_buffer()
 				stream_map:        map[string][]CodexTarget{}
 			}
 		}
-		feishu_buffers: map[string]FeishuStreamBuffer{}
+		feishu: FeishuState{
+			buffers: map[string]FeishuStreamBuffer{}
+		}
 	}
 	mut handler := FeishuCommandHandler.new(mut app)
 	cmd := transport.WorkerWebSocketUpstreamCommand{
@@ -563,8 +567,8 @@ fn test_feishu_handler_session_bind_message_registers_stream_target_and_buffer()
 	assert snapshot.message_id == 'om_reply_001'
 	assert app.codex.runtime.stream_map['codex:task_002'].len == 1
 	assert app.codex.runtime.stream_map['codex:task_002'][0].message_id == 'om_reply_001'
-	assert 'om_reply_001' in app.feishu_buffers
-	assert app.feishu_buffers['om_reply_001'].stream_id == 'codex:task_002'
+	assert 'om_reply_001' in app.feishu.buffers
+	assert app.feishu.buffers['om_reply_001'].stream_id == 'codex:task_002'
 }
 
 fn test_feishu_handler_session_clear_message_removes_buffer_and_stream_target() {
@@ -582,10 +586,12 @@ fn test_feishu_handler_session_clear_message_removes_buffer_and_stream_target() 
 				}
 			}
 		}
-		feishu_buffers: {
-			'om_reply_002': FeishuStreamBuffer{
-				message_id: 'om_reply_002'
-				stream_id:  'codex:task_003'
+		feishu: FeishuState{
+			buffers: {
+				'om_reply_002': FeishuStreamBuffer{
+					message_id: 'om_reply_002'
+					stream_id:  'codex:task_003'
+				}
 			}
 		}
 	}
@@ -603,7 +609,7 @@ fn test_feishu_handler_session_clear_message_removes_buffer_and_stream_target() 
 	assert handled == true
 	assert err == ''
 	assert snapshot.status == 'cleared'
-	assert 'om_reply_002' !in app.feishu_buffers
+	assert 'om_reply_002' !in app.feishu.buffers
 	assert 'codex:task_003' !in app.codex.runtime.stream_map
 }
 
@@ -626,15 +632,17 @@ fn test_feishu_handler_session_clear_message_removes_buffer_chain() {
 				}
 			}
 		}
-		feishu_buffers: {
-			'om_chain_1': FeishuStreamBuffer{
-				message_id:    'om_chain_1'
-				stream_id:     'codex:task_chain'
-				next_message_id:'om_chain_2'
-			}
-			'om_chain_2': FeishuStreamBuffer{
-				message_id: 'om_chain_2'
-				stream_id:  'codex:task_chain'
+		feishu: FeishuState{
+			buffers: {
+				'om_chain_1': FeishuStreamBuffer{
+					message_id:    'om_chain_1'
+					stream_id:     'codex:task_chain'
+					next_message_id:'om_chain_2'
+				}
+				'om_chain_2': FeishuStreamBuffer{
+					message_id: 'om_chain_2'
+					stream_id:  'codex:task_chain'
+				}
 			}
 		}
 	}
@@ -651,8 +659,8 @@ fn test_feishu_handler_session_clear_message_removes_buffer_chain() {
 	assert handled == true
 	assert err == ''
 	assert snapshot.status == 'cleared'
-	assert 'om_chain_1' !in app.feishu_buffers
-	assert 'om_chain_2' !in app.feishu_buffers
+	assert 'om_chain_1' !in app.feishu.buffers
+	assert 'om_chain_2' !in app.feishu.buffers
 	assert 'codex:task_chain' !in app.codex.runtime.stream_map
 }
 
@@ -675,18 +683,20 @@ fn test_feishu_handler_session_clear_stream_id_removes_all_stream_buffers() {
 				}
 			}
 		}
-		feishu_buffers: {
-			'om_stream_1': FeishuStreamBuffer{
-				message_id: 'om_stream_1'
-				stream_id:  'codex:task_stream_clear'
-			}
-			'om_stream_2': FeishuStreamBuffer{
-				message_id: 'om_stream_2'
-				stream_id:  'codex:task_stream_clear'
-			}
-			'om_other': FeishuStreamBuffer{
-				message_id: 'om_other'
-				stream_id:  'codex:other'
+		feishu: FeishuState{
+			buffers: {
+				'om_stream_1': FeishuStreamBuffer{
+					message_id: 'om_stream_1'
+					stream_id:  'codex:task_stream_clear'
+				}
+				'om_stream_2': FeishuStreamBuffer{
+					message_id: 'om_stream_2'
+					stream_id:  'codex:task_stream_clear'
+				}
+				'om_other': FeishuStreamBuffer{
+					message_id: 'om_other'
+					stream_id:  'codex:other'
+				}
 			}
 		}
 	}
@@ -702,8 +712,8 @@ fn test_feishu_handler_session_clear_stream_id_removes_all_stream_buffers() {
 	assert handled == true
 	assert err == ''
 	assert snapshot.status == 'cleared'
-	assert 'om_stream_1' !in app.feishu_buffers
-	assert 'om_stream_2' !in app.feishu_buffers
-	assert 'om_other' in app.feishu_buffers
+	assert 'om_stream_1' !in app.feishu.buffers
+	assert 'om_stream_2' !in app.feishu.buffers
+	assert 'om_other' in app.feishu.buffers
 	assert 'codex:task_stream_clear' !in app.codex.runtime.stream_map
 }
