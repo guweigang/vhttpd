@@ -3,6 +3,8 @@ import executor
 import ws
 import provider
 import stats
+import assets
+import plugins
 
 import encoding.base64
 import json
@@ -38,8 +40,8 @@ pub mut:
 	worker                                      WorkerState
 	admin                                       AdminState
 	runtime_config_json                         string
-	plugins                                     PluginState
-	assets                                      AssetsState
+	plugins                                     plugins.PluginState
+	assets                                      assets.AssetsState
 	mcp                                        McpState
 	openai                                      OpenaiState
 	http_stats                                  stats.HttpStats

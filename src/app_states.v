@@ -1,6 +1,9 @@
 module main
 import executor
 import config
+import stats
+import assets
+import plugins
 
 import net.websocket
 import state_store
@@ -108,20 +111,9 @@ pub mut:
 	token             string
 }
 
-pub struct AssetsState {
-pub mut:
-	enabled        bool
-	prefix         string
-	root           string
-	root_real      string
-	cache_control  string
-}
+type AssetsState = assets.AssetsState
 
-pub struct PluginState {
-pub mut:
-	configs  map[string]config.PluginConfig
-	vjsx     map[string]InProcVjsxExecutor
-}
+type PluginState = plugins.PluginState
 
 pub struct HttpStats {
 pub mut:
