@@ -223,3 +223,13 @@ pub fn error_response(status int, message string) InternalAdminResponse {
 pub fn bad_request(errmsg string) InternalAdminResponse {
 	return error_response(400, errmsg)
 }
+
+// ── Admin state configuration ──
+
+// AdminState configures the internal admin API server.
+pub struct AdminState {
+pub mut:
+	internal_socket   string
+	on_data_plane     bool
+	token             string
+}

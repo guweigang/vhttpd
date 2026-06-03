@@ -5,6 +5,7 @@ import provider
 import stats
 import assets
 import plugins
+import admin
 
 import encoding.base64
 import json
@@ -38,7 +39,7 @@ pub:
 pub mut:
 	started_at_unix                             i64
 	worker                                      WorkerState
-	admin                                       AdminState
+	admin                                       admin.AdminState
 	runtime_config_json                         string
 	plugins                                     plugins.PluginState
 	assets                                      assets.AssetsState

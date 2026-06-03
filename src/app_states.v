@@ -4,6 +4,7 @@ import config
 import stats
 import assets
 import plugins
+import admin
 
 import net.websocket
 import state_store
@@ -104,12 +105,7 @@ pub mut:
 	stat_sampling_capability_errors_total   i64
 }
 
-pub struct AdminState {
-pub mut:
-	internal_socket   string
-	on_data_plane     bool
-	token             string
-}
+type AdminState = admin.AdminState
 
 type AssetsState = assets.AssetsState
 
