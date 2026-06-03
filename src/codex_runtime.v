@@ -1,6 +1,7 @@
 module main
 import config
 import transport
+import codex
 
 import json
 import jsonutils
@@ -13,190 +14,17 @@ const codex_turn_read_fallback_delay_ms = 12000
 
 // ── Codex Turn / Item / Plan state ──────────────────────────────────────
 
-struct CodexPendingRpc {
-	instance   string
-	method     string
-	stream_id  string
-	message_id string
-}
+type CodexPendingRpc = codex.PendingRpc
 
-struct CodexReadFallback {
-	token                int
-	stream_id            string
-	thread_id            string
-	scheduled_at_unix_ms i64
-}
+type CodexReadFallback = codex.ReadFallback
 
 // ── Codex Provider Runtime ──────────────────────────────────────────────
 
-struct CodexProviderRuntime {
-mut:
-	instance string
-	// ── config (from TOML / CLI) ──
-	enabled            bool
-	url                string
-	model              string
-	effort             string
-	cwd                string
-	approval_policy    string
-	sandbox            string
-	reconnect_delay_ms int
-	flush_interval_ms  int
-	// ── connection state ──
-	connected               bool
-	ws_url                  string
-	last_connect_at_unix    i64
-	last_disconnect_at_unix i64
-	last_error              string
-	connect_attempts        i64
-	connect_successes       i64
-	received_frames         i64
-	last_frame_at_unix_ms   i64
-	initialized             bool   // initialize handshake done
-	thread_id               string // active thread
-	active_stream_id        string // current stream being processed
-	conn                    &ws.Client = unsafe { nil }
-	// ── runtime state ──
-	stream_map          map[string][]CodexTarget // stream_id -> list of targets
-	rpc_id_counter      int
-	pending_rpcs        map[int]CodexPendingRpc
-	err_bursts          map[string][]string
-	err_pending_flushes map[string]bool
-	thread_stream_map   map[string]string // thread_id -> stream_id (deterministic mapping)
-	read_fallback_seq   int
-	read_fallbacks      map[string]CodexReadFallback
-}
+type CodexProviderRuntime = codex.ProviderRuntime
 
-struct AdminCodexRuntimeSnapshot {
-	enabled            bool
-	connected          bool
-	initialized        bool
-	ws_url             string
-	thread_id          string
-	active_turns       int
-	last_connect_at    i64
-	last_disconnect_at i64
-	last_error         string
-	connect_attempts   i64
-	connect_successes  i64
-	received_frames    i64
-	config             AdminCodexConfigSnapshot
-}
+type AdminCodexRuntimeSnapshot = codex.AdminRuntimeSnapshot
 
-struct AdminCodexConfigSnapshot {
-	url             string
-	model           string
-	effort          string
-	cwd             string
-	approval_policy string
-	sandbox         string
-	flush_interval  int
-}
-
-fn (rt CodexProviderRuntime) pull_url() !string {
-	url := rt.url.trim_space()
-	if url == '' {
-		return error('codex url not configured')
-	}
-	return url
-}
-
-fn (rt CodexProviderRuntime) reconnect_delay_ms_value() int {
-	if rt.reconnect_delay_ms > 0 {
-		return rt.reconnect_delay_ms
-	}
-	return 3000
-}
-
-fn (rt CodexProviderRuntime) is_connected() bool {
-	return rt.connected
-}
-
-fn (rt CodexProviderRuntime) is_initialized() bool {
-	return rt.initialized
-}
-
-fn (rt CodexProviderRuntime) current_thread_id() string {
-	return rt.thread_id
-}
-
-fn (rt CodexProviderRuntime) current_stream_id() string {
-	return rt.active_stream_id
-}
-
-fn (rt CodexProviderRuntime) connection() &ws.Client {
-	return rt.conn
-}
-
-fn (rt CodexProviderRuntime) config_snapshot() AdminCodexConfigSnapshot {
-	return AdminCodexConfigSnapshot{
-		url:             rt.url
-		model:           rt.model
-		effort:          rt.effort
-		cwd:             rt.cwd
-		approval_policy: rt.approval_policy
-		sandbox:         rt.sandbox
-		flush_interval:  rt.flush_interval_ms
-	}
-}
-
-fn (mut rt CodexProviderRuntime) note_connecting() {
-	rt.connect_attempts++
-}
-
-fn (mut rt CodexProviderRuntime) note_connected(ws_url string) {
-	rt.connected = true
-	rt.ws_url = ws_url
-	rt.last_connect_at_unix = time.now().unix()
-	rt.connect_successes++
-	rt.last_error = ''
-}
-
-fn (mut rt CodexProviderRuntime) note_disconnected(reason string) {
-	rt.connected = false
-	rt.initialized = false
-	rt.last_disconnect_at_unix = time.now().unix()
-	rt.last_error = reason
-	rt.conn = unsafe { nil }
-	rt.thread_id = ''
-	rt.read_fallbacks = map[string]CodexReadFallback{}
-}
-
-fn (mut rt CodexProviderRuntime) mark_initialized() {
-	rt.initialized = true
-}
-
-fn (mut rt CodexProviderRuntime) attach_connection(conn &ws.Client) {
-	rt.conn = unsafe { conn }
-}
-
-fn (mut rt CodexProviderRuntime) next_rpc_id() int {
-	rt.rpc_id_counter++
-	return rt.rpc_id_counter
-}
-
-fn (mut rt CodexProviderRuntime) remember_pending_rpc(id int, pending CodexPendingRpc) {
-	rt.pending_rpcs[id] = pending
-}
-
-fn (mut rt CodexProviderRuntime) bind_stream_to_current_thread(stream_id string) string {
-	rt.active_stream_id = stream_id
-	thread_id := rt.current_thread_id()
-	if thread_id != '' {
-		rt.thread_stream_map[thread_id] = stream_id
-	}
-	return thread_id
-}
-
-fn (mut rt CodexProviderRuntime) bind_stream_to_thread(thread_id string, stream_id string) string {
-	rt.active_stream_id = stream_id
-	if thread_id == '' {
-		return ''
-	}
-	rt.thread_id = thread_id
-	rt.thread_stream_map[thread_id] = stream_id
-	return thread_id
-}
+type AdminCodexConfigSnapshot = codex.AdminConfigSnapshot
 
 fn (mut rt CodexProviderRuntime) begin_turn_stream(stream_id string) string {
 	thread_id := rt.current_thread_id()

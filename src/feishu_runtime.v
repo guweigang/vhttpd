@@ -1,5 +1,6 @@
 module main
 import config
+import feishu
 
 import json
 import crypto.aes
@@ -29,46 +30,19 @@ const feishu_runtime_message_event = 'event'
 const feishu_runtime_message_card = 'card'
 const feishu_runtime_max_upload_image_bytes = 10 * 1024 * 1024
 
-struct FeishuHttpLane {}
+type FeishuHttpLane = feishu.HttpLane
 
-struct FeishuControlHttpLane {}
+type FeishuControlHttpLane = feishu.ControlHttpLane
 
-struct FeishuRuntimeProtoHeader {
-mut:
-	key   string
-	value string
-}
+type FeishuRuntimeProtoHeader = feishu.RuntimeProtoHeader
 
-struct FeishuRuntimeProtoFrame {
-mut:
-	seq_id           u64
-	log_id           u64
-	service          i32
-	method           i32
-	headers          []FeishuRuntimeProtoHeader
-	payload_encoding string
-	payload_type     string
-	payload          []u8
-	log_id_str       string
-}
+type FeishuRuntimeProtoFrame = feishu.RuntimeProtoFrame
 
-struct FeishuRuntimeClientConfig {
-	reconnect_interval int @[json: 'ReconnectInterval']
-	reconnect_nonce    int @[json: 'ReconnectNonce']
-	ping_interval      int @[json: 'PingInterval']
-	reconnect_count    int @[json: 'ReconnectCount']
-}
+type FeishuRuntimeClientConfig = feishu.RuntimeClientConfig
 
-struct FeishuRuntimeWsEndpointData {
-	url           string                    @[json: 'URL']
-	client_config FeishuRuntimeClientConfig @[json: 'ClientConfig']
-}
+type FeishuRuntimeWsEndpointData = feishu.RuntimeWsEndpointData
 
-struct FeishuRuntimeWsEndpointResponse {
-	code int
-	msg  string
-	data FeishuRuntimeWsEndpointData
-}
+type FeishuRuntimeWsEndpointResponse = feishu.RuntimeWsEndpointResponse
 
 struct FeishuRuntimeTenantTokenResponse {
 	code                int
@@ -97,236 +71,25 @@ struct FeishuRuntimeUploadImageResponse {
 	data FeishuRuntimeUploadImageData
 }
 
-pub struct FeishuRuntimeEventSnapshot {
-pub:
-	seq_id            string
-	trace_id          string
-	action            string
-	event_id          string
-	event_kind        string
-	event_type        string
-	message_id        string
-	message_type      string
-	chat_id           string
-	chat_type         string
-	target_type       string
-	target            string
-	open_message_id   string
-	root_id           string
-	parent_id         string
-	create_time       string
-	sender_id         string
-	sender_id_type    string
-	sender_tenant_key string
-	action_tag        string
-	action_value      string
-	token             string
-	received_at       i64
-	payload           string
-}
+type FeishuRuntimeEventSnapshot = feishu.RuntimeEventSnapshot
 
-struct FeishuProviderRuntime {
-mut:
-	name                            string
-	connected                       bool
-	ws_url                          string
-	ping_interval_seconds           int
-	last_connect_at_unix            i64
-	last_disconnect_at_unix         i64
-	last_error                      string
-	tenant_access_token             string
-	tenant_access_token_expire_unix i64
-	connect_attempts                i64
-	connect_successes               i64
-	received_frames                 i64
-	acked_events                    i64
-	messages_sent                   i64
-	send_errors                     i64
-	recent_events                   []FeishuRuntimeEventSnapshot
-}
+type FeishuProviderRuntime = feishu.ProviderRuntime
 
 fn new_feishu_provider_runtime(name string) FeishuProviderRuntime {
-	return FeishuProviderRuntime{
-		name:          name
-		recent_events: []FeishuRuntimeEventSnapshot{}
-	}
+	return feishu.new_provider_runtime(name)
 }
 
-struct FeishuStreamBuffer {
-pub:
-	message_id string
-mut:
-	app              string
-	content          string
-	rendered_content string
-	last_delta       i64 // ms epoch
-	last_flush       i64 // ms epoch
-	stream_id        string
-	receive_id       string
-	receive_id_type  string
-	segment_index    int
-	sealed           bool
-	next_message_id  string
-}
+type FeishuStreamBuffer = feishu.StreamBuffer
 
 const feishu_stream_buffer_rollover_runes = 4200
 
-pub struct FeishuRuntimeAppSnapshot {
-pub:
-	name                    string
-	source                  string
-	static_configured       bool @[json: 'static_configured']
-	dynamic_configured      bool @[json: 'dynamic_configured']
-	enabled                 bool
-	configured              bool
-	connected               bool
-	open_base_url           string
-	ws_url                  string
-	ping_interval_seconds   int
-	last_connect_at_unix    i64
-	last_disconnect_at_unix i64
-	last_error              string
-	connect_attempts        i64
-	connect_successes       i64
-	received_frames         i64
-	acked_events            i64
-	messages_sent           i64
-	send_errors             i64
-	recent_events           []FeishuRuntimeEventSnapshot
-}
+type FeishuRuntimeAppSnapshot = feishu.RuntimeAppSnapshot
 
-pub struct FeishuRuntimeSnapshot {
-pub:
-	enabled         bool
-	configured      bool
-	app_count       int
-	connected_count int
-	default_app     string
-	apps            []FeishuRuntimeAppSnapshot
-}
+type FeishuRuntimeSnapshot = feishu.RuntimeSnapshot
 
-pub struct FeishuRuntimeChatSnapshot {
-pub:
-	instance          string
-	chat_id           string
-	chat_type         string
-	target_type       string @[json: 'target_type']
-	target            string
-	last_event_type   string @[json: 'last_event_type']
-	last_message_id   string @[json: 'last_message_id']
-	last_message_type string @[json: 'last_message_type']
-	last_sender_id    string @[json: 'last_sender_id']
-	last_create_time  string @[json: 'last_create_time']
-	last_received_at  i64    @[json: 'last_received_at']
-	seen_count        int    @[json: 'seen_count']
-}
+type FeishuRuntimeChatSnapshot = feishu.RuntimeChatSnapshot
 
-pub struct FeishuRuntimeChatsSnapshot {
-pub:
-	returned_count int
-	limit          int
-	offset         int
-	instance       string
-	chat_type      string @[json: 'chat_type']
-	chat_id        string @[json: 'chat_id']
-	chats          []FeishuRuntimeChatSnapshot
-}
-
-fn (rt FeishuProviderRuntime) is_connected() bool {
-	return rt.connected
-}
-
-fn (rt FeishuProviderRuntime) ping_interval_seconds_value() int {
-	if rt.ping_interval_seconds > 0 {
-		return rt.ping_interval_seconds
-	}
-	return 5
-}
-
-fn (rt FeishuProviderRuntime) app_snapshot(name string, enabled bool, open_base_url string) FeishuRuntimeAppSnapshot {
-	return rt.app_snapshot_with_source(name, enabled, open_base_url, 'runtime', false, false)
-}
-
-fn (rt FeishuProviderRuntime) app_snapshot_with_source(name string, enabled bool, open_base_url string, source string, static_configured bool, dynamic_configured bool) FeishuRuntimeAppSnapshot {
-	resolved_name := if rt.name.trim_space() != '' { rt.name } else { name }
-	return FeishuRuntimeAppSnapshot{
-		name:                    resolved_name
-		source:                  source
-		static_configured:       static_configured
-		dynamic_configured:      dynamic_configured
-		enabled:                 enabled
-		configured:              true
-		connected:               rt.connected
-		open_base_url:           open_base_url
-		ws_url:                  rt.ws_url
-		ping_interval_seconds:   rt.ping_interval_seconds
-		last_connect_at_unix:    rt.last_connect_at_unix
-		last_disconnect_at_unix: rt.last_disconnect_at_unix
-		last_error:              rt.last_error
-		connect_attempts:        rt.connect_attempts
-		connect_successes:       rt.connect_successes
-		received_frames:         rt.received_frames
-		acked_events:            rt.acked_events
-		messages_sent:           rt.messages_sent
-		send_errors:             rt.send_errors
-		recent_events:           rt.recent_events.clone()
-	}
-}
-
-fn (mut rt FeishuProviderRuntime) note_connecting() {
-	rt.connect_attempts++
-}
-
-fn (mut rt FeishuProviderRuntime) note_connected(ws_url string) {
-	rt.connected = true
-	rt.ws_url = ws_url
-	rt.last_connect_at_unix = time.now().unix()
-	rt.connect_successes++
-	rt.last_error = ''
-}
-
-fn (mut rt FeishuProviderRuntime) note_disconnected(reason string) {
-	rt.connected = false
-	rt.last_disconnect_at_unix = time.now().unix()
-	rt.last_error = reason
-}
-
-fn (mut rt FeishuProviderRuntime) note_frame() {
-	rt.received_frames++
-}
-
-fn (mut rt FeishuProviderRuntime) note_ack() {
-	rt.acked_events++
-}
-
-fn (mut rt FeishuProviderRuntime) note_send(ok bool) {
-	if ok {
-		rt.messages_sent++
-	} else {
-		rt.send_errors++
-	}
-}
-
-fn (mut rt FeishuProviderRuntime) note_client_config(cfg FeishuRuntimeClientConfig) {
-	if cfg.ping_interval > 0 {
-		rt.ping_interval_seconds = cfg.ping_interval
-	}
-}
-
-fn (mut rt FeishuProviderRuntime) cache_tenant_access_token(token string, expire_unix i64) {
-	rt.tenant_access_token = token
-	rt.tenant_access_token_expire_unix = expire_unix
-}
-
-fn (mut rt FeishuProviderRuntime) push_event(snapshot FeishuRuntimeEventSnapshot, limit int) {
-	mut events := rt.recent_events.clone()
-	events << snapshot
-	applied_limit := if limit > 0 { limit } else { 20 }
-	if events.len > applied_limit {
-		events = events[events.len - applied_limit..].clone()
-	}
-	rt.recent_events = events
-}
+type FeishuRuntimeChatsSnapshot = feishu.RuntimeChatsSnapshot
 
 struct FeishuRuntimeSendMessageRequest {
 	app             string            @[json: 'app']

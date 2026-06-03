@@ -1,6 +1,9 @@
 module main
 import executor
 import ws
+import feishu
+import codex
+import worker
 import provider
 import stats
 import assets
@@ -39,7 +42,7 @@ pub:
 	event_log string
 pub mut:
 	started_at_unix                             i64
-	worker                                      WorkerState
+	worker                                      worker.WorkerState
 	admin                                       admin.AdminState
 	runtime_config_json                         string
 	plugins                                     plugins.PluginState
@@ -53,14 +56,11 @@ pub mut:
 	providers                                   ProviderHost
 	provider_instance_specs                     map[string]ProviderInstanceSpec = map[string]ProviderInstanceSpec{}
 	// codex upstream
-	codex                            CodexState
-	feishu                           FeishuState
+	codex                            codex.CodexState
+	feishu                           feishu.FeishuState
 }
 
-struct CodexTarget {
-	platform   string
-	message_id string
-}
+type CodexTarget = codex.CodexTarget
 
 // ── Transitional config type aliases (for files where config var conflicts with import) ─
 pub type AdminConfig = config.AdminConfig

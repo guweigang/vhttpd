@@ -1,41 +1,9 @@
 module main
 import transport
+import worker
 
-pub interface WorkerBackend {
-	kind() string
-}
+type WorkerBackend = worker.WorkerBackend
 
-pub struct PhpWorkerBackend {}
+type PhpWorkerBackend = worker.PhpWorkerBackend
 
-pub fn (b PhpWorkerBackend) kind() string {
-	_ = b
-	return 'php'
-}
-
-pub struct WorkerBackendRuntime {
-pub mut:
-	backend               WorkerBackend = PhpWorkerBackend{}
-	sockets               []string
-	read_timeout_ms       int
-	rr_index              int
-	autostart             bool
-	cmd                   string
-	env                   map[string]string
-	workdir               string
-	restart_backoff_ms    int
-	restart_backoff_max_ms int
-	max_requests          int
-	queue_capacity        int
-	queue_timeout_ms      int
-	queue_poll_ms         int
-	managed_workers       []transport.ManagedWorker
-	queue_waiting_requests int
-}
-
-pub fn (rt WorkerBackendRuntime) kind() string {
-	return rt.backend.kind()
-}
-
-pub fn (rt WorkerBackendRuntime) enabled() bool {
-	return rt.sockets.len > 0
-}
+type WorkerBackendRuntime = worker.WorkerBackendRuntime

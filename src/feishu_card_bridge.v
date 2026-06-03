@@ -1,5 +1,6 @@
 module main
 import executor
+import feishu
 
 import json
 import log
@@ -72,16 +73,7 @@ struct FeishuBridgeProxyRequest {
 	request    WebSocketUpstreamSendRequest
 }
 
-struct FeishuBridgeProxyResult {
-mut:
-	type_      string @[json: 'type']
-	request_id string @[json: 'request_id']
-	ok         bool
-	provider   string
-	instance   string
-	message_id string @[json: 'message_id']
-	error      string
-}
+type FeishuBridgeProxyResult = feishu.BridgeProxyResult
 
 @[heap]
 struct FeishuCardBridgeServerState {
@@ -236,13 +228,13 @@ fn (mut app App) feishu_card_bridge_take_pending(request_id string) ?chan execut
 	return ch
 }
 
-fn (mut app App) feishu_card_bridge_store_proxy_pending(request_id string, ch chan FeishuBridgeProxyResult) {
+fn (mut app App) feishu_card_bridge_store_proxy_pending(request_id string, ch chan feishu.BridgeProxyResult) {
 	app.feishu.card_bridge_mu.@lock()
 	app.feishu.card_bridge_proxy_pending[request_id] = ch
 	app.feishu.card_bridge_mu.unlock()
 }
 
-fn (mut app App) feishu_card_bridge_take_proxy_pending(request_id string) ?chan FeishuBridgeProxyResult {
+fn (mut app App) feishu_card_bridge_take_proxy_pending(request_id string) ?chan feishu.BridgeProxyResult {
 	app.feishu.card_bridge_mu.@lock()
 	defer {
 		app.feishu.card_bridge_mu.unlock()
@@ -318,12 +310,12 @@ fn (mut app App) feishu_card_bridge_dispatch_callback(app_name string, trace_id 
 	return error('bridge_unreachable')
 }
 
-fn (mut app App) feishu_card_bridge_proxy_request(action string, req WebSocketUpstreamSendRequest) !FeishuBridgeProxyResult {
+fn (mut app App) feishu_card_bridge_proxy_request(action string, req WebSocketUpstreamSendRequest) !feishu.BridgeProxyResult {
 	if !app.feishu_card_bridge_enabled() {
 		return error('bridge_disabled')
 	}
 	request_id := 'bridge-proxy-${time.now().unix_micro()}'
-	ch := chan FeishuBridgeProxyResult{cap: 1}
+	ch := chan feishu.BridgeProxyResult{cap: 1}
 	app.feishu_card_bridge_store_proxy_pending(request_id, ch)
 	defer {
 		dummy := app.feishu_card_bridge_take_proxy_pending(request_id) or { ch }
@@ -427,7 +419,7 @@ fn feishu_card_bridge_client_message_cb(mut _ws websocket.Client, msg &websocket
 		return
 	}
 	if envelope.type_ == feishu_bridge_proxy_result_type {
-		result := json.decode(FeishuBridgeProxyResult, raw) or {
+		result := json.decode(feishu.BridgeProxyResult, raw) or {
 			log.error('[bridge] ❌ invalid proxy result frame: ${err}')
 			return
 		}
@@ -615,7 +607,7 @@ fn feishu_card_bridge_server_message_cb(mut _ws websocket.Client, msg &websocket
 		return
 	}
 	log.info('[bridge] 📨 proxy request: request_id=${req.request_id} trace_id=${req.request.metadata["trace_id"] or { "" }} action=${req.action} instance=${req.request.instance} target=${req.request.target} target_type=${req.request.target_type} stream_id=${req.request.metadata["stream_id"] or { "" }} message_type=${req.request.message_type}')
-	mut result := FeishuBridgeProxyResult{
+	mut result := feishu.BridgeProxyResult{
 		type_:      feishu_bridge_proxy_result_type
 		request_id: req.request_id
 	}

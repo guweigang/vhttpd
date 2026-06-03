@@ -1,5 +1,6 @@
 module main
 
+import codex
 import json
 import net.unix
 import time
@@ -26,12 +27,9 @@ pub:
 	has_last_insert_id bool
 }
 
-pub struct DbPoolHandle {}
+type DbPoolHandle = codex.DbPoolHandle
 
-pub struct DbSessionHandle {
-pub mut:
-	driver string
-}
+type DbSessionHandle = codex.DbSessionHandle
 
 struct DbRuntimeSnapshotCapabilities {
 	pool         bool
@@ -63,31 +61,7 @@ struct DbRuntimeSnapshot {
 	snapshot_at_unix    i64
 }
 
-pub struct DbProviderRuntime {
-pub mut:
-	enabled             bool
-	socket              string
-	driver              string
-	host                string
-	port                int
-	username            string
-	password            string
-	database            string
-	pool_size           int
-	started             bool
-	started_at_unix     i64
-	last_error          string
-	pool_ready          bool
-	pool                DbPoolHandle
-	total_queries       u64
-	total_executes      u64
-	failed_queries      u64
-	active_transactions int
-	session_counter     u64
-	stop_requested      bool
-	listener            &unix.StreamListener = unsafe { nil }
-	tx_sessions         map[string]DbSessionHandle
-}
+type DbProviderRuntime = codex.DbProviderRuntime
 
 struct DbUpstreamRequest {
 	mode       string
