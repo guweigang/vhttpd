@@ -101,6 +101,37 @@ pub mut:
 	stat_sampling_capability_errors_total   i64
 }
 
+pub struct AdminState {
+pub mut:
+	internal_socket   string
+	on_data_plane     bool
+	token             string
+}
+
+pub struct AssetsState {
+pub mut:
+	enabled        bool
+	prefix         string
+	root           string
+	root_real      string
+	cache_control  string
+}
+
+pub struct PluginState {
+pub mut:
+	configs  map[string]config.PluginConfig
+	vjsx     map[string]InProcVjsxExecutor
+}
+
+pub struct HttpStats {
+pub mut:
+	requests_total       i64
+	errors_total         i64
+	timeouts_total       i64
+	streams_total        i64
+	admin_actions_total  i64
+}
+
 pub struct OpenaiState {
 pub mut:
 	enabled          bool

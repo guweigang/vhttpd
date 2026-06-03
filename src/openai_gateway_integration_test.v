@@ -239,8 +239,10 @@ fn openai_integration_start_gateway(port int, upstream_port int, plugin_file str
 	mut app := App{
 		event_log:                  ''
 		started_at_unix:            time.now().unix()
-		plugin_configs:             plugins
-		plugin_vjsx:                build_vjsx_plugin_runtimes(plugins)
+		plugins:                    PluginState{
+			configs: plugins
+			vjsx:    build_vjsx_plugin_runtimes(plugins)
+		}
 		openai: OpenaiState{
 			enabled:             true
 			base_path:           '/v1'

@@ -1,5 +1,28 @@
 module main
 
+// ═══════════════════════════════════════════════════════════════════════
+// Lock Hierarchy (acquire in this order; NEVER acquire a lower lock while holding a higher one)
+//
+//   L0  app.mu                     — main mutex (providers, stats, event_log, general state)
+//   L1  app.worker.mu              — worker backend pool & queue
+//   L2  app.ws_hub.mu              — WebSocket hub connections
+//   L3  app.ws_hub.upstream_mu     — WebSocket upstream sessions
+//   L4  app.mcp.mu                 — MCP session manager
+//   L5  app.feishu.mu              — Feishu runtime state
+//   L6  app.feishu.card_bridge_mu  — Feishu card bridge clients
+//   L7  app.codex.mu               — Codex runtime state
+//
+// Independent (no ordering constraint with above):
+//   app.ws_hub.send_mu             — WebSocket send serialization (short-lived, per-conn)
+//   app.feishu.card_bridge_send_mu — Feishu card bridge send serialization
+//   app.feishu.http_test_mu        — Feishu HTTP test stub (test-only)
+//
+// Rules:
+//   - When acquiring multiple locks, always acquire higher (lower number) first.
+//   - Use defer { mutex.unlock() } to ensure release on all paths.
+//   - Never hold L0 while calling into user-provided callbacks (plugins, executors).
+// ═══════════════════════════════════════════════════════════════════════
+
 import config
 import log
 import os

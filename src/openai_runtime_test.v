@@ -166,8 +166,10 @@ export function openai(req) {
 	}
 	mut app := App{
 		started_at_unix:        123
-		plugin_configs:         plugins
-		plugin_vjsx:            build_vjsx_plugin_runtimes(plugins)
+		plugins:                PluginState{
+			configs: plugins
+			vjsx:    build_vjsx_plugin_runtimes(plugins)
+		}
 		openai: OpenaiState{
 			enabled:         true
 			base_path:       '/v1'
@@ -218,8 +220,10 @@ export function openai(req) {
 		}
 	}
 	mut app := App{
-		plugin_configs:   plugins
-		plugin_vjsx:      build_vjsx_plugin_runtimes(plugins)
+		plugins: PluginState{
+			configs: plugins
+			vjsx:    build_vjsx_plugin_runtimes(plugins)
+		}
 		openai: OpenaiState{
 			enabled:   true
 			base_path: '/v1'
@@ -259,8 +263,10 @@ export function openai(_req) {
 		}
 	}
 	mut app := App{
-		plugin_configs:         plugins
-		plugin_vjsx:            build_vjsx_plugin_runtimes(plugins)
+		plugins:                PluginState{
+			configs: plugins
+			vjsx:    build_vjsx_plugin_runtimes(plugins)
+		}
 		openai: OpenaiState{
 			enabled:         true
 			base_path:       '/v1'

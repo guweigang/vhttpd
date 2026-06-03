@@ -65,7 +65,23 @@ fn build_app_runtime(provider_settings ProviderRuntimeSettings, executor_plan Lo
 			lifecycle:           executor_plan.lifecycle.name()
 			stream_dispatch:     executor_plan.bootstrap.stream_dispatch
 		}
-		internal_admin_socket:                    build_cfg.internal_admin_socket
+		admin:                                      AdminState{
+			internal_socket: build_cfg.internal_admin_socket
+			on_data_plane:   !build_cfg.admin_enabled
+			token:           build_cfg.admin_token
+		}
+		runtime_config_json:                      json.encode(cfg)
+		plugins:                                    PluginState{
+			configs: cfg.plugins.clone()
+			vjsx:    build_vjsx_plugin_runtimes(cfg.plugins)
+		}
+		assets:                                     AssetsState{
+			enabled:       build_cfg.assets_enabled
+			prefix:        build_cfg.assets_prefix
+			root:          build_cfg.assets_root
+			root_real:     build_cfg.assets_root_real
+			cache_control: build_cfg.assets_cache_control
+		}
 		ws_hub:                                    WebSocketHubState{
 			dispatch_mode:            executor_plan.bootstrap.websocket_dispatch_mode
 			recent_dispatch_limit:   50
@@ -80,16 +96,6 @@ fn build_app_runtime(provider_settings ProviderRuntimeSettings, executor_plan Lo
 			fixture_runtime:         map[string]FixtureWebSocketUpstreamRuntime{}
 			recent_activities:       []WebSocketUpstreamActivitySnapshot{}
 		}
-		admin_on_data_plane:                      !build_cfg.admin_enabled
-		admin_token:                              build_cfg.admin_token
-		runtime_config_json:                      json.encode(cfg)
-		plugin_configs:                           cfg.plugins.clone()
-		plugin_vjsx:                              build_vjsx_plugin_runtimes(cfg.plugins)
-		assets_enabled:                           build_cfg.assets_enabled
-		assets_prefix:                            build_cfg.assets_prefix
-		assets_root:                              build_cfg.assets_root
-		assets_root_real:                         build_cfg.assets_root_real
-		assets_cache_control:                     build_cfg.assets_cache_control
 		mcp:                                      McpState{
 			max_sessions:               app_runtime_default_mcp_max_sessions(cfg)
 			max_pending_messages:       app_runtime_default_mcp_max_pending_messages(cfg)

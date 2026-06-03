@@ -51,7 +51,7 @@ fn (app AdminApp) admin_authorized(ctx Context) bool {
 }
 
 fn (app &App) api_authorized(ctx Context) bool {
-	if app.admin_token == '' {
+	if app.admin.token == '' {
 		return true
 	}
 	headers := header_map_from_request(ctx.req)
@@ -59,7 +59,7 @@ fn (app &App) api_authorized(ctx Context) bool {
 	if token == '' {
 		token = ctx.query['admin_token'] or { '' }
 	}
-	return token == app.admin_token
+	return token == app.admin.token
 }
 
 fn admin_parse_boolish(raw string) bool {

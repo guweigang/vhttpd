@@ -20,17 +20,17 @@ fn initialize_app_runtime(mut app App, internal_admin_socket string) {
 }
 
 fn mount_app_assets(mut app App) {
-	if app.assets_enabled && app.assets_root_real != '' {
-		app.mount_static_folder_at(app.assets_root_real, app.assets_prefix) or {
+	if app.assets.enabled && app.assets.root_real != '' {
+		app.mount_static_folder_at(app.assets.root_real, app.assets.prefix) or {
 			log.error('assets mount failed: ${err}')
 		}
 	}
 }
 
 fn install_app_middleware(mut app App) {
-	if app.assets_enabled && app.assets_cache_control.trim_space() != '' {
-		assets_prefix_mw := app.assets_prefix
-		cache_control := app.assets_cache_control
+	if app.assets.enabled && app.assets.cache_control.trim_space() != '' {
+		assets_prefix_mw := app.assets.prefix
+		cache_control := app.assets.cache_control
 		app.use(
 			handler: fn [assets_prefix_mw, cache_control] (mut ctx Context) bool {
 				mut url := ctx.req.url
@@ -108,8 +108,8 @@ fn start_upstream_providers(mut app App) {
 }
 
 fn log_server_runtime_endpoints(app &App, host string, port int) {
-	if app.assets_enabled && app.assets_root_real != '' {
-		log.info('[vhttpd] Assets: ${app.assets_prefix} -> ${app.assets_root_real}')
+	if app.assets.enabled && app.assets.root_real != '' {
+		log.info('[vhttpd] Assets: ${app.assets.prefix} -> ${app.assets.root_real}')
 	} else {
 		log.info('[vhttpd] Assets: disabled')
 	}

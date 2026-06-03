@@ -33,24 +33,13 @@ pub:
 pub mut:
 	started_at_unix                             i64
 	worker                                      WorkerState
-	internal_admin_socket                       string
-	admin_on_data_plane                         bool
-	admin_token                                 string
+	admin                                       AdminState
 	runtime_config_json                         string
-	plugin_configs                              map[string]config.PluginConfig
-	plugin_vjsx                                 map[string]InProcVjsxExecutor
-	assets_enabled                              bool
-	assets_prefix                               string
-	assets_root                                 string
-	assets_root_real                            string
-	assets_cache_control                        string
+	plugins                                     PluginState
+	assets                                      AssetsState
 	mcp                                        McpState
 	openai                                      OpenaiState
-	stat_http_requests_total                    i64
-	stat_http_errors_total                      i64
-	stat_http_timeouts_total                    i64
-	stat_http_streams_total                     i64
-	stat_admin_actions_total                    i64
+	http_stats                                  HttpStats
 	mu                                          sync.Mutex
 
 	ws_hub                                      WebSocketHubState
@@ -1014,21 +1003,21 @@ fn (mut app App) emit(kind string, fields map[string]string) {
 		app.mu.unlock()
 	}
 	if kind == 'http.request' {
-		app.stat_http_requests_total++
+		app.http_stats.requests_total++
 		status := (fields['status'] or { '0' }).int()
 		if status >= 400 {
-			app.stat_http_errors_total++
+			app.http_stats.errors_total++
 		}
 		error_class := fields['error_class'] or { '' }
 		if error_class == 'timeout' {
-			app.stat_http_timeouts_total++
+			app.http_stats.timeouts_total++
 		}
 		if (fields['response_mode'] or { '' }) == 'stream' {
-			app.stat_http_streams_total++
+			app.http_stats.streams_total++
 		}
 	}
 	if kind.starts_with('admin.') {
-		app.stat_admin_actions_total++
+		app.http_stats.admin_actions_total++
 	}
 	mut row := map[string]string{}
 	row['type'] = kind

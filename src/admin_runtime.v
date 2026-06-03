@@ -26,10 +26,10 @@ fn (mut app App) admin_stats_snapshot() executor.AdminRuntimeStats {
 		started_at_unix: started
 		uptime_seconds:  uptime
 		http: AdminHttpStats{
-			requests_total: app.stat_http_requests_total
-			errors_total:   app.stat_http_errors_total
-			timeouts_total: app.stat_http_timeouts_total
-			streams_total:  app.stat_http_streams_total
+			requests_total: app.http_stats.requests_total
+			errors_total:   app.http_stats.errors_total
+			timeouts_total: app.http_stats.timeouts_total
+			streams_total:  app.http_stats.streams_total
 		}
 		worker: AdminWorkerQueueStats{
 			waits_total:    app.worker.stat_queue_waits_total
@@ -56,7 +56,7 @@ fn (mut app App) admin_stats_snapshot() executor.AdminRuntimeStats {
 			messages_sent:     feishu_metrics.messages_sent
 			send_errors:       feishu_metrics.send_errors
 		}
-		admin_actions_total: app.stat_admin_actions_total
+		admin_actions_total: app.http_stats.admin_actions_total
 	}
 }
 
@@ -150,7 +150,7 @@ fn admin_query_offset(raw string) int {
 
 @['/admin/runtime'; get]
 pub fn (mut app App) admin_runtime(mut ctx Context) veb.Result {
-	if !app.admin_on_data_plane {
+	if !app.admin.on_data_plane {
 		ctx.res.set_status(.not_found)
 		return ctx.text('Not Found')
 	}
@@ -172,7 +172,7 @@ pub fn (mut app App) admin_runtime(mut ctx Context) veb.Result {
 
 @['/admin/runtime/upstreams'; get]
 pub fn (mut app App) admin_runtime_upstreams(mut ctx Context) veb.Result {
-	if !app.admin_on_data_plane {
+	if !app.admin.on_data_plane {
 		ctx.res.set_status(.not_found)
 		return ctx.text('Not Found')
 	}
@@ -200,7 +200,7 @@ pub fn (mut app App) admin_runtime_upstreams(mut ctx Context) veb.Result {
 
 @['/admin/runtime/websockets'; get]
 pub fn (mut app App) admin_runtime_websockets(mut ctx Context) veb.Result {
-	if !app.admin_on_data_plane {
+	if !app.admin.on_data_plane {
 		ctx.res.set_status(.not_found)
 		return ctx.text('Not Found')
 	}
@@ -228,7 +228,7 @@ pub fn (mut app App) admin_runtime_websockets(mut ctx Context) veb.Result {
 
 @['/admin/runtime/mcp'; get]
 pub fn (mut app App) admin_runtime_mcp(mut ctx Context) veb.Result {
-	if !app.admin_on_data_plane {
+	if !app.admin.on_data_plane {
 		ctx.res.set_status(.not_found)
 		return ctx.text('Not Found')
 	}
@@ -256,7 +256,7 @@ pub fn (mut app App) admin_runtime_mcp(mut ctx Context) veb.Result {
 
 @['/admin/runtime/provider-instances'; get]
 pub fn (mut app App) admin_runtime_provider_instances(mut ctx Context) veb.Result {
-	if !app.admin_on_data_plane {
+	if !app.admin.on_data_plane {
 		ctx.res.set_status(.not_found)
 		return ctx.text('Not Found')
 	}
@@ -279,7 +279,7 @@ pub fn (mut app App) admin_runtime_provider_instances(mut ctx Context) veb.Resul
 
 @['/admin/providers/specs'; get]
 pub fn (mut app App) admin_provider_specs(mut ctx Context) veb.Result {
-	if !app.admin_on_data_plane {
+	if !app.admin.on_data_plane {
 		ctx.res.set_status(.not_found)
 		return ctx.text('Not Found')
 	}
@@ -301,7 +301,7 @@ pub fn (mut app App) admin_provider_specs(mut ctx Context) veb.Result {
 
 @['/admin/providers/runtimes'; get]
 pub fn (mut app App) admin_provider_runtimes(mut ctx Context) veb.Result {
-	if !app.admin_on_data_plane {
+	if !app.admin.on_data_plane {
 		ctx.res.set_status(.not_found)
 		return ctx.text('Not Found')
 	}

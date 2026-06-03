@@ -824,7 +824,7 @@ fn run_websocket_upstream_provider(mut app App, provider string, instance string
 
 @['/admin/runtime/upstreams/websocket'; get]
 pub fn (mut app App) admin_runtime_websocket_upstreams(mut ctx Context) veb.Result {
-	if !app.admin_on_data_plane {
+	if !app.admin.on_data_plane {
 		ctx.res.set_status(.not_found)
 		return ctx.text('Not Found')
 	}
@@ -852,7 +852,7 @@ pub fn (mut app App) admin_runtime_websocket_upstreams(mut ctx Context) veb.Resu
 
 @['/admin/runtime/upstreams/websocket/events'; get]
 pub fn (mut app App) admin_runtime_websocket_upstream_events(mut ctx Context) veb.Result {
-	if !app.admin_on_data_plane {
+	if !app.admin.on_data_plane {
 		ctx.res.set_status(.not_found)
 		return ctx.text('Not Found')
 	}
@@ -879,7 +879,7 @@ pub fn (mut app App) admin_runtime_websocket_upstream_events(mut ctx Context) ve
 
 @['/admin/runtime/upstreams/websocket/activities'; get]
 pub fn (mut app App) admin_runtime_websocket_upstream_activities(mut ctx Context) veb.Result {
-	if !app.admin_on_data_plane {
+	if !app.admin.on_data_plane {
 		ctx.res.set_status(.not_found)
 		return ctx.text('Not Found')
 	}
@@ -910,7 +910,7 @@ pub fn (mut app App) admin_runtime_websocket_upstream_activities(mut ctx Context
 
 @['/admin/runtime/upstreams/websocket/fixture/emit'; post]
 pub fn (mut app App) admin_runtime_websocket_upstream_fixture_emit(mut ctx Context) veb.Result {
-	if !app.admin_on_data_plane {
+	if !app.admin.on_data_plane {
 		ctx.res.set_status(.not_found)
 		return ctx.text('Not Found')
 	}
@@ -947,7 +947,7 @@ pub fn (mut app App) admin_runtime_websocket_upstream_fixture_emit(mut ctx Conte
 
 @['/admin/runtime/upstreams/websocket/send'; post]
 pub fn (mut app App) admin_runtime_websocket_upstream_send(mut ctx Context) veb.Result {
-	if !app.admin_on_data_plane {
+	if !app.admin.on_data_plane {
 		ctx.res.set_status(.not_found)
 		return ctx.text('Not Found')
 	}

@@ -2547,7 +2547,7 @@ fn (mut app App) feishu_provider_handle_binary_message(instance string, mut ws w
 
 @['/admin/runtime/feishu'; get]
 pub fn (mut app App) admin_runtime_feishu(mut ctx Context) veb.Result {
-	if !app.admin_on_data_plane {
+	if !app.admin.on_data_plane {
 		ctx.res.set_status(.not_found)
 		return ctx.text('Not Found')
 	}
@@ -2569,7 +2569,7 @@ pub fn (mut app App) admin_runtime_feishu(mut ctx Context) veb.Result {
 
 @['/admin/runtime/feishu/chats'; get]
 pub fn (mut app App) admin_runtime_feishu_chats(mut ctx Context) veb.Result {
-	if !app.admin_on_data_plane {
+	if !app.admin.on_data_plane {
 		ctx.res.set_status(.not_found)
 		return ctx.text('Not Found')
 	}
@@ -2814,7 +2814,7 @@ fn (mut app App) feishu_callback_by_app(mut ctx Context, raw_app string) veb.Res
 
 @['/admin/runtime/feishu/messages'; post]
 pub fn (mut app App) admin_runtime_feishu_send(mut ctx Context) veb.Result {
-	if !app.admin_on_data_plane {
+	if !app.admin.on_data_plane {
 		ctx.res.set_status(.not_found)
 		return ctx.text('Not Found')
 	}
