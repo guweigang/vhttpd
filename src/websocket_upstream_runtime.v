@@ -278,7 +278,7 @@ fn (mut app App) fixture_websocket_emit(req WebSocketUpstreamFixtureEmitRequest)
 		received_at: received_at
 		recorded_at: received_at
 	}
-	if app.worker_backend.sockets.len == 0 {
+	if app.worker.worker_backend.sockets.len == 0 {
 		app.websocket_upstream_record_activity(snapshot)
 		return snapshot
 	}

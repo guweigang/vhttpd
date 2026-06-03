@@ -7,7 +7,7 @@ fn shutdown_app_runtime(mut app App, runtime_cfg ServerRuntimeConfig) {
 		'pid': '${os.getpid()}'
 	})
 	runtime_cfg.executor_plan.lifecycle.stop(mut app)
-	app.logic_executor.close()
+	app.worker.logic_executor.close()
 	app.close_all_plugins()
 	// Graceful provider shutdown is now spec/runtime-driven.
 	app.stop_all_providers()

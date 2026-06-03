@@ -32,12 +32,8 @@ pub:
 	event_log string
 pub mut:
 	started_at_unix                             i64
-	worker_backend                              WorkerBackendRuntime
-	worker_backend_mode                         executor.WorkerBackendMode = .required
-	logic_executor                              executor.LogicExecutor = executor.SocketWorkerExecutor{}
-	logic_executor_lifecycle                    string
+	worker                                      WorkerState
 	internal_admin_socket                       string
-	stream_dispatch                             bool
 	websocket_dispatch_mode                     bool
 	admin_on_data_plane                         bool
 	admin_token                                 string
@@ -58,12 +54,8 @@ pub mut:
 	stat_http_timeouts_total                    i64
 	stat_http_streams_total                     i64
 	stat_admin_actions_total                    i64
-	stat_worker_queue_waits_total               i64
-	stat_worker_queue_rejected_total            i64
-	stat_worker_queue_timeouts_total            i64
 	stat_upstream_plans_total                   i64
 	stat_upstream_plan_errors_total             i64
-	pool_mu                                     sync.Mutex
 	mu                                          sync.Mutex
 	upstream_mu                                 sync.Mutex
 
@@ -554,7 +546,7 @@ fn proxy_worker_websocket(mut app App, mut ctx Context, method string, path stri
 	}
 	remote_addr := if isnil(ctx.conn) { '' } else { ctx.conn.peer_ip() or { '' } }
 	mut facade := app.as_facade()
-	mut ws_open := app.logic_executor.open_websocket_session(mut facade, executor.WebSocketSessionOpenRequest{
+	mut ws_open := app.worker.logic_executor.open_websocket_session(mut facade, executor.WebSocketSessionOpenRequest{
 		req:         ctx.req
 		remote_addr: remote_addr
 		path:        path
@@ -918,7 +910,7 @@ fn proxy_worker_response(mut app App, mut ctx Context, method string, path strin
 	req_id := resolve_request_id(ctx, path)
 	trace_id := resolve_trace_id(ctx, path)
 	log.info('[http] ⇢ dispatch method=${method.to_upper()} path=${path} trace_id=${trace_id} request_id=${req_id} body_len=${ctx.req.data.len} executor=${app.logic_executor_kind()}')
-	if app.stream_dispatch {
+	if app.worker.stream_dispatch {
 		if result := stream_via_dispatch(mut app, mut ctx, method, path, req_id, trace_id,
 			remote_addr)
 		{
@@ -926,7 +918,7 @@ fn proxy_worker_response(mut app App, mut ctx Context, method string, path strin
 		}
 	}
 	mut facade := app.as_facade()
-	mut outcome := app.logic_executor.dispatch_http(mut facade, executor.HttpLogicDispatchRequest{
+	mut outcome := app.worker.logic_executor.dispatch_http(mut facade, executor.HttpLogicDispatchRequest{
 		method:      method
 		path:        path
 		req:         ctx.req

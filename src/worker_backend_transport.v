@@ -153,8 +153,8 @@ fn (mut app App) worker_backend_dispatch_stream(req transport.StreamDispatchRequ
 		app.on_worker_request_finished(selected_socket)
 		conn.close() or {}
 	}
-	if app.worker_backend.read_timeout_ms > 0 {
-		conn.set_read_timeout(time.millisecond * app.worker_backend.read_timeout_ms)
+	if app.worker.worker_backend.read_timeout_ms > 0 {
+		conn.set_read_timeout(time.millisecond * app.worker.worker_backend.read_timeout_ms)
 	}
 	write_frame(mut conn, json.encode(req))!
 	return read_stream_response(mut conn)!
@@ -172,8 +172,8 @@ fn (mut app App) worker_backend_dispatch_mcp(req transport.WorkerMcpDispatchRequ
 		app.on_worker_request_finished(selected_socket)
 		conn.close() or {}
 	}
-	if app.worker_backend.read_timeout_ms > 0 {
-		conn.set_read_timeout(time.millisecond * app.worker_backend.read_timeout_ms)
+	if app.worker.worker_backend.read_timeout_ms > 0 {
+		conn.set_read_timeout(time.millisecond * app.worker.worker_backend.read_timeout_ms)
 	}
 	write_frame(mut conn, json.encode(req))!
 	return read_mcp_response(mut conn)!
@@ -192,8 +192,8 @@ fn (mut app App) worker_backend_dispatch_websocket_upstream(req transport.Worker
 		app.on_worker_request_finished(socket)
 		conn.close() or {}
 	}
-	if app.worker_backend.read_timeout_ms > 0 {
-		conn.set_read_timeout(time.millisecond * app.worker_backend.read_timeout_ms)
+	if app.worker.worker_backend.read_timeout_ms > 0 {
+		conn.set_read_timeout(time.millisecond * app.worker.worker_backend.read_timeout_ms)
 	}
 	raw_req := json.encode(req)
 	log.info('[worker-transport] 📤 dispatching websocket_upstream: ${raw_req}')
@@ -333,8 +333,8 @@ fn (mut app App) worker_backend_dispatch_websocket_event(frame transport.WorkerW
 		app.on_worker_request_finished(selected_socket)
 		conn.close() or {}
 	}
-	if app.worker_backend.read_timeout_ms > 0 {
-		conn.set_read_timeout(time.millisecond * app.worker_backend.read_timeout_ms)
+	if app.worker.worker_backend.read_timeout_ms > 0 {
+		conn.set_read_timeout(time.millisecond * app.worker.worker_backend.read_timeout_ms)
 	}
 	write_worker_websocket_frame(mut conn, frame)!
 	return read_worker_websocket_dispatch_response(mut conn)!

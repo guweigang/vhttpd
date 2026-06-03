@@ -34,12 +34,12 @@ pub fn (w AppFacadeWrapper) get_runtime_config_json() string {
 
 pub fn (w AppFacadeWrapper) worker_backend_read_timeout_ms() int {
 	app := unsafe { &App(w.app_ptr) }
-	return app.worker_backend.read_timeout_ms
+	return app.worker.worker_backend.read_timeout_ms
 }
 
 pub fn (w AppFacadeWrapper) worker_backend_sockets_len() int {
 	app := unsafe { &App(w.app_ptr) }
-	return app.worker_backend.sockets.len
+	return app.worker.worker_backend.sockets.len
 }
 
 pub fn (mut w AppFacadeWrapper) worker_backend_select_socket_queued() !string {
@@ -110,27 +110,27 @@ pub fn (mut w AppFacadeWrapper) run_command_envelopes(request_id string, dispatc
 // ── App logic_executor proxy methods ──
 
 pub fn (app &App) logic_executor_kind() string {
-	return app.logic_executor.kind()
+	return app.worker.logic_executor.kind()
 }
 
 pub fn (app &App) logic_executor_model() executor.LogicExecutorModel {
-	return app.logic_executor.model()
+	return app.worker.logic_executor.model()
 }
 
 pub fn (app &App) logic_executor_provider() string {
-	return app.logic_executor.provider()
+	return app.worker.logic_executor.provider()
 }
 
 pub fn (app &App) logic_executor_admin_details() executor.LogicExecutorAdminDetails {
-	return app.logic_executor.admin_details()
+	return app.worker.logic_executor.admin_details()
 }
 
 pub fn (app &App) has_http_logic_executor() bool {
-	return app.worker_backend.sockets.len > 0 || app.logic_executor.model() == .embedded
+	return app.worker.worker_backend.sockets.len > 0 || app.worker.logic_executor.model() == .embedded
 }
 
 pub fn (app &App) has_websocket_upstream_logic_executor() bool {
-	return app.worker_backend.sockets.len > 0 || app.logic_executor.model() == .embedded
+	return app.worker.worker_backend.sockets.len > 0 || app.worker.logic_executor.model() == .embedded
 }
 
 // ── Global Type Aliases ──

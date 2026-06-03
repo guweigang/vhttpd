@@ -44,26 +44,28 @@ fn build_app_runtime(provider_settings ProviderRuntimeSettings, executor_plan Lo
 	return &App{
 		event_log:                                build_cfg.event_log
 		started_at_unix:                          time.now().unix()
-		worker_backend:                           WorkerBackendRuntime{
-			backend:                PhpWorkerBackend{}
-			sockets:                executor_plan.bootstrap.worker_sockets
-			read_timeout_ms:        build_cfg.worker_read_timeout_ms
-			autostart:              executor_plan.bootstrap.worker_autostart
-			cmd:                    executor_plan.bootstrap.worker_cmd
-			env:                    executor_plan.bootstrap.worker_env
-			workdir:                build_cfg.workdir
-			restart_backoff_ms:     build_cfg.worker_restart_backoff_ms
-			restart_backoff_max_ms: build_cfg.worker_restart_backoff_max_ms
-			max_requests:           build_cfg.worker_max_requests
-			queue_capacity:         build_cfg.worker_queue_capacity
-			queue_timeout_ms:       build_cfg.worker_queue_timeout_ms
-			queue_poll_ms:          10
+		worker:                                   WorkerState{
+			worker_backend: WorkerBackendRuntime{
+				backend:                PhpWorkerBackend{}
+				sockets:                executor_plan.bootstrap.worker_sockets
+				read_timeout_ms:        build_cfg.worker_read_timeout_ms
+				autostart:              executor_plan.bootstrap.worker_autostart
+				cmd:                    executor_plan.bootstrap.worker_cmd
+				env:                    executor_plan.bootstrap.worker_env
+				workdir:                build_cfg.workdir
+				restart_backoff_ms:     build_cfg.worker_restart_backoff_ms
+				restart_backoff_max_ms: build_cfg.worker_restart_backoff_max_ms
+				max_requests:           build_cfg.worker_max_requests
+				queue_capacity:         build_cfg.worker_queue_capacity
+				queue_timeout_ms:       build_cfg.worker_queue_timeout_ms
+				queue_poll_ms:          10
+			}
+			worker_backend_mode: executor_plan.worker_backend_mode
+			logic_executor:      executor_plan.executor
+			lifecycle:           executor_plan.lifecycle.name()
+			stream_dispatch:     executor_plan.bootstrap.stream_dispatch
 		}
-		worker_backend_mode:                      executor_plan.worker_backend_mode
-		logic_executor:                           executor_plan.executor
-		logic_executor_lifecycle:                 executor_plan.lifecycle.name()
 		internal_admin_socket:                    build_cfg.internal_admin_socket
-		stream_dispatch:                          executor_plan.bootstrap.stream_dispatch
 		websocket_dispatch_mode:                  executor_plan.bootstrap.websocket_dispatch_mode
 		admin_on_data_plane:                      !build_cfg.admin_enabled
 		admin_token:                              build_cfg.admin_token

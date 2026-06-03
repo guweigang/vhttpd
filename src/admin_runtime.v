@@ -25,9 +25,9 @@ fn (mut app App) admin_stats_snapshot() executor.AdminRuntimeStats {
 		http_timeouts_total:                    app.stat_http_timeouts_total
 		http_streams_total:                     app.stat_http_streams_total
 		admin_actions_total:                    app.stat_admin_actions_total
-		worker_queue_waits_total:               app.stat_worker_queue_waits_total
-		worker_queue_rejected_total:            app.stat_worker_queue_rejected_total
-		worker_queue_timeouts_total:            app.stat_worker_queue_timeouts_total
+		worker_queue_waits_total:               app.worker.stat_queue_waits_total
+		worker_queue_rejected_total:            app.worker.stat_queue_rejected_total
+		worker_queue_timeouts_total:            app.worker.stat_queue_timeouts_total
 		upstream_plans_total:                   app.stat_upstream_plans_total
 		upstream_plan_errors_total:             app.stat_upstream_plan_errors_total
 		mcp_sessions_expired_total:             app.mcp.stat_sessions_expired_total
@@ -61,14 +61,14 @@ fn (mut app App) admin_runtime_snapshot() executor.AdminRuntimeSummary {
 	active_mcp_sessions = app.mcp.sessions.len
 	app.mcp.mu.unlock()
 	mut worker_queue_depth := 0
-	app.pool_mu.@lock()
-	worker_queue_depth = app.worker_backend.queue_waiting_requests
-	app.pool_mu.unlock()
+	app.worker.mu.@lock()
+	worker_queue_depth = app.worker.worker_backend.queue_waiting_requests
+	app.worker.mu.unlock()
 	mut capabilities := map[string]bool{}
 	capabilities['http'] = true
 	capabilities['stream'] = true
 	capabilities['stream_direct'] = true
-	capabilities['stream_dispatch'] = app.stream_dispatch
+	capabilities['stream_dispatch'] = app.worker.stream_dispatch
 	capabilities['stream_upstream_plan'] = true
 	capabilities['websocket'] = true
 	capabilities['websocket_dispatch'] = app.websocket_dispatch_mode
@@ -81,13 +81,13 @@ fn (mut app App) admin_runtime_snapshot() executor.AdminRuntimeSummary {
 	return executor.AdminRuntimeSummary{
 		started_at_unix:          stats.started_at_unix
 		uptime_seconds:           stats.uptime_seconds
-		worker_pool_size:         app.worker_backend.sockets.len
-		worker_backend_mode:      '${app.worker_backend_mode}'
-		worker_queue_capacity:    app.worker_backend.queue_capacity
-		worker_queue_timeout_ms:  app.worker_backend.queue_timeout_ms
+		worker_pool_size:         app.worker.worker_backend.sockets.len
+		worker_backend_mode:      '${app.worker.worker_backend_mode}'
+		worker_queue_capacity:    app.worker.worker_backend.queue_capacity
+		worker_queue_timeout_ms:  app.worker.worker_backend.queue_timeout_ms
 		worker_queue_depth:       worker_queue_depth
 		logic_executor:           app.logic_executor_kind()
-		logic_executor_lifecycle: app.logic_executor_lifecycle
+		logic_executor_lifecycle: app.worker.lifecycle
 		logic_executor_model:     '${app.logic_executor_model()}'
 		logic_provider:           app.logic_executor_provider()
 		logic_executor_details:   logic_details

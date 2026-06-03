@@ -4,9 +4,9 @@ import log
 import os
 
 fn initialize_app_runtime(mut app App, internal_admin_socket string) {
-	app.worker_backend.env['VHTTPD_INTERNAL_ADMIN_SOCKET'] = internal_admin_socket
+	app.worker.worker_backend.env['VHTTPD_INTERNAL_ADMIN_SOCKET'] = internal_admin_socket
 	if app.codex.db_runtime.enabled && app.codex.db_runtime.socket.trim_space() != '' {
-		app.worker_backend.env['VHTTPD_DB_SOCKET'] = app.codex.db_runtime.socket
+		app.worker.worker_backend.env['VHTTPD_DB_SOCKET'] = app.codex.db_runtime.socket
 	}
 	app.feishu_card_bridge_apply_env_fallbacks()
 	go run_internal_admin_server(mut app, internal_admin_socket)
@@ -51,14 +51,14 @@ fn emit_server_started_event(mut app App, host string, port int, admin_enabled b
 		'host':                     host
 		'port':                     '${port}'
 		'pid':                      '${os.getpid()}'
-		'worker_backend':           app.worker_backend.kind()
-		'worker_backend_mode':      '${app.worker_backend_mode}'
+		'worker_backend':           app.worker.worker_backend.kind()
+		'worker_backend_mode':      '${app.worker.worker_backend_mode}'
 		'logic_executor':           app.logic_executor_kind()
-		'logic_executor_lifecycle': app.logic_executor_lifecycle
+		'logic_executor_lifecycle': app.worker.lifecycle
 		'logic_executor_model':     '${app.logic_executor_model()}'
 		'logic_provider':           app.logic_executor_provider()
-		'worker_autostart':         if app.worker_backend.autostart { 'true' } else { 'false' }
-		'worker_pool_size':         '${app.worker_backend.sockets.len}'
+		'worker_autostart':         if app.worker.worker_backend.autostart { 'true' } else { 'false' }
+		'worker_pool_size':         '${app.worker.worker_backend.sockets.len}'
 		'admin_enabled':            if admin_enabled { 'true' } else { 'false' }
 		'admin_host':               if admin_enabled { admin_host } else { '' }
 		'admin_port':               if admin_enabled { '${admin_port}' } else { '' }

@@ -1386,14 +1386,14 @@ fn test_build_app_runtime_projects_executor_plan_into_app_state() {
 		worker_queue_timeout_ms:       34
 		workdir:                       '/tmp/workdir'
 	})
-	assert app.worker_backend.sockets == ['/tmp/a.sock']
-	assert app.worker_backend.cmd == 'php worker.php'
-	assert app.worker_backend.env['APP_ENV'] == 'dev'
-	assert app.worker_backend.read_timeout_ms == 900
-	assert app.worker_backend.max_requests == 777
-	assert app.worker_backend_mode == .required
-	assert app.logic_executor.kind() == 'php'
-	assert app.logic_executor_lifecycle == 'php_worker_host'
+	assert app.worker.worker_backend.sockets == ['/tmp/a.sock']
+	assert app.worker.worker_backend.cmd == 'php worker.php'
+	assert app.worker.worker_backend.env['APP_ENV'] == 'dev'
+	assert app.worker.worker_backend.read_timeout_ms == 900
+	assert app.worker.worker_backend.max_requests == 777
+	assert app.worker.worker_backend_mode == .required
+	assert app.worker.logic_executor.kind() == 'php'
+	assert app.worker.lifecycle == 'php_worker_host'
 	assert app.internal_admin_socket == '/tmp/internal.sock'
 	assert app.admin_token == 'secret'
 	assert app.assets_enabled
