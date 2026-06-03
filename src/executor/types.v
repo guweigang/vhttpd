@@ -91,32 +91,57 @@ pub:
 
 // ── Admin runtime types ──
 
+pub struct AdminHttpStats {
+pub:
+	requests_total i64
+	errors_total   i64
+	timeouts_total i64
+	streams_total  i64
+}
+
+pub struct AdminWorkerQueueStats {
+pub:
+	waits_total    i64
+	rejected_total i64
+	timeouts_total i64
+}
+
+pub struct AdminUpstreamStats {
+pub:
+	plans_total       i64
+	plan_errors_total i64
+}
+
+pub struct AdminMcpStats {
+pub:
+	sessions_expired_total             i64
+	sessions_evicted_total             i64
+	pending_dropped_total              i64
+	sampling_capability_warnings_total i64
+	sampling_capability_dropped_total  i64
+	sampling_capability_errors_total   i64
+}
+
+pub struct AdminFeishuStats {
+pub:
+	connect_attempts  i64
+	connect_successes i64
+	received_frames   i64
+	acked_events      i64
+	messages_sent     i64
+	send_errors       i64
+}
+
 pub struct AdminRuntimeStats {
 pub:
-	started_at_unix                        i64
-	uptime_seconds                         i64
-	http_requests_total                    i64
-	http_errors_total                      i64
-	http_timeouts_total                    i64
-	http_streams_total                     i64
-	admin_actions_total                    i64
-	worker_queue_waits_total               i64
-	worker_queue_rejected_total            i64
-	worker_queue_timeouts_total            i64
-	upstream_plans_total                   i64
-	upstream_plan_errors_total             i64
-	mcp_sessions_expired_total             i64
-	mcp_sessions_evicted_total             i64
-	mcp_pending_dropped_total              i64
-	mcp_sampling_capability_warnings_total i64
-	mcp_sampling_capability_dropped_total  i64
-	mcp_sampling_capability_errors_total   i64
-	feishu_connect_attempts                i64
-	feishu_connect_successes               i64
-	feishu_received_frames                 i64
-	feishu_acked_events                    i64
-	feishu_messages_sent                   i64
-	feishu_send_errors                     i64
+	started_at_unix i64
+	uptime_seconds  i64
+	http            AdminHttpStats
+	worker          AdminWorkerQueueStats
+	upstream        AdminUpstreamStats
+	mcp             AdminMcpStats
+	feishu          AdminFeishuStats
+	admin_actions_total i64
 }
 
 pub struct AdminRuntimeSummary {

@@ -27,16 +27,18 @@ fn test_logic_executor_can_hold_inproc_vjsx_executor() {
 
 fn test_admin_runtime_snapshot_exposes_embedded_logic_executor_identity() {
 	mut app := App{
-		worker_backend_mode:      .disabled
-		logic_executor_lifecycle: 'embedded_host'
-		logic_executor:           new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
-			thread_count:    1
-			module_root:     '/tmp/demo'
-			build_root:      '/tmp/demo-build'
-			signature_root:  '/tmp/demo'
-			runtime_profile: 'node'
-			enable_fs:       true
-		})
+		worker: WorkerState{
+			worker_backend_mode: .disabled
+			lifecycle:           'embedded_host'
+			logic_executor:      new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
+				thread_count:    1
+				module_root:     '/tmp/demo'
+				build_root:      '/tmp/demo-build'
+				signature_root:  '/tmp/demo'
+				runtime_profile: 'node'
+				enable_fs:       true
+			})
+		}
 	}
 	snapshot := app.admin_runtime_snapshot()
 	assert snapshot.logic_executor == 'vjsx'

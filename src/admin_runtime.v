@@ -7,6 +7,11 @@ import veb
 
 type AdminRuntimeStats = executor.AdminRuntimeStats
 type AdminRuntimeSummary = executor.AdminRuntimeSummary
+type AdminHttpStats = executor.AdminHttpStats
+type AdminWorkerQueueStats = executor.AdminWorkerQueueStats
+type AdminUpstreamStats = executor.AdminUpstreamStats
+type AdminMcpStats = executor.AdminMcpStats
+type AdminFeishuStats = executor.AdminFeishuStats
 
 fn (mut app App) admin_stats_snapshot() executor.AdminRuntimeStats {
 	app.mu.@lock()
@@ -18,30 +23,40 @@ fn (mut app App) admin_stats_snapshot() executor.AdminRuntimeStats {
 	started := if app.started_at_unix > 0 { app.started_at_unix } else { now }
 	uptime := if now > started { now - started } else { 0 }
 	return executor.AdminRuntimeStats{
-		started_at_unix:                        started
-		uptime_seconds:                         uptime
-		http_requests_total:                    app.stat_http_requests_total
-		http_errors_total:                      app.stat_http_errors_total
-		http_timeouts_total:                    app.stat_http_timeouts_total
-		http_streams_total:                     app.stat_http_streams_total
-		admin_actions_total:                    app.stat_admin_actions_total
-		worker_queue_waits_total:               app.worker.stat_queue_waits_total
-		worker_queue_rejected_total:            app.worker.stat_queue_rejected_total
-		worker_queue_timeouts_total:            app.worker.stat_queue_timeouts_total
-		upstream_plans_total:                   app.ws_hub.stat_upstream_plans_total
-		upstream_plan_errors_total:             app.ws_hub.stat_upstream_plan_errors_total
-		mcp_sessions_expired_total:             app.mcp.stat_sessions_expired_total
-		mcp_sessions_evicted_total:             app.mcp.stat_sessions_evicted_total
-		mcp_pending_dropped_total:              app.mcp.stat_pending_dropped_total
-		mcp_sampling_capability_warnings_total: app.mcp.stat_sampling_capability_warnings_total
-		mcp_sampling_capability_dropped_total:  app.mcp.stat_sampling_capability_dropped_total
-		mcp_sampling_capability_errors_total:   app.mcp.stat_sampling_capability_errors_total
-		feishu_connect_attempts:                feishu_metrics.connect_attempts
-		feishu_connect_successes:               feishu_metrics.connect_successes
-		feishu_received_frames:                 feishu_metrics.received_frames
-		feishu_acked_events:                    feishu_metrics.acked_events
-		feishu_messages_sent:                   feishu_metrics.messages_sent
-		feishu_send_errors:                     feishu_metrics.send_errors
+		started_at_unix: started
+		uptime_seconds:  uptime
+		http: AdminHttpStats{
+			requests_total: app.stat_http_requests_total
+			errors_total:   app.stat_http_errors_total
+			timeouts_total: app.stat_http_timeouts_total
+			streams_total:  app.stat_http_streams_total
+		}
+		worker: AdminWorkerQueueStats{
+			waits_total:    app.worker.stat_queue_waits_total
+			rejected_total: app.worker.stat_queue_rejected_total
+			timeouts_total: app.worker.stat_queue_timeouts_total
+		}
+		upstream: AdminUpstreamStats{
+			plans_total:       app.ws_hub.stat_upstream_plans_total
+			plan_errors_total: app.ws_hub.stat_upstream_plan_errors_total
+		}
+		mcp: AdminMcpStats{
+			sessions_expired_total:             app.mcp.stat_sessions_expired_total
+			sessions_evicted_total:             app.mcp.stat_sessions_evicted_total
+			pending_dropped_total:              app.mcp.stat_pending_dropped_total
+			sampling_capability_warnings_total: app.mcp.stat_sampling_capability_warnings_total
+			sampling_capability_dropped_total:  app.mcp.stat_sampling_capability_dropped_total
+			sampling_capability_errors_total:   app.mcp.stat_sampling_capability_errors_total
+		}
+		feishu: AdminFeishuStats{
+			connect_attempts:  feishu_metrics.connect_attempts
+			connect_successes: feishu_metrics.connect_successes
+			received_frames:   feishu_metrics.received_frames
+			acked_events:      feishu_metrics.acked_events
+			messages_sent:     feishu_metrics.messages_sent
+			send_errors:       feishu_metrics.send_errors
+		}
+		admin_actions_total: app.stat_admin_actions_total
 	}
 }
 
