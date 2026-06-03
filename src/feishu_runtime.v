@@ -3,12 +3,8 @@ import config
 import feishu
 
 import json
-import crypto.aes
-import crypto.cipher
-import crypto.sha256
 import encoding.base64
 import net.http
-import net.urllib
 import net.websocket
 import time
 import veb
@@ -17,18 +13,18 @@ import log
 import executor
 
 @[markused]
-const feishu_runtime_frame_type_control = 0
-const feishu_runtime_frame_type_data = 1
-const feishu_runtime_header_type = 'type'
-const feishu_runtime_header_seq = 'seq'
-const feishu_runtime_header_trace = 'trace_id'
-const feishu_runtime_header_biz_rt = 'biz_rt'
-const feishu_runtime_message_ping = 'ping'
-const feishu_runtime_message_pong = 'pong'
-const feishu_runtime_message_data = 'data'
-const feishu_runtime_message_event = 'event'
-const feishu_runtime_message_card = 'card'
-const feishu_runtime_max_upload_image_bytes = 10 * 1024 * 1024
+const feishu_runtime_frame_type_control = feishu.frame_type_control
+const feishu_runtime_frame_type_data = feishu.frame_type_data
+const feishu_runtime_header_type = feishu.header_type
+const feishu_runtime_header_seq = feishu.header_seq
+const feishu_runtime_header_trace = feishu.header_trace
+const feishu_runtime_header_biz_rt = feishu.header_biz_rt
+const feishu_runtime_message_ping = feishu.message_ping
+const feishu_runtime_message_pong = feishu.message_pong
+const feishu_runtime_message_data = feishu.message_data
+const feishu_runtime_message_event = feishu.message_event
+const feishu_runtime_message_card = feishu.message_card
+const feishu_runtime_max_upload_image_bytes = feishu.max_upload_image_bytes
 
 type FeishuHttpLane = feishu.HttpLane
 
@@ -44,32 +40,15 @@ type FeishuRuntimeWsEndpointData = feishu.RuntimeWsEndpointData
 
 type FeishuRuntimeWsEndpointResponse = feishu.RuntimeWsEndpointResponse
 
-struct FeishuRuntimeTenantTokenResponse {
-	code                int
-	msg                 string
-	tenant_access_token string @[json: 'tenant_access_token']
-	expire              int
-}
+type FeishuRuntimeTenantTokenResponse = feishu.TenantTokenResponse
 
-struct FeishuRuntimeSendMessageData {
-	message_id string @[json: 'message_id']
-}
+type FeishuRuntimeSendMessageData = feishu.SendMessageData
 
-struct FeishuRuntimeUploadImageData {
-	image_key string @[json: 'image_key']
-}
+type FeishuRuntimeUploadImageData = feishu.UploadImageData
 
-struct FeishuRuntimeSendMessageResponse {
-	code int
-	msg  string
-	data FeishuRuntimeSendMessageData
-}
+type FeishuRuntimeSendMessageResponse = feishu.SendMessageResponse
 
-struct FeishuRuntimeUploadImageResponse {
-	code int
-	msg  string
-	data FeishuRuntimeUploadImageData
-}
+type FeishuRuntimeUploadImageResponse = feishu.UploadImageResponse
 
 type FeishuRuntimeEventSnapshot = feishu.RuntimeEventSnapshot
 
@@ -81,7 +60,7 @@ fn new_feishu_provider_runtime(name string) FeishuProviderRuntime {
 
 type FeishuStreamBuffer = feishu.StreamBuffer
 
-const feishu_stream_buffer_rollover_runes = 4200
+const feishu_stream_buffer_rollover_runes = feishu.stream_buffer_rollover_runes
 
 type FeishuRuntimeAppSnapshot = feishu.RuntimeAppSnapshot
 
@@ -91,61 +70,21 @@ type FeishuRuntimeChatSnapshot = feishu.RuntimeChatSnapshot
 
 type FeishuRuntimeChatsSnapshot = feishu.RuntimeChatsSnapshot
 
-struct FeishuRuntimeSendMessageRequest {
-	app             string            @[json: 'app']
-	receive_id_type string            @[json: 'receive_id_type']
-	receive_id      string            @[json: 'receive_id']
-	msg_type        string            @[json: 'msg_type']
-	content         string            @[json: 'content']
-	content_fields  map[string]string @[json: 'content_fields']
-	text            string            @[json: 'text']
-	uuid            string            @[json: 'uuid']
-}
+type FeishuRuntimeSendMessageRequest = feishu.SendMessageRequest
 
-struct FeishuRuntimeUpdateMessageRequest {
-	app             string            @[json: 'app']
-	message_id      string            @[json: 'message_id']
-	message_id_type string            @[json: 'message_id_type']
-	msg_type        string            @[json: 'msg_type']
-	content         string            @[json: 'content']
-	content_fields  map[string]string @[json: 'content_fields']
-	text            string            @[json: 'text']
-	uuid            string            @[json: 'uuid']
-}
+type FeishuRuntimeUpdateMessageRequest = feishu.UpdateMessageRequest
 
-struct FeishuRuntimeUploadImageRequest {
-	app            string
-	image_type     string @[json: 'image_type']
-	filename       string
-	content_type   string @[json: 'content_type']
-	data_base64    string @[json: 'data_base64']
-	content_length int    @[json: 'content_length']
-}
+type FeishuRuntimeUploadImageRequest = feishu.UploadImageRequest
 
-struct FeishuRuntimeTextContent {
-	text string @[json: 'text']
-}
+type FeishuRuntimeTextContent = feishu.TextContent
 
-struct FeishuCallbackChallengeResponse {
-	challenge string
-}
+type FeishuCallbackChallengeResponse = feishu.CallbackChallengeResponse
 
-struct FeishuCallbackAckResponse {
-	code int
-	msg  string
-}
+type FeishuCallbackAckResponse = feishu.CallbackAckResponse
 
-struct FeishuRuntimeSendMessageResult {
-	ok         bool
-	message_id string @[json: 'message_id']
-	error      string
-}
+type FeishuRuntimeSendMessageResult = feishu.SendMessageResult
 
-struct FeishuRuntimeUploadImageResult {
-	ok        bool
-	image_key string @[json: 'image_key']
-	error     string
-}
+type FeishuRuntimeUploadImageResult = feishu.UploadImageResult
 
 fn (mut app App) feishu_runtime_http_test_enter() int {
 	app.feishu.http_test_mu.@lock()
@@ -348,118 +287,30 @@ fn (mut app App) feishu_runtime_http_post_multipart_form(url string, cfg http.Po
 
 // FeishuRuntimeEventSummary is executor.FeishuRuntimeEventSummary (used directly)
 
-struct FeishuRuntimeWsResponsePayload {
-	code    int
-	headers map[string]string
-	data    string
-}
+type FeishuRuntimeWsResponsePayload = feishu.WsResponsePayload
 
 fn feishu_runtime_json_field_string(obj map[string]json2.Any, key string) string {
-	return (obj[key] or { json2.Any('') }).str()
+	return feishu.json_field_string(obj, key)
 }
 
 fn feishu_runtime_json_map_field(obj map[string]json2.Any, key string) map[string]json2.Any {
-	return (obj[key] or { json2.Any(map[string]json2.Any{}) }).as_map()
+	return feishu.json_map_field(obj, key)
 }
 
 fn feishu_runtime_build_message_content(msg_type string, raw_content string, text string, content_fields map[string]string) !string {
-	content := raw_content.trim_space()
-	if content != '' {
-		return content
-	}
-	match msg_type {
-		'text' {
-			text_value := if text.trim_space() != '' {
-				text
-			} else {
-				content_fields['text'] or { '' }
-			}
-			if text_value.trim_space() == '' {
-				return error('missing text content')
-			}
-			return json.encode({
-				'text': text_value
-			})
-		}
-		'image' {
-			image_key := content_fields['image_key'] or { '' }
-			if image_key.trim_space() == '' {
-				return error('missing image_key')
-			}
-			return json.encode({
-				'image_key': image_key
-			})
-		}
-		'file', 'audio', 'sticker' {
-			file_key := content_fields['file_key'] or { '' }
-			if file_key.trim_space() == '' {
-				return error('missing file_key')
-			}
-			return json.encode({
-				'file_key': file_key
-			})
-		}
-		'media' {
-			file_key := content_fields['file_key'] or { '' }
-			image_key := content_fields['image_key'] or { '' }
-			file_name := content_fields['file_name'] or { '' }
-			duration := content_fields['duration'] or { '' }
-			if file_key.trim_space() == '' {
-				return error('missing file_key')
-			}
-			if image_key.trim_space() == '' {
-				return error('missing image_key')
-			}
-			if file_name.trim_space() == '' {
-				return error('missing file_name')
-			}
-			if duration.trim_space() == '' {
-				return error('missing duration')
-			}
-			return json.encode({
-				'file_key':  file_key
-				'image_key': image_key
-				'file_name': file_name
-				'duration':  duration
-			})
-		}
-		'post', 'interactive', 'share_chat', 'share_user' {
-			return error('missing raw content for msg_type ${msg_type}')
-		}
-		else {
-			return error('unsupported feishu msg_type ${msg_type}')
-		}
-	}
+	return feishu.build_message_content(msg_type, raw_content, text, content_fields)
 }
 
 fn feishu_runtime_extract_markdown_text(raw_content string, text string, content_fields map[string]string) string {
-	if text.trim_space() != '' {
-		return text
-	}
-	text_field := content_fields['text'] or { '' }
-	if text_field.trim_space() != '' {
-		return text_field
-	}
-	content := raw_content.trim_space()
-	if content == '' {
-		return ''
-	}
-	decoded := json.decode(FeishuRuntimeTextContent, content) or { return content }
-	if decoded.text.trim_space() != '' {
-		return decoded.text
-	}
-	return content
+	return feishu.extract_markdown_text(raw_content, text, content_fields)
 }
 
 fn feishu_runtime_interactive_markdown_card(markdown string) string {
-	return '{"elements":[{"tag":"markdown","content":${json.encode(markdown)}}]}'
+	return feishu.interactive_markdown_card(markdown)
 }
 
 fn feishu_runtime_streaming_card(markdown string, segment_index int) string {
-	if segment_index <= 1 {
-		return feishu_runtime_interactive_markdown_card(markdown)
-	}
-	return '{"elements":[{"tag":"note","elements":[{"tag":"plain_text","content":${json.encode('继续输出 · 第 ${segment_index} 段')}}]},{"tag":"markdown","content":${json.encode(markdown)}}]}'
+	return feishu.streaming_card(markdown, segment_index)
 }
 
 fn feishu_runtime_normalize_streaming_send(req WebSocketUpstreamSendRequest) WebSocketUpstreamSendRequest {
@@ -479,57 +330,27 @@ fn feishu_runtime_normalize_streaming_send(req WebSocketUpstreamSendRequest) Web
 }
 
 fn feishu_runtime_update_http_method(msg_type string) http.Method {
-	return match msg_type {
-		'interactive' { .patch }
-		else { .put }
-	}
+	return feishu.update_http_method(msg_type)
 }
 
 fn feishu_runtime_delay_update_card_body(token string, raw_content string) !string {
-	if token.trim_space() == '' {
-		return error('missing callback token')
-	}
-	card_content := raw_content.trim_space()
-	if card_content == '' {
-		return error('missing interactive card content')
-	}
-	token_json := json.encode(token)
-	return '{"token":${token_json},"card":${card_content}}'
+	return feishu.delay_update_card_body(token, raw_content)
 }
 
 fn normalize_feishu_open_base(raw string) string {
-	mut base := raw.trim_space()
-	if base == '' {
-		base = 'https://open.feishu.cn/open-apis'
-	}
-	for base.len > 1 && base.ends_with('/') {
-		base = base[..base.len - 1]
-	}
-	return base
+	return feishu.normalize_open_base(raw)
 }
 
 fn feishu_runtime_root_base(base string) string {
-	mut trimmed := normalize_feishu_open_base(base)
-	if trimmed.ends_with('/open-apis') {
-		trimmed = trimmed[..trimmed.len - '/open-apis'.len]
-	}
-	return trimmed
+	return feishu.root_base(base)
 }
 
 fn feishu_runtime_ws_endpoint_urls(base string) []string {
-	primary := '${normalize_feishu_open_base(base)}/callback/ws/endpoint'
-	fallback := '${feishu_runtime_root_base(base)}/callback/ws/endpoint'
-	if fallback == primary {
-		return [primary]
-	}
-	return [primary, fallback]
+	return feishu.ws_endpoint_urls(base)
 }
 
 fn feishu_runtime_ws_endpoint_body(app_id string, app_secret string) string {
-	return json.encode({
-		'AppID':     app_id
-		'AppSecret': app_secret
-	})
+	return feishu.ws_endpoint_body(app_id, app_secret)
 }
 
 fn (app &App) feishu_runtime_enabled() bool {
@@ -625,12 +446,7 @@ fn (app &App) feishu_runtime_app_config(name string) !config.FeishuAppConfig {
 }
 
 fn feishu_runtime_callback_challenge(payload string) string {
-	parsed := json2.decode[json2.Any](payload) or { return '' }
-	root := parsed.as_map()
-	if feishu_runtime_json_field_string(root, 'type') != 'url_verification' {
-		return ''
-	}
-	return feishu_runtime_json_field_string(root, 'challenge')
+	return feishu.callback_challenge(payload)
 }
 
 fn (app &App) feishu_runtime_callback_token_valid(app_name string, payload string) bool {
@@ -645,60 +461,15 @@ fn (app &App) feishu_runtime_callback_token_valid(app_name string, payload strin
 }
 
 fn feishu_runtime_pkcs7_unpad(data []u8) ![]u8 {
-	if data.len == 0 {
-		return error('empty encrypted payload')
-	}
-	padding := int(data[data.len - 1])
-	if padding <= 0 || padding > aes.block_size || padding > data.len {
-		return error('invalid pkcs7 padding')
-	}
-	for i in data.len - padding .. data.len {
-		if int(data[i]) != padding {
-			return error('invalid pkcs7 padding')
-		}
-	}
-	return data[..data.len - padding].clone()
+	return feishu.pkcs7_unpad(data)
 }
 
 fn feishu_runtime_callback_signature_valid(headers map[string]string, encrypt_key string, payload string) bool {
-	mut signature := (headers['x-lark-signature'] or { '' }).trim_space().to_lower()
-	if signature == '' {
-		signature = (headers['x-lark-request-signature'] or { '' }).trim_space().to_lower()
-	}
-	if signature == '' {
-		return encrypt_key.trim_space() == ''
-	}
-	timestamp := (headers['x-lark-request-timestamp'] or { '' }).trim_space()
-	nonce := (headers['x-lark-request-nonce'] or { '' }).trim_space()
-	if timestamp == '' || nonce == '' || encrypt_key.trim_space() == '' {
-		return false
-	}
-	expected := sha256.sum('${timestamp}${nonce}${encrypt_key}${payload}'.bytes()).hex().to_lower()
-	return signature == expected
+	return feishu.callback_signature_valid(headers, encrypt_key, payload)
 }
 
 fn feishu_runtime_callback_decrypt_payload(encrypt_key string, payload string) !string {
-	if encrypt_key.trim_space() == '' {
-		return payload
-	}
-	parsed := json2.decode[json2.Any](payload) or { return payload }
-	root := parsed.as_map()
-	encrypted := feishu_runtime_json_field_string(root, 'encrypt')
-	if encrypted == '' {
-		return payload
-	}
-	ciphertext := base64.decode(encrypted)
-	if ciphertext.len < aes.block_size || ciphertext.len % aes.block_size != 0 {
-		return error('invalid feishu encrypted payload length')
-	}
-	key := sha256.sum(encrypt_key.bytes())
-	iv := key[..aes.block_size].clone()
-	mut block := aes.new_cipher(key)
-	mut mode := cipher.new_cbc(block, iv)
-	mut plaintext := []u8{len: ciphertext.len}
-	mode.decrypt_blocks(mut plaintext, ciphertext)
-	unpadded := feishu_runtime_pkcs7_unpad(plaintext)!
-	return unpadded.bytestr()
+	return feishu.callback_decrypt_payload(encrypt_key, payload)
 }
 
 fn (mut app App) feishu_runtime_ensure(name string) FeishuProviderRuntime {
@@ -721,318 +492,55 @@ fn (mut app App) feishu_runtime_update(name string, runtime FeishuProviderRuntim
 }
 
 fn feishu_runtime_varint_encode(mut out []u8, value u64) {
-	mut current := value
-	for {
-		if (current & ~u64(0x7f)) == 0 {
-			out << u8(current)
-			return
-		}
-		out << u8((current & 0x7f) | 0x80)
-		current >>= 7
-	}
+	feishu.varint_encode(mut out, value)
 }
 
 fn feishu_runtime_encode_field_key(mut out []u8, field_number int, wire_type int) {
-	feishu_runtime_varint_encode(mut out, (u64(field_number) << 3) | u64(wire_type))
+	feishu.encode_field_key(mut out, field_number, wire_type)
 }
 
 fn feishu_runtime_encode_bytes_field(mut out []u8, field_number int, payload []u8) {
-	feishu_runtime_encode_field_key(mut out, field_number, 2)
-	feishu_runtime_varint_encode(mut out, u64(payload.len))
-	out << payload
+	feishu.encode_bytes_field(mut out, field_number, payload)
 }
 
 fn feishu_runtime_encode_string_field(mut out []u8, field_number int, payload string) {
-	feishu_runtime_encode_bytes_field(mut out, field_number, payload.bytes())
+	feishu.encode_string_field(mut out, field_number, payload)
 }
 
 fn feishu_runtime_proto_header_encode(header FeishuRuntimeProtoHeader) []u8 {
-	mut out := []u8{}
-	if header.key != '' {
-		feishu_runtime_encode_string_field(mut out, 1, header.key)
-	}
-	if header.value != '' {
-		feishu_runtime_encode_string_field(mut out, 2, header.value)
-	}
-	return out
+	return feishu.proto_header_encode(header)
 }
 
 fn feishu_runtime_proto_frame_encode(frame FeishuRuntimeProtoFrame) []u8 {
-	mut out := []u8{}
-	if frame.seq_id > 0 {
-		feishu_runtime_encode_field_key(mut out, 1, 0)
-		feishu_runtime_varint_encode(mut out, frame.seq_id)
-	}
-	if frame.log_id > 0 {
-		feishu_runtime_encode_field_key(mut out, 2, 0)
-		feishu_runtime_varint_encode(mut out, frame.log_id)
-	}
-	if frame.service != 0 {
-		feishu_runtime_encode_field_key(mut out, 3, 0)
-		feishu_runtime_varint_encode(mut out, u64(frame.service))
-	}
-	feishu_runtime_encode_field_key(mut out, 4, 0)
-	feishu_runtime_varint_encode(mut out, u64(frame.method))
-
-	for header in frame.headers {
-		encoded := feishu_runtime_proto_header_encode(header)
-		if encoded.len > 0 {
-			feishu_runtime_encode_bytes_field(mut out, 5, encoded)
-		}
-	}
-	if frame.payload_encoding != '' {
-		feishu_runtime_encode_string_field(mut out, 6, frame.payload_encoding)
-	}
-	if frame.payload_type != '' {
-		feishu_runtime_encode_string_field(mut out, 7, frame.payload_type)
-	}
-	if frame.payload.len > 0 {
-		feishu_runtime_encode_bytes_field(mut out, 8, frame.payload)
-	}
-	if frame.log_id_str != '' {
-		feishu_runtime_encode_string_field(mut out, 9, frame.log_id_str)
-	}
-	return out
+	return feishu.proto_frame_encode(frame)
 }
 
 fn feishu_runtime_varint_decode(buf []u8, start int) !(u64, int) {
-	mut value := u64(0)
-	mut shift := 0
-	mut idx := start
-	for idx < buf.len {
-		b := buf[idx]
-		value |= u64(b & 0x7f) << shift
-		idx++
-		if (b & 0x80) == 0 {
-			return value, idx
-		}
-		shift += 7
-		if shift >= 64 {
-			return error('protobuf varint overflow')
-		}
-	}
-	return error('unexpected end of protobuf varint')
+	return feishu.varint_decode(buf, start)
 }
 
 fn feishu_runtime_skip_wire(buf []u8, start int, wire_type int) !int {
-	match wire_type {
-		0 {
-			_, next := feishu_runtime_varint_decode(buf, start)!
-			return next
-		}
-		2 {
-			length, next := feishu_runtime_varint_decode(buf, start)!
-			end := next + int(length)
-			if end > buf.len {
-				return error('protobuf length exceeds payload')
-			}
-			return end
-		}
-		else {
-			return error('unsupported protobuf wire type ${wire_type}')
-		}
-	}
+	return feishu.skip_wire(buf, start, wire_type)
 }
 
 fn feishu_runtime_proto_header_decode(buf []u8) !FeishuRuntimeProtoHeader {
-	mut out := FeishuRuntimeProtoHeader{}
-	mut idx := 0
-	for idx < buf.len {
-		key, next := feishu_runtime_varint_decode(buf, idx)!
-		idx = next
-		field_number := int(key >> 3)
-		wire_type := int(key & 0x07)
-		if wire_type != 2 {
-			idx = feishu_runtime_skip_wire(buf, idx, wire_type)!
-			continue
-		}
-		length, next_len := feishu_runtime_varint_decode(buf, idx)!
-		start := next_len
-		end := start + int(length)
-		if end > buf.len {
-			return error('protobuf header payload truncated')
-		}
-		value := buf[start..end].bytestr()
-		match field_number {
-			1 { out.key = value }
-			2 { out.value = value }
-			else {}
-		}
-
-		idx = end
-	}
-	return out
+	return feishu.proto_header_decode(buf)
 }
 
 fn feishu_runtime_proto_frame_decode(buf []u8) !FeishuRuntimeProtoFrame {
-	mut out := FeishuRuntimeProtoFrame{}
-	mut idx := 0
-	for idx < buf.len {
-		key, next := feishu_runtime_varint_decode(buf, idx)!
-		idx = next
-		field_number := int(key >> 3)
-		wire_type := int(key & 0x07)
-		match field_number {
-			1, 2, 3, 4 {
-				value, next_val := feishu_runtime_varint_decode(buf, idx)!
-				match field_number {
-					1 { out.seq_id = value }
-					2 { out.log_id = value }
-					3 { out.service = i32(value) }
-					4 { out.method = i32(value) }
-					else {}
-				}
-
-				idx = next_val
-			}
-			5, 6, 7, 8, 9 {
-				if wire_type != 2 {
-					return error('unexpected protobuf wire type ${wire_type} for field ${field_number}')
-				}
-				length, next_len := feishu_runtime_varint_decode(buf, idx)!
-				start := next_len
-				end := start + int(length)
-				if end > buf.len {
-					return error('protobuf field exceeds payload')
-				}
-				match field_number {
-					5 {
-						header := feishu_runtime_proto_header_decode(buf[start..end])!
-						out.headers << header
-					}
-					6 {
-						out.payload_encoding = buf[start..end].bytestr()
-					}
-					7 {
-						out.payload_type = buf[start..end].bytestr()
-					}
-					8 {
-						out.payload = buf[start..end].clone()
-					}
-					9 {
-						out.log_id_str = buf[start..end].bytestr()
-					}
-					else {}
-				}
-
-				idx = end
-			}
-			else {
-				idx = feishu_runtime_skip_wire(buf, idx, wire_type)!
-			}
-		}
-	}
-	return out
+	return feishu.proto_frame_decode(buf)
 }
 
 fn feishu_runtime_header_map(headers []FeishuRuntimeProtoHeader) map[string]string {
-	mut out := map[string]string{}
-	for header in headers {
-		if header.key == '' {
-			continue
-		}
-		out[header.key] = header.value
-	}
-	return out
+	return feishu.header_map(headers)
 }
 
 fn feishu_runtime_event_summary(payload string) executor.FeishuRuntimeEventSummary {
-	parsed := json2.decode[json2.Any](payload) or { return executor.FeishuRuntimeEventSummary{} }
-	root := parsed.as_map()
-	header := feishu_runtime_json_map_field(root, 'header')
-	event := feishu_runtime_json_map_field(root, 'event')
-	context := feishu_runtime_json_map_field(root, 'context')
-	operator := feishu_runtime_json_map_field(root, 'operator')
-	message := feishu_runtime_json_map_field(event, 'message')
-	sender := feishu_runtime_json_map_field(event, 'sender')
-	sender_id := feishu_runtime_json_map_field(sender, 'sender_id')
-	mut action := feishu_runtime_json_map_field(event, 'action')
-	if action.len == 0 {
-		action = feishu_runtime_json_map_field(root, 'action')
-	}
-	mut operator_id_type := ''
-	mut operator_id_value := ''
-	for key, value in operator {
-		candidate := value.str()
-		if candidate == '' {
-			continue
-		}
-		operator_id_type = key
-		operator_id_value = candidate
-		break
-	}
-	mut sender_id_type := ''
-	mut sender_id_value := ''
-	for key, value in sender_id {
-		candidate := value.str()
-		if candidate == '' {
-			continue
-		}
-		sender_id_type = key
-		sender_id_value = candidate
-		break
-	}
-	action_value := if action_value_any := action['value'] {
-		action_value_any.str()
-	} else {
-		''
-	}
-	open_message_id := if feishu_runtime_json_field_string(event, 'open_message_id') != '' {
-		feishu_runtime_json_field_string(event, 'open_message_id')
-	} else if feishu_runtime_json_field_string(context, 'open_message_id') != '' {
-		feishu_runtime_json_field_string(context, 'open_message_id')
-	} else {
-		feishu_runtime_json_field_string(action, 'open_message_id')
-	}
-	mut event_kind := 'event'
-	if message.len > 0 || feishu_runtime_json_field_string(message, 'message_id') != '' {
-		event_kind = 'message'
-	}
-	if action.len > 0 || feishu_runtime_json_field_string(action, 'tag') != '' {
-		event_kind = 'action'
-	}
-	mut target_type := ''
-	mut target := ''
-	chat_id := feishu_runtime_json_field_string(message, 'chat_id')
-	if chat_id != '' {
-		target_type = 'chat_id'
-		target = chat_id
-	} else if open_message_id != '' {
-		target_type = 'open_message_id'
-		target = open_message_id
-	}
-	return executor.FeishuRuntimeEventSummary{
-		event_id:          feishu_runtime_json_field_string(header, 'event_id')
-		event_kind:        event_kind
-		event_type:        feishu_runtime_json_field_string(header, 'event_type')
-		message_id:        feishu_runtime_json_field_string(message, 'message_id')
-		message_type:      feishu_runtime_json_field_string(message, 'message_type')
-		chat_id:           chat_id
-		chat_type:         feishu_runtime_json_field_string(message, 'chat_type')
-		target_type:       target_type
-		target:            target
-		open_message_id:   open_message_id
-		root_id:           feishu_runtime_json_field_string(message, 'root_id')
-		parent_id:         feishu_runtime_json_field_string(message, 'parent_id')
-		create_time:       feishu_runtime_json_field_string(message, 'create_time')
-		sender_id:         if sender_id_value != '' { sender_id_value } else { operator_id_value }
-		sender_id_type:    if sender_id_type != '' { sender_id_type } else { operator_id_type }
-		sender_tenant_key: if feishu_runtime_json_field_string(root, 'tenant_key') != '' {
-			feishu_runtime_json_field_string(root, 'tenant_key')
-		} else {
-			feishu_runtime_json_field_string(sender, 'tenant_key')
-		}
-		action_tag:        feishu_runtime_json_field_string(action, 'tag')
-		action_value:      action_value
-		token:             feishu_runtime_json_field_string(root, 'token')
-	}
+	return feishu.event_summary(payload)
 }
 
 fn feishu_runtime_should_dispatch_upstream(summary executor.FeishuRuntimeEventSummary) bool {
-	if summary.event_type == 'im.message.message_read_v1' {
-		return false
-	}
-	return true
+	return feishu.should_dispatch_upstream(summary)
 }
 
 fn (mut app App) feishu_runtime_snapshot() FeishuRuntimeSnapshot {
@@ -1217,112 +725,27 @@ fn (mut app App) feishu_runtime_push_event(name string, snapshot FeishuRuntimeEv
 }
 
 fn feishu_runtime_clone_headers_with_type(frame FeishuRuntimeProtoFrame, next_type string) []FeishuRuntimeProtoHeader {
-	mut out_headers := []FeishuRuntimeProtoHeader{}
-	mut found_type := false
-	for header in frame.headers {
-		if header.key == feishu_runtime_header_type {
-			found_type = true
-			out_headers << FeishuRuntimeProtoHeader{
-				key:   header.key
-				value: next_type
-			}
-			continue
-		}
-		out_headers << FeishuRuntimeProtoHeader{
-			key:   header.key
-			value: header.value
-		}
-	}
-	if !found_type {
-		out_headers << FeishuRuntimeProtoHeader{
-			key:   feishu_runtime_header_type
-			value: next_type
-		}
-	}
-	return out_headers
+	return feishu.clone_headers_with_type(frame, next_type)
 }
 
 fn feishu_runtime_build_pong(frame FeishuRuntimeProtoFrame) FeishuRuntimeProtoFrame {
-	return FeishuRuntimeProtoFrame{
-		seq_id:           frame.seq_id
-		log_id:           frame.log_id
-		service:          frame.service
-		method:           3
-		headers:          feishu_runtime_clone_headers_with_type(frame, feishu_runtime_message_pong)
-		payload_encoding: frame.payload_encoding
-		payload_type:     frame.payload_type
-		payload:          frame.payload.clone()
-		log_id_str:       frame.log_id_str
-	}
+	return feishu.build_pong(frame)
 }
 
 fn feishu_runtime_build_ack(frame FeishuRuntimeProtoFrame, status int, headers map[string]string, data string) FeishuRuntimeProtoFrame {
-	mut out_headers := feishu_runtime_clone_headers_with_type(frame, headers_to_type(frame.headers))
-	mut found_biz_rt := false
-	for header in out_headers {
-		if header.key == feishu_runtime_header_biz_rt {
-			found_biz_rt = true
-		}
-	}
-	if found_biz_rt {
-		for i, header in out_headers {
-			if header.key == feishu_runtime_header_biz_rt {
-				out_headers[i].value = '0'
-			}
-		}
-	} else {
-		out_headers << FeishuRuntimeProtoHeader{
-			key:   feishu_runtime_header_biz_rt
-			value: '0'
-		}
-	}
-	payload := json.encode(FeishuRuntimeWsResponsePayload{
-		code:    if status > 0 { status } else { 200 }
-		headers: headers.clone()
-		data:    data
-	})
-	return FeishuRuntimeProtoFrame{
-		seq_id:           frame.seq_id
-		log_id:           frame.log_id
-		service:          frame.service
-		method:           feishu_runtime_frame_type_data
-		headers:          out_headers
-		payload_encoding: 'json'
-		payload_type:     'application/json'
-		payload:          payload.bytes()
-		log_id_str:       frame.log_id_str
-	}
+	return feishu.build_ack(frame, status, headers, data)
 }
 
 fn headers_to_type(headers []FeishuRuntimeProtoHeader) string {
-	for header in headers {
-		if header.key == feishu_runtime_header_type && header.value.trim_space() != '' {
-			return header.value
-		}
-	}
-	return feishu_runtime_message_data
+	return feishu.headers_to_type(headers)
 }
 
 fn feishu_runtime_ws_url_service_id(ws_url string) i32 {
-	parsed := urllib.parse(ws_url) or { return 0 }
-	service_id := (parsed.query().get('service_id') or { '' }).trim_space()
-	if service_id == '' {
-		return 0
-	}
-	return service_id.int()
+	return feishu.ws_url_service_id(ws_url)
 }
 
 fn feishu_runtime_build_client_ping(service_id i32) FeishuRuntimeProtoFrame {
-	mut headers := []FeishuRuntimeProtoHeader{}
-	headers << FeishuRuntimeProtoHeader{
-		key:   feishu_runtime_header_type
-		value: feishu_runtime_message_ping
-	}
-	return FeishuRuntimeProtoFrame{
-		service: service_id
-		method:  2
-		headers: headers
-	}
+	return feishu.build_client_ping(service_id)
 }
 
 fn (mut app App) feishu_runtime_ping_interval_seconds(instance string) int {
@@ -1800,68 +1223,15 @@ fn (mut app App) feishu_runtime_register_stream_buffer(message_id string, stream
 }
 
 fn feishu_runtime_split_content_runes(content string, limit int) (string, string) {
-	runes := content.runes()
-	if runes.len <= limit {
-		return content, ''
-	}
-	head_runes := runes[..limit]
-	tail_runes := runes[limit..]
-	mut head := head_runes.string()
-	mut tail := tail_runes.string()
-	markers := ['\n\n', '\n### ', '\n## ', '\n- ', '\n* ', '\n1. ', '\n2. ', '\n3. ', '\n• ']
-	for marker in markers {
-		if idx := head.last_index(marker) {
-			if idx > limit / 2 {
-				candidate_head := head[..idx].trim_space()
-				candidate_tail := (head[idx..] + tail).trim_space()
-				if candidate_head != '' && candidate_tail != '' {
-					head = candidate_head
-					tail = candidate_tail
-					break
-				}
-			}
-		}
-	}
-	return head, tail
+	return feishu.split_content_runes(content, limit)
 }
 
 fn feishu_runtime_streaming_preview_markdown(content string) string {
-	trimmed := content.trim_space()
-	if trimmed == '' {
-		return ''
-	}
-	head, tail := feishu_runtime_split_content_runes(trimmed, feishu_stream_buffer_rollover_runes)
-	if tail == '' {
-		return head
-	}
-	note := '\n\n_内容过长，预览已截断，完整结果会在结束时自动分段发送。_'
-	mut preview := head.trim_space()
-	if preview == '' {
-		return note.trim_space()
-	}
-	if (preview + note).runes().len <= feishu_stream_buffer_rollover_runes {
-		return preview + note
-	}
-	note_runes := note.runes().len
-	head_limit := if feishu_stream_buffer_rollover_runes > note_runes {
-		feishu_stream_buffer_rollover_runes - note_runes
-	} else {
-		feishu_stream_buffer_rollover_runes
-	}
-	short_head, _ := feishu_runtime_split_content_runes(preview, head_limit)
-	return short_head.trim_space() + note
+	return feishu.streaming_preview_markdown(content)
 }
 
 fn feishu_runtime_render_final_card(markdown string, template_content string) string {
-	if template_content.trim_space() == '' {
-		return feishu_runtime_interactive_markdown_card(markdown)
-	}
-	escaped_json := json.encode(markdown)
-	escaped := escaped_json[1..escaped_json.len - 1]
-	if template_content.contains('{{content}}') {
-		return template_content.replace('{{content}}', escaped)
-	}
-	return template_content
+	return feishu.render_final_card(markdown, template_content)
 }
 
 fn (mut app App) feishu_runtime_send_followup_segment(buf FeishuStreamBuffer, markdown string, finish bool,
