@@ -399,27 +399,11 @@ fn (app &App) feishu_runtime_bridge_proxy_only() bool {
 }
 
 fn (app &App) feishu_runtime_default_app_name() string {
-	if 'main' in app.feishu.apps {
-		return 'main'
-	}
-	mut names := []string{}
-	for name in app.feishu.apps.keys() {
-		names << name
-	}
-	names.sort()
-	return if names.len > 0 { names[0] } else { '' }
+	return app.feishu.default_app_name()
 }
 
 fn (app &App) feishu_runtime_app_names() []string {
-	mut names := []string{}
-	for name, cfg in app.feishu.apps {
-		if cfg.app_id.trim_space() == '' && cfg.app_secret.trim_space() == '' {
-			continue
-		}
-		names << name
-	}
-	names.sort()
-	return names
+	return app.feishu.app_names()
 }
 
 fn (app &App) feishu_runtime_resolve_app_name(raw string) !string {
@@ -473,22 +457,11 @@ fn feishu_runtime_callback_decrypt_payload(encrypt_key string, payload string) !
 }
 
 fn (mut app App) feishu_runtime_ensure(name string) FeishuProviderRuntime {
-	app.feishu.mu.@lock()
-	defer {
-		app.feishu.mu.unlock()
-	}
-	if runtime := app.feishu.runtime[name] {
-		return runtime
-	}
-	runtime := new_feishu_provider_runtime(name)
-	app.feishu.runtime[name] = runtime
-	return runtime
+	return app.feishu.ensure(name)
 }
 
 fn (mut app App) feishu_runtime_update(name string, runtime FeishuProviderRuntime) {
-	app.feishu.mu.@lock()
-	app.feishu.runtime[name] = runtime
-	app.feishu.mu.unlock()
+	app.feishu.update_runtime(name, runtime)
 }
 
 fn feishu_runtime_varint_encode(mut out []u8, value u64) {
@@ -682,46 +655,31 @@ fn (mut app App) feishu_runtime_totals() (i64, i64, i64, i64, i64, i64) {
 }
 
 fn (mut app App) feishu_runtime_note_connecting(name string) {
-	mut runtime := app.feishu_runtime_ensure(name)
-	runtime.note_connecting()
-	app.feishu_runtime_update(name, runtime)
+	app.feishu.note_connecting(name)
 }
 
 fn (mut app App) feishu_runtime_note_connected(name string, ws_url string) {
-	mut runtime := app.feishu_runtime_ensure(name)
-	runtime.note_connected(ws_url)
-	app.feishu_runtime_update(name, runtime)
+	app.feishu.note_connected(name, ws_url)
 }
 
 fn (mut app App) feishu_runtime_note_disconnected(name string, reason string) {
-	log.error('[feishu] ❌ disconnected: name=${name} reason=${reason}')
-	mut runtime := app.feishu_runtime_ensure(name)
-	runtime.note_disconnected(reason)
-	app.feishu_runtime_update(name, runtime)
+	app.feishu.note_disconnected(name, reason)
 }
 
 fn (mut app App) feishu_runtime_note_frame(name string) {
-	mut runtime := app.feishu_runtime_ensure(name)
-	runtime.note_frame()
-	app.feishu_runtime_update(name, runtime)
+	app.feishu.note_frame(name)
 }
 
 fn (mut app App) feishu_runtime_note_ack(name string) {
-	mut runtime := app.feishu_runtime_ensure(name)
-	runtime.note_ack()
-	app.feishu_runtime_update(name, runtime)
+	app.feishu.note_ack(name)
 }
 
 fn (mut app App) feishu_runtime_note_send(name string, ok bool) {
-	mut runtime := app.feishu_runtime_ensure(name)
-	runtime.note_send(ok)
-	app.feishu_runtime_update(name, runtime)
+	app.feishu.note_send(name, ok)
 }
 
 fn (mut app App) feishu_runtime_push_event(name string, snapshot FeishuRuntimeEventSnapshot) {
-	mut runtime := app.feishu_runtime_ensure(name)
-	runtime.push_event(snapshot, app.feishu.recent_event_limit)
-	app.feishu_runtime_update(name, runtime)
+	app.feishu.push_event(name, snapshot)
 }
 
 fn feishu_runtime_clone_headers_with_type(frame FeishuRuntimeProtoFrame, next_type string) []FeishuRuntimeProtoHeader {
@@ -749,20 +707,11 @@ fn feishu_runtime_build_client_ping(service_id i32) FeishuRuntimeProtoFrame {
 }
 
 fn (mut app App) feishu_runtime_ping_interval_seconds(instance string) int {
-	app.feishu.mu.@lock()
-	defer {
-		app.feishu.mu.unlock()
-	}
-	if runtime := app.feishu.runtime[instance] {
-		return runtime.ping_interval_seconds_value()
-	}
-	return 5
+	return app.feishu.ping_interval_seconds(instance)
 }
 
 fn (mut app App) feishu_runtime_note_client_config(instance string, cfg FeishuRuntimeClientConfig) {
-	mut runtime := app.feishu_runtime_ensure(instance)
-	runtime.note_client_config(cfg)
-	app.feishu_runtime_update(instance, runtime)
+	app.feishu.note_client_config(instance, cfg)
 }
 
 fn feishu_runtime_ping_loop(mut app App, instance string, ws_url string, mut ws websocket.Client) {
