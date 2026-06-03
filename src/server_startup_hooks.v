@@ -5,8 +5,8 @@ import os
 
 fn initialize_app_runtime(mut app App, internal_admin_socket string) {
 	app.worker_backend.env['VHTTPD_INTERNAL_ADMIN_SOCKET'] = internal_admin_socket
-	if app.db_runtime.enabled && app.db_runtime.socket.trim_space() != '' {
-		app.worker_backend.env['VHTTPD_DB_SOCKET'] = app.db_runtime.socket
+	if app.codex.db_runtime.enabled && app.codex.db_runtime.socket.trim_space() != '' {
+		app.worker_backend.env['VHTTPD_DB_SOCKET'] = app.codex.db_runtime.socket
 	}
 	app.feishu_card_bridge_apply_env_fallbacks()
 	go run_internal_admin_server(mut app, internal_admin_socket)
@@ -113,8 +113,8 @@ fn log_server_runtime_endpoints(app &App, host string, port int) {
 	} else {
 		log.info('[vhttpd] Assets: disabled')
 	}
-	if app.db_runtime.enabled {
-		log.info('[vhttpd] DB Upstream: unix://${app.db_runtime.socket} (${app.db_runtime.driver}, db=${app.db_runtime.database}, pool=${app.db_runtime.pool_size})')
+	if app.codex.db_runtime.enabled {
+		log.info('[vhttpd] DB Upstream: unix://${app.codex.db_runtime.socket} (${app.codex.db_runtime.driver}, db=${app.codex.db_runtime.database}, pool=${app.codex.db_runtime.pool_size})')
 	} else {
 		log.info('[vhttpd] DB Upstream: disabled')
 	}

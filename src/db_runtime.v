@@ -158,21 +158,21 @@ fn build_db_runtime(settings DbRuntimeSettings) DbProviderRuntime {
 
 pub fn (mut app App) db_runtime_snapshot() string {
 	app.mu.@lock()
-	enabled := app.db_runtime.enabled
-	socket := app.db_runtime.socket
-	driver := app.db_runtime.driver
-	host := app.db_runtime.host
-	port := app.db_runtime.port
-	database := app.db_runtime.database
-	pool_size := app.db_runtime.pool_size
-	pool_ready := app.db_runtime.pool_ready
-	started := app.db_runtime.started
-	started_at_unix := app.db_runtime.started_at_unix
-	last_error := app.db_runtime.last_error
-	total_queries := app.db_runtime.total_queries
-	total_executes := app.db_runtime.total_executes
-	failed_queries := app.db_runtime.failed_queries
-	active_transactions := app.db_runtime.active_transactions
+	enabled := app.codex.db_runtime.enabled
+	socket := app.codex.db_runtime.socket
+	driver := app.codex.db_runtime.driver
+	host := app.codex.db_runtime.host
+	port := app.codex.db_runtime.port
+	database := app.codex.db_runtime.database
+	pool_size := app.codex.db_runtime.pool_size
+	pool_ready := app.codex.db_runtime.pool_ready
+	started := app.codex.db_runtime.started
+	started_at_unix := app.codex.db_runtime.started_at_unix
+	last_error := app.codex.db_runtime.last_error
+	total_queries := app.codex.db_runtime.total_queries
+	total_executes := app.codex.db_runtime.total_executes
+	failed_queries := app.codex.db_runtime.failed_queries
+	active_transactions := app.codex.db_runtime.active_transactions
 	app.mu.unlock()
 	return json.encode(DbRuntimeSnapshot{
 		enabled:             enabled
@@ -201,13 +201,13 @@ fn (mut app App) db_runtime_finalize_tx_session(session_id string, mut conn DbSe
 	_ = reusable
 	_ = conn
 	app.mu.@lock()
-	app.db_runtime.tx_sessions.delete(session_id)
-	app.db_runtime.active_transactions = app.db_runtime.tx_sessions.len
+	app.codex.db_runtime.tx_sessions.delete(session_id)
+	app.codex.db_runtime.active_transactions = app.codex.db_runtime.tx_sessions.len
 	app.mu.unlock()
 }
 
 fn (mut app App) db_runtime_dispatch(req DbUpstreamRequest) DbUpstreamResponse {
-	driver := normalize_db_driver_name(app.db_runtime.driver)
+	driver := normalize_db_driver_name(app.codex.db_runtime.driver)
 	if req.mode != 'db' {
 		return DbUpstreamResponse{
 			ok:     false
@@ -225,8 +225,8 @@ fn (mut app App) db_runtime_dispatch(req DbUpstreamRequest) DbUpstreamResponse {
 fn run_db_runtime_server(mut app App, socket_path string) {
 	_ = socket_path
 	app.mu.@lock()
-	app.db_runtime.started = false
-	app.db_runtime.last_error = 'db_not_compiled'
+	app.codex.db_runtime.started = false
+	app.codex.db_runtime.last_error = 'db_not_compiled'
 	app.mu.unlock()
 	app.emit('db.error', {
 		'socket': socket_path

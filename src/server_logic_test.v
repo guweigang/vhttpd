@@ -1404,10 +1404,10 @@ fn test_build_app_runtime_projects_executor_plan_into_app_state() {
 	assert app.feishu_enabled
 	assert app.feishu_open_base_url == 'https://open.feishu.test'
 	assert app.feishu_apps['main'].app_id == 'app-1'
-	assert app.codex_runtime.enabled
-	assert app.codex_runtime.model == 'gpt-5.4'
-	assert app.codex_runtime.flush_interval_ms == 3333
-	assert app.ollama_enabled
+	assert app.codex.runtime.enabled
+	assert app.codex.runtime.model == 'gpt-5.4'
+	assert app.codex.runtime.flush_interval_ms == 3333
+	assert app.codex.ollama_enabled
 }
 
 fn test_prepare_server_runtime_files_creates_parent_dirs_and_pid_file() {

@@ -111,28 +111,30 @@ fn build_app_runtime(provider_settings ProviderRuntimeSettings, executor_plan Lo
 			registry: map[string]Provider{}
 			specs:    map[string]ProviderSpec{}
 		}
-		ollama_enabled:                           provider_settings.ollama_enabled
-		db_runtime:                               build_db_runtime(provider_settings.db)
+		codex:                                    CodexState{
+			ollama_enabled:  provider_settings.ollama_enabled
+			db_runtime:      build_db_runtime(provider_settings.db)
+			runtime:         CodexProviderRuntime{
+				enabled:             provider_settings.codex.enabled
+				url:                 provider_settings.codex.url
+				model:               provider_settings.codex.model
+				effort:              provider_settings.codex.effort
+				cwd:                 provider_settings.codex.cwd
+				approval_policy:     provider_settings.codex.approval_policy
+				sandbox:             provider_settings.codex.sandbox
+				reconnect_delay_ms:  provider_settings.codex.reconnect_delay_ms
+				flush_interval_ms:   provider_settings.codex.flush_interval_ms
+				pending_rpcs:        map[int]CodexPendingRpc{}
+				stream_map:          map[string][]CodexTarget{}
+				err_bursts:          map[string][]string{}
+				err_pending_flushes: map[string]bool{}
+				thread_stream_map:   map[string]string{}
+			}
+			instances:       map[string]CodexProviderRuntime{}
+		}
 		fixture_websocket_runtime:                map[string]FixtureWebSocketUpstreamRuntime{}
 		websocket_upstream_recent_activities:     []WebSocketUpstreamActivitySnapshot{}
 		provider_instance_specs:                  map[string]ProviderInstanceSpec{}
-		codex_runtime:                            CodexProviderRuntime{
-			enabled:             provider_settings.codex.enabled
-			url:                 provider_settings.codex.url
-			model:               provider_settings.codex.model
-			effort:              provider_settings.codex.effort
-			cwd:                 provider_settings.codex.cwd
-			approval_policy:     provider_settings.codex.approval_policy
-			sandbox:             provider_settings.codex.sandbox
-			reconnect_delay_ms:  provider_settings.codex.reconnect_delay_ms
-			flush_interval_ms:   provider_settings.codex.flush_interval_ms
-			pending_rpcs:        map[int]CodexPendingRpc{}
-			stream_map:          map[string][]CodexTarget{}
-			err_bursts:          map[string][]string{}
-			err_pending_flushes: map[string]bool{}
-			thread_stream_map:   map[string]string{}
-		}
-		codex_instances:                          map[string]CodexProviderRuntime{}
 		feishu_buffers:                           map[string]FeishuStreamBuffer{}
 		feishu_card_bridge_enabled_flag:          provider_settings.bridge.enabled
 		feishu_card_bridge_ws_url:                provider_settings.bridge.ws_url

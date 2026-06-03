@@ -481,9 +481,11 @@ fn test_command_executor_handles_provider_instance_upsert() {
 
 fn test_codex_handler_session_bind_thread_updates_runtime_binding() {
 	mut app := &App{
-		codex_runtime: CodexProviderRuntime{
-			thread_stream_map: map[string]string{}
-			stream_map:        map[string][]CodexTarget{}
+		codex: CodexState{
+			runtime: CodexProviderRuntime{
+				thread_stream_map: map[string]string{}
+				stream_map:        map[string][]CodexTarget{}
+			}
 		}
 	}
 	mut handler := CodexCommandHandler.new(mut app)
@@ -500,18 +502,20 @@ fn test_codex_handler_session_bind_thread_updates_runtime_binding() {
 	assert handled == true
 	assert err == ''
 	assert snapshot.status == 'bound'
-	assert app.codex_runtime.thread_id == 'thread_001'
-	assert app.codex_runtime.thread_stream_map['thread_001'] == 'codex:task_001'
+	assert app.codex.runtime.thread_id == 'thread_001'
+	assert app.codex.runtime.thread_stream_map['thread_001'] == 'codex:task_001'
 }
 
 fn test_codex_handler_session_clear_thread_removes_runtime_binding() {
 	mut app := &App{
-		codex_runtime: CodexProviderRuntime{
-			thread_id:         'thread_001'
-			thread_stream_map: {
-				'thread_001': 'codex:task_001'
+		codex: CodexState{
+			runtime: CodexProviderRuntime{
+				thread_id:         'thread_001'
+				thread_stream_map: {
+					'thread_001': 'codex:task_001'
+				}
+				stream_map: map[string][]CodexTarget{}
 			}
-			stream_map: map[string][]CodexTarget{}
 		}
 	}
 	mut handler := CodexCommandHandler.new(mut app)
@@ -527,15 +531,17 @@ fn test_codex_handler_session_clear_thread_removes_runtime_binding() {
 	assert handled == true
 	assert err == ''
 	assert snapshot.status == 'cleared'
-	assert app.codex_runtime.thread_id == ''
-	assert 'thread_001' !in app.codex_runtime.thread_stream_map
+	assert app.codex.runtime.thread_id == ''
+	assert 'thread_001' !in app.codex.runtime.thread_stream_map
 }
 
 fn test_feishu_handler_session_bind_message_registers_stream_target_and_buffer() {
 	mut app := &App{
-		codex_runtime: CodexProviderRuntime{
-			thread_stream_map: map[string]string{}
-			stream_map:        map[string][]CodexTarget{}
+		codex: CodexState{
+			runtime: CodexProviderRuntime{
+				thread_stream_map: map[string]string{}
+				stream_map:        map[string][]CodexTarget{}
+			}
 		}
 		feishu_buffers: map[string]FeishuStreamBuffer{}
 	}
@@ -555,23 +561,25 @@ fn test_feishu_handler_session_bind_message_registers_stream_target_and_buffer()
 	assert err == ''
 	assert snapshot.status == 'bound'
 	assert snapshot.message_id == 'om_reply_001'
-	assert app.codex_runtime.stream_map['codex:task_002'].len == 1
-	assert app.codex_runtime.stream_map['codex:task_002'][0].message_id == 'om_reply_001'
+	assert app.codex.runtime.stream_map['codex:task_002'].len == 1
+	assert app.codex.runtime.stream_map['codex:task_002'][0].message_id == 'om_reply_001'
 	assert 'om_reply_001' in app.feishu_buffers
 	assert app.feishu_buffers['om_reply_001'].stream_id == 'codex:task_002'
 }
 
 fn test_feishu_handler_session_clear_message_removes_buffer_and_stream_target() {
 	mut app := &App{
-		codex_runtime: CodexProviderRuntime{
-			thread_stream_map: map[string]string{}
-			stream_map: {
-				'codex:task_003': [
-					CodexTarget{
-						platform:   'feishu'
-						message_id: 'om_reply_002'
-					},
-				]
+		codex: CodexState{
+			runtime: CodexProviderRuntime{
+				thread_stream_map: map[string]string{}
+				stream_map: {
+					'codex:task_003': [
+						CodexTarget{
+							platform:   'feishu'
+							message_id: 'om_reply_002'
+						},
+					]
+				}
 			}
 		}
 		feishu_buffers: {
@@ -596,24 +604,26 @@ fn test_feishu_handler_session_clear_message_removes_buffer_and_stream_target() 
 	assert err == ''
 	assert snapshot.status == 'cleared'
 	assert 'om_reply_002' !in app.feishu_buffers
-	assert 'codex:task_003' !in app.codex_runtime.stream_map
+	assert 'codex:task_003' !in app.codex.runtime.stream_map
 }
 
 fn test_feishu_handler_session_clear_message_removes_buffer_chain() {
 	mut app := &App{
-		codex_runtime: CodexProviderRuntime{
-			thread_stream_map: map[string]string{}
-			stream_map: {
-				'codex:task_chain': [
-					CodexTarget{
-						platform:   'feishu'
-						message_id: 'om_chain_1'
-					},
-					CodexTarget{
-						platform:   'feishu'
-						message_id: 'om_chain_2'
-					},
-				]
+		codex: CodexState{
+			runtime: CodexProviderRuntime{
+				thread_stream_map: map[string]string{}
+				stream_map: {
+					'codex:task_chain': [
+						CodexTarget{
+							platform:   'feishu'
+							message_id: 'om_chain_1'
+						},
+						CodexTarget{
+							platform:   'feishu'
+							message_id: 'om_chain_2'
+						},
+					]
+				}
 			}
 		}
 		feishu_buffers: {
@@ -643,24 +653,26 @@ fn test_feishu_handler_session_clear_message_removes_buffer_chain() {
 	assert snapshot.status == 'cleared'
 	assert 'om_chain_1' !in app.feishu_buffers
 	assert 'om_chain_2' !in app.feishu_buffers
-	assert 'codex:task_chain' !in app.codex_runtime.stream_map
+	assert 'codex:task_chain' !in app.codex.runtime.stream_map
 }
 
 fn test_feishu_handler_session_clear_stream_id_removes_all_stream_buffers() {
 	mut app := &App{
-		codex_runtime: CodexProviderRuntime{
-			thread_stream_map: map[string]string{}
-			stream_map: {
-				'codex:task_stream_clear': [
-					CodexTarget{
-						platform:   'feishu'
-						message_id: 'om_stream_1'
-					},
-					CodexTarget{
-						platform:   'feishu'
-						message_id: 'om_stream_2'
-					},
-				]
+		codex: CodexState{
+			runtime: CodexProviderRuntime{
+				thread_stream_map: map[string]string{}
+				stream_map: {
+					'codex:task_stream_clear': [
+						CodexTarget{
+							platform:   'feishu'
+							message_id: 'om_stream_1'
+						},
+						CodexTarget{
+							platform:   'feishu'
+							message_id: 'om_stream_2'
+						},
+					]
+				}
 			}
 		}
 		feishu_buffers: {
@@ -693,5 +705,5 @@ fn test_feishu_handler_session_clear_stream_id_removes_all_stream_buffers() {
 	assert 'om_stream_1' !in app.feishu_buffers
 	assert 'om_stream_2' !in app.feishu_buffers
 	assert 'om_other' in app.feishu_buffers
-	assert 'codex:task_stream_clear' !in app.codex_runtime.stream_map
+	assert 'codex:task_stream_clear' !in app.codex.runtime.stream_map
 }

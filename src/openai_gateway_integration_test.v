@@ -283,7 +283,9 @@ fn openai_integration_start_gateway(port int, upstream_port int, plugin_file str
 		}
 		fixture_websocket_runtime:  map[string]FixtureWebSocketUpstreamRuntime{}
 		provider_instance_specs:    map[string]ProviderInstanceSpec{}
-		codex_instances:            map[string]CodexProviderRuntime{}
+		codex:                      CodexState{
+			instances: map[string]CodexProviderRuntime{}
+		}
 		feishu_buffers:             map[string]FeishuStreamBuffer{}
 	}
 	veb.run_at[App, Context](mut app,

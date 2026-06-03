@@ -101,11 +101,7 @@ pub mut:
 	websocket_upstream_recent_activities        []WebSocketUpstreamActivitySnapshot
 	provider_instance_specs                     map[string]ProviderInstanceSpec = map[string]ProviderInstanceSpec{}
 	// codex upstream
-	codex_mu                         sync.Mutex
-	codex_runtime                    CodexProviderRuntime
-	codex_instances                  map[string]CodexProviderRuntime = map[string]CodexProviderRuntime{}
-	ollama_enabled                   bool
-	db_runtime                       DbProviderRuntime
+	codex                            CodexState
 	feishu_buffers                   map[string]FeishuStreamBuffer
 	feishu_http_lane                 shared FeishuHttpLane
 	feishu_control_http_lane         shared FeishuControlHttpLane
@@ -1457,9 +1453,9 @@ pub fn (mut app App) provider_runtime_upstream_provider_names() []string {
 pub fn (app &App) provider_bootstrap_enabled(name string) bool {
 	return match name {
 		'feishu' { app.feishu_runtime_enabled() }
-		'codex' { app.codex_runtime.enabled || app.provider_instance_list('codex').len > 0 }
-		'ollama' { app.ollama_enabled }
-		'db' { app.db_runtime.enabled && db_runtime_compiled() }
+		'codex' { app.codex.runtime.enabled || app.provider_instance_list('codex').len > 0 }
+		'ollama' { app.codex.ollama_enabled }
+		'db' { app.codex.db_runtime.enabled && db_runtime_compiled() }
 		else { false }
 	}
 }

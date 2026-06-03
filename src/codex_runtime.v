@@ -412,22 +412,22 @@ fn codex_runtime_build_instance_from_base(base CodexProviderRuntime, instance st
 
 fn (mut app App) codex_runtime_ensure_instance(instance string) CodexProviderRuntime {
 	resolved := codex_runtime_instance_name(instance)
-	app.codex_mu.@lock()
+	app.codex.mu.@lock()
 	defer {
-		app.codex_mu.unlock()
+		app.codex.mu.unlock()
 	}
 	if resolved == 'main' {
-		if app.codex_runtime.instance == '' {
-			app.codex_runtime.instance = 'main'
+		if app.codex.runtime.instance == '' {
+			app.codex.runtime.instance = 'main'
 		}
-		return app.codex_runtime
+		return app.codex.runtime
 	}
-	if resolved in app.codex_instances {
-		return app.codex_instances[resolved] or {
-			codex_runtime_build_instance_from_base(app.codex_runtime, resolved)
+	if resolved in app.codex.instances {
+		return app.codex.instances[resolved] or {
+			codex_runtime_build_instance_from_base(app.codex.runtime, resolved)
 		}
 	}
-	mut next := codex_runtime_build_instance_from_base(app.codex_runtime, resolved)
+	mut next := codex_runtime_build_instance_from_base(app.codex.runtime, resolved)
 	if spec := app.provider_instance_get('codex', resolved) {
 		if spec.config_json.trim_space() != '' {
 			cfg := json.decode(config.CodexConfig, spec.config_json) or { config.CodexConfig{} }
@@ -457,49 +457,49 @@ fn (mut app App) codex_runtime_ensure_instance(instance string) CodexProviderRun
 			}
 		}
 	}
-	app.codex_instances[resolved] = next
+	app.codex.instances[resolved] = next
 	return next
 }
 
 fn (mut app App) codex_runtime_snapshot(instance string) CodexProviderRuntime {
 	resolved := codex_runtime_instance_name(instance)
-	app.codex_mu.@lock()
+	app.codex.mu.@lock()
 	defer {
-		app.codex_mu.unlock()
+		app.codex.mu.unlock()
 	}
 	if resolved == 'main' {
-		if app.codex_runtime.instance == '' {
-			app.codex_runtime.instance = 'main'
+		if app.codex.runtime.instance == '' {
+			app.codex.runtime.instance = 'main'
 		}
-		return app.codex_runtime
+		return app.codex.runtime
 	}
-	if resolved in app.codex_instances {
-		return app.codex_instances[resolved] or {
-			codex_runtime_build_instance_from_base(app.codex_runtime, resolved)
+	if resolved in app.codex.instances {
+		return app.codex.instances[resolved] or {
+			codex_runtime_build_instance_from_base(app.codex.runtime, resolved)
 		}
 	}
-	return codex_runtime_build_instance_from_base(app.codex_runtime, resolved)
+	return codex_runtime_build_instance_from_base(app.codex.runtime, resolved)
 }
 
 fn (mut app App) codex_runtime_update(instance string, rt CodexProviderRuntime) {
 	resolved := codex_runtime_instance_name(instance)
-	app.codex_mu.@lock()
+	app.codex.mu.@lock()
 	defer {
-		app.codex_mu.unlock()
+		app.codex.mu.unlock()
 	}
 	if resolved == 'main' {
-		app.codex_runtime = rt
-		if app.codex_runtime.instance == '' {
-			app.codex_runtime.instance = 'main'
+		app.codex.runtime = rt
+		if app.codex.runtime.instance == '' {
+			app.codex.runtime.instance = 'main'
 		}
 		return
 	}
-	app.codex_instances[resolved] = rt
+	app.codex.instances[resolved] = rt
 }
 
 fn (app &App) codex_runtime_known_instances() []string {
 	mut names := ['main']
-	for name, _ in app.codex_instances {
+	for name, _ in app.codex.instances {
 		if name !in names {
 			names << name
 		}

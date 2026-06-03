@@ -104,21 +104,21 @@ pub fn (p DbProvider) init(mut app App) ! {
 }
 
 pub fn (p DbProvider) start(mut app App) ! {
-	if !app.db_runtime.enabled || app.db_runtime.socket.trim_space() == '' {
+	if !app.codex.db_runtime.enabled || app.codex.db_runtime.socket.trim_space() == '' {
 		return
 	}
-	go run_db_runtime_server(mut app, app.db_runtime.socket)
+	go run_db_runtime_server(mut app, app.codex.db_runtime.socket)
 	return
 }
 
 pub fn (p DbProvider) stop(mut app App) ! {
 	app.mu.@lock()
-	app.db_runtime.stop_requested = true
-	mut listener := app.db_runtime.listener
-	app.db_runtime.started = false
+	app.codex.db_runtime.stop_requested = true
+	mut listener := app.codex.db_runtime.listener
+	app.codex.db_runtime.started = false
 	app.mu.unlock()
 	if !isnil(listener) {
-		listener.close() or {}
+		listener.close()!
 	}
 	return
 }
