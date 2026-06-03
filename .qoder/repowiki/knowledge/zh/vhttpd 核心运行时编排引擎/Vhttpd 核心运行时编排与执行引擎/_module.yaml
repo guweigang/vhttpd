@@ -1,0 +1,9 @@
+schema_version: 1
+module_path: core_runtime/server_orchestration
+title: Vhttpd 核心运行时编排与执行引擎
+scope:
+    - src/
+source_files: []
+depends_on: []
+related_to:
+    - path: core_runtime/provider_registry

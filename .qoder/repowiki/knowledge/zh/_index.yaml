@@ -1,0 +1,224 @@
+# 知识卡导出索引文件
+schema_version: 1
+locale: zh-CN
+branch: refactor/v2
+exported_at: "2026-06-03T12:04:02Z"
+modules:
+    "":
+        dir_name: vhttpd 多模态应用运行时编排
+        title: vhttpd 多模态应用运行时编排
+        scope:
+            - README.md
+            - REPO_SPLIT_NOTES.md
+            - TODO_REFACTOR.md
+            - .gitignore
+            - Makefile
+            - v.mod
+            - vhttpd.toml
+            - bench/
+            - scripts/
+            - tests/
+            - tools/
+            - dbsrc/
+            - .github/
+            - .omo/
+            - .env.example
+            - test_bin
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    core_runtime:
+        dir_name: vhttpd 核心运行时编排引擎
+        title: vhttpd 核心运行时编排引擎
+        scope:
+            - src/
+        source_files: []
+        children:
+            - core_runtime/config_logging
+            - core_runtime/websocket
+            - core_runtime/feishu
+            - core_runtime/server_orchestration
+            - core_runtime/openai
+            - core_runtime/worker_backend
+            - core_runtime/command_kernel
+            - core_runtime/jsonutils_state_store
+            - core_runtime/executor
+            - core_runtime/provider_registry
+            - core_runtime/transport
+        depends_on: []
+        related_to: []
+    core_runtime/command_kernel:
+        dir_name: 命令内核与执行引擎
+        title: 命令内核与执行引擎
+        scope:
+            - src/command.v
+            - src/command_executor.v
+            - src/command_executor_test.v
+            - src/command_handlers.v
+            - src/command_test.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: core_runtime/openai
+    core_runtime/config_logging:
+        dir_name: 配置加载与运行时日志初始化
+        title: 配置加载与运行时日志初始化
+        scope:
+            - src/config/
+            - src/logging/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    core_runtime/executor:
+        dir_name: 进程内 VJSX 执行引擎
+        title: 进程内 VJSX 执行引擎
+        scope:
+            - src/executor/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: core_runtime/jsonutils_state_store
+    core_runtime/feishu:
+        dir_name: 飞书卡片桥接与运行时集成
+        title: 飞书卡片桥接与运行时集成
+        scope:
+            - src/feishu_card_bridge.v
+            - src/feishu_runtime.v
+            - src/feishu_runtime_test.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: core_runtime/websocket
+    core_runtime/jsonutils_state_store:
+        dir_name: JSON工具与内存状态存储
+        title: JSON工具与内存状态存储
+        scope:
+            - src/jsonutils/
+            - src/state_store/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: core_runtime/executor
+    core_runtime/openai:
+        dir_name: OpenAI 网关集成与运行时
+        title: OpenAI 网关集成与运行时
+        scope:
+            - src/openai_gateway_integration_test.v
+            - src/openai_runtime.v
+            - src/openai_runtime_test.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: core_runtime/command_kernel
+    core_runtime/provider_registry:
+        dir_name: 上游提供者注册与生命周期管理
+        title: 上游提供者注册与生命周期管理
+        scope:
+            - src/provider_bootstrap.v
+            - src/provider_bootstrap_test.v
+            - src/provider_config.v
+            - src/provider_instance_runtime.v
+            - src/provider_registry.v
+            - src/provider_registry_test.v
+            - src/provider_spec.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: core_runtime/server_orchestration
+    core_runtime/server_orchestration:
+        dir_name: Vhttpd 核心运行时编排与执行引擎
+        title: Vhttpd 核心运行时编排与执行引擎
+        scope:
+            - src/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: core_runtime/provider_registry
+    core_runtime/transport:
+        dir_name: 运行时传输与会话管理
+        title: 运行时传输与会话管理
+        scope:
+            - src/transport/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: core_runtime/worker_backend
+    core_runtime/websocket:
+        dir_name: WebSocket 运行时与上游桥接
+        title: WebSocket 运行时与上游桥接
+        scope:
+            - src/websocket_binary_support_test.v
+            - src/websocket_dispatch_lifecycle_test.v
+            - src/websocket_runtime.v
+            - src/websocket_upstream_runtime.v
+            - src/websocket_upstream_runtime_test.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: core_runtime/feishu
+    core_runtime/worker_backend:
+        dir_name: Worker Backend Runtime & Transport
+        title: Worker Backend Runtime & Transport
+        scope:
+            - src/worker_backend_dispatch.v
+            - src/worker_backend_pool.v
+            - src/worker_backend_queue.v
+            - src/worker_backend_runtime.v
+            - src/worker_backend_runtime_test.v
+            - src/worker_backend_transport.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: core_runtime/transport
+            - path: php_sdk
+    deploy_config:
+        dir_name: 部署配置与系统服务集成
+        title: 部署配置与系统服务集成
+        scope:
+            - deploy/
+            - config/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    documentation:
+        dir_name: vhttpd 架构与运行时文档体系
+        title: vhttpd 架构与运行时文档体系
+        scope:
+            - docs/
+            - articles/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    examples:
+        dir_name: CodexBot 集成示例与协议适配层
+        title: CodexBot 集成示例与协议适配层
+        scope:
+            - examples/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    php_sdk:
+        dir_name: VHttpd PHP 运行时与集成 SDK
+        title: VHttpd PHP 运行时与集成 SDK
+        scope:
+            - php/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: core_runtime/worker_backend

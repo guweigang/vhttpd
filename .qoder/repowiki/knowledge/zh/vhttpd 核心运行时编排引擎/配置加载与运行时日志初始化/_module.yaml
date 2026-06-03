@@ -1,0 +1,9 @@
+schema_version: 1
+module_path: core_runtime/config_logging
+title: 配置加载与运行时日志初始化
+scope:
+    - src/config/
+    - src/logging/
+source_files: []
+depends_on: []
+related_to: []

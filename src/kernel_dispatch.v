@@ -1,71 +1,34 @@
 module main
 import transport
+import executor
 
-pub enum KernelDispatchKind {
-	stream
-	mcp
-	websocket_upstream
-	websocket_dispatch
-}
+type KernelDispatchKind = executor.KernelDispatchKind
 
-pub struct KernelDispatchEnvelope {
-pub:
-	kind    KernelDispatchKind
-	context DispatchContext
-}
+type KernelDispatchEnvelope = executor.KernelDispatchEnvelope
 
-pub struct KernelDispatchTransportFailure {
-pub:
-	status      int
-	error_class string
-}
+type KernelDispatchTransportFailure = executor.KernelDispatchTransportFailure
 
-pub struct KernelWebSocketUpstreamDispatchOutcome {
-pub:
-	response          transport.WorkerWebSocketUpstreamDispatchResponse
-	command_snapshots []WebSocketUpstreamCommandActivity
-	command_error     string
-}
+type KernelWebSocketUpstreamDispatchOutcome = executor.KernelWebSocketUpstreamDispatchOutcome
 
-pub struct KernelMcpDispatchOutcome {
-pub:
-	response          transport.WorkerMcpDispatchResponse
-	command_snapshots []WebSocketUpstreamCommandActivity
-	command_error     string
-}
+type KernelMcpDispatchOutcome = executor.KernelMcpDispatchOutcome
 
-pub struct KernelStreamDispatchFailure {
-pub:
-	error       string
-	error_class string
-}
+type KernelStreamDispatchFailure = executor.KernelStreamDispatchFailure
 
+// Factory methods forwarded to executor module
 pub fn KernelDispatchEnvelope.from_stream_dispatch(req transport.StreamDispatchRequest) KernelDispatchEnvelope {
-	return KernelDispatchEnvelope{
-		kind:    .stream
-		context: DispatchContext.from_stream_dispatch(req)
-	}
+	return executor.KernelDispatchEnvelope.from_stream_dispatch(req)
 }
 
 pub fn KernelDispatchEnvelope.from_mcp_dispatch(req transport.WorkerMcpDispatchRequest) KernelDispatchEnvelope {
-	return KernelDispatchEnvelope{
-		kind:    .mcp
-		context: DispatchContext.from_mcp_dispatch(req)
-	}
+	return executor.KernelDispatchEnvelope.from_mcp_dispatch(req)
 }
 
 pub fn KernelDispatchEnvelope.from_websocket_upstream(req transport.WorkerWebSocketUpstreamDispatchRequest) KernelDispatchEnvelope {
-	return KernelDispatchEnvelope{
-		kind:    .websocket_upstream
-		context: DispatchContext.from_websocket_upstream(req)
-	}
+	return executor.KernelDispatchEnvelope.from_websocket_upstream(req)
 }
 
 pub fn KernelDispatchEnvelope.from_websocket_dispatch(frame transport.WorkerWebSocketFrame) KernelDispatchEnvelope {
-	return KernelDispatchEnvelope{
-		kind:    .websocket_dispatch
-		context: DispatchContext.from_websocket_dispatch(frame)
-	}
+	return executor.KernelDispatchEnvelope.from_websocket_dispatch(frame)
 }
 
 fn (mut app App) kernel_dispatch_stream(req transport.StreamDispatchRequest) !transport.StreamDispatchResponse {

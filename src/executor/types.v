@@ -295,3 +295,72 @@ pub:
 	streamed bool
 	response PluginCallResponse
 }
+
+// ── Kernel dispatch types ──
+
+pub enum KernelDispatchKind {
+	stream
+	mcp
+	websocket_upstream
+	websocket_dispatch
+}
+
+pub struct KernelDispatchEnvelope {
+pub:
+	kind    KernelDispatchKind
+	context DispatchContext
+}
+
+pub struct KernelDispatchTransportFailure {
+pub:
+	status      int
+	error_class string
+}
+
+pub struct KernelWebSocketUpstreamDispatchOutcome {
+pub:
+	response          transport.WorkerWebSocketUpstreamDispatchResponse
+	command_snapshots []WebSocketUpstreamCommandActivity
+	command_error     string
+}
+
+pub struct KernelMcpDispatchOutcome {
+pub:
+	response          transport.WorkerMcpDispatchResponse
+	command_snapshots []WebSocketUpstreamCommandActivity
+	command_error     string
+}
+
+pub struct KernelStreamDispatchFailure {
+pub:
+	error       string
+	error_class string
+}
+
+pub fn KernelDispatchEnvelope.from_stream_dispatch(req transport.StreamDispatchRequest) KernelDispatchEnvelope {
+	return KernelDispatchEnvelope{
+		kind:    .stream
+		context: DispatchContext.from_stream_dispatch(req)
+	}
+}
+
+pub fn KernelDispatchEnvelope.from_mcp_dispatch(req transport.WorkerMcpDispatchRequest) KernelDispatchEnvelope {
+	return KernelDispatchEnvelope{
+		kind:    .mcp
+		context: DispatchContext.from_mcp_dispatch(req)
+	}
+}
+
+pub fn KernelDispatchEnvelope.from_websocket_upstream(req transport.WorkerWebSocketUpstreamDispatchRequest) KernelDispatchEnvelope {
+	return KernelDispatchEnvelope{
+		kind:    .websocket_upstream
+		context: DispatchContext.from_websocket_upstream(req)
+	}
+}
+
+pub fn KernelDispatchEnvelope.from_websocket_dispatch(frame transport.WorkerWebSocketFrame) KernelDispatchEnvelope {
+	return KernelDispatchEnvelope{
+		kind:    .websocket_dispatch
+		context: DispatchContext.from_websocket_dispatch(frame)
+	}
+}

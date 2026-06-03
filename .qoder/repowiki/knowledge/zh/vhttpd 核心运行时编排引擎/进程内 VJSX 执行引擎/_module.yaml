@@ -1,0 +1,9 @@
+schema_version: 1
+module_path: core_runtime/executor
+title: 进程内 VJSX 执行引擎
+scope:
+    - src/executor/
+source_files: []
+depends_on: []
+related_to:
+    - path: core_runtime/jsonutils_state_store

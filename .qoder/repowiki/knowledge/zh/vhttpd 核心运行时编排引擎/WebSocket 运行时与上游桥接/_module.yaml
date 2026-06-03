@@ -1,0 +1,13 @@
+schema_version: 1
+module_path: core_runtime/websocket
+title: WebSocket 运行时与上游桥接
+scope:
+    - src/websocket_binary_support_test.v
+    - src/websocket_dispatch_lifecycle_test.v
+    - src/websocket_runtime.v
+    - src/websocket_upstream_runtime.v
+    - src/websocket_upstream_runtime_test.v
+source_files: []
+depends_on: []
+related_to:
+    - path: core_runtime/feishu

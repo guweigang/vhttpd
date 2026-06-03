@@ -1,0 +1,11 @@
+schema_version: 1
+module_path: core_runtime/feishu
+title: 飞书卡片桥接与运行时集成
+scope:
+    - src/feishu_card_bridge.v
+    - src/feishu_runtime.v
+    - src/feishu_runtime_test.v
+source_files: []
+depends_on: []
+related_to:
+    - path: core_runtime/websocket

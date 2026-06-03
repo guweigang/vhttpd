@@ -1,0 +1,11 @@
+schema_version: 1
+module_path: core_runtime/openai
+title: OpenAI 网关集成与运行时
+scope:
+    - src/openai_gateway_integration_test.v
+    - src/openai_runtime.v
+    - src/openai_runtime_test.v
+source_files: []
+depends_on: []
+related_to:
+    - path: core_runtime/command_kernel

@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: examples
+title: CodexBot 集成示例与协议适配层
+scope:
+    - examples/
+source_files: []
+depends_on: []
+related_to: []
