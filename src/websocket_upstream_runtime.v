@@ -35,58 +35,19 @@ mut:
 }
 
 fn (mut app App) fixture_websocket_runtime_ensure(name string) FixtureWebSocketUpstreamRuntime {
-	app.ws_hub.upstream_mu.@lock()
-	defer {
-		app.ws_hub.upstream_mu.unlock()
-	}
-	if name in app.ws_hub.fixture_runtime {
-		return app.ws_hub.fixture_runtime[name]
-	}
-	runtime := FixtureWebSocketUpstreamRuntime{
-		name:                 name
-		connected:            true
-		last_connect_at_unix: time.now().unix()
-		connect_attempts:     1
-		connect_successes:    1
-	}
-	app.ws_hub.fixture_runtime[name] = runtime
-	return runtime
+	return app.ws_hub.fixture_ensure(name)
 }
 
 fn (mut app App) fixture_websocket_runtime_update(name string, runtime FixtureWebSocketUpstreamRuntime) {
-	app.ws_hub.upstream_mu.@lock()
-	defer {
-		app.ws_hub.upstream_mu.unlock()
-	}
-	app.ws_hub.fixture_runtime[name] = runtime
+	app.ws_hub.fixture_update(name, runtime)
 }
 
 fn (mut app App) fixture_websocket_app_names() []string {
-	app.ws_hub.upstream_mu.@lock()
-	defer {
-		app.ws_hub.upstream_mu.unlock()
-	}
-	mut names := app.ws_hub.fixture_runtime.keys()
-	names.sort()
-	return names
+	return app.ws_hub.fixture_app_names()
 }
 
 fn (mut app App) fixture_websocket_snapshot(name string) WebSocketUpstreamSnapshot {
-	runtime := app.fixture_websocket_runtime_ensure(name)
-	return WebSocketUpstreamSnapshot{
-		provider:                websocket_upstream_provider_fixture
-		instance:                runtime.name
-		enabled:                 true
-		configured:              true
-		connected:               runtime.connected
-		url:                     'fixture://${runtime.name}'
-		last_connect_at_unix:    runtime.last_connect_at_unix
-		last_disconnect_at_unix: runtime.last_disconnect_at_unix
-		last_error:              runtime.last_error
-		connect_attempts:        runtime.connect_attempts
-		connect_successes:       runtime.connect_successes
-		received_frames:         runtime.received_frames
-	}
+	return app.ws_hub.fixture_snapshot(name)
 }
 
 fn (mut app App) fixture_websocket_push_event(instance string, event WebSocketUpstreamEventSnapshot) {
@@ -103,39 +64,15 @@ fn (mut app App) fixture_websocket_push_event(instance string, event WebSocketUp
 }
 
 fn (mut app App) fixture_websocket_note_send(instance string, ok bool) {
-	mut runtime := app.fixture_websocket_runtime_ensure(instance)
-	if ok {
-		runtime.messages_sent++
-	} else {
-		runtime.send_errors++
-	}
-	app.fixture_websocket_runtime_update(instance, runtime)
+	app.ws_hub.fixture_note_send(instance, ok)
 }
 
 fn (mut app App) fixture_websocket_send(req WebSocketUpstreamSendRequest) !WebSocketUpstreamSendResult {
-	instance := if req.instance.trim_space() == '' { 'main' } else { req.instance.trim_space() }
-	app.fixture_websocket_note_send(instance, true)
-	return WebSocketUpstreamSendResult{
-		ok:         true
-		provider:   websocket_upstream_provider_fixture
-		instance:   instance
-		message_id: 'fixture-msg-${time.now().unix_micro()}'
-	}
+	return app.ws_hub.fixture_send(req.instance)
 }
 
 fn (mut app App) fixture_websocket_update(req WebSocketUpstreamSendRequest) !WebSocketUpstreamUpdateResult {
-	instance := if req.instance.trim_space() == '' { 'main' } else { req.instance.trim_space() }
-	target := req.target.trim_space()
-	if target == '' {
-		return error('missing fixture update target')
-	}
-	app.fixture_websocket_note_send(instance, true)
-	return WebSocketUpstreamUpdateResult{
-		ok:         true
-		provider:   websocket_upstream_provider_fixture
-		instance:   instance
-		message_id: target
-	}
+	return app.ws_hub.fixture_update_msg(req.instance, req.target)
 }
 
 fn (mut app App) fixture_websocket_emit(req WebSocketUpstreamFixtureEmitRequest) !WebSocketUpstreamActivitySnapshot {
@@ -217,53 +154,11 @@ fn (mut app App) fixture_websocket_emit(req WebSocketUpstreamFixtureEmitRequest)
 type WebSocketUpstreamCommandActivity = executor.WebSocketUpstreamCommandActivity
 
 fn (mut app App) websocket_upstream_record_activity(snapshot WebSocketUpstreamActivitySnapshot) {
-	app.ws_hub.upstream_mu.@lock()
-	defer {
-		app.ws_hub.upstream_mu.unlock()
-	}
-	limit := if app.ws_hub.recent_dispatch_limit > 0 {
-		app.ws_hub.recent_dispatch_limit
-	} else {
-		50
-	}
-	app.ws_hub.recent_activities << snapshot
-	if app.ws_hub.recent_activities.len > limit {
-		start := app.ws_hub.recent_activities.len - limit
-		app.ws_hub.recent_activities = app.ws_hub.recent_activities[start..].clone()
-	}
+	app.ws_hub.record_upstream_activity(snapshot)
 }
 
 fn (mut app App) admin_websocket_upstream_activities_snapshot(limit int, offset int, provider_filter string, instance_filter string) AdminWebSocketUpstreamActivitySnapshot {
-	app.ws_hub.upstream_mu.@lock()
-	defer {
-		app.ws_hub.upstream_mu.unlock()
-	}
-	mut activities := []WebSocketUpstreamActivitySnapshot{}
-	for entry in app.ws_hub.recent_activities {
-		if provider_filter != '' && entry.provider != provider_filter {
-			continue
-		}
-		if instance_filter != '' && entry.instance != instance_filter {
-			continue
-		}
-		activities << entry
-	}
-	activities.sort(a.received_at > b.received_at)
-	if offset >= activities.len {
-		return AdminWebSocketUpstreamActivitySnapshot{
-			returned_count: 0
-			limit:          limit
-			offset:         offset
-			activities:     []WebSocketUpstreamActivitySnapshot{}
-		}
-	}
-	end := if offset + limit < activities.len { offset + limit } else { activities.len }
-	return AdminWebSocketUpstreamActivitySnapshot{
-		returned_count: end - offset
-		limit:          limit
-		offset:         offset
-		activities:     activities[offset..end].clone()
-	}
+	return app.ws_hub.upstream_activities_snapshot(limit, offset, provider_filter, instance_filter)
 }
 
 fn (mut app App) execute_websocket_upstream_commands(source_activity_id string, commands []transport.WorkerWebSocketUpstreamCommand) ([]WebSocketUpstreamCommandActivity, string) {
