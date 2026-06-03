@@ -1398,9 +1398,9 @@ fn test_build_app_runtime_projects_executor_plan_into_app_state() {
 	assert app.admin_token == 'secret'
 	assert app.assets_enabled
 	assert app.assets_root_real == '/private/tmp/assets'
-	assert app.mcp_max_sessions == 55
-	assert app.mcp_max_pending_messages == 21
-	assert app.mcp_session_ttl_seconds == 77
+	assert app.mcp.max_sessions == 55
+	assert app.mcp.max_pending_messages == 21
+	assert app.mcp.session_ttl_seconds == 77
 	assert app.feishu.enabled
 	assert app.feishu.open_base_url == 'https://open.feishu.test'
 	assert app.feishu.apps['main'].app_id == 'app-1'

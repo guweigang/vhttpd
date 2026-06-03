@@ -75,11 +75,14 @@ fn build_app_runtime(provider_settings ProviderRuntimeSettings, executor_plan Lo
 		assets_root:                              build_cfg.assets_root
 		assets_root_real:                         build_cfg.assets_root_real
 		assets_cache_control:                     build_cfg.assets_cache_control
-		mcp_max_sessions:                         app_runtime_default_mcp_max_sessions(cfg)
-		mcp_max_pending_messages:                 app_runtime_default_mcp_max_pending_messages(cfg)
-		mcp_session_ttl_seconds:                  app_runtime_default_mcp_session_ttl_seconds(cfg)
-		mcp_sampling_capability_policy:           normalize_mcp_sampling_capability_policy(cfg.mcp.sampling_capability_policy)
-		mcp_allowed_origins:                      cfg.mcp.allowed_origins.clone()
+		mcp:                                      McpState{
+			max_sessions:               app_runtime_default_mcp_max_sessions(cfg)
+			max_pending_messages:       app_runtime_default_mcp_max_pending_messages(cfg)
+			session_ttl_seconds:        app_runtime_default_mcp_session_ttl_seconds(cfg)
+			sampling_capability_policy: normalize_mcp_sampling_capability_policy(cfg.mcp.sampling_capability_policy)
+			allowed_origins:            cfg.mcp.allowed_origins.clone()
+			sessions:                   map[string]McpSession{}
+		}
 		openai:                                   OpenaiState{
 			enabled:          cfg.openai.enabled
 			base_path:        cfg.openai.base_path
@@ -93,7 +96,6 @@ fn build_app_runtime(provider_settings ProviderRuntimeSettings, executor_plan Lo
 		websocket_upstream_recent_dispatch_limit: 50
 		auto_start_dynamic_upstreams:             true
 		upstream_sessions:                        map[string]UpstreamRuntimeSession{}
-		mcp_sessions:                             map[string]McpSession{}
 		ws_hub_conns:                             map[string]HubConn{}
 		ws_hub_room_members:                      map[string]map[string]bool{}
 		ws_hub_conn_rooms:                        map[string]map[string]bool{}

@@ -49,11 +49,7 @@ pub mut:
 	assets_root                                 string
 	assets_root_real                            string
 	assets_cache_control                        string
-	mcp_max_sessions                            int
-	mcp_max_pending_messages                    int
-	mcp_session_ttl_seconds                     int
-	mcp_sampling_capability_policy              string
-	mcp_allowed_origins                         []string
+	mcp                                        McpState
 	openai                                      OpenaiState
 	websocket_upstream_recent_dispatch_limit    int
 	auto_start_dynamic_upstreams                bool
@@ -67,20 +63,14 @@ pub mut:
 	stat_worker_queue_timeouts_total            i64
 	stat_upstream_plans_total                   i64
 	stat_upstream_plan_errors_total             i64
-	stat_mcp_sessions_expired_total             i64
-	stat_mcp_sessions_evicted_total             i64
-	stat_mcp_pending_dropped_total              i64
-	stat_mcp_sampling_capability_warnings_total i64
-	stat_mcp_sampling_capability_dropped_total  i64
-	stat_mcp_sampling_capability_errors_total   i64
 	pool_mu                                     sync.Mutex
 	mu                                          sync.Mutex
 	upstream_mu                                 sync.Mutex
-	mcp_mu                                      sync.Mutex
+
 	ws_hub_mu                                   sync.Mutex
 	ws_hub_send_mu                              sync.Mutex
 	upstream_sessions                           map[string]UpstreamRuntimeSession
-	mcp_sessions                                map[string]McpSession
+
 	ws_hub_conns                                map[string]HubConn
 	ws_hub_room_members                         map[string]map[string]bool
 	ws_hub_conn_rooms                           map[string]map[string]bool

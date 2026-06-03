@@ -30,12 +30,12 @@ fn (mut app App) admin_stats_snapshot() executor.AdminRuntimeStats {
 		worker_queue_timeouts_total:            app.stat_worker_queue_timeouts_total
 		upstream_plans_total:                   app.stat_upstream_plans_total
 		upstream_plan_errors_total:             app.stat_upstream_plan_errors_total
-		mcp_sessions_expired_total:             app.stat_mcp_sessions_expired_total
-		mcp_sessions_evicted_total:             app.stat_mcp_sessions_evicted_total
-		mcp_pending_dropped_total:              app.stat_mcp_pending_dropped_total
-		mcp_sampling_capability_warnings_total: app.stat_mcp_sampling_capability_warnings_total
-		mcp_sampling_capability_dropped_total:  app.stat_mcp_sampling_capability_dropped_total
-		mcp_sampling_capability_errors_total:   app.stat_mcp_sampling_capability_errors_total
+		mcp_sessions_expired_total:             app.mcp.stat_sessions_expired_total
+		mcp_sessions_evicted_total:             app.mcp.stat_sessions_evicted_total
+		mcp_pending_dropped_total:              app.mcp.stat_pending_dropped_total
+		mcp_sampling_capability_warnings_total: app.mcp.stat_sampling_capability_warnings_total
+		mcp_sampling_capability_dropped_total:  app.mcp.stat_sampling_capability_dropped_total
+		mcp_sampling_capability_errors_total:   app.mcp.stat_sampling_capability_errors_total
 		feishu_connect_attempts:                feishu_metrics.connect_attempts
 		feishu_connect_successes:               feishu_metrics.connect_successes
 		feishu_received_frames:                 feishu_metrics.received_frames
@@ -56,10 +56,10 @@ fn (mut app App) admin_runtime_snapshot() executor.AdminRuntimeSummary {
 	active_upstreams = app.upstream_sessions.len
 	app.upstream_mu.unlock()
 	mut active_mcp_sessions := 0
-	app.mcp_mu.@lock()
+	app.mcp.mu.@lock()
 	app.mcp_prune_sessions_locked(time.now().unix())
-	active_mcp_sessions = app.mcp_sessions.len
-	app.mcp_mu.unlock()
+	active_mcp_sessions = app.mcp.sessions.len
+	app.mcp.mu.unlock()
 	mut worker_queue_depth := 0
 	app.pool_mu.@lock()
 	worker_queue_depth = app.worker_backend.queue_waiting_requests
