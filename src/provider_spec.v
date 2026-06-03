@@ -1,34 +1,11 @@
 module main
 import transport
+import provider
 
-pub enum ProviderRouteKind {
-	codex
-	feishu
-	openai
-	ollama
-	generic
-}
-
-pub enum CommandMatcherKind {
-	prefix
-	exact
-}
-
-pub struct CommandMatcher {
-pub:
-	kind  CommandMatcherKind
-	value string
-}
-
-pub fn (m CommandMatcher) matches(command_type string) bool {
-	if m.value.trim_space() == '' {
-		return false
-	}
-	return match m.kind {
-		.prefix { command_type.starts_with(m.value) }
-		.exact { command_type == m.value }
-	}
-}
+// provider type aliases
+type ProviderRouteKind = provider.ProviderRouteKind
+type CommandMatcherKind = provider.CommandMatcherKind
+type CommandMatcher = provider.CommandMatcher
 
 // ProviderCommandHandler bridges provider-specific command execution.
 pub interface ProviderCommandHandler {
@@ -63,22 +40,9 @@ pub mut:
 	runtime  ProviderRuntime
 }
 
-pub struct AdminProviderSpecSnapshot {
-pub:
-	name             string
-	enabled          bool
-	has_handler      bool     @[json: 'has_handler']
-	has_runtime      bool     @[json: 'has_runtime']
-	command_matchers []string @[json: 'command_matchers']
-	route_kind       string   @[json: 'route_kind']
-}
+type AdminProviderSpecSnapshot = provider.AdminProviderSpecSnapshot
 
-pub struct AdminProviderRuntimeSnapshot {
-pub:
-	name     string
-	enabled  bool
-	snapshot string
-}
+type AdminProviderRuntimeSnapshot = provider.AdminProviderRuntimeSnapshot
 
 pub fn (mut app App) admin_provider_specs_snapshot() []AdminProviderSpecSnapshot {
 	app.mu.@lock()

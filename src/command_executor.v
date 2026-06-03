@@ -1,5 +1,6 @@
 module main
 import transport
+import provider
 
 import log
 import time
@@ -50,7 +51,7 @@ pub fn CommandExecutor.new(mut app App) CommandExecutor {
 	}
 }
 
-fn (mut exec CommandExecutor) route_from_normalized(normalized NormalizedCommand) ProviderRouteKind {
+fn (mut exec CommandExecutor) route_from_normalized(normalized NormalizedCommand) provider.ProviderRouteKind {
 	if normalized.is_codex_control() && exec.codex_enabled {
 		return .codex
 	}
@@ -70,7 +71,7 @@ fn (mut exec CommandExecutor) route_from_normalized(normalized NormalizedCommand
 	return .generic
 }
 
-fn (mut exec CommandExecutor) route_from_specs(command transport.WorkerWebSocketUpstreamCommand) ProviderRouteKind {
+fn (mut exec CommandExecutor) route_from_specs(command transport.WorkerWebSocketUpstreamCommand) provider.ProviderRouteKind {
 	return exec.route_from_normalized(NormalizedCommand.from_worker_command(command))
 }
 
@@ -215,7 +216,7 @@ fn (mut exec CommandExecutor) execute_provider_instance_command(normalized Norma
 	return false, ''
 }
 
-fn (mut exec CommandExecutor) execute_routed_command(route ProviderRouteKind, command transport.WorkerWebSocketUpstreamCommand, normalized NormalizedCommand, mut snapshot WebSocketUpstreamCommandActivity) (bool, string) {
+fn (mut exec CommandExecutor) execute_routed_command(route provider.ProviderRouteKind, command transport.WorkerWebSocketUpstreamCommand, normalized NormalizedCommand, mut snapshot WebSocketUpstreamCommandActivity) (bool, string) {
 	return match route {
 		.codex {
 			if exec.codex_enabled {

@@ -1,6 +1,7 @@
 module main
 import config
 import transport
+import provider
 
 fn test_normalized_command_from_worker_command_codex_rpc_send() {
 	cmd := transport.WorkerWebSocketUpstreamCommand{
@@ -47,7 +48,7 @@ fn test_command_route_from_normalized_provider_message_send_for_feishu() {
 		enabled:          true
 		has_handler:      true
 		has_runtime:      true
-		command_matchers: [CommandMatcher{kind: .prefix, value: 'feishu.message.'}]
+		command_matchers: [provider.CommandMatcher{kind: provider.CommandMatcherKind.prefix, value: 'feishu.message.'}]
 		route_kind:       .feishu
 		provider:         FeishuProvider{}
 		handler:          FeishuCommandHandler.new(mut app)
@@ -58,7 +59,7 @@ fn test_command_route_from_normalized_provider_message_send_for_feishu() {
 		type_:    'provider.message.send'
 		provider: 'feishu'
 	}
-	assert exec.route_from_specs(cmd) == ProviderRouteKind.feishu
+	assert exec.route_from_specs(cmd) == provider.ProviderRouteKind.feishu
 }
 
 fn test_command_route_from_normalized_stream_append_for_feishu() {
@@ -75,7 +76,7 @@ fn test_command_route_from_normalized_stream_append_for_feishu() {
 		enabled:          true
 		has_handler:      true
 		has_runtime:      true
-		command_matchers: [CommandMatcher{kind: .prefix, value: 'feishu.message.'}]
+		command_matchers: [provider.CommandMatcher{kind: provider.CommandMatcherKind.prefix, value: 'feishu.message.'}]
 		route_kind:       .feishu
 		provider:         FeishuProvider{}
 		handler:          FeishuCommandHandler.new(mut app)
@@ -86,7 +87,7 @@ fn test_command_route_from_normalized_stream_append_for_feishu() {
 		type_:    'stream.append'
 		provider: 'feishu'
 	}
-	assert exec.route_from_specs(cmd) == ProviderRouteKind.feishu
+	assert exec.route_from_specs(cmd) == provider.ProviderRouteKind.feishu
 }
 
 fn test_command_route_from_normalized_stream_fail_for_feishu() {
@@ -103,7 +104,7 @@ fn test_command_route_from_normalized_stream_fail_for_feishu() {
 		enabled:          true
 		has_handler:      true
 		has_runtime:      true
-		command_matchers: [CommandMatcher{kind: .prefix, value: 'feishu.message.'}]
+		command_matchers: [provider.CommandMatcher{kind: provider.CommandMatcherKind.prefix, value: 'feishu.message.'}]
 		route_kind:       .feishu
 		provider:         FeishuProvider{}
 		handler:          FeishuCommandHandler.new(mut app)
@@ -114,7 +115,7 @@ fn test_command_route_from_normalized_stream_fail_for_feishu() {
 		type_:    'stream.fail'
 		provider: 'feishu'
 	}
-	assert exec.route_from_specs(cmd) == ProviderRouteKind.feishu
+	assert exec.route_from_specs(cmd) == provider.ProviderRouteKind.feishu
 }
 
 fn test_execute_provider_instance_upsert_applies_feishu_app_config() {
@@ -158,7 +159,7 @@ fn test_command_route_from_command_codex_control() {
 		enabled:          true
 		has_handler:      true
 		has_runtime:      true
-		command_matchers: [CommandMatcher{kind: .prefix, value: 'codex.'}]
+		command_matchers: [provider.CommandMatcher{kind: provider.CommandMatcherKind.prefix, value: 'codex.'}]
 		route_kind:       .codex
 		provider:         CodexProvider{}
 		handler:          CodexCommandHandler.new(mut app)
@@ -168,7 +169,7 @@ fn test_command_route_from_command_codex_control() {
 	cmd := transport.WorkerWebSocketUpstreamCommand{
 		type_: 'codex.rpc.send'
 	}
-	assert exec.route_from_specs(cmd) == ProviderRouteKind.codex
+	assert exec.route_from_specs(cmd) == provider.ProviderRouteKind.codex
 }
 
 fn test_command_route_from_command_feishu_message_prefix() {
@@ -185,7 +186,7 @@ fn test_command_route_from_command_feishu_message_prefix() {
 		enabled:          true
 		has_handler:      true
 		has_runtime:      true
-		command_matchers: [CommandMatcher{kind: .prefix, value: 'feishu.message.'}]
+		command_matchers: [provider.CommandMatcher{kind: provider.CommandMatcherKind.prefix, value: 'feishu.message.'}]
 		route_kind:       .feishu
 		provider:         FeishuProvider{}
 		handler:          FeishuCommandHandler.new(mut app)
@@ -195,7 +196,7 @@ fn test_command_route_from_command_feishu_message_prefix() {
 	cmd := transport.WorkerWebSocketUpstreamCommand{
 		type_: 'feishu.message.patch'
 	}
-	assert exec.route_from_specs(cmd) == ProviderRouteKind.feishu
+	assert exec.route_from_specs(cmd) == provider.ProviderRouteKind.feishu
 }
 
 fn test_command_route_from_command_generic_fallback() {
@@ -209,7 +210,7 @@ fn test_command_route_from_command_generic_fallback() {
 		type_: 'discord.message.send'
 		event: 'send'
 	}
-	assert exec.route_from_specs(cmd) == ProviderRouteKind.generic
+	assert exec.route_from_specs(cmd) == provider.ProviderRouteKind.generic
 }
 
 fn test_command_route_from_command_ollama_message_prefix() {
@@ -226,7 +227,7 @@ fn test_command_route_from_command_ollama_message_prefix() {
 		enabled:          true
 		has_handler:      true
 		has_runtime:      true
-		command_matchers: [CommandMatcher{kind: .prefix, value: 'ollama.message.'}]
+		command_matchers: [provider.CommandMatcher{kind: provider.CommandMatcherKind.prefix, value: 'ollama.message.'}]
 		route_kind:       .ollama
 		provider:         OllamaProvider{}
 		handler:          GenericUpstreamCommandHandler.new(mut app)
@@ -236,7 +237,7 @@ fn test_command_route_from_command_ollama_message_prefix() {
 	cmd := transport.WorkerWebSocketUpstreamCommand{
 		type_: 'ollama.message.send'
 	}
-	assert exec.route_from_specs(cmd) == ProviderRouteKind.ollama
+	assert exec.route_from_specs(cmd) == provider.ProviderRouteKind.ollama
 }
 
 fn test_provider_spec_command_matchers_are_exposed_in_snapshot() {
@@ -250,7 +251,7 @@ fn test_provider_spec_command_matchers_are_exposed_in_snapshot() {
 		enabled:          true
 		has_handler:      true
 		has_runtime:      true
-		command_matchers: [CommandMatcher{kind: .prefix, value: 'feishu.message.'}]
+		command_matchers: [provider.CommandMatcher{kind: provider.CommandMatcherKind.prefix, value: 'feishu.message.'}]
 		route_kind:       .feishu
 		provider:         FeishuProvider{}
 		handler:          FeishuCommandHandler.new(mut app)
@@ -264,7 +265,7 @@ fn test_provider_spec_command_matchers_are_exposed_in_snapshot() {
 }
 
 fn test_command_matcher_exact_kind_matches_exactly() {
-	matcher := CommandMatcher{kind: .exact, value: 'codex.rpc.send'}
+	matcher := provider.CommandMatcher{kind: provider.CommandMatcherKind.exact, value: 'codex.rpc.send'}
 	assert matcher.matches('codex.rpc.send')
 	assert !matcher.matches('codex.rpc.reply')
 }
@@ -289,7 +290,7 @@ fn test_command_route_from_command_feishu_is_generic_when_disabled() {
 	cmd := transport.WorkerWebSocketUpstreamCommand{
 		type_: 'feishu.message.patch'
 	}
-	assert exec.route_from_specs(cmd) == ProviderRouteKind.generic
+	assert exec.route_from_specs(cmd) == provider.ProviderRouteKind.generic
 	assert CommandExecutor.feishu_route_enabled() == false
 }
 
@@ -336,7 +337,7 @@ fn test_command_route_from_command_codex_is_generic_when_disabled() {
 	cmd := transport.WorkerWebSocketUpstreamCommand{
 		type_: 'codex.rpc.send'
 	}
-	assert exec.route_from_specs(cmd) == ProviderRouteKind.generic
+	assert exec.route_from_specs(cmd) == provider.ProviderRouteKind.generic
 	assert CommandExecutor.codex_route_enabled() == false
 }
 
@@ -354,7 +355,7 @@ fn test_command_route_from_command_ollama_is_generic_when_disabled() {
 		type_: 'ollama.message.send'
 		event: 'send'
 	}
-	assert exec.route_from_specs(cmd) == ProviderRouteKind.generic
+	assert exec.route_from_specs(cmd) == provider.ProviderRouteKind.generic
 	assert CommandExecutor.ollama_route_enabled() == false
 }
 

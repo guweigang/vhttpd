@@ -1,6 +1,7 @@
 module main
 import executor
 import ws
+import provider
 
 import encoding.base64
 import json
@@ -1051,7 +1052,7 @@ pub fn (mut app App) register_provider(name string, p Provider) {
 		enabled:          true
 		has_handler:      false
 		has_runtime:      true
-		command_matchers: []CommandMatcher{}
+		command_matchers: []provider.CommandMatcher{}
 		route_kind:       .generic
 		provider:         p
 		handler:          NoopProviderCommandHandler{}

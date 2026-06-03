@@ -2,6 +2,7 @@ module main
 import transport
 import config
 import executor
+import provider
 
 import json
 import os

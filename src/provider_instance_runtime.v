@@ -1,77 +1,27 @@
 module main
 import config
+import provider
 
 import json
 import time
-import x.json2
 
-pub struct ProviderInstanceSpec {
-pub mut:
-	provider      string
-	instance      string
-	config_json   string
-	desired_state string
-	created_at    i64
-	updated_at    i64
-}
+type ProviderInstanceSpec = provider.ProviderInstanceSpec
+type AdminProviderInstanceSnapshot = provider.AdminProviderInstanceSnapshot
 
-pub struct AdminProviderInstanceSnapshot {
-pub:
-	provider           string
-	instance           string
-	source             string
-	stored             bool
-	runtime_configured bool     @[json: 'runtime_configured']
-	runtime_connected  bool     @[json: 'runtime_connected']
-	runtime_url        string   @[json: 'runtime_url']
-	config_present     bool     @[json: 'config_present']
-	config_fields      []string @[json: 'config_fields']
-	desired_state      string   @[json: 'desired_state']
-	created_at         i64      @[json: 'created_at']
-	updated_at         i64      @[json: 'updated_at']
-}
-
-fn provider_instance_normalize_name(instance string) string {
-	name := instance.trim_space()
-	if name == '' || name == 'default' {
-		return 'main'
-	}
-	return name
-}
-
-fn provider_instance_key(provider string, instance string) string {
-	return '${provider.trim_space()}/${provider_instance_normalize_name(instance)}'
-}
-
-fn provider_instance_config_fields(config_json string) []string {
-	raw := config_json.trim_space()
-	if raw == '' {
-		return []string{}
-	}
-	parsed := json2.decode[json2.Any](raw) or { return []string{} }
-	root := parsed.as_map()
-	mut fields := []string{}
-	for key, _ in root {
-		fields << key
-	}
-	fields.sort()
-	return fields
-}
-
-fn provider_instance_runtime_snapshot(mut app App, provider string, instance string) (WebSocketUpstreamSnapshot, bool) {
-	if snapshot := app.provider_runtime_upstream_snapshot(provider, instance) {
+fn provider_instance_runtime_snapshot(mut app App, provider_name string, instance string) (WebSocketUpstreamSnapshot, bool) {
+	if snapshot := app.provider_runtime_upstream_snapshot(provider_name, instance) {
 		return snapshot, true
 	}
 	return WebSocketUpstreamSnapshot{}, false
 }
 
 pub fn (mut app App) provider_instance_upsert(spec ProviderInstanceSpec) ProviderInstanceSpec {
-	key := provider_instance_key(spec.provider, spec.instance)
+	key := provider.instance_key(spec.provider, spec.instance)
 	now_ms := time.now().unix_milli()
 	existing := app.provider_instance_specs[key] or { ProviderInstanceSpec{} }
 	next := ProviderInstanceSpec{
 		provider:      spec.provider.trim_space()
-		instance:      provider_instance_normalize_name(spec.instance)
+		instance:      provider.normalize_instance_name(spec.instance)
 		config_json:   spec.config_json
 		desired_state: if spec.desired_state.trim_space() == '' {
 			'connected'
@@ -85,18 +35,18 @@ pub fn (mut app App) provider_instance_upsert(spec ProviderInstanceSpec) Provide
 	return next
 }
 
-pub fn (app &App) provider_instance_get(provider string, instance string) ?ProviderInstanceSpec {
-	key := provider_instance_key(provider, instance)
+pub fn (app &App) provider_instance_get(provider_name string, instance string) ?ProviderInstanceSpec {
+	key := provider.instance_key(provider_name, instance)
 	if key !in app.provider_instance_specs {
 		return none
 	}
 	return app.provider_instance_specs[key]
 }
 
-pub fn (app &App) provider_instance_list(provider string) []ProviderInstanceSpec {
+pub fn (app &App) provider_instance_list(provider_name string) []ProviderInstanceSpec {
 	mut out := []ProviderInstanceSpec{}
 	for _, spec in app.provider_instance_specs {
-		if provider.trim_space() != '' && spec.provider != provider.trim_space() {
+		if provider_name.trim_space() != '' && spec.provider != provider_name.trim_space() {
 			continue
 		}
 		out << spec
@@ -137,7 +87,7 @@ pub fn (mut app App) admin_provider_instance_snapshots(provider_filter string) [
 			runtime_connected:  upstream_ok && upstream.connected
 			runtime_url:        if upstream_ok { upstream.url } else { '' }
 			config_present:     spec.config_json.trim_space() != ''
-			config_fields:      provider_instance_config_fields(spec.config_json)
+			config_fields:      provider.instance_config_fields(spec.config_json)
 			desired_state:      spec.desired_state
 			created_at:         spec.created_at
 			updated_at:         spec.updated_at
@@ -159,7 +109,7 @@ pub fn (mut app App) admin_provider_instance_snapshots(provider_filter string) [
 				runtime_connected:  upstream_ok && upstream.connected
 				runtime_url:        if upstream_ok { upstream.url } else { '' }
 				config_present:     true
-				config_fields:      provider_instance_config_fields(json.encode(cfg))
+				config_fields:      provider.instance_config_fields(json.encode(cfg))
 				desired_state:      'connected'
 				created_at:         0
 				updated_at:         0
@@ -232,15 +182,15 @@ pub fn (mut app App) provider_instance_apply(spec ProviderInstanceSpec) ! {
 	}
 }
 
-pub fn (mut app App) provider_instance_ensure(provider string, instance string) !ProviderInstanceSpec {
-	normalized_instance := provider_instance_normalize_name(instance)
-	if spec := app.provider_instance_get(provider, normalized_instance) {
-		if provider in ['codex', 'feishu'] {
+pub fn (mut app App) provider_instance_ensure(provider_name string, instance string) !ProviderInstanceSpec {
+	normalized_instance := provider.normalize_instance_name(instance)
+	if spec := app.provider_instance_get(provider_name, normalized_instance) {
+		if provider_name in ['codex', 'feishu'] {
 			app.provider_instance_apply(spec) or {}
 		}
 		return spec
 	}
-	if provider == 'feishu' {
+	if provider_name == 'feishu' {
 		if cfg := app.feishu.apps[normalized_instance] {
 			spec := app.provider_instance_upsert(ProviderInstanceSpec{
 				provider:      'feishu'
@@ -252,7 +202,7 @@ pub fn (mut app App) provider_instance_ensure(provider string, instance string) 
 			return spec
 		}
 	}
-	if provider == 'codex' && normalized_instance == 'main' && app.provider_enabled('codex') {
+	if provider_name == 'codex' && normalized_instance == 'main' && app.provider_enabled('codex') {
 		return app.provider_instance_upsert(ProviderInstanceSpec{
 			provider:      'codex'
 			instance:      'main'
@@ -260,5 +210,5 @@ pub fn (mut app App) provider_instance_ensure(provider string, instance string) 
 			desired_state: 'connected'
 		})
 	}
-	return error('provider_instance_not_found:${provider}/${normalized_instance}')
+	return error('provider_instance_not_found:${provider_name}/${normalized_instance}')
 }

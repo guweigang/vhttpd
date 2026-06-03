@@ -1,5 +1,6 @@
 module main
 import config
+import provider
 
 import net
 import net.http

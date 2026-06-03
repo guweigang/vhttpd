@@ -1,5 +1,6 @@
 module main
 import config
+import provider
 
 fn test_provider_registry_smoke() {
 	// Basic smoke assertions for provider registry API surface
@@ -51,7 +52,7 @@ fn test_provider_runtime_snapshots_expose_registered_runtime() {
 		enabled:          true
 		has_handler:      false
 		has_runtime:      true
-		command_matchers: []CommandMatcher{}
+		command_matchers: []provider.CommandMatcher{}
 		route_kind:       .ollama
 		provider:         OllamaProvider{}
 		handler:          NoopProviderCommandHandler{}
@@ -75,7 +76,7 @@ fn test_provider_enabled_and_runtime_snapshot_use_host() {
 		enabled:          true
 		has_handler:      false
 		has_runtime:      true
-		command_matchers: []CommandMatcher{}
+		command_matchers: []provider.CommandMatcher{}
 		route_kind:       .codex
 		provider:         CodexProvider{}
 		handler:          NoopProviderCommandHandler{}

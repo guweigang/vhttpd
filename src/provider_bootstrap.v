@@ -1,4 +1,5 @@
 module main
+import provider
 
 // Provider bootstrap is intentionally isolated from transport/runtime startup
 // to keep HTTP/WebSocket/stream + workerpool orchestration independent from
@@ -17,9 +18,9 @@ fn bootstrap_providers(mut app App) {
 				has_handler: true
 				has_runtime: true
 				command_matchers: [
-					CommandMatcher{kind: .prefix, value: 'feishu.message.'},
+					provider.CommandMatcher{kind: provider.CommandMatcherKind.prefix, value: 'feishu.message.'},
 				]
-				route_kind: .feishu
+				route_kind: provider.ProviderRouteKind.feishu
 				provider:    p
 				handler:     h
 				runtime:     ProviderRuntimeAdapter{
@@ -41,9 +42,9 @@ fn bootstrap_providers(mut app App) {
 				has_handler: true
 				has_runtime: true
 				command_matchers: [
-					CommandMatcher{kind: .prefix, value: 'codex.'},
+					provider.CommandMatcher{kind: provider.CommandMatcherKind.prefix, value: 'codex.'},
 				]
-				route_kind: .codex
+				route_kind: provider.ProviderRouteKind.codex
 				provider:    p
 				handler:     h
 				runtime:     ProviderRuntimeAdapter{
@@ -63,8 +64,8 @@ fn bootstrap_providers(mut app App) {
 			enabled:     true
 			has_handler: false
 			has_runtime: true
-			command_matchers: []CommandMatcher{}
-			route_kind: .generic
+			command_matchers: []provider.CommandMatcher{}
+			route_kind: provider.ProviderRouteKind.generic
 			provider:    p
 			handler:     NoopProviderCommandHandler{}
 			runtime:     ProviderRuntimeAdapter{
@@ -85,9 +86,9 @@ fn bootstrap_providers(mut app App) {
 				has_handler: true
 				has_runtime: true
 				command_matchers: [
-					CommandMatcher{kind: .prefix, value: 'ollama.message.'},
+					provider.CommandMatcher{kind: provider.CommandMatcherKind.prefix, value: 'ollama.message.'},
 				]
-				route_kind: .ollama
+				route_kind: provider.ProviderRouteKind.ollama
 				provider:    p
 				handler:     h
 				runtime:     ProviderRuntimeAdapter{
