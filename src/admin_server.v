@@ -1,5 +1,6 @@
 module main
 
+import admin
 import json
 import log
 import net.http
@@ -15,28 +16,10 @@ pub mut:
 	shared &App = unsafe { nil }
 }
 
-struct AdminErrorResponse {
-	error string
-}
-
-struct AdminRestartSingleResponse {
-	ok     bool
-	mode   string
-	worker WorkerAdminStatus
-}
-
-struct AdminRestartAllResponse {
-	ok        bool
-	mode      string
-	restarted int
-	force     bool
-}
-
-struct AdminFeishuSendResponse {
-	ok         bool
-	message_id string @[json: 'message_id']
-	error      string
-}
+type AdminErrorResponse = admin.AdminErrorResponse
+type AdminRestartSingleResponse = admin.AdminRestartSingleResponse
+type AdminRestartAllResponse = admin.AdminRestartAllResponse
+type AdminFeishuSendResponse = admin.AdminFeishuSendResponse
 
 fn (app AdminApp) admin_authorized(ctx Context) bool {
 	if app.admin_token == '' {
@@ -63,7 +46,7 @@ fn (app &App) api_authorized(ctx Context) bool {
 }
 
 fn admin_parse_boolish(raw string) bool {
-	return raw.trim_space().to_lower() in ['1', 'true', 'yes', 'on']
+	return admin.parse_boolish(raw)
 }
 
 @[get]
@@ -564,13 +547,13 @@ pub fn (mut app AdminApp) admin_restart_all_workers(mut ctx Context) veb.Result 
 }
 
 fn run_admin_server(mut shared_app App, host string, port int, token string) {
-	mut admin := &AdminApp{
+	mut admin_app := &AdminApp{
 		admin_host:  host
 		admin_port:  port
 		admin_token: token
 		shared:      unsafe { shared_app }
 	}
-	veb.run_at[AdminApp, Context](mut admin,
+	veb.run_at[AdminApp, Context](mut admin_app,
 		host:                 host
 		port:                 port
 		family:               .ip

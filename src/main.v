@@ -1,5 +1,6 @@
 module main
 import executor
+import ws
 
 import encoding.base64
 import json
@@ -326,7 +327,7 @@ pub fn (mut app App) worker_websocket_open(mut conn unix.StreamConn, req http.Re
 	return true, 101, ''
 }
 
-fn worker_websocket_message_cb(mut ws websocket.Client, msg &websocket.Message, ref voidptr) ! {
+fn worker_websocket_message_cb(mut ws_client websocket.Client, msg &websocket.Message, ref voidptr) ! {
 	mut state := unsafe { &WebSocketBridgeState(ref) }
 	runtime_trace('ws.message.enter', {
 		'conn_id':     state.conn_id
@@ -346,7 +347,7 @@ fn worker_websocket_message_cb(mut ws websocket.Client, msg &websocket.Message, 
 	}
 	opcode, payload, supported := websocket_dispatch_payload_from_message(msg)
 	if !supported {
-		ws.close(1003, 'Only text and binary frames are supported') or {
+		ws_client.close(1003, 'Only text and binary frames are supported') or {
 			runtime_trace('ws.message.invalid.close.error', {
 				'conn_id':    state.conn_id
 				'request_id': state.request_id
@@ -379,7 +380,7 @@ fn worker_websocket_message_cb(mut ws websocket.Client, msg &websocket.Message, 
 			'request_id': state.request_id
 			'error':      err.msg()
 		})
-		ws.close(1011, 'Worker bridge write failed') or {}
+		ws_client.close(1011, 'Worker bridge write failed') or {}
 		state.app.ws_hub_unregister_conn(state.conn_id)
 		state.worker_conn.close() or {}
 		return
@@ -400,7 +401,7 @@ fn worker_websocket_message_cb(mut ws websocket.Client, msg &websocket.Message, 
 				'request_id': state.request_id
 				'error':      err.msg()
 			})
-			ws.close(1011, 'Worker bridge read failed') or {}
+			ws_client.close(1011, 'Worker bridge read failed') or {}
 			state.app.ws_hub_unregister_conn(state.conn_id)
 			state.worker_conn.close() or {}
 			return
@@ -425,7 +426,7 @@ fn worker_websocket_message_cb(mut ws websocket.Client, msg &websocket.Message, 
 				state.close_notified = true
 				state.cb_mu.unlock()
 				code := if reply.code > 0 { reply.code } else { 1000 }
-				ws.close(code, reply.reason) or {
+				ws_client.close(code, reply.reason) or {
 					runtime_trace('ws.message.reply.close.error', {
 						'conn_id':    state.conn_id
 						'request_id': state.request_id
@@ -713,7 +714,7 @@ fn worker_websocket_dispatch_attached_cb(mut sc websocket.ServerClient, ref void
 }
 
 fn worker_websocket_dispatch_begin_local_close(mut state WebSocketDispatchBridgeState) {
-	_ = ws_dispatch_conn_begin_worker_close(state.lifecycle)
+	_ = ws.dispatch_conn_begin_worker_close(state.lifecycle)
 	state.app.ws_hub_mark_closing(state.conn_id)
 }
 
@@ -746,7 +747,7 @@ fn worker_websocket_dispatch_activate(state &WebSocketDispatchBridgeState) {
 	}
 	unsafe {
 		current := state
-		if !ws_dispatch_conn_mark_open(current.lifecycle) {
+		if !ws.dispatch_conn_mark_open(current.lifecycle) {
 			return
 		}
 		current.app.ws_hub_flush_pending(current.conn_id)
@@ -782,22 +783,22 @@ fn worker_websocket_dispatch_finalize(state &WebSocketDispatchBridgeState) {
 	unsafe {
 		mut current := state
 		current.app.ws_hub_mark_closing(current.conn_id)
-		if ws_dispatch_conn_begin_cleanup(current.lifecycle) {
+		if ws.dispatch_conn_begin_cleanup(current.lifecycle) {
 			current.app.ws_hub_cleanup_conn(current.conn_id)
 		}
 	}
 }
 
-fn worker_websocket_dispatch_message_cb(mut ws websocket.Client, msg &websocket.Message, ref voidptr) ! {
+fn worker_websocket_dispatch_message_cb(mut ws_client websocket.Client, msg &websocket.Message, ref voidptr) ! {
 	mut state := unsafe { &WebSocketDispatchBridgeState(ref) }
-	if !ws_dispatch_conn_can_process_messages(state.lifecycle) {
+	if !ws.dispatch_conn_can_process_messages(state.lifecycle) {
 		log.debug('[vhttpd] websocket dispatch message ignored conn_id=${state.conn_id} request_id=${state.request_id} reason=closed')
 		return
 	}
 	opcode, payload, supported := websocket_dispatch_payload_from_message(msg)
 	if !supported {
 		worker_websocket_dispatch_begin_local_close(mut state)
-		ws.close(1003, 'Only text and binary frames are supported')!
+		ws_client.close(1003, 'Only text and binary frames are supported')!
 		return
 	}
 	room_members, member_metadata, room_counts, presence_users :=
@@ -809,7 +810,7 @@ fn worker_websocket_dispatch_message_cb(mut ws websocket.Client, msg &websocket.
 		presence_users))!
 	if resp.event == 'error' {
 		worker_websocket_dispatch_begin_local_close(mut state)
-		ws.close(1011, 'worker error')!
+		ws_client.close(1011, 'worker error')!
 		return
 	}
 	log.debug('[vhttpd] websocket message commands begin conn_id=${state.conn_id} request_id=${state.request_id} commands=${resp.commands.len}')
@@ -819,7 +820,7 @@ fn worker_websocket_dispatch_message_cb(mut ws websocket.Client, msg &websocket.
 		close_frame := result.close_frame
 		code := if close_frame.code > 0 { close_frame.code } else { 1000 }
 		worker_websocket_dispatch_begin_local_close(mut state)
-		ws.close(code, close_frame.reason)!
+		ws_client.close(code, close_frame.reason)!
 		return
 	}
 	if result.failures.len > 0 {
@@ -829,7 +830,7 @@ fn worker_websocket_dispatch_message_cb(mut ws websocket.Client, msg &websocket.
 		{
 			code := if close_frame.code > 0 { close_frame.code } else { 1000 }
 			worker_websocket_dispatch_begin_local_close(mut state)
-			ws.close(code, close_frame.reason)!
+			ws_client.close(code, close_frame.reason)!
 			return
 		}
 	}
@@ -849,10 +850,10 @@ fn websocket_dispatch_payload_from_message(msg &websocket.Message) (string, stri
 	}
 }
 
-fn worker_websocket_dispatch_close_cb(mut ws websocket.Client, code int, reason string, ref voidptr) ! {
+fn worker_websocket_dispatch_close_cb(mut ws_client websocket.Client, code int, reason string, ref voidptr) ! {
 	mut state := unsafe { &WebSocketDispatchBridgeState(ref) }
-	_ = ws
-	should_process, worker_initiated := ws_dispatch_conn_begin_peer_close(state.lifecycle)
+	_ = ws_client
+	should_process, worker_initiated := ws.dispatch_conn_begin_peer_close(state.lifecycle)
 	if !should_process {
 		return
 	}

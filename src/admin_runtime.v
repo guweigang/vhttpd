@@ -1,4 +1,5 @@
 module main
+import admin
 import executor
 
 import json
@@ -126,26 +127,15 @@ fn (mut app App) admin_runtime_snapshot() executor.AdminRuntimeSummary {
 }
 
 fn admin_query_boolish(raw string) bool {
-	return raw.trim_space().to_lower() in ['1', 'true', 'yes', 'on']
+	return admin.parse_boolish(raw)
 }
 
 fn admin_query_limit(raw string, default_value int, max_value int) int {
-	mut value := raw.trim_space().int()
-	if value <= 0 {
-		value = default_value
-	}
-	if value > max_value {
-		value = max_value
-	}
-	return value
+	return admin.query_limit(raw, default_value, max_value)
 }
 
 fn admin_query_offset(raw string) int {
-	mut value := raw.trim_space().int()
-	if value < 0 {
-		value = 0
-	}
-	return value
+	return admin.query_offset(raw)
 }
 
 @['/admin/runtime'; get]

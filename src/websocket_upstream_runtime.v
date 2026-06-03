@@ -1,6 +1,7 @@
 module main
 import transport
 import executor
+import ws
 
 import json
 import log
@@ -8,6 +9,19 @@ import net.http
 import net.websocket
 import time
 import veb
+
+// ws type aliases
+type WebSocketUpstreamSnapshot = ws.UpstreamSnapshot
+type AdminWebSocketUpstreamRuntimeSnapshot = ws.UpstreamRuntimeSnapshot
+type WebSocketUpstreamSendRequest = ws.UpstreamSendRequest
+type WebSocketUpstreamSendResult = ws.UpstreamSendResult
+type WebSocketUpstreamUpdateResult = ws.UpstreamUpdateResult
+type WebSocketUpstreamEventSnapshot = ws.UpstreamEventSnapshot
+type AdminWebSocketUpstreamEventSnapshot = ws.UpstreamEventListSnapshot
+type FixtureWebSocketUpstreamRuntime = ws.FixtureRuntime
+type WebSocketUpstreamFixtureEmitRequest = ws.UpstreamFixtureEmitRequest
+type WebSocketUpstreamActivitySnapshot = ws.UpstreamActivitySnapshot
+type AdminWebSocketUpstreamActivitySnapshot = ws.UpstreamActivityListSnapshot
 
 const websocket_upstream_provider_feishu = 'feishu'
 const websocket_upstream_provider_fixture = 'fixture'
@@ -18,110 +32,6 @@ mut:
 	app      &App = unsafe { nil }
 	provider string
 	instance string
-}
-
-struct WebSocketUpstreamSnapshot {
-	provider                string
-	instance                string
-	enabled                 bool
-	configured              bool
-	connected               bool
-	url                     string
-	last_connect_at_unix    i64
-	last_disconnect_at_unix i64
-	last_error              string
-	connect_attempts        i64
-	connect_successes       i64
-	received_frames         i64
-}
-
-struct AdminWebSocketUpstreamRuntimeSnapshot {
-	active_count   int
-	returned_count int
-	details        bool
-	limit          int
-	offset         int
-	sessions       []WebSocketUpstreamSnapshot
-}
-
-pub struct WebSocketUpstreamSendRequest {
-pub mut:
-	provider       string
-	instance       string
-	app            string @[json: 'app']
-	target_type    string @[json: 'target_type']
-	target         string
-	message_type   string @[json: 'message_type']
-	content        string
-	content_fields map[string]string @[json: 'content_fields']
-	text           string
-	uuid           string
-	method         string
-	params         string
-	metadata       map[string]string
-}
-
-struct WebSocketUpstreamSendResult {
-	ok         bool
-	provider   string
-	instance   string
-	message_id string @[json: 'message_id']
-	error      string
-}
-
-struct WebSocketUpstreamUpdateResult {
-	ok         bool
-	provider   string
-	instance   string
-	message_id string @[json: 'message_id']
-	error      string
-}
-
-struct WebSocketUpstreamEventSnapshot {
-	provider    string
-	instance    string
-	event_type  string
-	message_id  string
-	target      string
-	target_type string @[json: 'target_type']
-	trace_id    string
-	received_at i64
-	payload     string
-	metadata    map[string]string
-}
-
-struct AdminWebSocketUpstreamEventSnapshot {
-	returned_count int
-	limit          int
-	offset         int
-	events         []WebSocketUpstreamEventSnapshot
-}
-
-struct FixtureWebSocketUpstreamRuntime {
-mut:
-	name                    string
-	connected               bool
-	last_connect_at_unix    i64
-	last_disconnect_at_unix i64
-	last_error              string
-	connect_attempts        i64
-	connect_successes       i64
-	received_frames         i64
-	messages_sent           i64
-	send_errors             i64
-	recent_events           []WebSocketUpstreamEventSnapshot
-}
-
-struct WebSocketUpstreamFixtureEmitRequest {
-	provider    string
-	instance    string
-	trace_id    string @[json: 'trace_id']
-	event_type  string @[json: 'event_type']
-	message_id  string @[json: 'message_id']
-	target_type string @[json: 'target_type']
-	target      string
-	payload     string
-	metadata    map[string]string
 }
 
 fn (mut app App) fixture_websocket_runtime_ensure(name string) FixtureWebSocketUpstreamRuntime {
@@ -306,33 +216,6 @@ fn (mut app App) fixture_websocket_emit(req WebSocketUpstreamFixtureEmitRequest)
 
 type WebSocketUpstreamCommandActivity = executor.WebSocketUpstreamCommandActivity
 
-struct WebSocketUpstreamActivitySnapshot {
-mut:
-	provider       string
-	instance       string
-	trace_id       string @[json: 'trace_id']
-	activity_id    string @[json: 'activity_id']
-	event_type     string @[json: 'event_type']
-	message_id     string @[json: 'message_id']
-	target_type    string @[json: 'target_type']
-	target         string
-	payload        string
-	received_at    i64    @[json: 'received_at']
-	worker_handled bool   @[json: 'worker_handled']
-	worker_error   string @[json: 'worker_error']
-	error_class    string @[json: 'error_class']
-	command_error  string @[json: 'command_error']
-	commands       []WebSocketUpstreamCommandActivity
-	recorded_at    i64 @[json: 'recorded_at']
-}
-
-struct AdminWebSocketUpstreamActivitySnapshot {
-	returned_count int
-	limit          int
-	offset         int
-	activities     []WebSocketUpstreamActivitySnapshot
-}
-
 fn (mut app App) websocket_upstream_record_activity(snapshot WebSocketUpstreamActivitySnapshot) {
 	app.ws_hub.upstream_mu.@lock()
 	defer {
@@ -514,7 +397,7 @@ fn websocket_upstream_provider_reconnect_delay_ms(app &App, provider string, ins
 	return app_mut.provider_runtime_reconnect_delay_ms(provider, instance)
 }
 
-fn websocket_upstream_provider_handle_message(mut app App, provider string, instance string, mut ws websocket.Client, msg &websocket.Message) ! {
+fn websocket_upstream_provider_handle_message(mut app App, provider string, instance string, mut ws_client websocket.Client, msg &websocket.Message) ! {
 	if provider == websocket_upstream_provider_codex {
 		mut payload_preview := ''
 		if msg.opcode == .text_frame || msg.opcode == .binary_frame || msg.opcode == .continuation {
@@ -525,7 +408,7 @@ fn websocket_upstream_provider_handle_message(mut app App, provider string, inst
 	}
 	match provider {
 		websocket_upstream_provider_feishu {
-			app.feishu_provider_handle_binary_message(instance, mut ws, msg)!
+			app.feishu_provider_handle_binary_message(instance, mut ws_client, msg)!
 		}
 		websocket_upstream_provider_codex {
 			if msg.opcode == .text_frame {
@@ -696,13 +579,13 @@ fn (mut app App) admin_websocket_upstream_events_snapshot(limit int, offset int,
 	}
 }
 
-fn websocket_upstream_message_cb(mut ws websocket.Client, msg &websocket.Message, ref voidptr) ! {
+fn websocket_upstream_message_cb(mut ws_client websocket.Client, msg &websocket.Message, ref voidptr) ! {
 	mut state := unsafe { &WebSocketUpstreamRef(ref) }
 	if isnil(state.app) {
 		return
 	}
 	websocket_upstream_provider_handle_message(mut state.app, state.provider, state.instance, mut
-		ws, msg)!
+		ws_client, msg)!
 }
 
 fn websocket_upstream_error_cb(mut _ws websocket.Client, err string, ref voidptr) ! {

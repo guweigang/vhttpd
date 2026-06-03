@@ -1,109 +1,39 @@
 module main
 
+import admin
 import json
 import net.unix
 import os
 
-struct InternalAdminRequest {
-	mode   string
-	method string
-	path   string
-	query  map[string]string
-	body   string
-}
-
-struct InternalAdminResponse {
-	status  int
-	headers map[string]string
-	body    string
-	error   string
-}
+type InternalAdminRequest = admin.InternalAdminRequest
+type InternalAdminResponse = admin.InternalAdminResponse
 
 fn default_internal_admin_socket() string {
-	return '/tmp/vhttpd_admin_${os.getpid()}.sock'
+	return admin.default_socket()
 }
 
 fn default_internal_admin_socket_for(label string) string {
-	safe_label := sanitize_internal_admin_socket_label(label)
-	if safe_label == '' {
-		return default_internal_admin_socket()
-	}
-	return '/tmp/vhttpd_admin_${os.getpid()}_${safe_label}.sock'
-}
-
-fn sanitize_internal_admin_socket_label(raw string) string {
-	if raw.trim_space() == '' {
-		return ''
-	}
-	mut out := []u8{}
-	for ch in raw.bytes() {
-		if (ch >= `a` && ch <= `z`) || (ch >= `A` && ch <= `Z`) || (ch >= `0` && ch <= `9`) {
-			out << ch
-			continue
-		}
-		if ch in [`-`, `_`, `.`, `:`] {
-			out << `_`
-		}
-	}
-	if out.len == 0 {
-		return ''
-	}
-	return out.bytestr()
+	return admin.default_socket_for(label)
 }
 
 fn internal_admin_normalize_path(raw string) string {
-	mut path := normalize_path(raw)
-	if path == '/admin' {
-		return '/'
-	}
-	if path.starts_with('/admin/') {
-		path = path.all_after('/admin')
-		if path == '' {
-			return '/'
-		}
-	}
-	return path
+	return admin.normalize_admin_path(raw)
 }
 
 fn internal_gateway_normalize_path(raw string) string {
-	mut path := normalize_path(raw)
-	if path == '/gateway' {
-		return '/'
-	}
-	if path.starts_with('/gateway/') {
-		path = path.all_after('/gateway')
-		if path == '' {
-			return '/'
-		}
-	}
-	return path
+	return admin.normalize_gateway_path(raw)
 }
 
 fn internal_admin_json_response(body string) InternalAdminResponse {
-	return InternalAdminResponse{
-		status:  200
-		headers: {
-			'content-type': 'application/json; charset=utf-8'
-		}
-		body:    body
-	}
+	return admin.json_response(body)
 }
 
 fn internal_admin_error_response(status int, message string) InternalAdminResponse {
-	return InternalAdminResponse{
-		status:  status
-		headers: {
-			'content-type': 'application/json; charset=utf-8'
-		}
-		body:    json.encode({
-			'error': message
-		})
-		error:   message
-	}
+	return admin.error_response(status, message)
 }
 
 fn internal_gateway_bad_request(errmsg string) InternalAdminResponse {
-	return internal_admin_error_response(400, errmsg)
+	return admin.bad_request(errmsg)
 }
 
 fn (mut app App) internal_admin_dispatch(req InternalAdminRequest) InternalAdminResponse {

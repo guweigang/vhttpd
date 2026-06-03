@@ -1,11 +1,25 @@
 module main
 import transport
+import ws
 
 import encoding.base64
 import json
 import net.websocket
 import net.unix
 import sync
+
+// ws type aliases
+type WebSocketDispatchConnState = ws.DispatchConnState
+type WebSocketDispatchConnPhase = ws.DispatchConnPhase
+type HubConn = ws.HubConn
+type HubPendingMessage = ws.HubPendingMessage
+type HubSendTarget = ws.HubSendTarget
+type HubDispatchTarget = ws.HubDispatchTarget
+type AdminWebSocketConnSnapshot = ws.ConnSnapshot
+type AdminWebSocketRoomSnapshot = ws.RoomSnapshot
+type AdminWebSocketRuntimeSnapshot = ws.RuntimeSnapshot
+
+// ws function aliases — use ws.dispatch_conn_* directly
 
 @[heap]
 struct WebSocketBridgeState {
@@ -39,88 +53,6 @@ mut:
 	request_id    string
 	trace_id      string
 	start_ms      i64
-}
-
-@[heap]
-struct WebSocketDispatchConnState {
-mut:
-	phase                  WebSocketDispatchConnPhase = .opening
-	close_notified         bool
-	worker_initiated_close bool
-	mu                     sync.Mutex
-}
-
-enum WebSocketDispatchConnPhase {
-	opening
-	open
-	closing
-	closed
-}
-
-struct HubConn {
-	id            string
-	worker_socket string
-	method        string
-	request_id    string
-	trace_id      string
-	path          string
-	query         map[string]string
-	headers       map[string]string
-	remote_addr   string
-mut:
-	client    &websocket.Client           = unsafe { nil }
-	lifecycle &WebSocketDispatchConnState = unsafe { nil }
-}
-
-struct HubPendingMessage {
-	data   string
-	opcode string
-}
-
-struct HubSendTarget {
-	id string
-mut:
-	client &websocket.Client = unsafe { nil }
-}
-
-struct HubDispatchTarget {
-	id          string
-	method      string
-	request_id  string
-	trace_id    string
-	path        string
-	query       map[string]string
-	headers     map[string]string
-	remote_addr string
-}
-
-struct AdminWebSocketConnSnapshot {
-	id         string
-	request_id string
-	trace_id   string
-	path       string
-	rooms      []string
-	metadata   map[string]string
-}
-
-struct AdminWebSocketRoomSnapshot {
-	name         string
-	member_count int
-	members      []string
-}
-
-struct AdminWebSocketRuntimeSnapshot {
-	active_connections   int
-	active_rooms         int
-	returned_connections int
-	returned_rooms       int
-	details              bool
-	limit                int
-	offset               int
-	room_filter          string
-	conn_id              string
-	connections          []AdminWebSocketConnSnapshot
-	rooms                []AdminWebSocketRoomSnapshot
 }
 
 fn websocket_hub_payload_bytes(data string, opcode string) ?([]u8, websocket.OPCode) {
@@ -170,131 +102,6 @@ fn (mut app App) websocket_dispatch_followup_failures(conn_id string, method str
 	return none
 }
 
-fn ws_dispatch_conn_phase(state &WebSocketDispatchConnState) WebSocketDispatchConnPhase {
-	if isnil(state) {
-		return .open
-	}
-	unsafe {
-		mut current := state
-		current.mu.@lock()
-		phase := current.phase
-		current.mu.unlock()
-		return phase
-	}
-}
-
-fn ws_dispatch_conn_can_process_messages(state &WebSocketDispatchConnState) bool {
-	if isnil(state) {
-		return true
-	}
-	return ws_dispatch_conn_phase(state) == .open
-}
-
-fn ws_dispatch_conn_can_send(state &WebSocketDispatchConnState) bool {
-	if isnil(state) {
-		return true
-	}
-	return ws_dispatch_conn_phase(state) == .open
-}
-
-fn ws_dispatch_conn_can_queue(state &WebSocketDispatchConnState) bool {
-	if isnil(state) {
-		return false
-	}
-	return ws_dispatch_conn_phase(state) == .opening
-}
-
-fn ws_dispatch_conn_mark_open(state &WebSocketDispatchConnState) bool {
-	if isnil(state) {
-		return true
-	}
-	unsafe {
-		mut current := state
-		current.mu.@lock()
-		if current.phase != .opening {
-			current.mu.unlock()
-			return current.phase == .open
-		}
-		current.phase = .open
-		current.mu.unlock()
-		return true
-	}
-}
-
-fn ws_dispatch_conn_mark_closing(state &WebSocketDispatchConnState) bool {
-	if isnil(state) {
-		return false
-	}
-	unsafe {
-		mut current := state
-		current.mu.@lock()
-		if current.phase == .closing || current.phase == .closed {
-			current.mu.unlock()
-			return false
-		}
-		current.phase = .closing
-		current.mu.unlock()
-		return true
-	}
-}
-
-fn ws_dispatch_conn_begin_worker_close(state &WebSocketDispatchConnState) bool {
-	if isnil(state) {
-		return true
-	}
-	unsafe {
-		mut current := state
-		current.mu.@lock()
-		if current.phase == .closed || current.close_notified {
-			current.mu.unlock()
-			return false
-		}
-		current.worker_initiated_close = true
-		current.close_notified = true
-		current.phase = .closing
-		current.mu.unlock()
-		return true
-	}
-}
-
-fn ws_dispatch_conn_begin_peer_close(state &WebSocketDispatchConnState) (bool, bool) {
-	if isnil(state) {
-		return true, false
-	}
-	unsafe {
-		mut current := state
-		current.mu.@lock()
-		if current.phase == .closed || current.close_notified {
-			worker_initiated := current.worker_initiated_close
-			current.mu.unlock()
-			return false, worker_initiated
-		}
-		current.close_notified = true
-		current.phase = .closing
-		worker_initiated := current.worker_initiated_close
-		current.mu.unlock()
-		return true, worker_initiated
-	}
-}
-
-fn ws_dispatch_conn_begin_cleanup(state &WebSocketDispatchConnState) bool {
-	if isnil(state) {
-		return true
-	}
-	unsafe {
-		mut current := state
-		current.mu.@lock()
-		if current.phase == .closed {
-			current.mu.unlock()
-			return false
-		}
-		current.phase = .closed
-		current.close_notified = true
-		current.mu.unlock()
-		return true
-	}
-}
-
 fn (mut app App) ws_hub_cleanup_conn(conn_id string) {
 	if conn_id == '' {
 		return
@@ -336,7 +143,7 @@ fn (mut app App) ws_hub_register_conn(conn_id string, worker_socket string, meth
 		headers:       headers.clone()
 		remote_addr:   remote_addr
 		client:        unsafe { client }
-		lifecycle:     lifecycle
+		lifecycle:     unsafe { lifecycle }
 	}
 	app.ws_hub.mu.unlock()
 }
@@ -351,7 +158,7 @@ fn (mut app App) ws_hub_mark_closing(conn_id string) bool {
 	}
 	if hub_conn := app.ws_hub.conns[conn_id] {
 		app.ws_hub.pending.delete(conn_id)
-		return ws_dispatch_conn_mark_closing(hub_conn.lifecycle)
+		return ws.dispatch_conn_mark_closing(hub_conn.lifecycle)
 	}
 	app.ws_hub.pending.delete(conn_id)
 	return false
@@ -365,7 +172,7 @@ fn (mut app App) ws_hub_flush_pending(conn_id string) {
 	mut pending := []HubPendingMessage{}
 	app.ws_hub.mu.@lock()
 	if hub_conn := app.ws_hub.conns[conn_id] {
-		phase := ws_dispatch_conn_phase(hub_conn.lifecycle)
+		phase := ws.dispatch_conn_phase(hub_conn.lifecycle)
 		if phase == .closing || phase == .closed {
 			app.ws_hub.mu.unlock()
 			return
@@ -504,7 +311,7 @@ fn (mut app App) ws_hub_unregister_conn(conn_id string) {
 	}
 	app.ws_hub.mu.@lock()
 	if hub_conn := app.ws_hub.conns[conn_id] {
-		if !ws_dispatch_conn_begin_cleanup(hub_conn.lifecycle) {
+		if !ws.dispatch_conn_begin_cleanup(hub_conn.lifecycle) {
 			app.ws_hub.mu.unlock()
 			return
 		}
@@ -564,8 +371,8 @@ fn (mut app App) ws_hub_send_client(conn_id string, client &websocket.Client, da
 	if conn_id != '' {
 		app.ws_hub.mu.@lock()
 		if hub_conn := app.ws_hub.conns[conn_id] {
-			if !ws_dispatch_conn_can_send(hub_conn.lifecycle) {
-				if ws_dispatch_conn_can_queue(hub_conn.lifecycle) {
+			if !ws.dispatch_conn_can_send(hub_conn.lifecycle) {
+				if ws.dispatch_conn_can_queue(hub_conn.lifecycle) {
 					mut pending := app.ws_hub.pending[conn_id] or { []HubPendingMessage{} }
 					pending << HubPendingMessage{
 						data:   data
@@ -603,8 +410,8 @@ fn (mut app App) ws_hub_send_to(conn_id string, data string, opcode string) bool
 	mut queued := false
 	app.ws_hub.mu.@lock()
 	if hub_conn := app.ws_hub.conns[conn_id] {
-		if !ws_dispatch_conn_can_send(hub_conn.lifecycle) {
-			if ws_dispatch_conn_can_queue(hub_conn.lifecycle) {
+		if !ws.dispatch_conn_can_send(hub_conn.lifecycle) {
+			if ws.dispatch_conn_can_queue(hub_conn.lifecycle) {
 				mut pending := app.ws_hub.pending[conn_id] or { []HubPendingMessage{} }
 				pending << HubPendingMessage{
 					data:   data
@@ -756,7 +563,7 @@ fn (mut app App) ws_hub_close_target(conn_id string, code int, reason string) {
 	mut client := &websocket.Client(unsafe { nil })
 	app.ws_hub.mu.@lock()
 	if hub_conn := app.ws_hub.conns[conn_id] {
-		if !ws_dispatch_conn_mark_closing(hub_conn.lifecycle) {
+		if !ws.dispatch_conn_mark_closing(hub_conn.lifecycle) {
 			app.ws_hub.mu.unlock()
 			return
 		}

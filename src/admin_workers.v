@@ -1,46 +1,15 @@
 module main
 
+import admin
 import json
 import net.http
 import veb
 
-struct WorkerAdminStatus {
-	id                int
-	socket            string
-	alive             bool
-	pid               int
-	rss_kb            i64
-	draining          bool
-	inflight_requests i64
-	served_requests   i64
-	restart_count     int
-	next_retry_ts     i64
-}
-
-struct WorkerPoolAdminStatus {
-	worker_autostart    bool
-	worker_pool_size    int
-	worker_rr_index     int
-	worker_max_requests int
-	worker_sockets      []string
-	workers             []WorkerAdminStatus
-}
-
-struct WorkerAdminErrorResponse {
-	error string
-}
-
-struct WorkerAdminRestartSingleResponse {
-	ok     bool
-	mode   string
-	worker WorkerAdminStatus
-}
-
-struct WorkerAdminRestartAllResponse {
-	ok        bool
-	mode      string
-	restarted int
-}
+type WorkerAdminStatus = admin.WorkerAdminStatus
+type WorkerPoolAdminStatus = admin.WorkerPoolAdminStatus
+type WorkerAdminErrorResponse = admin.WorkerAdminErrorResponse
+type WorkerAdminRestartSingleResponse = admin.WorkerAdminRestartSingleResponse
+type WorkerAdminRestartAllResponse = admin.WorkerAdminRestartAllResponse
 
 @['/admin/workers'; get]
 pub fn (mut app App) admin_workers(mut ctx Context) veb.Result {
