@@ -144,26 +144,41 @@ pub:
 	admin_actions_total i64
 }
 
+pub struct AdminWorkerPoolSummary {
+pub:
+	pool_size        int
+	backend_mode     string
+	queue_capacity   int
+	queue_timeout_ms int
+	queue_depth      int
+}
+
+pub struct AdminLogicExecutorSummary {
+pub:
+	kind      string
+	lifecycle string
+	model     string
+	provider  string
+	details   LogicExecutorAdminDetails
+}
+
+pub struct AdminActiveCounts {
+pub:
+	websockets    int
+	upstreams     int
+	mcp_sessions  int
+	gateways      int
+}
+
 pub struct AdminRuntimeSummary {
 pub:
-	started_at_unix          i64
-	uptime_seconds           i64
-	worker_pool_size         int
-	worker_backend_mode      string
-	worker_queue_capacity    int
-	worker_queue_timeout_ms  int
-	worker_queue_depth       int
-	logic_executor           string
-	logic_executor_lifecycle string
-	logic_executor_model     string
-	logic_provider           string
-	logic_executor_details   LogicExecutorAdminDetails
-	capabilities             map[string]bool
-	active_websockets        int
-	active_upstreams         int
-	active_mcp_sessions      int
-	active_gateways          int
-	stats                    AdminRuntimeStats
+	started_at_unix  i64
+	uptime_seconds   i64
+	worker_pool      AdminWorkerPoolSummary
+	logic_executor   AdminLogicExecutorSummary
+	capabilities     map[string]bool
+	active           AdminActiveCounts
+	stats            AdminRuntimeStats
 }
 
 // ── Dispatch context ──

@@ -41,25 +41,27 @@ fn test_admin_runtime_snapshot_exposes_embedded_logic_executor_identity() {
 		}
 	}
 	snapshot := app.admin_runtime_snapshot()
-	assert snapshot.logic_executor == 'vjsx'
-	assert snapshot.logic_executor_lifecycle == 'embedded_host'
-	assert snapshot.logic_executor_model == 'embedded'
-	assert snapshot.logic_provider == 'vjsx'
-	assert snapshot.worker_backend_mode == 'disabled'
-	assert snapshot.logic_executor_details.kind == 'vjsx'
-	assert snapshot.logic_executor_details.model == 'embedded'
-	assert snapshot.logic_executor_details.runtime_profile == 'node'
-	assert snapshot.logic_executor_details.lane_count == 1
-	assert snapshot.logic_executor_details.module_root == '/tmp/demo'
-	assert snapshot.logic_executor_details.build_root == '/tmp/demo-build'
-	assert snapshot.logic_executor_details.enable_fs
+	assert snapshot.logic_executor.kind == 'vjsx'
+	assert snapshot.logic_executor.lifecycle == 'embedded_host'
+	assert snapshot.logic_executor.model == 'embedded'
+	assert snapshot.logic_executor.provider == 'vjsx'
+	assert snapshot.worker_pool.backend_mode == 'disabled'
+	assert snapshot.logic_executor.details.kind == 'vjsx'
+	assert snapshot.logic_executor.details.model == 'embedded'
+	assert snapshot.logic_executor.details.runtime_profile == 'node'
+	assert snapshot.logic_executor.details.lane_count == 1
+	assert snapshot.logic_executor.details.module_root == '/tmp/demo'
+	assert snapshot.logic_executor.details.build_root == '/tmp/demo-build'
+	assert snapshot.logic_executor.details.enable_fs
 }
 
 fn test_internal_admin_runtime_exposes_worker_logic_executor_identity() {
 	mut app := App{
-		worker_backend_mode:      .required
-		logic_executor_lifecycle: 'php_worker_host'
-		logic_executor:           SocketWorkerExecutor{}
+		worker: WorkerState{
+			worker_backend_mode: .required
+			lifecycle:           'php_worker_host'
+			logic_executor:      SocketWorkerExecutor{}
+		}
 	}
 	resp := app.internal_admin_dispatch(InternalAdminRequest{
 		mode:   'vhttpd_admin'
@@ -68,13 +70,13 @@ fn test_internal_admin_runtime_exposes_worker_logic_executor_identity() {
 	})
 	assert resp.status == 200
 	snapshot := json.decode(AdminRuntimeSummary, resp.body) or { panic(err) }
-	assert snapshot.logic_executor == 'php'
-	assert snapshot.logic_executor_lifecycle == 'php_worker_host'
-	assert snapshot.logic_executor_model == 'worker'
-	assert snapshot.logic_provider == 'php-worker'
-	assert snapshot.worker_backend_mode == 'required'
-	assert snapshot.logic_executor_details.kind == 'php'
-	assert snapshot.logic_executor_details.model == 'worker'
-	assert snapshot.logic_executor_details.runtime_profile == ''
-	assert snapshot.logic_executor_details.lane_count == 0
+	assert snapshot.logic_executor.kind == 'php'
+	assert snapshot.logic_executor.lifecycle == 'php_worker_host'
+	assert snapshot.logic_executor.model == 'worker'
+	assert snapshot.logic_executor.provider == 'php-worker'
+	assert snapshot.worker_pool.backend_mode == 'required'
+	assert snapshot.logic_executor.details.kind == 'php'
+	assert snapshot.logic_executor.details.model == 'worker'
+	assert snapshot.logic_executor.details.runtime_profile == ''
+	assert snapshot.logic_executor.details.lane_count == 0
 }

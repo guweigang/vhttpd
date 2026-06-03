@@ -60,6 +60,10 @@ fn (mut app App) admin_stats_snapshot() executor.AdminRuntimeStats {
 	}
 }
 
+type AdminWorkerPoolSummary = executor.AdminWorkerPoolSummary
+type AdminLogicExecutorSummary = executor.AdminLogicExecutorSummary
+type AdminActiveCounts = executor.AdminActiveCounts
+
 fn (mut app App) admin_runtime_snapshot() executor.AdminRuntimeSummary {
 	stats := app.admin_stats_snapshot()
 	mut active_websockets := 0
@@ -94,24 +98,30 @@ fn (mut app App) admin_runtime_snapshot() executor.AdminRuntimeSummary {
 	}
 	logic_details := app.logic_executor_admin_details()
 	return executor.AdminRuntimeSummary{
-		started_at_unix:          stats.started_at_unix
-		uptime_seconds:           stats.uptime_seconds
-		worker_pool_size:         app.worker.worker_backend.sockets.len
-		worker_backend_mode:      '${app.worker.worker_backend_mode}'
-		worker_queue_capacity:    app.worker.worker_backend.queue_capacity
-		worker_queue_timeout_ms:  app.worker.worker_backend.queue_timeout_ms
-		worker_queue_depth:       worker_queue_depth
-		logic_executor:           app.logic_executor_kind()
-		logic_executor_lifecycle: app.worker.lifecycle
-		logic_executor_model:     '${app.logic_executor_model()}'
-		logic_provider:           app.logic_executor_provider()
-		logic_executor_details:   logic_details
-		capabilities:             capabilities
-		active_websockets:        active_websockets
-		active_upstreams:         active_upstreams
-		active_mcp_sessions:      active_mcp_sessions
-		active_gateways:          app.provider_runtime_gateway_count()
-		stats:                    stats
+		started_at_unix: stats.started_at_unix
+		uptime_seconds:  stats.uptime_seconds
+		worker_pool: AdminWorkerPoolSummary{
+			pool_size:        app.worker.worker_backend.sockets.len
+			backend_mode:     '${app.worker.worker_backend_mode}'
+			queue_capacity:   app.worker.worker_backend.queue_capacity
+			queue_timeout_ms: app.worker.worker_backend.queue_timeout_ms
+			queue_depth:      worker_queue_depth
+		}
+		logic_executor: AdminLogicExecutorSummary{
+			kind:      app.logic_executor_kind()
+			lifecycle: app.worker.lifecycle
+			model:     '${app.logic_executor_model()}'
+			provider:  app.logic_executor_provider()
+			details:   logic_details
+		}
+		capabilities: capabilities
+		active: AdminActiveCounts{
+			websockets:   active_websockets
+			upstreams:    active_upstreams
+			mcp_sessions: active_mcp_sessions
+			gateways:     app.provider_runtime_gateway_count()
+		}
+		stats: stats
 	}
 }
 
