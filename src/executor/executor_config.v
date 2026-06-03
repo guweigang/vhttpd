@@ -1,5 +1,4 @@
-module main
-import executor
+module executor
 
 import config
 
@@ -8,7 +7,7 @@ import os
 pub struct ExecutorRuntimeSelection {
 pub:
 	executor            LogicExecutor
-	worker_backend_mode executor.WorkerBackendMode      = .required
+	worker_backend_mode WorkerBackendMode      = .required
 	lifecycle           LogicExecutorLifecycle = PhpWorkerExecutorLifecycle{}
 }
 

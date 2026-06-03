@@ -1,4 +1,4 @@
-module main
+module executor
 
 import hash.fnv1a
 import os

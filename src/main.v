@@ -33,7 +33,7 @@ pub mut:
 	started_at_unix                             i64
 	worker_backend                              WorkerBackendRuntime
 	worker_backend_mode                         executor.WorkerBackendMode = .required
-	logic_executor                              LogicExecutor     = SocketWorkerExecutor{}
+	logic_executor                              executor.LogicExecutor = executor.SocketWorkerExecutor{}
 	logic_executor_lifecycle                    string
 	internal_admin_socket                       string
 	stream_dispatch                             bool
@@ -314,7 +314,7 @@ fn is_websocket_upgrade(req http.Request) bool {
 		&& key != ''
 }
 
-fn worker_websocket_open(mut app App, mut conn unix.StreamConn, req http.Request, remote_addr string, path string, req_id string, trace_id string) !(bool, int, string) {
+pub fn (mut app App) worker_websocket_open(mut conn unix.StreamConn, req http.Request, remote_addr string, path string, req_id string, trace_id string) !(bool, int, string) {
 	normalized_path, query_string := normalize_request_target(path)
 	query := parse_query_map(query_string)
 	room_members, member_metadata, room_counts, presence_users :=
@@ -606,7 +606,7 @@ fn proxy_worker_websocket_dispatch(mut app App, mut ctx Context, method string, 
 		app.ws_hub_meta_snapshot(req_id), map[string][]string{}, map[string]map[string]string{},
 		map[string]int{}, map[string][]string{})
 	resp := app.kernel_dispatch_websocket_event(open_frame) or {
-		err_msg := inproc_vjsx_normalize_error_message(err.msg(),
+		err_msg := executor.inproc_vjsx_normalize_error_message(err.msg(),
 			'inproc_vjsx_executor_websocket_open_failed')
 		log.error('[vhttpd] kernel_dispatch_websocket_event failed trace_id=${trace_id} path=${normalized_path} error=${err_msg}')
 		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}

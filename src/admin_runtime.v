@@ -5,55 +5,10 @@ import json
 import time
 import veb
 
-struct AdminRuntimeStats {
-	started_at_unix                        i64
-	uptime_seconds                         i64
-	http_requests_total                    i64
-	http_errors_total                      i64
-	http_timeouts_total                    i64
-	http_streams_total                     i64
-	admin_actions_total                    i64
-	worker_queue_waits_total               i64
-	worker_queue_rejected_total            i64
-	worker_queue_timeouts_total            i64
-	upstream_plans_total                   i64
-	upstream_plan_errors_total             i64
-	mcp_sessions_expired_total             i64
-	mcp_sessions_evicted_total             i64
-	mcp_pending_dropped_total              i64
-	mcp_sampling_capability_warnings_total i64
-	mcp_sampling_capability_dropped_total  i64
-	mcp_sampling_capability_errors_total   i64
-	feishu_connect_attempts                i64
-	feishu_connect_successes               i64
-	feishu_received_frames                 i64
-	feishu_acked_events                    i64
-	feishu_messages_sent                   i64
-	feishu_send_errors                     i64
-}
+type AdminRuntimeStats = executor.AdminRuntimeStats
+type AdminRuntimeSummary = executor.AdminRuntimeSummary
 
-struct AdminRuntimeSummary {
-	started_at_unix          i64
-	uptime_seconds           i64
-	worker_pool_size         int
-	worker_backend_mode      string
-	worker_queue_capacity    int
-	worker_queue_timeout_ms  int
-	worker_queue_depth       int
-	logic_executor           string
-	logic_executor_lifecycle string
-	logic_executor_model     string
-	logic_provider           string
-	logic_executor_details   executor.LogicExecutorAdminDetails
-	capabilities             map[string]bool
-	active_websockets        int
-	active_upstreams         int
-	active_mcp_sessions      int
-	active_gateways          int
-	stats                    AdminRuntimeStats
-}
-
-fn (mut app App) admin_stats_snapshot() AdminRuntimeStats {
+fn (mut app App) admin_stats_snapshot() executor.AdminRuntimeStats {
 	app.mu.@lock()
 	defer {
 		app.mu.unlock()
@@ -62,7 +17,7 @@ fn (mut app App) admin_stats_snapshot() AdminRuntimeStats {
 	now := time.now().unix()
 	started := if app.started_at_unix > 0 { app.started_at_unix } else { now }
 	uptime := if now > started { now - started } else { 0 }
-	return AdminRuntimeStats{
+	return executor.AdminRuntimeStats{
 		started_at_unix:                        started
 		uptime_seconds:                         uptime
 		http_requests_total:                    app.stat_http_requests_total
@@ -90,7 +45,7 @@ fn (mut app App) admin_stats_snapshot() AdminRuntimeStats {
 	}
 }
 
-fn (mut app App) admin_runtime_snapshot() AdminRuntimeSummary {
+fn (mut app App) admin_runtime_snapshot() executor.AdminRuntimeSummary {
 	stats := app.admin_stats_snapshot()
 	mut active_websockets := 0
 	app.ws_hub_mu.@lock()
@@ -123,7 +78,7 @@ fn (mut app App) admin_runtime_snapshot() AdminRuntimeSummary {
 		capabilities[key] = value
 	}
 	logic_details := app.logic_executor_admin_details()
-	return AdminRuntimeSummary{
+	return executor.AdminRuntimeSummary{
 		started_at_unix:          stats.started_at_unix
 		uptime_seconds:           stats.uptime_seconds
 		worker_pool_size:         app.worker_backend.sockets.len

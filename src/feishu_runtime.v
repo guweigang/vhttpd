@@ -13,6 +13,7 @@ import time
 import veb
 import x.json2
 import log
+import executor
 
 @[markused]
 const feishu_runtime_frame_type_control = 0
@@ -582,27 +583,7 @@ fn (mut app App) feishu_runtime_http_post_multipart_form(url string, cfg http.Po
 	return feishu_runtime_http_post_multipart_form_locked(&app, url, cfg)
 }
 
-struct FeishuRuntimeEventSummary {
-	event_id          string
-	event_kind        string
-	event_type        string
-	message_id        string
-	message_type      string
-	chat_id           string
-	chat_type         string
-	target_type       string
-	target            string
-	open_message_id   string
-	root_id           string
-	parent_id         string
-	create_time       string
-	sender_id         string
-	sender_id_type    string
-	sender_tenant_key string
-	action_tag        string
-	action_value      string
-	token             string
-}
+// FeishuRuntimeEventSummary is executor.FeishuRuntimeEventSummary (used directly)
 
 struct FeishuRuntimeWsResponsePayload {
 	code    int
@@ -1192,8 +1173,8 @@ fn feishu_runtime_header_map(headers []FeishuRuntimeProtoHeader) map[string]stri
 	return out
 }
 
-fn feishu_runtime_event_summary(payload string) FeishuRuntimeEventSummary {
-	parsed := json2.decode[json2.Any](payload) or { return FeishuRuntimeEventSummary{} }
+fn feishu_runtime_event_summary(payload string) executor.FeishuRuntimeEventSummary {
+	parsed := json2.decode[json2.Any](payload) or { return executor.FeishuRuntimeEventSummary{} }
 	root := parsed.as_map()
 	header := feishu_runtime_json_map_field(root, 'header')
 	event := feishu_runtime_json_map_field(root, 'event')
@@ -1257,7 +1238,7 @@ fn feishu_runtime_event_summary(payload string) FeishuRuntimeEventSummary {
 		target_type = 'open_message_id'
 		target = open_message_id
 	}
-	return FeishuRuntimeEventSummary{
+	return executor.FeishuRuntimeEventSummary{
 		event_id:          feishu_runtime_json_field_string(header, 'event_id')
 		event_kind:        event_kind
 		event_type:        feishu_runtime_json_field_string(header, 'event_type')
@@ -1284,7 +1265,7 @@ fn feishu_runtime_event_summary(payload string) FeishuRuntimeEventSummary {
 	}
 }
 
-fn feishu_runtime_should_dispatch_upstream(summary FeishuRuntimeEventSummary) bool {
+fn feishu_runtime_should_dispatch_upstream(summary executor.FeishuRuntimeEventSummary) bool {
 	if summary.event_type == 'im.message.message_read_v1' {
 		return false
 	}
@@ -2468,7 +2449,7 @@ fn (mut app App) feishu_provider_handle_binary_message(instance string, mut ws w
 		bridge_resp := app.feishu_card_bridge_dispatch_callback(app_name, trace_id, summary,
 			payload) or {
 			log.error('[feishu] ❌ bridge upstream dispatch failed: trace_id=${trace_id} event_type=${summary.event_type} message_id=${summary.message_id} ${err}')
-			FeishuCardBridgeResult{
+			executor.FeishuCardBridgeResult{
 				error: err.msg()
 			}
 		}

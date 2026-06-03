@@ -1,4 +1,4 @@
-module main
+module executor
 
 import os
 import vjsx

@@ -65,7 +65,7 @@ pub mut:
 	card_bridge_mu            sync.Mutex
 	card_bridge_send_mu       sync.Mutex
 	card_bridge_clients       map[string]&websocket.Client            = map[string]&websocket.Client{}
-	card_bridge_pending       map[string]chan FeishuCardBridgeResult  = map[string]chan FeishuCardBridgeResult{}
+	card_bridge_pending       map[string]chan executor.FeishuCardBridgeResult  = map[string]chan executor.FeishuCardBridgeResult{}
 	card_bridge_proxy_pending map[string]chan FeishuBridgeProxyResult = map[string]chan FeishuBridgeProxyResult{}
 	card_bridge_client_conn   &websocket.Client                       = unsafe { nil }
 	card_bridge_enabled_flag  bool

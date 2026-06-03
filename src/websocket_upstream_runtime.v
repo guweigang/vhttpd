@@ -1,5 +1,6 @@
 module main
 import transport
+import executor
 
 import json
 import log
@@ -303,32 +304,7 @@ fn (mut app App) fixture_websocket_emit(req WebSocketUpstreamFixtureEmitRequest)
 	return snapshot
 }
 
-struct WebSocketUpstreamCommandActivity {
-mut:
-	event          string
-	provider       string
-	instance       string
-	target_type    string @[json: 'target_type']
-	target         string
-	message_type   string @[json: 'message_type']
-	content        string
-	content_fields map[string]string @[json: 'content_fields']
-	text           string
-	uuid           string
-	metadata       map[string]string
-
-	type_                string @[json: 'type']
-	stream_id            string @[json: 'stream_id']
-	session_key          string @[json: 'session_key']
-	task_type            string @[json: 'task_type']
-	prompt               string
-	source_activity_id   string @[json: 'source_activity_id']
-	source_command_index int    @[json: 'source_command_index']
-	status               string
-	error                string
-	message_id           string @[json: 'message_id']
-	executed_at          i64    @[json: 'executed_at']
-}
+type WebSocketUpstreamCommandActivity = executor.WebSocketUpstreamCommandActivity
 
 struct WebSocketUpstreamActivitySnapshot {
 mut:

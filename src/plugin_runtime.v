@@ -4,31 +4,7 @@ import config
 
 import log
 
-pub struct PluginCallRequest {
-pub:
-	plugin     string
-	capability string
-	op         string
-	request_id string @[json: 'request_id']
-	trace_id   string @[json: 'trace_id']
-	payload    string
-	metadata   map[string]string
-}
 
-pub struct PluginCallResponse {
-pub:
-	ok     bool
-	result string
-	error  string
-}
-
-pub type PluginStreamFrameFn = fn (string) !bool
-
-pub struct PluginStreamCallResponse {
-pub:
-	streamed bool
-	response PluginCallResponse
-}
 
 fn plugin_config_app_entry(cfg config.PluginConfig) string {
 	if cfg.app_entry.trim_space() != '' {

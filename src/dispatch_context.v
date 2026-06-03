@@ -1,14 +1,8 @@
 module main
 import transport
+import executor
 
-
-pub struct DispatchContext {
-pub:
-	session  transport.SessionHandle
-	payload  string
-	metadata map[string]string
-	event    string
-}
+pub type DispatchContext = executor.DispatchContext
 
 pub fn DispatchContext.from_websocket_upstream(req transport.WorkerWebSocketUpstreamDispatchRequest) DispatchContext {
 	return DispatchContext{

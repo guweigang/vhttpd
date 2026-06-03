@@ -1,4 +1,5 @@
 module main
+import executor
 
 import json
 import log
@@ -62,12 +63,7 @@ struct FeishuCardBridgeDispatchResult {
 	error      string
 }
 
-struct FeishuCardBridgeResult {
-	status  int
-	headers map[string]string
-	body    string
-	error   string
-}
+// FeishuCardBridgeResult is executor.FeishuCardBridgeResult (used directly)
 
 struct FeishuBridgeProxyRequest {
 	type_      string @[json: 'type']
@@ -221,13 +217,13 @@ fn (mut app App) feishu_card_bridge_send(client_id string, payload string) bool 
 	return true
 }
 
-fn (mut app App) feishu_card_bridge_store_pending(request_id string, ch chan FeishuCardBridgeResult) {
+fn (mut app App) feishu_card_bridge_store_pending(request_id string, ch chan executor.FeishuCardBridgeResult) {
 	app.feishu.card_bridge_mu.@lock()
 	app.feishu.card_bridge_pending[request_id] = ch
 	app.feishu.card_bridge_mu.unlock()
 }
 
-fn (mut app App) feishu_card_bridge_take_pending(request_id string) ?chan FeishuCardBridgeResult {
+fn (mut app App) feishu_card_bridge_take_pending(request_id string) ?chan executor.FeishuCardBridgeResult {
 	app.feishu.card_bridge_mu.@lock()
 	defer {
 		app.feishu.card_bridge_mu.unlock()
@@ -261,7 +257,7 @@ fn (mut app App) feishu_card_bridge_take_proxy_pending(request_id string) ?chan 
 
 fn (mut app App) feishu_card_bridge_resolve_pending(result FeishuCardBridgeDispatchResult) {
 	ch := app.feishu_card_bridge_take_pending(result.request_id) or { return }
-	ch <- FeishuCardBridgeResult{
+	ch <- executor.FeishuCardBridgeResult{
 		status:  if result.status > 0 { result.status } else { 200 }
 		headers: result.headers.clone()
 		body:    result.body
@@ -269,7 +265,7 @@ fn (mut app App) feishu_card_bridge_resolve_pending(result FeishuCardBridgeDispa
 	}
 }
 
-fn (mut app App) feishu_card_bridge_dispatch_callback(app_name string, trace_id string, summary FeishuRuntimeEventSummary, payload string) !FeishuCardBridgeResult {
+fn (mut app App) feishu_card_bridge_dispatch_callback(app_name string, trace_id string, summary executor.FeishuRuntimeEventSummary, payload string) !executor.FeishuCardBridgeResult {
 	client_id := app.feishu.card_bridge_target_id.trim_space()
 	if client_id == '' {
 		return error('bridge_target_unconfigured')
@@ -278,7 +274,7 @@ fn (mut app App) feishu_card_bridge_dispatch_callback(app_name string, trace_id 
 		return error('bridge_client_unavailable:${client_id}')
 	}
 	request_id := 'bridge-${time.now().unix_micro()}'
-	ch := chan FeishuCardBridgeResult{cap: 1}
+	ch := chan executor.FeishuCardBridgeResult{cap: 1}
 	app.feishu_card_bridge_store_pending(request_id, ch)
 	defer {
 		dummy := app.feishu_card_bridge_take_pending(request_id) or { ch }
@@ -785,7 +781,7 @@ pub fn (mut app App) feishu_card_bridge_gateway_dispatch(mut ctx Context) veb.Re
 	}
 	summary := feishu_runtime_event_summary(req.payload)
 	bridge_trace_id := if req.trace_id.trim_space() != '' { req.trace_id } else { trace_id }
-	result := app.feishu_card_bridge_dispatch_callback(req.app, bridge_trace_id, FeishuRuntimeEventSummary{
+	result := app.feishu_card_bridge_dispatch_callback(req.app, bridge_trace_id, executor.FeishuRuntimeEventSummary{
 		event_id:        summary.event_id
 		event_kind:      if summary.event_kind != '' { summary.event_kind } else { 'action' }
 		event_type:      if req.event_type.trim_space() != '' { req.event_type } else { summary.event_type }
