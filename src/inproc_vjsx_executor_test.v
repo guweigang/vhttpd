@@ -2539,13 +2539,15 @@ export default app;
 		executor.close()
 	}
 	mut app := App{
-		ws_hub_conns:        map[string]HubConn{}
-		ws_hub_room_members: map[string]map[string]bool{}
-		ws_hub_conn_rooms:   map[string]map[string]bool{}
-		ws_hub_conn_meta:    map[string]map[string]string{}
-		ws_hub_pending:      map[string][]HubPendingMessage{}
+		ws_hub: WebSocketHubState{
+			conns:        map[string]HubConn{}
+			room_members: map[string]map[string]bool{}
+			conn_rooms:   map[string]map[string]bool{}
+			conn_meta:    map[string]map[string]string{}
+			pending:      map[string][]HubPendingMessage{}
+		}
 	}
-	app.ws_hub_conns['ws_timer'] = HubConn{
+	app.ws_hub.conns['ws_timer'] = HubConn{
 		id:         'ws_timer'
 		request_id: 'req_ws_timer'
 		trace_id:   'trace_ws_timer'
@@ -2611,13 +2613,15 @@ export default app;
 		executor.close()
 	}
 	mut app := App{
-		ws_hub_conns:        map[string]HubConn{}
-		ws_hub_room_members: map[string]map[string]bool{}
-		ws_hub_conn_rooms:   map[string]map[string]bool{}
-		ws_hub_conn_meta:    map[string]map[string]string{}
-		ws_hub_pending:      map[string][]HubPendingMessage{}
+		ws_hub: WebSocketHubState{
+			conns:        map[string]HubConn{}
+			room_members: map[string]map[string]bool{}
+			conn_rooms:   map[string]map[string]bool{}
+			conn_meta:    map[string]map[string]string{}
+			pending:      map[string][]HubPendingMessage{}
+		}
 	}
-	app.ws_hub_conns['ws_timer_pump'] = HubConn{
+	app.ws_hub.conns['ws_timer_pump'] = HubConn{
 		id:         'ws_timer_pump'
 		request_id: 'req_ws_timer_pump'
 		trace_id:   'trace_ws_timer_pump'
@@ -2686,13 +2690,15 @@ export default app;
 		executor.close()
 	}
 	mut app := App{
-		ws_hub_conns:        map[string]HubConn{}
-		ws_hub_room_members: map[string]map[string]bool{}
-		ws_hub_conn_rooms:   map[string]map[string]bool{}
-		ws_hub_conn_meta:    map[string]map[string]string{}
-		ws_hub_pending:      map[string][]HubPendingMessage{}
+		ws_hub: WebSocketHubState{
+			conns:        map[string]HubConn{}
+			room_members: map[string]map[string]bool{}
+			conn_rooms:   map[string]map[string]bool{}
+			conn_meta:    map[string]map[string]string{}
+			pending:      map[string][]HubPendingMessage{}
+		}
 	}
-	app.ws_hub_conns['ws_timer_failure'] = HubConn{
+	app.ws_hub.conns['ws_timer_failure'] = HubConn{
 		id:         'ws_timer_failure'
 		request_id: 'req_ws_timer_failure'
 		trace_id:   'trace_ws_timer_failure'
@@ -2972,13 +2978,15 @@ export default app;
 		executor.close()
 	}
 	mut app := App{
-		ws_hub_conns:        map[string]HubConn{}
-		ws_hub_room_members: map[string]map[string]bool{}
-		ws_hub_conn_rooms:   map[string]map[string]bool{}
-		ws_hub_conn_meta:    map[string]map[string]string{}
-		ws_hub_pending:      map[string][]HubPendingMessage{}
+		ws_hub: WebSocketHubState{
+			conns:        map[string]HubConn{}
+			room_members: map[string]map[string]bool{}
+			conn_rooms:   map[string]map[string]bool{}
+			conn_meta:    map[string]map[string]string{}
+			pending:      map[string][]HubPendingMessage{}
+		}
 	}
-	app.ws_hub_conns['ws_main_failure'] = HubConn{
+	app.ws_hub.conns['ws_main_failure'] = HubConn{
 		id:         'ws_main_failure'
 		request_id: 'req_ws_main_failure'
 		trace_id:   'trace_ws_main_failure'
@@ -3356,11 +3364,13 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_nudges_control_when_server_data_do
 	}
 	mut app := App{
 		runtime_config_json: '{"relay":{"controlNudgeDelayMs":20,"controlResetDelayMs":200}}'
-		ws_hub_conns:        map[string]HubConn{}
-		ws_hub_room_members: map[string]map[string]bool{}
-		ws_hub_conn_rooms:   map[string]map[string]bool{}
-		ws_hub_conn_meta:    map[string]map[string]string{}
-		ws_hub_pending:      map[string][]HubPendingMessage{}
+		ws_hub: WebSocketHubState{
+			conns:        map[string]HubConn{}
+			room_members: map[string]map[string]bool{}
+			conn_rooms:   map[string]map[string]bool{}
+			conn_meta:    map[string]map[string]string{}
+			pending:      map[string][]HubPendingMessage{}
+		}
 	}
 	server_id := 'srv_nudge_demo'
 	control_open := executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
