@@ -3,6 +3,7 @@ import transport
 import config
 import executor
 import provider
+import openai
 
 import json
 import os
@@ -113,7 +114,7 @@ fn build_app_runtime(provider_settings ProviderRuntimeSettings, executor_plan Lo
 			endpoints:        cfg.openai.endpoints
 			backends:         cfg.openai.backends.clone()
 			routes:           cfg.openai.routes.clone()
-			responses:        state_store.new_memory_state_store[OpenAIResponseRecord]()
+			responses:        state_store.new_memory_state_store[openai.OpenAIResponseRecord]()
 		}
 		providers:                                ProviderHost{
 			registry: map[string]Provider{}

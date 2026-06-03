@@ -6,6 +6,8 @@ import stats
 import assets
 import plugins
 import admin
+import openai
+import ws
 
 import net.websocket
 import state_store
@@ -25,26 +27,7 @@ pub mut:
 	stat_queue_timeouts_total i64
 }
 
-pub struct WebSocketHubState {
-pub mut:
-	mu                                  sync.Mutex
-	send_mu                             sync.Mutex
-	upstream_mu                         sync.Mutex
-	conns                               map[string]HubConn
-	room_members                        map[string]map[string]bool
-	conn_rooms                          map[string]map[string]bool
-	conn_meta                           map[string]map[string]string
-	pending                             map[string][]HubPendingMessage
-	dispatch_mode                       bool
-	recent_dispatch_limit               int
-	auto_start_dynamic_upstreams        bool
-	upstream_started                    map[string]bool
-	fixture_runtime                     map[string]FixtureWebSocketUpstreamRuntime
-	recent_activities                   []WebSocketUpstreamActivitySnapshot
-	upstream_sessions                   map[string]UpstreamRuntimeSession
-	stat_upstream_plans_total           i64
-	stat_upstream_plan_errors_total     i64
-}
+type WebSocketHubState = ws.HubState
 
 pub struct FeishuState {
 pub mut:
@@ -97,23 +80,6 @@ type AssetsState = assets.AssetsState
 
 type PluginState = plugins.PluginState
 
-pub struct HttpStats {
-pub mut:
-	requests_total       i64
-	errors_total         i64
-	timeouts_total       i64
-	streams_total        i64
-	admin_actions_total  i64
-}
+type HttpStats = stats.HttpStats
 
-pub struct OpenaiState {
-pub mut:
-	enabled          bool
-	base_path        string
-	default_backend  string
-	plugin           string
-	endpoints        config.OpenAIEndpointsConfig
-	backends         map[string]config.OpenAIBackendConfig
-	routes           map[string]config.OpenAIRouteConfig
-	responses        state_store.MemoryStateStore[OpenAIResponseRecord]
-}
+type OpenaiState = openai.OpenaiState

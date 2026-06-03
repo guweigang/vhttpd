@@ -316,3 +316,46 @@ pub:
 	offset         int
 	activities     []UpstreamActivitySnapshot
 }
+
+// ── Upstream Runtime Session ──
+
+pub struct UpstreamRuntimeSession {
+pub:
+	id              string
+	request_id      string
+	trace_id        string
+	role            string
+	provider        string
+	method          string
+	path            string
+	name            string
+	transport       string
+	codec           string
+	mapper          string
+	stream_type     string
+	source          string
+	started_at_unix i64
+}
+
+// ── WebSocket Hub State ──
+
+pub struct HubState {
+pub mut:
+	mu                           sync.Mutex
+	send_mu                      sync.Mutex
+	upstream_mu                  sync.Mutex
+	conns                        map[string]HubConn
+	room_members                 map[string]map[string]bool
+	conn_rooms                   map[string]map[string]bool
+	conn_meta                    map[string]map[string]string
+	pending                      map[string][]HubPendingMessage
+	dispatch_mode                bool
+	recent_dispatch_limit        int
+	auto_start_dynamic_upstreams bool
+	upstream_started             map[string]bool
+	fixture_runtime              map[string]FixtureRuntime
+	recent_activities            []UpstreamActivitySnapshot
+	upstream_sessions            map[string]UpstreamRuntimeSession
+	stat_upstream_plans_total    i64
+	stat_upstream_plan_errors_total i64
+}

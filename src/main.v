@@ -120,22 +120,7 @@ fn runtime_trace(label string, fields map[string]string) {
 	f.writeln(json.encode(row)) or {}
 }
 
-struct UpstreamRuntimeSession {
-	id              string
-	request_id      string
-	trace_id        string
-	role            string
-	provider        string
-	method          string
-	path            string
-	name            string
-	transport       string
-	codec           string
-	mapper          string
-	stream_type     string
-	source          string
-	started_at_unix i64
-}
+type UpstreamRuntimeSession = ws.UpstreamRuntimeSession
 
 fn header_map_from_request(req http.Request) map[string]string {
 	mut out := map[string]string{}

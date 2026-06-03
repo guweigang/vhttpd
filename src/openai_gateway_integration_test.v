@@ -1,6 +1,7 @@
 module main
 import config
 import provider
+import openai
 
 import net
 import net.http
@@ -269,7 +270,7 @@ fn openai_integration_start_gateway(port int, upstream_port int, plugin_file str
 					upstream_model: 'builtin-upstream-model'
 				}
 			}
-			responses:           state_store.new_memory_state_store[OpenAIResponseRecord]()
+			responses:           state_store.new_memory_state_store[openai.OpenAIResponseRecord]()
 		}
 		upstream_sessions:          map[string]UpstreamRuntimeSession{}
 		mcp_sessions:               map[string]McpSession{}

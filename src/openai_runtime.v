@@ -1,5 +1,6 @@
 module main
 import config
+import openai
 
 import json
 import net
@@ -79,19 +80,7 @@ struct OpenAIPluginModelsResult {
 	models  []string
 }
 
-struct OpenAIResponseRecord {
-	id              string
-	backend_name    string
-	backend_kind    string
-	executor        string
-	model           string
-	status          string
-	created_at_unix i64
-	updated_at_unix i64
-	request_id      string
-	trace_id        string
-	body            string
-}
+type OpenAIResponseRecord = openai.OpenAIResponseRecord
 
 @[heap]
 struct OpenAIResponsesStreamRegistryState {
