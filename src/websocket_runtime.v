@@ -2,7 +2,6 @@ module main
 import transport
 import ws
 
-import encoding.base64
 import json
 import net.websocket
 import net.unix
@@ -55,20 +54,6 @@ mut:
 	start_ms      i64
 }
 
-fn websocket_hub_payload_bytes(data string, opcode string) ?([]u8, websocket.OPCode) {
-	return match opcode {
-		'', 'text' {
-			data.bytes(), websocket.OPCode.text_frame
-		}
-		'binary' {
-			base64.decode(data), websocket.OPCode.binary_frame
-		}
-		else {
-			none
-		}
-	}
-}
-
 fn (mut app App) websocket_dispatch_command_failures_frame(conn_id string, method string, path string, query map[string]string, headers map[string]string, remote_addr string, req_id string, trace_id string, failures []transport.WorkerWebSocketDispatchCommandFailure) transport.WorkerWebSocketFrame {
 	room_members, member_metadata, room_counts, presence_users :=
 		app.ws_hub_presence_snapshot(conn_id)
@@ -103,303 +88,55 @@ fn (mut app App) websocket_dispatch_followup_failures(conn_id string, method str
 }
 
 fn (mut app App) ws_hub_cleanup_conn(conn_id string) {
-	if conn_id == '' {
-		return
-	}
-	app.ws_hub.mu.@lock()
-	app.ws_hub.conns.delete(conn_id)
-	if rooms := app.ws_hub.conn_rooms[conn_id] {
-		for room, _ in rooms.clone() {
-			mut members := (app.ws_hub.room_members[room] or {
-				map[string]bool{}
-			}).clone()
-			members.delete(conn_id)
-			if members.len == 0 {
-				app.ws_hub.room_members.delete(room)
-			} else {
-				app.ws_hub.room_members[room] = members.clone()
-			}
-		}
-	}
-	app.ws_hub.conn_rooms.delete(conn_id)
-	app.ws_hub.conn_meta.delete(conn_id)
-	app.ws_hub.pending.delete(conn_id)
-	app.ws_hub.mu.unlock()
+	app.ws_hub.cleanup_conn(conn_id)
 }
 
 fn (mut app App) ws_hub_register_conn(conn_id string, worker_socket string, method string, req_id string, trace_id string, path string, query map[string]string, headers map[string]string, remote_addr string, client &websocket.Client, lifecycle &WebSocketDispatchConnState) {
-	if conn_id == '' || isnil(client) {
-		return
-	}
-	app.ws_hub.mu.@lock()
-	app.ws_hub.conns[conn_id] = HubConn{
-		id:            conn_id
-		worker_socket: worker_socket
-		method:        method
-		request_id:    req_id
-		trace_id:      trace_id
-		path:          path
-		query:         query.clone()
-		headers:       headers.clone()
-		remote_addr:   remote_addr
-		client:        unsafe { client }
-		lifecycle:     unsafe { lifecycle }
-	}
-	app.ws_hub.mu.unlock()
+	app.ws_hub.register_conn(conn_id, worker_socket, method, req_id, trace_id, path, query, headers, remote_addr, client, lifecycle)
 }
 
 fn (mut app App) ws_hub_mark_closing(conn_id string) bool {
-	if conn_id == '' {
-		return false
-	}
-	app.ws_hub.mu.@lock()
-	defer {
-		app.ws_hub.mu.unlock()
-	}
-	if hub_conn := app.ws_hub.conns[conn_id] {
-		app.ws_hub.pending.delete(conn_id)
-		return ws.dispatch_conn_mark_closing(hub_conn.lifecycle)
-	}
-	app.ws_hub.pending.delete(conn_id)
-	return false
+	return app.ws_hub.mark_closing(conn_id)
 }
 
 fn (mut app App) ws_hub_flush_pending(conn_id string) {
-	if conn_id == '' {
-		return
-	}
-	mut client := &websocket.Client(unsafe { nil })
-	mut pending := []HubPendingMessage{}
-	app.ws_hub.mu.@lock()
-	if hub_conn := app.ws_hub.conns[conn_id] {
-		phase := ws.dispatch_conn_phase(hub_conn.lifecycle)
-		if phase == .closing || phase == .closed {
-			app.ws_hub.mu.unlock()
-			return
-		}
-		if phase != .open {
-			app.ws_hub.mu.unlock()
-			return
-		}
-		client = hub_conn.client
-	}
-	if queued := app.ws_hub.pending[conn_id] {
-		pending = queued.clone()
-		app.ws_hub.pending.delete(conn_id)
-	}
-	app.ws_hub.mu.unlock()
-	if isnil(client) {
-		return
-	}
-	for item in pending {
-		app.ws_hub_send_client(conn_id, client, item.data, item.opcode)
-	}
+	app.ws_hub.flush_pending(conn_id)
 }
 
 fn (mut app App) ws_hub_rooms_snapshot(conn_id string) []string {
-	if conn_id == '' {
-		return []string{}
-	}
-	app.ws_hub.mu.@lock()
-	defer {
-		app.ws_hub.mu.unlock()
-	}
-	mut rooms := []string{}
-	if joined := app.ws_hub.conn_rooms[conn_id] {
-		for room, present in joined {
-			if present {
-				rooms << room
-			}
-		}
-	}
-	rooms.sort()
-	return rooms
+	return app.ws_hub.rooms_snapshot(conn_id)
 }
 
 fn (mut app App) ws_hub_meta_snapshot(conn_id string) map[string]string {
-	if conn_id == '' {
-		return map[string]string{}
-	}
-	app.ws_hub.mu.@lock()
-	defer {
-		app.ws_hub.mu.unlock()
-	}
-	return (app.ws_hub.conn_meta[conn_id] or {
-		map[string]string{}
-	}).clone()
+	return app.ws_hub.meta_snapshot(conn_id)
 }
 
 fn (mut app App) ws_hub_set_meta(conn_id string, key string, value string) bool {
-	if conn_id == '' || key == '' {
-		return false
-	}
-	app.ws_hub.mu.@lock()
-	mut meta := (app.ws_hub.conn_meta[conn_id] or {
-		map[string]string{}
-	}).clone()
-	meta[key] = value
-	app.ws_hub.conn_meta[conn_id] = meta.clone()
-	app.ws_hub.mu.unlock()
-	return true
+	return app.ws_hub.set_meta(conn_id, key, value)
 }
 
 fn (mut app App) ws_hub_clear_meta(conn_id string, key string) bool {
-	if conn_id == '' || key == '' {
-		return false
-	}
-	app.ws_hub.mu.@lock()
-	if mut meta := app.ws_hub.conn_meta[conn_id] {
-		meta.delete(key)
-		if meta.len == 0 {
-			app.ws_hub.conn_meta.delete(conn_id)
-		} else {
-			app.ws_hub.conn_meta[conn_id] = meta.clone()
-		}
-	}
-	app.ws_hub.mu.unlock()
-	return true
+	return app.ws_hub.clear_meta(conn_id, key)
 }
 
 fn (mut app App) ws_hub_presence_snapshot(conn_id string) (map[string][]string, map[string]map[string]string, map[string]int, map[string][]string) {
-	if conn_id == '' {
-		return map[string][]string{}, map[string]map[string]string{}, map[string]int{}, map[string][]string{}
-	}
-	app.ws_hub.mu.@lock()
-	defer {
-		app.ws_hub.mu.unlock()
-	}
-	mut room_members := map[string][]string{}
-	mut member_metadata := map[string]map[string]string{}
-	mut room_counts := map[string]int{}
-	mut presence_users := map[string][]string{}
-	if rooms := app.ws_hub.conn_rooms[conn_id] {
-		for room, present in rooms {
-			if !present {
-				continue
-			}
-			mut ids := []string{}
-			mut users := []string{}
-			if members := app.ws_hub.room_members[room] {
-				for member_id, in_room in members {
-					if !in_room {
-						continue
-					}
-					ids << member_id
-					if meta := app.ws_hub.conn_meta[member_id] {
-						member_metadata[member_id] = meta.clone()
-						user := meta['user'] or { member_id }
-						users << user
-					} else {
-						member_metadata[member_id] = map[string]string{}
-						users << member_id
-					}
-				}
-			}
-			ids.sort()
-			users.sort()
-			room_members[room] = ids
-			room_counts[room] = ids.len
-			presence_users[room] = users
-		}
-	}
-	return room_members, member_metadata, room_counts, presence_users
+	return app.ws_hub.presence_snapshot(conn_id)
 }
 
 fn (mut app App) ws_hub_unregister_conn(conn_id string) {
-	if conn_id == '' {
-		return
-	}
-	app.ws_hub.mu.@lock()
-	if hub_conn := app.ws_hub.conns[conn_id] {
-		if !ws.dispatch_conn_begin_cleanup(hub_conn.lifecycle) {
-			app.ws_hub.mu.unlock()
-			return
-		}
-	}
-	app.ws_hub.mu.unlock()
-	app.ws_hub_cleanup_conn(conn_id)
+	app.ws_hub.unregister_conn(conn_id)
 }
 
 fn (mut app App) ws_hub_join(conn_id string, room string) bool {
-	if conn_id == '' || room == '' {
-		return false
-	}
-	app.ws_hub.mu.@lock()
-	mut members := (app.ws_hub.room_members[room] or {
-		map[string]bool{}
-	}).clone()
-	members[conn_id] = true
-	app.ws_hub.room_members[room] = members.clone()
-	mut rooms := (app.ws_hub.conn_rooms[conn_id] or {
-		map[string]bool{}
-	}).clone()
-	rooms[room] = true
-	app.ws_hub.conn_rooms[conn_id] = rooms.clone()
-	app.ws_hub.mu.unlock()
-	return true
+	return app.ws_hub.join(conn_id, room)
 }
 
 fn (mut app App) ws_hub_leave(conn_id string, room string) bool {
-	if conn_id == '' || room == '' {
-		return false
-	}
-	app.ws_hub.mu.@lock()
-	if mut members := app.ws_hub.room_members[room] {
-		members.delete(conn_id)
-		if members.len == 0 {
-			app.ws_hub.room_members.delete(room)
-		} else {
-			app.ws_hub.room_members[room] = members.clone()
-		}
-	}
-	if mut rooms := app.ws_hub.conn_rooms[conn_id] {
-		rooms.delete(room)
-		if rooms.len == 0 {
-			app.ws_hub.conn_rooms.delete(conn_id)
-		} else {
-			app.ws_hub.conn_rooms[conn_id] = rooms.clone()
-		}
-	}
-	app.ws_hub.mu.unlock()
-	return true
+	return app.ws_hub.leave(conn_id, room)
 }
 
 fn (mut app App) ws_hub_send_client(conn_id string, client &websocket.Client, data string, opcode string) bool {
-	if isnil(client) {
-		return false
-	}
-	if conn_id != '' {
-		app.ws_hub.mu.@lock()
-		if hub_conn := app.ws_hub.conns[conn_id] {
-			if !ws.dispatch_conn_can_send(hub_conn.lifecycle) {
-				if ws.dispatch_conn_can_queue(hub_conn.lifecycle) {
-					mut pending := app.ws_hub.pending[conn_id] or { []HubPendingMessage{} }
-					pending << HubPendingMessage{
-						data:   data
-						opcode: if opcode == '' { 'text' } else { opcode }
-					}
-					app.ws_hub.pending[conn_id] = pending
-					app.ws_hub.mu.unlock()
-					return true
-				}
-				app.ws_hub.mu.unlock()
-				return false
-			}
-		}
-		app.ws_hub.mu.unlock()
-	}
-	app.ws_hub.send_mu.@lock()
-	defer {
-		app.ws_hub.send_mu.unlock()
-	}
-	mut c := unsafe { client }
-	payload, code := websocket_hub_payload_bytes(data, opcode) or { return false }
-	if code == .text_frame {
-		c.write_string(data) or { return false }
-		return true
-	}
-	c.write(payload, code) or { return false }
-	return true
+	return app.ws_hub.send_client(conn_id, client, data, opcode)
 }
 
 fn (mut app App) ws_hub_send_to(conn_id string, data string, opcode string) bool {
