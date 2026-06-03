@@ -1,73 +1,28 @@
 module main
 
+import mcp_protocol
+
 import net
 import net.http
 import time
 import veb
 
-struct McpSession {
-mut:
-	id                       string
-	protocol_version         string
-	request_id               string
-	trace_id                 string
-	path                     string
-	started_at_unix          i64
-	last_activity_unix       i64
-	client_capabilities_json string
-	conn                     &net.TcpConn = unsafe { nil }
-	pending                  []string
-}
-
-struct AdminMcpSessionSnapshot {
-	id                       string
-	protocol_version         string
-	request_id               string
-	trace_id                 string
-	path                     string
-	started_at_unix          i64
-	last_activity_unix       i64
-	pending_count            int
-	connected                bool
-	client_capabilities_json string
-}
-
-struct AdminMcpRuntimeSnapshot {
-	active_sessions            int
-	returned_sessions          int
-	details                    bool
-	limit                      int
-	offset                     int
-	session_id                 string
-	protocol_version           string
-	max_sessions               int
-	max_pending_messages       int
-	session_ttl_seconds        int
-	allowed_origins            []string
-	sampling_capability_policy string
-	sessions                   []AdminMcpSessionSnapshot
-}
-
-struct McpQueueResult {
-	queued      bool
-	error       bool
-	error_class string
-}
+// mcp type aliases
+type McpSession = mcp_protocol.Session
+type AdminMcpSessionSnapshot = mcp_protocol.SessionSnapshot
+type AdminMcpRuntimeSnapshot = mcp_protocol.RuntimeSnapshot
+type McpQueueResult = mcp_protocol.QueueResult
 
 fn generate_mcp_session_id() string {
-	return 'mcp_${time.now().unix_micro()}'
+	return mcp_protocol.generate_session_id()
 }
 
 fn default_mcp_protocol_version() string {
-	return '2025-11-05'
+	return mcp_protocol.default_protocol_version()
 }
 
 fn normalize_mcp_sampling_capability_policy(raw string) string {
-	policy := raw.trim_space().to_lower()
-	return match policy {
-		'drop', 'error' { policy }
-		else { 'warn' }
-	}
+	return mcp_protocol.normalize_sampling_capability_policy(raw)
 }
 
 fn (mut app App) mcp_prune_sessions_locked(now i64) {
