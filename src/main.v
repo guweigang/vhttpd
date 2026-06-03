@@ -2,6 +2,7 @@ module main
 import executor
 import ws
 import provider
+import stats
 
 import encoding.base64
 import json
@@ -41,7 +42,7 @@ pub mut:
 	assets                                      AssetsState
 	mcp                                        McpState
 	openai                                      OpenaiState
-	http_stats                                  HttpStats
+	http_stats                                  stats.HttpStats
 	mu                                          sync.Mutex
 
 	ws_hub                                      WebSocketHubState
@@ -1005,21 +1006,21 @@ fn (mut app App) emit(kind string, fields map[string]string) {
 		app.mu.unlock()
 	}
 	if kind == 'http.request' {
-		app.http_stats.requests_total++
+		app.http_stats.inc_requests()
 		status := (fields['status'] or { '0' }).int()
 		if status >= 400 {
-			app.http_stats.errors_total++
+			app.http_stats.inc_errors()
 		}
 		error_class := fields['error_class'] or { '' }
 		if error_class == 'timeout' {
-			app.http_stats.timeouts_total++
+			app.http_stats.inc_timeouts()
 		}
 		if (fields['response_mode'] or { '' }) == 'stream' {
-			app.http_stats.streams_total++
+			app.http_stats.inc_streams()
 		}
 	}
 	if kind.starts_with('admin.') {
-		app.http_stats.admin_actions_total++
+		app.http_stats.inc_admin_actions()
 	}
 	mut row := map[string]string{}
 	row['type'] = kind
