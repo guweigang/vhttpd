@@ -34,7 +34,6 @@ pub mut:
 	started_at_unix                             i64
 	worker                                      WorkerState
 	internal_admin_socket                       string
-	websocket_dispatch_mode                     bool
 	admin_on_data_plane                         bool
 	admin_token                                 string
 	runtime_config_json                         string
@@ -47,31 +46,15 @@ pub mut:
 	assets_cache_control                        string
 	mcp                                        McpState
 	openai                                      OpenaiState
-	websocket_upstream_recent_dispatch_limit    int
-	auto_start_dynamic_upstreams                bool
 	stat_http_requests_total                    i64
 	stat_http_errors_total                      i64
 	stat_http_timeouts_total                    i64
 	stat_http_streams_total                     i64
 	stat_admin_actions_total                    i64
-	stat_upstream_plans_total                   i64
-	stat_upstream_plan_errors_total             i64
 	mu                                          sync.Mutex
-	upstream_mu                                 sync.Mutex
 
-	ws_hub_mu                                   sync.Mutex
-	ws_hub_send_mu                              sync.Mutex
-	upstream_sessions                           map[string]UpstreamRuntimeSession
-
-	ws_hub_conns                                map[string]HubConn
-	ws_hub_room_members                         map[string]map[string]bool
-	ws_hub_conn_rooms                           map[string]map[string]bool
-	ws_hub_conn_meta                            map[string]map[string]string
-	ws_hub_pending                              map[string][]HubPendingMessage
-	websocket_upstream_started                  map[string]bool
+	ws_hub                                      WebSocketHubState
 	providers                                   ProviderHost
-	fixture_websocket_runtime                   map[string]FixtureWebSocketUpstreamRuntime
-	websocket_upstream_recent_activities        []WebSocketUpstreamActivitySnapshot
 	provider_instance_specs                     map[string]ProviderInstanceSpec = map[string]ProviderInstanceSpec{}
 	// codex upstream
 	codex                            CodexState
@@ -531,7 +514,7 @@ fn worker_websocket_close_cb(mut _ws websocket.Client, code int, reason string, 
 }
 
 fn proxy_worker_websocket(mut app App, mut ctx Context, method string, path string) veb.Result {
-	if app.websocket_dispatch_mode {
+	if app.ws_hub.dispatch_mode {
 		return proxy_worker_websocket_dispatch(mut app, mut ctx, method, path)
 	}
 	start_ms := time.now().unix_milli()

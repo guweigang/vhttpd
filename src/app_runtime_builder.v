@@ -66,7 +66,20 @@ fn build_app_runtime(provider_settings ProviderRuntimeSettings, executor_plan Lo
 			stream_dispatch:     executor_plan.bootstrap.stream_dispatch
 		}
 		internal_admin_socket:                    build_cfg.internal_admin_socket
-		websocket_dispatch_mode:                  executor_plan.bootstrap.websocket_dispatch_mode
+		ws_hub:                                    WebSocketHubState{
+			dispatch_mode:            executor_plan.bootstrap.websocket_dispatch_mode
+			recent_dispatch_limit:   50
+			auto_start_dynamic_upstreams: true
+			upstream_sessions:       map[string]UpstreamRuntimeSession{}
+			conns:                   map[string]HubConn{}
+			room_members:            map[string]map[string]bool{}
+			conn_rooms:              map[string]map[string]bool{}
+			conn_meta:               map[string]map[string]string{}
+			pending:                 map[string][]HubPendingMessage{}
+			upstream_started:        map[string]bool{}
+			fixture_runtime:         map[string]FixtureWebSocketUpstreamRuntime{}
+			recent_activities:       []WebSocketUpstreamActivitySnapshot{}
+		}
 		admin_on_data_plane:                      !build_cfg.admin_enabled
 		admin_token:                              build_cfg.admin_token
 		runtime_config_json:                      json.encode(cfg)
@@ -95,15 +108,6 @@ fn build_app_runtime(provider_settings ProviderRuntimeSettings, executor_plan Lo
 			routes:           cfg.openai.routes.clone()
 			responses:        state_store.new_memory_state_store[OpenAIResponseRecord]()
 		}
-		websocket_upstream_recent_dispatch_limit: 50
-		auto_start_dynamic_upstreams:             true
-		upstream_sessions:                        map[string]UpstreamRuntimeSession{}
-		ws_hub_conns:                             map[string]HubConn{}
-		ws_hub_room_members:                      map[string]map[string]bool{}
-		ws_hub_conn_rooms:                        map[string]map[string]bool{}
-		ws_hub_conn_meta:                         map[string]map[string]string{}
-		ws_hub_pending:                           map[string][]HubPendingMessage{}
-		websocket_upstream_started:               map[string]bool{}
 		providers:                                ProviderHost{
 			registry: map[string]Provider{}
 			specs:    map[string]ProviderSpec{}
@@ -129,8 +133,6 @@ fn build_app_runtime(provider_settings ProviderRuntimeSettings, executor_plan Lo
 			}
 			instances:       map[string]CodexProviderRuntime{}
 		}
-		fixture_websocket_runtime:                map[string]FixtureWebSocketUpstreamRuntime{}
-		websocket_upstream_recent_activities:     []WebSocketUpstreamActivitySnapshot{}
 		provider_instance_specs:                  map[string]ProviderInstanceSpec{}
 		feishu:                                   FeishuState{
 			enabled:                    provider_settings.feishu.enabled

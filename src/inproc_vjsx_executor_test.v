@@ -3408,7 +3408,7 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_nudges_control_when_server_data_do
 		&& it.data.contains('"type":"connected"'))
 	time.sleep(80 * time.millisecond)
 	executor.pump_all_lane_sessions() or { panic(err) }
-	pending := app.ws_hub_pending['ws_control_nudge'] or { []HubPendingMessage{} }
+	pending := app.ws_hub.pending['ws_control_nudge'] or { []HubPendingMessage{} }
 	assert pending.len == 0
 }
 

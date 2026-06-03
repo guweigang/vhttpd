@@ -28,8 +28,8 @@ fn (mut app App) admin_stats_snapshot() executor.AdminRuntimeStats {
 		worker_queue_waits_total:               app.worker.stat_queue_waits_total
 		worker_queue_rejected_total:            app.worker.stat_queue_rejected_total
 		worker_queue_timeouts_total:            app.worker.stat_queue_timeouts_total
-		upstream_plans_total:                   app.stat_upstream_plans_total
-		upstream_plan_errors_total:             app.stat_upstream_plan_errors_total
+		upstream_plans_total:                   app.ws_hub.stat_upstream_plans_total
+		upstream_plan_errors_total:             app.ws_hub.stat_upstream_plan_errors_total
 		mcp_sessions_expired_total:             app.mcp.stat_sessions_expired_total
 		mcp_sessions_evicted_total:             app.mcp.stat_sessions_evicted_total
 		mcp_pending_dropped_total:              app.mcp.stat_pending_dropped_total
@@ -48,13 +48,13 @@ fn (mut app App) admin_stats_snapshot() executor.AdminRuntimeStats {
 fn (mut app App) admin_runtime_snapshot() executor.AdminRuntimeSummary {
 	stats := app.admin_stats_snapshot()
 	mut active_websockets := 0
-	app.ws_hub_mu.@lock()
-	active_websockets = app.ws_hub_conns.len
-	app.ws_hub_mu.unlock()
+	app.ws_hub.mu.@lock()
+	active_websockets = app.ws_hub.conns.len
+	app.ws_hub.mu.unlock()
 	mut active_upstreams := 0
-	app.upstream_mu.@lock()
-	active_upstreams = app.upstream_sessions.len
-	app.upstream_mu.unlock()
+	app.ws_hub.upstream_mu.@lock()
+	active_upstreams = app.ws_hub.upstream_sessions.len
+	app.ws_hub.upstream_mu.unlock()
 	mut active_mcp_sessions := 0
 	app.mcp.mu.@lock()
 	app.mcp_prune_sessions_locked(time.now().unix())
@@ -71,7 +71,7 @@ fn (mut app App) admin_runtime_snapshot() executor.AdminRuntimeSummary {
 	capabilities['stream_dispatch'] = app.worker.stream_dispatch
 	capabilities['stream_upstream_plan'] = true
 	capabilities['websocket'] = true
-	capabilities['websocket_dispatch'] = app.websocket_dispatch_mode
+	capabilities['websocket_dispatch'] = app.ws_hub.dispatch_mode
 	capabilities['mcp'] = true
 	capabilities['websocket_upstream'] = true
 	for key, value in app.provider_runtime_capabilities() {

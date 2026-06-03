@@ -334,8 +334,8 @@ fn (mut app App) upstream_runtime_register(plan transport.WorkerUpstreamPlanFram
 	if req_id == '' {
 		return
 	}
-	app.upstream_mu.@lock()
-	app.upstream_sessions[req_id] = UpstreamRuntimeSession{
+	app.ws_hub.upstream_mu.@lock()
+	app.ws_hub.upstream_sessions[req_id] = UpstreamRuntimeSession{
 		id:              req_id
 		request_id:      req_id
 		trace_id:        trace_id
@@ -351,9 +351,9 @@ fn (mut app App) upstream_runtime_register(plan transport.WorkerUpstreamPlanFram
 		source:          if plan.fixture_path != '' { 'fixture' } else { 'http' }
 		started_at_unix: time.now().unix()
 	}
-	app.upstream_mu.unlock()
+	app.ws_hub.upstream_mu.unlock()
 	app.mu.@lock()
-	app.stat_upstream_plans_total++
+	app.ws_hub.stat_upstream_plans_total
 	app.mu.unlock()
 }
 
@@ -361,24 +361,24 @@ fn (mut app App) upstream_runtime_unregister(req_id string) {
 	if req_id == '' {
 		return
 	}
-	app.upstream_mu.@lock()
-	app.upstream_sessions.delete(req_id)
-	app.upstream_mu.unlock()
+	app.ws_hub.upstream_mu.@lock()
+	app.ws_hub.upstream_sessions.delete(req_id)
+	app.ws_hub.upstream_mu.unlock()
 }
 
 fn (mut app App) upstream_runtime_note_error() {
 	app.mu.@lock()
-	app.stat_upstream_plan_errors_total++
+	app.ws_hub.stat_upstream_plan_errors_total
 	app.mu.unlock()
 }
 
 fn (mut app App) admin_upstreams_snapshot(details bool, limit int, offset int, role_filter string, provider_filter string) AdminUpstreamRuntimeSnapshot {
-	app.upstream_mu.@lock()
+	app.ws_hub.upstream_mu.@lock()
 	defer {
-		app.upstream_mu.unlock()
+		app.ws_hub.upstream_mu.unlock()
 	}
 	mut sessions := []UpstreamRuntimeSession{}
-	for _, session in app.upstream_sessions {
+	for _, session in app.ws_hub.upstream_sessions {
 		if role_filter != '' && session.role != role_filter {
 			continue
 		}

@@ -125,12 +125,12 @@ struct WebSocketUpstreamFixtureEmitRequest {
 }
 
 fn (mut app App) fixture_websocket_runtime_ensure(name string) FixtureWebSocketUpstreamRuntime {
-	app.upstream_mu.@lock()
+	app.ws_hub.upstream_mu.@lock()
 	defer {
-		app.upstream_mu.unlock()
+		app.ws_hub.upstream_mu.unlock()
 	}
-	if name in app.fixture_websocket_runtime {
-		return app.fixture_websocket_runtime[name]
+	if name in app.ws_hub.fixture_runtime {
+		return app.ws_hub.fixture_runtime[name]
 	}
 	runtime := FixtureWebSocketUpstreamRuntime{
 		name:                 name
@@ -139,24 +139,24 @@ fn (mut app App) fixture_websocket_runtime_ensure(name string) FixtureWebSocketU
 		connect_attempts:     1
 		connect_successes:    1
 	}
-	app.fixture_websocket_runtime[name] = runtime
+	app.ws_hub.fixture_runtime[name] = runtime
 	return runtime
 }
 
 fn (mut app App) fixture_websocket_runtime_update(name string, runtime FixtureWebSocketUpstreamRuntime) {
-	app.upstream_mu.@lock()
+	app.ws_hub.upstream_mu.@lock()
 	defer {
-		app.upstream_mu.unlock()
+		app.ws_hub.upstream_mu.unlock()
 	}
-	app.fixture_websocket_runtime[name] = runtime
+	app.ws_hub.fixture_runtime[name] = runtime
 }
 
 fn (mut app App) fixture_websocket_app_names() []string {
-	app.upstream_mu.@lock()
+	app.ws_hub.upstream_mu.@lock()
 	defer {
-		app.upstream_mu.unlock()
+		app.ws_hub.upstream_mu.unlock()
 	}
-	mut names := app.fixture_websocket_runtime.keys()
+	mut names := app.ws_hub.fixture_runtime.keys()
 	names.sort()
 	return names
 }
@@ -334,29 +334,29 @@ struct AdminWebSocketUpstreamActivitySnapshot {
 }
 
 fn (mut app App) websocket_upstream_record_activity(snapshot WebSocketUpstreamActivitySnapshot) {
-	app.upstream_mu.@lock()
+	app.ws_hub.upstream_mu.@lock()
 	defer {
-		app.upstream_mu.unlock()
+		app.ws_hub.upstream_mu.unlock()
 	}
-	limit := if app.websocket_upstream_recent_dispatch_limit > 0 {
-		app.websocket_upstream_recent_dispatch_limit
+	limit := if app.ws_hub.recent_dispatch_limit > 0 {
+		app.ws_hub.recent_dispatch_limit
 	} else {
 		50
 	}
-	app.websocket_upstream_recent_activities << snapshot
-	if app.websocket_upstream_recent_activities.len > limit {
-		start := app.websocket_upstream_recent_activities.len - limit
-		app.websocket_upstream_recent_activities = app.websocket_upstream_recent_activities[start..].clone()
+	app.ws_hub.recent_activities << snapshot
+	if app.ws_hub.recent_activities.len > limit {
+		start := app.ws_hub.recent_activities.len - limit
+		app.ws_hub.recent_activities = app.ws_hub.recent_activities[start..].clone()
 	}
 }
 
 fn (mut app App) admin_websocket_upstream_activities_snapshot(limit int, offset int, provider_filter string, instance_filter string) AdminWebSocketUpstreamActivitySnapshot {
-	app.upstream_mu.@lock()
+	app.ws_hub.upstream_mu.@lock()
 	defer {
-		app.upstream_mu.unlock()
+		app.ws_hub.upstream_mu.unlock()
 	}
 	mut activities := []WebSocketUpstreamActivitySnapshot{}
-	for entry in app.websocket_upstream_recent_activities {
+	for entry in app.ws_hub.recent_activities {
 		if provider_filter != '' && entry.provider != provider_filter {
 			continue
 		}
@@ -732,14 +732,14 @@ fn (mut app App) websocket_upstream_mark_started(provider string, instance strin
 	if key == '/' || provider.trim_space() == '' || instance.trim_space() == '' {
 		return false
 	}
-	app.upstream_mu.@lock()
+	app.ws_hub.upstream_mu.@lock()
 	defer {
-		app.upstream_mu.unlock()
+		app.ws_hub.upstream_mu.unlock()
 	}
-	if key in app.websocket_upstream_started {
+	if key in app.ws_hub.upstream_started {
 		return false
 	}
-	app.websocket_upstream_started[key] = true
+	app.ws_hub.upstream_started[key] = true
 	return true
 }
 
@@ -749,7 +749,7 @@ fn (mut app App) ensure_websocket_upstream_provider_running(provider string, ins
 	if resolved_provider == '' {
 		return false
 	}
-	if !app.auto_start_dynamic_upstreams {
+	if !app.ws_hub.auto_start_dynamic_upstreams {
 		return false
 	}
 	if resolved_instance == '' {
