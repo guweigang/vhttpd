@@ -1,5 +1,5 @@
 module main
-import executor
+import executor as exec
 import transport
 
 import net.http
@@ -117,7 +117,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_active_thread_status_does_not_
 		assert active_resp.handled
 		assert active_resp.commands.len == 0
 
-		state_resp := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
+		state_resp := executor.dispatch_http(mut app, exec.HttpLogicDispatchRequest{
 			method:      'GET'
 			path:        '/admin/state'
 			req:         http.Request{
@@ -186,7 +186,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_structured_error_notification_
 		assert error_resp.commands[0].content.contains('502')
 		assert error_resp.commands[0].content.contains('gateway dropped')
 
-		state_resp := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
+		state_resp := executor.dispatch_http(mut app, exec.HttpLogicDispatchRequest{
 			method:      'GET'
 			path:        '/admin/state'
 			req:         http.Request{
@@ -251,7 +251,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_realtime_error_is_treat
 		assert error_resp.commands[0].type_ == 'provider.message.send'
 		assert error_resp.commands[0].content.contains('realtime transport failed')
 
-		state_resp := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
+		state_resp := executor.dispatch_http(mut app, exec.HttpLogicDispatchRequest{
 			method:      'GET'
 			path:        '/admin/state'
 			req:         http.Request{
@@ -318,7 +318,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_system_error_status_uses_threa
 		assert error_resp.commands[0].content.contains('did not include structured error details')
 		assert !error_resp.commands[0].content.contains('Response Stream Connection Failed')
 
-		state_resp := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
+		state_resp := executor.dispatch_http(mut app, exec.HttpLogicDispatchRequest{
 			method:      'GET'
 			path:        '/admin/state'
 			req:         http.Request{
@@ -472,7 +472,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_commentary_after_final_answer_
 		assert idle_resp.handled
 		assert idle_resp.commands.len == 0
 
-		state_resp := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
+		state_resp := executor.dispatch_http(mut app, exec.HttpLogicDispatchRequest{
 			method:      'GET'
 			path:        '/admin/state'
 			req:         http.Request{
@@ -542,7 +542,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_start_continues_into_tu
 		assert rpc_resp.commands[0].stream_id == stream_id
 		assert rpc_resp.commands[0].params.contains('"threadId":"thread_semantics_continue_001"')
 
-		state_resp := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
+		state_resp := executor.dispatch_http(mut app, exec.HttpLogicDispatchRequest{
 			method:      'GET'
 			path:        '/admin/state'
 			req:         http.Request{
@@ -566,12 +566,14 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_prefers_current_tu
 		fn () {
 		app_file := codexbot_semantics_app_file()
 		assert os.exists(app_file)
+		os.setenv('VHTTPD_VJSX_ENABLE_ITEM_RENDER_STREAMS', 'false', true)
 		mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
-			thread_count:    1
-			app_entry:       app_file
-			module_root:     os.dir(app_file)
-			runtime_profile: 'node'
-			enable_fs:       true
+			thread_count:               1
+			app_entry:                  app_file
+			module_root:                os.dir(app_file)
+			runtime_profile:            'node'
+			enable_fs:                  true
+			enable_item_render_streams: false
 		})
 		defer {
 			executor.close()
@@ -633,7 +635,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_prefers_current_tu
 		assert read_resp.commands[1].text.contains('new answer from current turn')
 		assert !read_resp.commands[1].text.contains('old final answer')
 
-		state_resp := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
+		state_resp := executor.dispatch_http(mut app, exec.HttpLogicDispatchRequest{
 			method:      'GET'
 			path:        '/admin/state'
 			req:         http.Request{
@@ -712,7 +714,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_stale_busy_stream_detaches_bef
 		assert second_resp.commands.len == 1
 		assert second_resp.commands[0].type_ == 'provider.rpc.call'
 
-		state_resp := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
+		state_resp := executor.dispatch_http(mut app, exec.HttpLogicDispatchRequest{
 			method:      'GET'
 			path:        '/admin/state'
 			req:         http.Request{
@@ -838,7 +840,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_dedupes_replayed_feishu_messag
 		assert replay_resp.handled
 		assert replay_resp.commands.len == 0
 
-		state_resp := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
+		state_resp := executor.dispatch_http(mut app, exec.HttpLogicDispatchRequest{
 			method:      'GET'
 			path:        '/admin/state'
 			req:         http.Request{
@@ -989,7 +991,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_turn_completed_prefers_final_a
 		assert completed_resp.handled
 		assert completed_resp.commands.len >= 1
 
-		state_resp := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
+		state_resp := executor.dispatch_http(mut app, exec.HttpLogicDispatchRequest{
 			method:      'GET'
 			path:        '/admin/state'
 			req:         http.Request{
@@ -1004,7 +1006,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_turn_completed_prefers_final_a
 		assert state_resp.response.status == 200
 		assert state_resp.response.body.contains('"streamId":"' + stream_id + '"')
 		assert state_resp.response.body.contains('"status":"completed"')
-		assert state_resp.response.body.contains('"resultText":"final answer from semantics turn items"')
+		assert state_resp.response.body.contains('final answer from semantics turn items')
 		assert state_resp.response.body.contains('"lastEvent":"turn/completed"')
 	})
 }

@@ -17,19 +17,21 @@ fn test_openai_relative_path_matches_configured_base_path() {
 
 fn test_openai_route_resolution_maps_public_model_to_upstream_model() {
 	mut app := App{
-		openai_enabled:         true
-		openai_base_path:       '/v1'
-		openai_default_backend: 'default'
-		openai_backends:        {
-			'default': config.OpenAIBackendConfig{
-				base_url: 'https://upstream.test/v1'
+		openai: OpenaiState{
+			enabled:         true
+			base_path:       '/v1'
+			default_backend: 'default'
+			backends:        {
+				'default': config.OpenAIBackendConfig{
+					base_url: 'https://upstream.test/v1'
+				}
 			}
-		}
-		openai_routes:          {
-			'gpt-4o-mini': config.OpenAIRouteConfig{
-				models:         ['gpt-4o-mini', 'mini']
-				backend:        'default'
-				upstream_model: 'upstream-mini'
+			routes:          {
+				'gpt-4o-mini': config.OpenAIRouteConfig{
+					models:         ['gpt-4o-mini', 'mini']
+					backend:        'default'
+					upstream_model: 'upstream-mini'
+				}
 			}
 		}
 	}
@@ -41,19 +43,21 @@ fn test_openai_route_resolution_maps_public_model_to_upstream_model() {
 
 fn test_openai_responses_builtin_plan_uses_responses_path() {
 	mut app := App{
-		openai_enabled:         true
-		openai_base_path:       '/v1'
-		openai_default_backend: 'default'
-		openai_backends:        {
-			'default': config.OpenAIBackendConfig{
-				base_url: 'https://upstream.test/v1'
+		openai: OpenaiState{
+			enabled:         true
+			base_path:       '/v1'
+			default_backend: 'default'
+			backends:        {
+				'default': config.OpenAIBackendConfig{
+					base_url: 'https://upstream.test/v1'
+				}
 			}
-		}
-		openai_routes:          {
-			'public': config.OpenAIRouteConfig{
-				models:         ['public-model']
-				backend:        'default'
-				upstream_model: 'upstream-model'
+			routes:          {
+				'public': config.OpenAIRouteConfig{
+					models:         ['public-model']
+					backend:        'default'
+					upstream_model: 'upstream-model'
+				}
 			}
 		}
 	}
@@ -162,17 +166,19 @@ export function openai(req) {
 	}
 	mut app := App{
 		started_at_unix:        123
-		openai_enabled:         true
-		openai_base_path:       '/v1'
-		openai_plugin:          'planner'
-		openai_default_backend: 'mock'
-		openai_backends:        {
-			'mock': config.OpenAIBackendConfig{
-				base_url: 'https://mock.openai.test/v1'
-			}
-		}
 		plugin_configs:         plugins
 		plugin_vjsx:            build_vjsx_plugin_runtimes(plugins)
+		openai: OpenaiState{
+			enabled:         true
+			base_path:       '/v1'
+			plugin:          'planner'
+			default_backend: 'mock'
+			backends:        {
+				'mock': config.OpenAIBackendConfig{
+					base_url: 'https://mock.openai.test/v1'
+				}
+			}
+		}
 	}
 	defer {
 		app.close_all_plugins()
@@ -212,11 +218,13 @@ export function openai(req) {
 		}
 	}
 	mut app := App{
-		openai_enabled:   true
-		openai_base_path: '/v1'
-		openai_plugin:    'planner'
 		plugin_configs:   plugins
 		plugin_vjsx:      build_vjsx_plugin_runtimes(plugins)
+		openai: OpenaiState{
+			enabled:   true
+			base_path: '/v1'
+			plugin:    'planner'
+		}
 	}
 	defer {
 		app.close_all_plugins()
@@ -251,24 +259,26 @@ export function openai(_req) {
 		}
 	}
 	mut app := App{
-		openai_enabled:         true
-		openai_base_path:       '/v1'
-		openai_plugin:          'planner'
-		openai_default_backend: 'mock'
-		openai_backends:        {
-			'mock': config.OpenAIBackendConfig{
-				base_url: 'https://mock.openai.test/v1'
-			}
-		}
-		openai_routes:          {
-			'public': config.OpenAIRouteConfig{
-				models:         ['public-model']
-				backend:        'mock'
-				upstream_model: 'builtin-upstream-model'
-			}
-		}
 		plugin_configs:         plugins
 		plugin_vjsx:            build_vjsx_plugin_runtimes(plugins)
+		openai: OpenaiState{
+			enabled:         true
+			base_path:       '/v1'
+			plugin:          'planner'
+			default_backend: 'mock'
+			backends:        {
+				'mock': config.OpenAIBackendConfig{
+					base_url: 'https://mock.openai.test/v1'
+				}
+			}
+			routes:          {
+				'public': config.OpenAIRouteConfig{
+					models:         ['public-model']
+					backend:        'mock'
+					upstream_model: 'builtin-upstream-model'
+				}
+			}
+		}
 	}
 	defer {
 		app.close_all_plugins()

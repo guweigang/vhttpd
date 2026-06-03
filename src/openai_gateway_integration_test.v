@@ -239,33 +239,35 @@ fn openai_integration_start_gateway(port int, upstream_port int, plugin_file str
 	mut app := App{
 		event_log:                  ''
 		started_at_unix:            time.now().unix()
-		openai_enabled:             true
-		openai_base_path:           '/v1'
-		openai_plugin:              if plugin_file.trim_space() == '' { '' } else { 'planner' }
-		openai_default_backend:     'mock'
-		openai_endpoints:           config.OpenAIEndpointsConfig{}
-		openai_backends:            {
-			'mock':   config.OpenAIBackendConfig{
-				base_url: 'http://127.0.0.1:${upstream_port}/v1'
-			}
-			'backup': config.OpenAIBackendConfig{
-				base_url: 'http://127.0.0.1:${upstream_port}/v1'
-			}
-			'exec':   config.OpenAIBackendConfig{
-				kind:     'executor'
-				executor: 'planner'
-			}
-		}
-		openai_routes:              {
-			'public': config.OpenAIRouteConfig{
-				models:         ['public-model']
-				backend:        'mock'
-				upstream_model: 'builtin-upstream-model'
-			}
-		}
 		plugin_configs:             plugins
 		plugin_vjsx:                build_vjsx_plugin_runtimes(plugins)
-		openai_responses:           state_store.new_memory_state_store[OpenAIResponseRecord]()
+		openai: OpenaiState{
+			enabled:             true
+			base_path:           '/v1'
+			plugin:              if plugin_file.trim_space() == '' { '' } else { 'planner' }
+			default_backend:     'mock'
+			endpoints:           config.OpenAIEndpointsConfig{}
+			backends:            {
+				'mock':   config.OpenAIBackendConfig{
+					base_url: 'http://127.0.0.1:${upstream_port}/v1'
+				}
+				'backup': config.OpenAIBackendConfig{
+					base_url: 'http://127.0.0.1:${upstream_port}/v1'
+				}
+				'exec':   config.OpenAIBackendConfig{
+					kind:     'executor'
+					executor: 'planner'
+				}
+			}
+			routes:              {
+				'public': config.OpenAIRouteConfig{
+					models:         ['public-model']
+					backend:        'mock'
+					upstream_model: 'builtin-upstream-model'
+				}
+			}
+			responses:           state_store.new_memory_state_store[OpenAIResponseRecord]()
+		}
 		upstream_sessions:          map[string]UpstreamRuntimeSession{}
 		mcp_sessions:               map[string]McpSession{}
 		ws_hub_conns:               map[string]HubConn{}

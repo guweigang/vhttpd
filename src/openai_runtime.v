@@ -482,7 +482,7 @@ fn (mut app App) openai_store_response_record(plan OpenAIResolvedPlan, body stri
 		return ''
 	}
 	record := openai_response_registry_record(plan, response_id, body, req_id, trace_id)
-	app.openai_responses.set_with_ttl(response_id, record, openai_response_registry_ttl) or {}
+	app.openai.responses.set_with_ttl(response_id, record, openai_response_registry_ttl) or {}
 	return response_id
 }
 
@@ -515,7 +515,7 @@ fn openai_route_models(route config.OpenAIRouteConfig, route_name string) []stri
 
 fn (app &App) openai_models() []string {
 	mut models := []string{}
-	for name, route in app.openai_routes {
+	for name, route in app.openai.routes {
 		for model in openai_route_models(route, name) {
 			if model !in models {
 				models << model
@@ -529,17 +529,17 @@ fn (app &App) openai_models() []string {
 fn (app &App) openai_resolve_route(model string) !OpenAIResolvedRoute {
 	requested := model.trim_space()
 	if requested != '' {
-		for name, route in app.openai_routes {
+		for name, route in app.openai.routes {
 			if requested in openai_route_models(route, name) {
 				backend_name := if route.backend.trim_space() != '' {
 					route.backend.trim_space()
 				} else {
-					app.openai_default_backend.trim_space()
+					app.openai.default_backend.trim_space()
 				}
 				if backend_name == '' {
 					return error('missing backend for model ${requested}')
 				}
-				backend := app.openai_backends[backend_name] or {
+				backend := app.openai.backends[backend_name] or {
 					return error('unknown backend ${backend_name}')
 				}
 				upstream_model := if route.upstream_model.trim_space() != '' {
@@ -557,11 +557,11 @@ fn (app &App) openai_resolve_route(model string) !OpenAIResolvedRoute {
 			}
 		}
 	}
-	backend_name := app.openai_default_backend.trim_space()
+	backend_name := app.openai.default_backend.trim_space()
 	if backend_name == '' {
 		return error('no matching route for model ${requested}')
 	}
-	backend := app.openai_backends[backend_name] or {
+	backend := app.openai.backends[backend_name] or {
 		return error('unknown backend ${backend_name}')
 	}
 	return OpenAIResolvedRoute{
@@ -793,7 +793,7 @@ fn openai_models_from_plugin_json(raw string) ![]string {
 }
 
 fn (mut app App) openai_call_plugin(op string, payload string, req_id string, trace_id string, metadata map[string]string) !PluginCallResponse {
-	plugin_name := app.openai_plugin.trim_space()
+	plugin_name := app.openai.plugin.trim_space()
 	if plugin_name == '' {
 		return error('openai_plugin_not_configured')
 	}
@@ -812,7 +812,7 @@ fn (mut app App) openai_plugin_models(method string, path string, req_id string,
 	resp := app.openai_call_plugin('models', json.encode(OpenAIPluginModelsPayload{
 		method:     method.to_upper()
 		path:       path
-		base_path:  app.openai_base_path
+		base_path:  app.openai.base_path
 		request_id: req_id
 		trace_id:   trace_id
 	}), req_id, trace_id, map[string]string{})!
@@ -833,7 +833,7 @@ fn (mut app App) openai_resolved_plan_from_plugin_result_with_defaults(model str
 		return openai_plan_error('openai_plugin_plan_missing_backend',
 			'plugin plan must include backend')
 	}
-	backend := app.openai_backends[backend_name] or {
+	backend := app.openai.backends[backend_name] or {
 		return openai_plan_error('openai_plugin_plan_unknown_backend',
 			'unknown backend ${backend_name}')
 	}
@@ -876,7 +876,7 @@ fn (mut app App) openai_plugin_plan(model string, body string, method string, pa
 		model:      model
 		stream:     openai_is_stream_request(body)
 		body:       body
-		base_path:  app.openai_base_path
+		base_path:  app.openai.base_path
 		request_id: req_id
 		trace_id:   trace_id
 	}), req_id, trace_id, {
@@ -898,7 +898,7 @@ fn (mut app App) openai_plugin_responses_plan(model string, body string, method 
 		model:      model
 		stream:     openai_is_stream_request(body)
 		body:       body
-		base_path:  app.openai_base_path
+		base_path:  app.openai.base_path
 		request_id: req_id
 		trace_id:   trace_id
 	}), req_id, trace_id, {
@@ -915,7 +915,7 @@ fn (mut app App) openai_plugin_responses_plan(model string, body string, method 
 }
 
 fn (mut app App) openai_plugin_fallback_plan(model string, body string, method string, path string, failed_plan OpenAIResolvedPlan, status_code int, error_code string, error_message string, req_id string, trace_id string) !OpenAIPluginPlanResult {
-	if app.openai_plugin.trim_space() == '' {
+	if app.openai.plugin.trim_space() == '' {
 		return OpenAIPluginPlanResult{}
 	}
 	resp := app.openai_call_plugin('chat.fallback', json.encode(OpenAIPluginFallbackPayload{
@@ -924,7 +924,7 @@ fn (mut app App) openai_plugin_fallback_plan(model string, body string, method s
 		model:          model
 		stream:         openai_is_stream_request(body)
 		body:           body
-		base_path:      app.openai_base_path
+		base_path:      app.openai.base_path
 		failed_backend: failed_plan.backend_name
 		status_code:    status_code
 		error_code:     error_code
@@ -1014,7 +1014,7 @@ fn (mut app App) openai_call_executor_stream(plan OpenAIResolvedPlan, method str
 }
 
 fn (mut app App) openai_resolve_plan(model string, body string, method string, path string, req_id string, trace_id string) !OpenAIResolvedPlan {
-	if app.openai_plugin.trim_space() != '' {
+	if app.openai.plugin.trim_space() != '' {
 		result := app.openai_plugin_plan(model, body, method, path, req_id, trace_id)!
 		if result.handled {
 			return result.plan
@@ -1025,7 +1025,7 @@ fn (mut app App) openai_resolve_plan(model string, body string, method string, p
 }
 
 fn (mut app App) openai_resolve_responses_plan(model string, body string, method string, path string, req_id string, trace_id string) !OpenAIResolvedPlan {
-	if app.openai_plugin.trim_space() != '' {
+	if app.openai.plugin.trim_space() != '' {
 		result := app.openai_plugin_responses_plan(model, body, method, path, req_id, trace_id)!
 		if result.handled {
 			return result.plan
@@ -1042,11 +1042,11 @@ fn (mut app App) openai_resolve_responses_passthrough_plan(relative_target strin
 		return openai_builtin_plan_from_route_for_endpoint_method(route, body, relative_target,
 			'openai.response', method)
 	}
-	backend_name := app.openai_default_backend.trim_space()
+	backend_name := app.openai.default_backend.trim_space()
 	if backend_name == '' {
 		return error('openai_responses_passthrough_missing_default_backend')
 	}
-	backend := app.openai_backends[backend_name] or {
+	backend := app.openai.backends[backend_name] or {
 		return error('unknown backend ${backend_name}')
 	}
 	return OpenAIResolvedPlan{
@@ -2517,7 +2517,7 @@ fn (mut app App) openai_handle_models(mut ctx Context, method string, path strin
 		return openai_error(mut app, mut ctx, 405, path, method, req_id, trace_id, start_ms,
 			'method_not_allowed', 'method ${method} is not allowed for ${path}')
 	}
-	models := if app.openai_plugin.trim_space() != '' {
+	models := if app.openai.plugin.trim_space() != '' {
 		result := app.openai_plugin_models(method, path, req_id, trace_id) or {
 			return openai_error(mut app, mut ctx, 500, path, method, req_id, trace_id, start_ms,
 				'plugin_error', err.msg())
@@ -2617,7 +2617,7 @@ fn (mut app App) openai_handle_responses_passthrough(mut ctx Context, method str
 	relative_path := normalize_path(relative_target.all_before('?'))
 	if method.to_upper() in ['GET', 'HEAD'] && response_id != ''
 		&& !relative_path.contains('/input_items') {
-		if record := app.openai_responses.get(response_id) {
+		if record := app.openai.responses.get(response_id) {
 			ctx.res.set_status(.ok)
 			ctx.set_content_type('application/json; charset=utf-8')
 			ctx.set_custom_header('x-request-id', req_id) or {}
@@ -2657,34 +2657,34 @@ fn (mut app App) openai_handle_responses_passthrough(mut ctx Context, method str
 }
 
 fn (mut app App) openai_try_handle(mut ctx Context, method string, target string, req_id string, trace_id string, start_ms i64) ?veb.Result {
-	if !app.openai_enabled {
+	if !app.openai.enabled {
 		return none
 	}
-	relative := openai_relative_path(target, app.openai_base_path) or { return none }
-	relative_target := openai_relative_target(target, app.openai_base_path) or { return none }
+	relative := openai_relative_path(target, app.openai.base_path) or { return none }
+	relative_target := openai_relative_target(target, app.openai.base_path) or { return none }
 	if relative == '/models' {
-		if !app.openai_endpoints.models {
+		if !app.openai.endpoints.models {
 			return openai_error(mut app, mut ctx, 404, target, method, req_id, trace_id, start_ms,
 				'endpoint_disabled', 'OpenAI models endpoint is disabled')
 		}
 		return app.openai_handle_models(mut ctx, method, target, req_id, trace_id, start_ms)
 	}
 	if relative == '/chat/completions' {
-		if !app.openai_endpoints.chat_completions {
+		if !app.openai.endpoints.chat_completions {
 			return openai_error(mut app, mut ctx, 404, target, method, req_id, trace_id, start_ms,
 				'endpoint_disabled', 'OpenAI chat completions endpoint is disabled')
 		}
 		return app.openai_handle_chat(mut ctx, method, target, req_id, trace_id, start_ms)
 	}
 	if relative == '/responses' {
-		if !app.openai_endpoints.responses {
+		if !app.openai.endpoints.responses {
 			return openai_error(mut app, mut ctx, 404, target, method, req_id, trace_id, start_ms,
 				'endpoint_disabled', 'OpenAI responses endpoint is disabled')
 		}
 		return app.openai_handle_responses(mut ctx, method, target, req_id, trace_id, start_ms)
 	}
 	if relative.starts_with('/responses/') {
-		if !app.openai_endpoints.responses {
+		if !app.openai.endpoints.responses {
 			return openai_error(mut app, mut ctx, 404, target, method, req_id, trace_id, start_ms,
 				'endpoint_disabled', 'OpenAI responses endpoint is disabled')
 		}

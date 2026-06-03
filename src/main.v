@@ -58,14 +58,7 @@ pub mut:
 	feishu_reconnect_delay_ms                   int
 	feishu_token_refresh_skew_seconds           int
 	feishu_recent_event_limit                   int
-	openai_enabled                              bool
-	openai_base_path                            string
-	openai_default_backend                      string
-	openai_plugin                               string
-	openai_endpoints                            config.OpenAIEndpointsConfig
-	openai_backends                             map[string]config.OpenAIBackendConfig
-	openai_routes                               map[string]config.OpenAIRouteConfig
-	openai_responses                            state_store.MemoryStateStore[OpenAIResponseRecord]
+	openai                                      OpenaiState
 	websocket_upstream_recent_dispatch_limit    int
 	auto_start_dynamic_upstreams                bool
 	feishu_static_apps                          map[string]config.FeishuAppConfig

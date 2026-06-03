@@ -84,14 +84,16 @@ fn build_app_runtime(provider_settings ProviderRuntimeSettings, executor_plan Lo
 		feishu_reconnect_delay_ms:                provider_settings.feishu.reconnect_delay_ms
 		feishu_token_refresh_skew_seconds:        provider_settings.feishu.token_refresh_skew_seconds
 		feishu_recent_event_limit:                provider_settings.feishu.recent_event_limit
-		openai_enabled:                           cfg.openai.enabled
-		openai_base_path:                         cfg.openai.base_path
-		openai_default_backend:                   cfg.openai.default_backend
-		openai_plugin:                            cfg.openai.plugin
-		openai_endpoints:                         cfg.openai.endpoints
-		openai_backends:                          cfg.openai.backends.clone()
-		openai_routes:                            cfg.openai.routes.clone()
-		openai_responses:                         state_store.new_memory_state_store[OpenAIResponseRecord]()
+		openai:                                   OpenaiState{
+			enabled:          cfg.openai.enabled
+			base_path:        cfg.openai.base_path
+			default_backend:  cfg.openai.default_backend
+			plugin:           cfg.openai.plugin
+			endpoints:        cfg.openai.endpoints
+			backends:         cfg.openai.backends.clone()
+			routes:           cfg.openai.routes.clone()
+			responses:        state_store.new_memory_state_store[OpenAIResponseRecord]()
+		}
 		websocket_upstream_recent_dispatch_limit: 50
 		auto_start_dynamic_upstreams:             true
 		feishu_static_apps:                       provider_settings.feishu.apps.clone()

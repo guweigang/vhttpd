@@ -106,21 +106,21 @@ fn build_db_runtime(settings DbRuntimeSettings) DbProviderRuntime {
 pub fn (mut app App) db_runtime_snapshot() string {
 	ready := app.provider_enabled('db')
 	app.mu.@lock()
-	enabled := app.codex.db_runtime.enabled
-	socket := app.codex.db_runtime.socket
-	driver := app.codex.db_runtime.driver
-	host := app.codex.db_runtime.host
-	port := app.codex.db_runtime.port
-	database := app.codex.db_runtime.database
-	pool_size := app.codex.db_runtime.pool_size
-	pool_ready := app.codex.db_runtime.pool_ready
-	started := app.codex.db_runtime.started
-	started_at_unix := app.codex.db_runtime.started_at_unix
-	last_error := app.codex.db_runtime.last_error
-	total_queries := app.codex.db_runtime.total_queries
-	total_executes := app.codex.db_runtime.total_executes
-	failed_queries := app.codex.db_runtime.failed_queries
-	active_transactions := app.codex.db_runtime.active_transactions
+	enabled := app.db_runtime.enabled
+	socket := app.db_runtime.socket
+	driver := app.db_runtime.driver
+	host := app.db_runtime.host
+	port := app.db_runtime.port
+	database := app.db_runtime.database
+	pool_size := app.db_runtime.pool_size
+	pool_ready := app.db_runtime.pool_ready
+	started := app.db_runtime.started
+	started_at_unix := app.db_runtime.started_at_unix
+	last_error := app.db_runtime.last_error
+	total_queries := app.db_runtime.total_queries
+	total_executes := app.db_runtime.total_executes
+	failed_queries := app.db_runtime.failed_queries
+	active_transactions := app.db_runtime.active_transactions
 	app.mu.unlock()
 	caps := db_driver_capabilities(driver)
 	return json.encode(DbRuntimeSnapshot{
@@ -154,111 +154,111 @@ pub fn (mut app App) db_runtime_snapshot() string {
 
 fn (mut app App) db_runtime_driver() string {
 	app.mu.@lock()
-	driver := app.codex.db_runtime.driver
+	driver := app.db_runtime.driver
 	app.mu.unlock()
 	return driver
 }
 
 fn (mut app App) db_runtime_note_error(message string) {
 	app.mu.@lock()
-	app.codex.db_runtime.last_error = message
-	app.codex.db_runtime.failed_queries++
+	app.db_runtime.last_error = message
+	app.db_runtime.failed_queries++
 	app.mu.unlock()
 }
 
 fn (mut app App) db_runtime_note_query_success() string {
 	app.mu.@lock()
-	app.codex.db_runtime.total_queries++
-	driver := app.codex.db_runtime.driver
+	app.db_runtime.total_queries++
+	driver := app.db_runtime.driver
 	app.mu.unlock()
 	return driver
 }
 
 fn (mut app App) db_runtime_note_execute_success() string {
 	app.mu.@lock()
-	app.codex.db_runtime.total_executes++
-	driver := app.codex.db_runtime.driver
+	app.db_runtime.total_executes++
+	driver := app.db_runtime.driver
 	app.mu.unlock()
 	return driver
 }
 
 fn (mut app App) db_runtime_next_session_id() string {
 	app.mu.@lock()
-	app.codex.db_runtime.session_counter++
-	session_id := 'dbtx_${time.now().unix_micro()}_${app.codex.db_runtime.session_counter}'
+	app.db_runtime.session_counter++
+	session_id := 'dbtx_${time.now().unix_micro()}_${app.db_runtime.session_counter}'
 	app.mu.unlock()
 	return session_id
 }
 
 fn (mut app App) db_runtime_track_transaction(session_id string, conn DbSessionHandle) string {
 	app.mu.@lock()
-	app.codex.db_runtime.tx_sessions[session_id] = conn
-	app.codex.db_runtime.active_transactions = app.codex.db_runtime.tx_sessions.len
-	driver := app.codex.db_runtime.driver
+	app.db_runtime.tx_sessions[session_id] = conn
+	app.db_runtime.active_transactions = app.db_runtime.tx_sessions.len
+	driver := app.db_runtime.driver
 	app.mu.unlock()
 	return driver
 }
 
 fn (mut app App) db_runtime_mark_started(started_at_unix i64, listener &unix.StreamListener) string {
 	app.mu.@lock()
-	app.codex.db_runtime.started = true
-	app.codex.db_runtime.started_at_unix = started_at_unix
-	app.codex.db_runtime.last_error = ''
-	app.codex.db_runtime.stop_requested = false
-	app.codex.db_runtime.listener = unsafe { listener }
-	driver := app.codex.db_runtime.driver
+	app.db_runtime.started = true
+	app.db_runtime.started_at_unix = started_at_unix
+	app.db_runtime.last_error = ''
+	app.db_runtime.stop_requested = false
+	app.db_runtime.listener = unsafe { listener }
+	driver := app.db_runtime.driver
 	app.mu.unlock()
 	return driver
 }
 
 fn (mut app App) db_runtime_mark_stopped() {
 	app.mu.@lock()
-	app.codex.db_runtime.listener = unsafe { nil }
-	app.codex.db_runtime.started = false
-	app.codex.db_runtime.stop_requested = false
+	app.db_runtime.listener = unsafe { nil }
+	app.db_runtime.started = false
+	app.db_runtime.stop_requested = false
 	app.mu.unlock()
 }
 
 fn (mut app App) db_runtime_stop_requested() bool {
 	app.mu.@lock()
-	stop_requested := app.codex.db_runtime.stop_requested
+	stop_requested := app.db_runtime.stop_requested
 	app.mu.unlock()
 	return stop_requested
 }
 
 fn (mut app App) db_runtime_ensure_pool() ! {
 	app.mu.@lock()
-	driver := app.codex.db_runtime.driver
+	driver := app.db_runtime.driver
 	caps := db_driver_capabilities(driver)
 	if !caps.pool {
 		app.mu.unlock()
 		return error('unsupported_driver')
 	}
-	if app.codex.db_runtime.pool_ready {
+	if app.db_runtime.pool_ready {
 		app.mu.unlock()
 		return
 	}
 	settings := DbRuntimeSettings{
-		enabled:   app.codex.db_runtime.enabled
-		socket:    app.codex.db_runtime.socket
-		driver:    app.codex.db_runtime.driver
-		host:      app.codex.db_runtime.host
-		port:      app.codex.db_runtime.port
-		username:  app.codex.db_runtime.username
-		password:  app.codex.db_runtime.password
-		database:  app.codex.db_runtime.database
-		pool_size: app.codex.db_runtime.pool_size
+		enabled:   app.db_runtime.enabled
+		socket:    app.db_runtime.socket
+		driver:    app.db_runtime.driver
+		host:      app.db_runtime.host
+		port:      app.db_runtime.port
+		username:  app.db_runtime.username
+		password:  app.db_runtime.password
+		database:  app.db_runtime.database
+		pool_size: app.db_runtime.pool_size
 	}
 	app.mu.unlock()
 	mut pool := db_open_pool(settings)!
 	app.mu.@lock()
-	if app.codex.db_runtime.pool_ready {
+	if app.db_runtime.pool_ready {
 		app.mu.unlock()
 		db_pool_close(mut pool)
 		return
 	}
-	app.codex.db_runtime.pool = pool
-	app.codex.db_runtime.pool_ready = true
+	app.db_runtime.pool = pool
+	app.db_runtime.pool_ready = true
 	app.mu.unlock()
 }
 
@@ -267,8 +267,8 @@ fn (mut app App) db_runtime_release_conn(conn DbSessionHandle, session_id string
 		return
 	}
 	app.mu.@lock()
-	pool_ready := app.codex.db_runtime.pool_ready
-	mut pool := app.codex.db_runtime.pool
+	pool_ready := app.db_runtime.pool_ready
+	mut pool := app.db_runtime.pool
 	app.mu.unlock()
 	if pool_ready {
 		db_pool_release(mut pool, conn)
@@ -279,7 +279,7 @@ fn (mut app App) db_runtime_acquire_conn(session_id string) !DbSessionHandle {
 	app.db_runtime_ensure_pool()!
 	if session_id != '' {
 		app.mu.@lock()
-		conn := app.codex.db_runtime.tx_sessions[session_id] or {
+		conn := app.db_runtime.tx_sessions[session_id] or {
 			app.mu.unlock()
 			return error('invalid_session')
 		}
@@ -287,7 +287,7 @@ fn (mut app App) db_runtime_acquire_conn(session_id string) !DbSessionHandle {
 		return conn
 	}
 	app.mu.@lock()
-	mut pool := app.codex.db_runtime.pool
+	mut pool := app.db_runtime.pool
 	app.mu.unlock()
 	return db_pool_acquire(mut pool)!
 }
@@ -295,17 +295,17 @@ fn (mut app App) db_runtime_acquire_conn(session_id string) !DbSessionHandle {
 fn (mut app App) db_runtime_discard_conn(mut conn DbSessionHandle) {
 	db_session_close(mut conn) or {}
 	app.mu.@lock()
-	pool_ready := app.codex.db_runtime.pool_ready
+	pool_ready := app.db_runtime.pool_ready
 	settings := DbRuntimeSettings{
-		enabled:   app.codex.db_runtime.enabled
-		socket:    app.codex.db_runtime.socket
-		driver:    app.codex.db_runtime.driver
-		host:      app.codex.db_runtime.host
-		port:      app.codex.db_runtime.port
-		username:  app.codex.db_runtime.username
-		password:  app.codex.db_runtime.password
-		database:  app.codex.db_runtime.database
-		pool_size: app.codex.db_runtime.pool_size
+		enabled:   app.db_runtime.enabled
+		socket:    app.db_runtime.socket
+		driver:    app.db_runtime.driver
+		host:      app.db_runtime.host
+		port:      app.db_runtime.port
+		username:  app.db_runtime.username
+		password:  app.db_runtime.password
+		database:  app.db_runtime.database
+		pool_size: app.db_runtime.pool_size
 	}
 	app.mu.unlock()
 	if !pool_ready {
@@ -331,8 +331,8 @@ fn (mut app App) db_runtime_discard_conn(mut conn DbSessionHandle) {
 	}
 	db_pool_close(mut replacement_pool)
 	app.mu.@lock()
-	still_ready := app.codex.db_runtime.pool_ready
-	mut pool := app.codex.db_runtime.pool
+	still_ready := app.db_runtime.pool_ready
+	mut pool := app.db_runtime.pool
 	app.mu.unlock()
 	if still_ready {
 		db_pool_release(mut pool, replacement_session)
@@ -343,10 +343,10 @@ fn (mut app App) db_runtime_discard_conn(mut conn DbSessionHandle) {
 
 fn (mut app App) db_runtime_finalize_tx_session(session_id string, mut conn DbSessionHandle, reusable bool) ! {
 	app.mu.@lock()
-	app.codex.db_runtime.tx_sessions.delete(session_id)
-	app.codex.db_runtime.active_transactions = app.codex.db_runtime.tx_sessions.len
-	pool_ready := app.codex.db_runtime.pool_ready
-	mut pool := app.codex.db_runtime.pool
+	app.db_runtime.tx_sessions.delete(session_id)
+	app.db_runtime.active_transactions = app.db_runtime.tx_sessions.len
+	pool_ready := app.db_runtime.pool_ready
+	mut pool := app.db_runtime.pool
 	app.mu.unlock()
 	if reusable {
 		db_session_reset_for_pool(mut conn) or {
@@ -367,11 +367,11 @@ fn (mut app App) db_runtime_finalize_tx_session(session_id string, mut conn DbSe
 fn (mut app App) db_runtime_cleanup_sessions() {
 	app.mu.@lock()
 	mut sessions := []DbSessionHandle{}
-	for _, conn in app.codex.db_runtime.tx_sessions {
+	for _, conn in app.db_runtime.tx_sessions {
 		sessions << conn
 	}
-	app.codex.db_runtime.tx_sessions = map[string]DbSessionHandle{}
-	app.codex.db_runtime.active_transactions = 0
+	app.db_runtime.tx_sessions = map[string]DbSessionHandle{}
+	app.db_runtime.active_transactions = 0
 	app.mu.unlock()
 	for mut conn in sessions {
 		db_session_reset_for_pool(mut conn) or {}
@@ -381,9 +381,9 @@ fn (mut app App) db_runtime_cleanup_sessions() {
 
 fn (mut app App) db_runtime_close_pool() {
 	app.mu.@lock()
-	pool_ready := app.codex.db_runtime.pool_ready
-	mut pool := app.codex.db_runtime.pool
-	app.codex.db_runtime.pool_ready = false
+	pool_ready := app.db_runtime.pool_ready
+	mut pool := app.db_runtime.pool
+	app.db_runtime.pool_ready = false
 	app.mu.unlock()
 	if pool_ready {
 		db_pool_close(mut pool)
@@ -663,8 +663,8 @@ fn run_db_runtime_server(mut app App, socket_path string) {
 	}
 	mut listener := unix.listen_stream(socket_path) or {
 		app.mu.@lock()
-		app.codex.db_runtime.started = false
-		app.codex.db_runtime.last_error = err.msg()
+		app.db_runtime.started = false
+		app.db_runtime.last_error = err.msg()
 		app.mu.unlock()
 		app.emit('db.error', {
 			'socket': socket_path
