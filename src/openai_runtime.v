@@ -13,6 +13,14 @@ import x.json2
 const openai_response_registry_ttl = 24 * time.hour
 const openai_stream_done_fetch_error = 'openai_stream_done'
 
+fn build_openai_path_context() openai.PathContext {
+	return openai.PathContext{
+		normalize_path:           normalize_path
+		normalize_request_target: normalize_request_target
+		parse_query_map:          parse_query_map
+	}
+}
+
 struct OpenAIModelObject {
 	id       string
 	object   string = 'model'
@@ -35,50 +43,11 @@ struct OpenAIErrorResponse {
 	error OpenAIErrorBody
 }
 
-struct OpenAIResolvedRoute {
-	route_name     string
-	model          string
-	backend_name   string
-	upstream_model string
-	backend        config.OpenAIBackendConfig
-}
-
-struct OpenAIUpstreamPlan {
-	backend         string
-	method          string
-	path            string
-	body            string
-	upstream_model  string @[json: 'upstream_model']
-	stream_mode     string @[json: 'stream_mode']
-	response_codec  string @[json: 'response_codec']
-	output_protocol string @[json: 'output_protocol']
-	mapper          string
-	headers         map[string]string
-}
-
-struct OpenAIResolvedPlan {
-	backend_name    string
-	backend         config.OpenAIBackendConfig
-	method          string
-	path            string
-	body            string
-	model           string
-	stream_mode     string
-	response_codec  string
-	output_protocol string
-	mapper          string
-	headers         map[string]string
-}
-
-struct OpenAIPluginPlanResult {
-	handled bool
-	plan    OpenAIResolvedPlan
-}
-
-struct OpenAIPluginModelsResult {
-	handled bool
-	models  []string
-}
+type OpenAIResolvedRoute = openai.OpenAIResolvedRoute
+type OpenAIUpstreamPlan = openai.OpenAIUpstreamPlan
+type OpenAIResolvedPlan = openai.OpenAIResolvedPlan
+type OpenAIPluginPlanResult = openai.OpenAIPluginPlanResult
+type OpenAIPluginModelsResult = openai.OpenAIPluginModelsResult
 
 type OpenAIResponseRecord = openai.OpenAIResponseRecord
 
@@ -201,15 +170,8 @@ struct OpenAIFrameMapping {
 	finish_reason string
 }
 
-struct OpenAIChunkDecodeState {
-mut:
-	mode            string = 'unknown'
-	buffer          string
-	remaining       int
-	need_chunk_crlf bool
-	done            bool
-}
-fn openai_decode_progress_chunk(mut decoder OpenAIChunkDecodeState, chunk []u8) string {
+type OpenAIChunkDecodeState = openai.ChunkDecodeState
+fn openai_decode_progress_chunk(mut decoder openai.ChunkDecodeState, chunk []u8) string {
 	if chunk.len == 0 || decoder.done {
 		return ''
 	}
@@ -296,7 +258,7 @@ mut:
 	response_headers map[string]string
 	headers_written  bool
 	error_body       string
-	chunk_decoder    OpenAIChunkDecodeState
+	chunk_decoder    openai.ChunkDecodeState
 	done             bool
 	done_probe       string
 	final_written    bool
@@ -323,7 +285,7 @@ mut:
 	mapper_error     string
 	error_body       string
 	usage            map[string]int
-	chunk_decoder    OpenAIChunkDecodeState
+	chunk_decoder    openai.ChunkDecodeState
 	final_written    bool
 }
 

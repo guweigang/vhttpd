@@ -2,7 +2,7 @@
 schema_version: 1
 locale: zh-CN
 branch: refactor/v2
-exported_at: "2026-06-04T02:57:12Z"
+exported_at: "2026-06-04T03:27:28Z"
 modules:
     "":
         dir_name: vhttpd 多模态应用运行时编排
@@ -35,17 +35,17 @@ modules:
             - src/
         source_files: []
         children:
-            - core_runtime/provider_registry
+            - core_runtime/server_orchestration
+            - core_runtime/transport
             - core_runtime/feishu
-            - core_runtime/worker_backend
             - core_runtime/executor
             - core_runtime/jsonutils_state_store
-            - core_runtime/command_kernel
-            - core_runtime/server_orchestration
             - core_runtime/websocket
             - core_runtime/openai
+            - core_runtime/command_kernel
             - core_runtime/config_logging
-            - core_runtime/transport
+            - core_runtime/provider_registry
+            - core_runtime/worker_backend
         depends_on: []
         related_to: []
     core_runtime/command_kernel:
