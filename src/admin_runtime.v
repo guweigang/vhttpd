@@ -19,46 +19,10 @@ fn (mut app App) admin_stats_snapshot() executor.AdminRuntimeStats {
 	defer {
 		app.mu.unlock()
 	}
-	feishu_metrics := app.provider_runtime_metrics('feishu')
-	now := time.now().unix()
-	started := if app.started_at_unix > 0 { app.started_at_unix } else { now }
-	uptime := if now > started { now - started } else { 0 }
-	return executor.AdminRuntimeStats{
-		started_at_unix: started
-		uptime_seconds:  uptime
-		http: AdminHttpStats{
-			requests_total: app.http_stats.requests_total
-			errors_total:   app.http_stats.errors_total
-			timeouts_total: app.http_stats.timeouts_total
-			streams_total:  app.http_stats.streams_total
-		}
-		worker: AdminWorkerQueueStats{
-			waits_total:    app.worker.stat_queue_waits_total
-			rejected_total: app.worker.stat_queue_rejected_total
-			timeouts_total: app.worker.stat_queue_timeouts_total
-		}
-		upstream: AdminUpstreamStats{
-			plans_total:       app.ws_hub.stat_upstream_plans_total
-			plan_errors_total: app.ws_hub.stat_upstream_plan_errors_total
-		}
-		mcp: AdminMcpStats{
-			sessions_expired_total:             app.mcp.stat_sessions_expired_total
-			sessions_evicted_total:             app.mcp.stat_sessions_evicted_total
-			pending_dropped_total:              app.mcp.stat_pending_dropped_total
-			sampling_capability_warnings_total: app.mcp.stat_sampling_capability_warnings_total
-			sampling_capability_dropped_total:  app.mcp.stat_sampling_capability_dropped_total
-			sampling_capability_errors_total:   app.mcp.stat_sampling_capability_errors_total
-		}
-		feishu: AdminFeishuStats{
-			connect_attempts:  feishu_metrics.connect_attempts
-			connect_successes: feishu_metrics.connect_successes
-			received_frames:   feishu_metrics.received_frames
-			acked_events:      feishu_metrics.acked_events
-			messages_sent:     feishu_metrics.messages_sent
-			send_errors:       feishu_metrics.send_errors
-		}
-		admin_actions_total: app.http_stats.admin_actions_total
-	}
+	connect_attempts, connect_successes, received_frames, acked_events, messages_sent, send_errors :=
+		app.feishu_runtime_totals()
+	return app.admin.stats_snapshot(app, connect_attempts, connect_successes, received_frames,
+		acked_events, messages_sent, send_errors)
 }
 
 type AdminWorkerPoolSummary = executor.AdminWorkerPoolSummary
@@ -66,15 +30,8 @@ type AdminLogicExecutorSummary = executor.AdminLogicExecutorSummary
 type AdminActiveCounts = executor.AdminActiveCounts
 
 fn (mut app App) admin_runtime_snapshot() executor.AdminRuntimeSummary {
-	stats := app.admin_stats_snapshot()
-	mut active_websockets := 0
-	app.ws_hub.mu.@lock()
-	active_websockets = app.ws_hub.conns.len
-	app.ws_hub.mu.unlock()
-	mut active_upstreams := 0
-	app.ws_hub.upstream_mu.@lock()
-	active_upstreams = app.ws_hub.upstream_sessions.len
-	app.ws_hub.upstream_mu.unlock()
+	// These two values require mutating internal sub-struct locks;
+	// compute them here (in main) and pass to the admin sub-module.
 	mut active_mcp_sessions := 0
 	app.mcp.mu.@lock()
 	app.mcp_prune_sessions_locked(time.now().unix())
@@ -84,46 +41,11 @@ fn (mut app App) admin_runtime_snapshot() executor.AdminRuntimeSummary {
 	app.worker.mu.@lock()
 	worker_queue_depth = app.worker.worker_backend.queue_waiting_requests
 	app.worker.mu.unlock()
-	mut capabilities := map[string]bool{}
-	capabilities['http'] = true
-	capabilities['stream'] = true
-	capabilities['stream_direct'] = true
-	capabilities['stream_dispatch'] = app.worker.stream_dispatch
-	capabilities['stream_upstream_plan'] = true
-	capabilities['websocket'] = true
-	capabilities['websocket_dispatch'] = app.ws_hub.dispatch_mode
-	capabilities['mcp'] = true
-	capabilities['websocket_upstream'] = true
-	for key, value in app.provider_runtime_capabilities() {
-		capabilities[key] = value
-	}
-	logic_details := app.logic_executor_admin_details()
-	return executor.AdminRuntimeSummary{
-		started_at_unix: stats.started_at_unix
-		uptime_seconds:  stats.uptime_seconds
-		worker_pool: AdminWorkerPoolSummary{
-			pool_size:        app.worker.worker_backend.sockets.len
-			backend_mode:     '${app.worker.worker_backend_mode}'
-			queue_capacity:   app.worker.worker_backend.queue_capacity
-			queue_timeout_ms: app.worker.worker_backend.queue_timeout_ms
-			queue_depth:      worker_queue_depth
-		}
-		logic_executor: AdminLogicExecutorSummary{
-			kind:      app.logic_executor_kind()
-			lifecycle: app.worker.lifecycle
-			model:     '${app.logic_executor_model()}'
-			provider:  app.logic_executor_provider()
-			details:   logic_details
-		}
-		capabilities: capabilities
-		active: AdminActiveCounts{
-			websockets:   active_websockets
-			upstreams:    active_upstreams
-			mcp_sessions: active_mcp_sessions
-			gateways:     app.provider_runtime_gateway_count()
-		}
-		stats: stats
-	}
+	provider_capabilities := app.provider_runtime_capabilities()
+	provider_gateway_count := app.provider_runtime_gateway_count()
+	connect_attempts, connect_successes, received_frames, acked_events, messages_sent, send_errors :=
+		app.feishu_runtime_totals()
+	return app.admin.runtime_snapshot(app, active_mcp_sessions, worker_queue_depth, provider_capabilities, provider_gateway_count, connect_attempts, connect_successes, received_frames, acked_events, messages_sent, send_errors)
 }
 
 fn admin_query_boolish(raw string) bool {
@@ -309,4 +231,121 @@ pub fn (mut app App) admin_provider_runtimes(mut ctx Context) veb.Result {
 		'trace_id':   trace_id
 	})
 	return ctx.text(body)
+}
+
+// ── admin.RuntimeContext implementation ──
+// These methods allow App to satisfy the admin.RuntimeContext interface
+// so admin/ sub-module can call back without importing main.
+// All are assumed to be called under app.mu lock.
+
+fn (app &App) started_at_unix() i64 {
+	return app.started_at_unix
+}
+
+fn (app &App) http_requests_total() i64 {
+	return app.http_stats.requests_total
+}
+
+fn (app &App) http_errors_total() i64 {
+	return app.http_stats.errors_total
+}
+
+fn (app &App) http_timeouts_total() i64 {
+	return app.http_stats.timeouts_total
+}
+
+fn (app &App) http_streams_total() i64 {
+	return app.http_stats.streams_total
+}
+
+fn (app &App) http_admin_actions_total() i64 {
+	return app.http_stats.admin_actions_total
+}
+
+fn (app &App) worker_queue_waits_total() i64 {
+	return app.worker.stat_queue_waits_total
+}
+
+fn (app &App) worker_queue_rejected_total() i64 {
+	return app.worker.stat_queue_rejected_total
+}
+
+fn (app &App) worker_queue_timeouts_total() i64 {
+	return app.worker.stat_queue_timeouts_total
+}
+
+fn (app &App) ws_hub_upstream_plans_total() i64 {
+	return app.ws_hub.stat_upstream_plans_total
+}
+
+fn (app &App) ws_hub_upstream_plan_errors_total() i64 {
+	return app.ws_hub.stat_upstream_plan_errors_total
+}
+
+fn (app &App) mcp_sessions_expired_total() i64 {
+	return app.mcp.stat_sessions_expired_total
+}
+
+fn (app &App) mcp_sessions_evicted_total() i64 {
+	return app.mcp.stat_sessions_evicted_total
+}
+
+fn (app &App) mcp_pending_dropped_total() i64 {
+	return app.mcp.stat_pending_dropped_total
+}
+
+fn (app &App) mcp_sampling_capability_warnings_total() i64 {
+	return app.mcp.stat_sampling_capability_warnings_total
+}
+
+fn (app &App) mcp_sampling_capability_dropped_total() i64 {
+	return app.mcp.stat_sampling_capability_dropped_total
+}
+
+fn (app &App) mcp_sampling_capability_errors_total() i64 {
+	return app.mcp.stat_sampling_capability_errors_total
+}
+
+fn (app &App) ws_hub_active_conns() int {
+	app.ws_hub.mu.@lock()
+	defer {
+		app.ws_hub.mu.unlock()
+	}
+	return app.ws_hub.conns.len
+}
+
+fn (app &App) ws_hub_active_upstreams() int {
+	app.ws_hub.upstream_mu.@lock()
+	defer {
+		app.ws_hub.upstream_mu.unlock()
+	}
+	return app.ws_hub.upstream_sessions.len
+}
+
+fn (app &App) worker_pool_size() int {
+	return app.worker.worker_backend.sockets.len
+}
+
+fn (app &App) worker_backend_mode() string {
+	return '${app.worker.worker_backend_mode}'
+}
+
+fn (app &App) worker_queue_capacity() int {
+	return app.worker.worker_backend.queue_capacity
+}
+
+fn (app &App) worker_queue_timeout_ms() int {
+	return app.worker.worker_backend.queue_timeout_ms
+}
+
+fn (app &App) worker_stream_dispatch() bool {
+	return app.worker.stream_dispatch
+}
+
+fn (app &App) ws_hub_dispatch_mode() bool {
+	return app.ws_hub.dispatch_mode
+}
+
+fn (app &App) worker_lifecycle() string {
+	return app.worker.lifecycle
 }
