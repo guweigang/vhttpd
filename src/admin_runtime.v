@@ -3,7 +3,6 @@ import admin
 import executor
 
 import json
-import time
 import veb
 
 type AdminRuntimeStats = executor.AdminRuntimeStats
@@ -14,15 +13,72 @@ type AdminUpstreamStats = executor.AdminUpstreamStats
 type AdminMcpStats = executor.AdminMcpStats
 type AdminFeishuStats = executor.AdminFeishuStats
 
+// build_admin_context constructs an admin.RuntimeContext whose closures
+// capture App, bridging the admin sub-module to the main program.
+fn (mut app App) build_admin_context() admin.RuntimeContext {
+	return admin.RuntimeContext{
+		started_at_unix: fn [app] () i64 { return app.started_at_unix }
+		http_requests_total: fn [app] () i64 { return app.http_stats.requests_total }
+		http_errors_total: fn [app] () i64 { return app.http_stats.errors_total }
+		http_timeouts_total: fn [app] () i64 { return app.http_stats.timeouts_total }
+		http_streams_total: fn [app] () i64 { return app.http_stats.streams_total }
+		http_admin_actions_total: fn [app] () i64 { return app.http_stats.admin_actions_total }
+		worker_queue_waits_total: fn [app] () i64 { return app.worker.stat_queue_waits_total }
+		worker_queue_rejected_total: fn [app] () i64 { return app.worker.stat_queue_rejected_total }
+		worker_queue_timeouts_total: fn [app] () i64 { return app.worker.stat_queue_timeouts_total }
+		ws_hub_upstream_plans_total: fn [app] () i64 { return app.ws_hub.stat_upstream_plans_total }
+		ws_hub_upstream_plan_errors_total: fn [app] () i64 { return app.ws_hub.stat_upstream_plan_errors_total }
+		mcp_sessions_expired_total: fn [app] () i64 { return app.mcp.stat_sessions_expired_total }
+		mcp_sessions_evicted_total: fn [app] () i64 { return app.mcp.stat_sessions_evicted_total }
+		mcp_pending_dropped_total: fn [app] () i64 { return app.mcp.stat_pending_dropped_total }
+		mcp_sampling_capability_warnings_total: fn [app] () i64 { return app.mcp.stat_sampling_capability_warnings_total }
+		mcp_sampling_capability_dropped_total: fn [app] () i64 { return app.mcp.stat_sampling_capability_dropped_total }
+		mcp_sampling_capability_errors_total: fn [app] () i64 { return app.mcp.stat_sampling_capability_errors_total }
+		feishu_runtime_totals: fn [mut app] () (i64, i64, i64, i64, i64, i64) {
+			return app.feishu_runtime_totals()
+		}
+		ws_hub_active_conns: fn [app] () int {
+			app.ws_hub.mu.@lock()
+			defer { app.ws_hub.mu.unlock() }
+			return app.ws_hub.conns.len
+		}
+		ws_hub_active_upstreams: fn [app] () int {
+			app.ws_hub.upstream_mu.@lock()
+			defer { app.ws_hub.upstream_mu.unlock() }
+			return app.ws_hub.upstream_sessions.len
+		}
+		mcp_active_sessions: fn [mut app] (now i64) int {
+			app.mcp.mu.@lock()
+			defer { app.mcp.mu.unlock() }
+			app.mcp_prune_sessions_locked(now)
+			return app.mcp.sessions.len
+		}
+		worker_queue_depth: fn [app] () int {
+			app.worker.mu.@lock()
+			defer { app.worker.mu.unlock() }
+			return app.worker.worker_backend.queue_waiting_requests
+		}
+		worker_pool_size: fn [app] () i64 { return app.worker.worker_backend.sockets.len }
+		worker_backend_mode: fn [app] () string { return '${app.worker.worker_backend_mode}' }
+		worker_queue_capacity: fn [app] () int { return app.worker.worker_backend.queue_capacity }
+		worker_queue_timeout_ms: fn [app] () int { return app.worker.worker_backend.queue_timeout_ms }
+		worker_stream_dispatch: fn [app] () bool { return app.worker.stream_dispatch }
+		ws_hub_dispatch_mode: fn [app] () bool { return app.ws_hub.dispatch_mode }
+		worker_lifecycle: fn [app] () string { return app.worker.lifecycle }
+		logic_executor_admin_details: fn [app] () executor.LogicExecutorAdminDetails { return app.logic_executor_admin_details() }
+		logic_executor_kind: fn [app] () string { return app.logic_executor_kind() }
+		logic_executor_model: fn [app] () executor.LogicExecutorModel { return app.logic_executor_model() }
+		logic_executor_provider: fn [app] () string { return app.logic_executor_provider() }
+		provider_runtime_capabilities: fn [mut app] () map[string]bool { return app.provider_runtime_capabilities() }
+		provider_runtime_gateway_count: fn [mut app] () int { return app.provider_runtime_gateway_count() }
+	}
+}
+
 fn (mut app App) admin_stats_snapshot() executor.AdminRuntimeStats {
 	app.mu.@lock()
-	defer {
-		app.mu.unlock()
-	}
-	connect_attempts, connect_successes, received_frames, acked_events, messages_sent, send_errors :=
-		app.feishu_runtime_totals()
-	return app.admin.stats_snapshot(app, connect_attempts, connect_successes, received_frames,
-		acked_events, messages_sent, send_errors)
+	defer { app.mu.unlock() }
+	ctx := app.build_admin_context()
+	return app.admin.stats_snapshot(ctx)
 }
 
 type AdminWorkerPoolSummary = executor.AdminWorkerPoolSummary
@@ -30,22 +86,8 @@ type AdminLogicExecutorSummary = executor.AdminLogicExecutorSummary
 type AdminActiveCounts = executor.AdminActiveCounts
 
 fn (mut app App) admin_runtime_snapshot() executor.AdminRuntimeSummary {
-	// These two values require mutating internal sub-struct locks;
-	// compute them here (in main) and pass to the admin sub-module.
-	mut active_mcp_sessions := 0
-	app.mcp.mu.@lock()
-	app.mcp_prune_sessions_locked(time.now().unix())
-	active_mcp_sessions = app.mcp.sessions.len
-	app.mcp.mu.unlock()
-	mut worker_queue_depth := 0
-	app.worker.mu.@lock()
-	worker_queue_depth = app.worker.worker_backend.queue_waiting_requests
-	app.worker.mu.unlock()
-	provider_capabilities := app.provider_runtime_capabilities()
-	provider_gateway_count := app.provider_runtime_gateway_count()
-	connect_attempts, connect_successes, received_frames, acked_events, messages_sent, send_errors :=
-		app.feishu_runtime_totals()
-	return app.admin.runtime_snapshot(app, active_mcp_sessions, worker_queue_depth, provider_capabilities, provider_gateway_count, connect_attempts, connect_successes, received_frames, acked_events, messages_sent, send_errors)
+	ctx := app.build_admin_context()
+	return app.admin.runtime_snapshot(ctx)
 }
 
 fn admin_query_boolish(raw string) bool {
@@ -231,121 +273,4 @@ pub fn (mut app App) admin_provider_runtimes(mut ctx Context) veb.Result {
 		'trace_id':   trace_id
 	})
 	return ctx.text(body)
-}
-
-// ── admin.RuntimeContext implementation ──
-// These methods allow App to satisfy the admin.RuntimeContext interface
-// so admin/ sub-module can call back without importing main.
-// All are assumed to be called under app.mu lock.
-
-fn (app &App) started_at_unix() i64 {
-	return app.started_at_unix
-}
-
-fn (app &App) http_requests_total() i64 {
-	return app.http_stats.requests_total
-}
-
-fn (app &App) http_errors_total() i64 {
-	return app.http_stats.errors_total
-}
-
-fn (app &App) http_timeouts_total() i64 {
-	return app.http_stats.timeouts_total
-}
-
-fn (app &App) http_streams_total() i64 {
-	return app.http_stats.streams_total
-}
-
-fn (app &App) http_admin_actions_total() i64 {
-	return app.http_stats.admin_actions_total
-}
-
-fn (app &App) worker_queue_waits_total() i64 {
-	return app.worker.stat_queue_waits_total
-}
-
-fn (app &App) worker_queue_rejected_total() i64 {
-	return app.worker.stat_queue_rejected_total
-}
-
-fn (app &App) worker_queue_timeouts_total() i64 {
-	return app.worker.stat_queue_timeouts_total
-}
-
-fn (app &App) ws_hub_upstream_plans_total() i64 {
-	return app.ws_hub.stat_upstream_plans_total
-}
-
-fn (app &App) ws_hub_upstream_plan_errors_total() i64 {
-	return app.ws_hub.stat_upstream_plan_errors_total
-}
-
-fn (app &App) mcp_sessions_expired_total() i64 {
-	return app.mcp.stat_sessions_expired_total
-}
-
-fn (app &App) mcp_sessions_evicted_total() i64 {
-	return app.mcp.stat_sessions_evicted_total
-}
-
-fn (app &App) mcp_pending_dropped_total() i64 {
-	return app.mcp.stat_pending_dropped_total
-}
-
-fn (app &App) mcp_sampling_capability_warnings_total() i64 {
-	return app.mcp.stat_sampling_capability_warnings_total
-}
-
-fn (app &App) mcp_sampling_capability_dropped_total() i64 {
-	return app.mcp.stat_sampling_capability_dropped_total
-}
-
-fn (app &App) mcp_sampling_capability_errors_total() i64 {
-	return app.mcp.stat_sampling_capability_errors_total
-}
-
-fn (app &App) ws_hub_active_conns() int {
-	app.ws_hub.mu.@lock()
-	defer {
-		app.ws_hub.mu.unlock()
-	}
-	return app.ws_hub.conns.len
-}
-
-fn (app &App) ws_hub_active_upstreams() int {
-	app.ws_hub.upstream_mu.@lock()
-	defer {
-		app.ws_hub.upstream_mu.unlock()
-	}
-	return app.ws_hub.upstream_sessions.len
-}
-
-fn (app &App) worker_pool_size() int {
-	return app.worker.worker_backend.sockets.len
-}
-
-fn (app &App) worker_backend_mode() string {
-	return '${app.worker.worker_backend_mode}'
-}
-
-fn (app &App) worker_queue_capacity() int {
-	return app.worker.worker_backend.queue_capacity
-}
-
-fn (app &App) worker_queue_timeout_ms() int {
-	return app.worker.worker_backend.queue_timeout_ms
-}
-
-fn (app &App) worker_stream_dispatch() bool {
-	return app.worker.stream_dispatch
-}
-
-fn (app &App) ws_hub_dispatch_mode() bool {
-	return app.ws_hub.dispatch_mode
-}
-
-fn (app &App) worker_lifecycle() string {
-	return app.worker.lifecycle
 }
