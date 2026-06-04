@@ -3,7 +3,6 @@ import config
 import provider
 
 import json
-import time
 
 type ProviderInstanceSpec = provider.ProviderInstanceSpec
 type AdminProviderInstanceSnapshot = provider.AdminProviderInstanceSnapshot
@@ -16,53 +15,15 @@ fn provider_instance_runtime_snapshot(mut app App, provider_name string, instanc
 }
 
 pub fn (mut app App) provider_instance_upsert(spec ProviderInstanceSpec) ProviderInstanceSpec {
-	key := provider.instance_key(spec.provider, spec.instance)
-	now_ms := time.now().unix_milli()
-	existing := app.provider_instance_specs[key] or { ProviderInstanceSpec{} }
-	next := ProviderInstanceSpec{
-		provider:      spec.provider.trim_space()
-		instance:      provider.normalize_instance_name(spec.instance)
-		config_json:   spec.config_json
-		desired_state: if spec.desired_state.trim_space() == '' {
-			'connected'
-		} else {
-			spec.desired_state.trim_space()
-		}
-		created_at:    if existing.created_at > 0 { existing.created_at } else { now_ms }
-		updated_at:    now_ms
-	}
-	app.provider_instance_specs[key] = next
-	return next
+	return provider.instance_upsert(mut app.provider_instance_specs, spec)
 }
 
 pub fn (app &App) provider_instance_get(provider_name string, instance string) ?ProviderInstanceSpec {
-	key := provider.instance_key(provider_name, instance)
-	if key !in app.provider_instance_specs {
-		return none
-	}
-	return app.provider_instance_specs[key]
+	return provider.instance_get(app.provider_instance_specs, provider_name, instance)
 }
 
 pub fn (app &App) provider_instance_list(provider_name string) []ProviderInstanceSpec {
-	mut out := []ProviderInstanceSpec{}
-	for _, spec in app.provider_instance_specs {
-		if provider_name.trim_space() != '' && spec.provider != provider_name.trim_space() {
-			continue
-		}
-		out << spec
-	}
-	out.sort_with_compare(fn (a &ProviderInstanceSpec, b &ProviderInstanceSpec) int {
-		left := '${a.provider}/${a.instance}'
-		right := '${b.provider}/${b.instance}'
-		if left < right {
-			return -1
-		}
-		if left > right {
-			return 1
-		}
-		return 0
-	})
-	return out
+	return provider.instance_list(app.provider_instance_specs, provider_name)
 }
 
 pub fn (mut app App) admin_provider_instance_snapshots(provider_filter string) []AdminProviderInstanceSnapshot {
