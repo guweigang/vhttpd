@@ -1,5 +1,6 @@
 module main
 import transport
+import command as cmdpkg
 
 import log
 
@@ -14,7 +15,7 @@ pub fn CodexCommandHandler.new(mut app App) CodexCommandHandler {
 	}
 }
 
-pub fn (h CodexCommandHandler) execute(command transport.WorkerWebSocketUpstreamCommand, normalized NormalizedCommand, mut snapshot WebSocketUpstreamCommandActivity) (bool, string) {
+pub fn (h CodexCommandHandler) execute(command transport.WorkerWebSocketUpstreamCommand, normalized cmdpkg.NormalizedCommand, mut snapshot WebSocketUpstreamCommandActivity) (bool, string) {
 	mut app := h.app
 	_ = command
 	if normalized.provider != 'codex' {
@@ -110,7 +111,7 @@ pub fn FeishuCommandHandler.new(mut app App) FeishuCommandHandler {
 	}
 }
 
-fn websocket_upstream_request_from_normalized(normalized NormalizedCommand, default_provider string) WebSocketUpstreamSendRequest {
+fn websocket_upstream_request_from_normalized(normalized cmdpkg.NormalizedCommand, default_provider string) WebSocketUpstreamSendRequest {
 	return WebSocketUpstreamSendRequest{
 		provider:       normalized.normalized_provider(default_provider)
 		instance:       normalized.instance
@@ -127,11 +128,11 @@ fn websocket_upstream_request_from_normalized(normalized NormalizedCommand, defa
 	}
 }
 
-fn feishu_command_request_from_normalized(normalized NormalizedCommand) WebSocketUpstreamSendRequest {
+fn feishu_command_request_from_normalized(normalized cmdpkg.NormalizedCommand) WebSocketUpstreamSendRequest {
 	return websocket_upstream_request_from_normalized(normalized, 'feishu')
 }
 
-fn (h FeishuCommandHandler) resolve_target(normalized NormalizedCommand, mut req WebSocketUpstreamSendRequest) {
+fn (h FeishuCommandHandler) resolve_target(normalized cmdpkg.NormalizedCommand, mut req WebSocketUpstreamSendRequest) {
 	if req.target != '' || normalized.correlation.stream_id == '' {
 		return
 	}
@@ -147,14 +148,14 @@ fn (h FeishuCommandHandler) resolve_target(normalized NormalizedCommand, mut req
 	}
 }
 
-fn feishu_command_normalize_stream_send(normalized NormalizedCommand, req WebSocketUpstreamSendRequest) WebSocketUpstreamSendRequest {
+fn feishu_command_normalize_stream_send(normalized cmdpkg.NormalizedCommand, req WebSocketUpstreamSendRequest) WebSocketUpstreamSendRequest {
 	if normalized.correlation.stream_id.trim_space() == '' {
 		return req
 	}
 	return feishu_runtime_normalize_streaming_send(req)
 }
 
-fn (h FeishuCommandHandler) execute_provider_message_send(normalized NormalizedCommand, mut req WebSocketUpstreamSendRequest, mut snapshot WebSocketUpstreamCommandActivity) (bool, string) {
+fn (h FeishuCommandHandler) execute_provider_message_send(normalized cmdpkg.NormalizedCommand, mut req WebSocketUpstreamSendRequest, mut snapshot WebSocketUpstreamCommandActivity) (bool, string) {
 	req = feishu_command_normalize_stream_send(normalized, req)
 	if normalized.correlation.stream_id.trim_space() != '' {
 		req.metadata['stream_id'] = normalized.correlation.stream_id
@@ -193,7 +194,7 @@ fn (h FeishuCommandHandler) execute_provider_message_send(normalized NormalizedC
 	return true, ''
 }
 
-fn (h FeishuCommandHandler) execute_stream_command(normalized NormalizedCommand, req WebSocketUpstreamSendRequest, mut snapshot WebSocketUpstreamCommandActivity) (bool, string) {
+fn (h FeishuCommandHandler) execute_stream_command(normalized cmdpkg.NormalizedCommand, req WebSocketUpstreamSendRequest, mut snapshot WebSocketUpstreamCommandActivity) (bool, string) {
 	mut app := h.app
 	if app.feishu_card_bridge_enabled() && req.target != '' {
 		if normalized.is_stream_append() {
@@ -258,7 +259,7 @@ fn (h FeishuCommandHandler) execute_stream_command(normalized NormalizedCommand,
 	return false, ''
 }
 
-fn (h FeishuCommandHandler) execute_provider_message_update(normalized NormalizedCommand, req WebSocketUpstreamSendRequest, mut snapshot WebSocketUpstreamCommandActivity) (bool, string) {
+fn (h FeishuCommandHandler) execute_provider_message_update(normalized cmdpkg.NormalizedCommand, req WebSocketUpstreamSendRequest, mut snapshot WebSocketUpstreamCommandActivity) (bool, string) {
 	mut app := h.app
 	if req.target != '' {
 		app.feishu_runtime_clear_buffer(req.target)
@@ -275,7 +276,7 @@ fn (h FeishuCommandHandler) execute_provider_message_update(normalized Normalize
 	return true, ''
 }
 
-pub fn (h FeishuCommandHandler) execute(command transport.WorkerWebSocketUpstreamCommand, normalized NormalizedCommand, mut snapshot WebSocketUpstreamCommandActivity) (bool, string) {
+pub fn (h FeishuCommandHandler) execute(command transport.WorkerWebSocketUpstreamCommand, normalized cmdpkg.NormalizedCommand, mut snapshot WebSocketUpstreamCommandActivity) (bool, string) {
 	_ = command
 	if normalized.normalized_provider('') != 'feishu' {
 		return false, ''
@@ -353,7 +354,7 @@ pub fn GenericUpstreamCommandHandler.new(mut app App) GenericUpstreamCommandHand
 	}
 }
 
-pub fn (h GenericUpstreamCommandHandler) execute(command transport.WorkerWebSocketUpstreamCommand, normalized NormalizedCommand, mut snapshot WebSocketUpstreamCommandActivity) (bool, string) {
+pub fn (h GenericUpstreamCommandHandler) execute(command transport.WorkerWebSocketUpstreamCommand, normalized cmdpkg.NormalizedCommand, mut snapshot WebSocketUpstreamCommandActivity) (bool, string) {
 	_ = command
 	if normalized.kind == 'admin.worker.restart_all' {
 		mut app := h.app

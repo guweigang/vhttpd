@@ -2,6 +2,7 @@ module main
 import config
 import transport
 import codex
+import command
 
 import json
 import jsonutils
@@ -1251,10 +1252,10 @@ fn (mut app App) codex_provider_update(req WebSocketUpstreamSendRequest) !WebSoc
 // ── Turn Management ─────────────────────────────────────────────────────
 
 fn (mut app App) codex_start_turn(cmd transport.WorkerWebSocketUpstreamCommand) ! {
-	return app.codex_start_turn_normalized(NormalizedCommand.from_worker_command(cmd))
+	return app.codex_start_turn_normalized(command.NormalizedCommand.from_worker_command(cmd))
 }
 
-fn (mut app App) codex_start_turn_normalized(cmd NormalizedCommand) ! {
+fn (mut app App) codex_start_turn_normalized(cmd command.NormalizedCommand) ! {
 	log.info('[codex] 🚀 codex_start_turn stream_id=${cmd.correlation.stream_id} task_type=${cmd.task_type} prompt=${cmd.prompt}')
 	instance := codex_runtime_instance_name(cmd.instance)
 	cfg := app.codex_runtime_config(instance)

@@ -1,6 +1,7 @@
 module main
 import transport
 import provider
+import command as cmdpkg
 
 import log
 import time
@@ -51,7 +52,7 @@ pub fn CommandExecutor.new(mut app App) CommandExecutor {
 	}
 }
 
-fn (mut exec CommandExecutor) route_from_normalized(normalized NormalizedCommand) provider.ProviderRouteKind {
+fn (mut exec CommandExecutor) route_from_normalized(normalized cmdpkg.NormalizedCommand) provider.ProviderRouteKind {
 	if normalized.is_codex_control() && exec.codex_enabled {
 		return .codex
 	}
@@ -72,7 +73,7 @@ fn (mut exec CommandExecutor) route_from_normalized(normalized NormalizedCommand
 }
 
 fn (mut exec CommandExecutor) route_from_specs(command transport.WorkerWebSocketUpstreamCommand) provider.ProviderRouteKind {
-	return exec.route_from_normalized(NormalizedCommand.from_worker_command(command))
+	return exec.route_from_normalized(cmdpkg.NormalizedCommand.from_worker_command(command))
 }
 
 pub fn CommandExecutor.codex_route_enabled() bool {
@@ -146,7 +147,7 @@ pub fn (mut exec CommandExecutor) execute_websocket_upstream_commands(source_act
 	mut snapshots := []WebSocketUpstreamCommandActivity{}
 	log.info('[ws-cmd] executing ${commands.len} commands from ${source_activity_id}')
 	for index, command in commands {
-		normalized := NormalizedCommand.from_worker_command(command)
+		normalized := cmdpkg.NormalizedCommand.from_worker_command(command)
 		log.info('[ws-cmd]   #${index}: type=${normalized.routing_type()} kind=${normalized.kind} event=${normalized.normalized_event('')} provider=${normalized.normalized_provider('')} stream_id=${normalized.correlation.stream_id} trace_id=${normalized.metadata['trace_id'] or {
 			''
 		}} request_id=${normalized.correlation.request_id}')
@@ -183,7 +184,7 @@ pub fn (mut exec CommandExecutor) execute_websocket_upstream_commands(source_act
 	return snapshots, last_error
 }
 
-fn (mut exec CommandExecutor) execute_provider_instance_command(normalized NormalizedCommand, mut snapshot WebSocketUpstreamCommandActivity) (bool, string) {
+fn (mut exec CommandExecutor) execute_provider_instance_command(normalized cmdpkg.NormalizedCommand, mut snapshot WebSocketUpstreamCommandActivity) (bool, string) {
 	mut app := exec.app
 	if normalized.is_provider_instance_upsert() {
 		spec := app.provider_instance_upsert(ProviderInstanceSpec{
@@ -216,7 +217,7 @@ fn (mut exec CommandExecutor) execute_provider_instance_command(normalized Norma
 	return false, ''
 }
 
-fn (mut exec CommandExecutor) execute_routed_command(route provider.ProviderRouteKind, command transport.WorkerWebSocketUpstreamCommand, normalized NormalizedCommand, mut snapshot WebSocketUpstreamCommandActivity) (bool, string) {
+fn (mut exec CommandExecutor) execute_routed_command(route provider.ProviderRouteKind, command transport.WorkerWebSocketUpstreamCommand, normalized cmdpkg.NormalizedCommand, mut snapshot WebSocketUpstreamCommandActivity) (bool, string) {
 	return match route {
 		.codex {
 			if exec.codex_enabled {

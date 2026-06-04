@@ -1,6 +1,7 @@
 module main
 import transport
 import provider
+import command as cmdpkg
 
 // provider type aliases
 type ProviderRouteKind = provider.ProviderRouteKind
@@ -9,7 +10,7 @@ type CommandMatcher = provider.CommandMatcher
 
 // ProviderCommandHandler bridges provider-specific command execution.
 pub interface ProviderCommandHandler {
-	execute(command transport.WorkerWebSocketUpstreamCommand, normalized NormalizedCommand, mut snapshot WebSocketUpstreamCommandActivity) (bool, string)
+	execute(command transport.WorkerWebSocketUpstreamCommand, normalized cmdpkg.NormalizedCommand, mut snapshot WebSocketUpstreamCommandActivity) (bool, string)
 }
 
 // ProviderRuntime represents optional provider-owned runtime lifecycle hooks.
@@ -115,7 +116,7 @@ pub fn (mut app App) admin_provider_runtimes_snapshot() []AdminProviderRuntimeSn
 // No-op defaults let specs be constructed safely while keeping behavior stable.
 pub struct NoopProviderCommandHandler {}
 
-pub fn (h NoopProviderCommandHandler) execute(command transport.WorkerWebSocketUpstreamCommand, normalized NormalizedCommand, mut snapshot WebSocketUpstreamCommandActivity) (bool, string) {
+pub fn (h NoopProviderCommandHandler) execute(command transport.WorkerWebSocketUpstreamCommand, normalized cmdpkg.NormalizedCommand, mut snapshot WebSocketUpstreamCommandActivity) (bool, string) {
 	_ = command
 	_ = normalized
 	_ = snapshot
