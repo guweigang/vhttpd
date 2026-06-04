@@ -95,16 +95,6 @@ pub type WebSocketActorSourceConfig = config.WebSocketActorSourceConfig
 pub type WebSocketAffinityConfig = config.WebSocketAffinityConfig
 pub type WorkerConfig = config.WorkerConfig
 
-struct OllamaNdjsonMessage {
-	content string
-}
-
-struct OllamaNdjsonRow {
-	message  OllamaNdjsonMessage
-	response string
-	done     bool
-}
-
 fn runtime_trace(label string, fields map[string]string) {
 	mut row := map[string]string{}
 	row['ts'] = time.now().format_ss_milli()

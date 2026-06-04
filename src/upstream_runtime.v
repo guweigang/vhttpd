@@ -1,29 +1,19 @@
 module main
+import upstream
 import transport
 
 import json
-import net
 import net.http
-import os
 import time
 import veb
 
-@[heap]
-struct UpstreamExecState {
-mut:
-	conn                net.TcpConn
-	method              string
-	stream_type         string
-	mapper              string
-	field_path          string
-	fallback_field_path string
-	sse_event           string
-	status_code         int
-	content_type        string
-	response_headers    map[string]string
-	headers_written     bool
-	line_buf            string
-	token_index         int
+// build_upstream_io constructs the upstream.Io bridge from main App's I/O primitives.
+fn build_upstream_io() upstream.Io {
+	return upstream.Io{
+		write_sse_message:              write_sse_message
+		write_chunk:                    write_chunk
+		write_http_stream_headers_conn: write_http_stream_headers_conn
+	}
 }
 
 struct AdminUpstreamRuntimeSnapshot {
@@ -35,175 +25,8 @@ struct AdminUpstreamRuntimeSnapshot {
 	sessions       []UpstreamRuntimeSession
 }
 
-fn write_upstream_output(mut conn net.TcpConn, method string, stream_type string, mapper string, piece string, token_index int) ! {
-	if method.to_upper() == 'HEAD' || piece == '' {
-		return
-	}
-	if stream_type == 'sse' {
-		write_sse_message(mut conn, transport.WorkerStreamFrame{
-			sse_id:    if token_index > 0 { 'tok-${token_index}' } else { '' }
-			sse_event: if mapper != '' { mapper } else { 'message' }
-			data:      piece
-		})!
-		return
-	}
-	write_chunk(mut conn, piece)!
-}
-
-fn upstream_row_field(row OllamaNdjsonRow, path string) string {
-	return match path {
-		'message.content' { row.message.content }
-		'response' { row.response }
-		else { '' }
-	}
-}
-
-fn write_upstream_done(mut conn net.TcpConn, method string, stream_type string, token_index int) ! {
-	if method.to_upper() == 'HEAD' || stream_type != 'sse' {
-		return
-	}
-	write_sse_message(mut conn, transport.WorkerStreamFrame{
-		sse_id:    'done-${token_index + 1}'
-		sse_event: 'done'
-		data:      'done'
-	})!
-}
-
-fn write_upstream_error_notice(mut conn net.TcpConn, method string, stream_type string, err_msg string) ! {
-	if method.to_upper() == 'HEAD' || err_msg == '' {
-		return
-	}
-	if stream_type == 'sse' {
-		write_sse_message(mut conn, transport.WorkerStreamFrame{
-			sse_event: 'error'
-			data:      err_msg
-		})!
-		return
-	}
-	write_chunk(mut conn, err_msg + '\n')!
-}
-
-fn ensure_upstream_headers_written(mut state UpstreamExecState) ! {
-	if state.headers_written {
-		return
-	}
-	mut headers := state.response_headers.clone()
-	if state.stream_type == 'sse' {
-		headers['x-accel-buffering'] = 'no'
-		write_http_stream_headers_conn(mut state.conn, state.status_code, state.content_type, headers, false)!
-	} else {
-		write_http_stream_headers_conn(mut state.conn, state.status_code, state.content_type, headers, true)!
-	}
-	state.headers_written = true
-}
-
-fn write_upstream_line(mut state UpstreamExecState, line string) ! {
-	trimmed := line.trim_space()
-	if trimmed == '' {
-		return
-	}
-	row := json.decode(OllamaNdjsonRow, trimmed) or { return }
-	mut piece := upstream_row_field(row, state.field_path)
-	if piece == '' {
-		piece = upstream_row_field(row, state.fallback_field_path)
-	}
-	if piece != '' {
-		ensure_upstream_headers_written(mut state)!
-		state.token_index++
-		write_upstream_output(mut state.conn, state.method, state.stream_type, state.sse_event, piece, state.token_index)!
-	}
-	if row.done {
-		ensure_upstream_headers_written(mut state)!
-		write_upstream_done(mut state.conn, state.method, state.stream_type, state.token_index)!
-	}
-}
-
-fn flush_upstream_buffer(mut state UpstreamExecState) ! {
-	if state.line_buf.trim_space() == '' {
-		state.line_buf = ''
-		return
-	}
-	write_upstream_line(mut state, state.line_buf)!
-	state.line_buf = ''
-}
-
-fn consume_upstream_chunk(mut state UpstreamExecState, chunk string) ! {
-	if chunk == '' {
-		return
-	}
-	state.line_buf += chunk
-	for {
-		idx := state.line_buf.index('\n') or { break }
-		line := state.line_buf[..idx]
-		state.line_buf = state.line_buf[idx + 1..]
-		write_upstream_line(mut state, line)!
-	}
-}
-
-const upstream_exec_nil = &UpstreamExecState(unsafe { nil })
-
-fn upstream_progress_body_cb(request &http.Request, chunk []u8, _body_read_so_far u64, _body_expected_size u64, _status_code int) ! {
-	mut state := unsafe { upstream_exec_nil }
-	pstate := unsafe { &voidptr(&state) }
-	unsafe {
-		*pstate = request.user_ptr
-	}
-	consume_upstream_chunk(mut state, chunk.bytestr())!
-}
-
-fn upstream_http_method(method string) http.Method {
-	return match method.to_upper() {
-		'POST' { .post }
-		'PUT' { .put }
-		'PATCH' { .patch }
-		'DELETE' { .delete }
-		'HEAD' { .head }
-		else { .get }
-	}
-}
-
-fn validate_upstream_plan(plan transport.WorkerUpstreamPlanFrame) ?string {
-	if plan.transport != 'http' {
-		return 'unsupported_transport'
-	}
-	if plan.codec != 'ndjson' {
-		return 'unsupported_codec'
-	}
-	if plan.mapper !in ['ndjson_text_field', 'ndjson_sse_field'] {
-		return 'unsupported_mapper'
-	}
-	return none
-}
-
-fn execute_upstream_plan_fixture(mut state UpstreamExecState, plan transport.WorkerUpstreamPlanFrame) ! {
-	lines := os.read_lines(plan.fixture_path)!
-	for line in lines {
-		consume_upstream_chunk(mut state, line + '\n')!
-	}
-	flush_upstream_buffer(mut state)!
-}
-
-fn execute_upstream_plan_http(mut state UpstreamExecState, plan transport.WorkerUpstreamPlanFrame) ! {
-	mut header := http.new_header()
-	for name, value in plan.request_headers {
-		header.add_custom(name, value) or {}
-	}
-	_ := http.fetch(
-		url:                plan.url
-		method:             upstream_http_method(plan.method)
-		header:             header
-		data:               plan.body
-		on_progress_body:   upstream_progress_body_cb
-		user_ptr:           state
-		stop_copying_limit: 65536
-	) or {
-		return err
-	}
-	flush_upstream_buffer(mut state)!
-}
-
 fn execute_upstream_plan(mut app App, mut ctx Context, plan transport.WorkerUpstreamPlanFrame, method string, path string, req_id string, trace_id string, start_ms i64) veb.Result {
-	if error_class := validate_upstream_plan(plan) {
+	if error_class := upstream.validate_plan(plan) {
 		app.upstream_runtime_note_error()
 		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
 		ctx.set_custom_header('x-vhttpd-error-class', error_class) or {}
@@ -230,7 +53,8 @@ fn execute_upstream_plan(mut app App, mut ctx Context, plan transport.WorkerUpst
 	response_headers['x-request-id'] = req_id
 	response_headers['x-vhttpd-trace-id'] = trace_id
 	response_headers['x-vhttpd-stream-mode'] = 'upstream_plan'
-	mut state := &UpstreamExecState{
+	mut state := &upstream.ExecState{
+		io:                  build_upstream_io()
 		conn:                client_conn
 		method:              method
 		stream_type:         stream_type
@@ -246,7 +70,7 @@ fn execute_upstream_plan(mut app App, mut ctx Context, plan transport.WorkerUpst
 		token_index:         0
 	}
 	if plan.fixture_path != '' {
-		execute_upstream_plan_fixture(mut state, plan) or {
+		upstream.execute_plan_fixture(mut state, plan) or {
 			app.upstream_runtime_note_error()
 			app.emit('http.stream.error', {
 				'method':      method.to_upper()
@@ -262,22 +86,22 @@ fn execute_upstream_plan(mut app App, mut ctx Context, plan transport.WorkerUpst
 				err_headers['x-vhttpd-error-class'] = 'upstream_error'
 				if stream_type == 'sse' {
 					write_http_stream_headers_conn(mut client_conn, 502, content_type, err_headers, false) or {}
-					write_upstream_error_notice(mut client_conn, method, stream_type, err.msg()) or {}
-					write_upstream_done(mut client_conn, method, stream_type, state.token_index) or {}
+					upstream.write_error_notice(mut state, err.msg()) or {}
+					upstream.write_done(mut state) or {}
 				} else {
 					write_http_stream_headers_conn(mut client_conn, 502, 'text/plain; charset=utf-8', err_headers, true) or {}
-					write_upstream_error_notice(mut client_conn, method, 'text', err.msg()) or {}
+					upstream.write_error_notice(mut state, err.msg()) or {}
 				}
 				state.headers_written = true
 			} else {
-				write_upstream_error_notice(mut client_conn, method, stream_type, err.msg()) or {}
+				upstream.write_error_notice(mut state, err.msg()) or {}
 				if stream_type == 'sse' {
-					write_upstream_done(mut client_conn, method, stream_type, state.token_index) or {}
+					upstream.write_done(mut state) or {}
 				}
 			}
 		}
 	} else {
-		execute_upstream_plan_http(mut state, plan) or {
+		upstream.execute_plan_http(mut state, plan) or {
 			app.upstream_runtime_note_error()
 			app.emit('http.stream.error', {
 				'method':      method.to_upper()
@@ -293,23 +117,23 @@ fn execute_upstream_plan(mut app App, mut ctx Context, plan transport.WorkerUpst
 				err_headers['x-vhttpd-error-class'] = 'upstream_error'
 				if stream_type == 'sse' {
 					write_http_stream_headers_conn(mut client_conn, 502, content_type, err_headers, false) or {}
-					write_upstream_error_notice(mut client_conn, method, stream_type, err.msg()) or {}
-					write_upstream_done(mut client_conn, method, stream_type, state.token_index) or {}
+					upstream.write_error_notice(mut state, err.msg()) or {}
+					upstream.write_done(mut state) or {}
 				} else {
 					write_http_stream_headers_conn(mut client_conn, 502, 'text/plain; charset=utf-8', err_headers, true) or {}
-					write_upstream_error_notice(mut client_conn, method, 'text', err.msg()) or {}
+					upstream.write_error_notice(mut state, err.msg()) or {}
 				}
 				state.headers_written = true
 			} else {
-				write_upstream_error_notice(mut client_conn, method, stream_type, err.msg()) or {}
+				upstream.write_error_notice(mut state, err.msg()) or {}
 				if stream_type == 'sse' {
-					write_upstream_done(mut client_conn, method, stream_type, state.token_index) or {}
+					upstream.write_done(mut state) or {}
 				}
 			}
 		}
 	}
 	if !state.headers_written {
-		ensure_upstream_headers_written(mut state) or {}
+		upstream.ensure_headers_written(mut state) or {}
 	}
 	if stream_type != 'sse' {
 		client_conn.write_string('0\r\n\r\n') or {}
