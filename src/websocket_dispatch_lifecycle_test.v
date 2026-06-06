@@ -1,5 +1,7 @@
 module main
 
+import ws
+
 fn test_ws_dispatch_conn_state_uses_single_lifecycle_source() {
 	mut lifecycle := &WebSocketDispatchConnState{}
 	assert lifecycle.phase() == .opening
@@ -46,14 +48,14 @@ fn test_worker_websocket_dispatch_finalize_cleans_hub_state_once() {
 		lifecycle: lifecycle
 		conn_id:   'conn_dispatch'
 	}
-	worker_websocket_dispatch_finalize(state)
+	ws.dispatch_session_finalize(state)
 	assert lifecycle.phase() == .closed
 	assert 'conn_dispatch' !in app.ws_hub.conns
 	assert 'conn_dispatch' !in app.ws_hub.conn_rooms
 	assert 'conn_dispatch' !in app.ws_hub.conn_meta
 	assert 'conn_dispatch' !in app.ws_hub.pending
 	assert 'room_dispatch' !in app.ws_hub.room_members
-	worker_websocket_dispatch_finalize(state)
+	ws.dispatch_session_finalize(state)
 	assert 'conn_dispatch' !in app.ws_hub.conns
 }
 

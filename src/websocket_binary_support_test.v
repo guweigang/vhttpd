@@ -9,7 +9,7 @@ fn test_websocket_dispatch_payload_from_message_supports_text_frame() {
 		opcode: .text_frame
 		payload: 'hello'.bytes()
 	}
-	opcode, payload, supported := websocket_dispatch_payload_from_message(&msg)
+	opcode, payload, supported := ws.dispatch_payload_from_message(&msg)
 	assert supported
 	assert opcode == 'text'
 	assert payload == 'hello'
@@ -21,7 +21,7 @@ fn test_websocket_dispatch_payload_from_message_supports_binary_frame() {
 		opcode: .binary_frame
 		payload: raw.clone()
 	}
-	opcode, payload, supported := websocket_dispatch_payload_from_message(&msg)
+	opcode, payload, supported := ws.dispatch_payload_from_message(&msg)
 	assert supported
 	assert opcode == 'binary'
 	assert payload == base64.encode(raw)
@@ -32,7 +32,7 @@ fn test_websocket_dispatch_payload_from_message_rejects_control_frame() {
 		opcode: .ping
 		payload: 'ping'.bytes()
 	}
-	opcode, payload, supported := websocket_dispatch_payload_from_message(&msg)
+	opcode, payload, supported := ws.dispatch_payload_from_message(&msg)
 	assert !supported
 	assert opcode == ''
 	assert payload == ''
