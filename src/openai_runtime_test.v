@@ -357,7 +357,7 @@ fn test_openai_plugin_plan_sanitizes_hop_by_hop_headers() {
 fn test_openai_mapped_once_ndjson_aggregates_chat_completion() {
 	body := '{"message":{"content":"你"},"done":false}\n' +
 		'{"message":{"content":"好"},"done":false}\n' + '{"done":true}\n'
-	mapped := openai_map_once_response(OpenAIResolvedPlan{
+	mapped := openai.map_once_response(OpenAIResolvedPlan{
 		model:           'public-model'
 		stream_mode:     'mapped'
 		response_codec:  'ndjson'
@@ -376,7 +376,7 @@ fn test_openai_mapped_once_ndjson_aggregates_tool_calls() {
 		'{"message":{"tool_calls":[{"index":0,"id":"call_search","type":"function","function":{"name":"search","arguments":"{\\"q\\":\\"vh"}}]},"done":false}\n' +
 		'{"message":{"tool_calls":[{"index":0,"function":{"arguments":"ttpd\\"}"}}]},"done":false}\n' +
 		'{"done":true}\n'
-	mapped := openai_map_once_response(OpenAIResolvedPlan{
+	mapped := openai.map_once_response(OpenAIResolvedPlan{
 		model:           'public-model'
 		stream_mode:     'mapped'
 		response_codec:  'ndjson'
@@ -398,7 +398,7 @@ fn test_openai_mapped_once_ndjson_aggregates_tool_calls() {
 fn test_openai_mapped_once_ndjson_normalizes_usage() {
 	body := '{"message":{"content":"hi"},"done":false}\n' +
 		'{"done":true,"prompt_eval_count":7,"eval_count":11}\n'
-	mapped := openai_map_once_response(OpenAIResolvedPlan{
+	mapped := openai.map_once_response(OpenAIResolvedPlan{
 		model:           'public-model'
 		stream_mode:     'mapped'
 		response_codec:  'ndjson'

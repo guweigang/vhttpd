@@ -5,7 +5,6 @@ import openai
 import json
 import net
 import net.http
-import os
 import time
 import veb
 import x.json2
@@ -441,7 +440,7 @@ fn openai_error(mut app App, mut ctx Context, status int, path string, method st
 }
 
 fn openai_error_typed(mut app App, mut ctx Context, status int, path string, method string, req_id string, trace_id string, start_ms i64, code string, message string, typ string) veb.Result {
-	body := openai_error_body_json(code, message, typ)
+	body := openai.error_body_json(code, message, typ)
 	ctx.res.set_status(http.status_from_int(status))
 	ctx.set_content_type('application/json; charset=utf-8')
 	ctx.set_custom_header('x-request-id', req_id) or {}
@@ -458,64 +457,15 @@ fn openai_error_typed(mut app App, mut ctx Context, status int, path string, met
 	return ctx.text(body)
 }
 
-fn openai_error_body_json(code string, message string, typ string) string {
-	return json.encode(OpenAIErrorResponse{
-		error: OpenAIErrorBody{
-			message: message
-			typ:     typ
-			code:    code
-		}
-	})
-}
-
-fn openai_upstream_error_from_body(body string, fallback_code string, fallback_message string) (string, string, string) {
-	parsed := json2.decode[json2.Any](body) or {
-		trimmed := body.trim_space()
-		return fallback_code, if trimmed == '' {
-			fallback_message
-		} else {
-			trimmed
-		}, 'server_error'
-	}
-	root := parsed.as_map()
-	if error_any := root['error'] {
-		error_obj := error_any.as_map()
-		message := (error_obj['message'] or { json2.Any(fallback_message) }).str()
-		code := (error_obj['code'] or { json2.Any(fallback_code) }).str()
-		typ := (error_obj['type'] or { json2.Any('server_error') }).str()
-		return if code == '' { fallback_code } else { code }, if message == '' {
-			fallback_message
-		} else {
-			message
-		}, if typ == '' {
-			'server_error'
-		} else {
-			typ
-		}
-	}
-	message := (root['message'] or { json2.Any(fallback_message) }).str()
-	code := (root['code'] or { json2.Any(fallback_code) }).str()
-	typ := (root['type'] or { json2.Any('server_error') }).str()
-	return if code == '' { fallback_code } else { code }, if message == '' {
-		fallback_message
-	} else {
-		message
-	}, if typ == '' {
-		'server_error'
-	} else {
-		typ
-	}
-}
-
 fn openai_write_error_response_conn(mut conn net.TcpConn, status int, headers map[string]string, code string, message string, typ string) {
 	WorkerHttpStreamWriter.write_headers_conn(mut conn, status, 'application/json; charset=utf-8',
 		headers, false) or {}
-	conn.write_string(openai_error_body_json(code, message, typ)) or {}
+	conn.write_string(openai.error_body_json(code, message, typ)) or {}
 }
 
 fn openai_write_sse_error(mut conn net.TcpConn, code string, message string, typ string) {
 	WorkerHttpStreamWriter.write_chunk(mut conn,
-		'data: ${openai_error_body_json(code, message, typ)}\n\n') or {}
+		'data: ${openai.error_body_json(code, message, typ)}\n\n') or {}
 	WorkerHttpStreamWriter.write_chunk(mut conn, 'data: [DONE]\n\n') or {}
 }
 
@@ -546,50 +496,6 @@ fn openai_passthrough_chunk_has_done(mut state OpenAIStreamProxyState, decoded s
 	return false
 }
 
-fn openai_build_upstream_url(base_url string, relative string) string {
-	mut base := base_url.trim_space()
-	for base.ends_with('/') {
-		base = base[..base.len - 1]
-	}
-	return '${base}${relative}'
-}
-
-fn openai_backend_auth_key(backend config.OpenAIBackendConfig) string {
-	if backend.api_key.trim_space() != '' {
-		return backend.api_key.trim_space()
-	}
-	if backend.api_key_env.trim_space() != '' {
-		return os.getenv(backend.api_key_env.trim_space())
-	}
-	return ''
-}
-
-fn openai_http_method(raw string, fallback string) http.Method {
-	return match raw.trim_space().to_upper() {
-		'GET' {
-			.get
-		}
-		'PUT' {
-			.put
-		}
-		'PATCH' {
-			.patch
-		}
-		'DELETE' {
-			.delete
-		}
-		'HEAD' {
-			.head
-		}
-		else {
-			match fallback.trim_space().to_upper() {
-				'HEAD' { .head }
-				else { .post }
-			}
-		}
-	}
-}
-
 fn openai_build_headers(mut ctx Context, backend config.OpenAIBackendConfig, req_id string, stream bool, extra map[string]string) http.Header {
 	mut header := http.new_header()
 	content_type := ctx.req.header.get(.content_type) or { 'application/json' }
@@ -598,7 +504,7 @@ fn openai_build_headers(mut ctx Context, backend config.OpenAIBackendConfig, req
 	header.add(.content_type, content_type)
 	header.add(.accept, accept)
 	header.add_custom('x-request-id', req_id) or {}
-	api_key := openai_backend_auth_key(backend)
+	api_key := openai.backend_auth_key(backend)
 	if api_key != '' {
 		header.add(.authorization, 'Bearer ${api_key}')
 	}
@@ -658,102 +564,6 @@ fn ensure_openai_mapped_stream_headers_written(mut state OpenAIMappedStreamProxy
 	state.headers_written = true
 }
 
-fn openai_extract_mapped_row(line string) OpenAIFrameMapping {
-	parsed := json2.decode[json2.Any](line) or { return OpenAIFrameMapping{} }
-	root := parsed.as_map()
-	done := (root['done'] or { json2.Any(false) }).bool()
-	mut tool_calls := []json2.Any{}
-	usage := openai_usage_from_map(root)
-	if message_any := root['message'] {
-		message := message_any.as_map()
-		content := (message['content'] or { json2.Any('') }).str()
-		if tool_calls_any := message['tool_calls'] {
-			tool_calls = tool_calls_any.as_array()
-		}
-		return OpenAIFrameMapping{
-			content:       content
-			tool_calls:    tool_calls
-			usage:         usage
-			done:          done
-			handled:       true
-			finish_reason: if tool_calls.len > 0 { 'tool_calls' } else { '' }
-		}
-	}
-	if tool_calls_any := root['tool_calls'] {
-		tool_calls = tool_calls_any.as_array()
-		return OpenAIFrameMapping{
-			tool_calls:    tool_calls
-			usage:         usage
-			done:          done
-			handled:       true
-			finish_reason: if tool_calls.len > 0 { 'tool_calls' } else { '' }
-		}
-	}
-	if response_any := root['response'] {
-		return OpenAIFrameMapping{
-			content: response_any.str()
-			usage:   usage
-			done:    done
-			handled: true
-		}
-	}
-	if content_any := root['content'] {
-		return OpenAIFrameMapping{
-			content: content_any.str()
-			usage:   usage
-			done:    done
-			handled: true
-		}
-	}
-	return OpenAIFrameMapping{
-		usage:   usage
-		done:    done
-		handled: true
-	}
-}
-
-fn openai_int_field(obj map[string]json2.Any, key string) int {
-	value := obj[key] or { return 0 }
-	return value.int()
-}
-
-fn openai_usage_from_map(root map[string]json2.Any) map[string]int {
-	if usage_any := root['usage'] {
-		usage := usage_any.as_map()
-		prompt := openai_int_field(usage, 'prompt_tokens')
-		completion := openai_int_field(usage, 'completion_tokens')
-		total_raw := openai_int_field(usage, 'total_tokens')
-		total := if total_raw > 0 { total_raw } else { prompt + completion }
-		if prompt > 0 || completion > 0 || total > 0 {
-			return {
-				'prompt_tokens':     prompt
-				'completion_tokens': completion
-				'total_tokens':      total
-			}
-		}
-	}
-	prompt := openai_int_field(root, 'prompt_tokens') + openai_int_field(root, 'prompt_eval_count')
-	completion := openai_int_field(root, 'completion_tokens') + openai_int_field(root, 'eval_count')
-	total_raw := openai_int_field(root, 'total_tokens')
-	total := if total_raw > 0 { total_raw } else { prompt + completion }
-	if prompt > 0 || completion > 0 || total > 0 {
-		return {
-			'prompt_tokens':     prompt
-			'completion_tokens': completion
-			'total_tokens':      total
-		}
-	}
-	return map[string]int{}
-}
-
-fn openai_merge_usage(mut acc map[string]int, usage map[string]int) {
-	for key, value in usage {
-		if value > 0 {
-			acc[key] = value
-		}
-	}
-}
-
 fn openai_stream_chunk_json(state OpenAIMappedStreamProxyState, mapping OpenAIFrameMapping) string {
 	mut delta := map[string]json2.Any{}
 	if mapping.content != '' {
@@ -777,14 +587,6 @@ fn openai_stream_chunk_json(state OpenAIMappedStreamProxyState, mapping OpenAIFr
 	return json2.Any(root).json_str()
 }
 
-fn openai_usage_json_obj(usage map[string]int) map[string]json2.Any {
-	return {
-		'prompt_tokens':     json2.Any(usage['prompt_tokens'])
-		'completion_tokens': json2.Any(usage['completion_tokens'])
-		'total_tokens':      json2.Any(usage['total_tokens'])
-	}
-}
-
 fn openai_stream_usage_chunk_json(state OpenAIMappedStreamProxyState) string {
 	mut root := map[string]json2.Any{}
 	root['id'] = json2.Any('chatcmpl-${state.request_id}')
@@ -792,7 +594,7 @@ fn openai_stream_usage_chunk_json(state OpenAIMappedStreamProxyState) string {
 	root['created'] = json2.Any(state.created)
 	root['model'] = json2.Any(state.model)
 	root['choices'] = json2.Any([]json2.Any{})
-	root['usage'] = json2.Any(openai_usage_json_obj(state.usage))
+	root['usage'] = json2.Any(openai.usage_json_obj(state.usage))
 	return json2.Any(root).json_str()
 }
 
@@ -803,114 +605,6 @@ fn openai_write_stream_usage_chunk(mut state OpenAIMappedStreamProxyState) ! {
 	ensure_openai_mapped_stream_headers_written(mut state)!
 	WorkerHttpStreamWriter.write_chunk(mut state.conn,
 		'data: ${openai_stream_usage_chunk_json(state)}\n\n')!
-}
-
-fn openai_tool_call_index(call map[string]json2.Any, fallback int) int {
-	index_any := call['index'] or { return fallback }
-	return index_any.int()
-}
-
-fn openai_merge_tool_call(existing map[string]json2.Any, incoming map[string]json2.Any) map[string]json2.Any {
-	mut merged := existing.clone()
-	for key in ['id', 'type', 'index'] {
-		if value := incoming[key] {
-			if key == 'index' || value.str() != '' {
-				merged[key] = value
-			}
-		}
-	}
-	if incoming_fn_any := incoming['function'] {
-		incoming_fn := incoming_fn_any.as_map()
-		mut fn_obj := if existing_fn_any := merged['function'] {
-			existing_fn_any.as_map()
-		} else {
-			map[string]json2.Any{}
-		}
-		if name_any := incoming_fn['name'] {
-			name := name_any.str()
-			if name != '' {
-				fn_obj['name'] = json2.Any(name)
-			}
-		}
-		if args_any := incoming_fn['arguments'] {
-			args := args_any.str()
-			if args != '' {
-				prev := (fn_obj['arguments'] or { json2.Any('') }).str()
-				fn_obj['arguments'] = json2.Any(prev + args)
-			}
-		}
-		merged['function'] = json2.Any(fn_obj)
-	}
-	return merged
-}
-
-fn openai_merge_tool_calls(mut acc []json2.Any, calls []json2.Any) {
-	for call_any in calls {
-		call := call_any.as_map()
-		index := openai_tool_call_index(call, acc.len)
-		mut found := -1
-		for i, existing_any in acc {
-			existing := existing_any.as_map()
-			if openai_tool_call_index(existing, i) == index {
-				found = i
-				break
-			}
-		}
-		if found < 0 {
-			acc << json2.Any(call)
-			continue
-		}
-		acc[found] = json2.Any(openai_merge_tool_call(acc[found].as_map(), call))
-	}
-}
-
-fn openai_plugin_map_frame_result(raw string) OpenAIFrameMapping {
-	if openai.OpenAIPluginPlanResult.not_handled(raw) {
-		return OpenAIFrameMapping{}
-	}
-	parsed := json2.decode[json2.Any](raw) or {
-		return OpenAIFrameMapping{
-			handled: true
-			error:   'invalid mapper response'
-		}
-	}
-	root := parsed.as_map()
-	if error_any := root['error'] {
-		error_obj := error_any.as_map()
-		if error_obj.len > 0 {
-			message := (error_obj['message'] or { json2.Any('mapper error') }).str()
-			return OpenAIFrameMapping{
-				done:    true
-				handled: true
-				error:   message
-			}
-		}
-		err_msg := error_any.str()
-		return OpenAIFrameMapping{
-			done:    true
-			handled: true
-			error:   if err_msg == '' { 'mapper error' } else { err_msg }
-		}
-	}
-	content := (root['content'] or { json2.Any('') }).str()
-	mut tool_calls := []json2.Any{}
-	if tool_calls_any := root['tool_calls'] {
-		tool_calls = tool_calls_any.as_array()
-	}
-	usage := openai_usage_from_map(root)
-	done := (root['done'] or { json2.Any(false) }).bool()
-	return OpenAIFrameMapping{
-		content:       content
-		tool_calls:    tool_calls
-		usage:         usage
-		done:          done
-		handled:       true
-		finish_reason: openai.json_string_field(root, 'finish_reason', if tool_calls.len > 0 {
-			'tool_calls'
-		} else {
-			''
-		})
-	}
 }
 
 fn (mut app App) openai_plugin_map_frame(plan OpenAIResolvedPlan, frame string, req_id string, trace_id string) !OpenAIFrameMapping {
@@ -925,7 +619,7 @@ fn (mut app App) openai_plugin_map_frame(plan OpenAIResolvedPlan, frame string, 
 		'model':  plan.model
 		'mapper': 'plugin'
 	})!
-	return openai_plugin_map_frame_result(resp.result)
+	return openai.plugin_map_frame_result(resp.result)
 }
 
 fn openai_map_line_with_plugin(mut state OpenAIMappedStreamProxyState, line string) OpenAIFrameMapping {
@@ -956,10 +650,10 @@ fn openai_write_mapped_stream_line(mut state OpenAIMappedStreamProxyState, line 
 		if plugin_mapping.handled {
 			plugin_mapping
 		} else {
-			openai_extract_mapped_row(trimmed)
+			openai.extract_mapped_row(trimmed)
 		}
 	} else {
-		openai_extract_mapped_row(trimmed)
+		openai.extract_mapped_row(trimmed)
 	}
 	if mapping.error != '' {
 		state.mapper_error = mapping.error
@@ -974,7 +668,7 @@ fn openai_write_mapped_stream_line(mut state OpenAIMappedStreamProxyState, line 
 		WorkerHttpStreamWriter.write_chunk(mut state.conn, 'data: ${openai_stream_chunk_json(state,
 			mapping)}\n\n')!
 	}
-	openai_merge_usage(mut state.usage, mapping.usage)
+	openai.merge_usage(mut state.usage, mapping.usage)
 	if mapping.done && !state.done {
 		ensure_openai_mapped_stream_headers_written(mut state)!
 		openai_write_stream_usage_chunk(mut state)!
@@ -1031,8 +725,8 @@ fn openai_reset_mapped_stream_state_for_plan(mut state OpenAIMappedStreamProxySt
 
 fn openai_fetch_mapped_stream(mut ctx Context, mut state OpenAIMappedStreamProxyState, plan OpenAIResolvedPlan, method string, req_id string) string {
 	_ := http.fetch(
-		url:                openai_build_upstream_url(plan.backend.base_url, plan.path)
-		method:             openai_http_method(plan.method, method)
+		url:                openai.build_upstream_url(plan.backend.base_url, plan.path)
+		method:             openai.http_method(plan.method, method)
 		header:             openai_build_headers(mut ctx, plan.backend, req_id, true, plan.headers)
 		data:               plan.body
 		on_progress_body:   openai_mapped_progress_body_cb
@@ -1112,7 +806,7 @@ fn openai_proxy_mapped_stream(mut app App, mut ctx Context, plan OpenAIResolvedP
 		return veb.no_result()
 	}
 	if state.status_code >= 400 && !state.headers_written {
-		code, message, _ := openai_upstream_error_from_body(state.error_body, 'upstream_error',
+		code, message, _ := openai.upstream_error_from_body(state.error_body, 'upstream_error',
 			'upstream returned HTTP ${state.status_code}')
 		fallback := app.openai_plugin_fallback_plan(plan.model, plan.body, method, path, plan,
 			state.status_code, code, message, req_id, trace_id) or { OpenAIPluginPlanResult{} }
@@ -1134,7 +828,7 @@ fn openai_proxy_mapped_stream(mut app App, mut ctx Context, plan OpenAIResolvedP
 		}
 	}
 	if state.status_code >= 400 && !state.headers_written {
-		code, message, typ := openai_upstream_error_from_body(state.error_body, 'upstream_error',
+		code, message, typ := openai.upstream_error_from_body(state.error_body, 'upstream_error',
 			'upstream returned HTTP ${state.status_code}')
 		err_headers := {
 			'x-request-id':         req_id
@@ -1181,8 +875,8 @@ fn openai_proxy_mapped_stream(mut app App, mut ctx Context, plan OpenAIResolvedP
 
 fn openai_fetch_passthrough_stream(mut ctx Context, mut state OpenAIStreamProxyState, plan OpenAIResolvedPlan, method string, req_id string) string {
 	_ := http.fetch(
-		url:                openai_build_upstream_url(plan.backend.base_url, plan.path)
-		method:             openai_http_method(plan.method, method)
+		url:                openai.build_upstream_url(plan.backend.base_url, plan.path)
+		method:             openai.http_method(plan.method, method)
 		header:             openai_build_headers(mut ctx, plan.backend, req_id, true, plan.headers)
 		data:               plan.body
 		on_progress_body:   openai_progress_body_cb
@@ -1216,10 +910,10 @@ fn openai_proxy_stream(mut app App, mut ctx Context, plan OpenAIResolvedPlan, me
 		content_type:     'text/event-stream'
 		response_headers: headers
 	}
-	fetch_method := openai_http_method(plan.method, method)
+	fetch_method := openai.http_method(plan.method, method)
 	mut fetch_err_msg := ''
 	_ := http.fetch(
-		url:                openai_build_upstream_url(plan.backend.base_url, plan.path)
+		url:                openai.build_upstream_url(plan.backend.base_url, plan.path)
 		method:             fetch_method
 		header:             openai_build_headers(mut ctx, plan.backend, req_id, true, plan.headers)
 		data:               plan.body
@@ -1268,7 +962,7 @@ fn openai_proxy_stream(mut app App, mut ctx Context, plan OpenAIResolvedPlan, me
 		return veb.no_result()
 	}
 	if state.status_code >= 400 && !state.headers_written {
-		code, message, typ := openai_upstream_error_from_body(state.error_body, 'upstream_error',
+		code, message, typ := openai.upstream_error_from_body(state.error_body, 'upstream_error',
 			'upstream returned HTTP ${state.status_code}')
 		fallback := app.openai_plugin_fallback_plan(plan.model, plan.body, method, path, plan,
 			state.status_code, code, message, req_id, trace_id) or { OpenAIPluginPlanResult{} }
@@ -1293,7 +987,7 @@ fn openai_proxy_stream(mut app App, mut ctx Context, plan OpenAIResolvedPlan, me
 			}
 		}
 		if state.status_code >= 400 {
-			code2, message2, typ2 := openai_upstream_error_from_body(state.error_body,
+			code2, message2, typ2 := openai.upstream_error_from_body(state.error_body,
 				'upstream_error', 'upstream returned HTTP ${state.status_code}')
 			err_headers := {
 				'x-request-id':         req_id
@@ -1353,8 +1047,8 @@ fn openai_proxy_once_attempt(mut app App, mut ctx Context, plan OpenAIResolvedPl
 			'missing_backend_base_url', 'OpenAI backend ${plan.backend_name} has no base_url')
 	}
 	resp := http.fetch(
-		url:    openai_build_upstream_url(plan.backend.base_url, plan.path)
-		method: openai_http_method(plan.method, method)
+		url:    openai.build_upstream_url(plan.backend.base_url, plan.path)
+		method: openai.http_method(plan.method, method)
 		header: openai_build_headers(mut ctx, plan.backend, req_id, false, plan.headers)
 		data:   plan.body
 	) or {
@@ -1372,7 +1066,7 @@ fn openai_proxy_once_attempt(mut app App, mut ctx Context, plan OpenAIResolvedPl
 			'upstream_fetch_failed', err.msg())
 	}
 	if resp.status_code >= 400 {
-		code, message, typ := openai_upstream_error_from_body(resp.body, 'upstream_error',
+		code, message, typ := openai.upstream_error_from_body(resp.body, 'upstream_error',
 			'upstream returned HTTP ${resp.status_code}')
 		if allow_fallback {
 			fallback := app.openai_plugin_fallback_plan(plan.model, plan.body, method, path, plan,
@@ -1405,7 +1099,7 @@ fn openai_proxy_once_attempt(mut app App, mut ctx Context, plan OpenAIResolvedPl
 		'backend':     plan.backend_name
 	})
 	if plan.stream_mode == 'mapped' {
-		mapped_body := openai_map_once_response(plan, resp.body, req_id, int(time.now().unix())) or {
+		mapped_body := openai.map_once_response(plan, resp.body, req_id, int(time.now().unix())) or {
 			return openai_error(mut app, mut ctx, 502, path, method, req_id, trace_id, start_ms,
 				openai.OpenAIResolvedPlan.plan_error_code(err.msg()),
 				openai.OpenAIResolvedPlan.plan_error_message(err.msg()))
@@ -1415,172 +1109,12 @@ fn openai_proxy_once_attempt(mut app App, mut ctx Context, plan OpenAIResolvedPl
 	return ctx.text(if method.to_upper() == 'HEAD' { '' } else { resp.body })
 }
 
-fn openai_map_once_response(plan OpenAIResolvedPlan, body string, req_id string, created int) !string {
-	if plan.response_codec !in ['ndjson', 'json']
-		|| plan.output_protocol != 'openai.chat.completion' {
-		return openai.OpenAIResolvedPlan.plan_error('openai_plugin_plan_unsupported_mapper',
-			'unsupported mapper ${plan.response_codec} -> ${plan.output_protocol}')
-	}
-	mut content := ''
-	mut tool_calls := []json2.Any{}
-	mut usage := map[string]int{}
-	if plan.response_codec == 'ndjson' {
-		for line in body.split_into_lines() {
-			mapping := openai_extract_mapped_row(line)
-			content += mapping.content
-			openai_merge_tool_calls(mut tool_calls, mapping.tool_calls)
-			openai_merge_usage(mut usage, mapping.usage)
-		}
-	} else {
-		mapping := openai_extract_mapped_row(body)
-		content = mapping.content
-		openai_merge_tool_calls(mut tool_calls, mapping.tool_calls)
-		openai_merge_usage(mut usage, mapping.usage)
-	}
-	mut message := map[string]json2.Any{}
-	message['role'] = json2.Any('assistant')
-	message['content'] = json2.Any(content)
-	if tool_calls.len > 0 {
-		message['tool_calls'] = json2.Any(tool_calls)
-	}
-	mut choice := map[string]json2.Any{}
-	choice['index'] = json2.Any(0)
-	choice['message'] = json2.Any(message)
-	choice['finish_reason'] = json2.Any(if tool_calls.len > 0 { 'tool_calls' } else { 'stop' })
-	mut root := map[string]json2.Any{}
-	root['id'] = json2.Any('chatcmpl-${req_id}')
-	root['object'] = json2.Any('chat.completion')
-	root['created'] = json2.Any(created)
-	root['model'] = json2.Any(plan.model)
-	root['choices'] = json2.Any([json2.Any(choice)])
-	if usage.len > 0 {
-		root['usage'] = json2.Any(openai_usage_json_obj(usage))
-	}
-	return json2.Any(root).json_str()
-}
-
-fn openai_executor_mapping_from_result(raw string) OpenAIFrameMapping {
-	parsed := json2.decode[json2.Any](raw) or {
-		return OpenAIFrameMapping{
-			content: raw
-			handled: true
-		}
-	}
-	root := parsed.as_map()
-	if root.len == 0 {
-		return OpenAIFrameMapping{
-			content: raw
-			handled: true
-		}
-	}
-	return openai_plugin_map_frame_result(raw)
-}
-
-fn openai_completion_json_from_mapping(plan OpenAIResolvedPlan, mapping OpenAIFrameMapping, req_id string, created int) string {
-	mut message := map[string]json2.Any{}
-	message['role'] = json2.Any('assistant')
-	message['content'] = json2.Any(mapping.content)
-	if mapping.tool_calls.len > 0 {
-		message['tool_calls'] = json2.Any(mapping.tool_calls)
-	}
-	mut choice := map[string]json2.Any{}
-	choice['index'] = json2.Any(0)
-	choice['message'] = json2.Any(message)
-	choice['finish_reason'] = json2.Any(if mapping.finish_reason != '' {
-		mapping.finish_reason
-	} else if mapping.tool_calls.len > 0 {
-		'tool_calls'
-	} else {
-		'stop'
-	})
-	mut root := map[string]json2.Any{}
-	root['id'] = json2.Any('chatcmpl-${req_id}')
-	root['object'] = json2.Any('chat.completion')
-	root['created'] = json2.Any(created)
-	root['model'] = json2.Any(plan.model)
-	root['choices'] = json2.Any([json2.Any(choice)])
-	if mapping.usage.len > 0 {
-		root['usage'] = json2.Any(openai_usage_json_obj(mapping.usage))
-	}
-	return json2.Any(root).json_str()
-}
-
-fn openai_executor_once_body(plan OpenAIResolvedPlan, raw string, req_id string, created int) string {
-	parsed := json2.decode[json2.Any](raw) or {
-		return openai_completion_json_from_mapping(plan, OpenAIFrameMapping{
-			content: raw
-			handled: true
-		}, req_id, created)
-	}
-	root := parsed.as_map()
-	if body_any := root['body'] {
-		body := body_any.str()
-		if body != '' {
-			return body
-		}
-	}
-	if _ := root['choices'] {
-		return raw
-	}
-	if _ := root['error'] {
-		return raw
-	}
-	return openai_completion_json_from_mapping(plan, openai_executor_mapping_from_result(raw),
-		req_id, created)
-}
-
-fn openai_responses_executor_once_body(plan OpenAIResolvedPlan, raw string, req_id string, created int) string {
-	parsed := json2.decode[json2.Any](raw) or { return raw }
-	root := parsed.as_map()
-	if body_any := root['body'] {
-		body := body_any.str()
-		if body != '' {
-			return body
-		}
-	}
-	if (root['object'] or { json2.Any('') }).str() == 'response' {
-		return raw
-	}
-	if _ := root['output'] {
-		return raw
-	}
-	content := (root['content'] or { json2.Any('') }).str()
-	text := if content != '' { content } else { raw }
-	response_id := if req_id.trim_space() != '' { 'resp_${req_id}' } else { 'resp_vhttpd' }
-	mut response := {
-		'id':         json2.Any(response_id)
-		'object':     json2.Any('response')
-		'created_at': json2.Any(created)
-		'status':     json2.Any('completed')
-		'model':      json2.Any(plan.model)
-		'output':     json2.Any([
-			json2.Any({
-				'id':      json2.Any('msg_${req_id}')
-				'type':    json2.Any('message')
-				'status':  json2.Any('completed')
-				'role':    json2.Any('assistant')
-				'content': json2.Any([
-					json2.Any({
-						'type':        json2.Any('output_text')
-						'text':        json2.Any(text)
-						'annotations': json2.Any([]json2.Any{})
-					}),
-				])
-			}),
-		])
-	}
-	if usage_any := root['usage'] {
-		response['usage'] = usage_any
-	}
-	return json2.Any(response).json_str()
-}
-
 fn openai_proxy_executor_once(mut app App, mut ctx Context, plan OpenAIResolvedPlan, method string, path string, req_id string, trace_id string, start_ms i64) veb.Result {
 	resp := app.openai_call_executor(plan, method, path, req_id, trace_id) or {
 		return openai_error(mut app, mut ctx, 502, path, method, req_id, trace_id, start_ms,
 			'openai_executor_failed', err.msg())
 	}
-	body := openai_executor_once_body(plan, resp.result, req_id, int(time.now().unix()))
+	body := openai.executor_once_body(plan, resp.result, req_id, int(time.now().unix()))
 	ctx.res.set_status(.ok)
 	ctx.set_content_type('application/json; charset=utf-8')
 	ctx.set_custom_header('x-request-id', req_id) or {}
@@ -1605,7 +1139,7 @@ fn openai_proxy_responses_executor_once(mut app App, mut ctx Context, plan OpenA
 		return openai_error(mut app, mut ctx, 502, path, method, req_id, trace_id, start_ms,
 			'openai_executor_failed', err.msg())
 	}
-	body := openai_responses_executor_once_body(plan, resp.result, req_id, int(time.now().unix()))
+	body := openai.responses_executor_once_body(plan, resp.result, req_id, int(time.now().unix()))
 	app.openai_store_response_record(plan, body, req_id, trace_id)
 	ctx.res.set_status(.ok)
 	ctx.set_content_type('application/json; charset=utf-8')
@@ -1627,59 +1161,6 @@ fn openai_proxy_responses_executor_once(mut app App, mut ctx Context, plan OpenA
 	return ctx.text(if method.to_upper() == 'HEAD' { '' } else { body })
 }
 
-fn openai_executor_stream_mappings(raw string) []OpenAIFrameMapping {
-	parsed := json2.decode[json2.Any](raw) or {
-		return [
-			OpenAIFrameMapping{
-				content: raw
-				done:    true
-				handled: true
-			},
-		]
-	}
-	root := parsed.as_map()
-	if frames_any := root['frames'] {
-		mut mappings := []OpenAIFrameMapping{}
-		for frame in frames_any.as_array() {
-			mappings << openai_plugin_map_frame_result(frame.json_str())
-		}
-		return mappings
-	}
-	return [openai_executor_mapping_from_result(raw)]
-}
-
-fn openai_response_stream_event_from_raw(raw string) string {
-	parsed := json2.decode[json2.Any](raw) or { return 'data: ${raw}\n\n' }
-	root := parsed.as_map()
-	event_type := (root['event'] or { root['type'] or { json2.Any('') } }).str()
-	if data_any := root['data'] {
-		data := if data_any.str() != '' { data_any.str() } else { data_any.json_str() }
-		if event_type != '' {
-			return 'event: ${event_type}\ndata: ${data}\n\n'
-		}
-		return 'data: ${data}\n\n'
-	}
-	if event_type != '' {
-		return 'event: ${event_type}\ndata: ${raw}\n\n'
-	}
-	return 'data: ${raw}\n\n'
-}
-
-fn openai_response_body_from_completed_event(raw string) string {
-	parsed := json2.decode[json2.Any](raw) or { return '' }
-	root := parsed.as_map()
-	event_type := (root['type'] or { root['event'] or { json2.Any('') } }).str()
-	if event_type != 'response.completed' {
-		return ''
-	}
-	response_any := root['response'] or { return '' }
-	mut response := response_any.as_map()
-	if (response['object'] or { json2.Any('') }).str() == '' {
-		response['object'] = json2.Any('response')
-	}
-	return json2.Any(response).json_str()
-}
-
 fn openai_proxy_responses_executor_stream(mut app App, mut ctx Context, plan OpenAIResolvedPlan, method string, path string, req_id string, trace_id string, start_ms i64) veb.Result {
 	ctx.takeover_conn_reusable()
 	ctx.conn.set_write_timeout(time.infinite)
@@ -1698,10 +1179,10 @@ fn openai_proxy_responses_executor_stream(mut app App, mut ctx Context, plan Ope
 	stream_resp := app.openai_call_executor_stream_op(plan, 'responses.execute', method, path,
 		req_id, trace_id, fn [mut client_conn, mut registry_state] (raw string) !bool {
 		if registry_state.completed_body == '' {
-			registry_state.completed_body = openai_response_body_from_completed_event(raw)
+			registry_state.completed_body = openai.response_body_from_completed_event(raw)
 		}
 		WorkerHttpStreamWriter.write_chunk(mut client_conn,
-			openai_response_stream_event_from_raw(raw))!
+			openai.response_stream_event_from_raw(raw))!
 		return true
 	}) or {
 		openai_write_sse_error(mut client_conn, 'openai_executor_failed', err.msg(), 'server_error')
@@ -1723,7 +1204,7 @@ fn openai_proxy_responses_executor_stream(mut app App, mut ctx Context, plan Ope
 	}
 	if !stream_resp.streamed {
 		mut wrote_frame := false
-		for mapping in openai_executor_stream_mappings(stream_resp.response.result) {
+		for mapping in openai.executor_stream_mappings(stream_resp.response.result) {
 			if mapping.error != '' {
 				openai_write_sse_error(mut client_conn, 'openai_executor_error', mapping.error,
 					'server_error')
@@ -1737,20 +1218,20 @@ fn openai_proxy_responses_executor_stream(mut app App, mut ctx Context, plan Ope
 			}
 			if mapping.content != '' {
 				WorkerHttpStreamWriter.write_chunk(mut client_conn,
-					openai_response_stream_event_from_raw(json2.Any(event).json_str())) or {}
+					openai.response_stream_event_from_raw(json2.Any(event).json_str())) or {}
 				wrote_frame = true
 			}
 			if mapping.done {
 				registry_state.completed_body = '{"id":"resp_${req_id}","object":"response","status":"completed","model":"${plan.model}"}'
 				WorkerHttpStreamWriter.write_chunk(mut client_conn,
-					openai_response_stream_event_from_raw('{"type":"response.completed","sequence_number":2,"response":${registry_state.completed_body}}')) or {}
+					openai.response_stream_event_from_raw('{"type":"response.completed","sequence_number":2,"response":${registry_state.completed_body}}')) or {}
 				wrote_frame = true
 			}
 		}
 		if !wrote_frame {
 			registry_state.completed_body = '{"id":"resp_${req_id}","object":"response","status":"completed","model":"${plan.model}"}'
 			WorkerHttpStreamWriter.write_chunk(mut client_conn,
-				openai_response_stream_event_from_raw('{"type":"response.completed","sequence_number":1,"response":${registry_state.completed_body}}')) or {}
+				openai.response_stream_event_from_raw('{"type":"response.completed","sequence_number":1,"response":${registry_state.completed_body}}')) or {}
 		}
 	}
 	if registry_state.completed_body != '' {
@@ -1796,7 +1277,7 @@ fn openai_proxy_executor_stream(mut app App, mut ctx Context, plan OpenAIResolve
 		created:          int(time.now().unix())
 	}
 	stream_resp := app.openai_call_executor_stream(plan, method, path, req_id, trace_id, fn [mut state, mut client_conn] (raw string) !bool {
-		mapping := openai_plugin_map_frame_result(raw)
+		mapping := openai.plugin_map_frame_result(raw)
 		if mapping.error != '' {
 			ensure_openai_mapped_stream_headers_written(mut state)!
 			openai_write_sse_error(mut client_conn, 'openai_executor_error', mapping.error,
@@ -1809,7 +1290,7 @@ fn openai_proxy_executor_stream(mut app App, mut ctx Context, plan OpenAIResolve
 			WorkerHttpStreamWriter.write_chunk(mut client_conn, 'data: ${openai_stream_chunk_json(state,
 				mapping)}\n\n')!
 		}
-		openai_merge_usage(mut state.usage, mapping.usage)
+		openai.merge_usage(mut state.usage, mapping.usage)
 		if mapping.done && !state.done {
 			ensure_openai_mapped_stream_headers_written(mut state)!
 			openai_write_stream_usage_chunk(mut state)!
@@ -1845,7 +1326,7 @@ fn openai_proxy_executor_stream(mut app App, mut ctx Context, plan OpenAIResolve
 		return veb.no_result()
 	}
 	if !stream_resp.streamed {
-		for mapping in openai_executor_stream_mappings(stream_resp.response.result) {
+		for mapping in openai.executor_stream_mappings(stream_resp.response.result) {
 			if mapping.error != '' {
 				ensure_openai_mapped_stream_headers_written(mut state) or {}
 				openai_write_sse_error(mut client_conn, 'openai_executor_error', mapping.error,
@@ -1858,7 +1339,7 @@ fn openai_proxy_executor_stream(mut app App, mut ctx Context, plan OpenAIResolve
 				WorkerHttpStreamWriter.write_chunk(mut client_conn, 'data: ${openai_stream_chunk_json(state,
 					mapping)}\n\n') or {}
 			}
-			openai_merge_usage(mut state.usage, mapping.usage)
+			openai.merge_usage(mut state.usage, mapping.usage)
 			if mapping.done && !state.done {
 				ensure_openai_mapped_stream_headers_written(mut state) or {}
 				openai_write_stream_usage_chunk(mut state) or {}
