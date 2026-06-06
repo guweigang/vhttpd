@@ -347,33 +347,7 @@ fn (mut app App) codex_runtime_config(instance string) CodexProviderRuntime {
 	return app.codex_runtime_snapshot(instance)
 }
 
-struct CodexRuntimeStateView {
-	connected          bool
-	initialized        bool
-	ws_url             string
-	thread_id          string
-	last_connect_at    i64
-	last_disconnect_at i64
-	last_error         string
-	connect_attempts   i64
-	connect_successes  i64
-	received_frames    i64
-}
-
-fn (rt CodexProviderRuntime) state_view() CodexRuntimeStateView {
-	return CodexRuntimeStateView{
-		connected:          rt.connected
-		initialized:        rt.initialized
-		ws_url:             rt.ws_url
-		thread_id:          rt.thread_id
-		last_connect_at:    rt.last_connect_at_unix
-		last_disconnect_at: rt.last_disconnect_at_unix
-		last_error:         rt.last_error
-		connect_attempts:   rt.connect_attempts
-		connect_successes:  rt.connect_successes
-		received_frames:    rt.received_frames
-	}
-}
+type CodexRuntimeStateView = codex.RuntimeStateView
 
 fn (mut app App) codex_runtime_state_view(instance string) CodexRuntimeStateView {
 	return app.codex_runtime_snapshot(instance).state_view()

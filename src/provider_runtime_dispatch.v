@@ -4,38 +4,8 @@ import db
 import json
 import provider
 
-struct ProviderRuntimeDispatch {}
-
-struct ProviderRuntimeDispatchContext {
-	instances_fn         fn (string) []string        = unsafe { nil }
-	upstream_enabled_fn  fn (string, string) bool    = unsafe { nil }
-	bootstrap_enabled_fn fn (string) bool            = unsafe { nil }
-	ready_fn             fn (string) bool            = unsafe { nil }
-	pull_url_fn          fn (string, string) !string = unsafe { nil }
-}
-
-fn (ctx ProviderRuntimeDispatchContext) instances(name string) []string {
-	return ctx.instances_fn(name)
-}
-
-fn (ctx ProviderRuntimeDispatchContext) upstream_enabled(name string, instance string) bool {
-	return ctx.upstream_enabled_fn(name, instance)
-}
-
-fn (ctx ProviderRuntimeDispatchContext) bootstrap_enabled(name string) bool {
-	return ctx.bootstrap_enabled_fn(name)
-}
-
-fn (ctx ProviderRuntimeDispatchContext) ready(name string) bool {
-	return ctx.ready_fn(name)
-}
-
-fn (ctx ProviderRuntimeDispatchContext) pull_url(name string, instance string) !string {
-	return ctx.pull_url_fn(name, instance)
-}
-
-fn (mut app App) build_provider_runtime_dispatch_context() ProviderRuntimeDispatchContext {
-	return ProviderRuntimeDispatchContext{
+fn (mut app App) build_provider_runtime_dispatch_context() provider.RuntimeDispatchContext {
+	return provider.RuntimeDispatchContext{
 		instances_fn:         fn [mut app] (name string) []string {
 			return app.provider_runtime_instances(name)
 		}
@@ -51,189 +21,6 @@ fn (mut app App) build_provider_runtime_dispatch_context() ProviderRuntimeDispat
 		pull_url_fn:          fn [mut app] (name string, instance string) !string {
 			return app.provider_runtime_pull_url(name, instance)
 		}
-	}
-}
-
-fn ProviderRuntimeDispatch.gateway_count(ctx ProviderRuntimeDispatchContext) int {
-	mut total := 0
-	for provider_name in ['feishu', 'codex'] {
-		for instance in ctx.instances(provider_name) {
-			if ctx.upstream_enabled(provider_name, instance) {
-				total++
-			}
-		}
-	}
-	return total
-}
-
-fn ProviderRuntimeDispatch.capabilities(ctx ProviderRuntimeDispatchContext) map[string]bool {
-	feishu_ready := ctx.ready('feishu')
-	return {
-		'feishu_runtime': feishu_ready
-		'feishu_gateway': feishu_ready
-	}
-}
-
-fn ProviderRuntimeDispatch.upstream_enabled(ctx ProviderRuntimeDispatchContext, name string, instance string) bool {
-	return match name {
-		'feishu' {
-			ctx.ready('feishu') && instance in ctx.instances('feishu')
-		}
-		'codex' {
-			instance in ctx.instances('codex')
-		}
-		'ollama' {
-			ctx.ready('ollama') && instance in ctx.instances('ollama')
-		}
-		else {
-			false
-		}
-	}
-}
-
-fn ProviderRuntimeDispatch.default_instance(name string) string {
-	return match name {
-		'feishu' { 'main' }
-		'codex' { 'main' }
-		'ollama' { 'main' }
-		'db' { 'main' }
-		else { '' }
-	}
-}
-
-fn ProviderRuntimeDispatch.upstream_provider_names(ctx ProviderRuntimeDispatchContext) []string {
-	mut names := []string{}
-	for name in ['feishu', 'codex'] {
-		mut has_enabled_instance := false
-		for instance in ctx.instances(name) {
-			if ctx.upstream_enabled(name, instance) {
-				has_enabled_instance = true
-				break
-			}
-		}
-		if has_enabled_instance {
-			names << name
-		}
-	}
-	return names
-}
-
-fn ProviderRuntimeDispatch.upstream_launches(ctx ProviderRuntimeDispatchContext) []ProviderRuntimeUpstreamLaunch {
-	mut launches := []ProviderRuntimeUpstreamLaunch{}
-	feishu_instances := ctx.instances('feishu')
-	if ctx.bootstrap_enabled('feishu') && feishu_instances.len > 0 {
-		launches << ProviderRuntimeUpstreamLaunch{
-			provider: 'feishu'
-			instance: ''
-			label:    feishu_instances.join(', ')
-		}
-		for instance in feishu_instances {
-			launches << ProviderRuntimeUpstreamLaunch{
-				provider: 'feishu'
-				instance: instance
-				label:    instance
-			}
-		}
-	}
-	codex_instances := ctx.instances('codex')
-	for instance in codex_instances {
-		launches << ProviderRuntimeUpstreamLaunch{
-			provider: 'codex'
-			instance: instance
-			label:    instance
-			url:      ctx.pull_url('codex', instance) or { '' }
-		}
-	}
-	return launches
-}
-
-fn ProviderRuntimeDispatch.feishu_upstream_snapshot(snapshot FeishuRuntimeAppSnapshot) WebSocketUpstreamSnapshot {
-	return WebSocketUpstreamSnapshot{
-		provider:                'feishu'
-		instance:                snapshot.name
-		enabled:                 snapshot.enabled
-		configured:              snapshot.configured
-		connected:               snapshot.connected
-		url:                     snapshot.ws_url
-		last_connect_at_unix:    snapshot.last_connect_at_unix
-		last_disconnect_at_unix: snapshot.last_disconnect_at_unix
-		last_error:              snapshot.last_error
-		connect_attempts:        snapshot.connect_attempts
-		connect_successes:       snapshot.connect_successes
-		received_frames:         snapshot.received_frames
-	}
-}
-
-fn ProviderRuntimeDispatch.codex_upstream_snapshot(instance string, state CodexRuntimeStateView, enabled bool) WebSocketUpstreamSnapshot {
-	return WebSocketUpstreamSnapshot{
-		provider:                'codex'
-		instance:                instance
-		enabled:                 enabled
-		configured:              enabled
-		connected:               state.connected
-		url:                     state.ws_url
-		last_connect_at_unix:    state.last_connect_at
-		last_disconnect_at_unix: state.last_disconnect_at
-		last_error:              state.last_error
-		connect_attempts:        state.connect_attempts
-		connect_successes:       state.connect_successes
-		received_frames:         state.received_frames
-	}
-}
-
-fn ProviderRuntimeDispatch.feishu_upstream_events(snapshot FeishuRuntimeSnapshot, instance_filter string) []WebSocketUpstreamEventSnapshot {
-	mut events := []WebSocketUpstreamEventSnapshot{}
-	for app_snapshot in snapshot.apps {
-		if instance_filter != '' && app_snapshot.name != instance_filter {
-			continue
-		}
-		for event in app_snapshot.recent_events {
-			events << WebSocketUpstreamEventSnapshot{
-				provider:    'feishu'
-				instance:    app_snapshot.name
-				event_type:  event.event_type
-				message_id:  event.message_id
-				target:      event.chat_id
-				target_type: 'chat_id'
-				trace_id:    event.trace_id
-				received_at: event.received_at
-				payload:     event.payload
-				metadata:    {
-					'action':            event.action
-					'event_id':          event.event_id
-					'event_kind':        event.event_kind
-					'chat_type':         event.chat_type
-					'message_type':      event.message_type
-					'open_message_id':   event.open_message_id
-					'root_id':           event.root_id
-					'parent_id':         event.parent_id
-					'create_time':       event.create_time
-					'sender_id':         event.sender_id
-					'sender_id_type':    event.sender_id_type
-					'sender_tenant_key': event.sender_tenant_key
-					'action_tag':        event.action_tag
-					'action_value':      event.action_value
-					'token':             event.token
-				}
-			}
-		}
-	}
-	return events
-}
-
-fn ProviderRuntimeDispatch.codex_metrics(states []CodexRuntimeStateView) ProviderRuntimeMetrics {
-	mut connect_attempts := i64(0)
-	mut connect_successes := i64(0)
-	mut received_frames := i64(0)
-	for state in states {
-		connect_attempts += state.connect_attempts
-		connect_successes += state.connect_successes
-		received_frames += state.received_frames
-	}
-	return ProviderRuntimeMetrics{
-		connect_attempts:  connect_attempts
-		connect_successes: connect_successes
-		received_frames:   received_frames
 	}
 }
 
@@ -304,7 +91,7 @@ pub fn (mut app App) provider_runtime_upstream_snapshot(name string, instance st
 	return match name {
 		'feishu' {
 			snapshot := app.provider_runtime_feishu_app_snapshot(instance) or { return none }
-			ProviderRuntimeDispatch.feishu_upstream_snapshot(snapshot)
+			provider.feishu_upstream_snapshot(snapshot)
 		}
 		'codex' {
 			mut resolved_instance := instance.trim_space()
@@ -313,7 +100,7 @@ pub fn (mut app App) provider_runtime_upstream_snapshot(name string, instance st
 			}
 			state := app.codex_runtime_state_view(resolved_instance)
 			enabled := app.provider_runtime_upstream_enabled('codex', resolved_instance)
-			return ProviderRuntimeDispatch.codex_upstream_snapshot(resolved_instance, state,
+			return provider.codex_upstream_snapshot(resolved_instance, state,
 				enabled)
 		}
 		else {
@@ -335,7 +122,7 @@ pub fn (mut app App) provider_runtime_upstream_snapshots(name string) []WebSocke
 pub fn (mut app App) provider_runtime_upstream_events(name string, instance_filter string) []WebSocketUpstreamEventSnapshot {
 	return match name {
 		'feishu' {
-			ProviderRuntimeDispatch.feishu_upstream_events(app.provider_runtime_feishu_snapshot(),
+			provider.feishu_upstream_events(app.provider_runtime_feishu_snapshot(),
 				instance_filter)
 		}
 		'codex' {
@@ -370,7 +157,7 @@ pub fn (mut app App) provider_runtime_metrics(name string) ProviderRuntimeMetric
 			for instance in instances {
 				states << app.codex_runtime_state_view(instance)
 			}
-			ProviderRuntimeDispatch.codex_metrics(states)
+			provider.codex_metrics(states)
 		}
 		else {
 			ProviderRuntimeMetrics{}
@@ -380,27 +167,27 @@ pub fn (mut app App) provider_runtime_metrics(name string) ProviderRuntimeMetric
 
 pub fn (mut app App) provider_runtime_capabilities() map[string]bool {
 	ctx := app.build_provider_runtime_dispatch_context()
-	return ProviderRuntimeDispatch.capabilities(ctx)
+	return provider.capabilities(ctx)
 }
 
 pub fn (mut app App) provider_runtime_gateway_count() int {
 	ctx := app.build_provider_runtime_dispatch_context()
-	return ProviderRuntimeDispatch.gateway_count(ctx)
+	return provider.gateway_count(ctx)
 }
 
 pub fn (mut app App) provider_runtime_upstream_launches() []ProviderRuntimeUpstreamLaunch {
 	ctx := app.build_provider_runtime_dispatch_context()
-	return ProviderRuntimeDispatch.upstream_launches(ctx)
+	return provider.upstream_launches(ctx)
 }
 
 pub fn (mut app App) provider_runtime_upstream_enabled(name string, instance string) bool {
 	ctx := app.build_provider_runtime_dispatch_context()
-	return ProviderRuntimeDispatch.upstream_enabled(ctx, name, instance)
+	return provider.upstream_enabled(ctx, name, instance)
 }
 
 pub fn (mut app App) provider_runtime_upstream_provider_names() []string {
 	ctx := app.build_provider_runtime_dispatch_context()
-	return ProviderRuntimeDispatch.upstream_provider_names(ctx)
+	return provider.upstream_provider_names(ctx)
 }
 
 pub fn (app &App) provider_bootstrap_enabled(name string) bool {
@@ -427,7 +214,7 @@ pub fn (mut app App) provider_runtime_default_instance(name string) string {
 	if name == 'feishu' {
 		return app.feishu_runtime_default_app_name()
 	}
-	return ProviderRuntimeDispatch.default_instance(name)
+	return provider.default_instance(name)
 }
 
 pub fn (mut app App) provider_runtime_instances(name string) []string {

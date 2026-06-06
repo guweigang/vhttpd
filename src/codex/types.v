@@ -208,6 +208,37 @@ pub fn (mut rt ProviderRuntime) bind_stream_to_thread(thread_id string, stream_i
 	return thread_id
 }
 
+// ── Runtime State View ──
+
+pub struct RuntimeStateView {
+pub:
+	connected          bool
+	initialized        bool
+	ws_url             string
+	thread_id          string
+	last_connect_at    i64
+	last_disconnect_at i64
+	last_error         string
+	connect_attempts   i64
+	connect_successes  i64
+	received_frames    i64
+}
+
+pub fn (rt &ProviderRuntime) state_view() RuntimeStateView {
+	return RuntimeStateView{
+		connected:          rt.connected
+		initialized:        rt.initialized
+		ws_url:             rt.ws_url
+		thread_id:          rt.thread_id
+		last_connect_at:    rt.last_connect_at_unix
+		last_disconnect_at: rt.last_disconnect_at_unix
+		last_error:         rt.last_error
+		connect_attempts:   rt.connect_attempts
+		connect_successes:  rt.connect_successes
+		received_frames:    rt.received_frames
+	}
+}
+
 // ── Codex State ──
 
 pub struct CodexState {
