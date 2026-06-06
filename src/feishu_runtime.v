@@ -337,19 +337,11 @@ fn (app &App) feishu_runtime_app_source(name string) string {
 }
 
 fn (app &App) feishu_runtime_ready() bool {
-	return app.feishu_runtime_enabled() && app.feishu_runtime_app_names().len > 0
+	return app.feishu_runtime_enabled() && app.feishu.app_names().len > 0
 }
 
 fn (app &App) feishu_runtime_bridge_proxy_only() bool {
-	return app.feishu_card_bridge_enabled() && app.feishu_runtime_app_names().len == 0
-}
-
-fn (app &App) feishu_runtime_default_app_name() string {
-	return app.feishu.default_app_name()
-}
-
-fn (app &App) feishu_runtime_app_names() []string {
-	return app.feishu.app_names()
+	return app.feishu_card_bridge_enabled() && app.feishu.app_names().len == 0
 }
 
 fn (app &App) feishu_runtime_resolve_app_name(raw string) !string {
@@ -360,7 +352,7 @@ fn (app &App) feishu_runtime_resolve_app_name(raw string) !string {
 		}
 		return error('unknown feishu app "${name}"')
 	}
-	default_name := app.feishu_runtime_default_app_name()
+	default_name := app.feishu.default_app_name()
 	if default_name == '' {
 		return error('no configured feishu apps')
 	}
@@ -386,14 +378,6 @@ fn (app &App) feishu_runtime_callback_token_valid(app_name string, payload strin
 	return token != '' && token == cfg.verification_token
 }
 
-fn (mut app App) feishu_runtime_ensure(name string) FeishuProviderRuntime {
-	return app.feishu.ensure(name)
-}
-
-fn (mut app App) feishu_runtime_update(name string, runtime FeishuProviderRuntime) {
-	app.feishu.update_runtime(name, runtime)
-}
-
 fn (mut app App) feishu_runtime_snapshot() FeishuRuntimeSnapshot {
 	app.feishu.mu.@lock()
 	defer {
@@ -401,7 +385,7 @@ fn (mut app App) feishu_runtime_snapshot() FeishuRuntimeSnapshot {
 	}
 	mut apps := []FeishuRuntimeAppSnapshot{}
 	mut connected_count := 0
-	for name in app.feishu_runtime_app_names() {
+	for name in app.feishu.app_names() {
 		runtime := app.feishu.runtime[name] or { feishu.ProviderRuntime.new(name) }
 		if runtime.is_connected() {
 			connected_count++
@@ -415,7 +399,7 @@ fn (mut app App) feishu_runtime_snapshot() FeishuRuntimeSnapshot {
 		configured:      app.feishu_runtime_ready()
 		app_count:       apps.len
 		connected_count: connected_count
-		default_app:     app.feishu_runtime_default_app_name()
+		default_app:     app.feishu.default_app_name()
 		apps:            apps
 	}
 }
@@ -532,48 +516,12 @@ fn (mut app App) feishu_runtime_totals() (i64, i64, i64, i64, i64, i64) {
 	return connect_attempts, connect_successes, received_frames, acked_events, messages_sent, send_errors
 }
 
-fn (mut app App) feishu_runtime_note_connecting(name string) {
-	app.feishu.note_connecting(name)
-}
-
-fn (mut app App) feishu_runtime_note_connected(name string, ws_url string) {
-	app.feishu.note_connected(name, ws_url)
-}
-
-fn (mut app App) feishu_runtime_note_disconnected(name string, reason string) {
-	app.feishu.note_disconnected(name, reason)
-}
-
-fn (mut app App) feishu_runtime_note_frame(name string) {
-	app.feishu.note_frame(name)
-}
-
-fn (mut app App) feishu_runtime_note_ack(name string) {
-	app.feishu.note_ack(name)
-}
-
-fn (mut app App) feishu_runtime_note_send(name string, ok bool) {
-	app.feishu.note_send(name, ok)
-}
-
-fn (mut app App) feishu_runtime_push_event(name string, snapshot FeishuRuntimeEventSnapshot) {
-	app.feishu.push_event(name, snapshot)
-}
-
-fn (mut app App) feishu_runtime_ping_interval_seconds(instance string) int {
-	return app.feishu.ping_interval_seconds(instance)
-}
-
-fn (mut app App) feishu_runtime_note_client_config(instance string, cfg FeishuRuntimeClientConfig) {
-	app.feishu.note_client_config(instance, cfg)
-}
-
 fn feishu_runtime_ping_loop(mut app App, instance string, ws_url string, mut ws websocket.Client) {
 	service_id := feishu.RuntimeProtoFrame.service_id_from_ws_url(ws_url)
 	if service_id <= 0 {
 		return
 	}
-	mut interval_seconds := app.feishu_runtime_ping_interval_seconds(instance)
+	mut interval_seconds := app.feishu.ping_interval_seconds(instance)
 	if interval_seconds <= 0 {
 		interval_seconds = 5
 	}
@@ -623,7 +571,7 @@ fn (mut app App) feishu_provider_pull_ws_endpoint(app_name string) !string {
 			}
 			return error('feishu ws endpoint error: code=${decoded.code} detail=${detail}')
 		}
-		app.feishu_runtime_note_client_config(app_name, decoded.data.client_config)
+		app.feishu.note_client_config(app_name, decoded.data.client_config)
 		return decoded.data.url
 	}
 	if last_status > 0 {
@@ -663,9 +611,9 @@ fn (mut app App) feishu_runtime_tenant_access_token(app_name string) !string {
 	if decoded.code != 0 || decoded.tenant_access_token.trim_space() == '' {
 		return error('feishu tenant token error: ${decoded.msg}')
 	}
-	mut runtime := app.feishu_runtime_ensure(app_name)
+	mut runtime := app.feishu.ensure(app_name)
 	runtime.cache_tenant_access_token(decoded.tenant_access_token, now + i64(decoded.expire))
-	app.feishu_runtime_update(app_name, runtime)
+	app.feishu.update_runtime(app_name, runtime)
 	return decoded.tenant_access_token
 }
 
@@ -713,24 +661,24 @@ fn (mut app App) feishu_runtime_send_message(req FeishuRuntimeSendMessageRequest
 		data:   payload
 		header: header
 	) or {
-		app.feishu_runtime_note_send(app_name, false)
+		app.feishu.note_send(app_name, false)
 		log.error('[feishu] ❌ send fetch failed: ${err}')
 		return err
 	}
 	log.info('[feishu] 📩 send response: status=${resp.status_code} body=${resp.body}')
 	if resp.status_code != 200 {
-		app.feishu_runtime_note_send(app_name, false)
+		app.feishu.note_send(app_name, false)
 		return error('feishu message send failed with status ${resp.status_code}: ${resp.body}')
 	}
 	decoded := json.decode(FeishuRuntimeSendMessageResponse, resp.body) or {
-		app.feishu_runtime_note_send(app_name, false)
+		app.feishu.note_send(app_name, false)
 		return error('invalid feishu send response: ${err}')
 	}
 	if decoded.code != 0 {
-		app.feishu_runtime_note_send(app_name, false)
+		app.feishu.note_send(app_name, false)
 		return error('feishu send error: ${decoded.msg}')
 	}
-	app.feishu_runtime_note_send(app_name, true)
+	app.feishu.note_send(app_name, true)
 	return FeishuRuntimeSendMessageResult{
 		ok:         true
 		message_id: decoded.data.message_id
@@ -869,24 +817,24 @@ fn (mut app App) feishu_runtime_update_message(req FeishuRuntimeUpdateMessageReq
 	}
 	log.info('[feishu] 📤 sending update: method=${method} url=${url} payload=${payload.len} bytes')
 	resp := app.feishu_runtime_http_fetch(url: url, method: method, data: payload, header: header) or {
-		app.feishu_runtime_note_send(app_name, false)
+		app.feishu.note_send(app_name, false)
 		log.error('[feishu] ❌ update fetch failed: ${err}')
 		return err
 	}
 	log.info('[feishu] 📩 update response: status=${resp.status_code} body=${resp.body}')
 	if resp.status_code != 200 {
-		app.feishu_runtime_note_send(app_name, false)
+		app.feishu.note_send(app_name, false)
 		return error('feishu message update failed with status ${resp.status_code}: ${resp.body}')
 	}
 	decoded := json.decode(FeishuRuntimeSendMessageResponse, resp.body) or {
-		app.feishu_runtime_note_send(app_name, false)
+		app.feishu.note_send(app_name, false)
 		return error('invalid feishu update response: ${err}')
 	}
 	if decoded.code != 0 {
-		app.feishu_runtime_note_send(app_name, false)
+		app.feishu.note_send(app_name, false)
 		return error('feishu update error: ${decoded.msg}')
 	}
-	app.feishu_runtime_note_send(app_name, true)
+	app.feishu.note_send(app_name, true)
 	return FeishuRuntimeSendMessageResult{
 		ok:         true
 		message_id: if decoded.data.message_id.trim_space() != '' {
@@ -1285,7 +1233,7 @@ fn (mut app App) feishu_provider_handle_binary_message(instance string, mut ws w
 		log.error('[feishu] ❌ proto decode failed: ${err}')
 		return err
 	}
-	app.feishu_runtime_note_frame(app_name)
+	app.feishu.note_frame(app_name)
 	headers := feishu.RuntimeProtoHeader.to_map(frame.headers)
 	msg_type := headers[feishu_runtime_header_type] or { '' }
 	trace_id := headers[feishu_runtime_header_trace] or { '' }
@@ -1301,7 +1249,7 @@ fn (mut app App) feishu_provider_handle_binary_message(instance string, mut ws w
 			cfg := json.decode(FeishuRuntimeClientConfig, frame.payload.bytestr()) or {
 				FeishuRuntimeClientConfig{}
 			}
-			app.feishu_runtime_note_client_config(app_name, cfg)
+			app.feishu.note_client_config(app_name, cfg)
 		}
 		return
 	}
@@ -1311,7 +1259,7 @@ fn (mut app App) feishu_provider_handle_binary_message(instance string, mut ws w
 	}
 	payload := frame.payload.bytestr()
 	summary := feishu.RuntimeEventSnapshot.summary_from_payload(payload)
-	app.feishu_runtime_push_event(app_name, FeishuRuntimeEventSnapshot{
+	app.feishu.push_event(app_name, FeishuRuntimeEventSnapshot{
 		seq_id:            seq_id
 		trace_id:          trace_id
 		action:            ''
@@ -1466,7 +1414,7 @@ fn (mut app App) feishu_provider_handle_binary_message(instance string, mut ws w
 	}
 	ack := frame.ack(ack_status, ack_headers, ack_data)
 	ws.write(ack.encode(), .binary_frame)!
-	app.feishu_runtime_note_ack(app_name)
+	app.feishu.note_ack(app_name)
 }
 
 @['/admin/runtime/feishu'; get]
@@ -1594,7 +1542,7 @@ fn (mut app App) feishu_callback_by_app(mut ctx Context, raw_app string) veb.Res
 		}))
 	}
 	summary := feishu.RuntimeEventSnapshot.summary_from_payload(payload)
-	app.feishu_runtime_push_event(app_name, FeishuRuntimeEventSnapshot{
+	app.feishu.push_event(app_name, FeishuRuntimeEventSnapshot{
 		seq_id:            'callback-${time.now().unix_micro()}'
 		trace_id:          trace_id
 		action:            'callback'

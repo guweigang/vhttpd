@@ -110,26 +110,6 @@ fn McpRuntime.queue_message(mut app App, session_id string, raw string) McpQueue
 	}
 }
 
-fn McpRuntime.flush_session(mut app App, session_id string) bool {
-	return app.mcp.flush_session(session_id)
-}
-
-fn (mut app App) admin_mcp_snapshot(details bool, limit int, offset int, session_filter string, protocol_filter string) AdminMcpRuntimeSnapshot {
-	return app.mcp.snapshot(details, limit, offset, session_filter, protocol_filter)
-}
-
-fn McpRuntime.origin_allowed(app &App, headers map[string]string) bool {
-	return app.mcp.origin_allowed(headers)
-}
-
-fn McpRuntime.delete_session(mut app App, session_id string) bool {
-	return app.mcp.delete_session(session_id)
-}
-
-fn McpRuntime.client_capabilities_for_request(app &App, session_id string, raw string) string {
-	return app.mcp.client_capabilities_for_request(session_id, raw)
-}
-
 fn proxy_worker_mcp(mut app App, mut ctx Context) veb.Result {
 	start_ms := time.now().unix_milli()
 	path := if ctx.req.url == '' { '/mcp' } else { ctx.req.url }
@@ -166,7 +146,7 @@ fn proxy_worker_mcp(mut app App, mut ctx Context) veb.Result {
 		})
 		return ctx.text('{"error":"MCP requires a configured logic executor"}')
 	}
-	if !McpRuntime.origin_allowed(app, headers) {
+	if !app.mcp.origin_allowed(headers) {
 		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
 		ctx.res.set_status(http.status_from_int(403))
 		ctx.set_content_type('application/json; charset=utf-8')
@@ -202,7 +182,7 @@ fn proxy_worker_mcp(mut app App, mut ctx Context) veb.Result {
 		return ctx.text('{"error":"Empty JSON-RPC body"}')
 	}
 	request := app.kernel_mcp_dispatch_request(method, normalize_path(path), headers,
-		protocol_version, body, ctx.ip(), req_id, trace_id, headers['mcp-session-id'] or { '' }, McpRuntime.client_capabilities_for_request(app, headers['mcp-session-id'] or {
+		protocol_version, body, ctx.ip(), req_id, trace_id, headers['mcp-session-id'] or { '' }, app.mcp.client_capabilities_for_request(headers['mcp-session-id'] or {
 		''
 	}, body))
 	outcome := app.kernel_dispatch_mcp_handled(request) or {
@@ -360,7 +340,7 @@ pub fn (mut app App) mcp_get(mut ctx Context) veb.Result {
 	req_id := resolve_request_id(ctx, path)
 	trace_id := resolve_trace_id(ctx, path)
 	headers := header_map_from_request(ctx.req)
-	if !McpRuntime.origin_allowed(app, headers) {
+	if !app.mcp.origin_allowed(headers) {
 		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
 		ctx.res.set_status(http.status_from_int(403))
 		ctx.set_content_type('application/json; charset=utf-8')
@@ -436,7 +416,7 @@ pub fn (mut app App) mcp_get(mut ctx Context) veb.Result {
 
 fn handle_mcp_session_stream(mut app App, mut conn net.TcpConn, session_id string, req_id string, trace_id string) {
 	app.mcp.bind_conn(session_id, conn)
-	McpRuntime.flush_session(mut app, session_id)
+	app.mcp.flush_session(session_id)
 	conn.write_string(': connected\n\n') or {
 		app.mcp.unbind_conn(session_id, conn)
 		conn.close() or {}
@@ -445,7 +425,7 @@ fn handle_mcp_session_stream(mut app App, mut conn net.TcpConn, session_id strin
 	mut last_keepalive_ms := time.now().unix_milli()
 	for {
 		time.sleep(200 * time.millisecond)
-		if !McpRuntime.flush_session(mut app, session_id) {
+		if !app.mcp.flush_session(session_id) {
 			break
 		}
 		now_ms := time.now().unix_milli()
@@ -472,7 +452,7 @@ pub fn (mut app App) mcp_delete(mut ctx Context) veb.Result {
 	req_id := resolve_request_id(ctx, path)
 	trace_id := resolve_trace_id(ctx, path)
 	headers := header_map_from_request(ctx.req)
-	if !McpRuntime.origin_allowed(app, headers) {
+	if !app.mcp.origin_allowed(headers) {
 		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
 		ctx.res.set_status(http.status_from_int(403))
 		ctx.set_content_type('application/json; charset=utf-8')
@@ -497,7 +477,7 @@ pub fn (mut app App) mcp_delete(mut ctx Context) veb.Result {
 		ctx.set_content_type('application/json; charset=utf-8')
 		return ctx.text('{"error":"Missing Mcp-Session-Id"}')
 	}
-	deleted := McpRuntime.delete_session(mut app, session_id)
+	deleted := app.mcp.delete_session(session_id)
 	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
 	ctx.set_content_type('application/json; charset=utf-8')
 	ctx.res.set_status(http.status_from_int(if deleted { 200 } else { 404 }))

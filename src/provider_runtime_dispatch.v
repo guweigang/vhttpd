@@ -212,7 +212,7 @@ pub fn (mut app App) provider_runtime_ready(name string) bool {
 
 pub fn (mut app App) provider_runtime_default_instance(name string) string {
 	if name == 'feishu' {
-		return app.feishu_runtime_default_app_name()
+		return app.feishu.default_app_name()
 	}
 	return provider.default_instance(name)
 }
@@ -220,7 +220,7 @@ pub fn (mut app App) provider_runtime_default_instance(name string) string {
 pub fn (mut app App) provider_runtime_instances(name string) []string {
 	return match name {
 		'feishu' {
-			app.feishu_runtime_app_names()
+			app.feishu.app_names()
 		}
 		'codex' {
 			mut out := []string{}
@@ -284,7 +284,7 @@ pub fn (mut app App) provider_runtime_reconnect_delay_ms(name string, instance s
 pub fn (mut app App) provider_runtime_on_connecting(name string, instance string) {
 	match name {
 		'feishu' {
-			app.feishu_runtime_note_connecting(instance)
+			app.feishu.note_connecting(instance)
 		}
 		'codex' {
 			app.codex_provider_on_connecting(instance)
@@ -296,7 +296,7 @@ pub fn (mut app App) provider_runtime_on_connecting(name string, instance string
 pub fn (mut app App) provider_runtime_on_connected(name string, instance string, ws_url string) {
 	match name {
 		'feishu' {
-			app.feishu_runtime_note_connected(instance, ws_url)
+			app.feishu.note_connected(instance, ws_url)
 		}
 		'codex' {
 			app.codex_provider_on_connected(instance, ws_url)
@@ -308,7 +308,7 @@ pub fn (mut app App) provider_runtime_on_connected(name string, instance string,
 pub fn (mut app App) provider_runtime_on_disconnected(name string, instance string, reason string) {
 	match name {
 		'feishu' {
-			app.feishu_runtime_note_disconnected(instance, reason)
+			app.feishu.note_disconnected(instance, reason)
 		}
 		'codex' {
 			app.codex_provider_on_disconnected(instance, reason)

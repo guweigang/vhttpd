@@ -230,7 +230,7 @@ pub fn (mut app App) admin_runtime_mcp(mut ctx Context) veb.Result {
 	offset := admin.AdminQuery.offset(ctx.query['offset'] or { '' })
 	session_filter := (ctx.query['session_id'] or { '' }).trim_space()
 	protocol_filter := (ctx.query['protocol_version'] or { '' }).trim_space()
-	body := json.encode(app.admin_mcp_snapshot(details, limit, offset, session_filter,
+	body := json.encode(app.mcp.snapshot(details, limit, offset, session_filter,
 		protocol_filter))
 	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
 	ctx.set_content_type('application/json; charset=utf-8')

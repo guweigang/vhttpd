@@ -98,7 +98,7 @@ fn (mut app App) build_provider_instance_runtime_context() ProviderInstanceRunti
 						return error('provider_instance_invalid_feishu_config:${err}')
 					}
 					app.feishu.apps[spec.instance] = cfg
-					app.feishu_runtime_ensure(spec.instance)
+					app.feishu.ensure(spec.instance)
 					_ = app.ensure_websocket_upstream_provider_running('feishu', spec.instance)
 				}
 				'codex' {

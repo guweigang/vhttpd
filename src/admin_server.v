@@ -290,7 +290,7 @@ pub fn (mut app AdminApp) admin_runtime_mcp(mut ctx Context) veb.Result {
 	offset := admin.AdminQuery.offset(ctx.query['offset'] or { '' })
 	session_filter := (ctx.query['session_id'] or { '' }).trim_space()
 	protocol_filter := (ctx.query['protocol_version'] or { '' }).trim_space()
-	body := json.encode(app.shared.admin_mcp_snapshot(details, limit, offset, session_filter,
+	body := json.encode(app.shared.mcp.snapshot(details, limit, offset, session_filter,
 		protocol_filter))
 	app.shared.emit('http.request', {
 		'method':     'GET'

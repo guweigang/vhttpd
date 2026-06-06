@@ -482,7 +482,7 @@ fn test_feishu_runtime_note_client_config() {
 			runtime: map[string]FeishuProviderRuntime{}
 		}
 	}
-	app.feishu_runtime_note_client_config('main', FeishuRuntimeClientConfig{
+	app.feishu.note_client_config('main', FeishuRuntimeClientConfig{
 		ping_interval:      15
 		reconnect_interval: 90
 	})
@@ -609,8 +609,8 @@ fn test_feishu_runtime_resolve_named_apps() {
 			}
 		}
 	}
-	assert app.feishu_runtime_default_app_name() == 'main'
-	assert app.feishu_runtime_app_names() == ['main', 'openclaw']
+	assert app.feishu.default_app_name() == 'main'
+	assert app.feishu.app_names() == ['main', 'openclaw']
 	assert app.feishu_runtime_resolve_app_name('')! == 'main'
 	assert app.feishu_runtime_resolve_app_name('openclaw')! == 'openclaw'
 	assert app.websocket_upstream_provider_enabled(websocket_upstream_provider_feishu, 'main')
