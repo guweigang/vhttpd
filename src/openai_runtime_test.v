@@ -7,9 +7,10 @@ import os
 import x.json2
 
 fn test_openai_relative_path_matches_configured_base_path() {
-	assert openai_relative_path('/v1/models', '/v1') or { '' } == '/models'
-	assert openai_relative_path('api/openai/chat/completions?trace=1', '/api/openai') or { '' } == '/chat/completions'
-	if _ := openai_relative_path('/api/other/models', '/api/openai') {
+	ctx := openai_path_context()
+	assert ctx.relative_path('/v1/models', '/v1') or { '' } == '/models'
+	assert ctx.relative_path('api/openai/chat/completions?trace=1', '/api/openai') or { '' } == '/chat/completions'
+	if _ := ctx.relative_path('/api/other/models', '/api/openai') {
 		assert false
 	} else {
 		assert true
@@ -299,7 +300,7 @@ export function openai(_req) {
 
 fn test_openai_plugin_plan_validation_rejects_missing_backend() {
 	raw := '{"method":"POST","path":"/chat/completions","body":"{}"}'
-	plan := openai_upstream_plan_from_plugin_json_with_defaults(raw, '/chat/completions',
+	plan := openai.OpenAIUpstreamPlan.from_plugin_json(raw, '/chat/completions',
 		'openai.chat.completion') or { panic(err) }
 	mut app := App{}
 	_ := app

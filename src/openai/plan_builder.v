@@ -279,6 +279,7 @@ pub fn OpenAIPluginModelsResult.models_from_json(raw string) ![]string {
 			}
 		}
 	}
+	models.sort()
 	return models
 }
 

@@ -13,27 +13,26 @@ import x.json2
 const openai_response_registry_ttl = 24 * time.hour
 const openai_stream_done_fetch_error = 'openai_stream_done'
 
-struct OpenAIModelObject {
-	id       string
-	object   string = 'model'
-	created  int
-	owned_by string = 'vhttpd'
-}
+// ── Type aliases: main → openai (models, errors, payloads, chat, mapping) ──
 
-struct OpenAIModelsResponse {
-	object string = 'list'
-	data   []OpenAIModelObject
-}
-
-struct OpenAIErrorBody {
-	message string
-	typ     string @[json: 'type']
-	code    string
-}
-
-struct OpenAIErrorResponse {
-	error OpenAIErrorBody
-}
+type OpenAIModelObject = openai.OpenAIModelObject
+type OpenAIModelsResponse = openai.OpenAIModelsResponse
+type OpenAIErrorBody = openai.OpenAIErrorBody
+type OpenAIErrorResponse = openai.OpenAIErrorResponse
+type OpenAIResponsesStreamRegistryState = openai.OpenAIResponsesStreamRegistryState
+type OpenAIPluginChatPayload = openai.OpenAIPluginChatPayload
+type OpenAIPluginResponsesPayload = openai.OpenAIPluginResponsesPayload
+type OpenAIPluginModelsPayload = openai.OpenAIPluginModelsPayload
+type OpenAIPluginFallbackPayload = openai.OpenAIPluginFallbackPayload
+type OpenAIExecutorPayload = openai.OpenAIExecutorPayload
+type OpenAIPluginMapFramePayload = openai.OpenAIPluginMapFramePayload
+type OpenAIChatStreamDelta = openai.OpenAIChatStreamDelta
+type OpenAIChatStreamChoice = openai.OpenAIChatStreamChoice
+type OpenAIChatStreamChunk = openai.OpenAIChatStreamChunk
+type OpenAIChatMessage = openai.OpenAIChatMessage
+type OpenAIChatCompletionChoice = openai.OpenAIChatCompletionChoice
+type OpenAIChatCompletionResponse = openai.OpenAIChatCompletionResponse
+type OpenAIFrameMapping = openai.OpenAIFrameMapping
 
 type OpenAIResolvedRoute = openai.OpenAIResolvedRoute
 type OpenAIUpstreamPlan = openai.OpenAIUpstreamPlan
@@ -43,202 +42,13 @@ type OpenAIPluginModelsResult = openai.OpenAIPluginModelsResult
 
 type OpenAIResponseRecord = openai.OpenAIResponseRecord
 
-@[heap]
-struct OpenAIResponsesStreamRegistryState {
-mut:
-	completed_body string
-}
-
-struct OpenAIPluginChatPayload {
-	method     string
-	path       string
-	model      string
-	stream     bool
-	body       string
-	base_path  string @[json: 'base_path']
-	request_id string @[json: 'request_id']
-	trace_id   string @[json: 'trace_id']
-}
-
-struct OpenAIPluginResponsesPayload {
-	method     string
-	path       string
-	model      string
-	stream     bool
-	body       string
-	base_path  string @[json: 'base_path']
-	request_id string @[json: 'request_id']
-	trace_id   string @[json: 'trace_id']
-}
-
-struct OpenAIPluginModelsPayload {
-	method     string
-	path       string
-	base_path  string @[json: 'base_path']
-	request_id string @[json: 'request_id']
-	trace_id   string @[json: 'trace_id']
-}
-
-struct OpenAIPluginFallbackPayload {
-	method         string
-	path           string
-	model          string
-	stream         bool
-	body           string
-	base_path      string @[json: 'base_path']
-	failed_backend string @[json: 'failed_backend']
-	status_code    int    @[json: 'status_code']
-	error_code     string @[json: 'error_code']
-	error_message  string @[json: 'error_message']
-	request_id     string @[json: 'request_id']
-	trace_id       string @[json: 'trace_id']
-}
-
-struct OpenAIExecutorPayload {
-	method          string
-	path            string
-	model           string
-	stream          bool
-	body            string
-	backend         string
-	request_id      string @[json: 'request_id']
-	trace_id        string @[json: 'trace_id']
-	response_codec  string @[json: 'response_codec']
-	output_protocol string @[json: 'output_protocol']
-}
-
-struct OpenAIPluginMapFramePayload {
-	model           string
-	frame           string
-	response_codec  string @[json: 'response_codec']
-	output_protocol string @[json: 'output_protocol']
-	request_id      string @[json: 'request_id']
-	trace_id        string @[json: 'trace_id']
-}
-
-struct OpenAIChatStreamDelta {
-	content string
-}
-
-struct OpenAIChatStreamChoice {
-	index int
-	delta OpenAIChatStreamDelta
-}
-
-struct OpenAIChatStreamChunk {
-	id      string
-	object  string = 'chat.completion.chunk'
-	created int
-	model   string
-	choices []OpenAIChatStreamChoice
-}
-
-struct OpenAIChatMessage {
-	role    string
-	content string
-}
-
-struct OpenAIChatCompletionChoice {
-	index         int
-	message       OpenAIChatMessage
-	finish_reason string @[json: 'finish_reason']
-}
-
-struct OpenAIChatCompletionResponse {
-	id      string
-	object  string = 'chat.completion'
-	created int
-	model   string
-	choices []OpenAIChatCompletionChoice
-}
-
-struct OpenAIFrameMapping {
-	content       string
-	tool_calls    []json2.Any
-	usage         map[string]int
-	done          bool
-	handled       bool
-	error         string
-	finish_reason string
-}
-
-type OpenAIChunkDecodeState = openai.ChunkDecodeState
-
-fn openai_decode_progress_chunk(mut decoder openai.ChunkDecodeState, chunk []u8) string {
-	if chunk.len == 0 || decoder.done {
-		return ''
+// openai_path_context builds a PathContext that wraps module-main path helpers.
+fn openai_path_context() openai.PathContext {
+	return openai.PathContext{
+		normalize_path:           normalize_path
+		normalize_request_target: normalize_request_target
+		parse_query_map:          parse_query_map
 	}
-	incoming := chunk.bytestr()
-	if decoder.mode == 'plain' {
-		return incoming
-	}
-	decoder.buffer += incoming
-	if decoder.mode == 'unknown' {
-		if decoder.buffer.contains('\r\n') {
-			first_line := decoder.buffer.all_before('\r\n')
-			_ := openai.OpenAIResolvedPlan.hex_chunk_size(first_line) or {
-				decoder.mode = 'plain'
-				out := decoder.buffer
-				decoder.buffer = ''
-				return out
-			}
-			decoder.mode = 'chunked'
-		} else if decoder.buffer.contains('\n') || decoder.buffer.len > 64 {
-			decoder.mode = 'plain'
-			out := decoder.buffer
-			decoder.buffer = ''
-			return out
-		} else {
-			return ''
-		}
-	}
-	mut out := ''
-	for decoder.mode == 'chunked' && decoder.buffer.len > 0 && !decoder.done {
-		if decoder.need_chunk_crlf {
-			if decoder.buffer.len < 2 {
-				break
-			}
-			if decoder.buffer.starts_with('\r\n') {
-				decoder.buffer = decoder.buffer[2..]
-			} else if decoder.buffer.starts_with('\n') {
-				decoder.buffer = decoder.buffer[1..]
-			}
-			decoder.need_chunk_crlf = false
-		}
-		if decoder.remaining == 0 {
-			if !decoder.buffer.contains('\r\n') {
-				break
-			}
-			line := decoder.buffer.all_before('\r\n')
-			decoder.buffer = decoder.buffer.all_after('\r\n')
-			size := openai.OpenAIResolvedPlan.hex_chunk_size(line) or {
-				decoder.mode = 'plain'
-				out += decoder.buffer
-				decoder.buffer = ''
-				break
-			}
-			if size == 0 {
-				decoder.done = true
-				decoder.buffer = ''
-				break
-			}
-			decoder.remaining = size
-		}
-		if decoder.remaining > 0 {
-			take := if decoder.buffer.len < decoder.remaining {
-				decoder.buffer.len
-			} else {
-				decoder.remaining
-			}
-			out += decoder.buffer[..take]
-			decoder.buffer = decoder.buffer[take..]
-			decoder.remaining -= take
-			if decoder.remaining == 0 {
-				decoder.need_chunk_crlf = true
-			}
-		}
-	}
-	return out
 }
 
 @[heap]
@@ -282,107 +92,20 @@ mut:
 	final_written    bool
 }
 
-fn normalize_openai_base_path(raw string) string {
-	mut base := normalize_path(raw.trim_space())
-	for base.len > 1 && base.ends_with('/') {
-		base = base[..base.len - 1]
-	}
-	return base
-}
-
-fn openai_relative_path(target string, base_path string) ?string {
-	request_path, _ := normalize_request_target(target)
-	path := normalize_path(request_path)
-	base := normalize_openai_base_path(base_path)
-	if path == base {
-		return ''
-	}
-	prefix := '${base}/'
-	if !path.starts_with(prefix) {
-		return none
-	}
-	return '/' + path[prefix.len..]
-}
-
-fn openai_relative_target(target string, base_path string) ?string {
-	request_path, query := normalize_request_target(target)
-	path := normalize_path(request_path)
-	base := normalize_openai_base_path(base_path)
-	mut relative := ''
-	if path == base {
-		relative = ''
-	} else {
-		prefix := '${base}/'
-		if !path.starts_with(prefix) {
-			return none
-		}
-		relative = '/' + path[prefix.len..]
-	}
-	if query == '' {
-		return relative
-	}
-	return '${relative}?${query}'
-}
-
-fn openai_is_stream_target(target string) bool {
-	_, query := normalize_request_target(target)
-	if query == '' {
-		return false
-	}
-	params := parse_query_map(query)
-	stream := params['stream'] or { return false }
-	return stream.to_lower() in ['1', 'true', 'yes']
-}
-
-fn openai_response_registry_record(plan OpenAIResolvedPlan, response_id string, body string, req_id string, trace_id string) OpenAIResponseRecord {
-	now := time.now().unix()
-	status := openai.OpenAIResponseRecord.status_from_body(body)
-	return OpenAIResponseRecord{
-		id:              response_id
-		backend_name:    plan.backend_name
-		backend_kind:    plan.backend.kind
-		executor:        plan.backend.executor
-		model:           plan.model
-		status:          if status == '' { 'completed' } else { status }
-		created_at_unix: now
-		updated_at_unix: now
-		request_id:      req_id
-		trace_id:        trace_id
-		body:            body
-	}
-}
-
 fn (mut app App) openai_store_response_record(plan OpenAIResolvedPlan, body string, req_id string, trace_id string) string {
 	response_id := openai.OpenAIResponseRecord.id_from_body(body)
 	if response_id == '' {
 		return ''
 	}
-	record := openai_response_registry_record(plan, response_id, body, req_id, trace_id)
+	record := openai.OpenAIResponseRecord.from_plan(plan, response_id, body, req_id, trace_id)
 	app.openai.responses.set_with_ttl(response_id, record, openai_response_registry_ttl) or {}
 	return response_id
-}
-
-fn openai_route_models(route config.OpenAIRouteConfig, route_name string) []string {
-	mut models := []string{}
-	for raw in route.models {
-		model := raw.trim_space()
-		if model != '' && model !in models {
-			models << model
-		}
-	}
-	if route.model.trim_space() != '' && route.model !in models {
-		models << route.model.trim_space()
-	}
-	if models.len == 0 && route_name.trim_space() != '' {
-		models << route_name.trim_space()
-	}
-	return models
 }
 
 fn (app &App) openai_models() []string {
 	mut models := []string{}
 	for name, route in app.openai.routes {
-		for model in openai_route_models(route, name) {
+		for model in openai.OpenAIResolvedRoute.models(route, name) {
 			if model !in models {
 				models << model
 			}
@@ -396,7 +119,7 @@ fn (app &App) openai_resolve_route(model string) !OpenAIResolvedRoute {
 	requested := model.trim_space()
 	if requested != '' {
 		for name, route in app.openai.routes {
-			if requested in openai_route_models(route, name) {
+			if requested in openai.OpenAIResolvedRoute.models(route, name) {
 				backend_name := if route.backend.trim_space() != '' {
 					route.backend.trim_space()
 				} else {
@@ -438,78 +161,6 @@ fn (app &App) openai_resolve_route(model string) !OpenAIResolvedRoute {
 	}
 }
 
-fn openai_builtin_plan_from_route_for_endpoint_method(route OpenAIResolvedRoute, body string, upstream_path string, output_protocol string, method string) OpenAIResolvedPlan {
-	return OpenAIResolvedPlan{
-		backend_name:    route.backend_name
-		backend:         route.backend
-		method:          method.to_upper()
-		path:            upstream_path
-		body:            openai.OpenAIResolvedPlan.replace_model(body, route.upstream_model)
-		model:           route.model
-		stream_mode:     'passthrough'
-		response_codec:  'sse'
-		output_protocol: output_protocol
-		mapper:          'builtin'
-		headers:         map[string]string{}
-	}
-}
-
-fn openai_builtin_plan_from_route_for_endpoint(route OpenAIResolvedRoute, body string, upstream_path string, output_protocol string) OpenAIResolvedPlan {
-	return openai_builtin_plan_from_route_for_endpoint_method(route, body, upstream_path,
-		output_protocol, 'POST')
-}
-
-fn openai_builtin_plan_from_route(route OpenAIResolvedRoute, body string) OpenAIResolvedPlan {
-	return openai_builtin_plan_from_route_for_endpoint(route, body, '/chat/completions',
-		'openai.chat.completion')
-}
-
-fn openai_upstream_plan_from_plugin_json_with_defaults(raw string, default_path string, default_output_protocol string) !OpenAIUpstreamPlan {
-	parsed := json2.decode[json2.Any](raw)!
-	mut root := parsed.as_map()
-	if plan_any := root['plan'] {
-		root = plan_any.as_map()
-	}
-	body := if body_any := root['body'] { body_any.str() } else { '' }
-	return OpenAIUpstreamPlan{
-		backend:         openai.json_string_field(root, 'backend', '')
-		method:          openai.json_string_field(root, 'method', 'POST')
-		path:            openai.json_string_field(root, 'path', default_path)
-		body:            body
-		upstream_model:  openai.json_string_field(root, 'upstream_model', '')
-		stream_mode:     openai.json_string_field(root, 'stream_mode', 'passthrough')
-		response_codec:  openai.json_string_field(root, 'response_codec', '')
-		output_protocol: openai.json_string_field(root, 'output_protocol', default_output_protocol)
-		mapper:          openai.json_string_field(root, 'mapper', '')
-		headers:         openai.json_string_map_field(root, 'headers')
-	}
-}
-
-fn openai_models_from_plugin_json(raw string) ![]string {
-	parsed := json2.decode[json2.Any](raw)!
-	root := parsed.as_map()
-	mut models := []string{}
-	if models_any := root['models'] {
-		for item in models_any.as_array() {
-			model := item.str().trim_space()
-			if model != '' && model !in models {
-				models << model
-			}
-		}
-	}
-	if data_any := root['data'] {
-		for item in data_any.as_array() {
-			row := item.as_map()
-			model := (row['id'] or { json2.Any('') }).str().trim_space()
-			if model != '' && model !in models {
-				models << model
-			}
-		}
-	}
-	models.sort()
-	return models
-}
-
 fn (mut app App) openai_call_plugin(op string, payload string, req_id string, trace_id string, metadata map[string]string) !PluginCallResponse {
 	plugin_name := app.openai.plugin.trim_space()
 	if plugin_name == '' {
@@ -539,12 +190,12 @@ fn (mut app App) openai_plugin_models(method string, path string, req_id string,
 	}
 	return OpenAIPluginModelsResult{
 		handled: true
-		models:  openai_models_from_plugin_json(resp.result)!
+		models:  openai.OpenAIPluginModelsResult.models_from_json(resp.result)!
 	}
 }
 
 fn (mut app App) openai_resolved_plan_from_plugin_result_with_defaults(model string, body string, raw string, default_path string, default_output_protocol string) !OpenAIResolvedPlan {
-	plan := openai_upstream_plan_from_plugin_json_with_defaults(raw, default_path,
+	plan := openai.OpenAIUpstreamPlan.from_plugin_json(raw, default_path,
 		default_output_protocol)!
 	backend_name := plan.backend.trim_space()
 	if backend_name == '' {
@@ -741,7 +392,7 @@ fn (mut app App) openai_resolve_plan(model string, body string, method string, p
 		}
 	}
 	route := app.openai_resolve_route(model)!
-	return openai_builtin_plan_from_route(route, body)
+	return openai.OpenAIResolvedPlan.builtin_from_route(route, body)
 }
 
 fn (mut app App) openai_resolve_responses_plan(model string, body string, method string, path string, req_id string, trace_id string) !OpenAIResolvedPlan {
@@ -752,14 +403,14 @@ fn (mut app App) openai_resolve_responses_plan(model string, body string, method
 		}
 	}
 	route := app.openai_resolve_route(model)!
-	return openai_builtin_plan_from_route_for_endpoint(route, body, '/responses', 'openai.response')
+	return openai.OpenAIResolvedPlan.builtin_from_route_for_endpoint(route, body, '/responses', 'openai.response')
 }
 
 fn (mut app App) openai_resolve_responses_passthrough_plan(relative_target string, body string, method string) !OpenAIResolvedPlan {
 	model := openai.OpenAIResolvedPlan.request_model(body)
 	if model.trim_space() != '' {
 		route := app.openai_resolve_route(model)!
-		return openai_builtin_plan_from_route_for_endpoint_method(route, body, relative_target,
+		return openai.OpenAIResolvedPlan.builtin_from_route_for_endpoint_method(route, body, relative_target,
 			'openai.response', method)
 	}
 	backend_name := app.openai.default_backend.trim_space()
@@ -979,7 +630,7 @@ fn openai_progress_body_cb(request &http.Request, chunk []u8, _body_read_so_far 
 	if status_code > 0 {
 		state.status_code = status_code
 	}
-	decoded := openai_decode_progress_chunk(mut state.chunk_decoder, chunk)
+	decoded := state.chunk_decoder.decode(chunk)
 	if state.status_code >= 400 {
 		if decoded.len > 0 {
 			state.error_body += decoded
@@ -1342,7 +993,7 @@ fn openai_mapped_progress_body_cb(request &http.Request, chunk []u8, _body_read_
 	if status_code > 0 {
 		state.status_code = status_code
 	}
-	decoded := openai_decode_progress_chunk(mut state.chunk_decoder, chunk)
+	decoded := state.chunk_decoder.decode(chunk)
 	if state.status_code >= 400 {
 		if decoded.len > 0 {
 			state.error_body += decoded
@@ -1591,7 +1242,7 @@ fn openai_proxy_stream(mut app App, mut ctx Context, plan OpenAIResolvedPlan, me
 		if fallback.handled && fallback.plan.stream_mode == 'passthrough' {
 			state.status_code = 200
 			state.error_body = ''
-			state.chunk_decoder = OpenAIChunkDecodeState{}
+			state.chunk_decoder = openai.ChunkDecodeState{}
 			state.done = false
 			state.done_probe = ''
 			state.final_written = false
@@ -1624,7 +1275,7 @@ fn openai_proxy_stream(mut app App, mut ctx Context, plan OpenAIResolvedPlan, me
 		if fallback.handled && fallback.plan.stream_mode == 'passthrough' {
 			state.status_code = 200
 			state.error_body = ''
-			state.chunk_decoder = OpenAIChunkDecodeState{}
+			state.chunk_decoder = openai.ChunkDecodeState{}
 			state.done = false
 			state.done_probe = ''
 			state.final_written = false
@@ -2379,7 +2030,7 @@ fn (mut app App) openai_handle_responses_passthrough(mut ctx Context, method str
 			'unsupported_backend',
 			'Responses passthrough endpoint ${relative_target} requires an HTTP backend')
 	}
-	if openai.OpenAIResolvedPlan.is_stream_request(ctx.req.data) || openai_is_stream_target(path) {
+	if openai.OpenAIResolvedPlan.is_stream_request(ctx.req.data) || openai_path_context().is_stream_target(path) {
 		return openai_proxy_stream(mut app, mut ctx, plan, method, path, req_id, trace_id, start_ms)
 	}
 	return openai_proxy_once_attempt(mut app, mut ctx, plan, method, path, req_id, trace_id,
@@ -2390,8 +2041,9 @@ fn (mut app App) openai_try_handle(mut ctx Context, method string, target string
 	if !app.openai.enabled {
 		return none
 	}
-	relative := openai_relative_path(target, app.openai.base_path) or { return none }
-	relative_target := openai_relative_target(target, app.openai.base_path) or { return none }
+	path_ctx := openai_path_context()
+	relative := path_ctx.relative_path(target, app.openai.base_path) or { return none }
+	relative_target := path_ctx.relative_target(target, app.openai.base_path) or { return none }
 	if relative == '/models' {
 		if !app.openai.endpoints.models {
 			return openai_error(mut app, mut ctx, 404, target, method, req_id, trace_id, start_ms,
