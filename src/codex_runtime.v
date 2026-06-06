@@ -1,7 +1,6 @@
 module main
 
 import config
-import transport
 import codex
 import command
 import json
@@ -10,7 +9,6 @@ import time
 import net.websocket as ws
 
 const websocket_upstream_provider_codex = 'codex'
-const codex_turn_read_fallback_delay_ms = 12000
 
 // ── Codex Turn / Item / Plan state ──────────────────────────────────────
 
@@ -131,13 +129,6 @@ fn (mut app App) codex_bind_stream_to_current_thread(instance string, stream_id 
 	return bound
 }
 
-fn (mut app App) codex_begin_turn_stream(instance string, stream_id string) string {
-	mut rt := app.codex_runtime_ensure_instance(instance)
-	thread_id := rt.begin_turn_stream(stream_id)
-	app.codex_runtime_update(instance, rt)
-	return thread_id
-}
-
 fn (mut app App) codex_add_stream_target(instance string, stream_id string, target CodexTarget) {
 	mut rt := app.codex_runtime_ensure_instance(instance)
 	rt.add_stream_target(stream_id, target)
@@ -169,16 +160,6 @@ fn (mut app App) codex_clear_thread_binding(instance string, thread_id string) b
 	mut rt := app.codex_runtime_ensure_instance(instance)
 	cleared := rt.clear_thread_binding(thread_id)
 	app.codex_runtime_update(instance, rt)
-	return cleared
-}
-
-fn (mut app App) codex_clear_thread_binding_any(thread_id string) bool {
-	mut cleared := false
-	for instance in app.codex_runtime_known_instances() {
-		if app.codex_clear_thread_binding(instance, thread_id) {
-			cleared = true
-		}
-	}
 	return cleared
 }
 
@@ -343,10 +324,6 @@ fn (mut app App) codex_runtime_config_snapshot(instance string) AdminCodexConfig
 	return app.codex_runtime_snapshot(instance).config_snapshot()
 }
 
-fn (mut app App) codex_runtime_config(instance string) CodexProviderRuntime {
-	return app.codex_runtime_snapshot(instance)
-}
-
 type CodexRuntimeStateView = codex.RuntimeStateView
 
 fn (mut app App) codex_runtime_state_view(instance string) CodexRuntimeStateView {
@@ -383,8 +360,6 @@ fn (mut app App) codex_next_rpc_id(instance string) int {
 	app.codex_runtime_update(instance, rt)
 	return id
 }
-
-type CodexRpcClassification = codex.RpcClassification
 
 // ── WebSocket text message handler ──────────────────────────────────────
 
@@ -517,41 +492,6 @@ fn (mut app App) dispatch_codex_rpc_response(instance string, pending CodexPendi
 		if outcome.command_error != '' {
 			log.error('[codex]    ❌ command execution error: ${outcome.command_error}')
 		}
-	}
-}
-
-fn (mut app App) codex_spawn_read_fallback(instance string, stream_id string, thread_id string) {
-	fallback, ok := app.codex_schedule_read_fallback(instance, stream_id, thread_id)
-	if !ok {
-		return
-	}
-	log.info('[codex] ⏳ scheduled thread/read fallback instance=${CodexProviderRuntime.normalize_instance(instance)} stream_id=${stream_id} thread_id=${thread_id} token=${fallback.token}')
-	spawn fn (mut app App, instance_name string, stream_id string, token int) {
-		time.sleep(codex_turn_read_fallback_delay_ms * time.millisecond)
-		app.codex_fire_read_fallback(instance_name, stream_id, token)
-	}(mut app, CodexProviderRuntime.normalize_instance(instance), stream_id, fallback.token)
-}
-
-fn (mut app App) codex_fire_read_fallback(instance string, stream_id string, token int) {
-	fallback, ok := app.codex_read_fallback(instance, stream_id)
-	if !ok || fallback.token != token {
-		return
-	}
-	rt := app.codex_runtime_snapshot(instance)
-	if rt.current_stream_id() != stream_id {
-		app.codex_clear_read_fallback(instance, stream_id)
-		return
-	}
-	thread_id := if fallback.thread_id != '' { fallback.thread_id } else { rt.current_thread_id() }
-	if thread_id == '' {
-		app.codex_clear_read_fallback(instance, stream_id)
-		return
-	}
-	app.codex_clear_read_fallback(instance, stream_id)
-	log.warn('[codex] 🛟 watchdog triggering thread/read instance=${CodexProviderRuntime.normalize_instance(instance)} stream_id=${stream_id} thread_id=${thread_id}')
-	params := '{"threadId":"${thread_id}","includeTurns":true}'
-	app.codex_send_rpc(instance, 'thread/read', params, stream_id, '') or {
-		log.error('[codex] ❌ watchdog thread/read failed instance=${CodexProviderRuntime.normalize_instance(instance)} stream_id=${stream_id}: ${err}')
 	}
 }
 
@@ -853,7 +793,7 @@ fn (mut app App) codex_send_initialized(instance string, mut conn ws.Client) ! {
 }
 
 fn (mut app App) codex_send_thread_start(instance string, mut conn ws.Client) ! {
-	cfg := app.codex_runtime_config(instance)
+	cfg := app.codex_runtime_snapshot(instance)
 	rt := app.codex_runtime_snapshot(instance)
 	log.info('[codex] 🤝 sending thread/start instance=${CodexProviderRuntime.normalize_instance(instance)} url=${rt.ws_url} cwd=${cfg.cwd} ...')
 	id := app.codex_next_rpc_id(instance)
@@ -950,14 +890,10 @@ fn (mut app App) codex_provider_update(req WebSocketUpstreamSendRequest) !WebSoc
 
 // ── Turn Management ─────────────────────────────────────────────────────
 
-fn (mut app App) codex_start_turn(cmd transport.WorkerWebSocketUpstreamCommand) ! {
-	return app.codex_start_turn_normalized(command.NormalizedCommand.from_worker_command(cmd))
-}
-
 fn (mut app App) codex_start_turn_normalized(cmd command.NormalizedCommand) ! {
 	log.info('[codex] 🚀 codex_start_turn stream_id=${cmd.correlation.stream_id} task_type=${cmd.task_type} prompt=${cmd.prompt}')
 	instance := CodexProviderRuntime.normalize_instance(cmd.instance)
-	cfg := app.codex_runtime_config(instance)
+	cfg := app.codex_runtime_snapshot(instance)
 	mut rt := app.codex_runtime_ensure_instance(instance)
 
 	// Ensure provider is connected
