@@ -1,6 +1,7 @@
 module main
 
 import admin
+import codex
 import command
 import transport
 import executor
@@ -67,7 +68,7 @@ fn (mut app App) build_websocket_upstream_runtime_context() ws.UpstreamRuntimeCo
 			} else if provider == websocket_upstream_provider_codex {
 				mut codex_app_ref := unsafe { &app }
 				go codex_app_ref.codex_post_connect_handshake(instance, mut client)
-				go codex_ping_loop(mut client)
+				go codex.ping_loop(mut client)
 			}
 		}
 	}

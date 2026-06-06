@@ -5,7 +5,6 @@ import transport
 import codex
 import command
 import json
-import jsonutils
 import log
 import time
 import net.websocket as ws
@@ -303,25 +302,6 @@ fn (mut app App) codex_find_stream_targets(stream_id string) []CodexTarget {
 
 // ── Provider lifecycle callbacks ────────────────────────────────────────
 
-// Helper to convert sandbox type for different RPC requirements
-fn codex_format_sandbox(val string, to_camel bool) string {
-	if to_camel {
-		return match val {
-			'read-only' { 'readOnly' }
-			'workspace-write' { 'workspaceWrite' }
-			'danger-full-access' { 'dangerFullAccess' }
-			else { val }
-		}
-	} else {
-		return match val {
-			'readOnly' { 'read-only' }
-			'workspaceWrite' { 'workspace-write' }
-			'dangerFullAccess' { 'danger-full-access' }
-			else { val }
-		}
-	}
-}
-
 fn (mut app App) codex_provider_enabled() bool {
 	return app.provider_enabled('codex')
 }
@@ -343,16 +323,6 @@ fn (mut app App) codex_provider_on_connected(instance string, ws_url string) {
 	mut rt := app.codex_runtime_ensure_instance(instance)
 	rt.note_connected(ws_url)
 	app.codex_runtime_update(instance, rt)
-}
-
-fn codex_ping_loop(mut client ws.Client) {
-	for client.get_state() == .open {
-		client.ping() or {
-			log.error('[codex] ❌ ping failed: ${err}')
-			return
-		}
-		time.sleep(20 * time.second)
-	}
 }
 
 fn (mut app App) codex_provider_on_disconnected(instance string, reason string) {
@@ -440,240 +410,7 @@ fn (mut app App) codex_next_rpc_id(instance string) int {
 	return id
 }
 
-fn codex_encode_request(method string, id int, params string) string {
-	if params == '' || params == '{}' {
-		return '{"method":"${method}","id":${id},"params":{}}'
-	}
-	return '{"method":"${method}","id":${id},"params":${params}}'
-}
-
-fn codex_encode_notification(method string, params string) string {
-	if params == '' || params == '{}' {
-		return '{"method":"${method}","params":{}}'
-	}
-	return '{"method":"${method}","params":${params}}'
-}
-
-// Lightweight JSON-RPC message classification using string scanning.
-// Avoids full JSON parse for every incoming frame.
-
-struct CodexRpcClassification {
-	is_response     bool // has "id" + ("result" or "error"), no "method"
-	is_notification bool // has "method", no "id"
-	is_request      bool // has "method" + "id" (server-initiated request, e.g. approvals)
-	method          string
-	id_raw          string // raw id value as string (may be int)
-	has_error       bool
-}
-
-struct CodexJsonRpcMessage {
-	method string
-	id     ?int
-	params string
-	result string
-	error  string
-}
-
-fn codex_classify_rpc(raw string) CodexRpcClassification {
-	// Use top-level field detection to avoid matching nested keys like thread.id
-	has_method := jsonutils.has_any_top_level_key(raw, ['method'])
-	has_id := jsonutils.has_any_top_level_key(raw, ['id'])
-	has_result := jsonutils.has_any_top_level_key(raw, ['result'])
-	has_error := jsonutils.has_any_top_level_key(raw, ['error'])
-
-	method := if has_method { codex_extract_string_field(raw, 'method') } else { '' }
-	id_raw := if has_id { codex_extract_raw_field(raw, 'id') } else { '' }
-
-	if has_method && !has_id {
-		return CodexRpcClassification{
-			is_notification: true
-			method:          method
-		}
-	}
-	if has_method && has_id {
-		return CodexRpcClassification{
-			is_request: true
-			method:     method
-			id_raw:     id_raw
-		}
-	}
-	if has_id && (has_result || has_error) {
-		return CodexRpcClassification{
-			is_response: true
-			id_raw:      id_raw
-			has_error:   has_error
-		}
-	}
-	return CodexRpcClassification{}
-}
-
-fn codex_classification_kind(cls CodexRpcClassification) string {
-	if cls.is_response {
-		return 'response'
-	}
-	if cls.is_notification {
-		return 'notification'
-	}
-	if cls.is_request {
-		return 'request'
-	}
-	return 'unknown'
-}
-
-fn codex_extract_nested_item_field(raw string, field string) string {
-	if !raw.contains('"item"') {
-		return ''
-	}
-	if item_idx := raw.index('"item"') {
-		return codex_extract_string_field(raw[item_idx..], field)
-	}
-	return ''
-}
-
-fn codex_frame_summary(raw string, cls CodexRpcClassification) string {
-	method := cls.method
-	id_raw := cls.id_raw
-	thread_id := codex_extract_string_field(raw, 'threadId')
-	turn_id := codex_extract_string_field(raw, 'turnId')
-	mut item_id := codex_extract_string_field(raw, 'itemId')
-	if item_id == '' {
-		item_id = codex_extract_nested_item_field(raw, 'id')
-	}
-	mut item_type := codex_extract_string_field(raw, 'itemType')
-	if item_type == '' {
-		item_type = codex_extract_nested_item_field(raw, 'type')
-	}
-	status_type := codex_extract_string_field(raw, 'type')
-	return 'kind=${codex_classification_kind(cls)} method=${method} id=${id_raw} has_error=${cls.has_error} thread_id=${thread_id} turn_id=${turn_id} item_id=${item_id} item_type=${item_type} status_type=${status_type}'
-}
-
-// Fast field extractors (avoid full JSON parse for routing)
-fn codex_extract_string_field(raw string, field string) string {
-	marker := '"${field}"'
-	mut idx := raw.index(marker) or { return '' }
-	idx += marker.len
-	// skip : and optional whitespace
-	for idx < raw.len && (raw[idx] == `:` || raw[idx] == ` ` || raw[idx] == `\t`
-		|| raw[idx] == `\n` || raw[idx] == `\r`) {
-		idx++
-	}
-	if idx >= raw.len || raw[idx] != `"` {
-		return ''
-	}
-	idx++ // skip opening quote
-	start := idx
-	for idx < raw.len && raw[idx] != `"` {
-		if raw[idx] == `\\` {
-			idx++ // skip escaped char
-		}
-		idx++
-	}
-	return raw[start..idx]
-}
-
-fn codex_extract_rpc_thread_id(params string) string {
-	if params == '' || !params.contains('"threadId"') {
-		return ''
-	}
-	return codex_extract_string_field(params, 'threadId')
-}
-
-fn codex_extract_raw_field(raw string, field string) string {
-	marker := '"${field}"'
-	mut idx := raw.index(marker) or { return '' }
-	idx += marker.len
-	for idx < raw.len && (raw[idx] == `:` || raw[idx] == ` ` || raw[idx] == `\t`) {
-		idx++
-	}
-	if idx >= raw.len {
-		return ''
-	}
-	start := idx
-	// value can be number, string, object, array, bool, null
-	if raw[idx] == `"` {
-		// string value — find closing quote
-		idx++
-		for idx < raw.len {
-			if raw[idx] == `\\` {
-				idx++
-			} else if raw[idx] == `"` {
-				idx++
-				break
-			}
-			idx++
-		}
-	} else if raw[idx] == `{` || raw[idx] == `[` {
-		// object/array value — track nesting while ignoring quoted strings
-		mut stack := []u8{cap: 16}
-		stack << raw[idx]
-		idx++
-		mut in_string := false
-		mut escaped := false
-		for idx < raw.len && stack.len > 0 {
-			ch := raw[idx]
-			if in_string {
-				if escaped {
-					escaped = false
-				} else if ch == `\\` {
-					escaped = true
-				} else if ch == `"` {
-					in_string = false
-				}
-				idx++
-				continue
-			}
-			if ch == `"` {
-				in_string = true
-				idx++
-				continue
-			}
-			if ch == `{` || ch == `[` {
-				stack << ch
-			} else if ch == `}` {
-				if stack.len > 0 && stack[stack.len - 1] == `{` {
-					stack.delete(stack.len - 1)
-				} else {
-					break
-				}
-			} else if ch == `]` {
-				if stack.len > 0 && stack[stack.len - 1] == `[` {
-					stack.delete(stack.len - 1)
-				} else {
-					break
-				}
-			}
-			idx++
-		}
-	} else {
-		// number, bool, null — read until , or } or ]
-		for idx < raw.len && raw[idx] != `,` && raw[idx] != `}` && raw[idx] != `]`
-			&& raw[idx] != ` ` && raw[idx] != `\n` {
-			idx++
-		}
-	}
-	return raw[start..idx].trim_space()
-}
-
-fn codex_debug_enabled() bool {
-	$if prod {
-		return false
-	}
-	return true
-}
-
-fn codex_debug_snippet(raw string, limit int) string {
-	if raw.len <= limit {
-		return raw
-	}
-	return raw[..limit] + '...'
-}
-
-fn codex_debug_log(label string, raw string) {
-	if !codex_debug_enabled() {
-		return
-	}
-	log.info('[codex][debug] ${label}: ${codex_debug_snippet(raw, 1600)}')
-}
+type CodexRpcClassification = codex.RpcClassification
 
 // ── WebSocket text message handler ──────────────────────────────────────
 
@@ -682,10 +419,10 @@ fn (mut app App) codex_provider_handle_text_message(instance string, raw string)
 
 	preview := if raw.len > 200 { raw[..200] + '...' } else { raw }
 	log.info('[codex] 📩 instance=${CodexProviderRuntime.normalize_instance(instance)} frame #${frame_count}: ${preview}')
-	codex_debug_log('frame.raw', raw)
+	codex.debug_log('frame.raw', raw)
 
-	classification := codex_classify_rpc(raw)
-	log.info('[codex] 🔎 instance=${CodexProviderRuntime.normalize_instance(instance)} frame #${frame_count} ${codex_frame_summary(raw,
+	classification := codex.classify_rpc(raw)
+	log.info('[codex] 🔎 instance=${CodexProviderRuntime.normalize_instance(instance)} frame #${frame_count} ${codex.frame_summary(raw,
 		classification)}')
 
 	if classification.is_response {
@@ -705,9 +442,9 @@ fn (mut app App) codex_provider_handle_text_message(instance string, raw string)
 
 // ── Response handling ───────────────────────────────────────────────────
 
-fn (mut app App) codex_handle_response(instance string, cls CodexRpcClassification, raw string) {
+fn (mut app App) codex_handle_response(instance string, cls codex.RpcClassification, raw string) {
 	log.info('[codex] 📨 instance=${CodexProviderRuntime.normalize_instance(instance)} response id=${cls.id_raw} has_error=${cls.has_error}')
-	codex_debug_log('response.raw', raw)
+	codex.debug_log('response.raw', raw)
 
 	// Check for pending RPCs FIRST so we know the stream_id
 	id := cls.id_raw.int()
@@ -718,7 +455,7 @@ fn (mut app App) codex_handle_response(instance string, cls CodexRpcClassificati
 		if pending.stream_id != '' {
 			app.codex_clear_read_fallback(instance, pending.stream_id)
 		}
-		error_msg := codex_extract_string_field(raw, 'message')
+		error_msg := codex.extract_string_field(raw, 'message')
 		app.emit('codex.rpc.error', {
 			'id':       cls.id_raw
 			'error':    error_msg
@@ -740,7 +477,7 @@ fn (mut app App) codex_handle_response(instance string, cls CodexRpcClassificati
 		// Use a more specific marker to avoid picking up the top-level "id"
 		thread_marker := '"thread"'
 		if thread_idx := raw.index(thread_marker) {
-			thread_id := codex_extract_string_field(raw[thread_idx..], 'id')
+			thread_id := codex.extract_string_field(raw[thread_idx..], 'id')
 			if thread_id != '' {
 				app.codex_capture_thread_id(instance, thread_id)
 				log.info('[codex]    ✅ thread_id extracted: ${thread_id}')
@@ -755,7 +492,7 @@ fn (mut app App) codex_handle_response(instance string, cls CodexRpcClassificati
 	if raw.contains('"turn"') {
 		// Avoid top-level "id" (RPC ID)
 		if turn_idx := raw.index('"turn"') {
-			turn_id := codex_extract_string_field(raw[turn_idx..], 'id')
+			turn_id := codex.extract_string_field(raw[turn_idx..], 'id')
 			if turn_id != '' {
 				log.info('[codex]    ✅ turn_id extracted: ${turn_id}')
 				app.emit('codex.turn.response', {
@@ -769,9 +506,9 @@ fn (mut app App) codex_handle_response(instance string, cls CodexRpcClassificati
 	if pending.method != '' {
 		// Route result back to PHP
 		result_raw := if cls.has_error {
-			codex_extract_raw_field(raw, 'error')
+			codex.extract_raw_field(raw, 'error')
 		} else {
-			codex_extract_raw_field(raw, 'result')
+			codex.extract_raw_field(raw, 'result')
 		}
 		app.dispatch_codex_rpc_response(instance, pending, result_raw, cls.has_error, raw)
 		if pending.method == 'thread/read' {
@@ -782,8 +519,8 @@ fn (mut app App) codex_handle_response(instance string, cls CodexRpcClassificati
 
 fn (mut app App) dispatch_codex_rpc_response(instance string, pending CodexPendingRpc, result_raw string, has_error bool, raw string) {
 	log.info('[codex] 🏁 dispatch_codex_rpc_response instance=${CodexProviderRuntime.normalize_instance(instance)} method=${pending.method} stream_id=${pending.stream_id} error=${has_error}')
-	codex_debug_log('rpc.dispatch.raw_response', raw)
-	codex_debug_log('rpc.dispatch.result_raw', result_raw)
+	codex.debug_log('rpc.dispatch.raw_response', raw)
+	codex.debug_log('rpc.dispatch.result_raw', result_raw)
 	if !app.has_websocket_upstream_logic_executor() {
 		log.warn('[codex] ⚠️ websocket_upstream logic executor unavailable, skipping dispatch')
 		return
@@ -858,16 +595,16 @@ fn (mut app App) codex_send_internal_thread_resume(instance string, thread_id st
 		return error('codex provider not connected')
 	}
 	params := '{"threadId":"${thread_id}","persistExtendedHistory":true}'
-	msg := codex_encode_request('thread/resume', id, params)
+	msg := codex.encode_request('thread/resume', id, params)
 	log.info('[codex] 🔄 internal thread/resume instance=${resolved_instance} thread_id=${thread_id} rpc_id=${id}')
 	log.info('[codex] 📤 sending internal rpc: ${msg}')
-	codex_debug_log('rpc.send.params.thread/resume', params)
+	codex.debug_log('rpc.send.params.thread/resume', params)
 	conn.write_string(msg)!
 }
 
 fn (mut app App) codex_send_rpc(instance string, method string, params string, stream_id string, message_id string) !int {
 	resolved_instance := CodexProviderRuntime.normalize_instance(instance)
-	explicit_thread_id := codex_extract_rpc_thread_id(params)
+	explicit_thread_id := codex.extract_rpc_thread_id(params)
 	current_thread_id := app.codex_runtime_snapshot(resolved_instance).current_thread_id()
 	if method == 'turn/start' && explicit_thread_id != '' && current_thread_id != ''
 		&& explicit_thread_id != current_thread_id {
@@ -905,11 +642,11 @@ fn (mut app App) codex_send_rpc(instance string, method string, params string, s
 		return error('codex provider not connected')
 	}
 
-	msg := codex_encode_request(method, id, params)
+	msg := codex.encode_request(method, id, params)
 	thread_id := explicit_thread_id
 	log.info('[codex] 🧭 rpc route instance=${resolved_instance} method=${method} url=${rt.ws_url} thread_id=${thread_id} stream_id=${stream_id}')
 	log.info('[codex] 📤 sending custom rpc: ${msg}')
-	codex_debug_log('rpc.send.params.${method}', params)
+	codex.debug_log('rpc.send.params.${method}', params)
 	conn.write_string(msg)!
 	return id
 }
@@ -925,15 +662,15 @@ fn (mut app App) codex_reply_rpc(instance string, id string, result string) ! {
 
 	msg := '{"id":${id},"result":${result}}'
 	log.info('[codex] 📤 sending rpc reply: ${msg}')
-	codex_debug_log('rpc.reply.result', result)
+	codex.debug_log('rpc.reply.result', result)
 	conn.write_string(msg)!
 }
 
-fn (mut app App) codex_handle_server_request(instance string, cls CodexRpcClassification, raw string) {
+fn (mut app App) codex_handle_server_request(instance string, cls codex.RpcClassification, raw string) {
 	log.info('[codex] 🙋 instance=${CodexProviderRuntime.normalize_instance(instance)} server request: method=${cls.method} id=${cls.id_raw}')
-	codex_debug_log('server_request.raw.${cls.method}', raw)
+	codex.debug_log('server_request.raw.${cls.method}', raw)
 
-	detected_thread_id := codex_extract_string_field(raw, 'threadId')
+	detected_thread_id := codex.extract_string_field(raw, 'threadId')
 	mut target_stream_id := ''
 	if detected_thread_id != '' {
 		target_stream_id = app.codex_repair_thread_stream_binding(instance, detected_thread_id)
@@ -994,10 +731,10 @@ fn (mut app App) codex_handle_server_request(instance string, cls CodexRpcClassi
 fn (mut app App) codex_handle_notification(instance string, method string, raw string) {
 	// 1. Transparent logging
 	log.info('[codex] 📢 instance=${CodexProviderRuntime.normalize_instance(instance)} notification: ${method}')
-	codex_debug_log('notification.raw.${method}', raw)
+	codex.debug_log('notification.raw.${method}', raw)
 
 	// 2. Minimal gateway-level state sync & Mapping Lookups
-	detected_thread_id := codex_extract_string_field(raw, 'threadId')
+	detected_thread_id := codex.extract_string_field(raw, 'threadId')
 
 	mut target_stream_id := ''
 	if detected_thread_id != '' {
@@ -1032,7 +769,7 @@ fn (mut app App) codex_handle_notification(instance string, method string, raw s
 		'thread/started' {
 			if raw.contains('"thread"') {
 				if idx := raw.index('"thread"') {
-					thread_id := codex_extract_string_field(raw[idx..], 'id')
+					thread_id := codex.extract_string_field(raw[idx..], 'id')
 					if thread_id != '' {
 						if app.codex_ensure_thread_id(instance, thread_id) {
 							log.info('[codex]    ✅ thread_id sync: ${thread_id}')
@@ -1064,7 +801,7 @@ fn (mut app App) codex_handle_notification(instance string, method string, raw s
 		}
 	}
 	if method == 'thread/status/changed' {
-		status_type := codex_extract_string_field(raw, 'type').to_lower()
+		status_type := codex.extract_string_field(raw, 'type').to_lower()
 		if (status_type == 'idle' || status_type == 'completed' || status_type == 'error')
 			&& target_stream_id != '' {
 			app.codex_clear_read_fallback(instance, target_stream_id)
@@ -1117,9 +854,9 @@ fn (mut app App) codex_send_initialize(instance string, mut conn ws.Client) ! {
 	log.info('[codex] 🤝 sending initialize instance=${CodexProviderRuntime.normalize_instance(instance)} ...')
 	id := app.codex_next_rpc_id(instance)
 	params := '{"clientInfo":{"name":"codex_vhttpd","title":"vhttpd Codex Integration","version":"0.1.0"},"capabilities":{"experimentalApi":true}}'
-	msg := codex_encode_request('initialize', id, params)
+	msg := codex.encode_request('initialize', id, params)
 	log.info('[codex]    → ${msg}')
-	codex_debug_log('rpc.send.params.initialize', params)
+	codex.debug_log('rpc.send.params.initialize', params)
 	conn.write_string(msg)!
 	app.emit('codex.rpc.sent', {
 		'method':   'initialize'
@@ -1130,7 +867,7 @@ fn (mut app App) codex_send_initialize(instance string, mut conn ws.Client) ! {
 
 fn (mut app App) codex_send_initialized(instance string, mut conn ws.Client) ! {
 	log.info('[codex] 🤝 sending initialized notification instance=${CodexProviderRuntime.normalize_instance(instance)} ...')
-	msg := codex_encode_notification('initialized', '{}')
+	msg := codex.encode_notification('initialized', '{}')
 	conn.write_string(msg)!
 	mut rt := app.codex_runtime_ensure_instance(instance)
 	rt.mark_initialized()
@@ -1147,11 +884,11 @@ fn (mut app App) codex_send_thread_start(instance string, mut conn ws.Client) ! 
 	log.info('[codex] 🤝 sending thread/start instance=${CodexProviderRuntime.normalize_instance(instance)} url=${rt.ws_url} cwd=${cfg.cwd} ...')
 	id := app.codex_next_rpc_id(instance)
 	// thread/start expects kebab-case for top-level sandbox field
-	sandbox_wire := codex_format_sandbox(cfg.sandbox, false)
+	sandbox_wire := codex.format_sandbox(cfg.sandbox, false)
 	params := '{"model":"${cfg.model}","cwd":"${cfg.cwd}","approvalPolicy":"${cfg.approval_policy}","sandbox":"${sandbox_wire}"}'
-	msg := codex_encode_request('thread/start', id, params)
+	msg := codex.encode_request('thread/start', id, params)
 	log.info('[codex]    → ${msg}')
-	codex_debug_log('rpc.send.params.thread/start', params)
+	codex.debug_log('rpc.send.params.thread/start', params)
 	conn.write_string(msg)!
 	app.emit('codex.rpc.sent', {
 		'method':   'thread/start'
@@ -1307,7 +1044,7 @@ fn (mut app App) codex_start_turn_normalized(cmd command.NormalizedCommand) ! {
 
 	// sandboxPolicy object
 	// turn/start sandboxPolicy.type expects camelCase
-	sandbox_type_wire := codex_format_sandbox(cfg.sandbox, true)
+	sandbox_type_wire := codex.format_sandbox(cfg.sandbox, true)
 	mut sandbox_policy := '{"type":"${sandbox_type_wire}"'
 	cwd := if override_cwd != '' { override_cwd } else { cfg.cwd }
 
@@ -1334,10 +1071,10 @@ fn (mut app App) codex_start_turn_normalized(cmd command.NormalizedCommand) ! {
 
 	params = '{${params}}'
 
-	req_msg := codex_encode_request('turn/start', id, params)
+	req_msg := codex.encode_request('turn/start', id, params)
 	log.info('[codex] 🧭 rpc route instance=${CodexProviderRuntime.normalize_instance(instance)} method=turn/start url=${rt.ws_url} thread_id=${thread_id} stream_id=${stream_id} cwd=${cwd}')
 	log.info('[codex]    → turn/start rpc: ${req_msg}')
-	codex_debug_log('rpc.send.params.turn/start', params)
+	codex.debug_log('rpc.send.params.turn/start', params)
 
 	// Send to websocket
 	req := WebSocketUpstreamSendRequest{

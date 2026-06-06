@@ -93,12 +93,12 @@ pub fn (e CodexRuntimeTestExecutor) dispatch_websocket_event(mut app executor.Ap
 }
 
 fn test_codex_encode_request_and_notification() {
-	req := codex_encode_request('turn/start', 42, '{"a":1}')
+	req := codex.encode_request('turn/start', 42, '{"a":1}')
 	assert req.contains('"method":"turn/start"')
 	assert req.contains('"id":42')
 	assert req.contains('"params":')
 
-	notif := codex_encode_notification('initialized', '{}')
+	notif := codex.encode_notification('initialized', '{}')
 	assert notif.contains('"method":"initialized"')
 	assert notif.contains('"params":{}')
 }
@@ -106,18 +106,18 @@ fn test_codex_encode_request_and_notification() {
 fn test_codex_classify_rpc_variants() {
 	// response (has id + result)
 	resp := '{"id":1,"result":{"ok":true}}'
-	c := codex_classify_rpc(resp)
+	c := codex.classify_rpc(resp)
 	assert c.is_response
 
 	// notification (method only)
 	notif := '{"method":"thread/started","thread":{"id":"t1"}}'
-	n := codex_classify_rpc(notif)
+	n := codex.classify_rpc(notif)
 	assert n.is_notification
 	assert n.method == 'thread/started'
 
 	// request (method + id)
 	req := '{"method":"approve","id":7,"params":{}}'
-	r := codex_classify_rpc(req)
+	r := codex.classify_rpc(req)
 	assert r.is_request
 	assert r.method == 'approve'
 	assert r.id_raw == '7'
@@ -125,11 +125,11 @@ fn test_codex_classify_rpc_variants() {
 
 fn test_codex_extractors() {
 	raw := '{"id":123,"method":"mymethod","thread":{"id":"th-1"},"obj":{"a":1}}'
-	s := codex_extract_string_field(raw, 'method')
+	s := codex.extract_string_field(raw, 'method')
 	assert s == 'mymethod'
-	idraw := codex_extract_raw_field(raw, 'id')
+	idraw := codex.extract_raw_field(raw, 'id')
 	assert idraw == '123'
-	obj := codex_extract_raw_field(raw, 'obj')
+	obj := codex.extract_raw_field(raw, 'obj')
 	assert obj.contains('{')
 }
 
@@ -291,7 +291,7 @@ fn test_codex_turn_start_response_does_not_schedule_read_fallback() {
 		method:    'turn/start'
 		stream_id: 'stream_turn_start_001'
 	})
-	app.codex_handle_response('main', CodexRpcClassification{
+	app.codex_handle_response('main', codex.RpcClassification{
 		id_raw:      '7'
 		is_response: true
 	}, '{"id":7,"result":{"turn":{"id":"turn_001","status":"inProgress","error":null}}}')
@@ -457,7 +457,7 @@ fn test_codex_server_request_uses_logic_executor_without_worker_sockets() {
 			}
 		}
 	}
-	app.codex_handle_server_request('main', CodexRpcClassification{
+	app.codex_handle_server_request('main', codex.RpcClassification{
 		is_request: true
 		method:     'item/commandExecution/requestApproval'
 		id_raw:     '991'
