@@ -1,5 +1,6 @@
 module main
 
+import db
 import json
 import provider
 
@@ -269,7 +270,7 @@ fn (mut app App) build_provider_context(name string) provider.RuntimeContext {
 		start:    fn [mut app, name] () ! {
 			if name == 'db' {
 				if app.db_runtime.enabled && app.db_runtime.socket.trim_space() != '' {
-					go DbRuntimeServer.run(mut app, app.db_runtime.socket)
+					go app.db_runtime_server_run(app.db_runtime.socket)
 				}
 			}
 			return
@@ -407,7 +408,7 @@ pub fn (app &App) provider_bootstrap_enabled(name string) bool {
 		'feishu' { app.feishu_runtime_enabled() }
 		'codex' { app.codex.runtime.enabled || app.provider_instance_list('codex').len > 0 }
 		'ollama' { app.codex.ollama_enabled }
-		'db' { app.db_runtime.enabled && DbProviderRuntime.compiled() }
+		'db' { app.db_runtime.enabled && db.Runtime.compiled() }
 		else { false }
 	}
 }
