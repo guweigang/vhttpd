@@ -4,6 +4,7 @@ import admin
 import json
 import log
 import net.http
+import transport
 import veb
 
 pub struct AdminApp {
@@ -17,12 +18,12 @@ pub mut:
 }
 
 fn (app AdminApp) admin_authorized(ctx Context) bool {
-	headers := header_map_from_request(ctx.req)
+	headers := transport.header_map_from_request(ctx.req)
 	return admin.AdminAuth.authorized(app.admin_token, headers, ctx.query)
 }
 
 fn (app &App) api_authorized(ctx Context) bool {
-	headers := header_map_from_request(ctx.req)
+	headers := transport.header_map_from_request(ctx.req)
 	return admin.AdminAuth.authorized(app.admin.token, headers, ctx.query)
 }
 

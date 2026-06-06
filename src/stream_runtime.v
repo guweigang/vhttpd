@@ -92,7 +92,7 @@ fn HttpStreamRuntime.direct_sse(rt StreamRuntimeContext, mut ctx Context, mut co
 		if frame.event == 'error' {
 			rt.emit('http.stream.error', {
 				'method':      method.to_upper()
-				'path':        normalize_path(path)
+				'path':        transport.normalize_path(path)
 				'request_id':  req_id
 				'trace_id':    trace_id
 				'error_class': frame.error_class
@@ -107,7 +107,7 @@ fn HttpStreamRuntime.direct_sse(rt StreamRuntimeContext, mut ctx Context, mut co
 	ctx.conn.close() or {}
 	rt.emit('http.request', {
 		'method':          method.to_upper()
-		'path':            normalize_path(path)
+		'path':            transport.normalize_path(path)
 		'status':          '${status}'
 		'request_id':      req_id
 		'trace_id':        trace_id
@@ -154,7 +154,7 @@ fn HttpStreamRuntime.direct_passthrough(rt StreamRuntimeContext, mut ctx Context
 		if frame.event == 'error' {
 			rt.emit('http.stream.error', {
 				'method':      method.to_upper()
-				'path':        normalize_path(path)
+				'path':        transport.normalize_path(path)
 				'request_id':  req_id
 				'trace_id':    trace_id
 				'error_class': frame.error_class
@@ -170,7 +170,7 @@ fn HttpStreamRuntime.direct_passthrough(rt StreamRuntimeContext, mut ctx Context
 	ctx.conn.close() or {}
 	rt.emit('http.request', {
 		'method':          method.to_upper()
-		'path':            normalize_path(path)
+		'path':            transport.normalize_path(path)
 		'status':          '${status}'
 		'request_id':      req_id
 		'trace_id':        trace_id
@@ -208,9 +208,9 @@ fn stream_via_dispatch(mut app App, mut ctx Context, method string, path string,
 }
 
 fn HttpStreamRuntime.dispatch(rt StreamRuntimeContext, mut ctx Context, method string, path string, req_id string, trace_id string, remote_addr string) ?veb.Result {
-	normalized_path, query_string := normalize_request_target(path)
-	query := parse_query_map(query_string)
-	headers := header_map_from_request(ctx.req)
+	normalized_path, query_string := transport.normalize_request_target(path)
+	query := transport.parse_query_map(query_string)
+	headers := transport.header_map_from_request(ctx.req)
 	start_ms := time.now().unix_milli()
 	open_resp := rt.dispatch_open(method, normalized_path, ctx.req.data, remote_addr, req_id,
 		trace_id, query, headers) or { return none }
@@ -265,7 +265,7 @@ fn HttpStreamRuntime.dispatch(rt StreamRuntimeContext, mut ctx Context, method s
 			query, headers, state) or {
 			rt.emit('http.stream.error', {
 				'method':      method.to_upper()
-				'path':        normalize_path(path)
+				'path':        transport.normalize_path(path)
 				'request_id':  req_id
 				'trace_id':    trace_id
 				'error_class': 'transport_error'
@@ -276,7 +276,7 @@ fn HttpStreamRuntime.dispatch(rt StreamRuntimeContext, mut ctx Context, method s
 		if failure := kernel_stream_dispatch_failure(next_resp) {
 			rt.emit('http.stream.error', {
 				'method':      method.to_upper()
-				'path':        normalize_path(path)
+				'path':        transport.normalize_path(path)
 				'request_id':  req_id
 				'trace_id':    trace_id
 				'error_class': failure.error_class
@@ -301,7 +301,7 @@ fn HttpStreamRuntime.dispatch(rt StreamRuntimeContext, mut ctx Context, method s
 	ctx.conn.close() or {}
 	rt.emit('http.request', {
 		'method':          method.to_upper()
-		'path':            normalize_path(path)
+		'path':            transport.normalize_path(path)
 		'status':          '${status}'
 		'request_id':      req_id
 		'trace_id':        trace_id

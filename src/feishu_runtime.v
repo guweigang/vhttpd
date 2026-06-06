@@ -7,6 +7,7 @@ import encoding.base64
 import net.http
 import net.websocket
 import time
+import transport
 import veb
 import x.json2
 import log
@@ -1271,7 +1272,7 @@ fn (mut app App) feishu_callback_by_app(mut ctx Context, raw_app string) veb.Res
 			error: 'unknown_feishu_app'
 		}))
 	}
-	headers := header_map_from_request(ctx.req)
+	headers := transport.header_map_from_request(ctx.req)
 	raw_payload := ctx.req.data
 	if !feishu.CallbackChallengeResponse.signature_valid(headers, app_cfg.encrypt_key, raw_payload) {
 		ctx.res.set_status(http.status_from_int(403))

@@ -11,6 +11,7 @@ import net.urllib
 import net.websocket
 import os
 import time
+import transport
 import veb
 
 const feishu_card_bridge_request_type = 'feishu_card_callback'
@@ -729,8 +730,8 @@ fn handle_feishu_card_bridge_server_session(mut app App, mut conn net.TcpConn, k
 @['/bridge/ws'; get]
 pub fn (mut app App) feishu_card_bridge_ws(mut ctx Context) veb.Result {
 	path := if ctx.req.url == '' { '/bridge/ws' } else { ctx.req.url }
-	request_path, _ := normalize_request_target(path)
-	normalized_path := normalize_path(request_path)
+	request_path, _ := transport.normalize_request_target(path)
+	normalized_path := transport.normalize_path(request_path)
 	log.info('[bridge] route feishu_card_bridge_ws path=${path} request_path=${request_path} normalized=${normalized_path} upgrade=${if is_websocket_upgrade(ctx.req) {
 		'true'
 	} else {
@@ -749,8 +750,8 @@ pub fn (mut app App) feishu_card_bridge_ws(mut ctx Context) veb.Result {
 		ctx.set_custom_header('upgrade', 'websocket') or {} // safe to ignore: write failure usually means peer disconnected
 		return ctx.text('Upgrade Required')
 	}
-	_, query_string := normalize_request_target(path)
-	query := parse_query_map(query_string)
+	_, query_string := transport.normalize_request_target(path)
+	query := transport.parse_query_map(query_string)
 	client_id := (query['client_id'] or { '' }).trim_space()
 	token := (query['token'] or { '' }).trim_space()
 	expected := app.feishu.card_bridge_token.trim_space()

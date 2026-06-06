@@ -108,7 +108,7 @@ fn UpstreamRuntimeContext.execute_plan(rt UpstreamRuntimeContext, mut ctx Contex
 			rt.note_error()
 			rt.emit('http.stream.error', {
 				'method':      method.to_upper()
-				'path':        normalize_path(path)
+				'path':        transport.normalize_path(path)
 				'request_id':  req_id
 				'trace_id':    trace_id
 				'error_class': 'upstream_error'
@@ -141,7 +141,7 @@ fn UpstreamRuntimeContext.execute_plan(rt UpstreamRuntimeContext, mut ctx Contex
 			rt.note_error()
 			rt.emit('http.stream.error', {
 				'method':      method.to_upper()
-				'path':        normalize_path(path)
+				'path':        transport.normalize_path(path)
 				'request_id':  req_id
 				'trace_id':    trace_id
 				'error_class': 'upstream_error'
@@ -179,7 +179,7 @@ fn UpstreamRuntimeContext.execute_plan(rt UpstreamRuntimeContext, mut ctx Contex
 	client_conn.close() or {}
 	rt.emit('http.request', {
 		'method':          method.to_upper()
-		'path':            normalize_path(path)
+		'path':            transport.normalize_path(path)
 		'status':          if state.headers_written && state.status_code > 0 {
 			'${state.status_code}'
 		} else {
@@ -226,7 +226,7 @@ fn UpstreamRuntimeRegistry.register(mut app App, plan transport.WorkerUpstreamPl
 	if req_id == '' {
 		return
 	}
-	normalized_path, _ := normalize_request_target(path)
+	normalized_path, _ := transport.normalize_request_target(path)
 	app.ws_hub.upstream_mu.@lock()
 	app.ws_hub.upstream_sessions[req_id] = UpstreamRuntimeSession{
 		id:              req_id

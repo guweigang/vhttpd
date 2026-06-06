@@ -16,7 +16,6 @@ import json
 import log
 import net
 import net.http
-import net.urllib
 import net.unix
 import net.websocket
 import os
@@ -80,31 +79,9 @@ fn runtime_trace(label string, fields map[string]string) {
 
 type UpstreamRuntimeSession = ws.UpstreamRuntimeSession
 
-fn header_map_from_request(req http.Request) map[string]string {
-	mut out := map[string]string{}
-	for key in req.header.keys() {
-		values := req.header.custom_values(key)
-		if values.len == 0 {
-			continue
-		}
-		out[key.to_lower()] = values.join(', ')
-	}
-	return out
-}
-
-fn normalize_path(path string) string {
-	if path.len == 0 {
-		return '/'
-	}
-	if path.starts_with('/') {
-		return path
-	}
-	return '/${path}'
-}
-
 fn dispatch_core(method string, path string) (int, string, string) {
 	m := method.to_upper()
-	p := normalize_path(path)
+	p := transport.normalize_path(path)
 
 	if p == '/panic' {
 		return 500, 'Internal Server Error', 'text/plain; charset=utf-8'
@@ -129,12 +106,12 @@ fn dispatch_core(method string, path string) (int, string, string) {
 }
 
 fn resolve_trace_id(ctx Context, path string) string {
-	_, query_str := normalize_request_target(path)
-	query := parse_query_map(query_str)
+	_, query_str := transport.normalize_request_target(path)
+	query := transport.parse_query_map(query_str)
 	if query['trace_id'] != '' {
 		return query['trace_id']
 	}
-	headers := header_map_from_request(ctx.req)
+	headers := transport.header_map_from_request(ctx.req)
 	for key in ['x-trace-id', 'x-request-id'] {
 		if headers[key] != '' {
 			return headers[key]
@@ -147,15 +124,15 @@ fn resolve_trace_id(ctx Context, path string) string {
 }
 
 fn resolve_request_id(ctx Context, path string) string {
-	_, query_str := normalize_request_target(path)
-	query := parse_query_map(query_str)
+	_, query_str := transport.normalize_request_target(path)
+	query := transport.parse_query_map(query_str)
 	if query['request_id'] != '' {
 		return query['request_id']
 	}
 	if ctx.request_id != '' {
 		return ctx.request_id
 	}
-	headers := header_map_from_request(ctx.req)
+	headers := transport.header_map_from_request(ctx.req)
 	header_rid := headers['x-request-id']
 	if header_rid != '' {
 		return header_rid
@@ -171,7 +148,7 @@ fn is_websocket_upgrade(req http.Request) bool {
 	if req.method != .get {
 		return false
 	}
-	headers := header_map_from_request(req)
+	headers := transport.header_map_from_request(req)
 	upgrade := headers['upgrade']
 	connection := headers['connection']
 	key := headers['sec-websocket-key']
@@ -180,8 +157,8 @@ fn is_websocket_upgrade(req http.Request) bool {
 }
 
 pub fn (mut app App) worker_websocket_open(mut conn unix.StreamConn, req http.Request, remote_addr string, path string, req_id string, trace_id string) !(bool, int, string) {
-	normalized_path, query_string := normalize_request_target(path)
-	query := parse_query_map(query_string)
+	normalized_path, query_string := transport.normalize_request_target(path)
+	query := transport.parse_query_map(query_string)
 	rt := app.build_websocket_runtime_context()
 	presence := rt.presence(req_id)
 	frame := transport.WorkerWebSocketFrame{
@@ -190,7 +167,7 @@ pub fn (mut app App) worker_websocket_open(mut conn unix.StreamConn, req http.Re
 		id:              req_id
 		path:            normalized_path
 		query:           query
-		headers:         header_map_from_request(req)
+		headers:         transport.header_map_from_request(req)
 		remote_addr:     remote_addr
 		request_id:      req_id
 		trace_id:        trace_id
@@ -464,9 +441,9 @@ fn proxy_worker_websocket_dispatch(mut app App, mut ctx Context, method string, 
 	req_id := resolve_request_id(ctx, path)
 	trace_id := resolve_trace_id(ctx, path)
 	key := websocket_upgrade_key(ctx.req)
-	normalized_path, query_string := normalize_request_target(path)
-	query := parse_query_map(query_string)
-	headers := header_map_from_request(ctx.req)
+	normalized_path, query_string := transport.normalize_request_target(path)
+	query := transport.parse_query_map(query_string)
+	headers := transport.header_map_from_request(ctx.req)
 	websocket_runtime := app.build_websocket_runtime_context()
 	presence := websocket_runtime.presence(req_id)
 	open_frame := websocket_runtime.build_frame('open', method, normalized_path, query, headers,
@@ -616,7 +593,7 @@ fn proxy_worker_response(mut app App, mut ctx Context, method string, path strin
 		log.error('[http] ⇠ dispatch error method=${method.to_upper()} path=${path} trace_id=${trace_id} request_id=${req_id} status=${status} duration_ms=${time.now().unix_milli() - start_ms} error=${err_msg}')
 		app.emit('http.request', {
 			'method':      method.to_upper()
-			'path':        normalize_path(path)
+			'path':        transport.normalize_path(path)
 			'status':      '${status}'
 			'request_id':  req_id
 			'trace_id':    trace_id
@@ -656,7 +633,7 @@ fn proxy_worker_response(mut app App, mut ctx Context, method string, path strin
 	log.info('[http] ⇠ dispatch response method=${method.to_upper()} path=${path} trace_id=${trace_id} request_id=${req_id} status=${resp.status} body_len=${resp.body.len} duration_ms=${time.now().unix_milli() - start_ms}')
 	app.emit('http.request', {
 		'method':      method.to_upper()
-		'path':        normalize_path(path)
+		'path':        transport.normalize_path(path)
 		'status':      '${resp.status}'
 		'request_id':  req_id
 		'trace_id':    trace_id
@@ -668,32 +645,6 @@ fn proxy_worker_response(mut app App, mut ctx Context, method string, path strin
 	ctype := resp.headers['content-type'] or { 'text/plain; charset=utf-8' }
 	ctx.set_content_type(ctype)
 	return ctx.text(if body_on_head == '' && method.to_upper() == 'HEAD' { '' } else { resp.body })
-}
-
-fn normalize_request_target(raw_path string) (string, string) {
-	path := normalize_path(raw_path)
-	if !path.contains('?') {
-		return path, ''
-	}
-	base := normalize_path(path.all_before('?'))
-	query := path.all_after('?')
-	return base, query
-}
-
-fn parse_query_map(query_str string) map[string]string {
-	mut out := map[string]string{}
-	if query_str == '' {
-		return out
-	}
-	values := urllib.parse_query(query_str) or { return out }
-	for key, entries in values.to_map() {
-		if entries.len == 0 {
-			out[key] = ''
-			continue
-		}
-		out[key] = entries[0]
-	}
-	return out
 }
 
 fn apply_worker_headers(mut ctx Context, headers map[string]string) {
@@ -776,7 +727,7 @@ pub fn (mut app App) dispatch(mut ctx Context) veb.Result {
 	status, body, ctype = dispatch_core(method, path)
 	app.emit('http.request', {
 		'method':      method.to_upper()
-		'path':        normalize_path(path)
+		'path':        transport.normalize_path(path)
 		'status':      '${status}'
 		'request_id':  req_id
 		'duration_ms': '${time.now().unix_milli() - start_ms}'
@@ -801,7 +752,7 @@ pub fn (mut app App) dispatch_head(mut ctx Context) veb.Result {
 	status, body, ctype = dispatch_core(method, path)
 	app.emit('http.request', {
 		'method':      method.to_upper()
-		'path':        normalize_path(path)
+		'path':        transport.normalize_path(path)
 		'status':      '${status}'
 		'request_id':  req_id
 		'duration_ms': '${time.now().unix_milli() - start_ms}'
@@ -874,8 +825,8 @@ pub fn (mut app App) proxy_get(mut ctx Context, path string) veb.Result {
 	if result := app.openai_try_handle(mut ctx, 'GET', target, req_id, trace_id, start_ms) {
 		return result
 	}
-	request_path, _ := normalize_request_target(target)
-	normalized_target := normalize_path(request_path)
+	request_path, _ := transport.normalize_request_target(target)
+	normalized_target := transport.normalize_path(request_path)
 	if normalized_target == '/mcp' {
 		return app.mcp_get(mut ctx)
 	}
@@ -896,8 +847,8 @@ pub fn (mut app App) proxy_post(mut ctx Context, path string) veb.Result {
 	if result := app.openai_try_handle(mut ctx, 'POST', target, req_id, trace_id, start_ms) {
 		return result
 	}
-	request_path, _ := normalize_request_target(target)
-	normalized_target := normalize_path(request_path)
+	request_path, _ := transport.normalize_request_target(target)
+	normalized_target := transport.normalize_path(request_path)
 	if normalized_target == '/mcp' {
 		return app.mcp_post(mut ctx)
 	}
@@ -949,7 +900,7 @@ pub fn (mut app App) proxy_delete(mut ctx Context, path string) veb.Result {
 	if result := app.openai_try_handle(mut ctx, 'DELETE', target, req_id, trace_id, start_ms) {
 		return result
 	}
-	if normalize_path(target) == '/mcp' {
+	if transport.normalize_path(target) == '/mcp' {
 		return app.mcp_delete(mut ctx)
 	}
 	if !app.has_http_logic_executor() {

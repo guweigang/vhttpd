@@ -6,6 +6,7 @@ import json
 import net
 import net.http
 import time
+import transport
 import veb
 import x.json2
 
@@ -44,9 +45,9 @@ type OpenAIResponseRecord = openai.OpenAIResponseRecord
 // openai_path_context builds a PathContext that wraps module-main path helpers.
 fn openai_path_context() openai.PathContext {
 	return openai.PathContext{
-		normalize_path:           normalize_path
-		normalize_request_target: normalize_request_target
-		parse_query_map:          parse_query_map
+		normalize_path:           transport.normalize_path
+		normalize_request_target: transport.normalize_request_target
+		parse_query_map:          transport.parse_query_map
 	}
 }
 
@@ -447,7 +448,7 @@ fn openai_error_typed(mut app App, mut ctx Context, status int, path string, met
 	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
 	app.emit('http.request', {
 		'method':      method.to_upper()
-		'path':        normalize_path(path)
+		'path':        transport.normalize_path(path)
 		'status':      '${status}'
 		'request_id':  req_id
 		'trace_id':    trace_id
@@ -861,7 +862,7 @@ fn openai_proxy_mapped_stream(mut app App, mut ctx Context, plan OpenAIResolvedP
 	}
 	app.emit('http.request', {
 		'method':      method.to_upper()
-		'path':        normalize_path(path)
+		'path':        transport.normalize_path(path)
 		'status':      '${state.status_code}'
 		'request_id':  req_id
 		'trace_id':    trace_id
@@ -1017,7 +1018,7 @@ fn openai_proxy_stream(mut app App, mut ctx Context, plan OpenAIResolvedPlan, me
 	}
 	app.emit('http.request', {
 		'method':      method.to_upper()
-		'path':        normalize_path(path)
+		'path':        transport.normalize_path(path)
 		'status':      '${state.status_code}'
 		'request_id':  req_id
 		'trace_id':    trace_id
@@ -1090,7 +1091,7 @@ fn openai_proxy_once_attempt(mut app App, mut ctx Context, plan OpenAIResolvedPl
 	ctx.set_custom_header('x-vhttpd-openai-backend', plan.backend_name) or {}
 	app.emit('http.request', {
 		'method':      method.to_upper()
-		'path':        normalize_path(path)
+		'path':        transport.normalize_path(path)
 		'status':      '${resp.status_code}'
 		'request_id':  req_id
 		'trace_id':    trace_id
@@ -1122,7 +1123,7 @@ fn openai_proxy_executor_once(mut app App, mut ctx Context, plan OpenAIResolvedP
 	ctx.set_custom_header('x-vhttpd-openai-backend', plan.backend_name) or {}
 	app.emit('http.request', {
 		'method':      method.to_upper()
-		'path':        normalize_path(path)
+		'path':        transport.normalize_path(path)
 		'status':      '200'
 		'request_id':  req_id
 		'trace_id':    trace_id
@@ -1148,7 +1149,7 @@ fn openai_proxy_responses_executor_once(mut app App, mut ctx Context, plan OpenA
 	ctx.set_custom_header('x-vhttpd-openai-backend', plan.backend_name) or {}
 	app.emit('http.request', {
 		'method':      method.to_upper()
-		'path':        normalize_path(path)
+		'path':        transport.normalize_path(path)
 		'status':      '200'
 		'request_id':  req_id
 		'trace_id':    trace_id
@@ -1190,7 +1191,7 @@ fn openai_proxy_responses_executor_stream(mut app App, mut ctx Context, plan Ope
 		client_conn.close() or {}
 		app.emit('http.request', {
 			'method':      method.to_upper()
-			'path':        normalize_path(path)
+			'path':        transport.normalize_path(path)
 			'status':      '502'
 			'request_id':  req_id
 			'trace_id':    trace_id
@@ -1240,7 +1241,7 @@ fn openai_proxy_responses_executor_stream(mut app App, mut ctx Context, plan Ope
 	WorkerHttpStreamWriter.write_final_chunk(mut client_conn) or {}
 	app.emit('http.request', {
 		'method':      method.to_upper()
-		'path':        normalize_path(path)
+		'path':        transport.normalize_path(path)
 		'status':      '200'
 		'request_id':  req_id
 		'trace_id':    trace_id
@@ -1314,7 +1315,7 @@ fn openai_proxy_executor_stream(mut app App, mut ctx Context, plan OpenAIResolve
 		client_conn.close() or {}
 		app.emit('http.request', {
 			'method':      method.to_upper()
-			'path':        normalize_path(path)
+			'path':        transport.normalize_path(path)
 			'status':      '502'
 			'request_id':  req_id
 			'trace_id':    trace_id
@@ -1359,7 +1360,7 @@ fn openai_proxy_executor_stream(mut app App, mut ctx Context, plan OpenAIResolve
 	}
 	app.emit('http.request', {
 		'method':      method.to_upper()
-		'path':        normalize_path(path)
+		'path':        transport.normalize_path(path)
 		'status':      '200'
 		'request_id':  req_id
 		'trace_id':    trace_id
@@ -1405,7 +1406,7 @@ fn (mut app App) openai_handle_models(mut ctx Context, method string, path strin
 	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
 	app.emit('http.request', {
 		'method':      method.to_upper()
-		'path':        normalize_path(path)
+		'path':        transport.normalize_path(path)
 		'status':      '200'
 		'request_id':  req_id
 		'trace_id':    trace_id
@@ -1475,7 +1476,7 @@ fn (mut app App) openai_handle_responses_passthrough(mut ctx Context, method str
 			'method_not_allowed', 'method ${method} is not allowed for ${path}')
 	}
 	response_id := openai.OpenAIResponseRecord.id_from_relative(relative_target)
-	relative_path := normalize_path(relative_target.all_before('?'))
+	relative_path := transport.normalize_path(relative_target.all_before('?'))
 	if method.to_upper() in ['GET', 'HEAD'] && response_id != ''
 		&& !relative_path.contains('/input_items') {
 		if record := app.openai.responses.get(response_id) {
@@ -1486,7 +1487,7 @@ fn (mut app App) openai_handle_responses_passthrough(mut ctx Context, method str
 			ctx.set_custom_header('x-vhttpd-openai-backend', record.backend_name) or {}
 			app.emit('http.request', {
 				'method':      method.to_upper()
-				'path':        normalize_path(path)
+				'path':        transport.normalize_path(path)
 				'status':      '200'
 				'request_id':  req_id
 				'trace_id':    trace_id

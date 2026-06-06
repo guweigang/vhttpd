@@ -4,6 +4,7 @@ import mcp_protocol
 import net
 import net.http
 import time
+import transport
 import veb
 
 // mcp type aliases
@@ -115,7 +116,7 @@ fn proxy_worker_mcp(mut app App, mut ctx Context) veb.Result {
 	path := if ctx.req.url == '' { '/mcp' } else { ctx.req.url }
 	req_id := resolve_request_id(ctx, path)
 	trace_id := resolve_trace_id(ctx, path)
-	headers := header_map_from_request(ctx.req)
+	headers := transport.header_map_from_request(ctx.req)
 	method := ctx.req.method.str().to_upper()
 	if method != 'POST' {
 		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
@@ -181,7 +182,7 @@ fn proxy_worker_mcp(mut app App, mut ctx Context) veb.Result {
 		})
 		return ctx.text('{"error":"Empty JSON-RPC body"}')
 	}
-	request := app.kernel_mcp_dispatch_request(method, normalize_path(path), headers,
+	request := app.kernel_mcp_dispatch_request(method, transport.normalize_path(path), headers,
 		protocol_version, body, ctx.ip(), req_id, trace_id, headers['mcp-session-id'] or { '' }, app.mcp.client_capabilities_for_request(headers['mcp-session-id'] or {
 		''
 	}, body))
@@ -339,7 +340,7 @@ pub fn (mut app App) mcp_get(mut ctx Context) veb.Result {
 	path := if ctx.req.url == '' { '/mcp' } else { ctx.req.url }
 	req_id := resolve_request_id(ctx, path)
 	trace_id := resolve_trace_id(ctx, path)
-	headers := header_map_from_request(ctx.req)
+	headers := transport.header_map_from_request(ctx.req)
 	if !app.mcp.origin_allowed(headers) {
 		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
 		ctx.res.set_status(http.status_from_int(403))
@@ -451,7 +452,7 @@ pub fn (mut app App) mcp_delete(mut ctx Context) veb.Result {
 	path := if ctx.req.url == '' { '/mcp' } else { ctx.req.url }
 	req_id := resolve_request_id(ctx, path)
 	trace_id := resolve_trace_id(ctx, path)
-	headers := header_map_from_request(ctx.req)
+	headers := transport.header_map_from_request(ctx.req)
 	if !app.mcp.origin_allowed(headers) {
 		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
 		ctx.res.set_status(http.status_from_int(403))
