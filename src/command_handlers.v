@@ -192,7 +192,7 @@ fn (h FeishuCommandHandler) execute_provider_message_send(normalized cmdpkg.Norm
 				message_id: result.message_id
 			})
 		}
-		app.feishu_runtime_register_stream_buffer(result.message_id,
+		app.feishu.register_stream_buffer(result.message_id,
 			normalized.correlation.stream_id, req.instance, req.target, req.target_type, req.text)
 	}
 	app.dispatch_feishu_message_sent(normalized.correlation.stream_id, result.message_id)
@@ -250,7 +250,7 @@ fn (h FeishuCommandHandler) execute_stream_command(normalized cmdpkg.NormalizedC
 		return true, ''
 	}
 	if normalized.is_stream_fail() && req.target != '' {
-		app.feishu_runtime_clear_buffer(req.target)
+		app.feishu.clear_buffer(req.target)
 		result := app.websocket_upstream_update(req) or {
 			snapshot.status = 'error'
 			snapshot.error = err.msg()
@@ -267,7 +267,7 @@ fn (h FeishuCommandHandler) execute_stream_command(normalized cmdpkg.NormalizedC
 fn (h FeishuCommandHandler) execute_provider_message_update(normalized cmdpkg.NormalizedCommand, req WebSocketUpstreamSendRequest, mut snapshot executor.WebSocketUpstreamCommandActivity) (bool, string) {
 	mut app := h.app
 	if req.target != '' {
-		app.feishu_runtime_clear_buffer(req.target)
+		app.feishu.clear_buffer(req.target)
 	}
 	result := app.websocket_upstream_update(req) or {
 		snapshot.status = 'error'
@@ -295,7 +295,7 @@ pub fn (h FeishuCommandHandler) execute(command transport.WorkerWebSocketUpstrea
 				platform:   'feishu'
 				message_id: normalized.target.id
 			})
-			app.feishu_runtime_register_stream_buffer(normalized.target.id,
+			app.feishu.register_stream_buffer(normalized.target.id,
 				normalized.correlation.stream_id, normalized.instance, '', '', '')
 			snapshot.status = 'bound'
 			snapshot.message_id = normalized.target.id
@@ -307,8 +307,8 @@ pub fn (h FeishuCommandHandler) execute(command transport.WorkerWebSocketUpstrea
 		mut cleared := false
 		mut app := h.app
 		if normalized.target.type_ == 'message_id' && normalized.target.id != '' {
-			stream_id := app.feishu_runtime_stream_id_for_buffer(normalized.target.id)
-			cleared_count := app.feishu_runtime_clear_buffer_chain(normalized.target.id)
+			stream_id := app.feishu.stream_id_for_buffer(normalized.target.id)
+			cleared_count := app.feishu.clear_buffer_chain(normalized.target.id)
 			if normalized.correlation.stream_id != '' {
 				cleared = app.codex_clear_stream_targets_any(normalized.correlation.stream_id)
 			} else if stream_id != '' {
@@ -317,7 +317,7 @@ pub fn (h FeishuCommandHandler) execute(command transport.WorkerWebSocketUpstrea
 			cleared = cleared || cleared_count > 0
 		} else if normalized.correlation.stream_id != '' {
 			cleared_count :=
-				app.feishu_runtime_clear_stream_buffers(normalized.correlation.stream_id)
+				app.feishu.clear_stream_buffers(normalized.correlation.stream_id)
 			cleared = app.codex_clear_stream_targets_any(normalized.correlation.stream_id)
 			cleared = cleared || cleared_count > 0
 		}

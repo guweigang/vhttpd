@@ -138,7 +138,7 @@ pub fn (mut app App) provider_runtime_metrics(name string) ProviderRuntimeMetric
 	return match name {
 		'feishu' {
 			connect_attempts, connect_successes, received_frames, acked_events, messages_sent, send_errors :=
-				app.feishu_runtime_totals()
+				app.feishu.totals()
 			ProviderRuntimeMetrics{
 				connect_attempts:  connect_attempts
 				connect_successes: connect_successes

@@ -1,7 +1,6 @@
 module main
 
 import admin
-import config
 import feishu
 import json
 import encoding.base64
@@ -344,31 +343,8 @@ fn (app &App) feishu_runtime_bridge_proxy_only() bool {
 	return app.feishu_card_bridge_enabled() && app.feishu.app_names().len == 0
 }
 
-fn (app &App) feishu_runtime_resolve_app_name(raw string) !string {
-	name := raw.trim_space()
-	if name != '' {
-		if name in app.feishu.apps {
-			return name
-		}
-		return error('unknown feishu app "${name}"')
-	}
-	default_name := app.feishu.default_app_name()
-	if default_name == '' {
-		return error('no configured feishu apps')
-	}
-	return default_name
-}
-
-fn (app &App) feishu_runtime_app_config(name string) !config.FeishuAppConfig {
-	resolved := app.feishu_runtime_resolve_app_name(name)!
-	if cfg := app.feishu.apps[resolved] {
-		return cfg
-	}
-	return error('missing feishu app config "${resolved}"')
-}
-
 fn (app &App) feishu_runtime_callback_token_valid(app_name string, payload string) bool {
-	cfg := app.feishu_runtime_app_config(app_name) or { return false }
+	cfg := app.feishu.app_config(app_name) or { return false }
 	if cfg.verification_token.trim_space() == '' {
 		return true
 	}
@@ -414,108 +390,6 @@ fn (mut app App) feishu_runtime_app_snapshot(name string) ?FeishuRuntimeAppSnaps
 	return none
 }
 
-fn (mut app App) feishu_runtime_chats_snapshot(limit int, offset int, instance_filter string, chat_type_filter string, chat_id_filter string) FeishuRuntimeChatsSnapshot {
-	app.feishu.mu.@lock()
-	defer {
-		app.feishu.mu.unlock()
-	}
-	mut latest_by_chat := map[string]FeishuRuntimeChatSnapshot{}
-	for instance, runtime in app.feishu.runtime {
-		if instance_filter != '' && instance != instance_filter {
-			continue
-		}
-		for event in runtime.recent_events {
-			if event.chat_id.trim_space() == '' {
-				continue
-			}
-			if chat_type_filter != '' && event.chat_type != chat_type_filter {
-				continue
-			}
-			if chat_id_filter != '' && event.chat_id != chat_id_filter {
-				continue
-			}
-			key := '${instance}:${event.chat_id}'
-			existing := latest_by_chat[key] or { FeishuRuntimeChatSnapshot{} }
-			if existing.chat_id == '' || event.received_at >= existing.last_received_at {
-				latest_by_chat[key] = FeishuRuntimeChatSnapshot{
-					instance:          instance
-					chat_id:           event.chat_id
-					chat_type:         event.chat_type
-					target_type:       'chat_id'
-					target:            event.chat_id
-					last_event_type:   event.event_type
-					last_message_id:   event.message_id
-					last_message_type: event.message_type
-					last_sender_id:    event.sender_id
-					last_create_time:  event.create_time
-					last_received_at:  event.received_at
-					seen_count:        existing.seen_count + 1
-				}
-			} else {
-				latest_by_chat[key] = FeishuRuntimeChatSnapshot{
-					instance:          existing.instance
-					chat_id:           existing.chat_id
-					chat_type:         existing.chat_type
-					target_type:       existing.target_type
-					target:            existing.target
-					last_event_type:   existing.last_event_type
-					last_message_id:   existing.last_message_id
-					last_message_type: existing.last_message_type
-					last_sender_id:    existing.last_sender_id
-					last_create_time:  existing.last_create_time
-					last_received_at:  existing.last_received_at
-					seen_count:        existing.seen_count + 1
-				}
-			}
-		}
-	}
-	mut chats := latest_by_chat.values()
-	chats.sort(a.last_received_at > b.last_received_at)
-	if offset >= chats.len {
-		return FeishuRuntimeChatsSnapshot{
-			returned_count: 0
-			limit:          limit
-			offset:         offset
-			instance:       instance_filter
-			chat_type:      chat_type_filter
-			chat_id:        chat_id_filter
-			chats:          []FeishuRuntimeChatSnapshot{}
-		}
-	}
-	end := if offset + limit < chats.len { offset + limit } else { chats.len }
-	return FeishuRuntimeChatsSnapshot{
-		returned_count: end - offset
-		limit:          limit
-		offset:         offset
-		instance:       instance_filter
-		chat_type:      chat_type_filter
-		chat_id:        chat_id_filter
-		chats:          chats[offset..end].clone()
-	}
-}
-
-fn (mut app App) feishu_runtime_totals() (i64, i64, i64, i64, i64, i64) {
-	app.feishu.mu.@lock()
-	defer {
-		app.feishu.mu.unlock()
-	}
-	mut connect_attempts := i64(0)
-	mut connect_successes := i64(0)
-	mut received_frames := i64(0)
-	mut acked_events := i64(0)
-	mut messages_sent := i64(0)
-	mut send_errors := i64(0)
-	for _, runtime in app.feishu.runtime {
-		connect_attempts += runtime.connect_attempts
-		connect_successes += runtime.connect_successes
-		received_frames += runtime.received_frames
-		acked_events += runtime.acked_events
-		messages_sent += runtime.messages_sent
-		send_errors += runtime.send_errors
-	}
-	return connect_attempts, connect_successes, received_frames, acked_events, messages_sent, send_errors
-}
-
 fn feishu_runtime_ping_loop(mut app App, instance string, ws_url string, mut ws websocket.Client) {
 	service_id := feishu.RuntimeProtoFrame.service_id_from_ws_url(ws_url)
 	if service_id <= 0 {
@@ -540,7 +414,7 @@ fn feishu_runtime_ping_loop(mut app App, instance string, ws_url string, mut ws 
 }
 
 fn (mut app App) feishu_provider_pull_ws_endpoint(app_name string) !string {
-	app_cfg := app.feishu_runtime_app_config(app_name)!
+	app_cfg := app.feishu.app_config(app_name)!
 	body := feishu.RuntimeWsEndpointData.request_body(app_cfg.app_id, app_cfg.app_secret)
 	mut last_status := 0
 	mut last_error := ''
@@ -581,7 +455,7 @@ fn (mut app App) feishu_provider_pull_ws_endpoint(app_name string) !string {
 }
 
 fn (mut app App) feishu_runtime_tenant_access_token(app_name string) !string {
-	_ := app.feishu_runtime_app_config(app_name)!
+	_ := app.feishu.app_config(app_name)!
 	now := time.now().unix()
 	app.feishu.mu.@lock()
 	if runtime := app.feishu.runtime[app_name] {
@@ -593,7 +467,7 @@ fn (mut app App) feishu_runtime_tenant_access_token(app_name string) !string {
 		}
 	}
 	app.feishu.mu.unlock()
-	app_cfg := app.feishu_runtime_app_config(app_name)!
+	app_cfg := app.feishu.app_config(app_name)!
 	body := json.encode({
 		'app_id':     app_cfg.app_id
 		'app_secret': app_cfg.app_secret
@@ -618,7 +492,7 @@ fn (mut app App) feishu_runtime_tenant_access_token(app_name string) !string {
 }
 
 fn (mut app App) feishu_runtime_send_message(req FeishuRuntimeSendMessageRequest) !FeishuRuntimeSendMessageResult {
-	app_name := app.feishu_runtime_resolve_app_name(req.app)!
+	app_name := app.feishu.resolve_app_name(req.app)!
 	if !app.feishu_runtime_ready() {
 		return error('feishu gateway is not configured')
 	}
@@ -697,7 +571,7 @@ fn (mut app App) feishu_runtime_upload_image(req FeishuRuntimeUploadImageRequest
 }
 
 fn (mut app App) feishu_runtime_upload_image_bytes(req FeishuRuntimeUploadImageRequest, data []u8) !FeishuRuntimeUploadImageResult {
-	app_name := app.feishu_runtime_resolve_app_name(req.app)!
+	app_name := app.feishu.resolve_app_name(req.app)!
 	if data.len == 0 {
 		return error('missing_image_data')
 	}
@@ -753,7 +627,7 @@ fn (mut app App) feishu_runtime_upload_image_bytes(req FeishuRuntimeUploadImageR
 }
 
 fn (mut app App) feishu_runtime_update_message(req FeishuRuntimeUpdateMessageRequest) !FeishuRuntimeSendMessageResult {
-	app_name := app.feishu_runtime_resolve_app_name(req.app)!
+	app_name := app.feishu.resolve_app_name(req.app)!
 	if !app.feishu_runtime_ready() {
 		return error('feishu gateway is not configured')
 	}
@@ -931,46 +805,6 @@ fn (mut app App) feishu_runtime_buffer_patch(req WebSocketUpstreamSendRequest) {
 		}
 		return
 	}
-}
-
-fn (mut app App) feishu_runtime_register_stream_buffer(message_id string, stream_id string, app_name string, receive_id string, receive_id_type string, initial_content string) {
-	if message_id == '' {
-		return
-	}
-	now := time.now().unix_milli()
-	app.feishu.mu.@lock()
-	defer {
-		app.feishu.mu.unlock()
-	}
-	mut buf := app.feishu.buffers[message_id] or {
-		FeishuStreamBuffer{
-			message_id: message_id
-			app:        app_name
-			last_flush: now
-		}
-	}
-	if app_name != '' {
-		buf.app = app_name
-	}
-	if stream_id != '' {
-		buf.stream_id = stream_id
-	}
-	if receive_id != '' {
-		buf.receive_id = receive_id
-	}
-	if receive_id_type != '' {
-		buf.receive_id_type = receive_id_type
-	}
-	if buf.segment_index <= 0 {
-		buf.segment_index = 1
-	}
-	if initial_content != '' {
-		buf.content = initial_content
-		buf.rendered_content = initial_content
-		buf.last_delta = now
-		buf.last_flush = now
-	}
-	app.feishu.buffers[message_id] = buf
 }
 
 fn (mut app App) feishu_runtime_send_followup_segment(buf FeishuStreamBuffer, markdown string, finish bool,
@@ -1162,73 +996,11 @@ fn (mut app App) feishu_runtime_flush_buffer(message_id string, template_content
 	app.feishu.mu.unlock()
 }
 
-fn (mut app App) feishu_runtime_clear_buffer(message_id string) {
-	app.feishu.mu.@lock()
-	app.feishu.buffers.delete(message_id)
-	app.feishu.mu.unlock()
-}
-
-fn (mut app App) feishu_runtime_stream_id_for_buffer(message_id string) string {
-	if message_id == '' {
-		return ''
-	}
-	app.feishu.mu.@lock()
-	defer {
-		app.feishu.mu.unlock()
-	}
-	if buf := app.feishu.buffers[message_id] {
-		return buf.stream_id
-	}
-	return ''
-}
-
-fn (mut app App) feishu_runtime_clear_buffer_chain(message_id string) int {
-	if message_id == '' {
-		return 0
-	}
-	mut cleared := 0
-	mut current := message_id
-	for current != '' {
-		mut next := ''
-		app.feishu.mu.@lock()
-		if buf := app.feishu.buffers[current] {
-			next = buf.next_message_id
-			app.feishu.buffers.delete(current)
-			cleared++
-		}
-		app.feishu.mu.unlock()
-		current = next
-	}
-	return cleared
-}
-
-fn (mut app App) feishu_runtime_clear_stream_buffers(stream_id string) int {
-	if stream_id == '' {
-		return 0
-	}
-	app.feishu.mu.@lock()
-	keys := app.feishu.buffers.keys()
-	app.feishu.mu.unlock()
-	mut cleared := 0
-	for key in keys {
-		app.feishu.mu.@lock()
-		buf := app.feishu.buffers[key] or {
-			app.feishu.mu.unlock()
-			continue
-		}
-		app.feishu.mu.unlock()
-		if buf.stream_id == stream_id {
-			cleared += app.feishu_runtime_clear_buffer_chain(key)
-		}
-	}
-	return cleared
-}
-
 fn (mut app App) feishu_provider_handle_binary_message(instance string, mut ws websocket.Client, msg &websocket.Message) ! {
 	if msg.opcode != .binary_frame {
 		return
 	}
-	app_name := app.feishu_runtime_resolve_app_name(instance)!
+	app_name := app.feishu.resolve_app_name(instance)!
 	frame := feishu.RuntimeProtoFrame.decode(msg.payload) or {
 		log.error('[feishu] ❌ proto decode failed: ${err}')
 		return err
@@ -1453,7 +1225,7 @@ pub fn (mut app App) admin_runtime_feishu_chats(mut ctx Context) veb.Result {
 	instance_filter := (ctx.query['instance'] or { '' }).trim_space()
 	chat_type_filter := (ctx.query['chat_type'] or { '' }).trim_space()
 	chat_id_filter := (ctx.query['chat_id'] or { '' }).trim_space()
-	body := json.encode(app.feishu_runtime_chats_snapshot(limit, offset, instance_filter,
+	body := json.encode(app.feishu.chats_snapshot(limit, offset, instance_filter,
 		chat_type_filter, chat_id_filter))
 	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
 	ctx.set_content_type('application/json; charset=utf-8')
@@ -1487,13 +1259,13 @@ fn (mut app App) feishu_callback_by_app(mut ctx Context, raw_app string) veb.Res
 	trace_id := resolve_trace_id(ctx, path)
 	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
 	ctx.set_content_type('application/json; charset=utf-8')
-	app_name := app.feishu_runtime_resolve_app_name(raw_app) or {
+	app_name := app.feishu.resolve_app_name(raw_app) or {
 		ctx.res.set_status(http.status_from_int(404))
 		return ctx.text(json.encode(admin.AdminErrorResponse{
 			error: 'unknown_feishu_app'
 		}))
 	}
-	app_cfg := app.feishu_runtime_app_config(app_name) or {
+	app_cfg := app.feishu.app_config(app_name) or {
 		ctx.res.set_status(http.status_from_int(404))
 		return ctx.text(json.encode(admin.AdminErrorResponse{
 			error: 'unknown_feishu_app'

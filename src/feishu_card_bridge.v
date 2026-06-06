@@ -636,7 +636,7 @@ fn feishu_card_bridge_server_message_cb(mut _ws websocket.Client, msg &websocket
 			result.error = send_result.error
 			stream_id := (req.request.metadata['stream_id'] or { '' }).trim_space()
 			if result.ok && result.message_id.trim_space() != '' && stream_id != '' {
-				state.app.feishu_runtime_register_stream_buffer(result.message_id, stream_id, if req.request.instance.trim_space() != '' {
+				state.app.feishu.register_stream_buffer(result.message_id, stream_id, if req.request.instance.trim_space() != '' {
 					req.request.instance
 				} else {
 					result.instance
@@ -676,7 +676,7 @@ fn feishu_card_bridge_server_message_cb(mut _ws websocket.Client, msg &websocket
 			result.message_id = req.request.target
 		}
 		'fail' {
-			state.app.feishu_runtime_clear_buffer(req.request.target)
+			state.app.feishu.clear_buffer(req.request.target)
 			update_result := state.app.websocket_upstream_update(req.request) or {
 				result.error = err.msg()
 				mut ws_err := unsafe { _ws }

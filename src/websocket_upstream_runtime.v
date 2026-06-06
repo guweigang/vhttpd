@@ -367,7 +367,7 @@ fn (mut app App) websocket_upstream_provider_send(provider string, req WebSocket
 			return WebSocketUpstreamSendResult{
 				ok:         result.ok
 				provider:   provider
-				instance:   app.feishu_runtime_resolve_app_name(req.instance)!
+				instance:   app.feishu.resolve_app_name(req.instance)!
 				message_id: result.message_id
 				error:      result.error
 			}
@@ -403,7 +403,7 @@ fn (mut app App) websocket_upstream_provider_update(provider string, req WebSock
 			return WebSocketUpstreamUpdateResult{
 				ok:         result.ok
 				provider:   provider
-				instance:   app.feishu_runtime_resolve_app_name(req.instance)!
+				instance:   app.feishu.resolve_app_name(req.instance)!
 				message_id: result.message_id
 				error:      result.error
 			}

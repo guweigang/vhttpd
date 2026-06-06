@@ -40,7 +40,7 @@ fn (mut app App) internal_admin_dispatch(req InternalAdminRequest) InternalAdmin
 			instance := (req.query['instance'] or { '' }).trim_space()
 			chat_type := (req.query['chat_type'] or { '' }).trim_space()
 			chat_id := (req.query['chat_id'] or { '' }).trim_space()
-			return InternalAdminResponse.json(json.encode(app.feishu_runtime_chats_snapshot(limit,
+			return InternalAdminResponse.json(json.encode(app.feishu.chats_snapshot(limit,
 				offset, instance, chat_type, chat_id)))
 		}
 		'/runtime/upstreams/websocket' {

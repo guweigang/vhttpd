@@ -546,7 +546,7 @@ fn test_admin_feishu_runtime_chats_snapshot_dedupes_by_instance_and_chat() {
 			}
 		}
 	}
-	snapshot := app.feishu_runtime_chats_snapshot(10, 0, '', '', '')
+	snapshot := app.feishu.chats_snapshot(10, 0, '', '', '')
 	assert snapshot.returned_count == 3
 	assert snapshot.chats[0].instance == 'mac'
 	assert snapshot.chats[0].chat_id == 'oc_chat_a'
@@ -556,7 +556,7 @@ fn test_admin_feishu_runtime_chats_snapshot_dedupes_by_instance_and_chat() {
 	assert snapshot.chats[2].chat_id == 'oc_chat_a'
 	assert snapshot.chats[2].last_message_id == 'om_2'
 	assert snapshot.chats[2].seen_count == 2
-	filtered := app.feishu_runtime_chats_snapshot(10, 0, 'main', 'group', '')
+	filtered := app.feishu.chats_snapshot(10, 0, 'main', 'group', '')
 	assert filtered.returned_count == 1
 	assert filtered.chats[0].chat_id == 'oc_chat_b'
 }
@@ -583,7 +583,7 @@ fn test_admin_feishu_runtime_chats_snapshot_json_shape() {
 			}
 		}
 	}
-	encoded := json.encode(app.feishu_runtime_chats_snapshot(10, 0, '', '', ''))
+	encoded := json.encode(app.feishu.chats_snapshot(10, 0, '', '', ''))
 	assert encoded.contains('"chats"')
 	assert encoded.contains('"instance"')
 	assert encoded.contains('"chat_id"')
@@ -611,8 +611,8 @@ fn test_feishu_runtime_resolve_named_apps() {
 	}
 	assert app.feishu.default_app_name() == 'main'
 	assert app.feishu.app_names() == ['main', 'openclaw']
-	assert app.feishu_runtime_resolve_app_name('')! == 'main'
-	assert app.feishu_runtime_resolve_app_name('openclaw')! == 'openclaw'
+	assert app.feishu.resolve_app_name('')! == 'main'
+	assert app.feishu.resolve_app_name('openclaw')! == 'openclaw'
 	assert app.websocket_upstream_provider_enabled(websocket_upstream_provider_feishu, 'main')
 	assert app.websocket_upstream_provider_enabled(websocket_upstream_provider_feishu, 'openclaw')
 	assert !app.websocket_upstream_provider_enabled(websocket_upstream_provider_feishu, 'missing')

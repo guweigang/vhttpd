@@ -397,7 +397,7 @@ pub fn (mut app AdminApp) admin_runtime_feishu_chats(mut ctx Context) veb.Result
 	instance_filter := (ctx.query['instance'] or { '' }).trim_space()
 	chat_type_filter := (ctx.query['chat_type'] or { '' }).trim_space()
 	chat_id_filter := (ctx.query['chat_id'] or { '' }).trim_space()
-	body := json.encode(app.shared.feishu_runtime_chats_snapshot(limit, offset, instance_filter,
+	body := json.encode(app.shared.feishu.chats_snapshot(limit, offset, instance_filter,
 		chat_type_filter, chat_id_filter))
 	app.shared.emit('http.request', {
 		'method':     'GET'

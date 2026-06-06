@@ -61,7 +61,7 @@ fn (mut app App) build_admin_context() admin.RuntimeContext {
 			return app.mcp.stat_sampling_capability_errors_total
 		}
 		feishu_runtime_totals:                  fn [mut app] () (i64, i64, i64, i64, i64, i64) {
-			return app.feishu_runtime_totals()
+			return app.feishu.totals()
 		}
 		ws_hub_active_conns:                    fn [app] () int {
 			app.ws_hub.mu.@lock()
