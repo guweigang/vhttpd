@@ -7,6 +7,7 @@ import net.http
 import net.unix
 import time
 import veb
+import worker
 
 struct HttpStreamRuntime {}
 
@@ -85,7 +86,7 @@ fn HttpStreamRuntime.direct_sse(rt StreamRuntimeContext, mut ctx Context, mut co
 		}
 		if frame.event == 'chunk' {
 			if method.to_upper() != 'HEAD' {
-				WorkerHttpStreamWriter.write_sse_message(mut ctx.conn, frame) or { break }
+				worker.WorkerHttpStreamWriter.write_sse_message(mut ctx.conn, frame) or { break }
 			}
 			continue
 		}
@@ -147,7 +148,7 @@ fn HttpStreamRuntime.direct_passthrough(rt StreamRuntimeContext, mut ctx Context
 		}
 		if frame.event == 'chunk' {
 			if method.to_upper() != 'HEAD' {
-				WorkerHttpStreamWriter.write_chunk(mut ctx.conn, frame.data) or { break }
+				worker.WorkerHttpStreamWriter.write_chunk(mut ctx.conn, frame.data) or { break }
 			}
 			continue
 		}
@@ -185,7 +186,7 @@ fn HttpStreamRuntime.direct_passthrough(rt StreamRuntimeContext, mut ctx Context
 fn HttpStreamChunkWriter.write_dispatch_chunks(mut conn net.TcpConn, stream_type string, chunks []transport.StreamDispatchChunk) ! {
 	for chunk in chunks {
 		if stream_type == 'sse' {
-			WorkerHttpStreamWriter.write_sse_message(mut conn, transport.WorkerStreamFrame{
+			worker.WorkerHttpStreamWriter.write_sse_message(mut conn, transport.WorkerStreamFrame{
 				sse_id:    chunk.id
 				sse_event: chunk.event
 				sse_retry: chunk.retry
@@ -193,7 +194,7 @@ fn HttpStreamChunkWriter.write_dispatch_chunks(mut conn net.TcpConn, stream_type
 			})!
 			continue
 		}
-		WorkerHttpStreamWriter.write_chunk(mut conn, chunk.data)!
+		worker.WorkerHttpStreamWriter.write_chunk(mut conn, chunk.data)!
 	}
 }
 

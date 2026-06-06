@@ -9,6 +9,7 @@ import time
 import transport
 import veb
 import x.json2
+import worker
 
 const openai_response_registry_ttl = 24 * time.hour
 const openai_stream_done_fetch_error = 'openai_stream_done'
@@ -459,27 +460,27 @@ fn openai_error_typed(mut app App, mut ctx Context, status int, path string, met
 }
 
 fn openai_write_error_response_conn(mut conn net.TcpConn, status int, headers map[string]string, code string, message string, typ string) {
-	WorkerHttpStreamWriter.write_headers_conn(mut conn, status, 'application/json; charset=utf-8',
+	worker.WorkerHttpStreamWriter.write_headers_conn(mut conn, status, 'application/json; charset=utf-8',
 		headers, false) or {}
 	conn.write_string(openai.error_body_json(code, message, typ)) or {}
 }
 
 fn openai_write_sse_error(mut conn net.TcpConn, code string, message string, typ string) {
-	WorkerHttpStreamWriter.write_chunk(mut conn,
+	worker.WorkerHttpStreamWriter.write_chunk(mut conn,
 		'data: ${openai.error_body_json(code, message, typ)}\n\n') or {}
-	WorkerHttpStreamWriter.write_chunk(mut conn, 'data: [DONE]\n\n') or {}
+	worker.WorkerHttpStreamWriter.write_chunk(mut conn, 'data: [DONE]\n\n') or {}
 }
 
 fn openai_finish_passthrough_stream(mut state OpenAIStreamProxyState) ! {
 	if state.headers_written && !state.final_written {
-		WorkerHttpStreamWriter.write_final_chunk(mut state.conn)!
+		worker.WorkerHttpStreamWriter.write_final_chunk(mut state.conn)!
 		state.final_written = true
 	}
 }
 
 fn openai_finish_mapped_stream(mut state OpenAIMappedStreamProxyState) ! {
 	if state.headers_written && !state.final_written {
-		WorkerHttpStreamWriter.write_final_chunk(mut state.conn)!
+		worker.WorkerHttpStreamWriter.write_final_chunk(mut state.conn)!
 		state.final_written = true
 	}
 }
@@ -523,7 +524,7 @@ fn ensure_openai_stream_headers_written(mut state OpenAIStreamProxyState) ! {
 	}
 	mut headers := state.response_headers.clone()
 	headers['x-accel-buffering'] = 'no'
-	WorkerHttpStreamWriter.write_headers_conn_with_close(mut state.conn, state.status_code,
+	worker.WorkerHttpStreamWriter.write_headers_conn_with_close(mut state.conn, state.status_code,
 		state.content_type, headers, true, false)!
 	state.headers_written = true
 }
@@ -546,7 +547,7 @@ fn openai_progress_body_cb(request &http.Request, chunk []u8, _body_read_so_far 
 	}
 	ensure_openai_stream_headers_written(mut state)!
 	if state.method.to_upper() != 'HEAD' && decoded.len > 0 {
-		WorkerHttpStreamWriter.write_chunk(mut state.conn, decoded)!
+		worker.WorkerHttpStreamWriter.write_chunk(mut state.conn, decoded)!
 	}
 	if openai_passthrough_chunk_has_done(mut state, decoded) {
 		openai_finish_passthrough_stream(mut state)!
@@ -560,7 +561,7 @@ fn ensure_openai_mapped_stream_headers_written(mut state OpenAIMappedStreamProxy
 	}
 	mut headers := state.response_headers.clone()
 	headers['x-accel-buffering'] = 'no'
-	WorkerHttpStreamWriter.write_headers_conn_with_close(mut state.conn, state.status_code,
+	worker.WorkerHttpStreamWriter.write_headers_conn_with_close(mut state.conn, state.status_code,
 		'text/event-stream', headers, true, false)!
 	state.headers_written = true
 }
@@ -604,7 +605,7 @@ fn openai_write_stream_usage_chunk(mut state OpenAIMappedStreamProxyState) ! {
 		return
 	}
 	ensure_openai_mapped_stream_headers_written(mut state)!
-	WorkerHttpStreamWriter.write_chunk(mut state.conn,
+	worker.WorkerHttpStreamWriter.write_chunk(mut state.conn,
 		'data: ${openai_stream_usage_chunk_json(state)}\n\n')!
 }
 
@@ -666,14 +667,14 @@ fn openai_write_mapped_stream_line(mut state OpenAIMappedStreamProxyState, line 
 	}
 	if mapping.content != '' || mapping.tool_calls.len > 0 {
 		ensure_openai_mapped_stream_headers_written(mut state)!
-		WorkerHttpStreamWriter.write_chunk(mut state.conn, 'data: ${openai_stream_chunk_json(state,
+		worker.WorkerHttpStreamWriter.write_chunk(mut state.conn, 'data: ${openai_stream_chunk_json(state,
 			mapping)}\n\n')!
 	}
 	openai.merge_usage(mut state.usage, mapping.usage)
 	if mapping.done && !state.done {
 		ensure_openai_mapped_stream_headers_written(mut state)!
 		openai_write_stream_usage_chunk(mut state)!
-		WorkerHttpStreamWriter.write_chunk(mut state.conn, 'data: [DONE]\n\n')!
+		worker.WorkerHttpStreamWriter.write_chunk(mut state.conn, 'data: [DONE]\n\n')!
 		state.done = true
 		openai_finish_mapped_stream(mut state)!
 	}
@@ -854,7 +855,7 @@ fn openai_proxy_mapped_stream(mut app App, mut ctx Context, plan OpenAIResolvedP
 	if !state.done {
 		ensure_openai_mapped_stream_headers_written(mut state) or {}
 		openai_write_stream_usage_chunk(mut state) or {}
-		WorkerHttpStreamWriter.write_chunk(mut client_conn, 'data: [DONE]\n\n') or {}
+		worker.WorkerHttpStreamWriter.write_chunk(mut client_conn, 'data: [DONE]\n\n') or {}
 		state.done = true
 	}
 	if state.headers_written {
@@ -1174,7 +1175,7 @@ fn openai_proxy_responses_executor_stream(mut app App, mut ctx Context, plan Ope
 		'x-vhttpd-openai-executor': plan.backend.executor
 		'x-accel-buffering':        'no'
 	}
-	WorkerHttpStreamWriter.write_headers_conn(mut client_conn, 200, 'text/event-stream', headers,
+	worker.WorkerHttpStreamWriter.write_headers_conn(mut client_conn, 200, 'text/event-stream', headers,
 		true) or {}
 	mut registry_state := &OpenAIResponsesStreamRegistryState{}
 	stream_resp := app.openai_call_executor_stream_op(plan, 'responses.execute', method, path,
@@ -1182,12 +1183,12 @@ fn openai_proxy_responses_executor_stream(mut app App, mut ctx Context, plan Ope
 		if registry_state.completed_body == '' {
 			registry_state.completed_body = openai.response_body_from_completed_event(raw)
 		}
-		WorkerHttpStreamWriter.write_chunk(mut client_conn,
+		worker.WorkerHttpStreamWriter.write_chunk(mut client_conn,
 			openai.response_stream_event_from_raw(raw))!
 		return true
 	}) or {
 		openai_write_sse_error(mut client_conn, 'openai_executor_failed', err.msg(), 'server_error')
-		WorkerHttpStreamWriter.write_final_chunk(mut client_conn) or {}
+		worker.WorkerHttpStreamWriter.write_final_chunk(mut client_conn) or {}
 		client_conn.close() or {}
 		app.emit('http.request', {
 			'method':      method.to_upper()
@@ -1218,27 +1219,27 @@ fn openai_proxy_responses_executor_stream(mut app App, mut ctx Context, plan Ope
 				'sequence_number': json2.Any(1)
 			}
 			if mapping.content != '' {
-				WorkerHttpStreamWriter.write_chunk(mut client_conn,
+				worker.WorkerHttpStreamWriter.write_chunk(mut client_conn,
 					openai.response_stream_event_from_raw(json2.Any(event).json_str())) or {}
 				wrote_frame = true
 			}
 			if mapping.done {
 				registry_state.completed_body = '{"id":"resp_${req_id}","object":"response","status":"completed","model":"${plan.model}"}'
-				WorkerHttpStreamWriter.write_chunk(mut client_conn,
+				worker.WorkerHttpStreamWriter.write_chunk(mut client_conn,
 					openai.response_stream_event_from_raw('{"type":"response.completed","sequence_number":2,"response":${registry_state.completed_body}}')) or {}
 				wrote_frame = true
 			}
 		}
 		if !wrote_frame {
 			registry_state.completed_body = '{"id":"resp_${req_id}","object":"response","status":"completed","model":"${plan.model}"}'
-			WorkerHttpStreamWriter.write_chunk(mut client_conn,
+			worker.WorkerHttpStreamWriter.write_chunk(mut client_conn,
 				openai.response_stream_event_from_raw('{"type":"response.completed","sequence_number":1,"response":${registry_state.completed_body}}')) or {}
 		}
 	}
 	if registry_state.completed_body != '' {
 		app.openai_store_response_record(plan, registry_state.completed_body, req_id, trace_id)
 	}
-	WorkerHttpStreamWriter.write_final_chunk(mut client_conn) or {}
+	worker.WorkerHttpStreamWriter.write_final_chunk(mut client_conn) or {}
 	app.emit('http.request', {
 		'method':      method.to_upper()
 		'path':        transport.normalize_path(path)
@@ -1288,14 +1289,14 @@ fn openai_proxy_executor_stream(mut app App, mut ctx Context, plan OpenAIResolve
 		}
 		if mapping.content != '' || mapping.tool_calls.len > 0 {
 			ensure_openai_mapped_stream_headers_written(mut state)!
-			WorkerHttpStreamWriter.write_chunk(mut client_conn, 'data: ${openai_stream_chunk_json(state,
+			worker.WorkerHttpStreamWriter.write_chunk(mut client_conn, 'data: ${openai_stream_chunk_json(state,
 				mapping)}\n\n')!
 		}
 		openai.merge_usage(mut state.usage, mapping.usage)
 		if mapping.done && !state.done {
 			ensure_openai_mapped_stream_headers_written(mut state)!
 			openai_write_stream_usage_chunk(mut state)!
-			WorkerHttpStreamWriter.write_chunk(mut client_conn, 'data: [DONE]\n\n')!
+			worker.WorkerHttpStreamWriter.write_chunk(mut client_conn, 'data: [DONE]\n\n')!
 			state.done = true
 			openai_finish_mapped_stream(mut state)!
 			return false
@@ -1337,14 +1338,14 @@ fn openai_proxy_executor_stream(mut app App, mut ctx Context, plan OpenAIResolve
 			}
 			if mapping.content != '' || mapping.tool_calls.len > 0 {
 				ensure_openai_mapped_stream_headers_written(mut state) or {}
-				WorkerHttpStreamWriter.write_chunk(mut client_conn, 'data: ${openai_stream_chunk_json(state,
+				worker.WorkerHttpStreamWriter.write_chunk(mut client_conn, 'data: ${openai_stream_chunk_json(state,
 					mapping)}\n\n') or {}
 			}
 			openai.merge_usage(mut state.usage, mapping.usage)
 			if mapping.done && !state.done {
 				ensure_openai_mapped_stream_headers_written(mut state) or {}
 				openai_write_stream_usage_chunk(mut state) or {}
-				WorkerHttpStreamWriter.write_chunk(mut client_conn, 'data: [DONE]\n\n') or {}
+				worker.WorkerHttpStreamWriter.write_chunk(mut client_conn, 'data: [DONE]\n\n') or {}
 				state.done = true
 				openai_finish_mapped_stream(mut state) or {}
 			}
@@ -1353,7 +1354,7 @@ fn openai_proxy_executor_stream(mut app App, mut ctx Context, plan OpenAIResolve
 	if !state.done {
 		ensure_openai_mapped_stream_headers_written(mut state) or {}
 		openai_write_stream_usage_chunk(mut state) or {}
-		WorkerHttpStreamWriter.write_chunk(mut client_conn, 'data: [DONE]\n\n') or {}
+		worker.WorkerHttpStreamWriter.write_chunk(mut client_conn, 'data: [DONE]\n\n') or {}
 	}
 	if state.headers_written {
 		openai_finish_mapped_stream(mut state) or {}

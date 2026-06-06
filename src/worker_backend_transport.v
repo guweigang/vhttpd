@@ -3,7 +3,6 @@ module main
 import transport
 import json
 import log
-import net
 import net.unix
 import time
 import worker
@@ -12,8 +11,6 @@ type WorkerBackendFrameCodec = worker.WorkerBackendFrameCodec
 type WorkerBackendConnection = worker.WorkerBackendConnection
 
 struct WorkerHttpStreamWriter {}
-
-struct WorkerBackendErrorClassifier {}
 
 struct WorkerWebSocketDispatchCommandRuntime {}
 
@@ -92,10 +89,6 @@ fn (mut app App) build_worker_backend_dispatch_context() WorkerBackendDispatchCo
 	}
 }
 
-fn WorkerBackendErrorClassifier.classify(err_msg string) (int, string) {
-	return transport.classify_worker_backend_error(err_msg)
-}
-
 fn WorkerWebSocketDispatchCommandRuntime.execute(rt WebSocketRuntimeContext, commands []transport.WorkerWebSocketFrame) transport.WorkerWebSocketDispatchCommandsResult {
 	mut close_frame := transport.WorkerWebSocketFrame{}
 	mut has_close := false
@@ -124,35 +117,9 @@ fn WorkerWebSocketDispatchCommandRuntime.first_close(result transport.WorkerWebS
 	return none
 }
 
-fn WorkerHttpStreamWriter.status_reason_phrase(status int) string {
-	return worker.WorkerHttpStreamWriter.status_reason_phrase(status)
-}
-
-fn WorkerHttpStreamWriter.write_headers_conn_with_close(mut conn net.TcpConn, status int, content_type string, extra_headers map[string]string, chunked bool, close_conn bool) ! {
-	worker.WorkerHttpStreamWriter.write_headers_conn_with_close(mut conn, status, content_type,
-		extra_headers, chunked, close_conn)!
-}
-
-fn WorkerHttpStreamWriter.write_headers_conn(mut conn net.TcpConn, status int, content_type string, extra_headers map[string]string, chunked bool) ! {
-	worker.WorkerHttpStreamWriter.write_headers_conn(mut conn, status, content_type, extra_headers,
-		chunked)!
-}
-
 fn WorkerHttpStreamWriter.write_headers(mut ctx Context, status int, content_type string, extra_headers map[string]string, chunked bool) ! {
 	worker.WorkerHttpStreamWriter.write_headers_conn(mut ctx.conn, status, content_type,
 		extra_headers, chunked)!
-}
-
-fn WorkerHttpStreamWriter.write_chunk(mut conn net.TcpConn, data string) ! {
-	worker.WorkerHttpStreamWriter.write_chunk(mut conn, data)!
-}
-
-fn WorkerHttpStreamWriter.write_final_chunk(mut conn net.TcpConn) ! {
-	worker.WorkerHttpStreamWriter.write_final_chunk(mut conn)!
-}
-
-fn WorkerHttpStreamWriter.write_sse_message(mut conn net.TcpConn, frame transport.WorkerStreamFrame) ! {
-	worker.WorkerHttpStreamWriter.write_sse_message(mut conn, frame)!
 }
 
 fn WorkerBackendConnectorRuntime.socket_with_retry(ctx WorkerBackendConnectorContext) !string {

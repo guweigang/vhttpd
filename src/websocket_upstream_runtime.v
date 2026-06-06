@@ -80,10 +80,6 @@ fn (mut app App) fixture_websocket_runtime_ensure(name string) FixtureWebSocketU
 	return app.ws_hub.fixture_ensure(name)
 }
 
-fn (mut app App) fixture_websocket_runtime_update(name string, runtime FixtureWebSocketUpstreamRuntime) {
-	app.ws_hub.fixture_update(name, runtime)
-}
-
 fn (mut app App) fixture_websocket_app_names() []string {
 	return app.ws_hub.fixture_app_names()
 }
@@ -94,10 +90,6 @@ fn (mut app App) fixture_websocket_snapshot(name string) WebSocketUpstreamSnapsh
 
 fn (mut app App) fixture_websocket_push_event(instance string, event WebSocketUpstreamEventSnapshot) {
 	app.ws_hub.fixture_push_event(instance, event, app.feishu.recent_event_limit)
-}
-
-fn (mut app App) fixture_websocket_note_send(instance string, ok bool) {
-	app.ws_hub.fixture_note_send(instance, ok)
 }
 
 fn (mut app App) fixture_websocket_send(req WebSocketUpstreamSendRequest) !WebSocketUpstreamSendResult {

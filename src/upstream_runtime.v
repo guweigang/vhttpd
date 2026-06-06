@@ -5,6 +5,7 @@ import transport
 import net.http
 import time
 import veb
+import worker
 
 struct UpstreamIoBridge {}
 
@@ -20,9 +21,9 @@ struct UpstreamRuntimeContext {
 
 fn UpstreamIoBridge.build() upstream.Io {
 	return upstream.Io{
-		write_sse_message:              WorkerHttpStreamWriter.write_sse_message
-		write_chunk:                    WorkerHttpStreamWriter.write_chunk
-		write_http_stream_headers_conn: WorkerHttpStreamWriter.write_headers_conn
+		write_sse_message:              worker.WorkerHttpStreamWriter.write_sse_message
+		write_chunk:                    worker.WorkerHttpStreamWriter.write_chunk
+		write_http_stream_headers_conn: worker.WorkerHttpStreamWriter.write_headers_conn
 	}
 }
 
@@ -119,12 +120,12 @@ fn UpstreamRuntimeContext.execute_plan(rt UpstreamRuntimeContext, mut ctx Contex
 				mut err_headers := response_headers.clone()
 				err_headers['x-vhttpd-error-class'] = 'upstream_error'
 				if stream_type == 'sse' {
-					WorkerHttpStreamWriter.write_headers_conn(mut client_conn, 502, content_type,
+					worker.WorkerHttpStreamWriter.write_headers_conn(mut client_conn, 502, content_type,
 						err_headers, false) or {}
 					state.write_error_notice(err.msg()) or {}
 					state.write_done() or {}
 				} else {
-					WorkerHttpStreamWriter.write_headers_conn(mut client_conn, 502,
+					worker.WorkerHttpStreamWriter.write_headers_conn(mut client_conn, 502,
 						'text/plain; charset=utf-8', err_headers, true) or {}
 					state.write_error_notice(err.msg()) or {}
 				}
@@ -152,12 +153,12 @@ fn UpstreamRuntimeContext.execute_plan(rt UpstreamRuntimeContext, mut ctx Contex
 				mut err_headers := response_headers.clone()
 				err_headers['x-vhttpd-error-class'] = 'upstream_error'
 				if stream_type == 'sse' {
-					WorkerHttpStreamWriter.write_headers_conn(mut client_conn, 502, content_type,
+					worker.WorkerHttpStreamWriter.write_headers_conn(mut client_conn, 502, content_type,
 						err_headers, false) or {}
 					state.write_error_notice(err.msg()) or {}
 					state.write_done() or {}
 				} else {
-					WorkerHttpStreamWriter.write_headers_conn(mut client_conn, 502,
+					worker.WorkerHttpStreamWriter.write_headers_conn(mut client_conn, 502,
 						'text/plain; charset=utf-8', err_headers, true) or {}
 					state.write_error_notice(err.msg()) or {}
 				}

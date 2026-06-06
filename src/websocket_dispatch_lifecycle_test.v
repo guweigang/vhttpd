@@ -67,7 +67,7 @@ fn test_ws_hub_send_to_rejects_closing_dispatch_connection() {
 		lifecycle: lifecycle
 	}
 	assert lifecycle.mark_closing()
-	assert !app.ws_hub_send_to('conn_dispatch', 'hello', 'text')
+	assert !ws.hub_send_to(mut app.ws_hub, 'conn_dispatch', 'hello', 'text')
 	assert 'conn_dispatch' !in app.ws_hub.pending
 }
 
@@ -78,6 +78,6 @@ fn test_ws_hub_send_to_queues_opening_dispatch_connection() {
 		id:        'conn_dispatch'
 		lifecycle: lifecycle
 	}
-	assert app.ws_hub_send_to('conn_dispatch', 'hello', 'text')
+	assert ws.hub_send_to(mut app.ws_hub, 'conn_dispatch', 'hello', 'text')
 	assert app.ws_hub.pending['conn_dispatch'].len == 1
 }

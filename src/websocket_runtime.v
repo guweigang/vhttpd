@@ -2,7 +2,6 @@ module main
 
 import transport
 import ws
-import json
 import net.websocket
 
 // ── Type aliases: main → ws ──
@@ -30,7 +29,7 @@ fn (mut app App) build_websocket_runtime_context() ws.RuntimeContext {
 		}
 		presence_fn:         fn [mut app] (conn_id string) ws.PresenceSnapshot {
 			room_members, member_metadata, room_counts, presence_users :=
-				app.ws_hub_presence_snapshot(conn_id)
+				app.ws_hub.presence_snapshot(conn_id)
 			return ws.PresenceSnapshot{
 				room_members:    room_members
 				member_metadata: member_metadata
@@ -39,10 +38,10 @@ fn (mut app App) build_websocket_runtime_context() ws.RuntimeContext {
 			}
 		}
 		rooms_fn:            fn [mut app] (conn_id string) []string {
-			return app.ws_hub_rooms_snapshot(conn_id)
+			return app.ws_hub.rooms_snapshot(conn_id)
 		}
 		metadata_fn:         fn [mut app] (conn_id string) map[string]string {
-			return app.ws_hub_meta_snapshot(conn_id)
+			return app.ws_hub.meta_snapshot(conn_id)
 		}
 		register_conn_fn:    fn [mut app] (conn_id string, worker_socket string, method string, req_id string, trace_id string, path string, query map[string]string, headers map[string]string, remote_addr string, client &websocket.Client, lifecycle &ws.DispatchConnState) {
 			app.ws_hub.register_conn(conn_id, worker_socket, method, req_id, trace_id, path,
@@ -102,22 +101,6 @@ fn (mut app App) build_websocket_runtime_context() ws.RuntimeContext {
 
 // ── Dispatch followup (stub) ──
 
-fn (mut app App) websocket_dispatch_command_failures_frame(conn_id string, method string, path string, query map[string]string, headers map[string]string, remote_addr string, req_id string, trace_id string, failures []transport.WorkerWebSocketDispatchCommandFailure) transport.WorkerWebSocketFrame {
-	room_members, member_metadata, room_counts, presence_users :=
-		app.ws_hub_presence_snapshot(conn_id)
-	base_frame := app.kernel_websocket_dispatch_frame('info', method, path, query, headers,
-		remote_addr, req_id, trace_id, 'text', json.encode(transport.WorkerWebSocketDispatchFailureEnvelope{
-		event:    'command_failures'
-		failures: failures
-	}), 0, '', app.ws_hub_rooms_snapshot(conn_id), app.ws_hub_meta_snapshot(conn_id), room_members,
-		member_metadata, room_counts, presence_users)
-	return transport.WorkerWebSocketFrame{
-		...base_frame
-		error:       'websocket_dispatch_command_failed'
-		error_class: 'websocket_send_failed'
-	}
-}
-
 fn (mut app App) websocket_dispatch_followup_failures(conn_id string, method string, path string, query map[string]string, headers map[string]string, remote_addr string, req_id string, trace_id string, failures []transport.WorkerWebSocketDispatchCommandFailure) ?transport.WorkerWebSocketFrame {
 	_ = app
 	_ = conn_id
@@ -130,83 +113,6 @@ fn (mut app App) websocket_dispatch_followup_failures(conn_id string, method str
 	_ = trace_id
 	_ = failures
 	return none
-}
-
-// ── Thin ws_hub wrappers (delegate to ws.HubState methods) ──
-
-fn (mut app App) ws_hub_cleanup_conn(conn_id string) {
-	app.ws_hub.cleanup_conn(conn_id)
-}
-
-fn (mut app App) ws_hub_register_conn(conn_id string, worker_socket string, method string, req_id string, trace_id string, path string, query map[string]string, headers map[string]string, remote_addr string, client &websocket.Client, lifecycle &ws.DispatchConnState) {
-	app.ws_hub.register_conn(conn_id, worker_socket, method, req_id, trace_id, path, query,
-		headers, remote_addr, client, lifecycle)
-}
-
-fn (mut app App) ws_hub_mark_closing(conn_id string) bool {
-	return app.ws_hub.mark_closing(conn_id)
-}
-
-fn (mut app App) ws_hub_flush_pending(conn_id string) {
-	app.ws_hub.flush_pending(conn_id)
-}
-
-fn (mut app App) ws_hub_rooms_snapshot(conn_id string) []string {
-	return app.ws_hub.rooms_snapshot(conn_id)
-}
-
-fn (mut app App) ws_hub_meta_snapshot(conn_id string) map[string]string {
-	return app.ws_hub.meta_snapshot(conn_id)
-}
-
-fn (mut app App) ws_hub_set_meta(conn_id string, key string, value string) bool {
-	return app.ws_hub.set_meta(conn_id, key, value)
-}
-
-fn (mut app App) ws_hub_clear_meta(conn_id string, key string) bool {
-	return app.ws_hub.clear_meta(conn_id, key)
-}
-
-fn (mut app App) ws_hub_presence_snapshot(conn_id string) (map[string][]string, map[string]map[string]string, map[string]int, map[string][]string) {
-	return app.ws_hub.presence_snapshot(conn_id)
-}
-
-fn (mut app App) ws_hub_unregister_conn(conn_id string) {
-	app.ws_hub.unregister_conn(conn_id)
-}
-
-fn (mut app App) ws_hub_join(conn_id string, room string) bool {
-	return app.ws_hub.join(conn_id, room)
-}
-
-fn (mut app App) ws_hub_leave(conn_id string, room string) bool {
-	return app.ws_hub.leave(conn_id, room)
-}
-
-fn (mut app App) ws_hub_send_client(conn_id string, client &websocket.Client, data string, opcode string) bool {
-	return app.ws_hub.send_client(conn_id, client, data, opcode)
-}
-
-fn (mut app App) ws_hub_send_to(conn_id string, data string, opcode string) bool {
-	return ws.hub_send_to(mut app.ws_hub, conn_id, data, opcode)
-}
-
-fn (mut app App) ws_hub_broadcast(room string, data string, opcode string, except_id string) int {
-	return ws.hub_broadcast(mut app.ws_hub, room, data, opcode, except_id)
-}
-
-fn (mut app App) ws_hub_broadcast_dispatch(room string, data string, except_id string) int {
-	websocket_runtime := app.build_websocket_runtime_context()
-	return ws.hub_broadcast_dispatch(websocket_runtime, room, data, except_id)
-}
-
-fn (mut app App) ws_hub_close_target(conn_id string, code int, reason string) {
-	ws.hub_close_target(mut app.ws_hub, conn_id, code, reason)
-}
-
-fn (mut app App) process_worker_websocket_hub_frame(frame transport.WorkerWebSocketFrame) ?transport.WorkerWebSocketDispatchCommandFailure {
-	websocket_runtime := app.build_websocket_runtime_context()
-	return ws.hub_process_worker_frame(websocket_runtime, frame)
 }
 
 fn (mut app App) admin_websockets_snapshot(details bool, limit int, offset int, room_filter string, conn_filter string) ws.RuntimeSnapshot {

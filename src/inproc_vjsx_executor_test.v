@@ -3000,7 +3000,7 @@ export default app;
 	}) or { panic(err) }
 	assert open_resp.accepted
 	room_members, member_metadata, room_counts, presence_users :=
-		app.ws_hub_presence_snapshot('ws_main_failure')
+		app.ws_hub.presence_snapshot('ws_main_failure')
 	msg_resp := executor.dispatch_websocket_event(mut facade6, transport.WorkerWebSocketFrame{
 		mode:            'websocket_dispatch'
 		event:           'message'
@@ -3015,8 +3015,8 @@ export default app;
 		trace_id:        'trace_ws_main_failure'
 		opcode:          'text'
 		data:            'hello'
-		rooms:           app.ws_hub_rooms_snapshot('ws_main_failure')
-		metadata:        app.ws_hub_meta_snapshot('ws_main_failure')
+		rooms:           app.ws_hub.rooms_snapshot('ws_main_failure')
+		metadata:        app.ws_hub.meta_snapshot('ws_main_failure')
 		room_members:    room_members
 		member_metadata: member_metadata
 		room_counts:     room_counts

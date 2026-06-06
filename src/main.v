@@ -413,7 +413,7 @@ fn proxy_worker_websocket(mut app App, mut ctx Context, method string, path stri
 		trace_id:    trace_id
 	}) or {
 		err_msg := err.msg()
-		status, error_class := WorkerBackendErrorClassifier.classify(err_msg)
+		status, error_class := transport.classify_worker_backend_error(err_msg)
 		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
 		ctx.set_custom_header('x-vhttpd-error-class', error_class) or {}
 		ctx.res.set_status(http.status_from_int(status))
@@ -589,7 +589,7 @@ fn proxy_worker_response(mut app App, mut ctx Context, method string, path strin
 		request_id:  req_id
 	}) or {
 		err_msg := err.msg()
-		status, error_class := WorkerBackendErrorClassifier.classify(err_msg)
+		status, error_class := transport.classify_worker_backend_error(err_msg)
 		log.error('[http] ⇠ dispatch error method=${method.to_upper()} path=${path} trace_id=${trace_id} request_id=${req_id} status=${status} duration_ms=${time.now().unix_milli() - start_ms} error=${err_msg}')
 		app.emit('http.request', {
 			'method':      method.to_upper()
