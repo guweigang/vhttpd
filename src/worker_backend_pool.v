@@ -1,5 +1,6 @@
 module main
 
+import admin
 import transport
 import json
 import net.unix
@@ -381,9 +382,9 @@ fn (mut app App) worker_backend_select_socket() !string {
 	return error(last_err)
 }
 
-fn (mut w WorkerAdminView) admin_status() WorkerAdminStatus {
+fn (mut w WorkerAdminView) admin_status() admin.WorkerAdminStatus {
 	pid := if isnil(w.proc) { 0 } else { w.proc.pid }
-	return WorkerAdminStatus{
+	return admin.WorkerAdminStatus{
 		id:                w.id
 		socket:            w.socket_path
 		alive:             if isnil(w.proc) { false } else { w.proc.is_alive() }
@@ -414,7 +415,7 @@ fn WorkerProcessMetrics.rss_kb(pid int) i64 {
 	return rss_raw.i64()
 }
 
-fn (mut app App) restart_worker_by_id(worker_id int) !WorkerAdminStatus {
+fn (mut app App) restart_worker_by_id(worker_id int) !admin.WorkerAdminStatus {
 	app.worker.mu.@lock()
 	if !app.worker.worker_backend.autostart || app.worker.worker_backend.managed_workers.len == 0 {
 		app.worker.mu.unlock()
@@ -455,17 +456,17 @@ fn (mut app App) restart_all_workers() int {
 	return restarted
 }
 
-fn (mut app App) worker_admin_snapshot() WorkerPoolAdminStatus {
+fn (mut app App) worker_admin_snapshot() admin.WorkerPoolAdminStatus {
 	app.worker.mu.@lock()
 	defer {
 		app.worker.mu.unlock()
 	}
-	mut workers := []WorkerAdminStatus{cap: app.worker.worker_backend.managed_workers.len}
+	mut workers := []admin.WorkerAdminStatus{cap: app.worker.worker_backend.managed_workers.len}
 	for worker in app.worker.worker_backend.managed_workers {
 		mut view := WorkerAdminView(worker)
 		workers << view.admin_status()
 	}
-	return WorkerPoolAdminStatus{
+	return admin.WorkerPoolAdminStatus{
 		worker_autostart:    app.worker.worker_backend.autostart
 		worker_pool_size:    app.worker.worker_backend.sockets.len
 		worker_rr_index:     app.worker.worker_backend.rr_index

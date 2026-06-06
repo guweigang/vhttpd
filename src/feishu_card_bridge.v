@@ -1,5 +1,6 @@
 module main
 
+import admin
 import executor
 import feishu
 import json
@@ -467,7 +468,7 @@ fn feishu_card_bridge_client_message_cb(mut _ws websocket.Client, msg &websocket
 			headers:    {
 				'content-type': 'application/json; charset=utf-8'
 			}
-			body:       json.encode(AdminErrorResponse{
+			body:       json.encode(admin.AdminErrorResponse{
 				error: 'bridge_dispatch_error'
 			})
 			error:      err.msg()
@@ -774,13 +775,13 @@ pub fn (mut app App) feishu_card_bridge_gateway_dispatch(mut ctx Context) veb.Re
 	ctx.set_content_type('application/json; charset=utf-8')
 	if !app.api_authorized(ctx) {
 		ctx.res.set_status(http.status_from_int(403))
-		return ctx.text(json.encode(AdminErrorResponse{
+		return ctx.text(json.encode(admin.AdminErrorResponse{
 			error: 'forbidden'
 		}))
 	}
 	req := json.decode(FeishuCardBridgeGatewayDispatchRequest, ctx.req.data) or {
 		ctx.res.set_status(http.status_from_int(400))
-		return ctx.text(json.encode(AdminErrorResponse{
+		return ctx.text(json.encode(admin.AdminErrorResponse{
 			error: 'invalid_json'
 		}))
 	}
@@ -809,7 +810,7 @@ pub fn (mut app App) feishu_card_bridge_gateway_dispatch(mut ctx Context) veb.Re
 		action_tag:      summary.action_tag
 	}, req.payload) or {
 		ctx.res.set_status(http.status_from_int(502))
-		return ctx.text(json.encode(AdminErrorResponse{
+		return ctx.text(json.encode(admin.AdminErrorResponse{
 			error: 'bridge_dispatch_failed'
 		}))
 	}

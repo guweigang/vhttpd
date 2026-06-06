@@ -5,14 +5,6 @@ import executor
 import json
 import veb
 
-type AdminRuntimeStats = executor.AdminRuntimeStats
-type AdminRuntimeSummary = executor.AdminRuntimeSummary
-type AdminHttpStats = executor.AdminHttpStats
-type AdminWorkerQueueStats = executor.AdminWorkerQueueStats
-type AdminUpstreamStats = executor.AdminUpstreamStats
-type AdminMcpStats = executor.AdminMcpStats
-type AdminFeishuStats = executor.AdminFeishuStats
-
 // build_admin_context constructs an admin.RuntimeContext whose closures
 // capture App, bridging the admin sub-module to the main program.
 fn (mut app App) build_admin_context() admin.RuntimeContext {
@@ -140,10 +132,6 @@ fn (mut app App) admin_stats_snapshot() executor.AdminRuntimeStats {
 	ctx := app.build_admin_context()
 	return app.admin.stats_snapshot(ctx)
 }
-
-type AdminWorkerPoolSummary = executor.AdminWorkerPoolSummary
-type AdminLogicExecutorSummary = executor.AdminLogicExecutorSummary
-type AdminActiveCounts = executor.AdminActiveCounts
 
 fn (mut app App) admin_runtime_snapshot() executor.AdminRuntimeSummary {
 	ctx := app.build_admin_context()

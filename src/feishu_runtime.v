@@ -1541,13 +1541,13 @@ fn (mut app App) feishu_callback_by_app(mut ctx Context, raw_app string) veb.Res
 	ctx.set_content_type('application/json; charset=utf-8')
 	app_name := app.feishu_runtime_resolve_app_name(raw_app) or {
 		ctx.res.set_status(http.status_from_int(404))
-		return ctx.text(json.encode(AdminErrorResponse{
+		return ctx.text(json.encode(admin.AdminErrorResponse{
 			error: 'unknown_feishu_app'
 		}))
 	}
 	app_cfg := app.feishu_runtime_app_config(app_name) or {
 		ctx.res.set_status(http.status_from_int(404))
-		return ctx.text(json.encode(AdminErrorResponse{
+		return ctx.text(json.encode(admin.AdminErrorResponse{
 			error: 'unknown_feishu_app'
 		}))
 	}
@@ -1555,13 +1555,13 @@ fn (mut app App) feishu_callback_by_app(mut ctx Context, raw_app string) veb.Res
 	raw_payload := ctx.req.data
 	if !feishu.CallbackChallengeResponse.signature_valid(headers, app_cfg.encrypt_key, raw_payload) {
 		ctx.res.set_status(http.status_from_int(403))
-		return ctx.text(json.encode(AdminErrorResponse{
+		return ctx.text(json.encode(admin.AdminErrorResponse{
 			error: 'invalid_feishu_callback_signature'
 		}))
 	}
 	payload := feishu.CallbackChallengeResponse.decrypt_payload(app_cfg.encrypt_key, raw_payload) or {
 		ctx.res.set_status(http.status_from_int(400))
-		return ctx.text(json.encode(AdminErrorResponse{
+		return ctx.text(json.encode(admin.AdminErrorResponse{
 			error: 'invalid_feishu_callback_encryption'
 		}))
 	}
@@ -1569,7 +1569,7 @@ fn (mut app App) feishu_callback_by_app(mut ctx Context, raw_app string) veb.Res
 	if challenge != '' {
 		if !app.feishu_runtime_callback_token_valid(app_name, payload) {
 			ctx.res.set_status(http.status_from_int(403))
-			return ctx.text(json.encode(AdminErrorResponse{
+			return ctx.text(json.encode(admin.AdminErrorResponse{
 				error: 'invalid_feishu_callback_token'
 			}))
 		}
@@ -1589,7 +1589,7 @@ fn (mut app App) feishu_callback_by_app(mut ctx Context, raw_app string) veb.Res
 	}
 	if !app.feishu_runtime_callback_token_valid(app_name, payload) {
 		ctx.res.set_status(http.status_from_int(403))
-		return ctx.text(json.encode(AdminErrorResponse{
+		return ctx.text(json.encode(admin.AdminErrorResponse{
 			error: 'invalid_feishu_callback_token'
 		}))
 	}
@@ -1628,7 +1628,7 @@ fn (mut app App) feishu_callback_by_app(mut ctx Context, raw_app string) veb.Res
 			payload) or {
 			log.error('[feishu] ❌ bridge callback dispatch failed: ${err}')
 			ctx.res.set_status(http.status_from_int(502))
-			return ctx.text(json.encode(AdminErrorResponse{
+			return ctx.text(json.encode(admin.AdminErrorResponse{
 				error: 'feishu_callback_bridge_error'
 			}))
 		}
@@ -1701,7 +1701,7 @@ fn (mut app App) feishu_callback_by_app(mut ctx Context, raw_app string) veb.Res
 			activity_snapshot.error_class = 'transport_error'
 			app.websocket_upstream_record_activity(activity_snapshot)
 			ctx.res.set_status(http.status_from_int(502))
-			return ctx.text(json.encode(AdminErrorResponse{
+			return ctx.text(json.encode(admin.AdminErrorResponse{
 				error: 'feishu_callback_worker_transport_error'
 			}))
 		}
@@ -1711,7 +1711,7 @@ fn (mut app App) feishu_callback_by_app(mut ctx Context, raw_app string) veb.Res
 			activity_snapshot.error_class = resp.error_class
 			app.websocket_upstream_record_activity(activity_snapshot)
 			ctx.res.set_status(http.status_from_int(502))
-			return ctx.text(json.encode(AdminErrorResponse{
+			return ctx.text(json.encode(admin.AdminErrorResponse{
 				error: 'feishu_callback_worker_error'
 			}))
 		}
@@ -1780,7 +1780,7 @@ pub fn (mut app App) gateway_feishu_send(mut ctx Context) veb.Result {
 	ctx.set_content_type('application/json; charset=utf-8')
 	if !app.api_authorized(ctx) {
 		ctx.res.set_status(http.status_from_int(403))
-		return ctx.text(json.encode(AdminErrorResponse{
+		return ctx.text(json.encode(admin.AdminErrorResponse{
 			error: 'forbidden'
 		}))
 	}

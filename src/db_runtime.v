@@ -445,14 +445,14 @@ $if !enable_db ? {
 					'error':  error
 				})
 			}
-			mark_started_fn:    fn [mut app] (_ i64, _ &unix.StreamListener) string { return '' }
-			mark_stopped_fn:    fn [mut app] () {}
-			stop_requested_fn:  fn [mut app] () bool { return false }
-			note_error_fn:      fn [mut app] (_ string) {}
-			cleanup_sessions_fn: fn [mut app] () {}
-			close_pool_fn:      fn [mut app] () {}
-			build_server_ctx_fn: fn [mut app] () db.ServerContext { return db.ServerContext{} }
-			emit_started_fn:    fn [mut app] (_ string, _ string) {}
+			mark_started_fn:    fn (_ i64, _ &unix.StreamListener) string { return '' }
+			mark_stopped_fn:    fn () {}
+			stop_requested_fn:  fn () bool { return false }
+			note_error_fn:      fn (_ string) {}
+			cleanup_sessions_fn: fn () {}
+			close_pool_fn:      fn () {}
+			build_server_ctx_fn: fn () db.ServerContext { return db.ServerContext{} }
+			emit_started_fn:    fn (_ string, _ string) {}
 		}
 		db.Server.run(ctx, socket_path)
 	}

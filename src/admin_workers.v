@@ -5,12 +5,6 @@ import json
 import net.http
 import veb
 
-type WorkerAdminStatus = admin.WorkerAdminStatus
-type WorkerPoolAdminStatus = admin.WorkerPoolAdminStatus
-type WorkerAdminErrorResponse = admin.WorkerAdminErrorResponse
-type WorkerAdminRestartSingleResponse = admin.WorkerAdminRestartSingleResponse
-type WorkerAdminRestartAllResponse = admin.WorkerAdminRestartAllResponse
-
 @['/admin/workers'; get]
 pub fn (mut app App) admin_workers(mut ctx Context) veb.Result {
 	if !app.admin.on_data_plane {
@@ -69,14 +63,14 @@ pub fn (mut app App) admin_restart_worker(mut ctx Context) veb.Result {
 	id_raw := (ctx.query['id'] or { '' }).trim_space()
 	if id_raw == '' {
 		ctx.res.set_status(http.status_from_int(400))
-		return ctx.text(json.encode(WorkerAdminErrorResponse{
+		return ctx.text(json.encode(admin.WorkerAdminErrorResponse{
 			error: 'missing worker id, use ?id=<worker_id>'
 		}))
 	}
 	worker_id := id_raw.int()
 	status := app.restart_worker_by_id(worker_id) or {
 		ctx.res.set_status(http.status_from_int(404))
-		return ctx.text(json.encode(WorkerAdminErrorResponse{
+		return ctx.text(json.encode(admin.WorkerAdminErrorResponse{
 			error: err.msg()
 		}))
 	}
@@ -88,7 +82,7 @@ pub fn (mut app App) admin_restart_worker(mut ctx Context) veb.Result {
 		'plane':      'data'
 	})
 	ctx.res.set_status(http.status_from_int(200))
-	return ctx.text(json.encode(WorkerAdminRestartSingleResponse{
+	return ctx.text(json.encode(admin.WorkerAdminRestartSingleResponse{
 		ok:     true
 		mode:   'single'
 		worker: status
@@ -115,7 +109,7 @@ pub fn (mut app App) admin_restart_all_workers(mut ctx Context) veb.Result {
 		'plane':      'data'
 	})
 	ctx.res.set_status(http.status_from_int(200))
-	return ctx.text(json.encode(WorkerAdminRestartAllResponse{
+	return ctx.text(json.encode(admin.WorkerAdminRestartAllResponse{
 		ok:        true
 		mode:      'all'
 		restarted: restarted

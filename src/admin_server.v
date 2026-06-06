@@ -16,11 +16,6 @@ pub mut:
 	shared &App = unsafe { nil }
 }
 
-type AdminErrorResponse = admin.AdminErrorResponse
-type AdminRestartSingleResponse = admin.AdminRestartSingleResponse
-type AdminRestartAllResponse = admin.AdminRestartAllResponse
-type AdminFeishuSendResponse = admin.AdminFeishuSendResponse
-
 fn (app AdminApp) admin_authorized(ctx Context) bool {
 	headers := header_map_from_request(ctx.req)
 	return admin.AdminAuth.authorized(app.admin_token, headers, ctx.query)
@@ -70,7 +65,7 @@ pub fn (mut app AdminApp) admin_stats(mut ctx Context) veb.Result {
 	ctx.set_content_type('application/json; charset=utf-8')
 	if !app.admin_authorized(ctx) {
 		ctx.res.set_status(http.status_from_int(403))
-		return ctx.text(json.encode(AdminErrorResponse{
+		return ctx.text(json.encode(admin.AdminErrorResponse{
 			error: 'forbidden'
 		}))
 	}
@@ -95,7 +90,7 @@ pub fn (mut app AdminApp) admin_runtime(mut ctx Context) veb.Result {
 	ctx.set_content_type('application/json; charset=utf-8')
 	if !app.admin_authorized(ctx) {
 		ctx.res.set_status(http.status_from_int(403))
-		return ctx.text(json.encode(AdminErrorResponse{
+		return ctx.text(json.encode(admin.AdminErrorResponse{
 			error: 'forbidden'
 		}))
 	}
@@ -123,7 +118,7 @@ pub fn (mut app AdminApp) admin_providers(mut ctx Context) veb.Result {
 	ctx.set_content_type('application/json; charset=utf-8')
 	if !app.admin_authorized(ctx) {
 		ctx.res.set_status(http.status_from_int(403))
-		return ctx.text(json.encode(AdminErrorResponse{
+		return ctx.text(json.encode(admin.AdminErrorResponse{
 			error: 'forbidden'
 		}))
 	}
@@ -149,7 +144,7 @@ pub fn (mut app AdminApp) admin_executors(mut ctx Context) veb.Result {
 	ctx.set_content_type('application/json; charset=utf-8')
 	if !app.admin_authorized(ctx) {
 		ctx.res.set_status(http.status_from_int(403))
-		return ctx.text(json.encode(AdminErrorResponse{
+		return ctx.text(json.encode(admin.AdminErrorResponse{
 			error: 'forbidden'
 		}))
 	}
@@ -174,7 +169,7 @@ pub fn (mut app AdminApp) admin_provider_specs(mut ctx Context) veb.Result {
 	ctx.set_content_type('application/json; charset=utf-8')
 	if !app.admin_authorized(ctx) {
 		ctx.res.set_status(http.status_from_int(403))
-		return ctx.text(json.encode(AdminErrorResponse{
+		return ctx.text(json.encode(admin.AdminErrorResponse{
 			error: 'forbidden'
 		}))
 	}
@@ -199,7 +194,7 @@ pub fn (mut app AdminApp) admin_provider_runtimes(mut ctx Context) veb.Result {
 	ctx.set_content_type('application/json; charset=utf-8')
 	if !app.admin_authorized(ctx) {
 		ctx.res.set_status(http.status_from_int(403))
-		return ctx.text(json.encode(AdminErrorResponse{
+		return ctx.text(json.encode(admin.AdminErrorResponse{
 			error: 'forbidden'
 		}))
 	}
@@ -224,7 +219,7 @@ pub fn (mut app AdminApp) admin_runtime_upstreams(mut ctx Context) veb.Result {
 	ctx.set_content_type('application/json; charset=utf-8')
 	if !app.admin_authorized(ctx) {
 		ctx.res.set_status(http.status_from_int(403))
-		return ctx.text(json.encode(AdminErrorResponse{
+		return ctx.text(json.encode(admin.AdminErrorResponse{
 			error: 'forbidden'
 		}))
 	}
@@ -255,7 +250,7 @@ pub fn (mut app AdminApp) admin_runtime_websockets(mut ctx Context) veb.Result {
 	ctx.set_content_type('application/json; charset=utf-8')
 	if !app.admin_authorized(ctx) {
 		ctx.res.set_status(http.status_from_int(403))
-		return ctx.text(json.encode(AdminErrorResponse{
+		return ctx.text(json.encode(admin.AdminErrorResponse{
 			error: 'forbidden'
 		}))
 	}
@@ -286,7 +281,7 @@ pub fn (mut app AdminApp) admin_runtime_mcp(mut ctx Context) veb.Result {
 	ctx.set_content_type('application/json; charset=utf-8')
 	if !app.admin_authorized(ctx) {
 		ctx.res.set_status(http.status_from_int(403))
-		return ctx.text(json.encode(AdminErrorResponse{
+		return ctx.text(json.encode(admin.AdminErrorResponse{
 			error: 'forbidden'
 		}))
 	}
@@ -317,7 +312,7 @@ pub fn (mut app AdminApp) admin_runtime_provider_instances(mut ctx Context) veb.
 	ctx.set_content_type('application/json; charset=utf-8')
 	if !app.admin_authorized(ctx) {
 		ctx.res.set_status(http.status_from_int(403))
-		return ctx.text(json.encode(AdminErrorResponse{
+		return ctx.text(json.encode(admin.AdminErrorResponse{
 			error: 'forbidden'
 		}))
 	}
@@ -343,7 +338,7 @@ pub fn (mut app AdminApp) admin_runtime_feishu(mut ctx Context) veb.Result {
 	ctx.set_content_type('application/json; charset=utf-8')
 	if !app.admin_authorized(ctx) {
 		ctx.res.set_status(http.status_from_int(403))
-		return ctx.text(json.encode(AdminErrorResponse{
+		return ctx.text(json.encode(admin.AdminErrorResponse{
 			error: 'forbidden'
 		}))
 	}
@@ -368,7 +363,7 @@ pub fn (mut app AdminApp) admin_runtime_db(mut ctx Context) veb.Result {
 	ctx.set_content_type('application/json; charset=utf-8')
 	if !app.admin_authorized(ctx) {
 		ctx.res.set_status(http.status_from_int(403))
-		return ctx.text(json.encode(AdminErrorResponse{
+		return ctx.text(json.encode(admin.AdminErrorResponse{
 			error: 'forbidden'
 		}))
 	}
@@ -393,7 +388,7 @@ pub fn (mut app AdminApp) admin_runtime_feishu_chats(mut ctx Context) veb.Result
 	ctx.set_content_type('application/json; charset=utf-8')
 	if !app.admin_authorized(ctx) {
 		ctx.res.set_status(http.status_from_int(403))
-		return ctx.text(json.encode(AdminErrorResponse{
+		return ctx.text(json.encode(admin.AdminErrorResponse{
 			error: 'forbidden'
 		}))
 	}
@@ -424,19 +419,19 @@ pub fn (mut app AdminApp) admin_runtime_feishu_send(mut ctx Context) veb.Result 
 	ctx.set_content_type('application/json; charset=utf-8')
 	if !app.admin_authorized(ctx) {
 		ctx.res.set_status(http.status_from_int(403))
-		return ctx.text(json.encode(AdminErrorResponse{
+		return ctx.text(json.encode(admin.AdminErrorResponse{
 			error: 'forbidden'
 		}))
 	}
 	req := json.decode(FeishuRuntimeSendMessageRequest, ctx.req.data) or {
 		ctx.res.set_status(http.status_from_int(400))
-		return ctx.text(json.encode(AdminErrorResponse{
+		return ctx.text(json.encode(admin.AdminErrorResponse{
 			error: 'invalid_json'
 		}))
 	}
 	result := app.shared.feishu_runtime_send_message(req) or {
 		ctx.res.set_status(http.status_from_int(502))
-		return ctx.text(json.encode(AdminFeishuSendResponse{
+		return ctx.text(json.encode(admin.AdminFeishuSendResponse{
 			ok:    false
 			error: err.msg()
 		}))
@@ -449,7 +444,7 @@ pub fn (mut app AdminApp) admin_runtime_feishu_send(mut ctx Context) veb.Result 
 		'trace_id':   trace_id
 		'plane':      'admin'
 	})
-	return ctx.text(json.encode(AdminFeishuSendResponse{
+	return ctx.text(json.encode(admin.AdminFeishuSendResponse{
 		ok:         true
 		message_id: result.message_id
 	}))
@@ -464,25 +459,25 @@ pub fn (mut app AdminApp) admin_restart_worker(mut ctx Context) veb.Result {
 	ctx.set_content_type('application/json; charset=utf-8')
 	if !app.admin_authorized(ctx) {
 		ctx.res.set_status(http.status_from_int(403))
-		return ctx.text(json.encode(AdminErrorResponse{
+		return ctx.text(json.encode(admin.AdminErrorResponse{
 			error: 'forbidden'
 		}))
 	}
 	id_raw := (ctx.query['id'] or { '' }).trim_space()
 	if id_raw == '' {
 		ctx.res.set_status(http.status_from_int(400))
-		return ctx.text(json.encode(AdminErrorResponse{
+		return ctx.text(json.encode(admin.AdminErrorResponse{
 			error: 'missing worker id, use ?id=<worker_id>'
 		}))
 	}
 	worker_id := id_raw.int()
 	status := app.shared.restart_worker_by_id(worker_id) or {
 		ctx.res.set_status(http.status_from_int(404))
-		return ctx.text(json.encode(AdminErrorResponse{
+		return ctx.text(json.encode(admin.AdminErrorResponse{
 			error: err.msg()
 		}))
 	}
-	body := json.encode(AdminRestartSingleResponse{
+	body := json.encode(admin.AdminRestartSingleResponse{
 		ok:     true
 		mode:   'single'
 		worker: status
@@ -506,13 +501,13 @@ pub fn (mut app AdminApp) admin_restart_all_workers(mut ctx Context) veb.Result 
 	ctx.set_content_type('application/json; charset=utf-8')
 	if !app.admin_authorized(ctx) {
 		ctx.res.set_status(http.status_from_int(403))
-		return ctx.text(json.encode(AdminErrorResponse{
+		return ctx.text(json.encode(admin.AdminErrorResponse{
 			error: 'forbidden'
 		}))
 	}
 	force := admin.AdminQuery.parse_boolish(ctx.query['force'] or { 'false' })
 	restarted := app.shared.restart_all_workers()
-	body := json.encode(AdminRestartAllResponse{
+	body := json.encode(admin.AdminRestartAllResponse{
 		ok:        true
 		mode:      'all'
 		restarted: restarted

@@ -660,13 +660,13 @@ pub fn (mut app App) admin_runtime_websocket_upstream_fixture_emit(mut ctx Conte
 	ctx.set_content_type('application/json; charset=utf-8')
 	req := json.decode(WebSocketUpstreamFixtureEmitRequest, ctx.req.data) or {
 		ctx.res.set_status(http.status_from_int(400))
-		return ctx.text(json.encode(AdminErrorResponse{
+		return ctx.text(json.encode(admin.AdminErrorResponse{
 			error: 'invalid_json'
 		}))
 	}
 	snapshot := app.fixture_websocket_emit(req) or {
 		ctx.res.set_status(http.status_from_int(502))
-		return ctx.text(json.encode(AdminErrorResponse{
+		return ctx.text(json.encode(admin.AdminErrorResponse{
 			error: err.msg()
 		}))
 	}
@@ -724,7 +724,7 @@ pub fn (mut app App) gateway_websocket_upstream_send(mut ctx Context) veb.Result
 	ctx.set_content_type('application/json; charset=utf-8')
 	if !app.api_authorized(ctx) {
 		ctx.res.set_status(http.status_from_int(403))
-		return ctx.text(json.encode(AdminErrorResponse{
+		return ctx.text(json.encode(admin.AdminErrorResponse{
 			error: 'forbidden'
 		}))
 	}
@@ -764,7 +764,7 @@ pub fn (mut app AdminApp) admin_runtime_websocket_upstreams(mut ctx Context) veb
 	ctx.set_content_type('application/json; charset=utf-8')
 	if !app.admin_authorized(ctx) {
 		ctx.res.set_status(http.status_from_int(403))
-		return ctx.text(json.encode(AdminErrorResponse{
+		return ctx.text(json.encode(admin.AdminErrorResponse{
 			error: 'forbidden'
 		}))
 	}
@@ -795,7 +795,7 @@ pub fn (mut app AdminApp) admin_runtime_websocket_upstream_events(mut ctx Contex
 	ctx.set_content_type('application/json; charset=utf-8')
 	if !app.admin_authorized(ctx) {
 		ctx.res.set_status(http.status_from_int(403))
-		return ctx.text(json.encode(AdminErrorResponse{
+		return ctx.text(json.encode(admin.AdminErrorResponse{
 			error: 'forbidden'
 		}))
 	}
@@ -829,7 +829,7 @@ pub fn (mut app AdminApp) admin_runtime_websocket_upstream_activities(mut ctx Co
 	ctx.set_content_type('application/json; charset=utf-8')
 	if !app.admin_authorized(ctx) {
 		ctx.res.set_status(http.status_from_int(403))
-		return ctx.text(json.encode(AdminErrorResponse{
+		return ctx.text(json.encode(admin.AdminErrorResponse{
 			error: 'forbidden'
 		}))
 	}
@@ -863,19 +863,19 @@ pub fn (mut app AdminApp) admin_runtime_websocket_upstream_fixture_emit(mut ctx 
 	ctx.set_content_type('application/json; charset=utf-8')
 	if !app.admin_authorized(ctx) {
 		ctx.res.set_status(http.status_from_int(403))
-		return ctx.text(json.encode(AdminErrorResponse{
+		return ctx.text(json.encode(admin.AdminErrorResponse{
 			error: 'forbidden'
 		}))
 	}
 	req := json.decode(WebSocketUpstreamFixtureEmitRequest, ctx.req.data) or {
 		ctx.res.set_status(http.status_from_int(400))
-		return ctx.text(json.encode(AdminErrorResponse{
+		return ctx.text(json.encode(admin.AdminErrorResponse{
 			error: 'invalid_json'
 		}))
 	}
 	snapshot := app.shared.fixture_websocket_emit(req) or {
 		ctx.res.set_status(http.status_from_int(502))
-		return ctx.text(json.encode(AdminErrorResponse{
+		return ctx.text(json.encode(admin.AdminErrorResponse{
 			error: err.msg()
 		}))
 	}
@@ -899,13 +899,13 @@ pub fn (mut app AdminApp) admin_runtime_websocket_upstream_send(mut ctx Context)
 	ctx.set_content_type('application/json; charset=utf-8')
 	if !app.admin_authorized(ctx) {
 		ctx.res.set_status(http.status_from_int(403))
-		return ctx.text(json.encode(AdminErrorResponse{
+		return ctx.text(json.encode(admin.AdminErrorResponse{
 			error: 'forbidden'
 		}))
 	}
 	req := json.decode(WebSocketUpstreamSendRequest, ctx.req.data) or {
 		ctx.res.set_status(http.status_from_int(400))
-		return ctx.text(json.encode(AdminErrorResponse{
+		return ctx.text(json.encode(admin.AdminErrorResponse{
 			error: 'invalid_json'
 		}))
 	}

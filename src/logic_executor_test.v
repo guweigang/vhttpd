@@ -71,7 +71,7 @@ fn test_internal_admin_runtime_exposes_worker_logic_executor_identity() {
 		path:   '/admin/runtime'
 	})
 	assert resp.status == 200
-	snapshot := json.decode(AdminRuntimeSummary, resp.body) or { panic(err) }
+	snapshot := json.decode(executor.AdminRuntimeSummary, resp.body) or { panic(err) }
 	assert snapshot.logic_executor.kind == 'php'
 	assert snapshot.logic_executor.lifecycle == 'php_worker_host'
 	assert snapshot.logic_executor.model == 'worker'
