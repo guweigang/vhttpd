@@ -12,7 +12,9 @@ import net.websocket
 import time
 import veb
 
-// ws type aliases
+// ── Type aliases: main → ws ──
+type WebSocketUpstreamRuntimeContext = ws.UpstreamRuntimeContext
+type WebSocketUpstreamRef = ws.UpstreamRef
 type WebSocketUpstreamSnapshot = ws.UpstreamSnapshot
 type AdminWebSocketUpstreamRuntimeSnapshot = ws.UpstreamRuntimeSnapshot
 type WebSocketUpstreamSendRequest = ws.UpstreamSendRequest
@@ -28,103 +30,10 @@ type AdminWebSocketUpstreamActivitySnapshot = ws.UpstreamActivityListSnapshot
 const websocket_upstream_provider_feishu = 'feishu'
 const websocket_upstream_provider_fixture = 'fixture'
 
-@[heap]
-struct WebSocketUpstreamRef {
-mut:
-	rt       WebSocketUpstreamRuntimeContext
-	provider string
-	instance string
-}
+// ── Builder: captures App closures ──
 
-struct WebSocketUpstreamRuntimeContext {
-	enabled_fn         fn (string, string) bool    = unsafe { nil }
-	reconnect_delay_fn fn (string, string) int     = unsafe { nil }
-	connecting_fn      fn (string, string)         = unsafe { nil }
-	pull_url_fn        fn (string, string) !string = unsafe { nil }
-	connected_fn       fn (string, string, string) = unsafe { nil }
-	disconnected_fn    fn (string, string, string) = unsafe { nil }
-	handle_message_fn  fn (string, string, mut websocket.Client, &websocket.Message) ! = unsafe { nil }
-	post_connect_fn    fn (string, string, string, mut websocket.Client)               = unsafe { nil }
-}
-
-fn (rt WebSocketUpstreamRuntimeContext) enabled(provider string, instance string) bool {
-	return rt.enabled_fn(provider, instance)
-}
-
-fn (rt WebSocketUpstreamRuntimeContext) reconnect_delay_ms(provider string, instance string) int {
-	return rt.reconnect_delay_fn(provider, instance)
-}
-
-fn (rt WebSocketUpstreamRuntimeContext) on_connecting(provider string, instance string) {
-	rt.connecting_fn(provider, instance)
-}
-
-fn (rt WebSocketUpstreamRuntimeContext) pull_url(provider string, instance string) !string {
-	return rt.pull_url_fn(provider, instance)
-}
-
-fn (rt WebSocketUpstreamRuntimeContext) on_connected(provider string, instance string, ws_url string) {
-	rt.connected_fn(provider, instance, ws_url)
-}
-
-fn (rt WebSocketUpstreamRuntimeContext) on_disconnected(provider string, instance string, reason string) {
-	rt.disconnected_fn(provider, instance, reason)
-}
-
-fn (rt WebSocketUpstreamRuntimeContext) handle_message(provider string, instance string, mut ws_client websocket.Client, msg &websocket.Message) ! {
-	rt.handle_message_fn(provider, instance, mut ws_client, msg)!
-}
-
-fn (rt WebSocketUpstreamRuntimeContext) post_connect(provider string, instance string, ws_url string, mut client websocket.Client) {
-	rt.post_connect_fn(provider, instance, ws_url, mut client)
-}
-
-fn WebSocketUpstreamRuntimeContext.started_key(provider string, instance string) string {
-	return '${provider.trim_space()}/${instance.trim_space()}'
-}
-
-fn WebSocketUpstreamRuntimeContext.run_provider(rt WebSocketUpstreamRuntimeContext, provider string, instance string) {
-	if !rt.enabled(provider, instance) {
-		return
-	}
-	reconnect_delay := rt.reconnect_delay_ms(provider, instance)
-	mut ref := &WebSocketUpstreamRef{
-		rt:       rt
-		provider: provider
-		instance: instance
-	}
-	for {
-		rt.on_connecting(provider, instance)
-		ws_url := rt.pull_url(provider, instance) or {
-			rt.on_disconnected(provider, instance, 'endpoint:${err}')
-			time.sleep(reconnect_delay * time.millisecond)
-			continue
-		}
-		mut client := websocket.new_client(ws_url,
-			read_timeout:  60 * time.second
-			write_timeout: 60 * time.second
-		) or {
-			rt.on_disconnected(provider, instance, 'client:${err}')
-			time.sleep(reconnect_delay * time.millisecond)
-			continue
-		}
-		client.on_message_ref(websocket_upstream_message_cb, ref)
-		client.on_error_ref(websocket_upstream_error_cb, ref)
-		client.on_close_ref(websocket_upstream_close_cb, ref)
-		client.connect() or {
-			rt.on_disconnected(provider, instance, 'connect:${err}')
-			time.sleep(reconnect_delay * time.millisecond)
-			continue
-		}
-		rt.on_connected(provider, instance, ws_url)
-		rt.post_connect(provider, instance, ws_url, mut client)
-		client.listen() or { rt.on_disconnected(provider, instance, 'listen:${err}') }
-		time.sleep(reconnect_delay * time.millisecond)
-	}
-}
-
-fn (mut app App) build_websocket_upstream_runtime_context() WebSocketUpstreamRuntimeContext {
-	return WebSocketUpstreamRuntimeContext{
+fn (mut app App) build_websocket_upstream_runtime_context() ws.UpstreamRuntimeContext {
+	return ws.UpstreamRuntimeContext{
 		enabled_fn:         fn [mut app] (provider string, instance string) bool {
 			return app.websocket_upstream_provider_enabled(provider, instance)
 		}
@@ -163,6 +72,8 @@ fn (mut app App) build_websocket_upstream_runtime_context() WebSocketUpstreamRun
 		}
 	}
 }
+
+// ── Fixture helpers ──
 
 fn (mut app App) fixture_websocket_runtime_ensure(name string) FixtureWebSocketUpstreamRuntime {
 	return app.ws_hub.fixture_ensure(name)
@@ -272,6 +183,8 @@ fn (mut app App) fixture_websocket_emit(req WebSocketUpstreamFixtureEmitRequest)
 	return snapshot
 }
 
+// ── Activity & admin snapshots ──
+
 fn (mut app App) websocket_upstream_record_activity(snapshot WebSocketUpstreamActivitySnapshot) {
 	app.ws_hub.record_upstream_activity(snapshot)
 }
@@ -286,6 +199,8 @@ fn (mut app App) execute_websocket_upstream_commands(source_activity_id string, 
 	ctx := DispatchContext{}
 	return exec.execute(source_activity_id, ctx, commands)
 }
+
+// ── Provider routing ──
 
 fn (mut app App) websocket_upstream_provider_enabled(provider string, instance string) bool {
 	if provider == websocket_upstream_provider_fixture {
@@ -430,6 +345,8 @@ fn (mut app App) websocket_upstream_provider_handle_message(provider string, ins
 	}
 }
 
+// ── Send / Update ──
+
 fn (mut app App) websocket_upstream_provider_send(provider string, req WebSocketUpstreamSendRequest) !WebSocketUpstreamSendResult {
 	return match provider {
 		websocket_upstream_provider_feishu {
@@ -554,6 +471,8 @@ fn (mut app App) websocket_upstream_update(req WebSocketUpstreamSendRequest) !We
 	return app.websocket_upstream_provider_update(provider, normalized)
 }
 
+// ── Events snapshot ──
+
 fn (mut app App) admin_websocket_upstream_events_snapshot(limit int, offset int, provider_filter string, instance_filter string) AdminWebSocketUpstreamEventSnapshot {
 	mut events := []WebSocketUpstreamEventSnapshot{}
 	if provider_filter == '' || provider_filter == websocket_upstream_provider_feishu {
@@ -588,23 +507,10 @@ fn (mut app App) admin_websocket_upstream_events_snapshot(limit int, offset int,
 	}
 }
 
-fn websocket_upstream_message_cb(mut ws_client websocket.Client, msg &websocket.Message, ref voidptr) ! {
-	mut state := unsafe { &WebSocketUpstreamRef(ref) }
-	state.rt.handle_message(state.provider, state.instance, mut ws_client, msg)!
-}
-
-fn websocket_upstream_error_cb(mut _ws websocket.Client, err string, ref voidptr) ! {
-	mut state := unsafe { &WebSocketUpstreamRef(ref) }
-	state.rt.on_disconnected(state.provider, state.instance, err)
-}
-
-fn websocket_upstream_close_cb(mut _ws websocket.Client, code int, reason string, ref voidptr) ! {
-	mut state := unsafe { &WebSocketUpstreamRef(ref) }
-	state.rt.on_disconnected(state.provider, state.instance, 'close:${code}:${reason}')
-}
+// ── Provider lifecycle ──
 
 fn (mut app App) websocket_upstream_mark_started(provider string, instance string) bool {
-	key := WebSocketUpstreamRuntimeContext.started_key(provider, instance)
+	key := ws.UpstreamRuntimeContext.started_key(provider, instance)
 	if key == '/' || provider.trim_space() == '' || instance.trim_space() == '' {
 		return false
 	}
@@ -646,8 +552,10 @@ fn (mut app App) ensure_websocket_upstream_provider_running(provider string, ins
 
 fn run_websocket_upstream_provider(mut app App, provider string, instance string) {
 	rt := app.build_websocket_upstream_runtime_context()
-	WebSocketUpstreamRuntimeContext.run_provider(rt, provider, instance)
+	ws.upstream_run_provider(rt, provider, instance)
 }
+
+// ── Admin HTTP endpoints (App) ──
 
 @['/admin/runtime/upstreams/websocket'; get]
 pub fn (mut app App) admin_runtime_websocket_upstreams(mut ctx Context) veb.Result {
@@ -844,6 +752,8 @@ pub fn (mut app App) gateway_websocket_upstream_send(mut ctx Context) veb.Result
 	})
 	return ctx.text(json.encode(result))
 }
+
+// ── Admin HTTP endpoints (AdminApp) ──
 
 @['/admin/runtime/upstreams/websocket'; get]
 pub fn (mut app AdminApp) admin_runtime_websocket_upstreams(mut ctx Context) veb.Result {
