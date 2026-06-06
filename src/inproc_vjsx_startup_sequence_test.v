@@ -1,6 +1,7 @@
 module main
+import config
 import transport
-
+import feishu
 import json
 import os
 
@@ -55,11 +56,16 @@ export default app;
 		warm_executor.close()
 	}
 	mut warm_app := App{
-		feishu_apps:    map[string]FeishuAppConfig{}
-		feishu_runtime: map[string]FeishuProviderRuntime{}
+		feishu: feishu.FeishuState{
+			apps:    map[string]config.FeishuAppConfig{}
+			runtime: map[string]FeishuProviderRuntime{}
+		}
 	}
-	warm_executor.warmup(mut warm_app) or { panic(err) }
-	spec := warm_app.provider_instance_get('demo', 'main') or { panic('missing provider instance spec') }
+	mut warm_facade := warm_app.as_facade()
+	warm_executor.warmup(mut warm_facade) or { panic(err) }
+	spec := warm_app.provider_instance_get('demo', 'main') or {
+		panic('missing provider instance spec')
+	}
 	assert spec.config_json.contains('"value":"startup_value"')
 
 	startup_sequence_with_temp_db('codexbot_ts_startup_sequence.sqlite', fn (_ string) {
@@ -74,7 +80,7 @@ export default app;
 		defer {
 			repo_executor.close()
 		}
-		mut repo_app := App{}
+		mut repo_app := InProcTestApp{}
 		resp := repo_executor.dispatch_websocket_upstream(mut repo_app,
 			transport.WorkerWebSocketUpstreamDispatchRequest{
 				mode:        'websocket_upstream'

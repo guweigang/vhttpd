@@ -25,7 +25,7 @@ fn test_inproc_vjsx_executor_feishu_cb_app_handles_card_action() {
 	defer {
 		executor.close()
 	}
-	mut app := App{}
+	mut app := InProcTestApp{}
 	resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 		mode:        'websocket_upstream'
 		event:       'action'

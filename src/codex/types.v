@@ -2,7 +2,6 @@ module codex
 
 import sync
 import time
-import net.unix
 import net.websocket as ws
 
 // ── Codex Target ──
@@ -209,41 +208,6 @@ pub fn (mut rt ProviderRuntime) bind_stream_to_thread(thread_id string, stream_i
 	return thread_id
 }
 
-// ── DB Types ──
-
-pub struct DbPoolHandle {}
-
-pub struct DbSessionHandle {
-pub mut:
-	driver string
-}
-
-pub struct DbProviderRuntime {
-pub mut:
-	enabled             bool
-	socket              string
-	driver              string
-	host                string
-	port                int
-	username            string
-	password            string
-	database            string
-	pool_size           int
-	started             bool
-	started_at_unix     i64
-	last_error          string
-	pool_ready          bool
-	pool                DbPoolHandle
-	total_queries       u64
-	total_executes      u64
-	failed_queries      u64
-	active_transactions int
-	session_counter     u64
-	stop_requested      bool
-	listener            &unix.StreamListener = unsafe { nil }
-	tx_sessions         map[string]DbSessionHandle
-}
-
 // ── Codex State ──
 
 pub struct CodexState {
@@ -252,5 +216,4 @@ pub mut:
 	runtime         ProviderRuntime
 	instances       map[string]ProviderRuntime
 	ollama_enabled  bool
-	db_runtime      DbProviderRuntime
 }

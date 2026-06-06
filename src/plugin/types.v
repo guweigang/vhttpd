@@ -1,4 +1,4 @@
-module plugins
+module plugin
 
 import config
 import executor

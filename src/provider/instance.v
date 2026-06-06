@@ -2,48 +2,52 @@ module provider
 
 import time
 
-// instance_upsert creates or updates a provider instance spec in the store.
-pub fn instance_upsert(mut specs map[string]ProviderInstanceSpec, spec ProviderInstanceSpec) ProviderInstanceSpec {
-	key := instance_key(spec.provider, spec.instance)
+pub fn ProviderInstanceStore.upsert(mut specs map[string]ProviderInstanceSpec, spec ProviderInstanceSpec) ProviderInstanceSpec {
+	key := spec.key()
 	now_ms := time.now().unix_milli()
 	existing := specs[key] or { ProviderInstanceSpec{} }
 	next := ProviderInstanceSpec{
-		provider:      spec.provider.trim_space()
-		instance:      normalize_instance_name(spec.instance)
+		provider:      spec.normalized_provider()
+		instance:      spec.normalized_instance()
 		config_json:   spec.config_json
-		desired_state: if spec.desired_state.trim_space() == '' {
-			'connected'
-		} else {
-			spec.desired_state.trim_space()
-		}
-		created_at: if existing.created_at > 0 { existing.created_at } else { now_ms }
-		updated_at: now_ms
+		desired_state: spec.desired_state_or_default()
+		created_at:    if existing.created_at > 0 { existing.created_at } else { now_ms }
+		updated_at:    now_ms
 	}
 	specs[key] = next
 	return next
 }
 
-// instance_get retrieves a provider instance spec by name.
-pub fn instance_get(specs map[string]ProviderInstanceSpec, provider_name string, instance string) ?ProviderInstanceSpec {
-	key := instance_key(provider_name, instance)
+// upsert creates or updates a provider instance spec in the registry.
+pub fn (mut registry ProviderInstanceRegistry) upsert(spec ProviderInstanceSpec) ProviderInstanceSpec {
+	return ProviderInstanceStore.upsert(mut registry.specs, spec)
+}
+
+pub fn ProviderInstanceStore.get(specs map[string]ProviderInstanceSpec, provider_name string, instance string) ?ProviderInstanceSpec {
+	key := ProviderInstanceSpec.key_for(provider_name, instance)
 	if key !in specs {
 		return none
 	}
 	return specs[key]
 }
 
-// instance_list returns provider instance specs, optionally filtered by provider name.
-pub fn instance_list(specs map[string]ProviderInstanceSpec, provider_name string) []ProviderInstanceSpec {
+// get retrieves a provider instance spec by name.
+pub fn (registry ProviderInstanceRegistry) get(provider_name string, instance string) ?ProviderInstanceSpec {
+	return ProviderInstanceStore.get(registry.specs, provider_name, instance)
+}
+
+pub fn ProviderInstanceStore.list(specs map[string]ProviderInstanceSpec, provider_name string) []ProviderInstanceSpec {
+	filter_provider := provider_name.trim_space()
 	mut out := []ProviderInstanceSpec{}
 	for _, spec in specs {
-		if provider_name.trim_space() != '' && spec.provider != provider_name.trim_space() {
+		if filter_provider != '' && spec.provider != filter_provider {
 			continue
 		}
 		out << spec
 	}
 	out.sort_with_compare(fn (a &ProviderInstanceSpec, b &ProviderInstanceSpec) int {
-		left := '${a.provider}/${a.instance}'
-		right := '${b.provider}/${b.instance}'
+		left := a.key()
+		right := b.key()
 		if left < right {
 			return -1
 		}
@@ -53,4 +57,9 @@ pub fn instance_list(specs map[string]ProviderInstanceSpec, provider_name string
 		return 0
 	})
 	return out
+}
+
+// list returns provider instance specs, optionally filtered by provider name.
+pub fn (registry ProviderInstanceRegistry) list(provider_name string) []ProviderInstanceSpec {
+	return ProviderInstanceStore.list(registry.specs, provider_name)
 }

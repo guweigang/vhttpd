@@ -69,6 +69,19 @@ pub fn (mut h HubState) fixture_note_send(instance string, ok bool) {
 	h.fixture_update(instance, runtime)
 }
 
+pub fn (mut h HubState) fixture_push_event(instance string, event UpstreamEventSnapshot, recent_event_limit int) {
+	mut runtime := h.fixture_ensure(instance)
+	mut events := runtime.recent_events.clone()
+	events << event
+	limit := if recent_event_limit > 0 { recent_event_limit } else { 20 }
+	if events.len > limit {
+		events = events[events.len - limit..].clone()
+	}
+	runtime.received_frames++
+	runtime.recent_events = events
+	h.fixture_update(instance, runtime)
+}
+
 pub fn (mut h HubState) fixture_send(instance string) UpstreamSendResult {
 	name := if instance.trim_space() == '' { 'main' } else { instance.trim_space() }
 	h.fixture_note_send(name, true)

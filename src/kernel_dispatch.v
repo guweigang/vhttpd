@@ -1,34 +1,30 @@
 module main
+
 import transport
 import executor
+import dispatch
 
 type KernelDispatchKind = executor.KernelDispatchKind
-
 type KernelDispatchEnvelope = executor.KernelDispatchEnvelope
-
 type KernelDispatchTransportFailure = executor.KernelDispatchTransportFailure
-
 type KernelWebSocketUpstreamDispatchOutcome = executor.KernelWebSocketUpstreamDispatchOutcome
-
 type KernelMcpDispatchOutcome = executor.KernelMcpDispatchOutcome
-
 type KernelStreamDispatchFailure = executor.KernelStreamDispatchFailure
 
-// Factory methods forwarded to executor module
 pub fn KernelDispatchEnvelope.from_stream_dispatch(req transport.StreamDispatchRequest) KernelDispatchEnvelope {
-	return executor.KernelDispatchEnvelope.from_stream_dispatch(req)
+	return dispatch.stream_dispatch_envelope_from_stream(req)
 }
 
 pub fn KernelDispatchEnvelope.from_mcp_dispatch(req transport.WorkerMcpDispatchRequest) KernelDispatchEnvelope {
-	return executor.KernelDispatchEnvelope.from_mcp_dispatch(req)
+	return dispatch.mcp_dispatch_envelope_from_mcp(req)
 }
 
 pub fn KernelDispatchEnvelope.from_websocket_upstream(req transport.WorkerWebSocketUpstreamDispatchRequest) KernelDispatchEnvelope {
-	return executor.KernelDispatchEnvelope.from_websocket_upstream(req)
+	return dispatch.websocket_upstream_envelope(req)
 }
 
 pub fn KernelDispatchEnvelope.from_websocket_dispatch(frame transport.WorkerWebSocketFrame) KernelDispatchEnvelope {
-	return executor.KernelDispatchEnvelope.from_websocket_dispatch(frame)
+	return dispatch.websocket_dispatch_envelope(frame)
 }
 
 fn (mut app App) kernel_dispatch_stream(req transport.StreamDispatchRequest) !transport.StreamDispatchResponse {
@@ -41,12 +37,10 @@ fn (mut app App) kernel_dispatch_stream(req transport.StreamDispatchRequest) !tr
 }
 
 fn kernel_stream_dispatch_failure(resp transport.StreamDispatchResponse) ?KernelStreamDispatchFailure {
-	if resp.event != 'error' {
-		return none
-	}
+	result := dispatch.stream_failure(resp) or { return none }
 	return KernelStreamDispatchFailure{
-		error:       resp.error
-		error_class: if resp.error_class != '' { resp.error_class } else { 'worker_runtime_error' }
+		error:       result.error
+		error_class: result.error_class
 	}
 }
 
@@ -64,12 +58,13 @@ fn (mut app App) kernel_dispatch_mcp_handled(req transport.WorkerMcpDispatchRequ
 	if resp.error != '' || resp.commands.len == 0 {
 		return KernelMcpDispatchOutcome{
 			response:          resp
-			command_snapshots: []WebSocketUpstreamCommandActivity{}
+			command_snapshots: []executor.WebSocketUpstreamCommandActivity{}
 			command_error:     ''
 		}
 	}
 	ctx := DispatchContext.from_mcp_dispatch_provider(req, app.logic_executor_provider())
-	command_snapshots, command_error := app.execute_command_envelopes_with_snapshots(req.id, ctx, resp.commands)
+	command_snapshots, command_error := app.execute_command_envelopes_with_snapshots(req.id, ctx,
+		resp.commands)
 	return KernelMcpDispatchOutcome{
 		response:          resp
 		command_snapshots: command_snapshots
@@ -88,12 +83,13 @@ fn (mut app App) kernel_dispatch_websocket_upstream_handled(req transport.Worker
 	if resp.error != '' || resp.commands.len == 0 {
 		return KernelWebSocketUpstreamDispatchOutcome{
 			response:          resp
-			command_snapshots: []WebSocketUpstreamCommandActivity{}
+			command_snapshots: []executor.WebSocketUpstreamCommandActivity{}
 			command_error:     ''
 		}
 	}
 	ctx := DispatchContext.from_websocket_upstream(req)
-	command_snapshots, command_error := app.execute_command_envelopes_with_snapshots(req.id, ctx, resp.commands)
+	command_snapshots, command_error := app.execute_command_envelopes_with_snapshots(req.id, ctx,
+		resp.commands)
 	return KernelWebSocketUpstreamDispatchOutcome{
 		response:          resp
 		command_snapshots: command_snapshots
@@ -112,142 +108,63 @@ fn (mut app App) kernel_dispatch_websocket_event(frame transport.WorkerWebSocket
 }
 
 fn kernel_dispatch_transport_failure(err_msg string) KernelDispatchTransportFailure {
-	status, error_class := classify_worker_error(err_msg)
-	return KernelDispatchTransportFailure{
-		status:      status
-		error_class: error_class
-	}
+	return dispatch.transport_failure(err_msg)
 }
 
 fn (mut app App) kernel_stream_dispatch_open_request(method string, path string, body string, remote_addr string, req_id string, trace_id string, query map[string]string, headers map[string]string) transport.StreamDispatchRequest {
-	return transport.StreamDispatchRequest{
-		mode:        'stream'
-		strategy:    'dispatch'
-		event:       'open'
-		id:          req_id
-		method:      method.to_upper()
-		path:        path
-		body:        body
-		remote_addr: remote_addr
-		request_id:  req_id
-		trace_id:    trace_id
-		query:       query.clone()
-		headers:     headers.clone()
-		state:       map[string]string{}
-	}
+	_ = app
+	return dispatch.build_stream_open_request(method, path, body, remote_addr, req_id, trace_id,
+		query, headers)
 }
 
 fn (mut app App) kernel_stream_dispatch_open(method string, path string, body string, remote_addr string, req_id string, trace_id string, query map[string]string, headers map[string]string) !transport.StreamDispatchResponse {
-	return app.kernel_dispatch_stream(app.kernel_stream_dispatch_open_request(method, path, body,
+	return app.kernel_dispatch_stream(dispatch.build_stream_open_request(method, path, body,
 		remote_addr, req_id, trace_id, query, headers))
 }
 
 fn (mut app App) kernel_stream_dispatch_next_request(method string, path string, remote_addr string, req_id string, trace_id string, query map[string]string, headers map[string]string, state map[string]string) transport.StreamDispatchRequest {
-	return transport.StreamDispatchRequest{
-		mode:        'stream'
-		strategy:    'dispatch'
-		event:       'next'
-		id:          req_id
-		method:      method.to_upper()
-		path:        path
-		body:        ''
-		remote_addr: remote_addr
-		request_id:  req_id
-		trace_id:    trace_id
-		query:       query.clone()
-		headers:     headers.clone()
-		state:       state.clone()
-	}
+	_ = app
+	return dispatch.build_stream_next_request(method, path, remote_addr, req_id, trace_id, query,
+		headers, state)
 }
 
 fn (mut app App) kernel_stream_dispatch_next(method string, path string, remote_addr string, req_id string, trace_id string, query map[string]string, headers map[string]string, state map[string]string) !transport.StreamDispatchResponse {
-	return app.kernel_dispatch_stream(app.kernel_stream_dispatch_next_request(method, path,
+	return app.kernel_dispatch_stream(dispatch.build_stream_next_request(method, path,
 		remote_addr, req_id, trace_id, query, headers, state))
 }
 
 fn (mut app App) kernel_stream_dispatch_close_request(req_id string, trace_id string, state map[string]string, reason string) transport.StreamDispatchRequest {
-	return transport.StreamDispatchRequest{
-		mode:       'stream'
-		strategy:   'dispatch'
-		event:      'close'
-		id:         req_id
-		request_id: req_id
-		trace_id:   trace_id
-		state:      state.clone()
-		reason:     reason
-	}
+	_ = app
+	return dispatch.build_stream_close_request(req_id, trace_id, state, reason)
 }
 
 fn (mut app App) kernel_stream_dispatch_close(req_id string, trace_id string, state map[string]string, reason string) !transport.StreamDispatchResponse {
-	return app.kernel_dispatch_stream(app.kernel_stream_dispatch_close_request(req_id, trace_id,
-		state, reason))
+	return app.kernel_dispatch_stream(dispatch.build_stream_close_request(req_id, trace_id, state,
+		reason))
 }
 
 fn (mut app App) kernel_mcp_dispatch_request(method string, path string, headers map[string]string, protocol_version string, body string, remote_addr string, req_id string, trace_id string, session_id string, client_capabilities_json string) transport.WorkerMcpDispatchRequest {
-	return transport.WorkerMcpDispatchRequest{
-		mode:                     'mcp'
-		event:                    'message'
-		id:                       req_id
-		http_method:              method
-		path:                     path
-		headers:                  headers.clone()
-		protocol_version:         protocol_version
-		accept:                   headers['accept'] or { '' }
-		content_type:             headers['content-type'] or { '' }
-		body:                     body
-		jsonrpc_raw:              body
-		remote_addr:              remote_addr
-		request_id:               req_id
-		trace_id:                 trace_id
-		session_id:               session_id
-		client_capabilities_json: client_capabilities_json
-	}
+	_ = app
+	return dispatch.build_mcp_message_request(method, path, headers, protocol_version, body,
+		remote_addr, req_id, trace_id, session_id, client_capabilities_json)
 }
 
 fn (mut app App) kernel_websocket_upstream_dispatch_request(activity_id string, provider string, instance string, trace_id string, event_type string, message_id string, target string, target_type string, payload string, received_at i64, metadata map[string]string) transport.WorkerWebSocketUpstreamDispatchRequest {
-	return app.kernel_websocket_upstream_dispatch_request_with_event('message', activity_id,
-		provider, instance, trace_id, event_type, message_id, target, target_type, payload,
-		received_at, metadata)
+	_ = app
+	return dispatch.build_websocket_upstream_request(activity_id, provider, instance, trace_id,
+		event_type, message_id, target, target_type, payload, received_at, metadata)
 }
 
 fn (mut app App) kernel_websocket_upstream_dispatch_request_with_event(event string, activity_id string, provider string, instance string, trace_id string, event_type string, message_id string, target string, target_type string, payload string, received_at i64, metadata map[string]string) transport.WorkerWebSocketUpstreamDispatchRequest {
-	return transport.WorkerWebSocketUpstreamDispatchRequest{
-		mode:        'websocket_upstream'
-		event:       event
-		id:          activity_id
-		provider:    provider
-		instance:    instance
-		trace_id:    trace_id
-		event_type:  event_type
-		message_id:  message_id
-		target:      target
-		target_type: target_type
-		payload:     payload
-		received_at: received_at
-		metadata:    metadata.clone()
-	}
+	_ = app
+	return dispatch.build_websocket_upstream_request_with_event(event, activity_id, provider,
+		instance, trace_id, event_type, message_id, target, target_type, payload, received_at,
+		metadata)
 }
 
 fn (mut app App) kernel_websocket_dispatch_frame(event string, _method string, path string, query map[string]string, headers map[string]string, remote_addr string, req_id string, trace_id string, opcode string, data string, code int, reason string, rooms []string, metadata map[string]string, room_members map[string][]string, member_metadata map[string]map[string]string, room_counts map[string]int, presence_users map[string][]string) transport.WorkerWebSocketFrame {
-	return transport.WorkerWebSocketFrame{
-		mode:            'websocket_dispatch'
-		event:           event
-		id:              req_id
-		path:            path
-		query:           query.clone()
-		headers:         headers.clone()
-		remote_addr:     remote_addr
-		request_id:      req_id
-		trace_id:        trace_id
-		opcode:          opcode
-		data:            data
-		code:            code
-		reason:          reason
-		rooms:           rooms.clone()
-		metadata:        metadata.clone()
-		room_members:    room_members.clone()
-		member_metadata: member_metadata.clone()
-		room_counts:     room_counts.clone()
-		presence_users:  presence_users.clone()
-	}
+	_ = app
+	return dispatch.build_websocket_dispatch_frame(event, _method, path, query, headers,
+		remote_addr, req_id, trace_id, opcode, data, code, reason, rooms, metadata, room_members,
+		member_metadata, room_counts, presence_users)
 }

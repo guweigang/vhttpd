@@ -29,6 +29,30 @@ mut:
 	run_command_envelopes(request_id string, dispatch_ctx DispatchContext, commands []transport.WorkerWebSocketUpstreamCommand) string
 }
 
+// NoOpAppFacade is a no-op implementation of AppFacade used as a default value
+// for struct fields that hold an AppFacade reference.
+pub struct NoOpAppFacade {
+mut:
+	reserved int
+}
+
+pub fn (a NoOpAppFacade) get_runtime_config_json() string { return '{}' }
+pub fn (a NoOpAppFacade) worker_backend_read_timeout_ms() int { return 0 }
+pub fn (a NoOpAppFacade) worker_backend_sockets_len() int { return 0 }
+pub fn (mut a NoOpAppFacade) worker_backend_select_socket_queued() !string { return error('noop') }
+pub fn (mut a NoOpAppFacade) on_worker_request_started(_socket_path string) {}
+pub fn (mut a NoOpAppFacade) on_worker_request_finished(_socket_path string) {}
+pub fn (mut a NoOpAppFacade) worker_websocket_open(mut _conn unix.StreamConn, _req http.Request, _remote_addr string, _path string, _req_id string, _trace_id string) !(bool, int, string) { return error('noop') }
+pub fn (mut a NoOpAppFacade) worker_backend_dispatch_stream(_req transport.StreamDispatchRequest) !transport.StreamDispatchResponse { return error('noop') }
+pub fn (mut a NoOpAppFacade) worker_backend_dispatch_mcp(_req transport.WorkerMcpDispatchRequest) !transport.WorkerMcpDispatchResponse { return error('noop') }
+pub fn (mut a NoOpAppFacade) worker_backend_dispatch_websocket_upstream(_req transport.WorkerWebSocketUpstreamDispatchRequest) !transport.WorkerWebSocketUpstreamDispatchResponse { return error('noop') }
+pub fn (mut a NoOpAppFacade) worker_backend_dispatch_websocket_event(_frame transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse { return error('noop') }
+pub fn (mut a NoOpAppFacade) emit(_kind string, _fields map[string]string) {}
+pub fn (mut a NoOpAppFacade) admin_runtime_snapshot() AdminRuntimeSummary { return AdminRuntimeSummary{} }
+pub fn (mut a NoOpAppFacade) feishu_card_bridge_dispatch_callback(_app_name string, _trace_id string, _summary FeishuRuntimeEventSummary, _payload string) !FeishuCardBridgeResult { return error('noop') }
+pub fn (mut a NoOpAppFacade) execute_websocket_dispatch_commands_result(_commands []transport.WorkerWebSocketFrame) transport.WorkerWebSocketDispatchCommandsResult { return transport.WorkerWebSocketDispatchCommandsResult{} }
+pub fn (mut a NoOpAppFacade) run_command_envelopes(_request_id string, _dispatch_ctx DispatchContext, _commands []transport.WorkerWebSocketUpstreamCommand) string { return '' }
+
 pub struct FeishuRuntimeEventSummary {
 pub mut:
 	event_id          string
@@ -53,26 +77,38 @@ pub mut:
 }
 
 fn feishu_json_field_string(obj map[string]json2.Any, key string) string {
+	return FeishuRuntimeEventSummary.json_field_string(obj, key)
+}
+
+fn FeishuRuntimeEventSummary.json_field_string(obj map[string]json2.Any, key string) string {
 	return (obj[key] or { json2.Any('') }).str()
 }
 
 fn feishu_json_map_field(obj map[string]json2.Any, key string) map[string]json2.Any {
+	return FeishuRuntimeEventSummary.json_map_field(obj, key)
+}
+
+fn FeishuRuntimeEventSummary.json_map_field(obj map[string]json2.Any, key string) map[string]json2.Any {
 	return (obj[key] or { json2.Any(map[string]json2.Any{}) }).as_map()
 }
 
 pub fn feishu_runtime_event_summary(payload string) FeishuRuntimeEventSummary {
+	return FeishuRuntimeEventSummary.from_payload(payload)
+}
+
+pub fn FeishuRuntimeEventSummary.from_payload(payload string) FeishuRuntimeEventSummary {
 	parsed := json2.decode[json2.Any](payload) or { return FeishuRuntimeEventSummary{} }
 	root := parsed.as_map()
-	header := feishu_json_map_field(root, 'header')
-	event := feishu_json_map_field(root, 'event')
-	context := feishu_json_map_field(root, 'context')
-	operator := feishu_json_map_field(root, 'operator')
-	message := feishu_json_map_field(event, 'message')
-	sender := feishu_json_map_field(event, 'sender')
-	sender_id := feishu_json_map_field(sender, 'sender_id')
-	mut action := feishu_json_map_field(event, 'action')
+	header := FeishuRuntimeEventSummary.json_map_field(root, 'header')
+	event := FeishuRuntimeEventSummary.json_map_field(root, 'event')
+	context := FeishuRuntimeEventSummary.json_map_field(root, 'context')
+	operator := FeishuRuntimeEventSummary.json_map_field(root, 'operator')
+	message := FeishuRuntimeEventSummary.json_map_field(event, 'message')
+	sender := FeishuRuntimeEventSummary.json_map_field(event, 'sender')
+	sender_id := FeishuRuntimeEventSummary.json_map_field(sender, 'sender_id')
+	mut action := FeishuRuntimeEventSummary.json_map_field(event, 'action')
 	if action.len == 0 {
-		action = feishu_json_map_field(root, 'action')
+		action = FeishuRuntimeEventSummary.json_map_field(root, 'action')
 	}
 	mut operator_id_type := ''
 	mut operator_id_value := ''
@@ -101,23 +137,23 @@ pub fn feishu_runtime_event_summary(payload string) FeishuRuntimeEventSummary {
 	} else {
 		''
 	}
-	open_message_id := if feishu_json_field_string(event, 'open_message_id') != '' {
-		feishu_json_field_string(event, 'open_message_id')
-	} else if feishu_json_field_string(context, 'open_message_id') != '' {
-		feishu_json_field_string(context, 'open_message_id')
+	open_message_id := if FeishuRuntimeEventSummary.json_field_string(event, 'open_message_id') != '' {
+		FeishuRuntimeEventSummary.json_field_string(event, 'open_message_id')
+	} else if FeishuRuntimeEventSummary.json_field_string(context, 'open_message_id') != '' {
+		FeishuRuntimeEventSummary.json_field_string(context, 'open_message_id')
 	} else {
-		feishu_json_field_string(action, 'open_message_id')
+		FeishuRuntimeEventSummary.json_field_string(action, 'open_message_id')
 	}
 	mut event_kind := 'event'
-	if message.len > 0 || feishu_json_field_string(message, 'message_id') != '' {
+	if message.len > 0 || FeishuRuntimeEventSummary.json_field_string(message, 'message_id') != '' {
 		event_kind = 'message'
 	}
-	if action.len > 0 || feishu_json_field_string(action, 'tag') != '' {
+	if action.len > 0 || FeishuRuntimeEventSummary.json_field_string(action, 'tag') != '' {
 		event_kind = 'action'
 	}
 	mut target_type := ''
 	mut target := ''
-	chat_id := feishu_json_field_string(message, 'chat_id')
+	chat_id := FeishuRuntimeEventSummary.json_field_string(message, 'chat_id')
 	if chat_id != '' {
 		target_type = 'chat_id'
 		target = chat_id
@@ -126,28 +162,28 @@ pub fn feishu_runtime_event_summary(payload string) FeishuRuntimeEventSummary {
 		target = open_message_id
 	}
 	return FeishuRuntimeEventSummary{
-		event_id:          feishu_json_field_string(header, 'event_id')
+		event_id:          FeishuRuntimeEventSummary.json_field_string(header, 'event_id')
 		event_kind:        event_kind
-		event_type:        feishu_json_field_string(header, 'event_type')
-		message_id:        feishu_json_field_string(message, 'message_id')
-		message_type:      feishu_json_field_string(message, 'message_type')
+		event_type:        FeishuRuntimeEventSummary.json_field_string(header, 'event_type')
+		message_id:        FeishuRuntimeEventSummary.json_field_string(message, 'message_id')
+		message_type:      FeishuRuntimeEventSummary.json_field_string(message, 'message_type')
 		chat_id:           chat_id
-		chat_type:         feishu_json_field_string(message, 'chat_type')
+		chat_type:         FeishuRuntimeEventSummary.json_field_string(message, 'chat_type')
 		target_type:       target_type
 		target:            target
 		open_message_id:   open_message_id
-		root_id:           feishu_json_field_string(message, 'root_id')
-		parent_id:         feishu_json_field_string(message, 'parent_id')
-		create_time:       feishu_json_field_string(message, 'create_time')
+		root_id:           FeishuRuntimeEventSummary.json_field_string(message, 'root_id')
+		parent_id:         FeishuRuntimeEventSummary.json_field_string(message, 'parent_id')
+		create_time:       FeishuRuntimeEventSummary.json_field_string(message, 'create_time')
 		sender_id:         if sender_id_value != '' { sender_id_value } else { operator_id_value }
 		sender_id_type:    if sender_id_type != '' { sender_id_type } else { operator_id_type }
-		sender_tenant_key: if feishu_json_field_string(root, 'tenant_key') != '' {
-			feishu_json_field_string(root, 'tenant_key')
+		sender_tenant_key: if FeishuRuntimeEventSummary.json_field_string(root, 'tenant_key') != '' {
+			FeishuRuntimeEventSummary.json_field_string(root, 'tenant_key')
 		} else {
-			feishu_json_field_string(sender, 'tenant_key')
+			FeishuRuntimeEventSummary.json_field_string(sender, 'tenant_key')
 		}
-		action_tag:        feishu_json_field_string(action, 'tag')
+		action_tag:        FeishuRuntimeEventSummary.json_field_string(action, 'tag')
 		action_value:      action_value
-		token:             feishu_json_field_string(root, 'token')
+		token:             FeishuRuntimeEventSummary.json_field_string(root, 'token')
 	}
 }

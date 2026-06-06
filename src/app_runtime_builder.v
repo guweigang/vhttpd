@@ -1,34 +1,20 @@
 module main
-import transport
-import config
-import executor
-import provider
-import openai
 
+import config
+import mcp_protocol
+import openai
 import json
-import os
 import state_store
 import time
-
-pub struct AppRuntimeBuildConfig {
-pub:
-	event_log                     string
-	internal_admin_socket         string
-	admin_enabled                 bool
-	admin_token                   string
-	assets_enabled                bool
-	assets_prefix                 string
-	assets_root                   string
-	assets_root_real              string
-	assets_cache_control          string
-	worker_read_timeout_ms        int
-	worker_restart_backoff_ms     int
-	worker_restart_backoff_max_ms int
-	worker_max_requests           int
-	worker_queue_capacity         int
-	worker_queue_timeout_ms       int
-	workdir                       string
-}
+import ws
+import worker
+import admin
+import plugin
+import assets
+import feishu
+import codex
+import executor
+import server_lifecycle
 
 fn app_runtime_default_mcp_max_sessions(cfg config.VhttpdConfig) int {
 	return if cfg.mcp.max_sessions > 0 { cfg.mcp.max_sessions } else { 1000 }
@@ -42,13 +28,13 @@ fn app_runtime_default_mcp_session_ttl_seconds(cfg config.VhttpdConfig) int {
 	return if cfg.mcp.session_ttl_seconds > 0 { cfg.mcp.session_ttl_seconds } else { 900 }
 }
 
-fn build_app_runtime(provider_settings ProviderRuntimeSettings, executor_plan LogicExecutorRuntimePlan, cfg config.VhttpdConfig, build_cfg AppRuntimeBuildConfig) &App {
+fn build_app_runtime(provider_settings ProviderRuntimeSettings, executor_plan executor.LogicExecutorRuntimePlan, cfg config.VhttpdConfig, build_cfg server_lifecycle.AppRuntimeBuildConfig) &App {
 	return &App{
-		event_log:                                build_cfg.event_log
-		started_at_unix:                          time.now().unix()
-		worker:                                   WorkerState{
-			worker_backend: WorkerBackendRuntime{
-				backend:                PhpWorkerBackend{}
+		event_log:           build_cfg.event_log
+		started_at_unix:     time.now().unix()
+		worker:              worker.WorkerState{
+			worker_backend:      worker.WorkerBackendRuntime{
+				backend:                worker.PhpWorkerBackend{}
 				sockets:                executor_plan.bootstrap.worker_sockets
 				read_timeout_ms:        build_cfg.worker_read_timeout_ms
 				autostart:              executor_plan.bootstrap.worker_autostart
@@ -67,63 +53,62 @@ fn build_app_runtime(provider_settings ProviderRuntimeSettings, executor_plan Lo
 			lifecycle:           executor_plan.lifecycle.name()
 			stream_dispatch:     executor_plan.bootstrap.stream_dispatch
 		}
-		admin:                                      AdminState{
+		admin:               admin.AdminState{
 			internal_socket: build_cfg.internal_admin_socket
 			on_data_plane:   !build_cfg.admin_enabled
 			token:           build_cfg.admin_token
 		}
-		runtime_config_json:                      json.encode(cfg)
-		plugins:                                    PluginState{
+		runtime_config_json: json.encode(cfg)
+		plugins:             plugin.PluginState{
 			configs: cfg.plugins.clone()
 			vjsx:    build_vjsx_plugin_runtimes(cfg.plugins)
 		}
-		assets:                                     AssetsState{
+		assets:              assets.AssetsState{
 			enabled:       build_cfg.assets_enabled
 			prefix:        build_cfg.assets_prefix
 			root:          build_cfg.assets_root
 			root_real:     build_cfg.assets_root_real
 			cache_control: build_cfg.assets_cache_control
 		}
-		ws_hub:                                    WebSocketHubState{
-			dispatch_mode:            executor_plan.bootstrap.websocket_dispatch_mode
-			recent_dispatch_limit:   50
+		ws_hub:              ws.HubState{
+			dispatch_mode:                executor_plan.bootstrap.websocket_dispatch_mode
+			recent_dispatch_limit:        50
 			auto_start_dynamic_upstreams: true
-			upstream_sessions:       map[string]UpstreamRuntimeSession{}
-			conns:                   map[string]HubConn{}
-			room_members:            map[string]map[string]bool{}
-			conn_rooms:              map[string]map[string]bool{}
-			conn_meta:               map[string]map[string]string{}
-			pending:                 map[string][]HubPendingMessage{}
-			upstream_started:        map[string]bool{}
-			fixture_runtime:         map[string]FixtureWebSocketUpstreamRuntime{}
-			recent_activities:       []WebSocketUpstreamActivitySnapshot{}
+			upstream_sessions:            map[string]UpstreamRuntimeSession{}
+			conns:                        map[string]HubConn{}
+			room_members:                 map[string]map[string]bool{}
+			conn_rooms:                   map[string]map[string]bool{}
+			conn_meta:                    map[string]map[string]string{}
+			pending:                      map[string][]HubPendingMessage{}
+			upstream_started:             map[string]bool{}
+			fixture_runtime:              map[string]FixtureWebSocketUpstreamRuntime{}
+			recent_activities:            []WebSocketUpstreamActivitySnapshot{}
 		}
-		mcp:                                      McpState{
+		mcp:                 mcp_protocol.McpState{
 			max_sessions:               app_runtime_default_mcp_max_sessions(cfg)
 			max_pending_messages:       app_runtime_default_mcp_max_pending_messages(cfg)
 			session_ttl_seconds:        app_runtime_default_mcp_session_ttl_seconds(cfg)
-			sampling_capability_policy: normalize_mcp_sampling_capability_policy(cfg.mcp.sampling_capability_policy)
+			sampling_capability_policy: mcp_protocol.McpState.normalize_sampling_capability_policy(cfg.mcp.sampling_capability_policy)
 			allowed_origins:            cfg.mcp.allowed_origins.clone()
 			sessions:                   map[string]McpSession{}
 		}
-		openai:                                   OpenaiState{
-			enabled:          cfg.openai.enabled
-			base_path:        cfg.openai.base_path
-			default_backend:  cfg.openai.default_backend
-			plugin:           cfg.openai.plugin
-			endpoints:        cfg.openai.endpoints
-			backends:         cfg.openai.backends.clone()
-			routes:           cfg.openai.routes.clone()
-			responses:        state_store.new_memory_state_store[openai.OpenAIResponseRecord]()
+		openai:             openai.OpenaiState{
+			enabled:         cfg.openai.enabled
+			base_path:       cfg.openai.base_path
+			default_backend: cfg.openai.default_backend
+			plugin:          cfg.openai.plugin
+			endpoints:       cfg.openai.endpoints
+			backends:        cfg.openai.backends.clone()
+			routes:          cfg.openai.routes.clone()
+			responses:       state_store.MemoryStateStore.new[openai.OpenAIResponseRecord]()
 		}
-		providers:                                ProviderHost{
+		providers:           ProviderHost{
 			registry: map[string]Provider{}
 			specs:    map[string]ProviderSpec{}
 		}
-		codex:                                    CodexState{
-			ollama_enabled:  provider_settings.ollama_enabled
-			db_runtime:      build_db_runtime(provider_settings.db)
-			runtime:         CodexProviderRuntime{
+		codex:               codex.CodexState{
+			ollama_enabled: provider_settings.ollama_enabled
+			runtime:        CodexProviderRuntime{
 				enabled:             provider_settings.codex.enabled
 				url:                 provider_settings.codex.url
 				model:               provider_settings.codex.model
@@ -139,10 +124,12 @@ fn build_app_runtime(provider_settings ProviderRuntimeSettings, executor_plan Lo
 				err_pending_flushes: map[string]bool{}
 				thread_stream_map:   map[string]string{}
 			}
-			instances:       map[string]CodexProviderRuntime{}
+			instances:      map[string]CodexProviderRuntime{}
 		}
-		provider_instance_specs:                  map[string]ProviderInstanceSpec{}
-		feishu:                                   FeishuState{
+		provider_instances:  ProviderInstanceRegistry{
+			specs: map[string]ProviderInstanceSpec{}
+		}
+		feishu:              feishu.FeishuState{
 			enabled:                    provider_settings.feishu.enabled
 			open_base_url:              provider_settings.feishu.open_base_url
 			reconnect_delay_ms:         provider_settings.feishu.reconnect_delay_ms
@@ -158,12 +145,6 @@ fn build_app_runtime(provider_settings ProviderRuntimeSettings, executor_plan Lo
 			card_bridge_token:          provider_settings.bridge.token
 			card_bridge_target_id:      provider_settings.bridge.target_id
 		}
+		db_runtime:          DbProviderRuntime.from_settings(provider_settings.db)
 	}
-}
-
-fn prepare_server_runtime_files_for_label(event_log string, pid_file string, socket_label string) !string {
-	os.mkdir_all(os.dir(event_log))!
-	os.mkdir_all(os.dir(pid_file))!
-	os.write_file(pid_file, '${os.getpid()}')!
-	return default_internal_admin_socket_for(socket_label)
 }

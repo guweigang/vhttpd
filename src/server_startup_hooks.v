@@ -5,8 +5,8 @@ import os
 
 fn initialize_app_runtime(mut app App, internal_admin_socket string) {
 	app.worker.worker_backend.env['VHTTPD_INTERNAL_ADMIN_SOCKET'] = internal_admin_socket
-	if app.codex.db_runtime.enabled && app.codex.db_runtime.socket.trim_space() != '' {
-		app.worker.worker_backend.env['VHTTPD_DB_SOCKET'] = app.codex.db_runtime.socket
+	if app.db_runtime.enabled && app.db_runtime.socket.trim_space() != '' {
+		app.worker.worker_backend.env['VHTTPD_DB_SOCKET'] = app.db_runtime.socket
 	}
 	app.feishu_card_bridge_apply_env_fallbacks()
 	go run_internal_admin_server(mut app, internal_admin_socket)
@@ -16,7 +16,7 @@ fn initialize_app_runtime(mut app App, internal_admin_socket string) {
 	if app.feishu_card_bridge_enabled() {
 		go run_feishu_card_bridge_client(mut app)
 	}
-	bootstrap_providers(mut app)
+	app.bootstrap_providers()
 }
 
 fn mount_app_assets(mut app App) {
@@ -57,7 +57,11 @@ fn emit_server_started_event(mut app App, host string, port int, admin_enabled b
 		'logic_executor_lifecycle': app.worker.lifecycle
 		'logic_executor_model':     '${app.logic_executor_model()}'
 		'logic_provider':           app.logic_executor_provider()
-		'worker_autostart':         if app.worker.worker_backend.autostart { 'true' } else { 'false' }
+		'worker_autostart':         if app.worker.worker_backend.autostart {
+			'true'
+		} else {
+			'false'
+		}
 		'worker_pool_size':         '${app.worker.worker_backend.sockets.len}'
 		'admin_enabled':            if admin_enabled { 'true' } else { 'false' }
 		'admin_host':               if admin_enabled { admin_host } else { '' }
@@ -113,8 +117,8 @@ fn log_server_runtime_endpoints(app &App, host string, port int) {
 	} else {
 		log.info('[vhttpd] Assets: disabled')
 	}
-	if app.codex.db_runtime.enabled {
-		log.info('[vhttpd] DB Upstream: unix://${app.codex.db_runtime.socket} (${app.codex.db_runtime.driver}, db=${app.codex.db_runtime.database}, pool=${app.codex.db_runtime.pool_size})')
+	if app.db_runtime.enabled {
+		log.info('[vhttpd] DB Upstream: unix://${app.db_runtime.socket} (${app.db_runtime.driver}, db=${app.db_runtime.database}, pool=${app.db_runtime.pool_size})')
 	} else {
 		log.info('[vhttpd] DB Upstream: disabled')
 	}

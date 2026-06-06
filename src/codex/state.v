@@ -1,10 +1,10 @@
 module codex
 
-// ── Pure Helpers ──
+// ── ProviderRuntime Instance Helpers ──
 
-// instance_name normalizes an instance string to its canonical name.
+// normalize_instance normalizes an instance string to its canonical name.
 // Empty or "default" become "main"; all others pass through trimmed.
-pub fn instance_name(instance string) string {
+pub fn ProviderRuntime.normalize_instance(instance string) string {
 	name := instance.trim_space()
 	if name == '' || name == 'default' {
 		return 'main'
@@ -12,10 +12,10 @@ pub fn instance_name(instance string) string {
 	return name
 }
 
-// build_provider_runtime_from_base creates a ProviderRuntime for the given
-// instance name, inheriting config from the base runtime.
-pub fn build_provider_runtime_from_base(base ProviderRuntime, instance string) ProviderRuntime {
-	resolved := instance_name(instance)
+// for_instance creates a ProviderRuntime for the given instance name, inheriting
+// config from the base runtime.
+pub fn (base ProviderRuntime) for_instance(instance string) ProviderRuntime {
+	resolved := ProviderRuntime.normalize_instance(instance)
 	return ProviderRuntime{
 		instance:            resolved
 		enabled:             base.enabled
@@ -39,7 +39,7 @@ pub fn build_provider_runtime_from_base(base ProviderRuntime, instance string) P
 // ── CodexState Instance Management ──
 
 pub fn (mut s CodexState) snapshot(instance string) ProviderRuntime {
-	resolved := instance_name(instance)
+	resolved := ProviderRuntime.normalize_instance(instance)
 	s.mu.@lock()
 	defer {
 		s.mu.unlock()
@@ -51,15 +51,13 @@ pub fn (mut s CodexState) snapshot(instance string) ProviderRuntime {
 		return s.runtime
 	}
 	if resolved in s.instances {
-		return s.instances[resolved] or {
-			build_provider_runtime_from_base(s.runtime, resolved)
-		}
+		return s.instances[resolved] or { s.runtime.for_instance(resolved) }
 	}
-	return build_provider_runtime_from_base(s.runtime, resolved)
+	return s.runtime.for_instance(resolved)
 }
 
 pub fn (mut s CodexState) update(instance string, rt ProviderRuntime) {
-	resolved := instance_name(instance)
+	resolved := ProviderRuntime.normalize_instance(instance)
 	s.mu.@lock()
 	defer {
 		s.mu.unlock()

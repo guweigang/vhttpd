@@ -7,17 +7,17 @@ import time
 
 pub struct ManagedWorker {
 pub mut:
-	id               int
-	socket_path      string
-	worker_cmd       string
-	worker_env       map[string]string
-	proc             &os.Process = unsafe { nil }
-	restart_count    int
-	last_exit_ts     i64
-	next_retry_ts    i64
-	served_requests  i64
+	id                int
+	socket_path       string
+	worker_cmd        string
+	worker_env        map[string]string
+	proc              &os.Process = unsafe { nil }
+	restart_count     int
+	last_exit_ts      i64
+	next_retry_ts     i64
+	served_requests   i64
 	inflight_requests i64
-	draining         bool
+	draining          bool
 }
 
 pub struct WorkerSelectionDiagnostic {
@@ -29,7 +29,9 @@ pub:
 	probe_error       string
 }
 
-pub fn wait_for_worker(socket_path string, timeout_ms int) ! {
+pub struct ManagedWorkerPool {}
+
+pub fn ManagedWorker.wait_for_socket(socket_path string, timeout_ms int) ! {
 	deadline := time.now().add(time.millisecond * timeout_ms)
 	for time.now() < deadline {
 		mut conn := unix.connect_stream(socket_path) or {
@@ -42,7 +44,7 @@ pub fn wait_for_worker(socket_path string, timeout_ms int) ! {
 	return error('worker socket not ready: ${socket_path}')
 }
 
-pub fn cmd_with_socket(worker_cmd string, worker_socket string, pool_size int) !string {
+pub fn ManagedWorker.command_with_socket(worker_cmd string, worker_socket string, pool_size int) !string {
 	if worker_cmd == '' {
 		return error('empty worker command')
 	}
@@ -61,7 +63,7 @@ pub fn cmd_with_socket(worker_cmd string, worker_socket string, pool_size int) !
 	return worker_cmd
 }
 
-pub fn merge_worker_env(base map[string]string, extra map[string]string) map[string]string {
+pub fn ManagedWorker.merge_env(base map[string]string, extra map[string]string) map[string]string {
 	mut merged := base.clone()
 	for k, v in extra {
 		merged[k] = v
@@ -69,9 +71,9 @@ pub fn merge_worker_env(base map[string]string, extra map[string]string) map[str
 	return merged
 }
 
-pub fn start_managed_worker(id int, worker_cmd string, worker_env map[string]string, worker_socket string, workdir string, pool_size int) !ManagedWorker {
-	cmd := cmd_with_socket(worker_cmd, worker_socket, pool_size)!
-	mut merged_env := merge_worker_env(os.environ(), worker_env)
+pub fn ManagedWorker.start(id int, worker_cmd string, worker_env map[string]string, worker_socket string, workdir string, pool_size int) !ManagedWorker {
+	cmd := ManagedWorker.command_with_socket(worker_cmd, worker_socket, pool_size)!
+	mut merged_env := ManagedWorker.merge_env(os.environ(), worker_env)
 	merged_env['VHTTPD_PARENT_PID'] = '${os.getpid()}'
 	mut proc := os.new_process('/bin/sh')
 	proc.set_args(['-lc', cmd])
@@ -79,7 +81,7 @@ pub fn start_managed_worker(id int, worker_cmd string, worker_env map[string]str
 	proc.set_work_folder(workdir)
 	proc.use_pgroup = true
 	proc.run()
-	wait_for_worker(worker_socket, 5000)!
+	ManagedWorker.wait_for_socket(worker_socket, 5000)!
 	return ManagedWorker{
 		id:                id
 		socket_path:       worker_socket
@@ -94,9 +96,9 @@ pub fn start_managed_worker(id int, worker_cmd string, worker_env map[string]str
 	}
 }
 
-pub fn build_managed_worker_slot(id int, worker_cmd string, worker_env map[string]string, worker_socket string, pool_size int) !ManagedWorker {
-	cmd := cmd_with_socket(worker_cmd, worker_socket, pool_size)!
-	mut merged_env := merge_worker_env(os.environ(), worker_env)
+pub fn ManagedWorker.build_slot(id int, worker_cmd string, worker_env map[string]string, worker_socket string, pool_size int) !ManagedWorker {
+	cmd := ManagedWorker.command_with_socket(worker_cmd, worker_socket, pool_size)!
+	mut merged_env := ManagedWorker.merge_env(os.environ(), worker_env)
 	merged_env['VHTTPD_PARENT_PID'] = '${os.getpid()}'
 	return ManagedWorker{
 		id:                id
@@ -130,25 +132,25 @@ pub fn (mut w ManagedWorker) stop() {
 	w.proc.close()
 }
 
-pub fn stop_worker_pool(mut workers []ManagedWorker) {
+pub fn ManagedWorkerPool.stop(mut workers []ManagedWorker) {
 	for i in 0 .. workers.len {
 		mut w := workers[i]
 		w.stop()
 	}
 }
 
-pub fn start_worker_pool(worker_cmd string, worker_env map[string]string, worker_sockets []string, workdir string) []ManagedWorker {
+pub fn ManagedWorkerPool.start(worker_cmd string, worker_env map[string]string, worker_sockets []string, workdir string) []ManagedWorker {
 	if worker_sockets.len == 0 {
 		return []ManagedWorker{}
 	}
 	mut workers := []ManagedWorker{}
 	for i, socket_path in worker_sockets {
-		mut slot := build_managed_worker_slot(i, worker_cmd, worker_env, socket_path,
+		mut slot := ManagedWorker.build_slot(i, worker_cmd, worker_env, socket_path,
 			worker_sockets.len) or {
 			log.error('worker slot init failed [${i}] ${socket_path}: ${err.msg()}')
 			continue
 		}
-		worker := start_managed_worker(i, worker_cmd, worker_env, socket_path, workdir,
+		worker := ManagedWorker.start(i, worker_cmd, worker_env, socket_path, workdir,
 			worker_sockets.len) or {
 			now := time.now().unix_milli()
 			slot.restart_count = 1
@@ -163,7 +165,7 @@ pub fn start_worker_pool(worker_cmd string, worker_env map[string]string, worker
 	return workers
 }
 
-pub fn restart_backoff_ms(restart_count int, base_ms int, max_ms int) int {
+pub fn ManagedWorkerPool.restart_backoff_ms(restart_count int, base_ms int, max_ms int) int {
 	mut delay := if base_ms > 0 { base_ms } else { 500 }
 	mut step := if restart_count > 0 { restart_count - 1 } else { 0 }
 	for step > 0 {

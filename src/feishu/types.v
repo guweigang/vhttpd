@@ -45,8 +45,8 @@ pub:
 
 pub struct RuntimeWsEndpointData {
 pub:
-	url           string                @[json: 'URL']
-	client_config RuntimeClientConfig   @[json: 'ClientConfig']
+	url           string              @[json: 'URL']
+	client_config RuntimeClientConfig @[json: 'ClientConfig']
 }
 
 pub struct RuntimeWsEndpointResponse {
@@ -108,7 +108,7 @@ pub mut:
 	recent_events                   []RuntimeEventSnapshot
 }
 
-pub fn new_provider_runtime(name string) ProviderRuntime {
+pub fn ProviderRuntime.new(name string) ProviderRuntime {
 	return ProviderRuntime{
 		name:          name
 		recent_events: []RuntimeEventSnapshot{}
@@ -312,31 +312,31 @@ pub mut:
 
 pub struct FeishuState {
 pub mut:
-	mu                               sync.Mutex
-	enabled                          bool
-	open_base_url                    string
-	reconnect_delay_ms               int
-	token_refresh_skew_seconds       int
-	recent_event_limit               int
-	static_apps                      map[string]config.FeishuAppConfig
-	apps                             map[string]config.FeishuAppConfig
-	runtime                          map[string]ProviderRuntime
-	buffers                          map[string]StreamBuffer
-	http_lane                        shared HttpLane
-	control_http_lane                shared ControlHttpLane
-	http_test_mu                     sync.Mutex
-	http_test_stub                   bool
-	http_test_delay_ms               int
-	http_test_inflight               int
-	http_test_calls                  int
-	http_test_message_seq            int
+	mu                         sync.Mutex
+	enabled                    bool
+	open_base_url              string
+	reconnect_delay_ms         int
+	token_refresh_skew_seconds int
+	recent_event_limit         int
+	static_apps                map[string]config.FeishuAppConfig
+	apps                       map[string]config.FeishuAppConfig
+	runtime                    map[string]ProviderRuntime
+	buffers                    map[string]StreamBuffer
+	http_lane                  shared HttpLane
+	control_http_lane          shared ControlHttpLane
+	http_test_mu               sync.Mutex
+	http_test_stub             bool
+	http_test_delay_ms         int
+	http_test_inflight         int
+	http_test_calls            int
+	http_test_message_seq      int
 	// feishu card bridge
 	card_bridge_mu            sync.Mutex
 	card_bridge_send_mu       sync.Mutex
-	card_bridge_clients       map[string]&websocket.Client            = map[string]&websocket.Client{}
-	card_bridge_pending       map[string]chan executor.FeishuCardBridgeResult  = map[string]chan executor.FeishuCardBridgeResult{}
-	card_bridge_proxy_pending map[string]chan BridgeProxyResult = map[string]chan BridgeProxyResult{}
-	card_bridge_client_conn   &websocket.Client                       = unsafe { nil }
+	card_bridge_clients       map[string]&websocket.Client                    = map[string]&websocket.Client{}
+	card_bridge_pending       map[string]chan executor.FeishuCardBridgeResult = map[string]chan executor.FeishuCardBridgeResult{}
+	card_bridge_proxy_pending map[string]chan BridgeProxyResult               = map[string]chan BridgeProxyResult{}
+	card_bridge_client_conn   &websocket.Client = unsafe { nil }
 	card_bridge_enabled_flag  bool
 	card_bridge_ws_url        string
 	card_bridge_client_id     string

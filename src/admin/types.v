@@ -96,13 +96,17 @@ pub:
 	error   string
 }
 
+pub struct AdminQuery {}
+
+pub struct AdminAuth {}
+
 // ── Query helpers ──
 
-pub fn parse_boolish(raw string) bool {
+pub fn AdminQuery.parse_boolish(raw string) bool {
 	return raw.trim_space().to_lower() in ['1', 'true', 'yes', 'on']
 }
 
-pub fn query_limit(raw string, default_value int, max_value int) int {
+pub fn AdminQuery.limit(raw string, default_value int, max_value int) int {
 	mut value := raw.trim_space().int()
 	if value <= 0 {
 		value = default_value
@@ -113,7 +117,7 @@ pub fn query_limit(raw string, default_value int, max_value int) int {
 	return value
 }
 
-pub fn query_offset(raw string) int {
+pub fn AdminQuery.offset(raw string) int {
 	mut value := raw.trim_space().int()
 	if value < 0 {
 		value = 0
@@ -121,21 +125,34 @@ pub fn query_offset(raw string) int {
 	return value
 }
 
+// ── Auth helpers ──
+
+pub fn AdminAuth.authorized(expected_token string, headers map[string]string, query map[string]string) bool {
+	if expected_token == '' {
+		return true
+	}
+	mut token := headers['x-vhttpd-admin-token']
+	if token == '' {
+		token = query['admin_token'] or { '' }
+	}
+	return token == expected_token
+}
+
 // ── Internal admin socket helpers ──
 
-pub fn default_socket() string {
+pub fn AdminState.default_socket() string {
 	return '/tmp/vhttpd_admin_${os.getpid()}.sock'
 }
 
-pub fn default_socket_for(label string) string {
-	safe_label := sanitize_socket_label(label)
+pub fn AdminState.default_socket_for(label string) string {
+	safe_label := AdminState.sanitize_socket_label(label)
 	if safe_label == '' {
-		return default_socket()
+		return AdminState.default_socket()
 	}
 	return '/tmp/vhttpd_admin_${os.getpid()}_${safe_label}.sock'
 }
 
-pub fn sanitize_socket_label(raw string) string {
+pub fn AdminState.sanitize_socket_label(raw string) string {
 	if raw.trim_space() == '' {
 		return ''
 	}
@@ -167,7 +184,7 @@ fn normalize(raw string) string {
 	return '/${raw}'
 }
 
-pub fn normalize_admin_path(raw string) string {
+pub fn InternalAdminRequest.normalize_admin_path(raw string) string {
 	mut path := normalize(raw)
 	if path == '/admin' {
 		return '/'
@@ -181,7 +198,7 @@ pub fn normalize_admin_path(raw string) string {
 	return path
 }
 
-pub fn normalize_gateway_path(raw string) string {
+pub fn InternalAdminRequest.normalize_gateway_path(raw string) string {
 	mut path := normalize(raw)
 	if path == '/gateway' {
 		return '/'
@@ -197,7 +214,7 @@ pub fn normalize_gateway_path(raw string) string {
 
 // ── Response builders ──
 
-pub fn json_response(body string) InternalAdminResponse {
+pub fn InternalAdminResponse.json(body string) InternalAdminResponse {
 	return InternalAdminResponse{
 		status:  200
 		headers: {
@@ -207,7 +224,7 @@ pub fn json_response(body string) InternalAdminResponse {
 	}
 }
 
-pub fn error_response(status int, message string) InternalAdminResponse {
+pub fn InternalAdminResponse.error(status int, message string) InternalAdminResponse {
 	return InternalAdminResponse{
 		status:  status
 		headers: {
@@ -220,8 +237,8 @@ pub fn error_response(status int, message string) InternalAdminResponse {
 	}
 }
 
-pub fn bad_request(errmsg string) InternalAdminResponse {
-	return error_response(400, errmsg)
+pub fn InternalAdminResponse.bad_request(errmsg string) InternalAdminResponse {
+	return InternalAdminResponse.error(400, errmsg)
 }
 
 // ── Admin state configuration ──
@@ -229,7 +246,7 @@ pub fn bad_request(errmsg string) InternalAdminResponse {
 // AdminState configures the internal admin API server.
 pub struct AdminState {
 pub mut:
-	internal_socket   string
-	on_data_plane     bool
-	token             string
+	internal_socket string
+	on_data_plane   bool
+	token           string
 }

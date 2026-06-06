@@ -746,7 +746,6 @@ export async function routeCodexNotification(frame, deps) {
       const resolvedSessionPath = resolveSessionPath(frame.runtime, stream, latest);
       const completedText = notification.finalText || notification.message || latest?.resultText || latest?.draft || "";
       const lookupThreadId = latest?.threadId || stream.threadId || notification.threadId || "";
-      frame.runtime.log("DEBUG turn/completed completedText=" + completedText + " lookupThreadId=" + lookupThreadId + " isPlain=" + deps.isPlainPromptStream(latest || stream));
       if (!completedText && lookupThreadId) {
         if (deps.isPlainPromptStream(latest || stream)) {
           await deps.updateStreamState(notification.streamId, {

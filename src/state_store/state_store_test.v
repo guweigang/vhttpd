@@ -9,7 +9,7 @@ struct MemoryStateStoreTestRecord {
 }
 
 fn test_memory_state_store_set_get_and_keys() {
-	mut store := new_memory_state_store[string]()
+	mut store := MemoryStateStore.new[string]()
 	store.set('alpha', 'a') or { panic(err) }
 	store.set('beta', 'b') or { panic(err) }
 
@@ -21,7 +21,7 @@ fn test_memory_state_store_set_get_and_keys() {
 }
 
 fn test_memory_state_store_roundtrips_struct_values() {
-	mut store := new_memory_state_store[MemoryStateStoreTestRecord]()
+	mut store := MemoryStateStore.new[MemoryStateStoreTestRecord]()
 	store.set('resp', MemoryStateStoreTestRecord{
 		id:     'resp_1'
 		status: 'completed'
@@ -35,7 +35,7 @@ fn test_memory_state_store_roundtrips_struct_values() {
 }
 
 fn test_memory_state_store_ttl_expiry_and_prune() {
-	mut store := new_memory_state_store[string]()
+	mut store := MemoryStateStore.new[string]()
 	store.set_with_ttl('short', 'x', 20 * time.millisecond) or { panic(err) }
 	assert store.exists('short')
 
@@ -52,7 +52,7 @@ fn test_memory_state_store_ttl_expiry_and_prune() {
 }
 
 fn test_memory_state_store_patch_updates_existing_value() {
-	mut store := new_memory_state_store[map[string]string]()
+	mut store := MemoryStateStore.new[map[string]string]()
 	store.set('bag', {
 		'user':  'alice'
 		'count': '1'
@@ -70,7 +70,7 @@ fn test_memory_state_store_patch_updates_existing_value() {
 }
 
 fn test_memory_state_store_patch_missing_key_returns_error() {
-	mut store := new_memory_state_store[map[string]string]()
+	mut store := MemoryStateStore.new[map[string]string]()
 	store.patch('missing', fn (mut val map[string]string) ! {
 		val['x'] = 'y'
 	}) or {

@@ -2,8 +2,13 @@ module main
 
 import time
 
-fn (mut app App) try_enter_worker_queue() bool {
-	if app.worker.worker_backend.queue_capacity <= 0 || app.worker.worker_backend.queue_timeout_ms <= 0 {
+struct WorkerBackendQueue {}
+
+struct WorkerBackendQueueMetrics {}
+
+fn WorkerBackendQueue.try_enter(mut app App) bool {
+	if app.worker.worker_backend.queue_capacity <= 0
+		|| app.worker.worker_backend.queue_timeout_ms <= 0 {
 		return false
 	}
 	app.worker.mu.@lock()
@@ -17,7 +22,7 @@ fn (mut app App) try_enter_worker_queue() bool {
 	return true
 }
 
-fn (mut app App) leave_worker_queue() {
+fn WorkerBackendQueue.leave(mut app App) {
 	app.worker.mu.@lock()
 	defer {
 		app.worker.mu.unlock()
@@ -27,7 +32,7 @@ fn (mut app App) leave_worker_queue() {
 	}
 }
 
-fn (mut app App) note_worker_queue_wait() {
+fn WorkerBackendQueueMetrics.note_wait(mut app App) {
 	app.mu.@lock()
 	defer {
 		app.mu.unlock()
@@ -35,7 +40,7 @@ fn (mut app App) note_worker_queue_wait() {
 	app.worker.stat_queue_waits_total++
 }
 
-fn (mut app App) note_worker_queue_rejected() {
+fn WorkerBackendQueueMetrics.note_rejected(mut app App) {
 	app.mu.@lock()
 	defer {
 		app.mu.unlock()
@@ -43,7 +48,7 @@ fn (mut app App) note_worker_queue_rejected() {
 	app.worker.stat_queue_rejected_total++
 }
 
-fn (mut app App) note_worker_queue_timeout() {
+fn WorkerBackendQueueMetrics.note_timeout(mut app App) {
 	app.mu.@lock()
 	defer {
 		app.mu.unlock()
@@ -56,25 +61,31 @@ fn (mut app App) worker_backend_select_socket_queued() !string {
 		if err.msg() != 'all workers busy' {
 			return error(err.msg())
 		}
-		if !app.try_enter_worker_queue() {
-			app.note_worker_queue_rejected()
+		if !WorkerBackendQueue.try_enter(mut app) {
+			WorkerBackendQueueMetrics.note_rejected(mut app)
 			return error('worker queue full')
 		}
-		app.note_worker_queue_wait()
+		WorkerBackendQueueMetrics.note_wait(mut app)
 		defer {
-			app.leave_worker_queue()
+			WorkerBackendQueue.leave(mut app)
 		}
-		timeout_ms := if app.worker.worker_backend.queue_timeout_ms > 0 { app.worker.worker_backend.queue_timeout_ms } else { 0 }
-		poll_ms := if app.worker.worker_backend.queue_poll_ms > 0 { app.worker.worker_backend.queue_poll_ms } else { 10 }
+		timeout_ms := if app.worker.worker_backend.queue_timeout_ms > 0 {
+			app.worker.worker_backend.queue_timeout_ms
+		} else {
+			0
+		}
+		poll_ms := if app.worker.worker_backend.queue_poll_ms > 0 {
+			app.worker.worker_backend.queue_poll_ms
+		} else {
+			10
+		}
 		deadline := time.now().add(time.millisecond * timeout_ms)
 		for time.now() < deadline {
 			time.sleep(time.millisecond * poll_ms)
-			socket := app.worker_backend_select_socket() or {
-				continue
-			}
+			socket := app.worker_backend_select_socket() or { continue }
 			return socket
 		}
-		app.note_worker_queue_timeout()
+		WorkerBackendQueueMetrics.note_timeout(mut app)
 		return error('worker queue timeout')
 	}
 	return socket_path

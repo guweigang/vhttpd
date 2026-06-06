@@ -1,6 +1,9 @@
 module main
+
 import config
 import provider
+import feishu
+import codex
 
 fn test_provider_registry_smoke() {
 	// Basic smoke assertions for provider registry API surface
@@ -55,7 +58,7 @@ fn test_provider_runtime_snapshots_expose_registered_runtime() {
 		command_matchers: []provider.CommandMatcher{}
 		route_kind:       .ollama
 		provider:         OllamaProvider{}
-		handler:          NoopProviderCommandHandler{}
+		handler:          provider.NoopProviderCommandHandler{}
 		runtime:          NoopProviderRuntime{}
 	})
 	snapshots := app.admin_provider_runtimes_snapshot()
@@ -72,26 +75,26 @@ fn test_provider_enabled_and_runtime_snapshot_use_host() {
 		}
 	}
 	app.register_provider_spec(ProviderSpec{
-		name:             'codex'
+		name:             'test-provider'
 		enabled:          true
 		has_handler:      false
 		has_runtime:      true
 		command_matchers: []provider.CommandMatcher{}
-		route_kind:       .codex
+		route_kind:       .generic
 		provider:         CodexProvider{}
-		handler:          NoopProviderCommandHandler{}
+		handler:          provider.NoopProviderCommandHandler{}
 		runtime:          NoopProviderRuntime{}
 	})
-	assert app.provider_enabled('codex')
-	assert app.provider_runtime_snapshot('codex') or { '' } == '{}'
+	assert app.provider_enabled('test-provider')
+	assert app.provider_runtime_snapshot('test-provider') or { '' } == '{}'
 	assert !app.provider_enabled('missing')
 }
 
 fn test_provider_bootstrap_and_runtime_ready_helpers() {
 	mut app := App{
-		feishu: FeishuState{
+		feishu:    feishu.FeishuState{
 			enabled: true
-			apps: {
+			apps:    {
 				'main': config.FeishuAppConfig{
 					app_id: 'test-app'
 				}
@@ -100,10 +103,10 @@ fn test_provider_bootstrap_and_runtime_ready_helpers() {
 				'main': FeishuProviderRuntime{}
 			}
 		}
-		codex:          CodexState{
+		codex:     codex.CodexState{
 			ollama_enabled: true
 		}
-		providers:      ProviderHost{
+		providers: ProviderHost{
 			specs: map[string]ProviderSpec{}
 		}
 	}
@@ -127,15 +130,17 @@ fn test_provider_bootstrap_and_runtime_ready_helpers() {
 
 fn test_provider_runtime_dynamic_feishu_instance_is_bootstrapped_and_ready() {
 	mut app := App{
-		provider_instance_specs: {
-			'feishu/main': ProviderInstanceSpec{
-				provider:      'feishu'
-				instance:      'main'
-				config_json:   '{"app_id":"cli_main","app_secret":"cli_secret"}'
-				desired_state: 'connected'
+		provider_instances: ProviderInstanceRegistry{
+			specs: {
+				'feishu/main': ProviderInstanceSpec{
+					provider:      'feishu'
+					instance:      'main'
+					config_json:   '{"app_id":"cli_main","app_secret":"cli_secret"}'
+					desired_state: 'connected'
+				}
 			}
 		}
-		feishu: FeishuState{
+		feishu:             feishu.FeishuState{
 			apps:    map[string]config.FeishuAppConfig{}
 			runtime: map[string]FeishuProviderRuntime{}
 		}
@@ -156,10 +161,10 @@ fn test_provider_runtime_dynamic_feishu_instance_is_bootstrapped_and_ready() {
 
 fn test_provider_runtime_pull_url_and_reconnect_delay_helpers() {
 	mut app := App{
-		feishu: FeishuState{
+		feishu: feishu.FeishuState{
 			reconnect_delay_ms: 4321
 		}
-		codex:                     CodexState{
+		codex:  codex.CodexState{
 			runtime: CodexProviderRuntime{
 				enabled:            true
 				url:                'ws://codex.local/ws'
@@ -174,21 +179,23 @@ fn test_provider_runtime_pull_url_and_reconnect_delay_helpers() {
 
 fn test_provider_runtime_dynamic_codex_instance_is_bootstrapped_and_enabled() {
 	mut app := App{
-		codex:                   CodexState{
+		codex:              codex.CodexState{
 			runtime: CodexProviderRuntime{}
 		}
-		provider_instance_specs: {
-			'codex/main':         ProviderInstanceSpec{
-				provider:      'codex'
-				instance:      'main'
-				config_json:   '{"url":"ws://codex.local/main"}'
-				desired_state: 'connected'
-			}
-			'codex/project_demo': ProviderInstanceSpec{
-				provider:      'codex'
-				instance:      'project_demo'
-				config_json:   '{"url":"ws://codex.local/project-demo"}'
-				desired_state: 'connected'
+		provider_instances: ProviderInstanceRegistry{
+			specs: {
+				'codex/main':         ProviderInstanceSpec{
+					provider:      'codex'
+					instance:      'main'
+					config_json:   '{"url":"ws://codex.local/main"}'
+					desired_state: 'connected'
+				}
+				'codex/project_demo': ProviderInstanceSpec{
+					provider:      'codex'
+					instance:      'project_demo'
+					config_json:   '{"url":"ws://codex.local/project-demo"}'
+					desired_state: 'connected'
+				}
 			}
 		}
 	}
@@ -200,7 +207,7 @@ fn test_provider_runtime_dynamic_codex_instance_is_bootstrapped_and_enabled() {
 
 fn test_admin_provider_instance_snapshots_include_dynamic_and_static_compat_rows() {
 	mut app := App{
-		feishu:                  FeishuState{
+		feishu:             feishu.FeishuState{
 			static_apps: {
 				'legacy': config.FeishuAppConfig{
 					app_id:     'legacy_app'
@@ -230,7 +237,7 @@ fn test_admin_provider_instance_snapshots_include_dynamic_and_static_compat_rows
 				}
 			}
 		}
-		codex:                   CodexState{
+		codex:              codex.CodexState{
 			runtime:   CodexProviderRuntime{}
 			instances: {
 				'project_demo': CodexProviderRuntime{
@@ -240,22 +247,24 @@ fn test_admin_provider_instance_snapshots_include_dynamic_and_static_compat_rows
 				}
 			}
 		}
-		provider_instance_specs: {
-			'feishu/main':        ProviderInstanceSpec{
-				provider:      'feishu'
-				instance:      'main'
-				config_json:   '{"app_id":"dyn_app","app_secret":"dyn_secret"}'
-				desired_state: 'connected'
-				created_at:    10
-				updated_at:    20
-			}
-			'codex/project_demo': ProviderInstanceSpec{
-				provider:      'codex'
-				instance:      'project_demo'
-				config_json:   '{"url":"ws://codex.local/project-demo","model":"o4-mini"}'
-				desired_state: 'connected'
-				created_at:    30
-				updated_at:    40
+		provider_instances: ProviderInstanceRegistry{
+			specs: {
+				'feishu/main':        ProviderInstanceSpec{
+					provider:      'feishu'
+					instance:      'main'
+					config_json:   '{"app_id":"dyn_app","app_secret":"dyn_secret"}'
+					desired_state: 'connected'
+					created_at:    10
+					updated_at:    20
+				}
+				'codex/project_demo': ProviderInstanceSpec{
+					provider:      'codex'
+					instance:      'project_demo'
+					config_json:   '{"url":"ws://codex.local/project-demo","model":"o4-mini"}'
+					desired_state: 'connected'
+					created_at:    30
+					updated_at:    40
+				}
 			}
 		}
 	}
@@ -288,7 +297,7 @@ fn test_admin_provider_instance_snapshots_include_dynamic_and_static_compat_rows
 
 fn test_provider_runtime_upstream_snapshot_helpers() {
 	mut app := App{
-		feishu: FeishuState{
+		feishu: feishu.FeishuState{
 			enabled: true
 			apps:    {
 				'main': config.FeishuAppConfig{
@@ -303,7 +312,7 @@ fn test_provider_runtime_upstream_snapshot_helpers() {
 				}
 			}
 		}
-		codex:          CodexState{
+		codex:  codex.CodexState{
 			runtime: CodexProviderRuntime{
 				enabled:          true
 				connected:        true
@@ -330,7 +339,7 @@ fn test_provider_runtime_upstream_snapshot_helpers() {
 
 fn test_provider_runtime_upstream_events_helper() {
 	mut app := App{
-		feishu: FeishuState{
+		feishu: feishu.FeishuState{
 			enabled: true
 			apps:    {
 				'main': config.FeishuAppConfig{
@@ -363,7 +372,7 @@ fn test_provider_runtime_upstream_events_helper() {
 
 fn test_provider_runtime_metrics_helper() {
 	mut app := App{
-		feishu: FeishuState{
+		feishu: feishu.FeishuState{
 			runtime: {
 				'main': FeishuProviderRuntime{
 					connect_attempts:  3
@@ -375,7 +384,7 @@ fn test_provider_runtime_metrics_helper() {
 				}
 			}
 		}
-		codex:          CodexState{
+		codex:  codex.CodexState{
 			runtime: CodexProviderRuntime{
 				connect_attempts:  6
 				connect_successes: 4
@@ -393,7 +402,7 @@ fn test_provider_runtime_metrics_helper() {
 
 fn test_provider_runtime_capabilities_and_gateway_count_helpers() {
 	mut app := App{
-		feishu: FeishuState{
+		feishu: feishu.FeishuState{
 			enabled: true
 			apps:    {
 				'main': config.FeishuAppConfig{
@@ -406,7 +415,7 @@ fn test_provider_runtime_capabilities_and_gateway_count_helpers() {
 				}
 			}
 		}
-		codex:          CodexState{
+		codex:  codex.CodexState{
 			runtime: CodexProviderRuntime{
 				enabled: true
 			}
@@ -423,7 +432,7 @@ fn test_provider_runtime_capabilities_and_gateway_count_helpers() {
 
 fn test_provider_runtime_upstream_launches_helper() {
 	mut app := App{
-		feishu: FeishuState{
+		feishu: feishu.FeishuState{
 			enabled: true
 			apps:    {
 				'main': config.FeishuAppConfig{
@@ -436,7 +445,7 @@ fn test_provider_runtime_upstream_launches_helper() {
 				}
 			}
 		}
-		codex:          CodexState{
+		codex:  codex.CodexState{
 			runtime: CodexProviderRuntime{
 				enabled: true
 				url:     'ws://codex.local/ws'
@@ -454,7 +463,7 @@ fn test_provider_runtime_upstream_launches_helper() {
 
 fn test_provider_runtime_helpers_skip_disabled_feishu_launch_and_gateway_count() {
 	mut app := App{
-		feishu: FeishuState{
+		feishu: feishu.FeishuState{
 			enabled: false
 			apps:    {
 				'main': config.FeishuAppConfig{
@@ -467,7 +476,7 @@ fn test_provider_runtime_helpers_skip_disabled_feishu_launch_and_gateway_count()
 				}
 			}
 		}
-		codex:          CodexState{
+		codex:  codex.CodexState{
 			runtime: CodexProviderRuntime{
 				enabled: true
 				url:     'ws://codex.local/ws'
@@ -485,7 +494,7 @@ fn test_provider_runtime_helpers_skip_disabled_feishu_launch_and_gateway_count()
 
 fn test_websocket_upstream_provider_helpers_delegate_to_host_facade() {
 	mut app := App{
-		feishu: FeishuState{
+		feishu: feishu.FeishuState{
 			enabled: true
 			apps:    {
 				'main': config.FeishuAppConfig{
@@ -498,7 +507,7 @@ fn test_websocket_upstream_provider_helpers_delegate_to_host_facade() {
 				}
 			}
 		}
-		codex:          CodexState{
+		codex:  codex.CodexState{
 			runtime: CodexProviderRuntime{
 				enabled:            true
 				url:                'ws://codex.local/ws'
@@ -506,18 +515,18 @@ fn test_websocket_upstream_provider_helpers_delegate_to_host_facade() {
 			}
 		}
 	}
-	assert websocket_upstream_provider_pull_url(mut app, websocket_upstream_provider_codex,
-		'main') or { '' } == 'ws://codex.local/ws'
-	assert websocket_upstream_provider_reconnect_delay_ms(&app, websocket_upstream_provider_codex,
+	assert app.websocket_upstream_provider_pull_url(websocket_upstream_provider_codex, 'main') or {
+		''
+	} == 'ws://codex.local/ws'
+	assert app.websocket_upstream_provider_reconnect_delay_ms(websocket_upstream_provider_codex,
 		'main') == 2222
-	websocket_upstream_provider_on_connecting(mut app, websocket_upstream_provider_codex,
-		'main')
+	app.websocket_upstream_provider_on_connecting(websocket_upstream_provider_codex, 'main')
 	assert app.codex.runtime.connect_attempts == 1
 }
 
 fn test_provider_runtime_lifecycle_helpers_delegate_codex_runtime() {
 	mut app := App{
-		codex: CodexState{
+		codex: codex.CodexState{
 			runtime: CodexProviderRuntime{
 				enabled: true
 				url:     'ws://codex.local/ws'
@@ -536,15 +545,13 @@ fn test_provider_runtime_lifecycle_helpers_delegate_codex_runtime() {
 
 fn test_db_runtime_snapshot_without_compiled_support() {
 	mut app := App{
-		codex:      CodexState{
-			db_runtime: build_db_runtime(DbRuntimeSettings{
-				enabled: true
-				socket:  'tmp/vhttpd-db.sock'
-				driver:  'mysql'
-			})
-		}
+		db_runtime: DbProviderRuntime.from_settings(DbRuntimeSettings{
+			enabled: true
+			socket:  'tmp/vhttpd-db.sock'
+			driver:  'mysql'
+		})
 	}
-	assert !db_runtime_compiled()
+	assert !DbProviderRuntime.compiled()
 	assert !app.provider_bootstrap_enabled('db')
 	snapshot := app.db_runtime_snapshot()
 	assert snapshot.contains('tmp/vhttpd-db.sock')
@@ -554,12 +561,10 @@ fn test_db_runtime_snapshot_without_compiled_support() {
 
 fn test_db_runtime_dispatch_reports_not_compiled() {
 	mut app := App{
-		codex:      CodexState{
-			db_runtime: DbProviderRuntime{
-				enabled: true
-				socket:  'tmp/vhttpd-db.sock'
-				driver:  'mysql'
-			}
+		db_runtime: DbProviderRuntime{
+			enabled: true
+			socket:  'tmp/vhttpd-db.sock'
+			driver:  'mysql'
 		}
 	}
 	invalid := app.db_runtime_dispatch(DbUpstreamRequest{

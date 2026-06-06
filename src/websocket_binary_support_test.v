@@ -2,6 +2,7 @@ module main
 
 import encoding.base64
 import net.websocket
+import ws
 
 fn test_websocket_dispatch_payload_from_message_supports_text_frame() {
 	msg := websocket.Message{
@@ -38,14 +39,14 @@ fn test_websocket_dispatch_payload_from_message_rejects_control_frame() {
 }
 
 fn test_websocket_hub_payload_bytes_supports_text() {
-	payload, code := websocket_hub_payload_bytes('hello', 'text') or { panic('missing payload') }
+	payload, code := ws.HubPendingMessage{data: 'hello', opcode: 'text'}.payload_bytes() or { panic('missing_payload') }
 	assert code == websocket.OPCode.text_frame
 	assert payload == 'hello'.bytes()
 }
 
 fn test_websocket_hub_payload_bytes_supports_binary() {
 	raw := [u8(9), 8, 7, 6]
-	payload, code := websocket_hub_payload_bytes(base64.encode(raw), 'binary') or {
+	payload, code := ws.HubPendingMessage{data: base64.encode(raw), opcode: 'binary'}.payload_bytes() or {
 		panic('missing payload')
 	}
 	assert code == websocket.OPCode.binary_frame
@@ -53,7 +54,7 @@ fn test_websocket_hub_payload_bytes_supports_binary() {
 }
 
 fn test_websocket_hub_payload_bytes_rejects_unknown_opcode() {
-	_, _ := websocket_hub_payload_bytes('hello', 'pong') or {
+	_, _ := ws.HubPendingMessage{data: 'hello', opcode: 'pong'}.payload_bytes() or {
 		assert true
 		return
 	}

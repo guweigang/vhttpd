@@ -1,7 +1,7 @@
 module main
+
 import executor
 import feishu
-
 import json
 import log
 import net
@@ -32,32 +32,32 @@ struct FeishuBridgeHeartbeatFrame {
 }
 
 struct FeishuCardBridgeDispatchRequest {
-	type_      string            @[json: 'type']
-	request_id string            @[json: 'request_id']
-	trace_id   string            @[json: 'trace_id']
-	app        string
-	event_type string            @[json: 'event_type']
-	message_id string            @[json: 'message_id']
-	target     string
-	target_type string           @[json: 'target_type']
-	payload    string
-	metadata   map[string]string
+	type_       string @[json: 'type']
+	request_id  string @[json: 'request_id']
+	trace_id    string @[json: 'trace_id']
+	app         string
+	event_type  string @[json: 'event_type']
+	message_id  string @[json: 'message_id']
+	target      string
+	target_type string @[json: 'target_type']
+	payload     string
+	metadata    map[string]string
 }
 
 struct FeishuCardBridgeGatewayDispatchRequest {
 	app         string
-	trace_id    string            @[json: 'trace_id']
-	event_type  string            @[json: 'event_type']
-	message_id  string            @[json: 'message_id']
+	trace_id    string @[json: 'trace_id']
+	event_type  string @[json: 'event_type']
+	message_id  string @[json: 'message_id']
 	target      string
-	target_type string            @[json: 'target_type']
+	target_type string @[json: 'target_type']
 	payload     string
 	metadata    map[string]string
 }
 
 struct FeishuCardBridgeDispatchResult {
-	type_      string            @[json: 'type']
-	request_id string            @[json: 'request_id']
+	type_      string @[json: 'type']
+	request_id string @[json: 'request_id']
 	status     int
 	headers    map[string]string
 	body       string
@@ -95,7 +95,8 @@ fn (mut app App) feishu_card_bridge_apply_env_fallbacks() {
 		app.feishu.card_bridge_ws_url = os.getenv('VHTTPD_FEISHU_CARD_BRIDGE_WS_URL').trim_space()
 	}
 	if app.feishu.card_bridge_client_id.trim_space() == '' {
-		app.feishu.card_bridge_client_id = os.getenv('VHTTPD_FEISHU_CARD_BRIDGE_CLIENT_ID').trim_space()
+		app.feishu.card_bridge_client_id =
+			os.getenv('VHTTPD_FEISHU_CARD_BRIDGE_CLIENT_ID').trim_space()
 	}
 	if app.feishu.card_bridge_client_id.trim_space() == '' {
 		app.feishu.card_bridge_client_id = feishu_card_bridge_default_client_id()
@@ -104,7 +105,8 @@ fn (mut app App) feishu_card_bridge_apply_env_fallbacks() {
 		app.feishu.card_bridge_token = os.getenv('VHTTPD_FEISHU_CARD_BRIDGE_TOKEN').trim_space()
 	}
 	if app.feishu.card_bridge_target_id.trim_space() == '' {
-		app.feishu.card_bridge_target_id = os.getenv('VHTTPD_FEISHU_CARD_BRIDGE_TARGET_ID').trim_space()
+		app.feishu.card_bridge_target_id =
+			os.getenv('VHTTPD_FEISHU_CARD_BRIDGE_TARGET_ID').trim_space()
 	}
 	if app.feishu.card_bridge_target_id == '' {
 		app.feishu.card_bridge_target_id = app.feishu.card_bridge_client_id
@@ -282,7 +284,7 @@ fn (mut app App) feishu_card_bridge_dispatch_callback(app_name string, trace_id 
 		target:      summary.target
 		target_type: summary.target_type
 		payload:     payload
-		metadata: {
+		metadata:    {
 			'event_kind':      summary.event_kind
 			'event_id':        summary.event_id
 			'open_message_id': summary.open_message_id
@@ -327,21 +329,31 @@ fn (mut app App) feishu_card_bridge_proxy_request(action string, req WebSocketUp
 		action:     action
 		request:    req
 	}
-	log.info('[bridge] 🔁 proxy -> remote request_id=${request_id} trace_id=${req.metadata["trace_id"] or { "" }} action=${action} instance=${req.instance} target=${req.target} target_type=${req.target_type} stream_id=${req.metadata["stream_id"] or { "" }} message_type=${req.message_type}')
+	log.info('[bridge] 🔁 proxy -> remote request_id=${request_id} trace_id=${req.metadata['trace_id'] or {
+		''
+	}} action=${action} instance=${req.instance} target=${req.target} target_type=${req.target_type} stream_id=${req.metadata['stream_id'] or {
+		''
+	}} message_type=${req.message_type}')
 	if !app.feishu_card_bridge_send_to_server(json.encode(frame)) {
 		return error('bridge_send_failed:server')
 	}
 	select {
 		result := <-ch {
 			if result.error != '' {
-				log.error('[bridge] ❌ proxy <- remote error request_id=${request_id} trace_id=${req.metadata["trace_id"] or { "" }} action=${action}: ${result.error}')
+				log.error('[bridge] ❌ proxy <- remote error request_id=${request_id} trace_id=${req.metadata['trace_id'] or {
+					''
+				}} action=${action}: ${result.error}')
 				return error(result.error)
 			}
-			log.info('[bridge] ✅ proxy <- remote request_id=${request_id} trace_id=${req.metadata["trace_id"] or { "" }} action=${action} message_id=${result.message_id}')
+			log.info('[bridge] ✅ proxy <- remote request_id=${request_id} trace_id=${req.metadata['trace_id'] or {
+				''
+			}} action=${action} message_id=${result.message_id}')
 			return result
 		}
 		5 * time.second {
-			log.error('[bridge] ❌ proxy timeout request_id=${request_id} trace_id=${req.metadata["trace_id"] or { "" }} action=${action}')
+			log.error('[bridge] ❌ proxy timeout request_id=${request_id} trace_id=${req.metadata['trace_id'] or {
+				''
+			}} action=${action}')
 			return error('bridge_proxy_timeout')
 		}
 	}
@@ -440,20 +452,14 @@ fn feishu_card_bridge_client_message_cb(mut _ws websocket.Client, msg &websocket
 		'action'
 	}
 	log.info('[bridge] 📨 callback dispatch request: request_id=${req.request_id} trace_id=${req.trace_id} event_kind=${event_kind} event_type=${req.event_type} message_id=${req.message_id} target=${req.target}')
-	outcome := app.kernel_dispatch_websocket_upstream_handled(app.kernel_websocket_upstream_dispatch_request_with_event(
-		event_kind,
-		req.request_id,
-		websocket_upstream_provider_feishu,
-		if req.app.trim_space() != '' { req.app } else { 'main' },
-		if req.trace_id.trim_space() != '' { req.trace_id } else { req.request_id },
-		req.event_type,
-		req.message_id,
-		req.target,
-		req.target_type,
-		req.payload,
-		time.now().unix(),
-		req.metadata.clone(),
-	)) or {
+	outcome := app.kernel_dispatch_websocket_upstream_handled(app.kernel_websocket_upstream_dispatch_request_with_event(event_kind,
+		req.request_id, websocket_upstream_provider_feishu, if req.app.trim_space() != '' {
+		req.app
+	} else {
+		'main'
+	}, if req.trace_id.trim_space() != '' { req.trace_id } else { req.request_id }, req.event_type,
+		req.message_id, req.target, req.target_type, req.payload, time.now().unix(),
+		req.metadata.clone())) or {
 		result := FeishuCardBridgeDispatchResult{
 			type_:      feishu_card_bridge_result_type
 			request_id: req.request_id
@@ -529,7 +535,8 @@ fn run_feishu_card_bridge_client(mut app App) {
 		mut endpoint := ws_url
 		parsed := urllib.parse(endpoint) or { urllib.URL{} }
 		existing_query := if parsed.raw_query != '' { parsed.raw_query } else { '' }
-		if !existing_query.contains('client_id=') && app.feishu.card_bridge_client_id.trim_space() != '' {
+		if !existing_query.contains('client_id=')
+			&& app.feishu.card_bridge_client_id.trim_space() != '' {
 			endpoint += if endpoint.contains('?') {
 				'&client_id=${urllib.query_escape(app.feishu.card_bridge_client_id)}'
 			} else {
@@ -561,9 +568,7 @@ fn run_feishu_card_bridge_client(mut app App) {
 			continue
 		}
 		app.feishu_card_bridge_set_client_conn(client)
-		client.listen() or {
-			log.error('[bridge] ❌ bridge client listen failed: ${err}')
-		}
+		client.listen() or { log.error('[bridge] ❌ bridge client listen failed: ${err}') }
 		app.feishu_card_bridge_clear_client_conn()
 		time.sleep(3 * time.second)
 	}
@@ -606,7 +611,11 @@ fn feishu_card_bridge_server_message_cb(mut _ws websocket.Client, msg &websocket
 		log.error('[bridge] ❌ invalid proxy request frame: ${err}')
 		return
 	}
-	log.info('[bridge] 📨 proxy request: request_id=${req.request_id} trace_id=${req.request.metadata["trace_id"] or { "" }} action=${req.action} instance=${req.request.instance} target=${req.request.target} target_type=${req.request.target_type} stream_id=${req.request.metadata["stream_id"] or { "" }} message_type=${req.request.message_type}')
+	log.info('[bridge] 📨 proxy request: request_id=${req.request_id} trace_id=${req.request.metadata['trace_id'] or {
+		''
+	}} action=${req.action} instance=${req.request.instance} target=${req.request.target} target_type=${req.request.target_type} stream_id=${req.request.metadata['stream_id'] or {
+		''
+	}} message_type=${req.request.message_type}')
 	mut result := feishu.BridgeProxyResult{
 		type_:      feishu_bridge_proxy_result_type
 		request_id: req.request_id
@@ -626,14 +635,11 @@ fn feishu_card_bridge_server_message_cb(mut _ws websocket.Client, msg &websocket
 			result.error = send_result.error
 			stream_id := (req.request.metadata['stream_id'] or { '' }).trim_space()
 			if result.ok && result.message_id.trim_space() != '' && stream_id != '' {
-				state.app.feishu_runtime_register_stream_buffer(
-					result.message_id,
-					stream_id,
-					if req.request.instance.trim_space() != '' { req.request.instance } else { result.instance },
-					req.request.target,
-					req.request.target_type,
-					req.request.text,
-				)
+				state.app.feishu_runtime_register_stream_buffer(result.message_id, stream_id, if req.request.instance.trim_space() != '' {
+					req.request.instance
+				} else {
+					result.instance
+				}, req.request.target, req.request.target_type, req.request.text)
 			}
 		}
 		'update' {
@@ -686,8 +692,11 @@ fn feishu_card_bridge_server_message_cb(mut _ws websocket.Client, msg &websocket
 			result.error = 'unsupported_proxy_action:${req.action}'
 		}
 	}
+
 	mut ws2 := unsafe { _ws }
-	log.info('[bridge] 📤 proxy result: request_id=${req.request_id} trace_id=${req.request.metadata["trace_id"] or { "" }} action=${req.action} ok=${result.ok} message_id=${result.message_id} error=${result.error}')
+	log.info('[bridge] 📤 proxy result: request_id=${req.request_id} trace_id=${req.request.metadata['trace_id'] or {
+		''
+	}} action=${req.action} ok=${result.ok} message_id=${result.message_id} error=${result.error}')
 	ws2.write_string(json.encode(result)) or {
 		log.error('[bridge] ❌ failed to send proxy result: ${err}')
 	}
@@ -721,7 +730,11 @@ pub fn (mut app App) feishu_card_bridge_ws(mut ctx Context) veb.Result {
 	path := if ctx.req.url == '' { '/bridge/ws' } else { ctx.req.url }
 	request_path, _ := normalize_request_target(path)
 	normalized_path := normalize_path(request_path)
-	log.info('[bridge] route feishu_card_bridge_ws path=${path} request_path=${request_path} normalized=${normalized_path} upgrade=${if is_websocket_upgrade(ctx.req) { "true" } else { "false" }}')
+	log.info('[bridge] route feishu_card_bridge_ws path=${path} request_path=${request_path} normalized=${normalized_path} upgrade=${if is_websocket_upgrade(ctx.req) {
+		'true'
+	} else {
+		'false'
+	}}')
 	if normalized_path != '/bridge/ws' {
 		ctx.res.set_status(http.status_from_int(404))
 		return ctx.text('Not Found')
@@ -771,15 +784,27 @@ pub fn (mut app App) feishu_card_bridge_gateway_dispatch(mut ctx Context) veb.Re
 			error: 'invalid_json'
 		}))
 	}
-	summary := feishu_runtime_event_summary(req.payload)
+	summary := feishu.RuntimeEventSnapshot.summary_from_payload(req.payload)
 	bridge_trace_id := if req.trace_id.trim_space() != '' { req.trace_id } else { trace_id }
 	result := app.feishu_card_bridge_dispatch_callback(req.app, bridge_trace_id, executor.FeishuRuntimeEventSummary{
 		event_id:        summary.event_id
 		event_kind:      if summary.event_kind != '' { summary.event_kind } else { 'action' }
-		event_type:      if req.event_type.trim_space() != '' { req.event_type } else { summary.event_type }
-		message_id:      if req.message_id.trim_space() != '' { req.message_id } else { summary.message_id }
+		event_type:      if req.event_type.trim_space() != '' {
+			req.event_type
+		} else {
+			summary.event_type
+		}
+		message_id:      if req.message_id.trim_space() != '' {
+			req.message_id
+		} else {
+			summary.message_id
+		}
 		target:          if req.target.trim_space() != '' { req.target } else { summary.target }
-		target_type:     if req.target_type.trim_space() != '' { req.target_type } else { summary.target_type }
+		target_type:     if req.target_type.trim_space() != '' {
+			req.target_type
+		} else {
+			summary.target_type
+		}
 		open_message_id: summary.open_message_id
 		action_tag:      summary.action_tag
 	}, req.payload) or {

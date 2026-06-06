@@ -1,16 +1,17 @@
 module main
 
-import json
+import provider
 
 // Minimal provider registry to enable pluggable upstream providers.
 // Non-breaking: adapters delegate to existing provider code (eg feishu_runtime.*).
 
 pub interface Provider {
-	init(mut app App) !
-	start(mut app App) !
-	stop(mut app App) !
+mut:
+	init(mut ctx provider.RuntimeContext) !
+	start(mut ctx provider.RuntimeContext) !
+	stop(mut ctx provider.RuntimeContext) !
 	// Return a JSON string snapshot for admin visibility.
-	snapshot(mut app App) string
+	snapshot(mut ctx provider.RuntimeContext) string
 }
 
 // Global registry (kept minimal and simple).
@@ -24,105 +25,228 @@ pub interface Provider {
 // The old global helpers (register_provider, get_provider, provider_names)
 // have been removed to eliminate unrecoverable panics in production code.
 
-// Simple Feishu adapter implementing Provider by delegating to existing functions.
+// Provider registry helpers on App. Registry is protected by app.mu.
+fn (mut host ProviderHost) ensure_maps() {
+	if host.registry.len == 0 {
+		host.registry = map[string]Provider{}
+	}
+	if host.specs.len == 0 {
+		host.specs = map[string]ProviderSpec{}
+	}
+}
+
+fn (mut host ProviderHost) register_provider(name string, p Provider, ctx provider.RuntimeContext) {
+	host.ensure_maps()
+	host.registry[name] = p
+	host.specs[name] = ProviderSpec{
+		name:             name
+		enabled:          true
+		has_handler:      false
+		has_runtime:      true
+		command_matchers: []provider.CommandMatcher{}
+		route_kind:       .generic
+		provider:         p
+		handler:          provider.NoopProviderCommandHandler{}
+		runtime:          ProviderRuntimeAdapter{
+			provider: p
+			ctx:      ctx
+		}
+		lifecycle_ctx:    ctx
+	}
+}
+
+fn (mut host ProviderHost) register_spec(spec ProviderSpec) {
+	host.ensure_maps()
+	host.specs[spec.name] = spec
+}
+
+fn (host ProviderHost) spec(name string) ?ProviderSpec {
+	return host.specs[name] or { return none }
+}
+
+fn (host ProviderHost) provider(name string) ?Provider {
+	if spec := host.specs[name] {
+		return spec.provider
+	}
+	return host.registry[name] or { return none }
+}
+
+fn (host ProviderHost) enabled(name string, bootstrap_enabled bool) bool {
+	if spec := host.specs[name] {
+		return spec.enabled
+	}
+	return bootstrap_enabled
+}
+
+fn (host ProviderHost) runtime(name string) ?ProviderRuntime {
+	if spec := host.specs[name] {
+		return spec.runtime
+	}
+	return none
+}
+
+fn (host ProviderHost) names() []string {
+	mut keys := host.specs.keys()
+	keys.sort()
+	return keys
+}
+
+fn (host ProviderHost) runtimes_with_contexts() ([]ProviderRuntime, []provider.RuntimeContext) {
+	mut runtimes := []ProviderRuntime{}
+	mut contexts := []provider.RuntimeContext{}
+	for _, spec in host.specs {
+		runtimes << spec.runtime
+		contexts << spec.lifecycle_ctx
+	}
+	return runtimes, contexts
+}
+
+pub fn (mut app App) register_provider(name string, p Provider) {
+	mut generic_ctx := app.build_provider_context(name)
+	app.mu.@lock()
+	defer {
+		app.mu.unlock()
+	}
+	app.providers.register_provider(name, p, generic_ctx)
+}
+
+pub fn (mut app App) register_provider_spec(spec ProviderSpec) {
+	app.mu.@lock()
+	defer {
+		app.mu.unlock()
+	}
+	app.providers.register_spec(spec)
+}
+
+pub fn (mut app App) get_provider_spec(name string) ?ProviderSpec {
+	app.mu.@lock()
+	defer {
+		app.mu.unlock()
+	}
+	return app.providers.spec(name)
+}
+
+pub fn (mut app App) get_provider(name string) ?Provider {
+	app.mu.@lock()
+	defer {
+		app.mu.unlock()
+	}
+	return app.providers.provider(name)
+}
+
+pub fn (mut app App) provider_enabled(name string) bool {
+	bootstrap_enabled := app.provider_bootstrap_enabled(name)
+	app.mu.@lock()
+	defer {
+		app.mu.unlock()
+	}
+	return app.providers.enabled(name, bootstrap_enabled)
+}
+
+pub fn (mut app App) get_provider_runtime(name string) ?ProviderRuntime {
+	app.mu.@lock()
+	defer {
+		app.mu.unlock()
+	}
+	return app.providers.runtime(name)
+}
+
+pub fn (mut app App) provider_names() []string {
+	app.mu.@lock()
+	defer {
+		app.mu.unlock()
+	}
+	return app.providers.names()
+}
+
+// Helpers to run provider lifecycle across registered providers.
+pub fn (mut app App) stop_all_providers() {
+	app.mu.@lock()
+	mut runtimes, mut contexts := app.providers.runtimes_with_contexts()
+	app.mu.unlock()
+	for i, mut runtime in runtimes {
+		runtime.stop(mut contexts[i]) or {
+			app.emit('provider.stop_failed', {
+				'error': err.msg()
+			})
+		}
+	}
+}
+
+// Simple Feishu adapter implementing Provider by delegating to context closures.
 pub struct FeishuProvider {}
 
-// Note: Provider interface expects immutable receiver for `init/start/stop` so
-// adapters implement methods with immutable receiver to match the interface.
-pub fn (p FeishuProvider) init(mut app App) ! {
-	// No-op for now; existing Feishu runtime remains owned by App.
+pub fn (mut p FeishuProvider) init(mut ctx provider.RuntimeContext) ! {
 	return
 }
 
-pub fn (p FeishuProvider) start(mut app App) ! {
-	// No-op: server startup already launches websocket provider goroutines.
+pub fn (mut p FeishuProvider) start(mut ctx provider.RuntimeContext) ! {
 	return
 }
 
-pub fn (p FeishuProvider) stop(mut app App) ! {
-	// No-op placeholder for graceful shutdown in future.
+pub fn (mut p FeishuProvider) stop(mut ctx provider.RuntimeContext) ! {
 	return
 }
 
-pub fn (p FeishuProvider) snapshot(mut app App) string {
-	return app.provider_runtime_snapshot('feishu') or { '{}' }
+pub fn (mut p FeishuProvider) snapshot(mut ctx provider.RuntimeContext) string {
+	return ctx.snapshot()
 }
 
-// Codex adapter: thin delegator to existing codex runtime snapshot and hooks.
+// Codex adapter: thin delegator to context closures.
 pub struct CodexProvider {}
 
-pub fn (p CodexProvider) init(mut app App) ! {
-	// No-op: codex runtime initialization is managed by codex_runtime.v logic.
+pub fn (mut p CodexProvider) init(mut ctx provider.RuntimeContext) ! {
 	return
 }
 
-pub fn (p CodexProvider) start(mut app App) ! {
-	// No-op: codex connection loops are started elsewhere when enabled.
+pub fn (mut p CodexProvider) start(mut ctx provider.RuntimeContext) ! {
 	return
 }
 
-pub fn (p CodexProvider) stop(mut app App) ! {
-	// No-op placeholder for graceful shutdown in future.
+pub fn (mut p CodexProvider) stop(mut ctx provider.RuntimeContext) ! {
 	return
 }
 
-pub fn (p CodexProvider) snapshot(mut app App) string {
-	// Reuse existing admin snapshot function for Codex runtime.
-	return json.encode(app.admin_codex_snapshot())
+pub fn (mut p CodexProvider) snapshot(mut ctx provider.RuntimeContext) string {
+	return ctx.snapshot()
 }
 
 // Ollama adapter skeleton — thin delegator for Ollama upstreams (NDJSON style).
 pub struct OllamaProvider {}
 
-pub fn (p OllamaProvider) init(mut app App) ! {
-	// No-op: Ollama runtime initialization will be implemented when added.
+pub fn (mut p OllamaProvider) init(mut ctx provider.RuntimeContext) ! {
 	return
 }
 
-pub fn (p OllamaProvider) start(mut app App) ! {
-	// No-op: Ollama connection loops are started elsewhere when enabled.
+pub fn (mut p OllamaProvider) start(mut ctx provider.RuntimeContext) ! {
 	return
 }
 
-pub fn (p OllamaProvider) stop(mut app App) ! {
-	// No-op placeholder for graceful shutdown in future.
+pub fn (mut p OllamaProvider) stop(mut ctx provider.RuntimeContext) ! {
 	return
 }
 
-pub fn (p OllamaProvider) snapshot(mut app App) string {
-	// If Ollama runtime snapshot helper is added, delegate here. For now
-	// return an empty object representation so admin tooling can display it.
-	return json.encode(map[string]string{})
+pub fn (mut p OllamaProvider) snapshot(mut ctx provider.RuntimeContext) string {
+	return ctx.snapshot()
 }
 
 // Db adapter skeleton — runtime-owned unix socket upstream for database access.
 pub struct DbProvider {}
 
-pub fn (p DbProvider) init(mut app App) ! {
-	_ = app
+pub fn (mut p DbProvider) init(mut ctx provider.RuntimeContext) ! {
 	return
 }
 
-pub fn (p DbProvider) start(mut app App) ! {
-	if !app.codex.db_runtime.enabled || app.codex.db_runtime.socket.trim_space() == '' {
-		return
-	}
-	go run_db_runtime_server(mut app, app.codex.db_runtime.socket)
+pub fn (mut p DbProvider) start(mut ctx provider.RuntimeContext) ! {
+	ctx.start()!
 	return
 }
 
-pub fn (p DbProvider) stop(mut app App) ! {
-	app.mu.@lock()
-	app.codex.db_runtime.stop_requested = true
-	mut listener := app.codex.db_runtime.listener
-	app.codex.db_runtime.started = false
-	app.mu.unlock()
-	if !isnil(listener) {
-		listener.close()!
-	}
+pub fn (mut p DbProvider) stop(mut ctx provider.RuntimeContext) ! {
+	ctx.stop()!
 	return
 }
 
-pub fn (p DbProvider) snapshot(mut app App) string {
-	return app.db_runtime_snapshot()
+pub fn (mut p DbProvider) snapshot(mut ctx provider.RuntimeContext) string {
+	return ctx.snapshot()
 }

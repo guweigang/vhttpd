@@ -20,9 +20,9 @@ pub:
 // Io bridges transport-level I/O from the main App to upstream sub-module.
 pub struct Io {
 pub:
-	write_sse_message                fn (mut net.TcpConn, transport.WorkerStreamFrame) !
-	write_chunk                      fn (mut net.TcpConn, string) !
-	write_http_stream_headers_conn   fn (mut net.TcpConn, int, string, map[string]string, bool) !
+	write_sse_message                fn (mut net.TcpConn, transport.WorkerStreamFrame) !             = unsafe { nil }
+	write_chunk                      fn (mut net.TcpConn, string) !                                  = unsafe { nil }
+	write_http_stream_headers_conn   fn (mut net.TcpConn, int, string, map[string]string, bool) !   = unsafe { nil }
 }
 
 // ExecState tracks the lifecycle of a single upstream stream execution.

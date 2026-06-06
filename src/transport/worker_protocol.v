@@ -110,6 +110,10 @@ pub:
 	uploaded_files   []string
 }
 
+pub struct WorkerFrameCodec {}
+
+pub struct WorkerHttpRequestCodec {}
+
 // WebSocket / MCP communication protocol structures.
 pub struct WorkerWebSocketFrame {
 pub:

@@ -1,37 +1,14 @@
 module provider
 
 import x.json2
+import command
 
-// ProviderRouteKind classifies upstream routing targets for the command executor.
-pub enum ProviderRouteKind {
-	codex
-	feishu
-	openai
-	ollama
-	generic
-}
+// Type aliases for routing types now owned by the command module.
+pub type ProviderRouteKind = command.ProviderRouteKind
 
-// CommandMatcherKind describes how a command matcher compares against a command type.
-pub enum CommandMatcherKind {
-	prefix
-	exact
-}
+pub type CommandMatcherKind = command.CommandMatcherKind
 
-pub struct CommandMatcher {
-pub:
-	kind  CommandMatcherKind
-	value string
-}
-
-pub fn (m CommandMatcher) matches(command_type string) bool {
-	if m.value.trim_space() == '' {
-		return false
-	}
-	return match m.kind {
-		.prefix { command_type.starts_with(m.value) }
-		.exact { command_type == m.value }
-	}
-}
+pub type CommandMatcher = command.CommandMatcher
 
 // Admin snapshot types for provider visibility.
 pub struct AdminProviderSpecSnapshot {
@@ -62,6 +39,60 @@ pub mut:
 	updated_at    i64
 }
 
+pub struct ProviderInstanceRegistry {
+pub mut:
+	specs map[string]ProviderInstanceSpec
+}
+
+pub struct ProviderInstanceStore {}
+
+pub fn ProviderInstanceSpec.normalize_instance_name(instance string) string {
+	name := instance.trim_space()
+	if name == '' || name == 'default' {
+		return 'main'
+	}
+	return name
+}
+
+pub fn ProviderInstanceSpec.key_for(provider_name string, instance string) string {
+	return '${provider_name.trim_space()}/${ProviderInstanceSpec.normalize_instance_name(instance)}'
+}
+
+pub fn (spec ProviderInstanceSpec) normalized_provider() string {
+	return spec.provider.trim_space()
+}
+
+pub fn (spec ProviderInstanceSpec) normalized_instance() string {
+	return ProviderInstanceSpec.normalize_instance_name(spec.instance)
+}
+
+pub fn (spec ProviderInstanceSpec) key() string {
+	return ProviderInstanceSpec.key_for(spec.provider, spec.instance)
+}
+
+pub fn (spec ProviderInstanceSpec) desired_state_or_default() string {
+	desired_state := spec.desired_state.trim_space()
+	if desired_state == '' {
+		return 'connected'
+	}
+	return desired_state
+}
+
+pub fn (spec ProviderInstanceSpec) config_fields() []string {
+	raw := spec.config_json.trim_space()
+	if raw == '' {
+		return []string{}
+	}
+	parsed := json2.decode[json2.Any](raw) or { return []string{} }
+	root := parsed.as_map()
+	mut fields := []string{}
+	for key, _ in root {
+		fields << key
+	}
+	fields.sort()
+	return fields
+}
+
 // AdminProviderInstanceSnapshot exposes instance state for admin APIs.
 pub struct AdminProviderInstanceSnapshot {
 pub:
@@ -77,34 +108,4 @@ pub:
 	desired_state      string   @[json: 'desired_state']
 	created_at         i64      @[json: 'created_at']
 	updated_at         i64      @[json: 'updated_at']
-}
-
-// normalize_instance_name canonicalizes an instance identifier.
-pub fn normalize_instance_name(instance string) string {
-	name := instance.trim_space()
-	if name == '' || name == 'default' {
-		return 'main'
-	}
-	return name
-}
-
-// instance_key produces a compound key from provider and instance names.
-pub fn instance_key(provider_name string, instance string) string {
-	return '${provider_name.trim_space()}/${normalize_instance_name(instance)}'
-}
-
-// instance_config_fields extracts top-level keys from a JSON config blob.
-pub fn instance_config_fields(config_json string) []string {
-	raw := config_json.trim_space()
-	if raw == '' {
-		return []string{}
-	}
-	parsed := json2.decode[json2.Any](raw) or { return []string{} }
-	root := parsed.as_map()
-	mut fields := []string{}
-	for key, _ in root {
-		fields << key
-	}
-	fields.sort()
-	return fields
 }

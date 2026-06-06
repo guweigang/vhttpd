@@ -12,7 +12,7 @@ fn test_inproc_vjsx_runtime_exposes_http_fetch_capability() {
 	defer {
 		os.rm(app_file) or {}
 	}
-	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
+	mut exec := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
 		thread_count:    1
 		app_entry:       app_file
 		module_root:     os.dir(app_file)
@@ -21,10 +21,10 @@ fn test_inproc_vjsx_runtime_exposes_http_fetch_capability() {
 		enable_network:  true
 	})
 	defer {
-		executor.close()
+		exec.close()
 	}
-	mut app := App{}
-	outcome := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
+	mut app := InProcTestApp{}
+	outcome := exec.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/capabilities'
 		req:         http.Request{

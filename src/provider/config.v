@@ -1,11 +1,13 @@
-module main
+module provider
 
 import config
+import feishu
 
 // Provider runtime settings are resolved here so server.v can stay focused on
 // transport/process orchestration instead of provider-specific defaults.
 
-struct FeishuRuntimeSettings {
+pub struct FeishuRuntimeSettings {
+pub:
 	enabled                    bool
 	open_base_url              string
 	reconnect_delay_ms         int
@@ -14,7 +16,8 @@ struct FeishuRuntimeSettings {
 	apps                       map[string]config.FeishuAppConfig
 }
 
-struct CodexRuntimeSettings {
+pub struct CodexRuntimeSettings {
+pub:
 	enabled            bool
 	url                string
 	model              string
@@ -26,7 +29,8 @@ struct CodexRuntimeSettings {
 	flush_interval_ms  int
 }
 
-struct DbRuntimeSettings {
+pub struct DbRuntimeSettings {
+pub:
 	enabled   bool
 	socket    string
 	driver    string
@@ -38,7 +42,8 @@ struct DbRuntimeSettings {
 	pool_size int
 }
 
-struct BridgeRuntimeSettings {
+pub struct BridgeRuntimeSettings {
+pub:
 	enabled   bool
 	ws_url    string
 	client_id string
@@ -46,7 +51,8 @@ struct BridgeRuntimeSettings {
 	target_id string
 }
 
-struct ProviderRuntimeSettings {
+pub struct ProviderRuntimeSettings {
+pub:
 	feishu         FeishuRuntimeSettings
 	codex          CodexRuntimeSettings
 	bridge         BridgeRuntimeSettings
@@ -54,8 +60,8 @@ struct ProviderRuntimeSettings {
 	ollama_enabled bool
 }
 
-fn resolve_provider_runtime_settings(args []string, cfg config.VhttpdConfig) ProviderRuntimeSettings {
-	db_driver := normalize_db_driver_name(cfg.db.driver)
+pub fn ProviderRuntimeSettings.resolve(args []string, cfg config.VhttpdConfig) ProviderRuntimeSettings {
+	db_driver := normalize_db_driver(cfg.db.driver)
 	db_host := if db_driver in ['pgsql', 'pg', 'postgres', 'postgresql'] {
 		if cfg.db.pgsql.host.trim_space() != '' { cfg.db.pgsql.host } else { '127.0.0.1' }
 	} else {
@@ -86,11 +92,11 @@ fn resolve_provider_runtime_settings(args []string, cfg config.VhttpdConfig) Pro
 	} else {
 		if cfg.db.mysql.pool_size > 0 { cfg.db.mysql.pool_size } else { 5 }
 	}
-	feishu_enabled := config.arg_bool_or(args, '--feishu-enabled', cfg.feishu.enabled)
-	feishu_app_id := config.arg_string_or(args, '--feishu-app-id', '')
-	feishu_app_secret := config.arg_string_or(args, '--feishu-app-secret', '')
-	feishu_open_base_url := normalize_feishu_open_base(config.arg_string_or(args, '--feishu-open-base-url',
-		cfg.feishu.open_base_url))
+	feishu_enabled := config.CliArgs.bool_or(args, '--feishu-enabled', cfg.feishu.enabled)
+	feishu_app_id := config.CliArgs.string_or(args, '--feishu-app-id', '')
+	feishu_app_secret := config.CliArgs.string_or(args, '--feishu-app-secret', '')
+	feishu_open_base_url := feishu.RuntimeWsEndpointData.normalize_open_base(config.CliArgs.string_or(args,
+		'--feishu-open-base-url', cfg.feishu.open_base_url))
 	mut feishu_apps := cfg.feishu.apps.clone()
 	if feishu_app_id.trim_space() != '' || feishu_app_secret.trim_space() != '' {
 		feishu_apps['main'] = config.FeishuAppConfig{
@@ -181,6 +187,25 @@ fn resolve_provider_runtime_settings(args []string, cfg config.VhttpdConfig) Pro
 			database:  db_database
 			pool_size: db_pool_size
 		}
-		ollama_enabled: config.arg_bool_or(args, '--ollama-enabled', false)
+		ollama_enabled: config.CliArgs.bool_or(args, '--ollama-enabled', false)
+	}
+}
+
+pub fn normalize_db_driver(name string) string {
+	driver := name.trim_space().to_lower()
+	return match driver {
+		'pg', 'postgres', 'postgresql' {
+			'pgsql'
+		}
+		'mysql' {
+			'mysql'
+		}
+		else {
+			if driver != '' {
+				driver
+			} else {
+				'mysql'
+			}
+		}
 	}
 }

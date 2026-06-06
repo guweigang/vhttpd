@@ -1,33 +1,35 @@
 module main
 
+import executor
 import json
+import worker
 
 fn test_disabled_logic_executor_identity() {
-	executor := DisabledLogicExecutor{}
-	assert executor.model() == .worker
-	assert executor.kind() == 'none'
-	assert executor.provider() == 'none'
+	disabled_executor := executor.DisabledLogicExecutor{}
+	assert disabled_executor.model() == .worker
+	assert disabled_executor.kind() == 'none'
+	assert disabled_executor.provider() == 'none'
 }
 
 fn test_socket_worker_executor_identity() {
-	executor := SocketWorkerExecutor{}
-	assert executor.model() == .worker
-	assert executor.kind() == 'php'
-	assert executor.provider() == 'php-worker'
+	socket_executor := executor.SocketWorkerExecutor{}
+	assert socket_executor.model() == .worker
+	assert socket_executor.kind() == 'php'
+	assert socket_executor.provider() == 'php-worker'
 }
 
 fn test_logic_executor_can_hold_inproc_vjsx_executor() {
-	mut executor := LogicExecutor(new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
+	mut logic_executor := executor.LogicExecutor(new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
 		thread_count: 1
 	}))
-	assert executor.model() == .embedded
-	assert executor.kind() == 'vjsx'
-	assert executor.provider() == 'vjsx'
+	assert logic_executor.model() == .embedded
+	assert logic_executor.kind() == 'vjsx'
+	assert logic_executor.provider() == 'vjsx'
 }
 
 fn test_admin_runtime_snapshot_exposes_embedded_logic_executor_identity() {
 	mut app := App{
-		worker: WorkerState{
+		worker: worker.WorkerState{
 			worker_backend_mode: .disabled
 			lifecycle:           'embedded_host'
 			logic_executor:      new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
@@ -57,10 +59,10 @@ fn test_admin_runtime_snapshot_exposes_embedded_logic_executor_identity() {
 
 fn test_internal_admin_runtime_exposes_worker_logic_executor_identity() {
 	mut app := App{
-		worker: WorkerState{
+		worker: worker.WorkerState{
 			worker_backend_mode: .required
 			lifecycle:           'php_worker_host'
-			logic_executor:      SocketWorkerExecutor{}
+			logic_executor:      executor.SocketWorkerExecutor{}
 		}
 	}
 	resp := app.internal_admin_dispatch(InternalAdminRequest{

@@ -30,5 +30,8 @@ fn test_kernel_dispatch_envelope_from_stream_dispatch() {
 	env := KernelDispatchEnvelope.from_stream_dispatch(req)
 	assert env.kind == .stream
 	assert env.context.session.transport == 'worker_backend'
-	assert env.context.metadata['path'] == '/stream'
+	assert env.context.session.request_id == 'req-1'
+	assert env.context.session.trace_id == 'trace-1'
+	assert env.context.session.stream_type == 'dispatch'
+	assert env.context.session.source == 'open'
 }

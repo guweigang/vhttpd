@@ -1,8 +1,6 @@
 module feishu
 
-import config
 import log
-import time
 
 // ── Provider Runtime Lifecycle ──
 
@@ -14,7 +12,7 @@ pub fn (mut s FeishuState) ensure(name string) ProviderRuntime {
 	if runtime := s.runtime[name] {
 		return runtime
 	}
-	runtime := new_provider_runtime(name)
+	runtime := ProviderRuntime.new(name)
 	s.runtime[name] = runtime
 	return runtime
 }

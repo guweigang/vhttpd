@@ -2,20 +2,20 @@ module main
 
 fn test_ws_dispatch_conn_state_uses_single_lifecycle_source() {
 	mut lifecycle := &WebSocketDispatchConnState{}
-	assert ws.dispatch_conn_phase(lifecycle) == .opening
-	assert !ws.dispatch_conn_can_process_messages(lifecycle)
-	assert ws.dispatch_conn_can_queue(lifecycle)
-	assert ws.dispatch_conn_mark_open(lifecycle)
-	assert ws.dispatch_conn_can_process_messages(lifecycle)
-	assert ws.dispatch_conn_begin_worker_close(lifecycle)
-	assert ws.dispatch_conn_phase(lifecycle) == .closing
-	assert !ws.dispatch_conn_can_process_messages(lifecycle)
-	should_process, worker_initiated := ws.dispatch_conn_begin_peer_close(lifecycle)
+	assert lifecycle.phase() == .opening
+	assert !lifecycle.can_process_messages()
+	assert lifecycle.can_queue()
+	assert lifecycle.mark_open()
+	assert lifecycle.can_process_messages()
+	assert lifecycle.begin_worker_close()
+	assert lifecycle.phase() == .closing
+	assert !lifecycle.can_process_messages()
+	should_process, worker_initiated := lifecycle.begin_peer_close()
 	assert !should_process
 	assert worker_initiated
-	assert ws.dispatch_conn_begin_cleanup(lifecycle)
-	assert !ws.dispatch_conn_begin_cleanup(lifecycle)
-	assert ws.dispatch_conn_phase(lifecycle) == .closed
+	assert lifecycle.begin_cleanup()
+	assert !lifecycle.begin_cleanup()
+	assert lifecycle.phase() == .closed
 }
 
 fn test_worker_websocket_dispatch_finalize_cleans_hub_state_once() {
@@ -40,20 +40,21 @@ fn test_worker_websocket_dispatch_finalize_cleans_hub_state_once() {
 			opcode: 'text'
 		},
 	]
+	rt := app.build_websocket_runtime_context()
 	mut state := &WebSocketDispatchBridgeState{
-		app:       &app
+		rt:        rt
 		lifecycle: lifecycle
 		conn_id:   'conn_dispatch'
 	}
 	worker_websocket_dispatch_finalize(state)
-	assert ws.dispatch_conn_phase(lifecycle) == .closed
-	assert !('conn_dispatch' in app.ws_hub.conns)
-	assert !('conn_dispatch' in app.ws_hub.conn_rooms)
-	assert !('conn_dispatch' in app.ws_hub.conn_meta)
-	assert !('conn_dispatch' in app.ws_hub.pending)
-	assert !('room_dispatch' in app.ws_hub.room_members)
+	assert lifecycle.phase() == .closed
+	assert 'conn_dispatch' !in app.ws_hub.conns
+	assert 'conn_dispatch' !in app.ws_hub.conn_rooms
+	assert 'conn_dispatch' !in app.ws_hub.conn_meta
+	assert 'conn_dispatch' !in app.ws_hub.pending
+	assert 'room_dispatch' !in app.ws_hub.room_members
 	worker_websocket_dispatch_finalize(state)
-	assert !('conn_dispatch' in app.ws_hub.conns)
+	assert 'conn_dispatch' !in app.ws_hub.conns
 }
 
 fn test_ws_hub_send_to_rejects_closing_dispatch_connection() {
@@ -63,9 +64,9 @@ fn test_ws_hub_send_to_rejects_closing_dispatch_connection() {
 		id:        'conn_dispatch'
 		lifecycle: lifecycle
 	}
-	assert ws.dispatch_conn_mark_closing(lifecycle)
+	assert lifecycle.mark_closing()
 	assert !app.ws_hub_send_to('conn_dispatch', 'hello', 'text')
-	assert !('conn_dispatch' in app.ws_hub.pending)
+	assert 'conn_dispatch' !in app.ws_hub.pending
 }
 
 fn test_ws_hub_send_to_queues_opening_dispatch_connection() {

@@ -1,23 +1,35 @@
 module main
-import transport
+
 import provider
-import command as cmdpkg
+import command
 
-// provider type aliases
-type ProviderRouteKind = provider.ProviderRouteKind
-type CommandMatcherKind = provider.CommandMatcherKind
-type CommandMatcher = provider.CommandMatcher
+// provider type aliases — route/matcher types live in command/ module
+type ProviderRouteKind = command.ProviderRouteKind
+type CommandMatcherKind = command.CommandMatcherKind
+type CommandMatcher = command.CommandMatcher
 
-// ProviderCommandHandler bridges provider-specific command execution.
-pub interface ProviderCommandHandler {
-	execute(command transport.WorkerWebSocketUpstreamCommand, normalized cmdpkg.NormalizedCommand, mut snapshot WebSocketUpstreamCommandActivity) (bool, string)
-}
+// Provider config type aliases (from provider/config.v)
+type FeishuRuntimeSettings = provider.FeishuRuntimeSettings
+
+type CodexRuntimeSettings = provider.CodexRuntimeSettings
+
+type DbRuntimeSettings = provider.DbRuntimeSettings
+
+type BridgeRuntimeSettings = provider.BridgeRuntimeSettings
+
+type ProviderRuntimeSettings = provider.ProviderRuntimeSettings
+
+// Provider data type aliases (from provider/spec.v)
+type ProviderRuntimeMetrics = provider.ProviderRuntimeMetrics
+
+type ProviderRuntimeUpstreamLaunch = provider.ProviderRuntimeUpstreamLaunch
 
 // ProviderRuntime represents optional provider-owned runtime lifecycle hooks.
 pub interface ProviderRuntime {
-	start(mut app App) !
-	stop(mut app App) !
-	snapshot(mut app App) string
+mut:
+	start(mut ctx provider.RuntimeContext) !
+	stop(mut ctx provider.RuntimeContext) !
+	snapshot(mut ctx provider.RuntimeContext) string
 }
 
 pub struct ProviderHost {
@@ -36,25 +48,21 @@ pub:
 	command_matchers []CommandMatcher
 	route_kind       ProviderRouteKind
 pub mut:
-	provider Provider
-	handler  ProviderCommandHandler
-	runtime  ProviderRuntime
+	provider      Provider
+	handler       provider.ProviderCommandHandler
+	runtime       ProviderRuntime
+	lifecycle_ctx provider.RuntimeContext
 }
 
 type AdminProviderSpecSnapshot = provider.AdminProviderSpecSnapshot
 
 type AdminProviderRuntimeSnapshot = provider.AdminProviderRuntimeSnapshot
 
-pub fn (mut app App) admin_provider_specs_snapshot() []AdminProviderSpecSnapshot {
-	app.mu.@lock()
-	defer {
-		app.mu.unlock()
-	}
-	mut names := app.providers.specs.keys()
-	names.sort()
+fn (host ProviderHost) admin_specs_snapshot() []AdminProviderSpecSnapshot {
+	names := host.names()
 	mut out := []AdminProviderSpecSnapshot{cap: names.len}
 	for name in names {
-		spec := app.providers.specs[name] or { continue }
+		spec := host.specs[name] or { continue }
 		mut matcher_rows := []string{}
 		for matcher in spec.command_matchers {
 			matcher_rows << '${matcher.kind.str()}:${matcher.value}'
@@ -65,22 +73,17 @@ pub fn (mut app App) admin_provider_specs_snapshot() []AdminProviderSpecSnapshot
 			has_handler:      spec.has_handler
 			has_runtime:      spec.has_runtime
 			command_matchers: matcher_rows
-			route_kind:       spec.route_kind.str()
+			route_kind:       spec.route_kind.snapshot_value()
 		}
 	}
 	return out
 }
 
-pub fn (mut app App) provider_specs_copy() []ProviderSpec {
-	app.mu.@lock()
-	defer {
-		app.mu.unlock()
-	}
-	mut names := app.providers.specs.keys()
-	names.sort()
+fn (host ProviderHost) specs_copy() []ProviderSpec {
+	names := host.names()
 	mut specs := []ProviderSpec{cap: names.len}
 	for name in names {
-		spec := app.providers.specs[name] or { continue }
+		spec := host.specs[name] or { continue }
 		specs << ProviderSpec{
 			name:             spec.name
 			enabled:          spec.enabled
@@ -91,18 +94,35 @@ pub fn (mut app App) provider_specs_copy() []ProviderSpec {
 			provider:         spec.provider
 			handler:          spec.handler
 			runtime:          spec.runtime
+			lifecycle_ctx:    spec.lifecycle_ctx
 		}
 	}
 	return specs
 }
 
+pub fn (mut app App) admin_provider_specs_snapshot() []AdminProviderSpecSnapshot {
+	app.mu.@lock()
+	defer {
+		app.mu.unlock()
+	}
+	return app.providers.admin_specs_snapshot()
+}
+
+pub fn (mut app App) provider_specs_copy() []ProviderSpec {
+	app.mu.@lock()
+	defer {
+		app.mu.unlock()
+	}
+	return app.providers.specs_copy()
+}
+
 pub fn (mut app App) admin_provider_runtimes_snapshot() []AdminProviderRuntimeSnapshot {
-	specs := app.provider_specs_copy()
+	mut specs := app.provider_specs_copy()
 	mut snapshots := []AdminProviderRuntimeSnapshot{cap: specs.len}
-	for spec in specs {
+	for mut spec in specs {
 		mut snapshot := '{}'
 		if spec.has_runtime {
-			snapshot = spec.runtime.snapshot(mut app)
+			snapshot = spec.runtime.snapshot(mut spec.lifecycle_ctx)
 		}
 		snapshots << AdminProviderRuntimeSnapshot{
 			name:     spec.name
@@ -113,49 +133,40 @@ pub fn (mut app App) admin_provider_runtimes_snapshot() []AdminProviderRuntimeSn
 	return snapshots
 }
 
-// No-op defaults let specs be constructed safely while keeping behavior stable.
-pub struct NoopProviderCommandHandler {}
-
-pub fn (h NoopProviderCommandHandler) execute(command transport.WorkerWebSocketUpstreamCommand, normalized cmdpkg.NormalizedCommand, mut snapshot WebSocketUpstreamCommandActivity) (bool, string) {
-	_ = command
-	_ = normalized
-	_ = snapshot
-	return false, ''
-}
-
 pub struct NoopProviderRuntime {}
 
-pub fn (r NoopProviderRuntime) start(mut app App) ! {
-	_ = app
+pub fn (mut r NoopProviderRuntime) start(mut ctx provider.RuntimeContext) ! {
+	_ = ctx
 	return
 }
 
-pub fn (r NoopProviderRuntime) stop(mut app App) ! {
-	_ = app
+pub fn (mut r NoopProviderRuntime) stop(mut ctx provider.RuntimeContext) ! {
+	_ = ctx
 	return
 }
 
-pub fn (r NoopProviderRuntime) snapshot(mut app App) string {
-	_ = app
+pub fn (mut r NoopProviderRuntime) snapshot(mut ctx provider.RuntimeContext) string {
+	_ = ctx
 	return '{}'
 }
 
 // Adapter for existing Provider interface so runtime hooks can remain optional.
 pub struct ProviderRuntimeAdapter {
-pub:
+pub mut:
 	provider Provider
+	ctx      provider.RuntimeContext
 }
 
-pub fn (r ProviderRuntimeAdapter) start(mut app App) ! {
-	r.provider.start(mut app)!
+pub fn (mut r ProviderRuntimeAdapter) start(mut ctx provider.RuntimeContext) ! {
+	r.provider.start(mut r.ctx)!
 	return
 }
 
-pub fn (r ProviderRuntimeAdapter) stop(mut app App) ! {
-	r.provider.stop(mut app)!
+pub fn (mut r ProviderRuntimeAdapter) stop(mut ctx provider.RuntimeContext) ! {
+	r.provider.stop(mut r.ctx)!
 	return
 }
 
-pub fn (r ProviderRuntimeAdapter) snapshot(mut app App) string {
-	return r.provider.snapshot(mut app)
+pub fn (mut r ProviderRuntimeAdapter) snapshot(mut ctx provider.RuntimeContext) string {
+	return r.provider.snapshot(mut r.ctx)
 }

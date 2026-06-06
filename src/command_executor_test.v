@@ -1,7 +1,12 @@
 module main
+
+import command
 import config
 import transport
 import provider
+import executor as execmod
+import feishu
+import codex
 
 fn test_normalized_command_from_worker_command_codex_rpc_send() {
 	cmd := transport.WorkerWebSocketUpstreamCommand{
@@ -10,7 +15,7 @@ fn test_normalized_command_from_worker_command_codex_rpc_send() {
 		method:    'thread/start'
 		params:    '{"cwd":"/tmp/demo"}'
 	}
-	normalized := NormalizedCommand.from_worker_command(cmd)
+	normalized := command.NormalizedCommand.from_worker_command(cmd)
 	assert normalized.version == '1'
 	assert normalized.kind == 'provider.rpc.call'
 	assert normalized.provider == 'codex'
@@ -26,7 +31,7 @@ fn test_normalized_command_from_worker_command_feishu_patch() {
 		stream_id: 'codex:task_002'
 		text:      'chunk'
 	}
-	normalized := NormalizedCommand.from_worker_command(cmd)
+	normalized := command.NormalizedCommand.from_worker_command(cmd)
 	assert normalized.kind == 'stream.append'
 	assert normalized.provider == 'feishu'
 	assert normalized.target.id == 'om_xxx'
@@ -48,13 +53,18 @@ fn test_command_route_from_normalized_provider_message_send_for_feishu() {
 		enabled:          true
 		has_handler:      true
 		has_runtime:      true
-		command_matchers: [provider.CommandMatcher{kind: provider.CommandMatcherKind.prefix, value: 'feishu.message.'}]
+		command_matchers: [
+			provider.CommandMatcher{
+				kind:  provider.CommandMatcherKind.prefix
+				value: 'feishu.message.'
+			},
+		]
 		route_kind:       .feishu
 		provider:         FeishuProvider{}
 		handler:          FeishuCommandHandler.new(mut app)
 		runtime:          NoopProviderRuntime{}
 	})
-	mut exec := CommandExecutor.new(mut app)
+	mut exec := command.CommandExecutor.new(app.build_command_context())
 	cmd := transport.WorkerWebSocketUpstreamCommand{
 		type_:    'provider.message.send'
 		provider: 'feishu'
@@ -76,13 +86,18 @@ fn test_command_route_from_normalized_stream_append_for_feishu() {
 		enabled:          true
 		has_handler:      true
 		has_runtime:      true
-		command_matchers: [provider.CommandMatcher{kind: provider.CommandMatcherKind.prefix, value: 'feishu.message.'}]
+		command_matchers: [
+			provider.CommandMatcher{
+				kind:  provider.CommandMatcherKind.prefix
+				value: 'feishu.message.'
+			},
+		]
 		route_kind:       .feishu
 		provider:         FeishuProvider{}
 		handler:          FeishuCommandHandler.new(mut app)
 		runtime:          NoopProviderRuntime{}
 	})
-	mut exec := CommandExecutor.new(mut app)
+	mut exec := command.CommandExecutor.new(app.build_command_context())
 	cmd := transport.WorkerWebSocketUpstreamCommand{
 		type_:    'stream.append'
 		provider: 'feishu'
@@ -104,13 +119,18 @@ fn test_command_route_from_normalized_stream_fail_for_feishu() {
 		enabled:          true
 		has_handler:      true
 		has_runtime:      true
-		command_matchers: [provider.CommandMatcher{kind: provider.CommandMatcherKind.prefix, value: 'feishu.message.'}]
+		command_matchers: [
+			provider.CommandMatcher{
+				kind:  provider.CommandMatcherKind.prefix
+				value: 'feishu.message.'
+			},
+		]
 		route_kind:       .feishu
 		provider:         FeishuProvider{}
 		handler:          FeishuCommandHandler.new(mut app)
 		runtime:          NoopProviderRuntime{}
 	})
-	mut exec := CommandExecutor.new(mut app)
+	mut exec := command.CommandExecutor.new(app.build_command_context())
 	cmd := transport.WorkerWebSocketUpstreamCommand{
 		type_:    'stream.fail'
 		provider: 'feishu'
@@ -120,24 +140,24 @@ fn test_command_route_from_normalized_stream_fail_for_feishu() {
 
 fn test_execute_provider_instance_upsert_applies_feishu_app_config() {
 	mut app := &App{
-		feishu: FeishuState{
-			apps: map[string]config.FeishuAppConfig{}
+		feishu:    feishu.FeishuState{
+			apps:    map[string]config.FeishuAppConfig{}
 			runtime: map[string]FeishuProviderRuntime{}
 		}
 		providers: ProviderHost{
 			specs: map[string]ProviderSpec{}
 		}
 	}
-	mut exec := CommandExecutor.new(mut app)
-	mut snapshot := WebSocketUpstreamCommandActivity{}
-	normalized := NormalizedCommand{
+	mut exec := command.CommandExecutor.new(app.build_command_context())
+	mut snapshot := execmod.WebSocketUpstreamCommandActivity{}
+	normalized := command.NormalizedCommand{
 		kind:          'provider.instance.upsert'
 		provider:      'feishu'
 		instance:      'main'
 		config_raw:    '{"app_id":"bot_app","app_secret":"bot_secret"}'
 		desired_state: 'connected'
 	}
-	handled, exec_err := exec.execute_provider_instance_command(normalized, mut snapshot)
+	handled, exec_err := exec.execute_instance_command(normalized, mut snapshot)
 	assert handled
 	assert exec_err == ''
 	assert snapshot.status == 'upserted'
@@ -159,13 +179,18 @@ fn test_command_route_from_command_codex_control() {
 		enabled:          true
 		has_handler:      true
 		has_runtime:      true
-		command_matchers: [provider.CommandMatcher{kind: provider.CommandMatcherKind.prefix, value: 'codex.'}]
+		command_matchers: [
+			provider.CommandMatcher{
+				kind:  provider.CommandMatcherKind.prefix
+				value: 'codex.'
+			},
+		]
 		route_kind:       .codex
 		provider:         CodexProvider{}
 		handler:          CodexCommandHandler.new(mut app)
 		runtime:          NoopProviderRuntime{}
 	})
-	mut exec := CommandExecutor.new(mut app)
+	mut exec := command.CommandExecutor.new(app.build_command_context())
 	cmd := transport.WorkerWebSocketUpstreamCommand{
 		type_: 'codex.rpc.send'
 	}
@@ -186,13 +211,18 @@ fn test_command_route_from_command_feishu_message_prefix() {
 		enabled:          true
 		has_handler:      true
 		has_runtime:      true
-		command_matchers: [provider.CommandMatcher{kind: provider.CommandMatcherKind.prefix, value: 'feishu.message.'}]
+		command_matchers: [
+			provider.CommandMatcher{
+				kind:  provider.CommandMatcherKind.prefix
+				value: 'feishu.message.'
+			},
+		]
 		route_kind:       .feishu
 		provider:         FeishuProvider{}
 		handler:          FeishuCommandHandler.new(mut app)
 		runtime:          NoopProviderRuntime{}
 	})
-	mut exec := CommandExecutor.new(mut app)
+	mut exec := command.CommandExecutor.new(app.build_command_context())
 	cmd := transport.WorkerWebSocketUpstreamCommand{
 		type_: 'feishu.message.patch'
 	}
@@ -205,7 +235,7 @@ fn test_command_route_from_command_generic_fallback() {
 			specs: map[string]ProviderSpec{}
 		}
 	}
-	mut exec := CommandExecutor.new(mut app)
+	mut exec := command.CommandExecutor.new(app.build_command_context())
 	cmd := transport.WorkerWebSocketUpstreamCommand{
 		type_: 'discord.message.send'
 		event: 'send'
@@ -227,13 +257,18 @@ fn test_command_route_from_command_ollama_message_prefix() {
 		enabled:          true
 		has_handler:      true
 		has_runtime:      true
-		command_matchers: [provider.CommandMatcher{kind: provider.CommandMatcherKind.prefix, value: 'ollama.message.'}]
+		command_matchers: [
+			provider.CommandMatcher{
+				kind:  provider.CommandMatcherKind.prefix
+				value: 'ollama.message.'
+			},
+		]
 		route_kind:       .ollama
 		provider:         OllamaProvider{}
 		handler:          GenericUpstreamCommandHandler.new(mut app)
 		runtime:          NoopProviderRuntime{}
 	})
-	mut exec := CommandExecutor.new(mut app)
+	mut exec := command.CommandExecutor.new(app.build_command_context())
 	cmd := transport.WorkerWebSocketUpstreamCommand{
 		type_: 'ollama.message.send'
 	}
@@ -251,7 +286,12 @@ fn test_provider_spec_command_matchers_are_exposed_in_snapshot() {
 		enabled:          true
 		has_handler:      true
 		has_runtime:      true
-		command_matchers: [provider.CommandMatcher{kind: provider.CommandMatcherKind.prefix, value: 'feishu.message.'}]
+		command_matchers: [
+			provider.CommandMatcher{
+				kind:  provider.CommandMatcherKind.prefix
+				value: 'feishu.message.'
+			},
+		]
 		route_kind:       .feishu
 		provider:         FeishuProvider{}
 		handler:          FeishuCommandHandler.new(mut app)
@@ -265,7 +305,10 @@ fn test_provider_spec_command_matchers_are_exposed_in_snapshot() {
 }
 
 fn test_command_matcher_exact_kind_matches_exactly() {
-	matcher := provider.CommandMatcher{kind: provider.CommandMatcherKind.exact, value: 'codex.rpc.send'}
+	matcher := provider.CommandMatcher{
+		kind:  provider.CommandMatcherKind.exact
+		value: 'codex.rpc.send'
+	}
 	assert matcher.matches('codex.rpc.send')
 	assert !matcher.matches('codex.rpc.reply')
 }
@@ -274,7 +317,7 @@ fn test_command_executor_feishu_route_enabled_default_true() {
 	$if no_feishu_routes ? {
 		return
 	}
-	assert CommandExecutor.feishu_route_enabled() == true
+	assert command.CommandExecutor.feishu_route_enabled() == true
 }
 
 fn test_command_route_from_command_feishu_is_generic_when_disabled() {
@@ -286,12 +329,12 @@ fn test_command_route_from_command_feishu_is_generic_when_disabled() {
 			specs: map[string]ProviderSpec{}
 		}
 	}
-	mut exec := CommandExecutor.new(mut app)
+	mut exec := command.CommandExecutor.new(app.build_command_context())
 	cmd := transport.WorkerWebSocketUpstreamCommand{
 		type_: 'feishu.message.patch'
 	}
 	assert exec.route_from_specs(cmd) == provider.ProviderRouteKind.generic
-	assert CommandExecutor.feishu_route_enabled() == false
+	assert command.CommandExecutor.feishu_route_enabled() == false
 }
 
 fn test_codex_handler_non_codex_command_not_handled() {
@@ -303,8 +346,8 @@ fn test_codex_handler_non_codex_command_not_handled() {
 	cmd := transport.WorkerWebSocketUpstreamCommand{
 		type_: 'feishu.message.send'
 	}
-	normalized := NormalizedCommand.from_worker_command(cmd)
-	mut snapshot := WebSocketUpstreamCommandActivity{}
+	normalized := command.NormalizedCommand.from_worker_command(cmd)
+	mut snapshot := execmod.WebSocketUpstreamCommandActivity{}
 	handled, err := handler.execute(cmd, normalized, mut snapshot)
 	assert handled == false
 	assert err == ''
@@ -314,14 +357,14 @@ fn test_command_executor_codex_route_enabled_default_true() {
 	$if no_codex_routes ? {
 		return
 	}
-	assert CommandExecutor.codex_route_enabled() == true
+	assert command.CommandExecutor.codex_route_enabled() == true
 }
 
 fn test_command_executor_ollama_route_enabled_default_true() {
 	$if no_ollama_routes ? {
 		return
 	}
-	assert CommandExecutor.ollama_route_enabled() == true
+	assert command.CommandExecutor.ollama_route_enabled() == true
 }
 
 fn test_command_route_from_command_codex_is_generic_when_disabled() {
@@ -333,12 +376,12 @@ fn test_command_route_from_command_codex_is_generic_when_disabled() {
 			specs: map[string]ProviderSpec{}
 		}
 	}
-	mut exec := CommandExecutor.new(mut app)
+	mut exec := command.CommandExecutor.new(app.build_command_context())
 	cmd := transport.WorkerWebSocketUpstreamCommand{
 		type_: 'codex.rpc.send'
 	}
 	assert exec.route_from_specs(cmd) == provider.ProviderRouteKind.generic
-	assert CommandExecutor.codex_route_enabled() == false
+	assert command.CommandExecutor.codex_route_enabled() == false
 }
 
 fn test_command_route_from_command_ollama_is_generic_when_disabled() {
@@ -350,13 +393,13 @@ fn test_command_route_from_command_ollama_is_generic_when_disabled() {
 			specs: map[string]ProviderSpec{}
 		}
 	}
-	mut exec := CommandExecutor.new(mut app)
+	mut exec := command.CommandExecutor.new(app.build_command_context())
 	cmd := transport.WorkerWebSocketUpstreamCommand{
 		type_: 'ollama.message.send'
 		event: 'send'
 	}
 	assert exec.route_from_specs(cmd) == provider.ProviderRouteKind.generic
-	assert CommandExecutor.ollama_route_enabled() == false
+	assert command.CommandExecutor.ollama_route_enabled() == false
 }
 
 fn test_feishu_handler_non_feishu_command_not_handled() {
@@ -365,8 +408,8 @@ fn test_feishu_handler_non_feishu_command_not_handled() {
 	cmd := transport.WorkerWebSocketUpstreamCommand{
 		type_: 'codex.rpc.send'
 	}
-	normalized := NormalizedCommand.from_worker_command(cmd)
-	mut snapshot := WebSocketUpstreamCommandActivity{}
+	normalized := command.NormalizedCommand.from_worker_command(cmd)
+	mut snapshot := execmod.WebSocketUpstreamCommandActivity{}
 	handled, err := handler.execute(cmd, normalized, mut snapshot)
 	assert handled == false
 	assert err == ''
@@ -381,8 +424,8 @@ fn test_feishu_command_normalize_stream_send_only_applies_to_stream_commands() {
 		message_type: 'text'
 		text:         'plain'
 	}
-	normalized_cmd := NormalizedCommand.from_worker_command(cmd)
-	normalized := feishu_command_normalize_stream_send(normalized_cmd, req)
+	normalized_cmd := command.NormalizedCommand.from_worker_command(cmd)
+	normalized := req.normalize_feishu_streaming_for(normalized_cmd)
 	assert normalized.message_type == 'text'
 	assert normalized.text == 'plain'
 }
@@ -397,8 +440,8 @@ fn test_feishu_command_normalize_stream_send_promotes_stream_send_to_interactive
 		message_type: 'text'
 		text:         'stream body'
 	}
-	normalized_cmd := NormalizedCommand.from_worker_command(cmd)
-	normalized := feishu_command_normalize_stream_send(normalized_cmd, req)
+	normalized_cmd := command.NormalizedCommand.from_worker_command(cmd)
+	normalized := req.normalize_feishu_streaming_for(normalized_cmd)
 	assert normalized.message_type == 'interactive'
 	assert normalized.content.contains('stream body')
 }
@@ -409,8 +452,8 @@ fn test_generic_handler_executes_admin_worker_restart_all_command() {
 	cmd := transport.WorkerWebSocketUpstreamCommand{
 		type_: 'admin.worker.restart_all'
 	}
-	normalized := NormalizedCommand.from_worker_command(cmd)
-	mut snapshot := WebSocketUpstreamCommandActivity{}
+	normalized := command.NormalizedCommand.from_worker_command(cmd)
+	mut snapshot := execmod.WebSocketUpstreamCommandActivity{}
 	handled, err := handler.execute(cmd, normalized, mut snapshot)
 	assert handled == true
 	assert err == ''
@@ -420,20 +463,23 @@ fn test_generic_handler_executes_admin_worker_restart_all_command() {
 }
 
 fn test_websocket_upstream_request_from_normalized_uses_default_provider_and_fields() {
-	normalized := NormalizedCommand{
+	normalized := command.NormalizedCommand{
 		instance:     'main'
-		target:       CommandTarget{id: 'oc_123', type_: 'chat_id'}
+		target:       command.CommandTarget{
+			id:    'oc_123'
+			type_: 'chat_id'
+		}
 		message_type: 'text'
 		content:      '{"text":"hello"}'
 		text:         'hello'
 		uuid:         'uuid_123'
 		method:       'thread/start'
 		params:       '{"cwd":"/tmp/demo"}'
-		metadata: {
+		metadata:     {
 			'trace_id': 'trace_001'
 		}
 	}
-	req := websocket_upstream_request_from_normalized(normalized, 'discord')
+	req := WebSocketUpstreamSendRequest.from_normalized(normalized, 'discord')
 	assert req.provider == 'discord'
 	assert req.instance == 'main'
 	assert req.target == 'oc_123'
@@ -448,16 +494,16 @@ fn test_websocket_upstream_request_from_normalized_uses_default_provider_and_fie
 }
 
 fn test_websocket_upstream_request_from_normalized_prefers_declared_provider() {
-	normalized := NormalizedCommand{
+	normalized := command.NormalizedCommand{
 		provider: 'ollama'
 	}
-	req := websocket_upstream_request_from_normalized(normalized, 'generic')
+	req := WebSocketUpstreamSendRequest.from_normalized(normalized, 'generic')
 	assert req.provider == 'ollama'
 }
 
 fn test_command_executor_handles_provider_instance_upsert() {
 	mut app := &App{}
-	mut executor := CommandExecutor.new(mut app)
+	mut executor := command.CommandExecutor.new(app.build_command_context())
 	commands := [
 		transport.WorkerWebSocketUpstreamCommand{
 			type_:    'provider.instance.upsert'
@@ -469,7 +515,7 @@ fn test_command_executor_handles_provider_instance_upsert() {
 			}
 		},
 	]
-	snapshots, last_error := executor.execute_websocket_upstream_commands('unit-upsert', commands)
+	snapshots, last_error := executor.execute_commands('unit-upsert', commands)
 	assert last_error == ''
 	assert snapshots.len == 1
 	assert snapshots[0].status == 'upserted'
@@ -484,7 +530,7 @@ fn test_command_executor_handles_provider_instance_upsert() {
 
 fn test_codex_handler_session_bind_thread_updates_runtime_binding() {
 	mut app := &App{
-		codex: CodexState{
+		codex: codex.CodexState{
 			runtime: CodexProviderRuntime{
 				thread_stream_map: map[string]string{}
 				stream_map:        map[string][]CodexTarget{}
@@ -493,14 +539,14 @@ fn test_codex_handler_session_bind_thread_updates_runtime_binding() {
 	}
 	mut handler := CodexCommandHandler.new(mut app)
 	cmd := transport.WorkerWebSocketUpstreamCommand{
-		type_:     'session.bind'
-		provider:  'codex'
-		stream_id: 'codex:task_001'
-		target:    'thread_001'
+		type_:       'session.bind'
+		provider:    'codex'
+		stream_id:   'codex:task_001'
+		target:      'thread_001'
 		target_type: 'thread_id'
 	}
-	normalized := NormalizedCommand.from_worker_command(cmd)
-	mut snapshot := WebSocketUpstreamCommandActivity{}
+	normalized := command.NormalizedCommand.from_worker_command(cmd)
+	mut snapshot := execmod.WebSocketUpstreamCommandActivity{}
 	handled, err := handler.execute(cmd, normalized, mut snapshot)
 	assert handled == true
 	assert err == ''
@@ -511,25 +557,25 @@ fn test_codex_handler_session_bind_thread_updates_runtime_binding() {
 
 fn test_codex_handler_session_clear_thread_removes_runtime_binding() {
 	mut app := &App{
-		codex: CodexState{
+		codex: codex.CodexState{
 			runtime: CodexProviderRuntime{
 				thread_id:         'thread_001'
 				thread_stream_map: {
 					'thread_001': 'codex:task_001'
 				}
-				stream_map: map[string][]CodexTarget{}
+				stream_map:        map[string][]CodexTarget{}
 			}
 		}
 	}
 	mut handler := CodexCommandHandler.new(mut app)
 	cmd := transport.WorkerWebSocketUpstreamCommand{
-		type_:    'session.clear'
-		provider: 'codex'
-		target:   'thread_001'
+		type_:       'session.clear'
+		provider:    'codex'
+		target:      'thread_001'
 		target_type: 'thread_id'
 	}
-	normalized := NormalizedCommand.from_worker_command(cmd)
-	mut snapshot := WebSocketUpstreamCommandActivity{}
+	normalized := command.NormalizedCommand.from_worker_command(cmd)
+	mut snapshot := execmod.WebSocketUpstreamCommandActivity{}
 	handled, err := handler.execute(cmd, normalized, mut snapshot)
 	assert handled == true
 	assert err == ''
@@ -540,27 +586,27 @@ fn test_codex_handler_session_clear_thread_removes_runtime_binding() {
 
 fn test_feishu_handler_session_bind_message_registers_stream_target_and_buffer() {
 	mut app := &App{
-		codex: CodexState{
+		codex:  codex.CodexState{
 			runtime: CodexProviderRuntime{
 				thread_stream_map: map[string]string{}
 				stream_map:        map[string][]CodexTarget{}
 			}
 		}
-		feishu: FeishuState{
+		feishu: feishu.FeishuState{
 			buffers: map[string]FeishuStreamBuffer{}
 		}
 	}
 	mut handler := FeishuCommandHandler.new(mut app)
 	cmd := transport.WorkerWebSocketUpstreamCommand{
-		type_:     'session.bind'
-		provider:  'feishu'
-		instance:  'main'
-		stream_id: 'codex:task_002'
-		target:    'om_reply_001'
+		type_:       'session.bind'
+		provider:    'feishu'
+		instance:    'main'
+		stream_id:   'codex:task_002'
+		target:      'om_reply_001'
 		target_type: 'message_id'
 	}
-	normalized := NormalizedCommand.from_worker_command(cmd)
-	mut snapshot := WebSocketUpstreamCommandActivity{}
+	normalized := command.NormalizedCommand.from_worker_command(cmd)
+	mut snapshot := execmod.WebSocketUpstreamCommandActivity{}
 	handled, err := handler.execute(cmd, normalized, mut snapshot)
 	assert handled == true
 	assert err == ''
@@ -574,10 +620,10 @@ fn test_feishu_handler_session_bind_message_registers_stream_target_and_buffer()
 
 fn test_feishu_handler_session_clear_message_removes_buffer_and_stream_target() {
 	mut app := &App{
-		codex: CodexState{
+		codex:  codex.CodexState{
 			runtime: CodexProviderRuntime{
 				thread_stream_map: map[string]string{}
-				stream_map: {
+				stream_map:        {
 					'codex:task_003': [
 						CodexTarget{
 							platform:   'feishu'
@@ -587,7 +633,7 @@ fn test_feishu_handler_session_clear_message_removes_buffer_and_stream_target() 
 				}
 			}
 		}
-		feishu: FeishuState{
+		feishu: feishu.FeishuState{
 			buffers: {
 				'om_reply_002': FeishuStreamBuffer{
 					message_id: 'om_reply_002'
@@ -598,14 +644,14 @@ fn test_feishu_handler_session_clear_message_removes_buffer_and_stream_target() 
 	}
 	mut handler := FeishuCommandHandler.new(mut app)
 	cmd := transport.WorkerWebSocketUpstreamCommand{
-		type_:     'session.clear'
-		provider:  'feishu'
-		stream_id: 'codex:task_003'
-		target:    'om_reply_002'
+		type_:       'session.clear'
+		provider:    'feishu'
+		stream_id:   'codex:task_003'
+		target:      'om_reply_002'
 		target_type: 'message_id'
 	}
-	normalized := NormalizedCommand.from_worker_command(cmd)
-	mut snapshot := WebSocketUpstreamCommandActivity{}
+	normalized := command.NormalizedCommand.from_worker_command(cmd)
+	mut snapshot := execmod.WebSocketUpstreamCommandActivity{}
 	handled, err := handler.execute(cmd, normalized, mut snapshot)
 	assert handled == true
 	assert err == ''
@@ -616,10 +662,10 @@ fn test_feishu_handler_session_clear_message_removes_buffer_and_stream_target() 
 
 fn test_feishu_handler_session_clear_message_removes_buffer_chain() {
 	mut app := &App{
-		codex: CodexState{
+		codex:  codex.CodexState{
 			runtime: CodexProviderRuntime{
 				thread_stream_map: map[string]string{}
-				stream_map: {
+				stream_map:        {
 					'codex:task_chain': [
 						CodexTarget{
 							platform:   'feishu'
@@ -633,12 +679,12 @@ fn test_feishu_handler_session_clear_message_removes_buffer_chain() {
 				}
 			}
 		}
-		feishu: FeishuState{
+		feishu: feishu.FeishuState{
 			buffers: {
 				'om_chain_1': FeishuStreamBuffer{
-					message_id:    'om_chain_1'
-					stream_id:     'codex:task_chain'
-					next_message_id:'om_chain_2'
+					message_id:      'om_chain_1'
+					stream_id:       'codex:task_chain'
+					next_message_id: 'om_chain_2'
 				}
 				'om_chain_2': FeishuStreamBuffer{
 					message_id: 'om_chain_2'
@@ -649,13 +695,13 @@ fn test_feishu_handler_session_clear_message_removes_buffer_chain() {
 	}
 	mut handler := FeishuCommandHandler.new(mut app)
 	cmd := transport.WorkerWebSocketUpstreamCommand{
-		type_:      'session.clear'
-		provider:   'feishu'
-		target:     'om_chain_1'
-		target_type:'message_id'
+		type_:       'session.clear'
+		provider:    'feishu'
+		target:      'om_chain_1'
+		target_type: 'message_id'
 	}
-	normalized := NormalizedCommand.from_worker_command(cmd)
-	mut snapshot := WebSocketUpstreamCommandActivity{}
+	normalized := command.NormalizedCommand.from_worker_command(cmd)
+	mut snapshot := execmod.WebSocketUpstreamCommandActivity{}
 	handled, err := handler.execute(cmd, normalized, mut snapshot)
 	assert handled == true
 	assert err == ''
@@ -667,10 +713,10 @@ fn test_feishu_handler_session_clear_message_removes_buffer_chain() {
 
 fn test_feishu_handler_session_clear_stream_id_removes_all_stream_buffers() {
 	mut app := &App{
-		codex: CodexState{
+		codex:  codex.CodexState{
 			runtime: CodexProviderRuntime{
 				thread_stream_map: map[string]string{}
-				stream_map: {
+				stream_map:        {
 					'codex:task_stream_clear': [
 						CodexTarget{
 							platform:   'feishu'
@@ -684,7 +730,7 @@ fn test_feishu_handler_session_clear_stream_id_removes_all_stream_buffers() {
 				}
 			}
 		}
-		feishu: FeishuState{
+		feishu: feishu.FeishuState{
 			buffers: {
 				'om_stream_1': FeishuStreamBuffer{
 					message_id: 'om_stream_1'
@@ -694,7 +740,7 @@ fn test_feishu_handler_session_clear_stream_id_removes_all_stream_buffers() {
 					message_id: 'om_stream_2'
 					stream_id:  'codex:task_stream_clear'
 				}
-				'om_other': FeishuStreamBuffer{
+				'om_other':    FeishuStreamBuffer{
 					message_id: 'om_other'
 					stream_id:  'codex:other'
 				}
@@ -707,8 +753,8 @@ fn test_feishu_handler_session_clear_stream_id_removes_all_stream_buffers() {
 		provider:  'feishu'
 		stream_id: 'codex:task_stream_clear'
 	}
-	normalized := NormalizedCommand.from_worker_command(cmd)
-	mut snapshot := WebSocketUpstreamCommandActivity{}
+	normalized := command.NormalizedCommand.from_worker_command(cmd)
+	mut snapshot := execmod.WebSocketUpstreamCommandActivity{}
 	handled, err := handler.execute(cmd, normalized, mut snapshot)
 	assert handled == true
 	assert err == ''

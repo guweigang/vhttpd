@@ -22,11 +22,12 @@ module main
 //   - Use defer { mutex.unlock() } to ensure release on all paths.
 //   - Never hold L0 while calling into user-provided callbacks (plugins, executors).
 // ═══════════════════════════════════════════════════════════════════════
-
 import config
+import executor
 import log
 import os
 import logging
+import server_lifecycle
 
 #include <time.h>
 
@@ -121,7 +122,7 @@ fn print_vhttpd_help() {
 	println('  --worker-queue-capacity <N>  Max waiting requests before immediate 503')
 	println('  --worker-queue-timeout-ms <N> Max wait time for a worker before 504')
 	println('  --worker-socket-prefix <p>   Advanced override for pool socket prefix')
-	println('  --executor <kind>            ${builtin_logic_executor_kinds_label()}')
+	println('  --executor <kind>            ${executor.builtin_executor_spec_kinds_label()}')
 	println('  --php-bin <path>             PHP binary for generated php worker command')
 	println('  --php-worker-entry <path>    PHP worker bootstrap script')
 	println('  --php-app-entry <path>       PHP app/bootstrap entry (injects VHTTPD_APP)')
@@ -168,12 +169,12 @@ fn validate_args(args []string) ! {
 }
 
 fn run_single_server(args []string, cfg config.VhttpdConfig) {
-	runtime_cfg := resolve_server_runtime_config(args, cfg) or {
+	runtime_cfg := server_lifecycle.ServerRuntimeConfig.resolve(args, cfg) or {
 		log.error('server runtime config resolve failed: ${err}')
 		return
 	}
-	mut app := build_app_runtime(runtime_cfg.provider_settings, runtime_cfg.executor_plan,
-		cfg, runtime_cfg.app_build_cfg)
+	mut app := build_app_runtime(runtime_cfg.provider_settings, runtime_cfg.executor_plan, cfg,
+		runtime_cfg.app_build_cfg)
 	defer {
 		shutdown_app_runtime(mut app, runtime_cfg)
 	}
@@ -190,7 +191,7 @@ fn run_server(args []string) {
 	configure_runtime_timezone(cfg.runtime.timezone)
 	log.debug('[vhttpd] run_server: timezone configured')
 	os.signal_ignore(.pipe)
-	if config.config_uses_multi_listener(cfg) {
+	if cfg.uses_multi_listener() {
 		log.debug('[vhttpd] run_server: entering multi_server mode')
 		run_multi_server(args, cfg)
 		return
@@ -212,7 +213,7 @@ fn configure_runtime_timezone(config_tz string) {
 	}
 	os.setenv('TZ', tz, true)
 	C.tzset()
-	logging.runtime_configure_logger()
+	logging.RuntimeLogger.configure()
 	log.info('vhttpd timezone: ${tz}')
 }
 

@@ -62,24 +62,23 @@ pub:
 	error_class string
 }
 
-// ── Utility Functions ──
+// ── Session Utilities ──
 
-pub fn generate_session_id() string {
+pub fn Session.generate_id() string {
 	return 'mcp_${time.now().unix_micro()}'
 }
 
-pub fn default_protocol_version() string {
+pub fn Session.default_protocol_version() string {
 	return '2025-11-05'
 }
 
-pub fn normalize_sampling_capability_policy(raw string) string {
+pub fn McpState.normalize_sampling_capability_policy(raw string) string {
 	policy := raw.trim_space().to_lower()
 	return match policy {
 		'drop', 'error' { policy }
 		else { 'warn' }
 	}
 }
-
 
 pub struct McpState {
 pub mut:

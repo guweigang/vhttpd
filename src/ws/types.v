@@ -22,31 +22,31 @@ pub mut:
 	mu                     sync.Mutex
 }
 
-pub fn dispatch_conn_phase(state &DispatchConnState) DispatchConnPhase {
+pub fn (state &DispatchConnState) phase() DispatchConnPhase {
 	state.mu.@lock()
 	defer { state.mu.unlock() }
 	return state.phase
 }
 
-pub fn dispatch_conn_can_process_messages(state &DispatchConnState) bool {
+pub fn (state &DispatchConnState) can_process_messages() bool {
 	state.mu.@lock()
 	defer { state.mu.unlock() }
 	return state.phase == .open && !state.close_notified
 }
 
-pub fn dispatch_conn_can_send(state &DispatchConnState) bool {
+pub fn (state &DispatchConnState) can_send() bool {
 	state.mu.@lock()
 	defer { state.mu.unlock() }
 	return state.phase == .open && !state.close_notified && !state.worker_initiated_close
 }
 
-pub fn dispatch_conn_can_queue(state &DispatchConnState) bool {
+pub fn (state &DispatchConnState) can_queue() bool {
 	state.mu.@lock()
 	defer { state.mu.unlock() }
-	return state.phase == .open && !state.close_notified
+	return (state.phase == .opening || state.phase == .open) && !state.close_notified
 }
 
-pub fn dispatch_conn_mark_open(state &DispatchConnState) bool {
+pub fn (state &DispatchConnState) mark_open() bool {
 	state.mu.@lock()
 	defer { state.mu.unlock() }
 	if state.phase != .opening {
@@ -56,7 +56,7 @@ pub fn dispatch_conn_mark_open(state &DispatchConnState) bool {
 	return true
 }
 
-pub fn dispatch_conn_mark_closing(state &DispatchConnState) bool {
+pub fn (state &DispatchConnState) mark_closing() bool {
 	state.mu.@lock()
 	defer { state.mu.unlock() }
 	if state.phase == .closing || state.phase == .closed {
@@ -66,7 +66,7 @@ pub fn dispatch_conn_mark_closing(state &DispatchConnState) bool {
 	return true
 }
 
-pub fn dispatch_conn_begin_worker_close(state &DispatchConnState) bool {
+pub fn (state &DispatchConnState) begin_worker_close() bool {
 	state.mu.@lock()
 	defer { state.mu.unlock() }
 	if state.phase != .open {
@@ -77,7 +77,7 @@ pub fn dispatch_conn_begin_worker_close(state &DispatchConnState) bool {
 	return true
 }
 
-pub fn dispatch_conn_begin_peer_close(state &DispatchConnState) (bool, bool) {
+pub fn (state &DispatchConnState) begin_peer_close() (bool, bool) {
 	state.mu.@lock()
 	defer { state.mu.unlock() }
 	worker_initiated := state.worker_initiated_close
@@ -86,10 +86,13 @@ pub fn dispatch_conn_begin_peer_close(state &DispatchConnState) (bool, bool) {
 	}
 	unsafe { state.close_notified = true }
 	unsafe { state.phase = .closing }
+	if worker_initiated {
+		return false, worker_initiated
+	}
 	return true, worker_initiated
 }
 
-pub fn dispatch_conn_begin_cleanup(state &DispatchConnState) bool {
+pub fn (state &DispatchConnState) begin_cleanup() bool {
 	state.mu.@lock()
 	defer { state.mu.unlock() }
 	if state.phase != .closing {

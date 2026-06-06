@@ -1,15 +1,15 @@
 module main
 import config
-
+import server_lifecycle
 import log
 
 struct MultiServerAppBinding {
 mut:
-	listener ListenerRuntimeBinding
+	listener server_lifecycle.ListenerRuntimeBinding
 	app      &App = unsafe { nil }
 }
 
-fn build_multi_server_apps(runtime_cfg MultiServerRuntimeConfig) []MultiServerAppBinding {
+fn build_multi_server_apps(runtime_cfg server_lifecycle.MultiServerRuntimeConfig) []MultiServerAppBinding {
 	mut bindings := []MultiServerAppBinding{cap: runtime_cfg.listeners.len}
 	for listener in runtime_cfg.listeners {
 		bindings << MultiServerAppBinding{
@@ -23,7 +23,7 @@ fn build_multi_server_apps(runtime_cfg MultiServerRuntimeConfig) []MultiServerAp
 
 fn run_multi_server(args []string, cfg config.VhttpdConfig) {
 	log.debug('[vhttpd] run_multi_server: resolving multi-server config')
-	runtime_cfg := resolve_multi_server_runtime_config(args, cfg) or {
+	runtime_cfg := server_lifecycle.resolve_multi_server_runtime_config(args, cfg) or {
 		log.error('multi server runtime config resolve failed: ${err}')
 		return
 	}

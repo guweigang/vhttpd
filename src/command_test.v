@@ -3,24 +3,54 @@ import command
 import transport
 
 fn test_normalized_command_kind_for_legacy_type_mappings() {
-	assert normalized_command_kind_for_legacy_type('codex.rpc.send') == 'provider.rpc.call'
-	assert normalized_command_kind_for_legacy_type('codex.rpc.reply') == 'provider.rpc.reply'
-	assert normalized_command_kind_for_legacy_type('codex.turn.start') == 'session.turn.start'
-	assert normalized_command_kind_for_legacy_type('feishu.message.send') == 'provider.message.send'
-	assert normalized_command_kind_for_legacy_type('feishu.message.update') == 'provider.message.update'
-	assert normalized_command_kind_for_legacy_type('feishu.message.patch') == 'stream.append'
-	assert normalized_command_kind_for_legacy_type('feishu.message.flush') == 'stream.finish'
-	assert normalized_command_kind_for_legacy_type('discord.message.send') == 'provider.message.send'
-	assert normalized_command_kind_for_legacy_type('discord.message.update') == 'provider.message.update'
-	assert normalized_command_kind_for_legacy_type('session.bind') == 'session.bind'
+	assert command.NormalizedCommand.from_worker_command(transport.WorkerWebSocketUpstreamCommand{
+		type_: 'codex.rpc.send'
+	}).kind == 'provider.rpc.call'
+	assert command.NormalizedCommand.from_worker_command(transport.WorkerWebSocketUpstreamCommand{
+		type_: 'codex.rpc.reply'
+	}).kind == 'provider.rpc.reply'
+	assert command.NormalizedCommand.from_worker_command(transport.WorkerWebSocketUpstreamCommand{
+		type_: 'codex.turn.start'
+	}).kind == 'session.turn.start'
+	assert command.NormalizedCommand.from_worker_command(transport.WorkerWebSocketUpstreamCommand{
+		type_: 'feishu.message.send'
+	}).kind == 'provider.message.send'
+	assert command.NormalizedCommand.from_worker_command(transport.WorkerWebSocketUpstreamCommand{
+		type_: 'feishu.message.update'
+	}).kind == 'provider.message.update'
+	assert command.NormalizedCommand.from_worker_command(transport.WorkerWebSocketUpstreamCommand{
+		type_: 'feishu.message.patch'
+	}).kind == 'stream.append'
+	assert command.NormalizedCommand.from_worker_command(transport.WorkerWebSocketUpstreamCommand{
+		type_: 'feishu.message.flush'
+	}).kind == 'stream.finish'
+	assert command.NormalizedCommand.from_worker_command(transport.WorkerWebSocketUpstreamCommand{
+		type_: 'discord.message.send'
+	}).kind == 'provider.message.send'
+	assert command.NormalizedCommand.from_worker_command(transport.WorkerWebSocketUpstreamCommand{
+		type_: 'discord.message.update'
+	}).kind == 'provider.message.update'
+	assert command.NormalizedCommand.from_worker_command(transport.WorkerWebSocketUpstreamCommand{
+		type_: 'session.bind'
+	}).kind == 'session.bind'
 }
 
 fn test_normalized_command_infer_provider_prefers_declared_provider() {
-	assert normalized_command_infer_provider('feishu.message.send', 'discord') == 'discord'
-	assert normalized_command_infer_provider('codex.rpc.send', '') == 'codex'
-	assert normalized_command_infer_provider('stream.append', 'feishu') == 'feishu'
-	assert normalized_command_infer_provider('stream.append', '') == 'stream'
-	assert normalized_command_infer_provider('', '') == ''
+	assert command.NormalizedCommand.from_worker_command(transport.WorkerWebSocketUpstreamCommand{
+		type_:    'feishu.message.send'
+		provider: 'discord'
+	}).provider == 'discord'
+	assert command.NormalizedCommand.from_worker_command(transport.WorkerWebSocketUpstreamCommand{
+		type_: 'codex.rpc.send'
+	}).provider == 'codex'
+	assert command.NormalizedCommand.from_worker_command(transport.WorkerWebSocketUpstreamCommand{
+		type_:    'stream.append'
+		provider: 'feishu'
+	}).provider == 'feishu'
+	assert command.NormalizedCommand.from_worker_command(transport.WorkerWebSocketUpstreamCommand{
+		type_: 'stream.append'
+	}).provider == 'stream'
+	assert command.NormalizedCommand.from_worker_command(transport.WorkerWebSocketUpstreamCommand{}).provider == ''
 }
 
 fn test_normalized_command_from_worker_command_preserves_correlation_and_metadata() {

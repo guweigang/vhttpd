@@ -21,16 +21,18 @@ const vjsx_default_signature_excludes = [
 
 const vjsx_signature_source_exts = ['.js', '.mjs', '.cjs', '.ts', '.mts', '.cts', '.json']
 
-fn vjsx_signature_file_hash(path string) string {
+struct VjsxHostSignature {}
+
+fn VjsxHostSignature.file_hash(path string) string {
 	bytes := os.read_bytes(path) or { return 'read_error' }
 	return fnv1a.sum64_string(bytes.bytestr()).hex()
 }
 
-fn normalize_vjsx_signature_glob(raw string) string {
+fn VjsxHostSignature.normalize_glob(raw string) string {
 	return raw.trim_space().replace('\\', '/').trim_left('/')
 }
 
-fn normalize_vjsx_signature_rel_path(raw string) string {
+fn VjsxHostSignature.normalize_rel_path(raw string) string {
 	mut rel := raw.trim_space().replace('\\', '/')
 	if rel == '.' {
 		return ''
@@ -42,7 +44,7 @@ fn normalize_vjsx_signature_rel_path(raw string) string {
 	return rel
 }
 
-fn vjsx_signature_root_for_config(config VjsxRuntimeFacadeConfig) string {
+fn (config VjsxRuntimeFacadeConfig) signature_root_path() string {
 	if config.signature_root.trim_space() != '' {
 		return os.abs_path(config.signature_root)
 	}
@@ -55,20 +57,20 @@ fn vjsx_signature_root_for_config(config VjsxRuntimeFacadeConfig) string {
 	return ''
 }
 
-fn vjsx_signature_include_globs(config VjsxRuntimeFacadeConfig) []string {
-	return config.signature_include.map(normalize_vjsx_signature_glob).filter(it != '')
+fn (config VjsxRuntimeFacadeConfig) signature_include_globs() []string {
+	return config.signature_include.map(VjsxHostSignature.normalize_glob).filter(it != '')
 }
 
-fn vjsx_signature_exclude_globs(config VjsxRuntimeFacadeConfig) []string {
+fn (config VjsxRuntimeFacadeConfig) signature_exclude_globs() []string {
 	mut out := []string{}
 	for pattern in vjsx_default_signature_excludes {
-		normalized := normalize_vjsx_signature_glob(pattern)
+		normalized := VjsxHostSignature.normalize_glob(pattern)
 		if normalized != '' {
 			out << normalized
 		}
 	}
 	for pattern in config.signature_exclude {
-		normalized := normalize_vjsx_signature_glob(pattern)
+		normalized := VjsxHostSignature.normalize_glob(pattern)
 		if normalized != '' {
 			out << normalized
 		}
@@ -76,7 +78,7 @@ fn vjsx_signature_exclude_globs(config VjsxRuntimeFacadeConfig) []string {
 	return out
 }
 
-fn vjsx_signature_glob_patterns(include_globs []string) []string {
+fn VjsxHostSignature.glob_patterns(include_globs []string) []string {
 	if include_globs.len > 0 {
 		return include_globs
 	}
@@ -88,13 +90,14 @@ fn vjsx_signature_glob_patterns(include_globs []string) []string {
 	return patterns
 }
 
-fn vjsx_signature_match_segment(path_segment string, pattern_segment string) bool {
+fn VjsxHostSignature.match_segment(path_segment string, pattern_segment string) bool {
 	mut pi := 0
 	mut si := 0
 	mut star := -1
 	mut matched_idx := 0
 	for si < path_segment.len {
-		if pi < pattern_segment.len && (pattern_segment[pi] == `?` || pattern_segment[pi] == path_segment[si]) {
+		if pi < pattern_segment.len
+			&& (pattern_segment[pi] == `?` || pattern_segment[pi] == path_segment[si]) {
 			pi++
 			si++
 			continue
@@ -119,16 +122,16 @@ fn vjsx_signature_match_segment(path_segment string, pattern_segment string) boo
 	return pi == pattern_segment.len
 }
 
-fn vjsx_signature_match_segments(path_segments []string, pattern_segments []string) bool {
+fn VjsxHostSignature.match_segments(path_segments []string, pattern_segments []string) bool {
 	if pattern_segments.len == 0 {
 		return path_segments.len == 0
 	}
 	if pattern_segments[0] == '**' {
-		if vjsx_signature_match_segments(path_segments, pattern_segments[1..]) {
+		if VjsxHostSignature.match_segments(path_segments, pattern_segments[1..]) {
 			return true
 		}
 		for i := 0; i < path_segments.len; i++ {
-			if vjsx_signature_match_segments(path_segments[i + 1..], pattern_segments[1..]) {
+			if VjsxHostSignature.match_segments(path_segments[i + 1..], pattern_segments[1..]) {
 				return true
 			}
 		}
@@ -137,29 +140,29 @@ fn vjsx_signature_match_segments(path_segments []string, pattern_segments []stri
 	if path_segments.len == 0 {
 		return false
 	}
-	if !vjsx_signature_match_segment(path_segments[0], pattern_segments[0]) {
+	if !VjsxHostSignature.match_segment(path_segments[0], pattern_segments[0]) {
 		return false
 	}
-	return vjsx_signature_match_segments(path_segments[1..], pattern_segments[1..])
+	return VjsxHostSignature.match_segments(path_segments[1..], pattern_segments[1..])
 }
 
-fn vjsx_signature_path_matches(rel_path string, pattern string) bool {
-	normalized_path := normalize_vjsx_signature_rel_path(rel_path)
-	normalized_pattern := normalize_vjsx_signature_glob(pattern)
+fn VjsxHostSignature.path_matches(rel_path string, pattern string) bool {
+	normalized_path := VjsxHostSignature.normalize_rel_path(rel_path)
+	normalized_pattern := VjsxHostSignature.normalize_glob(pattern)
 	if normalized_path == '' || normalized_pattern == '' {
 		return false
 	}
 	path_segments := normalized_path.split('/')
 	pattern_segments := normalized_pattern.split('/')
-	return vjsx_signature_match_segments(path_segments, pattern_segments)
+	return VjsxHostSignature.match_segments(path_segments, pattern_segments)
 }
 
-fn vjsx_signature_collect_files(root string, current string, mut out []string) {
+fn VjsxHostSignature.collect_files(_root string, current string, mut out []string) {
 	entries := os.ls(current) or { return }
 	for entry in entries {
 		path := os.join_path(current, entry)
 		if os.is_dir(path) && !os.is_link(path) {
-			vjsx_signature_collect_files(root, path, mut out)
+			VjsxHostSignature.collect_files(_root, path, mut out)
 			continue
 		}
 		if os.is_dir(path) {
@@ -169,28 +172,28 @@ fn vjsx_signature_collect_files(root string, current string, mut out []string) {
 	}
 }
 
-fn vjsx_signature_expand_globs(root string, globs []string) []string {
+fn VjsxHostSignature.expand_globs(root string, globs []string) []string {
 	if root.trim_space() == '' || !os.exists(root) {
 		return []string{}
 	}
 	mut files := []string{}
-	vjsx_signature_collect_files(root, root, mut files)
+	VjsxHostSignature.collect_files(root, root, mut files)
 	mut matches := map[string]bool{}
 	for raw_path in files {
 		path := os.abs_path(raw_path)
 		if !os.exists(path) || os.is_dir(path) {
 			continue
 		}
-		rel := normalize_vjsx_signature_rel_path(runtime_relative_path(root, path))
+		rel := VjsxHostSignature.normalize_rel_path(VjsxHostPath.relative(root, path))
 		if rel == '' {
 			continue
 		}
 		for pattern in globs {
-			normalized := normalize_vjsx_signature_glob(pattern)
+			normalized := VjsxHostSignature.normalize_glob(pattern)
 			if normalized == '' {
 				continue
 			}
-			if vjsx_signature_path_matches(rel, normalized) {
+			if VjsxHostSignature.path_matches(rel, normalized) {
 				matches[path] = true
 				break
 			}
@@ -201,12 +204,13 @@ fn vjsx_signature_expand_globs(root string, globs []string) []string {
 	return out
 }
 
-fn vjsx_source_signature_collect(root string, include_globs []string, exclude_globs []string, mut rows []string) {
+fn VjsxHostSignature.collect_source_signature(root string, include_globs []string, exclude_globs []string, mut rows []string) {
 	if root.trim_space() == '' || !os.exists(root) {
 		return
 	}
-	include_matches := vjsx_signature_expand_globs(root, vjsx_signature_glob_patterns(include_globs))
-	exclude_matches := vjsx_signature_expand_globs(root, exclude_globs)
+	include_matches := VjsxHostSignature.expand_globs(root,
+		VjsxHostSignature.glob_patterns(include_globs))
+	exclude_matches := VjsxHostSignature.expand_globs(root, exclude_globs)
 	mut exclude_set := map[string]bool{}
 	for path in exclude_matches {
 		exclude_set[path] = true
@@ -215,21 +219,22 @@ fn vjsx_source_signature_collect(root string, include_globs []string, exclude_gl
 		if path in exclude_set {
 			continue
 		}
-		rel := normalize_vjsx_signature_rel_path(runtime_relative_path(root, path))
+		rel := VjsxHostSignature.normalize_rel_path(VjsxHostPath.relative(root, path))
 		if rel == '' {
 			continue
 		}
 		st := os.stat(path) or { continue }
-		rows << '${rel}:${st.mtime}:${st.size}:${vjsx_signature_file_hash(path)}'
+		rows << '${rel}:${st.mtime}:${st.size}:${VjsxHostSignature.file_hash(path)}'
 	}
 }
 
-fn vjsx_source_probe_collect(root string, include_globs []string, exclude_globs []string, mut rows []string) {
+fn VjsxHostSignature.collect_source_probe(root string, include_globs []string, exclude_globs []string, mut rows []string) {
 	if root.trim_space() == '' || !os.exists(root) {
 		return
 	}
-	include_matches := vjsx_signature_expand_globs(root, vjsx_signature_glob_patterns(include_globs))
-	exclude_matches := vjsx_signature_expand_globs(root, exclude_globs)
+	include_matches := VjsxHostSignature.expand_globs(root,
+		VjsxHostSignature.glob_patterns(include_globs))
+	exclude_matches := VjsxHostSignature.expand_globs(root, exclude_globs)
 	mut exclude_set := map[string]bool{}
 	for path in exclude_matches {
 		exclude_set[path] = true
@@ -238,7 +243,7 @@ fn vjsx_source_probe_collect(root string, include_globs []string, exclude_globs 
 		if path in exclude_set {
 			continue
 		}
-		rel := normalize_vjsx_signature_rel_path(runtime_relative_path(root, path))
+		rel := VjsxHostSignature.normalize_rel_path(VjsxHostPath.relative(root, path))
 		if rel == '' {
 			continue
 		}
@@ -247,7 +252,7 @@ fn vjsx_source_probe_collect(root string, include_globs []string, exclude_globs 
 	}
 }
 
-fn vjsx_source_probe_for_config(config VjsxRuntimeFacadeConfig) string {
+fn (config VjsxRuntimeFacadeConfig) source_probe() string {
 	entry_abs := os.abs_path(config.app_entry)
 	mut probe_rows := ['entry:${entry_abs}']
 	mut entry_meta := 'entry_meta:missing'
@@ -255,19 +260,20 @@ fn vjsx_source_probe_for_config(config VjsxRuntimeFacadeConfig) string {
 		entry_meta = 'entry_meta:${entry_stat.mtime}:${entry_stat.size}'
 	}
 	probe_rows << entry_meta
-	signature_root := vjsx_signature_root_for_config(config)
-	include_globs := vjsx_signature_include_globs(config)
-	exclude_globs := vjsx_signature_exclude_globs(config)
+	signature_root := config.signature_root_path()
+	include_globs := config.signature_include_globs()
+	exclude_globs := config.signature_exclude_globs()
 	probe_rows << 'signature_root:${signature_root}'
 	probe_rows << 'signature_include:${include_globs.join(',')}'
 	probe_rows << 'signature_exclude:${exclude_globs.join(',')}'
 	if signature_root != '' {
-		vjsx_source_probe_collect(signature_root, include_globs, exclude_globs, mut probe_rows)
+		VjsxHostSignature.collect_source_probe(signature_root, include_globs, exclude_globs, mut
+			probe_rows)
 	}
 	return fnv1a.sum64_string(probe_rows.join('|')).hex()
 }
 
-fn vjsx_source_signature_for_config(config VjsxRuntimeFacadeConfig) string {
+pub fn (config VjsxRuntimeFacadeConfig) source_signature() string {
 	entry_abs := os.abs_path(config.app_entry)
 	mut signature_rows := ['entry:${entry_abs}']
 	mut entry_meta := 'entry_meta:missing'
@@ -275,14 +281,14 @@ fn vjsx_source_signature_for_config(config VjsxRuntimeFacadeConfig) string {
 		entry_meta = 'entry_meta:${entry_stat.mtime}:${entry_stat.size}'
 	}
 	signature_rows << entry_meta
-	signature_root := vjsx_signature_root_for_config(config)
-	include_globs := vjsx_signature_include_globs(config)
-	exclude_globs := vjsx_signature_exclude_globs(config)
+	signature_root := config.signature_root_path()
+	include_globs := config.signature_include_globs()
+	exclude_globs := config.signature_exclude_globs()
 	signature_rows << 'signature_root:${signature_root}'
 	signature_rows << 'signature_include:${include_globs.join(',')}'
 	signature_rows << 'signature_exclude:${exclude_globs.join(',')}'
 	if signature_root != '' {
-		vjsx_source_signature_collect(signature_root, include_globs, exclude_globs, mut
+		VjsxHostSignature.collect_source_signature(signature_root, include_globs, exclude_globs, mut
 			signature_rows)
 	}
 	return fnv1a.sum64_string(signature_rows.join('|')).hex()

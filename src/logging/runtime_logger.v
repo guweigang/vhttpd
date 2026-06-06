@@ -3,14 +3,16 @@ module logging
 import log
 import os
 
-pub fn runtime_default_log_level() log.Level {
+pub struct RuntimeLogger {}
+
+pub fn RuntimeLogger.default_level() log.Level {
 	$if prod {
 		return .warn
 	}
 	return .info
 }
 
-pub fn runtime_parse_log_level(raw string) ?log.Level {
+pub fn RuntimeLogger.parse_level(raw string) ?log.Level {
 	name := raw.trim_space().to_lower()
 	return match name {
 		'debug' { log.Level.debug }
@@ -22,18 +24,18 @@ pub fn runtime_parse_log_level(raw string) ?log.Level {
 	}
 }
 
-pub fn runtime_effective_log_level() log.Level {
+pub fn RuntimeLogger.effective_level() log.Level {
 	if from_env := os.getenv_opt('VHTTPD_LOG_LEVEL') {
-		if parsed := runtime_parse_log_level(from_env) {
+		if parsed := RuntimeLogger.parse_level(from_env) {
 			return parsed
 		}
 	}
-	return runtime_default_log_level()
+	return RuntimeLogger.default_level()
 }
 
-pub fn runtime_configure_logger() {
+pub fn RuntimeLogger.configure() {
 	mut local_logger := &log.Log{}
-	local_logger.set_level(runtime_effective_log_level())
+	local_logger.set_level(RuntimeLogger.effective_level())
 	local_logger.set_local_time(true)
 	log.set_logger(local_logger)
 }

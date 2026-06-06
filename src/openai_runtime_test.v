@@ -1,7 +1,8 @@
 module main
 
 import config
-
+import openai
+import plugin
 import os
 import x.json2
 
@@ -17,7 +18,7 @@ fn test_openai_relative_path_matches_configured_base_path() {
 
 fn test_openai_route_resolution_maps_public_model_to_upstream_model() {
 	mut app := App{
-		openai: OpenaiState{
+		openai: openai.OpenaiState{
 			enabled:         true
 			base_path:       '/v1'
 			default_backend: 'default'
@@ -43,7 +44,7 @@ fn test_openai_route_resolution_maps_public_model_to_upstream_model() {
 
 fn test_openai_responses_builtin_plan_uses_responses_path() {
 	mut app := App{
-		openai: OpenaiState{
+		openai: openai.OpenaiState{
 			enabled:         true
 			base_path:       '/v1'
 			default_backend: 'default'
@@ -71,7 +72,7 @@ fn test_openai_responses_builtin_plan_uses_responses_path() {
 }
 
 fn test_openai_replace_model_in_body_keeps_other_fields() {
-	body := openai_replace_model_in_body('{"model":"public","messages":[{"role":"user","content":"hi"}],"stream":true}',
+	body := openai.OpenAIResolvedPlan.replace_model('{"model":"public","messages":[{"role":"user","content":"hi"}],"stream":true}',
 		'upstream')
 	root := json2.decode[json2.Any](body) or { panic(err) }.as_map()
 	assert (root['model'] or { json2.Any('') }).str() == 'upstream'
@@ -166,11 +167,11 @@ export function openai(req) {
 	}
 	mut app := App{
 		started_at_unix:        123
-		plugins:                PluginState{
+		plugins:                plugin.PluginState{
 			configs: plugins
 			vjsx:    build_vjsx_plugin_runtimes(plugins)
 		}
-		openai: OpenaiState{
+		openai: openai.OpenaiState{
 			enabled:         true
 			base_path:       '/v1'
 			plugin:          'planner'
@@ -220,11 +221,11 @@ export function openai(req) {
 		}
 	}
 	mut app := App{
-		plugins: PluginState{
+		plugins: plugin.PluginState{
 			configs: plugins
 			vjsx:    build_vjsx_plugin_runtimes(plugins)
 		}
-		openai: OpenaiState{
+		openai: openai.OpenaiState{
 			enabled:   true
 			base_path: '/v1'
 			plugin:    'planner'
@@ -263,11 +264,11 @@ export function openai(_req) {
 		}
 	}
 	mut app := App{
-		plugins:                PluginState{
+		plugins:                plugin.PluginState{
 			configs: plugins
 			vjsx:    build_vjsx_plugin_runtimes(plugins)
 		}
-		openai: OpenaiState{
+		openai: openai.OpenaiState{
 			enabled:         true
 			base_path:       '/v1'
 			plugin:          'planner'
@@ -303,42 +304,42 @@ fn test_openai_plugin_plan_validation_rejects_missing_backend() {
 	mut app := App{}
 	_ := app
 	if plan.backend.trim_space() == '' {
-		err := openai_plan_error('openai_plugin_plan_missing_backend',
+		err := openai.OpenAIResolvedPlan.plan_error('openai_plugin_plan_missing_backend',
 			'plugin plan must include backend')
-		assert openai_plan_error_code(err.msg()) == 'openai_plugin_plan_missing_backend'
-		assert openai_plan_error_message(err.msg()) == 'plugin plan must include backend'
+		assert openai.OpenAIResolvedPlan.plan_error_code(err.msg()) == 'openai_plugin_plan_missing_backend'
+		assert openai.OpenAIResolvedPlan.plan_error_message(err.msg()) == 'plugin plan must include backend'
 		return
 	}
 	assert false
 }
 
 fn test_openai_plugin_plan_validation_rejects_invalid_method_and_path() {
-	openai_validate_plan_method('TRACE') or {
-		assert openai_plan_error_code(err.msg()) == 'openai_plugin_plan_invalid_method'
-		assert openai_plan_error_message(err.msg()).contains('TRACE')
+	openai.OpenAIResolvedPlan.validate_method('TRACE') or {
+		assert openai.OpenAIResolvedPlan.plan_error_code(err.msg()) == 'openai_plugin_plan_invalid_method'
+		assert openai.OpenAIResolvedPlan.plan_error_message(err.msg()).contains('TRACE')
 	}
-	openai_validate_plan_path('chat/completions') or {
-		assert openai_plan_error_code(err.msg()) == 'openai_plugin_plan_invalid_path'
-		assert openai_plan_error_message(err.msg()).contains('start with /')
+	openai.OpenAIResolvedPlan.validate_path('chat/completions') or {
+		assert openai.OpenAIResolvedPlan.plan_error_code(err.msg()) == 'openai_plugin_plan_invalid_path'
+		assert openai.OpenAIResolvedPlan.plan_error_message(err.msg()).contains('start with /')
 	}
-	assert openai_validate_stream_mode('mapped') or { panic(err) } == 'mapped'
-	openai_validate_response_codec('xml', 'mapped') or {
-		assert openai_plan_error_code(err.msg()) == 'openai_plugin_plan_unsupported_response_codec'
-		assert openai_plan_error_message(err.msg()).contains('xml')
+	assert openai.OpenAIResolvedPlan.validate_stream_mode('mapped') or { panic(err) } == 'mapped'
+	openai.OpenAIResolvedPlan.validate_response_codec('xml', 'mapped') or {
+		assert openai.OpenAIResolvedPlan.plan_error_code(err.msg()) == 'openai_plugin_plan_unsupported_response_codec'
+		assert openai.OpenAIResolvedPlan.plan_error_message(err.msg()).contains('xml')
 	}
-	openai_validate_output_protocol('custom.protocol', 'mapped') or {
-		assert openai_plan_error_code(err.msg()) == 'openai_plugin_plan_unsupported_output_protocol'
-		assert openai_plan_error_message(err.msg()).contains('custom.protocol')
+	openai.OpenAIResolvedPlan.validate_output_protocol('custom.protocol', 'mapped') or {
+		assert openai.OpenAIResolvedPlan.plan_error_code(err.msg()) == 'openai_plugin_plan_unsupported_output_protocol'
+		assert openai.OpenAIResolvedPlan.plan_error_message(err.msg()).contains('custom.protocol')
 	}
-	assert openai_validate_mapper('plugin') or { panic(err) } == 'plugin'
-	openai_validate_mapper('remote') or {
-		assert openai_plan_error_code(err.msg()) == 'openai_plugin_plan_unsupported_mapper'
-		assert openai_plan_error_message(err.msg()).contains('remote')
+	assert openai.OpenAIResolvedPlan.validate_mapper('plugin') or { panic(err) } == 'plugin'
+	openai.OpenAIResolvedPlan.validate_mapper('remote') or {
+		assert openai.OpenAIResolvedPlan.plan_error_code(err.msg()) == 'openai_plugin_plan_unsupported_mapper'
+		assert openai.OpenAIResolvedPlan.plan_error_message(err.msg()).contains('remote')
 	}
 }
 
 fn test_openai_plugin_plan_sanitizes_hop_by_hop_headers() {
-	headers := openai_sanitize_plan_headers({
+	headers := openai.OpenAIResolvedPlan.sanitize_headers({
 		'x-ok':              'yes'
 		'connection':        'close'
 		'transfer-encoding': 'chunked'

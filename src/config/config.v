@@ -311,7 +311,7 @@ pub fn default_vhttpd_config() VhttpdConfig {
 }
 
 pub fn load_vhttpd_config(args []string) !VhttpdConfig {
-	mut config_path := arg_string_or(args, '--config', '')
+	mut config_path := CliArgs.string_or(args, '--config', '')
 	if config_path == '' {
 		config_path = os.getenv('VHTTPD_CONFIG')
 	}
@@ -513,7 +513,8 @@ fn decode_worker_config_map(entry map[string]toml.Any) WorkerConfig {
 		cfg.queue_timeout_ms = toml_int_from_map(entry, 'queue_timeout_ms', cfg.queue_timeout_ms)
 	}
 	if 'restart_backoff_ms' in entry {
-		cfg.restart_backoff_ms = toml_int_from_map(entry, 'restart_backoff_ms', cfg.restart_backoff_ms)
+		cfg.restart_backoff_ms = toml_int_from_map(entry, 'restart_backoff_ms',
+			cfg.restart_backoff_ms)
 	}
 	if 'restart_backoff_max_ms' in entry {
 		cfg.restart_backoff_max_ms = toml_int_from_map(entry, 'restart_backoff_max_ms',
@@ -529,7 +530,8 @@ fn decode_worker_config_map(entry map[string]toml.Any) WorkerConfig {
 		cfg.pool_size = toml_int_from_map(entry, 'pool_size', cfg.pool_size)
 	}
 	if 'websocket_dispatch' in entry {
-		cfg.websocket_dispatch = toml_bool_from_map(entry, 'websocket_dispatch', cfg.websocket_dispatch)
+		cfg.websocket_dispatch = toml_bool_from_map(entry, 'websocket_dispatch',
+			cfg.websocket_dispatch)
 	}
 	if 'socket_prefix' in entry {
 		cfg.socket_prefix = toml_string_from_map(entry, 'socket_prefix', cfg.socket_prefix)
@@ -753,10 +755,12 @@ fn decode_mcp_config_map(entry map[string]toml.Any) McpConfig {
 		cfg.max_sessions = toml_int_from_map(entry, 'max_sessions', cfg.max_sessions)
 	}
 	if 'max_pending_messages' in entry {
-		cfg.max_pending_messages = toml_int_from_map(entry, 'max_pending_messages', cfg.max_pending_messages)
+		cfg.max_pending_messages = toml_int_from_map(entry, 'max_pending_messages',
+			cfg.max_pending_messages)
 	}
 	if 'session_ttl_seconds' in entry {
-		cfg.session_ttl_seconds = toml_int_from_map(entry, 'session_ttl_seconds', cfg.session_ttl_seconds)
+		cfg.session_ttl_seconds = toml_int_from_map(entry, 'session_ttl_seconds',
+			cfg.session_ttl_seconds)
 	}
 	cfg.allowed_origins = toml_string_list_from_map(entry, 'allowed_origins')
 	if 'sampling_capability_policy' in entry {
@@ -784,14 +788,16 @@ fn decode_feishu_config_map(entry map[string]toml.Any) FeishuConfig {
 		cfg.open_base_url = toml_string_from_map(entry, 'open_base_url', cfg.open_base_url)
 	}
 	if 'reconnect_delay_ms' in entry {
-		cfg.reconnect_delay_ms = toml_int_from_map(entry, 'reconnect_delay_ms', cfg.reconnect_delay_ms)
+		cfg.reconnect_delay_ms = toml_int_from_map(entry, 'reconnect_delay_ms',
+			cfg.reconnect_delay_ms)
 	}
 	if 'token_refresh_skew_seconds' in entry {
 		cfg.token_refresh_skew_seconds = toml_int_from_map(entry, 'token_refresh_skew_seconds',
 			cfg.token_refresh_skew_seconds)
 	}
 	if 'recent_event_limit' in entry {
-		cfg.recent_event_limit = toml_int_from_map(entry, 'recent_event_limit', cfg.recent_event_limit)
+		cfg.recent_event_limit = toml_int_from_map(entry, 'recent_event_limit',
+			cfg.recent_event_limit)
 	}
 	mut apps := map[string]FeishuAppConfig{}
 	root_app := decode_feishu_app_config_map(entry)
@@ -846,7 +852,8 @@ fn decode_codex_config_map(entry map[string]toml.Any) CodexConfig {
 		cfg.sandbox = toml_string_from_map(entry, 'sandbox', cfg.sandbox)
 	}
 	if 'reconnect_delay_ms' in entry {
-		cfg.reconnect_delay_ms = toml_int_from_map(entry, 'reconnect_delay_ms', cfg.reconnect_delay_ms)
+		cfg.reconnect_delay_ms = toml_int_from_map(entry, 'reconnect_delay_ms',
+			cfg.reconnect_delay_ms)
 	}
 	if 'flush_interval_ms' in entry {
 		cfg.flush_interval_ms = toml_int_from_map(entry, 'flush_interval_ms', cfg.flush_interval_ms)
@@ -1119,8 +1126,8 @@ pub fn resolve_config_variables(mut cfg VhttpdConfig, config_path string) ! {
 	for _ in 0 .. max_passes {
 		mut changed := false
 		mut vars := build_config_variable_map(cfg)
-		cfg.paths.root, changed = expand_config_string(cfg.paths.root, 'paths', vars,
-			env_map, changed)!
+		cfg.paths.root, changed = expand_config_string(cfg.paths.root, 'paths', vars, env_map,
+			changed)!
 		vars['paths.root'] = resolve_config_path(base_dir, cfg.paths.root)
 		mut next_paths := map[string]string{}
 		for key, value in cfg.paths.values {
@@ -1131,30 +1138,30 @@ pub fn resolve_config_variables(mut cfg VhttpdConfig, config_path string) ! {
 			}
 		}
 		cfg.paths.values = next_paths.clone()
-		cfg.server.host, changed = expand_config_string(cfg.server.host, 'server', vars,
+		cfg.server.host, changed = expand_config_string(cfg.server.host, 'server', vars, env_map,
+			changed)!
+		cfg.files.event_log, changed = expand_config_string(cfg.files.event_log, 'files', vars,
 			env_map, changed)!
-		cfg.files.event_log, changed = expand_config_string(cfg.files.event_log, 'files',
-			vars, env_map, changed)!
-		cfg.files.pid_file, changed = expand_config_string(cfg.files.pid_file, 'files',
-			vars, env_map, changed)!
-		cfg.worker.cmd, changed = expand_config_string(cfg.worker.cmd, 'worker', vars,
+		cfg.files.pid_file, changed = expand_config_string(cfg.files.pid_file, 'files', vars,
 			env_map, changed)!
-		cfg.worker.socket, changed = expand_config_string(cfg.worker.socket, 'worker',
-			vars, env_map, changed)!
+		cfg.worker.cmd, changed = expand_config_string(cfg.worker.cmd, 'worker', vars, env_map,
+			changed)!
+		cfg.worker.socket, changed = expand_config_string(cfg.worker.socket, 'worker', vars,
+			env_map, changed)!
 		cfg.worker.socket_prefix, changed = expand_config_string(cfg.worker.socket_prefix,
 			'worker', vars, env_map, changed)!
-		cfg.executor.kind, changed = expand_config_string(cfg.executor.kind, 'executor',
+		cfg.executor.kind, changed = expand_config_string(cfg.executor.kind, 'executor', vars,
+			env_map, changed)!
+		cfg.vjsx.app_entry, changed = expand_config_string(cfg.vjsx.app_entry, 'vjsx', vars,
+			env_map, changed)!
+		cfg.vjsx.module_root, changed = expand_config_string(cfg.vjsx.module_root, 'vjsx', vars,
+			env_map, changed)!
+		cfg.vjsx.build_root, changed = expand_config_string(cfg.vjsx.build_root, 'vjsx', vars,
+			env_map, changed)!
+		cfg.vjsx.signature_root, changed = expand_config_string(cfg.vjsx.signature_root, 'vjsx',
 			vars, env_map, changed)!
-		cfg.vjsx.app_entry, changed = expand_config_string(cfg.vjsx.app_entry, 'vjsx',
+		cfg.vjsx.runtime_profile, changed = expand_config_string(cfg.vjsx.runtime_profile, 'vjsx',
 			vars, env_map, changed)!
-		cfg.vjsx.module_root, changed = expand_config_string(cfg.vjsx.module_root, 'vjsx',
-			vars, env_map, changed)!
-		cfg.vjsx.build_root, changed = expand_config_string(cfg.vjsx.build_root, 'vjsx',
-			vars, env_map, changed)!
-		cfg.vjsx.signature_root, changed = expand_config_string(cfg.vjsx.signature_root,
-			'vjsx', vars, env_map, changed)!
-		cfg.vjsx.runtime_profile, changed = expand_config_string(cfg.vjsx.runtime_profile,
-			'vjsx', vars, env_map, changed)!
 		for i, raw in cfg.vjsx.signature_include {
 			next, c := expand_config_string(raw, 'vjsx', vars, env_map, false)!
 			if c {
@@ -1171,10 +1178,10 @@ pub fn resolve_config_variables(mut cfg VhttpdConfig, config_path string) ! {
 		}
 		mut next_plugins := map[string]PluginConfig{}
 		for name, plugin in cfg.plugins {
-			entry, entry_changed := expand_config_string(plugin.entry, 'plugins.${name}',
-				vars, env_map, false)!
-			app_entry, app_entry_changed := expand_config_string(plugin.app_entry, 'plugins.${name}',
-				vars, env_map, false)!
+			entry, entry_changed := expand_config_string(plugin.entry, 'plugins.${name}', vars,
+				env_map, false)!
+			app_entry, app_entry_changed := expand_config_string(plugin.app_entry,
+				'plugins.${name}', vars, env_map, false)!
 			module_root, module_root_changed := expand_config_string(plugin.module_root,
 				'plugins.${name}', vars, env_map, false)!
 			build_root, build_root_changed := expand_config_string(plugin.build_root,
@@ -1185,8 +1192,7 @@ pub fn resolve_config_variables(mut cfg VhttpdConfig, config_path string) ! {
 				'plugins.${name}', vars, env_map, false)!
 			mut signature_include := plugin.signature_include.clone()
 			for i, raw in signature_include {
-				next, c := expand_config_string(raw, 'plugins.${name}', vars, env_map,
-					false)!
+				next, c := expand_config_string(raw, 'plugins.${name}', vars, env_map, false)!
 				if c {
 					signature_include[i] = next
 					changed = true
@@ -1194,8 +1200,7 @@ pub fn resolve_config_variables(mut cfg VhttpdConfig, config_path string) ! {
 			}
 			mut signature_exclude := plugin.signature_exclude.clone()
 			for i, raw in signature_exclude {
-				next, c := expand_config_string(raw, 'plugins.${name}', vars, env_map,
-					false)!
+				next, c := expand_config_string(raw, 'plugins.${name}', vars, env_map, false)!
 				if c {
 					signature_exclude[i] = next
 					changed = true
@@ -1230,12 +1235,11 @@ pub fn resolve_config_variables(mut cfg VhttpdConfig, config_path string) ! {
 				changed = true
 			}
 		}
-		cfg.php.bin, changed = expand_config_string(cfg.php.bin, 'php', vars, env_map,
-			changed)!
-		cfg.php.worker_entry, changed = expand_config_string(cfg.php.worker_entry, 'php',
-			vars, env_map, changed)!
-		cfg.php.app_entry, changed = expand_config_string(cfg.php.app_entry, 'php', vars,
+		cfg.php.bin, changed = expand_config_string(cfg.php.bin, 'php', vars, env_map, changed)!
+		cfg.php.worker_entry, changed = expand_config_string(cfg.php.worker_entry, 'php', vars,
 			env_map, changed)!
+		cfg.php.app_entry, changed = expand_config_string(cfg.php.app_entry, 'php', vars, env_map,
+			changed)!
 		for i, raw in cfg.php.extensions {
 			next, c := expand_config_string(raw, 'php', vars, env_map, false)!
 			if c {
@@ -1259,24 +1263,24 @@ pub fn resolve_config_variables(mut cfg VhttpdConfig, config_path string) ! {
 			}
 		}
 		cfg.worker.env = next_env.clone()
-		cfg.admin.host, changed = expand_config_string(cfg.admin.host, 'admin', vars,
+		cfg.admin.host, changed = expand_config_string(cfg.admin.host, 'admin', vars, env_map,
+			changed)!
+		cfg.admin.token, changed = expand_config_string(cfg.admin.token, 'admin', vars, env_map,
+			changed)!
+		cfg.assets.prefix, changed = expand_config_string(cfg.assets.prefix, 'assets', vars,
 			env_map, changed)!
-		cfg.admin.token, changed = expand_config_string(cfg.admin.token, 'admin', vars,
-			env_map, changed)!
-		cfg.assets.prefix, changed = expand_config_string(cfg.assets.prefix, 'assets',
-			vars, env_map, changed)!
-		cfg.assets.root, changed = expand_config_string(cfg.assets.root, 'assets', vars,
-			env_map, changed)!
+		cfg.assets.root, changed = expand_config_string(cfg.assets.root, 'assets', vars, env_map,
+			changed)!
 		cfg.assets.cache_control, changed = expand_config_string(cfg.assets.cache_control,
 			'assets', vars, env_map, changed)!
-		cfg.runtime.timezone, changed = expand_config_string(cfg.runtime.timezone, 'runtime',
-			vars, env_map, changed)!
+		cfg.runtime.timezone, changed = expand_config_string(cfg.runtime.timezone, 'runtime', vars,
+			env_map, changed)!
 		cfg.feishu.open_base_url, changed = expand_config_string(cfg.feishu.open_base_url,
 			'feishu', vars, env_map, changed)!
 		mut next_apps := map[string]FeishuAppConfig{}
 		for name, app_cfg in cfg.feishu.apps {
-			app_id, app_id_changed := expand_config_string(app_cfg.app_id, 'feishu.${name}',
-				vars, env_map, false)!
+			app_id, app_id_changed := expand_config_string(app_cfg.app_id, 'feishu.${name}', vars,
+				env_map, false)!
 			app_secret, app_secret_changed := expand_config_string(app_cfg.app_secret,
 				'feishu.${name}', vars, env_map, false)!
 			next_apps[name] = FeishuAppConfig{
@@ -1292,30 +1296,30 @@ pub fn resolve_config_variables(mut cfg VhttpdConfig, config_path string) ! {
 		// codex
 		cfg.codex.url, changed = expand_config_string(cfg.codex.url, 'codex', vars, env_map,
 			changed)!
-		cfg.codex.model, changed = expand_config_string(cfg.codex.model, 'codex', vars,
-			env_map, changed)!
-		cfg.codex.effort, changed = expand_config_string(cfg.codex.effort, 'codex', vars,
-			env_map, changed)!
+		cfg.codex.model, changed = expand_config_string(cfg.codex.model, 'codex', vars, env_map,
+			changed)!
+		cfg.codex.effort, changed = expand_config_string(cfg.codex.effort, 'codex', vars, env_map,
+			changed)!
 		cfg.codex.cwd, changed = expand_config_string(cfg.codex.cwd, 'codex', vars, env_map,
 			changed)!
 		cfg.codex.approval_policy, changed = expand_config_string(cfg.codex.approval_policy,
 			'codex', vars, env_map, changed)!
-		cfg.codex.sandbox, changed = expand_config_string(cfg.codex.sandbox, 'codex',
-			vars, env_map, changed)!
-		cfg.openai.base_path, changed = expand_config_string(cfg.openai.base_path, 'openai',
-			vars, env_map, changed)!
+		cfg.codex.sandbox, changed = expand_config_string(cfg.codex.sandbox, 'codex', vars,
+			env_map, changed)!
+		cfg.openai.base_path, changed = expand_config_string(cfg.openai.base_path, 'openai', vars,
+			env_map, changed)!
 		cfg.openai.default_backend, changed = expand_config_string(cfg.openai.default_backend,
 			'openai', vars, env_map, changed)!
-		cfg.openai.plugin, changed = expand_config_string(cfg.openai.plugin, 'openai',
-			vars, env_map, changed)!
+		cfg.openai.plugin, changed = expand_config_string(cfg.openai.plugin, 'openai', vars,
+			env_map, changed)!
 		mut next_openai_backends := map[string]OpenAIBackendConfig{}
 		for name, backend in cfg.openai.backends {
-			base_url, base_url_changed := expand_config_string(backend.base_url, 'openai.backends.${name}',
-				vars, env_map, false)!
-			api_key, api_key_changed := expand_config_string(backend.api_key, 'openai.backends.${name}',
-				vars, env_map, false)!
-			executor, executor_changed := expand_config_string(backend.executor, 'openai.backends.${name}',
-				vars, env_map, false)!
+			base_url, base_url_changed := expand_config_string(backend.base_url,
+				'openai.backends.${name}', vars, env_map, false)!
+			api_key, api_key_changed := expand_config_string(backend.api_key,
+				'openai.backends.${name}', vars, env_map, false)!
+			executor, executor_changed := expand_config_string(backend.executor,
+				'openai.backends.${name}', vars, env_map, false)!
 			api_key_env, api_key_env_changed := expand_config_string(backend.api_key_env,
 				'openai.backends.${name}', vars, env_map, false)!
 			next_openai_backends[name] = OpenAIBackendConfig{
@@ -1335,14 +1339,13 @@ pub fn resolve_config_variables(mut cfg VhttpdConfig, config_path string) ! {
 		for name, route in cfg.openai.routes {
 			model, model_changed := expand_config_string(route.model, 'openai.routes.${name}',
 				vars, env_map, false)!
-			backend, backend_changed := expand_config_string(route.backend, 'openai.routes.${name}',
-				vars, env_map, false)!
+			backend, backend_changed := expand_config_string(route.backend,
+				'openai.routes.${name}', vars, env_map, false)!
 			upstream_model, upstream_model_changed := expand_config_string(route.upstream_model,
 				'openai.routes.${name}', vars, env_map, false)!
 			mut models := route.models.clone()
 			for i, raw in models {
-				next, c := expand_config_string(raw, 'openai.routes.${name}', vars, env_map,
-					false)!
+				next, c := expand_config_string(raw, 'openai.routes.${name}', vars, env_map, false)!
 				if c {
 					models[i] = next
 					changed = true
@@ -1629,7 +1632,7 @@ fn resolve_config_variable(expr string, scope string, vars map[string]string, en
 // Returns explicit list if --worker-sockets is provided, otherwise expands --worker-socket
 // with --worker-pool-size using --worker-socket-prefix.
 pub fn resolve_worker_sockets_with_defaults(args []string, default_worker_socket string, default_pool_size int, default_socket_prefix string, default_worker_sockets string) []string {
-	worker_sockets_arg := arg_string_or(args, '--worker-sockets', default_worker_sockets)
+	worker_sockets_arg := CliArgs.string_or(args, '--worker-sockets', default_worker_sockets)
 	if worker_sockets_arg != '' {
 		mut sockets := []string{}
 		for raw in worker_sockets_arg.split(',') {
@@ -1640,12 +1643,12 @@ pub fn resolve_worker_sockets_with_defaults(args []string, default_worker_socket
 		}
 		return sockets
 	}
-	worker_socket := arg_string_or(args, '--worker-socket', default_worker_socket)
-	pool_size := arg_int_or(args, '--worker-pool-size', default_pool_size)
+	worker_socket := CliArgs.string_or(args, '--worker-socket', default_worker_socket)
+	pool_size := CliArgs.int_or(args, '--worker-pool-size', default_pool_size)
 	if pool_size <= 1 {
 		return if worker_socket == '' { []string{} } else { [worker_socket] }
 	}
-	mut prefix := arg_string_or(args, '--worker-socket-prefix', default_socket_prefix)
+	mut prefix := CliArgs.string_or(args, '--worker-socket-prefix', default_socket_prefix)
 	if prefix == '' {
 		prefix = socket_prefix(worker_socket)
 	}

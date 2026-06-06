@@ -1,107 +1,164 @@
 module main
-import transport
 
+import transport
 import json
 import log
 import net
-import net.http
 import net.unix
-import strings
 import time
+import worker
 
-fn write_frame(mut conn unix.StreamConn, payload string) ! {
-	size := payload.len
-	header := [u8((size >> 24) & 0xff), u8((size >> 16) & 0xff), u8((size >> 8) & 0xff),
-		u8(size & 0xff)]
-	conn.write_ptr(&header[0], 4)!
-	conn.write_string(payload)!
+type WorkerBackendFrameCodec = worker.WorkerBackendFrameCodec
+type WorkerBackendConnection = worker.WorkerBackendConnection
+
+struct WorkerHttpStreamWriter {}
+
+struct WorkerBackendErrorClassifier {}
+
+struct WorkerWebSocketDispatchCommandRuntime {}
+
+struct WorkerBackendDispatchRuntime {}
+
+struct WorkerBackendConnectorRuntime {}
+
+struct WorkerBackendConnectorContext {
+	select_socket_fn fn () !string                  = unsafe { nil }
+	emit_fn          fn (string, map[string]string) = unsafe { nil }
 }
 
-fn read_exact(mut conn unix.StreamConn, size int) ![]u8 {
-	mut out := []u8{len: size}
-	mut read := 0
-	for read < size {
-		n := conn.read(mut out[read..])!
-		if n <= 0 {
-			return error('unexpected EOF')
+fn (ctx WorkerBackendConnectorContext) select_socket() !string {
+	return ctx.select_socket_fn()
+}
+
+fn (ctx WorkerBackendConnectorContext) emit(kind string, fields map[string]string) {
+	ctx.emit_fn(kind, fields)
+}
+
+struct WorkerBackendDispatchContext {
+	open_fn    fn () !WorkerBackendConnection = unsafe { nil }
+	start_fn   fn (string)                    = unsafe { nil }
+	finish_fn  fn (string)                    = unsafe { nil }
+	timeout_ms int
+}
+
+fn (ctx WorkerBackendDispatchContext) open() !WorkerBackendConnection {
+	return ctx.open_fn()
+}
+
+fn (ctx WorkerBackendDispatchContext) started(socket_path string) {
+	ctx.start_fn(socket_path)
+}
+
+fn (ctx WorkerBackendDispatchContext) finished(socket_path string) {
+	ctx.finish_fn(socket_path)
+}
+
+fn WorkerBackendConnection.from_selected(socket_path string, conn unix.StreamConn) WorkerBackendConnection {
+	return WorkerBackendConnection{
+		socket_path: socket_path
+		conn:        conn
+	}
+}
+
+fn WorkerBackendConnection.open(mut app App) !WorkerBackendConnection {
+	ctx := app.build_worker_backend_connector_context()
+	socket_path, conn := WorkerBackendConnectorRuntime.connect_selected(ctx)!
+	return WorkerBackendConnection.from_selected(socket_path, conn)
+}
+
+fn (mut app App) build_worker_backend_connector_context() WorkerBackendConnectorContext {
+	return WorkerBackendConnectorContext{
+		select_socket_fn: fn [mut app] () !string {
+			return app.worker_backend_select_socket_queued()
 		}
-		read += n
+		emit_fn:          fn [mut app] (kind string, fields map[string]string) {
+			app.emit(kind, fields)
+		}
 	}
-	return out
 }
 
-fn read_frame(mut conn unix.StreamConn) !string {
-	body := read_frame_bytes(mut conn)!
-	return body.bytestr()
-}
-
-fn read_frame_bytes(mut conn unix.StreamConn) ![]u8 {
-	header := read_exact(mut conn, 4)!
-	size_u32 := (u32(header[0]) << 24) | (u32(header[1]) << 16) | (u32(header[2]) << 8) | u32(header[3])
-	size := int(size_u32)
-	if size <= 0 || size > 16 * 1024 * 1024 {
-		return error('invalid frame size ${size}')
+fn (mut app App) build_worker_backend_dispatch_context() WorkerBackendDispatchContext {
+	return WorkerBackendDispatchContext{
+		open_fn:    fn [mut app] () !WorkerBackendConnection {
+			return WorkerBackendConnection.open(mut app)
+		}
+		start_fn:   fn [mut app] (socket_path string) {
+			app.on_worker_request_started(socket_path)
+		}
+		finish_fn:  fn [mut app] (socket_path string) {
+			app.on_worker_request_finished(socket_path)
+		}
+		timeout_ms: app.worker.worker_backend.read_timeout_ms
 	}
-	return read_exact(mut conn, size)!
 }
 
-fn encode_worker_request(method string, path string, req http.Request, remote_addr string, trace_id string, req_id string) string {
-	normalized_path, query_string := normalize_request_target(path)
-	query := parse_query_map(query_string)
-	mut headers := header_map_from_request(req)
-	if headers['x-request-id'] == '' {
-		headers['x-request-id'] = req_id
+fn WorkerBackendErrorClassifier.classify(err_msg string) (int, string) {
+	return transport.classify_worker_backend_error(err_msg)
+}
+
+fn WorkerWebSocketDispatchCommandRuntime.execute(rt WebSocketRuntimeContext, commands []transport.WorkerWebSocketFrame) transport.WorkerWebSocketDispatchCommandsResult {
+	mut close_frame := transport.WorkerWebSocketFrame{}
+	mut has_close := false
+	mut failures := []transport.WorkerWebSocketDispatchCommandFailure{}
+	for cmd in commands {
+		if cmd.event == 'close' && cmd.target_id == '' {
+			close_frame = cmd
+			has_close = true
+			continue
+		}
+		if failure := rt.process_worker_frame(cmd) {
+			failures << failure
+		}
 	}
-	cookies := cookie_map_from_request(req)
-	server := server_map_from_request(req, remote_addr)
-	host := server['host'] or { req.host }
-	port := server['port'] or { '' }
-	scheme := req.header.get(.x_forwarded_proto) or { 'http' }
-	return json.encode(transport.WorkerRequestPayload{
-		id:               trace_id
-		method:           method.to_upper()
-		path:             normalized_path
-		body:             req.data
-		scheme:           scheme
-		host:             host
-		port:             port
-		protocol_version: req.version.str().trim_left('HTTP/')
-		remote_addr:      remote_addr
-		query:            query
-		headers:          headers
-		cookies:          cookies
-		attributes:       map[string]string{}
-		server:           server
-		uploaded_files:   []string{}
-	})
+	return transport.WorkerWebSocketDispatchCommandsResult{
+		close_frame: close_frame
+		has_close:   has_close
+		failures:    failures
+	}
 }
 
-fn try_decode_stream_start(raw string) ?transport.WorkerStreamFrame {
-	frame := json.decode(transport.WorkerStreamFrame, raw) or { return none }
-	if frame.mode == 'stream' && frame.event == 'start' {
-		return frame
+fn WorkerWebSocketDispatchCommandRuntime.first_close(result transport.WorkerWebSocketDispatchCommandsResult) ?transport.WorkerWebSocketFrame {
+	if result.has_close {
+		return result.close_frame
 	}
 	return none
 }
 
-fn try_decode_upstream_plan(raw string) ?transport.WorkerUpstreamPlanFrame {
-	frame := json.decode(transport.WorkerUpstreamPlanFrame, raw) or { return none }
-	if ((frame.mode == 'stream' && frame.strategy == 'upstream_plan')
-		|| frame.mode == 'upstream_plan') && frame.event == 'start' {
-		return frame
-	}
-	return none
+fn WorkerHttpStreamWriter.status_reason_phrase(status int) string {
+	return worker.WorkerHttpStreamWriter.status_reason_phrase(status)
 }
 
-fn read_stream_response(mut conn unix.StreamConn) !transport.StreamDispatchResponse {
-	raw := read_frame(mut conn)!
-	return json.decode(transport.StreamDispatchResponse, raw)!
+fn WorkerHttpStreamWriter.write_headers_conn_with_close(mut conn net.TcpConn, status int, content_type string, extra_headers map[string]string, chunked bool, close_conn bool) ! {
+	worker.WorkerHttpStreamWriter.write_headers_conn_with_close(mut conn, status, content_type,
+		extra_headers, chunked, close_conn)!
 }
 
-fn (mut app App) worker_backend_connect_socket_with_retry() !string {
+fn WorkerHttpStreamWriter.write_headers_conn(mut conn net.TcpConn, status int, content_type string, extra_headers map[string]string, chunked bool) ! {
+	worker.WorkerHttpStreamWriter.write_headers_conn(mut conn, status, content_type, extra_headers,
+		chunked)!
+}
+
+fn WorkerHttpStreamWriter.write_headers(mut ctx Context, status int, content_type string, extra_headers map[string]string, chunked bool) ! {
+	worker.WorkerHttpStreamWriter.write_headers_conn(mut ctx.conn, status, content_type,
+		extra_headers, chunked)!
+}
+
+fn WorkerHttpStreamWriter.write_chunk(mut conn net.TcpConn, data string) ! {
+	worker.WorkerHttpStreamWriter.write_chunk(mut conn, data)!
+}
+
+fn WorkerHttpStreamWriter.write_final_chunk(mut conn net.TcpConn) ! {
+	worker.WorkerHttpStreamWriter.write_final_chunk(mut conn)!
+}
+
+fn WorkerHttpStreamWriter.write_sse_message(mut conn net.TcpConn, frame transport.WorkerStreamFrame) ! {
+	worker.WorkerHttpStreamWriter.write_sse_message(mut conn, frame)!
+}
+
+fn WorkerBackendConnectorRuntime.socket_with_retry(ctx WorkerBackendConnectorContext) !string {
 	mut last_err := 'worker unavailable'
 	for attempt in 0 .. 10 {
-		socket_path := app.worker_backend_select_socket_queued() or {
+		socket_path := ctx.select_socket() or {
 			last_err = err.msg()
 			if last_err.contains('worker queue full') || last_err.contains('worker queue timeout') {
 				return error(last_err)
@@ -117,10 +174,10 @@ fn (mut app App) worker_backend_connect_socket_with_retry() !string {
 	return error(last_err)
 }
 
-fn (mut app App) worker_backend_connect_selected() !(string, unix.StreamConn) {
+fn WorkerBackendConnectorRuntime.connect_selected(ctx WorkerBackendConnectorContext) !(string, unix.StreamConn) {
 	mut last_err := 'worker connect failed'
 	for attempt in 0 .. 10 {
-		socket_path := app.worker_backend_connect_socket_with_retry() or {
+		socket_path := WorkerBackendConnectorRuntime.socket_with_retry(ctx) or {
 			last_err = err.msg()
 			if attempt < 9 {
 				time.sleep(10 * time.millisecond)
@@ -130,7 +187,7 @@ fn (mut app App) worker_backend_connect_selected() !(string, unix.StreamConn) {
 		}
 		mut conn := unix.connect_stream(socket_path) or {
 			last_err = err.msg()
-			app.emit('worker.connect.failed', {
+			ctx.emit('worker.connect.failed', {
 				'socket':  socket_path
 				'attempt': '${attempt + 1}'
 				'error':   last_err
@@ -146,225 +203,92 @@ fn (mut app App) worker_backend_connect_selected() !(string, unix.StreamConn) {
 	return error(last_err)
 }
 
-fn (mut app App) worker_backend_dispatch_stream(req transport.StreamDispatchRequest) !transport.StreamDispatchResponse {
-	selected_socket, mut conn := app.worker_backend_connect_selected()!
-	app.on_worker_request_started(selected_socket)
+fn WorkerBackendDispatchRuntime.stream(ctx WorkerBackendDispatchContext, req transport.StreamDispatchRequest) !transport.StreamDispatchResponse {
+	mut worker_conn := ctx.open()!
+	ctx.started(worker_conn.socket_path)
 	defer {
-		app.on_worker_request_finished(selected_socket)
-		conn.close() or {}
+		ctx.finished(worker_conn.socket_path)
+		worker_conn.close()
 	}
-	if app.worker.worker_backend.read_timeout_ms > 0 {
-		conn.set_read_timeout(time.millisecond * app.worker.worker_backend.read_timeout_ms)
-	}
-	write_frame(mut conn, json.encode(req))!
-	return read_stream_response(mut conn)!
+	worker_conn.apply_read_timeout(ctx.timeout_ms)
+	worker_conn.write_json(req)!
+	return worker_conn.read_stream_response()!
 }
 
-fn read_mcp_response(mut conn unix.StreamConn) !transport.WorkerMcpDispatchResponse {
-	raw := read_frame(mut conn)!
-	return json.decode(transport.WorkerMcpDispatchResponse, raw)!
+fn WorkerBackendDispatchRuntime.mcp(ctx WorkerBackendDispatchContext, req transport.WorkerMcpDispatchRequest) !transport.WorkerMcpDispatchResponse {
+	mut worker_conn := ctx.open()!
+	ctx.started(worker_conn.socket_path)
+	defer {
+		ctx.finished(worker_conn.socket_path)
+		worker_conn.close()
+	}
+	worker_conn.apply_read_timeout(ctx.timeout_ms)
+	worker_conn.write_json(req)!
+	return worker_conn.read_mcp_response()!
+}
+
+fn WorkerBackendDispatchRuntime.websocket_upstream(ctx WorkerBackendDispatchContext, req transport.WorkerWebSocketUpstreamDispatchRequest) !transport.WorkerWebSocketUpstreamDispatchResponse {
+	mut worker_conn := ctx.open()!
+	ctx.started(worker_conn.socket_path)
+	defer {
+		ctx.finished(worker_conn.socket_path)
+		worker_conn.close()
+	}
+	worker_conn.apply_read_timeout(ctx.timeout_ms)
+	raw_req := json.encode(req)
+	log.info('[worker-transport] 📤 dispatching websocket_upstream: ${raw_req}')
+	worker_conn.write_payload(raw_req)!
+	return worker_conn.read_websocket_upstream_response()!
+}
+
+fn WorkerBackendDispatchRuntime.websocket_event(ctx WorkerBackendDispatchContext, frame transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse {
+	mut worker_conn := ctx.open()!
+	ctx.started(worker_conn.socket_path)
+	defer {
+		ctx.finished(worker_conn.socket_path)
+		worker_conn.close()
+	}
+	worker_conn.apply_read_timeout(ctx.timeout_ms)
+	worker_conn.write_websocket_frame(frame)!
+	return worker_conn.read_websocket_dispatch_response()!
+}
+
+fn (mut app App) worker_backend_connect_socket_with_retry() !string {
+	ctx := app.build_worker_backend_connector_context()
+	return WorkerBackendConnectorRuntime.socket_with_retry(ctx)
+}
+
+fn (mut app App) worker_backend_connect_selected() !(string, unix.StreamConn) {
+	ctx := app.build_worker_backend_connector_context()
+	return WorkerBackendConnectorRuntime.connect_selected(ctx)
+}
+
+fn (mut app App) worker_backend_dispatch_stream(req transport.StreamDispatchRequest) !transport.StreamDispatchResponse {
+	ctx := app.build_worker_backend_dispatch_context()
+	return WorkerBackendDispatchRuntime.stream(ctx, req)
 }
 
 fn (mut app App) worker_backend_dispatch_mcp(req transport.WorkerMcpDispatchRequest) !transport.WorkerMcpDispatchResponse {
-	selected_socket, mut conn := app.worker_backend_connect_selected()!
-	app.on_worker_request_started(selected_socket)
-	defer {
-		app.on_worker_request_finished(selected_socket)
-		conn.close() or {}
-	}
-	if app.worker.worker_backend.read_timeout_ms > 0 {
-		conn.set_read_timeout(time.millisecond * app.worker.worker_backend.read_timeout_ms)
-	}
-	write_frame(mut conn, json.encode(req))!
-	return read_mcp_response(mut conn)!
-}
-
-fn read_websocket_upstream_response(mut conn unix.StreamConn) !transport.WorkerWebSocketUpstreamDispatchResponse {
-	raw := read_frame(mut conn)!
-	return json.decode(transport.WorkerWebSocketUpstreamDispatchResponse, raw)!
+	ctx := app.build_worker_backend_dispatch_context()
+	return WorkerBackendDispatchRuntime.mcp(ctx, req)
 }
 
 fn (mut app App) worker_backend_dispatch_websocket_upstream(req transport.WorkerWebSocketUpstreamDispatchRequest) !transport.WorkerWebSocketUpstreamDispatchResponse {
-	socket, mut conn := app.worker_backend_connect_selected()!
-
-	app.on_worker_request_started(socket)
-	defer {
-		app.on_worker_request_finished(socket)
-		conn.close() or {}
-	}
-	if app.worker.worker_backend.read_timeout_ms > 0 {
-		conn.set_read_timeout(time.millisecond * app.worker.worker_backend.read_timeout_ms)
-	}
-	raw_req := json.encode(req)
-	log.info('[worker-transport] 📤 dispatching websocket_upstream: ${raw_req}')
-	write_frame(mut conn, raw_req)!
-	return read_websocket_upstream_response(mut conn)!
-}
-
-fn status_reason_phrase(status int) string {
-	return match status {
-		200 { 'OK' }
-		201 { 'Created' }
-		202 { 'Accepted' }
-		204 { 'No Content' }
-		301 { 'Moved Permanently' }
-		302 { 'Found' }
-		304 { 'Not Modified' }
-		400 { 'Bad Request' }
-		401 { 'Unauthorized' }
-		403 { 'Forbidden' }
-		404 { 'Not Found' }
-		405 { 'Method Not Allowed' }
-		408 { 'Request Timeout' }
-		409 { 'Conflict' }
-		429 { 'Too Many Requests' }
-		500 { 'Internal Server Error' }
-		502 { 'Bad Gateway' }
-		503 { 'Service Unavailable' }
-		504 { 'Gateway Timeout' }
-		else { 'OK' }
-	}
-}
-
-fn write_http_stream_headers_conn_with_close(mut conn net.TcpConn, status int, content_type string, extra_headers map[string]string, chunked bool, close_conn bool) ! {
-	mut code := status
-	if code <= 0 {
-		code = 200
-	}
-	mut sb := strings.new_builder(512)
-	sb.write_string('HTTP/1.1 ${code} ${status_reason_phrase(code)}\r\n')
-	sb.write_string('Server: vhttpd\r\n')
-	if close_conn {
-		sb.write_string('Connection: close\r\n')
-	}
-	if chunked {
-		sb.write_string('Transfer-Encoding: chunked\r\n')
-	}
-	if content_type != '' {
-		sb.write_string('Content-Type: ${content_type}\r\n')
-	}
-	for name, value in extra_headers {
-		lower := name.to_lower()
-		if lower == 'content-type' || lower == 'content-length' || lower == 'transfer-encoding'
-			|| lower == 'connection' || lower == 'server' {
-			continue
-		}
-		sb.write_string('${name}: ${value}\r\n')
-	}
-	sb.write_string('\r\n')
-	conn.write_string(sb.str())!
-}
-
-fn write_http_stream_headers_conn(mut conn net.TcpConn, status int, content_type string, extra_headers map[string]string, chunked bool) ! {
-	write_http_stream_headers_conn_with_close(mut conn, status, content_type, extra_headers,
-		chunked, true)!
-}
-
-fn write_http_stream_headers(mut ctx Context, status int, content_type string, extra_headers map[string]string, chunked bool) ! {
-	write_http_stream_headers_conn(mut ctx.conn, status, content_type, extra_headers, chunked)!
-}
-
-fn write_chunk(mut conn net.TcpConn, data string) ! {
-	if data.len == 0 {
-		return
-	}
-	conn.write_string('${data.len:x}\r\n')!
-	conn.write_string(data)!
-	conn.write_string('\r\n')!
-}
-
-fn write_final_chunk(mut conn net.TcpConn) ! {
-	conn.write_string('0\r\n\r\n')!
-}
-
-fn write_sse_message(mut conn net.TcpConn, frame transport.WorkerStreamFrame) ! {
-	mut sb := strings.new_builder(256)
-	if frame.sse_id != '' {
-		sb.write_string('id: ${frame.sse_id}\n')
-	}
-	if frame.sse_event != '' {
-		sb.write_string('event: ${frame.sse_event}\n')
-	}
-	if frame.data != '' {
-		sb.write_string('data: ${frame.data}\n')
-	}
-	if frame.sse_retry != 0 {
-		sb.write_string('retry: ${frame.sse_retry}\n')
-	}
-	sb.write_string('\n')
-	conn.write_string(sb.str())!
-}
-
-fn classify_worker_error(err_msg string) (int, string) {
-	msg := err_msg.to_lower()
-	if msg.contains('all workers busy') {
-		return 503, 'worker_pool_exhausted'
-	}
-	if msg.contains('worker queue full') {
-		return 503, 'worker_queue_full'
-	}
-	if msg.contains('worker queue timeout') {
-		return 504, 'worker_queue_timeout'
-	}
-	if msg.contains('timed out') || msg.contains('timeout') {
-		return 504, 'timeout'
-	}
-	return 502, 'transport_error'
-}
-
-fn read_worker_websocket_frame(mut conn unix.StreamConn) !transport.WorkerWebSocketFrame {
-	raw := read_frame(mut conn)!
-	return json.decode(transport.WorkerWebSocketFrame, raw)!
-}
-
-fn write_worker_websocket_frame(mut conn unix.StreamConn, frame transport.WorkerWebSocketFrame) ! {
-	write_frame(mut conn, json.encode(frame))!
-}
-
-fn read_worker_websocket_dispatch_response(mut conn unix.StreamConn) !transport.WorkerWebSocketDispatchResponse {
-	raw := read_frame(mut conn)!
-	return json.decode(transport.WorkerWebSocketDispatchResponse, raw)!
+	ctx := app.build_worker_backend_dispatch_context()
+	return WorkerBackendDispatchRuntime.websocket_upstream(ctx, req)
 }
 
 fn (mut app App) worker_backend_dispatch_websocket_event(frame transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse {
-	selected_socket, mut conn := app.worker_backend_connect_selected()!
-	app.on_worker_request_started(selected_socket)
-	defer {
-		app.on_worker_request_finished(selected_socket)
-		conn.close() or {}
-	}
-	if app.worker.worker_backend.read_timeout_ms > 0 {
-		conn.set_read_timeout(time.millisecond * app.worker.worker_backend.read_timeout_ms)
-	}
-	write_worker_websocket_frame(mut conn, frame)!
-	return read_worker_websocket_dispatch_response(mut conn)!
+	ctx := app.build_worker_backend_dispatch_context()
+	return WorkerBackendDispatchRuntime.websocket_event(ctx, frame)
 }
 
 fn (mut app App) execute_websocket_dispatch_commands_result(commands []transport.WorkerWebSocketFrame) transport.WorkerWebSocketDispatchCommandsResult {
-	mut close_frame := transport.WorkerWebSocketFrame{}
-	mut has_close := false
-	mut failures := []transport.WorkerWebSocketDispatchCommandFailure{}
-	for cmd in commands {
-		if cmd.event == 'close' && cmd.target_id == '' {
-			close_frame = cmd
-			has_close = true
-			continue
-		}
-		if failure := app.process_worker_websocket_hub_frame(cmd) {
-			failures << failure
-		}
-	}
-	return transport.WorkerWebSocketDispatchCommandsResult{
-		close_frame: close_frame
-		has_close:   has_close
-		failures:    failures
-	}
+	websocket_runtime := app.build_websocket_runtime_context()
+	return WorkerWebSocketDispatchCommandRuntime.execute(websocket_runtime, commands)
 }
 
 fn (mut app App) execute_websocket_dispatch_commands(commands []transport.WorkerWebSocketFrame) ?transport.WorkerWebSocketFrame {
 	result := app.execute_websocket_dispatch_commands_result(commands)
-	if result.has_close {
-		return result.close_frame
-	}
-	return none
+	return WorkerWebSocketDispatchCommandRuntime.first_close(result)
 }

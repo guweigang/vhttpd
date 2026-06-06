@@ -22,31 +22,13 @@ type AdminRestartAllResponse = admin.AdminRestartAllResponse
 type AdminFeishuSendResponse = admin.AdminFeishuSendResponse
 
 fn (app AdminApp) admin_authorized(ctx Context) bool {
-	if app.admin_token == '' {
-		return true
-	}
 	headers := header_map_from_request(ctx.req)
-	mut token := headers['x-vhttpd-admin-token']
-	if token == '' {
-		token = ctx.query['admin_token'] or { '' }
-	}
-	return token == app.admin_token
+	return admin.AdminAuth.authorized(app.admin_token, headers, ctx.query)
 }
 
 fn (app &App) api_authorized(ctx Context) bool {
-	if app.admin.token == '' {
-		return true
-	}
 	headers := header_map_from_request(ctx.req)
-	mut token := headers['x-vhttpd-admin-token']
-	if token == '' {
-		token = ctx.query['admin_token'] or { '' }
-	}
-	return token == app.admin.token
-}
-
-fn admin_parse_boolish(raw string) bool {
-	return admin.parse_boolish(raw)
+	return admin.AdminAuth.authorized(app.admin.token, headers, ctx.query)
 }
 
 @[get]
@@ -246,9 +228,9 @@ pub fn (mut app AdminApp) admin_runtime_upstreams(mut ctx Context) veb.Result {
 			error: 'forbidden'
 		}))
 	}
-	details := admin_query_boolish(ctx.query['details'] or { 'false' })
-	limit := admin_query_limit(ctx.query['limit'] or { '' }, 100, 1000)
-	offset := admin_query_offset(ctx.query['offset'] or { '' })
+	details := admin.AdminQuery.parse_boolish(ctx.query['details'] or { 'false' })
+	limit := admin.AdminQuery.limit(ctx.query['limit'] or { '' }, 100, 1000)
+	offset := admin.AdminQuery.offset(ctx.query['offset'] or { '' })
 	role_filter := (ctx.query['role'] or { '' }).trim_space()
 	provider_filter := (ctx.query['provider'] or { '' }).trim_space()
 	body := json.encode(app.shared.admin_upstreams_snapshot(details, limit, offset, role_filter,
@@ -277,9 +259,9 @@ pub fn (mut app AdminApp) admin_runtime_websockets(mut ctx Context) veb.Result {
 			error: 'forbidden'
 		}))
 	}
-	details := admin_query_boolish(ctx.query['details'] or { 'false' })
-	limit := admin_query_limit(ctx.query['limit'] or { '' }, 100, 1000)
-	offset := admin_query_offset(ctx.query['offset'] or { '' })
+	details := admin.AdminQuery.parse_boolish(ctx.query['details'] or { 'false' })
+	limit := admin.AdminQuery.limit(ctx.query['limit'] or { '' }, 100, 1000)
+	offset := admin.AdminQuery.offset(ctx.query['offset'] or { '' })
 	room_filter := (ctx.query['room'] or { '' }).trim_space()
 	conn_filter := (ctx.query['conn_id'] or { '' }).trim_space()
 	body := json.encode(app.shared.admin_websockets_snapshot(details, limit, offset, room_filter,
@@ -308,9 +290,9 @@ pub fn (mut app AdminApp) admin_runtime_mcp(mut ctx Context) veb.Result {
 			error: 'forbidden'
 		}))
 	}
-	details := admin_query_boolish(ctx.query['details'] or { 'false' })
-	limit := admin_query_limit(ctx.query['limit'] or { '' }, 100, 1000)
-	offset := admin_query_offset(ctx.query['offset'] or { '' })
+	details := admin.AdminQuery.parse_boolish(ctx.query['details'] or { 'false' })
+	limit := admin.AdminQuery.limit(ctx.query['limit'] or { '' }, 100, 1000)
+	offset := admin.AdminQuery.offset(ctx.query['offset'] or { '' })
 	session_filter := (ctx.query['session_id'] or { '' }).trim_space()
 	protocol_filter := (ctx.query['protocol_version'] or { '' }).trim_space()
 	body := json.encode(app.shared.admin_mcp_snapshot(details, limit, offset, session_filter,
@@ -415,8 +397,8 @@ pub fn (mut app AdminApp) admin_runtime_feishu_chats(mut ctx Context) veb.Result
 			error: 'forbidden'
 		}))
 	}
-	limit := admin_query_limit(ctx.query['limit'] or { '' }, 100, 1000)
-	offset := admin_query_offset(ctx.query['offset'] or { '' })
+	limit := admin.AdminQuery.limit(ctx.query['limit'] or { '' }, 100, 1000)
+	offset := admin.AdminQuery.offset(ctx.query['offset'] or { '' })
 	instance_filter := (ctx.query['instance'] or { '' }).trim_space()
 	chat_type_filter := (ctx.query['chat_type'] or { '' }).trim_space()
 	chat_id_filter := (ctx.query['chat_id'] or { '' }).trim_space()
@@ -528,7 +510,7 @@ pub fn (mut app AdminApp) admin_restart_all_workers(mut ctx Context) veb.Result 
 			error: 'forbidden'
 		}))
 	}
-	force := admin_parse_boolish(ctx.query['force'] or { 'false' })
+	force := admin.AdminQuery.parse_boolish(ctx.query['force'] or { 'false' })
 	restarted := app.shared.restart_all_workers()
 	body := json.encode(AdminRestartAllResponse{
 		ok:        true

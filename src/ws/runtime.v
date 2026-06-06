@@ -5,13 +5,13 @@ import net.websocket
 
 // ── Payload helpers ──
 
-pub fn hub_payload_bytes(data string, opcode string) ?([]u8, websocket.OPCode) {
-	return match opcode {
+pub fn (msg HubPendingMessage) payload_bytes() ?([]u8, websocket.OPCode) {
+	return match msg.opcode {
 		'', 'text' {
-			data.bytes(), websocket.OPCode.text_frame
+			msg.data.bytes(), websocket.OPCode.text_frame
 		}
 		'binary' {
-			base64.decode(data), websocket.OPCode.binary_frame
+			base64.decode(msg.data), websocket.OPCode.binary_frame
 		}
 		else {
 			none
@@ -77,7 +77,7 @@ pub fn (mut s HubState) mark_closing(conn_id string) bool {
 	}
 	if hub_conn := s.conns[conn_id] {
 		s.pending.delete(conn_id)
-		return dispatch_conn_mark_closing(hub_conn.lifecycle)
+		return hub_conn.lifecycle.mark_closing()
 	}
 	s.pending.delete(conn_id)
 	return false
@@ -91,7 +91,7 @@ pub fn (mut s HubState) flush_pending(conn_id string) {
 	mut pending := []HubPendingMessage{}
 	s.mu.@lock()
 	if hub_conn := s.conns[conn_id] {
-		phase := dispatch_conn_phase(hub_conn.lifecycle)
+		phase := hub_conn.lifecycle.phase()
 		if phase == .closing || phase == .closed {
 			s.mu.unlock()
 			return
@@ -230,7 +230,7 @@ pub fn (mut s HubState) unregister_conn(conn_id string) {
 	}
 	s.mu.@lock()
 	if hub_conn := s.conns[conn_id] {
-		if !dispatch_conn_begin_cleanup(hub_conn.lifecycle) {
+		if !hub_conn.lifecycle.begin_cleanup() {
 			s.mu.unlock()
 			return
 		}
@@ -290,8 +290,8 @@ pub fn (mut s HubState) send_client(conn_id string, client &websocket.Client, da
 	if conn_id != '' {
 		s.mu.@lock()
 		if hub_conn := s.conns[conn_id] {
-			if !dispatch_conn_can_send(hub_conn.lifecycle) {
-				if dispatch_conn_can_queue(hub_conn.lifecycle) {
+			if !hub_conn.lifecycle.can_send() {
+				if hub_conn.lifecycle.can_queue() {
 					mut pending := s.pending[conn_id] or { []HubPendingMessage{} }
 					pending << HubPendingMessage{
 						data:   data
@@ -312,7 +312,7 @@ pub fn (mut s HubState) send_client(conn_id string, client &websocket.Client, da
 		s.send_mu.unlock()
 	}
 	mut c := unsafe { client }
-	payload, code := hub_payload_bytes(data, opcode) or { return false }
+	payload, code := HubPendingMessage{data: data, opcode: opcode}.payload_bytes() or { return false }
 	if code == .text_frame {
 		c.write_string(data) or { return false }
 		return true

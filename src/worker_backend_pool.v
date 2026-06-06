@@ -1,14 +1,15 @@
 module main
 
 import transport
-
-import config
-
 import json
-import log
 import net.unix
 import os
 import time
+
+type WorkerAdminView = transport.ManagedWorker
+
+struct WorkerProcessMetrics {}
+
 fn (app &App) worker_index_by_socket_unlocked(socket_path string) int {
 	for i, w in app.worker.worker_backend.managed_workers {
 		if w.socket_path == socket_path {
@@ -20,7 +21,8 @@ fn (app &App) worker_index_by_socket_unlocked(socket_path string) int {
 
 fn (mut app App) ensure_worker_slot(idx int) {
 	app.worker.mu.@lock()
-	if !app.worker.worker_backend.autostart || idx < 0 || idx >= app.worker.worker_backend.managed_workers.len {
+	if !app.worker.worker_backend.autostart || idx < 0
+		|| idx >= app.worker.worker_backend.managed_workers.len {
 		app.worker.mu.unlock()
 		return
 	}
@@ -34,7 +36,8 @@ fn (mut app App) ensure_worker_slot(idx int) {
 		app.worker.mu.unlock()
 		return
 	}
-	delay_ms := transport.restart_backoff_ms(w.restart_count, app.worker.worker_backend.restart_backoff_ms,
+	delay_ms := transport.ManagedWorkerPool.restart_backoff_ms(w.restart_count,
+		app.worker.worker_backend.restart_backoff_ms,
 		app.worker.worker_backend.restart_backoff_max_ms)
 	mut proc := os.new_process('/bin/sh')
 	proc.set_args(['-lc', w.worker_cmd])
@@ -42,7 +45,7 @@ fn (mut app App) ensure_worker_slot(idx int) {
 	proc.set_work_folder(app.worker.worker_backend.workdir)
 	proc.use_pgroup = true
 	proc.run()
-	transport.wait_for_worker(w.socket_path, 1500) or {
+	transport.ManagedWorker.wait_for_socket(w.socket_path, 1500) or {
 		w.restart_count++
 		w.last_exit_ts = now
 		w.next_retry_ts = now + delay_ms
@@ -97,7 +100,8 @@ fn (mut app App) restart_worker_slot_now(idx int, reason string) {
 	}
 	w.proc.close()
 	now := time.now().unix_milli()
-	delay_ms := transport.restart_backoff_ms(w.restart_count, app.worker.worker_backend.restart_backoff_ms,
+	delay_ms := transport.ManagedWorkerPool.restart_backoff_ms(w.restart_count,
+		app.worker.worker_backend.restart_backoff_ms,
 		app.worker.worker_backend.restart_backoff_max_ms)
 	mut proc := os.new_process('/bin/sh')
 	proc.set_args(['-lc', w.worker_cmd])
@@ -105,7 +109,7 @@ fn (mut app App) restart_worker_slot_now(idx int, reason string) {
 	proc.set_work_folder(app.worker.worker_backend.workdir)
 	proc.use_pgroup = true
 	proc.run()
-	transport.wait_for_worker(w.socket_path, 1500) or {
+	transport.ManagedWorker.wait_for_socket(w.socket_path, 1500) or {
 		w.restart_count++
 		w.last_exit_ts = now
 		w.next_retry_ts = now + delay_ms
@@ -377,14 +381,14 @@ fn (mut app App) worker_backend_select_socket() !string {
 	return error(last_err)
 }
 
-fn worker_admin_status_from(mut w transport.ManagedWorker) WorkerAdminStatus {
+fn (mut w WorkerAdminView) admin_status() WorkerAdminStatus {
 	pid := if isnil(w.proc) { 0 } else { w.proc.pid }
 	return WorkerAdminStatus{
 		id:                w.id
 		socket:            w.socket_path
 		alive:             if isnil(w.proc) { false } else { w.proc.is_alive() }
 		pid:               pid
-		rss_kb:            worker_rss_kb(pid)
+		rss_kb:            WorkerProcessMetrics.rss_kb(pid)
 		draining:          w.draining
 		inflight_requests: w.inflight_requests
 		served_requests:   w.served_requests
@@ -393,7 +397,7 @@ fn worker_admin_status_from(mut w transport.ManagedWorker) WorkerAdminStatus {
 	}
 }
 
-fn worker_rss_kb(pid int) i64 {
+fn WorkerProcessMetrics.rss_kb(pid int) i64 {
 	if pid <= 0 {
 		return 0
 	}
@@ -431,7 +435,8 @@ fn (mut app App) restart_worker_by_id(worker_id int) !WorkerAdminStatus {
 	app.worker.mu.@lock()
 	mut w := app.worker.worker_backend.managed_workers[idx]
 	app.worker.mu.unlock()
-	return worker_admin_status_from(mut w)
+	mut view := WorkerAdminView(w)
+	return view.admin_status()
 }
 
 fn (mut app App) restart_all_workers() int {
@@ -457,8 +462,8 @@ fn (mut app App) worker_admin_snapshot() WorkerPoolAdminStatus {
 	}
 	mut workers := []WorkerAdminStatus{cap: app.worker.worker_backend.managed_workers.len}
 	for worker in app.worker.worker_backend.managed_workers {
-		mut w := worker
-		workers << worker_admin_status_from(mut w)
+		mut view := WorkerAdminView(worker)
+		workers << view.admin_status()
 	}
 	return WorkerPoolAdminStatus{
 		worker_autostart:    app.worker.worker_backend.autostart

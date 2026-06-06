@@ -86,6 +86,13 @@ function relayLog(runtime, ...args) {
   }
 }
 
+function relayLogWhenEnabled(runtime, enabled, ...args) {
+  if (!enabled || !runtime || typeof runtime.log !== "function") {
+    return;
+  }
+  runtime.log("[paseo-relay]", ...args);
+}
+
 function previewPayload(data, opcode) {
   const kind = trimString(opcode) || "text";
   const text = String(data ?? "");
@@ -665,6 +672,7 @@ function scheduleControlNudge(session, connectionId, runtime) {
     "relay.controlResetDelayMs",
     DEFAULT_CONTROL_RESET_DELAY_MS,
   );
+  const debugEnabled = relayDebugEnabled(runtime);
   session.controlNudgeTokensByConnection.set(connectionId, token);
   setTimeout(() => {
     let shouldSync = false;
@@ -690,7 +698,7 @@ function scheduleControlNudge(session, connectionId, runtime) {
     if (!current || !shouldSync) {
       return;
     }
-    relayLog(runtime, "control_nudge_sync", sessionDebugState(current, connectionId));
+    relayLogWhenEnabled(runtime, debugEnabled, "control_nudge_sync", sessionDebugState(current, connectionId));
     const syncResult = runtime.websocketDispatch(
       notifyControls(current, {
         type: "sync",
@@ -700,7 +708,7 @@ function scheduleControlNudge(session, connectionId, runtime) {
     );
     const failedControlIds = failedTargetIdsFromDispatchResult(syncResult);
     if (failedControlIds.length > 0) {
-      relayLog(runtime, "control_sync_send_failed", `targets=${failedControlIds.join(",")}`);
+      relayLogWhenEnabled(runtime, debugEnabled, "control_sync_send_failed", `targets=${failedControlIds.join(",")}`);
       runtime.websocketDispatch(
         failedControlIds.map((controlId) =>
           closeCommand("Control send failed", {
@@ -735,7 +743,7 @@ function scheduleControlNudge(session, connectionId, runtime) {
       if (!latest || !shouldReset) {
         return;
       }
-      relayLog(runtime, "control_nudge_reset", sessionDebugState(latest, connectionId));
+      relayLogWhenEnabled(runtime, debugEnabled, "control_nudge_reset", sessionDebugState(latest, connectionId));
       runtime.websocketDispatch(
         Array.from(latest.controlIds).map((controlId) =>
           closeCommand("Control unresponsive", {

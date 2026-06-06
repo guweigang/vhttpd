@@ -1,16 +1,16 @@
 module main
+
 import executor
 import ws
 import feishu
 import codex
 import worker
-import provider
 import stats
 import assets
-import plugins
+import plugin
 import admin
+import openai
 import mcp_protocol
-
 import encoding.base64
 import json
 import log
@@ -23,8 +23,6 @@ import os
 import sync
 import time
 import veb
-import config
-import state_store
 import veb.request_id
 import veb.sse
 import transport
@@ -41,59 +39,29 @@ pub struct App {
 pub:
 	event_log string
 pub mut:
-	started_at_unix                             i64
-	worker                                      worker.WorkerState
-	admin                                       admin.AdminState
-	runtime_config_json                         string
-	plugins                                     plugins.PluginState
-	assets                                      assets.AssetsState
-	mcp                                         mcp_protocol.McpState
-	openai                                      OpenaiState
-	http_stats                                  stats.HttpStats
-	mu                                          sync.Mutex
+	started_at_unix     i64
+	worker              worker.WorkerState
+	admin               admin.AdminState
+	runtime_config_json string
+	plugins             plugin.PluginState
+	assets              assets.AssetsState
+	mcp                 mcp_protocol.McpState
+	openai              openai.OpenaiState
+	http_stats          stats.HttpStats
+	mu                  sync.Mutex
 
-	ws_hub                                      WebSocketHubState
-	providers                                   ProviderHost
-	provider_instance_specs                     map[string]ProviderInstanceSpec = map[string]ProviderInstanceSpec{}
+	ws_hub             ws.HubState
+	providers          ProviderHost
+	provider_instances ProviderInstanceRegistry = ProviderInstanceRegistry{
+		specs: map[string]ProviderInstanceSpec{}
+	}
 	// codex upstream
-	codex                            codex.CodexState
-	feishu                           feishu.FeishuState
+	codex      codex.CodexState
+	feishu     feishu.FeishuState
+	db_runtime DbProviderRuntime
 }
 
 type CodexTarget = codex.CodexTarget
-
-// ── Transitional config type aliases (for files where config var conflicts with import) ─
-pub type AdminConfig = config.AdminConfig
-pub type AssetsConfig = config.AssetsConfig
-pub type BridgeConfig = config.BridgeConfig
-pub type CodexConfig = config.CodexConfig
-pub type DbConfig = config.DbConfig
-pub type DbMysqlConfig = config.DbMysqlConfig
-pub type DbPgsqlConfig = config.DbPgsqlConfig
-pub type EmbeddedHostCliOverrides = config.EmbeddedHostCliOverrides
-pub type EmbeddedHostRuntimeConfig = config.EmbeddedHostRuntimeConfig
-pub type ExecutorConfig = config.ExecutorConfig
-pub type FeishuAppConfig = config.FeishuAppConfig
-pub type FeishuConfig = config.FeishuConfig
-pub type FilesConfig = config.FilesConfig
-pub type ListenerConfig = config.ListenerConfig
-pub type McpConfig = config.McpConfig
-pub type OpenAIBackendConfig = config.OpenAIBackendConfig
-pub type OpenAIConfig = config.OpenAIConfig
-pub type OpenAIEndpointsConfig = config.OpenAIEndpointsConfig
-pub type OpenAIRouteConfig = config.OpenAIRouteConfig
-pub type PathsConfig = config.PathsConfig
-pub type PhpConfig = config.PhpConfig
-pub type PluginConfig = config.PluginConfig
-pub type RuntimeConfig = config.RuntimeConfig
-pub type ServerConfig = config.ServerConfig
-pub type SiteConfig = config.SiteConfig
-pub type VhttpdConfig = config.VhttpdConfig
-pub type VjsxConfig = config.VjsxConfig
-pub type WebSocketActorConfig = config.WebSocketActorConfig
-pub type WebSocketActorSourceConfig = config.WebSocketActorSourceConfig
-pub type WebSocketAffinityConfig = config.WebSocketAffinityConfig
-pub type WorkerConfig = config.WorkerConfig
 
 fn runtime_trace(label string, fields map[string]string) {
 	mut row := map[string]string{}
@@ -124,32 +92,6 @@ fn header_map_from_request(req http.Request) map[string]string {
 	return out
 }
 
-fn cookie_map_from_request(req http.Request) map[string]string {
-	mut out := map[string]string{}
-	for cookie in http.read_cookies(req.header, '') {
-		out[cookie.name] = cookie.value
-	}
-	return out
-}
-
-fn server_map_from_request(req http.Request, remote_addr string) map[string]string {
-	mut host := req.host
-	mut port := ''
-	if host == '' {
-		host = req.header.get(.host) or { '' }
-	}
-	if host != '' {
-		host, port = urllib.split_host_port(host)
-	}
-	return {
-		'host':        host
-		'port':        port
-		'remote_addr': remote_addr
-		'method':      req.method.str()
-		'url':         req.url
-	}
-}
-
 fn normalize_path(path string) string {
 	if path.len == 0 {
 		return '/'
@@ -158,20 +100,6 @@ fn normalize_path(path string) string {
 		return path
 	}
 	return '/${path}'
-}
-
-fn normalize_assets_prefix(raw string) string {
-	mut prefix := raw.trim_space()
-	if prefix == '' {
-		return '/assets'
-	}
-	if !prefix.starts_with('/') {
-		prefix = '/${prefix}'
-	}
-	for prefix.len > 1 && prefix.ends_with('/') {
-		prefix = prefix[..prefix.len - 1]
-	}
-	return prefix
 }
 
 fn dispatch_core(method string, path string) (int, string, string) {
@@ -254,8 +182,8 @@ fn is_websocket_upgrade(req http.Request) bool {
 pub fn (mut app App) worker_websocket_open(mut conn unix.StreamConn, req http.Request, remote_addr string, path string, req_id string, trace_id string) !(bool, int, string) {
 	normalized_path, query_string := normalize_request_target(path)
 	query := parse_query_map(query_string)
-	room_members, member_metadata, room_counts, presence_users :=
-		app.ws_hub_presence_snapshot(req_id)
+	rt := app.build_websocket_runtime_context()
+	presence := rt.presence(req_id)
 	frame := transport.WorkerWebSocketFrame{
 		mode:            'websocket'
 		event:           'open'
@@ -266,21 +194,21 @@ pub fn (mut app App) worker_websocket_open(mut conn unix.StreamConn, req http.Re
 		remote_addr:     remote_addr
 		request_id:      req_id
 		trace_id:        trace_id
-		rooms:           app.ws_hub_rooms_snapshot(req_id)
-		metadata:        app.ws_hub_meta_snapshot(req_id)
-		room_members:    room_members
-		member_metadata: member_metadata
-		room_counts:     room_counts
-		presence_users:  presence_users
+		rooms:           rt.rooms(req_id)
+		metadata:        rt.metadata(req_id)
+		room_members:    presence.room_members
+		member_metadata: presence.member_metadata
+		room_counts:     presence.room_counts
+		presence_users:  presence.presence_users
 	}
-	write_worker_websocket_frame(mut conn, frame)!
+	worker.WorkerBackendFrameCodec.write_websocket_frame(mut conn, frame)!
 	mut accepted := false
 	for {
-		reply := read_worker_websocket_frame(mut conn)!
+		reply := worker.WorkerBackendFrameCodec.read_websocket_frame(mut conn)!
 		if reply.mode != 'websocket' {
 			continue
 		}
-		if _ := app.process_worker_websocket_hub_frame(reply) {
+		if _ := rt.process_worker_frame(reply) {
 			continue
 		}
 		match reply.event {
@@ -337,21 +265,20 @@ fn worker_websocket_message_cb(mut ws_client websocket.Client, msg &websocket.Me
 		}
 		return
 	}
-	room_members, member_metadata, room_counts, presence_users :=
-		state.app.ws_hub_presence_snapshot(state.conn_id)
+	presence := state.rt.presence(state.conn_id)
 	state.cb_mu.@lock()
-	write_worker_websocket_frame(mut state.worker_conn, transport.WorkerWebSocketFrame{
+	worker.WorkerBackendFrameCodec.write_websocket_frame(mut state.worker_conn, transport.WorkerWebSocketFrame{
 		mode:            'websocket'
 		event:           'message'
 		id:              state.request_id
 		opcode:          opcode
 		data:            payload
-		rooms:           state.app.ws_hub_rooms_snapshot(state.conn_id)
-		metadata:        state.app.ws_hub_meta_snapshot(state.conn_id)
-		room_members:    room_members
-		member_metadata: member_metadata
-		room_counts:     room_counts
-		presence_users:  presence_users
+		rooms:           state.rt.rooms(state.conn_id)
+		metadata:        state.rt.metadata(state.conn_id)
+		room_members:    presence.room_members
+		member_metadata: presence.member_metadata
+		room_counts:     presence.room_counts
+		presence_users:  presence.presence_users
 	}) or {
 		state.worker_initiated_close = true
 		state.close_notified = true
@@ -362,7 +289,7 @@ fn worker_websocket_message_cb(mut ws_client websocket.Client, msg &websocket.Me
 			'error':      err.msg()
 		})
 		ws_client.close(1011, 'Worker bridge write failed') or {}
-		state.app.ws_hub_unregister_conn(state.conn_id)
+		state.rt.unregister_conn(state.conn_id)
 		state.worker_conn.close() or {}
 		return
 	}
@@ -373,7 +300,7 @@ fn worker_websocket_message_cb(mut ws_client websocket.Client, msg &websocket.Me
 	})
 	for {
 		state.cb_mu.@lock()
-		reply := read_worker_websocket_frame(mut state.worker_conn) or {
+		reply := worker.WorkerBackendFrameCodec.read_websocket_frame(mut state.worker_conn) or {
 			state.worker_initiated_close = true
 			state.close_notified = true
 			state.cb_mu.unlock()
@@ -383,7 +310,7 @@ fn worker_websocket_message_cb(mut ws_client websocket.Client, msg &websocket.Me
 				'error':      err.msg()
 			})
 			ws_client.close(1011, 'Worker bridge read failed') or {}
-			state.app.ws_hub_unregister_conn(state.conn_id)
+			state.rt.unregister_conn(state.conn_id)
 			state.worker_conn.close() or {}
 			return
 		}
@@ -391,7 +318,7 @@ fn worker_websocket_message_cb(mut ws_client websocket.Client, msg &websocket.Me
 		if reply.mode != 'websocket' {
 			continue
 		}
-		if _ := state.app.process_worker_websocket_hub_frame(reply) {
+		if _ := state.rt.process_worker_frame(reply) {
 			continue
 		}
 		match reply.event {
@@ -445,27 +372,28 @@ fn worker_websocket_close_cb(mut _ws websocket.Client, code int, reason string, 
 	}
 	state.close_notified = true
 	if !state.worker_initiated_close {
-		room_members, member_metadata, room_counts, presence_users :=
-			state.app.ws_hub_presence_snapshot(state.conn_id)
-		write_worker_websocket_frame(mut state.worker_conn, transport.WorkerWebSocketFrame{
+		presence := state.rt.presence(state.conn_id)
+		worker.WorkerBackendFrameCodec.write_websocket_frame(mut state.worker_conn, transport.WorkerWebSocketFrame{
 			mode:            'websocket'
 			event:           'close'
 			id:              state.request_id
 			code:            code
 			reason:          reason
-			rooms:           state.app.ws_hub_rooms_snapshot(state.conn_id)
-			metadata:        state.app.ws_hub_meta_snapshot(state.conn_id)
-			room_members:    room_members
-			member_metadata: member_metadata
-			room_counts:     room_counts
-			presence_users:  presence_users
+			rooms:           state.rt.rooms(state.conn_id)
+			metadata:        state.rt.metadata(state.conn_id)
+			room_members:    presence.room_members
+			member_metadata: presence.member_metadata
+			room_counts:     presence.room_counts
+			presence_users:  presence.presence_users
 		}) or {}
 		for {
-			reply := read_worker_websocket_frame(mut state.worker_conn) or { break }
+			reply := worker.WorkerBackendFrameCodec.read_websocket_frame(mut state.worker_conn) or {
+				break
+			}
 			if reply.mode != 'websocket' {
 				continue
 			}
-			if _ := state.app.process_worker_websocket_hub_frame(reply) {
+			if _ := state.rt.process_worker_frame(reply) {
 				continue
 			}
 			if reply.event == 'done' {
@@ -475,7 +403,7 @@ fn worker_websocket_close_cb(mut _ws websocket.Client, code int, reason string, 
 			}
 		}
 	}
-	state.app.ws_hub_unregister_conn(state.conn_id)
+	state.rt.unregister_conn(state.conn_id)
 	state.worker_conn.close() or {}
 	state.cb_mu.unlock()
 	runtime_trace('ws.close.exit', {
@@ -508,7 +436,7 @@ fn proxy_worker_websocket(mut app App, mut ctx Context, method string, path stri
 		trace_id:    trace_id
 	}) or {
 		err_msg := err.msg()
-		status, error_class := classify_worker_error(err_msg)
+		status, error_class := WorkerBackendErrorClassifier.classify(err_msg)
 		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
 		ctx.set_custom_header('x-vhttpd-error-class', error_class) or {}
 		ctx.res.set_status(http.status_from_int(status))
@@ -539,11 +467,12 @@ fn proxy_worker_websocket_dispatch(mut app App, mut ctx Context, method string, 
 	normalized_path, query_string := normalize_request_target(path)
 	query := parse_query_map(query_string)
 	headers := header_map_from_request(ctx.req)
-	open_frame := app.kernel_websocket_dispatch_frame('open', method, normalized_path, query,
-		headers, remote_addr, req_id, trace_id, '', '', 0, '', app.ws_hub_rooms_snapshot(req_id),
-		app.ws_hub_meta_snapshot(req_id), map[string][]string{}, map[string]map[string]string{},
-		map[string]int{}, map[string][]string{})
-	resp := app.kernel_dispatch_websocket_event(open_frame) or {
+	websocket_runtime := app.build_websocket_runtime_context()
+	presence := websocket_runtime.presence(req_id)
+	open_frame := websocket_runtime.build_frame('open', method, normalized_path, query, headers,
+		remote_addr, req_id, trace_id, '', '', 0, '', websocket_runtime.rooms(req_id),
+		websocket_runtime.metadata(req_id), presence)
+	resp := websocket_runtime.dispatch_event(open_frame) or {
 		err_msg := executor.inproc_vjsx_normalize_error_message(err.msg(),
 			'inproc_vjsx_executor_websocket_open_failed')
 		log.error('[vhttpd] kernel_dispatch_websocket_event failed trace_id=${trace_id} path=${normalized_path} error=${err_msg}')
@@ -563,7 +492,9 @@ fn proxy_worker_websocket_dispatch(mut app App, mut ctx Context, method string, 
 		return ctx.text('WebSocket open failed')
 	}
 	if !resp.accepted {
-		if close_frame := app.execute_websocket_dispatch_commands(resp.commands) {
+		result := websocket_runtime.command_result(resp.commands)
+		if result.has_close {
+			close_frame := result.close_frame
 			status := if close_frame.status > 0 { close_frame.status } else { 403 }
 			body := if close_frame.reason != '' { close_frame.reason } else { 'Forbidden' }
 			ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
@@ -602,9 +533,10 @@ fn handle_worker_websocket_session(mut app App, mut client_conn net.TcpConn, mut
 		app.on_worker_request_finished(selected_socket)
 	}
 	mut ws_server := websocket.new_server(.ip, 0, '')
+	websocket_runtime := app.build_websocket_runtime_context()
 	mut state := &WebSocketBridgeState{
-		app:           &app
 		worker_conn:   worker_conn
+		rt:            websocket_runtime
 		worker_socket: selected_socket
 		conn_id:       req_id
 		method:        method
@@ -613,16 +545,16 @@ fn handle_worker_websocket_session(mut app App, mut client_conn net.TcpConn, mut
 		trace_id:      trace_id
 		start_ms:      start_ms
 	}
-	ws_server.on_connect(fn [mut app, mut state] (mut sc websocket.ServerClient) !bool {
+	ws_server.on_connect(fn [mut state] (mut sc websocket.ServerClient) !bool {
 		runtime_trace('ws.session.connect', {
 			'conn_id':       state.conn_id
 			'request_id':    state.request_id
 			'path':          state.path
 			'worker_socket': state.worker_socket
 		})
-		app.ws_hub_register_conn(state.conn_id, state.worker_socket, state.method,
-			state.request_id, state.trace_id, state.path, map[string]string{}, map[string]string{},
-			'', sc.client, unsafe { nil })
+		state.rt.register_conn(state.conn_id, state.worker_socket, state.method, state.request_id,
+			state.trace_id, state.path, map[string]string{}, map[string]string{}, '', sc.client,
+			unsafe { nil })
 		return true
 	}) or {}
 	ws_server.on_message_ref(worker_websocket_message_cb, state)
@@ -634,18 +566,18 @@ fn handle_worker_websocket_session(mut app App, mut client_conn net.TcpConn, mut
 			'path':       state.path
 			'error':      err.msg()
 		})
-		app.ws_hub_unregister_conn(state.conn_id)
+		state.rt.unregister_conn(state.conn_id)
 		state.worker_conn.close() or {}
 		return
 	}
-	app.ws_hub_flush_pending(state.conn_id)
+	state.rt.flush_pending(state.conn_id)
 	runtime_trace('ws.session.handshake.done', {
 		'conn_id':        state.conn_id
 		'request_id':     state.request_id
 		'close_notified': if state.close_notified { 'true' } else { 'false' }
 	})
 	if !state.close_notified {
-		app.ws_hub_unregister_conn(state.conn_id)
+		state.rt.unregister_conn(state.conn_id)
 		state.worker_conn.close() or {}
 		runtime_trace('ws.session.cleanup.no_close', {
 			'conn_id':    state.conn_id
@@ -657,9 +589,10 @@ fn handle_worker_websocket_session(mut app App, mut client_conn net.TcpConn, mut
 fn handle_worker_websocket_dispatch_session(mut app App, mut client_conn net.TcpConn, key string, method string, path string, query map[string]string, headers map[string]string, remote_addr string, req_id string, trace_id string, start_ms i64, open_commands []transport.WorkerWebSocketFrame) {
 	mut ws_server := websocket.new_server(.ip, 0, '')
 	mut lifecycle := &WebSocketDispatchConnState{}
+	websocket_runtime := app.build_websocket_runtime_context()
 	mut state := &WebSocketDispatchBridgeState{
-		app:           &app
 		lifecycle:     lifecycle
+		rt:            websocket_runtime
 		open_commands: open_commands.clone()
 		conn_id:       req_id
 		method:        method
@@ -686,17 +619,16 @@ fn worker_websocket_dispatch_attached_cb(mut sc websocket.ServerClient, ref void
 	}
 	unsafe {
 		mut state := &WebSocketDispatchBridgeState(ref)
-		state.app.ws_hub_register_conn(state.conn_id, '', state.method, state.request_id,
-			state.trace_id, state.path, state.query, state.headers, state.remote_addr, sc.client,
-			state.lifecycle)
+		state.rt.register_conn(state.conn_id, '', state.method, state.request_id, state.trace_id,
+			state.path, state.query, state.headers, state.remote_addr, sc.client, state.lifecycle)
 		worker_websocket_dispatch_process_open(state)
 		worker_websocket_dispatch_activate(state)
 	}
 }
 
 fn worker_websocket_dispatch_begin_local_close(mut state WebSocketDispatchBridgeState) {
-	_ = ws.dispatch_conn_begin_worker_close(state.lifecycle)
-	state.app.ws_hub_mark_closing(state.conn_id)
+	_ = state.lifecycle.begin_worker_close()
+	state.rt.mark_closing(state.conn_id)
 }
 
 fn worker_websocket_dispatch_close_current(state &WebSocketDispatchBridgeState, code int, reason string) {
@@ -706,7 +638,7 @@ fn worker_websocket_dispatch_close_current(state &WebSocketDispatchBridgeState, 
 	unsafe {
 		mut current := state
 		worker_websocket_dispatch_begin_local_close(mut current)
-		current.app.ws_hub_close_target(current.conn_id, code, reason)
+		current.rt.close_target(current.conn_id, code, reason)
 	}
 }
 
@@ -716,8 +648,8 @@ fn worker_websocket_dispatch_followup_close(state &WebSocketDispatchBridgeState,
 	}
 	unsafe {
 		current := state
-		return current.app.websocket_dispatch_followup_failures(current.conn_id, current.method,
-			current.path, current.query, current.headers, current.remote_addr, current.request_id,
+		return current.rt.followup_failure(current.conn_id, current.method, current.path,
+			current.query, current.headers, current.remote_addr, current.request_id,
 			current.trace_id, failures)
 	}
 }
@@ -728,10 +660,10 @@ fn worker_websocket_dispatch_activate(state &WebSocketDispatchBridgeState) {
 	}
 	unsafe {
 		current := state
-		if !ws.dispatch_conn_mark_open(current.lifecycle) {
+		if !current.lifecycle.mark_open() {
 			return
 		}
-		current.app.ws_hub_flush_pending(current.conn_id)
+		current.rt.flush_pending(current.conn_id)
 	}
 }
 
@@ -741,7 +673,7 @@ fn worker_websocket_dispatch_process_open(state &WebSocketDispatchBridgeState) {
 	}
 	unsafe {
 		current := state
-		result := current.app.execute_websocket_dispatch_commands_result(current.open_commands)
+		result := current.rt.command_result(current.open_commands)
 		if result.has_close {
 			close_frame := result.close_frame
 			code := if close_frame.code > 0 { close_frame.code } else { 1000 }
@@ -763,16 +695,16 @@ fn worker_websocket_dispatch_finalize(state &WebSocketDispatchBridgeState) {
 	}
 	unsafe {
 		mut current := state
-		current.app.ws_hub_mark_closing(current.conn_id)
-		if ws.dispatch_conn_begin_cleanup(current.lifecycle) {
-			current.app.ws_hub_cleanup_conn(current.conn_id)
+		current.rt.mark_closing(current.conn_id)
+		if current.lifecycle.begin_cleanup() {
+			current.rt.cleanup_conn(current.conn_id)
 		}
 	}
 }
 
 fn worker_websocket_dispatch_message_cb(mut ws_client websocket.Client, msg &websocket.Message, ref voidptr) ! {
 	mut state := unsafe { &WebSocketDispatchBridgeState(ref) }
-	if !ws.dispatch_conn_can_process_messages(state.lifecycle) {
+	if !state.lifecycle.can_process_messages() {
 		log.debug('[vhttpd] websocket dispatch message ignored conn_id=${state.conn_id} request_id=${state.request_id} reason=closed')
 		return
 	}
@@ -782,20 +714,17 @@ fn worker_websocket_dispatch_message_cb(mut ws_client websocket.Client, msg &web
 		ws_client.close(1003, 'Only text and binary frames are supported')!
 		return
 	}
-	room_members, member_metadata, room_counts, presence_users :=
-		state.app.ws_hub_presence_snapshot(state.conn_id)
-	resp := state.app.kernel_dispatch_websocket_event(state.app.kernel_websocket_dispatch_frame('message',
-		state.method, state.path, state.query, state.headers, state.remote_addr, state.request_id,
-		state.trace_id, opcode, payload, 0, '', state.app.ws_hub_rooms_snapshot(state.conn_id),
-		state.app.ws_hub_meta_snapshot(state.conn_id), room_members, member_metadata, room_counts,
-		presence_users))!
+	presence := state.rt.presence(state.conn_id)
+	resp := state.rt.dispatch_event(state.rt.build_frame('message', state.method, state.path,
+		state.query, state.headers, state.remote_addr, state.request_id, state.trace_id, opcode,
+		payload, 0, '', state.rt.rooms(state.conn_id), state.rt.metadata(state.conn_id), presence))!
 	if resp.event == 'error' {
 		worker_websocket_dispatch_begin_local_close(mut state)
 		ws_client.close(1011, 'worker error')!
 		return
 	}
 	log.debug('[vhttpd] websocket message commands begin conn_id=${state.conn_id} request_id=${state.request_id} commands=${resp.commands.len}')
-	result := state.app.execute_websocket_dispatch_commands_result(resp.commands)
+	result := state.rt.command_result(resp.commands)
 	log.debug('[vhttpd] websocket message commands done conn_id=${state.conn_id} request_id=${state.request_id} has_close=${result.has_close} failures=${result.failures.len}')
 	if result.has_close {
 		close_frame := result.close_frame
@@ -805,9 +734,9 @@ fn worker_websocket_dispatch_message_cb(mut ws_client websocket.Client, msg &web
 		return
 	}
 	if result.failures.len > 0 {
-		if close_frame := state.app.websocket_dispatch_followup_failures(state.conn_id,
-			state.method, state.path, state.query, state.headers, state.remote_addr,
-			state.request_id, state.trace_id, result.failures)
+		if close_frame := state.rt.followup_failure(state.conn_id, state.method, state.path,
+			state.query, state.headers, state.remote_addr, state.request_id, state.trace_id,
+			result.failures)
 		{
 			code := if close_frame.code > 0 { close_frame.code } else { 1000 }
 			worker_websocket_dispatch_begin_local_close(mut state)
@@ -834,23 +763,20 @@ fn websocket_dispatch_payload_from_message(msg &websocket.Message) (string, stri
 fn worker_websocket_dispatch_close_cb(mut ws_client websocket.Client, code int, reason string, ref voidptr) ! {
 	mut state := unsafe { &WebSocketDispatchBridgeState(ref) }
 	_ = ws_client
-	should_process, worker_initiated := ws.dispatch_conn_begin_peer_close(state.lifecycle)
+	should_process, worker_initiated := state.lifecycle.begin_peer_close()
 	if !should_process {
 		return
 	}
-	state.app.ws_hub_mark_closing(state.conn_id)
-	room_members, member_metadata, room_counts, presence_users :=
-		state.app.ws_hub_presence_snapshot(state.conn_id)
-	resp := state.app.kernel_dispatch_websocket_event(state.app.kernel_websocket_dispatch_frame('close',
-		state.method, state.path, state.query, state.headers, state.remote_addr, state.request_id,
-		state.trace_id, '', '', code, reason, state.app.ws_hub_rooms_snapshot(state.conn_id),
-		state.app.ws_hub_meta_snapshot(state.conn_id), room_members, member_metadata, room_counts,
-		presence_users)) or {
+	state.rt.mark_closing(state.conn_id)
+	presence := state.rt.presence(state.conn_id)
+	resp := state.rt.dispatch_event(state.rt.build_frame('close', state.method, state.path,
+		state.query, state.headers, state.remote_addr, state.request_id, state.trace_id, '', '',
+		code, reason, state.rt.rooms(state.conn_id), state.rt.metadata(state.conn_id), presence)) or {
 		worker_websocket_dispatch_finalize(state)
 		return
 	}
 	if !worker_initiated && resp.event != 'error' {
-		state.app.execute_websocket_dispatch_commands(resp.commands)
+		state.rt.command_result(resp.commands)
 	}
 	worker_websocket_dispatch_finalize(state)
 }
@@ -881,7 +807,7 @@ fn proxy_worker_response(mut app App, mut ctx Context, method string, path strin
 		request_id:  req_id
 	}) or {
 		err_msg := err.msg()
-		status, error_class := classify_worker_error(err_msg)
+		status, error_class := WorkerBackendErrorClassifier.classify(err_msg)
 		log.error('[http] ⇠ dispatch error method=${method.to_upper()} path=${path} trace_id=${trace_id} request_id=${req_id} status=${status} duration_ms=${time.now().unix_milli() - start_ms} error=${err_msg}')
 		app.emit('http.request', {
 			'method':      method.to_upper()
@@ -917,8 +843,9 @@ fn proxy_worker_response(mut app App, mut ctx Context, method string, path strin
 	}
 	if outcome.kind == .upstream_plan {
 		log.info('[http] ⇠ dispatch upstream_plan method=${method.to_upper()} path=${path} trace_id=${trace_id} request_id=${req_id} duration_ms=${time.now().unix_milli() - start_ms}')
-		return execute_upstream_plan(mut app, mut ctx, outcome.upstream_plan, method, path, req_id,
-			trace_id, start_ms)
+		upstream_runtime := app.build_upstream_runtime_context()
+		return UpstreamRuntimeContext.execute_plan(upstream_runtime, mut ctx,
+			outcome.upstream_plan, method, path, req_id, trace_id, start_ms)
 	}
 	resp := outcome.response
 	log.info('[http] ⇠ dispatch response method=${method.to_upper()} path=${path} trace_id=${trace_id} request_id=${req_id} status=${resp.status} body_len=${resp.body.len} duration_ms=${time.now().unix_milli() - start_ms}')
@@ -1012,508 +939,6 @@ fn (mut app App) emit(kind string, fields map[string]string) {
 		f.close()
 	}
 	f.writeln(json.encode(row)) or {}
-}
-
-// Provider registry helpers on App. Registry is protected by app.mu.
-pub fn (mut app App) register_provider(name string, p Provider) {
-	app.mu.@lock()
-	defer {
-		app.mu.unlock()
-	}
-	if app.providers.registry.len == 0 {
-		app.providers.registry = map[string]Provider{}
-	}
-	if app.providers.specs.len == 0 {
-		app.providers.specs = map[string]ProviderSpec{}
-	}
-	app.providers.registry[name] = p
-	app.providers.specs[name] = ProviderSpec{
-		name:             name
-		enabled:          true
-		has_handler:      false
-		has_runtime:      true
-		command_matchers: []provider.CommandMatcher{}
-		route_kind:       .generic
-		provider:         p
-		handler:          NoopProviderCommandHandler{}
-		runtime:          ProviderRuntimeAdapter{
-			provider: p
-		}
-	}
-}
-
-pub fn (mut app App) register_provider_spec(spec ProviderSpec) {
-	app.mu.@lock()
-	defer {
-		app.mu.unlock()
-	}
-	if app.providers.specs.len == 0 {
-		app.providers.specs = map[string]ProviderSpec{}
-	}
-	app.providers.specs[spec.name] = spec
-}
-
-pub fn (mut app App) get_provider_spec(name string) ?ProviderSpec {
-	app.mu.@lock()
-	defer {
-		app.mu.unlock()
-	}
-	return app.providers.specs[name] or { return none }
-}
-
-pub fn (mut app App) get_provider(name string) ?Provider {
-	app.mu.@lock()
-	defer {
-		app.mu.unlock()
-	}
-	if spec := app.providers.specs[name] {
-		return spec.provider
-	}
-	return app.providers.registry[name] or { return none }
-}
-
-pub fn (mut app App) provider_enabled(name string) bool {
-	app.mu.@lock()
-	defer {
-		app.mu.unlock()
-	}
-	if spec := app.providers.specs[name] {
-		return spec.enabled
-	}
-	return app.provider_bootstrap_enabled(name)
-}
-
-pub fn (mut app App) get_provider_runtime(name string) ?ProviderRuntime {
-	app.mu.@lock()
-	defer {
-		app.mu.unlock()
-	}
-	if spec := app.providers.specs[name] {
-		return spec.runtime
-	}
-	return none
-}
-
-pub fn (mut app App) provider_runtime_snapshot(name string) ?string {
-	if name == 'db' {
-		return app.db_runtime_snapshot()
-	}
-	runtime := app.get_provider_runtime(name) or { return none }
-	return runtime.snapshot(mut app)
-}
-
-pub fn (mut app App) provider_runtime_feishu_snapshot() FeishuRuntimeSnapshot {
-	return app.feishu_runtime_snapshot()
-}
-
-pub fn (mut app App) provider_runtime_feishu_app_snapshot(instance string) ?FeishuRuntimeAppSnapshot {
-	return app.feishu_runtime_app_snapshot(instance)
-}
-
-pub fn (mut app App) provider_runtime_upstream_snapshot(name string, instance string) ?WebSocketUpstreamSnapshot {
-	return match name {
-		'feishu' {
-			snapshot := app.provider_runtime_feishu_app_snapshot(instance) or { return none }
-			WebSocketUpstreamSnapshot{
-				provider:                'feishu'
-				instance:                snapshot.name
-				enabled:                 snapshot.enabled
-				configured:              snapshot.configured
-				connected:               snapshot.connected
-				url:                     snapshot.ws_url
-				last_connect_at_unix:    snapshot.last_connect_at_unix
-				last_disconnect_at_unix: snapshot.last_disconnect_at_unix
-				last_error:              snapshot.last_error
-				connect_attempts:        snapshot.connect_attempts
-				connect_successes:       snapshot.connect_successes
-				received_frames:         snapshot.received_frames
-			}
-		}
-		'codex' {
-			mut resolved_instance := instance.trim_space()
-			if resolved_instance == '' {
-				resolved_instance = 'main'
-			}
-			state := app.codex_runtime_state_view(resolved_instance)
-			return WebSocketUpstreamSnapshot{
-				provider:                'codex'
-				instance:                resolved_instance
-				enabled:                 app.provider_runtime_upstream_enabled('codex',
-					resolved_instance)
-				configured:              app.provider_runtime_upstream_enabled('codex',
-					resolved_instance)
-				connected:               state.connected
-				url:                     state.ws_url
-				last_connect_at_unix:    state.last_connect_at
-				last_disconnect_at_unix: state.last_disconnect_at
-				last_error:              state.last_error
-				connect_attempts:        state.connect_attempts
-				connect_successes:       state.connect_successes
-				received_frames:         state.received_frames
-			}
-		}
-		else {
-			none
-		}
-	}
-}
-
-pub fn (mut app App) provider_runtime_upstream_snapshots(name string) []WebSocketUpstreamSnapshot {
-	mut snapshots := []WebSocketUpstreamSnapshot{}
-	for instance in app.provider_runtime_instances(name) {
-		if snapshot := app.provider_runtime_upstream_snapshot(name, instance) {
-			snapshots << snapshot
-		}
-	}
-	return snapshots
-}
-
-pub fn (mut app App) provider_runtime_upstream_events(name string, instance_filter string) []WebSocketUpstreamEventSnapshot {
-	return match name {
-		'feishu' {
-			mut events := []WebSocketUpstreamEventSnapshot{}
-			for app_snapshot in app.provider_runtime_feishu_snapshot().apps {
-				if instance_filter != '' && app_snapshot.name != instance_filter {
-					continue
-				}
-				for event in app_snapshot.recent_events {
-					events << WebSocketUpstreamEventSnapshot{
-						provider:    'feishu'
-						instance:    app_snapshot.name
-						event_type:  event.event_type
-						message_id:  event.message_id
-						target:      event.chat_id
-						target_type: 'chat_id'
-						trace_id:    event.trace_id
-						received_at: event.received_at
-						payload:     event.payload
-						metadata:    {
-							'action':            event.action
-							'event_id':          event.event_id
-							'event_kind':        event.event_kind
-							'chat_type':         event.chat_type
-							'message_type':      event.message_type
-							'open_message_id':   event.open_message_id
-							'root_id':           event.root_id
-							'parent_id':         event.parent_id
-							'create_time':       event.create_time
-							'sender_id':         event.sender_id
-							'sender_id_type':    event.sender_id_type
-							'sender_tenant_key': event.sender_tenant_key
-							'action_tag':        event.action_tag
-							'action_value':      event.action_value
-							'token':             event.token
-						}
-					}
-				}
-			}
-			events
-		}
-		'codex' {
-			[]WebSocketUpstreamEventSnapshot{}
-		}
-		else {
-			[]WebSocketUpstreamEventSnapshot{}
-		}
-	}
-}
-
-pub struct ProviderRuntimeMetrics {
-pub:
-	connect_attempts  i64
-	connect_successes i64
-	received_frames   i64
-	acked_events      i64
-	messages_sent     i64
-	send_errors       i64
-}
-
-pub struct ProviderRuntimeUpstreamLaunch {
-pub:
-	provider string
-	instance string
-	label    string
-	url      string
-}
-
-pub fn (mut app App) provider_runtime_metrics(name string) ProviderRuntimeMetrics {
-	return match name {
-		'feishu' {
-			connect_attempts, connect_successes, received_frames, acked_events, messages_sent, send_errors :=
-				app.feishu_runtime_totals()
-			ProviderRuntimeMetrics{
-				connect_attempts:  connect_attempts
-				connect_successes: connect_successes
-				received_frames:   received_frames
-				acked_events:      acked_events
-				messages_sent:     messages_sent
-				send_errors:       send_errors
-			}
-		}
-		'codex' {
-			mut connect_attempts := i64(0)
-			mut connect_successes := i64(0)
-			mut received_frames := i64(0)
-			mut instances := app.provider_runtime_instances('codex')
-			if instances.len == 0 {
-				instances = ['main']
-			}
-			for instance in instances {
-				state := app.codex_runtime_state_view(instance)
-				connect_attempts += state.connect_attempts
-				connect_successes += state.connect_successes
-				received_frames += state.received_frames
-			}
-			ProviderRuntimeMetrics{
-				connect_attempts:  connect_attempts
-				connect_successes: connect_successes
-				received_frames:   received_frames
-			}
-		}
-		else {
-			ProviderRuntimeMetrics{}
-		}
-	}
-}
-
-pub fn (mut app App) provider_runtime_capabilities() map[string]bool {
-	feishu_ready := app.provider_runtime_ready('feishu')
-	return {
-		'feishu_runtime': feishu_ready
-		'feishu_gateway': feishu_ready
-	}
-}
-
-pub fn (mut app App) provider_runtime_gateway_count() int {
-	mut total := 0
-	for provider in ['feishu', 'codex'] {
-		for instance in app.provider_runtime_instances(provider) {
-			if app.provider_runtime_upstream_enabled(provider, instance) {
-				total++
-			}
-		}
-	}
-	return total
-}
-
-pub fn (mut app App) provider_runtime_upstream_launches() []ProviderRuntimeUpstreamLaunch {
-	mut launches := []ProviderRuntimeUpstreamLaunch{}
-	feishu_instances := app.provider_runtime_instances('feishu')
-	if app.provider_bootstrap_enabled('feishu') && feishu_instances.len > 0 {
-		launches << ProviderRuntimeUpstreamLaunch{
-			provider: 'feishu'
-			instance: ''
-			label:    feishu_instances.join(', ')
-		}
-		for instance in feishu_instances {
-			launches << ProviderRuntimeUpstreamLaunch{
-				provider: 'feishu'
-				instance: instance
-				label:    instance
-			}
-		}
-	}
-	codex_instances := app.provider_runtime_instances('codex')
-	for instance in codex_instances {
-		launches << ProviderRuntimeUpstreamLaunch{
-			provider: 'codex'
-			instance: instance
-			label:    instance
-			url:      app.provider_runtime_pull_url('codex', instance) or { '' }
-		}
-	}
-	return launches
-}
-
-pub fn (mut app App) provider_runtime_upstream_enabled(name string, instance string) bool {
-	return match name {
-		'feishu' {
-			app.provider_runtime_ready('feishu')
-				&& instance in app.provider_runtime_instances('feishu')
-		}
-		'codex' {
-			instance in app.provider_runtime_instances('codex')
-		}
-		'ollama' {
-			app.provider_runtime_ready('ollama')
-				&& instance in app.provider_runtime_instances('ollama')
-		}
-		else {
-			false
-		}
-	}
-}
-
-pub fn (mut app App) provider_runtime_upstream_provider_names() []string {
-	mut names := []string{}
-	for name in ['feishu', 'codex'] {
-		mut has_enabled_instance := false
-		for instance in app.provider_runtime_instances(name) {
-			if app.provider_runtime_upstream_enabled(name, instance) {
-				has_enabled_instance = true
-				break
-			}
-		}
-		if has_enabled_instance {
-			names << name
-		}
-	}
-	return names
-}
-
-pub fn (app &App) provider_bootstrap_enabled(name string) bool {
-	return match name {
-		'feishu' { app.feishu_runtime_enabled() }
-		'codex' { app.codex.runtime.enabled || app.provider_instance_list('codex').len > 0 }
-		'ollama' { app.codex.ollama_enabled }
-		'db' { app.codex.db_runtime.enabled && db_runtime_compiled() }
-		else { false }
-	}
-}
-
-pub fn (mut app App) provider_runtime_ready(name string) bool {
-	return match name {
-		'feishu' { app.feishu_runtime_ready() }
-		'codex' { app.provider_enabled('codex') }
-		'ollama' { app.provider_enabled('ollama') }
-		'db' { app.provider_enabled('db') }
-		else { false }
-	}
-}
-
-pub fn (mut app App) provider_runtime_default_instance(name string) string {
-	return match name {
-		'feishu' { app.feishu_runtime_default_app_name() }
-		'codex' { 'main' }
-		'ollama' { 'main' }
-		'db' { 'main' }
-		else { '' }
-	}
-}
-
-pub fn (mut app App) provider_runtime_instances(name string) []string {
-	return match name {
-		'feishu' {
-			app.feishu_runtime_app_names()
-		}
-		'codex' {
-			mut out := []string{}
-			if app.provider_enabled('codex') {
-				out << 'main'
-			}
-			for spec in app.provider_instance_list('codex') {
-				if spec.instance !in out {
-					out << spec.instance
-				}
-			}
-			out.sort()
-			out
-		}
-		'ollama' {
-			if app.provider_runtime_ready('ollama') {
-				['main']
-			} else {
-				[]string{}
-			}
-		}
-		'db' {
-			if app.provider_runtime_ready('db') {
-				['main']
-			} else {
-				[]string{}
-			}
-		}
-		else {
-			[]string{}
-		}
-	}
-}
-
-pub fn (mut app App) provider_runtime_pull_url(name string, instance string) !string {
-	return match name {
-		'feishu' { app.feishu_provider_pull_ws_endpoint(instance) }
-		'codex' { app.codex_provider_pull_url(instance) }
-		else { error('unknown provider ${name}') }
-	}
-}
-
-pub fn (mut app App) provider_runtime_reconnect_delay_ms(name string, instance string) int {
-	return match name {
-		'feishu' {
-			if app.feishu.reconnect_delay_ms > 0 {
-				app.feishu.reconnect_delay_ms
-			} else {
-				3000
-			}
-		}
-		'codex' {
-			app.codex_provider_reconnect_delay_ms(instance)
-		}
-		else {
-			3000
-		}
-	}
-}
-
-pub fn (mut app App) provider_runtime_on_connecting(name string, instance string) {
-	match name {
-		'feishu' {
-			app.feishu_runtime_note_connecting(instance)
-		}
-		'codex' {
-			app.codex_provider_on_connecting(instance)
-		}
-		else {}
-	}
-}
-
-pub fn (mut app App) provider_runtime_on_connected(name string, instance string, ws_url string) {
-	match name {
-		'feishu' {
-			app.feishu_runtime_note_connected(instance, ws_url)
-		}
-		'codex' {
-			app.codex_provider_on_connected(instance, ws_url)
-		}
-		else {}
-	}
-}
-
-pub fn (mut app App) provider_runtime_on_disconnected(name string, instance string, reason string) {
-	match name {
-		'feishu' {
-			app.feishu_runtime_note_disconnected(instance, reason)
-		}
-		'codex' {
-			app.codex_provider_on_disconnected(instance, reason)
-		}
-		else {}
-	}
-}
-
-pub fn (mut app App) provider_names() []string {
-	app.mu.@lock()
-	defer {
-		app.mu.unlock()
-	}
-	mut keys := app.providers.specs.keys()
-	keys.sort()
-	return keys
-}
-
-// Helpers to run provider lifecycle across registered providers.
-pub fn (mut app App) stop_all_providers() {
-	mut runtimes := []ProviderRuntime{}
-	app.mu.@lock()
-	for _, spec in app.providers.specs {
-		runtimes << spec.runtime
-	}
-	app.mu.unlock()
-	for runtime in runtimes {
-		runtime.stop(mut app) or { app.emit('provider.stop_failed', {
-			'error': err.msg()
-		}) }
-	}
 }
 
 @[get]
@@ -1744,4 +1169,3 @@ pub fn (mut app App) proxy_head(mut ctx Context, path string) veb.Result {
 	}
 	return proxy_worker_response(mut app, mut ctx, 'HEAD', target, '')
 }
-

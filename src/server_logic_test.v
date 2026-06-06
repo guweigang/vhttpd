@@ -1,84 +1,74 @@
 module main
+
 import executor
 import transport
-
 import config
-
-
 import json
 import os
+import provider
+import worker
+import server_lifecycle
 
-struct TestShutdownExecutorLifecycle {}
-
-fn (l TestShutdownExecutorLifecycle) name() string {
-	_ = l
-	return 'test_shutdown_lifecycle'
-}
-
-fn (l TestShutdownExecutorLifecycle) prepare_bootstrap(args []string, cfg config.VhttpdConfig, mut state ExecutorBootstrapState) ! {
-	_ = l
-	_ = args
-	_ = cfg
-	_ = state
-}
-
-fn (l TestShutdownExecutorLifecycle) start(mut app App) {
-	_ = l
-	_ = app
-}
-
-fn (l TestShutdownExecutorLifecycle) stop(mut app App) {
-	_ = l
-	app.emit('test.executor.stopped', {
-		'source': 'lifecycle'
-	})
+fn new_shutdown_test_lifecycle() executor.LogicExecutorLifecycle {
+	return executor.LogicExecutorLifecycle{
+		name_fn: fn () string {
+			return 'test_shutdown_lifecycle'
+		}
+		prepare_bootstrap_fn: fn (args []string, cfg config.VhttpdConfig, mut state executor.ExecutorBootstrapState) ! {
+			_ = args
+			_ = cfg
+			_ = state
+		}
+		start_fn: fn (mut ctx executor.LifecycleRuntimeContext) {
+			_ = ctx
+		}
+		stop_fn: fn (mut ctx executor.LifecycleRuntimeContext) {
+			ctx.emit('test.executor.stopped', {
+				'source': 'lifecycle'
+			})
+		}
+	}
 }
 
 struct TestShutdownProviderRuntime {}
 
 struct TestShutdownProvider {}
 
-fn (p TestShutdownProvider) init(mut app App) ! {
-	_ = p
-	_ = app
+fn (mut p TestShutdownProvider) init(mut ctx provider.RuntimeContext) ! {
+	_ = ctx
 	return
 }
 
-fn (p TestShutdownProvider) start(mut app App) ! {
-	_ = p
-	_ = app
+fn (mut p TestShutdownProvider) start(mut ctx provider.RuntimeContext) ! {
+	_ = ctx
 	return
 }
 
-fn (p TestShutdownProvider) stop(mut app App) ! {
-	_ = p
-	_ = app
+fn (mut p TestShutdownProvider) stop(mut ctx provider.RuntimeContext) ! {
+	_ = ctx
 	return
 }
 
-fn (p TestShutdownProvider) snapshot(mut app App) string {
-	_ = p
-	_ = app
+fn (mut p TestShutdownProvider) snapshot(mut ctx provider.RuntimeContext) string {
+	_ = ctx
 	return '{}'
 }
 
-fn (r TestShutdownProviderRuntime) start(mut app App) ! {
-	_ = r
-	_ = app
+fn (mut r TestShutdownProviderRuntime) start(mut ctx provider.RuntimeContext) ! {
+	_ = ctx
 	return
 }
 
-fn (r TestShutdownProviderRuntime) stop(mut app App) ! {
+fn (mut r TestShutdownProviderRuntime) stop(mut ctx provider.RuntimeContext) ! {
 	_ = r
-	app.emit('test.provider.stopped', {
+	ctx.emit('test.provider.stopped', {
 		'source': 'provider'
 	})
 	return
 }
 
-fn (r TestShutdownProviderRuntime) snapshot(mut app App) string {
-	_ = r
-	_ = app
+fn (mut r TestShutdownProviderRuntime) snapshot(mut ctx provider.RuntimeContext) string {
+	_ = ctx
 	return '{}'
 }
 
@@ -116,7 +106,7 @@ fn (e TestShutdownLogicExecutor) admin_details() executor.LogicExecutorAdminDeta
 	}
 }
 
-fn (e TestShutdownLogicExecutor) warmup(mut app App) ! {
+fn (e TestShutdownLogicExecutor) warmup(mut app executor.AppFacade) ! {
 	_ = e
 	_ = app
 }
@@ -129,42 +119,42 @@ fn (e TestShutdownLogicExecutor) close() {
 	state.close_called = true
 }
 
-fn (e TestShutdownLogicExecutor) dispatch_http(mut app App, req executor.HttpLogicDispatchRequest) !executor.HttpLogicDispatchOutcome {
+fn (e TestShutdownLogicExecutor) dispatch_http(mut app executor.AppFacade, req executor.HttpLogicDispatchRequest) !executor.HttpLogicDispatchOutcome {
 	_ = e
 	_ = app
 	_ = req
 	return error('not_used')
 }
 
-fn (e TestShutdownLogicExecutor) open_websocket_session(mut app App, req executor.WebSocketSessionOpenRequest) !executor.WebSocketSessionOpenOutcome {
+fn (e TestShutdownLogicExecutor) open_websocket_session(mut app executor.AppFacade, req executor.WebSocketSessionOpenRequest) !executor.WebSocketSessionOpenOutcome {
 	_ = e
 	_ = app
 	_ = req
 	return error('not_used')
 }
 
-fn (e TestShutdownLogicExecutor) dispatch_stream(mut app App, req transport.StreamDispatchRequest) !transport.StreamDispatchResponse {
+fn (e TestShutdownLogicExecutor) dispatch_stream(mut app executor.AppFacade, req transport.StreamDispatchRequest) !transport.StreamDispatchResponse {
 	_ = e
 	_ = app
 	_ = req
 	return error('not_used')
 }
 
-fn (e TestShutdownLogicExecutor) dispatch_mcp(mut app App, req transport.WorkerMcpDispatchRequest) !transport.WorkerMcpDispatchResponse {
+fn (e TestShutdownLogicExecutor) dispatch_mcp(mut app executor.AppFacade, req transport.WorkerMcpDispatchRequest) !transport.WorkerMcpDispatchResponse {
 	_ = e
 	_ = app
 	_ = req
 	return error('not_used')
 }
 
-fn (e TestShutdownLogicExecutor) dispatch_websocket_upstream(mut app App, req transport.WorkerWebSocketUpstreamDispatchRequest) !transport.WorkerWebSocketUpstreamDispatchResponse {
+fn (e TestShutdownLogicExecutor) dispatch_websocket_upstream(mut app executor.AppFacade, req transport.WorkerWebSocketUpstreamDispatchRequest) !transport.WorkerWebSocketUpstreamDispatchResponse {
 	_ = e
 	_ = app
 	_ = req
 	return error('not_used')
 }
 
-fn (e TestShutdownLogicExecutor) dispatch_websocket_event(mut app App, frame transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse {
+fn (e TestShutdownLogicExecutor) dispatch_websocket_event(mut app executor.AppFacade, frame transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse {
 	_ = e
 	_ = app
 	_ = frame
@@ -317,7 +307,7 @@ fn test_resolve_provider_runtime_settings_supports_pgsql_db_config() {
 	cfg.db.pgsql.password = 'secret'
 	cfg.db.pgsql.database = 'appdb'
 	cfg.db.pgsql.pool_size = 9
-	settings := resolve_provider_runtime_settings([]string{}, cfg)
+	settings := ProviderRuntimeSettings.resolve([]string{}, cfg)
 	assert settings.db.enabled
 	assert settings.db.driver == 'pgsql'
 	assert settings.db.socket == '/tmp/vhttpd-db-pg.sock'
@@ -361,7 +351,7 @@ fn test_resolve_provider_runtime_settings_supports_bridge_config() {
 	cfg.feishu.bridge.client_id = 'local-main'
 	cfg.feishu.bridge.token = 'bridge-secret'
 	cfg.feishu.bridge.target_id = 'remote-main'
-	settings := resolve_provider_runtime_settings([]string{}, cfg)
+	settings := ProviderRuntimeSettings.resolve([]string{}, cfg)
 	assert settings.bridge.enabled
 	assert settings.bridge.ws_url == 'wss://bridge.example/ws'
 	assert settings.bridge.client_id == 'local-main'
@@ -447,7 +437,7 @@ vjsx.thread_count = 2
 	assert cfg.assets.root == os.join_path(temp_dir, 'public')
 	assert cfg.codex.enabled
 	assert cfg.codex.model == 'gpt-5.4'
-	multi_cfg := resolve_multi_server_runtime_config([]string{}, cfg) or { panic(err) }
+	multi_cfg := server_lifecycle.resolve_multi_server_runtime_config([]string{}, cfg) or { panic(err) }
 	assert multi_cfg.listeners.len == 2
 	assert multi_cfg.listeners[0].site_cfg.paths.root == project_a_dir
 	assert multi_cfg.listeners[0].site_cfg.php.worker_entry == php_worker
@@ -515,7 +505,7 @@ vjsx.runtime_profile = "node"
 	assert cfg.listeners.len == 0
 	assert cfg.sites['demo'].host == '127.0.0.1'
 	assert cfg.sites['demo'].port == 19883
-	multi_cfg := resolve_multi_server_runtime_config([]string{}, cfg) or { panic(err) }
+	multi_cfg := server_lifecycle.resolve_multi_server_runtime_config([]string{}, cfg) or { panic(err) }
 	assert multi_cfg.listeners.len == 1
 	assert multi_cfg.listeners[0].id == 'demo'
 	assert multi_cfg.listeners[0].site_id == 'demo'
@@ -558,7 +548,7 @@ app = "\${paths.site_app}"
 	}
 	cfg := config.load_vhttpd_config(['--config', config_file]) or { panic(err) }
 	assert cfg.sites['demo'].project_root == '\${paths.site_root}'
-	multi_cfg := resolve_multi_server_runtime_config([]string{}, cfg) or { panic(err) }
+	multi_cfg := server_lifecycle.resolve_multi_server_runtime_config([]string{}, cfg) or { panic(err) }
 	assert multi_cfg.listeners.len == 1
 	assert multi_cfg.listeners[0].site_cfg.paths.root == project_dir
 	assert multi_cfg.listeners[0].site_cfg.vjsx.app_entry == app_file
@@ -598,7 +588,7 @@ vjsx.build_root = "\${paths.vjsx_build_root}"
 		os.rmdir_all(temp_dir) or {}
 	}
 	cfg := config.load_vhttpd_config(['--config', config_file]) or { panic(err) }
-	multi_cfg := resolve_multi_server_runtime_config([]string{}, cfg) or { panic(err) }
+	multi_cfg := server_lifecycle.resolve_multi_server_runtime_config([]string{}, cfg) or { panic(err) }
 	assert multi_cfg.listeners.len == 1
 	assert multi_cfg.listeners[0].site_cfg.paths.root == project_dir
 	assert multi_cfg.listeners[0].site_cfg.vjsx.app_entry == app_file
@@ -640,7 +630,7 @@ vjsx.build_root = "\${paths.vjsx_build_root}"
 		os.rmdir_all(temp_dir) or {}
 	}
 	cfg := config.load_vhttpd_config(['--config', config_file]) or { panic(err) }
-	multi_cfg := resolve_multi_server_runtime_config([]string{}, cfg) or { panic(err) }
+	multi_cfg := server_lifecycle.resolve_multi_server_runtime_config([]string{}, cfg) or { panic(err) }
 	assert multi_cfg.listeners.len == 1
 	assert multi_cfg.listeners[0].site_cfg.paths.root == project_dir
 	assert multi_cfg.listeners[0].site_cfg.vjsx.app_entry == app_file
@@ -649,7 +639,7 @@ vjsx.build_root = "\${paths.vjsx_build_root}"
 }
 
 fn test_site_config_as_vhttpd_config_defaults_vjsx_module_root_to_site_root() {
-	cfg := config.site_config_as_vhttpd_config(config.default_vhttpd_config(), config.SiteConfig{
+	cfg := config.default_vhttpd_config().with_site(config.SiteConfig{
 		project_root: '/tmp/site-root'
 		executor:     config.ExecutorConfig{
 			kind: 'vjsx'
@@ -663,7 +653,7 @@ fn test_site_config_as_vhttpd_config_defaults_vjsx_module_root_to_site_root() {
 }
 
 fn test_site_config_as_vhttpd_config_routes_app_alias_to_vjsx() {
-	cfg := config.site_config_as_vhttpd_config(config.default_vhttpd_config(), config.SiteConfig{
+	cfg := config.default_vhttpd_config().with_site(config.SiteConfig{
 		project_root: '/tmp/site-root'
 		executor:     config.ExecutorConfig{
 			kind: 'vjsx'
@@ -675,7 +665,7 @@ fn test_site_config_as_vhttpd_config_routes_app_alias_to_vjsx() {
 }
 
 fn test_site_config_as_vhttpd_config_routes_app_alias_to_php() {
-	cfg := config.site_config_as_vhttpd_config(config.default_vhttpd_config(), config.SiteConfig{
+	cfg := config.default_vhttpd_config().with_site(config.SiteConfig{
 		project_root: '/tmp/site-root'
 		executor:     config.ExecutorConfig{
 			kind: 'php'
@@ -687,7 +677,7 @@ fn test_site_config_as_vhttpd_config_routes_app_alias_to_php() {
 }
 
 fn test_site_config_as_vhttpd_config_routes_worker_entry_alias_to_php() {
-	cfg := config.site_config_as_vhttpd_config(config.default_vhttpd_config(), config.SiteConfig{
+	cfg := config.default_vhttpd_config().with_site(config.SiteConfig{
 		project_root: '/tmp/site-root'
 		executor:     config.ExecutorConfig{
 			kind: 'php'
@@ -698,13 +688,13 @@ fn test_site_config_as_vhttpd_config_routes_worker_entry_alias_to_php() {
 }
 
 fn test_site_config_as_vhttpd_config_infers_executor_from_app_alias() {
-	php_cfg := config.site_config_as_vhttpd_config(config.default_vhttpd_config(), config.SiteConfig{
+	php_cfg := config.default_vhttpd_config().with_site(config.SiteConfig{
 		project_root: '/tmp/site-root'
 		app:          './app.php'
 	})
 	assert php_cfg.executor.kind == 'php'
 	assert php_cfg.php.app_entry == './app.php'
-	vjsx_cfg := config.site_config_as_vhttpd_config(config.default_vhttpd_config(), config.SiteConfig{
+	vjsx_cfg := config.default_vhttpd_config().with_site(config.SiteConfig{
 		project_root: '/tmp/site-root'
 		app:          './app.mts'
 	})
@@ -752,7 +742,7 @@ app = "examples/hello-app.php"
 	assert cfg.sites['demo'].worker.pool_size == 2
 	assert cfg.sites['demo'].worker.socket_prefix == 'tmp/demo-worker'
 	assert cfg.sites['demo'].php.bin == 'php'
-	multi_cfg := resolve_multi_server_runtime_config([]string{}, cfg) or { panic(err) }
+	multi_cfg := server_lifecycle.resolve_multi_server_runtime_config([]string{}, cfg) or { panic(err) }
 	assert multi_cfg.listeners.len == 1
 	assert multi_cfg.listeners[0].site_cfg.worker.socket_prefix == os.join_path(config_dir, 'tmp',
 		'demo-worker')
@@ -938,7 +928,9 @@ root = "\${paths.assets_root}"
 }
 
 fn test_resolve_executor_runtime_defaults_to_disabled_executor() {
-	selection := resolve_executor_runtime([]string{}, config.default_vhttpd_config()) or { panic(err) }
+	selection := executor.ExecutorRuntimeSelection.resolve([]string{}, config.default_vhttpd_config(), build_executor_factory()) or {
+		panic(err)
+	}
 	assert selection.lifecycle.name() == 'disabled'
 	assert selection.executor.model() == .worker
 	assert selection.executor.kind() == 'none'
@@ -953,7 +945,7 @@ fn test_build_php_worker_command_from_php_section() {
 		extensions:   ['/tmp/a.so', '/tmp/b.so']
 		args:         ['-d', 'memory_limit=512M']
 	}
-	cmd := build_php_worker_command(php_cfg) or { panic(err) }
+	cmd := executor.php_worker_runtime_build_command(php_cfg) or { panic(err) }
 	assert cmd == "'php' '-d' 'extension=/tmp/a.so' '-d' 'extension=/tmp/b.so' '-d' 'memory_limit=512M' '/tmp/php-worker'"
 }
 
@@ -961,7 +953,7 @@ fn test_build_php_worker_command_requires_worker_entry() {
 	php_cfg := config.PhpConfig{
 		bin: 'php'
 	}
-	build_php_worker_command(php_cfg) or {
+	executor.php_worker_runtime_build_command(php_cfg) or {
 		assert err.msg() == 'php_worker_entry_missing'
 		return
 	}
@@ -976,7 +968,7 @@ fn test_build_php_worker_env_prefers_php_app_entry() {
 	php_cfg := config.PhpConfig{
 		app_entry: '/tmp/from-php.php'
 	}
-	env := build_php_worker_env(worker_env, php_cfg)
+	env := executor.php_worker_runtime_build_env(worker_env, php_cfg)
 	assert env['APP_ENV'] == 'dev'
 	assert env['VHTTPD_APP'] == '/tmp/from-php.php'
 }
@@ -1003,7 +995,7 @@ fn test_builtin_logic_executor_spec_resolves_php_runtime_config_overrides_from_c
 	cfg.php.worker_entry = worker_entry
 	cfg.php.app_entry = app_entry
 	cfg.php.extensions = [ext_a]
-	php_spec := builtin_logic_executor_spec('php') or { panic(err) }
+	php_spec := executor.builtin_executor_spec_find('php') or { panic(err) }
 	php_cfg := php_spec.resolve_php_runtime_config(['--php-bin', 'php82', '--php-worker-entry',
 		worker_entry, '--php-app-entry', app_entry, '--php-extension', ext_a, '--php-extension',
 		ext_b, '--php-arg', '-d', '--php-arg', 'memory_limit=512M'], cfg) or { panic(err) }
@@ -1019,7 +1011,7 @@ fn test_builtin_logic_executor_spec_resolves_php_runtime_config_overrides_from_c
 }
 
 fn test_arg_string_list_or_supports_repeated_and_csv_values() {
-	values := config.arg_string_list_or(['--php-extension', '/tmp/a.so',
+	values := config.CliArgs.string_list_or(['--php-extension', '/tmp/a.so',
 		'--php-extension=/tmp/b.so,/tmp/c.so'], '--php-extension', [])
 	assert values.len == 3
 	assert values[0] == '/tmp/a.so'
@@ -1031,7 +1023,7 @@ fn test_builtin_logic_executor_spec_resolve_php_runtime_config_reports_missing_p
 	mut cfg := config.default_vhttpd_config()
 	cfg.php.bin = 'php'
 	cfg.php.worker_entry = '/tmp/definitely-missing-worker'
-	php_spec := builtin_logic_executor_spec('php') or { panic(err) }
+	php_spec := executor.builtin_executor_spec_find('php') or { panic(err) }
 	php_spec.resolve_php_runtime_config([]string{}, cfg) or {
 		assert err.msg() == 'php_worker_entry_not_found:/tmp/definitely-missing-worker'
 		return
@@ -1049,10 +1041,9 @@ fn test_resolve_executor_runtime_builds_vjsx_executor() {
 	defer {
 		os.rm(app_file) or {}
 	}
-	selection := resolve_executor_runtime(['--executor', 'vjsx', '--vjsx-entry', app_file,
-		'--vjsx-thread-count', '2', '--vjsx-runtime-profile', 'script'], config.default_vhttpd_config()) or {
-		panic(err)
-	}
+	selection := executor.ExecutorRuntimeSelection.resolve(['--executor', 'vjsx', '--vjsx-entry', app_file,
+		'--vjsx-thread-count', '2', '--vjsx-runtime-profile', 'script'],
+		config.default_vhttpd_config(), build_executor_factory()) or { panic(err) }
 	assert selection.lifecycle.name() == 'embedded_host'
 	assert selection.executor.model() == .embedded
 	assert selection.executor.kind() == 'vjsx'
@@ -1061,16 +1052,16 @@ fn test_resolve_executor_runtime_builds_vjsx_executor() {
 }
 
 fn test_normalize_executor_kind_accepts_aliases() {
-	assert (builtin_logic_executor_spec('none') or { panic(err) }).kind == 'none'
-	assert (builtin_logic_executor_spec('disabled') or { panic(err) }).kind == 'none'
-	assert (builtin_logic_executor_spec('noop') or { panic(err) }).kind == 'none'
-	assert (builtin_logic_executor_spec('php-worker') or { panic(err) }).kind == 'php'
-	assert (builtin_logic_executor_spec('php_worker') or { panic(err) }).kind == 'php'
-	assert (builtin_logic_executor_spec('vjsx') or { panic(err) }).kind == 'vjsx'
+	assert (executor.builtin_executor_spec_find('none') or { panic(err) }).kind == 'none'
+	assert (executor.builtin_executor_spec_find('disabled') or { panic(err) }).kind == 'none'
+	assert (executor.builtin_executor_spec_find('noop') or { panic(err) }).kind == 'none'
+	assert (executor.builtin_executor_spec_find('php-worker') or { panic(err) }).kind == 'php'
+	assert (executor.builtin_executor_spec_find('php_worker') or { panic(err) }).kind == 'php'
+	assert (executor.builtin_executor_spec_find('vjsx') or { panic(err) }).kind == 'vjsx'
 }
 
 fn test_builtin_logic_executor_spec_exposes_runtime_models() {
-	none_spec := builtin_logic_executor_spec('none') or { panic(err) }
+	none_spec := executor.builtin_executor_spec_find('none') or { panic(err) }
 	assert none_spec.matches_kind('none')
 	assert none_spec.matches_kind('disabled')
 	assert none_spec.provider == 'none'
@@ -1078,7 +1069,7 @@ fn test_builtin_logic_executor_spec_exposes_runtime_models() {
 	assert none_spec.worker_backend_mode == .disabled
 	assert none_spec.lifecycle.name() == 'disabled'
 	assert none_spec.config_surface.section == 'none'
-	php_spec := builtin_logic_executor_spec('php') or { panic(err) }
+	php_spec := executor.builtin_executor_spec_find('php') or { panic(err) }
 	assert php_spec.matches_kind('php-worker')
 	assert php_spec.provider == 'php-worker'
 	assert php_spec.logic_model == .worker
@@ -1087,7 +1078,7 @@ fn test_builtin_logic_executor_spec_exposes_runtime_models() {
 	assert php_spec.config_surface.section == 'php'
 	assert php_spec.config_surface.app_entry_flag == '--php-app-entry'
 	assert php_spec.config_surface.worker_entry_flag == '--php-worker-entry'
-	vjsx_spec := builtin_logic_executor_spec('vjsx') or { panic(err) }
+	vjsx_spec := executor.builtin_executor_spec_find('vjsx') or { panic(err) }
 	assert vjsx_spec.matches_kind('vjsx')
 	assert vjsx_spec.provider == 'vjsx'
 	assert vjsx_spec.logic_model == .embedded
@@ -1143,7 +1134,7 @@ fn test_internal_admin_executors_returns_builtin_executor_specs() {
 		path:   '/admin/executors'
 	})
 	assert resp.status == 200
-	snapshot := json.decode([]AdminLogicExecutorSpecSnapshot, resp.body) or { panic(err) }
+	snapshot := json.decode([]executor.AdminLogicExecutorSpecSnapshot, resp.body) or { panic(err) }
 	assert snapshot.len == 3
 	assert snapshot[0].kind == 'none'
 	assert snapshot[0].logic_provider == 'none'
@@ -1173,20 +1164,20 @@ fn test_php_worker_executor_lifecycle_prepares_worker_command_and_env() {
 	mut cfg := config.default_vhttpd_config()
 	cfg.php.worker_entry = worker_entry
 	cfg.php.app_entry = app_entry
-	mut state := ExecutorBootstrapState{
+	mut state := executor.ExecutorBootstrapState{
 		worker_autostart: true
 		worker_env:       {
 			'APP_ENV': 'test'
 		}
 	}
-	PhpWorkerExecutorLifecycle{}.prepare_bootstrap([]string{}, cfg, mut state) or { panic(err) }
+	executor.php_worker_executor_lifecycle().prepare_bootstrap([]string{}, cfg, mut state) or { panic(err) }
 	assert state.worker_env['APP_ENV'] == 'test'
 	assert state.worker_env['VHTTPD_APP'] == app_entry
 	assert state.worker_cmd.contains(worker_entry)
 }
 
 fn test_embedded_executor_lifecycle_disables_worker_backend_features() {
-	mut state := ExecutorBootstrapState{
+	mut state := executor.ExecutorBootstrapState{
 		worker_sockets:          ['/tmp/a.sock']
 		stream_dispatch:         true
 		websocket_dispatch_mode: true
@@ -1196,9 +1187,8 @@ fn test_embedded_executor_lifecycle_disables_worker_backend_features() {
 			'VHTTPD_APP': '/tmp/app.php'
 		}
 	}
-	EmbeddedExecutorLifecycle{}.prepare_bootstrap([]string{}, config.default_vhttpd_config(), mut state) or {
-		panic(err)
-	}
+	executor.embedded_executor_lifecycle().prepare_bootstrap([]string{}, config.default_vhttpd_config(), mut
+		state) or { panic(err) }
 	assert state.worker_sockets.len == 0
 	assert !state.stream_dispatch
 	assert state.websocket_dispatch_mode
@@ -1221,7 +1211,7 @@ fn test_resolve_logic_executor_runtime_plan_defaults_to_php_worker_host() {
 	mut cfg := config.default_vhttpd_config()
 	cfg.php.worker_entry = worker_entry
 	cfg.php.app_entry = app_entry
-	plan := resolve_logic_executor_runtime_plan([]string{}, cfg, [
+	plan := executor.LogicExecutorRuntimePlan.resolve([]string{}, cfg, [
 		'/tmp/a.sock',
 	], true, true, true, '', {
 		'APP_ENV': 'dev'
@@ -1239,7 +1229,7 @@ fn test_resolve_logic_executor_runtime_plan_defaults_to_php_worker_host() {
 }
 
 fn test_resolve_logic_executor_runtime_plan_defaults_to_disabled_executor() {
-	plan := resolve_logic_executor_runtime_plan([]string{}, config.default_vhttpd_config(), [
+	plan := executor.LogicExecutorRuntimePlan.resolve([]string{}, config.default_vhttpd_config(), [
 		'/tmp/a.sock',
 	], true, true, true, 'php worker.php', {
 		'APP_ENV': 'dev'
@@ -1266,7 +1256,7 @@ fn test_resolve_logic_executor_runtime_plan_for_vjsx_disables_worker_bootstrap()
 	defer {
 		os.rm(app_file) or {}
 	}
-	plan := resolve_logic_executor_runtime_plan(['--executor', 'vjsx', '--vjsx-entry', app_file],
+	plan := executor.LogicExecutorRuntimePlan.resolve(['--executor', 'vjsx', '--vjsx-entry', app_file],
 		config.default_vhttpd_config(), ['/tmp/a.sock'], true, true, true, 'php worker.php', {
 		'VHTTPD_APP': '/tmp/app.php'
 	}) or { panic(err) }
@@ -1292,8 +1282,8 @@ fn test_builtin_logic_executor_spec_runtime_selection_builds_vjsx_executor() {
 	defer {
 		os.rmdir_all(temp_dir) or {}
 	}
-	spec := builtin_logic_executor_spec('vjsx') or { panic(err) }
-	selection := spec.runtime_selection(['--vjsx-entry', app_file], config.default_vhttpd_config()) or {
+	spec := executor.builtin_executor_spec_find('vjsx') or { panic(err) }
+	selection := spec.runtime_selection(['--vjsx-entry', app_file], config.default_vhttpd_config(), build_executor_factory()) or {
 		panic(err)
 	}
 	assert selection.executor.kind() == 'vjsx'
@@ -1310,7 +1300,7 @@ fn test_builtin_logic_executor_spec_resolves_vjsx_runtime_config_from_config_sur
 	defer {
 		os.rmdir_all(temp_dir) or {}
 	}
-	vjsx_spec := builtin_logic_executor_spec('vjsx') or { panic(err) }
+	vjsx_spec := executor.builtin_executor_spec_find('vjsx') or { panic(err) }
 	vjsx_cfg := vjsx_spec.resolve_vjsx_runtime_config(['--vjsx-entry', app_file, '--vjsx-build-root',
 		os.join_path(temp_dir, 'lane-cache'), '--vjsx-thread-count', '2', '--vjsx-runtime-profile',
 		'node'], config.default_vhttpd_config()) or { panic(err) }
@@ -1353,11 +1343,11 @@ fn test_build_app_runtime_projects_executor_plan_into_app_state() {
 		}
 		ollama_enabled: true
 	}
-	plan := LogicExecutorRuntimePlan{
-		executor:            SocketWorkerExecutor{}
+	plan := executor.LogicExecutorRuntimePlan{
+		executor:            executor.SocketWorkerExecutor{}
 		worker_backend_mode: .required
-		lifecycle:           PhpWorkerExecutorLifecycle{}
-		bootstrap:           ExecutorBootstrapState{
+		lifecycle:           executor.php_worker_executor_lifecycle()
+		bootstrap:           executor.ExecutorBootstrapState{
 			worker_sockets:          ['/tmp/a.sock']
 			stream_dispatch:         true
 			websocket_dispatch_mode: false
@@ -1368,7 +1358,7 @@ fn test_build_app_runtime_projects_executor_plan_into_app_state() {
 			}
 		}
 	}
-	app := build_app_runtime(provider_settings, plan, cfg, AppRuntimeBuildConfig{
+	app := build_app_runtime(provider_settings, plan, cfg, server_lifecycle.AppRuntimeBuildConfig{
 		event_log:                     '/tmp/events.ndjson'
 		internal_admin_socket:         '/tmp/internal.sock'
 		admin_enabled:                 true
@@ -1414,7 +1404,7 @@ fn test_prepare_server_runtime_files_creates_parent_dirs_and_pid_file() {
 	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_runtime_files_test')
 	event_log := os.join_path(temp_dir, 'logs', 'events.ndjson')
 	pid_file := os.join_path(temp_dir, 'run', 'vhttpd.pid')
-	internal_socket := prepare_server_runtime_files_for_label(event_log, pid_file, '') or {
+	internal_socket := server_lifecycle.prepare_server_runtime_files_for_label(event_log, pid_file, '') or {
 		panic(err)
 	}
 	defer {
@@ -1456,7 +1446,7 @@ fn test_resolve_server_runtime_config_builds_php_runtime_state() {
 	cfg.worker.websocket_dispatch = true
 	cfg.worker.queue_capacity = 9
 	cfg.worker.queue_timeout_ms = 88
-	runtime_cfg := resolve_server_runtime_config([]string{}, cfg) or { panic(err) }
+	runtime_cfg := server_lifecycle.ServerRuntimeConfig.resolve([]string{}, cfg) or { panic(err) }
 	assert runtime_cfg.host == '0.0.0.0'
 	assert runtime_cfg.port == 19881
 	assert runtime_cfg.admin_host == '127.0.0.1'
@@ -1488,7 +1478,7 @@ fn test_resolve_server_runtime_config_defaults_to_disabled_executor_without_app_
 	cfg.server.port = 18081
 	cfg.files.event_log = event_log
 	cfg.files.pid_file = pid_file
-	runtime_cfg := resolve_server_runtime_config([]string{}, cfg) or { panic(err) }
+	runtime_cfg := server_lifecycle.ServerRuntimeConfig.resolve([]string{}, cfg) or { panic(err) }
 	assert runtime_cfg.executor_plan.executor.kind() == 'none'
 	assert runtime_cfg.executor_plan.lifecycle.name() == 'disabled'
 	assert runtime_cfg.executor_plan.worker_backend_mode == .disabled
@@ -1530,7 +1520,7 @@ fn test_resolve_server_runtime_config_builds_vjsx_embedded_runtime_state() {
 	cfg.admin.host = ''
 	cfg.admin.port = 19983
 	cfg.admin.token = 'admin-secret'
-	runtime_cfg := resolve_server_runtime_config([]string{}, cfg) or { panic(err) }
+	runtime_cfg := server_lifecycle.ServerRuntimeConfig.resolve([]string{}, cfg) or { panic(err) }
 	assert runtime_cfg.host == '127.0.0.9'
 	assert runtime_cfg.port == 18888
 	assert runtime_cfg.admin_enabled
@@ -1570,7 +1560,7 @@ fn test_resolve_multi_server_runtime_config_keeps_single_site_compatibility() {
 	cfg.files.pid_file = pid_file
 	cfg.php.worker_entry = worker_entry
 	cfg.php.app_entry = app_entry
-	multi_cfg := resolve_multi_server_runtime_config([]string{}, cfg) or { panic(err) }
+	multi_cfg := server_lifecycle.resolve_multi_server_runtime_config([]string{}, cfg) or { panic(err) }
 	assert multi_cfg.single_mode
 	assert multi_cfg.listeners.len == 1
 	assert multi_cfg.listeners[0].id == 'default'
@@ -1642,7 +1632,7 @@ fn test_resolve_multi_server_runtime_config_builds_listener_bound_sites() {
 			}
 		}
 	}
-	multi_cfg := resolve_multi_server_runtime_config([]string{}, cfg) or { panic(err) }
+	multi_cfg := server_lifecycle.resolve_multi_server_runtime_config([]string{}, cfg) or { panic(err) }
 	assert !multi_cfg.single_mode
 	assert multi_cfg.listeners.len == 2
 	assert multi_cfg.listeners[0].id == 'project_a'
@@ -1676,7 +1666,7 @@ fn test_resolve_multi_server_runtime_config_rejects_unknown_site_binding() {
 	cfg.sites = {
 		'other': config.SiteConfig{}
 	}
-	resolve_multi_server_runtime_config([]string{}, cfg) or {
+	server_lifecycle.resolve_multi_server_runtime_config([]string{}, cfg) or {
 		assert err.msg() == 'multi_listener_unknown_site:broken:missing'
 		return
 	}
@@ -1698,7 +1688,7 @@ fn test_site_config_as_vhttpd_config_inherits_global_defaults() {
 			app_entry: './app.mts'
 		}
 	}
-	derived := config.site_config_as_vhttpd_config(cfg, site_cfg)
+	derived := cfg.with_site(site_cfg)
 	assert derived.paths.root == '/tmp/project-a'
 	assert derived.executor.kind == 'vjsx'
 	assert derived.vjsx.app_entry == './app.mts'
@@ -1792,7 +1782,7 @@ fn test_site_config_as_vhttpd_config_merges_site_websocket_affinity() {
 		scope:    'lane'
 		fallback: 'round_robin'
 	}
-	derived := config.site_config_as_vhttpd_config(base, config.SiteConfig{
+	derived := base.with_site(config.SiteConfig{
 		websocket_affinity: config.WebSocketAffinityConfig{
 			enabled:  true
 			source:   'app'
@@ -1824,7 +1814,7 @@ fn test_site_config_as_vhttpd_config_merges_site_websocket_actor() {
 			},
 		]
 	}
-	derived := config.site_config_as_vhttpd_config(base, config.SiteConfig{
+	derived := base.with_site(config.SiteConfig{
 		websocket_actor: config.WebSocketActorConfig{
 			enabled:           true
 			fallback:          'reject'
@@ -1862,7 +1852,7 @@ fn test_resolve_embedded_host_runtime_config_normalizes_paths_and_lane_defaults(
 	defer {
 		os.rmdir_all(temp_dir) or {}
 	}
-	cfg := config.resolve_embedded_host_runtime_config(['--app', app_file, '--module-root',
+	cfg := config.EmbeddedHostRuntimeConfig.resolve(['--app', app_file, '--module-root',
 		os.join_path(temp_dir, 'modules'), '--build-root', os.join_path(temp_dir, 'cache'),
 		'--signature-root', os.join_path(temp_dir, 'sig'), '--signature-include', '**/*.mts',
 		'--signature-exclude', 'tmp/**', '--profile', 'node', '--lanes', '0'], config.EmbeddedHostRuntimeConfig{
@@ -1910,33 +1900,39 @@ fn test_shutdown_app_runtime_stops_lifecycle_and_cleans_runtime_files() {
 	}
 	mut executor_state := &TestShutdownLogicExecutorState{}
 	mut app := App{
-		event_log:      event_log
-		logic_executor: TestShutdownLogicExecutor{
-			state: executor_state
+		event_log: event_log
+		worker:    worker.WorkerState{
+			logic_executor: TestShutdownLogicExecutor{
+				state: executor_state
+			}
 		}
-		providers:      ProviderHost{
+		providers: ProviderHost{
 			specs: {
 				'test': ProviderSpec{
 					name:        'test'
 					enabled:     true
 					has_runtime: true
 					provider:    TestShutdownProvider{}
-					handler:     NoopProviderCommandHandler{}
+					handler:     provider.NoopProviderCommandHandler{}
 					runtime:     TestShutdownProviderRuntime{}
 				}
 			}
 		}
 	}
-	runtime_cfg := ServerRuntimeConfig{
+	mut test_ctx := app.build_provider_context('test')
+	mut spec_ref := app.providers.specs['test']
+	spec_ref.lifecycle_ctx = test_ctx
+	app.providers.specs['test'] = spec_ref
+	runtime_cfg := server_lifecycle.ServerRuntimeConfig{
 		pid_file:              pid_file
 		internal_admin_socket: internal_socket
-		executor_plan:         LogicExecutorRuntimePlan{
+		executor_plan:         executor.LogicExecutorRuntimePlan{
 			executor:            TestShutdownLogicExecutor{
 				state: executor_state
 			}
 			worker_backend_mode: .disabled
-			lifecycle:           TestShutdownExecutorLifecycle{}
-			bootstrap:           ExecutorBootstrapState{}
+			lifecycle:           new_shutdown_test_lifecycle()
+			bootstrap:           executor.ExecutorBootstrapState{}
 		}
 	}
 	shutdown_app_runtime(mut app, runtime_cfg)
@@ -1969,7 +1965,7 @@ fn test_paseo_relay_example_config_enables_websocket_dispatch() {
 	assert cfg.sites['paseo_relay'].websocket_actor.sources[0].typ == 'connection_cache'
 	assert cfg.sites['paseo_relay'].websocket_actor.sources[1].key == 'connectionId'
 	assert cfg.sites['paseo_relay'].websocket_actor.sources[1].class_name == 'conn'
-	runtime := resolve_multi_server_runtime_config(['--config', config_path], cfg) or { panic(err) }
+	runtime := server_lifecycle.resolve_multi_server_runtime_config(['--config', config_path], cfg) or { panic(err) }
 	assert runtime.listeners.len == 1
 	assert runtime.listeners[0].runtime_cfg.executor_plan.bootstrap.websocket_dispatch_mode
 	assert !runtime.listeners[0].site_cfg.websocket_affinity.enabled

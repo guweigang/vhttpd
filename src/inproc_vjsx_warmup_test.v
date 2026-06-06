@@ -28,19 +28,19 @@ export default app;
 	defer {
 		os.rm(app_file) or {}
 	}
-	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
+	mut exec := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
 		thread_count:    1
 		app_entry:       app_file
 		module_root:     temp_dir
 		runtime_profile: 'node'
 	})
 	defer {
-		executor.close()
+		exec.close()
 	}
-	mut app := App{}
-	executor.warmup(mut app) or { panic(err) }
-	executor.warmup(mut app) or { panic(err) }
-	resp := executor.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
+	mut app := InProcTestApp{}
+	exec.warmup(mut app) or { panic(err) }
+	exec.warmup(mut app) or { panic(err) }
+	resp := exec.dispatch_http(mut app, executor.HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/warmup'
 		req:         http.Request{
@@ -77,26 +77,21 @@ export default app;
 	defer {
 		os.rm(app_file) or {}
 	}
-	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
+	mut exec := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
 		thread_count:    2
 		app_entry:       app_file
 		module_root:     temp_dir
 		runtime_profile: 'node'
 	})
 	defer {
-		executor.close()
+		exec.close()
 	}
-	mut app := App{}
-	executor.warmup(mut app) or { panic(err) }
+	mut app := InProcTestApp{}
+	exec.warmup(mut app) or { panic(err) }
 
-	mut state := executor.state
-	state.mu.@lock()
-	defer {
-		state.mu.unlock()
-	}
-	assert state.hosts.len == 2
-	assert state.hosts[0].initialized
-	assert !isnil(state.hosts[0].session)
-	assert state.hosts[1].initialized
-	assert !isnil(state.hosts[1].session)
+	assert exec.host_count() == 2
+	assert exec.host_initialized(0)
+	assert exec.host_has_session(0)
+	assert exec.host_initialized(1)
+	assert exec.host_has_session(1)
 }

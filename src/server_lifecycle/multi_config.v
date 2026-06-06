@@ -1,4 +1,4 @@
-module main
+module server_lifecycle
 
 import config
 
@@ -16,8 +16,8 @@ pub:
 	listeners   []ListenerRuntimeBinding
 }
 
-fn resolve_multi_server_runtime_config(args []string, cfg config.VhttpdConfig) !MultiServerRuntimeConfig {
-	if !config.config_uses_multi_listener(cfg) {
+pub fn resolve_multi_server_runtime_config(args []string, cfg config.VhttpdConfig) !MultiServerRuntimeConfig {
+	if !cfg.uses_multi_listener() {
 		return MultiServerRuntimeConfig{
 			single_mode: true
 			listeners:   [
@@ -25,7 +25,7 @@ fn resolve_multi_server_runtime_config(args []string, cfg config.VhttpdConfig) !
 					id:          'default'
 					site_id:     'default'
 					site_cfg:    cfg
-					runtime_cfg: resolve_server_runtime_config(args, cfg)!
+					runtime_cfg: ServerRuntimeConfig.resolve(args, cfg)!
 				},
 			]
 		}
@@ -35,7 +35,7 @@ fn resolve_multi_server_runtime_config(args []string, cfg config.VhttpdConfig) !
 			return error('multi_listener_missing_sites')
 		}
 	}
-	listeners := config.resolve_multi_listener_specs(cfg)!
+	listeners := cfg.resolve_multi_listeners()!
 	mut listener_ids := listeners.keys()
 	listener_ids.sort()
 	admin_owner_listener_id := if cfg.admin.port > 0 && listener_ids.len > 0 {
@@ -59,13 +59,13 @@ fn resolve_multi_server_runtime_config(args []string, cfg config.VhttpdConfig) !
 			return error('multi_listener_duplicate_bind:${binding_key}')
 		}
 		used_bindings[binding_key] = true
-		mut site_runtime_cfg := config.site_config_as_vhttpd_config(cfg, cfg.sites[site_id])
+		mut site_runtime_cfg := cfg.with_site(cfg.sites[site_id])
 		if site_runtime_cfg.config_path != '' {
 			config.resolve_config_variables(mut site_runtime_cfg, site_runtime_cfg.config_path)!
 		}
 		admin_enabled_override := listener_id == admin_owner_listener_id
-		runtime_cfg := resolve_server_runtime_config_for_target(args, site_runtime_cfg,
-			listener_id, site_id, listener_cfg.host, listener_cfg.port, admin_enabled_override)!
+		runtime_cfg := ServerRuntimeConfig.resolve_for_target(args, site_runtime_cfg, listener_id,
+			site_id, listener_cfg.host, listener_cfg.port, admin_enabled_override)!
 		bindings << ListenerRuntimeBinding{
 			id:          listener_id
 			site_id:     site_id

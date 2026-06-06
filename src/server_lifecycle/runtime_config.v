@@ -1,0 +1,147 @@
+module server_lifecycle
+
+import config
+import os
+import admin
+import executor
+import provider
+
+pub struct AppRuntimeBuildConfig {
+pub:
+	event_log                     string
+	internal_admin_socket         string
+	admin_enabled                 bool
+	admin_token                   string
+	assets_enabled                bool
+	assets_prefix                 string
+	assets_root                   string
+	assets_root_real              string
+	assets_cache_control          string
+	worker_read_timeout_ms        int
+	worker_restart_backoff_ms     int
+	worker_restart_backoff_max_ms int
+	worker_max_requests           int
+	worker_queue_capacity         int
+	worker_queue_timeout_ms       int
+	workdir                       string
+}
+
+pub struct ServerRuntimeConfig {
+pub:
+	listener_id           string
+	site_id               string
+	host                  string
+	port                  int
+	pid_file              string
+	admin_enabled         bool
+	admin_host            string
+	admin_port            int
+	admin_token           string
+	internal_admin_socket string
+	provider_settings     provider.ProviderRuntimeSettings
+	executor_plan         executor.LogicExecutorRuntimePlan
+	app_build_cfg         AppRuntimeBuildConfig
+}
+
+pub fn ServerRuntimeConfig.resolve(args []string, cfg config.VhttpdConfig) !ServerRuntimeConfig {
+	host := config.CliArgs.string_or(args, '--host', cfg.server.host)
+	port := config.CliArgs.int_or(args, '--port', cfg.server.port)
+	return ServerRuntimeConfig.resolve_for_target(args, cfg, '', '', host, port, true)
+}
+
+pub fn ServerRuntimeConfig.resolve_for_target(args []string, cfg config.VhttpdConfig, listener_id string, site_id string, host string, port int, admin_enabled_override bool) !ServerRuntimeConfig {
+	event_log := config.CliArgs.string_or(args, '--event-log', cfg.files.event_log)
+	pid_file := config.CliArgs.string_or(args, '--pid-file', cfg.files.pid_file)
+	worker_read_timeout_ms := config.CliArgs.int_or(args, '--worker-read-timeout-ms',
+		cfg.worker.read_timeout_ms)
+	worker_cmd_override := config.CliArgs.string_or(args, '--worker-cmd', cfg.worker.cmd)
+	worker_autostart := config.CliArgs.bool_or(args, '--worker-autostart', cfg.worker.autostart)
+	worker_restart_backoff_ms := config.CliArgs.int_or(args, '--worker-restart-backoff-ms',
+		cfg.worker.restart_backoff_ms)
+	worker_restart_backoff_max_ms := config.CliArgs.int_or(args, '--worker-restart-backoff-max-ms',
+		cfg.worker.restart_backoff_max_ms)
+	worker_max_requests := config.CliArgs.int_or(args, '--worker-max-requests',
+		cfg.worker.max_requests)
+	worker_queue_capacity := config.CliArgs.int_or(args, '--worker-queue-capacity',
+		cfg.worker.queue_capacity)
+	worker_queue_timeout_ms := config.CliArgs.int_or(args, '--worker-queue-timeout-ms',
+		cfg.worker.queue_timeout_ms)
+	assets_enabled := cfg.assets.enabled
+	assets_prefix := normalize_assets_prefix(cfg.assets.prefix)
+	assets_root := cfg.assets.root
+	assets_root_real := if assets_root.trim_space() == '' { '' } else { os.real_path(assets_root) }
+	assets_cache_control := cfg.assets.cache_control
+	admin_host_arg := config.CliArgs.string_or(args, '--admin-host', cfg.admin.host).trim_space()
+	admin_port := config.CliArgs.int_or(args, '--admin-port', cfg.admin.port)
+	admin_token := config.CliArgs.string_or(args, '--admin-token', cfg.admin.token)
+	admin_enabled := admin_enabled_override && admin_port > 0
+	admin_host := if admin_host_arg == '' { '127.0.0.1' } else { admin_host_arg }
+	provider_settings := provider.ProviderRuntimeSettings.resolve(args, cfg)
+	executor_plan := executor.LogicExecutorRuntimePlan.resolve(args, cfg, config.resolve_worker_sockets_with_defaults(args,
+		cfg.worker.socket, cfg.worker.pool_size, cfg.worker.socket_prefix,
+		cfg.worker.sockets.join(',')), cfg.worker.stream_dispatch, cfg.worker.websocket_dispatch,
+		worker_autostart, worker_cmd_override, cfg.worker.env.clone())!
+	workdir := os.getwd()
+	socket_label := if listener_id != '' {
+		listener_id
+	} else if site_id != '' {
+		site_id
+	} else {
+		''
+	}
+	internal_admin_socket := prepare_server_runtime_files_for_label(event_log, pid_file,
+		socket_label)!
+	return ServerRuntimeConfig{
+		listener_id:           listener_id
+		site_id:               site_id
+		host:                  host
+		port:                  port
+		pid_file:              pid_file
+		admin_enabled:         admin_enabled
+		admin_host:            admin_host
+		admin_port:            admin_port
+		admin_token:           admin_token
+		internal_admin_socket: internal_admin_socket
+		provider_settings:     provider_settings
+		executor_plan:         executor_plan
+		app_build_cfg:         AppRuntimeBuildConfig{
+			event_log:                     event_log
+			internal_admin_socket:         internal_admin_socket
+			admin_enabled:                 admin_enabled
+			admin_token:                   admin_token
+			assets_enabled:                assets_enabled
+			assets_prefix:                 assets_prefix
+			assets_root:                   assets_root
+			assets_root_real:              assets_root_real
+			assets_cache_control:          assets_cache_control
+			worker_read_timeout_ms:        worker_read_timeout_ms
+			worker_restart_backoff_ms:     worker_restart_backoff_ms
+			worker_restart_backoff_max_ms: worker_restart_backoff_max_ms
+			worker_max_requests:           worker_max_requests
+			worker_queue_capacity:         worker_queue_capacity
+			worker_queue_timeout_ms:       worker_queue_timeout_ms
+			workdir:                       workdir
+		}
+	}
+}
+
+pub fn normalize_assets_prefix(raw string) string {
+	mut prefix := raw.trim_space()
+	if prefix == '' {
+		return '/assets'
+	}
+	if !prefix.starts_with('/') {
+		prefix = '/${prefix}'
+	}
+	for prefix.len > 1 && prefix.ends_with('/') {
+		prefix = prefix[..prefix.len - 1]
+	}
+	return prefix
+}
+
+pub fn prepare_server_runtime_files_for_label(event_log string, pid_file string, socket_label string) !string {
+	os.mkdir_all(os.dir(event_log))!
+	os.mkdir_all(os.dir(pid_file))!
+	os.write_file(pid_file, '${os.getpid()}')!
+	return admin.AdminState.default_socket_for(socket_label)
+}

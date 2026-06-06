@@ -8,6 +8,10 @@ import net.urllib
 // ── Frame I/O ──
 
 pub fn write_frame(mut conn unix.StreamConn, payload string) ! {
+	WorkerFrameCodec.write(mut conn, payload)!
+}
+
+pub fn WorkerFrameCodec.write(mut conn unix.StreamConn, payload string) ! {
 	size := payload.len
 	header := [u8((size >> 24) & 0xff), u8((size >> 16) & 0xff), u8((size >> 8) & 0xff),
 		u8(size & 0xff)]
@@ -16,6 +20,10 @@ pub fn write_frame(mut conn unix.StreamConn, payload string) ! {
 }
 
 pub fn read_exact(mut conn unix.StreamConn, size int) ![]u8 {
+	return WorkerFrameCodec.read_exact(mut conn, size)!
+}
+
+pub fn WorkerFrameCodec.read_exact(mut conn unix.StreamConn, size int) ![]u8 {
 	mut out := []u8{len: size}
 	mut read := 0
 	for read < size {
@@ -29,23 +37,35 @@ pub fn read_exact(mut conn unix.StreamConn, size int) ![]u8 {
 }
 
 pub fn read_frame(mut conn unix.StreamConn) !string {
-	body := read_frame_bytes(mut conn)!
+	return WorkerFrameCodec.read(mut conn)!
+}
+
+pub fn WorkerFrameCodec.read(mut conn unix.StreamConn) !string {
+	body := WorkerFrameCodec.read_bytes(mut conn)!
 	return body.bytestr()
 }
 
 pub fn read_frame_bytes(mut conn unix.StreamConn) ![]u8 {
-	header := read_exact(mut conn, 4)!
+	return WorkerFrameCodec.read_bytes(mut conn)!
+}
+
+pub fn WorkerFrameCodec.read_bytes(mut conn unix.StreamConn) ![]u8 {
+	header := WorkerFrameCodec.read_exact(mut conn, 4)!
 	size_u32 := (u32(header[0]) << 24) | (u32(header[1]) << 16) | (u32(header[2]) << 8) | u32(header[3])
 	size := int(size_u32)
 	if size <= 0 || size > 16 * 1024 * 1024 {
 		return error('invalid frame size ${size}')
 	}
-	return read_exact(mut conn, size)!
+	return WorkerFrameCodec.read_exact(mut conn, size)!
 }
 
 // ── URL / HTTP helpers ──
 
 pub fn normalize_path(path string) string {
+	return WorkerHttpRequestCodec.normalize_path(path)
+}
+
+pub fn WorkerHttpRequestCodec.normalize_path(path string) string {
 	if path.len == 0 {
 		return '/'
 	}
@@ -56,16 +76,24 @@ pub fn normalize_path(path string) string {
 }
 
 pub fn normalize_request_target(raw_path string) (string, string) {
-	path := normalize_path(raw_path)
+	return WorkerHttpRequestCodec.normalize_request_target(raw_path)
+}
+
+pub fn WorkerHttpRequestCodec.normalize_request_target(raw_path string) (string, string) {
+	path := WorkerHttpRequestCodec.normalize_path(raw_path)
 	if !path.contains('?') {
 		return path, ''
 	}
-	base := normalize_path(path.all_before('?'))
+	base := WorkerHttpRequestCodec.normalize_path(path.all_before('?'))
 	query := path.all_after('?')
 	return base, query
 }
 
 pub fn parse_query_map(query_str string) map[string]string {
+	return WorkerHttpRequestCodec.parse_query_map(query_str)
+}
+
+pub fn WorkerHttpRequestCodec.parse_query_map(query_str string) map[string]string {
 	mut out := map[string]string{}
 	if query_str == '' {
 		return out
@@ -82,6 +110,10 @@ pub fn parse_query_map(query_str string) map[string]string {
 }
 
 pub fn header_map_from_request(req http.Request) map[string]string {
+	return WorkerHttpRequestCodec.header_map_from_request(req)
+}
+
+pub fn WorkerHttpRequestCodec.header_map_from_request(req http.Request) map[string]string {
 	mut out := map[string]string{}
 	for key in req.header.keys() {
 		values := req.header.custom_values(key)
@@ -94,6 +126,10 @@ pub fn header_map_from_request(req http.Request) map[string]string {
 }
 
 pub fn cookie_map_from_request(req http.Request) map[string]string {
+	return WorkerHttpRequestCodec.cookie_map_from_request(req)
+}
+
+pub fn WorkerHttpRequestCodec.cookie_map_from_request(req http.Request) map[string]string {
 	mut out := map[string]string{}
 	for cookie in http.read_cookies(req.header, '') {
 		out[cookie.name] = cookie.value
@@ -102,6 +138,10 @@ pub fn cookie_map_from_request(req http.Request) map[string]string {
 }
 
 pub fn server_map_from_request(req http.Request, remote_addr string) map[string]string {
+	return WorkerHttpRequestCodec.server_map_from_request(req, remote_addr)
+}
+
+pub fn WorkerHttpRequestCodec.server_map_from_request(req http.Request, remote_addr string) map[string]string {
 	mut host := req.host
 	mut port := ''
 	if host == '' {
@@ -122,14 +162,18 @@ pub fn server_map_from_request(req http.Request, remote_addr string) map[string]
 // ── Worker request encoding ──
 
 pub fn encode_worker_request(method string, path string, req http.Request, remote_addr string, trace_id string, req_id string) string {
-	normalized_path, query_string := normalize_request_target(path)
-	query := parse_query_map(query_string)
-	mut headers := header_map_from_request(req)
+	return WorkerHttpRequestCodec.encode_request(method, path, req, remote_addr, trace_id, req_id)
+}
+
+pub fn WorkerHttpRequestCodec.encode_request(method string, path string, req http.Request, remote_addr string, trace_id string, req_id string) string {
+	normalized_path, query_string := WorkerHttpRequestCodec.normalize_request_target(path)
+	query := WorkerHttpRequestCodec.parse_query_map(query_string)
+	mut headers := WorkerHttpRequestCodec.header_map_from_request(req)
 	if headers['x-request-id'] == '' {
 		headers['x-request-id'] = req_id
 	}
-	cookies := cookie_map_from_request(req)
-	server := server_map_from_request(req, remote_addr)
+	cookies := WorkerHttpRequestCodec.cookie_map_from_request(req)
+	server := WorkerHttpRequestCodec.server_map_from_request(req, remote_addr)
 	host := server['host'] or { req.host }
 	port := server['port'] or { '' }
 	scheme := req.header.get(.x_forwarded_proto) or { 'http' }
@@ -155,6 +199,10 @@ pub fn encode_worker_request(method string, path string, req http.Request, remot
 // ── Stream / Upstream plan decoding ──
 
 pub fn try_decode_stream_start(raw string) ?WorkerStreamFrame {
+	return WorkerStreamFrame.try_decode_start(raw)
+}
+
+pub fn WorkerStreamFrame.try_decode_start(raw string) ?WorkerStreamFrame {
 	frame := json.decode(WorkerStreamFrame, raw) or { return none }
 	if frame.mode == 'stream' && frame.event == 'start' {
 		return frame
@@ -163,6 +211,10 @@ pub fn try_decode_stream_start(raw string) ?WorkerStreamFrame {
 }
 
 pub fn try_decode_upstream_plan(raw string) ?WorkerUpstreamPlanFrame {
+	return WorkerUpstreamPlanFrame.try_decode_start(raw)
+}
+
+pub fn WorkerUpstreamPlanFrame.try_decode_start(raw string) ?WorkerUpstreamPlanFrame {
 	frame := json.decode(WorkerUpstreamPlanFrame, raw) or { return none }
 	if ((frame.mode == 'stream' && frame.strategy == 'upstream_plan')
 		|| frame.mode == 'upstream_plan') && frame.event == 'start' {

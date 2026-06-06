@@ -2,14 +2,12 @@ module mcp_protocol
 
 import net
 
-// extract_client_capabilities_json extracts the "capabilities" JSON object from
-// a raw JSON-RPC message string using simple string scanning (avoids full JSON decode).
-pub fn extract_client_capabilities_json(raw string) string {
+pub fn Session.extract_client_capabilities_json(raw string) string {
 	field_marker := '"capabilities"'
 	mut idx := raw.index(field_marker) or { return '' }
 	idx += field_marker.len
-	for idx < raw.len && (raw[idx] == `:` || raw[idx] == ` ` || raw[idx] == `\n` || raw[idx] == `\r`
-		|| raw[idx] == `\t`) {
+	for idx < raw.len && (raw[idx] == `:` || raw[idx] == ` ` || raw[idx] == `\n`
+		|| raw[idx] == `\r` || raw[idx] == `\t`) {
 		idx++
 	}
 	if idx >= raw.len || raw[idx] != `{` {
@@ -52,9 +50,7 @@ pub fn extract_client_capabilities_json(raw string) string {
 	return ''
 }
 
-// write_sse_json writes a single SSE `event: message` line followed by the JSON payload
-// to the given TCP connection. Returns true on success.
-pub fn write_sse_json(mut conn net.TcpConn, raw string) bool {
+pub fn Session.write_sse_json(mut conn net.TcpConn, raw string) bool {
 	conn.write_string('event: message\ndata: ${raw}\n\n') or { return false }
 	return true
 }

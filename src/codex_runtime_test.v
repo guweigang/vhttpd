@@ -1,6 +1,9 @@
 module main
+
 import executor
+import codex
 import transport
+import worker
 
 struct CodexRuntimeTestDispatchState {
 mut:
@@ -34,7 +37,7 @@ pub fn (e CodexRuntimeTestExecutor) admin_details() executor.LogicExecutorAdminD
 	}
 }
 
-pub fn (e CodexRuntimeTestExecutor) warmup(mut app App) ! {
+pub fn (e CodexRuntimeTestExecutor) warmup(mut app executor.AppFacade) ! {
 	_ = e
 	_ = app
 }
@@ -43,31 +46,31 @@ pub fn (e CodexRuntimeTestExecutor) close() {
 	_ = e
 }
 
-pub fn (e CodexRuntimeTestExecutor) dispatch_http(mut app App, req executor.HttpLogicDispatchRequest) !executor.HttpLogicDispatchOutcome {
+pub fn (e CodexRuntimeTestExecutor) dispatch_http(mut app executor.AppFacade, req executor.HttpLogicDispatchRequest) !executor.HttpLogicDispatchOutcome {
 	_ = app
 	_ = req
 	return error('not_used')
 }
 
-pub fn (e CodexRuntimeTestExecutor) open_websocket_session(mut app App, req executor.WebSocketSessionOpenRequest) !executor.WebSocketSessionOpenOutcome {
+pub fn (e CodexRuntimeTestExecutor) open_websocket_session(mut app executor.AppFacade, req executor.WebSocketSessionOpenRequest) !executor.WebSocketSessionOpenOutcome {
 	_ = app
 	_ = req
 	return error('not_used')
 }
 
-pub fn (e CodexRuntimeTestExecutor) dispatch_stream(mut app App, req transport.StreamDispatchRequest) !transport.StreamDispatchResponse {
+pub fn (e CodexRuntimeTestExecutor) dispatch_stream(mut app executor.AppFacade, req transport.StreamDispatchRequest) !transport.StreamDispatchResponse {
 	_ = app
 	_ = req
 	return error('not_used')
 }
 
-pub fn (e CodexRuntimeTestExecutor) dispatch_mcp(mut app App, req transport.WorkerMcpDispatchRequest) !transport.WorkerMcpDispatchResponse {
+pub fn (e CodexRuntimeTestExecutor) dispatch_mcp(mut app executor.AppFacade, req transport.WorkerMcpDispatchRequest) !transport.WorkerMcpDispatchResponse {
 	_ = app
 	_ = req
 	return error('not_used')
 }
 
-pub fn (e CodexRuntimeTestExecutor) dispatch_websocket_upstream(mut app App, req transport.WorkerWebSocketUpstreamDispatchRequest) !transport.WorkerWebSocketUpstreamDispatchResponse {
+pub fn (e CodexRuntimeTestExecutor) dispatch_websocket_upstream(mut app executor.AppFacade, req transport.WorkerWebSocketUpstreamDispatchRequest) !transport.WorkerWebSocketUpstreamDispatchResponse {
 	_ = app
 	if !isnil(e.state) {
 		mut state := e.state
@@ -83,7 +86,7 @@ pub fn (e CodexRuntimeTestExecutor) dispatch_websocket_upstream(mut app App, req
 	}
 }
 
-pub fn (e CodexRuntimeTestExecutor) dispatch_websocket_event(mut app App, frame transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse {
+pub fn (e CodexRuntimeTestExecutor) dispatch_websocket_event(mut app executor.AppFacade, frame transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse {
 	_ = app
 	_ = frame
 	return error('not_used')
@@ -132,7 +135,7 @@ fn test_codex_extractors() {
 
 fn test_admin_codex_snapshot_reflects_runtime() {
 	mut app := App{
-		codex: CodexState{
+		codex: codex.CodexState{
 			runtime: CodexProviderRuntime{
 				enabled:            true
 				url:                'https://codex.example'
@@ -156,7 +159,7 @@ fn test_admin_codex_snapshot_reflects_runtime() {
 
 fn test_codex_next_rpc_id_increment() {
 	mut app := App{
-		codex: CodexState{
+		codex: codex.CodexState{
 			runtime: CodexProviderRuntime{}
 		}
 	}
@@ -167,22 +170,22 @@ fn test_codex_next_rpc_id_increment() {
 
 fn test_websocket_upstream_reconnect_delay_default_and_override() {
 	mut app := App{
-		codex: CodexState{
+		codex: codex.CodexState{
 			runtime: CodexProviderRuntime{}
 		}
 	}
 	// default when unset
-	assert websocket_upstream_provider_reconnect_delay_ms(&app, websocket_upstream_provider_codex,
+	assert app.websocket_upstream_provider_reconnect_delay_ms(websocket_upstream_provider_codex,
 		'main') == 3000
 
 	app.codex.runtime.reconnect_delay_ms = 5500
-	assert websocket_upstream_provider_reconnect_delay_ms(&app, websocket_upstream_provider_codex,
+	assert app.websocket_upstream_provider_reconnect_delay_ms(websocket_upstream_provider_codex,
 		'main') == 5500
 }
 
 fn test_codex_get_active_stream_id_and_set() {
 	mut app := App{
-		codex: CodexState{
+		codex: codex.CodexState{
 			runtime: CodexProviderRuntime{}
 		}
 	}
@@ -208,73 +211,78 @@ fn test_codex_runtime_bind_and_clear_thread_binding() {
 
 fn test_codex_notification_active_does_not_schedule_read_fallback() {
 	mut app := App{
-		codex: CodexState{
+		codex: codex.CodexState{
 			runtime: CodexProviderRuntime{
-				thread_stream_map: map[string]string{}
-				stream_map:        map[string][]CodexTarget{}
-				pending_rpcs:      map[int]CodexPendingRpc{}
-				err_bursts:        map[string][]string{}
+				thread_stream_map:   map[string]string{}
+				stream_map:          map[string][]CodexTarget{}
+				pending_rpcs:        map[int]CodexPendingRpc{}
+				err_bursts:          map[string][]string{}
 				err_pending_flushes: map[string]bool{}
-				read_fallbacks:    map[string]CodexReadFallback{}
+				read_fallbacks:      map[string]codex.ReadFallback{}
 			}
 		}
 	}
 	app.codex_bind_stream_to_thread('main', 'thread_watchdog_001', 'stream_watchdog_001')
-	app.codex_handle_notification('main', 'thread/status/changed', '{"method":"thread/status/changed","params":{"threadId":"thread_watchdog_001","status":{"type":"active","activeFlags":[]}}}')
+	app.codex_handle_notification('main', 'thread/status/changed',
+		'{"method":"thread/status/changed","params":{"threadId":"thread_watchdog_001","status":{"type":"active","activeFlags":[]}}}')
 	_, ok := app.codex_read_fallback('main', 'stream_watchdog_001')
 	assert !ok
 }
 
 fn test_codex_notification_delta_clears_read_fallback() {
 	mut app := App{
-		codex: CodexState{
+		codex: codex.CodexState{
 			runtime: CodexProviderRuntime{
-				thread_stream_map: map[string]string{}
-				stream_map:        map[string][]CodexTarget{}
-				pending_rpcs:      map[int]CodexPendingRpc{}
-				err_bursts:        map[string][]string{}
+				thread_stream_map:   map[string]string{}
+				stream_map:          map[string][]CodexTarget{}
+				pending_rpcs:        map[int]CodexPendingRpc{}
+				err_bursts:          map[string][]string{}
 				err_pending_flushes: map[string]bool{}
-				read_fallbacks:    map[string]CodexReadFallback{}
+				read_fallbacks:      map[string]codex.ReadFallback{}
 			}
 		}
 	}
 	app.codex_bind_stream_to_thread('main', 'thread_watchdog_002', 'stream_watchdog_002')
 	_, _ = app.codex_schedule_read_fallback('main', 'stream_watchdog_002', 'thread_watchdog_002')
-	app.codex_handle_notification('main', 'item/agentMessage/delta', '{"method":"item/agentMessage/delta","params":{"threadId":"thread_watchdog_002","delta":"hello"}}')
+	app.codex_handle_notification('main', 'item/agentMessage/delta',
+		'{"method":"item/agentMessage/delta","params":{"threadId":"thread_watchdog_002","delta":"hello"}}')
 	_, ok := app.codex_read_fallback('main', 'stream_watchdog_002')
 	assert !ok
 }
 
 fn test_codex_notification_reasoning_delta_clears_read_fallback() {
 	mut app := App{
-		codex: CodexState{
+		codex: codex.CodexState{
 			runtime: CodexProviderRuntime{
-				thread_stream_map: map[string]string{}
-				stream_map:        map[string][]CodexTarget{}
-				pending_rpcs:      map[int]CodexPendingRpc{}
-				err_bursts:        map[string][]string{}
+				thread_stream_map:   map[string]string{}
+				stream_map:          map[string][]CodexTarget{}
+				pending_rpcs:        map[int]CodexPendingRpc{}
+				err_bursts:          map[string][]string{}
 				err_pending_flushes: map[string]bool{}
-				read_fallbacks:    map[string]CodexReadFallback{}
+				read_fallbacks:      map[string]codex.ReadFallback{}
 			}
 		}
 	}
-	app.codex_bind_stream_to_thread('main', 'thread_watchdog_reasoning_001', 'stream_watchdog_reasoning_001')
-	_, _ = app.codex_schedule_read_fallback('main', 'stream_watchdog_reasoning_001', 'thread_watchdog_reasoning_001')
-	app.codex_handle_notification('main', 'item/reasoning/textDelta', '{"method":"item/reasoning/textDelta","params":{"threadId":"thread_watchdog_reasoning_001","itemId":"item_reasoning_001","delta":"thinking"}}')
+	app.codex_bind_stream_to_thread('main', 'thread_watchdog_reasoning_001',
+		'stream_watchdog_reasoning_001')
+	_, _ = app.codex_schedule_read_fallback('main', 'stream_watchdog_reasoning_001',
+		'thread_watchdog_reasoning_001')
+	app.codex_handle_notification('main', 'item/reasoning/textDelta',
+		'{"method":"item/reasoning/textDelta","params":{"threadId":"thread_watchdog_reasoning_001","itemId":"item_reasoning_001","delta":"thinking"}}')
 	_, ok := app.codex_read_fallback('main', 'stream_watchdog_reasoning_001')
 	assert !ok
 }
 
 fn test_codex_turn_start_response_does_not_schedule_read_fallback() {
 	mut app := App{
-		codex: CodexState{
+		codex: codex.CodexState{
 			runtime: CodexProviderRuntime{
-				thread_stream_map: map[string]string{}
-				stream_map:        map[string][]CodexTarget{}
-				pending_rpcs:      map[int]CodexPendingRpc{}
-				err_bursts:        map[string][]string{}
+				thread_stream_map:   map[string]string{}
+				stream_map:          map[string][]CodexTarget{}
+				pending_rpcs:        map[int]CodexPendingRpc{}
+				err_bursts:          map[string][]string{}
 				err_pending_flushes: map[string]bool{}
-				read_fallbacks:    map[string]CodexReadFallback{}
+				read_fallbacks:      map[string]codex.ReadFallback{}
 			}
 		}
 	}
@@ -320,11 +328,11 @@ fn test_codex_runtime_add_remove_and_clear_stream_targets() {
 
 fn test_codex_find_stream_targets_scans_across_instances() {
 	mut app := App{
-		codex: CodexState{
-			runtime: CodexProviderRuntime{
-				instance:          'main'
-				thread_stream_map: map[string]string{}
-				stream_map: {
+		codex: codex.CodexState{
+			runtime:   CodexProviderRuntime{
+				instance:            'main'
+				thread_stream_map:   map[string]string{}
+				stream_map:          {
 					'codex:stream_001': [
 						CodexTarget{
 							platform:   'feishu'
@@ -332,23 +340,23 @@ fn test_codex_find_stream_targets_scans_across_instances() {
 						},
 					]
 				}
-				pending_rpcs:      map[int]CodexPendingRpc{}
-				err_bursts:        map[string][]string{}
+				pending_rpcs:        map[int]CodexPendingRpc{}
+				err_bursts:          map[string][]string{}
 				err_pending_flushes: map[string]bool{}
-				read_fallbacks:    map[string]CodexReadFallback{}
+				read_fallbacks:      map[string]codex.ReadFallback{}
 			}
 			instances: {
 				'local4501': CodexProviderRuntime{
-					instance:          'local4501'
-					active_stream_id:  'codex:stream_001'
-					thread_stream_map: {
+					instance:            'local4501'
+					active_stream_id:    'codex:stream_001'
+					thread_stream_map:   {
 						'thread_local_001': 'codex:stream_001'
 					}
-					stream_map: map[string][]CodexTarget{}
-					pending_rpcs:      map[int]CodexPendingRpc{}
-					err_bursts:        map[string][]string{}
+					stream_map:          map[string][]CodexTarget{}
+					pending_rpcs:        map[int]CodexPendingRpc{}
+					err_bursts:          map[string][]string{}
 					err_pending_flushes: map[string]bool{}
-					read_fallbacks:    map[string]CodexReadFallback{}
+					read_fallbacks:      map[string]codex.ReadFallback{}
 				}
 			}
 		}
@@ -363,8 +371,10 @@ fn test_codex_find_stream_targets_scans_across_instances() {
 fn test_codex_dispatch_rpc_response_uses_logic_executor_without_worker_sockets() {
 	mut state := &CodexRuntimeTestDispatchState{}
 	mut app := App{
-		logic_executor: CodexRuntimeTestExecutor{
-			state: state
+		worker: worker.WorkerState{
+			logic_executor: CodexRuntimeTestExecutor{
+				state: state
+			}
 		}
 	}
 	app.dispatch_codex_rpc_response('main', CodexPendingRpc{
@@ -383,16 +393,19 @@ fn test_codex_dispatch_rpc_response_uses_logic_executor_without_worker_sockets()
 fn test_codex_notification_uses_logic_executor_without_worker_sockets() {
 	mut state := &CodexRuntimeTestDispatchState{}
 	mut app := App{
-		logic_executor: CodexRuntimeTestExecutor{
-			state: state
+		worker: worker.WorkerState{
+			logic_executor: CodexRuntimeTestExecutor{
+				state: state
+			}
 		}
-		codex: CodexState{
+		codex:  codex.CodexState{
 			runtime: CodexProviderRuntime{
 				active_stream_id: 'codex:task_002'
 			}
 		}
 	}
-	app.codex_handle_notification('main', 'item/agentMessage/delta', '{"method":"item/agentMessage/delta","params":{"delta":"hello"}}')
+	app.codex_handle_notification('main', 'item/agentMessage/delta',
+		'{"method":"item/agentMessage/delta","params":{"delta":"hello"}}')
 	assert state.dispatch_count == 1
 	assert state.last_req.provider == 'codex'
 	assert state.last_req.event_type == 'codex.notification'
@@ -403,24 +416,27 @@ fn test_codex_notification_uses_logic_executor_without_worker_sockets() {
 fn test_codex_notification_prefers_thread_bound_stream_over_active_stream() {
 	mut state := &CodexRuntimeTestDispatchState{}
 	mut app := App{
-		logic_executor: CodexRuntimeTestExecutor{
-			state: state
+		worker: worker.WorkerState{
+			logic_executor: CodexRuntimeTestExecutor{
+				state: state
+			}
 		}
-		codex: CodexState{
+		codex:  codex.CodexState{
 			runtime: CodexProviderRuntime{
-				active_stream_id: 'codex:wrong_active'
-				thread_stream_map: {
+				active_stream_id:    'codex:wrong_active'
+				thread_stream_map:   {
 					'thread_live_001': 'codex:thread_bound_001'
 				}
 				stream_map:          map[string][]CodexTarget{}
 				pending_rpcs:        map[int]CodexPendingRpc{}
 				err_bursts:          map[string][]string{}
 				err_pending_flushes: map[string]bool{}
-				read_fallbacks:      map[string]CodexReadFallback{}
+				read_fallbacks:      map[string]codex.ReadFallback{}
 			}
 		}
 	}
-	app.codex_handle_notification('main', 'thread/realtime/itemAdded', '{"method":"thread/realtime/itemAdded","params":{"threadId":"thread_live_001","item":{"id":"item_live_001","type":"reasoning"}}}')
+	app.codex_handle_notification('main', 'thread/realtime/itemAdded',
+		'{"method":"thread/realtime/itemAdded","params":{"threadId":"thread_live_001","item":{"id":"item_live_001","type":"reasoning"}}}')
 	assert state.dispatch_count == 1
 	assert state.last_req.event_type == 'codex.notification'
 	assert state.last_req.trace_id == 'codex:thread_bound_001'
@@ -430,10 +446,12 @@ fn test_codex_notification_prefers_thread_bound_stream_over_active_stream() {
 fn test_codex_server_request_uses_logic_executor_without_worker_sockets() {
 	mut state := &CodexRuntimeTestDispatchState{}
 	mut app := App{
-		logic_executor: CodexRuntimeTestExecutor{
-			state: state
+		worker: worker.WorkerState{
+			logic_executor: CodexRuntimeTestExecutor{
+				state: state
+			}
 		}
-		codex: CodexState{
+		codex:  codex.CodexState{
 			runtime: CodexProviderRuntime{
 				active_stream_id: 'codex:task_approval_001'
 			}
@@ -443,7 +461,8 @@ fn test_codex_server_request_uses_logic_executor_without_worker_sockets() {
 		is_request: true
 		method:     'item/commandExecution/requestApproval'
 		id_raw:     '991'
-	}, '{"method":"item/commandExecution/requestApproval","id":991,"params":{"threadId":"thread_approval_001","turnId":"turn_approval_001","itemId":"item_approval_001","command":"rm foo"}}')
+	},
+		'{"method":"item/commandExecution/requestApproval","id":991,"params":{"threadId":"thread_approval_001","turnId":"turn_approval_001","itemId":"item_approval_001","command":"rm foo"}}')
 	assert state.dispatch_count == 1
 	assert state.last_req.provider == 'codex'
 	assert state.last_req.event_type == 'codex.server_request'

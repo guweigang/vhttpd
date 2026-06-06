@@ -1,8 +1,7 @@
 module executor
-import transport
 
+import transport
 import json
-import net.http
 import net.unix
 import time
 
@@ -142,19 +141,19 @@ pub fn (e SocketWorkerExecutor) dispatch_http(mut app AppFacade, req HttpLogicDi
 	if read_timeout > 0 {
 		conn.set_read_timeout(time.millisecond * read_timeout)
 	}
-	payload := transport.encode_worker_request(req.method, req.path, req.req, req.remote_addr, req.trace_id,
-		req.request_id)
-	transport.write_frame(mut conn, payload) or {
+	payload := transport.WorkerHttpRequestCodec.encode_request(req.method, req.path, req.req,
+		req.remote_addr, req.trace_id, req.request_id)
+	transport.WorkerFrameCodec.write(mut conn, payload) or {
 		conn.close() or {}
 		app.on_worker_request_finished(selected_socket)
 		return error(err.msg())
 	}
-	first_raw := transport.read_frame(mut conn) or {
+	first_raw := transport.WorkerFrameCodec.read(mut conn) or {
 		conn.close() or {}
 		app.on_worker_request_finished(selected_socket)
 		return error(err.msg())
 	}
-	if start := transport.try_decode_stream_start(first_raw) {
+	if start := transport.WorkerStreamFrame.try_decode_start(first_raw) {
 		return HttpLogicDispatchOutcome{
 			kind:         .stream
 			socket_path:  selected_socket
@@ -162,7 +161,7 @@ pub fn (e SocketWorkerExecutor) dispatch_http(mut app AppFacade, req HttpLogicDi
 			conn:         conn
 		}
 	}
-	if plan := transport.try_decode_upstream_plan(first_raw) {
+	if plan := transport.WorkerUpstreamPlanFrame.try_decode_start(first_raw) {
 		conn.close() or {}
 		app.on_worker_request_finished(selected_socket)
 		return HttpLogicDispatchOutcome{
@@ -191,8 +190,8 @@ pub fn (e SocketWorkerExecutor) open_websocket_session(mut app AppFacade, req We
 	if read_timeout > 0 {
 		worker_conn.set_read_timeout(time.millisecond * read_timeout)
 	}
-	accepted, status, body := app.worker_websocket_open(mut worker_conn, req.req,
-		req.remote_addr, req.path, req.request_id, req.trace_id) or {
+	accepted, status, body := app.worker_websocket_open(mut worker_conn, req.req, req.remote_addr,
+		req.path, req.request_id, req.trace_id) or {
 		worker_conn.close() or {}
 		return error(err.msg())
 	}

@@ -14,10 +14,6 @@ mut:
 	app_ptr voidptr
 }
 
-fn app_facade_wrapper_get_ptr(w &AppFacadeWrapper) voidptr {
-	return w.app_ptr
-}
-
 pub fn new_app_facade_wrapper(mut app App) executor.AppFacade {
 	return AppFacadeWrapper{
 		app_ptr: voidptr(&app)
@@ -145,6 +141,11 @@ pub type InProcVjsxExecutor = executor.InProcVjsxExecutor
 
 pub fn new_inproc_vjsx_executor(config executor.VjsxRuntimeFacadeConfig) executor.InProcVjsxExecutor {
 	return executor.new_inproc_vjsx_executor(config)
+}
+
+// build_executor_factory delegates to executor module's default factory.
+pub fn build_executor_factory() executor.ExecutorFactory {
+	return executor.ExecutorFactory.new_default()
 }
 
 pub fn (mut app App) as_facade() executor.AppFacade {

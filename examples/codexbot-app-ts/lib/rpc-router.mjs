@@ -292,9 +292,12 @@ export function createCodexRpcResponseRouter(deps) {
                 }]
               : []);
         const itemCommands = await recoverPlainPromptReadItems(stream, response, recoveredItems, deps);
+        const parentText = itemCommands?.length
+          ? turnLifecycleText("completed")
+          : renderedReadAnswer;
         return {
           handled: true,
-          commands: updateParentLifecycleCommands(response.streamId, turnLifecycleText("completed"), deps, { finish: true })
+          commands: updateParentLifecycleCommands(response.streamId, parentText, deps, { finish: true })
             .concat(itemCommands || []),
         };
       }

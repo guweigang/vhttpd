@@ -1,13 +1,13 @@
-module main
+module executor
 
 import os
 
 fn test_vjsx_signature_path_matches_supports_recursive_and_exact_patterns() {
-	assert vjsx_signature_path_matches('apps/demo/app.mts', '**/*.mts')
-	assert vjsx_signature_path_matches('apps/demo/app.mts', 'apps/**/*.mts')
-	assert !vjsx_signature_path_matches('apps/demo/app.mts', 'ignore.mts')
-	assert vjsx_signature_path_matches('ignore.mts', 'ignore.mts')
-	assert vjsx_signature_path_matches('tmp/cache/file.json', 'tmp/**')
+	assert VjsxHostSignature.path_matches('apps/demo/app.mts', '**/*.mts')
+	assert VjsxHostSignature.path_matches('apps/demo/app.mts', 'apps/**/*.mts')
+	assert !VjsxHostSignature.path_matches('apps/demo/app.mts', 'ignore.mts')
+	assert VjsxHostSignature.path_matches('ignore.mts', 'ignore.mts')
+	assert VjsxHostSignature.path_matches('tmp/cache/file.json', 'tmp/**')
 }
 
 fn test_vjsx_signature_expand_globs_collects_matches_without_os_glob() {
@@ -23,7 +23,7 @@ fn test_vjsx_signature_expand_globs_collects_matches_without_os_glob() {
 	defer {
 		os.rmdir_all(temp_dir) or {}
 	}
-	matches := vjsx_signature_expand_globs(temp_dir, ['**/*.mts'])
+	matches := VjsxHostSignature.expand_globs(temp_dir, ['**/*.mts'])
 	assert matches.len == 2
 	assert matches[0].ends_with('/apps/demo/app.mts') || matches[1].ends_with('/apps/demo/app.mts')
 	assert matches[0].ends_with('/ignore.mts') || matches[1].ends_with('/ignore.mts')

@@ -10,10 +10,10 @@ pub mut:
 	done            bool
 }
 
-// decode_progress_chunk incrementally decodes an HTTP progress callback
+// decode incrementally decodes an HTTP progress callback
 // chunk. Handles auto-detection of plain vs chunked transfer encoding and
 // returns the decoded accumulated content as a string.
-pub fn decode_progress_chunk(mut decoder ChunkDecodeState, chunk []u8) string {
+pub fn (mut decoder ChunkDecodeState) decode(chunk []u8) string {
 	if chunk.len == 0 || decoder.done {
 		return ''
 	}
@@ -25,7 +25,7 @@ pub fn decode_progress_chunk(mut decoder ChunkDecodeState, chunk []u8) string {
 	if decoder.mode == 'unknown' {
 		if decoder.buffer.contains('\r\n') {
 			first_line := decoder.buffer.all_before('\r\n')
-			_ := hex_chunk_size(first_line) or {
+			_ := OpenAIResolvedPlan.hex_chunk_size(first_line) or {
 				decoder.mode = 'plain'
 				out := decoder.buffer
 				decoder.buffer = ''
@@ -60,7 +60,7 @@ pub fn decode_progress_chunk(mut decoder ChunkDecodeState, chunk []u8) string {
 			}
 			line := decoder.buffer.all_before('\r\n')
 			decoder.buffer = decoder.buffer.all_after('\r\n')
-			size := hex_chunk_size(line) or {
+			size := OpenAIResolvedPlan.hex_chunk_size(line) or {
 				decoder.mode = 'plain'
 				out += decoder.buffer
 				decoder.buffer = ''

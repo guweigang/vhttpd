@@ -24,7 +24,6 @@ VJS_QUICKJS_PATH ?= $(shell if [ -f "$(LOCAL_QUICKJS)/quickjs.c" ] && [ -f "$(LO
 VJSX_FLAGS ?= -d build_quickjs
 V_ENV = VJS_QUICKJS_PATH="$(VJS_QUICKJS_PATH)"
 
-DB_IMPL_DIR := $(ROOT)/dbsrc
 BUILD_STAGE_ROOT := $(ROOT)/tmp/vbuildsrc
 BUILD_STAGE_DIR := $(BUILD_STAGE_ROOT)
 
@@ -64,9 +63,6 @@ prepare-build-src:
 		find $(BUILD_STAGE_DIR) -name '*_test_helpers.v' -delete; \
 		find $(BUILD_STAGE_DIR) -name 'test_*.v' -delete; \
 	fi
-ifeq ($(WITH_DB),1)
-	@cp $(DB_IMPL_DIR)/*.v $(BUILD_STAGE_DIR)/
-endif
 
 build: prepare-build-src
 	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_FLAGS) $(V_DB_FLAGS) $(V_GC_FLAG) -o $(VHTTPD_BIN) $(BUILD_STAGE_DIR)

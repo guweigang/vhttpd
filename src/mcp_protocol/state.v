@@ -12,7 +12,11 @@ pub fn (mut s McpState) prune_sessions_locked(now i64) {
 	ttl := if s.session_ttl_seconds > 0 { i64(s.session_ttl_seconds) } else { i64(900) }
 	mut expired := []string{}
 	for id, session in s.sessions {
-		last_seen := if session.last_activity_unix > 0 { session.last_activity_unix } else { session.started_at_unix }
+		last_seen := if session.last_activity_unix > 0 {
+			session.last_activity_unix
+		} else {
+			session.started_at_unix
+		}
 		if now - last_seen > ttl {
 			expired << id
 		}
@@ -32,7 +36,11 @@ pub fn (mut s McpState) evict_one_locked() {
 	mut candidate_id := ''
 	mut candidate_last := i64(0)
 	for id, session in s.sessions {
-		last_seen := if session.last_activity_unix > 0 { session.last_activity_unix } else { session.started_at_unix }
+		last_seen := if session.last_activity_unix > 0 {
+			session.last_activity_unix
+		} else {
+			session.started_at_unix
+		}
 		if candidate_id == '' || last_seen < candidate_last {
 			candidate_id = id
 			candidate_last = last_seen
@@ -76,16 +84,16 @@ pub fn (mut s McpState) ensure_session(session_id string, protocol_version strin
 		s.evict_one_locked()
 	}
 	session := Session{
-		id: session_id
-		protocol_version: protocol_version
-		request_id: req_id
-		trace_id: trace_id
-		path: path
-		started_at_unix: now
-		last_activity_unix: now
+		id:                       session_id
+		protocol_version:         protocol_version
+		request_id:               req_id
+		trace_id:                 trace_id
+		path:                     path
+		started_at_unix:          now
+		last_activity_unix:       now
 		client_capabilities_json: ''
-		conn: unsafe { nil }
-		pending: []string{}
+		conn:                     unsafe { nil }
+		pending:                  []string{}
 	}
 	s.sessions[session_id] = session
 	return session
@@ -161,7 +169,9 @@ pub fn (mut s McpState) queue_message_drop_due_to_sampling(session_id string) bo
 
 pub fn (mut s McpState) do_queue(session_id string, raw string) QueueResult {
 	if session_id == '' || raw == '' {
-		return QueueResult{queued: false}
+		return QueueResult{
+			queued: false
+		}
 	}
 	s.mu.@lock()
 	defer {
@@ -177,9 +187,13 @@ pub fn (mut s McpState) do_queue(session_id string, raw string) QueueResult {
 			s.stat_pending_dropped_total += drop_count
 		}
 		s.sessions[session_id] = session
-		return QueueResult{queued: true}
+		return QueueResult{
+			queued: true
+		}
 	}
-	return QueueResult{queued: false}
+	return QueueResult{
+		queued: false
+	}
 }
 
 pub fn (mut s McpState) flush_session(session_id string) bool {
@@ -203,7 +217,7 @@ pub fn (mut s McpState) flush_session(session_id string) bool {
 		return false
 	}
 	for raw in pending {
-		if !write_sse_json(mut client, raw) {
+		if !Session.write_sse_json(mut client, raw) {
 			return false
 		}
 	}
@@ -224,15 +238,15 @@ pub fn (mut s McpState) snapshot(details bool, limit int, offset int, session_fi
 			continue
 		}
 		sessions << SessionSnapshot{
-			id: session.id
-			protocol_version: session.protocol_version
-			request_id: session.request_id
-			trace_id: session.trace_id
-			path: session.path
-			started_at_unix: session.started_at_unix
-			last_activity_unix: session.last_activity_unix
-			pending_count: session.pending.len
-			connected: !isnil(session.conn)
+			id:                       session.id
+			protocol_version:         session.protocol_version
+			request_id:               session.request_id
+			trace_id:                 session.trace_id
+			path:                     session.path
+			started_at_unix:          session.started_at_unix
+			last_activity_unix:       session.last_activity_unix
+			pending_count:            session.pending.len
+			connected:                !isnil(session.conn)
 			client_capabilities_json: session.client_capabilities_json
 		}
 	}
@@ -241,37 +255,53 @@ pub fn (mut s McpState) snapshot(details bool, limit int, offset int, session_fi
 	total := sessions.len
 	if !details {
 		return RuntimeSnapshot{
-			active_sessions: total
-			returned_sessions: 0
-			details: false
-			limit: limit
-			offset: offset
-			session_id: session_filter
-			protocol_version: protocol_filter
-			max_sessions: if s.max_sessions > 0 { s.max_sessions } else { 1000 }
-			max_pending_messages: if s.max_pending_messages > 0 { s.max_pending_messages } else { 128 }
-			session_ttl_seconds: if s.session_ttl_seconds > 0 { s.session_ttl_seconds } else { 900 }
-			allowed_origins: s.allowed_origins.clone()
-			sampling_capability_policy: normalize_sampling_capability_policy(s.sampling_capability_policy)
-			sessions: []SessionSnapshot{}
+			active_sessions:            total
+			returned_sessions:          0
+			details:                    false
+			limit:                      limit
+			offset:                     offset
+			session_id:                 session_filter
+			protocol_version:           protocol_filter
+			max_sessions:               if s.max_sessions > 0 { s.max_sessions } else { 1000 }
+			max_pending_messages:       if s.max_pending_messages > 0 {
+				s.max_pending_messages
+			} else {
+				128
+			}
+			session_ttl_seconds:        if s.session_ttl_seconds > 0 {
+				s.session_ttl_seconds
+			} else {
+				900
+			}
+			allowed_origins:            s.allowed_origins.clone()
+			sampling_capability_policy: McpState.normalize_sampling_capability_policy(s.sampling_capability_policy)
+			sessions:                   []SessionSnapshot{}
 		}
 	}
 	start := if offset < total { offset } else { total }
 	end := if start + limit < total { start + limit } else { total }
 	return RuntimeSnapshot{
-		active_sessions: total
-		returned_sessions: end - start
-		details: true
-		limit: limit
-		offset: offset
-		session_id: session_filter
-		protocol_version: protocol_filter
-		max_sessions: if s.max_sessions > 0 { s.max_sessions } else { 1000 }
-		max_pending_messages: if s.max_pending_messages > 0 { s.max_pending_messages } else { 128 }
-		session_ttl_seconds: if s.session_ttl_seconds > 0 { s.session_ttl_seconds } else { 900 }
-		allowed_origins: s.allowed_origins.clone()
-		sampling_capability_policy: normalize_sampling_capability_policy(s.sampling_capability_policy)
-		sessions: sessions[start..end].clone()
+		active_sessions:            total
+		returned_sessions:          end - start
+		details:                    true
+		limit:                      limit
+		offset:                     offset
+		session_id:                 session_filter
+		protocol_version:           protocol_filter
+		max_sessions:               if s.max_sessions > 0 { s.max_sessions } else { 1000 }
+		max_pending_messages:       if s.max_pending_messages > 0 {
+			s.max_pending_messages
+		} else {
+			128
+		}
+		session_ttl_seconds:        if s.session_ttl_seconds > 0 {
+			s.session_ttl_seconds
+		} else {
+			900
+		}
+		allowed_origins:            s.allowed_origins.clone()
+		sampling_capability_policy: McpState.normalize_sampling_capability_policy(s.sampling_capability_policy)
+		sessions:                   sessions[start..end].clone()
 	}
 }
 
@@ -311,7 +341,7 @@ pub fn (mut s McpState) delete_session(session_id string) bool {
 }
 
 pub fn (s &McpState) client_capabilities_for_request(session_id string, raw string) string {
-	body_caps := extract_client_capabilities_json(raw)
+	body_caps := Session.extract_client_capabilities_json(raw)
 	if body_caps != '' {
 		return body_caps
 	}

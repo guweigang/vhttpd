@@ -8,7 +8,6 @@ import executor
 import json
 import net.http
 import net.urllib
-import time
 import x.json2
 
 // ── Protocol Constants ──
@@ -108,6 +107,10 @@ pub:
 	content_length int    @[json: 'content_length']
 }
 
+pub fn UploadImageRequest.from_json(body string) !UploadImageRequest {
+	return json.decode(UploadImageRequest, body)
+}
+
 pub struct TextContent {
 pub:
 	text string @[json: 'text']
@@ -136,17 +139,31 @@ pub:
 
 // ── JSON Helpers ──
 
+pub struct JsonField {}
+
 pub fn json_field_string(obj map[string]json2.Any, key string) string {
-	return (obj[key] or { json2.Any('') }).str()
+	return JsonField.string(obj, key)
 }
 
 pub fn json_map_field(obj map[string]json2.Any, key string) map[string]json2.Any {
+	return JsonField.map(obj, key)
+}
+
+pub fn JsonField.string(obj map[string]json2.Any, key string) string {
+	return (obj[key] or { json2.Any('') }).str()
+}
+
+pub fn JsonField.map(obj map[string]json2.Any, key string) map[string]json2.Any {
 	return (obj[key] or { json2.Any(map[string]json2.Any{}) }).as_map()
 }
 
 // ── Message Content Building ──
 
 pub fn build_message_content(msg_type string, raw_content string, text string, content_fields map[string]string) !string {
+	return SendMessageRequest.build_content(msg_type, raw_content, text, content_fields)
+}
+
+pub fn SendMessageRequest.build_content(msg_type string, raw_content string, text string, content_fields map[string]string) !string {
 	content := raw_content.trim_space()
 	if content != '' {
 		return content
@@ -217,6 +234,10 @@ pub fn build_message_content(msg_type string, raw_content string, text string, c
 }
 
 pub fn extract_markdown_text(raw_content string, text string, content_fields map[string]string) string {
+	return SendMessageRequest.extract_markdown_text(raw_content, text, content_fields)
+}
+
+pub fn SendMessageRequest.extract_markdown_text(raw_content string, text string, content_fields map[string]string) string {
 	if text.trim_space() != '' {
 		return text
 	}
@@ -236,17 +257,29 @@ pub fn extract_markdown_text(raw_content string, text string, content_fields map
 }
 
 pub fn interactive_markdown_card(markdown string) string {
+	return SendMessageRequest.interactive_markdown_card(markdown)
+}
+
+pub fn SendMessageRequest.interactive_markdown_card(markdown string) string {
 	return '{"elements":[{"tag":"markdown","content":${json.encode(markdown)}}]}'
 }
 
 pub fn streaming_card(markdown string, segment_index int) string {
+	return SendMessageRequest.streaming_card(markdown, segment_index)
+}
+
+pub fn SendMessageRequest.streaming_card(markdown string, segment_index int) string {
 	if segment_index <= 1 {
-		return interactive_markdown_card(markdown)
+		return SendMessageRequest.interactive_markdown_card(markdown)
 	}
 	return '{"elements":[{"tag":"note","elements":[{"tag":"plain_text","content":${json.encode('继续输出 · 第 ${segment_index} 段')}}]},{"tag":"markdown","content":${json.encode(markdown)}}]}'
 }
 
 pub fn update_http_method(msg_type string) http.Method {
+	return UpdateMessageRequest.http_method_for(msg_type)
+}
+
+pub fn UpdateMessageRequest.http_method_for(msg_type string) http.Method {
 	return match msg_type {
 		'interactive' { .patch }
 		else { .put }
@@ -254,6 +287,10 @@ pub fn update_http_method(msg_type string) http.Method {
 }
 
 pub fn delay_update_card_body(token string, raw_content string) !string {
+	return UpdateMessageRequest.delay_card_body(token, raw_content)
+}
+
+pub fn UpdateMessageRequest.delay_card_body(token string, raw_content string) !string {
 	if token.trim_space() == '' {
 		return error('missing callback token')
 	}
@@ -268,6 +305,10 @@ pub fn delay_update_card_body(token string, raw_content string) !string {
 // ── Endpoint URL Helpers ──
 
 pub fn normalize_open_base(raw string) string {
+	return RuntimeWsEndpointData.normalize_open_base(raw)
+}
+
+pub fn RuntimeWsEndpointData.normalize_open_base(raw string) string {
 	mut base := raw.trim_space()
 	if base == '' {
 		base = 'https://open.feishu.cn/open-apis'
@@ -279,16 +320,24 @@ pub fn normalize_open_base(raw string) string {
 }
 
 pub fn root_base(base string) string {
-	mut trimmed := normalize_open_base(base)
+	return RuntimeWsEndpointData.root_base(base)
+}
+
+pub fn ws_endpoint_urls(base string) []string {
+	return RuntimeWsEndpointData.endpoint_urls(base)
+}
+
+pub fn RuntimeWsEndpointData.root_base(base string) string {
+	mut trimmed := RuntimeWsEndpointData.normalize_open_base(base)
 	if trimmed.ends_with('/open-apis') {
 		trimmed = trimmed[..trimmed.len - '/open-apis'.len]
 	}
 	return trimmed
 }
 
-pub fn ws_endpoint_urls(base string) []string {
-	primary := '${normalize_open_base(base)}/callback/ws/endpoint'
-	fallback := '${root_base(base)}/callback/ws/endpoint'
+pub fn RuntimeWsEndpointData.endpoint_urls(base string) []string {
+	primary := '${RuntimeWsEndpointData.normalize_open_base(base)}/callback/ws/endpoint'
+	fallback := '${RuntimeWsEndpointData.root_base(base)}/callback/ws/endpoint'
 	if fallback == primary {
 		return [primary]
 	}
@@ -296,6 +345,10 @@ pub fn ws_endpoint_urls(base string) []string {
 }
 
 pub fn ws_endpoint_body(app_id string, app_secret string) string {
+	return RuntimeWsEndpointData.request_body(app_id, app_secret)
+}
+
+pub fn RuntimeWsEndpointData.request_body(app_id string, app_secret string) string {
 	return json.encode({
 		'AppID':     app_id
 		'AppSecret': app_secret
@@ -305,15 +358,23 @@ pub fn ws_endpoint_body(app_id string, app_secret string) string {
 // ── Callback Crypto ──
 
 pub fn callback_challenge(payload string) string {
+	return CallbackChallengeResponse.challenge(payload)
+}
+
+pub fn CallbackChallengeResponse.challenge(payload string) string {
 	parsed := json2.decode[json2.Any](payload) or { return '' }
 	root := parsed.as_map()
-	if json_field_string(root, 'type') != 'url_verification' {
+	if JsonField.string(root, 'type') != 'url_verification' {
 		return ''
 	}
-	return json_field_string(root, 'challenge')
+	return JsonField.string(root, 'challenge')
 }
 
 pub fn pkcs7_unpad(data []u8) ![]u8 {
+	return CallbackChallengeResponse.pkcs7_unpad(data)
+}
+
+pub fn CallbackChallengeResponse.pkcs7_unpad(data []u8) ![]u8 {
 	if data.len == 0 {
 		return error('empty encrypted payload')
 	}
@@ -330,6 +391,10 @@ pub fn pkcs7_unpad(data []u8) ![]u8 {
 }
 
 pub fn callback_signature_valid(headers map[string]string, encrypt_key string, payload string) bool {
+	return CallbackChallengeResponse.signature_valid(headers, encrypt_key, payload)
+}
+
+pub fn CallbackChallengeResponse.signature_valid(headers map[string]string, encrypt_key string, payload string) bool {
 	mut signature := (headers['x-lark-signature'] or { '' }).trim_space().to_lower()
 	if signature == '' {
 		signature = (headers['x-lark-request-signature'] or { '' }).trim_space().to_lower()
@@ -347,12 +412,16 @@ pub fn callback_signature_valid(headers map[string]string, encrypt_key string, p
 }
 
 pub fn callback_decrypt_payload(encrypt_key string, payload string) !string {
+	return CallbackChallengeResponse.decrypt_payload(encrypt_key, payload)
+}
+
+pub fn CallbackChallengeResponse.decrypt_payload(encrypt_key string, payload string) !string {
 	if encrypt_key.trim_space() == '' {
 		return payload
 	}
 	parsed := json2.decode[json2.Any](payload) or { return payload }
 	root := parsed.as_map()
-	encrypted := json_field_string(root, 'encrypt')
+	encrypted := JsonField.string(root, 'encrypt')
 	if encrypted == '' {
 		return payload
 	}
@@ -366,13 +435,17 @@ pub fn callback_decrypt_payload(encrypt_key string, payload string) !string {
 	mut mode := cipher.new_cbc(block, iv)
 	mut plaintext := []u8{len: ciphertext.len}
 	mode.decrypt_blocks(mut plaintext, ciphertext)
-	unpadded := pkcs7_unpad(plaintext)!
+	unpadded := CallbackChallengeResponse.pkcs7_unpad(plaintext)!
 	return unpadded.bytestr()
 }
 
 // ── Protobuf Encoding ──
 
 pub fn varint_encode(mut out []u8, value u64) {
+	RuntimeProtoFrame.varint_encode(mut out, value)
+}
+
+pub fn RuntimeProtoFrame.varint_encode(mut out []u8, value u64) {
 	mut current := value
 	for {
 		if (current & ~u64(0x7f)) == 0 {
@@ -385,64 +458,84 @@ pub fn varint_encode(mut out []u8, value u64) {
 }
 
 pub fn encode_field_key(mut out []u8, field_number int, wire_type int) {
-	varint_encode(mut out, (u64(field_number) << 3) | u64(wire_type))
+	RuntimeProtoFrame.encode_field_key(mut out, field_number, wire_type)
+}
+
+pub fn RuntimeProtoFrame.encode_field_key(mut out []u8, field_number int, wire_type int) {
+	RuntimeProtoFrame.varint_encode(mut out, (u64(field_number) << 3) | u64(wire_type))
 }
 
 pub fn encode_bytes_field(mut out []u8, field_number int, payload []u8) {
-	encode_field_key(mut out, field_number, 2)
-	varint_encode(mut out, u64(payload.len))
+	RuntimeProtoFrame.encode_bytes_field(mut out, field_number, payload)
+}
+
+pub fn RuntimeProtoFrame.encode_bytes_field(mut out []u8, field_number int, payload []u8) {
+	RuntimeProtoFrame.encode_field_key(mut out, field_number, 2)
+	RuntimeProtoFrame.varint_encode(mut out, u64(payload.len))
 	out << payload
 }
 
 pub fn encode_string_field(mut out []u8, field_number int, payload string) {
-	encode_bytes_field(mut out, field_number, payload.bytes())
+	RuntimeProtoFrame.encode_string_field(mut out, field_number, payload)
+}
+
+pub fn RuntimeProtoFrame.encode_string_field(mut out []u8, field_number int, payload string) {
+	RuntimeProtoFrame.encode_bytes_field(mut out, field_number, payload.bytes())
 }
 
 pub fn proto_header_encode(header RuntimeProtoHeader) []u8 {
+	return header.encode()
+}
+
+pub fn (header RuntimeProtoHeader) encode() []u8 {
 	mut out := []u8{}
 	if header.key != '' {
-		encode_string_field(mut out, 1, header.key)
+		RuntimeProtoFrame.encode_string_field(mut out, 1, header.key)
 	}
 	if header.value != '' {
-		encode_string_field(mut out, 2, header.value)
+		RuntimeProtoFrame.encode_string_field(mut out, 2, header.value)
 	}
 	return out
 }
 
 pub fn proto_frame_encode(frame RuntimeProtoFrame) []u8 {
+	return frame.encode()
+}
+
+pub fn (frame RuntimeProtoFrame) encode() []u8 {
 	mut out := []u8{}
 	if frame.seq_id > 0 {
-		encode_field_key(mut out, 1, 0)
-		varint_encode(mut out, frame.seq_id)
+		RuntimeProtoFrame.encode_field_key(mut out, 1, 0)
+		RuntimeProtoFrame.varint_encode(mut out, frame.seq_id)
 	}
 	if frame.log_id > 0 {
-		encode_field_key(mut out, 2, 0)
-		varint_encode(mut out, frame.log_id)
+		RuntimeProtoFrame.encode_field_key(mut out, 2, 0)
+		RuntimeProtoFrame.varint_encode(mut out, frame.log_id)
 	}
 	if frame.service != 0 {
-		encode_field_key(mut out, 3, 0)
-		varint_encode(mut out, u64(frame.service))
+		RuntimeProtoFrame.encode_field_key(mut out, 3, 0)
+		RuntimeProtoFrame.varint_encode(mut out, u64(frame.service))
 	}
-	encode_field_key(mut out, 4, 0)
-	varint_encode(mut out, u64(frame.method))
+	RuntimeProtoFrame.encode_field_key(mut out, 4, 0)
+	RuntimeProtoFrame.varint_encode(mut out, u64(frame.method))
 
 	for header in frame.headers {
-		encoded := proto_header_encode(header)
+		encoded := header.encode()
 		if encoded.len > 0 {
-			encode_bytes_field(mut out, 5, encoded)
+			RuntimeProtoFrame.encode_bytes_field(mut out, 5, encoded)
 		}
 	}
 	if frame.payload_encoding != '' {
-		encode_string_field(mut out, 6, frame.payload_encoding)
+		RuntimeProtoFrame.encode_string_field(mut out, 6, frame.payload_encoding)
 	}
 	if frame.payload_type != '' {
-		encode_string_field(mut out, 7, frame.payload_type)
+		RuntimeProtoFrame.encode_string_field(mut out, 7, frame.payload_type)
 	}
 	if frame.payload.len > 0 {
-		encode_bytes_field(mut out, 8, frame.payload)
+		RuntimeProtoFrame.encode_bytes_field(mut out, 8, frame.payload)
 	}
 	if frame.log_id_str != '' {
-		encode_string_field(mut out, 9, frame.log_id_str)
+		RuntimeProtoFrame.encode_string_field(mut out, 9, frame.log_id_str)
 	}
 	return out
 }
@@ -450,6 +543,10 @@ pub fn proto_frame_encode(frame RuntimeProtoFrame) []u8 {
 // ── Protobuf Decoding ──
 
 pub fn varint_decode(buf []u8, start int) !(u64, int) {
+	return RuntimeProtoFrame.varint_decode(buf, start)
+}
+
+pub fn RuntimeProtoFrame.varint_decode(buf []u8, start int) !(u64, int) {
 	mut value := u64(0)
 	mut shift := 0
 	mut idx := start
@@ -469,13 +566,17 @@ pub fn varint_decode(buf []u8, start int) !(u64, int) {
 }
 
 pub fn skip_wire(buf []u8, start int, wire_type int) !int {
+	return RuntimeProtoFrame.skip_wire(buf, start, wire_type)
+}
+
+pub fn RuntimeProtoFrame.skip_wire(buf []u8, start int, wire_type int) !int {
 	match wire_type {
 		0 {
-			_, next := varint_decode(buf, start)!
+			_, next := RuntimeProtoFrame.varint_decode(buf, start)!
 			return next
 		}
 		2 {
-			length, next := varint_decode(buf, start)!
+			length, next := RuntimeProtoFrame.varint_decode(buf, start)!
 			end := next + int(length)
 			if end > buf.len {
 				return error('protobuf length exceeds payload')
@@ -489,18 +590,22 @@ pub fn skip_wire(buf []u8, start int, wire_type int) !int {
 }
 
 pub fn proto_header_decode(buf []u8) !RuntimeProtoHeader {
+	return RuntimeProtoHeader.decode(buf)
+}
+
+pub fn RuntimeProtoHeader.decode(buf []u8) !RuntimeProtoHeader {
 	mut out := RuntimeProtoHeader{}
 	mut idx := 0
 	for idx < buf.len {
-		key, next := varint_decode(buf, idx)!
+		key, next := RuntimeProtoFrame.varint_decode(buf, idx)!
 		idx = next
 		field_number := int(key >> 3)
 		wire_type := int(key & 0x07)
 		if wire_type != 2 {
-			idx = skip_wire(buf, idx, wire_type)!
+			idx = RuntimeProtoFrame.skip_wire(buf, idx, wire_type)!
 			continue
 		}
-		length, next_len := varint_decode(buf, idx)!
+		length, next_len := RuntimeProtoFrame.varint_decode(buf, idx)!
 		start := next_len
 		end := start + int(length)
 		if end > buf.len {
@@ -519,16 +624,20 @@ pub fn proto_header_decode(buf []u8) !RuntimeProtoHeader {
 }
 
 pub fn proto_frame_decode(buf []u8) !RuntimeProtoFrame {
+	return RuntimeProtoFrame.decode(buf)
+}
+
+pub fn RuntimeProtoFrame.decode(buf []u8) !RuntimeProtoFrame {
 	mut out := RuntimeProtoFrame{}
 	mut idx := 0
 	for idx < buf.len {
-		key, next := varint_decode(buf, idx)!
+		key, next := RuntimeProtoFrame.varint_decode(buf, idx)!
 		idx = next
 		field_number := int(key >> 3)
 		wire_type := int(key & 0x07)
 		match field_number {
 			1, 2, 3, 4 {
-				value, next_val := varint_decode(buf, idx)!
+				value, next_val := RuntimeProtoFrame.varint_decode(buf, idx)!
 				match field_number {
 					1 { out.seq_id = value }
 					2 { out.log_id = value }
@@ -543,7 +652,7 @@ pub fn proto_frame_decode(buf []u8) !RuntimeProtoFrame {
 				if wire_type != 2 {
 					return error('unexpected protobuf wire type ${wire_type} for field ${field_number}')
 				}
-				length, next_len := varint_decode(buf, idx)!
+				length, next_len := RuntimeProtoFrame.varint_decode(buf, idx)!
 				start := next_len
 				end := start + int(length)
 				if end > buf.len {
@@ -551,7 +660,7 @@ pub fn proto_frame_decode(buf []u8) !RuntimeProtoFrame {
 				}
 				match field_number {
 					5 {
-						header := proto_header_decode(buf[start..end])!
+						header := RuntimeProtoHeader.decode(buf[start..end])!
 						out.headers << header
 					}
 					6 {
@@ -572,7 +681,7 @@ pub fn proto_frame_decode(buf []u8) !RuntimeProtoFrame {
 				idx = end
 			}
 			else {
-				idx = skip_wire(buf, idx, wire_type)!
+				idx = RuntimeProtoFrame.skip_wire(buf, idx, wire_type)!
 			}
 		}
 	}
@@ -580,6 +689,10 @@ pub fn proto_frame_decode(buf []u8) !RuntimeProtoFrame {
 }
 
 pub fn header_map(headers []RuntimeProtoHeader) map[string]string {
+	return RuntimeProtoHeader.to_map(headers)
+}
+
+pub fn RuntimeProtoHeader.to_map(headers []RuntimeProtoHeader) map[string]string {
 	mut out := map[string]string{}
 	for header in headers {
 		if header.key == '' {
@@ -593,6 +706,10 @@ pub fn header_map(headers []RuntimeProtoHeader) map[string]string {
 // ── Event Summary ──
 
 pub fn event_summary(payload string) executor.FeishuRuntimeEventSummary {
+	return RuntimeEventSnapshot.summary_from_payload(payload)
+}
+
+pub fn RuntimeEventSnapshot.summary_from_payload(payload string) executor.FeishuRuntimeEventSummary {
 	parsed := json2.decode[json2.Any](payload) or { return executor.FeishuRuntimeEventSummary{} }
 	root := parsed.as_map()
 	h := json_map_field(root, 'header')
@@ -685,6 +802,10 @@ pub fn event_summary(payload string) executor.FeishuRuntimeEventSummary {
 }
 
 pub fn should_dispatch_upstream(summary executor.FeishuRuntimeEventSummary) bool {
+	return RuntimeEventSnapshot.should_dispatch_upstream(summary)
+}
+
+pub fn RuntimeEventSnapshot.should_dispatch_upstream(summary executor.FeishuRuntimeEventSummary) bool {
 	if summary.event_type == 'im.message.message_read_v1' {
 		return false
 	}
@@ -694,6 +815,10 @@ pub fn should_dispatch_upstream(summary executor.FeishuRuntimeEventSummary) bool
 // ── Frame Helpers ──
 
 pub fn clone_headers_with_type(frame RuntimeProtoFrame, next_type string) []RuntimeProtoHeader {
+	return frame.clone_headers_with_type(next_type)
+}
+
+pub fn (frame RuntimeProtoFrame) clone_headers_with_type(next_type string) []RuntimeProtoHeader {
 	mut out_headers := []RuntimeProtoHeader{}
 	mut found_type := false
 	for header in frame.headers {
@@ -720,12 +845,16 @@ pub fn clone_headers_with_type(frame RuntimeProtoFrame, next_type string) []Runt
 }
 
 pub fn build_pong(frame RuntimeProtoFrame) RuntimeProtoFrame {
+	return frame.pong()
+}
+
+pub fn (frame RuntimeProtoFrame) pong() RuntimeProtoFrame {
 	return RuntimeProtoFrame{
 		seq_id:           frame.seq_id
 		log_id:           frame.log_id
 		service:          frame.service
 		method:           3
-		headers:          clone_headers_with_type(frame, message_pong)
+		headers:          frame.clone_headers_with_type(message_pong)
 		payload_encoding: frame.payload_encoding
 		payload_type:     frame.payload_type
 		payload:          frame.payload.clone()
@@ -734,6 +863,10 @@ pub fn build_pong(frame RuntimeProtoFrame) RuntimeProtoFrame {
 }
 
 pub fn headers_to_type(headers []RuntimeProtoHeader) string {
+	return RuntimeProtoHeader.message_type(headers)
+}
+
+pub fn RuntimeProtoHeader.message_type(headers []RuntimeProtoHeader) string {
 	for header in headers {
 		if header.key == header_type && header.value.trim_space() != '' {
 			return header.value
@@ -743,7 +876,11 @@ pub fn headers_to_type(headers []RuntimeProtoHeader) string {
 }
 
 pub fn build_ack(frame RuntimeProtoFrame, status int, headers_ map[string]string, data string) RuntimeProtoFrame {
-	mut out_headers := clone_headers_with_type(frame, headers_to_type(frame.headers))
+	return frame.ack(status, headers_, data)
+}
+
+pub fn (frame RuntimeProtoFrame) ack(status int, headers_ map[string]string, data string) RuntimeProtoFrame {
+	mut out_headers := frame.clone_headers_with_type(RuntimeProtoHeader.message_type(frame.headers))
 	mut found_biz_rt := false
 	for header in out_headers {
 		if header.key == header_biz_rt {
@@ -781,6 +918,10 @@ pub fn build_ack(frame RuntimeProtoFrame, status int, headers_ map[string]string
 }
 
 pub fn ws_url_service_id(ws_url string) i32 {
+	return RuntimeProtoFrame.service_id_from_ws_url(ws_url)
+}
+
+pub fn RuntimeProtoFrame.service_id_from_ws_url(ws_url string) i32 {
 	parsed := urllib.parse(ws_url) or { return 0 }
 	service_id := (parsed.query().get('service_id') or { '' }).trim_space()
 	if service_id == '' {
@@ -790,6 +931,10 @@ pub fn ws_url_service_id(ws_url string) i32 {
 }
 
 pub fn build_client_ping(service_id i32) RuntimeProtoFrame {
+	return RuntimeProtoFrame.client_ping(service_id)
+}
+
+pub fn RuntimeProtoFrame.client_ping(service_id i32) RuntimeProtoFrame {
 	mut headers := []RuntimeProtoHeader{}
 	headers << RuntimeProtoHeader{
 		key:   header_type
@@ -805,6 +950,10 @@ pub fn build_client_ping(service_id i32) RuntimeProtoFrame {
 // ── Stream Content Helpers ──
 
 pub fn split_content_runes(content string, limit int) (string, string) {
+	return StreamBuffer.split_content_runes(content, limit)
+}
+
+pub fn StreamBuffer.split_content_runes(content string, limit int) (string, string) {
 	runes := content.runes()
 	if runes.len <= limit {
 		return content, ''
@@ -831,11 +980,15 @@ pub fn split_content_runes(content string, limit int) (string, string) {
 }
 
 pub fn streaming_preview_markdown(content string) string {
+	return StreamBuffer.streaming_preview_markdown(content)
+}
+
+pub fn StreamBuffer.streaming_preview_markdown(content string) string {
 	trimmed := content.trim_space()
 	if trimmed == '' {
 		return ''
 	}
-	head, tail := split_content_runes(trimmed, stream_buffer_rollover_runes)
+	head, tail := StreamBuffer.split_content_runes(trimmed, stream_buffer_rollover_runes)
 	if tail == '' {
 		return head
 	}
@@ -853,13 +1006,17 @@ pub fn streaming_preview_markdown(content string) string {
 	} else {
 		stream_buffer_rollover_runes
 	}
-	short_head, _ := split_content_runes(preview, head_limit)
+	short_head, _ := StreamBuffer.split_content_runes(preview, head_limit)
 	return short_head.trim_space() + note
 }
 
 pub fn render_final_card(markdown string, template_content string) string {
+	return StreamBuffer.render_final_card(markdown, template_content)
+}
+
+pub fn StreamBuffer.render_final_card(markdown string, template_content string) string {
 	if template_content.trim_space() == '' {
-		return interactive_markdown_card(markdown)
+		return SendMessageRequest.interactive_markdown_card(markdown)
 	}
 	escaped_json := json.encode(markdown)
 	escaped := escaped_json[1..escaped_json.len - 1]

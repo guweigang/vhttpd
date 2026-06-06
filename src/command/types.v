@@ -20,41 +20,41 @@ pub:
 
 pub struct NormalizedCommand {
 pub:
-	version      string
-	legacy_type  string
-	kind         string
-	provider     string
-	instance     string
-	event        string
-	target       CommandTarget
-	message_type string
-	content      string
-	content_fields map[string]string
-	text         string
-	uuid         string
-	metadata     map[string]string
-	correlation  CommandCorrelation
-	task_type    string
-	prompt       string
-	method       string
-	params       string
-	config_raw   string
-	desired_state string
-	working_dir  string
+	version             string
+	legacy_type         string
+	kind                string
+	provider            string
+	instance            string
+	event               string
+	target              CommandTarget
+	message_type        string
+	content             string
+	content_fields      map[string]string
+	text                string
+	uuid                string
+	metadata            map[string]string
+	correlation         CommandCorrelation
+	task_type           string
+	prompt              string
+	method              string
+	params              string
+	config_raw          string
+	desired_state       string
+	working_dir         string
 	response_message_id string
-	rpc_id       string
-	rpc_result   string
-	stream_finish bool
+	rpc_id              string
+	rpc_result          string
+	stream_finish       bool
 }
 
 pub struct CommandEnvelope {
 pub:
-	type_     string
-	provider  string
-	instance  string
-	target    string
-	payload   string
-	metadata  map[string]string
+	type_    string
+	provider string
+	instance string
+	target   string
+	payload  string
+	metadata map[string]string
 }
 
 pub fn CommandEnvelope.from_worker_command(cmd transport.WorkerWebSocketUpstreamCommand) CommandEnvelope {
@@ -68,15 +68,29 @@ pub fn CommandEnvelope.from_worker_command(cmd transport.WorkerWebSocketUpstream
 	}
 }
 
-fn normalized_command_kind_for_legacy_type(command_type string) string {
+fn NormalizedCommand.kind_for_legacy_type(command_type string) string {
 	return match command_type {
-		'codex.rpc.send' { 'provider.rpc.call' }
-		'codex.rpc.reply' { 'provider.rpc.reply' }
-		'codex.turn.start' { 'session.turn.start' }
-		'feishu.message.send' { 'provider.message.send' }
-		'feishu.message.update' { 'provider.message.update' }
-		'feishu.message.patch' { 'stream.append' }
-		'feishu.message.flush' { 'stream.finish' }
+		'codex.rpc.send' {
+			'provider.rpc.call'
+		}
+		'codex.rpc.reply' {
+			'provider.rpc.reply'
+		}
+		'codex.turn.start' {
+			'session.turn.start'
+		}
+		'feishu.message.send' {
+			'provider.message.send'
+		}
+		'feishu.message.update' {
+			'provider.message.update'
+		}
+		'feishu.message.patch' {
+			'stream.append'
+		}
+		'feishu.message.flush' {
+			'stream.finish'
+		}
 		else {
 			if command_type.ends_with('.message.send') {
 				'provider.message.send'
@@ -89,7 +103,7 @@ fn normalized_command_kind_for_legacy_type(command_type string) string {
 	}
 }
 
-fn normalized_command_infer_provider(command_type string, declared_provider string) string {
+fn NormalizedCommand.infer_provider(command_type string, declared_provider string) string {
 	if declared_provider.trim_space() != '' {
 		return declared_provider.trim_space()
 	}
@@ -99,7 +113,7 @@ fn normalized_command_infer_provider(command_type string, declared_provider stri
 	return ''
 }
 
-fn normalized_command_string_bool(raw string) bool {
+fn NormalizedCommand.string_bool(raw string) bool {
 	value := raw.trim_space().to_lower()
 	return value in ['1', 'true', 'yes', 'on']
 }
@@ -120,28 +134,30 @@ pub fn NormalizedCommand.from_worker_command(cmd transport.WorkerWebSocketUpstre
 		cmd.metadata['message_id'] or { '' }
 	}
 	rpc_id := cmd.metadata['id'] or { '' }
-	rpc_result := if cmd.content.trim_space() != '' { cmd.content } else { cmd.metadata['result'] or { '{}' } }
+	rpc_result := if cmd.content.trim_space() != '' { cmd.content } else { cmd.metadata['result'] or {
+			'{}'} }
 	mode_raw := cmd.metadata['mode'] or { '' }
 	finish_raw := cmd.metadata['finish'] or { '' }
-	stream_finish := mode_raw == 'finish' || normalized_command_string_bool(finish_raw)
+	stream_finish := mode_raw == 'finish' || NormalizedCommand.string_bool(finish_raw)
+	kind := NormalizedCommand.kind_for_legacy_type(cmd.type_)
 	return NormalizedCommand{
-		version:     '1'
-		legacy_type: cmd.type_
-		kind:        normalized_command_kind_for_legacy_type(cmd.type_)
-		provider:    normalized_command_infer_provider(cmd.type_, cmd.provider)
-		instance:    cmd.instance
-		event:       cmd.event
-		target: CommandTarget{
+		version:             '1'
+		legacy_type:         cmd.type_
+		kind:                kind
+		provider:            NormalizedCommand.infer_provider(cmd.type_, cmd.provider)
+		instance:            cmd.instance
+		event:               cmd.event
+		target:              CommandTarget{
 			id:    cmd.target
 			type_: cmd.target_type
 		}
-		message_type:  cmd.message_type
-		content:       cmd.content
-		content_fields: cmd.content_fields.clone()
-		text:          cmd.text
-		uuid:          cmd.uuid
-		metadata:      cmd.metadata.clone()
-		correlation: CommandCorrelation{
+		message_type:        cmd.message_type
+		content:             cmd.content
+		content_fields:      cmd.content_fields.clone()
+		text:                cmd.text
+		uuid:                cmd.uuid
+		metadata:            cmd.metadata.clone()
+		correlation:         CommandCorrelation{
 			stream_id:   cmd.stream_id
 			session_key: cmd.session_key
 			task_id:     task_id
@@ -149,21 +165,21 @@ pub fn NormalizedCommand.from_worker_command(cmd transport.WorkerWebSocketUpstre
 			turn_id:     turn_id
 			request_id:  request_id
 		}
-		task_type: cmd.task_type
-		prompt:    cmd.prompt
-		method:    cmd.method
-		params:    cmd.params
-		config_raw: if normalized_command_kind_for_legacy_type(cmd.type_) == 'provider.instance.upsert' {
+		task_type:           cmd.task_type
+		prompt:              cmd.prompt
+		method:              cmd.method
+		params:              cmd.params
+		config_raw:          if kind == 'provider.instance.upsert' {
 			cmd.content
 		} else {
 			''
 		}
-		desired_state: cmd.metadata['desired_state'] or { '' }
-		working_dir: working_dir
+		desired_state:       cmd.metadata['desired_state'] or { '' }
+		working_dir:         working_dir
 		response_message_id: response_message_id
-		rpc_id:     rpc_id
-		rpc_result: rpc_result
-		stream_finish: stream_finish
+		rpc_id:              rpc_id
+		rpc_result:          rpc_result
+		stream_finish:       stream_finish
 	}
 }
 
@@ -255,8 +271,8 @@ pub fn (cmd NormalizedCommand) should_route_to_provider(provider_name string) bo
 
 // Object method: semantic classification on a normalized command instance.
 pub fn (cmd NormalizedCommand) is_codex_control() bool {
-	return cmd.provider == 'codex'
-		&& (cmd.is_provider_rpc_call() || cmd.is_provider_rpc_reply() || cmd.is_session_turn_start())
+	return cmd.provider == 'codex' && (cmd.is_provider_rpc_call() || cmd.is_provider_rpc_reply()
+		|| cmd.is_session_turn_start())
 }
 
 // Object method: infer provider with explicit field first, then type prefix fallback.

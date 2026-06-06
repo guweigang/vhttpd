@@ -20,7 +20,13 @@
 
 **transport aliases** → ✅ Cleaned up. 28 `module main` files + main.v itself now use `transport.X` directly. 17 aliases deleted from main.v.
 
+**all state/executor/worker/server_lifecycle aliases** → ✅ Cleaned up (2025-06). All transitional type aliases in `app_states.v`, `executor_lifecycle.v`, `executor_runtime_plan.v`, `worker_backend_runtime.v`, `server_runtime_config.v`, `multi_server_runtime_config.v` replaced with fully-qualified names (`module.TypeName`). 8 files deleted. `executor_config.v` deleted. `executor_registry.v` retains only the `admin_logic_executor_specs_snapshot()` App method.
+
 **config aliases** → still pending. 27 config type aliases remain in main.v (`pub type VhttpdConfig = config.VhttpdConfig` etc.). These should be cleaned up once all callers use `config.X` directly.
+
+### Plugin module consolidation
+
+**plugin/ + plugins/** → ✅ Merged (2025-06). `plugins/` (plural) deleted; `PluginState` moved to `plugin/types.v` alongside the runtime builder functions. All callers updated from `plugins.PluginState` to `plugin.PluginState`.
 
 ### 2.1 Remaining: domain module extraction
 
