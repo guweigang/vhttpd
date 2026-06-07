@@ -57,10 +57,11 @@ prepare-build-src:
 	@rm -rf $(BUILD_STAGE_ROOT)
 	@mkdir -p $(BUILD_STAGE_DIR)
 	@if command -v rsync >/dev/null 2>&1; then \
-		rsync -a --exclude='*_test_helpers.v' --exclude='test_*.v' $(SRC_DIR)/ $(BUILD_STAGE_DIR)/; \
+		rsync -a --exclude='*_helpers.v' --exclude='*_test_support.v' --exclude='test_*.v' $(SRC_DIR)/ $(BUILD_STAGE_DIR)/; \
 	else \
 		cp -R $(SRC_DIR)/. $(BUILD_STAGE_DIR)/; \
-		find $(BUILD_STAGE_DIR) -name '*_test_helpers.v' -delete; \
+		find $(BUILD_STAGE_DIR) -name '*_helpers.v' -delete; \
+		find $(BUILD_STAGE_DIR) -name '*_test_support.v' -delete; \
 		find $(BUILD_STAGE_DIR) -name 'test_*.v' -delete; \
 	fi
 

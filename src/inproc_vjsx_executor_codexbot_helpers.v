@@ -210,16 +210,6 @@ fn (mut h CodexbotTsTestHarness) admin_state(trace_id string, request_id string)
 	})
 }
 
-fn codexbot_ts_command_by_type(commands []transport.WorkerWebSocketUpstreamCommand, type_ string) transport.WorkerWebSocketUpstreamCommand {
-	for command in commands {
-		if command.type_ == type_ {
-			return command
-		}
-	}
-	assert false, 'missing command type ${type_}'
-	return transport.WorkerWebSocketUpstreamCommand{}
-}
-
 fn codexbot_ts_first_stream_id(commands []transport.WorkerWebSocketUpstreamCommand) string {
 	for command in commands {
 		if command.stream_id != '' {
