@@ -1,6 +1,6 @@
 module main
 
-import db
+import dbx
 import config
 import mcp_protocol
 import openai
@@ -146,6 +146,6 @@ fn build_app_runtime(provider_settings ProviderRuntimeSettings, executor_plan ex
 			card_bridge_token:          provider_settings.bridge.token
 			card_bridge_target_id:      provider_settings.bridge.target_id
 		}
-		db_runtime:          db.Runtime.from_settings(provider_settings.db)
+		db_runtime:          dbx.Runtime.from_settings(provider_settings.db)
 	}
 }

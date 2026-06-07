@@ -1,6 +1,6 @@
 module main
 
-import db
+import dbx
 import executor
 import ws
 import feishu
@@ -57,7 +57,7 @@ pub mut:
 	// codex upstream
 	codex      codex.CodexState
 	feishu     feishu.FeishuState
-	db_runtime db.Runtime
+	db_runtime dbx.Runtime
 }
 
 type CodexTarget = codex.CodexTarget

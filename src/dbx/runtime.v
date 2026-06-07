@@ -1,4 +1,4 @@
-module db
+module dbx
 
 $if enable_db ? {
 	import db.mysql

@@ -1,6 +1,6 @@
 module main
 
-import db
+import dbx
 import json
 import provider
 
@@ -195,7 +195,7 @@ pub fn (app &App) provider_bootstrap_enabled(name string) bool {
 		'feishu' { app.feishu_runtime_enabled() }
 		'codex' { app.codex.runtime.enabled || app.provider_instance_list('codex').len > 0 }
 		'ollama' { app.codex.ollama_enabled }
-		'db' { app.db_runtime.enabled && db.Runtime.compiled() }
+		'db' { app.db_runtime.enabled && dbx.Runtime.compiled() }
 		else { false }
 	}
 }

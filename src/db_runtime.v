@@ -1,23 +1,23 @@
 module main
 
-import db
+import dbx
 import net.unix
 
 // ── Type aliases: main → db ──
-type DbProviderRuntime = db.Runtime
-type DbRuntimeSnapshot = db.Snapshot
-type DbRuntimeSnapshotCapabilities = db.SnapshotCapabilities
-type DbUpstreamRequest = db.Request
-type DbUpstreamResponse = db.Response
-type DbRuntimeFrameCodec = db.FrameCodec
-type DbRuntimeServer = db.Server
-type DbRuntimeServerContext = db.ServerContext
-type DbDriverName = db.DriverName
-type DbDriverCapabilities = db.DriverCapabilities
-type DbQueryResult = db.QueryResult
-type DbExecResult = db.ExecResult
-type DbPoolHandle = db.PoolHandle
-type DbSessionHandle = db.SessionHandle
+type DbProviderRuntime = dbx.Runtime
+type DbRuntimeSnapshot = dbx.Snapshot
+type DbRuntimeSnapshotCapabilities = dbx.SnapshotCapabilities
+type DbUpstreamRequest = dbx.Request
+type DbUpstreamResponse = dbx.Response
+type DbRuntimeFrameCodec = dbx.FrameCodec
+type DbRuntimeServer = dbx.Server
+type DbRuntimeServerContext = dbx.ServerContext
+type DbDriverName = dbx.DriverName
+type DbDriverCapabilities = dbx.DriverCapabilities
+type DbQueryResult = dbx.QueryResult
+type DbExecResult = dbx.ExecResult
+type DbPoolHandle = dbx.PoolHandle
+type DbSessionHandle = dbx.SessionHandle
 
 // ══════════════════════════════════════════════════════════════════════
 // enable_db implementation
@@ -26,8 +26,8 @@ type DbSessionHandle = db.SessionHandle
 $if enable_db ? {
 	// ── RuntimeContext builder ──
 
-	fn (mut app App) build_db_runtime_context() db.RuntimeContext {
-		return db.RuntimeContext{
+	fn (mut app App) build_db_runtime_context() dbx.RuntimeContext {
+		return dbx.RuntimeContext{
 			mark_listen_error_fn: fn [mut app] (message string) {
 				app.mu.@lock()
 				app.db_runtime.mark_listen_error(message)
@@ -59,7 +59,7 @@ $if enable_db ? {
 			close_pool_fn:      fn [mut app] () {
 				app.db_runtime_close_pool()
 			}
-			build_server_ctx_fn: fn [mut app] () db.ServerContext {
+			build_server_ctx_fn: fn [mut app] () dbx.ServerContext {
 				return app.build_db_runtime_server_context()
 			}
 			emit_started_fn:    fn [mut app] (socket string, driver string) {
@@ -79,12 +79,12 @@ $if enable_db ? {
 
 	// ── ServerContext builder ──
 
-	fn (mut app App) build_db_runtime_server_context() db.ServerContext {
-		return db.ServerContext{
+	fn (mut app App) build_db_runtime_server_context() dbx.ServerContext {
+		return dbx.ServerContext{
 			driver_fn:   fn [mut app] () string {
 				return app.db_runtime_driver()
 			}
-			dispatch_fn: fn [mut app] (req db.Request) db.Response {
+			dispatch_fn: fn [mut app] (req dbx.Request) dbx.Response {
 				return app.db_runtime_dispatch(req)
 			}
 		}
@@ -135,7 +135,7 @@ $if enable_db ? {
 		return session_id
 	}
 
-	fn (mut app App) db_runtime_track_transaction(session_id string, conn db.SessionHandle) string {
+	fn (mut app App) db_runtime_track_transaction(session_id string, conn dbx.SessionHandle) string {
 		app.mu.@lock()
 		driver := app.db_runtime.track_transaction(session_id, conn)
 		app.mu.unlock()
@@ -172,7 +172,7 @@ $if enable_db ? {
 			return err
 		}
 		app.mu.unlock()
-		mut pool := db.PoolHandle.open(settings)!
+		mut pool := dbx.PoolHandle.open(settings)!
 		app.mu.@lock()
 		installed := app.db_runtime.install_pool_if_missing(pool)
 		if !installed {
@@ -183,7 +183,7 @@ $if enable_db ? {
 		app.mu.unlock()
 	}
 
-	fn (mut app App) db_runtime_release_conn(conn db.SessionHandle, session_id string) {
+	fn (mut app App) db_runtime_release_conn(conn dbx.SessionHandle, session_id string) {
 		if session_id != '' {
 			return
 		}
@@ -195,7 +195,7 @@ $if enable_db ? {
 		}
 	}
 
-	fn (mut app App) db_runtime_acquire_conn(session_id string) !db.SessionHandle {
+	fn (mut app App) db_runtime_acquire_conn(session_id string) !dbx.SessionHandle {
 		app.db_runtime_ensure_pool()!
 		if session_id != '' {
 			app.mu.@lock()
@@ -212,7 +212,7 @@ $if enable_db ? {
 		return pool.acquire()!
 	}
 
-	fn (mut app App) db_runtime_discard_conn(mut conn db.SessionHandle) {
+	fn (mut app App) db_runtime_discard_conn(mut conn dbx.SessionHandle) {
 		conn.close() or {}
 		app.mu.@lock()
 		pool_ready, _ := app.db_runtime.pool_handle()
@@ -221,7 +221,7 @@ $if enable_db ? {
 		if !pool_ready {
 			return
 		}
-		replacement := db.PoolHandle.open(settings) or {
+		replacement := dbx.PoolHandle.open(settings) or {
 			app.db_runtime_note_error(err.msg())
 			return
 		}
@@ -242,7 +242,7 @@ $if enable_db ? {
 		replacement_session.close() or {}
 	}
 
-	fn (mut app App) db_runtime_finalize_tx_session(session_id string, mut conn db.SessionHandle, reusable bool) ! {
+	fn (mut app App) db_runtime_finalize_tx_session(session_id string, mut conn dbx.SessionHandle, reusable bool) ! {
 		app.mu.@lock()
 		pool_ready, mut pool := app.db_runtime.detach_transaction(session_id)
 		app.mu.unlock()
@@ -281,115 +281,115 @@ $if enable_db ? {
 		}
 	}
 
-	fn (mut app App) db_runtime_dispatch(req db.Request) db.Response {
+	fn (mut app App) db_runtime_dispatch(req dbx.Request) dbx.Response {
 		driver := app.db_runtime_driver()
 		if req.mode != 'db' {
-			return db.Response.error(driver, 'invalid_mode')
+			return dbx.Response.error(driver, 'invalid_mode')
 		}
 		return match req.op {
 			'ping' {
 				app.db_runtime_ensure_pool() or {
 					app.db_runtime_note_error(err.msg())
-					return db.Response.error(driver, err.msg())
+					return dbx.Response.error(driver, err.msg())
 				}
 				mut conn := app.db_runtime_acquire_conn('') or {
 					app.db_runtime_note_error(err.msg())
-					return db.Response.error(driver, err.msg())
+					return dbx.Response.error(driver, err.msg())
 				}
 				defer {
 					app.db_runtime_release_conn(conn, '')
 				}
 				conn.ping() or {
 					app.db_runtime_note_error(err.msg())
-					return db.Response.error(driver, err.msg())
+					return dbx.Response.error(driver, err.msg())
 				}
-				db.Response.pong(driver)
+				dbx.Response.pong(driver)
 			}
 			'begin_transaction' {
 				mut conn := app.db_runtime_acquire_conn('') or {
 					app.db_runtime_note_error(err.msg())
-					return db.Response.error(driver, err.msg())
+					return dbx.Response.error(driver, err.msg())
 				}
 				conn.begin() or {
 					conn.reset_for_pool() or {}
 					app.db_runtime_release_conn(conn, '')
 					app.db_runtime_note_error(err.msg())
-					return db.Response.error(driver, err.msg())
+					return dbx.Response.error(driver, err.msg())
 				}
 				session_id := app.db_runtime_next_session_id()
 				driver_name := app.db_runtime_track_transaction(session_id, conn)
-				db.Response.transaction_started(driver_name, session_id)
+				dbx.Response.transaction_started(driver_name, session_id)
 			}
 			'commit' {
 				if req.session_id.trim_space() == '' {
-					db.Response.ok(driver)
+					dbx.Response.ok(driver)
 				} else {
 					mut conn := app.db_runtime_acquire_conn(req.session_id) or {
 						app.db_runtime_note_error(err.msg())
-						return db.Response.error(driver, err.msg())
+						return dbx.Response.error(driver, err.msg())
 					}
 					conn.commit() or {
 						app.db_runtime_finalize_tx_session(req.session_id, mut conn, false) or {}
 						app.db_runtime_note_error(err.msg())
-						return db.Response.error(driver, err.msg())
+						return dbx.Response.error(driver, err.msg())
 					}
 					app.db_runtime_finalize_tx_session(req.session_id, mut conn, true) or {
 						app.db_runtime_note_error(err.msg())
-						return db.Response.error(driver, err.msg())
+						return dbx.Response.error(driver, err.msg())
 					}
-					db.Response.ok(driver)
+					dbx.Response.ok(driver)
 				}
 			}
 			'rollback' {
 				if req.session_id.trim_space() == '' {
-					db.Response.ok(driver)
+					dbx.Response.ok(driver)
 				} else {
 					mut conn := app.db_runtime_acquire_conn(req.session_id) or {
 						app.db_runtime_note_error(err.msg())
-						return db.Response.error(driver, err.msg())
+						return dbx.Response.error(driver, err.msg())
 					}
 					conn.rollback() or {
 						app.db_runtime_finalize_tx_session(req.session_id, mut conn, false) or {}
 						app.db_runtime_note_error(err.msg())
-						return db.Response.error(driver, err.msg())
+						return dbx.Response.error(driver, err.msg())
 					}
 					app.db_runtime_finalize_tx_session(req.session_id, mut conn, true) or {
 						app.db_runtime_note_error(err.msg())
-						return db.Response.error(driver, err.msg())
+						return dbx.Response.error(driver, err.msg())
 					}
-					db.Response.ok(driver)
+					dbx.Response.ok(driver)
 				}
 			}
 			'query' {
 				mut conn := app.db_runtime_acquire_conn(req.session_id) or {
 					app.db_runtime_note_error(err.msg())
-					return db.Response.error(driver, err.msg())
+					return dbx.Response.error(driver, err.msg())
 				}
 				query_result := conn.query(req.sql_text, req.params) or {
 					app.db_runtime_release_conn(conn, req.session_id)
 					app.db_runtime_note_error(err.msg())
-					return db.Response.error(driver, err.msg())
+					return dbx.Response.error(driver, err.msg())
 				}
 				app.db_runtime_release_conn(conn, req.session_id)
 				driver_name := app.db_runtime_note_query_success()
-				db.Response.query_result(driver_name, query_result, req.session_id)
+				dbx.Response.query_result(driver_name, query_result, req.session_id)
 			}
 			'execute' {
 				mut conn := app.db_runtime_acquire_conn(req.session_id) or {
 					app.db_runtime_note_error(err.msg())
-					return db.Response.error(driver, err.msg())
+					return dbx.Response.error(driver, err.msg())
 				}
 				exec_result := conn.execute(req.sql_text, req.params) or {
 					app.db_runtime_release_conn(conn, req.session_id)
 					app.db_runtime_note_error(err.msg())
-					return db.Response.error(driver, err.msg())
+					return dbx.Response.error(driver, err.msg())
 				}
 				app.db_runtime_release_conn(conn, req.session_id)
 				driver_name := app.db_runtime_note_execute_success()
-				db.Response.exec_result(driver_name, exec_result, req.session_id)
+				dbx.Response.exec_result(driver_name, exec_result, req.session_id)
 			}
 			else {
-				db.Response.error(driver, 'unsupported_op')
+				dbx.Response.error(driver, 'unsupported_op')
 			}
 		}
 	}
@@ -398,7 +398,7 @@ $if enable_db ? {
 
 	fn (mut app App) db_runtime_server_run(socket_path string) {
 		ctx := app.build_db_runtime_context()
-		db.Server.run(ctx, socket_path)
+		dbx.Server.run(ctx, socket_path)
 	}
 }
 
@@ -415,7 +415,7 @@ $if !enable_db ? {
 		return app.db_runtime.snapshot_json(false)
 	}
 
-	fn (mut app App) db_runtime_finalize_tx_session(session_id string, mut conn db.SessionHandle, reusable bool) ! {
+	fn (mut app App) db_runtime_finalize_tx_session(session_id string, mut conn dbx.SessionHandle, reusable bool) ! {
 		_ = session_id
 		_ = reusable
 		_ = conn
@@ -424,16 +424,16 @@ $if !enable_db ? {
 		app.mu.unlock()
 	}
 
-	fn (mut app App) db_runtime_dispatch(req db.Request) db.Response {
-		driver := db.DriverName.normalize(app.db_runtime.driver_name())
+	fn (mut app App) db_runtime_dispatch(req dbx.Request) dbx.Response {
+		driver := dbx.DriverName.normalize(app.db_runtime.driver_name())
 		if req.mode != 'db' {
-			return db.Response.error(driver, 'invalid_mode')
+			return dbx.Response.error(driver, 'invalid_mode')
 		}
-		return db.Response.error(driver, 'db_not_compiled')
+		return dbx.Response.error(driver, 'db_not_compiled')
 	}
 
 	fn (mut app App) db_runtime_server_run(socket_path string) {
-		ctx := db.RuntimeContext{
+		ctx := dbx.RuntimeContext{
 			mark_listen_error_fn: fn [mut app] (message string) {
 				app.mu.@lock()
 				app.db_runtime.mark_not_compiled()
@@ -451,9 +451,9 @@ $if !enable_db ? {
 			note_error_fn:      fn (_ string) {}
 			cleanup_sessions_fn: fn () {}
 			close_pool_fn:      fn () {}
-			build_server_ctx_fn: fn () db.ServerContext { return db.ServerContext{} }
+			build_server_ctx_fn: fn () dbx.ServerContext { return dbx.ServerContext{} }
 			emit_started_fn:    fn (_ string, _ string) {}
 		}
-		db.Server.run(ctx, socket_path)
+		dbx.Server.run(ctx, socket_path)
 	}
 }
