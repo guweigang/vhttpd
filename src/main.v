@@ -2,6 +2,7 @@ module main
 
 import dbx
 import executor
+import provider
 import ws
 import feishu
 import codex
@@ -51,16 +52,14 @@ pub mut:
 
 	ws_hub             ws.HubState
 	providers          ProviderHost
-	provider_instances ProviderInstanceRegistry = ProviderInstanceRegistry{
-		specs: map[string]ProviderInstanceSpec{}
+	provider_instances provider.ProviderInstanceRegistry = provider.ProviderInstanceRegistry{
+		specs: map[string]provider.ProviderInstanceSpec{}
 	}
 	// codex upstream
 	codex      codex.CodexState
 	feishu     feishu.FeishuState
 	db_runtime dbx.Runtime
 }
-
-type CodexTarget = codex.CodexTarget
 
 fn runtime_trace(label string, fields map[string]string) {
 	mut row := map[string]string{}
@@ -76,8 +75,6 @@ fn runtime_trace(label string, fields map[string]string) {
 	}
 	f.writeln(json.encode(row)) or {}
 }
-
-type UpstreamRuntimeSession = ws.UpstreamRuntimeSession
 
 fn dispatch_core(method string, path string) (int, string, string) {
 	m := method.to_upper()

@@ -2,6 +2,7 @@ module main
 
 import upstream
 import transport
+import ws
 import net.http
 import time
 import veb
@@ -33,7 +34,7 @@ struct AdminUpstreamRuntimeSnapshot {
 	details        bool
 	limit          int
 	offset         int
-	sessions       []UpstreamRuntimeSession
+	sessions       []ws.UpstreamRuntimeSession
 }
 
 fn (rt UpstreamRuntimeContext) register(plan transport.WorkerUpstreamPlanFrame, method string, path string, req_id string, trace_id string) {
@@ -229,7 +230,7 @@ fn UpstreamRuntimeRegistry.register(mut app App, plan transport.WorkerUpstreamPl
 	}
 	normalized_path, _ := transport.normalize_request_target(path)
 	app.ws_hub.upstream_mu.@lock()
-	app.ws_hub.upstream_sessions[req_id] = UpstreamRuntimeSession{
+	app.ws_hub.upstream_sessions[req_id] = ws.UpstreamRuntimeSession{
 		id:              req_id
 		request_id:      req_id
 		trace_id:        trace_id
@@ -286,7 +287,7 @@ fn UpstreamRuntimeRegistry.snapshot(mut app App, details bool, limit int, offset
 	defer {
 		app.ws_hub.upstream_mu.unlock()
 	}
-	mut sessions := []UpstreamRuntimeSession{}
+	mut sessions := []ws.UpstreamRuntimeSession{}
 	for _, session in app.ws_hub.upstream_sessions {
 		if role_filter != '' && session.role != role_filter {
 			continue
@@ -296,9 +297,9 @@ fn UpstreamRuntimeRegistry.snapshot(mut app App, details bool, limit int, offset
 		}
 		sessions << session
 	}
-	mut ordered := []UpstreamRuntimeSession{}
+	mut ordered := []ws.UpstreamRuntimeSession{}
 	mut sort_keys := []string{}
-	mut session_by_key := map[string]UpstreamRuntimeSession{}
+	mut session_by_key := map[string]ws.UpstreamRuntimeSession{}
 	for session in sessions {
 		key := '${session.started_at_unix}_${session.id}'
 		sort_keys << key
@@ -315,10 +316,10 @@ fn UpstreamRuntimeRegistry.snapshot(mut app App, details bool, limit int, offset
 			details:        false
 			limit:          limit
 			offset:         offset
-			sessions:       []UpstreamRuntimeSession{}
+			sessions:       []ws.UpstreamRuntimeSession{}
 		}
 	}
-	mut sliced := []UpstreamRuntimeSession{}
+	mut sliced := []ws.UpstreamRuntimeSession{}
 	if offset < ordered.len {
 		end := if offset + limit < ordered.len { offset + limit } else { ordered.len }
 		for i in offset .. end {

@@ -7,7 +7,7 @@ import ws
 fn test_websocket_upstream_reconnect_and_admin_helpers() {
 	mut app := App{
 		codex: codex.CodexState{
-			runtime: CodexProviderRuntime{}
+			runtime: codex.ProviderRuntime{}
 		}
 	}
 
@@ -32,7 +32,7 @@ fn test_websocket_upstream_reconnect_and_admin_helpers() {
 fn test_upstream_runtime_context_tracks_registry_metrics_and_snapshot() {
 	mut app := App{
 		ws_hub: ws.HubState{
-			upstream_sessions: map[string]UpstreamRuntimeSession{}
+			upstream_sessions: map[string]ws.UpstreamRuntimeSession{}
 		}
 	}
 	plan := transport.WorkerUpstreamPlanFrame{

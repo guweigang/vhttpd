@@ -136,7 +136,7 @@ fn test_codex_extractors() {
 fn test_admin_codex_snapshot_reflects_runtime() {
 	mut app := App{
 		codex: codex.CodexState{
-			runtime: CodexProviderRuntime{
+			runtime: codex.ProviderRuntime{
 				enabled:            true
 				url:                'https://codex.example'
 				model:              'gpt-test'
@@ -160,7 +160,7 @@ fn test_admin_codex_snapshot_reflects_runtime() {
 fn test_codex_next_rpc_id_increment() {
 	mut app := App{
 		codex: codex.CodexState{
-			runtime: CodexProviderRuntime{}
+			runtime: codex.ProviderRuntime{}
 		}
 	}
 	id1 := app.codex_next_rpc_id('main')
@@ -171,7 +171,7 @@ fn test_codex_next_rpc_id_increment() {
 fn test_websocket_upstream_reconnect_delay_default_and_override() {
 	mut app := App{
 		codex: codex.CodexState{
-			runtime: CodexProviderRuntime{}
+			runtime: codex.ProviderRuntime{}
 		}
 	}
 	// default when unset
@@ -186,7 +186,7 @@ fn test_websocket_upstream_reconnect_delay_default_and_override() {
 fn test_codex_get_active_stream_id_and_set() {
 	mut app := App{
 		codex: codex.CodexState{
-			runtime: CodexProviderRuntime{}
+			runtime: codex.ProviderRuntime{}
 		}
 	}
 	app.codex.runtime.active_stream_id = 'stream-1'
@@ -194,9 +194,9 @@ fn test_codex_get_active_stream_id_and_set() {
 }
 
 fn test_codex_runtime_bind_and_clear_thread_binding() {
-	mut rt := CodexProviderRuntime{
+	mut rt := codex.ProviderRuntime{
 		thread_stream_map: map[string]string{}
-		stream_map:        map[string][]CodexTarget{}
+		stream_map:        map[string][]codex.CodexTarget{}
 	}
 	thread_id := rt.bind_stream_to_thread('thread_001', 'stream_001')
 	assert thread_id == 'thread_001'
@@ -212,10 +212,10 @@ fn test_codex_runtime_bind_and_clear_thread_binding() {
 fn test_codex_notification_active_does_not_schedule_read_fallback() {
 	mut app := App{
 		codex: codex.CodexState{
-			runtime: CodexProviderRuntime{
+			runtime: codex.ProviderRuntime{
 				thread_stream_map:   map[string]string{}
-				stream_map:          map[string][]CodexTarget{}
-				pending_rpcs:        map[int]CodexPendingRpc{}
+				stream_map:          map[string][]codex.CodexTarget{}
+				pending_rpcs:        map[int]codex.PendingRpc{}
 				err_bursts:          map[string][]string{}
 				err_pending_flushes: map[string]bool{}
 				read_fallbacks:      map[string]codex.ReadFallback{}
@@ -232,10 +232,10 @@ fn test_codex_notification_active_does_not_schedule_read_fallback() {
 fn test_codex_notification_delta_clears_read_fallback() {
 	mut app := App{
 		codex: codex.CodexState{
-			runtime: CodexProviderRuntime{
+			runtime: codex.ProviderRuntime{
 				thread_stream_map:   map[string]string{}
-				stream_map:          map[string][]CodexTarget{}
-				pending_rpcs:        map[int]CodexPendingRpc{}
+				stream_map:          map[string][]codex.CodexTarget{}
+				pending_rpcs:        map[int]codex.PendingRpc{}
 				err_bursts:          map[string][]string{}
 				err_pending_flushes: map[string]bool{}
 				read_fallbacks:      map[string]codex.ReadFallback{}
@@ -253,10 +253,10 @@ fn test_codex_notification_delta_clears_read_fallback() {
 fn test_codex_notification_reasoning_delta_clears_read_fallback() {
 	mut app := App{
 		codex: codex.CodexState{
-			runtime: CodexProviderRuntime{
+			runtime: codex.ProviderRuntime{
 				thread_stream_map:   map[string]string{}
-				stream_map:          map[string][]CodexTarget{}
-				pending_rpcs:        map[int]CodexPendingRpc{}
+				stream_map:          map[string][]codex.CodexTarget{}
+				pending_rpcs:        map[int]codex.PendingRpc{}
 				err_bursts:          map[string][]string{}
 				err_pending_flushes: map[string]bool{}
 				read_fallbacks:      map[string]codex.ReadFallback{}
@@ -276,17 +276,17 @@ fn test_codex_notification_reasoning_delta_clears_read_fallback() {
 fn test_codex_turn_start_response_does_not_schedule_read_fallback() {
 	mut app := App{
 		codex: codex.CodexState{
-			runtime: CodexProviderRuntime{
+			runtime: codex.ProviderRuntime{
 				thread_stream_map:   map[string]string{}
-				stream_map:          map[string][]CodexTarget{}
-				pending_rpcs:        map[int]CodexPendingRpc{}
+				stream_map:          map[string][]codex.CodexTarget{}
+				pending_rpcs:        map[int]codex.PendingRpc{}
 				err_bursts:          map[string][]string{}
 				err_pending_flushes: map[string]bool{}
 				read_fallbacks:      map[string]codex.ReadFallback{}
 			}
 		}
 	}
-	app.codex_remember_pending_rpc('main', 7, CodexPendingRpc{
+	app.codex_remember_pending_rpc('main', 7, codex.PendingRpc{
 		instance:  'main'
 		method:    'turn/start'
 		stream_id: 'stream_turn_start_001'
@@ -300,16 +300,16 @@ fn test_codex_turn_start_response_does_not_schedule_read_fallback() {
 }
 
 fn test_codex_runtime_add_remove_and_clear_stream_targets() {
-	mut rt := CodexProviderRuntime{
+	mut rt := codex.ProviderRuntime{
 		thread_stream_map: map[string]string{}
-		stream_map:        map[string][]CodexTarget{}
+		stream_map:        map[string][]codex.CodexTarget{}
 		active_stream_id:  'stream_001'
 	}
-	rt.add_stream_target('stream_001', CodexTarget{
+	rt.add_stream_target('stream_001', codex.CodexTarget{
 		platform:   'feishu'
 		message_id: 'om_001'
 	})
-	rt.add_stream_target('stream_001', CodexTarget{
+	rt.add_stream_target('stream_001', codex.CodexTarget{
 		platform:   'discord'
 		message_id: 'msg_002'
 	})
@@ -329,31 +329,31 @@ fn test_codex_runtime_add_remove_and_clear_stream_targets() {
 fn test_codex_find_stream_targets_scans_across_instances() {
 	mut app := App{
 		codex: codex.CodexState{
-			runtime:   CodexProviderRuntime{
+			runtime:   codex.ProviderRuntime{
 				instance:            'main'
 				thread_stream_map:   map[string]string{}
 				stream_map:          {
 					'codex:stream_001': [
-						CodexTarget{
+						codex.CodexTarget{
 							platform:   'feishu'
 							message_id: 'om_main_001'
 						},
 					]
 				}
-				pending_rpcs:        map[int]CodexPendingRpc{}
+				pending_rpcs:        map[int]codex.PendingRpc{}
 				err_bursts:          map[string][]string{}
 				err_pending_flushes: map[string]bool{}
 				read_fallbacks:      map[string]codex.ReadFallback{}
 			}
 			instances: {
-				'local4501': CodexProviderRuntime{
+				'local4501': codex.ProviderRuntime{
 					instance:            'local4501'
 					active_stream_id:    'codex:stream_001'
 					thread_stream_map:   {
 						'thread_local_001': 'codex:stream_001'
 					}
-					stream_map:          map[string][]CodexTarget{}
-					pending_rpcs:        map[int]CodexPendingRpc{}
+					stream_map:          map[string][]codex.CodexTarget{}
+					pending_rpcs:        map[int]codex.PendingRpc{}
 					err_bursts:          map[string][]string{}
 					err_pending_flushes: map[string]bool{}
 					read_fallbacks:      map[string]codex.ReadFallback{}
@@ -377,7 +377,7 @@ fn test_codex_dispatch_rpc_response_uses_logic_executor_without_worker_sockets()
 			}
 		}
 	}
-	app.dispatch_codex_rpc_response('main', CodexPendingRpc{
+	app.dispatch_codex_rpc_response('main', codex.PendingRpc{
 		instance:   'main'
 		method:     'thread/start'
 		stream_id:  'codex:task_001'
@@ -399,7 +399,7 @@ fn test_codex_notification_uses_logic_executor_without_worker_sockets() {
 			}
 		}
 		codex:  codex.CodexState{
-			runtime: CodexProviderRuntime{
+			runtime: codex.ProviderRuntime{
 				active_stream_id: 'codex:task_002'
 			}
 		}
@@ -422,13 +422,13 @@ fn test_codex_notification_prefers_thread_bound_stream_over_active_stream() {
 			}
 		}
 		codex:  codex.CodexState{
-			runtime: CodexProviderRuntime{
+			runtime: codex.ProviderRuntime{
 				active_stream_id:    'codex:wrong_active'
 				thread_stream_map:   {
 					'thread_live_001': 'codex:thread_bound_001'
 				}
-				stream_map:          map[string][]CodexTarget{}
-				pending_rpcs:        map[int]CodexPendingRpc{}
+				stream_map:          map[string][]codex.CodexTarget{}
+				pending_rpcs:        map[int]codex.PendingRpc{}
 				err_bursts:          map[string][]string{}
 				err_pending_flushes: map[string]bool{}
 				read_fallbacks:      map[string]codex.ReadFallback{}
@@ -452,7 +452,7 @@ fn test_codex_server_request_uses_logic_executor_without_worker_sockets() {
 			}
 		}
 		codex:  codex.CodexState{
-			runtime: CodexProviderRuntime{
+			runtime: codex.ProviderRuntime{
 				active_stream_id: 'codex:task_approval_001'
 			}
 		}

@@ -1,6 +1,7 @@
 module main
 
 import admin
+import codex
 import feishu
 import json
 import encoding.base64
@@ -772,7 +773,7 @@ fn (mut app App) feishu_runtime_buffer_patch(req WebSocketUpstreamSendRequest) {
 		app.feishu.mu.unlock()
 		if stream_id != '' {
 			app.codex_add_stream_target(app.codex_resolve_instance_for_stream(stream_id),
-				stream_id, CodexTarget{
+				stream_id, codex.CodexTarget{
 				platform:   'feishu'
 				message_id: send_result.message_id
 			})
@@ -801,7 +802,7 @@ fn (mut app App) feishu_runtime_send_followup_segment(buf FeishuStreamBuffer, ma
 	})!
 	if buf.stream_id.trim_space() != '' {
 		app.codex_add_stream_target(app.codex_resolve_instance_for_stream(buf.stream_id),
-			buf.stream_id, CodexTarget{
+			buf.stream_id, codex.CodexTarget{
 			platform:   'feishu'
 			message_id: send_result.message_id
 		})

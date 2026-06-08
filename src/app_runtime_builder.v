@@ -2,8 +2,10 @@ module main
 
 import dbx
 import config
+import codex
 import mcp_protocol
 import openai
+import provider
 import json
 import state_store
 import time
@@ -13,7 +15,6 @@ import admin
 import plugin
 import assets
 import feishu
-import codex
 import executor
 import server_lifecycle
 
@@ -109,7 +110,7 @@ fn build_app_runtime(provider_settings ProviderRuntimeSettings, executor_plan ex
 		}
 		codex:               codex.CodexState{
 			ollama_enabled: provider_settings.ollama_enabled
-			runtime:        CodexProviderRuntime{
+			runtime:        codex.ProviderRuntime{
 				enabled:             provider_settings.codex.enabled
 				url:                 provider_settings.codex.url
 				model:               provider_settings.codex.model
@@ -119,16 +120,16 @@ fn build_app_runtime(provider_settings ProviderRuntimeSettings, executor_plan ex
 				sandbox:             provider_settings.codex.sandbox
 				reconnect_delay_ms:  provider_settings.codex.reconnect_delay_ms
 				flush_interval_ms:   provider_settings.codex.flush_interval_ms
-				pending_rpcs:        map[int]CodexPendingRpc{}
-				stream_map:          map[string][]CodexTarget{}
+				pending_rpcs:        map[int]codex.PendingRpc{}
+				stream_map:          map[string][]codex.CodexTarget{}
 				err_bursts:          map[string][]string{}
 				err_pending_flushes: map[string]bool{}
 				thread_stream_map:   map[string]string{}
 			}
-			instances:      map[string]CodexProviderRuntime{}
+			instances:      map[string]codex.ProviderRuntime{}
 		}
-		provider_instances:  ProviderInstanceRegistry{
-			specs: map[string]ProviderInstanceSpec{}
+		provider_instances:  provider.ProviderInstanceRegistry{
+			specs: map[string]provider.ProviderInstanceSpec{}
 		}
 		feishu:              feishu.FeishuState{
 			enabled:                    provider_settings.feishu.enabled

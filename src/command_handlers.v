@@ -2,6 +2,7 @@ module main
 
 import transport
 import command as cmdpkg
+import codex
 import executor
 import log
 
@@ -23,7 +24,7 @@ pub fn (h CodexCommandHandler) execute(command transport.WorkerWebSocketUpstream
 		return false, ''
 	}
 	if normalized.is_session_bind() {
-		instance := CodexProviderRuntime.normalize_instance(normalized.instance)
+		instance := codex.ProviderRuntime.normalize_instance(normalized.instance)
 		if normalized.correlation.stream_id != '' && normalized.target.type_ == 'thread_id'
 			&& normalized.target.id != '' {
 			app.codex_bind_stream_to_thread(instance, normalized.target.id,
@@ -33,7 +34,7 @@ pub fn (h CodexCommandHandler) execute(command transport.WorkerWebSocketUpstream
 		}
 		if normalized.correlation.stream_id != '' && normalized.target.type_ == 'message_id'
 			&& normalized.target.id != '' {
-			app.codex_add_stream_target(instance, normalized.correlation.stream_id, CodexTarget{
+			app.codex_add_stream_target(instance, normalized.correlation.stream_id, codex.CodexTarget{
 				platform:   'feishu'
 				message_id: normalized.target.id
 			})
@@ -43,7 +44,7 @@ pub fn (h CodexCommandHandler) execute(command transport.WorkerWebSocketUpstream
 		return false, ''
 	}
 	if normalized.is_session_clear() {
-		instance := CodexProviderRuntime.normalize_instance(normalized.instance)
+		instance := codex.ProviderRuntime.normalize_instance(normalized.instance)
 		mut cleared := false
 		if normalized.target.type_ == 'thread_id' && normalized.target.id != '' {
 			cleared = app.codex_clear_thread_binding(instance, normalized.target.id)
@@ -187,7 +188,7 @@ fn (h FeishuCommandHandler) execute_provider_message_send(normalized cmdpkg.Norm
 		}
 		if !found {
 			app.codex_add_stream_target(app.codex_resolve_instance_for_stream(normalized.correlation.stream_id),
-				normalized.correlation.stream_id, CodexTarget{
+				normalized.correlation.stream_id, codex.CodexTarget{
 				platform:   platform
 				message_id: result.message_id
 			})
@@ -291,7 +292,7 @@ pub fn (h FeishuCommandHandler) execute(command transport.WorkerWebSocketUpstrea
 			&& normalized.target.id != '' {
 			mut app := h.app
 			app.codex_add_stream_target(app.codex_resolve_instance_for_stream(normalized.correlation.stream_id),
-				normalized.correlation.stream_id, CodexTarget{
+				normalized.correlation.stream_id, codex.CodexTarget{
 				platform:   'feishu'
 				message_id: normalized.target.id
 			})

@@ -2,6 +2,7 @@ module main
 
 import config
 import openai
+import provider
 import net
 import net.http
 import os
@@ -302,17 +303,17 @@ fn openai_integration_start_gateway(port int, upstream_port int, plugin_file str
 			pending:           map[string][]ws.HubPendingMessage{}
 			upstream_started:  map[string]bool{}
 			fixture_runtime:   map[string]FixtureWebSocketUpstreamRuntime{}
-			upstream_sessions: map[string]UpstreamRuntimeSession{}
+			upstream_sessions: map[string]ws.UpstreamRuntimeSession{}
 		}
 		providers:          ProviderHost{
 			registry: map[string]Provider{}
 			specs:    map[string]ProviderSpec{}
 		}
-		provider_instances: ProviderInstanceRegistry{
-			specs: map[string]ProviderInstanceSpec{}
+		provider_instances: provider.ProviderInstanceRegistry{
+			specs: map[string]provider.ProviderInstanceSpec{}
 		}
 		codex:              codex.CodexState{
-			instances: map[string]CodexProviderRuntime{}
+			instances: map[string]codex.ProviderRuntime{}
 		}
 		feishu:             feishu.FeishuState{
 			runtime: map[string]FeishuProviderRuntime{}

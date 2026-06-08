@@ -3,9 +3,6 @@ module main
 import dbx
 import net.unix
 
-// ── Type aliases: main → db ──
-type DbProviderRuntime = dbx.Runtime
-
 // ══════════════════════════════════════════════════════════════════════
 // enable_db implementation
 // ══════════════════════════════════════════════════════════════════════

@@ -531,9 +531,9 @@ fn test_command_executor_handles_provider_instance_upsert() {
 fn test_codex_handler_session_bind_thread_updates_runtime_binding() {
 	mut app := &App{
 		codex: codex.CodexState{
-			runtime: CodexProviderRuntime{
+			runtime: codex.ProviderRuntime{
 				thread_stream_map: map[string]string{}
-				stream_map:        map[string][]CodexTarget{}
+				stream_map:        map[string][]codex.CodexTarget{}
 			}
 		}
 	}
@@ -558,12 +558,12 @@ fn test_codex_handler_session_bind_thread_updates_runtime_binding() {
 fn test_codex_handler_session_clear_thread_removes_runtime_binding() {
 	mut app := &App{
 		codex: codex.CodexState{
-			runtime: CodexProviderRuntime{
+			runtime: codex.ProviderRuntime{
 				thread_id:         'thread_001'
 				thread_stream_map: {
 					'thread_001': 'codex:task_001'
 				}
-				stream_map:        map[string][]CodexTarget{}
+				stream_map:        map[string][]codex.CodexTarget{}
 			}
 		}
 	}
@@ -587,9 +587,9 @@ fn test_codex_handler_session_clear_thread_removes_runtime_binding() {
 fn test_feishu_handler_session_bind_message_registers_stream_target_and_buffer() {
 	mut app := &App{
 		codex:  codex.CodexState{
-			runtime: CodexProviderRuntime{
+			runtime: codex.ProviderRuntime{
 				thread_stream_map: map[string]string{}
-				stream_map:        map[string][]CodexTarget{}
+				stream_map:        map[string][]codex.CodexTarget{}
 			}
 		}
 		feishu: feishu.FeishuState{
@@ -621,11 +621,11 @@ fn test_feishu_handler_session_bind_message_registers_stream_target_and_buffer()
 fn test_feishu_handler_session_clear_message_removes_buffer_and_stream_target() {
 	mut app := &App{
 		codex:  codex.CodexState{
-			runtime: CodexProviderRuntime{
+			runtime: codex.ProviderRuntime{
 				thread_stream_map: map[string]string{}
 				stream_map:        {
 					'codex:task_003': [
-						CodexTarget{
+						codex.CodexTarget{
 							platform:   'feishu'
 							message_id: 'om_reply_002'
 						},
@@ -663,15 +663,15 @@ fn test_feishu_handler_session_clear_message_removes_buffer_and_stream_target() 
 fn test_feishu_handler_session_clear_message_removes_buffer_chain() {
 	mut app := &App{
 		codex:  codex.CodexState{
-			runtime: CodexProviderRuntime{
+			runtime: codex.ProviderRuntime{
 				thread_stream_map: map[string]string{}
 				stream_map:        {
 					'codex:task_chain': [
-						CodexTarget{
+						codex.CodexTarget{
 							platform:   'feishu'
 							message_id: 'om_chain_1'
 						},
-						CodexTarget{
+						codex.CodexTarget{
 							platform:   'feishu'
 							message_id: 'om_chain_2'
 						},
@@ -714,15 +714,15 @@ fn test_feishu_handler_session_clear_message_removes_buffer_chain() {
 fn test_feishu_handler_session_clear_stream_id_removes_all_stream_buffers() {
 	mut app := &App{
 		codex:  codex.CodexState{
-			runtime: CodexProviderRuntime{
+			runtime: codex.ProviderRuntime{
 				thread_stream_map: map[string]string{}
 				stream_map:        {
 					'codex:task_stream_clear': [
-						CodexTarget{
+						codex.CodexTarget{
 							platform:   'feishu'
 							message_id: 'om_stream_1'
 						},
-						CodexTarget{
+						codex.CodexTarget{
 							platform:   'feishu'
 							message_id: 'om_stream_2'
 						},
