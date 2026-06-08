@@ -4,16 +4,6 @@ import transport
 import ws
 import net.websocket
 
-// ── Type aliases: main → ws ──
-type WebSocketDispatchConnState = ws.DispatchConnState
-type HubConn = ws.HubConn
-type HubPendingMessage = ws.HubPendingMessage
-
-
-type WebSocketRuntimeContext = ws.RuntimeContext
-type WebSocketBridgeState = ws.BridgeState
-type WebSocketDispatchBridgeState = ws.DispatchBridgeState
-
 // ── Builder: captures App closures ──
 
 fn (mut app App) build_websocket_runtime_context() ws.RuntimeContext {

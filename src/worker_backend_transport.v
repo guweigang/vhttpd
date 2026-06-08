@@ -1,17 +1,15 @@
 module main
 
 import transport
+import ws
 import json
 import log
 import net.unix
 import time
 import worker
 
-type WorkerBackendFrameCodec = worker.WorkerBackendFrameCodec
 
 type WorkerBackendConnection = worker.WorkerBackendConnection
-
-struct WorkerHttpStreamWriter {}
 
 struct WorkerWebSocketDispatchCommandRuntime {}
 
@@ -90,7 +88,7 @@ fn (mut app App) build_worker_backend_dispatch_context() WorkerBackendDispatchCo
 	}
 }
 
-fn WorkerWebSocketDispatchCommandRuntime.execute(rt WebSocketRuntimeContext, commands []transport.WorkerWebSocketFrame) transport.WorkerWebSocketDispatchCommandsResult {
+fn WorkerWebSocketDispatchCommandRuntime.execute(rt ws.RuntimeContext, commands []transport.WorkerWebSocketFrame) transport.WorkerWebSocketDispatchCommandsResult {
 	mut close_frame := transport.WorkerWebSocketFrame{}
 	mut has_close := false
 	mut failures := []transport.WorkerWebSocketDispatchCommandFailure{}
@@ -116,11 +114,6 @@ fn WorkerWebSocketDispatchCommandRuntime.first_close(result transport.WorkerWebS
 		return result.close_frame
 	}
 	return none
-}
-
-fn WorkerHttpStreamWriter.write_headers(mut ctx Context, status int, content_type string, extra_headers map[string]string, chunked bool) ! {
-	worker.WorkerHttpStreamWriter.write_headers_conn(mut ctx.conn, status, content_type,
-		extra_headers, chunked)!
 }
 
 fn WorkerBackendConnectorRuntime.socket_with_retry(ctx WorkerBackendConnectorContext) !string {

@@ -6,9 +6,7 @@ import net.http
 import time
 import transport
 import veb
-
-// mcp type aliases
-type McpSession = mcp_protocol.Session
+import worker
 
 struct McpRuntime {}
 
@@ -161,7 +159,7 @@ fn proxy_worker_mcp(mut app App, mut ctx Context) veb.Result {
 	}
 	mut protocol_version := headers['mcp-protocol-version'] or { '' }
 	if protocol_version == '' {
-		protocol_version = McpSession.default_protocol_version()
+		protocol_version = mcp_protocol.Session.default_protocol_version()
 	}
 	body := ctx.req.data
 	if body.trim_space() == '' {
@@ -218,7 +216,7 @@ fn proxy_worker_mcp(mut app App, mut ctx Context) veb.Result {
 	}
 	if session_id == '' {
 		if body.contains('"method":"initialize"') || body.contains('"method": "initialize"') {
-			session_id = McpSession.generate_id()
+			session_id = mcp_protocol.Session.generate_id()
 		}
 	}
 	if session_id != '' {
@@ -229,7 +227,7 @@ fn proxy_worker_mcp(mut app App, mut ctx Context) veb.Result {
 		}, req_id, trace_id, '/mcp')
 		session_id = session.id
 		if body.contains('"method":"initialize"') || body.contains('"method": "initialize"') {
-			client_capabilities_json := McpSession.extract_client_capabilities_json(body)
+			client_capabilities_json := mcp_protocol.Session.extract_client_capabilities_json(body)
 			if client_capabilities_json != '' {
 				app.mcp.set_client_capabilities(session_id, client_capabilities_json)
 			}
@@ -373,7 +371,7 @@ pub fn (mut app App) mcp_get(mut ctx Context) veb.Result {
 		return ctx.text('{"error":"Missing Mcp-Session-Id"}')
 	}
 	app.mcp.mu.@lock()
-	session := app.mcp.sessions[session_id] or { McpSession{} }
+	session := app.mcp.sessions[session_id] or { mcp_protocol.Session{} }
 	app.mcp.mu.unlock()
 	if session.id == '' {
 		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
@@ -401,10 +399,10 @@ pub fn (mut app App) mcp_get(mut ctx Context) veb.Result {
 		'mcp-protocol-version': if session.protocol_version != '' {
 			session.protocol_version
 		} else {
-			McpSession.default_protocol_version()
+			mcp_protocol.Session.default_protocol_version()
 		}
 	}
-	WorkerHttpStreamWriter.write_headers(mut ctx, 200, 'text/event-stream', response_headers, false) or {
+	worker.WorkerHttpStreamWriter.write_headers_conn(mut ctx.conn, 200, 'text/event-stream', response_headers, false) or {
 		return veb.no_result()
 	}
 	mut conn := ctx.conn

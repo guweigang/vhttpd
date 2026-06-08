@@ -4,12 +4,7 @@ import transport
 import executor
 import dispatch
 
-type KernelDispatchKind = executor.KernelDispatchKind
 type KernelDispatchEnvelope = executor.KernelDispatchEnvelope
-type KernelDispatchTransportFailure = executor.KernelDispatchTransportFailure
-type KernelWebSocketUpstreamDispatchOutcome = executor.KernelWebSocketUpstreamDispatchOutcome
-type KernelMcpDispatchOutcome = executor.KernelMcpDispatchOutcome
-type KernelStreamDispatchFailure = executor.KernelStreamDispatchFailure
 
 pub fn KernelDispatchEnvelope.from_stream_dispatch(req transport.StreamDispatchRequest) KernelDispatchEnvelope {
 	return dispatch.stream_dispatch_envelope_from_stream(req)
@@ -36,9 +31,9 @@ fn (mut app App) kernel_dispatch_stream(req transport.StreamDispatchRequest) !tr
 	return app.worker.logic_executor.dispatch_stream(mut facade, req)
 }
 
-fn kernel_stream_dispatch_failure(resp transport.StreamDispatchResponse) ?KernelStreamDispatchFailure {
+fn kernel_stream_dispatch_failure(resp transport.StreamDispatchResponse) ?executor.KernelStreamDispatchFailure {
 	result := dispatch.stream_failure(resp) or { return none }
-	return KernelStreamDispatchFailure{
+	return executor.KernelStreamDispatchFailure{
 		error:       result.error
 		error_class: result.error_class
 	}
@@ -53,10 +48,10 @@ fn (mut app App) kernel_dispatch_mcp(req transport.WorkerMcpDispatchRequest) !tr
 	return app.worker.logic_executor.dispatch_mcp(mut facade, req)
 }
 
-fn (mut app App) kernel_dispatch_mcp_handled(req transport.WorkerMcpDispatchRequest) !KernelMcpDispatchOutcome {
+fn (mut app App) kernel_dispatch_mcp_handled(req transport.WorkerMcpDispatchRequest) !executor.KernelMcpDispatchOutcome {
 	resp := app.kernel_dispatch_mcp(req)!
 	if resp.error != '' || resp.commands.len == 0 {
-		return KernelMcpDispatchOutcome{
+		return executor.KernelMcpDispatchOutcome{
 			response:          resp
 			command_snapshots: []executor.WebSocketUpstreamCommandActivity{}
 			command_error:     ''
@@ -65,7 +60,7 @@ fn (mut app App) kernel_dispatch_mcp_handled(req transport.WorkerMcpDispatchRequ
 	ctx := DispatchContext.from_mcp_dispatch_provider(req, app.logic_executor_provider())
 	command_snapshots, command_error := app.execute_command_envelopes_with_snapshots(req.id, ctx,
 		resp.commands)
-	return KernelMcpDispatchOutcome{
+	return executor.KernelMcpDispatchOutcome{
 		response:          resp
 		command_snapshots: command_snapshots
 		command_error:     command_error
@@ -78,10 +73,10 @@ fn (mut app App) kernel_dispatch_websocket_upstream(req transport.WorkerWebSocke
 	return app.worker.logic_executor.dispatch_websocket_upstream(mut facade, req)
 }
 
-fn (mut app App) kernel_dispatch_websocket_upstream_handled(req transport.WorkerWebSocketUpstreamDispatchRequest) !KernelWebSocketUpstreamDispatchOutcome {
+fn (mut app App) kernel_dispatch_websocket_upstream_handled(req transport.WorkerWebSocketUpstreamDispatchRequest) !executor.KernelWebSocketUpstreamDispatchOutcome {
 	resp := app.kernel_dispatch_websocket_upstream(req)!
 	if resp.error != '' || resp.commands.len == 0 {
-		return KernelWebSocketUpstreamDispatchOutcome{
+		return executor.KernelWebSocketUpstreamDispatchOutcome{
 			response:          resp
 			command_snapshots: []executor.WebSocketUpstreamCommandActivity{}
 			command_error:     ''
@@ -90,7 +85,7 @@ fn (mut app App) kernel_dispatch_websocket_upstream_handled(req transport.Worker
 	ctx := DispatchContext.from_websocket_upstream(req)
 	command_snapshots, command_error := app.execute_command_envelopes_with_snapshots(req.id, ctx,
 		resp.commands)
-	return KernelWebSocketUpstreamDispatchOutcome{
+	return executor.KernelWebSocketUpstreamDispatchOutcome{
 		response:          resp
 		command_snapshots: command_snapshots
 		command_error:     command_error
@@ -107,7 +102,7 @@ fn (mut app App) kernel_dispatch_websocket_event(frame transport.WorkerWebSocket
 	return app.worker.logic_executor.dispatch_websocket_event(mut facade, frame)
 }
 
-fn kernel_dispatch_transport_failure(err_msg string) KernelDispatchTransportFailure {
+fn kernel_dispatch_transport_failure(err_msg string) executor.KernelDispatchTransportFailure {
 	return dispatch.transport_failure(err_msg)
 }
 

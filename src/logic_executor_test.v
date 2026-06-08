@@ -1,5 +1,6 @@
 module main
 
+import admin
 import executor
 import json
 import worker
@@ -65,7 +66,7 @@ fn test_internal_admin_runtime_exposes_worker_logic_executor_identity() {
 			logic_executor:      executor.SocketWorkerExecutor{}
 		}
 	}
-	resp := app.internal_admin_dispatch(InternalAdminRequest{
+	resp := app.internal_admin_dispatch(admin.InternalAdminRequest{
 		mode:   'vhttpd_admin'
 		method: 'GET'
 		path:   '/admin/runtime'

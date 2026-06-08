@@ -75,11 +75,11 @@ fn HttpStreamRuntime.direct_sse(rt StreamRuntimeContext, mut ctx Context, mut co
 	headers['x-accel-buffering'] = 'no'
 	headers['x-vhttpd-stream-mode'] = 'direct'
 	ctype := if start.content_type != '' { start.content_type } else { 'text/event-stream' }
-	WorkerHttpStreamWriter.write_headers(mut ctx, status, ctype, headers, false) or {
+	worker.WorkerHttpStreamWriter.write_headers_conn(mut ctx.conn, status, ctype, headers, false) or {
 		return veb.no_result()
 	}
 	for {
-		raw := WorkerBackendFrameCodec.read(mut conn) or { break }
+		raw := worker.WorkerBackendFrameCodec.read(mut conn) or { break }
 		frame := json.decode(transport.WorkerStreamFrame, raw) or { continue }
 		if frame.mode != 'stream' {
 			continue
@@ -137,11 +137,11 @@ fn HttpStreamRuntime.direct_passthrough(rt StreamRuntimeContext, mut ctx Context
 	headers['x-vhttpd-trace-id'] = trace_id
 	headers['x-vhttpd-stream-mode'] = 'direct'
 	ctype := if start.content_type != '' { start.content_type } else { 'text/plain; charset=utf-8' }
-	WorkerHttpStreamWriter.write_headers(mut ctx, status, ctype, headers, true) or {
+	worker.WorkerHttpStreamWriter.write_headers_conn(mut ctx.conn, status, ctype, headers, true) or {
 		return veb.no_result()
 	}
 	for {
-		raw := WorkerBackendFrameCodec.read(mut conn) or { break }
+		raw := worker.WorkerBackendFrameCodec.read(mut conn) or { break }
 		frame := json.decode(transport.WorkerStreamFrame, raw) or { continue }
 		if frame.mode != 'stream' {
 			continue
@@ -240,13 +240,13 @@ fn HttpStreamRuntime.dispatch(rt StreamRuntimeContext, mut ctx Context, method s
 	response_headers['x-vhttpd-stream-mode'] = 'dispatch'
 	if stream_type == 'sse' {
 		response_headers['x-accel-buffering'] = 'no'
-		WorkerHttpStreamWriter.write_headers(mut ctx, status, content_type, response_headers, false) or {
+		worker.WorkerHttpStreamWriter.write_headers_conn(mut ctx.conn, status, content_type, response_headers, false) or {
 			DispatchStreamSession.best_effort_close(rt, req_id, trace_id, open_resp.state,
 				'client_write_error')
 			return veb.no_result()
 		}
 	} else {
-		WorkerHttpStreamWriter.write_headers(mut ctx, status, content_type, response_headers, true) or {
+		worker.WorkerHttpStreamWriter.write_headers_conn(mut ctx.conn, status, content_type, response_headers, true) or {
 			DispatchStreamSession.best_effort_close(rt, req_id, trace_id, open_resp.state,
 				'client_write_error')
 			return veb.no_result()

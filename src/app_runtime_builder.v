@@ -75,14 +75,14 @@ fn build_app_runtime(provider_settings ProviderRuntimeSettings, executor_plan ex
 			dispatch_mode:                executor_plan.bootstrap.websocket_dispatch_mode
 			recent_dispatch_limit:        50
 			auto_start_dynamic_upstreams: true
-			upstream_sessions:            map[string]UpstreamRuntimeSession{}
-			conns:                        map[string]HubConn{}
+			upstream_sessions:            map[string]ws.UpstreamRuntimeSession{}
+			conns:                        map[string]ws.HubConn{}
 			room_members:                 map[string]map[string]bool{}
 			conn_rooms:                   map[string]map[string]bool{}
 			conn_meta:                    map[string]map[string]string{}
-			pending:                      map[string][]HubPendingMessage{}
+			pending:                      map[string][]ws.HubPendingMessage{}
 			upstream_started:             map[string]bool{}
-			fixture_runtime:              map[string]FixtureWebSocketUpstreamRuntime{}
+			fixture_runtime:              map[string]ws.FixtureRuntime{}
 			recent_activities:            []WebSocketUpstreamActivitySnapshot{}
 		}
 		mcp:                 mcp_protocol.McpState{
@@ -91,7 +91,7 @@ fn build_app_runtime(provider_settings ProviderRuntimeSettings, executor_plan ex
 			session_ttl_seconds:        app_runtime_default_mcp_session_ttl_seconds(cfg)
 			sampling_capability_policy: mcp_protocol.McpState.normalize_sampling_capability_policy(cfg.mcp.sampling_capability_policy)
 			allowed_origins:            cfg.mcp.allowed_origins.clone()
-			sessions:                   map[string]McpSession{}
+			sessions:                   map[string]mcp_protocol.Session{}
 		}
 		openai:             openai.OpenaiState{
 			enabled:         cfg.openai.enabled

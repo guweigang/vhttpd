@@ -2526,15 +2526,15 @@ export default app;
 	}
 	mut app := App{
 		ws_hub: ws.HubState{
-			conns:        map[string]HubConn{}
+			conns:        map[string]ws.HubConn{}
 			room_members: map[string]map[string]bool{}
 			conn_rooms:   map[string]map[string]bool{}
 			conn_meta:    map[string]map[string]string{}
-			pending:      map[string][]HubPendingMessage{}
+			pending:      map[string][]ws.HubPendingMessage{}
 		}
 	}
 	mut facade := app.as_facade()
-	app.ws_hub.conns['ws_timer'] = HubConn{
+	app.ws_hub.conns['ws_timer'] = ws.HubConn{
 		id:         'ws_timer'
 		request_id: 'req_ws_timer'
 		trace_id:   'trace_ws_timer'
@@ -2601,15 +2601,15 @@ export default app;
 	}
 	mut app := App{
 		ws_hub: ws.HubState{
-			conns:        map[string]HubConn{}
+			conns:        map[string]ws.HubConn{}
 			room_members: map[string]map[string]bool{}
 			conn_rooms:   map[string]map[string]bool{}
 			conn_meta:    map[string]map[string]string{}
-			pending:      map[string][]HubPendingMessage{}
+			pending:      map[string][]ws.HubPendingMessage{}
 		}
 	}
 	mut facade2 := app.as_facade()
-	app.ws_hub.conns['ws_timer_pump'] = HubConn{
+	app.ws_hub.conns['ws_timer_pump'] = ws.HubConn{
 		id:         'ws_timer_pump'
 		request_id: 'req_ws_timer_pump'
 		trace_id:   'trace_ws_timer_pump'
@@ -2679,14 +2679,14 @@ export default app;
 	}
 	mut app := App{
 		ws_hub: ws.HubState{
-			conns:        map[string]HubConn{}
+			conns:        map[string]ws.HubConn{}
 			room_members: map[string]map[string]bool{}
 			conn_rooms:   map[string]map[string]bool{}
 			conn_meta:    map[string]map[string]string{}
-			pending:      map[string][]HubPendingMessage{}
+			pending:      map[string][]ws.HubPendingMessage{}
 		}
 	}
-	app.ws_hub.conns['ws_timer_failure'] = HubConn{
+	app.ws_hub.conns['ws_timer_failure'] = ws.HubConn{
 		id:         'ws_timer_failure'
 		request_id: 'req_ws_timer_failure'
 		trace_id:   'trace_ws_timer_failure'
@@ -2968,14 +2968,14 @@ export default app;
 	}
 	mut app := App{
 		ws_hub: ws.HubState{
-			conns:        map[string]HubConn{}
+			conns:        map[string]ws.HubConn{}
 			room_members: map[string]map[string]bool{}
 			conn_rooms:   map[string]map[string]bool{}
 			conn_meta:    map[string]map[string]string{}
-			pending:      map[string][]HubPendingMessage{}
+			pending:      map[string][]ws.HubPendingMessage{}
 		}
 	}
-	app.ws_hub.conns['ws_main_failure'] = HubConn{
+	app.ws_hub.conns['ws_main_failure'] = ws.HubConn{
 		id:         'ws_main_failure'
 		request_id: 'req_ws_main_failure'
 		trace_id:   'trace_ws_main_failure'
@@ -3355,11 +3355,11 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_nudges_control_when_server_data_do
 	mut app := App{
 		runtime_config_json: '{"relay":{"controlNudgeDelayMs":20,"controlResetDelayMs":200}}'
 		ws_hub:              ws.HubState{
-			conns:        map[string]HubConn{}
+			conns:        map[string]ws.HubConn{}
 			room_members: map[string]map[string]bool{}
 			conn_rooms:   map[string]map[string]bool{}
 			conn_meta:    map[string]map[string]string{}
-			pending:      map[string][]HubPendingMessage{}
+			pending:      map[string][]ws.HubPendingMessage{}
 		}
 	}
 	mut facade7 := app.as_facade()
@@ -3409,7 +3409,7 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_nudges_control_when_server_data_do
 		&& it.data.contains('"type":"connected"'))
 	time.sleep(80 * time.millisecond)
 	executor.pump_all_lane_sessions() or { panic(err) }
-	pending := app.ws_hub.pending['ws_control_nudge'] or { []HubPendingMessage{} }
+	pending := app.ws_hub.pending['ws_control_nudge'] or { []ws.HubPendingMessage{} }
 	assert pending.len == 0
 }
 

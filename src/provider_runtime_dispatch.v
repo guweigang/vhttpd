@@ -1,5 +1,6 @@
 module main
 
+import codex
 import dbx
 import json
 import provider
@@ -153,7 +154,7 @@ pub fn (mut app App) provider_runtime_metrics(name string) ProviderRuntimeMetric
 			if instances.len == 0 {
 				instances = ['main']
 			}
-			mut states := []CodexRuntimeStateView{cap: instances.len}
+			mut states := []codex.RuntimeStateView{cap: instances.len}
 			for instance in instances {
 				states << app.codex_runtime_state_view(instance)
 			}

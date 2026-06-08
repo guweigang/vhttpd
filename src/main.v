@@ -214,7 +214,7 @@ pub fn (mut app App) worker_websocket_open(mut conn unix.StreamConn, req http.Re
 }
 
 fn worker_websocket_message_cb(mut ws_client websocket.Client, msg &websocket.Message, ref voidptr) ! {
-	mut state := unsafe { &WebSocketBridgeState(ref) }
+	mut state := unsafe { &ws.BridgeState(ref) }
 	runtime_trace('ws.message.enter', {
 		'conn_id':     state.conn_id
 		'request_id':  state.request_id
@@ -334,7 +334,7 @@ fn worker_websocket_message_cb(mut ws_client websocket.Client, msg &websocket.Me
 }
 
 fn worker_websocket_close_cb(mut _ws websocket.Client, code int, reason string, ref voidptr) ! {
-	mut state := unsafe { &WebSocketBridgeState(ref) }
+	mut state := unsafe { &ws.BridgeState(ref) }
 	state.cb_mu.@lock()
 	runtime_trace('ws.close.enter', {
 		'conn_id':          state.conn_id
@@ -511,7 +511,7 @@ fn handle_worker_websocket_session(mut app App, mut client_conn net.TcpConn, mut
 	}
 	mut ws_server := websocket.new_server(.ip, 0, '')
 	websocket_runtime := app.build_websocket_runtime_context()
-	mut state := &WebSocketBridgeState{
+	mut state := &ws.BridgeState{
 		worker_conn:   worker_conn
 		rt:            websocket_runtime
 		worker_socket: selected_socket

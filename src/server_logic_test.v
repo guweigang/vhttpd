@@ -1,5 +1,6 @@
 module main
 
+import admin
 import executor
 import transport
 import config
@@ -1128,7 +1129,7 @@ fn test_admin_logic_executor_specs_snapshot_lists_builtin_executors() {
 
 fn test_internal_admin_executors_returns_builtin_executor_specs() {
 	mut app := App{}
-	resp := app.internal_admin_dispatch(InternalAdminRequest{
+	resp := app.internal_admin_dispatch(admin.InternalAdminRequest{
 		mode:   'vhttpd_admin'
 		method: 'GET'
 		path:   '/admin/executors'

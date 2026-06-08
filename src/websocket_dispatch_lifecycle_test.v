@@ -3,7 +3,7 @@ module main
 import ws
 
 fn test_ws_dispatch_conn_state_uses_single_lifecycle_source() {
-	mut lifecycle := &WebSocketDispatchConnState{}
+	mut lifecycle := &ws.DispatchConnState{}
 	assert lifecycle.phase() == .opening
 	assert !lifecycle.can_process_messages()
 	assert lifecycle.can_queue()
@@ -22,8 +22,8 @@ fn test_ws_dispatch_conn_state_uses_single_lifecycle_source() {
 
 fn test_worker_websocket_dispatch_finalize_cleans_hub_state_once() {
 	mut app := App{}
-	mut lifecycle := &WebSocketDispatchConnState{}
-	app.ws_hub.conns['conn_dispatch'] = HubConn{
+	mut lifecycle := &ws.DispatchConnState{}
+	app.ws_hub.conns['conn_dispatch'] = ws.HubConn{
 		id:        'conn_dispatch'
 		lifecycle: lifecycle
 	}
@@ -37,13 +37,13 @@ fn test_worker_websocket_dispatch_finalize_cleans_hub_state_once() {
 		'relay_role': 'client'
 	}
 	app.ws_hub.pending['conn_dispatch'] = [
-		HubPendingMessage{
+		ws.HubPendingMessage{
 			data:   'hello'
 			opcode: 'text'
 		},
 	]
 	rt := app.build_websocket_runtime_context()
-	mut state := &WebSocketDispatchBridgeState{
+	mut state := &ws.DispatchBridgeState{
 		rt:        rt
 		lifecycle: lifecycle
 		conn_id:   'conn_dispatch'
@@ -61,8 +61,8 @@ fn test_worker_websocket_dispatch_finalize_cleans_hub_state_once() {
 
 fn test_ws_hub_send_to_rejects_closing_dispatch_connection() {
 	mut app := App{}
-	mut lifecycle := &WebSocketDispatchConnState{}
-	app.ws_hub.conns['conn_dispatch'] = HubConn{
+	mut lifecycle := &ws.DispatchConnState{}
+	app.ws_hub.conns['conn_dispatch'] = ws.HubConn{
 		id:        'conn_dispatch'
 		lifecycle: lifecycle
 	}
@@ -73,8 +73,8 @@ fn test_ws_hub_send_to_rejects_closing_dispatch_connection() {
 
 fn test_ws_hub_send_to_queues_opening_dispatch_connection() {
 	mut app := App{}
-	mut lifecycle := &WebSocketDispatchConnState{}
-	app.ws_hub.conns['conn_dispatch'] = HubConn{
+	mut lifecycle := &ws.DispatchConnState{}
+	app.ws_hub.conns['conn_dispatch'] = ws.HubConn{
 		id:        'conn_dispatch'
 		lifecycle: lifecycle
 	}

@@ -292,14 +292,14 @@ fn openai_integration_start_gateway(port int, upstream_port int, plugin_file str
 			responses:       state_store.MemoryStateStore.new[openai.OpenAIResponseRecord]()
 		}
 		mcp:                mcp_protocol.McpState{
-			sessions: map[string]McpSession{}
+			sessions: map[string]mcp_protocol.Session{}
 		}
 		ws_hub:             ws.HubState{
-			conns:             map[string]HubConn{}
+			conns:             map[string]ws.HubConn{}
 			room_members:      map[string]map[string]bool{}
 			conn_rooms:        map[string]map[string]bool{}
 			conn_meta:         map[string]map[string]string{}
-			pending:           map[string][]HubPendingMessage{}
+			pending:           map[string][]ws.HubPendingMessage{}
 			upstream_started:  map[string]bool{}
 			fixture_runtime:   map[string]FixtureWebSocketUpstreamRuntime{}
 			upstream_sessions: map[string]UpstreamRuntimeSession{}

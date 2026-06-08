@@ -312,9 +312,7 @@ fn (mut app App) codex_runtime_config_snapshot(instance string) codex.AdminConfi
 	return app.codex.snapshot(instance).config_snapshot()
 }
 
-type CodexRuntimeStateView = codex.RuntimeStateView
-
-fn (mut app App) codex_runtime_state_view(instance string) CodexRuntimeStateView {
+fn (mut app App) codex_runtime_state_view(instance string) codex.RuntimeStateView {
 	return app.codex.snapshot(instance).state_view()
 }
 
