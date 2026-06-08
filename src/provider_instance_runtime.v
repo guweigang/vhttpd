@@ -133,7 +133,7 @@ fn (mut app App) build_provider_instance_runtime_context() ProviderInstanceRunti
 					if cfg.flush_interval_ms > 0 {
 						rt.flush_interval_ms = cfg.flush_interval_ms
 					}
-					app.codex_runtime_update(spec.instance, rt)
+					app.codex.update(spec.instance, rt)
 					_ = app.ensure_websocket_upstream_provider_running('codex', spec.instance)
 				}
 				else {}

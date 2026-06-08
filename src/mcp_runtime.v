@@ -9,15 +9,12 @@ import veb
 
 // mcp type aliases
 type McpSession = mcp_protocol.Session
-type AdminMcpSessionSnapshot = mcp_protocol.SessionSnapshot
-type AdminMcpRuntimeSnapshot = mcp_protocol.RuntimeSnapshot
-type McpQueueResult = mcp_protocol.QueueResult
 
 struct McpRuntime {}
 
-fn McpRuntime.queue_message(mut app App, session_id string, raw string) McpQueueResult {
+fn McpRuntime.queue_message(mut app App, session_id string, raw string) mcp_protocol.QueueResult {
 	if session_id == '' || raw == '' {
-		return McpQueueResult{
+		return mcp_protocol.QueueResult{
 			queued: false
 		}
 	}
@@ -85,7 +82,7 @@ fn McpRuntime.queue_message(mut app App, session_id string, raw string) McpQueue
 			'policy':     policy
 			'drop_class': 'sampling_without_client_capability'
 		})
-		return McpQueueResult{
+		return mcp_protocol.QueueResult{
 			queued: false
 		}
 	}
@@ -100,13 +97,13 @@ fn McpRuntime.queue_message(mut app App, session_id string, raw string) McpQueue
 			'policy':      policy
 			'error_class': 'sampling_without_client_capability'
 		})
-		return McpQueueResult{
+		return mcp_protocol.QueueResult{
 			queued:      false
 			error:       true
 			error_class: 'sampling_capability_required'
 		}
 	}
-	return McpQueueResult{
+	return mcp_protocol.QueueResult{
 		queued: true
 	}
 }

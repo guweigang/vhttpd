@@ -5,19 +5,6 @@ import net.unix
 
 // ── Type aliases: main → db ──
 type DbProviderRuntime = dbx.Runtime
-type DbRuntimeSnapshot = dbx.Snapshot
-type DbRuntimeSnapshotCapabilities = dbx.SnapshotCapabilities
-type DbUpstreamRequest = dbx.Request
-type DbUpstreamResponse = dbx.Response
-type DbRuntimeFrameCodec = dbx.FrameCodec
-type DbRuntimeServer = dbx.Server
-type DbRuntimeServerContext = dbx.ServerContext
-type DbDriverName = dbx.DriverName
-type DbDriverCapabilities = dbx.DriverCapabilities
-type DbQueryResult = dbx.QueryResult
-type DbExecResult = dbx.ExecResult
-type DbPoolHandle = dbx.PoolHandle
-type DbSessionHandle = dbx.SessionHandle
 
 // ══════════════════════════════════════════════════════════════════════
 // enable_db implementation

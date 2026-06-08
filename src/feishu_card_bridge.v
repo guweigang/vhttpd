@@ -75,8 +75,6 @@ struct FeishuBridgeProxyRequest {
 	request    WebSocketUpstreamSendRequest
 }
 
-type FeishuBridgeProxyResult = feishu.BridgeProxyResult
-
 @[heap]
 struct FeishuCardBridgeServerState {
 mut:

@@ -67,14 +67,6 @@ fn (mut app App) codex_runtime_ensure_instance(instance string) CodexProviderRun
 	return next
 }
 
-fn (mut app App) codex_runtime_snapshot(instance string) CodexProviderRuntime {
-	return app.codex.snapshot(instance)
-}
-
-fn (mut app App) codex_runtime_update(instance string, rt CodexProviderRuntime) {
-	app.codex.update(instance, rt)
-}
-
 fn (app &App) codex_runtime_known_instances() []string {
 	mut names := ['main']
 	for name, _ in app.codex.instances {
@@ -94,51 +86,51 @@ fn (app &App) codex_runtime_known_instances() []string {
 fn (mut app App) codex_note_frame_received(instance string) i64 {
 	mut rt := app.codex_runtime_ensure_instance(instance)
 	count := rt.note_frame_received()
-	app.codex_runtime_update(instance, rt)
+	app.codex.update(instance, rt)
 	return count
 }
 
 fn (mut app App) codex_take_pending_rpc(instance string, id int) (CodexPendingRpc, bool) {
 	mut rt := app.codex_runtime_ensure_instance(instance)
 	pending, ok := rt.take_pending_rpc(id)
-	app.codex_runtime_update(instance, rt)
+	app.codex.update(instance, rt)
 	return pending, ok
 }
 
 fn (mut app App) codex_remember_pending_rpc(instance string, id int, pending CodexPendingRpc) {
 	mut rt := app.codex_runtime_ensure_instance(instance)
 	rt.remember_pending_rpc(id, pending)
-	app.codex_runtime_update(instance, rt)
+	app.codex.update(instance, rt)
 }
 
 fn (mut app App) codex_bind_stream_to_thread(instance string, thread_id string, stream_id string) string {
 	mut rt := app.codex_runtime_ensure_instance(instance)
 	bound := rt.bind_stream_to_thread(thread_id, stream_id)
-	app.codex_runtime_update(instance, rt)
+	app.codex.update(instance, rt)
 	return bound
 }
 
 fn (mut app App) codex_bind_stream_to_current_thread(instance string, stream_id string) string {
 	mut rt := app.codex_runtime_ensure_instance(instance)
 	bound := rt.bind_stream_to_current_thread(stream_id)
-	app.codex_runtime_update(instance, rt)
+	app.codex.update(instance, rt)
 	return bound
 }
 
 fn (mut app App) codex_add_stream_target(instance string, stream_id string, target CodexTarget) {
 	mut rt := app.codex_runtime_ensure_instance(instance)
 	rt.add_stream_target(stream_id, target)
-	app.codex_runtime_update(instance, rt)
+	app.codex.update(instance, rt)
 }
 
 fn (mut app App) codex_stream_targets(instance string, stream_id string) []CodexTarget {
-	return app.codex_runtime_snapshot(instance).stream_targets(stream_id)
+	return app.codex.snapshot(instance).stream_targets(stream_id)
 }
 
 fn (mut app App) codex_clear_stream_targets(instance string, stream_id string) bool {
 	mut rt := app.codex_runtime_ensure_instance(instance)
 	cleared := rt.clear_stream_targets(stream_id)
-	app.codex_runtime_update(instance, rt)
+	app.codex.update(instance, rt)
 	return cleared
 }
 
@@ -155,39 +147,39 @@ fn (mut app App) codex_clear_stream_targets_any(stream_id string) bool {
 fn (mut app App) codex_clear_thread_binding(instance string, thread_id string) bool {
 	mut rt := app.codex_runtime_ensure_instance(instance)
 	cleared := rt.clear_thread_binding(thread_id)
-	app.codex_runtime_update(instance, rt)
+	app.codex.update(instance, rt)
 	return cleared
 }
 
 fn (mut app App) codex_capture_thread_id(instance string, thread_id string) bool {
 	mut rt := app.codex_runtime_ensure_instance(instance)
 	ok := rt.capture_thread_id(thread_id)
-	app.codex_runtime_update(instance, rt)
+	app.codex.update(instance, rt)
 	return ok
 }
 
 fn (mut app App) codex_ensure_thread_id(instance string, thread_id string) bool {
 	mut rt := app.codex_runtime_ensure_instance(instance)
 	ok := rt.ensure_thread_id(thread_id)
-	app.codex_runtime_update(instance, rt)
+	app.codex.update(instance, rt)
 	return ok
 }
 
 fn (mut app App) codex_repair_thread_stream_binding(instance string, thread_id string) string {
 	mut rt := app.codex_runtime_ensure_instance(instance)
 	stream_id := rt.repair_thread_stream_binding(thread_id)
-	app.codex_runtime_update(instance, rt)
+	app.codex.update(instance, rt)
 	return stream_id
 }
 
 fn (mut app App) codex_pending_stream_id(instance string) string {
-	return app.codex_runtime_snapshot(instance).pending_stream_id()
+	return app.codex.snapshot(instance).pending_stream_id()
 }
 
 fn (mut app App) codex_queue_error_burst(instance string, stream_id string, raw_payload string) bool {
 	mut rt := app.codex_runtime_ensure_instance(instance)
 	should_flush := rt.queue_error_burst(stream_id, raw_payload)
-	app.codex_runtime_update(instance, rt)
+	app.codex.update(instance, rt)
 	return should_flush
 }
 
@@ -197,26 +189,26 @@ fn (mut app App) codex_schedule_read_fallback(instance string, stream_id string,
 	}
 	mut rt := app.codex_runtime_ensure_instance(instance)
 	fallback := rt.schedule_read_fallback(stream_id, thread_id)
-	app.codex_runtime_update(instance, rt)
+	app.codex.update(instance, rt)
 	return fallback, true
 }
 
 fn (mut app App) codex_clear_read_fallback(instance string, stream_id string) bool {
 	mut rt := app.codex_runtime_ensure_instance(instance)
 	cleared := rt.clear_read_fallback(stream_id)
-	app.codex_runtime_update(instance, rt)
+	app.codex.update(instance, rt)
 	return cleared
 }
 
 fn (mut app App) codex_read_fallback(instance string, stream_id string) (codex.ReadFallback, bool) {
-	rt := app.codex_runtime_ensure_instance(instance)
+	rt := app.codex.snapshot(instance)
 	return rt.read_fallback(stream_id)
 }
 
 fn (mut app App) codex_take_error_burst(instance string, stream_id string) []string {
 	mut rt := app.codex_runtime_ensure_instance(instance)
 	errors := rt.take_error_burst(stream_id)
-	app.codex_runtime_update(instance, rt)
+	app.codex.update(instance, rt)
 	return errors
 }
 
@@ -225,7 +217,7 @@ fn (mut app App) codex_resolve_instance_for_stream(stream_id string) string {
 		return 'main'
 	}
 	for instance in app.codex_runtime_known_instances() {
-		rt := app.codex_runtime_snapshot(instance)
+		rt := app.codex.snapshot(instance)
 		if stream_id in rt.stream_map {
 			return instance
 		}
@@ -245,7 +237,7 @@ fn (mut app App) codex_resolve_instance_for_stream(stream_id string) string {
 }
 
 fn (mut app App) codex_get_active_stream_id_for_instance(instance string) string {
-	return app.codex_runtime_snapshot(instance).current_stream_id()
+	return app.codex.snapshot(instance).current_stream_id()
 }
 
 fn (mut app App) codex_find_stream_targets(stream_id string) []CodexTarget {
@@ -292,21 +284,21 @@ fn (mut app App) codex_provider_on_connecting(instance string) {
 	mut rt := app.codex_runtime_ensure_instance(instance)
 	log.info('[codex] connecting instance=${rt.instance} to ${rt.url} ...')
 	rt.note_connecting()
-	app.codex_runtime_update(instance, rt)
+	app.codex.update(instance, rt)
 }
 
 fn (mut app App) codex_provider_on_connected(instance string, ws_url string) {
 	log.info('[codex] ✅ connected instance=${CodexProviderRuntime.normalize_instance(instance)} to ${ws_url}')
 	mut rt := app.codex_runtime_ensure_instance(instance)
 	rt.note_connected(ws_url)
-	app.codex_runtime_update(instance, rt)
+	app.codex.update(instance, rt)
 }
 
 fn (mut app App) codex_provider_on_disconnected(instance string, reason string) {
 	log.error('[codex] ❌ disconnected instance=${CodexProviderRuntime.normalize_instance(instance)}: ${reason}')
 	mut rt := app.codex_runtime_ensure_instance(instance)
 	rt.note_disconnected(reason)
-	app.codex_runtime_update(instance, rt)
+	app.codex.update(instance, rt)
 
 	// Connections will be cleaned up by PHP as needed or timed out
 }
@@ -317,13 +309,13 @@ fn (mut app App) codex_provider_reconnect_delay_ms(instance string) int {
 }
 
 fn (mut app App) codex_runtime_config_snapshot(instance string) codex.AdminConfigSnapshot {
-	return app.codex_runtime_snapshot(instance).config_snapshot()
+	return app.codex.snapshot(instance).config_snapshot()
 }
 
 type CodexRuntimeStateView = codex.RuntimeStateView
 
 fn (mut app App) codex_runtime_state_view(instance string) CodexRuntimeStateView {
-	return app.codex_runtime_snapshot(instance).state_view()
+	return app.codex.snapshot(instance).state_view()
 }
 
 // ── Admin snapshot ──────────────────────────────────────────────────────
@@ -353,7 +345,7 @@ fn (mut app App) admin_codex_snapshot() codex.AdminRuntimeSnapshot {
 fn (mut app App) codex_next_rpc_id(instance string) int {
 	mut rt := app.codex_runtime_ensure_instance(instance)
 	id := rt.next_rpc_id()
-	app.codex_runtime_update(instance, rt)
+	app.codex.update(instance, rt)
 	return id
 }
 
@@ -498,7 +490,7 @@ fn (mut app App) codex_send_internal_thread_resume(instance string, thread_id st
 	resolved_instance := CodexProviderRuntime.normalize_instance(instance)
 	id := app.codex_next_rpc_id(resolved_instance)
 	app.codex_remember_pending_rpc(resolved_instance, id, CodexPendingRpc{})
-	rt := app.codex_runtime_snapshot(resolved_instance)
+	rt := app.codex.snapshot(resolved_instance)
 	mut conn := rt.connection()
 	connected := rt.is_connected()
 	if isnil(conn) || !connected {
@@ -515,7 +507,7 @@ fn (mut app App) codex_send_internal_thread_resume(instance string, thread_id st
 fn (mut app App) codex_send_rpc(instance string, method string, params string, stream_id string, message_id string) !int {
 	resolved_instance := CodexProviderRuntime.normalize_instance(instance)
 	explicit_thread_id := codex.extract_rpc_thread_id(params)
-	current_thread_id := app.codex_runtime_snapshot(resolved_instance).current_thread_id()
+	current_thread_id := app.codex.snapshot(resolved_instance).current_thread_id()
 	if method == 'turn/start' && explicit_thread_id != '' && current_thread_id != ''
 		&& explicit_thread_id != current_thread_id {
 		app.codex_send_internal_thread_resume(resolved_instance, explicit_thread_id)!
@@ -544,7 +536,7 @@ fn (mut app App) codex_send_rpc(instance string, method string, params string, s
 		}
 	}
 
-	rt := app.codex_runtime_snapshot(resolved_instance)
+	rt := app.codex.snapshot(resolved_instance)
 	mut conn := rt.connection()
 	connected := rt.is_connected()
 
@@ -562,7 +554,7 @@ fn (mut app App) codex_send_rpc(instance string, method string, params string, s
 }
 
 fn (mut app App) codex_reply_rpc(instance string, id string, result string) ! {
-	rt := app.codex_runtime_snapshot(instance)
+	rt := app.codex.snapshot(instance)
 	mut conn := rt.connection()
 	connected := rt.is_connected()
 
@@ -781,7 +773,7 @@ fn (mut app App) codex_send_initialized(instance string, mut conn ws.Client) ! {
 	conn.write_string(msg)!
 	mut rt := app.codex_runtime_ensure_instance(instance)
 	rt.mark_initialized()
-	app.codex_runtime_update(instance, rt)
+	app.codex.update(instance, rt)
 	app.emit('codex.rpc.sent', {
 		'method':   'initialized'
 		'instance': CodexProviderRuntime.normalize_instance(instance)
@@ -789,8 +781,8 @@ fn (mut app App) codex_send_initialized(instance string, mut conn ws.Client) ! {
 }
 
 fn (mut app App) codex_send_thread_start(instance string, mut conn ws.Client) ! {
-	cfg := app.codex_runtime_snapshot(instance)
-	rt := app.codex_runtime_snapshot(instance)
+	cfg := app.codex.snapshot(instance)
+	rt := app.codex.snapshot(instance)
 	log.info('[codex] 🤝 sending thread/start instance=${CodexProviderRuntime.normalize_instance(instance)} url=${rt.ws_url} cwd=${cfg.cwd} ...')
 	id := app.codex_next_rpc_id(instance)
 	// thread/start expects kebab-case for top-level sandbox field
@@ -842,7 +834,7 @@ fn (mut app App) codex_post_connect_handshake(instance string, mut conn ws.Clien
 
 	mut rt := app.codex_runtime_ensure_instance(instance)
 	rt.attach_connection(conn)
-	app.codex_runtime_update(instance, rt)
+	app.codex.update(instance, rt)
 
 	app.emit('codex.handshake.completed', {
 		'phase':    'initialized'
@@ -854,7 +846,7 @@ fn (mut app App) codex_post_connect_handshake(instance string, mut conn ws.Clien
 
 fn (mut app App) codex_provider_send(req WebSocketUpstreamSendRequest) !WebSocketUpstreamSendResult {
 	instance := CodexProviderRuntime.normalize_instance(req.instance)
-	rt := app.codex_runtime_snapshot(instance)
+	rt := app.codex.snapshot(instance)
 	mut conn := rt.connection()
 	connected := rt.is_connected()
 
@@ -889,7 +881,7 @@ fn (mut app App) codex_provider_update(req WebSocketUpstreamSendRequest) !WebSoc
 fn (mut app App) codex_start_turn_normalized(cmd command.NormalizedCommand) ! {
 	log.info('[codex] 🚀 codex_start_turn stream_id=${cmd.correlation.stream_id} task_type=${cmd.task_type} prompt=${cmd.prompt}')
 	instance := CodexProviderRuntime.normalize_instance(cmd.instance)
-	cfg := app.codex_runtime_snapshot(instance)
+	cfg := app.codex.snapshot(instance)
 	mut rt := app.codex_runtime_ensure_instance(instance)
 
 	// Ensure provider is connected
@@ -939,7 +931,7 @@ fn (mut app App) codex_start_turn_normalized(cmd command.NormalizedCommand) ! {
 		stream_id:  stream_id
 		message_id: cmd.response_message_id
 	})
-	app.codex_runtime_update(instance, rt)
+	app.codex.update(instance, rt)
 
 	if thread_id == '' {
 		return error('no active codex thread available for turn')

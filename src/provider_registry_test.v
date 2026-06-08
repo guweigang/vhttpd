@@ -4,6 +4,7 @@ import config
 import provider
 import feishu
 import codex
+import dbx
 
 fn test_provider_registry_smoke() {
 	// Basic smoke assertions for provider registry API surface
@@ -567,14 +568,14 @@ fn test_db_runtime_dispatch_reports_not_compiled() {
 			driver:  'mysql'
 		}
 	}
-	invalid := app.db_runtime_dispatch(DbUpstreamRequest{
+	invalid := app.db_runtime_dispatch(dbx.Request{
 		mode: 'worker'
 		op:   'ping'
 	})
 	assert !invalid.ok
 	assert invalid.error == 'invalid_mode'
 	assert invalid.driver == 'mysql'
-	resp := app.db_runtime_dispatch(DbUpstreamRequest{
+	resp := app.db_runtime_dispatch(dbx.Request{
 		mode: 'db'
 		op:   'ping'
 	})
