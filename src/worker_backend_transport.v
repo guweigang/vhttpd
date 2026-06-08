@@ -8,6 +8,7 @@ import time
 import worker
 
 type WorkerBackendFrameCodec = worker.WorkerBackendFrameCodec
+
 type WorkerBackendConnection = worker.WorkerBackendConnection
 
 struct WorkerHttpStreamWriter {}

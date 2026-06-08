@@ -831,7 +831,7 @@ fn test_fixture_websocket_provider_emit_and_send() {
 	assert send_result.provider == websocket_upstream_provider_fixture
 	assert send_result.instance == 'demo'
 	assert send_result.message_id.starts_with('fixture-msg-')
-	dispatch := app.fixture_websocket_emit(WebSocketUpstreamFixtureEmitRequest{
+	dispatch := app.fixture_websocket_emit(ws.UpstreamFixtureEmitRequest{
 		instance:    'demo'
 		trace_id:    'trace-fixture'
 		event_type:  'fixture.message'

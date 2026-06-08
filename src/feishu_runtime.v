@@ -25,10 +25,6 @@ const feishu_runtime_message_event = feishu.message_event
 const feishu_runtime_message_card = feishu.message_card
 const feishu_runtime_max_upload_image_bytes = feishu.max_upload_image_bytes
 
-type FeishuHttpLane = feishu.HttpLane
-
-type FeishuControlHttpLane = feishu.ControlHttpLane
-
 type FeishuRuntimeProtoHeader = feishu.RuntimeProtoHeader
 
 type FeishuRuntimeProtoFrame = feishu.RuntimeProtoFrame
@@ -36,16 +32,6 @@ type FeishuRuntimeProtoFrame = feishu.RuntimeProtoFrame
 type FeishuRuntimeClientConfig = feishu.RuntimeClientConfig
 
 type FeishuRuntimeWsEndpointResponse = feishu.RuntimeWsEndpointResponse
-
-type FeishuRuntimeTenantTokenResponse = feishu.TenantTokenResponse
-
-type FeishuRuntimeSendMessageData = feishu.SendMessageData
-
-type FeishuRuntimeUploadImageData = feishu.UploadImageData
-
-type FeishuRuntimeSendMessageResponse = feishu.SendMessageResponse
-
-type FeishuRuntimeUploadImageResponse = feishu.UploadImageResponse
 
 type FeishuRuntimeEventSnapshot = feishu.RuntimeEventSnapshot
 
@@ -59,23 +45,11 @@ type FeishuRuntimeAppSnapshot = feishu.RuntimeAppSnapshot
 
 type FeishuRuntimeSnapshot = feishu.RuntimeSnapshot
 
-type FeishuRuntimeChatSnapshot = feishu.RuntimeChatSnapshot
-
-type FeishuRuntimeChatsSnapshot = feishu.RuntimeChatsSnapshot
-
 type FeishuRuntimeSendMessageRequest = feishu.SendMessageRequest
 
 type FeishuRuntimeUpdateMessageRequest = feishu.UpdateMessageRequest
 
 type FeishuRuntimeUploadImageRequest = feishu.UploadImageRequest
-
-type FeishuRuntimeTextContent = feishu.TextContent
-
-type FeishuCallbackChallengeResponse = feishu.CallbackChallengeResponse
-
-type FeishuCallbackAckResponse = feishu.CallbackAckResponse
-
-type FeishuRuntimeSendMessageResult = feishu.SendMessageResult
 
 type FeishuRuntimeUploadImageResult = feishu.UploadImageResult
 
@@ -482,7 +456,7 @@ fn (mut app App) feishu_runtime_tenant_access_token(app_name string) !string {
 	if resp.status_code != 200 {
 		return error('feishu tenant token request failed with status ${resp.status_code}')
 	}
-	decoded := json.decode(FeishuRuntimeTenantTokenResponse, resp.body)!
+	decoded := json.decode(feishu.TenantTokenResponse, resp.body)!
 	if decoded.code != 0 || decoded.tenant_access_token.trim_space() == '' {
 		return error('feishu tenant token error: ${decoded.msg}')
 	}
@@ -492,7 +466,7 @@ fn (mut app App) feishu_runtime_tenant_access_token(app_name string) !string {
 	return decoded.tenant_access_token
 }
 
-fn (mut app App) feishu_runtime_send_message(req FeishuRuntimeSendMessageRequest) !FeishuRuntimeSendMessageResult {
+fn (mut app App) feishu_runtime_send_message(req FeishuRuntimeSendMessageRequest) !feishu.SendMessageResult {
 	app_name := app.feishu.resolve_app_name(req.app)!
 	if !app.feishu_runtime_ready() {
 		return error('feishu gateway is not configured')
@@ -545,7 +519,7 @@ fn (mut app App) feishu_runtime_send_message(req FeishuRuntimeSendMessageRequest
 		app.feishu.note_send(app_name, false)
 		return error('feishu message send failed with status ${resp.status_code}: ${resp.body}')
 	}
-	decoded := json.decode(FeishuRuntimeSendMessageResponse, resp.body) or {
+	decoded := json.decode(feishu.SendMessageResponse, resp.body) or {
 		app.feishu.note_send(app_name, false)
 		return error('invalid feishu send response: ${err}')
 	}
@@ -554,7 +528,7 @@ fn (mut app App) feishu_runtime_send_message(req FeishuRuntimeSendMessageRequest
 		return error('feishu send error: ${decoded.msg}')
 	}
 	app.feishu.note_send(app_name, true)
-	return FeishuRuntimeSendMessageResult{
+	return feishu.SendMessageResult{
 		ok:         true
 		message_id: decoded.data.message_id
 	}
@@ -615,7 +589,7 @@ fn (mut app App) feishu_runtime_upload_image_bytes(req FeishuRuntimeUploadImageR
 	if resp.status_code < 200 || resp.status_code >= 300 {
 		return error('feishu image upload failed with status ${resp.status_code}')
 	}
-	decoded := json.decode(FeishuRuntimeUploadImageResponse, resp.body) or {
+	decoded := json.decode(feishu.UploadImageResponse, resp.body) or {
 		return error('invalid_feishu_image_upload_response')
 	}
 	if decoded.code != 0 || decoded.data.image_key.trim_space() == '' {
@@ -627,7 +601,7 @@ fn (mut app App) feishu_runtime_upload_image_bytes(req FeishuRuntimeUploadImageR
 	}
 }
 
-fn (mut app App) feishu_runtime_update_message(req FeishuRuntimeUpdateMessageRequest) !FeishuRuntimeSendMessageResult {
+fn (mut app App) feishu_runtime_update_message(req FeishuRuntimeUpdateMessageRequest) !feishu.SendMessageResult {
 	app_name := app.feishu.resolve_app_name(req.app)!
 	if !app.feishu_runtime_ready() {
 		return error('feishu gateway is not configured')
@@ -701,7 +675,7 @@ fn (mut app App) feishu_runtime_update_message(req FeishuRuntimeUpdateMessageReq
 		app.feishu.note_send(app_name, false)
 		return error('feishu message update failed with status ${resp.status_code}: ${resp.body}')
 	}
-	decoded := json.decode(FeishuRuntimeSendMessageResponse, resp.body) or {
+	decoded := json.decode(feishu.SendMessageResponse, resp.body) or {
 		app.feishu.note_send(app_name, false)
 		return error('invalid feishu update response: ${err}')
 	}
@@ -710,7 +684,7 @@ fn (mut app App) feishu_runtime_update_message(req FeishuRuntimeUpdateMessageReq
 		return error('feishu update error: ${decoded.msg}')
 	}
 	app.feishu.note_send(app_name, true)
-	return FeishuRuntimeSendMessageResult{
+	return feishu.SendMessageResult{
 		ok:         true
 		message_id: if decoded.data.message_id.trim_space() != '' {
 			decoded.data.message_id
@@ -1304,7 +1278,7 @@ fn (mut app App) feishu_callback_by_app(mut ctx Context, raw_app string) veb.Res
 			'instance':   app_name
 			'callback':   'challenge'
 		})
-		return ctx.text(json.encode(FeishuCallbackChallengeResponse{
+		return ctx.text(json.encode(feishu.CallbackChallengeResponse{
 			challenge: challenge
 		}))
 	}
@@ -1451,7 +1425,7 @@ fn (mut app App) feishu_callback_by_app(mut ctx Context, raw_app string) veb.Res
 		'instance':   app_name
 		'callback':   summary.event_type
 	})
-	return ctx.text(json.encode(FeishuCallbackAckResponse{
+	return ctx.text(json.encode(feishu.CallbackAckResponse{
 		code: 0
 		msg:  'ok'
 	}))
@@ -1470,14 +1444,14 @@ pub fn (mut app App) admin_runtime_feishu_send(mut ctx Context) veb.Result {
 	ctx.set_content_type('application/json; charset=utf-8')
 	req := json.decode(FeishuRuntimeSendMessageRequest, ctx.req.data) or {
 		ctx.res.set_status(http.status_from_int(400))
-		return ctx.text(json.encode(FeishuRuntimeSendMessageResult{
+		return ctx.text(json.encode(feishu.SendMessageResult{
 			ok:    false
 			error: 'invalid_json'
 		}))
 	}
 	result := app.feishu_runtime_send_message(req) or {
 		ctx.res.set_status(http.status_from_int(502))
-		return ctx.text(json.encode(FeishuRuntimeSendMessageResult{
+		return ctx.text(json.encode(feishu.SendMessageResult{
 			ok:    false
 			error: err.msg()
 		}))
@@ -1507,14 +1481,14 @@ pub fn (mut app App) gateway_feishu_send(mut ctx Context) veb.Result {
 	}
 	req := json.decode(FeishuRuntimeSendMessageRequest, ctx.req.data) or {
 		ctx.res.set_status(http.status_from_int(400))
-		return ctx.text(json.encode(FeishuRuntimeSendMessageResult{
+		return ctx.text(json.encode(feishu.SendMessageResult{
 			ok:    false
 			error: 'invalid_json'
 		}))
 	}
 	result := app.feishu_runtime_send_message(req) or {
 		ctx.res.set_status(http.status_from_int(502))
-		return ctx.text(json.encode(FeishuRuntimeSendMessageResult{
+		return ctx.text(json.encode(feishu.SendMessageResult{
 			ok:    false
 			error: err.msg()
 		}))

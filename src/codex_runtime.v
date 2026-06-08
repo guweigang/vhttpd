@@ -18,10 +18,6 @@ type CodexPendingRpc = codex.PendingRpc
 
 type CodexProviderRuntime = codex.ProviderRuntime
 
-type AdminCodexRuntimeSnapshot = codex.AdminRuntimeSnapshot
-
-type AdminCodexConfigSnapshot = codex.AdminConfigSnapshot
-
 fn (mut app App) codex_runtime_ensure_instance(instance string) CodexProviderRuntime {
 	resolved := CodexProviderRuntime.normalize_instance(instance)
 	app.codex.mu.@lock()
@@ -320,7 +316,7 @@ fn (mut app App) codex_provider_reconnect_delay_ms(instance string) int {
 	return rt.reconnect_delay_ms_value()
 }
 
-fn (mut app App) codex_runtime_config_snapshot(instance string) AdminCodexConfigSnapshot {
+fn (mut app App) codex_runtime_config_snapshot(instance string) codex.AdminConfigSnapshot {
 	return app.codex_runtime_snapshot(instance).config_snapshot()
 }
 
@@ -332,9 +328,9 @@ fn (mut app App) codex_runtime_state_view(instance string) CodexRuntimeStateView
 
 // ── Admin snapshot ──────────────────────────────────────────────────────
 
-fn (mut app App) admin_codex_snapshot() AdminCodexRuntimeSnapshot {
+fn (mut app App) admin_codex_snapshot() codex.AdminRuntimeSnapshot {
 	rt := app.codex_runtime_state_view('main')
-	return AdminCodexRuntimeSnapshot{
+	return codex.AdminRuntimeSnapshot{
 		enabled:            app.codex_provider_enabled()
 		connected:          rt.connected
 		initialized:        rt.initialized

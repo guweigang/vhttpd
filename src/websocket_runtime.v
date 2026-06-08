@@ -6,17 +6,11 @@ import net.websocket
 
 // ── Type aliases: main → ws ──
 type WebSocketDispatchConnState = ws.DispatchConnState
-type WebSocketDispatchConnPhase = ws.DispatchConnPhase
 type HubConn = ws.HubConn
 type HubPendingMessage = ws.HubPendingMessage
-type HubSendTarget = ws.HubSendTarget
-type HubDispatchTarget = ws.HubDispatchTarget
-type AdminWebSocketConnSnapshot = ws.ConnSnapshot
-type AdminWebSocketRoomSnapshot = ws.RoomSnapshot
-type AdminWebSocketRuntimeSnapshot = ws.RuntimeSnapshot
+
 
 type WebSocketRuntimeContext = ws.RuntimeContext
-type WebSocketPresenceSnapshot = ws.PresenceSnapshot
 type WebSocketBridgeState = ws.BridgeState
 type WebSocketDispatchBridgeState = ws.DispatchBridgeState
 
