@@ -14,9 +14,6 @@ import net.websocket
 import time
 import veb
 
-// ── Type alias: main → ws ──
-type WebSocketUpstreamSendRequest = ws.UpstreamSendRequest
-
 const websocket_upstream_provider_feishu = 'feishu'
 const websocket_upstream_provider_fixture = 'fixture'
 
@@ -305,7 +302,7 @@ fn (mut app App) websocket_upstream_provider_handle_message(provider string, ins
 
 // ── Send / Update ──
 
-fn (mut app App) websocket_upstream_provider_send(provider string, req WebSocketUpstreamSendRequest) !ws.UpstreamSendResult {
+fn (mut app App) websocket_upstream_provider_send(provider string, req ws.UpstreamSendRequest) !ws.UpstreamSendResult {
 	return match provider {
 		websocket_upstream_provider_feishu {
 			if app.feishu_card_bridge_enabled() {
@@ -341,7 +338,7 @@ fn (mut app App) websocket_upstream_provider_send(provider string, req WebSocket
 	}
 }
 
-fn (mut app App) websocket_upstream_provider_update(provider string, req WebSocketUpstreamSendRequest) !ws.UpstreamUpdateResult {
+fn (mut app App) websocket_upstream_provider_update(provider string, req ws.UpstreamSendRequest) !ws.UpstreamUpdateResult {
 	return match provider {
 		websocket_upstream_provider_feishu {
 			if app.feishu_card_bridge_enabled() {
@@ -377,13 +374,13 @@ fn (mut app App) websocket_upstream_provider_update(provider string, req WebSock
 	}
 }
 
-fn (mut app App) websocket_upstream_send(req WebSocketUpstreamSendRequest) !ws.UpstreamSendResult {
+fn (mut app App) websocket_upstream_send(req ws.UpstreamSendRequest) !ws.UpstreamSendResult {
 	provider := if req.provider.trim_space() == '' {
 		websocket_upstream_provider_feishu
 	} else {
 		req.provider.trim_space()
 	}
-	normalized := WebSocketUpstreamSendRequest{
+	normalized := ws.UpstreamSendRequest{
 		provider:       provider
 		instance:       if req.instance.trim_space() != '' {
 			req.instance.trim_space()
@@ -403,13 +400,13 @@ fn (mut app App) websocket_upstream_send(req WebSocketUpstreamSendRequest) !ws.U
 	return app.websocket_upstream_provider_send(provider, normalized)
 }
 
-fn (mut app App) websocket_upstream_update(req WebSocketUpstreamSendRequest) !ws.UpstreamUpdateResult {
+fn (mut app App) websocket_upstream_update(req ws.UpstreamSendRequest) !ws.UpstreamUpdateResult {
 	provider := if req.provider.trim_space() == '' {
 		websocket_upstream_provider_feishu
 	} else {
 		req.provider.trim_space()
 	}
-	normalized := WebSocketUpstreamSendRequest{
+	normalized := ws.UpstreamSendRequest{
 		provider:       provider
 		instance:       if req.instance.trim_space() != '' {
 			req.instance.trim_space()
@@ -649,7 +646,7 @@ pub fn (mut app App) admin_runtime_websocket_upstream_send(mut ctx Context) veb.
 	trace_id := resolve_trace_id(ctx, path)
 	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
 	ctx.set_content_type('application/json; charset=utf-8')
-	req := json.decode(WebSocketUpstreamSendRequest, ctx.req.data) or {
+	req := json.decode(ws.UpstreamSendRequest, ctx.req.data) or {
 		ctx.res.set_status(http.status_from_int(400))
 		return ctx.text(json.encode(ws.UpstreamSendResult{
 			ok:    false
@@ -686,7 +683,7 @@ pub fn (mut app App) gateway_websocket_upstream_send(mut ctx Context) veb.Result
 			error: 'forbidden'
 		}))
 	}
-	req := json.decode(WebSocketUpstreamSendRequest, ctx.req.data) or {
+	req := json.decode(ws.UpstreamSendRequest, ctx.req.data) or {
 		ctx.res.set_status(http.status_from_int(400))
 		return ctx.text(json.encode(ws.UpstreamSendResult{
 			ok:    false
@@ -861,7 +858,7 @@ pub fn (mut app AdminApp) admin_runtime_websocket_upstream_send(mut ctx Context)
 			error: 'forbidden'
 		}))
 	}
-	req := json.decode(WebSocketUpstreamSendRequest, ctx.req.data) or {
+	req := json.decode(ws.UpstreamSendRequest, ctx.req.data) or {
 		ctx.res.set_status(http.status_from_int(400))
 		return ctx.text(json.encode(admin.AdminErrorResponse{
 			error: 'invalid_json'

@@ -1,6 +1,8 @@
 module ws
 
+import command
 import executor
+import feishu
 import net.websocket
 import sync
 
@@ -361,4 +363,51 @@ pub mut:
 	upstream_sessions            map[string]UpstreamRuntimeSession
 	stat_upstream_plans_total    i64
 	stat_upstream_plan_errors_total i64
+}
+
+// ── Feishu streaming normalization ──
+
+pub fn (req UpstreamSendRequest) normalize_feishu_streaming() UpstreamSendRequest {
+	if req.message_type.trim_space() == 'interactive' {
+		return req
+	}
+	mut normalized := req
+	mut markdown := feishu.SendMessageRequest.extract_markdown_text(req.content, req.text,
+		req.content_fields)
+	if markdown.trim_space() == '' {
+		markdown = '⚙️ **处理中...**'
+	}
+	normalized.message_type = 'interactive'
+	normalized.content = feishu.SendMessageRequest.interactive_markdown_card(markdown)
+	normalized.text = ''
+	normalized.content_fields = map[string]string{}
+	return normalized
+}
+
+pub fn (req UpstreamSendRequest) normalize_feishu_streaming_for(normalized command.NormalizedCommand) UpstreamSendRequest {
+	if normalized.correlation.stream_id.trim_space() == '' {
+		return req
+	}
+	return req.normalize_feishu_streaming()
+}
+
+pub fn UpstreamSendRequest.from_normalized(normalized command.NormalizedCommand, default_provider string) UpstreamSendRequest {
+	return UpstreamSendRequest{
+		provider:       normalized.normalized_provider(default_provider)
+		instance:       normalized.instance
+		target_type:    normalized.target.type_
+		target:         normalized.target.id
+		message_type:   normalized.message_type
+		content:        normalized.content
+		content_fields: normalized.content_fields.clone()
+		text:           normalized.text
+		uuid:           normalized.uuid
+		method:         normalized.method
+		params:         normalized.params
+		metadata:       normalized.metadata.clone()
+	}
+}
+
+pub fn UpstreamSendRequest.from_feishu_command(normalized command.NormalizedCommand) UpstreamSendRequest {
+	return UpstreamSendRequest.from_normalized(normalized, 'feishu')
 }

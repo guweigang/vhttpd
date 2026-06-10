@@ -360,7 +360,7 @@ fn test_feishu_runtime_followup_segment_supports_message_reply_target() {
 }
 
 fn test_feishu_runtime_normalize_streaming_send_wraps_text_as_interactive_card() {
-	req := WebSocketUpstreamSendRequest{
+	req := ws.UpstreamSendRequest{
 		provider:     'feishu'
 		instance:     'main'
 		target_type:  'chat_id'
@@ -377,7 +377,7 @@ fn test_feishu_runtime_normalize_streaming_send_wraps_text_as_interactive_card()
 }
 
 fn test_feishu_runtime_normalize_streaming_send_preserves_existing_interactive_card() {
-	req := WebSocketUpstreamSendRequest{
+	req := ws.UpstreamSendRequest{
 		provider:     'feishu'
 		instance:     'main'
 		target_type:  'chat_id'
@@ -819,7 +819,7 @@ fn test_fixture_websocket_provider_emit_and_send() {
 		}
 	}
 	assert app.websocket_upstream_provider_enabled(websocket_upstream_provider_fixture, 'demo')
-	send_result := app.websocket_upstream_send(WebSocketUpstreamSendRequest{
+	send_result := app.websocket_upstream_send(ws.UpstreamSendRequest{
 		provider:     websocket_upstream_provider_fixture
 		instance:     'demo'
 		target_type:  'fixture_target'

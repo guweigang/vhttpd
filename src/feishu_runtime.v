@@ -33,23 +33,6 @@ const feishu_stream_buffer_rollover_runes = feishu.stream_buffer_rollover_runes
 
 // FeishuRuntimeEventSummary is executor.FeishuRuntimeEventSummary (used directly)
 
-fn (req WebSocketUpstreamSendRequest) normalize_feishu_streaming() WebSocketUpstreamSendRequest {
-	if req.message_type.trim_space() == 'interactive' {
-		return req
-	}
-	mut normalized := req
-	mut markdown := feishu.SendMessageRequest.extract_markdown_text(req.content, req.text,
-		req.content_fields)
-	if markdown.trim_space() == '' {
-		markdown = '⚙️ **处理中...**'
-	}
-	normalized.message_type = 'interactive'
-	normalized.content = feishu.SendMessageRequest.interactive_markdown_card(markdown)
-	normalized.text = ''
-	normalized.content_fields = map[string]string{}
-	return normalized
-}
-
 fn (app &App) feishu_runtime_enabled() bool {
 	return app.feishu.enabled || app.provider_instance_list('feishu').len > 0
 }
@@ -220,10 +203,7 @@ fn (mut app App) feishu_runtime_tenant_access_token(app_name string) !string {
 	}
 	app.feishu.mu.unlock()
 	app_cfg := app.feishu.app_config(app_name)!
-	body := json.encode({
-		'app_id':     app_cfg.app_id
-		'app_secret': app_cfg.app_secret
-	})
+	body := feishu.build_tenant_token_request_body(app_cfg.app_id, app_cfg.app_secret)
 	resp := (&app.feishu).http_fetch(
 		url:    '${app.feishu.open_base_url}/auth/v3/tenant_access_token/internal'
 		method: .post
@@ -233,14 +213,11 @@ fn (mut app App) feishu_runtime_tenant_access_token(app_name string) !string {
 	if resp.status_code != 200 {
 		return error('feishu tenant token request failed with status ${resp.status_code}')
 	}
-	decoded := json.decode(feishu.TenantTokenResponse, resp.body)!
-	if decoded.code != 0 || decoded.tenant_access_token.trim_space() == '' {
-		return error('feishu tenant token error: ${decoded.msg}')
-	}
+	token, expire := feishu.parse_tenant_token_response(resp.body)!
 	mut runtime := app.feishu.ensure(app_name)
-	runtime.cache_tenant_access_token(decoded.tenant_access_token, now + i64(decoded.expire))
+	runtime.cache_tenant_access_token(token, now + expire)
 	app.feishu.update_runtime(app_name, runtime)
-	return decoded.tenant_access_token
+	return token
 }
 
 fn (mut app App) feishu_runtime_send_message(req feishu.SendMessageRequest) !feishu.SendMessageResult {
@@ -248,38 +225,12 @@ fn (mut app App) feishu_runtime_send_message(req feishu.SendMessageRequest) !fei
 	if !app.feishu_runtime_ready() {
 		return error('feishu gateway is not configured')
 	}
-	receive_id_type := if req.receive_id_type.trim_space() == '' {
-		'chat_id'
-	} else {
-		req.receive_id_type.trim_space()
-	}
-	if req.receive_id.trim_space() == '' {
-		return error('missing receive_id')
-	}
-	msg_type := if req.msg_type.trim_space() == '' { 'text' } else { req.msg_type.trim_space() }
-	content := feishu.SendMessageRequest.build_content(msg_type, req.content, req.text,
-		req.content_fields)!
+	receive_id_type, receive_id, msg_type, content := feishu.resolve_send_message_params(req)!
 	token := app.feishu_runtime_tenant_access_token(app_name)!
 	mut header := http.new_header(key: .content_type, value: 'application/json; charset=utf-8')
 	header.add_custom('authorization', 'Bearer ${token}') or {} // safe to ignore: header append on detached request
-	mut payload := ''
-	mut url := ''
-	if receive_id_type == 'message_id' {
-		payload = json.encode({
-			'msg_type': msg_type
-			'content':  content
-			'uuid':     req.uuid
-		})
-		url = '${app.feishu.open_base_url}/im/v1/messages/${req.receive_id.trim_space()}/reply'
-	} else {
-		payload = json.encode({
-			'receive_id': req.receive_id
-			'msg_type':   msg_type
-			'content':    content
-			'uuid':       req.uuid
-		})
-		url = '${app.feishu.open_base_url}/im/v1/messages?receive_id_type=${receive_id_type}'
-	}
+	url := feishu.build_send_message_url(app.feishu.open_base_url, receive_id_type, receive_id)
+	payload := feishu.build_send_message_payload(msg_type, content, receive_id, req.uuid, receive_id_type)
 	log.info('[feishu] 📤 sending message: method=POST url=${url} payload=${payload.len} bytes')
 	resp := (&app.feishu).http_fetch(
 		url:    url
@@ -346,23 +297,10 @@ fn (mut app App) feishu_runtime_upload_image_bytes(req feishu.UploadImageRequest
 	} else {
 		req.content_type.trim_space()
 	}
-	mut header := http.new_header()
-	header.set(.authorization, 'Bearer ${token}')
-	resp := (&app.feishu).http_post_multipart_form('${app.feishu.open_base_url}/im/v1/images', http.PostMultipartFormConfig{
-		form:   {
-			'image_type': image_type
-		}
-		files:  {
-			'image': [
-				http.FileData{
-					filename:     filename
-					content_type: content_type
-					data:         data.bytestr()
-				},
-			]
-		}
-		header: header
-	}) or { return error('feishu image upload request failed: ${err.msg()}') }
+	config := feishu.build_upload_image_multipart_config(image_type, filename, content_type, data, token)
+	resp := (&app.feishu).http_post_multipart_form('${app.feishu.open_base_url}/im/v1/images', config) or {
+		return error('feishu image upload request failed: ${err.msg()}')
+	}
 	if resp.status_code < 200 || resp.status_code >= 300 {
 		return error('feishu image upload failed with status ${resp.status_code}')
 	}
@@ -383,26 +321,7 @@ fn (mut app App) feishu_runtime_update_message(req feishu.UpdateMessageRequest) 
 	if !app.feishu_runtime_ready() {
 		return error('feishu gateway is not configured')
 	}
-	message_id_type := if req.message_id_type.trim_space() == '' {
-		'message_id'
-	} else {
-		req.message_id_type.trim_space()
-	}
-	msg_type := if req.msg_type.trim_space() == '' { 'text' } else { req.msg_type.trim_space() }
-	target := req.message_id.trim_space()
-	mut content_raw := req.content
-
-	if message_id_type == 'token' && msg_type != 'interactive' {
-		return error('token-based feishu delayed update only supports interactive cards')
-	}
-	if message_id_type == 'message_id' {
-		if target == '' {
-			return error('missing message_id')
-		}
-		if msg_type != 'interactive' {
-			return error('message_id-based feishu update only supports interactive cards')
-		}
-	}
+	message_id_type, target, msg_type, mut content_raw := feishu.resolve_update_message_params(req)!
 
 	// Support buffer placeholder replacement or auto-append
 	if target != '' {
@@ -421,26 +340,7 @@ fn (mut app App) feishu_runtime_update_message(req feishu.UpdateMessageRequest) 
 	token := app.feishu_runtime_tenant_access_token(app_name)!
 	mut header := http.new_header(key: .content_type, value: 'application/json; charset=utf-8')
 	header.add_custom('authorization', 'Bearer ${token}') or {} // safe to ignore: header append on detached request
-	mut payload := ''
-	mut url := ''
-	mut method := http.Method.post
-	if message_id_type == 'token' {
-		payload = feishu.UpdateMessageRequest.delay_card_body(target, content_raw)!
-		url = '${app.feishu.open_base_url}/interactive/v1/card/update'
-		method = .post
-	} else if message_id_type == 'message_id' {
-		content := feishu.SendMessageRequest.build_content(msg_type, content_raw, req.text,
-			req.content_fields)!
-		payload = json.encode({
-			'msg_type': msg_type
-			'content':  content
-			'uuid':     req.uuid
-		})
-		url = '${app.feishu.open_base_url}/im/v1/messages/${target}'
-		method = feishu.UpdateMessageRequest.http_method_for(msg_type)
-	} else {
-		return error('unsupported feishu update target type ${message_id_type}')
-	}
+	url, method, payload := feishu.build_update_message_request(app.feishu.open_base_url, message_id_type, target, msg_type, content_raw, req.uuid)!
 	log.info('[feishu] 📤 sending update: method=${method} url=${url} payload=${payload.len} bytes')
 	resp := (&app.feishu).http_fetch(url: url, method: method, data: payload, header: header) or {
 		app.feishu.note_send(app_name, false)
@@ -473,7 +373,7 @@ fn (mut app App) feishu_runtime_update_message(req feishu.UpdateMessageRequest) 
 
 // ── Stream Buffering ───────────────────────────────────────────────────
 
-fn (mut app App) feishu_runtime_buffer_patch(req WebSocketUpstreamSendRequest) {
+fn (mut app App) feishu_runtime_buffer_patch(req ws.UpstreamSendRequest) {
 	mut current_target := req.target
 	if current_target == '' {
 		return

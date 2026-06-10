@@ -839,7 +839,7 @@ fn (mut app App) codex_post_connect_handshake(instance string, mut conn net_ws.C
 
 // ── Generic WebSocket Upstream Provider Implementation ──────────────────
 
-fn (mut app App) codex_provider_send(req WebSocketUpstreamSendRequest) !ws.UpstreamSendResult {
+fn (mut app App) codex_provider_send(req ws.UpstreamSendRequest) !ws.UpstreamSendResult {
 	instance := codex.ProviderRuntime.normalize_instance(req.instance)
 	rt := app.codex.snapshot(instance)
 	mut conn := rt.connection()
@@ -859,7 +859,7 @@ fn (mut app App) codex_provider_send(req WebSocketUpstreamSendRequest) !ws.Upstr
 	}
 }
 
-fn (mut app App) codex_provider_update(req WebSocketUpstreamSendRequest) !ws.UpstreamUpdateResult {
+fn (mut app App) codex_provider_update(req ws.UpstreamSendRequest) !ws.UpstreamUpdateResult {
 	// Codex as a WebSocket provider doesn't really have "message updates" in the same sense as Feishu,
 	// but we might use it to send follow-up notifications.
 	res := app.codex_provider_send(req)!
@@ -970,7 +970,7 @@ fn (mut app App) codex_start_turn_normalized(cmd command.NormalizedCommand) ! {
 	codex.debug_log('rpc.send.params.turn/start', params)
 
 	// Send to websocket
-	req := WebSocketUpstreamSendRequest{
+	req := ws.UpstreamSendRequest{
 		provider: 'codex'
 		instance: instance
 		text:     req_msg

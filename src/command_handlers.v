@@ -5,6 +5,7 @@ import command as cmdpkg
 import codex
 import executor
 import log
+import ws
 
 pub struct CodexCommandHandler {
 pub mut:
@@ -115,28 +116,7 @@ pub fn FeishuCommandHandler.new(mut app App) FeishuCommandHandler {
 	}
 }
 
-fn WebSocketUpstreamSendRequest.from_normalized(normalized cmdpkg.NormalizedCommand, default_provider string) WebSocketUpstreamSendRequest {
-	return WebSocketUpstreamSendRequest{
-		provider:       normalized.normalized_provider(default_provider)
-		instance:       normalized.instance
-		target_type:    normalized.target.type_
-		target:         normalized.target.id
-		message_type:   normalized.message_type
-		content:        normalized.content
-		content_fields: normalized.content_fields.clone()
-		text:           normalized.text
-		uuid:           normalized.uuid
-		method:         normalized.method
-		params:         normalized.params
-		metadata:       normalized.metadata.clone()
-	}
-}
-
-fn WebSocketUpstreamSendRequest.from_feishu_command(normalized cmdpkg.NormalizedCommand) WebSocketUpstreamSendRequest {
-	return WebSocketUpstreamSendRequest.from_normalized(normalized, 'feishu')
-}
-
-fn (h FeishuCommandHandler) resolve_target(normalized cmdpkg.NormalizedCommand, mut req WebSocketUpstreamSendRequest) {
+fn (h FeishuCommandHandler) resolve_target(normalized cmdpkg.NormalizedCommand, mut req ws.UpstreamSendRequest) {
 	if req.target != '' || normalized.correlation.stream_id == '' {
 		return
 	}
@@ -152,14 +132,7 @@ fn (h FeishuCommandHandler) resolve_target(normalized cmdpkg.NormalizedCommand, 
 	}
 }
 
-fn (req WebSocketUpstreamSendRequest) normalize_feishu_streaming_for(normalized cmdpkg.NormalizedCommand) WebSocketUpstreamSendRequest {
-	if normalized.correlation.stream_id.trim_space() == '' {
-		return req
-	}
-	return req.normalize_feishu_streaming()
-}
-
-fn (h FeishuCommandHandler) execute_provider_message_send(normalized cmdpkg.NormalizedCommand, mut req WebSocketUpstreamSendRequest, mut snapshot executor.WebSocketUpstreamCommandActivity) (bool, string) {
+fn (h FeishuCommandHandler) execute_provider_message_send(normalized cmdpkg.NormalizedCommand, mut req ws.UpstreamSendRequest, mut snapshot executor.WebSocketUpstreamCommandActivity) (bool, string) {
 	req = req.normalize_feishu_streaming_for(normalized)
 	if normalized.correlation.stream_id.trim_space() != '' {
 		req.metadata['stream_id'] = normalized.correlation.stream_id
@@ -200,7 +173,7 @@ fn (h FeishuCommandHandler) execute_provider_message_send(normalized cmdpkg.Norm
 	return true, ''
 }
 
-fn (h FeishuCommandHandler) execute_stream_command(normalized cmdpkg.NormalizedCommand, req WebSocketUpstreamSendRequest, mut snapshot executor.WebSocketUpstreamCommandActivity) (bool, string) {
+fn (h FeishuCommandHandler) execute_stream_command(normalized cmdpkg.NormalizedCommand, req ws.UpstreamSendRequest, mut snapshot executor.WebSocketUpstreamCommandActivity) (bool, string) {
 	mut app := h.app
 	if app.feishu_card_bridge_enabled() && req.target != '' {
 		if normalized.is_stream_append() {
@@ -265,7 +238,7 @@ fn (h FeishuCommandHandler) execute_stream_command(normalized cmdpkg.NormalizedC
 	return false, ''
 }
 
-fn (h FeishuCommandHandler) execute_provider_message_update(normalized cmdpkg.NormalizedCommand, req WebSocketUpstreamSendRequest, mut snapshot executor.WebSocketUpstreamCommandActivity) (bool, string) {
+fn (h FeishuCommandHandler) execute_provider_message_update(normalized cmdpkg.NormalizedCommand, req ws.UpstreamSendRequest, mut snapshot executor.WebSocketUpstreamCommandActivity) (bool, string) {
 	mut app := h.app
 	if req.target != '' {
 		app.feishu.clear_buffer(req.target)
@@ -334,7 +307,7 @@ pub fn (h FeishuCommandHandler) execute(command transport.WorkerWebSocketUpstrea
 		return false, ''
 	}
 
-	mut req := WebSocketUpstreamSendRequest.from_feishu_command(normalized)
+	mut req := ws.UpstreamSendRequest.from_feishu_command(normalized)
 	req.provider = resolved_provider
 	h.resolve_target(normalized, mut req)
 
@@ -384,7 +357,7 @@ pub fn (h GenericUpstreamCommandHandler) execute(command transport.WorkerWebSock
 		return false, ''
 	}
 
-	mut req := WebSocketUpstreamSendRequest.from_normalized(normalized, '')
+	mut req := ws.UpstreamSendRequest.from_normalized(normalized, '')
 	req.provider = resolved_provider
 	mut app := h.app
 	if resolved_event == 'send' {

@@ -6,6 +6,7 @@ import json
 import net.unix
 import os
 import worker
+import ws
 
 
 fn (mut app App) internal_admin_dispatch(req admin.InternalAdminRequest) admin.InternalAdminResponse {
@@ -83,7 +84,7 @@ fn (mut app App) internal_gateway_dispatch(req admin.InternalAdminRequest, binar
 	path := admin.InternalAdminRequest.normalize_gateway_path(req.path)
 	match path {
 		'/upstreams/websocket/send', '/feishu/messages' {
-			send_req := json.decode(WebSocketUpstreamSendRequest, req.body) or {
+			send_req := json.decode(ws.UpstreamSendRequest, req.body) or {
 				return admin.InternalAdminResponse.bad_request('invalid_json')
 			}
 			result := app.websocket_upstream_send(send_req) or {

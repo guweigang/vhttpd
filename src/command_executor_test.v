@@ -7,6 +7,7 @@ import provider
 import executor as execmod
 import feishu
 import codex
+import ws
 
 fn test_normalized_command_from_worker_command_codex_rpc_send() {
 	cmd := transport.WorkerWebSocketUpstreamCommand{
@@ -419,7 +420,7 @@ fn test_feishu_command_normalize_stream_send_only_applies_to_stream_commands() {
 	cmd := transport.WorkerWebSocketUpstreamCommand{
 		type_: 'feishu.message.send'
 	}
-	req := WebSocketUpstreamSendRequest{
+	req := ws.UpstreamSendRequest{
 		provider:     'feishu'
 		message_type: 'text'
 		text:         'plain'
@@ -435,7 +436,7 @@ fn test_feishu_command_normalize_stream_send_promotes_stream_send_to_interactive
 		type_:     'feishu.message.send'
 		stream_id: 'stream_123'
 	}
-	req := WebSocketUpstreamSendRequest{
+	req := ws.UpstreamSendRequest{
 		provider:     'feishu'
 		message_type: 'text'
 		text:         'stream body'
@@ -479,7 +480,7 @@ fn test_websocket_upstream_request_from_normalized_uses_default_provider_and_fie
 			'trace_id': 'trace_001'
 		}
 	}
-	req := WebSocketUpstreamSendRequest.from_normalized(normalized, 'discord')
+	req := ws.UpstreamSendRequest.from_normalized(normalized, 'discord')
 	assert req.provider == 'discord'
 	assert req.instance == 'main'
 	assert req.target == 'oc_123'
@@ -497,7 +498,7 @@ fn test_websocket_upstream_request_from_normalized_prefers_declared_provider() {
 	normalized := command.NormalizedCommand{
 		provider: 'ollama'
 	}
-	req := WebSocketUpstreamSendRequest.from_normalized(normalized, 'generic')
+	req := ws.UpstreamSendRequest.from_normalized(normalized, 'generic')
 	assert req.provider == 'ollama'
 }
 

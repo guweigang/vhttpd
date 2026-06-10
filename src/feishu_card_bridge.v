@@ -15,67 +15,6 @@ import transport
 import veb
 import ws
 
-const feishu_card_bridge_request_type = 'feishu_card_callback'
-const feishu_card_bridge_result_type = 'feishu_card_callback_result'
-const feishu_bridge_proxy_request_type = 'feishu_proxy_request'
-const feishu_bridge_proxy_result_type = 'feishu_proxy_result'
-const feishu_bridge_ping_type = 'feishu_bridge_ping'
-const feishu_bridge_pong_type = 'feishu_bridge_pong'
-
-struct FeishuCardBridgeEnvelope {
-	type_      string @[json: 'type']
-	request_id string @[json: 'request_id']
-}
-
-struct FeishuBridgeHeartbeatFrame {
-	type_      string @[json: 'type']
-	request_id string @[json: 'request_id']
-	trace_id   string @[json: 'trace_id']
-	sent_at    i64    @[json: 'sent_at']
-}
-
-struct FeishuCardBridgeDispatchRequest {
-	type_       string @[json: 'type']
-	request_id  string @[json: 'request_id']
-	trace_id    string @[json: 'trace_id']
-	app         string
-	event_type  string @[json: 'event_type']
-	message_id  string @[json: 'message_id']
-	target      string
-	target_type string @[json: 'target_type']
-	payload     string
-	metadata    map[string]string
-}
-
-struct FeishuCardBridgeGatewayDispatchRequest {
-	app         string
-	trace_id    string @[json: 'trace_id']
-	event_type  string @[json: 'event_type']
-	message_id  string @[json: 'message_id']
-	target      string
-	target_type string @[json: 'target_type']
-	payload     string
-	metadata    map[string]string
-}
-
-struct FeishuCardBridgeDispatchResult {
-	type_      string @[json: 'type']
-	request_id string @[json: 'request_id']
-	status     int
-	headers    map[string]string
-	body       string
-	error      string
-}
-
-// FeishuCardBridgeResult is executor.FeishuCardBridgeResult (used directly)
-
-struct FeishuBridgeProxyRequest {
-	type_      string @[json: 'type']
-	request_id string @[json: 'request_id']
-	action     string
-	request    WebSocketUpstreamSendRequest
-}
-
 @[heap]
 struct FeishuCardBridgeServerState {
 mut:
@@ -250,7 +189,7 @@ fn (mut app App) feishu_card_bridge_take_proxy_pending(request_id string) ?chan 
 	return ch
 }
 
-fn (mut app App) feishu_card_bridge_resolve_pending(result FeishuCardBridgeDispatchResult) {
+fn (mut app App) feishu_card_bridge_resolve_pending(result feishu.BridgeDispatchResult) {
 	ch := app.feishu_card_bridge_take_pending(result.request_id) or { return }
 	ch <- executor.FeishuCardBridgeResult{
 		status:  if result.status > 0 { result.status } else { 200 }
@@ -275,8 +214,8 @@ fn (mut app App) feishu_card_bridge_dispatch_callback(app_name string, trace_id 
 		dummy := app.feishu_card_bridge_take_pending(request_id) or { ch }
 		_ = dummy
 	}
-	frame := FeishuCardBridgeDispatchRequest{
-		type_:       feishu_card_bridge_request_type
+	frame := feishu.BridgeDispatchRequest{
+		type_:       feishu.card_bridge_request_type
 		request_id:  request_id
 		trace_id:    trace_id
 		app:         app_name
@@ -313,7 +252,7 @@ fn (mut app App) feishu_card_bridge_dispatch_callback(app_name string, trace_id 
 	return error('bridge_unreachable')
 }
 
-fn (mut app App) feishu_card_bridge_proxy_request(action string, req WebSocketUpstreamSendRequest) !feishu.BridgeProxyResult {
+fn (mut app App) feishu_card_bridge_proxy_request(action string, req ws.UpstreamSendRequest) !feishu.BridgeProxyResult {
 	if !app.feishu_card_bridge_enabled() {
 		return error('bridge_disabled')
 	}
@@ -324,8 +263,8 @@ fn (mut app App) feishu_card_bridge_proxy_request(action string, req WebSocketUp
 		dummy := app.feishu_card_bridge_take_proxy_pending(request_id) or { ch }
 		_ = dummy
 	}
-	frame := FeishuBridgeProxyRequest{
-		type_:      feishu_bridge_proxy_request_type
+	frame := feishu.BridgeProxyRequest{
+		type_:      feishu.bridge_proxy_request_type
 		request_id: request_id
 		action:     action
 		request:    req
@@ -361,7 +300,7 @@ fn (mut app App) feishu_card_bridge_proxy_request(action string, req WebSocketUp
 	return error('bridge_proxy_unreachable')
 }
 
-fn (mut app App) feishu_card_bridge_proxy_send(req WebSocketUpstreamSendRequest) !ws.UpstreamSendResult {
+fn (mut app App) feishu_card_bridge_proxy_send(req ws.UpstreamSendRequest) !ws.UpstreamSendResult {
 	result := app.feishu_card_bridge_proxy_request('send', req)!
 	return ws.UpstreamSendResult{
 		ok:         result.ok
@@ -372,7 +311,7 @@ fn (mut app App) feishu_card_bridge_proxy_send(req WebSocketUpstreamSendRequest)
 	}
 }
 
-fn (mut app App) feishu_card_bridge_proxy_append(req WebSocketUpstreamSendRequest) !ws.UpstreamUpdateResult {
+fn (mut app App) feishu_card_bridge_proxy_append(req ws.UpstreamSendRequest) !ws.UpstreamUpdateResult {
 	result := app.feishu_card_bridge_proxy_request('append', req)!
 	return ws.UpstreamUpdateResult{
 		ok:         result.ok
@@ -383,7 +322,7 @@ fn (mut app App) feishu_card_bridge_proxy_append(req WebSocketUpstreamSendReques
 	}
 }
 
-fn (mut app App) feishu_card_bridge_proxy_finish(req WebSocketUpstreamSendRequest) !ws.UpstreamUpdateResult {
+fn (mut app App) feishu_card_bridge_proxy_finish(req ws.UpstreamSendRequest) !ws.UpstreamUpdateResult {
 	result := app.feishu_card_bridge_proxy_request('finish', req)!
 	return ws.UpstreamUpdateResult{
 		ok:         result.ok
@@ -394,7 +333,7 @@ fn (mut app App) feishu_card_bridge_proxy_finish(req WebSocketUpstreamSendReques
 	}
 }
 
-fn (mut app App) feishu_card_bridge_proxy_fail(req WebSocketUpstreamSendRequest) !ws.UpstreamUpdateResult {
+fn (mut app App) feishu_card_bridge_proxy_fail(req ws.UpstreamSendRequest) !ws.UpstreamUpdateResult {
 	result := app.feishu_card_bridge_proxy_request('fail', req)!
 	return ws.UpstreamUpdateResult{
 		ok:         result.ok
@@ -405,7 +344,7 @@ fn (mut app App) feishu_card_bridge_proxy_fail(req WebSocketUpstreamSendRequest)
 	}
 }
 
-fn (mut app App) feishu_card_bridge_proxy_update(req WebSocketUpstreamSendRequest) !ws.UpstreamUpdateResult {
+fn (mut app App) feishu_card_bridge_proxy_update(req ws.UpstreamSendRequest) !ws.UpstreamUpdateResult {
 	result := app.feishu_card_bridge_proxy_request('update', req)!
 	return ws.UpstreamUpdateResult{
 		ok:         result.ok
@@ -422,16 +361,16 @@ fn feishu_card_bridge_client_message_cb(mut _ws websocket.Client, msg &websocket
 		return
 	}
 	raw := msg.payload.bytestr()
-	envelope := json.decode(FeishuCardBridgeEnvelope, raw) or {
+	envelope := json.decode(feishu.BridgeEnvelope, raw) or {
 		log.error('[bridge] ❌ invalid bridge envelope: ${err}')
 		return
 	}
-	if envelope.type_ == feishu_bridge_pong_type {
-		hb := json.decode(FeishuBridgeHeartbeatFrame, raw) or { FeishuBridgeHeartbeatFrame{} }
+	if envelope.type_ == feishu.bridge_pong_type {
+		hb := json.decode(feishu.BridgeHeartbeatFrame, raw) or { feishu.BridgeHeartbeatFrame{} }
 		log.info('[bridge] 💓 heartbeat pong received: request_id=${hb.request_id} trace_id=${hb.trace_id}')
 		return
 	}
-	if envelope.type_ == feishu_bridge_proxy_result_type {
+	if envelope.type_ == feishu.bridge_proxy_result_type {
 		result := json.decode(feishu.BridgeProxyResult, raw) or {
 			log.error('[bridge] ❌ invalid proxy result frame: ${err}')
 			return
@@ -440,10 +379,10 @@ fn feishu_card_bridge_client_message_cb(mut _ws websocket.Client, msg &websocket
 		ch <- result
 		return
 	}
-	if envelope.type_ != feishu_card_bridge_request_type {
+	if envelope.type_ != feishu.card_bridge_request_type {
 		return
 	}
-	req := json.decode(FeishuCardBridgeDispatchRequest, raw) or {
+	req := json.decode(feishu.BridgeDispatchRequest, raw) or {
 		log.error('[bridge] ❌ invalid request frame: ${err}')
 		return
 	}
@@ -461,8 +400,8 @@ fn feishu_card_bridge_client_message_cb(mut _ws websocket.Client, msg &websocket
 	}, if req.trace_id.trim_space() != '' { req.trace_id } else { req.request_id }, req.event_type,
 		req.message_id, req.target, req.target_type, req.payload, time.now().unix(),
 		req.metadata.clone())) or {
-		result := FeishuCardBridgeDispatchResult{
-			type_:      feishu_card_bridge_result_type
+		result := feishu.BridgeDispatchResult{
+			type_:      feishu.card_bridge_result_type
 			request_id: req.request_id
 			status:     500
 			headers:    {
@@ -478,8 +417,8 @@ fn feishu_card_bridge_client_message_cb(mut _ws websocket.Client, msg &websocket
 		return
 	}
 	resp := outcome.response
-	result := FeishuCardBridgeDispatchResult{
-		type_:      feishu_card_bridge_result_type
+	result := feishu.BridgeDispatchResult{
+		type_:      feishu.card_bridge_result_type
 		request_id: req.request_id
 		status:     if resp.status > 0 { resp.status } else { 200 }
 		headers:    resp.headers.clone()
@@ -514,8 +453,8 @@ fn feishu_card_bridge_client_heartbeat_loop(mut app App) {
 			continue
 		}
 		request_id := 'bridge-hb-${time.now().unix_micro()}'
-		frame := FeishuBridgeHeartbeatFrame{
-			type_:      feishu_bridge_ping_type
+		frame := feishu.BridgeHeartbeatFrame{
+			type_:      feishu.bridge_ping_type
 			request_id: request_id
 			trace_id:   'bridge-heartbeat'
 			sent_at:    time.now().unix_milli()
@@ -581,34 +520,34 @@ fn feishu_card_bridge_server_message_cb(mut _ws websocket.Client, msg &websocket
 		return
 	}
 	raw := msg.payload.bytestr()
-	envelope := json.decode(FeishuCardBridgeEnvelope, raw) or {
+	envelope := json.decode(feishu.BridgeEnvelope, raw) or {
 		log.error('[bridge] ❌ invalid bridge envelope: ${err}')
 		return
 	}
-	if envelope.type_ == feishu_bridge_ping_type {
-		hb := json.decode(FeishuBridgeHeartbeatFrame, raw) or { FeishuBridgeHeartbeatFrame{} }
+	if envelope.type_ == feishu.bridge_ping_type {
+		hb := json.decode(feishu.BridgeHeartbeatFrame, raw) or { feishu.BridgeHeartbeatFrame{} }
 		log.info('[bridge] 💓 heartbeat ping received: request_id=${hb.request_id} trace_id=${hb.trace_id}')
 		mut ws_hb := unsafe { _ws }
-		ws_hb.write_string(json.encode(FeishuBridgeHeartbeatFrame{
-			type_:      feishu_bridge_pong_type
+		ws_hb.write_string(json.encode(feishu.BridgeHeartbeatFrame{
+			type_:      feishu.bridge_pong_type
 			request_id: hb.request_id
 			trace_id:   hb.trace_id
 			sent_at:    time.now().unix_milli()
 		})) or {} // safe to ignore: write failure usually means peer disconnected
 		return
 	}
-	if envelope.type_ == feishu_card_bridge_result_type {
-		result := json.decode(FeishuCardBridgeDispatchResult, raw) or {
+	if envelope.type_ == feishu.card_bridge_result_type {
+		result := json.decode(feishu.BridgeDispatchResult, raw) or {
 			log.error('[bridge] ❌ invalid result frame: ${err}')
 			return
 		}
 		state.app.feishu_card_bridge_resolve_pending(result)
 		return
 	}
-	if envelope.type_ != feishu_bridge_proxy_request_type {
+	if envelope.type_ != feishu.bridge_proxy_request_type {
 		return
 	}
-	req := json.decode(FeishuBridgeProxyRequest, raw) or {
+	req := json.decode(feishu.BridgeProxyRequest, raw) or {
 		log.error('[bridge] ❌ invalid proxy request frame: ${err}')
 		return
 	}
@@ -618,7 +557,7 @@ fn feishu_card_bridge_server_message_cb(mut _ws websocket.Client, msg &websocket
 		''
 	}} message_type=${req.request.message_type}')
 	mut result := feishu.BridgeProxyResult{
-		type_:      feishu_bridge_proxy_result_type
+		type_:      feishu.bridge_proxy_result_type
 		request_id: req.request_id
 	}
 	match req.action {
@@ -779,7 +718,7 @@ pub fn (mut app App) feishu_card_bridge_gateway_dispatch(mut ctx Context) veb.Re
 			error: 'forbidden'
 		}))
 	}
-	req := json.decode(FeishuCardBridgeGatewayDispatchRequest, ctx.req.data) or {
+	req := json.decode(feishu.BridgeGatewayDispatchRequest, ctx.req.data) or {
 		ctx.res.set_status(http.status_from_int(400))
 		return ctx.text(json.encode(admin.AdminErrorResponse{
 			error: 'invalid_json'

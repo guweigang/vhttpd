@@ -11,7 +11,18 @@
 - [WEBSOCKET_MVP_PLAN.md](file://docs/WEBSOCKET_MVP_PLAN.md)
 - [WEBSOCKET_PHASE2_IMPLEMENTATION_PLAN.md](file://docs/WEBSOCKET_PHASE2_IMPLEMENTATION_PLAN.md)
 - [WEBSOCKET_UPSTREAM_PLAN.md](file://docs/WEBSOCKET_UPSTREAM_PLAN.md)
+- [types.v](file://src/ws/types.v)
+- [runtime.v](file://src/ws/runtime.v)
+- [hub_runtime.v](file://src/ws/hub_runtime.v)
+- [upstream_runtime.v](file://src/ws/upstream_runtime.v)
 </cite>
+
+## 更新摘要
+**变更内容**
+- 移除了未使用的类型别名（WebSocketDispatchConnState、HubConn、HubPendingMessage 等）
+- 内联了 fixture 委托方法，直接调用 ws 包中的函数
+- 更新了函数签名使用直接的 ws 包类型，简化了类型引用
+- 优化了代码结构，减少了中间层抽象
 
 ## 目录
 1. [简介](#简介)
@@ -46,37 +57,42 @@ subgraph "核心 WebSocket 运行时"
 A["WebSocket 运行时<br/>src/websocket_runtime.v"]
 B["房间与分发<br/>连接注册/清理/广播"]
 C["会话句柄与生命周期<br/>打开/关闭/清理"]
+D["类型别名移除<br/>直接使用 ws 包类型"]
 end
 subgraph "上游 WebSocket 运行时"
-D["上游运行时<br/>src/websocket_upstream_runtime.v"]
-E["提供商适配<br/>Feishu/Codex/Fixture"]
-F["自动重连与心跳<br/>连接/错误/关闭回调"]
+E["上游运行时<br/>src/websocket_upstream_runtime.v"]
+F["提供商适配<br/>Feishu/Codex/Fixture"]
+G["自动重连与心跳<br/>连接/错误/关闭回调"]
+H["fixture 方法内联<br/>直接调用 ws 包函数"]
 end
 A --> B
 A --> C
-D --> E
-D --> F
+A --> D
+E --> F
+E --> G
+E --> H
 ```
 
 **图表来源**
-- [websocket_runtime.v:1-978](file://src/websocket_runtime.v#L1-L978)
-- [websocket_upstream_runtime.v:1-1192](file://src/websocket_upstream_runtime.v#L1-L1192)
+- [websocket_runtime.v:1-105](file://src/websocket_runtime.v#L1-L105)
+- [websocket_upstream_runtime.v:1-887](file://src/websocket_upstream_runtime.v#L1-L887)
 
 **章节来源**
-- [websocket_runtime.v:1-978](file://src/websocket_runtime.v#L1-L978)
-- [websocket_upstream_runtime.v:1-1192](file://src/websocket_upstream_runtime.v#L1-L1192)
+- [websocket_runtime.v:1-105](file://src/websocket_runtime.v#L1-L105)
+- [websocket_upstream_runtime.v:1-887](file://src/websocket_upstream_runtime.v#L1-L887)
 
 ## 核心组件
 - WebSocketHub：集中管理连接、房间、元数据与待发消息队列
 - 连接生命周期：opening/open/closing/closed 四阶段状态机
 - 房间系统：基于连接 ID 的房间成员映射与房间到成员映射
 - 上游运行时：按提供商拉取连接地址、建立连接、消息处理与自动重连
+- 类型系统：直接使用 ws 包中的类型定义，移除了中间类型别名层
 
 **章节来源**
-- [websocket_runtime.v:10-124](file://src/websocket_runtime.v#L10-L124)
+- [websocket_runtime.v:10-15](file://src/websocket_runtime.v#L10-L15)
 - [websocket_runtime.v:44-58](file://src/websocket_runtime.v#L44-L58)
 - [websocket_runtime.v:516-558](file://src/websocket_runtime.v#L516-L558)
-- [websocket_upstream_runtime.v:15-45](file://src/websocket_upstream_runtime.v#L15-L45)
+- [websocket_upstream_runtime.v:16-24](file://src/websocket_upstream_runtime.v#L16-L24)
 
 ## 架构总览
 WebSocket 运行时在 vhttpd 中承担两类职责：
@@ -130,15 +146,15 @@ class HubConn {
 +map~string,string~ headers
 +string remote_addr
 +Client* client
-+WebSocketDispatchConnState* lifecycle
++DispatchConnState* lifecycle
 }
-class WebSocketDispatchConnState {
+class DispatchConnState {
 +phase
 +bool close_notified
 +bool worker_initiated_close
 +Mutex mu
 }
-class WebSocketHub {
+class HubState {
 +map~string,HubConn~ conns
 +map~string,map~string,bool~~ room_members
 +map~string,map~string,bool~~ conn_rooms
@@ -147,14 +163,14 @@ class WebSocketHub {
 +Mutex mu
 +Mutex send_mu
 }
-WebSocketHub --> HubConn : "管理"
-HubConn --> WebSocketDispatchConnState : "持有生命周期"
+HubState --> HubConn : "管理"
+HubConn --> DispatchConnState : "持有生命周期"
 ```
 
 **图表来源**
-- [websocket_runtime.v:60-95](file://src/websocket_runtime.v#L60-L95)
-- [websocket_runtime.v:44-58](file://src/websocket_runtime.v#L44-L58)
-- [websocket_runtime.v:10-42](file://src/websocket_runtime.v#L10-L42)
+- [types.v:107-121](file://src/ws/types.v#L107-L121)
+- [types.v:17-23](file://src/ws/types.v#L17-L23)
+- [types.v:345-365](file://src/ws/types.v#L345-L365)
 
 **章节来源**
 - [websocket_runtime.v:298-321](file://src/websocket_runtime.v#L298-L321)
@@ -181,11 +197,11 @@ closed --> [*]
 ```
 
 **图表来源**
-- [websocket_runtime.v:44-58](file://src/websocket_runtime.v#L44-L58)
-- [websocket_runtime.v:173-296](file://src/websocket_runtime.v#L173-L296)
+- [types.v:9-14](file://src/ws/types.v#L9-L14)
+- [types.v:49-103](file://src/ws/types.v#L49-L103)
 
 **章节来源**
-- [websocket_runtime.v:173-296](file://src/websocket_runtime.v#L173-L296)
+- [types.v:49-103](file://src/ws/types.v#L49-L103)
 
 ### 组件三：消息派发与广播
 - 单播：ws_hub_send_to
@@ -259,10 +275,24 @@ Upstream-->>WS : "send/update"
 - [websocket_runtime.v:10-42](file://src/websocket_runtime.v#L10-L42)
 - [websocket_runtime.v:173-296](file://src/websocket_runtime.v#L173-L296)
 
+### 组件六：类型系统重构
+- 类型别名移除：WebSocketDispatchConnState、HubConn、HubPendingMessage 等类型别名已被移除
+- 直接使用 ws 包类型：所有函数签名直接使用 ws 包中的类型定义
+- fixture 方法内联：fixture_websocket_emit 等方法直接调用 ws 包中的对应函数
+- 简化导入：减少了中间层抽象，直接从 ws 包导入所需类型
+
+**更新** 仅保留了必要的 WebSocketUpstreamSendRequest 类型别名，用于上游运行时的统一请求格式
+
+**章节来源**
+- [websocket_runtime.v:7-15](file://src/websocket_runtime.v#L7-L15)
+- [websocket_upstream_runtime.v:16-24](file://src/websocket_upstream_runtime.v#L16-L24)
+- [websocket_runtime.v:112-115](file://src/websocket_runtime.v#L112-L115)
+
 ## 依赖关系分析
 - WebSocketHub 依赖于内核的 WebSocket 派发框架（WorkerWebSocketFrame），用于广播与派发
 - 上游运行时依赖提供商运行时（Feishu/Codex/Fixture）以获取连接 URL、执行命令
 - 两者均通过互斥锁保证并发安全
+- 类型系统直接依赖 ws 包，移除了中间类型别名层
 
 ```mermaid
 graph LR
@@ -270,6 +300,8 @@ WS["WebSocketHub<br/>src/websocket_runtime.v"] --> Kernel["内核/应用"]
 Upstream["上游运行时<br/>src/websocket_upstream_runtime.v"] --> Providers["提供商运行时"]
 WS --> Kernel
 Upstream --> Kernel
+WS --> WSPackage["ws 包<br/>直接类型引用"]
+Upstream --> WSPackage
 ```
 
 **图表来源**
@@ -290,6 +322,9 @@ Upstream --> Kernel
 - 上游连接
   - 自动重连与指数退避（由提供商实现）降低抖动
   - 心跳循环与握手后处理确保长连接稳定性
+- 类型系统优化
+  - 移除类型别名减少了内存占用和查找开销
+  - 直接类型引用提高了编译时类型检查效率
 
 **章节来源**
 - [websocket_runtime.v:560-636](file://src/websocket_runtime.v#L560-L636)
@@ -305,6 +340,9 @@ Upstream --> Kernel
 - 上游连接异常
   - 查看连接/断开事件日志，确认提供商可用性与 URL 正确性
   - 检查错误回调与自动重连逻辑是否生效
+- 类型系统问题
+  - 确认所有函数签名都使用 ws 包中的直接类型定义
+  - 检查 fixture 方法是否正确内联到 ws 包函数
 - 管理接口
   - 使用管理端点查看活动连接、房间快照与上游活动记录
 
@@ -314,7 +352,7 @@ Upstream --> Kernel
 - [websocket_upstream_runtime.v:825-909](file://src/websocket_upstream_runtime.v#L825-L909)
 
 ## 结论
-vhttpd 的 WebSocket 运行时提供了完整的本地会话与房间管理能力，并通过上游运行时与外部服务进行稳定桥接。其状态机与并发控制保障了高可用，同时通过派发与广播机制实现了灵活的消息路由。结合管理接口与日志，可有效支撑生产环境的运维与排障。
+vhttpd 的 WebSocket 运行时提供了完整的本地会话与房间管理能力，并通过上游运行时与外部服务进行稳定桥接。其状态机与并发控制保障了高可用，同时通过派发与广播机制实现了灵活的消息路由。最新的代码清理和重构进一步优化了类型系统，移除了不必要的抽象层，提高了代码的可维护性和性能。结合管理接口与日志，可有效支撑生产环境的运维与排障。
 
 ## 附录
 
@@ -323,7 +361,7 @@ vhttpd 的 WebSocket 运行时提供了完整的本地会话与房间管理能�
   - 使用浏览器原生 WebSocket 或示例脚本连接 ws://host:port/ws
   - 示例页面与脚本位于 examples/websocket_echo_app.php 与 examples/public/websocket_echo_app.js
 - 消息发送
-  - 连接建立后，服务端会回显消息；支持发送“bye”触发关闭
+  - 连接建立后，服务端会回显消息；支持发送"bye"触发关闭
 - 事件监听
   - 监听 open/message/close/error 事件，实时反馈连接状态
 
