@@ -1,6 +1,7 @@
 module main
 
 import admin
+import feishu
 import json
 import net.unix
 import os
@@ -100,10 +101,10 @@ fn (mut app App) internal_gateway_dispatch(req admin.InternalAdminRequest, binar
 			return admin.InternalAdminResponse.json(json.encode(result))
 		}
 		'/feishu/images' {
-			upload_req := FeishuRuntimeUploadImageRequest.from_json(req.body) or {
+			upload_req := feishu.UploadImageRequest.from_json(req.body) or {
 				return admin.InternalAdminResponse.bad_request('invalid_json')
 			}
-			mut result := FeishuRuntimeUploadImageResult{}
+			mut result := feishu.UploadImageResult{}
 			if binary_payload.len > 0 {
 				result = app.feishu_runtime_upload_image_bytes(upload_req, binary_payload) or {
 					return admin.InternalAdminResponse{
@@ -183,7 +184,7 @@ fn run_internal_admin_server(mut app App, socket_path string) {
 		mut binary_payload := []u8{}
 		if req.mode == 'vhttpd_gateway'
 			&& admin.InternalAdminRequest.normalize_gateway_path(req.path) == '/feishu/images' {
-			upload_req := FeishuRuntimeUploadImageRequest.from_json(req.body) or {
+			upload_req := feishu.UploadImageRequest.from_json(req.body) or {
 				worker.WorkerBackendFrameCodec.write(mut conn, json.encode(admin.InternalAdminResponse.error(400,
 					'invalid_json'))) or {}
 				conn.close() or {}

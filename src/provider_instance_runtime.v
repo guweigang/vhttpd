@@ -3,6 +3,7 @@ module main
 import config
 import provider
 import json
+import ws
 
 struct ProviderInstanceStaticSpec {
 	spec   provider.ProviderInstanceSpec
@@ -10,7 +11,7 @@ struct ProviderInstanceStaticSpec {
 }
 
 struct ProviderInstanceRuntimeContext {
-	runtime_snapshot_fn fn (string, string) (WebSocketUpstreamSnapshot, bool) = unsafe { nil }
+	runtime_snapshot_fn fn (string, string) (ws.UpstreamSnapshot, bool) = unsafe { nil }
 	source_fn           fn (string, string) string                = unsafe { nil }
 	static_specs_fn     fn () []ProviderInstanceStaticSpec        = unsafe { nil }
 	static_spec_fn      fn (string, string) ?provider.ProviderInstanceSpec = unsafe { nil }
@@ -20,7 +21,7 @@ struct ProviderInstanceRuntimeContext {
 
 struct ProviderInstanceRuntime {}
 
-fn (ctx ProviderInstanceRuntimeContext) runtime_snapshot(provider_name string, instance string) (WebSocketUpstreamSnapshot, bool) {
+fn (ctx ProviderInstanceRuntimeContext) runtime_snapshot(provider_name string, instance string) (ws.UpstreamSnapshot, bool) {
 	return ctx.runtime_snapshot_fn(provider_name, instance)
 }
 
@@ -46,7 +47,7 @@ fn (ctx ProviderInstanceRuntimeContext) provider_enabled(provider_name string) b
 
 fn (mut app App) build_provider_instance_runtime_context() ProviderInstanceRuntimeContext {
 	return ProviderInstanceRuntimeContext{
-		runtime_snapshot_fn: fn [mut app] (provider_name string, instance string) (WebSocketUpstreamSnapshot, bool) {
+		runtime_snapshot_fn: fn [mut app] (provider_name string, instance string) (ws.UpstreamSnapshot, bool) {
 			return app.provider_instance_runtime_snapshot(provider_name, instance)
 		}
 		source_fn:           fn [mut app] (provider_name string, instance string) string {
@@ -141,11 +142,11 @@ fn (mut app App) build_provider_instance_runtime_context() ProviderInstanceRunti
 	}
 }
 
-fn (mut app App) provider_instance_runtime_snapshot(provider_name string, instance string) (WebSocketUpstreamSnapshot, bool) {
+fn (mut app App) provider_instance_runtime_snapshot(provider_name string, instance string) (ws.UpstreamSnapshot, bool) {
 	if snapshot := app.provider_runtime_upstream_snapshot(provider_name, instance) {
 		return snapshot, true
 	}
-	return WebSocketUpstreamSnapshot{}, false
+	return ws.UpstreamSnapshot{}, false
 }
 
 pub fn (mut app App) provider_instance_upsert(spec provider.ProviderInstanceSpec) provider.ProviderInstanceSpec {

@@ -2,8 +2,10 @@ module main
 
 import codex
 import dbx
+import feishu
 import json
 import provider
+import ws
 
 fn (mut app App) build_provider_runtime_dispatch_context() provider.RuntimeDispatchContext {
 	return provider.RuntimeDispatchContext{
@@ -80,15 +82,15 @@ fn (mut app App) build_provider_context(name string) provider.RuntimeContext {
 	}
 }
 
-pub fn (mut app App) provider_runtime_feishu_snapshot() FeishuRuntimeSnapshot {
+pub fn (mut app App) provider_runtime_feishu_snapshot() feishu.RuntimeSnapshot {
 	return app.feishu_runtime_snapshot()
 }
 
-pub fn (mut app App) provider_runtime_feishu_app_snapshot(instance string) ?FeishuRuntimeAppSnapshot {
+pub fn (mut app App) provider_runtime_feishu_app_snapshot(instance string) ?feishu.RuntimeAppSnapshot {
 	return app.feishu_runtime_app_snapshot(instance)
 }
 
-pub fn (mut app App) provider_runtime_upstream_snapshot(name string, instance string) ?WebSocketUpstreamSnapshot {
+pub fn (mut app App) provider_runtime_upstream_snapshot(name string, instance string) ?ws.UpstreamSnapshot {
 	return match name {
 		'feishu' {
 			snapshot := app.provider_runtime_feishu_app_snapshot(instance) or { return none }
@@ -110,8 +112,8 @@ pub fn (mut app App) provider_runtime_upstream_snapshot(name string, instance st
 	}
 }
 
-pub fn (mut app App) provider_runtime_upstream_snapshots(name string) []WebSocketUpstreamSnapshot {
-	mut snapshots := []WebSocketUpstreamSnapshot{}
+pub fn (mut app App) provider_runtime_upstream_snapshots(name string) []ws.UpstreamSnapshot {
+	mut snapshots := []ws.UpstreamSnapshot{}
 	for instance in app.provider_runtime_instances(name) {
 		if snapshot := app.provider_runtime_upstream_snapshot(name, instance) {
 			snapshots << snapshot
@@ -120,27 +122,27 @@ pub fn (mut app App) provider_runtime_upstream_snapshots(name string) []WebSocke
 	return snapshots
 }
 
-pub fn (mut app App) provider_runtime_upstream_events(name string, instance_filter string) []WebSocketUpstreamEventSnapshot {
+pub fn (mut app App) provider_runtime_upstream_events(name string, instance_filter string) []ws.UpstreamEventSnapshot {
 	return match name {
 		'feishu' {
 			provider.feishu_upstream_events(app.provider_runtime_feishu_snapshot(),
 				instance_filter)
 		}
 		'codex' {
-			[]WebSocketUpstreamEventSnapshot{}
+			[]ws.UpstreamEventSnapshot{}
 		}
 		else {
-			[]WebSocketUpstreamEventSnapshot{}
+			[]ws.UpstreamEventSnapshot{}
 		}
 	}
 }
 
-pub fn (mut app App) provider_runtime_metrics(name string) ProviderRuntimeMetrics {
+pub fn (mut app App) provider_runtime_metrics(name string) provider.ProviderRuntimeMetrics {
 	return match name {
 		'feishu' {
 			connect_attempts, connect_successes, received_frames, acked_events, messages_sent, send_errors :=
 				app.feishu.totals()
-			ProviderRuntimeMetrics{
+			provider.ProviderRuntimeMetrics{
 				connect_attempts:  connect_attempts
 				connect_successes: connect_successes
 				received_frames:   received_frames
@@ -161,7 +163,7 @@ pub fn (mut app App) provider_runtime_metrics(name string) ProviderRuntimeMetric
 			provider.codex_metrics(states)
 		}
 		else {
-			ProviderRuntimeMetrics{}
+			provider.ProviderRuntimeMetrics{}
 		}
 	}
 }
@@ -176,7 +178,7 @@ pub fn (mut app App) provider_runtime_gateway_count() int {
 	return provider.gateway_count(ctx)
 }
 
-pub fn (mut app App) provider_runtime_upstream_launches() []ProviderRuntimeUpstreamLaunch {
+pub fn (mut app App) provider_runtime_upstream_launches() []provider.ProviderRuntimeUpstreamLaunch {
 	ctx := app.build_provider_runtime_dispatch_context()
 	return provider.upstream_launches(ctx)
 }

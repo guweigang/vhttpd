@@ -5,6 +5,7 @@ import provider
 import feishu
 import codex
 import dbx
+import ws
 
 fn test_provider_registry_smoke() {
 	// Basic smoke assertions for provider registry API surface
@@ -101,7 +102,7 @@ fn test_provider_bootstrap_and_runtime_ready_helpers() {
 				}
 			}
 			runtime: {
-				'main': FeishuProviderRuntime{}
+				'main': feishu.ProviderRuntime{}
 			}
 		}
 		codex:     codex.CodexState{
@@ -120,7 +121,7 @@ fn test_provider_bootstrap_and_runtime_ready_helpers() {
 	assert app.provider_runtime_instances('feishu') == ['main']
 	assert app.provider_runtime_feishu_snapshot().apps.len == 1
 	app_snapshot := app.provider_runtime_feishu_app_snapshot('main') or {
-		FeishuRuntimeAppSnapshot{}
+		feishu.RuntimeAppSnapshot{}
 	}
 	assert app_snapshot.name == 'main'
 	assert app_snapshot.source == 'static'
@@ -143,7 +144,7 @@ fn test_provider_runtime_dynamic_feishu_instance_is_bootstrapped_and_ready() {
 		}
 		feishu:             feishu.FeishuState{
 			apps:    map[string]config.FeishuAppConfig{}
-			runtime: map[string]FeishuProviderRuntime{}
+			runtime: map[string]feishu.ProviderRuntime{}
 		}
 	}
 	spec := app.provider_instance_ensure('feishu', 'main') or { provider.ProviderInstanceSpec{} }
@@ -153,7 +154,7 @@ fn test_provider_runtime_dynamic_feishu_instance_is_bootstrapped_and_ready() {
 	assert app.provider_runtime_default_instance('feishu') == 'main'
 	assert app.provider_runtime_instances('feishu') == ['main']
 	app_snapshot := app.provider_runtime_feishu_app_snapshot('main') or {
-		FeishuRuntimeAppSnapshot{}
+		feishu.RuntimeAppSnapshot{}
 	}
 	assert app_snapshot.source == 'dynamic'
 	assert !app_snapshot.static_configured
@@ -226,12 +227,12 @@ fn test_admin_provider_instance_snapshots_include_dynamic_and_static_compat_rows
 				}
 			}
 			runtime:     {
-				'legacy': FeishuProviderRuntime{
+				'legacy': feishu.ProviderRuntime{
 					name:      'legacy'
 					connected: true
 					ws_url:    'wss://feishu.local/legacy'
 				}
-				'main':   FeishuProviderRuntime{
+				'main':   feishu.ProviderRuntime{
 					name:      'main'
 					connected: false
 					ws_url:    'wss://feishu.local/main'
@@ -306,7 +307,7 @@ fn test_provider_runtime_upstream_snapshot_helpers() {
 				}
 			}
 			runtime: {
-				'main': FeishuProviderRuntime{
+				'main': feishu.ProviderRuntime{
 					name:      'main'
 					connected: true
 					ws_url:    'wss://feishu.local/ws'
@@ -324,13 +325,13 @@ fn test_provider_runtime_upstream_snapshot_helpers() {
 		}
 	}
 	feishu_snapshot := app.provider_runtime_upstream_snapshot('feishu', 'main') or {
-		WebSocketUpstreamSnapshot{}
+		ws.UpstreamSnapshot{}
 	}
 	assert feishu_snapshot.provider == 'feishu'
 	assert feishu_snapshot.instance == 'main'
 	assert feishu_snapshot.connected
 	codex_snapshot := app.provider_runtime_upstream_snapshot('codex', 'main') or {
-		WebSocketUpstreamSnapshot{}
+		ws.UpstreamSnapshot{}
 	}
 	assert codex_snapshot.provider == 'codex'
 	assert codex_snapshot.instance == 'main'
@@ -348,10 +349,10 @@ fn test_provider_runtime_upstream_events_helper() {
 				}
 			}
 			runtime: {
-				'main': FeishuProviderRuntime{
+				'main': feishu.ProviderRuntime{
 					name:          'main'
 					recent_events: [
-						FeishuRuntimeEventSnapshot{
+						feishu.RuntimeEventSnapshot{
 							event_type:  'im.message.receive_v1'
 							message_id:  'msg-1'
 							chat_id:     'chat-1'
@@ -375,7 +376,7 @@ fn test_provider_runtime_metrics_helper() {
 	mut app := App{
 		feishu: feishu.FeishuState{
 			runtime: {
-				'main': FeishuProviderRuntime{
+				'main': feishu.ProviderRuntime{
 					connect_attempts:  3
 					connect_successes: 2
 					received_frames:   7
@@ -411,7 +412,7 @@ fn test_provider_runtime_capabilities_and_gateway_count_helpers() {
 				}
 			}
 			runtime: {
-				'main': FeishuProviderRuntime{
+				'main': feishu.ProviderRuntime{
 					name: 'main'
 				}
 			}
@@ -441,7 +442,7 @@ fn test_provider_runtime_upstream_launches_helper() {
 				}
 			}
 			runtime: {
-				'main': FeishuProviderRuntime{
+				'main': feishu.ProviderRuntime{
 					name: 'main'
 				}
 			}
@@ -472,7 +473,7 @@ fn test_provider_runtime_helpers_skip_disabled_feishu_launch_and_gateway_count()
 				}
 			}
 			runtime: {
-				'main': FeishuProviderRuntime{
+				'main': feishu.ProviderRuntime{
 					name: 'main'
 				}
 			}
@@ -503,7 +504,7 @@ fn test_websocket_upstream_provider_helpers_delegate_to_host_facade() {
 				}
 			}
 			runtime: {
-				'main': FeishuProviderRuntime{
+				'main': feishu.ProviderRuntime{
 					name: 'main'
 				}
 			}
@@ -546,7 +547,7 @@ fn test_provider_runtime_lifecycle_helpers_delegate_codex_runtime() {
 
 fn test_db_runtime_snapshot_without_compiled_support() {
 	mut app := App{
-		db_runtime: dbx.Runtime.from_settings(DbRuntimeSettings{
+		db_runtime: dbx.Runtime.from_settings(provider.DbRuntimeSettings{
 			enabled: true
 			socket:  'tmp/vhttpd-db.sock'
 			driver:  'mysql'

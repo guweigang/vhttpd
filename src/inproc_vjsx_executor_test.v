@@ -2286,7 +2286,7 @@ export default app;
 	mut app := App{
 		feishu: feishu.FeishuState{
 			apps:    map[string]cfg_mod.FeishuAppConfig{}
-			runtime: map[string]FeishuProviderRuntime{}
+			runtime: map[string]feishu.ProviderRuntime{}
 		}
 	}
 	mut facade := app.as_facade()

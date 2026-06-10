@@ -6,13 +6,14 @@ import feishu
 import json
 import encoding.base64
 import net.http
-import net.websocket
+import net.websocket as websock
 import time
 import transport
 import veb
 import x.json2
 import log
 import executor
+import ws
 
 @[markused]
 const feishu_runtime_frame_type_control = feishu.frame_type_control
@@ -26,33 +27,7 @@ const feishu_runtime_message_event = feishu.message_event
 const feishu_runtime_message_card = feishu.message_card
 const feishu_runtime_max_upload_image_bytes = feishu.max_upload_image_bytes
 
-type FeishuRuntimeProtoHeader = feishu.RuntimeProtoHeader
-
-type FeishuRuntimeProtoFrame = feishu.RuntimeProtoFrame
-
-type FeishuRuntimeClientConfig = feishu.RuntimeClientConfig
-
-type FeishuRuntimeWsEndpointResponse = feishu.RuntimeWsEndpointResponse
-
-type FeishuRuntimeEventSnapshot = feishu.RuntimeEventSnapshot
-
-type FeishuProviderRuntime = feishu.ProviderRuntime
-
-type FeishuStreamBuffer = feishu.StreamBuffer
-
 const feishu_stream_buffer_rollover_runes = feishu.stream_buffer_rollover_runes
-
-type FeishuRuntimeAppSnapshot = feishu.RuntimeAppSnapshot
-
-type FeishuRuntimeSnapshot = feishu.RuntimeSnapshot
-
-type FeishuRuntimeSendMessageRequest = feishu.SendMessageRequest
-
-type FeishuRuntimeUpdateMessageRequest = feishu.UpdateMessageRequest
-
-type FeishuRuntimeUploadImageRequest = feishu.UploadImageRequest
-
-type FeishuRuntimeUploadImageResult = feishu.UploadImageResult
 
 fn (mut app App) feishu_runtime_http_test_enter() int {
 	app.feishu.http_test_mu.@lock()
@@ -255,8 +230,6 @@ fn (mut app App) feishu_runtime_http_post_multipart_form(url string, cfg http.Po
 
 // FeishuRuntimeEventSummary is executor.FeishuRuntimeEventSummary (used directly)
 
-type FeishuRuntimeWsResponsePayload = feishu.WsResponsePayload
-
 fn (req WebSocketUpstreamSendRequest) normalize_feishu_streaming() WebSocketUpstreamSendRequest {
 	if req.message_type.trim_space() == 'interactive' {
 		return req
@@ -330,12 +303,12 @@ fn (app &App) feishu_runtime_callback_token_valid(app_name string, payload strin
 	return token != '' && token == cfg.verification_token
 }
 
-fn (mut app App) feishu_runtime_snapshot() FeishuRuntimeSnapshot {
+fn (mut app App) feishu_runtime_snapshot() feishu.RuntimeSnapshot {
 	app.feishu.mu.@lock()
 	defer {
 		app.feishu.mu.unlock()
 	}
-	mut apps := []FeishuRuntimeAppSnapshot{}
+	mut apps := []feishu.RuntimeAppSnapshot{}
 	mut connected_count := 0
 	for name in app.feishu.app_names() {
 		runtime := app.feishu.runtime[name] or { feishu.ProviderRuntime.new(name) }
@@ -346,7 +319,7 @@ fn (mut app App) feishu_runtime_snapshot() FeishuRuntimeSnapshot {
 			app.feishu.open_base_url, app.feishu_runtime_app_source(name),
 			app.feishu_runtime_has_static_app(name), app.feishu_runtime_has_dynamic_app(name))
 	}
-	return FeishuRuntimeSnapshot{
+	return feishu.RuntimeSnapshot{
 		enabled:         app.feishu_runtime_enabled()
 		configured:      app.feishu_runtime_ready()
 		app_count:       apps.len
@@ -356,7 +329,7 @@ fn (mut app App) feishu_runtime_snapshot() FeishuRuntimeSnapshot {
 	}
 }
 
-fn (mut app App) feishu_runtime_app_snapshot(name string) ?FeishuRuntimeAppSnapshot {
+fn (mut app App) feishu_runtime_app_snapshot(name string) ?feishu.RuntimeAppSnapshot {
 	snapshot := app.feishu_runtime_snapshot()
 	for item in snapshot.apps {
 		if item.name == name {
@@ -366,7 +339,7 @@ fn (mut app App) feishu_runtime_app_snapshot(name string) ?FeishuRuntimeAppSnaps
 	return none
 }
 
-fn feishu_runtime_ping_loop(mut app App, instance string, ws_url string, mut ws websocket.Client) {
+fn feishu_runtime_ping_loop(mut app App, instance string, ws_url string, mut client websock.Client) {
 	service_id := feishu.RuntimeProtoFrame.service_id_from_ws_url(ws_url)
 	if service_id <= 0 {
 		return
@@ -375,14 +348,14 @@ fn feishu_runtime_ping_loop(mut app App, instance string, ws_url string, mut ws 
 	if interval_seconds <= 0 {
 		interval_seconds = 5
 	}
-	for ws.get_state() == .open {
+	for client.get_state() == .open {
 		ping := feishu.RuntimeProtoFrame.client_ping(service_id)
-		ws.write(ping.encode(), .binary_frame) or {
+		client.write(ping.encode(), .binary_frame) or {
 			log.error('[feishu] ❌ ping send failed: ${err}')
 			return
 		}
 		log.info('[feishu] 💓 heartbeat sent')
-		if ws.get_state() != .open {
+		if client.get_state() != .open {
 			return
 		}
 		time.sleep(interval_seconds * time.second)
@@ -412,7 +385,7 @@ fn (mut app App) feishu_provider_pull_ws_endpoint(app_name string) !string {
 		if resp.status_code != 200 {
 			return error('feishu ws endpoint request failed with status ${resp.status_code}')
 		}
-		decoded := json.decode(FeishuRuntimeWsEndpointResponse, resp.body)!
+		decoded := json.decode(feishu.RuntimeWsEndpointResponse, resp.body)!
 		if decoded.code != 0 || decoded.data.url.trim_space() == '' {
 			detail := if decoded.msg.trim_space() != '' {
 				decoded.msg
@@ -467,7 +440,7 @@ fn (mut app App) feishu_runtime_tenant_access_token(app_name string) !string {
 	return decoded.tenant_access_token
 }
 
-fn (mut app App) feishu_runtime_send_message(req FeishuRuntimeSendMessageRequest) !feishu.SendMessageResult {
+fn (mut app App) feishu_runtime_send_message(req feishu.SendMessageRequest) !feishu.SendMessageResult {
 	app_name := app.feishu.resolve_app_name(req.app)!
 	if !app.feishu_runtime_ready() {
 		return error('feishu gateway is not configured')
@@ -535,7 +508,7 @@ fn (mut app App) feishu_runtime_send_message(req FeishuRuntimeSendMessageRequest
 	}
 }
 
-fn (mut app App) feishu_runtime_upload_image(req FeishuRuntimeUploadImageRequest) !FeishuRuntimeUploadImageResult {
+fn (mut app App) feishu_runtime_upload_image(req feishu.UploadImageRequest) !feishu.UploadImageResult {
 	if req.content_length > feishu_runtime_max_upload_image_bytes {
 		return error('image_too_large')
 	}
@@ -546,7 +519,7 @@ fn (mut app App) feishu_runtime_upload_image(req FeishuRuntimeUploadImageRequest
 	return app.feishu_runtime_upload_image_bytes(req, data.bytes())
 }
 
-fn (mut app App) feishu_runtime_upload_image_bytes(req FeishuRuntimeUploadImageRequest, data []u8) !FeishuRuntimeUploadImageResult {
+fn (mut app App) feishu_runtime_upload_image_bytes(req feishu.UploadImageRequest, data []u8) !feishu.UploadImageResult {
 	app_name := app.feishu.resolve_app_name(req.app)!
 	if data.len == 0 {
 		return error('missing_image_data')
@@ -596,13 +569,13 @@ fn (mut app App) feishu_runtime_upload_image_bytes(req FeishuRuntimeUploadImageR
 	if decoded.code != 0 || decoded.data.image_key.trim_space() == '' {
 		return error('feishu image upload error: code=${decoded.code} detail=${resp.body}')
 	}
-	return FeishuRuntimeUploadImageResult{
+	return feishu.UploadImageResult{
 		ok:        true
 		image_key: decoded.data.image_key
 	}
 }
 
-fn (mut app App) feishu_runtime_update_message(req FeishuRuntimeUpdateMessageRequest) !feishu.SendMessageResult {
+fn (mut app App) feishu_runtime_update_message(req feishu.UpdateMessageRequest) !feishu.SendMessageResult {
 	app_name := app.feishu.resolve_app_name(req.app)!
 	if !app.feishu_runtime_ready() {
 		return error('feishu gateway is not configured')
@@ -706,7 +679,7 @@ fn (mut app App) feishu_runtime_buffer_patch(req WebSocketUpstreamSendRequest) {
 	for {
 		app.feishu.mu.@lock()
 		if current_target !in app.feishu.buffers {
-			app.feishu.buffers[current_target] = FeishuStreamBuffer{
+			app.feishu.buffers[current_target] = feishu.StreamBuffer{
 				message_id:    current_target
 				app:           req.instance
 				last_flush:    time.now().unix_milli()
@@ -739,7 +712,7 @@ fn (mut app App) feishu_runtime_buffer_patch(req WebSocketUpstreamSendRequest) {
 		}
 
 		card_payload := feishu.SendMessageRequest.streaming_card(req.text, segment_index)
-		send_result := app.feishu_runtime_send_message(FeishuRuntimeSendMessageRequest{
+		send_result := app.feishu_runtime_send_message(feishu.SendMessageRequest{
 			app:             app_name
 			receive_id_type: receive_id_type
 			receive_id:      receive_id
@@ -758,7 +731,7 @@ fn (mut app App) feishu_runtime_buffer_patch(req WebSocketUpstreamSendRequest) {
 				app.feishu.buffers[current_target] = sealed_buf
 			}
 		}
-		app.feishu.buffers[send_result.message_id] = FeishuStreamBuffer{
+		app.feishu.buffers[send_result.message_id] = feishu.StreamBuffer{
 			message_id:       send_result.message_id
 			app:              app_name
 			content:          req.text
@@ -783,7 +756,7 @@ fn (mut app App) feishu_runtime_buffer_patch(req WebSocketUpstreamSendRequest) {
 	}
 }
 
-fn (mut app App) feishu_runtime_send_followup_segment(buf FeishuStreamBuffer, markdown string, finish bool,
+fn (mut app App) feishu_runtime_send_followup_segment(buf feishu.StreamBuffer, markdown string, finish bool,
 	template_content string) !string {
 	if buf.receive_id.trim_space() == '' || buf.receive_id_type.trim_space() == '' {
 		return error('stream followup segment missing send context')
@@ -793,7 +766,7 @@ fn (mut app App) feishu_runtime_send_followup_segment(buf FeishuStreamBuffer, ma
 	} else {
 		feishu.SendMessageRequest.streaming_card(markdown, buf.segment_index)
 	}
-	send_result := app.feishu_runtime_send_message(FeishuRuntimeSendMessageRequest{
+	send_result := app.feishu_runtime_send_message(feishu.SendMessageRequest{
 		app:             buf.app
 		receive_id_type: buf.receive_id_type
 		receive_id:      buf.receive_id
@@ -824,7 +797,7 @@ fn (mut app App) feishu_runtime_flush_pending_buffers() {
 		return
 	}
 	now := time.now().unix_milli()
-	mut to_flush := []FeishuStreamBuffer{}
+	mut to_flush := []feishu.StreamBuffer{}
 
 	app.feishu.mu.@lock()
 	for _, buf in app.feishu.buffers {
@@ -850,7 +823,7 @@ fn (mut app App) feishu_runtime_flush_pending_buffers() {
 			continue
 		}
 		card_payload := feishu.SendMessageRequest.streaming_card(preview_markdown, 1)
-		app.feishu_runtime_update_message(FeishuRuntimeUpdateMessageRequest{
+		app.feishu_runtime_update_message(feishu.UpdateMessageRequest{
 			app:        buf.app
 			message_id: buf.message_id
 			msg_type:   'interactive'
@@ -913,7 +886,7 @@ fn (mut app App) feishu_runtime_flush_buffer(message_id string, template_content
 		} else {
 			feishu.SendMessageRequest.interactive_markdown_card(head)
 		}
-		app.feishu_runtime_update_message(FeishuRuntimeUpdateMessageRequest{
+		app.feishu_runtime_update_message(feishu.UpdateMessageRequest{
 			app:        buf.app
 			message_id: buf.message_id
 			msg_type:   'interactive'
@@ -957,7 +930,7 @@ fn (mut app App) feishu_runtime_flush_buffer(message_id string, template_content
 	if preview_markdown == '' {
 		return
 	}
-	app.feishu_runtime_update_message(FeishuRuntimeUpdateMessageRequest{
+	app.feishu_runtime_update_message(feishu.UpdateMessageRequest{
 		app:        buf.app
 		message_id: buf.message_id
 		msg_type:   'interactive'
@@ -972,7 +945,7 @@ fn (mut app App) feishu_runtime_flush_buffer(message_id string, template_content
 	app.feishu.mu.unlock()
 }
 
-fn (mut app App) feishu_provider_handle_binary_message(instance string, mut ws websocket.Client, msg &websocket.Message) ! {
+fn (mut app App) feishu_provider_handle_binary_message(instance string, mut conn websock.Client, msg &websock.Message) ! {
 	if msg.opcode != .binary_frame {
 		return
 	}
@@ -988,14 +961,14 @@ fn (mut app App) feishu_provider_handle_binary_message(instance string, mut ws w
 	seq_id := headers[feishu_runtime_header_seq] or { '${frame.seq_id}' }
 	if frame.method == 2 || msg_type == feishu_runtime_message_ping {
 		pong := frame.pong()
-		ws.write(pong.encode(), .binary_frame)!
+		conn.write(pong.encode(), .binary_frame)!
 		return
 	}
 	if frame.method == 3 || msg_type == feishu_runtime_message_pong {
 		log.info('[feishu] 💓 heartbeat pong received')
 		if frame.payload.len > 0 {
-			cfg := json.decode(FeishuRuntimeClientConfig, frame.payload.bytestr()) or {
-				FeishuRuntimeClientConfig{}
+			cfg := json.decode(feishu.RuntimeClientConfig, frame.payload.bytestr()) or {
+				feishu.RuntimeClientConfig{}
 			}
 			app.feishu.note_client_config(app_name, cfg)
 		}
@@ -1007,7 +980,7 @@ fn (mut app App) feishu_provider_handle_binary_message(instance string, mut ws w
 	}
 	payload := frame.payload.bytestr()
 	summary := feishu.RuntimeEventSnapshot.summary_from_payload(payload)
-	app.feishu.push_event(app_name, FeishuRuntimeEventSnapshot{
+	app.feishu.push_event(app_name, feishu.RuntimeEventSnapshot{
 		seq_id:            seq_id
 		trace_id:          trace_id
 		action:            ''
@@ -1085,7 +1058,7 @@ fn (mut app App) feishu_provider_handle_binary_message(instance string, mut ws w
 	if !bridged && app.has_websocket_upstream_logic_executor()
 		&& feishu.RuntimeEventSnapshot.should_dispatch_upstream(summary) {
 		log.info('[feishu] 📤 dispatching upstream event to logic executor kind=${app.logic_executor_kind()}')
-		mut activity_snapshot := WebSocketUpstreamActivitySnapshot{
+		mut activity_snapshot := ws.UpstreamActivitySnapshot{
 			provider:    websocket_upstream_provider_feishu
 			instance:    app_name
 			trace_id:    trace_id
@@ -1161,7 +1134,7 @@ fn (mut app App) feishu_provider_handle_binary_message(instance string, mut ws w
 		}
 	}
 	ack := frame.ack(ack_status, ack_headers, ack_data)
-	ws.write(ack.encode(), .binary_frame)!
+	conn.write(ack.encode(), .binary_frame)!
 	app.feishu.note_ack(app_name)
 }
 
@@ -1290,7 +1263,7 @@ fn (mut app App) feishu_callback_by_app(mut ctx Context, raw_app string) veb.Res
 		}))
 	}
 	summary := feishu.RuntimeEventSnapshot.summary_from_payload(payload)
-	app.feishu.push_event(app_name, FeishuRuntimeEventSnapshot{
+	app.feishu.push_event(app_name, feishu.RuntimeEventSnapshot{
 		seq_id:            'callback-${time.now().unix_micro()}'
 		trace_id:          trace_id
 		action:            'callback'
@@ -1360,7 +1333,7 @@ fn (mut app App) feishu_callback_by_app(mut ctx Context, raw_app string) veb.Res
 		} else {
 			'callback-${time.now().unix_micro()}'
 		}
-		mut activity_snapshot := WebSocketUpstreamActivitySnapshot{
+		mut activity_snapshot := ws.UpstreamActivitySnapshot{
 			provider:    websocket_upstream_provider_feishu
 			instance:    app_name
 			trace_id:    trace_id
@@ -1443,7 +1416,7 @@ pub fn (mut app App) admin_runtime_feishu_send(mut ctx Context) veb.Result {
 	trace_id := resolve_trace_id(ctx, path)
 	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
 	ctx.set_content_type('application/json; charset=utf-8')
-	req := json.decode(FeishuRuntimeSendMessageRequest, ctx.req.data) or {
+	req := json.decode(feishu.SendMessageRequest, ctx.req.data) or {
 		ctx.res.set_status(http.status_from_int(400))
 		return ctx.text(json.encode(feishu.SendMessageResult{
 			ok:    false
@@ -1480,7 +1453,7 @@ pub fn (mut app App) gateway_feishu_send(mut ctx Context) veb.Result {
 			error: 'forbidden'
 		}))
 	}
-	req := json.decode(FeishuRuntimeSendMessageRequest, ctx.req.data) or {
+	req := json.decode(feishu.SendMessageRequest, ctx.req.data) or {
 		ctx.res.set_status(http.status_from_int(400))
 		return ctx.text(json.encode(feishu.SendMessageResult{
 			ok:    false

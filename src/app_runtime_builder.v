@@ -30,7 +30,7 @@ fn app_runtime_default_mcp_session_ttl_seconds(cfg config.VhttpdConfig) int {
 	return if cfg.mcp.session_ttl_seconds > 0 { cfg.mcp.session_ttl_seconds } else { 900 }
 }
 
-fn build_app_runtime(provider_settings ProviderRuntimeSettings, executor_plan executor.LogicExecutorRuntimePlan, cfg config.VhttpdConfig, build_cfg server_lifecycle.AppRuntimeBuildConfig) &App {
+fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executor_plan executor.LogicExecutorRuntimePlan, cfg config.VhttpdConfig, build_cfg server_lifecycle.AppRuntimeBuildConfig) &App {
 	return &App{
 		event_log:           build_cfg.event_log
 		started_at_unix:     time.now().unix()
@@ -84,7 +84,7 @@ fn build_app_runtime(provider_settings ProviderRuntimeSettings, executor_plan ex
 			pending:                      map[string][]ws.HubPendingMessage{}
 			upstream_started:             map[string]bool{}
 			fixture_runtime:              map[string]ws.FixtureRuntime{}
-			recent_activities:            []WebSocketUpstreamActivitySnapshot{}
+			recent_activities:            []ws.UpstreamActivitySnapshot{}
 		}
 		mcp:                 mcp_protocol.McpState{
 			max_sessions:               app_runtime_default_mcp_max_sessions(cfg)
@@ -139,8 +139,8 @@ fn build_app_runtime(provider_settings ProviderRuntimeSettings, executor_plan ex
 			recent_event_limit:         provider_settings.feishu.recent_event_limit
 			static_apps:                provider_settings.feishu.apps.clone()
 			apps:                       provider_settings.feishu.apps.clone()
-			runtime:                    map[string]FeishuProviderRuntime{}
-			buffers:                    map[string]FeishuStreamBuffer{}
+			runtime:                    map[string]feishu.ProviderRuntime{}
+			buffers:                    map[string]feishu.StreamBuffer{}
 			card_bridge_enabled_flag:   provider_settings.bridge.enabled
 			card_bridge_ws_url:         provider_settings.bridge.ws_url
 			card_bridge_client_id:      provider_settings.bridge.client_id

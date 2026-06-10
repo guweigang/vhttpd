@@ -58,7 +58,7 @@ export default app;
 	mut warm_app := App{
 		feishu: feishu.FeishuState{
 			apps:    map[string]config.FeishuAppConfig{}
-			runtime: map[string]FeishuProviderRuntime{}
+			runtime: map[string]feishu.ProviderRuntime{}
 		}
 	}
 	mut warm_facade := warm_app.as_facade()

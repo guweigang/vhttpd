@@ -1,6 +1,7 @@
 module main
 
 import admin
+import feishu
 import json
 import log
 import net.http
@@ -424,7 +425,7 @@ pub fn (mut app AdminApp) admin_runtime_feishu_send(mut ctx Context) veb.Result 
 			error: 'forbidden'
 		}))
 	}
-	req := json.decode(FeishuRuntimeSendMessageRequest, ctx.req.data) or {
+	req := json.decode(feishu.SendMessageRequest, ctx.req.data) or {
 		ctx.res.set_status(http.status_from_int(400))
 		return ctx.text(json.encode(admin.AdminErrorResponse{
 			error: 'invalid_json'

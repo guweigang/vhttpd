@@ -302,7 +302,7 @@ fn openai_integration_start_gateway(port int, upstream_port int, plugin_file str
 			conn_meta:         map[string]map[string]string{}
 			pending:           map[string][]ws.HubPendingMessage{}
 			upstream_started:  map[string]bool{}
-			fixture_runtime:   map[string]FixtureWebSocketUpstreamRuntime{}
+			fixture_runtime:   map[string]ws.FixtureRuntime{}
 			upstream_sessions: map[string]ws.UpstreamRuntimeSession{}
 		}
 		providers:          ProviderHost{
@@ -316,8 +316,8 @@ fn openai_integration_start_gateway(port int, upstream_port int, plugin_file str
 			instances: map[string]codex.ProviderRuntime{}
 		}
 		feishu:             feishu.FeishuState{
-			runtime: map[string]FeishuProviderRuntime{}
-			buffers: map[string]FeishuStreamBuffer{}
+			runtime: map[string]feishu.ProviderRuntime{}
+			buffers: map[string]feishu.StreamBuffer{}
 		}
 	}
 	veb.run_at[App, Context](mut app,

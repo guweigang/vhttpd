@@ -6,6 +6,7 @@ import command
 import transport
 import executor
 import ws
+import feishu
 import json
 import log
 import net.http
@@ -14,13 +15,9 @@ import time
 import veb
 
 // ── Type aliases: main → ws ──
-type WebSocketUpstreamSnapshot = ws.UpstreamSnapshot
 type WebSocketUpstreamSendRequest = ws.UpstreamSendRequest
 type WebSocketUpstreamSendResult = ws.UpstreamSendResult
 type WebSocketUpstreamUpdateResult = ws.UpstreamUpdateResult
-type WebSocketUpstreamEventSnapshot = ws.UpstreamEventSnapshot
-type FixtureWebSocketUpstreamRuntime = ws.FixtureRuntime
-type WebSocketUpstreamActivitySnapshot = ws.UpstreamActivitySnapshot
 
 const websocket_upstream_provider_feishu = 'feishu'
 const websocket_upstream_provider_fixture = 'fixture'
@@ -70,7 +67,7 @@ fn (mut app App) build_websocket_upstream_runtime_context() ws.UpstreamRuntimeCo
 
 // ── Fixture helpers ──
 
-fn (mut app App) fixture_websocket_emit(req ws.UpstreamFixtureEmitRequest) !WebSocketUpstreamActivitySnapshot {
+fn (mut app App) fixture_websocket_emit(req ws.UpstreamFixtureEmitRequest) !ws.UpstreamActivitySnapshot {
 	instance := if req.instance.trim_space() == '' { 'main' } else { req.instance.trim_space() }
 	event_type := if req.event_type.trim_space() == '' {
 		'fixture.message'
@@ -94,7 +91,7 @@ fn (mut app App) fixture_websocket_emit(req ws.UpstreamFixtureEmitRequest) !WebS
 	}
 	activity_id := 'fixture-activity-${time.now().unix_micro()}'
 	received_at := time.now().unix()
-	event := WebSocketUpstreamEventSnapshot{
+	event := ws.UpstreamEventSnapshot{
 		provider:    websocket_upstream_provider_fixture
 		instance:    instance
 		event_type:  event_type
@@ -107,7 +104,7 @@ fn (mut app App) fixture_websocket_emit(req ws.UpstreamFixtureEmitRequest) !WebS
 		metadata:    req.metadata.clone()
 	}
 	app.ws_hub.fixture_push_event(instance, event, app.feishu.recent_event_limit)
-	mut snapshot := WebSocketUpstreamActivitySnapshot{
+	mut snapshot := ws.UpstreamActivitySnapshot{
 		provider:    websocket_upstream_provider_fixture
 		instance:    instance
 		trace_id:    trace_id
@@ -148,7 +145,7 @@ fn (mut app App) fixture_websocket_emit(req ws.UpstreamFixtureEmitRequest) !WebS
 
 // ── Activity & admin snapshots ──
 
-fn (mut app App) websocket_upstream_record_activity(snapshot WebSocketUpstreamActivitySnapshot) {
+fn (mut app App) websocket_upstream_record_activity(snapshot ws.UpstreamActivitySnapshot) {
 	app.ws_hub.record_upstream_activity(snapshot)
 }
 
@@ -172,7 +169,7 @@ fn (mut app App) websocket_upstream_provider_enabled(provider string, instance s
 	return app.provider_runtime_upstream_enabled(provider, instance)
 }
 
-fn (mut app App) websocket_upstream_snapshot(provider string, instance string) ?WebSocketUpstreamSnapshot {
+fn (mut app App) websocket_upstream_snapshot(provider string, instance string) ?ws.UpstreamSnapshot {
 	return match provider {
 		websocket_upstream_provider_feishu {
 			app.provider_runtime_upstream_snapshot('feishu', instance)
@@ -190,7 +187,7 @@ fn (mut app App) websocket_upstream_snapshot(provider string, instance string) ?
 }
 
 fn (mut app App) admin_websocket_upstreams_snapshot(details bool, limit int, offset int, provider_filter string, instance_filter string) ws.UpstreamRuntimeSnapshot {
-	mut sessions := []WebSocketUpstreamSnapshot{}
+	mut sessions := []ws.UpstreamSnapshot{}
 	for name in app.provider_runtime_instances('feishu') {
 		if provider_filter != '' && provider_filter != websocket_upstream_provider_feishu {
 			break
@@ -230,7 +227,7 @@ fn (mut app App) admin_websocket_upstreams_snapshot(details bool, limit int, off
 			details:        details
 			limit:          limit
 			offset:         offset
-			sessions:       []WebSocketUpstreamSnapshot{}
+			sessions:       []ws.UpstreamSnapshot{}
 		}
 	}
 	end := if offset + limit < sessions.len { offset + limit } else { sessions.len }
@@ -310,13 +307,13 @@ fn (mut app App) websocket_upstream_provider_handle_message(provider string, ins
 
 // ── Send / Update ──
 
-fn (mut app App) websocket_upstream_provider_send(provider string, req WebSocketUpstreamSendRequest) !WebSocketUpstreamSendResult {
+fn (mut app App) websocket_upstream_provider_send(provider string, req WebSocketUpstreamSendRequest) !ws.UpstreamSendResult {
 	return match provider {
 		websocket_upstream_provider_feishu {
 			if app.feishu_card_bridge_enabled() {
 				return app.feishu_card_bridge_proxy_send(req)
 			}
-			result := app.feishu_runtime_send_message(FeishuRuntimeSendMessageRequest{
+			result := app.feishu_runtime_send_message(feishu.SendMessageRequest{
 				app:             req.instance
 				receive_id_type: req.target_type
 				receive_id:      req.target
@@ -326,7 +323,7 @@ fn (mut app App) websocket_upstream_provider_send(provider string, req WebSocket
 				text:            req.text
 				uuid:            req.uuid
 			})!
-			return WebSocketUpstreamSendResult{
+			return ws.UpstreamSendResult{
 				ok:         result.ok
 				provider:   provider
 				instance:   app.feishu.resolve_app_name(req.instance)!
@@ -346,13 +343,13 @@ fn (mut app App) websocket_upstream_provider_send(provider string, req WebSocket
 	}
 }
 
-fn (mut app App) websocket_upstream_provider_update(provider string, req WebSocketUpstreamSendRequest) !WebSocketUpstreamUpdateResult {
+fn (mut app App) websocket_upstream_provider_update(provider string, req WebSocketUpstreamSendRequest) !ws.UpstreamUpdateResult {
 	return match provider {
 		websocket_upstream_provider_feishu {
 			if app.feishu_card_bridge_enabled() {
 				return app.feishu_card_bridge_proxy_update(req)
 			}
-			result := app.feishu_runtime_update_message(FeishuRuntimeUpdateMessageRequest{
+			result := app.feishu_runtime_update_message(feishu.UpdateMessageRequest{
 				app:             req.instance
 				message_id:      req.target
 				message_id_type: req.target_type
@@ -362,7 +359,7 @@ fn (mut app App) websocket_upstream_provider_update(provider string, req WebSock
 				text:            req.text
 				uuid:            req.uuid
 			})!
-			return WebSocketUpstreamUpdateResult{
+			return ws.UpstreamUpdateResult{
 				ok:         result.ok
 				provider:   provider
 				instance:   app.feishu.resolve_app_name(req.instance)!
@@ -382,7 +379,7 @@ fn (mut app App) websocket_upstream_provider_update(provider string, req WebSock
 	}
 }
 
-fn (mut app App) websocket_upstream_send(req WebSocketUpstreamSendRequest) !WebSocketUpstreamSendResult {
+fn (mut app App) websocket_upstream_send(req WebSocketUpstreamSendRequest) !ws.UpstreamSendResult {
 	provider := if req.provider.trim_space() == '' {
 		websocket_upstream_provider_feishu
 	} else {
@@ -408,7 +405,7 @@ fn (mut app App) websocket_upstream_send(req WebSocketUpstreamSendRequest) !WebS
 	return app.websocket_upstream_provider_send(provider, normalized)
 }
 
-fn (mut app App) websocket_upstream_update(req WebSocketUpstreamSendRequest) !WebSocketUpstreamUpdateResult {
+fn (mut app App) websocket_upstream_update(req WebSocketUpstreamSendRequest) !ws.UpstreamUpdateResult {
 	provider := if req.provider.trim_space() == '' {
 		websocket_upstream_provider_feishu
 	} else {
@@ -437,7 +434,7 @@ fn (mut app App) websocket_upstream_update(req WebSocketUpstreamSendRequest) !We
 // ── Events snapshot ──
 
 fn (mut app App) admin_websocket_upstream_events_snapshot(limit int, offset int, provider_filter string, instance_filter string) ws.UpstreamEventListSnapshot {
-	mut events := []WebSocketUpstreamEventSnapshot{}
+	mut events := []ws.UpstreamEventSnapshot{}
 	if provider_filter == '' || provider_filter == websocket_upstream_provider_feishu {
 		events << app.provider_runtime_upstream_events('feishu', instance_filter)
 	}
@@ -458,7 +455,7 @@ fn (mut app App) admin_websocket_upstream_events_snapshot(limit int, offset int,
 			returned_count: 0
 			limit:          limit
 			offset:         offset
-			events:         []WebSocketUpstreamEventSnapshot{}
+			events:         []ws.UpstreamEventSnapshot{}
 		}
 	}
 	end := if offset + limit < events.len { offset + limit } else { events.len }
@@ -656,14 +653,14 @@ pub fn (mut app App) admin_runtime_websocket_upstream_send(mut ctx Context) veb.
 	ctx.set_content_type('application/json; charset=utf-8')
 	req := json.decode(WebSocketUpstreamSendRequest, ctx.req.data) or {
 		ctx.res.set_status(http.status_from_int(400))
-		return ctx.text(json.encode(WebSocketUpstreamSendResult{
+		return ctx.text(json.encode(ws.UpstreamSendResult{
 			ok:    false
 			error: 'invalid_json'
 		}))
 	}
 	result := app.websocket_upstream_send(req) or {
 		ctx.res.set_status(http.status_from_int(502))
-		return ctx.text(json.encode(WebSocketUpstreamSendResult{
+		return ctx.text(json.encode(ws.UpstreamSendResult{
 			ok:    false
 			error: err.msg()
 		}))
@@ -693,14 +690,14 @@ pub fn (mut app App) gateway_websocket_upstream_send(mut ctx Context) veb.Result
 	}
 	req := json.decode(WebSocketUpstreamSendRequest, ctx.req.data) or {
 		ctx.res.set_status(http.status_from_int(400))
-		return ctx.text(json.encode(WebSocketUpstreamSendResult{
+		return ctx.text(json.encode(ws.UpstreamSendResult{
 			ok:    false
 			error: 'invalid_json'
 		}))
 	}
 	result := app.websocket_upstream_send(req) or {
 		ctx.res.set_status(http.status_from_int(502))
-		return ctx.text(json.encode(WebSocketUpstreamSendResult{
+		return ctx.text(json.encode(ws.UpstreamSendResult{
 			ok:    false
 			error: err.msg()
 		}))
@@ -874,7 +871,7 @@ pub fn (mut app AdminApp) admin_runtime_websocket_upstream_send(mut ctx Context)
 	}
 	result := app.shared.websocket_upstream_send(req) or {
 		ctx.res.set_status(http.status_from_int(502))
-		return ctx.text(json.encode(WebSocketUpstreamSendResult{
+		return ctx.text(json.encode(ws.UpstreamSendResult{
 			ok:    false
 			error: err.msg()
 		}))

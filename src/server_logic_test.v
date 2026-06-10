@@ -308,7 +308,7 @@ fn test_resolve_provider_runtime_settings_supports_pgsql_db_config() {
 	cfg.db.pgsql.password = 'secret'
 	cfg.db.pgsql.database = 'appdb'
 	cfg.db.pgsql.pool_size = 9
-	settings := ProviderRuntimeSettings.resolve([]string{}, cfg)
+	settings := provider.ProviderRuntimeSettings.resolve([]string{}, cfg)
 	assert settings.db.enabled
 	assert settings.db.driver == 'pgsql'
 	assert settings.db.socket == '/tmp/vhttpd-db-pg.sock'
@@ -352,7 +352,7 @@ fn test_resolve_provider_runtime_settings_supports_bridge_config() {
 	cfg.feishu.bridge.client_id = 'local-main'
 	cfg.feishu.bridge.token = 'bridge-secret'
 	cfg.feishu.bridge.target_id = 'remote-main'
-	settings := ProviderRuntimeSettings.resolve([]string{}, cfg)
+	settings := provider.ProviderRuntimeSettings.resolve([]string{}, cfg)
 	assert settings.bridge.enabled
 	assert settings.bridge.ws_url == 'wss://bridge.example/ws'
 	assert settings.bridge.client_id == 'local-main'
@@ -1318,8 +1318,8 @@ fn test_build_app_runtime_projects_executor_plan_into_app_state() {
 	cfg.mcp.max_sessions = 55
 	cfg.mcp.max_pending_messages = 21
 	cfg.mcp.session_ttl_seconds = 77
-	provider_settings := ProviderRuntimeSettings{
-		feishu:         FeishuRuntimeSettings{
+	provider_settings := provider.ProviderRuntimeSettings{
+		feishu:         provider.FeishuRuntimeSettings{
 			enabled:                    true
 			open_base_url:              'https://open.feishu.test'
 			reconnect_delay_ms:         1234
@@ -1331,7 +1331,7 @@ fn test_build_app_runtime_projects_executor_plan_into_app_state() {
 				}
 			}
 		}
-		codex:          CodexRuntimeSettings{
+		codex:          provider.CodexRuntimeSettings{
 			enabled:            true
 			url:                'ws://127.0.0.1:4500'
 			model:              'gpt-5.4'

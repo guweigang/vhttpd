@@ -3,27 +3,6 @@ module main
 import provider
 import command
 
-// provider type aliases — route/matcher types live in command/ module
-type ProviderRouteKind = command.ProviderRouteKind
-type CommandMatcherKind = command.CommandMatcherKind
-type CommandMatcher = command.CommandMatcher
-
-// Provider config type aliases (from provider/config.v)
-type FeishuRuntimeSettings = provider.FeishuRuntimeSettings
-
-type CodexRuntimeSettings = provider.CodexRuntimeSettings
-
-type DbRuntimeSettings = provider.DbRuntimeSettings
-
-type BridgeRuntimeSettings = provider.BridgeRuntimeSettings
-
-type ProviderRuntimeSettings = provider.ProviderRuntimeSettings
-
-// Provider data type aliases (from provider/spec.v)
-type ProviderRuntimeMetrics = provider.ProviderRuntimeMetrics
-
-type ProviderRuntimeUpstreamLaunch = provider.ProviderRuntimeUpstreamLaunch
-
 // ProviderRuntime represents optional provider-owned runtime lifecycle hooks.
 pub interface ProviderRuntime {
 mut:
@@ -45,8 +24,8 @@ pub:
 	enabled          bool
 	has_handler      bool
 	has_runtime      bool
-	command_matchers []CommandMatcher
-	route_kind       ProviderRouteKind
+	command_matchers []command.CommandMatcher
+	route_kind       command.ProviderRouteKind
 pub mut:
 	provider      Provider
 	handler       provider.ProviderCommandHandler
@@ -54,20 +33,16 @@ pub mut:
 	lifecycle_ctx provider.RuntimeContext
 }
 
-type AdminProviderSpecSnapshot = provider.AdminProviderSpecSnapshot
-
-type AdminProviderRuntimeSnapshot = provider.AdminProviderRuntimeSnapshot
-
-fn (host ProviderHost) admin_specs_snapshot() []AdminProviderSpecSnapshot {
+fn (host ProviderHost) admin_specs_snapshot() []provider.AdminProviderSpecSnapshot {
 	names := host.names()
-	mut out := []AdminProviderSpecSnapshot{cap: names.len}
+	mut out := []provider.AdminProviderSpecSnapshot{cap: names.len}
 	for name in names {
 		spec := host.specs[name] or { continue }
 		mut matcher_rows := []string{}
 		for matcher in spec.command_matchers {
 			matcher_rows << '${matcher.kind.str()}:${matcher.value}'
 		}
-		out << AdminProviderSpecSnapshot{
+		out << provider.AdminProviderSpecSnapshot{
 			name:             spec.name
 			enabled:          spec.enabled
 			has_handler:      spec.has_handler
@@ -100,7 +75,7 @@ fn (host ProviderHost) specs_copy() []ProviderSpec {
 	return specs
 }
 
-pub fn (mut app App) admin_provider_specs_snapshot() []AdminProviderSpecSnapshot {
+pub fn (mut app App) admin_provider_specs_snapshot() []provider.AdminProviderSpecSnapshot {
 	app.mu.@lock()
 	defer {
 		app.mu.unlock()
@@ -116,15 +91,15 @@ pub fn (mut app App) provider_specs_copy() []ProviderSpec {
 	return app.providers.specs_copy()
 }
 
-pub fn (mut app App) admin_provider_runtimes_snapshot() []AdminProviderRuntimeSnapshot {
+pub fn (mut app App) admin_provider_runtimes_snapshot() []provider.AdminProviderRuntimeSnapshot {
 	mut specs := app.provider_specs_copy()
-	mut snapshots := []AdminProviderRuntimeSnapshot{cap: specs.len}
+	mut snapshots := []provider.AdminProviderRuntimeSnapshot{cap: specs.len}
 	for mut spec in specs {
 		mut snapshot := '{}'
 		if spec.has_runtime {
 			snapshot = spec.runtime.snapshot(mut spec.lifecycle_ctx)
 		}
-		snapshots << AdminProviderRuntimeSnapshot{
+		snapshots << provider.AdminProviderRuntimeSnapshot{
 			name:     spec.name
 			enabled:  spec.enabled
 			snapshot: snapshot

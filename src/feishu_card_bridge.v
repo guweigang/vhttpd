@@ -13,6 +13,7 @@ import os
 import time
 import transport
 import veb
+import ws
 
 const feishu_card_bridge_request_type = 'feishu_card_callback'
 const feishu_card_bridge_result_type = 'feishu_card_callback_result'
@@ -360,9 +361,9 @@ fn (mut app App) feishu_card_bridge_proxy_request(action string, req WebSocketUp
 	return error('bridge_proxy_unreachable')
 }
 
-fn (mut app App) feishu_card_bridge_proxy_send(req WebSocketUpstreamSendRequest) !WebSocketUpstreamSendResult {
+fn (mut app App) feishu_card_bridge_proxy_send(req WebSocketUpstreamSendRequest) !ws.UpstreamSendResult {
 	result := app.feishu_card_bridge_proxy_request('send', req)!
-	return WebSocketUpstreamSendResult{
+	return ws.UpstreamSendResult{
 		ok:         result.ok
 		provider:   if result.provider.trim_space() != '' { result.provider } else { 'feishu' }
 		instance:   result.instance
@@ -371,9 +372,9 @@ fn (mut app App) feishu_card_bridge_proxy_send(req WebSocketUpstreamSendRequest)
 	}
 }
 
-fn (mut app App) feishu_card_bridge_proxy_append(req WebSocketUpstreamSendRequest) !WebSocketUpstreamUpdateResult {
+fn (mut app App) feishu_card_bridge_proxy_append(req WebSocketUpstreamSendRequest) !ws.UpstreamUpdateResult {
 	result := app.feishu_card_bridge_proxy_request('append', req)!
-	return WebSocketUpstreamUpdateResult{
+	return ws.UpstreamUpdateResult{
 		ok:         result.ok
 		provider:   if result.provider.trim_space() != '' { result.provider } else { 'feishu' }
 		instance:   result.instance
@@ -382,9 +383,9 @@ fn (mut app App) feishu_card_bridge_proxy_append(req WebSocketUpstreamSendReques
 	}
 }
 
-fn (mut app App) feishu_card_bridge_proxy_finish(req WebSocketUpstreamSendRequest) !WebSocketUpstreamUpdateResult {
+fn (mut app App) feishu_card_bridge_proxy_finish(req WebSocketUpstreamSendRequest) !ws.UpstreamUpdateResult {
 	result := app.feishu_card_bridge_proxy_request('finish', req)!
-	return WebSocketUpstreamUpdateResult{
+	return ws.UpstreamUpdateResult{
 		ok:         result.ok
 		provider:   if result.provider.trim_space() != '' { result.provider } else { 'feishu' }
 		instance:   result.instance
@@ -393,9 +394,9 @@ fn (mut app App) feishu_card_bridge_proxy_finish(req WebSocketUpstreamSendReques
 	}
 }
 
-fn (mut app App) feishu_card_bridge_proxy_fail(req WebSocketUpstreamSendRequest) !WebSocketUpstreamUpdateResult {
+fn (mut app App) feishu_card_bridge_proxy_fail(req WebSocketUpstreamSendRequest) !ws.UpstreamUpdateResult {
 	result := app.feishu_card_bridge_proxy_request('fail', req)!
-	return WebSocketUpstreamUpdateResult{
+	return ws.UpstreamUpdateResult{
 		ok:         result.ok
 		provider:   if result.provider.trim_space() != '' { result.provider } else { 'feishu' }
 		instance:   result.instance
@@ -404,9 +405,9 @@ fn (mut app App) feishu_card_bridge_proxy_fail(req WebSocketUpstreamSendRequest)
 	}
 }
 
-fn (mut app App) feishu_card_bridge_proxy_update(req WebSocketUpstreamSendRequest) !WebSocketUpstreamUpdateResult {
+fn (mut app App) feishu_card_bridge_proxy_update(req WebSocketUpstreamSendRequest) !ws.UpstreamUpdateResult {
 	result := app.feishu_card_bridge_proxy_request('update', req)!
-	return WebSocketUpstreamUpdateResult{
+	return ws.UpstreamUpdateResult{
 		ok:         result.ok
 		provider:   if result.provider.trim_space() != '' { result.provider } else { 'feishu' }
 		instance:   result.instance

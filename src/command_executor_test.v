@@ -142,7 +142,7 @@ fn test_execute_provider_instance_upsert_applies_feishu_app_config() {
 	mut app := &App{
 		feishu:    feishu.FeishuState{
 			apps:    map[string]config.FeishuAppConfig{}
-			runtime: map[string]FeishuProviderRuntime{}
+			runtime: map[string]feishu.ProviderRuntime{}
 		}
 		providers: ProviderHost{
 			specs: map[string]ProviderSpec{}
@@ -593,7 +593,7 @@ fn test_feishu_handler_session_bind_message_registers_stream_target_and_buffer()
 			}
 		}
 		feishu: feishu.FeishuState{
-			buffers: map[string]FeishuStreamBuffer{}
+			buffers: map[string]feishu.StreamBuffer{}
 		}
 	}
 	mut handler := FeishuCommandHandler.new(mut app)
@@ -635,7 +635,7 @@ fn test_feishu_handler_session_clear_message_removes_buffer_and_stream_target() 
 		}
 		feishu: feishu.FeishuState{
 			buffers: {
-				'om_reply_002': FeishuStreamBuffer{
+				'om_reply_002': feishu.StreamBuffer{
 					message_id: 'om_reply_002'
 					stream_id:  'codex:task_003'
 				}
@@ -681,12 +681,12 @@ fn test_feishu_handler_session_clear_message_removes_buffer_chain() {
 		}
 		feishu: feishu.FeishuState{
 			buffers: {
-				'om_chain_1': FeishuStreamBuffer{
+				'om_chain_1': feishu.StreamBuffer{
 					message_id:      'om_chain_1'
 					stream_id:       'codex:task_chain'
 					next_message_id: 'om_chain_2'
 				}
-				'om_chain_2': FeishuStreamBuffer{
+				'om_chain_2': feishu.StreamBuffer{
 					message_id: 'om_chain_2'
 					stream_id:  'codex:task_chain'
 				}
@@ -732,15 +732,15 @@ fn test_feishu_handler_session_clear_stream_id_removes_all_stream_buffers() {
 		}
 		feishu: feishu.FeishuState{
 			buffers: {
-				'om_stream_1': FeishuStreamBuffer{
+				'om_stream_1': feishu.StreamBuffer{
 					message_id: 'om_stream_1'
 					stream_id:  'codex:task_stream_clear'
 				}
-				'om_stream_2': FeishuStreamBuffer{
+				'om_stream_2': feishu.StreamBuffer{
 					message_id: 'om_stream_2'
 					stream_id:  'codex:task_stream_clear'
 				}
-				'om_other':    FeishuStreamBuffer{
+				'om_other':    feishu.StreamBuffer{
 					message_id: 'om_other'
 					stream_id:  'codex:other'
 				}
