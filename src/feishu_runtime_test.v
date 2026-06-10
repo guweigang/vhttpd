@@ -33,7 +33,7 @@ fn new_feishu_http_test_app() App {
 }
 
 fn feishu_test_concurrent_fetch(app &App, url string) int {
-	resp := app.feishu_runtime_http_fetch_locked(http.FetchConfig{
+	resp := (&app.feishu).http_fetch(http.FetchConfig{
 		url:    url
 		method: .get
 	}) or { panic(err) }

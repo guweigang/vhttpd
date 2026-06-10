@@ -29,204 +29,7 @@ const feishu_runtime_max_upload_image_bytes = feishu.max_upload_image_bytes
 
 const feishu_stream_buffer_rollover_runes = feishu.stream_buffer_rollover_runes
 
-fn (mut app App) feishu_runtime_http_test_enter() int {
-	app.feishu.http_test_mu.@lock()
-	app.feishu.http_test_inflight++
-	app.feishu.http_test_calls++
-	delay_ms := app.feishu.http_test_delay_ms
-	app.feishu.http_test_mu.unlock()
-	return delay_ms
-}
-
-fn (mut app App) feishu_runtime_http_test_leave() {
-	app.feishu.http_test_mu.@lock()
-	if app.feishu.http_test_inflight > 0 {
-		app.feishu.http_test_inflight--
-	}
-	app.feishu.http_test_mu.unlock()
-}
-
-fn (mut app App) feishu_runtime_http_test_next_message_id() string {
-	app.feishu.http_test_mu.@lock()
-	app.feishu.http_test_message_seq++
-	id := app.feishu.http_test_message_seq
-	app.feishu.http_test_mu.unlock()
-	return 'om_test_${id}'
-}
-
-fn (mut app App) feishu_runtime_http_test_next_reply_message_id() string {
-	app.feishu.http_test_mu.@lock()
-	app.feishu.http_test_message_seq++
-	id := app.feishu.http_test_message_seq
-	app.feishu.http_test_mu.unlock()
-	return 'om_reply_${id}'
-}
-
-fn (mut app App) feishu_runtime_http_test_fetch(cfg http.FetchConfig) !http.Response {
-	delay_ms := app.feishu_runtime_http_test_enter()
-	defer {
-		app.feishu_runtime_http_test_leave()
-	}
-	if delay_ms > 0 {
-		time.sleep(time.Duration(delay_ms) * time.millisecond)
-	}
-	if cfg.url.contains('/auth/v3/tenant_access_token/internal') {
-		return http.Response{
-			status_code: 200
-			body:        '{"code":0,"msg":"ok","tenant_access_token":"tenant_test_token","expire":7200}'
-		}
-	}
-	if cfg.url.contains('/im/v1/messages/') && cfg.url.contains('/reply') {
-		return http.Response{
-			status_code: 200
-			body:        '{"code":0,"msg":"ok","data":{"message_id":"${app.feishu_runtime_http_test_next_reply_message_id()}"}}'
-		}
-	}
-	if cfg.url.contains('/im/v1/messages?receive_id_type=') {
-		return http.Response{
-			status_code: 200
-			body:        '{"code":0,"msg":"ok","data":{"message_id":"${app.feishu_runtime_http_test_next_message_id()}"}}'
-		}
-	}
-	if cfg.url.contains('/im/v1/messages/') || cfg.url.contains('/interactive/v1/card/update') {
-		return http.Response{
-			status_code: 200
-			body:        '{"code":0,"msg":"ok","data":{"message_id":"om_updated"}}'
-		}
-	}
-	if cfg.url.contains('/ws/v2') || cfg.url.contains('/event/v2') {
-		return http.Response{
-			status_code: 200
-			body:        '{"code":0,"msg":"ok","data":{"url":"wss://example.test/ws","client_config":{"ReconnectInterval":5,"ReconnectNonce":1,"PingInterval":15,"ReconnectCount":0}}}'
-		}
-	}
-	return http.Response{
-		status_code: 200
-		body:        '{"code":0,"msg":"ok"}'
-	}
-}
-
-fn (mut app App) feishu_runtime_http_test_post_multipart_form(url string, _ http.PostMultipartFormConfig) !http.Response {
-	delay_ms := app.feishu_runtime_http_test_enter()
-	defer {
-		app.feishu_runtime_http_test_leave()
-	}
-	if delay_ms > 0 {
-		time.sleep(time.Duration(delay_ms) * time.millisecond)
-	}
-	if url.contains('/im/v1/images') {
-		return http.Response{
-			status_code: 200
-			body:        '{"code":0,"msg":"ok","data":{"image_key":"img_test_1"}}'
-		}
-	}
-	return http.Response{
-		status_code: 200
-		body:        '{"code":0,"msg":"ok"}'
-	}
-}
-
-fn (app &App) feishu_runtime_http_fetch_locked(cfg http.FetchConfig) !http.Response {
-	mut app_mut := unsafe { &App(app) }
-	mut resp := http.Response{}
-	mut fetch_err := ''
-	lock app_mut.feishu.http_lane {
-		$if test {
-			if app_mut.feishu.http_test_stub {
-				resp = app_mut.feishu_runtime_http_test_fetch(cfg) or {
-					fetch_err = err.msg()
-					http.Response{}
-				}
-			} else {
-				resp = http.fetch(cfg) or {
-					fetch_err = err.msg()
-					http.Response{}
-				}
-			}
-		} $else {
-			resp = http.fetch(cfg) or {
-				fetch_err = err.msg()
-				http.Response{}
-			}
-		}
-	}
-	if fetch_err != '' {
-		return error(fetch_err)
-	}
-	return resp
-}
-
-fn (mut app App) feishu_runtime_http_fetch(cfg http.FetchConfig) !http.Response {
-	return (&app).feishu_runtime_http_fetch_locked(cfg)
-}
-
-fn (app &App) feishu_runtime_control_http_fetch_locked(cfg http.FetchConfig) !http.Response {
-	mut app_mut := unsafe { &App(app) }
-	mut resp := http.Response{}
-	mut fetch_err := ''
-	lock app_mut.feishu.control_http_lane {
-		$if test {
-			if app_mut.feishu.http_test_stub {
-				resp = app_mut.feishu_runtime_http_test_fetch(cfg) or {
-					fetch_err = err.msg()
-					http.Response{}
-				}
-			} else {
-				resp = http.fetch(cfg) or {
-					fetch_err = err.msg()
-					http.Response{}
-				}
-			}
-		} $else {
-			resp = http.fetch(cfg) or {
-				fetch_err = err.msg()
-				http.Response{}
-			}
-		}
-	}
-	if fetch_err != '' {
-		return error(fetch_err)
-	}
-	return resp
-}
-
-fn (mut app App) feishu_runtime_control_http_fetch(cfg http.FetchConfig) !http.Response {
-	return (&app).feishu_runtime_control_http_fetch_locked(cfg)
-}
-
-fn (app &App) feishu_runtime_http_post_multipart_form_locked(url string, cfg http.PostMultipartFormConfig) !http.Response {
-	mut app_mut := unsafe { &App(app) }
-	mut resp := http.Response{}
-	mut fetch_err := ''
-	lock app_mut.feishu.http_lane {
-		$if test {
-			if app_mut.feishu.http_test_stub {
-				resp = app_mut.feishu_runtime_http_test_post_multipart_form(url, cfg) or {
-					fetch_err = err.msg()
-					http.Response{}
-				}
-			} else {
-				resp = http.post_multipart_form(url, cfg) or {
-					fetch_err = err.msg()
-					http.Response{}
-				}
-			}
-		} $else {
-			resp = http.post_multipart_form(url, cfg) or {
-				fetch_err = err.msg()
-				http.Response{}
-			}
-		}
-	}
-	if fetch_err != '' {
-		return error(fetch_err)
-	}
-	return resp
-}
-
-fn (mut app App) feishu_runtime_http_post_multipart_form(url string, cfg http.PostMultipartFormConfig) !http.Response {
-	return (&app).feishu_runtime_http_post_multipart_form_locked(url, cfg)
-}
+// HTTP test helpers and fetch wrappers moved to feishu/http.v
 
 // FeishuRuntimeEventSummary is executor.FeishuRuntimeEventSummary (used directly)
 
@@ -368,7 +171,7 @@ fn (mut app App) feishu_provider_pull_ws_endpoint(app_name string) !string {
 	mut last_status := 0
 	mut last_error := ''
 	for endpoint_url in feishu.RuntimeWsEndpointData.endpoint_urls(app.feishu.open_base_url) {
-		resp := app.feishu_runtime_control_http_fetch(
+		resp := (&app.feishu).control_http_fetch(
 			url:    endpoint_url
 			method: .post
 			data:   body
@@ -421,7 +224,7 @@ fn (mut app App) feishu_runtime_tenant_access_token(app_name string) !string {
 		'app_id':     app_cfg.app_id
 		'app_secret': app_cfg.app_secret
 	})
-	resp := app.feishu_runtime_http_fetch(
+	resp := (&app.feishu).http_fetch(
 		url:    '${app.feishu.open_base_url}/auth/v3/tenant_access_token/internal'
 		method: .post
 		data:   body
@@ -478,7 +281,7 @@ fn (mut app App) feishu_runtime_send_message(req feishu.SendMessageRequest) !fei
 		url = '${app.feishu.open_base_url}/im/v1/messages?receive_id_type=${receive_id_type}'
 	}
 	log.info('[feishu] 📤 sending message: method=POST url=${url} payload=${payload.len} bytes')
-	resp := app.feishu_runtime_http_fetch(
+	resp := (&app.feishu).http_fetch(
 		url:    url
 		method: .post
 		data:   payload
@@ -545,7 +348,7 @@ fn (mut app App) feishu_runtime_upload_image_bytes(req feishu.UploadImageRequest
 	}
 	mut header := http.new_header()
 	header.set(.authorization, 'Bearer ${token}')
-	resp := app.feishu_runtime_http_post_multipart_form('${app.feishu.open_base_url}/im/v1/images', http.PostMultipartFormConfig{
+	resp := (&app.feishu).http_post_multipart_form('${app.feishu.open_base_url}/im/v1/images', http.PostMultipartFormConfig{
 		form:   {
 			'image_type': image_type
 		}
@@ -639,7 +442,7 @@ fn (mut app App) feishu_runtime_update_message(req feishu.UpdateMessageRequest) 
 		return error('unsupported feishu update target type ${message_id_type}')
 	}
 	log.info('[feishu] 📤 sending update: method=${method} url=${url} payload=${payload.len} bytes')
-	resp := app.feishu_runtime_http_fetch(url: url, method: method, data: payload, header: header) or {
+	resp := (&app.feishu).http_fetch(url: url, method: method, data: payload, header: header) or {
 		app.feishu.note_send(app_name, false)
 		log.error('[feishu] ❌ update fetch failed: ${err}')
 		return err
