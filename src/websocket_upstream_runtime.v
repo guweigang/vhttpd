@@ -14,10 +14,8 @@ import net.websocket
 import time
 import veb
 
-// ── Type aliases: main → ws ──
+// ── Type alias: main → ws ──
 type WebSocketUpstreamSendRequest = ws.UpstreamSendRequest
-type WebSocketUpstreamSendResult = ws.UpstreamSendResult
-type WebSocketUpstreamUpdateResult = ws.UpstreamUpdateResult
 
 const websocket_upstream_provider_feishu = 'feishu'
 const websocket_upstream_provider_fixture = 'fixture'

@@ -6,7 +6,8 @@ import command
 import json
 import log
 import time
-import net.websocket as ws
+import net.websocket as net_ws
+import ws
 
 const websocket_upstream_provider_codex = 'codex'
 
@@ -746,7 +747,7 @@ fn (mut app App) codex_handle_notification(instance string, method string, raw s
 // ── Initialize handshake ────────────────────────────────────────────────
 // Must be called right after WebSocket connect, before any other RPC.
 
-fn (mut app App) codex_send_initialize(instance string, mut conn ws.Client) ! {
+fn (mut app App) codex_send_initialize(instance string, mut conn net_ws.Client) ! {
 	log.info('[codex] 🤝 sending initialize instance=${codex.ProviderRuntime.normalize_instance(instance)} ...')
 	id := app.codex_next_rpc_id(instance)
 	params := '{"clientInfo":{"name":"codex_vhttpd","title":"vhttpd Codex Integration","version":"0.1.0"},"capabilities":{"experimentalApi":true}}'
@@ -761,7 +762,7 @@ fn (mut app App) codex_send_initialize(instance string, mut conn ws.Client) ! {
 	})
 }
 
-fn (mut app App) codex_send_initialized(instance string, mut conn ws.Client) ! {
+fn (mut app App) codex_send_initialized(instance string, mut conn net_ws.Client) ! {
 	log.info('[codex] 🤝 sending initialized notification instance=${codex.ProviderRuntime.normalize_instance(instance)} ...')
 	msg := codex.encode_notification('initialized', '{}')
 	conn.write_string(msg)!
@@ -774,7 +775,7 @@ fn (mut app App) codex_send_initialized(instance string, mut conn ws.Client) ! {
 	})
 }
 
-fn (mut app App) codex_send_thread_start(instance string, mut conn ws.Client) ! {
+fn (mut app App) codex_send_thread_start(instance string, mut conn net_ws.Client) ! {
 	cfg := app.codex.snapshot(instance)
 	rt := app.codex.snapshot(instance)
 	log.info('[codex] 🤝 sending thread/start instance=${codex.ProviderRuntime.normalize_instance(instance)} url=${rt.ws_url} cwd=${cfg.cwd} ...')
@@ -795,7 +796,7 @@ fn (mut app App) codex_send_thread_start(instance string, mut conn ws.Client) ! 
 
 // Called from run_websocket_upstream_provider after connect + on_connected.
 // Sends initialize request, waits briefly for response, then sends initialized.
-fn (mut app App) codex_post_connect_handshake(instance string, mut conn ws.Client) {
+fn (mut app App) codex_post_connect_handshake(instance string, mut conn net_ws.Client) {
 	app.codex_send_initialize(instance, mut conn) or {
 		app.emit('codex.handshake.failed', {
 			'phase':    'initialize'
@@ -838,7 +839,7 @@ fn (mut app App) codex_post_connect_handshake(instance string, mut conn ws.Clien
 
 // ── Generic WebSocket Upstream Provider Implementation ──────────────────
 
-fn (mut app App) codex_provider_send(req WebSocketUpstreamSendRequest) !WebSocketUpstreamSendResult {
+fn (mut app App) codex_provider_send(req WebSocketUpstreamSendRequest) !ws.UpstreamSendResult {
 	instance := codex.ProviderRuntime.normalize_instance(req.instance)
 	rt := app.codex.snapshot(instance)
 	mut conn := rt.connection()
@@ -850,7 +851,7 @@ fn (mut app App) codex_provider_send(req WebSocketUpstreamSendRequest) !WebSocke
 
 	conn.write_string(req.text)!
 
-	return WebSocketUpstreamSendResult{
+	return ws.UpstreamSendResult{
 		ok:         true
 		provider:   websocket_upstream_provider_codex
 		instance:   instance
@@ -858,11 +859,11 @@ fn (mut app App) codex_provider_send(req WebSocketUpstreamSendRequest) !WebSocke
 	}
 }
 
-fn (mut app App) codex_provider_update(req WebSocketUpstreamSendRequest) !WebSocketUpstreamUpdateResult {
+fn (mut app App) codex_provider_update(req WebSocketUpstreamSendRequest) !ws.UpstreamUpdateResult {
 	// Codex as a WebSocket provider doesn't really have "message updates" in the same sense as Feishu,
 	// but we might use it to send follow-up notifications.
 	res := app.codex_provider_send(req)!
-	return WebSocketUpstreamUpdateResult{
+	return ws.UpstreamUpdateResult{
 		ok:         res.ok
 		provider:   res.provider
 		instance:   res.instance
