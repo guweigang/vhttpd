@@ -1,5 +1,6 @@
 module main
 import transport
+import executor
 
 fn test_kernel_dispatch_envelope_from_websocket_upstream() {
 	req := transport.WorkerWebSocketUpstreamDispatchRequest{
@@ -10,7 +11,7 @@ fn test_kernel_dispatch_envelope_from_websocket_upstream() {
 		event_type: 'feishu.message.receive'
 		payload: '{"text":"hi"}'
 	}
-	env := KernelDispatchEnvelope.from_websocket_upstream(req)
+	env := executor.KernelDispatchEnvelope.from_websocket_upstream(req)
 	assert env.kind == .websocket_upstream
 	assert env.context.session.provider == 'feishu'
 	assert env.context.event == 'feishu.message.receive'
@@ -27,7 +28,7 @@ fn test_kernel_dispatch_envelope_from_stream_dispatch() {
 		event: 'open'
 		strategy: 'dispatch'
 	}
-	env := KernelDispatchEnvelope.from_stream_dispatch(req)
+	env := executor.KernelDispatchEnvelope.from_stream_dispatch(req)
 	assert env.kind == .stream
 	assert env.context.session.transport == 'worker_backend'
 	assert env.context.session.request_id == 'req-1'

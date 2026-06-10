@@ -49,3 +49,10 @@ pub fn (mut c WorkerBackendConnection) write_websocket_frame(frame transport.Wor
 pub fn (mut c WorkerBackendConnection) read_websocket_dispatch_response() !transport.WorkerWebSocketDispatchResponse {
 	return WorkerBackendFrameCodec.read_websocket_dispatch_response(mut c.conn)!
 }
+
+pub fn WorkerBackendConnection.from_selected(socket_path string, conn unix.StreamConn) WorkerBackendConnection {
+	return WorkerBackendConnection{
+		socket_path: socket_path
+		conn:        conn
+	}
+}

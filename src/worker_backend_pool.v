@@ -7,8 +7,6 @@ import net.unix
 import os
 import time
 
-type WorkerAdminView = transport.ManagedWorker
-
 struct WorkerProcessMetrics {}
 
 fn (app &App) worker_index_by_socket_unlocked(socket_path string) int {
@@ -382,7 +380,7 @@ fn (mut app App) worker_backend_select_socket() !string {
 	return error(last_err)
 }
 
-fn (mut w WorkerAdminView) admin_status() admin.WorkerAdminStatus {
+fn worker_admin_status(mut w transport.ManagedWorker) admin.WorkerAdminStatus {
 	pid := if isnil(w.proc) { 0 } else { w.proc.pid }
 	return admin.WorkerAdminStatus{
 		id:                w.id
@@ -436,8 +434,7 @@ fn (mut app App) restart_worker_by_id(worker_id int) !admin.WorkerAdminStatus {
 	app.worker.mu.@lock()
 	mut w := app.worker.worker_backend.managed_workers[idx]
 	app.worker.mu.unlock()
-	mut view := WorkerAdminView(w)
-	return view.admin_status()
+	return worker_admin_status(mut w)
 }
 
 fn (mut app App) restart_all_workers() int {
@@ -462,9 +459,8 @@ fn (mut app App) worker_admin_snapshot() admin.WorkerPoolAdminStatus {
 		app.worker.mu.unlock()
 	}
 	mut workers := []admin.WorkerAdminStatus{cap: app.worker.worker_backend.managed_workers.len}
-	for worker in app.worker.worker_backend.managed_workers {
-		mut view := WorkerAdminView(worker)
-		workers << view.admin_status()
+	for mut worker in app.worker.worker_backend.managed_workers {
+		workers << worker_admin_status(mut worker)
 	}
 	return admin.WorkerPoolAdminStatus{
 		worker_autostart:    app.worker.worker_backend.autostart

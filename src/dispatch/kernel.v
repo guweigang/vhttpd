@@ -4,27 +4,10 @@ import transport
 import executor
 
 pub type KernelDispatchKind = executor.KernelDispatchKind
-pub type KernelDispatchEnvelope = executor.KernelDispatchEnvelope
 pub type KernelDispatchTransportFailure = executor.KernelDispatchTransportFailure
 pub type KernelWebSocketUpstreamDispatchOutcome = executor.KernelWebSocketUpstreamDispatchOutcome
 pub type KernelMcpDispatchOutcome = executor.KernelMcpDispatchOutcome
 pub type KernelStreamDispatchFailure = executor.KernelStreamDispatchFailure
-
-pub fn stream_dispatch_envelope_from_stream(req transport.StreamDispatchRequest) KernelDispatchEnvelope {
-	return executor.KernelDispatchEnvelope.from_stream_dispatch(req)
-}
-
-pub fn mcp_dispatch_envelope_from_mcp(req transport.WorkerMcpDispatchRequest) KernelDispatchEnvelope {
-	return executor.KernelDispatchEnvelope.from_mcp_dispatch(req)
-}
-
-pub fn websocket_upstream_envelope(req transport.WorkerWebSocketUpstreamDispatchRequest) KernelDispatchEnvelope {
-	return executor.KernelDispatchEnvelope.from_websocket_upstream(req)
-}
-
-pub fn websocket_dispatch_envelope(frame transport.WorkerWebSocketFrame) KernelDispatchEnvelope {
-	return executor.KernelDispatchEnvelope.from_websocket_dispatch(frame)
-}
 
 pub fn stream_failure(resp transport.StreamDispatchResponse) ?KernelStreamDispatchFailure {
 	if resp.event != 'error' {

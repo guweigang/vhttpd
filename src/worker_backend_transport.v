@@ -9,8 +9,6 @@ import time
 import worker
 
 
-type WorkerBackendConnection = worker.WorkerBackendConnection
-
 struct WorkerWebSocketDispatchCommandRuntime {}
 
 struct WorkerBackendDispatchRuntime {}
@@ -31,13 +29,13 @@ fn (ctx WorkerBackendConnectorContext) emit(kind string, fields map[string]strin
 }
 
 struct WorkerBackendDispatchContext {
-	open_fn    fn () !WorkerBackendConnection = unsafe { nil }
+	open_fn    fn () !worker.WorkerBackendConnection = unsafe { nil }
 	start_fn   fn (string)                    = unsafe { nil }
 	finish_fn  fn (string)                    = unsafe { nil }
 	timeout_ms int
 }
 
-fn (ctx WorkerBackendDispatchContext) open() !WorkerBackendConnection {
+fn (ctx WorkerBackendDispatchContext) open() !worker.WorkerBackendConnection {
 	return ctx.open_fn()
 }
 
@@ -49,17 +47,10 @@ fn (ctx WorkerBackendDispatchContext) finished(socket_path string) {
 	ctx.finish_fn(socket_path)
 }
 
-fn WorkerBackendConnection.from_selected(socket_path string, conn unix.StreamConn) WorkerBackendConnection {
-	return WorkerBackendConnection{
-		socket_path: socket_path
-		conn:        conn
-	}
-}
-
-fn WorkerBackendConnection.open(mut app App) !WorkerBackendConnection {
+fn (mut app App) worker_backend_open_connection() !worker.WorkerBackendConnection {
 	ctx := app.build_worker_backend_connector_context()
 	socket_path, conn := WorkerBackendConnectorRuntime.connect_selected(ctx)!
-	return WorkerBackendConnection.from_selected(socket_path, conn)
+	return worker.WorkerBackendConnection.from_selected(socket_path, conn)
 }
 
 fn (mut app App) build_worker_backend_connector_context() WorkerBackendConnectorContext {
@@ -75,8 +66,8 @@ fn (mut app App) build_worker_backend_connector_context() WorkerBackendConnector
 
 fn (mut app App) build_worker_backend_dispatch_context() WorkerBackendDispatchContext {
 	return WorkerBackendDispatchContext{
-		open_fn:    fn [mut app] () !WorkerBackendConnection {
-			return WorkerBackendConnection.open(mut app)
+		open_fn:    fn [mut app] () !worker.WorkerBackendConnection {
+			return app.worker_backend_open_connection()
 		}
 		start_fn:   fn [mut app] (socket_path string) {
 			app.on_worker_request_started(socket_path)

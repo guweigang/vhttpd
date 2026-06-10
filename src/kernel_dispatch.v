@@ -4,26 +4,8 @@ import transport
 import executor
 import dispatch
 
-type KernelDispatchEnvelope = executor.KernelDispatchEnvelope
-
-pub fn KernelDispatchEnvelope.from_stream_dispatch(req transport.StreamDispatchRequest) KernelDispatchEnvelope {
-	return dispatch.stream_dispatch_envelope_from_stream(req)
-}
-
-pub fn KernelDispatchEnvelope.from_mcp_dispatch(req transport.WorkerMcpDispatchRequest) KernelDispatchEnvelope {
-	return dispatch.mcp_dispatch_envelope_from_mcp(req)
-}
-
-pub fn KernelDispatchEnvelope.from_websocket_upstream(req transport.WorkerWebSocketUpstreamDispatchRequest) KernelDispatchEnvelope {
-	return dispatch.websocket_upstream_envelope(req)
-}
-
-pub fn KernelDispatchEnvelope.from_websocket_dispatch(frame transport.WorkerWebSocketFrame) KernelDispatchEnvelope {
-	return dispatch.websocket_dispatch_envelope(frame)
-}
-
 fn (mut app App) kernel_dispatch_stream(req transport.StreamDispatchRequest) !transport.StreamDispatchResponse {
-	_ = KernelDispatchEnvelope{
+	_ = executor.KernelDispatchEnvelope{
 		kind:    .stream
 		context: DispatchContext.from_stream_dispatch_provider(req, app.logic_executor_provider())
 	}
@@ -40,7 +22,7 @@ fn kernel_stream_dispatch_failure(resp transport.StreamDispatchResponse) ?execut
 }
 
 fn (mut app App) kernel_dispatch_mcp(req transport.WorkerMcpDispatchRequest) !transport.WorkerMcpDispatchResponse {
-	_ = KernelDispatchEnvelope{
+	_ = executor.KernelDispatchEnvelope{
 		kind:    .mcp
 		context: DispatchContext.from_mcp_dispatch_provider(req, app.logic_executor_provider())
 	}
@@ -68,7 +50,7 @@ fn (mut app App) kernel_dispatch_mcp_handled(req transport.WorkerMcpDispatchRequ
 }
 
 fn (mut app App) kernel_dispatch_websocket_upstream(req transport.WorkerWebSocketUpstreamDispatchRequest) !transport.WorkerWebSocketUpstreamDispatchResponse {
-	_ = KernelDispatchEnvelope.from_websocket_upstream(req)
+	_ = executor.KernelDispatchEnvelope.from_websocket_upstream(req)
 	mut facade := app.as_facade()
 	return app.worker.logic_executor.dispatch_websocket_upstream(mut facade, req)
 }
@@ -93,7 +75,7 @@ fn (mut app App) kernel_dispatch_websocket_upstream_handled(req transport.Worker
 }
 
 fn (mut app App) kernel_dispatch_websocket_event(frame transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse {
-	_ = KernelDispatchEnvelope{
+	_ = executor.KernelDispatchEnvelope{
 		kind:    .websocket_dispatch
 		context: DispatchContext.from_websocket_dispatch_provider(frame,
 			app.logic_executor_provider())
