@@ -1,0 +1,18 @@
+{
+  "name": "vhttpd/wordpress-example",
+  "description": "WordPress example for vhttpd",
+  "type": "project",
+  "require": {
+    "php": "^8.1",
+    "vphp/runtime": "dev-main"
+  },
+  "repositories": [
+    {
+      "type": "path",
+      "url": "../../php/package",
+      "options": {
+        "symlink": true
+      }
+    }
+  ]
+}

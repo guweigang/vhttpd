@@ -5,36 +5,138 @@ declare(strict_types=1);
  * WordPress bridge demo for vhttpd/php-worker.
  *
  * Required env:
- * - VSLIM_WP_ROOT=/abs/path/to/wordpress
+ * - VPHP_WP_ROOT=/abs/path/to/wordpress
  */
 
-return static function ($requestOrEnvelope, array $envelope = []): array {
-    $payload = is_array($requestOrEnvelope) ? $requestOrEnvelope : $envelope;
+require_once __DIR__ . '/vendor/autoload.php';
 
-    $wpRoot = getenv('VSLIM_WP_ROOT');
-    if (!is_string($wpRoot) || $wpRoot === '') {
-        throw new RuntimeException('VSLIM_WP_ROOT is required for wordpress demo');
+// 自适应延迟退出类，用于支持安装阶段
+class AutoExitHelper
+{
+    public function __destruct()
+    {
+        // 延迟 20 毫秒，确保 vhttpd-worker 成功发送 TCP/Unix 响应包
+        usleep(20000);
+        exit(0);
     }
-    $wpLoad = rtrim($wpRoot, '/') . '/wp-load.php';
-    if (!is_file($wpLoad)) {
-        throw new RuntimeException('wp-load.php not found: ' . $wpLoad);
-    }
+}
 
+// 初始化加载 WordPress (只加载一次)
+$wpRoot = getenv('VPHP_WP_ROOT');
+if (!is_string($wpRoot) || $wpRoot === '') {
+    throw new RuntimeException('VPHP_WP_ROOT is required for wordpress demo');
+}
+$wpLoad = rtrim($wpRoot, '/') . '/wp-load.php';
+if (!is_file($wpLoad)) {
+    throw new RuntimeException('wp-load.php not found: ' . $wpLoad);
+}
+
+// 如果配置文件已存在，则可以安全地在全局 require 进来
+$hasConfig = file_exists(rtrim($wpRoot, '/') . '/wp-config.php');
+if ($hasConfig) {
     if (!defined('WP_USE_THEMES')) {
-        define('WP_USE_THEMES', false);
+        define('WP_USE_THEMES', true);
     }
     require_once $wpLoad;
+}
 
-    $path = (string)($payload['path'] ?? '/');
-    $pathOnly = strtok($path, '?');
-    $query = [];
-    if (isset($payload['query']) && is_array($payload['query'])) {
-        $query = $payload['query'];
-    } elseif (str_contains($path, '?')) {
-        parse_str((string)parse_url($path, PHP_URL_QUERY), $query);
+return static function ($requestOrEnvelope, array $envelope = []): array {
+    // 兼容 PSR-7 和 数组 envelope
+    if ($requestOrEnvelope instanceof \Psr\Http\Message\ServerRequestInterface) {
+        $request = $requestOrEnvelope;
+        $path = $request->getUri()->getPath();
+        $queryStr = $request->getUri()->getQuery();
+        $method = $request->getMethod();
+        $queryParams = $request->getQueryParams();
+        $body = (string)$request->getBody();
+        $headers = [];
+        foreach ($request->getHeaders() as $name => $values) {
+            $headers[$name] = implode(', ', $values);
+        }
+        $cookies = $request->getCookieParams();
+        $serverParams = $request->getServerParams();
+        $host = $request->getUri()->getHost();
+        $port = (string)$request->getUri()->getPort();
+        $scheme = $request->getUri()->getScheme();
+        $remoteAddr = $serverParams['REMOTE_ADDR'] ?? '';
+    } else {
+        $payload = is_array($requestOrEnvelope) ? $requestOrEnvelope : $envelope;
+        $path = (string)($payload['path'] ?? '/');
+        $queryStr = '';
+        if (str_contains($path, '?')) {
+            $parts = explode('?', $path, 2);
+            $path = $parts[0];
+            $queryStr = $parts[1] ?? '';
+        }
+        $method = strtoupper((string)($payload['method'] ?? 'GET'));
+        $queryParams = $payload['query'] ?? [];
+        if (empty($queryStr) && !empty($queryParams)) {
+            $queryStr = http_build_query($queryParams);
+        }
+        $body = (string)($payload['body'] ?? '');
+        $headers = $payload['headers'] ?? [];
+        $cookies = $payload['cookies'] ?? [];
+        $serverParams = $payload['server'] ?? [];
+        $host = (string)($payload['host'] ?? '');
+        $port = (string)($payload['port'] ?? '');
+        $scheme = (string)($payload['scheme'] ?? 'http');
+        $remoteAddr = (string)($payload['remote_addr'] ?? '');
     }
 
-    if ($pathOnly === '/wordpress/meta') {
+    $wpRoot = getenv('VPHP_WP_ROOT');
+    $wpLoad = rtrim($wpRoot, '/') . '/wp-load.php';
+
+    // 1. 静态资源直达支持 (提取任意路由前缀后的静态文件相对路径)
+    $cleanStaticPath = '';
+    if (preg_match('#/(wp-content/.*|wp-includes/.*|wp-admin/.*|favicon\.ico|robots\.txt)$#', $path, $m) === 1) {
+        $cleanStaticPath = $m[1];
+    }
+    if ($cleanStaticPath !== '') {
+        $localFile = rtrim($wpRoot, '/') . '/' . $cleanStaticPath;
+        if (is_file($localFile)) {
+            $ext = strtolower(pathinfo($localFile, PATHINFO_EXTENSION));
+            $mimeTypes = [
+                'css'   => 'text/css; charset=utf-8',
+                'js'    => 'application/javascript; charset=utf-8',
+                'png'   => 'image/png',
+                'jpg'   => 'image/jpeg',
+                'jpeg'  => 'image/jpeg',
+                'gif'   => 'image/gif',
+                'svg'   => 'image/svg+xml',
+                'ico'   => 'image/x-icon',
+                'woff'  => 'font/woff',
+                'woff2' => 'font/woff2',
+                'ttf'   => 'font/ttf',
+                'xml'   => 'application/xml; charset=utf-8',
+                'txt'   => 'text/plain; charset=utf-8',
+            ];
+            if (isset($mimeTypes[$ext])) {
+                return [
+                    'status' => 200,
+                    'content_type' => $mimeTypes[$ext],
+                    'headers' => [
+                        'cache-control' => 'public, max-age=31536000',
+                        'x-static-pass' => 'true',
+                    ],
+                    'body' => file_get_contents($localFile),
+                ];
+            }
+        }
+    }
+
+    // 2. 如果在上一请求或当前请求期间还未生成 wp-config.php，说明还在安装配置阶段
+    $hasConfig = file_exists(rtrim($wpRoot, '/') . '/wp-config.php');
+    if (!$hasConfig) {
+        // 安装阶段，我们需要在每次请求闭包执行时 require 加载 wp-load.php
+        // （由于每次请求结束后我们都会退出进程重新拉起，所以不需要担心 cannot redeclare 错误）
+        if (!defined('WP_USE_THEMES')) {
+            define('WP_USE_THEMES', true);
+        }
+        require_once $wpLoad;
+    }
+
+    // 3. 原有的 API 路由接口（采用后缀匹配，解耦 /wordpress 硬编码）
+    if (str_ends_with($path, '/meta')) {
         return [
             'status' => 200,
             'content_type' => 'application/json; charset=utf-8',
@@ -45,12 +147,12 @@ return static function ($requestOrEnvelope, array $envelope = []): array {
                 'framework' => 'wordpress',
                 'home' => function_exists('home_url') ? home_url('/') : '',
                 'site_name' => function_exists('get_bloginfo') ? get_bloginfo('name') : '',
-                'trace' => (string)($query['trace_id'] ?? ''),
+                'trace' => (string)($queryParams['trace_id'] ?? ''),
             ]),
         ];
     }
 
-    if (preg_match('#^/wordpress/post/(\d+)$#', (string)$pathOnly, $m) === 1) {
+    if (preg_match('#/post/(\d+)$#', $path, $m) === 1) {
         $postId = (int)$m[1];
         $post = function_exists('get_post') ? get_post($postId) : null;
         if (!$post) {
@@ -82,12 +184,69 @@ return static function ($requestOrEnvelope, array $envelope = []): array {
         ];
     }
 
-    return [
-        'status' => 404,
-        'content_type' => 'text/plain; charset=utf-8',
+    // 4. 完整的 WordPress 路由与渲染
+    // 重置超全局变量以模拟此次真实请求。透传前端发来的真实带有前缀/或无前缀的 REQUEST_URI
+    $requestUri = $path . ($queryStr !== '' ? '?' . $queryStr : '');
+    $_SERVER['REQUEST_URI'] = $requestUri;
+    $_SERVER['REQUEST_METHOD'] = $method;
+    $_SERVER['QUERY_STRING'] = $queryStr;
+    $_SERVER['HTTP_HOST'] = $host;
+    $_SERVER['SERVER_NAME'] = $host;
+    if ($port !== '') {
+        $_SERVER['SERVER_PORT'] = $port;
+    } else {
+        $_SERVER['SERVER_PORT'] = ($scheme === 'https') ? '443' : '80';
+    }
+    $_SERVER['HTTPS'] = ($scheme === 'https') ? 'on' : 'off';
+    $_SERVER['REMOTE_ADDR'] = $remoteAddr ?: '127.0.0.1';
+
+    $_GET = $queryParams;
+    $_POST = [];
+    if ($method === 'POST') {
+        $contentType = $headers['content-type'] ?? $headers['Content-Type'] ?? '';
+        if (is_array($contentType)) {
+            $contentType = implode(', ', $contentType);
+        }
+        if (str_contains(strtolower($contentType), 'application/x-www-form-urlencoded')) {
+            parse_str($body, $_POST);
+        }
+    }
+    $_COOKIE = $cookies;
+    $_REQUEST = array_merge($_GET, $_POST, $_COOKIE);
+
+    // 调用 wp() 进行路由和查询
+    global $wp, $wp_query, $wp_the_query, $post, $posts, $wp_did_header;
+    $wp_did_header = true;
+
+    if (function_exists('wp')) {
+        wp();
+    }
+
+    // 渲染 HTML
+    ob_start();
+    try {
+        if (defined('ABSPATH') && defined('WPINC')) {
+            require ABSPATH . WPINC . '/template-loader.php';
+        }
+    } catch (\Throwable $t) {
+        ob_end_clean();
+        throw $t;
+    }
+    $html = ob_get_clean();
+
+    $response = [
+        'status' => 200,
+        'content_type' => 'text/html; charset=utf-8',
         'headers' => [
             'x-framework' => 'wordpress',
         ],
-        'body' => 'Not Found',
+        'body' => $html,
     ];
+
+    // 如果还没有生成 wp-config.php，注册 AutoExitHelper 在该请求发送完毕后退出进程，以便重启干净的 Worker 加载全新配置
+    if (!$hasConfig) {
+        $response['auto_exit'] = new AutoExitHelper();
+    }
+
+    return $response;
 };

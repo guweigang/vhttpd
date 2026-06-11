@@ -15,6 +15,7 @@ STDOUT_LOG="/tmp/vslim_demo_${CASE}.stdout.log"
 APP_BOOTSTRAP="${VHTTPD_APP_BOOTSTRAP:-}"
 WORKER_ENV=""
 declare -a URLS=()
+TEMP_TOML=""
 
 case "${CASE}" in
   vslim)
@@ -68,20 +69,49 @@ case "${CASE}" in
     if [ -z "${APP_BOOTSTRAP}" ]; then
       APP_BOOTSTRAP="${ROOT}/examples/wordpress/app.php"
     fi
-    WP_ROOT="${VSLIM_WP_ROOT:-}"
+    if [ ! -f "${ROOT}/examples/wordpress/vendor/autoload.php" ]; then
+      echo "[demo] wordpress dependencies missing"
+      echo "run: cd ${ROOT}/examples/wordpress && ${COMPOSER_BIN} install"
+      exit 2
+    fi
+    WP_ROOT="${VPHP_WP_ROOT:-}"
     if [ -z "${WP_ROOT}" ]; then
-      echo "[demo] VSLIM_WP_ROOT is required for wordpress demo"
+      echo "[demo] VPHP_WP_ROOT is required for wordpress demo"
       exit 2
     fi
     if [ ! -f "${WP_ROOT}/wp-load.php" ]; then
-      echo "[demo] wp-load.php not found under VSLIM_WP_ROOT=${WP_ROOT}"
+      echo "[demo] wp-load.php not found under VPHP_WP_ROOT=${WP_ROOT}"
       exit 2
     fi
-    WORKER_ENV="VSLIM_WP_ROOT='${WP_ROOT}'"
+    WORKER_ENV="VPHP_WP_ROOT='${WP_ROOT}'"
     URLS=(
       "http://${HOST}:${PORT}/wordpress/meta?trace_id=demo"
       "http://${HOST}:${PORT}/wordpress/post/1"
     )
+    TEMP_TOML="/tmp/vhttpd_wordpress_${PORT}.toml"
+    cat <<EOF > "${TEMP_TOML}"
+[server]
+host = "${HOST}"
+port = ${PORT}
+
+[executor]
+kind = "php"
+
+[worker]
+autostart = true
+pool_size = 4
+socket = "${SOCKET}"
+
+[worker.env]
+VPHP_WP_ROOT = "${WP_ROOT}"
+
+[php]
+worker_entry = "${ROOT}/php/package/bin/vphp-worker"
+app_entry = "${APP_BOOTSTRAP}"
+extensions = [
+  "${VSLIM_ROOT}/vslim.so"
+]
+EOF
     ;;
   *)
     echo "usage: $0 [vslim|ai|symfony|laravel|wordpress]"
@@ -106,21 +136,32 @@ cleanup() {
   if [ -f "${PID_FILE}" ]; then
     kill "$(cat "${PID_FILE}")" >/dev/null 2>&1 || true
   fi
+  if [ -n "${TEMP_TOML:-}" ] && [ -f "${TEMP_TOML}" ]; then
+    rm -f "${TEMP_TOML}"
+  fi
 }
 trap cleanup EXIT
 
 make -C "${VSLIM_ROOT}" build >/dev/null
 make -C "${ROOT}" vhttpd >/dev/null
 
-"${ROOT}/vhttpd" \
-  --host "${HOST}" \
-  --port "${PORT}" \
-  --pid-file "${PID_FILE}" \
-  --event-log "${EVENT_LOG}" \
-  --worker-socket "${SOCKET}" \
-  --worker-autostart 1 \
-  --worker-cmd "${WORKER_ENV} VHTTPD_APP='${APP_BOOTSTRAP}' php -d extension='${VSLIM_ROOT}/vslim.so' '${ROOT}/php/package/bin/php-worker'" \
-  >"${STDOUT_LOG}" 2>&1 &
+if [ -n "${TEMP_TOML}" ]; then
+  "${ROOT}/vhttpd" \
+    --config "${TEMP_TOML}" \
+    --pid-file "${PID_FILE}" \
+    --event-log "${EVENT_LOG}" \
+    >"${STDOUT_LOG}" 2>&1 &
+else
+  "${ROOT}/vhttpd" \
+    --host "${HOST}" \
+    --port "${PORT}" \
+    --pid-file "${PID_FILE}" \
+    --event-log "${EVENT_LOG}" \
+    --worker-socket "${SOCKET}" \
+    --worker-autostart 1 \
+    --worker-cmd "${WORKER_ENV} VHTTPD_APP='${APP_BOOTSTRAP}' php -d extension='${VSLIM_ROOT}/vslim.so' '${ROOT}/php/package/bin/vphp-worker'" \
+    >"${STDOUT_LOG}" 2>&1 &
+fi
 
 if ! wait_ready; then
   echo "[demo] vhttpd not ready, log: ${STDOUT_LOG}"
