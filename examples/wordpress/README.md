@@ -36,7 +36,7 @@ composer install
 VPHP_WP_ROOT=/path/to/wordpress \
 VHTTPD_APP=/Users/guweigang/Source/vhttpd/examples/wordpress/app.php \
 # 启动 vhttpd 并加载您的配置
-vhttpd --config /path/to/vhttpd.toml
+vhttpd --config examples/wordpress/vhttpd.toml
 ```
 
 或者使用一键 demo 脚本：
