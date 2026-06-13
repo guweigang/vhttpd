@@ -20,6 +20,112 @@ class AutoExitHelper
         exit(0);
     }
 }
+// 使用独立的 php-cgi 进程来防 exit/die 夭折，并正确保留响应 Header 的辅助桥接函数
+function run_via_cgi(string $phpCgiBin, string $scriptFile, array $envelope, string $wpRoot): array {
+    $method = strtoupper((string)($envelope['method'] ?? 'GET'));
+    $path = (string)($envelope['path'] ?? '/');
+    $queryStr = '';
+    if (str_contains($path, '?')) {
+        $parts = explode('?', $path, 2);
+        $path = $parts[0];
+        $queryStr = $parts[1] ?? '';
+    }
+    $queryParams = $envelope['query'] ?? [];
+    if (empty($queryStr) && !empty($queryParams)) {
+        $queryStr = http_build_query($queryParams);
+    }
+    $body = (string)($envelope['body'] ?? '');
+    
+    // 准备标准的 CGI 环境变量
+    $env = [
+        'GATEWAY_INTERFACE' => 'CGI/1.1',
+        'SCRIPT_FILENAME'   => $scriptFile,
+        'REQUEST_METHOD'    => $method,
+        'REQUEST_URI'       => $path . ($queryStr !== '' ? '?' . $queryStr : ''),
+        'QUERY_STRING'      => $queryStr,
+        'HTTP_HOST'         => $envelope['host'] ?: '127.0.0.1',
+        'SERVER_NAME'       => $envelope['host'] ?: '127.0.0.1',
+        'SERVER_PORT'       => $envelope['port'] ?: '19881',
+        'HTTPS'             => (($envelope['scheme'] ?? 'http') === 'https') ? 'on' : 'off',
+        'REMOTE_ADDR'       => $envelope['remote_addr'] ?: '127.0.0.1',
+        'REDIRECT_STATUS'   => '200', // 绕过 PHP-CGI 安全限制
+        'VPHP_WP_ROOT'      => $wpRoot,
+    ];
+    
+    // 导入 HTTP Headers
+    foreach ($envelope['headers'] ?? [] as $name => $values) {
+        $headerName = 'HTTP_' . strtoupper(str_replace('-', '_', $name));
+        $env[$headerName] = is_array($values) ? implode(', ', $values) : (string)$values;
+    }
+    
+    $descriptors = [
+        0 => ['pipe', 'r'], // stdin
+        1 => ['pipe', 'w'], // stdout
+        2 => ['pipe', 'w'], // stderr
+    ];
+    
+    $vslimSo = dirname(__DIR__, 2) . '/vphpx/vslim/vslim.so';
+    $cmd = '"' . $phpCgiBin . '"';
+    if (is_file($vslimSo)) {
+        $cmd .= ' -d extension="' . $vslimSo . '"';
+    }
+    
+    $process = proc_open($cmd, $descriptors, $pipes, null, $env);
+    if (!is_resource($process)) {
+        throw new RuntimeException("Failed to run php-cgi");
+    }
+    
+    if ($body !== '') {
+        fwrite($pipes[0], $body);
+    }
+    fclose($pipes[0]);
+    
+    $stdout = stream_get_contents($pipes[1]);
+    fclose($pipes[1]);
+    
+    $stderr = stream_get_contents($pipes[2]);
+    fclose($pipes[2]);
+    
+    proc_close($process);
+    
+    // 解析 CGI 响应（Header 和 Body）
+    $parts = explode("\r\n\r\n", $stdout, 2);
+    if (count($parts) < 2) {
+        $parts = explode("\n\n", $stdout, 2);
+    }
+    
+    $headerRaw = $parts[0] ?? '';
+    $respBody = $parts[1] ?? '';
+    
+    $status = 200;
+    $contentType = 'text/html; charset=utf-8';
+    $headers = [];
+    
+    foreach (explode("\n", str_replace("\r", "", $headerRaw)) as $line) {
+        $line = trim($line);
+        if ($line === '') continue;
+        if (!str_contains($line, ':')) continue;
+        
+        list($name, $val) = explode(':', $line, 2);
+        $name = strtolower(trim($name));
+        $val = trim($val);
+        
+        if ($name === 'status') {
+            $status = (int)$val;
+        } elseif ($name === 'content-type') {
+            $contentType = $val;
+        } else {
+            $headers[$name] = $val;
+        }
+    }
+    
+    return [
+        'status' => $status,
+        'content_type' => $contentType,
+        'headers' => $headers,
+        'body' => $respBody,
+    ];
+}
 
 // 初始化加载 WordPress (只加载一次)
 $wpRoot = getenv('VPHP_WP_ROOT');
@@ -161,16 +267,56 @@ return static function ($requestOrEnvelope, array $envelope = []): array {
     $_COOKIE = $cookies;
     $_REQUEST = array_merge($_GET, $_POST, $_COOKIE);
 
-    // 3. 如果在上一请求或当前请求期间还未生成 wp-config.php，说明还在安装配置阶段
+    // 3. 判定当前是否是未安装阶段，或者访问的是物理存在的特定 .php 文件（如后台 setup-config）
     $hasConfig = file_exists(rtrim($wpRoot, '/') . '/wp-config.php');
-    if (!$hasConfig) {
-        // 安装阶段，我们需要在每次请求闭包执行时 require 加载 wp-load.php
-        // （由于每次请求结束后我们都会退出进程重新拉起，所以不需要担心 cannot redeclare 错误）
-        if (!defined('WP_USE_THEMES')) {
-            define('WP_USE_THEMES', true);
-        }
-        require_once $wpLoad;
+
+    // 首次安装若访问根路径，由闭包直接 302 重定向到 setup-config.php，不走 require_once 以免 exit 导致进程夭折
+    if (!$hasConfig && ($path === '/' || $path === '')) {
+        return [
+            'status' => 302,
+            'content_type' => 'text/html; charset=utf-8',
+            'headers' => [
+                'location' => '/wp-admin/setup-config.php',
+            ],
+            'body' => '',
+        ];
     }
+
+    $localPhpFile = rtrim($wpRoot, '/') . '/' . ltrim($path, '/');
+    if (is_dir($localPhpFile)) {
+        $localPhpFile = rtrim($localPhpFile, '/') . '/index.php';
+    }
+    $isPhpFile = is_file($localPhpFile) && str_ends_with($localPhpFile, '.php');
+
+    // 处于未安装阶段，或者是请求了物理存在的特定 .php 脚本（特别是 wp-admin 下的安装/配置页面）
+    // 为了防止 wp-load 或页面自身执行 exit/die 导致主 worker 进程 502 死亡，我们通过独立的 php-cgi 进程来托管运行
+    if (!$hasConfig || $isPhpFile) {
+        $phpCgiBin = '/opt/homebrew/bin/php-cgi';
+        if (!is_file($phpCgiBin)) {
+            $phpCgiBin = 'php-cgi';
+        }
+        
+        $envelopeWrapper = [
+            'method' => $method,
+            'path' => $path,
+            'query' => $queryParams,
+            'body' => $body,
+            'headers' => $headers,
+            'cookies' => $cookies,
+            'host' => $host,
+            'port' => $port,
+            'scheme' => $scheme,
+            'remote_addr' => $remoteAddr,
+        ];
+        
+        return run_via_cgi($phpCgiBin, $localPhpFile, $envelopeWrapper, $wpRoot);
+    }
+
+    // 4. 常规前驻加载：如果已安装且不是物理 PHP 请求，安全 require $wpLoad 提供常驻高性能
+    if (!defined('WP_USE_THEMES')) {
+        define('WP_USE_THEMES', true);
+    }
+    require_once $wpLoad;
 
     // 4. 原有的 API 路由接口（采用后缀匹配，解耦 /wordpress 硬编码）
     if (str_ends_with($path, '/meta')) {
