@@ -17,15 +17,15 @@ socket = "/tmp/vhttpd_wordpress.sock"
 
 # 推荐注入 VPHP_WP_ROOT 环境变量 (也可以通过系统环境变量传递)
 [worker.env]
-VPHP_WP_ROOT = "${VPHP_WP_ROOT}"
+VPHP_WP_ROOT = "${env.VPHP_WP_ROOT}"
 
 [php]
 # 建议指定绝对路径，或者指向 vhttpd 项目编译后的 vphp-worker 真实位置
-worker_entry = "./php/package/bin/vphp-worker"
-app_entry = "./examples/wordpress/app.php"
+worker_entry = "../../php/package/bin/vphp-worker"
+app_entry = "./app.php"
 extensions = [
   # 挂载 vslim 扩展，提供高性能的 C/V 框架集成
-  "../vphpx/vslim/vslim.so"
+  "../../../vphpx/vslim/vslim.so"
 ]
 
 # 静态资源挂载器配置：
@@ -33,6 +33,6 @@ extensions = [
 # 不经过动态的 PHP Worker 进程，从而极大地提升静态性能并减少 PHP 算力消耗。
 [assets]
 enabled = true
-prefix = "/wordpress"
-root = "${VPHP_WP_ROOT}"
+prefix = "/"
+root = "${env.VPHP_WP_ROOT}"
 cache_control = "public, max-age=31536000"
