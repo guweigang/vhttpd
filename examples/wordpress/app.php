@@ -31,6 +31,14 @@ if (!is_file($wpLoad)) {
     throw new RuntimeException('wp-load.php not found: ' . $wpLoad);
 }
 
+// 设置全局超全局变量 Fallback 默认值，以防 WordPress 首次加载初始化时抛出 Undefined Key Notice/Warning
+$_SERVER['HTTP_HOST'] = $_SERVER['HTTP_HOST'] ?? 'localhost';
+$_SERVER['REQUEST_URI'] = $_SERVER['REQUEST_URI'] ?? '/';
+$_SERVER['REQUEST_METHOD'] = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+$_SERVER['SERVER_NAME'] = $_SERVER['SERVER_NAME'] ?? 'localhost';
+$_SERVER['SERVER_PORT'] = $_SERVER['SERVER_PORT'] ?? '80';
+$_SERVER['REMOTE_ADDR'] = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+
 // 如果配置文件已存在，则可以安全地在全局 require 进来
 $hasConfig = file_exists(rtrim($wpRoot, '/') . '/wp-config.php');
 if ($hasConfig) {
@@ -124,7 +132,36 @@ return static function ($requestOrEnvelope, array $envelope = []): array {
         }
     }
 
-    // 2. 如果在上一请求或当前请求期间还未生成 wp-config.php，说明还在安装配置阶段
+    // 2. 重置超全局变量以模拟此次真实请求。透传前端发来的真实 REQUEST_URI，这一步必须在加载 wp-load.php 之前执行
+    $requestUri = $path . ($queryStr !== '' ? '?' . $queryStr : '');
+    $_SERVER['REQUEST_URI'] = $requestUri;
+    $_SERVER['REQUEST_METHOD'] = $method;
+    $_SERVER['QUERY_STRING'] = $queryStr;
+    $_SERVER['HTTP_HOST'] = $host ?: 'localhost';
+    $_SERVER['SERVER_NAME'] = $host ?: 'localhost';
+    if ($port !== '') {
+        $_SERVER['SERVER_PORT'] = $port;
+    } else {
+        $_SERVER['SERVER_PORT'] = ($scheme === 'https') ? '443' : '80';
+    }
+    $_SERVER['HTTPS'] = ($scheme === 'https') ? 'on' : 'off';
+    $_SERVER['REMOTE_ADDR'] = $remoteAddr ?: '127.0.0.1';
+
+    $_GET = $queryParams;
+    $_POST = [];
+    if ($method === 'POST') {
+        $contentType = $headers['content-type'] ?? $headers['Content-Type'] ?? '';
+        if (is_array($contentType)) {
+            $contentType = implode(', ', $contentType);
+        }
+        if (str_contains(strtolower($contentType), 'application/x-www-form-urlencoded')) {
+            parse_str($body, $_POST);
+        }
+    }
+    $_COOKIE = $cookies;
+    $_REQUEST = array_merge($_GET, $_POST, $_COOKIE);
+
+    // 3. 如果在上一请求或当前请求期间还未生成 wp-config.php，说明还在安装配置阶段
     $hasConfig = file_exists(rtrim($wpRoot, '/') . '/wp-config.php');
     if (!$hasConfig) {
         // 安装阶段，我们需要在每次请求闭包执行时 require 加载 wp-load.php
@@ -135,7 +172,7 @@ return static function ($requestOrEnvelope, array $envelope = []): array {
         require_once $wpLoad;
     }
 
-    // 3. 原有的 API 路由接口（采用后缀匹配，解耦 /wordpress 硬编码）
+    // 4. 原有的 API 路由接口（采用后缀匹配，解耦 /wordpress 硬编码）
     if (str_ends_with($path, '/meta')) {
         return [
             'status' => 200,
@@ -183,36 +220,6 @@ return static function ($requestOrEnvelope, array $envelope = []): array {
             ]),
         ];
     }
-
-    // 4. 完整的 WordPress 路由与渲染
-    // 重置超全局变量以模拟此次真实请求。透传前端发来的真实带有前缀/或无前缀的 REQUEST_URI
-    $requestUri = $path . ($queryStr !== '' ? '?' . $queryStr : '');
-    $_SERVER['REQUEST_URI'] = $requestUri;
-    $_SERVER['REQUEST_METHOD'] = $method;
-    $_SERVER['QUERY_STRING'] = $queryStr;
-    $_SERVER['HTTP_HOST'] = $host;
-    $_SERVER['SERVER_NAME'] = $host;
-    if ($port !== '') {
-        $_SERVER['SERVER_PORT'] = $port;
-    } else {
-        $_SERVER['SERVER_PORT'] = ($scheme === 'https') ? '443' : '80';
-    }
-    $_SERVER['HTTPS'] = ($scheme === 'https') ? 'on' : 'off';
-    $_SERVER['REMOTE_ADDR'] = $remoteAddr ?: '127.0.0.1';
-
-    $_GET = $queryParams;
-    $_POST = [];
-    if ($method === 'POST') {
-        $contentType = $headers['content-type'] ?? $headers['Content-Type'] ?? '';
-        if (is_array($contentType)) {
-            $contentType = implode(', ', $contentType);
-        }
-        if (str_contains(strtolower($contentType), 'application/x-www-form-urlencoded')) {
-            parse_str($body, $_POST);
-        }
-    }
-    $_COOKIE = $cookies;
-    $_REQUEST = array_merge($_GET, $_POST, $_COOKIE);
 
     // 调用 wp() 进行路由和查询
     global $wp, $wp_query, $wp_the_query, $post, $posts, $wp_did_header;
