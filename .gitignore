@@ -1,5 +1,5 @@
-vhttpd
-vhttpd_prod
+/vhttpd
+/vhttpd_prod
 .DS_Store
 *.log
 *.db

@@ -17,6 +17,7 @@ import plugin
 import feishu
 import executor
 import server_lifecycle
+import regex
 
 fn app_runtime_default_mcp_max_sessions(cfg config.VhttpdConfig) int {
 	return if cfg.mcp.max_sessions > 0 { cfg.mcp.max_sessions } else { 1000 }
@@ -31,6 +32,82 @@ fn app_runtime_default_mcp_session_ttl_seconds(cfg config.VhttpdConfig) int {
 }
 
 fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executor_plan executor.LogicExecutorRuntimePlan, cfg config.VhttpdConfig, build_cfg server_lifecycle.AppRuntimeBuildConfig) &App {
+	// 1. 预编译正则并构建运行时路由规则
+	mut runtime_routes := []RuntimeRouteRule{}
+	for r in cfg.routes {
+		mut re := regex.RE{}
+		if r.match.path_regexp != '' {
+			re = regex.regex_opt(r.match.path_regexp) or {
+				continue
+			}
+		}
+		runtime_routes << RuntimeRouteRule{
+			match_path:        r.match.path.clone()
+			match_path_regexp: r.match.path_regexp
+			re:                re
+			executor:          r.executor
+			root:              r.root
+			status:            r.status
+			location:          r.location
+			body:              r.body
+		}
+	}
+
+	// 2. 遍历 routes 中的所有附加 executor，如果有专属的进程池配置则实例化其 WorkerState
+	mut add_workers := map[string]&worker.WorkerState{}
+	for route in cfg.routes {
+		if route.executor != '' && route.executor != cfg.executor.kind && route.executor !in add_workers {
+			if spec := cfg.executors[route.executor] {
+				mut sub_cfg := cfg
+				sub_cfg.worker = spec.worker
+				sub_cfg.php = spec.php
+				sub_cfg.vjsx = spec.vjsx
+				sub_cfg.executor = spec.executor
+
+				sub_sockets := config.resolve_worker_sockets_with_defaults(
+					[]string{},
+					spec.worker.socket,
+					spec.worker.pool_size,
+					spec.worker.socket_prefix,
+					spec.worker.sockets.join(',')
+				)
+				sub_plan := executor.LogicExecutorRuntimePlan.resolve(
+					[]string{},
+					sub_cfg,
+					sub_sockets,
+					spec.worker.stream_dispatch,
+					spec.worker.websocket_dispatch,
+					spec.worker.autostart,
+					spec.worker.cmd,
+					spec.worker.env
+				) or { continue }
+
+				mut sub_ws := &worker.WorkerState{
+					worker_backend:      worker.WorkerBackendRuntime{
+						backend:                worker.PhpWorkerBackend{}
+						sockets:                sub_plan.bootstrap.worker_sockets.clone()
+						read_timeout_ms:        build_cfg.worker_read_timeout_ms
+						autostart:              sub_plan.bootstrap.worker_autostart
+						cmd:                    sub_plan.bootstrap.worker_cmd
+						env:                    sub_plan.bootstrap.worker_env.clone()
+						workdir:                build_cfg.workdir
+						restart_backoff_ms:     build_cfg.worker_restart_backoff_ms
+						restart_backoff_max_ms: build_cfg.worker_restart_backoff_max_ms
+						max_requests:           build_cfg.worker_max_requests
+						queue_capacity:         build_cfg.worker_queue_capacity
+						queue_timeout_ms:       build_cfg.worker_queue_timeout_ms
+						queue_poll_ms:          10
+					}
+					worker_backend_mode: sub_plan.worker_backend_mode
+					logic_executor:      sub_plan.executor
+					lifecycle:           sub_plan.lifecycle.name()
+					stream_dispatch:     sub_plan.bootstrap.stream_dispatch
+				}
+				add_workers[route.executor] = sub_ws
+			}
+		}
+	}
+
 	return &App{
 		event_log:           build_cfg.event_log
 		started_at_unix:     time.now().unix()
@@ -157,5 +234,7 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 				card_bridge_target_id:      provider_settings.bridge.target_id
 			}
 		}
+		routes:              runtime_routes
+		additional_workers:  add_workers
 	}
 }

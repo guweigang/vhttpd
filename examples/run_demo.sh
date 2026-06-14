@@ -2,7 +2,6 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-VSLIM_ROOT="${VSLIM_ROOT:-$(cd "${ROOT}/../vphpx/vslim" && pwd)}"
 COMPOSER_BIN="${COMPOSER_BIN:-composer}"
 CASE="${1:-vslim}"
 HOST="${VHTTPD_HOST:-127.0.0.1}"
@@ -16,6 +15,14 @@ APP_BOOTSTRAP="${VHTTPD_APP_BOOTSTRAP:-}"
 WORKER_ENV=""
 declare -a URLS=()
 TEMP_TOML=""
+
+resolve_vslim_root() {
+  if [ -n "${VSLIM_ROOT:-}" ]; then
+    printf '%s\n' "${VSLIM_ROOT}"
+    return 0
+  fi
+  cd "${ROOT}/../vphpx/vslim" && pwd
+}
 
 case "${CASE}" in
   vslim)
@@ -85,8 +92,8 @@ case "${CASE}" in
     fi
     WORKER_ENV="VPHP_WP_ROOT='${WP_ROOT}'"
     URLS=(
-      "http://${HOST}:${PORT}/wordpress/meta?trace_id=demo"
-      "http://${HOST}:${PORT}/wordpress/post/1"
+      "http://${HOST}:${PORT}/meta?trace_id=demo"
+      "http://${HOST}:${PORT}/post/1"
     )
     TEMP_TOML="/tmp/vhttpd_wordpress_${PORT}.toml"
     cat <<EOF > "${TEMP_TOML}"
@@ -106,11 +113,11 @@ socket = "${SOCKET}"
 VPHP_WP_ROOT = "${WP_ROOT}"
 
 [php]
-worker_entry = "${ROOT}/php/package/bin/vphp-worker"
+worker_entry = "${ROOT}/examples/wordpress/vendor/bin/vphp-worker"
 app_entry = "${APP_BOOTSTRAP}"
-extensions = [
-  "${VSLIM_ROOT}/vslim.so"
-]
+
+[assets]
+enabled = false
 EOF
     ;;
   *)
@@ -142,7 +149,10 @@ cleanup() {
 }
 trap cleanup EXIT
 
-make -C "${VSLIM_ROOT}" build >/dev/null
+if [ "${CASE}" != "wordpress" ]; then
+  VSLIM_ROOT="$(resolve_vslim_root)"
+  make -C "${VSLIM_ROOT}" build >/dev/null
+fi
 make -C "${ROOT}" vhttpd >/dev/null
 
 if [ -n "${TEMP_TOML}" ]; then

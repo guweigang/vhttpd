@@ -21,6 +21,10 @@ fn (a InProcTestApp) worker_backend_read_timeout_ms() int {
 	return 0
 }
 
+fn (a InProcTestApp) worker_backend_read_timeout_ms_for_kind(_kind string) int {
+	return 0
+}
+
 fn (a InProcTestApp) worker_backend_sockets_len() int {
 	return 0
 }
@@ -30,6 +34,10 @@ fn (a InProcTestApp) worker_env() map[string]string {
 }
 
 fn (mut a InProcTestApp) worker_backend_select_socket_queued() !string {
+	return error('inproc_test_app_no_backend')
+}
+
+fn (mut a InProcTestApp) worker_backend_select_socket_for_kind(_kind string) !string {
 	return error('inproc_test_app_no_backend')
 }
 

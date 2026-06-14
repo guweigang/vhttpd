@@ -18,6 +18,19 @@ import veb
 import veb.request_id
 import veb.sse
 import upstream.transport
+import regex
+
+pub struct RuntimeRouteRule {
+pub mut:
+	match_path        []string
+	match_path_regexp string
+	re                regex.RE
+	executor          string
+	root              string
+	status            int
+	location          string
+	body              string
+}
 
 pub struct Context {
 	veb.Context
@@ -35,12 +48,14 @@ pub mut:
 	http_stats          HttpStats
 	mu                  sync.Mutex
 
-	transport TransportRuntimeHub
-	protocols ProtocolRuntimeHub
-	providers ProviderRuntimeHub
-	executors ExecutorRuntimeHub
-	admin     admin.AdminState
-	assets    config.AssetsRuntime
+	transport          TransportRuntimeHub
+	protocols          ProtocolRuntimeHub
+	providers          ProviderRuntimeHub
+	executors          ExecutorRuntimeHub
+	admin              admin.AdminState
+	assets             config.AssetsRuntime
+	routes             []RuntimeRouteRule
+	additional_workers map[string]&worker.WorkerState
 }
 
 fn runtime_trace(label string, fields map[string]string) {
@@ -82,6 +97,39 @@ fn dispatch_core(method string, path string) (int, string, string) {
 	}
 
 	return 404, 'Not Found', 'text/plain; charset=utf-8'
+}
+
+fn match_path(pattern string, path string) bool {
+	if pattern == '*' {
+		return true
+	}
+	if pattern.starts_with('*') {
+		suffix := pattern.all_after('*')
+		return path.ends_with(suffix)
+	}
+	if pattern.ends_with('*') {
+		prefix := pattern.all_before_last('*')
+		return path.starts_with(prefix)
+	}
+	return path == pattern
+}
+
+fn (r RuntimeRouteRule) matches(path string) bool {
+	if r.match_path_regexp != '' {
+		mut re_mutable := r.re
+		start, _ := re_mutable.find(path)
+		if start >= 0 {
+			return true
+		}
+	}
+	if r.match_path.len > 0 {
+		for p in r.match_path {
+			if match_path(p, path) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 fn resolve_trace_id(ctx Context, path string) string {
@@ -550,16 +598,88 @@ fn proxy_worker_response(mut app App, mut ctx Context, method string, path strin
 	remote_addr := if isnil(ctx.conn) { '' } else { ctx.conn.peer_ip() or { '' } }
 	req_id := resolve_request_id(ctx, path)
 	trace_id := resolve_trace_id(ctx, path)
-	log.info('[http] ⇢ dispatch method=${method.to_upper()} path=${path} trace_id=${trace_id} request_id=${req_id} body_len=${ctx.req.data.len} executor=${app.logic_executor_kind()}')
-	if app.executors.worker.stream_dispatch {
-		if result := HttpStreamRuntime.via_dispatch(mut app, mut ctx, method, path, req_id,
-			trace_id, remote_addr)
-		{
-			return result
+
+	request_path, _ := transport.normalize_request_target(path)
+	normalized_target := transport.normalize_path(request_path)
+
+	// 1. 匹配 Caddy 路由规则
+	mut matched_rule := ?RuntimeRouteRule(none)
+	for rule in app.routes {
+		if rule.matches(normalized_target) {
+			matched_rule = rule
+			break
+		}
+	}
+
+	if rule := matched_rule {
+		// 2.1 重定向与直接状态响应 (status > 0)
+		if rule.status > 0 {
+			ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
+			ctx.res.set_status(http.status_from_int(rule.status))
+			if rule.status in [301, 302, 307, 308] {
+				if rule.location != '' {
+					ctx.set_custom_header('location', rule.location) or {}
+				}
+				log.info('[http] ⇠ route redirect status=${rule.status} location=${rule.location} trace_id=${trace_id}')
+				return ctx.text(if rule.body != '' { rule.body } else { 'Redirecting...' })
+			}
+			log.info('[http] ⇠ route status response status=${rule.status} trace_id=${trace_id}')
+			return ctx.text(rule.body)
+		}
+		
+		// 2.2 静态文件高性能直回
+		if rule.executor == 'static' {
+			if method.to_upper() !in ['GET', 'HEAD'] {
+				ctx.res.set_status(.method_not_allowed)
+				return ctx.text('Method Not Allowed')
+			}
+			mut root_dir := rule.root
+			if root_dir == '' { root_dir = app.assets.root_real }
+			if root_dir == '' { root_dir = app.executors.worker.worker_backend.workdir }
+			file_path := os.join_path(root_dir, normalized_target.trim_left('/'))
+			if os.exists(file_path) && !os.is_dir(file_path) {
+				log.info('[http] ⇠ route static file=${file_path} trace_id=${trace_id}')
+				return ctx.file(file_path)
+			}
+			log.warn('[http] ⇠ route static file not found path=${file_path} trace_id=${trace_id}')
+			ctx.res.set_status(.not_found)
+			return ctx.text('Not Found')
+		}
+		
+		// 2.3 阻断返回
+		if rule.executor == 'none' {
+			log.info('[http] ⇠ route none (block) trace_id=${trace_id}')
+			ctx.res.set_status(.not_found)
+			return ctx.text('Not Found')
+		}
+	}
+
+	// 3. 动态切换活动的后端执行器
+	mut active_executor := app.executors.worker.logic_executor
+	mut selected_pool := 'main'
+	mut is_stream_dispatch := app.executors.worker.stream_dispatch
+	if rule := matched_rule {
+		if rule.executor != '' && rule.executor != app.logic_executor_kind() {
+			if exec_state := app.additional_workers[rule.executor] {
+				active_executor = exec_state.logic_executor
+				selected_pool = rule.executor
+				is_stream_dispatch = exec_state.stream_dispatch
+			}
+		}
+	}
+
+	log.info('[http] ⇢ dispatch method=${method.to_upper()} path=${path} trace_id=${trace_id} request_id=${req_id} body_len=${ctx.req.data.len} executor=${active_executor.kind()} pool=${selected_pool}')
+	if is_stream_dispatch {
+		if selected_pool == 'main' {
+			if result := HttpStreamRuntime.via_dispatch(mut app, mut ctx, method, path, req_id,
+				trace_id, remote_addr)
+			{
+				return result
+			}
 		}
 	}
 	mut facade := app.as_facade()
-	mut outcome := app.executors.worker.logic_executor.dispatch_http(mut facade, executor.HttpLogicDispatchRequest{
+	mut outcome := active_executor.dispatch_http(mut facade, executor.HttpLogicDispatchRequest{
 		method:      method
 		path:        path
 		req:         ctx.req

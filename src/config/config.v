@@ -260,6 +260,30 @@ pub mut:
 	pgsql   DbPgsqlConfig
 }
 
+pub struct RouteMatchConfig {
+pub mut:
+	path        []string
+	path_regexp string   @[toml: 'path_regexp']
+}
+
+pub struct RouteRuleConfig {
+pub mut:
+	match    RouteMatchConfig
+	executor string
+	root     string
+	status   int
+	location string
+	body     string
+}
+
+pub struct ExecutorSpecConfig {
+pub mut:
+	worker   WorkerConfig
+	php      PhpConfig
+	vjsx     VjsxConfig
+	executor ExecutorConfig
+}
+
 pub struct ListenerConfig {
 pub mut:
 	host string = '127.0.0.1'
@@ -289,6 +313,8 @@ pub mut:
 	codex              CodexConfig
 	openai             OpenAIConfig
 	db                 DbConfig
+	routes             []RouteRuleConfig
+	executors          map[string]ExecutorSpecConfig
 }
 
 pub struct VhttpdConfig {
@@ -314,6 +340,8 @@ pub mut:
 	listeners          map[string]ListenerConfig
 	sites              map[string]SiteConfig
 	config_path        string
+	routes             []RouteRuleConfig
+	executors          map[string]ExecutorSpecConfig
 }
 
 pub fn default_vhttpd_config() VhttpdConfig {
@@ -1384,6 +1412,75 @@ pub fn resolve_config_variables(mut cfg VhttpdConfig, config_path string) ! {
 		cfg.feishu.bridge.target_id, changed = expand_config_string(cfg.feishu.bridge.target_id,
 			'feishu.bridge', vars, env_map, changed)!
 
+		// 展开 routes
+		mut next_routes := []RouteRuleConfig{}
+		for r in cfg.routes {
+			mut r_copy := r
+			root, root_changed := expand_config_string(r.root, 'routes', vars, env_map, false)!
+			if root_changed {
+				r_copy.root = root
+				changed = true
+			}
+			executor, executor_changed := expand_config_string(r.executor, 'routes', vars, env_map, false)!
+			if executor_changed {
+				r_copy.executor = executor
+				changed = true
+			}
+			location, location_changed := expand_config_string(r.location, 'routes', vars, env_map, false)!
+			if location_changed {
+				r_copy.location = location
+				changed = true
+			}
+			body, body_changed := expand_config_string(r.body, 'routes', vars, env_map, false)!
+			if body_changed {
+				r_copy.body = body
+				changed = true
+			}
+			next_routes << r_copy
+		}
+		cfg.routes = next_routes.clone()
+
+		// 展开 executors
+		mut next_executors := map[string]ExecutorSpecConfig{}
+		for name, spec in cfg.executors {
+			mut spec_copy := spec
+			
+			socket, socket_changed := expand_config_string(spec.worker.socket, 'executors.${name}', vars, env_map, false)!
+			if socket_changed {
+				spec_copy.worker.socket = socket
+				changed = true
+			}
+			socket_prefix, socket_prefix_changed := expand_config_string(spec.worker.socket_prefix, 'executors.${name}', vars, env_map, false)!
+			if socket_prefix_changed {
+				spec_copy.worker.socket_prefix = socket_prefix
+				changed = true
+			}
+			cmd, cmd_changed := expand_config_string(spec.worker.cmd, 'executors.${name}', vars, env_map, false)!
+			if cmd_changed {
+				spec_copy.worker.cmd = cmd
+				changed = true
+			}
+			
+			bin, bin_changed := expand_config_string(spec.php.bin, 'executors.${name}', vars, env_map, false)!
+			if bin_changed {
+				spec_copy.php.bin = bin
+				changed = true
+			}
+			worker_entry, worker_entry_changed := expand_config_string(spec.php.worker_entry, 'executors.${name}', vars, env_map, false)!
+			if worker_entry_changed {
+				spec_copy.php.worker_entry = worker_entry
+				changed = true
+			}
+			app_entry, app_entry_changed := expand_config_string(spec.php.app_entry, 'executors.${name}', vars, env_map, false)!
+			if app_entry_changed {
+				spec_copy.php.app_entry = app_entry
+				changed = true
+			}
+
+			next_executors[name] = spec_copy
+		}
+		cfg.executors = next_executors.clone()
+
 		if !changed {
 			resolve_config_paths(mut cfg, config_path)
 			return
@@ -1463,6 +1560,35 @@ fn resolve_config_paths(mut cfg VhttpdConfig, config_path string) {
 	}
 	cfg.assets.root = resolve_config_path(cfg.paths.root, cfg.assets.root)
 	cfg.codex.cwd = resolve_config_path(cfg.paths.root, cfg.codex.cwd)
+
+	// 解析 routes 路径
+	for i in 0 .. cfg.routes.len {
+		if cfg.routes[i].root != '' {
+			cfg.routes[i].root = resolve_config_path(cfg.paths.root, cfg.routes[i].root)
+		}
+	}
+
+	// 解析 executors 里的路径
+	for name, mut spec in cfg.executors {
+		spec.worker.socket = resolve_config_path(cfg.paths.root, spec.worker.socket)
+		spec.worker.socket_prefix = resolve_config_path(cfg.paths.root, spec.worker.socket_prefix)
+		for j, raw in spec.worker.sockets {
+			spec.worker.sockets[j] = resolve_config_path(cfg.paths.root, raw)
+		}
+		if spec_app_entry := spec.worker.env['VHTTPD_APP'] {
+			spec.worker.env['VHTTPD_APP'] = resolve_config_path(cfg.paths.root, spec_app_entry)
+		}
+		spec.php.worker_entry = resolve_config_path(cfg.paths.root, spec.php.worker_entry)
+		spec.php.app_entry = resolve_config_path(cfg.paths.root, spec.php.app_entry)
+		for j, raw in spec.php.extensions {
+			spec.php.extensions[j] = resolve_config_path(cfg.paths.root, raw)
+		}
+		spec.vjsx.app_entry = resolve_config_path(cfg.paths.root, spec.vjsx.app_entry)
+		spec.vjsx.module_root = resolve_config_path(cfg.paths.root, spec.vjsx.module_root)
+		spec.vjsx.build_root = resolve_config_path(cfg.paths.root, spec.vjsx.build_root)
+		spec.vjsx.signature_root = resolve_config_path(cfg.paths.root, spec.vjsx.signature_root)
+		cfg.executors[name] = spec
+	}
 }
 
 pub fn build_config_variable_map(cfg VhttpdConfig) map[string]string {

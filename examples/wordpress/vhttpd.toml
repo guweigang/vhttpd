@@ -1,7 +1,7 @@
 # vhttpd configuration for WordPress demo
 #
-# 使用此配置启动：
-# VPHP_WP_ROOT=/path/to/wordpress vhttpd --config examples/wordpress/vhttpd.toml
+# 从 vhttpd 仓库根目录启动：
+# VPHP_WP_ROOT=/Users/guweigang/wwwroot/wordpress ./vhttpd --config examples/wordpress/vhttpd.toml
 
 [server]
 host = "127.0.0.1"
@@ -20,19 +20,14 @@ socket = "/tmp/vhttpd_wordpress.sock"
 VPHP_WP_ROOT = "${env.VPHP_WP_ROOT}"
 
 [php]
-# 建议指定绝对路径，或者指向 vhttpd 项目编译后的 vphp-worker 真实位置
-worker_entry = "../../php/package/bin/vphp-worker"
+# WordPress 通过 vphp-worker 运行，不依赖 vslim 扩展。
+worker_entry = "./vendor/bin/vphp-worker"
 app_entry = "./app.php"
-extensions = [
-  # 挂载 vslim 扩展，提供高性能的 C/V 框架集成
-  "../../../vphpx/vslim/vslim.so"
-]
 
-# 静态资源挂载器配置：
-# 开启后，所有以 prefix 为前缀的静态资源（如 /wordpress/wp-content/... 等）直接由 vhttpd 在 C/Rust 侧读取返回，
-# 不经过动态的 PHP Worker 进程，从而极大地提升静态性能并减少 PHP 算力消耗。
+# WordPress 作为根站点运行时不要把源码根目录挂到 prefix="/"；
+# 否则 wp-admin/*.php 可能被静态层直接暴露。静态资源由 app.php 内部安全处理。
 [assets]
-enabled = true
-prefix = "/"
+enabled = false
+prefix = "/assets"
 root = "${env.VPHP_WP_ROOT}"
 cache_control = "public, max-age=31536000"

@@ -134,10 +134,10 @@ pub fn (e SocketWorkerExecutor) close() {
 
 pub fn (e SocketWorkerExecutor) dispatch_http(mut app AppFacade, req HttpLogicDispatchRequest) !HttpLogicDispatchOutcome {
 	_ = e
-	selected_socket := app.worker_backend_select_socket_queued()!
+	selected_socket := app.worker_backend_select_socket_for_kind(e.kind())!
 	mut conn := unix.connect_stream(selected_socket)!
 	app.on_worker_request_started(selected_socket)
-	read_timeout := app.worker_backend_read_timeout_ms()
+	read_timeout := app.worker_backend_read_timeout_ms_for_kind(e.kind())
 	if read_timeout > 0 {
 		conn.set_read_timeout(time.millisecond * read_timeout)
 	}
@@ -271,10 +271,10 @@ pub fn (e PhpCgiExecutor) close() {
 
 pub fn (e PhpCgiExecutor) dispatch_http(mut app AppFacade, req HttpLogicDispatchRequest) !HttpLogicDispatchOutcome {
 	_ = e
-	selected_socket := app.worker_backend_select_socket_queued()!
+	selected_socket := app.worker_backend_select_socket_for_kind(e.kind())!
 	mut conn := unix.connect_stream(selected_socket)!
 	app.on_worker_request_started(selected_socket)
-	read_timeout := app.worker_backend_read_timeout_ms()
+	read_timeout := app.worker_backend_read_timeout_ms_for_kind(e.kind())
 	if read_timeout > 0 {
 		conn.set_read_timeout(time.millisecond * read_timeout)
 	}

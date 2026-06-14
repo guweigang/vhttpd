@@ -11,9 +11,11 @@ pub interface AppFacade {
 	worker_backend_read_timeout_ms() int
 	worker_backend_sockets_len() int
 	worker_env() map[string]string
+	worker_backend_read_timeout_ms_for_kind(kind string) int
 mut:
 	// Worker Backend routing/lifecycle methods
 	worker_backend_select_socket_queued() !string
+	worker_backend_select_socket_for_kind(kind string) !string
 	on_worker_request_started(socket_path string)
 	on_worker_request_finished(socket_path string)
 	worker_websocket_open(mut conn unix.StreamConn, req http.Request, remote_addr string, path string, req_id string, trace_id string) !(bool, int, string)
@@ -39,9 +41,11 @@ mut:
 
 pub fn (a NoOpAppFacade) get_runtime_config_json() string { return '{}' }
 pub fn (a NoOpAppFacade) worker_backend_read_timeout_ms() int { return 0 }
+pub fn (a NoOpAppFacade) worker_backend_read_timeout_ms_for_kind(kind string) int { return 0 }
 pub fn (a NoOpAppFacade) worker_backend_sockets_len() int { return 0 }
 pub fn (a NoOpAppFacade) worker_env() map[string]string { return map[string]string{} }
 pub fn (mut a NoOpAppFacade) worker_backend_select_socket_queued() !string { return error('noop') }
+pub fn (mut a NoOpAppFacade) worker_backend_select_socket_for_kind(kind string) !string { return error('noop') }
 pub fn (mut a NoOpAppFacade) on_worker_request_started(_socket_path string) {}
 pub fn (mut a NoOpAppFacade) on_worker_request_finished(_socket_path string) {}
 pub fn (mut a NoOpAppFacade) worker_websocket_open(mut _conn unix.StreamConn, _req http.Request, _remote_addr string, _path string, _req_id string, _trace_id string) !(bool, int, string) { return error('noop') }

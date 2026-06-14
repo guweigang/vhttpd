@@ -47,6 +47,42 @@ fn start_server_runtime(mut app App, runtime_cfg server_lifecycle.ServerRuntimeC
 			'logic_executor_warmup_failed')
 		log.error('[vhttpd] logic executor warmup failed: ${err_msg}')
 	}
+
+	// 启动并预热所有附加常驻进程池与逻辑执行器
+	for name, mut ws in app.additional_workers {
+		log.debug('[vhttpd] start_server_runtime: starting additional executor lifecycle: ${name}')
+		event_log_path := app.event_log
+		mut sub_lifecycle_ctx := executor.LifecycleRuntimeContext{
+			worker_backend_autostart: ws.worker_backend.autostart
+			worker_backend_cmd:       ws.worker_backend.cmd
+			worker_backend_env:       ws.worker_backend.env.clone()
+			worker_backend_sockets:   ws.worker_backend.sockets.clone()
+			worker_backend_workdir:   ws.worker_backend.workdir
+			worker_backend_managed_workers: ws.worker_backend.managed_workers.clone()
+			emit:                     fn [event_log_path] (kind string, fields map[string]string) {
+				mut row := map[string]string{}
+				row['type'] = kind
+				row['ts'] = '${time.now().unix()}'
+				for k, v in fields {
+					row[k] = v
+				}
+				mut f := os.open_append(event_log_path) or { return }
+				defer {
+					f.close()
+				}
+				f.writeln(json.encode(row)) or {}
+			}
+		}
+		spec := executor.builtin_executor_spec_find(name) or { continue }
+		spec.lifecycle.start(mut sub_lifecycle_ctx)
+		ws.worker_backend.managed_workers = sub_lifecycle_ctx.worker_backend_managed_workers
+		
+		log.debug('[vhttpd] start_server_runtime: warming up additional executor: ${name}')
+		ws.logic_executor.warmup(mut facade) or {
+			log.error('[vhttpd] additional logic executor warmup failed: ${err.msg()}')
+		}
+	}
+
 	log.debug('[vhttpd] start_server_runtime: mounting assets')
 	AppStartupHooks.mount_assets(mut app)
 	log.debug('[vhttpd] start_server_runtime: installing middleware')

@@ -410,6 +410,12 @@ pub fn (global_cfg VhttpdConfig) with_site(site_cfg SiteConfig) VhttpdConfig {
 	cfg.codex = global_cfg.codex.merge(site_cfg.codex)
 	cfg.openai = global_cfg.openai.merge(site_cfg.openai)
 	cfg.feishu.bridge = global_cfg.feishu.bridge.merge(site_cfg.feishu.bridge)
+	if site_cfg.routes.len > 0 {
+		cfg.routes = site_cfg.routes.clone()
+	}
+	if site_cfg.executors.len > 0 {
+		cfg.executors = site_cfg.executors.clone()
+	}
 	cfg.config_path = global_cfg.config_path
 	return cfg
 }

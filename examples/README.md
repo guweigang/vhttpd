@@ -35,7 +35,7 @@ make build vhttpd
 
 - `vhttpd.multi.example.toml` 演示一个进程同时监听两个端口，分别跑 PHP 和 vjsx site
 - `symfony.toml` / `laravel.toml` 需要先安装各自 `vendor` 依赖
-- `wordpress.toml` 需要把 `VSLIM_WP_ROOT=/ABS/PATH/TO/WORDPRESS` 改成真实路径
+- `wordpress.toml` 需要把 `VPHP_WP_ROOT=/ABS/PATH/TO/WORDPRESS` 改成真实路径
 - `ollama-proxy.toml` 里 `OLLAMA_CHAT_URL / OLLAMA_MODEL / OLLAMA_API_KEY` 可按需改
 - `ollama-proxy.toml` 也支持 `OLLAMA_STREAM_FIXTURE`，可离线验证 phase-3 upstream plan
 - `db-upstream.toml` 演示 `vhttpd` 托管 mysql 连接池，并通过 unix socket 暴露 `db` runtime，上游可通过 `/admin/runtime/db` 查看状态
@@ -390,5 +390,5 @@ curl --noproxy '*' http://127.0.0.1:19995/admin/runtime | jq '.stats.mcp_samplin
 ```bash
 make -C /Users/guweigang/Source/vhttpd demo-symfony
 make -C /Users/guweigang/Source/vhttpd demo-laravel
-VSLIM_WP_ROOT=/abs/path/to/wordpress make -C /Users/guweigang/Source/vhttpd demo-wordpress
+VPHP_WP_ROOT=/abs/path/to/wordpress make -C /Users/guweigang/Source/vhttpd demo-wordpress
 ```

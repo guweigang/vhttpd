@@ -33,6 +33,17 @@ pub fn (w AppFacadeWrapper) worker_backend_read_timeout_ms() int {
 	return app.executors.worker.worker_backend.read_timeout_ms
 }
 
+pub fn (w AppFacadeWrapper) worker_backend_read_timeout_ms_for_kind(kind string) int {
+	app := unsafe { &App(w.app_ptr) }
+	if kind == app.logic_executor_kind() {
+		return app.executors.worker.worker_backend.read_timeout_ms
+	}
+	if state := app.additional_workers[kind] {
+		return state.worker_backend.read_timeout_ms
+	}
+	return 0
+}
+
 pub fn (w AppFacadeWrapper) worker_backend_sockets_len() int {
 	app := unsafe { &App(w.app_ptr) }
 	return app.executors.worker.worker_backend.sockets.len
@@ -46,6 +57,27 @@ pub fn (w AppFacadeWrapper) worker_env() map[string]string {
 pub fn (mut w AppFacadeWrapper) worker_backend_select_socket_queued() !string {
 	mut app := unsafe { &App(w.app_ptr) }
 	return app.worker_backend_select_socket_queued()
+}
+
+pub fn (mut w AppFacadeWrapper) worker_backend_select_socket_for_kind(kind string) !string {
+	mut app := unsafe { &App(w.app_ptr) }
+	if kind == app.logic_executor_kind() {
+		return app.worker_backend_select_socket_queued()
+	}
+	mut ws := app.additional_workers[kind] or {
+		return error('unknown_executor_kind:${kind}')
+	}
+	ws.mu.@lock()
+	defer {
+		ws.mu.unlock()
+	}
+	socket_len := ws.worker_backend.sockets.len
+	if socket_len == 0 {
+		return error('worker not configured for kind: ${kind}')
+	}
+	socket_path := ws.worker_backend.sockets[ws.worker_backend.rr_index % socket_len]
+	ws.worker_backend.rr_index = (ws.worker_backend.rr_index + 1) % socket_len
+	return socket_path
 }
 
 pub fn (mut w AppFacadeWrapper) on_worker_request_started(socket_path string) {

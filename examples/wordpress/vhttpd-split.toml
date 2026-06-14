@@ -1,0 +1,55 @@
+[server]
+host = "127.0.0.1"
+port = 19881
+
+[executor]
+kind = "php"
+
+[worker]
+autostart = true
+pool_size = 2
+socket = "/tmp/vhttpd_split_main.sock"
+
+[worker.env]
+VPHP_WP_ROOT = "/Users/guweigang/Source/vhttpd/examples/wordpress"
+
+[php]
+worker_entry = "./vendor/bin/vphp-worker"
+app_entry = "./app.php"
+
+# Additional executor php-cgi pool
+[executors.php-cgi]
+[executors.php-cgi.executor]
+kind = "php-cgi"
+
+[executors.php-cgi.worker]
+autostart = true
+pool_size = 2
+socket = "/tmp/vhttpd_split_cgi.sock"
+
+[executors.php-cgi.worker.env]
+VPHP_WP_ROOT = "/Users/guweigang/Source/vhttpd/examples/wordpress"
+
+[executors.php-cgi.php]
+bin = "php-cgi"
+
+# Split routing rules
+[[routes]]
+match.path = ["/redir-test"]
+status = 302
+location = "/redirected"
+body = "Redirecting to /redirected..."
+
+[[routes]]
+match.path = ["/block-test"]
+status = 403
+body = "Forbidden: Access Blocked"
+
+[[routes]]
+match.path = ["/static/*"]
+executor = "static"
+root = "/Users/guweigang/Source/vhttpd/examples/wordpress"
+
+[[routes]]
+match.path = ["/cgi/*"]
+executor = "php-cgi"
