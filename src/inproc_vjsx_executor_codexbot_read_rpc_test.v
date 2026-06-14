@@ -1,6 +1,6 @@
 module main
 
-import transport
+import upstream.transport
 import os
 
 fn test_inproc_vjsx_executor_repo_codexbot_app_ts_codex_query_command_runs_rpc_and_formats_response() {

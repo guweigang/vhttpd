@@ -23,20 +23,20 @@ fn test_ws_dispatch_conn_state_uses_single_lifecycle_source() {
 fn test_worker_websocket_dispatch_finalize_cleans_hub_state_once() {
 	mut app := App{}
 	mut lifecycle := &ws.DispatchConnState{}
-	app.ws_hub.conns['conn_dispatch'] = ws.HubConn{
+	app.transport.websocket.conns['conn_dispatch'] = ws.HubConn{
 		id:        'conn_dispatch'
 		lifecycle: lifecycle
 	}
-	app.ws_hub.conn_rooms['conn_dispatch'] = {
+	app.transport.websocket.conn_rooms['conn_dispatch'] = {
 		'room_dispatch': true
 	}
-	app.ws_hub.room_members['room_dispatch'] = {
+	app.transport.websocket.room_members['room_dispatch'] = {
 		'conn_dispatch': true
 	}
-	app.ws_hub.conn_meta['conn_dispatch'] = {
+	app.transport.websocket.conn_meta['conn_dispatch'] = {
 		'relay_role': 'client'
 	}
-	app.ws_hub.pending['conn_dispatch'] = [
+	app.transport.websocket.pending['conn_dispatch'] = [
 		ws.HubPendingMessage{
 			data:   'hello'
 			opcode: 'text'
@@ -50,34 +50,34 @@ fn test_worker_websocket_dispatch_finalize_cleans_hub_state_once() {
 	}
 	ws.dispatch_session_finalize(state)
 	assert lifecycle.phase() == .closed
-	assert 'conn_dispatch' !in app.ws_hub.conns
-	assert 'conn_dispatch' !in app.ws_hub.conn_rooms
-	assert 'conn_dispatch' !in app.ws_hub.conn_meta
-	assert 'conn_dispatch' !in app.ws_hub.pending
-	assert 'room_dispatch' !in app.ws_hub.room_members
+	assert 'conn_dispatch' !in app.transport.websocket.conns
+	assert 'conn_dispatch' !in app.transport.websocket.conn_rooms
+	assert 'conn_dispatch' !in app.transport.websocket.conn_meta
+	assert 'conn_dispatch' !in app.transport.websocket.pending
+	assert 'room_dispatch' !in app.transport.websocket.room_members
 	ws.dispatch_session_finalize(state)
-	assert 'conn_dispatch' !in app.ws_hub.conns
+	assert 'conn_dispatch' !in app.transport.websocket.conns
 }
 
 fn test_ws_hub_send_to_rejects_closing_dispatch_connection() {
 	mut app := App{}
 	mut lifecycle := &ws.DispatchConnState{}
-	app.ws_hub.conns['conn_dispatch'] = ws.HubConn{
+	app.transport.websocket.conns['conn_dispatch'] = ws.HubConn{
 		id:        'conn_dispatch'
 		lifecycle: lifecycle
 	}
 	assert lifecycle.mark_closing()
-	assert !ws.hub_send_to(mut app.ws_hub, 'conn_dispatch', 'hello', 'text')
-	assert 'conn_dispatch' !in app.ws_hub.pending
+	assert !ws.hub_send_to(mut app.transport.websocket, 'conn_dispatch', 'hello', 'text')
+	assert 'conn_dispatch' !in app.transport.websocket.pending
 }
 
 fn test_ws_hub_send_to_queues_opening_dispatch_connection() {
 	mut app := App{}
 	mut lifecycle := &ws.DispatchConnState{}
-	app.ws_hub.conns['conn_dispatch'] = ws.HubConn{
+	app.transport.websocket.conns['conn_dispatch'] = ws.HubConn{
 		id:        'conn_dispatch'
 		lifecycle: lifecycle
 	}
-	assert ws.hub_send_to(mut app.ws_hub, 'conn_dispatch', 'hello', 'text')
-	assert app.ws_hub.pending['conn_dispatch'].len == 1
+	assert ws.hub_send_to(mut app.transport.websocket, 'conn_dispatch', 'hello', 'text')
+	assert app.transport.websocket.pending['conn_dispatch'].len == 1
 }

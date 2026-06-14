@@ -5,7 +5,7 @@ import provider
 import feishu
 import codex
 import dbx
-import ws
+import upstream
 
 fn test_provider_registry_smoke() {
 	// Basic smoke assertions for provider registry API surface
@@ -40,7 +40,7 @@ fn test_provider_register_and_snapshot() {
 
 	// cleanup: remove spec directly from app for test isolation
 	app.mu.@lock()
-	app.providers.specs.delete('feishu-test')
+	app.providers.registry.specs.delete('feishu-test')
 	app.mu.unlock()
 	names2 := app.provider_names()
 	assert !names2.contains('feishu-test')
@@ -48,8 +48,10 @@ fn test_provider_register_and_snapshot() {
 
 fn test_provider_runtime_snapshots_expose_registered_runtime() {
 	mut app := App{
-		providers: ProviderHost{
-			specs: map[string]ProviderSpec{}
+		providers: ProviderRuntimeHub{
+			registry: ProviderHost{
+				specs: map[string]ProviderSpec{}
+			}
 		}
 	}
 	app.register_provider_spec(ProviderSpec{
@@ -72,8 +74,10 @@ fn test_provider_runtime_snapshots_expose_registered_runtime() {
 
 fn test_provider_enabled_and_runtime_snapshot_use_host() {
 	mut app := App{
-		providers: ProviderHost{
-			specs: map[string]ProviderSpec{}
+		providers: ProviderRuntimeHub{
+			registry: ProviderHost{
+				specs: map[string]ProviderSpec{}
+			}
 		}
 	}
 	app.register_provider_spec(ProviderSpec{
@@ -94,22 +98,24 @@ fn test_provider_enabled_and_runtime_snapshot_use_host() {
 
 fn test_provider_bootstrap_and_runtime_ready_helpers() {
 	mut app := App{
-		feishu:    feishu.FeishuState{
-			enabled: true
-			apps:    {
-				'main': config.FeishuAppConfig{
-					app_id: 'test-app'
+		providers: ProviderRuntimeHub{
+			feishu:   feishu.FeishuState{
+				enabled: true
+				apps:    {
+					'main': config.FeishuAppConfig{
+						app_id: 'test-app'
+					}
+				}
+				runtime: {
+					'main': feishu.ProviderRuntime{}
 				}
 			}
-			runtime: {
-				'main': feishu.ProviderRuntime{}
+			codex:    codex.CodexState{
+				ollama_enabled: true
 			}
-		}
-		codex:     codex.CodexState{
-			ollama_enabled: true
-		}
-		providers: ProviderHost{
-			specs: map[string]ProviderSpec{}
+			registry: ProviderHost{
+				specs: map[string]ProviderSpec{}
+			}
 		}
 	}
 	assert app.provider_bootstrap_enabled('feishu')
@@ -132,19 +138,21 @@ fn test_provider_bootstrap_and_runtime_ready_helpers() {
 
 fn test_provider_runtime_dynamic_feishu_instance_is_bootstrapped_and_ready() {
 	mut app := App{
-		provider_instances: provider.ProviderInstanceRegistry{
-			specs: {
-				'feishu/main': provider.ProviderInstanceSpec{
-					provider:      'feishu'
-					instance:      'main'
-					config_json:   '{"app_id":"cli_main","app_secret":"cli_secret"}'
-					desired_state: 'connected'
+		providers: ProviderRuntimeHub{
+			instances: provider.ProviderInstanceRegistry{
+				specs: {
+					'feishu/main': provider.ProviderInstanceSpec{
+						provider:      'feishu'
+						instance:      'main'
+						config_json:   '{"app_id":"cli_main","app_secret":"cli_secret"}'
+						desired_state: 'connected'
+					}
 				}
 			}
-		}
-		feishu:             feishu.FeishuState{
-			apps:    map[string]config.FeishuAppConfig{}
-			runtime: map[string]feishu.ProviderRuntime{}
+			feishu:    feishu.FeishuState{
+				apps:    map[string]config.FeishuAppConfig{}
+				runtime: map[string]feishu.ProviderRuntime{}
+			}
 		}
 	}
 	spec := app.provider_instance_ensure('feishu', 'main') or { provider.ProviderInstanceSpec{} }
@@ -163,14 +171,16 @@ fn test_provider_runtime_dynamic_feishu_instance_is_bootstrapped_and_ready() {
 
 fn test_provider_runtime_pull_url_and_reconnect_delay_helpers() {
 	mut app := App{
-		feishu: feishu.FeishuState{
-			reconnect_delay_ms: 4321
-		}
-		codex:  codex.CodexState{
-			runtime: codex.ProviderRuntime{
-				enabled:            true
-				url:                'ws://codex.local/ws'
-				reconnect_delay_ms: 9876
+		providers: ProviderRuntimeHub{
+			feishu: feishu.FeishuState{
+				reconnect_delay_ms: 4321
+			}
+			codex:  codex.CodexState{
+				runtime: codex.ProviderRuntime{
+					enabled:            true
+					url:                'ws://codex.local/ws'
+					reconnect_delay_ms: 9876
+				}
 			}
 		}
 	}
@@ -181,22 +191,24 @@ fn test_provider_runtime_pull_url_and_reconnect_delay_helpers() {
 
 fn test_provider_runtime_dynamic_codex_instance_is_bootstrapped_and_enabled() {
 	mut app := App{
-		codex:              codex.CodexState{
-			runtime: codex.ProviderRuntime{}
-		}
-		provider_instances: provider.ProviderInstanceRegistry{
-			specs: {
-				'codex/main':         provider.ProviderInstanceSpec{
-					provider:      'codex'
-					instance:      'main'
-					config_json:   '{"url":"ws://codex.local/main"}'
-					desired_state: 'connected'
-				}
-				'codex/project_demo': provider.ProviderInstanceSpec{
-					provider:      'codex'
-					instance:      'project_demo'
-					config_json:   '{"url":"ws://codex.local/project-demo"}'
-					desired_state: 'connected'
+		providers: ProviderRuntimeHub{
+			codex:     codex.CodexState{
+				runtime: codex.ProviderRuntime{}
+			}
+			instances: provider.ProviderInstanceRegistry{
+				specs: {
+					'codex/main':         provider.ProviderInstanceSpec{
+						provider:      'codex'
+						instance:      'main'
+						config_json:   '{"url":"ws://codex.local/main"}'
+						desired_state: 'connected'
+					}
+					'codex/project_demo': provider.ProviderInstanceSpec{
+						provider:      'codex'
+						instance:      'project_demo'
+						config_json:   '{"url":"ws://codex.local/project-demo"}'
+						desired_state: 'connected'
+					}
 				}
 			}
 		}
@@ -209,63 +221,65 @@ fn test_provider_runtime_dynamic_codex_instance_is_bootstrapped_and_enabled() {
 
 fn test_admin_provider_instance_snapshots_include_dynamic_and_static_compat_rows() {
 	mut app := App{
-		feishu:             feishu.FeishuState{
-			static_apps: {
-				'legacy': config.FeishuAppConfig{
-					app_id:     'legacy_app'
-					app_secret: 'legacy_secret'
+		providers: ProviderRuntimeHub{
+			feishu:    feishu.FeishuState{
+				static_apps: {
+					'legacy': config.FeishuAppConfig{
+						app_id:     'legacy_app'
+						app_secret: 'legacy_secret'
+					}
+				}
+				apps:        {
+					'legacy': config.FeishuAppConfig{
+						app_id:     'legacy_app'
+						app_secret: 'legacy_secret'
+					}
+					'main':   config.FeishuAppConfig{
+						app_id:     'dyn_app'
+						app_secret: 'dyn_secret'
+					}
+				}
+				runtime:     {
+					'legacy': feishu.ProviderRuntime{
+						name:      'legacy'
+						connected: true
+						ws_url:    'wss://feishu.local/legacy'
+					}
+					'main':   feishu.ProviderRuntime{
+						name:      'main'
+						connected: false
+						ws_url:    'wss://feishu.local/main'
+					}
 				}
 			}
-			apps:        {
-				'legacy': config.FeishuAppConfig{
-					app_id:     'legacy_app'
-					app_secret: 'legacy_secret'
-				}
-				'main':   config.FeishuAppConfig{
-					app_id:     'dyn_app'
-					app_secret: 'dyn_secret'
-				}
-			}
-			runtime:     {
-				'legacy': feishu.ProviderRuntime{
-					name:      'legacy'
-					connected: true
-					ws_url:    'wss://feishu.local/legacy'
-				}
-				'main':   feishu.ProviderRuntime{
-					name:      'main'
-					connected: false
-					ws_url:    'wss://feishu.local/main'
+			codex:     codex.CodexState{
+				runtime:   codex.ProviderRuntime{}
+				instances: {
+					'project_demo': codex.ProviderRuntime{
+						instance:  'project_demo'
+						connected: true
+						ws_url:    'ws://codex.local/project-demo/live'
+					}
 				}
 			}
-		}
-		codex:              codex.CodexState{
-			runtime:   codex.ProviderRuntime{}
-			instances: {
-				'project_demo': codex.ProviderRuntime{
-					instance:  'project_demo'
-					connected: true
-					ws_url:    'ws://codex.local/project-demo/live'
-				}
-			}
-		}
-		provider_instances: provider.ProviderInstanceRegistry{
-			specs: {
-				'feishu/main':        provider.ProviderInstanceSpec{
-					provider:      'feishu'
-					instance:      'main'
-					config_json:   '{"app_id":"dyn_app","app_secret":"dyn_secret"}'
-					desired_state: 'connected'
-					created_at:    10
-					updated_at:    20
-				}
-				'codex/project_demo': provider.ProviderInstanceSpec{
-					provider:      'codex'
-					instance:      'project_demo'
-					config_json:   '{"url":"ws://codex.local/project-demo","model":"o4-mini"}'
-					desired_state: 'connected'
-					created_at:    30
-					updated_at:    40
+			instances: provider.ProviderInstanceRegistry{
+				specs: {
+					'feishu/main':        provider.ProviderInstanceSpec{
+						provider:      'feishu'
+						instance:      'main'
+						config_json:   '{"app_id":"dyn_app","app_secret":"dyn_secret"}'
+						desired_state: 'connected'
+						created_at:    10
+						updated_at:    20
+					}
+					'codex/project_demo': provider.ProviderInstanceSpec{
+						provider:      'codex'
+						instance:      'project_demo'
+						config_json:   '{"url":"ws://codex.local/project-demo","model":"o4-mini"}'
+						desired_state: 'connected'
+						created_at:    30
+						updated_at:    40
+					}
 				}
 			}
 		}
@@ -299,39 +313,41 @@ fn test_admin_provider_instance_snapshots_include_dynamic_and_static_compat_rows
 
 fn test_provider_runtime_upstream_snapshot_helpers() {
 	mut app := App{
-		feishu: feishu.FeishuState{
-			enabled: true
-			apps:    {
-				'main': config.FeishuAppConfig{
-					app_id: 'test-app'
+		providers: ProviderRuntimeHub{
+			feishu: feishu.FeishuState{
+				enabled: true
+				apps:    {
+					'main': config.FeishuAppConfig{
+						app_id: 'test-app'
+					}
+				}
+				runtime: {
+					'main': feishu.ProviderRuntime{
+						name:      'main'
+						connected: true
+						ws_url:    'wss://feishu.local/ws'
+					}
 				}
 			}
-			runtime: {
-				'main': feishu.ProviderRuntime{
-					name:      'main'
-					connected: true
-					ws_url:    'wss://feishu.local/ws'
+			codex:  codex.CodexState{
+				runtime: codex.ProviderRuntime{
+					enabled:          true
+					connected:        true
+					ws_url:           'wss://codex.local/ws'
+					last_error:       ''
+					connect_attempts: 2
 				}
-			}
-		}
-		codex:  codex.CodexState{
-			runtime: codex.ProviderRuntime{
-				enabled:          true
-				connected:        true
-				ws_url:           'wss://codex.local/ws'
-				last_error:       ''
-				connect_attempts: 2
 			}
 		}
 	}
 	feishu_snapshot := app.provider_runtime_upstream_snapshot('feishu', 'main') or {
-		ws.UpstreamSnapshot{}
+		upstream.UpstreamSnapshot{}
 	}
 	assert feishu_snapshot.provider == 'feishu'
 	assert feishu_snapshot.instance == 'main'
 	assert feishu_snapshot.connected
 	codex_snapshot := app.provider_runtime_upstream_snapshot('codex', 'main') or {
-		ws.UpstreamSnapshot{}
+		upstream.UpstreamSnapshot{}
 	}
 	assert codex_snapshot.provider == 'codex'
 	assert codex_snapshot.instance == 'main'
@@ -341,26 +357,28 @@ fn test_provider_runtime_upstream_snapshot_helpers() {
 
 fn test_provider_runtime_upstream_events_helper() {
 	mut app := App{
-		feishu: feishu.FeishuState{
-			enabled: true
-			apps:    {
-				'main': config.FeishuAppConfig{
-					app_id: 'test-app'
+		providers: ProviderRuntimeHub{
+			feishu: feishu.FeishuState{
+				enabled: true
+				apps:    {
+					'main': config.FeishuAppConfig{
+						app_id: 'test-app'
+					}
 				}
-			}
-			runtime: {
-				'main': feishu.ProviderRuntime{
-					name:          'main'
-					recent_events: [
-						feishu.RuntimeEventSnapshot{
-							event_type:  'im.message.receive_v1'
-							message_id:  'msg-1'
-							chat_id:     'chat-1'
-							trace_id:    'trace-1'
-							received_at: 123
-							payload:     '{"ok":true}'
-						},
-					]
+				runtime: {
+					'main': feishu.ProviderRuntime{
+						name:          'main'
+						recent_events: [
+							feishu.RuntimeEventSnapshot{
+								event_type:  'im.message.receive_v1'
+								message_id:  'msg-1'
+								chat_id:     'chat-1'
+								trace_id:    'trace-1'
+								received_at: 123
+								payload:     '{"ok":true}'
+							},
+						]
+					}
 				}
 			}
 		}
@@ -374,23 +392,25 @@ fn test_provider_runtime_upstream_events_helper() {
 
 fn test_provider_runtime_metrics_helper() {
 	mut app := App{
-		feishu: feishu.FeishuState{
-			runtime: {
-				'main': feishu.ProviderRuntime{
-					connect_attempts:  3
-					connect_successes: 2
-					received_frames:   7
-					acked_events:      5
-					messages_sent:     4
-					send_errors:       1
+		providers: ProviderRuntimeHub{
+			feishu: feishu.FeishuState{
+				runtime: {
+					'main': feishu.ProviderRuntime{
+						connect_attempts:  3
+						connect_successes: 2
+						received_frames:   7
+						acked_events:      5
+						messages_sent:     4
+						send_errors:       1
+					}
 				}
 			}
-		}
-		codex:  codex.CodexState{
-			runtime: codex.ProviderRuntime{
-				connect_attempts:  6
-				connect_successes: 4
-				received_frames:   9
+			codex:  codex.CodexState{
+				runtime: codex.ProviderRuntime{
+					connect_attempts:  6
+					connect_successes: 4
+					received_frames:   9
+				}
 			}
 		}
 	}
@@ -404,22 +424,24 @@ fn test_provider_runtime_metrics_helper() {
 
 fn test_provider_runtime_capabilities_and_gateway_count_helpers() {
 	mut app := App{
-		feishu: feishu.FeishuState{
-			enabled: true
-			apps:    {
-				'main': config.FeishuAppConfig{
-					app_id: 'test-app'
-				}
-			}
-			runtime: {
-				'main': feishu.ProviderRuntime{
-					name: 'main'
-				}
-			}
-		}
-		codex:  codex.CodexState{
-			runtime: codex.ProviderRuntime{
+		providers: ProviderRuntimeHub{
+			feishu: feishu.FeishuState{
 				enabled: true
+				apps:    {
+					'main': config.FeishuAppConfig{
+						app_id: 'test-app'
+					}
+				}
+				runtime: {
+					'main': feishu.ProviderRuntime{
+						name: 'main'
+					}
+				}
+			}
+			codex:  codex.CodexState{
+				runtime: codex.ProviderRuntime{
+					enabled: true
+				}
 			}
 		}
 	}
@@ -434,23 +456,25 @@ fn test_provider_runtime_capabilities_and_gateway_count_helpers() {
 
 fn test_provider_runtime_upstream_launches_helper() {
 	mut app := App{
-		feishu: feishu.FeishuState{
-			enabled: true
-			apps:    {
-				'main': config.FeishuAppConfig{
-					app_id: 'test-app'
-				}
-			}
-			runtime: {
-				'main': feishu.ProviderRuntime{
-					name: 'main'
-				}
-			}
-		}
-		codex:  codex.CodexState{
-			runtime: codex.ProviderRuntime{
+		providers: ProviderRuntimeHub{
+			feishu: feishu.FeishuState{
 				enabled: true
-				url:     'ws://codex.local/ws'
+				apps:    {
+					'main': config.FeishuAppConfig{
+						app_id: 'test-app'
+					}
+				}
+				runtime: {
+					'main': feishu.ProviderRuntime{
+						name: 'main'
+					}
+				}
+			}
+			codex:  codex.CodexState{
+				runtime: codex.ProviderRuntime{
+					enabled: true
+					url:     'ws://codex.local/ws'
+				}
 			}
 		}
 	}
@@ -465,23 +489,25 @@ fn test_provider_runtime_upstream_launches_helper() {
 
 fn test_provider_runtime_helpers_skip_disabled_feishu_launch_and_gateway_count() {
 	mut app := App{
-		feishu: feishu.FeishuState{
-			enabled: false
-			apps:    {
-				'main': config.FeishuAppConfig{
-					app_id: 'test-app'
+		providers: ProviderRuntimeHub{
+			feishu: feishu.FeishuState{
+				enabled: false
+				apps:    {
+					'main': config.FeishuAppConfig{
+						app_id: 'test-app'
+					}
+				}
+				runtime: {
+					'main': feishu.ProviderRuntime{
+						name: 'main'
+					}
 				}
 			}
-			runtime: {
-				'main': feishu.ProviderRuntime{
-					name: 'main'
+			codex:  codex.CodexState{
+				runtime: codex.ProviderRuntime{
+					enabled: true
+					url:     'ws://codex.local/ws'
 				}
-			}
-		}
-		codex:  codex.CodexState{
-			runtime: codex.ProviderRuntime{
-				enabled: true
-				url:     'ws://codex.local/ws'
 			}
 		}
 	}
@@ -496,24 +522,26 @@ fn test_provider_runtime_helpers_skip_disabled_feishu_launch_and_gateway_count()
 
 fn test_websocket_upstream_provider_helpers_delegate_to_host_facade() {
 	mut app := App{
-		feishu: feishu.FeishuState{
-			enabled: true
-			apps:    {
-				'main': config.FeishuAppConfig{
-					app_id: 'test-app'
+		providers: ProviderRuntimeHub{
+			feishu: feishu.FeishuState{
+				enabled: true
+				apps:    {
+					'main': config.FeishuAppConfig{
+						app_id: 'test-app'
+					}
+				}
+				runtime: {
+					'main': feishu.ProviderRuntime{
+						name: 'main'
+					}
 				}
 			}
-			runtime: {
-				'main': feishu.ProviderRuntime{
-					name: 'main'
+			codex:  codex.CodexState{
+				runtime: codex.ProviderRuntime{
+					enabled:            true
+					url:                'ws://codex.local/ws'
+					reconnect_delay_ms: 2222
 				}
-			}
-		}
-		codex:  codex.CodexState{
-			runtime: codex.ProviderRuntime{
-				enabled:            true
-				url:                'ws://codex.local/ws'
-				reconnect_delay_ms: 2222
 			}
 		}
 	}
@@ -523,35 +551,39 @@ fn test_websocket_upstream_provider_helpers_delegate_to_host_facade() {
 	assert app.websocket_upstream_provider_reconnect_delay_ms(websocket_upstream_provider_codex,
 		'main') == 2222
 	app.websocket_upstream_provider_on_connecting(websocket_upstream_provider_codex, 'main')
-	assert app.codex.runtime.connect_attempts == 1
+	assert app.providers.codex.runtime.connect_attempts == 1
 }
 
 fn test_provider_runtime_lifecycle_helpers_delegate_codex_runtime() {
 	mut app := App{
-		codex: codex.CodexState{
-			runtime: codex.ProviderRuntime{
-				enabled: true
-				url:     'ws://codex.local/ws'
+		providers: ProviderRuntimeHub{
+			codex: codex.CodexState{
+				runtime: codex.ProviderRuntime{
+					enabled: true
+					url:     'ws://codex.local/ws'
+				}
 			}
 		}
 	}
 	app.provider_runtime_on_connecting('codex', 'main')
-	assert app.codex.runtime.connect_attempts == 1
+	assert app.providers.codex.runtime.connect_attempts == 1
 	app.provider_runtime_on_connected('codex', 'main', 'ws://codex.local/live')
-	assert app.codex.runtime.connected
-	assert app.codex.runtime.ws_url == 'ws://codex.local/live'
+	assert app.providers.codex.runtime.connected
+	assert app.providers.codex.runtime.ws_url == 'ws://codex.local/live'
 	app.provider_runtime_on_disconnected('codex', 'main', 'test-close')
-	assert !app.codex.runtime.connected
-	assert app.codex.runtime.last_error == 'test-close'
+	assert !app.providers.codex.runtime.connected
+	assert app.providers.codex.runtime.last_error == 'test-close'
 }
 
 fn test_db_runtime_snapshot_without_compiled_support() {
 	mut app := App{
-		db_runtime: dbx.Runtime.from_settings(provider.DbRuntimeSettings{
-			enabled: true
-			socket:  'tmp/vhttpd-db.sock'
-			driver:  'mysql'
-		})
+		transport: TransportRuntimeHub{
+			db: dbx.Runtime.from_settings(provider.DbRuntimeSettings{
+				enabled: true
+				socket:  'tmp/vhttpd-db.sock'
+				driver:  'mysql'
+			})
+		}
 	}
 	assert !dbx.Runtime.compiled()
 	assert !app.provider_bootstrap_enabled('db')
@@ -563,10 +595,12 @@ fn test_db_runtime_snapshot_without_compiled_support() {
 
 fn test_db_runtime_dispatch_reports_not_compiled() {
 	mut app := App{
-		db_runtime: dbx.Runtime{
-			enabled: true
-			socket:  'tmp/vhttpd-db.sock'
-			driver:  'mysql'
+		transport: TransportRuntimeHub{
+			db: dbx.Runtime{
+				enabled: true
+				socket:  'tmp/vhttpd-db.sock'
+				driver:  'mysql'
+			}
 		}
 	}
 	invalid := app.db_runtime_dispatch(dbx.Request{

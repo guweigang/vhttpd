@@ -1,6 +1,7 @@
 module main
+
 import config
-import transport
+import upstream.transport
 import feishu
 import json
 import os
@@ -56,9 +57,11 @@ export default app;
 		warm_executor.close()
 	}
 	mut warm_app := App{
-		feishu: feishu.FeishuState{
-			apps:    map[string]config.FeishuAppConfig{}
-			runtime: map[string]feishu.ProviderRuntime{}
+		providers: ProviderRuntimeHub{
+			feishu: feishu.FeishuState{
+				apps:    map[string]config.FeishuAppConfig{}
+				runtime: map[string]feishu.ProviderRuntime{}
+			}
 		}
 	}
 	mut warm_facade := warm_app.as_facade()
@@ -81,22 +84,21 @@ export default app;
 			repo_executor.close()
 		}
 		mut repo_app := InProcTestApp{}
-		resp := repo_executor.dispatch_websocket_upstream(mut repo_app,
-			transport.WorkerWebSocketUpstreamDispatchRequest{
-				mode:        'websocket_upstream'
-				event:       'message'
-				id:          'codexbot_ts_startup_sequence'
-				provider:    'feishu'
-				instance:    'main'
-				trace_id:    'trace_codexbot_ts_startup_sequence'
-				event_type:  'im.message.receive_v1'
-				message_id:  'om_codexbot_ts_startup_sequence'
-				target:      'chat_codexbot_ts_startup_sequence'
-				target_type: 'chat_id'
-				payload:     startup_sequence_feishu_payload('/help', 'chat_codexbot_ts_startup_sequence',
-					'om_codexbot_ts_startup_sequence')
-				received_at: 1710002000
-			}) or { panic(err) }
+		resp := repo_executor.dispatch_websocket_upstream(mut repo_app, transport.WorkerWebSocketUpstreamDispatchRequest{
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_startup_sequence'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_startup_sequence'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_startup_sequence'
+			target:      'chat_codexbot_ts_startup_sequence'
+			target_type: 'chat_id'
+			payload:     startup_sequence_feishu_payload('/help',
+				'chat_codexbot_ts_startup_sequence', 'om_codexbot_ts_startup_sequence')
+			received_at: 1710002000
+		}) or { panic(err) }
 		assert resp.handled
 		assert resp.commands.len > 0
 	})

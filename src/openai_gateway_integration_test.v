@@ -1,18 +1,19 @@
 module main
 
 import config
-import openai
+import api.openai
 import provider
 import net
 import net.http
 import os
 import state_store
 import time
+import upstream
 import veb
 import ws
 import feishu
 import codex
-import mcp_protocol
+import api.mcp.protocol as mcp_protocol
 import plugin
 
 fn openai_integration_free_port_pair() (int, int) {
@@ -259,65 +260,71 @@ fn openai_integration_start_gateway(port int, upstream_port int, plugin_file str
 		}
 	}
 	mut app := App{
-		event_log:          ''
-		started_at_unix:    time.now().unix()
-		plugins:            plugin.PluginState{
-			configs: plugins
-			vjsx:    build_vjsx_plugin_runtimes(plugins)
-		}
-		openai:             openai.OpenaiState{
-			enabled:         true
-			base_path:       '/v1'
-			plugin:          if plugin_file.trim_space() == '' { '' } else { 'planner' }
-			default_backend: 'mock'
-			endpoints:       config.OpenAIEndpointsConfig{}
-			backends:        {
-				'mock':   config.OpenAIBackendConfig{
-					base_url: 'http://127.0.0.1:${upstream_port}/v1'
-				}
-				'backup': config.OpenAIBackendConfig{
-					base_url: 'http://127.0.0.1:${upstream_port}/v1'
-				}
-				'exec':   config.OpenAIBackendConfig{
-					kind:     'executor'
-					executor: 'planner'
-				}
+		event_log:        ''
+		started_at_unix:  time.now().unix()
+		protocols:       ProtocolRuntimeHub{
+			plugins: plugin.PluginState{
+				configs: plugins
+				vjsx:    build_vjsx_plugin_runtimes(plugins)
 			}
-			routes:          {
-				'public': config.OpenAIRouteConfig{
-					models:         ['public-model']
-					backend:        'mock'
-					upstream_model: 'builtin-upstream-model'
+			openai:  openai.OpenaiState{
+				enabled:         true
+				base_path:       '/v1'
+				plugin:          if plugin_file.trim_space() == '' { '' } else { 'planner' }
+				default_backend: 'mock'
+				endpoints:       config.OpenAIEndpointsConfig{}
+				backends:        {
+					'mock':   config.OpenAIBackendConfig{
+						base_url: 'http://127.0.0.1:${upstream_port}/v1'
+					}
+					'backup': config.OpenAIBackendConfig{
+						base_url: 'http://127.0.0.1:${upstream_port}/v1'
+					}
+					'exec':   config.OpenAIBackendConfig{
+						kind:     'executor'
+						executor: 'planner'
+					}
 				}
+				routes:          {
+					'public': config.OpenAIRouteConfig{
+						models:         ['public-model']
+						backend:        'mock'
+						upstream_model: 'builtin-upstream-model'
+					}
+				}
+				responses:       state_store.MemoryStateStore.new[openai.OpenAIResponseRecord]()
 			}
-			responses:       state_store.MemoryStateStore.new[openai.OpenAIResponseRecord]()
+			mcp:     mcp_protocol.McpState{
+				sessions: map[string]mcp_protocol.Session{}
+			}
 		}
-		mcp:                mcp_protocol.McpState{
-			sessions: map[string]mcp_protocol.Session{}
+		transport:       TransportRuntimeHub{
+			websocket: ws.HubState{
+				conns:             map[string]ws.HubConn{}
+				room_members:      map[string]map[string]bool{}
+				conn_rooms:        map[string]map[string]bool{}
+				conn_meta:         map[string]map[string]string{}
+				pending:           map[string][]ws.HubPendingMessage{}
+				upstream_started:  map[string]bool{}
+				fixture_runtime:   map[string]ws.FixtureRuntime{}
+				upstream_sessions: map[string]upstream.UpstreamRuntimeSession{}
+			}
 		}
-		ws_hub:             ws.HubState{
-			conns:             map[string]ws.HubConn{}
-			room_members:      map[string]map[string]bool{}
-			conn_rooms:        map[string]map[string]bool{}
-			conn_meta:         map[string]map[string]string{}
-			pending:           map[string][]ws.HubPendingMessage{}
-			upstream_started:  map[string]bool{}
-			fixture_runtime:   map[string]ws.FixtureRuntime{}
-			upstream_sessions: map[string]ws.UpstreamRuntimeSession{}
-		}
-		providers:          ProviderHost{
-			registry: map[string]Provider{}
-			specs:    map[string]ProviderSpec{}
-		}
-		provider_instances: provider.ProviderInstanceRegistry{
-			specs: map[string]provider.ProviderInstanceSpec{}
-		}
-		codex:              codex.CodexState{
-			instances: map[string]codex.ProviderRuntime{}
-		}
-		feishu:             feishu.FeishuState{
-			runtime: map[string]feishu.ProviderRuntime{}
-			buffers: map[string]feishu.StreamBuffer{}
+		providers: ProviderRuntimeHub{
+			registry:  ProviderHost{
+				registry: map[string]Provider{}
+				specs:    map[string]ProviderSpec{}
+			}
+			instances: provider.ProviderInstanceRegistry{
+				specs: map[string]provider.ProviderInstanceSpec{}
+			}
+			codex:     codex.CodexState{
+				instances: map[string]codex.ProviderRuntime{}
+			}
+			feishu:    feishu.FeishuState{
+				runtime: map[string]feishu.ProviderRuntime{}
+				buffers: map[string]feishu.StreamBuffer{}
+			}
 		}
 	}
 	veb.run_at[App, Context](mut app,

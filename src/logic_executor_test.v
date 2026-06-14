@@ -30,17 +30,19 @@ fn test_logic_executor_can_hold_inproc_vjsx_executor() {
 
 fn test_admin_runtime_snapshot_exposes_embedded_logic_executor_identity() {
 	mut app := App{
-		worker: worker.WorkerState{
-			worker_backend_mode: .disabled
-			lifecycle:           'embedded_host'
-			logic_executor:      new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
-				thread_count:    1
-				module_root:     '/tmp/demo'
-				build_root:      '/tmp/demo-build'
-				signature_root:  '/tmp/demo'
-				runtime_profile: 'node'
-				enable_fs:       true
-			})
+		executors: ExecutorRuntimeHub{
+			worker: worker.WorkerState{
+				worker_backend_mode: .disabled
+				lifecycle:           'embedded_host'
+				logic_executor:      new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
+					thread_count:    1
+					module_root:     '/tmp/demo'
+					build_root:      '/tmp/demo-build'
+					signature_root:  '/tmp/demo'
+					runtime_profile: 'node'
+					enable_fs:       true
+				})
+			}
 		}
 	}
 	snapshot := app.admin_runtime_snapshot()
@@ -60,10 +62,12 @@ fn test_admin_runtime_snapshot_exposes_embedded_logic_executor_identity() {
 
 fn test_internal_admin_runtime_exposes_worker_logic_executor_identity() {
 	mut app := App{
-		worker: worker.WorkerState{
-			worker_backend_mode: .required
-			lifecycle:           'php_worker_host'
-			logic_executor:      executor.SocketWorkerExecutor{}
+		executors: ExecutorRuntimeHub{
+			worker: worker.WorkerState{
+				worker_backend_mode: .required
+				lifecycle:           'php_worker_host'
+				logic_executor:      executor.SocketWorkerExecutor{}
+			}
 		}
 	}
 	resp := app.internal_admin_dispatch(admin.InternalAdminRequest{

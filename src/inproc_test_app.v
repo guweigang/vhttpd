@@ -3,7 +3,7 @@ module main
 import executor
 import net.http
 import net.unix
-import transport
+import upstream.transport
 
 // InProcTestApp is a no-op executor.AppFacade used by inproc test files.
 // It satisfies the interface so tests can call dispatch_http / warmup / etc.

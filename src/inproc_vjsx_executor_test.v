@@ -2,7 +2,7 @@ module main
 
 import executor as exec
 import config as cfg_mod
-import transport
+import upstream.transport
 import encoding.base64
 import net.http
 import os
@@ -407,8 +407,8 @@ fn test_inproc_vjsx_executor_dispatch_http_exposes_runtime_snapshot() {
 		executor.close()
 	}
 	mut app := App{}
-	app.worker.worker_backend.queue_capacity = 8
-	app.worker.worker_backend.queue_timeout_ms = 25
+	app.executors.worker.worker_backend.queue_capacity = 8
+	app.executors.worker.worker_backend.queue_timeout_ms = 25
 	mut facade := app.as_facade()
 	req := http.Request{
 		method: .get
@@ -2284,9 +2284,11 @@ export default app;
 		executor.close()
 	}
 	mut app := App{
-		feishu: feishu.FeishuState{
-			apps:    map[string]cfg_mod.FeishuAppConfig{}
-			runtime: map[string]feishu.ProviderRuntime{}
+		providers: ProviderRuntimeHub{
+			feishu: feishu.FeishuState{
+				apps:    map[string]cfg_mod.FeishuAppConfig{}
+				runtime: map[string]feishu.ProviderRuntime{}
+			}
 		}
 	}
 	mut facade := app.as_facade()
@@ -2534,7 +2536,7 @@ export default app;
 		}
 	}
 	mut facade := app.as_facade()
-	app.ws_hub.conns['ws_timer'] = ws.HubConn{
+	app.transport.websocket.conns['ws_timer'] = ws.HubConn{
 		id:         'ws_timer'
 		request_id: 'req_ws_timer'
 		trace_id:   'trace_ws_timer'
@@ -2609,7 +2611,7 @@ export default app;
 		}
 	}
 	mut facade2 := app.as_facade()
-	app.ws_hub.conns['ws_timer_pump'] = ws.HubConn{
+	app.transport.websocket.conns['ws_timer_pump'] = ws.HubConn{
 		id:         'ws_timer_pump'
 		request_id: 'req_ws_timer_pump'
 		trace_id:   'trace_ws_timer_pump'
@@ -2686,7 +2688,7 @@ export default app;
 			pending:      map[string][]ws.HubPendingMessage{}
 		}
 	}
-	app.ws_hub.conns['ws_timer_failure'] = ws.HubConn{
+	app.transport.websocket.conns['ws_timer_failure'] = ws.HubConn{
 		id:         'ws_timer_failure'
 		request_id: 'req_ws_timer_failure'
 		trace_id:   'trace_ws_timer_failure'
@@ -2975,7 +2977,7 @@ export default app;
 			pending:      map[string][]ws.HubPendingMessage{}
 		}
 	}
-	app.ws_hub.conns['ws_main_failure'] = ws.HubConn{
+	app.transport.websocket.conns['ws_main_failure'] = ws.HubConn{
 		id:         'ws_main_failure'
 		request_id: 'req_ws_main_failure'
 		trace_id:   'trace_ws_main_failure'
@@ -3000,7 +3002,7 @@ export default app;
 	}) or { panic(err) }
 	assert open_resp.accepted
 	room_members, member_metadata, room_counts, presence_users :=
-		app.ws_hub.presence_snapshot('ws_main_failure')
+		app.transport.websocket.presence_snapshot('ws_main_failure')
 	msg_resp := executor.dispatch_websocket_event(mut facade6, transport.WorkerWebSocketFrame{
 		mode:            'websocket_dispatch'
 		event:           'message'
@@ -3015,8 +3017,8 @@ export default app;
 		trace_id:        'trace_ws_main_failure'
 		opcode:          'text'
 		data:            'hello'
-		rooms:           app.ws_hub.rooms_snapshot('ws_main_failure')
-		metadata:        app.ws_hub.meta_snapshot('ws_main_failure')
+		rooms:           app.transport.websocket.rooms_snapshot('ws_main_failure')
+		metadata:        app.transport.websocket.meta_snapshot('ws_main_failure')
 		room_members:    room_members
 		member_metadata: member_metadata
 		room_counts:     room_counts
@@ -3353,13 +3355,17 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_nudges_control_when_server_data_do
 		executor.close()
 	}
 	mut app := App{
-		runtime_config_json: '{"relay":{"controlNudgeDelayMs":20,"controlResetDelayMs":200}}'
-		ws_hub:              ws.HubState{
-			conns:        map[string]ws.HubConn{}
-			room_members: map[string]map[string]bool{}
-			conn_rooms:   map[string]map[string]bool{}
-			conn_meta:    map[string]map[string]string{}
-			pending:      map[string][]ws.HubPendingMessage{}
+		protocols: ProtocolRuntimeHub{
+			runtime_config_json: '{"relay":{"controlNudgeDelayMs":20,"controlResetDelayMs":200}}'
+		}
+		transport: TransportRuntimeHub{
+			websocket: ws.HubState{
+				conns:        map[string]ws.HubConn{}
+				room_members: map[string]map[string]bool{}
+				conn_rooms:   map[string]map[string]bool{}
+				conn_meta:    map[string]map[string]string{}
+				pending:      map[string][]ws.HubPendingMessage{}
+			}
 		}
 	}
 	mut facade7 := app.as_facade()
@@ -3409,7 +3415,7 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_nudges_control_when_server_data_do
 		&& it.data.contains('"type":"connected"'))
 	time.sleep(80 * time.millisecond)
 	executor.pump_all_lane_sessions() or { panic(err) }
-	pending := app.ws_hub.pending['ws_control_nudge'] or { []ws.HubPendingMessage{} }
+	pending := app.transport.websocket.pending['ws_control_nudge'] or { []ws.HubPendingMessage{} }
 	assert pending.len == 0
 }
 

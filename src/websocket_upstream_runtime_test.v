@@ -1,13 +1,16 @@
 module main
 
-import transport
+import upstream.transport
 import codex
+import upstream
 import ws
 
 fn test_websocket_upstream_reconnect_and_admin_helpers() {
 	mut app := App{
-		codex: codex.CodexState{
-			runtime: codex.ProviderRuntime{}
+		providers: ProviderRuntimeHub{
+			codex: codex.CodexState{
+				runtime: codex.ProviderRuntime{}
+			}
 		}
 	}
 
@@ -15,14 +18,14 @@ fn test_websocket_upstream_reconnect_and_admin_helpers() {
 	assert app.websocket_upstream_provider_reconnect_delay_ms(websocket_upstream_provider_codex,
 		'main') == 3000
 
-	app.codex.runtime.reconnect_delay_ms = 7200
+	app.providers.codex.runtime.reconnect_delay_ms = 7200
 	assert app.websocket_upstream_provider_reconnect_delay_ms(websocket_upstream_provider_codex,
 		'main') == 7200
 
 	// admin snapshot includes config mapping
-	app.codex.runtime.enabled = true
-	app.codex.runtime.url = 'https://example'
-	app.codex.runtime.model = 'm'
+	app.providers.codex.runtime.enabled = true
+	app.providers.codex.runtime.url = 'https://example'
+	app.providers.codex.runtime.model = 'm'
 	snap := app.admin_codex_snapshot()
 	assert snap.enabled
 	assert snap.config.url == 'https://example'
@@ -31,8 +34,10 @@ fn test_websocket_upstream_reconnect_and_admin_helpers() {
 
 fn test_upstream_runtime_context_tracks_registry_metrics_and_snapshot() {
 	mut app := App{
-		ws_hub: ws.HubState{
-			upstream_sessions: map[string]ws.UpstreamRuntimeSession{}
+		transport: TransportRuntimeHub{
+			websocket: ws.HubState{
+				upstream_sessions: map[string]upstream.UpstreamRuntimeSession{}
+			}
 		}
 	}
 	plan := transport.WorkerUpstreamPlanFrame{
@@ -46,7 +51,7 @@ fn test_upstream_runtime_context_tracks_registry_metrics_and_snapshot() {
 
 	app.upstream_runtime_register(plan, 'post', '/v1/chat/completions?debug=1', 'req_up_1',
 		'trace_up_1')
-	assert app.ws_hub.stat_upstream_plans_total == 1
+	assert app.transport.websocket.stat_upstream_plans_total == 1
 
 	snapshot := app.admin_upstreams_snapshot(true, 10, 0, 'external_upstream', 'mock_provider')
 	assert snapshot.active_count == 1
@@ -57,7 +62,7 @@ fn test_upstream_runtime_context_tracks_registry_metrics_and_snapshot() {
 	assert snapshot.sessions[0].source == 'fixture'
 
 	app.upstream_runtime_note_error()
-	assert app.ws_hub.stat_upstream_plan_errors_total == 1
+	assert app.transport.websocket.stat_upstream_plan_errors_total == 1
 
 	app.upstream_runtime_unregister('req_up_1')
 	assert app.admin_upstreams_snapshot(false, 10, 0, '', '').active_count == 0

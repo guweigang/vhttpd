@@ -1,5 +1,5 @@
 module main
-import transport
+import upstream.transport
 import executor
 
 fn test_kernel_dispatch_envelope_from_websocket_upstream() {

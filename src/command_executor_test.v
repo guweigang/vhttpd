@@ -2,7 +2,7 @@ module main
 
 import command
 import config
-import transport
+import upstream.transport
 import provider
 import executor as execmod
 import feishu
@@ -45,8 +45,10 @@ fn test_command_route_from_normalized_provider_message_send_for_feishu() {
 		return
 	}
 	mut app := &App{
-		providers: ProviderHost{
-			specs: map[string]ProviderSpec{}
+		providers: ProviderRuntimeHub{
+			registry: ProviderHost{
+				specs: map[string]ProviderSpec{}
+			}
 		}
 	}
 	app.register_provider_spec(ProviderSpec{
@@ -78,8 +80,10 @@ fn test_command_route_from_normalized_stream_append_for_feishu() {
 		return
 	}
 	mut app := &App{
-		providers: ProviderHost{
-			specs: map[string]ProviderSpec{}
+		providers: ProviderRuntimeHub{
+			registry: ProviderHost{
+				specs: map[string]ProviderSpec{}
+			}
 		}
 	}
 	app.register_provider_spec(ProviderSpec{
@@ -111,8 +115,10 @@ fn test_command_route_from_normalized_stream_fail_for_feishu() {
 		return
 	}
 	mut app := &App{
-		providers: ProviderHost{
-			specs: map[string]ProviderSpec{}
+		providers: ProviderRuntimeHub{
+			registry: ProviderHost{
+				specs: map[string]ProviderSpec{}
+			}
 		}
 	}
 	app.register_provider_spec(ProviderSpec{
@@ -141,12 +147,14 @@ fn test_command_route_from_normalized_stream_fail_for_feishu() {
 
 fn test_execute_provider_instance_upsert_applies_feishu_app_config() {
 	mut app := &App{
-		feishu:    feishu.FeishuState{
-			apps:    map[string]config.FeishuAppConfig{}
-			runtime: map[string]feishu.ProviderRuntime{}
-		}
-		providers: ProviderHost{
-			specs: map[string]ProviderSpec{}
+		providers: ProviderRuntimeHub{
+			feishu:   feishu.FeishuState{
+				apps:    map[string]config.FeishuAppConfig{}
+				runtime: map[string]feishu.ProviderRuntime{}
+			}
+			registry: ProviderHost{
+				specs: map[string]ProviderSpec{}
+			}
 		}
 	}
 	mut exec := command.CommandExecutor.new(app.build_command_context())
@@ -162,8 +170,8 @@ fn test_execute_provider_instance_upsert_applies_feishu_app_config() {
 	assert handled
 	assert exec_err == ''
 	assert snapshot.status == 'upserted'
-	assert app.feishu.apps['main'].app_id == 'bot_app'
-	assert app.feishu.apps['main'].app_secret == 'bot_secret'
+	assert app.providers.feishu.apps['main'].app_id == 'bot_app'
+	assert app.providers.feishu.apps['main'].app_secret == 'bot_secret'
 }
 
 fn test_command_route_from_command_codex_control() {
@@ -171,8 +179,10 @@ fn test_command_route_from_command_codex_control() {
 		return
 	}
 	mut app := &App{
-		providers: ProviderHost{
-			specs: map[string]ProviderSpec{}
+		providers: ProviderRuntimeHub{
+			registry: ProviderHost{
+				specs: map[string]ProviderSpec{}
+			}
 		}
 	}
 	app.register_provider_spec(ProviderSpec{
@@ -203,8 +213,10 @@ fn test_command_route_from_command_feishu_message_prefix() {
 		return
 	}
 	mut app := &App{
-		providers: ProviderHost{
-			specs: map[string]ProviderSpec{}
+		providers: ProviderRuntimeHub{
+			registry: ProviderHost{
+				specs: map[string]ProviderSpec{}
+			}
 		}
 	}
 	app.register_provider_spec(ProviderSpec{
@@ -232,8 +244,10 @@ fn test_command_route_from_command_feishu_message_prefix() {
 
 fn test_command_route_from_command_generic_fallback() {
 	mut app := &App{
-		providers: ProviderHost{
-			specs: map[string]ProviderSpec{}
+		providers: ProviderRuntimeHub{
+			registry: ProviderHost{
+				specs: map[string]ProviderSpec{}
+			}
 		}
 	}
 	mut exec := command.CommandExecutor.new(app.build_command_context())
@@ -249,8 +263,10 @@ fn test_command_route_from_command_ollama_message_prefix() {
 		return
 	}
 	mut app := &App{
-		providers: ProviderHost{
-			specs: map[string]ProviderSpec{}
+		providers: ProviderRuntimeHub{
+			registry: ProviderHost{
+				specs: map[string]ProviderSpec{}
+			}
 		}
 	}
 	app.register_provider_spec(ProviderSpec{
@@ -278,8 +294,10 @@ fn test_command_route_from_command_ollama_message_prefix() {
 
 fn test_provider_spec_command_matchers_are_exposed_in_snapshot() {
 	mut app := &App{
-		providers: ProviderHost{
-			specs: map[string]ProviderSpec{}
+		providers: ProviderRuntimeHub{
+			registry: ProviderHost{
+				specs: map[string]ProviderSpec{}
+			}
 		}
 	}
 	app.register_provider_spec(ProviderSpec{
@@ -326,8 +344,10 @@ fn test_command_route_from_command_feishu_is_generic_when_disabled() {
 		return
 	}
 	mut app := &App{
-		providers: ProviderHost{
-			specs: map[string]ProviderSpec{}
+		providers: ProviderRuntimeHub{
+			registry: ProviderHost{
+				specs: map[string]ProviderSpec{}
+			}
 		}
 	}
 	mut exec := command.CommandExecutor.new(app.build_command_context())
@@ -373,8 +393,10 @@ fn test_command_route_from_command_codex_is_generic_when_disabled() {
 		return
 	}
 	mut app := &App{
-		providers: ProviderHost{
-			specs: map[string]ProviderSpec{}
+		providers: ProviderRuntimeHub{
+			registry: ProviderHost{
+				specs: map[string]ProviderSpec{}
+			}
 		}
 	}
 	mut exec := command.CommandExecutor.new(app.build_command_context())
@@ -390,8 +412,10 @@ fn test_command_route_from_command_ollama_is_generic_when_disabled() {
 		return
 	}
 	mut app := &App{
-		providers: ProviderHost{
-			specs: map[string]ProviderSpec{}
+		providers: ProviderRuntimeHub{
+			registry: ProviderHost{
+				specs: map[string]ProviderSpec{}
+			}
 		}
 	}
 	mut exec := command.CommandExecutor.new(app.build_command_context())
@@ -531,10 +555,12 @@ fn test_command_executor_handles_provider_instance_upsert() {
 
 fn test_codex_handler_session_bind_thread_updates_runtime_binding() {
 	mut app := &App{
-		codex: codex.CodexState{
-			runtime: codex.ProviderRuntime{
-				thread_stream_map: map[string]string{}
-				stream_map:        map[string][]codex.CodexTarget{}
+		providers: ProviderRuntimeHub{
+			codex: codex.CodexState{
+				runtime: codex.ProviderRuntime{
+					thread_stream_map: map[string]string{}
+					stream_map:        map[string][]codex.CodexTarget{}
+				}
 			}
 		}
 	}
@@ -552,19 +578,21 @@ fn test_codex_handler_session_bind_thread_updates_runtime_binding() {
 	assert handled == true
 	assert err == ''
 	assert snapshot.status == 'bound'
-	assert app.codex.runtime.thread_id == 'thread_001'
-	assert app.codex.runtime.thread_stream_map['thread_001'] == 'codex:task_001'
+	assert app.providers.codex.runtime.thread_id == 'thread_001'
+	assert app.providers.codex.runtime.thread_stream_map['thread_001'] == 'codex:task_001'
 }
 
 fn test_codex_handler_session_clear_thread_removes_runtime_binding() {
 	mut app := &App{
-		codex: codex.CodexState{
-			runtime: codex.ProviderRuntime{
-				thread_id:         'thread_001'
-				thread_stream_map: {
-					'thread_001': 'codex:task_001'
+		providers: ProviderRuntimeHub{
+			codex: codex.CodexState{
+				runtime: codex.ProviderRuntime{
+					thread_id:         'thread_001'
+					thread_stream_map: {
+						'thread_001': 'codex:task_001'
+					}
+					stream_map:        map[string][]codex.CodexTarget{}
 				}
-				stream_map:        map[string][]codex.CodexTarget{}
 			}
 		}
 	}
@@ -581,20 +609,22 @@ fn test_codex_handler_session_clear_thread_removes_runtime_binding() {
 	assert handled == true
 	assert err == ''
 	assert snapshot.status == 'cleared'
-	assert app.codex.runtime.thread_id == ''
-	assert 'thread_001' !in app.codex.runtime.thread_stream_map
+	assert app.providers.codex.runtime.thread_id == ''
+	assert 'thread_001' !in app.providers.codex.runtime.thread_stream_map
 }
 
 fn test_feishu_handler_session_bind_message_registers_stream_target_and_buffer() {
 	mut app := &App{
-		codex:  codex.CodexState{
-			runtime: codex.ProviderRuntime{
-				thread_stream_map: map[string]string{}
-				stream_map:        map[string][]codex.CodexTarget{}
+		providers: ProviderRuntimeHub{
+			codex:  codex.CodexState{
+				runtime: codex.ProviderRuntime{
+					thread_stream_map: map[string]string{}
+					stream_map:        map[string][]codex.CodexTarget{}
+				}
 			}
-		}
-		feishu: feishu.FeishuState{
-			buffers: map[string]feishu.StreamBuffer{}
+			feishu: feishu.FeishuState{
+				buffers: map[string]feishu.StreamBuffer{}
+			}
 		}
 	}
 	mut handler := FeishuCommandHandler.new(mut app)
@@ -613,32 +643,34 @@ fn test_feishu_handler_session_bind_message_registers_stream_target_and_buffer()
 	assert err == ''
 	assert snapshot.status == 'bound'
 	assert snapshot.message_id == 'om_reply_001'
-	assert app.codex.runtime.stream_map['codex:task_002'].len == 1
-	assert app.codex.runtime.stream_map['codex:task_002'][0].message_id == 'om_reply_001'
-	assert 'om_reply_001' in app.feishu.buffers
-	assert app.feishu.buffers['om_reply_001'].stream_id == 'codex:task_002'
+	assert app.providers.codex.runtime.stream_map['codex:task_002'].len == 1
+	assert app.providers.codex.runtime.stream_map['codex:task_002'][0].message_id == 'om_reply_001'
+	assert 'om_reply_001' in app.providers.feishu.buffers
+	assert app.providers.feishu.buffers['om_reply_001'].stream_id == 'codex:task_002'
 }
 
 fn test_feishu_handler_session_clear_message_removes_buffer_and_stream_target() {
 	mut app := &App{
-		codex:  codex.CodexState{
-			runtime: codex.ProviderRuntime{
-				thread_stream_map: map[string]string{}
-				stream_map:        {
-					'codex:task_003': [
-						codex.CodexTarget{
-							platform:   'feishu'
-							message_id: 'om_reply_002'
-						},
-					]
+		providers: ProviderRuntimeHub{
+			codex:  codex.CodexState{
+				runtime: codex.ProviderRuntime{
+					thread_stream_map: map[string]string{}
+					stream_map:        {
+						'codex:task_003': [
+							codex.CodexTarget{
+								platform:   'feishu'
+								message_id: 'om_reply_002'
+							},
+						]
+					}
 				}
 			}
-		}
-		feishu: feishu.FeishuState{
-			buffers: {
-				'om_reply_002': feishu.StreamBuffer{
-					message_id: 'om_reply_002'
-					stream_id:  'codex:task_003'
+			feishu: feishu.FeishuState{
+				buffers: {
+					'om_reply_002': feishu.StreamBuffer{
+						message_id: 'om_reply_002'
+						stream_id:  'codex:task_003'
+					}
 				}
 			}
 		}
@@ -657,39 +689,41 @@ fn test_feishu_handler_session_clear_message_removes_buffer_and_stream_target() 
 	assert handled == true
 	assert err == ''
 	assert snapshot.status == 'cleared'
-	assert 'om_reply_002' !in app.feishu.buffers
-	assert 'codex:task_003' !in app.codex.runtime.stream_map
+	assert 'om_reply_002' !in app.providers.feishu.buffers
+	assert 'codex:task_003' !in app.providers.codex.runtime.stream_map
 }
 
 fn test_feishu_handler_session_clear_message_removes_buffer_chain() {
 	mut app := &App{
-		codex:  codex.CodexState{
-			runtime: codex.ProviderRuntime{
-				thread_stream_map: map[string]string{}
-				stream_map:        {
-					'codex:task_chain': [
-						codex.CodexTarget{
-							platform:   'feishu'
-							message_id: 'om_chain_1'
-						},
-						codex.CodexTarget{
-							platform:   'feishu'
-							message_id: 'om_chain_2'
-						},
-					]
+		providers: ProviderRuntimeHub{
+			codex:  codex.CodexState{
+				runtime: codex.ProviderRuntime{
+					thread_stream_map: map[string]string{}
+					stream_map:        {
+						'codex:task_chain': [
+							codex.CodexTarget{
+								platform:   'feishu'
+								message_id: 'om_chain_1'
+							},
+							codex.CodexTarget{
+								platform:   'feishu'
+								message_id: 'om_chain_2'
+							},
+						]
+					}
 				}
 			}
-		}
-		feishu: feishu.FeishuState{
-			buffers: {
-				'om_chain_1': feishu.StreamBuffer{
-					message_id:      'om_chain_1'
-					stream_id:       'codex:task_chain'
-					next_message_id: 'om_chain_2'
-				}
-				'om_chain_2': feishu.StreamBuffer{
-					message_id: 'om_chain_2'
-					stream_id:  'codex:task_chain'
+			feishu: feishu.FeishuState{
+				buffers: {
+					'om_chain_1': feishu.StreamBuffer{
+						message_id:      'om_chain_1'
+						stream_id:       'codex:task_chain'
+						next_message_id: 'om_chain_2'
+					}
+					'om_chain_2': feishu.StreamBuffer{
+						message_id: 'om_chain_2'
+						stream_id:  'codex:task_chain'
+					}
 				}
 			}
 		}
@@ -707,43 +741,45 @@ fn test_feishu_handler_session_clear_message_removes_buffer_chain() {
 	assert handled == true
 	assert err == ''
 	assert snapshot.status == 'cleared'
-	assert 'om_chain_1' !in app.feishu.buffers
-	assert 'om_chain_2' !in app.feishu.buffers
-	assert 'codex:task_chain' !in app.codex.runtime.stream_map
+	assert 'om_chain_1' !in app.providers.feishu.buffers
+	assert 'om_chain_2' !in app.providers.feishu.buffers
+	assert 'codex:task_chain' !in app.providers.codex.runtime.stream_map
 }
 
 fn test_feishu_handler_session_clear_stream_id_removes_all_stream_buffers() {
 	mut app := &App{
-		codex:  codex.CodexState{
-			runtime: codex.ProviderRuntime{
-				thread_stream_map: map[string]string{}
-				stream_map:        {
-					'codex:task_stream_clear': [
-						codex.CodexTarget{
-							platform:   'feishu'
-							message_id: 'om_stream_1'
-						},
-						codex.CodexTarget{
-							platform:   'feishu'
-							message_id: 'om_stream_2'
-						},
-					]
+		providers: ProviderRuntimeHub{
+			codex:  codex.CodexState{
+				runtime: codex.ProviderRuntime{
+					thread_stream_map: map[string]string{}
+					stream_map:        {
+						'codex:task_stream_clear': [
+							codex.CodexTarget{
+								platform:   'feishu'
+								message_id: 'om_stream_1'
+							},
+							codex.CodexTarget{
+								platform:   'feishu'
+								message_id: 'om_stream_2'
+							},
+						]
+					}
 				}
 			}
-		}
-		feishu: feishu.FeishuState{
-			buffers: {
-				'om_stream_1': feishu.StreamBuffer{
-					message_id: 'om_stream_1'
-					stream_id:  'codex:task_stream_clear'
-				}
-				'om_stream_2': feishu.StreamBuffer{
-					message_id: 'om_stream_2'
-					stream_id:  'codex:task_stream_clear'
-				}
-				'om_other':    feishu.StreamBuffer{
-					message_id: 'om_other'
-					stream_id:  'codex:other'
+			feishu: feishu.FeishuState{
+				buffers: {
+					'om_stream_1': feishu.StreamBuffer{
+						message_id: 'om_stream_1'
+						stream_id:  'codex:task_stream_clear'
+					}
+					'om_stream_2': feishu.StreamBuffer{
+						message_id: 'om_stream_2'
+						stream_id:  'codex:task_stream_clear'
+					}
+					'om_other':    feishu.StreamBuffer{
+						message_id: 'om_other'
+						stream_id:  'codex:other'
+					}
 				}
 			}
 		}
@@ -760,8 +796,8 @@ fn test_feishu_handler_session_clear_stream_id_removes_all_stream_buffers() {
 	assert handled == true
 	assert err == ''
 	assert snapshot.status == 'cleared'
-	assert 'om_stream_1' !in app.feishu.buffers
-	assert 'om_stream_2' !in app.feishu.buffers
-	assert 'om_other' in app.feishu.buffers
-	assert 'codex:task_stream_clear' !in app.codex.runtime.stream_map
+	assert 'om_stream_1' !in app.providers.feishu.buffers
+	assert 'om_stream_2' !in app.providers.feishu.buffers
+	assert 'om_other' in app.providers.feishu.buffers
+	assert 'codex:task_stream_clear' !in app.providers.codex.runtime.stream_map
 }

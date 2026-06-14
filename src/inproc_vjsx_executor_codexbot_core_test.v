@@ -1,6 +1,6 @@
 module main
 
-import transport
+import upstream.transport
 import os
 import time
 

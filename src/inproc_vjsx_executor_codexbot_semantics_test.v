@@ -1,7 +1,7 @@
 module main
 
 import executor as exec
-import transport
+import upstream.transport
 import net.http
 import os
 import json

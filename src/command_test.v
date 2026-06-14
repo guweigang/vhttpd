@@ -1,6 +1,6 @@
 module main
 import command
-import transport
+import upstream.transport
 
 fn test_normalized_command_kind_for_legacy_type_mappings() {
 	assert command.NormalizedCommand.from_worker_command(transport.WorkerWebSocketUpstreamCommand{

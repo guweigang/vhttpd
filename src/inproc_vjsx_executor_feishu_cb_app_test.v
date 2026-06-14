@@ -1,5 +1,5 @@
 module main
-import transport
+import upstream.transport
 
 import os
 
