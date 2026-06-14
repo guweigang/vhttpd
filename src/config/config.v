@@ -5,8 +5,9 @@ import toml
 
 pub struct ServerConfig {
 pub mut:
-	host string = '127.0.0.1'
-	port int    = 18081
+	host  string = '127.0.0.1'
+	port  int    = 18081
+	index string = 'index.php'
 }
 
 pub struct FilesConfig {
@@ -1482,6 +1483,15 @@ pub fn resolve_config_variables(mut cfg VhttpdConfig, config_path string) ! {
 		cfg.executors = next_executors.clone()
 
 		if !changed {
+			cfg.server.index, _ = expand_config_string(cfg.server.index, 'server', vars, env_map, false)!
+			if cfg.server.index != '' {
+				cfg.worker.env['VHTTPD_INDEX'] = cfg.server.index
+				for name, spec in cfg.executors {
+					mut spec_copy := spec
+					spec_copy.worker.env['VHTTPD_INDEX'] = cfg.server.index
+					cfg.executors[name] = spec_copy
+				}
+			}
 			resolve_config_paths(mut cfg, config_path)
 			return
 		}

@@ -3,6 +3,7 @@ module transport
 import net.http
 import net.unix
 import log
+import os
 
 // FastCGI 协议常量
 const fcgi_version_1 = u8(1)
@@ -104,12 +105,20 @@ pub fn FastCgiCodec.encode_request(method string, path string, req http.Request,
 	// 针对 WordPress 解析物理 SCRIPT_FILENAME 路径
 	wp_root := env_overrides['VPHP_WP_ROOT']
 	mut script_filename := ''
+	mut resolved_uri := normalized_path
 	if wp_root != '' {
 		mut rel_path := normalized_path
+		idx := env_overrides['VHTTPD_INDEX']
+		index_file := if idx != '' { idx } else { 'index.php' }
 		if rel_path == '' || rel_path == '/' {
-			rel_path = '/index.php'
+			rel_path = '/' + index_file
 		}
 		script_filename = wp_root.trim_right('/') + '/' + rel_path.trim_left('/')
+		if os.is_dir(script_filename) {
+			rel_path = os.join_path(rel_path, index_file)
+			script_filename = os.join_path(script_filename, index_file)
+		}
+		resolved_uri = rel_path
 	} else {
 		script_filename = normalized_path
 	}
@@ -118,8 +127,8 @@ pub fn FastCgiCodec.encode_request(method string, path string, req http.Request,
 	envs['DOCUMENT_ROOT'] = wp_root
 	
 	envs['REQUEST_URI'] = path
-	envs['DOCUMENT_URI'] = normalized_path
-	envs['SCRIPT_NAME'] = normalized_path
+	envs['DOCUMENT_URI'] = resolved_uri
+	envs['SCRIPT_NAME'] = resolved_uri
 	envs['QUERY_STRING'] = query_str
 	envs['REMOTE_ADDR'] = if remote_addr != '' { remote_addr } else { '127.0.0.1' }
 	envs['SERVER_SOFTWARE'] = 'vhttpd'
