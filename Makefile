@@ -14,7 +14,7 @@ V_TLS_FLAGS := -d use_openssl
 else
 V_TLS_FLAGS := -d mbedtls_client_read_timeout_ms=120000
 endif
-V_FLAGS ?= $(V_TLS_FLAGS)
+V_FLAGS ?= $(V_TLS_FLAGS) -enable-globals
 V_PROD_FLAGS ?= -prod
 V_NOCACHE_FLAGS ?= -nocache
 WITH_DB ?= 1

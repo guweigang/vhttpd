@@ -28,10 +28,42 @@ import log
 import os
 import logging
 import server_lifecycle
+import upstream.transport
 
 #include <time.h>
+#include <signal.h>
 
 fn C.tzset()
+fn C.kill(pid int, sig int) int
+
+__global (
+	g_active_apps      []&App
+	g_active_cfgs      []server_lifecycle.ServerRuntimeConfig
+	g_is_shutting_down bool
+)
+
+fn vhttpd_signal_handler(sig os.Signal) {
+	if g_is_shutting_down {
+		return
+	}
+	g_is_shutting_down = true
+
+	log.info('[vhttpd] Received signal ${sig}. Cleaning up child process groups...')
+	for pid in transport.get_child_pids() {
+		if pid > 0 {
+			log.info('[vhttpd] Terminating child process group: PID ${pid}')
+			C.kill(-pid, 9)
+		}
+	}
+
+	for i in 0 .. g_active_cfgs.len {
+		cfg := g_active_cfgs[i]
+		os.rm(cfg.internal_admin_socket) or {}
+		os.rm(cfg.pid_file) or {}
+	}
+	log.info('[vhttpd] Cleanup complete. Exiting process.')
+	exit(128 + int(sig))
+}
 
 const vhttpd_version = '0.1.0'
 
@@ -175,8 +207,14 @@ fn run_single_server(args []string, cfg config.VhttpdConfig) {
 	}
 	mut app := build_app_runtime(runtime_cfg.provider_settings, runtime_cfg.executor_plan, cfg,
 		runtime_cfg.app_build_cfg)
+	unsafe {
+		g_active_apps << &app
+		g_active_cfgs << runtime_cfg
+	}
 	defer {
-		shutdown_app_runtime(mut app, runtime_cfg)
+		if !g_is_shutting_down {
+			shutdown_app_runtime(mut app, runtime_cfg)
+		}
 	}
 
 	start_server_runtime(mut app, runtime_cfg)
@@ -191,6 +229,12 @@ fn run_server(args []string) {
 	configure_runtime_timezone(cfg.runtime.timezone)
 	log.debug('[vhttpd] run_server: timezone configured')
 	os.signal_ignore(.pipe)
+	os.signal_opt(.int, vhttpd_signal_handler) or {
+		log.error('[vhttpd] Failed to register SIGINT handler: ${err}')
+	}
+	os.signal_opt(.term, vhttpd_signal_handler) or {
+		log.error('[vhttpd] Failed to register SIGTERM handler: ${err}')
+	}
 	if cfg.uses_multi_listener() {
 		log.debug('[vhttpd] run_server: entering multi_server mode')
 		run_multi_server(args, cfg)

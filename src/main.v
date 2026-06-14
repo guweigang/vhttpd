@@ -753,7 +753,14 @@ fn apply_worker_headers(mut ctx Context, headers map[string]string) {
 			|| lower == 'x-request-id' {
 			continue
 		}
-		ctx.set_custom_header(name, value) or {}
+		if lower == 'set-cookie' {
+			cookies := value.split('\n')
+			for cookie in cookies {
+				ctx.res.header.add_custom('Set-Cookie', cookie) or {}
+			}
+		} else {
+			ctx.set_custom_header(name, value) or {}
+		}
 	}
 }
 

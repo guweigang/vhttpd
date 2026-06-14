@@ -34,9 +34,17 @@ fn run_multi_server(args []string, cfg config.VhttpdConfig) {
 	}
 	mut apps := build_multi_server_apps(runtime_cfg)
 	log.debug('[vhttpd] run_multi_server: apps built count=${apps.len}')
+	for i in 0 .. apps.len {
+		unsafe {
+			g_active_apps << apps[i].app
+			g_active_cfgs << apps[i].listener.runtime_cfg
+		}
+	}
 	defer {
-		for mut binding in apps {
-			shutdown_app_runtime(mut binding.app, binding.listener.runtime_cfg)
+		if !g_is_shutting_down {
+			for mut binding in apps {
+				shutdown_app_runtime(mut binding.app, binding.listener.runtime_cfg)
+			}
 		}
 	}
 	if apps.len == 0 {

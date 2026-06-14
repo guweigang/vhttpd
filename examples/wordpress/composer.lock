@@ -1,0 +1,64 @@
+{
+    "_readme": [
+        "This file locks the dependencies of your project to a known state",
+        "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
+        "This file is @generated automatically"
+    ],
+    "content-hash": "ba9a96d5fa6e4ea2c84d394d621f7565",
+    "packages": [
+        {
+            "name": "vphp/runtime",
+            "version": "dev-main",
+            "dist": {
+                "type": "path",
+                "url": "../../php/package",
+                "reference": "6e282e9893770826d7f91745c5fa4b44796b83fa"
+            },
+            "require": {
+                "php": ">=8.1"
+            },
+            "bin": [
+                "bin/vphp-worker",
+                "bin/vphp-worker-client"
+            ],
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "VHttpd\\": "src/VHttpd/",
+                    "VSlim\\": "src/VSlim/",
+                    "VPhp\\Provider\\": "src/Provider/"
+                },
+                "files": [
+                    "src/legacy_aliases.php"
+                ]
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Gu Weigang",
+                    "email": "guweigang@bullsoft.org"
+                }
+            ],
+            "description": "VPhp Vhttpd PHP Runtime",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        }
+    ],
+    "packages-dev": [],
+    "aliases": [],
+    "minimum-stability": "stable",
+    "stability-flags": {
+        "vphp/runtime": 20
+    },
+    "prefer-stable": false,
+    "prefer-lowest": false,
+    "platform": {
+        "php": "^8.1"
+    },
+    "platform-dev": {},
+    "plugin-api-version": "2.9.0"
+}

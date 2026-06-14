@@ -1,0 +1,50 @@
+{
+    "packages": [
+        {
+            "name": "vphp/runtime",
+            "version": "dev-main",
+            "version_normalized": "dev-main",
+            "dist": {
+                "type": "path",
+                "url": "../../php/package",
+                "reference": "6e282e9893770826d7f91745c5fa4b44796b83fa"
+            },
+            "require": {
+                "php": ">=8.1"
+            },
+            "bin": [
+                "bin/vphp-worker",
+                "bin/vphp-worker-client"
+            ],
+            "type": "library",
+            "installation-source": "dist",
+            "autoload": {
+                "psr-4": {
+                    "VHttpd\\": "src/VHttpd/",
+                    "VSlim\\": "src/VSlim/",
+                    "VPhp\\Provider\\": "src/Provider/"
+                },
+                "files": [
+                    "src/legacy_aliases.php"
+                ]
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Gu Weigang",
+                    "email": "guweigang@bullsoft.org"
+                }
+            ],
+            "description": "VPhp Vhttpd PHP Runtime",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            },
+            "install-path": "../vphp/runtime"
+        }
+    ],
+    "dev": true,
+    "dev-package-names": []
+}

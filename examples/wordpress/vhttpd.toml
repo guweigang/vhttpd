@@ -1,33 +1,97 @@
-# vhttpd configuration for WordPress demo
-#
-# 从 vhttpd 仓库根目录启动：
-# VPHP_WP_ROOT=/Users/guweigang/wwwroot/wordpress ./vhttpd --config examples/wordpress/vhttpd.toml
-
 [server]
 host = "127.0.0.1"
-port = 19881
+port = 8080
+index = "index.php"   # <--- 在这里自定义默认文档 (默认为 index.php)
 
+
+# 1. 默认执行器 (主池): 负责前台的高性能长驻运行
 [executor]
 kind = "php"
 
 [worker]
 autostart = true
 pool_size = 4
-socket = "/tmp/vhttpd_wordpress.sock"
+socket = "/tmp/vhttpd_wp_main.sock"
 
-# 推荐注入 VPHP_WP_ROOT 环境变量 (也可以通过系统环境变量传递)
 [worker.env]
-VPHP_WP_ROOT = "${env.VPHP_WP_ROOT}"
+VPHP_WP_ROOT = "/Users/guweigang/wwwroot/wordpress"
 
 [php]
-# WordPress 通过 vphp-worker 运行，不依赖 vslim 扩展。
+# 运行 vphp-worker 封装的 WordPress 入口
 worker_entry = "./vendor/bin/vphp-worker"
 app_entry = "./app.php"
 
-# WordPress 作为根站点运行时不要把源码根目录挂到 prefix="/"；
-# 否则 wp-admin/*.php 可能被静态层直接暴露。静态资源由 app.php 内部安全处理。
-[assets]
-enabled = false
-prefix = "/assets"
-root = "${env.VPHP_WP_ROOT}"
-cache_control = "public, max-age=31536000"
+# 2. 附加执行器 (附加池): 负责后台管理、登录等不适合/不支持长驻模式的动态脚本
+[executors.php-cgi]
+[executors.php-cgi.executor]
+kind = "php-cgi"
+
+[executors.php-cgi.worker]
+autostart = true
+pool_size = 2
+socket = "/tmp/vhttpd_wp_cgi.sock"
+
+[executors.php-cgi.worker.env]
+VPHP_WP_ROOT = "/Users/guweigang/wwwroot/wordpress"
+
+[executors.php-cgi.php]
+bin = "php-cgi"
+
+
+# 3. 路由分流策略 (按顺序从上往下匹配，匹配成功即刻阻断)
+# ==========================================================
+
+# 规则 3.1: 阻断敏感配置文件的直接访问 (安全防范)
+# ==========================================================
+# 路由分流策略 (请把静态文件后缀拦截放在最顶部)
+# ==========================================================
+
+# 规则 3.1: 拦截全站任意目录下的静态文件后缀，由 static 极速直回
+[[routes]]
+match.path = [
+    "*.css",
+    "*.js",
+    "*.png",
+    "*.jpg",
+    "*.jpeg",
+    "*.gif",
+    "*.svg",
+    "*.ico",
+    "*.woff",
+    "*.woff2",
+    "*.ttf"
+]
+executor = "static"
+root = "/Users/guweigang/wwwroot/wordpress"
+
+# 规则 3.2: 阻断敏感配置文件的直接访问
+[[routes]]
+match.path = ["/wp-config.php", "/wp-content/uploads/*.php"]
+status = 403
+body = "Forbidden: Access denied."
+
+# 规则 3.3: 其他非特定后缀的静态资源目录直回
+[[routes]]
+match.path = [
+    "/wp-content/*",
+    "/wp-includes/*",
+    "/favicon.ico",
+    "robots.txt"
+]
+executor = "static"
+root = "/Users/guweigang/wwwroot/wordpress"
+
+# 规则 3.4: 管理后台及特定 CGI 请求分流至 php-cgi 进程池
+# (此时 /wp-admin/css/install.css 已经在规则 3.1 被拦截并返回，
+#  剩下的如 /wp-admin/setup-config.php 会顺利滑落到这里由 php-cgi 运行)
+[[routes]]
+match.path = [
+    "/wp-admin/*",
+    "/wp-login.php",
+    "/wp-comments-post.php",
+    "/wp-cron.php"
+]
+executor = "php-cgi"
+
+# 规则 3.4: 兜底规则 (选填)
+# 任何未匹配上述规则的动态请求，将默认派发给 [executor].kind 中定义的 "php" (php-worker) 高性能长驻主池处理

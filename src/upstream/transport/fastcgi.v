@@ -338,6 +338,12 @@ fn parse_http_response_from_cgi(raw_stdout string) !WorkerResponse {
 			if status_parts.len > 0 {
 				status = status_parts[0].int()
 			}
+		} else if key.to_lower() == 'set-cookie' {
+			if 'set-cookie' in headers {
+				headers['set-cookie'] = headers['set-cookie'] + '\n' + val
+			} else {
+				headers['set-cookie'] = val
+			}
 		} else {
 			headers[key.to_lower()] = val
 		}

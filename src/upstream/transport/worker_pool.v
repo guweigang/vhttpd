@@ -5,6 +5,18 @@ import net.unix
 import os
 import time
 
+#include <signal.h>
+
+fn C.kill(pid int, sig int) int
+
+__global (
+	g_child_pids []int
+)
+
+pub fn get_child_pids() []int {
+	return g_child_pids
+}
+
 pub struct ManagedWorker {
 pub mut:
 	id                int
@@ -81,6 +93,9 @@ pub fn ManagedWorker.start(id int, worker_cmd string, worker_env map[string]stri
 	proc.set_work_folder(workdir)
 	proc.use_pgroup = true
 	proc.run()
+	unsafe {
+		g_child_pids << proc.pid
+	}
 	ManagedWorker.wait_for_socket(worker_socket, 5000)!
 	return ManagedWorker{
 		id:                id
@@ -117,18 +132,15 @@ pub fn (mut w ManagedWorker) stop() {
 	if isnil(w.proc) {
 		return
 	}
-	if w.proc.is_alive() {
-		w.proc.signal_term()
-		time.sleep(200 * time.millisecond)
-		if w.proc.is_alive() {
-			w.proc.signal_pgkill()
-			time.sleep(100 * time.millisecond)
-		}
-		if w.proc.is_alive() {
-			w.proc.signal_kill()
-		}
-		w.proc.wait()
-	}
+	// 向整个子进程组发送 SIGTERM，允许后代进程优雅退出
+	C.kill(-w.proc.pid, 15)
+
+	time.sleep(200 * time.millisecond)
+
+	// 无论 /bin/sh 是否已经退出，向整个进程组发送 SIGKILL 以防顽固残留
+	w.proc.signal_pgkill()
+
+	w.proc.wait()
 	w.proc.close()
 }
 

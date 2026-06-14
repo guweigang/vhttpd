@@ -23,55 +23,7 @@ for ($i = 0; $i < 6; $i++) {
 if ($autoload !== null) {
     require_once $autoload;
 } else {
-    require_once __DIR__ . '/../src/VHttpd/JsonShape.php';
-    require_once __DIR__ . '/../src/VHttpd/Psr7Adapter.php';
-    require_once __DIR__ . '/../src/VHttpd/AdminClient.php';
-    require_once __DIR__ . '/../src/VHttpd/GatewayClient.php';
-    require_once __DIR__ . '/../src/VHttpd/VHttpd.php';
-    require_once __DIR__ . '/../src/VHttpd/Attribute/Dispatchable.php';
-    require_once __DIR__ . '/../src/VHttpd/Upstream/Plan.php';
-    if (!class_exists('VSlim\Psr7Adapter', false)) {
-        require_once __DIR__ . '/../src/VSlim/Psr7Adapter.php';
-    }
     require_once __DIR__ . '/../src/VHttpd/PhpWorker/StreamResponse.php';
-    require_once __DIR__ . '/../src/VHttpd/PhpWorker/StreamApp.php';
-    require_once __DIR__ . '/../src/VHttpd/Upstream/WebSocket/Feishu/Event.php';
-    require_once __DIR__ . '/../src/VHttpd/Upstream/WebSocket/Feishu/Message.php';
-    require_once __DIR__ . '/../src/VHttpd/Upstream/WebSocket/Feishu/Command.php';
-    require_once __DIR__ . '/../src/VHttpd/Upstream/WebSocket/Feishu/Command/AbstractCommand.php';
-    require_once __DIR__ . '/../src/VHttpd/Upstream/WebSocket/Feishu/Command/Factory.php';
-    require_once __DIR__ . '/../src/VHttpd/Upstream/WebSocket/Feishu/Command/SendCommand.php';
-    require_once __DIR__ . '/../src/VHttpd/Upstream/WebSocket/Feishu/Command/UpdateCommand.php';
-    require_once __DIR__ . '/../src/VHttpd/Upstream/WebSocket/Feishu/Content/InteractiveCard.php';
-    require_once __DIR__ . '/../src/VHttpd/Upstream/WebSocket/Feishu/Content/PostContent.php';
-    require_once __DIR__ . '/../src/VHttpd/Upstream/WebSocket/Feishu/Content/CardActionValue.php';
-    require_once __DIR__ . '/../src/VHttpd/Upstream/WebSocket/Feishu/Content/CardButton.php';
-    require_once __DIR__ . '/../src/VHttpd/Upstream/WebSocket/Feishu/Content/CardMarkdown.php';
-    require_once __DIR__ . '/../src/VHttpd/Upstream/WebSocket/Feishu/Content/CardActionBlock.php';
-    require_once __DIR__ . '/../src/VHttpd/Upstream/WebSocket/Feishu/Content/PlainText.php';
-    require_once __DIR__ . '/../src/VHttpd/Upstream/WebSocket/Feishu/Content/CardHeader.php';
-    require_once __DIR__ . '/../src/VHttpd/Upstream/WebSocket/Feishu/Event/AbstractEvent.php';
-    require_once __DIR__ . '/../src/VHttpd/Upstream/WebSocket/Feishu/Event/Factory.php';
-    require_once __DIR__ . '/../src/VHttpd/Upstream/WebSocket/Feishu/Event/CardActionEvent.php';
-    require_once __DIR__ . '/../src/VHttpd/Upstream/WebSocket/Feishu/Message/AbstractMessage.php';
-    require_once __DIR__ . '/../src/VHttpd/Upstream/WebSocket/Feishu/Message/Factory.php';
-    require_once __DIR__ . '/../src/VHttpd/Upstream/WebSocket/Feishu/Message/TextMessage.php';
-    require_once __DIR__ . '/../src/VHttpd/Upstream/WebSocket/Feishu/Message/ImageMessage.php';
-    require_once __DIR__ . '/../src/VHttpd/Upstream/WebSocket/Feishu/Message/PostMessage.php';
-    require_once __DIR__ . '/../src/VHttpd/Upstream/WebSocket/Feishu/Message/FileMessage.php';
-    require_once __DIR__ . '/../src/VHttpd/Upstream/WebSocket/Feishu/Message/AudioMessage.php';
-    require_once __DIR__ . '/../src/VHttpd/Upstream/WebSocket/Feishu/Message/MediaMessage.php';
-    require_once __DIR__ . '/../src/VHttpd/Upstream/WebSocket/Feishu/Message/StickerMessage.php';
-    require_once __DIR__ . '/../src/VSlim/App/Feishu/BotAdapter.php';
-    require_once __DIR__ . '/../src/VSlim/App/Feishu/BotHandler.php';
-    require_once __DIR__ . '/../src/VSlim/App/Feishu/AbstractBotHandler.php';
-    require_once __DIR__ . '/../src/VSlim/App/Feishu/BotApp.php';
-    require_once __DIR__ . '/../src/VSlim/Mcp/App.php';
-    require_once __DIR__ . '/../src/VHttpd/Upstream/WebSocket/Feishu/McpToolset.php';
-    require_once __DIR__ . '/../src/VHttpd/PhpWorker/WebSocket/CommandSink.php';
-    require_once __DIR__ . '/../src/VHttpd/PhpWorker/WebSocket/Connection.php';
-    require_once __DIR__ . '/../src/VHttpd/PhpWorker/WebSocket/CommandBuffer.php';
-    require_once __DIR__ . '/../src/VSlim/WebSocket/App.php';
     require_once __DIR__ . '/../src/VHttpd/PhpWorker/Server.php';
     require_once __DIR__ . '/../src/legacy_aliases.php';
 }

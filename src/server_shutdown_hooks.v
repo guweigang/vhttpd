@@ -1,19 +1,25 @@
 module main
 
 import os
+import log
 import server_lifecycle
 import executor
 
 fn shutdown_app_runtime(mut app App, runtime_cfg server_lifecycle.ServerRuntimeConfig) {
+	log.info('[vhttpd] shutdown_app_runtime: emitting server.stopped event')
 	app.emit('server.stopped', {
 		'pid': '${os.getpid()}'
 	})
+	log.info('[vhttpd] shutdown_app_runtime: stopping main executor lifecycle')
 	mut lifecycle_ctx := build_lifecycle_runtime_context(app)
 	runtime_cfg.executor_plan.lifecycle.stop(mut lifecycle_ctx)
+	log.info('[vhttpd] shutdown_app_runtime: closing main logic_executor')
 	app.executors.worker.logic_executor.close()
 
 	// 关闭所有附加常驻进程池的生命周期并关闭执行器
+	log.info('[vhttpd] shutdown_app_runtime: stopping additional worker lifecycles')
 	for name, mut ws in app.additional_workers {
+		log.info('[vhttpd] shutdown_app_runtime: stopping additional worker: ${name}')
 		mut sub_lifecycle_ctx := executor.LifecycleRuntimeContext{
 			worker_backend_autostart: ws.worker_backend.autostart
 			worker_backend_cmd:       ws.worker_backend.cmd
@@ -24,12 +30,16 @@ fn shutdown_app_runtime(mut app App, runtime_cfg server_lifecycle.ServerRuntimeC
 		}
 		spec := executor.builtin_executor_spec_find(name) or { continue }
 		spec.lifecycle.stop(mut sub_lifecycle_ctx)
+		log.info('[vhttpd] shutdown_app_runtime: closing additional logic_executor: ${name}')
 		ws.logic_executor.close()
 	}
 
+	log.info('[vhttpd] shutdown_app_runtime: closing all plugins')
 	app.close_all_plugins()
-	// Graceful provider shutdown is now spec/runtime-driven.
+	log.info('[vhttpd] shutdown_app_runtime: stopping all providers')
 	app.stop_all_providers()
+	log.info('[vhttpd] shutdown_app_runtime: cleaning runtime files')
 	os.rm(runtime_cfg.internal_admin_socket) or {}
 	os.rm(runtime_cfg.pid_file) or {}
+	log.info('[vhttpd] shutdown_app_runtime: complete')
 }
