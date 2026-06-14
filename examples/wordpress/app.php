@@ -145,7 +145,12 @@ return static function ($requestOrEnvelope, array $envelope = []): array {
     $_SERVER['REQUEST_URI'] = $requestUri;
     $_SERVER['REQUEST_METHOD'] = $method;
     $_SERVER['QUERY_STRING'] = $queryStr;
-    $_SERVER['HTTP_HOST'] = $host ?: 'localhost';
+    
+    $hostHeader = $host ?: 'localhost';
+    if ($port !== '' && $port !== '80' && $port !== '443') {
+        $hostHeader .= ':' . $port;
+    }
+    $_SERVER['HTTP_HOST'] = $hostHeader;
     $_SERVER['SERVER_NAME'] = $host ?: 'localhost';
     if ($port !== '') {
         $_SERVER['SERVER_PORT'] = $port;
