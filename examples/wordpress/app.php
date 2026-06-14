@@ -1,6 +1,24 @@
 <?php
 declare(strict_types=1);
 
+class WpRedirectException extends \Exception {
+    private $location;
+    private $status;
+    public function __construct(string $location, int $status) {
+        parent::__construct("Redirecting to {$location}");
+        $this->location = $location;
+        $this->status = $status;
+    }
+    public function getLocation(): string { return $this->location; }
+    public function getStatus(): int { return $this->status; }
+}
+
+if (!function_exists('wp_redirect')) {
+    function wp_redirect($location, $status = 302, $x_redirect_by = 'WordPress') {
+        throw new WpRedirectException($location, (int)$status);
+    }
+}
+
 /**
  * WordPress bridge demo for vhttpd/php-worker.
  *
@@ -288,6 +306,17 @@ return static function ($requestOrEnvelope, array $envelope = []): array {
         'body' => $html,
     ];
     } catch (\Throwable $t) {
+        if ($t instanceof WpRedirectException) {
+            return [
+                'status' => $t->getStatus(),
+                'content_type' => 'text/html; charset=utf-8',
+                'headers' => [
+                    'location' => $t->getLocation(),
+                    'x-redirect-by' => 'vhttpd-worker-intercept',
+                ],
+                'body' => 'Redirecting to ' . htmlspecialchars($t->getLocation()),
+            ];
+        }
         return [
             'status' => 500,
             'content_type' => 'text/html; charset=utf-8',
