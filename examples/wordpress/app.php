@@ -186,18 +186,21 @@ return static function ($requestOrEnvelope, array $envelope = []): array {
     }
     $isPhpFile = is_file($localPhpFile) && str_ends_with($localPhpFile, '.php');
     if ($isPhpFile) {
-        return [
-            'status' => 501,
-            'content_type' => 'application/json; charset=utf-8',
-            'headers' => [
-                'x-framework' => 'wordpress',
-            ],
-            'body' => json_encode([
-                'error' => 'direct_php_script_unsupported',
-                'path' => $path,
-                'message' => 'Direct WordPress PHP entrypoints require a separate CGI/compat executor, not this long-running worker app.',
-            ], JSON_UNESCAPED_SLASHES),
-        ];
+        $cleanPath = '/' . ltrim($path, '/');
+        if ($cleanPath !== '/' && $cleanPath !== '/index.php') {
+            return [
+                'status' => 501,
+                'content_type' => 'application/json; charset=utf-8',
+                'headers' => [
+                    'x-framework' => 'wordpress',
+                ],
+                'body' => json_encode([
+                    'error' => 'direct_php_script_unsupported',
+                    'path' => $path,
+                    'message' => 'Direct WordPress PHP entrypoints require a separate CGI/compat executor, not this long-running worker app.',
+                ], JSON_UNESCAPED_SLASHES),
+            ];
+        }
     }
 
     // 4. 常驻加载：已安装且不是物理 PHP 入口时，交给 WordPress runtime 处理。
