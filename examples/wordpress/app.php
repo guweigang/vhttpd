@@ -171,15 +171,12 @@ return static function ($requestOrEnvelope, array $envelope = []): array {
         }
 
         return [
-            'status' => 503,
-            'content_type' => 'application/json; charset=utf-8',
+            'status' => 302,
+            'content_type' => 'text/html; charset=utf-8',
             'headers' => [
-                'x-framework' => 'wordpress',
+                'location' => '/wp-admin/setup-config.php',
             ],
-            'body' => json_encode([
-                'error' => 'wp_config_missing',
-                'message' => 'This vphp-worker example expects an installed WordPress site.',
-            ], JSON_UNESCAPED_SLASHES),
+            'body' => 'Redirecting to WordPress setup...',
         ];
     }
 
