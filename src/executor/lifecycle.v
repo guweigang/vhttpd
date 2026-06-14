@@ -134,6 +134,25 @@ pub fn php_worker_executor_lifecycle() LogicExecutorLifecycle {
 	}
 }
 
+pub fn php_cgi_executor_lifecycle() LogicExecutorLifecycle {
+	mut l := php_worker_executor_lifecycle()
+	return LogicExecutorLifecycle{
+		name_fn: fn () string {
+			return 'php_cgi_host'
+		}
+		prepare_bootstrap_fn: fn (args []string, cfg config.VhttpdConfig, mut state ExecutorBootstrapState) ! {
+			php_spec := builtin_executor_spec_find('php-cgi')!
+			php_cfg := php_spec.resolve_php_runtime_config(args, cfg)!
+			state.worker_env = php_worker_runtime_build_env(state.worker_env, php_cfg)
+			if state.worker_cmd.trim_space() == '' {
+				state.worker_cmd = php_cgi_runtime_build_command(php_cfg)!
+			}
+		}
+		start_fn: l.start_fn
+		stop_fn: l.stop_fn
+	}
+}
+
 // ── Embedded (vjsx) lifecycle ──
 
 pub fn embedded_executor_lifecycle() LogicExecutorLifecycle {

@@ -10,6 +10,7 @@ pub interface AppFacade {
 	get_runtime_config_json() string
 	worker_backend_read_timeout_ms() int
 	worker_backend_sockets_len() int
+	worker_env() map[string]string
 mut:
 	// Worker Backend routing/lifecycle methods
 	worker_backend_select_socket_queued() !string
@@ -39,6 +40,7 @@ mut:
 pub fn (a NoOpAppFacade) get_runtime_config_json() string { return '{}' }
 pub fn (a NoOpAppFacade) worker_backend_read_timeout_ms() int { return 0 }
 pub fn (a NoOpAppFacade) worker_backend_sockets_len() int { return 0 }
+pub fn (a NoOpAppFacade) worker_env() map[string]string { return map[string]string{} }
 pub fn (mut a NoOpAppFacade) worker_backend_select_socket_queued() !string { return error('noop') }
 pub fn (mut a NoOpAppFacade) on_worker_request_started(_socket_path string) {}
 pub fn (mut a NoOpAppFacade) on_worker_request_finished(_socket_path string) {}

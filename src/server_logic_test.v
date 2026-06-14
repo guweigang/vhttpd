@@ -961,6 +961,16 @@ fn test_build_php_worker_command_from_php_section() {
 	assert cmd == "'php' '-d' 'extension=/tmp/a.so' '-d' 'extension=/tmp/b.so' '-d' 'memory_limit=512M' '/tmp/php-worker'"
 }
 
+fn test_build_php_cgi_command_from_php_section() {
+	php_cfg := config.PhpConfig{
+		bin:          'php-cgi'
+		extensions:   ['/tmp/a.so']
+		args:         ['-d', 'memory_limit=256M']
+	}
+	cmd := executor.php_cgi_runtime_build_command(php_cfg) or { panic(err) }
+	assert cmd == "'php-cgi' '-d' 'extension=/tmp/a.so' '-d' 'memory_limit=256M' '-b' '{socket}'"
+}
+
 fn test_build_php_worker_command_requires_worker_entry() {
 	php_cfg := config.PhpConfig{
 		bin: 'php'
@@ -1111,7 +1121,7 @@ fn test_builtin_logic_executor_spec_exposes_runtime_models() {
 fn test_admin_logic_executor_specs_snapshot_lists_builtin_executors() {
 	mut app := App{}
 	snapshot := app.admin_logic_executor_specs_snapshot()
-	assert snapshot.len == 3
+	assert snapshot.len == 4
 	assert snapshot[0].kind == 'none'
 	assert snapshot[0].logic_provider == 'none'
 	assert snapshot[0].logic_executor_lifecycle == 'disabled'
@@ -1127,15 +1137,23 @@ fn test_admin_logic_executor_specs_snapshot_lists_builtin_executors() {
 	assert snapshot[1].config_surface.section == 'php'
 	assert snapshot[1].config_surface.worker_entry_flag == '--php-worker-entry'
 	assert 'php-worker' in snapshot[1].aliases
-	assert snapshot[2].kind == 'vjsx'
-	assert snapshot[2].logic_provider == 'vjsx'
-	assert snapshot[2].logic_executor_lifecycle == 'embedded_host'
-	assert snapshot[2].logic_executor_model == 'embedded'
-	assert snapshot[2].worker_backend_mode == 'disabled'
-	assert snapshot[2].config_surface.section == 'vjsx'
-	assert snapshot[2].config_surface.app_entry_flag == '--vjsx-entry'
-	assert snapshot[2].config_surface.build_root_flag == '--vjsx-build-root'
-	assert snapshot[2].config_surface.signature_root_flag == '--vjsx-signature-root'
+	assert snapshot[2].kind == 'php-cgi'
+	assert snapshot[2].logic_provider == 'php-cgi'
+	assert snapshot[2].logic_executor_lifecycle == 'php_cgi_host'
+	assert snapshot[2].logic_executor_model == 'worker'
+	assert snapshot[2].worker_backend_mode == 'required'
+	assert snapshot[2].config_surface.section == 'php'
+	assert snapshot[2].config_surface.worker_entry_flag == '--php-worker-entry'
+	assert 'php-cgi' in snapshot[2].aliases
+	assert snapshot[3].kind == 'vjsx'
+	assert snapshot[3].logic_provider == 'vjsx'
+	assert snapshot[3].logic_executor_lifecycle == 'embedded_host'
+	assert snapshot[3].logic_executor_model == 'embedded'
+	assert snapshot[3].worker_backend_mode == 'disabled'
+	assert snapshot[3].config_surface.section == 'vjsx'
+	assert snapshot[3].config_surface.app_entry_flag == '--vjsx-entry'
+	assert snapshot[3].config_surface.build_root_flag == '--vjsx-build-root'
+	assert snapshot[3].config_surface.signature_root_flag == '--vjsx-signature-root'
 }
 
 fn test_internal_admin_executors_returns_builtin_executor_specs() {
@@ -1147,7 +1165,7 @@ fn test_internal_admin_executors_returns_builtin_executor_specs() {
 	})
 	assert resp.status == 200
 	snapshot := json.decode([]executor.AdminLogicExecutorSpecSnapshot, resp.body) or { panic(err) }
-	assert snapshot.len == 3
+	assert snapshot.len == 4
 	assert snapshot[0].kind == 'none'
 	assert snapshot[0].logic_provider == 'none'
 	assert snapshot[0].logic_executor_lifecycle == 'disabled'
@@ -1156,10 +1174,14 @@ fn test_internal_admin_executors_returns_builtin_executor_specs() {
 	assert snapshot[1].logic_provider == 'php-worker'
 	assert snapshot[1].logic_executor_lifecycle == 'php_worker_host'
 	assert snapshot[1].config_surface.section == 'php'
-	assert snapshot[2].kind == 'vjsx'
-	assert snapshot[2].logic_provider == 'vjsx'
-	assert snapshot[2].logic_executor_lifecycle == 'embedded_host'
-	assert snapshot[2].config_surface.section == 'vjsx'
+	assert snapshot[2].kind == 'php-cgi'
+	assert snapshot[2].logic_provider == 'php-cgi'
+	assert snapshot[2].logic_executor_lifecycle == 'php_cgi_host'
+	assert snapshot[2].config_surface.section == 'php'
+	assert snapshot[3].kind == 'vjsx'
+	assert snapshot[3].logic_provider == 'vjsx'
+	assert snapshot[3].logic_executor_lifecycle == 'embedded_host'
+	assert snapshot[3].config_surface.section == 'vjsx'
 }
 
 fn test_php_worker_executor_lifecycle_prepares_worker_command_and_env() {

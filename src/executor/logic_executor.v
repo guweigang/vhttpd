@@ -233,3 +233,110 @@ pub fn (e SocketWorkerExecutor) dispatch_websocket_event(mut app AppFacade, fram
 }
 
 // Host bridge methods removed and moved to main module bridge.
+
+pub struct PhpCgiExecutor {}
+
+pub fn (e PhpCgiExecutor) model() LogicExecutorModel {
+	_ = e
+	return .worker
+}
+
+pub fn (e PhpCgiExecutor) kind() string {
+	_ = e
+	return 'php-cgi'
+}
+
+pub fn (e PhpCgiExecutor) provider() string {
+	_ = e
+	return 'php-cgi'
+}
+
+pub fn (e PhpCgiExecutor) admin_details() LogicExecutorAdminDetails {
+	_ = e
+	return LogicExecutorAdminDetails{
+		kind:     'php-cgi'
+		provider: 'php-cgi'
+		model:    LogicExecutorModel.worker.str()
+	}
+}
+
+pub fn (e PhpCgiExecutor) warmup(mut app AppFacade) ! {
+	_ = e
+	_ = app
+}
+
+pub fn (e PhpCgiExecutor) close() {
+	_ = e
+}
+
+pub fn (e PhpCgiExecutor) dispatch_http(mut app AppFacade, req HttpLogicDispatchRequest) !HttpLogicDispatchOutcome {
+	_ = e
+	selected_socket := app.worker_backend_select_socket_queued()!
+	mut conn := unix.connect_stream(selected_socket)!
+	app.on_worker_request_started(selected_socket)
+	read_timeout := app.worker_backend_read_timeout_ms()
+	if read_timeout > 0 {
+		conn.set_read_timeout(time.millisecond * read_timeout)
+	}
+	
+	// 从配置文件中读取当前站点的环境变量
+	env_overrides := app.worker_env()
+	
+	payload := transport.FastCgiCodec.encode_request(req.method, req.path, req.req,
+		req.remote_addr, req.trace_id, req.request_id, env_overrides)
+	
+	conn.write_ptr(&payload[0], payload.len) or {
+		conn.close() or {}
+		app.on_worker_request_finished(selected_socket)
+		return error(err.msg())
+	}
+	
+	resp := transport.FastCgiCodec.decode_response(mut conn) or {
+		conn.close() or {}
+		app.on_worker_request_finished(selected_socket)
+		return error('transport_error: decode fastcgi response failed: ${err.msg()}')
+	}
+	
+	conn.close() or {}
+	app.on_worker_request_finished(selected_socket)
+	
+	return HttpLogicDispatchOutcome{
+		kind:     .response
+		response: resp
+	}
+}
+
+pub fn (e PhpCgiExecutor) open_websocket_session(mut app AppFacade, req WebSocketSessionOpenRequest) !WebSocketSessionOpenOutcome {
+	_ = e
+	_ = app
+	_ = req
+	return error('php-cgi executor does not support websockets')
+}
+
+pub fn (e PhpCgiExecutor) dispatch_stream(mut app AppFacade, req transport.StreamDispatchRequest) !transport.StreamDispatchResponse {
+	_ = e
+	_ = app
+	_ = req
+	return error('php-cgi executor does not support stream dispatch')
+}
+
+pub fn (e PhpCgiExecutor) dispatch_mcp(mut app AppFacade, req transport.WorkerMcpDispatchRequest) !transport.WorkerMcpDispatchResponse {
+	_ = e
+	_ = app
+	_ = req
+	return error('php-cgi executor does not support MCP dispatch')
+}
+
+pub fn (e PhpCgiExecutor) dispatch_websocket_upstream(mut app AppFacade, req transport.WorkerWebSocketUpstreamDispatchRequest) !transport.WorkerWebSocketUpstreamDispatchResponse {
+	_ = e
+	_ = app
+	_ = req
+	return error('php-cgi executor does not support websocket upstream')
+}
+
+pub fn (e PhpCgiExecutor) dispatch_websocket_event(mut app AppFacade, frame transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse {
+	_ = e
+	_ = app
+	_ = frame
+	return error('php-cgi executor does not support websocket events')
+}

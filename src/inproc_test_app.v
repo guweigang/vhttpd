@@ -25,6 +25,10 @@ fn (a InProcTestApp) worker_backend_sockets_len() int {
 	return 0
 }
 
+fn (a InProcTestApp) worker_env() map[string]string {
+	return map[string]string{}
+}
+
 fn (mut a InProcTestApp) worker_backend_select_socket_queued() !string {
 	return error('inproc_test_app_no_backend')
 }

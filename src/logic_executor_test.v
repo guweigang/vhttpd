@@ -19,6 +19,13 @@ fn test_socket_worker_executor_identity() {
 	assert socket_executor.provider() == 'php-worker'
 }
 
+fn test_php_cgi_executor_identity() {
+	cgi_executor := executor.PhpCgiExecutor{}
+	assert cgi_executor.model() == .worker
+	assert cgi_executor.kind() == 'php-cgi'
+	assert cgi_executor.provider() == 'php-cgi'
+}
+
 fn test_logic_executor_can_hold_inproc_vjsx_executor() {
 	mut logic_executor := executor.LogicExecutor(new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
 		thread_count: 1

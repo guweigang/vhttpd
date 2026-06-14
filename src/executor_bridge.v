@@ -38,6 +38,11 @@ pub fn (w AppFacadeWrapper) worker_backend_sockets_len() int {
 	return app.executors.worker.worker_backend.sockets.len
 }
 
+pub fn (w AppFacadeWrapper) worker_env() map[string]string {
+	app := unsafe { &App(w.app_ptr) }
+	return app.executors.worker.worker_backend.env.clone()
+}
+
 pub fn (mut w AppFacadeWrapper) worker_backend_select_socket_queued() !string {
 	mut app := unsafe { &App(w.app_ptr) }
 	return app.worker_backend_select_socket_queued()

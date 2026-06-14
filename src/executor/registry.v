@@ -7,6 +7,7 @@ pub enum BuiltinLogicExecutorFactoryKind {
 	noop
 	socket_worker
 	inproc_vjsx
+	php_cgi
 }
 
 pub struct LogicExecutorConfigSurface {
@@ -90,6 +91,20 @@ pub fn builtin_executor_spec_all() []BuiltinLogicExecutorSpec {
 			}
 		},
 		BuiltinLogicExecutorSpec{
+			kind:                'php-cgi'
+			aliases:             ['php_cgi', 'php-cgi']
+			provider:            'php-cgi'
+			logic_model:         .worker
+			worker_backend_mode: .required
+			lifecycle:           php_cgi_executor_lifecycle()
+			factory:             .php_cgi
+			config_surface:      LogicExecutorConfigSurface{
+				section:           'php'
+				app_entry_flag:    '--php-app-entry'
+				worker_entry_flag: '--php-worker-entry'
+			}
+		},
+		BuiltinLogicExecutorSpec{
 			kind:                'vjsx'
 			aliases:             []string{}
 			provider:            'vjsx'
@@ -159,7 +174,7 @@ pub fn (spec BuiltinLogicExecutorSpec) admin_snapshot() AdminLogicExecutorSpecSn
 }
 
 pub fn (spec BuiltinLogicExecutorSpec) resolve_php_runtime_config(args []string, cfg config.VhttpdConfig) !config.PhpConfig {
-	if spec.factory != .socket_worker {
+	if spec.factory != .socket_worker && spec.factory != .php_cgi {
 		return error('builtin_logic_executor_php_runtime_config_unsupported:${spec.kind}')
 	}
 	mut php_cfg := cfg.php
@@ -174,7 +189,8 @@ pub fn (spec BuiltinLogicExecutorSpec) resolve_php_runtime_config(args []string,
 	if config.CliArgs.has(args, '--php-arg') {
 		php_cfg.args = config.CliArgs.string_list_or(args, '--php-arg', []string{})
 	}
-	php_worker_runtime_validate_config(php_cfg)!
+	is_cgi := spec.kind == 'php-cgi'
+	php_worker_runtime_validate_config(php_cfg, is_cgi)!
 	return php_cfg
 }
 
@@ -252,6 +268,9 @@ pub fn (spec BuiltinLogicExecutorSpec) build_executor(args []string, cfg config.
 		.socket_worker {
 			return SocketWorkerExecutor{}
 		}
+		.php_cgi {
+			return PhpCgiExecutor{}
+		}
 		.inproc_vjsx {
 			return factory.new_inproc(spec.resolve_vjsx_runtime_config(args, cfg)!)
 		}
@@ -278,13 +297,15 @@ pub fn php_worker_runtime_shell_quote_arg(raw string) string {
 	return "'" + raw.replace("'", '\'"\'"\'') + "'"
 }
 
-pub fn php_worker_runtime_validate_config(php_cfg config.PhpConfig) ! {
-	worker_entry := php_cfg.worker_entry.trim_space()
-	if worker_entry == '' {
-		return error('php_worker_entry_missing')
-	}
-	if !os.exists(worker_entry) {
-		return error('php_worker_entry_not_found:${worker_entry}')
+pub fn php_worker_runtime_validate_config(php_cfg config.PhpConfig, is_cgi bool) ! {
+	if !is_cgi {
+		worker_entry := php_cfg.worker_entry.trim_space()
+		if worker_entry == '' {
+			return error('php_worker_entry_missing')
+		}
+		if !os.exists(worker_entry) {
+			return error('php_worker_entry_not_found:${worker_entry}')
+		}
 	}
 	app_entry := php_cfg.app_entry.trim_space()
 	if app_entry != '' && !os.exists(app_entry) {
@@ -336,4 +357,30 @@ pub fn php_worker_runtime_build_env(worker_env map[string]string, php_cfg config
 		env['VHTTPD_APP'] = php_cfg.app_entry
 	}
 	return env
+}
+
+pub fn php_cgi_runtime_build_command(php_cfg config.PhpConfig) !string {
+	mut bin := php_cfg.bin.trim_space()
+	if bin == '' || bin == 'php' {
+		bin = 'php-cgi'
+	}
+	mut parts := []string{}
+	parts << bin
+	for ext in php_cfg.extensions {
+		ext_path := ext.trim_space()
+		if ext_path == '' {
+			continue
+		}
+		parts << '-d'
+		parts << 'extension=${ext_path}'
+	}
+	for arg in php_cfg.args {
+		if arg.trim_space() == '' {
+			continue
+		}
+		parts << arg
+	}
+	parts << '-b'
+	parts << '{socket}'
+	return parts.map(php_worker_runtime_shell_quote_arg(it)).join(' ')
 }
