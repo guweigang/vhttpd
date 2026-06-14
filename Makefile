@@ -35,9 +35,15 @@ endif
 
 # Auto-discover test files so new *_test.v files under src/ are picked up automatically.
 # Unit tests: exclude inproc (heavy) and db (needs network) tests.
-FAST_TEST_FILES := $(shell find $(SRC_DIR) -name '*_test.v' \
+# Top-level tests can run as files; sub-module tests must run by directory so V
+# includes their sibling module files instead of compiling a naked test file.
+FAST_TEST_FILES := $(shell find $(SRC_DIR) -maxdepth 1 -name '*_test.v' \
 	! -name 'inproc_*' \
 	! -name 'db_*')
+FAST_TEST_MODULE_DIRS := $(shell find $(SRC_DIR) -mindepth 2 -name '*_test.v' \
+	! -name 'inproc_*' \
+	! -name 'db_*' \
+	-exec dirname {} \; | sort -u)
 
 # In-proc vjsx tests (non-codexbot).
 INPROC_TEST_FILES := $(shell find $(SRC_DIR) -name 'inproc_*_test.v' \
@@ -57,12 +63,13 @@ prepare-build-src:
 	@rm -rf $(BUILD_STAGE_ROOT)
 	@mkdir -p $(BUILD_STAGE_DIR)
 	@if command -v rsync >/dev/null 2>&1; then \
-		rsync -a --exclude='*_helpers.v' --exclude='*_test_support.v' --exclude='test_*.v' $(SRC_DIR)/ $(BUILD_STAGE_DIR)/; \
+		rsync -a --exclude='*_test.v' --exclude='*_test_support.v' --exclude='test_*.v' --exclude='inproc_vjsx_executor_codexbot_helpers.v' $(SRC_DIR)/ $(BUILD_STAGE_DIR)/; \
 	else \
 		cp -R $(SRC_DIR)/. $(BUILD_STAGE_DIR)/; \
-		find $(BUILD_STAGE_DIR) -name '*_helpers.v' -delete; \
+		find $(BUILD_STAGE_DIR) -name '*_test.v' -delete; \
 		find $(BUILD_STAGE_DIR) -name '*_test_support.v' -delete; \
 		find $(BUILD_STAGE_DIR) -name 'test_*.v' -delete; \
+		find $(BUILD_STAGE_DIR) -name 'inproc_vjsx_executor_codexbot_helpers.v' -delete; \
 	fi
 
 build: prepare-build-src
@@ -117,7 +124,14 @@ test-e2e:
 	@bash $(ROOT)/tests/e2e/run.sh
 
 test-fast:
-	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) test $(FAST_TEST_FILES)
+	@set -e; for test_file in $(FAST_TEST_FILES); do \
+		echo "==> v test $${test_file}"; \
+		$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) test "$${test_file}"; \
+	done
+	@set -e; for test_dir in $(FAST_TEST_MODULE_DIRS); do \
+		echo "==> v test $${test_dir}"; \
+		$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) test "$${test_dir}"; \
+	done
 
 test-inproc:
 	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) test $(INPROC_TEST_FILES)
