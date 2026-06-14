@@ -1,6 +1,6 @@
 module feishu
 
-import ws
+import upstream
 
 // ── Bridge Protocol Constants ──
 
@@ -68,16 +68,5 @@ pub struct BridgeProxyRequest {
 		type_      string @[json: 'type']
 		request_id string @[json: 'request_id']
 		action     string
-		request    ws.UpstreamSendRequest
-}
-
-pub struct BridgeProxyResult {
-	pub mut:
-		type_      string @[json: 'type']
-		request_id string @[json: 'request_id']
-		ok         bool
-		provider   string
-		instance   string
-		message_id string @[json: 'message_id']
-		error      string
+		request    upstream.UpstreamSendRequest
 }

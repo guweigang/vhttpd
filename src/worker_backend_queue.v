@@ -7,28 +7,28 @@ struct WorkerBackendQueue {}
 struct WorkerBackendQueueMetrics {}
 
 fn WorkerBackendQueue.try_enter(mut app App) bool {
-	if app.worker.worker_backend.queue_capacity <= 0
-		|| app.worker.worker_backend.queue_timeout_ms <= 0 {
+	if app.executors.worker.worker_backend.queue_capacity <= 0
+		|| app.executors.worker.worker_backend.queue_timeout_ms <= 0 {
 		return false
 	}
-	app.worker.mu.@lock()
+	app.executors.worker.mu.@lock()
 	defer {
-		app.worker.mu.unlock()
+		app.executors.worker.mu.unlock()
 	}
-	if app.worker.worker_backend.queue_waiting_requests >= app.worker.worker_backend.queue_capacity {
+	if app.executors.worker.worker_backend.queue_waiting_requests >= app.executors.worker.worker_backend.queue_capacity {
 		return false
 	}
-	app.worker.worker_backend.queue_waiting_requests++
+	app.executors.worker.worker_backend.queue_waiting_requests++
 	return true
 }
 
 fn WorkerBackendQueue.leave(mut app App) {
-	app.worker.mu.@lock()
+	app.executors.worker.mu.@lock()
 	defer {
-		app.worker.mu.unlock()
+		app.executors.worker.mu.unlock()
 	}
-	if app.worker.worker_backend.queue_waiting_requests > 0 {
-		app.worker.worker_backend.queue_waiting_requests--
+	if app.executors.worker.worker_backend.queue_waiting_requests > 0 {
+		app.executors.worker.worker_backend.queue_waiting_requests--
 	}
 }
 
@@ -37,7 +37,7 @@ fn WorkerBackendQueueMetrics.note_wait(mut app App) {
 	defer {
 		app.mu.unlock()
 	}
-	app.worker.stat_queue_waits_total++
+	app.executors.worker.stat_queue_waits_total++
 }
 
 fn WorkerBackendQueueMetrics.note_rejected(mut app App) {
@@ -45,7 +45,7 @@ fn WorkerBackendQueueMetrics.note_rejected(mut app App) {
 	defer {
 		app.mu.unlock()
 	}
-	app.worker.stat_queue_rejected_total++
+	app.executors.worker.stat_queue_rejected_total++
 }
 
 fn WorkerBackendQueueMetrics.note_timeout(mut app App) {
@@ -53,7 +53,7 @@ fn WorkerBackendQueueMetrics.note_timeout(mut app App) {
 	defer {
 		app.mu.unlock()
 	}
-	app.worker.stat_queue_timeouts_total++
+	app.executors.worker.stat_queue_timeouts_total++
 }
 
 fn (mut app App) worker_backend_select_socket_queued() !string {
@@ -69,13 +69,13 @@ fn (mut app App) worker_backend_select_socket_queued() !string {
 		defer {
 			WorkerBackendQueue.leave(mut app)
 		}
-		timeout_ms := if app.worker.worker_backend.queue_timeout_ms > 0 {
-			app.worker.worker_backend.queue_timeout_ms
+		timeout_ms := if app.executors.worker.worker_backend.queue_timeout_ms > 0 {
+			app.executors.worker.worker_backend.queue_timeout_ms
 		} else {
 			0
 		}
-		poll_ms := if app.worker.worker_backend.queue_poll_ms > 0 {
-			app.worker.worker_backend.queue_poll_ms
+		poll_ms := if app.executors.worker.worker_backend.queue_poll_ms > 0 {
+			app.executors.worker.worker_backend.queue_poll_ms
 		} else {
 			10
 		}

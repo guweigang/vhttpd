@@ -5,7 +5,7 @@ import feishu
 import json
 import log
 import net.http
-import transport
+import upstream.transport
 import veb
 
 pub struct AdminApp {
@@ -17,6 +17,8 @@ pub:
 pub mut:
 	shared &App = unsafe { nil }
 }
+
+struct AdminPlaneRuntime {}
 
 fn (app AdminApp) admin_authorized(ctx Context) bool {
 	headers := transport.header_map_from_request(ctx.req)
@@ -292,7 +294,7 @@ pub fn (mut app AdminApp) admin_runtime_mcp(mut ctx Context) veb.Result {
 	offset := admin.AdminQuery.offset(ctx.query['offset'] or { '' })
 	session_filter := (ctx.query['session_id'] or { '' }).trim_space()
 	protocol_filter := (ctx.query['protocol_version'] or { '' }).trim_space()
-	body := json.encode(app.shared.mcp.snapshot(details, limit, offset, session_filter,
+	body := json.encode(app.shared.protocols.mcp.snapshot(details, limit, offset, session_filter,
 		protocol_filter))
 	app.shared.emit('http.request', {
 		'method':     'GET'
@@ -399,7 +401,7 @@ pub fn (mut app AdminApp) admin_runtime_feishu_chats(mut ctx Context) veb.Result
 	instance_filter := (ctx.query['instance'] or { '' }).trim_space()
 	chat_type_filter := (ctx.query['chat_type'] or { '' }).trim_space()
 	chat_id_filter := (ctx.query['chat_id'] or { '' }).trim_space()
-	body := json.encode(app.shared.feishu.chats_snapshot(limit, offset, instance_filter,
+	body := json.encode(app.shared.providers.feishu.chats_snapshot(limit, offset, instance_filter,
 		chat_type_filter, chat_id_filter))
 	app.shared.emit('http.request', {
 		'method':     'GET'
@@ -546,4 +548,8 @@ fn run_admin_server(mut shared_app App, host string, port int, token string) {
 		})
 		log.error('admin server failed: ${err_msg}')
 	}
+}
+
+fn AdminPlaneRuntime.serve(mut shared_app App, host string, port int, token string) {
+	run_admin_server(mut shared_app, host, port, token)
 }

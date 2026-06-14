@@ -2,7 +2,7 @@ module worker
 
 import net
 import strings
-import transport
+import upstream.transport
 
 pub struct WorkerHttpStreamWriter {}
 

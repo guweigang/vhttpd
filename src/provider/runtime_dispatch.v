@@ -2,9 +2,11 @@ module provider
 
 import codex
 import feishu
-import ws
+import upstream
 
 // ── Dispatch Context ──
+
+pub struct UpstreamRuntimeMapper {}
 
 pub struct RuntimeDispatchContext {
 pub:
@@ -49,12 +51,20 @@ pub fn gateway_count(ctx RuntimeDispatchContext) int {
 	return total
 }
 
+pub fn (ctx RuntimeDispatchContext) gateway_count() int {
+	return gateway_count(ctx)
+}
+
 pub fn capabilities(ctx RuntimeDispatchContext) map[string]bool {
 	feishu_ready := ctx.ready('feishu')
 	return {
 		'feishu_runtime': feishu_ready
 		'feishu_gateway': feishu_ready
 	}
+}
+
+pub fn (ctx RuntimeDispatchContext) capabilities() map[string]bool {
+	return capabilities(ctx)
 }
 
 pub fn upstream_enabled(ctx RuntimeDispatchContext, name string, instance string) bool {
@@ -72,6 +82,10 @@ pub fn upstream_enabled(ctx RuntimeDispatchContext, name string, instance string
 			false
 		}
 	}
+}
+
+pub fn (ctx RuntimeDispatchContext) is_upstream_enabled(name string, instance string) bool {
+	return upstream_enabled(ctx, name, instance)
 }
 
 pub fn default_instance(name string) string {
@@ -99,6 +113,10 @@ pub fn upstream_provider_names(ctx RuntimeDispatchContext) []string {
 		}
 	}
 	return names
+}
+
+pub fn (ctx RuntimeDispatchContext) upstream_provider_names() []string {
+	return upstream_provider_names(ctx)
 }
 
 pub fn upstream_launches(ctx RuntimeDispatchContext) []ProviderRuntimeUpstreamLaunch {
@@ -130,8 +148,12 @@ pub fn upstream_launches(ctx RuntimeDispatchContext) []ProviderRuntimeUpstreamLa
 	return launches
 }
 
-pub fn feishu_upstream_snapshot(snapshot feishu.RuntimeAppSnapshot) ws.UpstreamSnapshot {
-	return ws.UpstreamSnapshot{
+pub fn (ctx RuntimeDispatchContext) upstream_launches() []ProviderRuntimeUpstreamLaunch {
+	return upstream_launches(ctx)
+}
+
+pub fn feishu_upstream_snapshot(snapshot feishu.RuntimeAppSnapshot) upstream.UpstreamSnapshot {
+	return upstream.UpstreamSnapshot{
 		provider:                'feishu'
 		instance:                snapshot.name
 		enabled:                 snapshot.enabled
@@ -147,8 +169,8 @@ pub fn feishu_upstream_snapshot(snapshot feishu.RuntimeAppSnapshot) ws.UpstreamS
 	}
 }
 
-pub fn codex_upstream_snapshot(instance string, state codex.RuntimeStateView, enabled bool) ws.UpstreamSnapshot {
-	return ws.UpstreamSnapshot{
+pub fn codex_upstream_snapshot(instance string, state codex.RuntimeStateView, enabled bool) upstream.UpstreamSnapshot {
+	return upstream.UpstreamSnapshot{
 		provider:                'codex'
 		instance:                instance
 		enabled:                 enabled
@@ -164,14 +186,14 @@ pub fn codex_upstream_snapshot(instance string, state codex.RuntimeStateView, en
 	}
 }
 
-pub fn feishu_upstream_events(snapshot feishu.RuntimeSnapshot, instance_filter string) []ws.UpstreamEventSnapshot {
-	mut events := []ws.UpstreamEventSnapshot{}
+pub fn feishu_upstream_events(snapshot feishu.RuntimeSnapshot, instance_filter string) []upstream.UpstreamEventSnapshot {
+	mut events := []upstream.UpstreamEventSnapshot{}
 	for app_snapshot in snapshot.apps {
 		if instance_filter != '' && app_snapshot.name != instance_filter {
 			continue
 		}
 		for event in app_snapshot.recent_events {
-			events << ws.UpstreamEventSnapshot{
+			events << upstream.UpstreamEventSnapshot{
 				provider:    'feishu'
 				instance:    app_snapshot.name
 				event_type:  event.event_type
@@ -218,4 +240,31 @@ pub fn codex_metrics(states []codex.RuntimeStateView) ProviderRuntimeMetrics {
 		connect_successes: connect_successes
 		received_frames:   received_frames
 	}
+}
+
+pub fn UpstreamRuntimeMapper.from_feishu_snapshot(snapshot feishu.RuntimeAppSnapshot) upstream.UpstreamSnapshot {
+	return feishu_upstream_snapshot(snapshot)
+}
+
+pub fn UpstreamRuntimeMapper.from_codex_state(instance string, state codex.RuntimeStateView, enabled bool) upstream.UpstreamSnapshot {
+	return codex_upstream_snapshot(instance, state, enabled)
+}
+
+pub fn UpstreamRuntimeMapper.events_from_feishu_snapshot(snapshot feishu.RuntimeSnapshot, instance_filter string) []upstream.UpstreamEventSnapshot {
+	return feishu_upstream_events(snapshot, instance_filter)
+}
+
+pub fn ProviderRuntimeMetrics.from_feishu_totals(connect_attempts i64, connect_successes i64, received_frames i64, acked_events i64, messages_sent i64, send_errors i64) ProviderRuntimeMetrics {
+	return ProviderRuntimeMetrics{
+		connect_attempts:  connect_attempts
+		connect_successes: connect_successes
+		received_frames:   received_frames
+		acked_events:      acked_events
+		messages_sent:     messages_sent
+		send_errors:       send_errors
+	}
+}
+
+pub fn ProviderRuntimeMetrics.from_codex_states(states []codex.RuntimeStateView) ProviderRuntimeMetrics {
+	return codex_metrics(states)
 }

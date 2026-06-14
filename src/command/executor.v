@@ -1,6 +1,6 @@
 module command
 
-import transport
+import upstream.transport
 import executor
 import log
 import time

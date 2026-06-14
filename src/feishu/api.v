@@ -23,12 +23,20 @@ pub fn resolve_send_message_params(req SendMessageRequest) !(string, string, str
 	return receive_id_type, req.receive_id.trim_space(), msg_type, content
 }
 
+pub fn (req SendMessageRequest) resolve_params() !(string, string, string, string) {
+	return resolve_send_message_params(req)
+}
+
 // build_send_message_url builds the Feishu send message API URL.
 pub fn build_send_message_url(base_url string, receive_id_type string, receive_id string) string {
 	if receive_id_type == 'message_id' {
 		return '${base_url}/im/v1/messages/${receive_id}/reply'
 	}
 	return '${base_url}/im/v1/messages?receive_id_type=${receive_id_type}'
+}
+
+pub fn SendMessageRequest.api_url(base_url string, receive_id_type string, receive_id string) string {
+	return build_send_message_url(base_url, receive_id_type, receive_id)
 }
 
 // build_send_message_payload builds the JSON payload for sending a Feishu message.
@@ -46,6 +54,10 @@ pub fn build_send_message_payload(msg_type string, content string, receive_id st
 		'content':    content
 		'uuid':       uuid
 	})
+}
+
+pub fn SendMessageRequest.api_payload(msg_type string, content string, receive_id string, uuid string, receive_id_type string) string {
+	return build_send_message_payload(msg_type, content, receive_id, uuid, receive_id_type)
 }
 
 // ── Update Message API ──
@@ -74,13 +86,17 @@ pub fn resolve_update_message_params(req UpdateMessageRequest) !(string, string,
 	return message_id_type, target, msg_type, req.content
 }
 
+pub fn (req UpdateMessageRequest) resolve_params() !(string, string, string, string) {
+	return resolve_update_message_params(req)
+}
+
 // build_update_message_request builds the URL, HTTP method and payload for updating a Feishu message.
 // Returns (url, method, payload).
 pub fn build_update_message_request(base_url string, message_id_type string, target string, msg_type string, content_raw string, uuid string) !(string, http.Method, string) {
 	if message_id_type == 'token' {
 		payload := UpdateMessageRequest.delay_card_body(target, content_raw)!
 		url := '${base_url}/interactive/v1/card/update'
-		return url, .post, payload
+		return url, http.Method.post, payload
 	} else if message_id_type == 'message_id' {
 		content := SendMessageRequest.build_content(msg_type, content_raw, '', map[string]string{})!
 		payload := json.encode({
@@ -92,6 +108,11 @@ pub fn build_update_message_request(base_url string, message_id_type string, tar
 		return url, UpdateMessageRequest.http_method_for(msg_type), payload
 	}
 	return error('unsupported feishu update target type ${message_id_type}')
+}
+
+pub fn UpdateMessageRequest.api_request(base_url string, message_id_type string, target string, msg_type string, content_raw string, uuid string) !(string, http.Method, string) {
+	return build_update_message_request(base_url, message_id_type, target, msg_type, content_raw,
+		uuid)
 }
 
 // ── Upload Image API ──
@@ -136,6 +157,10 @@ pub fn build_upload_image_multipart_config(image_type string, filename string, c
 	return config
 }
 
+pub fn UploadImageRequest.multipart_config(image_type string, filename string, content_type string, data []u8, token string) http.PostMultipartFormConfig {
+	return build_upload_image_multipart_config(image_type, filename, content_type, data, token)
+}
+
 // ── Tenant Token API ──
 
 // build_tenant_token_request_body builds the request body for tenant access token.
@@ -146,6 +171,10 @@ pub fn build_tenant_token_request_body(app_id string, app_secret string) string 
 	})
 }
 
+pub fn TenantTokenResponse.request_body(app_id string, app_secret string) string {
+	return build_tenant_token_request_body(app_id, app_secret)
+}
+
 // parse_tenant_token_response parses the tenant access token response.
 pub fn parse_tenant_token_response(body string) !(string, i64) {
 	decoded := json.decode(TenantTokenResponse, body)!
@@ -153,4 +182,8 @@ pub fn parse_tenant_token_response(body string) !(string, i64) {
 		return error('feishu tenant token error: ${decoded.msg}')
 	}
 	return decoded.tenant_access_token, i64(decoded.expire)
+}
+
+pub fn TenantTokenResponse.parse(body string) !(string, i64) {
+	return parse_tenant_token_response(body)
 }

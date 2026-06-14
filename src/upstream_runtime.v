@@ -1,16 +1,14 @@
 module main
 
-import upstream
-import transport
-import ws
 import net.http
+import net
 import time
+import upstream
+import upstream.transport
 import veb
 import worker
 
 struct UpstreamIoBridge {}
-
-struct UpstreamRuntimeRegistry {}
 
 struct UpstreamRuntimeContext {
 	register_fn   fn (transport.WorkerUpstreamPlanFrame, string, string, string, string) = unsafe { nil }
@@ -34,7 +32,7 @@ struct AdminUpstreamRuntimeSnapshot {
 	details        bool
 	limit          int
 	offset         int
-	sessions       []ws.UpstreamRuntimeSession
+	sessions       []upstream.UpstreamRuntimeSession
 }
 
 fn (rt UpstreamRuntimeContext) register(plan transport.WorkerUpstreamPlanFrame, method string, path string, req_id string, trace_id string) {
@@ -110,66 +108,28 @@ fn UpstreamRuntimeContext.execute_plan(rt UpstreamRuntimeContext, mut ctx Contex
 			rt.note_error()
 			rt.emit('http.stream.error', {
 				'method':      method.to_upper()
-				'path':        transport.normalize_path(path)
+				'path':        transport.WorkerHttpRequestCodec.normalize_path(path)
 				'request_id':  req_id
 				'trace_id':    trace_id
 				'error_class': 'upstream_error'
 				'error':       err.msg()
 			})
-			if !state.headers_written {
-				state.status_code = 502
-				mut err_headers := response_headers.clone()
-				err_headers['x-vhttpd-error-class'] = 'upstream_error'
-				if stream_type == 'sse' {
-					worker.WorkerHttpStreamWriter.write_headers_conn(mut client_conn, 502, content_type,
-						err_headers, false) or {}
-					state.write_error_notice(err.msg()) or {}
-					state.write_done() or {}
-				} else {
-					worker.WorkerHttpStreamWriter.write_headers_conn(mut client_conn, 502,
-						'text/plain; charset=utf-8', err_headers, true) or {}
-					state.write_error_notice(err.msg()) or {}
-				}
-				state.headers_written = true
-			} else {
-				state.write_error_notice(err.msg()) or {}
-				if stream_type == 'sse' {
-					state.write_done() or {}
-				}
-			}
+			UpstreamRuntimeContext.write_error(mut state, mut client_conn, response_headers,
+				content_type, stream_type, err.msg())
 		}
 	} else {
 		state.execute_http(plan) or {
 			rt.note_error()
 			rt.emit('http.stream.error', {
 				'method':      method.to_upper()
-				'path':        transport.normalize_path(path)
+				'path':        transport.WorkerHttpRequestCodec.normalize_path(path)
 				'request_id':  req_id
 				'trace_id':    trace_id
 				'error_class': 'upstream_error'
 				'error':       err.msg()
 			})
-			if !state.headers_written {
-				state.status_code = 502
-				mut err_headers := response_headers.clone()
-				err_headers['x-vhttpd-error-class'] = 'upstream_error'
-				if stream_type == 'sse' {
-					worker.WorkerHttpStreamWriter.write_headers_conn(mut client_conn, 502, content_type,
-						err_headers, false) or {}
-					state.write_error_notice(err.msg()) or {}
-					state.write_done() or {}
-				} else {
-					worker.WorkerHttpStreamWriter.write_headers_conn(mut client_conn, 502,
-						'text/plain; charset=utf-8', err_headers, true) or {}
-					state.write_error_notice(err.msg()) or {}
-				}
-				state.headers_written = true
-			} else {
-				state.write_error_notice(err.msg()) or {}
-				if stream_type == 'sse' {
-					state.write_done() or {}
-				}
-			}
+			UpstreamRuntimeContext.write_error(mut state, mut client_conn, response_headers,
+				content_type, stream_type, err.msg())
 		}
 	}
 	if !state.headers_written {
@@ -181,7 +141,7 @@ fn UpstreamRuntimeContext.execute_plan(rt UpstreamRuntimeContext, mut ctx Contex
 	client_conn.close() or {}
 	rt.emit('http.request', {
 		'method':          method.to_upper()
-		'path':            transport.normalize_path(path)
+		'path':            transport.WorkerHttpRequestCodec.normalize_path(path)
 		'status':          if state.headers_written && state.status_code > 0 {
 			'${state.status_code}'
 		} else {
@@ -198,140 +158,26 @@ fn UpstreamRuntimeContext.execute_plan(rt UpstreamRuntimeContext, mut ctx Contex
 	return veb.no_result()
 }
 
-fn (mut app App) build_upstream_runtime_context() UpstreamRuntimeContext {
-	return UpstreamRuntimeContext{
-		register_fn:   fn [mut app] (plan transport.WorkerUpstreamPlanFrame, method string, path string, req_id string, trace_id string) {
-			UpstreamRuntimeRegistry.register(mut app, plan, method, path, req_id, trace_id)
+fn UpstreamRuntimeContext.write_error(mut state upstream.ExecState, mut client_conn net.TcpConn, response_headers map[string]string, content_type string, stream_type string, message string) {
+	if !state.headers_written {
+		state.status_code = 502
+		mut err_headers := response_headers.clone()
+		err_headers['x-vhttpd-error-class'] = 'upstream_error'
+		if stream_type == 'sse' {
+			worker.WorkerHttpStreamWriter.write_headers_conn(mut client_conn, 502, content_type,
+				err_headers, false) or {}
+			state.write_error_notice(message) or {}
+			state.write_done() or {}
+		} else {
+			worker.WorkerHttpStreamWriter.write_headers_conn(mut client_conn, 502,
+				'text/plain; charset=utf-8', err_headers, true) or {}
+			state.write_error_notice(message) or {}
 		}
-		unregister_fn: fn [mut app] (req_id string) {
-			UpstreamRuntimeRegistry.unregister(mut app, req_id)
-		}
-		note_error_fn: fn [mut app] () {
-			UpstreamRuntimeRegistry.note_error(mut app)
-		}
-		emit_fn:       fn [mut app] (kind string, fields map[string]string) {
-			app.emit(kind, fields)
-		}
-		snapshot_fn:   fn [mut app] (details bool, limit int, offset int, role_filter string, provider_filter string) AdminUpstreamRuntimeSnapshot {
-			return UpstreamRuntimeRegistry.snapshot(mut app, details, limit, offset, role_filter,
-				provider_filter)
-		}
-	}
-}
-
-fn (mut app App) upstream_runtime_register(plan transport.WorkerUpstreamPlanFrame, method string, path string, req_id string, trace_id string) {
-	runtime := app.build_upstream_runtime_context()
-	runtime.register(plan, method, path, req_id, trace_id)
-}
-
-fn UpstreamRuntimeRegistry.register(mut app App, plan transport.WorkerUpstreamPlanFrame, method string, path string, req_id string, trace_id string) {
-	if req_id == '' {
+		state.headers_written = true
 		return
 	}
-	normalized_path, _ := transport.normalize_request_target(path)
-	app.ws_hub.upstream_mu.@lock()
-	app.ws_hub.upstream_sessions[req_id] = ws.UpstreamRuntimeSession{
-		id:              req_id
-		request_id:      req_id
-		trace_id:        trace_id
-		role:            'external_upstream'
-		provider:        plan.name
-		method:          method.to_upper()
-		path:            normalized_path
-		name:            plan.name
-		transport:       plan.transport
-		codec:           plan.codec
-		mapper:          plan.mapper
-		stream_type:     if plan.output_stream_type == '' { 'sse' } else { plan.output_stream_type }
-		source:          if plan.fixture_path != '' { 'fixture' } else { 'http' }
-		started_at_unix: time.now().unix()
-	}
-	app.ws_hub.upstream_mu.unlock()
-	app.mu.@lock()
-	app.ws_hub.stat_upstream_plans_total++
-	app.mu.unlock()
-}
-
-fn (mut app App) upstream_runtime_unregister(req_id string) {
-	runtime := app.build_upstream_runtime_context()
-	runtime.unregister(req_id)
-}
-
-fn UpstreamRuntimeRegistry.unregister(mut app App, req_id string) {
-	if req_id == '' {
-		return
-	}
-	app.ws_hub.upstream_mu.@lock()
-	app.ws_hub.upstream_sessions.delete(req_id)
-	app.ws_hub.upstream_mu.unlock()
-}
-
-fn (mut app App) upstream_runtime_note_error() {
-	runtime := app.build_upstream_runtime_context()
-	runtime.note_error()
-}
-
-fn UpstreamRuntimeRegistry.note_error(mut app App) {
-	app.mu.@lock()
-	app.ws_hub.stat_upstream_plan_errors_total++
-	app.mu.unlock()
-}
-
-fn (mut app App) admin_upstreams_snapshot(details bool, limit int, offset int, role_filter string, provider_filter string) AdminUpstreamRuntimeSnapshot {
-	runtime := app.build_upstream_runtime_context()
-	return runtime.snapshot(details, limit, offset, role_filter, provider_filter)
-}
-
-fn UpstreamRuntimeRegistry.snapshot(mut app App, details bool, limit int, offset int, role_filter string, provider_filter string) AdminUpstreamRuntimeSnapshot {
-	app.ws_hub.upstream_mu.@lock()
-	defer {
-		app.ws_hub.upstream_mu.unlock()
-	}
-	mut sessions := []ws.UpstreamRuntimeSession{}
-	for _, session in app.ws_hub.upstream_sessions {
-		if role_filter != '' && session.role != role_filter {
-			continue
-		}
-		if provider_filter != '' && session.provider != provider_filter {
-			continue
-		}
-		sessions << session
-	}
-	mut ordered := []ws.UpstreamRuntimeSession{}
-	mut sort_keys := []string{}
-	mut session_by_key := map[string]ws.UpstreamRuntimeSession{}
-	for session in sessions {
-		key := '${session.started_at_unix}_${session.id}'
-		sort_keys << key
-		session_by_key[key] = session
-	}
-	sort_keys.sort()
-	for key in sort_keys {
-		ordered << session_by_key[key]
-	}
-	if !details {
-		return AdminUpstreamRuntimeSnapshot{
-			active_count:   ordered.len
-			returned_count: 0
-			details:        false
-			limit:          limit
-			offset:         offset
-			sessions:       []ws.UpstreamRuntimeSession{}
-		}
-	}
-	mut sliced := []ws.UpstreamRuntimeSession{}
-	if offset < ordered.len {
-		end := if offset + limit < ordered.len { offset + limit } else { ordered.len }
-		for i in offset .. end {
-			sliced << ordered[i]
-		}
-	}
-	return AdminUpstreamRuntimeSnapshot{
-		active_count:   ordered.len
-		returned_count: sliced.len
-		details:        true
-		limit:          limit
-		offset:         offset
-		sessions:       sliced
+	state.write_error_notice(message) or {}
+	if stream_type == 'sse' {
+		state.write_done() or {}
 	}
 }

@@ -3,7 +3,7 @@ module worker
 import json
 import net.unix
 import time
-import transport
+import upstream.transport
 
 pub struct WorkerBackendConnection {
 pub:

@@ -3,7 +3,7 @@ module ws
 import encoding.base64
 import log
 import net
-import transport
+import upstream.transport
 import net.websocket
 
 // ── Dispatch Session Lifecycle ──

@@ -1,7 +1,7 @@
 module executor
 
 import config
-import transport
+import upstream.transport
 import log
 
 pub struct ExecutorBootstrapState {

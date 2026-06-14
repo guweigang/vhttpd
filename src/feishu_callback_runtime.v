@@ -1,0 +1,182 @@
+module main
+
+import json
+import log
+import net.http
+import time
+import upstream.transport
+import upstream
+import feishu
+import veb
+
+@['/callbacks/feishu'; post]
+pub fn (mut app App) feishu_callback_default(mut ctx Context) veb.Result {
+	return app.feishu_callback_by_app(mut ctx, '')
+}
+
+@['/callbacks/feishu/:app'; post]
+pub fn (mut app App) feishu_callback(mut ctx Context, app_name string) veb.Result {
+	return app.feishu_callback_by_app(mut ctx, app_name)
+}
+
+fn (mut app App) feishu_callback_by_app(mut ctx Context, raw_app string) veb.Result {
+	default_path := if raw_app.trim_space() == '' {
+		'/callbacks/feishu'
+	} else {
+		'/callbacks/feishu/${raw_app}'
+	}
+	req_ctx := FeishuHttpRequest.from_context(ctx, default_path)
+	trace_id := req_ctx.trace_id
+	req_ctx.prepare_json(mut ctx)
+	app_name := app.providers.feishu.resolve_app_name(raw_app) or {
+		return FeishuHttpResponse.admin_error(mut ctx, 404, 'unknown_feishu_app')
+	}
+	app_cfg := app.providers.feishu.app_config(app_name) or {
+		return FeishuHttpResponse.admin_error(mut ctx, 404, 'unknown_feishu_app')
+	}
+	headers := transport.WorkerHttpRequestCodec.header_map_from_request(ctx.req)
+	raw_payload := ctx.req.data
+	if !feishu.CallbackChallengeResponse.signature_valid(headers, app_cfg.encrypt_key, raw_payload) {
+		return FeishuHttpResponse.admin_error(mut ctx, 403, 'invalid_feishu_callback_signature')
+	}
+	payload := feishu.CallbackChallengeResponse.decrypt_payload(app_cfg.encrypt_key, raw_payload) or {
+		return FeishuHttpResponse.admin_error(mut ctx, 400, 'invalid_feishu_callback_encryption')
+	}
+	challenge := feishu.CallbackChallengeResponse.challenge(payload)
+	if challenge != '' {
+		if !app.feishu_runtime_callback_token_valid(app_name, payload) {
+			return FeishuHttpResponse.admin_error(mut ctx, 403, 'invalid_feishu_callback_token')
+		}
+		req_ctx.emit_success(mut app, 'POST', '/callbacks/feishu', '', 'challenge', app_name)
+		return ctx.text(json.encode(feishu.CallbackChallengeResponse{
+			challenge: challenge
+		}))
+	}
+	if !app.feishu_runtime_callback_token_valid(app_name, payload) {
+		return FeishuHttpResponse.admin_error(mut ctx, 403, 'invalid_feishu_callback_token')
+	}
+	summary := feishu.RuntimeEventSnapshot.summary_from_payload(payload)
+	app.providers.feishu.push_event(app_name, feishu.RuntimeEventSnapshot{
+		seq_id:            'callback-${time.now().unix_micro()}'
+		trace_id:          trace_id
+		action:            'callback'
+		event_id:          summary.event_id
+		event_kind:        summary.event_kind
+		event_type:        summary.event_type
+		message_id:        summary.message_id
+		message_type:      summary.message_type
+		chat_id:           summary.chat_id
+		chat_type:         summary.chat_type
+		target_type:       summary.target_type
+		target:            summary.target
+		open_message_id:   summary.open_message_id
+		root_id:           summary.root_id
+		parent_id:         summary.parent_id
+		create_time:       summary.create_time
+		sender_id:         summary.sender_id
+		sender_id_type:    summary.sender_id_type
+		sender_tenant_key: summary.sender_tenant_key
+		action_tag:        summary.action_tag
+		action_value:      summary.action_value
+		token:             summary.token
+		received_at:       time.now().unix()
+		payload:           payload
+	})
+	log.info('[feishu] 📩 callback received: type=${summary.event_type} kind=${summary.event_kind} chat_id=${summary.chat_id} msg_id=${summary.message_id}')
+	log.info('[feishu][debug] callback.payload.${summary.event_type}: ${payload}')
+	if summary.event_type == 'card.action.trigger'
+		&& app.providers.feishu.card_bridge_target_id.trim_space() != '' {
+		bridge_resp := app.feishu_card_bridge_dispatch_callback(app_name, trace_id, summary,
+			payload) or {
+			log.error('[feishu] ❌ bridge callback dispatch failed: ${err}')
+			return FeishuHttpResponse.admin_error(mut ctx, 502, 'feishu_callback_bridge_error')
+		}
+		for name, value in bridge_resp.headers {
+			if name.to_lower() == 'content-type' {
+				continue
+			}
+			ctx.set_custom_header(name, value) or {}
+		}
+		ctx.res.set_status(http.status_from_int(if bridge_resp.status > 0 {
+			bridge_resp.status
+		} else {
+			200
+		}))
+		ctype := bridge_resp.headers['content-type'] or { 'application/json; charset=utf-8' }
+		ctx.set_content_type(ctype)
+		app.emit('http.request', {
+			'method':     'POST'
+			'path':       '/callbacks/feishu'
+			'status':     '${if bridge_resp.status > 0 { bridge_resp.status } else { 200 }}'
+			'request_id': req_ctx.req_id
+			'trace_id':   req_ctx.trace_id
+			'provider':   'feishu'
+			'instance':   app_name
+			'callback':   '${summary.event_type}.bridge'
+		})
+		return ctx.text(bridge_resp.body)
+	}
+	if app.has_websocket_upstream_logic_executor()
+		&& feishu.RuntimeEventSnapshot.should_dispatch_upstream(summary) {
+		activity_id := if summary.event_id != '' {
+			summary.event_id
+		} else {
+			'callback-${time.now().unix_micro()}'
+		}
+		mut activity_snapshot := upstream.UpstreamActivitySnapshot{
+			provider:    websocket_upstream_provider_feishu
+			instance:    app_name
+			trace_id:    trace_id
+			activity_id: activity_id
+			event_type:  summary.event_type
+			message_id:  summary.message_id
+			target_type: summary.target_type
+			target:      summary.target
+			payload:     payload
+			received_at: time.now().unix()
+			recorded_at: time.now().unix()
+		}
+		outcome := app.kernel_dispatch_websocket_upstream_handled(app.kernel_websocket_upstream_dispatch_request_with_event(summary.event_kind,
+			activity_id, websocket_upstream_provider_feishu, app_name, trace_id,
+			summary.event_type, summary.message_id, summary.target, summary.target_type, payload,
+			time.now().unix(), {
+			'action':            'callback'
+			'event_id':          summary.event_id
+			'event_kind':        summary.event_kind
+			'chat_type':         summary.chat_type
+			'message_type':      summary.message_type
+			'open_message_id':   summary.open_message_id
+			'root_id':           summary.root_id
+			'parent_id':         summary.parent_id
+			'create_time':       summary.create_time
+			'sender_id':         summary.sender_id
+			'sender_id_type':    summary.sender_id_type
+			'sender_tenant_key': summary.sender_tenant_key
+			'action_tag':        summary.action_tag
+			'action_value':      summary.action_value
+			'token':             summary.token
+		})) or {
+			activity_snapshot.worker_error = err.msg()
+			activity_snapshot.error_class = 'transport_error'
+			app.websocket_upstream_record_activity(activity_snapshot)
+			return FeishuHttpResponse.admin_error(mut ctx, 502,
+				'feishu_callback_worker_transport_error')
+		}
+		resp := outcome.response
+		if resp.error != '' {
+			activity_snapshot.worker_error = resp.error
+			activity_snapshot.error_class = resp.error_class
+			app.websocket_upstream_record_activity(activity_snapshot)
+			return FeishuHttpResponse.admin_error(mut ctx, 502, 'feishu_callback_worker_error')
+		}
+		activity_snapshot.worker_handled = resp.handled
+		activity_snapshot.commands = outcome.command_snapshots
+		activity_snapshot.command_error = outcome.command_error
+		app.websocket_upstream_record_activity(activity_snapshot)
+	}
+	req_ctx.emit_success(mut app, 'POST', '/callbacks/feishu', '', summary.event_type, app_name)
+	return ctx.text(json.encode(feishu.CallbackAckResponse{
+		code: 0
+		msg:  'ok'
+	}))
+}

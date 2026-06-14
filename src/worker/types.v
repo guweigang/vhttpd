@@ -2,7 +2,7 @@ module worker
 
 import executor
 import sync
-import transport
+import upstream.transport
 
 // WorkerBackend is the interface for backend worker implementations.
 pub interface WorkerBackend {

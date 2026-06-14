@@ -1,6 +1,6 @@
 module upstream
 
-import transport
+import upstream.transport
 
 import json
 import net.http

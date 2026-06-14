@@ -1,8 +1,10 @@
 module main
 
-import transport
+import upstream.transport
 import executor
 import dispatch
+
+struct KernelDispatchFailureMapper {}
 
 fn (mut app App) kernel_dispatch_stream(req transport.StreamDispatchRequest) !transport.StreamDispatchResponse {
 	_ = executor.KernelDispatchEnvelope{
@@ -10,7 +12,7 @@ fn (mut app App) kernel_dispatch_stream(req transport.StreamDispatchRequest) !tr
 		context: DispatchContext.from_stream_dispatch_provider(req, app.logic_executor_provider())
 	}
 	mut facade := app.as_facade()
-	return app.worker.logic_executor.dispatch_stream(mut facade, req)
+	return app.executors.worker.logic_executor.dispatch_stream(mut facade, req)
 }
 
 fn kernel_stream_dispatch_failure(resp transport.StreamDispatchResponse) ?executor.KernelStreamDispatchFailure {
@@ -21,13 +23,17 @@ fn kernel_stream_dispatch_failure(resp transport.StreamDispatchResponse) ?execut
 	}
 }
 
+fn KernelDispatchFailureMapper.from_stream_response(resp transport.StreamDispatchResponse) ?executor.KernelStreamDispatchFailure {
+	return kernel_stream_dispatch_failure(resp)
+}
+
 fn (mut app App) kernel_dispatch_mcp(req transport.WorkerMcpDispatchRequest) !transport.WorkerMcpDispatchResponse {
 	_ = executor.KernelDispatchEnvelope{
 		kind:    .mcp
 		context: DispatchContext.from_mcp_dispatch_provider(req, app.logic_executor_provider())
 	}
 	mut facade := app.as_facade()
-	return app.worker.logic_executor.dispatch_mcp(mut facade, req)
+	return app.executors.worker.logic_executor.dispatch_mcp(mut facade, req)
 }
 
 fn (mut app App) kernel_dispatch_mcp_handled(req transport.WorkerMcpDispatchRequest) !executor.KernelMcpDispatchOutcome {
@@ -52,7 +58,7 @@ fn (mut app App) kernel_dispatch_mcp_handled(req transport.WorkerMcpDispatchRequ
 fn (mut app App) kernel_dispatch_websocket_upstream(req transport.WorkerWebSocketUpstreamDispatchRequest) !transport.WorkerWebSocketUpstreamDispatchResponse {
 	_ = executor.KernelDispatchEnvelope.from_websocket_upstream(req)
 	mut facade := app.as_facade()
-	return app.worker.logic_executor.dispatch_websocket_upstream(mut facade, req)
+	return app.executors.worker.logic_executor.dispatch_websocket_upstream(mut facade, req)
 }
 
 fn (mut app App) kernel_dispatch_websocket_upstream_handled(req transport.WorkerWebSocketUpstreamDispatchRequest) !executor.KernelWebSocketUpstreamDispatchOutcome {
@@ -81,7 +87,7 @@ fn (mut app App) kernel_dispatch_websocket_event(frame transport.WorkerWebSocket
 			app.logic_executor_provider())
 	}
 	mut facade := app.as_facade()
-	return app.worker.logic_executor.dispatch_websocket_event(mut facade, frame)
+	return app.executors.worker.logic_executor.dispatch_websocket_event(mut facade, frame)
 }
 
 fn kernel_dispatch_transport_failure(err_msg string) executor.KernelDispatchTransportFailure {

@@ -1,6 +1,6 @@
 module dispatch
 
-import transport
+import upstream.transport
 import executor
 
 pub type KernelDispatchKind = executor.KernelDispatchKind

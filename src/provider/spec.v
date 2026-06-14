@@ -1,6 +1,6 @@
 module provider
 
-import transport
+import upstream.transport
 import command as cmdpkg
 import executor
 

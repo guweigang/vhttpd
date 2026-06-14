@@ -1,6 +1,6 @@
 module executor
 
-import transport
+import upstream.transport
 import json
 import net.unix
 import time

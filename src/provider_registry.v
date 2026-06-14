@@ -107,7 +107,7 @@ pub fn (mut app App) register_provider(name string, p Provider) {
 	defer {
 		app.mu.unlock()
 	}
-	app.providers.register_provider(name, p, generic_ctx)
+	app.providers.registry.register_provider(name, p, generic_ctx)
 }
 
 pub fn (mut app App) register_provider_spec(spec ProviderSpec) {
@@ -115,7 +115,7 @@ pub fn (mut app App) register_provider_spec(spec ProviderSpec) {
 	defer {
 		app.mu.unlock()
 	}
-	app.providers.register_spec(spec)
+	app.providers.registry.register_spec(spec)
 }
 
 pub fn (mut app App) get_provider_spec(name string) ?ProviderSpec {
@@ -123,7 +123,7 @@ pub fn (mut app App) get_provider_spec(name string) ?ProviderSpec {
 	defer {
 		app.mu.unlock()
 	}
-	return app.providers.spec(name)
+	return app.providers.registry.spec(name)
 }
 
 pub fn (mut app App) get_provider(name string) ?Provider {
@@ -131,7 +131,7 @@ pub fn (mut app App) get_provider(name string) ?Provider {
 	defer {
 		app.mu.unlock()
 	}
-	return app.providers.provider(name)
+	return app.providers.registry.provider(name)
 }
 
 pub fn (mut app App) provider_enabled(name string) bool {
@@ -140,7 +140,7 @@ pub fn (mut app App) provider_enabled(name string) bool {
 	defer {
 		app.mu.unlock()
 	}
-	return app.providers.enabled(name, bootstrap_enabled)
+	return app.providers.registry.enabled(name, bootstrap_enabled)
 }
 
 pub fn (mut app App) get_provider_runtime(name string) ?ProviderRuntime {
@@ -148,7 +148,7 @@ pub fn (mut app App) get_provider_runtime(name string) ?ProviderRuntime {
 	defer {
 		app.mu.unlock()
 	}
-	return app.providers.runtime(name)
+	return app.providers.registry.runtime(name)
 }
 
 pub fn (mut app App) provider_names() []string {
@@ -156,13 +156,13 @@ pub fn (mut app App) provider_names() []string {
 	defer {
 		app.mu.unlock()
 	}
-	return app.providers.names()
+	return app.providers.registry.names()
 }
 
 // Helpers to run provider lifecycle across registered providers.
 pub fn (mut app App) stop_all_providers() {
 	app.mu.@lock()
-	mut runtimes, mut contexts := app.providers.runtimes_with_contexts()
+	mut runtimes, mut contexts := app.providers.registry.runtimes_with_contexts()
 	app.mu.unlock()
 	for i, mut runtime in runtimes {
 		runtime.stop(mut contexts[i]) or {

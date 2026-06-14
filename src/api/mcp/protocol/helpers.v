@@ -1,4 +1,4 @@
-module mcp_protocol
+module protocol
 
 import net
 

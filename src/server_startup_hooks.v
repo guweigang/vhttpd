@@ -3,23 +3,25 @@ module main
 import log
 import os
 
-fn initialize_app_runtime(mut app App, internal_admin_socket string) {
-	app.worker.worker_backend.env['VHTTPD_INTERNAL_ADMIN_SOCKET'] = internal_admin_socket
-	if app.db_runtime.enabled && app.db_runtime.socket.trim_space() != '' {
-		app.worker.worker_backend.env['VHTTPD_DB_SOCKET'] = app.db_runtime.socket
+struct AppStartupHooks {}
+
+fn AppStartupHooks.initialize_runtime(mut app App, internal_admin_socket string) {
+	app.executors.worker.worker_backend.env['VHTTPD_INTERNAL_ADMIN_SOCKET'] = internal_admin_socket
+	if app.transport.db.enabled && app.transport.db.socket.trim_space() != '' {
+		app.executors.worker.worker_backend.env['VHTTPD_DB_SOCKET'] = app.transport.db.socket
 	}
 	app.feishu_card_bridge_apply_env_fallbacks()
-	go run_internal_admin_server(mut app, internal_admin_socket)
-	if app.feishu.enabled {
+	go InternalAdminRuntime.serve(mut app, internal_admin_socket)
+	if app.providers.feishu.enabled {
 		go app.feishu_runtime_run_buffer_flusher()
 	}
 	if app.feishu_card_bridge_enabled() {
-		go run_feishu_card_bridge_client(mut app)
+		go FeishuCardBridgeRuntime.run_client(mut app)
 	}
 	app.bootstrap_providers()
 }
 
-fn mount_app_assets(mut app App) {
+fn AppStartupHooks.mount_assets(mut app App) {
 	if app.assets.enabled && app.assets.root_real != '' {
 		app.mount_static_folder_at(app.assets.root_real, app.assets.prefix) or {
 			log.error('assets mount failed: ${err}')
@@ -27,7 +29,7 @@ fn mount_app_assets(mut app App) {
 	}
 }
 
-fn install_app_middleware(mut app App) {
+fn AppStartupHooks.install_middleware(mut app App) {
 	if app.assets.enabled && app.assets.cache_control.trim_space() != '' {
 		assets_prefix_mw := app.assets.prefix
 		cache_control := app.assets.cache_control
@@ -46,32 +48,32 @@ fn install_app_middleware(mut app App) {
 	}
 }
 
-fn emit_server_started_event(mut app App, host string, port int, admin_enabled bool, admin_host string, admin_port int) {
+fn AppStartupHooks.emit_server_started(mut app App, host string, port int, admin_enabled bool, admin_host string, admin_port int) {
 	app.emit('server.started', {
 		'host':                     host
 		'port':                     '${port}'
 		'pid':                      '${os.getpid()}'
-		'worker_backend':           app.worker.worker_backend.kind()
-		'worker_backend_mode':      '${app.worker.worker_backend_mode}'
+		'worker_backend':           app.executors.worker.worker_backend.kind()
+		'worker_backend_mode':      '${app.executors.worker.worker_backend_mode}'
 		'logic_executor':           app.logic_executor_kind()
-		'logic_executor_lifecycle': app.worker.lifecycle
+		'logic_executor_lifecycle': app.executors.worker.lifecycle
 		'logic_executor_model':     '${app.logic_executor_model()}'
 		'logic_provider':           app.logic_executor_provider()
-		'worker_autostart':         if app.worker.worker_backend.autostart {
+		'worker_autostart':         if app.executors.worker.worker_backend.autostart {
 			'true'
 		} else {
 			'false'
 		}
-		'worker_pool_size':         '${app.worker.worker_backend.sockets.len}'
+		'worker_pool_size':         '${app.executors.worker.worker_backend.sockets.len}'
 		'admin_enabled':            if admin_enabled { 'true' } else { 'false' }
 		'admin_host':               if admin_enabled { admin_host } else { '' }
 		'admin_port':               if admin_enabled { '${admin_port}' } else { '' }
 	})
 }
 
-fn start_admin_plane(mut app App, admin_enabled bool, admin_host string, admin_port int, admin_token string) {
+fn AppStartupHooks.start_admin_plane(mut app App, admin_enabled bool, admin_host string, admin_port int, admin_token string) {
 	if admin_enabled {
-		go run_admin_server(mut app, admin_host, admin_port, admin_token)
+		go AdminPlaneRuntime.serve(mut app, admin_host, admin_port, admin_token)
 		app.emit('admin.started', {
 			'host': admin_host
 			'port': '${admin_port}'
@@ -82,7 +84,7 @@ fn start_admin_plane(mut app App, admin_enabled bool, admin_host string, admin_p
 	}
 }
 
-fn start_upstream_providers(mut app App) {
+fn AppStartupHooks.start_upstream_providers(mut app App) {
 	mut upstream_launches := app.provider_runtime_upstream_launches()
 	mut feishu_labels := []string{}
 	mut started_any_upstream := false
@@ -111,14 +113,14 @@ fn start_upstream_providers(mut app App) {
 	}
 }
 
-fn log_server_runtime_endpoints(app &App, host string, port int) {
+fn AppStartupHooks.log_runtime_endpoints(app &App, host string, port int) {
 	if app.assets.enabled && app.assets.root_real != '' {
 		log.info('[vhttpd] Assets: ${app.assets.prefix} -> ${app.assets.root_real}')
 	} else {
 		log.info('[vhttpd] Assets: disabled')
 	}
-	if app.db_runtime.enabled {
-		log.info('[vhttpd] DB Upstream: unix://${app.db_runtime.socket} (${app.db_runtime.driver}, db=${app.db_runtime.database}, pool=${app.db_runtime.pool_size})')
+	if app.transport.db.enabled {
+		log.info('[vhttpd] DB Upstream: unix://${app.transport.db.socket} (${app.transport.db.driver}, db=${app.transport.db.database}, pool=${app.transport.db.pool_size})')
 	} else {
 		log.info('[vhttpd] DB Upstream: disabled')
 	}

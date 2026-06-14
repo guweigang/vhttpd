@@ -18,6 +18,16 @@ pub:
 	has_error       bool
 }
 
+pub struct RpcFrame {}
+
+pub struct RpcDebug {}
+
+pub struct RpcField {}
+
+pub struct SandboxMode {}
+
+pub struct WebSocketHeartbeat {}
+
 // ── Encoding ──
 
 // encode_request builds a JSON-RPC request frame.
@@ -28,12 +38,20 @@ pub fn encode_request(method string, id int, params string) string {
 	return '{"method":"${method}","id":${id},"params":${params}}'
 }
 
+pub fn RpcFrame.request(method string, id int, params string) string {
+	return encode_request(method, id, params)
+}
+
 // encode_notification builds a JSON-RPC notification frame (no id).
 pub fn encode_notification(method string, params string) string {
 	if params == '' || params == '{}' {
 		return '{"method":"${method}","params":{}}'
 	}
 	return '{"method":"${method}","params":${params}}'
+}
+
+pub fn RpcFrame.notification(method string, params string) string {
+	return encode_notification(method, params)
 }
 
 // format_sandbox converts sandbox type between kebab-case and camelCase.
@@ -53,6 +71,10 @@ pub fn format_sandbox(val string, to_camel bool) string {
 			else { val }
 		}
 	}
+}
+
+pub fn SandboxMode.format(val string, to_camel bool) string {
+	return format_sandbox(val, to_camel)
 }
 
 // ── Classification ──
@@ -89,6 +111,10 @@ pub fn classify_rpc(raw string) RpcClassification {
 		}
 	}
 	return RpcClassification{}
+}
+
+pub fn RpcFrame.classify(raw string) RpcClassification {
+	return classify_rpc(raw)
 }
 
 // classification_kind returns a human-readable kind label.
@@ -136,6 +162,10 @@ pub fn frame_summary(raw string, cls RpcClassification) string {
 	return 'kind=${classification_kind(cls)} method=${method} id=${id_raw} has_error=${cls.has_error} thread_id=${thread_id} turn_id=${turn_id} item_id=${item_id} item_type=${item_type} status_type=${status_type}'
 }
 
+pub fn RpcFrame.summary(raw string, cls RpcClassification) string {
+	return frame_summary(raw, cls)
+}
+
 // extract_string_field extracts a quoted string value for a given JSON key.
 pub fn extract_string_field(raw string, field string) string {
 	marker := '"${field}"'
@@ -160,12 +190,20 @@ pub fn extract_string_field(raw string, field string) string {
 	return raw[start..idx]
 }
 
+pub fn RpcField.string(raw string, field string) string {
+	return extract_string_field(raw, field)
+}
+
 // extract_rpc_thread_id extracts threadId from a params JSON string.
 pub fn extract_rpc_thread_id(params string) string {
 	if params == '' || !params.contains('"threadId"') {
 		return ''
 	}
 	return extract_string_field(params, 'threadId')
+}
+
+pub fn RpcField.thread_id(params string) string {
+	return extract_rpc_thread_id(params)
 }
 
 // extract_raw_field extracts a raw JSON value (string, number, object, array, bool, null)
@@ -246,6 +284,10 @@ pub fn extract_raw_field(raw string, field string) string {
 	return raw[start..idx].trim_space()
 }
 
+pub fn RpcField.raw(raw string, field string) string {
+	return extract_raw_field(raw, field)
+}
+
 // ── Debug Helpers ──
 
 fn debug_enabled() bool {
@@ -270,6 +312,10 @@ pub fn debug_log(label string, raw string) {
 	log.info('[codex][debug] ${label}: ${debug_snippet(raw, 1600)}')
 }
 
+pub fn RpcDebug.log(label string, raw string) {
+	debug_log(label, raw)
+}
+
 // ── WebSocket Ping ──
 
 // ping_loop sends periodic WebSocket pings until the connection closes.
@@ -281,4 +327,8 @@ pub fn ping_loop(mut client ws.Client) {
 		}
 		time.sleep(20 * time.second)
 	}
+}
+
+pub fn WebSocketHeartbeat.loop(mut client ws.Client) {
+	ping_loop(mut client)
 }

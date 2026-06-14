@@ -129,6 +129,16 @@ pub mut:
 	cache_control string = 'public, max-age=3600' @[toml: 'cache_control']
 }
 
+// AssetsRuntime configures static file serving after config paths are resolved.
+pub struct AssetsRuntime {
+pub mut:
+	enabled       bool
+	prefix        string
+	root          string
+	root_real     string
+	cache_control string
+}
+
 pub struct RuntimeConfig {
 pub mut:
 	timezone string = 'Asia/Shanghai'

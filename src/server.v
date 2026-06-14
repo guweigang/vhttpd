@@ -4,18 +4,18 @@ module main
 // Lock Hierarchy (acquire in this order; NEVER acquire a lower lock while holding a higher one)
 //
 //   L0  app.mu                     — main mutex (providers, stats, event_log, general state)
-//   L1  app.worker.mu              — worker backend pool & queue
-//   L2  app.ws_hub.mu              — WebSocket hub connections
-//   L3  app.ws_hub.upstream_mu     — WebSocket upstream sessions
-//   L4  app.mcp.mu                 — MCP session manager
-//   L5  app.feishu.mu              — Feishu runtime state
-//   L6  app.feishu.card_bridge_mu  — Feishu card bridge clients
-//   L7  app.codex.mu               — Codex runtime state
+//   L1  app.executors.worker.mu              — worker backend pool & queue
+//   L2  app.transport.websocket.mu              — WebSocket hub connections
+//   L3  app.transport.websocket.upstream_mu     — WebSocket upstream sessions
+//   L4  app.protocols.mcp.mu                 — MCP session manager
+//   L5  app.providers.feishu.mu              — Feishu runtime state
+//   L6  app.providers.feishu.card_bridge_mu  — Feishu card bridge clients
+//   L7  app.providers.codex.mu               — Codex runtime state
 //
 // Independent (no ordering constraint with above):
-//   app.ws_hub.send_mu             — WebSocket send serialization (short-lived, per-conn)
-//   app.feishu.card_bridge_send_mu — Feishu card bridge send serialization
-//   app.feishu.http_test_mu        — Feishu HTTP test stub (test-only)
+//   app.transport.websocket.send_mu             — WebSocket send serialization (short-lived, per-conn)
+//   app.providers.feishu.card_bridge_send_mu — Feishu card bridge send serialization
+//   app.providers.feishu.http_test_mu        — Feishu HTTP test stub (test-only)
 //
 // Rules:
 //   - When acquiring multiple locks, always acquire higher (lower number) first.
@@ -81,7 +81,7 @@ const known_long_flags = [
 
 // ── Global Lock Order ──
 // When acquiring multiple locks, always follow this hierarchy to avoid deadlocks:
-//   app.mu > app.feishu.mu > app.ws_hub.mu > app.ws_hub.upstream_mu > app.mcp.mu > app.worker.mu
+//   app.mu > app.providers.feishu.mu > app.transport.websocket.mu > app.transport.websocket.upstream_mu > app.protocols.mcp.mu > app.executors.worker.mu
 // Any function that needs more than one lock MUST acquire them in the above order
 // and release them in reverse order. Prefer defer for unlocks.
 // Reviewers: reject PRs that introduce out-of-order locking.

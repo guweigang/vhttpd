@@ -3,11 +3,13 @@ module feishu
 import crypto.aes
 import crypto.cipher
 import crypto.sha256
+import command
 import encoding.base64
 import executor
 import json
 import net.http
 import net.urllib
+import upstream
 import x.json2
 
 // ── Protocol Constants ──
@@ -107,6 +109,60 @@ pub:
 	content_length int    @[json: 'content_length']
 }
 
+pub fn SendMessageRequest.from_upstream_request(req upstream.UpstreamSendRequest) SendMessageRequest {
+	return SendMessageRequest{
+		app:             req.instance
+		receive_id_type: req.target_type
+		receive_id:      req.target
+		msg_type:        req.message_type
+		content:         req.content
+		content_fields:  req.content_fields.clone()
+		text:            req.text
+		uuid:            req.uuid
+	}
+}
+
+pub fn UpdateMessageRequest.from_upstream_request(req upstream.UpstreamSendRequest) UpdateMessageRequest {
+	return UpdateMessageRequest{
+		app:             req.instance
+		message_id:      req.target
+		message_id_type: req.target_type
+		msg_type:        req.message_type
+		content:         req.content
+		content_fields:  req.content_fields.clone()
+		text:            req.text
+		uuid:            req.uuid
+	}
+}
+
+pub fn SendMessageRequest.normalize_upstream_for_streaming(req upstream.UpstreamSendRequest) upstream.UpstreamSendRequest {
+	if req.message_type.trim_space() == 'interactive' {
+		return req
+	}
+	mut normalized := req
+	mut markdown := SendMessageRequest.extract_markdown_text(req.content, req.text,
+		req.content_fields)
+	if markdown.trim_space() == '' {
+		markdown = '⚙️ **处理中...**'
+	}
+	normalized.message_type = 'interactive'
+	normalized.content = SendMessageRequest.interactive_markdown_card(markdown)
+	normalized.text = ''
+	normalized.content_fields = map[string]string{}
+	return normalized
+}
+
+pub fn SendMessageRequest.normalize_upstream_for_streaming_if_needed(req upstream.UpstreamSendRequest, normalized command.NormalizedCommand) upstream.UpstreamSendRequest {
+	if normalized.correlation.stream_id.trim_space() == '' {
+		return req
+	}
+	return SendMessageRequest.normalize_upstream_for_streaming(req)
+}
+
+pub fn SendMessageRequest.upstream_request_from_command(normalized command.NormalizedCommand) upstream.UpstreamSendRequest {
+	return upstream.UpstreamSendRequest.from_normalized(normalized, 'feishu')
+}
+
 pub fn UploadImageRequest.from_json(body string) !UploadImageRequest {
 	return json.decode(UploadImageRequest, body)
 }
@@ -121,6 +177,26 @@ pub:
 	ok         bool
 	message_id string @[json: 'message_id']
 	error      string
+}
+
+pub fn (result SendMessageResult) to_upstream_send_result(provider string, instance string) upstream.UpstreamSendResult {
+	return upstream.UpstreamSendResult{
+		ok:         result.ok
+		provider:   provider
+		instance:   instance
+		message_id: result.message_id
+		error:      result.error
+	}
+}
+
+pub fn (result SendMessageResult) to_upstream_update_result(provider string, instance string) upstream.UpstreamUpdateResult {
+	return upstream.UpstreamUpdateResult{
+		ok:         result.ok
+		provider:   provider
+		instance:   instance
+		message_id: result.message_id
+		error:      result.error
+	}
 }
 
 pub struct UploadImageResult {

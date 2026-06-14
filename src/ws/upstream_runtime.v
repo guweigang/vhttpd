@@ -101,6 +101,10 @@ pub fn upstream_run_provider(rt UpstreamRuntimeContext, provider string, instanc
 	}
 }
 
+pub fn (rt UpstreamRuntimeContext) run_provider(provider string, instance string) {
+	upstream_run_provider(rt, provider, instance)
+}
+
 fn upstream_message_cb(mut ws_client websocket.Client, msg &websocket.Message, ref voidptr) ! {
 	mut state := unsafe { &UpstreamRef(ref) }
 	state.rt.handle_message(state.provider, state.instance, mut ws_client, msg)!

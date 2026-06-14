@@ -1,6 +1,6 @@
 module ws
 
-import transport
+import upstream.transport
 import net.websocket
 import sync
 import net.unix

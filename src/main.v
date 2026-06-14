@@ -1,18 +1,10 @@
 module main
 
-import dbx
 import executor
-import provider
 import ws
-import feishu
-import codex
 import worker
-import stats
-import assets
-import plugin
 import admin
-import openai
-import mcp_protocol
+import config
 import json
 import log
 import net
@@ -25,7 +17,7 @@ import time
 import veb
 import veb.request_id
 import veb.sse
-import transport
+import upstream.transport
 
 pub struct Context {
 	veb.Context
@@ -40,25 +32,15 @@ pub:
 	event_log string
 pub mut:
 	started_at_unix     i64
-	worker              worker.WorkerState
-	admin               admin.AdminState
-	runtime_config_json string
-	plugins             plugin.PluginState
-	assets              assets.AssetsState
-	mcp                 mcp_protocol.McpState
-	openai              openai.OpenaiState
-	http_stats          stats.HttpStats
+	http_stats          HttpStats
 	mu                  sync.Mutex
 
-	ws_hub             ws.HubState
-	providers          ProviderHost
-	provider_instances provider.ProviderInstanceRegistry = provider.ProviderInstanceRegistry{
-		specs: map[string]provider.ProviderInstanceSpec{}
-	}
-	// codex upstream
-	codex      codex.CodexState
-	feishu     feishu.FeishuState
-	db_runtime dbx.Runtime
+	transport TransportRuntimeHub
+	protocols ProtocolRuntimeHub
+	providers ProviderRuntimeHub
+	executors ExecutorRuntimeHub
+	admin     admin.AdminState
+	assets    config.AssetsRuntime
 }
 
 fn runtime_trace(label string, fields map[string]string) {
@@ -387,7 +369,7 @@ fn worker_websocket_close_cb(mut _ws websocket.Client, code int, reason string, 
 }
 
 fn proxy_worker_websocket(mut app App, mut ctx Context, method string, path string) veb.Result {
-	if app.ws_hub.dispatch_mode {
+	if app.transport.websocket.dispatch_mode {
 		return proxy_worker_websocket_dispatch(mut app, mut ctx, method, path)
 	}
 	start_ms := time.now().unix_milli()
@@ -402,7 +384,7 @@ fn proxy_worker_websocket(mut app App, mut ctx Context, method string, path stri
 	}
 	remote_addr := if isnil(ctx.conn) { '' } else { ctx.conn.peer_ip() or { '' } }
 	mut facade := app.as_facade()
-	mut ws_open := app.worker.logic_executor.open_websocket_session(mut facade, executor.WebSocketSessionOpenRequest{
+	mut ws_open := app.executors.worker.logic_executor.open_websocket_session(mut facade, executor.WebSocketSessionOpenRequest{
 		req:         ctx.req
 		remote_addr: remote_addr
 		path:        path
@@ -447,7 +429,7 @@ fn proxy_worker_websocket_dispatch(mut app App, mut ctx Context, method string, 
 		remote_addr, req_id, trace_id, '', '', 0, '', websocket_runtime.rooms(req_id),
 		websocket_runtime.metadata(req_id), presence)
 	resp := websocket_runtime.dispatch_event(open_frame) or {
-		err_msg := executor.inproc_vjsx_normalize_error_message(err.msg(),
+		err_msg := executor.InProcVjsxError.normalize_message(err.msg(),
 			'inproc_vjsx_executor_websocket_open_failed')
 		log.error('[vhttpd] kernel_dispatch_websocket_event failed trace_id=${trace_id} path=${normalized_path} error=${err_msg}')
 		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
@@ -483,9 +465,9 @@ fn proxy_worker_websocket_dispatch(mut app App, mut ctx Context, method string, 
 	ctx.conn.set_write_timeout(time.infinite)
 	ctx.conn.set_read_timeout(time.infinite)
 	mut conn := ctx.conn
-	spawn ws.handle_dispatch_session(app.build_websocket_runtime_context(), mut conn, key, method.to_upper(),
-		normalized_path, query, headers, remote_addr, req_id, trace_id, start_ms,
-		resp.commands.clone())
+	spawn ws.handle_dispatch_session(app.build_websocket_runtime_context(), mut conn, key,
+		method.to_upper(), normalized_path, query, headers, remote_addr, req_id, trace_id,
+		start_ms, resp.commands.clone())
 	return veb.no_result()
 }
 
@@ -569,15 +551,15 @@ fn proxy_worker_response(mut app App, mut ctx Context, method string, path strin
 	req_id := resolve_request_id(ctx, path)
 	trace_id := resolve_trace_id(ctx, path)
 	log.info('[http] ⇢ dispatch method=${method.to_upper()} path=${path} trace_id=${trace_id} request_id=${req_id} body_len=${ctx.req.data.len} executor=${app.logic_executor_kind()}')
-	if app.worker.stream_dispatch {
-		if result := stream_via_dispatch(mut app, mut ctx, method, path, req_id, trace_id,
-			remote_addr)
+	if app.executors.worker.stream_dispatch {
+		if result := HttpStreamRuntime.via_dispatch(mut app, mut ctx, method, path, req_id,
+			trace_id, remote_addr)
 		{
 			return result
 		}
 	}
 	mut facade := app.as_facade()
-	mut outcome := app.worker.logic_executor.dispatch_http(mut facade, executor.HttpLogicDispatchRequest{
+	mut outcome := app.executors.worker.logic_executor.dispatch_http(mut facade, executor.HttpLogicDispatchRequest{
 		method:      method
 		path:        path
 		req:         ctx.req
@@ -614,11 +596,11 @@ fn proxy_worker_response(mut app App, mut ctx Context, method string, path strin
 		}
 		if (start.stream_type == 'sse' || start.content_type.starts_with('text/event-stream'))
 			&& method.to_upper() != 'HEAD' {
-			return stream_via_sse(mut app, mut ctx, mut conn, start, method, path, req_id,
-				trace_id, start_ms)
+			return HttpStreamRuntime.via_sse(mut app, mut ctx, mut conn, start, method, path,
+				req_id, trace_id, start_ms)
 		}
-		return stream_via_passthrough(mut app, mut ctx, mut conn, start, method, path, req_id,
-			trace_id, start_ms)
+		return HttpStreamRuntime.via_passthrough(mut app, mut ctx, mut conn, start, method,
+			path, req_id, trace_id, start_ms)
 	}
 	if outcome.kind == .upstream_plan {
 		log.info('[http] ⇠ dispatch upstream_plan method=${method.to_upper()} path=${path} trace_id=${trace_id} request_id=${req_id} duration_ms=${time.now().unix_milli() - start_ms}')

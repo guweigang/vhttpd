@@ -5,8 +5,10 @@ import feishu
 import json
 import net.unix
 import os
+import upstream
 import worker
-import ws
+
+struct InternalAdminRuntime {}
 
 
 fn (mut app App) internal_admin_dispatch(req admin.InternalAdminRequest) admin.InternalAdminResponse {
@@ -40,7 +42,7 @@ fn (mut app App) internal_admin_dispatch(req admin.InternalAdminRequest) admin.I
 			instance := (req.query['instance'] or { '' }).trim_space()
 			chat_type := (req.query['chat_type'] or { '' }).trim_space()
 			chat_id := (req.query['chat_id'] or { '' }).trim_space()
-			return admin.InternalAdminResponse.json(json.encode(app.feishu.chats_snapshot(limit,
+			return admin.InternalAdminResponse.json(json.encode(app.providers.feishu.chats_snapshot(limit,
 				offset, instance, chat_type, chat_id)))
 		}
 		'/runtime/upstreams/websocket' {
@@ -84,7 +86,7 @@ fn (mut app App) internal_gateway_dispatch(req admin.InternalAdminRequest, binar
 	path := admin.InternalAdminRequest.normalize_gateway_path(req.path)
 	match path {
 		'/upstreams/websocket/send', '/feishu/messages' {
-			send_req := json.decode(ws.UpstreamSendRequest, req.body) or {
+			send_req := json.decode(upstream.UpstreamSendRequest, req.body) or {
 				return admin.InternalAdminResponse.bad_request('invalid_json')
 			}
 			result := app.websocket_upstream_send(send_req) or {
@@ -214,4 +216,8 @@ fn run_internal_admin_server(mut app App, socket_path string) {
 		worker.WorkerBackendFrameCodec.write(mut conn, json.encode(resp)) or {}
 		conn.close() or {}
 	}
+}
+
+fn InternalAdminRuntime.serve(mut app App, socket_path string) {
+	run_internal_admin_server(mut app, socket_path)
 }

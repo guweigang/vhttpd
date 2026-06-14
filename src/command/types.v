@@ -1,6 +1,6 @@
 module command
 
-import transport
+import upstream.transport
 
 pub struct CommandTarget {
 pub:

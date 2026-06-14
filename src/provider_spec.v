@@ -80,7 +80,7 @@ pub fn (mut app App) admin_provider_specs_snapshot() []provider.AdminProviderSpe
 	defer {
 		app.mu.unlock()
 	}
-	return app.providers.admin_specs_snapshot()
+	return app.providers.registry.admin_specs_snapshot()
 }
 
 pub fn (mut app App) provider_specs_copy() []ProviderSpec {
@@ -88,7 +88,7 @@ pub fn (mut app App) provider_specs_copy() []ProviderSpec {
 	defer {
 		app.mu.unlock()
 	}
-	return app.providers.specs_copy()
+	return app.providers.registry.specs_copy()
 }
 
 pub fn (mut app App) admin_provider_runtimes_snapshot() []provider.AdminProviderRuntimeSnapshot {

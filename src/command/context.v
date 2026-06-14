@@ -1,6 +1,6 @@
 module command
 
-import transport
+import upstream.transport
 import executor
 
 // Handler is the command module's handler interface, mirroring

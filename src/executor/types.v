@@ -2,7 +2,7 @@ module executor
 
 import net.http
 import net.unix
-import transport
+import upstream.transport
 
 // ── HTTP dispatch types ──
 

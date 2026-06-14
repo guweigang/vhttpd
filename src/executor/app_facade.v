@@ -1,6 +1,6 @@
 module executor
 
-import transport
+import upstream.transport
 import net.http
 import net.unix
 import x.json2

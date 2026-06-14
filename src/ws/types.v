@@ -5,6 +5,7 @@ import executor
 import feishu
 import net.websocket
 import sync
+import upstream
 
 // ── WebSocket Dispatch Connection State Machine ──
 
@@ -360,7 +361,7 @@ pub mut:
 	upstream_started             map[string]bool
 	fixture_runtime              map[string]FixtureRuntime
 	recent_activities            []UpstreamActivitySnapshot
-	upstream_sessions            map[string]UpstreamRuntimeSession
+	upstream_sessions            map[string]upstream.UpstreamRuntimeSession
 	stat_upstream_plans_total    i64
 	stat_upstream_plan_errors_total i64
 }
