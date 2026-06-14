@@ -38,6 +38,7 @@ if ($hasConfig) {
 }
 
 return static function ($requestOrEnvelope, array $envelope = []): array {
+    try {
     // 兼容 PSR-7 和 数组 envelope
     if ($requestOrEnvelope instanceof \Psr\Http\Message\ServerRequestInterface) {
         $request = $requestOrEnvelope;
@@ -286,4 +287,17 @@ return static function ($requestOrEnvelope, array $envelope = []): array {
         ],
         'body' => $html,
     ];
+    } catch (\Throwable $t) {
+        return [
+            'status' => 500,
+            'content_type' => 'text/html; charset=utf-8',
+            'headers' => [
+                'x-framework' => 'wordpress',
+            ],
+            'body' => '<h1>WordPress Worker Mode Error</h1>' .
+                      '<p><strong>Message:</strong> ' . htmlspecialchars($t->getMessage()) . '</p>' .
+                      '<p><strong>File:</strong> ' . htmlspecialchars($t->getFile()) . ':' . $t->getLine() . '</p>' .
+                      '<pre>' . htmlspecialchars($t->getTraceAsString()) . '</pre>',
+        ];
+    }
 };
