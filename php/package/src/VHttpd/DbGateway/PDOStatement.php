@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace VSlim\DbGateway;
+namespace VHttpd\DbGateway;
 
 final class PDOStatement
 {
@@ -43,7 +43,7 @@ final class PDOStatement
         if ($this->pdo->isQuerySql($this->sql)) {
             $result = $this->pdo->gatewayQuery($this->sql, $ordered);
             $this->rows = $this->normalizeRows($result['rows'] ?? []);
-            $this->affectedRows = (int) ($result['row_count'] ?? count($this->rows));
+            $this->affectedRows = (int) ($result['affected_rows'] ?? count($this->rows));
             $this->lastInsertId = isset($result['last_insert_id']) ? (string) $result['last_insert_id'] : null;
             return true;
         }

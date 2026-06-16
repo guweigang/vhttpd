@@ -29,11 +29,15 @@ final class Server
 {
     /** @var callable */
     private $app;
+    private readonly int $parentPid;
 
     public function __construct(
         private readonly string $socketPath,
         private readonly string $defaultApp,
     ) {
+        $parentPid = getenv('VHTTPD_PARENT_PID');
+        $this->parentPid = is_string($parentPid) && ctype_digit($parentPid) ? (int) $parentPid : 0;
+
         $appPath = getenv('VHTTPD_APP');
         if (!is_string($appPath) || $appPath === '') {
             $appPath = $this->defaultApp;
@@ -77,15 +81,47 @@ final class Server
             socket_close($server);
             throw new \RuntimeException("failed to listen on worker socket {$this->socketPath}: {$error}");
         }
+        socket_set_nonblock($server);
 
-        while (true) {
+        while (!$this->parentProcessExited()) {
             $conn = @socket_accept($server);
             if (!$conn) {
+                if (self::isWouldBlock(socket_last_error($server))) {
+                    socket_clear_error($server);
+                    usleep(200_000);
+                    continue;
+                }
                 continue;
             }
+            socket_set_block($conn);
             $this->handleConnection($conn);
             socket_close($conn);
         }
+        socket_close($server);
+        if (file_exists($this->socketPath) || is_link($this->socketPath)) {
+            @unlink($this->socketPath);
+        }
+    }
+
+    private function parentProcessExited(): bool
+    {
+        if ($this->parentPid <= 0 || !function_exists('posix_kill')) {
+            return false;
+        }
+
+        return !@posix_kill($this->parentPid, 0);
+    }
+
+    private static function isWouldBlock(int $error): bool
+    {
+        $wouldBlock = [];
+        foreach (['SOCKET_EAGAIN', 'SOCKET_EWOULDBLOCK'] as $constant) {
+            if (defined($constant)) {
+                $wouldBlock[] = constant($constant);
+            }
+        }
+
+        return $error === 0 || in_array($error, $wouldBlock, true);
     }
 
     /**
@@ -167,6 +203,13 @@ final class Server
     {
         if ($result instanceof StreamResponse) {
             return self::normalizeStreamResponse($request, $result);
+        }
+        if ($result instanceof Response) {
+            $payload = $result->toArray();
+            if ((string) ($payload['id'] ?? '') === '') {
+                $payload['id'] = (string) ($request['id'] ?? '');
+            }
+            return $payload;
         }
         if (!is_array($result)) {
             $result = [

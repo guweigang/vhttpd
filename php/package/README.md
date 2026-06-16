@@ -61,8 +61,12 @@ Primary classes:
 - `VPhp\\VHttpd\\Upstream\\WebSocket\\EventRouter`
 - `VPhp\\VSlim\\Psr7Adapter`
 - `VPhp\\VHttpd\\PhpWorker\\Server`
-- `VPhp\\VHttpd\\PhpWorker\\Client`
+- `VHttpd\\PhpWorker\\Request`
+- `VHttpd\\PhpWorker\\Response`
+- `VHttpd\\PhpWorker\\Client`
 - `VPhp\\VHttpd\\PhpWorker\\StreamResponse`
+- `VHttpd\\Wire\\FrameCodec`
+- `VHttpd\\Wire\\JsonClient`
 - `VPhp\\VSlim\\WebSocket\\App`
 - `VPhp\\VHttpd\\PhpWorker\\WebSocket\\Connection`
 - `VPhp\\VHttpd\\PhpWorker\\WebSocket\\CommandSink`
@@ -71,8 +75,10 @@ Primary classes:
 - `VPhp\\VSlim\\App\\Feishu\\BotApp`
 - `VPhp\\VSlim\\App\\Feishu\\BotHandler`
 - `VPhp\\VSlim\\App\\Feishu\\BotAdapter`
-- `VPhp\\VSlim\\DbGateway\\PDO` (experimental)
-- `VPhp\\VSlim\\DbGateway\\PDOStatement` (experimental)
+- `VHttpd\\Db\\Client` (experimental)
+- `VHttpd\\WordPress\\Wpdb` (experimental)
+- `VSlim\\DbGateway\\PDO` (experimental)
+- `VSlim\\DbGateway\\PDOStatement` (experimental)
 - `VSlim\\Container` (PSR-11, provided by `vslim.so` when `psr` extension is enabled)
 - `VSlim\\Container\\NotFoundException` (provided by `vslim.so`)
 - `VSlim\\Container\\ContainerException` (provided by `vslim.so`)
@@ -500,30 +506,65 @@ $app->get('/stream/text', function () {
 
 ## Experimental DB gateway client
 
+The database pool lives in vhttpd. PHP code, whether running as a long-lived
+`php-worker` or as short-lived `php-cgi`, only opens a lightweight framed JSON
+client to the vhttpd DB runtime socket.
+
 ```php
 <?php
 
 declare(strict_types=1);
 
-use VSlim\DbGateway\PDO;
+use VHttpd\DbGateway\Client;
 
-$db = new PDO('/tmp/vhttpd_db.sock');
+$db = Client::fromEnv();
 $db->ping();
 
-$stmt = $db->prepare('SELECT id, name FROM users WHERE id = ?');
-$stmt->execute([123]);
-$row = $stmt->fetch();
+$result = $db->query('SELECT id, name FROM users WHERE id = ?', [123]);
+$row = $result['rows'][0] ?? null;
 
-$db->beginTransaction();
+$sessionId = $db->beginTransaction();
 try {
-    $db->execute('UPDATE accounts SET balance = balance - ? WHERE id = ?', [100, 1]);
-    $db->execute('UPDATE accounts SET balance = balance + ? WHERE id = ?', [100, 2]);
-    $db->commit();
+    $db->execute('UPDATE accounts SET balance = balance - ? WHERE id = ?', [100, 1], $sessionId);
+    $db->execute('UPDATE accounts SET balance = balance + ? WHERE id = ?', [100, 2], $sessionId);
+    $db->commit($sessionId);
 } catch (Throwable $e) {
-    $db->rollBack();
+    $db->rollback($sessionId);
     throw $e;
 }
 ```
+
+For PDO-style application code, use the experimental facade:
+
+```php
+use VHttpd\DbGateway\PDO;
+
+$pdo = new PDO(getenv('VHTTPD_DB_SOCKET') ?: '/tmp/vhttpd_db.sock', getenv('VHTTPD_DB_POOL') ?: 'default');
+```
+
+The client speaks the vhttpd DB runtime protocol over the same 4-byte
+length-prefixed JSON frame format used by PHP workers:
+
+```json
+{"version":1,"mode":"db","op":"query","pool":"default","session_id":"","sql":"SELECT 1","params":[],"timeout_ms":1000}
+```
+
+## Experimental WordPress DB drop-in
+
+Copy or symlink `php/package/wordpress/db.php` into `wp-content/db.php`, then
+point it at the vhttpd DB runtime socket:
+
+```php
+<?php
+
+define('VHTTPD_DB_SOCKET', '/tmp/vhttpd_db.sock');
+define('VHTTPD_DB_POOL', 'default');
+define('VHTTPD_DB_TIMEOUT_MS', 1000);
+```
+
+The drop-in replaces WordPress core `$wpdb` traffic with
+`VHttpd\WordPress\Wpdb`. It does not shim plugins that bypass `$wpdb` and call
+`mysqli_*` directly.
 
 ## VSlim global container (PSR-11)
 

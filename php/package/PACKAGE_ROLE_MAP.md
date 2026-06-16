@@ -59,6 +59,8 @@
 - `VHttpd\AdminClient`
 - `VHttpd\GatewayClient`
 - `VHttpd\PhpWorker\Server`
+- `VHttpd\PhpWorker\Request`
+- `VHttpd\PhpWorker\Response`
 - `VHttpd\PhpWorker\Client`
 - `VHttpd\PhpWorker\StreamResponse`
 - `VHttpd\PhpWorker\WebSocket\Connection`
@@ -101,6 +103,8 @@
 
 ### `Integration`
 
+- `VHttpd\Wire\FrameCodec`
+- `VHttpd\Wire\JsonClient`
 - `VHttpd\Upstream\WebSocket\Feishu\McpToolset`
 - `VHttpd\Upstream\WebSocket\Feishu\Command\Factory`
 - `VHttpd\Upstream\WebSocket\Feishu\Event\Factory`
@@ -109,8 +113,10 @@
 - `VSlim\Psr7Adapter`
 - `VSlim\Stream\Factory`
 - `VSlim\Stream\OllamaClient`
-- `VSlim\DbGateway\PDO`
-- `VSlim\DbGateway\PDOStatement`
+- `VHttpd\DbGateway\Client`
+- `VHttpd\WordPress\Wpdb`
+- `VHttpd\DbGateway\PDO`
+- `VHttpd\DbGateway\PDOStatement`
 
 这组类的共同点是：
 
