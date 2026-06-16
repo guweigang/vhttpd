@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+use VHttpd\WordPress\Lifecycle;
+
 class WpRedirectException extends \Exception {
     private $location;
     private $status;
@@ -28,79 +30,22 @@ if (!function_exists('wp_redirect')) {
 
 require_once __DIR__ . '/vendor/autoload.php';
 
-// 初始化加载 WordPress (只加载一次)
-$wpRoot = getenv('VPHP_WP_ROOT');
-if (!is_string($wpRoot) || $wpRoot === '') {
-    throw new RuntimeException('VPHP_WP_ROOT is required for wordpress demo');
-}
-$wpLoad = rtrim($wpRoot, '/') . '/wp-load.php';
-if (!is_file($wpLoad)) {
-    throw new RuntimeException('wp-load.php not found: ' . $wpLoad);
-}
+$lifecycle = new Lifecycle();
 
-// 设置全局超全局变量 Fallback 默认值，以防 WordPress 首次加载初始化时抛出 Undefined Key Notice/Warning
-$_SERVER['HTTP_HOST'] = $_SERVER['HTTP_HOST'] ?? 'localhost';
-$_SERVER['REQUEST_URI'] = $_SERVER['REQUEST_URI'] ?? '/';
-$_SERVER['REQUEST_METHOD'] = $_SERVER['REQUEST_METHOD'] ?? 'GET';
-$_SERVER['SERVER_NAME'] = $_SERVER['SERVER_NAME'] ?? 'localhost';
-$_SERVER['SERVER_PORT'] = $_SERVER['SERVER_PORT'] ?? '80';
-$_SERVER['REMOTE_ADDR'] = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+// 初始化加载 WordPress (只加载一次)
+$wpRoot = $lifecycle->rootFromEnv();
+$lifecycle->prepareBootstrapDefaults();
 
 // 如果配置文件已存在，则可以安全地在全局 require 进来
-$hasConfig = file_exists(rtrim($wpRoot, '/') . '/wp-config.php');
-if ($hasConfig) {
-    if (!defined('WP_USE_THEMES')) {
-        define('WP_USE_THEMES', true);
-    }
-    require_once $wpLoad;
-}
+$lifecycle->bootstrapIfInstalled($wpRoot);
 
-return static function ($requestOrEnvelope, array $envelope = []): array {
+return static function ($requestOrEnvelope, array $envelope = []) use ($lifecycle, $wpRoot): array {
     try {
-    // 兼容 PSR-7 和 数组 envelope
-    if ($requestOrEnvelope instanceof \Psr\Http\Message\ServerRequestInterface) {
-        $request = $requestOrEnvelope;
-        $path = $request->getUri()->getPath();
-        $queryStr = $request->getUri()->getQuery();
-        $method = $request->getMethod();
-        $queryParams = $request->getQueryParams();
-        $body = (string)$request->getBody();
-        $headers = [];
-        foreach ($request->getHeaders() as $name => $values) {
-            $headers[$name] = implode(', ', $values);
-        }
-        $cookies = $request->getCookieParams();
-        $serverParams = $request->getServerParams();
-        $host = $request->getUri()->getHost();
-        $port = (string)$request->getUri()->getPort();
-        $scheme = $request->getUri()->getScheme();
-        $remoteAddr = $serverParams['REMOTE_ADDR'] ?? '';
-    } else {
-        $payload = is_array($requestOrEnvelope) ? $requestOrEnvelope : $envelope;
-        $path = (string)($payload['path'] ?? '/');
-        $queryStr = '';
-        if (str_contains($path, '?')) {
-            $parts = explode('?', $path, 2);
-            $path = $parts[0];
-            $queryStr = $parts[1] ?? '';
-        }
-        $method = strtoupper((string)($payload['method'] ?? 'GET'));
-        $queryParams = $payload['query'] ?? [];
-        if (empty($queryStr) && !empty($queryParams)) {
-            $queryStr = http_build_query($queryParams);
-        }
-        $body = (string)($payload['body'] ?? '');
-        $headers = $payload['headers'] ?? [];
-        $cookies = $payload['cookies'] ?? [];
-        $serverParams = $payload['server'] ?? [];
-        $host = (string)($payload['host'] ?? '');
-        $port = (string)($payload['port'] ?? '');
-        $scheme = (string)($payload['scheme'] ?? 'http');
-        $remoteAddr = (string)($payload['remote_addr'] ?? '');
-    }
+    $request = $lifecycle->normalizeRequest($requestOrEnvelope, $envelope);
+    $lifecycle->prepareEnvironment($request);
 
-    $wpRoot = getenv('VPHP_WP_ROOT');
-    $wpLoad = rtrim($wpRoot, '/') . '/wp-load.php';
+    $path = (string)$request['path'];
+    $queryParams = $request['query'];
 
     // 1. 静态资源直达支持 (提取任意路由前缀后的静态文件相对路径)
     $cleanStaticPath = '';
@@ -140,43 +85,8 @@ return static function ($requestOrEnvelope, array $envelope = []): array {
         }
     }
 
-    // 2. 重置超全局变量以模拟此次真实请求。透传前端发来的真实 REQUEST_URI，这一步必须在加载 wp-load.php 之前执行
-    $requestUri = $path . ($queryStr !== '' ? '?' . $queryStr : '');
-    $_SERVER['REQUEST_URI'] = $requestUri;
-    $_SERVER['REQUEST_METHOD'] = $method;
-    $_SERVER['QUERY_STRING'] = $queryStr;
-    
-    $hostHeader = $host ?: 'localhost';
-    if ($port !== '' && $port !== '80' && $port !== '443') {
-        $hostHeader .= ':' . $port;
-    }
-    $_SERVER['HTTP_HOST'] = $hostHeader;
-    $_SERVER['SERVER_NAME'] = $host ?: 'localhost';
-    if ($port !== '') {
-        $_SERVER['SERVER_PORT'] = $port;
-    } else {
-        $_SERVER['SERVER_PORT'] = ($scheme === 'https') ? '443' : '80';
-    }
-    $_SERVER['HTTPS'] = ($scheme === 'https') ? 'on' : 'off';
-    $_SERVER['REMOTE_ADDR'] = $remoteAddr ?: '127.0.0.1';
-
-    $_GET = $queryParams;
-    $_POST = [];
-    if ($method === 'POST') {
-        $contentType = $headers['content-type'] ?? $headers['Content-Type'] ?? '';
-        if (is_array($contentType)) {
-            $contentType = implode(', ', $contentType);
-        }
-        if (str_contains(strtolower($contentType), 'application/x-www-form-urlencoded')) {
-            parse_str($body, $_POST);
-        }
-    }
-    $_COOKIE = $cookies;
-    $_REQUEST = array_merge($_GET, $_POST, $_COOKIE);
-
     // 3. WordPress worker mode requires an installed site.
-    $hasConfig = file_exists(rtrim($wpRoot, '/') . '/wp-config.php');
-    if (!$hasConfig) {
+    if (!$lifecycle->isInstalled($wpRoot)) {
         if (str_ends_with($path, '/meta')) {
             return [
                 'status' => 200,
@@ -228,10 +138,8 @@ return static function ($requestOrEnvelope, array $envelope = []): array {
     }
 
     // 4. 常驻加载：已安装且不是物理 PHP 入口时，交给 WordPress runtime 处理。
-    if (!defined('WP_USE_THEMES')) {
-        define('WP_USE_THEMES', true);
-    }
-    require_once $wpLoad;
+    $lifecycle->bootstrap($wpRoot);
+    $lifecycle->resetRequestRuntime();
 
     // 4. 原有的 API 路由接口
     if (str_ends_with($path, '/meta')) {

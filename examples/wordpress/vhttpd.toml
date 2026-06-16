@@ -3,28 +3,52 @@ host = "127.0.0.1"
 port = 8080
 index = "index.php"   # <--- 在这里自定义默认文档 (默认为 index.php)
 
+[site]
+name = "wordpress"
+root = "/Users/guweigang/wwwroot/wordpress"
+index = "index.php"
+default_executor = "php"
 
 # 1. 默认执行器 (主池): 负责前台的高性能长驻运行
-[executor]
+[executors.php]
 kind = "php"
+worker_entry = "./vendor/bin/vphp-worker"
+app_entry = "./app.php"
+deny_php = [
+    "/wp-config.php",
+    "/wp-config-sample.php",
+    "/wp-load.php",
+    "/wp-settings.php",
+    "/wp-blog-header.php",
+    "/wp-content/uploads/*",
+    "/wp-includes/*",
+    "/wp-admin/includes/*"
+]
+compat_php = [
+    "/wp-admin/*",
+    "/wp-login.php",
+    "/wp-comments-post.php",
+    "/wp-cron.php",
+    "/xmlrpc.php",
+    "/wp-trackback.php",
+    "/wp-links-opml.php",
+    "/wp-activate.php",
+    "/wp-signup.php",
+    "/wp-mail.php"
+]
 
-[worker]
+[executors.php.worker]
 autostart = true
 pool_size = 4
 socket = "/tmp/vhttpd_wp_main.sock"
 
-[worker.env]
+[executors.php.worker.env]
 VPHP_WP_ROOT = "/Users/guweigang/wwwroot/wordpress"
-
-[php]
-# 运行 vphp-worker 封装的 WordPress 入口
-worker_entry = "./vendor/bin/vphp-worker"
-app_entry = "./app.php"
 
 # 2. 附加执行器 (附加池): 负责后台管理、登录等不适合/不支持长驻模式的动态脚本
 [executors.php-cgi]
-[executors.php-cgi.executor]
 kind = "php-cgi"
+bin = "php-cgi"
 
 [executors.php-cgi.worker]
 autostart = true
@@ -33,9 +57,6 @@ socket = "/tmp/vhttpd_wp_cgi.sock"
 
 [executors.php-cgi.worker.env]
 VPHP_WP_ROOT = "/Users/guweigang/wwwroot/wordpress"
-
-[executors.php-cgi.php]
-bin = "php-cgi"
 
 
 # 3. 路由分流策略 (按顺序从上往下匹配，匹配成功即刻阻断)
@@ -62,15 +83,9 @@ match.path = [
     "*.ttf"
 ]
 executor = "static"
-root = "/Users/guweigang/wwwroot/wordpress"
+root = "${site.root}"
 
-# 规则 3.2: 阻断敏感配置文件的直接访问
-[[routes]]
-match.path = ["/wp-config.php", "/wp-content/uploads/*.php"]
-status = 403
-body = "Forbidden: Access denied."
-
-# 规则 3.3: 其他非特定后缀的静态资源目录直回
+# 规则 3.2: 其他非特定后缀的静态资源目录直回
 [[routes]]
 match.path = [
     "/wp-content/*",
@@ -79,19 +94,22 @@ match.path = [
     "robots.txt"
 ]
 executor = "static"
-root = "/Users/guweigang/wwwroot/wordpress"
+root = "${site.root}"
 
-# 规则 3.4: 管理后台及特定 CGI 请求分流至 php-cgi 进程池
-# (此时 /wp-admin/css/install.css 已经在规则 3.1 被拦截并返回，
-#  剩下的如 /wp-admin/setup-config.php 会顺利滑落到这里由 php-cgi 运行)
+# 规则 3.3: WordPress REST API 通过 /index.php?rest_route=... 进入，
+# long-running worker 会把部分 REST 输出写到 stdout，因此这里走 CGI/compat 池
 [[routes]]
-match.path = [
-    "/wp-admin/*",
-    "/wp-login.php",
-    "/wp-comments-post.php",
-    "/wp-cron.php"
-]
+match.path = ["/index.php"]
+match.query = { rest_route = "*" }
 executor = "php-cgi"
+
+# Pretty permalink REST API: /wp-json/... behaves like
+# /index.php?rest_route=/...
+[[routes]]
+match.path = ["/wp-json", "/wp-json/*"]
+executor = "php-cgi"
+rewrite = "/index.php?rest_route=$path_remainder"
+rewrite_strip_prefix = "/wp-json"
 
 # 规则 3.4: 兜底规则 (选填)
 # 任何未匹配上述规则的动态请求，将默认派发给 [executor].kind 中定义的 "php" (php-worker) 高性能长驻主池处理
