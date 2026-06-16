@@ -8,6 +8,11 @@ $if enable_db ? {
 		if req.mode != 'db' {
 			return dbx.Response.error(driver, 'invalid_mode')
 		}
+		if !app.db_runtime_accepts_pool(req.pool) {
+			message := 'unknown_pool:${req.pool}'
+			app.db_runtime_note_error(message)
+			return dbx.Response.error(driver, message)
+		}
 		return match req.op {
 			'ping' {
 				app.db_runtime_ensure_pool() or {
@@ -95,6 +100,20 @@ $if enable_db ? {
 				app.db_runtime_release_conn(conn, req.session_id)
 				driver_name := app.db_runtime_note_query_success()
 				dbx.Response.query_result(driver_name, query_result, req.session_id)
+			}
+			'escape' {
+				mut conn := app.db_runtime_acquire_conn(req.session_id) or {
+					app.db_runtime_note_error(err.msg())
+					return dbx.Response.error(driver, err.msg())
+				}
+				value := if req.params.len > 0 { req.params[0] } else { req.sql_text }
+				escaped := conn.escape(value) or {
+					app.db_runtime_release_conn(conn, req.session_id)
+					app.db_runtime_note_error(err.msg())
+					return dbx.Response.error(driver, err.msg())
+				}
+				app.db_runtime_release_conn(conn, req.session_id)
+				dbx.Response.escaped(driver, escaped, req.session_id)
 			}
 			'execute' {
 				mut conn := app.db_runtime_acquire_conn(req.session_id) or {

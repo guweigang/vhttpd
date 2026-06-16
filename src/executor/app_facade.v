@@ -11,6 +11,7 @@ pub interface AppFacade {
 	worker_backend_read_timeout_ms() int
 	worker_backend_sockets_len() int
 	worker_env() map[string]string
+	worker_env_for_kind(kind string) map[string]string
 	worker_backend_read_timeout_ms_for_kind(kind string) int
 mut:
 	// Worker Backend routing/lifecycle methods
@@ -44,6 +45,7 @@ pub fn (a NoOpAppFacade) worker_backend_read_timeout_ms() int { return 0 }
 pub fn (a NoOpAppFacade) worker_backend_read_timeout_ms_for_kind(kind string) int { return 0 }
 pub fn (a NoOpAppFacade) worker_backend_sockets_len() int { return 0 }
 pub fn (a NoOpAppFacade) worker_env() map[string]string { return map[string]string{} }
+pub fn (a NoOpAppFacade) worker_env_for_kind(kind string) map[string]string { return map[string]string{} }
 pub fn (mut a NoOpAppFacade) worker_backend_select_socket_queued() !string { return error('noop') }
 pub fn (mut a NoOpAppFacade) worker_backend_select_socket_for_kind(kind string) !string { return error('noop') }
 pub fn (mut a NoOpAppFacade) on_worker_request_started(_socket_path string) {}

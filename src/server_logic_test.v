@@ -302,6 +302,7 @@ fn test_resolve_provider_runtime_settings_supports_pgsql_db_config() {
 	cfg.db.enabled = true
 	cfg.db.driver = 'pgsql'
 	cfg.db.socket = '/tmp/vhttpd-db-pg.sock'
+	cfg.db.pool_name = 'analytics'
 	cfg.db.pgsql.host = '127.0.0.1'
 	cfg.db.pgsql.port = 5433
 	cfg.db.pgsql.username = 'postgres'
@@ -312,6 +313,7 @@ fn test_resolve_provider_runtime_settings_supports_pgsql_db_config() {
 	assert settings.db.enabled
 	assert settings.db.driver == 'pgsql'
 	assert settings.db.socket == '/tmp/vhttpd-db-pg.sock'
+	assert settings.db.pool_name == 'analytics'
 	assert settings.db.host == '127.0.0.1'
 	assert settings.db.port == 5433
 	assert settings.db.username == 'postgres'
@@ -759,6 +761,8 @@ app = "examples/hello-app.php"
 	assert multi_cfg.listeners.len == 1
 	assert multi_cfg.listeners[0].site_cfg.worker.socket_prefix == os.join_path(config_dir, 'tmp',
 		'demo-worker')
+	assert multi_cfg.listeners[0].site_cfg.site.document_root == config_dir
+	assert multi_cfg.listeners[0].site_cfg.worker.env['DOCUMENT_ROOT'] == config_dir
 	assert multi_cfg.listeners[0].site_cfg.php.worker_entry == php_worker
 	assert multi_cfg.listeners[0].site_cfg.php.app_entry == php_app
 }
@@ -806,6 +810,180 @@ args = ["-d", "memory_limit=512M"]
 	assert cfg.php.args.len == 2
 	assert cfg.php.args[0] == '-d'
 	assert cfg.php.args[1] == 'memory_limit=512M'
+}
+
+fn test_load_vhttpd_config_normalizes_single_site_named_executors() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_site_php_policy_test')
+	config_dir := os.join_path(temp_dir, 'config')
+	os.mkdir_all(config_dir) or { panic(err) }
+	config_file := os.join_path(config_dir, 'vhttpd.toml')
+	os.write_file(config_file, '
+[site]
+name = "wordpress"
+root = ".."
+index = "index.php"
+default_executor = "php"
+
+[executors.php]
+kind = "php"
+worker_entry = "./vendor/bin/vphp-worker"
+app_entry = "./app.php"
+deny_php = ["/wp-config.php", "/wp-includes/*"]
+compat_php = ["/wp-admin/*", "/xmlrpc.php"]
+
+[executors.php.worker]
+pool_size = 3
+
+[executors.php-cgi]
+kind = "php-cgi"
+bin = "php-cgi"
+
+[executors.php-cgi.worker]
+pool_size = 2
+
+[[routes]]
+match.path = ["/index.php"]
+match.query = { rest_route = "*" }
+executor = "php-cgi"
+') or {
+		panic(err)
+	}
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	cfg := config.load_vhttpd_config(['--config', config_file]) or { panic(err) }
+	assert cfg.paths.root == os.abs_path(config_dir)
+	assert cfg.site.document_root == os.abs_path(temp_dir)
+	assert cfg.worker.env['DOCUMENT_ROOT'] == os.abs_path(temp_dir)
+	assert cfg.server.index == 'index.php'
+	assert cfg.default_site_id() == 'wordpress'
+	assert cfg.executor.kind == 'php'
+	assert cfg.worker.pool_size == 3
+	assert cfg.php.worker_entry == os.join_path(config_dir, 'vendor', 'bin', 'vphp-worker')
+	assert cfg.php.app_entry == os.join_path(config_dir, 'app.php')
+	assert cfg.php_site.deny_php == ['/wp-config.php', '/wp-includes/*']
+	assert cfg.php_site.compat_php == ['/wp-admin/*', '/xmlrpc.php']
+	assert cfg.executors['php-cgi'].executor.kind == 'php-cgi'
+	assert cfg.executors['php-cgi'].worker.pool_size == 2
+	assert cfg.executors['php-cgi'].php.bin == 'php-cgi'
+	assert cfg.routes.len == 1
+	assert cfg.routes[0].executor == 'php-cgi'
+	assert cfg.routes[0].match.query['rest_route'] == '*'
+	canonical_sites := cfg.canonical_sites()
+	assert canonical_sites.len == 1
+	assert 'wordpress' in canonical_sites
+	assert canonical_sites['wordpress'].executors.len == 2
+	routes := config.expand_php_site_routes(cfg)
+	assert routes.len == 4
+	assert routes[0].match.path == ['/wp-config.php']
+	assert routes[1].match.path_regexp == '^/wp-includes/.*\\.php$'
+	assert routes[2].executor == 'php-cgi'
+	assert routes[3].executor == 'php-cgi'
+}
+
+fn test_load_vhttpd_config_does_not_accept_removed_php_policy_forms() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_removed_php_policy_forms_test')
+	config_dir := os.join_path(temp_dir, 'config')
+	os.mkdir_all(config_dir) or { panic(err) }
+	config_file := os.join_path(config_dir, 'vhttpd.toml')
+	os.write_file(config_file, '
+[site]
+default_executor = "php"
+
+[php]
+deny_php = ["/wp-config.php"]
+compat_php = ["/wp-login.php"]
+
+[site.php]
+deny_php = ["/wp-load.php"]
+
+[executors.php]
+kind = "php"
+
+[executors.php.php]
+worker_entry = "./vendor/bin/vphp-worker"
+app_entry = "./app.php"
+') or {
+		panic(err)
+	}
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	cfg := config.load_vhttpd_config(['--config', config_file]) or { panic(err) }
+	assert cfg.php_site.deny_php.len == 0
+	assert cfg.php_site.compat_php.len == 0
+	assert cfg.php.worker_entry == ''
+	assert cfg.php.app_entry == ''
+}
+
+fn test_load_vhttpd_config_parses_multisite_named_executors() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_multisite_named_executors_test')
+	config_dir := os.join_path(temp_dir, 'config')
+	php_worker_dir := os.join_path(config_dir, 'vendor', 'bin')
+	os.mkdir_all(config_dir) or { panic(err) }
+	os.mkdir_all(php_worker_dir) or { panic(err) }
+	config_file := os.join_path(config_dir, 'vhttpd.toml')
+	os.write_file(os.join_path(php_worker_dir, 'vphp-worker'), '#!/usr/bin/env php') or {
+		panic(err)
+	}
+	os.write_file(os.join_path(config_dir, 'app.php'), '<?php echo "app";') or { panic(err) }
+	os.write_file(config_file, '
+[paths]
+root = "."
+
+[sites.wordpress]
+project_root = "."
+document_root = "../wwwroot/wordpress"
+default_executor = "php"
+port = 19880
+routes = [
+  { match = { path = ["/wp-login.php"] }, executor = "php-cgi" }
+]
+
+[sites.wordpress.executors.php]
+kind = "php"
+worker_entry = "./vendor/bin/vphp-worker"
+app_entry = "./app.php"
+deny_php = ["/wp-config.php"]
+
+[sites.wordpress.executors.php.worker]
+pool_size = 4
+
+[sites.wordpress.executors.php-cgi]
+kind = "php-cgi"
+bin = "php-cgi"
+
+[sites.wordpress.executors.php-cgi.worker]
+pool_size = 2
+') or {
+		panic(err)
+	}
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	cfg := config.load_vhttpd_config(['--config', config_file]) or { panic(err) }
+	assert cfg.sites.len == 1
+	assert cfg.sites['wordpress'].default_executor == 'php'
+	assert cfg.sites['wordpress'].executors.len == 2
+	assert cfg.sites['wordpress'].executors['php'].worker.pool_size == 4
+	assert cfg.sites['wordpress'].executors['php'].php.worker_entry == './vendor/bin/vphp-worker'
+	assert cfg.sites['wordpress'].executors['php'].php_site.deny_php == [
+		'/wp-config.php',
+	]
+	assert cfg.sites['wordpress'].executors['php-cgi'].executor.kind == 'php-cgi'
+	assert cfg.sites['wordpress'].routes.len == 1
+	multi_cfg := server_lifecycle.resolve_multi_server_runtime_config([]string{}, cfg) or {
+		panic(err)
+	}
+	assert !multi_cfg.single_mode
+	assert multi_cfg.listeners.len == 1
+	assert multi_cfg.listeners[0].site_id == 'wordpress'
+	assert multi_cfg.listeners[0].site_cfg.executor.kind == 'php'
+	assert multi_cfg.listeners[0].site_cfg.worker.pool_size == 4
+	assert multi_cfg.listeners[0].site_cfg.php_site.deny_php == ['/wp-config.php']
+	assert multi_cfg.listeners[0].site_cfg.php.worker_entry == os.join_path(config_dir, 'vendor',
+		'bin', 'vphp-worker')
+	assert multi_cfg.listeners[0].site_cfg.executors['php-cgi'].worker.pool_size == 2
 }
 
 fn test_load_vhttpd_config_expands_same_section_paths_short_reference() {
@@ -963,9 +1141,9 @@ fn test_build_php_worker_command_from_php_section() {
 
 fn test_build_php_cgi_command_from_php_section() {
 	php_cfg := config.PhpConfig{
-		bin:          'php-cgi'
-		extensions:   ['/tmp/a.so']
-		args:         ['-d', 'memory_limit=256M']
+		bin:        'php-cgi'
+		extensions: ['/tmp/a.so']
+		args:       ['-d', 'memory_limit=256M']
 	}
 	cmd := executor.php_cgi_runtime_build_command(php_cfg) or { panic(err) }
 	assert cmd == "'php-cgi' '-d' 'extension=/tmp/a.so' '-d' 'memory_limit=256M' '-b' '{socket}'"
@@ -1939,9 +2117,9 @@ fn test_shutdown_app_runtime_stops_lifecycle_and_cleans_runtime_files() {
 	}
 	mut executor_state := &TestShutdownLogicExecutorState{}
 	mut app := App{
-		event_log:        event_log
+		event_log: event_log
 		executors: ExecutorRuntimeHub{
-			worker:           worker.WorkerState{
+			worker: worker.WorkerState{
 				logic_executor: TestShutdownLogicExecutor{
 					state: executor_state
 				}

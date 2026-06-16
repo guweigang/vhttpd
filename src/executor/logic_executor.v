@@ -278,28 +278,29 @@ pub fn (e PhpCgiExecutor) dispatch_http(mut app AppFacade, req HttpLogicDispatch
 	if read_timeout > 0 {
 		conn.set_read_timeout(time.millisecond * read_timeout)
 	}
-	
-	// 从配置文件中读取当前站点的环境变量
-	env_overrides := app.worker_env()
-	
-	payload := transport.FastCgiCodec.encode_request(req.method, req.path, req.req,
+
+	// FastCGI executors can run in an additional pool with its own env.
+	env_overrides := app.worker_env_for_kind(e.kind())
+
+	original_path := if req.original_path != '' { req.original_path } else { req.path }
+	payload := transport.FastCgiCodec.encode_request(req.method, req.path, original_path, req.req,
 		req.remote_addr, req.trace_id, req.request_id, env_overrides)
-	
+
 	conn.write_ptr(&payload[0], payload.len) or {
 		conn.close() or {}
 		app.on_worker_request_finished(selected_socket)
 		return error(err.msg())
 	}
-	
+
 	resp := transport.FastCgiCodec.decode_response(mut conn) or {
 		conn.close() or {}
 		app.on_worker_request_finished(selected_socket)
 		return error('transport_error: decode fastcgi response failed: ${err.msg()}')
 	}
-	
+
 	conn.close() or {}
 	app.on_worker_request_finished(selected_socket)
-	
+
 	return HttpLogicDispatchOutcome{
 		kind:     .response
 		response: resp

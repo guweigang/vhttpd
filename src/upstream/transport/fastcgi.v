@@ -8,16 +8,16 @@ import os
 // FastCGI 协议常量
 const fcgi_version_1 = u8(1)
 
-const fcgi_begin_request     = u8(1)
-const fcgi_abort_request     = u8(2)
-const fcgi_end_request       = u8(3)
-const fcgi_params            = u8(4)
-const fcgi_stdin             = u8(5)
-const fcgi_stdout            = u8(6)
-const fcgi_stderr            = u8(7)
-const fcgi_data              = u8(8)
+const fcgi_begin_request = u8(1)
+const fcgi_abort_request = u8(2)
+const fcgi_end_request = u8(3)
+const fcgi_params = u8(4)
+const fcgi_stdin = u8(5)
+const fcgi_stdout = u8(6)
+const fcgi_stderr = u8(7)
+const fcgi_data = u8(8)
 
-const fcgi_responder         = u16(1)
+const fcgi_responder = u16(1)
 
 pub struct FastCgiRecord {
 pub mut:
@@ -61,7 +61,7 @@ pub fn (r FastCgiRecord) encode() []u8 {
 	write_u16_be(mut buf, r.content_length)
 	buf << r.padding_length
 	buf << u8(0) // reserved
-	
+
 	if r.content.len > 0 {
 		buf << r.content.clone()
 	}
@@ -76,9 +76,9 @@ pub fn (r FastCgiRecord) encode() []u8 {
 pub struct FastCgiCodec {}
 
 // 编码一个完整的 FastCGI 请求
-pub fn FastCgiCodec.encode_request(method string, path string, req http.Request, remote_addr string, trace_id string, request_id string, env_overrides map[string]string) []u8 {
+pub fn FastCgiCodec.encode_request(method string, path string, original_path string, req http.Request, remote_addr string, trace_id string, request_id string, env_overrides map[string]string) []u8 {
 	mut buf := []u8{}
-	
+
 	// 1. FCGI_BEGIN_REQUEST
 	mut begin_content := []u8{}
 	write_u16_be(mut begin_content, fcgi_responder)
@@ -86,14 +86,14 @@ pub fn FastCgiCodec.encode_request(method string, path string, req http.Request,
 	for _ in 0 .. 5 {
 		begin_content << u8(0) // reserved
 	}
-	
+
 	r_begin := FastCgiRecord{
-		@type: fcgi_begin_request
+		@type:          fcgi_begin_request
 		content_length: u16(begin_content.len)
-		content: begin_content
+		content:        begin_content
 	}
 	buf << r_begin.encode()
-	
+
 	// 2. FCGI_PARAMS
 	mut params_buf := []u8{}
 	normalized_path, query_str := normalize_request_target_for_cgi(path)
@@ -101,7 +101,7 @@ pub fn FastCgiCodec.encode_request(method string, path string, req http.Request,
 	// 组装标准的 CGI 环境变量
 	mut envs := map[string]string{}
 	envs['REQUEST_METHOD'] = method.to_upper()
-	
+
 	// 针对 WordPress 解析物理 SCRIPT_FILENAME 路径
 	wp_root := env_overrides['VPHP_WP_ROOT']
 	mut script_filename := ''
@@ -122,11 +122,11 @@ pub fn FastCgiCodec.encode_request(method string, path string, req http.Request,
 	} else {
 		script_filename = normalized_path
 	}
-	
+
 	envs['SCRIPT_FILENAME'] = script_filename
 	envs['DOCUMENT_ROOT'] = wp_root
-	
-	envs['REQUEST_URI'] = path
+
+	envs['REQUEST_URI'] = if original_path != '' { original_path } else { path }
 	envs['DOCUMENT_URI'] = resolved_uri
 	envs['SCRIPT_NAME'] = resolved_uri
 	envs['QUERY_STRING'] = query_str
@@ -135,7 +135,7 @@ pub fn FastCgiCodec.encode_request(method string, path string, req http.Request,
 	envs['GATEWAY_INTERFACE'] = 'CGI/1.1'
 	envs['SERVER_PROTOCOL'] = 'HTTP/1.1'
 	envs['HTTPS'] = 'off'
-	
+
 	// 传递 HTTP Headers (复用已有的 header 映射辅助函数)
 	req_headers := header_map_from_request(req)
 	for header_key, header_val in req_headers {
@@ -151,7 +151,7 @@ pub fn FastCgiCodec.encode_request(method string, path string, req http.Request,
 	} else if method.to_upper() == 'POST' || method.to_upper() == 'PUT' {
 		envs['CONTENT_LENGTH'] = '${req.data.len}'
 	}
-	
+
 	// 合并环境覆盖变量（比如系统环境变量 VPHP_WP_ROOT 等）
 	for k, v in env_overrides {
 		if k.starts_with('HTTP_') || k == 'VPHP_WP_ROOT' || k == 'VHTTPD_APP' {
@@ -159,7 +159,7 @@ pub fn FastCgiCodec.encode_request(method string, path string, req http.Request,
 		}
 		envs[k] = v
 	}
-	
+
 	// 编码 Params 键值对
 	for k, v in envs {
 		log.info('[fastcgi] env: ${k} = ${v}')
@@ -172,7 +172,7 @@ pub fn FastCgiCodec.encode_request(method string, path string, req http.Request,
 			params_buf << u8(ch)
 		}
 	}
-	
+
 	// 发送所有的 params，如果超过 65535 字节，分帧发送
 	mut offset := 0
 	for offset < params_buf.len {
@@ -181,21 +181,21 @@ pub fn FastCgiCodec.encode_request(method string, path string, req http.Request,
 			chunk_len = 65535
 		}
 		r_params := FastCgiRecord{
-			@type: fcgi_params
+			@type:          fcgi_params
 			content_length: u16(chunk_len)
-			content: params_buf[offset .. offset + chunk_len].clone()
+			content:        params_buf[offset..offset + chunk_len].clone()
 		}
 		buf << r_params.encode()
 		offset += chunk_len
 	}
-	
+
 	// 发送空的 params 帧，表示 params 结束
 	r_params_end := FastCgiRecord{
-		@type: fcgi_params
+		@type:          fcgi_params
 		content_length: 0
 	}
 	buf << r_params_end.encode()
-	
+
 	// 3. FCGI_STDIN
 	// 如果有 Request Body
 	req_body := req.data
@@ -211,22 +211,22 @@ pub fn FastCgiCodec.encode_request(method string, path string, req http.Request,
 				chunk_content << u8(req_body[body_offset + i])
 			}
 			r_stdin := FastCgiRecord{
-				@type: fcgi_stdin
+				@type:          fcgi_stdin
 				content_length: u16(chunk_len)
-				content: chunk_content
+				content:        chunk_content
 			}
 			buf << r_stdin.encode()
 			body_offset += chunk_len
 		}
 	}
-	
+
 	// 发送空的 stdin 帧，表示 stdin 结束
 	r_stdin_end := FastCgiRecord{
-		@type: fcgi_stdin
+		@type:          fcgi_stdin
 		content_length: 0
 	}
 	buf << r_stdin_end.encode()
-	
+
 	return buf
 }
 
@@ -248,17 +248,17 @@ fn read_full_from_stream(mut conn unix.StreamConn, bytes_to_read int) ![]u8 {
 pub fn FastCgiCodec.decode_response(mut conn unix.StreamConn) !WorkerResponse {
 	mut stdout_buf := []u8{}
 	mut stderr_buf := []u8{}
-	
+
 	for {
 		// 1. 读取 8 字节头部
 		header_bytes := read_full_from_stream(mut conn, 8) or {
 			return error('read record header failed: ${err.msg()}')
 		}
-		
+
 		rec_type := header_bytes[1]
 		content_len := read_u16_be(header_bytes, 4)
 		padding_len := header_bytes[6]
-		
+
 		// 2. 读取 content 数据
 		mut content_bytes := []u8{}
 		if content_len > 0 {
@@ -266,14 +266,14 @@ pub fn FastCgiCodec.decode_response(mut conn unix.StreamConn) !WorkerResponse {
 				return error('read record content failed: ${err.msg()}')
 			}
 		}
-		
+
 		// 3. 读取 padding 数据并丢弃
 		if padding_len > 0 {
 			_ := read_full_from_stream(mut conn, int(padding_len)) or {
 				return error('read record padding failed: ${err.msg()}')
 			}
 		}
-		
+
 		// 4. 根据类型处理
 		match rec_type {
 			fcgi_stdout {
@@ -289,11 +289,11 @@ pub fn FastCgiCodec.decode_response(mut conn unix.StreamConn) !WorkerResponse {
 			else {}
 		}
 	}
-	
+
 	if stderr_buf.len > 0 {
 		log.warn('[fastcgi] stderr from php-cgi: ' + stderr_buf.bytestr())
 	}
-	
+
 	// 5. 解析 HTTP 响应头和 body
 	return parse_http_response_from_cgi(stdout_buf.bytestr())!
 }
@@ -303,7 +303,7 @@ fn parse_http_response_from_cgi(raw_stdout string) !WorkerResponse {
 	if raw_stdout == '' {
 		return error('empty response from php-cgi')
 	}
-	
+
 	mut parts_found := false
 	mut header_part := ''
 	mut body_part := ''
@@ -317,13 +317,13 @@ fn parse_http_response_from_cgi(raw_stdout string) !WorkerResponse {
 	if !parts_found {
 		return error('invalid cgi response format')
 	}
-	
+
 	header_lines := header_part.split('\n')
 	body := body_part
-	
+
 	mut status := 200
 	mut headers := map[string]string{}
-	
+
 	for line in header_lines {
 		trimmed := line.trim_space()
 		if trimmed == '' {
@@ -332,7 +332,7 @@ fn parse_http_response_from_cgi(raw_stdout string) !WorkerResponse {
 		k, v := trimmed.split_once(':') or { continue }
 		key := k.trim_space()
 		val := v.trim_space()
-		
+
 		if key.to_lower() == 'status' {
 			status_parts := val.split(' ')
 			if status_parts.len > 0 {
@@ -348,11 +348,11 @@ fn parse_http_response_from_cgi(raw_stdout string) !WorkerResponse {
 			headers[key.to_lower()] = val
 		}
 	}
-	
+
 	return WorkerResponse{
-		id: ''
-		status: status
-		body: body
+		id:      ''
+		status:  status
+		body:    body
 		headers: headers
 	}
 }

@@ -2,6 +2,7 @@ module main
 
 import json
 import log
+import net
 import os
 import time
 import veb
@@ -11,13 +12,13 @@ import server_lifecycle
 fn build_lifecycle_runtime_context(app &App) executor.LifecycleRuntimeContext {
 	event_log_path := app.event_log
 	return executor.LifecycleRuntimeContext{
-		worker_backend_autostart: app.executors.worker.worker_backend.autostart
-		worker_backend_cmd:       app.executors.worker.worker_backend.cmd
-		worker_backend_env:       app.executors.worker.worker_backend.env.clone()
-		worker_backend_sockets:   app.executors.worker.worker_backend.sockets.clone()
-		worker_backend_workdir:   app.executors.worker.worker_backend.workdir
+		worker_backend_autostart:       app.executors.worker.worker_backend.autostart
+		worker_backend_cmd:             app.executors.worker.worker_backend.cmd
+		worker_backend_env:             app.executors.worker.worker_backend.env.clone()
+		worker_backend_sockets:         app.executors.worker.worker_backend.sockets.clone()
+		worker_backend_workdir:         app.executors.worker.worker_backend.workdir
 		worker_backend_managed_workers: app.executors.worker.worker_backend.managed_workers.clone()
-		emit:                     fn [event_log_path] (kind string, fields map[string]string) {
+		emit:                           fn [event_log_path] (kind string, fields map[string]string) {
 			mut row := map[string]string{}
 			row['type'] = kind
 			row['ts'] = '${time.now().unix()}'
@@ -30,6 +31,33 @@ fn build_lifecycle_runtime_context(app &App) executor.LifecycleRuntimeContext {
 			}
 			f.writeln(json.encode(row)) or {}
 		}
+	}
+}
+
+fn preflight_bind_addr(addr string) ! {
+	mut listener := net.listen_tcp(.ip, addr) or {
+		return error('bind preflight failed for ${addr}: ${err.msg()}')
+	}
+	listener.close() or {}
+}
+
+fn preflight_server_bind(runtime_cfg server_lifecycle.ServerRuntimeConfig) ! {
+	host := runtime_cfg.host.trim_space()
+	port := runtime_cfg.port
+	if port <= 0 {
+		return error('bind preflight failed: invalid port ${port}')
+	}
+	mut addrs := []string{}
+	if host == '' {
+		addrs << '0.0.0.0:${port}'
+	} else {
+		addrs << '${host}:${port}'
+		if host != '0.0.0.0' && host != '::' {
+			addrs << '0.0.0.0:${port}'
+		}
+	}
+	for addr in addrs {
+		preflight_bind_addr(addr)!
 	}
 }
 
@@ -53,13 +81,13 @@ fn start_server_runtime(mut app App, runtime_cfg server_lifecycle.ServerRuntimeC
 		log.debug('[vhttpd] start_server_runtime: starting additional executor lifecycle: ${name}')
 		event_log_path := app.event_log
 		mut sub_lifecycle_ctx := executor.LifecycleRuntimeContext{
-			worker_backend_autostart: ws.worker_backend.autostart
-			worker_backend_cmd:       ws.worker_backend.cmd
-			worker_backend_env:       ws.worker_backend.env.clone()
-			worker_backend_sockets:   ws.worker_backend.sockets.clone()
-			worker_backend_workdir:   ws.worker_backend.workdir
+			worker_backend_autostart:       ws.worker_backend.autostart
+			worker_backend_cmd:             ws.worker_backend.cmd
+			worker_backend_env:             ws.worker_backend.env.clone()
+			worker_backend_sockets:         ws.worker_backend.sockets.clone()
+			worker_backend_workdir:         ws.worker_backend.workdir
 			worker_backend_managed_workers: ws.worker_backend.managed_workers.clone()
-			emit:                     fn [event_log_path] (kind string, fields map[string]string) {
+			emit:                           fn [event_log_path] (kind string, fields map[string]string) {
 				mut row := map[string]string{}
 				row['type'] = kind
 				row['ts'] = '${time.now().unix()}'
@@ -76,7 +104,7 @@ fn start_server_runtime(mut app App, runtime_cfg server_lifecycle.ServerRuntimeC
 		spec := executor.builtin_executor_spec_find(name) or { continue }
 		spec.lifecycle.start(mut sub_lifecycle_ctx)
 		ws.worker_backend.managed_workers = sub_lifecycle_ctx.worker_backend_managed_workers
-		
+
 		log.debug('[vhttpd] start_server_runtime: warming up additional executor: ${name}')
 		ws.logic_executor.warmup(mut facade) or {
 			log.error('[vhttpd] additional logic executor warmup failed: ${err.msg()}')

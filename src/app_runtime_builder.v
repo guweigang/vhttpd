@@ -34,29 +34,32 @@ fn app_runtime_default_mcp_session_ttl_seconds(cfg config.VhttpdConfig) int {
 fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executor_plan executor.LogicExecutorRuntimePlan, cfg config.VhttpdConfig, build_cfg server_lifecycle.AppRuntimeBuildConfig) &App {
 	// 1. 预编译正则并构建运行时路由规则
 	mut runtime_routes := []RuntimeRouteRule{}
-	for r in cfg.routes {
+	expanded_routes := config.expand_php_site_routes(cfg)
+	for r in expanded_routes {
 		mut re := regex.RE{}
 		if r.match.path_regexp != '' {
-			re = regex.regex_opt(r.match.path_regexp) or {
-				continue
-			}
+			re = regex.regex_opt(r.match.path_regexp) or { continue }
 		}
 		runtime_routes << RuntimeRouteRule{
-			match_path:        r.match.path.clone()
-			match_path_regexp: r.match.path_regexp
-			re:                re
-			executor:          r.executor
-			root:              r.root
-			status:            r.status
-			location:          r.location
-			body:              r.body
+			match_path:           r.match.path.clone()
+			match_path_regexp:    r.match.path_regexp
+			match_query:          r.match.query.clone()
+			re:                   re
+			executor:             r.executor
+			rewrite:              r.rewrite
+			rewrite_strip_prefix: r.rewrite_strip_prefix
+			root:                 r.root
+			status:               r.status
+			location:             r.location
+			body:                 r.body
 		}
 	}
 
 	// 2. 遍历 routes 中的所有附加 executor，如果有专属的进程池配置则实例化其 WorkerState
 	mut add_workers := map[string]&worker.WorkerState{}
-	for route in cfg.routes {
-		if route.executor != '' && route.executor != cfg.executor.kind && route.executor !in add_workers {
+	for route in expanded_routes {
+		if route.executor != '' && route.executor != cfg.executor.kind
+			&& route.executor !in add_workers {
 			if spec := cfg.executors[route.executor] {
 				mut sub_cfg := cfg
 				sub_cfg.worker = spec.worker
@@ -64,23 +67,12 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 				sub_cfg.vjsx = spec.vjsx
 				sub_cfg.executor = spec.executor
 
-				sub_sockets := config.resolve_worker_sockets_with_defaults(
-					[]string{},
-					spec.worker.socket,
-					spec.worker.pool_size,
-					spec.worker.socket_prefix,
-					spec.worker.sockets.join(',')
-				)
-				sub_plan := executor.LogicExecutorRuntimePlan.resolve(
-					[]string{},
-					sub_cfg,
-					sub_sockets,
-					spec.worker.stream_dispatch,
-					spec.worker.websocket_dispatch,
-					spec.worker.autostart,
-					spec.worker.cmd,
-					spec.worker.env
-				) or { continue }
+				sub_sockets := config.resolve_worker_sockets_with_defaults([]string{},
+					spec.worker.socket, spec.worker.pool_size, spec.worker.socket_prefix,
+					spec.worker.sockets.join(','))
+				sub_plan := executor.LogicExecutorRuntimePlan.resolve([]string{}, sub_cfg,
+					sub_sockets, spec.worker.stream_dispatch, spec.worker.websocket_dispatch,
+					spec.worker.autostart, spec.worker.cmd, spec.worker.env) or { continue }
 
 				mut sub_ws := &worker.WorkerState{
 					worker_backend:      worker.WorkerBackendRuntime{
@@ -109,22 +101,22 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 	}
 
 	return &App{
-		event_log:           build_cfg.event_log
-		started_at_unix:     time.now().unix()
-		http_stats:          HttpStats{}
-		admin:               admin.AdminState{
+		event_log:          build_cfg.event_log
+		started_at_unix:    time.now().unix()
+		http_stats:         HttpStats{}
+		admin:              admin.AdminState{
 			internal_socket: build_cfg.internal_admin_socket
 			on_data_plane:   !build_cfg.admin_enabled
 			token:           build_cfg.admin_token
 		}
-		assets:              config.AssetsRuntime{
+		assets:             config.AssetsRuntime{
 			enabled:       build_cfg.assets_enabled
 			prefix:        build_cfg.assets_prefix
 			root:          build_cfg.assets_root
 			root_real:     build_cfg.assets_root_real
 			cache_control: build_cfg.assets_cache_control
 		}
-		protocols: ProtocolRuntimeHub{
+		protocols:          ProtocolRuntimeHub{
 			runtime_config_json: json.encode(cfg)
 			plugins:             plugin.PluginState{
 				configs: cfg.plugins.clone()
@@ -149,7 +141,7 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 				responses:       state_store.MemoryStateStore.new[openai.OpenAIResponseRecord]()
 			}
 		}
-		transport:           TransportRuntimeHub{
+		transport:          TransportRuntimeHub{
 			websocket: ws.HubState{
 				dispatch_mode:                executor_plan.bootstrap.websocket_dispatch_mode
 				recent_dispatch_limit:        50
@@ -166,7 +158,7 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 			}
 			db:        dbx.Runtime.from_settings(provider_settings.db)
 		}
-		executors:           ExecutorRuntimeHub{
+		executors:          ExecutorRuntimeHub{
 			worker: worker.WorkerState{
 				worker_backend:      worker.WorkerBackendRuntime{
 					backend:                worker.PhpWorkerBackend{}
@@ -189,7 +181,7 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 				stream_dispatch:     executor_plan.bootstrap.stream_dispatch
 			}
 		}
-		providers:           ProviderRuntimeHub{
+		providers:          ProviderRuntimeHub{
 			registry:  ProviderHost{
 				registry: map[string]Provider{}
 				specs:    map[string]ProviderSpec{}
@@ -234,7 +226,7 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 				card_bridge_target_id:      provider_settings.bridge.target_id
 			}
 		}
-		routes:              runtime_routes
-		additional_workers:  add_workers
+		routes:             runtime_routes
+		additional_workers: add_workers
 	}
 }

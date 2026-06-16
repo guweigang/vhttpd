@@ -4,6 +4,29 @@ pub fn (cfg VhttpdConfig) uses_multi_listener() bool {
 	return cfg.listeners.len > 0 || cfg.sites.len > 0
 }
 
+pub fn (cfg VhttpdConfig) default_site_id() string {
+	if cfg.site.name.trim_space() != '' {
+		return cfg.site.name.trim_space()
+	}
+	return 'default'
+}
+
+pub fn (cfg VhttpdConfig) canonical_sites() map[string]SiteConfig {
+	if cfg.sites.len > 0 {
+		return cfg.sites.clone()
+	}
+	mut site_cfg := cfg.site
+	if site_cfg.executors.len == 0 && cfg.executors.len > 0 {
+		site_cfg.executors = cfg.executors.clone()
+	}
+	if site_cfg.routes.len == 0 && cfg.routes.len > 0 {
+		site_cfg.routes = cfg.routes.clone()
+	}
+	return {
+		cfg.default_site_id(): site_cfg
+	}
+}
+
 pub fn (base PathsConfig) merge(override PathsConfig) PathsConfig {
 	defaults := default_vhttpd_config().paths
 	mut cfg := base
@@ -108,6 +131,82 @@ pub fn (base PhpConfig) merge(override PhpConfig) PhpConfig {
 		cfg.args = override.args.clone()
 	}
 	return cfg
+}
+
+pub fn (base PhpSiteConfig) merge(override PhpSiteConfig) PhpSiteConfig {
+	mut cfg := base
+	if override.deny_php.len > 0 {
+		cfg.deny_php = override.deny_php.clone()
+	}
+	if override.compat_php.len > 0 {
+		cfg.compat_php = override.compat_php.clone()
+	}
+	return cfg
+}
+
+fn escape_regex_literal(s string) string {
+	mut out := ''
+	for ch in s {
+		c := ch.ascii_str()
+		if c in ['\\', '.', '+', '?', '^', '$', '(', ')', '[', ']', '{', '}', '|'] {
+			out += '\\' + c
+		} else if c == '*' {
+			out += '.*'
+		} else {
+			out += c
+		}
+	}
+	return out
+}
+
+fn php_deny_rule_for_pattern(pattern string) RouteRuleConfig {
+	trimmed := pattern.trim_space()
+	if trimmed == '' {
+		return RouteRuleConfig{}
+	}
+	if trimmed.ends_with('.php') && !trimmed.contains('*') {
+		return RouteRuleConfig{
+			match:  RouteMatchConfig{
+				path: [trimmed]
+			}
+			status: 403
+			body:   'Forbidden: Access denied.'
+		}
+	}
+	mut base := trimmed
+	if base.ends_with('/*') {
+		base = base[..base.len - 2]
+	}
+	if base.ends_with('/') {
+		base = base[..base.len - 1]
+	}
+	return RouteRuleConfig{
+		match:  RouteMatchConfig{
+			path_regexp: '^' + escape_regex_literal(base) + '/.*\\.php$'
+		}
+		status: 403
+		body:   'Forbidden: Access denied.'
+	}
+}
+
+pub fn expand_php_site_routes(cfg VhttpdConfig) []RouteRuleConfig {
+	mut expanded := []RouteRuleConfig{}
+	for pattern in cfg.php_site.deny_php {
+		rule := php_deny_rule_for_pattern(pattern)
+		if rule.match.path.len > 0 || rule.match.path_regexp != '' {
+			expanded << rule
+		}
+	}
+	if cfg.php_site.compat_php.len > 0 {
+		expanded << RouteRuleConfig{
+			match:    RouteMatchConfig{
+				path: cfg.php_site.compat_php.clone()
+			}
+			executor: 'php-cgi'
+		}
+	}
+	expanded << cfg.routes.clone()
+	return expanded
 }
 
 pub fn (base VjsxConfig) merge(override VjsxConfig) VjsxConfig {
@@ -330,6 +429,74 @@ pub fn (base BridgeConfig) merge(override BridgeConfig) BridgeConfig {
 	return cfg
 }
 
+pub fn (base DbMysqlConfig) merge(override DbMysqlConfig) DbMysqlConfig {
+	defaults := default_vhttpd_config().db.mysql
+	mut cfg := base
+	if override.host != defaults.host {
+		cfg.host = override.host
+	}
+	if override.port != defaults.port {
+		cfg.port = override.port
+	}
+	if override.username != defaults.username {
+		cfg.username = override.username
+	}
+	if override.password != defaults.password {
+		cfg.password = override.password
+	}
+	if override.database != defaults.database {
+		cfg.database = override.database
+	}
+	if override.pool_size != defaults.pool_size {
+		cfg.pool_size = override.pool_size
+	}
+	return cfg
+}
+
+pub fn (base DbPgsqlConfig) merge(override DbPgsqlConfig) DbPgsqlConfig {
+	defaults := default_vhttpd_config().db.pgsql
+	mut cfg := base
+	if override.host != defaults.host {
+		cfg.host = override.host
+	}
+	if override.port != defaults.port {
+		cfg.port = override.port
+	}
+	if override.username != defaults.username {
+		cfg.username = override.username
+	}
+	if override.password != defaults.password {
+		cfg.password = override.password
+	}
+	if override.database != defaults.database {
+		cfg.database = override.database
+	}
+	if override.pool_size != defaults.pool_size {
+		cfg.pool_size = override.pool_size
+	}
+	return cfg
+}
+
+pub fn (base DbConfig) merge(override DbConfig) DbConfig {
+	defaults := default_vhttpd_config().db
+	mut cfg := base
+	if override.enabled != defaults.enabled {
+		cfg.enabled = override.enabled
+	}
+	if override.socket != defaults.socket {
+		cfg.socket = override.socket
+	}
+	if override.driver != defaults.driver {
+		cfg.driver = override.driver
+	}
+	if override.pool_name != defaults.pool_name {
+		cfg.pool_name = override.pool_name
+	}
+	cfg.mysql = base.mysql.merge(override.mysql)
+	cfg.pgsql = base.pgsql.merge(override.pgsql)
+	return cfg
+}
+
 pub fn (base OpenAIConfig) merge(override OpenAIConfig) OpenAIConfig {
 	defaults := default_vhttpd_config().openai
 	mut cfg := base
@@ -367,6 +534,7 @@ pub fn (global_cfg VhttpdConfig) with_site(site_cfg SiteConfig) VhttpdConfig {
 	mut cfg := global_cfg
 	cfg.listeners = map[string]ListenerConfig{}
 	cfg.sites = map[string]SiteConfig{}
+	cfg.site = site_cfg
 	cfg.paths = global_cfg.paths.merge(site_cfg.paths)
 	if site_cfg.project_root.trim_space() != '' {
 		mut project_root := site_cfg.project_root
@@ -381,9 +549,16 @@ pub fn (global_cfg VhttpdConfig) with_site(site_cfg SiteConfig) VhttpdConfig {
 			values: cfg.paths.values.clone()
 		}
 	}
+	if cfg.site.document_root.trim_space() == '' {
+		cfg.site.document_root = cfg.paths.root
+	}
 	cfg.worker = global_cfg.worker.merge(site_cfg.worker)
+	if cfg.site.document_root.trim_space() != '' && cfg.worker.env['DOCUMENT_ROOT'] == '' {
+		cfg.worker.env['DOCUMENT_ROOT'] = cfg.site.document_root
+	}
 	cfg.executor = global_cfg.executor.merge(site_cfg.executor, site_cfg)
 	cfg.php = global_cfg.php.merge(site_cfg.php)
+	cfg.php_site = global_cfg.php_site.merge(site_cfg.php_site)
 	cfg.vjsx = global_cfg.vjsx.merge(site_cfg.vjsx)
 	cfg.plugins = PluginConfig.merge_map(global_cfg.plugins, site_cfg.plugins)
 	cfg.websocket_affinity = global_cfg.websocket_affinity.merge(site_cfg.websocket_affinity)
@@ -409,6 +584,7 @@ pub fn (global_cfg VhttpdConfig) with_site(site_cfg SiteConfig) VhttpdConfig {
 	cfg.feishu = global_cfg.feishu.merge(site_cfg.feishu)
 	cfg.codex = global_cfg.codex.merge(site_cfg.codex)
 	cfg.openai = global_cfg.openai.merge(site_cfg.openai)
+	cfg.db = global_cfg.db.merge(site_cfg.db)
 	cfg.feishu.bridge = global_cfg.feishu.bridge.merge(site_cfg.feishu.bridge)
 	if site_cfg.routes.len > 0 {
 		cfg.routes = site_cfg.routes.clone()
@@ -417,7 +593,26 @@ pub fn (global_cfg VhttpdConfig) with_site(site_cfg SiteConfig) VhttpdConfig {
 		cfg.executors = site_cfg.executors.clone()
 	}
 	cfg.config_path = global_cfg.config_path
-	return cfg
+	return cfg.with_default_executor_from_named_executor()
+}
+
+pub fn (cfg VhttpdConfig) with_default_executor_from_named_executor() VhttpdConfig {
+	default_executor := cfg.site.default_executor.trim_space()
+	if default_executor == '' {
+		return cfg
+	}
+	spec := cfg.executors[default_executor] or { return cfg }
+	mut next := cfg
+	if spec.executor.kind.trim_space() != '' {
+		next.executor = spec.executor
+	} else if next.executor.kind.trim_space() == '' {
+		next.executor.kind = default_executor
+	}
+	next.worker = next.worker.merge(spec.worker)
+	next.php = next.php.merge(spec.php)
+	next.php_site = next.php_site.merge(spec.php_site)
+	next.vjsx = next.vjsx.merge(spec.vjsx)
+	return next
 }
 
 pub fn (cfg VhttpdConfig) resolve_multi_listeners() !map[string]ListenerConfig {

@@ -16,6 +16,7 @@ timezone = "Asia/Shanghai"
 enabled = true
 socket = "/tmp/vhttpd_db_pg.sock"
 driver = "pgsql"
+pool_name = "default"
 
 [db.pgsql]
 host = "127.0.0.1"

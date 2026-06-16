@@ -22,14 +22,17 @@ import regex
 
 pub struct RuntimeRouteRule {
 pub mut:
-	match_path        []string
-	match_path_regexp string
-	re                regex.RE
-	executor          string
-	root              string
-	status            int
-	location          string
-	body              string
+	match_path           []string
+	match_path_regexp    string
+	match_query          map[string]string
+	re                   regex.RE
+	executor             string
+	rewrite              string
+	rewrite_strip_prefix string
+	root                 string
+	status               int
+	location             string
+	body                 string
 }
 
 pub struct Context {
@@ -44,9 +47,9 @@ pub struct App {
 pub:
 	event_log string
 pub mut:
-	started_at_unix     i64
-	http_stats          HttpStats
-	mu                  sync.Mutex
+	started_at_unix i64
+	http_stats      HttpStats
+	mu              sync.Mutex
 
 	transport          TransportRuntimeHub
 	protocols          ProtocolRuntimeHub
@@ -114,22 +117,116 @@ fn match_path(pattern string, path string) bool {
 	return path == pattern
 }
 
+fn match_query(pattern string, value string) bool {
+	if pattern == '*' {
+		return value != ''
+	}
+	return value == pattern
+}
+
 fn (r RuntimeRouteRule) matches(path string) bool {
+	return r.matches_request(path, map[string]string{})
+}
+
+fn (r RuntimeRouteRule) matches_request(path string, query map[string]string) bool {
+	mut path_matched := false
 	if r.match_path_regexp != '' {
 		mut re_mutable := r.re
 		start, _ := re_mutable.find(path)
 		if start >= 0 {
-			return true
+			path_matched = true
 		}
 	}
-	if r.match_path.len > 0 {
+	if !path_matched && r.match_path.len > 0 {
 		for p in r.match_path {
 			if match_path(p, path) {
-				return true
+				path_matched = true
+				break
 			}
 		}
 	}
-	return false
+	if !path_matched {
+		return false
+	}
+	for key, expected in r.match_query {
+		actual := query[key] or { return false }
+		if !match_query(expected, actual) {
+			return false
+		}
+	}
+	return true
+}
+
+fn (r RuntimeRouteRule) rewrite_target(original_target string) string {
+	if r.rewrite == '' {
+		return original_target
+	}
+	request_path, query_string := transport.normalize_request_target(original_target)
+	normalized_path := transport.normalize_path(request_path)
+	mut remainder := normalized_path
+	if r.rewrite_strip_prefix != '' && normalized_path.starts_with(r.rewrite_strip_prefix) {
+		remainder = normalized_path[r.rewrite_strip_prefix.len..]
+		if remainder == '' {
+			remainder = '/'
+		}
+	}
+	if !remainder.starts_with('/') {
+		remainder = '/' + remainder
+	}
+	mut target := r.rewrite
+	target = target.replace('$path_remainder', remainder)
+	target = target.replace('$path', normalized_path)
+	if target.contains('$query') {
+		target = target.replace('$query', query_string)
+	} else if query_string != '' {
+		sep := if target.contains('?') { '&' } else { '?' }
+		target += sep + query_string
+	}
+	return target
+}
+
+fn directory_slash_redirect_location(document_root string, normalized_path string, query_string string) ?string {
+	if document_root == '' || normalized_path == '/' || normalized_path.ends_with('/') {
+		return none
+	}
+	file_path := os.join_path(document_root, normalized_path.trim_left('/'))
+	if !os.is_dir(file_path) {
+		return none
+	}
+	mut location := normalized_path + '/'
+	if query_string != '' {
+		location += '?' + query_string
+	}
+	return location
+}
+
+fn (app App) directory_slash_document_root() string {
+	if app.assets.root_real != '' {
+		return app.assets.root_real
+	}
+	if root := app.executors.worker.worker_backend.env['DOCUMENT_ROOT'] {
+		if root != '' {
+			return root
+		}
+	}
+	if root := app.executors.worker.worker_backend.env['VPHP_WP_ROOT'] {
+		if root != '' {
+			return root
+		}
+	}
+	for _, state in app.additional_workers {
+		if root := state.worker_backend.env['DOCUMENT_ROOT'] {
+			if root != '' {
+				return root
+			}
+		}
+		if root := state.worker_backend.env['VPHP_WP_ROOT'] {
+			if root != '' {
+				return root
+			}
+		}
+	}
+	return ''
 }
 
 fn resolve_trace_id(ctx Context, path string) string {
@@ -599,13 +696,30 @@ fn proxy_worker_response(mut app App, mut ctx Context, method string, path strin
 	req_id := resolve_request_id(ctx, path)
 	trace_id := resolve_trace_id(ctx, path)
 
-	request_path, _ := transport.normalize_request_target(path)
+	request_path, query_string := transport.normalize_request_target(path)
 	normalized_target := transport.normalize_path(request_path)
+	query := transport.parse_query_map(query_string)
+
+	if method.to_upper() in ['GET', 'HEAD'] {
+		if location := directory_slash_redirect_location(app.directory_slash_document_root(),
+			normalized_target, query_string)
+		{
+			ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
+			ctx.set_custom_header('location', location) or {}
+			ctx.res.set_status(.moved_permanently)
+			log.info('[http] ⇠ directory slash redirect location=${location} trace_id=${trace_id}')
+			return ctx.text(if method.to_upper() == 'HEAD' {
+				''
+			} else {
+				'Redirecting to ${location}'
+			})
+		}
+	}
 
 	// 1. 匹配 Caddy 路由规则
 	mut matched_rule := ?RuntimeRouteRule(none)
 	for rule in app.routes {
-		if rule.matches(normalized_target) {
+		if rule.matches_request(normalized_target, query) {
 			matched_rule = rule
 			break
 		}
@@ -626,7 +740,7 @@ fn proxy_worker_response(mut app App, mut ctx Context, method string, path strin
 			log.info('[http] ⇠ route status response status=${rule.status} trace_id=${trace_id}')
 			return ctx.text(rule.body)
 		}
-		
+
 		// 2.2 静态文件高性能直回
 		if rule.executor == 'static' {
 			if method.to_upper() !in ['GET', 'HEAD'] {
@@ -645,13 +759,18 @@ fn proxy_worker_response(mut app App, mut ctx Context, method string, path strin
 			ctx.res.set_status(.not_found)
 			return ctx.text('Not Found')
 		}
-		
+
 		// 2.3 阻断返回
 		if rule.executor == 'none' {
 			log.info('[http] ⇠ route none (block) trace_id=${trace_id}')
 			ctx.res.set_status(.not_found)
 			return ctx.text('Not Found')
 		}
+	}
+
+	mut dispatch_path := path
+	if rule := matched_rule {
+		dispatch_path = rule.rewrite_target(path)
 	}
 
 	// 3. 动态切换活动的后端执行器
@@ -668,11 +787,11 @@ fn proxy_worker_response(mut app App, mut ctx Context, method string, path strin
 		}
 	}
 
-	log.info('[http] ⇢ dispatch method=${method.to_upper()} path=${path} trace_id=${trace_id} request_id=${req_id} body_len=${ctx.req.data.len} executor=${active_executor.kind()} pool=${selected_pool}')
+	log.info('[http] ⇢ dispatch method=${method.to_upper()} path=${path} target=${dispatch_path} trace_id=${trace_id} request_id=${req_id} body_len=${ctx.req.data.len} executor=${active_executor.kind()} pool=${selected_pool}')
 	if is_stream_dispatch {
 		if selected_pool == 'main' {
-			if result := HttpStreamRuntime.via_dispatch(mut app, mut ctx, method, path, req_id,
-				trace_id, remote_addr)
+			if result := HttpStreamRuntime.via_dispatch(mut app, mut ctx, method, dispatch_path,
+				req_id, trace_id, remote_addr)
 			{
 				return result
 			}
@@ -680,12 +799,13 @@ fn proxy_worker_response(mut app App, mut ctx Context, method string, path strin
 	}
 	mut facade := app.as_facade()
 	mut outcome := active_executor.dispatch_http(mut facade, executor.HttpLogicDispatchRequest{
-		method:      method
-		path:        path
-		req:         ctx.req
-		remote_addr: remote_addr
-		trace_id:    trace_id
-		request_id:  req_id
+		method:        method
+		path:          dispatch_path
+		original_path: path
+		req:           ctx.req
+		remote_addr:   remote_addr
+		trace_id:      trace_id
+		request_id:    req_id
 	}) or {
 		err_msg := err.msg()
 		status, error_class := transport.classify_worker_backend_error(err_msg)
@@ -719,8 +839,8 @@ fn proxy_worker_response(mut app App, mut ctx Context, method string, path strin
 			return HttpStreamRuntime.via_sse(mut app, mut ctx, mut conn, start, method, path,
 				req_id, trace_id, start_ms)
 		}
-		return HttpStreamRuntime.via_passthrough(mut app, mut ctx, mut conn, start, method,
-			path, req_id, trace_id, start_ms)
+		return HttpStreamRuntime.via_passthrough(mut app, mut ctx, mut conn, start, method, path,
+			req_id, trace_id, start_ms)
 	}
 	if outcome.kind == .upstream_plan {
 		log.info('[http] ⇠ dispatch upstream_plan method=${method.to_upper()} path=${path} trace_id=${trace_id} request_id=${req_id} duration_ms=${time.now().unix_milli() - start_ms}')

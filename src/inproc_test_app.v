@@ -33,6 +33,10 @@ fn (a InProcTestApp) worker_env() map[string]string {
 	return map[string]string{}
 }
 
+fn (a InProcTestApp) worker_env_for_kind(_kind string) map[string]string {
+	return map[string]string{}
+}
+
 fn (mut a InProcTestApp) worker_backend_select_socket_queued() !string {
 	return error('inproc_test_app_no_backend')
 }

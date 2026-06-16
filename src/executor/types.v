@@ -14,12 +14,13 @@ pub enum HttpLogicDispatchKind {
 
 pub struct HttpLogicDispatchRequest {
 pub:
-	method      string
-	path        string
-	req         http.Request
-	remote_addr string
-	trace_id    string
-	request_id  string
+	method        string
+	path          string
+	original_path string
+	req           http.Request
+	remote_addr   string
+	trace_id      string
+	request_id    string
 }
 
 pub struct HttpLogicDispatchOutcome {
@@ -134,13 +135,13 @@ pub:
 
 pub struct AdminRuntimeStats {
 pub:
-	started_at_unix i64
-	uptime_seconds  i64
-	http            AdminHttpStats
-	worker          AdminWorkerQueueStats
-	upstream        AdminUpstreamStats
-	mcp             AdminMcpStats
-	feishu          AdminFeishuStats
+	started_at_unix     i64
+	uptime_seconds      i64
+	http                AdminHttpStats
+	worker              AdminWorkerQueueStats
+	upstream            AdminUpstreamStats
+	mcp                 AdminMcpStats
+	feishu              AdminFeishuStats
 	admin_actions_total i64
 }
 
@@ -164,21 +165,21 @@ pub:
 
 pub struct AdminActiveCounts {
 pub:
-	websockets    int
-	upstreams     int
-	mcp_sessions  int
-	gateways      int
+	websockets   int
+	upstreams    int
+	mcp_sessions int
+	gateways     int
 }
 
 pub struct AdminRuntimeSummary {
 pub:
-	started_at_unix  i64
-	uptime_seconds   i64
-	worker_pool      AdminWorkerPoolSummary
-	logic_executor   AdminLogicExecutorSummary
-	capabilities     map[string]bool
-	active           AdminActiveCounts
-	stats            AdminRuntimeStats
+	started_at_unix i64
+	uptime_seconds  i64
+	worker_pool     AdminWorkerPoolSummary
+	logic_executor  AdminLogicExecutorSummary
+	capabilities    map[string]bool
+	active          AdminActiveCounts
+	stats           AdminRuntimeStats
 }
 
 // ── Dispatch context ──
@@ -244,17 +245,17 @@ pub:
 
 pub struct WebSocketUpstreamCommandActivity {
 pub mut:
-	event          string
-	provider       string
-	instance       string
-	target_type    string @[json: 'target_type']
-	target         string
-	message_type   string @[json: 'message_type']
-	content        string
-	content_fields map[string]string @[json: 'content_fields']
-	text           string
-	uuid           string
-	metadata       map[string]string
+	event                string
+	provider             string
+	instance             string
+	target_type          string @[json: 'target_type']
+	target               string
+	message_type         string @[json: 'message_type']
+	content              string
+	content_fields       map[string]string @[json: 'content_fields']
+	text                 string
+	uuid                 string
+	metadata             map[string]string
 	type_                string @[json: 'type']
 	stream_id            string @[json: 'stream_id']
 	session_key          string @[json: 'session_key']

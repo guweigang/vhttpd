@@ -55,6 +55,12 @@ pub mut:
 	args         []string
 }
 
+pub struct PhpSiteConfig {
+pub mut:
+	deny_php   []string @[toml: 'deny_php']
+	compat_php []string @[toml: 'compat_php']
+}
+
 pub struct VjsxConfig {
 pub mut:
 	app_entry         string   @[toml: 'app_entry']
@@ -254,33 +260,38 @@ pub mut:
 
 pub struct DbConfig {
 pub mut:
-	enabled bool
-	socket  string = 'tmp/vhttpd-db.sock'
-	driver  string = 'mysql'
-	mysql   DbMysqlConfig
-	pgsql   DbPgsqlConfig
+	enabled   bool
+	socket    string = 'tmp/vhttpd-db.sock'
+	driver    string = 'mysql'
+	pool_name string = 'default' @[toml: 'pool_name']
+	mysql     DbMysqlConfig
+	pgsql     DbPgsqlConfig
 }
 
 pub struct RouteMatchConfig {
 pub mut:
 	path        []string
-	path_regexp string   @[toml: 'path_regexp']
+	path_regexp string @[toml: 'path_regexp']
+	query       map[string]string
 }
 
 pub struct RouteRuleConfig {
 pub mut:
-	match    RouteMatchConfig
-	executor string
-	root     string
-	status   int
-	location string
-	body     string
+	match                RouteMatchConfig
+	executor             string
+	rewrite              string
+	rewrite_strip_prefix string @[toml: 'rewrite_strip_prefix']
+	root                 string
+	status               int
+	location             string
+	body                 string
 }
 
 pub struct ExecutorSpecConfig {
 pub mut:
 	worker   WorkerConfig
 	php      PhpConfig
+	php_site PhpSiteConfig
 	vjsx     VjsxConfig
 	executor ExecutorConfig
 }
@@ -294,15 +305,20 @@ pub mut:
 
 pub struct SiteConfig {
 pub mut:
+	name               string
 	project_root       string @[toml: 'project_root']
+	document_root      string @[toml: 'document_root']
+	default_executor   string @[toml: 'default_executor']
 	host               string = '127.0.0.1'
 	port               int
+	index              string
 	app                string
 	worker_entry       string
 	paths              PathsConfig
 	worker             WorkerConfig
 	executor           ExecutorConfig
 	php                PhpConfig
+	php_site           PhpSiteConfig
 	vjsx               VjsxConfig
 	plugins            map[string]PluginConfig
 	websocket_affinity WebSocketAffinityConfig @[toml: 'websocket_affinity']
@@ -323,9 +339,11 @@ pub mut:
 	server             ServerConfig
 	files              FilesConfig
 	paths              PathsConfig
+	site               SiteConfig
 	worker             WorkerConfig
 	executor           ExecutorConfig
 	php                PhpConfig
+	php_site           PhpSiteConfig
 	vjsx               VjsxConfig
 	plugins            map[string]PluginConfig
 	websocket_affinity WebSocketAffinityConfig @[toml: 'websocket_affinity']
@@ -375,6 +393,7 @@ pub fn load_vhttpd_config(args []string) !VhttpdConfig {
 	decode_feishu_config(doc, mut cfg)!
 	decode_openai_root_config(doc, mut cfg)!
 	decode_plugins_root_config(doc, mut cfg)!
+	decode_root_executors_config(doc, mut cfg)!
 	if root_any := doc.value_opt('bridge') {
 		root := root_any.as_map()
 		if cfg.feishu.bridge.ws_url.trim_space() == ''
@@ -385,6 +404,7 @@ pub fn load_vhttpd_config(args []string) !VhttpdConfig {
 		}
 	}
 	decode_multi_listener_config(doc, mut cfg)!
+	decode_single_site_config(doc, mut cfg)!
 	resolve_config_variables(mut cfg, config_path)!
 	cfg.config_path = if config_path.trim_space() != '' { os.abs_path(config_path) } else { '' }
 	return cfg
@@ -468,6 +488,16 @@ fn decode_plugins_root_config(doc toml.Doc, mut cfg VhttpdConfig) ! {
 	}
 }
 
+fn decode_root_executors_config(doc toml.Doc, mut cfg VhttpdConfig) ! {
+	if root_any := doc.value_opt('executors') {
+		root := root_any.as_map()
+		decoded := decode_executor_spec_config_map_map(root)
+		if decoded.len > 0 {
+			cfg.executors = decoded.clone()
+		}
+	}
+}
+
 fn toml_string_from_map(entry map[string]toml.Any, key string, default_val string) string {
 	return (entry[key] or { toml.Any(default_val) }).string()
 }
@@ -502,6 +532,18 @@ fn toml_string_list_from_map(entry map[string]toml.Any, key string) []string {
 		}
 	}
 	return values
+}
+
+fn toml_string_or_list_from_map(entry map[string]toml.Any, key string) []string {
+	raw_any := entry[key] or { return []string{} }
+	if raw_any is []toml.Any {
+		return toml_string_list_from_map(entry, key)
+	}
+	value := raw_any.string().trim_space()
+	if value == '' {
+		return []string{}
+	}
+	return [value]
 }
 
 fn toml_string_map_from_map(entry map[string]toml.Any, key string) map[string]string {
@@ -602,6 +644,107 @@ fn decode_php_config_map(entry map[string]toml.Any) PhpConfig {
 	cfg.extensions = toml_string_list_from_map(entry, 'extensions')
 	cfg.args = toml_string_list_from_map(entry, 'args')
 	return cfg
+}
+
+fn decode_php_site_config_map(entry map[string]toml.Any) PhpSiteConfig {
+	return PhpSiteConfig{
+		deny_php:   toml_string_list_from_map(entry, 'deny_php')
+		compat_php: toml_string_list_from_map(entry, 'compat_php')
+	}
+}
+
+fn decode_route_match_config_map(entry map[string]toml.Any) RouteMatchConfig {
+	return RouteMatchConfig{
+		path:        toml_string_or_list_from_map(entry, 'path')
+		path_regexp: toml_string_from_map(entry, 'path_regexp', '')
+		query:       toml_string_map_from_map(entry, 'query')
+	}
+}
+
+fn decode_route_rule_config_map(entry map[string]toml.Any) RouteRuleConfig {
+	mut cfg := RouteRuleConfig{}
+	if match_any := entry['match'] {
+		if match_any is map[string]toml.Any {
+			cfg.match = decode_route_match_config_map(match_any)
+		}
+	}
+	if 'executor' in entry {
+		cfg.executor = toml_string_from_map(entry, 'executor', cfg.executor)
+	}
+	if 'rewrite' in entry {
+		cfg.rewrite = toml_string_from_map(entry, 'rewrite', cfg.rewrite)
+	}
+	if 'rewrite_strip_prefix' in entry {
+		cfg.rewrite_strip_prefix = toml_string_from_map(entry, 'rewrite_strip_prefix',
+			cfg.rewrite_strip_prefix)
+	}
+	if 'root' in entry {
+		cfg.root = toml_string_from_map(entry, 'root', cfg.root)
+	}
+	if 'status' in entry {
+		cfg.status = toml_int_from_map(entry, 'status', cfg.status)
+	}
+	if 'location' in entry {
+		cfg.location = toml_string_from_map(entry, 'location', cfg.location)
+	}
+	if 'body' in entry {
+		cfg.body = toml_string_from_map(entry, 'body', cfg.body)
+	}
+	return cfg
+}
+
+fn decode_route_rule_list(value toml.Any) []RouteRuleConfig {
+	mut routes := []RouteRuleConfig{}
+	if value is []toml.Any {
+		for item in value {
+			if item is map[string]toml.Any {
+				routes << decode_route_rule_config_map(item)
+			}
+		}
+	}
+	return routes
+}
+
+fn decode_executor_spec_config_map(entry map[string]toml.Any) ExecutorSpecConfig {
+	mut cfg := ExecutorSpecConfig{}
+	if 'kind' in entry {
+		cfg.executor.kind = toml_string_from_map(entry, 'kind', cfg.executor.kind)
+	}
+	if 'bin' in entry || 'worker_entry' in entry || 'app_entry' in entry || 'extensions' in entry
+		|| 'args' in entry {
+		cfg.php = decode_php_config_map(entry)
+	}
+	if 'deny_php' in entry || 'compat_php' in entry {
+		cfg.php_site = decode_php_site_config_map(entry)
+	}
+	if worker_any := entry['worker'] {
+		if worker_any is map[string]toml.Any {
+			cfg.worker = decode_worker_config_map(worker_any)
+		}
+	}
+	if executor_any := entry['executor'] {
+		if executor_any is map[string]toml.Any {
+			cfg.executor = decode_executor_config_map(executor_any)
+		} else {
+			cfg.executor.kind = executor_any.string()
+		}
+	}
+	if vjsx_any := entry['vjsx'] {
+		if vjsx_any is map[string]toml.Any {
+			cfg.vjsx = decode_vjsx_config_map(vjsx_any)
+		}
+	}
+	return cfg
+}
+
+fn decode_executor_spec_config_map_map(entry map[string]toml.Any) map[string]ExecutorSpecConfig {
+	mut specs := map[string]ExecutorSpecConfig{}
+	for name, value in entry {
+		if value is map[string]toml.Any {
+			specs[name] = decode_executor_spec_config_map(value)
+		}
+	}
+	return specs
 }
 
 fn decode_vjsx_config_map(entry map[string]toml.Any) VjsxConfig {
@@ -1042,17 +1185,29 @@ fn decode_listener_config_map(entry map[string]toml.Any) ListenerConfig {
 
 fn decode_site_config_map(entry map[string]toml.Any) SiteConfig {
 	mut cfg := SiteConfig{}
+	if 'name' in entry {
+		cfg.name = toml_string_from_map(entry, 'name', cfg.name)
+	}
 	if 'root' in entry {
 		cfg.project_root = toml_string_from_map(entry, 'root', cfg.project_root)
 	}
 	if 'project_root' in entry {
 		cfg.project_root = toml_string_from_map(entry, 'project_root', cfg.project_root)
 	}
+	if 'document_root' in entry {
+		cfg.document_root = toml_string_from_map(entry, 'document_root', cfg.document_root)
+	}
+	if 'default_executor' in entry {
+		cfg.default_executor = toml_string_from_map(entry, 'default_executor', cfg.default_executor)
+	}
 	if 'host' in entry {
 		cfg.host = toml_string_from_map(entry, 'host', cfg.host)
 	}
 	if 'port' in entry {
 		cfg.port = toml_int_from_map(entry, 'port', cfg.port)
+	}
+	if 'index' in entry {
+		cfg.index = toml_string_from_map(entry, 'index', cfg.index)
 	}
 	if 'app' in entry {
 		cfg.app = toml_string_from_map(entry, 'app', cfg.app)
@@ -1132,6 +1287,14 @@ fn decode_site_config_map(entry map[string]toml.Any) SiteConfig {
 			cfg.openai = decode_openai_config_map(openai_any)
 		}
 	}
+	if routes_any := entry['routes'] {
+		cfg.routes = decode_route_rule_list(routes_any)
+	}
+	if executors_any := entry['executors'] {
+		if executors_any is map[string]toml.Any {
+			cfg.executors = decode_executor_spec_config_map_map(executors_any)
+		}
+	}
 	return cfg
 }
 
@@ -1145,7 +1308,9 @@ fn decode_multi_listener_config(doc toml.Doc, mut cfg VhttpdConfig) ! {
 			}
 		}
 	}
-	cfg.listeners = listeners.clone()
+	if listeners.len > 0 {
+		cfg.listeners = listeners.clone()
+	}
 	mut sites := map[string]SiteConfig{}
 	if root_any := doc.value_opt('sites') {
 		root := root_any.as_map()
@@ -1155,7 +1320,31 @@ fn decode_multi_listener_config(doc toml.Doc, mut cfg VhttpdConfig) ! {
 			}
 		}
 	}
-	cfg.sites = sites.clone()
+	if sites.len > 0 {
+		cfg.sites = sites.clone()
+	}
+}
+
+fn decode_single_site_config(doc toml.Doc, mut cfg VhttpdConfig) ! {
+	if root_any := doc.value_opt('site') {
+		root := root_any.as_map()
+		single_site_root := toml_string_from_map(root, 'root', '')
+		cfg.site = decode_site_config_map(root)
+		if single_site_root.trim_space() != '' {
+			cfg.site.document_root = single_site_root
+			cfg.site.project_root = ''
+		}
+		if cfg.site.project_root.trim_space() != '' {
+			cfg.paths.root = cfg.site.project_root
+		}
+		if cfg.site.index.trim_space() != '' {
+			cfg.server.index = cfg.site.index
+		}
+		if cfg.site.document_root.trim_space() != '' && cfg.worker.env['DOCUMENT_ROOT'] == '' {
+			cfg.worker.env['DOCUMENT_ROOT'] = cfg.site.document_root
+		}
+		cfg = cfg.with_site(cfg.site)
+	}
 }
 
 pub fn resolve_config_variables(mut cfg VhttpdConfig, config_path string) ! {
@@ -1168,6 +1357,11 @@ pub fn resolve_config_variables(mut cfg VhttpdConfig, config_path string) ! {
 		cfg.paths.root, changed = expand_config_string(cfg.paths.root, 'paths', vars, env_map,
 			changed)!
 		vars['paths.root'] = resolve_config_path(base_dir, cfg.paths.root)
+		cfg.site.document_root, changed = expand_config_string(cfg.site.document_root, 'site',
+			vars, env_map, changed)!
+		if cfg.site.document_root.trim_space() != '' {
+			vars['site.root'] = resolve_config_path(vars['paths.root'], cfg.site.document_root)
+		}
 		mut next_paths := map[string]string{}
 		for key, value in cfg.paths.values {
 			next, c := expand_config_string(value, 'paths', vars, env_map, false)!
@@ -1183,6 +1377,26 @@ pub fn resolve_config_variables(mut cfg VhttpdConfig, config_path string) ! {
 			env_map, changed)!
 		cfg.files.pid_file, changed = expand_config_string(cfg.files.pid_file, 'files', vars,
 			env_map, changed)!
+		cfg.db.socket, changed = expand_config_string(cfg.db.socket, 'db', vars, env_map, changed)!
+		cfg.db.driver, changed = expand_config_string(cfg.db.driver, 'db', vars, env_map, changed)!
+		cfg.db.pool_name, changed = expand_config_string(cfg.db.pool_name, 'db', vars, env_map,
+			changed)!
+		cfg.db.mysql.host, changed = expand_config_string(cfg.db.mysql.host, 'db.mysql', vars,
+			env_map, changed)!
+		cfg.db.mysql.username, changed = expand_config_string(cfg.db.mysql.username, 'db.mysql',
+			vars, env_map, changed)!
+		cfg.db.mysql.password, changed = expand_config_string(cfg.db.mysql.password, 'db.mysql',
+			vars, env_map, changed)!
+		cfg.db.mysql.database, changed = expand_config_string(cfg.db.mysql.database, 'db.mysql',
+			vars, env_map, changed)!
+		cfg.db.pgsql.host, changed = expand_config_string(cfg.db.pgsql.host, 'db.pgsql', vars,
+			env_map, changed)!
+		cfg.db.pgsql.username, changed = expand_config_string(cfg.db.pgsql.username, 'db.pgsql',
+			vars, env_map, changed)!
+		cfg.db.pgsql.password, changed = expand_config_string(cfg.db.pgsql.password, 'db.pgsql',
+			vars, env_map, changed)!
+		cfg.db.pgsql.database, changed = expand_config_string(cfg.db.pgsql.database, 'db.pgsql',
+			vars, env_map, changed)!
 		cfg.worker.cmd, changed = expand_config_string(cfg.worker.cmd, 'worker', vars, env_map,
 			changed)!
 		cfg.worker.socket, changed = expand_config_string(cfg.worker.socket, 'worker', vars,
@@ -1290,6 +1504,20 @@ pub fn resolve_config_variables(mut cfg VhttpdConfig, config_path string) ! {
 			next, c := expand_config_string(raw, 'php', vars, env_map, false)!
 			if c {
 				cfg.php.args[i] = next
+				changed = true
+			}
+		}
+		for i, raw in cfg.php_site.deny_php {
+			next, c := expand_config_string(raw, 'site.php', vars, env_map, false)!
+			if c {
+				cfg.php_site.deny_php[i] = next
+				changed = true
+			}
+		}
+		for i, raw in cfg.php_site.compat_php {
+			next, c := expand_config_string(raw, 'site.php', vars, env_map, false)!
+			if c {
+				cfg.php_site.compat_php[i] = next
 				changed = true
 			}
 		}
@@ -1422,12 +1650,26 @@ pub fn resolve_config_variables(mut cfg VhttpdConfig, config_path string) ! {
 				r_copy.root = root
 				changed = true
 			}
-			executor, executor_changed := expand_config_string(r.executor, 'routes', vars, env_map, false)!
+			executor, executor_changed := expand_config_string(r.executor, 'routes', vars, env_map,
+				false)!
 			if executor_changed {
 				r_copy.executor = executor
 				changed = true
 			}
-			location, location_changed := expand_config_string(r.location, 'routes', vars, env_map, false)!
+			rewrite, rewrite_changed := expand_config_string(r.rewrite, 'routes', vars, env_map,
+				false)!
+			if rewrite_changed {
+				r_copy.rewrite = rewrite
+				changed = true
+			}
+			rewrite_strip_prefix, rewrite_strip_prefix_changed := expand_config_string(r.rewrite_strip_prefix,
+				'routes', vars, env_map, false)!
+			if rewrite_strip_prefix_changed {
+				r_copy.rewrite_strip_prefix = rewrite_strip_prefix
+				changed = true
+			}
+			location, location_changed := expand_config_string(r.location, 'routes', vars, env_map,
+				false)!
 			if location_changed {
 				r_copy.location = location
 				changed = true
@@ -1445,34 +1687,40 @@ pub fn resolve_config_variables(mut cfg VhttpdConfig, config_path string) ! {
 		mut next_executors := map[string]ExecutorSpecConfig{}
 		for name, spec in cfg.executors {
 			mut spec_copy := spec
-			
-			socket, socket_changed := expand_config_string(spec.worker.socket, 'executors.${name}', vars, env_map, false)!
+
+			socket, socket_changed := expand_config_string(spec.worker.socket, 'executors.${name}',
+				vars, env_map, false)!
 			if socket_changed {
 				spec_copy.worker.socket = socket
 				changed = true
 			}
-			socket_prefix, socket_prefix_changed := expand_config_string(spec.worker.socket_prefix, 'executors.${name}', vars, env_map, false)!
+			socket_prefix, socket_prefix_changed := expand_config_string(spec.worker.socket_prefix,
+				'executors.${name}', vars, env_map, false)!
 			if socket_prefix_changed {
 				spec_copy.worker.socket_prefix = socket_prefix
 				changed = true
 			}
-			cmd, cmd_changed := expand_config_string(spec.worker.cmd, 'executors.${name}', vars, env_map, false)!
+			cmd, cmd_changed := expand_config_string(spec.worker.cmd, 'executors.${name}', vars,
+				env_map, false)!
 			if cmd_changed {
 				spec_copy.worker.cmd = cmd
 				changed = true
 			}
-			
-			bin, bin_changed := expand_config_string(spec.php.bin, 'executors.${name}', vars, env_map, false)!
+
+			bin, bin_changed := expand_config_string(spec.php.bin, 'executors.${name}', vars,
+				env_map, false)!
 			if bin_changed {
 				spec_copy.php.bin = bin
 				changed = true
 			}
-			worker_entry, worker_entry_changed := expand_config_string(spec.php.worker_entry, 'executors.${name}', vars, env_map, false)!
+			worker_entry, worker_entry_changed := expand_config_string(spec.php.worker_entry,
+				'executors.${name}', vars, env_map, false)!
 			if worker_entry_changed {
 				spec_copy.php.worker_entry = worker_entry
 				changed = true
 			}
-			app_entry, app_entry_changed := expand_config_string(spec.php.app_entry, 'executors.${name}', vars, env_map, false)!
+			app_entry, app_entry_changed := expand_config_string(spec.php.app_entry,
+				'executors.${name}', vars, env_map, false)!
 			if app_entry_changed {
 				spec_copy.php.app_entry = app_entry
 				changed = true
@@ -1483,7 +1731,8 @@ pub fn resolve_config_variables(mut cfg VhttpdConfig, config_path string) ! {
 		cfg.executors = next_executors.clone()
 
 		if !changed {
-			cfg.server.index, _ = expand_config_string(cfg.server.index, 'server', vars, env_map, false)!
+			cfg.server.index, _ = expand_config_string(cfg.server.index, 'server', vars, env_map,
+				false)!
 			if cfg.server.index != '' {
 				cfg.worker.env['VHTTPD_INDEX'] = cfg.server.index
 				for name, spec in cfg.executors {
@@ -1541,8 +1790,10 @@ fn resolve_config_paths(mut cfg VhttpdConfig, config_path string) {
 		next_paths[key] = resolve_config_path(cfg.paths.root, value)
 	}
 	cfg.paths.values = next_paths.clone()
+	cfg.site.document_root = resolve_config_path(cfg.paths.root, cfg.site.document_root)
 	cfg.files.event_log = resolve_config_path(cfg.paths.root, cfg.files.event_log)
 	cfg.files.pid_file = resolve_config_path(cfg.paths.root, cfg.files.pid_file)
+	cfg.db.socket = resolve_config_path(cfg.paths.root, cfg.db.socket)
 	cfg.worker.socket = resolve_config_path(cfg.paths.root, cfg.worker.socket)
 	cfg.worker.socket_prefix = resolve_config_path(cfg.paths.root, cfg.worker.socket_prefix)
 	for i, raw in cfg.worker.sockets {
@@ -1550,6 +1801,9 @@ fn resolve_config_paths(mut cfg VhttpdConfig, config_path string) {
 	}
 	if app_entry := cfg.worker.env['VHTTPD_APP'] {
 		cfg.worker.env['VHTTPD_APP'] = resolve_config_path(cfg.paths.root, app_entry)
+	}
+	if document_root := cfg.worker.env['DOCUMENT_ROOT'] {
+		cfg.worker.env['DOCUMENT_ROOT'] = resolve_config_path(cfg.paths.root, document_root)
 	}
 	cfg.php.worker_entry = resolve_config_path(cfg.paths.root, cfg.php.worker_entry)
 	cfg.php.app_entry = resolve_config_path(cfg.paths.root, cfg.php.app_entry)
@@ -1588,6 +1842,10 @@ fn resolve_config_paths(mut cfg VhttpdConfig, config_path string) {
 		if spec_app_entry := spec.worker.env['VHTTPD_APP'] {
 			spec.worker.env['VHTTPD_APP'] = resolve_config_path(cfg.paths.root, spec_app_entry)
 		}
+		if spec_document_root := spec.worker.env['DOCUMENT_ROOT'] {
+			spec.worker.env['DOCUMENT_ROOT'] = resolve_config_path(cfg.paths.root,
+				spec_document_root)
+		}
 		spec.php.worker_entry = resolve_config_path(cfg.paths.root, spec.php.worker_entry)
 		spec.php.app_entry = resolve_config_path(cfg.paths.root, spec.php.app_entry)
 		for j, raw in spec.php.extensions {
@@ -1607,7 +1865,22 @@ pub fn build_config_variable_map(cfg VhttpdConfig) map[string]string {
 		'server.port':                    '${cfg.server.port}'
 		'files.event_log':                cfg.files.event_log
 		'files.pid_file':                 cfg.files.pid_file
+		'db.socket':                      cfg.db.socket
+		'db.driver':                      cfg.db.driver
+		'db.pool_name':                   cfg.db.pool_name
+		'db.mysql.host':                  cfg.db.mysql.host
+		'db.mysql.port':                  '${cfg.db.mysql.port}'
+		'db.mysql.username':              cfg.db.mysql.username
+		'db.mysql.database':              cfg.db.mysql.database
+		'db.mysql.pool_size':             '${cfg.db.mysql.pool_size}'
+		'db.pgsql.host':                  cfg.db.pgsql.host
+		'db.pgsql.port':                  '${cfg.db.pgsql.port}'
+		'db.pgsql.username':              cfg.db.pgsql.username
+		'db.pgsql.database':              cfg.db.pgsql.database
+		'db.pgsql.pool_size':             '${cfg.db.pgsql.pool_size}'
 		'paths.root':                     cfg.paths.root
+		'site.root':                      cfg.site.document_root
+		'site.index':                     cfg.site.index
 		'worker.read_timeout_ms':         '${cfg.worker.read_timeout_ms}'
 		'worker.autostart':               '${cfg.worker.autostart}'
 		'worker.cmd':                     cfg.worker.cmd

@@ -26,6 +26,38 @@ fn test_php_cgi_executor_identity() {
 	assert cgi_executor.provider() == 'php-cgi'
 }
 
+fn test_app_facade_returns_env_for_named_executor_pool() {
+	mut app := App{
+		executors:          ExecutorRuntimeHub{
+			worker: worker.WorkerState{
+				worker_backend: worker.WorkerBackendRuntime{
+					env: {
+						'VPHP_WP_ROOT': '/main'
+					}
+				}
+				logic_executor: executor.SocketWorkerExecutor{}
+			}
+		}
+		additional_workers: {
+			'php-cgi': &worker.WorkerState{
+				worker_backend: worker.WorkerBackendRuntime{
+					env: {
+						'VPHP_WP_ROOT': '/cgi'
+					}
+				}
+				logic_executor: executor.PhpCgiExecutor{}
+			}
+		}
+	}
+	facade := app.as_facade()
+	assert facade.worker_env_for_kind('php') == {
+		'VPHP_WP_ROOT': '/main'
+	}
+	assert facade.worker_env_for_kind('php-cgi') == {
+		'VPHP_WP_ROOT': '/cgi'
+	}
+}
+
 fn test_logic_executor_can_hold_inproc_vjsx_executor() {
 	mut logic_executor := executor.LogicExecutor(new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
 		thread_count: 1

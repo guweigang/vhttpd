@@ -10,11 +10,28 @@ import time
 fn C.kill(pid int, sig int) int
 
 __global (
-	g_child_pids []int
+	g_managed_worker_processes ManagedWorkerProcessRegistry
 )
 
+struct ManagedWorkerProcessRegistry {
+mut:
+	child_pids []int
+}
+
+fn (mut r ManagedWorkerProcessRegistry) register_child_pid(pid int) {
+	if pid > 0 {
+		r.child_pids << pid
+	}
+}
+
+fn (r ManagedWorkerProcessRegistry) child_pid_snapshot() []int {
+	return r.child_pids.clone()
+}
+
 pub fn get_child_pids() []int {
-	return g_child_pids
+	unsafe {
+		return g_managed_worker_processes.child_pid_snapshot()
+	}
 }
 
 pub struct ManagedWorker {
@@ -94,7 +111,7 @@ pub fn ManagedWorker.start(id int, worker_cmd string, worker_env map[string]stri
 	proc.use_pgroup = true
 	proc.run()
 	unsafe {
-		g_child_pids << proc.pid
+		g_managed_worker_processes.register_child_pid(proc.pid)
 	}
 	ManagedWorker.wait_for_socket(worker_socket, 5000)!
 	return ManagedWorker{

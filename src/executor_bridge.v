@@ -54,6 +54,17 @@ pub fn (w AppFacadeWrapper) worker_env() map[string]string {
 	return app.executors.worker.worker_backend.env.clone()
 }
 
+pub fn (w AppFacadeWrapper) worker_env_for_kind(kind string) map[string]string {
+	app := unsafe { &App(w.app_ptr) }
+	if kind == app.logic_executor_kind() {
+		return app.executors.worker.worker_backend.env.clone()
+	}
+	if state := app.additional_workers[kind] {
+		return state.worker_backend.env.clone()
+	}
+	return map[string]string{}
+}
+
 pub fn (mut w AppFacadeWrapper) worker_backend_select_socket_queued() !string {
 	mut app := unsafe { &App(w.app_ptr) }
 	return app.worker_backend_select_socket_queued()

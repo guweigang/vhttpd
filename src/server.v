@@ -37,16 +37,65 @@ fn C.tzset()
 fn C.kill(pid int, sig int) int
 
 __global (
-	g_active_apps      []&App
-	g_active_cfgs      []server_lifecycle.ServerRuntimeConfig
-	g_is_shutting_down bool
+	g_active_runtime_registry ActiveRuntimeRegistry
 )
 
+struct ActiveRuntimeRegistry {
+mut:
+	apps             []&App
+	cfgs             []server_lifecycle.ServerRuntimeConfig
+	is_shutting_down bool
+}
+
+fn (mut r ActiveRuntimeRegistry) register(app &App, cfg server_lifecycle.ServerRuntimeConfig) {
+	r.apps << app
+	r.cfgs << cfg
+}
+
+fn (mut r ActiveRuntimeRegistry) begin_shutdown() bool {
+	if r.is_shutting_down {
+		return false
+	}
+	r.is_shutting_down = true
+	return true
+}
+
+fn (r ActiveRuntimeRegistry) shutting_down() bool {
+	return r.is_shutting_down
+}
+
+fn (r ActiveRuntimeRegistry) config_snapshot() []server_lifecycle.ServerRuntimeConfig {
+	return r.cfgs.clone()
+}
+
+fn register_active_runtime(app &App, cfg server_lifecycle.ServerRuntimeConfig) {
+	unsafe {
+		g_active_runtime_registry.register(app, cfg)
+	}
+}
+
+fn begin_active_runtime_shutdown() bool {
+	unsafe {
+		return g_active_runtime_registry.begin_shutdown()
+	}
+}
+
+fn active_runtime_is_shutting_down() bool {
+	unsafe {
+		return g_active_runtime_registry.shutting_down()
+	}
+}
+
+fn active_runtime_config_snapshot() []server_lifecycle.ServerRuntimeConfig {
+	unsafe {
+		return g_active_runtime_registry.config_snapshot()
+	}
+}
+
 fn vhttpd_signal_handler(sig os.Signal) {
-	if g_is_shutting_down {
+	if !begin_active_runtime_shutdown() {
 		return
 	}
-	g_is_shutting_down = true
 
 	log.info('[vhttpd] Received signal ${sig}. Cleaning up child process groups...')
 	for pid in transport.get_child_pids() {
@@ -56,8 +105,7 @@ fn vhttpd_signal_handler(sig os.Signal) {
 		}
 	}
 
-	for i in 0 .. g_active_cfgs.len {
-		cfg := g_active_cfgs[i]
+	for cfg in active_runtime_config_snapshot() {
 		os.rm(cfg.internal_admin_socket) or {}
 		os.rm(cfg.pid_file) or {}
 	}
@@ -205,14 +253,15 @@ fn run_single_server(args []string, cfg config.VhttpdConfig) {
 		log.error('server runtime config resolve failed: ${err}')
 		return
 	}
+	preflight_server_bind(runtime_cfg) or {
+		log.error('[vhttpd] ${err.msg()}')
+		return
+	}
 	mut app := build_app_runtime(runtime_cfg.provider_settings, runtime_cfg.executor_plan, cfg,
 		runtime_cfg.app_build_cfg)
-	unsafe {
-		g_active_apps << &app
-		g_active_cfgs << runtime_cfg
-	}
+	register_active_runtime(app, runtime_cfg)
 	defer {
-		if !g_is_shutting_down {
+		if !active_runtime_is_shutting_down() {
 			shutdown_app_runtime(mut app, runtime_cfg)
 		}
 	}

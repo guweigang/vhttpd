@@ -18,12 +18,13 @@ pub:
 
 pub fn resolve_multi_server_runtime_config(args []string, cfg config.VhttpdConfig) !MultiServerRuntimeConfig {
 	if !cfg.uses_multi_listener() {
+		site_id := cfg.default_site_id()
 		return MultiServerRuntimeConfig{
 			single_mode: true
 			listeners:   [
 				ListenerRuntimeBinding{
 					id:          'default'
-					site_id:     'default'
+					site_id:     site_id
 					site_cfg:    cfg
 					runtime_cfg: ServerRuntimeConfig.resolve(args, cfg)!
 				},

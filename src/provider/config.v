@@ -34,6 +34,7 @@ pub:
 	enabled   bool
 	socket    string
 	driver    string
+	pool_name string
 	host      string
 	port      int
 	username  string
@@ -180,6 +181,11 @@ pub fn ProviderRuntimeSettings.resolve(args []string, cfg config.VhttpdConfig) P
 				'tmp/vhttpd-db.sock'
 			}
 			driver:    db_driver
+			pool_name: if cfg.db.pool_name.trim_space() != '' {
+				cfg.db.pool_name
+			} else {
+				'default'
+			}
 			host:      db_host
 			port:      db_port
 			username:  db_username

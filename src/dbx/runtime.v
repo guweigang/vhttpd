@@ -27,6 +27,7 @@ pub:
 	compiled            bool
 	socket              string
 	driver              string
+	pool_name           string @[json: 'pool_name']
 	host                string
 	port                int
 	database            string
@@ -49,6 +50,7 @@ pub mut:
 	enabled             bool
 	socket              string
 	driver              string
+	pool_name           string
 	host                string
 	port                int
 	username            string
@@ -109,6 +111,8 @@ pub:
 	driver         string
 	pong           bool
 	session_id     string @[json: 'session_id']
+	escaped        string
+	columns        []string
 	rows           []map[string]string
 	affected_rows  int @[json: 'affected_rows']
 	last_insert_id i64 @[json: 'last_insert_id']
@@ -149,10 +153,20 @@ pub fn Response.query_result(driver string, result QueryResult, session_id strin
 	return Response{
 		ok:             true
 		driver:         driver
+		columns:        result.columns
 		rows:           result.rows
 		affected_rows:  0
 		last_insert_id: 0
 		session_id:     session_id
+	}
+}
+
+pub fn Response.escaped(driver string, escaped string, session_id string) Response {
+	return Response{
+		ok:         true
+		driver:     driver
+		escaped:    escaped
+		session_id: session_id
 	}
 }
 
@@ -173,7 +187,7 @@ pub struct Server {}
 // ServerContext is the closure-based interface for server dispatch operations.
 pub struct ServerContext {
 pub:
-	driver_fn   fn () string = unsafe { nil }
+	driver_fn   fn () string          = unsafe { nil }
 	dispatch_fn fn (Request) Response = unsafe { nil }
 }
 
@@ -209,16 +223,16 @@ pub fn DriverName.normalize(name string) string {
 // RuntimeContext is the closure-based interface that Server.run needs from the App.
 pub struct RuntimeContext {
 pub:
-	mark_listen_error_fn  fn (string)                  = unsafe { nil }
-	mark_started_fn       fn (i64, &unix.StreamListener) string = unsafe { nil }
-	mark_stopped_fn       fn ()                        = unsafe { nil }
-	stop_requested_fn     fn () bool                   = unsafe { nil }
-	note_error_fn         fn (string)                  = unsafe { nil }
-	cleanup_sessions_fn   fn ()                        = unsafe { nil }
-	close_pool_fn         fn ()                        = unsafe { nil }
-	build_server_ctx_fn   fn () ServerContext           = unsafe { nil }
-	emit_started_fn       fn (string, string)          = unsafe { nil }
-	emit_error_fn         fn (string, string)          = unsafe { nil }
+	mark_listen_error_fn fn (string) = unsafe { nil }
+	mark_started_fn      fn (i64, &unix.StreamListener) string = unsafe { nil }
+	mark_stopped_fn      fn ()               = unsafe { nil }
+	stop_requested_fn    fn () bool          = unsafe { nil }
+	note_error_fn        fn (string)         = unsafe { nil }
+	cleanup_sessions_fn  fn ()               = unsafe { nil }
+	close_pool_fn        fn ()               = unsafe { nil }
+	build_server_ctx_fn  fn () ServerContext = unsafe { nil }
+	emit_started_fn      fn (string, string) = unsafe { nil }
+	emit_error_fn        fn (string, string) = unsafe { nil }
 }
 
 // ── enable_db: real types ──
@@ -504,6 +518,20 @@ $if enable_db ? {
 		}
 	}
 
+	pub fn (mut session SessionHandle) escape(value string) !string {
+		return match session.driver {
+			'mysql' {
+				session.mysql_conn.escape_string(value)
+			}
+			'pgsql' {
+				value.replace("'", "''").replace('\\', '\\\\')
+			}
+			else {
+				return error('unsupported_driver')
+			}
+		}
+	}
+
 	fn mysql_field_names_from_result(result mysql.Result) []string {
 		field_count := result.n_fields()
 		field_defs := C.mysql_fetch_fields(result.result)
@@ -667,6 +695,11 @@ $if enable_db ? {
 			enabled:     settings.enabled
 			socket:      settings.socket
 			driver:      settings.driver
+			pool_name:   if settings.pool_name.trim_space() != '' {
+				settings.pool_name
+			} else {
+				'default'
+			}
 			host:        settings.host
 			port:        settings.port
 			username:    settings.username
@@ -685,6 +718,7 @@ $if enable_db ? {
 			compiled:            true
 			socket:              rt.socket
 			driver:              DriverName.normalize(rt.driver)
+			pool_name:           rt.normalized_pool_name()
 			host:                rt.host
 			port:                rt.port
 			database:            rt.database
@@ -714,6 +748,7 @@ $if enable_db ? {
 			enabled:   rt.enabled
 			socket:    rt.socket
 			driver:    rt.driver
+			pool_name: rt.normalized_pool_name()
 			host:      rt.host
 			port:      rt.port
 			username:  rt.username
@@ -727,6 +762,7 @@ $if enable_db ? {
 		settings := rt.settings()
 		return provider.DbRuntimeSettings{
 			driver:    settings.driver
+			pool_name: settings.pool_name
 			host:      settings.host
 			port:      settings.port
 			username:  settings.username
@@ -739,6 +775,16 @@ $if enable_db ? {
 	pub fn (mut rt Runtime) note_error(message string) {
 		rt.last_error = message
 		rt.failed_queries++
+	}
+
+	pub fn (rt Runtime) normalized_pool_name() string {
+		name := rt.pool_name.trim_space()
+		return if name == '' { 'default' } else { name }
+	}
+
+	pub fn (rt Runtime) accepts_pool(name string) bool {
+		clean := name.trim_space()
+		return clean == '' || clean == 'default' || clean == rt.normalized_pool_name()
 	}
 
 	pub fn (mut rt Runtime) note_query_success() string {
@@ -879,8 +925,7 @@ $if enable_db ? {
 		}
 		payload := FrameCodec.read(mut conn) or { return }
 		req := json.decode(Request, payload) or {
-			FrameCodec.write(mut conn, json.encode(Response.error(ctx.driver(),
-				'invalid_json'))) or {}
+			FrameCodec.write(mut conn, json.encode(Response.error(ctx.driver(), 'invalid_json'))) or {}
 			return
 		}
 		resp := ctx.dispatch(req)
@@ -936,6 +981,11 @@ $if !enable_db ? {
 			enabled:    settings.enabled
 			socket:     settings.socket
 			driver:     settings.driver
+			pool_name:  if settings.pool_name.trim_space() != '' {
+				settings.pool_name
+			} else {
+				'default'
+			}
 			host:       settings.host
 			port:       settings.port
 			username:   settings.username
@@ -953,6 +1003,7 @@ $if !enable_db ? {
 			compiled:            false
 			socket:              rt.socket
 			driver:              DriverName.normalize(rt.driver)
+			pool_name:           rt.normalized_pool_name()
 			host:                rt.host
 			port:                rt.port
 			database:            rt.database
@@ -969,6 +1020,16 @@ $if !enable_db ? {
 			capabilities:        SnapshotCapabilities{}
 			snapshot_at_unix:    time.now().unix()
 		})
+	}
+
+	pub fn (rt Runtime) normalized_pool_name() string {
+		name := rt.pool_name.trim_space()
+		return if name == '' { 'default' } else { name }
+	}
+
+	pub fn (rt Runtime) accepts_pool(name string) bool {
+		clean := name.trim_space()
+		return clean == '' || clean == 'default' || clean == rt.normalized_pool_name()
 	}
 
 	// ── Server (!enable_db) ──

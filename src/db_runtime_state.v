@@ -24,6 +24,13 @@ $if enable_db ? {
 		return driver
 	}
 
+	fn (mut app App) db_runtime_accepts_pool(name string) bool {
+		app.mu.@lock()
+		accepted := app.transport.db.accepts_pool(name)
+		app.mu.unlock()
+		return accepted
+	}
+
 	fn (mut app App) db_runtime_note_error(message string) {
 		app.mu.@lock()
 		app.transport.db.note_error(message)

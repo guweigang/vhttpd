@@ -16,6 +16,7 @@ timezone = "Asia/Shanghai"
 enabled = true
 socket = "/tmp/vhttpd_db.sock"
 driver = "mysql"
+pool_name = "default"
 
 [db.mysql]
 host = "127.0.0.1"
