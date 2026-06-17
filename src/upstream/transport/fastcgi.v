@@ -134,7 +134,9 @@ pub fn FastCgiCodec.encode_request(method string, path string, original_path str
 	envs['SERVER_SOFTWARE'] = 'vhttpd'
 	envs['GATEWAY_INTERFACE'] = 'CGI/1.1'
 	envs['SERVER_PROTOCOL'] = 'HTTP/1.1'
-	envs['HTTPS'] = 'off'
+	scheme := req.header.get(.x_forwarded_proto) or { 'http' }
+	envs['REQUEST_SCHEME'] = scheme
+	envs['HTTPS'] = if scheme == 'https' { 'on' } else { 'off' }
 
 	// 传递 HTTP Headers (复用已有的 header 映射辅助函数)
 	req_headers := header_map_from_request(req)
