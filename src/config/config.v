@@ -8,6 +8,14 @@ pub mut:
 	host  string = '127.0.0.1'
 	port  int    = 18081
 	index string = 'index.php'
+	ssl   ServerSslConfig
+}
+
+pub struct ServerSslConfig {
+pub mut:
+	enabled  bool
+	cert     string
+	cert_key string @[toml: 'cert_key']
 }
 
 pub struct FilesConfig {
@@ -308,6 +316,7 @@ pub mut:
 	host string = '127.0.0.1'
 	port int
 	site string
+	ssl  ServerSslConfig @[skip]
 }
 
 pub struct SiteConfig {
@@ -318,6 +327,7 @@ pub mut:
 	default_executor   string @[toml: 'default_executor']
 	host               string = '127.0.0.1'
 	port               int
+	ssl                ServerSslConfig @[skip]
 	index              string
 	app                string
 	worker_entry       string
@@ -1189,6 +1199,27 @@ fn decode_listener_config_map(entry map[string]toml.Any) ListenerConfig {
 	if 'site' in entry {
 		cfg.site = toml_string_from_map(entry, 'site', cfg.site)
 	}
+	if 'ssl' in entry {
+		if ssl_any := entry['ssl'] {
+			if ssl_any is map[string]toml.Any {
+				cfg.ssl = decode_server_ssl_config_map(ssl_any)
+			}
+		}
+	}
+	return cfg
+}
+
+fn decode_server_ssl_config_map(entry map[string]toml.Any) ServerSslConfig {
+	mut cfg := ServerSslConfig{}
+	if 'enabled' in entry {
+		cfg.enabled = toml_bool_from_map(entry, 'enabled', cfg.enabled)
+	}
+	if 'cert' in entry {
+		cfg.cert = toml_string_from_map(entry, 'cert', cfg.cert)
+	}
+	if 'cert_key' in entry {
+		cfg.cert_key = toml_string_from_map(entry, 'cert_key', cfg.cert_key)
+	}
 	return cfg
 }
 
@@ -1214,6 +1245,13 @@ fn decode_site_config_map(entry map[string]toml.Any) SiteConfig {
 	}
 	if 'port' in entry {
 		cfg.port = toml_int_from_map(entry, 'port', cfg.port)
+	}
+	if 'ssl' in entry {
+		if ssl_any := entry['ssl'] {
+			if ssl_any is map[string]toml.Any {
+				cfg.ssl = decode_server_ssl_config_map(ssl_any)
+			}
+		}
 	}
 	if 'index' in entry {
 		cfg.index = toml_string_from_map(entry, 'index', cfg.index)
@@ -1382,6 +1420,24 @@ pub fn resolve_config_variables(mut cfg VhttpdConfig, config_path string) ! {
 		cfg.paths.values = next_paths.clone()
 		cfg.server.host, changed = expand_config_string(cfg.server.host, 'server', vars, env_map,
 			changed)!
+		cfg.server.ssl.cert, changed = expand_config_string(cfg.server.ssl.cert, 'server.ssl',
+			vars, env_map, changed)!
+		cfg.server.ssl.cert_key, changed = expand_config_string(cfg.server.ssl.cert_key,
+			'server.ssl', vars, env_map, changed)!
+		for name, mut listener in cfg.listeners {
+			listener.ssl.cert, changed = expand_config_string(listener.ssl.cert,
+				'listeners.${name}.ssl', vars, env_map, changed)!
+			listener.ssl.cert_key, changed = expand_config_string(listener.ssl.cert_key,
+				'listeners.${name}.ssl', vars, env_map, changed)!
+			cfg.listeners[name] = listener
+		}
+		for name, mut site in cfg.sites {
+			site.ssl.cert, changed = expand_config_string(site.ssl.cert, 'sites.${name}.ssl', vars,
+				env_map, changed)!
+			site.ssl.cert_key, changed = expand_config_string(site.ssl.cert_key,
+				'sites.${name}.ssl', vars, env_map, changed)!
+			cfg.sites[name] = site
+		}
 		cfg.files.event_log, changed = expand_config_string(cfg.files.event_log, 'files', vars,
 			env_map, changed)!
 		cfg.files.pid_file, changed = expand_config_string(cfg.files.pid_file, 'files', vars,
@@ -1804,6 +1860,18 @@ fn resolve_config_paths(mut cfg VhttpdConfig, config_path string) {
 	cfg.site.document_root = resolve_config_path(cfg.paths.root, cfg.site.document_root)
 	cfg.files.event_log = resolve_config_path(cfg.paths.root, cfg.files.event_log)
 	cfg.files.pid_file = resolve_config_path(cfg.paths.root, cfg.files.pid_file)
+	cfg.server.ssl.cert = resolve_config_path(cfg.paths.root, cfg.server.ssl.cert)
+	cfg.server.ssl.cert_key = resolve_config_path(cfg.paths.root, cfg.server.ssl.cert_key)
+	for name, mut listener in cfg.listeners {
+		listener.ssl.cert = resolve_config_path(cfg.paths.root, listener.ssl.cert)
+		listener.ssl.cert_key = resolve_config_path(cfg.paths.root, listener.ssl.cert_key)
+		cfg.listeners[name] = listener
+	}
+	for name, mut site in cfg.sites {
+		site.ssl.cert = resolve_config_path(cfg.paths.root, site.ssl.cert)
+		site.ssl.cert_key = resolve_config_path(cfg.paths.root, site.ssl.cert_key)
+		cfg.sites[name] = site
+	}
 	cfg.db.socket = resolve_config_path(cfg.paths.root, cfg.db.socket)
 	cfg.cache.socket = resolve_config_path(cfg.paths.root, cfg.cache.socket)
 	cfg.worker.socket = resolve_config_path(cfg.paths.root, cfg.worker.socket)
@@ -1875,6 +1943,8 @@ pub fn build_config_variable_map(cfg VhttpdConfig) map[string]string {
 	mut vars := {
 		'server.host':                    cfg.server.host
 		'server.port':                    '${cfg.server.port}'
+		'server.ssl.cert':                cfg.server.ssl.cert
+		'server.ssl.cert_key':            cfg.server.ssl.cert_key
 		'files.event_log':                cfg.files.event_log
 		'files.pid_file':                 cfg.files.pid_file
 		'db.socket':                      cfg.db.socket

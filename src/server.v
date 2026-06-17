@@ -121,6 +121,8 @@ const known_long_flags = [
 	'--config',
 	'--host',
 	'--port',
+	'--ssl-cert',
+	'--ssl-key',
 	'--event-log',
 	'--pid-file',
 	'--worker-read-timeout-ms',
@@ -190,6 +192,8 @@ fn print_vhttpd_help() {
 	println('  --config <path>              TOML config file')
 	println('  --host <host>                Data plane host')
 	println('  --port <port>                Data plane port')
+	println('  --ssl-cert <path>            Enable HTTPS with this certificate')
+	println('  --ssl-key <path>             Private key for --ssl-cert')
 	println('  --admin-host <host>          Admin plane host')
 	println('  --admin-port <port>          Admin plane port')
 	println('  --admin-token <token>        Admin API token')

@@ -52,8 +52,9 @@ fn AppStartupHooks.install_middleware(mut app App) {
 	}
 }
 
-fn AppStartupHooks.emit_server_started(mut app App, host string, port int, admin_enabled bool, admin_host string, admin_port int) {
+fn AppStartupHooks.emit_server_started(mut app App, scheme string, host string, port int, admin_enabled bool, admin_host string, admin_port int) {
 	app.emit('server.started', {
+		'scheme':                   scheme
 		'host':                     host
 		'port':                     '${port}'
 		'pid':                      '${os.getpid()}'
@@ -117,7 +118,7 @@ fn AppStartupHooks.start_upstream_providers(mut app App) {
 	}
 }
 
-fn AppStartupHooks.log_runtime_endpoints(app &App, host string, port int) {
+fn AppStartupHooks.log_runtime_endpoints(app &App, scheme string, host string, port int) {
 	if app.assets.enabled && app.assets.root_real != '' {
 		log.info('[vhttpd] Assets: ${app.assets.prefix} -> ${app.assets.root_real}')
 	} else {
@@ -133,5 +134,5 @@ fn AppStartupHooks.log_runtime_endpoints(app &App, host string, port int) {
 	} else {
 		log.info('[vhttpd] Cache Upstream: disabled')
 	}
-	log.info('[vhttpd] Data Plane: http://${host}:${port}/')
+	log.info('[vhttpd] Data Plane: ${scheme}://${host}:${port}/')
 }

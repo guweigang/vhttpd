@@ -65,8 +65,14 @@ pub fn resolve_multi_server_runtime_config(args []string, cfg config.VhttpdConfi
 			config.resolve_config_variables(mut site_runtime_cfg, site_runtime_cfg.config_path)!
 		}
 		admin_enabled_override := listener_id == admin_owner_listener_id
+		ssl_cfg := if listener_cfg.ssl.cert.trim_space() != ''
+			|| listener_cfg.ssl.cert_key.trim_space() != '' || listener_cfg.ssl.enabled {
+			listener_cfg.ssl
+		} else {
+			site_runtime_cfg.server.ssl
+		}
 		runtime_cfg := ServerRuntimeConfig.resolve_for_target(args, site_runtime_cfg, listener_id,
-			site_id, listener_cfg.host, listener_cfg.port, admin_enabled_override)!
+			site_id, listener_cfg.host, listener_cfg.port, ssl_cfg, admin_enabled_override)!
 		bindings << ListenerRuntimeBinding{
 			id:          listener_id
 			site_id:     site_id

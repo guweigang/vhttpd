@@ -552,6 +552,7 @@ pub fn (global_cfg VhttpdConfig) with_site(site_cfg SiteConfig) VhttpdConfig {
 	if cfg.site.document_root.trim_space() == '' {
 		cfg.site.document_root = cfg.paths.root
 	}
+	cfg.server.ssl = global_cfg.server.ssl.merge(site_cfg.ssl)
 	cfg.worker = global_cfg.worker.merge(site_cfg.worker)
 	if cfg.site.document_root.trim_space() != '' && cfg.worker.env['DOCUMENT_ROOT'] == '' {
 		cfg.worker.env['DOCUMENT_ROOT'] = cfg.site.document_root
@@ -634,7 +635,23 @@ pub fn (cfg VhttpdConfig) resolve_multi_listeners() !map[string]ListenerConfig {
 			host: if site_cfg.host.trim_space() == '' { '127.0.0.1' } else { site_cfg.host }
 			port: site_cfg.port
 			site: site_id
+			ssl:  site_cfg.ssl
 		}
 	}
 	return listeners
+}
+
+pub fn (base ServerSslConfig) merge(override ServerSslConfig) ServerSslConfig {
+	defaults := default_vhttpd_config().server.ssl
+	mut cfg := base
+	if override.enabled != defaults.enabled {
+		cfg.enabled = override.enabled
+	}
+	if override.cert != defaults.cert {
+		cfg.cert = override.cert
+	}
+	if override.cert_key != defaults.cert_key {
+		cfg.cert_key = override.cert_key
+	}
+	return cfg
 }

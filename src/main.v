@@ -47,9 +47,10 @@ pub struct App {
 pub:
 	event_log string
 pub mut:
-	started_at_unix i64
-	http_stats      HttpStats
-	mu              sync.Mutex
+	started_at_unix   i64
+	http_stats        HttpStats
+	mu                sync.Mutex
+	data_plane_scheme string = 'http'
 
 	transport          TransportRuntimeHub
 	protocols          ProtocolRuntimeHub
@@ -692,6 +693,7 @@ fn proxy_worker_response(mut app App, mut ctx Context, method string, path strin
 	if is_websocket_upgrade(ctx.req) {
 		return proxy_worker_websocket(mut app, mut ctx, method, path)
 	}
+	apply_data_plane_scheme(mut ctx, app.data_plane_scheme)
 	remote_addr := if isnil(ctx.conn) { '' } else { ctx.conn.peer_ip() or { '' } }
 	req_id := resolve_request_id(ctx, path)
 	trace_id := resolve_trace_id(ctx, path)
@@ -864,6 +866,12 @@ fn proxy_worker_response(mut app App, mut ctx Context, method string, path strin
 	ctype := resp.headers['content-type'] or { 'text/plain; charset=utf-8' }
 	ctx.set_content_type(ctype)
 	return ctx.text(if body_on_head == '' && method.to_upper() == 'HEAD' { '' } else { resp.body })
+}
+
+fn apply_data_plane_scheme(mut ctx Context, scheme string) {
+	normalized := if scheme.trim_space() == 'https' { 'https' } else { 'http' }
+	ctx.req.header.set(.x_forwarded_proto, normalized)
+	ctx.req.header.set_custom('X-Scheme', normalized) or {}
 }
 
 fn apply_worker_headers(mut ctx Context, headers map[string]string) {

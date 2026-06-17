@@ -191,6 +191,53 @@ thread_count = 3
 	assert cfg.vjsx.thread_count == 3
 }
 
+fn test_load_vhttpd_config_supports_https_certificate_config() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_https_config_test')
+	config_dir := os.join_path(temp_dir, 'config')
+	os.mkdir_all(config_dir) or { panic(err) }
+	config_file := os.join_path(config_dir, 'vhttpd.toml')
+	os.write_file(config_file, '
+[paths]
+root = ".."
+
+[server]
+host = "127.0.0.1"
+port = 18443
+
+[server.ssl]
+enabled = true
+cert = "certs/server.crt"
+cert_key = "certs/server.key"
+') or {
+		panic(err)
+	}
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	cfg := config.load_vhttpd_config(['--config', config_file]) or { panic(err) }
+	assert cfg.server.ssl.enabled
+	assert cfg.server.ssl.cert == os.join_path(temp_dir, 'certs', 'server.crt')
+	assert cfg.server.ssl.cert_key == os.join_path(temp_dir, 'certs', 'server.key')
+	runtime_cfg := server_lifecycle.ServerRuntimeConfig.resolve(['--config', config_file], cfg) or {
+		panic(err)
+	}
+	assert runtime_cfg.ssl_enabled
+	assert runtime_cfg.ssl_cert == cfg.server.ssl.cert
+	assert runtime_cfg.ssl_cert_key == cfg.server.ssl.cert_key
+
+	override_cfg := server_lifecycle.ServerRuntimeConfig.resolve([
+		'--config',
+		config_file,
+		'--ssl-cert',
+		'/tmp/override.crt',
+		'--ssl-key',
+		'/tmp/override.key',
+	], cfg) or { panic(err) }
+	assert override_cfg.ssl_enabled
+	assert override_cfg.ssl_cert == '/tmp/override.crt'
+	assert override_cfg.ssl_cert_key == '/tmp/override.key'
+}
+
 fn test_execute_websocket_dispatch_commands_result_treats_targeted_close_as_hub_command() {
 	mut app := App{}
 	result := app.execute_websocket_dispatch_commands_result([

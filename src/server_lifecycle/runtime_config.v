@@ -32,6 +32,9 @@ pub:
 	site_id               string
 	host                  string
 	port                  int
+	ssl_enabled           bool
+	ssl_cert              string
+	ssl_cert_key          string
 	pid_file              string
 	admin_enabled         bool
 	admin_host            string
@@ -46,10 +49,11 @@ pub:
 pub fn ServerRuntimeConfig.resolve(args []string, cfg config.VhttpdConfig) !ServerRuntimeConfig {
 	host := config.CliArgs.string_or(args, '--host', cfg.server.host)
 	port := config.CliArgs.int_or(args, '--port', cfg.server.port)
-	return ServerRuntimeConfig.resolve_for_target(args, cfg, '', '', host, port, true)
+	return ServerRuntimeConfig.resolve_for_target(args, cfg, '', '', host, port, cfg.server.ssl,
+		true)
 }
 
-pub fn ServerRuntimeConfig.resolve_for_target(args []string, cfg config.VhttpdConfig, listener_id string, site_id string, host string, port int, admin_enabled_override bool) !ServerRuntimeConfig {
+pub fn ServerRuntimeConfig.resolve_for_target(args []string, cfg config.VhttpdConfig, listener_id string, site_id string, host string, port int, ssl config.ServerSslConfig, admin_enabled_override bool) !ServerRuntimeConfig {
 	event_log := config.CliArgs.string_or(args, '--event-log', cfg.files.event_log)
 	pid_file := config.CliArgs.string_or(args, '--pid-file', cfg.files.pid_file)
 	worker_read_timeout_ms := config.CliArgs.int_or(args, '--worker-read-timeout-ms',
@@ -76,6 +80,9 @@ pub fn ServerRuntimeConfig.resolve_for_target(args []string, cfg config.VhttpdCo
 	admin_token := config.CliArgs.string_or(args, '--admin-token', cfg.admin.token)
 	admin_enabled := admin_enabled_override && admin_port > 0
 	admin_host := if admin_host_arg == '' { '127.0.0.1' } else { admin_host_arg }
+	ssl_cert := config.CliArgs.string_or(args, '--ssl-cert', ssl.cert)
+	ssl_cert_key := config.CliArgs.string_or(args, '--ssl-key', ssl.cert_key)
+	ssl_enabled := ssl.enabled || (ssl_cert.trim_space() != '' && ssl_cert_key.trim_space() != '')
 	provider_settings := provider.ProviderRuntimeSettings.resolve(args, cfg)
 	executor_plan := executor.LogicExecutorRuntimePlan.resolve(args, cfg, config.resolve_worker_sockets_with_defaults(args,
 		cfg.worker.socket, cfg.worker.pool_size, cfg.worker.socket_prefix,
@@ -96,6 +103,9 @@ pub fn ServerRuntimeConfig.resolve_for_target(args []string, cfg config.VhttpdCo
 		site_id:               site_id
 		host:                  host
 		port:                  port
+		ssl_enabled:           ssl_enabled
+		ssl_cert:              ssl_cert
+		ssl_cert_key:          ssl_cert_key
 		pid_file:              pid_file
 		admin_enabled:         admin_enabled
 		admin_host:            admin_host
