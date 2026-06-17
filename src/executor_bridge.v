@@ -78,17 +78,7 @@ pub fn (mut w AppFacadeWrapper) worker_backend_select_socket_for_kind(kind strin
 	mut ws := app.additional_workers[kind] or {
 		return error('unknown_executor_kind:${kind}')
 	}
-	ws.mu.@lock()
-	defer {
-		ws.mu.unlock()
-	}
-	socket_len := ws.worker_backend.sockets.len
-	if socket_len == 0 {
-		return error('worker not configured for kind: ${kind}')
-	}
-	socket_path := ws.worker_backend.sockets[ws.worker_backend.rr_index % socket_len]
-	ws.worker_backend.rr_index = (ws.worker_backend.rr_index + 1) % socket_len
-	return socket_path
+	return app.worker_backend_select_socket_queued_for_state(kind, mut *ws)
 }
 
 pub fn (mut w AppFacadeWrapper) on_worker_request_started(socket_path string) {

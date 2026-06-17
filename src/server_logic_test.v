@@ -878,7 +878,9 @@ executor = "php-cgi"
 	assert routes[0].match.path == ['/wp-config.php']
 	assert routes[1].match.path_regexp == '^/wp-includes/.*\\.php$'
 	assert routes[2].executor == 'php-cgi'
+	assert routes[2].match.query['rest_route'] == '*'
 	assert routes[3].executor == 'php-cgi'
+	assert routes[3].match.path == ['/wp-admin/*', '/xmlrpc.php']
 }
 
 fn test_load_vhttpd_config_does_not_accept_removed_php_policy_forms() {
@@ -1530,6 +1532,30 @@ fn test_build_app_runtime_projects_executor_plan_into_app_state() {
 	cfg.mcp.max_sessions = 55
 	cfg.mcp.max_pending_messages = 21
 	cfg.mcp.session_ttl_seconds = 77
+	cfg.routes = [
+		config.RouteRuleConfig{
+			match:    config.RouteMatchConfig{
+				path: ['/admin/*']
+			}
+			executor: 'php-cgi'
+		},
+	]
+	cfg.executors = {
+		'php-cgi': config.ExecutorSpecConfig{
+			executor: config.ExecutorConfig{
+				kind: 'php-cgi'
+			}
+			php:      config.PhpConfig{
+				bin: 'php-cgi'
+			}
+			worker:   config.WorkerConfig{
+				autostart:        true
+				socket:           '/tmp/cgi.sock'
+				queue_capacity:   7
+				queue_timeout_ms: 89
+			}
+		}
+	}
 	provider_settings := provider.ProviderRuntimeSettings{
 		feishu:         provider.FeishuRuntimeSettings{
 			enabled:                    true
@@ -1601,6 +1627,9 @@ fn test_build_app_runtime_projects_executor_plan_into_app_state() {
 	assert app.admin.token == 'secret'
 	assert app.assets.enabled
 	assert app.assets.root_real == '/private/tmp/assets'
+	cgi_worker := app.additional_workers['php-cgi'] or { panic('missing php-cgi worker') }
+	assert cgi_worker.worker_backend.queue_capacity == 7
+	assert cgi_worker.worker_backend.queue_timeout_ms == 89
 	assert app.protocols.mcp.max_sessions == 55
 	assert app.protocols.mcp.max_pending_messages == 21
 	assert app.protocols.mcp.session_ttl_seconds == 77

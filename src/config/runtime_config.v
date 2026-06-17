@@ -197,6 +197,7 @@ pub fn expand_php_site_routes(cfg VhttpdConfig) []RouteRuleConfig {
 			expanded << rule
 		}
 	}
+	expanded << cfg.routes.clone()
 	if cfg.php_site.compat_php.len > 0 {
 		expanded << RouteRuleConfig{
 			match:    RouteMatchConfig{
@@ -205,7 +206,6 @@ pub fn expand_php_site_routes(cfg VhttpdConfig) []RouteRuleConfig {
 			executor: 'php-cgi'
 		}
 	}
-	expanded << cfg.routes.clone()
 	return expanded
 }
 

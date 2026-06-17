@@ -73,6 +73,16 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 				sub_plan := executor.LogicExecutorRuntimePlan.resolve([]string{}, sub_cfg,
 					sub_sockets, spec.worker.stream_dispatch, spec.worker.websocket_dispatch,
 					spec.worker.autostart, spec.worker.cmd, spec.worker.env) or { continue }
+				sub_queue_capacity := if spec.worker.queue_capacity > 0 {
+					spec.worker.queue_capacity
+				} else {
+					build_cfg.worker_queue_capacity
+				}
+				sub_queue_timeout_ms := if spec.worker.queue_timeout_ms > 0 {
+					spec.worker.queue_timeout_ms
+				} else {
+					build_cfg.worker_queue_timeout_ms
+				}
 
 				mut sub_ws := &worker.WorkerState{
 					worker_backend:      worker.WorkerBackendRuntime{
@@ -86,8 +96,8 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 						restart_backoff_ms:     build_cfg.worker_restart_backoff_ms
 						restart_backoff_max_ms: build_cfg.worker_restart_backoff_max_ms
 						max_requests:           build_cfg.worker_max_requests
-						queue_capacity:         build_cfg.worker_queue_capacity
-						queue_timeout_ms:       build_cfg.worker_queue_timeout_ms
+						queue_capacity:         sub_queue_capacity
+						queue_timeout_ms:       sub_queue_timeout_ms
 						queue_poll_ms:          10
 					}
 					worker_backend_mode: sub_plan.worker_backend_mode

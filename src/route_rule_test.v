@@ -106,7 +106,7 @@ fn test_directory_slash_redirect_location() {
 	assert directory_slash_redirect_location(tmp, '/missing', '') == none
 }
 
-fn test_php_site_route_shortcuts_expand_before_explicit_routes() {
+fn test_php_site_route_shortcuts_keep_explicit_routes_before_compat_php() {
 	cfg := config.VhttpdConfig{
 		php_site: config.PhpSiteConfig{
 			deny_php:   ['/wp-includes/*', '/wp-config.php']
@@ -127,7 +127,29 @@ fn test_php_site_route_shortcuts_expand_before_explicit_routes() {
 	assert routes[0].status == 403
 	assert routes[1].match.path == ['/wp-config.php']
 	assert routes[1].status == 403
-	assert routes[2].match.path == ['/wp-admin/*', '/xmlrpc.php']
-	assert routes[2].executor == 'php-cgi'
-	assert routes[3].executor == 'static'
+	assert routes[2].executor == 'static'
+	assert routes[3].match.path == ['/wp-admin/*', '/xmlrpc.php']
+	assert routes[3].executor == 'php-cgi'
+}
+
+fn test_explicit_wp_admin_static_asset_route_wins_before_compat_php() {
+	cfg := config.VhttpdConfig{
+		php_site: config.PhpSiteConfig{
+			compat_php: ['/wp-admin/*', '/xmlrpc.php']
+		}
+		routes:   [
+			config.RouteRuleConfig{
+				match:    config.RouteMatchConfig{
+					path: ['*.css', '*.js']
+				}
+				executor: 'static'
+			},
+		]
+	}
+	routes := config.expand_php_site_routes(cfg)
+	assert routes.len == 2
+	assert routes[0].executor == 'static'
+	assert routes[0].match.path == ['*.css', '*.js']
+	assert routes[1].executor == 'php-cgi'
+	assert routes[1].match.path == ['/wp-admin/*', '/xmlrpc.php']
 }

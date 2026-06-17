@@ -259,3 +259,12 @@ fn (mut app App) ensure_workers_alive() {
 		app.ensure_worker_slot(i)
 	}
 }
+
+fn (mut app App) ensure_workers_alive_for_state(mut ws worker.WorkerState) {
+	if !ws.worker_backend.autostart || ws.worker_backend.managed_workers.len == 0 {
+		return
+	}
+	for i in 0 .. ws.worker_backend.managed_workers.len {
+		app.ensure_worker_slot_for_state(mut ws, i)
+	}
+}
