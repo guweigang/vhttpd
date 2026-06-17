@@ -114,7 +114,9 @@
 - `VSlim\Stream\Factory`
 - `VSlim\Stream\OllamaClient`
 - `VHttpd\DbGateway\Client`
+- `VHttpd\Cache\Client`
 - `VHttpd\WordPress\Wpdb`
+- `VHttpd\WordPress\ObjectCache`
 - `VHttpd\DbGateway\PDO`
 - `VHttpd\DbGateway\PDOStatement`
 

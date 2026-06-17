@@ -65,11 +65,13 @@ export default function handle(ctx) {
   if (ctx.path === "/set") {
     return ctx.json({
       ok: store.set("srv:test", { count: 1, status: "ready" }, { ttlMs: 60000 }),
+      okSecond: store.set("srv:other", { count: 2 }, { ttlMs: 60000 }),
       existsAfterSet: store.exists("srv:test")
     }, 200);
   }
   return ctx.json({
     value: store.get("srv:test", null),
+    keys: store.keys([]),
     exists: store.exists("srv:test")
   }, 200);
 }
@@ -121,6 +123,7 @@ export default function handle(ctx) {
 	assert get_outcome.response.body.contains('"exists":true')
 	assert get_outcome.response.body.contains('"status":"ready"')
 	assert get_outcome.response.body.contains('"count":1')
+	assert get_outcome.response.body.contains('"keys":["srv:other","srv:test"]')
 }
 
 fn test_inproc_vjsx_runtime_session_store_patch_updates_across_requests() {

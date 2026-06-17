@@ -1,5 +1,6 @@
 module main
 
+import cachex
 import dbx
 import config
 import codex
@@ -167,6 +168,7 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 				recent_activities:            []ws.UpstreamActivitySnapshot{}
 			}
 			db:        dbx.Runtime.from_settings(provider_settings.db)
+			cache:     cachex.Runtime.new(cfg.cache.enabled, cfg.cache.socket)
 		}
 		executors:          ExecutorRuntimeHub{
 			worker: worker.WorkerState{

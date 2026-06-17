@@ -292,7 +292,7 @@ fn InProcVjsxHostApi.session_store_builder(mut state VjsxExecutorState, idx int)
 					ctx.js_string(json.encode(InProcVjsxHostSessionStoreResponse{
 						ok:    true
 						found: keys.len > 0
-						value: json.encode(keys)
+						keys:  keys
 					}))
 				}
 				else {

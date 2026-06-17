@@ -38,6 +38,15 @@ fn shutdown_app_runtime(mut app App, runtime_cfg server_lifecycle.ServerRuntimeC
 	app.close_all_plugins()
 	log.info('[vhttpd] shutdown_app_runtime: stopping all providers')
 	app.stop_all_providers()
+	if app.transport.cache.enabled {
+		log.info('[vhttpd] shutdown_app_runtime: stopping cache upstream')
+		app.mu.@lock()
+		mut cache_listener := app.transport.cache.request_stop()
+		app.mu.unlock()
+		if !isnil(cache_listener) {
+			cache_listener.close() or {}
+		}
+	}
 	log.info('[vhttpd] shutdown_app_runtime: cleaning runtime files')
 	os.rm(runtime_cfg.internal_admin_socket) or {}
 	os.rm(runtime_cfg.pid_file) or {}

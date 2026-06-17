@@ -268,6 +268,12 @@ pub mut:
 	pgsql     DbPgsqlConfig
 }
 
+pub struct CacheConfig {
+pub mut:
+	enabled bool
+	socket  string = 'tmp/vhttpd-cache.sock'
+}
+
 pub struct RouteMatchConfig {
 pub mut:
 	path        []string
@@ -330,6 +336,7 @@ pub mut:
 	codex              CodexConfig
 	openai             OpenAIConfig
 	db                 DbConfig
+	cache              CacheConfig
 	routes             []RouteRuleConfig
 	executors          map[string]ExecutorSpecConfig
 }
@@ -356,6 +363,7 @@ pub mut:
 	codex              CodexConfig
 	openai             OpenAIConfig
 	db                 DbConfig
+	cache              CacheConfig
 	listeners          map[string]ListenerConfig
 	sites              map[string]SiteConfig
 	config_path        string
@@ -1397,6 +1405,8 @@ pub fn resolve_config_variables(mut cfg VhttpdConfig, config_path string) ! {
 			vars, env_map, changed)!
 		cfg.db.pgsql.database, changed = expand_config_string(cfg.db.pgsql.database, 'db.pgsql',
 			vars, env_map, changed)!
+		cfg.cache.socket, changed = expand_config_string(cfg.cache.socket, 'cache', vars, env_map,
+			changed)!
 		cfg.worker.cmd, changed = expand_config_string(cfg.worker.cmd, 'worker', vars, env_map,
 			changed)!
 		cfg.worker.socket, changed = expand_config_string(cfg.worker.socket, 'worker', vars,
@@ -1794,6 +1804,7 @@ fn resolve_config_paths(mut cfg VhttpdConfig, config_path string) {
 	cfg.files.event_log = resolve_config_path(cfg.paths.root, cfg.files.event_log)
 	cfg.files.pid_file = resolve_config_path(cfg.paths.root, cfg.files.pid_file)
 	cfg.db.socket = resolve_config_path(cfg.paths.root, cfg.db.socket)
+	cfg.cache.socket = resolve_config_path(cfg.paths.root, cfg.cache.socket)
 	cfg.worker.socket = resolve_config_path(cfg.paths.root, cfg.worker.socket)
 	cfg.worker.socket_prefix = resolve_config_path(cfg.paths.root, cfg.worker.socket_prefix)
 	for i, raw in cfg.worker.sockets {

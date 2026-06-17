@@ -295,10 +295,16 @@ fn InProcVjsxWebSocketJs.runtime(ctx &vjsx.Context, runtime_meta InProcVjsxRunti
 			resp := json.decode(InProcVjsxHostSessionStoreResponse, resp_raw.to_string()) or {
 				return fallback
 			}
-			if !resp.ok || resp.value.trim_space() == '' {
+			if !resp.ok {
 				return fallback
 			}
-			return ctx.json_parse(resp.value)
+			if resp.keys.len > 0 {
+				return ctx.json_parse(json.encode(resp.keys))
+			}
+			if resp.value.trim_space() != '' {
+				return ctx.json_parse(resp.value)
+			}
+			return ctx.js_array()
 		}))
 		return store
 	}))

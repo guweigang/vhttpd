@@ -62,5 +62,6 @@ struct InProcVjsxHostSessionStoreResponse {
 	found    bool
 	conflict bool
 	value    string
+	keys     []string
 	error    string
 }

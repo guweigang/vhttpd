@@ -10,6 +10,10 @@ fn AppStartupHooks.initialize_runtime(mut app App, internal_admin_socket string)
 	if app.transport.db.enabled && app.transport.db.socket.trim_space() != '' {
 		app.executors.worker.worker_backend.env['VHTTPD_DB_SOCKET'] = app.transport.db.socket
 	}
+	if app.transport.cache.enabled && app.transport.cache.socket.trim_space() != '' {
+		app.executors.worker.worker_backend.env['VHTTPD_CACHE_SOCKET'] = app.transport.cache.socket
+		go app.cache_runtime_server_run(app.transport.cache.socket)
+	}
 	app.feishu_card_bridge_apply_env_fallbacks()
 	go InternalAdminRuntime.serve(mut app, internal_admin_socket)
 	if app.providers.feishu.enabled {
@@ -123,6 +127,11 @@ fn AppStartupHooks.log_runtime_endpoints(app &App, host string, port int) {
 		log.info('[vhttpd] DB Upstream: unix://${app.transport.db.socket} (${app.transport.db.driver}, db=${app.transport.db.database}, pool=${app.transport.db.pool_size})')
 	} else {
 		log.info('[vhttpd] DB Upstream: disabled')
+	}
+	if app.transport.cache.enabled {
+		log.info('[vhttpd] Cache Upstream: unix://${app.transport.cache.socket} (memory)')
+	} else {
+		log.info('[vhttpd] Cache Upstream: disabled')
 	}
 	log.info('[vhttpd] Data Plane: http://${host}:${port}/')
 }
