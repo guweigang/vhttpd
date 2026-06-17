@@ -240,12 +240,13 @@ pub mut:
 
 pub struct DbMysqlConfig {
 pub mut:
-	host      string = '127.0.0.1'
-	port      int    = 3306
-	username  string
-	password  string
-	database  string = 'mysql'
-	pool_size int    = 5 @[toml: 'pool_size']
+	host             string = '127.0.0.1'
+	port             int    = 3306
+	username         string
+	password         string
+	database         string = 'mysql'
+	pool_size        int    = 5 @[toml: 'pool_size']
+	wordpress_compat bool   @[toml: 'wordpress_compat']
 }
 
 pub struct DbPgsqlConfig {
@@ -1889,6 +1890,7 @@ pub fn build_config_variable_map(cfg VhttpdConfig) map[string]string {
 		'db.pgsql.username':              cfg.db.pgsql.username
 		'db.pgsql.database':              cfg.db.pgsql.database
 		'db.pgsql.pool_size':             '${cfg.db.pgsql.pool_size}'
+		'cache.socket':                   cfg.cache.socket
 		'paths.root':                     cfg.paths.root
 		'site.root':                      cfg.site.document_root
 		'site.index':                     cfg.site.index

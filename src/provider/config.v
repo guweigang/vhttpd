@@ -41,6 +41,7 @@ pub:
 	password  string
 	database  string
 	pool_size int
+	wordpress_compat bool
 }
 
 pub struct BridgeRuntimeSettings {
@@ -192,6 +193,11 @@ pub fn ProviderRuntimeSettings.resolve(args []string, cfg config.VhttpdConfig) P
 			password:  db_password
 			database:  db_database
 			pool_size: db_pool_size
+			wordpress_compat: if db_driver in ['pgsql', 'pg', 'postgres', 'postgresql'] {
+				false
+			} else {
+				cfg.db.mysql.wordpress_compat
+			}
 		}
 		ollama_enabled: config.CliArgs.bool_or(args, '--ollama-enabled', false)
 	}

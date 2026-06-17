@@ -57,6 +57,7 @@ pub mut:
 	password            string
 	database            string
 	pool_size           int
+	wordpress_compat    bool
 	started             bool
 	started_at_unix     i64
 	last_error          string
@@ -262,16 +263,18 @@ $if enable_db ? {
 
 	pub struct PoolHandle {
 	pub mut:
-		driver     string
-		mysql_pool mysql.ConnectionPool
-		pg_pool    &pg.DB = unsafe { nil }
+		driver           string
+		wordpress_compat bool
+		mysql_pool       mysql.ConnectionPool
+		pg_pool          &pg.DB = unsafe { nil }
 	}
 
 	pub struct SessionHandle {
 	pub mut:
-		driver     string
-		mysql_conn mysql.DB
-		pg_conn    &pg.Conn = unsafe { nil }
+		driver           string
+		wordpress_compat bool
+		mysql_conn       mysql.DB
+		pg_conn          &pg.Conn = unsafe { nil }
 	}
 }
 
@@ -354,8 +357,9 @@ $if enable_db ? {
 		return match driver {
 			'mysql' {
 				PoolHandle{
-					driver:     'mysql'
-					mysql_pool: mysql.new_connection_pool(mysql.Config{
+					driver:           'mysql'
+					wordpress_compat: settings.wordpress_compat
+					mysql_pool:       mysql.new_connection_pool(mysql.Config{
 						host:     host
 						port:     port
 						username: settings.username
@@ -399,10 +403,15 @@ $if enable_db ? {
 	pub fn (mut pool PoolHandle) acquire() !SessionHandle {
 		return match pool.driver {
 			'mysql' {
-				SessionHandle{
-					driver:     'mysql'
-					mysql_conn: pool.mysql_pool.acquire()!
+				mut session := SessionHandle{
+					driver:           'mysql'
+					wordpress_compat: pool.wordpress_compat
+					mysql_conn:       pool.mysql_pool.acquire()!
 				}
+				if pool.wordpress_compat {
+					session.apply_wordpress_mysql_compat()!
+				}
+				session
 			}
 			'pgsql' {
 				SessionHandle{
@@ -508,6 +517,9 @@ $if enable_db ? {
 		match session.driver {
 			'mysql' {
 				session.mysql_conn.autocommit(true)!
+				if session.wordpress_compat {
+					session.apply_wordpress_mysql_compat()!
+				}
 			}
 			'pgsql' {
 				// PostgreSQL connections can be returned to the pool after commit/rollback directly.
@@ -516,6 +528,13 @@ $if enable_db ? {
 				return error('unsupported_driver')
 			}
 		}
+	}
+
+	pub fn (mut session SessionHandle) apply_wordpress_mysql_compat() ! {
+		if session.driver != 'mysql' {
+			return
+		}
+		_ = session.mysql_conn.exec_none("SET SESSION sql_mode = TRIM(BOTH ',' FROM REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(CONCAT(',', @@SESSION.sql_mode, ','), ',NO_ZERO_DATE,', ','), ',ONLY_FULL_GROUP_BY,', ','), ',STRICT_TRANS_TABLES,', ','), ',STRICT_ALL_TABLES,', ','), ',TRADITIONAL,', ','), ',ANSI,', ','))")
 	}
 
 	pub fn (mut session SessionHandle) escape(value string) !string {
@@ -706,6 +725,7 @@ $if enable_db ? {
 			password:    settings.password
 			database:    settings.database
 			pool_size:   settings.pool_size
+			wordpress_compat: settings.wordpress_compat
 			started:     false
 			tx_sessions: map[string]SessionHandle{}
 		}
@@ -755,6 +775,7 @@ $if enable_db ? {
 			password:  rt.password
 			database:  rt.database
 			pool_size: rt.pool_size
+			wordpress_compat: rt.wordpress_compat
 		}
 	}
 
@@ -769,6 +790,7 @@ $if enable_db ? {
 			password:  settings.password
 			database:  settings.database
 			pool_size: 1
+			wordpress_compat: settings.wordpress_compat
 		}
 	}
 
@@ -992,6 +1014,7 @@ $if !enable_db ? {
 			password:   settings.password
 			database:   settings.database
 			pool_size:  settings.pool_size
+			wordpress_compat: settings.wordpress_compat
 			last_error: if settings.enabled { 'db_not_compiled' } else { '' }
 			started:    false
 		}

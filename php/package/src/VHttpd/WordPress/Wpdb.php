@@ -122,6 +122,15 @@ class Wpdb extends \wpdb
         }
     }
 
+    public function print_error($str = '')
+    {
+        if ($str === '') {
+            $str = $this->last_error ?: 'vhttpd DB gateway query failed';
+        }
+
+        return parent::print_error($str);
+    }
+
     public function _real_escape($data)
     {
         if (!is_scalar($data)) {

@@ -542,29 +542,67 @@ use VHttpd\DbGateway\PDO;
 $pdo = new PDO(getenv('VHTTPD_DB_SOCKET') ?: '/tmp/vhttpd_db.sock', getenv('VHTTPD_DB_POOL') ?: 'default');
 ```
 
-The client speaks the vhttpd DB runtime protocol over the same 4-byte
-length-prefixed JSON frame format used by PHP workers:
+## Cache Gateway
+
+When vhttpd starts `[cache]`, PHP code can access the shared in-memory cache
+through the same JSON frame transport:
+
+```php
+use VHttpd\Cache\Client;
+
+$cache = Client::fromEnv(defaultNamespace: 'wordpress');
+$cache->set('page:home', $html, 60_000);
+$html = $cache->get('page:home');
+```
+
+The cache gateway currently uses vhttpd's memory-backed SessionStore semantics:
+namespaced string keys, optional TTL, key listing, existence checks, delete, and
+compare-and-swap patch operations. Redis can be added behind the same client
+protocol later without changing PHP application code.
+
+The cache and DB clients speak vhttpd runtime protocols over the same 4-byte
+length-prefixed JSON frame format used by PHP workers. DB requests look like:
 
 ```json
 {"version":1,"mode":"db","op":"query","pool":"default","session_id":"","sql":"SELECT 1","params":[],"timeout_ms":1000}
 ```
 
-## Experimental WordPress DB drop-in
+## Experimental WordPress DB bridge
 
-Copy or symlink `php/package/wordpress/db.php` into `wp-content/db.php`, then
-point it at the vhttpd DB runtime socket:
+Include the bridge from `wp-config.php` when WordPress is launched by vhttpd:
 
 ```php
 <?php
 
-define('VHTTPD_DB_SOCKET', '/tmp/vhttpd_db.sock');
-define('VHTTPD_DB_POOL', 'default');
-define('VHTTPD_DB_TIMEOUT_MS', 1000);
+if (($vendor = getenv('VHTTPD_VENDOR')) !== false && $vendor !== '') {
+    require_once rtrim($vendor, '/') . '/wordpress/vhttpd-db.php';
+}
 ```
 
-The drop-in replaces WordPress core `$wpdb` traffic with
-`VHttpd\WordPress\Wpdb`. It does not shim plugins that bypass `$wpdb` and call
-`mysqli_*` directly.
+Set `VHTTPD_VENDOR`, `VHTTPD_DB_SOCKET`, `VHTTPD_DB_POOL`, and optionally
+`VHTTPD_DB_TIMEOUT_MS` in the vhttpd PHP executor environment. The bridge
+prepares `VHttpd\WordPress\Wpdb` before WordPress boots, so no
+`wp-content/db.php` drop-in is required. It does not shim plugins that bypass
+`$wpdb` and call `mysqli_*` directly.
+
+## Experimental WordPress Object Cache
+
+WordPress only loads external object caches through the official
+`wp-content/object-cache.php` drop-in. Keep that file as a tiny environment
+loader and let vhttpd provide the implementation:
+
+```php
+<?php
+
+if (($vendor = getenv('VHTTPD_VENDOR')) !== false && $vendor !== '') {
+    require_once rtrim($vendor, '/') . '/wordpress/object-cache.php';
+}
+```
+
+Set `VHTTPD_CACHE_SOCKET` in the vhttpd PHP executor environment. The drop-in
+uses `VHttpd\WordPress\ObjectCache`, keeps a local per-request cache, and
+persists serializable values through `VHttpd\Cache\Client`. If the cache socket
+is unavailable, WordPress falls back to the local cache for the current request.
 
 ## VSlim global container (PSR-11)
 

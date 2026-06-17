@@ -6,6 +6,9 @@ use VHttpd\WordPress\Wpdb;
 
 if (!class_exists(Wpdb::class)) {
     $autoload = getenv('VHTTPD_PHP_PACKAGE_AUTOLOAD');
+    if ((!is_string($autoload) || $autoload === '') && defined('VHTTPD_PHP_PACKAGE_AUTOLOAD')) {
+        $autoload = (string) VHTTPD_PHP_PACKAGE_AUTOLOAD;
+    }
     if (is_string($autoload) && $autoload !== '' && is_file($autoload)) {
         require_once $autoload;
     } elseif (is_file(__DIR__ . '/../vendor/autoload.php')) {

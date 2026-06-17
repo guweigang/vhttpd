@@ -9,6 +9,25 @@ root = "/Users/guweigang/wwwroot/wordpress"
 index = "index.php"
 default_executor = "php"
 
+[db]
+enabled = true
+socket = "/tmp/vhttpd_wp_db.sock"
+driver = "mysql"
+pool_name = "wordpress"
+
+[db.mysql]
+host = "127.0.0.1"
+port = 3306
+username = "root"
+password = "Abcd.1234"
+database = "wordpress"
+pool_size = 5
+wordpress_compat = true
+
+[cache]
+enabled = true
+socket = "/tmp/vhttpd_wp_cache.sock"
+
 # 1. 默认执行器 (主池): 负责前台的高性能长驻运行
 [executors.php]
 kind = "php"
@@ -41,9 +60,16 @@ compat_php = [
 autostart = true
 pool_size = 4
 socket = "/tmp/vhttpd_wp_main.sock"
+queue_capacity = 64
+queue_timeout_ms = 10000
 
 [executors.php.worker.env]
 VPHP_WP_ROOT = "/Users/guweigang/wwwroot/wordpress"
+VHTTPD_VENDOR = "/Users/guweigang/Source/vhttpd/php/package"
+VHTTPD_DB_SOCKET = "/tmp/vhttpd_wp_db.sock"
+VHTTPD_DB_POOL = "wordpress"
+VHTTPD_DB_TIMEOUT_MS = "3000"
+VHTTPD_CACHE_SOCKET = "/tmp/vhttpd_wp_cache.sock"
 
 # 2. 附加执行器 (附加池): 负责后台管理、登录等不适合/不支持长驻模式的动态脚本
 [executors.php-cgi]
@@ -54,9 +80,16 @@ bin = "php-cgi"
 autostart = true
 pool_size = 2
 socket = "/tmp/vhttpd_wp_cgi.sock"
+queue_capacity = 64
+queue_timeout_ms = 10000
 
 [executors.php-cgi.worker.env]
 VPHP_WP_ROOT = "/Users/guweigang/wwwroot/wordpress"
+VHTTPD_VENDOR = "/Users/guweigang/Source/vhttpd/php/package"
+VHTTPD_DB_SOCKET = "/tmp/vhttpd_wp_db.sock"
+VHTTPD_DB_POOL = "wordpress"
+VHTTPD_DB_TIMEOUT_MS = "3000"
+VHTTPD_CACHE_SOCKET = "/tmp/vhttpd_wp_cache.sock"
 
 
 # 3. 路由分流策略 (按顺序从上往下匹配，匹配成功即刻阻断)
