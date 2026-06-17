@@ -7,6 +7,14 @@ namespace VHttpd\WordPress;
 use RuntimeException;
 use VHttpd\DbGateway\Client;
 
+final class WpdbConnectionInfo
+{
+    public function __construct(
+        public string $client_info = 'vhttpd-db-gateway',
+    ) {
+    }
+}
+
 /**
  * WordPress wpdb drop-in backed by the vhttpd DB runtime.
  *
@@ -38,6 +46,7 @@ class Wpdb extends \wpdb
         $this->dbname = $dbname;
         $this->dbhost = $dbhost;
         $this->is_mysql = true;
+        $this->dbh = new WpdbConnectionInfo();
 
         if (defined('WP_SETUP_CONFIG')) {
             return;
@@ -52,6 +61,7 @@ class Wpdb extends \wpdb
             $this->client()->ping($this->timeoutMs);
             $this->init_charset();
             $this->ready = true;
+            $this->dbh = new WpdbConnectionInfo();
             return true;
         } catch (\Throwable $e) {
             $this->ready = false;
