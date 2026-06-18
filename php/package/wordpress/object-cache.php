@@ -38,7 +38,12 @@ if (!function_exists('wp_cache_init')) {
     function wp_cache_init(): void
     {
         $client = null;
-        if (class_exists(Client::class) && getenv('VHTTPD_CACHE_SOCKET')) {
+        $socket = getenv('VHTTPD_CACHE_SOCKET');
+        if (!is_string($socket) || $socket === '') {
+            $socket = $_SERVER['VHTTPD_CACHE_SOCKET'] ?? '';
+        }
+
+        if (class_exists(Client::class) && $socket !== '') {
             $client = Client::fromEnv(defaultNamespace: 'wordpress');
         }
 

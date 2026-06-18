@@ -32,7 +32,14 @@ final class Client
         string $defaultNamespace = 'default',
     ): self {
         $socket = getenv($socketEnv);
+        if (!is_string($socket) || $socket === '') {
+            $socket = $_SERVER[$socketEnv] ?? '';
+        }
+        
         $namespace = getenv($namespaceEnv);
+        if (!is_string($namespace) || $namespace === '') {
+            $namespace = $_SERVER[$namespaceEnv] ?? '';
+        }
 
         return new self(
             is_string($socket) && $socket !== '' ? $socket : $defaultSocket,
