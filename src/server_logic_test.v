@@ -238,6 +238,50 @@ cert_key = "certs/server.key"
 	assert override_cfg.ssl_cert_key == '/tmp/override.key'
 }
 
+fn test_load_vhttpd_config_supports_route_cache_control() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_route_cache_control_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	config_file := os.join_path(temp_dir, 'vhttpd.toml')
+	os.write_file(config_file, '
+[paths]
+root = "."
+
+[[routes]]
+match.method = ["GET", "HEAD"]
+match.path = ["*.js", "*.css"]
+executor = "static"
+root = "/public"
+cache_control = "public, max-age=31536000, immutable"
+response_cache_ttl_ms = 60000
+cache_bypass_cookie_patterns = ["session_*"]
+cache_ignore_cookie_patterns = ["test_cookie"]
+response_headers = { X-Content-Type-Options = "nosniff" }
+max_body_bytes = 1048576
+required_headers = { X-API-Key = "*" }
+denied_query_patterns = { debug = "*" }
+upload_dir = "/tmp/uploads"
+on_completed = "vjsx:test.upload.completed"
+') or {
+		panic(err)
+	}
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	cfg := config.load_vhttpd_config(['--config', config_file]) or { panic(err) }
+	assert cfg.routes.len == 1
+	assert cfg.routes[0].match.method == ['GET', 'HEAD']
+	assert cfg.routes[0].cache_control == 'public, max-age=31536000, immutable'
+	assert cfg.routes[0].response_cache_ttl_ms == 60000
+	assert cfg.routes[0].cache_bypass_cookie_patterns == ['session_*']
+	assert cfg.routes[0].cache_ignore_cookie_patterns == ['test_cookie']
+	assert cfg.routes[0].response_headers['X-Content-Type-Options'] == 'nosniff'
+	assert cfg.routes[0].max_body_bytes == 1048576
+	assert cfg.routes[0].upload_dir == '/tmp/uploads'
+	assert cfg.routes[0].on_completed == 'vjsx:test.upload.completed'
+	assert cfg.routes[0].required_headers['X-API-Key'] == '*'
+	assert cfg.routes[0].denied_query_patterns['debug'] == '*'
+}
+
 fn test_execute_websocket_dispatch_commands_result_treats_targeted_close_as_hub_command() {
 	mut app := App{}
 	result := app.execute_websocket_dispatch_commands_result([
@@ -367,6 +411,31 @@ fn test_resolve_provider_runtime_settings_supports_pgsql_db_config() {
 	assert settings.db.password == 'secret'
 	assert settings.db.database == 'appdb'
 	assert settings.db.pool_size == 9
+}
+
+fn test_resolve_provider_runtime_settings_supports_mysql_idle_ping() {
+	mut cfg := config.default_vhttpd_config()
+	cfg.db.enabled = true
+	cfg.db.driver = 'mysql'
+	cfg.db.mysql.host = '127.0.0.1'
+	cfg.db.mysql.port = 3307
+	cfg.db.mysql.username = 'root'
+	cfg.db.mysql.password = 'secret'
+	cfg.db.mysql.database = 'wordpress'
+	cfg.db.mysql.pool_size = 7
+	cfg.db.mysql.idle_ping_ms = 300000
+	cfg.db.mysql.init_sql = ['SET SESSION time_zone = "+00:00"']
+	settings := provider.ProviderRuntimeSettings.resolve([]string{}, cfg)
+	assert settings.db.enabled
+	assert settings.db.driver == 'mysql'
+	assert settings.db.host == '127.0.0.1'
+	assert settings.db.port == 3307
+	assert settings.db.username == 'root'
+	assert settings.db.password == 'secret'
+	assert settings.db.database == 'wordpress'
+	assert settings.db.pool_size == 7
+	assert settings.db.idle_ping_ms == 300000
+	assert settings.db.init_sql == ['SET SESSION time_zone = "+00:00"']
 }
 
 fn test_load_vhttpd_config_supports_bridge_config() {
@@ -1439,6 +1508,37 @@ fn test_php_worker_executor_lifecycle_prepares_worker_command_and_env() {
 	assert state.worker_cmd.contains(worker_entry)
 }
 
+fn test_runtime_scheme_is_injected_before_worker_start() {
+	mut app := App{
+		executors:          ExecutorRuntimeHub{
+			worker: worker.WorkerState{
+				worker_backend: worker.WorkerBackendRuntime{
+					env: {
+						'APP_ENV': 'dev'
+					}
+				}
+			}
+		}
+		additional_workers: {
+			'php-cgi': &worker.WorkerState{
+				worker_backend: worker.WorkerBackendRuntime{
+					env: {
+						'CGI_ENV': 'dev'
+					}
+				}
+			}
+		}
+	}
+	apply_runtime_scheme_to_worker_envs(mut app, 'https')
+	assert app.executors.worker.worker_backend.env['APP_ENV'] == 'dev'
+	assert app.executors.worker.worker_backend.env['VHTTPD_SCHEME'] == 'https'
+	assert app.executors.worker.worker_backend.env['VHTTPD_REQUEST_SCHEME'] == 'https'
+	cgi_worker := app.additional_workers['php-cgi'] or { panic('missing php-cgi worker') }
+	assert cgi_worker.worker_backend.env['CGI_ENV'] == 'dev'
+	assert cgi_worker.worker_backend.env['VHTTPD_SCHEME'] == 'https'
+	assert cgi_worker.worker_backend.env['VHTTPD_REQUEST_SCHEME'] == 'https'
+}
+
 fn test_embedded_executor_lifecycle_disables_worker_backend_features() {
 	mut state := executor.ExecutorBootstrapState{
 		worker_sockets:          ['/tmp/a.sock']
@@ -1575,6 +1675,16 @@ fn test_builtin_logic_executor_spec_resolves_vjsx_runtime_config_from_config_sur
 }
 
 fn test_build_app_runtime_projects_executor_plan_into_app_state() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_app_runtime_upload_events_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	vjsx_app := os.join_path(temp_dir, 'upload-events.mts')
+	os.write_file(vjsx_app,
+		'export default { async handle() { return { status: 202, body: "ok" }; } };') or {
+		panic(err)
+	}
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
 	mut cfg := config.default_vhttpd_config()
 	cfg.mcp.max_sessions = 55
 	cfg.mcp.max_pending_messages = 21
@@ -1585,6 +1695,29 @@ fn test_build_app_runtime_projects_executor_plan_into_app_state() {
 				path: ['/admin/*']
 			}
 			executor: 'php-cgi'
+		},
+		config.RouteRuleConfig{
+			match:                        config.RouteMatchConfig{
+				method: ['GET']
+				path:   ['*.js']
+			}
+			executor:                     'static'
+			cache_control:                'public, max-age=31536000, immutable'
+			response_cache_ttl_ms:        60000
+			cache_bypass_cookie_patterns: ['session_*']
+			cache_ignore_cookie_patterns: ['test_cookie']
+			response_headers:             {
+				'X-Content-Type-Options': 'nosniff'
+			}
+			max_body_bytes:               1048576
+			required_headers:             {
+				'X-API-Key': '*'
+			}
+			denied_query_patterns:        {
+				'debug': '*'
+			}
+			upload_dir:                   '/tmp/uploads'
+			on_completed:                 'vjsx:test.upload.completed'
 		},
 	]
 	cfg.executors = {
@@ -1600,6 +1733,15 @@ fn test_build_app_runtime_projects_executor_plan_into_app_state() {
 				socket:           '/tmp/cgi.sock'
 				queue_capacity:   7
 				queue_timeout_ms: 89
+			}
+		}
+		'vjsx':    config.ExecutorSpecConfig{
+			executor: config.ExecutorConfig{
+				kind: 'vjsx'
+			}
+			vjsx:     config.VjsxConfig{
+				app_entry:   vjsx_app
+				module_root: temp_dir
 			}
 		}
 	}
@@ -1674,9 +1816,24 @@ fn test_build_app_runtime_projects_executor_plan_into_app_state() {
 	assert app.admin.token == 'secret'
 	assert app.assets.enabled
 	assert app.assets.root_real == '/private/tmp/assets'
+	assert app.routes.len == 2
+	assert app.routes[1].match_method == ['GET']
+	assert app.routes[1].cache_control == 'public, max-age=31536000, immutable'
+	assert app.routes[1].response_cache_ttl_ms == 60000
+	assert app.routes[1].cache_bypass_cookie_patterns == ['session_*']
+	assert app.routes[1].cache_ignore_cookie_patterns == ['test_cookie']
+	assert app.routes[1].response_headers['X-Content-Type-Options'] == 'nosniff'
+	assert app.routes[1].max_body_bytes == 1048576
+	assert app.routes[1].required_headers['X-API-Key'] == '*'
+	assert app.routes[1].denied_query_patterns['debug'] == '*'
+	assert app.routes[1].upload_dir == '/tmp/uploads'
+	assert app.routes[1].on_completed == 'vjsx:test.upload.completed'
 	cgi_worker := app.additional_workers['php-cgi'] or { panic('missing php-cgi worker') }
 	assert cgi_worker.worker_backend.queue_capacity == 7
 	assert cgi_worker.worker_backend.queue_timeout_ms == 89
+	vjsx_worker := app.additional_workers['vjsx'] or { panic('missing vjsx worker') }
+	assert vjsx_worker.logic_executor.kind() == 'vjsx'
+	assert vjsx_worker.worker_backend_mode == .disabled
 	assert app.protocols.mcp.max_sessions == 55
 	assert app.protocols.mcp.max_pending_messages == 21
 	assert app.protocols.mcp.session_ttl_seconds == 77

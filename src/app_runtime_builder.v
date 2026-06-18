@@ -42,26 +42,47 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 			re = regex.regex_opt(r.match.path_regexp) or { continue }
 		}
 		runtime_routes << RuntimeRouteRule{
-			match_path:           r.match.path.clone()
-			match_path_regexp:    r.match.path_regexp
-			match_query:          r.match.query.clone()
-			re:                   re
-			executor:             r.executor
-			rewrite:              r.rewrite
-			rewrite_strip_prefix: r.rewrite_strip_prefix
-			root:                 r.root
-			status:               r.status
-			location:             r.location
-			body:                 r.body
+			match_method:                 r.match.method.clone()
+			match_path:                   r.match.path.clone()
+			match_path_regexp:            r.match.path_regexp
+			match_query:                  r.match.query.clone()
+			re:                           re
+			executor:                     r.executor
+			rewrite:                      r.rewrite
+			rewrite_strip_prefix:         r.rewrite_strip_prefix
+			root:                         r.root
+			cache_control:                r.cache_control
+			response_cache_ttl_ms:        r.response_cache_ttl_ms
+			cache_bypass_cookie_patterns: r.cache_bypass_cookie_patterns.clone()
+			cache_ignore_cookie_patterns: r.cache_ignore_cookie_patterns.clone()
+			response_headers:             r.response_headers.clone()
+			max_body_bytes:               r.max_body_bytes
+			required_headers:             r.required_headers.clone()
+			denied_query_patterns:        r.denied_query_patterns.clone()
+			upload_dir:                   r.upload_dir
+			on_completed:                 r.on_completed
+			status:                       r.status
+			location:                     r.location
+			body:                         r.body
 		}
 	}
 
 	// 2. 遍历 routes 中的所有附加 executor，如果有专属的进程池配置则实例化其 WorkerState
 	mut add_workers := map[string]&worker.WorkerState{}
 	for route in expanded_routes {
-		if route.executor != '' && route.executor != cfg.executor.kind
-			&& route.executor !in add_workers {
-			if spec := cfg.executors[route.executor] {
+		mut executor_names := []string{}
+		if route.executor != '' {
+			executor_names << route.executor
+		}
+		if route.on_completed.trim_space().starts_with('vjsx:') {
+			executor_names << 'vjsx'
+		}
+		for executor_name in executor_names {
+			if executor_name == '' || executor_name == cfg.executor.kind
+				|| executor_name in add_workers {
+				continue
+			}
+			if spec := cfg.executors[executor_name] {
 				mut sub_cfg := cfg
 				sub_cfg.worker = spec.worker
 				sub_cfg.php = spec.php
@@ -106,7 +127,7 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 					lifecycle:           sub_plan.lifecycle.name()
 					stream_dispatch:     sub_plan.bootstrap.stream_dispatch
 				}
-				add_workers[route.executor] = sub_ws
+				add_workers[executor_name] = sub_ws
 			}
 		}
 	}

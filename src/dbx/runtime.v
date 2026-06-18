@@ -5,10 +5,15 @@ $if enable_db ? {
 	import db.pg
 	import os
 }
+import encoding.base64
 import json
 import net.unix
 import provider
 import time
+
+$if enable_db ? {
+	fn C.mysql_fetch_lengths(res &C.MYSQL_RES) &u64
+}
 
 // ── Shared types (both enable_db and !enable_db) ──
 
@@ -19,6 +24,21 @@ pub:
 	parameters   bool
 	prepared     bool
 	savepoints   bool
+}
+
+pub struct QueryObservation {
+pub:
+	at_unix     i64 @[json: 'at_unix']
+	op          string
+	pool        string
+	session_id  string @[json: 'session_id']
+	trace_id    string @[json: 'trace_id']
+	request_id  string @[json: 'request_id']
+	duration_ms i64    @[json: 'duration_ms']
+	ok          bool
+	slow        bool
+	query       string @[json: 'sql']
+	error       string
 }
 
 pub struct Snapshot {
@@ -32,6 +52,7 @@ pub:
 	port                int
 	database            string
 	pool_size           int
+	idle_ping_ms        int @[json: 'idle_ping_ms']
 	pool_ready          bool
 	started             bool
 	started_at_unix     i64
@@ -39,6 +60,9 @@ pub:
 	total_queries       u64
 	total_executes      u64
 	failed_queries      u64
+	slow_queries        u64                @[json: 'slow_queries']
+	last_query_ms       i64                @[json: 'last_query_ms']
+	recent_queries      []QueryObservation @[json: 'recent_queries']
 	active_transactions int
 	ready               bool
 	capabilities        SnapshotCapabilities
@@ -57,7 +81,8 @@ pub mut:
 	password            string
 	database            string
 	pool_size           int
-	wordpress_compat    bool
+	idle_ping_ms        int
+	init_sql            []string
 	started             bool
 	started_at_unix     i64
 	last_error          string
@@ -66,6 +91,10 @@ pub mut:
 	total_queries       u64
 	total_executes      u64
 	failed_queries      u64
+	slow_queries        u64
+	last_query_ms       i64
+	slow_query_ms       int = 200 @[json: 'slow_query_ms']
+	recent_queries      []QueryObservation
 	active_transactions int
 	session_counter     u64
 	stop_requested      bool
@@ -95,14 +124,17 @@ pub fn (rt Runtime) driver_name() string {
 
 pub struct Request {
 pub:
-	mode       string
-	op         string
-	pool       string
-	version    int
-	timeout_ms int    @[json: 'timeout_ms']
-	session_id string @[json: 'session_id']
-	sql_text   string @[json: 'sql']
-	params     []string
+	mode          string
+	op            string
+	pool          string
+	version       int
+	timeout_ms    int    @[json: 'timeout_ms']
+	session_id    string @[json: 'session_id']
+	trace_id      string @[json: 'trace_id']
+	request_id    string @[json: 'request_id']
+	sql_text      string @[json: 'sql']
+	params        []string
+	params_base64 []string @[json: 'params_base64']
 }
 
 pub struct Response {
@@ -119,6 +151,81 @@ pub:
 	last_insert_id i64 @[json: 'last_insert_id']
 }
 
+const max_recent_queries = 50
+
+fn compact_sql(query string) string {
+	mut out := []u8{cap: query.len}
+	mut previous_space := false
+	for ch in query.bytes() {
+		is_space := ch in [` `, `\t`, `\r`, `\n`]
+		if is_space {
+			if previous_space {
+				continue
+			}
+			out << ` `
+			previous_space = true
+			continue
+		}
+		out << ch
+		previous_space = false
+	}
+	clean := out.bytestr().trim_space()
+	if clean.len <= 300 {
+		return clean
+	}
+	return clean[..300] + '...'
+}
+
+pub fn is_connection_lost_error(message string) bool {
+	clean := message.to_lower()
+	return clean.contains('lost connection to mysql server')
+		|| clean.contains('mysql server has gone away')
+		|| clean.contains('server closed the connection unexpectedly')
+		|| clean.contains('connection reset by peer') || clean.contains('broken pipe')
+		|| clean.contains('eof')
+}
+
+pub fn (mut rt Runtime) note_query_observation(op string, req Request, duration_ms i64, ok bool, message string) string {
+	if op == 'query' {
+		if ok {
+			rt.total_queries++
+		} else {
+			rt.failed_queries++
+		}
+	} else if op == 'execute' {
+		if ok {
+			rt.total_executes++
+		} else {
+			rt.failed_queries++
+		}
+	}
+	rt.last_query_ms = duration_ms
+	if !ok {
+		rt.last_error = message
+	}
+	slow := duration_ms >= i64(rt.slow_query_ms)
+	if slow {
+		rt.slow_queries++
+	}
+	rt.recent_queries << QueryObservation{
+		at_unix:     time.now().unix()
+		op:          op
+		pool:        req.pool
+		session_id:  req.session_id
+		trace_id:    req.trace_id
+		request_id:  req.request_id
+		duration_ms: duration_ms
+		ok:          ok
+		slow:        slow
+		query:       compact_sql(req.sql_text)
+		error:       message
+	}
+	if rt.recent_queries.len > max_recent_queries {
+		rt.recent_queries = rt.recent_queries[rt.recent_queries.len - max_recent_queries..].clone()
+	}
+	return rt.driver
+}
+
 pub fn Response.error(driver string, message string) Response {
 	return Response{
 		ok:     false
@@ -133,6 +240,17 @@ pub fn Response.pong(driver string) Response {
 		pong:   true
 		driver: driver
 	}
+}
+
+pub fn (req Request) decoded_params() []string {
+	if req.params_base64.len == 0 {
+		return req.params
+	}
+	mut params := []string{cap: req.params_base64.len}
+	for encoded in req.params_base64 {
+		params << base64.decode_str(encoded)
+	}
+	return params
 }
 
 pub fn Response.ok(driver string) Response {
@@ -261,20 +379,30 @@ $if enable_db ? {
 		has_last_insert_id bool
 	}
 
+	pub struct MySqlPooledConn {
+	pub mut:
+		conn         mysql.DB
+		last_used_ms i64
+	}
+
 	pub struct PoolHandle {
 	pub mut:
-		driver           string
-		wordpress_compat bool
-		mysql_pool       mysql.ConnectionPool
-		pg_pool          &pg.DB = unsafe { nil }
+		driver       string
+		init_sql     []string
+		mysql_pool   chan MySqlPooledConn
+		mysql_config mysql.Config
+		pool_size    int
+		idle_ping_ms int
+		pg_pool      &pg.DB = unsafe { nil }
 	}
 
 	pub struct SessionHandle {
 	pub mut:
-		driver           string
-		wordpress_compat bool
-		mysql_conn       mysql.DB
-		pg_conn          &pg.Conn = unsafe { nil }
+		driver             string
+		init_sql           []string
+		mysql_conn         mysql.DB
+		mysql_last_used_ms i64
+		pg_conn            &pg.Conn = unsafe { nil }
 	}
 }
 
@@ -342,6 +470,17 @@ $if enable_db ? {
 		}
 	}
 
+	fn mysql_connect_initialized(config mysql.Config, init_sql []string) !mysql.DB {
+		mut conn := mysql.connect(config)!
+		for statement in init_sql {
+			statement_sql := statement.trim_space()
+			if statement_sql != '' {
+				_ = conn.exec_none(statement_sql)
+			}
+		}
+		return conn
+	}
+
 	pub fn PoolHandle.open(settings provider.DbRuntimeSettings) !PoolHandle {
 		driver := DriverName.normalize(settings.driver)
 		host := if settings.host.trim_space() != '' { settings.host } else { '127.0.0.1' }
@@ -356,16 +495,27 @@ $if enable_db ? {
 		pool_size := if settings.pool_size > 0 { settings.pool_size } else { 5 }
 		return match driver {
 			'mysql' {
+				mysql_config := mysql.Config{
+					host:     host
+					port:     port
+					username: settings.username
+					password: settings.password
+					dbname:   database
+				}
+				mut mysql_pool := chan MySqlPooledConn{cap: pool_size}
+				for _ in 0 .. pool_size {
+					mysql_pool <- MySqlPooledConn{
+						conn:         mysql_connect_initialized(mysql_config, settings.init_sql)!
+						last_used_ms: time.now().unix_milli()
+					}
+				}
 				PoolHandle{
-					driver:           'mysql'
-					wordpress_compat: settings.wordpress_compat
-					mysql_pool:       mysql.new_connection_pool(mysql.Config{
-						host:     host
-						port:     port
-						username: settings.username
-						password: settings.password
-						dbname:   database
-					}, pool_size)!
+					driver:       'mysql'
+					init_sql:     settings.init_sql.clone()
+					mysql_pool:   mysql_pool
+					mysql_config: mysql_config
+					pool_size:    pool_size
+					idle_ping_ms: settings.idle_ping_ms
 				}
 			}
 			'pgsql', 'pg', 'postgres', 'postgresql' {
@@ -391,7 +541,10 @@ $if enable_db ? {
 	pub fn (mut pool PoolHandle) close() {
 		match pool.driver {
 			'mysql' {
-				pool.mysql_pool.close()
+				for _ in 0 .. pool.mysql_pool.len {
+					mut pooled := <-pool.mysql_pool or { break }
+					pooled.conn.close() or { break }
+				}
 			}
 			'pgsql' {
 				pool.pg_pool.close() or {}
@@ -403,14 +556,23 @@ $if enable_db ? {
 	pub fn (mut pool PoolHandle) acquire() !SessionHandle {
 		return match pool.driver {
 			'mysql' {
+				mut pooled := <-pool.mysql_pool or {
+					return error('Failed to acquire a connection from the pool')
+				}
+				if pool.idle_ping_ms > 0
+					&& time.now().unix_milli() - pooled.last_used_ms >= i64(pool.idle_ping_ms) {
+					pooled.conn.ping() or {
+						pooled.conn.close() or {}
+						pooled.conn = mysql_connect_initialized(pool.mysql_config, pool.init_sql)!
+					}
+				}
 				mut session := SessionHandle{
-					driver:           'mysql'
-					wordpress_compat: pool.wordpress_compat
-					mysql_conn:       pool.mysql_pool.acquire()!
+					driver:             'mysql'
+					init_sql:           pool.init_sql.clone()
+					mysql_conn:         pooled.conn
+					mysql_last_used_ms: pooled.last_used_ms
 				}
-				if pool.wordpress_compat {
-					session.apply_wordpress_mysql_compat()!
-				}
+				session.apply_init_sql()!
 				session
 			}
 			'pgsql' {
@@ -429,7 +591,10 @@ $if enable_db ? {
 		match pool.driver {
 			'mysql' {
 				if session.driver == 'mysql' {
-					pool.mysql_pool.release(session.mysql_conn)
+					pool.mysql_pool <- MySqlPooledConn{
+						conn:         session.mysql_conn
+						last_used_ms: time.now().unix_milli()
+					}
 				}
 			}
 			'pgsql' {
@@ -517,9 +682,7 @@ $if enable_db ? {
 		match session.driver {
 			'mysql' {
 				session.mysql_conn.autocommit(true)!
-				if session.wordpress_compat {
-					session.apply_wordpress_mysql_compat()!
-				}
+				session.apply_init_sql()!
 			}
 			'pgsql' {
 				// PostgreSQL connections can be returned to the pool after commit/rollback directly.
@@ -530,11 +693,16 @@ $if enable_db ? {
 		}
 	}
 
-	pub fn (mut session SessionHandle) apply_wordpress_mysql_compat() ! {
+	pub fn (mut session SessionHandle) apply_init_sql() ! {
 		if session.driver != 'mysql' {
 			return
 		}
-		_ = session.mysql_conn.exec_none("SET SESSION sql_mode = TRIM(BOTH ',' FROM REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(CONCAT(',', @@SESSION.sql_mode, ','), ',NO_ZERO_DATE,', ','), ',ONLY_FULL_GROUP_BY,', ','), ',STRICT_TRANS_TABLES,', ','), ',STRICT_ALL_TABLES,', ','), ',TRADITIONAL,', ','), ',ANSI,', ','))")
+		for statement in session.init_sql {
+			statement_sql := statement.trim_space()
+			if statement_sql != '' {
+				_ = session.mysql_conn.exec_none(statement_sql)
+			}
+		}
 	}
 
 	pub fn (mut session SessionHandle) escape(value string) !string {
@@ -559,6 +727,31 @@ $if enable_db ? {
 			columns << unsafe { cstring_to_vstring(field_defs[i].name) }
 		}
 		return columns
+	}
+
+	fn mysql_result_maps(result mysql.Result) []map[string]string {
+		columns := mysql_field_names_from_result(result)
+		mut rows := []map[string]string{}
+		field_count := result.n_fields()
+		for {
+			row := C.mysql_fetch_row(result.result)
+			if row == unsafe { nil } {
+				break
+			}
+			lengths := C.mysql_fetch_lengths(result.result)
+			mut item := map[string]string{}
+			for i in 0 .. field_count {
+				key := if i < columns.len && columns[i] != '' { columns[i] } else { '${i}' }
+				if unsafe { row[i] == 0 } {
+					item[key] = ''
+					continue
+				}
+				length := if lengths == unsafe { nil } { 0 } else { int(unsafe { lengths[i] }) }
+				item[key] = unsafe { (&u8(row[i])).vstring_with_len(length).clone() }
+			}
+			rows << item
+		}
+		return rows
 	}
 
 	fn mysql_stmt_query_columns(mut conn mysql.DB, query string) ![]string {
@@ -616,9 +809,9 @@ $if enable_db ? {
 		return match session.driver {
 			'mysql' {
 				if params.len == 0 {
-					mut result := session.mysql_conn.query(query)!
-					rows := result.maps()
+					mut result := session.mysql_conn.real_query(query)!
 					columns := mysql_field_names_from_result(result)
+					rows := mysql_result_maps(result)
 					unsafe {
 						result.free()
 					}
@@ -667,7 +860,10 @@ $if enable_db ? {
 		return match session.driver {
 			'mysql' {
 				if params.len == 0 {
-					_ = session.mysql_conn.exec_none(query)
+					mut result := session.mysql_conn.real_query(query)!
+					unsafe {
+						result.free()
+					}
 				} else {
 					mut stmt := session.mysql_conn.init_stmt(query)
 					defer {
@@ -711,23 +907,24 @@ $if enable_db ? {
 
 	pub fn Runtime.from_settings(settings provider.DbRuntimeSettings) Runtime {
 		return Runtime{
-			enabled:     settings.enabled
-			socket:      settings.socket
-			driver:      settings.driver
-			pool_name:   if settings.pool_name.trim_space() != '' {
+			enabled:      settings.enabled
+			socket:       settings.socket
+			driver:       settings.driver
+			pool_name:    if settings.pool_name.trim_space() != '' {
 				settings.pool_name
 			} else {
 				'default'
 			}
-			host:        settings.host
-			port:        settings.port
-			username:    settings.username
-			password:    settings.password
-			database:    settings.database
-			pool_size:   settings.pool_size
-			wordpress_compat: settings.wordpress_compat
-			started:     false
-			tx_sessions: map[string]SessionHandle{}
+			host:         settings.host
+			port:         settings.port
+			username:     settings.username
+			password:     settings.password
+			database:     settings.database
+			pool_size:    settings.pool_size
+			idle_ping_ms: settings.idle_ping_ms
+			init_sql:     settings.init_sql.clone()
+			started:      false
+			tx_sessions:  map[string]SessionHandle{}
 		}
 	}
 
@@ -743,6 +940,7 @@ $if enable_db ? {
 			port:                rt.port
 			database:            rt.database
 			pool_size:           rt.pool_size
+			idle_ping_ms:        rt.idle_ping_ms
 			pool_ready:          rt.pool_ready
 			started:             rt.started
 			started_at_unix:     rt.started_at_unix
@@ -750,6 +948,9 @@ $if enable_db ? {
 			total_queries:       rt.total_queries
 			total_executes:      rt.total_executes
 			failed_queries:      rt.failed_queries
+			slow_queries:        rt.slow_queries
+			last_query_ms:       rt.last_query_ms
+			recent_queries:      rt.recent_queries.clone()
 			active_transactions: rt.active_transactions
 			ready:               ready
 			capabilities:        SnapshotCapabilities{
@@ -765,32 +966,34 @@ $if enable_db ? {
 
 	pub fn (rt Runtime) settings() provider.DbRuntimeSettings {
 		return provider.DbRuntimeSettings{
-			enabled:   rt.enabled
-			socket:    rt.socket
-			driver:    rt.driver
-			pool_name: rt.normalized_pool_name()
-			host:      rt.host
-			port:      rt.port
-			username:  rt.username
-			password:  rt.password
-			database:  rt.database
-			pool_size: rt.pool_size
-			wordpress_compat: rt.wordpress_compat
+			enabled:      rt.enabled
+			socket:       rt.socket
+			driver:       rt.driver
+			pool_name:    rt.normalized_pool_name()
+			host:         rt.host
+			port:         rt.port
+			username:     rt.username
+			password:     rt.password
+			database:     rt.database
+			pool_size:    rt.pool_size
+			idle_ping_ms: rt.idle_ping_ms
+			init_sql:     rt.init_sql.clone()
 		}
 	}
 
 	pub fn (rt Runtime) single_connection_settings() provider.DbRuntimeSettings {
 		settings := rt.settings()
 		return provider.DbRuntimeSettings{
-			driver:    settings.driver
-			pool_name: settings.pool_name
-			host:      settings.host
-			port:      settings.port
-			username:  settings.username
-			password:  settings.password
-			database:  settings.database
-			pool_size: 1
-			wordpress_compat: settings.wordpress_compat
+			driver:       settings.driver
+			pool_name:    settings.pool_name
+			host:         settings.host
+			port:         settings.port
+			username:     settings.username
+			password:     settings.password
+			database:     settings.database
+			pool_size:    1
+			idle_ping_ms: settings.idle_ping_ms
+			init_sql:     settings.init_sql.clone()
 		}
 	}
 
@@ -1000,23 +1203,24 @@ $if !enable_db ? {
 
 	pub fn Runtime.from_settings(settings provider.DbRuntimeSettings) Runtime {
 		return Runtime{
-			enabled:    settings.enabled
-			socket:     settings.socket
-			driver:     settings.driver
-			pool_name:  if settings.pool_name.trim_space() != '' {
+			enabled:      settings.enabled
+			socket:       settings.socket
+			driver:       settings.driver
+			pool_name:    if settings.pool_name.trim_space() != '' {
 				settings.pool_name
 			} else {
 				'default'
 			}
-			host:       settings.host
-			port:       settings.port
-			username:   settings.username
-			password:   settings.password
-			database:   settings.database
-			pool_size:  settings.pool_size
-			wordpress_compat: settings.wordpress_compat
-			last_error: if settings.enabled { 'db_not_compiled' } else { '' }
-			started:    false
+			host:         settings.host
+			port:         settings.port
+			username:     settings.username
+			password:     settings.password
+			database:     settings.database
+			pool_size:    settings.pool_size
+			idle_ping_ms: settings.idle_ping_ms
+			init_sql:     settings.init_sql.clone()
+			last_error:   if settings.enabled { 'db_not_compiled' } else { '' }
+			started:      false
 		}
 	}
 
@@ -1031,6 +1235,7 @@ $if !enable_db ? {
 			port:                rt.port
 			database:            rt.database
 			pool_size:           rt.pool_size
+			idle_ping_ms:        rt.idle_ping_ms
 			pool_ready:          rt.pool_ready
 			started:             rt.started
 			started_at_unix:     rt.started_at_unix
@@ -1038,6 +1243,9 @@ $if !enable_db ? {
 			total_queries:       rt.total_queries
 			total_executes:      rt.total_executes
 			failed_queries:      rt.failed_queries
+			slow_queries:        rt.slow_queries
+			last_query_ms:       rt.last_query_ms
+			recent_queries:      rt.recent_queries.clone()
 			active_transactions: rt.active_transactions
 			ready:               ready
 			capabilities:        SnapshotCapabilities{}

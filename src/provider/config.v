@@ -31,17 +31,18 @@ pub:
 
 pub struct DbRuntimeSettings {
 pub:
-	enabled   bool
-	socket    string
-	driver    string
-	pool_name string
-	host      string
-	port      int
-	username  string
-	password  string
-	database  string
-	pool_size int
-	wordpress_compat bool
+	enabled      bool
+	socket       string
+	driver       string
+	pool_name    string
+	host         string
+	port         int
+	username     string
+	password     string
+	database     string
+	pool_size    int
+	idle_ping_ms int
+	init_sql     []string
 }
 
 pub struct BridgeRuntimeSettings {
@@ -175,28 +176,33 @@ pub fn ProviderRuntimeSettings.resolve(args []string, cfg config.VhttpdConfig) P
 			target_id: cfg.feishu.bridge.target_id
 		}
 		db:             DbRuntimeSettings{
-			enabled:   cfg.db.enabled
-			socket:    if cfg.db.socket.trim_space() != '' {
+			enabled:      cfg.db.enabled
+			socket:       if cfg.db.socket.trim_space() != '' {
 				cfg.db.socket
 			} else {
 				'tmp/vhttpd-db.sock'
 			}
-			driver:    db_driver
-			pool_name: if cfg.db.pool_name.trim_space() != '' {
+			driver:       db_driver
+			pool_name:    if cfg.db.pool_name.trim_space() != '' {
 				cfg.db.pool_name
 			} else {
 				'default'
 			}
-			host:      db_host
-			port:      db_port
-			username:  db_username
-			password:  db_password
-			database:  db_database
-			pool_size: db_pool_size
-			wordpress_compat: if db_driver in ['pgsql', 'pg', 'postgres', 'postgresql'] {
-				false
+			host:         db_host
+			port:         db_port
+			username:     db_username
+			password:     db_password
+			database:     db_database
+			pool_size:    db_pool_size
+			idle_ping_ms: if db_driver in ['pgsql', 'pg', 'postgres', 'postgresql'] {
+				0
 			} else {
-				cfg.db.mysql.wordpress_compat
+				cfg.db.mysql.idle_ping_ms
+			}
+			init_sql:     if db_driver in ['pgsql', 'pg', 'postgres', 'postgresql'] {
+				[]string{}
+			} else {
+				cfg.db.mysql.init_sql.clone()
 			}
 		}
 		ollama_enabled: config.CliArgs.bool_or(args, '--ollama-enabled', false)

@@ -20,6 +20,7 @@ pub:
 	content_type string @[json: 'content_type']
 	headers      map[string]string
 	data         string
+	data_base64  string @[json: 'data_base64']
 	sse_id       string @[json: 'sse_id']
 	sse_event    string @[json: 'sse_event']
 	sse_retry    int    @[json: 'sse_retry']

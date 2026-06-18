@@ -450,6 +450,12 @@ pub fn (base DbMysqlConfig) merge(override DbMysqlConfig) DbMysqlConfig {
 	if override.pool_size != defaults.pool_size {
 		cfg.pool_size = override.pool_size
 	}
+	if override.idle_ping_ms != defaults.idle_ping_ms {
+		cfg.idle_ping_ms = override.idle_ping_ms
+	}
+	if override.init_sql != defaults.init_sql {
+		cfg.init_sql = override.init_sql.clone()
+	}
 	return cfg
 }
 

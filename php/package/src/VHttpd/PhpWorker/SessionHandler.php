@@ -14,7 +14,7 @@ use VHttpd\Cache\Client;
 final class SessionHandler implements SessionHandlerInterface
 {
     public function __construct(
-        private readonly Client $client,
+        private readonly Client|object $client,
         private readonly string $prefix = 'php_session:',
         private readonly int $ttlSeconds = 1440, // default PHP session gc lifetime (24 mins)
     ) {}

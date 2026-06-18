@@ -131,10 +131,22 @@ pub fn FastCgiCodec.encode_request(method string, path string, original_path str
 	envs['SCRIPT_NAME'] = resolved_uri
 	envs['QUERY_STRING'] = query_str
 	envs['REMOTE_ADDR'] = if remote_addr != '' { remote_addr } else { '127.0.0.1' }
+	scheme := req.header.get(.x_forwarded_proto) or { 'http' }
+	host_value := if req.host.trim_space() != '' { req.host } else { 'localhost' }
+	host_name := host_value.all_before(':')
+	host_port := if host_value.contains(':') {
+		host_value.all_after_last(':')
+	} else if scheme == 'https' {
+		'443'
+	} else {
+		'80'
+	}
+	envs['HTTP_HOST'] = host_value
+	envs['SERVER_NAME'] = if host_name != '' { host_name } else { 'localhost' }
+	envs['SERVER_PORT'] = host_port
 	envs['SERVER_SOFTWARE'] = 'vhttpd'
 	envs['GATEWAY_INTERFACE'] = 'CGI/1.1'
 	envs['SERVER_PROTOCOL'] = 'HTTP/1.1'
-	scheme := req.header.get(.x_forwarded_proto) or { 'http' }
 	envs['REQUEST_SCHEME'] = scheme
 	envs['HTTPS'] = if scheme == 'https' { 'on' } else { 'off' }
 
@@ -144,6 +156,10 @@ pub fn FastCgiCodec.encode_request(method string, path string, original_path str
 		key := 'HTTP_' + header_key.to_upper().replace('-', '_')
 		envs[key] = header_val
 	}
+	envs['VHTTPD_TRACE_ID'] = trace_id
+	envs['VHTTPD_REQUEST_ID'] = request_id
+	envs['HTTP_X_VHTTPD_TRACE_ID'] = trace_id
+	envs['HTTP_X_REQUEST_ID'] = request_id
 	// 特殊处理 Content-Type 和 Content-Length，CGI 规范里这两个不带 HTTP_ 前缀
 	if ct := req.header.get(.content_type) {
 		envs['CONTENT_TYPE'] = ct

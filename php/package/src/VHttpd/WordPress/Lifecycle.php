@@ -200,6 +200,7 @@ final class Lifecycle
     public function resetRequestRuntime(): void
     {
         global $wp_styles, $wp_scripts, $wp_script_modules, $current_user, $wp_admin_bar;
+        global $user_ID, $user_level, $userdata, $user_login, $user_email, $user_url, $user_identity;
 
         if ($wp_styles instanceof \WP_Styles) {
             $this->resetDependencyRuntime($wp_styles);
@@ -217,6 +218,13 @@ final class Lifecycle
         }
 
         $current_user = null;
+        $user_ID = 0;
+        $user_level = 0;
+        $userdata = null;
+        $user_login = '';
+        $user_email = '';
+        $user_url = '';
+        $user_identity = '';
         $wp_admin_bar = null;
         unset($GLOBALS['show_admin_bar']);
         $GLOBALS['vhttpd_wp_admin_bar_rendered'] = false;
@@ -232,6 +240,10 @@ final class Lifecycle
             if (false === has_action('wp_footer', [self::class, 'renderAdminBar'])) {
                 add_action('wp_footer', [self::class, 'renderAdminBar'], 1000);
             }
+        }
+
+        if (function_exists('wp_cache_clear_local')) {
+            wp_cache_clear_local();
         }
     }
 

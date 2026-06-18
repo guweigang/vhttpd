@@ -137,6 +137,10 @@ final class Server
             }
 
             $result = ($this->app)($payload, $payload);
+            if ($result instanceof StreamResponse) {
+                self::writeStreamResponse($conn, $payload, $result);
+                return;
+            }
             self::writeFrame($conn, json_encode(self::normalizeResponse($payload, $result), JSON_THROW_ON_ERROR));
         } catch (Throwable $e) {
             if (str_contains($e->getMessage(), 'unexpected EOF')) {
@@ -201,9 +205,6 @@ final class Server
 
     private static function normalizeResponse(array $request, mixed $result): array
     {
-        if ($result instanceof StreamResponse) {
-            return self::normalizeStreamResponse($request, $result);
-        }
         if ($result instanceof Response) {
             $payload = $result->toArray();
             if ((string) ($payload['id'] ?? '') === '') {
@@ -232,23 +233,76 @@ final class Server
         ];
     }
 
-    private static function normalizeStreamResponse(array $request, StreamResponse $response): array
+    /**
+     * @param \Socket $conn
+     * @param array<string,mixed> $request
+     */
+    private static function writeStreamResponse($conn, array $request, StreamResponse $response): void
     {
-        $body = '';
-        foreach ($response->chunks as $chunk) {
-            $body .= (string) $chunk;
-        }
         $headers = self::normalizeHeaders($response->headers);
         if (!isset($headers['content-type'])) {
             $headers['content-type'] = $response->contentType;
         }
 
-        return [
+        self::writeJsonFrame($conn, [
             'id' => (string) ($request['id'] ?? ''),
+            'mode' => 'stream',
+            'event' => 'start',
             'status' => $response->status,
+            'stream_type' => $response->streamType,
+            'content_type' => $response->contentType,
             'headers' => $headers,
-            'body' => $body,
+        ]);
+
+        foreach ($response->chunks as $chunk) {
+            self::writeJsonFrame($conn, self::streamChunkFrame($request, $response, $chunk));
+        }
+
+        self::writeJsonFrame($conn, [
+            'id' => (string) ($request['id'] ?? ''),
+            'mode' => 'stream',
+            'event' => 'end',
+            'stream_type' => $response->streamType,
+        ]);
+    }
+
+    /**
+     * @param array<string,mixed> $request
+     * @return array<string,mixed>
+     */
+    private static function streamChunkFrame(array $request, StreamResponse $response, mixed $chunk): array
+    {
+        $frame = [
+            'id' => (string) ($request['id'] ?? ''),
+            'mode' => 'stream',
+            'event' => 'chunk',
+            'stream_type' => $response->streamType,
         ];
+
+        if ($response->streamType === 'sse') {
+            if (is_array($chunk)) {
+                $frame['data'] = (string) ($chunk['data'] ?? '');
+                $frame['sse_id'] = (string) ($chunk['id'] ?? $chunk['sse_id'] ?? '');
+                $frame['sse_event'] = (string) ($chunk['event'] ?? $chunk['sse_event'] ?? '');
+                $retry = $chunk['retry'] ?? $chunk['sse_retry'] ?? 0;
+                $frame['sse_retry'] = is_numeric($retry) ? (int) $retry : 0;
+                return $frame;
+            }
+            $frame['data'] = (string) $chunk;
+            return $frame;
+        }
+
+        $frame['data_base64'] = base64_encode((string) $chunk);
+        return $frame;
+    }
+
+    /**
+     * @param \Socket $conn
+     * @param array<string,mixed> $payload
+     */
+    private static function writeJsonFrame($conn, array $payload): void
+    {
+        self::writeFrame($conn, json_encode($payload, JSON_THROW_ON_ERROR));
     }
 
     private static function normalizeHeaders(mixed $headers): array

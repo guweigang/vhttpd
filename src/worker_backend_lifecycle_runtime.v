@@ -38,7 +38,13 @@ fn (mut app App) ensure_worker_slot_for_state(mut ws worker.WorkerState, idx int
 		ws.worker_backend.restart_backoff_ms,
 		ws.worker_backend.restart_backoff_max_ms)
 	mut proc := os.new_process('/bin/sh')
-	proc.set_args(['-lc', w.worker_cmd])
+	cmd_str := if w.worker_cmd.starts_with('exec ') { w.worker_cmd } else { 'exec ' + w.worker_cmd }
+	redirect_cmd := if w.worker_cmd.contains('vphp-worker') {
+		'${cmd_str} >> /tmp/vhttpd_php_worker_${w.id}.log 2>&1'
+	} else {
+		cmd_str
+	}
+	proc.set_args(['-lc', redirect_cmd])
 	proc.set_environment(w.worker_env)
 	proc.set_work_folder(ws.worker_backend.workdir)
 	proc.use_pgroup = true
@@ -108,7 +114,13 @@ fn (mut app App) restart_worker_slot_now_for_state(mut ws worker.WorkerState, id
 		ws.worker_backend.restart_backoff_ms,
 		ws.worker_backend.restart_backoff_max_ms)
 	mut proc := os.new_process('/bin/sh')
-	proc.set_args(['-lc', w.worker_cmd])
+	cmd_str := if w.worker_cmd.starts_with('exec ') { w.worker_cmd } else { 'exec ' + w.worker_cmd }
+	redirect_cmd := if w.worker_cmd.contains('vphp-worker') {
+		'${cmd_str} >> /tmp/vhttpd_php_worker_${w.id}.log 2>&1'
+	} else {
+		cmd_str
+	}
+	proc.set_args(['-lc', redirect_cmd])
 	proc.set_environment(w.worker_env)
 	proc.set_work_folder(ws.worker_backend.workdir)
 	proc.use_pgroup = true

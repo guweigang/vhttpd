@@ -113,6 +113,7 @@ final class Client
      */
     public function call(string $op, string $sql = '', array $params = [], string $sessionId = '', int $timeoutMs = 1000): array
     {
+        $stringParams = array_map(static fn (mixed $value): string => (string) $value, array_values($params));
         $request = [
             'version' => 1,
             'mode' => 'db',
@@ -120,8 +121,11 @@ final class Client
             'pool' => $this->pool,
             'timeout_ms' => $timeoutMs,
             'session_id' => $sessionId,
+            'trace_id' => self::runtimeValue('VHTTPD_TRACE_ID', 'HTTP_X_VHTTPD_TRACE_ID'),
+            'request_id' => self::runtimeValue('VHTTPD_REQUEST_ID', 'HTTP_X_REQUEST_ID'),
             'sql' => $sql,
-            'params' => array_map(static fn (mixed $value): string => (string) $value, array_values($params)),
+            'params' => array_map(static fn (string $value): string => self::jsonSafeParam($value), $stringParams),
+            'params_base64' => array_map(static fn (string $value): string => base64_encode($value), $stringParams),
         ];
 
         $response = $this->client->request($request);
@@ -134,5 +138,20 @@ final class Client
             ? (string) ($error['message'] ?? 'db gateway call failed')
             : (string) $error;
         throw new RuntimeException($message === '' ? 'db gateway call failed' : $message);
+    }
+
+    private static function runtimeValue(string $envName, string $serverName): string
+    {
+        $serverValue = $_SERVER[$serverName] ?? $_SERVER[$envName] ?? '';
+        if (is_string($serverValue) && $serverValue !== '') {
+            return $serverValue;
+        }
+        $envValue = getenv($envName);
+        return is_string($envValue) ? $envValue : '';
+    }
+
+    private static function jsonSafeParam(string $value): string
+    {
+        return preg_match('//u', $value) === 1 ? $value : '';
     }
 }

@@ -120,7 +120,12 @@ pub fn WorkerHttpRequestCodec.header_map_from_request(req http.Request) map[stri
 		if values.len == 0 {
 			continue
 		}
-		out[key.to_lower()] = values.join(', ')
+		lower_key := key.to_lower()
+		if lower_key == 'cookie' {
+			out[lower_key] = values.join('; ')
+		} else {
+			out[lower_key] = values.join(', ')
+		}
 	}
 	return out
 }
@@ -172,6 +177,7 @@ pub fn WorkerHttpRequestCodec.encode_request(method string, path string, req htt
 	if headers['x-request-id'] == '' {
 		headers['x-request-id'] = req_id
 	}
+	headers['x-vhttpd-trace-id'] = trace_id
 	cookies := WorkerHttpRequestCodec.cookie_map_from_request(req)
 	server := WorkerHttpRequestCodec.server_map_from_request(req, remote_addr)
 	host := server['host'] or { req.host }

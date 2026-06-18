@@ -36,6 +36,25 @@ $if enable_db ? {
 		}
 	}
 
+	fn (mut app App) db_runtime_release_failed_conn(mut conn dbx.SessionHandle, session_id string, message string) {
+		if !dbx.is_connection_lost_error(message) {
+			app.db_runtime_release_conn(conn, session_id)
+			return
+		}
+		if session_id != '' {
+			app.mu.@lock()
+			pool_ready, _ := app.transport.db.detach_transaction(session_id)
+			app.mu.unlock()
+			if pool_ready {
+				app.db_runtime_discard_conn(mut conn)
+			} else {
+				conn.close() or {}
+			}
+			return
+		}
+		app.db_runtime_discard_conn(mut conn)
+	}
+
 	fn (mut app App) db_runtime_acquire_conn(session_id string) !dbx.SessionHandle {
 		app.db_runtime_ensure_pool()!
 		if session_id != '' {

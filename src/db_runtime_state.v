@@ -51,6 +51,13 @@ $if enable_db ? {
 		return driver
 	}
 
+	fn (mut app App) db_runtime_note_query_observation(op string, req dbx.Request, duration_ms i64, ok bool, message string) string {
+		app.mu.@lock()
+		driver := app.transport.db.note_query_observation(op, req, duration_ms, ok, message)
+		app.mu.unlock()
+		return driver
+	}
+
 	fn (mut app App) db_runtime_next_session_id() string {
 		app.mu.@lock()
 		session_id := app.transport.db.next_session_id()

@@ -214,3 +214,14 @@ if (!function_exists('wp_cache_reset')) {
         $wp_object_cache->reset();
     }
 }
+
+if (!function_exists('wp_cache_clear_local')) {
+    function wp_cache_clear_local(): void
+    {
+        global $wp_object_cache;
+        if (is_object($wp_object_cache) && method_exists($wp_object_cache, 'clearLocalCache')) {
+            $wp_object_cache->clearLocalCache();
+        }
+    }
+}
+

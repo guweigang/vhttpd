@@ -3,6 +3,10 @@ module main
 import dbx
 
 $if enable_db ? {
+	import time
+}
+
+$if enable_db ? {
 	fn (mut app App) db_runtime_dispatch(req dbx.Request) dbx.Response {
 		driver := app.db_runtime_driver()
 		if req.mode != 'db' {
@@ -23,13 +27,27 @@ $if enable_db ? {
 					app.db_runtime_note_error(err.msg())
 					return dbx.Response.error(driver, err.msg())
 				}
-				defer {
-					app.db_runtime_release_conn(conn, '')
-				}
 				conn.ping() or {
-					app.db_runtime_note_error(err.msg())
-					return dbx.Response.error(driver, err.msg())
+					err_msg := err.msg()
+					if dbx.is_connection_lost_error(err_msg) {
+						app.db_runtime_discard_conn(mut conn)
+						mut retry_conn := app.db_runtime_acquire_conn('') or {
+							app.db_runtime_note_error(err.msg())
+							return dbx.Response.error(driver, err.msg())
+						}
+						retry_conn.ping() or {
+							retry_err := err.msg()
+							app.db_runtime_release_failed_conn(mut retry_conn, '', retry_err)
+							app.db_runtime_note_error(retry_err)
+							return dbx.Response.error(driver, retry_err)
+						}
+						app.db_runtime_release_conn(retry_conn, '')
+						return dbx.Response.pong(driver)
+					}
+					app.db_runtime_note_error(err_msg)
+					return dbx.Response.error(driver, err_msg)
 				}
+				app.db_runtime_release_conn(conn, '')
 				dbx.Response.pong(driver)
 			}
 			'begin_transaction' {
@@ -88,45 +106,91 @@ $if enable_db ? {
 				}
 			}
 			'query' {
+				start_ms := time.now().unix_milli()
+				params := req.decoded_params()
 				mut conn := app.db_runtime_acquire_conn(req.session_id) or {
-					app.db_runtime_note_error(err.msg())
+					app.db_runtime_note_query_observation('query', req,
+						time.now().unix_milli() - start_ms, false, err.msg())
 					return dbx.Response.error(driver, err.msg())
 				}
-				query_result := conn.query(req.sql_text, req.params) or {
-					app.db_runtime_release_conn(conn, req.session_id)
-					app.db_runtime_note_error(err.msg())
-					return dbx.Response.error(driver, err.msg())
+				query_result := conn.query(req.sql_text, params) or {
+					err_msg := err.msg()
+					app.db_runtime_release_failed_conn(mut conn, req.session_id, err_msg)
+					if req.session_id.trim_space() == '' && dbx.is_connection_lost_error(err_msg) {
+						mut retry_conn := app.db_runtime_acquire_conn('') or {
+							app.db_runtime_note_query_observation('query', req,
+								time.now().unix_milli() - start_ms, false, err.msg())
+							return dbx.Response.error(driver, err.msg())
+						}
+						retry_result := retry_conn.query(req.sql_text, params) or {
+							retry_err := err.msg()
+							app.db_runtime_release_failed_conn(mut retry_conn, '', retry_err)
+							app.db_runtime_note_query_observation('query', req,
+								time.now().unix_milli() - start_ms, false, retry_err)
+							return dbx.Response.error(driver, retry_err)
+						}
+						app.db_runtime_release_conn(retry_conn, '')
+						driver_name := app.db_runtime_note_query_observation('query', req,
+							time.now().unix_milli() - start_ms, true, '')
+						return dbx.Response.query_result(driver_name, retry_result, req.session_id)
+					}
+					app.db_runtime_note_query_observation('query', req,
+						time.now().unix_milli() - start_ms, false, err_msg)
+					return dbx.Response.error(driver, err_msg)
 				}
 				app.db_runtime_release_conn(conn, req.session_id)
-				driver_name := app.db_runtime_note_query_success()
+				driver_name := app.db_runtime_note_query_observation('query', req,
+					time.now().unix_milli() - start_ms, true, '')
 				dbx.Response.query_result(driver_name, query_result, req.session_id)
 			}
 			'escape' {
+				params := req.decoded_params()
 				mut conn := app.db_runtime_acquire_conn(req.session_id) or {
 					app.db_runtime_note_error(err.msg())
 					return dbx.Response.error(driver, err.msg())
 				}
-				value := if req.params.len > 0 { req.params[0] } else { req.sql_text }
+				value := if params.len > 0 { params[0] } else { req.sql_text }
 				escaped := conn.escape(value) or {
-					app.db_runtime_release_conn(conn, req.session_id)
-					app.db_runtime_note_error(err.msg())
-					return dbx.Response.error(driver, err.msg())
+					err_msg := err.msg()
+					app.db_runtime_release_failed_conn(mut conn, req.session_id, err_msg)
+					if req.session_id.trim_space() == '' && dbx.is_connection_lost_error(err_msg) {
+						mut retry_conn := app.db_runtime_acquire_conn('') or {
+							app.db_runtime_note_error(err.msg())
+							return dbx.Response.error(driver, err.msg())
+						}
+						retry_escaped := retry_conn.escape(value) or {
+							retry_err := err.msg()
+							app.db_runtime_release_failed_conn(mut retry_conn, '', retry_err)
+							app.db_runtime_note_error(retry_err)
+							return dbx.Response.error(driver, retry_err)
+						}
+						app.db_runtime_release_conn(retry_conn, '')
+						return dbx.Response.escaped(driver, retry_escaped, req.session_id)
+					}
+					app.db_runtime_note_error(err_msg)
+					return dbx.Response.error(driver, err_msg)
 				}
 				app.db_runtime_release_conn(conn, req.session_id)
 				dbx.Response.escaped(driver, escaped, req.session_id)
 			}
 			'execute' {
+				start_ms := time.now().unix_milli()
+				params := req.decoded_params()
 				mut conn := app.db_runtime_acquire_conn(req.session_id) or {
-					app.db_runtime_note_error(err.msg())
+					app.db_runtime_note_query_observation('execute', req,
+						time.now().unix_milli() - start_ms, false, err.msg())
 					return dbx.Response.error(driver, err.msg())
 				}
-				exec_result := conn.execute(req.sql_text, req.params) or {
-					app.db_runtime_release_conn(conn, req.session_id)
-					app.db_runtime_note_error(err.msg())
-					return dbx.Response.error(driver, err.msg())
+				exec_result := conn.execute(req.sql_text, params) or {
+					err_msg := err.msg()
+					app.db_runtime_release_failed_conn(mut conn, req.session_id, err_msg)
+					app.db_runtime_note_query_observation('execute', req,
+						time.now().unix_milli() - start_ms, false, err_msg)
+					return dbx.Response.error(driver, err_msg)
 				}
 				app.db_runtime_release_conn(conn, req.session_id)
-				driver_name := app.db_runtime_note_execute_success()
+				driver_name := app.db_runtime_note_query_observation('execute', req,
+					time.now().unix_milli() - start_ms, true, '')
 				dbx.Response.exec_result(driver_name, exec_result, req.session_id)
 			}
 			else {

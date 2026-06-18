@@ -262,6 +262,13 @@ final class ObjectCache
         }
     }
 
+    public function clearLocalCache(): void
+    {
+        $this->cache = [];
+        $this->cache_hits = 0;
+        $this->cache_misses = 0;
+    }
+
     private function changeNumeric($key, int $offset, string $group): int|false
     {
         $found = false;
@@ -286,10 +293,12 @@ final class ObjectCache
     }
 
     /** @return array{0:string,1:string} */
-    private function normalizeKey(int|string $key, string $group): array
+    private function normalizeKey(int|string $key, $group): array
     {
-        $group = $this->normalizeGroup($group);
         $id = (string) $key;
+        $group = (string) $group;
+
+        $group = $this->normalizeGroup($group);
         if ($this->multisite && !isset($this->globalGroups[$group])) {
             $id = $this->blogPrefix . $id;
         }
@@ -300,7 +309,7 @@ final class ObjectCache
     private function normalizeGroup(string $group): string
     {
         $group = trim($group);
-        return $group === '' ? 'default' : $group;
+        return $group === '' || is_numeric($group) ? 'default' : $group;
     }
 
     private function existsLocal(string $id, string $group): bool

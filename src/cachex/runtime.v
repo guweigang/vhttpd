@@ -91,6 +91,44 @@ pub fn (mut rt Runtime) snapshot_json(ready bool) string {
 	})
 }
 
+pub fn (mut rt Runtime) get_value(namespace string, key string) ?string {
+	if !rt.enabled {
+		return none
+	}
+	cache_key := full_key(namespace, key)
+	rt.mu.@lock()
+	defer {
+		rt.mu.unlock()
+	}
+	return rt.store.get(cache_key) or { none }
+}
+
+pub fn (mut rt Runtime) set_value(namespace string, key string, value string, ttl_ms i64) bool {
+	if !rt.enabled {
+		return false
+	}
+	cache_key := full_key(namespace, key)
+	rt.mu.@lock()
+	defer {
+		rt.mu.unlock()
+	}
+	if ttl_ms > 0 {
+		rt.store.set_with_ttl(cache_key, value, ttl_ms * time.millisecond) or {
+			rt.failed_ops++
+			rt.last_error = err.msg()
+			return false
+		}
+	} else {
+		rt.store.set(cache_key, value) or {
+			rt.failed_ops++
+			rt.last_error = err.msg()
+			return false
+		}
+	}
+	rt.total_ops++
+	return true
+}
+
 pub fn Response.ok() Response {
 	return Response{
 		ok: true

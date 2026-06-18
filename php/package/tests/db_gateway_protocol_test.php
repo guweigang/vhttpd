@@ -9,6 +9,7 @@ require_once __DIR__ . '/../src/VHttpd/DbGateway/PDOStatement.php';
 require_once __DIR__ . '/../src/VHttpd/DbGateway/PDO.php';
 
 use VHttpd\Wire\FrameCodec;
+use VHttpd\DbGateway\Client;
 use VHttpd\DbGateway\PDO;
 
 if (!function_exists('pcntl_fork') || !extension_loaded('sockets')) {
@@ -37,7 +38,7 @@ if ($pid === 0) {
         exit(1);
     }
 
-    $expected = ['query', 'begin_transaction', 'execute', 'commit'];
+    $expected = ['query', 'begin_transaction', 'execute', 'commit', 'escape'];
     foreach ($expected as $op) {
         $accepted = @socket_accept($server);
         if (!$accepted) {
@@ -59,10 +60,13 @@ if ($pid === 0) {
         assertSame('db', $request['mode'] ?? null, 'mode');
         assertSame($op, $request['op'] ?? null, 'op');
         assertSame('default', $request['pool'] ?? null, 'pool');
+        assertSame('trace_db_gateway_001', $request['trace_id'] ?? null, 'trace_id');
+        assertSame('req_db_gateway_001', $request['request_id'] ?? null, 'request_id');
 
         if ($op === 'query') {
             assertSame('SELECT id FROM users WHERE id = ?', $request['sql'] ?? null, 'query sql');
             assertSame(['123'], $request['params'] ?? null, 'query params');
+            assertSame(['MTIz'], $request['params_base64'] ?? null, 'query params_base64');
             $response = ['ok' => true, 'driver' => 'mysql', 'rows' => [['id' => '123']], 'affected_rows' => 0, 'last_insert_id' => 0, 'session_id' => ''];
         } elseif ($op === 'begin_transaction') {
             $response = ['ok' => true, 'driver' => 'mysql', 'session_id' => 'tx_1'];
@@ -70,10 +74,16 @@ if ($pid === 0) {
             assertSame('tx_1', $request['session_id'] ?? null, 'execute session');
             assertSame('UPDATE users SET name = ? WHERE id = ?', $request['sql'] ?? null, 'execute sql');
             assertSame(['Ada', '123'], $request['params'] ?? null, 'execute params');
+            assertSame(['QWRh', 'MTIz'], $request['params_base64'] ?? null, 'execute params_base64');
             $response = ['ok' => true, 'driver' => 'mysql', 'affected_rows' => 1, 'last_insert_id' => 0, 'session_id' => 'tx_1'];
-        } else {
+        } elseif ($op === 'commit') {
             assertSame('tx_1', $request['session_id'] ?? null, 'commit session');
             $response = ['ok' => true, 'driver' => 'mysql'];
+        } else {
+            assertSame('', $request['sql'] ?? null, 'escape sql');
+            assertSame(["a\0b"], $request['params'] ?? null, 'escape params');
+            assertSame(['YQBi'], $request['params_base64'] ?? null, 'escape params_base64');
+            $response = ['ok' => true, 'driver' => 'mysql', 'escaped' => 'a\\0b'];
         }
 
         FrameCodec::write($conn, json_encode($response, JSON_THROW_ON_ERROR));
@@ -90,12 +100,17 @@ for ($i = 0; $i < 50 && !file_exists($socket); ++$i) {
 }
 
 $db = new PDO($socket);
+$_SERVER['VHTTPD_TRACE_ID'] = 'trace_db_gateway_001';
+$_SERVER['VHTTPD_REQUEST_ID'] = 'req_db_gateway_001';
 $stmt = $db->query('SELECT id FROM users WHERE id = ?', [123]);
 assertSame(['id' => '123'], $stmt->fetch(), 'fetch row');
 
 $db->beginTransaction();
 assertSame(1, $db->execute('UPDATE users SET name = ? WHERE id = ?', ['Ada', 123]), 'affected rows');
 $db->commit();
+
+$client = new Client($socket);
+assertSame('a\\0b', $client->escape("a\0b"), 'escaped binary value');
 
 $status = null;
 pcntl_waitpid($pid, $status);

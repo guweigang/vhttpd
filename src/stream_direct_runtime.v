@@ -1,6 +1,7 @@
 module main
 
 import upstream.transport
+import encoding.base64
 import json
 import net.unix
 import time
@@ -98,7 +99,12 @@ fn HttpStreamRuntime.direct_passthrough(rt StreamRuntimeContext, mut ctx Context
 		}
 		if frame.event == 'chunk' {
 			if method.to_upper() != 'HEAD' {
-				worker.WorkerHttpStreamWriter.write_chunk(mut ctx.conn, frame.data) or { break }
+				data := if frame.data_base64 != '' {
+					base64.decode_str(frame.data_base64)
+				} else {
+					frame.data
+				}
+				worker.WorkerHttpStreamWriter.write_chunk(mut ctx.conn, data) or { break }
 			}
 			continue
 		}

@@ -94,6 +94,20 @@ class Wpdb extends \wpdb
     {
         $this->charset = $charset ?? $this->charset;
         $this->collate = $collate ?? $this->collate;
+        $charset = $this->mysqlIdentifier((string) $this->charset);
+        $collate = $this->mysqlIdentifier((string) $this->collate);
+        if ($charset === '') {
+            return;
+        }
+        $sql = "SET NAMES {$charset}";
+        if ($collate !== '') {
+            $sql .= " COLLATE {$collate}";
+        }
+        try {
+            $this->client()->execute($sql, [], $this->activeSessionId, $this->timeoutMs);
+        } catch (\Throwable) {
+            // Keep WordPress boot tolerant; query paths will report DB errors normally.
+        }
     }
 
     public function query($query)
@@ -341,6 +355,15 @@ class Wpdb extends \wpdb
         }
 
         return $this->client;
+    }
+
+    private function mysqlIdentifier(string $value): string
+    {
+        $value = trim($value);
+        if ($value === '' || !preg_match('/^[A-Za-z0-9_]+$/', $value)) {
+            return '';
+        }
+        return $value;
     }
 
     private function bailConnectionError(\Throwable $e): void

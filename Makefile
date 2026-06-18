@@ -45,6 +45,15 @@ FAST_TEST_MODULE_DIRS := $(shell find $(SRC_DIR) -mindepth 2 -name '*_test.v' \
 	! -name 'db_*' \
 	-exec dirname {} \; | sort -u)
 
+TEST_FILES_FROM_GOALS := $(filter %.v,$(MAKECMDGOALS))
+ifneq ($(filter test test-fast,$(MAKECMDGOALS)),)
+ifneq ($(TEST_FILES_FROM_GOALS),)
+FAST_TEST_FILES := $(TEST_FILES_FROM_GOALS)
+FAST_TEST_MODULE_DIRS :=
+.PHONY: $(TEST_FILES_FROM_GOALS)
+endif
+endif
+
 # In-proc vjsx tests (non-codexbot).
 INPROC_TEST_FILES := $(shell find $(SRC_DIR) -name 'inproc_*_test.v' \
 	! -name '*codexbot*')
@@ -132,6 +141,9 @@ test-fast:
 		echo "==> v test $${test_dir}"; \
 		$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_FLAGS) test "$${test_dir}"; \
 	done
+
+$(TEST_FILES_FROM_GOALS):
+	@:
 
 test-inproc:
 	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_FLAGS) test $(INPROC_TEST_FILES)

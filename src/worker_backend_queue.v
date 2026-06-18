@@ -2,6 +2,7 @@ module main
 
 import time
 import worker
+import json
 
 struct WorkerBackendQueue {}
 
@@ -57,12 +58,22 @@ fn WorkerBackendQueueMetrics.note_timeout_state(mut ws worker.WorkerState) {
 }
 
 fn (mut app App) worker_backend_select_socket_queued_for_state(kind string, mut ws worker.WorkerState) !string {
-	socket_path := app.worker_backend_select_socket_for_state(kind, mut ws) or {
+	socket_path := app.worker_backend_select_socket_for_state_core(kind, mut ws) or {
 		if err.msg() != 'all workers busy' {
+			app.emit('worker.select.failed', {
+				'kind':             kind
+				'error':            err.msg()
+				'diagnostics_json': json.encode(worker_selection_diagnostics_for_state(ws))
+			})
 			return error(err.msg())
 		}
 		if !WorkerBackendQueue.try_enter_state(mut ws) {
 			WorkerBackendQueueMetrics.note_rejected_state(mut ws)
+			app.emit('worker.select.failed', {
+				'kind':             kind
+				'error':            'worker queue full'
+				'diagnostics_json': json.encode(worker_selection_diagnostics_for_state(ws))
+			})
 			return error('worker queue full')
 		}
 		WorkerBackendQueueMetrics.note_wait_state(mut ws)
@@ -80,12 +91,28 @@ fn (mut app App) worker_backend_select_socket_queued_for_state(kind string, mut 
 			10
 		}
 		deadline := time.now().add(time.millisecond * timeout_ms)
+		mut success := false
+		mut last_socket := ''
+		mut select_err := err
 		for time.now() < deadline {
 			time.sleep(time.millisecond * poll_ms)
-			socket := app.worker_backend_select_socket_for_state(kind, mut ws) or { continue }
-			return socket
+			socket := app.worker_backend_select_socket_for_state_core(kind, mut ws) or {
+				select_err = err
+				continue
+			}
+			last_socket = socket
+			success = true
+			break
+		}
+		if success {
+			return last_socket
 		}
 		WorkerBackendQueueMetrics.note_timeout_state(mut ws)
+		app.emit('worker.select.failed', {
+			'kind':             kind
+			'error':            'worker queue timeout: ' + select_err.msg()
+			'diagnostics_json': json.encode(worker_selection_diagnostics_for_state(ws))
+		})
 		return error('worker queue timeout')
 	}
 	return socket_path

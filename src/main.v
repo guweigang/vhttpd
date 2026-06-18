@@ -22,17 +22,36 @@ import regex
 
 pub struct RuntimeRouteRule {
 pub mut:
-	match_path           []string
-	match_path_regexp    string
-	match_query          map[string]string
-	re                   regex.RE
-	executor             string
-	rewrite              string
-	rewrite_strip_prefix string
-	root                 string
-	status               int
-	location             string
-	body                 string
+	match_method                 []string
+	match_path                   []string
+	match_path_regexp            string
+	match_query                  map[string]string
+	re                           regex.RE
+	executor                     string
+	rewrite                      string
+	rewrite_strip_prefix         string
+	root                         string
+	cache_control                string
+	response_cache_ttl_ms        int
+	cache_bypass_cookie_patterns []string
+	cache_ignore_cookie_patterns []string
+	response_headers             map[string]string
+	max_body_bytes               int
+	required_headers             map[string]string
+	denied_query_patterns        map[string]string
+	upload_dir                   string
+	on_completed                 string
+	status                       int
+	location                     string
+	body                         string
+}
+
+struct EdgeCachedHttpResponse {
+pub:
+	status        int
+	content_type  string
+	cache_control string
+	body          string
 }
 
 pub struct Context {
@@ -130,6 +149,24 @@ fn (r RuntimeRouteRule) matches(path string) bool {
 }
 
 fn (r RuntimeRouteRule) matches_request(path string, query map[string]string) bool {
+	return r.matches_http_request('', path, query)
+}
+
+fn (r RuntimeRouteRule) matches_http_request(method string, path string, query map[string]string) bool {
+	if r.match_method.len > 0 {
+		upper_method := method.to_upper()
+		mut method_matched := false
+		for item in r.match_method {
+			clean := item.trim_space().to_upper()
+			if clean == '*' || clean == upper_method {
+				method_matched = true
+				break
+			}
+		}
+		if !method_matched {
+			return false
+		}
+	}
 	mut path_matched := false
 	if r.match_path_regexp != '' {
 		mut re_mutable := r.re
@@ -199,6 +236,188 @@ fn directory_slash_redirect_location(document_root string, normalized_path strin
 		location += '?' + query_string
 	}
 	return location
+}
+
+fn route_response_cache_key(method string, target string) string {
+	request_path, query_string := transport.normalize_request_target(target)
+	normalized_path := transport.normalize_path(request_path)
+	if query_string == '' {
+		return '${method.to_upper()}:${normalized_path}'
+	}
+	return '${method.to_upper()}:${normalized_path}?${query_string}'
+}
+
+fn route_response_cache_cookie_pattern_matches(name string, pattern string) bool {
+	clean_name := name.trim_space()
+	clean_pattern := pattern.trim_space()
+	if clean_pattern == '' {
+		return false
+	}
+	if clean_pattern == '*' {
+		return true
+	}
+	if !clean_pattern.contains('*') {
+		return clean_name == clean_pattern
+	}
+	parts := clean_pattern.split('*')
+	mut pos := 0
+	if !clean_pattern.starts_with('*') {
+		prefix := parts[0]
+		if !clean_name.starts_with(prefix) {
+			return false
+		}
+		pos = prefix.len
+	}
+	for idx, part in parts {
+		if part == '' {
+			continue
+		}
+		if idx == 0 && !clean_pattern.starts_with('*') {
+			continue
+		}
+		found := clean_name[pos..].index(part) or { return false }
+		pos += found + part.len
+	}
+	if !clean_pattern.ends_with('*') {
+		suffix := parts[parts.len - 1]
+		return clean_name.ends_with(suffix)
+	}
+	return true
+}
+
+fn route_response_cache_cookie_list_bypass_reason(cookie_header string, bypass_patterns []string, ignore_patterns []string) string {
+	if cookie_header.trim_space() == '' {
+		return ''
+	}
+	if bypass_patterns.len == 0 && ignore_patterns.len == 0 {
+		return 'cookie'
+	}
+	for raw in cookie_header.split(';') {
+		name := raw.all_before('=').trim_space()
+		if name == '' {
+			continue
+		}
+		mut ignored := false
+		for pattern in ignore_patterns {
+			if route_response_cache_cookie_pattern_matches(name, pattern) {
+				ignored = true
+				break
+			}
+		}
+		if ignored {
+			continue
+		}
+		for pattern in bypass_patterns {
+			if route_response_cache_cookie_pattern_matches(name, pattern) {
+				return 'cookie:${name}'
+			}
+		}
+		return 'cookie:${name}'
+	}
+	return ''
+}
+
+fn route_response_cache_request_bypass_reason(rule RuntimeRouteRule, method string, req http.Request) string {
+	if method.to_upper() !in ['GET', 'HEAD'] {
+		return 'method'
+	}
+	headers := transport.header_map_from_request(req)
+	if headers['authorization'] != '' {
+		return 'authorization'
+	}
+	if headers['cookie'] != '' {
+		return route_response_cache_cookie_list_bypass_reason(headers['cookie'],
+			rule.cache_bypass_cookie_patterns, rule.cache_ignore_cookie_patterns)
+	}
+	return ''
+}
+
+fn route_response_cache_store_bypass_reason(resp transport.WorkerResponse) string {
+	if resp.status != 200 {
+		return 'status'
+	}
+	for name, value in resp.headers {
+		lower := name.to_lower()
+		if lower == 'set-cookie' {
+			return 'set_cookie'
+		}
+		if lower == 'cache-control' {
+			clean := value.to_lower()
+			if clean.contains('no-store') {
+				return 'no_store'
+			}
+			if clean.contains('no-cache') {
+				return 'no_cache'
+			}
+			if clean.contains('private') {
+				return 'private'
+			}
+			for directive in clean.split(',') {
+				trimmed := directive.trim_space()
+				if trimmed in ['max-age=0', 's-maxage=0'] {
+					return trimmed.replace('-', '_').replace('=', '_')
+				}
+			}
+		}
+	}
+	return ''
+}
+
+fn route_response_headers_have(headers map[string]string, name string) bool {
+	expected := name.to_lower()
+	for header_name, _ in headers {
+		if header_name.to_lower() == expected {
+			return true
+		}
+	}
+	return false
+}
+
+fn apply_route_response_headers(mut ctx Context, rule RuntimeRouteRule) {
+	for name, value in rule.response_headers {
+		if name.trim_space() == '' {
+			continue
+		}
+		ctx.set_custom_header(name, value) or {}
+	}
+}
+
+fn route_required_headers_failure(rule RuntimeRouteRule, headers map[string]string) string {
+	for name, expected in rule.required_headers {
+		actual := headers[name.to_lower()] or { return name }
+		if expected.trim_space() != '' && !match_query(expected, actual) {
+			return name
+		}
+	}
+	return ''
+}
+
+fn route_denied_query_failure(rule RuntimeRouteRule, query map[string]string) string {
+	for name, pattern in rule.denied_query_patterns {
+		actual := query[name] or { continue }
+		if pattern.trim_space() == '' || match_query(pattern, actual) {
+			return name
+		}
+	}
+	return ''
+}
+
+fn (mut app App) route_response_cache_get(rule RuntimeRouteRule, method string, target string) ?EdgeCachedHttpResponse {
+	if rule.response_cache_ttl_ms <= 0 || !app.transport.cache.enabled {
+		return none
+	}
+	key := route_response_cache_key(method, target)
+	raw := app.transport.cache.get_value('edge.response', key) or { return none }
+	return json.decode(EdgeCachedHttpResponse, raw) or { none }
+}
+
+fn (mut app App) route_response_cache_set(rule RuntimeRouteRule, method string, target string, cached EdgeCachedHttpResponse) {
+	if rule.response_cache_ttl_ms <= 0 || !app.transport.cache.enabled {
+		return
+	}
+	key := route_response_cache_key(method, target)
+	app.transport.cache.set_value('edge.response', key, json.encode(cached),
+		i64(rule.response_cache_ttl_ms))
 }
 
 fn (app App) directory_slash_document_root() string {
@@ -721,16 +940,71 @@ fn proxy_worker_response(mut app App, mut ctx Context, method string, path strin
 	// 1. 匹配 Caddy 路由规则
 	mut matched_rule := ?RuntimeRouteRule(none)
 	for rule in app.routes {
-		if rule.matches_request(normalized_target, query) {
+		if rule.matches_http_request(method, normalized_target, query) {
 			matched_rule = rule
 			break
 		}
 	}
 
 	if rule := matched_rule {
+		headers := transport.header_map_from_request(ctx.req)
+		header_name := route_required_headers_failure(rule, headers)
+		if header_name != '' {
+			ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
+			apply_route_response_headers(mut ctx, rule)
+			ctx.res.set_status(.forbidden)
+			app.emit('http.request', {
+				'method':      method.to_upper()
+				'path':        transport.normalize_path(path)
+				'status':      '403'
+				'request_id':  req_id
+				'trace_id':    trace_id
+				'duration_ms': '${time.now().unix_milli() - start_ms}'
+				'error_class': 'route_required_header'
+				'error':       header_name
+			})
+			log.warn('[http] ⇠ route required header failed method=${method.to_upper()} path=${path} trace_id=${trace_id} request_id=${req_id} header=${header_name}')
+			return ctx.text(body_on_head)
+		}
+		query_name := route_denied_query_failure(rule, query)
+		if query_name != '' {
+			ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
+			apply_route_response_headers(mut ctx, rule)
+			ctx.res.set_status(.forbidden)
+			app.emit('http.request', {
+				'method':      method.to_upper()
+				'path':        transport.normalize_path(path)
+				'status':      '403'
+				'request_id':  req_id
+				'trace_id':    trace_id
+				'duration_ms': '${time.now().unix_milli() - start_ms}'
+				'error_class': 'route_denied_query'
+				'error':       query_name
+			})
+			log.warn('[http] ⇠ route denied query failed method=${method.to_upper()} path=${path} trace_id=${trace_id} request_id=${req_id} query=${query_name}')
+			return ctx.text(body_on_head)
+		}
+		if rule.max_body_bytes > 0 && ctx.req.data.len > rule.max_body_bytes {
+			ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
+			apply_route_response_headers(mut ctx, rule)
+			ctx.res.set_status(http.status_from_int(413))
+			app.emit('http.request', {
+				'method':      method.to_upper()
+				'path':        transport.normalize_path(path)
+				'status':      '413'
+				'request_id':  req_id
+				'trace_id':    trace_id
+				'duration_ms': '${time.now().unix_milli() - start_ms}'
+				'error_class': 'payload_too_large'
+				'error':       'max_body_bytes'
+			})
+			log.warn('[http] ⇠ route max body exceeded method=${method.to_upper()} path=${path} trace_id=${trace_id} request_id=${req_id} body_len=${ctx.req.data.len} max_body_bytes=${rule.max_body_bytes}')
+			return ctx.text(body_on_head)
+		}
 		// 2.1 重定向与直接状态响应 (status > 0)
 		if rule.status > 0 {
 			ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
+			apply_route_response_headers(mut ctx, rule)
 			ctx.res.set_status(http.status_from_int(rule.status))
 			if rule.status in [301, 302, 307, 308] {
 				if rule.location != '' {
@@ -740,7 +1014,11 @@ fn proxy_worker_response(mut app App, mut ctx Context, method string, path strin
 				return ctx.text(if rule.body != '' { rule.body } else { 'Redirecting...' })
 			}
 			log.info('[http] ⇠ route status response status=${rule.status} trace_id=${trace_id}')
-			return ctx.text(rule.body)
+			return ctx.text(if method.to_upper() == 'HEAD' || rule.status in [204, 304] {
+				''
+			} else {
+				rule.body
+			})
 		}
 
 		// 2.2 静态文件高性能直回
@@ -754,6 +1032,10 @@ fn proxy_worker_response(mut app App, mut ctx Context, method string, path strin
 			if root_dir == '' { root_dir = app.executors.worker.worker_backend.workdir }
 			file_path := os.join_path(root_dir, normalized_target.trim_left('/'))
 			if os.exists(file_path) && !os.is_dir(file_path) {
+				if rule.cache_control.trim_space() != '' {
+					ctx.set_custom_header('cache-control', rule.cache_control) or {}
+				}
+				apply_route_response_headers(mut ctx, rule)
 				log.info('[http] ⇠ route static file=${file_path} trace_id=${trace_id}')
 				return ctx.file(file_path)
 			}
@@ -762,9 +1044,15 @@ fn proxy_worker_response(mut app App, mut ctx Context, method string, path strin
 			return ctx.text('Not Found')
 		}
 
+		if rule.executor == 'upload' {
+			return handle_upload_route(mut app, mut ctx, rule, method, normalized_target, req_id,
+				trace_id, start_ms)
+		}
+
 		// 2.3 阻断返回
 		if rule.executor == 'none' {
 			log.info('[http] ⇠ route none (block) trace_id=${trace_id}')
+			apply_route_response_headers(mut ctx, rule)
 			ctx.res.set_status(.not_found)
 			return ctx.text('Not Found')
 		}
@@ -774,13 +1062,39 @@ fn proxy_worker_response(mut app App, mut ctx Context, method string, path strin
 	if rule := matched_rule {
 		dispatch_path = rule.rewrite_target(path)
 	}
+	if rule := matched_rule {
+		if rule.response_cache_ttl_ms > 0 && app.transport.cache.enabled
+			&& route_response_cache_request_bypass_reason(rule, method, ctx.req) == '' {
+			if cached := app.route_response_cache_get(rule, method, dispatch_path) {
+				log.info('[http] ⇠ route response cache hit method=${method.to_upper()} path=${path} trace_id=${trace_id} request_id=${req_id}')
+				app.emit('http.request', {
+					'method':      method.to_upper()
+					'path':        transport.normalize_path(path)
+					'status':      '${cached.status}'
+					'request_id':  req_id
+					'trace_id':    trace_id
+					'duration_ms': '${time.now().unix_milli() - start_ms}'
+					'cache':       'hit'
+				})
+				ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
+				ctx.set_custom_header('x-vhttpd-cache', 'hit') or {}
+				if cached.cache_control != '' {
+					ctx.set_custom_header('cache-control', cached.cache_control) or {}
+				}
+				apply_route_response_headers(mut ctx, rule)
+				ctx.res.set_status(http.status_from_int(cached.status))
+				ctx.set_content_type(cached.content_type)
+				return ctx.text(if method.to_upper() == 'HEAD' { '' } else { cached.body })
+			}
+		}
+	}
 
 	// 3. 动态切换活动的后端执行器
 	mut active_executor := app.executors.worker.logic_executor
 	mut selected_pool := 'main'
 	mut is_stream_dispatch := app.executors.worker.stream_dispatch
 	if rule := matched_rule {
-		if rule.executor != '' && rule.executor != app.logic_executor_kind() {
+		if rule.executor != '' {
 			if exec_state := app.additional_workers[rule.executor] {
 				active_executor = exec_state.logic_executor
 				selected_pool = rule.executor
@@ -852,17 +1166,67 @@ fn proxy_worker_response(mut app App, mut ctx Context, method string, path strin
 	}
 	resp := outcome.response
 	log.info('[http] ⇠ dispatch response method=${method.to_upper()} path=${path} trace_id=${trace_id} request_id=${req_id} status=${resp.status} body_len=${resp.body.len} duration_ms=${time.now().unix_milli() - start_ms}')
+	mut response_cache_result := ''
+	mut response_cache_reason := ''
+	if rule := matched_rule {
+		if rule.response_cache_ttl_ms > 0 {
+			request_bypass_reason := if app.transport.cache.enabled {
+				route_response_cache_request_bypass_reason(rule, method, ctx.req)
+			} else {
+				'cache_disabled'
+			}
+			if request_bypass_reason != '' {
+				response_cache_result = 'bypass'
+				response_cache_reason = request_bypass_reason
+			} else {
+				store_bypass_reason := route_response_cache_store_bypass_reason(resp)
+				if store_bypass_reason != '' {
+					response_cache_result = 'bypass'
+					response_cache_reason = store_bypass_reason
+				} else {
+					ctype_for_cache := resp.headers['content-type'] or {
+						'text/plain; charset=utf-8'
+					}
+					cache_control_for_cache := resp.headers['cache-control'] or {
+						rule.cache_control
+					}
+					app.route_response_cache_set(rule, method, dispatch_path, EdgeCachedHttpResponse{
+						status:        resp.status
+						content_type:  ctype_for_cache
+						cache_control: cache_control_for_cache
+						body:          resp.body
+					})
+					response_cache_result = 'store'
+				}
+			}
+		}
+	}
 	app.emit('http.request', {
-		'method':      method.to_upper()
-		'path':        transport.normalize_path(path)
-		'status':      '${resp.status}'
-		'request_id':  req_id
-		'trace_id':    trace_id
-		'duration_ms': '${time.now().unix_milli() - start_ms}'
+		'method':       method.to_upper()
+		'path':         transport.normalize_path(path)
+		'status':       '${resp.status}'
+		'request_id':   req_id
+		'trace_id':     trace_id
+		'duration_ms':  '${time.now().unix_milli() - start_ms}'
+		'cache':        response_cache_result
+		'cache_reason': response_cache_reason
 	})
 	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
+	if response_cache_result != '' {
+		ctx.set_custom_header('x-vhttpd-cache', response_cache_result) or {}
+	}
+	if response_cache_reason != '' {
+		ctx.set_custom_header('x-vhttpd-cache-reason', response_cache_reason) or {}
+	}
 	ctx.res.set_status(http.status_from_int(resp.status))
 	apply_worker_headers(mut ctx, resp.headers)
+	if rule := matched_rule {
+		apply_route_response_headers(mut ctx, rule)
+		if rule.cache_control.trim_space() != ''
+			&& !route_response_headers_have(resp.headers, 'cache-control') {
+			ctx.set_custom_header('cache-control', rule.cache_control) or {}
+		}
+	}
 	ctype := resp.headers['content-type'] or { 'text/plain; charset=utf-8' }
 	ctx.set_content_type(ctype)
 	return ctx.text(if body_on_head == '' && method.to_upper() == 'HEAD' { '' } else { resp.body })

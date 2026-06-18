@@ -105,7 +105,14 @@ pub fn ManagedWorker.start(id int, worker_cmd string, worker_env map[string]stri
 	mut merged_env := ManagedWorker.merge_env(os.environ(), worker_env)
 	merged_env['VHTTPD_PARENT_PID'] = '${os.getpid()}'
 	mut proc := os.new_process('/bin/sh')
-	proc.set_args(['-lc', cmd])
+	redirect_cmd := if cmd.contains('vphp-worker') {
+		'exec ${cmd} >> /tmp/vhttpd_php_worker_${id}.log 2>&1'
+	} else if cmd.contains('php-cgi') {
+		'exec ${cmd} >> /tmp/vhttpd_php_cgi_${id}.log 2>&1'
+	} else {
+		cmd
+	}
+	proc.set_args(['-lc', redirect_cmd])
 	proc.set_environment(merged_env)
 	proc.set_work_folder(workdir)
 	proc.use_pgroup = true

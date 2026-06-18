@@ -248,13 +248,14 @@ pub mut:
 
 pub struct DbMysqlConfig {
 pub mut:
-	host             string = '127.0.0.1'
-	port             int    = 3306
-	username         string
-	password         string
-	database         string = 'mysql'
-	pool_size        int    = 5 @[toml: 'pool_size']
-	wordpress_compat bool   @[toml: 'wordpress_compat']
+	host         string = '127.0.0.1'
+	port         int    = 3306
+	username     string
+	password     string
+	database     string = 'mysql'
+	pool_size    int    = 5      @[toml: 'pool_size']
+	idle_ping_ms int      @[toml: 'idle_ping_ms']
+	init_sql     []string @[toml: 'init_sql']
 }
 
 pub struct DbPgsqlConfig {
@@ -285,6 +286,7 @@ pub mut:
 
 pub struct RouteMatchConfig {
 pub mut:
+	method      []string
 	path        []string
 	path_regexp string @[toml: 'path_regexp']
 	query       map[string]string
@@ -292,14 +294,24 @@ pub mut:
 
 pub struct RouteRuleConfig {
 pub mut:
-	match                RouteMatchConfig
-	executor             string
-	rewrite              string
-	rewrite_strip_prefix string @[toml: 'rewrite_strip_prefix']
-	root                 string
-	status               int
-	location             string
-	body                 string
+	match                        RouteMatchConfig
+	executor                     string
+	rewrite                      string
+	rewrite_strip_prefix         string @[toml: 'rewrite_strip_prefix']
+	root                         string
+	cache_control                string            @[toml: 'cache_control']
+	response_cache_ttl_ms        int               @[toml: 'response_cache_ttl_ms']
+	cache_bypass_cookie_patterns []string          @[toml: 'cache_bypass_cookie_patterns']
+	cache_ignore_cookie_patterns []string          @[toml: 'cache_ignore_cookie_patterns']
+	response_headers             map[string]string @[toml: 'response_headers']
+	max_body_bytes               int               @[toml: 'max_body_bytes']
+	required_headers             map[string]string @[toml: 'required_headers']
+	denied_query_patterns        map[string]string @[toml: 'denied_query_patterns']
+	upload_dir                   string            @[toml: 'upload_dir']
+	on_completed                 string            @[toml: 'on_completed']
+	status                       int
+	location                     string
+	body                         string
 }
 
 pub struct ExecutorSpecConfig {
@@ -674,6 +686,7 @@ fn decode_php_site_config_map(entry map[string]toml.Any) PhpSiteConfig {
 
 fn decode_route_match_config_map(entry map[string]toml.Any) RouteMatchConfig {
 	return RouteMatchConfig{
+		method:      toml_string_or_list_from_map(entry, 'method')
 		path:        toml_string_or_list_from_map(entry, 'path')
 		path_regexp: toml_string_from_map(entry, 'path_regexp', '')
 		query:       toml_string_map_from_map(entry, 'query')
@@ -699,6 +712,29 @@ fn decode_route_rule_config_map(entry map[string]toml.Any) RouteRuleConfig {
 	}
 	if 'root' in entry {
 		cfg.root = toml_string_from_map(entry, 'root', cfg.root)
+	}
+	if 'cache_control' in entry {
+		cfg.cache_control = toml_string_from_map(entry, 'cache_control', cfg.cache_control)
+	}
+	if 'response_cache_ttl_ms' in entry {
+		cfg.response_cache_ttl_ms = toml_int_from_map(entry, 'response_cache_ttl_ms',
+			cfg.response_cache_ttl_ms)
+	}
+	cfg.cache_bypass_cookie_patterns = toml_string_list_from_map(entry,
+		'cache_bypass_cookie_patterns')
+	cfg.cache_ignore_cookie_patterns = toml_string_list_from_map(entry,
+		'cache_ignore_cookie_patterns')
+	cfg.response_headers = toml_string_map_from_map(entry, 'response_headers')
+	if 'max_body_bytes' in entry {
+		cfg.max_body_bytes = toml_int_from_map(entry, 'max_body_bytes', cfg.max_body_bytes)
+	}
+	cfg.required_headers = toml_string_map_from_map(entry, 'required_headers')
+	cfg.denied_query_patterns = toml_string_map_from_map(entry, 'denied_query_patterns')
+	if 'upload_dir' in entry {
+		cfg.upload_dir = toml_string_from_map(entry, 'upload_dir', cfg.upload_dir)
+	}
+	if 'on_completed' in entry {
+		cfg.on_completed = toml_string_from_map(entry, 'on_completed', cfg.on_completed)
 	}
 	if 'status' in entry {
 		cfg.status = toml_int_from_map(entry, 'status', cfg.status)
@@ -1717,6 +1753,74 @@ pub fn resolve_config_variables(mut cfg VhttpdConfig, config_path string) ! {
 				r_copy.root = root
 				changed = true
 			}
+			cache_control, cache_control_changed := expand_config_string(r.cache_control, 'routes',
+				vars, env_map, false)!
+			if cache_control_changed {
+				r_copy.cache_control = cache_control
+				changed = true
+			}
+			mut cache_bypass_cookie_patterns := []string{}
+			for item in r.cache_bypass_cookie_patterns {
+				expanded, item_changed :=
+					expand_config_string(item, 'routes', vars, env_map, false)!
+				cache_bypass_cookie_patterns << expanded
+				if item_changed {
+					changed = true
+				}
+			}
+			r_copy.cache_bypass_cookie_patterns = cache_bypass_cookie_patterns
+			mut cache_ignore_cookie_patterns := []string{}
+			for item in r.cache_ignore_cookie_patterns {
+				expanded, item_changed :=
+					expand_config_string(item, 'routes', vars, env_map, false)!
+				cache_ignore_cookie_patterns << expanded
+				if item_changed {
+					changed = true
+				}
+			}
+			r_copy.cache_ignore_cookie_patterns = cache_ignore_cookie_patterns
+			mut response_headers := map[string]string{}
+			for header_name, header_value in r.response_headers {
+				expanded, item_changed := expand_config_string(header_value, 'routes', vars,
+					env_map, false)!
+				response_headers[header_name] = expanded
+				if item_changed {
+					changed = true
+				}
+			}
+			r_copy.response_headers = response_headers.clone()
+			mut required_headers := map[string]string{}
+			for header_name, header_value in r.required_headers {
+				expanded, item_changed := expand_config_string(header_value, 'routes', vars,
+					env_map, false)!
+				required_headers[header_name] = expanded
+				if item_changed {
+					changed = true
+				}
+			}
+			r_copy.required_headers = required_headers.clone()
+			mut denied_query_patterns := map[string]string{}
+			for query_name, query_value in r.denied_query_patterns {
+				expanded, item_changed := expand_config_string(query_value, 'routes', vars,
+					env_map, false)!
+				denied_query_patterns[query_name] = expanded
+				if item_changed {
+					changed = true
+				}
+			}
+			r_copy.denied_query_patterns = denied_query_patterns.clone()
+			upload_dir, upload_dir_changed := expand_config_string(r.upload_dir, 'routes', vars,
+				env_map, false)!
+			if upload_dir_changed {
+				r_copy.upload_dir = upload_dir
+				changed = true
+			}
+			on_completed, on_completed_changed := expand_config_string(r.on_completed, 'routes',
+				vars, env_map, false)!
+			if on_completed_changed {
+				r_copy.on_completed = on_completed
+				changed = true
+			}
 			executor, executor_changed := expand_config_string(r.executor, 'routes', vars, env_map,
 				false)!
 			if executor_changed {
@@ -1761,10 +1865,10 @@ pub fn resolve_config_variables(mut cfg VhttpdConfig, config_path string) ! {
 				spec_copy.worker.socket = socket
 				changed = true
 			}
-			socket_prefix, socket_prefix_changed := expand_config_string(spec.worker.socket_prefix,
+			expanded_socket_prefix, socket_prefix_changed := expand_config_string(spec.worker.socket_prefix,
 				'executors.${name}', vars, env_map, false)!
 			if socket_prefix_changed {
-				spec_copy.worker.socket_prefix = socket_prefix
+				spec_copy.worker.socket_prefix = expanded_socket_prefix
 				changed = true
 			}
 			cmd, cmd_changed := expand_config_string(spec.worker.cmd, 'executors.${name}', vars,
@@ -1955,6 +2059,8 @@ pub fn build_config_variable_map(cfg VhttpdConfig) map[string]string {
 		'db.mysql.username':              cfg.db.mysql.username
 		'db.mysql.database':              cfg.db.mysql.database
 		'db.mysql.pool_size':             '${cfg.db.mysql.pool_size}'
+		'db.mysql.idle_ping_ms':          '${cfg.db.mysql.idle_ping_ms}'
+		'db.mysql.init_sql':              cfg.db.mysql.init_sql.join('; ')
 		'db.pgsql.host':                  cfg.db.pgsql.host
 		'db.pgsql.port':                  '${cfg.db.pgsql.port}'
 		'db.pgsql.username':              cfg.db.pgsql.username

@@ -3,6 +3,9 @@ module main
 import regex
 import os
 import config
+import json
+import net.http
+import upstream.transport
 
 fn test_route_rule_path_matching() {
 	// 1. Precise match
@@ -82,6 +85,64 @@ fn test_route_rule_query_matching() {
 	}) == false
 }
 
+fn test_route_rule_method_matching() {
+	rule := RuntimeRouteRule{
+		match_method: ['POST']
+		match_path:   ['/xmlrpc.php']
+	}
+	assert rule.matches_http_request('POST', '/xmlrpc.php', map[string]string{})
+	assert !rule.matches_http_request('GET', '/xmlrpc.php', map[string]string{})
+	assert !rule.matches_http_request('POST', '/index.php', map[string]string{})
+}
+
+fn test_route_rule_method_matching_supports_preflight_split() {
+	preflight := RuntimeRouteRule{
+		match_method: ['OPTIONS']
+		match_path:   ['/api/*']
+	}
+	api := RuntimeRouteRule{
+		match_method: ['GET', 'HEAD']
+		match_path:   ['/api/*']
+	}
+	assert preflight.matches_http_request('OPTIONS', '/api/posts', map[string]string{})
+	assert !preflight.matches_http_request('GET', '/api/posts', map[string]string{})
+	assert api.matches_http_request('GET', '/api/posts', map[string]string{})
+	assert !api.matches_http_request('OPTIONS', '/api/posts', map[string]string{})
+}
+
+fn test_route_security_header_and_query_rules() {
+	rule := RuntimeRouteRule{
+		required_headers:      {
+			'x-api-key': '*'
+			'x-mode':    'live'
+		}
+		denied_query_patterns: {
+			'debug': '*'
+			'role':  'admin'
+		}
+	}
+	assert route_required_headers_failure(rule, {
+		'x-api-key': 'secret'
+		'x-mode':    'live'
+	}) == ''
+	assert route_required_headers_failure(rule, {
+		'x-api-key': 'secret'
+		'x-mode':    'preview'
+	}) == 'x-mode'
+	assert route_required_headers_failure(rule, {
+		'x-mode': 'live'
+	}) == 'x-api-key'
+	assert route_denied_query_failure(rule, {
+		'page': '1'
+	}) == ''
+	assert route_denied_query_failure(rule, {
+		'debug': '1'
+	}) == 'debug'
+	assert route_denied_query_failure(rule, {
+		'role': 'admin'
+	}) == 'role'
+}
+
 fn test_route_rule_rewrite_target_preserves_original_query() {
 	rule := RuntimeRouteRule{
 		match_path:           ['/wp-json/*']
@@ -90,6 +151,151 @@ fn test_route_rule_rewrite_target_preserves_original_query() {
 	}
 	assert rule.rewrite_target('/wp-json/wp/v2/users/me?context=edit') == '/index.php?rest_route=/wp/v2/users/me&context=edit'
 	assert rule.rewrite_target('/wp-json') == '/index.php?rest_route=/'
+}
+
+fn test_route_response_cache_key_normalizes_target() {
+	assert route_response_cache_key('get', '/posts?id=1') == 'GET:/posts?id=1'
+	assert route_response_cache_key('HEAD', 'posts') == 'HEAD:/posts'
+}
+
+fn test_route_response_cache_bypasses_authenticated_requests() {
+	rule := RuntimeRouteRule{}
+	mut anon := http.Request{}
+	assert route_response_cache_request_bypass_reason(rule, 'GET', anon) == ''
+	mut with_cookie := http.Request{}
+	with_cookie.header.set(.cookie, 'wordpress_logged_in=1')
+	assert route_response_cache_request_bypass_reason(rule, 'GET', with_cookie) == 'cookie'
+	mut with_auth := http.Request{}
+	with_auth.header.set(.authorization, 'Bearer token')
+	assert route_response_cache_request_bypass_reason(rule, 'GET', with_auth) == 'authorization'
+	assert route_response_cache_request_bypass_reason(rule, 'POST', anon) == 'method'
+}
+
+fn test_route_response_cache_cookie_patterns_allow_ignored_cookies() {
+	rule := RuntimeRouteRule{
+		cache_bypass_cookie_patterns: ['wordpress_logged_in_*', 'wp-postpass_*']
+		cache_ignore_cookie_patterns: ['wordpress_test_cookie', 'wp-settings-*']
+	}
+	mut with_test_cookie := http.Request{}
+	with_test_cookie.header.set(.cookie, 'wordpress_test_cookie=WP%20Cookie%20check')
+	assert route_response_cache_request_bypass_reason(rule, 'GET', with_test_cookie) == ''
+	mut with_settings_cookie := http.Request{}
+	with_settings_cookie.header.set(.cookie, 'wp-settings-1=editor')
+	assert route_response_cache_request_bypass_reason(rule, 'GET', with_settings_cookie) == ''
+	mut with_login_cookie := http.Request{}
+	with_login_cookie.header.set(.cookie, 'wordpress_logged_in_abc=token')
+	assert route_response_cache_request_bypass_reason(rule, 'GET', with_login_cookie) == 'cookie:wordpress_logged_in_abc'
+	mut with_unknown_cookie := http.Request{}
+	with_unknown_cookie.header.set(.cookie, 'ab_bucket=A')
+	assert route_response_cache_request_bypass_reason(rule, 'GET', with_unknown_cookie) == 'cookie:ab_bucket'
+}
+
+fn test_route_response_cache_store_bypass_reason() {
+	assert route_response_cache_store_bypass_reason(transport.WorkerResponse{
+		status: 200
+	}) == ''
+	assert route_response_cache_store_bypass_reason(transport.WorkerResponse{
+		status: 404
+	}) == 'status'
+	assert route_response_cache_store_bypass_reason(transport.WorkerResponse{
+		status:  200
+		headers: {
+			'set-cookie': 'a=b'
+		}
+	}) == 'set_cookie'
+	assert route_response_cache_store_bypass_reason(transport.WorkerResponse{
+		status:  200
+		headers: {
+			'cache-control': 'private, max-age=0'
+		}
+	}) == 'private'
+	assert route_response_cache_store_bypass_reason(transport.WorkerResponse{
+		status:  200
+		headers: {
+			'cache-control': 'no-store'
+		}
+	}) == 'no_store'
+	assert route_response_cache_store_bypass_reason(transport.WorkerResponse{
+		status:  200
+		headers: {
+			'cache-control': 'no-cache, must-revalidate'
+		}
+	}) == 'no_cache'
+	assert route_response_cache_store_bypass_reason(transport.WorkerResponse{
+		status:  200
+		headers: {
+			'cache-control': 'public, max-age=0'
+		}
+	}) == 'max_age_0'
+	assert route_response_cache_store_bypass_reason(transport.WorkerResponse{
+		status:  200
+		headers: {
+			'cache-control': 'public, s-maxage=0'
+		}
+	}) == 's_maxage_0'
+}
+
+fn test_upload_multipart_parser_extracts_file_payload() {
+	body := '--abc123\r\nContent-Disposition: form-data; name="file"; filename="demo.txt"\r\nContent-Type: text/plain\r\n\r\nhello upload\r\n--abc123--\r\n'
+	payload := parse_multipart_upload(body, 'multipart/form-data; boundary=abc123') or {
+		panic('missing upload payload')
+	}
+	assert payload.filename == 'demo.txt'
+	assert payload.content_type == 'text/plain'
+	assert payload.body == 'hello upload'
+}
+
+fn test_upload_filename_sanitizer_keeps_basename() {
+	assert sanitize_upload_filename('../../plugin zip.php') == 'plugin_zip.php'
+	assert sanitize_upload_filename('') == 'upload.bin'
+}
+
+fn test_route_response_headers_have_is_case_insensitive() {
+	headers := {
+		'Content-Type':  'text/html'
+		'Cache-Control': 'public, max-age=30'
+	}
+	assert route_response_headers_have(headers, 'cache-control')
+	assert route_response_headers_have(headers, 'CACHE-CONTROL')
+	assert !route_response_headers_have(headers, 'set-cookie')
+}
+
+fn test_worker_request_payload_preserves_forwarded_https_scheme() {
+	mut req := http.Request{
+		method: .get
+		url:    '/index.php'
+		host:   '127.0.0.1:8080'
+	}
+	req.header.set(.x_forwarded_proto, 'https')
+	raw := transport.WorkerHttpRequestCodec.encode_request('GET', '/index.php', req, '127.0.0.1',
+		'trace-1', 'req-1')
+	payload := json.decode(transport.WorkerRequestPayload, raw) or { panic(err) }
+	assert payload.scheme == 'https'
+	assert payload.port == '8080'
+	assert payload.headers['x-vhttpd-trace-id'] == 'trace-1'
+	assert payload.headers['x-request-id'] == 'req-1'
+}
+
+fn test_fastcgi_request_payload_includes_trace_env() {
+	mut req := http.Request{
+		method: .get
+		url:    '/index.php'
+		host:   '127.0.0.1:8080'
+	}
+	payload := transport.FastCgiCodec.encode_request('GET', '/index.php', '/index.php', req,
+		'127.0.0.1', 'trace-cgi-1', 'req-cgi-1', {
+		'VPHP_WP_ROOT': '/tmp/wp'
+	})
+	text := payload.bytestr()
+	assert text.contains('VHTTPD_TRACE_ID')
+	assert text.contains('trace-cgi-1')
+	assert text.contains('VHTTPD_REQUEST_ID')
+	assert text.contains('req-cgi-1')
+	assert text.contains('HTTP_X_VHTTPD_TRACE_ID')
+	assert text.contains('HTTP_HOST')
+	assert text.contains('127.0.0.1:8080')
+	assert text.contains('SERVER_NAME')
+	assert text.contains('SERVER_PORT')
 }
 
 fn test_directory_slash_redirect_location() {

@@ -79,6 +79,9 @@ fn preflight_server_bind(runtime_cfg server_lifecycle.ServerRuntimeConfig) ! {
 fn start_server_runtime(mut app App, runtime_cfg server_lifecycle.ServerRuntimeConfig) {
 	log.debug('[vhttpd] start_server_runtime: initializing app runtime site=${runtime_cfg.site_id}')
 	AppStartupHooks.initialize_runtime(mut app, runtime_cfg.internal_admin_socket)
+	scheme := server_runtime_scheme(runtime_cfg)
+	app.data_plane_scheme = scheme
+	apply_runtime_scheme_to_worker_envs(mut app, scheme)
 	log.debug('[vhttpd] start_server_runtime: starting executor lifecycle')
 	mut lifecycle_ctx := build_lifecycle_runtime_context(app)
 	runtime_cfg.executor_plan.lifecycle.start(mut lifecycle_ctx)
@@ -130,8 +133,6 @@ fn start_server_runtime(mut app App, runtime_cfg server_lifecycle.ServerRuntimeC
 	AppStartupHooks.mount_assets(mut app)
 	log.debug('[vhttpd] start_server_runtime: installing middleware')
 	AppStartupHooks.install_middleware(mut app)
-	scheme := server_runtime_scheme(runtime_cfg)
-	app.data_plane_scheme = scheme
 	AppStartupHooks.emit_server_started(mut app, scheme, runtime_cfg.host, runtime_cfg.port,
 		runtime_cfg.admin_enabled, runtime_cfg.admin_host, runtime_cfg.admin_port)
 	log.debug('[vhttpd] start_server_runtime: starting admin plane')
@@ -140,6 +141,16 @@ fn start_server_runtime(mut app App, runtime_cfg server_lifecycle.ServerRuntimeC
 	log.debug('[vhttpd] start_server_runtime: starting upstream providers')
 	AppStartupHooks.start_upstream_providers(mut app)
 	AppStartupHooks.log_runtime_endpoints(app, scheme, runtime_cfg.host, runtime_cfg.port)
+}
+
+fn apply_runtime_scheme_to_worker_envs(mut app App, scheme string) {
+	normalized := if scheme.trim_space() == 'https' { 'https' } else { 'http' }
+	app.executors.worker.worker_backend.env['VHTTPD_SCHEME'] = normalized
+	app.executors.worker.worker_backend.env['VHTTPD_REQUEST_SCHEME'] = normalized
+	for _, mut ws in app.additional_workers {
+		ws.worker_backend.env['VHTTPD_SCHEME'] = normalized
+		ws.worker_backend.env['VHTTPD_REQUEST_SCHEME'] = normalized
+	}
 }
 
 fn serve_server_runtime(mut app App, runtime_cfg server_lifecycle.ServerRuntimeConfig) {
