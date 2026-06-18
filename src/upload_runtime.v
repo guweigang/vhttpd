@@ -18,6 +18,7 @@ struct UploadPayload {
 
 struct UploadResponse {
 	ok           bool
+	event        string
 	upload_id    string @[json: 'upload_id']
 	filename     string
 	mime_type    string @[json: 'mime_type']
@@ -25,6 +26,7 @@ struct UploadResponse {
 	sha256       string
 	path         string
 	on_completed string @[json: 'on_completed']
+	handler      string
 	trace_id     string @[json: 'trace_id']
 	request_id   string @[json: 'request_id']
 }
@@ -137,77 +139,69 @@ fn upload_completed_vjsx_handler(on_completed string) string {
 	return clean['vjsx:'.len..].trim_space()
 }
 
-fn upload_completed_event_path(handler string) string {
-	clean := handler.trim_space().trim_left('/')
+fn upload_completed_spec_from_handler(handler string) string {
+	clean := handler.trim_space()
 	if clean == '' {
-		return '/__vhttpd/events/upload.completed'
+		return ''
 	}
-	return '/__vhttpd/events/upload.completed/${clean}'
+	return 'vjsx:${clean}'
+}
+
+fn upload_completed_dispatch_status(outcome executor.HttpLogicDispatchOutcome) int {
+	if outcome.kind == .response {
+		return outcome.response.status
+	}
+	if outcome.kind == .stream {
+		return outcome.stream_start.status
+	}
+	return 0
+}
+
+fn upload_completed_dispatch_fields(resp UploadResponse, route string, handler string, status string) map[string]string {
+	mut out := map[string]string{}
+	out['upload_id'] = resp.upload_id.clone()
+	out['filename'] = resp.filename.clone()
+	out['mime_type'] = resp.mime_type.clone()
+	out['size'] = '${resp.size}'
+	out['sha256'] = resp.sha256.clone()
+	out['path'] = resp.path.clone()
+	out['route'] = route.clone()
+	out['on_completed'] = upload_completed_spec_from_handler(handler)
+	out['handler'] = handler.clone()
+	out['request_id'] = resp.request_id.clone()
+	out['trace_id'] = resp.trace_id.clone()
+	if status != '' {
+		out['dispatch_status'] = status
+	}
+	return out
 }
 
 fn (mut app App) dispatch_upload_completed_vjsx(handler string, resp UploadResponse, fields map[string]string) {
-	if handler.trim_space() == '' {
+	clean_handler := handler.trim_space().clone()
+	if clean_handler == '' {
 		return
 	}
-	body := json.encode(resp)
-	mut req := http.Request{
-		method: .post
-		url:    upload_completed_event_path(handler)
-		data:   body
-		host:   'vhttpd.internal'
-	}
-	req.header.set(.content_type, 'application/json; charset=utf-8')
-	req.header.set_custom('x-vhttpd-event', 'upload.completed') or {}
-	req.header.set_custom('x-vhttpd-upload-id', resp.upload_id) or {}
-	req.header.set_custom('x-vhttpd-trace-id', resp.trace_id) or {}
-	req.header.set_custom('x-request-id', resp.request_id) or {}
-	mut facade := app.as_facade()
-	if app.logic_executor_kind() == 'vjsx' {
-		_ := app.executors.worker.logic_executor.dispatch_http(mut facade, executor.HttpLogicDispatchRequest{
-			method:        'POST'
-			path:          req.url
-			original_path: req.url
-			req:           req
-			remote_addr:   '127.0.0.1'
-			trace_id:      resp.trace_id
-			request_id:    resp.request_id
-		}) or {
-			mut failed := fields.clone()
-			failed['handler'] = handler
-			failed['error'] = err.msg()
-			app.emit('upload.completed.dispatch_failed', failed)
+	route := fields['route'] or { '' }
+	outcome := app.dispatch_vjsx_event(VjsxEventDispatchRequest{
+		event:      'upload.completed'
+		handler:    clean_handler
+		payload:    vjsx_event_payload(resp)
+		trace_id:   resp.trace_id
+		request_id: resp.request_id
+	}) or {
+		mut failed := upload_completed_dispatch_fields(resp, route, clean_handler, '')
+		failed['error'] = err.msg()
+		if err.msg() == 'vjsx_executor_unavailable' {
+			failed['reason'] = err.msg()
+			app.emit('upload.completed.dispatch_skipped', failed)
 			return
 		}
-		mut ok := fields.clone()
-		ok['handler'] = handler
-		app.emit('upload.completed.dispatch', ok)
+		app.emit('upload.completed.dispatch_failed', failed)
 		return
 	}
-	if state := app.additional_workers['vjsx'] {
-		_ := state.logic_executor.dispatch_http(mut facade, executor.HttpLogicDispatchRequest{
-			method:        'POST'
-			path:          req.url
-			original_path: req.url
-			req:           req
-			remote_addr:   '127.0.0.1'
-			trace_id:      resp.trace_id
-			request_id:    resp.request_id
-		}) or {
-			mut failed := fields.clone()
-			failed['handler'] = handler
-			failed['error'] = err.msg()
-			app.emit('upload.completed.dispatch_failed', failed)
-			return
-		}
-		mut ok := fields.clone()
-		ok['handler'] = handler
-		app.emit('upload.completed.dispatch', ok)
-		return
-	}
-	mut skipped := fields.clone()
-	skipped['handler'] = handler
-	skipped['reason'] = 'vjsx_executor_unavailable'
-	app.emit('upload.completed.dispatch_skipped', skipped)
+	ok := upload_completed_dispatch_fields(resp, route, clean_handler,
+		'${upload_completed_dispatch_status(outcome)}')
+	app.emit('upload.completed.dispatch', ok)
 }
 
 fn handle_upload_route(mut app App, mut ctx Context, rule RuntimeRouteRule, method string, path string, req_id string, trace_id string, start_ms i64) veb.Result {
@@ -241,15 +235,19 @@ fn handle_upload_route(mut app App, mut ctx Context, rule RuntimeRouteRule, meth
 		return ctx.text('upload write failed')
 	}
 	sum := sha256.sum(payload.body.bytes()).hex().to_lower()
+	on_completed := rule.on_completed.trim_space().clone()
+	handler := upload_completed_vjsx_handler(on_completed).clone()
 	resp := UploadResponse{
 		ok:           true
+		event:        'upload.completed'
 		upload_id:    upload_id
 		filename:     filename
 		mime_type:    payload.content_type
 		size:         payload.body.len
 		sha256:       sum
 		path:         path_out
-		on_completed: rule.on_completed
+		on_completed: on_completed
+		handler:      handler
 		trace_id:     trace_id
 		request_id:   req_id
 	}
@@ -262,12 +260,12 @@ fn handle_upload_route(mut app App, mut ctx Context, rule RuntimeRouteRule, meth
 		'path':         resp.path
 		'route':        path
 		'on_completed': resp.on_completed
+		'handler':      handler
 		'request_id':   req_id
 		'trace_id':     trace_id
 	}
 	app.emit('upload.completed', fields)
-	app.dispatch_upload_completed_vjsx(upload_completed_vjsx_handler(rule.on_completed), resp,
-		fields)
+	app.dispatch_upload_completed_vjsx(handler, resp, fields)
 	app.emit('http.request', {
 		'method':      method.to_upper()
 		'path':        transport.normalize_path(path)

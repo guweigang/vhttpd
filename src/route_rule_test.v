@@ -250,6 +250,16 @@ fn test_upload_filename_sanitizer_keeps_basename() {
 	assert sanitize_upload_filename('') == 'upload.bin'
 }
 
+fn test_upload_completed_vjsx_handler_and_event_path() {
+	assert upload_completed_vjsx_handler('vjsx:wordpress.upload.completed') == 'wordpress.upload.completed'
+	assert upload_completed_vjsx_handler(' vjsx:/wordpress.upload.completed ') == '/wordpress.upload.completed'
+	assert upload_completed_vjsx_handler('https://example.test/hook') == ''
+	assert upload_completed_spec_from_handler('wordpress.upload.completed') == 'vjsx:wordpress.upload.completed'
+	assert upload_completed_spec_from_handler('') == ''
+	assert vjsx_event_path('upload.completed', 'wordpress.upload.completed') == '/__vhttpd/events/upload.completed/wordpress.upload.completed'
+	assert vjsx_event_path('upload.completed', '') == '/__vhttpd/events/upload.completed'
+}
+
 fn test_route_response_headers_have_is_case_insensitive() {
 	headers := {
 		'Content-Type':  'text/html'

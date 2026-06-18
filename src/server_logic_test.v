@@ -282,6 +282,39 @@ on_completed = "vjsx:test.upload.completed"
 	assert cfg.routes[0].denied_query_patterns['debug'] == '*'
 }
 
+fn test_load_vhttpd_config_supports_flat_vjsx_executor_spec() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_flat_vjsx_executor_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	config_file := os.join_path(temp_dir, 'vhttpd.toml')
+	os.write_file(config_file, '
+[paths]
+root = "."
+
+[executors.vjsx]
+kind = "vjsx"
+app_entry = "./upload-events.mts"
+module_root = "."
+
+[[routes]]
+match.method = ["POST", "PUT"]
+match.path = ["/vhttpd/uploads"]
+executor = "upload"
+upload_dir = "/tmp/uploads"
+on_completed = "vjsx:test.upload.completed"
+') or {
+		panic(err)
+	}
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	cfg := config.load_vhttpd_config(['--config', config_file]) or { panic(err) }
+	vjsx_spec := cfg.executors['vjsx'] or { panic('missing vjsx executor') }
+	assert vjsx_spec.executor.kind == 'vjsx'
+	assert vjsx_spec.vjsx.app_entry == os.join_path(temp_dir, 'upload-events.mts')
+	assert vjsx_spec.vjsx.module_root == temp_dir
+	assert vjsx_spec.php.app_entry == ''
+}
+
 fn test_execute_websocket_dispatch_commands_result_treats_targeted_close_as_hub_command() {
 	mut app := App{}
 	result := app.execute_websocket_dispatch_commands_result([

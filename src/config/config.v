@@ -765,8 +765,10 @@ fn decode_executor_spec_config_map(entry map[string]toml.Any) ExecutorSpecConfig
 	if 'kind' in entry {
 		cfg.executor.kind = toml_string_from_map(entry, 'kind', cfg.executor.kind)
 	}
-	if 'bin' in entry || 'worker_entry' in entry || 'app_entry' in entry || 'extensions' in entry
-		|| 'args' in entry {
+	if cfg.executor.kind == 'vjsx' {
+		cfg.vjsx = decode_vjsx_config_map(entry)
+	} else if 'bin' in entry || 'worker_entry' in entry || 'app_entry' in entry
+		|| 'extensions' in entry || 'args' in entry {
 		cfg.php = decode_php_config_map(entry)
 	}
 	if 'deny_php' in entry || 'compat_php' in entry {
