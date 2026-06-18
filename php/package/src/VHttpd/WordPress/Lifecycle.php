@@ -65,11 +65,17 @@ final class Lifecycle
             }
 
             $serverParams = $request->getServerParams();
+            $method = strtoupper($request->getMethod());
+            $originalMethod = $method;
+            if ($method === 'HEAD') {
+                $method = 'GET';
+            }
 
             return $this->normalizeCookieState([
                 'path' => $request->getUri()->getPath(),
                 'query_string' => $request->getUri()->getQuery(),
-                'method' => $request->getMethod(),
+                'method' => $method,
+                'original_method' => $originalMethod,
                 'query' => $request->getQueryParams(),
                 'body' => (string) $request->getBody(),
                 'headers' => $headers,
@@ -79,6 +85,10 @@ final class Lifecycle
                 'port' => (string) $request->getUri()->getPort(),
                 'scheme' => $request->getUri()->getScheme(),
                 'remote_addr' => (string) ($serverParams['REMOTE_ADDR'] ?? ''),
+                'trace_id' => $this->headerValue($headers, ['x-vhttpd-trace-id', 'X-Vhttpd-Trace-Id', 'X-VHTTPD-TRACE-ID'])
+                    ?: (string) ($serverParams['VHTTPD_TRACE_ID'] ?? $serverParams['HTTP_X_VHTTPD_TRACE_ID'] ?? ''),
+                'request_id' => $this->headerValue($headers, ['x-request-id', 'X-Request-Id'])
+                    ?: (string) ($serverParams['VHTTPD_REQUEST_ID'] ?? $serverParams['HTTP_X_REQUEST_ID'] ?? ''),
             ]);
         }
 
@@ -94,10 +104,17 @@ final class Lifecycle
             $queryString = http_build_query($query);
         }
 
+        $method = strtoupper((string) ($payload['method'] ?? 'GET'));
+        $originalMethod = $method;
+        if ($method === 'HEAD') {
+            $method = 'GET';
+        }
+
         return $this->normalizeCookieState([
             'path' => $path,
             'query_string' => $queryString,
-            'method' => strtoupper((string) ($payload['method'] ?? 'GET')),
+            'method' => $method,
+            'original_method' => $originalMethod,
             'query' => is_array($query) ? $query : [],
             'body' => (string) ($payload['body'] ?? ''),
             'headers' => is_array($payload['headers'] ?? null) ? $payload['headers'] : [],
@@ -105,8 +122,13 @@ final class Lifecycle
             'server' => is_array($payload['server'] ?? null) ? $payload['server'] : [],
             'host' => (string) ($payload['host'] ?? ''),
             'port' => (string) ($payload['port'] ?? ''),
-            'scheme' => (string) ($payload['scheme'] ?? 'http'),
+            'scheme' => $this->requestScheme(
+                is_array($payload['headers'] ?? null) ? $payload['headers'] : [],
+                (string) ($payload['scheme'] ?? 'http'),
+            ),
             'remote_addr' => (string) ($payload['remote_addr'] ?? ''),
+            'trace_id' => $this->requestTraceId($payload),
+            'request_id' => $this->requestRequestId($payload),
         ]);
     }
 
@@ -123,6 +145,8 @@ final class Lifecycle
         $host = (string) ($request['host'] ?? '');
         $port = (string) ($request['port'] ?? '');
         $scheme = (string) ($request['scheme'] ?? 'http');
+        $traceId = (string) ($request['trace_id'] ?? '');
+        $requestId = (string) ($request['request_id'] ?? '');
 
         $_SERVER['REQUEST_URI'] = $path . ($queryString !== '' ? '?' . $queryString : '');
         $_SERVER['REQUEST_METHOD'] = $method;
@@ -131,8 +155,17 @@ final class Lifecycle
         $_SERVER['SERVER_NAME'] = $host !== '' ? $host : 'localhost';
         $_SERVER['SERVER_PORT'] = $port !== '' ? $port : ($scheme === 'https' ? '443' : '80');
         $_SERVER['HTTPS'] = $scheme === 'https' ? 'on' : 'off';
+        $_SERVER['REQUEST_SCHEME'] = $scheme;
+        $_SERVER['HTTP_X_FORWARDED_PROTO'] = $scheme;
         $_SERVER['REMOTE_ADDR'] = (string) ($request['remote_addr'] ?? '127.0.0.1') ?: '127.0.0.1';
         $_SERVER['HTTP_COOKIE'] = (string) ($request['cookie_header'] ?? '');
+        $_SERVER['VHTTPD_TRACE_ID'] = $traceId;
+        $_SERVER['VHTTPD_REQUEST_ID'] = $requestId;
+        $_SERVER['HTTP_X_VHTTPD_TRACE_ID'] = $traceId;
+        $_SERVER['HTTP_X_REQUEST_ID'] = $requestId;
+        putenv('VHTTPD_TRACE_ID=' . $traceId);
+        putenv('VHTTPD_REQUEST_ID=' . $requestId);
+        $this->refreshDependencyUrls($scheme);
 
         $_GET = $query;
         $_POST = [];
@@ -151,11 +184,16 @@ final class Lifecycle
 
     public function prepareBootstrapDefaults(): void
     {
+        $scheme = $this->bootstrapScheme();
+
         $_SERVER['HTTP_HOST'] = $_SERVER['HTTP_HOST'] ?? 'localhost';
         $_SERVER['REQUEST_URI'] = $_SERVER['REQUEST_URI'] ?? '/';
         $_SERVER['REQUEST_METHOD'] = $_SERVER['REQUEST_METHOD'] ?? 'GET';
         $_SERVER['SERVER_NAME'] = $_SERVER['SERVER_NAME'] ?? 'localhost';
-        $_SERVER['SERVER_PORT'] = $_SERVER['SERVER_PORT'] ?? '80';
+        $_SERVER['SERVER_PORT'] = $_SERVER['SERVER_PORT'] ?? ($scheme === 'https' ? '443' : '80');
+        $_SERVER['HTTPS'] = $_SERVER['HTTPS'] ?? ($scheme === 'https' ? 'on' : 'off');
+        $_SERVER['REQUEST_SCHEME'] = $_SERVER['REQUEST_SCHEME'] ?? $scheme;
+        $_SERVER['HTTP_X_FORWARDED_PROTO'] = $_SERVER['HTTP_X_FORWARDED_PROTO'] ?? $scheme;
         $_SERVER['REMOTE_ADDR'] = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
     }
 
@@ -253,6 +291,74 @@ final class Lifecycle
         return '';
     }
 
+    /** @param array<string,mixed> $headers */
+    private function requestScheme(array $headers, string $fallback): string
+    {
+        foreach (['x-forwarded-proto', 'X-Forwarded-Proto', 'HTTP_X_FORWARDED_PROTO', 'x-scheme', 'X-Scheme'] as $name) {
+            $value = $headers[$name] ?? '';
+            if (is_array($value)) {
+                $value = reset($value);
+            }
+            if (is_string($value) && strtolower(trim($value)) === 'https') {
+                return 'https';
+            }
+        }
+
+        return strtolower(trim($fallback)) === 'https' ? 'https' : 'http';
+    }
+
+    private function bootstrapScheme(): string
+    {
+        foreach (['VHTTPD_SCHEME', 'VHTTPD_REQUEST_SCHEME', 'REQUEST_SCHEME', 'HTTP_X_FORWARDED_PROTO'] as $name) {
+            $value = getenv($name);
+            if (is_string($value) && strtolower(trim($value)) === 'https') {
+                return 'https';
+            }
+        }
+
+        return 'http';
+    }
+
+    /** @param array<string,mixed> $payload */
+    private function requestTraceId(array $payload): string
+    {
+        $headers = is_array($payload['headers'] ?? null) ? $payload['headers'] : [];
+        $traceId = $this->headerValue($headers, ['x-vhttpd-trace-id', 'X-Vhttpd-Trace-Id', 'X-VHTTPD-TRACE-ID', 'HTTP_X_VHTTPD_TRACE_ID']);
+        if ($traceId !== '') {
+            return $traceId;
+        }
+        return (string) ($payload['trace_id'] ?? $payload['id'] ?? '');
+    }
+
+    /** @param array<string,mixed> $payload */
+    private function requestRequestId(array $payload): string
+    {
+        $headers = is_array($payload['headers'] ?? null) ? $payload['headers'] : [];
+        $requestId = $this->headerValue($headers, ['x-request-id', 'X-Request-Id', 'HTTP_X_REQUEST_ID']);
+        if ($requestId !== '') {
+            return $requestId;
+        }
+        return (string) ($payload['request_id'] ?? '');
+    }
+
+    /**
+     * @param array<string,mixed> $headers
+     * @param array<int,string> $names
+     */
+    private function headerValue(array $headers, array $names): string
+    {
+        foreach ($names as $name) {
+            $value = $headers[$name] ?? '';
+            if (is_array($value)) {
+                $value = reset($value);
+            }
+            if (is_string($value) && trim($value) !== '') {
+                return trim($value);
+            }
+        }
+        return '';
+    }
+
     /** @return array<string,string> */
     private function parseCookieHeader(string $header): array
     {
@@ -301,6 +407,37 @@ final class Lifecycle
         }
     }
 
+    private function refreshDependencyUrls(string $scheme): void
+    {
+        global $wp_styles, $wp_scripts;
+
+        $baseUrl = function_exists('site_url') ? site_url('', $scheme) : '';
+        $contentUrl = function_exists('content_url') ? content_url() : '';
+        if ($contentUrl !== '' && function_exists('set_url_scheme')) {
+            $contentUrl = set_url_scheme($contentUrl, $scheme);
+        }
+
+        foreach ([$wp_styles ?? null, $wp_scripts ?? null] as $deps) {
+            if (!is_object($deps)) {
+                continue;
+            }
+            if ($baseUrl !== '' && property_exists($deps, 'base_url')) {
+                $deps->base_url = $baseUrl;
+            }
+            if ($contentUrl !== '' && property_exists($deps, 'content_url')) {
+                $deps->content_url = $contentUrl;
+            }
+            if (property_exists($deps, 'registered') && is_array($deps->registered) && function_exists('set_url_scheme')) {
+                foreach ($deps->registered as $handle) {
+                    if (is_object($handle) && property_exists($handle, 'src') && is_string($handle->src)
+                        && preg_match('#^https?://#i', $handle->src) === 1) {
+                        $handle->src = set_url_scheme($handle->src, $scheme);
+                    }
+                }
+            }
+        }
+    }
+
     private function setPrivateProperty(object $object, string $property, mixed $value): void
     {
         try {
@@ -309,10 +446,24 @@ final class Lifecycle
                 return;
             }
             $refProperty = $reflection->getProperty($property);
-            $refProperty->setAccessible(true);
             $refProperty->setValue($object, $value);
         } catch (Throwable) {
             // WordPress internals differ by version; request cleanup is best-effort.
         }
     }
+
+    /**
+     * @param array<string,mixed> $request
+     * @param array<string,mixed> $response
+     * @return array<string,mixed>
+     */
+    public function finalizeResponse(array $request, array $response): array
+    {
+        $originalMethod = strtoupper((string) ($request['original_method'] ?? $request['method'] ?? 'GET'));
+        if ($originalMethod === 'HEAD') {
+            $response['body'] = '';
+        }
+        return $response;
+    }
 }
+

@@ -41,12 +41,6 @@ $lifecycle->bootstrapIfInstalled($wpRoot);
 
 return static function ($requestOrEnvelope, array $envelope = []) use ($lifecycle, $wpRoot): array {
     $request = $lifecycle->normalizeRequest($requestOrEnvelope, $envelope);
-    $originalMethod = $request['method'] ?? 'GET';
-    $isHead = false;
-    if (strtoupper($originalMethod) === 'HEAD') {
-        $isHead = true;
-        $request['method'] = 'GET';
-    }
 
     $execute = static function () use ($lifecycle, $wpRoot, $request, $envelope): array {
         try {
@@ -261,8 +255,5 @@ return static function ($requestOrEnvelope, array $envelope = []) use ($lifecycl
     };
 
     $response = $execute();
-    if ($isHead) {
-        $response['body'] = '';
-    }
-    return $response;
+    return $lifecycle->finalizeResponse($request, $response);
 };
