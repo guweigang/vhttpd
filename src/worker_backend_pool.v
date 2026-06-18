@@ -55,7 +55,7 @@ fn next_idle_worker_socket_for_state(mut ws worker.WorkerState) ?string {
 	return none
 }
 
-fn (mut app App) worker_backend_select_socket_for_state(kind string, mut ws worker.WorkerState) !string {
+fn (mut app App) worker_backend_select_socket_for_state_core(kind string, mut ws worker.WorkerState) !string {
 	app.ensure_workers_alive_for_state(mut ws)
 	ws.mu.@lock()
 	socket_len := ws.worker_backend.sockets.len
@@ -90,11 +90,6 @@ fn (mut app App) worker_backend_select_socket_for_state(kind string, mut ws work
 		if last_err == 'worker unavailable' {
 			last_err = 'all workers busy'
 		}
-		app.emit('worker.select.failed', {
-			'kind':             kind
-			'error':            last_err
-			'diagnostics_json': json.encode(worker_selection_diagnostics_for_state(ws))
-		})
 		return error(last_err)
 	}
 	for _ in 0 .. socket_len {
@@ -128,12 +123,19 @@ fn (mut app App) worker_backend_select_socket_for_state(kind string, mut ws work
 			app.restart_worker_slot_now_for_state(mut ws, idx, 'drain_complete')
 		}
 	}
-	app.emit('worker.select.failed', {
-		'kind':             kind
-		'error':            last_err
-		'diagnostics_json': json.encode(worker_selection_diagnostics_for_state(ws))
-	})
 	return error(last_err)
+}
+
+fn (mut app App) worker_backend_select_socket_for_state(kind string, mut ws worker.WorkerState) !string {
+	socket_path := app.worker_backend_select_socket_for_state_core(kind, mut ws) or {
+		app.emit('worker.select.failed', {
+			'kind':             kind
+			'error':            err.msg()
+			'diagnostics_json': json.encode(worker_selection_diagnostics_for_state(ws))
+		})
+		return err
+	}
+	return socket_path
 }
 
 fn (mut app App) worker_backend_select_socket() !string {
