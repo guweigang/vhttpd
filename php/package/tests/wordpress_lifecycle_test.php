@@ -42,6 +42,20 @@ $reqGet = $lifecycle->normalizeRequest([
 assertSame('GET', $reqGet['method'] ?? null, 'GET should remain GET');
 assertSame('GET', $reqGet['original_method'] ?? null, 'Original method should be GET');
 
+$reqCookie = $lifecycle->normalizeRequest([
+    'method' => 'GET',
+    'path' => '/cart',
+    'headers' => [
+        'cookie' => 'wordpress_logged_in_test=token%252Fstill_encoded; plain=value',
+    ],
+]);
+assertSame(
+    'token%2Fstill_encoded',
+    $reqCookie['cookies']['wordpress_logged_in_test'] ?? null,
+    'Cookie values should be decoded exactly once'
+);
+assertSame('value', $reqCookie['cookies']['plain'] ?? null, 'Plain cookie should survive normalization');
+
 $finalResGet = $lifecycle->finalizeResponse($reqGet, $res);
 assertSame('hello', $finalResGet['body'] ?? null, 'Response body should not be cleared for GET request');
 

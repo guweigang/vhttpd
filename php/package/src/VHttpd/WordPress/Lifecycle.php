@@ -202,6 +202,8 @@ final class Lifecycle
         global $wp_styles, $wp_scripts, $wp_script_modules, $current_user, $wp_admin_bar;
         global $user_ID, $user_level, $userdata, $user_login, $user_email, $user_url, $user_identity;
 
+        $this->resetWooCommerceRuntime();
+
         if ($wp_styles instanceof \WP_Styles) {
             $this->resetDependencyRuntime($wp_styles);
             $this->setPrivateProperty($wp_styles, 'all_queued_deps', null);
@@ -247,6 +249,35 @@ final class Lifecycle
         }
     }
 
+    public function prepareWooCommerceRuntime(): void
+    {
+        if (!function_exists('WC') || !is_object(WC())) {
+            return;
+        }
+
+        $woocommerce = WC();
+        if (function_exists('wp_get_current_user')) {
+            wp_get_current_user();
+        }
+
+        if (method_exists($woocommerce, 'initialize_session')) {
+            $woocommerce->initialize_session();
+        }
+        if (method_exists($woocommerce, 'initialize_cart')) {
+            $woocommerce->initialize_cart();
+        }
+
+        if (is_object($woocommerce->session ?? null) && method_exists($woocommerce->session, 'init_session_cookie')) {
+            $woocommerce->session->init_session_cookie();
+        }
+        if (is_object($woocommerce->cart ?? null) && is_object($woocommerce->cart->session ?? null)
+            && method_exists($woocommerce->cart->session, 'get_cart_from_session')) {
+            $woocommerce->cart->session->get_cart_from_session();
+        } elseif (is_object($woocommerce->cart ?? null) && method_exists($woocommerce->cart, 'get_cart_from_session')) {
+            $woocommerce->cart->get_cart_from_session();
+        }
+    }
+
     public static function renderAdminBar(): void
     {
         global $wp_admin_bar;
@@ -277,7 +308,7 @@ final class Lifecycle
         }
         foreach ($cookies as $name => $value) {
             if (is_string($value)) {
-                $cookies[$name] = urldecode($value);
+                $cookies[$name] = rawurldecode($value);
             }
         }
 
@@ -385,7 +416,7 @@ final class Lifecycle
             if ($name === '') {
                 continue;
             }
-            $cookies[$name] = urldecode($value);
+            $cookies[$name] = $value;
         }
         return $cookies;
     }
@@ -450,6 +481,61 @@ final class Lifecycle
         }
     }
 
+    private function resetWooCommerceRuntime(): void
+    {
+        if (!function_exists('WC') || !is_object(WC())) {
+            return;
+        }
+
+        $woocommerce = WC();
+        $session = $woocommerce->session ?? null;
+        if (is_object($session)) {
+            remove_action('woocommerce_set_cart_cookies', [$session, 'set_customer_session_cookie'], 10);
+            remove_action('wp', [$session, 'maybe_set_customer_session_cookie'], 99);
+            remove_action('template_redirect', [$session, 'destroy_session_if_empty'], 999);
+            remove_action('shutdown', [$session, 'save_data'], 20);
+            remove_action('wp_logout', [$session, 'destroy_session']);
+            remove_filter('nonce_user_logged_out', [$session, 'maybe_update_nonce_user_logged_out'], 10);
+        }
+
+        $cart = $woocommerce->cart ?? null;
+        if (is_object($cart)) {
+            remove_action('woocommerce_add_to_cart', [$cart, 'calculate_totals'], 20);
+            remove_action('woocommerce_applied_coupon', [$cart, 'calculate_totals'], 20);
+            remove_action('woocommerce_removed_coupon', [$cart, 'calculate_totals'], 20);
+            remove_action('woocommerce_cart_item_removed', [$cart, 'calculate_totals'], 20);
+            remove_action('woocommerce_cart_item_restored', [$cart, 'calculate_totals'], 20);
+            remove_action('woocommerce_check_cart_items', [$cart, 'check_cart_items'], 1);
+            remove_action('woocommerce_check_cart_items', [$cart, 'check_cart_coupons'], 1);
+            remove_action('woocommerce_after_checkout_validation', [$cart, 'check_customer_coupons'], 1);
+
+            $cartSession = $cart->session ?? null;
+            if (is_object($cartSession)) {
+                remove_action('wp_loaded', [$cartSession, 'get_cart_from_session']);
+                remove_action('woocommerce_cart_emptied', [$cartSession, 'destroy_cart_session']);
+                remove_action('woocommerce_after_calculate_totals', [$cartSession, 'set_session'], 1000);
+                remove_action('woocommerce_removed_coupon', [$cartSession, 'set_session']);
+                remove_action('woocommerce_add_to_cart', [$cartSession, 'persistent_cart_update']);
+                remove_action('woocommerce_cart_item_removed', [$cartSession, 'persistent_cart_update']);
+                remove_action('woocommerce_cart_item_restored', [$cartSession, 'persistent_cart_update']);
+                remove_action('woocommerce_cart_item_set_quantity', [$cartSession, 'persistent_cart_update']);
+                remove_action('woocommerce_add_to_cart', [$cartSession, 'maybe_set_cart_cookies']);
+                remove_action('wp', [$cartSession, 'maybe_set_cart_cookies'], 99);
+                remove_action('shutdown', [$cartSession, 'maybe_set_cart_cookies'], 0);
+                remove_action('template_redirect', [$cartSession, 'clean_up_removed_cart_contents']);
+            }
+        }
+
+        $customer = $woocommerce->customer ?? null;
+        if (is_object($customer)) {
+            remove_action('shutdown', [$customer, 'save'], 10);
+        }
+
+        $woocommerce->session = null;
+        $woocommerce->cart = null;
+        $woocommerce->customer = null;
+    }
+
     private function setPrivateProperty(object $object, string $property, mixed $value): void
     {
         try {
@@ -471,11 +557,137 @@ final class Lifecycle
      */
     public function finalizeResponse(array $request, array $response): array
     {
+        $response = $this->attachWooCommerceCookies($response);
         $originalMethod = strtoupper((string) ($request['original_method'] ?? $request['method'] ?? 'GET'));
         if ($originalMethod === 'HEAD') {
             $response['body'] = '';
         }
         return $response;
     }
-}
 
+    /** @param array<string,mixed> $response */
+    private function attachWooCommerceCookies(array $response): array
+    {
+        if (!function_exists('WC') || !is_object(WC())) {
+            return $response;
+        }
+
+        $headers = is_array($response['headers'] ?? null) ? $response['headers'] : [];
+        $sessionCookie = $this->wooCommerceSessionCookieHeader();
+        if ($sessionCookie !== '') {
+            $this->appendHeader($headers, 'set-cookie', $sessionCookie);
+        }
+
+        foreach ($this->wooCommerceCartCookieHeaders() as $cookie) {
+            $this->appendHeader($headers, 'set-cookie', $cookie);
+        }
+
+        $response['headers'] = $headers;
+        return $response;
+    }
+
+    private function wooCommerceSessionCookieHeader(): string
+    {
+        $session = WC()->session ?? null;
+        if (!is_object($session) || !method_exists($session, 'get_customer_id')) {
+            return '';
+        }
+
+        $customerId = (string) $session->get_customer_id();
+        $expiration = (int) $this->objectProperty($session, '_session_expiration', 0);
+        $expiring = (int) $this->objectProperty($session, '_session_expiring', 0);
+        if ($customerId === '' || $expiration <= 0 || $expiring <= 0) {
+            return '';
+        }
+
+        $cookieName = function_exists('apply_filters') && defined('COOKIEHASH')
+            ? (string) apply_filters('woocommerce_cookie', 'wp_woocommerce_session_' . COOKIEHASH)
+            : 'wp_woocommerce_session';
+        $hash = function_exists('wp_fast_hash')
+            ? wp_fast_hash($customerId . '|' . (string) $expiration)
+            : (function_exists('wp_hash')
+                ? hash_hmac('md5', $customerId . '|' . (string) $expiration, wp_hash($customerId . '|' . (string) $expiration))
+                : hash_hmac('md5', $customerId . '|' . (string) $expiration, 'vhttpd'));
+        $value = $customerId . '|' . (string) $expiration . '|' . (string) $expiring . '|' . $hash;
+        $secure = function_exists('wc_site_is_https') && function_exists('is_ssl')
+            ? (wc_site_is_https() && is_ssl())
+            : ((string) ($_SERVER['HTTPS'] ?? '') === 'on');
+        $httpOnly = function_exists('apply_filters')
+            ? (bool) apply_filters('woocommerce_cookie_httponly', true, $cookieName, $value, $expiration, $secure)
+            : true;
+
+        return $this->buildCookieHeader($cookieName, $value, $expiration, $secure, $httpOnly);
+    }
+
+    /** @return array<int,string> */
+    private function wooCommerceCartCookieHeaders(): array
+    {
+        $cart = WC()->cart ?? null;
+        if (!is_object($cart) || !method_exists($cart, 'get_cart_hash')) {
+            return [];
+        }
+
+        $secure = function_exists('wc_site_is_https') && function_exists('is_ssl')
+            ? (wc_site_is_https() && is_ssl())
+            : ((string) ($_SERVER['HTTPS'] ?? '') === 'on');
+        $isEmpty = method_exists($cart, 'is_empty') ? (bool) $cart->is_empty() : false;
+        if ($isEmpty) {
+            $expired = time() - 3600;
+            return [
+                $this->buildCookieHeader('woocommerce_items_in_cart', '0', $expired, $secure, false),
+                $this->buildCookieHeader('woocommerce_cart_hash', '', $expired, $secure, false),
+            ];
+        }
+
+        return [
+            $this->buildCookieHeader('woocommerce_items_in_cart', '1', 0, $secure, false),
+            $this->buildCookieHeader('woocommerce_cart_hash', (string) $cart->get_cart_hash(), 0, $secure, false),
+        ];
+    }
+
+    private function buildCookieHeader(string $name, string $value, int $expires, bool $secure, bool $httpOnly): string
+    {
+        $parts = [$name . '=' . rawurlencode($value)];
+        if ($expires > 0) {
+            $parts[] = 'expires=' . gmdate('D, d M Y H:i:s', $expires) . ' GMT';
+            $parts[] = 'Max-Age=' . max(0, $expires - time());
+        }
+        $path = defined('COOKIEPATH') && COOKIEPATH ? COOKIEPATH : '/';
+        $parts[] = 'path=' . $path;
+        if (defined('COOKIE_DOMAIN') && COOKIE_DOMAIN) {
+            $parts[] = 'domain=' . COOKIE_DOMAIN;
+        }
+        if ($secure) {
+            $parts[] = 'Secure';
+        }
+        if ($httpOnly) {
+            $parts[] = 'HttpOnly';
+        }
+        return implode('; ', $parts);
+    }
+
+    /** @param array<string,mixed> $headers */
+    private function appendHeader(array &$headers, string $name, string $value): void
+    {
+        foreach (array_keys($headers) as $key) {
+            if (strtolower((string) $key) === strtolower($name)) {
+                $headers[$key] = (string) $headers[$key] . "\n" . $value;
+                return;
+            }
+        }
+        $headers[$name] = $value;
+    }
+
+    private function objectProperty(object $object, string $property, mixed $default): mixed
+    {
+        try {
+            $reflection = new ReflectionObject($object);
+            if (!$reflection->hasProperty($property)) {
+                return $default;
+            }
+            return $reflection->getProperty($property)->getValue($object);
+        } catch (Throwable) {
+            return $default;
+        }
+    }
+}
