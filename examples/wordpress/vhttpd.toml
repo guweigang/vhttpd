@@ -27,7 +27,11 @@ username = "root"
 password = "Abcd.1234"
 database = "wordpress"
 pool_size = 5
-wordpress_compat = true
+idle_ping_ms = 300000
+init_sql = [
+    "SET NAMES utf8mb4",
+    "SET SESSION sql_mode = TRIM(BOTH ',' FROM REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(CONCAT(',', @@SESSION.sql_mode, ','), ',NO_ZERO_DATE,', ','), ',ONLY_FULL_GROUP_BY,', ','), ',STRICT_TRANS_TABLES,', ','), ',STRICT_ALL_TABLES,', ','), ',TRADITIONAL,', ','), ',ANSI,', ','))"
+]
 
 [cache]
 enabled = true
@@ -75,6 +79,8 @@ VHTTPD_DB_SOCKET = "/tmp/vhttpd_wp_db.sock"
 VHTTPD_DB_POOL = "wordpress"
 VHTTPD_DB_TIMEOUT_MS = "3000"
 VHTTPD_CACHE_SOCKET = "/tmp/vhttpd_wp_cache.sock"
+VHTTPD_SCHEME = "https"
+VHTTPD_REQUEST_SCHEME = "https"
 
 # 2. 附加执行器 (附加池): 负责后台管理、登录等不适合/不支持长驻模式的动态脚本
 [executors.php-cgi]
@@ -83,7 +89,7 @@ bin = "php-cgi"
 
 [executors.php-cgi.worker]
 autostart = true
-pool_size = 2
+pool_size = 4
 socket = "/tmp/vhttpd_wp_cgi.sock"
 queue_capacity = 64
 queue_timeout_ms = 10000
@@ -95,6 +101,13 @@ VHTTPD_DB_SOCKET = "/tmp/vhttpd_wp_db.sock"
 VHTTPD_DB_POOL = "wordpress"
 VHTTPD_DB_TIMEOUT_MS = "3000"
 VHTTPD_CACHE_SOCKET = "/tmp/vhttpd_wp_cache.sock"
+VHTTPD_SCHEME = "https"
+VHTTPD_REQUEST_SCHEME = "https"
+
+[executors.vjsx]
+kind = "vjsx"
+app_entry = "./upload-events.mts"
+module_root = "."
 
 
 # 3. 路由分流策略 (按顺序从上往下匹配，匹配成功即刻阻断)
@@ -106,6 +119,16 @@ VHTTPD_CACHE_SOCKET = "/tmp/vhttpd_wp_cache.sock"
 # ==========================================================
 
 # 规则 3.1: 拦截全站任意目录下的静态文件后缀，由 static 极速直回
+[[routes]]
+match.path = ["/vhttpd/uploads", "/vhttpd/uploads/*"]
+match.method = ["POST", "PUT"]
+executor = "upload"
+upload_dir = "/tmp/vhttpd-wordpress-uploads"
+on_completed = "vjsx:wordpress.upload.completed"
+max_body_bytes = 536870912
+cache_control = "private, no-store"
+response_headers = { X-Content-Type-Options = "nosniff" }
+
 [[routes]]
 match.path = [
     "*.css",
@@ -122,6 +145,7 @@ match.path = [
 ]
 executor = "static"
 root = "${site.root}"
+cache_control = "public, max-age=31536000, immutable"
 
 # 规则 3.2: 其他非特定后缀的静态资源目录直回
 [[routes]]
@@ -133,6 +157,7 @@ match.path = [
 ]
 executor = "static"
 root = "${site.root}"
+cache_control = "public, max-age=3600"
 
 # 规则 3.3: WordPress REST API 通过 /index.php?rest_route=... 进入，
 # long-running worker 会把部分 REST 输出写到 stdout，因此这里走 CGI/compat 池
@@ -145,9 +170,70 @@ executor = "php-cgi"
 # /index.php?rest_route=/...
 [[routes]]
 match.path = ["/wp-json", "/wp-json/*"]
+match.method = ["OPTIONS"]
+status = 204
+response_headers = { Access-Control-Allow-Methods = "GET, HEAD, OPTIONS", Access-Control-Allow-Headers = "Content-Type, Authorization", Access-Control-Max-Age = "600", X-Content-Type-Options = "nosniff" }
+
+[[routes]]
+match.path = ["/wp-json", "/wp-json/*"]
+match.method = ["GET", "HEAD"]
 executor = "php-cgi"
 rewrite = "/index.php?rest_route=$path_remainder"
 rewrite_strip_prefix = "/wp-json"
+response_headers = { X-Content-Type-Options = "nosniff" }
+max_body_bytes = 1048576
 
-# 规则 3.4: 兜底规则 (选填)
+# WooCommerce cart/session pages carry request-scoped nonces and session state.
+[[routes]]
+match.path = ["/cart", "/cart/", "/checkout", "/checkout/", "/my-account", "/my-account/"]
+executor = "php"
+max_body_bytes = 1048576
+cache_control = "private, no-store"
+
+[[routes]]
+match.path = ["/", "/index.php"]
+match.query = { page_id = "*" }
+executor = "php"
+max_body_bytes = 1048576
+cache_control = "private, no-store"
+
+[[routes]]
+match.path = ["/", "/index.php"]
+match.query = { wc-ajax = "*" }
+executor = "php"
+max_body_bytes = 1048576
+cache_control = "private, no-store"
+
+[[routes]]
+match.path = ["/", "/index.php"]
+match.query = { add-to-cart = "*" }
+executor = "php"
+max_body_bytes = 1048576
+cache_control = "private, no-store"
+
+# 规则 3.5: 匿名前台首页/查询页短 TTL 页面缓存，带 Cookie/Authorization 会自动旁路
+[[routes]]
+match.path = ["/", "/index.php"]
+executor = "php"
+max_body_bytes = 1048576
+response_cache_ttl_ms = 30000
+cache_control = "public, max-age=30"
+cache_bypass_cookie_patterns = [
+    "wordpress_logged_in_*",
+    "wordpress_sec_*",
+    "wp-postpass_*",
+    "comment_author_*",
+    "comment_author_email_*",
+    "comment_author_url_*",
+    "woocommerce_items_in_cart",
+    "woocommerce_cart_hash",
+    "wp_woocommerce_session_*"
+]
+cache_ignore_cookie_patterns = [
+    "wordpress_test_cookie",
+    "wp-settings-*",
+    "wp-settings-time-*"
+]
+
+# 规则 3.6: 兜底规则 (选填)
 # 任何未匹配上述规则的动态请求，将默认派发给 [executor].kind 中定义的 "php" (php-worker) 高性能长驻主池处理

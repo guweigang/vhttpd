@@ -201,6 +201,14 @@ return static function ($requestOrEnvelope, array $envelope = []) use ($lifecycl
             // 调用 wp() 进行路由和查询
             global $wp, $wp_query, $wp_the_query, $post, $posts, $wp_did_header;
             $wp_did_header = true;
+            if (function_exists('WC') && is_object(WC())) {
+                if (is_object(WC()->session) && method_exists(WC()->session, 'init_session_cookie')) {
+                    WC()->session->init_session_cookie();
+                }
+                if (is_object(WC()->cart) && method_exists(WC()->cart, 'get_cart_from_session')) {
+                    WC()->cart->get_cart_from_session();
+                }
+            }
 
             if (function_exists('wp')) {
                 wp();
