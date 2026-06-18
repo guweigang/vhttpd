@@ -200,7 +200,7 @@ cache_control = "private, no-store"
 [[routes]]
 match.path = ["/", "/index.php"]
 match.query = { wc-ajax = "*" }
-executor = "php"
+executor = "php-cgi"
 max_body_bytes = 1048576
 cache_control = "private, no-store"
 
