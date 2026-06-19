@@ -629,57 +629,61 @@ final class Profiler
         $topHooks = [];
         $count = 0;
         foreach (self::$hookCounts as $tag => $num) {
-            if ($count >= 10) {
+            // 只保留在 $wp_filter 中注册了回调的 hook
+            $hasCallbacks = isset($wp_filter[$tag]) && $wp_filter[$tag] instanceof \WP_Hook && !empty($wp_filter[$tag]->callbacks);
+            if (!$hasCallbacks) {
+                continue;
+            }
+
+            if ($count >= 30) {
                 break;
             }
 
             // 提取 Callback 定义位置的反射信息
             $callbacks = [];
-            if (isset($wp_filter[$tag]) && $wp_filter[$tag] instanceof \WP_Hook) {
-                foreach ($wp_filter[$tag]->callbacks as $priority => $priorityCallbacks) {
-                    foreach ($priorityCallbacks as $cbInfo) {
-                        $function = $cbInfo['function'];
-                        $name = 'unknown';
-                        $location = 'unknown';
+            foreach ($wp_filter[$tag]->callbacks as $priority => $priorityCallbacks) {
+                foreach ($priorityCallbacks as $cbInfo) {
+                    $function = $cbInfo['function'];
+                    $name = 'unknown';
+                    $location = 'unknown';
 
-                        try {
-                            if (is_string($function)) {
-                                $name = $function;
-                                if (function_exists($function)) {
-                                    $ref = new \ReflectionFunction($function);
-                                    $location = self::cleanPath($ref->getFileName()) . ':' . $ref->getStartLine();
-                                }
-                            } elseif (is_array($function) && count($function) === 2) {
-                                $class = $function[0];
-                                $method = $function[1];
-                                $className = is_object($class) ? get_class($class) : $class;
-                                $name = "{$className}::{$method}";
-                                if (method_exists($class, $method)) {
-                                    $ref = new \ReflectionMethod($class, $method);
-                                    $location = self::cleanPath($ref->getFileName()) . ':' . $ref->getStartLine();
-                                }
-                            } elseif ($function instanceof \Closure) {
-                                $name = 'Closure';
+                    try {
+                        if (is_string($function)) {
+                            $name = $function;
+                            if (function_exists($function)) {
                                 $ref = new \ReflectionFunction($function);
                                 $location = self::cleanPath($ref->getFileName()) . ':' . $ref->getStartLine();
-                            } elseif (is_object($function)) {
-                                $className = get_class($function);
-                                $name = "{$className}::__invoke";
-                                if (method_exists($function, '__invoke')) {
-                                    $ref = new \ReflectionMethod($function, '__invoke');
-                                    $location = self::cleanPath($ref->getFileName()) . ':' . $ref->getStartLine();
-                                }
                             }
-                        } catch (\Throwable $e) {
-                            $location = 'reflection failed';
+                        } elseif (is_array($function) && count($function) === 2) {
+                            $class = $function[0];
+                            $method = $function[1];
+                            $className = is_object($class) ? get_class($class) : $class;
+                            $name = "{$className}::{$method}";
+                            if (method_exists($class, $method)) {
+                                $ref = new \ReflectionMethod($class, $method);
+                                $location = self::cleanPath($ref->getFileName()) . ':' . $ref->getStartLine();
+                            }
+                        } elseif ($function instanceof \Closure) {
+                            $name = 'Closure';
+                            $ref = new \ReflectionFunction($function);
+                            $location = self::cleanPath($ref->getFileName()) . ':' . $ref->getStartLine();
+                        } elseif (is_object($function)) {
+                            $className = get_class($function);
+                            $name = "{$className}::__invoke";
+                            if (method_exists($function, '__invoke')) {
+                                $ref = new \ReflectionMethod($function, '__invoke');
+                                $location = self::cleanPath($ref->getFileName()) . ':' . $ref->getStartLine();
+                            }
                         }
-
-                        $callbacks[] = [
-                            'name' => $name,
-                            'priority' => $priority,
-                            'location' => $location
-                        ];
+                    } catch (\Throwable $e) {
+                        $location = 'reflection failed';
                     }
+
+                    $callbacks[] = [
+                        'name' => $name,
+                        'priority' => $priority,
+                        'location' => $location
+                    ];
                 }
             }
 

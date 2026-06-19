@@ -794,7 +794,7 @@
             }
 
             return `
-                <div class="waterfall-title" style="margin-bottom: 12px;">Top 10 Most Invoked Hooks & Actions</div>
+                <div class="waterfall-title" style="margin-bottom: 12px;">Top Active Hooks & Actions (With Callbacks)</div>
                 <table class="data-table">
                     <thead>
                         <tr>
