@@ -19,6 +19,8 @@ final class ObjectCache
 
     public int $cache_hits = 0;
     public int $cache_misses = 0;
+    public int $local_hits = 0;
+    public int $remote_hits = 0;
 
     private string $blogPrefix = '';
     private bool $multisite = false;
@@ -117,6 +119,7 @@ final class ObjectCache
         if (!$force && $this->existsLocal($id, $group)) {
             $found = true;
             ++$this->cache_hits;
+            ++$this->local_hits;
             return $this->cloneIfObject($this->cache[$group][$id]);
         }
 
@@ -126,6 +129,7 @@ final class ObjectCache
                 $this->cache[$group][$id] = $remote['value'];
                 $found = true;
                 ++$this->cache_hits;
+                ++$this->remote_hits;
                 return $this->cloneIfObject($remote['value']);
             }
         }
