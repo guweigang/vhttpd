@@ -2,6 +2,16 @@
 
 declare(strict_types=1);
 
+namespace Automattic\WooCommerce\Internal\DataStores\Orders {
+    class CustomOrdersTableController {
+        public static function is_active_and_enabled(): bool {
+            return true;
+        }
+    }
+}
+
+namespace {
+
 require_once __DIR__ . '/../vendor/autoload.php';
 
 // Mock WordPress functions so the test can run in CLI
@@ -38,6 +48,74 @@ class MockObjectCache {
 $GLOBALS['wp_object_cache'] = new MockObjectCache();
 $GLOBALS['wp_version'] = '6.4.2';
 
+// Mock WooCommerce and its helpers
+if (!defined('COOKIEHASH')) {
+    define('COOKIEHASH', 'mock_hash');
+}
+if (!defined('WC_TEMPLATE_DEBUG')) {
+    define('WC_TEMPLATE_DEBUG', true);
+}
+
+if (!function_exists('get_option')) {
+    function get_option(string $option, mixed $default = false): mixed {
+        if ($option === 'woocommerce_calc_taxes') {
+            return 'yes';
+        }
+        if ($option === 'woocommerce_calc_shipping') {
+            return 'yes';
+        }
+        return $default;
+    }
+}
+
+class WC_Cart {
+    public function get_cart_contents_count() { return 3; }
+    public function get_cart_subtotal() { return '$99.00'; }
+    public function get_cart_total() { return '$109.00'; }
+    public function needs_shipping() { return true; }
+}
+
+class WC_Session {
+    public function get_customer_id() { return 'session_12345'; }
+    public function get_session_expiration() { return 1700000000; }
+}
+
+class WooCommerce {
+    public string $version = '8.5.0';
+    public $cart;
+    public $session;
+    public function __construct() {
+        $this->cart = new WC_Cart();
+        $this->session = new WC_Session();
+    }
+}
+
+if (!function_exists('WC')) {
+    function WC() {
+        static $wc = null;
+        if ($wc === null) {
+            $wc = new WooCommerce();
+        }
+        return $wc;
+    }
+}
+
+if (!function_exists('is_woocommerce')) {
+    function is_woocommerce() { return true; }
+}
+if (!function_exists('is_cart')) {
+    function is_cart() { return false; }
+}
+if (!function_exists('is_checkout')) {
+    function is_checkout() { return false; }
+}
+if (!function_exists('is_account_page')) {
+    function is_account_page() { return false; }
+}
+if (!function_exists('is_wc_endpoint_url')) {
+    function is_wc_endpoint_url() { return false; }
+}
+
 // 1. Load the bootstrap file
 require_once __DIR__ . '/../wordpress/v-profiler.php';
 
@@ -49,7 +127,8 @@ Profiler::activate();
 // Mock queries after activation so they won't be cleared by reset
 $GLOBALS['wpdb']->queries = [
     ['SELECT * FROM wp_posts WHERE ID = 1', 0.012, 'get_post', 1600000000.123],
-    ['UPDATE wp_options SET option_value = "yes" WHERE option_name = "active"', 0.065, 'update_option', 1600000000.145]
+    ['UPDATE wp_options SET option_value = "yes" WHERE option_name = "active"', 0.065, 'update_option', 1600000000.145],
+    ['SELECT * FROM wp_woocommerce_sessions WHERE session_key = "abc"', 0.005, 'WC_Session_Handler->get_session', 1600000000.150]
 ];
 
 // Test that helpers exist and don't throw
@@ -77,14 +156,33 @@ assertArrayHasKey('logs', $report);
 assertArrayHasKey('errors', $report);
 assertArrayHasKey('env', $report);
 assertArrayHasKey('vhttpd', $report);
+assertArrayHasKey('woocommerce', $report);
 
 // Verify SQL queries count and slow queries
-assertSame(2, count($report['queries']), 'Queries count');
+assertSame(3, count($report['queries']), 'Queries count');
 assertSame(1, $report['overview']['slow_queries_count'], 'Slow queries count');
 assertSame('SELECT * FROM wp_posts WHERE ID = 1', $report['queries'][0]['sql'], 'Query 1 SQL');
 assertSame(12.0, $report['queries'][0]['duration_ms'], 'Query 1 duration ms');
 assertSame(65.0, $report['queries'][1]['duration_ms'], 'Query 2 duration ms');
 assertSame(true, $report['queries'][1]['slow'], 'Query 2 is slow');
+
+// Verify WooCommerce Telemetry Data
+$wc = $report['woocommerce'];
+assertSame(true, $wc['is_wc_page'], 'is_wc_page');
+assertSame('8.5.0', $wc['version'], 'woocommerce version');
+assertSame(3, $wc['cart']['contents_count'], 'cart contents count');
+assertSame('$99.00', $wc['cart']['subtotal'], 'cart subtotal');
+assertSame('$109.00', $wc['cart']['total'], 'cart total');
+assertSame(true, $wc['cart']['needs_shipping'], 'cart needs_shipping');
+assertSame('session_12345', $wc['session']['customer_id'], 'session customer_id');
+assertSame(1700000000, $wc['session']['session_expiration'], 'session expiration');
+assertSame('HPOS Enabled (High-Performance)', $wc['hpos_enabled'], 'hpos_enabled status');
+assertSame(true, $wc['settings']['calc_taxes'], 'calc_taxes setting');
+assertSame(true, $wc['settings']['calc_shipping'], 'calc_shipping setting');
+assertSame(true, $wc['settings']['template_debug'], 'template_debug setting');
+assertSame(1, $wc['sql_count'], 'WooCommerce SQL count');
+assertSame(5.0, $wc['sql_duration_ms'], 'WooCommerce SQL duration ms');
+assertSame('SELECT * FROM wp_woocommerce_sessions WHERE session_key = "abc"', $wc['queries'][0]['sql'], 'WooCommerce SQL query');
 
 // Verify Cache stats
 assertSame(5, $report['cache']['local_hits'], 'Local hits');
@@ -136,3 +234,6 @@ function assertSame(mixed $expected, mixed $actual, string $label): void {
         exit(1);
     }
 }
+
+}
+
