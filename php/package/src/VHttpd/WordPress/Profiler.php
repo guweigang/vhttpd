@@ -563,6 +563,9 @@ final class Profiler
         $slowQueryThresholdMs = 50.0;
         $totalSqlDurationMs = 0.0;
         $slowQueriesCount = 0;
+        $wcQueries = [];
+        $wcSqlDurationMs = 0.0;
+        $wcKeywords = ['wp_wc_', 'woocommerce_', 'product', 'line_item', 'order', 'coupon', 'checkout'];
 
         if (isset($wpdb->queries) && is_array($wpdb->queries)) {
             foreach ($wpdb->queries as $idx => $q) {
@@ -577,13 +580,27 @@ final class Profiler
                 // 配对并在过滤后的 SQL 调用栈
                 $callStack = self::$queryStacks[$idx] ?? [];
 
-                $queries[] = [
+                $queryItem = [
                     'sql' => $sql,
                     'duration_ms' => $durationMs,
                     'caller' => $caller,
                     'slow' => $durationMs > $slowQueryThresholdMs,
                     'call_stack' => $callStack
                 ];
+                $queries[] = $queryItem;
+
+                // 筛选与 WooCommerce 相关的 SQL
+                $isWcQuery = false;
+                foreach ($wcKeywords as $kw) {
+                    if (str_contains(strtolower($sql), $kw)) {
+                        $isWcQuery = true;
+                        break;
+                    }
+                }
+                if ($isWcQuery) {
+                    $wcSqlDurationMs += $durationMs;
+                    $wcQueries[] = $queryItem;
+                }
             }
         }
 
@@ -756,6 +773,36 @@ final class Profiler
             'server_variables' => self::maskSensitiveData($serverVarsFiltered),
         ];
 
+        // WooCommerce 自动上下文感知识别
+        $isWcPage = false;
+        $woocommerceData = null;
+        if (class_exists('WooCommerce')) {
+            $isWcPage = (
+                (function_exists('is_woocommerce') && is_woocommerce()) ||
+                (function_exists('is_cart') && is_cart()) ||
+                (function_exists('is_checkout') && is_checkout()) ||
+                (function_exists('is_account_page') && is_account_page()) ||
+                (function_exists('is_wc_endpoint_url') && is_wc_endpoint_url()) ||
+                isset($_GET['wc-ajax']) ||
+                isset($_POST['wc-ajax']) ||
+                (isset($_SERVER['REQUEST_URI']) && (str_contains($_SERVER['REQUEST_URI'], '/wp-json/wc/') || str_contains($_SERVER['REQUEST_URI'], 'wc-ajax')))
+            );
+
+            if ($isWcPage) {
+                $woocommerceData = [
+                    'is_wc_page' => true,
+                    'version' => \WC()->version ?? 'unknown',
+                    'cart' => self::getWcCartSummary(),
+                    'session' => self::getWcSessionSummary(),
+                    'hpos_enabled' => self::getWcHposStatus(),
+                    'settings' => self::getWcSettingsSummary(),
+                    'queries' => $wcQueries,
+                    'sql_duration_ms' => round($wcSqlDurationMs, 2),
+                    'sql_count' => count($wcQueries),
+                ];
+            }
+        }
+
         return [
             'request_id' => $requestId,
             'trace_id' => $traceId,
@@ -779,6 +826,68 @@ final class Profiler
             'db_pool' => $dbPool,
             'vhttpd' => $vhttpdStats,
             'external_requests' => self::$externalRequests,
+            'woocommerce' => $woocommerceData,
+        ];
+    }
+
+    private static function getWcCartSummary(): array
+    {
+        if (isset(WC()->cart) && WC()->cart instanceof \WC_Cart) {
+            try {
+                return [
+                    'contents_count' => WC()->cart->get_cart_contents_count(),
+                    'subtotal' => html_entity_decode(strip_tags(WC()->cart->get_cart_subtotal())),
+                    'total' => html_entity_decode(strip_tags(WC()->cart->get_cart_total())),
+                    'needs_shipping' => WC()->cart->needs_shipping(),
+                ];
+            } catch (\Throwable $e) {
+                return ['error' => 'failed to read cart: ' . $e->getMessage()];
+            }
+        }
+        return ['contents_count' => 0, 'subtotal' => 'N/A', 'total' => 'N/A', 'needs_shipping' => false];
+    }
+
+    private static function getWcSessionSummary(): array
+    {
+        if (isset(WC()->session) && WC()->session instanceof \WC_Session) {
+            try {
+                $cookieName = 'wp_woocommerce_session_' . COOKIEHASH;
+                $hasSessionCookie = isset($_COOKIE[$cookieName]);
+                return [
+                    'customer_id' => WC()->session->get_customer_id(),
+                    'has_cookie' => $hasSessionCookie,
+                    'session_cookie_name' => $hasSessionCookie ? $cookieName : 'none',
+                    'session_expiration' => WC()->session->get_session_expiration(),
+                ];
+            } catch (\Throwable $e) {
+                return ['error' => 'failed to read session: ' . $e->getMessage()];
+            }
+        }
+        return ['customer_id' => 0, 'has_cookie' => false];
+    }
+
+    private static function getWcHposStatus(): string
+    {
+        try {
+            if (class_exists(\Automattic\WooCommerce\Internal\DataStores\Orders\CustomOrdersTableController::class)) {
+                $controller = \Automattic\WooCommerce\Internal\DataStores\Orders\CustomOrdersTableController::class;
+                if (method_exists($controller, 'is_active_and_enabled') && $controller::is_active_and_enabled()) {
+                    return 'HPOS Enabled (High-Performance)';
+                }
+            }
+        } catch (\Throwable $e) {
+        }
+        return 'Legacy Postmeta (Slow)';
+    }
+
+    private static function getWcSettingsSummary(): array
+    {
+        return [
+            'calc_taxes' => get_option('woocommerce_calc_taxes') === 'yes',
+            'calc_shipping' => get_option('woocommerce_calc_shipping') === 'yes',
+            'template_debug' => defined('WC_TEMPLATE_DEBUG') && WC_TEMPLATE_DEBUG,
+            'checkout_pay_page' => (function_exists('is_checkout') && is_checkout()) && isset($_GET['pay_for_order']),
+            'ajax_endpoint' => isset($_GET['wc-ajax']) ? $_GET['wc-ajax'] : (isset($_POST['wc-ajax']) ? $_POST['wc-ajax'] : 'none'),
         ];
     }
 }

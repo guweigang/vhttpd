@@ -489,6 +489,11 @@
                         <button class="tab-button ${this.activeTab === 'http' ? 'active' : ''}" data-tab="http">
                             🌐 HTTP ${this.data.external_requests?.length ? `<span class="badge-counter">${this.data.external_requests.length}</span>` : ''}
                         </button>
+                        ${this.data.woocommerce?.is_wc_page ? `
+                        <button class="tab-button ${this.activeTab === 'woocommerce' ? 'active' : ''}" data-tab="woocommerce">
+                            🛒 WooCommerce
+                        </button>
+                        ` : ''}
                         <button class="tab-button ${this.activeTab === 'logs' ? 'active' : ''}" data-tab="logs">
                             🪲 Logs & Errors ${this.data.errors?.length || this.data.logs?.length ? `<span class="badge-counter ${this.data.errors?.length ? 'err' : ''}">${(this.data.errors?.length || 0) + (this.data.logs?.length || 0)}</span>` : ''}
                         </button>
@@ -521,6 +526,8 @@
                     return this.renderOverview();
                 case 'database':
                     return this.renderDatabase();
+                case 'woocommerce':
+                    return this.renderWooCommerce();
                 case 'hooks':
                     return this.renderHooks();
                 case 'cache':
@@ -1162,6 +1169,155 @@
                         <div class="env-section-title">Configured Logic Executors</div>
                         <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:12px;">
                             ${execsHtml}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        renderWooCommerce() {
+            const wc = this.data.woocommerce || {};
+            if (!wc.is_wc_page) return '';
+
+            const cart = wc.cart || {};
+            const session = wc.session || {};
+            const settings = wc.settings || {};
+            const queries = wc.queries || [];
+
+            // SQL Queries Rows
+            let queryRows = '';
+            if (queries.length === 0) {
+                queryRows = `<tr><td colspan="3" style="text-align:center;color:#64748b;padding:20px;">No WooCommerce-specific database queries recorded.</td></tr>`;
+            } else {
+                queries.forEach((q, idx) => {
+                    let stackHtml = '';
+                    if (q.call_stack && q.call_stack.length > 0) {
+                        let framesHtml = '';
+                        q.call_stack.forEach(frame => {
+                            framesHtml += `<div style="margin-bottom: 3px;">${this.escapeHtml(frame.caller)} <span style="color:#64748b;">in</span> ${this.escapeHtml(frame.file)}:${frame.line}</div>`;
+                        });
+                        stackHtml = `
+                            <details style="margin-top: 6px; outline: none;">
+                                <summary style="font-size: 10px; color: #a78bfa; cursor: pointer; user-select: none; outline: none;">View Call Stack</summary>
+                                <div style="margin-top: 4px; padding-left: 10px; border-left: 1.5px solid rgba(167, 139, 250, 0.4); font-family: monospace; font-size: 10px; color: #94a3b8; line-height: 1.4; word-break: break-all; white-space: pre-wrap;">
+                                    ${framesHtml}
+                                </div>
+                            </details>
+                        `;
+                    }
+
+                    queryRows += `
+                        <tr class="${q.slow ? 'slow-query' : ''}">
+                            <td style="width: 40px; color:#64748b; vertical-align: top;">#${idx + 1}</td>
+                            <td>
+                                <div class="sql-text">${this.escapeHtml(q.sql)}</div>
+                                <div class="sql-caller">↳ ${this.escapeHtml(q.caller)}</div>
+                                ${stackHtml}
+                            </td>
+                            <td style="width: 80px; text-align:right; font-weight: 600; vertical-align: top;">${q.duration_ms} ms</td>
+                        </tr>
+                    `;
+                });
+            }
+
+            return `
+                <div style="display:grid; grid-template-columns: 1.2fr 1.8fr; gap:25px;">
+                    <!-- Left Column: E-commerce Diagnostics -->
+                    <div style="border-right:1px solid rgba(255,255,255,0.05); padding-right:20px; display:flex; flex-direction:column; gap:20px;">
+                        
+                        <!-- Cart & Session status -->
+                        <div>
+                            <div class="waterfall-title" style="margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
+                                <span>🛒 Cart & Session Status</span>
+                                <span style="background:rgba(167,139,250,0.1); color:#a78bfa; font-size:10px; padding:2px 6px; border-radius:10px; font-weight:600;">WC v${this.escapeHtml(wc.version)}</span>
+                            </div>
+                            
+                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px;">
+                                <div class="stat-card" style="padding:10px;">
+                                    <span class="label" style="font-size:9px;">Cart Items</span>
+                                    <span class="val" style="font-size:16px; color:#c084fc;">${cart.contents_count || 0} items</span>
+                                </div>
+                                <div class="stat-card" style="padding:10px;">
+                                    <span class="label" style="font-size:9px;">Cart Total</span>
+                                    <span class="val" style="font-size:16px; color:#34d399;">${cart.total || 'N/A'}</span>
+                                </div>
+                            </div>
+
+                            <div class="key-value-list">
+                                <div class="key-value-row">
+                                    <span class="key">Cart Subtotal</span>
+                                    <span class="value">${cart.subtotal || 'N/A'}</span>
+                                </div>
+                                <div class="key-value-row">
+                                    <span class="key">Needs Shipping</span>
+                                    <span class="value">${cart.needs_shipping ? 'Yes' : 'No'}</span>
+                                </div>
+                                <div class="key-value-row">
+                                    <span class="key">Customer Session ID</span>
+                                    <span class="value" style="font-family:monospace; max-width:60%; word-break:break-all; text-align:right;">${session.customer_id || 'Guest'}</span>
+                                </div>
+                                <div class="key-value-row">
+                                    <span class="key">Session Cookie</span>
+                                    <span class="value" style="font-family:monospace; max-width:60%; font-size:10px;">${session.has_cookie ? 'Active' : 'Not Set'}</span>
+                                </div>
+                                ${session.has_cookie ? `
+                                <div class="key-value-row" style="font-size:10px; color:#64748b;">
+                                    <span class="key">Cookie Expiration</span>
+                                    <span class="value" style="font-family:monospace;">${session.session_expiration ? new Date(session.session_expiration * 1000).toLocaleString() : 'N/A'}</span>
+                                </div>
+                                ` : ''}
+                            </div>
+                        </div>
+
+                        <!-- HPOS & System configuration -->
+                        <div>
+                            <div class="waterfall-title" style="margin-bottom:10px;">⚙️ WooCommerce Settings</div>
+                            <div class="key-value-list">
+                                <div class="key-value-row">
+                                    <span class="key">Order Storage</span>
+                                    <span class="value" style="color:${wc.hpos_enabled?.includes('HPOS') ? '#34d399' : '#fb7185'}; font-weight:600;">${wc.hpos_enabled || 'Legacy Postmeta'}</span>
+                                </div>
+                                <div class="key-value-row">
+                                    <span class="key">Tax Calculation</span>
+                                    <span class="value">${settings.calc_taxes ? '<span style="color:#fb7185">Enabled (Slow)</span>' : 'Disabled'}</span>
+                                </div>
+                                <div class="key-value-row">
+                                    <span class="key">Shipping Calculation</span>
+                                    <span class="value">${settings.calc_shipping ? '<span style="color:#fb7185">Enabled (Slow)</span>' : 'Disabled'}</span>
+                                </div>
+                                <div class="key-value-row">
+                                    <span class="key">Template Debug Mode</span>
+                                    <span class="value">${settings.template_debug ? '<span style="color:#fb7185">ON (Slow)</span>' : 'OFF'}</span>
+                                </div>
+                                <div class="key-value-row">
+                                    <span class="key">Active AJAX Endpoint</span>
+                                    <span class="value" style="font-family:monospace; color:#818cf8;">${this.escapeHtml(settings.ajax_endpoint || 'none')}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right Column: WooCommerce SQL Queries -->
+                    <div>
+                        <div class="waterfall-title" style="margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
+                            <span>🗄️ WooCommerce Queries (${wc.sql_count || 0})</span>
+                            <span style="background:rgba(251,113,133,0.1); color:#fb7185; font-size:10px; padding:2px 6px; border-radius:10px; font-weight:600;">
+                                ${wc.sql_duration_ms || 0} ms total
+                            </span>
+                        </div>
+                        <div style="max-height: 240px; overflow-y:auto; border: 1px solid rgba(255,255,255,0.03); border-radius:6px;">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>SQL Query (WooCommerce Scope)</th>
+                                        <th style="text-align:right">Time</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${queryRows}
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
