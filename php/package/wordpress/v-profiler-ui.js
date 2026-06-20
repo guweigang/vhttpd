@@ -1058,6 +1058,9 @@
             const activeGateways = active.gateways || 0;
 
             // Configured Logic Executors list
+            const env = this.data.env || {};
+            const activeExecutorKind = (env.executor && env.executor.includes('php-cgi')) ? 'php-cgi' : 'php';
+
             const executors = vhttpd.executors || [];
             let execsHtml = '';
             if (executors.length === 0) {
@@ -1065,10 +1068,18 @@
             } else {
                 executors.forEach(ex => {
                     if (ex.kind === 'none') return;
+                    const isActive = ex.kind === activeExecutorKind;
+                    const borderStyle = isActive ? 'border: 1px solid rgba(139, 92, 246, 0.6); box-shadow: 0 0 10px rgba(139, 92, 246, 0.2);' : 'border: 1px solid rgba(255,255,255,0.05);';
+                    const bgStyle = isActive ? 'background: rgba(139, 92, 246, 0.05);' : 'background: rgba(255,255,255,0.02);';
+                    const activeBadge = isActive ? '<span style="background:#8b5cf6; color:#fff; font-size:9px; padding:1px 5px; border-radius:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; margin-left:6px;">Active Request</span>' : '';
+
                     execsHtml += `
-                        <div style="background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.05); padding:10px; border-radius:6px; display:flex; flex-direction:column; gap:4px;">
+                        <div style="${bgStyle} ${borderStyle} padding:10px; border-radius:6px; display:flex; flex-direction:column; gap:4px; transition: all 0.3s;">
                             <div style="display:flex; justify-content:space-between; align-items:center;">
-                                <span style="font-weight:600; color:#818cf8; font-size:12px;">${this.escapeHtml(ex.kind.toUpperCase())}</span>
+                                <span style="font-weight:700; color:${isActive ? '#a78bfa' : '#818cf8'}; font-size:12px; display:flex; align-items:center;">
+                                    ${this.escapeHtml(ex.kind.toUpperCase())}
+                                    ${activeBadge}
+                                </span>
                                 <span style="background:rgba(99,102,241,0.1); color:#818cf8; font-size:10px; padding:2px 6px; border-radius:10px; font-weight:600;">${this.escapeHtml(ex.logic_executor_model)}</span>
                             </div>
                             <div style="font-size:11px; color:#94a3b8; display:flex; justify-content:space-between; margin-top:4px;">
@@ -1098,12 +1109,16 @@
                                 <span class="value">${startedAt}</span>
                             </div>
                             <div class="key-value-row">
-                                <span class="key">Logic Executor Kind</span>
+                                <span class="key">Default Executor Kind</span>
                                 <span class="value">${leKind}</span>
                             </div>
                             <div class="key-value-row">
-                                <span class="key">Executor Provider</span>
+                                <span class="key">Default Provider</span>
                                 <span class="value">${leProvider}</span>
+                            </div>
+                            <div class="key-value-row" style="border-top:1px solid rgba(255,255,255,0.05); padding-top:6px; margin-top:4px;">
+                                <span class="key" style="color:#a78bfa; font-weight:600;">Request Executor</span>
+                                <span class="value" style="color:#a78bfa; font-weight:700;">${this.escapeHtml(env.executor || 'Unknown')}</span>
                             </div>
                         </div>
 
