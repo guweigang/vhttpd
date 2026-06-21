@@ -128,7 +128,8 @@ Profiler::activate();
 $GLOBALS['wpdb']->queries = [
     ['SELECT * FROM wp_posts WHERE ID = 1', 0.012, 'get_post', 1600000000.123],
     ['UPDATE wp_options SET option_value = "yes" WHERE option_name = "active"', 0.065, 'update_option', 1600000000.145],
-    ['SELECT * FROM wp_woocommerce_sessions WHERE session_key = "abc"', 0.005, 'WC_Session_Handler->get_session', 1600000000.150]
+    ['SELECT * FROM wp_woocommerce_sessions WHERE session_key = "abc"', 0.005, 'WC_Session_Handler->get_session', 1600000000.150],
+    ['SELECT option_value FROM wp_options WHERE option_name = "active" LIMIT 1', 0.002, 'get_option', 1600000000.160]
 ];
 
 // Test that helpers exist and don't throw
@@ -137,6 +138,7 @@ v_debug(['user_id' => 42, 'role' => 'admin'], 'User Details');
 
 // 3. Trigger some notices
 trigger_error('This is a test notice', E_USER_NOTICE);
+trigger_error('Undefined variable: foo', E_USER_NOTICE);
 
 // 4. Test error suppression with @
 @unserialize('invalid serialized data'); // This should be ignored due to error suppression
@@ -157,14 +159,22 @@ assertArrayHasKey('errors', $report);
 assertArrayHasKey('env', $report);
 assertArrayHasKey('vhttpd', $report);
 assertArrayHasKey('woocommerce', $report);
+assertArrayHasKey('security', $report);
 
 // Verify SQL queries count and slow queries
-assertSame(3, count($report['queries']), 'Queries count');
+assertSame(4, count($report['queries']), 'Queries count');
 assertSame(1, $report['overview']['slow_queries_count'], 'Slow queries count');
 assertSame('SELECT * FROM wp_posts WHERE ID = 1', $report['queries'][0]['sql'], 'Query 1 SQL');
 assertSame(12.0, $report['queries'][0]['duration_ms'], 'Query 1 duration ms');
 assertSame(65.0, $report['queries'][1]['duration_ms'], 'Query 2 duration ms');
 assertSame(true, $report['queries'][1]['slow'], 'Query 2 is slow');
+
+// Verify local expert optimization tip for SQL query
+assertSame(
+    '💡 提示：该查询正检索单个 option。建议使用 wp_cache_get 缓存该选项，或将其设为 autoload，避免频繁直查 DB。',
+    $report['queries'][3]['optimization_tip'],
+    'Query 4 optimization tip'
+);
 
 // Verify WooCommerce Telemetry Data
 $wc = $report['woocommerce'];
@@ -183,26 +193,36 @@ assertSame(true, $wc['settings']['template_debug'], 'template_debug setting');
 assertSame(1, $wc['sql_count'], 'WooCommerce SQL count');
 assertSame(5.0, $wc['sql_duration_ms'], 'WooCommerce SQL duration ms');
 assertSame('SELECT * FROM wp_woocommerce_sessions WHERE session_key = "abc"', $wc['queries'][0]['sql'], 'WooCommerce SQL query');
+assertSame('A (Excellent)', $wc['speed_grade'], 'WooCommerce speed grade');
 
 // Verify Cache stats
 assertSame(5, $report['cache']['local_hits'], 'Local hits');
 assertSame(12, $report['cache']['remote_hits'], 'Remote hits');
 assertSame(2, $report['cache']['misses'], 'Misses');
 assertSame(17, $report['cache']['local_hits'] + $report['cache']['remote_hits'], 'Total hits');
+assertArrayHasKey('bypass_reasons', $report['cache']);
 
 // Verify Logs
 assertSame(2, count($report['logs']), 'Logs count');
 assertSame('User Details', $report['logs'][1]['label'], 'Log 2 label');
 assertSame('info', $report['logs'][0]['level'], 'Log 1 level');
 
-// Verify Errors (Only E_USER_NOTICE should exist. The @unserialize should be ignored.)
-if (count($report['errors']) !== 1) {
-    fwrite(STDERR, "Errors count failed: expected exactly 1 (test notice), actual: " . count($report['errors']) . "\n");
-    print_r($report['errors']);
-    exit(1);
-}
+// Verify Errors
+assertSame(2, count($report['errors']), 'Errors count');
 assertSame('Notice', $report['errors'][0]['level'], 'Error 1 level');
 assertSame('This is a test notice', $report['errors'][0]['message'], 'Error 1 message');
+assertSame('Notice', $report['errors'][1]['level'], 'Error 2 level');
+assertSame('Undefined variable: foo', $report['errors'][1]['message'], 'Error 2 message');
+assertSame(
+    '💡 诊断：代码直接读取了未定义变量或数组键。可能导致潜在逻辑漏洞，建议在读取前使用 isset() 检查或赋初始值。',
+    $report['errors'][1]['optimization_tip'],
+    'Error 2 optimization tip'
+);
+
+// Verify Security headers status
+assertArrayHasKey('headers_status', $report['security']);
+assertSame('600', $report['security']['rate_limit_limit'], 'rate limit limit');
+assertSame('588', $report['security']['rate_limit_remaining'], 'rate limit remaining');
 
 // 6. Test state reset
 putenv('VHTTPD_REQUEST_ID=new_request_123');
