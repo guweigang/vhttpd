@@ -238,9 +238,11 @@
                     }
                     .timeline-value-text {
                         margin-left: 10px;
-                        width: 60px;
+                        width: 110px;
+                        flex-shrink: 0;
                         color: #cbd5e1;
                         text-align: right;
+                        white-space: nowrap;
                     }
                     table.data-table {
                         width: 100%;
@@ -294,7 +296,7 @@
                     }
                     .cache-ratio-val {
                         position: absolute;
-                        font-size: 22px;
+                        font-size: 15px;
                         font-weight: 700;
                         color: #f8fafc;
                         display: flex;
@@ -768,11 +770,9 @@
                     <div class="timeline-row">
                         <div class="timeline-label">${cp.name}</div>
                         <div class="timeline-track">
-                            <div class="timeline-fill" style="left: ${offset}%; width: ${percentage}%;">
-                                ${cp.duration_ms}ms
-                            </div>
+                            <div class="timeline-fill" style="left: ${offset}%; width: ${percentage}%;"></div>
                         </div>
-                        <div class="timeline-value-text">${cp.time_ms}ms</div>
+                        <div class="timeline-value-text">${cp.time_ms}ms (${cp.duration_ms}ms)</div>
                     </div>
                 `;
             });

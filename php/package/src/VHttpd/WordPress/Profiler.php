@@ -984,6 +984,34 @@ final class Profiler
             $enhancedErrors[] = $err;
         }
 
+        // 合并 SQL 和 HTTP 的插件统计并排序
+        $pluginOverview = [];
+        foreach ($pluginSqlStats as $slug => $data) {
+            if (!isset($pluginOverview[$slug])) {
+                $pluginOverview[$slug] = ['sql_duration_ms' => 0.0, 'sql_count' => 0, 'http_duration_ms' => 0.0, 'http_count' => 0, 'total_duration_ms' => 0.0];
+            }
+            $pluginOverview[$slug]['sql_duration_ms'] = round($data['duration_ms'], 2);
+            $pluginOverview[$slug]['sql_count'] = $data['count'];
+            $pluginOverview[$slug]['total_duration_ms'] += $data['duration_ms'];
+        }
+        foreach ($pluginHttpStats as $slug => $data) {
+            if (!isset($pluginOverview[$slug])) {
+                $pluginOverview[$slug] = ['sql_duration_ms' => 0.0, 'sql_count' => 0, 'http_duration_ms' => 0.0, 'http_count' => 0, 'total_duration_ms' => 0.0];
+            }
+            $pluginOverview[$slug]['http_duration_ms'] = round($data['duration_ms'], 2);
+            $pluginOverview[$slug]['http_count'] = $data['count'];
+            $pluginOverview[$slug]['total_duration_ms'] += $data['duration_ms'];
+        }
+
+        uasort($pluginOverview, static function ($a, $b) {
+            return $b['total_duration_ms'] <=> $a['total_duration_ms'];
+        });
+
+        $pluginStatsList = [];
+        foreach ($pluginOverview as $slug => $data) {
+            $pluginStatsList[] = array_merge(['slug' => $slug], $data);
+        }
+
         return [
             'request_id' => $requestId,
             'trace_id' => $traceId,
@@ -1011,6 +1039,7 @@ final class Profiler
             'external_requests' => self::$externalRequests,
             'woocommerce' => $woocommerceData,
             'security' => self::getSecurityDiagnostics(),
+            'plugin_stats' => $pluginStatsList,
         ];
     }
 
