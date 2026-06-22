@@ -9,6 +9,7 @@ import runtime_plan
 
 pub struct AppRuntimeBuildConfig {
 pub:
+	plan_listener_id              string
 	event_log                     string
 	internal_admin_socket         string
 	admin_enabled                 bool
@@ -127,6 +128,7 @@ pub fn ServerRuntimeConfig.resolve_for_target_with_plan(args []string, cfg confi
 		provider_settings:     provider_settings
 		executor_plan:         executor_plan
 		app_build_cfg:         AppRuntimeBuildConfig{
+			plan_listener_id:              plan_listener_id
 			event_log:                     event_log
 			internal_admin_socket:         internal_admin_socket
 			admin_enabled:                 admin_enabled

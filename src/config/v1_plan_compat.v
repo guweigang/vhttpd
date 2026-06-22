@@ -582,9 +582,15 @@ fn compile_v1_route_egress(route RouteRuleConfig, cfg VhttpdConfig, scope string
 	}
 	if executor_name == 'static' {
 		adapter_id := '${scope}/route_${order}_static'
+		completed_pipeline := compile_v1_upload_completed_pipeline(route.on_completed, cfg,
+			scope, order, listener_id, site_id, mut target)
 		target.adapters[adapter_id] = V2AdapterSpec{
-			kind: 'static'
-			root: if route.root != '' { route.root } else { cfg.site.document_root }
+			kind:               'static'
+			root:               if route.root != '' { route.root } else { cfg.site.document_root }
+			completed_pipeline: completed_pipeline
+			options:            {
+				'legacy_upload_dir': route.upload_dir
+			}
 		}
 		return 'adapter:${adapter_id}'
 	}

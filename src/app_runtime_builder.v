@@ -16,7 +16,6 @@ import plugin
 import feishu
 import executor
 import server_lifecycle
-import regex
 import runtime_plan
 
 fn app_runtime_default_mcp_max_sessions(cfg config.VhttpdConfig) int {
@@ -32,43 +31,17 @@ fn app_runtime_default_mcp_session_ttl_seconds(cfg config.VhttpdConfig) int {
 }
 
 fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executor_plan executor.LogicExecutorRuntimePlan, cfg config.VhttpdConfig, plan runtime_plan.RuntimePlan, build_cfg server_lifecycle.AppRuntimeBuildConfig) &App {
-	// 1. 预编译正则并构建运行时路由规则
-	mut runtime_routes := []RuntimeRouteRule{}
-	expanded_routes := config.expand_php_site_routes(cfg)
-	for r in expanded_routes {
-		mut re := regex.RE{}
-		if r.match.path_regexp != '' {
-			re = regex.regex_opt(r.match.path_regexp) or { continue }
-		}
-		runtime_routes << RuntimeRouteRule{
-			match_method:                 r.match.method.clone()
-			match_path:                   r.match.path.clone()
-			match_path_regexp:            r.match.path_regexp
-			match_query:                  r.match.query.clone()
-			re:                           re
-			executor:                     r.executor
-			rewrite:                      r.rewrite
-			rewrite_strip_prefix:         r.rewrite_strip_prefix
-			root:                         r.root
-			cache_control:                r.cache_control
-			response_cache_ttl_ms:        r.response_cache_ttl_ms
-			cache_bypass_cookie_patterns: r.cache_bypass_cookie_patterns.clone()
-			cache_ignore_cookie_patterns: r.cache_ignore_cookie_patterns.clone()
-			response_headers:             r.response_headers.clone()
-			max_body_bytes:               r.max_body_bytes
-			required_headers:             r.required_headers.clone()
-			denied_query_patterns:        r.denied_query_patterns.clone()
-			upload_dir:                   r.upload_dir
-			on_completed:                 r.on_completed
-			status:                       r.status
-			location:                     r.location
-			body:                         r.body
-		}
+	// 1. Build request-time routes only from the resolved plan for this listener.
+	plan_listener_id := if build_cfg.plan_listener_id != '' {
+		build_cfg.plan_listener_id
+	} else {
+		'default'
 	}
+	runtime_routes := runtime_routes_from_plan(plan, plan_listener_id)
 
 	// 2. 遍历 routes 中的所有附加 executor，如果有专属的进程池配置则实例化其 WorkerState
 	mut add_workers := map[string]&worker.WorkerState{}
-	for route in expanded_routes {
+	for route in runtime_routes {
 		mut executor_names := []string{}
 		if route.executor != '' {
 			executor_names << route.executor
