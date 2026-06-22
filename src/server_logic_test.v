@@ -1543,30 +1543,30 @@ fn test_php_worker_executor_lifecycle_prepares_worker_command_and_env() {
 
 fn test_runtime_scheme_is_injected_before_worker_start() {
 	mut app := App{
-		executors:          ExecutorRuntimeHub{
-			worker: worker.WorkerState{
+		engines: EngineRuntime{
+			primary:    worker.WorkerState{
 				worker_backend: worker.WorkerBackendRuntime{
 					env: {
 						'APP_ENV': 'dev'
 					}
 				}
 			}
-		}
-		additional_workers: {
-			'php-cgi': &worker.WorkerState{
-				worker_backend: worker.WorkerBackendRuntime{
-					env: {
-						'CGI_ENV': 'dev'
+			additional: {
+				'php-cgi': &worker.WorkerState{
+					worker_backend: worker.WorkerBackendRuntime{
+						env: {
+							'CGI_ENV': 'dev'
+						}
 					}
 				}
 			}
 		}
 	}
 	apply_runtime_scheme_to_worker_envs(mut app, 'https')
-	assert app.executors.worker.worker_backend.env['APP_ENV'] == 'dev'
-	assert app.executors.worker.worker_backend.env['VHTTPD_SCHEME'] == 'https'
-	assert app.executors.worker.worker_backend.env['VHTTPD_REQUEST_SCHEME'] == 'https'
-	cgi_worker := app.additional_workers['php-cgi'] or { panic('missing php-cgi worker') }
+	assert app.engines.primary.worker_backend.env['APP_ENV'] == 'dev'
+	assert app.engines.primary.worker_backend.env['VHTTPD_SCHEME'] == 'https'
+	assert app.engines.primary.worker_backend.env['VHTTPD_REQUEST_SCHEME'] == 'https'
+	cgi_worker := app.engines.additional['php-cgi'] or { panic('missing php-cgi worker') }
 	assert cgi_worker.worker_backend.env['CGI_ENV'] == 'dev'
 	assert cgi_worker.worker_backend.env['VHTTPD_SCHEME'] == 'https'
 	assert cgi_worker.worker_backend.env['VHTTPD_REQUEST_SCHEME'] == 'https'
@@ -1837,34 +1837,34 @@ fn test_build_app_runtime_projects_executor_plan_into_app_state() {
 		worker_queue_timeout_ms:       34
 		workdir:                       '/tmp/workdir'
 	})
-	assert app.executors.worker.worker_backend.sockets == ['/tmp/a.sock']
-	assert app.executors.worker.worker_backend.cmd == 'php worker.php'
-	assert app.executors.worker.worker_backend.env['APP_ENV'] == 'dev'
-	assert app.executors.worker.worker_backend.read_timeout_ms == 900
-	assert app.executors.worker.worker_backend.max_requests == 777
-	assert app.executors.worker.worker_backend_mode == .required
-	assert app.executors.worker.logic_executor.kind() == 'php'
-	assert app.executors.worker.lifecycle == 'php_worker_host'
-	assert app.admin.internal_socket == '/tmp/internal.sock'
-	assert app.admin.token == 'secret'
+	assert app.engines.primary.worker_backend.sockets == ['/tmp/a.sock']
+	assert app.engines.primary.worker_backend.cmd == 'php worker.php'
+	assert app.engines.primary.worker_backend.env['APP_ENV'] == 'dev'
+	assert app.engines.primary.worker_backend.read_timeout_ms == 900
+	assert app.engines.primary.worker_backend.max_requests == 777
+	assert app.engines.primary.worker_backend_mode == .required
+	assert app.engines.primary.logic_executor.kind() == 'php'
+	assert app.engines.primary.lifecycle == 'php_worker_host'
+	assert app.control_plane.admin.internal_socket == '/tmp/internal.sock'
+	assert app.control_plane.admin.token == 'secret'
 	assert app.assets.enabled
 	assert app.assets.root_real == '/private/tmp/assets'
-	assert app.routes.len == 2
-	assert app.routes[1].match_method == ['GET']
-	assert app.routes[1].cache_control == 'public, max-age=31536000, immutable'
-	assert app.routes[1].response_cache_ttl_ms == 60000
-	assert app.routes[1].cache_bypass_cookie_patterns == ['session_*']
-	assert app.routes[1].cache_ignore_cookie_patterns == ['test_cookie']
-	assert app.routes[1].response_headers['X-Content-Type-Options'] == 'nosniff'
-	assert app.routes[1].max_body_bytes == 1048576
-	assert app.routes[1].required_headers['X-API-Key'] == '*'
-	assert app.routes[1].denied_query_patterns['debug'] == '*'
-	assert app.routes[1].upload_dir == '/tmp/uploads'
-	assert app.routes[1].on_completed == 'vjsx:test.upload.completed'
-	cgi_worker := app.additional_workers['php-cgi'] or { panic('missing php-cgi worker') }
+	assert app.http_routing.rules.len == 2
+	assert app.http_routing.rules[1].match_method == ['GET']
+	assert app.http_routing.rules[1].cache_control == 'public, max-age=31536000, immutable'
+	assert app.http_routing.rules[1].response_cache_ttl_ms == 60000
+	assert app.http_routing.rules[1].cache_bypass_cookie_patterns == ['session_*']
+	assert app.http_routing.rules[1].cache_ignore_cookie_patterns == ['test_cookie']
+	assert app.http_routing.rules[1].response_headers['X-Content-Type-Options'] == 'nosniff'
+	assert app.http_routing.rules[1].max_body_bytes == 1048576
+	assert app.http_routing.rules[1].required_headers['X-API-Key'] == '*'
+	assert app.http_routing.rules[1].denied_query_patterns['debug'] == '*'
+	assert app.http_routing.rules[1].upload_dir == '/tmp/uploads'
+	assert app.http_routing.rules[1].on_completed == 'vjsx:test.upload.completed'
+	cgi_worker := app.engines.additional['php-cgi'] or { panic('missing php-cgi worker') }
 	assert cgi_worker.worker_backend.queue_capacity == 7
 	assert cgi_worker.worker_backend.queue_timeout_ms == 89
-	vjsx_worker := app.additional_workers['vjsx'] or { panic('missing vjsx worker') }
+	vjsx_worker := app.engines.additional['vjsx'] or { panic('missing vjsx worker') }
 	assert vjsx_worker.logic_executor.kind() == 'vjsx'
 	assert vjsx_worker.worker_backend_mode == .disabled
 	assert app.protocols.mcp.max_sessions == 55
@@ -2383,15 +2383,17 @@ fn test_shutdown_app_runtime_stops_lifecycle_and_cleans_runtime_files() {
 	}
 	mut executor_state := &TestShutdownLogicExecutorState{}
 	mut app := App{
-		event_log: event_log
-		executors: ExecutorRuntimeHub{
-			worker: worker.WorkerState{
+		control_plane: ControlPlaneRuntime{
+			event_log: event_log
+		}
+		engines:       EngineRuntime{
+			primary: worker.WorkerState{
 				logic_executor: TestShutdownLogicExecutor{
 					state: executor_state
 				}
 			}
 		}
-		providers: ProviderRuntimeHub{
+		providers:     ProviderRuntimeHub{
 			registry: ProviderHost{
 				specs: {
 					'test': ProviderSpec{

@@ -12,7 +12,7 @@ fn (mut app App) kernel_dispatch_stream(req transport.StreamDispatchRequest) !tr
 		context: DispatchContext.from_stream_dispatch_provider(req, app.logic_executor_provider())
 	}
 	mut facade := app.as_facade()
-	return app.executors.worker.logic_executor.dispatch_stream(mut facade, req)
+	return app.engines.dispatch_stream(mut facade, req)
 }
 
 fn kernel_stream_dispatch_failure(resp transport.StreamDispatchResponse) ?executor.KernelStreamDispatchFailure {
@@ -33,7 +33,7 @@ fn (mut app App) kernel_dispatch_mcp(req transport.WorkerMcpDispatchRequest) !tr
 		context: DispatchContext.from_mcp_dispatch_provider(req, app.logic_executor_provider())
 	}
 	mut facade := app.as_facade()
-	return app.executors.worker.logic_executor.dispatch_mcp(mut facade, req)
+	return app.engines.dispatch_mcp(mut facade, req)
 }
 
 fn (mut app App) kernel_dispatch_mcp_handled(req transport.WorkerMcpDispatchRequest) !executor.KernelMcpDispatchOutcome {
@@ -58,7 +58,7 @@ fn (mut app App) kernel_dispatch_mcp_handled(req transport.WorkerMcpDispatchRequ
 fn (mut app App) kernel_dispatch_websocket_upstream(req transport.WorkerWebSocketUpstreamDispatchRequest) !transport.WorkerWebSocketUpstreamDispatchResponse {
 	_ = executor.KernelDispatchEnvelope.from_websocket_upstream(req)
 	mut facade := app.as_facade()
-	return app.executors.worker.logic_executor.dispatch_websocket_upstream(mut facade, req)
+	return app.engines.dispatch_websocket_upstream(mut facade, req)
 }
 
 fn (mut app App) kernel_dispatch_websocket_upstream_handled(req transport.WorkerWebSocketUpstreamDispatchRequest) !executor.KernelWebSocketUpstreamDispatchOutcome {
@@ -87,7 +87,7 @@ fn (mut app App) kernel_dispatch_websocket_event(frame transport.WorkerWebSocket
 			app.logic_executor_provider())
 	}
 	mut facade := app.as_facade()
-	return app.executors.worker.logic_executor.dispatch_websocket_event(mut facade, frame)
+	return app.engines.dispatch_websocket_event(mut facade, frame)
 }
 
 fn kernel_dispatch_transport_failure(err_msg string) executor.KernelDispatchTransportFailure {
@@ -112,8 +112,8 @@ fn (mut app App) kernel_stream_dispatch_next_request(method string, path string,
 }
 
 fn (mut app App) kernel_stream_dispatch_next(method string, path string, remote_addr string, req_id string, trace_id string, query map[string]string, headers map[string]string, state map[string]string) !transport.StreamDispatchResponse {
-	return app.kernel_dispatch_stream(dispatch.build_stream_next_request(method, path,
-		remote_addr, req_id, trace_id, query, headers, state))
+	return app.kernel_dispatch_stream(dispatch.build_stream_next_request(method, path, remote_addr,
+		req_id, trace_id, query, headers, state))
 }
 
 fn (mut app App) kernel_stream_dispatch_close_request(req_id string, trace_id string, state map[string]string, reason string) transport.StreamDispatchRequest {

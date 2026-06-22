@@ -6,13 +6,11 @@ import cachex
 import dbx
 import plugin
 import worker
-import ws
 
 struct TransportRuntimeHub {
 mut:
-	websocket ws.HubState
-	db        dbx.Runtime
-	cache     cachex.Runtime
+	db    dbx.Runtime
+	cache cachex.Runtime
 }
 
 struct ProtocolRuntimeHub {
@@ -23,7 +21,8 @@ mut:
 	plugins             plugin.PluginState
 }
 
-struct ExecutorRuntimeHub {
+struct EngineRuntime {
 mut:
-	worker worker.WorkerState
+	primary    worker.WorkerState
+	additional map[string]&worker.WorkerState
 }

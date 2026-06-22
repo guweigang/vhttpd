@@ -1,39 +1,11 @@
 module main
 
-import json
 import log
 import net
 import net.openssl
 import os
-import time
 import veb
-import executor
 import server_lifecycle
-
-fn build_lifecycle_runtime_context(app &App) executor.LifecycleRuntimeContext {
-	event_log_path := app.event_log
-	return executor.LifecycleRuntimeContext{
-		worker_backend_autostart:       app.executors.worker.worker_backend.autostart
-		worker_backend_cmd:             app.executors.worker.worker_backend.cmd
-		worker_backend_env:             app.executors.worker.worker_backend.env.clone()
-		worker_backend_sockets:         app.executors.worker.worker_backend.sockets.clone()
-		worker_backend_workdir:         app.executors.worker.worker_backend.workdir
-		worker_backend_managed_workers: app.executors.worker.worker_backend.managed_workers.clone()
-		emit:                           fn [event_log_path] (kind string, fields map[string]string) {
-			mut row := map[string]string{}
-			row['type'] = kind
-			row['ts'] = '${time.now().unix()}'
-			for k, v in fields {
-				row[k] = v
-			}
-			mut f := os.open_append(event_log_path) or { return }
-			defer {
-				f.close()
-			}
-			f.writeln(json.encode(row)) or {}
-		}
-	}
-}
 
 fn preflight_bind_addr(addr string) ! {
 	mut listener := net.listen_tcp(.ip, addr) or {
@@ -77,57 +49,19 @@ fn preflight_server_bind(runtime_cfg server_lifecycle.ServerRuntimeConfig) ! {
 }
 
 fn start_server_runtime(mut app App, runtime_cfg server_lifecycle.ServerRuntimeConfig) {
+	app.lifecycle.start(mut app, runtime_cfg)
+}
+
+fn (mut lifecycle ProcessLifecycle) start(mut app App, runtime_cfg server_lifecycle.ServerRuntimeConfig) {
 	log.debug('[vhttpd] start_server_runtime: initializing app runtime site=${runtime_cfg.site_id}')
 	AppStartupHooks.initialize_runtime(mut app, runtime_cfg.internal_admin_socket)
 	scheme := server_runtime_scheme(runtime_cfg)
-	app.data_plane_scheme = scheme
+	lifecycle.data_plane_scheme = scheme
 	apply_runtime_scheme_to_worker_envs(mut app, scheme)
 	log.debug('[vhttpd] start_server_runtime: starting executor lifecycle')
-	mut lifecycle_ctx := build_lifecycle_runtime_context(app)
-	runtime_cfg.executor_plan.lifecycle.start(mut lifecycle_ctx)
-	app.executors.worker.worker_backend.managed_workers = lifecycle_ctx.worker_backend_managed_workers
-	log.debug('[vhttpd] start_server_runtime: warming up executor kind=${app.logic_executor_kind()}')
+	port := app.build_engine_lifecycle_port()
 	mut facade := app.as_facade()
-	app.executors.worker.logic_executor.warmup(mut facade) or {
-		err_msg := executor.InProcVjsxError.normalize_message(err.msg(),
-			'logic_executor_warmup_failed')
-		log.error('[vhttpd] logic executor warmup failed: ${err_msg}')
-	}
-
-	// 启动并预热所有附加常驻进程池与逻辑执行器
-	for name, mut ws in app.additional_workers {
-		log.debug('[vhttpd] start_server_runtime: starting additional executor lifecycle: ${name}')
-		event_log_path := app.event_log
-		mut sub_lifecycle_ctx := executor.LifecycleRuntimeContext{
-			worker_backend_autostart:       ws.worker_backend.autostart
-			worker_backend_cmd:             ws.worker_backend.cmd
-			worker_backend_env:             ws.worker_backend.env.clone()
-			worker_backend_sockets:         ws.worker_backend.sockets.clone()
-			worker_backend_workdir:         ws.worker_backend.workdir
-			worker_backend_managed_workers: ws.worker_backend.managed_workers.clone()
-			emit:                           fn [event_log_path] (kind string, fields map[string]string) {
-				mut row := map[string]string{}
-				row['type'] = kind
-				row['ts'] = '${time.now().unix()}'
-				for k, v in fields {
-					row[k] = v
-				}
-				mut f := os.open_append(event_log_path) or { return }
-				defer {
-					f.close()
-				}
-				f.writeln(json.encode(row)) or {}
-			}
-		}
-		spec := executor.builtin_executor_spec_find(name) or { continue }
-		spec.lifecycle.start(mut sub_lifecycle_ctx)
-		ws.worker_backend.managed_workers = sub_lifecycle_ctx.worker_backend_managed_workers
-
-		log.debug('[vhttpd] start_server_runtime: warming up additional executor: ${name}')
-		ws.logic_executor.warmup(mut facade) or {
-			log.error('[vhttpd] additional logic executor warmup failed: ${err.msg()}')
-		}
-	}
+	app.engines.start(runtime_cfg.executor_plan.lifecycle, port, mut facade)
 
 	log.debug('[vhttpd] start_server_runtime: mounting assets')
 	AppStartupHooks.mount_assets(mut app)
@@ -144,13 +78,7 @@ fn start_server_runtime(mut app App, runtime_cfg server_lifecycle.ServerRuntimeC
 }
 
 fn apply_runtime_scheme_to_worker_envs(mut app App, scheme string) {
-	normalized := if scheme.trim_space() == 'https' { 'https' } else { 'http' }
-	app.executors.worker.worker_backend.env['VHTTPD_SCHEME'] = normalized
-	app.executors.worker.worker_backend.env['VHTTPD_REQUEST_SCHEME'] = normalized
-	for _, mut ws in app.additional_workers {
-		ws.worker_backend.env['VHTTPD_SCHEME'] = normalized
-		ws.worker_backend.env['VHTTPD_REQUEST_SCHEME'] = normalized
-	}
+	app.engines.apply_scheme(scheme)
 }
 
 fn serve_server_runtime(mut app App, runtime_cfg server_lifecycle.ServerRuntimeConfig) {

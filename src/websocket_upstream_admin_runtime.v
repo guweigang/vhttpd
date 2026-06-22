@@ -97,11 +97,11 @@ fn ws_event_from_upstream(snapshot upstream.UpstreamEventSnapshot) ws.UpstreamEv
 }
 
 fn (mut app App) websocket_upstream_record_activity(snapshot upstream.UpstreamActivitySnapshot) {
-	app.transport.websocket.record_upstream_activity(ws_activity_from_upstream(snapshot))
+	app.websocket.record_upstream_activity(ws_activity_from_upstream(snapshot))
 }
 
 fn (mut app App) admin_websocket_upstream_activities_snapshot(limit int, offset int, provider_filter string, instance_filter string) upstream.UpstreamActivityListSnapshot {
-	ws_snapshot := app.transport.websocket.upstream_activities_snapshot(limit, offset, provider_filter,
+	ws_snapshot := app.websocket.upstream_activities_snapshot(limit, offset, provider_filter,
 		instance_filter)
 	mut activities := []upstream.UpstreamActivitySnapshot{cap: ws_snapshot.activities.len}
 	for activity in ws_snapshot.activities {
@@ -144,7 +144,7 @@ fn (mut app App) admin_websocket_upstreams_snapshot(details bool, limit int, off
 		}
 		sessions << snapshot
 	}
-	for name in app.transport.websocket.fixture_app_names() {
+	for name in app.websocket.fixture_names() {
 		if provider_filter != '' && provider_filter != websocket_upstream_provider_fixture {
 			continue
 		}
@@ -165,12 +165,11 @@ fn (mut app App) admin_websocket_upstream_events_snapshot(limit int, offset int,
 			instance_filter)
 	}
 	if provider_filter == '' || provider_filter == websocket_upstream_provider_fixture {
-		for name in app.transport.websocket.fixture_app_names() {
+		for name in app.websocket.fixture_names() {
 			if instance_filter != '' && name != instance_filter {
 				continue
 			}
-			runtime := app.transport.websocket.fixture_ensure(name)
-			for event in runtime.recent_events {
+			for event in app.websocket.fixture_events(name) {
 				events << upstream_event_from_ws(event)
 			}
 		}

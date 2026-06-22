@@ -4,10 +4,6 @@ import upstream.transport
 import net.unix
 import worker
 
-fn (mut app App) worker_selection_diagnostics() []transport.WorkerSelectionDiagnostic {
-	return worker_selection_diagnostics_for_state(app.executors.worker)
-}
-
 fn worker_selection_diagnostics_for_state(ws &worker.WorkerState) []transport.WorkerSelectionDiagnostic {
 	mut diagnostics := []transport.WorkerSelectionDiagnostic{}
 	ws.mu.@lock()
@@ -28,7 +24,7 @@ fn worker_selection_diagnostics_for_state(ws &worker.WorkerState) []transport.Wo
 		}
 		if worker_idx < 0 || worker_idx >= workers.len {
 			diagnostics << transport.WorkerSelectionDiagnostic{
-				socket_path:  socket_path
+				socket_path: socket_path
 				probe_error: 'worker_slot_missing'
 			}
 			continue

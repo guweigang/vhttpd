@@ -6,7 +6,7 @@ import veb
 
 @['/admin/runtime'; get]
 pub fn (mut app App) admin_runtime(mut ctx Context) veb.Result {
-	if !app.admin.on_data_plane {
+	if !app.control_plane.admin.on_data_plane {
 		ctx.res.set_status(.not_found)
 		return ctx.text('Not Found')
 	}
@@ -28,7 +28,7 @@ pub fn (mut app App) admin_runtime(mut ctx Context) veb.Result {
 
 @['/admin/runtime/upstreams'; get]
 pub fn (mut app App) admin_runtime_upstreams(mut ctx Context) veb.Result {
-	if !app.admin.on_data_plane {
+	if !app.control_plane.admin.on_data_plane {
 		ctx.res.set_status(.not_found)
 		return ctx.text('Not Found')
 	}
@@ -56,7 +56,7 @@ pub fn (mut app App) admin_runtime_upstreams(mut ctx Context) veb.Result {
 
 @['/admin/runtime/websockets'; get]
 pub fn (mut app App) admin_runtime_websockets(mut ctx Context) veb.Result {
-	if !app.admin.on_data_plane {
+	if !app.control_plane.admin.on_data_plane {
 		ctx.res.set_status(.not_found)
 		return ctx.text('Not Found')
 	}
@@ -68,8 +68,7 @@ pub fn (mut app App) admin_runtime_websockets(mut ctx Context) veb.Result {
 	offset := admin.AdminQuery.offset(ctx.query['offset'] or { '' })
 	room_filter := (ctx.query['room'] or { '' }).trim_space()
 	conn_filter := (ctx.query['conn_id'] or { '' }).trim_space()
-	body := json.encode(app.admin_websockets_snapshot(details, limit, offset, room_filter,
-		conn_filter))
+	body := json.encode(app.websocket.snapshot(details, limit, offset, room_filter, conn_filter))
 	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
 	ctx.set_content_type('application/json; charset=utf-8')
 	app.emit('http.request', {
@@ -84,7 +83,7 @@ pub fn (mut app App) admin_runtime_websockets(mut ctx Context) veb.Result {
 
 @['/admin/runtime/mcp'; get]
 pub fn (mut app App) admin_runtime_mcp(mut ctx Context) veb.Result {
-	if !app.admin.on_data_plane {
+	if !app.control_plane.admin.on_data_plane {
 		ctx.res.set_status(.not_found)
 		return ctx.text('Not Found')
 	}
@@ -112,7 +111,7 @@ pub fn (mut app App) admin_runtime_mcp(mut ctx Context) veb.Result {
 
 @['/admin/runtime/provider-instances'; get]
 pub fn (mut app App) admin_runtime_provider_instances(mut ctx Context) veb.Result {
-	if !app.admin.on_data_plane {
+	if !app.control_plane.admin.on_data_plane {
 		ctx.res.set_status(.not_found)
 		return ctx.text('Not Found')
 	}

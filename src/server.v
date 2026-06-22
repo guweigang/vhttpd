@@ -4,16 +4,16 @@ module main
 // Lock Hierarchy (acquire in this order; NEVER acquire a lower lock while holding a higher one)
 //
 //   L0  app.mu                     — main mutex (providers, stats, event_log, general state)
-//   L1  app.executors.worker.mu              — worker backend pool & queue
-//   L2  app.transport.websocket.mu              — WebSocket hub connections
-//   L3  app.transport.websocket.upstream_mu     — WebSocket upstream sessions
+//   L1  app.engines.primary.mu              — worker backend pool & queue
+//   L2  app.websocket.state.mu              — WebSocket hub connections
+//   L3  app.websocket.state.upstream_mu     — WebSocket provider/fixture state
 //   L4  app.protocols.mcp.mu                 — MCP session manager
 //   L5  app.providers.feishu.mu              — Feishu runtime state
 //   L6  app.providers.feishu.card_bridge_mu  — Feishu card bridge clients
 //   L7  app.providers.codex.mu               — Codex runtime state
 //
 // Independent (no ordering constraint with above):
-//   app.transport.websocket.send_mu             — WebSocket send serialization (short-lived, per-conn)
+//   app.websocket.state.send_mu             — WebSocket send serialization (short-lived, per-conn)
 //   app.providers.feishu.card_bridge_send_mu — Feishu card bridge send serialization
 //   app.providers.feishu.http_test_mu        — Feishu HTTP test stub (test-only)
 //
@@ -163,7 +163,7 @@ const known_long_flags = [
 
 // ── Global Lock Order ──
 // When acquiring multiple locks, always follow this hierarchy to avoid deadlocks:
-//   app.mu > app.providers.feishu.mu > app.transport.websocket.mu > app.transport.websocket.upstream_mu > app.protocols.mcp.mu > app.executors.worker.mu
+//   app.mu > app.providers.feishu.mu > app.websocket.state.mu > app.websocket.state.upstream_mu > app.upstreams.mu > app.protocols.mcp.mu > app.engines.primary.mu
 // Any function that needs more than one lock MUST acquire them in the above order
 // and release them in reverse order. Prefer defer for unlocks.
 // Reviewers: reject PRs that introduce out-of-order locking.

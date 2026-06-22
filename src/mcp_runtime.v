@@ -29,7 +29,7 @@ fn proxy_worker_mcp(mut app App, mut ctx Context) veb.Result {
 		})
 		return ctx.text('{"error":"Method Not Allowed"}')
 	}
-	if app.executors.worker.worker_backend.sockets.len == 0 {
+	if !app.engines.has_socket_workers() {
 		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
 		ctx.res.set_status(http.status_from_int(501))
 		ctx.set_content_type('application/json; charset=utf-8')

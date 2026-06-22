@@ -8,37 +8,39 @@ import executor
 fn (mut app App) build_admin_context() admin.RuntimeContext {
 	return admin.RuntimeContext{
 		started_at_unix:                        fn [app] () i64 {
-			return app.started_at_unix
+			return app.lifecycle.started_at_unix
 		}
 		http_requests_total:                    fn [app] () i64 {
-			return app.http_stats.requests_total
+			return app.control_plane.http_stats.requests_total
 		}
 		http_errors_total:                      fn [app] () i64 {
-			return app.http_stats.errors_total
+			return app.control_plane.http_stats.errors_total
 		}
 		http_timeouts_total:                    fn [app] () i64 {
-			return app.http_stats.timeouts_total
+			return app.control_plane.http_stats.timeouts_total
 		}
 		http_streams_total:                     fn [app] () i64 {
-			return app.http_stats.streams_total
+			return app.control_plane.http_stats.streams_total
 		}
 		http_admin_actions_total:               fn [app] () i64 {
-			return app.http_stats.admin_actions_total
+			return app.control_plane.http_stats.admin_actions_total
 		}
-		worker_queue_waits_total:               fn [app] () i64 {
-			return app.executors.worker.stat_queue_waits_total
+		worker_queue_waits_total:               fn [mut app] () i64 {
+			return app.engines.metrics().queue_waits_total
 		}
-		worker_queue_rejected_total:            fn [app] () i64 {
-			return app.executors.worker.stat_queue_rejected_total
+		worker_queue_rejected_total:            fn [mut app] () i64 {
+			return app.engines.metrics().queue_rejected_total
 		}
-		worker_queue_timeouts_total:            fn [app] () i64 {
-			return app.executors.worker.stat_queue_timeouts_total
+		worker_queue_timeouts_total:            fn [mut app] () i64 {
+			return app.engines.metrics().queue_timeouts_total
 		}
-		ws_hub_upstream_plans_total:            fn [app] () i64 {
-			return app.transport.websocket.stat_upstream_plans_total
+		ws_hub_upstream_plans_total:            fn [mut app] () i64 {
+			total, _ := app.upstreams.totals()
+			return total
 		}
-		ws_hub_upstream_plan_errors_total:      fn [app] () i64 {
-			return app.transport.websocket.stat_upstream_plan_errors_total
+		ws_hub_upstream_plan_errors_total:      fn [mut app] () i64 {
+			_, errors := app.upstreams.totals()
+			return errors
 		}
 		mcp_sessions_expired_total:             fn [app] () i64 {
 			return app.protocols.mcp.stat_sessions_expired_total
@@ -61,15 +63,11 @@ fn (mut app App) build_admin_context() admin.RuntimeContext {
 		feishu_runtime_totals:                  fn [mut app] () (i64, i64, i64, i64, i64, i64) {
 			return app.providers.feishu.totals()
 		}
-		ws_hub_active_conns:                    fn [app] () int {
-			app.transport.websocket.mu.@lock()
-			defer { app.transport.websocket.mu.unlock() }
-			return app.transport.websocket.conns.len
+		ws_hub_active_conns:                    fn [mut app] () int {
+			return app.websocket.active_connections()
 		}
-		ws_hub_active_upstreams:                fn [app] () int {
-			app.transport.websocket.upstream_mu.@lock()
-			defer { app.transport.websocket.upstream_mu.unlock() }
-			return app.transport.websocket.upstream_sessions.len
+		ws_hub_active_upstreams:                fn [mut app] () int {
+			return app.upstreams.active_count()
 		}
 		mcp_active_sessions:                    fn [mut app] (now i64) int {
 			app.protocols.mcp.mu.@lock()
@@ -77,31 +75,29 @@ fn (mut app App) build_admin_context() admin.RuntimeContext {
 			app.protocols.mcp.prune_sessions_locked(now)
 			return app.protocols.mcp.sessions.len
 		}
-		worker_queue_depth:                     fn [app] () int {
-			app.executors.worker.mu.@lock()
-			defer { app.executors.worker.mu.unlock() }
-			return app.executors.worker.worker_backend.queue_waiting_requests
+		worker_queue_depth:                     fn [mut app] () int {
+			return app.engines.metrics().queue_depth
 		}
-		worker_pool_size:                       fn [app] () i64 {
-			return app.executors.worker.worker_backend.sockets.len
+		worker_pool_size:                       fn [mut app] () i64 {
+			return app.engines.metrics().pool_size
 		}
-		worker_backend_mode:                    fn [app] () string {
-			return '${app.executors.worker.worker_backend_mode}'
+		worker_backend_mode:                    fn [mut app] () string {
+			return app.engines.metrics().backend_mode
 		}
-		worker_queue_capacity:                  fn [app] () int {
-			return app.executors.worker.worker_backend.queue_capacity
+		worker_queue_capacity:                  fn [mut app] () int {
+			return app.engines.metrics().queue_capacity
 		}
-		worker_queue_timeout_ms:                fn [app] () int {
-			return app.executors.worker.worker_backend.queue_timeout_ms
+		worker_queue_timeout_ms:                fn [mut app] () int {
+			return app.engines.metrics().queue_timeout_ms
 		}
-		worker_stream_dispatch:                 fn [app] () bool {
-			return app.executors.worker.stream_dispatch
+		worker_stream_dispatch:                 fn [mut app] () bool {
+			return app.engines.metrics().stream_dispatch
 		}
 		ws_hub_dispatch_mode:                   fn [app] () bool {
-			return app.transport.websocket.dispatch_mode
+			return app.websocket.dispatch_enabled()
 		}
-		worker_lifecycle:                       fn [app] () string {
-			return app.executors.worker.lifecycle
+		worker_lifecycle:                       fn [mut app] () string {
+			return app.engines.metrics().lifecycle
 		}
 		logic_executor_admin_details:           fn [app] () executor.LogicExecutorAdminDetails {
 			return app.logic_executor_admin_details()
@@ -125,13 +121,11 @@ fn (mut app App) build_admin_context() admin.RuntimeContext {
 }
 
 fn (mut app App) admin_stats_snapshot() executor.AdminRuntimeStats {
-	app.mu.@lock()
-	defer { app.mu.unlock() }
 	ctx := app.build_admin_context()
-	return app.admin.stats_snapshot(ctx)
+	return app.control_plane.stats_snapshot(ctx)
 }
 
 fn (mut app App) admin_runtime_snapshot() executor.AdminRuntimeSummary {
 	ctx := app.build_admin_context()
-	return app.admin.runtime_snapshot(ctx)
+	return app.control_plane.runtime_snapshot(ctx)
 }

@@ -15,30 +15,30 @@ pub:
 }
 
 // RuntimeContext is the closure-based interface for WebSocket hub operations.
-// Built by `module main` via `build_websocket_runtime_context()`, which captures
-// App subsystem references as closures.
+// Built by WebSocketRuntime. Hub closures capture the WebSocket owner while the
+// narrow kernel port supplies protocol-frame construction and logic dispatch.
 pub struct RuntimeContext {
 pub:
-	dispatch_targets_fn fn (string, string) []HubDispatchTarget                = unsafe { nil }
-	presence_fn         fn (string) PresenceSnapshot                           = unsafe { nil }
-	rooms_fn            fn (string) []string                                   = unsafe { nil }
-	metadata_fn         fn (string) map[string]string                          = unsafe { nil }
+	dispatch_targets_fn fn (string, string) []HubDispatchTarget = unsafe { nil }
+	presence_fn         fn (string) PresenceSnapshot            = unsafe { nil }
+	rooms_fn            fn (string) []string                    = unsafe { nil }
+	metadata_fn         fn (string) map[string]string           = unsafe { nil }
 	register_conn_fn    fn (string, string, string, string, string, string, map[string]string, map[string]string, string, &websocket.Client, &DispatchConnState) = unsafe { nil }
-	mark_closing_fn     fn (string) bool                                       = unsafe { nil }
-	flush_pending_fn    fn (string)                                            = unsafe { nil }
-	cleanup_conn_fn     fn (string)                                            = unsafe { nil }
-	unregister_conn_fn  fn (string)                                            = unsafe { nil }
-	send_to_fn          fn (string, string, string) bool                       = unsafe { nil }
-	join_fn             fn (string, string) bool                               = unsafe { nil }
-	leave_fn            fn (string, string) bool                               = unsafe { nil }
-	set_meta_fn         fn (string, string, string) bool                       = unsafe { nil }
-	clear_meta_fn       fn (string, string) bool                               = unsafe { nil }
-	broadcast_fn        fn (string, string, string, string) int                = unsafe { nil }
+	mark_closing_fn     fn (string) bool                        = unsafe { nil }
+	flush_pending_fn    fn (string)                             = unsafe { nil }
+	cleanup_conn_fn     fn (string)                             = unsafe { nil }
+	unregister_conn_fn  fn (string)                             = unsafe { nil }
+	send_to_fn          fn (string, string, string) bool        = unsafe { nil }
+	join_fn             fn (string, string) bool                = unsafe { nil }
+	leave_fn            fn (string, string) bool                = unsafe { nil }
+	set_meta_fn         fn (string, string, string) bool        = unsafe { nil }
+	clear_meta_fn       fn (string, string) bool                = unsafe { nil }
+	broadcast_fn        fn (string, string, string, string) int = unsafe { nil }
 	build_frame_fn      fn (string, string, string, map[string]string, map[string]string, string, string, string, string, string, int, string, []string, map[string]string, PresenceSnapshot) transport.WorkerWebSocketFrame = unsafe { nil }
 	dispatch_event_fn   fn (transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse        = unsafe { nil }
 	command_result_fn   fn ([]transport.WorkerWebSocketFrame) transport.WorkerWebSocketDispatchCommandsResult = unsafe { nil }
 	followup_failure_fn fn (string, string, string, map[string]string, map[string]string, string, string, string, []transport.WorkerWebSocketDispatchCommandFailure) ?transport.WorkerWebSocketFrame = unsafe { nil }
-	close_target_fn     fn (string, int, string)                               = unsafe { nil }
+	close_target_fn     fn (string, int, string) = unsafe { nil }
 }
 
 pub fn (rt RuntimeContext) dispatch_targets(room string, except_id string) []HubDispatchTarget {

@@ -62,11 +62,5 @@ fn (mut app App) dispatch_vjsx_event(req VjsxEventDispatchRequest) !executor.Htt
 		trace_id:      req.trace_id
 		request_id:    req.request_id
 	}
-	if app.logic_executor_kind() == 'vjsx' {
-		return app.executors.worker.logic_executor.dispatch_http(mut facade, dispatch_req)!
-	}
-	if state := app.additional_workers['vjsx'] {
-		return state.logic_executor.dispatch_http(mut facade, dispatch_req)!
-	}
-	return error('vjsx_executor_unavailable')
+	return app.engines.dispatch_http_for_kind('vjsx', mut facade, dispatch_req)!
 }

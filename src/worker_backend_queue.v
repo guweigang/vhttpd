@@ -57,10 +57,10 @@ fn WorkerBackendQueueMetrics.note_timeout_state(mut ws worker.WorkerState) {
 	ws.stat_queue_timeouts_total++
 }
 
-fn (mut app App) worker_backend_select_socket_queued_for_state(kind string, mut ws worker.WorkerState) !string {
-	socket_path := app.worker_backend_select_socket_for_state_core(kind, mut ws) or {
+fn (mut runtime EngineRuntime) select_socket_queued_for_state(port EngineLifecyclePort, kind string, mut ws worker.WorkerState) !string {
+	socket_path := runtime.select_socket_for_state_core(port, kind, mut ws) or {
 		if err.msg() != 'all workers busy' {
-			app.emit('worker.select.failed', {
+			port.emit_fn('worker.select.failed', {
 				'kind':             kind
 				'error':            err.msg()
 				'diagnostics_json': json.encode(worker_selection_diagnostics_for_state(ws))
@@ -69,7 +69,7 @@ fn (mut app App) worker_backend_select_socket_queued_for_state(kind string, mut 
 		}
 		if !WorkerBackendQueue.try_enter_state(mut ws) {
 			WorkerBackendQueueMetrics.note_rejected_state(mut ws)
-			app.emit('worker.select.failed', {
+			port.emit_fn('worker.select.failed', {
 				'kind':             kind
 				'error':            'worker queue full'
 				'diagnostics_json': json.encode(worker_selection_diagnostics_for_state(ws))
@@ -96,7 +96,7 @@ fn (mut app App) worker_backend_select_socket_queued_for_state(kind string, mut 
 		mut select_err := err
 		for time.now() < deadline {
 			time.sleep(time.millisecond * poll_ms)
-			socket := app.worker_backend_select_socket_for_state_core(kind, mut ws) or {
+			socket := runtime.select_socket_for_state_core(port, kind, mut ws) or {
 				select_err = err
 				continue
 			}
@@ -108,7 +108,7 @@ fn (mut app App) worker_backend_select_socket_queued_for_state(kind string, mut 
 			return last_socket
 		}
 		WorkerBackendQueueMetrics.note_timeout_state(mut ws)
-		app.emit('worker.select.failed', {
+		port.emit_fn('worker.select.failed', {
 			'kind':             kind
 			'error':            'worker queue timeout: ' + select_err.msg()
 			'diagnostics_json': json.encode(worker_selection_diagnostics_for_state(ws))
@@ -119,5 +119,11 @@ fn (mut app App) worker_backend_select_socket_queued_for_state(kind string, mut 
 }
 
 fn (mut app App) worker_backend_select_socket_queued() !string {
-	return app.worker_backend_select_socket_queued_for_state(app.logic_executor_kind(), mut app.executors.worker)
+	port := app.build_engine_lifecycle_port()
+	return app.engines.select_socket_for_kind(port, '')
+}
+
+fn (mut app App) worker_backend_select_socket_queued_for_state(kind string, mut state worker.WorkerState) !string {
+	port := app.build_engine_lifecycle_port()
+	return app.engines.select_socket_queued_for_state(port, kind, mut state)
 }

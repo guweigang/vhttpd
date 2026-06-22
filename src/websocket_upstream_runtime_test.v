@@ -2,8 +2,6 @@ module main
 
 import upstream.transport
 import codex
-import upstream
-import ws
 
 fn test_websocket_upstream_reconnect_and_admin_helpers() {
 	mut app := App{
@@ -34,11 +32,7 @@ fn test_websocket_upstream_reconnect_and_admin_helpers() {
 
 fn test_upstream_runtime_context_tracks_registry_metrics_and_snapshot() {
 	mut app := App{
-		transport: TransportRuntimeHub{
-			websocket: ws.HubState{
-				upstream_sessions: map[string]upstream.UpstreamRuntimeSession{}
-			}
-		}
+		upstreams: UpstreamRuntimeRegistry.new()
 	}
 	plan := transport.WorkerUpstreamPlanFrame{
 		name:               'mock_provider'
@@ -51,7 +45,8 @@ fn test_upstream_runtime_context_tracks_registry_metrics_and_snapshot() {
 
 	app.upstream_runtime_register(plan, 'post', '/v1/chat/completions?debug=1', 'req_up_1',
 		'trace_up_1')
-	assert app.transport.websocket.stat_upstream_plans_total == 1
+	plans, _ := app.upstreams.totals()
+	assert plans == 1
 
 	snapshot := app.admin_upstreams_snapshot(true, 10, 0, 'external_upstream', 'mock_provider')
 	assert snapshot.active_count == 1
@@ -62,8 +57,26 @@ fn test_upstream_runtime_context_tracks_registry_metrics_and_snapshot() {
 	assert snapshot.sessions[0].source == 'fixture'
 
 	app.upstream_runtime_note_error()
-	assert app.transport.websocket.stat_upstream_plan_errors_total == 1
+	_, errors := app.upstreams.totals()
+	assert errors == 1
 
 	app.upstream_runtime_unregister('req_up_1')
 	assert app.admin_upstreams_snapshot(false, 10, 0, '', '').active_count == 0
+}
+
+fn test_upstream_runtime_registry_is_independent_from_websocket_hub() {
+	mut registry := UpstreamRuntimeRegistry.new()
+	registry.register(transport.WorkerUpstreamPlanFrame{
+		name:      'generic_http'
+		transport: 'http'
+		codec:     'json'
+	}, 'GET', '/events?cursor=1', 'req_registry', 'trace_registry')
+	assert registry.active_count() == 1
+	plans, errors := registry.totals()
+	assert plans == 1
+	assert errors == 0
+	snapshot := registry.snapshot(true, 10, 0, '', 'generic_http')
+	assert snapshot.sessions[0].path == '/events'
+	registry.unregister('req_registry')
+	assert registry.active_count() == 0
 }

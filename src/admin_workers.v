@@ -7,7 +7,7 @@ import veb
 
 @['/admin/workers'; get]
 pub fn (mut app App) admin_workers(mut ctx Context) veb.Result {
-	if !app.admin.on_data_plane {
+	if !app.control_plane.admin.on_data_plane {
 		ctx.res.set_status(.not_found)
 		return ctx.text('Not Found')
 	}
@@ -29,7 +29,7 @@ pub fn (mut app App) admin_workers(mut ctx Context) veb.Result {
 
 @['/admin/stats'; get]
 pub fn (mut app App) admin_stats(mut ctx Context) veb.Result {
-	if !app.admin.on_data_plane {
+	if !app.control_plane.admin.on_data_plane {
 		ctx.res.set_status(.not_found)
 		return ctx.text('Not Found')
 	}
@@ -51,7 +51,7 @@ pub fn (mut app App) admin_stats(mut ctx Context) veb.Result {
 
 @['/admin/workers/restart'; post]
 pub fn (mut app App) admin_restart_worker(mut ctx Context) veb.Result {
-	if !app.admin.on_data_plane {
+	if !app.control_plane.admin.on_data_plane {
 		ctx.res.set_status(.not_found)
 		return ctx.text('Not Found')
 	}
@@ -91,7 +91,7 @@ pub fn (mut app App) admin_restart_worker(mut ctx Context) veb.Result {
 
 @['/admin/workers/restart/all'; post]
 pub fn (mut app App) admin_restart_all_workers(mut ctx Context) veb.Result {
-	if !app.admin.on_data_plane {
+	if !app.control_plane.admin.on_data_plane {
 		ctx.res.set_status(.not_found)
 		return ctx.text('Not Found')
 	}

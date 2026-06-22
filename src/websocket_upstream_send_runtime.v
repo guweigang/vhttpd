@@ -15,7 +15,7 @@ fn (mut app App) websocket_upstream_provider_send(provider string, req upstream.
 				app.providers.feishu.resolve_app_name(req.instance)!)
 		}
 		websocket_upstream_provider_fixture {
-			result := app.transport.websocket.fixture_send(req.instance)
+			result := app.websocket.fixture_send(req.instance)
 			return upstream.UpstreamSendResult{
 				ok:         result.ok
 				provider:   result.provider
@@ -45,7 +45,7 @@ fn (mut app App) websocket_upstream_provider_update(provider string, req upstrea
 				app.providers.feishu.resolve_app_name(req.instance)!)
 		}
 		websocket_upstream_provider_fixture {
-			result := app.transport.websocket.fixture_update_msg(req.instance, req.target)!
+			result := app.websocket.fixture_update(req.instance, req.target)!
 			return upstream.UpstreamUpdateResult{
 				ok:         result.ok
 				provider:   result.provider

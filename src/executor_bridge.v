@@ -30,55 +30,39 @@ pub fn (w AppFacadeWrapper) get_runtime_config_json() string {
 
 pub fn (w AppFacadeWrapper) worker_backend_read_timeout_ms() int {
 	app := unsafe { &App(w.app_ptr) }
-	return app.executors.worker.worker_backend.read_timeout_ms
+	return app.engines.read_timeout_ms('')
 }
 
 pub fn (w AppFacadeWrapper) worker_backend_read_timeout_ms_for_kind(kind string) int {
 	app := unsafe { &App(w.app_ptr) }
-	if kind == app.logic_executor_kind() {
-		return app.executors.worker.worker_backend.read_timeout_ms
-	}
-	if state := app.additional_workers[kind] {
-		return state.worker_backend.read_timeout_ms
-	}
-	return 0
+	return app.engines.read_timeout_ms(kind)
 }
 
 pub fn (w AppFacadeWrapper) worker_backend_sockets_len() int {
 	app := unsafe { &App(w.app_ptr) }
-	return app.executors.worker.worker_backend.sockets.len
+	return app.engines.primary_socket_count()
 }
 
 pub fn (w AppFacadeWrapper) worker_env() map[string]string {
 	app := unsafe { &App(w.app_ptr) }
-	return app.executors.worker.worker_backend.env.clone()
+	return app.engines.worker_env('')
 }
 
 pub fn (w AppFacadeWrapper) worker_env_for_kind(kind string) map[string]string {
 	app := unsafe { &App(w.app_ptr) }
-	if kind == app.logic_executor_kind() {
-		return app.executors.worker.worker_backend.env.clone()
-	}
-	if state := app.additional_workers[kind] {
-		return state.worker_backend.env.clone()
-	}
-	return map[string]string{}
+	return app.engines.worker_env(kind)
 }
 
 pub fn (mut w AppFacadeWrapper) worker_backend_select_socket_queued() !string {
 	mut app := unsafe { &App(w.app_ptr) }
-	return app.worker_backend_select_socket_queued()
+	port := app.build_engine_lifecycle_port()
+	return app.engines.select_socket_for_kind(port, '')
 }
 
 pub fn (mut w AppFacadeWrapper) worker_backend_select_socket_for_kind(kind string) !string {
 	mut app := unsafe { &App(w.app_ptr) }
-	if kind == app.logic_executor_kind() {
-		return app.worker_backend_select_socket_queued()
-	}
-	mut ws := app.additional_workers[kind] or {
-		return error('unknown_executor_kind:${kind}')
-	}
-	return app.worker_backend_select_socket_queued_for_state(kind, mut *ws)
+	port := app.build_engine_lifecycle_port()
+	return app.engines.select_socket_for_kind(port, kind)
 }
 
 pub fn (mut w AppFacadeWrapper) on_worker_request_started(socket_path string) {
@@ -144,27 +128,27 @@ pub fn (mut w AppFacadeWrapper) run_command_envelopes(request_id string, dispatc
 // ── App logic_executor proxy methods ──
 
 pub fn (app &App) logic_executor_kind() string {
-	return app.executors.worker.logic_executor.kind()
+	return app.engines.primary_kind()
 }
 
 pub fn (app &App) logic_executor_model() executor.LogicExecutorModel {
-	return app.executors.worker.logic_executor.model()
+	return app.engines.logic_executor_model()
 }
 
 pub fn (app &App) logic_executor_provider() string {
-	return app.executors.worker.logic_executor.provider()
+	return app.engines.logic_executor_provider()
 }
 
 pub fn (app &App) logic_executor_admin_details() executor.LogicExecutorAdminDetails {
-	return app.executors.worker.logic_executor.admin_details()
+	return app.engines.logic_executor_admin_details()
 }
 
 pub fn (app &App) has_http_logic_executor() bool {
-	return app.executors.worker.worker_backend.sockets.len > 0 || app.executors.worker.logic_executor.model() == .embedded
+	return app.engines.has_http_logic_executor()
 }
 
 pub fn (app &App) has_websocket_upstream_logic_executor() bool {
-	return app.executors.worker.worker_backend.sockets.len > 0 || app.executors.worker.logic_executor.model() == .embedded
+	return app.engines.has_http_logic_executor()
 }
 
 // ── Global Type Aliases ──

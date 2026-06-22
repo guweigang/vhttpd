@@ -8,7 +8,6 @@ import net.http
 import os
 import state_store
 import time
-import upstream
 import veb
 import ws
 import feishu
@@ -260,9 +259,13 @@ fn openai_integration_start_gateway(port int, upstream_port int, plugin_file str
 		}
 	}
 	mut app := App{
-		event_log:        ''
-		started_at_unix:  time.now().unix()
-		protocols:       ProtocolRuntimeHub{
+		control_plane: ControlPlaneRuntime{
+			event_log: ''
+		}
+		lifecycle:     ProcessLifecycle{
+			started_at_unix: time.now().unix()
+		}
+		protocols:     ProtocolRuntimeHub{
 			plugins: plugin.PluginState{
 				configs: plugins
 				vjsx:    build_vjsx_plugin_runtimes(plugins)
@@ -298,19 +301,19 @@ fn openai_integration_start_gateway(port int, upstream_port int, plugin_file str
 				sessions: map[string]mcp_protocol.Session{}
 			}
 		}
-		transport:       TransportRuntimeHub{
-			websocket: ws.HubState{
-				conns:             map[string]ws.HubConn{}
-				room_members:      map[string]map[string]bool{}
-				conn_rooms:        map[string]map[string]bool{}
-				conn_meta:         map[string]map[string]string{}
-				pending:           map[string][]ws.HubPendingMessage{}
-				upstream_started:  map[string]bool{}
-				fixture_runtime:   map[string]ws.FixtureRuntime{}
-				upstream_sessions: map[string]upstream.UpstreamRuntimeSession{}
+		websocket:     WebSocketRuntime{
+			state: ws.HubState{
+				conns:            map[string]ws.HubConn{}
+				room_members:     map[string]map[string]bool{}
+				conn_rooms:       map[string]map[string]bool{}
+				conn_meta:        map[string]map[string]string{}
+				pending:          map[string][]ws.HubPendingMessage{}
+				upstream_started: map[string]bool{}
+				fixture_runtime:  map[string]ws.FixtureRuntime{}
 			}
 		}
-		providers: ProviderRuntimeHub{
+		upstreams:     UpstreamRuntimeRegistry.new()
+		providers:     ProviderRuntimeHub{
 			registry:  ProviderHost{
 				registry: map[string]Provider{}
 				specs:    map[string]ProviderSpec{}

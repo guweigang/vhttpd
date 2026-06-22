@@ -389,8 +389,8 @@ fn test_codex_find_stream_targets_scans_across_instances() {
 fn test_codex_dispatch_rpc_response_uses_logic_executor_without_worker_sockets() {
 	mut state := &CodexRuntimeTestDispatchState{}
 	mut app := App{
-		executors: ExecutorRuntimeHub{
-			worker: worker.WorkerState{
+		engines: EngineRuntime{
+			primary: worker.WorkerState{
 				logic_executor: CodexRuntimeTestExecutor{
 					state: state
 				}
@@ -413,8 +413,8 @@ fn test_codex_dispatch_rpc_response_uses_logic_executor_without_worker_sockets()
 fn test_codex_notification_uses_logic_executor_without_worker_sockets() {
 	mut state := &CodexRuntimeTestDispatchState{}
 	mut app := App{
-		executors: ExecutorRuntimeHub{
-			worker: worker.WorkerState{
+		engines:   EngineRuntime{
+			primary: worker.WorkerState{
 				logic_executor: CodexRuntimeTestExecutor{
 					state: state
 				}
@@ -440,8 +440,8 @@ fn test_codex_notification_uses_logic_executor_without_worker_sockets() {
 fn test_codex_notification_prefers_thread_bound_stream_over_active_stream() {
 	mut state := &CodexRuntimeTestDispatchState{}
 	mut app := App{
-		executors: ExecutorRuntimeHub{
-			worker: worker.WorkerState{
+		engines:   EngineRuntime{
+			primary: worker.WorkerState{
 				logic_executor: CodexRuntimeTestExecutor{
 					state: state
 				}
@@ -474,8 +474,8 @@ fn test_codex_notification_prefers_thread_bound_stream_over_active_stream() {
 fn test_codex_server_request_uses_logic_executor_without_worker_sockets() {
 	mut state := &CodexRuntimeTestDispatchState{}
 	mut app := App{
-		executors: ExecutorRuntimeHub{
-			worker: worker.WorkerState{
+		engines:   EngineRuntime{
+			primary: worker.WorkerState{
 				logic_executor: CodexRuntimeTestExecutor{
 					state: state
 				}

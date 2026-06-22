@@ -33,9 +33,13 @@ fn WorkerWebSocketDispatchCommandRuntime.first_close(result transport.WorkerWebS
 	return none
 }
 
+fn (mut runtime WebSocketRuntime) execute_commands(commands []transport.WorkerWebSocketFrame) transport.WorkerWebSocketDispatchCommandsResult {
+	rt := runtime.build_context(WebSocketKernelPort{})
+	return WorkerWebSocketDispatchCommandRuntime.execute(rt, commands)
+}
+
 fn (mut app App) execute_websocket_dispatch_commands_result(commands []transport.WorkerWebSocketFrame) transport.WorkerWebSocketDispatchCommandsResult {
-	websocket_runtime := app.build_websocket_runtime_context()
-	return WorkerWebSocketDispatchCommandRuntime.execute(websocket_runtime, commands)
+	return app.websocket.execute_commands(commands)
 }
 
 fn (mut app App) execute_websocket_dispatch_commands(commands []transport.WorkerWebSocketFrame) ?transport.WorkerWebSocketFrame {

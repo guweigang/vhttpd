@@ -110,6 +110,40 @@ fn test_route_rule_method_matching_supports_preflight_split() {
 	assert !api.matches_http_request('OPTIONS', '/api/posts', map[string]string{})
 }
 
+fn test_http_routing_runtime_preserves_first_match_order() {
+	rt := HttpRoutingRuntime{
+		rules: [
+			RuntimeRouteRule{
+				match_path: ['/api/special']
+				executor:   'special'
+			},
+			RuntimeRouteRule{
+				match_path: ['/api/*']
+				executor:   'fallback'
+			},
+		]
+	}
+	rule := rt.match_http_request('GET', '/api/special', map[string]string{}) or {
+		assert false
+		return
+	}
+	assert rule.executor == 'special'
+}
+
+fn test_http_routing_runtime_owns_static_root_precedence() {
+	rt := HttpRoutingRuntime{
+		assets_root: '/srv/assets'
+		worker_root: '/srv/worker'
+	}
+	assert rt.static_root(RuntimeRouteRule{
+		root: '/srv/route'
+	}) == '/srv/route'
+	assert rt.static_root(RuntimeRouteRule{}) == '/srv/assets'
+	assert HttpRoutingRuntime{
+		worker_root: '/srv/worker'
+	}.static_root(RuntimeRouteRule{}) == '/srv/worker'
+}
+
 fn test_route_security_header_and_query_rules() {
 	rule := RuntimeRouteRule{
 		required_headers:      {

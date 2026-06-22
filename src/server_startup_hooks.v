@@ -6,12 +6,12 @@ import os
 struct AppStartupHooks {}
 
 fn AppStartupHooks.initialize_runtime(mut app App, internal_admin_socket string) {
-	app.executors.worker.worker_backend.env['VHTTPD_INTERNAL_ADMIN_SOCKET'] = internal_admin_socket
+	app.engines.set_primary_env('VHTTPD_INTERNAL_ADMIN_SOCKET', internal_admin_socket)
 	if app.transport.db.enabled && app.transport.db.socket.trim_space() != '' {
-		app.executors.worker.worker_backend.env['VHTTPD_DB_SOCKET'] = app.transport.db.socket
+		app.engines.set_primary_env('VHTTPD_DB_SOCKET', app.transport.db.socket)
 	}
 	if app.transport.cache.enabled && app.transport.cache.socket.trim_space() != '' {
-		app.executors.worker.worker_backend.env['VHTTPD_CACHE_SOCKET'] = app.transport.cache.socket
+		app.engines.set_primary_env('VHTTPD_CACHE_SOCKET', app.transport.cache.socket)
 		go app.cache_runtime_server_run(app.transport.cache.socket)
 	}
 	app.feishu_card_bridge_apply_env_fallbacks()
@@ -53,27 +53,15 @@ fn AppStartupHooks.install_middleware(mut app App) {
 }
 
 fn AppStartupHooks.emit_server_started(mut app App, scheme string, host string, port int, admin_enabled bool, admin_host string, admin_port int) {
-	app.emit('server.started', {
-		'scheme':                   scheme
-		'host':                     host
-		'port':                     '${port}'
-		'pid':                      '${os.getpid()}'
-		'worker_backend':           app.executors.worker.worker_backend.kind()
-		'worker_backend_mode':      '${app.executors.worker.worker_backend_mode}'
-		'logic_executor':           app.logic_executor_kind()
-		'logic_executor_lifecycle': app.executors.worker.lifecycle
-		'logic_executor_model':     '${app.logic_executor_model()}'
-		'logic_provider':           app.logic_executor_provider()
-		'worker_autostart':         if app.executors.worker.worker_backend.autostart {
-			'true'
-		} else {
-			'false'
-		}
-		'worker_pool_size':         '${app.executors.worker.worker_backend.sockets.len}'
-		'admin_enabled':            if admin_enabled { 'true' } else { 'false' }
-		'admin_host':               if admin_enabled { admin_host } else { '' }
-		'admin_port':               if admin_enabled { '${admin_port}' } else { '' }
-	})
+	mut fields := app.engines.startup_fields()
+	fields['scheme'] = scheme
+	fields['host'] = host
+	fields['port'] = '${port}'
+	fields['pid'] = '${os.getpid()}'
+	fields['admin_enabled'] = if admin_enabled { 'true' } else { 'false' }
+	fields['admin_host'] = if admin_enabled { admin_host } else { '' }
+	fields['admin_port'] = if admin_enabled { '${admin_port}' } else { '' }
+	app.emit('server.started', fields)
 }
 
 fn AppStartupHooks.start_admin_plane(mut app App, admin_enabled bool, admin_host string, admin_port int, admin_token string) {

@@ -3,26 +3,38 @@ module main
 import time
 import upstream
 import upstream.transport
+import sync
 
-struct UpstreamRuntimeRegistry {}
+struct UpstreamRuntimeRegistry {
+mut:
+	mu                     sync.Mutex
+	sessions               map[string]upstream.UpstreamRuntimeSession
+	stat_plans_total       i64
+	stat_plan_errors_total i64
+}
+
+fn UpstreamRuntimeRegistry.new() UpstreamRuntimeRegistry {
+	return UpstreamRuntimeRegistry{
+		sessions: map[string]upstream.UpstreamRuntimeSession{}
+	}
+}
 
 fn (mut app App) build_upstream_runtime_context() UpstreamRuntimeContext {
 	return UpstreamRuntimeContext{
 		register_fn:   fn [mut app] (plan transport.WorkerUpstreamPlanFrame, method string, path string, req_id string, trace_id string) {
-			UpstreamRuntimeRegistry.register(mut app, plan, method, path, req_id, trace_id)
+			app.upstreams.register(plan, method, path, req_id, trace_id)
 		}
 		unregister_fn: fn [mut app] (req_id string) {
-			UpstreamRuntimeRegistry.unregister(mut app, req_id)
+			app.upstreams.unregister(req_id)
 		}
 		note_error_fn: fn [mut app] () {
-			UpstreamRuntimeRegistry.note_error(mut app)
+			app.upstreams.note_error()
 		}
 		emit_fn:       fn [mut app] (kind string, fields map[string]string) {
 			app.emit(kind, fields)
 		}
 		snapshot_fn:   fn [mut app] (details bool, limit int, offset int, role_filter string, provider_filter string) AdminUpstreamRuntimeSnapshot {
-			return UpstreamRuntimeRegistry.snapshot(mut app, details, limit, offset, role_filter,
-				provider_filter)
+			return app.upstreams.snapshot(details, limit, offset, role_filter, provider_filter)
 		}
 	}
 }
@@ -32,13 +44,14 @@ fn (mut app App) upstream_runtime_register(plan transport.WorkerUpstreamPlanFram
 	runtime.register(plan, method, path, req_id, trace_id)
 }
 
-fn UpstreamRuntimeRegistry.register(mut app App, plan transport.WorkerUpstreamPlanFrame, method string, path string, req_id string, trace_id string) {
+fn (mut registry UpstreamRuntimeRegistry) register(plan transport.WorkerUpstreamPlanFrame, method string, path string, req_id string, trace_id string) {
 	if req_id == '' {
 		return
 	}
 	normalized_path, _ := transport.WorkerHttpRequestCodec.normalize_request_target(path)
-	app.transport.websocket.upstream_mu.@lock()
-	app.transport.websocket.upstream_sessions[req_id] = upstream.UpstreamRuntimeSession{
+	registry.mu.@lock()
+	defer { registry.mu.unlock() }
+	registry.sessions[req_id] = upstream.UpstreamRuntimeSession{
 		id:              req_id
 		request_id:      req_id
 		trace_id:        trace_id
@@ -54,10 +67,7 @@ fn UpstreamRuntimeRegistry.register(mut app App, plan transport.WorkerUpstreamPl
 		source:          if plan.fixture_path != '' { 'fixture' } else { 'http' }
 		started_at_unix: time.now().unix()
 	}
-	app.transport.websocket.upstream_mu.unlock()
-	app.mu.@lock()
-	app.transport.websocket.stat_upstream_plans_total++
-	app.mu.unlock()
+	registry.stat_plans_total++
 }
 
 fn (mut app App) upstream_runtime_unregister(req_id string) {
@@ -65,13 +75,13 @@ fn (mut app App) upstream_runtime_unregister(req_id string) {
 	runtime.unregister(req_id)
 }
 
-fn UpstreamRuntimeRegistry.unregister(mut app App, req_id string) {
+fn (mut registry UpstreamRuntimeRegistry) unregister(req_id string) {
 	if req_id == '' {
 		return
 	}
-	app.transport.websocket.upstream_mu.@lock()
-	app.transport.websocket.upstream_sessions.delete(req_id)
-	app.transport.websocket.upstream_mu.unlock()
+	registry.mu.@lock()
+	registry.sessions.delete(req_id)
+	registry.mu.unlock()
 }
 
 fn (mut app App) upstream_runtime_note_error() {
@@ -79,10 +89,10 @@ fn (mut app App) upstream_runtime_note_error() {
 	runtime.note_error()
 }
 
-fn UpstreamRuntimeRegistry.note_error(mut app App) {
-	app.mu.@lock()
-	app.transport.websocket.stat_upstream_plan_errors_total++
-	app.mu.unlock()
+fn (mut registry UpstreamRuntimeRegistry) note_error() {
+	registry.mu.@lock()
+	registry.stat_plan_errors_total++
+	registry.mu.unlock()
 }
 
 fn (mut app App) admin_upstreams_snapshot(details bool, limit int, offset int, role_filter string, provider_filter string) AdminUpstreamRuntimeSnapshot {
@@ -90,13 +100,13 @@ fn (mut app App) admin_upstreams_snapshot(details bool, limit int, offset int, r
 	return runtime.snapshot(details, limit, offset, role_filter, provider_filter)
 }
 
-fn UpstreamRuntimeRegistry.snapshot(mut app App, details bool, limit int, offset int, role_filter string, provider_filter string) AdminUpstreamRuntimeSnapshot {
-	app.transport.websocket.upstream_mu.@lock()
+fn (mut registry UpstreamRuntimeRegistry) snapshot(details bool, limit int, offset int, role_filter string, provider_filter string) AdminUpstreamRuntimeSnapshot {
+	registry.mu.@lock()
 	defer {
-		app.transport.websocket.upstream_mu.unlock()
+		registry.mu.unlock()
 	}
 	mut sessions := []upstream.UpstreamRuntimeSession{}
-	for _, session in app.transport.websocket.upstream_sessions {
+	for _, session in registry.sessions {
 		if role_filter != '' && session.role != role_filter {
 			continue
 		}
@@ -142,4 +152,16 @@ fn UpstreamRuntimeRegistry.snapshot(mut app App, details bool, limit int, offset
 		offset:         offset
 		sessions:       sliced
 	}
+}
+
+fn (mut registry UpstreamRuntimeRegistry) active_count() int {
+	registry.mu.@lock()
+	defer { registry.mu.unlock() }
+	return registry.sessions.len
+}
+
+fn (mut registry UpstreamRuntimeRegistry) totals() (i64, i64) {
+	registry.mu.@lock()
+	defer { registry.mu.unlock() }
+	return registry.stat_plans_total, registry.stat_plan_errors_total
 }

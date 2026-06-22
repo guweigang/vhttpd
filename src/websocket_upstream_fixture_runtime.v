@@ -7,10 +7,10 @@ fn (mut app App) fixture_websocket_emit(req upstream.UpstreamFixtureEmitRequest)
 	now := time.now()
 	plan := req.normalized(now.unix(), now.unix_micro())
 	event := plan.event_snapshot(websocket_upstream_provider_fixture)
-	app.transport.websocket.fixture_push_event(plan.instance, ws_event_from_upstream(event),
+	app.websocket.fixture_push_event(plan.instance, ws_event_from_upstream(event),
 		app.providers.feishu.recent_event_limit)
 	mut snapshot := plan.activity_snapshot(websocket_upstream_provider_fixture)
-	if app.executors.worker.worker_backend.sockets.len == 0 {
+	if !app.engines.has_socket_workers() {
 		app.websocket_upstream_record_activity(snapshot)
 		return snapshot
 	}

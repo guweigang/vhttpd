@@ -10,8 +10,6 @@ import provider
 import json
 import state_store
 import time
-import upstream
-import ws
 import worker
 import admin
 import plugin
@@ -133,22 +131,26 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 	}
 
 	return &App{
-		event_log:          build_cfg.event_log
-		started_at_unix:    time.now().unix()
-		http_stats:         HttpStats{}
-		admin:              admin.AdminState{
-			internal_socket: build_cfg.internal_admin_socket
-			on_data_plane:   !build_cfg.admin_enabled
-			token:           build_cfg.admin_token
+		control_plane: ControlPlaneRuntime{
+			event_log:  build_cfg.event_log
+			http_stats: HttpStats{}
+			admin:      admin.AdminState{
+				internal_socket: build_cfg.internal_admin_socket
+				on_data_plane:   !build_cfg.admin_enabled
+				token:           build_cfg.admin_token
+			}
 		}
-		assets:             config.AssetsRuntime{
+		lifecycle:     ProcessLifecycle{
+			started_at_unix: time.now().unix()
+		}
+		assets:        config.AssetsRuntime{
 			enabled:       build_cfg.assets_enabled
 			prefix:        build_cfg.assets_prefix
 			root:          build_cfg.assets_root
 			root_real:     build_cfg.assets_root_real
 			cache_control: build_cfg.assets_cache_control
 		}
-		protocols:          ProtocolRuntimeHub{
+		protocols:     ProtocolRuntimeHub{
 			runtime_config_json: json.encode(cfg)
 			plugins:             plugin.PluginState{
 				configs: cfg.plugins.clone()
@@ -173,26 +175,14 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 				responses:       state_store.MemoryStateStore.new[openai.OpenAIResponseRecord]()
 			}
 		}
-		transport:          TransportRuntimeHub{
-			websocket: ws.HubState{
-				dispatch_mode:                executor_plan.bootstrap.websocket_dispatch_mode
-				recent_dispatch_limit:        50
-				auto_start_dynamic_upstreams: true
-				upstream_sessions:            map[string]upstream.UpstreamRuntimeSession{}
-				conns:                        map[string]ws.HubConn{}
-				room_members:                 map[string]map[string]bool{}
-				conn_rooms:                   map[string]map[string]bool{}
-				conn_meta:                    map[string]map[string]string{}
-				pending:                      map[string][]ws.HubPendingMessage{}
-				upstream_started:             map[string]bool{}
-				fixture_runtime:              map[string]ws.FixtureRuntime{}
-				recent_activities:            []ws.UpstreamActivitySnapshot{}
-			}
-			db:        dbx.Runtime.from_settings(provider_settings.db)
-			cache:     cachex.Runtime.new(cfg.cache.enabled, cfg.cache.socket)
+		transport:     TransportRuntimeHub{
+			db:    dbx.Runtime.from_settings(provider_settings.db)
+			cache: cachex.Runtime.new(cfg.cache.enabled, cfg.cache.socket)
 		}
-		executors:          ExecutorRuntimeHub{
-			worker: worker.WorkerState{
+		websocket:     WebSocketRuntime.new(executor_plan.bootstrap.websocket_dispatch_mode)
+		upstreams:     UpstreamRuntimeRegistry.new()
+		engines:       EngineRuntime{
+			primary:    worker.WorkerState{
 				worker_backend:      worker.WorkerBackendRuntime{
 					backend:                worker.PhpWorkerBackend{}
 					sockets:                executor_plan.bootstrap.worker_sockets
@@ -213,8 +203,9 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 				lifecycle:           executor_plan.lifecycle.name()
 				stream_dispatch:     executor_plan.bootstrap.stream_dispatch
 			}
+			additional: add_workers
 		}
-		providers:          ProviderRuntimeHub{
+		providers:     ProviderRuntimeHub{
 			registry:  ProviderHost{
 				registry: map[string]Provider{}
 				specs:    map[string]ProviderSpec{}
@@ -259,7 +250,7 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 				card_bridge_target_id:      provider_settings.bridge.target_id
 			}
 		}
-		routes:             runtime_routes
-		additional_workers: add_workers
+		http_routing:  HttpRoutingRuntime.new(runtime_routes, build_cfg.assets_root_real,
+			build_cfg.workdir, executor_plan.bootstrap.worker_env, add_workers)
 	}
 }

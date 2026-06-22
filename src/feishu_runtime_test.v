@@ -633,8 +633,8 @@ fn test_feishu_runtime_resolve_named_apps() {
 
 fn test_websocket_upstream_activity_snapshot_filters_and_limit() {
 	mut app := App{
-		transport: TransportRuntimeHub{
-			websocket: ws.HubState{
+		websocket: WebSocketRuntime{
+			state: ws.HubState{
 				recent_dispatch_limit: 2
 				recent_activities:     []ws.UpstreamActivitySnapshot{}
 			}
@@ -715,8 +715,8 @@ fn test_execute_websocket_upstream_commands_skips_and_reports_errors() {
 
 fn test_execute_websocket_upstream_commands_preserves_content_fields() {
 	mut app := App{
-		transport: TransportRuntimeHub{
-			websocket: ws.HubState{
+		websocket: WebSocketRuntime{
+			state: ws.HubState{
 				fixture_runtime: map[string]ws.FixtureRuntime{}
 			}
 		}
@@ -747,8 +747,8 @@ fn test_execute_websocket_upstream_commands_preserves_content_fields() {
 
 fn test_execute_websocket_upstream_commands_updates_fixture_messages() {
 	mut app := App{
-		transport: TransportRuntimeHub{
-			websocket: ws.HubState{
+		websocket: WebSocketRuntime{
+			state: ws.HubState{
 				fixture_runtime: map[string]ws.FixtureRuntime{}
 			}
 		}
@@ -777,8 +777,8 @@ fn test_execute_websocket_upstream_commands_updates_fixture_messages() {
 
 fn test_admin_websocket_upstream_activities_snapshot_json_shape() {
 	mut app := App{
-		transport: TransportRuntimeHub{
-			websocket: ws.HubState{
+		websocket: WebSocketRuntime{
+			state: ws.HubState{
 				recent_dispatch_limit: 10
 				recent_activities:     []ws.UpstreamActivitySnapshot{}
 			}
@@ -835,8 +835,8 @@ fn test_admin_websocket_upstream_activities_snapshot_json_shape() {
 
 fn test_fixture_websocket_provider_emit_and_send() {
 	mut app := App{
-		transport: TransportRuntimeHub{
-			websocket: ws.HubState{
+		websocket: WebSocketRuntime{
+			state: ws.HubState{
 				fixture_runtime:       map[string]ws.FixtureRuntime{}
 				recent_dispatch_limit: 10
 				recent_activities:     []ws.UpstreamActivitySnapshot{}

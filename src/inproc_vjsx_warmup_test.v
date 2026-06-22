@@ -1,6 +1,6 @@
 module main
-import executor
 
+import executor
 import net.http
 import os
 
@@ -89,9 +89,10 @@ export default app;
 	mut app := InProcTestApp{}
 	exec.warmup(mut app) or { panic(err) }
 
-	assert exec.host_count() == 2
-	assert exec.host_initialized(0)
-	assert exec.host_has_session(0)
-	assert exec.host_initialized(1)
-	assert exec.host_has_session(1)
+	assert exec.lane_count() == 2
+	assert exec.facade_snapshot().bootstrapped
+	for lane in exec.lane_snapshot() {
+		assert lane.healthy
+		assert !lane.dirty
+	}
 }

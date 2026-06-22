@@ -28,8 +28,8 @@ fn test_php_cgi_executor_identity() {
 
 fn test_app_facade_returns_env_for_named_executor_pool() {
 	mut app := App{
-		executors:          ExecutorRuntimeHub{
-			worker: worker.WorkerState{
+		engines: EngineRuntime{
+			primary:    worker.WorkerState{
 				worker_backend: worker.WorkerBackendRuntime{
 					env: {
 						'VPHP_WP_ROOT': '/main'
@@ -37,15 +37,15 @@ fn test_app_facade_returns_env_for_named_executor_pool() {
 				}
 				logic_executor: executor.SocketWorkerExecutor{}
 			}
-		}
-		additional_workers: {
-			'php-cgi': &worker.WorkerState{
-				worker_backend: worker.WorkerBackendRuntime{
-					env: {
-						'VPHP_WP_ROOT': '/cgi'
+			additional: {
+				'php-cgi': &worker.WorkerState{
+					worker_backend: worker.WorkerBackendRuntime{
+						env: {
+							'VPHP_WP_ROOT': '/cgi'
+						}
 					}
+					logic_executor: executor.PhpCgiExecutor{}
 				}
-				logic_executor: executor.PhpCgiExecutor{}
 			}
 		}
 	}
@@ -69,8 +69,8 @@ fn test_logic_executor_can_hold_inproc_vjsx_executor() {
 
 fn test_admin_runtime_snapshot_exposes_embedded_logic_executor_identity() {
 	mut app := App{
-		executors: ExecutorRuntimeHub{
-			worker: worker.WorkerState{
+		engines: EngineRuntime{
+			primary: worker.WorkerState{
 				worker_backend_mode: .disabled
 				lifecycle:           'embedded_host'
 				logic_executor:      new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
@@ -101,8 +101,8 @@ fn test_admin_runtime_snapshot_exposes_embedded_logic_executor_identity() {
 
 fn test_internal_admin_runtime_exposes_worker_logic_executor_identity() {
 	mut app := App{
-		executors: ExecutorRuntimeHub{
-			worker: worker.WorkerState{
+		engines: EngineRuntime{
+			primary: worker.WorkerState{
 				worker_backend_mode: .required
 				lifecycle:           'php_worker_host'
 				logic_executor:      executor.SocketWorkerExecutor{}

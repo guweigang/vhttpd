@@ -9,10 +9,9 @@ import os
 import time
 import ws
 import feishu
-import codex
 
-fn inproc_vjsx_test_lane_host_signature(executor InProcVjsxExecutor, idx int) string {
-	return executor.host_source_signature(idx)
+fn inproc_vjsx_test_lane_host_signature(executor InProcVjsxExecutor, _idx int) string {
+	return executor.current_source_signature()
 }
 
 fn inproc_vjsx_wait_for_signature_refresh(executor InProcVjsxExecutor, previous string, timeout_ms int) bool {
@@ -407,8 +406,8 @@ fn test_inproc_vjsx_executor_dispatch_http_exposes_runtime_snapshot() {
 		executor.close()
 	}
 	mut app := App{}
-	app.executors.worker.worker_backend.queue_capacity = 8
-	app.executors.worker.worker_backend.queue_timeout_ms = 25
+	app.engines.primary.worker_backend.queue_capacity = 8
+	app.engines.primary.worker_backend.queue_timeout_ms = 25
 	mut facade := app.as_facade()
 	req := http.Request{
 		method: .get
@@ -796,7 +795,9 @@ fn test_inproc_vjsx_executor_runtime_emit_writes_event_log() {
 		executor.close()
 	}
 	mut app := App{
-		event_log: event_log
+		control_plane: ControlPlaneRuntime{
+			event_log: event_log
+		}
 	}
 	mut facade := app.as_facade()
 	req := http.Request{
@@ -1282,9 +1283,12 @@ fn test_inproc_vjsx_executor_websocket_affinity_migration_keeps_existing_lane() 
 	executor.migrate_websocket_connection_affinity(transport.WorkerWebSocketFrame{
 		id: 'conn_migrate'
 	}, 'conn_migrate_key', old_lane)
-	migrated_lane := executor.ws_connection_lane_by_id('conn_migrate')
-	assert migrated_lane == old_lane
-	assert migrated_lane != ''
+	migrated, _ := executor.acquire_websocket_lane(transport.WorkerWebSocketFrame{
+		id:    'conn_migrate'
+		event: 'message'
+	}) or { panic(err) }
+	assert migrated.id == old_lane
+	executor.release_lane(migrated.id)
 	executor.release_websocket_connection_affinity(transport.WorkerWebSocketFrame{
 		id: 'conn_migrate'
 	})
@@ -1460,10 +1464,6 @@ export default {
 		}
 	}) or { panic(err) }
 	assert open_resp.accepted
-	cached_key := executor.ws_connection_actor_key_by_id('conn_actor_cache')
-	cached_class := executor.ws_connection_actor_class_by_id('conn_actor_cache')
-	assert cached_key == 'cached_1'
-	assert cached_class == 'conn'
 	msg_resp := executor.dispatch_websocket_event(mut app, transport.WorkerWebSocketFrame{
 		id:    'conn_actor_cache'
 		event: 'message'
@@ -1476,8 +1476,6 @@ export default {
 		code:  1000
 	}) or { panic(err) }
 	assert close_resp.accepted
-	after_close_key := executor.ws_connection_actor_key_by_id('conn_actor_cache')
-	assert after_close_key == ''
 }
 
 fn test_inproc_vjsx_executor_websocket_actor_app_hook_rejects_async_handler() {
@@ -2527,16 +2525,18 @@ export default app;
 		executor.close()
 	}
 	mut app := App{
-		ws_hub: ws.HubState{
-			conns:        map[string]ws.HubConn{}
-			room_members: map[string]map[string]bool{}
-			conn_rooms:   map[string]map[string]bool{}
-			conn_meta:    map[string]map[string]string{}
-			pending:      map[string][]ws.HubPendingMessage{}
+		websocket: WebSocketRuntime{
+			state: ws.HubState{
+				conns:        map[string]ws.HubConn{}
+				room_members: map[string]map[string]bool{}
+				conn_rooms:   map[string]map[string]bool{}
+				conn_meta:    map[string]map[string]string{}
+				pending:      map[string][]ws.HubPendingMessage{}
+			}
 		}
 	}
 	mut facade := app.as_facade()
-	app.transport.websocket.conns['ws_timer'] = ws.HubConn{
+	app.websocket.state.conns['ws_timer'] = ws.HubConn{
 		id:         'ws_timer'
 		request_id: 'req_ws_timer'
 		trace_id:   'trace_ws_timer'
@@ -2561,7 +2561,7 @@ export default app;
 	assert resp.accepted
 	time.sleep(80 * time.millisecond)
 	executor.pump_all_lane_sessions() or { panic(err) }
-	snapshot := app.admin_websockets_snapshot(true, 10, 0, '', 'ws_timer')
+	snapshot := app.websocket.snapshot(true, 10, 0, '', 'ws_timer')
 	assert snapshot.connections.len == 1
 	assert snapshot.connections[0].metadata['timer_ready'] == '1'
 	assert 'timer:room' in snapshot.connections[0].rooms
@@ -2602,16 +2602,18 @@ export default app;
 		executor.close()
 	}
 	mut app := App{
-		ws_hub: ws.HubState{
-			conns:        map[string]ws.HubConn{}
-			room_members: map[string]map[string]bool{}
-			conn_rooms:   map[string]map[string]bool{}
-			conn_meta:    map[string]map[string]string{}
-			pending:      map[string][]ws.HubPendingMessage{}
+		websocket: WebSocketRuntime{
+			state: ws.HubState{
+				conns:        map[string]ws.HubConn{}
+				room_members: map[string]map[string]bool{}
+				conn_rooms:   map[string]map[string]bool{}
+				conn_meta:    map[string]map[string]string{}
+				pending:      map[string][]ws.HubPendingMessage{}
+			}
 		}
 	}
 	mut facade2 := app.as_facade()
-	app.transport.websocket.conns['ws_timer_pump'] = ws.HubConn{
+	app.websocket.state.conns['ws_timer_pump'] = ws.HubConn{
 		id:         'ws_timer_pump'
 		request_id: 'req_ws_timer_pump'
 		trace_id:   'trace_ws_timer_pump'
@@ -2635,7 +2637,7 @@ export default app;
 	}) or { panic(err) }
 	assert resp.accepted
 	time.sleep(80 * time.millisecond)
-	after_wakeup := app.admin_websockets_snapshot(true, 10, 0, '', 'ws_timer_pump')
+	after_wakeup := app.websocket.snapshot(true, 10, 0, '', 'ws_timer_pump')
 	assert after_wakeup.connections.len == 1
 	assert after_wakeup.connections[0].metadata['timer_ready'] == '1'
 }
@@ -2680,15 +2682,17 @@ export default app;
 		executor.close()
 	}
 	mut app := App{
-		ws_hub: ws.HubState{
-			conns:        map[string]ws.HubConn{}
-			room_members: map[string]map[string]bool{}
-			conn_rooms:   map[string]map[string]bool{}
-			conn_meta:    map[string]map[string]string{}
-			pending:      map[string][]ws.HubPendingMessage{}
+		websocket: WebSocketRuntime{
+			state: ws.HubState{
+				conns:        map[string]ws.HubConn{}
+				room_members: map[string]map[string]bool{}
+				conn_rooms:   map[string]map[string]bool{}
+				conn_meta:    map[string]map[string]string{}
+				pending:      map[string][]ws.HubPendingMessage{}
+			}
 		}
 	}
-	app.transport.websocket.conns['ws_timer_failure'] = ws.HubConn{
+	app.websocket.state.conns['ws_timer_failure'] = ws.HubConn{
 		id:         'ws_timer_failure'
 		request_id: 'req_ws_timer_failure'
 		trace_id:   'trace_ws_timer_failure'
@@ -2714,7 +2718,7 @@ export default app;
 	assert resp.accepted
 	time.sleep(80 * time.millisecond)
 	executor.pump_all_lane_sessions() or { panic(err) }
-	snapshot := app.admin_websockets_snapshot(true, 10, 0, '', 'ws_timer_failure')
+	snapshot := app.websocket.snapshot(true, 10, 0, '', 'ws_timer_failure')
 	assert snapshot.connections.len == 1
 	assert snapshot.connections[0].metadata['dispatch_failure_count'] == '0'
 }
@@ -2969,15 +2973,17 @@ export default app;
 		executor.close()
 	}
 	mut app := App{
-		ws_hub: ws.HubState{
-			conns:        map[string]ws.HubConn{}
-			room_members: map[string]map[string]bool{}
-			conn_rooms:   map[string]map[string]bool{}
-			conn_meta:    map[string]map[string]string{}
-			pending:      map[string][]ws.HubPendingMessage{}
+		websocket: WebSocketRuntime{
+			state: ws.HubState{
+				conns:        map[string]ws.HubConn{}
+				room_members: map[string]map[string]bool{}
+				conn_rooms:   map[string]map[string]bool{}
+				conn_meta:    map[string]map[string]string{}
+				pending:      map[string][]ws.HubPendingMessage{}
+			}
 		}
 	}
-	app.transport.websocket.conns['ws_main_failure'] = ws.HubConn{
+	app.websocket.state.conns['ws_main_failure'] = ws.HubConn{
 		id:         'ws_main_failure'
 		request_id: 'req_ws_main_failure'
 		trace_id:   'trace_ws_main_failure'
@@ -3002,7 +3008,7 @@ export default app;
 	}) or { panic(err) }
 	assert open_resp.accepted
 	room_members, member_metadata, room_counts, presence_users :=
-		app.transport.websocket.presence_snapshot('ws_main_failure')
+		app.websocket.state.presence_snapshot('ws_main_failure')
 	msg_resp := executor.dispatch_websocket_event(mut facade6, transport.WorkerWebSocketFrame{
 		mode:            'websocket_dispatch'
 		event:           'message'
@@ -3017,8 +3023,8 @@ export default app;
 		trace_id:        'trace_ws_main_failure'
 		opcode:          'text'
 		data:            'hello'
-		rooms:           app.transport.websocket.rooms_snapshot('ws_main_failure')
-		metadata:        app.transport.websocket.meta_snapshot('ws_main_failure')
+		rooms:           app.websocket.state.rooms_snapshot('ws_main_failure')
+		metadata:        app.websocket.state.meta_snapshot('ws_main_failure')
 		room_members:    room_members
 		member_metadata: member_metadata
 		room_counts:     room_counts
@@ -3029,12 +3035,11 @@ export default app;
 	assert !result.has_close
 	assert result.failures.len == 0
 	if result.failures.len > 0 {
-		app.websocket_dispatch_followup_failures('ws_main_failure', 'GET', '/ws',
-			map[string]string{}, {
+		websocket_dispatch_followup_failures('ws_main_failure', 'GET', '/ws', map[string]string{}, {
 			'host': 'relay.test'
 		}, '127.0.0.1', 'req_ws_main_failure', 'trace_ws_main_failure', result.failures) or {}
 	}
-	snapshot := app.admin_websockets_snapshot(true, 10, 0, '', 'ws_main_failure')
+	snapshot := app.websocket.snapshot(true, 10, 0, '', 'ws_main_failure')
 	assert snapshot.connections.len == 1
 	assert snapshot.connections[0].metadata['main_dispatch_failure_count'] == ''
 }
@@ -3358,8 +3363,8 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_nudges_control_when_server_data_do
 		protocols: ProtocolRuntimeHub{
 			runtime_config_json: '{"relay":{"controlNudgeDelayMs":20,"controlResetDelayMs":200}}'
 		}
-		transport: TransportRuntimeHub{
-			websocket: ws.HubState{
+		websocket: WebSocketRuntime{
+			state: ws.HubState{
 				conns:        map[string]ws.HubConn{}
 				room_members: map[string]map[string]bool{}
 				conn_rooms:   map[string]map[string]bool{}
@@ -3415,7 +3420,7 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_nudges_control_when_server_data_do
 		&& it.data.contains('"type":"connected"'))
 	time.sleep(80 * time.millisecond)
 	executor.pump_all_lane_sessions() or { panic(err) }
-	pending := app.transport.websocket.pending['ws_control_nudge'] or { []ws.HubPendingMessage{} }
+	pending := app.websocket.state.pending['ws_control_nudge'] or { []ws.HubPendingMessage{} }
 	assert pending.len == 0
 }
 

@@ -37,7 +37,7 @@ fn (mut app App) build_worker_backend_dispatch_context() WorkerBackendDispatchCo
 		finish_fn:  fn [mut app] (socket_path string) {
 			app.on_worker_request_finished(socket_path)
 		}
-		timeout_ms: app.executors.worker.worker_backend.read_timeout_ms
+		timeout_ms: app.engines.read_timeout_ms('')
 	}
 }
 

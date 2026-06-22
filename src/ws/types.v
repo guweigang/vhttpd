@@ -5,7 +5,6 @@ import executor
 import feishu
 import net.websocket
 import sync
-import upstream
 
 // ── WebSocket Dispatch Connection State Machine ──
 
@@ -55,7 +54,9 @@ pub fn (state &DispatchConnState) mark_open() bool {
 	if state.phase != .opening {
 		return false
 	}
-	unsafe { state.phase = .open }
+	unsafe {
+		state.phase = .open
+	}
 	return true
 }
 
@@ -65,7 +66,9 @@ pub fn (state &DispatchConnState) mark_closing() bool {
 	if state.phase == .closing || state.phase == .closed {
 		return false
 	}
-	unsafe { state.phase = .closing }
+	unsafe {
+		state.phase = .closing
+	}
 	return true
 }
 
@@ -75,8 +78,12 @@ pub fn (state &DispatchConnState) begin_worker_close() bool {
 	if state.phase != .open {
 		return false
 	}
-	unsafe { state.worker_initiated_close = true }
-	unsafe { state.phase = .closing }
+	unsafe {
+		state.worker_initiated_close = true
+	}
+	unsafe {
+		state.phase = .closing
+	}
 	return true
 }
 
@@ -87,8 +94,12 @@ pub fn (state &DispatchConnState) begin_peer_close() (bool, bool) {
 	if state.close_notified || state.phase == .closed {
 		return false, worker_initiated
 	}
-	unsafe { state.close_notified = true }
-	unsafe { state.phase = .closing }
+	unsafe {
+		state.close_notified = true
+	}
+	unsafe {
+		state.phase = .closing
+	}
 	if worker_initiated {
 		return false, worker_initiated
 	}
@@ -101,7 +112,9 @@ pub fn (state &DispatchConnState) begin_cleanup() bool {
 	if state.phase != .closing {
 		return false
 	}
-	unsafe { state.phase = .closed }
+	unsafe {
+		state.phase = .closed
+	}
 	return true
 }
 
@@ -361,9 +374,6 @@ pub mut:
 	upstream_started             map[string]bool
 	fixture_runtime              map[string]FixtureRuntime
 	recent_activities            []UpstreamActivitySnapshot
-	upstream_sessions            map[string]upstream.UpstreamRuntimeSession
-	stat_upstream_plans_total    i64
-	stat_upstream_plan_errors_total i64
 }
 
 // ── Feishu streaming normalization ──

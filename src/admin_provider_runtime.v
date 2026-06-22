@@ -5,7 +5,7 @@ import veb
 
 @['/admin/providers/specs'; get]
 pub fn (mut app App) admin_provider_specs(mut ctx Context) veb.Result {
-	if !app.admin.on_data_plane {
+	if !app.control_plane.admin.on_data_plane {
 		ctx.res.set_status(.not_found)
 		return ctx.text('Not Found')
 	}
@@ -27,7 +27,7 @@ pub fn (mut app App) admin_provider_specs(mut ctx Context) veb.Result {
 
 @['/admin/providers/runtimes'; get]
 pub fn (mut app App) admin_provider_runtimes(mut ctx Context) veb.Result {
-	if !app.admin.on_data_plane {
+	if !app.control_plane.admin.on_data_plane {
 		ctx.res.set_status(.not_found)
 		return ctx.text('Not Found')
 	}

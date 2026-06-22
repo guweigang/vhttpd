@@ -1,5 +1,7 @@
 # Site Config DSL
 
+> Compatibility note: this document describes the current V1 site shorthand. New architecture work targets the versioned resource model in [CONFIGURATION_MODEL_V2.md](CONFIGURATION_MODEL_V2.md). V1 remains supported through the compatibility compiler during migration.
+
 这页只讲一件事：
 
 - multi-site / multi-listener 模式下，`[sites.<id>]` 现在可以写到多短

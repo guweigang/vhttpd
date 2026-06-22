@@ -171,7 +171,9 @@ export function openai(req) {
 		}
 	}
 	mut app := App{
-		started_at_unix: 123
+		lifecycle: ProcessLifecycle{
+			started_at_unix: 123
+		}
 		protocols: ProtocolRuntimeHub{
 			plugins: plugin.PluginState{
 				configs: plugins

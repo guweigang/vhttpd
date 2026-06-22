@@ -27,7 +27,7 @@ fn (app AdminApp) admin_authorized(ctx Context) bool {
 
 fn (app &App) api_authorized(ctx Context) bool {
 	headers := transport.header_map_from_request(ctx.req)
-	return admin.AdminAuth.authorized(app.admin.token, headers, ctx.query)
+	return admin.AdminAuth.authorized(app.control_plane.admin.token, headers, ctx.query)
 }
 
 @[get]
@@ -263,7 +263,7 @@ pub fn (mut app AdminApp) admin_runtime_websockets(mut ctx Context) veb.Result {
 	offset := admin.AdminQuery.offset(ctx.query['offset'] or { '' })
 	room_filter := (ctx.query['room'] or { '' }).trim_space()
 	conn_filter := (ctx.query['conn_id'] or { '' }).trim_space()
-	body := json.encode(app.shared.admin_websockets_snapshot(details, limit, offset, room_filter,
+	body := json.encode(app.shared.websocket.snapshot(details, limit, offset, room_filter,
 		conn_filter))
 	app.shared.emit('http.request', {
 		'method':     'GET'

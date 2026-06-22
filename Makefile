@@ -146,7 +146,7 @@ $(TEST_FILES_FROM_GOALS):
 	@:
 
 test-inproc:
-	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_FLAGS) test $(INPROC_TEST_FILES)
+	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_FLAGS) -d vjsx_sqlite test $(INPROC_TEST_FILES)
 
 test-codexbot:
 	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_FLAGS) -d vjsx_sqlite test $(CODEXBOT_TEST_FILES)

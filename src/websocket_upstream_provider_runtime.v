@@ -57,7 +57,7 @@ fn (mut app App) websocket_upstream_snapshot(provider string, instance string) ?
 			app.provider_runtime_upstream_snapshot(provider_pkg.ProviderName.feishu(), instance)
 		}
 		websocket_upstream_provider_fixture {
-			return upstream_snapshot_from_ws(app.transport.websocket.fixture_snapshot(instance))
+			return upstream_snapshot_from_ws(app.websocket.fixture_snapshot(instance))
 		}
 		websocket_upstream_provider_codex {
 			app.provider_runtime_upstream_snapshot(provider_pkg.ProviderName.codex(), instance)
@@ -75,15 +75,7 @@ fn (mut app App) websocket_upstream_mark_started(provider string, instance strin
 	if key == '/' || provider.trim_space() == '' || instance.trim_space() == '' {
 		return false
 	}
-	app.transport.websocket.upstream_mu.@lock()
-	defer {
-		app.transport.websocket.upstream_mu.unlock()
-	}
-	if key in app.transport.websocket.upstream_started {
-		return false
-	}
-	app.transport.websocket.upstream_started[key] = true
-	return true
+	return app.websocket.mark_upstream_started(key)
 }
 
 fn (mut app App) ensure_websocket_upstream_provider_running(provider string, instance string) bool {
@@ -92,7 +84,7 @@ fn (mut app App) ensure_websocket_upstream_provider_running(provider string, ins
 	if resolved_provider == '' {
 		return false
 	}
-	if !app.transport.websocket.auto_start_dynamic_upstreams {
+	if !app.websocket.dynamic_upstream_autostart_enabled() {
 		return false
 	}
 	if resolved_instance == '' {

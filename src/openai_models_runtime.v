@@ -28,7 +28,7 @@ fn (mut app App) openai_handle_models(mut ctx Context, method string, path strin
 	for model in models {
 		data << openai.OpenAIModelObject{
 			id:      model
-			created: int(app.started_at_unix)
+			created: int(app.lifecycle.started_at_unix)
 		}
 	}
 	body := json.encode(openai.OpenAIModelsResponse{

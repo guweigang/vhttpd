@@ -17,19 +17,26 @@
 
 - [STRUCT_RELATIONSHIP_MAP.md](/Users/guweigang/Source/vhttpd/docs/STRUCT_RELATIONSHIP_MAP.md)
 - [FEISHU_RUNTIME_COMPATIBILITY_PLAN.md](/Users/guweigang/Source/vhttpd/docs/FEISHU_RUNTIME_COMPATIBILITY_PLAN.md)
+- [PROTOCOL_PIPELINE_RELAY_ARCHITECTURE.md](PROTOCOL_PIPELINE_RELAY_ARCHITECTURE.md)
+- [CONFIGURATION_MODEL_V2.md](CONFIGURATION_MODEL_V2.md)
+- [PROTOCOL_PIPELINE_IMPLEMENTATION_PLAN.md](PROTOCOL_PIPELINE_IMPLEMENTATION_PLAN.md)
 
 `vhttpd` 不是业务框架，也不只是一个给 PHP 跑页面的 HTTP server。
 
-更准确地说，它是一个面向 PHP 应用的 runtime gateway：
+目标架构中，它是一个通用的 programmable runtime gateway：
 
-- 终止 HTTP / WebSocket / stream 连接
-- 调度外部 worker
-- 承载 streaming / upstream execution / MCP runtime
+- 通过 HTTP / WebSocket / stream / MCP 等协议接入流量
+- 通过统一 Exchange 和 pipeline 连接不同协议
+- 通过 native V 或 VJSX transformer 处理逻辑
+- 通过 relay 跨公网与本地网络边界转发 Exchange
+- 调度 PHP worker、PHP CGI、VJSX 和后续 runtime engine
 - 暴露 runtime state 和 admin plane
 
 一句话定义：
 
-- `vhttpd` = PHP 应用的 transport/runtime layer
+- `vhttpd` = protocol pipeline + programmable runtime + cross-node relay
+
+PHP/WordPress 是当前最重要的运行负载与验证案例，但不限定 vhttpd 的通用架构。
 
 ## Runtime Model
 
