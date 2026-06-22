@@ -1819,7 +1819,8 @@ fn test_build_app_runtime_projects_executor_plan_into_app_state() {
 			}
 		}
 	}
-	app := build_app_runtime(provider_settings, plan, cfg, server_lifecycle.AppRuntimeBuildConfig{
+	compiled_plan := config.compile_v1_runtime_plan(cfg) or { panic(err) }
+	app := build_app_runtime(provider_settings, plan, cfg, compiled_plan, server_lifecycle.AppRuntimeBuildConfig{
 		event_log:                     '/tmp/events.ndjson'
 		internal_admin_socket:         '/tmp/internal.sock'
 		admin_enabled:                 true
@@ -1837,6 +1838,7 @@ fn test_build_app_runtime_projects_executor_plan_into_app_state() {
 		worker_queue_timeout_ms:       34
 		workdir:                       '/tmp/workdir'
 	})
+	assert app.plan.source.compatibility
 	assert app.engines.primary.worker_backend.sockets == ['/tmp/a.sock']
 	assert app.engines.primary.worker_backend.cmd == 'php worker.php'
 	assert app.engines.primary.worker_backend.env['APP_ENV'] == 'dev'
@@ -2049,6 +2051,8 @@ fn test_resolve_multi_server_runtime_config_keeps_single_site_compatibility() {
 	assert multi_cfg.listeners[0].runtime_cfg.host == '127.0.0.7'
 	assert multi_cfg.listeners[0].runtime_cfg.port == 18181
 	assert multi_cfg.listeners[0].runtime_cfg.executor_plan.executor.kind() == 'php'
+	assert multi_cfg.listeners[0].runtime_cfg.plan_listener_id == 'default'
+	assert multi_cfg.listeners[0].runtime_cfg.plan.listeners['default'].port == 18181
 }
 
 fn test_resolve_multi_server_runtime_config_builds_listener_bound_sites() {
@@ -2123,6 +2127,8 @@ fn test_resolve_multi_server_runtime_config_builds_listener_bound_sites() {
 	assert multi_cfg.listeners[0].runtime_cfg.host == '127.0.0.1'
 	assert multi_cfg.listeners[0].runtime_cfg.port == 18081
 	assert multi_cfg.listeners[0].runtime_cfg.executor_plan.executor.kind() == 'php'
+	assert multi_cfg.listeners[0].runtime_cfg.plan_listener_id == 'project_a'
+	assert multi_cfg.listeners[0].runtime_cfg.plan.listeners.len == 3
 	assert multi_cfg.listeners[0].site_cfg.php.app_entry == php_app
 	assert multi_cfg.listeners[0].runtime_cfg.admin_enabled
 	assert multi_cfg.listeners[0].runtime_cfg.admin_port == 19983
@@ -2131,6 +2137,8 @@ fn test_resolve_multi_server_runtime_config_builds_listener_bound_sites() {
 	assert multi_cfg.listeners[1].runtime_cfg.host == '127.0.0.1'
 	assert multi_cfg.listeners[1].runtime_cfg.port == 18082
 	assert multi_cfg.listeners[1].runtime_cfg.executor_plan.executor.kind() == 'vjsx'
+	assert multi_cfg.listeners[1].runtime_cfg.plan_listener_id == 'project_b'
+	assert multi_cfg.listeners[1].runtime_cfg.plan.listeners.len == 3
 	assert multi_cfg.listeners[1].site_cfg.vjsx.app_entry == vjsx_app
 	assert multi_cfg.listeners[1].site_cfg.vjsx.module_root == vjsx_root
 	assert !multi_cfg.listeners[1].runtime_cfg.admin_enabled

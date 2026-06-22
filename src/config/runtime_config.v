@@ -42,6 +42,7 @@ pub fn (base PathsConfig) merge(override PathsConfig) PathsConfig {
 pub fn (base WorkerConfig) merge(override WorkerConfig) WorkerConfig {
 	defaults := default_vhttpd_config().worker
 	mut cfg := base
+	cfg.env = base.env.clone()
 	if override.read_timeout_ms != defaults.read_timeout_ms {
 		cfg.read_timeout_ms = override.read_timeout_ms
 	}

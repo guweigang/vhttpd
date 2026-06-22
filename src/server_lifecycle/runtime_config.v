@@ -5,6 +5,7 @@ import os
 import admin
 import executor
 import provider
+import runtime_plan
 
 pub struct AppRuntimeBuildConfig {
 pub:
@@ -28,6 +29,8 @@ pub:
 
 pub struct ServerRuntimeConfig {
 pub:
+	plan                  runtime_plan.RuntimePlan
+	plan_listener_id      string
 	listener_id           string
 	site_id               string
 	host                  string
@@ -49,11 +52,18 @@ pub:
 pub fn ServerRuntimeConfig.resolve(args []string, cfg config.VhttpdConfig) !ServerRuntimeConfig {
 	host := config.CliArgs.string_or(args, '--host', cfg.server.host)
 	port := config.CliArgs.int_or(args, '--port', cfg.server.port)
-	return ServerRuntimeConfig.resolve_for_target(args, cfg, '', '', host, port, cfg.server.ssl,
-		true)
+	plan := config.compile_v1_runtime_plan(cfg)!
+	return ServerRuntimeConfig.resolve_for_target_with_plan(args, cfg, '', '', host, port,
+		cfg.server.ssl, true, plan, 'default')
 }
 
 pub fn ServerRuntimeConfig.resolve_for_target(args []string, cfg config.VhttpdConfig, listener_id string, site_id string, host string, port int, ssl config.ServerSslConfig, admin_enabled_override bool) !ServerRuntimeConfig {
+	plan := config.compile_v1_runtime_plan(cfg)!
+	return ServerRuntimeConfig.resolve_for_target_with_plan(args, cfg, listener_id, site_id, host,
+		port, ssl, admin_enabled_override, plan, 'default')
+}
+
+pub fn ServerRuntimeConfig.resolve_for_target_with_plan(args []string, cfg config.VhttpdConfig, listener_id string, site_id string, host string, port int, ssl config.ServerSslConfig, admin_enabled_override bool, plan runtime_plan.RuntimePlan, plan_listener_id string) !ServerRuntimeConfig {
 	event_log := config.CliArgs.string_or(args, '--event-log', cfg.files.event_log)
 	pid_file := config.CliArgs.string_or(args, '--pid-file', cfg.files.pid_file)
 	worker_read_timeout_ms := config.CliArgs.int_or(args, '--worker-read-timeout-ms',
@@ -99,6 +109,8 @@ pub fn ServerRuntimeConfig.resolve_for_target(args []string, cfg config.VhttpdCo
 	internal_admin_socket := prepare_server_runtime_files_for_label(event_log, pid_file,
 		socket_label)!
 	return ServerRuntimeConfig{
+		plan:                  plan
+		plan_listener_id:      plan_listener_id
 		listener_id:           listener_id
 		site_id:               site_id
 		host:                  host

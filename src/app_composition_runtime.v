@@ -7,10 +7,12 @@ import os
 import sync
 import time
 import executor
+import runtime_plan
 
 struct DataPlaneRuntime {
 mut:
-	mu sync.Mutex
+	plan runtime_plan.RuntimePlan
+	mu   sync.Mutex
 
 	transport    TransportRuntimeHub
 	websocket    WebSocketRuntime

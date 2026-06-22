@@ -16,7 +16,7 @@ fn build_multi_server_apps(runtime_cfg server_lifecycle.MultiServerRuntimeConfig
 		bindings << MultiServerAppBinding{
 			listener: listener
 			app:      build_app_runtime(listener.runtime_cfg.provider_settings,
-				listener.runtime_cfg.executor_plan, listener.site_cfg,
+				listener.runtime_cfg.executor_plan, listener.site_cfg, listener.runtime_cfg.plan,
 				listener.runtime_cfg.app_build_cfg)
 		}
 	}

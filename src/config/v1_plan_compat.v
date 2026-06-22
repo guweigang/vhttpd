@@ -84,7 +84,7 @@ pub fn compile_v1_to_v2(cfg VhttpdConfig) !V2Config {
 		listener := listeners[listener_id]
 		site_id := listener.site.trim_space()
 		if site_id == '' || site_id !in cfg.sites {
-			return error('v1_plan_unknown_listener_site:${listener_id}:${site_id}')
+			return error('multi_listener_unknown_site:${listener_id}:${site_id}')
 		}
 		site_cfg := cfg.with_site(cfg.sites[site_id])
 		ssl := if listener.ssl.enabled || listener.ssl.cert != '' || listener.ssl.cert_key != '' {

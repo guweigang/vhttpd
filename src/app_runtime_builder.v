@@ -17,6 +17,7 @@ import feishu
 import executor
 import server_lifecycle
 import regex
+import runtime_plan
 
 fn app_runtime_default_mcp_max_sessions(cfg config.VhttpdConfig) int {
 	return if cfg.mcp.max_sessions > 0 { cfg.mcp.max_sessions } else { 1000 }
@@ -30,7 +31,7 @@ fn app_runtime_default_mcp_session_ttl_seconds(cfg config.VhttpdConfig) int {
 	return if cfg.mcp.session_ttl_seconds > 0 { cfg.mcp.session_ttl_seconds } else { 900 }
 }
 
-fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executor_plan executor.LogicExecutorRuntimePlan, cfg config.VhttpdConfig, build_cfg server_lifecycle.AppRuntimeBuildConfig) &App {
+fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executor_plan executor.LogicExecutorRuntimePlan, cfg config.VhttpdConfig, plan runtime_plan.RuntimePlan, build_cfg server_lifecycle.AppRuntimeBuildConfig) &App {
 	// 1. 预编译正则并构建运行时路由规则
 	mut runtime_routes := []RuntimeRouteRule{}
 	expanded_routes := config.expand_php_site_routes(cfg)
@@ -131,6 +132,7 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 	}
 
 	return &App{
+		plan:          plan
 		control_plane: ControlPlaneRuntime{
 			event_log:  build_cfg.event_log
 			http_stats: HttpStats{}

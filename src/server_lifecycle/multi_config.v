@@ -37,6 +37,7 @@ pub fn resolve_multi_server_runtime_config(args []string, cfg config.VhttpdConfi
 		}
 	}
 	listeners := cfg.resolve_multi_listeners()!
+	plan := config.compile_v1_runtime_plan(cfg)!
 	mut listener_ids := listeners.keys()
 	listener_ids.sort()
 	admin_owner_listener_id := if cfg.admin.port > 0 && listener_ids.len > 0 {
@@ -71,8 +72,9 @@ pub fn resolve_multi_server_runtime_config(args []string, cfg config.VhttpdConfi
 		} else {
 			site_runtime_cfg.server.ssl
 		}
-		runtime_cfg := ServerRuntimeConfig.resolve_for_target(args, site_runtime_cfg, listener_id,
-			site_id, listener_cfg.host, listener_cfg.port, ssl_cfg, admin_enabled_override)!
+		runtime_cfg := ServerRuntimeConfig.resolve_for_target_with_plan(args, site_runtime_cfg,
+			listener_id, site_id, listener_cfg.host, listener_cfg.port, ssl_cfg,
+			admin_enabled_override, plan, listener_id)!
 		bindings << ListenerRuntimeBinding{
 			id:          listener_id
 			site_id:     site_id

@@ -262,7 +262,7 @@ fn run_single_server(args []string, cfg config.VhttpdConfig) {
 		return
 	}
 	mut app := build_app_runtime(runtime_cfg.provider_settings, runtime_cfg.executor_plan, cfg,
-		runtime_cfg.app_build_cfg)
+		runtime_cfg.plan, runtime_cfg.app_build_cfg)
 	register_active_runtime(app, runtime_cfg)
 	defer {
 		if !active_runtime_is_shutting_down() {
