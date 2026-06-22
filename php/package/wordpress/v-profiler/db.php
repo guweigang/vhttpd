@@ -29,4 +29,15 @@ if (!is_string($pool) || $pool === '') {
 $timeout = getenv('VHTTPD_DB_TIMEOUT_MS');
 $timeoutMs = is_string($timeout) && ctype_digit($timeout) ? (int) $timeout : 1000;
 
-$wpdb = new Wpdb(DB_USER, DB_PASSWORD, DB_NAME, DB_HOST, $socket, $pool, $timeoutMs);
+if (!class_exists(Wpdb::class)) {
+    // 优雅降级到 WordPress 原生数据库类，防止非 vhttpd 环境或缺少 Autoloader 时网站崩溃
+    if (defined('ABSPATH') && defined('WPINC')) {
+        require_once ABSPATH . WPINC . '/class-wpdb.php';
+        $wpdb = new \wpdb(DB_USER, DB_PASSWORD, DB_NAME, DB_HOST);
+    } else {
+        // 极端防护，如果连 ABSPATH 都没有
+        exit('v-Profiler: Failed to load database class.');
+    }
+} else {
+    $wpdb = new Wpdb(DB_USER, DB_PASSWORD, DB_NAME, DB_HOST, $socket, $pool, $timeoutMs);
+}

@@ -47,7 +47,17 @@ if (!function_exists('wp_cache_init')) {
             $client = Client::fromEnv(defaultNamespace: 'wordpress');
         }
 
-        $GLOBALS['wp_object_cache'] = new ObjectCache($client);
+        if (!class_exists(ObjectCache::class)) {
+            // 优雅降级为 WordPress 默认的运行时内存缓存
+            if (defined('ABSPATH') && defined('WPINC')) {
+                require_once ABSPATH . WPINC . '/class-wp-object-cache.php';
+                $GLOBALS['wp_object_cache'] = new \WP_Object_Cache();
+            } else {
+                exit('v-Profiler: Failed to load object cache class.');
+            }
+        } else {
+            $GLOBALS['wp_object_cache'] = new ObjectCache($client);
+        }
     }
 }
 
@@ -187,7 +197,9 @@ if (!function_exists('wp_cache_add_global_groups')) {
     function wp_cache_add_global_groups($groups): void
     {
         global $wp_object_cache;
-        $wp_object_cache->add_global_groups($groups);
+        if (is_object($wp_object_cache) && method_exists($wp_object_cache, 'add_global_groups')) {
+            $wp_object_cache->add_global_groups($groups);
+        }
     }
 }
 
@@ -195,7 +207,9 @@ if (!function_exists('wp_cache_add_non_persistent_groups')) {
     function wp_cache_add_non_persistent_groups($groups): void
     {
         global $wp_object_cache;
-        $wp_object_cache->add_non_persistent_groups($groups);
+        if (is_object($wp_object_cache) && method_exists($wp_object_cache, 'add_non_persistent_groups')) {
+            $wp_object_cache->add_non_persistent_groups($groups);
+        }
     }
 }
 
@@ -203,7 +217,9 @@ if (!function_exists('wp_cache_switch_to_blog')) {
     function wp_cache_switch_to_blog($blog_id): void
     {
         global $wp_object_cache;
-        $wp_object_cache->switch_to_blog($blog_id);
+        if (is_object($wp_object_cache) && method_exists($wp_object_cache, 'switch_to_blog')) {
+            $wp_object_cache->switch_to_blog($blog_id);
+        }
     }
 }
 
@@ -211,7 +227,9 @@ if (!function_exists('wp_cache_reset')) {
     function wp_cache_reset(): void
     {
         global $wp_object_cache;
-        $wp_object_cache->reset();
+        if (is_object($wp_object_cache) && method_exists($wp_object_cache, 'reset')) {
+            $wp_object_cache->reset();
+        }
     }
 }
 
