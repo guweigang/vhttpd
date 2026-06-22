@@ -34,6 +34,7 @@ pub mut:
 
 pub struct V2TlsSpec {
 pub mut:
+	enabled      bool
 	cert         string
 	cert_key     string @[toml: 'cert_key']
 	certificates []V2TlsCertificateSpec
@@ -165,6 +166,11 @@ pub mut:
 	completed_pipeline string @[toml: 'completed_pipeline']
 	topic              string
 	options            map[string]string
+	int_options        map[string]int                 @[toml: 'int_options']
+	bool_options       map[string]bool                @[toml: 'bool_options']
+	list_options       map[string][]string            @[toml: 'list_options']
+	map_options        map[string]map[string]string   @[toml: 'map_options']
+	record_options     map[string][]map[string]string @[toml: 'record_options']
 }
 
 pub struct V2TransformSpec {
@@ -182,6 +188,7 @@ pub mut:
 	cache       map[string]V2CachePolicySpec
 	limits      map[string]V2LimitPolicySpec
 	security    map[string]V2SecurityPolicySpec
+	response    map[string]V2ResponsePolicySpec
 	retry       map[string]V2RetryPolicySpec
 	concurrency map[string]V2ConcurrencyPolicySpec
 }
@@ -208,6 +215,11 @@ pub mut:
 	allowed_origins       []string          @[toml: 'allowed_origins']
 }
 
+pub struct V2ResponsePolicySpec {
+pub mut:
+	headers map[string]string
+}
+
 pub struct V2RetryPolicySpec {
 pub mut:
 	max_attempts   int @[toml: 'max_attempts']
@@ -220,10 +232,17 @@ pub mut:
 	max_in_flight     int    @[toml: 'max_in_flight']
 	queue_capacity    int    @[toml: 'queue_capacity']
 	queue_timeout_ms  int    @[toml: 'queue_timeout_ms']
+	max_queue_per_key int    @[toml: 'max_queue_per_key']
+	affinity_enabled  bool   @[toml: 'affinity_enabled']
+	actor_enabled     bool   @[toml: 'actor_enabled']
+	actor_fallback    string @[toml: 'actor_fallback']
 	affinity_source   string @[toml: 'affinity_source']
 	affinity_key      string @[toml: 'affinity_key']
 	affinity_scope    string @[toml: 'affinity_scope']
 	affinity_fallback string @[toml: 'affinity_fallback']
+	events            []string
+	options           map[string]string
+	record_options    map[string][]map[string]string @[toml: 'record_options']
 }
 
 pub struct V2PipelineSpec {

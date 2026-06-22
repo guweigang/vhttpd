@@ -165,7 +165,8 @@ fn compile_v2_tls_plan(spec V2TlsSpec) runtime_plan.TlsPlan {
 		}
 	}
 	return runtime_plan.TlsPlan{
-		enabled:      (spec.cert != '' && spec.cert_key != '') || certificates.len > 0
+		enabled:      spec.enabled || (spec.cert != '' && spec.cert_key != '')
+			|| certificates.len > 0
 		cert:         spec.cert
 		cert_key:     spec.cert_key
 		certificates: certificates
@@ -236,6 +237,14 @@ fn nonzero_int_options(values map[string]int) map[string]int {
 		}
 	}
 	return result
+}
+
+fn merge_int_options(base map[string]int, extra map[string]int) map[string]int {
+	mut values := base.clone()
+	for key, value in extra {
+		values[key] = value
+	}
+	return values
 }
 
 fn compile_v2_db_resources(specs map[string]V2DbResourceSpec, mut resources map[string]runtime_plan.ResourcePlan) {
@@ -358,7 +367,7 @@ fn compile_v2_engine_options(spec V2EngineSpec) runtime_plan.PlanOptions {
 
 fn compile_v2_adapter_options(spec V2AdapterSpec) runtime_plan.PlanOptions {
 	return runtime_plan.PlanOptions{
-		strings: merge_string_options({
+		strings:      merge_string_options({
 			'document_root':      spec.document_root
 			'index':              spec.index
 			'root':               spec.root
@@ -366,10 +375,14 @@ fn compile_v2_adapter_options(spec V2AdapterSpec) runtime_plan.PlanOptions {
 			'completed_pipeline': spec.completed_pipeline
 			'topic':              spec.topic
 		}, spec.options)
-		ints:    nonzero_int_options({
+		ints:         merge_int_options(nonzero_int_options({
 			'timeout_ms':     spec.timeout_ms
 			'max_body_bytes': spec.max_body_bytes
-		})
+		}), spec.int_options)
+		bools:        spec.bool_options.clone()
+		string_lists: spec.list_options.clone()
+		string_maps:  spec.map_options.clone()
+		record_lists: spec.record_options.clone()
 	}
 }
 
@@ -424,6 +437,18 @@ fn compile_v2_policies(specs V2PolicySpecs) map[string]runtime_plan.PolicyPlan {
 			}
 		}
 	}
+	for id, spec in specs.response {
+		policies['response/${id}'] = runtime_plan.PolicyPlan{
+			id:       'response/${id}'
+			category: 'response'
+			kind:     'response'
+			options:  runtime_plan.PlanOptions{
+				string_maps: {
+					'headers': spec.headers.clone()
+				}
+			}
+		}
+	}
 	for id, spec in specs.retry {
 		policies['retry/${id}'] = runtime_plan.PolicyPlan{
 			id:       'retry/${id}'
@@ -444,17 +469,27 @@ fn compile_v2_policies(specs V2PolicySpecs) map[string]runtime_plan.PolicyPlan {
 			category: 'concurrency'
 			kind:     'concurrency'
 			options:  runtime_plan.PlanOptions{
-				strings: nonempty_string_options({
+				strings:      merge_string_options({
 					'affinity_source':   spec.affinity_source
 					'affinity_key':      spec.affinity_key
 					'affinity_scope':    spec.affinity_scope
 					'affinity_fallback': spec.affinity_fallback
+					'actor_fallback':    spec.actor_fallback
+				}, spec.options)
+				ints:         nonzero_int_options({
+					'max_in_flight':     spec.max_in_flight
+					'queue_capacity':    spec.queue_capacity
+					'queue_timeout_ms':  spec.queue_timeout_ms
+					'max_queue_per_key': spec.max_queue_per_key
 				})
-				ints:    nonzero_int_options({
-					'max_in_flight':    spec.max_in_flight
-					'queue_capacity':   spec.queue_capacity
-					'queue_timeout_ms': spec.queue_timeout_ms
-				})
+				bools:        {
+					'affinity_enabled': spec.affinity_enabled
+					'actor_enabled':    spec.actor_enabled
+				}
+				string_lists: {
+					'events': spec.events.clone()
+				}
+				record_lists: spec.record_options.clone()
 			}
 		}
 	}

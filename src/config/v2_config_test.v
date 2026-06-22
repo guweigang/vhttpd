@@ -61,6 +61,9 @@ max_body_bytes = 1024
 [policies.security.api]
 allowed_origins = ["https://example.com"]
 
+[policies.response.secure]
+headers = { x_frame_options = "DENY" }
+
 [policies.retry.upstream]
 max_attempts = 3
 
@@ -95,6 +98,7 @@ url = "wss://relay.example.com"
 	assert cfg.policies.cache['assets'].cache_control == 'public, max-age=3600'
 	assert cfg.policies.limits['upload'].max_body_bytes == 1024
 	assert cfg.policies.security['api'].allowed_origins == ['https://example.com']
+	assert cfg.policies.response['secure'].headers['x_frame_options'] == 'DENY'
 	assert cfg.policies.retry['upstream'].max_attempts == 3
 	assert cfg.policies.concurrency['app'].max_in_flight == 8
 	assert cfg.pipelines[0].match.paths == ['*']

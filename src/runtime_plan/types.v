@@ -8,6 +8,7 @@ pub:
 	bools        map[string]bool
 	string_lists map[string][]string
 	string_maps  map[string]map[string]string
+	record_lists map[string][]map[string]string
 }
 
 pub struct RuntimePlan {

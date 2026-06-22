@@ -66,6 +66,7 @@ fn v1_listener_spec(host string, port int, ssl ServerSslConfig) V2ListenerSpec {
 		host:      host
 		port:      port
 		tls:       V2TlsSpec{
+			enabled:  ssl.enabled
 			cert:     ssl.cert
 			cert_key: ssl.cert_key
 		}
@@ -101,7 +102,7 @@ fn compile_v1_site(cfg VhttpdConfig, site_id string, listener_id string, mut tar
 			}
 		}
 	}
-	mut order := 0
+	mut order := compile_v1_protocol_resources(cfg, scope, site_id, listener_id, mut target)
 	if cfg.assets.enabled {
 		adapter_id := '${scope}/assets'
 		policy_id := 'cache/${scope}_assets'
@@ -168,7 +169,15 @@ fn compile_v1_site(cfg VhttpdConfig, site_id string, listener_id string, mut tar
 			}
 			policy_refs << 'policy:security/${policy_name}'
 		}
-		egress := compile_v1_route_egress(route, cfg, scope, order, default_adapter_id, mut target)
+		if route.response_headers.len > 0 {
+			policy_name := '${scope}_route_${order}'
+			target.policies.response[policy_name] = V2ResponsePolicySpec{
+				headers: route.response_headers.clone()
+			}
+			policy_refs << 'policy:response/${policy_name}'
+		}
+		egress := compile_v1_route_egress(route, cfg, scope, order, default_adapter_id,
+			listener_id, site_id, mut target)
 		target.pipelines << V2PipelineSpec{
 			id:         pipeline_id
 			group:      'site:${site_id}'
@@ -238,6 +247,224 @@ fn compile_v1_resources(cfg VhttpdConfig, scope string, mut target V2Config) []s
 	return references
 }
 
+fn compile_v1_protocol_resources(cfg VhttpdConfig, scope string, site_id string, listener_id string, mut target V2Config) int {
+	mut order := 0
+	mcp_adapter_id := '${scope}/mcp'
+	target.adapters[mcp_adapter_id] = V2AdapterSpec{
+		kind:         'mcp'
+		int_options:  {
+			'max_sessions':         cfg.mcp.max_sessions
+			'max_pending_messages': cfg.mcp.max_pending_messages
+			'session_ttl_seconds':  cfg.mcp.session_ttl_seconds
+		}
+		list_options: {
+			'allowed_origins': cfg.mcp.allowed_origins.clone()
+		}
+		options:      {
+			'sampling_capability_policy': cfg.mcp.sampling_capability_policy
+		}
+	}
+	target.pipelines << V2PipelineSpec{
+		id:      '${listener_id}/${order}_mcp'
+		group:   'site:${site_id}'
+		ingress: 'listener:${listener_id}'
+		match:   V2MatchSpec{
+			paths: ['/mcp']
+		}
+		egress:  'adapter:${mcp_adapter_id}'
+	}
+	order++
+
+	if cfg.openai.enabled {
+		adapter_id := '${scope}/openai'
+		mut backend_records := []map[string]string{}
+		mut backend_names := cfg.openai.backends.keys()
+		backend_names.sort()
+		for name in backend_names {
+			backend := cfg.openai.backends[name]
+			backend_records << {
+				'id':          name
+				'kind':        backend.kind
+				'base_url':    backend.base_url
+				'executor':    backend.executor
+				'api_key':     backend.api_key
+				'api_key_env': backend.api_key_env
+				'timeout_ms':  backend.timeout_ms.str()
+			}
+		}
+		mut route_records := []map[string]string{}
+		mut route_models := map[string][]string{}
+		mut route_names := cfg.openai.routes.keys()
+		route_names.sort()
+		for name in route_names {
+			route := cfg.openai.routes[name]
+			route_records << {
+				'id':             name
+				'model':          route.model
+				'backend':        route.backend
+				'upstream_model': route.upstream_model
+			}
+			route_models[name] = route.models.clone()
+		}
+		target.adapters[adapter_id] = V2AdapterSpec{
+			kind:           'openai'
+			options:        {
+				'base_path':       cfg.openai.base_path
+				'default_backend': cfg.openai.default_backend
+				'plugin':          cfg.openai.plugin
+			}
+			bool_options:   {
+				'endpoint_models':           cfg.openai.endpoints.models
+				'endpoint_chat_completions': cfg.openai.endpoints.chat_completions
+				'endpoint_responses':        cfg.openai.endpoints.responses
+				'endpoint_embeddings':       cfg.openai.endpoints.embeddings
+			}
+			list_options:   route_models
+			record_options: {
+				'backends': backend_records
+				'routes':   route_records
+			}
+		}
+		base_path := if cfg.openai.base_path.trim_space() == '' {
+			'/v1'
+		} else {
+			cfg.openai.base_path
+		}
+		target.pipelines << V2PipelineSpec{
+			id:      '${listener_id}/${order}_openai'
+			group:   'site:${site_id}'
+			ingress: 'listener:${listener_id}'
+			match:   V2MatchSpec{
+				paths: [base_path, '${base_path}/*']
+			}
+			egress:  'adapter:${adapter_id}'
+		}
+		order++
+	}
+
+	if cfg.feishu.enabled || cfg.feishu.apps.len > 0 {
+		mut app_records := []map[string]string{}
+		mut app_names := cfg.feishu.apps.keys()
+		app_names.sort()
+		for name in app_names {
+			app := cfg.feishu.apps[name]
+			app_records << {
+				'id':                 name
+				'app_id':             app.app_id
+				'app_secret':         app.app_secret
+				'verification_token': app.verification_token
+				'encrypt_key':        app.encrypt_key
+			}
+		}
+		target.adapters['${scope}/feishu'] = V2AdapterSpec{
+			kind:           'feishu-events'
+			options:        {
+				'open_base_url': cfg.feishu.open_base_url
+			}
+			int_options:    {
+				'reconnect_delay_ms':         cfg.feishu.reconnect_delay_ms
+				'token_refresh_skew_seconds': cfg.feishu.token_refresh_skew_seconds
+				'recent_event_limit':         cfg.feishu.recent_event_limit
+			}
+			bool_options:   {
+				'enabled': cfg.feishu.enabled
+			}
+			record_options: {
+				'apps': app_records
+			}
+		}
+	}
+
+	if cfg.codex.enabled {
+		target.adapters['${scope}/codex'] = V2AdapterSpec{
+			kind:         'codex'
+			options:      {
+				'url':             cfg.codex.url
+				'model':           cfg.codex.model
+				'effort':          cfg.codex.effort
+				'cwd':             cfg.codex.cwd
+				'approval_policy': cfg.codex.approval_policy
+				'sandbox':         cfg.codex.sandbox
+			}
+			int_options:  {
+				'reconnect_delay_ms': cfg.codex.reconnect_delay_ms
+				'flush_interval_ms':  cfg.codex.flush_interval_ms
+			}
+			bool_options: {
+				'enabled': cfg.codex.enabled
+			}
+		}
+	}
+
+	mut plugin_names := cfg.plugins.keys()
+	plugin_names.sort()
+	for name in plugin_names {
+		plugin := cfg.plugins[name]
+		engine_id := '${scope}/plugin/${safe_plan_id(name)}'
+		target.engines[engine_id] = V2EngineSpec{
+			kind:              'vjsx'
+			entry:             if plugin.app_entry != '' { plugin.app_entry } else { plugin.entry }
+			module_root:       plugin.module_root
+			build_root:        plugin.build_root
+			runtime_profile:   plugin.runtime_profile
+			thread_count:      plugin.thread_count
+			max_requests:      plugin.max_requests
+			enable_fs:         plugin.enable_fs
+			enable_process:    plugin.enable_process
+			enable_network:    plugin.enable_network
+			signature_root:    plugin.signature_root
+			signature_include: plugin.signature_include.clone()
+			signature_exclude: plugin.signature_exclude.clone()
+		}
+		target.transforms['${scope}/plugin/${safe_plan_id(name)}'] = V2TransformSpec{
+			kind:    if plugin.kind != '' { plugin.kind } else { 'vjsx' }
+			engine:  'engine:${engine_id}'
+			handler: name
+		}
+	}
+
+	if cfg.websocket_affinity.enabled || cfg.websocket_actor.enabled {
+		mut source_records := []map[string]string{}
+		for source in cfg.websocket_actor.sources {
+			source_records << {
+				'type':  source.typ
+				'key':   source.key
+				'class': source.class_name
+			}
+		}
+		target.policies.concurrency['${scope}_websocket'] = V2ConcurrencyPolicySpec{
+			queue_timeout_ms:  cfg.websocket_actor.queue_timeout_ms
+			max_queue_per_key: cfg.websocket_actor.max_queue_per_key
+			affinity_enabled:  cfg.websocket_affinity.enabled
+			actor_enabled:     cfg.websocket_actor.enabled
+			actor_fallback:    cfg.websocket_actor.fallback
+			affinity_source:   cfg.websocket_affinity.source
+			affinity_key:      cfg.websocket_affinity.key
+			affinity_scope:    cfg.websocket_affinity.scope
+			affinity_fallback: cfg.websocket_affinity.fallback
+			events:            cfg.websocket_actor.events.clone()
+			record_options:    {
+				'sources': source_records
+			}
+		}
+	}
+
+	if cfg.feishu.bridge.enabled || cfg.feishu.bridge.ws_url != '' {
+		target.relays['${scope}/bridge'] = V2RelaySpec{
+			mode:    'agent'
+			carrier: 'websocket'
+			url:     cfg.feishu.bridge.ws_url
+			node_id: cfg.feishu.bridge.client_id
+			token:   cfg.feishu.bridge.token
+			options: {
+				'target_id': cfg.feishu.bridge.target_id
+				'enabled':   cfg.feishu.bridge.enabled.str()
+			}
+		}
+	}
+	return order
+}
+
 fn v1_engine_spec(kind string, worker WorkerConfig, php PhpConfig, vjsx VjsxConfig, resources []string) V2EngineSpec {
 	normalized_kind := match kind.trim_space() {
 		'php', '' { 'php-worker' }
@@ -292,7 +519,7 @@ fn v1_engine_spec(kind string, worker WorkerConfig, php PhpConfig, vjsx VjsxConf
 	}
 }
 
-fn compile_v1_route_egress(route RouteRuleConfig, cfg VhttpdConfig, scope string, order int, default_adapter_id string, mut target V2Config) string {
+fn compile_v1_route_egress(route RouteRuleConfig, cfg VhttpdConfig, scope string, order int, default_adapter_id string, listener_id string, site_id string, mut target V2Config) string {
 	executor_name := route.executor.trim_space()
 	if executor_name == '' {
 		return 'adapter:${default_adapter_id}'
@@ -312,11 +539,13 @@ fn compile_v1_route_egress(route RouteRuleConfig, cfg VhttpdConfig, scope string
 	}
 	if executor_name == 'upload' {
 		adapter_id := '${scope}/route_${order}_upload'
+		completed_pipeline := compile_v1_upload_completed_pipeline(route.on_completed, cfg, scope,
+			order, listener_id, site_id, mut target)
 		target.adapters[adapter_id] = V2AdapterSpec{
 			kind:               'upload'
 			root:               route.upload_dir
 			max_body_bytes:     route.max_body_bytes
-			completed_pipeline: route.on_completed
+			completed_pipeline: completed_pipeline
 		}
 		return 'adapter:${adapter_id}'
 	}
@@ -336,6 +565,40 @@ fn compile_v1_route_egress(route RouteRuleConfig, cfg VhttpdConfig, scope string
 		return 'adapter:${adapter_id}'
 	}
 	return 'adapter:${scope}/${safe_plan_id(executor_name)}'
+}
+
+fn compile_v1_upload_completed_pipeline(value string, cfg VhttpdConfig, scope string, order int, listener_id string, site_id string, mut target V2Config) string {
+	raw := value.trim_space()
+	if raw == '' {
+		return ''
+	}
+	handler := if raw.starts_with('vjsx:') { raw.all_after('vjsx:').trim_space() } else { raw }
+	transform_id := '${scope}/upload_completed_${order}'
+	mut engine_ref := ''
+	if '${scope}/vjsx' in target.engines {
+		engine_ref = 'engine:${scope}/vjsx'
+	} else if cfg.executor.kind == 'vjsx' {
+		engine_ref = 'engine:${scope}/default'
+	}
+	target.transforms[transform_id] = V2TransformSpec{
+		kind:    if raw.starts_with('vjsx:') { 'vjsx' } else { 'native' }
+		engine:  engine_ref
+		handler: handler
+	}
+	event_adapter_id := '${scope}/upload_event_${order}'
+	target.adapters[event_adapter_id] = V2AdapterSpec{
+		kind:  'event-ingress'
+		topic: 'upload.completed'
+	}
+	pipeline_id := '${listener_id}/event_upload_${order}'
+	target.pipelines << V2PipelineSpec{
+		id:         pipeline_id
+		group:      'site:${site_id}'
+		ingress:    'adapter:${event_adapter_id}'
+		transforms: ['transform:${transform_id}']
+		egress:     'terminal:ack'
+	}
+	return 'pipeline:${pipeline_id}'
 }
 
 fn safe_plan_id(value string) string {
