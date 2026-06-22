@@ -896,6 +896,7 @@ Phase 1 is complete only when `main.v` and App satisfy their target sections; co
 Progress as of 2026-06-22:
 
 - `P2.1` complete: the independent `runtime_plan` module defines the immutable top-level plan, all eleven V2 domains, typed kind-specific options, canonical resource references, and declaration-ordered pipelines without importing legacy config or runtime implementations
+- `P2.2` complete: `config.V2Config` explicitly models every stable root domain, resource and policy subcategories, kind-facing specs, references, matches, TLS, tracing, and relay fields; a representative TOML decode test covers the complete root vocabulary
 
 Batches:
 
