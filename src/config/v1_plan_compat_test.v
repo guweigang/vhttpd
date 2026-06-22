@@ -1,5 +1,7 @@
 module config
 
+import os
+
 fn test_compile_v1_wordpress_shape_to_runtime_plan() {
 	mut cfg := VhttpdConfig{}
 	cfg.config_path = '/tmp/wordpress/vhttpd.toml'
@@ -58,6 +60,7 @@ fn test_compile_v1_wordpress_shape_to_runtime_plan() {
 	]
 	plan := compile_v1_runtime_plan(cfg) or { panic(err) }
 	assert plan.source.compatibility
+	assert plan.diagnostics[0].code == 'legacy_schema'
 	assert plan.source.schema_version == 2
 	assert plan.listeners['default'].tls.enabled
 	assert plan.resources['db/wordpress'].kind == 'mysql'
@@ -80,6 +83,8 @@ fn test_compile_v1_wordpress_shape_to_runtime_plan() {
 	assert plan.pipelines[3].egress.str() == 'adapter:wordpress/route_3_static'
 	assert plan.pipelines[3].policies[0].str() == 'policy:cache/wordpress_route_3'
 	assert plan.pipelines[4].egress.str() == 'adapter:wordpress/default'
+	assert plan.diagnostics.any(it.code == 'legacy_magic_executor'
+		&& it.path == 'routes[2].executor')
 }
 
 fn test_compile_v1_multisite_preserves_listener_and_site_scopes() {
@@ -209,4 +214,156 @@ fn test_compile_v1_upload_completion_and_response_headers_to_resources() {
 	assert plan.pipeline('default/event_upload_1')?.ingress.str() == 'adapter:uploads/upload_event_1'
 	assert plan.pipeline('default/1_route')?.policies[0].str() == 'policy:response/uploads_route_1'
 	assert plan.policies['response/uploads_route_1'].options.string_maps['headers']['x-content-type-options'] == 'nosniff'
+	assert plan.diagnostics.any(it.code == 'legacy_completion_handler')
+}
+
+fn test_representative_v1_and_v2_configs_compile_to_equivalent_http_plan() {
+	mut legacy := VhttpdConfig{}
+	legacy.server.host = '127.0.0.1'
+	legacy.server.port = 8080
+	legacy.site.name = 'wordpress'
+	legacy.site.document_root = '/srv/wordpress'
+	legacy.executor.kind = 'php'
+	legacy.worker.pool_size = 4
+	legacy.php.worker_entry = 'vendor/bin/vphp-worker'
+	legacy.php.app_entry = 'app.php'
+	legacy.db.enabled = true
+	legacy.db.mysql.database = 'wordpress'
+	legacy.routes = [
+		RouteRuleConfig{
+			match:         RouteMatchConfig{
+				method: ['GET', 'HEAD']
+				path:   ['/wp-content/*']
+			}
+			executor:      'static'
+			root:          '/srv/wordpress'
+			cache_control: 'public, max-age=3600'
+		},
+	]
+	legacy_plan := compile_v1_runtime_plan(legacy) or { panic(err) }
+	v2 := V2Config{
+		listeners: {
+			'default': V2ListenerSpec{
+				protocol:  'http'
+				transport: 'tcp'
+				host:      '127.0.0.1'
+				port:      8080
+			}
+		}
+		resources: V2ResourceSpecs{
+			db: {
+				'wordpress': V2DbResourceSpec{
+					kind:      'mysql'
+					database:  'wordpress'
+					pool_size: 5
+				}
+			}
+		}
+		engines:   {
+			'wordpress/default': V2EngineSpec{
+				kind:      'php-worker'
+				entry:     'vendor/bin/vphp-worker'
+				app:       'app.php'
+				pool_size: 4
+				resources: ['resource:db/wordpress']
+			}
+		}
+		adapters:  {
+			'wordpress/default':        V2AdapterSpec{
+				kind:          'http-handler'
+				engine:        'engine:wordpress/default'
+				document_root: '/srv/wordpress'
+				index:         'index.php'
+			}
+			'wordpress/mcp':            V2AdapterSpec{
+				kind: 'mcp'
+			}
+			'wordpress/route_1_static': V2AdapterSpec{
+				kind: 'static'
+				root: '/srv/wordpress'
+			}
+		}
+		policies:  V2PolicySpecs{
+			cache: {
+				'wordpress_route_1': V2CachePolicySpec{
+					cache_control: 'public, max-age=3600'
+				}
+			}
+		}
+		pipelines: [
+			V2PipelineSpec{
+				id:      'default/0_mcp'
+				ingress: 'listener:default'
+				match:   V2MatchSpec{
+					paths: ['/mcp']
+				}
+				egress:  'adapter:wordpress/mcp'
+			},
+			V2PipelineSpec{
+				id:       'default/1_route'
+				ingress:  'listener:default'
+				match:    V2MatchSpec{
+					methods: ['GET', 'HEAD']
+					paths:   ['/wp-content/*']
+				}
+				policies: ['policy:cache/wordpress_route_1']
+				egress:   'adapter:wordpress/route_1_static'
+			},
+			V2PipelineSpec{
+				id:      'default/2_fallback'
+				ingress: 'listener:default'
+				match:   V2MatchSpec{
+					paths: ['*']
+				}
+				egress:  'adapter:wordpress/default'
+			},
+		]
+	}
+	v2_plan := compile_v2_runtime_plan(v2, '', false) or { panic(err) }
+	assert legacy_plan.listeners['default'] == v2_plan.listeners['default']
+	assert legacy_plan.resources['db/wordpress'].kind == v2_plan.resources['db/wordpress'].kind
+	assert legacy_plan.resources['db/wordpress'].options.strings['database'] == v2_plan.resources['db/wordpress'].options.strings['database']
+	assert legacy_plan.engines['wordpress/default'].kind == v2_plan.engines['wordpress/default'].kind
+	assert legacy_plan.engines['wordpress/default'].resources == v2_plan.engines['wordpress/default'].resources
+	assert legacy_plan.adapters['wordpress/default'].kind == v2_plan.adapters['wordpress/default'].kind
+	assert legacy_plan.adapters['wordpress/route_1_static'].options.strings['root'] == v2_plan.adapters['wordpress/route_1_static'].options.strings['root']
+	assert legacy_plan.pipelines.map(it.id) == v2_plan.pipelines.map(it.id)
+	assert legacy_plan.pipelines.map(it.egress.str()) == v2_plan.pipelines.map(it.egress.str())
+	assert legacy_plan.pipelines[1].match.methods == v2_plan.pipelines[1].match.methods
+	assert legacy_plan.pipelines[1].policies == v2_plan.pipelines[1].policies
+}
+
+fn test_repository_v1_examples_compile_to_resolved_plans() {
+	repo_root := os.real_path(os.join_path(os.dir(@FILE), '..', '..'))
+	wordpress_cfg := load_vhttpd_config(['--config',
+		os.join_path(repo_root, 'examples', 'wordpress', 'vhttpd.toml')]) or { panic(err) }
+	wordpress_plan := compile_v1_runtime_plan(wordpress_cfg) or { panic(err) }
+	assert wordpress_plan.listeners['default'].tls.enabled
+	assert wordpress_plan.engines['wordpress/php-cgi'].kind == 'php-cgi'
+	mut upload_completion_found := false
+	for _, transform in wordpress_plan.transforms {
+		if transform.handler == 'wordpress.upload.completed' {
+			upload_completion_found = transform.kind == 'vjsx'
+				&& transform.engine?.str() == 'engine:wordpress/vjsx'
+			break
+		}
+	}
+	assert upload_completion_found
+	mut rest_options_is_fixed := false
+	for pipeline in wordpress_plan.pipelines {
+		if pipeline.match.methods == ['OPTIONS'] && '/wp-json' in pipeline.match.paths {
+			adapter := wordpress_plan.adapters[pipeline.egress.id]
+			rest_options_is_fixed = adapter.kind == 'fixed-response'
+				&& adapter.options.strings['status'] == '204'
+			break
+		}
+	}
+	assert rest_options_is_fixed
+
+	openai_cfg := load_vhttpd_config(['--config',
+		os.join_path(repo_root, 'examples', 'config', 'openai-gateway.toml')]) or { panic(err) }
+	openai_plan := compile_v1_runtime_plan(openai_cfg) or { panic(err) }
+	assert openai_plan.adapters['default/openai'].options.strings['default_backend'] == 'openai'
+	assert openai_plan.transforms['default/plugin/openai_gateway'].engine?.str() == 'engine:default/plugin/openai_gateway'
+	assert openai_plan.pipeline('default/1_openai')?.egress.str() == 'adapter:default/openai'
 }

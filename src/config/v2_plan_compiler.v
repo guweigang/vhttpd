@@ -3,6 +3,10 @@ module config
 import runtime_plan
 
 pub fn compile_v2_runtime_plan(cfg V2Config, source_path string, compatibility bool) !runtime_plan.RuntimePlan {
+	return compile_v2_runtime_plan_with_diagnostics(cfg, source_path, compatibility, [])
+}
+
+fn compile_v2_runtime_plan_with_diagnostics(cfg V2Config, source_path string, compatibility bool, diagnostics []runtime_plan.PlanDiagnostic) !runtime_plan.RuntimePlan {
 	if cfg.version != 2 {
 		return error('runtime_plan_unsupported_version:${cfg.version}')
 	}
@@ -150,6 +154,7 @@ pub fn compile_v2_runtime_plan(cfg V2Config, source_path string, compatibility b
 		policies:      policies
 		pipelines:     pipelines
 		relays:        relays
+		diagnostics:   diagnostics.clone()
 	}
 	validate_runtime_plan_references(plan)!
 	return plan

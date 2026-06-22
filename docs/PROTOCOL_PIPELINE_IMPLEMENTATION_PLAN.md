@@ -782,7 +782,7 @@ Acceptance:
 
 #### Phase 1 execution tasks
 
-Progress as of 2026-06-22:
+Progress as of 2026-06-23:
 
 - `P1.0` baseline recorded; targeted tests and build pass, while the pre-existing host readiness probe failure remains documented
 - `P1.1` complete: `HttpRoutingRuntime` owns route matching, rewrite, static-root selection, and response-cache policy
@@ -897,7 +897,7 @@ Progress as of 2026-06-22:
 
 - `P2.1` complete: the independent `runtime_plan` module defines the immutable top-level plan, all eleven V2 domains, typed kind-specific options, canonical resource references, and declaration-ordered pipelines without importing legacy config or runtime implementations
 - `P2.2` complete: `config.V2Config` explicitly models every stable root domain, resource and policy subcategories, kind-facing specs, references, matches, TLS, tracing, and relay fields; a representative TOML decode test covers the complete root vocabulary
-- `P2.3` in progress: the shared V2 plan compiler resolves and validates references; the V1 compiler now covers core HTTP resources plus MCP/OpenAI ingress, Feishu/Codex adapters, plugin engines/transforms, WebSocket concurrency policy, bridge relays, response policies, and upload-completion event pipelines; V1/V2 equivalence goldens and compatibility diagnostics remain before completion
+- `P2.3` complete: the shared compiler resolves and validates all plan references; the V1 compatibility compiler covers core HTTP resources, named engines, route policies, MCP/OpenAI ingress, Feishu/Codex adapters, plugin transforms, WebSocket concurrency, bridge relays, fixed responses, and upload-completion event pipelines; plan diagnostics expose compatibility rewrites, an independently authored V1/V2 golden produces equivalent HTTP plans, and the repository WordPress/OpenAI examples compile successfully
 
 Batches:
 

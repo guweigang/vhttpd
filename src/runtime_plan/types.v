@@ -26,6 +26,15 @@ pub:
 	policies      map[string]PolicyPlan
 	pipelines     []PipelinePlan
 	relays        map[string]RelayPlan
+	diagnostics   []PlanDiagnostic
+}
+
+pub struct PlanDiagnostic {
+pub:
+	severity string
+	code     string
+	path     string
+	message  string
 }
 
 pub struct PlanSource {

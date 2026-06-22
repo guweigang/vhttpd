@@ -4,7 +4,46 @@ import runtime_plan
 
 pub fn compile_v1_runtime_plan(cfg VhttpdConfig) !runtime_plan.RuntimePlan {
 	v2 := compile_v1_to_v2(cfg)!
-	return compile_v2_runtime_plan(v2, cfg.config_path, true)
+	return compile_v2_runtime_plan_with_diagnostics(v2, cfg.config_path, true,
+		v1_plan_diagnostics(cfg))
+}
+
+fn v1_plan_diagnostics(cfg VhttpdConfig) []runtime_plan.PlanDiagnostic {
+	mut diagnostics := [
+		runtime_plan.PlanDiagnostic{
+			severity: 'warning'
+			code:     'legacy_schema'
+			path:     '$'
+			message:  'V1 configuration was compiled through the compatibility layer'
+		},
+	]
+	if cfg.paths.root != '.' || cfg.paths.values.len > 0 {
+		diagnostics << runtime_plan.PlanDiagnostic{
+			severity: 'info'
+			code:     'compile_only_paths'
+			path:     'paths'
+			message:  'path variables are resolved before RuntimePlan compilation'
+		}
+	}
+	for index, route in cfg.routes {
+		if route.executor in ['static', 'upload', 'none'] {
+			diagnostics << runtime_plan.PlanDiagnostic{
+				severity: 'info'
+				code:     'legacy_magic_executor'
+				path:     'routes[${index}].executor'
+				message:  'legacy executor ${route.executor} was compiled into an adapter or terminal'
+			}
+		}
+		if route.on_completed.trim_space().starts_with('vjsx:') {
+			diagnostics << runtime_plan.PlanDiagnostic{
+				severity: 'info'
+				code:     'legacy_completion_handler'
+				path:     'routes[${index}].on_completed'
+				message:  'legacy completion handler was compiled into an event pipeline'
+			}
+		}
+	}
+	return diagnostics
 }
 
 pub fn compile_v1_to_v2(cfg VhttpdConfig) !V2Config {
@@ -521,6 +560,18 @@ fn v1_engine_spec(kind string, worker WorkerConfig, php PhpConfig, vjsx VjsxConf
 
 fn compile_v1_route_egress(route RouteRuleConfig, cfg VhttpdConfig, scope string, order int, default_adapter_id string, listener_id string, site_id string, mut target V2Config) string {
 	executor_name := route.executor.trim_space()
+	if route.status != 0 || route.location != '' || route.body != '' {
+		adapter_id := '${scope}/route_${order}_response'
+		target.adapters[adapter_id] = V2AdapterSpec{
+			kind:    'fixed-response'
+			options: {
+				'status':   route.status.str()
+				'location': route.location
+				'body':     route.body
+			}
+		}
+		return 'adapter:${adapter_id}'
+	}
 	if executor_name == '' {
 		return 'adapter:${default_adapter_id}'
 	}
@@ -550,19 +601,7 @@ fn compile_v1_route_egress(route RouteRuleConfig, cfg VhttpdConfig, scope string
 		return 'adapter:${adapter_id}'
 	}
 	if executor_name == 'none' {
-		if route.status == 0 && route.location == '' && route.body == '' {
-			return 'terminal:reject'
-		}
-		adapter_id := '${scope}/route_${order}_response'
-		target.adapters[adapter_id] = V2AdapterSpec{
-			kind:    'fixed-response'
-			options: {
-				'status':   route.status.str()
-				'location': route.location
-				'body':     route.body
-			}
-		}
-		return 'adapter:${adapter_id}'
+		return 'terminal:reject'
 	}
 	return 'adapter:${scope}/${safe_plan_id(executor_name)}'
 }
