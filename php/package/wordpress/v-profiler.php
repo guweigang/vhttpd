@@ -12,6 +12,16 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+// PHP 版本兼容性检测 (vhttpd runtime 要求 PHP >= 8.1)
+if (version_compare(PHP_VERSION, '8.1.0', '<')) {
+    add_action('admin_notices', static function (): void {
+        echo '<div class="notice notice-error"><p>';
+        echo '<strong>v-Profiler:</strong> This plugin requires PHP version 8.1.0 or higher. Your current PHP version is ' . esc_html(PHP_VERSION) . '.';
+        echo '</p></div>';
+    });
+    return;
+}
+
 // 确保 autoloader 正常加载
 if (!class_exists(\VHttpd\WordPress\Profiler::class)) {
     $autoload = getenv('VHTTPD_PHP_PACKAGE_AUTOLOAD');

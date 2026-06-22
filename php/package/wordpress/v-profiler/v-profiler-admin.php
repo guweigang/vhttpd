@@ -19,6 +19,15 @@ add_action('admin_menu', function (): void {
     );
 });
 
+// 注册插件列表页面的 "Settings" 快捷链接
+add_filter('plugin_row_meta', function (array $plugin_meta, string $plugin_file): array {
+    if ($plugin_file === 'v-profiler.php') {
+        $settings_url = admin_url('admin.php?page=v-profiler-settings');
+        $plugin_meta[] = '<a href="' . esc_url($settings_url) . '">Settings</a>';
+    }
+    return $plugin_meta;
+}, 10, 2);
+
 // 处理设置页面表单提交
 add_action('admin_init', function (): void {
     if (!isset($_POST['v_profiler_action'])) {
