@@ -310,6 +310,8 @@ final class Profiler
         $jsCode = '';
         if (is_file($jsFile)) {
             $jsCode = file_get_contents($jsFile);
+        } elseif (defined('WPMU_PLUGIN_DIR') && is_file(WPMU_PLUGIN_DIR . '/v-profiler/v-profiler-ui.js')) {
+            $jsCode = file_get_contents(WPMU_PLUGIN_DIR . '/v-profiler/v-profiler-ui.js');
         } elseif (defined('WPMU_PLUGIN_DIR') && is_file(WPMU_PLUGIN_DIR . '/v-profiler-ui.js')) {
             $jsCode = file_get_contents(WPMU_PLUGIN_DIR . '/v-profiler-ui.js');
         } elseif (defined('WP_PLUGIN_DIR') && is_file(WP_PLUGIN_DIR . '/v-profiler-ui.js')) {
@@ -993,6 +995,29 @@ final class Profiler
             }
         }
 
+        // 自动生成建议的 TOML 配置段
+        $suggestedToml = '';
+        $missingHeaders = [];
+        foreach ($headersStatus as $secHeader => $configured) {
+            if (!$configured) {
+                if ($secHeader === 'Content-Security-Policy') {
+                    $missingHeaders[] = 'Content-Security-Policy = "default-src \'self\' \'unsafe-inline\' \'unsafe-eval\' https:;"';
+                } elseif ($secHeader === 'X-Frame-Options') {
+                    $missingHeaders[] = 'X-Frame-Options = "SAMEORIGIN"';
+                } elseif ($secHeader === 'X-Content-Type-Options') {
+                    $missingHeaders[] = 'X-Content-Type-Options = "nosniff"';
+                } elseif ($secHeader === 'Referrer-Policy') {
+                    $missingHeaders[] = 'Referrer-Policy = "strict-origin-when-cross-origin"';
+                } elseif ($secHeader === 'Permissions-Policy') {
+                    $missingHeaders[] = 'Permissions-Policy = "geolocation=(), microphone=()"';
+                }
+            }
+        }
+
+        if (!empty($missingHeaders)) {
+            $suggestedToml = "# 建议在 vhttpd.toml 的 [http.headers] 段中添加以下配置以加固站点安全：\n[http.headers]\n" . implode("\n", $missingHeaders) . "\n";
+        }
+
         $rateLimitLimit = getenv('VHTTPD_RATELIMIT_LIMIT') ?: ($_SERVER['VHTTPD_RATELIMIT_LIMIT'] ?? '600');
         $rateLimitRemaining = getenv('VHTTPD_RATELIMIT_REMAINING') ?: ($_SERVER['VHTTPD_RATELIMIT_REMAINING'] ?? '588');
 
@@ -1001,6 +1026,7 @@ final class Profiler
             'rate_limit_limit' => $rateLimitLimit,
             'rate_limit_remaining' => $rateLimitRemaining,
             'is_https' => isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on',
+            'suggested_toml' => $suggestedToml,
         ];
     }
 

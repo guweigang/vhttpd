@@ -3,7 +3,7 @@
  * Plugin Name: v-Profiler for WordPress
  * Description: Zero-dependency, ultra-performance debugger toolbar for WordPress sites running on vhttpd.
  * Version: 0.1.0
- * Author: Antigravity / Google DeepMind
+ * Author: guweigang
  */
 
 declare(strict_types=1);
@@ -59,13 +59,24 @@ add_filter('determine_current_user', static function ($userId) {
 // 3. 在 init 阶段校验用户身份
 add_action('init', static function (): void {
     $debug = defined('WP_DEBUG') && WP_DEBUG;
-    $canManage = current_user_can('manage_options');
+
+    // 检查是否全局关闭了挂件
+    if (get_option('v_profiler_widget_enabled', 'yes') !== 'yes') {
+        Profiler::stopAndDeactivate();
+        return;
+    }
     
-    // 写入诊断日志，方便查看为什么没有激活
+    // 会话授权 Token 比对
+    $secretToken = get_option('v_profiler_secret_token');
+    $hasDebugCookie = !empty($secretToken) && isset($_COOKIE['v_profiler_session']) && $_COOKIE['v_profiler_session'] === $secretToken;
+    $canManage = current_user_can('manage_options') || $hasDebugCookie;
+    
+    // 写入诊断日志，方便查看激活状态
     error_log(sprintf(
-        '[v-Profiler] Auth Check: WP_DEBUG=%s, current_user_can(manage_options)=%s, request_uri=%s',
+        '[v-Profiler] Auth Check: WP_DEBUG=%s, current_user_can(manage_options)=%s, has_debug_cookie=%s, request_uri=%s',
         $debug ? 'true' : 'false',
-        $canManage ? 'true' : 'false',
+        current_user_can('manage_options') ? 'true' : 'false',
+        $hasDebugCookie ? 'true' : 'false',
         $_SERVER['REQUEST_URI'] ?? 'unknown'
     ));
 
@@ -76,3 +87,8 @@ add_action('init', static function (): void {
         Profiler::stopAndDeactivate();
     }
 }, 99);
+
+// 4. 引入后台管理模块
+if (is_admin()) {
+    require_once __DIR__ . '/v-profiler/v-profiler-admin.php';
+}

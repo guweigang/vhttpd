@@ -115,6 +115,9 @@ if (!function_exists('is_account_page')) {
 if (!function_exists('is_wc_endpoint_url')) {
     function is_wc_endpoint_url() { return false; }
 }
+if (!function_exists('is_admin')) {
+    function is_admin() { return true; }
+}
 
 // 1. Load the bootstrap file
 require_once __DIR__ . '/../wordpress/v-profiler.php';
@@ -223,6 +226,12 @@ assertSame(
 assertArrayHasKey('headers_status', $report['security']);
 assertSame('600', $report['security']['rate_limit_limit'], 'rate limit limit');
 assertSame('588', $report['security']['rate_limit_remaining'], 'rate limit remaining');
+assertArrayHasKey('suggested_toml', $report['security']);
+$suggestedToml = $report['security']['suggested_toml'];
+if (!str_contains($suggestedToml, '[http.headers]') || !str_contains($suggestedToml, 'Content-Security-Policy')) {
+    fwrite(STDERR, "Assertion failed: suggested_toml does not contain expected header recommendations.\n");
+    exit(1);
+}
 
 // 6. Test state reset
 putenv('VHTTPD_REQUEST_ID=new_request_123');
