@@ -897,6 +897,7 @@ Progress as of 2026-06-22:
 
 - `P2.1` complete: the independent `runtime_plan` module defines the immutable top-level plan, all eleven V2 domains, typed kind-specific options, canonical resource references, and declaration-ordered pipelines without importing legacy config or runtime implementations
 - `P2.2` complete: `config.V2Config` explicitly models every stable root domain, resource and policy subcategories, kind-facing specs, references, matches, TLS, tracing, and relay fields; a representative TOML decode test covers the complete root vocabulary
+- `P2.3` in progress: the shared V2 plan compiler resolves and validates references, and the V1 compatibility compiler covers single-site and multi-site listeners, DB/cache resources, default and named engines, HTTP/static/upload/fixed adapters, route transforms and policies, ordered routes, and fallback pipelines; provider/plugin/WebSocket/bridge field coverage remains before completion
 
 Batches:
 

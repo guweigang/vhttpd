@@ -132,6 +132,17 @@ pub mut:
 	restart_backoff_max_ms int    @[toml: 'restart_backoff_max_ms']
 	max_requests           int    @[toml: 'max_requests']
 	autostart              bool
+	stream_dispatch        bool @[toml: 'stream_dispatch']
+	websocket_dispatch     bool @[toml: 'websocket_dispatch']
+	enable_fs              bool @[toml: 'enable_fs']
+	enable_process         bool @[toml: 'enable_process']
+	enable_network         bool @[toml: 'enable_network']
+	socket                 string
+	socket_prefix          string @[toml: 'socket_prefix']
+	sockets                []string
+	signature_root         string   @[toml: 'signature_root']
+	signature_include      []string @[toml: 'signature_include']
+	signature_exclude      []string @[toml: 'signature_exclude']
 	resources              []string
 	capabilities           []string
 	env                    map[string]string
