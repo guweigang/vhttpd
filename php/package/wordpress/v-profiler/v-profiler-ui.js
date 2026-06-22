@@ -1789,7 +1789,7 @@
             const after = JSON.parse(localStorage.getItem('v_profiler_after_snap')) || null;
 
             const currentSnap = {
-                label: "Current Request",
+                label: "当前请求",
                 timestamp: Math.floor(Date.now() / 1000),
                 url: window.location.pathname + window.location.search,
                 total_duration_ms: parseFloat(this.data.overview?.total_duration_ms || 0),
@@ -1802,17 +1802,17 @@
             let sidebarHtml = `
                 <div class="bench-sidebar">
                     <div class="bench-card">
-                        <div class="bench-title">📍 Current Page Status</div>
+                        <div class="bench-title">📍 当前页面性能快照</div>
                         <div style="font-size:11px; line-height:1.6; color:#cbd5e1;">
-                            <div style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"><strong>URL:</strong> <span style="font-family:monospace; color:#a78bfa;">${this.escapeHtml(currentSnap.url)}</span></div>
-                            <div><strong>Load Time:</strong> ${currentSnap.total_duration_ms} ms</div>
-                            <div><strong>SQL Queries:</strong> ${currentSnap.sql_count} queries</div>
-                            <div><strong>SQL Duration:</strong> ${currentSnap.sql_duration_ms.toFixed(2)} ms</div>
-                            <div><strong>Memory:</strong> ${currentSnap.peak_memory}</div>
+                            <div style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"><strong>页面地址:</strong> <span style="font-family:monospace; color:#a78bfa;">${this.escapeHtml(currentSnap.url)}</span></div>
+                            <div><strong>加载时间:</strong> ${currentSnap.total_duration_ms} ms</div>
+                            <div><strong>SQL 查询次数:</strong> ${currentSnap.sql_count} 次</div>
+                            <div><strong>SQL 总耗时:</strong> ${currentSnap.sql_duration_ms.toFixed(2)} ms</div>
+                            <div><strong>内存峰值:</strong> ${currentSnap.peak_memory}</div>
                         </div>
                         <div class="bench-btn-group" style="flex-direction:column; gap:6px; margin-top:10px;">
-                            <button class="bench-btn" id="save-before-btn">📸 Save as BEFORE (Old Stack)</button>
-                            <button class="bench-btn" id="save-after-btn" style="background:rgba(16,185,129,0.1); border-color:rgba(16,185,129,0.2); color:#34d399;">📸 Save as AFTER (vhttpd)</button>
+                            <button class="bench-btn" id="save-before-btn">📸 保存为“对比前”（传统架构）</button>
+                            <button class="bench-btn" id="save-after-btn" style="background:rgba(16,185,129,0.1); border-color:rgba(16,185,129,0.2); color:#34d399;">📸 保存为“对比后”（vhttpd）</button>
                         </div>
                     </div>
             `;
@@ -1820,20 +1820,20 @@
             if (before || after) {
                 sidebarHtml += `
                     <div class="bench-card">
-                        <div class="bench-title">🧹 Manage Snapshots</div>
+                        <div class="bench-title">🧹 快照数据管理</div>
                         <div class="bench-btn-group">
-                            <button class="bench-btn danger" id="clear-snaps-btn" style="width:100%;">Clear Snapshots</button>
+                            <button class="bench-btn danger" id="clear-snaps-btn" style="width:100%;">清除所有对比快照</button>
                         </div>
                     </div>
                 `;
             } else {
                 sidebarHtml += `
                     <div class="bench-card">
-                        <div class="bench-title">💡 Quick Demo</div>
+                        <div class="bench-title">💡 快速体验 A/B 对比</div>
                         <div style="font-size:10px; color:#94a3b8; line-height:1.4; margin-bottom:8px;">
-                            No Before snapshot? You can populate a typical Nginx industry benchmark to simulate the performance of the traditional PHP-FPM architecture.
+                            如果您还没有对比前的数据，可以一键导入行业内典型的 Nginx + PHP-FPM 传统无缓存架构基准数据进行演示。
                         </div>
-                        <button class="bench-btn secondary" id="fill-nginx-btn" style="width:100%;">⚡ Import Nginx Baseline</button>
+                        <button class="bench-btn secondary" id="fill-nginx-btn" style="width:100%;">⚡ 导入 Nginx 基准数据</button>
                     </div>
                 `;
             }
@@ -1843,17 +1843,26 @@
             let mainHtml = '';
             if (!before && !after) {
                 mainHtml = `
-                    <div class="bench-main" style="justify-content:center; align-items:center; color:#64748b; text-align:center;">
-                        <div style="font-size:36px; margin-bottom:10px;">📊</div>
-                        <div style="font-weight:600; font-size:13px; color:#94a3b8;">No A/B Benchmark snapshots saved.</div>
-                        <div style="font-size:11px; max-width:320px; margin-top:5px; line-height:1.4;">
-                            Save the BEFORE state (e.g., when running under Nginx) and the AFTER state (under vhttpd) to generate a side-by-side performance comparison report.
+                    <div class="bench-main" style="justify-content:center; align-items:center; color:#94a3b8; padding: 20px;">
+                        <div style="font-size:36px; margin-bottom:10px; text-align:center;">📊</div>
+                        <div style="font-weight:700; font-size:15px; color:#f8fafc; margin-bottom: 15px; text-align:center;">性能基准测试 A/B 对比</div>
+                        <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; padding: 16px; max-width: 420px; text-align: left; font-size: 11px; line-height: 1.6; color: #cbd5e1;">
+                            <p style="margin-top:0; font-weight:600; color:#c084fc; font-size:12px;">💡 什么是 A/B 性能对比？</p>
+                            <p style="margin-bottom:12px;">本工具通过捕获网站在「优化前」与「优化后（vhttpd 加速）」的实际运行性能快照，生成多维度性能对比图，直观评估加速成效。</p>
+                            
+                            <p style="margin-top:0; font-weight:600; color:#c084fc; font-size:12px;">🛠️ 使用步骤向导：</p>
+                            <ol style="margin: 0; padding-left: 18px;">
+                                <li style="margin-bottom: 6px;"><b>访问测试页面</b>（例如首页，此时尚未启用加速或清空了对象缓存），在左侧点击 <span style="color:#e2e8f0; background:rgba(139, 92, 246, 0.2); padding: 1px 4px; border-radius: 2px;">保存为“对比前”</span>。</li>
+                                <li style="margin-bottom: 6px;"><b>在后台开启加速</b>（可以在 v-Profiler 后台控制面板切换至「完整加速模式」，或配置好 Object Cache）。</li>
+                                <li style="margin-bottom: 6px;"><b>再次访问同一页面</b>，在左侧点击 <span style="color:#34d399; background:rgba(16,185,129,0.2); padding: 1px 4px; border-radius: 2px;">保存为“对比后”</span>。</li>
+                                <li>系统将<b>自动生成</b>耗时、SQL 和内存的对比报告，并支持导出 PDF 报告。</li>
+                            </ol>
                         </div>
                     </div>
                 `;
             } else {
                 const bVal = before || {
-                    label: "N/A",
+                    label: "无数据",
                     total_duration_ms: 0,
                     sql_duration_ms: 0,
                     sql_count: 0,
@@ -1861,7 +1870,7 @@
                     external_requests_count: 0
                 };
                 const aVal = after || {
-                    label: "N/A",
+                    label: "无数据",
                     total_duration_ms: 0,
                     sql_duration_ms: 0,
                     sql_count: 0,
@@ -1898,22 +1907,22 @@
                     if (times > 1.1) {
                         speedupHtml = `
                             <div class="comparison-summary">
-                                🚀 <span>Performance Speedup: <strong>${times.toFixed(1)}x Faster</strong> with vhttpd stack (reduced by ${(((before.total_duration_ms - after.total_duration_ms) / before.total_duration_ms) * 100).toFixed(1)}%) !</span>
-                                <button class="bench-btn" id="print-pdf-btn" style="margin-left:auto; background:#10b981; border:1px solid #059669; color:#fff; padding:4px 10px; flex:none;">📄 Print PDF Report</button>
+                                🚀 <span>性能提升：使用 vhttpd 架构加速了 <strong>${times.toFixed(1)} 倍</strong>（耗时缩减了 ${(((before.total_duration_ms - after.total_duration_ms) / before.total_duration_ms) * 100).toFixed(1)}%）！</span>
+                                <button class="bench-btn" id="print-pdf-btn" style="margin-left:auto; background:#10b981; border:1px solid #059669; color:#fff; padding:4px 10px; flex:none;">📄 导出 PDF 报告</button>
                             </div>
                         `;
                     } else {
                         speedupHtml = `
                             <div class="comparison-summary" style="background:rgba(96,165,250,0.08); border-color:rgba(96,165,250,0.15); color:#60a5fa;">
-                                ℹ️ <span>Before & After profiles are registered. Performance difference is minor.</span>
-                                <button class="bench-btn" id="print-pdf-btn" style="margin-left:auto; background:#3b82f6; border:1px solid #2563eb; color:#fff; padding:4px 10px; flex:none;">📄 Print PDF Report</button>
+                                ℹ️ <span>已保存“对比前/后”数据。两者的性能差异较小。</span>
+                                <button class="bench-btn" id="print-pdf-btn" style="margin-left:auto; background:#3b82f6; border:1px solid #2563eb; color:#fff; padding:4px 10px; flex:none;">📄 导出 PDF 报告</button>
                             </div>
                         `;
                     }
                 } else {
                     speedupHtml = `
                         <div style="font-size:11px; padding:8px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); border-radius:4px; color:#94a3b8; text-align:center;">
-                            💡 Save both Before and After snapshots to generate a speedup evaluation report.
+                            💡 请同时保存“对比前”和“对比后”的页面快照，以生成加速成效评测报告。
                         </div>
                     `;
                 }
@@ -1924,19 +1933,19 @@
 
                         <div class="comparison-item">
                             <div class="comparison-label">
-                                <span>⏱️ Page Load Duration</span>
-                                <span style="font-size:10px; color:#94a3b8;">Lower is better</span>
+                                <span>⏱️ 页面加载耗时</span>
+                                <span style="font-size:10px; color:#94a3b8;">数值越低越好</span>
                             </div>
                             <div class="comparison-bar-group">
                                 <div class="comparison-bar-row">
-                                    <span class="bar-name">Before</span>
+                                    <span class="bar-name">对比前</span>
                                     <div class="bar-track">
                                         <div class="bar-fill before" style="width: ${bDurPercent}%"></div>
                                     </div>
                                     <span class="bar-value">${bVal.total_duration_ms} ms</span>
                                 </div>
                                 <div class="comparison-bar-row" style="margin-top:4px;">
-                                    <span class="bar-name">After</span>
+                                    <span class="bar-name">对比后</span>
                                     <div class="bar-track">
                                         <div class="bar-fill after" style="width: ${aDurPercent}%"></div>
                                     </div>
@@ -1947,42 +1956,42 @@
 
                         <div class="comparison-item">
                             <div class="comparison-label">
-                                <span>🗄️ SQL Queries Executed</span>
-                                <span style="font-size:10px; color:#94a3b8;">Fewer is better</span>
+                                <span>🗄️ 执行的 SQL 查询次数</span>
+                                <span style="font-size:10px; color:#94a3b8;">次数越少越好</span>
                             </div>
                             <div class="comparison-bar-group">
                                 <div class="comparison-bar-row">
-                                    <span class="bar-name">Before</span>
+                                    <span class="bar-name">对比前</span>
                                     <div class="bar-track">
                                         <div class="bar-fill before" style="width: ${bSqlPercent}%"></div>
                                     </div>
-                                    <span class="bar-value">${bVal.sql_count}</span>
+                                    <span class="bar-value">${bVal.sql_count} 次</span>
                                 </div>
                                 <div class="comparison-bar-row" style="margin-top:4px;">
-                                    <span class="bar-name">After</span>
+                                    <span class="bar-name">对比后</span>
                                     <div class="bar-track">
                                         <div class="bar-fill after" style="width: ${aSqlPercent}%"></div>
                                     </div>
-                                    <span class="bar-value">${aVal.sql_count}</span>
+                                    <span class="bar-value">${aVal.sql_count} 次</span>
                                 </div>
                             </div>
                         </div>
 
                         <div class="comparison-item">
                             <div class="comparison-label">
-                                <span>🧠 Peak Memory Usage</span>
-                                <span style="font-size:10px; color:#94a3b8;">Lower is better</span>
+                                <span>🧠 内存占用峰值</span>
+                                <span style="font-size:10px; color:#94a3b8;">数值越低越好</span>
                             </div>
                             <div class="comparison-bar-group">
                                 <div class="comparison-bar-row">
-                                    <span class="bar-name">Before</span>
+                                    <span class="bar-name">对比前</span>
                                     <div class="bar-track">
                                         <div class="bar-fill before" style="width: ${bMemPercent}%"></div>
                                     </div>
                                     <span class="bar-value">${bVal.peak_memory}</span>
                                 </div>
                                 <div class="comparison-bar-row" style="margin-top:4px;">
-                                    <span class="bar-name">After</span>
+                                    <span class="bar-name">对比后</span>
                                     <div class="bar-track">
                                         <div class="bar-fill after" style="width: ${aMemPercent}%"></div>
                                     </div>
@@ -1993,23 +2002,23 @@
 
                         <div class="comparison-item">
                             <div class="comparison-label">
-                                <span>🌐 Outgoing HTTP Calls</span>
-                                <span style="font-size:10px; color:#94a3b8;">Fewer is better</span>
+                                <span>🌐 外部 HTTP 请求次数</span>
+                                <span style="font-size:10px; color:#94a3b8;">次数越少越好</span>
                             </div>
                             <div class="comparison-bar-group">
                                 <div class="comparison-bar-row">
-                                    <span class="bar-name">Before</span>
+                                    <span class="bar-name">对比前</span>
                                     <div class="bar-track">
                                         <div class="bar-fill before" style="width: ${bExtPercent}%"></div>
                                     </div>
-                                    <span class="bar-value">${bVal.external_requests_count}</span>
+                                    <span class="bar-value">${bVal.external_requests_count} 次</span>
                                 </div>
                                 <div class="comparison-bar-row" style="margin-top:4px;">
-                                    <span class="bar-name">After</span>
+                                    <span class="bar-name">对比后</span>
                                     <div class="bar-track">
                                         <div class="bar-fill after" style="width: ${aExtPercent}%"></div>
                                     </div>
-                                    <span class="bar-value">${aVal.external_requests_count}</span>
+                                    <span class="bar-value">${aVal.external_requests_count} 次</span>
                                 </div>
                             </div>
                         </div>
@@ -2065,7 +2074,7 @@
                 <html>
                 <head>
                     <meta charset="utf-8">
-                    <title>vhttpd Performance Benchmark Report</title>
+                    <title>v-Profiler 性能报告</title>
                     <style>
                         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
                         body {
@@ -2226,32 +2235,32 @@
                 <body>
                     <div class="header">
                         <div class="logo-area">
-                            <span class="logo-text">v-Profiler Pro</span>
+                            <span class="logo-text">v-Profiler 性能报告</span>
                         </div>
                         <div class="report-meta">
-                            <div><strong>Report Date:</strong> ${dateStr}</div>
-                            <div><strong>Target URL:</strong> ${this.escapeHtml(before.url)}</div>
+                            <div><strong>报告时间:</strong> ${dateStr}</div>
+                            <div><strong>目标页面:</strong> ${this.escapeHtml(before.url)}</div>
                         </div>
                     </div>
 
                     <div class="banner">
-                        <h1>vhttpd Stack WordPress Performance Report</h1>
-                        <p>A/B performance metrics comparison before and after transitioning to the vhttpd stack</p>
-                        <span class="stat-highlight">🚀 ${times}x Faster Performance</span>
-                        <p style="font-size:14px; margin-top:5px; color:#5b21b6;">Page loading latency reduced by <strong>${diffPercent}%</strong></p>
+                        <h1>vhttpd 极速架构性能评估报告</h1>
+                        <p>WordPress 在传统 Nginx + PHP-FPM 与 vhttpd 极速服务器架构下的 A/B 性能指标对比分析</p>
+                        <span class="stat-highlight">🚀 性能提升 ${times} 倍</span>
+                        <p style="font-size:14px; margin-top:5px; color:#5b21b6;">页面加载延迟缩减了 <strong>${diffPercent}%</strong></p>
                     </div>
 
-                    <div class="section-title">Performance Benchmark Comparison</div>
+                    <div class="section-title">性能基准测试对比数据</div>
 
                     <div class="grid-layout">
                         <div class="metric-card">
                             <div class="metric-title">
-                                <span>⏱️ Page Load Duration</span>
-                                <span style="font-size:11px; color:#ef4444; font-weight:600;">Lower is better</span>
+                                <span>⏱️ 页面加载耗时</span>
+                                <span style="font-size:11px; color:#ef4444; font-weight:600;">数值越低越好</span>
                             </div>
                             <div class="bar-container">
                                 <div class="bar-label">
-                                    <span>Before (Traditional Stack)</span>
+                                    <span>对比前 (传统架构 Nginx/PHP-FPM)</span>
                                     <span class="bar-value">${before.total_duration_ms} ms</span>
                                 </div>
                                 <div class="bar-track">
@@ -2260,7 +2269,7 @@
                             </div>
                             <div class="bar-container" style="margin-bottom:0;">
                                 <div class="bar-label">
-                                    <span>After (vhttpd Server Stack)</span>
+                                    <span>对比后 (vhttpd 极速服务器)</span>
                                     <span class="bar-value">${after.total_duration_ms} ms</span>
                                 </div>
                                 <div class="bar-track">
@@ -2271,12 +2280,12 @@
 
                         <div class="metric-card">
                             <div class="metric-title">
-                                <span>🗄️ SQL Queries Executed</span>
-                                <span style="font-size:11px; color:#ef4444; font-weight:600;">Fewer is better</span>
+                                <span>🗄️ SQL 查询次数</span>
+                                <span style="font-size:11px; color:#ef4444; font-weight:600;">次数越少越好</span>
                             </div>
                             <div class="bar-container">
                                 <div class="bar-label">
-                                    <span>Before (Traditional Stack)</span>
+                                    <span>对比前 (传统架构 Nginx/PHP-FPM)</span>
                                     <span class="bar-value">${before.sql_count}</span>
                                 </div>
                                 <div class="bar-track">
@@ -2285,7 +2294,7 @@
                             </div>
                             <div class="bar-container" style="margin-bottom:0;">
                                 <div class="bar-label">
-                                    <span>After (vhttpd Server Stack)</span>
+                                    <span>对比后 (vhttpd 极速服务器)</span>
                                     <span class="bar-value">${after.sql_count}</span>
                                 </div>
                                 <div class="bar-track">
@@ -2296,12 +2305,12 @@
 
                         <div class="metric-card">
                             <div class="metric-title">
-                                <span>🧠 Peak Memory Usage</span>
-                                <span style="font-size:11px; color:#ef4444; font-weight:600;">Lower is better</span>
+                                <span>🧠 内存占用峰值</span>
+                                <span style="font-size:11px; color:#ef4444; font-weight:600;">数值越低越好</span>
                             </div>
                             <div class="bar-container">
                                 <div class="bar-label">
-                                    <span>Before (Traditional Stack)</span>
+                                    <span>对比前 (传统架构 Nginx/PHP-FPM)</span>
                                     <span class="bar-value">${before.peak_memory}</span>
                                 </div>
                                 <div class="bar-track">
@@ -2310,7 +2319,7 @@
                             </div>
                             <div class="bar-container" style="margin-bottom:0;">
                                 <div class="bar-label">
-                                    <span>After (vhttpd Server Stack)</span>
+                                    <span>对比后 (vhttpd 极速服务器)</span>
                                     <span class="bar-value">${after.peak_memory}</span>
                                 </div>
                                 <div class="bar-track">
@@ -2321,12 +2330,12 @@
 
                         <div class="metric-card">
                             <div class="metric-title">
-                                <span>🌐 Outgoing Third-Party HTTP Calls</span>
-                                <span style="font-size:11px; color:#ef4444; font-weight:600;">Fewer is better</span>
+                                <span>🌐 外部 HTTP API 请求次数</span>
+                                <span style="font-size:11px; color:#ef4444; font-weight:600;">次数越少越好</span>
                             </div>
                             <div class="bar-container">
                                 <div class="bar-label">
-                                    <span>Before (Traditional Stack)</span>
+                                    <span>对比前 (传统架构 Nginx/PHP-FPM)</span>
                                     <span class="bar-value">${before.external_requests_count}</span>
                                 </div>
                                 <div class="bar-track">
@@ -2335,7 +2344,7 @@
                             </div>
                             <div class="bar-container" style="margin-bottom:0;">
                                 <div class="bar-label">
-                                    <span>After (vhttpd Server Stack)</span>
+                                    <span>对比后 (vhttpd 极速服务器)</span>
                                     <span class="bar-value">${after.external_requests_count}</span>
                                 </div>
                                 <div class="bar-track">
@@ -2345,19 +2354,19 @@
                         </div>
                     </div>
 
-                    <div class="section-title">Architectural Optimization Analysis</div>
+                    <div class="section-title">架构优化深度解析</div>
                     <div class="tech-notes">
-                        <strong>Why is the After (vhttpd) stack significantly faster?</strong>
+                        <strong>为什么优化后的 vhttpd 架构速度显著提升？</strong>
                         <ul>
-                            <li><strong>Built-in Keepalive SQL Connection Pool:</strong> WordPress usually initiates a new TCP handshake to MySQL on every single PHP request. vhttpd provides a persistent worker thread pool that keeps SQL connections alive globally, saving 30ms - 100ms of handshake latency per request.</li>
-                            <li><strong>High Performance Cache Multiplexing:</strong> Page caching and object caching are handled at the HTTP layer, bypassing WordPress runtime compilation overhead when cached hits occur.</li>
-                            <li><strong>Optimized PHP Worker Model:</strong> By spawning persistent, long-running PHP Workers instead of traditional on-demand PHP-FPM spawn patterns, request startup times are drastically reduced.</li>
-                            <li><strong>Enterprise Security Shield:</strong> Rate limiter gates, DDoS traffic mitigation, and standard response header enforcement are pre-applied without any custom PHP plugin requirements, ensuring raw speed does not compromise safety.</li>
+                            <li><strong>内置 Keepalive 数据库连接池：</strong> WordPress 默认情况下在每个 PHP 请求生命周期里都要重新与 MySQL 建立 TCP 握手。vhttpd 提供持久的工作线程/进程池并维持常驻的数据库连接，为每次请求节省 30ms - 100ms 的握手网络开销。</li>
+                            <li><strong>高性能数据缓存共享：</strong> 页面缓存与对象缓存由高性能 HTTP 数据层直接在进程内共享内存多路复用，省去了大量的 WordPress 核心框架引导与 PHP 解析开销。</li>
+                            <li><strong>优化 PHP 常驻 Workers 模型：</strong> 采用常驻的持久化 PHP Worker 代替传统 PHP-FPM 按需频繁创建与销毁的模式，极大地减少了请求初始化时的 CPU 耗能。</li>
+                            <li><strong>企业级内置安全护盾：</strong> 流量控制限速、DDoS 缓解机制均在高性能数据面上预先处理，无需任何第三方 PHP 安全插件，确保运行性能不受安全性要求拖累。</li>
                         </ul>
                     </div>
 
                     <div class="footer">
-                        This report is auto-generated by v-Profiler telemetry module for vhttpd Enterprise Server.
+                        本报告由 vhttpd 企业级服务器的 v-Profiler 遥测模块自动生成。
                         <br>
                         &copy; 2026 vhttpd Project. All rights reserved.
                     </div>
