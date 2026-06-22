@@ -893,6 +893,10 @@ Phase 1 is complete only when `main.v` and App satisfy their target sections; co
 
 ### Phase 2: RuntimePlan and configuration compiler
 
+Progress as of 2026-06-22:
+
+- `P2.1` complete: the independent `runtime_plan` module defines the immutable top-level plan, all eleven V2 domains, typed kind-specific options, canonical resource references, and declaration-ordered pipelines without importing legacy config or runtime implementations
+
 Batches:
 
 1. Add pure RuntimePlan/resource/reference types for every V2 domain.
