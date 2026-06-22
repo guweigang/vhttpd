@@ -187,6 +187,11 @@
                         font-weight: 700;
                         color: #f8fafc;
                     }
+                    .overview-sections {
+                        display: flex;
+                        flex-direction: column;
+                        gap: 25px;
+                    }
                     .waterfall-title {
                         font-size: 13px;
                         font-weight: 600;
@@ -774,6 +779,38 @@
 
             const isMemoryGain = overview.memory_diff && overview.memory_diff.startsWith('+') && !overview.memory_diff.includes(' 0 B') && !overview.memory_diff.includes('0 B');
 
+            // 计算插件性能排名
+            const pluginStats = this.data.plugin_stats || [];
+            let pluginRows = '';
+            if (pluginStats.length === 0) {
+                pluginRows = `
+                    <div style="color: #64748b; font-size: 11px; padding: 25px; text-align: center; background: rgba(255, 255, 255, 0.01); border-radius: 6px; border: 1px dashed rgba(255, 255, 255, 0.04);">
+                        No active plugin overhead detected in this request.
+                    </div>
+                `;
+            } else {
+                const maxDuration = Math.max(...pluginStats.map(p => p.total_duration_ms), 1);
+                pluginRows = pluginStats.map(p => {
+                    const percent = Math.min(100, Math.max(2, Math.round((p.total_duration_ms / maxDuration) * 100)));
+                    const sqlText = p.sql_count > 0 ? `SQL: ${p.sql_duration_ms} ms (${p.sql_count} q)` : '';
+                    const httpText = p.http_count > 0 ? `HTTP: ${p.http_duration_ms} ms (${p.http_count} c)` : '';
+                    const detailText = [sqlText, httpText].filter(Boolean).join(' | ');
+
+                    return `
+                        <div style="margin-bottom: 12px; display: flex; flex-direction: column; gap: 4px;">
+                            <div style="display: flex; justify-content: space-between; font-size: 11px;">
+                                <span style="font-weight: 600; color: #e2e8f0;">${p.slug}</span>
+                                <span style="color: #cbd5e1; font-weight: 500;">${p.total_duration_ms} ms</span>
+                            </div>
+                            <div style="height: 6px; background: rgba(255, 255, 255, 0.04); border-radius: 3px; position: relative; overflow: hidden;">
+                                <div style="position: absolute; left: 0; top: 0; bottom: 0; width: ${percent}%; background: linear-gradient(90deg, #8b5cf6, #ec4899); border-radius: 3px;"></div>
+                            </div>
+                            <div style="font-size: 10px; color: #64748b; line-height: 1.2;">${detailText}</div>
+                        </div>
+                    `;
+                }).join('');
+            }
+
             return `
                 <div class="overview-grid" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));">
                     <div class="stat-card">
@@ -805,10 +842,18 @@
                         <span class="val" style="font-size: 14px; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #38bdf8;" title="${overview.slowest_plugin_http || 'none'}">${overview.slowest_plugin_http || 'none'}</span>
                     </div>
                 </div>
-                <div>
-                    <div class="waterfall-title">Execution Lifecycle Waterfall</div>
-                    <div class="timeline-bar-container">
-                        ${waterfallRows}
+                <div class="overview-sections">
+                    <div class="overview-section">
+                        <div class="waterfall-title">Execution Lifecycle Waterfall</div>
+                        <div class="timeline-bar-container">
+                            ${waterfallRows}
+                        </div>
+                    </div>
+                    <div class="overview-section">
+                        <div class="waterfall-title">Plugin Performance Ranking</div>
+                        <div class="plugin-ranking-container" style="background: rgba(255, 255, 255, 0.01); border: 1px solid rgba(255, 255, 255, 0.03); border-radius: 8px; padding: 15px;">
+                            ${pluginRows}
+                        </div>
                     </div>
                 </div>
             `;
