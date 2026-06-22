@@ -796,6 +796,14 @@
                         <span class="label">Cache Hit Ratio</span>
                         <span class="val">${overview.cache_ratio}%</span>
                     </div>
+                    <div class="stat-card">
+                        <span class="label">Slowest Plugin (SQL)</span>
+                        <span class="val" style="font-size: 14px; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #fb7185;" title="${overview.slowest_plugin_sql || 'none'}">${overview.slowest_plugin_sql || 'none'}</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="label">Slowest Plugin (HTTP)</span>
+                        <span class="val" style="font-size: 14px; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #38bdf8;" title="${overview.slowest_plugin_http || 'none'}">${overview.slowest_plugin_http || 'none'}</span>
+                    </div>
                 </div>
                 <div>
                     <div class="waterfall-title">Execution Lifecycle Waterfall</div>

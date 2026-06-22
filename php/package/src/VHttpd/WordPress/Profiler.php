@@ -230,12 +230,31 @@ final class Profiler
             $statusCode = 'error: ' . $response->get_error_message();
         }
 
+        $callStack = [];
+        $stack = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 12);
+        foreach ($stack as $frame) {
+            if (isset($frame['file'])) {
+                $file = self::cleanPath($frame['file']);
+                if (str_contains($file, 'Profiler.php')) {
+                    continue;
+                }
+                $func = $frame['function'] ?? '';
+                $class = $frame['class'] ?? '';
+                $callStack[] = [
+                    'file' => $file,
+                    'line' => $frame['line'] ?? 0,
+                    'caller' => $class !== '' ? "{$class}::{$func}" : $func
+                ];
+            }
+        }
+
         self::$externalRequests[] = [
             'url' => $cleanUrl,
             'method' => $args['method'] ?? 'GET',
             'status' => $statusCode,
             'duration_ms' => $durationMs,
-            'timestamp' => microtime(true)
+            'timestamp' => microtime(true),
+            'call_stack' => $callStack
         ];
     }
 
@@ -542,6 +561,15 @@ final class Profiler
         return $masked;
     }
 
+    private static function getPluginSlug(string $file): ?string
+    {
+        $pattern = '/wp-content\/plugins\/([^\/]+)/';
+        if (preg_match($pattern, $file, $matches)) {
+            return $matches[1];
+        }
+        return null;
+    }
+
     private static function buildReport(): array
     {
         global $wpdb, $wp_object_cache, $wp_filter;
@@ -568,6 +596,7 @@ final class Profiler
         $wcQueries = [];
         $wcSqlDurationMs = 0.0;
         $wcKeywords = ['wp_wc_', 'woocommerce_', 'product', 'line_item', 'order', 'coupon', 'checkout'];
+        $pluginSqlStats = [];
 
         if (isset($wpdb->queries) && is_array($wpdb->queries)) {
             foreach ($wpdb->queries as $idx => $q) {
@@ -581,6 +610,25 @@ final class Profiler
                 
                 // 配对并在过滤后的 SQL 调用栈
                 $callStack = self::$queryStacks[$idx] ?? [];
+
+                // 统计各插件 SQL 耗时
+                $pluginSlug = null;
+                foreach ($callStack as $frame) {
+                    if (isset($frame['file'])) {
+                        $slug = self::getPluginSlug($frame['file']);
+                        if ($slug !== null) {
+                            $pluginSlug = $slug;
+                            break;
+                        }
+                    }
+                }
+                if ($pluginSlug !== null) {
+                    if (!isset($pluginSqlStats[$pluginSlug])) {
+                        $pluginSqlStats[$pluginSlug] = ['duration_ms' => 0.0, 'count' => 0];
+                    }
+                    $pluginSqlStats[$pluginSlug]['duration_ms'] += $durationMs;
+                    $pluginSqlStats[$pluginSlug]['count']++;
+                }
 
                 // 专家优化规则
                 $optimizationTip = '';
@@ -618,6 +666,55 @@ final class Profiler
             }
         }
 
+        // 统计各插件外部 HTTP 请求耗时
+        $pluginHttpStats = [];
+        foreach (self::$externalRequests as $req) {
+            $durationMs = $req['duration_ms'] ?? 0.0;
+            $callStack = $req['call_stack'] ?? [];
+            $pluginSlug = null;
+            foreach ($callStack as $frame) {
+                if (isset($frame['file'])) {
+                    $slug = self::getPluginSlug($frame['file']);
+                    if ($slug !== null) {
+                        $pluginSlug = $slug;
+                        break;
+                    }
+                }
+            }
+            if ($pluginSlug !== null) {
+                if (!isset($pluginHttpStats[$pluginSlug])) {
+                    $pluginHttpStats[$pluginSlug] = ['duration_ms' => 0.0, 'count' => 0];
+                }
+                $pluginHttpStats[$pluginSlug]['duration_ms'] += $durationMs;
+                $pluginHttpStats[$pluginSlug]['count']++;
+            }
+        }
+
+        // 算出最慢 SQL 插件
+        $slowestPluginSql = 'none';
+        if (!empty($pluginSqlStats)) {
+            uasort($pluginSqlStats, static function ($a, $b) {
+                return $b['duration_ms'] <=> $a['duration_ms'];
+            });
+            $firstSlug = array_key_first($pluginSqlStats);
+            $firstData = $pluginSqlStats[$firstSlug];
+            $slowestPluginSql = sprintf('%s (%s ms / %s queries)', $firstSlug, round($firstData['duration_ms'], 1), $firstData['count']);
+        }
+
+        // 算出最慢 HTTP 插件
+        $slowestPluginHttp = 'none';
+        if (!empty($pluginHttpStats)) {
+            uasort($pluginHttpStats, static function ($a, $b) {
+                return $b['duration_ms'] <=> $a['duration_ms'];
+            });
+            $firstSlug = array_key_first($pluginHttpStats);
+            $firstData = $pluginHttpStats[$firstSlug];
+            $slowestPluginHttp = sprintf('%s (%s ms / %s calls)', $firstSlug, round($firstData['duration_ms'], 1), $firstData['count']);
+        }
+
+        $local = 0;
+        $remote = 0;
+        $misses = 0;
         $cacheStats = [
             'local_hits' => 0,
             'remote_hits' => 0,
@@ -628,10 +725,16 @@ final class Profiler
             'global_key_count' => 0,
             'bypass_reasons' => self::getCacheBypassReasons(),
         ];
-        if (isset($wp_object_cache) && property_exists($wp_object_cache, 'local_hits')) {
-            $local = (int) $wp_object_cache->local_hits;
-            $remote = (int) $wp_object_cache->remote_hits;
-            $misses = (int) $wp_object_cache->cache_misses;
+        if (isset($wp_object_cache)) {
+            if (property_exists($wp_object_cache, 'local_hits')) {
+                $local = (int) $wp_object_cache->local_hits;
+                $remote = (int) $wp_object_cache->remote_hits;
+                $misses = (int) $wp_object_cache->cache_misses;
+            } elseif (property_exists($wp_object_cache, 'cache_hits')) {
+                $local = (int) $wp_object_cache->cache_hits;
+                $remote = 0;
+                $misses = (int) $wp_object_cache->cache_misses;
+            }
             $total = $local + $remote + $misses;
             $ratio = $total > 0 ? round((($local + $remote) / $total) * 100, 2) : 0.0;
             $cacheStats = [
@@ -893,6 +996,8 @@ final class Profiler
                 'peak_memory' => function_exists('size_format') ? size_format($peakMemory) : ($peakMemory . ' B'),
                 'memory_diff' => $memoryDiffFormatted,
                 'cache_ratio' => $cacheStats['ratio'],
+                'slowest_plugin_sql' => $slowestPluginSql,
+                'slowest_plugin_http' => $slowestPluginHttp,
             ],
             'checkpoints' => $checkpoints,
             'queries' => $queries,

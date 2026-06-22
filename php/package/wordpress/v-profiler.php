@@ -76,7 +76,6 @@ add_action('init', static function (): void {
         return;
     }
     
-    // 会话授权 Token 比对
     $secretToken = get_option('v_profiler_secret_token');
     $hasDebugCookie = !empty($secretToken) && isset($_COOKIE['v_profiler_session']) && $_COOKIE['v_profiler_session'] === $secretToken;
     $canManage = current_user_can('manage_options') || $hasDebugCookie;
