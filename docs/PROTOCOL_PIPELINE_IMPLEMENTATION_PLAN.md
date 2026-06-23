@@ -915,6 +915,7 @@ Progress as of 2026-06-22:
 - `P2.5` worker runtime slice complete: primary worker read timeout, restart backoff, max requests, queue capacity, and queue timeout are projected from the active listener fallback engine options, with CLI overrides still taking precedence
 - `P2.5` semantic validation slice complete: strict V2 rejects unknown engine and transform kinds, requires concrete PHP worker/VJSX entries outside compatibility plans, and requires VJSX transforms to reference an engine with a handler
 - `P3.1` contract slice complete: the dispatch module now has pure Exchange identity, kind, payload, capability, transform action, runtime service, transformer, ingress descriptor, egress adapter, delivery outcome, pipeline descriptor, and pipeline dispatcher contracts that do not import executor, veb, or live transport objects
+- `P3.2` HTTP normalization started: the dispatch module can build a request Exchange from plain HTTP values with normalized method, headers, identity, trace, remote address, and deadline fields while keeping veb request objects at the ingress edge
 
 Batches:
 
@@ -939,7 +940,7 @@ Acceptance:
 Batches:
 
 1. Add Exchange, capability, action, adapter, and pipeline contracts. (contract slice complete)
-2. Implement HTTP ingress normalization.
+2. Implement HTTP ingress normalization. (started with pure HTTP value-to-Exchange conversion)
 3. Wrap PHP worker, PHP CGI, static, upload, fixed response, and reject as adapters.
 4. Execute existing HTTP routes through compiled pipelines.
 5. Preserve cache and security policies through named policy plans.

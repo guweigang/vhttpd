@@ -225,6 +225,65 @@ fn test_pipeline_dispatcher_contract() {
 	assert exchange.metadata['dispatcher'] == 'upload.completed'
 }
 
+fn test_http_request_exchange_normalizes_values() {
+	exchange := http_request_exchange(HttpIngressRequest{
+		method:         'post'
+		path:           '/wp-admin/admin-ajax.php'
+		query:          {
+			'action': 'wc_fragments'
+		}
+		headers:        {
+			'Host':         'example.test'
+			'Content-Type': 'application/json'
+		}
+		body:           '{}'
+		remote_addr:    '127.0.0.1:50000'
+		request_id:     'req-4'
+		trace_id:       'trace-4'
+		ingress:        'listener:web'
+		pipeline:       'site'
+		created_at_ms:  100
+		deadline_at_ms: 200
+	})
+
+	assert exchange.identity.id == 'req-4'
+	assert exchange.identity.request_id == 'req-4'
+	assert exchange.identity.trace_id == 'trace-4'
+	assert exchange.kind == .request
+	assert exchange.ingress == 'listener:web'
+	assert exchange.pipeline == 'site'
+	assert exchange.created_at_ms == 100
+	assert exchange.deadline_at_ms == 200
+	assert exchange.headers['host'] == 'example.test'
+	assert exchange.headers['content-type'] == 'application/json'
+	assert exchange.metadata['protocol'] == 'http'
+	assert exchange.metadata['remote_addr'] == '127.0.0.1:50000'
+	match exchange.payload {
+		RequestPayload {
+			assert exchange.payload.method == 'POST'
+			assert exchange.payload.path == '/wp-admin/admin-ajax.php'
+			assert exchange.payload.query['action'] == 'wc_fragments'
+			assert exchange.payload.body == '{}'
+			assert exchange.payload.remote_addr == '127.0.0.1:50000'
+		}
+		else {
+			assert false
+		}
+	}
+}
+
+fn test_http_request_exchange_allows_explicit_exchange_id() {
+	exchange := http_request_exchange(HttpIngressRequest{
+		method:      'GET'
+		path:        '/'
+		request_id:  'req-5'
+		trace_id:    'trace-5'
+		exchange_id: 'ex-5'
+	})
+	assert exchange.identity.id == 'ex-5'
+	assert exchange.identity.request_id == 'req-5'
+}
+
 fn test_transform_action_helpers() {
 	respond := respond_action(204)
 	assert respond.kind == .respond
