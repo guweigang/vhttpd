@@ -182,6 +182,82 @@ fn test_compile_v1_provider_plugin_websocket_and_bridge_resources() {
 	assert plan.pipelines[1].id == 'default/1_openai'
 }
 
+fn test_runtime_plan_cli_overlay_updates_default_engine_only() {
+	mut cfg := VhttpdConfig{}
+	cfg.site.name = 'wordpress'
+	cfg.executor.kind = 'php'
+	cfg.worker.pool_size = 2
+	cfg.worker.queue_capacity = 8
+	cfg.php.worker_entry = 'worker.php'
+	cfg.php.app_entry = 'app.php'
+	cfg.executors['php-cgi'] = ExecutorSpecConfig{
+		executor: ExecutorConfig{
+			kind: 'php-cgi'
+		}
+		php:      PhpConfig{
+			bin: 'php-cgi'
+		}
+	}
+	cfg.routes = [
+		RouteRuleConfig{
+			match:    RouteMatchConfig{
+				path: ['/wp-admin/*']
+			}
+			executor: 'php-cgi'
+		},
+	]
+	plan := compile_v1_runtime_plan(cfg) or { panic(err) }
+	resolved := runtime_plan_apply_cli_overrides([
+		'--executor',
+		'vjsx',
+		'--vjsx-entry',
+		'app.mts',
+		'--vjsx-thread-count',
+		'4',
+		'--worker-queue-capacity',
+		'64',
+	], cfg, plan, 'default')
+
+	assert resolved.engines['wordpress/default'].kind == 'vjsx'
+	assert resolved.engines['wordpress/default'].options.strings['entry'] == 'app.mts'
+	assert resolved.engines['wordpress/default'].options.ints['thread_count'] == 4
+	assert resolved.engines['wordpress/default'].options.ints['queue_capacity'] == 64
+	assert resolved.engines['wordpress/php-cgi'].kind == 'php-cgi'
+	assert resolved.engines['wordpress/php-cgi'].options.strings['binary'] == 'php-cgi'
+}
+
+fn test_runtime_plan_cli_overlay_updates_provider_adapters() {
+	mut cfg := VhttpdConfig{}
+	cfg.site.name = 'gateway'
+	cfg.feishu.enabled = false
+	cfg.feishu.open_base_url = 'https://open.feishu.cn'
+	cfg.feishu.apps['legacy'] = FeishuAppConfig{
+		app_id:     'legacy_app'
+		app_secret: 'legacy_secret'
+	}
+	cfg.codex.enabled = true
+	plan := compile_v1_runtime_plan(cfg) or { panic(err) }
+	resolved := runtime_plan_apply_cli_overrides([
+		'--feishu-enabled',
+		'1',
+		'--feishu-open-base-url',
+		'https://open.example.com',
+		'--feishu-app-id',
+		'cli_app',
+		'--feishu-app-secret',
+		'cli_secret',
+		'--ollama-enabled',
+		'1',
+	], cfg, plan, 'default')
+
+	feishu_adapter := resolved.adapters['gateway/feishu']
+	assert feishu_adapter.options.bools['enabled']
+	assert feishu_adapter.options.strings['open_base_url'] == 'https://open.example.com'
+	assert feishu_adapter.options.record_lists['apps'].any(it['id'] == 'main'
+		&& it['app_id'] == 'cli_app' && it['app_secret'] == 'cli_secret')
+	assert resolved.adapters['gateway/codex'].options.bools['ollama_enabled']
+}
+
 fn test_compile_v1_upload_completion_and_response_headers_to_resources() {
 	mut cfg := VhttpdConfig{}
 	cfg.site.name = 'uploads'

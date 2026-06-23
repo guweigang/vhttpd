@@ -65,6 +65,7 @@ pub fn ServerRuntimeConfig.resolve_for_target(args []string, cfg config.VhttpdCo
 }
 
 pub fn ServerRuntimeConfig.resolve_for_target_with_plan(args []string, cfg config.VhttpdConfig, listener_id string, site_id string, host string, port int, ssl config.ServerSslConfig, admin_enabled_override bool, plan runtime_plan.RuntimePlan, plan_listener_id string) !ServerRuntimeConfig {
+	resolved_plan := config.runtime_plan_apply_cli_overrides(args, cfg, plan, plan_listener_id)
 	event_log := config.CliArgs.string_or(args, '--event-log', cfg.files.event_log)
 	pid_file := config.CliArgs.string_or(args, '--pid-file', cfg.files.pid_file)
 	worker_read_timeout_ms := config.CliArgs.int_or(args, '--worker-read-timeout-ms',
@@ -110,7 +111,7 @@ pub fn ServerRuntimeConfig.resolve_for_target_with_plan(args []string, cfg confi
 	internal_admin_socket := prepare_server_runtime_files_for_label(event_log, pid_file,
 		socket_label)!
 	return ServerRuntimeConfig{
-		plan:                  plan
+		plan:                  resolved_plan
 		plan_listener_id:      plan_listener_id
 		listener_id:           listener_id
 		site_id:               site_id
