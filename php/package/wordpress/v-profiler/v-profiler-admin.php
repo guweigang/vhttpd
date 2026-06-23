@@ -128,6 +128,10 @@ add_action('admin_init', function (): void {
             }
 
             update_option('v_profiler_mode', 'full');
+            if (function_exists('opcache_reset')) {
+                @opcache_reset();
+            }
+            clearstatcache(true);
             wp_safe_redirect(add_query_arg('v_success', 'mode_upgraded', $redirect_url));
         } else {
             // 切换到受限模式 (清除 Drop-ins)
@@ -146,6 +150,10 @@ add_action('admin_init', function (): void {
             }
 
             update_option('v_profiler_mode', 'restricted');
+            if (function_exists('opcache_reset')) {
+                @opcache_reset();
+            }
+            clearstatcache(true);
             wp_safe_redirect(add_query_arg('v_success', 'mode_downgraded', $redirect_url));
         }
         exit;
