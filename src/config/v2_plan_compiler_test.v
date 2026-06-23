@@ -95,3 +95,45 @@ fn test_compile_v2_runtime_plan_rejects_wrong_reference_domain() {
 		assert err.msg() == 'runtime_plan_ref_domain:adapter:not-a-resource:expected_resource'
 	}
 }
+
+fn test_compile_v2_runtime_plan_rejects_listener_without_pipeline() {
+	cfg := V2Config{
+		listeners: {
+			'web': V2ListenerSpec{}
+		}
+	}
+	if _ := compile_v2_runtime_plan(cfg, '', false) {
+		assert false
+	} else {
+		assert err.msg() == 'runtime_plan_listener_without_pipeline:web'
+	}
+}
+
+fn test_compile_v2_runtime_plan_allows_control_listener_without_pipeline() {
+	cfg := V2Config{
+		listeners: {
+			'control': V2ListenerSpec{}
+		}
+		control:   V2ControlSpec{
+			listener: 'listener:control'
+		}
+	}
+	plan := compile_v2_runtime_plan(cfg, '', false) or { panic(err) }
+	assert plan.control.listener?.str() == 'listener:control'
+}
+
+fn test_compile_v2_runtime_plan_allows_relay_listener_without_pipeline() {
+	cfg := V2Config{
+		listeners: {
+			'relay': V2ListenerSpec{}
+		}
+		relays:    {
+			'edge': V2RelaySpec{
+				listener: 'listener:relay'
+				carrier:  'websocket'
+			}
+		}
+	}
+	plan := compile_v2_runtime_plan(cfg, '', false) or { panic(err) }
+	assert plan.relays['edge'].ingress?.str() == 'listener:relay'
+}

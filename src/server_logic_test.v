@@ -304,6 +304,12 @@ protocol = "http"
 transport = "tcp"
 host = "127.0.0.1"
 port = 18445
+
+[[pipelines]]
+id = "site"
+ingress = "listener:web"
+match.paths = ["*"]
+egress = "terminal:response"
 ') or {
 		panic(err)
 	}

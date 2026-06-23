@@ -541,6 +541,7 @@ fn validate_runtime_plan_references(plan runtime_plan.RuntimePlan) ! {
 			validate_plan_ref_exists(auth, plan)!
 		}
 	}
+	validate_listener_pipeline_coverage(plan)!
 }
 
 fn validate_plan_ref_exists(reference runtime_plan.ResourceRef, plan runtime_plan.RuntimePlan) ! {
@@ -558,5 +559,33 @@ fn validate_plan_ref_exists(reference runtime_plan.ResourceRef, plan runtime_pla
 
 	if !exists {
 		return error('runtime_plan_unresolved_ref:${reference}')
+	}
+}
+
+fn validate_listener_pipeline_coverage(plan runtime_plan.RuntimePlan) ! {
+	for listener_id, _ in plan.listeners {
+		mut found := false
+		if control_listener := plan.control.listener {
+			if control_listener.domain == .listener && control_listener.id == listener_id {
+				found = true
+			}
+		}
+		for _, relay in plan.relays {
+			if ingress := relay.ingress {
+				if ingress.domain == .listener && ingress.id == listener_id {
+					found = true
+					break
+				}
+			}
+		}
+		for pipeline in plan.pipelines {
+			if pipeline.ingress.domain == .listener && pipeline.ingress.id == listener_id {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return error('runtime_plan_listener_without_pipeline:${listener_id}')
+		}
 	}
 }
