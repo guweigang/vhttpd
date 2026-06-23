@@ -7,7 +7,7 @@ import runtime_plan
 import state_store
 
 fn mcp_state_from_plan(plan runtime_plan.RuntimePlan, listener_id string) mcp_protocol.McpState {
-	adapter := listener_adapter_plan(plan, listener_id, 'mcp') or {
+	adapter := plan.listener_adapter(listener_id, 'mcp') or {
 		return mcp_protocol.McpState{
 			max_sessions:               1000
 			max_pending_messages:       128
@@ -39,7 +39,7 @@ fn mcp_state_from_plan(plan runtime_plan.RuntimePlan, listener_id string) mcp_pr
 }
 
 fn openai_state_from_plan(plan runtime_plan.RuntimePlan, listener_id string) openai.OpenaiState {
-	adapter := listener_adapter_plan(plan, listener_id, 'openai') or {
+	adapter := plan.listener_adapter(listener_id, 'openai') or {
 		return openai.OpenaiState{
 			responses: state_store.MemoryStateStore.new[openai.OpenAIResponseRecord]()
 		}
@@ -63,20 +63,6 @@ fn openai_state_from_plan(plan runtime_plan.RuntimePlan, listener_id string) ope
 		routes:          openai_routes_from_adapter(adapter)
 		responses:       state_store.MemoryStateStore.new[openai.OpenAIResponseRecord]()
 	}
-}
-
-fn listener_adapter_plan(plan runtime_plan.RuntimePlan, listener_id string, kind string) ?runtime_plan.AdapterPlan {
-	for pipeline in plan.pipelines {
-		if pipeline.ingress.domain != .listener || pipeline.ingress.id != listener_id
-			|| pipeline.egress.domain != .adapter {
-			continue
-		}
-		adapter := plan.adapters[pipeline.egress.id] or { continue }
-		if adapter.kind == kind {
-			return adapter
-		}
-	}
-	return none
 }
 
 fn openai_backends_from_adapter(adapter runtime_plan.AdapterPlan) map[string]config.OpenAIBackendConfig {

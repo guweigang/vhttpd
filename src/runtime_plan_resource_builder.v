@@ -4,7 +4,7 @@ import provider
 import runtime_plan
 
 fn db_runtime_settings_from_plan(plan runtime_plan.RuntimePlan, listener_id string) provider.DbRuntimeSettings {
-	resource := listener_resource_plan(plan, listener_id, 'db') or {
+	resource := plan.listener_resource(listener_id, 'db') or {
 		return provider.DbRuntimeSettings{}
 	}
 	driver := provider.normalize_db_driver(resource.kind)
@@ -37,35 +37,8 @@ fn db_runtime_settings_from_plan(plan runtime_plan.RuntimePlan, listener_id stri
 }
 
 fn cache_runtime_settings_from_plan(plan runtime_plan.RuntimePlan, listener_id string) (bool, string) {
-	resource := listener_resource_plan(plan, listener_id, 'cache') or { return false, '' }
+	resource := plan.listener_resource(listener_id, 'cache') or { return false, '' }
 	return true, resource.options.strings['socket']
-}
-
-fn listener_resource_plan(plan runtime_plan.RuntimePlan, listener_id string, category string) ?runtime_plan.ResourcePlan {
-	engine := listener_default_engine_plan(plan, listener_id) or { return none }
-	for reference in engine.resources {
-		if reference.domain != .resource {
-			continue
-		}
-		resource := plan.resources[reference.id] or { continue }
-		if resource.category == category {
-			return resource
-		}
-	}
-	return none
-}
-
-fn listener_default_engine_plan(plan runtime_plan.RuntimePlan, listener_id string) ?runtime_plan.EnginePlan {
-	for pipeline in plan.pipelines {
-		if pipeline.ingress.domain != .listener || pipeline.ingress.id != listener_id
-			|| !pipeline.id.ends_with('_fallback') || pipeline.egress.domain != .adapter {
-			continue
-		}
-		adapter := plan.adapters[pipeline.egress.id] or { return none }
-		engine_ref := adapter.engine or { return none }
-		return plan.engines[engine_ref.id] or { return none }
-	}
-	return none
 }
 
 fn db_plan_host(resource runtime_plan.ResourcePlan) string {

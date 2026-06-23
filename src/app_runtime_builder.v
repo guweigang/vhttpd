@@ -45,7 +45,7 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 				|| executor_name in add_workers {
 				continue
 			}
-			if engine := additional_engine_plan_for_executor(plan, plan_listener_id, executor_name) {
+			if engine := plan.listener_named_engine(plan_listener_id, executor_name) {
 				mut sub_cfg := cfg
 				mut spec := config.ExecutorSpecConfig{}
 				if fallback_spec := cfg.executors[executor_name] {
@@ -204,27 +204,4 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 		http_routing:  HttpRoutingRuntime.new(runtime_routes, build_cfg.assets_root_real,
 			build_cfg.workdir, executor_plan.bootstrap.worker_env, add_workers)
 	}
-}
-
-fn additional_engine_plan_for_executor(plan runtime_plan.RuntimePlan, listener_id string, executor_name string) ?runtime_plan.EnginePlan {
-	for pipeline in plan.pipelines {
-		if pipeline.ingress.domain != .listener || pipeline.ingress.id != listener_id
-			|| pipeline.egress.domain != .adapter {
-			continue
-		}
-		adapter := plan.adapters[pipeline.egress.id] or { continue }
-		engine_ref := adapter.engine or { continue }
-		if engine_ref.domain != .engine || !engine_ref.id.ends_with('/${executor_name}') {
-			continue
-		}
-		return plan.engines[engine_ref.id] or { continue }
-	}
-	for _, transform in plan.transforms {
-		engine_ref := transform.engine or { continue }
-		if engine_ref.domain != .engine || !engine_ref.id.ends_with('/${executor_name}') {
-			continue
-		}
-		return plan.engines[engine_ref.id] or { continue }
-	}
-	return none
 }

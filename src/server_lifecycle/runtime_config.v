@@ -198,10 +198,8 @@ fn assets_runtime_from_plan(plan runtime_plan.RuntimePlan, listener_id string, f
 }
 
 fn assets_adapter_from_plan(plan runtime_plan.RuntimePlan, listener_id string) ?(runtime_plan.AdapterPlan, string) {
-	target_listener_id := if listener_id.trim_space() == '' { 'default' } else { listener_id }
-	for pipeline in plan.pipelines {
-		if pipeline.ingress.domain != .listener || pipeline.ingress.id != target_listener_id
-			|| pipeline.egress.domain != .adapter {
+	for pipeline in plan.listener_pipelines(listener_id) {
+		if pipeline.egress.domain != .adapter {
 			continue
 		}
 		adapter := plan.adapters[pipeline.egress.id] or { continue }
@@ -215,10 +213,8 @@ fn assets_adapter_from_plan(plan runtime_plan.RuntimePlan, listener_id string) ?
 }
 
 fn assets_cache_control_from_plan(plan runtime_plan.RuntimePlan, listener_id string, fallback string) string {
-	target_listener_id := if listener_id.trim_space() == '' { 'default' } else { listener_id }
-	for pipeline in plan.pipelines {
-		if pipeline.ingress.domain != .listener || pipeline.ingress.id != target_listener_id
-			|| !pipeline.id.ends_with('_assets') {
+	for pipeline in plan.listener_pipelines(listener_id) {
+		if !pipeline.id.ends_with('_assets') {
 			continue
 		}
 		for policy_ref in pipeline.policies {

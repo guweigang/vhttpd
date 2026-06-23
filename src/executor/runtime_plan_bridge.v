@@ -5,7 +5,7 @@ import os
 import runtime_plan
 
 pub fn LogicExecutorRuntimePlan.resolve_from_plan(args []string, legacy_cfg config.VhttpdConfig, plan runtime_plan.RuntimePlan, listener_id string) !LogicExecutorRuntimePlan {
-	engine := default_engine_from_runtime_plan(plan, listener_id) or {
+	engine := plan.listener_fallback_engine(listener_id) or {
 		return LogicExecutorRuntimePlan.resolve(args, legacy_cfg, config.resolve_worker_sockets_with_defaults(args,
 			legacy_cfg.worker.socket, legacy_cfg.worker.pool_size, legacy_cfg.worker.socket_prefix,
 			legacy_cfg.worker.sockets.join(',')), legacy_cfg.worker.stream_dispatch,
@@ -26,30 +26,6 @@ pub fn LogicExecutorRuntimePlan.resolve_engine_from_plan(legacy_cfg config.Vhttp
 	return LogicExecutorRuntimePlan.resolve([]string{}, cfg, worker_sockets,
 		cfg.worker.stream_dispatch, cfg.worker.websocket_dispatch, cfg.worker.autostart,
 		cfg.worker.cmd, cfg.worker.env.clone())!
-}
-
-fn default_engine_from_runtime_plan(plan runtime_plan.RuntimePlan, listener_id string) ?runtime_plan.EnginePlan {
-	target_listener_id := if listener_id.trim_space() == '' { 'default' } else { listener_id }
-	for pipeline in plan.pipelines {
-		if pipeline.ingress.domain != .listener || pipeline.ingress.id != target_listener_id {
-			continue
-		}
-		if '*' !in pipeline.match.paths && !pipeline.id.ends_with('_fallback') {
-			continue
-		}
-		if pipeline.egress.domain != .adapter {
-			continue
-		}
-		adapter := plan.adapters[pipeline.egress.id] or { continue }
-		engine_ref := adapter.engine or { continue }
-		if engine_ref.domain != .engine {
-			continue
-		}
-		if engine := plan.engines[engine_ref.id] {
-			return engine
-		}
-	}
-	return none
 }
 
 fn executor_kind_from_engine_plan(engine runtime_plan.EnginePlan, legacy_cfg config.VhttpdConfig) string {
