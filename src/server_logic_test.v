@@ -1916,6 +1916,46 @@ fn test_build_app_runtime_projects_executor_plan_into_app_state() {
 	assert app.providers.codex.ollama_enabled
 }
 
+fn test_provider_runtime_settings_are_projected_from_runtime_plan() {
+	mut cfg := config.default_vhttpd_config()
+	cfg.site.name = 'gateway'
+	cfg.feishu.enabled = true
+	cfg.feishu.open_base_url = 'https://open.feishu.test'
+	cfg.feishu.reconnect_delay_ms = 123
+	cfg.feishu.token_refresh_skew_seconds = 45
+	cfg.feishu.recent_event_limit = 67
+	cfg.feishu.apps['main'] = config.FeishuAppConfig{
+		app_id:             'plan-app'
+		app_secret:         'plan-secret'
+		verification_token: 'verify'
+		encrypt_key:        'encrypt'
+	}
+	cfg.codex.enabled = true
+	cfg.codex.model = 'gpt-plan'
+	cfg.codex.flush_interval_ms = 789
+	cfg.feishu.bridge = config.BridgeConfig{
+		enabled:   true
+		ws_url:    'wss://relay.test'
+		client_id: 'local'
+		token:     'token'
+		target_id: 'remote'
+	}
+	plan := config.compile_v1_runtime_plan(cfg) or { panic(err) }
+	settings := provider_runtime_settings_from_plan(plan, provider.ProviderRuntimeSettings{})
+
+	assert settings.feishu.enabled
+	assert settings.feishu.open_base_url == 'https://open.feishu.test'
+	assert settings.feishu.reconnect_delay_ms == 123
+	assert settings.feishu.apps['main'].app_id == 'plan-app'
+	assert settings.feishu.apps['main'].verification_token == 'verify'
+	assert settings.codex.enabled
+	assert settings.codex.model == 'gpt-plan'
+	assert settings.codex.flush_interval_ms == 789
+	assert settings.bridge.enabled
+	assert settings.bridge.ws_url == 'wss://relay.test'
+	assert settings.bridge.target_id == 'remote'
+}
+
 fn test_prepare_server_runtime_files_creates_parent_dirs_and_pid_file() {
 	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_runtime_files_test')
 	event_log := os.join_path(temp_dir, 'logs', 'events.ndjson')

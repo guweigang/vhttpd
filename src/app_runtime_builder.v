@@ -28,6 +28,7 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 	mcp_state := mcp_state_from_plan(plan, plan_listener_id)
 	openai_state := openai_state_from_plan(plan, plan_listener_id)
 	plugin_configs := plugin_configs_from_plan(plan)
+	plan_provider_settings := provider_runtime_settings_from_plan(plan, provider_settings)
 
 	// 2. 遍历 routes 中的所有附加 executor，如果有专属的进程池配置则实例化其 WorkerState
 	mut add_workers := map[string]&worker.WorkerState{}
@@ -163,17 +164,17 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 				specs: map[string]provider.ProviderInstanceSpec{}
 			}
 			codex:     codex.CodexState{
-				ollama_enabled: provider_settings.ollama_enabled
+				ollama_enabled: plan_provider_settings.ollama_enabled
 				runtime:        codex.ProviderRuntime{
-					enabled:             provider_settings.codex.enabled
-					url:                 provider_settings.codex.url
-					model:               provider_settings.codex.model
-					effort:              provider_settings.codex.effort
-					cwd:                 provider_settings.codex.cwd
-					approval_policy:     provider_settings.codex.approval_policy
-					sandbox:             provider_settings.codex.sandbox
-					reconnect_delay_ms:  provider_settings.codex.reconnect_delay_ms
-					flush_interval_ms:   provider_settings.codex.flush_interval_ms
+					enabled:             plan_provider_settings.codex.enabled
+					url:                 plan_provider_settings.codex.url
+					model:               plan_provider_settings.codex.model
+					effort:              plan_provider_settings.codex.effort
+					cwd:                 plan_provider_settings.codex.cwd
+					approval_policy:     plan_provider_settings.codex.approval_policy
+					sandbox:             plan_provider_settings.codex.sandbox
+					reconnect_delay_ms:  plan_provider_settings.codex.reconnect_delay_ms
+					flush_interval_ms:   plan_provider_settings.codex.flush_interval_ms
 					pending_rpcs:        map[int]codex.PendingRpc{}
 					stream_map:          map[string][]codex.CodexTarget{}
 					err_bursts:          map[string][]string{}
@@ -183,20 +184,20 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 				instances:      map[string]codex.ProviderRuntime{}
 			}
 			feishu:    feishu.FeishuState{
-				enabled:                    provider_settings.feishu.enabled
-				open_base_url:              provider_settings.feishu.open_base_url
-				reconnect_delay_ms:         provider_settings.feishu.reconnect_delay_ms
-				token_refresh_skew_seconds: provider_settings.feishu.token_refresh_skew_seconds
-				recent_event_limit:         provider_settings.feishu.recent_event_limit
-				static_apps:                provider_settings.feishu.apps.clone()
-				apps:                       provider_settings.feishu.apps.clone()
+				enabled:                    plan_provider_settings.feishu.enabled
+				open_base_url:              plan_provider_settings.feishu.open_base_url
+				reconnect_delay_ms:         plan_provider_settings.feishu.reconnect_delay_ms
+				token_refresh_skew_seconds: plan_provider_settings.feishu.token_refresh_skew_seconds
+				recent_event_limit:         plan_provider_settings.feishu.recent_event_limit
+				static_apps:                plan_provider_settings.feishu.apps.clone()
+				apps:                       plan_provider_settings.feishu.apps.clone()
 				runtime:                    map[string]feishu.ProviderRuntime{}
 				buffers:                    map[string]feishu.StreamBuffer{}
-				card_bridge_enabled_flag:   provider_settings.bridge.enabled
-				card_bridge_ws_url:         provider_settings.bridge.ws_url
-				card_bridge_client_id:      provider_settings.bridge.client_id
-				card_bridge_token:          provider_settings.bridge.token
-				card_bridge_target_id:      provider_settings.bridge.target_id
+				card_bridge_enabled_flag:   plan_provider_settings.bridge.enabled
+				card_bridge_ws_url:         plan_provider_settings.bridge.ws_url
+				card_bridge_client_id:      plan_provider_settings.bridge.client_id
+				card_bridge_token:          plan_provider_settings.bridge.token
+				card_bridge_target_id:      plan_provider_settings.bridge.target_id
 			}
 		}
 		http_routing:  HttpRoutingRuntime.new(runtime_routes, build_cfg.assets_root_real,
