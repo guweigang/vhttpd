@@ -225,51 +225,6 @@ fn test_route_response_cache_cookie_patterns_allow_ignored_cookies() {
 	assert route_response_cache_request_bypass_reason(rule, 'GET', with_unknown_cookie) == 'cookie:ab_bucket'
 }
 
-fn test_route_response_cache_store_bypass_reason() {
-	assert route_response_cache_store_bypass_reason(transport.WorkerResponse{
-		status: 200
-	}) == ''
-	assert route_response_cache_store_bypass_reason(transport.WorkerResponse{
-		status: 404
-	}) == 'status'
-	assert route_response_cache_store_bypass_reason(transport.WorkerResponse{
-		status:  200
-		headers: {
-			'set-cookie': 'a=b'
-		}
-	}) == 'set_cookie'
-	assert route_response_cache_store_bypass_reason(transport.WorkerResponse{
-		status:  200
-		headers: {
-			'cache-control': 'private, max-age=0'
-		}
-	}) == 'private'
-	assert route_response_cache_store_bypass_reason(transport.WorkerResponse{
-		status:  200
-		headers: {
-			'cache-control': 'no-store'
-		}
-	}) == 'no_store'
-	assert route_response_cache_store_bypass_reason(transport.WorkerResponse{
-		status:  200
-		headers: {
-			'cache-control': 'no-cache, must-revalidate'
-		}
-	}) == 'no_cache'
-	assert route_response_cache_store_bypass_reason(transport.WorkerResponse{
-		status:  200
-		headers: {
-			'cache-control': 'public, max-age=0'
-		}
-	}) == 'max_age_0'
-	assert route_response_cache_store_bypass_reason(transport.WorkerResponse{
-		status:  200
-		headers: {
-			'cache-control': 'public, s-maxage=0'
-		}
-	}) == 's_maxage_0'
-}
-
 fn test_route_response_cache_store_bypass_reason_for_delivery_outcome() {
 	assert route_response_cache_store_bypass_reason_for_outcome(dispatch.response_outcome(200,
 		map[string]string{}, 'ok')) == ''
@@ -281,6 +236,18 @@ fn test_route_response_cache_store_bypass_reason_for_delivery_outcome() {
 	assert route_response_cache_store_bypass_reason_for_outcome(dispatch.response_outcome(200, {
 		'cache-control': 'private'
 	}, 'ok')) == 'private'
+	assert route_response_cache_store_bypass_reason_for_outcome(dispatch.response_outcome(200, {
+		'cache-control': 'no-store'
+	}, 'ok')) == 'no_store'
+	assert route_response_cache_store_bypass_reason_for_outcome(dispatch.response_outcome(200, {
+		'cache-control': 'no-cache, must-revalidate'
+	}, 'ok')) == 'no_cache'
+	assert route_response_cache_store_bypass_reason_for_outcome(dispatch.response_outcome(200, {
+		'cache-control': 'public, max-age=0'
+	}, 'ok')) == 'max_age_0'
+	assert route_response_cache_store_bypass_reason_for_outcome(dispatch.response_outcome(200, {
+		'cache-control': 'public, s-maxage=0'
+	}, 'ok')) == 's_maxage_0'
 }
 
 fn test_worker_response_delivery_outcome_maps_response_values() {

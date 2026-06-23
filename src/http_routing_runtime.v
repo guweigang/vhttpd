@@ -329,11 +329,6 @@ fn route_response_cache_request_bypass_reason(rule RuntimeRouteRule, method stri
 	return ''
 }
 
-fn route_response_cache_store_bypass_reason(resp transport.WorkerResponse) string {
-	return route_response_cache_store_bypass_reason_for_outcome(dispatch.response_outcome(resp.status,
-		resp.headers, resp.body))
-}
-
 fn route_response_cache_store_bypass_reason_for_outcome(outcome dispatch.DeliveryOutcome) string {
 	if outcome.status != 200 {
 		return 'status'
