@@ -64,7 +64,7 @@ pub fn ServerRuntimeConfig.resolve(args []string, cfg config.VhttpdConfig) !Serv
 }
 
 pub fn ServerRuntimeConfig.resolve_for_target(args []string, cfg config.VhttpdConfig, listener_id string, site_id string, host string, port int, ssl config.ServerSslConfig, admin_enabled_override bool) !ServerRuntimeConfig {
-	plan := config.compile_v1_runtime_plan(cfg)!
+	plan := config.load_runtime_plan_or_compile_config(args, cfg)!
 	return ServerRuntimeConfig.resolve_for_target_with_plan(args, cfg, listener_id, site_id, host,
 		port, ssl, admin_enabled_override, plan, 'default')
 }

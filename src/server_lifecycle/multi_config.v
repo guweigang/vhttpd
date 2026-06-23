@@ -37,7 +37,7 @@ pub fn resolve_multi_server_runtime_config(args []string, cfg config.VhttpdConfi
 		}
 	}
 	listeners := cfg.resolve_multi_listeners()!
-	plan := config.compile_v1_runtime_plan(cfg)!
+	plan := config.load_runtime_plan_or_compile_config(args, cfg)!
 	mut listener_ids := listeners.keys()
 	listener_ids.sort()
 	admin_owner_listener_id := if cfg.admin.port > 0 && listener_ids.len > 0 {
