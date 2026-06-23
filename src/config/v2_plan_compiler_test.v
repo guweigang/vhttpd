@@ -243,3 +243,198 @@ fn test_compile_v2_runtime_plan_rejects_empty_fixed_response_adapter() {
 		assert err.msg() == 'runtime_plan_adapter_empty_fixed_response:empty'
 	}
 }
+
+fn test_compile_v2_runtime_plan_rejects_unknown_engine_kind() {
+	cfg := V2Config{
+		listeners: {
+			'web': V2ListenerSpec{}
+		}
+		engines:   {
+			'app': V2EngineSpec{
+				kind:  'python'
+				entry: 'app.py'
+			}
+		}
+		adapters:  {
+			'app': V2AdapterSpec{
+				kind:   'http-handler'
+				engine: 'engine:app'
+			}
+		}
+		pipelines: [
+			V2PipelineSpec{
+				id:      'app'
+				ingress: 'listener:web'
+				egress:  'adapter:app'
+			},
+		]
+	}
+	if _ := compile_v2_runtime_plan(cfg, '', false) {
+		assert false
+	} else {
+		assert err.msg() == 'runtime_plan_engine_unknown_kind:app:python'
+	}
+}
+
+fn test_compile_v2_runtime_plan_rejects_engine_missing_entry() {
+	cfg := V2Config{
+		listeners: {
+			'web': V2ListenerSpec{}
+		}
+		engines:   {
+			'app': V2EngineSpec{
+				kind: 'php-worker'
+			}
+		}
+		adapters:  {
+			'app': V2AdapterSpec{
+				kind:   'http-handler'
+				engine: 'engine:app'
+			}
+		}
+		pipelines: [
+			V2PipelineSpec{
+				id:      'app'
+				ingress: 'listener:web'
+				egress:  'adapter:app'
+			},
+		]
+	}
+	if _ := compile_v2_runtime_plan(cfg, '', false) {
+		assert false
+	} else {
+		assert err.msg() == 'runtime_plan_engine_missing_entry:app'
+	}
+}
+
+fn test_compile_v2_runtime_plan_allows_compatibility_engine_missing_entry() {
+	cfg := V2Config{
+		listeners: {
+			'web': V2ListenerSpec{}
+		}
+		engines:   {
+			'app': V2EngineSpec{
+				kind: 'php-worker'
+			}
+		}
+		adapters:  {
+			'app': V2AdapterSpec{
+				kind:   'http-handler'
+				engine: 'engine:app'
+			}
+		}
+		pipelines: [
+			V2PipelineSpec{
+				id:      'app'
+				ingress: 'listener:web'
+				egress:  'adapter:app'
+			},
+		]
+	}
+	plan := compile_v2_runtime_plan(cfg, '', true) or { panic(err) }
+	assert plan.source.compatibility
+}
+
+fn test_compile_v2_runtime_plan_rejects_unknown_transform_kind() {
+	cfg := V2Config{
+		listeners:  {
+			'web': V2ListenerSpec{}
+		}
+		transforms: {
+			'rewrite': V2TransformSpec{
+				kind:    'lua'
+				handler: 'rewrite'
+			}
+		}
+		adapters:   {
+			'app': V2AdapterSpec{
+				kind:    'fixed-response'
+				options: {
+					'body': 'ok'
+				}
+			}
+		}
+		pipelines:  [
+			V2PipelineSpec{
+				id:         'app'
+				ingress:    'listener:web'
+				transforms: ['transform:rewrite']
+				egress:     'adapter:app'
+			},
+		]
+	}
+	if _ := compile_v2_runtime_plan(cfg, '', false) {
+		assert false
+	} else {
+		assert err.msg() == 'runtime_plan_transform_unknown_kind:rewrite:lua'
+	}
+}
+
+fn test_compile_v2_runtime_plan_rejects_vjsx_transform_without_engine() {
+	cfg := V2Config{
+		listeners:  {
+			'web': V2ListenerSpec{}
+		}
+		transforms: {
+			'auth': V2TransformSpec{
+				kind:    'vjsx'
+				handler: 'auth.check'
+			}
+		}
+		adapters:   {
+			'app': V2AdapterSpec{
+				kind:    'fixed-response'
+				options: {
+					'body': 'ok'
+				}
+			}
+		}
+		pipelines:  [
+			V2PipelineSpec{
+				id:         'app'
+				ingress:    'listener:web'
+				transforms: ['transform:auth']
+				egress:     'adapter:app'
+			},
+		]
+	}
+	if _ := compile_v2_runtime_plan(cfg, '', false) {
+		assert false
+	} else {
+		assert err.msg() == 'runtime_plan_transform_missing_engine:auth'
+	}
+}
+
+fn test_compile_v2_runtime_plan_rejects_transform_missing_handler() {
+	cfg := V2Config{
+		listeners:  {
+			'web': V2ListenerSpec{}
+		}
+		transforms: {
+			'rewrite': V2TransformSpec{
+				kind: 'native'
+			}
+		}
+		adapters:   {
+			'app': V2AdapterSpec{
+				kind:    'fixed-response'
+				options: {
+					'body': 'ok'
+				}
+			}
+		}
+		pipelines:  [
+			V2PipelineSpec{
+				id:         'app'
+				ingress:    'listener:web'
+				transforms: ['transform:rewrite']
+				egress:     'adapter:app'
+			},
+		]
+	}
+	if _ := compile_v2_runtime_plan(cfg, '', false) {
+		assert false
+	} else {
+		assert err.msg() == 'runtime_plan_transform_missing_handler:rewrite'
+	}
+}

@@ -542,6 +542,8 @@ fn validate_runtime_plan_references(plan runtime_plan.RuntimePlan) ! {
 		}
 	}
 	validate_adapter_semantics(plan)!
+	validate_engine_semantics(plan)!
+	validate_transform_semantics(plan)!
 	validate_listener_pipeline_coverage(plan)!
 }
 
@@ -584,6 +586,48 @@ fn validate_adapter_semantics(plan runtime_plan.RuntimePlan) ! {
 				}
 			}
 			else {}
+		}
+	}
+}
+
+fn validate_engine_semantics(plan runtime_plan.RuntimePlan) ! {
+	for id, engine in plan.engines {
+		match engine.kind {
+			'php-worker', 'php_worker' {
+				if !plan.source.compatibility && engine.options.strings['entry'].trim_space() == ''
+					&& engine.options.strings['app'].trim_space() == '' {
+					return error('runtime_plan_engine_missing_entry:${id}')
+				}
+			}
+			'php-cgi' {}
+			'vjsx' {
+				if !plan.source.compatibility && engine.options.strings['entry'].trim_space() == '' {
+					return error('runtime_plan_engine_missing_entry:${id}')
+				}
+			}
+			else {
+				return error('runtime_plan_engine_unknown_kind:${id}:${engine.kind}')
+			}
+		}
+	}
+}
+
+fn validate_transform_semantics(plan runtime_plan.RuntimePlan) ! {
+	for id, transform in plan.transforms {
+		match transform.kind {
+			'native' {}
+			'vjsx' {
+				if transform.engine == none {
+					return error('runtime_plan_transform_missing_engine:${id}')
+				}
+			}
+			else {
+				return error('runtime_plan_transform_unknown_kind:${id}:${transform.kind}')
+			}
+		}
+
+		if transform.handler.trim_space() == '' {
+			return error('runtime_plan_transform_missing_handler:${id}')
 		}
 	}
 }
