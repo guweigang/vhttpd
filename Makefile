@@ -22,6 +22,7 @@ VJSX_DIR ?= $(shell if [ -x "$(ROOT)/../vjsx/scripts/ensure-quickjs.sh" ]; then 
 LOCAL_QUICKJS ?= $(abspath $(ROOT)/../quickjs)
 VJS_QUICKJS_PATH ?= $(shell if [ -f "$(LOCAL_QUICKJS)/quickjs.c" ] && [ -f "$(LOCAL_QUICKJS)/quickjs-c-atomics.h" ] && grep -q 'QJS_VERSION_MAJOR' "$(LOCAL_QUICKJS)/quickjs.h" 2>/dev/null; then printf "%s" "$(LOCAL_QUICKJS)"; else VJS_QUICKJS_WORK_ROOT="$(ROOT)" "$(VJSX_DIR)/scripts/ensure-quickjs.sh"; fi)
 VJSX_FLAGS ?= -d build_quickjs
+V_TEST_FLAGS ?= -d vjsx_sqlite
 V_ENV = VJS_QUICKJS_PATH="$(VJS_QUICKJS_PATH)"
 
 BUILD_STAGE_ROOT := $(ROOT)/tmp/vbuildsrc
@@ -138,30 +139,30 @@ test-e2e:
 test-fast:
 	@set -e; for test_file in $(FAST_TEST_FILES); do \
 		echo "==> v test $${test_file}"; \
-		$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_FLAGS) test "$${test_file}"; \
+		$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_FLAGS) $(V_TEST_FLAGS) test "$${test_file}"; \
 	done
 	@set -e; for test_dir in $(FAST_TEST_MODULE_DIRS); do \
 		echo "==> v test $${test_dir}"; \
-		$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_FLAGS) test "$${test_dir}"; \
+		$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_FLAGS) $(V_TEST_FLAGS) test "$${test_dir}"; \
 	done
 
 $(TEST_FILES_FROM_GOALS):
 	@:
 
 test-inproc:
-	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_FLAGS) -d vjsx_sqlite test $(INPROC_TEST_FILES)
+	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_FLAGS) $(V_TEST_FLAGS) test $(INPROC_TEST_FILES)
 
 test-codexbot:
-	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_FLAGS) -d vjsx_sqlite test $(CODEXBOT_TEST_FILES)
+	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_FLAGS) $(V_TEST_FLAGS) test $(CODEXBOT_TEST_FILES)
 
 test-codexbot-fast:
-	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_FLAGS) -d vjsx_sqlite test $(CODEXBOT_FAST_TEST_FILES)
+	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_FLAGS) $(V_TEST_FLAGS) test $(CODEXBOT_FAST_TEST_FILES)
 
 test-codexbot-lifecycle:
-	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_FLAGS) -d vjsx_sqlite test $(CODEXBOT_LIFECYCLE_TEST_FILES)
+	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_FLAGS) $(V_TEST_FLAGS) test $(CODEXBOT_LIFECYCLE_TEST_FILES)
 
 test-profile-codexbot:
 	@/bin/zsh $(ROOT)/tools/profile_codexbot_tests.sh $(ROOT)
 
 test-all:
-	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_FLAGS) test $(SRC_DIR)
+	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_FLAGS) $(V_TEST_FLAGS) test $(SRC_DIR)
