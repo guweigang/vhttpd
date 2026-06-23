@@ -3,7 +3,6 @@ module main
 import dispatch
 import executor
 import log
-import net.http
 import os
 import time
 import upstream.transport
@@ -82,56 +81,29 @@ fn HttpIngressRuntime.handle(mut app App, mut ctx Context, method string, path s
 		headers := transport.header_map_from_request(ctx.req)
 		header_name := route_required_headers_failure(rule, headers)
 		if header_name != '' {
-			ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-			apply_route_response_headers(mut ctx, rule)
-			ctx.res.set_status(.forbidden)
-			app.emit('http.request', {
-				'method':      method.to_upper()
-				'path':        transport.normalize_path(path)
-				'status':      '403'
-				'request_id':  req_id
-				'trace_id':    trace_id
-				'duration_ms': '${time.now().unix_milli() - start_ms}'
-				'error_class': 'route_required_header'
-				'error':       header_name
-			})
 			log.warn('[http] ⇠ route required header failed method=${method.to_upper()} path=${path} trace_id=${trace_id} request_id=${req_id} header=${header_name}')
-			return ctx.text(body_on_head)
+			mut terminal_adapter := dispatch.EgressAdapter(dispatch.reject_adapter('route/required_header',
+				403, header_name, 'route_required_header'))
+			return render_http_terminal_adapter(mut app, mut ctx, method, path, normalized_target,
+				query, body_on_head, remote_addr, req_id, trace_id, start_ms, rule, mut
+				terminal_adapter)
 		}
 		query_name := route_denied_query_failure(rule, query)
 		if query_name != '' {
-			ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-			apply_route_response_headers(mut ctx, rule)
-			ctx.res.set_status(.forbidden)
-			app.emit('http.request', {
-				'method':      method.to_upper()
-				'path':        transport.normalize_path(path)
-				'status':      '403'
-				'request_id':  req_id
-				'trace_id':    trace_id
-				'duration_ms': '${time.now().unix_milli() - start_ms}'
-				'error_class': 'route_denied_query'
-				'error':       query_name
-			})
 			log.warn('[http] ⇠ route denied query failed method=${method.to_upper()} path=${path} trace_id=${trace_id} request_id=${req_id} query=${query_name}')
-			return ctx.text(body_on_head)
+			mut terminal_adapter := dispatch.EgressAdapter(dispatch.reject_adapter('route/denied_query',
+				403, query_name, 'route_denied_query'))
+			return render_http_terminal_adapter(mut app, mut ctx, method, path, normalized_target,
+				query, body_on_head, remote_addr, req_id, trace_id, start_ms, rule, mut
+				terminal_adapter)
 		}
 		if rule.max_body_bytes > 0 && ctx.req.data.len > rule.max_body_bytes {
-			ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-			apply_route_response_headers(mut ctx, rule)
-			ctx.res.set_status(http.status_from_int(413))
-			app.emit('http.request', {
-				'method':      method.to_upper()
-				'path':        transport.normalize_path(path)
-				'status':      '413'
-				'request_id':  req_id
-				'trace_id':    trace_id
-				'duration_ms': '${time.now().unix_milli() - start_ms}'
-				'error_class': 'payload_too_large'
-				'error':       'max_body_bytes'
-			})
 			log.warn('[http] ⇠ route max body exceeded method=${method.to_upper()} path=${path} trace_id=${trace_id} request_id=${req_id} body_len=${ctx.req.data.len} max_body_bytes=${rule.max_body_bytes}')
-			return ctx.text(body_on_head)
+			mut terminal_adapter := dispatch.EgressAdapter(dispatch.reject_adapter('route/payload_too_large',
+				413, 'max_body_bytes', 'payload_too_large'))
+			return render_http_terminal_adapter(mut app, mut ctx, method, path, normalized_target,
+				query, body_on_head, remote_addr, req_id, trace_id, start_ms, rule, mut
+				terminal_adapter)
 		}
 		// 2.1 重定向与直接状态响应 (status > 0)
 		if rule.status > 0 {
@@ -146,44 +118,10 @@ fn HttpIngressRuntime.handle(mut app App, mut ctx Context, method string, path s
 			}
 			mut terminal_adapter := dispatch.EgressAdapter(dispatch.fixed_response_adapter('route/status',
 				rule.status, outcome_headers, terminal_body))
-			exchange := dispatch.http_request_exchange(dispatch.HttpIngressRequest{
-				method:      method
-				path:        normalized_target
-				query:       query.clone()
-				headers:     transport.header_map_from_request(ctx.req)
-				body:        ctx.req.data
-				remote_addr: remote_addr
-				request_id:  req_id
-				trace_id:    trace_id
-				ingress:     ''
-				pipeline:    ''
-			})
-			mut services := dispatch.RuntimeServices(dispatch.NoOpRuntimeServices{
-				trace: trace_id
-			})
-			outcome := terminal_adapter.deliver(mut services, exchange) or {
-				return HttpResponseRuntime.dispatch_error(mut app, mut ctx, HttpIngressRequest{
-					method:        method
-					path:          path
-					dispatch_path: path
-					body_on_head:  body_on_head
-					remote_addr:   remote_addr
-					request_id:    req_id
-					trace_id:      trace_id
-					start_ms:      start_ms
-				}, err.msg())
-			}
 			log.info('[http] ⇠ route terminal status=${rule.status} trace_id=${trace_id}')
-			return HttpResponseRuntime.delivery_outcome(mut app, mut ctx, HttpIngressRequest{
-				method:        method
-				path:          path
-				dispatch_path: path
-				body_on_head:  body_on_head
-				remote_addr:   remote_addr
-				request_id:    req_id
-				trace_id:      trace_id
-				start_ms:      start_ms
-			}, outcome, rule)
+			return render_http_terminal_adapter(mut app, mut ctx, method, path, normalized_target,
+				query, body_on_head, remote_addr, req_id, trace_id, start_ms, rule, mut
+				terminal_adapter)
 		}
 
 		// 2.2 静态文件高性能直回
