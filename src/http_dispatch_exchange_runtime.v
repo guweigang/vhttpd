@@ -25,30 +25,28 @@ fn noop_dispatch_services(trace_id string) dispatch.RuntimeServices {
 	})
 }
 
-fn render_http_terminal_adapter(mut app App, mut ctx Context, method string, path string, normalized_target string, query map[string]string, body_on_head string, remote_addr string, request_id string, trace_id string, start_ms i64, matched_rule ?RuntimeRouteRule, mut adapter dispatch.EgressAdapter) veb.Result {
-	exchange := http_exchange_from_context(ctx, method, normalized_target, query, remote_addr,
-		request_id, trace_id, '', '')
-	mut services := noop_dispatch_services(trace_id)
-	outcome := adapter.deliver(mut services, exchange) or {
-		return HttpResponseRuntime.dispatch_error(mut app, mut ctx, HttpIngressRequest{
-			method:        method
-			path:          path
-			dispatch_path: path
-			body_on_head:  body_on_head
-			remote_addr:   remote_addr
-			request_id:    request_id
-			trace_id:      trace_id
-			start_ms:      start_ms
-		}, err.msg())
-	}
-	return HttpResponseRuntime.delivery_outcome(mut app, mut ctx, HttpIngressRequest{
+fn http_ingress_request(method string, path string, dispatch_path string, body_on_head string, remote_addr string, request_id string, trace_id string, start_ms i64) HttpIngressRequest {
+	return HttpIngressRequest{
 		method:        method
 		path:          path
-		dispatch_path: path
+		dispatch_path: dispatch_path
 		body_on_head:  body_on_head
 		remote_addr:   remote_addr
 		request_id:    request_id
 		trace_id:      trace_id
 		start_ms:      start_ms
-	}, outcome, matched_rule)
+	}
+}
+
+fn render_http_terminal_adapter(mut app App, mut ctx Context, method string, path string, normalized_target string, query map[string]string, body_on_head string, remote_addr string, request_id string, trace_id string, start_ms i64, matched_rule ?RuntimeRouteRule, mut adapter dispatch.EgressAdapter) veb.Result {
+	exchange := http_exchange_from_context(ctx, method, normalized_target, query, remote_addr,
+		request_id, trace_id, '', '')
+	mut services := noop_dispatch_services(trace_id)
+	outcome := adapter.deliver(mut services, exchange) or {
+		return HttpResponseRuntime.dispatch_error(mut app, mut ctx, http_ingress_request(method,
+			path, path, body_on_head, remote_addr, request_id, trace_id, start_ms), err.msg())
+	}
+	return HttpResponseRuntime.delivery_outcome(mut app, mut ctx, http_ingress_request(method,
+		path, path, body_on_head, remote_addr, request_id, trace_id, start_ms), outcome,
+		matched_rule)
 }

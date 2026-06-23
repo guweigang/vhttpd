@@ -142,16 +142,9 @@ fn HttpIngressRuntime.handle(mut app App, mut ctx Context, method string, path s
 				}
 				log.info('[http] ⇠ route static file=${file_path} trace_id=${trace_id}')
 				outcome := dispatch.file_outcome(file_path, file_headers)
-				return HttpResponseRuntime.delivery_outcome(mut app, mut ctx, HttpIngressRequest{
-					method:        method
-					path:          path
-					dispatch_path: path
-					body_on_head:  body_on_head
-					remote_addr:   remote_addr
-					request_id:    req_id
-					trace_id:      trace_id
-					start_ms:      start_ms
-				}, outcome, rule)
+				return HttpResponseRuntime.delivery_outcome(mut app, mut ctx, http_ingress_request(method,
+					path, path, body_on_head, remote_addr, req_id, trace_id, start_ms), outcome,
+					rule)
 			}
 			log.warn('[http] ⇠ route static file not found path=${file_path} trace_id=${trace_id}')
 			mut terminal_adapter := dispatch.EgressAdapter(dispatch.fixed_response_adapter('route/static_not_found',
@@ -181,16 +174,8 @@ fn HttpIngressRuntime.handle(mut app App, mut ctx Context, method string, path s
 	if rule := matched_rule {
 		dispatch_path = rule.rewrite_target(path)
 	}
-	ingress_req := HttpIngressRequest{
-		method:        method
-		path:          path
-		dispatch_path: dispatch_path
-		body_on_head:  body_on_head
-		remote_addr:   remote_addr
-		request_id:    req_id
-		trace_id:      trace_id
-		start_ms:      start_ms
-	}
+	ingress_req := http_ingress_request(method, path, dispatch_path, body_on_head, remote_addr,
+		req_id, trace_id, start_ms)
 	if rule := matched_rule {
 		if rule.response_cache_ttl_ms > 0 && app.transport.cache.enabled
 			&& route_response_cache_request_bypass_reason(rule, method, ctx.req) == '' {
