@@ -1,0 +1,183 @@
+module dispatch
+
+import runtime_plan
+
+fn test_pipeline_descriptor_from_runtime_plan_preserves_refs() {
+	pipeline := runtime_plan.PipelinePlan{
+		id:         'site'
+		group:      'wordpress'
+		ingress:    runtime_plan.ResourceRef{
+			domain: .listener
+			id:     'web'
+		}
+		match:      runtime_plan.MatchPlan{
+			methods: ['GET']
+			hosts:   ['example.test']
+			paths:   ['/']
+		}
+		transforms: [
+			runtime_plan.ResourceRef{
+				domain: .transform
+				id:     'rewrite'
+			},
+		]
+		policies:   [
+			runtime_plan.ResourceRef{
+				domain: .policy
+				id:     'cache/public'
+			},
+		]
+		egress:     runtime_plan.ResourceRef{
+			domain: .adapter
+			id:     'php'
+		}
+	}
+
+	descriptor := pipeline_descriptor_from_plan(pipeline)
+	assert descriptor.id == 'site'
+	assert descriptor.group == 'wordpress'
+	assert descriptor.ingress == 'listener:web'
+	assert descriptor.transforms == ['transform:rewrite']
+	assert descriptor.policies == ['policy:cache/public']
+	assert descriptor.egress == 'adapter:php'
+
+	matcher := http_match_from_plan(pipeline)
+	assert matcher.methods == ['GET']
+	assert matcher.hosts == ['example.test']
+	assert matcher.paths == ['/']
+}
+
+fn test_listener_pipeline_descriptors_keep_listener_order() {
+	plan := runtime_plan.RuntimePlan{
+		pipelines: [
+			runtime_plan.PipelinePlan{
+				id:      'web/assets'
+				ingress: runtime_plan.ResourceRef{
+					domain: .listener
+					id:     'web'
+				}
+				egress:  runtime_plan.ResourceRef{
+					domain: .adapter
+					id:     'assets'
+				}
+			},
+			runtime_plan.PipelinePlan{
+				id:      'admin/app'
+				ingress: runtime_plan.ResourceRef{
+					domain: .listener
+					id:     'admin'
+				}
+				egress:  runtime_plan.ResourceRef{
+					domain: .adapter
+					id:     'admin'
+				}
+			},
+			runtime_plan.PipelinePlan{
+				id:      'web/app'
+				ingress: runtime_plan.ResourceRef{
+					domain: .listener
+					id:     'web'
+				}
+				egress:  runtime_plan.ResourceRef{
+					domain: .adapter
+					id:     'php'
+				}
+			},
+		]
+	}
+
+	descriptors := listener_pipeline_descriptors(plan, 'web')
+	assert descriptors.map(it.id) == ['web/assets', 'web/app']
+	assert descriptors.map(it.egress) == ['adapter:assets', 'adapter:php']
+}
+
+fn test_match_basic_http_pipeline_uses_plan_order() {
+	plan := runtime_plan.RuntimePlan{
+		pipelines: [
+			runtime_plan.PipelinePlan{
+				id:      'assets'
+				ingress: runtime_plan.ResourceRef{
+					domain: .listener
+					id:     'web'
+				}
+				match:   runtime_plan.MatchPlan{
+					methods: ['GET']
+					paths:   ['/wp-content/*']
+				}
+				egress:  runtime_plan.ResourceRef{
+					domain: .adapter
+					id:     'assets'
+				}
+			},
+			runtime_plan.PipelinePlan{
+				id:      'fallback'
+				ingress: runtime_plan.ResourceRef{
+					domain: .listener
+					id:     'web'
+				}
+				match:   runtime_plan.MatchPlan{
+					methods: ['GET']
+					paths:   ['*']
+				}
+				egress:  runtime_plan.ResourceRef{
+					domain: .adapter
+					id:     'php'
+				}
+			},
+		]
+	}
+	exchange := http_request_exchange(HttpIngressRequest{
+		method:     'GET'
+		path:       '/wp-content/app.css'
+		request_id: 'req-1'
+		trace_id:   'trace-1'
+	})
+
+	matched := match_basic_http_pipeline(plan, 'web', exchange) or { panic('no match') }
+	assert matched.id == 'assets'
+	assert matched.egress == 'adapter:assets'
+}
+
+fn test_match_basic_http_pipeline_skips_regex_pipeline() {
+	plan := runtime_plan.RuntimePlan{
+		pipelines: [
+			runtime_plan.PipelinePlan{
+				id:      'regex'
+				ingress: runtime_plan.ResourceRef{
+					domain: .listener
+					id:     'web'
+				}
+				match:   runtime_plan.MatchPlan{
+					path_regexp: '^/items/[0-9]+$'
+				}
+				egress:  runtime_plan.ResourceRef{
+					domain: .adapter
+					id:     'regex'
+				}
+			},
+			runtime_plan.PipelinePlan{
+				id:      'fallback'
+				ingress: runtime_plan.ResourceRef{
+					domain: .listener
+					id:     'web'
+				}
+				match:   runtime_plan.MatchPlan{
+					paths: ['*']
+				}
+				egress:  runtime_plan.ResourceRef{
+					domain: .adapter
+					id:     'fallback'
+				}
+			},
+		]
+	}
+	exchange := http_request_exchange(HttpIngressRequest{
+		method:     'GET'
+		path:       '/items/123'
+		request_id: 'req-2'
+		trace_id:   'trace-2'
+	})
+
+	matched := match_basic_http_pipeline(plan, 'web', exchange) or { panic('no match') }
+	assert matched.id == 'fallback'
+}

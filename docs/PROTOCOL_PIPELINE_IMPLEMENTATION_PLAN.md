@@ -916,6 +916,7 @@ Progress as of 2026-06-22:
 - `P2.5` semantic validation slice complete: strict V2 rejects unknown engine and transform kinds, requires concrete PHP worker/VJSX entries outside compatibility plans, and requires VJSX transforms to reference an engine with a handler
 - `P3.1` contract slice complete: the dispatch module now has pure Exchange identity, kind, payload, capability, transform action, runtime service, transformer, ingress descriptor, egress adapter, delivery outcome, pipeline descriptor, and pipeline dispatcher contracts that do not import executor, veb, or live transport objects
 - `P3.2` HTTP normalization slice complete: the dispatch module can build a request Exchange from plain HTTP values and match it against pure method, host, path, query, and header rules while keeping veb request objects and compiled regex state at the ingress/runtime edge
+- `P3.2` plan projection slice complete: listener pipelines can be projected from RuntimePlan into dispatch pipeline descriptors and basic HTTP matchers while preserving declaration order and leaving regex indexes to the runtime edge
 
 Batches:
 
