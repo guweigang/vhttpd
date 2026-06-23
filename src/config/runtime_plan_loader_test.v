@@ -171,3 +171,15 @@ egress = "adapter:app"
 	assert plan.adapters['app'].options.strings['custom_adapter_flag'] == 'ok'
 	assert plan.pipelines[0].match.headers['x_custom'] == 'yes'
 }
+
+fn test_load_runtime_plan_file_accepts_hello_v2_example() {
+	repo_root := os.real_path(os.join_path(os.dir(@FILE), '..', '..'))
+	config_file := os.join_path(repo_root, 'examples', 'config', 'hello-v2.toml')
+	plan := load_runtime_plan_file(config_file) or { panic(err) }
+	assert plan.source.schema_version == 2
+	assert !plan.source.compatibility
+	assert plan.listeners['web'].port == 19882
+	assert plan.engines['hello'].kind == 'vjsx'
+	assert plan.adapters['hello'].engine?.str() == 'engine:hello'
+	assert plan.pipelines[0].id == 'hello'
+}
