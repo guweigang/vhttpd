@@ -12,6 +12,10 @@ pub fn LogicExecutorRuntimePlan.resolve_from_plan(args []string, legacy_cfg conf
 			legacy_cfg.worker.websocket_dispatch, legacy_cfg.worker.autostart, legacy_cfg.worker.cmd,
 			legacy_cfg.worker.env.clone())!
 	}
+	return LogicExecutorRuntimePlan.resolve_engine_from_plan(legacy_cfg, engine)!
+}
+
+pub fn LogicExecutorRuntimePlan.resolve_engine_from_plan(legacy_cfg config.VhttpdConfig, engine runtime_plan.EnginePlan) !LogicExecutorRuntimePlan {
 	mut cfg := legacy_cfg
 	cfg.executor.kind = executor_kind_from_engine_plan(engine, legacy_cfg)
 	cfg.worker = worker_config_from_engine_plan(engine, legacy_cfg.worker)

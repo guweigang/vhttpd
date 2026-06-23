@@ -45,26 +45,26 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 				|| executor_name in add_workers {
 				continue
 			}
-			if spec := cfg.executors[executor_name] {
+			if engine := additional_engine_plan_for_executor(plan, plan_listener_id, executor_name) {
 				mut sub_cfg := cfg
+				mut spec := config.ExecutorSpecConfig{}
+				if fallback_spec := cfg.executors[executor_name] {
+					spec = fallback_spec
+				}
 				sub_cfg.worker = spec.worker
 				sub_cfg.php = spec.php
 				sub_cfg.vjsx = spec.vjsx
 				sub_cfg.executor = spec.executor
 
-				sub_sockets := config.resolve_worker_sockets_with_defaults([]string{},
-					spec.worker.socket, spec.worker.pool_size, spec.worker.socket_prefix,
-					spec.worker.sockets.join(','))
-				sub_plan := executor.LogicExecutorRuntimePlan.resolve([]string{}, sub_cfg,
-					sub_sockets, spec.worker.stream_dispatch, spec.worker.websocket_dispatch,
-					spec.worker.autostart, spec.worker.cmd, spec.worker.env) or { continue }
-				sub_queue_capacity := if spec.worker.queue_capacity > 0 {
-					spec.worker.queue_capacity
+				sub_plan := executor.LogicExecutorRuntimePlan.resolve_engine_from_plan(sub_cfg,
+					engine) or { continue }
+				sub_queue_capacity := if engine.options.ints['queue_capacity'] > 0 {
+					engine.options.ints['queue_capacity']
 				} else {
 					build_cfg.worker_queue_capacity
 				}
-				sub_queue_timeout_ms := if spec.worker.queue_timeout_ms > 0 {
-					spec.worker.queue_timeout_ms
+				sub_queue_timeout_ms := if engine.options.ints['queue_timeout_ms'] > 0 {
+					engine.options.ints['queue_timeout_ms']
 				} else {
 					build_cfg.worker_queue_timeout_ms
 				}
@@ -203,4 +203,27 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 		http_routing:  HttpRoutingRuntime.new(runtime_routes, build_cfg.assets_root_real,
 			build_cfg.workdir, executor_plan.bootstrap.worker_env, add_workers)
 	}
+}
+
+fn additional_engine_plan_for_executor(plan runtime_plan.RuntimePlan, listener_id string, executor_name string) ?runtime_plan.EnginePlan {
+	for pipeline in plan.pipelines {
+		if pipeline.ingress.domain != .listener || pipeline.ingress.id != listener_id
+			|| pipeline.egress.domain != .adapter {
+			continue
+		}
+		adapter := plan.adapters[pipeline.egress.id] or { continue }
+		engine_ref := adapter.engine or { continue }
+		if engine_ref.domain != .engine || !engine_ref.id.ends_with('/${executor_name}') {
+			continue
+		}
+		return plan.engines[engine_ref.id] or { continue }
+	}
+	for _, transform in plan.transforms {
+		engine_ref := transform.engine or { continue }
+		if engine_ref.domain != .engine || !engine_ref.id.ends_with('/${executor_name}') {
+			continue
+		}
+		return plan.engines[engine_ref.id] or { continue }
+	}
+	return none
 }
