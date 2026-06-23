@@ -150,6 +150,12 @@ PHP;
         update_option('v_profiler_mode', $savedMode);
     }
 
+    // 写入模式状态文件，使得 wp-config.php 里的 bridge 也能感知
+    $contentDir = defined('WP_CONTENT_DIR') ? WP_CONTENT_DIR : (defined('ABSPATH') ? ABSPATH . 'wp-content' : '');
+    if ($contentDir !== '' && is_writable($contentDir)) {
+        @file_put_contents($contentDir . '/.v-profiler-mode', $savedMode);
+    }
+
     // 如果处于极速模式（或者是默认决定的极速模式），且文件不在，自动拷贝部署
     if ($savedMode === 'full') {
         $contentDir = defined('WP_CONTENT_DIR') ? WP_CONTENT_DIR : (defined('ABSPATH') ? ABSPATH . 'wp-content' : '');
@@ -194,6 +200,11 @@ function v_profiler_deactivate_plugin(): void {
             if ($ocContent !== false && str_contains($ocContent, 'VHttpd\\WordPress\\ObjectCache')) {
                 @unlink($ocFile);
             }
+        }
+
+        $modeFile = $contentDir . '/.v-profiler-mode';
+        if (is_file($modeFile)) {
+            @unlink($modeFile);
         }
     }
 }

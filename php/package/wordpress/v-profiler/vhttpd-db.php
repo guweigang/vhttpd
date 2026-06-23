@@ -68,7 +68,14 @@ spl_autoload_register(static function (string $class) use ($vhttpdPackageRoot): 
     }
 });
 
-if ($vhttpdWordPressRoot !== '' && defined('DB_USER') && defined('DB_PASSWORD') && defined('DB_NAME') && defined('DB_HOST')) {
+// 检测 v-Profiler 插件是否处于“受限调试直连模式”
+$vhttpdDbMode = 'full';
+$vhttpdModeFile = $vhttpdWordPressRoot . '/wp-content/.v-profiler-mode';
+if (is_file($vhttpdModeFile)) {
+    $vhttpdDbMode = trim((string)@file_get_contents($vhttpdModeFile));
+}
+
+if ($vhttpdDbMode !== 'restricted' && $vhttpdWordPressRoot !== '' && defined('DB_USER') && defined('DB_PASSWORD') && defined('DB_NAME') && defined('DB_HOST')) {
     $wpdbClass = $vhttpdWordPressRoot . '/wp-includes/class-wpdb.php';
     if (is_file($wpdbClass)) {
         require_once $wpdbClass;

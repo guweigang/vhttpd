@@ -844,6 +844,7 @@ final class Profiler
         if (!$isWpdbOverride) {
             $dbPool['pool_ready'] = false;
         }
+        $dbPool['db_class'] = isset($wpdb) ? get_class($wpdb) : 'unknown';
 
         if (isset($dbPool['pool_ready']) && $dbPool['pool_ready'] === true) {
             $dbPool['multiplexing_savings_ms'] = 12.5;

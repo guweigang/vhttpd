@@ -962,6 +962,7 @@
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:8px;">
                     <div style="font-size:13px; font-weight:600; color:#CBD5E1; display:flex; gap:15px; align-items:center;">
                         <span>vhttpd DB Pool: <span class="pool-status-badge ${poolStatusClass}">${poolStatusText}</span></span>
+                        <span>数据库驱动: <span style="color:#f472b6; font-family:monospace;">${db_pool.db_class || 'wpdb'}</span></span>
                         ${db_pool.pool_name ? `<span>Pool Name: <span style="color:#a78bfa">${db_pool.pool_name}</span></span>` : ''}
                     </div>
                 </div>

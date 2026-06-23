@@ -128,6 +128,7 @@ add_action('admin_init', function (): void {
             }
 
             update_option('v_profiler_mode', 'full');
+            @file_put_contents(WP_CONTENT_DIR . '/.v-profiler-mode', 'full');
             if (function_exists('opcache_reset')) {
                 @opcache_reset();
             }
@@ -150,6 +151,7 @@ add_action('admin_init', function (): void {
             }
 
             update_option('v_profiler_mode', 'restricted');
+            @file_put_contents(WP_CONTENT_DIR . '/.v-profiler-mode', 'restricted');
             if (function_exists('opcache_reset')) {
                 @opcache_reset();
             }
