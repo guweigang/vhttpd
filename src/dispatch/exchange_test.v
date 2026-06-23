@@ -195,6 +195,34 @@ fn test_adapter_and_pipeline_contracts() {
 	assert outcome.headers['x-pipeline'] == 'site'
 }
 
+fn test_fixed_response_adapter_delivers_response_outcome() {
+	mut services := RuntimeServices(TestServices{
+		trace: 'trace-fixed'
+	})
+	exchange := http_request_exchange(HttpIngressRequest{
+		method:     'GET'
+		path:       '/healthz'
+		request_id: 'req-fixed'
+		trace_id:   'trace-fixed'
+	})
+	mut adapter := EgressAdapter(fixed_response_adapter('adapter:healthz', 204, {
+		'cache-control': 'no-store'
+	}, ''))
+
+	outcome := adapter.deliver(mut services, exchange) or { panic(err) }
+	assert adapter.id() == 'adapter:healthz'
+	assert adapter.capabilities().request_response
+	assert outcome.kind == .response
+	assert outcome.status == 204
+	assert outcome.headers['cache-control'] == 'no-store'
+	assert outcome.body == ''
+}
+
+fn test_fixed_response_adapter_defaults_status() {
+	adapter := fixed_response_adapter('adapter:ok', 0, map[string]string{}, 'ok')
+	assert adapter.status == 200
+}
+
 fn test_pipeline_dispatcher_contract() {
 	mut services := RuntimeServices(TestServices{
 		trace: 'trace-3'
