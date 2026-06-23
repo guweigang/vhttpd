@@ -259,6 +259,12 @@ cert_key = "/tmp/server.key"
 [engines.vjsx]
 kind = "vjsx"
 entry = "app.mts"
+read_timeout_ms = 1234
+restart_backoff_ms = 111
+restart_backoff_max_ms = 222
+max_requests = 333
+queue_capacity = 44
+queue_timeout_ms = 55
 
 [adapters.app]
 kind = "http-handler"
@@ -287,6 +293,12 @@ egress = "adapter:app"
 	assert runtime_cfg.ssl_enabled
 	assert runtime_cfg.ssl_cert == '/tmp/server.crt'
 	assert runtime_cfg.ssl_cert_key == '/tmp/server.key'
+	assert runtime_cfg.app_build_cfg.worker_read_timeout_ms == 1234
+	assert runtime_cfg.app_build_cfg.worker_restart_backoff_ms == 111
+	assert runtime_cfg.app_build_cfg.worker_restart_backoff_max_ms == 222
+	assert runtime_cfg.app_build_cfg.worker_max_requests == 333
+	assert runtime_cfg.app_build_cfg.worker_queue_capacity == 44
+	assert runtime_cfg.app_build_cfg.worker_queue_timeout_ms == 55
 }
 
 fn test_runtime_timezone_prefers_v2_runtime_plan() {

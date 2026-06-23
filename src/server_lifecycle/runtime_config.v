@@ -59,8 +59,8 @@ pub fn ServerRuntimeConfig.resolve(args []string, cfg config.VhttpdConfig) !Serv
 	host := config.CliArgs.string_or(args, '--host', host_fallback)
 	port := config.CliArgs.int_or(args, '--port', port_fallback)
 	ssl := server_ssl_config_from_plan_listener(listener, cfg.server.ssl)
-	return ServerRuntimeConfig.resolve_for_target_with_plan(args, cfg, '', '', host, port,
-		ssl, true, plan, plan_listener_id)
+	return ServerRuntimeConfig.resolve_for_target_with_plan(args, cfg, '', '', host, port, ssl,
+		true, plan, plan_listener_id)
 }
 
 pub fn ServerRuntimeConfig.resolve_for_target(args []string, cfg config.VhttpdConfig, listener_id string, site_id string, host string, port int, ssl config.ServerSslConfig, admin_enabled_override bool) !ServerRuntimeConfig {
@@ -75,18 +75,23 @@ pub fn ServerRuntimeConfig.resolve_for_target_with_plan(args []string, cfg confi
 		cfg.files.event_log))
 	pid_file := config.CliArgs.string_or(args, '--pid-file', plan_pid_file(resolved_plan,
 		cfg.files.pid_file))
-	worker_read_timeout_ms := config.CliArgs.int_or(args, '--worker-read-timeout-ms',
-		cfg.worker.read_timeout_ms)
-	worker_restart_backoff_ms := config.CliArgs.int_or(args, '--worker-restart-backoff-ms',
-		cfg.worker.restart_backoff_ms)
-	worker_restart_backoff_max_ms := config.CliArgs.int_or(args, '--worker-restart-backoff-max-ms',
-		cfg.worker.restart_backoff_max_ms)
-	worker_max_requests := config.CliArgs.int_or(args, '--worker-max-requests',
-		cfg.worker.max_requests)
-	worker_queue_capacity := config.CliArgs.int_or(args, '--worker-queue-capacity',
-		cfg.worker.queue_capacity)
-	worker_queue_timeout_ms := config.CliArgs.int_or(args, '--worker-queue-timeout-ms',
-		cfg.worker.queue_timeout_ms)
+	executor_plan := executor.LogicExecutorRuntimePlan.resolve_from_plan(args, cfg, resolved_plan,
+		plan_listener_id)!
+	engine := resolved_plan.listener_fallback_engine(plan_listener_id) or {
+		runtime_plan.EnginePlan{}
+	}
+	worker_read_timeout_ms := config.CliArgs.int_or(args, '--worker-read-timeout-ms', plan_worker_int_option(engine,
+		'read_timeout_ms', cfg.worker.read_timeout_ms))
+	worker_restart_backoff_ms := config.CliArgs.int_or(args, '--worker-restart-backoff-ms', plan_worker_int_option(engine,
+		'restart_backoff_ms', cfg.worker.restart_backoff_ms))
+	worker_restart_backoff_max_ms := config.CliArgs.int_or(args, '--worker-restart-backoff-max-ms', plan_worker_int_option(engine,
+		'restart_backoff_max_ms', cfg.worker.restart_backoff_max_ms))
+	worker_max_requests := config.CliArgs.int_or(args, '--worker-max-requests', plan_worker_int_option(engine,
+		'max_requests', cfg.worker.max_requests))
+	worker_queue_capacity := config.CliArgs.int_or(args, '--worker-queue-capacity', plan_worker_int_option(engine,
+		'queue_capacity', cfg.worker.queue_capacity))
+	worker_queue_timeout_ms := config.CliArgs.int_or(args, '--worker-queue-timeout-ms', plan_worker_int_option(engine,
+		'queue_timeout_ms', cfg.worker.queue_timeout_ms))
 	assets_cfg := assets_runtime_from_plan(resolved_plan, plan_listener_id, cfg.assets)
 	assets_enabled := assets_cfg.enabled
 	assets_prefix := assets_cfg.prefix
@@ -103,8 +108,6 @@ pub fn ServerRuntimeConfig.resolve_for_target_with_plan(args []string, cfg confi
 	ssl_cert_key := config.CliArgs.string_or(args, '--ssl-key', ssl.cert_key)
 	ssl_enabled := ssl.enabled || (ssl_cert.trim_space() != '' && ssl_cert_key.trim_space() != '')
 	provider_settings := provider.ProviderRuntimeSettings.resolve(args, cfg)
-	executor_plan := executor.LogicExecutorRuntimePlan.resolve_from_plan(args, cfg, resolved_plan,
-		plan_listener_id)!
 	workdir := os.getwd()
 	socket_label := if listener_id != '' {
 		listener_id
@@ -185,6 +188,11 @@ fn plan_admin_token(plan runtime_plan.RuntimePlan, fallback string) string {
 	return if plan.control.token.trim_space() != '' { plan.control.token } else { fallback }
 }
 
+fn plan_worker_int_option(engine runtime_plan.EnginePlan, key string, fallback int) int {
+	value := engine.options.ints[key]
+	return if value > 0 { value } else { fallback }
+}
+
 fn server_ssl_config_from_plan_listener(listener runtime_plan.ListenerPlan, fallback config.ServerSslConfig) config.ServerSslConfig {
 	if !listener.tls.enabled && listener.tls.cert.trim_space() == ''
 		&& listener.tls.cert_key.trim_space() == '' {
@@ -220,7 +228,8 @@ fn assets_adapter_from_plan(plan runtime_plan.RuntimePlan, listener_id string) ?
 			continue
 		}
 		adapter := plan.adapters[pipeline.egress.id] or { continue }
-		if adapter.kind != 'static' || (!pipeline.id.ends_with('_assets') && !adapter.id.ends_with('/assets')) {
+		if adapter.kind != 'static'
+			|| (!pipeline.id.ends_with('_assets') && !adapter.id.ends_with('/assets')) {
 			continue
 		}
 		prefix := if pipeline.match.paths.len > 0 { pipeline.match.paths[0] } else { '/assets' }
