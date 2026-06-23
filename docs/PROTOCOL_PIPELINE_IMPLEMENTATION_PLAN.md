@@ -914,7 +914,7 @@ Progress as of 2026-06-22:
 - `P2.5` listener validation slice complete: the V2 compiler rejects listeners that are not consumed by a request pipeline, control plane, or relay, catching empty data-plane listener declarations before runtime startup
 - `P2.5` worker runtime slice complete: primary worker read timeout, restart backoff, max requests, queue capacity, and queue timeout are projected from the active listener fallback engine options, with CLI overrides still taking precedence
 - `P2.5` semantic validation slice complete: strict V2 rejects unknown engine and transform kinds, requires concrete PHP worker/VJSX entries outside compatibility plans, and requires VJSX transforms to reference an engine with a handler
-- `P3.1` started: the dispatch module now has pure Exchange identity, kind, payload, capability, transform action, runtime service, and transformer contracts that do not import executor, veb, or live transport objects
+- `P3.1` contract slice complete: the dispatch module now has pure Exchange identity, kind, payload, capability, transform action, runtime service, transformer, ingress descriptor, egress adapter, delivery outcome, pipeline descriptor, and pipeline dispatcher contracts that do not import executor, veb, or live transport objects
 
 Batches:
 
@@ -938,7 +938,7 @@ Acceptance:
 
 Batches:
 
-1. Add Exchange, capability, action, adapter, and pipeline contracts. (started with pure Exchange/action/transformer contracts)
+1. Add Exchange, capability, action, adapter, and pipeline contracts. (contract slice complete)
 2. Implement HTTP ingress normalization.
 3. Wrap PHP worker, PHP CGI, static, upload, fixed response, and reject as adapters.
 4. Execute existing HTTP routes through compiled pipelines.
