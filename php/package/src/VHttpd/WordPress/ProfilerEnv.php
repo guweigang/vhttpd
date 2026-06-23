@@ -31,7 +31,8 @@ final class ProfilerEnv
 
     /**
      * 获取当前的运行模式：'full' | 'restricted'
-     * 在非 vhttpd 环境下强制返回 'restricted' 模式
+     * 在非 vhttpd 环境下强制返回 'restricted' 模式。
+     * 采用单一事实来源（Single Source of Truth），直接通过物理 Drop-in 文件的存在性来判定。
      */
     public static function getMode(): string
     {
@@ -43,27 +44,20 @@ final class ProfilerEnv
             return self::$cachedMode;
         }
 
-        // 优先尝试从本地配置文件中读取（此方法在 WP 核心数据库尚未建立连接的非常早期也能工作）
-        $modeFile = self::getModeFilePath();
-        if (is_file($modeFile)) {
-            $mode = trim((string)@file_get_contents($modeFile));
-            if ($mode === 'full' || $mode === 'restricted') {
-                self::$cachedMode = $mode;
-                return $mode;
-            }
+        $wpContentDir = self::getWpContentDir();
+        $loaderFile = $wpContentDir . '/mu-plugins/v-profiler-loader.php';
+        $dbFile = $wpContentDir . '/db.php';
+
+        // 如果安装并激活了 v-Profiler 插件（loader 存在）
+        if (is_file($loaderFile)) {
+            // 模式的真实性 100% 绑定到 Drop-ins 物理文件是否在位
+            self::$cachedMode = is_file($dbFile) ? 'full' : 'restricted';
+        } else {
+            // 没有安装插件时，纯 wp-config.php 桥接模式下默认开启 DB 代理
+            self::$cachedMode = 'full';
         }
 
-        // 降级尝试从数据库读取（在 WordPress 数据库连接加载完毕后）
-        if (function_exists('get_option')) {
-            $dbMode = get_option('v_profiler_mode');
-            if ($dbMode === 'full' || $dbMode === 'restricted') {
-                self::$cachedMode = $dbMode;
-                return $dbMode;
-            }
-        }
-
-        // 默认兜底
-        return 'full';
+        return self::$cachedMode;
     }
 
     /**
@@ -75,11 +69,12 @@ final class ProfilerEnv
     }
 
     /**
-     * 物理切换运行模式并同步所有文件状态
+     * 物理切换运行模式并同步文件状态
      * @return bool 是否成功
      */
     public static function switchMode(string $targetMode): bool
     {
+        self::$cachedMode = null; // 重置缓存
         if ($targetMode === 'full') {
             return self::enableFullMode();
         }
@@ -93,31 +88,15 @@ final class ProfilerEnv
      */
     public static function activate(): void
     {
-        // 1. 部署必须的 mu-plugins 加载器
+        // 1. 部署 mu-plugins 加载器
         self::deployMuLoader();
 
-        // 2. 确定初始模式并保存
-        $savedMode = false;
-        if (function_exists('get_option')) {
-            $savedMode = get_option('v_profiler_mode');
-        }
-
-        $modeFile = self::getModeFilePath();
-        // 如果数据库未保存模式，或物理状态指示文件不存在（说明是全新安装），强行覆盖并重新评估
-        if ($savedMode === false || !is_file($modeFile)) {
-            $savedMode = self::isVHttpd() ? 'full' : 'restricted';
-            if (function_exists('update_option')) {
-                update_option('v_profiler_mode', $savedMode);
-            }
-        }
-
-        // 同步状态配置文件
-        self::writeModeFile($savedMode);
-
-        // 如果是完整模式，自动部署 Drop-ins 文件
-        if ($savedMode === 'full') {
+        // 2. 环境适配：如果是 vhttpd，默认部署 Drop-ins 以开启完整模式
+        if (self::isVHttpd()) {
             self::deployDropins();
         }
+
+        self::resetOpcache();
     }
 
     /**
@@ -125,13 +104,14 @@ final class ProfilerEnv
      */
     public static function deactivate(): void
     {
+        self::$cachedMode = null;
         self::removeMuLoader();
-        self::removeModeFile();
         self::removeDropins();
+        self::resetOpcache();
     }
 
     /**
-     * 部署 Drop-ins 到 wp-content
+     * 部署 Drop-ins 数据库和对象缓存文件
      */
     private static function deployDropins(): bool
     {
@@ -163,12 +143,7 @@ final class ProfilerEnv
             return false;
         }
 
-        if (function_exists('update_option')) {
-            update_option('v_profiler_mode', 'full');
-        }
-        self::writeModeFile('full');
         self::resetOpcache();
-
         return true;
     }
 
@@ -178,34 +153,7 @@ final class ProfilerEnv
     private static function enableRestrictedMode(): void
     {
         self::removeDropins();
-        
-        if (function_exists('update_option')) {
-            update_option('v_profiler_mode', 'restricted');
-        }
-        self::writeModeFile('restricted');
         self::resetOpcache();
-    }
-
-    /**
-     * 写入模式配置文件
-     */
-    private static function writeModeFile(string $mode): void
-    {
-        $contentDir = self::getWpContentDir();
-        if ($contentDir !== '' && is_writable($contentDir)) {
-            @file_put_contents($contentDir . '/.v-profiler-mode', $mode);
-        }
-    }
-
-    /**
-     * 删除模式配置文件
-     */
-    private static function removeModeFile(): void
-    {
-        $file = self::getModeFilePath();
-        if (is_file($file)) {
-            @unlink($file);
-        }
     }
 
     /**
@@ -254,7 +202,7 @@ PHP;
     }
 
     /**
-     * 物理删除 wp-content 下的 Drop-ins
+     * 物理删除 wp-content 下的 Drop-ins 代理文件
      */
     private static function removeDropins(): void
     {
@@ -326,11 +274,5 @@ PHP;
         }
         $contentDir = self::getWpContentDir();
         return $contentDir !== '' ? $contentDir . '/plugins/v-profiler' : '';
-    }
-
-    private static function getModeFilePath(): string
-    {
-        $contentDir = self::getWpContentDir();
-        return $contentDir !== '' ? $contentDir . '/.v-profiler-mode' : '';
     }
 }
