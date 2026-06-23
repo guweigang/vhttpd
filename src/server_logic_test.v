@@ -286,6 +286,30 @@ egress = "adapter:app"
 	assert runtime_cfg.ssl_cert_key == '/tmp/server.key'
 }
 
+fn test_runtime_timezone_prefers_v2_runtime_plan() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_v2_timezone_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	config_file := os.join_path(temp_dir, 'vhttpd.toml')
+	os.write_file(config_file, '
+version = 2
+
+[server]
+timezone = "UTC"
+
+[listeners.web]
+protocol = "http"
+transport = "tcp"
+host = "127.0.0.1"
+port = 18445
+') or { panic(err) }
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	mut cfg := config.load_vhttpd_config(['--config', config_file]) or { panic(err) }
+	cfg.runtime.timezone = 'Asia/Shanghai'
+	assert runtime_timezone_from_plan_or_config(['--config', config_file], cfg) == 'UTC'
+}
+
 fn test_load_vhttpd_config_supports_route_cache_control() {
 	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_route_cache_control_test')
 	os.mkdir_all(temp_dir) or { panic(err) }

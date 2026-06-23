@@ -279,7 +279,7 @@ fn run_server(args []string) {
 		log.error('config load failed: ${err}')
 		return
 	}
-	configure_runtime_timezone(runtime_timezone_from_plan_or_config(cfg))
+	configure_runtime_timezone(runtime_timezone_from_plan_or_config(args, cfg))
 	log.debug('[vhttpd] run_server: timezone configured')
 	os.signal_ignore(.pipe)
 	os.signal_opt(.int, vhttpd_signal_handler) or {
@@ -297,8 +297,8 @@ fn run_server(args []string) {
 	run_single_server(args, cfg)
 }
 
-fn runtime_timezone_from_plan_or_config(cfg config.VhttpdConfig) string {
-	plan := config.compile_v1_runtime_plan(cfg) or { return cfg.runtime.timezone }
+fn runtime_timezone_from_plan_or_config(args []string, cfg config.VhttpdConfig) string {
+	plan := config.load_runtime_plan_or_compile_config(args, cfg) or { return cfg.runtime.timezone }
 	return if plan.server.timezone.trim_space() != '' { plan.server.timezone } else { cfg.runtime.timezone }
 }
 
