@@ -21,7 +21,7 @@ add_action('admin_menu', function (): void {
 
 // 注册插件列表页面（插件名称下方）的 "Settings" 快捷链接
 add_filter('plugin_action_links', function (array $actions, string $plugin_file): array {
-    if ($plugin_file === 'v-profiler.php') {
+    if ($plugin_file === 'v-profiler.php' || $plugin_file === 'v-profiler/v-profiler.php' || $plugin_file === 'v-profiler-loader.php') {
         $settings_url = admin_url('admin.php?page=v-profiler-settings');
         $actions['settings'] = '<a href="' . esc_url($settings_url) . '">Settings</a>';
     }
@@ -29,7 +29,7 @@ add_filter('plugin_action_links', function (array $actions, string $plugin_file)
 }, 10, 2);
 
 add_filter('network_admin_plugin_action_links', function (array $actions, string $plugin_file): array {
-    if ($plugin_file === 'v-profiler.php') {
+    if ($plugin_file === 'v-profiler.php' || $plugin_file === 'v-profiler/v-profiler.php' || $plugin_file === 'v-profiler-loader.php') {
         $settings_url = admin_url('admin.php?page=v-profiler-settings');
         $actions['settings'] = '<a href="' . esc_url($settings_url) . '">Settings</a>';
     }

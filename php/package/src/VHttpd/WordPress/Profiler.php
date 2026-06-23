@@ -325,16 +325,23 @@ final class Profiler
         $report = self::buildReport();
         $reportJson = json_encode($report, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
 
-        $jsFile = dirname(__DIR__, 3) . '/wordpress/v-profiler-ui.js';
         $jsCode = '';
-        if (is_file($jsFile)) {
-            $jsCode = file_get_contents($jsFile);
-        } elseif (defined('WPMU_PLUGIN_DIR') && is_file(WPMU_PLUGIN_DIR . '/v-profiler/v-profiler-ui.js')) {
-            $jsCode = file_get_contents(WPMU_PLUGIN_DIR . '/v-profiler/v-profiler-ui.js');
-        } elseif (defined('WPMU_PLUGIN_DIR') && is_file(WPMU_PLUGIN_DIR . '/v-profiler-ui.js')) {
-            $jsCode = file_get_contents(WPMU_PLUGIN_DIR . '/v-profiler-ui.js');
-        } elseif (defined('WP_PLUGIN_DIR') && is_file(WP_PLUGIN_DIR . '/v-profiler-ui.js')) {
-            $jsCode = file_get_contents(WP_PLUGIN_DIR . '/v-profiler-ui.js');
+        $localJsFile = dirname(__DIR__, 3) . '/v-profiler/v-profiler-ui.js';
+        if (is_file($localJsFile)) {
+            $jsCode = file_get_contents($localJsFile);
+        } else {
+            $jsFile = dirname(__DIR__, 3) . '/wordpress/v-profiler-ui.js';
+            if (is_file($jsFile)) {
+                $jsCode = file_get_contents($jsFile);
+            } elseif (defined('WPMU_PLUGIN_DIR') && is_file(WPMU_PLUGIN_DIR . '/v-profiler/v-profiler-ui.js')) {
+                $jsCode = file_get_contents(WPMU_PLUGIN_DIR . '/v-profiler/v-profiler-ui.js');
+            } elseif (defined('WPMU_PLUGIN_DIR') && is_file(WPMU_PLUGIN_DIR . '/v-profiler-ui.js')) {
+                $jsCode = file_get_contents(WPMU_PLUGIN_DIR . '/v-profiler-ui.js');
+            } elseif (defined('WP_PLUGIN_DIR') && is_file(WP_PLUGIN_DIR . '/v-profiler/v-profiler-ui.js')) {
+                $jsCode = file_get_contents(WP_PLUGIN_DIR . '/v-profiler/v-profiler-ui.js');
+            } elseif (defined('WP_PLUGIN_DIR') && is_file(WP_PLUGIN_DIR . '/v-profiler-ui.js')) {
+                $jsCode = file_get_contents(WP_PLUGIN_DIR . '/v-profiler-ui.js');
+            }
         }
 
         echo "\n<!-- v-Profiler Start -->\n";
