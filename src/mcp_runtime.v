@@ -212,7 +212,7 @@ fn proxy_worker_mcp(mut app App, mut ctx Context) veb.Result {
 	if session_id != '' {
 		resp_headers['mcp-session-id'] = session_id
 	}
-	apply_worker_headers(mut ctx, resp_headers)
+	apply_delivery_headers(mut ctx, resp_headers)
 	ctx.res.set_status(http.status_from_int(if response.status > 0 { response.status } else { 200 }))
 	ctx.set_content_type(resp_headers['content-type'] or { 'application/json; charset=utf-8' })
 	app.emit('http.request', {

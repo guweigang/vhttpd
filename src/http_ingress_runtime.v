@@ -219,21 +219,3 @@ fn apply_data_plane_scheme(mut ctx Context, scheme string) {
 	ctx.req.header.set(.x_forwarded_proto, normalized)
 	ctx.req.header.set_custom('X-Scheme', normalized) or {}
 }
-
-fn apply_worker_headers(mut ctx Context, headers map[string]string) {
-	for name, value in headers {
-		lower := name.to_lower()
-		if lower == 'content-type' || lower == 'content-length' || lower == 'server'
-			|| lower == 'x-request-id' {
-			continue
-		}
-		if lower == 'set-cookie' {
-			cookies := value.split('\n')
-			for cookie in cookies {
-				ctx.res.header.add_custom('Set-Cookie', cookie) or {}
-			}
-		} else {
-			ctx.set_custom_header(name, value) or {}
-		}
-	}
-}

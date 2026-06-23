@@ -285,6 +285,11 @@ fn test_worker_response_delivery_outcome_maps_response_values() {
 	assert outcome.headers['x-test'] == 'ok'
 }
 
+fn test_delivery_set_cookie_values_splits_non_empty_lines() {
+	assert delivery_set_cookie_values('a=1\nb=2; Path=/\n\n c=3 ') == ['a=1', 'b=2; Path=/', 'c=3']
+	assert delivery_set_cookie_values('') == []
+}
+
 fn test_upload_multipart_parser_extracts_file_payload() {
 	body := '--abc123\r\nContent-Disposition: form-data; name="file"; filename="demo.txt"\r\nContent-Type: text/plain\r\n\r\nhello upload\r\n--abc123--\r\n'
 	payload := parse_multipart_upload(body, 'multipart/form-data; boundary=abc123') or {

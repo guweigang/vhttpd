@@ -88,20 +88,16 @@ fn HttpResponseRuntime.delivery_outcome(mut app App, mut ctx Context, req HttpIn
 	if error_class != '' {
 		ctx.set_custom_header('x-vhttpd-error-class', error_class) or {}
 	}
-	for name, value in outcome.headers {
-		if value == '' {
-			continue
-		}
-		if name.to_lower() == 'content-type' {
-			ctx.set_content_type(value)
-		} else {
-			ctx.set_custom_header(name, value) or {}
-		}
-	}
+	apply_delivery_headers(mut ctx, outcome.headers)
 	if rule := matched_rule {
 		apply_route_response_headers(mut ctx, rule)
 	}
 	ctx.res.set_status(http.status_from_int(status))
+	if ctype := outcome.headers['content-type'] {
+		if ctype != '' {
+			ctx.set_content_type(ctype)
+		}
+	}
 	body := if req.method.to_upper() == 'HEAD' || status in [204, 304] {
 		''
 	} else if outcome.body != '' {
@@ -123,11 +119,11 @@ fn HttpResponseRuntime.file_outcome(mut app App, mut ctx Context, req HttpIngres
 		'duration_ms': '${time.now().unix_milli() - req.start_ms}'
 	})
 	ctx.set_custom_header('x-vhttpd-trace-id', req.trace_id) or {}
-	for name, value in outcome.headers {
-		if value == '' {
-			continue
+	apply_delivery_headers(mut ctx, outcome.headers)
+	if ctype := outcome.headers['content-type'] {
+		if ctype != '' {
+			ctx.set_content_type(ctype)
 		}
-		ctx.set_custom_header(name, value) or {}
 	}
 	if rule := matched_rule {
 		apply_route_response_headers(mut ctx, rule)
@@ -234,7 +230,7 @@ fn HttpResponseRuntime.worker_response_outcome(mut ctx Context, req HttpIngressR
 		ctx.set_custom_header('x-vhttpd-cache-reason', cache_reason) or {}
 	}
 	ctx.res.set_status(http.status_from_int(status))
-	apply_worker_headers(mut ctx, outcome.headers)
+	apply_delivery_headers(mut ctx, outcome.headers)
 	if rule := matched_rule {
 		apply_route_response_headers(mut ctx, rule)
 		if rule.cache_control.trim_space() != ''
@@ -249,4 +245,32 @@ fn HttpResponseRuntime.worker_response_outcome(mut ctx Context, req HttpIngressR
 	} else {
 		outcome.body
 	})
+}
+
+fn apply_delivery_headers(mut ctx Context, headers map[string]string) {
+	for name, value in headers {
+		lower := name.to_lower()
+		if value == '' || lower == 'content-type' || lower == 'content-length' || lower == 'server'
+			|| lower == 'x-request-id' {
+			continue
+		}
+		if lower == 'set-cookie' {
+			for cookie in delivery_set_cookie_values(value) {
+				ctx.res.header.add_custom('Set-Cookie', cookie) or {}
+			}
+		} else {
+			ctx.set_custom_header(name, value) or {}
+		}
+	}
+}
+
+fn delivery_set_cookie_values(value string) []string {
+	mut cookies := []string{}
+	for cookie in value.split('\n') {
+		clean := cookie.trim_space()
+		if clean != '' {
+			cookies << clean
+		}
+	}
+	return cookies
 }
