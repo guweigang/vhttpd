@@ -1,6 +1,7 @@
 module main
 
 import cachex
+import dispatch
 import json
 import net.http
 import os
@@ -329,10 +330,15 @@ fn route_response_cache_request_bypass_reason(rule RuntimeRouteRule, method stri
 }
 
 fn route_response_cache_store_bypass_reason(resp transport.WorkerResponse) string {
-	if resp.status != 200 {
+	return route_response_cache_store_bypass_reason_for_outcome(dispatch.response_outcome(resp.status,
+		resp.headers, resp.body))
+}
+
+fn route_response_cache_store_bypass_reason_for_outcome(outcome dispatch.DeliveryOutcome) string {
+	if outcome.status != 200 {
 		return 'status'
 	}
-	for name, value in resp.headers {
+	for name, value in outcome.headers {
 		lower := name.to_lower()
 		if lower == 'set-cookie' {
 			return 'set_cookie'

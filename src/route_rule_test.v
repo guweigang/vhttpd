@@ -3,6 +3,7 @@ module main
 import regex
 import os
 import config
+import dispatch
 import json
 import net.http
 import upstream.transport
@@ -267,6 +268,19 @@ fn test_route_response_cache_store_bypass_reason() {
 			'cache-control': 'public, s-maxage=0'
 		}
 	}) == 's_maxage_0'
+}
+
+fn test_route_response_cache_store_bypass_reason_for_delivery_outcome() {
+	assert route_response_cache_store_bypass_reason_for_outcome(dispatch.response_outcome(200,
+		map[string]string{}, 'ok')) == ''
+	assert route_response_cache_store_bypass_reason_for_outcome(dispatch.response_outcome(204,
+		map[string]string{}, '')) == 'status'
+	assert route_response_cache_store_bypass_reason_for_outcome(dispatch.response_outcome(200, {
+		'set-cookie': 'wordpress_logged_in=token'
+	}, 'ok')) == 'set_cookie'
+	assert route_response_cache_store_bypass_reason_for_outcome(dispatch.response_outcome(200, {
+		'cache-control': 'private'
+	}, 'ok')) == 'private'
 }
 
 fn test_worker_response_delivery_outcome_maps_response_values() {

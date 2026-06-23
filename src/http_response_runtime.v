@@ -183,7 +183,8 @@ fn HttpResponseRuntime.normal(mut app App, mut ctx Context, req HttpIngressReque
 				cache_result = 'bypass'
 				cache_reason = request_bypass_reason
 			} else {
-				store_bypass_reason := route_response_cache_store_bypass_reason(resp)
+				store_bypass_reason :=
+					route_response_cache_store_bypass_reason_for_outcome(delivery)
 				if store_bypass_reason != '' {
 					cache_result = 'bypass'
 					cache_reason = store_bypass_reason
