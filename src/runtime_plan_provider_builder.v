@@ -19,7 +19,7 @@ fn provider_runtime_settings_from_plan(plan runtime_plan.RuntimePlan, fallback p
 }
 
 fn feishu_runtime_settings_from_plan(plan runtime_plan.RuntimePlan) ?provider.FeishuRuntimeSettings {
-	adapter := first_adapter_by_kind(plan, 'feishu-events')?
+	adapter := plan.first_adapter_by_kind('feishu-events')?
 	return provider.FeishuRuntimeSettings{
 		enabled:                    adapter.options.bools['enabled']
 		open_base_url:              feishu.RuntimeWsEndpointData.normalize_open_base(adapter.options.strings['open_base_url'])
@@ -60,8 +60,8 @@ fn feishu_apps_from_adapter(adapter runtime_plan.AdapterPlan) map[string]config.
 }
 
 fn codex_runtime_settings_from_plan(plan runtime_plan.RuntimePlan, fallback provider.ProviderRuntimeSettings) (provider.CodexRuntimeSettings, bool) {
-	adapter := first_adapter_by_kind(plan, 'codex') or {
-		if openai_adapter := first_adapter_by_kind(plan, 'openai') {
+	adapter := plan.first_adapter_by_kind('codex') or {
+		if openai_adapter := plan.first_adapter_by_kind('openai') {
 			return fallback.codex, openai_adapter.options.bools['ollama_enabled'] || fallback.ollama_enabled
 		}
 		return fallback.codex, fallback.ollama_enabled
@@ -108,7 +108,7 @@ fn codex_runtime_settings_from_plan(plan runtime_plan.RuntimePlan, fallback prov
 }
 
 fn bridge_runtime_settings_from_plan(plan runtime_plan.RuntimePlan) ?provider.BridgeRuntimeSettings {
-	relay := first_relay_by_carrier(plan, 'websocket')?
+	relay := plan.first_relay_by_carrier('websocket')?
 	return provider.BridgeRuntimeSettings{
 		enabled:   config.CliArgs.parse_boolish(relay.options.strings['enabled'])
 		ws_url:    relay.options.strings['url']
@@ -116,28 +116,4 @@ fn bridge_runtime_settings_from_plan(plan runtime_plan.RuntimePlan) ?provider.Br
 		token:     relay.options.strings['token']
 		target_id: relay.options.strings['target_id']
 	}
-}
-
-fn first_adapter_by_kind(plan runtime_plan.RuntimePlan, kind string) ?runtime_plan.AdapterPlan {
-	mut ids := plan.adapters.keys()
-	ids.sort()
-	for id in ids {
-		adapter := plan.adapters[id]
-		if adapter.kind == kind {
-			return adapter
-		}
-	}
-	return none
-}
-
-fn first_relay_by_carrier(plan runtime_plan.RuntimePlan, carrier string) ?runtime_plan.RelayPlan {
-	mut ids := plan.relays.keys()
-	ids.sort()
-	for id in ids {
-		relay := plan.relays[id]
-		if relay.carrier == carrier {
-			return relay
-		}
-	}
-	return none
 }

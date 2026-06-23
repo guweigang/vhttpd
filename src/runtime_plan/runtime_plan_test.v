@@ -108,6 +108,16 @@ fn test_runtime_plan_listener_query_helpers() {
 				kind:   'http-handler'
 				engine: ResourceRef{domain: .engine, id: 'site/vjsx'}
 			}
+			'site/codex':   AdapterPlan{
+				id:   'site/codex'
+				kind: 'codex'
+			}
+		}
+		relays:    {
+			'site/bridge': RelayPlan{
+				id:      'site/bridge'
+				carrier: 'websocket'
+			}
 		}
 		pipelines: [
 			PipelinePlan{
@@ -135,4 +145,6 @@ fn test_runtime_plan_listener_query_helpers() {
 	assert plan.listener_fallback_engine('default')?.id == 'site/default'
 	assert plan.listener_resource('', 'db')?.id == 'db/site'
 	assert plan.listener_named_engine('', 'vjsx')?.id == 'site/vjsx'
+	assert plan.first_adapter_by_kind('codex')?.id == 'site/codex'
+	assert plan.first_relay_by_carrier('websocket')?.id == 'site/bridge'
 }

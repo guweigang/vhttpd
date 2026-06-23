@@ -28,6 +28,30 @@ pub fn (plan RuntimePlan) listener_adapter(listener_id string, kind string) ?Ada
 	return none
 }
 
+pub fn (plan RuntimePlan) first_adapter_by_kind(kind string) ?AdapterPlan {
+	mut ids := plan.adapters.keys()
+	ids.sort()
+	for id in ids {
+		adapter := plan.adapters[id]
+		if adapter.kind == kind {
+			return adapter
+		}
+	}
+	return none
+}
+
+pub fn (plan RuntimePlan) first_relay_by_carrier(carrier string) ?RelayPlan {
+	mut ids := plan.relays.keys()
+	ids.sort()
+	for id in ids {
+		relay := plan.relays[id]
+		if relay.carrier == carrier {
+			return relay
+		}
+	}
+	return none
+}
+
 pub fn (plan RuntimePlan) listener_fallback_engine(listener_id string) ?EnginePlan {
 	for pipeline in plan.listener_pipelines(listener_id) {
 		if !pipeline.id.ends_with('_fallback') || pipeline.egress.domain != .adapter {
