@@ -269,6 +269,22 @@ fn test_route_response_cache_store_bypass_reason() {
 	}) == 's_maxage_0'
 }
 
+fn test_worker_response_delivery_outcome_maps_response_values() {
+	outcome := worker_response_delivery_outcome(transport.WorkerResponse{
+		status:  202
+		body:    'accepted'
+		headers: {
+			'content-type': 'text/plain'
+			'x-test':       'ok'
+		}
+	})
+	assert outcome.kind == .response
+	assert outcome.status == 202
+	assert outcome.body == 'accepted'
+	assert outcome.headers['content-type'] == 'text/plain'
+	assert outcome.headers['x-test'] == 'ok'
+}
+
 fn test_upload_multipart_parser_extracts_file_payload() {
 	body := '--abc123\r\nContent-Disposition: form-data; name="file"; filename="demo.txt"\r\nContent-Type: text/plain\r\n\r\nhello upload\r\n--abc123--\r\n'
 	payload := parse_multipart_upload(body, 'multipart/form-data; boundary=abc123') or {

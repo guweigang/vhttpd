@@ -172,7 +172,7 @@ fn HttpResponseRuntime.upstream_plan(mut app App, mut ctx Context, req HttpIngre
 
 fn HttpResponseRuntime.normal(mut app App, mut ctx Context, req HttpIngressRequest, outcome executor.HttpLogicDispatchOutcome, matched_rule ?RuntimeRouteRule) veb.Result {
 	resp := outcome.response
-	delivery := dispatch.response_outcome(resp.status, resp.headers, resp.body)
+	delivery := worker_response_delivery_outcome(resp)
 	log.info('[http] ⇠ dispatch response method=${req.method.to_upper()} path=${req.path} trace_id=${req.trace_id} request_id=${req.request_id} status=${resp.status} body_len=${resp.body.len} duration_ms=${time.now().unix_milli() - req.start_ms}')
 	mut cache_result := ''
 	mut cache_reason := ''
@@ -218,6 +218,10 @@ fn HttpResponseRuntime.normal(mut app App, mut ctx Context, req HttpIngressReque
 	})
 	return HttpResponseRuntime.worker_response_outcome(mut ctx, req, delivery, matched_rule,
 		cache_result, cache_reason)
+}
+
+fn worker_response_delivery_outcome(resp transport.WorkerResponse) dispatch.DeliveryOutcome {
+	return dispatch.response_outcome(resp.status, resp.headers, resp.body)
 }
 
 fn HttpResponseRuntime.worker_response_outcome(mut ctx Context, req HttpIngressRequest, outcome dispatch.DeliveryOutcome, matched_rule ?RuntimeRouteRule, cache_result string, cache_reason string) veb.Result {
