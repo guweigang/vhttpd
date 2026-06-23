@@ -1,6 +1,7 @@
 module server_lifecycle
 
 import config
+import runtime_plan
 
 pub struct ListenerRuntimeBinding {
 pub:
@@ -17,7 +18,11 @@ pub:
 }
 
 pub fn resolve_multi_server_runtime_config(args []string, cfg config.VhttpdConfig) !MultiServerRuntimeConfig {
+	plan := config.load_runtime_plan_or_compile_config(args, cfg)!
 	if !cfg.uses_multi_listener() {
+		if plan.listeners.len > 1 {
+			return resolve_plan_multi_server_runtime_config(args, cfg, plan)!
+		}
 		site_id := cfg.default_site_id()
 		return MultiServerRuntimeConfig{
 			single_mode: true
@@ -37,7 +42,6 @@ pub fn resolve_multi_server_runtime_config(args []string, cfg config.VhttpdConfi
 		}
 	}
 	listeners := cfg.resolve_multi_listeners()!
-	plan := config.load_runtime_plan_or_compile_config(args, cfg)!
 	mut listener_ids := listeners.keys()
 	listener_ids.sort()
 	admin_owner_listener_id := if cfg.admin.port > 0 && listener_ids.len > 0 {
@@ -79,6 +83,45 @@ pub fn resolve_multi_server_runtime_config(args []string, cfg config.VhttpdConfi
 			id:          listener_id
 			site_id:     site_id
 			site_cfg:    site_runtime_cfg
+			runtime_cfg: runtime_cfg
+		}
+	}
+	return MultiServerRuntimeConfig{
+		single_mode: false
+		listeners:   bindings
+	}
+}
+
+fn resolve_plan_multi_server_runtime_config(args []string, cfg config.VhttpdConfig, plan runtime_plan.RuntimePlan) !MultiServerRuntimeConfig {
+	mut listener_ids := plan.listeners.keys()
+	listener_ids.sort()
+	admin_owner_listener_id := if cfg.admin.port > 0 && listener_ids.len > 0 {
+		listener_ids[0]
+	} else {
+		''
+	}
+	mut used_bindings := map[string]bool{}
+	mut bindings := []ListenerRuntimeBinding{cap: listener_ids.len}
+	for listener_id in listener_ids {
+		listener := plan.listeners[listener_id]
+		host := if listener.host.trim_space() == '' { '127.0.0.1' } else { listener.host }
+		if listener.port <= 0 {
+			return error('runtime_plan_listener_missing_port:${listener_id}')
+		}
+		binding_key := '${host}:${listener.port}'
+		if binding_key in used_bindings {
+			return error('multi_listener_duplicate_bind:${binding_key}')
+		}
+		used_bindings[binding_key] = true
+		site_id := listener_id
+		admin_enabled_override := listener_id == admin_owner_listener_id
+		ssl_cfg := server_ssl_config_from_plan_listener(listener, cfg.server.ssl)
+		runtime_cfg := ServerRuntimeConfig.resolve_for_target_with_plan(args, cfg, listener_id,
+			site_id, host, listener.port, ssl_cfg, admin_enabled_override, plan, listener_id)!
+		bindings << ListenerRuntimeBinding{
+			id:          listener_id
+			site_id:     site_id
+			site_cfg:    cfg
 			runtime_cfg: runtime_cfg
 		}
 	}

@@ -269,13 +269,16 @@ id = "site"
 ingress = "listener:web"
 match.paths = ["*"]
 egress = "adapter:app"
-') or { panic(err) }
+') or {
+		panic(err)
+	}
 	defer {
 		os.rmdir_all(temp_dir) or {}
 	}
 	cfg := config.load_vhttpd_config(['--config', config_file]) or { panic(err) }
-	runtime_cfg := server_lifecycle.ServerRuntimeConfig.resolve(['--config', config_file],
-		cfg) or { panic(err) }
+	runtime_cfg := server_lifecycle.ServerRuntimeConfig.resolve(['--config', config_file], cfg) or {
+		panic(err)
+	}
 	assert runtime_cfg.plan.source.schema_version == 2
 	assert !runtime_cfg.plan.source.compatibility
 	assert runtime_cfg.plan_listener_id == 'web'
@@ -301,13 +304,103 @@ protocol = "http"
 transport = "tcp"
 host = "127.0.0.1"
 port = 18445
-') or { panic(err) }
+') or {
+		panic(err)
+	}
 	defer {
 		os.rmdir_all(temp_dir) or {}
 	}
 	mut cfg := config.load_vhttpd_config(['--config', config_file]) or { panic(err) }
 	cfg.runtime.timezone = 'Asia/Shanghai'
 	assert runtime_timezone_from_plan_or_config(['--config', config_file], cfg) == 'UTC'
+}
+
+fn test_v2_runtime_plan_listeners_drive_multi_server_bindings() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_v2_multi_listener_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	app_a := os.join_path(temp_dir, 'app-a.mts')
+	app_b := os.join_path(temp_dir, 'app-b.mts')
+	os.write_file(app_a,
+		'export default { async handle() { return { status: 200, body: "a" }; } };') or {
+		panic(err)
+	}
+	os.write_file(app_b,
+		'export default { async handle() { return { status: 200, body: "b" }; } };') or {
+		panic(err)
+	}
+	config_file := os.join_path(temp_dir, 'vhttpd.toml')
+	os.write_file(config_file, '
+version = 2
+
+[server]
+pid_file = "${temp_dir}/vhttpd.pid"
+
+[observability]
+event_log = "${temp_dir}/events.ndjson"
+
+[listeners.web_a]
+protocol = "http"
+transport = "tcp"
+host = "127.0.0.11"
+port = 18451
+
+[listeners.web_b]
+protocol = "http"
+transport = "tcp"
+host = "127.0.0.12"
+port = 18452
+
+[engines.app_a]
+kind = "vjsx"
+entry = "${app_a}"
+
+[engines.app_b]
+kind = "vjsx"
+entry = "${app_b}"
+
+[adapters.app_a]
+kind = "http-handler"
+engine = "engine:app_a"
+
+[adapters.app_b]
+kind = "http-handler"
+engine = "engine:app_b"
+
+[[pipelines]]
+id = "web_a_fallback"
+ingress = "listener:web_a"
+match.paths = ["*"]
+egress = "adapter:app_a"
+
+[[pipelines]]
+id = "web_b_fallback"
+ingress = "listener:web_b"
+match.paths = ["*"]
+egress = "adapter:app_b"
+') or {
+		panic(err)
+	}
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	cfg := config.load_vhttpd_config(['--config', config_file]) or { panic(err) }
+	assert !cfg.uses_multi_listener()
+	assert should_run_multi_server(['--config', config_file], cfg)
+	multi_cfg := server_lifecycle.resolve_multi_server_runtime_config(['--config', config_file], cfg) or {
+		panic(err)
+	}
+	assert !multi_cfg.single_mode
+	assert multi_cfg.listeners.len == 2
+	assert multi_cfg.listeners[0].id == 'web_a'
+	assert multi_cfg.listeners[0].runtime_cfg.host == '127.0.0.11'
+	assert multi_cfg.listeners[0].runtime_cfg.port == 18451
+	assert multi_cfg.listeners[0].runtime_cfg.plan_listener_id == 'web_a'
+	assert multi_cfg.listeners[0].runtime_cfg.executor_plan.executor.kind() == 'vjsx'
+	assert multi_cfg.listeners[1].id == 'web_b'
+	assert multi_cfg.listeners[1].runtime_cfg.host == '127.0.0.12'
+	assert multi_cfg.listeners[1].runtime_cfg.port == 18452
+	assert multi_cfg.listeners[1].runtime_cfg.plan_listener_id == 'web_b'
+	assert multi_cfg.listeners[1].runtime_cfg.executor_plan.executor.kind() == 'vjsx'
 }
 
 fn test_load_vhttpd_config_supports_route_cache_control() {

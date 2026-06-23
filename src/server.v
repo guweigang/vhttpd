@@ -288,7 +288,7 @@ fn run_server(args []string) {
 	os.signal_opt(.term, vhttpd_signal_handler) or {
 		log.error('[vhttpd] Failed to register SIGTERM handler: ${err}')
 	}
-	if cfg.uses_multi_listener() {
+	if should_run_multi_server(args, cfg) {
 		log.debug('[vhttpd] run_server: entering multi_server mode')
 		run_multi_server(args, cfg)
 		return
@@ -297,9 +297,21 @@ fn run_server(args []string) {
 	run_single_server(args, cfg)
 }
 
+fn should_run_multi_server(args []string, cfg config.VhttpdConfig) bool {
+	if cfg.uses_multi_listener() {
+		return true
+	}
+	plan := config.load_runtime_plan_or_compile_config(args, cfg) or { return false }
+	return plan.listeners.len > 1
+}
+
 fn runtime_timezone_from_plan_or_config(args []string, cfg config.VhttpdConfig) string {
 	plan := config.load_runtime_plan_or_compile_config(args, cfg) or { return cfg.runtime.timezone }
-	return if plan.server.timezone.trim_space() != '' { plan.server.timezone } else { cfg.runtime.timezone }
+	return if plan.server.timezone.trim_space() != '' {
+		plan.server.timezone
+	} else {
+		cfg.runtime.timezone
+	}
 }
 
 fn configure_runtime_timezone(config_tz string) {

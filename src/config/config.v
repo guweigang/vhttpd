@@ -423,6 +423,12 @@ pub fn load_vhttpd_config(args []string) !VhttpdConfig {
 		return default_vhttpd_config()
 	}
 	text := os.read_file(config_path)!
+	version := detect_config_version(text)!
+	if version == v2_config_version {
+		mut cfg := default_vhttpd_config()
+		cfg.config_path = if config_path.trim_space() != '' { os.abs_path(config_path) } else { '' }
+		return cfg
+	}
 	mut cfg := toml.decode[VhttpdConfig](text)!
 	doc := toml.parse_text(text)!
 	decode_paths_config(doc, mut cfg)!
