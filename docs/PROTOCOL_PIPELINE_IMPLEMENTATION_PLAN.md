@@ -918,6 +918,7 @@ Progress as of 2026-06-22:
 - `P3.2` HTTP normalization slice complete: the dispatch module can build a request Exchange from plain HTTP values and match it against pure method, host, path, query, and header rules while keeping veb request objects and compiled regex state at the ingress/runtime edge
 - `P3.2` plan projection slice complete: listener pipelines can be projected from RuntimePlan into dispatch pipeline descriptors and basic HTTP matchers while preserving declaration order and leaving regex indexes to the runtime edge
 - `P3.3` terminal adapter slice complete: fixed-response and reject now have dispatch `EgressAdapter` implementations and RuntimePlan projection helpers that return protocol-neutral delivery outcomes without importing veb or HTTP connection state
+- `P3.4` terminal HTTP slice started: existing route status and redirect responses now flow through dispatch fixed-response delivery outcomes before HTTP rendering, preserving legacy headers, trace IDs, status/body behavior, and route response headers
 
 Batches:
 
@@ -944,7 +945,7 @@ Batches:
 1. Add Exchange, capability, action, adapter, and pipeline contracts. (contract slice complete)
 2. Implement HTTP ingress normalization. (pure value-to-Exchange conversion and basic HTTP matcher complete)
 3. Wrap PHP worker, PHP CGI, static, upload, fixed response, and reject as adapters. (fixed-response and reject slices complete)
-4. Execute existing HTTP routes through compiled pipelines.
+4. Execute existing HTTP routes through compiled pipelines. (started with terminal fixed-response delivery outcome rendering)
 5. Preserve cache and security policies through named policy plans.
 
 Acceptance:

@@ -1,5 +1,6 @@
 module main
 
+import dispatch
 import executor
 import log
 import net.http
@@ -59,6 +60,49 @@ fn HttpResponseRuntime.dispatch_error(mut app App, mut ctx Context, req HttpIngr
 	ctx.set_custom_header('x-vhttpd-error-class', error_class) or {}
 	ctx.res.set_status(http.status_from_int(status))
 	return ctx.text(req.body_on_head)
+}
+
+fn HttpResponseRuntime.delivery_outcome(mut app App, mut ctx Context, req HttpIngressRequest, outcome dispatch.DeliveryOutcome, matched_rule ?RuntimeRouteRule) veb.Result {
+	status := if outcome.status > 0 { outcome.status } else { 200 }
+	error_class := outcome.error_class
+	log.info('[http] ⇠ delivery outcome method=${req.method.to_upper()} path=${req.path} trace_id=${req.trace_id} request_id=${req.request_id} status=${status} kind=${outcome.kind} duration_ms=${time.now().unix_milli() - req.start_ms}')
+	mut event_fields := {
+		'method':      req.method.to_upper()
+		'path':        transport.normalize_path(req.path)
+		'status':      '${status}'
+		'request_id':  req.request_id
+		'trace_id':    req.trace_id
+		'duration_ms': '${time.now().unix_milli() - req.start_ms}'
+	}
+	if error_class != '' {
+		event_fields['error_class'] = error_class
+	}
+	if outcome.error != '' {
+		event_fields['error'] = outcome.error
+	}
+	app.emit('http.request', event_fields)
+	ctx.set_custom_header('x-vhttpd-trace-id', req.trace_id) or {}
+	if error_class != '' {
+		ctx.set_custom_header('x-vhttpd-error-class', error_class) or {}
+	}
+	for name, value in outcome.headers {
+		if value == '' {
+			continue
+		}
+		ctx.set_custom_header(name, value) or {}
+	}
+	if rule := matched_rule {
+		apply_route_response_headers(mut ctx, rule)
+	}
+	ctx.res.set_status(http.status_from_int(status))
+	body := if req.method.to_upper() == 'HEAD' || status in [204, 304] {
+		''
+	} else if outcome.body != '' {
+		outcome.body
+	} else {
+		req.body_on_head
+	}
+	return ctx.text(body)
 }
 
 fn HttpResponseRuntime.render(mut app App, mut ctx Context, req HttpIngressRequest, mut outcome executor.HttpLogicDispatchOutcome, matched_rule ?RuntimeRouteRule) veb.Result {

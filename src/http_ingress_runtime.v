@@ -1,5 +1,6 @@
 module main
 
+import dispatch
 import executor
 import log
 import net.http
@@ -134,22 +135,55 @@ fn HttpIngressRuntime.handle(mut app App, mut ctx Context, method string, path s
 		}
 		// 2.1 重定向与直接状态响应 (status > 0)
 		if rule.status > 0 {
-			ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-			apply_route_response_headers(mut ctx, rule)
-			ctx.res.set_status(http.status_from_int(rule.status))
-			if rule.status in [301, 302, 307, 308] {
-				if rule.location != '' {
-					ctx.set_custom_header('location', rule.location) or {}
-				}
-				log.info('[http] ⇠ route redirect status=${rule.status} location=${rule.location} trace_id=${trace_id}')
-				return ctx.text(if rule.body != '' { rule.body } else { 'Redirecting...' })
+			mut outcome_headers := map[string]string{}
+			if rule.location != '' {
+				outcome_headers['location'] = rule.location
 			}
-			log.info('[http] ⇠ route status response status=${rule.status} trace_id=${trace_id}')
-			return ctx.text(if method.to_upper() == 'HEAD' || rule.status in [204, 304] {
-				''
+			terminal_body := if rule.status in [301, 302, 307, 308] && rule.body == '' {
+				'Redirecting...'
 			} else {
 				rule.body
+			}
+			mut terminal_adapter := dispatch.EgressAdapter(dispatch.fixed_response_adapter('route/status',
+				rule.status, outcome_headers, terminal_body))
+			exchange := dispatch.http_request_exchange(dispatch.HttpIngressRequest{
+				method:      method
+				path:        normalized_target
+				query:       query.clone()
+				headers:     transport.header_map_from_request(ctx.req)
+				body:        ctx.req.data
+				remote_addr: remote_addr
+				request_id:  req_id
+				trace_id:    trace_id
+				ingress:     ''
+				pipeline:    ''
 			})
+			mut services := dispatch.RuntimeServices(dispatch.NoOpRuntimeServices{
+				trace: trace_id
+			})
+			outcome := terminal_adapter.deliver(mut services, exchange) or {
+				return HttpResponseRuntime.dispatch_error(mut app, mut ctx, HttpIngressRequest{
+					method:        method
+					path:          path
+					dispatch_path: path
+					body_on_head:  body_on_head
+					remote_addr:   remote_addr
+					request_id:    req_id
+					trace_id:      trace_id
+					start_ms:      start_ms
+				}, err.msg())
+			}
+			log.info('[http] ⇠ route terminal status=${rule.status} trace_id=${trace_id}')
+			return HttpResponseRuntime.delivery_outcome(mut app, mut ctx, HttpIngressRequest{
+				method:        method
+				path:          path
+				dispatch_path: path
+				body_on_head:  body_on_head
+				remote_addr:   remote_addr
+				request_id:    req_id
+				trace_id:      trace_id
+				start_ms:      start_ms
+			}, outcome, rule)
 		}
 
 		// 2.2 静态文件高性能直回
