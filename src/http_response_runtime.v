@@ -172,6 +172,7 @@ fn HttpResponseRuntime.upstream_plan(mut app App, mut ctx Context, req HttpIngre
 
 fn HttpResponseRuntime.normal(mut app App, mut ctx Context, req HttpIngressRequest, outcome executor.HttpLogicDispatchOutcome, matched_rule ?RuntimeRouteRule) veb.Result {
 	resp := outcome.response
+	delivery := dispatch.response_outcome(resp.status, resp.headers, resp.body)
 	log.info('[http] ⇠ dispatch response method=${req.method.to_upper()} path=${req.path} trace_id=${req.trace_id} request_id=${req.request_id} status=${resp.status} body_len=${resp.body.len} duration_ms=${time.now().unix_milli() - req.start_ms}')
 	mut cache_result := ''
 	mut cache_reason := ''
@@ -215,6 +216,12 @@ fn HttpResponseRuntime.normal(mut app App, mut ctx Context, req HttpIngressReque
 		'cache':        cache_result
 		'cache_reason': cache_reason
 	})
+	return HttpResponseRuntime.worker_response_outcome(mut ctx, req, delivery, matched_rule,
+		cache_result, cache_reason)
+}
+
+fn HttpResponseRuntime.worker_response_outcome(mut ctx Context, req HttpIngressRequest, outcome dispatch.DeliveryOutcome, matched_rule ?RuntimeRouteRule, cache_result string, cache_reason string) veb.Result {
+	status := if outcome.status > 0 { outcome.status } else { 200 }
 	ctx.set_custom_header('x-vhttpd-trace-id', req.trace_id) or {}
 	if cache_result != '' {
 		ctx.set_custom_header('x-vhttpd-cache', cache_result) or {}
@@ -222,20 +229,20 @@ fn HttpResponseRuntime.normal(mut app App, mut ctx Context, req HttpIngressReque
 	if cache_reason != '' {
 		ctx.set_custom_header('x-vhttpd-cache-reason', cache_reason) or {}
 	}
-	ctx.res.set_status(http.status_from_int(resp.status))
-	apply_worker_headers(mut ctx, resp.headers)
+	ctx.res.set_status(http.status_from_int(status))
+	apply_worker_headers(mut ctx, outcome.headers)
 	if rule := matched_rule {
 		apply_route_response_headers(mut ctx, rule)
 		if rule.cache_control.trim_space() != ''
-			&& !route_response_headers_have(resp.headers, 'cache-control') {
+			&& !route_response_headers_have(outcome.headers, 'cache-control') {
 			ctx.set_custom_header('cache-control', rule.cache_control) or {}
 		}
 	}
-	ctype := resp.headers['content-type'] or { 'text/plain; charset=utf-8' }
+	ctype := outcome.headers['content-type'] or { 'text/plain; charset=utf-8' }
 	ctx.set_content_type(ctype)
 	return ctx.text(if req.body_on_head == '' && req.method.to_upper() == 'HEAD' {
 		''
 	} else {
-		resp.body
+		outcome.body
 	})
 }

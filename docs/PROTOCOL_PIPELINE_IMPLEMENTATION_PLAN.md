@@ -921,6 +921,7 @@ Progress as of 2026-06-22:
 - `P3.4` terminal HTTP slice complete: existing route status, redirect, required-header, denied-query, body-limit, and `executor = "none"` block responses now flow through dispatch delivery outcomes before HTTP rendering, preserving legacy route response headers and carrying trace/error metadata through one terminal helper
 - `P3.4` static file outcome slice complete: static file hits, missing files, and method rejections now produce dispatch delivery outcomes before HTTP rendering, while file existence checks and veb file sending remain owned by the HTTP runtime
 - `P3.4` upload response slice complete: upload success and error responses now render through dispatch delivery outcomes while parsing, persistence, hashing, and upload completion event dispatch remain owned by the upload runtime
+- `P3.4` worker response slice started: normal executor HTTP responses are mapped into dispatch response delivery outcomes before rendering while preserving worker-specific cookie/header handling and response cache behavior
 
 Batches:
 
