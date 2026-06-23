@@ -284,6 +284,68 @@ fn test_http_request_exchange_allows_explicit_exchange_id() {
 	assert exchange.identity.request_id == 'req-5'
 }
 
+fn test_http_exchange_matcher_matches_request_values() {
+	exchange := http_request_exchange(HttpIngressRequest{
+		method:     'get'
+		path:       '/wp-content/app.css'
+		query:      {
+			'ver': '1'
+		}
+		headers:    {
+			'Host':      'Example.test'
+			'X-API-Key': 'secret'
+		}
+		request_id: 'req-6'
+		trace_id:   'trace-6'
+	})
+
+	assert http_exchange_matches(exchange, HttpMatch{
+		methods: ['GET']
+		hosts:   ['example.test']
+		paths:   ['/wp-content/*']
+		query:   {
+			'ver': '*'
+		}
+		headers: {
+			'x-api-key': '*'
+		}
+	})
+	assert !http_exchange_matches(exchange, HttpMatch{
+		methods: ['POST']
+		paths:   ['/wp-content/*']
+	})
+	assert !http_exchange_matches(exchange, HttpMatch{
+		methods: ['GET']
+		paths:   ['/wp-admin/*']
+	})
+	assert !http_exchange_matches(exchange, HttpMatch{
+		methods: ['GET']
+		paths:   ['/wp-content/*']
+		query:   {
+			'missing': '*'
+		}
+	})
+}
+
+fn test_http_exchange_matcher_rejects_non_request_exchange() {
+	exchange := Exchange{
+		identity: ExchangeIdentity{
+			id:       'evt-1'
+			trace_id: 'trace-7'
+		}
+		kind:     .event
+		metadata: map[string]string{}
+		headers:  map[string]string{}
+		payload:  EventPayload{
+			topic: 'upload'
+			name:  'completed'
+		}
+	}
+	assert !http_exchange_matches(exchange, HttpMatch{
+		paths: ['*']
+	})
+}
+
 fn test_transform_action_helpers() {
 	respond := respond_action(204)
 	assert respond.kind == .respond
