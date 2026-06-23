@@ -904,6 +904,7 @@ Progress as of 2026-06-22:
 - `P2.4` plugin slice complete: plugin configs are restored from plugin engine/transform plans and existing VJSX plugin runtime construction is reused without reading V1 plugin maps during app assembly
 - `P2.4` CLI overlay slice complete: executor, worker, PHP, VJSX, Feishu, and Ollama command-line overrides are folded into the active listener RuntimePlan before app assembly, preserving legacy CLI behavior while reducing raw V1 config reads
 - `P2.4` provider slice complete: Feishu, Codex, Ollama, and bridge runtime settings are projected from RuntimePlan adapters/relays with the legacy provider resolver retained only as a compatibility fallback
+- `P2.4` primary engine slice complete: `ServerRuntimeConfig.executor_plan` is reconstructed from the active listener fallback engine in RuntimePlan, reusing the existing executor registry and retaining legacy path-resolution fallbacks
 
 Batches:
 

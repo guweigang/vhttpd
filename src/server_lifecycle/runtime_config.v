@@ -70,8 +70,6 @@ pub fn ServerRuntimeConfig.resolve_for_target_with_plan(args []string, cfg confi
 	pid_file := config.CliArgs.string_or(args, '--pid-file', cfg.files.pid_file)
 	worker_read_timeout_ms := config.CliArgs.int_or(args, '--worker-read-timeout-ms',
 		cfg.worker.read_timeout_ms)
-	worker_cmd_override := config.CliArgs.string_or(args, '--worker-cmd', cfg.worker.cmd)
-	worker_autostart := config.CliArgs.bool_or(args, '--worker-autostart', cfg.worker.autostart)
 	worker_restart_backoff_ms := config.CliArgs.int_or(args, '--worker-restart-backoff-ms',
 		cfg.worker.restart_backoff_ms)
 	worker_restart_backoff_max_ms := config.CliArgs.int_or(args, '--worker-restart-backoff-max-ms',
@@ -96,10 +94,8 @@ pub fn ServerRuntimeConfig.resolve_for_target_with_plan(args []string, cfg confi
 	ssl_cert_key := config.CliArgs.string_or(args, '--ssl-key', ssl.cert_key)
 	ssl_enabled := ssl.enabled || (ssl_cert.trim_space() != '' && ssl_cert_key.trim_space() != '')
 	provider_settings := provider.ProviderRuntimeSettings.resolve(args, cfg)
-	executor_plan := executor.LogicExecutorRuntimePlan.resolve(args, cfg, config.resolve_worker_sockets_with_defaults(args,
-		cfg.worker.socket, cfg.worker.pool_size, cfg.worker.socket_prefix,
-		cfg.worker.sockets.join(',')), cfg.worker.stream_dispatch, cfg.worker.websocket_dispatch,
-		worker_autostart, worker_cmd_override, cfg.worker.env.clone())!
+	executor_plan := executor.LogicExecutorRuntimePlan.resolve_from_plan(args, cfg, resolved_plan,
+		plan_listener_id)!
 	workdir := os.getwd()
 	socket_label := if listener_id != '' {
 		listener_id
