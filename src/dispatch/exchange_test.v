@@ -411,3 +411,13 @@ fn test_transform_action_helpers() {
 	assert reject.status == 403
 	assert reject.error_class == 'security_policy'
 }
+
+fn test_file_delivery_outcome() {
+	outcome := file_outcome('/tmp/app.css', {
+		'cache-control': 'public, max-age=60'
+	})
+	assert outcome.kind == .file
+	assert outcome.status == 200
+	assert outcome.path == '/tmp/app.css'
+	assert outcome.headers['cache-control'] == 'public, max-age=60'
+}

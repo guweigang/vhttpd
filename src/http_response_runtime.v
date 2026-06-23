@@ -63,6 +63,9 @@ fn HttpResponseRuntime.dispatch_error(mut app App, mut ctx Context, req HttpIngr
 }
 
 fn HttpResponseRuntime.delivery_outcome(mut app App, mut ctx Context, req HttpIngressRequest, outcome dispatch.DeliveryOutcome, matched_rule ?RuntimeRouteRule) veb.Result {
+	if outcome.kind == .file {
+		return HttpResponseRuntime.file_outcome(mut app, mut ctx, req, outcome, matched_rule)
+	}
 	status := if outcome.status > 0 { outcome.status } else { 200 }
 	error_class := outcome.error_class
 	log.info('[http] ⇠ delivery outcome method=${req.method.to_upper()} path=${req.path} trace_id=${req.trace_id} request_id=${req.request_id} status=${status} kind=${outcome.kind} duration_ms=${time.now().unix_milli() - req.start_ms}')
@@ -103,6 +106,29 @@ fn HttpResponseRuntime.delivery_outcome(mut app App, mut ctx Context, req HttpIn
 		req.body_on_head
 	}
 	return ctx.text(body)
+}
+
+fn HttpResponseRuntime.file_outcome(mut app App, mut ctx Context, req HttpIngressRequest, outcome dispatch.DeliveryOutcome, matched_rule ?RuntimeRouteRule) veb.Result {
+	log.info('[http] ⇠ delivery file method=${req.method.to_upper()} path=${req.path} file=${outcome.path} trace_id=${req.trace_id} request_id=${req.request_id} duration_ms=${time.now().unix_milli() - req.start_ms}')
+	app.emit('http.request', {
+		'method':      req.method.to_upper()
+		'path':        transport.normalize_path(req.path)
+		'status':      '200'
+		'request_id':  req.request_id
+		'trace_id':    req.trace_id
+		'duration_ms': '${time.now().unix_milli() - req.start_ms}'
+	})
+	ctx.set_custom_header('x-vhttpd-trace-id', req.trace_id) or {}
+	for name, value in outcome.headers {
+		if value == '' {
+			continue
+		}
+		ctx.set_custom_header(name, value) or {}
+	}
+	if rule := matched_rule {
+		apply_route_response_headers(mut ctx, rule)
+	}
+	return ctx.file(outcome.path)
 }
 
 fn HttpResponseRuntime.render(mut app App, mut ctx Context, req HttpIngressRequest, mut outcome executor.HttpLogicDispatchOutcome, matched_rule ?RuntimeRouteRule) veb.Result {

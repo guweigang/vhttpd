@@ -8,6 +8,7 @@ pub:
 
 pub enum DeliveryOutcomeKind {
 	response
+	file
 	accepted_event
 	stream_plan
 	session_plan
@@ -21,6 +22,7 @@ pub:
 	status      int
 	headers     map[string]string
 	body        string
+	path        string
 	target      string
 	error       string
 	error_class string
@@ -33,6 +35,15 @@ pub fn response_outcome(status int, headers map[string]string, body string) Deli
 		status:  status
 		headers: headers.clone()
 		body:    body
+	}
+}
+
+pub fn file_outcome(path string, headers map[string]string) DeliveryOutcome {
+	return DeliveryOutcome{
+		kind:    .file
+		status:  200
+		headers: headers.clone()
+		path:    path
 	}
 }
 

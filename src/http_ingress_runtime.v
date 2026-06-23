@@ -133,12 +133,22 @@ fn HttpIngressRuntime.handle(mut app App, mut ctx Context, method string, path s
 			root_dir := app.http_routing.static_root(rule)
 			file_path := os.join_path(root_dir, normalized_target.trim_left('/'))
 			if os.exists(file_path) && !os.is_dir(file_path) {
+				mut file_headers := map[string]string{}
 				if rule.cache_control.trim_space() != '' {
-					ctx.set_custom_header('cache-control', rule.cache_control) or {}
+					file_headers['cache-control'] = rule.cache_control
 				}
-				apply_route_response_headers(mut ctx, rule)
 				log.info('[http] ⇠ route static file=${file_path} trace_id=${trace_id}')
-				return ctx.file(file_path)
+				outcome := dispatch.file_outcome(file_path, file_headers)
+				return HttpResponseRuntime.delivery_outcome(mut app, mut ctx, HttpIngressRequest{
+					method:        method
+					path:          path
+					dispatch_path: path
+					body_on_head:  body_on_head
+					remote_addr:   remote_addr
+					request_id:    req_id
+					trace_id:      trace_id
+					start_ms:      start_ms
+				}, outcome, rule)
 			}
 			log.warn('[http] ⇠ route static file not found path=${file_path} trace_id=${trace_id}')
 			ctx.res.set_status(.not_found)
