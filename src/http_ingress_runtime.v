@@ -127,8 +127,11 @@ fn HttpIngressRuntime.handle(mut app App, mut ctx Context, method string, path s
 		// 2.2 静态文件高性能直回
 		if rule.executor == 'static' {
 			if method.to_upper() !in ['GET', 'HEAD'] {
-				ctx.res.set_status(.method_not_allowed)
-				return ctx.text('Method Not Allowed')
+				mut terminal_adapter := dispatch.EgressAdapter(dispatch.fixed_response_adapter('route/static_method',
+					405, map[string]string{}, 'Method Not Allowed'))
+				return render_http_terminal_adapter(mut app, mut ctx, method, path,
+					normalized_target, query, body_on_head, remote_addr, req_id, trace_id,
+					start_ms, rule, mut terminal_adapter)
 			}
 			root_dir := app.http_routing.static_root(rule)
 			file_path := os.join_path(root_dir, normalized_target.trim_left('/'))
@@ -151,8 +154,11 @@ fn HttpIngressRuntime.handle(mut app App, mut ctx Context, method string, path s
 				}, outcome, rule)
 			}
 			log.warn('[http] ⇠ route static file not found path=${file_path} trace_id=${trace_id}')
-			ctx.res.set_status(.not_found)
-			return ctx.text('Not Found')
+			mut terminal_adapter := dispatch.EgressAdapter(dispatch.fixed_response_adapter('route/static_not_found',
+				404, map[string]string{}, 'Not Found'))
+			return render_http_terminal_adapter(mut app, mut ctx, method, path, normalized_target,
+				query, body_on_head, remote_addr, req_id, trace_id, start_ms, rule, mut
+				terminal_adapter)
 		}
 
 		if rule.executor == 'upload' {
