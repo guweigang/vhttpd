@@ -921,7 +921,9 @@ Progress as of 2026-06-22:
 - `P3.4` terminal HTTP slice complete: existing route status, redirect, required-header, denied-query, body-limit, and `executor = "none"` block responses now flow through dispatch delivery outcomes before HTTP rendering, preserving legacy route response headers and carrying trace/error metadata through one terminal helper
 - `P3.4` static file outcome slice complete: static file hits, missing files, and method rejections now produce dispatch delivery outcomes before HTTP rendering, while file existence checks and veb file sending remain owned by the HTTP runtime
 - `P3.4` upload response slice complete: upload success and error responses now render through dispatch delivery outcomes while parsing, persistence, hashing, and upload completion event dispatch remain owned by the upload runtime
-- `P3.4` worker response slice started: normal executor HTTP responses are mapped into dispatch response delivery outcomes before rendering, and delivery header rendering now handles `Set-Cookie` generically across worker, MCP, and terminal outcomes while preserving response cache behavior
+- `P3.4` worker response slice complete for finite responses: normal executor HTTP responses are mapped into dispatch response delivery outcomes before rendering, response-cache storage decisions read delivery outcomes directly, and delivery header rendering handles `Set-Cookie` generically across worker, MCP, and terminal outcomes while preserving response cache behavior
+- `P3.4` failure response slice complete: worker/backend dispatch errors are classified into dispatch failure delivery outcomes before HTTP rendering, so trace/error headers and `http.request` observations flow through the same terminal renderer as other delivery outcomes
+- `P3.4` stream boundary decision recorded: current stream and upstream-plan executor outcomes still carry live Unix connection or concrete upstream plan state, so they remain outside pure dispatch delivery outcomes until stream/upstream runtimes own those live resources behind protocol-neutral terminal plans
 
 Batches:
 
