@@ -153,9 +153,11 @@ fn HttpIngressRuntime.handle(mut app App, mut ctx Context, method string, path s
 		// 2.3 阻断返回
 		if rule.executor == 'none' {
 			log.info('[http] ⇠ route none (block) trace_id=${trace_id}')
-			apply_route_response_headers(mut ctx, rule)
-			ctx.res.set_status(.not_found)
-			return ctx.text('Not Found')
+			mut terminal_adapter := dispatch.EgressAdapter(dispatch.fixed_response_adapter('route/none',
+				404, map[string]string{}, 'Not Found'))
+			return render_http_terminal_adapter(mut app, mut ctx, method, path, normalized_target,
+				query, body_on_head, remote_addr, req_id, trace_id, start_ms, rule, mut
+				terminal_adapter)
 		}
 	}
 
