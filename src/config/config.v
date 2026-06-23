@@ -398,7 +398,7 @@ pub fn default_vhttpd_config() VhttpdConfig {
 	return VhttpdConfig{}
 }
 
-pub fn load_vhttpd_config(args []string) !VhttpdConfig {
+fn config_path_from_args(args []string) string {
 	mut config_path := CliArgs.string_or(args, '--config', '')
 	if config_path == '' {
 		config_path = os.getenv('VHTTPD_CONFIG')
@@ -414,6 +414,11 @@ pub fn load_vhttpd_config(args []string) !VhttpdConfig {
 			}
 		}
 	}
+	return config_path
+}
+
+pub fn load_vhttpd_config(args []string) !VhttpdConfig {
+	config_path := config_path_from_args(args)
 	if config_path == '' {
 		return default_vhttpd_config()
 	}

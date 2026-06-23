@@ -51,11 +51,16 @@ pub:
 }
 
 pub fn ServerRuntimeConfig.resolve(args []string, cfg config.VhttpdConfig) !ServerRuntimeConfig {
-	host := config.CliArgs.string_or(args, '--host', cfg.server.host)
-	port := config.CliArgs.int_or(args, '--port', cfg.server.port)
-	plan := config.compile_v1_runtime_plan(cfg)!
+	plan := config.load_runtime_plan_or_compile_config(args, cfg)!
+	plan_listener_id := plan.first_listener_id_or_default()
+	listener := plan.listener_or_default(plan_listener_id) or { runtime_plan.ListenerPlan{} }
+	host_fallback := if listener.host.trim_space() != '' { listener.host } else { cfg.server.host }
+	port_fallback := if listener.port > 0 { listener.port } else { cfg.server.port }
+	host := config.CliArgs.string_or(args, '--host', host_fallback)
+	port := config.CliArgs.int_or(args, '--port', port_fallback)
+	ssl := server_ssl_config_from_plan_listener(listener, cfg.server.ssl)
 	return ServerRuntimeConfig.resolve_for_target_with_plan(args, cfg, '', '', host, port,
-		cfg.server.ssl, true, plan, 'default')
+		ssl, true, plan, plan_listener_id)
 }
 
 pub fn ServerRuntimeConfig.resolve_for_target(args []string, cfg config.VhttpdConfig, listener_id string, site_id string, host string, port int, ssl config.ServerSslConfig, admin_enabled_override bool) !ServerRuntimeConfig {
@@ -178,6 +183,18 @@ fn plan_pid_file(plan runtime_plan.RuntimePlan, fallback string) string {
 
 fn plan_admin_token(plan runtime_plan.RuntimePlan, fallback string) string {
 	return if plan.control.token.trim_space() != '' { plan.control.token } else { fallback }
+}
+
+fn server_ssl_config_from_plan_listener(listener runtime_plan.ListenerPlan, fallback config.ServerSslConfig) config.ServerSslConfig {
+	if !listener.tls.enabled && listener.tls.cert.trim_space() == ''
+		&& listener.tls.cert_key.trim_space() == '' {
+		return fallback
+	}
+	return config.ServerSslConfig{
+		enabled:  listener.tls.enabled
+		cert:     listener.tls.cert
+		cert_key: listener.tls.cert_key
+	}
 }
 
 fn assets_runtime_from_plan(plan runtime_plan.RuntimePlan, listener_id string, fallback config.AssetsConfig) config.AssetsRuntime {

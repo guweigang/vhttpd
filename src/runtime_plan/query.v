@@ -4,6 +4,27 @@ pub fn listener_id_or_default(listener_id string) string {
 	return if listener_id.trim_space() == '' { 'default' } else { listener_id }
 }
 
+pub fn (plan RuntimePlan) first_listener_id_or_default() string {
+	if 'default' in plan.listeners {
+		return 'default'
+	}
+	mut ids := plan.listeners.keys()
+	ids.sort()
+	if ids.len == 0 {
+		return 'default'
+	}
+	return ids[0]
+}
+
+pub fn (plan RuntimePlan) listener_or_default(listener_id string) ?ListenerPlan {
+	target_listener_id := if listener_id.trim_space() == '' {
+		plan.first_listener_id_or_default()
+	} else {
+		listener_id
+	}
+	return plan.listeners[target_listener_id] or { none }
+}
+
 pub fn (plan RuntimePlan) listener_pipelines(listener_id string) []PipelinePlan {
 	target_listener_id := listener_id_or_default(listener_id)
 	mut pipelines := []PipelinePlan{}

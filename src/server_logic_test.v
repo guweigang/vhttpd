@@ -238,6 +238,54 @@ cert_key = "certs/server.key"
 	assert override_cfg.ssl_cert_key == '/tmp/override.key'
 }
 
+fn test_server_runtime_config_resolves_listener_from_v2_runtime_plan() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_v2_runtime_listener_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	config_file := os.join_path(temp_dir, 'vhttpd.toml')
+	os.write_file(config_file, '
+version = 2
+
+[listeners.web]
+protocol = "http"
+transport = "tcp"
+host = "127.0.0.8"
+port = 18444
+
+[listeners.web.tls]
+enabled = true
+cert = "/tmp/server.crt"
+cert_key = "/tmp/server.key"
+
+[engines.vjsx]
+kind = "vjsx"
+entry = "app.mts"
+
+[adapters.app]
+kind = "http-handler"
+engine = "engine:vjsx"
+
+[[pipelines]]
+id = "site"
+ingress = "listener:web"
+match.paths = ["*"]
+egress = "adapter:app"
+') or { panic(err) }
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	cfg := config.load_vhttpd_config(['--config', config_file]) or { panic(err) }
+	runtime_cfg := server_lifecycle.ServerRuntimeConfig.resolve(['--config', config_file],
+		cfg) or { panic(err) }
+	assert runtime_cfg.plan.source.schema_version == 2
+	assert !runtime_cfg.plan.source.compatibility
+	assert runtime_cfg.plan_listener_id == 'web'
+	assert runtime_cfg.host == '127.0.0.8'
+	assert runtime_cfg.port == 18444
+	assert runtime_cfg.ssl_enabled
+	assert runtime_cfg.ssl_cert == '/tmp/server.crt'
+	assert runtime_cfg.ssl_cert_key == '/tmp/server.key'
+}
+
 fn test_load_vhttpd_config_supports_route_cache_control() {
 	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_route_cache_control_test')
 	os.mkdir_all(temp_dir) or { panic(err) }

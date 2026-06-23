@@ -47,6 +47,26 @@ fn test_runtime_plan_preserves_pipeline_declaration_order() {
 	assert plan.pipeline('missing') == none
 }
 
+fn test_runtime_plan_listener_default_query_prefers_default_then_sorted() {
+	default_plan := RuntimePlan{
+		listeners: {
+			'web':     ListenerPlan{id: 'web', port: 8080}
+			'default': ListenerPlan{id: 'default', port: 18080}
+		}
+	}
+	assert default_plan.first_listener_id_or_default() == 'default'
+	assert default_plan.listener_or_default('')?.port == 18080
+
+	sorted_plan := RuntimePlan{
+		listeners: {
+			'web_b': ListenerPlan{id: 'web_b', port: 8082}
+			'web_a': ListenerPlan{id: 'web_a', port: 8081}
+		}
+	}
+	assert sorted_plan.first_listener_id_or_default() == 'web_a'
+	assert sorted_plan.listener_or_default('')?.port == 8081
+}
+
 fn test_plan_options_keep_kind_specific_values_typed() {
 	resource := ResourcePlan{
 		id:       'db/wordpress'
