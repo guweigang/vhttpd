@@ -899,6 +899,7 @@ Progress as of 2026-06-22:
 - `P2.2` complete: `config.V2Config` explicitly models every stable root domain, resource and policy subcategories, kind-facing specs, references, matches, TLS, tracing, and relay fields; a representative TOML decode test covers the complete root vocabulary
 - `P2.3` complete: the shared compiler resolves and validates all plan references; the V1 compatibility compiler covers core HTTP resources, named engines, route policies, MCP/OpenAI ingress, Feishu/Codex adapters, plugin transforms, WebSocket concurrency, bridge relays, fixed responses, and upload-completion event pipelines; plan diagnostics expose compatibility rewrites, an independently authored V1/V2 golden produces equivalent HTTP plans, and the repository WordPress/OpenAI examples compile successfully
 - `P2.4` in progress: single-site and multi-site resolution carry one immutable RuntimePlan with an explicit active listener ID; DataPlaneRuntime owns it, and request-time route rules plus referenced additional-worker discovery are now assembled from listener pipelines, adapters, transforms, and policies rather than raw V1 routes
+- `P2.4` resource slice complete: DB and cache transport runtimes are selected from the active listener fallback engine resources in RuntimePlan, so multi-site listeners no longer depend on global V1 DB/cache fields during app assembly
 
 Batches:
 

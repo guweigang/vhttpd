@@ -1722,6 +1722,13 @@ fn test_build_app_runtime_projects_executor_plan_into_app_state() {
 	cfg.mcp.max_sessions = 55
 	cfg.mcp.max_pending_messages = 21
 	cfg.mcp.session_ttl_seconds = 77
+	cfg.db.enabled = true
+	cfg.db.socket = '/tmp/plan-db.sock'
+	cfg.db.driver = 'mysql'
+	cfg.db.pool_name = 'plan_pool'
+	cfg.db.mysql.database = 'plan_db'
+	cfg.cache.enabled = true
+	cfg.cache.socket = '/tmp/plan-cache.sock'
 	cfg.routes = [
 		config.RouteRuleConfig{
 			match:    config.RouteMatchConfig{
@@ -1851,6 +1858,11 @@ fn test_build_app_runtime_projects_executor_plan_into_app_state() {
 	assert app.control_plane.admin.token == 'secret'
 	assert app.assets.enabled
 	assert app.assets.root_real == '/private/tmp/assets'
+	assert app.transport.db.enabled
+	assert app.transport.db.socket == '/tmp/plan-db.sock'
+	assert app.transport.db.database == 'plan_db'
+	assert app.transport.cache.enabled
+	assert app.transport.cache.socket == '/tmp/plan-cache.sock'
 	assert app.http_routing.rules.len == 2
 	assert app.http_routing.rules[1].match_method == ['GET']
 	assert app.http_routing.rules[1].cache_control == 'public, max-age=31536000, immutable'

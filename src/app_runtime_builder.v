@@ -38,6 +38,8 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 		'default'
 	}
 	runtime_routes := runtime_routes_from_plan(plan, plan_listener_id)
+	db_settings := db_runtime_settings_from_plan(plan, plan_listener_id)
+	cache_enabled, cache_socket := cache_runtime_settings_from_plan(plan, plan_listener_id)
 
 	// 2. 遍历 routes 中的所有附加 executor，如果有专属的进程池配置则实例化其 WorkerState
 	mut add_workers := map[string]&worker.WorkerState{}
@@ -151,8 +153,8 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 			}
 		}
 		transport:     TransportRuntimeHub{
-			db:    dbx.Runtime.from_settings(provider_settings.db)
-			cache: cachex.Runtime.new(cfg.cache.enabled, cfg.cache.socket)
+			db:    dbx.Runtime.from_settings(db_settings)
+			cache: cachex.Runtime.new(cache_enabled, cache_socket)
 		}
 		websocket:     WebSocketRuntime.new(executor_plan.bootstrap.websocket_dispatch_mode)
 		upstreams:     UpstreamRuntimeRegistry.new()
