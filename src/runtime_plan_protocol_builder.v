@@ -112,3 +112,35 @@ fn openai_routes_from_adapter(adapter runtime_plan.AdapterPlan) map[string]confi
 	}
 	return routes
 }
+
+fn plugin_configs_from_plan(plan runtime_plan.RuntimePlan) map[string]config.PluginConfig {
+	mut configs := map[string]config.PluginConfig{}
+	mut transform_ids := plan.transforms.keys()
+	transform_ids.sort()
+	for id in transform_ids {
+		transform := plan.transforms[id]
+		if !id.contains('/plugin/') {
+			continue
+		}
+		name := id.all_after_last('/')
+		engine_ref := transform.engine or { continue }
+		engine := plan.engines[engine_ref.id] or { continue }
+		configs[name] = config.PluginConfig{
+			kind:              transform.kind
+			entry:             engine.options.strings['entry']
+			app_entry:         engine.options.strings['entry']
+			module_root:       engine.options.strings['module_root']
+			build_root:        engine.options.strings['build_root']
+			signature_root:    engine.options.strings['signature_root']
+			signature_include: engine.options.string_lists['signature_include'].clone()
+			signature_exclude: engine.options.string_lists['signature_exclude'].clone()
+			runtime_profile:   engine.options.strings['runtime_profile']
+			thread_count:      engine.options.ints['thread_count']
+			max_requests:      engine.options.ints['max_requests']
+			enable_fs:         engine.options.bools['enable_fs']
+			enable_process:    engine.options.bools['enable_process']
+			enable_network:    engine.options.bools['enable_network']
+		}
+	}
+	return configs
+}

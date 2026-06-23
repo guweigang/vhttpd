@@ -1734,6 +1734,12 @@ fn test_build_app_runtime_projects_executor_plan_into_app_state() {
 		models:  ['demo-model']
 		backend: 'main'
 	}
+	cfg.openai.plugin = 'planner'
+	cfg.plugins['planner'] = config.PluginConfig{
+		entry:           vjsx_app
+		runtime_profile: 'node'
+		thread_count:    1
+	}
 	cfg.db.enabled = true
 	cfg.db.socket = '/tmp/plan-db.sock'
 	cfg.db.driver = 'mysql'
@@ -1900,6 +1906,7 @@ fn test_build_app_runtime_projects_executor_plan_into_app_state() {
 	assert app.protocols.openai.base_path == '/openai/v1'
 	assert app.protocols.openai.backends['main'].base_url == 'https://api.example.test/v1'
 	assert app.protocols.openai.routes['demo'].models == ['demo-model']
+	assert app.protocols.plugins.configs['planner'].app_entry == vjsx_app
 	assert app.providers.feishu.enabled
 	assert app.providers.feishu.open_base_url == 'https://open.feishu.test'
 	assert app.providers.feishu.apps['main'].app_id == 'app-1'

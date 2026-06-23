@@ -901,6 +901,7 @@ Progress as of 2026-06-22:
 - `P2.4` in progress: single-site and multi-site resolution carry one immutable RuntimePlan with an explicit active listener ID; DataPlaneRuntime owns it, and request-time route rules plus referenced additional-worker discovery are now assembled from listener pipelines, adapters, transforms, and policies rather than raw V1 routes
 - `P2.4` resource slice complete: DB and cache transport runtimes are selected from the active listener fallback engine resources in RuntimePlan, so multi-site listeners no longer depend on global V1 DB/cache fields during app assembly
 - `P2.4` protocol slice complete: MCP and OpenAI runtime state are projected from listener adapter plans, including limits, allowed origins, endpoint toggles, backend records, and model routes
+- `P2.4` plugin slice complete: plugin configs are restored from plugin engine/transform plans and existing VJSX plugin runtime construction is reused without reading V1 plugin maps during app assembly
 
 Batches:
 

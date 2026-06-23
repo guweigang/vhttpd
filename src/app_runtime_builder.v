@@ -27,6 +27,7 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 	cache_enabled, cache_socket := cache_runtime_settings_from_plan(plan, plan_listener_id)
 	mcp_state := mcp_state_from_plan(plan, plan_listener_id)
 	openai_state := openai_state_from_plan(plan, plan_listener_id)
+	plugin_configs := plugin_configs_from_plan(plan)
 
 	// 2. 遍历 routes 中的所有附加 executor，如果有专属的进程池配置则实例化其 WorkerState
 	mut add_workers := map[string]&worker.WorkerState{}
@@ -117,8 +118,8 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 		protocols:     ProtocolRuntimeHub{
 			runtime_config_json: json.encode(cfg)
 			plugins:             plugin.PluginState{
-				configs: cfg.plugins.clone()
-				vjsx:    build_vjsx_plugin_runtimes(cfg.plugins)
+				configs: plugin_configs.clone()
+				vjsx:    build_vjsx_plugin_runtimes(plugin_configs)
 			}
 			mcp:                 mcp_state
 			openai:              openai_state
