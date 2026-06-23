@@ -5,7 +5,7 @@ declare(strict_types=1);
 use VHttpd\Cache\Client;
 use VHttpd\WordPress\ObjectCache;
 
-$vhttpdPackageRoot = dirname(__DIR__);
+$vhttpdPackageRoot = dirname(__DIR__, 2);
 
 if (!class_exists(ObjectCache::class)) {
     $autoload = getenv('VHTTPD_PHP_PACKAGE_AUTOLOAD');

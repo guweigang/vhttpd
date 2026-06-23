@@ -12,7 +12,7 @@ declare(strict_types=1);
  * }
  */
 
-$vhttpdPackageRoot = dirname(__DIR__);
+$vhttpdPackageRoot = dirname(__DIR__, 2);
 $vhttpdWordPressRoot = '';
 
 foreach (get_included_files() as $includedFile) {
