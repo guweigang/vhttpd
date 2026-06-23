@@ -917,7 +917,7 @@ Progress as of 2026-06-22:
 - `P3.1` contract slice complete: the dispatch module now has pure Exchange identity, kind, payload, capability, transform action, runtime service, transformer, ingress descriptor, egress adapter, delivery outcome, pipeline descriptor, and pipeline dispatcher contracts that do not import executor, veb, or live transport objects
 - `P3.2` HTTP normalization slice complete: the dispatch module can build a request Exchange from plain HTTP values and match it against pure method, host, path, query, and header rules while keeping veb request objects and compiled regex state at the ingress/runtime edge
 - `P3.2` plan projection slice complete: listener pipelines can be projected from RuntimePlan into dispatch pipeline descriptors and basic HTTP matchers while preserving declaration order and leaving regex indexes to the runtime edge
-- `P3.3` fixed-response adapter slice complete: fixed responses now have a dispatch `EgressAdapter` implementation that returns protocol-neutral delivery outcomes without importing veb or HTTP connection state
+- `P3.3` terminal adapter slice complete: fixed-response and reject now have dispatch `EgressAdapter` implementations that return protocol-neutral delivery outcomes without importing veb or HTTP connection state
 
 Batches:
 
@@ -943,7 +943,7 @@ Batches:
 
 1. Add Exchange, capability, action, adapter, and pipeline contracts. (contract slice complete)
 2. Implement HTTP ingress normalization. (pure value-to-Exchange conversion and basic HTTP matcher complete)
-3. Wrap PHP worker, PHP CGI, static, upload, fixed response, and reject as adapters. (fixed-response slice complete)
+3. Wrap PHP worker, PHP CGI, static, upload, fixed response, and reject as adapters. (fixed-response and reject slices complete)
 4. Execute existing HTTP routes through compiled pipelines.
 5. Preserve cache and security policies through named policy plans.
 

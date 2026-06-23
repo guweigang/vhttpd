@@ -223,6 +223,33 @@ fn test_fixed_response_adapter_defaults_status() {
 	assert adapter.status == 200
 }
 
+fn test_reject_adapter_delivers_failure_outcome() {
+	mut services := RuntimeServices(TestServices{
+		trace: 'trace-reject'
+	})
+	exchange := http_request_exchange(HttpIngressRequest{
+		method:     'POST'
+		path:       '/admin'
+		request_id: 'req-reject'
+		trace_id:   'trace-reject'
+	})
+	mut adapter := EgressAdapter(reject_adapter('adapter:reject', 401, 'unauthorized',
+		'auth_required'))
+
+	outcome := adapter.deliver(mut services, exchange) or { panic(err) }
+	assert adapter.id() == 'adapter:reject'
+	assert outcome.kind == .failure
+	assert outcome.status == 401
+	assert outcome.error == 'unauthorized'
+	assert outcome.error_class == 'auth_required'
+}
+
+fn test_reject_adapter_defaults_status_and_error_class() {
+	adapter := reject_adapter('adapter:reject', 0, 'blocked', '')
+	assert adapter.status == 403
+	assert adapter.error_class == 'rejected'
+}
+
 fn test_pipeline_dispatcher_contract() {
 	mut services := RuntimeServices(TestServices{
 		trace: 'trace-3'
