@@ -4,11 +4,8 @@ import cachex
 import dbx
 import config
 import codex
-import api.mcp.protocol as mcp_protocol
-import api.openai
 import provider
 import json
-import state_store
 import time
 import worker
 import admin
@@ -17,18 +14,6 @@ import feishu
 import executor
 import server_lifecycle
 import runtime_plan
-
-fn app_runtime_default_mcp_max_sessions(cfg config.VhttpdConfig) int {
-	return if cfg.mcp.max_sessions > 0 { cfg.mcp.max_sessions } else { 1000 }
-}
-
-fn app_runtime_default_mcp_max_pending_messages(cfg config.VhttpdConfig) int {
-	return if cfg.mcp.max_pending_messages > 0 { cfg.mcp.max_pending_messages } else { 128 }
-}
-
-fn app_runtime_default_mcp_session_ttl_seconds(cfg config.VhttpdConfig) int {
-	return if cfg.mcp.session_ttl_seconds > 0 { cfg.mcp.session_ttl_seconds } else { 900 }
-}
 
 fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executor_plan executor.LogicExecutorRuntimePlan, cfg config.VhttpdConfig, plan runtime_plan.RuntimePlan, build_cfg server_lifecycle.AppRuntimeBuildConfig) &App {
 	// 1. Build request-time routes only from the resolved plan for this listener.
@@ -40,6 +25,8 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 	runtime_routes := runtime_routes_from_plan(plan, plan_listener_id)
 	db_settings := db_runtime_settings_from_plan(plan, plan_listener_id)
 	cache_enabled, cache_socket := cache_runtime_settings_from_plan(plan, plan_listener_id)
+	mcp_state := mcp_state_from_plan(plan, plan_listener_id)
+	openai_state := openai_state_from_plan(plan, plan_listener_id)
 
 	// 2. 遍历 routes 中的所有附加 executor，如果有专属的进程池配置则实例化其 WorkerState
 	mut add_workers := map[string]&worker.WorkerState{}
@@ -133,24 +120,8 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 				configs: cfg.plugins.clone()
 				vjsx:    build_vjsx_plugin_runtimes(cfg.plugins)
 			}
-			mcp:                 mcp_protocol.McpState{
-				max_sessions:               app_runtime_default_mcp_max_sessions(cfg)
-				max_pending_messages:       app_runtime_default_mcp_max_pending_messages(cfg)
-				session_ttl_seconds:        app_runtime_default_mcp_session_ttl_seconds(cfg)
-				sampling_capability_policy: mcp_protocol.McpState.normalize_sampling_capability_policy(cfg.mcp.sampling_capability_policy)
-				allowed_origins:            cfg.mcp.allowed_origins.clone()
-				sessions:                   map[string]mcp_protocol.Session{}
-			}
-			openai:              openai.OpenaiState{
-				enabled:         cfg.openai.enabled
-				base_path:       cfg.openai.base_path
-				default_backend: cfg.openai.default_backend
-				plugin:          cfg.openai.plugin
-				endpoints:       cfg.openai.endpoints
-				backends:        cfg.openai.backends.clone()
-				routes:          cfg.openai.routes.clone()
-				responses:       state_store.MemoryStateStore.new[openai.OpenAIResponseRecord]()
-			}
+			mcp:                 mcp_state
+			openai:              openai_state
 		}
 		transport:     TransportRuntimeHub{
 			db:    dbx.Runtime.from_settings(db_settings)

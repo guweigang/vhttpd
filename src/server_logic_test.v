@@ -1722,6 +1722,18 @@ fn test_build_app_runtime_projects_executor_plan_into_app_state() {
 	cfg.mcp.max_sessions = 55
 	cfg.mcp.max_pending_messages = 21
 	cfg.mcp.session_ttl_seconds = 77
+	cfg.openai.enabled = true
+	cfg.openai.base_path = '/openai/v1'
+	cfg.openai.default_backend = 'main'
+	cfg.openai.backends['main'] = config.OpenAIBackendConfig{
+		kind:       'http'
+		base_url:   'https://api.example.test/v1'
+		timeout_ms: 12345
+	}
+	cfg.openai.routes['demo'] = config.OpenAIRouteConfig{
+		models:  ['demo-model']
+		backend: 'main'
+	}
 	cfg.db.enabled = true
 	cfg.db.socket = '/tmp/plan-db.sock'
 	cfg.db.driver = 'mysql'
@@ -1884,6 +1896,10 @@ fn test_build_app_runtime_projects_executor_plan_into_app_state() {
 	assert app.protocols.mcp.max_sessions == 55
 	assert app.protocols.mcp.max_pending_messages == 21
 	assert app.protocols.mcp.session_ttl_seconds == 77
+	assert app.protocols.openai.enabled
+	assert app.protocols.openai.base_path == '/openai/v1'
+	assert app.protocols.openai.backends['main'].base_url == 'https://api.example.test/v1'
+	assert app.protocols.openai.routes['demo'].models == ['demo-model']
 	assert app.providers.feishu.enabled
 	assert app.providers.feishu.open_base_url == 'https://open.feishu.test'
 	assert app.providers.feishu.apps['main'].app_id == 'app-1'
