@@ -1,4 +1,4 @@
-.PHONY: build vhttpd prod build-prod build-db prepare-build-src deps-core deps-vjsx deps-db deps-full doctor demo-vslim demo-ai demo-symfony demo-laravel demo-wordpress psr-matrix test test-fast test-inproc test-codexbot test-codexbot-fast test-codexbot-lifecycle test-profile-codexbot test-all
+.PHONY: build vhttpd prod build-prod build-db prepare-build-src deps-core deps-vjsx deps-db deps-full doctor demo-vslim demo-ai demo-symfony demo-laravel demo-wordpress package-wp-plugin psr-matrix test test-fast test-inproc test-codexbot test-codexbot-fast test-codexbot-lifecycle test-profile-codexbot test-all
 
 ROOT := $(CURDIR)
 SRC_DIR := $(ROOT)/src
@@ -123,6 +123,9 @@ demo-laravel:
 
 demo-wordpress:
 	@$(ROOT)/examples/run_demo.sh wordpress
+
+package-wp-plugin:
+	@php $(ROOT)/scripts/package-wordpress-plugin.php
 
 psr-matrix:
 	@$(MAKE) -C $(ROOT)/../vphpx/vslim psr-matrix
