@@ -35,7 +35,8 @@ pub fn load_runtime_plan_file(config_path string) !runtime_plan.RuntimePlan {
 	text := os.read_file(config_path)!
 	version := detect_config_version(text)!
 	if version == v2_config_version {
-		cfg := decode_v2_config_strict(text)!
+		mut cfg := decode_v2_config_strict(text)!
+		resolve_v2_config_variables_and_paths(mut cfg, config_path)!
 		return compile_v2_runtime_plan(cfg, os.abs_path(config_path), false)
 	}
 	if version == legacy_config_version {
@@ -49,6 +50,95 @@ fn decode_v2_config_strict(text string) !V2Config {
 	doc := toml.parse_text(text)!
 	validate_v2_config_keys(doc.to_any().as_map())!
 	return doc.decode[V2Config]()!
+}
+
+fn resolve_v2_config_variables_and_paths(mut cfg V2Config, config_path string) ! {
+	env_map := os.environ()
+	base_dir := resolve_config_base_dir(config_path)
+	vars := {
+		'config.dir': base_dir
+		'paths.root': base_dir
+	}
+	cfg.server.pid_file = resolve_v2_path_string(cfg.server.pid_file, base_dir, 'server', vars,
+		env_map)!
+	cfg.observability.event_log = resolve_v2_path_string(cfg.observability.event_log, base_dir,
+		'observability', vars, env_map)!
+	for id, mut listener in cfg.listeners {
+		listener.tls.cert = resolve_v2_path_string(listener.tls.cert, base_dir,
+			'listeners.${id}.tls', vars, env_map)!
+		listener.tls.cert_key = resolve_v2_path_string(listener.tls.cert_key, base_dir,
+			'listeners.${id}.tls', vars, env_map)!
+		for i, mut certificate in listener.tls.certificates {
+			certificate.cert = resolve_v2_path_string(certificate.cert, base_dir,
+				'listeners.${id}.tls.certificates', vars, env_map)!
+			certificate.cert_key = resolve_v2_path_string(certificate.cert_key, base_dir,
+				'listeners.${id}.tls.certificates', vars, env_map)!
+			listener.tls.certificates[i] = certificate
+		}
+		cfg.listeners[id] = listener
+	}
+	for id, mut resource in cfg.resources.cache {
+		resource.socket = resolve_v2_path_string(resource.socket, base_dir,
+			'resources.cache.${id}', vars, env_map)!
+		cfg.resources.cache[id] = resource
+	}
+	for id, mut resource in cfg.resources.storage {
+		resource.root = resolve_v2_path_string(resource.root, base_dir, 'resources.storage.${id}',
+			vars, env_map)!
+		cfg.resources.storage[id] = resource
+	}
+	for id, mut engine in cfg.engines {
+		engine.entry = resolve_v2_path_string(engine.entry, base_dir, 'engines.${id}', vars,
+			env_map)!
+		engine.app = resolve_v2_path_string(engine.app, base_dir, 'engines.${id}', vars, env_map)!
+		engine.module_root = resolve_v2_path_string(engine.module_root, base_dir, 'engines.${id}',
+			vars, env_map)!
+		engine.build_root = resolve_v2_path_string(engine.build_root, base_dir, 'engines.${id}',
+			vars, env_map)!
+		engine.socket = resolve_v2_path_string(engine.socket, base_dir, 'engines.${id}', vars,
+			env_map)!
+		engine.socket_prefix = resolve_v2_path_string(engine.socket_prefix, base_dir,
+			'engines.${id}', vars, env_map)!
+		engine.signature_root = resolve_v2_path_string(engine.signature_root, base_dir,
+			'engines.${id}', vars, env_map)!
+		for i, raw in engine.sockets {
+			engine.sockets[i] = resolve_v2_path_string(raw, base_dir, 'engines.${id}', vars,
+				env_map)!
+		}
+		for i, raw in engine.extensions {
+			engine.extensions[i] = resolve_v2_path_string(raw, base_dir, 'engines.${id}', vars,
+				env_map)!
+		}
+		for key, raw in engine.env {
+			engine.env[key] = resolve_v2_value_string(raw, 'engines.${id}.env', vars, env_map)!
+		}
+		for key, raw in engine.options {
+			engine.options[key] = resolve_v2_value_string(raw, 'engines.${id}.options', vars,
+				env_map)!
+		}
+		cfg.engines[id] = engine
+	}
+	for id, mut adapter in cfg.adapters {
+		adapter.document_root = resolve_v2_path_string(adapter.document_root, base_dir,
+			'adapters.${id}', vars, env_map)!
+		adapter.root = resolve_v2_path_string(adapter.root, base_dir, 'adapters.${id}', vars,
+			env_map)!
+		for key, raw in adapter.options {
+			adapter.options[key] = resolve_v2_value_string(raw, 'adapters.${id}.options', vars,
+				env_map)!
+		}
+		cfg.adapters[id] = adapter
+	}
+}
+
+fn resolve_v2_value_string(raw string, scope string, vars map[string]string, env_map map[string]string) !string {
+	value, _ := expand_config_string(raw, scope, vars, env_map, false)!
+	return value
+}
+
+fn resolve_v2_path_string(raw string, root string, scope string, vars map[string]string, env_map map[string]string) !string {
+	value := resolve_v2_value_string(raw, scope, vars, env_map)!
+	return resolve_config_path(root, value)
 }
 
 fn validate_v2_config_keys(root map[string]toml.Any) ! {

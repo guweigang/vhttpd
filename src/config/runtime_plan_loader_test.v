@@ -183,3 +183,65 @@ fn test_load_runtime_plan_file_accepts_hello_v2_example() {
 	assert plan.adapters['hello'].engine?.str() == 'engine:hello'
 	assert plan.pipelines[0].id == 'hello'
 }
+
+fn test_load_runtime_plan_file_resolves_v2_relative_paths_and_env_defaults() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_runtime_plan_loader_v2_paths_test')
+	config_dir := os.join_path(temp_dir, 'config')
+	os.mkdir_all(config_dir) or { panic(err) }
+	app_file := os.join_path(config_dir, 'app.mts')
+	os.write_file(app_file,
+		'export default { async handle() { return { status: 200, body: "ok" }; } };') or {
+		panic(err)
+	}
+	config_file := os.join_path(config_dir, 'vhttpd.toml')
+	os.write_file(config_file, '
+version = 2
+
+[server]
+pid_file = "run/vhttpd.pid"
+
+[observability]
+event_log = "\${paths.root}/logs/events.ndjson"
+
+[listeners.web]
+protocol = "http"
+transport = "tcp"
+host = "127.0.0.1"
+port = 18083
+
+[resources.storage.uploads]
+kind = "filesystem"
+root = "uploads"
+
+[engines.app]
+kind = "vjsx"
+entry = "\${env.VHTTPD_TEST_V2_ENTRY:-app.mts}"
+module_root = "."
+
+[adapters.app]
+kind = "http-handler"
+engine = "engine:app"
+document_root = "public"
+
+[[pipelines]]
+id = "site"
+ingress = "listener:web"
+match.paths = ["*"]
+egress = "adapter:app"
+') or {
+		panic(err)
+	}
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+
+	plan := load_runtime_plan_file(config_file) or { panic(err) }
+	assert plan.server.pid_file == os.join_path(config_dir, 'run', 'vhttpd.pid')
+	assert plan.observability.event_log == os.join_path(config_dir, 'logs', 'events.ndjson')
+	assert plan.resources['storage/uploads'].options.strings['root'] == os.join_path(config_dir,
+		'uploads')
+	assert plan.engines['app'].options.strings['entry'] == app_file
+	assert plan.engines['app'].options.strings['module_root'] == config_dir
+	assert plan.adapters['app'].options.strings['document_root'] == os.join_path(config_dir,
+		'public')
+}
