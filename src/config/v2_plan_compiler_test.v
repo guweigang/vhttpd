@@ -219,6 +219,29 @@ fn test_compile_v2_runtime_plan_allows_static_adapter_with_storage_ref() {
 	assert plan.adapters['assets'].storage?.str() == 'resource:storage/public'
 }
 
+fn test_compile_v2_runtime_plan_allows_compatibility_static_adapter_without_root() {
+	cfg := V2Config{
+		listeners: {
+			'web': V2ListenerSpec{}
+		}
+		adapters:  {
+			'assets': V2AdapterSpec{
+				kind: 'static'
+			}
+		}
+		pipelines: [
+			V2PipelineSpec{
+				id:      'assets'
+				ingress: 'listener:web'
+				egress:  'adapter:assets'
+			},
+		]
+	}
+	plan := compile_v2_runtime_plan(cfg, '', true) or { panic(err) }
+	assert plan.source.compatibility
+	assert plan.adapters['assets'].kind == 'static'
+}
+
 fn test_compile_v2_runtime_plan_rejects_empty_fixed_response_adapter() {
 	cfg := V2Config{
 		listeners: {

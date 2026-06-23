@@ -85,6 +85,20 @@ pub fn (plan RuntimePlan) listener_fallback_engine(listener_id string) ?EnginePl
 		}
 		return plan.engines[engine_ref.id] or { return none }
 	}
+	for pipeline in plan.listener_pipelines(listener_id) {
+		if pipeline.egress.domain != .adapter {
+			continue
+		}
+		adapter := plan.adapters[pipeline.egress.id] or { continue }
+		if adapter.kind != 'http-handler' {
+			continue
+		}
+		engine_ref := adapter.engine or { continue }
+		if engine_ref.domain != .engine {
+			continue
+		}
+		return plan.engines[engine_ref.id] or { continue }
+	}
 	return none
 }
 

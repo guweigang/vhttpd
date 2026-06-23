@@ -574,7 +574,8 @@ fn validate_adapter_semantics(plan runtime_plan.RuntimePlan) ! {
 				}
 			}
 			'static', 'upload' {
-				if adapter.storage == none && adapter.options.strings['root'].trim_space() == '' {
+				if !plan.source.compatibility && adapter.storage == none
+					&& adapter.options.strings['root'].trim_space() == '' {
 					return error('runtime_plan_adapter_missing_storage:${id}')
 				}
 			}

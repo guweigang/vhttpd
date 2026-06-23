@@ -241,6 +241,7 @@ cert_key = "certs/server.key"
 fn test_server_runtime_config_resolves_listener_from_v2_runtime_plan() {
 	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_v2_runtime_listener_test')
 	os.mkdir_all(temp_dir) or { panic(err) }
+	os.write_file(os.join_path(temp_dir, 'app.mts'), 'export default {}') or { panic(err) }
 	config_file := os.join_path(temp_dir, 'vhttpd.toml')
 	os.write_file(config_file, '
 version = 2
