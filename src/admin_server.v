@@ -110,6 +110,31 @@ pub fn (mut app AdminApp) admin_runtime(mut ctx Context) veb.Result {
 	return ctx.text(body)
 }
 
+@['/admin/runtime/plan'; get]
+pub fn (mut app AdminApp) admin_runtime_plan(mut ctx Context) veb.Result {
+	path := if ctx.req.url == '' { '/admin/runtime/plan' } else { ctx.req.url }
+	req_id := resolve_request_id(ctx, path)
+	trace_id := resolve_trace_id(ctx, path)
+	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
+	ctx.set_content_type('application/json; charset=utf-8')
+	if !app.admin_authorized(ctx) {
+		ctx.res.set_status(http.status_from_int(403))
+		return ctx.text(json.encode(admin.AdminErrorResponse{
+			error: 'forbidden'
+		}))
+	}
+	body := app.shared.protocols.runtime_plan_json
+	app.shared.emit('http.request', {
+		'method':     'GET'
+		'path':       '/admin/runtime/plan'
+		'status':     '200'
+		'request_id': req_id
+		'trace_id':   trace_id
+		'plane':      'admin'
+	})
+	return ctx.text(body)
+}
+
 // New: return registered provider names as a stable admin endpoint so callers
 // don't need to parse /admin/runtime wrapper. This keeps API surface small
 // and explicit for tooling.

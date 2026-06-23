@@ -26,6 +26,28 @@ pub fn (mut app App) admin_runtime(mut ctx Context) veb.Result {
 	return ctx.text(body)
 }
 
+@['/admin/runtime/plan'; get]
+pub fn (mut app App) admin_runtime_plan(mut ctx Context) veb.Result {
+	if !app.control_plane.admin.on_data_plane {
+		ctx.res.set_status(.not_found)
+		return ctx.text('Not Found')
+	}
+	path := if ctx.req.url == '' { '/admin/runtime/plan' } else { ctx.req.url }
+	req_id := resolve_request_id(ctx, path)
+	trace_id := resolve_trace_id(ctx, path)
+	body := app.protocols.runtime_plan_json
+	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
+	ctx.set_content_type('application/json; charset=utf-8')
+	app.emit('http.request', {
+		'method':     'GET'
+		'path':       '/admin/runtime/plan'
+		'status':     '200'
+		'request_id': req_id
+		'trace_id':   trace_id
+	})
+	return ctx.text(body)
+}
+
 @['/admin/runtime/upstreams'; get]
 pub fn (mut app App) admin_runtime_upstreams(mut ctx Context) veb.Result {
 	if !app.control_plane.admin.on_data_plane {
