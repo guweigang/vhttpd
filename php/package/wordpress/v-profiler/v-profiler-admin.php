@@ -38,33 +38,9 @@ add_filter('network_admin_plugin_action_links', function (array $actions, string
 
 // 处理设置页面表单提交
 add_action('admin_init', function (): void {
-    // 安全检查与自动修复：如果不是 vhttpd 服务器却在后台处于 full 模式，强制回退为 restricted，并删除 drop-ins，防止网站崩溃
-    $is_vhttpd = false;
-    $serverSoftware = $_SERVER['SERVER_SOFTWARE'] ?? '';
-    if (str_contains(strtolower($serverSoftware), 'vhttpd') 
-        || getenv('VHTTPD_DB_SOCKET') !== false 
-        || getenv('VHTTPD_CACHE_SOCKET') !== false
-        || getenv('VHTTPD_INTERNAL_ADMIN_SOCKET') !== false
-    ) {
-        $is_vhttpd = true;
-    }
-
-    $current_mode = get_option('v_profiler_mode', 'restricted');
-    if (!$is_vhttpd && $current_mode === 'full') {
-        $db_dst = WP_CONTENT_DIR . '/db.php';
-        $oc_dst = WP_CONTENT_DIR . '/object-cache.php';
-        if (is_file($db_dst)) {
-            @unlink($db_dst);
-        }
-        if (is_file($oc_dst)) {
-            @unlink($oc_dst);
-        }
-        update_option('v_profiler_mode', 'restricted');
-        @file_put_contents(WP_CONTENT_DIR . '/.v-profiler-mode', 'restricted');
-        if (function_exists('opcache_reset')) {
-            @opcache_reset();
-        }
-        clearstatcache(true);
+    // 安全自愈：若当前在非 vhttpd 却处于 full 模式，强行安全降级并清除 Drop-ins
+    if (!\VHttpd\WordPress\ProfilerEnv::isVHttpd() && \VHttpd\WordPress\ProfilerEnv::getMode() === 'full') {
+        \VHttpd\WordPress\ProfilerEnv::switchMode('restricted');
     }
 
     if (!isset($_POST['v_profiler_action'])) {
@@ -134,63 +110,24 @@ add_action('admin_init', function (): void {
     if ($action === 'switch_mode') {
         $target_mode = sanitize_text_field($_POST['target_mode'] ?? 'restricted');
 
-        if ($target_mode === 'full' && !$is_vhttpd) {
+        if ($target_mode === 'full' && !\VHttpd\WordPress\ProfilerEnv::isVHttpd()) {
             wp_safe_redirect(add_query_arg('v_error', 'not_vhttpd', $redirect_url));
             exit;
         }
 
-        $db_src = dirname(__FILE__) . '/db.php';
-        $db_dst = WP_CONTENT_DIR . '/db.php';
-        $oc_src = dirname(__FILE__) . '/object-cache.php';
-        $oc_dst = WP_CONTENT_DIR . '/object-cache.php';
+        // 检查 wp-content 是否可写
+        $contentDir = \VHttpd\WordPress\ProfilerEnv::getWpContentDir();
+        if ($target_mode === 'full' && (!is_writable($contentDir))) {
+            wp_safe_redirect(add_query_arg('v_error', 'dir_not_writable', $redirect_url));
+            exit;
+        }
 
-        if ($target_mode === 'full') {
-            // 切换到完整加速模式 (部署 Drop-ins)
-            if (!is_writable(WP_CONTENT_DIR)) {
-                wp_safe_redirect(add_query_arg('v_error', 'dir_not_writable', $redirect_url));
-                exit;
-            }
-
-            if (!is_file($db_src) || !is_file($oc_src)) {
-                wp_safe_redirect(add_query_arg('v_error', 'source_files_missing', $redirect_url));
-                exit;
-            }
-
-            if (!copy($db_src, $db_dst) || !copy($oc_src, $oc_dst)) {
-                wp_safe_redirect(add_query_arg('v_error', 'copy_failed', $redirect_url));
-                exit;
-            }
-
-            update_option('v_profiler_mode', 'full');
-            @file_put_contents(WP_CONTENT_DIR . '/.v-profiler-mode', 'full');
-            if (function_exists('opcache_reset')) {
-                @opcache_reset();
-            }
-            clearstatcache(true);
-            wp_safe_redirect(add_query_arg('v_success', 'mode_upgraded', $redirect_url));
+        if (\VHttpd\WordPress\ProfilerEnv::switchMode($target_mode)) {
+            $suc_arg = ($target_mode === 'full') ? 'mode_upgraded' : 'mode_downgraded';
+            wp_safe_redirect(add_query_arg('v_success', $suc_arg, $redirect_url));
         } else {
-            // 切换到受限模式 (清除 Drop-ins)
-            if (is_file($db_dst)) {
-                if (!is_writable($db_dst) || !unlink($db_dst)) {
-                    wp_safe_redirect(add_query_arg('v_error', 'delete_db_failed', $redirect_url));
-                    exit;
-                }
-            }
-
-            if (is_file($oc_dst)) {
-                if (!is_writable($oc_dst) || !unlink($oc_dst)) {
-                    wp_safe_redirect(add_query_arg('v_error', 'delete_oc_failed', $redirect_url));
-                    exit;
-                }
-            }
-
-            update_option('v_profiler_mode', 'restricted');
-            @file_put_contents(WP_CONTENT_DIR . '/.v-profiler-mode', 'restricted');
-            if (function_exists('opcache_reset')) {
-                @opcache_reset();
-            }
-            clearstatcache(true);
-            wp_safe_redirect(add_query_arg('v_success', 'mode_downgraded', $redirect_url));
+            $err_arg = ($target_mode === 'full') ? 'copy_failed' : 'delete_db_failed';
+            wp_safe_redirect(add_query_arg('v_error', $err_arg, $redirect_url));
         }
         exit;
     }
@@ -198,20 +135,11 @@ add_action('admin_init', function (): void {
 
 // 渲染后台管理页面
 function v_profiler_render_admin_page(): void {
-    // 检测是否是 vhttpd 服务器
-    $is_vhttpd = false;
-    $serverSoftware = $_SERVER['SERVER_SOFTWARE'] ?? '';
-    if (str_contains(strtolower($serverSoftware), 'vhttpd') 
-        || getenv('VHTTPD_DB_SOCKET') !== false 
-        || getenv('VHTTPD_CACHE_SOCKET') !== false
-        || getenv('VHTTPD_INTERNAL_ADMIN_SOCKET') !== false
-    ) {
-        $is_vhttpd = true;
-    }
+    $is_vhttpd = \VHttpd\WordPress\ProfilerEnv::isVHttpd();
+    $current_mode = \VHttpd\WordPress\ProfilerEnv::getMode();
 
     // 状态查询
     $widget_enabled = get_option('v_profiler_widget_enabled', 'yes') === 'yes';
-    $current_mode = get_option('v_profiler_mode', 'restricted');
 
     $db_dst = WP_CONTENT_DIR . '/db.php';
     $oc_dst = WP_CONTENT_DIR . '/object-cache.php';

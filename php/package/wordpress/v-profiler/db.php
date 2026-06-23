@@ -29,17 +29,7 @@ if (!is_string($pool) || $pool === '') {
 $timeout = getenv('VHTTPD_DB_TIMEOUT_MS');
 $timeoutMs = is_string($timeout) && ctype_digit($timeout) ? (int) $timeout : 1000;
 
-$isVHttpd = false;
-$serverSoftware = $_SERVER['SERVER_SOFTWARE'] ?? '';
-if (str_contains(strtolower($serverSoftware), 'vhttpd') 
-    || getenv('VHTTPD_DB_SOCKET') !== false 
-    || getenv('VHTTPD_CACHE_SOCKET') !== false
-    || getenv('VHTTPD_INTERNAL_ADMIN_SOCKET') !== false
-) {
-    $isVHttpd = true;
-}
-
-if (!class_exists(Wpdb::class) || !$isVHttpd) {
+if (!class_exists(Wpdb::class) || !\VHttpd\WordPress\ProfilerEnv::isFullMode()) {
     // 优雅降级到 WordPress 原生数据库类，防止非 vhttpd 环境或缺少 Autoloader 时网站崩溃
     if (defined('ABSPATH') && defined('WPINC')) {
         require_once ABSPATH . WPINC . '/class-wpdb.php';

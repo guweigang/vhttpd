@@ -43,21 +43,11 @@ if (!function_exists('wp_cache_init')) {
             $socket = $_SERVER['VHTTPD_CACHE_SOCKET'] ?? '';
         }
 
-        $isVHttpd = false;
-        $serverSoftware = $_SERVER['SERVER_SOFTWARE'] ?? '';
-        if (str_contains(strtolower($serverSoftware), 'vhttpd') 
-            || getenv('VHTTPD_DB_SOCKET') !== false 
-            || getenv('VHTTPD_CACHE_SOCKET') !== false
-            || getenv('VHTTPD_INTERNAL_ADMIN_SOCKET') !== false
-        ) {
-            $isVHttpd = true;
-        }
-
-        if (class_exists(Client::class) && $socket !== '' && $isVHttpd) {
+        if (class_exists(Client::class) && $socket !== '' && \VHttpd\WordPress\ProfilerEnv::isFullMode()) {
             $client = Client::fromEnv(defaultNamespace: 'wordpress');
         }
 
-        if (!class_exists(ObjectCache::class) || !$isVHttpd) {
+        if (!class_exists(ObjectCache::class) || !\VHttpd\WordPress\ProfilerEnv::isFullMode()) {
             // 优雅降级为 WordPress 默认的运行时内存缓存
             if (defined('ABSPATH') && defined('WPINC')) {
                 require_once ABSPATH . WPINC . '/class-wp-object-cache.php';
