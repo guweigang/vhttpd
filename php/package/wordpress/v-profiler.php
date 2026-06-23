@@ -134,10 +134,31 @@ PHP;
 }
 
 function v_profiler_deactivate_plugin(): void {
+    // 1. 清理 MU-Plugin Loader
     $muDir = defined('WPMU_PLUGIN_DIR') ? WPMU_PLUGIN_DIR : (defined('WP_CONTENT_DIR') ? WP_CONTENT_DIR . '/mu-plugins' : ABSPATH . 'wp-content/mu-plugins');
     $loaderFile = $muDir . '/v-profiler-loader.php';
     if (is_file($loaderFile)) {
         @unlink($loaderFile);
+    }
+
+    // 2. 清理 wp-content 下的 Drop-ins 数据库和缓存重构文件，防止插件删除后网站白屏崩溃
+    $contentDir = defined('WP_CONTENT_DIR') ? WP_CONTENT_DIR : (defined('ABSPATH') ? ABSPATH . 'wp-content' : '');
+    if ($contentDir !== '') {
+        $dbFile = $contentDir . '/db.php';
+        if (is_file($dbFile)) {
+            $dbContent = @file_get_contents($dbFile);
+            if ($dbContent !== false && str_contains($dbContent, 'VHttpd\\WordPress\\Wpdb')) {
+                @unlink($dbFile);
+            }
+        }
+
+        $ocFile = $contentDir . '/object-cache.php';
+        if (is_file($ocFile)) {
+            $ocContent = @file_get_contents($ocFile);
+            if ($ocContent !== false && str_contains($ocContent, 'VHttpd\\WordPress\\ObjectCache')) {
+                @unlink($ocFile);
+            }
+        }
     }
 }
 
