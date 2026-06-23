@@ -45,21 +45,8 @@ fn HttpResponseRuntime.cache_hit(mut app App, mut ctx Context, req HttpIngressRe
 
 fn HttpResponseRuntime.dispatch_error(mut app App, mut ctx Context, req HttpIngressRequest, err_msg string) veb.Result {
 	status, error_class := transport.classify_worker_backend_error(err_msg)
-	log.error('[http] ⇠ dispatch error method=${req.method.to_upper()} path=${req.path} trace_id=${req.trace_id} request_id=${req.request_id} status=${status} duration_ms=${time.now().unix_milli() - req.start_ms} error=${err_msg}')
-	app.emit('http.request', {
-		'method':      req.method.to_upper()
-		'path':        transport.normalize_path(req.path)
-		'status':      '${status}'
-		'request_id':  req.request_id
-		'trace_id':    req.trace_id
-		'duration_ms': '${time.now().unix_milli() - req.start_ms}'
-		'error_class': error_class
-		'error':       err_msg
-	})
-	ctx.set_custom_header('x-vhttpd-trace-id', req.trace_id) or {}
-	ctx.set_custom_header('x-vhttpd-error-class', error_class) or {}
-	ctx.res.set_status(http.status_from_int(status))
-	return ctx.text(req.body_on_head)
+	return HttpResponseRuntime.delivery_outcome(mut app, mut ctx, req, dispatch.delivery_failure_outcome(status,
+		err_msg, error_class), none)
 }
 
 fn HttpResponseRuntime.delivery_outcome(mut app App, mut ctx Context, req HttpIngressRequest, outcome dispatch.DeliveryOutcome, matched_rule ?RuntimeRouteRule) veb.Result {
@@ -68,7 +55,15 @@ fn HttpResponseRuntime.delivery_outcome(mut app App, mut ctx Context, req HttpIn
 	}
 	status := if outcome.status > 0 { outcome.status } else { 200 }
 	error_class := outcome.error_class
-	log.info('[http] ⇠ delivery outcome method=${req.method.to_upper()} path=${req.path} trace_id=${req.trace_id} request_id=${req.request_id} status=${status} kind=${outcome.kind} duration_ms=${time.now().unix_milli() - req.start_ms}')
+	mut log_line := '[http] ⇠ delivery outcome method=${req.method.to_upper()} path=${req.path} trace_id=${req.trace_id} request_id=${req.request_id} status=${status} kind=${outcome.kind} duration_ms=${time.now().unix_milli() - req.start_ms}'
+	if outcome.error != '' {
+		log_line += ' error=${outcome.error}'
+	}
+	if outcome.kind == .failure {
+		log.error(log_line)
+	} else {
+		log.info(log_line)
+	}
 	mut event_fields := {
 		'method':      req.method.to_upper()
 		'path':        transport.normalize_path(req.path)
