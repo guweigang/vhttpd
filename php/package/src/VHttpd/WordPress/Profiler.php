@@ -839,8 +839,14 @@ final class Profiler
         }
 
         $dbPool = self::fetchDbPoolStats();
+        // 如果当前请求没有真正走 Wpdb（加速版数据库驱动），说明处于受限调试直连模式下，强行将 db pool 标记为不就绪
+        $isWpdbOverride = (isset($wpdb) && $wpdb instanceof \VHttpd\WordPress\Wpdb);
+        if (!$isWpdbOverride) {
+            $dbPool['pool_ready'] = false;
+        }
+
         if (isset($dbPool['pool_ready']) && $dbPool['pool_ready'] === true) {
-            $dbPool['multiplexing_savings_ms'] = 12.5; // 连接复用节省时延约 12.5 ms
+            $dbPool['multiplexing_savings_ms'] = 12.5;
         } else {
             $dbPool['multiplexing_savings_ms'] = 0.0;
         }

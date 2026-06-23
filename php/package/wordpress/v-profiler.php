@@ -107,6 +107,7 @@ register_activation_hook(__FILE__, 'v_profiler_activate_plugin');
 register_deactivation_hook(__FILE__, 'v_profiler_deactivate_plugin');
 
 function v_profiler_activate_plugin(): void {
+    // 1. 生成 MU-Plugin Loader
     $muDir = defined('WPMU_PLUGIN_DIR') ? WPMU_PLUGIN_DIR : (defined('WP_CONTENT_DIR') ? WP_CONTENT_DIR . '/mu-plugins' : ABSPATH . 'wp-content/mu-plugins');
     if (!is_dir($muDir)) {
         @mkdir($muDir, 0755, true);
@@ -131,6 +132,41 @@ if (file_exists(WP_PLUGIN_DIR . '/v-profiler/v-profiler.php')) {
 PHP;
     
     @file_put_contents($loaderFile, $loaderContent);
+
+    // 2. 智能环境判定与自动开启极速模式
+    $isVHttpd = false;
+    $serverSoftware = $_SERVER['SERVER_SOFTWARE'] ?? '';
+    if (str_contains(strtolower($serverSoftware), 'vhttpd') 
+        || getenv('VHTTPD_DB_SOCKET') !== false 
+        || getenv('VHTTPD_CACHE_SOCKET') !== false
+        || getenv('VHTTPD_INTERNAL_ADMIN_SOCKET') !== false
+    ) {
+        $isVHttpd = true;
+    }
+
+    $savedMode = get_option('v_profiler_mode');
+    if ($savedMode === false) {
+        $savedMode = $isVHttpd ? 'full' : 'restricted';
+        update_option('v_profiler_mode', $savedMode);
+    }
+
+    // 如果处于极速模式（或者是默认决定的极速模式），且文件不在，自动拷贝部署
+    if ($savedMode === 'full') {
+        $contentDir = defined('WP_CONTENT_DIR') ? WP_CONTENT_DIR : (defined('ABSPATH') ? ABSPATH . 'wp-content' : '');
+        if ($contentDir !== '' && is_writable($contentDir)) {
+            $db_src = __DIR__ . '/v-profiler/db.php';
+            $db_dst = $contentDir . '/db.php';
+            $oc_src = __DIR__ . '/v-profiler/object-cache.php';
+            $oc_dst = $contentDir . '/object-cache.php';
+            
+            if (is_file($db_src) && !is_file($db_dst)) {
+                @copy($db_src, $db_dst);
+            }
+            if (is_file($oc_src) && !is_file($oc_dst)) {
+                @copy($oc_src, $oc_dst);
+            }
+        }
+    }
 }
 
 function v_profiler_deactivate_plugin(): void {
