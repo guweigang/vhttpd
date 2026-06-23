@@ -102,7 +102,9 @@ final class ProfilerEnv
             $savedMode = get_option('v_profiler_mode');
         }
 
-        if ($savedMode === false) {
+        $modeFile = self::getModeFilePath();
+        // 如果数据库未保存模式，或物理状态指示文件不存在（说明是全新安装），强行覆盖并重新评估
+        if ($savedMode === false || !is_file($modeFile)) {
             $savedMode = self::isVHttpd() ? 'full' : 'restricted';
             if (function_exists('update_option')) {
                 update_option('v_profiler_mode', $savedMode);
@@ -228,8 +230,9 @@ final class ProfilerEnv
  */
 declare(strict_types=1);
 
-if (file_exists(WP_PLUGIN_DIR . '/v-profiler/v-profiler.php')) {
-    require_once WP_PLUGIN_DIR . '/v-profiler/v-profiler.php';
+$vProfilerEntry = dirname(__DIR__) . '/plugins/v-profiler/v-profiler.php';
+if (file_exists($vProfilerEntry)) {
+    require_once $vProfilerEntry;
 }
 PHP;
             @file_put_contents($muDir . '/v-profiler-loader.php', $loaderContent);

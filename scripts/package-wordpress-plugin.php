@@ -33,6 +33,8 @@ $wordpressSrc = $projectRoot . '/php/package/wordpress';
 copy($wordpressSrc . '/v-profiler.php', $stageDir . '/v-profiler.php');
 // 拷贝 proxy 文件
 copy($wordpressSrc . '/vhttpd-db.php', $stageDir . '/vhttpd-db.php');
+// 拷贝 uninstall 清理文件
+copy($wordpressSrc . '/uninstall.php', $stageDir . '/uninstall.php');
 
 // 拷贝内部组件
 $innerFiles = [
