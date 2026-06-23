@@ -38,6 +38,35 @@ add_filter('network_admin_plugin_action_links', function (array $actions, string
 
 // 处理设置页面表单提交
 add_action('admin_init', function (): void {
+    // 安全检查与自动修复：如果不是 vhttpd 服务器却在后台处于 full 模式，强制回退为 restricted，并删除 drop-ins，防止网站崩溃
+    $is_vhttpd = false;
+    $serverSoftware = $_SERVER['SERVER_SOFTWARE'] ?? '';
+    if (str_contains(strtolower($serverSoftware), 'vhttpd') 
+        || getenv('VHTTPD_DB_SOCKET') !== false 
+        || getenv('VHTTPD_CACHE_SOCKET') !== false
+        || getenv('VHTTPD_INTERNAL_ADMIN_SOCKET') !== false
+    ) {
+        $is_vhttpd = true;
+    }
+
+    $current_mode = get_option('v_profiler_mode', 'restricted');
+    if (!$is_vhttpd && $current_mode === 'full') {
+        $db_dst = WP_CONTENT_DIR . '/db.php';
+        $oc_dst = WP_CONTENT_DIR . '/object-cache.php';
+        if (is_file($db_dst)) {
+            @unlink($db_dst);
+        }
+        if (is_file($oc_dst)) {
+            @unlink($oc_dst);
+        }
+        update_option('v_profiler_mode', 'restricted');
+        @file_put_contents(WP_CONTENT_DIR . '/.v-profiler-mode', 'restricted');
+        if (function_exists('opcache_reset')) {
+            @opcache_reset();
+        }
+        clearstatcache(true);
+    }
+
     if (!isset($_POST['v_profiler_action'])) {
         return;
     }
@@ -105,6 +134,11 @@ add_action('admin_init', function (): void {
     if ($action === 'switch_mode') {
         $target_mode = sanitize_text_field($_POST['target_mode'] ?? 'restricted');
 
+        if ($target_mode === 'full' && !$is_vhttpd) {
+            wp_safe_redirect(add_query_arg('v_error', 'not_vhttpd', $redirect_url));
+            exit;
+        }
+
         $db_src = dirname(__FILE__) . '/db.php';
         $db_dst = WP_CONTENT_DIR . '/db.php';
         $oc_src = dirname(__FILE__) . '/object-cache.php';
@@ -164,6 +198,17 @@ add_action('admin_init', function (): void {
 
 // 渲染后台管理页面
 function v_profiler_render_admin_page(): void {
+    // 检测是否是 vhttpd 服务器
+    $is_vhttpd = false;
+    $serverSoftware = $_SERVER['SERVER_SOFTWARE'] ?? '';
+    if (str_contains(strtolower($serverSoftware), 'vhttpd') 
+        || getenv('VHTTPD_DB_SOCKET') !== false 
+        || getenv('VHTTPD_CACHE_SOCKET') !== false
+        || getenv('VHTTPD_INTERNAL_ADMIN_SOCKET') !== false
+    ) {
+        $is_vhttpd = true;
+    }
+
     // 状态查询
     $widget_enabled = get_option('v_profiler_widget_enabled', 'yes') === 'yes';
     $current_mode = get_option('v_profiler_mode', 'restricted');
@@ -208,6 +253,8 @@ function v_profiler_render_admin_page(): void {
             $message = '❌ 移除 db.php 失败，请检查文件写入权限。';
         } elseif ($err === 'delete_oc_failed') {
             $message = '❌ 移除 object-cache.php 失败，请检查文件写入权限。';
+        } elseif ($err === 'not_vhttpd') {
+            $message = '❌ 切换失败：当前 Web 服务器并非 vhttpd，无法开启完整极速模式。';
         }
     }
 
@@ -371,6 +418,13 @@ function v_profiler_render_admin_page(): void {
             border-color: rgba(167, 139, 250, 0.3);
             background: rgba(30, 41, 59, 0.2);
             transform: translateY(-2px);
+        }
+
+        .v-mode-box.disabled:hover {
+            border-color: rgba(255, 255, 255, 0.02) !important;
+            background: rgba(15, 23, 42, 0.3) !important;
+            transform: none !important;
+            cursor: not-allowed !important;
         }
 
         .v-mode-box.selected {
@@ -603,6 +657,7 @@ function v_profiler_render_admin_page(): void {
                 </div>
 
                 <!-- Full vhttpd Box -->
+                <?php if ($is_vhttpd) : ?>
                 <div class="v-mode-box <?php echo $current_mode === 'full' ? 'selected' : ''; ?>" 
                      onclick="document.getElementById('switch-full-form').submit()">
                     <span class="v-badge-mode green">Enterprise</span>
@@ -616,6 +671,15 @@ function v_profiler_render_admin_page(): void {
                         <input type="hidden" name="target_mode" value="full">
                     </form>
                 </div>
+                <?php else : ?>
+                <div class="v-mode-box disabled" style="opacity: 0.5; cursor: not-allowed; border-color: rgba(255,255,255,0.02);" title="当前非 vhttpd 环境，不可用">
+                    <span class="v-badge-mode" style="background: rgba(255,255,255,0.05); color: #64748b;">Unavailable</span>
+                    <h4 class="v-mode-title" style="color: #64748b;">完整极速模式 (不可用)</h4>
+                    <span class="v-mode-desc" style="color: #475569;">
+                        仅能在 vhttpd Web 服务器环境下启用。检测到当前运行于普通 HTTP 服务下。
+                    </span>
+                </div>
+                <?php endif; ?>
             </div>
         </div>
     </div>
