@@ -70,22 +70,19 @@ add_filter('determine_current_user', static function ($userId) {
 add_action('init', static function (): void {
     $debug = defined('WP_DEBUG') && WP_DEBUG;
 
-    // 检查是否全局关闭了挂件
-    if (get_option('v_profiler_widget_enabled', 'yes') !== 'yes') {
+    // 检查是否在 wp-config.php 中禁用了挂件
+    if (defined('V_PROFILER_WIDGET_DISABLED') && V_PROFILER_WIDGET_DISABLED) {
         Profiler::stopAndDeactivate();
         return;
     }
     
-    $secretToken = get_option('v_profiler_secret_token');
-    $hasDebugCookie = !empty($secretToken) && isset($_COOKIE['v_profiler_session']) && $_COOKIE['v_profiler_session'] === $secretToken;
-    $canManage = current_user_can('manage_options') || $hasDebugCookie;
+    $canManage = current_user_can('manage_options');
     
     // 写入诊断日志，方便查看激活状态
     error_log(sprintf(
-        '[v-Profiler] Auth Check: WP_DEBUG=%s, current_user_can(manage_options)=%s, has_debug_cookie=%s, request_uri=%s',
+        '[v-Profiler] Auth Check: WP_DEBUG=%s, current_user_can(manage_options)=%s, request_uri=%s',
         $debug ? 'true' : 'false',
-        current_user_can('manage_options') ? 'true' : 'false',
-        $hasDebugCookie ? 'true' : 'false',
+        $canManage ? 'true' : 'false',
         $_SERVER['REQUEST_URI'] ?? 'unknown'
     ));
 

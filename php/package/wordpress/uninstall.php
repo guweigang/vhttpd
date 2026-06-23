@@ -9,12 +9,7 @@ if (!defined('WP_UNINSTALL_PLUGIN')) {
     exit;
 }
 
-// 1. 清理 wp_options 中的所有持久化设置
-delete_option('v_profiler_mode');
-delete_option('v_profiler_widget_enabled');
-delete_option('v_profiler_secret_token');
-
-// 2. 安全清理可能残留在 wp-content 的加速 Drop-ins
+// 1. 安全清理可能残留在 wp-content 的加速 Drop-ins
 $contentDir = defined('WP_CONTENT_DIR') ? WP_CONTENT_DIR : ABSPATH . 'wp-content';
 
 if (is_dir($contentDir)) {

@@ -59,54 +59,7 @@ add_action('admin_init', function (): void {
         $redirect_url = remove_query_arg(['v_error', 'v_success'], $_SERVER['REQUEST_URI']);
     }
 
-    // 1. Telemetry Widget 开关控制
-    if ($action === 'save_widget_settings') {
-        $enabled = isset($_POST['widget_enabled']) && $_POST['widget_enabled'] === '1' ? 'yes' : 'no';
-        update_option('v_profiler_widget_enabled', $enabled);
-        wp_safe_redirect(add_query_arg('v_success', 'widget_updated', $redirect_url));
-        exit;
-    }
-
-    // 2. 授权调试会话控制 (Debug Session Cookie)
-    if ($action === 'start_session' || $action === 'stop_session') {
-        $secretToken = get_option('v_profiler_secret_token');
-        if (empty($secretToken)) {
-            $secretToken = wp_generate_password(32, false);
-            update_option('v_profiler_secret_token', $secretToken);
-        }
-
-        $cookie_path = defined('COOKIEPATH') ? COOKIEPATH : '/';
-        $cookie_domain = defined('COOKIE_DOMAIN') ? COOKIE_DOMAIN : '';
-
-        if ($action === 'start_session') {
-            // 下发有效期为 3 天的 Cookie
-            setcookie(
-                'v_profiler_session',
-                $secretToken,
-                time() + 3 * 86400,
-                $cookie_path,
-                $cookie_domain,
-                is_ssl(),
-                true // HttpOnly
-            );
-            wp_safe_redirect(add_query_arg('v_success', 'session_started', $redirect_url));
-        } else {
-            // 清理 Cookie
-            setcookie(
-                'v_profiler_session',
-                '',
-                time() - 3600,
-                $cookie_path,
-                $cookie_domain,
-                is_ssl(),
-                true
-            );
-            wp_safe_redirect(add_query_arg('v_success', 'session_stopped', $redirect_url));
-        }
-        exit;
-    }
-
-    // 3. 运行引擎模式切换 (Restricted vs Full vhttpd)
+    // 运行引擎模式切换 (Restricted vs Full vhttpd)
     if ($action === 'switch_mode') {
         $target_mode = sanitize_text_field($_POST['target_mode'] ?? 'restricted');
 
@@ -138,18 +91,12 @@ function v_profiler_render_admin_page(): void {
     $is_vhttpd = \VHttpd\WordPress\ProfilerEnv::isVHttpd();
     $current_mode = \VHttpd\WordPress\ProfilerEnv::getMode();
 
-    // 状态查询
-    $widget_enabled = get_option('v_profiler_widget_enabled', 'yes') === 'yes';
-
-    $db_dst = WP_CONTENT_DIR . '/db.php';
-    $oc_dst = WP_CONTENT_DIR . '/object-cache.php';
+    $db_dst = \VHttpd\WordPress\ProfilerEnv::getWpContentDir() . '/db.php';
+    $oc_dst = \VHttpd\WordPress\ProfilerEnv::getWpContentDir() . '/object-cache.php';
     
     // 实地检测加速文件是否在位
     $db_active = is_file($db_dst);
     $oc_active = is_file($oc_dst);
-
-    // 调试 Cookie 会话检测
-    $session_active = isset($_COOKIE['v_profiler_session']) && $_COOKIE['v_profiler_session'] === get_option('v_profiler_secret_token');
 
     // 反馈消息处理
     $message = '';
@@ -157,13 +104,7 @@ function v_profiler_render_admin_page(): void {
     
     if (isset($_GET['v_success'])) {
         $suc = sanitize_text_field($_GET['v_success']);
-        if ($suc === 'widget_updated') {
-            $message = '调试挂件状态已成功更新！';
-        } elseif ($suc === 'session_started') {
-            $message = '🎉 调试授权 Cookie 已注入当前浏览器！您现在可以退出登录或切换测试账号，挂件将在本浏览器中正常展示。';
-        } elseif ($suc === 'session_stopped') {
-            $message = '调试授权 Cookie 已从当前浏览器清除。';
-        } elseif ($suc === 'mode_upgraded') {
+        if ($suc === 'mode_upgraded') {
             $message = '🚀 极速引擎已开启！长连接池与进程共享内存已接管 WordPress。';
         } elseif ($suc === 'mode_downgraded') {
             $message = '已回退至受限模式，所有极速 Drop-ins 已安全移除。';
@@ -494,55 +435,7 @@ function v_profiler_render_admin_page(): void {
             </div>
         <?php endif; ?>
 
-        <!-- Section 1: Telemetry Switch -->
-        <div class="v-section">
-            <form method="post" action="">
-                <?php wp_nonce_field('v_profiler_admin_action', 'v_profiler_nonce'); ?>
-                <input type="hidden" name="v_profiler_action" value="save_widget_settings">
-                <div class="v-toggle-wrap">
-                    <div>
-                        <h3 class="v-section-title">📊 Debug Telemetry Widget</h3>
-                        <p style="margin:0; font-size:11px; color:#64748b;">控制是否在满足授权条件的浏览器底部渲染可视化性能挂件面板。</p>
-                    </div>
-                    <div style="display:flex; align-items:center; gap:12px;">
-                        <label class="switch">
-                            <input type="checkbox" name="widget_enabled" value="1" <?php checked($widget_enabled); ?> onchange="this.form.submit()">
-                            <span class="slider"></span>
-                        </label>
-                        <span style="font-size:12px; font-weight:700; color:<?php echo $widget_enabled ? '#34d399' : '#64748b'; ?>;">
-                            <?php echo $widget_enabled ? 'ENABLED' : 'DISABLED'; ?>
-                        </span>
-                    </div>
-                </div>
-            </form>
-        </div>
-
-        <!-- Section 2: Session Auth -->
-        <div class="v-section">
-            <h3 class="v-section-title">🛡️ 安全调试会话 (Debug Session)</h3>
-            <p style="margin:0 0 15px 0; font-size:11px; color:#94a3b8; line-height:1.4;">
-                为当前浏览器颁发加密调试 Cookie。开启后，即使您<b>退出登录以游客身份访问</b>或<b>切换为普通用户测试</b>，该浏览器仍能独占看到性能调试挂件，便于模拟访客全链路体验，且外网普通访客绝对无感。
-            </p>
-            
-            <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.15); padding:12px; border-radius:6px;">
-                <div style="font-size:12px;">
-                    会话状态：
-                    <strong style="color:<?php echo $session_active ? '#34d399' : '#f59e0b'; ?>;">
-                        <?php echo $session_active ? '● 正在运行 (已授权本浏览器)' : '○ 未授权'; ?>
-                    </strong>
-                </div>
-                <form method="post" action="">
-                    <?php wp_nonce_field('v_profiler_admin_action', 'v_profiler_nonce'); ?>
-                    <?php if ($session_active) : ?>
-                        <input type="hidden" name="v_profiler_action" value="stop_session">
-                        <button type="submit" class="v-btn secondary">🧹 退出调试会话 (Clear Cookie)</button>
-                    <?php else : ?>
-                        <input type="hidden" name="v_profiler_action" value="start_session">
-                        <button type="submit" class="v-btn">🔑 开启本浏览器游客调试 (Inject Cookie)</button>
-                    <?php endif; ?>
-                </form>
-            </div>
-        </div>
+        <!-- Section: Engine Mode -->
 
         <!-- Section 3: Engine Mode -->
         <div class="v-section">
