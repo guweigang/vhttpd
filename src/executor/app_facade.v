@@ -8,6 +8,7 @@ import x.json2
 pub interface AppFacade {
 	// Config & Backend details
 	get_runtime_config_json() string
+	get_runtime_plan_json() string
 	worker_backend_read_timeout_ms() int
 	worker_backend_sockets_len() int
 	worker_env() map[string]string
@@ -41,6 +42,7 @@ mut:
 }
 
 pub fn (a NoOpAppFacade) get_runtime_config_json() string { return '{}' }
+pub fn (a NoOpAppFacade) get_runtime_plan_json() string { return '{}' }
 pub fn (a NoOpAppFacade) worker_backend_read_timeout_ms() int { return 0 }
 pub fn (a NoOpAppFacade) worker_backend_read_timeout_ms_for_kind(kind string) int { return 0 }
 pub fn (a NoOpAppFacade) worker_backend_sockets_len() int { return 0 }

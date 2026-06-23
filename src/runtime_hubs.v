@@ -16,6 +16,7 @@ mut:
 struct ProtocolRuntimeHub {
 mut:
 	runtime_config_json string
+	runtime_plan_json   string
 	mcp                 mcp_protocol.McpState
 	openai              openai.OpenaiState
 	plugins             plugin.PluginState

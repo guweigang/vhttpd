@@ -906,6 +906,7 @@ Progress as of 2026-06-22:
 - `P2.4` provider slice complete: Feishu, Codex, Ollama, and bridge runtime settings are projected from RuntimePlan adapters/relays with the legacy provider resolver retained only as a compatibility fallback
 - `P2.4` primary engine slice complete: `ServerRuntimeConfig.executor_plan` is reconstructed from the active listener fallback engine in RuntimePlan, reusing the existing executor registry and retaining legacy path-resolution fallbacks
 - `P2.4` additional engine slice complete: named route and event engines such as PHP CGI and VJSX are resolved from active listener RuntimePlan references, with legacy executor specs used only as compatibility fallbacks
+- `P2.4` VJSX config surface slice complete: the in-proc runtime now exposes `runtime.plan()` / `runtime.getPlan()` backed by RuntimePlan JSON while retaining the legacy `runtime.config()` / `runtime.getConfig()` surface for compatibility
 
 Batches:
 

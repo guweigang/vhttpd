@@ -17,6 +17,10 @@ fn (a InProcTestApp) get_runtime_config_json() string {
 	return '{}'
 }
 
+fn (a InProcTestApp) get_runtime_plan_json() string {
+	return '{}'
+}
+
 fn (a InProcTestApp) worker_backend_read_timeout_ms() int {
 	return 0
 }

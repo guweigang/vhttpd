@@ -109,6 +109,24 @@ fn InProcVjsxWebSocketJs.runtime(ctx &vjsx.Context, runtime_meta InProcVjsxRunti
 		}
 		return ctx.json_parse(raw)
 	}))
+	runtime.set('plan', ctx.js_function(fn [ctx, mut app] (args []vjsx.Value) vjsx.Value {
+		path := if args.len > 0 { args[0].to_string().trim_space() } else { '' }
+		fallback := if args.len > 1 { args[1].dup_value() } else { ctx.js_undefined() }
+		raw := InProcVjsxHostApi.config_lookup(app.get_runtime_plan_json(), path)
+		if raw.trim_space() == '' {
+			return fallback
+		}
+		return ctx.js_string(raw)
+	}))
+	runtime.set('getPlan', ctx.js_function(fn [ctx, mut app] (args []vjsx.Value) vjsx.Value {
+		path := if args.len > 0 { args[0].to_string().trim_space() } else { '' }
+		fallback := if args.len > 1 { args[1].dup_value() } else { ctx.js_undefined() }
+		raw := InProcVjsxHostApi.config_lookup(app.get_runtime_plan_json(), path)
+		if raw.trim_space() == '' {
+			return fallback
+		}
+		return ctx.json_parse(raw)
+	}))
 	runtime.set('sessionStore', ctx.js_function(fn [ctx] (args []vjsx.Value) vjsx.Value {
 		namespace := if args.len > 0 { args[0].to_string().trim_space() } else { '' }
 		mut store := ctx.js_object()

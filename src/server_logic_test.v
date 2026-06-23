@@ -1864,6 +1864,9 @@ fn test_build_app_runtime_projects_executor_plan_into_app_state() {
 		workdir:                       '/tmp/workdir'
 	})
 	assert app.plan.source.compatibility
+	assert app.protocols.runtime_config_json.contains('"db"')
+	assert app.protocols.runtime_plan_json.contains('"version":2')
+	assert app.protocols.runtime_plan_json.contains('"pipelines"')
 	assert app.engines.primary.worker_backend.sockets == ['/tmp/a.sock']
 	assert app.engines.primary.worker_backend.cmd == 'php worker.php'
 	assert app.engines.primary.worker_backend.env['APP_ENV'] == 'dev'

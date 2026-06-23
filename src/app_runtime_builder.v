@@ -41,7 +41,7 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 			executor_names << 'vjsx'
 		}
 		for executor_name in executor_names {
-			if executor_name == '' || executor_name == cfg.executor.kind
+			if executor_name == '' || executor_name == executor_plan.executor.kind()
 				|| executor_name in add_workers {
 				continue
 			}
@@ -118,6 +118,7 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 		}
 		protocols:     ProtocolRuntimeHub{
 			runtime_config_json: json.encode(cfg)
+			runtime_plan_json:   json.encode(plan)
 			plugins:             plugin.PluginState{
 				configs: plugin_configs.clone()
 				vjsx:    build_vjsx_plugin_runtimes(plugin_configs)

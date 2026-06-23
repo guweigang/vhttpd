@@ -28,6 +28,11 @@ pub fn (w AppFacadeWrapper) get_runtime_config_json() string {
 	return app.protocols.runtime_config_json
 }
 
+pub fn (w AppFacadeWrapper) get_runtime_plan_json() string {
+	app := unsafe { &App(w.app_ptr) }
+	return app.protocols.runtime_plan_json
+}
+
 pub fn (w AppFacadeWrapper) worker_backend_read_timeout_ms() int {
 	app := unsafe { &App(w.app_ptr) }
 	return app.engines.read_timeout_ms('')
