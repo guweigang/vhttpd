@@ -192,14 +192,14 @@ fn HttpResponseRuntime.normal(mut app App, mut ctx Context, req HttpIngressReque
 					cache_result = 'bypass'
 					cache_reason = store_bypass_reason
 				} else {
-					ctype := resp.headers['content-type'] or { 'text/plain; charset=utf-8' }
-					cache_control := resp.headers['cache-control'] or { rule.cache_control }
+					ctype := delivery.headers['content-type'] or { 'text/plain; charset=utf-8' }
+					cache_control := delivery.headers['cache-control'] or { rule.cache_control }
 					app.http_routing.response_cache_set(mut app.transport.cache, rule, req.method,
 						req.dispatch_path, EdgeCachedHttpResponse{
-						status:        resp.status
+						status:        delivery.status
 						content_type:  ctype
 						cache_control: cache_control
-						body:          resp.body
+						body:          delivery.body
 					})
 					cache_result = 'store'
 				}
