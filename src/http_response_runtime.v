@@ -206,7 +206,7 @@ fn HttpResponseRuntime.normal(mut app App, mut ctx Context, req HttpIngressReque
 	app.emit('http.request', {
 		'method':       req.method.to_upper()
 		'path':         transport.normalize_path(req.path)
-		'status':       '${resp.status}'
+		'status':       '${delivery.status}'
 		'request_id':   req.request_id
 		'trace_id':     req.trace_id
 		'duration_ms':  '${time.now().unix_milli() - req.start_ms}'
