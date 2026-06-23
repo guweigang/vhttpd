@@ -909,6 +909,10 @@ Progress as of 2026-06-22:
 - `P2.4` VJSX config surface slice complete: the in-proc runtime now exposes `runtime.plan()` / `runtime.getPlan()` backed by RuntimePlan JSON while retaining the legacy `runtime.config()` / `runtime.getConfig()` surface for compatibility
 - `P2.4` shell runtime slice complete: event log, pid file, admin token, and listener asset runtime settings are projected from RuntimePlan with CLI startup overrides still applied at the process boundary
 - `P2.4` admin plan slice complete: the resolved RuntimePlan is available from both data-plane and dedicated admin-plane `/admin/runtime/plan` endpoints for inspection and tooling
+- `P2.5` loader slice complete: startup can load a versioned RuntimePlan directly from `version = 2` TOML while retaining V1 compatibility compilation when the version is omitted; single-listener startup, multi-listener startup, and timezone resolution now use the shared RuntimePlan loader
+- `P2.5` strict V2 slice complete: V2 loading rejects unknown root and kind-specific fields, preserves extension maps for options/headers/query metadata, resolves `${env.*}` and `${paths.root}` expressions, and normalizes declared path fields relative to the config file directory
+- `P2.5` listener validation slice complete: the V2 compiler rejects listeners that are not consumed by a request pipeline, control plane, or relay, catching empty data-plane listener declarations before runtime startup
+- `P2.5` worker runtime slice complete: primary worker read timeout, restart backoff, max requests, queue capacity, and queue timeout are projected from the active listener fallback engine options, with CLI overrides still taking precedence
 
 Batches:
 
@@ -916,8 +920,8 @@ Batches:
 2. Add the complete V2 root decode/spec model.
 3. Compile current V1 config into RuntimePlan.
 4. Make runtime assembly consume RuntimePlan.
-5. Add strict V2 decoder and compiler.
-6. Add resolved-plan admin/debug output.
+5. Add strict V2 decoder and compiler. (in progress; loader, field validation, path/env resolution, reference validation, and listener coverage are implemented)
+6. Add resolved-plan admin/debug output. (complete for `/admin/runtime/plan` on both admin surfaces)
 
 Acceptance:
 
