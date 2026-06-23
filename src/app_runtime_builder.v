@@ -46,18 +46,8 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 				continue
 			}
 			if engine := plan.listener_named_engine(plan_listener_id, executor_name) {
-				mut sub_cfg := cfg
-				mut spec := config.ExecutorSpecConfig{}
-				if fallback_spec := cfg.executors[executor_name] {
-					spec = fallback_spec
-				}
-				sub_cfg.worker = spec.worker
-				sub_cfg.php = spec.php
-				sub_cfg.vjsx = spec.vjsx
-				sub_cfg.executor = spec.executor
-
-				sub_plan := executor.LogicExecutorRuntimePlan.resolve_engine_from_plan(sub_cfg,
-					engine) or { continue }
+				sub_plan := executor.LogicExecutorRuntimePlan.resolve_additional_engine_from_plan(cfg,
+					engine, executor_name) or { continue }
 				sub_queue_capacity := if engine.options.ints['queue_capacity'] > 0 {
 					engine.options.ints['queue_capacity']
 				} else {

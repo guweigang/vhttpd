@@ -9,8 +9,8 @@ pub fn LogicExecutorRuntimePlan.resolve_from_plan(args []string, legacy_cfg conf
 		return LogicExecutorRuntimePlan.resolve(args, legacy_cfg, config.resolve_worker_sockets_with_defaults(args,
 			legacy_cfg.worker.socket, legacy_cfg.worker.pool_size, legacy_cfg.worker.socket_prefix,
 			legacy_cfg.worker.sockets.join(',')), legacy_cfg.worker.stream_dispatch,
-			legacy_cfg.worker.websocket_dispatch, legacy_cfg.worker.autostart, legacy_cfg.worker.cmd,
-			legacy_cfg.worker.env.clone())!
+			legacy_cfg.worker.websocket_dispatch, legacy_cfg.worker.autostart,
+			legacy_cfg.worker.cmd, legacy_cfg.worker.env.clone())!
 	}
 	return LogicExecutorRuntimePlan.resolve_engine_from_plan(legacy_cfg, engine)!
 }
@@ -26,6 +26,17 @@ pub fn LogicExecutorRuntimePlan.resolve_engine_from_plan(legacy_cfg config.Vhttp
 	return LogicExecutorRuntimePlan.resolve([]string{}, cfg, worker_sockets,
 		cfg.worker.stream_dispatch, cfg.worker.websocket_dispatch, cfg.worker.autostart,
 		cfg.worker.cmd, cfg.worker.env.clone())!
+}
+
+pub fn LogicExecutorRuntimePlan.resolve_additional_engine_from_plan(legacy_cfg config.VhttpdConfig, engine runtime_plan.EnginePlan, executor_name string) !LogicExecutorRuntimePlan {
+	mut cfg := legacy_cfg
+	if fallback_spec := legacy_cfg.executors[executor_name] {
+		cfg.worker = fallback_spec.worker
+		cfg.php = fallback_spec.php
+		cfg.vjsx = fallback_spec.vjsx
+		cfg.executor = fallback_spec.executor
+	}
+	return LogicExecutorRuntimePlan.resolve_engine_from_plan(cfg, engine)!
 }
 
 fn executor_kind_from_engine_plan(engine runtime_plan.EnginePlan, legacy_cfg config.VhttpdConfig) string {
@@ -48,7 +59,8 @@ fn worker_config_from_engine_plan(engine runtime_plan.EnginePlan, fallback confi
 		cmd:                    string_option_or(options, 'worker_cmd', fallback.cmd)
 		stream_dispatch:        bool_option_or(options, 'stream_dispatch', fallback.stream_dispatch)
 		queue_capacity:         int_option_or(options, 'queue_capacity', fallback.queue_capacity)
-		queue_timeout_ms:       int_option_or(options, 'queue_timeout_ms', fallback.queue_timeout_ms)
+		queue_timeout_ms:       int_option_or(options, 'queue_timeout_ms',
+			fallback.queue_timeout_ms)
 		restart_backoff_ms:     int_option_or(options, 'restart_backoff_ms',
 			fallback.restart_backoff_ms)
 		restart_backoff_max_ms: int_option_or(options, 'restart_backoff_max_ms',
@@ -137,8 +149,8 @@ fn string_list_option_or(options runtime_plan.PlanOptions, key string, fallback 
 
 fn file_string_list_option_or(options runtime_plan.PlanOptions, key string, fallback []string) []string {
 	values := string_list_option_or(options, key, fallback)
-	if values.any(it != '' && !os.exists(it)) && fallback.len > 0
-		&& fallback.all(it == '' || os.exists(it)) {
+	if values.any(it != '' && !os.exists(it)) && fallback.len > 0 && fallback.all(it == ''
+		|| os.exists(it)) {
 		return fallback.clone()
 	}
 	return values
