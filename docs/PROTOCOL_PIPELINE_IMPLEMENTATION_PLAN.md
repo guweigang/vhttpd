@@ -920,6 +920,7 @@ Progress as of 2026-06-22:
 - `P3.3` terminal adapter slice complete: fixed-response and reject now have dispatch `EgressAdapter` implementations and RuntimePlan projection helpers that return protocol-neutral delivery outcomes without importing veb or HTTP connection state
 - `P3.4` terminal HTTP slice complete: existing route status, redirect, required-header, denied-query, body-limit, and `executor = "none"` block responses now flow through dispatch delivery outcomes before HTTP rendering, preserving legacy route response headers and carrying trace/error metadata through one terminal helper
 - `P3.4` static file outcome slice complete: static file hits, missing files, and method rejections now produce dispatch delivery outcomes before HTTP rendering, while file existence checks and veb file sending remain owned by the HTTP runtime
+- `P3.4` upload response slice complete: upload success and error responses now render through dispatch delivery outcomes while parsing, persistence, hashing, and upload completion event dispatch remain owned by the upload runtime
 
 Batches:
 

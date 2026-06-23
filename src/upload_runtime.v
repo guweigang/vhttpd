@@ -1,13 +1,12 @@
 module main
 
 import crypto.sha256
+import dispatch
 import executor
 import json
 import net.http
 import os
 import rand
-import time
-import upstream.transport
 import veb
 
 struct UploadPayload {
@@ -204,15 +203,18 @@ fn (mut app App) dispatch_upload_completed_vjsx(handler string, resp UploadRespo
 	app.emit('upload.completed.dispatch', ok)
 }
 
-fn handle_upload_route(mut app App, mut ctx Context, rule RuntimeRouteRule, method string, path string, req_id string, trace_id string, start_ms i64) veb.Result {
+fn handle_upload_route(mut app App, mut ctx Context, rule RuntimeRouteRule, method string, path string, req_id string, trace_id string, start_ms i64, query map[string]string, body_on_head string, remote_addr string) veb.Result {
 	if method.to_upper() != 'POST' && method.to_upper() != 'PUT' {
-		ctx.res.set_status(.method_not_allowed)
-		return ctx.text('Method Not Allowed')
+		mut terminal_adapter := dispatch.EgressAdapter(dispatch.fixed_response_adapter('route/upload_method',
+			405, map[string]string{}, 'Method Not Allowed'))
+		return render_http_terminal_adapter(mut app, mut ctx, method, path, path, query,
+			body_on_head, remote_addr, req_id, trace_id, start_ms, rule, mut terminal_adapter)
 	}
 	if ctx.req.data.len == 0 {
-		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-		ctx.res.set_status(.bad_request)
-		return ctx.text('empty upload body')
+		mut terminal_adapter := dispatch.EgressAdapter(dispatch.fixed_response_adapter('route/upload_empty',
+			400, map[string]string{}, 'empty upload body'))
+		return render_http_terminal_adapter(mut app, mut ctx, method, path, path, query,
+			body_on_head, remote_addr, req_id, trace_id, start_ms, rule, mut terminal_adapter)
 	}
 	upload_dir := if rule.upload_dir.trim_space() != '' {
 		rule.upload_dir
@@ -220,9 +222,10 @@ fn handle_upload_route(mut app App, mut ctx Context, rule RuntimeRouteRule, meth
 		os.join_path(os.temp_dir(), 'vhttpd-uploads')
 	}
 	os.mkdir_all(upload_dir) or {
-		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-		ctx.res.set_status(.internal_server_error)
-		return ctx.text('upload dir unavailable')
+		mut terminal_adapter := dispatch.EgressAdapter(dispatch.fixed_response_adapter('route/upload_dir',
+			500, map[string]string{}, 'upload dir unavailable'))
+		return render_http_terminal_adapter(mut app, mut ctx, method, path, path, query,
+			body_on_head, remote_addr, req_id, trace_id, start_ms, rule, mut terminal_adapter)
 	}
 	payload := upload_payload_from_request(ctx.req)
 	filename := sanitize_upload_filename(payload.filename)
@@ -230,9 +233,10 @@ fn handle_upload_route(mut app App, mut ctx Context, rule RuntimeRouteRule, meth
 	stored_name := upload_id + '_' + filename
 	path_out := os.join_path(upload_dir, stored_name)
 	os.write_file(path_out, payload.body) or {
-		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-		ctx.res.set_status(.internal_server_error)
-		return ctx.text('upload write failed')
+		mut terminal_adapter := dispatch.EgressAdapter(dispatch.fixed_response_adapter('route/upload_write',
+			500, map[string]string{}, 'upload write failed'))
+		return render_http_terminal_adapter(mut app, mut ctx, method, path, path, query,
+			body_on_head, remote_addr, req_id, trace_id, start_ms, rule, mut terminal_adapter)
 	}
 	sum := sha256.sum(payload.body.bytes()).hex().to_lower()
 	on_completed := rule.on_completed.trim_space().clone()
@@ -266,21 +270,14 @@ fn handle_upload_route(mut app App, mut ctx Context, rule RuntimeRouteRule, meth
 	}
 	app.emit('upload.completed', fields)
 	app.dispatch_upload_completed_vjsx(handler, resp, fields)
-	app.emit('http.request', {
-		'method':      method.to_upper()
-		'path':        transport.normalize_path(path)
-		'status':      '201'
-		'request_id':  req_id
-		'trace_id':    trace_id
-		'duration_ms': '${time.now().unix_milli() - start_ms}'
-	})
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-	ctx.set_custom_header('x-vhttpd-upload-id', upload_id) or {}
-	if rule.cache_control.trim_space() != '' {
-		ctx.set_custom_header('cache-control', rule.cache_control) or {}
+	mut headers := {
+		'content-type':       'application/json; charset=utf-8'
+		'x-vhttpd-upload-id': upload_id
 	}
-	apply_route_response_headers(mut ctx, rule)
-	ctx.res.set_status(http.status_from_int(201))
-	ctx.set_content_type('application/json; charset=utf-8')
-	return ctx.text(json.encode(resp))
+	if rule.cache_control.trim_space() != '' {
+		headers['cache-control'] = rule.cache_control
+	}
+	outcome := dispatch.response_outcome(201, headers, json.encode(resp))
+	return HttpResponseRuntime.delivery_outcome(mut app, mut ctx, http_ingress_request(method,
+		path, path, body_on_head, remote_addr, req_id, trace_id, start_ms), outcome, rule)
 }

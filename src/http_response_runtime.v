@@ -92,7 +92,11 @@ fn HttpResponseRuntime.delivery_outcome(mut app App, mut ctx Context, req HttpIn
 		if value == '' {
 			continue
 		}
-		ctx.set_custom_header(name, value) or {}
+		if name.to_lower() == 'content-type' {
+			ctx.set_content_type(value)
+		} else {
+			ctx.set_custom_header(name, value) or {}
+		}
 	}
 	if rule := matched_rule {
 		apply_route_response_headers(mut ctx, rule)

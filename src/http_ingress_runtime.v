@@ -156,7 +156,7 @@ fn HttpIngressRuntime.handle(mut app App, mut ctx Context, method string, path s
 
 		if rule.executor == 'upload' {
 			return handle_upload_route(mut app, mut ctx, rule, method, normalized_target, req_id,
-				trace_id, start_ms)
+				trace_id, start_ms, query, body_on_head, remote_addr)
 		}
 
 		// 2.3 阻断返回
