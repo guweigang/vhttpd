@@ -78,6 +78,11 @@ fn HttpResponseRuntime.delivery_outcome(mut app App, mut ctx Context, req HttpIn
 	if outcome.error != '' {
 		event_fields['error'] = outcome.error
 	}
+	for key, value in outcome.metadata {
+		if key != '' && value != '' {
+			event_fields[key] = value
+		}
+	}
 	app.emit('http.request', event_fields)
 	ctx.set_custom_header('x-vhttpd-trace-id', req.trace_id) or {}
 	if error_class != '' {

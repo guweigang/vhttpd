@@ -38,6 +38,13 @@ pub fn response_outcome(status int, headers map[string]string, body string) Deli
 	}
 }
 
+pub fn outcome_with_metadata(outcome DeliveryOutcome, metadata map[string]string) DeliveryOutcome {
+	return DeliveryOutcome{
+		...outcome
+		metadata: metadata.clone()
+	}
+}
+
 pub fn file_outcome(path string, headers map[string]string) DeliveryOutcome {
 	return DeliveryOutcome{
 		kind:    .file

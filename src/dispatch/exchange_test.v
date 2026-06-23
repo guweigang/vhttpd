@@ -195,6 +195,16 @@ fn test_adapter_and_pipeline_contracts() {
 	assert outcome.headers['x-pipeline'] == 'site'
 }
 
+fn test_delivery_outcome_metadata_helper_clones_inputs() {
+	mut metadata := {
+		'response_mode': 'mcp'
+	}
+	outcome := outcome_with_metadata(response_outcome(200, map[string]string{}, 'ok'), metadata)
+	metadata['response_mode'] = 'changed'
+	assert outcome.kind == .response
+	assert outcome.metadata['response_mode'] == 'mcp'
+}
+
 fn test_fixed_response_adapter_delivers_response_outcome() {
 	mut services := RuntimeServices(TestServices{
 		trace: 'trace-fixed'

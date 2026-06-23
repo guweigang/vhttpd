@@ -1,6 +1,7 @@
 module main
 
 import api.mcp.protocol as mcp_protocol
+import dispatch
 import net.http
 import time
 import upstream.transport
@@ -212,19 +213,19 @@ fn proxy_worker_mcp(mut app App, mut ctx Context) veb.Result {
 	if session_id != '' {
 		resp_headers['mcp-session-id'] = session_id
 	}
-	apply_delivery_headers(mut ctx, resp_headers)
-	ctx.res.set_status(http.status_from_int(if response.status > 0 { response.status } else { 200 }))
-	ctx.set_content_type(resp_headers['content-type'] or { 'application/json; charset=utf-8' })
-	app.emit('http.request', {
-		'method':        method
-		'path':          '/mcp'
-		'status':        '${if response.status > 0 { response.status } else { 200 }}'
-		'request_id':    req_id
-		'trace_id':      trace_id
-		'duration_ms':   '${time.now().unix_milli() - start_ms}'
+	status := if response.status > 0 { response.status } else { 200 }
+	return HttpResponseRuntime.delivery_outcome(mut app, mut ctx, HttpIngressRequest{
+		method:        method
+		path:          '/mcp'
+		dispatch_path: transport.normalize_path(path)
+		remote_addr:   ctx.ip()
+		request_id:    req_id
+		trace_id:      trace_id
+		start_ms:      start_ms
+	}, dispatch.outcome_with_metadata(dispatch.response_outcome(status, resp_headers, response.body),
+		{
 		'response_mode': 'mcp'
-	})
-	return ctx.text(response.body)
+	}), none)
 }
 
 @['/mcp'; post]
