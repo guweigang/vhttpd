@@ -541,6 +541,7 @@ fn validate_runtime_plan_references(plan runtime_plan.RuntimePlan) ! {
 			validate_plan_ref_exists(auth, plan)!
 		}
 	}
+	validate_adapter_semantics(plan)!
 	validate_listener_pipeline_coverage(plan)!
 }
 
@@ -559,6 +560,31 @@ fn validate_plan_ref_exists(reference runtime_plan.ResourceRef, plan runtime_pla
 
 	if !exists {
 		return error('runtime_plan_unresolved_ref:${reference}')
+	}
+}
+
+fn validate_adapter_semantics(plan runtime_plan.RuntimePlan) ! {
+	for id, adapter in plan.adapters {
+		match adapter.kind {
+			'http-handler' {
+				if adapter.engine == none {
+					return error('runtime_plan_adapter_missing_engine:${id}')
+				}
+			}
+			'static', 'upload' {
+				if adapter.storage == none && adapter.options.strings['root'].trim_space() == '' {
+					return error('runtime_plan_adapter_missing_storage:${id}')
+				}
+			}
+			'fixed-response' {
+				if adapter.options.strings['status'].trim_space() == ''
+					&& adapter.options.strings['body'].trim_space() == ''
+					&& adapter.options.strings['location'].trim_space() == '' {
+					return error('runtime_plan_adapter_empty_fixed_response:${id}')
+				}
+			}
+			else {}
+		}
 	}
 }
 

@@ -137,3 +137,109 @@ fn test_compile_v2_runtime_plan_allows_relay_listener_without_pipeline() {
 	plan := compile_v2_runtime_plan(cfg, '', false) or { panic(err) }
 	assert plan.relays['edge'].ingress?.str() == 'listener:relay'
 }
+
+fn test_compile_v2_runtime_plan_rejects_http_handler_without_engine() {
+	cfg := V2Config{
+		listeners: {
+			'web': V2ListenerSpec{}
+		}
+		adapters:  {
+			'app': V2AdapterSpec{
+				kind: 'http-handler'
+			}
+		}
+		pipelines: [
+			V2PipelineSpec{
+				id:      'site'
+				ingress: 'listener:web'
+				egress:  'adapter:app'
+			},
+		]
+	}
+	if _ := compile_v2_runtime_plan(cfg, '', false) {
+		assert false
+	} else {
+		assert err.msg() == 'runtime_plan_adapter_missing_engine:app'
+	}
+}
+
+fn test_compile_v2_runtime_plan_rejects_static_adapter_without_root_or_storage() {
+	cfg := V2Config{
+		listeners: {
+			'web': V2ListenerSpec{}
+		}
+		adapters:  {
+			'assets': V2AdapterSpec{
+				kind: 'static'
+			}
+		}
+		pipelines: [
+			V2PipelineSpec{
+				id:      'assets'
+				ingress: 'listener:web'
+				egress:  'adapter:assets'
+			},
+		]
+	}
+	if _ := compile_v2_runtime_plan(cfg, '', false) {
+		assert false
+	} else {
+		assert err.msg() == 'runtime_plan_adapter_missing_storage:assets'
+	}
+}
+
+fn test_compile_v2_runtime_plan_allows_static_adapter_with_storage_ref() {
+	cfg := V2Config{
+		listeners: {
+			'web': V2ListenerSpec{}
+		}
+		resources: V2ResourceSpecs{
+			storage: {
+				'public': V2StorageResourceSpec{
+					kind: 'filesystem'
+					root: '/srv/public'
+				}
+			}
+		}
+		adapters:  {
+			'assets': V2AdapterSpec{
+				kind:    'static'
+				storage: 'resource:storage/public'
+			}
+		}
+		pipelines: [
+			V2PipelineSpec{
+				id:      'assets'
+				ingress: 'listener:web'
+				egress:  'adapter:assets'
+			},
+		]
+	}
+	plan := compile_v2_runtime_plan(cfg, '', false) or { panic(err) }
+	assert plan.adapters['assets'].storage?.str() == 'resource:storage/public'
+}
+
+fn test_compile_v2_runtime_plan_rejects_empty_fixed_response_adapter() {
+	cfg := V2Config{
+		listeners: {
+			'web': V2ListenerSpec{}
+		}
+		adapters:  {
+			'empty': V2AdapterSpec{
+				kind: 'fixed-response'
+			}
+		}
+		pipelines: [
+			V2PipelineSpec{
+				id:      'empty'
+				ingress: 'listener:web'
+				egress:  'adapter:empty'
+			},
+		]
+	}
+	if _ := compile_v2_runtime_plan(cfg, '', false) {
+		assert false
+	} else {
+		assert err.msg() == 'runtime_plan_adapter_empty_fixed_response:empty'
+	}
+}
