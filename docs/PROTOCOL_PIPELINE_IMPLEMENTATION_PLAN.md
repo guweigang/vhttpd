@@ -918,6 +918,7 @@ Progress as of 2026-06-22:
 - `P3.2` HTTP normalization slice complete: the dispatch module can build a request Exchange from plain HTTP values and match it against pure method, host, path, query, and header rules while keeping veb request objects and compiled regex state at the ingress/runtime edge
 - `P3.2` plan projection slice complete: listener pipelines can be projected from RuntimePlan into dispatch pipeline descriptors and basic HTTP matchers while preserving declaration order and leaving regex indexes to the runtime edge
 - `P3.3` terminal adapter slice complete: fixed-response and reject now have dispatch `EgressAdapter` implementations and RuntimePlan projection helpers that return protocol-neutral delivery outcomes without importing veb or HTTP connection state
+- `P3.3` runtime adapter descriptor slice complete: static, upload, HTTP handler, MCP, WebSocket, and other runtime-owned adapters now project into pure dispatch adapter descriptors with capabilities while remaining outside pure terminal delivery until their runtime owners provide IO
 - `P3.4` terminal HTTP slice complete: existing route status, redirect, required-header, denied-query, body-limit, and `executor = "none"` block responses now flow through dispatch delivery outcomes before HTTP rendering, preserving legacy route response headers and carrying trace/error metadata through one terminal helper
 - `P3.4` static file outcome slice complete: static file hits, missing files, and method rejections now produce dispatch delivery outcomes before HTTP rendering, while file existence checks and veb file sending remain owned by the HTTP runtime
 - `P3.4` upload response slice complete: upload success and error responses now render through dispatch delivery outcomes while parsing, persistence, hashing, and upload completion event dispatch remain owned by the upload runtime
@@ -965,7 +966,7 @@ Batches:
 
 1. Add Exchange, capability, action, adapter, and pipeline contracts. (contract slice complete)
 2. Implement HTTP ingress normalization. (pure value-to-Exchange conversion and basic HTTP matcher complete)
-3. Wrap PHP worker, PHP CGI, static, upload, fixed response, and reject as adapters. (fixed-response and reject slices complete)
+3. Wrap PHP worker, PHP CGI, static, upload, fixed response, and reject as adapters. (fixed-response and reject terminal slices complete; runtime-owned adapters now have pure descriptors and capability projection)
 4. Execute existing HTTP routes through compiled pipelines. (started with terminal fixed-response delivery outcome rendering)
 5. Preserve cache and security policies through named policy plans.
 
