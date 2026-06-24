@@ -1,8 +1,8 @@
 module main
 
+import dispatch
 import upstream.transport
 import net
-import net.http
 import time
 import veb
 import worker
@@ -32,11 +32,11 @@ fn DispatchStreamSession.best_effort_close(rt StreamRuntimeContext, req_id strin
 
 fn HttpStreamRuntime.via_dispatch(mut app App, mut ctx Context, method string, path string, req_id string, trace_id string, remote_addr string) ?veb.Result {
 	stream_runtime := app.build_stream_runtime_context()
-	return HttpStreamRuntime.dispatch(stream_runtime, mut ctx, method, path, req_id, trace_id,
-		remote_addr)
+	return HttpStreamRuntime.dispatch(mut app, stream_runtime, mut ctx, method, path, req_id,
+		trace_id, remote_addr)
 }
 
-fn HttpStreamRuntime.dispatch(rt StreamRuntimeContext, mut ctx Context, method string, path string, req_id string, trace_id string, remote_addr string) ?veb.Result {
+fn HttpStreamRuntime.dispatch(mut app App, rt StreamRuntimeContext, mut ctx Context, method string, path string, req_id string, trace_id string, remote_addr string) ?veb.Result {
 	normalized_path, query_string := transport.WorkerHttpRequestCodec.normalize_request_target(path)
 	query := transport.WorkerHttpRequestCodec.parse_query_map(query_string)
 	headers := transport.WorkerHttpRequestCodec.header_map_from_request(ctx.req)
@@ -44,10 +44,18 @@ fn HttpStreamRuntime.dispatch(rt StreamRuntimeContext, mut ctx Context, method s
 	open_resp := rt.dispatch_open(method, normalized_path, ctx.req.data, remote_addr, req_id,
 		trace_id, query, headers) or { return none }
 	if failure := KernelDispatchFailureMapper.from_stream_response(open_resp) {
-		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-		ctx.set_custom_header('x-vhttpd-error-class', failure.error_class) or {}
-		ctx.res.set_status(http.status_from_int(500))
-		return ctx.text('Internal Server Error')
+		return HttpResponseRuntime.delivery_outcome(mut app, mut ctx, http_ingress_request(method,
+			path, path, '', remote_addr, req_id, trace_id, start_ms), dispatch.outcome_with_metadata(dispatch.response_outcome(500, {
+			'content-type':          'text/plain; charset=utf-8'
+			'x-vhttpd-error-class':  failure.error_class
+			'x-vhttpd-stream-mode':  'dispatch'
+			'x-vhttpd-stream-stage': 'open'
+		}, 'Internal Server Error'), {
+			'error_class':  failure.error_class
+			'error':        failure.error
+			'stream_mode':  'dispatch'
+			'stream_stage': 'open'
+		}), none)
 	}
 	if !open_resp.handled {
 		return none
