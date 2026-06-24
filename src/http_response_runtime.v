@@ -23,24 +23,17 @@ struct HttpResponseRuntime {}
 
 fn HttpResponseRuntime.cache_hit(mut app App, mut ctx Context, req HttpIngressRequest, cached EdgeCachedHttpResponse, rule RuntimeRouteRule) veb.Result {
 	log.info('[http] ⇠ route response cache hit method=${req.method.to_upper()} path=${req.path} trace_id=${req.trace_id} request_id=${req.request_id}')
-	app.emit('http.request', {
-		'method':      req.method.to_upper()
-		'path':        transport.normalize_path(req.path)
-		'status':      '${cached.status}'
-		'request_id':  req.request_id
-		'trace_id':    req.trace_id
-		'duration_ms': '${time.now().unix_milli() - req.start_ms}'
-		'cache':       'hit'
-	})
-	ctx.set_custom_header('x-vhttpd-trace-id', req.trace_id) or {}
-	ctx.set_custom_header('x-vhttpd-cache', 'hit') or {}
-	if cached.cache_control != '' {
-		ctx.set_custom_header('cache-control', cached.cache_control) or {}
+	mut headers := {
+		'content-type':   cached.content_type
+		'x-vhttpd-cache': 'hit'
 	}
-	apply_route_response_headers(mut ctx, rule)
-	ctx.res.set_status(http.status_from_int(cached.status))
-	ctx.set_content_type(cached.content_type)
-	return ctx.text(if req.method.to_upper() == 'HEAD' { '' } else { cached.body })
+	if cached.cache_control != '' {
+		headers['cache-control'] = cached.cache_control
+	}
+	return HttpResponseRuntime.delivery_outcome(mut app, mut ctx, req, dispatch.outcome_with_metadata(dispatch.response_outcome(cached.status,
+		headers, cached.body), {
+		'cache': 'hit'
+	}), rule)
 }
 
 fn HttpResponseRuntime.dispatch_error(mut app App, mut ctx Context, req HttpIngressRequest, err_msg string) veb.Result {
