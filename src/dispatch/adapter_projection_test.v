@@ -137,6 +137,16 @@ fn test_adapter_descriptor_preserves_upload_event_capability() {
 	assert upload.capabilities.events
 }
 
+fn test_adapter_descriptor_marks_event_ingress_capability() {
+	event_ingress := adapter_descriptor_from_plan(runtime_plan.AdapterPlan{
+		id:   'upload_event'
+		kind: 'event-ingress'
+	})
+	assert !event_ingress.terminal
+	assert event_ingress.capabilities.events
+	assert !event_ingress.capabilities.request_response
+}
+
 fn test_adapter_descriptors_from_plan_indexes_by_adapter_id() {
 	plan := runtime_plan.RuntimePlan{
 		adapters: {

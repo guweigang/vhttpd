@@ -21,6 +21,11 @@ pub fn adapter_descriptors_from_plan(plan runtime_plan.RuntimePlan) map[string]A
 
 fn adapter_capabilities(kind string) Capabilities {
 	match kind {
+		'event-ingress' {
+			return Capabilities{
+				events: true
+			}
+		}
 		'upload' {
 			return Capabilities{
 				request_response: true

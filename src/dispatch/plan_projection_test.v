@@ -123,6 +123,25 @@ fn test_ingress_descriptor_from_listener_plan_defaults_empty_protocol_to_http() 
 	assert ingress.capabilities.stream_output
 }
 
+fn test_ingress_descriptors_from_plan_include_event_ingress_adapters() {
+	plan := runtime_plan.RuntimePlan{
+		listeners: {
+			'web': runtime_plan.ListenerPlan{
+				id: 'web'
+			}
+		}
+		adapters:  {
+			'upload_event': runtime_plan.AdapterPlan{
+				id:   'upload_event'
+				kind: 'event-ingress'
+			}
+		}
+	}
+	descriptors := ingress_descriptors_from_plan(plan)
+	assert descriptors['listener:web'].capabilities.request_response
+	assert descriptors['adapter:upload_event'].capabilities.events
+}
+
 fn test_match_basic_http_pipeline_uses_plan_order() {
 	plan := runtime_plan.RuntimePlan{
 		pipelines: [
@@ -273,6 +292,39 @@ fn test_pipeline_capability_errors_from_plan_reports_incompatible_websocket_egre
 		'pipeline_capability_mismatch:ws-on-http:listener:web:full_duplex',
 		'pipeline_capability_mismatch:ws-on-http:listener:web:sessions',
 		'pipeline_capability_mismatch:ws-on-http:listener:web:multiplexing',
+	]
+}
+
+fn test_pipeline_capability_errors_from_plan_visits_event_ingress_pipeline() {
+	plan := runtime_plan.RuntimePlan{
+		adapters:  {
+			'upload_event': runtime_plan.AdapterPlan{
+				id:   'upload_event'
+				kind: 'event-ingress'
+			}
+			'ws':           runtime_plan.AdapterPlan{
+				id:   'ws'
+				kind: 'websocket'
+			}
+		}
+		pipelines: [
+			runtime_plan.PipelinePlan{
+				id:      'event-to-ws'
+				ingress: runtime_plan.ResourceRef{
+					domain: .adapter
+					id:     'upload_event'
+				}
+				egress:  runtime_plan.ResourceRef{
+					domain: .adapter
+					id:     'ws'
+				}
+			},
+		]
+	}
+	assert pipeline_capability_errors_from_plan(plan) == [
+		'pipeline_capability_mismatch:event-to-ws:adapter:upload_event:full_duplex',
+		'pipeline_capability_mismatch:event-to-ws:adapter:upload_event:sessions',
+		'pipeline_capability_mismatch:event-to-ws:adapter:upload_event:multiplexing',
 	]
 }
 

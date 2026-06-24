@@ -12,7 +12,15 @@ pub fn ingress_descriptor_from_listener_plan(listener runtime_plan.ListenerPlan)
 pub fn ingress_descriptors_from_plan(plan runtime_plan.RuntimePlan) map[string]IngressDescriptor {
 	mut descriptors := map[string]IngressDescriptor{}
 	for id, listener in plan.listeners {
-		descriptors[id] = ingress_descriptor_from_listener_plan(listener)
+		descriptors['listener:${id}'] = ingress_descriptor_from_listener_plan(listener)
+	}
+	for id, adapter in adapter_descriptors_from_plan(plan) {
+		if adapter.kind == 'event-ingress' {
+			descriptors['adapter:${id}'] = IngressDescriptor{
+				id:           'adapter:${id}'
+				capabilities: adapter.capabilities
+			}
+		}
 	}
 	return descriptors
 }
@@ -44,10 +52,10 @@ pub fn pipeline_capability_errors_from_plan(plan runtime_plan.RuntimePlan) []str
 	ingresses := ingress_descriptors_from_plan(plan)
 	mut errors := []string{}
 	for pipeline in plan.pipelines {
-		if pipeline.ingress.domain != .listener {
+		if pipeline.ingress.domain !in [.listener, .adapter] {
 			continue
 		}
-		ingress := ingresses[pipeline.ingress.id] or { continue }
+		ingress := ingresses[pipeline.ingress.str()] or { continue }
 		descriptor := pipeline_descriptor_from_plan_with_adapters(pipeline, adapters)
 		errors << pipeline_capability_errors(descriptor, ingress)
 	}
