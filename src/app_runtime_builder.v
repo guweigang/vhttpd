@@ -204,10 +204,35 @@ fn runtime_plan_with_projection_diagnostics(plan runtime_plan.RuntimePlan) runti
 	if projection_diagnostics.len == 0 {
 		return plan
 	}
-	mut diagnostics := plan.diagnostics.clone()
-	diagnostics << projection_diagnostics
+	diagnostics := runtime_plan_append_unique_diagnostics(plan.diagnostics, projection_diagnostics)
 	return runtime_plan.RuntimePlan{
 		...plan
 		diagnostics: diagnostics
 	}
+}
+
+fn runtime_plan_append_unique_diagnostics(existing []runtime_plan.PlanDiagnostic, additions []runtime_plan.PlanDiagnostic) []runtime_plan.PlanDiagnostic {
+	mut diagnostics := []runtime_plan.PlanDiagnostic{cap: existing.len + additions.len}
+	mut seen := map[string]bool{}
+	for diagnostic in existing {
+		key := runtime_plan_diagnostic_key(diagnostic)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		diagnostics << diagnostic
+	}
+	for diagnostic in additions {
+		key := runtime_plan_diagnostic_key(diagnostic)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		diagnostics << diagnostic
+	}
+	return diagnostics
+}
+
+fn runtime_plan_diagnostic_key(diagnostic runtime_plan.PlanDiagnostic) string {
+	return '${diagnostic.severity}\n${diagnostic.code}\n${diagnostic.path}\n${diagnostic.message}'
 }
