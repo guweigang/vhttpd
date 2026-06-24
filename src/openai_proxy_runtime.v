@@ -3,7 +3,6 @@ module main
 import api.openai
 import net.http
 import time
-import upstream.transport
 import veb
 
 struct OpenAIProxyRuntime {}
@@ -63,25 +62,11 @@ fn OpenAIProxyRuntime.once_attempt(mut app App, mut ctx Context, plan openai.Ope
 		return OpenAIErrorResponseWriter.write_typed(mut app, mut ctx, resp.status_code, path,
 			method, req_id, trace_id, start_ms, code, message, typ)
 	}
-	ctx.res.set_status(http.status_from_int(resp.status_code))
-	ctx.set_content_type(if plan.stream_mode == 'mapped' {
+	content_type := if plan.stream_mode == 'mapped' {
 		'application/json; charset=utf-8'
 	} else {
 		openai.OpenAIHttp.response_content_type(resp.header, 'application/json; charset=utf-8')
-	})
-	ctx.set_custom_header('x-request-id', req_id) or {}
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-	ctx.set_custom_header('x-vhttpd-openai-backend', plan.backend_name) or {}
-	app.emit('http.request', {
-		'method':      method.to_upper()
-		'path':        transport.WorkerHttpRequestCodec.normalize_path(path)
-		'status':      '${resp.status_code}'
-		'request_id':  req_id
-		'trace_id':    trace_id
-		'duration_ms': '${time.now().unix_milli() - start_ms}'
-		'provider':    'openai'
-		'backend':     plan.backend_name
-	})
+	}
 	if plan.stream_mode == 'mapped' {
 		mapped_body := openai.OpenAIResponseBuilder.map_once_response(plan, resp.body, req_id,
 			int(time.now().unix())) or {
@@ -89,7 +74,18 @@ fn OpenAIProxyRuntime.once_attempt(mut app App, mut ctx Context, plan openai.Ope
 				trace_id, start_ms, openai.OpenAIResolvedPlan.plan_error_code(err.msg()),
 				openai.OpenAIResolvedPlan.plan_error_message(err.msg()))
 		}
-		return ctx.text(if method.to_upper() == 'HEAD' { '' } else { mapped_body })
+		return OpenAIResponseWriter.write(mut app, mut ctx, resp.status_code, path, method, req_id,
+			trace_id, start_ms, if method.to_upper() == 'HEAD' { '' } else { mapped_body },
+			content_type, {
+			'x-vhttpd-openai-backend': plan.backend_name
+		}, {
+			'backend': plan.backend_name
+		})
 	}
-	return ctx.text(if method.to_upper() == 'HEAD' { '' } else { resp.body })
+	return OpenAIResponseWriter.write(mut app, mut ctx, resp.status_code, path, method, req_id,
+		trace_id, start_ms, if method.to_upper() == 'HEAD' { '' } else { resp.body }, content_type, {
+		'x-vhttpd-openai-backend': plan.backend_name
+	}, {
+		'backend': plan.backend_name
+	})
 }

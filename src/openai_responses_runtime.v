@@ -3,7 +3,6 @@ module main
 import api.openai
 import upstream.transport
 import veb
-import time
 
 fn (mut app App) openai_handle_responses(mut ctx Context, method string, path string, req_id string, trace_id string, start_ms i64) veb.Result {
 	if method.to_upper() !in ['POST', 'HEAD'] {
@@ -44,24 +43,15 @@ fn (mut app App) openai_handle_responses_passthrough(mut ctx Context, method str
 	if method.to_upper() in ['GET', 'HEAD'] && response_id != ''
 		&& !relative_path.contains('/input_items') {
 		if record := app.protocols.openai.responses.get(response_id) {
-			ctx.res.set_status(.ok)
-			ctx.set_content_type('application/json; charset=utf-8')
-			ctx.set_custom_header('x-request-id', req_id) or {}
-			ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-			ctx.set_custom_header('x-vhttpd-openai-backend', record.backend_name) or {}
-			app.emit('http.request', {
-				'method':      method.to_upper()
-				'path':        transport.WorkerHttpRequestCodec.normalize_path(path)
-				'status':      '200'
-				'request_id':  req_id
-				'trace_id':    trace_id
-				'duration_ms': '${time.now().unix_milli() - start_ms}'
-				'provider':    'openai'
-				'backend':     record.backend_name
-				'executor':    record.executor
-				'endpoint':    'responses.registry'
+			return OpenAIResponseWriter.write(mut app, mut ctx, 200, path, method, req_id,
+				trace_id, start_ms, if method.to_upper() == 'HEAD' { '' } else { record.body },
+				'application/json; charset=utf-8', {
+				'x-vhttpd-openai-backend': record.backend_name
+			}, {
+				'backend':  record.backend_name
+				'executor': record.executor
+				'endpoint': 'responses.registry'
 			})
-			return ctx.text(if method.to_upper() == 'HEAD' { '' } else { record.body })
 		}
 	}
 	plan := app.openai_resolve_responses_passthrough_plan(relative_target, ctx.req.data, method) or {
