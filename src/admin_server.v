@@ -5,7 +5,6 @@ import dispatch
 import feishu
 import json
 import log
-import net.http
 import time
 import upstream.transport
 import veb
@@ -308,70 +307,58 @@ pub fn (mut app AdminApp) admin_runtime_feishu_chats(mut ctx Context) veb.Result
 
 @['/admin/runtime/feishu/messages'; post]
 pub fn (mut app AdminApp) admin_runtime_feishu_send(mut ctx Context) veb.Result {
-	path := if ctx.req.url == '' { '/admin/runtime/feishu/messages' } else { ctx.req.url }
-	req_id := resolve_request_id(ctx, path)
-	trace_id := resolve_trace_id(ctx, path)
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
-	ctx.set_content_type('application/json; charset=utf-8')
+	req := admin_plane_request(ctx, '/admin/runtime/feishu/messages')
 	if !app.admin_authorized(ctx) {
-		ctx.res.set_status(http.status_from_int(403))
-		return ctx.text(json.encode(admin.AdminErrorResponse{
-			error: 'forbidden'
-		}))
+		return admin_plane_forbidden(mut app, mut ctx, 'POST', req)
 	}
-	req := json.decode(feishu.SendMessageRequest, ctx.req.data) or {
-		ctx.res.set_status(http.status_from_int(400))
-		return ctx.text(json.encode(admin.AdminErrorResponse{
+	send_req := json.decode(feishu.SendMessageRequest, ctx.req.data) or {
+		return admin_plane_json_response(mut app, mut ctx, 'POST', req, 400, json.encode(admin.AdminErrorResponse{
 			error: 'invalid_json'
-		}))
+		}), {
+			'admin_endpoint': 'runtime_feishu_messages'
+			'error':          'invalid_json'
+		})
 	}
-	result := app.shared.feishu_runtime_send_message(req) or {
-		ctx.res.set_status(http.status_from_int(502))
-		return ctx.text(json.encode(admin.AdminFeishuSendResponse{
+	result := app.shared.feishu_runtime_send_message(send_req) or {
+		return admin_plane_json_response(mut app, mut ctx, 'POST', req, 502, json.encode(admin.AdminFeishuSendResponse{
 			ok:    false
 			error: err.msg()
-		}))
+		}), {
+			'admin_endpoint': 'runtime_feishu_messages'
+			'error':          err.msg()
+		})
 	}
-	app.shared.emit('http.request', {
-		'method':     'POST'
-		'path':       '/admin/runtime/feishu/messages'
-		'status':     '200'
-		'request_id': req_id
-		'trace_id':   trace_id
-		'plane':      'admin'
-	})
-	return ctx.text(json.encode(admin.AdminFeishuSendResponse{
+	return admin_plane_json_response(mut app, mut ctx, 'POST', req, 200, json.encode(admin.AdminFeishuSendResponse{
 		ok:         true
 		message_id: result.message_id
-	}))
+	}), {
+		'admin_endpoint': 'runtime_feishu_messages'
+	})
 }
 
 @['/admin/workers/restart'; post]
 pub fn (mut app AdminApp) admin_restart_worker(mut ctx Context) veb.Result {
-	path := if ctx.req.url == '' { '/admin/workers/restart' } else { ctx.req.url }
-	req_id := resolve_request_id(ctx, path)
-	trace_id := resolve_trace_id(ctx, path)
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
-	ctx.set_content_type('application/json; charset=utf-8')
+	req := admin_plane_request(ctx, '/admin/workers/restart')
 	if !app.admin_authorized(ctx) {
-		ctx.res.set_status(http.status_from_int(403))
-		return ctx.text(json.encode(admin.AdminErrorResponse{
-			error: 'forbidden'
-		}))
+		return admin_plane_forbidden(mut app, mut ctx, 'POST', req)
 	}
 	id_raw := (ctx.query['id'] or { '' }).trim_space()
 	if id_raw == '' {
-		ctx.res.set_status(http.status_from_int(400))
-		return ctx.text(json.encode(admin.AdminErrorResponse{
+		return admin_plane_json_response(mut app, mut ctx, 'POST', req, 400, json.encode(admin.AdminErrorResponse{
 			error: 'missing worker id, use ?id=<worker_id>'
-		}))
+		}), {
+			'admin_endpoint': 'workers_restart'
+			'error':          'missing_worker_id'
+		})
 	}
 	worker_id := id_raw.int()
 	status := app.shared.restart_worker_by_id(worker_id) or {
-		ctx.res.set_status(http.status_from_int(404))
-		return ctx.text(json.encode(admin.AdminErrorResponse{
+		return admin_plane_json_response(mut app, mut ctx, 'POST', req, 404, json.encode(admin.AdminErrorResponse{
 			error: err.msg()
-		}))
+		}), {
+			'admin_endpoint': 'workers_restart'
+			'error':          err.msg()
+		})
 	}
 	body := json.encode(admin.AdminRestartSingleResponse{
 		ok:     true
@@ -379,27 +366,22 @@ pub fn (mut app AdminApp) admin_restart_worker(mut ctx Context) veb.Result {
 		worker: status
 	})
 	app.shared.emit('admin.worker.restart', {
-		'request_id': req_id
-		'trace_id':   trace_id
+		'request_id': req.req_id
+		'trace_id':   req.trace_id
 		'mode':       'single'
 		'worker_id':  '${worker_id}'
 	})
-	ctx.res.set_status(http.status_from_int(200))
-	return ctx.text(body)
+	return admin_plane_json_response(mut app, mut ctx, 'POST', req, 200, body, {
+		'admin_endpoint': 'workers_restart'
+		'admin_action':   'worker_restart'
+	})
 }
 
 @['/admin/workers/restart/all'; post]
 pub fn (mut app AdminApp) admin_restart_all_workers(mut ctx Context) veb.Result {
-	path := if ctx.req.url == '' { '/admin/workers/restart/all' } else { ctx.req.url }
-	req_id := resolve_request_id(ctx, path)
-	trace_id := resolve_trace_id(ctx, path)
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
-	ctx.set_content_type('application/json; charset=utf-8')
+	req := admin_plane_request(ctx, '/admin/workers/restart/all')
 	if !app.admin_authorized(ctx) {
-		ctx.res.set_status(http.status_from_int(403))
-		return ctx.text(json.encode(admin.AdminErrorResponse{
-			error: 'forbidden'
-		}))
+		return admin_plane_forbidden(mut app, mut ctx, 'POST', req)
 	}
 	force := admin.AdminQuery.parse_boolish(ctx.query['force'] or { 'false' })
 	restarted := app.shared.restart_all_workers()
@@ -410,13 +392,15 @@ pub fn (mut app AdminApp) admin_restart_all_workers(mut ctx Context) veb.Result 
 		force:     force
 	})
 	app.shared.emit('admin.worker.restart', {
-		'request_id': req_id
-		'trace_id':   trace_id
+		'request_id': req.req_id
+		'trace_id':   req.trace_id
 		'mode':       'all'
 		'restarted':  '${restarted}'
 	})
-	ctx.res.set_status(http.status_from_int(200))
-	return ctx.text(body)
+	return admin_plane_json_response(mut app, mut ctx, 'POST', req, 200, body, {
+		'admin_endpoint': 'workers_restart_all'
+		'admin_action':   'worker_restart_all'
+	})
 }
 
 fn run_admin_server(mut shared_app App, host string, port int, token string) {
