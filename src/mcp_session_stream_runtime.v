@@ -2,7 +2,6 @@ module main
 
 import api.mcp.protocol as mcp_protocol
 import net
-import net.http
 import time
 import upstream.transport
 import veb
@@ -14,57 +13,25 @@ pub fn (mut app App) mcp_get(mut ctx Context) veb.Result {
 	req_id := HttpRequestIdentity.request_id(ctx, path)
 	trace_id := HttpRequestIdentity.trace_id(ctx, path)
 	headers := transport.WorkerHttpRequestCodec.header_map_from_request(ctx.req)
+	start_ms := time.now().unix_milli()
 	if !app.protocols.mcp.origin_allowed(headers) {
-		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-		ctx.res.set_status(http.status_from_int(403))
-		ctx.set_content_type('application/json; charset=utf-8')
-		app.emit('http.request', {
-			'method':        'GET'
-			'path':          '/mcp'
-			'status':        '403'
-			'request_id':    req_id
-			'trace_id':      trace_id
-			'response_mode': 'mcp'
-			'error_class':   'origin_forbidden'
-		})
-		return ctx.text('{"error":"Forbidden Origin"}')
+		return mcp_json_response(mut app, mut ctx, 'GET', path, req_id, trace_id, start_ms, 403,
+			'{"error":"Forbidden Origin"}', 'origin_forbidden', map[string]string{})
 	}
 	mut session_id := headers['mcp-session-id'] or { '' }
 	if session_id == '' {
 		session_id = (ctx.query['session_id'] or { '' }).trim_space()
 	}
 	if session_id == '' {
-		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-		ctx.res.set_status(http.status_from_int(400))
-		ctx.set_content_type('application/json; charset=utf-8')
-		app.emit('http.request', {
-			'method':        'GET'
-			'path':          '/mcp'
-			'status':        '400'
-			'request_id':    req_id
-			'trace_id':      trace_id
-			'response_mode': 'mcp'
-			'error_class':   'missing_session_id'
-		})
-		return ctx.text('{"error":"Missing Mcp-Session-Id"}')
+		return mcp_json_response(mut app, mut ctx, 'GET', path, req_id, trace_id, start_ms, 400,
+			'{"error":"Missing Mcp-Session-Id"}', 'missing_session_id', map[string]string{})
 	}
 	app.protocols.mcp.mu.@lock()
 	session := app.protocols.mcp.sessions[session_id] or { mcp_protocol.Session{} }
 	app.protocols.mcp.mu.unlock()
 	if session.id == '' {
-		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-		ctx.res.set_status(http.status_from_int(404))
-		ctx.set_content_type('application/json; charset=utf-8')
-		app.emit('http.request', {
-			'method':        'GET'
-			'path':          '/mcp'
-			'status':        '404'
-			'request_id':    req_id
-			'trace_id':      trace_id
-			'response_mode': 'mcp'
-			'error_class':   'unknown_session_id'
-		})
-		return ctx.text('{"error":"Unknown Mcp-Session-Id"}')
+		return mcp_json_response(mut app, mut ctx, 'GET', path, req_id, trace_id, start_ms, 404,
+			'{"error":"Unknown Mcp-Session-Id"}', 'unknown_session_id', map[string]string{})
 	}
 	ctx.takeover_conn()
 	ctx.conn.set_write_timeout(time.infinite)
