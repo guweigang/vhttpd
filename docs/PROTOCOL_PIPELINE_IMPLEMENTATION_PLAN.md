@@ -923,7 +923,7 @@ Progress as of 2026-06-22:
 - `P3.4` upload response slice complete: upload success and error responses now render through dispatch delivery outcomes while parsing, persistence, hashing, and upload completion event dispatch remain owned by the upload runtime
 - `P3.4` worker response slice complete for finite responses: normal executor HTTP responses are mapped into dispatch response delivery outcomes before rendering, response-cache storage decisions read delivery outcomes directly, and delivery header rendering handles `Set-Cookie` generically across worker, MCP, and terminal outcomes while preserving response cache behavior
 - `P3.4` failure response slice complete: worker/backend dispatch errors are classified into dispatch failure delivery outcomes before HTTP rendering, so trace/error headers and `http.request` observations flow through the same terminal renderer as other delivery outcomes
-- `P3.4` MCP finite response slice started: successful MCP HTTP responses now render through dispatch delivery outcomes with observation metadata, while MCP validation, queueing, session state, and streaming remain owned by the MCP runtime
+- `P3.4` MCP finite response slice complete: MCP POST JSON responses and MCP GET pre-stream JSON errors now render through dispatch delivery outcomes with observation metadata, while MCP validation, queueing, session state, and live SSE streaming remain owned by the MCP runtime
 - `P3.4` stream boundary decision recorded: current stream and upstream-plan executor outcomes still carry live Unix connection or concrete upstream plan state, so they remain outside pure dispatch delivery outcomes until stream/upstream runtimes own those live resources behind protocol-neutral terminal plans
 
 Batches:
