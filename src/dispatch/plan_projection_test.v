@@ -392,6 +392,11 @@ fn test_pipeline_capability_errors_from_plan_reports_incompatible_websocket_egre
 		'sessions',
 		'multiplexing',
 	]
+	diagnostics := pipeline_capability_diagnostics_from_plan(plan)
+	assert diagnostics[0].severity == 'warning'
+	assert diagnostics[0].code == 'pipeline_capability_mismatch'
+	assert diagnostics[0].path == 'pipelines.ws-on-http'
+	assert diagnostics[0].message == 'pipeline_capability_mismatch:ws-on-http:listener:web:full_duplex'
 }
 
 fn test_pipeline_capability_errors_from_plan_visits_event_ingress_pipeline() {

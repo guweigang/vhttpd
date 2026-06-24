@@ -114,6 +114,15 @@ pub fn pipeline_capability_errors_from_plan(plan runtime_plan.RuntimePlan) []str
 	return pipeline_capability_issues_from_plan(plan).map(it.message())
 }
 
+pub fn pipeline_capability_diagnostics_from_plan(plan runtime_plan.RuntimePlan) []runtime_plan.PlanDiagnostic {
+	return pipeline_capability_issues_from_plan(plan).map(runtime_plan.PlanDiagnostic{
+		severity: 'warning'
+		code:     it.code
+		path:     'pipelines.${it.pipeline}'
+		message:  it.message()
+	})
+}
+
 pub fn pipeline_capability_issues_from_plan(plan runtime_plan.RuntimePlan) []PipelineCapabilityIssue {
 	adapters := adapter_descriptors_from_plan(plan)
 	transforms := transform_descriptors_from_plan(plan)
