@@ -1,6 +1,6 @@
 module main
 
-import net.http
+import dispatch
 import net
 import time
 import upstream
@@ -55,13 +55,21 @@ fn (rt UpstreamRuntimeContext) snapshot(details bool, limit int, offset int, rol
 	return rt.snapshot_fn(details, limit, offset, role_filter, provider_filter)
 }
 
-fn UpstreamRuntimeContext.execute_plan(rt UpstreamRuntimeContext, mut ctx Context, plan transport.WorkerUpstreamPlanFrame, method string, path string, req_id string, trace_id string, start_ms i64) veb.Result {
+fn UpstreamRuntimeContext.execute_plan(rt UpstreamRuntimeContext, mut app App, mut ctx Context, plan transport.WorkerUpstreamPlanFrame, method string, path string, req_id string, trace_id string, start_ms i64) veb.Result {
 	if error_class := upstream.ExecState.validate_plan(plan) {
 		rt.note_error()
-		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-		ctx.set_custom_header('x-vhttpd-error-class', error_class) or {}
-		ctx.res.set_status(http.status_from_int(502))
-		return ctx.text('Bad Gateway')
+		return HttpResponseRuntime.delivery_outcome(mut app, mut ctx, http_ingress_request(method,
+			path, path, '', if isnil(ctx.conn) { '' } else { ctx.conn.peer_ip() or { '' } },
+			req_id, trace_id, start_ms), dispatch.outcome_with_metadata(dispatch.response_outcome(502, {
+			'content-type':          'text/plain; charset=utf-8'
+			'x-vhttpd-error-class':  error_class
+			'x-vhttpd-stream-mode':  'upstream_plan'
+			'x-vhttpd-stream-stage': 'validate'
+		}, 'Bad Gateway'), {
+			'error_class':  error_class
+			'stream_mode':  'upstream_plan'
+			'stream_stage': 'validate'
+		}), none)
 	}
 	rt.register(plan, method, path, req_id, trace_id)
 	defer {

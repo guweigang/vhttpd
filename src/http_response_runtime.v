@@ -155,8 +155,8 @@ fn HttpResponseRuntime.stream(mut app App, mut ctx Context, req HttpIngressReque
 fn HttpResponseRuntime.upstream_plan(mut app App, mut ctx Context, req HttpIngressRequest, outcome executor.HttpLogicDispatchOutcome) veb.Result {
 	log.info('[http] ⇠ dispatch upstream_plan method=${req.method.to_upper()} path=${req.path} trace_id=${req.trace_id} request_id=${req.request_id} duration_ms=${time.now().unix_milli() - req.start_ms}')
 	upstream_runtime := app.build_upstream_runtime_context()
-	return UpstreamRuntimeContext.execute_plan(upstream_runtime, mut ctx, outcome.upstream_plan,
-		req.method, req.path, req.request_id, req.trace_id, req.start_ms)
+	return UpstreamRuntimeContext.execute_plan(upstream_runtime, mut app, mut ctx,
+		outcome.upstream_plan, req.method, req.path, req.request_id, req.trace_id, req.start_ms)
 }
 
 fn HttpResponseRuntime.normal(mut app App, mut ctx Context, req HttpIngressRequest, outcome executor.HttpLogicDispatchOutcome, matched_rule ?RuntimeRouteRule) veb.Result {
