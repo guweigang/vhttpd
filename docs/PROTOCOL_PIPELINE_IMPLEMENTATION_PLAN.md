@@ -938,6 +938,7 @@ Progress as of 2026-06-22:
 - `P3.4` data-plane runtime admin slice complete: data-plane runtime summary, runtime plan, upstream, websocket, MCP, provider-instance, provider specs, and provider runtime endpoints now share the data-plane delivery outcome helper for success and disabled-admin 404 responses
 - `P3.4` admin-plane summary response slice complete: dedicated admin-plane health, workers, stats, and runtime summary endpoints now render finite text/JSON responses through dispatch delivery outcomes with admin-plane observations
 - `P3.4` admin-plane finite response slice complete: dedicated admin-plane catalog, runtime snapshot, Feishu admin, and worker restart endpoints now render finite JSON/text responses through dispatch delivery outcomes while preserving worker restart action events
+- `P3.4` delivery header audit complete: OpenAI `x-request-id` now flows through delivery outcome headers; the remaining direct header/status writes are the HTTP delivery renderer itself, route/startup header policy injection, and the host SSE live stream boundary
 - `P3.4` stream boundary decision recorded: current stream and upstream-plan executor outcomes still carry live Unix connection or concrete upstream plan state, so they remain outside pure dispatch delivery outcomes until stream/upstream runtimes own those live resources behind protocol-neutral terminal plans
 
 Batches:
