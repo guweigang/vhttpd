@@ -50,4 +50,11 @@ fn test_pipeline_capability_errors_include_pipeline_and_ingress() {
 		'pipeline_capability_mismatch:chat/ws:listener:http:full_duplex',
 		'pipeline_capability_mismatch:chat/ws:listener:http:sessions',
 	]
+	issues := pipeline_capability_issues(pipeline, ingress)
+	assert issues.len == 2
+	assert issues[0].code == 'pipeline_capability_mismatch'
+	assert issues[0].pipeline == 'chat/ws'
+	assert issues[0].ingress == 'listener:http'
+	assert issues[0].capability == 'full_duplex'
+	assert issues[0].message() == 'pipeline_capability_mismatch:chat/ws:listener:http:full_duplex'
 }

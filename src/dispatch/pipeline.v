@@ -25,6 +25,22 @@ pub:
 	capabilities Capabilities
 }
 
+pub struct PipelineCapabilityIssue {
+pub:
+	code       string
+	pipeline   string
+	ingress    string
+	transform  string
+	capability string
+}
+
+pub fn (issue PipelineCapabilityIssue) message() string {
+	if issue.transform != '' {
+		return '${issue.code}:${issue.pipeline}:${issue.ingress}:transform:${issue.transform}:${issue.capability}'
+	}
+	return '${issue.code}:${issue.pipeline}:${issue.ingress}:${issue.capability}'
+}
+
 pub fn capabilities_satisfy(available Capabilities, required Capabilities) bool {
 	return (!required.request_response || available.request_response)
 		&& (!required.events || available.events)
@@ -79,8 +95,20 @@ pub fn pipeline_capabilities_valid(pipeline PipelineDescriptor, ingress IngressD
 }
 
 pub fn pipeline_capability_errors(pipeline PipelineDescriptor, ingress IngressDescriptor) []string {
-	missing := missing_capabilities(ingress.capabilities, pipeline.required)
-	return missing.map('pipeline_capability_mismatch:${pipeline.id}:${ingress.id}:${it}')
+	return pipeline_capability_issues(pipeline, ingress).map(it.message())
+}
+
+pub fn pipeline_capability_issues(pipeline PipelineDescriptor, ingress IngressDescriptor) []PipelineCapabilityIssue {
+	mut issues := []PipelineCapabilityIssue{}
+	for capability in missing_capabilities(ingress.capabilities, pipeline.required) {
+		issues << PipelineCapabilityIssue{
+			code:       'pipeline_capability_mismatch'
+			pipeline:   pipeline.id
+			ingress:    ingress.id
+			capability: capability
+		}
+	}
+	return issues
 }
 
 pub interface PipelineDispatcher {

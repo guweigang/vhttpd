@@ -194,6 +194,17 @@ fn test_pipeline_transform_capability_errors_report_unsupported_ingress_exchange
 		'pipeline_transform_capability_mismatch:ws-transform:listener:ws:transform:http_only:full_duplex',
 		'pipeline_transform_capability_mismatch:ws-transform:listener:ws:transform:http_only:sessions',
 	]
+	issues := pipeline_transform_capability_issues(pipeline, ingress, {
+		'http_only': TransformDescriptor{
+			id:           'http_only'
+			capabilities: Capabilities{
+				request_response: true
+			}
+		}
+	})
+	assert issues[0].code == 'pipeline_transform_capability_mismatch'
+	assert issues[0].transform == 'http_only'
+	assert issues[0].message() == 'pipeline_transform_capability_mismatch:ws-transform:listener:ws:transform:http_only:full_duplex'
 }
 
 fn test_ingress_descriptor_from_listener_plan_defaults_empty_protocol_to_http() {
@@ -375,6 +386,11 @@ fn test_pipeline_capability_errors_from_plan_reports_incompatible_websocket_egre
 		'pipeline_capability_mismatch:ws-on-http:listener:web:full_duplex',
 		'pipeline_capability_mismatch:ws-on-http:listener:web:sessions',
 		'pipeline_capability_mismatch:ws-on-http:listener:web:multiplexing',
+	]
+	assert pipeline_capability_issues_from_plan(plan).map(it.capability) == [
+		'full_duplex',
+		'sessions',
+		'multiplexing',
 	]
 }
 

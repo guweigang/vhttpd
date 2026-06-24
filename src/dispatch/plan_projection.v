@@ -111,10 +111,14 @@ pub fn pipeline_descriptor_from_plan_with_runtime_descriptors(pipeline runtime_p
 }
 
 pub fn pipeline_capability_errors_from_plan(plan runtime_plan.RuntimePlan) []string {
+	return pipeline_capability_issues_from_plan(plan).map(it.message())
+}
+
+pub fn pipeline_capability_issues_from_plan(plan runtime_plan.RuntimePlan) []PipelineCapabilityIssue {
 	adapters := adapter_descriptors_from_plan(plan)
 	transforms := transform_descriptors_from_plan(plan)
 	ingresses := ingress_descriptors_from_plan(plan)
-	mut errors := []string{}
+	mut issues := []PipelineCapabilityIssue{}
 	for pipeline in plan.pipelines {
 		if pipeline.ingress.domain !in [.listener, .adapter] {
 			continue
@@ -122,24 +126,34 @@ pub fn pipeline_capability_errors_from_plan(plan runtime_plan.RuntimePlan) []str
 		ingress := ingresses[pipeline.ingress.str()] or { continue }
 		descriptor := pipeline_descriptor_from_plan_with_runtime_descriptors(pipeline, adapters,
 			transforms)
-		errors << pipeline_capability_errors(descriptor, ingress)
-		errors << pipeline_transform_capability_errors(pipeline, ingress, transforms)
+		issues << pipeline_capability_issues(descriptor, ingress)
+		issues << pipeline_transform_capability_issues(pipeline, ingress, transforms)
 	}
-	return errors
+	return issues
 }
 
 pub fn pipeline_transform_capability_errors(pipeline runtime_plan.PipelinePlan, ingress IngressDescriptor, transforms map[string]TransformDescriptor) []string {
-	mut errors := []string{}
+	return pipeline_transform_capability_issues(pipeline, ingress, transforms).map(it.message())
+}
+
+pub fn pipeline_transform_capability_issues(pipeline runtime_plan.PipelinePlan, ingress IngressDescriptor, transforms map[string]TransformDescriptor) []PipelineCapabilityIssue {
+	mut issues := []PipelineCapabilityIssue{}
 	for reference in pipeline.transforms {
 		if reference.domain != .transform {
 			continue
 		}
 		transform := transforms[reference.id] or { continue }
 		for missing in missing_capabilities(transform.capabilities, ingress.capabilities) {
-			errors << 'pipeline_transform_capability_mismatch:${pipeline.id}:${ingress.id}:transform:${reference.id}:${missing}'
+			issues << PipelineCapabilityIssue{
+				code:       'pipeline_transform_capability_mismatch'
+				pipeline:   pipeline.id
+				ingress:    ingress.id
+				transform:  reference.id
+				capability: missing
+			}
 		}
 	}
-	return errors
+	return issues
 }
 
 fn transform_capabilities(kind string) Capabilities {
