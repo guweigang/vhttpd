@@ -220,9 +220,11 @@ fn (mut app App) feishu_card_bridge_dispatch_callback(app_name string, trace_id 
 			'action_tag':      summary.action_tag
 		}
 	}
-	log.info('[bridge] 🔁 dispatch -> local client=${client_id} request_id=${request_id} trace_id=${trace_id} event_kind=${summary.event_kind} event_type=${summary.event_type} message_id=${summary.message_id} target=${summary.target}')
-	if !app.feishu_card_bridge_send(client_id, json.encode(frame)) {
-		return error('bridge_send_failed:${client_id}')
+	delivery := feishu_card_bridge_dispatch_delivery_outcome(client_id, frame)
+	relay_client_id := delivery.metadata['relay_client_id'] or { client_id }
+	log.info('[bridge] 🔁 dispatch -> local target=${delivery.target} client=${relay_client_id} request_id=${request_id} trace_id=${trace_id} event_kind=${summary.event_kind} event_type=${summary.event_type} message_id=${summary.message_id} target=${summary.target}')
+	if !app.feishu_card_bridge_send(relay_client_id, json.encode(frame)) {
+		return error('bridge_send_failed:${relay_client_id}')
 	}
 	select {
 		result := <-ch {
@@ -258,9 +260,11 @@ fn (mut app App) feishu_card_bridge_proxy_request(action string, req upstream.Up
 		action:     action
 		request:    req
 	}
-	log.info('[bridge] 🔁 proxy -> remote request_id=${request_id} trace_id=${req.metadata['trace_id'] or {
+	trace_id := req.metadata['trace_id'] or { '' }
+	delivery := feishu_card_bridge_proxy_delivery_outcome(frame, trace_id)
+	log.info('[bridge] 🔁 proxy -> remote target=${delivery.target} request_id=${request_id} trace_id=${delivery.metadata['trace_id'] or {
 		''
-	}} action=${action} instance=${req.instance} target=${req.target} target_type=${req.target_type} stream_id=${req.metadata['stream_id'] or {
+	}} action=${delivery.metadata['action'] or { action }} instance=${req.instance} target=${req.target} target_type=${req.target_type} stream_id=${delivery.metadata['stream_id'] or {
 		''
 	}} message_type=${req.message_type}')
 	if !app.feishu_card_bridge_send_to_server(json.encode(frame)) {
