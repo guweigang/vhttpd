@@ -63,3 +63,22 @@ fn test_feishu_card_bridge_proxy_delivery_outcome_projects_relay_delivery() {
 	assert outcome.metadata['message_type'] == 'text'
 	assert outcome.metadata['stream_id'] == 'stream-1'
 }
+
+fn test_feishu_card_bridge_server_session_delivery_outcome_projects_session() {
+	outcome := feishu_card_bridge_server_session_delivery_outcome('local-main', 'req-1',
+		'trace-1')
+
+	assert outcome.kind == .session_plan
+	assert outcome.status == 101
+	assert outcome.target == 'relay:feishu-card:local-main'
+	assert outcome.headers['upgrade'] == 'websocket'
+	assert outcome.metadata['response_mode'] == 'relay'
+	assert outcome.metadata['relay_protocol'] == 'feishu_card_bridge'
+	assert outcome.metadata['relay_carrier'] == 'websocket'
+	assert outcome.metadata['relay_direction'] == 'server_session'
+	assert outcome.metadata['relay_client_id'] == 'local-main'
+	assert outcome.metadata['request_id'] == 'req-1'
+	assert outcome.metadata['trace_id'] == 'trace-1'
+	assert outcome.metadata['session_protocol'] == 'websocket'
+	assert outcome.metadata['session_transport'] == 'websocket'
+}

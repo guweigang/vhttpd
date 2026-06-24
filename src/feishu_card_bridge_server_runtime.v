@@ -228,10 +228,13 @@ pub fn (mut app App) feishu_card_bridge_ws(mut ctx Context) veb.Result {
 			'content-type': 'text/plain; charset=utf-8'
 		}, 'Forbidden', 'forbidden')
 	}
+	delivery := feishu_card_bridge_server_session_delivery_outcome(client_id, req_id, trace_id)
+	relay_client_id := delivery.metadata['relay_client_id'] or { client_id }
 	ctx.takeover_conn()
 	ctx.conn.set_write_timeout(time.infinite)
 	ctx.conn.set_read_timeout(time.infinite)
 	mut conn := ctx.conn
-	spawn FeishuCardBridgeRuntime.handle_server_session(mut app, mut conn, key, client_id, req_id)
+	spawn FeishuCardBridgeRuntime.handle_server_session(mut app, mut conn, key, relay_client_id,
+		req_id)
 	return veb.no_result()
 }

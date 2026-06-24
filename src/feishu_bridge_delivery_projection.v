@@ -58,6 +58,23 @@ fn feishu_card_bridge_proxy_delivery_outcome(frame feishu.BridgeProxyRequest, tr
 	return dispatch.relay_delivery_outcome('relay:feishu-card:server', metadata)
 }
 
+fn feishu_card_bridge_server_session_delivery_outcome(client_id string, req_id string, trace_id string) dispatch.DeliveryOutcome {
+	return dispatch.session_plan_outcome_with_status(101, feishu_card_bridge_client_target(client_id),
+		{
+		'upgrade': 'websocket'
+	}, {
+		'response_mode':      'relay'
+		'relay_protocol':     'feishu_card_bridge'
+		'relay_carrier':      'websocket'
+		'relay_direction':    'server_session'
+		'relay_client_id':    client_id
+		'request_id':         req_id
+		'trace_id':           trace_id
+		'session_protocol':   'websocket'
+		'session_transport':  'websocket'
+	})
+}
+
 fn feishu_card_bridge_client_target(client_id string) string {
 	if client_id != '' {
 		return 'relay:feishu-card:${client_id}'
