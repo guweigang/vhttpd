@@ -9,6 +9,7 @@ import json
 import time
 import worker
 import admin
+import dispatch
 import plugin
 import feishu
 import executor
@@ -16,19 +17,21 @@ import server_lifecycle
 import runtime_plan
 
 fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executor_plan executor.LogicExecutorRuntimePlan, cfg config.VhttpdConfig, plan runtime_plan.RuntimePlan, build_cfg server_lifecycle.AppRuntimeBuildConfig) &App {
+	runtime_plan_for_app := runtime_plan_with_projection_diagnostics(plan)
 	// 1. Build request-time routes only from the resolved plan for this listener.
 	plan_listener_id := if build_cfg.plan_listener_id != '' {
 		build_cfg.plan_listener_id
 	} else {
 		'default'
 	}
-	runtime_routes := runtime_routes_from_plan(plan, plan_listener_id)
-	db_settings := db_runtime_settings_from_plan(plan, plan_listener_id)
-	cache_enabled, cache_socket := cache_runtime_settings_from_plan(plan, plan_listener_id)
-	mcp_state := mcp_state_from_plan(plan, plan_listener_id)
-	openai_state := openai_state_from_plan(plan, plan_listener_id)
-	plugin_configs := plugin_configs_from_plan(plan)
-	plan_provider_settings := provider_runtime_settings_from_plan(plan, provider_settings)
+	runtime_routes := runtime_routes_from_plan(runtime_plan_for_app, plan_listener_id)
+	db_settings := db_runtime_settings_from_plan(runtime_plan_for_app, plan_listener_id)
+	cache_enabled, cache_socket := cache_runtime_settings_from_plan(runtime_plan_for_app,
+		plan_listener_id)
+	mcp_state := mcp_state_from_plan(runtime_plan_for_app, plan_listener_id)
+	openai_state := openai_state_from_plan(runtime_plan_for_app, plan_listener_id)
+	plugin_configs := plugin_configs_from_plan(runtime_plan_for_app)
+	plan_provider_settings := provider_runtime_settings_from_plan(runtime_plan_for_app, provider_settings)
 
 	// 2. 遍历 routes 中的所有附加 executor，如果有专属的进程池配置则实例化其 WorkerState
 	mut add_workers := map[string]&worker.WorkerState{}
@@ -45,7 +48,7 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 				|| executor_name in add_workers {
 				continue
 			}
-			if engine := plan.listener_named_engine(plan_listener_id, executor_name) {
+			if engine := runtime_plan_for_app.listener_named_engine(plan_listener_id, executor_name) {
 				sub_plan := executor.LogicExecutorRuntimePlan.resolve_additional_engine_from_plan(cfg,
 					engine, executor_name) or { continue }
 				sub_queue_capacity := if engine.options.ints['queue_capacity'] > 0 {
@@ -86,7 +89,7 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 	}
 
 	return &App{
-		plan:          plan
+		plan:          runtime_plan_for_app
 		control_plane: ControlPlaneRuntime{
 			event_log:  build_cfg.event_log
 			http_stats: HttpStats{}
@@ -108,7 +111,7 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 		}
 		protocols:     ProtocolRuntimeHub{
 			runtime_config_json: json.encode(cfg)
-			runtime_plan_json:   json.encode(plan)
+			runtime_plan_json:   json.encode(runtime_plan_for_app)
 			plugins:             plugin.PluginState{
 				configs: plugin_configs.clone()
 				vjsx:    build_vjsx_plugin_runtimes(plugin_configs)
@@ -193,5 +196,18 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 		}
 		http_routing:  HttpRoutingRuntime.new(runtime_routes, build_cfg.assets_root_real,
 			build_cfg.workdir, executor_plan.bootstrap.worker_env, add_workers)
+	}
+}
+
+fn runtime_plan_with_projection_diagnostics(plan runtime_plan.RuntimePlan) runtime_plan.RuntimePlan {
+	projection_diagnostics := dispatch.runtime_plan_projection_diagnostics(plan)
+	if projection_diagnostics.len == 0 {
+		return plan
+	}
+	mut diagnostics := plan.diagnostics.clone()
+	diagnostics << projection_diagnostics
+	return runtime_plan.RuntimePlan{
+		...plan
+		diagnostics: diagnostics
 	}
 }
