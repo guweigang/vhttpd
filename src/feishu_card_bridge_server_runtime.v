@@ -3,9 +3,9 @@ module main
 import json
 import log
 import net
-import net.http
 import net.websocket
 import time
+import dispatch
 import upstream.transport
 import feishu
 import veb
@@ -15,6 +15,22 @@ struct FeishuCardBridgeServerState {
 mut:
 	app       &App = unsafe { nil }
 	client_id string
+}
+
+fn feishu_card_bridge_http_response(mut app App, mut ctx Context, method string, path string, req_id string, trace_id string, start_ms i64, status int, headers map[string]string, body string, error_class string) veb.Result {
+	mut event_metadata := {
+		'provider': 'feishu'
+		'bridge':   'card'
+	}
+	mut outcome_headers := headers.clone()
+	if error_class != '' {
+		event_metadata['error_class'] = error_class
+		outcome_headers['x-vhttpd-error-class'] = error_class
+	}
+	return HttpResponseRuntime.delivery_outcome(mut app, mut ctx, http_ingress_request(method,
+		path, path, '', if isnil(ctx.conn) { '' } else { ctx.conn.peer_ip() or { '' } }, req_id,
+		trace_id, start_ms), dispatch.outcome_with_metadata(dispatch.response_outcome(status,
+		outcome_headers, body), event_metadata), none)
 }
 
 // C callback trampoline; keep as a free function. Passing static methods to
@@ -176,6 +192,9 @@ fn FeishuCardBridgeRuntime.handle_server_session(mut app App, mut conn net.TcpCo
 @['/bridge/ws'; get]
 pub fn (mut app App) feishu_card_bridge_ws(mut ctx Context) veb.Result {
 	path := if ctx.req.url == '' { '/bridge/ws' } else { ctx.req.url }
+	req_id := HttpRequestIdentity.request_id(ctx, path)
+	trace_id := HttpRequestIdentity.trace_id(ctx, path)
+	start_ms := time.now().unix_milli()
 	request_path, _ := transport.WorkerHttpRequestCodec.normalize_request_target(path)
 	normalized_path := transport.WorkerHttpRequestCodec.normalize_path(request_path)
 	log.info('[bridge] route feishu_card_bridge_ws path=${path} request_path=${request_path} normalized=${normalized_path} upgrade=${if WebSocketUpgrade.is_upgrade(ctx.req) {
@@ -184,18 +203,19 @@ pub fn (mut app App) feishu_card_bridge_ws(mut ctx Context) veb.Result {
 		'false'
 	}}')
 	if normalized_path != '/bridge/ws' {
-		ctx.res.set_status(http.status_from_int(404))
-		return ctx.text('Not Found')
+		return feishu_card_bridge_http_response(mut app, mut ctx, 'GET', path, req_id, trace_id,
+			start_ms, 404, {
+			'content-type': 'text/plain; charset=utf-8'
+		}, 'Not Found', 'not_found')
 	}
-	req_id := HttpRequestIdentity.request_id(ctx, path)
-	trace_id := HttpRequestIdentity.trace_id(ctx, path)
 	key := WebSocketUpgrade.key(ctx.req)
 	if ctx.req.method.str().to_upper() != 'GET' || key == ''
 		|| !WebSocketUpgrade.is_upgrade(ctx.req) {
-		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: write failure usually means peer disconnected
-		ctx.res.set_status(http.status_from_int(426))
-		ctx.set_custom_header('upgrade', 'websocket') or {} // safe to ignore: write failure usually means peer disconnected
-		return ctx.text('Upgrade Required')
+		return feishu_card_bridge_http_response(mut app, mut ctx, 'GET', path, req_id, trace_id,
+			start_ms, 426, {
+			'content-type': 'text/plain; charset=utf-8'
+			'upgrade':      'websocket'
+		}, 'Upgrade Required', 'upgrade_required')
 	}
 	_, query_string := transport.WorkerHttpRequestCodec.normalize_request_target(path)
 	query := transport.WorkerHttpRequestCodec.parse_query_map(query_string)
@@ -203,9 +223,10 @@ pub fn (mut app App) feishu_card_bridge_ws(mut ctx Context) veb.Result {
 	token := (query['token'] or { '' }).trim_space()
 	expected := app.providers.feishu.card_bridge_token.trim_space()
 	if client_id == '' || (expected != '' && token != expected) {
-		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: write failure usually means peer disconnected
-		ctx.res.set_status(http.status_from_int(403))
-		return ctx.text('Forbidden')
+		return feishu_card_bridge_http_response(mut app, mut ctx, 'GET', path, req_id, trace_id,
+			start_ms, 403, {
+			'content-type': 'text/plain; charset=utf-8'
+		}, 'Forbidden', 'forbidden')
 	}
 	ctx.takeover_conn()
 	ctx.conn.set_write_timeout(time.infinite)
