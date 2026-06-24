@@ -75,19 +75,14 @@ fn UpstreamRuntimeContext.execute_plan(rt UpstreamRuntimeContext, mut app App, m
 	defer {
 		rt.unregister(req_id)
 	}
-	stream_type := if plan.output_stream_type == 'text' { 'text' } else { 'sse' }
-	content_type := if plan.output_content_type != '' {
-		plan.output_content_type
-	} else if stream_type == 'sse' {
-		'text/event-stream'
-	} else {
-		'text/plain; charset=utf-8'
-	}
+	delivery := upstream_plan_delivery_outcome(plan)
+	stream_type := delivery.metadata['stream_type'] or { 'sse' }
+	content_type := delivery.headers['content-type'] or { 'text/event-stream' }
 	ctx.takeover_conn()
 	ctx.conn.set_write_timeout(time.infinite)
 	ctx.conn.set_read_timeout(time.infinite)
 	mut client_conn := ctx.conn
-	mut response_headers := plan.response_headers.clone()
+	mut response_headers := delivery.headers.clone()
 	response_headers['x-request-id'] = req_id
 	response_headers['x-vhttpd-trace-id'] = trace_id
 	response_headers['x-vhttpd-stream-mode'] = 'upstream_plan'
