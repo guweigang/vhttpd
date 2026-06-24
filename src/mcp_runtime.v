@@ -2,12 +2,44 @@ module main
 
 import api.mcp.protocol as mcp_protocol
 import dispatch
-import net.http
 import time
 import upstream.transport
 import veb
 
 struct McpRuntime {}
+
+fn mcp_http_ingress_request(method string, path string, remote_addr string, req_id string, trace_id string, start_ms i64) HttpIngressRequest {
+	return HttpIngressRequest{
+		method:        method
+		path:          '/mcp'
+		dispatch_path: transport.normalize_path(path)
+		remote_addr:   remote_addr
+		request_id:    req_id
+		trace_id:      trace_id
+		start_ms:      start_ms
+	}
+}
+
+fn mcp_json_response(mut app App, mut ctx Context, method string, path string, req_id string, trace_id string, start_ms i64, status int, body string, error_class string, metadata map[string]string) veb.Result {
+	mut headers := {
+		'content-type': 'application/json; charset=utf-8'
+	}
+	mut event_metadata := {
+		'response_mode': 'mcp'
+	}
+	if error_class != '' {
+		headers['x-vhttpd-error-class'] = error_class
+		event_metadata['error_class'] = error_class
+	}
+	for key, value in metadata {
+		if key != '' && value != '' {
+			event_metadata[key] = value
+		}
+	}
+	return HttpResponseRuntime.delivery_outcome(mut app, mut ctx, mcp_http_ingress_request(method,
+		path, ctx.ip(), req_id, trace_id, start_ms), dispatch.outcome_with_metadata(dispatch.response_outcome(status,
+		headers, body), event_metadata), none)
+}
 
 fn proxy_worker_mcp(mut app App, mut ctx Context) veb.Result {
 	start_ms := time.now().unix_milli()
@@ -17,48 +49,17 @@ fn proxy_worker_mcp(mut app App, mut ctx Context) veb.Result {
 	headers := transport.header_map_from_request(ctx.req)
 	method := ctx.req.method.str().to_upper()
 	if method != 'POST' {
-		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-		ctx.res.set_status(http.status_from_int(405))
-		ctx.set_content_type('application/json; charset=utf-8')
-		app.emit('http.request', {
-			'method':        method
-			'path':          '/mcp'
-			'status':        '405'
-			'request_id':    req_id
-			'trace_id':      trace_id
-			'response_mode': 'mcp'
-		})
-		return ctx.text('{"error":"Method Not Allowed"}')
+		return mcp_json_response(mut app, mut ctx, method, path, req_id, trace_id, start_ms, 405,
+			'{"error":"Method Not Allowed"}', '', map[string]string{})
 	}
 	if !app.engines.has_socket_workers() {
-		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-		ctx.res.set_status(http.status_from_int(501))
-		ctx.set_content_type('application/json; charset=utf-8')
-		app.emit('http.request', {
-			'method':        method
-			'path':          '/mcp'
-			'status':        '501'
-			'request_id':    req_id
-			'trace_id':      trace_id
-			'response_mode': 'mcp'
-			'error_class':   'worker_unavailable'
-		})
-		return ctx.text('{"error":"MCP requires a configured logic executor"}')
+		return mcp_json_response(mut app, mut ctx, method, path, req_id, trace_id, start_ms, 501,
+			'{"error":"MCP requires a configured logic executor"}', 'worker_unavailable',
+			map[string]string{})
 	}
 	if !app.protocols.mcp.origin_allowed(headers) {
-		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-		ctx.res.set_status(http.status_from_int(403))
-		ctx.set_content_type('application/json; charset=utf-8')
-		app.emit('http.request', {
-			'method':        method
-			'path':          '/mcp'
-			'status':        '403'
-			'request_id':    req_id
-			'trace_id':      trace_id
-			'response_mode': 'mcp'
-			'error_class':   'origin_forbidden'
-		})
-		return ctx.text('{"error":"Forbidden Origin"}')
+		return mcp_json_response(mut app, mut ctx, method, path, req_id, trace_id, start_ms, 403,
+			'{"error":"Forbidden Origin"}', 'origin_forbidden', map[string]string{})
 	}
 	mut protocol_version := headers['mcp-protocol-version'] or { '' }
 	if protocol_version == '' {
@@ -66,19 +67,8 @@ fn proxy_worker_mcp(mut app App, mut ctx Context) veb.Result {
 	}
 	body := ctx.req.data
 	if body.trim_space() == '' {
-		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-		ctx.res.set_status(http.status_from_int(400))
-		ctx.set_content_type('application/json; charset=utf-8')
-		app.emit('http.request', {
-			'method':        method
-			'path':          '/mcp'
-			'status':        '400'
-			'request_id':    req_id
-			'trace_id':      trace_id
-			'response_mode': 'mcp'
-			'error_class':   'empty_body'
-		})
-		return ctx.text('{"error":"Empty JSON-RPC body"}')
+		return mcp_json_response(mut app, mut ctx, method, path, req_id, trace_id, start_ms, 400,
+			'{"error":"Empty JSON-RPC body"}', 'empty_body', map[string]string{})
 	}
 	request := app.kernel_mcp_dispatch_request(method, transport.normalize_path(path), headers,
 		protocol_version, body, ctx.ip(), req_id, trace_id, headers['mcp-session-id'] or { '' }, app.protocols.mcp.client_capabilities_for_request(headers['mcp-session-id'] or {
@@ -87,27 +77,16 @@ fn proxy_worker_mcp(mut app App, mut ctx Context) veb.Result {
 	outcome := app.kernel_dispatch_mcp_handled(request) or {
 		err_msg := err.msg()
 		failure := kernel_dispatch_transport_failure(err_msg)
-		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-		ctx.set_custom_header('x-vhttpd-error-class', failure.error_class) or {}
-		ctx.res.set_status(http.status_from_int(failure.status))
-		ctx.set_content_type('application/json; charset=utf-8')
-		app.emit('http.request', {
-			'method':        method
-			'path':          '/mcp'
-			'status':        '${failure.status}'
-			'request_id':    req_id
-			'trace_id':      trace_id
-			'response_mode': 'mcp'
-			'error_class':   failure.error_class
-			'error_detail':  err_msg
-		})
 		app.emit('mcp.dispatch.failed', {
 			'request_id':   req_id
 			'trace_id':     trace_id
 			'error_class':  failure.error_class
 			'error_detail': err_msg
 		})
-		return ctx.text('{"error":"Bad Gateway"}')
+		return mcp_json_response(mut app, mut ctx, method, path, req_id, trace_id, start_ms,
+			failure.status, '{"error":"Bad Gateway"}', failure.error_class, {
+			'error_detail': err_msg
+		})
 	}
 	mut response := outcome.response
 	mut session_id := response.session_id
@@ -140,21 +119,9 @@ fn proxy_worker_mcp(mut app App, mut ctx Context) veb.Result {
 		if session_id != '' {
 			queue_result := McpRuntime.queue_message(mut app, session_id, raw_message)
 			if queue_result.error {
-				ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-				ctx.set_custom_header('x-vhttpd-error-class', queue_result.error_class) or {}
-				ctx.res.set_status(http.status_from_int(409))
-				ctx.set_content_type('application/json; charset=utf-8')
-				app.emit('http.request', {
-					'method':        method
-					'path':          '/mcp'
-					'status':        '409'
-					'request_id':    req_id
-					'trace_id':      trace_id
-					'duration_ms':   '${time.now().unix_milli() - start_ms}'
-					'response_mode': 'mcp'
-					'error_class':   queue_result.error_class
-				})
-				return ctx.text('{"error":"Sampling capability required"}')
+				return mcp_json_response(mut app, mut ctx, method, path, req_id, trace_id,
+					start_ms, 409, '{"error":"Sampling capability required"}',
+					queue_result.error_class, map[string]string{})
 			}
 		}
 	}
@@ -171,36 +138,12 @@ fn proxy_worker_mcp(mut app App, mut ctx Context) veb.Result {
 		})
 	}
 	if response.event == 'error' {
-		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-		ctx.set_custom_header('x-vhttpd-error-class', response.error_class) or {}
-		ctx.res.set_status(http.status_from_int(500))
-		ctx.set_content_type('application/json; charset=utf-8')
-		app.emit('http.request', {
-			'method':        method
-			'path':          '/mcp'
-			'status':        '500'
-			'request_id':    req_id
-			'trace_id':      trace_id
-			'duration_ms':   '${time.now().unix_milli() - start_ms}'
-			'response_mode': 'mcp'
-			'error_class':   response.error_class
-		})
-		return ctx.text('{"error":"Internal Server Error"}')
+		return mcp_json_response(mut app, mut ctx, method, path, req_id, trace_id, start_ms, 500,
+			'{"error":"Internal Server Error"}', response.error_class, map[string]string{})
 	}
 	if !response.handled {
-		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-		ctx.res.set_status(http.status_from_int(501))
-		ctx.set_content_type('application/json; charset=utf-8')
-		app.emit('http.request', {
-			'method':        method
-			'path':          '/mcp'
-			'status':        '501'
-			'request_id':    req_id
-			'trace_id':      trace_id
-			'duration_ms':   '${time.now().unix_milli() - start_ms}'
-			'response_mode': 'mcp'
-		})
-		return ctx.text('{"error":"Not Implemented"}')
+		return mcp_json_response(mut app, mut ctx, method, path, req_id, trace_id, start_ms, 501,
+			'{"error":"Not Implemented"}', '', map[string]string{})
 	}
 	mut resp_headers := response.headers.clone()
 	resp_headers['x-vhttpd-trace-id'] = trace_id
@@ -214,16 +157,9 @@ fn proxy_worker_mcp(mut app App, mut ctx Context) veb.Result {
 		resp_headers['mcp-session-id'] = session_id
 	}
 	status := if response.status > 0 { response.status } else { 200 }
-	return HttpResponseRuntime.delivery_outcome(mut app, mut ctx, HttpIngressRequest{
-		method:        method
-		path:          '/mcp'
-		dispatch_path: transport.normalize_path(path)
-		remote_addr:   ctx.ip()
-		request_id:    req_id
-		trace_id:      trace_id
-		start_ms:      start_ms
-	}, dispatch.outcome_with_metadata(dispatch.response_outcome(status, resp_headers, response.body),
-		{
+	return HttpResponseRuntime.delivery_outcome(mut app, mut ctx, mcp_http_ingress_request(method,
+		path, ctx.ip(), req_id, trace_id, start_ms), dispatch.outcome_with_metadata(dispatch.response_outcome(status,
+		resp_headers, response.body), {
 		'response_mode': 'mcp'
 	}), none)
 }
