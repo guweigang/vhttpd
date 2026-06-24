@@ -42,6 +42,30 @@ pub fn transform_descriptors_from_plan(plan runtime_plan.RuntimePlan) map[string
 	return descriptors
 }
 
+pub fn terminal_descriptor(id string) ?TerminalDescriptor {
+	match id {
+		'ack' {
+			return TerminalDescriptor{
+				id:           id
+				capabilities: Capabilities{
+					events: true
+				}
+			}
+		}
+		'response', 'reject' {
+			return TerminalDescriptor{
+				id:           id
+				capabilities: Capabilities{
+					request_response: true
+				}
+			}
+		}
+		else {
+			return none
+		}
+	}
+}
+
 pub fn pipeline_descriptor_from_plan(pipeline runtime_plan.PipelinePlan) PipelineDescriptor {
 	return PipelineDescriptor{
 		id:         pipeline.id
@@ -55,12 +79,26 @@ pub fn pipeline_descriptor_from_plan(pipeline runtime_plan.PipelinePlan) Pipelin
 
 pub fn pipeline_descriptor_from_plan_with_adapters(pipeline runtime_plan.PipelinePlan, adapters map[string]AdapterDescriptor) PipelineDescriptor {
 	mut descriptor := pipeline_descriptor_from_plan(pipeline)
-	if adapter := adapters[pipeline.egress.id] {
-		descriptor = PipelineDescriptor{
-			...descriptor
-			required: adapter.capabilities
+	match pipeline.egress.domain {
+		.adapter {
+			if adapter := adapters[pipeline.egress.id] {
+				descriptor = PipelineDescriptor{
+					...descriptor
+					required: adapter.capabilities
+				}
+			}
 		}
+		.terminal {
+			if terminal := terminal_descriptor(pipeline.egress.id) {
+				descriptor = PipelineDescriptor{
+					...descriptor
+					required: terminal.capabilities
+				}
+			}
+		}
+		else {}
 	}
+
 	return descriptor
 }
 

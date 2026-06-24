@@ -19,6 +19,12 @@ pub:
 	capabilities Capabilities
 }
 
+pub struct TerminalDescriptor {
+pub:
+	id           string
+	capabilities Capabilities
+}
+
 pub fn capabilities_satisfy(available Capabilities, required Capabilities) bool {
 	return (!required.request_response || available.request_response)
 		&& (!required.events || available.events)

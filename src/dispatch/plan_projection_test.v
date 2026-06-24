@@ -136,18 +136,12 @@ fn test_pipeline_descriptor_with_runtime_descriptors_uses_egress_capabilities_on
 			},
 		]
 		egress:     runtime_plan.ResourceRef{
-			domain: .adapter
+			domain: .terminal
 			id:     'ack'
 		}
 	}
-	descriptor := pipeline_descriptor_from_plan_with_runtime_descriptors(pipeline, {
-		'ack': AdapterDescriptor{
-			id:           'ack'
-			capabilities: Capabilities{
-				events: true
-			}
-		}
-	}, {
+	descriptor := pipeline_descriptor_from_plan_with_runtime_descriptors(pipeline,
+		map[string]AdapterDescriptor{}, {
 		'upload_completed': TransformDescriptor{
 			id:           'upload_completed'
 			kind:         'vjsx'
@@ -159,6 +153,17 @@ fn test_pipeline_descriptor_with_runtime_descriptors_uses_egress_capabilities_on
 	})
 	assert !descriptor.required.request_response
 	assert descriptor.required.events
+}
+
+fn test_terminal_descriptor_projects_ack_and_response_capabilities() {
+	ack := terminal_descriptor('ack') or { panic('missing ack') }
+	assert ack.capabilities.events
+	assert !ack.capabilities.request_response
+
+	response := terminal_descriptor('response') or { panic('missing response') }
+	assert response.capabilities.request_response
+	assert !response.capabilities.events
+	assert terminal_descriptor('missing') == none
 }
 
 fn test_pipeline_transform_capability_errors_report_unsupported_ingress_exchange() {
@@ -413,10 +418,6 @@ fn test_pipeline_capability_errors_from_plan_allows_event_ingress_transform_ack_
 				id:   'upload_event'
 				kind: 'event-ingress'
 			}
-			'ack':          runtime_plan.AdapterPlan{
-				id:   'ack'
-				kind: 'event-ingress'
-			}
 		}
 		transforms: {
 			'upload_completed': runtime_plan.TransformPlan{
@@ -439,7 +440,7 @@ fn test_pipeline_capability_errors_from_plan_allows_event_ingress_transform_ack_
 					},
 				]
 				egress:     runtime_plan.ResourceRef{
-					domain: .adapter
+					domain: .terminal
 					id:     'ack'
 				}
 			},
