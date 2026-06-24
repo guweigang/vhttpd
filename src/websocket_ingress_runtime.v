@@ -1,5 +1,6 @@
 module main
 
+import dispatch
 import executor
 import log
 import net
@@ -26,6 +27,20 @@ fn is_websocket_upgrade(req http.Request) bool {
 	key := headers['sec-websocket-key']
 	return upgrade.to_lower() == 'websocket' && connection.to_lower().contains('upgrade')
 		&& key != ''
+}
+
+fn websocket_http_response(mut app App, mut ctx Context, method string, path string, remote_addr string, req_id string, trace_id string, start_ms i64, status int, headers map[string]string, body string, error_class string) veb.Result {
+	mut event_metadata := {
+		'response_mode': 'websocket'
+	}
+	mut outcome_headers := headers.clone()
+	if error_class != '' {
+		event_metadata['error_class'] = error_class
+		outcome_headers['x-vhttpd-error-class'] = error_class
+	}
+	return HttpResponseRuntime.delivery_outcome(mut app, mut ctx, http_ingress_request(method,
+		path, path, '', remote_addr, req_id, trace_id, start_ms), dispatch.outcome_with_metadata(dispatch.response_outcome(status,
+		outcome_headers, body), event_metadata), none)
 }
 
 pub fn (mut app App) worker_websocket_open(mut conn unix.StreamConn, req http.Request, remote_addr string, path string, req_id string, trace_id string) !(bool, int, string) {
@@ -269,13 +284,14 @@ fn proxy_worker_websocket(mut app App, mut ctx Context, method string, path stri
 	req_id := resolve_request_id(ctx, path)
 	trace_id := resolve_trace_id(ctx, path)
 	key := websocket_upgrade_key(ctx.req)
-	if method.to_upper() != 'GET' || key == '' || !is_websocket_upgrade(ctx.req) {
-		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-		ctx.res.set_status(http.status_from_int(426))
-		ctx.set_custom_header('upgrade', 'websocket') or {}
-		return ctx.text('Upgrade Required')
-	}
 	remote_addr := if isnil(ctx.conn) { '' } else { ctx.conn.peer_ip() or { '' } }
+	if method.to_upper() != 'GET' || key == '' || !is_websocket_upgrade(ctx.req) {
+		return websocket_http_response(mut app, mut ctx, method, path, remote_addr, req_id,
+			trace_id, start_ms, 426, {
+			'content-type': 'text/plain; charset=utf-8'
+			'upgrade':      'websocket'
+		}, 'Upgrade Required', 'upgrade_required')
+	}
 	mut facade := app.as_facade()
 	mut ws_open := app.engines.open_websocket_session(mut facade, executor.WebSocketSessionOpenRequest{
 		req:         ctx.req
@@ -286,15 +302,16 @@ fn proxy_worker_websocket(mut app App, mut ctx Context, method string, path stri
 	}) or {
 		err_msg := err.msg()
 		status, error_class := transport.classify_worker_backend_error(err_msg)
-		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-		ctx.set_custom_header('x-vhttpd-error-class', error_class) or {}
-		ctx.res.set_status(http.status_from_int(status))
-		return ctx.text('Bad Gateway')
+		return websocket_http_response(mut app, mut ctx, method, path, remote_addr, req_id,
+			trace_id, start_ms, status, {
+			'content-type': 'text/plain; charset=utf-8'
+		}, 'Bad Gateway', error_class)
 	}
 	if !ws_open.accepted {
-		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-		ctx.res.set_status(http.status_from_int(ws_open.status))
-		return ctx.text(ws_open.body)
+		return websocket_http_response(mut app, mut ctx, method, path, remote_addr, req_id,
+			trace_id, start_ms, ws_open.status, {
+			'content-type': 'text/plain; charset=utf-8'
+		}, ws_open.body, '')
 	}
 
 	ctx.takeover_conn()
@@ -325,20 +342,20 @@ fn proxy_worker_websocket_dispatch(mut app App, mut ctx Context, method string, 
 		err_msg := executor.InProcVjsxError.normalize_message(err.msg(),
 			'inproc_vjsx_executor_websocket_open_failed')
 		log.error('[vhttpd] kernel_dispatch_websocket_event failed trace_id=${trace_id} path=${normalized_path} error=${err_msg}')
-		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-		ctx.set_custom_header('x-vhttpd-error-class', 'transport_error') or {}
-		ctx.res.set_status(http.status_from_int(502))
-		return ctx.text('Bad Gateway')
+		return websocket_http_response(mut app, mut ctx, method, path, remote_addr, req_id,
+			trace_id, start_ms, 502, {
+			'content-type': 'text/plain; charset=utf-8'
+		}, 'Bad Gateway', 'transport_error')
 	}
 	if resp.event == 'error' {
-		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-		ctx.set_custom_header('x-vhttpd-error-class', if resp.error_class != '' {
+		return websocket_http_response(mut app, mut ctx, method, path, remote_addr, req_id,
+			trace_id, start_ms, 500, {
+			'content-type': 'text/plain; charset=utf-8'
+		}, 'WebSocket open failed', if resp.error_class != '' {
 			resp.error_class
 		} else {
 			'worker_runtime_error'
-		}) or {}
-		ctx.res.set_status(http.status_from_int(500))
-		return ctx.text('WebSocket open failed')
+		})
 	}
 	if !resp.accepted {
 		result := websocket_runtime.command_result(resp.commands)
@@ -346,13 +363,15 @@ fn proxy_worker_websocket_dispatch(mut app App, mut ctx Context, method string, 
 			close_frame := result.close_frame
 			status := if close_frame.status > 0 { close_frame.status } else { 403 }
 			body := if close_frame.reason != '' { close_frame.reason } else { 'Forbidden' }
-			ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-			ctx.res.set_status(http.status_from_int(status))
-			return ctx.text(body)
+			return websocket_http_response(mut app, mut ctx, method, path, remote_addr, req_id,
+				trace_id, start_ms, status, {
+				'content-type': 'text/plain; charset=utf-8'
+			}, body, '')
 		}
-		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-		ctx.res.set_status(http.status_from_int(403))
-		return ctx.text('Forbidden')
+		return websocket_http_response(mut app, mut ctx, method, path, remote_addr, req_id,
+			trace_id, start_ms, 403, {
+			'content-type': 'text/plain; charset=utf-8'
+		}, 'Forbidden', '')
 	}
 	ctx.takeover_conn()
 	ctx.conn.set_write_timeout(time.infinite)
