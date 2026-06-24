@@ -314,12 +314,14 @@ fn proxy_worker_websocket(mut app App, mut ctx Context, method string, path stri
 		}, ws_open.body, '')
 	}
 
+	delivery := worker_websocket_session_delivery_outcome(ws_open, req_id, path)
+	selected_socket := delivery.metadata['worker_socket'] or { ws_open.socket_path }
 	ctx.takeover_conn()
 	ctx.conn.set_write_timeout(time.infinite)
 	ctx.conn.set_read_timeout(time.infinite)
 	mut conn := ctx.conn
 	mut worker_conn := ws_open.conn
-	spawn handle_worker_websocket_session(mut app, mut conn, mut worker_conn, ws_open.socket_path,
+	spawn handle_worker_websocket_session(mut app, mut conn, mut worker_conn, selected_socket,
 		key, method.to_upper(), path, req_id, trace_id, start_ms)
 	return veb.no_result()
 }
@@ -373,13 +375,17 @@ fn proxy_worker_websocket_dispatch(mut app App, mut ctx Context, method string, 
 			'content-type': 'text/plain; charset=utf-8'
 		}, 'Forbidden', '')
 	}
+	delivery := dispatch_websocket_session_delivery_outcome(resp, req_id, normalized_path)
+	open_command_count := (delivery.metadata['command_count'] or { '${resp.commands.len}' }).int()
+	mut open_commands := []transport.WorkerWebSocketFrame{cap: open_command_count}
+	open_commands << resp.commands
 	ctx.takeover_conn()
 	ctx.conn.set_write_timeout(time.infinite)
 	ctx.conn.set_read_timeout(time.infinite)
 	mut conn := ctx.conn
 	spawn ws.handle_dispatch_session(app.build_websocket_runtime_context(), mut conn, key,
 		method.to_upper(), normalized_path, query, headers, remote_addr, req_id, trace_id,
-		start_ms, resp.commands.clone())
+		start_ms, open_commands)
 	return veb.no_result()
 }
 
