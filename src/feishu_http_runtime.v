@@ -1,18 +1,17 @@
 module main
 
 import admin
+import dispatch
 import json
-import net.http
-import feishu
+import time
 import veb
 
 struct FeishuHttpRequest {
 	path     string
 	req_id   string
 	trace_id string
+	start_ms i64
 }
-
-struct FeishuHttpResponse {}
 
 fn FeishuHttpRequest.from_context(ctx Context, default_path string) FeishuHttpRequest {
 	path := if ctx.req.url == '' { default_path } else { ctx.req.url }
@@ -20,6 +19,7 @@ fn FeishuHttpRequest.from_context(ctx Context, default_path string) FeishuHttpRe
 		path:     path
 		req_id:   HttpRequestIdentity.request_id(ctx, path)
 		trace_id: HttpRequestIdentity.trace_id(ctx, path)
+		start_ms: time.now().unix_milli()
 	}
 }
 
@@ -49,17 +49,15 @@ fn (req FeishuHttpRequest) emit_success(mut app App, method string, event_path s
 	app.emit('http.request', fields)
 }
 
-fn FeishuHttpResponse.admin_error(mut ctx Context, status int, error string) veb.Result {
-	ctx.res.set_status(http.status_from_int(status))
-	return ctx.text(json.encode(admin.AdminErrorResponse{
+fn feishu_admin_error(req FeishuHttpRequest, mut app App, mut ctx Context, status int, error string) veb.Result {
+	return HttpResponseRuntime.delivery_outcome(mut app, mut ctx, http_ingress_request('POST',
+		req.path, req.path, '', if isnil(ctx.conn) { '' } else { ctx.conn.peer_ip() or { '' } },
+		req.req_id, req.trace_id, req.start_ms), dispatch.outcome_with_metadata(dispatch.response_outcome(status, {
+		'content-type': 'application/json; charset=utf-8'
+	}, json.encode(admin.AdminErrorResponse{
 		error: error
-	}))
-}
-
-fn FeishuHttpResponse.send_failure(mut ctx Context, status int, error string) veb.Result {
-	ctx.res.set_status(http.status_from_int(status))
-	return ctx.text(json.encode(feishu.SendMessageResult{
-		ok:    false
-		error: error
-	}))
+	})), {
+		'provider': 'feishu'
+		'error':    error
+	}), none)
 }

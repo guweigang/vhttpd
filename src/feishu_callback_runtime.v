@@ -29,23 +29,26 @@ fn (mut app App) feishu_callback_by_app(mut ctx Context, raw_app string) veb.Res
 	trace_id := req_ctx.trace_id
 	req_ctx.prepare_json(mut ctx)
 	app_name := app.providers.feishu.resolve_app_name(raw_app) or {
-		return FeishuHttpResponse.admin_error(mut ctx, 404, 'unknown_feishu_app')
+		return feishu_admin_error(req_ctx, mut app, mut ctx, 404, 'unknown_feishu_app')
 	}
 	app_cfg := app.providers.feishu.app_config(app_name) or {
-		return FeishuHttpResponse.admin_error(mut ctx, 404, 'unknown_feishu_app')
+		return feishu_admin_error(req_ctx, mut app, mut ctx, 404, 'unknown_feishu_app')
 	}
 	headers := transport.WorkerHttpRequestCodec.header_map_from_request(ctx.req)
 	raw_payload := ctx.req.data
 	if !feishu.CallbackChallengeResponse.signature_valid(headers, app_cfg.encrypt_key, raw_payload) {
-		return FeishuHttpResponse.admin_error(mut ctx, 403, 'invalid_feishu_callback_signature')
+		return feishu_admin_error(req_ctx, mut app, mut ctx, 403,
+			'invalid_feishu_callback_signature')
 	}
 	payload := feishu.CallbackChallengeResponse.decrypt_payload(app_cfg.encrypt_key, raw_payload) or {
-		return FeishuHttpResponse.admin_error(mut ctx, 400, 'invalid_feishu_callback_encryption')
+		return feishu_admin_error(req_ctx, mut app, mut ctx, 400,
+			'invalid_feishu_callback_encryption')
 	}
 	challenge := feishu.CallbackChallengeResponse.challenge(payload)
 	if challenge != '' {
 		if !app.feishu_runtime_callback_token_valid(app_name, payload) {
-			return FeishuHttpResponse.admin_error(mut ctx, 403, 'invalid_feishu_callback_token')
+			return feishu_admin_error(req_ctx, mut app, mut ctx, 403,
+				'invalid_feishu_callback_token')
 		}
 		req_ctx.emit_success(mut app, 'POST', '/callbacks/feishu', '', 'challenge', app_name)
 		return ctx.text(json.encode(feishu.CallbackChallengeResponse{
@@ -53,7 +56,7 @@ fn (mut app App) feishu_callback_by_app(mut ctx Context, raw_app string) veb.Res
 		}))
 	}
 	if !app.feishu_runtime_callback_token_valid(app_name, payload) {
-		return FeishuHttpResponse.admin_error(mut ctx, 403, 'invalid_feishu_callback_token')
+		return feishu_admin_error(req_ctx, mut app, mut ctx, 403, 'invalid_feishu_callback_token')
 	}
 	summary := feishu.RuntimeEventSnapshot.summary_from_payload(payload)
 	app.providers.feishu.push_event(app_name, feishu.RuntimeEventSnapshot{
@@ -89,7 +92,8 @@ fn (mut app App) feishu_callback_by_app(mut ctx Context, raw_app string) veb.Res
 		bridge_resp := app.feishu_card_bridge_dispatch_callback(app_name, trace_id, summary,
 			payload) or {
 			log.error('[feishu] ❌ bridge callback dispatch failed: ${err}')
-			return FeishuHttpResponse.admin_error(mut ctx, 502, 'feishu_callback_bridge_error')
+			return feishu_admin_error(req_ctx, mut app, mut ctx, 502,
+				'feishu_callback_bridge_error')
 		}
 		for name, value in bridge_resp.headers {
 			if name.to_lower() == 'content-type' {
@@ -159,7 +163,7 @@ fn (mut app App) feishu_callback_by_app(mut ctx Context, raw_app string) veb.Res
 			activity_snapshot.worker_error = err.msg()
 			activity_snapshot.error_class = 'transport_error'
 			app.websocket_upstream_record_activity(activity_snapshot)
-			return FeishuHttpResponse.admin_error(mut ctx, 502,
+			return feishu_admin_error(req_ctx, mut app, mut ctx, 502,
 				'feishu_callback_worker_transport_error')
 		}
 		resp := outcome.response
@@ -167,7 +171,8 @@ fn (mut app App) feishu_callback_by_app(mut ctx Context, raw_app string) veb.Res
 			activity_snapshot.worker_error = resp.error
 			activity_snapshot.error_class = resp.error_class
 			app.websocket_upstream_record_activity(activity_snapshot)
-			return FeishuHttpResponse.admin_error(mut ctx, 502, 'feishu_callback_worker_error')
+			return feishu_admin_error(req_ctx, mut app, mut ctx, 502,
+				'feishu_callback_worker_error')
 		}
 		activity_snapshot.worker_handled = resp.handled
 		activity_snapshot.commands = outcome.command_snapshots
