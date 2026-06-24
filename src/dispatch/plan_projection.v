@@ -115,7 +115,11 @@ pub fn pipeline_capability_errors_from_plan(plan runtime_plan.RuntimePlan) []str
 }
 
 pub fn pipeline_capability_diagnostics_from_plan(plan runtime_plan.RuntimePlan) []runtime_plan.PlanDiagnostic {
-	return pipeline_capability_issues_from_plan(plan).map(runtime_plan.PlanDiagnostic{
+	return pipeline_capability_issues_to_diagnostics(pipeline_capability_issues_from_plan(plan))
+}
+
+pub fn pipeline_capability_issues_to_diagnostics(issues []PipelineCapabilityIssue) []runtime_plan.PlanDiagnostic {
+	return issues.map(runtime_plan.PlanDiagnostic{
 		severity: 'warning'
 		code:     it.code
 		path:     'pipelines.${it.pipeline}'
