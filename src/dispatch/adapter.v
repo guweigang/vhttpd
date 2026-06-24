@@ -70,6 +70,32 @@ pub fn accepted_event_outcome(metadata map[string]string) DeliveryOutcome {
 	}
 }
 
+pub fn stream_plan_outcome(target string, headers map[string]string, metadata map[string]string) DeliveryOutcome {
+	return DeliveryOutcome{
+		kind:     .stream_plan
+		headers:  headers.clone()
+		target:   target
+		metadata: metadata.clone()
+	}
+}
+
+pub fn session_plan_outcome(target string, headers map[string]string, metadata map[string]string) DeliveryOutcome {
+	return DeliveryOutcome{
+		kind:     .session_plan
+		headers:  headers.clone()
+		target:   target
+		metadata: metadata.clone()
+	}
+}
+
+pub fn relay_delivery_outcome(target string, metadata map[string]string) DeliveryOutcome {
+	return DeliveryOutcome{
+		kind:     .relay_delivery
+		target:   target
+		metadata: metadata.clone()
+	}
+}
+
 pub fn delivery_failure_outcome(status int, error string, error_class string) DeliveryOutcome {
 	return DeliveryOutcome{
 		kind:        .failure
