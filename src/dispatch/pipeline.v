@@ -11,6 +11,14 @@ pub:
 	required   Capabilities
 }
 
+pub struct TransformDescriptor {
+pub:
+	id           string
+	kind         string
+	handler      string
+	capabilities Capabilities
+}
+
 pub fn capabilities_satisfy(available Capabilities, required Capabilities) bool {
 	return (!required.request_response || available.request_response)
 		&& (!required.events || available.events)

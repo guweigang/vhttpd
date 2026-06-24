@@ -113,6 +113,84 @@ fn test_pipeline_descriptor_with_adapters_carries_egress_capabilities() {
 	assert descriptor.required.events
 }
 
+fn test_transform_descriptor_from_plan_carries_handler_and_capabilities() {
+	transform := transform_descriptor_from_plan(runtime_plan.TransformPlan{
+		id:      'upload_completed'
+		kind:    'vjsx'
+		handler: 'uploads.completed'
+	})
+	assert transform.id == 'upload_completed'
+	assert transform.kind == 'vjsx'
+	assert transform.handler == 'uploads.completed'
+	assert transform.capabilities.request_response
+	assert transform.capabilities.events
+}
+
+fn test_pipeline_descriptor_with_runtime_descriptors_uses_egress_capabilities_only() {
+	pipeline := runtime_plan.PipelinePlan{
+		id:         'event/upload'
+		transforms: [
+			runtime_plan.ResourceRef{
+				domain: .transform
+				id:     'upload_completed'
+			},
+		]
+		egress:     runtime_plan.ResourceRef{
+			domain: .adapter
+			id:     'ack'
+		}
+	}
+	descriptor := pipeline_descriptor_from_plan_with_runtime_descriptors(pipeline, {
+		'ack': AdapterDescriptor{
+			id:           'ack'
+			capabilities: Capabilities{
+				events: true
+			}
+		}
+	}, {
+		'upload_completed': TransformDescriptor{
+			id:           'upload_completed'
+			kind:         'vjsx'
+			capabilities: Capabilities{
+				request_response: true
+				events:           true
+			}
+		}
+	})
+	assert !descriptor.required.request_response
+	assert descriptor.required.events
+}
+
+fn test_pipeline_transform_capability_errors_report_unsupported_ingress_exchange() {
+	pipeline := runtime_plan.PipelinePlan{
+		id:         'ws-transform'
+		transforms: [
+			runtime_plan.ResourceRef{
+				domain: .transform
+				id:     'http_only'
+			},
+		]
+	}
+	ingress := IngressDescriptor{
+		id:           'listener:ws'
+		capabilities: Capabilities{
+			sessions:    true
+			full_duplex: true
+		}
+	}
+	assert pipeline_transform_capability_errors(pipeline, ingress, {
+		'http_only': TransformDescriptor{
+			id:           'http_only'
+			capabilities: Capabilities{
+				request_response: true
+			}
+		}
+	}) == [
+		'pipeline_transform_capability_mismatch:ws-transform:listener:ws:transform:http_only:full_duplex',
+		'pipeline_transform_capability_mismatch:ws-transform:listener:ws:transform:http_only:sessions',
+	]
+}
+
 fn test_ingress_descriptor_from_listener_plan_defaults_empty_protocol_to_http() {
 	ingress := ingress_descriptor_from_listener_plan(runtime_plan.ListenerPlan{
 		id: 'web'
@@ -326,6 +404,48 @@ fn test_pipeline_capability_errors_from_plan_visits_event_ingress_pipeline() {
 		'pipeline_capability_mismatch:event-to-ws:adapter:upload_event:sessions',
 		'pipeline_capability_mismatch:event-to-ws:adapter:upload_event:multiplexing',
 	]
+}
+
+fn test_pipeline_capability_errors_from_plan_allows_event_ingress_transform_ack_pipeline() {
+	plan := runtime_plan.RuntimePlan{
+		adapters:   {
+			'upload_event': runtime_plan.AdapterPlan{
+				id:   'upload_event'
+				kind: 'event-ingress'
+			}
+			'ack':          runtime_plan.AdapterPlan{
+				id:   'ack'
+				kind: 'event-ingress'
+			}
+		}
+		transforms: {
+			'upload_completed': runtime_plan.TransformPlan{
+				id:      'upload_completed'
+				kind:    'vjsx'
+				handler: 'uploads.completed'
+			}
+		}
+		pipelines:  [
+			runtime_plan.PipelinePlan{
+				id:         'event-upload'
+				ingress:    runtime_plan.ResourceRef{
+					domain: .adapter
+					id:     'upload_event'
+				}
+				transforms: [
+					runtime_plan.ResourceRef{
+						domain: .transform
+						id:     'upload_completed'
+					},
+				]
+				egress:     runtime_plan.ResourceRef{
+					domain: .adapter
+					id:     'ack'
+				}
+			},
+		]
+	}
+	assert pipeline_capability_errors_from_plan(plan).len == 0
 }
 
 fn test_match_basic_http_pipeline_skips_regex_pipeline() {

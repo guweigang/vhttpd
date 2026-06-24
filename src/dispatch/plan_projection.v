@@ -25,6 +25,23 @@ pub fn ingress_descriptors_from_plan(plan runtime_plan.RuntimePlan) map[string]I
 	return descriptors
 }
 
+pub fn transform_descriptor_from_plan(transform runtime_plan.TransformPlan) TransformDescriptor {
+	return TransformDescriptor{
+		id:           transform.id
+		kind:         transform.kind
+		handler:      transform.handler
+		capabilities: transform_capabilities(transform.kind)
+	}
+}
+
+pub fn transform_descriptors_from_plan(plan runtime_plan.RuntimePlan) map[string]TransformDescriptor {
+	mut descriptors := map[string]TransformDescriptor{}
+	for id, transform in plan.transforms {
+		descriptors[id] = transform_descriptor_from_plan(transform)
+	}
+	return descriptors
+}
+
 pub fn pipeline_descriptor_from_plan(pipeline runtime_plan.PipelinePlan) PipelineDescriptor {
 	return PipelineDescriptor{
 		id:         pipeline.id
@@ -47,8 +64,17 @@ pub fn pipeline_descriptor_from_plan_with_adapters(pipeline runtime_plan.Pipelin
 	return descriptor
 }
 
+pub fn pipeline_descriptor_from_plan_with_runtime_descriptors(pipeline runtime_plan.PipelinePlan, adapters map[string]AdapterDescriptor, transforms map[string]TransformDescriptor) PipelineDescriptor {
+	_ = transforms
+	descriptor := pipeline_descriptor_from_plan_with_adapters(pipeline, adapters)
+	return PipelineDescriptor{
+		...descriptor
+	}
+}
+
 pub fn pipeline_capability_errors_from_plan(plan runtime_plan.RuntimePlan) []string {
 	adapters := adapter_descriptors_from_plan(plan)
+	transforms := transform_descriptors_from_plan(plan)
 	ingresses := ingress_descriptors_from_plan(plan)
 	mut errors := []string{}
 	for pipeline in plan.pipelines {
@@ -56,10 +82,42 @@ pub fn pipeline_capability_errors_from_plan(plan runtime_plan.RuntimePlan) []str
 			continue
 		}
 		ingress := ingresses[pipeline.ingress.str()] or { continue }
-		descriptor := pipeline_descriptor_from_plan_with_adapters(pipeline, adapters)
+		descriptor := pipeline_descriptor_from_plan_with_runtime_descriptors(pipeline, adapters,
+			transforms)
 		errors << pipeline_capability_errors(descriptor, ingress)
+		errors << pipeline_transform_capability_errors(pipeline, ingress, transforms)
 	}
 	return errors
+}
+
+pub fn pipeline_transform_capability_errors(pipeline runtime_plan.PipelinePlan, ingress IngressDescriptor, transforms map[string]TransformDescriptor) []string {
+	mut errors := []string{}
+	for reference in pipeline.transforms {
+		if reference.domain != .transform {
+			continue
+		}
+		transform := transforms[reference.id] or { continue }
+		for missing in missing_capabilities(transform.capabilities, ingress.capabilities) {
+			errors << 'pipeline_transform_capability_mismatch:${pipeline.id}:${ingress.id}:transform:${reference.id}:${missing}'
+		}
+	}
+	return errors
+}
+
+fn transform_capabilities(kind string) Capabilities {
+	match kind.trim_space().to_lower() {
+		'native', 'vjsx' {
+			return Capabilities{
+				request_response: true
+				events:           true
+			}
+		}
+		else {
+			return Capabilities{
+				request_response: true
+			}
+		}
+	}
 }
 
 fn listener_capabilities(protocol string) Capabilities {
