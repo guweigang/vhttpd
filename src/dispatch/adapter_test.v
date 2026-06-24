@@ -41,6 +41,15 @@ fn test_session_plan_outcome_carries_protocol_neutral_target() {
 	assert outcome.metadata['trace_id'] == 'trace-1'
 }
 
+fn test_session_plan_outcome_with_status_carries_status() {
+	outcome := session_plan_outcome_with_status(101, 'websocket:chat', map[string]string{},
+		map[string]string{})
+
+	assert outcome.kind == .session_plan
+	assert outcome.status == 101
+	assert outcome.target == 'websocket:chat'
+}
+
 fn test_relay_delivery_outcome_carries_target_and_metadata() {
 	outcome := relay_delivery_outcome('relay:feishu', {
 		'carrier': 'websocket'

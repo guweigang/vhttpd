@@ -33,21 +33,16 @@ pub fn (mut app App) mcp_get(mut ctx Context) veb.Result {
 		return mcp_json_response(mut app, mut ctx, 'GET', path, req_id, trace_id, start_ms, 404,
 			'{"error":"Unknown Mcp-Session-Id"}', 'unknown_session_id', map[string]string{})
 	}
+	delivery := mcp_session_delivery_outcome(session_id, session.protocol_version)
 	ctx.takeover_conn()
 	ctx.conn.set_write_timeout(time.infinite)
 	ctx.conn.set_read_timeout(time.infinite)
-	response_headers := {
-		'x-request-id':         req_id
-		'x-vhttpd-trace-id':    trace_id
-		'x-accel-buffering':    'no'
-		'mcp-session-id':       session_id
-		'mcp-protocol-version': if session.protocol_version != '' {
-			session.protocol_version
-		} else {
-			mcp_protocol.Session.default_protocol_version()
-		}
-	}
-	worker.WorkerHttpStreamWriter.write_headers_conn(mut ctx.conn, 200, 'text/event-stream',
+	mut response_headers := delivery.headers.clone()
+	response_headers['x-request-id'] = req_id
+	response_headers['x-vhttpd-trace-id'] = trace_id
+	content_type := delivery.headers['content-type'] or { 'text/event-stream' }
+	status := if delivery.status > 0 { delivery.status } else { 200 }
+	worker.WorkerHttpStreamWriter.write_headers_conn(mut ctx.conn, status, content_type,
 		response_headers, false) or { return veb.no_result() }
 	mut conn := ctx.conn
 	spawn McpRuntime.handle_session_stream(mut app, mut conn, session_id, req_id, trace_id)
