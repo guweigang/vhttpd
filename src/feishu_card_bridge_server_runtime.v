@@ -5,6 +5,7 @@ import log
 import net
 import net.websocket
 import time
+import executor
 import dispatch
 import upstream.transport
 import feishu
@@ -38,6 +39,7 @@ fn feishu_card_bridge_http_response(mut app App, mut ctx Context, method string,
 // during C compilation with undeclared `__static__*_cb` symbols.
 fn feishu_card_bridge_server_message_cb(mut _ws websocket.Client, msg &websocket.Message, ref voidptr) ! {
 	mut state := unsafe { &FeishuCardBridgeServerState(ref) }
+	mut bridge := state.app.providers.feishu_card_bridge_context()
 	if msg.opcode != .text_frame {
 		return
 	}
@@ -63,7 +65,13 @@ fn feishu_card_bridge_server_message_cb(mut _ws websocket.Client, msg &websocket
 			log.error('[bridge] ❌ invalid result frame: ${err}')
 			return
 		}
-		state.app.feishu_card_bridge_resolve_pending(result)
+		ch := bridge.take_pending(result.request_id) or { return }
+		ch <- executor.FeishuCardBridgeResult{
+			status:  if result.status > 0 { result.status } else { 200 }
+			headers: result.headers.clone()
+			body:    result.body
+			error:   result.error
+		}
 		return
 	}
 	if envelope.type_ != feishu.bridge_proxy_request_type {
@@ -167,7 +175,8 @@ fn feishu_card_bridge_server_message_cb(mut _ws websocket.Client, msg &websocket
 // C callback trampoline; keep as a free function, see note above.
 fn feishu_card_bridge_server_close_cb(mut _ws websocket.Client, _code int, _reason string, ref voidptr) ! {
 	mut state := unsafe { &FeishuCardBridgeServerState(ref) }
-	state.app.feishu_card_bridge_unregister_client(state.client_id)
+	mut bridge := state.app.providers.feishu_card_bridge_context()
+	bridge.unregister_client(state.client_id)
 }
 
 fn FeishuCardBridgeRuntime.handle_server_session(mut app App, mut conn net.TcpConn, key string, client_id string, req_id string) {
@@ -177,14 +186,16 @@ fn FeishuCardBridgeRuntime.handle_server_session(mut app App, mut conn net.TcpCo
 		client_id: client_id
 	}
 	server.on_connect(fn [mut app, state] (mut sc websocket.ServerClient) !bool {
-		app.feishu_card_bridge_register_client(state.client_id, sc.client)
+		mut bridge := app.providers.feishu_card_bridge_context()
+		bridge.register_client(state.client_id, sc.client)
 		return true
 	}) or {} // safe to ignore: write failure usually means peer disconnected
 	// Keep these as free-function trampolines; see callback note above.
 	server.on_message_ref(feishu_card_bridge_server_message_cb, state)
 	server.on_close_ref(feishu_card_bridge_server_close_cb, state)
 	server.handle_handshake(mut conn, key) or {
-		app.feishu_card_bridge_unregister_client(client_id)
+		mut bridge := app.providers.feishu_card_bridge_context()
+		bridge.unregister_client(client_id)
 		log.error('[bridge] ❌ bridge ws handshake failed req=${req_id}: ${err}')
 	}
 }

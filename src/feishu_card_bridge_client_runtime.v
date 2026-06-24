@@ -13,6 +13,7 @@ import feishu
 // during C compilation with undeclared `__static__*_cb` symbols.
 fn feishu_card_bridge_client_message_cb(mut _ws websocket.Client, msg &websocket.Message, ref voidptr) ! {
 	mut app := unsafe { &App(ref) }
+	mut bridge := app.providers.feishu_card_bridge_context()
 	if msg.opcode != .text_frame {
 		return
 	}
@@ -31,7 +32,7 @@ fn feishu_card_bridge_client_message_cb(mut _ws websocket.Client, msg &websocket
 			log.error('[bridge] ❌ invalid proxy result frame: ${err}')
 			return
 		}
-		ch := app.feishu_card_bridge_take_proxy_pending(result.request_id) or { return }
+		ch := bridge.take_proxy_pending(result.request_id) or { return }
 		ch <- result
 		return
 	}
@@ -92,7 +93,8 @@ fn feishu_card_bridge_client_message_cb(mut _ws websocket.Client, msg &websocket
 fn feishu_card_bridge_client_error_cb(mut _ws websocket.Client, err string, ref voidptr) ! {
 	_ = _ws
 	mut app := unsafe { &App(ref) }
-	app.feishu_card_bridge_clear_client_conn()
+	mut bridge := app.providers.feishu_card_bridge_context()
+	bridge.clear_client_conn()
 	log.error('[bridge] ❌ bridge client websocket error: ${err}')
 }
 
@@ -100,7 +102,8 @@ fn feishu_card_bridge_client_error_cb(mut _ws websocket.Client, err string, ref 
 fn feishu_card_bridge_client_close_cb(mut _ws websocket.Client, code int, reason string, ref voidptr) ! {
 	_ = _ws
 	mut app := unsafe { &App(ref) }
-	app.feishu_card_bridge_clear_client_conn()
+	mut bridge := app.providers.feishu_card_bridge_context()
+	bridge.clear_client_conn()
 	log.info('[bridge] ℹ️ bridge client websocket closed: code=${code} reason=${reason}')
 }
 
@@ -117,7 +120,8 @@ fn FeishuCardBridgeRuntime.client_heartbeat_loop(mut app App) {
 			trace_id:   'bridge-heartbeat'
 			sent_at:    time.now().unix_milli()
 		}
-		if app.feishu_card_bridge_send_to_server(json.encode(frame)) {
+		mut bridge := app.providers.feishu_card_bridge_context()
+		if bridge.send_to_server(json.encode(frame)) {
 			log.info('[bridge] 💓 heartbeat ping sent: request_id=${request_id}')
 		}
 	}
@@ -166,9 +170,10 @@ fn FeishuCardBridgeRuntime.run_client(mut app App) {
 			time.sleep(3 * time.second)
 			continue
 		}
-		app.feishu_card_bridge_set_client_conn(client)
+		mut bridge := app.providers.feishu_card_bridge_context()
+		bridge.set_client_conn(client)
 		client.listen() or { log.error('[bridge] ❌ bridge client listen failed: ${err}') }
-		app.feishu_card_bridge_clear_client_conn()
+		bridge.clear_client_conn()
 		time.sleep(3 * time.second)
 	}
 }
