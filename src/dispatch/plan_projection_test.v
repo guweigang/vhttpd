@@ -113,6 +113,16 @@ fn test_pipeline_descriptor_with_adapters_carries_egress_capabilities() {
 	assert descriptor.required.events
 }
 
+fn test_ingress_descriptor_from_listener_plan_defaults_empty_protocol_to_http() {
+	ingress := ingress_descriptor_from_listener_plan(runtime_plan.ListenerPlan{
+		id: 'web'
+	})
+	assert ingress.id == 'listener:web'
+	assert ingress.capabilities.request_response
+	assert ingress.capabilities.events
+	assert ingress.capabilities.stream_output
+}
+
 fn test_match_basic_http_pipeline_uses_plan_order() {
 	plan := runtime_plan.RuntimePlan{
 		pipelines: [
@@ -198,6 +208,72 @@ fn test_match_basic_http_pipeline_with_adapters_carries_required_capabilities() 
 	}) or { panic('no match') }
 	assert matched.id == 'uploads'
 	assert matched.required.events
+}
+
+fn test_pipeline_capability_errors_from_plan_allows_http_upload_pipeline() {
+	plan := runtime_plan.RuntimePlan{
+		listeners: {
+			'web': runtime_plan.ListenerPlan{
+				id:       'web'
+				protocol: 'http'
+			}
+		}
+		adapters:  {
+			'upload': runtime_plan.AdapterPlan{
+				id:   'upload'
+				kind: 'upload'
+			}
+		}
+		pipelines: [
+			runtime_plan.PipelinePlan{
+				id:      'uploads'
+				ingress: runtime_plan.ResourceRef{
+					domain: .listener
+					id:     'web'
+				}
+				egress:  runtime_plan.ResourceRef{
+					domain: .adapter
+					id:     'upload'
+				}
+			},
+		]
+	}
+	assert pipeline_capability_errors_from_plan(plan).len == 0
+}
+
+fn test_pipeline_capability_errors_from_plan_reports_incompatible_websocket_egress() {
+	plan := runtime_plan.RuntimePlan{
+		listeners: {
+			'web': runtime_plan.ListenerPlan{
+				id:       'web'
+				protocol: 'http'
+			}
+		}
+		adapters:  {
+			'ws': runtime_plan.AdapterPlan{
+				id:   'ws'
+				kind: 'websocket'
+			}
+		}
+		pipelines: [
+			runtime_plan.PipelinePlan{
+				id:      'ws-on-http'
+				ingress: runtime_plan.ResourceRef{
+					domain: .listener
+					id:     'web'
+				}
+				egress:  runtime_plan.ResourceRef{
+					domain: .adapter
+					id:     'ws'
+				}
+			},
+		]
+	}
+	assert pipeline_capability_errors_from_plan(plan) == [
+		'pipeline_capability_mismatch:ws-on-http:listener:web:full_duplex',
+		'pipeline_capability_mismatch:ws-on-http:listener:web:sessions',
+		'pipeline_capability_mismatch:ws-on-http:listener:web:multiplexing',
+	]
 }
 
 fn test_match_basic_http_pipeline_skips_regex_pipeline() {

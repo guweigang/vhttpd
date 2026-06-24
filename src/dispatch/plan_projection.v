@@ -2,6 +2,21 @@ module dispatch
 
 import runtime_plan
 
+pub fn ingress_descriptor_from_listener_plan(listener runtime_plan.ListenerPlan) IngressDescriptor {
+	return IngressDescriptor{
+		id:           'listener:${listener.id}'
+		capabilities: listener_capabilities(listener.protocol)
+	}
+}
+
+pub fn ingress_descriptors_from_plan(plan runtime_plan.RuntimePlan) map[string]IngressDescriptor {
+	mut descriptors := map[string]IngressDescriptor{}
+	for id, listener in plan.listeners {
+		descriptors[id] = ingress_descriptor_from_listener_plan(listener)
+	}
+	return descriptors
+}
+
 pub fn pipeline_descriptor_from_plan(pipeline runtime_plan.PipelinePlan) PipelineDescriptor {
 	return PipelineDescriptor{
 		id:         pipeline.id
@@ -22,6 +37,52 @@ pub fn pipeline_descriptor_from_plan_with_adapters(pipeline runtime_plan.Pipelin
 		}
 	}
 	return descriptor
+}
+
+pub fn pipeline_capability_errors_from_plan(plan runtime_plan.RuntimePlan) []string {
+	adapters := adapter_descriptors_from_plan(plan)
+	ingresses := ingress_descriptors_from_plan(plan)
+	mut errors := []string{}
+	for pipeline in plan.pipelines {
+		if pipeline.ingress.domain != .listener {
+			continue
+		}
+		ingress := ingresses[pipeline.ingress.id] or { continue }
+		descriptor := pipeline_descriptor_from_plan_with_adapters(pipeline, adapters)
+		errors << pipeline_capability_errors(descriptor, ingress)
+	}
+	return errors
+}
+
+fn listener_capabilities(protocol string) Capabilities {
+	match protocol.trim_space().to_lower() {
+		'', 'http', 'https' {
+			return Capabilities{
+				request_response: true
+				events:           true
+				stream_output:    true
+			}
+		}
+		'websocket', 'ws', 'wss' {
+			return Capabilities{
+				sessions:     true
+				full_duplex:  true
+				multiplexing: true
+			}
+		}
+		'mcp' {
+			return Capabilities{
+				request_response: true
+				stream_output:    true
+				sessions:         true
+			}
+		}
+		else {
+			return Capabilities{
+				request_response: true
+			}
+		}
+	}
 }
 
 pub fn http_match_from_plan(pipeline runtime_plan.PipelinePlan) HttpMatch {
