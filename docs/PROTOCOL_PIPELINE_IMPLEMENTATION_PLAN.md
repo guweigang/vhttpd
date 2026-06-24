@@ -925,6 +925,7 @@ Progress as of 2026-06-22:
 - `P3.4` failure response slice complete: worker/backend dispatch errors are classified into dispatch failure delivery outcomes before HTTP rendering, so trace/error headers and `http.request` observations flow through the same terminal renderer as other delivery outcomes
 - `P3.4` MCP finite response slice complete: MCP POST JSON responses and MCP GET pre-stream JSON errors now render through dispatch delivery outcomes with observation metadata, while MCP validation, queueing, session state, and live SSE streaming remain owned by the MCP runtime
 - `P3.4` ingress finite response slice complete: no-executor 404 responses and directory slash redirects now flow through dispatch delivery outcomes, so trace headers and request observations use the same renderer as terminal adapter responses
+- `P3.4` cache-hit response slice complete: route response-cache hits now render through dispatch delivery outcomes while preserving `x-vhttpd-cache`, cache-control, content-type, route headers, and `cache=hit` observations
 - `P3.4` stream boundary decision recorded: current stream and upstream-plan executor outcomes still carry live Unix connection or concrete upstream plan state, so they remain outside pure dispatch delivery outcomes until stream/upstream runtimes own those live resources behind protocol-neutral terminal plans
 
 Batches:
