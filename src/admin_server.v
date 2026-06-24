@@ -1,10 +1,12 @@
 module main
 
 import admin
+import dispatch
 import feishu
 import json
 import log
 import net.http
+import time
 import upstream.transport
 import veb
 
@@ -20,6 +22,63 @@ pub mut:
 
 struct AdminPlaneRuntime {}
 
+struct AdminPlaneRequest {
+	path     string
+	req_id   string
+	trace_id string
+	start_ms i64
+}
+
+fn admin_plane_request(ctx Context, default_path string) AdminPlaneRequest {
+	path := if ctx.req.url == '' { default_path } else { ctx.req.url }
+	return AdminPlaneRequest{
+		path:     path
+		req_id:   resolve_request_id(ctx, path)
+		trace_id: resolve_trace_id(ctx, path)
+		start_ms: time.now().unix_milli()
+	}
+}
+
+fn admin_plane_json_response(mut admin_app AdminApp, mut ctx Context, method string, req AdminPlaneRequest, status int, body string, metadata map[string]string) veb.Result {
+	mut event_metadata := {
+		'plane': 'admin'
+	}
+	for key, value in metadata {
+		if key != '' && value != '' {
+			event_metadata[key] = value
+		}
+	}
+	return HttpResponseRuntime.delivery_outcome(mut admin_app.shared, mut ctx, http_ingress_request(method,
+		req.path, req.path, '', if isnil(ctx.conn) { '' } else { ctx.conn.peer_ip() or { '' } },
+		req.req_id, req.trace_id, req.start_ms), dispatch.outcome_with_metadata(dispatch.response_outcome(status, {
+		'content-type': 'application/json; charset=utf-8'
+	}, body), event_metadata), none)
+}
+
+fn admin_plane_text_response(mut admin_app AdminApp, mut ctx Context, method string, req AdminPlaneRequest, status int, body string, metadata map[string]string) veb.Result {
+	mut event_metadata := {
+		'plane': 'admin'
+	}
+	for key, value in metadata {
+		if key != '' && value != '' {
+			event_metadata[key] = value
+		}
+	}
+	return HttpResponseRuntime.delivery_outcome(mut admin_app.shared, mut ctx, http_ingress_request(method,
+		req.path, req.path, '', if isnil(ctx.conn) { '' } else { ctx.conn.peer_ip() or { '' } },
+		req.req_id, req.trace_id, req.start_ms), dispatch.outcome_with_metadata(dispatch.response_outcome(status, {
+		'content-type': 'text/plain; charset=utf-8'
+	}, body), event_metadata), none)
+}
+
+fn admin_plane_forbidden(mut admin_app AdminApp, mut ctx Context, method string, req AdminPlaneRequest) veb.Result {
+	return admin_plane_json_response(mut admin_app, mut ctx, method, req, 403, json.encode(admin.AdminErrorResponse{
+		error: 'forbidden'
+	}), {
+		'error': 'forbidden'
+	})
+}
+
 fn (app AdminApp) admin_authorized(ctx Context) bool {
 	headers := transport.header_map_from_request(ctx.req)
 	return admin.AdminAuth.authorized(app.admin_token, headers, ctx.query)
@@ -32,82 +91,46 @@ fn (app &App) api_authorized(ctx Context) bool {
 
 @[get]
 pub fn (mut app AdminApp) health(mut ctx Context) veb.Result {
-	ctx.res.set_status(.ok)
-	return ctx.text('OK')
+	req := admin_plane_request(ctx, '/health')
+	return admin_plane_text_response(mut app, mut ctx, 'GET', req, 200, 'OK', map[string]string{})
 }
 
 @['/admin/workers'; get]
 pub fn (mut app AdminApp) admin_workers(mut ctx Context) veb.Result {
-	path := if ctx.req.url == '' { '/admin/workers' } else { ctx.req.url }
-	req_id := resolve_request_id(ctx, path)
-	trace_id := resolve_trace_id(ctx, path)
+	req := admin_plane_request(ctx, '/admin/workers')
 	if !app.admin_authorized(ctx) {
-		ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
-		ctx.res.set_status(http.status_from_int(403))
-		return ctx.text('Forbidden')
+		return admin_plane_text_response(mut app, mut ctx, 'GET', req, 403, 'Forbidden', {
+			'error': 'forbidden'
+		})
 	}
 	body := json.encode(app.shared.worker_admin_snapshot())
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
-	ctx.set_content_type('application/json; charset=utf-8')
-	app.shared.emit('http.request', {
-		'method':     'GET'
-		'path':       '/admin/workers'
-		'status':     '200'
-		'request_id': req_id
-		'trace_id':   trace_id
-		'plane':      'admin'
+	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, body, {
+		'admin_endpoint': 'workers'
 	})
-	return ctx.text(body)
 }
 
 @['/admin/stats'; get]
 pub fn (mut app AdminApp) admin_stats(mut ctx Context) veb.Result {
-	path := if ctx.req.url == '' { '/admin/stats' } else { ctx.req.url }
-	req_id := resolve_request_id(ctx, path)
-	trace_id := resolve_trace_id(ctx, path)
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
-	ctx.set_content_type('application/json; charset=utf-8')
+	req := admin_plane_request(ctx, '/admin/stats')
 	if !app.admin_authorized(ctx) {
-		ctx.res.set_status(http.status_from_int(403))
-		return ctx.text(json.encode(admin.AdminErrorResponse{
-			error: 'forbidden'
-		}))
+		return admin_plane_forbidden(mut app, mut ctx, 'GET', req)
 	}
 	body := json.encode(app.shared.admin_stats_snapshot())
-	app.shared.emit('http.request', {
-		'method':     'GET'
-		'path':       '/admin/stats'
-		'status':     '200'
-		'request_id': req_id
-		'trace_id':   trace_id
-		'plane':      'admin'
+	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, body, {
+		'admin_endpoint': 'stats'
 	})
-	return ctx.text(body)
 }
 
 @['/admin/runtime'; get]
 pub fn (mut app AdminApp) admin_runtime(mut ctx Context) veb.Result {
-	path := if ctx.req.url == '' { '/admin/runtime' } else { ctx.req.url }
-	req_id := resolve_request_id(ctx, path)
-	trace_id := resolve_trace_id(ctx, path)
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
-	ctx.set_content_type('application/json; charset=utf-8')
+	req := admin_plane_request(ctx, '/admin/runtime')
 	if !app.admin_authorized(ctx) {
-		ctx.res.set_status(http.status_from_int(403))
-		return ctx.text(json.encode(admin.AdminErrorResponse{
-			error: 'forbidden'
-		}))
+		return admin_plane_forbidden(mut app, mut ctx, 'GET', req)
 	}
 	body := json.encode(app.shared.admin_runtime_snapshot())
-	app.shared.emit('http.request', {
-		'method':     'GET'
-		'path':       '/admin/runtime'
-		'status':     '200'
-		'request_id': req_id
-		'trace_id':   trace_id
-		'plane':      'admin'
+	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, body, {
+		'admin_endpoint': 'runtime'
 	})
-	return ctx.text(body)
 }
 
 @['/admin/runtime/plan'; get]
