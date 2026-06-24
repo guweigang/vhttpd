@@ -2,7 +2,6 @@ module main
 
 import json
 import log
-import net.http
 import time
 import upstream.transport
 import upstream
@@ -27,7 +26,6 @@ fn (mut app App) feishu_callback_by_app(mut ctx Context, raw_app string) veb.Res
 	}
 	req_ctx := FeishuHttpRequest.from_context(ctx, default_path)
 	trace_id := req_ctx.trace_id
-	req_ctx.prepare_json(mut ctx)
 	app_name := app.providers.feishu.resolve_app_name(raw_app) or {
 		return feishu_admin_error(req_ctx, mut app, mut ctx, 404, 'unknown_feishu_app')
 	}
@@ -50,10 +48,9 @@ fn (mut app App) feishu_callback_by_app(mut ctx Context, raw_app string) veb.Res
 			return feishu_admin_error(req_ctx, mut app, mut ctx, 403,
 				'invalid_feishu_callback_token')
 		}
-		req_ctx.emit_success(mut app, 'POST', '/callbacks/feishu', '', 'challenge', app_name)
-		return ctx.text(json.encode(feishu.CallbackChallengeResponse{
+		return feishu_json_response(req_ctx, mut app, mut ctx, 200, json.encode(feishu.CallbackChallengeResponse{
 			challenge: challenge
-		}))
+		}), 'challenge', app_name)
 	}
 	if !app.feishu_runtime_callback_token_valid(app_name, payload) {
 		return feishu_admin_error(req_ctx, mut app, mut ctx, 403, 'invalid_feishu_callback_token')
@@ -95,30 +92,22 @@ fn (mut app App) feishu_callback_by_app(mut ctx Context, raw_app string) veb.Res
 			return feishu_admin_error(req_ctx, mut app, mut ctx, 502,
 				'feishu_callback_bridge_error')
 		}
+		mut bridge_headers := map[string]string{}
 		for name, value in bridge_resp.headers {
 			if name.to_lower() == 'content-type' {
+				bridge_headers['content-type'] = value
 				continue
 			}
-			ctx.set_custom_header(name, value) or {}
+			bridge_headers[name] = value
 		}
-		ctx.res.set_status(http.status_from_int(if bridge_resp.status > 0 {
+		if 'content-type' !in bridge_headers {
+			bridge_headers['content-type'] = 'application/json; charset=utf-8'
+		}
+		return feishu_response(req_ctx, mut app, mut ctx, if bridge_resp.status > 0 {
 			bridge_resp.status
 		} else {
 			200
-		}))
-		ctype := bridge_resp.headers['content-type'] or { 'application/json; charset=utf-8' }
-		ctx.set_content_type(ctype)
-		app.emit('http.request', {
-			'method':     'POST'
-			'path':       '/callbacks/feishu'
-			'status':     '${if bridge_resp.status > 0 { bridge_resp.status } else { 200 }}'
-			'request_id': req_ctx.req_id
-			'trace_id':   req_ctx.trace_id
-			'provider':   'feishu'
-			'instance':   app_name
-			'callback':   '${summary.event_type}.bridge'
-		})
-		return ctx.text(bridge_resp.body)
+		}, bridge_headers, bridge_resp.body, '${summary.event_type}.bridge', app_name)
 	}
 	if app.has_websocket_upstream_logic_executor()
 		&& feishu.RuntimeEventSnapshot.should_dispatch_upstream(summary) {
@@ -179,9 +168,8 @@ fn (mut app App) feishu_callback_by_app(mut ctx Context, raw_app string) veb.Res
 		activity_snapshot.command_error = outcome.command_error
 		app.websocket_upstream_record_activity(activity_snapshot)
 	}
-	req_ctx.emit_success(mut app, 'POST', '/callbacks/feishu', '', summary.event_type, app_name)
-	return ctx.text(json.encode(feishu.CallbackAckResponse{
+	return feishu_json_response(req_ctx, mut app, mut ctx, 200, json.encode(feishu.CallbackAckResponse{
 		code: 0
 		msg:  'ok'
-	}))
+	}), summary.event_type, app_name)
 }
