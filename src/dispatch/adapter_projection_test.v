@@ -108,3 +108,50 @@ fn test_terminal_adapter_from_plan_ignores_non_terminal_adapters() {
 	}
 	assert terminal_adapter_from_plan(plan_adapter) == none
 }
+
+fn test_adapter_descriptor_marks_terminal_and_runtime_adapters() {
+	fixed := adapter_descriptor_from_plan(runtime_plan.AdapterPlan{
+		id:   'health'
+		kind: 'fixed-response'
+	})
+	assert fixed.id == 'health'
+	assert fixed.terminal
+	assert fixed.capabilities.request_response
+
+	http_handler := adapter_descriptor_from_plan(runtime_plan.AdapterPlan{
+		id:   'php'
+		kind: 'http-handler'
+	})
+	assert http_handler.kind == 'http-handler'
+	assert !http_handler.terminal
+	assert http_handler.capabilities.request_response
+}
+
+fn test_adapter_descriptor_preserves_upload_event_capability() {
+	upload := adapter_descriptor_from_plan(runtime_plan.AdapterPlan{
+		id:   'uploads'
+		kind: 'upload'
+	})
+	assert !upload.terminal
+	assert upload.capabilities.request_response
+	assert upload.capabilities.events
+}
+
+fn test_adapter_descriptors_from_plan_indexes_by_adapter_id() {
+	plan := runtime_plan.RuntimePlan{
+		adapters: {
+			'site/static': runtime_plan.AdapterPlan{
+				id:   'site/static'
+				kind: 'static'
+			}
+			'site/upload': runtime_plan.AdapterPlan{
+				id:   'site/upload'
+				kind: 'upload'
+			}
+		}
+	}
+	descriptors := adapter_descriptors_from_plan(plan)
+	assert descriptors.len == 2
+	assert descriptors['site/static'].capabilities.request_response
+	assert descriptors['site/upload'].capabilities.events
+}

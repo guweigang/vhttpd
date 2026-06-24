@@ -6,6 +6,14 @@ pub:
 	capabilities Capabilities
 }
 
+pub struct AdapterDescriptor {
+pub:
+	id           string
+	kind         string
+	capabilities Capabilities
+	terminal     bool
+}
+
 pub enum DeliveryOutcomeKind {
 	response
 	file
