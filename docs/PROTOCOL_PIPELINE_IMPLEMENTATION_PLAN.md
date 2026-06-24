@@ -929,6 +929,7 @@ Progress as of 2026-06-22:
 - `P3.4` host built-in route slice complete: `/health`, `/dispatch`, and `/events/stream` moved out of `main.v`; finite built-in responses render through dispatch delivery outcomes while the SSE endpoint keeps direct stream ownership
 - `P3.4` pre-stream failure slice complete: stream dispatch open failures and upstream-plan validation failures now render finite error responses through dispatch delivery outcomes before any client connection takeover
 - `P3.4` OpenAI finite response slice complete: OpenAI error responses, models responses, non-stream executor responses, non-stream HTTP proxy responses, and Responses registry reads now render through dispatch delivery outcomes while preserving `x-request-id`, backend headers, and provider observations
+- `P3.4` Feishu callback error slice complete: callback validation, bridge, and worker dispatch errors now render through dispatch delivery outcomes with trace/request/provider observations while successful callback handling remains in the Feishu runtime
 - `P3.4` stream boundary decision recorded: current stream and upstream-plan executor outcomes still carry live Unix connection or concrete upstream plan state, so they remain outside pure dispatch delivery outcomes until stream/upstream runtimes own those live resources behind protocol-neutral terminal plans
 
 Batches:
