@@ -60,17 +60,12 @@ fn HttpStreamRuntime.dispatch(mut app App, rt StreamRuntimeContext, mut ctx Cont
 	if !open_resp.handled {
 		return none
 	}
+	delivery := stream_dispatch_open_delivery_outcome(open_resp)
 	ctx.takeover_conn()
 	status := 200
-	stream_type := if open_resp.stream_type == 'text' { 'text' } else { 'sse' }
-	content_type := if open_resp.content_type != '' {
-		open_resp.content_type
-	} else if stream_type == 'sse' {
-		'text/event-stream'
-	} else {
-		'text/plain; charset=utf-8'
-	}
-	mut response_headers := open_resp.headers.clone()
+	stream_type := delivery.metadata['stream_type'] or { 'sse' }
+	content_type := delivery.headers['content-type'] or { 'text/event-stream' }
+	mut response_headers := delivery.headers.clone()
 	response_headers['x-request-id'] = req_id
 	response_headers['x-vhttpd-trace-id'] = trace_id
 	response_headers['x-vhttpd-stream-mode'] = 'dispatch'
