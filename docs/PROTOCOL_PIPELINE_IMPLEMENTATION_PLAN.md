@@ -793,7 +793,7 @@ Progress as of 2026-06-23:
 
 Phase 1 acceptance results on 2026-06-22:
 
-- `main.v` is 258 lines and App contains only veb integration plus the three top-level runtime owners
+- `main.v` is 111 lines after host built-in route isolation, and App contains only veb integration plus the three top-level runtime owners
 - `make test`, `make test-inproc`, `make build`, and `php php/package/tests/wordpress_lifecycle_test.php` pass
 - the host regression runner still reaches the pre-existing `/bench/health` readiness timeout recorded in P1.0; startup logs show requests entering `proxy_get`, with no new failure introduced by the ownership refactor
 
