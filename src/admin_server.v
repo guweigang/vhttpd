@@ -135,27 +135,14 @@ pub fn (mut app AdminApp) admin_runtime(mut ctx Context) veb.Result {
 
 @['/admin/runtime/plan'; get]
 pub fn (mut app AdminApp) admin_runtime_plan(mut ctx Context) veb.Result {
-	path := if ctx.req.url == '' { '/admin/runtime/plan' } else { ctx.req.url }
-	req_id := resolve_request_id(ctx, path)
-	trace_id := resolve_trace_id(ctx, path)
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
-	ctx.set_content_type('application/json; charset=utf-8')
+	req := admin_plane_request(ctx, '/admin/runtime/plan')
 	if !app.admin_authorized(ctx) {
-		ctx.res.set_status(http.status_from_int(403))
-		return ctx.text(json.encode(admin.AdminErrorResponse{
-			error: 'forbidden'
-		}))
+		return admin_plane_forbidden(mut app, mut ctx, 'GET', req)
 	}
 	body := app.shared.protocols.runtime_plan_json
-	app.shared.emit('http.request', {
-		'method':     'GET'
-		'path':       '/admin/runtime/plan'
-		'status':     '200'
-		'request_id': req_id
-		'trace_id':   trace_id
-		'plane':      'admin'
+	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, body, {
+		'admin_endpoint': 'runtime_plan'
 	})
-	return ctx.text(body)
 }
 
 // New: return registered provider names as a stable admin endpoint so callers
@@ -163,103 +150,51 @@ pub fn (mut app AdminApp) admin_runtime_plan(mut ctx Context) veb.Result {
 // and explicit for tooling.
 @['/admin/providers'; get]
 pub fn (mut app AdminApp) admin_providers(mut ctx Context) veb.Result {
-	path := if ctx.req.url == '' { '/admin/providers' } else { ctx.req.url }
-	req_id := resolve_request_id(ctx, path)
-	trace_id := resolve_trace_id(ctx, path)
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
-	ctx.set_content_type('application/json; charset=utf-8')
+	req := admin_plane_request(ctx, '/admin/providers')
 	if !app.admin_authorized(ctx) {
-		ctx.res.set_status(http.status_from_int(403))
-		return ctx.text(json.encode(admin.AdminErrorResponse{
-			error: 'forbidden'
-		}))
+		return admin_plane_forbidden(mut app, mut ctx, 'GET', req)
 	}
 	// provider_names returns []string
 	body := json.encode(app.shared.provider_names())
-	app.shared.emit('http.request', {
-		'method':     'GET'
-		'path':       '/admin/providers'
-		'status':     '200'
-		'request_id': req_id
-		'trace_id':   trace_id
-		'plane':      'admin'
+	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, body, {
+		'admin_endpoint': 'providers'
 	})
-	return ctx.text(body)
 }
 
 @['/admin/executors'; get]
 pub fn (mut app AdminApp) admin_executors(mut ctx Context) veb.Result {
-	path := if ctx.req.url == '' { '/admin/executors' } else { ctx.req.url }
-	req_id := resolve_request_id(ctx, path)
-	trace_id := resolve_trace_id(ctx, path)
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
-	ctx.set_content_type('application/json; charset=utf-8')
+	req := admin_plane_request(ctx, '/admin/executors')
 	if !app.admin_authorized(ctx) {
-		ctx.res.set_status(http.status_from_int(403))
-		return ctx.text(json.encode(admin.AdminErrorResponse{
-			error: 'forbidden'
-		}))
+		return admin_plane_forbidden(mut app, mut ctx, 'GET', req)
 	}
 	body := json.encode(app.shared.admin_logic_executor_specs_snapshot())
-	app.shared.emit('http.request', {
-		'method':     'GET'
-		'path':       '/admin/executors'
-		'status':     '200'
-		'request_id': req_id
-		'trace_id':   trace_id
-		'plane':      'admin'
+	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, body, {
+		'admin_endpoint': 'executors'
 	})
-	return ctx.text(body)
 }
 
 @['/admin/providers/specs'; get]
 pub fn (mut app AdminApp) admin_provider_specs(mut ctx Context) veb.Result {
-	path := if ctx.req.url == '' { '/admin/providers/specs' } else { ctx.req.url }
-	req_id := resolve_request_id(ctx, path)
-	trace_id := resolve_trace_id(ctx, path)
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
-	ctx.set_content_type('application/json; charset=utf-8')
+	req := admin_plane_request(ctx, '/admin/providers/specs')
 	if !app.admin_authorized(ctx) {
-		ctx.res.set_status(http.status_from_int(403))
-		return ctx.text(json.encode(admin.AdminErrorResponse{
-			error: 'forbidden'
-		}))
+		return admin_plane_forbidden(mut app, mut ctx, 'GET', req)
 	}
 	body := json.encode(app.shared.admin_provider_specs_snapshot())
-	app.shared.emit('http.request', {
-		'method':     'GET'
-		'path':       '/admin/providers/specs'
-		'status':     '200'
-		'request_id': req_id
-		'trace_id':   trace_id
-		'plane':      'admin'
+	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, body, {
+		'admin_endpoint': 'provider_specs'
 	})
-	return ctx.text(body)
 }
 
 @['/admin/providers/runtimes'; get]
 pub fn (mut app AdminApp) admin_provider_runtimes(mut ctx Context) veb.Result {
-	path := if ctx.req.url == '' { '/admin/providers/runtimes' } else { ctx.req.url }
-	req_id := resolve_request_id(ctx, path)
-	trace_id := resolve_trace_id(ctx, path)
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
-	ctx.set_content_type('application/json; charset=utf-8')
+	req := admin_plane_request(ctx, '/admin/providers/runtimes')
 	if !app.admin_authorized(ctx) {
-		ctx.res.set_status(http.status_from_int(403))
-		return ctx.text(json.encode(admin.AdminErrorResponse{
-			error: 'forbidden'
-		}))
+		return admin_plane_forbidden(mut app, mut ctx, 'GET', req)
 	}
 	body := json.encode(app.shared.admin_provider_runtimes_snapshot())
-	app.shared.emit('http.request', {
-		'method':     'GET'
-		'path':       '/admin/providers/runtimes'
-		'status':     '200'
-		'request_id': req_id
-		'trace_id':   trace_id
-		'plane':      'admin'
+	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, body, {
+		'admin_endpoint': 'provider_runtimes'
 	})
-	return ctx.text(body)
 }
 
 @['/admin/runtime/upstreams'; get]
