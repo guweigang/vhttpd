@@ -91,6 +91,28 @@ fn test_listener_pipeline_descriptors_keep_listener_order() {
 	assert descriptors.map(it.egress) == ['adapter:assets', 'adapter:php']
 }
 
+fn test_pipeline_descriptor_with_adapters_carries_egress_capabilities() {
+	pipeline := runtime_plan.PipelinePlan{
+		id:     'web/uploads'
+		egress: runtime_plan.ResourceRef{
+			domain: .adapter
+			id:     'uploads'
+		}
+	}
+	descriptor := pipeline_descriptor_from_plan_with_adapters(pipeline, {
+		'uploads': AdapterDescriptor{
+			id:           'uploads'
+			kind:         'upload'
+			capabilities: Capabilities{
+				request_response: true
+				events:           true
+			}
+		}
+	})
+	assert descriptor.required.request_response
+	assert descriptor.required.events
+}
+
 fn test_match_basic_http_pipeline_uses_plan_order() {
 	plan := runtime_plan.RuntimePlan{
 		pipelines: [
@@ -136,6 +158,46 @@ fn test_match_basic_http_pipeline_uses_plan_order() {
 	matched := match_basic_http_pipeline(plan, 'web', exchange) or { panic('no match') }
 	assert matched.id == 'assets'
 	assert matched.egress == 'adapter:assets'
+}
+
+fn test_match_basic_http_pipeline_with_adapters_carries_required_capabilities() {
+	plan := runtime_plan.RuntimePlan{
+		pipelines: [
+			runtime_plan.PipelinePlan{
+				id:      'uploads'
+				ingress: runtime_plan.ResourceRef{
+					domain: .listener
+					id:     'web'
+				}
+				match:   runtime_plan.MatchPlan{
+					methods: ['POST']
+					paths:   ['/vhttpd/uploads']
+				}
+				egress:  runtime_plan.ResourceRef{
+					domain: .adapter
+					id:     'upload'
+				}
+			},
+		]
+	}
+	exchange := http_request_exchange(HttpIngressRequest{
+		method:     'POST'
+		path:       '/vhttpd/uploads'
+		request_id: 'req-upload'
+		trace_id:   'trace-upload'
+	})
+	matched := match_basic_http_pipeline_with_adapters(plan, 'web', exchange, {
+		'upload': AdapterDescriptor{
+			id:           'upload'
+			kind:         'upload'
+			capabilities: Capabilities{
+				request_response: true
+				events:           true
+			}
+		}
+	}) or { panic('no match') }
+	assert matched.id == 'uploads'
+	assert matched.required.events
 }
 
 fn test_match_basic_http_pipeline_skips_regex_pipeline() {
