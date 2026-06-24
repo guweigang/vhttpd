@@ -243,8 +243,7 @@ fn HttpResponseRuntime.response_outcome(mut ctx Context, req HttpIngressRequest,
 fn apply_delivery_headers(mut ctx Context, headers map[string]string) {
 	for name, value in headers {
 		lower := name.to_lower()
-		if value == '' || lower == 'content-type' || lower == 'content-length' || lower == 'server'
-			|| lower == 'x-request-id' {
+		if value == '' || lower == 'content-type' || lower == 'content-length' || lower == 'server' {
 			continue
 		}
 		if lower == 'set-cookie' {

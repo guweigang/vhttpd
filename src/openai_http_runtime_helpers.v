@@ -23,6 +23,7 @@ fn OpenAIResponseWriter.write(mut app App, mut ctx Context, status int, path str
 			response_headers[key] = value
 		}
 	}
+	response_headers['x-request-id'] = req_id
 	mut event_metadata := {
 		'provider': 'openai'
 	}
@@ -31,7 +32,6 @@ fn OpenAIResponseWriter.write(mut app App, mut ctx Context, status int, path str
 			event_metadata[key] = value
 		}
 	}
-	ctx.set_custom_header('x-request-id', req_id) or {}
 	return HttpResponseRuntime.delivery_outcome(mut app, mut ctx, http_ingress_request(method,
 		path, path, '', if isnil(ctx.conn) { '' } else { ctx.conn.peer_ip() or { '' } }, req_id,
 		trace_id, start_ms), dispatch.outcome_with_metadata(dispatch.response_outcome(status,
