@@ -199,16 +199,9 @@ pub fn (mut app AdminApp) admin_provider_runtimes(mut ctx Context) veb.Result {
 
 @['/admin/runtime/upstreams'; get]
 pub fn (mut app AdminApp) admin_runtime_upstreams(mut ctx Context) veb.Result {
-	path := if ctx.req.url == '' { '/admin/runtime/upstreams' } else { ctx.req.url }
-	req_id := resolve_request_id(ctx, path)
-	trace_id := resolve_trace_id(ctx, path)
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
-	ctx.set_content_type('application/json; charset=utf-8')
+	req := admin_plane_request(ctx, '/admin/runtime/upstreams')
 	if !app.admin_authorized(ctx) {
-		ctx.res.set_status(http.status_from_int(403))
-		return ctx.text(json.encode(admin.AdminErrorResponse{
-			error: 'forbidden'
-		}))
+		return admin_plane_forbidden(mut app, mut ctx, 'GET', req)
 	}
 	details := admin.AdminQuery.parse_boolish(ctx.query['details'] or { 'false' })
 	limit := admin.AdminQuery.limit(ctx.query['limit'] or { '' }, 100, 1000)
@@ -217,29 +210,16 @@ pub fn (mut app AdminApp) admin_runtime_upstreams(mut ctx Context) veb.Result {
 	provider_filter := (ctx.query['provider'] or { '' }).trim_space()
 	body := json.encode(app.shared.admin_upstreams_snapshot(details, limit, offset, role_filter,
 		provider_filter))
-	app.shared.emit('http.request', {
-		'method':     'GET'
-		'path':       '/admin/runtime/upstreams'
-		'status':     '200'
-		'request_id': req_id
-		'trace_id':   trace_id
-		'plane':      'admin'
+	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, body, {
+		'admin_endpoint': 'runtime_upstreams'
 	})
-	return ctx.text(body)
 }
 
 @['/admin/runtime/websockets'; get]
 pub fn (mut app AdminApp) admin_runtime_websockets(mut ctx Context) veb.Result {
-	path := if ctx.req.url == '' { '/admin/runtime/websockets' } else { ctx.req.url }
-	req_id := resolve_request_id(ctx, path)
-	trace_id := resolve_trace_id(ctx, path)
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
-	ctx.set_content_type('application/json; charset=utf-8')
+	req := admin_plane_request(ctx, '/admin/runtime/websockets')
 	if !app.admin_authorized(ctx) {
-		ctx.res.set_status(http.status_from_int(403))
-		return ctx.text(json.encode(admin.AdminErrorResponse{
-			error: 'forbidden'
-		}))
+		return admin_plane_forbidden(mut app, mut ctx, 'GET', req)
 	}
 	details := admin.AdminQuery.parse_boolish(ctx.query['details'] or { 'false' })
 	limit := admin.AdminQuery.limit(ctx.query['limit'] or { '' }, 100, 1000)
@@ -248,29 +228,16 @@ pub fn (mut app AdminApp) admin_runtime_websockets(mut ctx Context) veb.Result {
 	conn_filter := (ctx.query['conn_id'] or { '' }).trim_space()
 	body := json.encode(app.shared.websocket.snapshot(details, limit, offset, room_filter,
 		conn_filter))
-	app.shared.emit('http.request', {
-		'method':     'GET'
-		'path':       '/admin/runtime/websockets'
-		'status':     '200'
-		'request_id': req_id
-		'trace_id':   trace_id
-		'plane':      'admin'
+	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, body, {
+		'admin_endpoint': 'runtime_websockets'
 	})
-	return ctx.text(body)
 }
 
 @['/admin/runtime/mcp'; get]
 pub fn (mut app AdminApp) admin_runtime_mcp(mut ctx Context) veb.Result {
-	path := if ctx.req.url == '' { '/admin/runtime/mcp' } else { ctx.req.url }
-	req_id := resolve_request_id(ctx, path)
-	trace_id := resolve_trace_id(ctx, path)
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
-	ctx.set_content_type('application/json; charset=utf-8')
+	req := admin_plane_request(ctx, '/admin/runtime/mcp')
 	if !app.admin_authorized(ctx) {
-		ctx.res.set_status(http.status_from_int(403))
-		return ctx.text(json.encode(admin.AdminErrorResponse{
-			error: 'forbidden'
-		}))
+		return admin_plane_forbidden(mut app, mut ctx, 'GET', req)
 	}
 	details := admin.AdminQuery.parse_boolish(ctx.query['details'] or { 'false' })
 	limit := admin.AdminQuery.limit(ctx.query['limit'] or { '' }, 100, 1000)
@@ -279,105 +246,53 @@ pub fn (mut app AdminApp) admin_runtime_mcp(mut ctx Context) veb.Result {
 	protocol_filter := (ctx.query['protocol_version'] or { '' }).trim_space()
 	body := json.encode(app.shared.protocols.mcp.snapshot(details, limit, offset, session_filter,
 		protocol_filter))
-	app.shared.emit('http.request', {
-		'method':     'GET'
-		'path':       '/admin/runtime/mcp'
-		'status':     '200'
-		'request_id': req_id
-		'trace_id':   trace_id
-		'plane':      'admin'
+	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, body, {
+		'admin_endpoint': 'runtime_mcp'
 	})
-	return ctx.text(body)
 }
 
 @['/admin/runtime/provider-instances'; get]
 pub fn (mut app AdminApp) admin_runtime_provider_instances(mut ctx Context) veb.Result {
-	path := if ctx.req.url == '' { '/admin/runtime/provider-instances' } else { ctx.req.url }
-	req_id := resolve_request_id(ctx, path)
-	trace_id := resolve_trace_id(ctx, path)
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
-	ctx.set_content_type('application/json; charset=utf-8')
+	req := admin_plane_request(ctx, '/admin/runtime/provider-instances')
 	if !app.admin_authorized(ctx) {
-		ctx.res.set_status(http.status_from_int(403))
-		return ctx.text(json.encode(admin.AdminErrorResponse{
-			error: 'forbidden'
-		}))
+		return admin_plane_forbidden(mut app, mut ctx, 'GET', req)
 	}
 	provider_filter := (ctx.query['provider'] or { '' }).trim_space()
 	body := json.encode(app.shared.admin_provider_instance_snapshots(provider_filter))
-	app.shared.emit('http.request', {
-		'method':     'GET'
-		'path':       '/admin/runtime/provider-instances'
-		'status':     '200'
-		'request_id': req_id
-		'trace_id':   trace_id
-		'plane':      'admin'
+	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, body, {
+		'admin_endpoint': 'runtime_provider_instances'
 	})
-	return ctx.text(body)
 }
 
 @['/admin/runtime/feishu'; get]
 pub fn (mut app AdminApp) admin_runtime_feishu(mut ctx Context) veb.Result {
-	path := if ctx.req.url == '' { '/admin/runtime/feishu' } else { ctx.req.url }
-	req_id := resolve_request_id(ctx, path)
-	trace_id := resolve_trace_id(ctx, path)
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
-	ctx.set_content_type('application/json; charset=utf-8')
+	req := admin_plane_request(ctx, '/admin/runtime/feishu')
 	if !app.admin_authorized(ctx) {
-		ctx.res.set_status(http.status_from_int(403))
-		return ctx.text(json.encode(admin.AdminErrorResponse{
-			error: 'forbidden'
-		}))
+		return admin_plane_forbidden(mut app, mut ctx, 'GET', req)
 	}
 	body := app.shared.provider_runtime_snapshot('feishu') or { '{}' }
-	app.shared.emit('http.request', {
-		'method':     'GET'
-		'path':       '/admin/runtime/feishu'
-		'status':     '200'
-		'request_id': req_id
-		'trace_id':   trace_id
-		'plane':      'admin'
+	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, body, {
+		'admin_endpoint': 'runtime_feishu'
 	})
-	return ctx.text(body)
 }
 
 @['/admin/runtime/db'; get]
 pub fn (mut app AdminApp) admin_runtime_db(mut ctx Context) veb.Result {
-	path := if ctx.req.url == '' { '/admin/runtime/db' } else { ctx.req.url }
-	req_id := resolve_request_id(ctx, path)
-	trace_id := resolve_trace_id(ctx, path)
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
-	ctx.set_content_type('application/json; charset=utf-8')
+	req := admin_plane_request(ctx, '/admin/runtime/db')
 	if !app.admin_authorized(ctx) {
-		ctx.res.set_status(http.status_from_int(403))
-		return ctx.text(json.encode(admin.AdminErrorResponse{
-			error: 'forbidden'
-		}))
+		return admin_plane_forbidden(mut app, mut ctx, 'GET', req)
 	}
 	body := app.shared.provider_runtime_snapshot('db') or { '{}' }
-	app.shared.emit('http.request', {
-		'method':     'GET'
-		'path':       '/admin/runtime/db'
-		'status':     '200'
-		'request_id': req_id
-		'trace_id':   trace_id
-		'plane':      'admin'
+	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, body, {
+		'admin_endpoint': 'runtime_db'
 	})
-	return ctx.text(body)
 }
 
 @['/admin/runtime/feishu/chats'; get]
 pub fn (mut app AdminApp) admin_runtime_feishu_chats(mut ctx Context) veb.Result {
-	path := if ctx.req.url == '' { '/admin/runtime/feishu/chats' } else { ctx.req.url }
-	req_id := resolve_request_id(ctx, path)
-	trace_id := resolve_trace_id(ctx, path)
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {} // safe to ignore: client may have disconnected
-	ctx.set_content_type('application/json; charset=utf-8')
+	req := admin_plane_request(ctx, '/admin/runtime/feishu/chats')
 	if !app.admin_authorized(ctx) {
-		ctx.res.set_status(http.status_from_int(403))
-		return ctx.text(json.encode(admin.AdminErrorResponse{
-			error: 'forbidden'
-		}))
+		return admin_plane_forbidden(mut app, mut ctx, 'GET', req)
 	}
 	limit := admin.AdminQuery.limit(ctx.query['limit'] or { '' }, 100, 1000)
 	offset := admin.AdminQuery.offset(ctx.query['offset'] or { '' })
@@ -386,15 +301,9 @@ pub fn (mut app AdminApp) admin_runtime_feishu_chats(mut ctx Context) veb.Result
 	chat_id_filter := (ctx.query['chat_id'] or { '' }).trim_space()
 	body := json.encode(app.shared.providers.feishu.chats_snapshot(limit, offset, instance_filter,
 		chat_type_filter, chat_id_filter))
-	app.shared.emit('http.request', {
-		'method':     'GET'
-		'path':       '/admin/runtime/feishu/chats'
-		'status':     '200'
-		'request_id': req_id
-		'trace_id':   trace_id
-		'plane':      'admin'
+	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, body, {
+		'admin_endpoint': 'runtime_feishu_chats'
 	})
-	return ctx.text(body)
 }
 
 @['/admin/runtime/feishu/messages'; post]
