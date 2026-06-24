@@ -34,8 +34,10 @@ fn HttpIngressRuntime.route(mut app App, mut ctx Context, method string, path st
 		}
 	}
 	if !app.has_http_logic_executor() {
-		ctx.res.set_status(.not_found)
-		return ctx.text(if method == 'HEAD' { '' } else { 'Not Found' })
+		remote_addr := if isnil(ctx.conn) { '' } else { ctx.conn.peer_ip() or { '' } }
+		return HttpResponseRuntime.delivery_outcome(mut app, mut ctx, http_ingress_request(method,
+			target, target, '', remote_addr, req_id, trace_id, start_ms), dispatch.response_outcome(404,
+			map[string]string{}, 'Not Found'), none)
 	}
 	return HttpIngressRuntime.handle(mut app, mut ctx, method, target, '')
 }
@@ -62,15 +64,11 @@ fn HttpIngressRuntime.handle(mut app App, mut ctx Context, method string, path s
 		if location := directory_slash_redirect_location(app.http_routing.document_root,
 			normalized_target, query_string)
 		{
-			ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-			ctx.set_custom_header('location', location) or {}
-			ctx.res.set_status(.moved_permanently)
 			log.info('[http] ⇠ directory slash redirect location=${location} trace_id=${trace_id}')
-			return ctx.text(if method.to_upper() == 'HEAD' {
-				''
-			} else {
-				'Redirecting to ${location}'
-			})
+			return HttpResponseRuntime.delivery_outcome(mut app, mut ctx, http_ingress_request(method,
+				path, path, body_on_head, remote_addr, req_id, trace_id, start_ms), dispatch.response_outcome(301, {
+				'location': location
+			}, 'Redirecting to ${location}'), none)
 		}
 	}
 
