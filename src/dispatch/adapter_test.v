@@ -18,6 +18,15 @@ fn test_stream_plan_outcome_carries_protocol_neutral_target() {
 	assert outcome.metadata['mode'] == 'sse'
 }
 
+fn test_stream_plan_outcome_with_status_carries_status() {
+	outcome := stream_plan_outcome_with_status(206, 'stream:range', map[string]string{},
+		map[string]string{})
+
+	assert outcome.kind == .stream_plan
+	assert outcome.status == 206
+	assert outcome.target == 'stream:range'
+}
+
 fn test_session_plan_outcome_carries_protocol_neutral_target() {
 	outcome := session_plan_outcome('websocket:chat', {
 		'sec-websocket-protocol': 'chat'

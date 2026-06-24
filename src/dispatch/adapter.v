@@ -71,8 +71,13 @@ pub fn accepted_event_outcome(metadata map[string]string) DeliveryOutcome {
 }
 
 pub fn stream_plan_outcome(target string, headers map[string]string, metadata map[string]string) DeliveryOutcome {
+	return stream_plan_outcome_with_status(0, target, headers, metadata)
+}
+
+pub fn stream_plan_outcome_with_status(status int, target string, headers map[string]string, metadata map[string]string) DeliveryOutcome {
 	return DeliveryOutcome{
 		kind:     .stream_plan
+		status:   status
 		headers:  headers.clone()
 		target:   target
 		metadata: metadata.clone()

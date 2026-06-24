@@ -15,17 +15,15 @@ fn HttpStreamRuntime.via_sse(mut app App, mut ctx Context, mut conn unix.StreamC
 }
 
 fn HttpStreamRuntime.direct_sse(rt StreamRuntimeContext, mut ctx Context, mut conn unix.StreamConn, start transport.WorkerStreamFrame, method string, path string, req_id string, trace_id string, start_ms i64) veb.Result {
+	delivery := worker_stream_start_delivery_outcome(start, 'sse')
 	ctx.takeover_conn()
-	mut status := start.status
-	if status <= 0 {
-		status = 200
-	}
-	mut headers := start.headers.clone()
+	status := if delivery.status > 0 { delivery.status } else { 200 }
+	mut headers := delivery.headers.clone()
 	headers['x-request-id'] = req_id
 	headers['x-vhttpd-trace-id'] = trace_id
 	headers['x-accel-buffering'] = 'no'
 	headers['x-vhttpd-stream-mode'] = 'direct'
-	ctype := if start.content_type != '' { start.content_type } else { 'text/event-stream' }
+	ctype := delivery.headers['content-type'] or { 'text/event-stream' }
 	worker.WorkerHttpStreamWriter.write_headers_conn(mut ctx.conn, status, ctype, headers, false) or {
 		return veb.no_result()
 	}
@@ -78,16 +76,14 @@ fn HttpStreamRuntime.via_passthrough(mut app App, mut ctx Context, mut conn unix
 }
 
 fn HttpStreamRuntime.direct_passthrough(rt StreamRuntimeContext, mut ctx Context, mut conn unix.StreamConn, start transport.WorkerStreamFrame, method string, path string, req_id string, trace_id string, start_ms i64) veb.Result {
+	delivery := worker_stream_start_delivery_outcome(start, 'passthrough')
 	ctx.takeover_conn()
-	mut status := start.status
-	if status <= 0 {
-		status = 200
-	}
-	mut headers := start.headers.clone()
+	status := if delivery.status > 0 { delivery.status } else { 200 }
+	mut headers := delivery.headers.clone()
 	headers['x-request-id'] = req_id
 	headers['x-vhttpd-trace-id'] = trace_id
 	headers['x-vhttpd-stream-mode'] = 'direct'
-	ctype := if start.content_type != '' { start.content_type } else { 'text/plain; charset=utf-8' }
+	ctype := delivery.headers['content-type'] or { 'text/plain; charset=utf-8' }
 	worker.WorkerHttpStreamWriter.write_headers_conn(mut ctx.conn, status, ctype, headers, true) or {
 		return veb.no_result()
 	}
@@ -134,7 +130,7 @@ fn HttpStreamRuntime.direct_passthrough(rt StreamRuntimeContext, mut ctx Context
 		'duration_ms':     '${time.now().unix_milli() - start_ms}'
 		'response_mode':   'stream'
 		'stream_strategy': 'direct'
-		'stream_type':     if start.stream_type != '' { start.stream_type } else { 'passthrough' }
+		'stream_type':     delivery.metadata['stream_type'] or { 'passthrough' }
 	})
 	return veb.no_result()
 }
