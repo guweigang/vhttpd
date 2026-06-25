@@ -9,9 +9,9 @@ fn (port McpProtocolIngressPort) try_route_http(mut app App, mut ctx Context, re
 		return none
 	}
 	match req.method {
-		'GET' { return app.mcp_get(mut ctx) }
-		'POST' { return app.mcp_post(mut ctx) }
-		'DELETE' { return app.mcp_delete(mut ctx) }
+		'GET' { return mcp_handle_get_http(mut app, mut ctx) }
+		'POST' { return mcp_handle_post_http(mut app, mut ctx) }
+		'DELETE' { return mcp_handle_delete_http(mut app, mut ctx) }
 		else { return none }
 	}
 }

@@ -8,7 +8,7 @@ import veb
 
 struct McpRuntime {}
 
-fn proxy_worker_mcp(mut app App, mut ctx Context) veb.Result {
+fn mcp_handle_post_http(mut app App, mut ctx Context) veb.Result {
 	start_ms := time.now().unix_milli()
 	path := if ctx.req.url == '' { '/mcp' } else { ctx.req.url }
 	req_id := resolve_request_id(ctx, path)
@@ -133,5 +133,5 @@ fn proxy_worker_mcp(mut app App, mut ctx Context) veb.Result {
 
 @['/mcp'; post]
 pub fn (mut app App) mcp_post(mut ctx Context) veb.Result {
-	return proxy_worker_mcp(mut app, mut ctx)
+	return mcp_handle_post_http(mut app, mut ctx)
 }

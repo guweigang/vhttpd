@@ -9,6 +9,10 @@ import worker
 
 @['/mcp'; get]
 pub fn (mut app App) mcp_get(mut ctx Context) veb.Result {
+	return mcp_handle_get_http(mut app, mut ctx)
+}
+
+fn mcp_handle_get_http(mut app App, mut ctx Context) veb.Result {
 	path := if ctx.req.url == '' { '/mcp' } else { ctx.req.url }
 	req_id := HttpRequestIdentity.request_id(ctx, path)
 	trace_id := HttpRequestIdentity.trace_id(ctx, path)

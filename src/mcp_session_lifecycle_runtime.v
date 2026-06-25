@@ -6,6 +6,10 @@ import veb
 
 @['/mcp'; delete]
 pub fn (mut app App) mcp_delete(mut ctx Context) veb.Result {
+	return mcp_handle_delete_http(mut app, mut ctx)
+}
+
+fn mcp_handle_delete_http(mut app App, mut ctx Context) veb.Result {
 	path := if ctx.req.url == '' { '/mcp' } else { ctx.req.url }
 	req_id := HttpRequestIdentity.request_id(ctx, path)
 	trace_id := HttpRequestIdentity.trace_id(ctx, path)
