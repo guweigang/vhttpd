@@ -101,8 +101,8 @@ fn HttpIngressRuntime.handle(mut app App, mut ctx Context, method string, path s
 	}
 
 	dispatch_plan := app.pipelines.http_dispatch_plan(matched_rule, path)
-	ingress_req := http_ingress_request_for_rule(method, path, dispatch_plan.target, body_on_head,
-		remote_addr, req_id, trace_id, start_ms, matched_rule)
+	ingress_req := app.pipelines.http_ingress_request(method, path, dispatch_plan, body_on_head,
+		remote_addr, req_id, trace_id, start_ms)
 	if cached_hit := app.pipelines.http_response_cache_hit(mut app.transport.cache, dispatch_plan,
 		method, ctx.req) {
 		return HttpResponseRuntime.cache_hit(mut app, mut ctx, ingress_req, cached_hit.cached,

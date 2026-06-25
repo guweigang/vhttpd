@@ -85,6 +85,16 @@ fn (rt PipelineRuntime) http_dispatch_plan(rule ?RuntimeRouteRule, original_targ
 	}
 }
 
+fn (rt PipelineRuntime) http_ingress_request(method string, path string, plan HttpPipelineDispatchPlan, body_on_head string, remote_addr string, request_id string, trace_id string, start_ms i64) HttpIngressRequest {
+	mut req := http_ingress_request(method, path, plan.target, body_on_head, remote_addr, request_id,
+		trace_id, start_ms)
+	if rule := plan.rule {
+		req.pipeline_id = rule.pipeline_id
+		req.ingress_id = rule.ingress_id
+	}
+	return req
+}
+
 fn (rt PipelineRuntime) http_response_cache_hit(mut cache cachex.Runtime, plan HttpPipelineDispatchPlan, method string, req http.Request) ?HttpResponseCacheHit {
 	rule := plan.rule or { return none }
 	if rule.response_cache_ttl_ms <= 0 || !cache.enabled {
