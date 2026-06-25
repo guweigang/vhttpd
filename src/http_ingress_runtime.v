@@ -61,9 +61,7 @@ fn HttpIngressRuntime.handle(mut app App, mut ctx Context, method string, path s
 	headers := transport.header_map_from_request(ctx.req)
 
 	if method.to_upper() in ['GET', 'HEAD'] {
-		if location := directory_slash_redirect_location(app.pipelines.http_document_root(),
-			normalized_target, query_string)
-		{
+		if location := app.pipelines.http_directory_slash_redirect(normalized_target, query_string) {
 			log.info('[http] ⇠ directory slash redirect location=${location} trace_id=${trace_id}')
 			return HttpResponseRuntime.delivery_outcome(mut app, mut ctx, http_ingress_request(method,
 				path, path, body_on_head, remote_addr, req_id, trace_id, start_ms), dispatch.response_outcome(301, {

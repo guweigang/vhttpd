@@ -34,10 +34,6 @@ fn PipelineRuntime.new(listener_id string, routes []RuntimeRouteRule, assets_roo
 	}
 }
 
-fn (rt PipelineRuntime) http_document_root() string {
-	return rt.http.document_root
-}
-
 fn (rt PipelineRuntime) match_http_request(req HttpPipelineMatchRequest) ?RuntimeRouteRule {
 	exchange := dispatch.http_request_exchange(dispatch.HttpIngressRequest{
 		method:        req.method
@@ -53,6 +49,10 @@ fn (rt PipelineRuntime) match_http_request(req HttpPipelineMatchRequest) ?Runtim
 		created_at_ms: req.start_ms
 	})
 	return rt.http.match_compiled_http_exchange(exchange)
+}
+
+fn (rt PipelineRuntime) http_directory_slash_redirect(normalized_target string, query_string string) ?string {
+	return directory_slash_redirect_location(rt.http.document_root, normalized_target, query_string)
 }
 
 fn (rt PipelineRuntime) http_static_root(rule RuntimeRouteRule) string {
