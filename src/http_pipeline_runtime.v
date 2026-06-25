@@ -103,3 +103,8 @@ fn (rt PipelineRuntime) try_handle_matched_http(mut app App, mut ctx Context, ru
 	}
 	return none
 }
+
+fn (rt PipelineRuntime) try_handle_http_dispatch_plan(mut app App, mut ctx Context, plan HttpPipelineDispatchPlan, req MatchedHttpPipelineRequest, headers map[string]string) ?veb.Result {
+	rule := plan.rule or { return none }
+	return rt.try_handle_matched_http(mut app, mut ctx, rule, req, headers)
+}

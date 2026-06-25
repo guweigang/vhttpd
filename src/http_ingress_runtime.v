@@ -82,25 +82,24 @@ fn HttpIngressRuntime.handle(mut app App, mut ctx Context, method string, path s
 		trace_id:          trace_id
 		start_ms:          start_ms
 	})
+	dispatch_plan := app.pipelines.http_dispatch_plan(matched_rule, path)
 
-	if rule := matched_rule {
-		if result := app.pipelines.try_handle_matched_http(mut app, mut ctx, rule, MatchedHttpPipelineRequest{
-			method:            method
-			path:              path
-			normalized_target: normalized_target
-			query:             query
-			body_on_head:      body_on_head
-			remote_addr:       remote_addr
-			req_id:            req_id
-			trace_id:          trace_id
-			start_ms:          start_ms
-		}, headers)
-		{
-			return result
-		}
+	if result := app.pipelines.try_handle_http_dispatch_plan(mut app, mut ctx, dispatch_plan,
+		MatchedHttpPipelineRequest{
+		method:            method
+		path:              path
+		normalized_target: normalized_target
+		query:             query
+		body_on_head:      body_on_head
+		remote_addr:       remote_addr
+		req_id:            req_id
+		trace_id:          trace_id
+		start_ms:          start_ms
+	}, headers)
+	{
+		return result
 	}
 
-	dispatch_plan := app.pipelines.http_dispatch_plan(matched_rule, path)
 	ingress_req := app.pipelines.http_ingress_request(method, path, dispatch_plan, body_on_head,
 		remote_addr, req_id, trace_id, start_ms)
 	if cached_hit := app.pipelines.http_response_cache_hit(mut app.transport.cache, dispatch_plan,
@@ -132,7 +131,7 @@ fn HttpIngressRuntime.handle(mut app App, mut ctx Context, method string, path s
 		trace_id:      trace_id
 		request_id:    req_id
 	}) or { return HttpResponseRuntime.dispatch_error(mut app, mut ctx, ingress_req, err.msg()) }
-	return HttpResponseRuntime.render(mut app, mut ctx, ingress_req, mut outcome, matched_rule)
+	return HttpResponseRuntime.render(mut app, mut ctx, ingress_req, mut outcome, dispatch_plan.rule)
 }
 
 fn apply_data_plane_scheme(mut ctx Context, scheme string) {
