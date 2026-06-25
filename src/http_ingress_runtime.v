@@ -59,6 +59,20 @@ fn HttpIngressRuntime.handle(mut app App, mut ctx Context, method string, path s
 	request_path, query_string := transport.normalize_request_target(path)
 	normalized_target := transport.normalize_path(request_path)
 	query := transport.parse_query_map(query_string)
+	headers := transport.header_map_from_request(ctx.req)
+	compiled_exchange := dispatch.http_request_exchange(dispatch.HttpIngressRequest{
+		method:        method
+		path:          normalized_target
+		query:         query
+		headers:       headers
+		body:          ctx.req.data
+		remote_addr:   remote_addr
+		request_id:    req_id
+		trace_id:      trace_id
+		exchange_id:   req_id
+		ingress:       'listener:${app.http_routing.listener_id}'
+		created_at_ms: start_ms
+	})
 
 	if method.to_upper() in ['GET', 'HEAD'] {
 		if location := directory_slash_redirect_location(app.http_routing.document_root,
@@ -72,11 +86,10 @@ fn HttpIngressRuntime.handle(mut app App, mut ctx Context, method string, path s
 		}
 	}
 
-	// 1. 匹配 Caddy 路由规则
-	matched_rule := app.http_routing.match_http_request(method, normalized_target, query)
+	// 1. Match the compiled RuntimePlan pipeline for this HTTP exchange.
+	matched_rule := app.http_routing.match_compiled_http_exchange(compiled_exchange)
 
 	if rule := matched_rule {
-		headers := transport.header_map_from_request(ctx.req)
 		header_name := route_required_headers_failure(rule, headers)
 		if header_name != '' {
 			log.warn('[http] ⇠ route required header failed method=${method.to_upper()} path=${path} trace_id=${trace_id} request_id=${req_id} header=${header_name}')
@@ -172,8 +185,8 @@ fn HttpIngressRuntime.handle(mut app App, mut ctx Context, method string, path s
 	if rule := matched_rule {
 		dispatch_path = rule.rewrite_target(path)
 	}
-	ingress_req := http_ingress_request(method, path, dispatch_path, body_on_head, remote_addr,
-		req_id, trace_id, start_ms)
+	ingress_req := http_ingress_request_for_rule(method, path, dispatch_path, body_on_head,
+		remote_addr, req_id, trace_id, start_ms, matched_rule)
 	if rule := matched_rule {
 		if rule.response_cache_ttl_ms > 0 && app.transport.cache.enabled
 			&& route_response_cache_request_bypass_reason(rule, method, ctx.req) == '' {
@@ -189,7 +202,8 @@ fn HttpIngressRuntime.handle(mut app App, mut ctx Context, method string, path s
 	requested_engine := if rule := matched_rule { rule.executor } else { '' }
 	mut engine_selection := app.engines.dispatch_selection(requested_engine)
 
-	log.info('[http] ⇢ dispatch method=${method.to_upper()} path=${path} target=${dispatch_path} trace_id=${trace_id} request_id=${req_id} body_len=${ctx.req.data.len} executor=${engine_selection.logic_executor.kind()} pool=${engine_selection.pool}')
+	pipeline_id := if rule := matched_rule { rule.pipeline_id } else { '' }
+	log.info('[http] ⇢ dispatch method=${method.to_upper()} path=${path} target=${dispatch_path} trace_id=${trace_id} request_id=${req_id} pipeline=${pipeline_id} body_len=${ctx.req.data.len} executor=${engine_selection.logic_executor.kind()} pool=${engine_selection.pool}')
 	if engine_selection.stream_dispatch {
 		if engine_selection.pool == 'main' {
 			if result := HttpStreamRuntime.via_dispatch(mut app, mut ctx, method, dispatch_path,

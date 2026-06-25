@@ -17,6 +17,9 @@ struct HttpIngressRequest {
 	request_id    string
 	trace_id      string
 	start_ms      i64
+pub mut:
+	pipeline_id string
+	ingress_id  string
 }
 
 struct HttpResponseRuntime {}
@@ -65,6 +68,17 @@ fn HttpResponseRuntime.delivery_outcome(mut app App, mut ctx Context, req HttpIn
 		'trace_id':    req.trace_id
 		'duration_ms': '${time.now().unix_milli() - req.start_ms}'
 	}
+	if req.pipeline_id != '' {
+		event_fields['pipeline'] = req.pipeline_id
+	}
+	if req.ingress_id != '' {
+		event_fields['ingress'] = req.ingress_id
+	}
+	if rule := matched_rule {
+		if rule.policy_refs.len > 0 {
+			event_fields['policies'] = rule.policy_refs.join(',')
+		}
+	}
 	if error_class != '' {
 		event_fields['error_class'] = error_class
 	}
@@ -78,6 +92,9 @@ fn HttpResponseRuntime.delivery_outcome(mut app App, mut ctx Context, req HttpIn
 	}
 	app.emit('http.request', event_fields)
 	ctx.set_custom_header('x-vhttpd-trace-id', req.trace_id) or {}
+	if req.pipeline_id != '' {
+		ctx.set_custom_header('x-vhttpd-pipeline', req.pipeline_id) or {}
+	}
 	if error_class != '' {
 		ctx.set_custom_header('x-vhttpd-error-class', error_class) or {}
 	}
@@ -103,15 +120,30 @@ fn HttpResponseRuntime.delivery_outcome(mut app App, mut ctx Context, req HttpIn
 
 fn HttpResponseRuntime.file_outcome(mut app App, mut ctx Context, req HttpIngressRequest, outcome dispatch.DeliveryOutcome, matched_rule ?RuntimeRouteRule) veb.Result {
 	log.info('[http] ⇠ delivery file method=${req.method.to_upper()} path=${req.path} file=${outcome.path} trace_id=${req.trace_id} request_id=${req.request_id} duration_ms=${time.now().unix_milli() - req.start_ms}')
-	app.emit('http.request', {
+	mut event_fields := {
 		'method':      req.method.to_upper()
 		'path':        transport.normalize_path(req.path)
 		'status':      '200'
 		'request_id':  req.request_id
 		'trace_id':    req.trace_id
 		'duration_ms': '${time.now().unix_milli() - req.start_ms}'
-	})
+	}
+	if req.pipeline_id != '' {
+		event_fields['pipeline'] = req.pipeline_id
+	}
+	if req.ingress_id != '' {
+		event_fields['ingress'] = req.ingress_id
+	}
+	if rule := matched_rule {
+		if rule.policy_refs.len > 0 {
+			event_fields['policies'] = rule.policy_refs.join(',')
+		}
+	}
+	app.emit('http.request', event_fields)
 	ctx.set_custom_header('x-vhttpd-trace-id', req.trace_id) or {}
+	if req.pipeline_id != '' {
+		ctx.set_custom_header('x-vhttpd-pipeline', req.pipeline_id) or {}
+	}
 	apply_delivery_headers(mut ctx, outcome.headers)
 	if ctype := outcome.headers['content-type'] {
 		if ctype != '' {
@@ -195,7 +227,7 @@ fn HttpResponseRuntime.normal(mut app App, mut ctx Context, req HttpIngressReque
 			}
 		}
 	}
-	app.emit('http.request', {
+	mut event_fields := {
 		'method':       req.method.to_upper()
 		'path':         transport.normalize_path(req.path)
 		'status':       '${delivery.status}'
@@ -204,7 +236,19 @@ fn HttpResponseRuntime.normal(mut app App, mut ctx Context, req HttpIngressReque
 		'duration_ms':  '${time.now().unix_milli() - req.start_ms}'
 		'cache':        cache_result
 		'cache_reason': cache_reason
-	})
+	}
+	if req.pipeline_id != '' {
+		event_fields['pipeline'] = req.pipeline_id
+	}
+	if req.ingress_id != '' {
+		event_fields['ingress'] = req.ingress_id
+	}
+	if rule := matched_rule {
+		if rule.policy_refs.len > 0 {
+			event_fields['policies'] = rule.policy_refs.join(',')
+		}
+	}
+	app.emit('http.request', event_fields)
 	return HttpResponseRuntime.response_outcome(mut ctx, req, delivery, matched_rule, cache_result,
 		cache_reason)
 }
@@ -216,6 +260,9 @@ fn worker_response_delivery_outcome(resp transport.WorkerResponse) dispatch.Deli
 fn HttpResponseRuntime.response_outcome(mut ctx Context, req HttpIngressRequest, outcome dispatch.DeliveryOutcome, matched_rule ?RuntimeRouteRule, cache_result string, cache_reason string) veb.Result {
 	status := if outcome.status > 0 { outcome.status } else { 200 }
 	ctx.set_custom_header('x-vhttpd-trace-id', req.trace_id) or {}
+	if req.pipeline_id != '' {
+		ctx.set_custom_header('x-vhttpd-pipeline', req.pipeline_id) or {}
+	}
 	if cache_result != '' {
 		ctx.set_custom_header('x-vhttpd-cache', cache_result) or {}
 	}

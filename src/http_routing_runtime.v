@@ -11,9 +11,17 @@ import worker
 
 pub struct RuntimeRouteRule {
 pub mut:
+	pipeline_id                  string
+	pipeline_group               string
+	ingress_id                   string
+	egress_ref                   string
+	policy_refs                  []string
+	transform_refs               []string
 	match_method                 []string
+	match_host                   []string
 	match_path                   []string
 	match_path_regexp            string
+	match_headers                map[string]string
 	match_query                  map[string]string
 	re                           regex.RE
 	executor                     string
@@ -45,14 +53,16 @@ pub:
 
 struct HttpRoutingRuntime {
 pub:
+	listener_id   string
 	rules         []RuntimeRouteRule
 	document_root string
 	assets_root   string
 	worker_root   string
 }
 
-fn HttpRoutingRuntime.new(rules []RuntimeRouteRule, assets_root string, worker_root string, primary_env map[string]string, additional_workers map[string]&worker.WorkerState) HttpRoutingRuntime {
+fn HttpRoutingRuntime.new(listener_id string, rules []RuntimeRouteRule, assets_root string, worker_root string, primary_env map[string]string, additional_workers map[string]&worker.WorkerState) HttpRoutingRuntime {
 	return HttpRoutingRuntime{
+		listener_id:   listener_id
 		rules:         rules
 		document_root: http_routing_document_root(assets_root, primary_env, additional_workers)
 		assets_root:   assets_root
@@ -86,6 +96,18 @@ fn http_routing_document_root(assets_root string, primary_env map[string]string,
 fn (rt HttpRoutingRuntime) match_http_request(method string, path string, query map[string]string) ?RuntimeRouteRule {
 	for rule in rt.rules {
 		if rule.matches_http_request(method, path, query) {
+			return rule
+		}
+	}
+	return none
+}
+
+fn (rt HttpRoutingRuntime) match_compiled_http_exchange(exchange dispatch.Exchange) ?RuntimeRouteRule {
+	request := dispatch.request_payload(exchange) or { return none }
+	for rule in rt.rules {
+		if rule.matches_compiled_http_request(request.method, request.path, request.query,
+			exchange.headers)
+		{
 			return rule
 		}
 	}
@@ -150,6 +172,10 @@ fn (r RuntimeRouteRule) matches_request(path string, query map[string]string) bo
 }
 
 fn (r RuntimeRouteRule) matches_http_request(method string, path string, query map[string]string) bool {
+	return r.matches_compiled_http_request(method, path, query, map[string]string{})
+}
+
+fn (r RuntimeRouteRule) matches_compiled_http_request(method string, path string, query map[string]string, headers map[string]string) bool {
 	if r.match_method.len > 0 {
 		upper_method := method.to_upper()
 		mut method_matched := false
@@ -163,6 +189,10 @@ fn (r RuntimeRouteRule) matches_http_request(method string, path string, query m
 		if !method_matched {
 			return false
 		}
+	}
+	if r.match_host.len > 0
+		&& !route_match_string_list(r.match_host, headers['host'] or { '' }, true) {
+		return false
 	}
 	mut path_matched := false
 	if r.match_path_regexp != '' {
@@ -183,6 +213,12 @@ fn (r RuntimeRouteRule) matches_http_request(method string, path string, query m
 	if !path_matched {
 		return false
 	}
+	for key, expected in r.match_headers {
+		actual := headers[key.to_lower()] or { return false }
+		if !match_query(expected, actual) {
+			return false
+		}
+	}
 	for key, expected in r.match_query {
 		actual := query[key] or { return false }
 		if !match_query(expected, actual) {
@@ -190,6 +226,24 @@ fn (r RuntimeRouteRule) matches_http_request(method string, path string, query m
 		}
 	}
 	return true
+}
+
+fn route_match_string_list(patterns []string, value string, case_insensitive bool) bool {
+	if patterns.len == 0 {
+		return true
+	}
+	needle := if case_insensitive { value.to_upper() } else { value }
+	for pattern in patterns {
+		clean := pattern.trim_space()
+		if clean == '*' {
+			return true
+		}
+		candidate := if case_insensitive { clean.to_upper() } else { clean }
+		if candidate == needle {
+			return true
+		}
+	}
+	return false
 }
 
 fn (r RuntimeRouteRule) rewrite_target(original_target string) string {

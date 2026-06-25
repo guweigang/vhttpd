@@ -38,15 +38,30 @@ fn http_ingress_request(method string, path string, dispatch_path string, body_o
 	}
 }
 
+fn http_ingress_request_for_rule(method string, path string, dispatch_path string, body_on_head string, remote_addr string, request_id string, trace_id string, start_ms i64, matched_rule ?RuntimeRouteRule) HttpIngressRequest {
+	mut req := http_ingress_request(method, path, dispatch_path, body_on_head, remote_addr,
+		request_id, trace_id, start_ms)
+	if rule := matched_rule {
+		req.pipeline_id = rule.pipeline_id
+		req.ingress_id = rule.ingress_id
+	}
+	return req
+}
+
 fn render_http_terminal_adapter(mut app App, mut ctx Context, method string, path string, normalized_target string, query map[string]string, body_on_head string, remote_addr string, request_id string, trace_id string, start_ms i64, matched_rule ?RuntimeRouteRule, mut adapter dispatch.EgressAdapter) veb.Result {
 	exchange := http_exchange_from_context(ctx, method, normalized_target, query, remote_addr,
-		request_id, trace_id, '', '')
+		request_id, trace_id, if rule := matched_rule { rule.ingress_id } else { '' }, if rule := matched_rule {
+		rule.pipeline_id
+	} else {
+		''
+	})
 	mut services := noop_dispatch_services(trace_id)
 	outcome := adapter.deliver(mut services, exchange) or {
-		return HttpResponseRuntime.dispatch_error(mut app, mut ctx, http_ingress_request(method,
-			path, path, body_on_head, remote_addr, request_id, trace_id, start_ms), err.msg())
+		return HttpResponseRuntime.dispatch_error(mut app, mut ctx, http_ingress_request_for_rule(method,
+			path, path, body_on_head, remote_addr, request_id, trace_id, start_ms, matched_rule),
+			err.msg())
 	}
-	return HttpResponseRuntime.delivery_outcome(mut app, mut ctx, http_ingress_request(method,
-		path, path, body_on_head, remote_addr, request_id, trace_id, start_ms), outcome,
-		matched_rule)
+	return HttpResponseRuntime.delivery_outcome(mut app, mut ctx, http_ingress_request_for_rule(method,
+		path, path, body_on_head, remote_addr, request_id, trace_id, start_ms, matched_rule),
+		outcome, matched_rule)
 }

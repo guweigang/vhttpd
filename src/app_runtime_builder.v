@@ -31,7 +31,8 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 	mcp_state := mcp_state_from_plan(runtime_plan_for_app, plan_listener_id)
 	openai_state := openai_state_from_plan(runtime_plan_for_app, plan_listener_id)
 	plugin_configs := plugin_configs_from_plan(runtime_plan_for_app)
-	plan_provider_settings := provider_runtime_settings_from_plan(runtime_plan_for_app, provider_settings)
+	plan_provider_settings := provider_runtime_settings_from_plan(runtime_plan_for_app,
+		provider_settings)
 
 	// 2. 遍历 routes 中的所有附加 executor，如果有专属的进程池配置则实例化其 WorkerState
 	mut add_workers := map[string]&worker.WorkerState{}
@@ -194,8 +195,9 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 				card_bridge_target_id:      plan_provider_settings.bridge.target_id
 			}
 		}
-		http_routing:  HttpRoutingRuntime.new(runtime_routes, build_cfg.assets_root_real,
-			build_cfg.workdir, executor_plan.bootstrap.worker_env, add_workers)
+		http_routing:  HttpRoutingRuntime.new(plan_listener_id, runtime_routes,
+			build_cfg.assets_root_real, build_cfg.workdir, executor_plan.bootstrap.worker_env,
+			add_workers)
 	}
 }
 

@@ -2069,6 +2069,11 @@ fn test_build_app_runtime_projects_executor_plan_into_app_state() {
 	assert app.transport.cache.enabled
 	assert app.transport.cache.socket == '/tmp/plan-cache.sock'
 	assert app.http_routing.rules.len == 2
+	assert app.http_routing.listener_id == 'default'
+	assert app.http_routing.rules[1].pipeline_id != ''
+	assert app.http_routing.rules[1].ingress_id == 'listener:default'
+	assert app.http_routing.rules[1].policy_refs.len > 0
+	assert app.http_routing.rules[1].policy_refs.any(it.starts_with('policy:'))
 	assert app.http_routing.rules[1].match_method == ['GET']
 	assert app.http_routing.rules[1].cache_control == 'public, max-age=31536000, immutable'
 	assert app.http_routing.rules[1].response_cache_ttl_ms == 60000

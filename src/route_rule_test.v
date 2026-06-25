@@ -111,6 +111,66 @@ fn test_route_rule_method_matching_supports_preflight_split() {
 	assert !api.matches_http_request('OPTIONS', '/api/posts', map[string]string{})
 }
 
+fn test_http_routing_runtime_matches_compiled_exchange_host_and_headers() {
+	rt := HttpRoutingRuntime{
+		listener_id: 'web'
+		rules:       [
+			RuntimeRouteRule{
+				pipeline_id:   'web/admin'
+				ingress_id:    'listener:web'
+				match_method:  ['GET']
+				match_host:    ['admin.local']
+				match_path:    ['/wp-admin/*']
+				match_headers: {
+					'x-admin': '*'
+				}
+				executor:      'php'
+			},
+			RuntimeRouteRule{
+				pipeline_id:  'web/fallback'
+				ingress_id:   'listener:web'
+				match_method: ['GET']
+				match_path:   ['*']
+				executor:     'php'
+			},
+		]
+	}
+	exchange := dispatch.http_request_exchange(dispatch.HttpIngressRequest{
+		method:     'GET'
+		path:       '/wp-admin/index.php'
+		query:      map[string]string{}
+		headers:    {
+			'Host':    'admin.local'
+			'X-Admin': '1'
+		}
+		request_id: 'req-1'
+		trace_id:   'trace-1'
+		ingress:    'listener:web'
+	})
+	rule := rt.match_compiled_http_exchange(exchange) or {
+		assert false
+		return
+	}
+	assert rule.pipeline_id == 'web/admin'
+
+	missing_header := dispatch.http_request_exchange(dispatch.HttpIngressRequest{
+		method:     'GET'
+		path:       '/wp-admin/index.php'
+		query:      map[string]string{}
+		headers:    {
+			'Host': 'admin.local'
+		}
+		request_id: 'req-2'
+		trace_id:   'trace-2'
+		ingress:    'listener:web'
+	})
+	fallback := rt.match_compiled_http_exchange(missing_header) or {
+		assert false
+		return
+	}
+	assert fallback.pipeline_id == 'web/fallback'
+}
+
 fn test_http_routing_runtime_preserves_first_match_order() {
 	rt := HttpRoutingRuntime{
 		rules: [

@@ -26,9 +26,17 @@ fn runtime_routes_from_plan(plan runtime_plan.RuntimePlan, listener_id string) [
 
 fn runtime_route_from_pipeline(plan runtime_plan.RuntimePlan, pipeline runtime_plan.PipelinePlan) ?RuntimeRouteRule {
 	mut route := RuntimeRouteRule{
+		pipeline_id:       pipeline.id
+		pipeline_group:    pipeline.group
+		ingress_id:        pipeline.ingress.str()
+		egress_ref:        pipeline.egress.str()
+		policy_refs:       pipeline.policies.map(it.str())
+		transform_refs:    pipeline.transforms.map(it.str())
 		match_method:      pipeline.match.methods.clone()
+		match_host:        pipeline.match.hosts.clone()
 		match_path:        pipeline.match.paths.clone()
 		match_path_regexp: pipeline.match.path_regexp
+		match_headers:     pipeline.match.headers.clone()
 		match_query:       pipeline.match.query.clone()
 	}
 	for reference in pipeline.transforms {
