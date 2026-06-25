@@ -22,6 +22,7 @@ mut:
 	engines      EngineRuntime
 	assets       config.AssetsRuntime
 	pipelines    PipelineRuntime
+	transformers TransformerRuntimeHub
 }
 
 struct ControlPlaneRuntime {

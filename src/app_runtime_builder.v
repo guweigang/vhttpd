@@ -126,6 +126,7 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 		}
 		websocket:     WebSocketRuntime.new(executor_plan.bootstrap.websocket_dispatch_mode)
 		upstreams:     UpstreamRuntimeRegistry.new()
+		transformers:  TransformerRuntimeHub.from_plan(runtime_plan_for_app)
 		engines:       EngineRuntime{
 			primary:    worker.WorkerState{
 				worker_backend:      worker.WorkerBackendRuntime{
