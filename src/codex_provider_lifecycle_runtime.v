@@ -5,8 +5,13 @@ import codex
 
 // ── Provider lifecycle callbacks ────────────────────────────────────────
 
+fn (hub ProviderRuntimeHub) codex_provider_enabled(db_transport_enabled bool) bool {
+	return hub.provider_enabled('codex', hub.provider_bootstrap_enabled('codex',
+		db_transport_enabled))
+}
+
 fn (mut app App) codex_provider_enabled() bool {
-	return app.provider_enabled('codex')
+	return app.providers.codex_provider_enabled(app.transport.db.enabled)
 }
 
 fn (mut app App) codex_provider_pull_url(instance string) !string {
@@ -42,20 +47,28 @@ fn (mut app App) codex_provider_reconnect_delay_ms(instance string) int {
 	return rt.reconnect_delay_ms_value()
 }
 
+fn (mut hub ProviderRuntimeHub) codex_runtime_config_snapshot(instance string) codex.AdminConfigSnapshot {
+	return hub.codex.snapshot(instance).config_snapshot()
+}
+
 fn (mut app App) codex_runtime_config_snapshot(instance string) codex.AdminConfigSnapshot {
-	return app.providers.codex.snapshot(instance).config_snapshot()
+	return app.providers.codex_runtime_config_snapshot(instance)
+}
+
+fn (mut hub ProviderRuntimeHub) codex_runtime_state_view(instance string) codex.RuntimeStateView {
+	return hub.codex.snapshot(instance).state_view()
 }
 
 fn (mut app App) codex_runtime_state_view(instance string) codex.RuntimeStateView {
-	return app.providers.codex.snapshot(instance).state_view()
+	return app.providers.codex_runtime_state_view(instance)
 }
 
 // ── Admin snapshot ──────────────────────────────────────────────────────
 
-fn (mut app App) admin_codex_snapshot() codex.AdminRuntimeSnapshot {
-	rt := app.codex_runtime_state_view('main')
+fn (mut hub ProviderRuntimeHub) admin_codex_snapshot(db_transport_enabled bool) codex.AdminRuntimeSnapshot {
+	rt := hub.codex_runtime_state_view('main')
 	return codex.AdminRuntimeSnapshot{
-		enabled:            app.codex_provider_enabled()
+		enabled:            hub.codex_provider_enabled(db_transport_enabled)
 		connected:          rt.connected
 		initialized:        rt.initialized
 		ws_url:             rt.ws_url
@@ -67,6 +80,10 @@ fn (mut app App) admin_codex_snapshot() codex.AdminRuntimeSnapshot {
 		connect_attempts:   rt.connect_attempts
 		connect_successes:  rt.connect_successes
 		received_frames:    rt.received_frames
-		config:             app.codex_runtime_config_snapshot('main')
+		config:             hub.codex_runtime_config_snapshot('main')
 	}
+}
+
+fn (mut app App) admin_codex_snapshot() codex.AdminRuntimeSnapshot {
+	return app.providers.admin_codex_snapshot(app.transport.db.enabled)
 }

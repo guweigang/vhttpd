@@ -34,7 +34,7 @@ fn (mut app App) build_provider_context(name string) provider.RuntimeContext {
 			db_name := provider.ProviderName.db()
 			return match name {
 				feishu_name { json.encode(app.providers.feishu_runtime_snapshot()) }
-				codex_name { json.encode(app.admin_codex_snapshot()) }
+				codex_name { json.encode(app.providers.admin_codex_snapshot(app.transport.db.enabled)) }
 				db_name { app.db_runtime_snapshot() }
 				else { '{}' }
 			}

@@ -14,7 +14,7 @@ pub fn (mut app App) provider_runtime_snapshot(name string) ?string {
 			json.encode(app.providers.feishu_runtime_snapshot())
 		}
 		codex_name {
-			json.encode(app.admin_codex_snapshot())
+			json.encode(app.providers.admin_codex_snapshot(app.transport.db.enabled))
 		}
 		db_name {
 			app.db_runtime_snapshot()
@@ -39,7 +39,7 @@ pub fn (mut app App) provider_runtime_upstream_snapshot(name string, instance st
 			if resolved_instance == '' {
 				resolved_instance = 'main'
 			}
-			state := app.codex_runtime_state_view(resolved_instance)
+			state := app.providers.codex_runtime_state_view(resolved_instance)
 			enabled := app.provider_runtime_upstream_enabled(codex_name, resolved_instance)
 			return provider.UpstreamRuntimeMapper.from_codex_state(resolved_instance, state,
 				enabled)
@@ -94,7 +94,7 @@ pub fn (mut app App) provider_runtime_metrics(name string) provider.ProviderRunt
 			}
 			mut states := []codex.RuntimeStateView{cap: instances.len}
 			for instance in instances {
-				states << app.codex_runtime_state_view(instance)
+				states << app.providers.codex_runtime_state_view(instance)
 			}
 			provider.ProviderRuntimeMetrics.from_codex_states(states)
 		}

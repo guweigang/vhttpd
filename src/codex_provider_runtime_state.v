@@ -19,7 +19,9 @@ fn (mut app App) codex_runtime_ensure_instance(instance string) codex.ProviderRu
 		return app.providers.codex.runtime
 	}
 	if resolved in app.providers.codex.instances {
-		return app.providers.codex.instances[resolved] or { app.providers.codex.runtime.for_instance(resolved) }
+		return app.providers.codex.instances[resolved] or {
+			app.providers.codex.runtime.for_instance(resolved)
+		}
 	}
 	mut next := app.providers.codex.runtime.for_instance(resolved)
 	if spec := app.provider_instance_get('codex', resolved) {
@@ -55,20 +57,24 @@ fn (mut app App) codex_runtime_ensure_instance(instance string) codex.ProviderRu
 	return next
 }
 
-fn (app &App) codex_runtime_known_instances() []string {
+fn (hub ProviderRuntimeHub) codex_runtime_known_instances() []string {
 	mut names := ['main']
-	for name, _ in app.providers.codex.instances {
+	for name, _ in hub.codex.instances {
 		if name !in names {
 			names << name
 		}
 	}
-	for spec in app.provider_instance_list('codex') {
+	for spec in hub.provider_instance_list('codex') {
 		if spec.instance !in names {
 			names << spec.instance
 		}
 	}
 	names.sort()
 	return names
+}
+
+fn (app &App) codex_runtime_known_instances() []string {
+	return app.providers.codex_runtime_known_instances()
 }
 
 fn (mut app App) codex_note_frame_received(instance string) i64 {
@@ -124,7 +130,7 @@ fn (mut app App) codex_clear_stream_targets(instance string, stream_id string) b
 
 fn (mut app App) codex_clear_stream_targets_any(stream_id string) bool {
 	mut cleared := false
-	for instance in app.codex_runtime_known_instances() {
+	for instance in app.providers.codex_runtime_known_instances() {
 		if app.codex_clear_stream_targets(instance, stream_id) {
 			cleared = true
 		}
@@ -204,7 +210,7 @@ fn (mut app App) codex_resolve_instance_for_stream(stream_id string) string {
 	if stream_id.trim_space() == '' {
 		return 'main'
 	}
-	for instance in app.codex_runtime_known_instances() {
+	for instance in app.providers.codex_runtime_known_instances() {
 		rt := app.providers.codex.snapshot(instance)
 		if stream_id in rt.stream_map {
 			return instance
@@ -240,7 +246,7 @@ fn (mut app App) codex_find_stream_targets(stream_id string) []codex.CodexTarget
 		instances << resolved
 		seen[resolved] = true
 	}
-	for instance in app.codex_runtime_known_instances() {
+	for instance in app.providers.codex_runtime_known_instances() {
 		if seen[instance] {
 			continue
 		}
