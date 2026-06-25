@@ -3,24 +3,51 @@ module main
 import json
 import provider
 
-fn (mut app App) build_provider_runtime_dispatch_context() provider.RuntimeDispatchContext {
-	return provider.RuntimeDispatchContext{
-		instances_fn:         fn [mut app] (name string) []string {
-			return app.provider_runtime_instances(name)
+fn (hub ProviderRuntimeHub) provider_runtime_upstream_enabled(name string, instance string, db_transport_enabled bool) bool {
+	feishu_name := provider.ProviderName.feishu()
+	codex_name := provider.ProviderName.codex()
+	ollama_name := provider.ProviderName.ollama()
+	return match name {
+		feishu_name {
+			hub.provider_runtime_ready(name, db_transport_enabled)
+				&& instance in hub.provider_runtime_instances(name, db_transport_enabled)
 		}
-		upstream_enabled_fn:  fn [mut app] (name string, instance string) bool {
-			return app.provider_runtime_upstream_enabled(name, instance)
+		codex_name {
+			instance in hub.provider_runtime_instances(name, db_transport_enabled)
 		}
-		bootstrap_enabled_fn: fn [mut app] (name string) bool {
-			return app.provider_bootstrap_enabled(name)
+		ollama_name {
+			hub.provider_runtime_ready(name, db_transport_enabled)
+				&& instance in hub.provider_runtime_instances(name, db_transport_enabled)
 		}
-		ready_fn:             fn [mut app] (name string) bool {
-			return app.provider_runtime_ready(name)
-		}
-		pull_url_fn:          fn [mut app] (name string, instance string) !string {
-			return app.provider_runtime_pull_url(name, instance)
+		else {
+			false
 		}
 	}
+}
+
+fn (mut hub ProviderRuntimeHub) build_runtime_dispatch_context(db_transport_enabled bool, pull_url_fn fn (string, string) !string) provider.RuntimeDispatchContext {
+	return provider.RuntimeDispatchContext{
+		instances_fn:         fn [hub, db_transport_enabled] (name string) []string {
+			return hub.provider_runtime_instances(name, db_transport_enabled)
+		}
+		upstream_enabled_fn:  fn [hub, db_transport_enabled] (name string, instance string) bool {
+			return hub.provider_runtime_upstream_enabled(name, instance, db_transport_enabled)
+		}
+		bootstrap_enabled_fn: fn [hub, db_transport_enabled] (name string) bool {
+			return hub.provider_bootstrap_enabled(name, db_transport_enabled)
+		}
+		ready_fn:             fn [hub, db_transport_enabled] (name string) bool {
+			return hub.provider_runtime_ready(name, db_transport_enabled)
+		}
+		pull_url_fn:          pull_url_fn
+	}
+}
+
+fn (mut app App) build_provider_runtime_dispatch_context() provider.RuntimeDispatchContext {
+	pull_url_fn := fn [mut app] (name string, instance string) !string {
+		return app.provider_runtime_pull_url(name, instance)
+	}
+	return app.providers.build_runtime_dispatch_context(app.transport.db.enabled, pull_url_fn)
 }
 
 // build_provider_context constructs a provider.RuntimeContext whose closures
@@ -80,8 +107,7 @@ pub fn (mut app App) provider_runtime_upstream_launches() []provider.ProviderRun
 }
 
 pub fn (mut app App) provider_runtime_upstream_enabled(name string, instance string) bool {
-	ctx := app.build_provider_runtime_dispatch_context()
-	return ctx.is_upstream_enabled(name, instance)
+	return app.providers.provider_runtime_upstream_enabled(name, instance, app.transport.db.enabled)
 }
 
 pub fn (mut app App) provider_runtime_upstream_provider_names() []string {
