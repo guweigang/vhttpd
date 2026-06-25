@@ -6,8 +6,8 @@ import feishu
 fn (mut app App) websocket_upstream_provider_send(provider string, req upstream.UpstreamSendRequest) !upstream.UpstreamSendResult {
 	return match provider {
 		websocket_upstream_provider_feishu {
-			if app.feishu_card_bridge_enabled() {
-				return app.feishu_card_bridge_proxy_send(req)
+			if app.providers.feishu_card_bridge_enabled() {
+				return app.providers.feishu_card_bridge_proxy_send(req)
 			}
 			result :=
 				app.feishu_runtime_send_message(feishu.SendMessageRequest.from_upstream_request(req))!
@@ -36,8 +36,8 @@ fn (mut app App) websocket_upstream_provider_send(provider string, req upstream.
 fn (mut app App) websocket_upstream_provider_update(provider string, req upstream.UpstreamSendRequest) !upstream.UpstreamUpdateResult {
 	return match provider {
 		websocket_upstream_provider_feishu {
-			if app.feishu_card_bridge_enabled() {
-				return app.feishu_card_bridge_proxy_update(req)
+			if app.providers.feishu_card_bridge_enabled() {
+				return app.providers.feishu_card_bridge_proxy_update(req)
 			}
 			result :=
 				app.feishu_runtime_update_message(feishu.UpdateMessageRequest.from_upstream_request(req))!

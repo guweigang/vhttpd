@@ -115,9 +115,17 @@ pub fn (mut w AppFacadeWrapper) admin_runtime_snapshot() executor.AdminRuntimeSu
 	return app.admin_runtime_snapshot()
 }
 
-pub fn (mut w AppFacadeWrapper) feishu_card_bridge_dispatch_callback(app_name string, trace_id string, summary executor.FeishuRuntimeEventSummary, payload string) !executor.FeishuCardBridgeResult {
+pub fn (mut w AppFacadeWrapper) provider_bridge_dispatch_callback(provider string, app_name string, trace_id string, summary executor.FeishuRuntimeEventSummary, payload string) !executor.FeishuCardBridgeResult {
 	mut app := unsafe { &App(w.app_ptr) }
-	return app.feishu_card_bridge_dispatch_callback(app_name, trace_id, summary, payload)
+	return match provider {
+		websocket_upstream_provider_feishu {
+			app.providers.feishu_card_bridge_dispatch_callback(app_name, trace_id, summary,
+				payload)
+		}
+		else {
+			error('provider_bridge_dispatch_unsupported:${provider}')
+		}
+	}
 }
 
 pub fn (mut w AppFacadeWrapper) execute_websocket_dispatch_commands_result(commands []transport.WorkerWebSocketFrame) transport.WorkerWebSocketDispatchCommandsResult {

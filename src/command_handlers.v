@@ -176,9 +176,9 @@ fn (h FeishuCommandHandler) execute_provider_message_send(normalized cmdpkg.Norm
 
 fn (h FeishuCommandHandler) execute_stream_command(normalized cmdpkg.NormalizedCommand, req upstream.UpstreamSendRequest, mut snapshot executor.WebSocketUpstreamCommandActivity) (bool, string) {
 	mut app := h.app
-	if app.feishu_card_bridge_enabled() && req.target != '' {
+	if app.providers.feishu_card_bridge_enabled() && req.target != '' {
 		if normalized.is_stream_append() {
-			result := app.feishu_card_bridge_proxy_append(req) or {
+			result := app.providers.feishu_card_bridge_proxy_append(req) or {
 				snapshot.status = 'error'
 				snapshot.error = err.msg()
 				return true, err.msg()
@@ -188,7 +188,7 @@ fn (h FeishuCommandHandler) execute_stream_command(normalized cmdpkg.NormalizedC
 			return true, ''
 		}
 		if normalized.is_stream_finish() {
-			result := app.feishu_card_bridge_proxy_finish(req) or {
+			result := app.providers.feishu_card_bridge_proxy_finish(req) or {
 				snapshot.status = 'error'
 				snapshot.error = err.msg()
 				return true, err.msg()
@@ -198,7 +198,7 @@ fn (h FeishuCommandHandler) execute_stream_command(normalized cmdpkg.NormalizedC
 			return true, ''
 		}
 		if normalized.is_stream_fail() {
-			result := app.feishu_card_bridge_proxy_fail(req) or {
+			result := app.providers.feishu_card_bridge_proxy_fail(req) or {
 				snapshot.status = 'error'
 				snapshot.error = err.msg()
 				return true, err.msg()

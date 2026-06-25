@@ -14,12 +14,12 @@ fn AppStartupHooks.initialize_runtime(mut app App, internal_admin_socket string)
 		app.engines.set_primary_env('VHTTPD_CACHE_SOCKET', app.transport.cache.socket)
 		go app.cache_runtime_server_run(app.transport.cache.socket)
 	}
-	app.feishu_card_bridge_apply_env_fallbacks()
+	app.providers.feishu_card_bridge_apply_env_fallbacks()
 	go InternalAdminRuntime.serve(mut app, internal_admin_socket)
 	if app.providers.feishu.enabled {
 		go app.feishu_runtime_run_buffer_flusher()
 	}
-	if app.feishu_card_bridge_enabled() {
+	if app.providers.feishu_card_bridge_enabled() {
 		go FeishuCardBridgeRuntime.run_client(mut app)
 	}
 	app.bootstrap_providers()

@@ -30,31 +30,31 @@ fn FeishuCardBridgeRuntime.default_client_id() string {
 	return 'local-main'
 }
 
-fn (mut app App) feishu_card_bridge_apply_env_fallbacks() {
-	if app.providers.feishu.card_bridge_ws_url.trim_space() == '' {
-		app.providers.feishu.card_bridge_ws_url = os.getenv('VHTTPD_FEISHU_CARD_BRIDGE_WS_URL').trim_space()
+fn (mut providers ProviderRuntimeHub) feishu_card_bridge_apply_env_fallbacks() {
+	if providers.feishu.card_bridge_ws_url.trim_space() == '' {
+		providers.feishu.card_bridge_ws_url = os.getenv('VHTTPD_FEISHU_CARD_BRIDGE_WS_URL').trim_space()
 	}
-	if app.providers.feishu.card_bridge_client_id.trim_space() == '' {
-		app.providers.feishu.card_bridge_client_id =
+	if providers.feishu.card_bridge_client_id.trim_space() == '' {
+		providers.feishu.card_bridge_client_id =
 			os.getenv('VHTTPD_FEISHU_CARD_BRIDGE_CLIENT_ID').trim_space()
 	}
-	if app.providers.feishu.card_bridge_client_id.trim_space() == '' {
-		app.providers.feishu.card_bridge_client_id = FeishuCardBridgeRuntime.default_client_id()
+	if providers.feishu.card_bridge_client_id.trim_space() == '' {
+		providers.feishu.card_bridge_client_id = FeishuCardBridgeRuntime.default_client_id()
 	}
-	if app.providers.feishu.card_bridge_token.trim_space() == '' {
-		app.providers.feishu.card_bridge_token = os.getenv('VHTTPD_FEISHU_CARD_BRIDGE_TOKEN').trim_space()
+	if providers.feishu.card_bridge_token.trim_space() == '' {
+		providers.feishu.card_bridge_token = os.getenv('VHTTPD_FEISHU_CARD_BRIDGE_TOKEN').trim_space()
 	}
-	if app.providers.feishu.card_bridge_target_id.trim_space() == '' {
-		app.providers.feishu.card_bridge_target_id =
+	if providers.feishu.card_bridge_target_id.trim_space() == '' {
+		providers.feishu.card_bridge_target_id =
 			os.getenv('VHTTPD_FEISHU_CARD_BRIDGE_TARGET_ID').trim_space()
 	}
-	if app.providers.feishu.card_bridge_target_id == '' {
-		app.providers.feishu.card_bridge_target_id = app.providers.feishu.card_bridge_client_id
+	if providers.feishu.card_bridge_target_id == '' {
+		providers.feishu.card_bridge_target_id = providers.feishu.card_bridge_client_id
 	}
 }
 
-fn (app &App) feishu_card_bridge_enabled() bool {
-	return app.providers.feishu.card_bridge_enabled_flag && app.providers.feishu.card_bridge_ws_url.trim_space() != ''
+fn (providers &ProviderRuntimeHub) feishu_card_bridge_enabled() bool {
+	return providers.feishu.card_bridge_enabled_flag && providers.feishu.card_bridge_ws_url.trim_space() != ''
 }
 
 fn (mut bridge FeishuCardBridgeContext) set_client_conn(client &websocket.Client) {
@@ -189,12 +189,12 @@ fn (mut bridge FeishuCardBridgeContext) take_proxy_pending(request_id string) ?c
 	return ch
 }
 
-fn (mut app App) feishu_card_bridge_dispatch_callback(app_name string, trace_id string, summary executor.FeishuRuntimeEventSummary, payload string) !executor.FeishuCardBridgeResult {
-	client_id := app.providers.feishu.card_bridge_target_id.trim_space()
+fn (mut providers ProviderRuntimeHub) feishu_card_bridge_dispatch_callback(app_name string, trace_id string, summary executor.FeishuRuntimeEventSummary, payload string) !executor.FeishuCardBridgeResult {
+	client_id := providers.feishu.card_bridge_target_id.trim_space()
 	if client_id == '' {
 		return error('bridge_target_unconfigured')
 	}
-	mut bridge := app.providers.feishu_card_bridge_context()
+	mut bridge := providers.feishu_card_bridge_context()
 	if !bridge.has_client(client_id) {
 		return error('bridge_client_unavailable:${client_id}')
 	}
@@ -245,13 +245,13 @@ fn (mut app App) feishu_card_bridge_dispatch_callback(app_name string, trace_id 
 	return error('bridge_unreachable')
 }
 
-fn (mut app App) feishu_card_bridge_proxy_request(action string, req upstream.UpstreamSendRequest) !feishu.BridgeProxyResult {
-	if !app.feishu_card_bridge_enabled() {
+fn (mut providers ProviderRuntimeHub) feishu_card_bridge_proxy_request(action string, req upstream.UpstreamSendRequest) !feishu.BridgeProxyResult {
+	if !providers.feishu_card_bridge_enabled() {
 		return error('bridge_disabled')
 	}
 	request_id := 'bridge-proxy-${time.now().unix_micro()}'
 	ch := chan feishu.BridgeProxyResult{cap: 1}
-	mut bridge := app.providers.feishu_card_bridge_context()
+	mut bridge := providers.feishu_card_bridge_context()
 	bridge.store_proxy_pending(request_id, ch)
 	defer {
 		dummy := bridge.take_proxy_pending(request_id) or { ch }
@@ -296,8 +296,8 @@ fn (mut app App) feishu_card_bridge_proxy_request(action string, req upstream.Up
 	return error('bridge_proxy_unreachable')
 }
 
-fn (mut app App) feishu_card_bridge_proxy_send(req upstream.UpstreamSendRequest) !upstream.UpstreamSendResult {
-	result := app.feishu_card_bridge_proxy_request('send', req)!
+fn (mut providers ProviderRuntimeHub) feishu_card_bridge_proxy_send(req upstream.UpstreamSendRequest) !upstream.UpstreamSendResult {
+	result := providers.feishu_card_bridge_proxy_request('send', req)!
 	return upstream.UpstreamSendResult{
 		ok:         result.ok
 		provider:   if result.provider.trim_space() != '' { result.provider } else { 'feishu' }
@@ -307,8 +307,8 @@ fn (mut app App) feishu_card_bridge_proxy_send(req upstream.UpstreamSendRequest)
 	}
 }
 
-fn (mut app App) feishu_card_bridge_proxy_append(req upstream.UpstreamSendRequest) !upstream.UpstreamUpdateResult {
-	result := app.feishu_card_bridge_proxy_request('append', req)!
+fn (mut providers ProviderRuntimeHub) feishu_card_bridge_proxy_append(req upstream.UpstreamSendRequest) !upstream.UpstreamUpdateResult {
+	result := providers.feishu_card_bridge_proxy_request('append', req)!
 	return upstream.UpstreamUpdateResult{
 		ok:         result.ok
 		provider:   if result.provider.trim_space() != '' { result.provider } else { 'feishu' }
@@ -318,8 +318,8 @@ fn (mut app App) feishu_card_bridge_proxy_append(req upstream.UpstreamSendReques
 	}
 }
 
-fn (mut app App) feishu_card_bridge_proxy_finish(req upstream.UpstreamSendRequest) !upstream.UpstreamUpdateResult {
-	result := app.feishu_card_bridge_proxy_request('finish', req)!
+fn (mut providers ProviderRuntimeHub) feishu_card_bridge_proxy_finish(req upstream.UpstreamSendRequest) !upstream.UpstreamUpdateResult {
+	result := providers.feishu_card_bridge_proxy_request('finish', req)!
 	return upstream.UpstreamUpdateResult{
 		ok:         result.ok
 		provider:   if result.provider.trim_space() != '' { result.provider } else { 'feishu' }
@@ -329,8 +329,8 @@ fn (mut app App) feishu_card_bridge_proxy_finish(req upstream.UpstreamSendReques
 	}
 }
 
-fn (mut app App) feishu_card_bridge_proxy_fail(req upstream.UpstreamSendRequest) !upstream.UpstreamUpdateResult {
-	result := app.feishu_card_bridge_proxy_request('fail', req)!
+fn (mut providers ProviderRuntimeHub) feishu_card_bridge_proxy_fail(req upstream.UpstreamSendRequest) !upstream.UpstreamUpdateResult {
+	result := providers.feishu_card_bridge_proxy_request('fail', req)!
 	return upstream.UpstreamUpdateResult{
 		ok:         result.ok
 		provider:   if result.provider.trim_space() != '' { result.provider } else { 'feishu' }
@@ -340,8 +340,8 @@ fn (mut app App) feishu_card_bridge_proxy_fail(req upstream.UpstreamSendRequest)
 	}
 }
 
-fn (mut app App) feishu_card_bridge_proxy_update(req upstream.UpstreamSendRequest) !upstream.UpstreamUpdateResult {
-	result := app.feishu_card_bridge_proxy_request('update', req)!
+fn (mut providers ProviderRuntimeHub) feishu_card_bridge_proxy_update(req upstream.UpstreamSendRequest) !upstream.UpstreamUpdateResult {
+	result := providers.feishu_card_bridge_proxy_request('update', req)!
 	return upstream.UpstreamUpdateResult{
 		ok:         result.ok
 		provider:   if result.provider.trim_space() != '' { result.provider } else { 'feishu' }

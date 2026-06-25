@@ -79,7 +79,7 @@ fn (mut a InProcTestApp) admin_runtime_snapshot() executor.AdminRuntimeSummary {
 	return executor.AdminRuntimeSummary{}
 }
 
-fn (mut a InProcTestApp) feishu_card_bridge_dispatch_callback(_app_name string, _trace_id string, _summary executor.FeishuRuntimeEventSummary, _payload string) !executor.FeishuCardBridgeResult {
+fn (mut a InProcTestApp) provider_bridge_dispatch_callback(_provider string, _app_name string, _trace_id string, _summary executor.FeishuRuntimeEventSummary, _payload string) !executor.FeishuCardBridgeResult {
 	return error('inproc_test_app_no_feishu')
 }
 

@@ -110,7 +110,7 @@ fn feishu_card_bridge_client_close_cb(mut _ws websocket.Client, code int, reason
 fn FeishuCardBridgeRuntime.client_heartbeat_loop(mut app App) {
 	for {
 		time.sleep(15 * time.second)
-		if !app.feishu_card_bridge_enabled() {
+		if !app.providers.feishu_card_bridge_enabled() {
 			continue
 		}
 		request_id := 'bridge-hb-${time.now().unix_micro()}'

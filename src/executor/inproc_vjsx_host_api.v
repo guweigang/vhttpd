@@ -484,7 +484,8 @@ fn InProcVjsxHostApi.bridge_dispatch_builder(mut state VjsxExecutorState, idx in
 			mut app := app_ref
 			summary := FeishuRuntimeEventSummary.from_payload(req.payload)
 			trace_id := if req.trace_id.trim_space() != '' { req.trace_id } else { request_trace_id }
-			result := app.feishu_card_bridge_dispatch_callback(req.app, trace_id, FeishuRuntimeEventSummary{
+			result := app.provider_bridge_dispatch_callback('feishu', req.app, trace_id,
+				FeishuRuntimeEventSummary{
 				event_id:        summary.event_id
 				event_kind:      if summary.event_kind != '' { summary.event_kind } else { 'action' }
 				event_type:      if req.event_type.trim_space() != '' {

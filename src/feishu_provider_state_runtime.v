@@ -45,7 +45,7 @@ fn (app &App) feishu_runtime_ready() bool {
 }
 
 fn (app &App) feishu_runtime_bridge_proxy_only() bool {
-	return app.feishu_card_bridge_enabled() && app.providers.feishu.app_names().len == 0
+	return app.providers.feishu_card_bridge_enabled() && app.providers.feishu.app_names().len == 0
 }
 
 fn (app &App) feishu_runtime_callback_token_valid(app_name string, payload string) bool {

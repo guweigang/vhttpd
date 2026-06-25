@@ -29,7 +29,7 @@ mut:
 	// Platform & Dispatcher methods
 	emit(kind string, fields map[string]string)
 	admin_runtime_snapshot() AdminRuntimeSummary
-	feishu_card_bridge_dispatch_callback(app_name string, trace_id string, summary FeishuRuntimeEventSummary, payload string) !FeishuCardBridgeResult
+	provider_bridge_dispatch_callback(provider string, app_name string, trace_id string, summary FeishuRuntimeEventSummary, payload string) !FeishuCardBridgeResult
 	execute_websocket_dispatch_commands_result(commands []transport.WorkerWebSocketFrame) transport.WorkerWebSocketDispatchCommandsResult
 	run_command_envelopes(request_id string, dispatch_ctx DispatchContext, commands []transport.WorkerWebSocketUpstreamCommand) string
 }
@@ -59,7 +59,7 @@ pub fn (mut a NoOpAppFacade) worker_backend_dispatch_websocket_upstream(_req tra
 pub fn (mut a NoOpAppFacade) worker_backend_dispatch_websocket_event(_frame transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse { return error('noop') }
 pub fn (mut a NoOpAppFacade) emit(_kind string, _fields map[string]string) {}
 pub fn (mut a NoOpAppFacade) admin_runtime_snapshot() AdminRuntimeSummary { return AdminRuntimeSummary{} }
-pub fn (mut a NoOpAppFacade) feishu_card_bridge_dispatch_callback(_app_name string, _trace_id string, _summary FeishuRuntimeEventSummary, _payload string) !FeishuCardBridgeResult { return error('noop') }
+pub fn (mut a NoOpAppFacade) provider_bridge_dispatch_callback(_provider string, _app_name string, _trace_id string, _summary FeishuRuntimeEventSummary, _payload string) !FeishuCardBridgeResult { return error('noop') }
 pub fn (mut a NoOpAppFacade) execute_websocket_dispatch_commands_result(_commands []transport.WorkerWebSocketFrame) transport.WorkerWebSocketDispatchCommandsResult { return transport.WorkerWebSocketDispatchCommandsResult{} }
 pub fn (mut a NoOpAppFacade) run_command_envelopes(_request_id string, _dispatch_ctx DispatchContext, _commands []transport.WorkerWebSocketUpstreamCommand) string { return '' }
 

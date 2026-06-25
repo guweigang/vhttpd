@@ -86,8 +86,8 @@ fn (mut app App) feishu_callback_by_app(mut ctx Context, raw_app string) veb.Res
 	log.info('[feishu][debug] callback.payload.${summary.event_type}: ${payload}')
 	if summary.event_type == 'card.action.trigger'
 		&& app.providers.feishu.card_bridge_target_id.trim_space() != '' {
-		bridge_resp := app.feishu_card_bridge_dispatch_callback(app_name, trace_id, summary,
-			payload) or {
+		bridge_resp := app.providers.feishu_card_bridge_dispatch_callback(app_name, trace_id,
+			summary, payload) or {
 			log.error('[feishu] ❌ bridge callback dispatch failed: ${err}')
 			return feishu_admin_error(req_ctx, mut app, mut ctx, 502,
 				'feishu_callback_bridge_error')
