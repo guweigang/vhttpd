@@ -19,15 +19,19 @@ fn HttpIngressRuntime.route(mut app App, mut ctx Context, method string, path st
 		return result
 	}
 	if !app.has_http_logic_executor() {
-		start_ms := time.now().unix_milli()
-		req_id := resolve_request_id(ctx, target)
-		trace_id := resolve_trace_id(ctx, target)
-		remote_addr := if isnil(ctx.conn) { '' } else { ctx.conn.peer_ip() or { '' } }
-		return HttpResponseRuntime.delivery_outcome(mut app, mut ctx, http_ingress_request(method,
-			target, target, '', remote_addr, req_id, trace_id, start_ms), dispatch.response_outcome(404,
-			map[string]string{}, 'Not Found'), none)
+		return HttpIngressRuntime.no_logic_executor_response(mut app, mut ctx, method, target)
 	}
 	return HttpIngressRuntime.handle(mut app, mut ctx, method, target, '')
+}
+
+fn HttpIngressRuntime.no_logic_executor_response(mut app App, mut ctx Context, method string, target string) veb.Result {
+	start_ms := time.now().unix_milli()
+	req_id := resolve_request_id(ctx, target)
+	trace_id := resolve_trace_id(ctx, target)
+	remote_addr := if isnil(ctx.conn) { '' } else { ctx.conn.peer_ip() or { '' } }
+	return HttpResponseRuntime.delivery_outcome(mut app, mut ctx, http_ingress_request(method,
+		target, target, '', remote_addr, req_id, trace_id, start_ms), dispatch.response_outcome(404,
+		map[string]string{}, 'Not Found'), none)
 }
 
 fn proxy_worker_response(mut app App, mut ctx Context, method string, path string, body_on_head string) veb.Result {
