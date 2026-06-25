@@ -71,7 +71,7 @@ fn HttpPipelineRuntime.try_handle_matched_pipeline(mut app App, mut ctx Context,
 				req.normalized_target, req.query, req.body_on_head, req.remote_addr, req.req_id,
 				req.trace_id, req.start_ms, rule, mut terminal_adapter)
 		}
-		root_dir := app.pipelines.http.static_root(rule)
+		root_dir := app.pipelines.http_static_root(rule)
 		file_path := os.join_path(root_dir, req.normalized_target.trim_left('/'))
 		if os.exists(file_path) && !os.is_dir(file_path) {
 			mut file_headers := map[string]string{}

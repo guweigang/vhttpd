@@ -215,7 +215,7 @@ fn HttpResponseRuntime.normal(mut app App, mut ctx Context, req HttpIngressReque
 				} else {
 					ctype := delivery.headers['content-type'] or { 'text/plain; charset=utf-8' }
 					cache_control := delivery.headers['cache-control'] or { rule.cache_control }
-					app.pipelines.http.response_cache_set(mut app.transport.cache, rule, req.method,
+					app.pipelines.http_response_cache_set(mut app.transport.cache, rule, req.method,
 						req.dispatch_path, EdgeCachedHttpResponse{
 						status:        delivery.status
 						content_type:  ctype

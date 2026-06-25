@@ -69,12 +69,12 @@ fn HttpIngressRuntime.handle(mut app App, mut ctx Context, method string, path s
 		request_id:    req_id
 		trace_id:      trace_id
 		exchange_id:   req_id
-		ingress:       'listener:${app.pipelines.http.listener_id}'
+		ingress:       'listener:${app.pipelines.http_listener_id()}'
 		created_at_ms: start_ms
 	})
 
 	if method.to_upper() in ['GET', 'HEAD'] {
-		if location := directory_slash_redirect_location(app.pipelines.http.document_root,
+		if location := directory_slash_redirect_location(app.pipelines.http_document_root(),
 			normalized_target, query_string)
 		{
 			log.info('[http] ⇠ directory slash redirect location=${location} trace_id=${trace_id}')
@@ -86,7 +86,7 @@ fn HttpIngressRuntime.handle(mut app App, mut ctx Context, method string, path s
 	}
 
 	// 1. Match the compiled RuntimePlan pipeline for this HTTP exchange.
-	matched_rule := app.pipelines.http.match_compiled_http_exchange(compiled_exchange)
+	matched_rule := app.pipelines.match_http_exchange(compiled_exchange)
 
 	if rule := matched_rule {
 		if result := HttpPipelineRuntime.try_handle_matched_pipeline(mut app, mut ctx, rule, MatchedHttpPipelineRequest{
@@ -114,7 +114,7 @@ fn HttpIngressRuntime.handle(mut app App, mut ctx Context, method string, path s
 	if rule := matched_rule {
 		if rule.response_cache_ttl_ms > 0 && app.transport.cache.enabled
 			&& route_response_cache_request_bypass_reason(rule, method, ctx.req) == '' {
-			if cached := app.pipelines.http.response_cache_get(mut app.transport.cache, rule, method,
+			if cached := app.pipelines.http_response_cache_get(mut app.transport.cache, rule, method,
 				dispatch_path)
 			{
 				return HttpResponseRuntime.cache_hit(mut app, mut ctx, ingress_req, cached, rule)
