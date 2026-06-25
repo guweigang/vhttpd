@@ -33,7 +33,7 @@ fn HttpIngressRuntime.route(mut app App, mut ctx Context, method string, path st
 	if result := ProtocolIngressRuntime.try_route_http(mut app, mut ctx, req.method, req.target) {
 		return result
 	}
-	if !app.has_http_logic_executor() {
+	if !app.engines.has_http_logic_executor() {
 		return HttpIngressRuntime.no_logic_executor_response(mut app, mut ctx, req.method, req.target)
 	}
 	return HttpIngressRuntime.handle(mut app, mut ctx, req.method, req.target, '')
