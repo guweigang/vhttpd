@@ -6,25 +6,23 @@ import codex
 
 // ── Codex Provider Runtime ──────────────────────────────────────────────
 
-fn (mut app App) codex_runtime_ensure_instance(instance string) codex.ProviderRuntime {
+fn (mut hub ProviderRuntimeHub) codex_runtime_ensure_instance(instance string) codex.ProviderRuntime {
 	resolved := codex.ProviderRuntime.normalize_instance(instance)
-	app.providers.codex.mu.@lock()
+	hub.codex.mu.@lock()
 	defer {
-		app.providers.codex.mu.unlock()
+		hub.codex.mu.unlock()
 	}
 	if resolved == 'main' {
-		if app.providers.codex.runtime.instance == '' {
-			app.providers.codex.runtime.instance = 'main'
+		if hub.codex.runtime.instance == '' {
+			hub.codex.runtime.instance = 'main'
 		}
-		return app.providers.codex.runtime
+		return hub.codex.runtime
 	}
-	if resolved in app.providers.codex.instances {
-		return app.providers.codex.instances[resolved] or {
-			app.providers.codex.runtime.for_instance(resolved)
-		}
+	if resolved in hub.codex.instances {
+		return hub.codex.instances[resolved] or { hub.codex.runtime.for_instance(resolved) }
 	}
-	mut next := app.providers.codex.runtime.for_instance(resolved)
-	if spec := app.provider_instance_get('codex', resolved) {
+	mut next := hub.codex.runtime.for_instance(resolved)
+	if spec := hub.provider_instance_get('codex', resolved) {
 		if spec.config_json.trim_space() != '' {
 			cfg := json.decode(config.CodexConfig, spec.config_json) or { config.CodexConfig{} }
 			if cfg.url.trim_space() != '' {
@@ -53,8 +51,12 @@ fn (mut app App) codex_runtime_ensure_instance(instance string) codex.ProviderRu
 			}
 		}
 	}
-	app.providers.codex.instances[resolved] = next
+	hub.codex.instances[resolved] = next
 	return next
+}
+
+fn (mut app App) codex_runtime_ensure_instance(instance string) codex.ProviderRuntime {
+	return app.providers.codex_runtime_ensure_instance(instance)
 }
 
 fn (hub ProviderRuntimeHub) codex_runtime_known_instances() []string {

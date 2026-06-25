@@ -19,32 +19,48 @@ fn (mut app App) codex_provider_pull_url(instance string) !string {
 	return rt.pull_url()
 }
 
-fn (mut app App) codex_provider_on_connecting(instance string) {
-	mut rt := app.codex_runtime_ensure_instance(instance)
+fn (mut hub ProviderRuntimeHub) codex_provider_reconnect_delay_ms(instance string) int {
+	rt := hub.codex_runtime_ensure_instance(instance)
+	return rt.reconnect_delay_ms_value()
+}
+
+fn (mut app App) codex_provider_reconnect_delay_ms(instance string) int {
+	return app.providers.codex_provider_reconnect_delay_ms(instance)
+}
+
+fn (mut hub ProviderRuntimeHub) codex_provider_on_connecting(instance string) {
+	mut rt := hub.codex_runtime_ensure_instance(instance)
 	log.info('[codex] connecting instance=${rt.instance} to ${rt.url} ...')
 	rt.note_connecting()
-	app.providers.codex.update(instance, rt)
+	hub.codex.update(instance, rt)
+}
+
+fn (mut app App) codex_provider_on_connecting(instance string) {
+	app.providers.codex_provider_on_connecting(instance)
+}
+
+fn (mut hub ProviderRuntimeHub) codex_provider_on_connected(instance string, ws_url string) {
+	log.info('[codex] ✅ connected instance=${codex.ProviderRuntime.normalize_instance(instance)} to ${ws_url}')
+	mut rt := hub.codex_runtime_ensure_instance(instance)
+	rt.note_connected(ws_url)
+	hub.codex.update(instance, rt)
 }
 
 fn (mut app App) codex_provider_on_connected(instance string, ws_url string) {
-	log.info('[codex] ✅ connected instance=${codex.ProviderRuntime.normalize_instance(instance)} to ${ws_url}')
-	mut rt := app.codex_runtime_ensure_instance(instance)
-	rt.note_connected(ws_url)
-	app.providers.codex.update(instance, rt)
+	app.providers.codex_provider_on_connected(instance, ws_url)
 }
 
-fn (mut app App) codex_provider_on_disconnected(instance string, reason string) {
+fn (mut hub ProviderRuntimeHub) codex_provider_on_disconnected(instance string, reason string) {
 	log.error('[codex] ❌ disconnected instance=${codex.ProviderRuntime.normalize_instance(instance)}: ${reason}')
-	mut rt := app.codex_runtime_ensure_instance(instance)
+	mut rt := hub.codex_runtime_ensure_instance(instance)
 	rt.note_disconnected(reason)
-	app.providers.codex.update(instance, rt)
+	hub.codex.update(instance, rt)
 
 	// Connections will be cleaned up by PHP as needed or timed out
 }
 
-fn (mut app App) codex_provider_reconnect_delay_ms(instance string) int {
-	rt := app.codex_runtime_ensure_instance(instance)
-	return rt.reconnect_delay_ms_value()
+fn (mut app App) codex_provider_on_disconnected(instance string, reason string) {
+	app.providers.codex_provider_on_disconnected(instance, reason)
 }
 
 fn (mut hub ProviderRuntimeHub) codex_runtime_config_snapshot(instance string) codex.AdminConfigSnapshot {
