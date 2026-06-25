@@ -21,7 +21,7 @@ mut:
 	providers    ProviderRuntimeHub
 	engines      EngineRuntime
 	assets       config.AssetsRuntime
-	http_routing HttpRoutingRuntime
+	pipelines    PipelineRuntime
 }
 
 struct ControlPlaneRuntime {

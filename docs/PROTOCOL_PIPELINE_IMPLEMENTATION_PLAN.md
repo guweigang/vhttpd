@@ -992,8 +992,10 @@ Batches:
 1. Add Exchange, capability, action, adapter, and pipeline contracts. (contract slice complete)
 2. Implement HTTP ingress normalization. (pure value-to-Exchange conversion and basic HTTP matcher complete)
 3. Wrap PHP worker, PHP CGI, static, upload, fixed response, and reject as adapters. (fixed-response and reject terminal slices complete; runtime-owned adapters now have pure descriptors and capability projection)
-4. Execute existing HTTP routes through compiled pipelines. (started with terminal fixed-response delivery outcome rendering)
-5. Preserve cache and security policies through named policy plans.
+4. Execute existing HTTP routes through compiled pipelines. (compiled route selection and matched pipeline execution are active for static, upload, fixed response, reject, and dynamic worker dispatch)
+5. Preserve cache and security policies through named policy plans. (cache TTL/bypass, response headers, body limits, required headers, and denied query checks project into runtime routes)
+6. Move HTTP pipeline state under `PipelineRuntime`. (initial ownership slice complete: `DataPlaneRuntime.pipelines.http` owns HTTP routing state)
+7. Keep WordPress as the HTTP vertical validation case. (strict V2 example added with resource, engine, adapter, policy, transform, and pipeline declarations)
 
 Acceptance:
 

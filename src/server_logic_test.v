@@ -2068,23 +2068,23 @@ fn test_build_app_runtime_projects_executor_plan_into_app_state() {
 	assert app.transport.db.database == 'plan_db'
 	assert app.transport.cache.enabled
 	assert app.transport.cache.socket == '/tmp/plan-cache.sock'
-	assert app.http_routing.rules.len == 2
-	assert app.http_routing.listener_id == 'default'
-	assert app.http_routing.rules[1].pipeline_id != ''
-	assert app.http_routing.rules[1].ingress_id == 'listener:default'
-	assert app.http_routing.rules[1].policy_refs.len > 0
-	assert app.http_routing.rules[1].policy_refs.any(it.starts_with('policy:'))
-	assert app.http_routing.rules[1].match_method == ['GET']
-	assert app.http_routing.rules[1].cache_control == 'public, max-age=31536000, immutable'
-	assert app.http_routing.rules[1].response_cache_ttl_ms == 60000
-	assert app.http_routing.rules[1].cache_bypass_cookie_patterns == ['session_*']
-	assert app.http_routing.rules[1].cache_ignore_cookie_patterns == ['test_cookie']
-	assert app.http_routing.rules[1].response_headers['X-Content-Type-Options'] == 'nosniff'
-	assert app.http_routing.rules[1].max_body_bytes == 1048576
-	assert app.http_routing.rules[1].required_headers['X-API-Key'] == '*'
-	assert app.http_routing.rules[1].denied_query_patterns['debug'] == '*'
-	assert app.http_routing.rules[1].upload_dir == '/tmp/uploads'
-	assert app.http_routing.rules[1].on_completed == 'vjsx:test.upload.completed'
+	assert app.pipelines.http.rules.len == 2
+	assert app.pipelines.http.listener_id == 'default'
+	assert app.pipelines.http.rules[1].pipeline_id != ''
+	assert app.pipelines.http.rules[1].ingress_id == 'listener:default'
+	assert app.pipelines.http.rules[1].policy_refs.len > 0
+	assert app.pipelines.http.rules[1].policy_refs.any(it.starts_with('policy:'))
+	assert app.pipelines.http.rules[1].match_method == ['GET']
+	assert app.pipelines.http.rules[1].cache_control == 'public, max-age=31536000, immutable'
+	assert app.pipelines.http.rules[1].response_cache_ttl_ms == 60000
+	assert app.pipelines.http.rules[1].cache_bypass_cookie_patterns == ['session_*']
+	assert app.pipelines.http.rules[1].cache_ignore_cookie_patterns == ['test_cookie']
+	assert app.pipelines.http.rules[1].response_headers['X-Content-Type-Options'] == 'nosniff'
+	assert app.pipelines.http.rules[1].max_body_bytes == 1048576
+	assert app.pipelines.http.rules[1].required_headers['X-API-Key'] == '*'
+	assert app.pipelines.http.rules[1].denied_query_patterns['debug'] == '*'
+	assert app.pipelines.http.rules[1].upload_dir == '/tmp/uploads'
+	assert app.pipelines.http.rules[1].on_completed == 'vjsx:test.upload.completed'
 	cgi_worker := app.engines.additional['php-cgi'] or { panic('missing php-cgi worker') }
 	assert cgi_worker.worker_backend.queue_capacity == 7
 	assert cgi_worker.worker_backend.queue_timeout_ms == 89

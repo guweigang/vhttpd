@@ -195,7 +195,7 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 				card_bridge_target_id:      plan_provider_settings.bridge.target_id
 			}
 		}
-		http_routing:  HttpRoutingRuntime.new(plan_listener_id, runtime_routes,
+		pipelines:     PipelineRuntime.new(plan_listener_id, runtime_routes,
 			build_cfg.assets_root_real, build_cfg.workdir, executor_plan.bootstrap.worker_env,
 			add_workers)
 	}
