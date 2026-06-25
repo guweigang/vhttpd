@@ -21,15 +21,8 @@ fn HttpIngressRuntime.route(mut app App, mut ctx Context, method string, path st
 	if result := app.openai_try_handle(mut ctx, method, target, req_id, trace_id, start_ms) {
 		return result
 	}
-	request_path, _ := transport.normalize_request_target(target)
-	normalized_target := transport.normalize_path(request_path)
-	if normalized_target == '/mcp' {
-		match method {
-			'GET' { return app.mcp_get(mut ctx) }
-			'POST' { return app.mcp_post(mut ctx) }
-			'DELETE' { return app.mcp_delete(mut ctx) }
-			else {}
-		}
+	if result := ProtocolIngressRuntime.try_route_http(mut app, mut ctx, method, target) {
+		return result
 	}
 	if !app.has_http_logic_executor() {
 		remote_addr := if isnil(ctx.conn) { '' } else { ctx.conn.peer_ip() or { '' } }
