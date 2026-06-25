@@ -24,19 +24,19 @@ pub mut:
 
 struct HttpResponseRuntime {}
 
-fn HttpResponseRuntime.cache_hit(mut app App, mut ctx Context, req HttpIngressRequest, cached EdgeCachedHttpResponse, rule RuntimeRouteRule) veb.Result {
+fn HttpResponseRuntime.cache_hit(mut app App, mut ctx Context, req HttpIngressRequest, hit HttpResponseCacheHit) veb.Result {
 	log.info('[http] ⇠ route response cache hit method=${req.method.to_upper()} path=${req.path} trace_id=${req.trace_id} request_id=${req.request_id}')
 	mut headers := {
-		'content-type':   cached.content_type
+		'content-type':   hit.cached.content_type
 		'x-vhttpd-cache': 'hit'
 	}
-	if cached.cache_control != '' {
-		headers['cache-control'] = cached.cache_control
+	if hit.cached.cache_control != '' {
+		headers['cache-control'] = hit.cached.cache_control
 	}
-	return HttpResponseRuntime.delivery_outcome(mut app, mut ctx, req, dispatch.outcome_with_metadata(dispatch.response_outcome(cached.status,
-		headers, cached.body), {
+	return HttpResponseRuntime.delivery_outcome(mut app, mut ctx, req, dispatch.outcome_with_metadata(dispatch.response_outcome(hit.cached.status,
+		headers, hit.cached.body), {
 		'cache': 'hit'
-	}), rule)
+	}), hit.rule)
 }
 
 fn HttpResponseRuntime.dispatch_error(mut app App, mut ctx Context, req HttpIngressRequest, err_msg string) veb.Result {
