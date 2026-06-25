@@ -2,6 +2,7 @@ module main
 
 import cachex
 import dispatch
+import executor
 import net.http
 import worker
 
@@ -93,6 +94,18 @@ fn (rt PipelineRuntime) http_ingress_request(method string, path string, plan Ht
 		req.ingress_id = rule.ingress_id
 	}
 	return req
+}
+
+fn (rt PipelineRuntime) http_logic_dispatch_request(method string, original_path string, plan HttpPipelineDispatchPlan, req http.Request, remote_addr string, trace_id string, request_id string) executor.HttpLogicDispatchRequest {
+	return executor.HttpLogicDispatchRequest{
+		method:        method
+		path:          plan.target
+		original_path: original_path
+		req:           req
+		remote_addr:   remote_addr
+		trace_id:      trace_id
+		request_id:    request_id
+	}
 }
 
 fn (rt PipelineRuntime) http_response_cache_hit(mut cache cachex.Runtime, plan HttpPipelineDispatchPlan, method string, req http.Request) ?HttpResponseCacheHit {

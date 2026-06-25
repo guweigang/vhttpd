@@ -1,7 +1,6 @@
 module main
 
 import dispatch
-import executor
 import log
 import time
 import upstream.transport
@@ -121,15 +120,11 @@ fn HttpIngressRuntime.handle(mut app App, mut ctx Context, method string, path s
 		}
 	}
 	mut facade := app.as_facade()
-	mut outcome := engine_selection.logic_executor.dispatch_http(mut facade, executor.HttpLogicDispatchRequest{
-		method:        method
-		path:          dispatch_plan.target
-		original_path: path
-		req:           ctx.req
-		remote_addr:   remote_addr
-		trace_id:      trace_id
-		request_id:    req_id
-	}) or { return HttpResponseRuntime.dispatch_error(mut app, mut ctx, ingress_req, err.msg()) }
+	dispatch_req := app.pipelines.http_logic_dispatch_request(method, path, dispatch_plan, ctx.req,
+		remote_addr, trace_id, req_id)
+	mut outcome := engine_selection.logic_executor.dispatch_http(mut facade, dispatch_req) or {
+		return HttpResponseRuntime.dispatch_error(mut app, mut ctx, ingress_req, err.msg())
+	}
 	return HttpResponseRuntime.render(mut app, mut ctx, ingress_req, mut outcome, dispatch_plan)
 }
 
