@@ -2,6 +2,7 @@ module main
 
 import cachex
 import dispatch
+import net.http
 import worker
 
 struct HttpPipelineMatchRequest {
@@ -53,7 +54,17 @@ fn (rt PipelineRuntime) http_static_root(rule RuntimeRouteRule) string {
 	return rt.http.static_root(rule)
 }
 
-fn (rt PipelineRuntime) http_response_cache_get(mut cache cachex.Runtime, rule RuntimeRouteRule, method string, target string) ?EdgeCachedHttpResponse {
+fn (rt PipelineRuntime) http_dispatch_target(rule ?RuntimeRouteRule, original_target string) string {
+	if matched := rule {
+		return matched.rewrite_target(original_target)
+	}
+	return original_target
+}
+
+fn (rt PipelineRuntime) http_response_cache_hit(mut cache cachex.Runtime, rule RuntimeRouteRule, method string, target string, req http.Request) ?EdgeCachedHttpResponse {
+	if route_response_cache_request_bypass_reason(rule, method, req) != '' {
+		return none
+	}
 	return rt.http.response_cache_get(mut cache, rule, method, target)
 }
 

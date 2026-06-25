@@ -102,18 +102,13 @@ fn HttpIngressRuntime.handle(mut app App, mut ctx Context, method string, path s
 		}
 	}
 
-	mut dispatch_path := path
-	if rule := matched_rule {
-		dispatch_path = rule.rewrite_target(path)
-	}
+	dispatch_path := app.pipelines.http_dispatch_target(matched_rule, path)
 	ingress_req := http_ingress_request_for_rule(method, path, dispatch_path, body_on_head,
 		remote_addr, req_id, trace_id, start_ms, matched_rule)
 	if rule := matched_rule {
-		if rule.response_cache_ttl_ms > 0 && app.transport.cache.enabled
-			&& route_response_cache_request_bypass_reason(rule, method, ctx.req) == '' {
-			if cached := app.pipelines.http_response_cache_get(mut app.transport.cache, rule, method,
-				dispatch_path)
-			{
+		if rule.response_cache_ttl_ms > 0 && app.transport.cache.enabled {
+			if cached := app.pipelines.http_response_cache_hit(mut app.transport.cache, rule, method,
+				dispatch_path, ctx.req) {
 				return HttpResponseRuntime.cache_hit(mut app, mut ctx, ingress_req, cached, rule)
 			}
 		}
