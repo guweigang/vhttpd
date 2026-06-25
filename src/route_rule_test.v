@@ -485,6 +485,15 @@ fn test_wordpress_v2_example_projects_http_pipelines_to_runtime_routes() {
 	assert asset.root == '/Users/guweigang/wwwroot/wordpress'
 	assert asset.cache_control == 'public, max-age=31536000, immutable'
 
+	deny_core := routes.filter(it.pipeline_id == 'security.deny-core-files')[0]
+	assert deny_core.executor == 'none'
+	assert deny_core.status == 403
+	assert deny_core.matches('/wp-config.php')
+
+	compat_entrypoint := routes.filter(it.pipeline_id == 'wordpress.compat-entrypoints')[0]
+	assert compat_entrypoint.executor == 'php-cgi'
+	assert compat_entrypoint.matches('/wp-login.php')
+
 	rest := routes.filter(it.pipeline_id == 'rest.pretty-route')[0]
 	assert rest.executor == 'php-cgi'
 	assert rest.rewrite == '/index.php?rest_route=$path_remainder'

@@ -109,3 +109,8 @@ pub fn (mut app App) proxy_delete(mut ctx Context, path string) veb.Result {
 pub fn (mut app App) proxy_head(mut ctx Context, path string) veb.Result {
 	return HttpIngressRuntime.route(mut app, mut ctx, 'HEAD', path)
 }
+
+@['/:path...'; options]
+pub fn (mut app App) proxy_options(mut ctx Context, path string) veb.Result {
+	return HttpIngressRuntime.route(mut app, mut ctx, 'OPTIONS', path)
+}

@@ -134,6 +134,10 @@ completed_pipeline = "pipeline:upload.completed"
 kind = "fixed-response"
 options = { status = "204", body = "" }
 
+[adapters.forbidden]
+kind = "fixed-response"
+options = { status = "403", body = "Forbidden" }
+
 [policies.limits.wordpress-request]
 max_body_bytes = 1048576
 
@@ -236,11 +240,77 @@ policies = ["policy:cache/asset-short"]
 egress = "adapter:wordpress-static"
 
 [[pipelines]]
+id = "security.deny-core-files"
+group = "wordpress.security"
+ingress = "listener:web"
+match.paths = [
+    "/wp-config.php",
+    "/wp-config-sample.php",
+    "/wp-load.php",
+    "/wp-settings.php",
+    "/wp-blog-header.php"
+]
+egress = "adapter:forbidden"
+
+[[pipelines]]
+id = "security.deny-upload-php"
+group = "wordpress.security"
+ingress = "listener:web"
+match.path_regexp = "^/wp-content/uploads/.*\\.php$"
+egress = "adapter:forbidden"
+
+[[pipelines]]
+id = "security.deny-includes-php"
+group = "wordpress.security"
+ingress = "listener:web"
+match.path_regexp = "^/wp-includes/.*\\.php$"
+egress = "adapter:forbidden"
+
+[[pipelines]]
+id = "security.deny-admin-includes-php"
+group = "wordpress.security"
+ingress = "listener:web"
+match.path_regexp = "^/wp-admin/includes/.*\\.php$"
+egress = "adapter:forbidden"
+
+[[pipelines]]
 id = "rest.query-route"
 group = "wordpress.rest"
 ingress = "listener:web"
 match.paths = ["/index.php"]
 match.query = { rest_route = "*" }
+egress = "adapter:wordpress-cgi"
+
+[[pipelines]]
+id = "wordpress.compat-admin"
+group = "wordpress.dynamic.compat"
+ingress = "listener:web"
+match.paths = ["/wp-admin/*"]
+policies = [
+    "policy:limits/wordpress-request",
+    "policy:cache/private-no-store"
+]
+egress = "adapter:wordpress-cgi"
+
+[[pipelines]]
+id = "wordpress.compat-entrypoints"
+group = "wordpress.dynamic.compat"
+ingress = "listener:web"
+match.paths = [
+    "/wp-login.php",
+    "/wp-comments-post.php",
+    "/wp-cron.php",
+    "/xmlrpc.php",
+    "/wp-trackback.php",
+    "/wp-links-opml.php",
+    "/wp-activate.php",
+    "/wp-signup.php",
+    "/wp-mail.php"
+]
+policies = [
+    "policy:limits/wordpress-request",
+    "policy:cache/private-no-store"
+]
 egress = "adapter:wordpress-cgi"
 
 [[pipelines]]

@@ -199,10 +199,13 @@ fn test_load_runtime_plan_file_accepts_wordpress_v2_example() {
 	assert plan.engines['php-cgi'].kind == 'php-cgi'
 	assert plan.adapters['wordpress-worker'].engine?.str() == 'engine:php'
 	assert plan.adapters['wordpress-cgi'].engine?.str() == 'engine:php-cgi'
+	assert plan.adapters['forbidden'].options.strings['status'] == '403'
 	assert plan.adapters['vhttpd-upload'].options.strings['completed_pipeline'] == 'pipeline:upload.completed'
 	assert plan.policies['cache/front-page'].options.ints['ttl_ms'] == 30000
 	assert plan.policies['response/wp-json-options'].options.string_maps['headers']['Access-Control-Allow-Methods'] == 'GET, HEAD, OPTIONS'
 	assert plan.transforms['wp-json-rewrite'].options.strings['strip_prefix'] == '/wp-json'
+	assert plan.pipeline('security.deny-core-files')?.egress.str() == 'adapter:forbidden'
+	assert plan.pipeline('wordpress.compat-entrypoints')?.egress.str() == 'adapter:wordpress-cgi'
 	assert plan.pipeline('wordpress.front-page')?.egress.str() == 'adapter:wordpress-worker'
 	assert plan.pipeline('rest.pretty-route')?.transforms[0].str() == 'transform:wp-json-rewrite'
 	assert plan.pipeline('upload.completed')?.transforms[0].str() == 'transform:upload-completed'
