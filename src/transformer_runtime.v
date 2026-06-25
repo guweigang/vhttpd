@@ -23,6 +23,12 @@ mut:
 	registry TransformerRuntimeRegistry
 }
 
+struct TransformPipelineResult {
+	action    dispatch.TransformAction
+	halted    bool
+	transform string
+}
+
 struct NativeTransformer {
 	id           string
 	handler      string
@@ -78,6 +84,30 @@ fn (hub TransformerRuntimeHub) entry(id string) ?TransformerRuntimeEntry {
 
 fn (mut hub TransformerRuntimeHub) transform(id string, mut services dispatch.RuntimeServices, mut exchange dispatch.Exchange) !dispatch.TransformAction {
 	return hub.registry.transform(id, mut services, mut exchange)!
+}
+
+fn (mut hub TransformerRuntimeHub) run_transform_refs(refs []string, mut services dispatch.RuntimeServices, mut exchange dispatch.Exchange) !TransformPipelineResult {
+	for ref in refs {
+		id := transform_id_from_ref(ref)
+		action := hub.transform(id, mut services, mut exchange)!
+		if action.kind != .continue_pipeline {
+			return TransformPipelineResult{
+				action:    action
+				halted:    true
+				transform: id
+			}
+		}
+	}
+	return TransformPipelineResult{
+		action: dispatch.continue_pipeline_action()
+	}
+}
+
+fn transform_id_from_ref(ref string) string {
+	if ref.starts_with('transform:') {
+		return ref.all_after('transform:')
+	}
+	return ref
 }
 
 fn (registry TransformerRuntimeRegistry) has(id string) bool {

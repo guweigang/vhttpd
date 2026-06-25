@@ -76,3 +76,70 @@ fn test_native_transformer_executes_as_continue_pipeline_action() {
 	action := hub.transform('noop', mut services, mut exchange) or { panic(err) }
 	assert action.kind == .continue_pipeline
 }
+
+fn test_transformer_runtime_runs_native_transform_ref_chain() {
+	plan := runtime_plan.RuntimePlan{
+		transforms: {
+			'first':  runtime_plan.TransformPlan{
+				id:      'first'
+				kind:    'native'
+				handler: 'test.first'
+			}
+			'second': runtime_plan.TransformPlan{
+				id:      'second'
+				kind:    'native'
+				handler: 'test.second'
+			}
+		}
+	}
+	mut hub := TransformerRuntimeHub.from_plan(plan)
+	mut services := dispatch.RuntimeServices(dispatch.NoOpRuntimeServices{
+		trace: 'trace-1'
+	})
+	mut exchange := transformer_test_exchange()
+	result := hub.run_transform_refs(['transform:first', 'transform:second'], mut services, mut
+		exchange) or { panic(err) }
+	assert !result.halted
+	assert result.action.kind == .continue_pipeline
+}
+
+fn test_transformer_runtime_reports_unavailable_transform_backend() {
+	plan := runtime_plan.RuntimePlan{
+		transforms: {
+			'vjsx-handler': runtime_plan.TransformPlan{
+				id:      'vjsx-handler'
+				kind:    'vjsx'
+				handler: 'uploads.completed'
+			}
+		}
+	}
+	mut hub := TransformerRuntimeHub.from_plan(plan)
+	mut services := dispatch.RuntimeServices(dispatch.NoOpRuntimeServices{
+		trace: 'trace-1'
+	})
+	mut exchange := transformer_test_exchange()
+	hub.run_transform_refs(['transform:vjsx-handler'], mut services, mut exchange) or {
+		assert err.msg() == 'transformer unavailable: vjsx-handler'
+		return
+	}
+	assert false
+}
+
+fn transformer_test_exchange() dispatch.Exchange {
+	return dispatch.Exchange{
+		identity: dispatch.ExchangeIdentity{
+			id:         'ex-1'
+			request_id: 'req-1'
+			trace_id:   'trace-1'
+		}
+		kind:     .event
+		ingress:  'adapter:uploads'
+		pipeline: 'upload.completed'
+		headers:  map[string]string{}
+		metadata: map[string]string{}
+		payload:  dispatch.EventPayload{
+			topic: 'uploads'
+			name:  'completed'
+		}
+	}
+}
