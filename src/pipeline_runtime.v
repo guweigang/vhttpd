@@ -17,6 +17,11 @@ struct HttpPipelineMatchRequest {
 	start_ms          i64
 }
 
+struct HttpResponseCacheStoreResult {
+	result string
+	reason string
+}
+
 struct PipelineRuntime {
 mut:
 	http HttpRoutingRuntime
@@ -68,6 +73,37 @@ fn (rt PipelineRuntime) http_response_cache_hit(mut cache cachex.Runtime, rule R
 	return rt.http.response_cache_get(mut cache, rule, method, target)
 }
 
-fn (rt PipelineRuntime) http_response_cache_set(mut cache cachex.Runtime, rule RuntimeRouteRule, method string, target string, cached EdgeCachedHttpResponse) {
-	rt.http.response_cache_set(mut cache, rule, method, target, cached)
+fn (rt PipelineRuntime) http_response_cache_store(mut cache cachex.Runtime, rule RuntimeRouteRule, method string, target string, req http.Request, outcome dispatch.DeliveryOutcome) HttpResponseCacheStoreResult {
+	if rule.response_cache_ttl_ms <= 0 {
+		return HttpResponseCacheStoreResult{}
+	}
+	request_bypass_reason := if cache.enabled {
+		route_response_cache_request_bypass_reason(rule, method, req)
+	} else {
+		'cache_disabled'
+	}
+	if request_bypass_reason != '' {
+		return HttpResponseCacheStoreResult{
+			result: 'bypass'
+			reason: request_bypass_reason
+		}
+	}
+	store_bypass_reason := route_response_cache_store_bypass_reason_for_outcome(outcome)
+	if store_bypass_reason != '' {
+		return HttpResponseCacheStoreResult{
+			result: 'bypass'
+			reason: store_bypass_reason
+		}
+	}
+	ctype := outcome.headers['content-type'] or { 'text/plain; charset=utf-8' }
+	cache_control := outcome.headers['cache-control'] or { rule.cache_control }
+	rt.http.response_cache_set(mut cache, rule, method, target, EdgeCachedHttpResponse{
+		status:        outcome.status
+		content_type:  ctype
+		cache_control: cache_control
+		body:          outcome.body
+	})
+	return HttpResponseCacheStoreResult{
+		result: 'store'
+	}
 }

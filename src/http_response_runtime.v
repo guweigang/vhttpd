@@ -197,35 +197,10 @@ fn HttpResponseRuntime.normal(mut app App, mut ctx Context, req HttpIngressReque
 	mut cache_result := ''
 	mut cache_reason := ''
 	if rule := matched_rule {
-		if rule.response_cache_ttl_ms > 0 {
-			request_bypass_reason := if app.transport.cache.enabled {
-				route_response_cache_request_bypass_reason(rule, req.method, ctx.req)
-			} else {
-				'cache_disabled'
-			}
-			if request_bypass_reason != '' {
-				cache_result = 'bypass'
-				cache_reason = request_bypass_reason
-			} else {
-				store_bypass_reason :=
-					route_response_cache_store_bypass_reason_for_outcome(delivery)
-				if store_bypass_reason != '' {
-					cache_result = 'bypass'
-					cache_reason = store_bypass_reason
-				} else {
-					ctype := delivery.headers['content-type'] or { 'text/plain; charset=utf-8' }
-					cache_control := delivery.headers['cache-control'] or { rule.cache_control }
-					app.pipelines.http_response_cache_set(mut app.transport.cache, rule, req.method,
-						req.dispatch_path, EdgeCachedHttpResponse{
-						status:        delivery.status
-						content_type:  ctype
-						cache_control: cache_control
-						body:          delivery.body
-					})
-					cache_result = 'store'
-				}
-			}
-		}
+		cache_store := app.pipelines.http_response_cache_store(mut app.transport.cache, rule,
+			req.method, req.dispatch_path, ctx.req, delivery)
+		cache_result = cache_store.result
+		cache_reason = cache_store.reason
 	}
 	mut event_fields := {
 		'method':       req.method.to_upper()
