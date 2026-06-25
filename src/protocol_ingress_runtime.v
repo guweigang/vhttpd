@@ -13,10 +13,6 @@ struct ProtocolHttpRequest {
 	start_ms          i64
 }
 
-struct OpenaiProtocolIngressPort {}
-
-struct McpProtocolIngressPort {}
-
 struct ProtocolIngressRuntime {
 	openai OpenaiProtocolIngressPort
 	mcp    McpProtocolIngressPort
@@ -47,25 +43,4 @@ fn (rt ProtocolIngressRuntime) try_route_http_request(mut app App, mut ctx Conte
 		return result
 	}
 	return none
-}
-
-fn (port OpenaiProtocolIngressPort) try_route_http(mut app App, mut ctx Context, req ProtocolHttpRequest) ?veb.Result {
-	if result := app.openai_try_handle(mut ctx, req.method, req.target, req.request_id,
-		req.trace_id, req.start_ms)
-	{
-		return result
-	}
-	return none
-}
-
-fn (port McpProtocolIngressPort) try_route_http(mut app App, mut ctx Context, req ProtocolHttpRequest) ?veb.Result {
-	if req.normalized_target != '/mcp' {
-		return none
-	}
-	match req.method {
-		'GET' { return app.mcp_get(mut ctx) }
-		'POST' { return app.mcp_post(mut ctx) }
-		'DELETE' { return app.mcp_delete(mut ctx) }
-		else { return none }
-	}
 }
