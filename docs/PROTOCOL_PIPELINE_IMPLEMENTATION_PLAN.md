@@ -994,7 +994,7 @@ Batches:
 3. Wrap PHP worker, PHP CGI, static, upload, fixed response, and reject as adapters. (fixed-response and reject terminal slices complete; runtime-owned adapters now have pure descriptors and capability projection)
 4. Execute existing HTTP routes through compiled pipelines. (compiled route selection and matched pipeline execution are active for static, upload, fixed response, reject, and dynamic worker dispatch)
 5. Preserve cache and security policies through named policy plans. (cache TTL/bypass, response headers, body limits, required headers, and denied query checks project into runtime routes)
-6. Move HTTP pipeline state under `PipelineRuntime`. (initial ownership slice complete: `DataPlaneRuntime.pipelines.http` owns HTTP routing state)
+6. Move HTTP pipeline state under `PipelineRuntime`. (ownership slice active: `DataPlaneRuntime.pipelines.http` owns HTTP routing state, dispatch plan derivation, rewrite targets, slash redirects, and response cache hit/store policy)
 7. Keep WordPress as the HTTP vertical validation case. (strict V2 example added with resource, engine, adapter, policy, transform, and pipeline declarations)
 
 Acceptance:
