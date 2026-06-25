@@ -4,6 +4,18 @@ import cachex
 import dispatch
 import worker
 
+struct HttpPipelineMatchRequest {
+	method            string
+	normalized_target string
+	query             map[string]string
+	headers           map[string]string
+	body              string
+	remote_addr       string
+	req_id            string
+	trace_id          string
+	start_ms          i64
+}
+
 struct PipelineRuntime {
 mut:
 	http HttpRoutingRuntime
@@ -16,15 +28,24 @@ fn PipelineRuntime.new(listener_id string, routes []RuntimeRouteRule, assets_roo
 	}
 }
 
-fn (rt PipelineRuntime) http_listener_id() string {
-	return rt.http.listener_id
-}
-
 fn (rt PipelineRuntime) http_document_root() string {
 	return rt.http.document_root
 }
 
-fn (rt PipelineRuntime) match_http_exchange(exchange dispatch.Exchange) ?RuntimeRouteRule {
+fn (rt PipelineRuntime) match_http_request(req HttpPipelineMatchRequest) ?RuntimeRouteRule {
+	exchange := dispatch.http_request_exchange(dispatch.HttpIngressRequest{
+		method:        req.method
+		path:          req.normalized_target
+		query:         req.query
+		headers:       req.headers
+		body:          req.body
+		remote_addr:   req.remote_addr
+		request_id:    req.req_id
+		trace_id:      req.trace_id
+		exchange_id:   req.req_id
+		ingress:       'listener:${rt.http.listener_id}'
+		created_at_ms: req.start_ms
+	})
 	return rt.http.match_compiled_http_exchange(exchange)
 }
 

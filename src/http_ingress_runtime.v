@@ -59,19 +59,6 @@ fn HttpIngressRuntime.handle(mut app App, mut ctx Context, method string, path s
 	normalized_target := transport.normalize_path(request_path)
 	query := transport.parse_query_map(query_string)
 	headers := transport.header_map_from_request(ctx.req)
-	compiled_exchange := dispatch.http_request_exchange(dispatch.HttpIngressRequest{
-		method:        method
-		path:          normalized_target
-		query:         query
-		headers:       headers
-		body:          ctx.req.data
-		remote_addr:   remote_addr
-		request_id:    req_id
-		trace_id:      trace_id
-		exchange_id:   req_id
-		ingress:       'listener:${app.pipelines.http_listener_id()}'
-		created_at_ms: start_ms
-	})
 
 	if method.to_upper() in ['GET', 'HEAD'] {
 		if location := directory_slash_redirect_location(app.pipelines.http_document_root(),
@@ -86,7 +73,17 @@ fn HttpIngressRuntime.handle(mut app App, mut ctx Context, method string, path s
 	}
 
 	// 1. Match the compiled RuntimePlan pipeline for this HTTP exchange.
-	matched_rule := app.pipelines.match_http_exchange(compiled_exchange)
+	matched_rule := app.pipelines.match_http_request(HttpPipelineMatchRequest{
+		method:            method
+		normalized_target: normalized_target
+		query:             query
+		headers:           headers
+		body:              ctx.req.data
+		remote_addr:       remote_addr
+		req_id:            req_id
+		trace_id:          trace_id
+		start_ms:          start_ms
+	})
 
 	if rule := matched_rule {
 		if result := app.pipelines.try_handle_matched_http(mut app, mut ctx, rule, MatchedHttpPipelineRequest{
