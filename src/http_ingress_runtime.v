@@ -8,20 +8,35 @@ import veb
 
 struct HttpIngressRuntime {}
 
-fn HttpIngressRuntime.route(mut app App, mut ctx Context, method string, path string) veb.Result {
+struct HttpRouteRequest {
+	method string
+	path   string
+	target string
+}
+
+fn HttpRouteRequest.from_context(ctx Context, method string, path string) HttpRouteRequest {
 	target := if ctx.req.url == '' { path } else { ctx.req.url }
 	if method == 'GET' {
 		log.info('[http] route proxy_get path=${path} url=${ctx.req.url}')
 	} else if method == 'POST' {
 		log.info('[http] route proxy_post path=${path} url=${ctx.req.url} body_len=${ctx.req.data.len}')
 	}
-	if result := ProtocolIngressRuntime.try_route_http(mut app, mut ctx, method, target) {
+	return HttpRouteRequest{
+		method: method
+		path:   path
+		target: target
+	}
+}
+
+fn HttpIngressRuntime.route(mut app App, mut ctx Context, method string, path string) veb.Result {
+	req := HttpRouteRequest.from_context(ctx, method, path)
+	if result := ProtocolIngressRuntime.try_route_http(mut app, mut ctx, req.method, req.target) {
 		return result
 	}
 	if !app.has_http_logic_executor() {
-		return HttpIngressRuntime.no_logic_executor_response(mut app, mut ctx, method, target)
+		return HttpIngressRuntime.no_logic_executor_response(mut app, mut ctx, req.method, req.target)
 	}
-	return HttpIngressRuntime.handle(mut app, mut ctx, method, target, '')
+	return HttpIngressRuntime.handle(mut app, mut ctx, req.method, req.target, '')
 }
 
 fn HttpIngressRuntime.no_logic_executor_response(mut app App, mut ctx Context, method string, target string) veb.Result {
