@@ -184,6 +184,30 @@ fn test_load_runtime_plan_file_accepts_hello_v2_example() {
 	assert plan.pipelines[0].id == 'hello'
 }
 
+fn test_load_runtime_plan_file_accepts_wordpress_v2_example() {
+	repo_root := os.real_path(os.join_path(os.dir(@FILE), '..', '..'))
+	config_file := os.join_path(repo_root, 'examples', 'wordpress', 'vhttpd-v2.toml')
+	plan := load_runtime_plan_file(config_file) or { panic(err) }
+	assert plan.source.schema_version == 2
+	assert !plan.source.compatibility
+	assert plan.listeners['web'].tls.enabled
+	assert plan.resources['db/wordpress'].options.strings['pool_name'] == 'wordpress'
+	assert plan.resources['cache/wordpress'].kind == 'session-store'
+	assert plan.resources['storage/wordpress'].options.strings['root'] == '/Users/guweigang/wwwroot/wordpress'
+	assert plan.engines['php'].kind == 'php-worker'
+	assert plan.engines['php'].resources.map(it.str()).contains('resource:db/wordpress')
+	assert plan.engines['php-cgi'].kind == 'php-cgi'
+	assert plan.adapters['wordpress-worker'].engine?.str() == 'engine:php'
+	assert plan.adapters['wordpress-cgi'].engine?.str() == 'engine:php-cgi'
+	assert plan.adapters['vhttpd-upload'].options.strings['completed_pipeline'] == 'pipeline:upload.completed'
+	assert plan.policies['cache/front-page'].options.ints['ttl_ms'] == 30000
+	assert plan.policies['response/wp-json-options'].options.string_maps['headers']['Access-Control-Allow-Methods'] == 'GET, HEAD, OPTIONS'
+	assert plan.transforms['wp-json-rewrite'].options.strings['strip_prefix'] == '/wp-json'
+	assert plan.pipeline('wordpress.front-page')?.egress.str() == 'adapter:wordpress-worker'
+	assert plan.pipeline('rest.pretty-route')?.transforms[0].str() == 'transform:wp-json-rewrite'
+	assert plan.pipeline('upload.completed')?.transforms[0].str() == 'transform:upload-completed'
+}
+
 fn test_load_runtime_plan_file_resolves_v2_relative_paths_and_env_defaults() {
 	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_runtime_plan_loader_v2_paths_test')
 	config_dir := os.join_path(temp_dir, 'config')

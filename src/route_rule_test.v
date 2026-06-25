@@ -465,3 +465,35 @@ fn test_explicit_wp_admin_static_asset_route_wins_before_compat_php() {
 	assert routes[1].executor == 'php-cgi'
 	assert routes[1].match.path == ['/wp-admin/*', '/xmlrpc.php']
 }
+
+fn test_wordpress_v2_example_projects_http_pipelines_to_runtime_routes() {
+	repo_root := os.real_path(os.join_path(os.dir(@FILE), '..'))
+	config_file := os.join_path(repo_root, 'examples', 'wordpress', 'vhttpd-v2.toml')
+	plan := config.load_runtime_plan_file(config_file) or { panic(err) }
+	routes := runtime_routes_from_plan(plan, 'web')
+	assert routes.len >= 15
+
+	upload := routes.filter(it.pipeline_id == 'uploads.accept')[0]
+	assert upload.executor == 'upload'
+	assert upload.upload_dir == '/tmp/vhttpd-wordpress-uploads'
+	assert upload.on_completed == 'vjsx:wordpress.upload.completed'
+	assert upload.max_body_bytes == 536870912
+	assert upload.response_headers['X-Content-Type-Options'] == 'nosniff'
+
+	asset := routes.filter(it.pipeline_id == 'assets.by-extension')[0]
+	assert asset.executor == 'static'
+	assert asset.root == '/Users/guweigang/wwwroot/wordpress'
+	assert asset.cache_control == 'public, max-age=31536000, immutable'
+
+	rest := routes.filter(it.pipeline_id == 'rest.pretty-route')[0]
+	assert rest.executor == 'php-cgi'
+	assert rest.rewrite == '/index.php?rest_route=$path_remainder'
+	assert rest.rewrite_strip_prefix == '/wp-json'
+	assert rest.max_body_bytes == 1048576
+
+	front := routes.filter(it.pipeline_id == 'wordpress.front-page')[0]
+	assert front.executor == 'php'
+	assert front.response_cache_ttl_ms == 30000
+	assert front.cache_bypass_cookie_patterns.contains('wordpress_logged_in_*')
+	assert front.cache_ignore_cookie_patterns.contains('wordpress_test_cookie')
+}

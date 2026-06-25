@@ -1,0 +1,399 @@
+version = 2
+
+[server]
+timezone = "Asia/Shanghai"
+
+[observability]
+event_log = "/tmp/vhttpd.events.ndjson"
+
+[listeners.web]
+protocol = "http"
+transport = "tcp"
+host = "127.0.0.1"
+port = 8080
+
+[listeners.web.tls]
+enabled = true
+cert = "server.crt"
+cert_key = "server.key"
+
+[resources.db.wordpress]
+kind = "mysql"
+host = "127.0.0.1"
+port = 3306
+username = "root"
+password = "Abcd.1234"
+database = "wordpress"
+pool_size = 5
+idle_ping_ms = 300000
+init_sql = [
+    "SET NAMES utf8mb4",
+    "SET SESSION sql_mode = TRIM(BOTH ',' FROM REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(CONCAT(',', @@SESSION.sql_mode, ','), ',NO_ZERO_DATE,', ','), ',ONLY_FULL_GROUP_BY,', ','), ',STRICT_TRANS_TABLES,', ','), ',STRICT_ALL_TABLES,', ','), ',TRADITIONAL,', ','), ',ANSI,', ','))"
+]
+options = { socket = "/tmp/vhttpd_wp_db.sock", pool_name = "wordpress" }
+
+[resources.cache.wordpress]
+kind = "session-store"
+socket = "/tmp/vhttpd_wp_cache.sock"
+namespace = "wordpress"
+
+[resources.storage.wordpress]
+kind = "filesystem"
+root = "/Users/guweigang/wwwroot/wordpress"
+
+[resources.storage.uploads]
+kind = "filesystem"
+root = "/tmp/vhttpd-wordpress-uploads"
+
+[engines.php]
+kind = "php-worker"
+entry = "./vendor/bin/vphp-worker"
+app = "./app.php"
+autostart = true
+pool_size = 4
+socket = "/tmp/vhttpd_wp_main.sock"
+queue_capacity = 64
+queue_timeout_ms = 10000
+resources = [
+    "resource:db/wordpress",
+    "resource:cache/wordpress",
+    "resource:storage/wordpress"
+]
+
+[engines.php.env]
+VPHP_WP_ROOT = "/Users/guweigang/wwwroot/wordpress"
+VHTTPD_VENDOR = "/Users/guweigang/Source/vhttpd/php/package"
+VHTTPD_DB_SOCKET = "/tmp/vhttpd_wp_db.sock"
+VHTTPD_DB_POOL = "wordpress"
+VHTTPD_DB_TIMEOUT_MS = "3000"
+VHTTPD_CACHE_SOCKET = "/tmp/vhttpd_wp_cache.sock"
+VHTTPD_SCHEME = "https"
+VHTTPD_REQUEST_SCHEME = "https"
+
+[engines.php.options]
+deny_php = "/wp-config.php,/wp-config-sample.php,/wp-load.php,/wp-settings.php,/wp-blog-header.php,/wp-content/uploads/*,/wp-includes/*,/wp-admin/includes/*"
+compat_php = "/wp-admin/*,/wp-login.php,/wp-comments-post.php,/wp-cron.php,/xmlrpc.php,/wp-trackback.php,/wp-links-opml.php,/wp-activate.php,/wp-signup.php,/wp-mail.php"
+
+[engines.php-cgi]
+kind = "php-cgi"
+binary = "php-cgi"
+autostart = true
+pool_size = 4
+socket = "/tmp/vhttpd_wp_cgi.sock"
+queue_capacity = 64
+queue_timeout_ms = 10000
+resources = [
+    "resource:db/wordpress",
+    "resource:cache/wordpress",
+    "resource:storage/wordpress"
+]
+
+[engines.php-cgi.env]
+VPHP_WP_ROOT = "/Users/guweigang/wwwroot/wordpress"
+VHTTPD_VENDOR = "/Users/guweigang/Source/vhttpd/php/package"
+VHTTPD_DB_SOCKET = "/tmp/vhttpd_wp_db.sock"
+VHTTPD_DB_POOL = "wordpress"
+VHTTPD_DB_TIMEOUT_MS = "3000"
+VHTTPD_CACHE_SOCKET = "/tmp/vhttpd_wp_cache.sock"
+VHTTPD_SCHEME = "https"
+VHTTPD_REQUEST_SCHEME = "https"
+
+[engines.upload-events]
+kind = "vjsx"
+entry = "./upload-events.mts"
+module_root = "."
+thread_count = 1
+
+[adapters.wordpress-worker]
+kind = "http-handler"
+engine = "engine:php"
+storage = "resource:storage/wordpress"
+document_root = "/Users/guweigang/wwwroot/wordpress"
+index = "index.php"
+
+[adapters.wordpress-cgi]
+kind = "http-handler"
+engine = "engine:php-cgi"
+storage = "resource:storage/wordpress"
+document_root = "/Users/guweigang/wwwroot/wordpress"
+index = "index.php"
+
+[adapters.wordpress-static]
+kind = "static"
+storage = "resource:storage/wordpress"
+root = "/Users/guweigang/wwwroot/wordpress"
+
+[adapters.vhttpd-upload]
+kind = "upload"
+storage = "resource:storage/uploads"
+root = "/tmp/vhttpd-wordpress-uploads"
+max_body_bytes = 536870912
+completed_pipeline = "pipeline:upload.completed"
+
+[adapters.empty-204]
+kind = "fixed-response"
+options = { status = "204", body = "" }
+
+[policies.limits.wordpress-request]
+max_body_bytes = 1048576
+
+[policies.limits.wordpress-upload]
+max_body_bytes = 536870912
+
+[policies.cache.asset-immutable]
+cache_control = "public, max-age=31536000, immutable"
+
+[policies.cache.asset-short]
+cache_control = "public, max-age=3600"
+
+[policies.cache.private-no-store]
+cache_control = "private, no-store"
+
+[policies.cache.front-page]
+cache_control = "public, max-age=30"
+ttl_ms = 30000
+bypass_cookie_patterns = [
+    "wordpress_logged_in_*",
+    "wordpress_sec_*",
+    "wp-postpass_*",
+    "comment_author_*",
+    "comment_author_email_*",
+    "comment_author_url_*",
+    "woocommerce_items_in_cart",
+    "woocommerce_cart_hash",
+    "wp_woocommerce_session_*"
+]
+ignore_cookie_patterns = [
+    "wordpress_test_cookie",
+    "wp-settings-*",
+    "wp-settings-time-*"
+]
+
+[policies.response.nosniff.headers]
+X-Content-Type-Options = "nosniff"
+
+[policies.response.wp-json-options.headers]
+Access-Control-Allow-Methods = "GET, HEAD, OPTIONS"
+Access-Control-Allow-Headers = "Content-Type, Authorization"
+Access-Control-Max-Age = "600"
+X-Content-Type-Options = "nosniff"
+
+[transforms.wp-json-rewrite]
+kind = "native"
+handler = "http.rewrite"
+target = "/index.php?rest_route=$path_remainder"
+strip_prefix = "/wp-json"
+
+[transforms.upload-completed]
+kind = "vjsx"
+engine = "engine:upload-events"
+handler = "wordpress.upload.completed"
+
+[[pipelines]]
+id = "uploads.accept"
+group = "wordpress.uploads"
+ingress = "listener:web"
+match.methods = ["POST", "PUT"]
+match.paths = ["/vhttpd/uploads", "/vhttpd/uploads/*"]
+policies = [
+    "policy:limits/wordpress-upload",
+    "policy:cache/private-no-store",
+    "policy:response/nosniff"
+]
+egress = "adapter:vhttpd-upload"
+
+[[pipelines]]
+id = "assets.by-extension"
+group = "wordpress.assets"
+ingress = "listener:web"
+match.paths = [
+    "*.css",
+    "*.js",
+    "*.png",
+    "*.jpg",
+    "*.jpeg",
+    "*.gif",
+    "*.svg",
+    "*.ico",
+    "*.woff",
+    "*.woff2",
+    "*.ttf"
+]
+policies = ["policy:cache/asset-immutable"]
+egress = "adapter:wordpress-static"
+
+[[pipelines]]
+id = "assets.wordpress-directories"
+group = "wordpress.assets"
+ingress = "listener:web"
+match.paths = [
+    "/wp-content/*",
+    "/wp-includes/*",
+    "/favicon.ico",
+    "robots.txt"
+]
+policies = ["policy:cache/asset-short"]
+egress = "adapter:wordpress-static"
+
+[[pipelines]]
+id = "rest.query-route"
+group = "wordpress.rest"
+ingress = "listener:web"
+match.paths = ["/index.php"]
+match.query = { rest_route = "*" }
+egress = "adapter:wordpress-cgi"
+
+[[pipelines]]
+id = "rest.pretty-options"
+group = "wordpress.rest"
+ingress = "listener:web"
+match.methods = ["OPTIONS"]
+match.paths = ["/wp-json", "/wp-json/*"]
+policies = ["policy:response/wp-json-options"]
+egress = "adapter:empty-204"
+
+[[pipelines]]
+id = "rest.pretty-route"
+group = "wordpress.rest"
+ingress = "listener:web"
+match.methods = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"]
+match.paths = ["/wp-json", "/wp-json/*"]
+transforms = ["transform:wp-json-rewrite"]
+policies = [
+    "policy:limits/wordpress-request",
+    "policy:response/nosniff"
+]
+egress = "adapter:wordpress-cgi"
+
+[[pipelines]]
+id = "woocommerce.account-pages"
+group = "wordpress.dynamic.compat"
+ingress = "listener:web"
+match.paths = ["/cart", "/cart/", "/checkout", "/checkout/", "/my-account", "/my-account/"]
+policies = [
+    "policy:limits/wordpress-request",
+    "policy:cache/private-no-store"
+]
+egress = "adapter:wordpress-cgi"
+
+[[pipelines]]
+id = "woocommerce.cart-page"
+group = "wordpress.dynamic.compat"
+ingress = "listener:web"
+match.methods = ["GET", "HEAD"]
+match.paths = ["/", "/index.php"]
+match.query = { page_id = "9" }
+policies = [
+    "policy:limits/wordpress-request",
+    "policy:cache/private-no-store"
+]
+egress = "adapter:wordpress-cgi"
+
+[[pipelines]]
+id = "woocommerce.checkout-page"
+group = "wordpress.dynamic.compat"
+ingress = "listener:web"
+match.methods = ["GET", "HEAD"]
+match.paths = ["/", "/index.php"]
+match.query = { page_id = "10" }
+policies = [
+    "policy:limits/wordpress-request",
+    "policy:cache/private-no-store"
+]
+egress = "adapter:wordpress-cgi"
+
+[[pipelines]]
+id = "woocommerce.account-page"
+group = "wordpress.dynamic.compat"
+ingress = "listener:web"
+match.methods = ["GET", "HEAD"]
+match.paths = ["/", "/index.php"]
+match.query = { page_id = "11" }
+policies = [
+    "policy:limits/wordpress-request",
+    "policy:cache/private-no-store"
+]
+egress = "adapter:wordpress-cgi"
+
+[[pipelines]]
+id = "wordpress.page-get"
+group = "wordpress.dynamic.worker"
+ingress = "listener:web"
+match.methods = ["GET", "HEAD"]
+match.paths = ["/", "/index.php"]
+match.query = { page_id = "*" }
+policies = [
+    "policy:limits/wordpress-request",
+    "policy:cache/private-no-store"
+]
+egress = "adapter:wordpress-worker"
+
+[[pipelines]]
+id = "wordpress.page-write"
+group = "wordpress.dynamic.compat"
+ingress = "listener:web"
+match.methods = ["POST", "PUT", "PATCH", "DELETE"]
+match.paths = ["/", "/index.php"]
+match.query = { page_id = "*" }
+policies = [
+    "policy:limits/wordpress-request",
+    "policy:cache/private-no-store"
+]
+egress = "adapter:wordpress-cgi"
+
+[[pipelines]]
+id = "woocommerce.ajax"
+group = "wordpress.dynamic.compat"
+ingress = "listener:web"
+match.paths = ["/", "/index.php"]
+match.query = { wc-ajax = "*" }
+policies = [
+    "policy:limits/wordpress-request",
+    "policy:cache/private-no-store"
+]
+egress = "adapter:wordpress-cgi"
+
+[[pipelines]]
+id = "woocommerce.add-to-cart-get"
+group = "wordpress.dynamic.worker"
+ingress = "listener:web"
+match.methods = ["GET", "HEAD"]
+match.paths = ["/", "/index.php"]
+match.query = { add-to-cart = "*" }
+policies = [
+    "policy:limits/wordpress-request",
+    "policy:cache/private-no-store"
+]
+egress = "adapter:wordpress-worker"
+
+[[pipelines]]
+id = "woocommerce.add-to-cart-write"
+group = "wordpress.dynamic.compat"
+ingress = "listener:web"
+match.methods = ["POST", "PUT", "PATCH", "DELETE"]
+match.paths = ["/", "/index.php"]
+match.query = { add-to-cart = "*" }
+policies = [
+    "policy:limits/wordpress-request",
+    "policy:cache/private-no-store"
+]
+egress = "adapter:wordpress-cgi"
+
+[[pipelines]]
+id = "wordpress.front-page"
+group = "wordpress.dynamic.worker"
+ingress = "listener:web"
+match.paths = ["/", "/index.php"]
+policies = [
+    "policy:limits/wordpress-request",
+    "policy:cache/front-page"
+]
+egress = "adapter:wordpress-worker"
+
+[[pipelines]]
+id = "upload.completed"
+group = "wordpress.events"
+ingress = "listener:web"
+match.metadata = { event = "upload.completed" }
+transforms = ["transform:upload-completed"]
+egress = "terminal:accepted"
