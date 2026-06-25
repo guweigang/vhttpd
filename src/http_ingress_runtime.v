@@ -100,27 +100,22 @@ fn HttpIngressRuntime.handle(mut app App, mut ctx Context, method string, path s
 		}
 	}
 
-	dispatch_path := app.pipelines.http_dispatch_target(matched_rule, path)
-	ingress_req := http_ingress_request_for_rule(method, path, dispatch_path, body_on_head,
+	dispatch_plan := app.pipelines.http_dispatch_plan(matched_rule, path)
+	ingress_req := http_ingress_request_for_rule(method, path, dispatch_plan.target, body_on_head,
 		remote_addr, req_id, trace_id, start_ms, matched_rule)
-	if rule := matched_rule {
-		if rule.response_cache_ttl_ms > 0 && app.transport.cache.enabled {
-			if cached := app.pipelines.http_response_cache_hit(mut app.transport.cache, rule, method,
-				dispatch_path, ctx.req) {
-				return HttpResponseRuntime.cache_hit(mut app, mut ctx, ingress_req, cached, rule)
-			}
-		}
+	if cached_hit := app.pipelines.http_response_cache_hit(mut app.transport.cache, dispatch_plan,
+		method, ctx.req) {
+		return HttpResponseRuntime.cache_hit(mut app, mut ctx, ingress_req, cached_hit.cached,
+			cached_hit.rule)
 	}
 
 	// 3. 动态切换活动的后端执行器
-	requested_engine := if rule := matched_rule { rule.executor } else { '' }
-	mut engine_selection := app.engines.dispatch_selection(requested_engine)
+	mut engine_selection := app.engines.dispatch_selection(dispatch_plan.executor)
 
-	pipeline_id := if rule := matched_rule { rule.pipeline_id } else { '' }
-	log.info('[http] ⇢ dispatch method=${method.to_upper()} path=${path} target=${dispatch_path} trace_id=${trace_id} request_id=${req_id} pipeline=${pipeline_id} body_len=${ctx.req.data.len} executor=${engine_selection.logic_executor.kind()} pool=${engine_selection.pool}')
+	log.info('[http] ⇢ dispatch method=${method.to_upper()} path=${path} target=${dispatch_plan.target} trace_id=${trace_id} request_id=${req_id} pipeline=${dispatch_plan.pipeline_id} body_len=${ctx.req.data.len} executor=${engine_selection.logic_executor.kind()} pool=${engine_selection.pool}')
 	if engine_selection.stream_dispatch {
 		if engine_selection.pool == 'main' {
-			if result := HttpStreamRuntime.via_dispatch(mut app, mut ctx, method, dispatch_path,
+			if result := HttpStreamRuntime.via_dispatch(mut app, mut ctx, method, dispatch_plan.target,
 				req_id, trace_id, remote_addr)
 			{
 				return result
@@ -130,7 +125,7 @@ fn HttpIngressRuntime.handle(mut app App, mut ctx Context, method string, path s
 	mut facade := app.as_facade()
 	mut outcome := engine_selection.logic_executor.dispatch_http(mut facade, executor.HttpLogicDispatchRequest{
 		method:        method
-		path:          dispatch_path
+		path:          dispatch_plan.target
 		original_path: path
 		req:           ctx.req
 		remote_addr:   remote_addr

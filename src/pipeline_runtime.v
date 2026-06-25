@@ -22,6 +22,18 @@ struct HttpResponseCacheStoreResult {
 	reason string
 }
 
+struct HttpPipelineDispatchPlan {
+	rule        ?RuntimeRouteRule
+	target      string
+	executor    string
+	pipeline_id string
+}
+
+struct HttpResponseCacheHit {
+	rule   RuntimeRouteRule
+	cached EdgeCachedHttpResponse
+}
+
 struct PipelineRuntime {
 mut:
 	http HttpRoutingRuntime
@@ -59,18 +71,33 @@ fn (rt PipelineRuntime) http_static_root(rule RuntimeRouteRule) string {
 	return rt.http.static_root(rule)
 }
 
-fn (rt PipelineRuntime) http_dispatch_target(rule ?RuntimeRouteRule, original_target string) string {
+fn (rt PipelineRuntime) http_dispatch_plan(rule ?RuntimeRouteRule, original_target string) HttpPipelineDispatchPlan {
 	if matched := rule {
-		return matched.rewrite_target(original_target)
+		return HttpPipelineDispatchPlan{
+			rule:        matched
+			target:      matched.rewrite_target(original_target)
+			executor:    matched.executor
+			pipeline_id: matched.pipeline_id
+		}
 	}
-	return original_target
+	return HttpPipelineDispatchPlan{
+		target: original_target
+	}
 }
 
-fn (rt PipelineRuntime) http_response_cache_hit(mut cache cachex.Runtime, rule RuntimeRouteRule, method string, target string, req http.Request) ?EdgeCachedHttpResponse {
+fn (rt PipelineRuntime) http_response_cache_hit(mut cache cachex.Runtime, plan HttpPipelineDispatchPlan, method string, req http.Request) ?HttpResponseCacheHit {
+	rule := plan.rule or { return none }
+	if rule.response_cache_ttl_ms <= 0 || !cache.enabled {
+		return none
+	}
 	if route_response_cache_request_bypass_reason(rule, method, req) != '' {
 		return none
 	}
-	return rt.http.response_cache_get(mut cache, rule, method, target)
+	cached := rt.http.response_cache_get(mut cache, rule, method, plan.target) or { return none }
+	return HttpResponseCacheHit{
+		rule:   rule
+		cached: cached
+	}
 }
 
 fn (rt PipelineRuntime) http_response_cache_store(mut cache cachex.Runtime, rule RuntimeRouteRule, method string, target string, req http.Request, outcome dispatch.DeliveryOutcome) HttpResponseCacheStoreResult {
