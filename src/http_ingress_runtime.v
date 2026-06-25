@@ -3,7 +3,6 @@ module main
 import dispatch
 import executor
 import log
-import os
 import time
 import upstream.transport
 import veb
@@ -90,94 +89,19 @@ fn HttpIngressRuntime.handle(mut app App, mut ctx Context, method string, path s
 	matched_rule := app.http_routing.match_compiled_http_exchange(compiled_exchange)
 
 	if rule := matched_rule {
-		header_name := route_required_headers_failure(rule, headers)
-		if header_name != '' {
-			log.warn('[http] ⇠ route required header failed method=${method.to_upper()} path=${path} trace_id=${trace_id} request_id=${req_id} header=${header_name}')
-			mut terminal_adapter := dispatch.EgressAdapter(dispatch.reject_adapter('route/required_header',
-				403, header_name, 'route_required_header'))
-			return render_http_terminal_adapter(mut app, mut ctx, method, path, normalized_target,
-				query, body_on_head, remote_addr, req_id, trace_id, start_ms, rule, mut
-				terminal_adapter)
-		}
-		query_name := route_denied_query_failure(rule, query)
-		if query_name != '' {
-			log.warn('[http] ⇠ route denied query failed method=${method.to_upper()} path=${path} trace_id=${trace_id} request_id=${req_id} query=${query_name}')
-			mut terminal_adapter := dispatch.EgressAdapter(dispatch.reject_adapter('route/denied_query',
-				403, query_name, 'route_denied_query'))
-			return render_http_terminal_adapter(mut app, mut ctx, method, path, normalized_target,
-				query, body_on_head, remote_addr, req_id, trace_id, start_ms, rule, mut
-				terminal_adapter)
-		}
-		if rule.max_body_bytes > 0 && ctx.req.data.len > rule.max_body_bytes {
-			log.warn('[http] ⇠ route max body exceeded method=${method.to_upper()} path=${path} trace_id=${trace_id} request_id=${req_id} body_len=${ctx.req.data.len} max_body_bytes=${rule.max_body_bytes}')
-			mut terminal_adapter := dispatch.EgressAdapter(dispatch.reject_adapter('route/payload_too_large',
-				413, 'max_body_bytes', 'payload_too_large'))
-			return render_http_terminal_adapter(mut app, mut ctx, method, path, normalized_target,
-				query, body_on_head, remote_addr, req_id, trace_id, start_ms, rule, mut
-				terminal_adapter)
-		}
-		// 2.1 重定向与直接状态响应 (status > 0)
-		if rule.status > 0 {
-			mut outcome_headers := map[string]string{}
-			if rule.location != '' {
-				outcome_headers['location'] = rule.location
-			}
-			terminal_body := if rule.status in [301, 302, 307, 308] && rule.body == '' {
-				'Redirecting...'
-			} else {
-				rule.body
-			}
-			mut terminal_adapter := dispatch.EgressAdapter(dispatch.fixed_response_adapter('route/status',
-				rule.status, outcome_headers, terminal_body))
-			log.info('[http] ⇠ route terminal status=${rule.status} trace_id=${trace_id}')
-			return render_http_terminal_adapter(mut app, mut ctx, method, path, normalized_target,
-				query, body_on_head, remote_addr, req_id, trace_id, start_ms, rule, mut
-				terminal_adapter)
-		}
-
-		// 2.2 静态文件高性能直回
-		if rule.executor == 'static' {
-			if method.to_upper() !in ['GET', 'HEAD'] {
-				mut terminal_adapter := dispatch.EgressAdapter(dispatch.fixed_response_adapter('route/static_method',
-					405, map[string]string{}, 'Method Not Allowed'))
-				return render_http_terminal_adapter(mut app, mut ctx, method, path,
-					normalized_target, query, body_on_head, remote_addr, req_id, trace_id,
-					start_ms, rule, mut terminal_adapter)
-			}
-			root_dir := app.http_routing.static_root(rule)
-			file_path := os.join_path(root_dir, normalized_target.trim_left('/'))
-			if os.exists(file_path) && !os.is_dir(file_path) {
-				mut file_headers := map[string]string{}
-				if rule.cache_control.trim_space() != '' {
-					file_headers['cache-control'] = rule.cache_control
-				}
-				log.info('[http] ⇠ route static file=${file_path} trace_id=${trace_id}')
-				outcome := dispatch.file_outcome(file_path, file_headers)
-				return HttpResponseRuntime.delivery_outcome(mut app, mut ctx, http_ingress_request(method,
-					path, path, body_on_head, remote_addr, req_id, trace_id, start_ms), outcome,
-					rule)
-			}
-			log.warn('[http] ⇠ route static file not found path=${file_path} trace_id=${trace_id}')
-			mut terminal_adapter := dispatch.EgressAdapter(dispatch.fixed_response_adapter('route/static_not_found',
-				404, map[string]string{}, 'Not Found'))
-			return render_http_terminal_adapter(mut app, mut ctx, method, path, normalized_target,
-				query, body_on_head, remote_addr, req_id, trace_id, start_ms, rule, mut
-				terminal_adapter)
-		}
-
-		if rule.executor == 'upload' {
-			return handle_upload_route(mut app, mut ctx, rule, method, normalized_target, req_id,
-				trace_id, start_ms, query, body_on_head, remote_addr)
-		}
-
-		// 2.3 阻断返回
-		if rule.executor == 'none' {
-			log.info('[http] ⇠ route none (block) trace_id=${trace_id}')
-			mut terminal_adapter := dispatch.EgressAdapter(dispatch.fixed_response_adapter('route/none',
-				404, map[string]string{}, 'Not Found'))
-			return render_http_terminal_adapter(mut app, mut ctx, method, path, normalized_target,
-				query, body_on_head, remote_addr, req_id, trace_id, start_ms, rule, mut
-				terminal_adapter)
+		if result := HttpPipelineRuntime.try_handle_matched_pipeline(mut app, mut ctx, rule, MatchedHttpPipelineRequest{
+			method:            method
+			path:              path
+			normalized_target: normalized_target
+			query:             query
+			body_on_head:      body_on_head
+			remote_addr:       remote_addr
+			req_id:            req_id
+			trace_id:          trace_id
+			start_ms:          start_ms
+		}, headers)
+		{
+			return result
 		}
 	}
 
