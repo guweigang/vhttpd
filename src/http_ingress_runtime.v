@@ -131,7 +131,7 @@ fn HttpIngressRuntime.handle(mut app App, mut ctx Context, method string, path s
 		trace_id:      trace_id
 		request_id:    req_id
 	}) or { return HttpResponseRuntime.dispatch_error(mut app, mut ctx, ingress_req, err.msg()) }
-	return HttpResponseRuntime.render(mut app, mut ctx, ingress_req, mut outcome, dispatch_plan.rule)
+	return HttpResponseRuntime.render(mut app, mut ctx, ingress_req, mut outcome, dispatch_plan)
 }
 
 fn apply_data_plane_scheme(mut ctx Context, scheme string) {

@@ -110,7 +110,8 @@ fn (rt PipelineRuntime) http_response_cache_hit(mut cache cachex.Runtime, plan H
 	}
 }
 
-fn (rt PipelineRuntime) http_response_cache_store(mut cache cachex.Runtime, rule RuntimeRouteRule, method string, target string, req http.Request, outcome dispatch.DeliveryOutcome) HttpResponseCacheStoreResult {
+fn (rt PipelineRuntime) http_response_cache_store(mut cache cachex.Runtime, plan HttpPipelineDispatchPlan, method string, req http.Request, outcome dispatch.DeliveryOutcome) HttpResponseCacheStoreResult {
+	rule := plan.rule or { return HttpResponseCacheStoreResult{} }
 	if rule.response_cache_ttl_ms <= 0 {
 		return HttpResponseCacheStoreResult{}
 	}
@@ -134,7 +135,7 @@ fn (rt PipelineRuntime) http_response_cache_store(mut cache cachex.Runtime, rule
 	}
 	ctype := outcome.headers['content-type'] or { 'text/plain; charset=utf-8' }
 	cache_control := outcome.headers['cache-control'] or { rule.cache_control }
-	rt.http.response_cache_set(mut cache, rule, method, target, EdgeCachedHttpResponse{
+	rt.http.response_cache_set(mut cache, rule, method, plan.target, EdgeCachedHttpResponse{
 		status:        outcome.status
 		content_type:  ctype
 		cache_control: cache_control

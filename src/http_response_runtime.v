@@ -156,14 +156,14 @@ fn HttpResponseRuntime.file_outcome(mut app App, mut ctx Context, req HttpIngres
 	return ctx.file(outcome.path)
 }
 
-fn HttpResponseRuntime.render(mut app App, mut ctx Context, req HttpIngressRequest, mut outcome executor.HttpLogicDispatchOutcome, matched_rule ?RuntimeRouteRule) veb.Result {
+fn HttpResponseRuntime.render(mut app App, mut ctx Context, req HttpIngressRequest, mut outcome executor.HttpLogicDispatchOutcome, dispatch_plan HttpPipelineDispatchPlan) veb.Result {
 	if outcome.kind == .stream {
 		return HttpResponseRuntime.stream(mut app, mut ctx, req, mut outcome)
 	}
 	if outcome.kind == .upstream_plan {
 		return HttpResponseRuntime.upstream_plan(mut app, mut ctx, req, outcome)
 	}
-	return HttpResponseRuntime.normal(mut app, mut ctx, req, outcome, matched_rule)
+	return HttpResponseRuntime.normal(mut app, mut ctx, req, outcome, dispatch_plan)
 }
 
 fn HttpResponseRuntime.stream(mut app App, mut ctx Context, req HttpIngressRequest, mut outcome executor.HttpLogicDispatchOutcome) veb.Result {
@@ -191,17 +191,15 @@ fn HttpResponseRuntime.upstream_plan(mut app App, mut ctx Context, req HttpIngre
 		outcome.upstream_plan, req.method, req.path, req.request_id, req.trace_id, req.start_ms)
 }
 
-fn HttpResponseRuntime.normal(mut app App, mut ctx Context, req HttpIngressRequest, outcome executor.HttpLogicDispatchOutcome, matched_rule ?RuntimeRouteRule) veb.Result {
+fn HttpResponseRuntime.normal(mut app App, mut ctx Context, req HttpIngressRequest, outcome executor.HttpLogicDispatchOutcome, dispatch_plan HttpPipelineDispatchPlan) veb.Result {
 	delivery := worker_response_delivery_outcome(outcome.response)
 	log.info('[http] ⇠ dispatch response method=${req.method.to_upper()} path=${req.path} trace_id=${req.trace_id} request_id=${req.request_id} status=${delivery.status} body_len=${delivery.body.len} duration_ms=${time.now().unix_milli() - req.start_ms}')
 	mut cache_result := ''
 	mut cache_reason := ''
-	if rule := matched_rule {
-		cache_store := app.pipelines.http_response_cache_store(mut app.transport.cache, rule,
-			req.method, req.dispatch_path, ctx.req, delivery)
-		cache_result = cache_store.result
-		cache_reason = cache_store.reason
-	}
+	cache_store := app.pipelines.http_response_cache_store(mut app.transport.cache, dispatch_plan,
+		req.method, ctx.req, delivery)
+	cache_result = cache_store.result
+	cache_reason = cache_store.reason
 	mut event_fields := {
 		'method':       req.method.to_upper()
 		'path':         transport.normalize_path(req.path)
@@ -218,13 +216,13 @@ fn HttpResponseRuntime.normal(mut app App, mut ctx Context, req HttpIngressReque
 	if req.ingress_id != '' {
 		event_fields['ingress'] = req.ingress_id
 	}
-	if rule := matched_rule {
+	if rule := dispatch_plan.rule {
 		if rule.policy_refs.len > 0 {
 			event_fields['policies'] = rule.policy_refs.join(',')
 		}
 	}
 	app.emit('http.request', event_fields)
-	return HttpResponseRuntime.response_outcome(mut ctx, req, delivery, matched_rule, cache_result,
+	return HttpResponseRuntime.response_outcome(mut ctx, req, delivery, dispatch_plan, cache_result,
 		cache_reason)
 }
 
@@ -232,7 +230,7 @@ fn worker_response_delivery_outcome(resp transport.WorkerResponse) dispatch.Deli
 	return dispatch.response_outcome(resp.status, resp.headers, resp.body)
 }
 
-fn HttpResponseRuntime.response_outcome(mut ctx Context, req HttpIngressRequest, outcome dispatch.DeliveryOutcome, matched_rule ?RuntimeRouteRule, cache_result string, cache_reason string) veb.Result {
+fn HttpResponseRuntime.response_outcome(mut ctx Context, req HttpIngressRequest, outcome dispatch.DeliveryOutcome, dispatch_plan HttpPipelineDispatchPlan, cache_result string, cache_reason string) veb.Result {
 	status := if outcome.status > 0 { outcome.status } else { 200 }
 	ctx.set_custom_header('x-vhttpd-trace-id', req.trace_id) or {}
 	if req.pipeline_id != '' {
@@ -246,7 +244,7 @@ fn HttpResponseRuntime.response_outcome(mut ctx Context, req HttpIngressRequest,
 	}
 	ctx.res.set_status(http.status_from_int(status))
 	apply_delivery_headers(mut ctx, outcome.headers)
-	if rule := matched_rule {
+	if rule := dispatch_plan.rule {
 		apply_route_response_headers(mut ctx, rule)
 		if rule.cache_control.trim_space() != ''
 			&& !route_response_headers_have(outcome.headers, 'cache-control') {
