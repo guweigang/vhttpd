@@ -30,7 +30,7 @@ fn HttpRouteRequest.from_context(ctx Context, method string, path string) HttpRo
 
 fn HttpIngressRuntime.route(mut app App, mut ctx Context, method string, path string) veb.Result {
 	req := HttpRouteRequest.from_context(ctx, method, path)
-	if result := ProtocolIngressRuntime.try_route_http(mut app, mut ctx, req.method, req.target) {
+	if result := app.protocols.try_route_http(mut app, mut ctx, req.method, req.target) {
 		return result
 	}
 	if !app.engines.has_http_logic_executor() {

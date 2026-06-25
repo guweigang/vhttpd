@@ -6,7 +6,11 @@ import veb
 
 struct ProtocolIngressRuntime {}
 
-fn ProtocolIngressRuntime.try_route_http(mut app App, mut ctx Context, method string, target string) ?veb.Result {
+fn (hub ProtocolRuntimeHub) try_route_http(mut app App, mut ctx Context, method string, target string) ?veb.Result {
+	return hub.ingress.try_route_http(mut app, mut ctx, method, target)
+}
+
+fn (rt ProtocolIngressRuntime) try_route_http(mut app App, mut ctx Context, method string, target string) ?veb.Result {
 	start_ms := time.now().unix_milli()
 	req_id := resolve_request_id(ctx, target)
 	trace_id := resolve_trace_id(ctx, target)
