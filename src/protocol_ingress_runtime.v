@@ -13,7 +13,14 @@ struct ProtocolHttpRequest {
 	start_ms          i64
 }
 
-struct ProtocolIngressRuntime {}
+struct OpenaiProtocolIngressPort {}
+
+struct McpProtocolIngressPort {}
+
+struct ProtocolIngressRuntime {
+	openai OpenaiProtocolIngressPort
+	mcp    McpProtocolIngressPort
+}
 
 fn (hub ProtocolRuntimeHub) try_route_http(mut app App, mut ctx Context, method string, target string) ?veb.Result {
 	req := new_protocol_http_request(ctx, method, target)
@@ -33,16 +40,16 @@ fn new_protocol_http_request(ctx Context, method string, target string) Protocol
 }
 
 fn (rt ProtocolIngressRuntime) try_route_http_request(mut app App, mut ctx Context, req ProtocolHttpRequest) ?veb.Result {
-	if result := rt.try_route_openai(mut app, mut ctx, req) {
+	if result := rt.openai.try_route_http(mut app, mut ctx, req) {
 		return result
 	}
-	if result := rt.try_route_mcp(mut app, mut ctx, req) {
+	if result := rt.mcp.try_route_http(mut app, mut ctx, req) {
 		return result
 	}
 	return none
 }
 
-fn (rt ProtocolIngressRuntime) try_route_openai(mut app App, mut ctx Context, req ProtocolHttpRequest) ?veb.Result {
+fn (port OpenaiProtocolIngressPort) try_route_http(mut app App, mut ctx Context, req ProtocolHttpRequest) ?veb.Result {
 	if result := app.openai_try_handle(mut ctx, req.method, req.target, req.request_id,
 		req.trace_id, req.start_ms)
 	{
@@ -51,7 +58,7 @@ fn (rt ProtocolIngressRuntime) try_route_openai(mut app App, mut ctx Context, re
 	return none
 }
 
-fn (rt ProtocolIngressRuntime) try_route_mcp(mut app App, mut ctx Context, req ProtocolHttpRequest) ?veb.Result {
+fn (port McpProtocolIngressPort) try_route_http(mut app App, mut ctx Context, req ProtocolHttpRequest) ?veb.Result {
 	if req.normalized_target != '/mcp' {
 		return none
 	}
