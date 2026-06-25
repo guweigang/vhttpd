@@ -89,7 +89,7 @@ fn HttpIngressRuntime.handle(mut app App, mut ctx Context, method string, path s
 	matched_rule := app.pipelines.match_http_exchange(compiled_exchange)
 
 	if rule := matched_rule {
-		if result := HttpPipelineRuntime.try_handle_matched_pipeline(mut app, mut ctx, rule, MatchedHttpPipelineRequest{
+		if result := app.pipelines.try_handle_matched_http(mut app, mut ctx, rule, MatchedHttpPipelineRequest{
 			method:            method
 			path:              path
 			normalized_target: normalized_target
