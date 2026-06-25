@@ -75,12 +75,20 @@ fn (host ProviderHost) specs_copy() []ProviderSpec {
 	return specs
 }
 
+fn (hub ProviderRuntimeHub) admin_specs_snapshot() []provider.AdminProviderSpecSnapshot {
+	return hub.registry.admin_specs_snapshot()
+}
+
+fn (hub ProviderRuntimeHub) provider_specs_copy() []ProviderSpec {
+	return hub.registry.specs_copy()
+}
+
 pub fn (mut app App) admin_provider_specs_snapshot() []provider.AdminProviderSpecSnapshot {
 	app.mu.@lock()
 	defer {
 		app.mu.unlock()
 	}
-	return app.providers.registry.admin_specs_snapshot()
+	return app.providers.admin_specs_snapshot()
 }
 
 pub fn (mut app App) provider_specs_copy() []ProviderSpec {
@@ -88,7 +96,7 @@ pub fn (mut app App) provider_specs_copy() []ProviderSpec {
 	defer {
 		app.mu.unlock()
 	}
-	return app.providers.registry.specs_copy()
+	return app.providers.provider_specs_copy()
 }
 
 pub fn (mut app App) admin_provider_runtimes_snapshot() []provider.AdminProviderRuntimeSnapshot {

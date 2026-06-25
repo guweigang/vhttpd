@@ -12,8 +12,8 @@ struct ProviderInstanceStaticSpec {
 
 struct ProviderInstanceRuntimeContext {
 	runtime_snapshot_fn fn (string, string) (upstream.UpstreamSnapshot, bool) = unsafe { nil }
-	source_fn           fn (string, string) string                = unsafe { nil }
-	static_specs_fn     fn () []ProviderInstanceStaticSpec        = unsafe { nil }
+	source_fn           fn (string, string) string                         = unsafe { nil }
+	static_specs_fn     fn () []ProviderInstanceStaticSpec                 = unsafe { nil }
 	static_spec_fn      fn (string, string) ?provider.ProviderInstanceSpec = unsafe { nil }
 	apply_fn            fn (provider.ProviderInstanceSpec) !               = unsafe { nil }
 	provider_enabled_fn fn (string) bool = unsafe { nil }
@@ -149,16 +149,28 @@ fn (mut app App) provider_instance_runtime_snapshot(provider_name string, instan
 	return upstream.UpstreamSnapshot{}, false
 }
 
+fn (mut hub ProviderRuntimeHub) provider_instance_upsert(spec provider.ProviderInstanceSpec) provider.ProviderInstanceSpec {
+	return hub.instances.upsert(spec)
+}
+
+fn (hub ProviderRuntimeHub) provider_instance_get(provider_name string, instance string) ?provider.ProviderInstanceSpec {
+	return hub.instances.get(provider_name, instance)
+}
+
+fn (hub ProviderRuntimeHub) provider_instance_list(provider_name string) []provider.ProviderInstanceSpec {
+	return hub.instances.list(provider_name)
+}
+
 pub fn (mut app App) provider_instance_upsert(spec provider.ProviderInstanceSpec) provider.ProviderInstanceSpec {
-	return app.providers.instances.upsert(spec)
+	return app.providers.provider_instance_upsert(spec)
 }
 
 pub fn (app &App) provider_instance_get(provider_name string, instance string) ?provider.ProviderInstanceSpec {
-	return app.providers.instances.get(provider_name, instance)
+	return app.providers.provider_instance_get(provider_name, instance)
 }
 
 pub fn (app &App) provider_instance_list(provider_name string) []provider.ProviderInstanceSpec {
-	return app.providers.instances.list(provider_name)
+	return app.providers.provider_instance_list(provider_name)
 }
 
 fn ProviderInstanceRuntime.apply(ctx ProviderInstanceRuntimeContext, spec provider.ProviderInstanceSpec) ! {
