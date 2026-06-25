@@ -1007,9 +1007,14 @@ Acceptance:
 
 ### Phase 4: interchangeable transformers
 
+Progress as of 2026-06-25:
+
+- `P4.1` transformer runtime registry slice complete: `DataPlaneRuntime` owns a `TransformerRuntimeHub` assembled from `RuntimePlan.transforms`, native transforms are registered as executable backend instances, and non-native transforms remain visible but unavailable until their backend wrappers are attached
+- `P4.1` transformer chain runner slice complete: runtime code can execute ordered transform references through the registry with protocol-neutral `dispatch.Exchange` and `dispatch.RuntimeServices`, halting on non-continue actions while preserving trace-capable service emission
+
 Batches:
 
-1. Implement transformer registry and native backend.
+1. Implement transformer registry and native backend. (registry, native no-op backend, and transform chain runner complete)
 2. Implement VJSX transformer wrapper using lane workers.
 3. Add conformance suite.
 4. Wrap Feishu event transformation as native V.
