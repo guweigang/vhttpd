@@ -9,22 +9,19 @@ import veb
 struct HttpIngressRuntime {}
 
 fn HttpIngressRuntime.route(mut app App, mut ctx Context, method string, path string) veb.Result {
-	start_ms := time.now().unix_milli()
 	target := if ctx.req.url == '' { path } else { ctx.req.url }
 	if method == 'GET' {
 		log.info('[http] route proxy_get path=${path} url=${ctx.req.url}')
 	} else if method == 'POST' {
 		log.info('[http] route proxy_post path=${path} url=${ctx.req.url} body_len=${ctx.req.data.len}')
 	}
-	req_id := resolve_request_id(ctx, target)
-	trace_id := resolve_trace_id(ctx, target)
-	if result := app.openai_try_handle(mut ctx, method, target, req_id, trace_id, start_ms) {
-		return result
-	}
 	if result := ProtocolIngressRuntime.try_route_http(mut app, mut ctx, method, target) {
 		return result
 	}
 	if !app.has_http_logic_executor() {
+		start_ms := time.now().unix_milli()
+		req_id := resolve_request_id(ctx, target)
+		trace_id := resolve_trace_id(ctx, target)
 		remote_addr := if isnil(ctx.conn) { '' } else { ctx.conn.peer_ip() or { '' } }
 		return HttpResponseRuntime.delivery_outcome(mut app, mut ctx, http_ingress_request(method,
 			target, target, '', remote_addr, req_id, trace_id, start_ms), dispatch.response_outcome(404,
