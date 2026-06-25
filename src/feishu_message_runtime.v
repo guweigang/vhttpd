@@ -8,14 +8,15 @@ import feishu
 
 fn (mut app App) feishu_runtime_send_message(req feishu.SendMessageRequest) !feishu.SendMessageResult {
 	app_name := app.providers.feishu.resolve_app_name(req.app)!
-	if !app.feishu_runtime_ready() {
+	if !app.providers.feishu_runtime_ready() {
 		return error('feishu gateway is not configured')
 	}
 	receive_id_type, receive_id, msg_type, content := req.resolve_params()!
 	token := app.feishu_runtime_tenant_access_token(app_name)!
 	mut header := http.new_header(key: .content_type, value: 'application/json; charset=utf-8')
 	header.add_custom('authorization', 'Bearer ${token}') or {} // safe to ignore: header append on detached request
-	url := feishu.SendMessageRequest.api_url(app.providers.feishu.open_base_url, receive_id_type, receive_id)
+	url := feishu.SendMessageRequest.api_url(app.providers.feishu.open_base_url, receive_id_type,
+		receive_id)
 	payload := feishu.SendMessageRequest.api_payload(msg_type, content, receive_id, req.uuid,
 		receive_id_type)
 	log.info('[feishu] 📤 sending message: method=POST url=${url} payload=${payload.len} bytes')
@@ -105,7 +106,7 @@ fn (mut app App) feishu_runtime_upload_image_bytes(req feishu.UploadImageRequest
 
 fn (mut app App) feishu_runtime_update_message(req feishu.UpdateMessageRequest) !feishu.SendMessageResult {
 	app_name := app.providers.feishu.resolve_app_name(req.app)!
-	if !app.feishu_runtime_ready() {
+	if !app.providers.feishu_runtime_ready() {
 		return error('feishu gateway is not configured')
 	}
 	message_id_type, target, msg_type, mut content_raw := req.resolve_params()!
@@ -130,7 +131,12 @@ fn (mut app App) feishu_runtime_update_message(req feishu.UpdateMessageRequest) 
 	url, method, payload := feishu.UpdateMessageRequest.api_request(app.providers.feishu.open_base_url,
 		message_id_type, target, msg_type, content_raw, req.uuid)!
 	log.info('[feishu] 📤 sending update: method=${method} url=${url} payload=${payload.len} bytes')
-	resp := (&app.providers.feishu).http_fetch(url: url, method: method, data: payload, header: header) or {
+	resp := (&app.providers.feishu).http_fetch(
+		url:    url
+		method: method
+		data:   payload
+		header: header
+	) or {
 		app.providers.feishu.note_send(app_name, false)
 		log.error('[feishu] ❌ update fetch failed: ${err}')
 		return err

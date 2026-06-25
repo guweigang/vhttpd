@@ -11,7 +11,7 @@ pub fn (mut app App) provider_runtime_snapshot(name string) ?string {
 	db_name := provider.ProviderName.db()
 	return match name {
 		feishu_name {
-			json.encode(app.feishu_runtime_snapshot())
+			json.encode(app.providers.feishu_runtime_snapshot())
 		}
 		codex_name {
 			json.encode(app.admin_codex_snapshot())
@@ -31,7 +31,7 @@ pub fn (mut app App) provider_runtime_upstream_snapshot(name string, instance st
 	codex_name := provider.ProviderName.codex()
 	return match name {
 		feishu_name {
-			snapshot := app.feishu_runtime_app_snapshot(instance) or { return none }
+			snapshot := app.providers.feishu_runtime_app_snapshot(instance) or { return none }
 			provider.UpstreamRuntimeMapper.from_feishu_snapshot(snapshot)
 		}
 		codex_name {
@@ -65,7 +65,7 @@ pub fn (mut app App) provider_runtime_upstream_events(name string, instance_filt
 	codex_name := provider.ProviderName.codex()
 	return match name {
 		feishu_name {
-			provider.UpstreamRuntimeMapper.events_from_feishu_snapshot(app.feishu_runtime_snapshot(),
+			provider.UpstreamRuntimeMapper.events_from_feishu_snapshot(app.providers.feishu_runtime_snapshot(),
 				instance_filter)
 		}
 		codex_name {

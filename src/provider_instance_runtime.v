@@ -52,7 +52,7 @@ fn (mut app App) build_provider_instance_runtime_context() ProviderInstanceRunti
 		}
 		source_fn:           fn [mut app] (provider_name string, instance string) string {
 			return match provider_name {
-				'feishu' { app.feishu_runtime_app_source(instance) }
+				'feishu' { app.providers.feishu_runtime_app_source(instance) }
 				'codex' { 'dynamic' }
 				else { 'dynamic' }
 			}

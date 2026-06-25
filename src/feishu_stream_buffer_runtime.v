@@ -132,7 +132,7 @@ fn (mut app App) feishu_runtime_run_buffer_flusher() {
 }
 
 fn (mut app App) feishu_runtime_flush_pending_buffers() {
-	if app.feishu_runtime_bridge_proxy_only() {
+	if app.providers.feishu_runtime_bridge_proxy_only() {
 		return
 	}
 	now := time.now().unix_milli()
@@ -182,7 +182,7 @@ fn (mut app App) feishu_runtime_flush_pending_buffers() {
 }
 
 fn (mut app App) feishu_runtime_flush_buffer(message_id string, template_content string, finish bool) ! {
-	if app.feishu_runtime_bridge_proxy_only() {
+	if app.providers.feishu_runtime_bridge_proxy_only() {
 		if finish {
 			log.info('[feishu] 🚿 explicit flush skipped in bridge proxy mode for msg_id=${message_id} (finish=true)')
 			return

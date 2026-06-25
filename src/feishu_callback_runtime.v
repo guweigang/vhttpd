@@ -44,7 +44,7 @@ fn (mut app App) feishu_callback_by_app(mut ctx Context, raw_app string) veb.Res
 	}
 	challenge := feishu.CallbackChallengeResponse.challenge(payload)
 	if challenge != '' {
-		if !app.feishu_runtime_callback_token_valid(app_name, payload) {
+		if !app.providers.feishu_runtime_callback_token_valid(app_name, payload) {
 			return feishu_admin_error(req_ctx, mut app, mut ctx, 403,
 				'invalid_feishu_callback_token')
 		}
@@ -52,7 +52,7 @@ fn (mut app App) feishu_callback_by_app(mut ctx Context, raw_app string) veb.Res
 			challenge: challenge
 		}), 'challenge', app_name)
 	}
-	if !app.feishu_runtime_callback_token_valid(app_name, payload) {
+	if !app.providers.feishu_runtime_callback_token_valid(app_name, payload) {
 		return feishu_admin_error(req_ctx, mut app, mut ctx, 403, 'invalid_feishu_callback_token')
 	}
 	summary := feishu.RuntimeEventSnapshot.summary_from_payload(payload)
