@@ -110,13 +110,11 @@ fn HttpIngressRuntime.handle(mut app App, mut ctx Context, method string, path s
 	mut engine_selection := app.engines.dispatch_selection(dispatch_plan.executor)
 
 	log.info('[http] ⇢ dispatch method=${method.to_upper()} path=${path} target=${dispatch_plan.target} trace_id=${trace_id} request_id=${req_id} pipeline=${dispatch_plan.pipeline_id} body_len=${ctx.req.data.len} executor=${engine_selection.logic_executor.kind()} pool=${engine_selection.pool}')
-	if engine_selection.stream_dispatch {
-		if engine_selection.pool == 'main' {
-			if result := HttpStreamRuntime.via_dispatch(mut app, mut ctx, method, dispatch_plan.target,
-				req_id, trace_id, remote_addr)
-			{
-				return result
-			}
+	if engine_selection.should_try_primary_stream_dispatch() {
+		if result := HttpStreamRuntime.via_dispatch(mut app, mut ctx, method, dispatch_plan.target,
+			req_id, trace_id, remote_addr)
+		{
+			return result
 		}
 	}
 	mut facade := app.as_facade()

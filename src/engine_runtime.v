@@ -81,6 +81,10 @@ pub:
 	stream_dispatch bool
 }
 
+fn (selection EngineDispatchSelection) should_try_primary_stream_dispatch() bool {
+	return selection.stream_dispatch && selection.pool == 'main'
+}
+
 struct EngineRuntimeMetrics {
 pub:
 	queue_waits_total    i64
