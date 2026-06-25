@@ -109,7 +109,7 @@ fn HttpIngressRuntime.handle(mut app App, mut ctx Context, method string, path s
 	// 3. 动态切换活动的后端执行器
 	mut engine_selection := app.engines.dispatch_selection(dispatch_plan.executor)
 
-	log.info('[http] ⇢ dispatch method=${method.to_upper()} path=${path} target=${dispatch_plan.target} trace_id=${trace_id} request_id=${req_id} pipeline=${dispatch_plan.pipeline_id} body_len=${ctx.req.data.len} executor=${engine_selection.logic_executor.kind()} pool=${engine_selection.pool}')
+	log.info('[http] ⇢ dispatch method=${method.to_upper()} path=${path} target=${dispatch_plan.target} trace_id=${trace_id} request_id=${req_id} pipeline=${dispatch_plan.pipeline_id} body_len=${ctx.req.data.len} executor=${engine_selection.executor_kind()} pool=${engine_selection.pool}')
 	if engine_selection.should_try_primary_stream_dispatch() {
 		if result := HttpStreamRuntime.via_dispatch(mut app, mut ctx, method, dispatch_plan.target,
 			req_id, trace_id, remote_addr)
@@ -120,7 +120,7 @@ fn HttpIngressRuntime.handle(mut app App, mut ctx Context, method string, path s
 	mut facade := app.as_facade()
 	dispatch_req := app.pipelines.http_logic_dispatch_request(method, path, dispatch_plan, ctx.req,
 		remote_addr, trace_id, req_id)
-	mut outcome := engine_selection.logic_executor.dispatch_http(mut facade, dispatch_req) or {
+	mut outcome := engine_selection.dispatch_http(mut facade, dispatch_req) or {
 		return HttpResponseRuntime.dispatch_error(mut app, mut ctx, ingress_req, err.msg())
 	}
 	return HttpResponseRuntime.render(mut app, mut ctx, ingress_req, mut outcome, dispatch_plan)

@@ -85,6 +85,14 @@ fn (selection EngineDispatchSelection) should_try_primary_stream_dispatch() bool
 	return selection.stream_dispatch && selection.pool == 'main'
 }
 
+fn (selection EngineDispatchSelection) executor_kind() string {
+	return selection.logic_executor.kind()
+}
+
+fn (selection EngineDispatchSelection) dispatch_http(mut facade executor.AppFacade, req executor.HttpLogicDispatchRequest) !executor.HttpLogicDispatchOutcome {
+	return selection.logic_executor.dispatch_http(mut facade, req)
+}
+
 struct EngineRuntimeMetrics {
 pub:
 	queue_waits_total    i64
