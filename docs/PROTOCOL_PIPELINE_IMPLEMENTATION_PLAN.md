@@ -1059,6 +1059,7 @@ Progress as of 2026-06-26:
 - `P5.19` in-process VJSX plugin runtime split complete: plugin call and plugin stream dispatch now live in a focused executor module instead of the broad dispatch runtime
 - `P5.20` in-process VJSX WebSocket upstream split complete: upstream dispatch and retry flow now live in a focused executor module, leaving the broad dispatch runtime closer to HTTP plus WebSocket event dispatch
 - `P5.21` in-process VJSX WebSocket event split complete: event dispatch, lane callback entry, task enqueue, and response finalization now live in a focused executor module
+- `P5.22` in-process VJSX host session-store API split complete: `vhttpdHost.sessionStore` request handling now lives in a focused host API module
 
 Batches:
 
@@ -1083,6 +1084,7 @@ Batches:
 19. Move in-process VJSX plugin call and stream dispatch into a focused module. (complete)
 20. Move in-process VJSX WebSocket upstream dispatch into a focused module. (complete)
 21. Move in-process VJSX WebSocket event dispatch into a focused module. (complete)
+22. Move in-process VJSX host session-store API handling into a focused module. (complete)
 
 Acceptance:
 
