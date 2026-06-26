@@ -1036,9 +1036,13 @@ Acceptance:
 
 ### Phase 5: stream, WebSocket, and MCP migration
 
+Progress as of 2026-06-26:
+
+- `P5.1` stream exchange projection slice complete: worker direct stream open/chunk/end frames and dispatch stream open/chunk/end frames can be projected into protocol-neutral `dispatch.Exchange` lifecycle values without moving TCP/Unix connection ownership out of their current stream runtimes
+
 Batches:
 
-1. Adapt stream frames to Exchange lifecycle.
+1. Adapt stream frames to Exchange lifecycle. (projection complete; runtime IO adoption pending)
 2. Adapt WebSocket session events.
 3. Adapt MCP sessions/messages.
 4. Add explicit protocol bridge transforms.
