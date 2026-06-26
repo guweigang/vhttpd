@@ -1041,13 +1041,14 @@ Progress as of 2026-06-26:
 - `P5.1` stream exchange projection slice complete: worker direct stream open/chunk/end frames and dispatch stream open/chunk/end frames can be projected into protocol-neutral `dispatch.Exchange` lifecycle values without moving TCP/Unix connection ownership out of their current stream runtimes
 - `P5.2` WebSocket exchange projection slice complete: worker session open/message/close frames and runtime message/close events can be projected into protocol-neutral `dispatch.Exchange` session lifecycle values while the current WebSocket bridge still owns live socket IO
 - `P5.3` MCP exchange projection slice complete: MCP POST dispatch requests/responses, session SSE opens, queued runtime messages, and session closes can be projected into protocol-neutral `dispatch.Exchange` request/response/stream/session lifecycle values while current MCP HTTP/SSE handlers still own live IO
+- `P5.4` protocol bridge transform slice complete: native `protocol.bridge` transforms annotate exchanges with bridge metadata and return explicit `forward` actions to configured or exchange-provided targets without embedding provider-specific forwarding logic
 
 Batches:
 
 1. Adapt stream frames to Exchange lifecycle. (projection complete; runtime IO adoption pending)
 2. Adapt WebSocket session events. (projection complete; runtime IO adoption pending)
 3. Adapt MCP sessions/messages. (projection complete; runtime IO adoption pending)
-4. Add explicit protocol bridge transforms.
+4. Add explicit protocol bridge transforms. (native forward boundary complete; relay/adapter delivery adoption pending)
 5. Split the broad `LogicExecutor` interface into capability interfaces.
 6. Split `executor.AppFacade` into capability-scoped service interfaces.
 
