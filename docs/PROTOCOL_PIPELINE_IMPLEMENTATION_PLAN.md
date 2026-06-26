@@ -1069,6 +1069,7 @@ Progress as of 2026-06-26:
 - `P5.29` in-process VJSX WebSocket affinity state split complete: connection affinity release, explicit affinity key release, and affinity migration/ref-count bookkeeping now live beside the state they maintain, leaving affinity runtime focused on key resolution and lane acquisition
 - `P5.30` in-process VJSX WebSocket lane-query runtime split complete: affinity and actor app-hook execution on a selected lane now lives beside the query runtimes, leaving the callback runtime focused on WebSocket handler invocation and response normalization
 - `P5.31` in-process VJSX lifecycle split complete: executor construction, app retention, admin details, and facade/lane snapshots now live in a lifecycle module, leaving the types module focused on state and data definitions
+- `P5.32` in-process VJSX WebSocket session-store JS facade split complete: the `runtime.sessionStore()` JavaScript facade now lives in a focused module, leaving WebSocket JS runtime construction focused on base metadata and transport helpers
 
 Batches:
 
