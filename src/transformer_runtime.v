@@ -1,6 +1,7 @@
 module main
 
 import dispatch
+import feishu
 import runtime_plan
 
 struct TransformerRuntimeEntry {
@@ -155,6 +156,43 @@ fn (mut transformer NativeTransformer) transform(mut services dispatch.RuntimeSe
 		'exchange_id': exchange.identity.id
 		'pipeline':    exchange.pipeline
 	})
+	match transformer.handler {
+		'feishu.event.summary' {
+			return transformer.transform_feishu_event_summary(mut exchange)!
+		}
+		else {}
+	}
+
+	return dispatch.continue_pipeline_action()
+}
+
+fn (transformer NativeTransformer) transform_feishu_event_summary(mut exchange dispatch.Exchange) !dispatch.TransformAction {
+	payload := match exchange.payload {
+		dispatch.EventPayload { exchange.payload.data }
+		else { '' }
+	}
+
+	if payload.trim_space() == '' {
+		return error('feishu_transform_missing_event_payload:${transformer.id}')
+	}
+	summary := feishu.RuntimeEventSnapshot.summary_from_payload(payload)
+	exchange.metadata['feishu.event_kind'] = summary.event_kind
+	exchange.metadata['feishu.event_type'] = summary.event_type
+	exchange.metadata['feishu.event_id'] = summary.event_id
+	exchange.metadata['feishu.message_id'] = summary.message_id
+	exchange.metadata['feishu.message_type'] = summary.message_type
+	exchange.metadata['feishu.chat_id'] = summary.chat_id
+	exchange.metadata['feishu.chat_type'] = summary.chat_type
+	exchange.metadata['feishu.target_type'] = summary.target_type
+	exchange.metadata['feishu.target'] = summary.target
+	exchange.metadata['feishu.open_message_id'] = summary.open_message_id
+	exchange.metadata['feishu.root_id'] = summary.root_id
+	exchange.metadata['feishu.parent_id'] = summary.parent_id
+	exchange.metadata['feishu.sender_id'] = summary.sender_id
+	exchange.metadata['feishu.sender_id_type'] = summary.sender_id_type
+	exchange.metadata['feishu.sender_tenant_key'] = summary.sender_tenant_key
+	exchange.metadata['feishu.action_tag'] = summary.action_tag
+	exchange.metadata['feishu.action_value'] = summary.action_value
 	return dispatch.continue_pipeline_action()
 }
 
