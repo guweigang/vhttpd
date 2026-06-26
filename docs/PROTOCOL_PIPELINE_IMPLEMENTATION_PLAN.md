@@ -1136,6 +1136,7 @@ Progress as of 2026-06-26:
 - `P6.5` relay logical channel registry added: channel ownership, correlation lookup, close cleanup, and bounded per-channel frame buffering now live in generic relay state before stream/session forwarding is wired to carriers
 - `P6.6` relay forwarding state transition contract added: open/data/end/cancel/error frames now drive generic channel creation, correlation binding, bounded enqueue, and close cleanup through relay outcomes before carrier send loops are attached
 - `P6.7` relay generic session registry added: session, link, endpoint, target selection, endpoint close cleanup, and per-link pending buffers now live in relay core while provider/application role names and control-message policy remain outside the core
+- `P6.8` relay session routing decision layer added: session frames now resolve generic target endpoints or enter bounded per-link pending buffers through explicit outcomes, while application policy remains responsible for selecting link IDs and target role names
 
 Batches:
 
