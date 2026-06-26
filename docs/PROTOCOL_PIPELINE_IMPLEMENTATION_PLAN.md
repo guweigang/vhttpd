@@ -1137,6 +1137,7 @@ Progress as of 2026-06-26:
 - `P6.6` relay forwarding state transition contract added: open/data/end/cancel/error frames now drive generic channel creation, correlation binding, bounded enqueue, and close cleanup through relay outcomes before carrier send loops are attached
 - `P6.7` relay generic session registry added: session, link, endpoint, target selection, endpoint close cleanup, and per-link pending buffers now live in relay core while provider/application role names and control-message policy remain outside the core
 - `P6.8` relay session routing decision layer added: session frames now resolve generic target endpoints or enter bounded per-link pending buffers through explicit outcomes, while application policy remains responsible for selecting link IDs and target role names
+- `P6.9` relay runtime snapshot contract added: descriptors, agent reconnect state, channel buffers with trace IDs, and session pending counts now have a generic observable summary before admin/runtime wiring is attached
 
 Batches:
 
