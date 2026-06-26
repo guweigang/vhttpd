@@ -1,9 +1,7 @@
 module executor
 
 import json
-import os
 import vjsx
-import x.json2
 
 struct InProcVjsxHostApi {}
 
@@ -146,102 +144,6 @@ fn InProcVjsxHostApi.snapshot_builder(state_ptr &VjsxExecutorState, idx int) vjs
 				return ctx.js_string(raw)
 			}
 			return ctx.js_string(json.encode(app.admin_runtime_snapshot()))
-		})
-	}
-}
-
-fn InProcVjsxHostApi.config_lookup(raw_json string, path string) string {
-	if raw_json.trim_space() == '' {
-		return ''
-	}
-	if path.trim_space() == '' {
-		return raw_json
-	}
-	parsed := json2.decode[json2.Any](raw_json) or { return '' }
-	mut current := parsed
-	for raw_part in path.split('.') {
-		part := raw_part.trim_space()
-		if part == '' {
-			continue
-		}
-		root := current.as_map()
-		if part !in root {
-			return ''
-		}
-		current = root[part] or { return '' }
-	}
-	return current.json_str()
-}
-
-fn InProcVjsxHostApi.config_builder(mut state VjsxExecutorState, idx int) vjsx.HostValueBuilder {
-	return fn [mut state, idx] (ctx &vjsx.Context) vjsx.Value {
-		return ctx.js_function(fn [ctx, mut state, idx] (args []vjsx.Value) vjsx.Value {
-			mut app_ref := AppFacade(unsafe { nil })
-			state.mu.@lock()
-			if idx >= 0 && idx < state.hosts.len && state.hosts[idx].request_ctx.active {
-				app_ref = state.hosts[idx].request_ctx.app
-			}
-			state.mu.unlock()
-			if isnil(app_ref) {
-				return ctx.js_string('')
-			}
-			mut app := app_ref
-			path := if args.len > 0 { args[0].to_string().trim_space() } else { '' }
-			return ctx.js_string(InProcVjsxHostApi.config_lookup(app.get_runtime_config_json(),
-				path))
-		})
-	}
-}
-
-fn InProcVjsxHostApi.read_text_file_builder(mut state VjsxExecutorState, idx int) vjsx.HostValueBuilder {
-	return fn [mut state, idx] (ctx &vjsx.Context) vjsx.Value {
-		return ctx.js_function(fn [ctx, mut state, idx] (args []vjsx.Value) vjsx.Value {
-			_ = idx
-			if args.len == 0 {
-				return ctx.js_string('')
-			}
-			path := args[0].to_string().trim_space()
-			if path == '' {
-				return ctx.js_string('')
-			}
-			mut enable_fs := false
-			state.mu.@lock()
-			enable_fs = state.facade.config.enable_fs
-			state.mu.unlock()
-			if !enable_fs {
-				return ctx.js_string('')
-			}
-			content := os.read_file(path) or {
-				resolved := os.real_path(path)
-				if resolved != '' && resolved != path {
-					return ctx.js_string(os.read_file(resolved) or { '' })
-				}
-				return ctx.js_string('')
-			}
-			return ctx.js_string(content)
-		})
-	}
-}
-
-fn InProcVjsxHostApi.find_codex_session_builder(mut state VjsxExecutorState, idx int) vjsx.HostValueBuilder {
-	return fn [mut state, idx] (ctx &vjsx.Context) vjsx.Value {
-		return ctx.js_function(fn [ctx, mut state, idx] (args []vjsx.Value) vjsx.Value {
-			_ = idx
-			if args.len == 0 {
-				return ctx.js_string('')
-			}
-			thread_id := args[0].to_string().trim_space()
-			if thread_id == '' {
-				return ctx.js_string('')
-			}
-			mut enable_fs := false
-			state.mu.@lock()
-			enable_fs = state.facade.config.enable_fs
-			state.mu.unlock()
-			if !enable_fs {
-				return ctx.js_string('')
-			}
-			return ctx.js_string(CodexSessionLocator.find(thread_id))
 		})
 	}
 }
