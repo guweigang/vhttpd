@@ -1074,6 +1074,7 @@ Progress as of 2026-06-26:
 - `P5.34` in-process VJSX WebSocket runtime payload split complete: WebSocket session and upstream runtime metadata builders now live in a WebSocket payload module, leaving the general payload module focused on HTTP and snapshot contexts
 - `P5.35` in-process VJSX snapshot runtime split complete: snapshot runtime payloads, per-lane snapshot hook execution, and app/runtime snapshot aggregation now live in a snapshot runtime module, leaving the general payload module focused on HTTP request payloads
 - `P5.36` in-process VJSX lane worker task handler split complete: snapshot, warmup, pump, and affinity/actor task handling now lives in focused worker handler helpers, leaving the lane worker loop focused on channel selection and WebSocket callback dispatch
+- `P5.37` in-process VJSX host shutdown split complete: lane host reset and executor close/reset bookkeeping now live in a shutdown module, leaving host lifecycle focused on ensuring and bootstrapping lane hosts
 
 Batches:
 
