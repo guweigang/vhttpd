@@ -1132,6 +1132,7 @@ Progress as of 2026-06-26:
 - `P6.1` relay wire frame contract added: generic relay frames now have an explicit version, frame kind, trace/request identity, channel/correlation identity, headers, metadata, and opaque body, with encode/decode validation covered before hub/agent behavior is introduced
 - `P6.2` relay runtime descriptor projection added: compiled relay plans now project into validated hub/agent descriptors with carrier, listener/url, auth, node identity, bounded channel limits, and reconnect defaults before runtime networking is introduced
 - `P6.3` relay registration contract added: agents can build versioned hello frames from descriptors and hubs can deterministically accept or reject registrations by node identity, carrier, and token before socket-owned runtime state is introduced
+- `P6.4` relay agent reconnect state machine added: agent connection lifecycle now has deterministic disconnected, connecting, registered, backoff, and closed transitions with capped reconnect delay calculation before WebSocket loops consume it
 
 Batches:
 
