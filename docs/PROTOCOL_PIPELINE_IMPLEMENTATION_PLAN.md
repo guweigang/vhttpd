@@ -1055,6 +1055,7 @@ Progress as of 2026-06-26:
 - `P5.15` in-process VJSX lane type split complete: lane wakeups, worker channels, and snapshot/warmup/pump/affinity task payloads now live in a dedicated executor module
 - `P5.16` in-process VJSX lane host ownership slice complete: `VjsxLaneHost` now lives beside its host lifecycle facade instead of the broad executor type file
 - `P5.17` in-process VJSX runtime/context type split complete: runtime payload metadata and active lane request context now live beside their runtime payload and lane context modules
+- `P5.18` in-process VJSX constant split complete: lane, dispatch, startup, signature, and host facade constants now live in a dedicated executor module
 
 Batches:
 
@@ -1075,6 +1076,7 @@ Batches:
 15. Move in-process VJSX lane worker task and wakeup types into a focused module. (complete)
 16. Move in-process VJSX lane host state next to its host facade methods. (complete)
 17. Move in-process VJSX runtime metadata and lane request context types next to their runtime modules. (complete)
+18. Move in-process VJSX runtime constants into a focused module. (complete)
 
 Acceptance:
 
