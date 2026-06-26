@@ -1013,6 +1013,8 @@ Progress as of 2026-06-25:
 - `P4.1` transformer chain runner slice complete: runtime code can execute ordered transform references through the registry with protocol-neutral `dispatch.Exchange` and `dispatch.RuntimeServices`, halting on non-continue actions while preserving trace-capable service emission
 - `P4.2` VJSX transformer wrapper slice complete: VJSX transforms reuse the existing VJSX event dispatch path and engine/lane workers through an App-facing runtime wrapper instead of allocating a second lane pool
 - `P4.3` transformer conformance slice complete: native and in-process VJSX backends both execute the same event exchange shape through transform refs and return `continue_pipeline`, with VJSX verified through a real lane worker
+- `P4.4` Feishu native transform slice complete: `feishu.event.summary` parses Feishu event payloads into standardized exchange metadata for message and card-action events without taking ownership of Feishu callback transport, bridge, or upstream dispatch state
+- `P4.5` VJSX fixture slice complete: the same Feishu event exchange shape is routed through an in-process VJSX transformer fixture and verified by the JS handler before returning `continue_pipeline`
 - `P4.6` upload completion transformer slice complete: upload adapters project completed-event pipeline transform refs into runtime routes, dispatch upload completion as a `dispatch.Exchange`, prefer transformer execution, and fall back to legacy direct VJSX event dispatch during the transition
 
 Batches:
@@ -1020,8 +1022,8 @@ Batches:
 1. Implement transformer registry and native backend. (registry, native no-op backend, and transform chain runner complete)
 2. Implement VJSX transformer wrapper using lane workers. (complete for event exchanges via existing VJSX dispatch)
 3. Add conformance suite. (native and VJSX event-exchange conformance complete)
-4. Wrap Feishu event transformation as native V.
-5. Run equivalent routing fixture through VJSX.
+4. Wrap Feishu event transformation as native V. (complete for event summary projection)
+5. Run equivalent routing fixture through VJSX. (complete for Feishu event exchange fixture)
 6. Route upload completion through a transformer pipeline. (complete with legacy fallback)
 
 Acceptance:
