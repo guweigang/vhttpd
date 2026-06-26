@@ -1016,6 +1016,7 @@ Progress as of 2026-06-25:
 - `P4.4` Feishu native transform slice complete: `feishu.event.summary` parses Feishu event payloads into standardized exchange metadata for message and card-action events without taking ownership of Feishu callback transport, bridge, or upstream dispatch state
 - `P4.5` VJSX fixture slice complete: the same Feishu event exchange shape is routed through an in-process VJSX transformer fixture and verified by the JS handler before returning `continue_pipeline`
 - `P4.6` upload completion transformer slice complete: upload adapters project completed-event pipeline transform refs into runtime routes, dispatch upload completion as a `dispatch.Exchange`, prefer transformer execution, and fall back to legacy direct VJSX event dispatch during the transition
+- `P4` observability slice complete: transformer runtime snapshots expose registered transforms, backend kind, handler, engine, availability, and capabilities through `/admin/runtime/transformers` on data-plane/admin-plane surfaces plus internal admin `/runtime/transformers`
 
 Batches:
 
@@ -1028,10 +1029,10 @@ Batches:
 
 Acceptance:
 
-- changing only transform `kind/engine/handler` switches backend
-- pipeline definitions remain unchanged
-- no transport lifecycle enters transformer code
-- queue limits and trace fields are visible
+- changing only transform `kind/engine/handler` switches backend (validated by native/VJSX conformance fixtures)
+- pipeline definitions remain unchanged (upload completion reads the configured completed pipeline transform refs)
+- no transport lifecycle enters transformer code (VJSX uses the existing engine/lane dispatch port; native operates on `dispatch.Exchange`)
+- queue limits and trace fields are visible (VJSX uses existing engine/lane queueing and transformer snapshots expose backend/capability state; event payloads carry request/trace IDs)
 
 ### Phase 5: stream, WebSocket, and MCP migration
 
