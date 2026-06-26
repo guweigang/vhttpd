@@ -191,3 +191,69 @@ fn test_transformer_conformance_vjsx_backend_continues_event_exchange_through_la
 	assert result.action.kind == .continue_pipeline
 	assert vjsx.lane_snapshot()[0].served_requests == 1
 }
+
+fn test_transformer_conformance_feishu_event_fixture_runs_through_vjsx_backend() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_transformer_feishu_vjsx_fixture_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	app_file := os.join_path(temp_dir, 'feishu-transformer.js')
+	os.write_file(app_file,
+		'globalThis.__vhttpd_handle = (ctx) => { const payload = ctx.jsonBody({}); const event = JSON.parse(payload.event_data || "{}"); const ok = payload.transform_id === "feishu-vjsx" && payload.event_name === "im.message.receive_v1" && event.header && event.header.event_type === "im.message.receive_v1" && event.event && event.event.message && event.event.message.message_id === "om_x"; return ctx.json({ ok, eventType: event.header && event.header.event_type }, ok ? 202 : 422); };') or {
+		panic(err)
+	}
+	defer {
+		os.rm(app_file) or {}
+	}
+	mut vjsx := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
+		thread_count:    1
+		app_entry:       app_file
+		runtime_profile: 'script'
+	})
+	defer {
+		vjsx.close()
+	}
+	plan := runtime_plan.RuntimePlan{
+		transforms: {
+			'feishu-vjsx': runtime_plan.TransformPlan{
+				id:      'feishu-vjsx'
+				kind:    'vjsx'
+				handler: 'feishu.fixture'
+			}
+		}
+	}
+	mut app := App{
+		transformers: TransformerRuntimeHub.from_plan(plan)
+		engines:      EngineRuntime{
+			additional: {
+				'vjsx': &worker.WorkerState{
+					worker_backend_mode: .disabled
+					logic_executor:      vjsx
+					lifecycle:           'embedded_host'
+				}
+			}
+		}
+	}
+	mut services := transformer_conformance_services()
+	mut exchange := dispatch.Exchange{
+		identity: dispatch.ExchangeIdentity{
+			id:         'ex-feishu-vjsx'
+			request_id: 'req-feishu-vjsx'
+			trace_id:   'trace-feishu-vjsx'
+		}
+		kind:     .event
+		ingress:  'listener:feishu'
+		pipeline: 'feishu.callback'
+		headers:  map[string]string{}
+		metadata: map[string]string{}
+		payload:  dispatch.EventPayload{
+			topic: 'feishu'
+			name:  'im.message.receive_v1'
+			data:  '{"header":{"event_id":"evt_1","event_type":"im.message.receive_v1"},"event":{"message":{"message_id":"om_x","message_type":"text","chat_id":"oc_y","chat_type":"group"}}}'
+		}
+	}
+	result := app.run_transform_refs(['transform:feishu-vjsx'], mut services, mut exchange) or {
+		panic(err)
+	}
+	assert !result.halted
+	assert result.action.kind == .continue_pipeline
+	assert vjsx.lane_snapshot()[0].served_requests == 1
+}
