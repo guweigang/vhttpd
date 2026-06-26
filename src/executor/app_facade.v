@@ -5,6 +5,61 @@ import net.http
 import net.unix
 import x.json2
 
+pub interface RuntimeConfigFacade {
+	get_runtime_config_json() string
+	get_runtime_plan_json() string
+}
+
+pub interface WorkerBackendConfigFacade {
+	worker_backend_read_timeout_ms() int
+	worker_backend_sockets_len() int
+	worker_env() map[string]string
+	worker_env_for_kind(kind string) map[string]string
+	worker_backend_read_timeout_ms_for_kind(kind string) int
+}
+
+pub interface WorkerSocketFacade {
+mut:
+	worker_backend_select_socket_queued() !string
+	worker_backend_select_socket_for_kind(kind string) !string
+	on_worker_request_started(socket_path string)
+	on_worker_request_finished(socket_path string)
+	worker_websocket_open(mut conn unix.StreamConn, req http.Request, remote_addr string, path string, req_id string, trace_id string) !(bool, int, string)
+}
+
+pub interface WorkerStreamDispatchFacade {
+mut:
+	worker_backend_dispatch_stream(req transport.StreamDispatchRequest) !transport.StreamDispatchResponse
+}
+
+pub interface WorkerMcpDispatchFacade {
+mut:
+	worker_backend_dispatch_mcp(req transport.WorkerMcpDispatchRequest) !transport.WorkerMcpDispatchResponse
+}
+
+pub interface WorkerWebSocketDispatchFacade {
+mut:
+	worker_backend_dispatch_websocket_upstream(req transport.WorkerWebSocketUpstreamDispatchRequest) !transport.WorkerWebSocketUpstreamDispatchResponse
+	worker_backend_dispatch_websocket_event(frame transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse
+	execute_websocket_dispatch_commands_result(commands []transport.WorkerWebSocketFrame) transport.WorkerWebSocketDispatchCommandsResult
+}
+
+pub interface PlatformFacade {
+mut:
+	emit(kind string, fields map[string]string)
+	admin_runtime_snapshot() AdminRuntimeSummary
+}
+
+pub interface ProviderBridgeFacade {
+mut:
+	provider_bridge_dispatch_callback(provider string, app_name string, trace_id string, summary FeishuRuntimeEventSummary, payload string) !FeishuCardBridgeResult
+}
+
+pub interface CommandDispatchFacade {
+mut:
+	run_command_envelopes(request_id string, dispatch_ctx DispatchContext, commands []transport.WorkerWebSocketUpstreamCommand) string
+}
+
 pub interface AppFacade {
 	// Config & Backend details
 	get_runtime_config_json() string
@@ -41,27 +96,83 @@ mut:
 	reserved int
 }
 
-pub fn (a NoOpAppFacade) get_runtime_config_json() string { return '{}' }
-pub fn (a NoOpAppFacade) get_runtime_plan_json() string { return '{}' }
-pub fn (a NoOpAppFacade) worker_backend_read_timeout_ms() int { return 0 }
-pub fn (a NoOpAppFacade) worker_backend_read_timeout_ms_for_kind(kind string) int { return 0 }
-pub fn (a NoOpAppFacade) worker_backend_sockets_len() int { return 0 }
-pub fn (a NoOpAppFacade) worker_env() map[string]string { return map[string]string{} }
-pub fn (a NoOpAppFacade) worker_env_for_kind(kind string) map[string]string { return map[string]string{} }
-pub fn (mut a NoOpAppFacade) worker_backend_select_socket_queued() !string { return error('noop') }
-pub fn (mut a NoOpAppFacade) worker_backend_select_socket_for_kind(kind string) !string { return error('noop') }
+pub fn (a NoOpAppFacade) get_runtime_config_json() string {
+	return '{}'
+}
+
+pub fn (a NoOpAppFacade) get_runtime_plan_json() string {
+	return '{}'
+}
+
+pub fn (a NoOpAppFacade) worker_backend_read_timeout_ms() int {
+	return 0
+}
+
+pub fn (a NoOpAppFacade) worker_backend_read_timeout_ms_for_kind(kind string) int {
+	return 0
+}
+
+pub fn (a NoOpAppFacade) worker_backend_sockets_len() int {
+	return 0
+}
+
+pub fn (a NoOpAppFacade) worker_env() map[string]string {
+	return map[string]string{}
+}
+
+pub fn (a NoOpAppFacade) worker_env_for_kind(kind string) map[string]string {
+	return map[string]string{}
+}
+
+pub fn (mut a NoOpAppFacade) worker_backend_select_socket_queued() !string {
+	return error('noop')
+}
+
+pub fn (mut a NoOpAppFacade) worker_backend_select_socket_for_kind(kind string) !string {
+	return error('noop')
+}
+
 pub fn (mut a NoOpAppFacade) on_worker_request_started(_socket_path string) {}
+
 pub fn (mut a NoOpAppFacade) on_worker_request_finished(_socket_path string) {}
-pub fn (mut a NoOpAppFacade) worker_websocket_open(mut _conn unix.StreamConn, _req http.Request, _remote_addr string, _path string, _req_id string, _trace_id string) !(bool, int, string) { return error('noop') }
-pub fn (mut a NoOpAppFacade) worker_backend_dispatch_stream(_req transport.StreamDispatchRequest) !transport.StreamDispatchResponse { return error('noop') }
-pub fn (mut a NoOpAppFacade) worker_backend_dispatch_mcp(_req transport.WorkerMcpDispatchRequest) !transport.WorkerMcpDispatchResponse { return error('noop') }
-pub fn (mut a NoOpAppFacade) worker_backend_dispatch_websocket_upstream(_req transport.WorkerWebSocketUpstreamDispatchRequest) !transport.WorkerWebSocketUpstreamDispatchResponse { return error('noop') }
-pub fn (mut a NoOpAppFacade) worker_backend_dispatch_websocket_event(_frame transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse { return error('noop') }
+
+pub fn (mut a NoOpAppFacade) worker_websocket_open(mut _conn unix.StreamConn, _req http.Request, _remote_addr string, _path string, _req_id string, _trace_id string) !(bool, int, string) {
+	return error('noop')
+}
+
+pub fn (mut a NoOpAppFacade) worker_backend_dispatch_stream(_req transport.StreamDispatchRequest) !transport.StreamDispatchResponse {
+	return error('noop')
+}
+
+pub fn (mut a NoOpAppFacade) worker_backend_dispatch_mcp(_req transport.WorkerMcpDispatchRequest) !transport.WorkerMcpDispatchResponse {
+	return error('noop')
+}
+
+pub fn (mut a NoOpAppFacade) worker_backend_dispatch_websocket_upstream(_req transport.WorkerWebSocketUpstreamDispatchRequest) !transport.WorkerWebSocketUpstreamDispatchResponse {
+	return error('noop')
+}
+
+pub fn (mut a NoOpAppFacade) worker_backend_dispatch_websocket_event(_frame transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse {
+	return error('noop')
+}
+
 pub fn (mut a NoOpAppFacade) emit(_kind string, _fields map[string]string) {}
-pub fn (mut a NoOpAppFacade) admin_runtime_snapshot() AdminRuntimeSummary { return AdminRuntimeSummary{} }
-pub fn (mut a NoOpAppFacade) provider_bridge_dispatch_callback(_provider string, _app_name string, _trace_id string, _summary FeishuRuntimeEventSummary, _payload string) !FeishuCardBridgeResult { return error('noop') }
-pub fn (mut a NoOpAppFacade) execute_websocket_dispatch_commands_result(_commands []transport.WorkerWebSocketFrame) transport.WorkerWebSocketDispatchCommandsResult { return transport.WorkerWebSocketDispatchCommandsResult{} }
-pub fn (mut a NoOpAppFacade) run_command_envelopes(_request_id string, _dispatch_ctx DispatchContext, _commands []transport.WorkerWebSocketUpstreamCommand) string { return '' }
+
+pub fn (mut a NoOpAppFacade) admin_runtime_snapshot() AdminRuntimeSummary {
+	return AdminRuntimeSummary{}
+}
+
+pub fn (mut a NoOpAppFacade) provider_bridge_dispatch_callback(_provider string, _app_name string, _trace_id string, _summary FeishuRuntimeEventSummary, _payload string) !FeishuCardBridgeResult {
+	return error('noop')
+}
+
+pub fn (mut a NoOpAppFacade) execute_websocket_dispatch_commands_result(_commands []transport.WorkerWebSocketFrame) transport.WorkerWebSocketDispatchCommandsResult {
+	return transport.WorkerWebSocketDispatchCommandsResult{}
+}
+
+pub fn (mut a NoOpAppFacade) run_command_envelopes(_request_id string, _dispatch_ctx DispatchContext, _commands []transport.WorkerWebSocketUpstreamCommand) string {
+	return ''
+}
 
 pub struct FeishuRuntimeEventSummary {
 pub mut:
