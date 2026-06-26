@@ -1051,6 +1051,7 @@ Progress as of 2026-06-26:
 - `P5.11` worker socket/config facade port migration slice complete: SocketWorkerExecutor HTTP/WebSocket open and PhpCgiExecutor HTTP dispatch now use explicit worker socket and backend config ports for socket selection, inflight accounting, read timeouts, and per-pool environment lookup
 - `P5.12` capability port module split complete: AppFacade ports and LogicExecutor ports now live in dedicated executor module files, keeping aggregate interfaces and concrete executor implementations smaller and more reviewable
 - `P5.13` logic executor module split complete: capability interfaces, disabled executor, socket worker executor, and PHP-CGI executor now live in dedicated executor module files instead of sharing one broad implementation file
+- `P5.14` in-process VJSX WebSocket type split complete: queued WebSocket task/frame payloads now live in a dedicated executor module, and WebSocket actor decisions sit beside affinity policy decisions
 
 Batches:
 
@@ -1067,6 +1068,7 @@ Batches:
 11. Migrate worker socket/config facade calls to capability-scoped facade ports. (complete)
 12. Move capability port wrappers into dedicated executor modules. (complete)
 13. Move concrete logic executor implementations into dedicated executor modules. (complete)
+14. Move in-process VJSX WebSocket task and policy decision types into focused modules. (complete)
 
 Acceptance:
 

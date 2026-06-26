@@ -148,11 +148,6 @@ struct InProcVjsxRuntimeMeta {
 	path                     string
 }
 
-struct InProcVjsxWebSocketFrameBundle {
-	raw     transport.WorkerWebSocketFrame
-	runtime InProcVjsxRuntimeMeta
-}
-
 struct InProcVjsxRequestContext {
 mut:
 	active     bool
@@ -162,43 +157,6 @@ mut:
 	trace_id   string
 	method     string
 	path       string
-}
-
-struct InProcVjsxWebSocketTaskResult {
-	ok            bool
-	response_json string
-	error         string
-}
-
-struct InProcVjsxWebSocketTaskSlot {
-mut:
-	mu     sync.Mutex
-	result InProcVjsxWebSocketTaskResult
-	ready  bool
-}
-
-struct InProcVjsxWebSocketTask {
-	app               AppFacade = NoOpAppFacade{}
-	frame             transport.WorkerWebSocketFrame
-	done              chan bool
-	started           chan bool
-	affinity_key      string
-	affinity_priority int
-	actor_key         string
-	actor_class       string
-	actor_priority    int
-	actor_persist     bool
-	actor_serialized  bool
-mut:
-	slot &InProcVjsxWebSocketTaskSlot = unsafe { nil }
-}
-
-pub struct WebSocketActorDecision {
-pub mut:
-	key        string
-	class_name string
-	priority   int
-	persist    bool = true
 }
 
 struct InProcVjsxLaneSnapshotTaskResult {

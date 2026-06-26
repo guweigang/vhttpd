@@ -14,6 +14,14 @@ mut:
 	priority int
 }
 
+pub struct WebSocketActorDecision {
+pub mut:
+	key        string
+	class_name string
+	priority   int
+	persist    bool = true
+}
+
 fn WebSocketAffinityPolicy.normalize_source(raw string) string {
 	source := raw.trim_space().to_lower()
 	return match source {
