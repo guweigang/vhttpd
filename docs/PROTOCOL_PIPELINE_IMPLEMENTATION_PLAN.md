@@ -1057,6 +1057,7 @@ Progress as of 2026-06-26:
 - `P5.17` in-process VJSX runtime/context type split complete: runtime payload metadata and active lane request context now live beside their runtime payload and lane context modules
 - `P5.18` in-process VJSX constant split complete: lane, dispatch, startup, signature, and host facade constants now live in a dedicated executor module
 - `P5.19` in-process VJSX plugin runtime split complete: plugin call and plugin stream dispatch now live in a focused executor module instead of the broad dispatch runtime
+- `P5.20` in-process VJSX WebSocket upstream split complete: upstream dispatch and retry flow now live in a focused executor module, leaving the broad dispatch runtime closer to HTTP plus WebSocket event dispatch
 
 Batches:
 
@@ -1079,6 +1080,7 @@ Batches:
 17. Move in-process VJSX runtime metadata and lane request context types next to their runtime modules. (complete)
 18. Move in-process VJSX runtime constants into a focused module. (complete)
 19. Move in-process VJSX plugin call and stream dispatch into a focused module. (complete)
+20. Move in-process VJSX WebSocket upstream dispatch into a focused module. (complete)
 
 Acceptance:
 
