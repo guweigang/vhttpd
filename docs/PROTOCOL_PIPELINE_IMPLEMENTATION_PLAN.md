@@ -1047,6 +1047,7 @@ Progress as of 2026-06-26:
 - `P5.7` aggregate interface composition complete: legacy `LogicExecutor` and `AppFacade` now compose their capability interfaces instead of duplicating method lists; V currently does not narrow an aggregate interface value back to a capability interface, so call-site migration should use concrete construction-time capabilities or explicit wrapper ports
 - `P5.8` HTTP executor port migration slice complete: `EngineDispatchSelection` now holds an explicit `LogicExecutorHttpPort` wrapper instead of the aggregate executor, giving HTTP routing a capability-scoped dependency while preserving legacy executor storage
 - `P5.9` protocol executor port migration slice complete: EngineRuntime stream, MCP, WebSocket session, WebSocket upstream, and WebSocket event dispatch now route through explicit capability ports instead of directly invoking the aggregate executor
+- `P5.10` worker dispatch facade port migration slice complete: SocketWorkerExecutor stream, MCP, WebSocket upstream, and WebSocket event backend calls now go through explicit AppFacade worker dispatch ports instead of directly invoking the aggregate facade
 
 Batches:
 
@@ -1059,6 +1060,7 @@ Batches:
 7. Compose legacy aggregate interfaces from capability interfaces. (complete; call-site migration requires wrapper/construction changes)
 8. Migrate HTTP dispatch selection to a capability-scoped executor port. (complete)
 9. Migrate protocol dispatch methods to capability-scoped executor ports. (complete)
+10. Migrate worker dispatch facade calls to capability-scoped facade ports. (complete)
 
 Acceptance:
 
