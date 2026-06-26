@@ -477,6 +477,7 @@ fn test_wordpress_v2_example_projects_http_pipelines_to_runtime_routes() {
 	assert upload.executor == 'upload'
 	assert upload.upload_dir == '/tmp/vhttpd-wordpress-uploads'
 	assert upload.on_completed == 'vjsx:wordpress.upload.completed'
+	assert upload.upload_completed_transform_refs == ['transform:upload-completed']
 	assert upload.max_body_bytes == 536870912
 	assert upload.response_headers['X-Content-Type-Options'] == 'nosniff'
 
@@ -505,4 +506,34 @@ fn test_wordpress_v2_example_projects_http_pipelines_to_runtime_routes() {
 	assert front.response_cache_ttl_ms == 30000
 	assert front.cache_bypass_cookie_patterns.contains('wordpress_logged_in_*')
 	assert front.cache_ignore_cookie_patterns.contains('wordpress_test_cookie')
+}
+
+fn test_upload_completed_exchange_carries_upload_event_payload() {
+	resp := UploadResponse{
+		ok:         true
+		event:      'upload.completed'
+		upload_id:  'upl_1'
+		filename:   'demo.txt'
+		trace_id:   'trace-1'
+		request_id: 'req-1'
+	}
+	exchange := upload_completed_exchange(resp, {
+		'route': '/vhttpd/uploads'
+	})
+	assert exchange.identity.id == 'upl_1'
+	assert exchange.identity.request_id == 'req-1'
+	assert exchange.identity.trace_id == 'trace-1'
+	assert exchange.kind == .event
+	assert exchange.pipeline == 'upload.completed'
+	assert exchange.metadata['route'] == '/vhttpd/uploads'
+	match exchange.payload {
+		dispatch.EventPayload {
+			assert exchange.payload.topic == 'upload'
+			assert exchange.payload.name == 'upload.completed'
+			assert exchange.payload.data.contains('"upload_id":"upl_1"')
+		}
+		else {
+			assert false
+		}
+	}
 }

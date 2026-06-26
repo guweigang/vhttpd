@@ -96,8 +96,10 @@ fn runtime_route_from_pipeline(plan runtime_plan.RuntimePlan, pipeline runtime_p
 			if route.max_body_bytes == 0 {
 				route.max_body_bytes = adapter.options.ints['max_body_bytes']
 			}
-			route.on_completed = legacy_completion_handler_from_plan(plan,
-				adapter.options.strings['completed_pipeline'])
+			completed_pipeline := adapter.options.strings['completed_pipeline']
+			route.on_completed = legacy_completion_handler_from_plan(plan, completed_pipeline)
+			route.upload_completed_transform_refs = completed_transform_refs_from_plan(plan,
+				completed_pipeline)
 		}
 		'fixed-response' {
 			route.executor = 'none'
@@ -114,6 +116,15 @@ fn runtime_route_from_pipeline(plan runtime_plan.RuntimePlan, pipeline runtime_p
 	}
 
 	return route
+}
+
+fn completed_transform_refs_from_plan(plan runtime_plan.RuntimePlan, pipeline_ref string) []string {
+	ref := runtime_plan.parse_ref(pipeline_ref) or { return []string{} }
+	if ref.domain != .pipeline {
+		return []string{}
+	}
+	pipeline := plan.pipeline(ref.id) or { return []string{} }
+	return pipeline.transforms.map(it.str())
 }
 
 fn runtime_executor_name(plan runtime_plan.RuntimePlan, adapter runtime_plan.AdapterPlan) string {

@@ -11,36 +11,37 @@ import worker
 
 pub struct RuntimeRouteRule {
 pub mut:
-	pipeline_id                  string
-	pipeline_group               string
-	ingress_id                   string
-	egress_ref                   string
-	policy_refs                  []string
-	transform_refs               []string
-	match_method                 []string
-	match_host                   []string
-	match_path                   []string
-	match_path_regexp            string
-	match_headers                map[string]string
-	match_query                  map[string]string
-	re                           regex.RE
-	executor                     string
-	rewrite                      string
-	rewrite_strip_prefix         string
-	root                         string
-	cache_control                string
-	response_cache_ttl_ms        int
-	cache_bypass_cookie_patterns []string
-	cache_ignore_cookie_patterns []string
-	response_headers             map[string]string
-	max_body_bytes               int
-	required_headers             map[string]string
-	denied_query_patterns        map[string]string
-	upload_dir                   string
-	on_completed                 string
-	status                       int
-	location                     string
-	body                         string
+	pipeline_id                     string
+	pipeline_group                  string
+	ingress_id                      string
+	egress_ref                      string
+	policy_refs                     []string
+	transform_refs                  []string
+	upload_completed_transform_refs []string
+	match_method                    []string
+	match_host                      []string
+	match_path                      []string
+	match_path_regexp               string
+	match_headers                   map[string]string
+	match_query                     map[string]string
+	re                              regex.RE
+	executor                        string
+	rewrite                         string
+	rewrite_strip_prefix            string
+	root                            string
+	cache_control                   string
+	response_cache_ttl_ms           int
+	cache_bypass_cookie_patterns    []string
+	cache_ignore_cookie_patterns    []string
+	response_headers                map[string]string
+	max_body_bytes                  int
+	required_headers                map[string]string
+	denied_query_patterns           map[string]string
+	upload_dir                      string
+	on_completed                    string
+	status                          int
+	location                        string
+	body                            string
 }
 
 struct EdgeCachedHttpResponse {

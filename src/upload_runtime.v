@@ -175,6 +175,54 @@ fn upload_completed_dispatch_fields(resp UploadResponse, route string, handler s
 	return out
 }
 
+fn upload_completed_exchange(resp UploadResponse, fields map[string]string) dispatch.Exchange {
+	return dispatch.Exchange{
+		identity: dispatch.ExchangeIdentity{
+			id:         resp.upload_id
+			request_id: resp.request_id
+			trace_id:   resp.trace_id
+		}
+		kind:     .event
+		ingress:  'adapter:upload'
+		pipeline: 'upload.completed'
+		headers:  map[string]string{}
+		metadata: fields.clone()
+		payload:  dispatch.EventPayload{
+			topic:    'upload'
+			name:     'upload.completed'
+			data:     json.encode(resp)
+			metadata: fields.clone()
+		}
+	}
+}
+
+fn (mut app App) dispatch_upload_completed_transforms(transform_refs []string, handler string, resp UploadResponse, fields map[string]string) bool {
+	if transform_refs.len == 0 {
+		return false
+	}
+	route := fields['route'] or { '' }
+	mut services := noop_dispatch_services(resp.trace_id)
+	mut exchange := upload_completed_exchange(resp, fields)
+	result := app.run_transform_refs(transform_refs, mut services, mut exchange) or {
+		mut failed := upload_completed_dispatch_fields(resp, route, handler, '')
+		failed['error'] = err.msg()
+		failed['transforms'] = transform_refs.join(',')
+		app.emit('upload.completed.transform_failed', failed)
+		return false
+	}
+	mut ok := upload_completed_dispatch_fields(resp, route, handler, if result.halted {
+		'halted'
+	} else {
+		'transform'
+	})
+	ok['transforms'] = transform_refs.join(',')
+	if result.transform != '' {
+		ok['transform'] = result.transform
+	}
+	app.emit('upload.completed.dispatch', ok)
+	return true
+}
+
 fn (mut app App) dispatch_upload_completed_vjsx(handler string, resp UploadResponse, fields map[string]string) {
 	clean_handler := handler.trim_space().clone()
 	if clean_handler == '' {
@@ -269,7 +317,10 @@ fn handle_upload_route(mut app App, mut ctx Context, rule RuntimeRouteRule, meth
 		'trace_id':     trace_id
 	}
 	app.emit('upload.completed', fields)
-	app.dispatch_upload_completed_vjsx(handler, resp, fields)
+	if !app.dispatch_upload_completed_transforms(rule.upload_completed_transform_refs, handler,
+		resp, fields) {
+		app.dispatch_upload_completed_vjsx(handler, resp, fields)
+	}
 	mut headers := {
 		'content-type':       'application/json; charset=utf-8'
 		'x-vhttpd-upload-id': upload_id
