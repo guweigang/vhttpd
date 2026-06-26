@@ -1139,6 +1139,7 @@ Progress as of 2026-06-27:
 - `P6.8` relay session routing decision layer added: session frames now resolve generic target endpoints or enter bounded per-link pending buffers through explicit outcomes, while application policy remains responsible for selecting link IDs and target role names
 - `P6.9` relay runtime snapshot contract added: descriptors, agent reconnect state, channel buffers with trace IDs, and session pending counts now have a generic observable summary before admin/runtime wiring is attached
 - `P6.10` relay runtime composition added: compiled relay descriptors, agent state, channel registry, session registry, forwarding, session routing, and snapshots now have a single generic runtime container before carrier sockets are attached
+- `P6.11` relay data-plane ownership added: the generic relay runtime is now composed as a first-class `DataPlaneRuntime` module built from `RuntimePlan`, keeping relay state out of providers and `main.v` before carrier socket integration
 
 Batches:
 

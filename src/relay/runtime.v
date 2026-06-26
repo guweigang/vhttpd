@@ -11,6 +11,15 @@ pub mut:
 	sessions SessionRegistry
 }
 
+pub fn empty_runtime() Runtime {
+	return Runtime{
+		descriptors: map[string]RelayDescriptor{}
+		agents:      map[string]AgentState{}
+		channels:    new_channel_registry(1024)
+		sessions:    new_session_registry()
+	}
+}
+
 pub fn new_runtime(plan runtime_plan.RuntimePlan) !Runtime {
 	descriptors := descriptors_from_plan(plan)!
 	mut max_channels := 1024

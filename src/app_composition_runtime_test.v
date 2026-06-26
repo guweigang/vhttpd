@@ -1,6 +1,8 @@
 module main
 
 import os
+import relay
+import runtime_plan
 import worker
 
 fn test_control_plane_runtime_emits_event_and_updates_stats_without_app() {
@@ -33,6 +35,26 @@ fn test_data_plane_runtime_owns_engine_state_without_app() {
 		}
 	}
 	assert data_plane.engines.primary_socket_count() == 1
+}
+
+fn test_data_plane_runtime_owns_relay_state_without_app() {
+	relay_runtime := relay.new_runtime(runtime_plan.RuntimePlan{
+		relays: {
+			'local': runtime_plan.RelayPlan{
+				id:   'local'
+				mode: 'agent'
+				options: runtime_plan.PlanOptions{
+					strings: {
+						'url': 'wss://relay.example.com'
+					}
+				}
+			}
+		}
+	}) or { panic(err) }
+	data_plane := DataPlaneRuntime{
+		relay: relay_runtime
+	}
+	assert data_plane.relay.snapshot().descriptor_count == 1
 }
 
 fn test_process_lifecycle_defaults_to_http() {

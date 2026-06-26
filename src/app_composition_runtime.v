@@ -4,6 +4,7 @@ import admin
 import config
 import json
 import os
+import relay
 import sync
 import time
 import executor
@@ -17,6 +18,7 @@ mut:
 	transport    TransportRuntimeHub
 	websocket    WebSocketRuntime
 	upstreams    UpstreamRuntimeRegistry
+	relay        relay.Runtime
 	protocols    ProtocolRuntimeHub
 	providers    ProviderRuntimeHub
 	engines      EngineRuntime

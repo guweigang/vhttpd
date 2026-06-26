@@ -6,6 +6,7 @@ import config
 import codex
 import provider
 import json
+import relay
 import time
 import worker
 import admin
@@ -126,6 +127,7 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 		}
 		websocket:     WebSocketRuntime.new(executor_plan.bootstrap.websocket_dispatch_mode)
 		upstreams:     UpstreamRuntimeRegistry.new()
+		relay:         relay_runtime_from_plan(runtime_plan_for_app)
 		transformers:  TransformerRuntimeHub.from_plan(runtime_plan_for_app)
 		engines:       EngineRuntime{
 			primary:    worker.WorkerState{
@@ -200,6 +202,10 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 			build_cfg.assets_root_real, build_cfg.workdir, executor_plan.bootstrap.worker_env,
 			add_workers)
 	}
+}
+
+fn relay_runtime_from_plan(plan runtime_plan.RuntimePlan) relay.Runtime {
+	return relay.new_runtime(plan) or { relay.empty_runtime() }
 }
 
 fn runtime_plan_with_projection_diagnostics(plan runtime_plan.RuntimePlan) runtime_plan.RuntimePlan {
