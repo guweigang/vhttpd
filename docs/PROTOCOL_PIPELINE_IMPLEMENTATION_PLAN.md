@@ -1071,6 +1071,7 @@ Progress as of 2026-06-26:
 - `P5.31` in-process VJSX lifecycle split complete: executor construction, app retention, admin details, and facade/lane snapshots now live in a lifecycle module, leaving the types module focused on state and data definitions
 - `P5.32` in-process VJSX WebSocket session-store JS facade split complete: the `runtime.sessionStore()` JavaScript facade now lives in a focused module, leaving WebSocket JS runtime construction focused on base metadata and transport helpers
 - `P5.33` in-process VJSX WebSocket dispatch JS facade split complete: the `runtime.websocketDispatch()` JavaScript bridge now lives in a focused module, leaving WebSocket JS runtime construction as a small facade installer
+- `P5.34` in-process VJSX WebSocket runtime payload split complete: WebSocket session and upstream runtime metadata builders now live in a WebSocket payload module, leaving the general payload module focused on HTTP and snapshot contexts
 
 Batches:
 
