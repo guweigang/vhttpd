@@ -1066,6 +1066,7 @@ Progress as of 2026-06-26:
 - `P5.26` in-process VJSX host filesystem API split complete: `vhttpdHost.readTextFile` and `vhttpdHost.findCodexSessionPath` now live in a focused host API module
 - `P5.27` in-process VJSX host runtime API split complete: `vhttpdHost.emit` and `vhttpdHost.snapshot` now live in a focused host API module, leaving the main host API file as the install/registry entry
 - `P5.28` in-process VJSX WebSocket actor runtime split complete: actor probing, source resolution, connection cache lookup, and cache lifecycle now live in a focused actor runtime module separate from affinity lane ownership
+- `P5.29` in-process VJSX WebSocket affinity state split complete: connection affinity release, explicit affinity key release, and affinity migration/ref-count bookkeeping now live beside the state they maintain, leaving affinity runtime focused on key resolution and lane acquisition
 
 Batches:
 
