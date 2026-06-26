@@ -2,6 +2,17 @@ module executor
 
 import upstream.transport
 
+struct InProcVjsxRequestContext {
+mut:
+	active     bool
+	app        AppFacade = NoOpAppFacade{}
+	lane_id    string
+	request_id string
+	trace_id   string
+	method     string
+	path       string
+}
+
 fn (e InProcVjsxExecutor) activate_lane_request_context(idx int, mut app AppFacade, lane_id string, req HttpLogicDispatchRequest) {
 	if isnil(e.state) || idx < 0 {
 		return
