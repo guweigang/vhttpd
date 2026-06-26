@@ -24,7 +24,7 @@ fn test_transformer_runtime_registers_native_transform_from_plan() {
 	assert entry.capabilities.events
 }
 
-fn test_transformer_runtime_keeps_vjsx_registered_but_unavailable_until_backend_exists() {
+fn test_transformer_runtime_marks_vjsx_registered_and_available_for_app_wrapper() {
 	plan := runtime_plan.RuntimePlan{
 		transforms: {
 			'upload-completed': runtime_plan.TransformPlan{
@@ -37,7 +37,7 @@ fn test_transformer_runtime_keeps_vjsx_registered_but_unavailable_until_backend_
 	hub := TransformerRuntimeHub.from_plan(plan)
 	entry := hub.entry('upload-completed') or { panic('missing transform entry') }
 	assert hub.has('upload-completed')
-	assert !hub.available('upload-completed')
+	assert hub.available('upload-completed')
 	assert entry.kind == 'vjsx'
 	assert entry.handler == 'wordpress.upload.completed'
 	assert entry.capabilities.events

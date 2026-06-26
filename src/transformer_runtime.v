@@ -50,7 +50,7 @@ fn TransformerRuntimeRegistry.from_plan(plan runtime_plan.RuntimePlan) Transform
 		descriptor := dispatch.transform_descriptor_from_plan(transform)
 		engine_ref := if engine := transform.engine { engine.str() } else { '' }
 		kind := transform.kind.trim_space().to_lower()
-		available := kind == 'native'
+		available := kind in ['native', 'vjsx']
 		registry.entries[id] = TransformerRuntimeEntry{
 			id:           id
 			kind:         kind
@@ -59,7 +59,7 @@ fn TransformerRuntimeRegistry.from_plan(plan runtime_plan.RuntimePlan) Transform
 			available:    available
 			capabilities: descriptor.capabilities
 		}
-		if available {
+		if kind == 'native' {
 			registry.native[id] = NativeTransformer{
 				id:           id
 				handler:      transform.handler
