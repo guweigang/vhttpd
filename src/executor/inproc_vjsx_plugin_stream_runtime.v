@@ -1,8 +1,9 @@
 module executor
 
 import json
+import vjsx
 
-fn (e InProcVjsxExecutor) call_plugin_once(mut app AppFacade, req PluginCallRequest) !PluginCallResponse {
+fn (e InProcVjsxExecutor) call_plugin_stream_once(mut app AppFacade, req PluginCallRequest, on_frame PluginStreamFrameFn) !PluginStreamCallResponse {
 	e.bootstrap_placeholder()!
 	lane := e.acquire_next_lane(inproc_vjsx_lane_wait_timeout_ms)!
 	defer {
@@ -58,6 +59,23 @@ fn (e InProcVjsxExecutor) call_plugin_once(mut app AppFacade, req PluginCallRequ
 	defer {
 		result.free()
 	}
+	if host.session.is_streamable_value(result) {
+		completed := host.session.stream_value(result, fn [on_frame] (frame vjsx.Value) !bool {
+			raw := frame.json_stringify()
+			return on_frame(raw)!
+		}) or {
+			e.record_lane_error(lane.id, err.msg())
+			return error('inproc_vjsx_executor_plugin_stream_failed:${err.msg()}')
+		}
+		e.record_lane_success(lane.id)
+		return PluginStreamCallResponse{
+			streamed: true
+			response: PluginCallResponse{
+				ok:     true
+				result: '{"streamed":true,"completed":${completed}}'
+			}
+		}
+	}
 	resolved := host.resolve_value(result) or {
 		e.record_lane_error(lane.id, err.msg())
 		return error('inproc_vjsx_executor_plugin_handler_failed:${err.msg()}')
@@ -67,25 +85,16 @@ fn (e InProcVjsxExecutor) call_plugin_once(mut app AppFacade, req PluginCallRequ
 	}
 	raw := resolved.json_stringify()
 	e.record_lane_success(lane.id)
-	return PluginCallResponse{
-		ok:     true
-		result: raw
+	return PluginStreamCallResponse{
+		streamed: false
+		response: PluginCallResponse{
+			ok:     true
+			result: raw
+		}
 	}
 }
 
-pub fn (e InProcVjsxExecutor) call_plugin(mut app AppFacade, req PluginCallRequest) !PluginCallResponse {
+pub fn (e InProcVjsxExecutor) call_plugin_stream(mut app AppFacade, req PluginCallRequest, on_frame PluginStreamFrameFn) !PluginStreamCallResponse {
 	e.remember_app(mut app)
-	mut last_err := 'inproc_vjsx_executor_plugin_call_failed'
-	for attempt in 0 .. inproc_vjsx_dispatch_retry_attempts {
-		resp := e.call_plugin_once(mut app, req) or {
-			last_err = err.msg()
-			if attempt + 1 < inproc_vjsx_dispatch_retry_attempts
-				&& InProcVjsxError.should_retry_dispatch(last_err) {
-				continue
-			}
-			return error(last_err)
-		}
-		return resp
-	}
-	return error(last_err)
+	return e.call_plugin_stream_once(mut app, req, on_frame)
 }
