@@ -1078,6 +1078,7 @@ Progress as of 2026-06-26:
 - `P5.38` in-process VJSX WebSocket actor policy split complete: actor source/event/result policy and actor decision types now live beside actor runtime code, leaving WebSocket affinity policy focused on lane affinity decisions
 - `P5.39` in-process VJSX lane state split complete: lane success/error bookkeeping and lane id lookup now live in a focused state module, leaving the lane pool module focused on selection, acquisition, waiting, and release
 - `P5.40` in-process VJSX startup hook runtime split complete: startup runtime payload creation, hook invocation, result normalization, and startup command dispatch now live in a hook runtime module, leaving startup runtime focused on lane/app startup gating
+- `P5.41` in-process VJSX WebSocket response codec split complete: WebSocket dispatch and upstream response normalization now live in a WebSocket codec module, leaving the base response codec focused on HTTP response values
 
 Batches:
 
