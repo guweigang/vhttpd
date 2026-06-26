@@ -34,6 +34,21 @@ pub fn (mut app App) admin_runtime_plan(mut ctx Context) veb.Result {
 	})
 }
 
+@['/admin/runtime/transformers'; get]
+pub fn (mut app App) admin_runtime_transformers(mut ctx Context) veb.Result {
+	req := admin_data_plane_request(ctx, '/admin/runtime/transformers')
+	if !app.control_plane.admin.on_data_plane {
+		return admin_data_plane_text(mut app, mut ctx, 'GET', req, 404, 'Not Found', {
+			'admin_endpoint': 'runtime_transformers'
+			'error':          'not_found'
+		})
+	}
+	body := json.encode(app.transformers.snapshot())
+	return admin_data_plane_json(mut app, mut ctx, 'GET', req, 200, body, {
+		'admin_endpoint': 'runtime_transformers'
+	})
+}
+
 @['/admin/runtime/upstreams'; get]
 pub fn (mut app App) admin_runtime_upstreams(mut ctx Context) veb.Result {
 	req := admin_data_plane_request(ctx, '/admin/runtime/upstreams')

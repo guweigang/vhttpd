@@ -30,6 +30,32 @@ struct TransformPipelineResult {
 	transform string
 }
 
+struct TransformerRuntimeSnapshot {
+	total        int
+	available    int
+	native_count int
+	vjsx_count   int
+	entries      []TransformerRuntimeEntrySnapshot
+}
+
+struct TransformerRuntimeEntrySnapshot {
+	id               string
+	kind             string
+	handler          string
+	engine           string
+	available        bool
+	request_response bool
+	events           bool
+	stream_input     bool
+	stream_output    bool
+	full_duplex      bool
+	sessions         bool
+	multiplexing     bool
+	cancellation     bool
+	backpressure     bool
+	replay           bool
+}
+
 struct NativeTransformer {
 	id           string
 	handler      string
@@ -104,6 +130,10 @@ fn (mut hub TransformerRuntimeHub) run_transform_refs(refs []string, mut service
 	}
 }
 
+fn (hub TransformerRuntimeHub) snapshot() TransformerRuntimeSnapshot {
+	return hub.registry.snapshot()
+}
+
 fn transform_id_from_ref(ref string) string {
 	if ref.starts_with('transform:') {
 		return ref.all_after('transform:')
@@ -128,6 +158,52 @@ fn (registry TransformerRuntimeRegistry) entry(id string) ?TransformerRuntimeEnt
 fn (mut registry TransformerRuntimeRegistry) transform(id string, mut services dispatch.RuntimeServices, mut exchange dispatch.Exchange) !dispatch.TransformAction {
 	mut transformer := registry.native[id] or { return error('transformer unavailable: ${id}') }
 	return transformer.transform(mut services, mut exchange)!
+}
+
+fn (registry TransformerRuntimeRegistry) snapshot() TransformerRuntimeSnapshot {
+	mut entries := []TransformerRuntimeEntrySnapshot{}
+	mut available := 0
+	mut native_count := 0
+	mut vjsx_count := 0
+	mut ids := registry.entries.keys()
+	ids.sort()
+	for id in ids {
+		entry := registry.entries[id]
+		if entry.available {
+			available++
+		}
+		match entry.kind {
+			'native' { native_count++ }
+			'vjsx' { vjsx_count++ }
+			else {}
+		}
+
+		caps := entry.capabilities
+		entries << TransformerRuntimeEntrySnapshot{
+			id:               entry.id
+			kind:             entry.kind
+			handler:          entry.handler
+			engine:           entry.engine
+			available:        entry.available
+			request_response: caps.request_response
+			events:           caps.events
+			stream_input:     caps.stream_input
+			stream_output:    caps.stream_output
+			full_duplex:      caps.full_duplex
+			sessions:         caps.sessions
+			multiplexing:     caps.multiplexing
+			cancellation:     caps.cancellation
+			backpressure:     caps.backpressure
+			replay:           caps.replay
+		}
+	}
+	return TransformerRuntimeSnapshot{
+		total:        entries.len
+		available:    available
+		native_count: native_count
+		vjsx_count:   vjsx_count
+		entries:      entries
+	}
 }
 
 fn (transformer NativeTransformer) id() string {

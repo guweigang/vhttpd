@@ -10,7 +10,6 @@ import worker
 
 struct InternalAdminRuntime {}
 
-
 fn (mut app App) internal_admin_dispatch(req admin.InternalAdminRequest) admin.InternalAdminResponse {
 	if req.mode != 'vhttpd_admin' {
 		return admin.InternalAdminResponse.error(400, 'invalid_mode')
@@ -26,12 +25,17 @@ fn (mut app App) internal_admin_dispatch(req admin.InternalAdminRequest) admin.I
 		'/runtime' {
 			return admin.InternalAdminResponse.json(json.encode(app.admin_runtime_snapshot()))
 		}
+		'/runtime/transformers' {
+			return admin.InternalAdminResponse.json(json.encode(app.transformers.snapshot()))
+		}
 		'/runtime/provider-instances' {
 			provider := (req.query['provider'] or { '' }).trim_space()
 			return admin.InternalAdminResponse.json(json.encode(app.admin_provider_instance_snapshots(provider)))
 		}
 		'/runtime/feishu' {
-			return admin.InternalAdminResponse.json(app.provider_runtime_snapshot('feishu') or { '{}' })
+			return admin.InternalAdminResponse.json(app.provider_runtime_snapshot('feishu') or {
+				'{}'
+			})
 		}
 		'/runtime/db' {
 			return admin.InternalAdminResponse.json(app.provider_runtime_snapshot('db') or { '{}' })

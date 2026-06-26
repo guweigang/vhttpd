@@ -144,6 +144,18 @@ pub fn (mut app AdminApp) admin_runtime_plan(mut ctx Context) veb.Result {
 	})
 }
 
+@['/admin/runtime/transformers'; get]
+pub fn (mut app AdminApp) admin_runtime_transformers(mut ctx Context) veb.Result {
+	req := admin_plane_request(ctx, '/admin/runtime/transformers')
+	if !app.admin_authorized(ctx) {
+		return admin_plane_forbidden(mut app, mut ctx, 'GET', req)
+	}
+	body := json.encode(app.shared.transformers.snapshot())
+	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, body, {
+		'admin_endpoint': 'runtime_transformers'
+	})
+}
+
 // New: return registered provider names as a stable admin endpoint so callers
 // don't need to parse /admin/runtime wrapper. This keeps API surface small
 // and explicit for tooling.
