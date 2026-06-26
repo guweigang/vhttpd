@@ -1134,6 +1134,7 @@ Progress as of 2026-06-26:
 - `P6.3` relay registration contract added: agents can build versioned hello frames from descriptors and hubs can deterministically accept or reject registrations by node identity, carrier, and token before socket-owned runtime state is introduced
 - `P6.4` relay agent reconnect state machine added: agent connection lifecycle now has deterministic disconnected, connecting, registered, backoff, and closed transitions with capped reconnect delay calculation before WebSocket loops consume it
 - `P6.5` relay logical channel registry added: channel ownership, correlation lookup, close cleanup, and bounded per-channel frame buffering now live in generic relay state before stream/session forwarding is wired to carriers
+- `P6.6` relay forwarding state transition contract added: open/data/end/cancel/error frames now drive generic channel creation, correlation binding, bounded enqueue, and close cleanup through relay outcomes before carrier send loops are attached
 
 Batches:
 
