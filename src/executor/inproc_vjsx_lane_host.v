@@ -3,6 +3,20 @@ module executor
 import os
 import vjsx
 
+struct VjsxLaneHost {
+mut:
+	initialized       bool
+	startup_completed bool
+	dirty             bool
+	source_signature  string
+	is_module_entry   bool
+	temp_root         string
+	app_ref           AppFacade            = NoOpAppFacade{}
+	session           &vjsx.RuntimeSession = unsafe { nil }
+	module_binding    &vjsx.ScriptModule   = unsafe { nil }
+	request_ctx       InProcVjsxRequestContext
+}
+
 fn VjsxLaneHost.empty() VjsxLaneHost {
 	return VjsxLaneHost{
 		session:        unsafe { nil }

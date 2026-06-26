@@ -4,7 +4,6 @@ import sync
 import time
 import config as app_config
 import state_store
-import vjsx
 
 const inproc_vjsx_lane_wait_timeout_ms = 1000
 const inproc_vjsx_lane_wait_poll_ms = 5
@@ -91,20 +90,6 @@ mut:
 	app_startup_running                     bool
 	app_startup_completed                   bool
 	app_startup_last_error                  string
-}
-
-struct VjsxLaneHost {
-mut:
-	initialized       bool
-	startup_completed bool
-	dirty             bool
-	source_signature  string
-	is_module_entry   bool
-	temp_root         string
-	app_ref           AppFacade            = NoOpAppFacade{}
-	session           &vjsx.RuntimeSession = unsafe { nil }
-	module_binding    &vjsx.ScriptModule   = unsafe { nil }
-	request_ctx       InProcVjsxRequestContext
 }
 
 struct InProcVjsxRuntimeMeta {

@@ -1053,6 +1053,7 @@ Progress as of 2026-06-26:
 - `P5.13` logic executor module split complete: capability interfaces, disabled executor, socket worker executor, and PHP-CGI executor now live in dedicated executor module files instead of sharing one broad implementation file
 - `P5.14` in-process VJSX WebSocket type split complete: queued WebSocket task/frame payloads now live in a dedicated executor module, and WebSocket actor decisions sit beside affinity policy decisions
 - `P5.15` in-process VJSX lane type split complete: lane wakeups, worker channels, and snapshot/warmup/pump/affinity task payloads now live in a dedicated executor module
+- `P5.16` in-process VJSX lane host ownership slice complete: `VjsxLaneHost` now lives beside its host lifecycle facade instead of the broad executor type file
 
 Batches:
 
@@ -1071,6 +1072,7 @@ Batches:
 13. Move concrete logic executor implementations into dedicated executor modules. (complete)
 14. Move in-process VJSX WebSocket task and policy decision types into focused modules. (complete)
 15. Move in-process VJSX lane worker task and wakeup types into a focused module. (complete)
+16. Move in-process VJSX lane host state next to its host facade methods. (complete)
 
 Acceptance:
 
