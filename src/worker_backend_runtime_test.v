@@ -42,7 +42,7 @@ fn test_engine_runtime_resolves_named_dispatch_and_worker_settings() {
 	}
 	selection := runtime.dispatch_selection('php-cgi')
 	assert selection.pool == 'php-cgi'
-	assert selection.logic_executor.kind() == 'php-cgi'
+	assert selection.executor_kind() == 'php-cgi'
 	assert runtime.read_timeout_ms('php-cgi') == 200
 	assert runtime.worker_env('php-cgi')['POOL'] == 'cgi'
 }

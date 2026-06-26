@@ -52,6 +52,36 @@ pub interface LogicExecutor {
 	WebSocketEventExecutor
 }
 
+pub struct LogicExecutorHttpPort {
+	inner LogicExecutor
+}
+
+pub fn logic_executor_http_port(inner LogicExecutor) LogicExecutorHttpPort {
+	return LogicExecutorHttpPort{
+		inner: inner
+	}
+}
+
+pub fn (port LogicExecutorHttpPort) model() LogicExecutorModel {
+	return port.inner.model()
+}
+
+pub fn (port LogicExecutorHttpPort) kind() string {
+	return port.inner.kind()
+}
+
+pub fn (port LogicExecutorHttpPort) provider() string {
+	return port.inner.provider()
+}
+
+pub fn (port LogicExecutorHttpPort) admin_details() LogicExecutorAdminDetails {
+	return port.inner.admin_details()
+}
+
+pub fn (port LogicExecutorHttpPort) dispatch_http(mut app AppFacade, req HttpLogicDispatchRequest) !HttpLogicDispatchOutcome {
+	return port.inner.dispatch_http(mut app, req)
+}
+
 pub struct DisabledLogicExecutor {}
 
 pub fn (e DisabledLogicExecutor) model() LogicExecutorModel {

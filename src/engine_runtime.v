@@ -75,7 +75,7 @@ fn (mut runtime EngineRuntime) apply_scheme(scheme string) {
 
 struct EngineDispatchSelection {
 mut:
-	logic_executor executor.LogicExecutor = executor.SocketWorkerExecutor{}
+	http_port executor.LogicExecutorHttpPort = executor.logic_executor_http_port(executor.SocketWorkerExecutor{})
 pub:
 	pool            string
 	stream_dispatch bool
@@ -86,11 +86,11 @@ fn (selection EngineDispatchSelection) should_try_primary_stream_dispatch() bool
 }
 
 fn (selection EngineDispatchSelection) executor_kind() string {
-	return selection.logic_executor.kind()
+	return selection.http_port.kind()
 }
 
 fn (selection EngineDispatchSelection) dispatch_http(mut facade executor.AppFacade, req executor.HttpLogicDispatchRequest) !executor.HttpLogicDispatchOutcome {
-	return selection.logic_executor.dispatch_http(mut facade, req)
+	return selection.http_port.dispatch_http(mut facade, req)
 }
 
 struct EngineRuntimeMetrics {
@@ -139,14 +139,14 @@ fn (runtime &EngineRuntime) dispatch_selection(name string) EngineDispatchSelect
 	if name != '' {
 		if state := runtime.additional[name] {
 			return EngineDispatchSelection{
-				logic_executor:  state.logic_executor
+				http_port:       executor.logic_executor_http_port(state.logic_executor)
 				pool:            name
 				stream_dispatch: state.stream_dispatch
 			}
 		}
 	}
 	return EngineDispatchSelection{
-		logic_executor:  runtime.primary.logic_executor
+		http_port:       executor.logic_executor_http_port(runtime.primary.logic_executor)
 		pool:            'main'
 		stream_dispatch: runtime.primary.stream_dispatch
 	}
