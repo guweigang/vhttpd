@@ -1043,6 +1043,7 @@ Progress as of 2026-06-26:
 - `P5.3` MCP exchange projection slice complete: MCP POST dispatch requests/responses, session SSE opens, queued runtime messages, and session closes can be projected into protocol-neutral `dispatch.Exchange` request/response/stream/session lifecycle values while current MCP HTTP/SSE handlers still own live IO
 - `P5.4` protocol bridge transform slice complete: native `protocol.bridge` transforms annotate exchanges with bridge metadata and return explicit `forward` actions to configured or exchange-provided targets without embedding provider-specific forwarding logic
 - `P5.5` logic executor capability interface slice complete: executor identity/lifecycle, HTTP, stream, MCP, WebSocket session, WebSocket upstream, and WebSocket event capabilities are available as separate interfaces while the legacy aggregate `LogicExecutor` remains for compatibility
+- `P5.6` AppFacade capability interface slice complete: runtime config, worker backend config, worker socket, stream/MCP/WebSocket dispatch, platform/admin, provider bridge, and command dispatch ports are available as separate interfaces while the legacy aggregate `AppFacade` remains for compatibility
 
 Batches:
 
@@ -1051,7 +1052,7 @@ Batches:
 3. Adapt MCP sessions/messages. (projection complete; runtime IO adoption pending)
 4. Add explicit protocol bridge transforms. (native forward boundary complete; relay/adapter delivery adoption pending)
 5. Split the broad `LogicExecutor` interface into capability interfaces. (capability interface definitions complete; call-site migration pending)
-6. Split `executor.AppFacade` into capability-scoped service interfaces.
+6. Split `executor.AppFacade` into capability-scoped service interfaces. (capability interface definitions complete; call-site migration pending)
 
 Acceptance:
 
