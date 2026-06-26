@@ -173,23 +173,28 @@ fn (runtime &EngineRuntime) has_socket_workers() bool {
 }
 
 fn (mut runtime EngineRuntime) dispatch_stream(mut facade executor.AppFacade, req transport.StreamDispatchRequest) !transport.StreamDispatchResponse {
-	return runtime.primary.logic_executor.dispatch_stream(mut facade, req)
+	return executor.logic_executor_stream_port(runtime.primary.logic_executor).dispatch_stream(mut facade,
+		req)
 }
 
 fn (mut runtime EngineRuntime) dispatch_mcp(mut facade executor.AppFacade, req transport.WorkerMcpDispatchRequest) !transport.WorkerMcpDispatchResponse {
-	return runtime.primary.logic_executor.dispatch_mcp(mut facade, req)
+	return executor.logic_executor_mcp_port(runtime.primary.logic_executor).dispatch_mcp(mut facade,
+		req)
 }
 
 fn (mut runtime EngineRuntime) dispatch_websocket_upstream(mut facade executor.AppFacade, req transport.WorkerWebSocketUpstreamDispatchRequest) !transport.WorkerWebSocketUpstreamDispatchResponse {
-	return runtime.primary.logic_executor.dispatch_websocket_upstream(mut facade, req)
+	return executor.logic_executor_websocket_upstream_port(runtime.primary.logic_executor).dispatch_websocket_upstream(mut facade,
+		req)
 }
 
 fn (mut runtime EngineRuntime) dispatch_websocket_event(mut facade executor.AppFacade, frame transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse {
-	return runtime.primary.logic_executor.dispatch_websocket_event(mut facade, frame)
+	return executor.logic_executor_websocket_event_port(runtime.primary.logic_executor).dispatch_websocket_event(mut facade,
+		frame)
 }
 
 fn (mut runtime EngineRuntime) open_websocket_session(mut facade executor.AppFacade, req executor.WebSocketSessionOpenRequest) !executor.WebSocketSessionOpenOutcome {
-	return runtime.primary.logic_executor.open_websocket_session(mut facade, req)
+	return executor.logic_executor_websocket_session_port(runtime.primary.logic_executor).open_websocket_session(mut facade,
+		req)
 }
 
 fn (mut runtime EngineRuntime) dispatch_http_for_kind(kind string, mut facade executor.AppFacade, req executor.HttpLogicDispatchRequest) !executor.HttpLogicDispatchOutcome {

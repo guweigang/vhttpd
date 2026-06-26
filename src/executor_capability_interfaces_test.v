@@ -72,3 +72,25 @@ fn test_builtin_logic_executors_satisfy_capability_interfaces() {
 	assert accepts_websocket_upstream_executor(cgi)
 	assert accepts_websocket_event_executor(cgi)
 }
+
+fn test_logic_executor_ports_satisfy_capability_interfaces() {
+	exec := executor.DisabledLogicExecutor{}
+	http_port := executor.logic_executor_http_port(exec)
+	assert accepts_executor_identity(http_port) == 'none'
+	assert accepts_http_executor(http_port)
+
+	stream_port := executor.logic_executor_stream_port(exec)
+	assert accepts_stream_executor(stream_port)
+
+	mcp_port := executor.logic_executor_mcp_port(exec)
+	assert accepts_mcp_executor(mcp_port)
+
+	ws_session_port := executor.logic_executor_websocket_session_port(exec)
+	assert accepts_websocket_session_executor(ws_session_port)
+
+	ws_upstream_port := executor.logic_executor_websocket_upstream_port(exec)
+	assert accepts_websocket_upstream_executor(ws_upstream_port)
+
+	ws_event_port := executor.logic_executor_websocket_event_port(exec)
+	assert accepts_websocket_event_executor(ws_event_port)
+}
