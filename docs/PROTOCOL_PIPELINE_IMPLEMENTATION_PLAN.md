@@ -1050,6 +1050,7 @@ Progress as of 2026-06-26:
 - `P5.10` worker dispatch facade port migration slice complete: SocketWorkerExecutor stream, MCP, WebSocket upstream, and WebSocket event backend calls now go through explicit AppFacade worker dispatch ports instead of directly invoking the aggregate facade
 - `P5.11` worker socket/config facade port migration slice complete: SocketWorkerExecutor HTTP/WebSocket open and PhpCgiExecutor HTTP dispatch now use explicit worker socket and backend config ports for socket selection, inflight accounting, read timeouts, and per-pool environment lookup
 - `P5.12` capability port module split complete: AppFacade ports and LogicExecutor ports now live in dedicated executor module files, keeping aggregate interfaces and concrete executor implementations smaller and more reviewable
+- `P5.13` logic executor module split complete: capability interfaces, disabled executor, socket worker executor, and PHP-CGI executor now live in dedicated executor module files instead of sharing one broad implementation file
 
 Batches:
 
@@ -1065,6 +1066,7 @@ Batches:
 10. Migrate worker dispatch facade calls to capability-scoped facade ports. (complete)
 11. Migrate worker socket/config facade calls to capability-scoped facade ports. (complete)
 12. Move capability port wrappers into dedicated executor modules. (complete)
+13. Move concrete logic executor implementations into dedicated executor modules. (complete)
 
 Acceptance:
 
