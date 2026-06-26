@@ -1049,6 +1049,7 @@ Progress as of 2026-06-26:
 - `P5.9` protocol executor port migration slice complete: EngineRuntime stream, MCP, WebSocket session, WebSocket upstream, and WebSocket event dispatch now route through explicit capability ports instead of directly invoking the aggregate executor
 - `P5.10` worker dispatch facade port migration slice complete: SocketWorkerExecutor stream, MCP, WebSocket upstream, and WebSocket event backend calls now go through explicit AppFacade worker dispatch ports instead of directly invoking the aggregate facade
 - `P5.11` worker socket/config facade port migration slice complete: SocketWorkerExecutor HTTP/WebSocket open and PhpCgiExecutor HTTP dispatch now use explicit worker socket and backend config ports for socket selection, inflight accounting, read timeouts, and per-pool environment lookup
+- `P5.12` capability port module split complete: AppFacade ports and LogicExecutor ports now live in dedicated executor module files, keeping aggregate interfaces and concrete executor implementations smaller and more reviewable
 
 Batches:
 
@@ -1063,6 +1064,7 @@ Batches:
 9. Migrate protocol dispatch methods to capability-scoped executor ports. (complete)
 10. Migrate worker dispatch facade calls to capability-scoped facade ports. (complete)
 11. Migrate worker socket/config facade calls to capability-scoped facade ports. (complete)
+12. Move capability port wrappers into dedicated executor modules. (complete)
 
 Acceptance:
 
