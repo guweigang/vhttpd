@@ -1052,6 +1052,7 @@ Progress as of 2026-06-26:
 - `P5.12` capability port module split complete: AppFacade ports and LogicExecutor ports now live in dedicated executor module files, keeping aggregate interfaces and concrete executor implementations smaller and more reviewable
 - `P5.13` logic executor module split complete: capability interfaces, disabled executor, socket worker executor, and PHP-CGI executor now live in dedicated executor module files instead of sharing one broad implementation file
 - `P5.14` in-process VJSX WebSocket type split complete: queued WebSocket task/frame payloads now live in a dedicated executor module, and WebSocket actor decisions sit beside affinity policy decisions
+- `P5.15` in-process VJSX lane type split complete: lane wakeups, worker channels, and snapshot/warmup/pump/affinity task payloads now live in a dedicated executor module
 
 Batches:
 
@@ -1069,6 +1070,7 @@ Batches:
 12. Move capability port wrappers into dedicated executor modules. (complete)
 13. Move concrete logic executor implementations into dedicated executor modules. (complete)
 14. Move in-process VJSX WebSocket task and policy decision types into focused modules. (complete)
+15. Move in-process VJSX lane worker task and wakeup types into a focused module. (complete)
 
 Acceptance:
 
