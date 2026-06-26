@@ -1,8 +1,8 @@
 module executor
 
-import upstream.transport
 import net.unix
 import time
+import upstream.transport
 
 pub struct PhpCgiExecutor {}
 
