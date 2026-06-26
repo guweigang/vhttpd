@@ -170,6 +170,85 @@ fn test_transformer_runtime_runs_native_transform_ref_chain() {
 	assert result.action.kind == .continue_pipeline
 }
 
+fn test_protocol_bridge_transform_forwards_to_configured_target() {
+	plan := runtime_plan.RuntimePlan{
+		transforms: {
+			'bridge': runtime_plan.TransformPlan{
+				id:      'bridge'
+				kind:    'native'
+				handler: 'protocol.bridge'
+				options: runtime_plan.PlanOptions{
+					strings: {
+						'target':   'relay:edge/local'
+						'protocol': 'websocket'
+					}
+				}
+			}
+		}
+	}
+	mut hub := TransformerRuntimeHub.from_plan(plan)
+	mut services := dispatch.RuntimeServices(dispatch.NoOpRuntimeServices{
+		trace: 'trace-1'
+	})
+	mut exchange := transformer_test_exchange()
+	result := hub.run_transform_refs(['transform:bridge'], mut services, mut exchange) or {
+		panic(err)
+	}
+	assert result.halted
+	assert result.transform == 'bridge'
+	assert result.action.kind == .forward
+	assert result.action.target == 'relay:edge/local'
+	assert exchange.metadata['bridge.transform'] == 'bridge'
+	assert exchange.metadata['bridge.handler'] == 'protocol.bridge'
+	assert exchange.metadata['bridge.target'] == 'relay:edge/local'
+	assert exchange.metadata['bridge.protocol'] == 'websocket'
+	assert exchange.metadata['bridge.exchange_kind'] == 'event'
+}
+
+fn test_protocol_bridge_transform_uses_exchange_target_fallback() {
+	plan := runtime_plan.RuntimePlan{
+		transforms: {
+			'bridge': runtime_plan.TransformPlan{
+				id:      'bridge'
+				kind:    'native'
+				handler: 'protocol.bridge'
+			}
+		}
+	}
+	mut hub := TransformerRuntimeHub.from_plan(plan)
+	mut services := dispatch.RuntimeServices(dispatch.NoOpRuntimeServices{
+		trace: 'trace-2'
+	})
+	mut exchange := transformer_test_exchange()
+	exchange.metadata['bridge.target'] = 'adapter:mcp'
+	action := hub.transform('bridge', mut services, mut exchange) or { panic(err) }
+	assert action.kind == .forward
+	assert action.target == 'adapter:mcp'
+	assert exchange.metadata['bridge.protocol'] == 'event'
+}
+
+fn test_protocol_bridge_transform_requires_target() {
+	plan := runtime_plan.RuntimePlan{
+		transforms: {
+			'bridge': runtime_plan.TransformPlan{
+				id:      'bridge'
+				kind:    'native'
+				handler: 'protocol.bridge'
+			}
+		}
+	}
+	mut hub := TransformerRuntimeHub.from_plan(plan)
+	mut services := dispatch.RuntimeServices(dispatch.NoOpRuntimeServices{
+		trace: 'trace-3'
+	})
+	mut exchange := transformer_test_exchange()
+	hub.transform('bridge', mut services, mut exchange) or {
+		assert err.msg() == 'protocol_bridge_missing_target:bridge'
+		return
+	}
+	assert false
+}
+
 fn test_transformer_runtime_reports_unavailable_transform_backend() {
 	plan := runtime_plan.RuntimePlan{
 		transforms: {

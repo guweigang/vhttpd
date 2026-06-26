@@ -9,6 +9,7 @@ struct TransformerRuntimeEntry {
 	kind         string
 	handler      string
 	engine       string
+	options      runtime_plan.PlanOptions
 	available    bool
 	capabilities dispatch.Capabilities
 }
@@ -59,6 +60,7 @@ struct TransformerRuntimeEntrySnapshot {
 struct NativeTransformer {
 	id           string
 	handler      string
+	options      runtime_plan.PlanOptions
 	capabilities dispatch.Capabilities
 }
 
@@ -83,6 +85,7 @@ fn TransformerRuntimeRegistry.from_plan(plan runtime_plan.RuntimePlan) Transform
 			kind:         kind
 			handler:      transform.handler
 			engine:       engine_ref
+			options:      transform.options
 			available:    available
 			capabilities: descriptor.capabilities
 		}
@@ -90,6 +93,7 @@ fn TransformerRuntimeRegistry.from_plan(plan runtime_plan.RuntimePlan) Transform
 			registry.native[id] = NativeTransformer{
 				id:           id
 				handler:      transform.handler
+				options:      transform.options
 				capabilities: descriptor.capabilities
 			}
 		}
@@ -236,6 +240,9 @@ fn (mut transformer NativeTransformer) transform(mut services dispatch.RuntimeSe
 		'feishu.event.summary' {
 			return transformer.transform_feishu_event_summary(mut exchange)!
 		}
+		'protocol.bridge' {
+			return transformer.transform_protocol_bridge(mut exchange)!
+		}
 		else {}
 	}
 
@@ -270,6 +277,65 @@ fn (transformer NativeTransformer) transform_feishu_event_summary(mut exchange d
 	exchange.metadata['feishu.action_tag'] = summary.action_tag
 	exchange.metadata['feishu.action_value'] = summary.action_value
 	return dispatch.continue_pipeline_action()
+}
+
+fn (transformer NativeTransformer) transform_protocol_bridge(mut exchange dispatch.Exchange) !dispatch.TransformAction {
+	target := transformer.bridge_target(exchange).trim_space()
+	if target == '' {
+		return error('protocol_bridge_missing_target:${transformer.id}')
+	}
+	protocol := transformer.bridge_protocol(exchange)
+	exchange.metadata['bridge.transform'] = transformer.id
+	exchange.metadata['bridge.handler'] = transformer.handler
+	exchange.metadata['bridge.target'] = target
+	exchange.metadata['bridge.protocol'] = protocol
+	exchange.metadata['bridge.exchange_kind'] = exchange.kind.str()
+	return dispatch.TransformAction{
+		kind:   .forward
+		target: target
+	}
+}
+
+fn (transformer NativeTransformer) bridge_target(exchange dispatch.Exchange) string {
+	if target := transformer.options.strings['target'] {
+		if target.trim_space() != '' {
+			return target
+		}
+	}
+	if target := exchange.metadata['bridge.target'] {
+		return target
+	}
+	if target := exchange.metadata['relay.target'] {
+		return target
+	}
+	return ''
+}
+
+fn (transformer NativeTransformer) bridge_protocol(exchange dispatch.Exchange) string {
+	if protocol := transformer.options.strings['protocol'] {
+		if protocol.trim_space() != '' {
+			return protocol
+		}
+	}
+	if protocol := exchange.metadata['bridge.protocol'] {
+		if protocol.trim_space() != '' {
+			return protocol
+		}
+	}
+	match exchange.kind {
+		.stream_open, .stream_chunk, .stream_end {
+			return 'stream'
+		}
+		.session_open, .session_message, .session_close {
+			return 'session'
+		}
+		.event {
+			return 'event'
+		}
+		else {
+			return 'http'
+		}
+	}
 }
 
 fn (mut transformer NativeTransformer) close() {
