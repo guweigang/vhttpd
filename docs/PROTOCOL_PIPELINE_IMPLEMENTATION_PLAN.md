@@ -1127,7 +1127,7 @@ Closeout:
 
 ### Phase 6: generic relay
 
-Progress as of 2026-06-26:
+Progress as of 2026-06-27:
 
 - `P6.1` relay wire frame contract added: generic relay frames now have an explicit version, frame kind, trace/request identity, channel/correlation identity, headers, metadata, and opaque body, with encode/decode validation covered before hub/agent behavior is introduced
 - `P6.2` relay runtime descriptor projection added: compiled relay plans now project into validated hub/agent descriptors with carrier, listener/url, auth, node identity, bounded channel limits, and reconnect defaults before runtime networking is introduced
@@ -1138,6 +1138,7 @@ Progress as of 2026-06-26:
 - `P6.7` relay generic session registry added: session, link, endpoint, target selection, endpoint close cleanup, and per-link pending buffers now live in relay core while provider/application role names and control-message policy remain outside the core
 - `P6.8` relay session routing decision layer added: session frames now resolve generic target endpoints or enter bounded per-link pending buffers through explicit outcomes, while application policy remains responsible for selecting link IDs and target role names
 - `P6.9` relay runtime snapshot contract added: descriptors, agent reconnect state, channel buffers with trace IDs, and session pending counts now have a generic observable summary before admin/runtime wiring is attached
+- `P6.10` relay runtime composition added: compiled relay descriptors, agent state, channel registry, session registry, forwarding, session routing, and snapshots now have a single generic runtime container before carrier sockets are attached
 
 Batches:
 
