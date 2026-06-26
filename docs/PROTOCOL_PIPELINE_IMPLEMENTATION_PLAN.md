@@ -1080,16 +1080,17 @@ Progress as of 2026-06-26:
 - `P5.40` in-process VJSX startup hook runtime split complete: startup runtime payload creation, hook invocation, result normalization, and startup command dispatch now live in a hook runtime module, leaving startup runtime focused on lane/app startup gating
 - `P5.41` in-process VJSX WebSocket response codec split complete: WebSocket dispatch and upstream response normalization now live in a WebSocket codec module, leaving the base response codec focused on HTTP response values
 - `P5.42` in-process VJSX plugin stream runtime split complete: streamable plugin call execution now lives in a focused stream runtime module, leaving the base plugin runtime focused on single response plugin calls
+- `P5.43` Phase 5 closeout audit complete: the capability-port migration and in-process VJSX ownership split are complete, while runtime IO adoption and generic-provider facade cleanup are explicitly deferred to Phase 6/7 instead of being hidden inside Phase 5
 
 Batches:
 
-1. Adapt stream frames to Exchange lifecycle. (projection complete; runtime IO adoption pending)
-2. Adapt WebSocket session events. (projection complete; runtime IO adoption pending)
-3. Adapt MCP sessions/messages. (projection complete; runtime IO adoption pending)
-4. Add explicit protocol bridge transforms. (native forward boundary complete; relay/adapter delivery adoption pending)
-5. Split the broad `LogicExecutor` interface into capability interfaces. (capability interface definitions complete; call-site migration pending)
-6. Split `executor.AppFacade` into capability-scoped service interfaces. (capability interface definitions complete; call-site migration pending)
-7. Compose legacy aggregate interfaces from capability interfaces. (complete; call-site migration requires wrapper/construction changes)
+1. Adapt stream frames to Exchange lifecycle. (projection complete; full runtime IO adoption deferred to Phase 6/7)
+2. Adapt WebSocket session events. (projection complete; full runtime IO adoption deferred to Phase 6/7)
+3. Adapt MCP sessions/messages. (projection complete; full runtime IO adoption deferred to Phase 6/7)
+4. Add explicit protocol bridge transforms. (native forward boundary complete; relay/adapter delivery adoption deferred to Phase 6)
+5. Split the broad `LogicExecutor` interface into capability interfaces. (complete for interface definitions and capability ports; aggregate compatibility remains by design)
+6. Split `executor.AppFacade` into capability-scoped service interfaces. (complete for worker/runtime/config/provider bridge ports; generic provider event payload cleanup deferred)
+7. Compose legacy aggregate interfaces from capability interfaces. (complete; legacy aggregate remains as compatibility surface)
 8. Migrate HTTP dispatch selection to a capability-scoped executor port. (complete)
 9. Migrate protocol dispatch methods to capability-scoped executor ports. (complete)
 10. Migrate worker dispatch facade calls to capability-scoped facade ports. (complete)
@@ -1113,10 +1114,16 @@ Batches:
 
 Acceptance:
 
-- HTTP dispatch contains no MCP/WebSocket/stream selection branches
-- session and streaming cancellation/backpressure remain correct
-- executors implement only capabilities they provide
-- no generic facade contains provider-specific methods
+- HTTP dispatch contains no MCP/WebSocket/stream selection branches. (met for executor dispatch selection; protocol dispatch now routes through explicit ports)
+- Session and streaming cancellation/backpressure remain correct. (no ownership move was made in Phase 5; existing stream/WebSocket/MCP runtimes still own live IO)
+- Executors implement only capabilities they provide. (partially met through explicit capability ports; legacy aggregate interfaces remain for compatibility)
+- No generic facade contains provider-specific methods. (not yet met: `AppFacade` still carries Feishu bridge compatibility types; cleanup is deferred to provider/relay hardening)
+
+Closeout:
+
+- Phase 5 is closed for capability-port migration and in-process VJSX module ownership.
+- Phase 5 is not the place to finish relay delivery, hot IO adoption, or provider-specific facade removal; those are tracked by Phase 6 generic relay and Phase 7 hardening.
+- Before Phase 6 exits, `AppFacade` provider bridge payloads should be generalized so Feishu/Paseo-specific types live only behind provider ports or VJSX-facing compatibility adapters.
 
 ### Phase 6: generic relay
 
