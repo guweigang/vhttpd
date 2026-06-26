@@ -1011,15 +1011,17 @@ Progress as of 2026-06-25:
 
 - `P4.1` transformer runtime registry slice complete: `DataPlaneRuntime` owns a `TransformerRuntimeHub` assembled from `RuntimePlan.transforms`, native transforms are registered as executable backend instances, and non-native transforms remain visible but unavailable until their backend wrappers are attached
 - `P4.1` transformer chain runner slice complete: runtime code can execute ordered transform references through the registry with protocol-neutral `dispatch.Exchange` and `dispatch.RuntimeServices`, halting on non-continue actions while preserving trace-capable service emission
+- `P4.2` VJSX transformer wrapper slice complete: VJSX transforms reuse the existing VJSX event dispatch path and engine/lane workers through an App-facing runtime wrapper instead of allocating a second lane pool
+- `P4.6` upload completion transformer slice complete: upload adapters project completed-event pipeline transform refs into runtime routes, dispatch upload completion as a `dispatch.Exchange`, prefer transformer execution, and fall back to legacy direct VJSX event dispatch during the transition
 
 Batches:
 
 1. Implement transformer registry and native backend. (registry, native no-op backend, and transform chain runner complete)
-2. Implement VJSX transformer wrapper using lane workers.
+2. Implement VJSX transformer wrapper using lane workers. (complete for event exchanges via existing VJSX dispatch)
 3. Add conformance suite.
 4. Wrap Feishu event transformation as native V.
 5. Run equivalent routing fixture through VJSX.
-6. Route upload completion through a transformer pipeline.
+6. Route upload completion through a transformer pipeline. (complete with legacy fallback)
 
 Acceptance:
 
