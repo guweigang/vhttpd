@@ -1064,6 +1064,7 @@ Progress as of 2026-06-26:
 - `P5.24` in-process VJSX host dispatch API split complete: `vhttpdHost.bridgeDispatch` and `vhttpdHost.websocketDispatch` request handling now live in a focused host API module
 - `P5.25` in-process VJSX host config API split complete: `vhttpdHost.config` lookup and path traversal now live in a focused host API module
 - `P5.26` in-process VJSX host filesystem API split complete: `vhttpdHost.readTextFile` and `vhttpdHost.findCodexSessionPath` now live in a focused host API module
+- `P5.27` in-process VJSX host runtime API split complete: `vhttpdHost.emit` and `vhttpdHost.snapshot` now live in a focused host API module, leaving the main host API file as the install/registry entry
 
 Batches:
 
@@ -1093,6 +1094,7 @@ Batches:
 24. Move in-process VJSX host bridge and WebSocket dispatch API handling into a focused module. (complete)
 25. Move in-process VJSX host config API handling into a focused module. (complete)
 26. Move in-process VJSX host filesystem API handling into a focused module. (complete)
+27. Move in-process VJSX host runtime emit/snapshot API handling into a focused module. (complete)
 
 Acceptance:
 
