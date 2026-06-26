@@ -60,3 +60,16 @@ fn test_noop_app_facade_satisfies_capability_interfaces() {
 	assert accepts_provider_bridge_facade(mut facade)
 	assert accepts_command_dispatch_facade(mut facade)
 }
+
+fn test_app_facade_worker_dispatch_ports_satisfy_capability_interfaces() {
+	facade := executor.NoOpAppFacade{}
+
+	mut stream_port := executor.worker_stream_dispatch_port(facade)
+	assert accepts_stream_dispatch_facade(mut stream_port)
+
+	mut mcp_port := executor.worker_mcp_dispatch_port(facade)
+	assert accepts_mcp_dispatch_facade(mut mcp_port)
+
+	mut websocket_port := executor.worker_websocket_dispatch_port(facade)
+	assert accepts_websocket_dispatch_facade(mut websocket_port)
+}

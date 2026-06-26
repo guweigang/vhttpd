@@ -346,22 +346,26 @@ pub fn (e SocketWorkerExecutor) open_websocket_session(mut app AppFacade, req We
 
 pub fn (e SocketWorkerExecutor) dispatch_stream(mut app AppFacade, req transport.StreamDispatchRequest) !transport.StreamDispatchResponse {
 	_ = e
-	return app.worker_backend_dispatch_stream(req)
+	mut port := worker_stream_dispatch_port(app)
+	return port.worker_backend_dispatch_stream(req)
 }
 
 pub fn (e SocketWorkerExecutor) dispatch_mcp(mut app AppFacade, req transport.WorkerMcpDispatchRequest) !transport.WorkerMcpDispatchResponse {
 	_ = e
-	return app.worker_backend_dispatch_mcp(req)
+	mut port := worker_mcp_dispatch_port(app)
+	return port.worker_backend_dispatch_mcp(req)
 }
 
 pub fn (e SocketWorkerExecutor) dispatch_websocket_upstream(mut app AppFacade, req transport.WorkerWebSocketUpstreamDispatchRequest) !transport.WorkerWebSocketUpstreamDispatchResponse {
 	_ = e
-	return app.worker_backend_dispatch_websocket_upstream(req)
+	mut port := worker_websocket_dispatch_port(app)
+	return port.worker_backend_dispatch_websocket_upstream(req)
 }
 
 pub fn (e SocketWorkerExecutor) dispatch_websocket_event(mut app AppFacade, frame transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse {
 	_ = e
-	return app.worker_backend_dispatch_websocket_event(frame)
+	mut port := worker_websocket_dispatch_port(app)
+	return port.worker_backend_dispatch_websocket_event(frame)
 }
 
 // Host bridge methods removed and moved to main module bridge.

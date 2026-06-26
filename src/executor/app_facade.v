@@ -72,6 +72,59 @@ pub interface AppFacade {
 	CommandDispatchFacade
 }
 
+pub struct WorkerStreamDispatchPort {
+mut:
+	inner AppFacade
+}
+
+pub fn worker_stream_dispatch_port(inner AppFacade) WorkerStreamDispatchPort {
+	return WorkerStreamDispatchPort{
+		inner: inner
+	}
+}
+
+pub fn (mut port WorkerStreamDispatchPort) worker_backend_dispatch_stream(req transport.StreamDispatchRequest) !transport.StreamDispatchResponse {
+	return port.inner.worker_backend_dispatch_stream(req)
+}
+
+pub struct WorkerMcpDispatchPort {
+mut:
+	inner AppFacade
+}
+
+pub fn worker_mcp_dispatch_port(inner AppFacade) WorkerMcpDispatchPort {
+	return WorkerMcpDispatchPort{
+		inner: inner
+	}
+}
+
+pub fn (mut port WorkerMcpDispatchPort) worker_backend_dispatch_mcp(req transport.WorkerMcpDispatchRequest) !transport.WorkerMcpDispatchResponse {
+	return port.inner.worker_backend_dispatch_mcp(req)
+}
+
+pub struct WorkerWebSocketDispatchPort {
+mut:
+	inner AppFacade
+}
+
+pub fn worker_websocket_dispatch_port(inner AppFacade) WorkerWebSocketDispatchPort {
+	return WorkerWebSocketDispatchPort{
+		inner: inner
+	}
+}
+
+pub fn (mut port WorkerWebSocketDispatchPort) worker_backend_dispatch_websocket_upstream(req transport.WorkerWebSocketUpstreamDispatchRequest) !transport.WorkerWebSocketUpstreamDispatchResponse {
+	return port.inner.worker_backend_dispatch_websocket_upstream(req)
+}
+
+pub fn (mut port WorkerWebSocketDispatchPort) worker_backend_dispatch_websocket_event(frame transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse {
+	return port.inner.worker_backend_dispatch_websocket_event(frame)
+}
+
+pub fn (mut port WorkerWebSocketDispatchPort) execute_websocket_dispatch_commands_result(commands []transport.WorkerWebSocketFrame) transport.WorkerWebSocketDispatchCommandsResult {
+	return port.inner.execute_websocket_dispatch_commands_result(commands)
+}
+
 // NoOpAppFacade is a no-op implementation of AppFacade used as a default value
 // for struct fields that hold an AppFacade reference.
 pub struct NoOpAppFacade {
