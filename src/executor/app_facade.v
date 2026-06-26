@@ -61,32 +61,15 @@ mut:
 }
 
 pub interface AppFacade {
-	// Config & Backend details
-	get_runtime_config_json() string
-	get_runtime_plan_json() string
-	worker_backend_read_timeout_ms() int
-	worker_backend_sockets_len() int
-	worker_env() map[string]string
-	worker_env_for_kind(kind string) map[string]string
-	worker_backend_read_timeout_ms_for_kind(kind string) int
-mut:
-	// Worker Backend routing/lifecycle methods
-	worker_backend_select_socket_queued() !string
-	worker_backend_select_socket_for_kind(kind string) !string
-	on_worker_request_started(socket_path string)
-	on_worker_request_finished(socket_path string)
-	worker_websocket_open(mut conn unix.StreamConn, req http.Request, remote_addr string, path string, req_id string, trace_id string) !(bool, int, string)
-	worker_backend_dispatch_stream(req transport.StreamDispatchRequest) !transport.StreamDispatchResponse
-	worker_backend_dispatch_mcp(req transport.WorkerMcpDispatchRequest) !transport.WorkerMcpDispatchResponse
-	worker_backend_dispatch_websocket_upstream(req transport.WorkerWebSocketUpstreamDispatchRequest) !transport.WorkerWebSocketUpstreamDispatchResponse
-	worker_backend_dispatch_websocket_event(frame transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse
-
-	// Platform & Dispatcher methods
-	emit(kind string, fields map[string]string)
-	admin_runtime_snapshot() AdminRuntimeSummary
-	provider_bridge_dispatch_callback(provider string, app_name string, trace_id string, summary FeishuRuntimeEventSummary, payload string) !FeishuCardBridgeResult
-	execute_websocket_dispatch_commands_result(commands []transport.WorkerWebSocketFrame) transport.WorkerWebSocketDispatchCommandsResult
-	run_command_envelopes(request_id string, dispatch_ctx DispatchContext, commands []transport.WorkerWebSocketUpstreamCommand) string
+	RuntimeConfigFacade
+	WorkerBackendConfigFacade
+	WorkerSocketFacade
+	WorkerStreamDispatchFacade
+	WorkerMcpDispatchFacade
+	WorkerWebSocketDispatchFacade
+	PlatformFacade
+	ProviderBridgeFacade
+	CommandDispatchFacade
 }
 
 // NoOpAppFacade is a no-op implementation of AppFacade used as a default value
