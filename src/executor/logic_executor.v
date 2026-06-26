@@ -42,18 +42,14 @@ pub interface WebSocketEventExecutor {
 }
 
 pub interface LogicExecutor {
-	model() LogicExecutorModel
-	kind() string
-	provider() string
-	admin_details() LogicExecutorAdminDetails
-	warmup(mut app AppFacade) !
-	close()
-	dispatch_http(mut app AppFacade, req HttpLogicDispatchRequest) !HttpLogicDispatchOutcome
-	open_websocket_session(mut app AppFacade, req WebSocketSessionOpenRequest) !WebSocketSessionOpenOutcome
-	dispatch_stream(mut app AppFacade, req transport.StreamDispatchRequest) !transport.StreamDispatchResponse
-	dispatch_mcp(mut app AppFacade, req transport.WorkerMcpDispatchRequest) !transport.WorkerMcpDispatchResponse
-	dispatch_websocket_upstream(mut app AppFacade, req transport.WorkerWebSocketUpstreamDispatchRequest) !transport.WorkerWebSocketUpstreamDispatchResponse
-	dispatch_websocket_event(mut app AppFacade, frame transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse
+	LogicExecutorIdentity
+	LogicExecutorLifecycleOps
+	HttpLogicExecutor
+	WebSocketSessionExecutor
+	StreamLogicExecutor
+	McpLogicExecutor
+	WebSocketUpstreamExecutor
+	WebSocketEventExecutor
 }
 
 pub struct DisabledLogicExecutor {}
