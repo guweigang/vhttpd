@@ -64,6 +64,12 @@ fn test_noop_app_facade_satisfies_capability_interfaces() {
 fn test_app_facade_worker_dispatch_ports_satisfy_capability_interfaces() {
 	facade := executor.NoOpAppFacade{}
 
+	config_port := executor.worker_backend_config_port(facade)
+	assert accepts_worker_backend_config_facade(config_port)
+
+	mut socket_port := executor.worker_socket_port(facade)
+	assert accepts_worker_socket_facade(mut socket_port)
+
 	mut stream_port := executor.worker_stream_dispatch_port(facade)
 	assert accepts_stream_dispatch_facade(mut stream_port)
 

@@ -125,6 +125,67 @@ pub fn (mut port WorkerWebSocketDispatchPort) execute_websocket_dispatch_command
 	return port.inner.execute_websocket_dispatch_commands_result(commands)
 }
 
+pub struct WorkerBackendConfigPort {
+	inner AppFacade
+}
+
+pub fn worker_backend_config_port(inner AppFacade) WorkerBackendConfigPort {
+	return WorkerBackendConfigPort{
+		inner: inner
+	}
+}
+
+pub fn (port WorkerBackendConfigPort) worker_backend_read_timeout_ms() int {
+	return port.inner.worker_backend_read_timeout_ms()
+}
+
+pub fn (port WorkerBackendConfigPort) worker_backend_sockets_len() int {
+	return port.inner.worker_backend_sockets_len()
+}
+
+pub fn (port WorkerBackendConfigPort) worker_env() map[string]string {
+	return port.inner.worker_env()
+}
+
+pub fn (port WorkerBackendConfigPort) worker_env_for_kind(kind string) map[string]string {
+	return port.inner.worker_env_for_kind(kind)
+}
+
+pub fn (port WorkerBackendConfigPort) worker_backend_read_timeout_ms_for_kind(kind string) int {
+	return port.inner.worker_backend_read_timeout_ms_for_kind(kind)
+}
+
+pub struct WorkerSocketPort {
+mut:
+	inner AppFacade
+}
+
+pub fn worker_socket_port(inner AppFacade) WorkerSocketPort {
+	return WorkerSocketPort{
+		inner: inner
+	}
+}
+
+pub fn (mut port WorkerSocketPort) worker_backend_select_socket_queued() !string {
+	return port.inner.worker_backend_select_socket_queued()
+}
+
+pub fn (mut port WorkerSocketPort) worker_backend_select_socket_for_kind(kind string) !string {
+	return port.inner.worker_backend_select_socket_for_kind(kind)
+}
+
+pub fn (mut port WorkerSocketPort) on_worker_request_started(socket_path string) {
+	port.inner.on_worker_request_started(socket_path)
+}
+
+pub fn (mut port WorkerSocketPort) on_worker_request_finished(socket_path string) {
+	port.inner.on_worker_request_finished(socket_path)
+}
+
+pub fn (mut port WorkerSocketPort) worker_websocket_open(mut conn unix.StreamConn, req http.Request, remote_addr string, path string, req_id string, trace_id string) !(bool, int, string) {
+	return port.inner.worker_websocket_open(mut conn, req, remote_addr, path, req_id, trace_id)
+}
+
 // NoOpAppFacade is a no-op implementation of AppFacade used as a default value
 // for struct fields that hold an AppFacade reference.
 pub struct NoOpAppFacade {

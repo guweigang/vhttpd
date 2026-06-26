@@ -266,10 +266,12 @@ pub fn (e SocketWorkerExecutor) close() {
 
 pub fn (e SocketWorkerExecutor) dispatch_http(mut app AppFacade, req HttpLogicDispatchRequest) !HttpLogicDispatchOutcome {
 	_ = e
-	selected_socket := app.worker_backend_select_socket_for_kind(e.kind())!
+	mut socket_port := worker_socket_port(app)
+	config_port := worker_backend_config_port(app)
+	selected_socket := socket_port.worker_backend_select_socket_for_kind(e.kind())!
 	mut conn := unix.connect_stream(selected_socket)!
-	app.on_worker_request_started(selected_socket)
-	read_timeout := app.worker_backend_read_timeout_ms_for_kind(e.kind())
+	socket_port.on_worker_request_started(selected_socket)
+	read_timeout := config_port.worker_backend_read_timeout_ms_for_kind(e.kind())
 	if read_timeout > 0 {
 		conn.set_read_timeout(time.millisecond * read_timeout)
 	}
@@ -277,12 +279,12 @@ pub fn (e SocketWorkerExecutor) dispatch_http(mut app AppFacade, req HttpLogicDi
 		req.remote_addr, req.trace_id, req.request_id)
 	transport.WorkerFrameCodec.write(mut conn, payload) or {
 		conn.close() or {}
-		app.on_worker_request_finished(selected_socket)
+		socket_port.on_worker_request_finished(selected_socket)
 		return error(err.msg())
 	}
 	first_raw := transport.WorkerFrameCodec.read(mut conn) or {
 		conn.close() or {}
-		app.on_worker_request_finished(selected_socket)
+		socket_port.on_worker_request_finished(selected_socket)
 		return error(err.msg())
 	}
 	if start := transport.WorkerStreamFrame.try_decode_start(first_raw) {
@@ -295,7 +297,7 @@ pub fn (e SocketWorkerExecutor) dispatch_http(mut app AppFacade, req HttpLogicDi
 	}
 	if plan := transport.WorkerUpstreamPlanFrame.try_decode_start(first_raw) {
 		conn.close() or {}
-		app.on_worker_request_finished(selected_socket)
+		socket_port.on_worker_request_finished(selected_socket)
 		return HttpLogicDispatchOutcome{
 			kind:          .upstream_plan
 			upstream_plan: plan
@@ -303,11 +305,11 @@ pub fn (e SocketWorkerExecutor) dispatch_http(mut app AppFacade, req HttpLogicDi
 	}
 	resp := json.decode(transport.WorkerResponse, first_raw) or {
 		conn.close() or {}
-		app.on_worker_request_finished(selected_socket)
+		socket_port.on_worker_request_finished(selected_socket)
 		return error('transport_error: decode worker response failed')
 	}
 	conn.close() or {}
-	app.on_worker_request_finished(selected_socket)
+	socket_port.on_worker_request_finished(selected_socket)
 	return HttpLogicDispatchOutcome{
 		kind:     .response
 		response: resp
@@ -316,14 +318,16 @@ pub fn (e SocketWorkerExecutor) dispatch_http(mut app AppFacade, req HttpLogicDi
 
 pub fn (e SocketWorkerExecutor) open_websocket_session(mut app AppFacade, req WebSocketSessionOpenRequest) !WebSocketSessionOpenOutcome {
 	_ = e
-	selected_socket := app.worker_backend_select_socket_queued()!
+	mut socket_port := worker_socket_port(app)
+	config_port := worker_backend_config_port(app)
+	selected_socket := socket_port.worker_backend_select_socket_queued()!
 	mut worker_conn := unix.connect_stream(selected_socket)!
-	read_timeout := app.worker_backend_read_timeout_ms()
+	read_timeout := config_port.worker_backend_read_timeout_ms()
 	if read_timeout > 0 {
 		worker_conn.set_read_timeout(time.millisecond * read_timeout)
 	}
-	accepted, status, body := app.worker_websocket_open(mut worker_conn, req.req, req.remote_addr,
-		req.path, req.request_id, req.trace_id) or {
+	accepted, status, body := socket_port.worker_websocket_open(mut worker_conn, req.req,
+		req.remote_addr, req.path, req.request_id, req.trace_id) or {
 		worker_conn.close() or {}
 		return error(err.msg())
 	}
@@ -407,16 +411,18 @@ pub fn (e PhpCgiExecutor) close() {
 
 pub fn (e PhpCgiExecutor) dispatch_http(mut app AppFacade, req HttpLogicDispatchRequest) !HttpLogicDispatchOutcome {
 	_ = e
-	selected_socket := app.worker_backend_select_socket_for_kind(e.kind())!
+	mut socket_port := worker_socket_port(app)
+	config_port := worker_backend_config_port(app)
+	selected_socket := socket_port.worker_backend_select_socket_for_kind(e.kind())!
 	mut conn := unix.connect_stream(selected_socket)!
-	app.on_worker_request_started(selected_socket)
-	read_timeout := app.worker_backend_read_timeout_ms_for_kind(e.kind())
+	socket_port.on_worker_request_started(selected_socket)
+	read_timeout := config_port.worker_backend_read_timeout_ms_for_kind(e.kind())
 	if read_timeout > 0 {
 		conn.set_read_timeout(time.millisecond * read_timeout)
 	}
 
 	// FastCGI executors can run in an additional pool with its own env.
-	env_overrides := app.worker_env_for_kind(e.kind())
+	env_overrides := config_port.worker_env_for_kind(e.kind())
 
 	original_path := if req.original_path != '' { req.original_path } else { req.path }
 	payload := transport.FastCgiCodec.encode_request(req.method, req.path, original_path, req.req,
@@ -424,18 +430,18 @@ pub fn (e PhpCgiExecutor) dispatch_http(mut app AppFacade, req HttpLogicDispatch
 
 	conn.write_ptr(&payload[0], payload.len) or {
 		conn.close() or {}
-		app.on_worker_request_finished(selected_socket)
+		socket_port.on_worker_request_finished(selected_socket)
 		return error(err.msg())
 	}
 
 	resp := transport.FastCgiCodec.decode_response(mut conn) or {
 		conn.close() or {}
-		app.on_worker_request_finished(selected_socket)
+		socket_port.on_worker_request_finished(selected_socket)
 		return error('transport_error: decode fastcgi response failed: ${err.msg()}')
 	}
 
 	conn.close() or {}
-	app.on_worker_request_finished(selected_socket)
+	socket_port.on_worker_request_finished(selected_socket)
 
 	return HttpLogicDispatchOutcome{
 		kind:     .response
