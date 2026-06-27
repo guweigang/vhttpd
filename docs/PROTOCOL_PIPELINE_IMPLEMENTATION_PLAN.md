@@ -1153,6 +1153,7 @@ Progress as of 2026-06-27:
 - `P6.22` relay carrier runtime adapter contract added: carrier loops now have generic attach, receive, send, and detach helpers around relay runtime and carrier ports before the WebSocket carrier is implemented
 - `P6.23` WebSocket relay carrier adapter added: the WebSocket hub context now exposes connection availability, and `ws.RelayCarrier` implements the generic relay carrier port with encoded wire-frame send and close behavior
 - `P6.24` raw relay carrier receive adapter added: carrier loops can now hand raw wire payloads to relay runtime for decode, validation, and inbound routing without embedding relay protocol parsing in WebSocket handlers
+- `P6.25` WebSocket relay inbound bridge added: WebSocket carrier payloads now have a small text-frame boundary adapter before handing raw relay wire payloads into the generic relay runtime receive path
 
 Batches:
 
