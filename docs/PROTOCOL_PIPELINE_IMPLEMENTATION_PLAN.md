@@ -1150,6 +1150,7 @@ Progress as of 2026-06-27:
 - `P6.19` relay carrier detach lifecycle added: carrier registrations can now be deterministically removed with trace-aware detach events, returning relay dispatch to disabled fallback state before live socket disconnect handling
 - `P6.20` relay inbound frame dispatch contract added: carrier loops can now hand versioned wire frames to relay runtime for registration, forwarding, ignored control frames, and trace-aware inbound outcomes without provider-specific branches
 - `P6.21` relay outbound delivery contract added: relay runtime now prepares outbound delivery outcomes with wire frames, carrier dispatch plans, and trace-aware event fields, and HTTP relay responses consume that unified outbound contract
+- `P6.22` relay carrier runtime adapter contract added: carrier loops now have generic attach, receive, send, and detach helpers around relay runtime and carrier ports before the WebSocket carrier is implemented
 
 Batches:
 
