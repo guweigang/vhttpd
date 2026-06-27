@@ -1165,6 +1165,7 @@ Progress as of 2026-06-27:
 - `P6.34` relay agent handshake contract added: agent runtimes can now consume hub hello_ack/error frames to mark registration success or deterministic backoff failure before the WebSocket client loop is wired in
 - `P6.35` relay agent hello WebSocket payload builder added: the WebSocket layer can now encode agent descriptors into versioned hello payloads and trace-aware hello events without knowing registration internals
 - `P6.36` relay agent payload routing added: WebSocket agent payloads now route pre-registration hello_ack/error frames through handshake handling and registered relay frames through inbound runtime with traceable outcomes
+- `P6.37` relay agent descriptor discovery added: relay runtime now exposes a stable agent descriptor list so startup code can wire agent loops explicitly without scanning provider-specific configuration
 
 Batches:
 

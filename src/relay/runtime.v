@@ -127,6 +127,19 @@ pub fn (rt Runtime) hub_relay_by_path(path string) ?RelayDescriptor {
 	return none
 }
 
+pub fn (rt Runtime) agent_descriptors() []RelayDescriptor {
+	mut out := []RelayDescriptor{}
+	mut ids := rt.descriptors.keys()
+	ids.sort()
+	for id in ids {
+		descriptor := rt.descriptors[id]
+		if descriptor.mode == .agent {
+			out << descriptor
+		}
+	}
+	return out
+}
+
 pub fn (rt Runtime) snapshot() RelayRuntimeSnapshot {
 	mut agents := []AgentState{}
 	mut ids := rt.agents.keys()

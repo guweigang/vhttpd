@@ -192,3 +192,46 @@ fn test_runtime_ignores_hub_relay_without_explicit_path() {
 
 	assert rt.hub_relay_by_path('/vhttpd/relay') == none
 }
+
+fn test_runtime_lists_agent_descriptors_in_stable_order() {
+	rt := new_runtime(runtime_plan.RuntimePlan{
+		relays: {
+			'z_agent': runtime_plan.RelayPlan{
+				id:      'z_agent'
+				mode:    'agent'
+				options: runtime_plan.PlanOptions{
+					strings: {
+						'url': 'wss://relay-z.example.com'
+					}
+				}
+			}
+			'hub':     runtime_plan.RelayPlan{
+				id:      'hub'
+				mode:    'hub'
+				ingress: runtime_plan.ResourceRef{
+					domain: .listener
+					id:     'relay'
+				}
+				options: runtime_plan.PlanOptions{
+					strings: {
+						'path':    '/vhttpd/relay'
+						'node_id': 'hub_1'
+					}
+				}
+			}
+			'a_agent': runtime_plan.RelayPlan{
+				id:      'a_agent'
+				mode:    'agent'
+				options: runtime_plan.PlanOptions{
+					strings: {
+						'url': 'wss://relay-a.example.com'
+					}
+				}
+			}
+		}
+	}) or { panic(err) }
+
+	agents := rt.agent_descriptors()
+
+	assert agents.map(it.id) == ['a_agent', 'z_agent']
+}
