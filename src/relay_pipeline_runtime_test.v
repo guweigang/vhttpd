@@ -73,6 +73,12 @@ fn test_dispatch_relay_ingress_frame_reports_missing_pipeline() {
 fn test_dispatch_relay_pipeline_exchange_reports_unsupported_egress() {
 	mut app := App{
 		plan: runtime_plan.RuntimePlan{
+			adapters:  {
+				'local': runtime_plan.AdapterPlan{
+					id:   'local'
+					kind: 'http-handler'
+				}
+			}
 			pipelines: [
 				runtime_plan.PipelinePlan{
 					id:      'edge/local'
@@ -104,6 +110,55 @@ fn test_dispatch_relay_pipeline_exchange_reports_unsupported_egress() {
 	assert outcome.status == 501
 	assert outcome.error == 'relay_pipeline_egress_unsupported:adapter:local'
 	assert outcome.error_class == 'relay_pipeline_egress_unsupported'
+}
+
+fn test_dispatch_relay_pipeline_exchange_delivers_terminal_adapter() {
+	mut app := App{
+		plan: runtime_plan.RuntimePlan{
+			adapters:  {
+				'fixed': runtime_plan.AdapterPlan{
+					id:      'fixed'
+					kind:    'fixed-response'
+					options: runtime_plan.PlanOptions{
+						strings: {
+							'status': '202'
+							'body':   'relay ok'
+						}
+					}
+				}
+			}
+			pipelines: [
+				runtime_plan.PipelinePlan{
+					id:      'edge/local'
+					ingress: runtime_plan.ResourceRef{
+						domain: .relay
+						id:     'edge'
+					}
+					egress:  runtime_plan.ResourceRef{
+						domain: .adapter
+						id:     'fixed'
+					}
+				},
+			]
+		}
+	}
+	mut exchange := dispatch.relay_ingress_exchange(dispatch.RelayIngressRequest{
+		relay_id:   'edge'
+		frame_id:   'frm-1'
+		trace_id:   'trace-1'
+		request_id: 'req-1'
+		pipeline:   'edge/local'
+		channel_id: 'chan-1'
+		session_id: 'sess-1'
+		body:       'payload'
+	})
+
+	outcome := app.dispatch_relay_pipeline_exchange(mut exchange)
+
+	assert outcome.action == 'response'
+	assert outcome.status == 202
+	assert outcome.body == 'relay ok'
+	assert outcome.channel_id == 'chan-1'
 }
 
 fn test_relay_pipeline_response_frame_projects_success_and_failure() {

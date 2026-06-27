@@ -126,7 +126,27 @@ fn (mut app App) dispatch_relay_pipeline_exchange(mut exchange dispatch.Exchange
 	if transform_result.halted {
 		return relay_pipeline_transform_action(exchange, transform_result)
 	}
+	if pipeline.egress.domain == .adapter {
+		return app.dispatch_relay_pipeline_adapter_egress(pipeline.egress.id, mut services,
+			exchange)
+	}
 	return relay_pipeline_terminal_outcome(exchange, pipeline.egress.str())
+}
+
+fn (mut app App) dispatch_relay_pipeline_adapter_egress(adapter_id string, mut services dispatch.RuntimeServices, exchange dispatch.Exchange) RelayPipelineDispatchOutcome {
+	adapter_plan := app.plan.adapters[adapter_id] or {
+		return relay_pipeline_failure(exchange, 404, 'relay_adapter_unknown:${adapter_id}',
+			'relay_adapter_unknown')
+	}
+	mut adapter := dispatch.terminal_adapter_from_plan(adapter_plan) or {
+		return relay_pipeline_failure(exchange, 501,
+			'relay_pipeline_egress_unsupported:adapter:${adapter_id}',
+			'relay_pipeline_egress_unsupported')
+	}
+	delivery := adapter.deliver(mut services, exchange) or {
+		return relay_pipeline_failure(exchange, 500, err.msg(), 'relay_adapter_failed')
+	}
+	return relay_pipeline_outcome_from_delivery(exchange, delivery)
 }
 
 fn relay_pipeline_terminal_outcome(exchange dispatch.Exchange, egress string) RelayPipelineDispatchOutcome {
