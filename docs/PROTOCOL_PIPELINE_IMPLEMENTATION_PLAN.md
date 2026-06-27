@@ -1160,6 +1160,7 @@ Progress as of 2026-06-27:
 - `P6.29` relay WebSocket ingress moved to the common upgrade path: configured relay hub paths are now handled before choosing worker or in-proc WebSocket dispatch, so relay behavior does not depend on a specific application engine mode
 - `P6.30` relay hub v2 example added: examples now include a minimal `relay-hub-v2.toml` that configures a WebSocket listener and hub relay path separately from the Paseo/vjsx relay skeleton
 - `P6.31` relay WebSocket observability added: hub sessions now emit relay attached, inbound, registration, and detach events with trace/request/path/carrier context instead of relying only on process logs
+- `P6.32` relay hub registration is path-bound: WebSocket hub sessions now reject and detach hello registrations whose relay ID does not match the configured hub path descriptor, preventing stale carrier mappings
 
 Batches:
 

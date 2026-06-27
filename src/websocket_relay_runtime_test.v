@@ -57,3 +57,30 @@ fn test_relay_websocket_event_fields_add_request_context() {
 	assert fields['carrier_id'] == 'carrier_1'
 	assert fields['frame_id'] == 'frm_1'
 }
+
+fn test_relay_registration_path_mismatch_rejects_other_relay_id() {
+	mut state := &RelayWebSocketBridgeState{
+		descriptor: relay.RelayDescriptor{
+			id: 'edge'
+		}
+		conn_id:    'carrier_1'
+		trace_id:   'trace_1'
+	}
+
+	mismatch := relay_registration_path_mismatch(state, relay.InboundOutcome{
+		action:     .registered
+		relay_id:   'other'
+		carrier_id: 'carrier_1'
+		trace_id:   'trace_2'
+		frame_id:   'frm_1'
+	}) or { panic('missing mismatch') }
+	matched := relay_registration_path_mismatch(state, relay.InboundOutcome{
+		action:   .registered
+		relay_id: 'edge'
+	})
+
+	assert mismatch.action == .rejected
+	assert mismatch.error == 'relay_websocket_relay_mismatch:other:edge'
+	assert mismatch.trace_id == 'trace_2'
+	assert matched == none
+}

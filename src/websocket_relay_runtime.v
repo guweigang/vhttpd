@@ -87,6 +87,15 @@ fn relay_websocket_message_cb(mut ws_client websocket.Client, msg &websocket.Mes
 	app.emit('relay.inbound', relay_websocket_event_fields(relay.inbound_event_fields(outcome),
 		state))
 	if outcome.action == .registered {
+		if mismatch := relay_registration_path_mismatch(state, outcome) {
+			app.relay.detach_carrier(outcome.relay_id, state.trace_id)
+			app.emit('relay.inbound', relay_websocket_event_fields(relay.inbound_event_fields(mismatch),
+				state))
+			send_relay_rejection(state, mismatch)
+			state.lifecycle.begin_worker_close()
+			ws_client.close(1008, mismatch.error)!
+			return
+		}
 		app.emit('relay.registration', relay_websocket_event_fields(relay.registration_event_fields(outcome.registration),
 			state))
 		send_relay_registration_ack(state, outcome)
@@ -170,6 +179,29 @@ fn send_relay_rejection(state &RelayWebSocketBridgeState, outcome relay.InboundO
 fn relay_websocket_path_descriptor(app &App, path string) ?relay.RelayDescriptor {
 	normalized_path, _ := transport.normalize_request_target(path)
 	return app.relay.hub_relay_by_path(normalized_path)
+}
+
+fn relay_registration_path_mismatch(state &RelayWebSocketBridgeState, outcome relay.InboundOutcome) ?relay.InboundOutcome {
+	if isnil(state) {
+		return none
+	}
+	if outcome.action != .registered {
+		return none
+	}
+	unsafe {
+		current := state
+		if outcome.relay_id == current.descriptor.id {
+			return none
+		}
+		return relay.InboundOutcome{
+			action:     .rejected
+			relay_id:   outcome.relay_id
+			carrier_id: outcome.carrier_id
+			trace_id:   outcome.trace_id
+			frame_id:   outcome.frame_id
+			error:      'relay_websocket_relay_mismatch:${outcome.relay_id}:${current.descriptor.id}'
+		}
+	}
 }
 
 fn relay_websocket_event_fields(fields map[string]string, state &RelayWebSocketBridgeState) map[string]string {
