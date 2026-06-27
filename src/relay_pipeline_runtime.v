@@ -2,13 +2,16 @@ module main
 
 import dispatch
 import relay
+import ws
 
 struct RelayPipelineDispatchOutcome {
 	pipeline_id string
 	exchange_id string
 	trace_id    string
+	channel_id  string
 	action      string
 	status      int
+	body        string
 	error       string
 	error_class string
 }
@@ -18,10 +21,33 @@ fn relay_pipeline_dispatch_event_fields(outcome RelayPipelineDispatchOutcome) ma
 		'pipeline_id': outcome.pipeline_id
 		'exchange_id': outcome.exchange_id
 		'trace_id':    outcome.trace_id
+		'channel_id':  outcome.channel_id
 		'action':      outcome.action
 		'status':      outcome.status.str()
 		'error':       outcome.error
 		'error_class': outcome.error_class
+	}
+}
+
+fn relay_pipeline_response_frame(outcome RelayPipelineDispatchOutcome) relay.WireFrame {
+	return relay.WireFrame{
+		version:       relay.wire_version
+		kind:          if outcome.action == 'failed' {
+			relay.WireFrameKind.error
+		} else {
+			relay.WireFrameKind.data
+		}
+		id:            'relay-response:${outcome.exchange_id}'
+		trace_id:      outcome.trace_id
+		channel_id:    outcome.channel_id
+		exchange_kind: if outcome.action == 'failed' { 'error' } else { 'response' }
+		metadata:      {
+			'pipeline_id': outcome.pipeline_id
+			'action':      outcome.action
+			'status':      outcome.status.str()
+			'error_class': outcome.error_class
+		}
+		body:          if outcome.body != '' { outcome.body } else { outcome.error }
 	}
 }
 
@@ -63,6 +89,21 @@ fn (mut app App) dispatch_relay_ingress_frame(relay_id string, carrier_id string
 	for item in exchanges {
 		mut exchange := item
 		outcomes << app.dispatch_relay_pipeline_exchange(mut exchange)
+	}
+	return outcomes
+}
+
+fn (mut app App) dispatch_and_send_relay_ingress_frame(relay_id string, carrier_id string, frame relay.WireFrame, created_at_ms i64) []RelayPipelineDispatchOutcome {
+	outcomes := app.dispatch_relay_ingress_frame(relay_id, carrier_id, frame, created_at_ms)
+	mut carrier := ws.new_relay_carrier(app.build_websocket_runtime_context(), carrier_id)
+	for outcome in outcomes {
+		response_frame := relay_pipeline_response_frame(outcome)
+		send_result := carrier.send(response_frame)
+		mut fields := relay_pipeline_dispatch_event_fields(outcome)
+		for key, value in relay.carrier_send_event_fields(send_result) {
+			fields['carrier_${key}'] = value
+		}
+		app.emit('relay.pipeline.response', fields)
 	}
 	return outcomes
 }
@@ -141,8 +182,10 @@ fn relay_pipeline_success(exchange dispatch.Exchange, action string, status int)
 		pipeline_id: exchange.pipeline
 		exchange_id: exchange.identity.id
 		trace_id:    exchange.identity.trace_id
+		channel_id:  exchange.metadata['channel_id'] or { '' }
 		action:      action
 		status:      status
+		body:        action
 	}
 }
 
@@ -151,8 +194,10 @@ fn relay_pipeline_failure(exchange dispatch.Exchange, status int, error string, 
 		pipeline_id: exchange.pipeline
 		exchange_id: exchange.identity.id
 		trace_id:    exchange.identity.trace_id
+		channel_id:  exchange.metadata['channel_id'] or { '' }
 		action:      'failed'
 		status:      status
+		body:        error
 		error:       error
 		error_class: error_class
 	}

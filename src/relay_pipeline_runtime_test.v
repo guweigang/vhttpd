@@ -46,6 +46,7 @@ fn test_dispatch_relay_ingress_frame_runs_terminal_response_pipeline() {
 	assert outcomes[0].pipeline_id == 'edge/local'
 	assert outcomes[0].exchange_id == 'frm-1'
 	assert outcomes[0].trace_id == 'trace-1'
+	assert outcomes[0].channel_id == 'chan-1'
 	assert outcomes[0].action == 'response'
 	assert outcomes[0].status == 200
 }
@@ -102,4 +103,40 @@ fn test_dispatch_relay_pipeline_exchange_reports_unsupported_egress() {
 	assert outcome.status == 501
 	assert outcome.error == 'relay_pipeline_egress_unsupported:adapter:local'
 	assert outcome.error_class == 'relay_pipeline_egress_unsupported'
+}
+
+fn test_relay_pipeline_response_frame_projects_success_and_failure() {
+	success := relay_pipeline_response_frame(RelayPipelineDispatchOutcome{
+		pipeline_id: 'edge/local'
+		exchange_id: 'frm-1'
+		trace_id:    'trace-1'
+		channel_id:  'chan-1'
+		action:      'response'
+		status:      200
+		body:        'ok'
+	})
+	failure := relay_pipeline_response_frame(RelayPipelineDispatchOutcome{
+		pipeline_id: 'edge/local'
+		exchange_id: 'frm-2'
+		trace_id:    'trace-2'
+		channel_id:  'chan-2'
+		action:      'failed'
+		status:      500
+		error:       'boom'
+		error_class: 'relay_error'
+	})
+
+	assert success.kind == .data
+	assert success.id == 'relay-response:frm-1'
+	assert success.exchange_kind == 'response'
+	assert success.channel_id == 'chan-1'
+	assert success.body == 'ok'
+	assert success.metadata['status'] == '200'
+
+	assert failure.kind == .error
+	assert failure.id == 'relay-response:frm-2'
+	assert failure.exchange_kind == 'error'
+	assert failure.channel_id == 'chan-2'
+	assert failure.body == 'boom'
+	assert failure.metadata['error_class'] == 'relay_error'
 }
