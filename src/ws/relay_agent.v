@@ -19,6 +19,19 @@ pub:
 	error     string
 }
 
+pub struct RelayAgentConnectAttempt {
+pub:
+	ok                 bool
+	relay_id           string
+	url                string
+	trace_id           string
+	hello_payload      string
+	reconnect_delay_ms int
+	agent              relay.AgentState
+	fields             map[string]string
+	error              string
+}
+
 pub fn build_relay_agent_hello_payload(descriptor relay.RelayDescriptor, trace_id string) !string {
 	if descriptor.mode != .agent {
 		return error('relay_agent_hello_requires_agent_mode:${descriptor.id}')
@@ -34,6 +47,51 @@ pub fn relay_agent_hello_event_fields(descriptor relay.RelayDescriptor, trace_id
 		'node_id':  descriptor.node_id
 		'url':      descriptor.url
 	})
+}
+
+pub fn prepare_relay_agent_connect_attempt(mut rt relay.Runtime, descriptor relay.RelayDescriptor, trace_id string, now_ms i64) RelayAgentConnectAttempt {
+	agent := rt.mark_agent_connecting(descriptor.id, now_ms) or {
+		return RelayAgentConnectAttempt{
+			relay_id: descriptor.id
+			url:      descriptor.url
+			trace_id: trace_id
+			error:    err.msg()
+			fields:   relay.event_fields('agent.connect_failed', trace_id, {
+				'relay_id': descriptor.id
+				'url':      descriptor.url
+				'error':    err.msg()
+			})
+		}
+	}
+	payload := build_relay_agent_hello_payload(descriptor, trace_id) or {
+		return RelayAgentConnectAttempt{
+			relay_id: descriptor.id
+			url:      descriptor.url
+			trace_id: trace_id
+			agent:    agent
+			error:    err.msg()
+			fields:   relay.event_fields('agent.connect_failed', trace_id, {
+				'relay_id': descriptor.id
+				'url':      descriptor.url
+				'error':    err.msg()
+			})
+		}
+	}
+	policy := relay.reconnect_policy_from_descriptor(descriptor)
+	return RelayAgentConnectAttempt{
+		ok:                 true
+		relay_id:           descriptor.id
+		url:                descriptor.url
+		trace_id:           trace_id
+		hello_payload:      payload
+		reconnect_delay_ms: policy.initial_delay_ms
+		agent:              agent
+		fields:             relay.event_fields('agent.connecting', trace_id, {
+			'relay_id': descriptor.id
+			'node_id':  descriptor.node_id
+			'url':      descriptor.url
+		})
+	}
 }
 
 pub fn receive_relay_agent_websocket_payload(mut rt relay.Runtime, relay_id string, opcode string, payload string, now_ms i64, default_buffer_limit int) RelayAgentPayloadOutcome {

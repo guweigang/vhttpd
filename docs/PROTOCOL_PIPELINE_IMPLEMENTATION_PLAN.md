@@ -1166,6 +1166,7 @@ Progress as of 2026-06-27:
 - `P6.35` relay agent hello WebSocket payload builder added: the WebSocket layer can now encode agent descriptors into versioned hello payloads and trace-aware hello events without knowing registration internals
 - `P6.36` relay agent payload routing added: WebSocket agent payloads now route pre-registration hello_ack/error frames through handshake handling and registered relay frames through inbound runtime with traceable outcomes
 - `P6.37` relay agent descriptor discovery added: relay runtime now exposes a stable agent descriptor list so startup code can wire agent loops explicitly without scanning provider-specific configuration
+- `P6.38` relay agent connect attempt contract added: WebSocket agent runtime can now mark an agent connecting, build its hello payload, and emit trace-aware attempt fields as one testable step before socket IO is introduced
 
 Batches:
 

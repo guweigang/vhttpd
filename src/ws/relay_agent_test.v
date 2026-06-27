@@ -52,6 +52,41 @@ fn test_build_relay_agent_hello_payload_rejects_hub_descriptor() {
 	assert false
 }
 
+fn test_prepare_relay_agent_connect_attempt_marks_connecting_and_builds_hello() {
+	mut rt := relay.new_runtime(relay_agent_payload_plan()) or { panic(err) }
+	descriptor := rt.agent_descriptors()[0]
+
+	attempt := prepare_relay_agent_connect_attempt(mut rt, descriptor, 'trace_1', 100)
+	frame := relay.decode_frame(attempt.hello_payload) or { panic(err) }
+
+	assert attempt.ok
+	assert attempt.relay_id == 'edge'
+	assert attempt.url == 'wss://relay.example.com/vhttpd/relay'
+	assert attempt.reconnect_delay_ms == 1000
+	assert attempt.agent.state == .connecting
+	assert rt.agents['edge'].state == .connecting
+	assert frame.kind == .hello
+	assert frame.metadata['relay_id'] == 'edge'
+	assert attempt.fields['relay_event'] == 'agent.connecting'
+	assert attempt.fields['trace_id'] == 'trace_1'
+}
+
+fn test_prepare_relay_agent_connect_attempt_reports_invalid_descriptor() {
+	mut rt := relay.empty_runtime()
+	descriptor := relay.RelayDescriptor{
+		id:   'hub'
+		mode: .hub
+		url:  'wss://relay.example.com/vhttpd/relay'
+	}
+
+	attempt := prepare_relay_agent_connect_attempt(mut rt, descriptor, 'trace_1', 100)
+
+	assert !attempt.ok
+	assert attempt.error == 'relay_runtime_unknown_relay:hub'
+	assert attempt.fields['relay_event'] == 'agent.connect_failed'
+	assert attempt.fields['error'] == 'relay_runtime_unknown_relay:hub'
+}
+
 fn test_receive_relay_agent_payload_routes_ack_to_handshake() {
 	mut rt := relay.new_runtime(relay_agent_payload_plan()) or { panic(err) }
 	rt.mark_agent_connecting('edge', 100) or { panic(err) }
