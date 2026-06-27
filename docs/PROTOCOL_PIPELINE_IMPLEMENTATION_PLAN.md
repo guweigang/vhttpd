@@ -1141,6 +1141,7 @@ Progress as of 2026-06-27:
 - `P6.10` relay runtime composition added: compiled relay descriptors, agent state, channel registry, session registry, forwarding, session routing, and snapshots now have a single generic runtime container before carrier sockets are attached
 - `P6.11` relay data-plane ownership added: the generic relay runtime is now composed as a first-class `DataPlaneRuntime` module built from `RuntimePlan`, keeping relay state out of providers and `main.v` before carrier socket integration
 - `P6.12` relay admin runtime summary added: `/admin/runtime` now exposes generic relay descriptor, agent, channel, session, pending-frame, and channel trace-id snapshots without coupling admin DTOs back to the relay core module
+- `P6.13` relay observability field mapping added: forwarding, session routing, registration, and agent state outcomes now project stable trace-aware event fields for the control-plane logger before carrier loops emit them
 
 Batches:
 
