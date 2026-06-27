@@ -1148,6 +1148,7 @@ Progress as of 2026-06-27:
 - `P6.17` relay HTTP delivery handling added: HTTP response rendering now recognizes `dispatch.relay_delivery`, projects it through the relay runtime, and returns deterministic accepted/unavailable outcomes while reusing the normal response/event path
 - `P6.18` relay carrier observability added: carrier registrations now appear in relay runtime snapshots and `/admin/runtime`, exposing relay-to-carrier mappings before live WebSocket carrier sockets are stored
 - `P6.19` relay carrier detach lifecycle added: carrier registrations can now be deterministically removed with trace-aware detach events, returning relay dispatch to disabled fallback state before live socket disconnect handling
+- `P6.20` relay inbound frame dispatch contract added: carrier loops can now hand versioned wire frames to relay runtime for registration, forwarding, ignored control frames, and trace-aware inbound outcomes without provider-specific branches
 
 Batches:
 
