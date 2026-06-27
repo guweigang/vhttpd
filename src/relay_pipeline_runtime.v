@@ -5,28 +5,38 @@ import relay
 import ws
 
 struct RelayPipelineDispatchOutcome {
-	pipeline_id string
-	exchange_id string
-	trace_id    string
-	channel_id  string
-	action      string
-	status      int
-	body        string
-	headers     map[string]string
-	error       string
-	error_class string
+	pipeline_id         string
+	exchange_id         string
+	trace_id            string
+	channel_id          string
+	action              string
+	status              int
+	body                string
+	headers             map[string]string
+	error               string
+	error_class         string
+	carrier_id          string
+	response_frame_id   string
+	carrier_send_ok     bool
+	carrier_send_queued bool
+	carrier_send_error  string
 }
 
 fn relay_pipeline_dispatch_event_fields(outcome RelayPipelineDispatchOutcome) map[string]string {
 	return {
-		'pipeline_id': outcome.pipeline_id
-		'exchange_id': outcome.exchange_id
-		'trace_id':    outcome.trace_id
-		'channel_id':  outcome.channel_id
-		'action':      outcome.action
-		'status':      outcome.status.str()
-		'error':       outcome.error
-		'error_class': outcome.error_class
+		'pipeline_id':         outcome.pipeline_id
+		'exchange_id':         outcome.exchange_id
+		'trace_id':            outcome.trace_id
+		'channel_id':          outcome.channel_id
+		'action':              outcome.action
+		'status':              outcome.status.str()
+		'error':               outcome.error
+		'error_class':         outcome.error_class
+		'carrier_id':          outcome.carrier_id
+		'response_frame_id':   outcome.response_frame_id
+		'carrier_send_ok':     outcome.carrier_send_ok.str()
+		'carrier_send_queued': outcome.carrier_send_queued.str()
+		'carrier_send_error':  outcome.carrier_send_error
 	}
 }
 
@@ -96,18 +106,31 @@ fn (mut app App) dispatch_relay_ingress_frame(relay_id string, carrier_id string
 }
 
 fn (mut app App) dispatch_and_send_relay_ingress_frame(relay_id string, carrier_id string, frame relay.WireFrame, created_at_ms i64) []RelayPipelineDispatchOutcome {
-	outcomes := app.dispatch_relay_ingress_frame(relay_id, carrier_id, frame, created_at_ms)
+	mut outcomes := app.dispatch_relay_ingress_frame(relay_id, carrier_id, frame, created_at_ms)
 	mut carrier := ws.new_relay_carrier(app.build_websocket_runtime_context(), carrier_id)
-	for outcome in outcomes {
+	for i, outcome in outcomes {
 		response_frame := relay_pipeline_response_frame(outcome)
 		send_result := carrier.send(response_frame)
-		mut fields := relay_pipeline_dispatch_event_fields(outcome)
+		outcomes[i] = relay_pipeline_outcome_with_send_result(outcome, carrier_id,
+			response_frame.id, send_result)
+		mut fields := relay_pipeline_dispatch_event_fields(outcomes[i])
 		for key, value in relay.carrier_send_event_fields(send_result) {
 			fields['carrier_${key}'] = value
 		}
 		app.emit('relay.pipeline.response', fields)
 	}
 	return outcomes
+}
+
+fn relay_pipeline_outcome_with_send_result(outcome RelayPipelineDispatchOutcome, carrier_id string, response_frame_id string, send_result relay.CarrierSendResult) RelayPipelineDispatchOutcome {
+	return RelayPipelineDispatchOutcome{
+		...outcome
+		carrier_id:          carrier_id
+		response_frame_id:   response_frame_id
+		carrier_send_ok:     send_result.ok
+		carrier_send_queued: send_result.queued
+		carrier_send_error:  send_result.error
+	}
 }
 
 fn (mut app App) dispatch_relay_pipeline_exchange(mut exchange dispatch.Exchange) RelayPipelineDispatchOutcome {

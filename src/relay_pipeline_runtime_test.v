@@ -52,6 +52,51 @@ fn test_dispatch_relay_ingress_frame_runs_terminal_response_pipeline() {
 	assert outcomes[0].body == 'payload'
 }
 
+fn test_dispatch_and_send_relay_ingress_frame_reports_send_result() {
+	mut app := App{
+		plan: runtime_plan.RuntimePlan{
+			relays:    {
+				'edge': runtime_plan.RelayPlan{
+					id:      'edge'
+					mode:    'agent'
+					carrier: 'websocket'
+				}
+			}
+			pipelines: [
+				runtime_plan.PipelinePlan{
+					id:      'edge/local'
+					ingress: runtime_plan.ResourceRef{
+						domain: .relay
+						id:     'edge'
+					}
+					egress:  runtime_plan.ResourceRef{
+						domain: .terminal
+						id:     'response'
+					}
+				},
+			]
+		}
+	}
+	app.pipelines = PipelineRuntime.new(app.plan, 'default', []RuntimeRouteRule{}, '', '',
+		map[string]string{}, map[string]&worker.WorkerState{})
+
+	outcomes := app.dispatch_and_send_relay_ingress_frame('edge', 'agent:edge', relay.WireFrame{
+		version:    relay.wire_version
+		kind:       .data
+		id:         'frm-1'
+		trace_id:   'trace-1'
+		channel_id: 'chan-1'
+		body:       'payload'
+	}, 123)
+
+	assert outcomes.len == 1
+	assert outcomes[0].action == 'response'
+	assert outcomes[0].carrier_id == 'agent:edge'
+	assert outcomes[0].response_frame_id == 'relay-response:frm-1'
+	assert outcomes[0].carrier_send_ok
+	assert outcomes[0].carrier_send_error == ''
+}
+
 fn test_dispatch_relay_ingress_frame_reports_missing_pipeline() {
 	mut app := App{
 		plan: runtime_plan.RuntimePlan{}
@@ -159,6 +204,30 @@ fn test_dispatch_relay_pipeline_exchange_delivers_terminal_adapter() {
 	assert outcome.status == 202
 	assert outcome.body == 'relay ok'
 	assert outcome.channel_id == 'chan-1'
+}
+
+fn test_relay_pipeline_outcome_with_send_result_preserves_dispatch_fields() {
+	outcome := relay_pipeline_outcome_with_send_result(RelayPipelineDispatchOutcome{
+		pipeline_id: 'edge/local'
+		exchange_id: 'frm-1'
+		trace_id:    'trace-1'
+		channel_id:  'chan-1'
+		action:      'response'
+		status:      200
+		body:        'ok'
+	}, 'agent:edge', 'relay-response:frm-1', relay.CarrierSendResult{
+		ok:       true
+		trace_id: 'trace-1'
+		frame_id: 'relay-response:frm-1'
+		queued:   true
+	})
+
+	assert outcome.pipeline_id == 'edge/local'
+	assert outcome.carrier_id == 'agent:edge'
+	assert outcome.response_frame_id == 'relay-response:frm-1'
+	assert outcome.carrier_send_ok
+	assert outcome.carrier_send_queued
+	assert outcome.carrier_send_error == ''
 }
 
 fn test_relay_pipeline_response_frame_projects_success_and_failure() {
