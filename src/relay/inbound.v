@@ -3,6 +3,7 @@ module relay
 pub enum InboundAction {
 	registered
 	forwarded
+	returned
 	ignored
 	rejected
 }
@@ -31,6 +32,8 @@ pub fn (mut rt Runtime) handle_inbound_frame(carrier_id string, frame WireFrame,
 			return InboundOutcome{
 				action:     if forwarding.action == .rejected {
 					InboundAction.rejected
+				} else if frame_is_pipeline_response(frame) {
+					InboundAction.returned
 				} else {
 					InboundAction.forwarded
 				}

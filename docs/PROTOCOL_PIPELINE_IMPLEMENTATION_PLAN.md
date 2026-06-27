@@ -1183,6 +1183,7 @@ Progress as of 2026-06-27:
 - `P6.52` relay agent v2 example added: examples now include a local agent config with `relay:*` pipeline ingress and fixed-response adapter egress, with compiler coverage to keep the new resource/pipeline shape schema-compatible
 - `P6.53` relay response send observability added: relay pipeline dispatch outcomes now retain carrier ID, response frame ID, and carrier send status/error so callers can distinguish pipeline execution from response-frame delivery
 - `P6.54` relay response redispatch guard added: response/error frames produced by relay pipelines are now kept out of relay-ingress pipeline dispatch, preventing response ping-pong while still allowing request/session frames to enter configured pipelines
+- `P6.55` relay returned-frame outcome added: relay core now classifies pipeline response/error frames as returned inbound frames, queues them on the channel without redispatch, and emits `inbound.returned` for traceable return-path observation
 
 Batches:
 

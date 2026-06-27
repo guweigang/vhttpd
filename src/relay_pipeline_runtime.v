@@ -64,10 +64,7 @@ fn relay_pipeline_response_frame(outcome RelayPipelineDispatchOutcome) relay.Wir
 }
 
 fn relay_frame_should_dispatch_pipeline(frame relay.WireFrame) bool {
-	if frame.id.starts_with('relay-response:') {
-		return false
-	}
-	if frame.exchange_kind.trim_space().to_lower() in ['response', 'error'] {
+	if relay.frame_is_pipeline_response(frame) {
 		return false
 	}
 	return frame.kind in [.open, .data, .end, .cancel]

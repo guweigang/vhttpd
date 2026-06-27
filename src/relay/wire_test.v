@@ -69,17 +69,17 @@ fn test_frame_from_exchange_projects_common_identity_and_body() {
 			trace_id:   'trace_1'
 			parent_id:  'span_0'
 		}
-		kind:      .request
-		ingress:   'adapter:http'
-		pipeline:  'site/main'
-		headers:   {
+		kind:     .request
+		ingress:  'adapter:http'
+		pipeline: 'site/main'
+		headers:  {
 			'content-type': 'text/plain'
 		}
-		metadata:  {
+		metadata: {
 			'provider': 'opaque-provider'
 			'custom':   'value'
 		}
-		payload:   dispatch.RequestPayload{
+		payload:  dispatch.RequestPayload{
 			method: 'POST'
 			path:   '/submit'
 			body:   'payload'
@@ -101,4 +101,19 @@ fn test_frame_from_exchange_projects_common_identity_and_body() {
 	assert frame.metadata['provider'] == 'opaque-provider'
 	assert frame.metadata['custom'] == 'value'
 	assert frame.body == 'payload'
+}
+
+fn test_frame_is_pipeline_response_detects_response_frames() {
+	assert frame_is_pipeline_response(WireFrame{
+		id:            'relay-response:frm_1'
+		exchange_kind: 'response'
+	})
+	assert frame_is_pipeline_response(WireFrame{
+		id:            'frm_error'
+		exchange_kind: 'error'
+	})
+	assert !frame_is_pipeline_response(WireFrame{
+		id:            'frm_request'
+		exchange_kind: 'request'
+	})
 }

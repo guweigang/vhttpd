@@ -44,8 +44,8 @@ fn test_inbound_hello_rejects_wrong_token_without_registering_carrier() {
 	mut rt := new_runtime(runtime_plan.RuntimePlan{
 		relays: {
 			'edge': runtime_plan.RelayPlan{
-				id:   'edge'
-				mode: 'agent'
+				id:      'edge'
+				mode:    'agent'
 				options: runtime_plan.PlanOptions{
 					strings: {
 						'url':   'wss://relay.example.com'
@@ -92,6 +92,36 @@ fn test_inbound_open_frame_uses_forwarding_runtime() {
 	assert outcome.action == .forwarded
 	assert outcome.forwarding.action == .opened
 	assert rt.channels.channels['chan_1'].node_id == 'node_1'
+}
+
+fn test_inbound_response_frame_is_returned_without_relay_pipeline_dispatch() {
+	mut rt := empty_runtime()
+	rt.handle_inbound_frame('carrier_edge', WireFrame{
+		version:    wire_version
+		kind:       .open
+		id:         'frm_open'
+		trace_id:   'trace_1'
+		channel_id: 'chan_1'
+	}, 2)
+
+	outcome := rt.handle_inbound_frame('carrier_edge', WireFrame{
+		version:       wire_version
+		kind:          .data
+		id:            'relay-response:frm_1'
+		trace_id:      'trace_1'
+		channel_id:    'chan_1'
+		exchange_kind: 'response'
+		body:          'ok'
+	}, 2)
+	frames := rt.channels.drain('chan_1') or { panic(err) }
+	fields := inbound_event_fields(outcome)
+
+	assert outcome.action == .returned
+	assert outcome.forwarding.action == .queued
+	assert frames.len == 1
+	assert frames[0].id == 'relay-response:frm_1'
+	assert frames[0].body == 'ok'
+	assert fields['relay_event'] == 'inbound.returned'
 }
 
 fn test_inbound_ping_is_ignored() {

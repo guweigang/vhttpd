@@ -93,6 +93,13 @@ pub fn validate_frame(frame WireFrame) ! {
 	}
 }
 
+pub fn frame_is_pipeline_response(frame WireFrame) bool {
+	if frame.id.starts_with('relay-response:') {
+		return true
+	}
+	return frame.exchange_kind.trim_space().to_lower() in ['response', 'error']
+}
+
 fn exchange_body(exchange dispatch.Exchange) string {
 	match exchange.payload {
 		dispatch.RequestPayload {
