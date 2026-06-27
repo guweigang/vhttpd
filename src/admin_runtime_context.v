@@ -117,6 +117,43 @@ fn (mut app App) build_admin_context() admin.RuntimeContext {
 		provider_runtime_gateway_count:         fn [mut app] () int {
 			return app.provider_runtime_gateway_count()
 		}
+		relay_runtime_snapshot:                 fn [mut app] () executor.AdminRelayRuntimeSummary {
+			return app.admin_relay_runtime_snapshot()
+		}
+	}
+}
+
+fn (mut app App) admin_relay_runtime_snapshot() executor.AdminRelayRuntimeSummary {
+	snapshot := app.relay.snapshot()
+	return executor.AdminRelayRuntimeSummary{
+		descriptor_count: snapshot.descriptor_count
+		agent_count:      snapshot.agent_count
+		channel_count:    snapshot.channel_count
+		open_channels:    snapshot.open_channels
+		session_count:    snapshot.session_count
+		pending_frames:   snapshot.pending_frames
+		agents:           snapshot.agents.map(executor.AdminRelayAgentSummary{
+			node_id:            it.node_id
+			relay_id:           it.relay_id
+			state:              it.state
+			attempt:            it.attempt
+			next_attempt_at_ms: it.next_attempt_at_ms
+			last_error:         it.last_error
+		})
+		channels:         snapshot.channels.map(executor.AdminRelayChannelSummary{
+			id:           it.id
+			node_id:      it.node_id
+			route:        it.route
+			trace_id:     it.trace_id
+			open:         it.open
+			buffered_len: it.buffered_len
+		})
+		sessions:         snapshot.sessions.map(executor.AdminRelaySessionSummary{
+			id:             it.id
+			endpoint_count: it.endpoint_count
+			link_count:     it.link_count
+			pending_frames: it.pending_frames
+		})
 	}
 }
 

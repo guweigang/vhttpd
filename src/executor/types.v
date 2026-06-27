@@ -171,6 +171,47 @@ pub:
 	gateways     int
 }
 
+pub struct AdminRelayAgentSummary {
+pub:
+	node_id            string
+	relay_id           string
+	state              string
+	attempt            int
+	next_attempt_at_ms i64
+	last_error         string
+}
+
+pub struct AdminRelayChannelSummary {
+pub:
+	id           string
+	node_id      string
+	route        string
+	trace_id     string
+	open         bool
+	buffered_len int
+}
+
+pub struct AdminRelaySessionSummary {
+pub:
+	id             string
+	endpoint_count int
+	link_count     int
+	pending_frames int
+}
+
+pub struct AdminRelayRuntimeSummary {
+pub:
+	descriptor_count int
+	agent_count      int
+	channel_count    int
+	open_channels    int
+	session_count    int
+	pending_frames   int
+	agents           []AdminRelayAgentSummary
+	channels         []AdminRelayChannelSummary
+	sessions         []AdminRelaySessionSummary
+}
+
 pub struct AdminRuntimeSummary {
 pub:
 	started_at_unix i64
@@ -179,6 +220,7 @@ pub:
 	logic_executor  AdminLogicExecutorSummary
 	capabilities    map[string]bool
 	active          AdminActiveCounts
+	relay           AdminRelayRuntimeSummary
 	stats           AdminRuntimeStats
 }
 

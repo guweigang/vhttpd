@@ -94,6 +94,7 @@ pub fn (mut s AdminState) runtime_snapshot(ctx RuntimeContext) executor.AdminRun
 			mcp_sessions: ctx.mcp_active_sessions(time.now().unix())
 			gateways:     ctx.provider_runtime_gateway_count()
 		}
+		relay: ctx.relay_runtime_snapshot()
 		stats: stats
 	}
 }

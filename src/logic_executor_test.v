@@ -3,6 +3,7 @@ module main
 import admin
 import executor
 import json
+import relay
 import worker
 
 fn test_disabled_logic_executor_identity() {
@@ -125,4 +126,24 @@ fn test_internal_admin_runtime_exposes_worker_logic_executor_identity() {
 	assert snapshot.logic_executor.details.model == 'worker'
 	assert snapshot.logic_executor.details.runtime_profile == ''
 	assert snapshot.logic_executor.details.lane_count == 0
+}
+
+fn test_admin_runtime_snapshot_exposes_relay_summary() {
+	mut app := App{
+		relay: relay.empty_runtime()
+	}
+	app.relay.channels.open_channel(relay.RelayChannel{
+		id:       'chan_1'
+		node_id:  'node_1'
+		route:    'site/main'
+		trace_id: 'trace_1'
+	}) or { panic(err) }
+	app.relay.channels.enqueue('chan_1', relay.new_frame(.data, 'frm_1', 'trace_1')) or {
+		panic(err)
+	}
+	snapshot := app.admin_runtime_snapshot()
+	assert snapshot.relay.channel_count == 1
+	assert snapshot.relay.open_channels == 1
+	assert snapshot.relay.pending_frames == 1
+	assert snapshot.relay.channels[0].trace_id == 'trace_1'
 }

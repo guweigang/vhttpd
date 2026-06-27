@@ -47,4 +47,5 @@ pub:
 	logic_executor_provider          fn () string                                 = unsafe { nil }
 	provider_runtime_capabilities    fn () map[string]bool                        = unsafe { nil }
 	provider_runtime_gateway_count   fn () int                                    = unsafe { nil }
+	relay_runtime_snapshot           fn () executor.AdminRelayRuntimeSummary      = unsafe { nil }
 }
