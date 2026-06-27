@@ -1180,6 +1180,7 @@ Progress as of 2026-06-27:
 - `P6.49` relay pipeline response projection added: relay pipeline outcomes now project to relay response/error wire frames and the hub/agent runtimes send those frames back through the shared WebSocket carrier path with carrier send results emitted for observability
 - `P6.50` relay terminal delivery projection added: relay pipeline terminal egress now flows through `dispatch.DeliveryOutcome` projection, preserving response status, body, headers, and failures before converting to relay response/error frames
 - `P6.51` relay terminal adapter egress added: relay-ingress pipelines can now execute terminal `adapter:*` egress such as fixed responses and rejects through the shared dispatch adapter contract, while non-terminal runtime adapters remain explicitly unsupported until their protocol bridge is implemented
+- `P6.52` relay agent v2 example added: examples now include a local agent config with `relay:*` pipeline ingress and fixed-response adapter egress, with compiler coverage to keep the new resource/pipeline shape schema-compatible
 
 Batches:
 
