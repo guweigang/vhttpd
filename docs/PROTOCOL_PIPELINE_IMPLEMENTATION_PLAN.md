@@ -1163,6 +1163,7 @@ Progress as of 2026-06-27:
 - `P6.32` relay hub registration is path-bound: WebSocket hub sessions now reject and detach hello registrations whose relay ID does not match the configured hub path descriptor, preventing stale carrier mappings
 - `P6.33` relay hub example compile coverage added: the v2 plan compiler test suite now loads `examples/config/relay-hub-v2.toml` directly so the documented relay hub example stays schema-compatible
 - `P6.34` relay agent handshake contract added: agent runtimes can now consume hub hello_ack/error frames to mark registration success or deterministic backoff failure before the WebSocket client loop is wired in
+- `P6.35` relay agent hello WebSocket payload builder added: the WebSocket layer can now encode agent descriptors into versioned hello payloads and trace-aware hello events without knowing registration internals
 
 Batches:
 
