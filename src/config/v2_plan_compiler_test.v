@@ -138,6 +138,31 @@ fn test_compile_v2_runtime_plan_allows_relay_listener_without_pipeline() {
 	assert plan.relays['edge'].ingress?.str() == 'listener:relay'
 }
 
+fn test_compile_v2_runtime_plan_preserves_relay_hub_path() {
+	cfg := V2Config{
+		listeners: {
+			'relay': V2ListenerSpec{
+				protocol: 'websocket'
+			}
+		}
+		relays:    {
+			'edge': V2RelaySpec{
+				mode:     'hub'
+				listener: 'listener:relay'
+				carrier:  'websocket'
+				path:     '/vhttpd/relay'
+				node_id:  'hub_1'
+			}
+		}
+	}
+
+	plan := compile_v2_runtime_plan(cfg, '', false) or { panic(err) }
+
+	assert plan.relays['edge'].ingress?.str() == 'listener:relay'
+	assert plan.relays['edge'].options.strings['path'] == '/vhttpd/relay'
+	assert plan.relays['edge'].options.strings['node_id'] == 'hub_1'
+}
+
 fn test_compile_v2_runtime_plan_rejects_http_handler_without_engine() {
 	cfg := V2Config{
 		listeners: {
