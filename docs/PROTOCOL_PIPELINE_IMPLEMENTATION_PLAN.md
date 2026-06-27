@@ -1145,6 +1145,7 @@ Progress as of 2026-06-27:
 - `P6.14` relay carrier port added: relay core now has a generic carrier interface, disabled carrier fallback, and trace-aware carrier send/close event fields before WebSocket carrier implementation
 - `P6.15` relay carrier dispatch registry added: relay runtime can now register carrier IDs and produce deterministic trace-aware carrier dispatch plans with disabled fallbacks before storing live carrier sockets
 - `P6.16` relay delivery projection added: generic `dispatch.relay_delivery` outcomes can now be normalized into relay wire frames and carrier dispatch plans without HTTP/provider code knowing carrier details
+- `P6.17` relay HTTP delivery handling added: HTTP response rendering now recognizes `dispatch.relay_delivery`, projects it through the relay runtime, and returns deterministic accepted/unavailable outcomes while reusing the normal response/event path
 
 Batches:
 

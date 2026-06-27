@@ -4,6 +4,7 @@ import dispatch
 import executor
 import log
 import net.http
+import relay
 import time
 import upstream.transport
 import veb
@@ -48,6 +49,10 @@ fn HttpResponseRuntime.dispatch_error(mut app App, mut ctx Context, req HttpIngr
 fn HttpResponseRuntime.delivery_outcome(mut app App, mut ctx Context, req HttpIngressRequest, outcome dispatch.DeliveryOutcome, matched_rule ?RuntimeRouteRule) veb.Result {
 	if outcome.kind == .file {
 		return HttpResponseRuntime.file_outcome(mut app, mut ctx, req, outcome, matched_rule)
+	}
+	if outcome.kind == .relay_delivery {
+		projected := relay_delivery_http_outcome(app.relay.project_delivery(outcome))
+		return HttpResponseRuntime.delivery_outcome(mut app, mut ctx, req, projected, matched_rule)
 	}
 	status := if outcome.status > 0 { outcome.status } else { 200 }
 	error_class := outcome.error_class
@@ -116,6 +121,25 @@ fn HttpResponseRuntime.delivery_outcome(mut app App, mut ctx Context, req HttpIn
 		req.body_on_head
 	}
 	return ctx.text(body)
+}
+
+fn relay_delivery_http_outcome(projection relay.DeliveryProjection) dispatch.DeliveryOutcome {
+	if projection.error != '' {
+		return dispatch.delivery_failure_outcome(500, projection.error, 'relay_delivery_projection')
+	}
+	mut metadata := relay.carrier_dispatch_plan_event_fields(projection.plan)
+	metadata['relay_id'] = projection.relay_id
+	metadata['carrier_id'] = projection.plan.carrier_id
+	metadata['frame_id'] = projection.frame.id
+	metadata['channel_id'] = projection.frame.channel_id
+	if projection.frame.correlation_id != '' {
+		metadata['correlation_id'] = projection.frame.correlation_id
+	}
+	if projection.plan.available {
+		return dispatch.accepted_event_outcome(metadata)
+	}
+	return dispatch.outcome_with_metadata(dispatch.delivery_failure_outcome(503, projection.plan.error,
+		'relay_carrier_unavailable'), metadata)
 }
 
 fn HttpResponseRuntime.file_outcome(mut app App, mut ctx Context, req HttpIngressRequest, outcome dispatch.DeliveryOutcome, matched_rule ?RuntimeRouteRule) veb.Result {
