@@ -24,12 +24,13 @@ make build vhttpd
 - `/Users/guweigang/Source/vhttpd/examples/config/stream-bench.toml`
 - `/Users/guweigang/Source/vhttpd/examples/config/ollama-proxy.toml`
 - `/Users/guweigang/Source/vhttpd/examples/config/mcp.toml`
+- `/Users/guweigang/Source/vhttpd/examples/config/relay-hub-v2.toml`
 - `/Users/guweigang/Source/vhttpd/examples/config/symfony.toml`
 - `/Users/guweigang/Source/vhttpd/examples/config/laravel.toml`
 - `/Users/guweigang/Source/vhttpd/examples/config/wordpress.toml`
 - `/Users/guweigang/Source/vhttpd/examples/config/db-upstream.toml`
 - `/Users/guweigang/Source/vhttpd/examples/config/db-upstream-pg.toml`
-- `/Users/guweigang/Source/vhttpd/examples/config/paseo-relay.toml`
+- `/Users/guweigang/Source/vhttpd/examples/paseo-relay/paseo-relay.toml`
 
 说明：
 
@@ -40,7 +41,8 @@ make build vhttpd
 - `ollama-proxy.toml` 也支持 `OLLAMA_STREAM_FIXTURE`，可离线验证 phase-3 upstream plan
 - `db-upstream.toml` 演示 `vhttpd` 托管 mysql 连接池，并通过 unix socket 暴露 `db` runtime，上游可通过 `/admin/runtime/db` 查看状态
 - `db-upstream-pg.toml` 演示 `vhttpd` 托管 postgresql 连接池，配置写在 `[db.pgsql]`
-- `paseo-relay.toml` 演示一个 `vhttpd + vjsx` 的 Paseo relay skeleton，建议保持 `vjsx.thread_count = 1`
+- `relay-hub-v2.toml` 演示 v2 配置里的通用 WebSocket relay hub
+- `paseo-relay.toml` 演示一个 `vhttpd + vjsx` 的 Paseo relay skeleton
 - 这些变量都在 `[worker.env]`，会传给 php-worker，可在 PHP 里直接 `getenv('KEY')`
 
 ## Paseo Relay Skeleton
@@ -49,7 +51,7 @@ make build vhttpd
 
 ```bash
 cd /Users/guweigang/Source/vhttpd
-./vhttpd --config /Users/guweigang/Source/vhttpd/examples/config/paseo-relay.toml
+./vhttpd --config /Users/guweigang/Source/vhttpd/examples/paseo-relay/paseo-relay.toml
 ```
 
 可用端点：
