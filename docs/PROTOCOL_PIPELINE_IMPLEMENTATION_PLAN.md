@@ -1175,6 +1175,7 @@ Progress as of 2026-06-27:
 - `P6.44` relay agent carrier attach added: connected agent sockets now register as relay carriers through the shared WebSocket runtime context, so outbound relay delivery can reuse the existing carrier send path instead of adding an agent-specific send channel
 - `P6.45` relay ingress capabilities added: `relay:*` resources now project into pipeline ingress descriptors with generic request, stream, session, multiplexing, cancellation, and backpressure capabilities, and capability validation includes relay-ingress pipelines instead of skipping them
 - `P6.46` relay ingress dispatch contract added: runtime plans can query `relay:*` pipelines in declaration order, dispatch exchanges can represent relay session frames with stable identity and metadata, and `PipelineRuntime` now owns relay pipeline descriptors alongside HTTP route state
+- `P6.47` relay frame exchange projection added: relay wire frames can now be projected into typed dispatch relay ingress requests and per-pipeline exchanges, giving the agent/hub runtime a protocol-neutral handoff before transformer and egress execution are wired in
 
 Batches:
 

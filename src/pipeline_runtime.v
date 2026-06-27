@@ -4,6 +4,7 @@ import cachex
 import dispatch
 import executor
 import net.http
+import relay
 import runtime_plan
 import worker
 
@@ -75,6 +76,16 @@ fn RelayPipelineRuntime.new(plan runtime_plan.RuntimePlan) RelayPipelineRuntime 
 
 fn (rt RelayPipelineRuntime) pipeline_descriptors(relay_id string) []dispatch.PipelineDescriptor {
 	return (rt.descriptors[relay_id] or { []dispatch.PipelineDescriptor{} }).clone()
+}
+
+fn (rt RelayPipelineRuntime) ingress_exchanges(relay_id string, carrier_id string, frame relay.WireFrame, created_at_ms i64) []dispatch.Exchange {
+	mut exchanges := []dispatch.Exchange{}
+	for descriptor in rt.pipeline_descriptors(relay_id) {
+		req := relay.relay_ingress_request_from_frame(relay_id, carrier_id, frame, descriptor.id,
+			created_at_ms)
+		exchanges << dispatch.relay_ingress_exchange(req)
+	}
+	return exchanges
 }
 
 fn (rt PipelineRuntime) match_http_request(req HttpPipelineMatchRequest) ?RuntimeRouteRule {
