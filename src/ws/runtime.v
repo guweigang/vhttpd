@@ -67,6 +67,23 @@ pub fn (mut s HubState) register_conn(conn_id string, worker_socket string, meth
 	s.mu.unlock()
 }
 
+pub fn (mut s HubState) conn_open(conn_id string) bool {
+	if conn_id == '' {
+		return false
+	}
+	s.mu.@lock()
+	defer {
+		s.mu.unlock()
+	}
+	if hub_conn := s.conns[conn_id] {
+		if isnil(hub_conn.lifecycle) {
+			return true
+		}
+		return hub_conn.lifecycle.can_queue()
+	}
+	return false
+}
+
 pub fn (mut s HubState) mark_closing(conn_id string) bool {
 	if conn_id == '' {
 		return false
@@ -312,7 +329,10 @@ pub fn (mut s HubState) send_client(conn_id string, client &websocket.Client, da
 		s.send_mu.unlock()
 	}
 	mut c := unsafe { client }
-	payload, code := HubPendingMessage{data: data, opcode: opcode}.payload_bytes() or { return false }
+	payload, code := HubPendingMessage{
+		data:   data
+		opcode: opcode
+	}.payload_bytes() or { return false }
 	if code == .text_frame {
 		c.write_string(data) or { return false }
 		return true

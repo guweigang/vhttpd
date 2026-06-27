@@ -48,6 +48,9 @@ fn (mut runtime WebSocketRuntime) build_context(kernel WebSocketKernelPort) ws.R
 			runtime.state.register_conn(conn_id, worker_socket, method, req_id, trace_id, path,
 				query, headers, remote_addr, client, lifecycle)
 		}
+		conn_open_fn:        fn [mut runtime] (conn_id string) bool {
+			return runtime.state.conn_open(conn_id)
+		}
 		mark_closing_fn:     fn [mut runtime] (conn_id string) bool {
 			return runtime.state.mark_closing(conn_id)
 		}

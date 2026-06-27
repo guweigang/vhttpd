@@ -24,6 +24,7 @@ pub:
 	rooms_fn            fn (string) []string                    = unsafe { nil }
 	metadata_fn         fn (string) map[string]string           = unsafe { nil }
 	register_conn_fn    fn (string, string, string, string, string, string, map[string]string, map[string]string, string, &websocket.Client, &DispatchConnState) = unsafe { nil }
+	conn_open_fn        fn (string) bool                        = unsafe { nil }
 	mark_closing_fn     fn (string) bool                        = unsafe { nil }
 	flush_pending_fn    fn (string)                             = unsafe { nil }
 	cleanup_conn_fn     fn (string)                             = unsafe { nil }
@@ -60,6 +61,10 @@ pub fn (rt RuntimeContext) metadata(conn_id string) map[string]string {
 pub fn (rt RuntimeContext) register_conn(conn_id string, worker_socket string, method string, req_id string, trace_id string, path string, query map[string]string, headers map[string]string, remote_addr string, client &websocket.Client, lifecycle &DispatchConnState) {
 	rt.register_conn_fn(conn_id, worker_socket, method, req_id, trace_id, path, query, headers,
 		remote_addr, client, lifecycle)
+}
+
+pub fn (rt RuntimeContext) conn_open(conn_id string) bool {
+	return rt.conn_open_fn(conn_id)
 }
 
 pub fn (rt RuntimeContext) mark_closing(conn_id string) bool {
