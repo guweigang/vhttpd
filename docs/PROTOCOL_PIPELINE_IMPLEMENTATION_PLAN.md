@@ -1143,6 +1143,7 @@ Progress as of 2026-06-27:
 - `P6.12` relay admin runtime summary added: `/admin/runtime` now exposes generic relay descriptor, agent, channel, session, pending-frame, and channel trace-id snapshots without coupling admin DTOs back to the relay core module
 - `P6.13` relay observability field mapping added: forwarding, session routing, registration, and agent state outcomes now project stable trace-aware event fields for the control-plane logger before carrier loops emit them
 - `P6.14` relay carrier port added: relay core now has a generic carrier interface, disabled carrier fallback, and trace-aware carrier send/close event fields before WebSocket carrier implementation
+- `P6.15` relay carrier dispatch registry added: relay runtime can now register carrier IDs and produce deterministic trace-aware carrier dispatch plans with disabled fallbacks before storing live carrier sockets
 
 Batches:
 

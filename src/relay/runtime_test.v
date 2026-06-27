@@ -89,3 +89,17 @@ fn test_runtime_open_session_endpoint_drains_pending_frames() {
 	assert frames[0].id == 'frm_1'
 	assert rt.snapshot().pending_frames == 0
 }
+
+fn test_runtime_tracks_carrier_dispatch_plan() {
+	mut rt := new_runtime(runtime_plan.RuntimePlan{}) or { panic(err) }
+	frame := new_frame(.data, 'frm_1', 'trace_1')
+
+	missing := rt.carrier_dispatch_plan('relay_1', frame)
+	rt.register_carrier('relay_1', 'carrier_1') or { panic(err) }
+	ready := rt.carrier_dispatch_plan('relay_1', frame)
+
+	assert !missing.available
+	assert missing.error == 'relay_carrier_unavailable:relay_1'
+	assert ready.available
+	assert ready.carrier_id == 'carrier_1'
+}

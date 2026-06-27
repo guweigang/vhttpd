@@ -9,6 +9,7 @@ pub mut:
 	agents   map[string]AgentState
 	channels ChannelRegistry
 	sessions SessionRegistry
+	carriers CarrierRegistry
 }
 
 pub fn empty_runtime() Runtime {
@@ -17,6 +18,7 @@ pub fn empty_runtime() Runtime {
 		agents:      map[string]AgentState{}
 		channels:    new_channel_registry(1024)
 		sessions:    new_session_registry()
+		carriers:    new_carrier_registry()
 	}
 }
 
@@ -33,6 +35,7 @@ pub fn new_runtime(plan runtime_plan.RuntimePlan) !Runtime {
 		agents:      map[string]AgentState{}
 		channels:    new_channel_registry(max_channels)
 		sessions:    new_session_registry()
+		carriers:    new_carrier_registry()
 	}
 }
 
@@ -82,6 +85,14 @@ pub fn (mut rt Runtime) route_session_frame(session_id string, link_id string, s
 
 pub fn (mut rt Runtime) open_session_endpoint(endpoint RelayEndpoint) ![]WireFrame {
 	return open_session_endpoint_and_drain(mut rt.sessions, endpoint)
+}
+
+pub fn (mut rt Runtime) register_carrier(relay_id string, carrier_id string) ! {
+	rt.carriers.register(relay_id, carrier_id)!
+}
+
+pub fn (rt Runtime) carrier_dispatch_plan(relay_id string, frame WireFrame) CarrierDispatchPlan {
+	return carrier_dispatch_plan(rt.carriers, relay_id, frame)
 }
 
 pub fn (rt Runtime) snapshot() RelayRuntimeSnapshot {
