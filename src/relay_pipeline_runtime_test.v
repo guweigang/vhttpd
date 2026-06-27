@@ -270,6 +270,36 @@ fn test_relay_pipeline_response_frame_projects_success_and_failure() {
 	assert failure.metadata['error_class'] == 'relay_error'
 }
 
+fn test_relay_frame_should_dispatch_pipeline_skips_response_frames() {
+	assert relay_frame_should_dispatch_pipeline(relay.WireFrame{
+		kind:       .open
+		id:         'frm-open'
+		trace_id:   'trace-1'
+		channel_id: 'chan-1'
+	})
+	assert relay_frame_should_dispatch_pipeline(relay.WireFrame{
+		kind:          .data
+		id:            'frm-request'
+		trace_id:      'trace-1'
+		channel_id:    'chan-1'
+		exchange_kind: 'request'
+	})
+	assert !relay_frame_should_dispatch_pipeline(relay.WireFrame{
+		kind:          .data
+		id:            'relay-response:frm-1'
+		trace_id:      'trace-1'
+		channel_id:    'chan-1'
+		exchange_kind: 'response'
+	})
+	assert !relay_frame_should_dispatch_pipeline(relay.WireFrame{
+		kind:          .error
+		id:            'relay-response:frm-2'
+		trace_id:      'trace-1'
+		channel_id:    'chan-1'
+		exchange_kind: 'error'
+	})
+}
+
 fn test_relay_pipeline_delivery_outcome_projection_handles_response_and_failure() {
 	exchange := dispatch.relay_ingress_exchange(dispatch.RelayIngressRequest{
 		relay_id:   'edge'

@@ -1182,6 +1182,7 @@ Progress as of 2026-06-27:
 - `P6.51` relay terminal adapter egress added: relay-ingress pipelines can now execute terminal `adapter:*` egress such as fixed responses and rejects through the shared dispatch adapter contract, while non-terminal runtime adapters remain explicitly unsupported until their protocol bridge is implemented
 - `P6.52` relay agent v2 example added: examples now include a local agent config with `relay:*` pipeline ingress and fixed-response adapter egress, with compiler coverage to keep the new resource/pipeline shape schema-compatible
 - `P6.53` relay response send observability added: relay pipeline dispatch outcomes now retain carrier ID, response frame ID, and carrier send status/error so callers can distinguish pipeline execution from response-frame delivery
+- `P6.54` relay response redispatch guard added: response/error frames produced by relay pipelines are now kept out of relay-ingress pipeline dispatch, preventing response ping-pong while still allowing request/session frames to enter configured pipelines
 
 Batches:
 

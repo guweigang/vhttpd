@@ -88,10 +88,12 @@ fn relay_websocket_message_cb(mut ws_client websocket.Client, msg &websocket.Mes
 	app.emit('relay.inbound', relay_websocket_event_fields(relay.inbound_event_fields(outcome),
 		state))
 	if outcome.action == .forwarded {
-		for dispatch_outcome in app.dispatch_and_send_relay_ingress_frame(state.descriptor.id,
-			state.conn_id, outcome.frame, time.now().unix_milli()) {
-			app.emit('relay.pipeline.dispatch', relay_websocket_event_fields(relay_pipeline_dispatch_event_fields(dispatch_outcome),
-				state))
+		if relay_frame_should_dispatch_pipeline(outcome.frame) {
+			for dispatch_outcome in app.dispatch_and_send_relay_ingress_frame(state.descriptor.id,
+				state.conn_id, outcome.frame, time.now().unix_milli()) {
+				app.emit('relay.pipeline.dispatch', relay_websocket_event_fields(relay_pipeline_dispatch_event_fields(dispatch_outcome),
+					state))
+			}
 		}
 	}
 	if outcome.action == .registered {
