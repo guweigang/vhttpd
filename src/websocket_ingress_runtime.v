@@ -277,9 +277,6 @@ fn worker_websocket_close_cb(mut _ws websocket.Client, code int, reason string, 
 }
 
 fn proxy_worker_websocket(mut app App, mut ctx Context, method string, path string) veb.Result {
-	if app.websocket.dispatch_enabled() {
-		return proxy_worker_websocket_dispatch(mut app, mut ctx, method, path)
-	}
 	start_ms := time.now().unix_milli()
 	req_id := resolve_request_id(ctx, path)
 	trace_id := resolve_trace_id(ctx, path)
@@ -291,6 +288,21 @@ fn proxy_worker_websocket(mut app App, mut ctx Context, method string, path stri
 			'content-type': 'text/plain; charset=utf-8'
 			'upgrade':      'websocket'
 		}, 'Upgrade Required', 'upgrade_required')
+	}
+	normalized_path, query_string := transport.normalize_request_target(path)
+	query := transport.parse_query_map(query_string)
+	headers := transport.header_map_from_request(ctx.req)
+	if descriptor := relay_websocket_path_descriptor(app, normalized_path) {
+		ctx.takeover_conn()
+		ctx.conn.set_write_timeout(time.infinite)
+		ctx.conn.set_read_timeout(time.infinite)
+		mut conn := ctx.conn
+		spawn handle_relay_websocket_session(mut app, mut conn, key, method.to_upper(),
+			normalized_path, query, headers, remote_addr, req_id, trace_id, descriptor)
+		return veb.no_result()
+	}
+	if app.websocket.dispatch_enabled() {
+		return proxy_worker_websocket_dispatch(mut app, mut ctx, method, path)
 	}
 	mut facade := app.as_facade()
 	mut ws_open := app.engines.open_websocket_session(mut facade, executor.WebSocketSessionOpenRequest{

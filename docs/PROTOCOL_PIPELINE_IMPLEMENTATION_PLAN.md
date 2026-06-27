@@ -1157,6 +1157,7 @@ Progress as of 2026-06-27:
 - `P6.26` relay delivery now sends through WebSocket carrier: HTTP relay delivery prepares an outbound relay frame, dispatches it via the generic carrier port backed by the WebSocket hub, and maps send failures into traceable delivery failures
 - `P6.27` WebSocket relay hub ingress added: dispatch WebSocket requests that match an explicit hub relay path now run a relay-owned session loop, register the socket in the WebSocket hub, route text frames through relay inbound handling, and detach carriers on close
 - `P6.28` relay hub path config coverage added: v2 plan compiler tests now lock in `relays.*.path` and `node_id` projection so WebSocket relay ingress remains expressible as configuration, not hard-coded route logic
+- `P6.29` relay WebSocket ingress moved to the common upgrade path: configured relay hub paths are now handled before choosing worker or in-proc WebSocket dispatch, so relay behavior does not depend on a specific application engine mode
 
 Batches:
 
