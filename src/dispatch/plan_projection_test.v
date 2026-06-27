@@ -230,10 +230,20 @@ fn test_ingress_descriptors_from_plan_include_event_ingress_adapters() {
 				kind: 'event-ingress'
 			}
 		}
+		relays:    {
+			'edge': runtime_plan.RelayPlan{
+				id:      'edge'
+				mode:    'agent'
+				carrier: 'websocket'
+			}
+		}
 	}
 	descriptors := ingress_descriptors_from_plan(plan)
 	assert descriptors['listener:web'].capabilities.request_response
 	assert descriptors['adapter:upload_event'].capabilities.events
+	assert descriptors['relay:edge'].capabilities.request_response
+	assert descriptors['relay:edge'].capabilities.full_duplex
+	assert descriptors['relay:edge'].capabilities.sessions
 }
 
 fn test_match_basic_http_pipeline_uses_plan_order() {
@@ -352,6 +362,33 @@ fn test_pipeline_capability_errors_from_plan_allows_http_upload_pipeline() {
 		]
 	}
 	assert pipeline_capability_errors_from_plan(plan).len == 0
+}
+
+fn test_pipeline_capability_errors_from_plan_allows_relay_response_pipeline() {
+	plan := runtime_plan.RuntimePlan{
+		relays:    {
+			'edge': runtime_plan.RelayPlan{
+				id:      'edge'
+				mode:    'agent'
+				carrier: 'websocket'
+			}
+		}
+		pipelines: [
+			runtime_plan.PipelinePlan{
+				id:      'relay/local'
+				ingress: runtime_plan.ResourceRef{
+					domain: .relay
+					id:     'edge'
+				}
+				egress:  runtime_plan.ResourceRef{
+					domain: .terminal
+					id:     'response'
+				}
+			},
+		]
+	}
+
+	assert pipeline_capability_errors_from_plan(plan) == []
 }
 
 fn test_pipeline_capability_errors_from_plan_reports_incompatible_websocket_egress() {

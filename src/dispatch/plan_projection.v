@@ -9,10 +9,20 @@ pub fn ingress_descriptor_from_listener_plan(listener runtime_plan.ListenerPlan)
 	}
 }
 
+pub fn ingress_descriptor_from_relay_plan(relay runtime_plan.RelayPlan) IngressDescriptor {
+	return IngressDescriptor{
+		id:           'relay:${relay.id}'
+		capabilities: relay_capabilities(relay.carrier)
+	}
+}
+
 pub fn ingress_descriptors_from_plan(plan runtime_plan.RuntimePlan) map[string]IngressDescriptor {
 	mut descriptors := map[string]IngressDescriptor{}
 	for id, listener in plan.listeners {
 		descriptors['listener:${id}'] = ingress_descriptor_from_listener_plan(listener)
+	}
+	for id, relay in plan.relays {
+		descriptors['relay:${id}'] = ingress_descriptor_from_relay_plan(relay)
 	}
 	for id, adapter in adapter_descriptors_from_plan(plan) {
 		if adapter.kind == 'event-ingress' {
@@ -133,7 +143,7 @@ pub fn pipeline_capability_issues_from_plan(plan runtime_plan.RuntimePlan) []Pip
 	ingresses := ingress_descriptors_from_plan(plan)
 	mut issues := []PipelineCapabilityIssue{}
 	for pipeline in plan.pipelines {
-		if pipeline.ingress.domain !in [.listener, .adapter] {
+		if pipeline.ingress.domain !in [.listener, .adapter, .relay] {
 			continue
 		}
 		ingress := ingresses[pipeline.ingress.str()] or { continue }
@@ -211,6 +221,30 @@ fn listener_capabilities(protocol string) Capabilities {
 		else {
 			return Capabilities{
 				request_response: true
+			}
+		}
+	}
+}
+
+fn relay_capabilities(carrier string) Capabilities {
+	match carrier.trim_space().to_lower() {
+		'', 'websocket', 'ws', 'wss' {
+			return Capabilities{
+				request_response: true
+				events:           true
+				stream_input:     true
+				stream_output:    true
+				full_duplex:      true
+				sessions:         true
+				multiplexing:     true
+				cancellation:     true
+				backpressure:     true
+			}
+		}
+		else {
+			return Capabilities{
+				request_response: true
+				events:           true
 			}
 		}
 	}
