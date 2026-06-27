@@ -41,7 +41,9 @@ pub fn new_runtime(plan runtime_plan.RuntimePlan) !Runtime {
 }
 
 pub fn (mut rt Runtime) ensure_agent(relay_id string) !AgentState {
-	descriptor := rt.descriptors[relay_id] or { return error('relay_runtime_unknown_relay:${relay_id}') }
+	descriptor := rt.descriptors[relay_id] or {
+		return error('relay_runtime_unknown_relay:${relay_id}')
+	}
 	if descriptor.mode != .agent {
 		return error('relay_runtime_not_agent:${relay_id}')
 	}
@@ -68,7 +70,9 @@ pub fn (mut rt Runtime) mark_agent_registered(relay_id string, now_ms i64) !Agen
 }
 
 pub fn (mut rt Runtime) mark_agent_failed(relay_id string, now_ms i64, err string) !AgentState {
-	descriptor := rt.descriptors[relay_id] or { return error('relay_runtime_unknown_relay:${relay_id}') }
+	descriptor := rt.descriptors[relay_id] or {
+		return error('relay_runtime_unknown_relay:${relay_id}')
+	}
 	agent := rt.ensure_agent(relay_id)!
 	next := agent.mark_failed(now_ms, err, reconnect_policy_from_descriptor(descriptor))
 	rt.agents[relay_id] = next
@@ -104,6 +108,25 @@ pub fn (rt Runtime) project_delivery(outcome dispatch.DeliveryOutcome) DeliveryP
 	return delivery_projection(rt.carriers, outcome)
 }
 
+pub fn (rt Runtime) hub_relay_by_path(path string) ?RelayDescriptor {
+	normalized := normalize_relay_path(path)
+	mut ids := rt.descriptors.keys()
+	ids.sort()
+	for id in ids {
+		descriptor := rt.descriptors[id]
+		if descriptor.mode != .hub {
+			continue
+		}
+		if descriptor.path.trim_space() == '' {
+			continue
+		}
+		if normalize_relay_path(descriptor.path) == normalized {
+			return descriptor
+		}
+	}
+	return none
+}
+
 pub fn (rt Runtime) snapshot() RelayRuntimeSnapshot {
 	mut agents := []AgentState{}
 	mut ids := rt.agents.keys()
@@ -111,5 +134,14 @@ pub fn (rt Runtime) snapshot() RelayRuntimeSnapshot {
 	for id in ids {
 		agents << rt.agents[id]
 	}
-	return runtime_snapshot_with_carriers(rt.descriptors, agents, rt.channels, rt.sessions, rt.carriers)
+	return runtime_snapshot_with_carriers(rt.descriptors, agents, rt.channels, rt.sessions,
+		rt.carriers)
+}
+
+fn normalize_relay_path(path string) string {
+	trimmed := path.trim_space()
+	if trimmed == '' {
+		return ''
+	}
+	return if trimmed.starts_with('/') { trimmed } else { '/${trimmed}' }
 }

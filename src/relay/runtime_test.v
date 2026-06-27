@@ -7,8 +7,8 @@ fn test_runtime_initializes_descriptors_and_channel_limit_from_plan() {
 	rt := new_runtime(runtime_plan.RuntimePlan{
 		relays: {
 			'local': runtime_plan.RelayPlan{
-				id:   'local'
-				mode: 'agent'
+				id:      'local'
+				mode:    'agent'
 				options: runtime_plan.PlanOptions{
 					strings: {
 						'url': 'wss://relay.example.com'
@@ -30,8 +30,8 @@ fn test_runtime_tracks_agent_lifecycle() {
 	mut rt := new_runtime(runtime_plan.RuntimePlan{
 		relays: {
 			'local': runtime_plan.RelayPlan{
-				id:   'local'
-				mode: 'agent'
+				id:      'local'
+				mode:    'agent'
 				options: runtime_plan.PlanOptions{
 					strings: {
 						'url': 'wss://relay.example.com'
@@ -63,8 +63,8 @@ fn test_runtime_handles_forward_frame_and_session_route() {
 		trace_id:   'trace_1'
 		channel_id: 'chan_1'
 	}, 'node_1', 2)
-	route := rt.route_session_frame('session_1', 'link_1', 'ep_client', 'producer',
-		new_frame(.data, 'frm_data', 'trace_1'), 2)
+	route := rt.route_session_frame('session_1', 'link_1', 'ep_client', 'producer', new_frame(.data,
+		'frm_data', 'trace_1'), 2)
 
 	assert forward.action == .opened
 	assert route.action == .buffered
@@ -133,4 +133,62 @@ fn test_runtime_projects_relay_delivery_through_registered_carrier() {
 	assert projection.frame.trace_id == 'trace_1'
 	assert projection.plan.available
 	assert projection.plan.carrier_id == 'carrier_edge'
+}
+
+fn test_runtime_finds_hub_relay_by_explicit_path() {
+	rt := new_runtime(runtime_plan.RuntimePlan{
+		relays: {
+			'edge':  runtime_plan.RelayPlan{
+				id:      'edge'
+				mode:    'hub'
+				ingress: runtime_plan.ResourceRef{
+					domain: .listener
+					id:     'relay'
+				}
+				options: runtime_plan.PlanOptions{
+					strings: {
+						'path':    'vhttpd/relay'
+						'node_id': 'hub_1'
+					}
+				}
+			}
+			'agent': runtime_plan.RelayPlan{
+				id:      'agent'
+				mode:    'agent'
+				options: runtime_plan.PlanOptions{
+					strings: {
+						'url': 'wss://relay.example.com'
+					}
+				}
+			}
+		}
+	}) or { panic(err) }
+
+	descriptor := rt.hub_relay_by_path('/vhttpd/relay') or { panic('missing relay') }
+	missing := rt.hub_relay_by_path('/ordinary/ws')
+
+	assert descriptor.id == 'edge'
+	assert missing == none
+}
+
+fn test_runtime_ignores_hub_relay_without_explicit_path() {
+	rt := new_runtime(runtime_plan.RuntimePlan{
+		relays: {
+			'edge': runtime_plan.RelayPlan{
+				id:      'edge'
+				mode:    'hub'
+				ingress: runtime_plan.ResourceRef{
+					domain: .listener
+					id:     'relay'
+				}
+				options: runtime_plan.PlanOptions{
+					strings: {
+						'node_id': 'hub_1'
+					}
+				}
+			}
+		}
+	}) or { panic(err) }
+
+	assert rt.hub_relay_by_path('/vhttpd/relay') == none
 }

@@ -1155,6 +1155,7 @@ Progress as of 2026-06-27:
 - `P6.24` raw relay carrier receive adapter added: carrier loops can now hand raw wire payloads to relay runtime for decode, validation, and inbound routing without embedding relay protocol parsing in WebSocket handlers
 - `P6.25` WebSocket relay inbound bridge added: WebSocket carrier payloads now have a small text-frame boundary adapter before handing raw relay wire payloads into the generic relay runtime receive path
 - `P6.26` relay delivery now sends through WebSocket carrier: HTTP relay delivery prepares an outbound relay frame, dispatches it via the generic carrier port backed by the WebSocket hub, and maps send failures into traceable delivery failures
+- `P6.27` WebSocket relay hub ingress added: dispatch WebSocket requests that match an explicit hub relay path now run a relay-owned session loop, register the socket in the WebSocket hub, route text frames through relay inbound handling, and detach carriers on close
 
 Batches:
 

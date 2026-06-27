@@ -321,8 +321,8 @@ fn proxy_worker_websocket(mut app App, mut ctx Context, method string, path stri
 	ctx.conn.set_read_timeout(time.infinite)
 	mut conn := ctx.conn
 	mut worker_conn := ws_open.conn
-	spawn handle_worker_websocket_session(mut app, mut conn, mut worker_conn, selected_socket,
-		key, method.to_upper(), path, req_id, trace_id, start_ms)
+	spawn handle_worker_websocket_session(mut app, mut conn, mut worker_conn, selected_socket, key,
+		method.to_upper(), path, req_id, trace_id, start_ms)
 	return veb.no_result()
 }
 
@@ -335,6 +335,15 @@ fn proxy_worker_websocket_dispatch(mut app App, mut ctx Context, method string, 
 	normalized_path, query_string := transport.normalize_request_target(path)
 	query := transport.parse_query_map(query_string)
 	headers := transport.header_map_from_request(ctx.req)
+	if descriptor := relay_websocket_path_descriptor(app, normalized_path) {
+		ctx.takeover_conn()
+		ctx.conn.set_write_timeout(time.infinite)
+		ctx.conn.set_read_timeout(time.infinite)
+		mut conn := ctx.conn
+		spawn handle_relay_websocket_session(mut app, mut conn, key, method.to_upper(),
+			normalized_path, query, headers, remote_addr, req_id, trace_id, descriptor)
+		return veb.no_result()
+	}
 	websocket_runtime := app.build_websocket_runtime_context()
 	presence := websocket_runtime.presence(req_id)
 	open_frame := websocket_runtime.build_frame('open', method, normalized_path, query, headers,
