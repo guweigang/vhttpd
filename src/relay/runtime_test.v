@@ -1,5 +1,6 @@
 module relay
 
+import dispatch
 import runtime_plan
 
 fn test_runtime_initializes_descriptors_and_channel_limit_from_plan() {
@@ -102,4 +103,21 @@ fn test_runtime_tracks_carrier_dispatch_plan() {
 	assert missing.error == 'relay_carrier_unavailable:relay_1'
 	assert ready.available
 	assert ready.carrier_id == 'carrier_1'
+}
+
+fn test_runtime_projects_relay_delivery_through_registered_carrier() {
+	mut rt := new_runtime(runtime_plan.RuntimePlan{}) or { panic(err) }
+	rt.register_carrier('edge', 'carrier_edge') or { panic(err) }
+
+	projection := rt.project_delivery(dispatch.relay_delivery_outcome('relay:edge', {
+		'trace_id':   'trace_1'
+		'request_id': 'req_1'
+		'channel_id': 'chan_1'
+	}))
+
+	assert projection.error == ''
+	assert projection.relay_id == 'edge'
+	assert projection.frame.trace_id == 'trace_1'
+	assert projection.plan.available
+	assert projection.plan.carrier_id == 'carrier_edge'
 }

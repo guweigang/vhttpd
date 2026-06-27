@@ -1144,6 +1144,7 @@ Progress as of 2026-06-27:
 - `P6.13` relay observability field mapping added: forwarding, session routing, registration, and agent state outcomes now project stable trace-aware event fields for the control-plane logger before carrier loops emit them
 - `P6.14` relay carrier port added: relay core now has a generic carrier interface, disabled carrier fallback, and trace-aware carrier send/close event fields before WebSocket carrier implementation
 - `P6.15` relay carrier dispatch registry added: relay runtime can now register carrier IDs and produce deterministic trace-aware carrier dispatch plans with disabled fallbacks before storing live carrier sockets
+- `P6.16` relay delivery projection added: generic `dispatch.relay_delivery` outcomes can now be normalized into relay wire frames and carrier dispatch plans without HTTP/provider code knowing carrier details
 
 Batches:
 

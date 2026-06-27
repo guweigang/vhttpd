@@ -1,5 +1,6 @@
 module relay
 
+import dispatch
 import runtime_plan
 
 pub struct Runtime {
@@ -93,6 +94,10 @@ pub fn (mut rt Runtime) register_carrier(relay_id string, carrier_id string) ! {
 
 pub fn (rt Runtime) carrier_dispatch_plan(relay_id string, frame WireFrame) CarrierDispatchPlan {
 	return carrier_dispatch_plan(rt.carriers, relay_id, frame)
+}
+
+pub fn (rt Runtime) project_delivery(outcome dispatch.DeliveryOutcome) DeliveryProjection {
+	return delivery_projection(rt.carriers, outcome)
 }
 
 pub fn (rt Runtime) snapshot() RelayRuntimeSnapshot {
