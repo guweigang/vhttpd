@@ -36,6 +36,17 @@ pub fn (plan RuntimePlan) listener_pipelines(listener_id string) []PipelinePlan 
 	return pipelines
 }
 
+pub fn (plan RuntimePlan) relay_pipelines(relay_id string) []PipelinePlan {
+	target_relay_id := relay_id.trim_space()
+	mut pipelines := []PipelinePlan{}
+	for pipeline in plan.pipelines {
+		if pipeline.ingress.domain == .relay && pipeline.ingress.id == target_relay_id {
+			pipelines << pipeline
+		}
+	}
+	return pipelines
+}
+
 pub fn (plan RuntimePlan) listener_adapter(listener_id string, kind string) ?AdapterPlan {
 	for pipeline in plan.listener_pipelines(listener_id) {
 		if pipeline.egress.domain != .adapter {

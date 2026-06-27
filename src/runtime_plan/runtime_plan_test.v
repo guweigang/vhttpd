@@ -259,3 +259,46 @@ fn test_runtime_plan_listener_fallback_engine_uses_first_http_handler_when_no_na
 	assert engine.id == 'site/vjsx'
 	assert engine.options.ints['read_timeout_ms'] == 1234
 }
+
+fn test_runtime_plan_relay_pipeline_query_preserves_declaration_order() {
+	plan := RuntimePlan{
+		pipelines: [
+			PipelinePlan{
+				id:      'edge/local/open'
+				ingress: ResourceRef{
+					domain: .relay
+					id:     'edge'
+				}
+				egress:  ResourceRef{
+					domain: .terminal
+					id:     'response'
+				}
+			},
+			PipelinePlan{
+				id:      'web'
+				ingress: ResourceRef{
+					domain: .listener
+					id:     'web'
+				}
+				egress:  ResourceRef{
+					domain: .adapter
+					id:     'app'
+				}
+			},
+			PipelinePlan{
+				id:      'edge/local/message'
+				ingress: ResourceRef{
+					domain: .relay
+					id:     'edge'
+				}
+				egress:  ResourceRef{
+					domain: .terminal
+					id:     'response'
+				}
+			},
+		]
+	}
+
+	assert plan.relay_pipelines('edge').map(it.id) == ['edge/local/open', 'edge/local/message']
+	assert plan.relay_pipelines('missing').len == 0
+}

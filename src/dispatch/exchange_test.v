@@ -431,3 +431,37 @@ fn test_file_delivery_outcome() {
 	assert outcome.path == '/tmp/app.css'
 	assert outcome.headers['cache-control'] == 'public, max-age=60'
 }
+
+fn test_relay_ingress_exchange_projects_session_payload_and_metadata() {
+	exchange := relay_ingress_exchange(RelayIngressRequest{
+		relay_id:      'edge'
+		carrier_id:    'agent:edge'
+		frame_id:      'frm-1'
+		channel_id:    'chan-1'
+		session_id:    'sess-1'
+		link_id:       'http'
+		trace_id:      'trace-relay'
+		request_id:    'req-relay'
+		pipeline:      'edge/local'
+		body:          'hello'
+		metadata:      {
+			'content_type': 'text/plain'
+		}
+		created_at_ms: 123
+	})
+	payload := exchange.payload as SessionPayload
+
+	assert exchange.identity.id == 'frm-1'
+	assert exchange.identity.request_id == 'req-relay'
+	assert exchange.identity.trace_id == 'trace-relay'
+	assert exchange.kind == .session_message
+	assert exchange.ingress == 'relay:edge'
+	assert exchange.pipeline == 'edge/local'
+	assert exchange.created_at_ms == 123
+	assert exchange.metadata['protocol'] == 'relay'
+	assert exchange.metadata['carrier_id'] == 'agent:edge'
+	assert exchange.metadata['frame_id'] == 'frm-1'
+	assert exchange.metadata['content_type'] == 'text/plain'
+	assert payload.session_id == 'sess-1'
+	assert payload.message == 'hello'
+}

@@ -4,6 +4,7 @@ import cachex
 import dispatch
 import executor
 import net.http
+import runtime_plan
 import worker
 
 struct HttpPipelineMatchRequest {
@@ -37,14 +38,43 @@ struct HttpResponseCacheHit {
 
 struct PipelineRuntime {
 mut:
-	http HttpRoutingRuntime
+	http  HttpRoutingRuntime
+	relay RelayPipelineRuntime
 }
 
-fn PipelineRuntime.new(listener_id string, routes []RuntimeRouteRule, assets_root string, worker_root string, primary_env map[string]string, additional_workers map[string]&worker.WorkerState) PipelineRuntime {
+struct RelayPipelineRuntime {
+	descriptors map[string][]dispatch.PipelineDescriptor
+}
+
+fn PipelineRuntime.new(plan runtime_plan.RuntimePlan, listener_id string, routes []RuntimeRouteRule, assets_root string, worker_root string, primary_env map[string]string, additional_workers map[string]&worker.WorkerState) PipelineRuntime {
 	return PipelineRuntime{
-		http: HttpRoutingRuntime.new(listener_id, routes, assets_root, worker_root, primary_env,
+		http:  HttpRoutingRuntime.new(listener_id, routes, assets_root, worker_root, primary_env,
 			additional_workers)
+		relay: RelayPipelineRuntime.new(plan)
 	}
+}
+
+fn RelayPipelineRuntime.new(plan runtime_plan.RuntimePlan) RelayPipelineRuntime {
+	adapters := dispatch.adapter_descriptors_from_plan(plan)
+	transforms := dispatch.transform_descriptors_from_plan(plan)
+	mut descriptors := map[string][]dispatch.PipelineDescriptor{}
+	mut relay_ids := plan.relays.keys()
+	relay_ids.sort()
+	for relay_id in relay_ids {
+		mut relay_descriptors := []dispatch.PipelineDescriptor{}
+		for pipeline in plan.relay_pipelines(relay_id) {
+			relay_descriptors << dispatch.pipeline_descriptor_from_plan_with_runtime_descriptors(pipeline,
+				adapters, transforms)
+		}
+		descriptors[relay_id] = relay_descriptors
+	}
+	return RelayPipelineRuntime{
+		descriptors: descriptors
+	}
+}
+
+fn (rt RelayPipelineRuntime) pipeline_descriptors(relay_id string) []dispatch.PipelineDescriptor {
+	return (rt.descriptors[relay_id] or { []dispatch.PipelineDescriptor{} }).clone()
 }
 
 fn (rt PipelineRuntime) match_http_request(req HttpPipelineMatchRequest) ?RuntimeRouteRule {
@@ -87,8 +117,8 @@ fn (rt PipelineRuntime) http_dispatch_plan(rule ?RuntimeRouteRule, original_targ
 }
 
 fn (rt PipelineRuntime) http_ingress_request(method string, path string, plan HttpPipelineDispatchPlan, body_on_head string, remote_addr string, request_id string, trace_id string, start_ms i64) HttpIngressRequest {
-	mut req := http_ingress_request(method, path, plan.target, body_on_head, remote_addr, request_id,
-		trace_id, start_ms)
+	mut req := http_ingress_request(method, path, plan.target, body_on_head, remote_addr,
+		request_id, trace_id, start_ms)
 	if rule := plan.rule {
 		req.pipeline_id = rule.pipeline_id
 		req.ingress_id = rule.ingress_id

@@ -1174,6 +1174,7 @@ Progress as of 2026-06-27:
 - `P6.43` relay agent reconnect loop added: autostart agents now run through a generic retry loop backed by relay runtime backoff state, with reconnect scheduling emitted as trace-aware events instead of embedding carrier-specific retry policy in the WebSocket adapter
 - `P6.44` relay agent carrier attach added: connected agent sockets now register as relay carriers through the shared WebSocket runtime context, so outbound relay delivery can reuse the existing carrier send path instead of adding an agent-specific send channel
 - `P6.45` relay ingress capabilities added: `relay:*` resources now project into pipeline ingress descriptors with generic request, stream, session, multiplexing, cancellation, and backpressure capabilities, and capability validation includes relay-ingress pipelines instead of skipping them
+- `P6.46` relay ingress dispatch contract added: runtime plans can query `relay:*` pipelines in declaration order, dispatch exchanges can represent relay session frames with stable identity and metadata, and `PipelineRuntime` now owns relay pipeline descriptors alongside HTTP route state
 
 Batches:
 
