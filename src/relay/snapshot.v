@@ -6,9 +6,11 @@ pub:
 	agent_count      int
 	channel_count    int
 	open_channels    int
+	carrier_count    int
 	session_count    int
 	pending_frames   int
 	agents           []AgentSnapshot
+	carriers         []CarrierSnapshot
 	channels         []ChannelSnapshot
 	sessions         []SessionSnapshot
 }
@@ -33,6 +35,12 @@ pub:
 	buffered_len int
 }
 
+pub struct CarrierSnapshot {
+pub:
+	relay_id   string
+	carrier_id string
+}
+
 pub struct SessionSnapshot {
 pub:
 	id            string
@@ -42,16 +50,23 @@ pub:
 }
 
 pub fn runtime_snapshot(descriptors map[string]RelayDescriptor, agents []AgentState, channels ChannelRegistry, sessions SessionRegistry) RelayRuntimeSnapshot {
+	return runtime_snapshot_with_carriers(descriptors, agents, channels, sessions, new_carrier_registry())
+}
+
+pub fn runtime_snapshot_with_carriers(descriptors map[string]RelayDescriptor, agents []AgentState, channels ChannelRegistry, sessions SessionRegistry, carriers CarrierRegistry) RelayRuntimeSnapshot {
 	channel_items := build_channel_snapshots(channels)
 	session_items := build_session_snapshots(sessions)
+	carrier_items := build_carrier_snapshots(carriers)
 	return RelayRuntimeSnapshot{
 		descriptor_count: descriptors.len
 		agent_count:      agents.len
 		channel_count:    channel_items.len
 		open_channels:    channel_items.filter(it.open).len
+		carrier_count:    carrier_items.len
 		session_count:    session_items.len
 		pending_frames:   channel_pending_total(channel_items) + session_pending_total(session_items)
 		agents:           agent_snapshots(agents)
+		carriers:         carrier_items
 		channels:         channel_items
 		sessions:         session_items
 	}
@@ -85,6 +100,19 @@ fn build_channel_snapshots(registry ChannelRegistry) []ChannelSnapshot {
 			trace_id:     channel.trace_id
 			open:         channel.open
 			buffered_len: channel.buffered.len
+		}
+	}
+	return out
+}
+
+fn build_carrier_snapshots(registry CarrierRegistry) []CarrierSnapshot {
+	mut ids := registry.ids.keys()
+	ids.sort()
+	mut out := []CarrierSnapshot{}
+	for relay_id in ids {
+		out << CarrierSnapshot{
+			relay_id:   relay_id
+			carrier_id: registry.ids[relay_id]
 		}
 	}
 	return out

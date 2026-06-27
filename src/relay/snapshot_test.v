@@ -64,3 +64,16 @@ fn test_runtime_snapshot_orders_channels_and_sessions_by_id() {
 	assert snapshot.channels.map(it.id) == ['a', 'b']
 	assert snapshot.sessions.map(it.id) == ['a', 'b']
 }
+
+fn test_runtime_snapshot_with_carriers_orders_registered_carriers() {
+	mut carriers := new_carrier_registry()
+	carriers.register('b', 'carrier_b') or { panic(err) }
+	carriers.register('a', 'carrier_a') or { panic(err) }
+
+	snapshot := runtime_snapshot_with_carriers(map[string]RelayDescriptor{}, []AgentState{},
+		new_channel_registry(1), new_session_registry(), carriers)
+
+	assert snapshot.carrier_count == 2
+	assert snapshot.carriers.map(it.relay_id) == ['a', 'b']
+	assert snapshot.carriers.map(it.carrier_id) == ['carrier_a', 'carrier_b']
+}

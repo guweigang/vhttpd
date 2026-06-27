@@ -132,6 +132,7 @@ fn test_admin_runtime_snapshot_exposes_relay_summary() {
 	mut app := App{
 		relay: relay.empty_runtime()
 	}
+	app.relay.register_carrier('edge', 'carrier_edge') or { panic(err) }
 	app.relay.channels.open_channel(relay.RelayChannel{
 		id:       'chan_1'
 		node_id:  'node_1'
@@ -144,6 +145,9 @@ fn test_admin_runtime_snapshot_exposes_relay_summary() {
 	snapshot := app.admin_runtime_snapshot()
 	assert snapshot.relay.channel_count == 1
 	assert snapshot.relay.open_channels == 1
+	assert snapshot.relay.carrier_count == 1
 	assert snapshot.relay.pending_frames == 1
+	assert snapshot.relay.carriers[0].relay_id == 'edge'
+	assert snapshot.relay.carriers[0].carrier_id == 'carrier_edge'
 	assert snapshot.relay.channels[0].trace_id == 'trace_1'
 }

@@ -130,6 +130,7 @@ fn (mut app App) admin_relay_runtime_snapshot() executor.AdminRelayRuntimeSummar
 		agent_count:      snapshot.agent_count
 		channel_count:    snapshot.channel_count
 		open_channels:    snapshot.open_channels
+		carrier_count:    snapshot.carrier_count
 		session_count:    snapshot.session_count
 		pending_frames:   snapshot.pending_frames
 		agents:           snapshot.agents.map(executor.AdminRelayAgentSummary{
@@ -139,6 +140,10 @@ fn (mut app App) admin_relay_runtime_snapshot() executor.AdminRelayRuntimeSummar
 			attempt:            it.attempt
 			next_attempt_at_ms: it.next_attempt_at_ms
 			last_error:         it.last_error
+		})
+		carriers:         snapshot.carriers.map(executor.AdminRelayCarrierSummary{
+			relay_id:   it.relay_id
+			carrier_id: it.carrier_id
 		})
 		channels:         snapshot.channels.map(executor.AdminRelayChannelSummary{
 			id:           it.id

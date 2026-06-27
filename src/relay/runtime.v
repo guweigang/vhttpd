@@ -107,5 +107,5 @@ pub fn (rt Runtime) snapshot() RelayRuntimeSnapshot {
 	for id in ids {
 		agents << rt.agents[id]
 	}
-	return runtime_snapshot(rt.descriptors, agents, rt.channels, rt.sessions)
+	return runtime_snapshot_with_carriers(rt.descriptors, agents, rt.channels, rt.sessions, rt.carriers)
 }

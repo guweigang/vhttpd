@@ -1146,6 +1146,7 @@ Progress as of 2026-06-27:
 - `P6.15` relay carrier dispatch registry added: relay runtime can now register carrier IDs and produce deterministic trace-aware carrier dispatch plans with disabled fallbacks before storing live carrier sockets
 - `P6.16` relay delivery projection added: generic `dispatch.relay_delivery` outcomes can now be normalized into relay wire frames and carrier dispatch plans without HTTP/provider code knowing carrier details
 - `P6.17` relay HTTP delivery handling added: HTTP response rendering now recognizes `dispatch.relay_delivery`, projects it through the relay runtime, and returns deterministic accepted/unavailable outcomes while reusing the normal response/event path
+- `P6.18` relay carrier observability added: carrier registrations now appear in relay runtime snapshots and `/admin/runtime`, exposing relay-to-carrier mappings before live WebSocket carrier sockets are stored
 
 Batches:
 

@@ -191,6 +191,12 @@ pub:
 	buffered_len int
 }
 
+pub struct AdminRelayCarrierSummary {
+pub:
+	relay_id   string
+	carrier_id string
+}
+
 pub struct AdminRelaySessionSummary {
 pub:
 	id             string
@@ -205,9 +211,11 @@ pub:
 	agent_count      int
 	channel_count    int
 	open_channels    int
+	carrier_count    int
 	session_count    int
 	pending_frames   int
 	agents           []AdminRelayAgentSummary
+	carriers         []AdminRelayCarrierSummary
 	channels         []AdminRelayChannelSummary
 	sessions         []AdminRelaySessionSummary
 }
