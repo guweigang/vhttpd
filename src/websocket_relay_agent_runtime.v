@@ -32,6 +32,17 @@ fn (mut app App) build_relay_agent_runtime_context() ws.RelayAgentRuntimeContext
 			agent := app.relay.mark_agent_failed(descriptor.id, now_ms, reason) or { return }
 			app.emit('relay.agent.disconnected', relay.agent_state_event_fields(agent))
 		}
+		reconnect_delay_fn: fn [mut app] (descriptor relay.RelayDescriptor, trace_id string, now_ms i64) int {
+			delay_ms := app.relay.agent_reconnect_delay_ms(descriptor.id, now_ms) or {
+				descriptor.reconnect_delay_ms
+			}
+			app.emit('relay.agent.reconnect_scheduled', relay.event_fields('agent.reconnect_scheduled',
+				trace_id, {
+				'relay_id': descriptor.id
+				'delay_ms': '${delay_ms}'
+			}))
+			return delay_ms
+		}
 	}
 }
 
@@ -75,6 +86,27 @@ fn RelayAgentRuntime.run_once(ctx ws.RelayAgentRuntimeContext, descriptor relay.
 	client.listen() or { ctx.on_disconnected(descriptor, 'listen:${err}', time.now().unix_milli()) }
 }
 
+fn relay_agent_attempt_trace_id(trace_prefix string, relay_id string, attempt int) string {
+	if trace_prefix != '' {
+		return '${trace_prefix}:${relay_id}:${attempt}'
+	}
+	return 'relay-agent:${relay_id}:${attempt}'
+}
+
+fn RelayAgentRuntime.run_loop(ctx ws.RelayAgentRuntimeContext, descriptor relay.RelayDescriptor, trace_prefix string) {
+	mut attempt := 0
+	for {
+		trace_id := relay_agent_attempt_trace_id(trace_prefix, descriptor.id, attempt)
+		RelayAgentRuntime.run_once(ctx, descriptor, trace_id)
+		delay_ms := ctx.reconnect_delay_ms(descriptor, trace_id, time.now().unix_milli())
+		if delay_ms < 0 {
+			return
+		}
+		time.sleep(delay_ms * time.millisecond)
+		attempt++
+	}
+}
+
 fn relay_agent_autostart_enabled(descriptor relay.RelayDescriptor) bool {
 	return descriptor.mode == .agent && (descriptor.options.bools['autostart'] or { false })
 }
@@ -86,12 +118,7 @@ fn (mut app App) start_relay_agents_once(trace_prefix string) int {
 		if !relay_agent_autostart_enabled(descriptor) {
 			continue
 		}
-		trace_id := if trace_prefix != '' {
-			'${trace_prefix}:${descriptor.id}'
-		} else {
-			'relay-agent:${descriptor.id}'
-		}
-		go RelayAgentRuntime.run_once(ctx, descriptor, trace_id)
+		go RelayAgentRuntime.run_loop(ctx, descriptor, trace_prefix)
 		started++
 	}
 	return started

@@ -53,6 +53,31 @@ fn test_runtime_tracks_agent_lifecycle() {
 	assert rt.snapshot().agents[0].last_error == 'dial_failed'
 }
 
+fn test_runtime_reports_agent_reconnect_delay() {
+	mut rt := new_runtime(runtime_plan.RuntimePlan{
+		relays: {
+			'local': runtime_plan.RelayPlan{
+				id:      'local'
+				mode:    'agent'
+				options: runtime_plan.PlanOptions{
+					strings: {
+						'url': 'wss://relay.example.com'
+					}
+					ints:    {
+						'reconnect_delay_ms': 100
+					}
+				}
+			}
+		}
+	}) or { panic(err) }
+
+	assert rt.agent_reconnect_delay_ms('local', 100) or { panic(err) } == 100
+	rt.mark_agent_failed('local', 120, 'dial_failed') or { panic(err) }
+
+	assert rt.agent_reconnect_delay_ms('local', 150) or { panic(err) } == 70
+	assert rt.agent_reconnect_delay_ms('local', 220) or { panic(err) } == 0
+}
+
 fn test_runtime_handles_forward_frame_and_session_route() {
 	mut rt := new_runtime(runtime_plan.RuntimePlan{}) or { panic(err) }
 

@@ -42,6 +42,11 @@ fn test_relay_agent_runtime_context_delegates_to_closures() {
 			probe.last_reason = reason
 			probe.last_timestamp = now_ms
 		}
+		reconnect_delay_fn: fn [mut probe] (descriptor relay.RelayDescriptor, _ string, now_ms i64) int {
+			probe.last_relay_id = descriptor.id
+			probe.last_timestamp = now_ms
+			return 250
+		}
 	}
 
 	ctx.prepare_attempt(relay.RelayDescriptor{
@@ -51,13 +56,17 @@ fn test_relay_agent_runtime_context_delegates_to_closures() {
 	ctx.on_disconnected(relay.RelayDescriptor{
 		id: 'edge'
 	}, 'closed', 120)
+	delay_ms := ctx.reconnect_delay_ms(relay.RelayDescriptor{
+		id: 'edge'
+	}, 'trace_1', 130)
 
 	assert probe.prepared
 	assert probe.handled
 	assert probe.disconnected
 	assert probe.last_relay_id == 'edge'
 	assert probe.last_reason == 'closed'
-	assert probe.last_timestamp == 120
+	assert probe.last_timestamp == 130
+	assert delay_ms == 250
 }
 
 fn test_build_relay_agent_hello_payload_encodes_registration_frame() {

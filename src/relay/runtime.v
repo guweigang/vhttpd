@@ -79,6 +79,24 @@ pub fn (mut rt Runtime) mark_agent_failed(relay_id string, now_ms i64, err strin
 	return next
 }
 
+pub fn (mut rt Runtime) agent_reconnect_delay_ms(relay_id string, now_ms i64) !int {
+	descriptor := rt.descriptors[relay_id] or {
+		return error('relay_runtime_unknown_relay:${relay_id}')
+	}
+	agent := rt.ensure_agent(relay_id)!
+	if agent.state == .closed {
+		return -1
+	}
+	if agent.state == .backoff {
+		remaining := agent.next_attempt_at_ms - now_ms
+		if remaining <= 0 {
+			return 0
+		}
+		return int(remaining)
+	}
+	return reconnect_policy_from_descriptor(descriptor).initial_delay_ms
+}
+
 pub fn (mut rt Runtime) handle_frame(frame WireFrame, source_node_id string, default_buffer_limit int) ForwardingOutcome {
 	return handle_forward_frame(mut rt.channels, frame, source_node_id, default_buffer_limit)
 }

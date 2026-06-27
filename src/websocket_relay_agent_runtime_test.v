@@ -42,14 +42,19 @@ fn test_relay_agent_runtime_context_emits_attempt_and_payload_events() {
 		trace_id: 'trace_1'
 	})) or { panic(err) }
 	payload := ctx.handle_payload('edge', 'text', ack, 120, 2)
+	ctx.on_disconnected(descriptor, 'closed', 130)
+	delay_ms := ctx.reconnect_delay_ms(descriptor, 'trace_1', 140)
 
 	assert attempt.ok
 	assert payload.action == .handshake
-	assert app.relay.agents['edge'].state == .registered
+	assert delay_ms == 990
+	assert app.relay.agents['edge'].state == .backoff
 	log_text := os.read_file(event_log) or { panic(err) }
 	assert log_text.contains('"type":"relay.agent.connecting"')
 	assert log_text.contains('"type":"relay.agent.payload"')
 	assert log_text.contains('"type":"relay.agent.handshake"')
+	assert log_text.contains('"type":"relay.agent.disconnected"')
+	assert log_text.contains('"type":"relay.agent.reconnect_scheduled"')
 }
 
 fn test_relay_agent_socket_callbacks_report_disconnect() {
@@ -142,6 +147,11 @@ fn test_relay_agent_autostart_enabled_requires_agent_mode_and_option() {
 	assert !relay_agent_autostart_enabled(hub)
 }
 
+fn test_relay_agent_attempt_trace_id_is_stable() {
+	assert relay_agent_attempt_trace_id('startup', 'edge', 2) == 'startup:edge:2'
+	assert relay_agent_attempt_trace_id('', 'edge', 2) == 'relay-agent:edge:2'
+}
+
 fn ws_relay_agent_runtime_test_context(mut probe RelayAgentSocketProbe) ws.RelayAgentRuntimeContext {
 	return ws.RelayAgentRuntimeContext{
 		prepare_attempt_fn: fn (_ relay.RelayDescriptor, _ string, _ i64) ws.RelayAgentConnectAttempt {
@@ -152,6 +162,9 @@ fn ws_relay_agent_runtime_test_context(mut probe RelayAgentSocketProbe) ws.Relay
 		}
 		disconnected_fn:    fn [mut probe] (_ relay.RelayDescriptor, reason string, _ i64) {
 			probe.reason = reason
+		}
+		reconnect_delay_fn: fn (_ relay.RelayDescriptor, _ string, _ i64) int {
+			return -1
 		}
 	}
 }
