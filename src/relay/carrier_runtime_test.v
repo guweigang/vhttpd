@@ -62,6 +62,33 @@ fn test_receive_from_carrier_routes_to_inbound_runtime() {
 	assert rt.channels.channels['chan_1'].node_id == 'carrier_edge'
 }
 
+fn test_receive_raw_from_carrier_decodes_and_routes_frame() {
+	mut rt := empty_runtime()
+	raw := encode_frame(WireFrame{
+		version:    wire_version
+		kind:       .open
+		id:         'frm_open'
+		trace_id:   'trace_1'
+		channel_id: 'chan_1'
+	}) or { panic(err) }
+
+	outcome := rt.receive_raw_from_carrier('carrier_edge', raw, 2)
+
+	assert outcome.action == .forwarded
+	assert outcome.frame_id == 'frm_open'
+	assert rt.channels.channels['chan_1'].node_id == 'carrier_edge'
+}
+
+fn test_receive_raw_from_carrier_rejects_invalid_payload() {
+	mut rt := empty_runtime()
+
+	outcome := rt.receive_raw_from_carrier('carrier_edge', 'not json', 2)
+
+	assert outcome.action == .rejected
+	assert outcome.carrier_id == 'carrier_edge'
+	assert outcome.error.contains('relay_wire_invalid_json')
+}
+
 fn test_send_to_connected_carrier_sends_ready_outbound_frame() {
 	mut rt := empty_runtime()
 	rt.register_carrier('edge', 'carrier_edge') or { panic(err) }

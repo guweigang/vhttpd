@@ -39,6 +39,17 @@ pub fn (mut rt Runtime) receive_from_carrier(carrier_id string, frame WireFrame,
 	return rt.handle_inbound_frame(carrier_id, frame, default_buffer_limit)
 }
 
+pub fn (mut rt Runtime) receive_raw_from_carrier(carrier_id string, raw string, default_buffer_limit int) InboundOutcome {
+	frame := decode_frame(raw) or {
+		return InboundOutcome{
+			action:     .rejected
+			carrier_id: carrier_id
+			error:      err.msg()
+		}
+	}
+	return rt.receive_from_carrier(carrier_id, frame, default_buffer_limit)
+}
+
 pub fn (mut rt Runtime) detach_carrier(relay_id string, trace_id string) CarrierDetachResult {
 	return rt.unregister_carrier(relay_id, trace_id)
 }
