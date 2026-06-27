@@ -44,3 +44,55 @@ fn RelayAgentRuntime.handle_message(ctx ws.RelayAgentRuntimeContext, descriptor 
 	ctx.handle_payload(descriptor.id, opcode, payload, time.now().unix_milli(),
 		descriptor.channel_buffer)
 }
+
+fn RelayAgentRuntime.run_once(ctx ws.RelayAgentRuntimeContext, descriptor relay.RelayDescriptor, trace_id string) {
+	attempt := ctx.prepare_attempt(descriptor, trace_id, time.now().unix_milli())
+	if !attempt.ok {
+		return
+	}
+	mut client := websocket.new_client(attempt.url,
+		read_timeout:  60 * time.second
+		write_timeout: 60 * time.second
+	) or {
+		ctx.on_disconnected(descriptor, 'client:${err}', time.now().unix_milli())
+		return
+	}
+	mut state := &RelayAgentSocketState{
+		ctx:        ctx
+		descriptor: descriptor
+	}
+	client.on_message_ref(relay_agent_message_cb, state)
+	client.on_error_ref(relay_agent_error_cb, state)
+	client.on_close_ref(relay_agent_close_cb, state)
+	client.connect() or {
+		ctx.on_disconnected(descriptor, 'connect:${err}', time.now().unix_milli())
+		return
+	}
+	client.write_string(attempt.hello_payload) or {
+		ctx.on_disconnected(descriptor, 'hello:${err}', time.now().unix_milli())
+		return
+	}
+	client.listen() or { ctx.on_disconnected(descriptor, 'listen:${err}', time.now().unix_milli()) }
+}
+
+@[heap]
+struct RelayAgentSocketState {
+pub mut:
+	ctx        ws.RelayAgentRuntimeContext
+	descriptor relay.RelayDescriptor
+}
+
+fn relay_agent_message_cb(mut client websocket.Client, msg &websocket.Message, ref voidptr) ! {
+	mut state := unsafe { &RelayAgentSocketState(ref) }
+	RelayAgentRuntime.handle_message(state.ctx, state.descriptor, mut client, msg)!
+}
+
+fn relay_agent_error_cb(mut _client websocket.Client, err string, ref voidptr) ! {
+	mut state := unsafe { &RelayAgentSocketState(ref) }
+	state.ctx.on_disconnected(state.descriptor, 'error:${err}', time.now().unix_milli())
+}
+
+fn relay_agent_close_cb(mut _client websocket.Client, code int, reason string, ref voidptr) ! {
+	mut state := unsafe { &RelayAgentSocketState(ref) }
+	state.ctx.on_disconnected(state.descriptor, 'close:${code}:${reason}', time.now().unix_milli())
+}
