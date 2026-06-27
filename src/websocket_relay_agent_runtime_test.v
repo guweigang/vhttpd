@@ -69,6 +69,31 @@ fn test_relay_agent_socket_callbacks_report_disconnect() {
 	assert probe.reason == 'close:1000:done'
 }
 
+fn test_start_relay_agents_once_ignores_hub_only_config() {
+	mut app := App{}
+	app.control_plane.event_log = os.join_path(os.temp_dir(),
+		'vhttpd_relay_agent_start_once_events.ndjson')
+	app.relay = relay.new_runtime(runtime_plan.RuntimePlan{
+		relays: {
+			'h': runtime_plan.RelayPlan{
+				id:      'h'
+				mode:    'hub'
+				ingress: runtime_plan.ResourceRef{
+					domain: .listener
+					id:     'relay'
+				}
+				options: runtime_plan.PlanOptions{
+					strings: {
+						'path': '/vhttpd/relay'
+					}
+				}
+			}
+		}
+	}) or { panic(err) }
+
+	assert app.start_relay_agents_once('trace') == 0
+}
+
 fn ws_relay_agent_runtime_test_context(mut probe RelayAgentSocketProbe) ws.RelayAgentRuntimeContext {
 	return ws.RelayAgentRuntimeContext{
 		prepare_attempt_fn: fn (_ relay.RelayDescriptor, _ string, _ i64) ws.RelayAgentConnectAttempt {
