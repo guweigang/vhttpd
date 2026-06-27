@@ -1,5 +1,8 @@
 module config
 
+import os
+import toml
+
 fn test_compile_v2_runtime_plan_resolves_references_and_options() {
 	cfg := V2Config{
 		listeners: {
@@ -161,6 +164,20 @@ fn test_compile_v2_runtime_plan_preserves_relay_hub_path() {
 	assert plan.relays['edge'].ingress?.str() == 'listener:relay'
 	assert plan.relays['edge'].options.strings['path'] == '/vhttpd/relay'
 	assert plan.relays['edge'].options.strings['node_id'] == 'hub_1'
+}
+
+fn test_compile_v2_runtime_plan_loads_relay_hub_example() {
+	config_path := os.join_path(os.dir(@FILE), '..', '..', 'examples', 'config',
+		'relay-hub-v2.toml')
+	text := os.read_file(config_path) or { panic(err) }
+	cfg := toml.decode[V2Config](text) or { panic(err) }
+
+	plan := compile_v2_runtime_plan(cfg, '', false) or { panic(err) }
+
+	assert plan.listeners['relay'].protocol == 'websocket'
+	assert plan.relays['edge'].ingress?.str() == 'listener:relay'
+	assert plan.relays['edge'].options.strings['path'] == '/vhttpd/relay'
+	assert plan.relays['edge'].options.strings['node_id'] == 'hub-local'
 }
 
 fn test_compile_v2_runtime_plan_rejects_http_handler_without_engine() {

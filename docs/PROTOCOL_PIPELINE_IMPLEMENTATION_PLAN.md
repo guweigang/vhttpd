@@ -1161,6 +1161,7 @@ Progress as of 2026-06-27:
 - `P6.30` relay hub v2 example added: examples now include a minimal `relay-hub-v2.toml` that configures a WebSocket listener and hub relay path separately from the Paseo/vjsx relay skeleton
 - `P6.31` relay WebSocket observability added: hub sessions now emit relay attached, inbound, registration, and detach events with trace/request/path/carrier context instead of relying only on process logs
 - `P6.32` relay hub registration is path-bound: WebSocket hub sessions now reject and detach hello registrations whose relay ID does not match the configured hub path descriptor, preventing stale carrier mappings
+- `P6.33` relay hub example compile coverage added: the v2 plan compiler test suite now loads `examples/config/relay-hub-v2.toml` directly so the documented relay hub example stays schema-compatible
 
 Batches:
 
