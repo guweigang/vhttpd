@@ -10,10 +10,10 @@ pub mut:
 
 pub struct RelayChannel {
 pub:
-	id          string
-	node_id     string
-	route       string
-	trace_id    string
+	id           string
+	node_id      string
+	route        string
+	trace_id     string
 	buffer_limit int = 64
 pub mut:
 	open     bool = true
@@ -67,7 +67,9 @@ pub fn (mut registry ChannelRegistry) bind_correlation(correlation_id string, ch
 	if correlation_id.trim_space() == '' {
 		return error('relay_channel_missing_correlation_id')
 	}
-	channel := registry.channels[channel_id] or { return error('relay_channel_unknown:${channel_id}') }
+	channel := registry.channels[channel_id] or {
+		return error('relay_channel_unknown:${channel_id}')
+	}
 	if !channel.open {
 		return error('relay_channel_closed:${channel_id}')
 	}
@@ -80,7 +82,9 @@ pub fn (registry ChannelRegistry) channel_for_correlation(correlation_id string)
 }
 
 pub fn (mut registry ChannelRegistry) enqueue(channel_id string, frame WireFrame) ! {
-	mut channel := registry.channels[channel_id] or { return error('relay_channel_unknown:${channel_id}') }
+	mut channel := registry.channels[channel_id] or {
+		return error('relay_channel_unknown:${channel_id}')
+	}
 	if !channel.open {
 		return error('relay_channel_closed:${channel_id}')
 	}
@@ -92,9 +96,29 @@ pub fn (mut registry ChannelRegistry) enqueue(channel_id string, frame WireFrame
 }
 
 pub fn (mut registry ChannelRegistry) drain(channel_id string) ![]WireFrame {
-	mut channel := registry.channels[channel_id] or { return error('relay_channel_unknown:${channel_id}') }
+	mut channel := registry.channels[channel_id] or {
+		return error('relay_channel_unknown:${channel_id}')
+	}
 	frames := channel.buffered.clone()
 	channel.buffered = []WireFrame{}
 	registry.channels[channel_id] = channel
 	return frames
+}
+
+pub fn (mut registry ChannelRegistry) drain_returned(channel_id string) ![]WireFrame {
+	mut channel := registry.channels[channel_id] or {
+		return error('relay_channel_unknown:${channel_id}')
+	}
+	mut returned := []WireFrame{}
+	mut remaining := []WireFrame{}
+	for frame in channel.buffered {
+		if frame_is_pipeline_response(frame) {
+			returned << frame
+		} else {
+			remaining << frame
+		}
+	}
+	channel.buffered = remaining
+	registry.channels[channel_id] = channel
+	return returned
 }

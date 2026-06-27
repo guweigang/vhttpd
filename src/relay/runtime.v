@@ -101,6 +101,10 @@ pub fn (mut rt Runtime) handle_frame(frame WireFrame, source_node_id string, def
 	return handle_forward_frame(mut rt.channels, frame, source_node_id, default_buffer_limit)
 }
 
+pub fn (mut rt Runtime) drain_returned_frames(channel_id string) ![]WireFrame {
+	return rt.channels.drain_returned(channel_id)
+}
+
 pub fn (mut rt Runtime) route_session_frame(session_id string, link_id string, source_endpoint_id string, target_role string, frame WireFrame, pending_limit int) SessionRouteOutcome {
 	return route_session_frame(mut rt.sessions, session_id, link_id, source_endpoint_id,
 		target_role, frame, pending_limit)

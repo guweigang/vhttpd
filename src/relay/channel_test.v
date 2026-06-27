@@ -58,6 +58,41 @@ fn test_channel_registry_buffers_frames_with_limit_and_drain() {
 	assert (registry.drain('chan_1') or { panic(err) }).len == 0
 }
 
+fn test_channel_registry_drains_returned_frames_without_dropping_pending_data() {
+	mut registry := new_channel_registry(1)
+	registry.open_channel(RelayChannel{
+		id:           'chan_1'
+		trace_id:     'trace_1'
+		buffer_limit: 4
+	}) or { panic(err) }
+	registry.enqueue('chan_1', WireFrame{
+		version:       wire_version
+		kind:          .data
+		id:            'relay-response:frm_1'
+		trace_id:      'trace_1'
+		channel_id:    'chan_1'
+		exchange_kind: 'response'
+		body:          'ok'
+	}) or { panic(err) }
+	registry.enqueue('chan_1', WireFrame{
+		version:    wire_version
+		kind:       .data
+		id:         'frm_data'
+		trace_id:   'trace_1'
+		channel_id: 'chan_1'
+		body:       'pending'
+	}) or { panic(err) }
+
+	returned := registry.drain_returned('chan_1') or { panic(err) }
+	remaining := registry.drain('chan_1') or { panic(err) }
+
+	assert returned.len == 1
+	assert returned[0].id == 'relay-response:frm_1'
+	assert returned[0].body == 'ok'
+	assert remaining.len == 1
+	assert remaining[0].id == 'frm_data'
+}
+
 fn test_close_channel_clears_buffer_and_correlations() {
 	mut registry := new_channel_registry(1)
 	registry.open_channel(RelayChannel{

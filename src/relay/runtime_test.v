@@ -97,6 +97,32 @@ fn test_runtime_handles_forward_frame_and_session_route() {
 	assert rt.snapshot().session_count == 1
 }
 
+fn test_runtime_drains_returned_frames_from_channels() {
+	mut rt := new_runtime(runtime_plan.RuntimePlan{}) or { panic(err) }
+
+	rt.handle_frame(WireFrame{
+		version:    wire_version
+		kind:       .open
+		id:         'frm_open'
+		trace_id:   'trace_1'
+		channel_id: 'chan_1'
+	}, 'node_1', 4)
+	rt.handle_frame(WireFrame{
+		version:       wire_version
+		kind:          .data
+		id:            'relay-response:frm_1'
+		trace_id:      'trace_1'
+		channel_id:    'chan_1'
+		exchange_kind: 'response'
+		body:          'ok'
+	}, 'node_1', 4)
+
+	returned := rt.drain_returned_frames('chan_1') or { panic(err) }
+
+	assert returned.len == 1
+	assert returned[0].body == 'ok'
+}
+
 fn test_runtime_open_session_endpoint_drains_pending_frames() {
 	mut rt := new_runtime(runtime_plan.RuntimePlan{}) or { panic(err) }
 	rt.route_session_frame('session_1', 'link_1', 'ep_client', 'producer', new_frame(.data,
