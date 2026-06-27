@@ -8,6 +8,7 @@ import relay
 import time
 import upstream.transport
 import veb
+import ws
 
 struct HttpIngressRequest {
 	method        string
@@ -51,7 +52,7 @@ fn HttpResponseRuntime.delivery_outcome(mut app App, mut ctx Context, req HttpIn
 		return HttpResponseRuntime.file_outcome(mut app, mut ctx, req, outcome, matched_rule)
 	}
 	if outcome.kind == .relay_delivery {
-		projected := relay_delivery_http_outcome(app.relay.prepare_outbound_delivery(outcome))
+		projected := app.dispatch_relay_delivery(outcome)
 		return HttpResponseRuntime.delivery_outcome(mut app, mut ctx, req, projected, matched_rule)
 	}
 	status := if outcome.status > 0 { outcome.status } else { 200 }
@@ -123,6 +124,16 @@ fn HttpResponseRuntime.delivery_outcome(mut app App, mut ctx Context, req HttpIn
 	return ctx.text(body)
 }
 
+fn (mut app App) dispatch_relay_delivery(outcome dispatch.DeliveryOutcome) dispatch.DeliveryOutcome {
+	outbound := app.relay.prepare_outbound_delivery(outcome)
+	if outbound.action != .ready {
+		return relay_delivery_http_outcome(outbound)
+	}
+	mut carrier := ws.new_relay_carrier(app.build_websocket_runtime_context(), outbound.carrier_id)
+	send_result := relay.send_to_carrier(mut carrier, outbound)
+	return relay_delivery_send_http_outcome(outbound, send_result)
+}
+
 fn relay_delivery_http_outcome(outbound relay.OutboundOutcome) dispatch.DeliveryOutcome {
 	if outbound.action == .rejected {
 		return dispatch.delivery_failure_outcome(500, outbound.error, 'relay_delivery_projection')
@@ -132,6 +143,31 @@ fn relay_delivery_http_outcome(outbound relay.OutboundOutcome) dispatch.Delivery
 	}
 	return dispatch.outcome_with_metadata(dispatch.delivery_failure_outcome(503, outbound.error,
 		'relay_carrier_unavailable'), outbound.fields)
+}
+
+fn relay_delivery_send_http_outcome(outbound relay.OutboundOutcome, send_result relay.CarrierSendResult) dispatch.DeliveryOutcome {
+	mut fields := outbound.fields.clone()
+	fields['carrier_send_event'] = if send_result.ok {
+		'carrier.send'
+	} else {
+		'carrier.send_failed'
+	}
+	fields['carrier_send_queued'] = send_result.queued.str()
+	if send_result.error != '' {
+		fields['carrier_send_error'] = send_result.error
+	}
+	if send_result.ok {
+		return dispatch.accepted_event_outcome(fields)
+	}
+	return dispatch.outcome_with_metadata(dispatch.delivery_failure_outcome(relay_delivery_send_failure_status(send_result.error),
+		send_result.error, 'relay_carrier_send_failed'), fields)
+}
+
+fn relay_delivery_send_failure_status(error string) int {
+	if error.contains('not_connected') || error.contains('send_failed') {
+		return 503
+	}
+	return 500
 }
 
 fn HttpResponseRuntime.file_outcome(mut app App, mut ctx Context, req HttpIngressRequest, outcome dispatch.DeliveryOutcome, matched_rule ?RuntimeRouteRule) veb.Result {
@@ -238,8 +274,8 @@ fn HttpResponseRuntime.normal(mut app App, mut ctx Context, req HttpIngressReque
 		}
 	}
 	app.emit('http.request', event_fields)
-	return HttpResponseRuntime.response_outcome(mut ctx, req, delivery, dispatch_plan, cache_result,
-		cache_reason)
+	return HttpResponseRuntime.response_outcome(mut ctx, req, delivery, dispatch_plan,
+		cache_result, cache_reason)
 }
 
 fn worker_response_delivery_outcome(resp transport.WorkerResponse) dispatch.DeliveryOutcome {

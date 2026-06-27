@@ -43,8 +43,8 @@ fn test_relay_delivery_http_outcome_reports_unavailable_carrier() {
 
 fn test_relay_delivery_http_outcome_reports_projection_error() {
 	rt := relay.empty_runtime()
-	projection := rt.prepare_outbound_delivery(dispatch.response_outcome(200, map[string]string{},
-		'ok'))
+	projection :=
+		rt.prepare_outbound_delivery(dispatch.response_outcome(200, map[string]string{}, 'ok'))
 
 	outcome := relay_delivery_http_outcome(projection)
 
@@ -52,4 +52,50 @@ fn test_relay_delivery_http_outcome_reports_projection_error() {
 	assert outcome.status == 500
 	assert outcome.error_class == 'relay_delivery_projection'
 	assert outcome.error == 'relay_delivery_invalid_outcome:response'
+}
+
+fn test_relay_delivery_send_http_outcome_accepts_successful_send() {
+	mut rt := relay.empty_runtime()
+	rt.register_carrier('edge', 'carrier_edge') or { panic(err) }
+	projection := rt.prepare_outbound_delivery(dispatch.relay_delivery_outcome('relay:edge', {
+		'trace_id':   'trace_1'
+		'request_id': 'req_1'
+		'channel_id': 'chan_1'
+	}))
+
+	outcome := relay_delivery_send_http_outcome(projection, relay.CarrierSendResult{
+		ok:       true
+		trace_id: 'trace_1'
+		frame_id: 'req_1'
+	})
+
+	assert outcome.kind == .accepted_event
+	assert outcome.status == 202
+	assert outcome.metadata['relay_event'] == 'outbound.ready'
+	assert outcome.metadata['carrier_send_event'] == 'carrier.send'
+	assert outcome.metadata['carrier_send_queued'] == 'false'
+}
+
+fn test_relay_delivery_send_http_outcome_reports_send_failure() {
+	mut rt := relay.empty_runtime()
+	rt.register_carrier('edge', 'carrier_edge') or { panic(err) }
+	projection := rt.prepare_outbound_delivery(dispatch.relay_delivery_outcome('relay:edge', {
+		'trace_id':   'trace_1'
+		'request_id': 'req_1'
+		'channel_id': 'chan_1'
+	}))
+
+	outcome := relay_delivery_send_http_outcome(projection, relay.CarrierSendResult{
+		ok:       false
+		trace_id: 'trace_1'
+		frame_id: 'req_1'
+		error:    'relay_carrier_not_connected:carrier_edge'
+	})
+
+	assert outcome.kind == .failure
+	assert outcome.status == 503
+	assert outcome.error_class == 'relay_carrier_send_failed'
+	assert outcome.error == 'relay_carrier_not_connected:carrier_edge'
+	assert outcome.metadata['carrier_send_event'] == 'carrier.send_failed'
+	assert outcome.metadata['carrier_send_error'] == 'relay_carrier_not_connected:carrier_edge'
 }
