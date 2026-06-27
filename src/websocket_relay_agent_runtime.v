@@ -9,6 +9,7 @@ struct RelayAgentRuntime {}
 
 fn (mut app App) build_relay_agent_runtime_context() ws.RelayAgentRuntimeContext {
 	return ws.RelayAgentRuntimeContext{
+		websocket_rt:       app.build_websocket_runtime_context()
 		prepare_attempt_fn: fn [mut app] (descriptor relay.RelayDescriptor, trace_id string, now_ms i64) ws.RelayAgentConnectAttempt {
 			attempt := ws.prepare_relay_agent_connect_attempt(mut app.relay, descriptor, trace_id,
 				now_ms)
@@ -43,6 +44,14 @@ fn (mut app App) build_relay_agent_runtime_context() ws.RelayAgentRuntimeContext
 			}))
 			return delay_ms
 		}
+		attach_carrier_fn:  fn [mut app] (descriptor relay.RelayDescriptor, carrier_id string, trace_id string) {
+			result := app.relay.attach_carrier(descriptor.id, carrier_id, trace_id)
+			app.emit('relay.carrier.attach', relay.carrier_attach_event_fields(result))
+		}
+		detach_carrier_fn:  fn [mut app] (descriptor relay.RelayDescriptor, _ string, trace_id string) {
+			result := app.relay.detach_carrier(descriptor.id, trace_id)
+			app.emit('relay.carrier.detach', relay.carrier_detach_event_fields(result))
+		}
 	}
 }
 
@@ -57,6 +66,7 @@ fn RelayAgentRuntime.handle_message(ctx ws.RelayAgentRuntimeContext, descriptor 
 }
 
 fn RelayAgentRuntime.run_once(ctx ws.RelayAgentRuntimeContext, descriptor relay.RelayDescriptor, trace_id string) {
+	websocket_rt := ctx.websocket_rt
 	attempt := ctx.prepare_attempt(descriptor, trace_id, time.now().unix_milli())
 	if !attempt.ok {
 		return
@@ -79,11 +89,29 @@ fn RelayAgentRuntime.run_once(ctx ws.RelayAgentRuntimeContext, descriptor relay.
 		ctx.on_disconnected(descriptor, 'connect:${err}', time.now().unix_milli())
 		return
 	}
+	carrier_id := relay_agent_carrier_id(descriptor.id)
+	mut lifecycle := &ws.DispatchConnState{}
+	websocket_rt.register_conn(carrier_id, '', 'WEBSOCKET', trace_id, trace_id, descriptor.url,
+		map[string]string{}, map[string]string{}, '', client, lifecycle)
+	lifecycle.mark_open()
+	websocket_rt.flush_pending(carrier_id)
+	ctx.on_carrier_attached(descriptor, carrier_id, trace_id)
+	defer {
+		ctx.on_carrier_detached(descriptor, carrier_id, trace_id)
+		websocket_rt.mark_closing(carrier_id)
+		if lifecycle.begin_cleanup() {
+			websocket_rt.cleanup_conn(carrier_id)
+		}
+	}
 	client.write_string(attempt.hello_payload) or {
 		ctx.on_disconnected(descriptor, 'hello:${err}', time.now().unix_milli())
 		return
 	}
 	client.listen() or { ctx.on_disconnected(descriptor, 'listen:${err}', time.now().unix_milli()) }
+}
+
+fn relay_agent_carrier_id(relay_id string) string {
+	return 'agent:${relay_id}'
 }
 
 fn relay_agent_attempt_trace_id(trace_prefix string, relay_id string, attempt int) string {

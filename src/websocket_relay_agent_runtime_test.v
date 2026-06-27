@@ -42,19 +42,24 @@ fn test_relay_agent_runtime_context_emits_attempt_and_payload_events() {
 		trace_id: 'trace_1'
 	})) or { panic(err) }
 	payload := ctx.handle_payload('edge', 'text', ack, 120, 2)
+	ctx.on_carrier_attached(descriptor, 'agent:edge', 'trace_1')
 	ctx.on_disconnected(descriptor, 'closed', 130)
 	delay_ms := ctx.reconnect_delay_ms(descriptor, 'trace_1', 140)
+	ctx.on_carrier_detached(descriptor, 'agent:edge', 'trace_1')
 
 	assert attempt.ok
 	assert payload.action == .handshake
 	assert delay_ms == 990
 	assert app.relay.agents['edge'].state == .backoff
+	assert app.relay.carriers.carrier_id('edge') == 'disabled:edge'
 	log_text := os.read_file(event_log) or { panic(err) }
 	assert log_text.contains('"type":"relay.agent.connecting"')
 	assert log_text.contains('"type":"relay.agent.payload"')
 	assert log_text.contains('"type":"relay.agent.handshake"')
+	assert log_text.contains('"type":"relay.carrier.attach"')
 	assert log_text.contains('"type":"relay.agent.disconnected"')
 	assert log_text.contains('"type":"relay.agent.reconnect_scheduled"')
+	assert log_text.contains('"type":"relay.carrier.detach"')
 }
 
 fn test_relay_agent_socket_callbacks_report_disconnect() {
@@ -152,6 +157,10 @@ fn test_relay_agent_attempt_trace_id_is_stable() {
 	assert relay_agent_attempt_trace_id('', 'edge', 2) == 'relay-agent:edge:2'
 }
 
+fn test_relay_agent_carrier_id_is_stable() {
+	assert relay_agent_carrier_id('edge') == 'agent:edge'
+}
+
 fn ws_relay_agent_runtime_test_context(mut probe RelayAgentSocketProbe) ws.RelayAgentRuntimeContext {
 	return ws.RelayAgentRuntimeContext{
 		prepare_attempt_fn: fn (_ relay.RelayDescriptor, _ string, _ i64) ws.RelayAgentConnectAttempt {
@@ -166,5 +175,7 @@ fn ws_relay_agent_runtime_test_context(mut probe RelayAgentSocketProbe) ws.Relay
 		reconnect_delay_fn: fn (_ relay.RelayDescriptor, _ string, _ i64) int {
 			return -1
 		}
+		attach_carrier_fn:  fn (_ relay.RelayDescriptor, _ string, _ string) {}
+		detach_carrier_fn:  fn (_ relay.RelayDescriptor, _ string, _ string) {}
 	}
 }

@@ -34,10 +34,13 @@ pub:
 
 pub struct RelayAgentRuntimeContext {
 pub:
+	websocket_rt       RuntimeContext
 	prepare_attempt_fn fn (relay.RelayDescriptor, string, i64) RelayAgentConnectAttempt = unsafe { nil }
 	handle_payload_fn  fn (string, string, string, i64, int) RelayAgentPayloadOutcome   = unsafe { nil }
 	disconnected_fn    fn (relay.RelayDescriptor, string, i64)     = unsafe { nil }
 	reconnect_delay_fn fn (relay.RelayDescriptor, string, i64) int = unsafe { nil }
+	attach_carrier_fn  fn (relay.RelayDescriptor, string, string)  = unsafe { nil }
+	detach_carrier_fn  fn (relay.RelayDescriptor, string, string)  = unsafe { nil }
 }
 
 pub fn (ctx RelayAgentRuntimeContext) prepare_attempt(descriptor relay.RelayDescriptor, trace_id string, now_ms i64) RelayAgentConnectAttempt {
@@ -54,6 +57,14 @@ pub fn (ctx RelayAgentRuntimeContext) on_disconnected(descriptor relay.RelayDesc
 
 pub fn (ctx RelayAgentRuntimeContext) reconnect_delay_ms(descriptor relay.RelayDescriptor, trace_id string, now_ms i64) int {
 	return ctx.reconnect_delay_fn(descriptor, trace_id, now_ms)
+}
+
+pub fn (ctx RelayAgentRuntimeContext) on_carrier_attached(descriptor relay.RelayDescriptor, carrier_id string, trace_id string) {
+	ctx.attach_carrier_fn(descriptor, carrier_id, trace_id)
+}
+
+pub fn (ctx RelayAgentRuntimeContext) on_carrier_detached(descriptor relay.RelayDescriptor, carrier_id string, trace_id string) {
+	ctx.detach_carrier_fn(descriptor, carrier_id, trace_id)
 }
 
 pub fn build_relay_agent_hello_payload(descriptor relay.RelayDescriptor, trace_id string) !string {

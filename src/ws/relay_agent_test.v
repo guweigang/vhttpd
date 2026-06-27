@@ -6,12 +6,15 @@ import runtime_plan
 @[heap]
 struct RelayAgentRuntimeContextProbe {
 mut:
-	prepared       bool
-	handled        bool
-	disconnected   bool
-	last_relay_id  string
-	last_reason    string
-	last_timestamp i64
+	prepared        bool
+	handled         bool
+	disconnected    bool
+	attached        bool
+	detached        bool
+	last_relay_id   string
+	last_carrier_id string
+	last_reason     string
+	last_timestamp  i64
 }
 
 fn test_relay_agent_runtime_context_delegates_to_closures() {
@@ -47,6 +50,16 @@ fn test_relay_agent_runtime_context_delegates_to_closures() {
 			probe.last_timestamp = now_ms
 			return 250
 		}
+		attach_carrier_fn:  fn [mut probe] (descriptor relay.RelayDescriptor, carrier_id string, _ string) {
+			probe.attached = true
+			probe.last_relay_id = descriptor.id
+			probe.last_carrier_id = carrier_id
+		}
+		detach_carrier_fn:  fn [mut probe] (descriptor relay.RelayDescriptor, carrier_id string, _ string) {
+			probe.detached = true
+			probe.last_relay_id = descriptor.id
+			probe.last_carrier_id = carrier_id
+		}
 	}
 
 	ctx.prepare_attempt(relay.RelayDescriptor{
@@ -59,11 +72,20 @@ fn test_relay_agent_runtime_context_delegates_to_closures() {
 	delay_ms := ctx.reconnect_delay_ms(relay.RelayDescriptor{
 		id: 'edge'
 	}, 'trace_1', 130)
+	ctx.on_carrier_attached(relay.RelayDescriptor{
+		id: 'edge'
+	}, 'agent:edge', 'trace_1')
+	ctx.on_carrier_detached(relay.RelayDescriptor{
+		id: 'edge'
+	}, 'agent:edge', 'trace_1')
 
 	assert probe.prepared
 	assert probe.handled
 	assert probe.disconnected
+	assert probe.attached
+	assert probe.detached
 	assert probe.last_relay_id == 'edge'
+	assert probe.last_carrier_id == 'agent:edge'
 	assert probe.last_reason == 'closed'
 	assert probe.last_timestamp == 130
 	assert delay_ms == 250
