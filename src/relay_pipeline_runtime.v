@@ -12,6 +12,7 @@ struct RelayPipelineDispatchOutcome {
 	action      string
 	status      int
 	body        string
+	headers     map[string]string
 	error       string
 	error_class string
 }
@@ -47,6 +48,7 @@ fn relay_pipeline_response_frame(outcome RelayPipelineDispatchOutcome) relay.Wir
 			'status':      outcome.status.str()
 			'error_class': outcome.error_class
 		}
+		headers:       outcome.headers.clone()
 		body:          if outcome.body != '' { outcome.body } else { outcome.error }
 	}
 }
@@ -130,18 +132,65 @@ fn (mut app App) dispatch_relay_pipeline_exchange(mut exchange dispatch.Exchange
 fn relay_pipeline_terminal_outcome(exchange dispatch.Exchange, egress string) RelayPipelineDispatchOutcome {
 	match egress {
 		'terminal:ack' {
-			return relay_pipeline_success(exchange, 'accepted', 202)
+			return relay_pipeline_outcome_from_delivery(exchange, dispatch.accepted_event_outcome({
+				'action': 'accepted'
+			}))
 		}
 		'terminal:response' {
-			return relay_pipeline_success(exchange, 'response', 200)
+			return relay_pipeline_outcome_from_delivery(exchange, dispatch.response_outcome(200,
+				map[string]string{}, relay_pipeline_exchange_body(exchange)))
 		}
 		'terminal:reject' {
-			return relay_pipeline_failure(exchange, 403, 'rejected', 'relay_terminal_reject')
+			return relay_pipeline_outcome_from_delivery(exchange, dispatch.delivery_failure_outcome(403,
+				'rejected', 'relay_terminal_reject'))
 		}
 		else {
 			return relay_pipeline_failure(exchange, 501,
 				'relay_pipeline_egress_unsupported:${egress}', 'relay_pipeline_egress_unsupported')
 		}
+	}
+}
+
+fn relay_pipeline_outcome_from_delivery(exchange dispatch.Exchange, delivery dispatch.DeliveryOutcome) RelayPipelineDispatchOutcome {
+	match delivery.kind {
+		.response {
+			return relay_pipeline_success_with_body(exchange, 'response', if delivery.status > 0 {
+				delivery.status
+			} else {
+				200
+			}, delivery.body, delivery.headers)
+		}
+		.accepted_event {
+			return relay_pipeline_success_with_body(exchange, 'accepted', if delivery.status > 0 {
+				delivery.status
+			} else {
+				202
+			}, delivery.metadata['body'] or { '' }, map[string]string{})
+		}
+		.failure {
+			return relay_pipeline_failure(exchange, if delivery.status > 0 {
+				delivery.status
+			} else {
+				500
+			}, delivery.error, delivery.error_class)
+		}
+		else {
+			return relay_pipeline_failure(exchange, 501,
+				'relay_delivery_kind_unsupported:${delivery.kind}',
+				'relay_delivery_kind_unsupported')
+		}
+	}
+}
+
+fn relay_pipeline_exchange_body(exchange dispatch.Exchange) string {
+	match exchange.payload {
+		dispatch.RequestPayload { return exchange.payload.body }
+		dispatch.ResponsePayload { return exchange.payload.body }
+		dispatch.EventPayload { return exchange.payload.data }
+		dispatch.StreamPayload { return exchange.payload.chunk }
+		dispatch.SessionPayload { return exchange.payload.message }
+		dispatch.ErrorPayload { return exchange.payload.message }
+		dispatch.EmptyPayload { return '' }
 	}
 }
 
@@ -178,6 +227,10 @@ fn relay_pipeline_transform_action(exchange dispatch.Exchange, result TransformP
 }
 
 fn relay_pipeline_success(exchange dispatch.Exchange, action string, status int) RelayPipelineDispatchOutcome {
+	return relay_pipeline_success_with_body(exchange, action, status, action, map[string]string{})
+}
+
+fn relay_pipeline_success_with_body(exchange dispatch.Exchange, action string, status int, body string, headers map[string]string) RelayPipelineDispatchOutcome {
 	return RelayPipelineDispatchOutcome{
 		pipeline_id: exchange.pipeline
 		exchange_id: exchange.identity.id
@@ -185,7 +238,8 @@ fn relay_pipeline_success(exchange dispatch.Exchange, action string, status int)
 		channel_id:  exchange.metadata['channel_id'] or { '' }
 		action:      action
 		status:      status
-		body:        action
+		body:        body
+		headers:     headers.clone()
 	}
 }
 

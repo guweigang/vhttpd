@@ -1178,6 +1178,7 @@ Progress as of 2026-06-27:
 - `P6.47` relay frame exchange projection added: relay wire frames can now be projected into typed dispatch relay ingress requests and per-pipeline exchanges, giving the agent/hub runtime a protocol-neutral handoff before transformer and egress execution are wired in
 - `P6.48` relay inbound pipeline dispatch added: forwarded relay frames now retain their source wire frame, hub and agent WebSocket runtimes invoke relay-ingress pipeline dispatch, and dispatch outcomes are emitted with trace, pipeline, exchange, action, status, and error fields
 - `P6.49` relay pipeline response projection added: relay pipeline outcomes now project to relay response/error wire frames and the hub/agent runtimes send those frames back through the shared WebSocket carrier path with carrier send results emitted for observability
+- `P6.50` relay terminal delivery projection added: relay pipeline terminal egress now flows through `dispatch.DeliveryOutcome` projection, preserving response status, body, headers, and failures before converting to relay response/error frames
 
 Batches:
 

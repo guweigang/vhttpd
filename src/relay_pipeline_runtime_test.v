@@ -49,6 +49,7 @@ fn test_dispatch_relay_ingress_frame_runs_terminal_response_pipeline() {
 	assert outcomes[0].channel_id == 'chan-1'
 	assert outcomes[0].action == 'response'
 	assert outcomes[0].status == 200
+	assert outcomes[0].body == 'payload'
 }
 
 fn test_dispatch_relay_ingress_frame_reports_missing_pipeline() {
@@ -114,6 +115,9 @@ fn test_relay_pipeline_response_frame_projects_success_and_failure() {
 		action:      'response'
 		status:      200
 		body:        'ok'
+		headers:     {
+			'content-type': 'text/plain'
+		}
 	})
 	failure := relay_pipeline_response_frame(RelayPipelineDispatchOutcome{
 		pipeline_id: 'edge/local'
@@ -132,6 +136,7 @@ fn test_relay_pipeline_response_frame_projects_success_and_failure() {
 	assert success.channel_id == 'chan-1'
 	assert success.body == 'ok'
 	assert success.metadata['status'] == '200'
+	assert success.headers['content-type'] == 'text/plain'
 
 	assert failure.kind == .error
 	assert failure.id == 'relay-response:frm-2'
@@ -139,4 +144,32 @@ fn test_relay_pipeline_response_frame_projects_success_and_failure() {
 	assert failure.channel_id == 'chan-2'
 	assert failure.body == 'boom'
 	assert failure.metadata['error_class'] == 'relay_error'
+}
+
+fn test_relay_pipeline_delivery_outcome_projection_handles_response_and_failure() {
+	exchange := dispatch.relay_ingress_exchange(dispatch.RelayIngressRequest{
+		relay_id:   'edge'
+		frame_id:   'frm-1'
+		trace_id:   'trace-1'
+		pipeline:   'edge/local'
+		channel_id: 'chan-1'
+		session_id: 'sess-1'
+		body:       'request-body'
+	})
+	response := relay_pipeline_outcome_from_delivery(exchange, dispatch.response_outcome(201, {
+		'content-type': 'application/json'
+	}, '{"ok":true}'))
+	failure := relay_pipeline_outcome_from_delivery(exchange, dispatch.delivery_failure_outcome(418,
+		'teapot', 'short_and_stout'))
+
+	assert response.action == 'response'
+	assert response.status == 201
+	assert response.body == '{"ok":true}'
+	assert response.headers['content-type'] == 'application/json'
+	assert response.channel_id == 'chan-1'
+
+	assert failure.action == 'failed'
+	assert failure.status == 418
+	assert failure.body == 'teapot'
+	assert failure.error_class == 'short_and_stout'
 }
