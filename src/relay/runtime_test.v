@@ -105,6 +105,19 @@ fn test_runtime_tracks_carrier_dispatch_plan() {
 	assert ready.carrier_id == 'carrier_1'
 }
 
+fn test_runtime_unregisters_carrier_and_returns_to_disabled_plan() {
+	mut rt := new_runtime(runtime_plan.RuntimePlan{}) or { panic(err) }
+	rt.register_carrier('relay_1', 'carrier_1') or { panic(err) }
+
+	detached := rt.unregister_carrier('relay_1', 'trace_1')
+	plan := rt.carrier_dispatch_plan('relay_1', new_frame(.data, 'frm_1', 'trace_1'))
+
+	assert detached.removed
+	assert detached.carrier_id == 'carrier_1'
+	assert !plan.available
+	assert plan.carrier_id == 'disabled:relay_1'
+}
+
 fn test_runtime_projects_relay_delivery_through_registered_carrier() {
 	mut rt := new_runtime(runtime_plan.RuntimePlan{}) or { panic(err) }
 	rt.register_carrier('edge', 'carrier_edge') or { panic(err) }

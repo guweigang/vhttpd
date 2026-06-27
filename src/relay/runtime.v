@@ -92,6 +92,10 @@ pub fn (mut rt Runtime) register_carrier(relay_id string, carrier_id string) ! {
 	rt.carriers.register(relay_id, carrier_id)!
 }
 
+pub fn (mut rt Runtime) unregister_carrier(relay_id string, trace_id string) CarrierDetachResult {
+	return rt.carriers.unregister(relay_id, trace_id)
+}
+
 pub fn (rt Runtime) carrier_dispatch_plan(relay_id string, frame WireFrame) CarrierDispatchPlan {
 	return carrier_dispatch_plan(rt.carriers, relay_id, frame)
 }
