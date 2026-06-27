@@ -51,3 +51,68 @@ fn test_build_relay_agent_hello_payload_rejects_hub_descriptor() {
 	}
 	assert false
 }
+
+fn test_receive_relay_agent_payload_routes_ack_to_handshake() {
+	mut rt := relay.new_runtime(relay_agent_payload_plan()) or { panic(err) }
+	rt.mark_agent_connecting('edge', 100) or { panic(err) }
+	raw := relay.encode_frame(relay.registration_ack_frame(relay.RegistrationResult{
+		accepted: true
+		node_id:  'agent_1'
+		relay_id: 'edge'
+		trace_id: 'trace_1'
+	})) or { panic(err) }
+
+	outcome := receive_relay_agent_websocket_payload(mut rt, 'edge', 'text', raw, 120, 2)
+	fields := relay_agent_payload_event_fields(outcome)
+
+	assert outcome.action == .handshake
+	assert outcome.handshake.action == .registered
+	assert rt.agents['edge'].state == .registered
+	assert fields['relay_event'] == 'agent_payload.handshake'
+	assert fields['trace_id'] == 'trace_1'
+}
+
+fn test_receive_relay_agent_payload_routes_registered_frames_to_inbound() {
+	mut rt := relay.new_runtime(relay_agent_payload_plan()) or { panic(err) }
+	rt.mark_agent_connecting('edge', 100) or { panic(err) }
+	rt.mark_agent_registered('edge', 120) or { panic(err) }
+	raw := relay.encode_frame(relay.WireFrame{
+		version:    relay.wire_version
+		kind:       .open
+		id:         'frm_open'
+		trace_id:   'trace_1'
+		channel_id: 'chan_1'
+	}) or { panic(err) }
+
+	outcome := receive_relay_agent_websocket_payload(mut rt, 'edge', 'text', raw, 120, 2)
+
+	assert outcome.action == .inbound
+	assert outcome.inbound.action == .forwarded
+	assert rt.channels.channels['chan_1'].node_id == 'hub:edge'
+}
+
+fn test_receive_relay_agent_payload_rejects_invalid_payload() {
+	mut rt := relay.new_runtime(relay_agent_payload_plan()) or { panic(err) }
+
+	outcome := receive_relay_agent_websocket_payload(mut rt, 'edge', 'binary', 'abc', 120, 2)
+
+	assert outcome.action == .rejected
+	assert outcome.error == 'relay_agent_unsupported_opcode:binary'
+}
+
+fn relay_agent_payload_plan() runtime_plan.RuntimePlan {
+	return runtime_plan.RuntimePlan{
+		relays: {
+			'edge': runtime_plan.RelayPlan{
+				id:      'edge'
+				mode:    'agent'
+				options: runtime_plan.PlanOptions{
+					strings: {
+						'url':     'wss://relay.example.com/vhttpd/relay'
+						'node_id': 'agent_1'
+					}
+				}
+			}
+		}
+	}
+}
