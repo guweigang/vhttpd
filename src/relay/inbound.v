@@ -14,6 +14,7 @@ pub:
 	carrier_id   string
 	trace_id     string
 	frame_id     string
+	frame        WireFrame
 	registration RegistrationResult
 	forwarding   ForwardingOutcome
 	error        string
@@ -28,11 +29,16 @@ pub fn (mut rt Runtime) handle_inbound_frame(carrier_id string, frame WireFrame,
 			source_node_id := frame.metadata['node_id'] or { carrier_id }
 			forwarding := rt.handle_frame(frame, source_node_id, default_buffer_limit)
 			return InboundOutcome{
-				action:     if forwarding.action == .rejected { InboundAction.rejected } else { InboundAction.forwarded }
+				action:     if forwarding.action == .rejected {
+					InboundAction.rejected
+				} else {
+					InboundAction.forwarded
+				}
 				relay_id:   frame.metadata['relay_id'] or { '' }
 				carrier_id: carrier_id
 				trace_id:   frame.trace_id
 				frame_id:   frame.id
+				frame:      frame
 				forwarding: forwarding
 				error:      forwarding.error
 			}
@@ -43,6 +49,7 @@ pub fn (mut rt Runtime) handle_inbound_frame(carrier_id string, frame WireFrame,
 				carrier_id: carrier_id
 				trace_id:   frame.trace_id
 				frame_id:   frame.id
+				frame:      frame
 			}
 		}
 	}
@@ -62,6 +69,7 @@ fn (mut rt Runtime) handle_inbound_registration(carrier_id string, frame WireFra
 			carrier_id: carrier_id
 			trace_id:   frame.trace_id
 			frame_id:   frame.id
+			frame:      frame
 			error:      err.msg()
 		}
 	}
@@ -73,6 +81,7 @@ fn (mut rt Runtime) handle_inbound_registration(carrier_id string, frame WireFra
 				carrier_id:   carrier_id
 				trace_id:     frame.trace_id
 				frame_id:     frame.id
+				frame:        frame
 				registration: result
 				error:        err.msg()
 			}
@@ -84,6 +93,7 @@ fn (mut rt Runtime) handle_inbound_registration(carrier_id string, frame WireFra
 		carrier_id:   carrier_id
 		trace_id:     frame.trace_id
 		frame_id:     frame.id
+		frame:        frame
 		registration: result
 		error:        result.error
 	}

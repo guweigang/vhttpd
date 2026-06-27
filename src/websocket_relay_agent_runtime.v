@@ -26,6 +26,11 @@ fn (mut app App) build_relay_agent_runtime_context() ws.RelayAgentRuntimeContext
 					relay.agent_handshake_event_fields(outcome.handshake))
 			} else if outcome.action == .inbound {
 				app.emit('relay.agent.inbound', relay.inbound_event_fields(outcome.inbound))
+				for dispatch_outcome in app.dispatch_relay_ingress_frame(relay_id,
+					'hub:${relay_id}', outcome.inbound.frame, now_ms) {
+					app.emit('relay.pipeline.dispatch',
+						relay_pipeline_dispatch_event_fields(dispatch_outcome))
+				}
 			}
 			return outcome
 		}

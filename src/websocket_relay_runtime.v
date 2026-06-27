@@ -4,6 +4,7 @@ import log
 import net
 import net.websocket
 import relay
+import time
 import upstream.transport
 import ws
 
@@ -86,6 +87,13 @@ fn relay_websocket_message_cb(mut ws_client websocket.Client, msg &websocket.Mes
 	log.info('[vhttpd] relay websocket message action=${outcome.action} path=${state.path} relay_id=${state.descriptor.id} carrier_id=${state.conn_id} frame_id=${outcome.frame_id} trace_id=${outcome.trace_id} request_id=${state.request_id}')
 	app.emit('relay.inbound', relay_websocket_event_fields(relay.inbound_event_fields(outcome),
 		state))
+	if outcome.action == .forwarded {
+		for dispatch_outcome in app.dispatch_relay_ingress_frame(state.descriptor.id,
+			state.conn_id, outcome.frame, time.now().unix_milli()) {
+			app.emit('relay.pipeline.dispatch', relay_websocket_event_fields(relay_pipeline_dispatch_event_fields(dispatch_outcome),
+				state))
+		}
+	}
 	if outcome.action == .registered {
 		if mismatch := relay_registration_path_mismatch(state, outcome) {
 			app.relay.detach_carrier(outcome.relay_id, state.trace_id)
