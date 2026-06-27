@@ -62,6 +62,11 @@ fn relay_websocket_attached_cb(mut sc websocket.ServerClient, ref voidptr) ! {
 	state.lifecycle.mark_open()
 	state.websocket_rt.flush_pending(state.conn_id)
 	log.info('[vhttpd] relay websocket attached path=${state.path} relay_id=${state.descriptor.id} carrier_id=${state.conn_id} trace_id=${state.trace_id} request_id=${state.request_id}')
+	mut app := unsafe { state.app }
+	app.emit('relay.websocket.attached', relay_websocket_event_fields({
+		'relay_event': 'websocket.attached'
+		'trace_id':    state.trace_id
+	}, state))
 }
 
 fn relay_websocket_message_cb(mut ws_client websocket.Client, msg &websocket.Message, ref voidptr) ! {
@@ -79,7 +84,11 @@ fn relay_websocket_message_cb(mut ws_client websocket.Client, msg &websocket.Mes
 	outcome := ws.receive_relay_websocket_payload(mut app.relay, state.conn_id, opcode, payload,
 		state.descriptor.channel_buffer)
 	log.info('[vhttpd] relay websocket message action=${outcome.action} path=${state.path} relay_id=${state.descriptor.id} carrier_id=${state.conn_id} frame_id=${outcome.frame_id} trace_id=${outcome.trace_id} request_id=${state.request_id}')
+	app.emit('relay.inbound', relay_websocket_event_fields(relay.inbound_event_fields(outcome),
+		state))
 	if outcome.action == .registered {
+		app.emit('relay.registration', relay_websocket_event_fields(relay.registration_event_fields(outcome.registration),
+			state))
 		send_relay_registration_ack(state, outcome)
 		return
 	}
@@ -103,6 +112,8 @@ fn relay_websocket_close_cb(mut _ws_client websocket.Client, code int, reason st
 	mut app := unsafe { state.app }
 	detached := app.relay.detach_carrier(state.descriptor.id, state.trace_id)
 	log.info('[vhttpd] relay websocket closed path=${state.path} relay_id=${state.descriptor.id} carrier_id=${state.conn_id} trace_id=${state.trace_id} request_id=${state.request_id} code=${code} reason=${reason} detached=${detached.removed}')
+	app.emit('relay.carrier.detach', relay_websocket_event_fields(relay.carrier_detach_event_fields(detached),
+		state))
 	relay_websocket_finalize(state)
 }
 
@@ -159,4 +170,22 @@ fn send_relay_rejection(state &RelayWebSocketBridgeState, outcome relay.InboundO
 fn relay_websocket_path_descriptor(app &App, path string) ?relay.RelayDescriptor {
 	normalized_path, _ := transport.normalize_request_target(path)
 	return app.relay.hub_relay_by_path(normalized_path)
+}
+
+fn relay_websocket_event_fields(fields map[string]string, state &RelayWebSocketBridgeState) map[string]string {
+	mut out := fields.clone()
+	if isnil(state) {
+		return out
+	}
+	unsafe {
+		current := state
+		if out['trace_id'] == '' {
+			out['trace_id'] = current.trace_id
+		}
+		out['request_id'] = current.request_id
+		out['path'] = current.path
+		out['relay_id'] = current.descriptor.id
+		out['carrier_id'] = current.conn_id
+	}
+	return out
 }

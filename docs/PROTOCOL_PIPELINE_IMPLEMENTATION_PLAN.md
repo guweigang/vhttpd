@@ -1159,6 +1159,7 @@ Progress as of 2026-06-27:
 - `P6.28` relay hub path config coverage added: v2 plan compiler tests now lock in `relays.*.path` and `node_id` projection so WebSocket relay ingress remains expressible as configuration, not hard-coded route logic
 - `P6.29` relay WebSocket ingress moved to the common upgrade path: configured relay hub paths are now handled before choosing worker or in-proc WebSocket dispatch, so relay behavior does not depend on a specific application engine mode
 - `P6.30` relay hub v2 example added: examples now include a minimal `relay-hub-v2.toml` that configures a WebSocket listener and hub relay path separately from the Paseo/vjsx relay skeleton
+- `P6.31` relay WebSocket observability added: hub sessions now emit relay attached, inbound, registration, and detach events with trace/request/path/carrier context instead of relying only on process logs
 
 Batches:
 
