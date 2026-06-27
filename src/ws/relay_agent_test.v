@@ -3,6 +3,63 @@ module ws
 import relay
 import runtime_plan
 
+@[heap]
+struct RelayAgentRuntimeContextProbe {
+mut:
+	prepared       bool
+	handled        bool
+	disconnected   bool
+	last_relay_id  string
+	last_reason    string
+	last_timestamp i64
+}
+
+fn test_relay_agent_runtime_context_delegates_to_closures() {
+	mut probe := &RelayAgentRuntimeContextProbe{}
+	ctx := RelayAgentRuntimeContext{
+		prepare_attempt_fn: fn [mut probe] (descriptor relay.RelayDescriptor, trace_id string, now_ms i64) RelayAgentConnectAttempt {
+			probe.prepared = true
+			probe.last_relay_id = descriptor.id
+			probe.last_timestamp = now_ms
+			return RelayAgentConnectAttempt{
+				ok:       true
+				relay_id: descriptor.id
+				trace_id: trace_id
+			}
+		}
+		handle_payload_fn:  fn [mut probe] (relay_id string, _ string, _ string, now_ms i64, _ int) RelayAgentPayloadOutcome {
+			probe.handled = true
+			probe.last_relay_id = relay_id
+			probe.last_timestamp = now_ms
+			return RelayAgentPayloadOutcome{
+				action:   .rejected
+				relay_id: relay_id
+			}
+		}
+		disconnected_fn:    fn [mut probe] (descriptor relay.RelayDescriptor, reason string, now_ms i64) {
+			probe.disconnected = true
+			probe.last_relay_id = descriptor.id
+			probe.last_reason = reason
+			probe.last_timestamp = now_ms
+		}
+	}
+
+	ctx.prepare_attempt(relay.RelayDescriptor{
+		id: 'edge'
+	}, 'trace_1', 100)
+	ctx.handle_payload('edge', 'text', '{}', 110, 2)
+	ctx.on_disconnected(relay.RelayDescriptor{
+		id: 'edge'
+	}, 'closed', 120)
+
+	assert probe.prepared
+	assert probe.handled
+	assert probe.disconnected
+	assert probe.last_relay_id == 'edge'
+	assert probe.last_reason == 'closed'
+	assert probe.last_timestamp == 120
+}
+
 fn test_build_relay_agent_hello_payload_encodes_registration_frame() {
 	descriptor := relay.descriptor_from_plan(runtime_plan.RelayPlan{
 		id:      'edge'

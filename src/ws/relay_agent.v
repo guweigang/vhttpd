@@ -32,6 +32,25 @@ pub:
 	error              string
 }
 
+pub struct RelayAgentRuntimeContext {
+pub:
+	prepare_attempt_fn fn (relay.RelayDescriptor, string, i64) RelayAgentConnectAttempt = unsafe { nil }
+	handle_payload_fn  fn (string, string, string, i64, int) RelayAgentPayloadOutcome   = unsafe { nil }
+	disconnected_fn    fn (relay.RelayDescriptor, string, i64) = unsafe { nil }
+}
+
+pub fn (ctx RelayAgentRuntimeContext) prepare_attempt(descriptor relay.RelayDescriptor, trace_id string, now_ms i64) RelayAgentConnectAttempt {
+	return ctx.prepare_attempt_fn(descriptor, trace_id, now_ms)
+}
+
+pub fn (ctx RelayAgentRuntimeContext) handle_payload(relay_id string, opcode string, payload string, now_ms i64, default_buffer_limit int) RelayAgentPayloadOutcome {
+	return ctx.handle_payload_fn(relay_id, opcode, payload, now_ms, default_buffer_limit)
+}
+
+pub fn (ctx RelayAgentRuntimeContext) on_disconnected(descriptor relay.RelayDescriptor, reason string, now_ms i64) {
+	ctx.disconnected_fn(descriptor, reason, now_ms)
+}
+
 pub fn build_relay_agent_hello_payload(descriptor relay.RelayDescriptor, trace_id string) !string {
 	if descriptor.mode != .agent {
 		return error('relay_agent_hello_requires_agent_mode:${descriptor.id}')
