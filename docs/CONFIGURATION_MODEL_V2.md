@@ -596,9 +596,10 @@ url = "wss://relay.example.com/_vhttpd/relay"
 node_id = "office-mac"
 token = "${env.VHTTPD_RELAY_TOKEN}"
 reconnect_delay_ms = 3000
+autostart = true
 ```
 
-Pipelines use `relay:edge` as ingress or egress. WebSocket remains the carrier and does not leak into application pipeline semantics.
+Pipelines use `relay:edge` as ingress or egress. WebSocket remains the carrier and does not leak into application pipeline semantics. Agent relays are inert by default; `autostart = true` opts an agent into dialing the hub during server startup.
 
 ## Complete WordPress Shape
 

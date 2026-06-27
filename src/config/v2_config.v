@@ -277,6 +277,7 @@ pub mut:
 	auth               string
 	node_id            string @[toml: 'node_id']
 	token              string
+	autostart          bool
 	max_channels       int @[toml: 'max_channels']
 	channel_buffer     int @[toml: 'channel_buffer']
 	reconnect_delay_ms int @[toml: 'reconnect_delay_ms']

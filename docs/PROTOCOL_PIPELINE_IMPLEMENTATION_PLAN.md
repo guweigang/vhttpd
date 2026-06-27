@@ -1170,6 +1170,7 @@ Progress as of 2026-06-27:
 - `P6.39` relay agent App runtime context added: app-level relay agent handling now exposes closure ports for connect attempts, payload routing, disconnect state, and event emission before the socket reconnect loop is enabled
 - `P6.40` relay agent single-connect runtime added: WebSocket agent runtime can now perform one explicit connect/send-hello/listen attempt through the agent context and report socket error/close callbacks without enabling automatic startup yet
 - `P6.41` relay agent explicit start hook added: app runtime now has a callable start-once entrypoint for configured agent descriptors while keeping automatic startup disabled until the activation policy is finalized
+- `P6.42` relay agent autostart policy added: v2 `relays.*.autostart` compiles into typed plan options, startup only launches explicit autostart agent relays, and default agent descriptors stay inert so configuration can describe relay topology without causing outbound connections
 
 Batches:
 

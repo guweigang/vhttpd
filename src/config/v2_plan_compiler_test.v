@@ -150,11 +150,12 @@ fn test_compile_v2_runtime_plan_preserves_relay_hub_path() {
 		}
 		relays:    {
 			'edge': V2RelaySpec{
-				mode:     'hub'
-				listener: 'listener:relay'
-				carrier:  'websocket'
-				path:     '/vhttpd/relay'
-				node_id:  'hub_1'
+				mode:      'hub'
+				listener:  'listener:relay'
+				carrier:   'websocket'
+				path:      '/vhttpd/relay'
+				node_id:   'hub_1'
+				autostart: true
 			}
 		}
 	}
@@ -164,6 +165,7 @@ fn test_compile_v2_runtime_plan_preserves_relay_hub_path() {
 	assert plan.relays['edge'].ingress?.str() == 'listener:relay'
 	assert plan.relays['edge'].options.strings['path'] == '/vhttpd/relay'
 	assert plan.relays['edge'].options.strings['node_id'] == 'hub_1'
+	assert plan.relays['edge'].options.bools['autostart']
 }
 
 fn test_compile_v2_runtime_plan_loads_relay_hub_example() {

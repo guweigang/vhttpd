@@ -164,7 +164,8 @@ fn validate_v2_config_keys(root map[string]toml.Any) ! {
 	validate_policy_specs(root)!
 	validate_pipeline_specs(root)!
 	validate_named_specs(root, 'relays', ['mode', 'carrier', 'listener', 'auth', 'url', 'path',
-		'node_id', 'token', 'max_channels', 'channel_buffer', 'reconnect_delay_ms', 'options'])!
+		'node_id', 'token', 'autostart', 'max_channels', 'channel_buffer', 'reconnect_delay_ms',
+		'options'])!
 }
 
 fn validate_keys(entry map[string]toml.Any, path string, allowed []string) ! {

@@ -23,6 +23,10 @@ fn AppStartupHooks.initialize_runtime(mut app App, internal_admin_socket string)
 		go FeishuCardBridgeRuntime.run_client(mut app)
 	}
 	app.bootstrap_providers()
+	relay_agents_started := app.start_relay_agents_once('relay-agent-startup')
+	if relay_agents_started > 0 {
+		log.info('[vhttpd] Relay Agents: started ${relay_agents_started}')
+	}
 }
 
 fn AppStartupHooks.mount_assets(mut app App) {

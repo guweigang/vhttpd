@@ -116,6 +116,9 @@ fn compile_v2_runtime_plan_with_diagnostics(cfg V2Config, source_path string, co
 					'channel_buffer':     spec.channel_buffer
 					'reconnect_delay_ms': spec.reconnect_delay_ms
 				})
+				bools:   {
+					'autostart': spec.autostart
+				}
 			}
 		}
 	}

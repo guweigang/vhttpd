@@ -94,6 +94,54 @@ fn test_start_relay_agents_once_ignores_hub_only_config() {
 	assert app.start_relay_agents_once('trace') == 0
 }
 
+fn test_start_relay_agents_once_ignores_agent_without_autostart() {
+	mut app := App{}
+	app.control_plane.event_log = os.join_path(os.temp_dir(),
+		'vhttpd_relay_agent_no_autostart_events.ndjson')
+	app.relay = relay.new_runtime(runtime_plan.RuntimePlan{
+		relays: {
+			'edge': runtime_plan.RelayPlan{
+				id:      'edge'
+				mode:    'agent'
+				carrier: 'websocket'
+				options: runtime_plan.PlanOptions{
+					strings: {
+						'url':     'wss://relay.example.com/vhttpd/relay'
+						'node_id': 'agent_1'
+					}
+				}
+			}
+		}
+	}) or { panic(err) }
+
+	assert app.start_relay_agents_once('trace') == 0
+	assert !relay_agent_autostart_enabled(app.relay.agent_descriptors()[0])
+}
+
+fn test_relay_agent_autostart_enabled_requires_agent_mode_and_option() {
+	agent := relay.RelayDescriptor{
+		id:      'edge'
+		mode:    .agent
+		options: runtime_plan.PlanOptions{
+			bools: {
+				'autostart': true
+			}
+		}
+	}
+	hub := relay.RelayDescriptor{
+		id:      'hub'
+		mode:    .hub
+		options: runtime_plan.PlanOptions{
+			bools: {
+				'autostart': true
+			}
+		}
+	}
+
+	assert relay_agent_autostart_enabled(agent)
+	assert !relay_agent_autostart_enabled(hub)
+}
+
 fn ws_relay_agent_runtime_test_context(mut probe RelayAgentSocketProbe) ws.RelayAgentRuntimeContext {
 	return ws.RelayAgentRuntimeContext{
 		prepare_attempt_fn: fn (_ relay.RelayDescriptor, _ string, _ i64) ws.RelayAgentConnectAttempt {

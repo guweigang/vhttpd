@@ -82,6 +82,7 @@ egress = "adapter:app"
 mode = "agent"
 carrier = "websocket"
 url = "wss://relay.example.com"
+autostart = true
 '
 	cfg := toml.decode[V2Config](text) or { panic(err) }
 	assert cfg.version == 2
@@ -103,4 +104,5 @@ url = "wss://relay.example.com"
 	assert cfg.policies.concurrency['app'].max_in_flight == 8
 	assert cfg.pipelines[0].match.paths == ['*']
 	assert cfg.relays['edge'].carrier == 'websocket'
+	assert cfg.relays['edge'].autostart
 }

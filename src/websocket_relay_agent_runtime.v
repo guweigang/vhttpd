@@ -75,10 +75,17 @@ fn RelayAgentRuntime.run_once(ctx ws.RelayAgentRuntimeContext, descriptor relay.
 	client.listen() or { ctx.on_disconnected(descriptor, 'listen:${err}', time.now().unix_milli()) }
 }
 
+fn relay_agent_autostart_enabled(descriptor relay.RelayDescriptor) bool {
+	return descriptor.mode == .agent && (descriptor.options.bools['autostart'] or { false })
+}
+
 fn (mut app App) start_relay_agents_once(trace_prefix string) int {
 	ctx := app.build_relay_agent_runtime_context()
 	mut started := 0
 	for descriptor in app.relay.agent_descriptors() {
+		if !relay_agent_autostart_enabled(descriptor) {
+			continue
+		}
 		trace_id := if trace_prefix != '' {
 			'${trace_prefix}:${descriptor.id}'
 		} else {
