@@ -1187,6 +1187,7 @@ Progress as of 2026-06-27:
 - `P6.56` relay returned-frame drain added: relay channels can now drain only pipeline response/error frames while preserving pending data frames, giving callers a focused return-path consumption API without losing buffered channel traffic
 - `P6.57` relay returned-frame snapshot added: relay runtime and admin snapshots now expose returned-frame counts separately from buffered pending frames, making return-path buildup visible without changing existing pending-frame totals
 - `P6.58` relay response target drain added: relay response frames now carry a stable `response_to` target and channels can drain returned frames for a single original frame ID, preparing request/response relay bridges without leaking string-prefix matching into callers
+- `P6.59` relay returned delivery projection added: returned relay response/error frames can now be projected back into generic `dispatch.DeliveryOutcome` values, giving request/response bridges a pure completion contract before blocking wait or HTTP rendering policy is attached
 
 Batches:
 
