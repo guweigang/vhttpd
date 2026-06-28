@@ -129,6 +129,9 @@ fn (mut app App) dispatch_relay_delivery(outcome dispatch.DeliveryOutcome) dispa
 	if outbound.action != .ready {
 		return relay_delivery_http_outcome(outbound)
 	}
+	if outbound.completion.mode != 'accepted' {
+		return relay_delivery_completion_policy_http_outcome(outbound)
+	}
 	mut carrier := ws.new_relay_carrier(app.build_websocket_runtime_context(), outbound.carrier_id)
 	send_result := relay.send_to_carrier(mut carrier, outbound)
 	return relay_delivery_send_http_outcome(outbound, send_result)
@@ -143,6 +146,14 @@ fn relay_delivery_http_outcome(outbound relay.OutboundOutcome) dispatch.Delivery
 	}
 	return dispatch.outcome_with_metadata(dispatch.delivery_failure_outcome(503, outbound.error,
 		'relay_carrier_unavailable'), outbound.fields)
+}
+
+fn relay_delivery_completion_policy_http_outcome(outbound relay.OutboundOutcome) dispatch.DeliveryOutcome {
+	mut fields := outbound.fields.clone()
+	fields['supported_completion_mode'] = 'accepted'
+	err := 'relay_completion_policy_unsupported:http:${outbound.completion.mode}'
+	return dispatch.outcome_with_metadata(dispatch.delivery_failure_outcome(501, err,
+		'relay_completion_policy_unsupported'), fields)
 }
 
 fn relay_delivery_send_http_outcome(outbound relay.OutboundOutcome, send_result relay.CarrierSendResult) dispatch.DeliveryOutcome {

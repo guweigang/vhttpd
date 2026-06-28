@@ -54,6 +54,28 @@ fn test_relay_delivery_http_outcome_reports_projection_error() {
 	assert outcome.error == 'relay_delivery_invalid_outcome:response'
 }
 
+fn test_relay_delivery_completion_policy_http_outcome_reports_unsupported_wait() {
+	mut rt := relay.empty_runtime()
+	rt.register_carrier('edge', 'carrier_edge') or { panic(err) }
+	projection := rt.prepare_outbound_delivery(dispatch.relay_delivery_outcome('relay:edge', {
+		'trace_id':              'trace_1'
+		'request_id':            'req_1'
+		'channel_id':            'chan_1'
+		'completion_mode':       'wait'
+		'completion_timeout_ms': '1500'
+	}))
+
+	outcome := relay_delivery_completion_policy_http_outcome(projection)
+
+	assert outcome.kind == .failure
+	assert outcome.status == 501
+	assert outcome.error_class == 'relay_completion_policy_unsupported'
+	assert outcome.error == 'relay_completion_policy_unsupported:http:wait'
+	assert outcome.metadata['completion_mode'] == 'wait'
+	assert outcome.metadata['completion_timeout_ms'] == '1500'
+	assert outcome.metadata['supported_completion_mode'] == 'accepted'
+}
+
 fn test_relay_delivery_send_http_outcome_accepts_successful_send() {
 	mut rt := relay.empty_runtime()
 	rt.register_carrier('edge', 'carrier_edge') or { panic(err) }

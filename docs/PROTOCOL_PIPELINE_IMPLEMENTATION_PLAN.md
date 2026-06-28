@@ -1192,6 +1192,7 @@ Progress as of 2026-06-27:
 - `P6.61` relay response completion delivery mapping added: completion outcomes now map back to generic delivery outcomes with stable accepted, completed, timeout, and send-failure semantics, letting HTTP or stream bridges render relay completions without duplicating policy
 - `P6.62` HTTP relay send completion mapping adopted: HTTP relay-delivery rendering now reuses the relay response-completion contract for send success/failure outcomes while preserving outbound relay/carrier context in metadata
 - `P6.63` relay response completion policy projection added: relay delivery metadata now projects into an explicit completion policy (`accepted`, `wait`, or `stream`) with optional timeout, and outbound outcomes expose that policy for future HTTP/stream bridge behavior without adding blocking IO yet
+- `P6.64` HTTP relay completion policy guard added: HTTP relay delivery now accepts only the explicit async `accepted` policy and returns a traceable unsupported-policy failure for `wait` or `stream`, preventing accidental async downgrades before blocking/stream bridge support lands
 
 Batches:
 
