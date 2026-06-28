@@ -210,6 +210,8 @@ fn test_compile_v2_runtime_plan_loads_relay_public_example() {
 	assert plan.relays['edge'].ingress?.str() == 'listener:relay'
 	assert plan.adapters['relay-edge'].kind == 'relay-delivery'
 	assert plan.adapters['relay-edge'].options.strings['target'] == 'relay:edge'
+	assert plan.adapters['relay-edge'].options.strings['completion_mode'] == 'wait'
+	assert plan.adapters['relay-edge'].options.ints['completion_timeout_ms'] == 30000
 	assert plan.adapters['relay-edge'].options.strings['frame_kind'] == 'open'
 	assert plan.adapters['relay-edge'].options.strings['route'] == 'relay/local-response'
 	assert plan.pipeline('public/relay')?.ingress.str() == 'listener:web'

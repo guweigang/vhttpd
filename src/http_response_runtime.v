@@ -26,6 +26,10 @@ pub mut:
 
 struct HttpResponseRuntime {}
 
+const relay_delivery_wait_default_timeout_ms = 30000
+const relay_delivery_wait_max_timeout_ms = 120000
+const relay_delivery_wait_poll_ms = 10
+
 fn HttpResponseRuntime.cache_hit(mut app App, mut ctx Context, req HttpIngressRequest, hit HttpResponseCacheHit) veb.Result {
 	log.info('[http] ⇠ route response cache hit method=${req.method.to_upper()} path=${req.path} trace_id=${req.trace_id} request_id=${req.request_id}')
 	mut headers := {
@@ -129,7 +133,7 @@ fn (mut app App) dispatch_relay_delivery(outcome dispatch.DeliveryOutcome) dispa
 	if outbound.action != .ready {
 		return relay_delivery_http_outcome(outbound)
 	}
-	if outbound.completion.mode != 'accepted' {
+	if !relay_delivery_http_completion_supported(outbound.completion.mode) {
 		return relay_delivery_completion_policy_http_outcome(outbound)
 	}
 	mut carrier := ws.new_relay_carrier(app.build_websocket_runtime_context(), outbound.carrier_id)
@@ -150,15 +154,50 @@ fn relay_delivery_http_outcome(outbound relay.OutboundOutcome) dispatch.Delivery
 
 fn relay_delivery_completion_policy_http_outcome(outbound relay.OutboundOutcome) dispatch.DeliveryOutcome {
 	mut fields := outbound.fields.clone()
-	fields['supported_completion_mode'] = 'accepted'
+	fields['supported_completion_mode'] = 'accepted,wait'
 	err := 'relay_completion_policy_unsupported:http:${outbound.completion.mode}'
 	return dispatch.outcome_with_metadata(dispatch.delivery_failure_outcome(501, err,
 		'relay_completion_policy_unsupported'), fields)
 }
 
 fn relay_delivery_send_http_outcome(mut rt relay.Runtime, outbound relay.OutboundOutcome, send_result relay.CarrierSendResult) dispatch.DeliveryOutcome {
+	if outbound.completion.mode == 'wait' {
+		return relay_delivery_wait_http_outcome(mut rt, outbound, send_result)
+	}
 	completion := rt.response_completion_after_send(outbound, send_result)
 	return relay.response_completion_delivery_outcome(completion)
+}
+
+fn relay_delivery_http_completion_supported(mode string) bool {
+	return mode == 'accepted' || mode == 'wait'
+}
+
+fn relay_delivery_wait_http_outcome(mut rt relay.Runtime, outbound relay.OutboundOutcome, send_result relay.CarrierSendResult) dispatch.DeliveryOutcome {
+	sent := relay.response_completion_sent(outbound, send_result)
+	if sent.action == .failed {
+		return relay.response_completion_delivery_outcome(sent)
+	}
+	timeout_ms := relay_delivery_wait_timeout_ms(outbound.completion.timeout_ms)
+	deadline_ms := time.now().unix_milli() + i64(timeout_ms)
+	for time.now().unix_milli() <= deadline_ms {
+		completion := rt.response_completion_after_send(outbound, send_result)
+		if completion.action != .missing {
+			return relay.response_completion_delivery_outcome(completion)
+		}
+		time.sleep(relay_delivery_wait_poll_ms * time.millisecond)
+	}
+	return relay.response_completion_delivery_outcome(relay.response_completion_missing(outbound,
+		send_result))
+}
+
+fn relay_delivery_wait_timeout_ms(raw int) int {
+	if raw <= 0 {
+		return relay_delivery_wait_default_timeout_ms
+	}
+	if raw > relay_delivery_wait_max_timeout_ms {
+		return relay_delivery_wait_max_timeout_ms
+	}
+	return raw
 }
 
 fn HttpResponseRuntime.file_outcome(mut app App, mut ctx Context, req HttpIngressRequest, outcome dispatch.DeliveryOutcome, matched_rule ?RuntimeRouteRule) veb.Result {

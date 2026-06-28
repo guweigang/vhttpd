@@ -44,7 +44,7 @@ make build vhttpd
 - `db-upstream.toml` 演示 `vhttpd` 托管 mysql 连接池，并通过 unix socket 暴露 `db` runtime，上游可通过 `/admin/runtime/db` 查看状态
 - `db-upstream-pg.toml` 演示 `vhttpd` 托管 postgresql 连接池，配置写在 `[db.pgsql]`
 - `relay-hub-v2.toml` 演示 v2 配置里的通用 WebSocket relay hub
-- `relay-public-v2.toml` 演示 public HTTP listener 通过 `relay-delivery` adapter 投递到通用 relay hub
+- `relay-public-v2.toml` 演示 public HTTP listener 通过 `relay-delivery` adapter 投递到通用 relay hub 并等待返回响应
 - `relay-agent-v2.toml` 演示 v2 配置里的 relay agent 和 `relay:*` pipeline ingress
 - `paseo-relay.toml` 演示一个 `vhttpd + vjsx` 的 Paseo relay skeleton
 - 这些变量都在 `[worker.env]`，会传给 php-worker，可在 PHP 里直接 `getenv('KEY')`

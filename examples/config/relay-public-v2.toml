@@ -32,7 +32,8 @@ channel_buffer = 64
 [adapters.relay-edge]
 kind = "relay-delivery"
 options.target = "relay:edge"
-options.completion_mode = "accepted"
+options.completion_mode = "wait"
+int_options.completion_timeout_ms = 30000
 options.frame_kind = "open"
 options.route = "relay/local-response"
 
