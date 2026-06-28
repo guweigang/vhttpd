@@ -85,7 +85,7 @@ fn test_relay_delivery_send_http_outcome_accepts_successful_send() {
 		'channel_id': 'chan_1'
 	}))
 
-	outcome := relay_delivery_send_http_outcome(projection, relay.CarrierSendResult{
+	outcome := relay_delivery_send_http_outcome(mut rt, projection, relay.CarrierSendResult{
 		ok:       true
 		trace_id: 'trace_1'
 		frame_id: 'req_1'
@@ -110,7 +110,7 @@ fn test_relay_delivery_send_http_outcome_reports_send_failure() {
 		'channel_id': 'chan_1'
 	}))
 
-	outcome := relay_delivery_send_http_outcome(projection, relay.CarrierSendResult{
+	outcome := relay_delivery_send_http_outcome(mut rt, projection, relay.CarrierSendResult{
 		ok:       false
 		trace_id: 'trace_1'
 		frame_id: 'req_1'
@@ -125,4 +125,45 @@ fn test_relay_delivery_send_http_outcome_reports_send_failure() {
 	assert outcome.metadata['outbound_relay_event'] == 'outbound.ready'
 	assert outcome.metadata['carrier_relay_event'] == 'carrier.send_failed'
 	assert outcome.metadata['carrier_error'] == 'relay_carrier_not_connected:carrier_edge'
+}
+
+fn test_relay_delivery_send_http_outcome_can_complete_wait_from_returned_frame() {
+	mut rt := relay.empty_runtime()
+	rt.register_carrier('edge', 'carrier_edge') or { panic(err) }
+	rt.handle_frame(relay.WireFrame{
+		version:    relay.wire_version
+		kind:       .open
+		id:         'frm_open'
+		trace_id:   'trace_1'
+		channel_id: 'chan_1'
+	}, 'node_1', 4)
+	rt.handle_frame(relay.WireFrame{
+		version:       relay.wire_version
+		kind:          .data
+		id:            'relay-response:req_1'
+		trace_id:      'trace_1'
+		channel_id:    'chan_1'
+		exchange_kind: 'response'
+		metadata:      {
+			'status': '209'
+		}
+		body:          'done'
+	}, 'node_1', 4)
+	projection := rt.prepare_outbound_delivery(dispatch.relay_delivery_outcome_with_completion('relay:edge', {
+		'trace_id':   'trace_1'
+		'request_id': 'req_1'
+		'channel_id': 'chan_1'
+	}, 'wait', 1000))
+
+	outcome := relay_delivery_send_http_outcome(mut rt, projection, relay.CarrierSendResult{
+		ok:       true
+		trace_id: 'trace_1'
+		frame_id: 'req_1'
+	})
+
+	assert outcome.kind == .response
+	assert outcome.status == 209
+	assert outcome.body == 'done'
+	assert outcome.metadata['relay_event'] == 'response_completion.completed'
+	assert outcome.metadata['target_id'] == 'req_1'
 }
