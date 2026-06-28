@@ -93,6 +93,45 @@ fn test_channel_registry_drains_returned_frames_without_dropping_pending_data() 
 	assert remaining[0].id == 'frm_data'
 }
 
+fn test_channel_registry_drains_returned_frames_for_target() {
+	mut registry := new_channel_registry(1)
+	registry.open_channel(RelayChannel{
+		id:           'chan_1'
+		trace_id:     'trace_1'
+		buffer_limit: 4
+	}) or { panic(err) }
+	registry.enqueue('chan_1', WireFrame{
+		version:       wire_version
+		kind:          .data
+		id:            'relay-response:frm_1'
+		trace_id:      'trace_1'
+		channel_id:    'chan_1'
+		exchange_kind: 'response'
+		body:          'first'
+	}) or { panic(err) }
+	registry.enqueue('chan_1', WireFrame{
+		version:       wire_version
+		kind:          .data
+		id:            'response-custom'
+		trace_id:      'trace_1'
+		channel_id:    'chan_1'
+		exchange_kind: 'response'
+		metadata:      {
+			'response_to': 'frm_2'
+		}
+		body:          'second'
+	}) or { panic(err) }
+	registry.enqueue('chan_1', new_frame(.data, 'frm_data', 'trace_1')) or { panic(err) }
+
+	returned := registry.drain_returned_for('chan_1', 'frm_2') or { panic(err) }
+	remaining := registry.drain('chan_1') or { panic(err) }
+
+	assert returned.len == 1
+	assert returned[0].id == 'response-custom'
+	assert returned[0].body == 'second'
+	assert remaining.map(it.id) == ['relay-response:frm_1', 'frm_data']
+}
+
 fn test_close_channel_clears_buffer_and_correlations() {
 	mut registry := new_channel_registry(1)
 	registry.open_channel(RelayChannel{

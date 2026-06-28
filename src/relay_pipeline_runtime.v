@@ -57,6 +57,7 @@ fn relay_pipeline_response_frame(outcome RelayPipelineDispatchOutcome) relay.Wir
 			'action':      outcome.action
 			'status':      outcome.status.str()
 			'error_class': outcome.error_class
+			'response_to': outcome.exchange_id
 		}
 		headers:       outcome.headers.clone()
 		body:          if outcome.body != '' { outcome.body } else { outcome.error }

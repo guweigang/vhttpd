@@ -117,3 +117,19 @@ fn test_frame_is_pipeline_response_detects_response_frames() {
 		exchange_kind: 'request'
 	})
 }
+
+fn test_frame_response_target_id_uses_metadata_prefix_or_parent() {
+	assert frame_response_target_id(WireFrame{
+		id: 'relay-response:frm_1'
+	}) == 'frm_1'
+	assert frame_response_target_id(WireFrame{
+		id:       'response_1'
+		metadata: {
+			'response_to': 'frm_2'
+		}
+	}) == 'frm_2'
+	assert frame_response_target_id(WireFrame{
+		id:        'response_2'
+		parent_id: 'frm_3'
+	}) == 'frm_3'
+}

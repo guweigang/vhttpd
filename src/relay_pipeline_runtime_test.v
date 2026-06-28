@@ -260,6 +260,7 @@ fn test_relay_pipeline_response_frame_projects_success_and_failure() {
 	assert success.channel_id == 'chan-1'
 	assert success.body == 'ok'
 	assert success.metadata['status'] == '200'
+	assert success.metadata['response_to'] == 'frm-1'
 	assert success.headers['content-type'] == 'text/plain'
 
 	assert failure.kind == .error
@@ -267,6 +268,7 @@ fn test_relay_pipeline_response_frame_projects_success_and_failure() {
 	assert failure.exchange_kind == 'error'
 	assert failure.channel_id == 'chan-2'
 	assert failure.body == 'boom'
+	assert failure.metadata['response_to'] == 'frm-2'
 	assert failure.metadata['error_class'] == 'relay_error'
 }
 

@@ -4,6 +4,7 @@ import dispatch
 import json
 
 pub const wire_version = 1
+pub const response_frame_prefix = 'relay-response:'
 
 pub enum WireFrameKind {
 	hello
@@ -94,10 +95,20 @@ pub fn validate_frame(frame WireFrame) ! {
 }
 
 pub fn frame_is_pipeline_response(frame WireFrame) bool {
-	if frame.id.starts_with('relay-response:') {
+	if frame.id.starts_with(response_frame_prefix) {
 		return true
 	}
 	return frame.exchange_kind.trim_space().to_lower() in ['response', 'error']
+}
+
+pub fn frame_response_target_id(frame WireFrame) string {
+	if target := frame.metadata['response_to'] {
+		return target
+	}
+	if frame.id.starts_with(response_frame_prefix) {
+		return frame.id[response_frame_prefix.len..]
+	}
+	return frame.parent_id
 }
 
 fn exchange_body(exchange dispatch.Exchange) string {

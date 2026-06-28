@@ -122,3 +122,25 @@ pub fn (mut registry ChannelRegistry) drain_returned(channel_id string) ![]WireF
 	registry.channels[channel_id] = channel
 	return returned
 }
+
+pub fn (mut registry ChannelRegistry) drain_returned_for(channel_id string, target_id string) ![]WireFrame {
+	normalized_target := target_id.trim_space()
+	if normalized_target == '' {
+		return error('relay_channel_missing_response_target')
+	}
+	mut channel := registry.channels[channel_id] or {
+		return error('relay_channel_unknown:${channel_id}')
+	}
+	mut returned := []WireFrame{}
+	mut remaining := []WireFrame{}
+	for frame in channel.buffered {
+		if frame_is_pipeline_response(frame) && frame_response_target_id(frame) == normalized_target {
+			returned << frame
+		} else {
+			remaining << frame
+		}
+	}
+	channel.buffered = remaining
+	registry.channels[channel_id] = channel
+	return returned
+}
