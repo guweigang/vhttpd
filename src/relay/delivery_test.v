@@ -11,14 +11,14 @@ fn test_relay_id_from_target_normalizes_relay_targets() {
 
 fn test_wire_frame_from_delivery_outcome_uses_metadata_identity() {
 	outcome := dispatch.relay_delivery_outcome('relay:edge', {
-		'trace_id':      'trace_1'
-		'request_id':    'req_1'
-		'channel_id':    'chan_1'
+		'trace_id':       'trace_1'
+		'request_id':     'req_1'
+		'channel_id':     'chan_1'
 		'correlation_id': 'corr_1'
-		'frame_id':      'frm_1'
-		'frame_kind':    'open'
-		'body':          'payload'
-		'route':         'site/main'
+		'frame_id':       'frm_1'
+		'frame_kind':     'open'
+		'body':           'payload'
+		'route':          'site/main'
 	})
 
 	frame := wire_frame_from_delivery_outcome(outcome)
@@ -49,6 +49,37 @@ fn test_delivery_projection_uses_registered_carrier_plan() {
 	assert projection.frame.trace_id == 'trace_1'
 	assert projection.plan.available
 	assert projection.plan.carrier_id == 'carrier_edge'
+	assert projection.completion_policy.mode == 'accepted'
+}
+
+fn test_delivery_projection_projects_response_completion_policy() {
+	mut registry := new_carrier_registry()
+	registry.register('edge', 'carrier_edge') or { panic(err) }
+	outcome := dispatch.relay_delivery_outcome('relay:edge', {
+		'trace_id':              'trace_1'
+		'request_id':            'req_1'
+		'channel_id':            'chan_1'
+		'relay_completion_mode': 'wait'
+		'response_timeout_ms':   '1500'
+	})
+
+	projection := delivery_projection(registry, outcome)
+
+	assert projection.error == ''
+	assert projection.completion_policy.mode == 'wait'
+	assert projection.completion_policy.timeout_ms == 1500
+}
+
+fn test_response_completion_policy_normalizes_modes() {
+	assert response_completion_policy_from_metadata({
+		'completion_mode': 'blocking'
+	}).mode == 'wait'
+	assert response_completion_policy_from_metadata({
+		'completion_mode': 'streaming'
+	}).mode == 'stream'
+	assert response_completion_policy_from_metadata({
+		'completion_mode': 'unknown'
+	}).mode == 'accepted'
 }
 
 fn test_delivery_projection_reports_unavailable_carrier_plan() {

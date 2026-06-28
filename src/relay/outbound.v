@@ -17,6 +17,7 @@ pub:
 	frame_id   string
 	frame      WireFrame
 	plan       CarrierDispatchPlan
+	completion ResponseCompletionPolicy
 	fields     map[string]string
 	error      string
 }
@@ -37,10 +38,18 @@ pub fn (rt Runtime) prepare_outbound_delivery(outcome dispatch.DeliveryOutcome) 
 	fields['carrier_id'] = projection.plan.carrier_id
 	fields['frame_id'] = projection.frame.id
 	fields['channel_id'] = projection.frame.channel_id
+	fields['completion_mode'] = projection.completion_policy.mode
+	if projection.completion_policy.timeout_ms > 0 {
+		fields['completion_timeout_ms'] = projection.completion_policy.timeout_ms.str()
+	}
 	if projection.frame.correlation_id != '' {
 		fields['correlation_id'] = projection.frame.correlation_id
 	}
-	action := if projection.plan.available { OutboundAction.ready } else { OutboundAction.unavailable }
+	action := if projection.plan.available {
+		OutboundAction.ready
+	} else {
+		OutboundAction.unavailable
+	}
 	fields['relay_event'] = 'outbound.${action}'
 	return OutboundOutcome{
 		action:     action
@@ -50,6 +59,7 @@ pub fn (rt Runtime) prepare_outbound_delivery(outcome dispatch.DeliveryOutcome) 
 		frame_id:   projection.frame.id
 		frame:      projection.frame
 		plan:       projection.plan
+		completion: projection.completion_policy
 		fields:     fields
 		error:      projection.plan.error
 	}
