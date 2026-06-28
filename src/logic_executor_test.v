@@ -1,8 +1,10 @@
 module main
 
 import admin
+import config
 import executor
 import json
+import os
 import relay
 import worker
 
@@ -126,6 +128,78 @@ fn test_internal_admin_runtime_exposes_worker_logic_executor_identity() {
 	assert snapshot.logic_executor.details.model == 'worker'
 	assert snapshot.logic_executor.details.runtime_profile == ''
 	assert snapshot.logic_executor.details.lane_count == 0
+}
+
+fn test_internal_admin_runtime_plan_replacement_previews_diff_from_config() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_plan_replacement_preview_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	current_file := os.join_path(temp_dir, 'current.toml')
+	config_file := os.join_path(temp_dir, 'next.toml')
+	current_text := '
+version = 2
+
+[listeners.web]
+protocol = "http"
+transport = "tcp"
+host = "127.0.0.1"
+port = 18080
+
+[engines.app]
+kind = "php-worker"
+entry = "/tmp/app.php"
+
+[engines.admin]
+kind = "vjsx"
+entry = "/tmp/admin.mts"
+
+[adapters.app]
+kind = "http-handler"
+engine = "engine:app"
+
+[adapters.admin]
+kind = "http-handler"
+engine = "engine:admin"
+
+[[pipelines]]
+id = "site/app"
+ingress = "listener:web"
+match.paths = ["*"]
+egress = "adapter:app"
+
+[[pipelines]]
+id = "site/admin"
+ingress = "listener:web"
+match.paths = ["/admin"]
+egress = "adapter:admin"
+'
+	os.write_file(current_file, current_text) or { panic(err) }
+	os.write_file(config_file, current_text.replace('[engines.app]\nkind = "php-worker"\nentry = "/tmp/app.php"',
+		'[engines.app]\nkind = "php-worker"\nentry = "/tmp/app.php"\nqueue_capacity = 128')) or {
+		panic(err)
+	}
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	mut app := App{
+		plan: config.load_runtime_plan_file(current_file) or { panic(err) }
+	}
+	resp := app.internal_admin_dispatch(admin.InternalAdminRequest{
+		mode:   'vhttpd_admin'
+		method: 'GET'
+		path:   '/admin/runtime/plan/replacement'
+		query:  {
+			'config': config_file
+		}
+	})
+	assert resp.status == 200
+	preview := json.decode(RuntimePlanReplacementPreview, resp.body) or { panic(err) }
+	assert preview.allowed
+	assert preview.config_path == config_file
+	assert preview.drain_engines == ['app']
+	assert preview.changed_pipelines == ['site/app']
+	assert preview.unchanged_pipelines == ['site/admin']
+	assert preview.current_schema_version == 2
+	assert preview.next_schema_version == 2
 }
 
 fn test_admin_runtime_snapshot_exposes_relay_summary() {

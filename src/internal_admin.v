@@ -25,6 +25,13 @@ fn (mut app App) internal_admin_dispatch(req admin.InternalAdminRequest) admin.I
 		'/runtime' {
 			return admin.InternalAdminResponse.json(json.encode(app.admin_runtime_snapshot()))
 		}
+		'/runtime/plan/replacement' {
+			config_path := (req.query['config'] or { req.query['path'] or { '' } }).trim_space()
+			preview := app.preview_runtime_plan_replacement(config_path) or {
+				return admin.InternalAdminResponse.bad_request(err.msg())
+			}
+			return admin.InternalAdminResponse.json(json.encode(preview))
+		}
 		'/runtime/transformers' {
 			return admin.InternalAdminResponse.json(json.encode(app.transformers.snapshot()))
 		}
