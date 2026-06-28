@@ -50,6 +50,7 @@ pub fn (mut rt Runtime) drain_returned_delivery_for(channel_id string, target_id
 pub fn response_completion_sent(outbound OutboundOutcome, send_result CarrierSendResult) ResponseCompletionOutcome {
 	mut fields := response_completion_base_fields(outbound.trace_id, outbound.frame.channel_id,
 		outbound.frame.id, completion_target_id(outbound.frame))
+	merge_response_completion_fields(mut fields, outbound.fields)
 	for key, value in carrier_send_event_fields(send_result) {
 		fields['carrier_${key}'] = value
 	}
@@ -79,6 +80,7 @@ pub fn response_completion_sent(outbound OutboundOutcome, send_result CarrierSen
 pub fn response_completion_from_returned(outbound OutboundOutcome, send_result CarrierSendResult, returned WireFrame) ResponseCompletionOutcome {
 	mut fields := response_completion_base_fields(outbound.trace_id, outbound.frame.channel_id,
 		outbound.frame.id, frame_response_target_id(returned))
+	merge_response_completion_fields(mut fields, outbound.fields)
 	for key, value in carrier_send_event_fields(send_result) {
 		fields['carrier_${key}'] = value
 	}
@@ -109,6 +111,7 @@ pub fn response_completion_from_returned(outbound OutboundOutcome, send_result C
 pub fn response_completion_missing(outbound OutboundOutcome, send_result CarrierSendResult) ResponseCompletionOutcome {
 	mut fields := response_completion_base_fields(outbound.trace_id, outbound.frame.channel_id,
 		outbound.frame.id, completion_target_id(outbound.frame))
+	merge_response_completion_fields(mut fields, outbound.fields)
 	for key, value in carrier_send_event_fields(send_result) {
 		fields['carrier_${key}'] = value
 	}
@@ -216,6 +219,18 @@ fn response_completion_base_fields(trace_id string, channel_id string, frame_id 
 		fields['target_id'] = target_id
 	}
 	return fields
+}
+
+fn merge_response_completion_fields(mut fields map[string]string, source map[string]string) {
+	for key, value in source {
+		if key == 'relay_event' {
+			fields['outbound_relay_event'] = value
+			continue
+		}
+		if key != '' && value != '' {
+			fields[key] = value
+		}
+	}
 }
 
 fn completion_target_id(frame WireFrame) string {

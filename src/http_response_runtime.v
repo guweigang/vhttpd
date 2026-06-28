@@ -146,28 +146,8 @@ fn relay_delivery_http_outcome(outbound relay.OutboundOutcome) dispatch.Delivery
 }
 
 fn relay_delivery_send_http_outcome(outbound relay.OutboundOutcome, send_result relay.CarrierSendResult) dispatch.DeliveryOutcome {
-	mut fields := outbound.fields.clone()
-	fields['carrier_send_event'] = if send_result.ok {
-		'carrier.send'
-	} else {
-		'carrier.send_failed'
-	}
-	fields['carrier_send_queued'] = send_result.queued.str()
-	if send_result.error != '' {
-		fields['carrier_send_error'] = send_result.error
-	}
-	if send_result.ok {
-		return dispatch.accepted_event_outcome(fields)
-	}
-	return dispatch.outcome_with_metadata(dispatch.delivery_failure_outcome(relay_delivery_send_failure_status(send_result.error),
-		send_result.error, 'relay_carrier_send_failed'), fields)
-}
-
-fn relay_delivery_send_failure_status(error string) int {
-	if error.contains('not_connected') || error.contains('send_failed') {
-		return 503
-	}
-	return 500
+	completion := relay.response_completion_sent(outbound, send_result)
+	return relay.response_completion_delivery_outcome(completion)
 }
 
 fn HttpResponseRuntime.file_outcome(mut app App, mut ctx Context, req HttpIngressRequest, outcome dispatch.DeliveryOutcome, matched_rule ?RuntimeRouteRule) veb.Result {

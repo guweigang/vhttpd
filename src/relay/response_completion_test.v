@@ -86,6 +86,11 @@ fn test_response_completion_sent_reports_send_state() {
 		action:   .ready
 		trace_id: 'trace_1'
 		frame_id: 'frm_1'
+		fields:   {
+			'relay_event': 'outbound.ready'
+			'relay_id':    'edge'
+			'carrier_id':  'carrier_edge'
+		}
 		frame:    WireFrame{
 			version:    wire_version
 			kind:       .data
@@ -105,6 +110,9 @@ fn test_response_completion_sent_reports_send_state() {
 	assert completion.target_id == 'frm_1'
 	assert completion.send_result.queued
 	assert completion.fields['relay_event'] == 'response_completion.sent'
+	assert completion.fields['outbound_relay_event'] == 'outbound.ready'
+	assert completion.fields['relay_id'] == 'edge'
+	assert completion.fields['carrier_id'] == 'carrier_edge'
 	assert completion.fields['carrier_relay_event'] == 'carrier.send'
 }
 

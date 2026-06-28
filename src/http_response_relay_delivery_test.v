@@ -71,9 +71,12 @@ fn test_relay_delivery_send_http_outcome_accepts_successful_send() {
 
 	assert outcome.kind == .accepted_event
 	assert outcome.status == 202
-	assert outcome.metadata['relay_event'] == 'outbound.ready'
-	assert outcome.metadata['carrier_send_event'] == 'carrier.send'
-	assert outcome.metadata['carrier_send_queued'] == 'false'
+	assert outcome.metadata['relay_event'] == 'response_completion.sent'
+	assert outcome.metadata['outbound_relay_event'] == 'outbound.ready'
+	assert outcome.metadata['relay_id'] == 'edge'
+	assert outcome.metadata['carrier_id'] == 'carrier_edge'
+	assert outcome.metadata['carrier_relay_event'] == 'carrier.send'
+	assert outcome.metadata['carrier_queued'] == 'false'
 }
 
 fn test_relay_delivery_send_http_outcome_reports_send_failure() {
@@ -94,8 +97,10 @@ fn test_relay_delivery_send_http_outcome_reports_send_failure() {
 
 	assert outcome.kind == .failure
 	assert outcome.status == 503
-	assert outcome.error_class == 'relay_carrier_send_failed'
+	assert outcome.error_class == 'relay_response_completion_failed'
 	assert outcome.error == 'relay_carrier_not_connected:carrier_edge'
-	assert outcome.metadata['carrier_send_event'] == 'carrier.send_failed'
-	assert outcome.metadata['carrier_send_error'] == 'relay_carrier_not_connected:carrier_edge'
+	assert outcome.metadata['relay_event'] == 'response_completion.failed'
+	assert outcome.metadata['outbound_relay_event'] == 'outbound.ready'
+	assert outcome.metadata['carrier_relay_event'] == 'carrier.send_failed'
+	assert outcome.metadata['carrier_error'] == 'relay_carrier_not_connected:carrier_edge'
 }
