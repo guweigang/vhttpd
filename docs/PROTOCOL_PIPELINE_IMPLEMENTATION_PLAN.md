@@ -1244,6 +1244,10 @@ Acceptance:
 - stateful transformers reject unsafe hot switches unless state is externalized or a migration hook is provided
 - old runtime resources drain without leaks
 
+Progress:
+
+- `P7.1` RuntimePlan replacement diff contract added: `runtime_plan` can now classify unchanged pipelines, changed pipelines, listeners that need restart, engines that need drain, transforms/relays that need reload, and unsafe stateful transformer switches before any live IO replacement is attempted
+
 ## Commit Strategy
 
 Each batch should be separately reviewable:

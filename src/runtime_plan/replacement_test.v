@@ -1,0 +1,241 @@
+module runtime_plan
+
+fn test_plan_replacement_keeps_unaffected_pipeline_available() {
+	old := RuntimePlan{
+		listeners: {
+			'web': ListenerPlan{
+				id:       'web'
+				protocol: 'http'
+				host:     '127.0.0.1'
+				port:     8080
+			}
+		}
+		engines:   {
+			'app':   EnginePlan{
+				id:   'app'
+				kind: 'php-worker'
+			}
+			'admin': EnginePlan{
+				id:   'admin'
+				kind: 'vjsx'
+			}
+		}
+		adapters:  {
+			'app':   AdapterPlan{
+				id:     'app'
+				kind:   'http-handler'
+				engine: ResourceRef{
+					domain: .engine
+					id:     'app'
+				}
+			}
+			'admin': AdapterPlan{
+				id:     'admin'
+				kind:   'http-handler'
+				engine: ResourceRef{
+					domain: .engine
+					id:     'admin'
+				}
+			}
+		}
+		pipelines: [
+			PipelinePlan{
+				id:      'site/app'
+				ingress: ResourceRef{
+					domain: .listener
+					id:     'web'
+				}
+				match:   MatchPlan{
+					paths: ['*']
+				}
+				egress:  ResourceRef{
+					domain: .adapter
+					id:     'app'
+				}
+			},
+			PipelinePlan{
+				id:      'site/admin'
+				ingress: ResourceRef{
+					domain: .listener
+					id:     'web'
+				}
+				match:   MatchPlan{
+					paths: ['/admin']
+				}
+				egress:  ResourceRef{
+					domain: .adapter
+					id:     'admin'
+				}
+			},
+		]
+	}
+	new := RuntimePlan{
+		...old
+		engines: {
+			'app':   EnginePlan{
+				id:      'app'
+				kind:    'php-worker'
+				options: PlanOptions{
+					ints: {
+						'queue_capacity': 128
+					}
+				}
+			}
+			'admin': old.engines['admin']
+		}
+	}
+
+	diff := diff_runtime_plan_replacement(old, new)
+
+	assert diff.allowed
+	assert diff.drain_engines == ['app']
+	assert diff.changed_pipelines == ['site/app']
+	assert diff.unchanged_pipelines == ['site/admin']
+}
+
+fn test_plan_replacement_resource_change_affects_referencing_engine_pipeline() {
+	old := RuntimePlan{
+		resources: {
+			'db/app': ResourcePlan{
+				id:       'db/app'
+				category: 'db'
+				kind:     'mysql'
+				options:  PlanOptions{
+					strings: {
+						'database': 'app'
+					}
+				}
+			}
+		}
+		engines:   {
+			'app': EnginePlan{
+				id:        'app'
+				kind:      'php-worker'
+				resources: [ResourceRef{ domain: .resource, id: 'db/app' }]
+			}
+		}
+		adapters:  {
+			'app': AdapterPlan{
+				id:     'app'
+				kind:   'http-handler'
+				engine: ResourceRef{
+					domain: .engine
+					id:     'app'
+				}
+			}
+		}
+		pipelines: [
+			PipelinePlan{
+				id:      'site/app'
+				ingress: ResourceRef{
+					domain: .listener
+					id:     'web'
+				}
+				egress:  ResourceRef{
+					domain: .adapter
+					id:     'app'
+				}
+			},
+		]
+	}
+	new := RuntimePlan{
+		...old
+		resources: {
+			'db/app': ResourcePlan{
+				id:       'db/app'
+				category: 'db'
+				kind:     'mysql'
+				options:  PlanOptions{
+					strings: {
+						'database': 'app_next'
+					}
+				}
+			}
+		}
+	}
+
+	diff := diff_runtime_plan_replacement(old, new)
+
+	assert diff.allowed
+	assert diff.changed_pipelines == ['site/app']
+	assert diff.unchanged_pipelines.len == 0
+}
+
+fn test_plan_replacement_rejects_unsafe_stateful_transform_switch() {
+	old := RuntimePlan{
+		transforms: {
+			'rewrite': TransformPlan{
+				id:      'rewrite'
+				kind:    'vjsx'
+				handler: 'rewrite.old'
+				options: PlanOptions{
+					bools: {
+						'stateful': true
+					}
+				}
+			}
+		}
+	}
+	new := RuntimePlan{
+		...old
+		transforms: {
+			'rewrite': TransformPlan{
+				id:      'rewrite'
+				kind:    'vjsx'
+				handler: 'rewrite.new'
+				options: PlanOptions{
+					bools: {
+						'stateful': true
+					}
+				}
+			}
+		}
+	}
+
+	diff := diff_runtime_plan_replacement(old, new)
+
+	assert !diff.allowed
+	assert diff.reload_transforms == ['rewrite']
+	assert diff.reasons == [
+		'stateful_transform_requires_external_state_or_migration:rewrite',
+	]
+}
+
+fn test_plan_replacement_allows_stateful_transform_with_externalized_state() {
+	old := RuntimePlan{
+		transforms: {
+			'rewrite': TransformPlan{
+				id:      'rewrite'
+				kind:    'vjsx'
+				handler: 'rewrite.old'
+				options: PlanOptions{
+					bools: {
+						'stateful': true
+					}
+				}
+			}
+		}
+	}
+	new := RuntimePlan{
+		...old
+		transforms: {
+			'rewrite': TransformPlan{
+				id:      'rewrite'
+				kind:    'vjsx'
+				handler: 'rewrite.new'
+				options: PlanOptions{
+					bools: {
+						'stateful':           true
+						'externalized_state': true
+					}
+				}
+			}
+		}
+	}
+
+	diff := diff_runtime_plan_replacement(old, new)
+
+	assert diff.allowed
+	assert diff.reload_transforms == ['rewrite']
+	assert diff.reasons.len == 0
+}
