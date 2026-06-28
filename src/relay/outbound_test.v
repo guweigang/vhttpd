@@ -29,13 +29,11 @@ fn test_prepare_outbound_delivery_includes_completion_policy_fields() {
 	mut rt := empty_runtime()
 	rt.register_carrier('edge', 'carrier_edge') or { panic(err) }
 
-	outcome := rt.prepare_outbound_delivery(dispatch.relay_delivery_outcome('relay:edge', {
-		'trace_id':              'trace_1'
-		'request_id':            'req_1'
-		'channel_id':            'chan_1'
-		'completion_mode':       'wait'
-		'completion_timeout_ms': '2500'
-	}))
+	outcome := rt.prepare_outbound_delivery(dispatch.relay_delivery_outcome_with_completion('relay:edge', {
+		'trace_id':   'trace_1'
+		'request_id': 'req_1'
+		'channel_id': 'chan_1'
+	}, 'wait', 2500))
 
 	assert outcome.action == .ready
 	assert outcome.completion.mode == 'wait'

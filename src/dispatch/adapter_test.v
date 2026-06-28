@@ -60,3 +60,17 @@ fn test_relay_delivery_outcome_carries_target_and_metadata() {
 	assert outcome.target == 'relay:feishu'
 	assert outcome.metadata['carrier'] == 'websocket'
 }
+
+fn test_relay_delivery_outcome_with_completion_adds_policy_metadata() {
+	mut metadata := {
+		'trace_id': 'trace-1'
+	}
+	outcome := relay_delivery_outcome_with_completion('relay:edge', metadata, 'wait', 1500)
+	metadata['trace_id'] = 'changed'
+
+	assert outcome.kind == .relay_delivery
+	assert outcome.target == 'relay:edge'
+	assert outcome.metadata['trace_id'] == 'trace-1'
+	assert outcome.metadata['completion_mode'] == 'wait'
+	assert outcome.metadata['completion_timeout_ms'] == '1500'
+}

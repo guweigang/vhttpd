@@ -106,6 +106,17 @@ pub fn relay_delivery_outcome(target string, metadata map[string]string) Deliver
 	}
 }
 
+pub fn relay_delivery_outcome_with_completion(target string, metadata map[string]string, completion_mode string, timeout_ms int) DeliveryOutcome {
+	mut next := metadata.clone()
+	if completion_mode.trim_space() != '' {
+		next['completion_mode'] = completion_mode.trim_space()
+	}
+	if timeout_ms > 0 {
+		next['completion_timeout_ms'] = timeout_ms.str()
+	}
+	return relay_delivery_outcome(target, next)
+}
+
 pub fn delivery_failure_outcome(status int, error string, error_class string) DeliveryOutcome {
 	return DeliveryOutcome{
 		kind:        .failure
