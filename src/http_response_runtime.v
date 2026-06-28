@@ -136,9 +136,11 @@ fn (mut app App) dispatch_relay_delivery(outcome dispatch.DeliveryOutcome) dispa
 	if !relay_delivery_http_completion_supported(outbound.completion.mode) {
 		return relay_delivery_completion_policy_http_outcome(outbound)
 	}
-	tracking := app.relay.track_outbound_delivery(outbound, 64)
-	if tracking.action == .rejected {
-		return relay_delivery_tracking_http_outcome(outbound, tracking)
+	if relay_delivery_http_needs_outbound_tracking(outbound.completion.mode) {
+		tracking := app.relay.track_outbound_delivery(outbound, 64)
+		if tracking.action == .rejected {
+			return relay_delivery_tracking_http_outcome(outbound, tracking)
+		}
 	}
 	mut carrier := ws.new_relay_carrier(app.build_websocket_runtime_context(), outbound.carrier_id)
 	send_result := relay.send_to_carrier(mut carrier, outbound)
@@ -186,6 +188,10 @@ fn relay_delivery_send_http_outcome(mut rt relay.Runtime, outbound relay.Outboun
 
 fn relay_delivery_http_completion_supported(mode string) bool {
 	return mode == 'accepted' || mode == 'wait'
+}
+
+fn relay_delivery_http_needs_outbound_tracking(mode string) bool {
+	return mode == 'wait'
 }
 
 fn relay_delivery_wait_http_outcome(mut rt relay.Runtime, outbound relay.OutboundOutcome, send_result relay.CarrierSendResult) dispatch.DeliveryOutcome {

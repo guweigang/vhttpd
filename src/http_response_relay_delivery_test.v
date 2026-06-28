@@ -101,6 +101,11 @@ fn test_relay_delivery_send_http_outcome_accepts_successful_send() {
 	assert outcome.metadata['carrier_queued'] == 'false'
 }
 
+fn test_relay_delivery_http_tracking_policy_only_tracks_wait() {
+	assert !relay_delivery_http_needs_outbound_tracking('accepted')
+	assert relay_delivery_http_needs_outbound_tracking('wait')
+}
+
 fn test_relay_delivery_send_http_outcome_reports_send_failure() {
 	mut rt := relay.empty_runtime()
 	rt.register_carrier('edge', 'carrier_edge') or { panic(err) }
