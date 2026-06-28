@@ -204,17 +204,7 @@ fn response_frame_metadata(frame WireFrame) map[string]string {
 }
 
 fn response_completion_delivery_metadata(completion ResponseCompletionOutcome) map[string]string {
-	mut metadata := completion.fields.clone()
-	metadata['trace_id'] = completion.trace_id
-	metadata['channel_id'] = completion.channel_id
-	metadata['frame_id'] = completion.frame_id
-	if completion.target_id != '' {
-		metadata['target_id'] = completion.target_id
-	}
-	if completion.error != '' {
-		metadata['error'] = completion.error
-	}
-	return metadata
+	return response_completion_event_fields(completion)
 }
 
 fn relay_response_completion_failure_status(error string) int {

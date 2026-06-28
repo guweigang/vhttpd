@@ -81,3 +81,69 @@ fn test_agent_state_event_fields_include_retry_state() {
 	assert fields['next_attempt_at_ms'] == '1200'
 	assert fields['last_error'] == 'dial_failed'
 }
+
+fn test_response_completion_event_fields_include_delivery_state() {
+	fields := response_completion_event_fields(ResponseCompletionOutcome{
+		action:     .completed
+		trace_id:   'trace_1'
+		channel_id: 'chan_1'
+		target_id:  'frm_1'
+		frame_id:   'frm_1'
+		delivery:   returned_frame_delivery_outcome(WireFrame{
+			version:       wire_version
+			kind:          .data
+			id:            'relay-response:frm_1'
+			trace_id:      'trace_1'
+			channel_id:    'chan_1'
+			exchange_kind: 'response'
+			metadata:      {
+				'status': '203'
+			}
+			body:          'ok'
+		})
+		fields:     {
+			'carrier_relay_event': 'carrier.send'
+		}
+	})
+
+	assert fields['relay_event'] == 'response_completion.completed'
+	assert fields['action'] == 'completed'
+	assert fields['trace_id'] == 'trace_1'
+	assert fields['channel_id'] == 'chan_1'
+	assert fields['frame_id'] == 'frm_1'
+	assert fields['target_id'] == 'frm_1'
+	assert fields['delivery_kind'] == 'response'
+	assert fields['status'] == '203'
+	assert fields['carrier_relay_event'] == 'carrier.send'
+}
+
+fn test_response_completion_event_fields_include_error_state() {
+	fields := response_completion_event_fields(ResponseCompletionOutcome{
+		action:     .failed
+		trace_id:   'trace_1'
+		channel_id: 'chan_1'
+		target_id:  'frm_1'
+		frame_id:   'frm_1'
+		error:      'boom'
+		delivery:   returned_frame_delivery_outcome(WireFrame{
+			version:       wire_version
+			kind:          .error
+			id:            'relay-response:frm_1'
+			trace_id:      'trace_1'
+			channel_id:    'chan_1'
+			exchange_kind: 'error'
+			metadata:      {
+				'status':      '502'
+				'error_class': 'relay_upstream_error'
+			}
+			body:          'boom'
+		})
+	})
+
+	assert fields['relay_event'] == 'response_completion.failed'
+	assert fields['action'] == 'failed'
+	assert fields['delivery_kind'] == 'failure'
+	assert fields['status'] == '502'
+	assert fields['error'] == 'boom'
+	assert fields['error_class'] == 'relay_upstream_error'
+}

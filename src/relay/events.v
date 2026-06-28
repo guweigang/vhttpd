@@ -36,8 +36,11 @@ pub fn session_route_event_fields(outcome SessionRouteOutcome) map[string]string
 }
 
 pub fn registration_event_fields(result RegistrationResult) map[string]string {
-	return event_fields(if result.accepted { 'registration.accepted' } else { 'registration.rejected' },
-		result.trace_id, {
+	return event_fields(if result.accepted {
+		'registration.accepted'
+	} else {
+		'registration.rejected'
+	}, result.trace_id, {
 		'node_id':        result.node_id
 		'relay_id':       result.relay_id
 		'error':          result.error
@@ -50,7 +53,37 @@ pub fn agent_state_event_fields(agent AgentState) map[string]string {
 		'node_id':            agent.node_id
 		'relay_id':           agent.relay_id
 		'attempt':            agent.attempt.str()
-		'next_attempt_at_ms': if agent.next_attempt_at_ms > 0 { agent.next_attempt_at_ms.str() } else { '' }
+		'next_attempt_at_ms': if agent.next_attempt_at_ms > 0 {
+			agent.next_attempt_at_ms.str()
+		} else {
+			''
+		}
 		'last_error':         agent.last_error
 	})
+}
+
+pub fn response_completion_event_fields(completion ResponseCompletionOutcome) map[string]string {
+	mut fields := completion.fields.clone()
+	fields['relay_event'] = 'response_completion.${completion.action}'
+	fields['action'] = completion.action.str()
+	fields['trace_id'] = completion.trace_id
+	fields['channel_id'] = completion.channel_id
+	fields['frame_id'] = completion.frame_id
+	if completion.target_id != '' {
+		fields['target_id'] = completion.target_id
+	}
+	if completion.delivery.kind.str() != 'response' || completion.delivery.status > 0
+		|| completion.delivery.error != '' {
+		fields['delivery_kind'] = completion.delivery.kind.str()
+	}
+	if completion.delivery.status > 0 {
+		fields['status'] = completion.delivery.status.str()
+	}
+	if completion.error != '' {
+		fields['error'] = completion.error
+	}
+	if completion.delivery.error_class != '' {
+		fields['error_class'] = completion.delivery.error_class
+	}
+	return fields
 }

@@ -1197,6 +1197,7 @@ Progress as of 2026-06-27:
 - `P6.66` Feishu relay completion policy adoption added: Feishu bridge relay-delivery projections now use the shared dispatch completion helper and declare the existing async `accepted` policy explicitly, keeping provider behavior aligned with generic relay completion semantics
 - `P6.67` relay post-send completion reducer added: relay runtime can now reduce a carrier send result according to completion policy, leaving `accepted`/`stream` as sent and resolving `wait` from already-returned frames when present, without introducing blocking IO in the core
 - `P6.68` HTTP relay send completion reducer adopted: HTTP relay send-result rendering now calls the relay runtime post-send reducer, preserving current async behavior while making completed wait responses render through the same delivery mapping when the policy is enabled by a bridge
+- `P6.69` relay response completion event fields added: response completion outcomes now have a canonical event-field projection with action, delivery kind/status, target, carrier context, and error class, and delivery metadata reuses the same field mapping for consistent tracing
 
 Batches:
 
