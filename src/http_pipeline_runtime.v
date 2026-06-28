@@ -93,6 +93,22 @@ fn (rt PipelineRuntime) try_handle_matched_http(mut app App, mut ctx Context, ru
 		return handle_upload_route(mut app, mut ctx, rule, req.method, req.normalized_target,
 			req.req_id, req.trace_id, req.start_ms, req.query, req.body_on_head, req.remote_addr)
 	}
+	if rule.executor == 'relay-delivery' {
+		adapter_id := rule.egress_ref.trim_string_left('adapter:')
+		adapter_plan := app.plan.adapters[adapter_id] or {
+			return HttpResponseRuntime.dispatch_error(mut app, mut ctx, http_ingress_request_for_rule(req.method,
+				req.path, req.path, req.body_on_head, req.remote_addr, req.req_id, req.trace_id,
+				req.start_ms, rule), 'relay_delivery_adapter_missing:${adapter_id}')
+		}
+		mut terminal_adapter := dispatch.terminal_adapter_from_plan(adapter_plan) or {
+			return HttpResponseRuntime.dispatch_error(mut app, mut ctx, http_ingress_request_for_rule(req.method,
+				req.path, req.path, req.body_on_head, req.remote_addr, req.req_id, req.trace_id,
+				req.start_ms, rule), 'relay_delivery_adapter_invalid:${adapter_id}')
+		}
+		return render_http_terminal_adapter(mut app, mut ctx, req.method, req.path,
+			req.normalized_target, req.query, req.body_on_head, req.remote_addr, req.req_id,
+			req.trace_id, req.start_ms, rule, mut terminal_adapter)
+	}
 	if rule.executor == 'none' {
 		log.info('[http] ⇠ pipeline none (block) trace_id=${req.trace_id} pipeline=${rule.pipeline_id}')
 		mut terminal_adapter := dispatch.EgressAdapter(dispatch.fixed_response_adapter('route/none',

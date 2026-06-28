@@ -107,6 +107,9 @@ fn runtime_route_from_pipeline(plan runtime_plan.RuntimePlan, pipeline runtime_p
 			route.location = adapter.options.strings['location']
 			route.body = adapter.options.strings['body']
 		}
+		'relay-delivery' {
+			route.executor = 'relay-delivery'
+		}
 		'mcp', 'openai' {
 			route.executor = adapter.kind
 		}

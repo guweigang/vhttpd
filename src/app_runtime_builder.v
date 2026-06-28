@@ -4,6 +4,7 @@ import cachex
 import dbx
 import config
 import codex
+import log
 import provider
 import json
 import relay
@@ -26,6 +27,7 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 		'default'
 	}
 	runtime_routes := runtime_routes_from_plan(runtime_plan_for_app, plan_listener_id)
+	log.debug('[vhttpd] runtime routes listener=${plan_listener_id} count=${runtime_routes.len} routes=${runtime_routes.map('${it.pipeline_id}:${it.executor}:${it.match_path}').join('|')}')
 	db_settings := db_runtime_settings_from_plan(runtime_plan_for_app, plan_listener_id)
 	cache_enabled, cache_socket := cache_runtime_settings_from_plan(runtime_plan_for_app,
 		plan_listener_id)

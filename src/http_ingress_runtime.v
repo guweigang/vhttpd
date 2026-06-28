@@ -30,11 +30,11 @@ fn HttpRouteRequest.from_context(ctx Context, method string, path string) HttpRo
 
 fn HttpIngressRuntime.route(mut app App, mut ctx Context, method string, path string) veb.Result {
 	req := HttpRouteRequest.from_context(ctx, method, path)
+	if is_websocket_upgrade(ctx.req) {
+		return proxy_worker_websocket(mut app, mut ctx, req.method, req.target)
+	}
 	if result := app.protocols.try_route_http(mut app, mut ctx, req.method, req.target) {
 		return result
-	}
-	if !app.engines.has_http_logic_executor() {
-		return HttpIngressRuntime.no_logic_executor_response(mut app, mut ctx, req.method, req.target)
 	}
 	return HttpIngressRuntime.handle(mut app, mut ctx, req.method, req.target, '')
 }
@@ -113,6 +113,9 @@ fn HttpIngressRuntime.handle(mut app App, mut ctx Context, method string, path s
 	if cached_hit := app.pipelines.http_response_cache_hit(mut app.transport.cache, dispatch_plan,
 		method, ctx.req) {
 		return HttpResponseRuntime.cache_hit(mut app, mut ctx, ingress_req, cached_hit)
+	}
+	if !app.engines.has_http_logic_executor() {
+		return HttpIngressRuntime.no_logic_executor_response(mut app, mut ctx, method, path)
 	}
 
 	// 3. 动态切换活动的后端执行器

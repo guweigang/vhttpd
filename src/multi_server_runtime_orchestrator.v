@@ -20,7 +20,32 @@ fn build_multi_server_apps(runtime_cfg server_lifecycle.MultiServerRuntimeConfig
 				listener.runtime_cfg.app_build_cfg)
 		}
 	}
+	share_websocket_listener_apps(mut bindings)
 	return bindings
+}
+
+fn share_websocket_listener_apps(mut bindings []MultiServerAppBinding) {
+	mut shared_app := &App(unsafe { nil })
+	for binding in bindings {
+		listener_plan := binding.listener.runtime_cfg.plan.listeners[binding.listener.runtime_cfg.plan_listener_id] or {
+			continue
+		}
+		if listener_plan.protocol.trim_space().to_lower() != 'websocket' {
+			shared_app = binding.app
+			break
+		}
+	}
+	if isnil(shared_app) {
+		return
+	}
+	for i in 0 .. bindings.len {
+		listener_plan := bindings[i].listener.runtime_cfg.plan.listeners[bindings[i].listener.runtime_cfg.plan_listener_id] or {
+			continue
+		}
+		if listener_plan.protocol.trim_space().to_lower() == 'websocket' {
+			bindings[i].app = shared_app
+		}
+	}
 }
 
 fn run_multi_server(args []string, cfg config.VhttpdConfig) {

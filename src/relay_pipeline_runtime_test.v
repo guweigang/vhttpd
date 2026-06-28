@@ -147,6 +147,100 @@ fn test_public_http_relay_delivery_reaches_agent_pipeline_and_returns_response()
 	assert public_relay.snapshot().channel_count == 0
 }
 
+fn test_runtime_routes_from_plan_exposes_relay_delivery_http_pipeline() {
+	plan := runtime_plan.RuntimePlan{
+		adapters:  {
+			'relay-edge': runtime_plan.AdapterPlan{
+				id:      'relay-edge'
+				kind:    'relay-delivery'
+				options: runtime_plan.PlanOptions{
+					strings: {
+						'target':          'relay:edge'
+						'completion_mode': 'wait'
+					}
+					ints:    {
+						'completion_timeout_ms': 1000
+					}
+				}
+			}
+		}
+		pipelines: [
+			runtime_plan.PipelinePlan{
+				id:      'public/relay'
+				ingress: runtime_plan.ResourceRef{
+					domain: .listener
+					id:     'web'
+				}
+				match:   runtime_plan.MatchPlan{
+					paths: ['/relay']
+				}
+				egress:  runtime_plan.ResourceRef{
+					domain: .adapter
+					id:     'relay-edge'
+				}
+			},
+		]
+	}
+
+	routes := runtime_routes_from_plan(plan, 'web')
+	assert routes.len == 1
+	assert routes[0].pipeline_id == 'public/relay'
+	assert routes[0].egress_ref == 'adapter:relay-edge'
+	assert routes[0].executor == 'relay-delivery'
+	assert routes[0].match_path == ['/relay']
+}
+
+fn test_pipeline_runtime_matches_relay_delivery_http_route() {
+	plan := runtime_plan.RuntimePlan{
+		adapters:  {
+			'relay-edge': runtime_plan.AdapterPlan{
+				id:      'relay-edge'
+				kind:    'relay-delivery'
+				options: runtime_plan.PlanOptions{
+					strings: {
+						'target':          'relay:edge'
+						'completion_mode': 'wait'
+					}
+				}
+			}
+		}
+		pipelines: [
+			runtime_plan.PipelinePlan{
+				id:      'public/relay'
+				ingress: runtime_plan.ResourceRef{
+					domain: .listener
+					id:     'web'
+				}
+				match:   runtime_plan.MatchPlan{
+					paths: ['/relay']
+				}
+				egress:  runtime_plan.ResourceRef{
+					domain: .adapter
+					id:     'relay-edge'
+				}
+			},
+		]
+	}
+	routes := runtime_routes_from_plan(plan, 'web')
+	runtime := PipelineRuntime.new(plan, 'web', routes, '', '', map[string]string{},
+		map[string]&worker.WorkerState{})
+	matched := runtime.match_http_request(HttpPipelineMatchRequest{
+		method:            'GET'
+		normalized_target: '/relay'
+		query:             map[string]string{}
+		headers:           map[string]string{}
+		body:              ''
+		remote_addr:       '127.0.0.1'
+		req_id:            'req-relay'
+		trace_id:          'trace-relay'
+		start_ms:          123
+	}) or { panic('relay route did not match') }
+	plan_for_request := runtime.http_dispatch_plan(matched, '/relay')
+	assert matched.pipeline_id == 'public/relay'
+	assert plan_for_request.executor == 'relay-delivery'
+	assert plan_for_request.pipeline_id == 'public/relay'
+}
+
 fn test_dispatch_and_send_relay_ingress_frame_reports_send_result() {
 	mut app := App{
 		plan: runtime_plan.RuntimePlan{

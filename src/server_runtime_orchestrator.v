@@ -35,17 +35,17 @@ fn preflight_server_bind(runtime_cfg server_lifecycle.ServerRuntimeConfig) ! {
 		}
 	}
 	mut addrs := []string{}
-	if host == '' {
-		addrs << '0.0.0.0:${port}'
-	} else {
-		addrs << '${host}:${port}'
-		if host != '0.0.0.0' && host != '::' {
-			addrs << '0.0.0.0:${port}'
-		}
-	}
+	addrs = preflight_server_bind_addrs(host, port)
 	for addr in addrs {
 		preflight_bind_addr(addr)!
 	}
+}
+
+fn preflight_server_bind_addrs(host string, port int) []string {
+	if host.trim_space() == '' {
+		return ['0.0.0.0:${port}']
+	}
+	return ['${host.trim_space()}:${port}']
 }
 
 fn start_server_runtime(mut app App, runtime_cfg server_lifecycle.ServerRuntimeConfig) {
