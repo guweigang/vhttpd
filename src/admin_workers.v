@@ -123,3 +123,34 @@ pub fn (mut app App) admin_restart_all_workers(mut ctx Context) veb.Result {
 		'restarted':      '${restarted}'
 	})
 }
+
+@['/admin/workers/drain'; post]
+pub fn (mut app App) admin_drain_workers(mut ctx Context) veb.Result {
+	start_ms := time.now().unix_milli()
+	path := if ctx.req.url == '' { '/admin/workers/drain' } else { ctx.req.url }
+	req_id := resolve_request_id(ctx, path)
+	trace_id := resolve_trace_id(ctx, path)
+	if !app.control_plane.admin.on_data_plane {
+		return admin_data_plane_text_response(mut app, mut ctx, 'POST', path, req_id, trace_id,
+			start_ms, 404, 'Not Found', {
+			'admin_endpoint': 'workers.drain'
+		})
+	}
+	engine := (ctx.query['engine'] or { ctx.query['kind'] or { '' } }).trim_space()
+	status := app.drain_engine(engine) or {
+		return admin_data_plane_json_response(mut app, mut ctx, 'POST', path, req_id, trace_id,
+			start_ms, 404, json.encode(admin.WorkerAdminErrorResponse{
+			error: err.msg()
+		}), {
+			'admin_endpoint': 'workers.drain'
+			'error':          err.msg()
+		})
+	}
+	return admin_data_plane_json_response(mut app, mut ctx, 'POST', path, req_id, trace_id,
+		start_ms, 200, json.encode(status), {
+		'admin_endpoint':    'workers.drain'
+		'engine':            status.engine
+		'draining_count':    '${status.draining_count}'
+		'inflight_requests': '${status.inflight_requests}'
+	})
+}

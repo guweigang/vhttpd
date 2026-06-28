@@ -2,6 +2,8 @@ module main
 
 import worker
 import executor
+import admin
+import json
 import upstream.transport
 
 fn test_worker_backend_runtime_defaults_to_php_backend() {
@@ -77,4 +79,85 @@ fn test_engine_runtime_tracks_request_start_across_pools() {
 	runtime.request_finished(EngineLifecyclePort{}, '/tmp/cgi.sock')
 	assert cgi.worker_backend.managed_workers[0].inflight_requests == 0
 	assert cgi.worker_backend.managed_workers[0].served_requests == 1
+}
+
+fn test_engine_runtime_marks_additional_engine_workers_draining() {
+	mut runtime := EngineRuntime{
+		additional: {
+			'php-cgi': &worker.WorkerState{
+				worker_backend: worker.WorkerBackendRuntime{
+					managed_workers: [
+						transport.ManagedWorker{
+							socket_path:       '/tmp/cgi-a.sock'
+							inflight_requests: 2
+						},
+						transport.ManagedWorker{
+							socket_path: '/tmp/cgi-b.sock'
+						},
+					]
+				}
+			}
+		}
+	}
+
+	status := runtime.drain_engine('php-cgi') or { panic(err) }
+	cgi := runtime.additional['php-cgi'] or { panic('missing php-cgi engine') }
+	second := runtime.drain_engine('php-cgi') or { panic(err) }
+
+	assert status.engine == 'php-cgi'
+	assert status.worker_count == 2
+	assert status.draining_count == 2
+	assert status.inflight_requests == 2
+	assert status.ready_count == 1
+	assert status.changed
+	assert cgi.worker_backend.managed_workers[0].draining
+	assert cgi.worker_backend.managed_workers[1].draining
+	assert !second.changed
+	assert second.draining_count == 2
+}
+
+fn test_engine_runtime_drain_unknown_engine_reports_error() {
+	mut runtime := EngineRuntime{}
+
+	if _ := runtime.drain_engine('missing') {
+		assert false
+	} else {
+		assert err.msg() == 'unknown_executor_kind:missing'
+	}
+}
+
+fn test_internal_admin_worker_drain_marks_engine_workers() {
+	mut app := App{
+		engines: EngineRuntime{
+			additional: {
+				'php-cgi': &worker.WorkerState{
+					worker_backend: worker.WorkerBackendRuntime{
+						managed_workers: [
+							transport.ManagedWorker{
+								socket_path:       '/tmp/cgi-a.sock'
+								inflight_requests: 1
+							},
+						]
+					}
+				}
+			}
+		}
+	}
+
+	resp := app.internal_admin_dispatch(admin.InternalAdminRequest{
+		mode:   'vhttpd_admin'
+		method: 'POST'
+		path:   '/admin/workers/drain'
+		query:  {
+			'engine': 'php-cgi'
+		}
+	})
+	status := json.decode(EngineDrainStatus, resp.body) or { panic(err) }
+	cgi := app.engines.additional['php-cgi'] or { panic('missing php-cgi engine') }
+
+	assert resp.status == 200
+	assert status.engine == 'php-cgi'
+	assert status.draining_count == 1
+	assert status.inflight_requests == 1
+	assert cgi.worker_backend.managed_workers[0].draining
 }

@@ -472,6 +472,30 @@ pub fn (mut app AdminApp) admin_restart_all_workers(mut ctx Context) veb.Result 
 	})
 }
 
+@['/admin/workers/drain'; post]
+pub fn (mut app AdminApp) admin_drain_workers(mut ctx Context) veb.Result {
+	req := admin_plane_request(ctx, '/admin/workers/drain')
+	if !app.admin_authorized(ctx) {
+		return admin_plane_forbidden(mut app, mut ctx, 'POST', req)
+	}
+	engine := (ctx.query['engine'] or { ctx.query['kind'] or { '' } }).trim_space()
+	status := app.shared.drain_engine(engine) or {
+		return admin_plane_json_response(mut app, mut ctx, 'POST', req, 404, json.encode(admin.AdminErrorResponse{
+			error: err.msg()
+		}), {
+			'admin_endpoint': 'workers_drain'
+			'error':          err.msg()
+		})
+	}
+	return admin_plane_json_response(mut app, mut ctx, 'POST', req, 200, json.encode(status), {
+		'admin_endpoint':    'workers_drain'
+		'admin_action':      'worker_drain'
+		'engine':            status.engine
+		'draining_count':    '${status.draining_count}'
+		'inflight_requests': '${status.inflight_requests}'
+	})
+}
+
 fn run_admin_server(mut shared_app App, host string, port int, token string) {
 	mut admin_app := &AdminApp{
 		admin_host:  host

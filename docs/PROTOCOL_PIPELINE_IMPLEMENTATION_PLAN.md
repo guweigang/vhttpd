@@ -1251,6 +1251,7 @@ Progress:
 - `P7.3` lightweight RuntimePlan replacement apply added: admin and internal admin surfaces can now apply replacements that do not require listener restart, engine drain, relay reload, or unsafe stateful transform migration, atomically swapping the plan JSON, HTTP/relay pipeline runtime, transformer registry, and protocol state while rejecting heavier replacements with a structured 409 result
 - `P7.4` RuntimePlan replacement observability added: preview/apply attempts now update a runtime state snapshot with totals and last-attempt details, exposed through data-plane admin, dedicated admin, and internal admin replacement state endpoints
 - `P7.5` RuntimePlan replacement execution plan added: replacement diffs now project into explicit strategies and ordered action descriptors, so preview/apply responses distinguish lightweight swaps from listener restart, engine drain, relay reload, and unsafe blocked plans through one reusable contract
+- `P7.6` worker engine drain control added: engine runtimes can now mark primary or named worker pools as draining and report worker/inflight/ready counts, with data-plane admin, dedicated admin, and internal admin endpoints exposing the control surface before replacement apply starts orchestrating engine swaps
 
 ## Commit Strategy
 

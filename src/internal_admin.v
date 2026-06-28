@@ -33,6 +33,13 @@ fn (mut app App) internal_admin_dispatch(req admin.InternalAdminRequest) admin.I
 		}
 		return admin.InternalAdminResponse.json(json.encode(result))
 	}
+	if method == 'POST' && path == '/workers/drain' {
+		engine := (req.query['engine'] or { req.query['kind'] or { '' } }).trim_space()
+		status := app.drain_engine(engine) or {
+			return admin.InternalAdminResponse.error(404, err.msg())
+		}
+		return admin.InternalAdminResponse.json(json.encode(status))
+	}
 	if method != 'GET' {
 		return admin.InternalAdminResponse.error(405, 'method_not_allowed')
 	}
