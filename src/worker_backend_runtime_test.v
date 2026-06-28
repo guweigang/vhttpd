@@ -116,6 +116,34 @@ fn test_engine_runtime_marks_additional_engine_workers_draining() {
 	assert second.draining_count == 2
 }
 
+fn test_engine_runtime_reads_drain_status_without_mutating_workers() {
+	mut runtime := EngineRuntime{
+		additional: {
+			'php-cgi': &worker.WorkerState{
+				worker_backend: worker.WorkerBackendRuntime{
+					managed_workers: [
+						transport.ManagedWorker{
+							socket_path:       '/tmp/cgi-a.sock'
+							inflight_requests: 1
+						},
+					]
+				}
+			}
+		}
+	}
+
+	status := runtime.engine_drain_status('php-cgi') or { panic(err) }
+	cgi := runtime.additional['php-cgi'] or { panic('missing php-cgi engine') }
+
+	assert status.engine == 'php-cgi'
+	assert status.worker_count == 1
+	assert status.draining_count == 0
+	assert status.inflight_requests == 1
+	assert status.ready_count == 0
+	assert !status.changed
+	assert !cgi.worker_backend.managed_workers[0].draining
+}
+
 fn test_engine_runtime_drain_unknown_engine_reports_error() {
 	mut runtime := EngineRuntime{}
 

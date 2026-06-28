@@ -380,6 +380,84 @@ egress = "adapter:app"
 	assert state.last_apply.drain_statuses[0].inflight_requests == 1
 }
 
+fn test_runtime_plan_replacement_snapshot_refreshes_pending_drain_ready() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_plan_replacement_refresh_drain_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	current_file := os.join_path(temp_dir, 'current.toml')
+	config_file := os.join_path(temp_dir, 'next.toml')
+	current_text := '
+version = 2
+
+[listeners.web]
+protocol = "http"
+transport = "tcp"
+host = "127.0.0.1"
+port = 18080
+
+[engines.app]
+kind = "php-worker"
+entry = "/tmp/app.php"
+
+[adapters.app]
+kind = "http-handler"
+engine = "engine:app"
+
+[[pipelines]]
+id = "site/app"
+ingress = "listener:web"
+match.paths = ["*"]
+egress = "adapter:app"
+'
+	os.write_file(current_file, current_text) or { panic(err) }
+	os.write_file(config_file, current_text.replace('entry = "/tmp/app.php"',
+		'entry = "/tmp/app-next.php"')) or { panic(err) }
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	current_plan := config.load_runtime_plan_file(current_file) or { panic(err) }
+	mut app := App{
+		plan:      current_plan
+		protocols: ProtocolRuntimeHub{
+			runtime_plan_json: json.encode(current_plan)
+		}
+		engines:   EngineRuntime{
+			primary: worker.WorkerState{
+				worker_backend: worker.WorkerBackendRuntime{
+					managed_workers: [
+						transport.ManagedWorker{
+							socket_path:       '/tmp/app-refresh.sock'
+							inflight_requests: 1
+						},
+					]
+				}
+				logic_executor: executor.SocketWorkerExecutor{}
+			}
+		}
+		pipelines: PipelineRuntime.new(current_plan, 'web', runtime_routes_from_plan(current_plan,
+			'web'), '', '', map[string]string{}, map[string]&worker.WorkerState{})
+	}
+	resp := app.internal_admin_dispatch(admin.InternalAdminRequest{
+		mode:   'vhttpd_admin'
+		method: 'POST'
+		path:   '/admin/runtime/plan/replacement/apply'
+		query:  {
+			'config': config_file
+		}
+	})
+	assert resp.status == 202
+	result := json.decode(RuntimePlanReplacementApplyResult, resp.body) or { panic(err) }
+	assert result.status == 'draining'
+
+	app.engines.request_finished(EngineLifecyclePort{}, '/tmp/app-refresh.sock')
+	state := app.runtime_plan_replacement_snapshot()
+
+	assert state.pending.active
+	assert state.pending.ready
+	assert state.pending.drain_statuses.len == 1
+	assert state.pending.drain_statuses[0].ready_count == 1
+	assert state.pending.drain_statuses[0].inflight_requests == 0
+}
+
 fn test_internal_admin_runtime_plan_replacement_reports_drain_ready() {
 	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_plan_replacement_drain_ready_test')
 	os.mkdir_all(temp_dir) or { panic(err) }

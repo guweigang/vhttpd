@@ -250,6 +250,7 @@ fn (mut app App) record_runtime_plan_replacement_apply(result RuntimePlanReplace
 }
 
 fn (mut app App) runtime_plan_replacement_snapshot() RuntimePlanReplacementRuntimeSnapshot {
+	app.refresh_pending_runtime_plan_replacement() or {}
 	app.mu.@lock()
 	defer {
 		app.mu.unlock()
@@ -264,6 +265,30 @@ fn (mut app App) runtime_plan_replacement_snapshot() RuntimePlanReplacementRunti
 		last_preview:   app.replacement.last_preview
 		last_apply:     app.replacement.last_apply
 	}
+}
+
+fn (mut app App) refresh_pending_runtime_plan_replacement() !RuntimePlanReplacementPendingSnapshot {
+	app.mu.@lock()
+	pending := app.replacement.pending
+	app.mu.unlock()
+	if !pending.active {
+		return pending
+	}
+	mut drain_statuses := []EngineDrainStatus{}
+	for engine_id in pending.drain_engines {
+		pool := app.resolve_engine_worker_pool(engine_id)
+		drain_statuses << app.engine_drain_status(pool)!
+	}
+	ready := drain_statuses_ready(drain_statuses)
+	updated := RuntimePlanReplacementPendingSnapshot{
+		...pending
+		ready:          ready
+		drain_statuses: drain_statuses
+	}
+	app.mu.@lock()
+	app.replacement.pending = updated
+	app.mu.unlock()
+	return updated
 }
 
 fn runtime_plan_replacement_attempt_from_preview(kind string, status string, applied bool, error string, drain_statuses []EngineDrainStatus, preview RuntimePlanReplacementPreview) RuntimePlanReplacementAttemptSnapshot {
