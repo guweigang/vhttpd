@@ -194,3 +194,90 @@ fn test_response_completion_missing_reports_target() {
 	assert completion.error == 'relay_returned_frame_not_found:chan_1:frm_1'
 	assert completion.fields['relay_event'] == 'response_completion.missing'
 }
+
+fn test_response_completion_delivery_outcome_preserves_completed_response() {
+	completion := ResponseCompletionOutcome{
+		action:     .completed
+		trace_id:   'trace_1'
+		channel_id: 'chan_1'
+		target_id:  'frm_1'
+		frame_id:   'frm_1'
+		delivery:   dispatch.response_outcome(201, {
+			'content-type': 'text/plain'
+		}, 'created')
+		fields:     {
+			'relay_event': 'response_completion.completed'
+		}
+	}
+
+	outcome := response_completion_delivery_outcome(completion)
+
+	assert outcome.kind == dispatch.DeliveryOutcomeKind.response
+	assert outcome.status == 201
+	assert outcome.body == 'created'
+	assert outcome.headers['content-type'] == 'text/plain'
+	assert outcome.metadata['relay_event'] == 'response_completion.completed'
+	assert outcome.metadata['target_id'] == 'frm_1'
+}
+
+fn test_response_completion_delivery_outcome_maps_sent_to_accepted() {
+	completion := ResponseCompletionOutcome{
+		action:     .sent
+		trace_id:   'trace_1'
+		channel_id: 'chan_1'
+		target_id:  'frm_1'
+		frame_id:   'frm_1'
+		fields:     {
+			'relay_event': 'response_completion.sent'
+		}
+	}
+
+	outcome := response_completion_delivery_outcome(completion)
+
+	assert outcome.kind == dispatch.DeliveryOutcomeKind.accepted_event
+	assert outcome.status == 202
+	assert outcome.metadata['relay_event'] == 'response_completion.sent'
+	assert outcome.metadata['trace_id'] == 'trace_1'
+}
+
+fn test_response_completion_delivery_outcome_maps_missing_to_timeout_failure() {
+	completion := ResponseCompletionOutcome{
+		action:     .missing
+		trace_id:   'trace_1'
+		channel_id: 'chan_1'
+		target_id:  'frm_1'
+		frame_id:   'frm_1'
+		error:      'relay_returned_frame_not_found:chan_1:frm_1'
+		fields:     {
+			'relay_event': 'response_completion.missing'
+		}
+	}
+
+	outcome := response_completion_delivery_outcome(completion)
+
+	assert outcome.kind == dispatch.DeliveryOutcomeKind.failure
+	assert outcome.status == 504
+	assert outcome.error_class == 'relay_response_missing'
+	assert outcome.metadata['error'] == 'relay_returned_frame_not_found:chan_1:frm_1'
+}
+
+fn test_response_completion_delivery_outcome_maps_send_failure() {
+	completion := ResponseCompletionOutcome{
+		action:     .failed
+		trace_id:   'trace_1'
+		channel_id: 'chan_1'
+		target_id:  'frm_1'
+		frame_id:   'frm_1'
+		error:      'relay_carrier_not_connected:carrier_1'
+		fields:     {
+			'relay_event': 'response_completion.failed'
+		}
+	}
+
+	outcome := response_completion_delivery_outcome(completion)
+
+	assert outcome.kind == dispatch.DeliveryOutcomeKind.failure
+	assert outcome.status == 503
+	assert outcome.error == 'relay_carrier_not_connected:carrier_1'
+	assert outcome.error_class == 'relay_response_completion_failed'
+}
