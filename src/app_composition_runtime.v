@@ -5,6 +5,7 @@ import config
 import json
 import os
 import relay
+import server_lifecycle
 import sync
 import time
 import executor
@@ -14,6 +15,9 @@ struct DataPlaneRuntime {
 mut:
 	plan runtime_plan.RuntimePlan
 	mu   sync.Mutex
+
+	legacy_config config.VhttpdConfig
+	app_build_cfg server_lifecycle.AppRuntimeBuildConfig
 
 	transport    TransportRuntimeHub
 	websocket    WebSocketRuntime

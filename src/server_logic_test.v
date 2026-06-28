@@ -2188,6 +2188,8 @@ fn test_build_app_runtime_projects_executor_plan_into_app_state() {
 		workdir:                       '/tmp/workdir'
 	})
 	assert app.plan.source.compatibility
+	assert app.legacy_config.mcp.max_sessions == 55
+	assert app.app_build_cfg.worker_queue_capacity == 12
 	assert app.protocols.runtime_config_json.contains('"db"')
 	assert app.protocols.runtime_plan_json.contains('"version":2')
 	assert app.protocols.runtime_plan_json.contains('"pipelines"')

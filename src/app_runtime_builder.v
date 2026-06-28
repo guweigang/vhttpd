@@ -94,6 +94,8 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 
 	return &App{
 		plan:          runtime_plan_for_app
+		legacy_config: cfg
+		app_build_cfg: build_cfg
 		control_plane: ControlPlaneRuntime{
 			event_log:  build_cfg.event_log
 			http_stats: HttpStats{}
