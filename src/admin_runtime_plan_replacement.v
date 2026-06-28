@@ -1,6 +1,7 @@
 module main
 
 import config
+import executor
 import json
 import runtime_plan
 import time
@@ -94,6 +95,13 @@ struct RuntimePlanReplacementFinalizeResult {
 	strategy    string
 	error       string
 	pending     RuntimePlanReplacementPendingSnapshot
+}
+
+struct RuntimePlanReplacementPreparedRuntime {
+	plan     runtime_plan.RuntimePlan
+	engines  EngineRuntime
+	routes   []RuntimeRouteRule
+	listener string
 }
 
 fn (mut app App) preview_runtime_plan_replacement(config_path string) !RuntimePlanReplacementPreview {
@@ -227,6 +235,25 @@ fn (mut app App) finalize_runtime_plan_replacement() RuntimePlanReplacementFinal
 		strategy:    pending.strategy
 		error:       'runtime_plan_replacement_requires_engine_runtime_rebuild'
 		pending:     pending
+	}
+}
+
+fn (mut app App) prepare_runtime_plan_replacement_runtime(pending RuntimePlanReplacementPendingSnapshot) !RuntimePlanReplacementPreparedRuntime {
+	if !pending.active {
+		return error('runtime_plan_replacement_no_pending')
+	}
+	next_plan := config.load_runtime_plan_file(pending.config_path)!
+	listener_id := app.pipelines.http.listener_id
+	next_routes := runtime_routes_from_plan(next_plan, listener_id)
+	next_executor_plan := executor.LogicExecutorRuntimePlan.resolve_from_plan([]string{},
+		app.legacy_config, next_plan, listener_id)!
+	next_engines := build_engine_runtime_from_plan(app.legacy_config, next_executor_plan,
+		next_plan, listener_id, next_routes, app.app_build_cfg)
+	return RuntimePlanReplacementPreparedRuntime{
+		plan:     next_plan
+		engines:  next_engines
+		routes:   next_routes
+		listener: listener_id
 	}
 }
 

@@ -6,6 +6,7 @@ import executor
 import json
 import os
 import relay
+import server_lifecycle
 import worker
 import upstream.transport
 
@@ -554,6 +555,72 @@ fn test_internal_admin_runtime_plan_replacement_finalize_blocks_engine_rebuild_u
 	assert result.error == 'runtime_plan_replacement_requires_engine_runtime_rebuild'
 	assert result.pending.ready
 	assert result.pending.drain_statuses[0].ready_count == 1
+}
+
+fn test_runtime_plan_replacement_prepares_next_engine_runtime() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_plan_replacement_prepare_engine_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	config_file := os.join_path(temp_dir, 'next.toml')
+	next_entry := os.join_path(temp_dir, 'app-next.php')
+	os.write_file(next_entry, '<?php echo "next";') or { panic(err) }
+	os.write_file(config_file, '
+version = 2
+
+[listeners.web]
+protocol = "http"
+transport = "tcp"
+host = "127.0.0.1"
+port = 18080
+
+[engines.app]
+kind = "php-worker"
+entry = "${next_entry}"
+
+[adapters.app]
+kind = "http-handler"
+engine = "engine:app"
+
+[[pipelines]]
+id = "site/app"
+ingress = "listener:web"
+match.paths = ["*"]
+egress = "adapter:app"
+') or {
+		panic(err)
+	}
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	mut cfg := config.default_vhttpd_config()
+	mut app := App{
+		legacy_config: cfg
+		app_build_cfg: server_lifecycle.AppRuntimeBuildConfig{
+			plan_listener_id:        'web'
+			worker_queue_capacity:   8
+			worker_queue_timeout_ms: 25
+			workdir:                 temp_dir
+		}
+		pipelines:     PipelineRuntime{
+			http: HttpRoutingRuntime{
+				listener_id: 'web'
+			}
+		}
+	}
+	pending := RuntimePlanReplacementPendingSnapshot{
+		active:      true
+		config_path: config_file
+		ready:       true
+		strategy:    'engine_drain_required'
+	}
+
+	prepared := app.prepare_runtime_plan_replacement_runtime(pending) or { panic(err) }
+
+	assert prepared.listener == 'web'
+	assert prepared.plan.engines['app'].options.strings['entry'] == next_entry
+	assert prepared.engines.primary.logic_executor.kind() == 'php'
+	assert prepared.engines.primary.worker_backend.cmd.contains(next_entry)
+	assert prepared.engines.primary.worker_backend.queue_capacity == 8
+	assert prepared.routes.len == 1
 }
 
 fn test_internal_admin_runtime_plan_replacement_reports_drain_ready() {

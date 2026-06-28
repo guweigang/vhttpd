@@ -37,60 +37,8 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 	plan_provider_settings := provider_runtime_settings_from_plan(runtime_plan_for_app,
 		provider_settings)
 
-	// 2. 遍历 routes 中的所有附加 executor，如果有专属的进程池配置则实例化其 WorkerState
-	mut add_workers := map[string]&worker.WorkerState{}
-	for route in runtime_routes {
-		mut executor_names := []string{}
-		if route.executor != '' {
-			executor_names << route.executor
-		}
-		if route.on_completed.trim_space().starts_with('vjsx:') {
-			executor_names << 'vjsx'
-		}
-		for executor_name in executor_names {
-			if executor_name == '' || executor_name == executor_plan.executor.kind()
-				|| executor_name in add_workers {
-				continue
-			}
-			if engine := runtime_plan_for_app.listener_named_engine(plan_listener_id, executor_name) {
-				sub_plan := executor.LogicExecutorRuntimePlan.resolve_additional_engine_from_plan(cfg,
-					engine, executor_name) or { continue }
-				sub_queue_capacity := if engine.options.ints['queue_capacity'] > 0 {
-					engine.options.ints['queue_capacity']
-				} else {
-					build_cfg.worker_queue_capacity
-				}
-				sub_queue_timeout_ms := if engine.options.ints['queue_timeout_ms'] > 0 {
-					engine.options.ints['queue_timeout_ms']
-				} else {
-					build_cfg.worker_queue_timeout_ms
-				}
-
-				mut sub_ws := &worker.WorkerState{
-					worker_backend:      worker.WorkerBackendRuntime{
-						backend:                worker.PhpWorkerBackend{}
-						sockets:                sub_plan.bootstrap.worker_sockets.clone()
-						read_timeout_ms:        build_cfg.worker_read_timeout_ms
-						autostart:              sub_plan.bootstrap.worker_autostart
-						cmd:                    sub_plan.bootstrap.worker_cmd
-						env:                    sub_plan.bootstrap.worker_env.clone()
-						workdir:                build_cfg.workdir
-						restart_backoff_ms:     build_cfg.worker_restart_backoff_ms
-						restart_backoff_max_ms: build_cfg.worker_restart_backoff_max_ms
-						max_requests:           build_cfg.worker_max_requests
-						queue_capacity:         sub_queue_capacity
-						queue_timeout_ms:       sub_queue_timeout_ms
-						queue_poll_ms:          10
-					}
-					worker_backend_mode: sub_plan.worker_backend_mode
-					logic_executor:      sub_plan.executor
-					lifecycle:           sub_plan.lifecycle.name()
-					stream_dispatch:     sub_plan.bootstrap.stream_dispatch
-				}
-				add_workers[executor_name] = sub_ws
-			}
-		}
-	}
+	engine_runtime := build_engine_runtime_from_plan(cfg, executor_plan, runtime_plan_for_app,
+		plan_listener_id, runtime_routes, build_cfg)
 
 	return &App{
 		plan:          runtime_plan_for_app
@@ -133,30 +81,7 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 		upstreams:     UpstreamRuntimeRegistry.new()
 		relay:         relay_runtime_from_plan(runtime_plan_for_app)
 		transformers:  TransformerRuntimeHub.from_plan(runtime_plan_for_app)
-		engines:       EngineRuntime{
-			primary:    worker.WorkerState{
-				worker_backend:      worker.WorkerBackendRuntime{
-					backend:                worker.PhpWorkerBackend{}
-					sockets:                executor_plan.bootstrap.worker_sockets
-					read_timeout_ms:        build_cfg.worker_read_timeout_ms
-					autostart:              executor_plan.bootstrap.worker_autostart
-					cmd:                    executor_plan.bootstrap.worker_cmd
-					env:                    executor_plan.bootstrap.worker_env
-					workdir:                build_cfg.workdir
-					restart_backoff_ms:     build_cfg.worker_restart_backoff_ms
-					restart_backoff_max_ms: build_cfg.worker_restart_backoff_max_ms
-					max_requests:           build_cfg.worker_max_requests
-					queue_capacity:         build_cfg.worker_queue_capacity
-					queue_timeout_ms:       build_cfg.worker_queue_timeout_ms
-					queue_poll_ms:          10
-				}
-				worker_backend_mode: executor_plan.worker_backend_mode
-				logic_executor:      executor_plan.executor
-				lifecycle:           executor_plan.lifecycle.name()
-				stream_dispatch:     executor_plan.bootstrap.stream_dispatch
-			}
-			additional: add_workers
-		}
+		engines:       engine_runtime
 		providers:     ProviderRuntimeHub{
 			registry:  ProviderHost{
 				registry: map[string]Provider{}
@@ -204,7 +129,77 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 		}
 		pipelines:     PipelineRuntime.new(runtime_plan_for_app, plan_listener_id, runtime_routes,
 			build_cfg.assets_root_real, build_cfg.workdir, executor_plan.bootstrap.worker_env,
-			add_workers)
+			engine_runtime.additional)
+	}
+}
+
+fn build_engine_runtime_from_plan(cfg config.VhttpdConfig, executor_plan executor.LogicExecutorRuntimePlan, plan runtime_plan.RuntimePlan, listener_id string, routes []RuntimeRouteRule, build_cfg server_lifecycle.AppRuntimeBuildConfig) EngineRuntime {
+	return EngineRuntime{
+		primary:    worker_state_from_executor_plan(executor_plan, build_cfg,
+			build_cfg.worker_queue_capacity, build_cfg.worker_queue_timeout_ms)
+		additional: build_additional_engine_workers_from_plan(cfg, executor_plan, plan,
+			listener_id, routes, build_cfg)
+	}
+}
+
+fn build_additional_engine_workers_from_plan(cfg config.VhttpdConfig, executor_plan executor.LogicExecutorRuntimePlan, plan runtime_plan.RuntimePlan, listener_id string, routes []RuntimeRouteRule, build_cfg server_lifecycle.AppRuntimeBuildConfig) map[string]&worker.WorkerState {
+	mut add_workers := map[string]&worker.WorkerState{}
+	for route in routes {
+		mut executor_names := []string{}
+		if route.executor != '' {
+			executor_names << route.executor
+		}
+		if route.on_completed.trim_space().starts_with('vjsx:') {
+			executor_names << 'vjsx'
+		}
+		for executor_name in executor_names {
+			if executor_name == '' || executor_name == executor_plan.executor.kind()
+				|| executor_name in add_workers {
+				continue
+			}
+			if engine := plan.listener_named_engine(listener_id, executor_name) {
+				sub_plan := executor.LogicExecutorRuntimePlan.resolve_additional_engine_from_plan(cfg,
+					engine, executor_name) or { continue }
+				sub_queue_capacity := if engine.options.ints['queue_capacity'] > 0 {
+					engine.options.ints['queue_capacity']
+				} else {
+					build_cfg.worker_queue_capacity
+				}
+				sub_queue_timeout_ms := if engine.options.ints['queue_timeout_ms'] > 0 {
+					engine.options.ints['queue_timeout_ms']
+				} else {
+					build_cfg.worker_queue_timeout_ms
+				}
+				mut sub_ws := worker_state_from_executor_plan(sub_plan, build_cfg,
+					sub_queue_capacity, sub_queue_timeout_ms)
+				add_workers[executor_name] = &sub_ws
+			}
+		}
+	}
+	return add_workers
+}
+
+fn worker_state_from_executor_plan(plan executor.LogicExecutorRuntimePlan, build_cfg server_lifecycle.AppRuntimeBuildConfig, queue_capacity int, queue_timeout_ms int) worker.WorkerState {
+	return worker.WorkerState{
+		worker_backend:      worker.WorkerBackendRuntime{
+			backend:                worker.PhpWorkerBackend{}
+			sockets:                plan.bootstrap.worker_sockets.clone()
+			read_timeout_ms:        build_cfg.worker_read_timeout_ms
+			autostart:              plan.bootstrap.worker_autostart
+			cmd:                    plan.bootstrap.worker_cmd
+			env:                    plan.bootstrap.worker_env.clone()
+			workdir:                build_cfg.workdir
+			restart_backoff_ms:     build_cfg.worker_restart_backoff_ms
+			restart_backoff_max_ms: build_cfg.worker_restart_backoff_max_ms
+			max_requests:           build_cfg.worker_max_requests
+			queue_capacity:         queue_capacity
+			queue_timeout_ms:       queue_timeout_ms
+			queue_poll_ms:          10
+		}
+		worker_backend_mode: plan.worker_backend_mode
+		logic_executor:      plan.executor
+		lifecycle:           plan.lifecycle.name()
+		stream_dispatch:     plan.bootstrap.stream_dispatch
 	}
 }
 
