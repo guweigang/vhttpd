@@ -80,3 +80,117 @@ fn test_runtime_drains_returned_delivery_for_target() {
 	assert outcome.body == 'accepted'
 	assert rt.snapshot().pending_frames == 0
 }
+
+fn test_response_completion_sent_reports_send_state() {
+	outbound := OutboundOutcome{
+		action:   .ready
+		trace_id: 'trace_1'
+		frame_id: 'frm_1'
+		frame:    WireFrame{
+			version:    wire_version
+			kind:       .data
+			id:         'frm_1'
+			trace_id:   'trace_1'
+			channel_id: 'chan_1'
+		}
+	}
+	completion := response_completion_sent(outbound, CarrierSendResult{
+		ok:       true
+		trace_id: 'trace_1'
+		frame_id: 'frm_1'
+		queued:   true
+	})
+
+	assert completion.action == .sent
+	assert completion.target_id == 'frm_1'
+	assert completion.send_result.queued
+	assert completion.fields['relay_event'] == 'response_completion.sent'
+	assert completion.fields['carrier_relay_event'] == 'carrier.send'
+}
+
+fn test_response_completion_sent_reports_send_failure() {
+	outbound := OutboundOutcome{
+		action:   .ready
+		trace_id: 'trace_1'
+		frame_id: 'frm_1'
+		frame:    WireFrame{
+			version:    wire_version
+			kind:       .data
+			id:         'frm_1'
+			trace_id:   'trace_1'
+			channel_id: 'chan_1'
+		}
+	}
+	completion := response_completion_sent(outbound, CarrierSendResult{
+		ok:       false
+		trace_id: 'trace_1'
+		frame_id: 'frm_1'
+		error:    'relay_carrier_not_connected:carrier_1'
+	})
+
+	assert completion.action == .failed
+	assert completion.error == 'relay_carrier_not_connected:carrier_1'
+	assert completion.fields['relay_event'] == 'response_completion.failed'
+	assert completion.fields['carrier_error'] == 'relay_carrier_not_connected:carrier_1'
+}
+
+fn test_response_completion_from_returned_reports_delivery() {
+	outbound := OutboundOutcome{
+		action:   .ready
+		trace_id: 'trace_1'
+		frame_id: 'frm_1'
+		frame:    WireFrame{
+			version:    wire_version
+			kind:       .data
+			id:         'frm_1'
+			trace_id:   'trace_1'
+			channel_id: 'chan_1'
+		}
+	}
+	completion := response_completion_from_returned(outbound, CarrierSendResult{
+		ok:       true
+		trace_id: 'trace_1'
+		frame_id: 'frm_1'
+	}, WireFrame{
+		version:       wire_version
+		kind:          .data
+		id:            'relay-response:frm_1'
+		trace_id:      'trace_1'
+		channel_id:    'chan_1'
+		exchange_kind: 'response'
+		metadata:      {
+			'status': '204'
+		}
+	})
+
+	assert completion.action == .completed
+	assert completion.delivery.kind == dispatch.DeliveryOutcomeKind.response
+	assert completion.delivery.status == 204
+	assert completion.fields['relay_event'] == 'response_completion.completed'
+	assert completion.fields['returned_frame_id'] == 'relay-response:frm_1'
+}
+
+fn test_response_completion_missing_reports_target() {
+	outbound := OutboundOutcome{
+		action:   .ready
+		trace_id: 'trace_1'
+		frame_id: 'frm_1'
+		frame:    WireFrame{
+			version:    wire_version
+			kind:       .data
+			id:         'frm_1'
+			trace_id:   'trace_1'
+			channel_id: 'chan_1'
+		}
+	}
+	completion := response_completion_missing(outbound, CarrierSendResult{
+		ok:       true
+		trace_id: 'trace_1'
+		frame_id: 'frm_1'
+	})
+
+	assert completion.action == .missing
+	assert completion.target_id == 'frm_1'
+	assert completion.error == 'relay_returned_frame_not_found:chan_1:frm_1'
+	assert completion.fields['relay_event'] == 'response_completion.missing'
+}
