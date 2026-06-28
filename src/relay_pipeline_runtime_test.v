@@ -52,6 +52,100 @@ fn test_dispatch_relay_ingress_frame_runs_terminal_response_pipeline() {
 	assert outcomes[0].body == 'payload'
 }
 
+fn test_public_http_relay_delivery_reaches_agent_pipeline_and_returns_response() {
+	mut public_services := dispatch.RuntimeServices(dispatch.NoOpRuntimeServices{
+		trace: 'trace-public'
+	})
+	public_exchange := dispatch.Exchange{
+		identity: dispatch.ExchangeIdentity{
+			id:         'frm-public'
+			request_id: 'req-public'
+			trace_id:   'trace-public'
+		}
+		kind:     .request
+		ingress:  'listener:web'
+		pipeline: 'public/relay'
+		headers:  map[string]string{}
+		metadata: map[string]string{}
+		payload:  dispatch.RequestPayload{
+			method: 'GET'
+			path:   '/relay'
+			body:   'public payload'
+		}
+	}
+	mut public_adapter := dispatch.EgressAdapter(dispatch.relay_delivery_adapter('relay-edge',
+		'relay:edge', 'wait', 1000, {
+		'frame_kind': 'open'
+		'route':      'relay/local-response'
+	}))
+	public_delivery := public_adapter.deliver(mut public_services, public_exchange) or {
+		panic(err)
+	}
+	mut public_relay := relay.empty_runtime()
+	public_relay.register_carrier('edge', 'carrier-edge') or { panic(err) }
+	outbound := public_relay.prepare_outbound_delivery(public_delivery)
+	tracking := public_relay.track_outbound_delivery(outbound, 64)
+
+	mut agent_app := App{
+		plan: runtime_plan.RuntimePlan{
+			adapters:  {
+				'local-response': runtime_plan.AdapterPlan{
+					id:      'local-response'
+					kind:    'fixed-response'
+					options: runtime_plan.PlanOptions{
+						strings: {
+							'status': '207'
+							'body':   'relay agent ok'
+						}
+					}
+				}
+			}
+			pipelines: [
+				runtime_plan.PipelinePlan{
+					id:      'relay/local-response'
+					ingress: runtime_plan.ResourceRef{
+						domain: .relay
+						id:     'edge'
+					}
+					egress:  runtime_plan.ResourceRef{
+						domain: .adapter
+						id:     'local-response'
+					}
+				},
+			]
+		}
+	}
+	mut agent_exchange := dispatch.relay_ingress_exchange(relay.relay_ingress_request_from_frame('edge',
+		'agent:edge', outbound.frame, 'relay/local-response', 123))
+	agent_outcome := agent_app.dispatch_relay_pipeline_exchange(mut agent_exchange)
+	response_frame := relay_pipeline_response_frame(agent_outcome)
+	public_relay.handle_frame(response_frame, 'agent:edge', 64)
+
+	http_outcome := relay_delivery_send_http_outcome(mut public_relay, outbound, relay.CarrierSendResult{
+		ok:       true
+		trace_id: outbound.trace_id
+		frame_id: outbound.frame_id
+	})
+
+	assert outbound.frame.trace_id == 'trace-public'
+	assert outbound.frame.request_id == 'req-public'
+	assert outbound.frame.channel_id == 'req-public'
+	assert outbound.frame.route == 'relay/local-response'
+	assert outbound.completion.mode == 'wait'
+	assert tracking.action == .opened
+	assert tracking.channel_id == 'req-public'
+	assert agent_outcome.trace_id == 'trace-public'
+	assert agent_outcome.channel_id == 'req-public'
+	assert response_frame.trace_id == 'trace-public'
+	assert response_frame.metadata['response_to'] == 'frm-public'
+	assert http_outcome.kind == .response
+	assert http_outcome.status == 207
+	assert http_outcome.body == 'relay agent ok'
+	assert http_outcome.metadata['trace_id'] == 'trace-public'
+	assert http_outcome.metadata['relay_event'] == 'response_completion.completed'
+	assert http_outcome.metadata['target_id'] == 'frm-public'
+}
+
 fn test_dispatch_and_send_relay_ingress_frame_reports_send_result() {
 	mut app := App{
 		plan: runtime_plan.RuntimePlan{

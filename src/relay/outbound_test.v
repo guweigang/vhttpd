@@ -69,3 +69,41 @@ fn test_prepare_outbound_delivery_rejects_invalid_outcome() {
 	assert outcome.fields['relay_event'] == 'outbound.rejected'
 	assert outcome.fields['error'] == 'relay_delivery_invalid_outcome:response'
 }
+
+fn test_track_outbound_delivery_opens_local_channel() {
+	mut rt := empty_runtime()
+	rt.register_carrier('edge', 'carrier_edge') or { panic(err) }
+	outbound := rt.prepare_outbound_delivery(dispatch.relay_delivery_outcome('relay:edge', {
+		'trace_id':   'trace_1'
+		'request_id': 'req_1'
+		'channel_id': 'chan_1'
+		'frame_kind': 'open'
+		'route':      'relay/local-response'
+	}))
+
+	tracking := rt.track_outbound_delivery(outbound, 32)
+
+	assert tracking.action == .opened
+	assert tracking.trace_id == 'trace_1'
+	assert tracking.frame_id == 'req_1'
+	assert tracking.channel_id == 'chan_1'
+	assert rt.channels.channels['chan_1'].node_id == 'local:edge'
+	assert rt.channels.channels['chan_1'].route == 'relay/local-response'
+	assert rt.channels.channels['chan_1'].buffer_limit == 32
+}
+
+fn test_track_outbound_delivery_rejects_unavailable_outbound() {
+	mut rt := empty_runtime()
+	outbound := rt.prepare_outbound_delivery(dispatch.relay_delivery_outcome('relay:edge', {
+		'trace_id':   'trace_1'
+		'request_id': 'req_1'
+		'channel_id': 'chan_1'
+	}))
+
+	tracking := rt.track_outbound_delivery(outbound, 32)
+
+	assert tracking.action == .rejected
+	assert tracking.trace_id == 'trace_1'
+	assert tracking.frame_id == 'req_1'
+	assert tracking.error == 'relay_carrier_unavailable:edge'
+}

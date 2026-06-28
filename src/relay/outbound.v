@@ -64,3 +64,15 @@ pub fn (rt Runtime) prepare_outbound_delivery(outcome dispatch.DeliveryOutcome) 
 		error:      projection.plan.error
 	}
 }
+
+pub fn (mut rt Runtime) track_outbound_delivery(outbound OutboundOutcome, default_buffer_limit int) ForwardingOutcome {
+	if outbound.action != .ready {
+		return ForwardingOutcome{
+			action:   .rejected
+			trace_id: outbound.trace_id
+			frame_id: outbound.frame_id
+			error:    if outbound.error != '' { outbound.error } else { 'relay_outbound_not_ready:${outbound.action}' }
+		}
+	}
+	return rt.handle_frame(outbound.frame, 'local:${outbound.relay_id}', default_buffer_limit)
+}

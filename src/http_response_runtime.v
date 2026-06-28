@@ -136,6 +136,10 @@ fn (mut app App) dispatch_relay_delivery(outcome dispatch.DeliveryOutcome) dispa
 	if !relay_delivery_http_completion_supported(outbound.completion.mode) {
 		return relay_delivery_completion_policy_http_outcome(outbound)
 	}
+	tracking := app.relay.track_outbound_delivery(outbound, 64)
+	if tracking.action == .rejected {
+		return relay_delivery_tracking_http_outcome(outbound, tracking)
+	}
 	mut carrier := ws.new_relay_carrier(app.build_websocket_runtime_context(), outbound.carrier_id)
 	send_result := relay.send_to_carrier(mut carrier, outbound)
 	return relay_delivery_send_http_outcome(mut app.relay, outbound, send_result)
@@ -158,6 +162,18 @@ fn relay_delivery_completion_policy_http_outcome(outbound relay.OutboundOutcome)
 	err := 'relay_completion_policy_unsupported:http:${outbound.completion.mode}'
 	return dispatch.outcome_with_metadata(dispatch.delivery_failure_outcome(501, err,
 		'relay_completion_policy_unsupported'), fields)
+}
+
+fn relay_delivery_tracking_http_outcome(outbound relay.OutboundOutcome, tracking relay.ForwardingOutcome) dispatch.DeliveryOutcome {
+	mut fields := outbound.fields.clone()
+	fields['relay_event'] = 'outbound.track_failed'
+	fields['tracking_error'] = tracking.error
+	if tracking.channel_id != '' {
+		fields['channel_id'] = tracking.channel_id
+	}
+	err := if tracking.error != '' { tracking.error } else { 'relay_outbound_tracking_failed' }
+	return dispatch.outcome_with_metadata(dispatch.delivery_failure_outcome(500, err,
+		'relay_outbound_tracking_failed'), fields)
 }
 
 fn relay_delivery_send_http_outcome(mut rt relay.Runtime, outbound relay.OutboundOutcome, send_result relay.CarrierSendResult) dispatch.DeliveryOutcome {
