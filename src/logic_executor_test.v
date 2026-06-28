@@ -193,7 +193,9 @@ egress = "adapter:admin"
 	})
 	assert resp.status == 200
 	preview := json.decode(RuntimePlanReplacementPreview, resp.body) or { panic(err) }
-	assert preview.allowed
+	assert !preview.allowed
+	assert preview.strategy == 'engine_drain_required'
+	assert preview.actions.any(it.kind == 'drain_engines' && it.targets == ['app'])
 	assert preview.config_path == config_file
 	assert preview.drain_engines == ['app']
 	assert preview.changed_pipelines == ['site/app']
@@ -209,6 +211,7 @@ egress = "adapter:admin"
 	assert state.previews_total == 1
 	assert state.last_preview.kind == 'preview'
 	assert state.last_preview.status == 'previewed'
+	assert state.last_preview.strategy == 'engine_drain_required'
 	assert state.last_preview.config_path == config_file
 	assert state.last_preview.changed_pipelines == ['site/app']
 }
@@ -267,6 +270,8 @@ egress = "adapter:hello"
 	result := json.decode(RuntimePlanReplacementApplyResult, resp.body) or { panic(err) }
 	assert result.applied
 	assert result.status == 'applied'
+	assert result.strategy == 'lightweight'
+	assert result.preview.actions[0].kind == 'swap_lightweight_runtime'
 	assert app.protocols.runtime_plan_json.contains('"body":"new"')
 	assert app.pipelines.http.rules.len == 1
 	assert app.pipelines.http.rules[0].body == 'new'
@@ -277,7 +282,9 @@ egress = "adapter:hello"
 	assert state.rejected_total == 0
 	assert state.last_apply.kind == 'apply'
 	assert state.last_apply.status == 'applied'
+	assert state.last_apply.strategy == 'lightweight'
 	assert state.last_apply.applied
+	assert state.last_apply.actions[0].kind == 'swap_lightweight_runtime'
 	assert state.last_apply.changed_pipelines == ['site/hello']
 }
 
@@ -335,6 +342,7 @@ egress = "adapter:app"
 	assert resp.status == 409
 	result := json.decode(RuntimePlanReplacementApplyResult, resp.body) or { panic(err) }
 	assert !result.applied
+	assert result.strategy == 'engine_drain_required'
 	assert result.error == 'runtime_plan_replacement_requires_engine_drain'
 	assert app.plan.engines['app'].options.strings['entry'] == '/tmp/app.php'
 	state := app.runtime_plan_replacement_snapshot()
@@ -342,6 +350,7 @@ egress = "adapter:app"
 	assert state.applied_total == 0
 	assert state.rejected_total == 1
 	assert state.last_apply.status == 'rejected'
+	assert state.last_apply.strategy == 'engine_drain_required'
 	assert state.last_apply.error == 'runtime_plan_replacement_requires_engine_drain'
 }
 

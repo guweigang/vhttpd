@@ -12,6 +12,21 @@ pub:
 	reasons             []string
 }
 
+pub struct PlanReplacementExecutionPlan {
+pub:
+	allowed  bool
+	strategy string
+	error    string
+	actions  []PlanReplacementAction
+	diff     PlanReplacementDiff
+}
+
+pub struct PlanReplacementAction {
+pub:
+	kind    string
+	targets []string
+}
+
 pub fn diff_runtime_plan_replacement(old RuntimePlan, new RuntimePlan) PlanReplacementDiff {
 	changed_listeners := changed_listener_ids(old, new)
 	changed_resources := changed_resource_ids(old, new)
@@ -49,6 +64,76 @@ pub fn diff_runtime_plan_replacement(old RuntimePlan, new RuntimePlan) PlanRepla
 		reload_transforms:   changed_transforms
 		reload_relays:       changed_relays
 		reasons:             reasons
+	}
+}
+
+pub fn execution_plan_for_replacement(diff PlanReplacementDiff) PlanReplacementExecutionPlan {
+	mut actions := []PlanReplacementAction{}
+	if diff.changed_pipelines.len > 0 || diff.reload_transforms.len > 0 {
+		actions << PlanReplacementAction{
+			kind:    'swap_lightweight_runtime'
+			targets: map_key_union(diff.changed_pipelines, diff.reload_transforms)
+		}
+	}
+	if diff.restart_listeners.len > 0 {
+		actions << PlanReplacementAction{
+			kind:    'restart_listeners'
+			targets: diff.restart_listeners.clone()
+		}
+	}
+	if diff.drain_engines.len > 0 {
+		actions << PlanReplacementAction{
+			kind:    'drain_engines'
+			targets: diff.drain_engines.clone()
+		}
+	}
+	if diff.reload_relays.len > 0 {
+		actions << PlanReplacementAction{
+			kind:    'reload_relays'
+			targets: diff.reload_relays.clone()
+		}
+	}
+	if !diff.allowed {
+		return PlanReplacementExecutionPlan{
+			allowed:  false
+			strategy: 'blocked'
+			error:    'runtime_plan_replacement_unsafe'
+			actions:  actions
+			diff:     diff
+		}
+	}
+	if diff.restart_listeners.len > 0 {
+		return PlanReplacementExecutionPlan{
+			allowed:  false
+			strategy: 'listener_restart_required'
+			error:    'runtime_plan_replacement_requires_listener_restart'
+			actions:  actions
+			diff:     diff
+		}
+	}
+	if diff.drain_engines.len > 0 {
+		return PlanReplacementExecutionPlan{
+			allowed:  false
+			strategy: 'engine_drain_required'
+			error:    'runtime_plan_replacement_requires_engine_drain'
+			actions:  actions
+			diff:     diff
+		}
+	}
+	if diff.reload_relays.len > 0 {
+		return PlanReplacementExecutionPlan{
+			allowed:  false
+			strategy: 'relay_reload_required'
+			error:    'runtime_plan_replacement_requires_relay_reload'
+			actions:  actions
+			diff:     diff
+		}
+	}
+	return PlanReplacementExecutionPlan{
+		allowed:  true
+		strategy: 'lightweight'
+		actions:  actions
+		diff:     diff
 	}
 }
 

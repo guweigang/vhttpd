@@ -20,9 +20,11 @@ struct RuntimePlanReplacementAttemptSnapshot {
 	kind                string
 	config_path         string
 	status              string
+	strategy            string
 	allowed             bool
 	applied             bool
 	error               string
+	actions             []runtime_plan.PlanReplacementAction
 	changed_pipelines   []string
 	unchanged_pipelines []string
 	restart_listeners   []string
@@ -44,6 +46,8 @@ struct RuntimePlanReplacementRuntimeSnapshot {
 struct RuntimePlanReplacementPreview {
 	config_path            string
 	allowed                bool
+	strategy               string
+	actions                []runtime_plan.PlanReplacementAction
 	unchanged_pipelines    []string
 	changed_pipelines      []string
 	restart_listeners      []string
@@ -59,6 +63,7 @@ struct RuntimePlanReplacementApplyResult {
 	config_path string
 	applied     bool
 	status      string
+	strategy    string
 	error       string
 	preview     RuntimePlanReplacementPreview
 }
@@ -80,9 +85,12 @@ fn (mut app App) preview_runtime_plan_replacement_for_plan(config_path string, n
 }
 
 fn runtime_plan_replacement_preview_from_diff(config_path string, current_plan runtime_plan.RuntimePlan, next_plan runtime_plan.RuntimePlan, diff runtime_plan.PlanReplacementDiff) RuntimePlanReplacementPreview {
+	execution := runtime_plan.execution_plan_for_replacement(diff)
 	return RuntimePlanReplacementPreview{
 		config_path:            config_path
-		allowed:                diff.allowed
+		allowed:                execution.allowed
+		strategy:               execution.strategy
+		actions:                execution.actions
 		unchanged_pipelines:    diff.unchanged_pipelines
 		changed_pipelines:      diff.changed_pipelines
 		restart_listeners:      diff.restart_listeners
@@ -102,47 +110,16 @@ fn (mut app App) apply_runtime_plan_replacement(config_path string) !RuntimePlan
 	}
 	next_plan := config.load_runtime_plan_file(normalized_path)!
 	diff := runtime_plan.diff_runtime_plan_replacement(app.plan, next_plan)
+	execution := runtime_plan.execution_plan_for_replacement(diff)
 	preview :=
 		runtime_plan_replacement_preview_from_diff(normalized_path, app.plan, next_plan, diff)
-	if !diff.allowed {
+	if !execution.allowed {
 		result := RuntimePlanReplacementApplyResult{
 			config_path: normalized_path
 			applied:     false
 			status:      'rejected'
-			error:       'runtime_plan_replacement_unsafe'
-			preview:     preview
-		}
-		app.record_runtime_plan_replacement_apply(result)
-		return result
-	}
-	if diff.restart_listeners.len > 0 {
-		result := RuntimePlanReplacementApplyResult{
-			config_path: normalized_path
-			applied:     false
-			status:      'rejected'
-			error:       'runtime_plan_replacement_requires_listener_restart'
-			preview:     preview
-		}
-		app.record_runtime_plan_replacement_apply(result)
-		return result
-	}
-	if diff.drain_engines.len > 0 {
-		result := RuntimePlanReplacementApplyResult{
-			config_path: normalized_path
-			applied:     false
-			status:      'rejected'
-			error:       'runtime_plan_replacement_requires_engine_drain'
-			preview:     preview
-		}
-		app.record_runtime_plan_replacement_apply(result)
-		return result
-	}
-	if diff.reload_relays.len > 0 {
-		result := RuntimePlanReplacementApplyResult{
-			config_path: normalized_path
-			applied:     false
-			status:      'rejected'
-			error:       'runtime_plan_replacement_requires_relay_reload'
+			strategy:    execution.strategy
+			error:       execution.error
 			preview:     preview
 		}
 		app.record_runtime_plan_replacement_apply(result)
@@ -161,6 +138,7 @@ fn (mut app App) apply_runtime_plan_replacement(config_path string) !RuntimePlan
 		config_path: normalized_path
 		applied:     true
 		status:      'applied'
+		strategy:    execution.strategy
 		preview:     preview
 	}
 	app.record_runtime_plan_replacement_apply(result)
@@ -237,9 +215,11 @@ fn runtime_plan_replacement_attempt_from_preview(kind string, status string, app
 		kind:                kind
 		config_path:         preview.config_path
 		status:              status
+		strategy:            preview.strategy
 		allowed:             preview.allowed
 		applied:             applied
 		error:               error
+		actions:             preview.actions
 		changed_pipelines:   preview.changed_pipelines
 		unchanged_pipelines: preview.unchanged_pipelines
 		restart_listeners:   preview.restart_listeners
