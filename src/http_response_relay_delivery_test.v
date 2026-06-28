@@ -41,6 +41,52 @@ fn test_relay_delivery_http_outcome_reports_unavailable_carrier() {
 	assert outcome.metadata['carrier_id'] == 'disabled:edge'
 }
 
+fn test_relay_delivery_http_outcome_reports_wait_target_unavailable_without_tracking() {
+	mut services := dispatch.RuntimeServices(dispatch.NoOpRuntimeServices{
+		trace: 'trace_public'
+	})
+	public_exchange := dispatch.Exchange{
+		identity: dispatch.ExchangeIdentity{
+			id:         'frm_public'
+			request_id: 'req_public'
+			trace_id:   'trace_public'
+		}
+		kind:     .request
+		ingress:  'listener:web'
+		pipeline: 'public/relay'
+		headers:  map[string]string{}
+		metadata: map[string]string{}
+		payload:  dispatch.RequestPayload{
+			method: 'GET'
+			path:   '/relay'
+		}
+	}
+	mut adapter := dispatch.EgressAdapter(dispatch.relay_delivery_adapter('relay-edge',
+		'relay:edge', 'wait', 1000, {
+		'frame_kind': 'open'
+		'route':      'relay/local-response'
+	}))
+	delivery := adapter.deliver(mut services, public_exchange) or { panic(err) }
+	rt := relay.empty_runtime()
+	outbound := rt.prepare_outbound_delivery(delivery)
+
+	outcome := relay_delivery_http_outcome(outbound)
+
+	assert outbound.action == .unavailable
+	assert outcome.kind == .failure
+	assert outcome.status == 503
+	assert outcome.error_class == 'relay_carrier_unavailable'
+	assert outcome.error == 'relay_carrier_unavailable:edge'
+	assert outcome.metadata['relay_event'] == 'outbound.unavailable'
+	assert outcome.metadata['trace_id'] == 'trace_public'
+	assert outcome.metadata['channel_id'] == 'req_public'
+	assert outcome.metadata['frame_id'] == 'frm_public'
+	assert outcome.metadata['completion_mode'] == 'wait'
+	assert outcome.metadata['completion_timeout_ms'] == '1000'
+	assert outcome.metadata['carrier_id'] == 'disabled:edge'
+	assert rt.snapshot().channel_count == 0
+}
+
 fn test_relay_delivery_http_outcome_reports_projection_error() {
 	rt := relay.empty_runtime()
 	projection :=

@@ -1203,6 +1203,7 @@ Progress as of 2026-06-27:
 - `P6.72` relay outbound channel tracking added: HTTP relay delivery now records outbound frames in the local relay runtime before carrier send, so returned response frames can be correlated and drained for wait completions; a public-to-agent relay contract test locks trace, channel, response target, and HTTP response reconstruction
 - `P6.73` relay wait channel retirement added: completed, failed, or timed-out HTTP relay wait deliveries now retire their local outbound channels and correlations, preventing request/response relay traffic from consuming bounded channel capacity after terminal completion
 - `P6.74` relay HTTP tracking policy tightened: async `accepted` relay deliveries no longer create local outbound channels, while `wait` deliveries retain the bounded tracking lifecycle required for response correlation
+- `P6.75` relay target-unavailable contract added: public HTTP relay delivery now has a higher-level deterministic test for missing relay carriers, preserving trace/channel/completion metadata while returning a stable 503 without creating local wait channels
 
 Batches:
 
