@@ -200,6 +200,17 @@ egress = "adapter:admin"
 	assert preview.unchanged_pipelines == ['site/admin']
 	assert preview.current_schema_version == 2
 	assert preview.next_schema_version == 2
+	state_resp := app.internal_admin_dispatch(admin.InternalAdminRequest{
+		mode:   'vhttpd_admin'
+		method: 'GET'
+		path:   '/admin/runtime/plan/replacement/state'
+	})
+	state := json.decode(RuntimePlanReplacementRuntimeSnapshot, state_resp.body) or { panic(err) }
+	assert state.previews_total == 1
+	assert state.last_preview.kind == 'preview'
+	assert state.last_preview.status == 'previewed'
+	assert state.last_preview.config_path == config_file
+	assert state.last_preview.changed_pipelines == ['site/app']
 }
 
 fn test_internal_admin_runtime_plan_replacement_apply_updates_lightweight_routes() {
@@ -260,6 +271,14 @@ egress = "adapter:hello"
 	assert app.pipelines.http.rules.len == 1
 	assert app.pipelines.http.rules[0].body == 'new'
 	assert app.plan.adapters['hello'].options.strings['body'] == 'new'
+	state := app.runtime_plan_replacement_snapshot()
+	assert state.applies_total == 1
+	assert state.applied_total == 1
+	assert state.rejected_total == 0
+	assert state.last_apply.kind == 'apply'
+	assert state.last_apply.status == 'applied'
+	assert state.last_apply.applied
+	assert state.last_apply.changed_pipelines == ['site/hello']
 }
 
 fn test_internal_admin_runtime_plan_replacement_apply_rejects_engine_drain() {
@@ -318,6 +337,12 @@ egress = "adapter:app"
 	assert !result.applied
 	assert result.error == 'runtime_plan_replacement_requires_engine_drain'
 	assert app.plan.engines['app'].options.strings['entry'] == '/tmp/app.php'
+	state := app.runtime_plan_replacement_snapshot()
+	assert state.applies_total == 1
+	assert state.applied_total == 0
+	assert state.rejected_total == 1
+	assert state.last_apply.status == 'rejected'
+	assert state.last_apply.error == 'runtime_plan_replacement_requires_engine_drain'
 }
 
 fn test_admin_runtime_snapshot_exposes_relay_summary() {

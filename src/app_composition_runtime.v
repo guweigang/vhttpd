@@ -25,6 +25,7 @@ mut:
 	assets       config.AssetsRuntime
 	pipelines    PipelineRuntime
 	transformers TransformerRuntimeHub
+	replacement  RuntimePlanReplacementRuntime
 }
 
 struct ControlPlaneRuntime {

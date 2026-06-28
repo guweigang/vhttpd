@@ -165,6 +165,18 @@ pub fn (mut app AdminApp) admin_runtime_plan_replacement(mut ctx Context) veb.Re
 	})
 }
 
+@['/admin/runtime/plan/replacement/state'; get]
+pub fn (mut app AdminApp) admin_runtime_plan_replacement_state(mut ctx Context) veb.Result {
+	req := admin_plane_request(ctx, '/admin/runtime/plan/replacement/state')
+	if !app.admin_authorized(ctx) {
+		return admin_plane_forbidden(mut app, mut ctx, 'GET', req)
+	}
+	body := json.encode(app.shared.runtime_plan_replacement_snapshot())
+	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, body, {
+		'admin_endpoint': 'runtime_plan_replacement_state'
+	})
+}
+
 @['/admin/runtime/plan/replacement/apply'; post]
 pub fn (mut app AdminApp) admin_runtime_plan_replacement_apply(mut ctx Context) veb.Result {
 	req := admin_plane_request(ctx, '/admin/runtime/plan/replacement/apply')

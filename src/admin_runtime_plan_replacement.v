@@ -3,6 +3,43 @@ module main
 import config
 import json
 import runtime_plan
+import time
+
+struct RuntimePlanReplacementRuntime {
+mut:
+	previews_total int
+	applies_total  int
+	applied_total  int
+	rejected_total int
+	last_preview   RuntimePlanReplacementAttemptSnapshot
+	last_apply     RuntimePlanReplacementAttemptSnapshot
+}
+
+struct RuntimePlanReplacementAttemptSnapshot {
+	ts_unix             i64
+	kind                string
+	config_path         string
+	status              string
+	allowed             bool
+	applied             bool
+	error               string
+	changed_pipelines   []string
+	unchanged_pipelines []string
+	restart_listeners   []string
+	drain_engines       []string
+	reload_transforms   []string
+	reload_relays       []string
+	reasons             []string
+}
+
+struct RuntimePlanReplacementRuntimeSnapshot {
+	previews_total int
+	applies_total  int
+	applied_total  int
+	rejected_total int
+	last_preview   RuntimePlanReplacementAttemptSnapshot
+	last_apply     RuntimePlanReplacementAttemptSnapshot
+}
 
 struct RuntimePlanReplacementPreview {
 	config_path            string
@@ -32,7 +69,9 @@ fn (mut app App) preview_runtime_plan_replacement(config_path string) !RuntimePl
 		return error('runtime_plan_replacement_missing_config')
 	}
 	next_plan := config.load_runtime_plan_file(normalized_path)!
-	return app.preview_runtime_plan_replacement_for_plan(normalized_path, next_plan)
+	preview := app.preview_runtime_plan_replacement_for_plan(normalized_path, next_plan)
+	app.record_runtime_plan_replacement_preview(preview)
+	return preview
 }
 
 fn (mut app App) preview_runtime_plan_replacement_for_plan(config_path string, next_plan runtime_plan.RuntimePlan) RuntimePlanReplacementPreview {
@@ -66,40 +105,48 @@ fn (mut app App) apply_runtime_plan_replacement(config_path string) !RuntimePlan
 	preview :=
 		runtime_plan_replacement_preview_from_diff(normalized_path, app.plan, next_plan, diff)
 	if !diff.allowed {
-		return RuntimePlanReplacementApplyResult{
+		result := RuntimePlanReplacementApplyResult{
 			config_path: normalized_path
 			applied:     false
 			status:      'rejected'
 			error:       'runtime_plan_replacement_unsafe'
 			preview:     preview
 		}
+		app.record_runtime_plan_replacement_apply(result)
+		return result
 	}
 	if diff.restart_listeners.len > 0 {
-		return RuntimePlanReplacementApplyResult{
+		result := RuntimePlanReplacementApplyResult{
 			config_path: normalized_path
 			applied:     false
 			status:      'rejected'
 			error:       'runtime_plan_replacement_requires_listener_restart'
 			preview:     preview
 		}
+		app.record_runtime_plan_replacement_apply(result)
+		return result
 	}
 	if diff.drain_engines.len > 0 {
-		return RuntimePlanReplacementApplyResult{
+		result := RuntimePlanReplacementApplyResult{
 			config_path: normalized_path
 			applied:     false
 			status:      'rejected'
 			error:       'runtime_plan_replacement_requires_engine_drain'
 			preview:     preview
 		}
+		app.record_runtime_plan_replacement_apply(result)
+		return result
 	}
 	if diff.reload_relays.len > 0 {
-		return RuntimePlanReplacementApplyResult{
+		result := RuntimePlanReplacementApplyResult{
 			config_path: normalized_path
 			applied:     false
 			status:      'rejected'
 			error:       'runtime_plan_replacement_requires_relay_reload'
 			preview:     preview
 		}
+		app.record_runtime_plan_replacement_apply(result)
+		return result
 	}
 	app.apply_lightweight_runtime_plan(next_plan)
 	app.emit('runtime.plan.replaced', {
@@ -110,12 +157,14 @@ fn (mut app App) apply_runtime_plan_replacement(config_path string) !RuntimePlan
 		'replacement_allowed':  '${diff.allowed}'
 		'replacement_strategy': 'lightweight'
 	})
-	return RuntimePlanReplacementApplyResult{
+	result := RuntimePlanReplacementApplyResult{
 		config_path: normalized_path
 		applied:     true
 		status:      'applied'
 		preview:     preview
 	}
+	app.record_runtime_plan_replacement_apply(result)
+	return result
 }
 
 fn (mut app App) apply_lightweight_runtime_plan(next_plan runtime_plan.RuntimePlan) {
@@ -140,4 +189,63 @@ fn (mut app App) apply_lightweight_runtime_plan(next_plan runtime_plan.RuntimePl
 	app.protocols.runtime_plan_json = plan_json
 	app.protocols.mcp = updated_mcp
 	app.protocols.openai = updated_openai
+}
+
+fn (mut app App) record_runtime_plan_replacement_preview(preview RuntimePlanReplacementPreview) {
+	app.mu.@lock()
+	defer {
+		app.mu.unlock()
+	}
+	app.replacement.previews_total++
+	app.replacement.last_preview = runtime_plan_replacement_attempt_from_preview('preview',
+		'previewed', false, '', preview)
+}
+
+fn (mut app App) record_runtime_plan_replacement_apply(result RuntimePlanReplacementApplyResult) {
+	app.mu.@lock()
+	defer {
+		app.mu.unlock()
+	}
+	app.replacement.applies_total++
+	if result.applied {
+		app.replacement.applied_total++
+	} else {
+		app.replacement.rejected_total++
+	}
+	app.replacement.last_apply = runtime_plan_replacement_attempt_from_preview('apply',
+		result.status, result.applied, result.error, result.preview)
+}
+
+fn (mut app App) runtime_plan_replacement_snapshot() RuntimePlanReplacementRuntimeSnapshot {
+	app.mu.@lock()
+	defer {
+		app.mu.unlock()
+	}
+	return RuntimePlanReplacementRuntimeSnapshot{
+		previews_total: app.replacement.previews_total
+		applies_total:  app.replacement.applies_total
+		applied_total:  app.replacement.applied_total
+		rejected_total: app.replacement.rejected_total
+		last_preview:   app.replacement.last_preview
+		last_apply:     app.replacement.last_apply
+	}
+}
+
+fn runtime_plan_replacement_attempt_from_preview(kind string, status string, applied bool, error string, preview RuntimePlanReplacementPreview) RuntimePlanReplacementAttemptSnapshot {
+	return RuntimePlanReplacementAttemptSnapshot{
+		ts_unix:             time.now().unix()
+		kind:                kind
+		config_path:         preview.config_path
+		status:              status
+		allowed:             preview.allowed
+		applied:             applied
+		error:               error
+		changed_pipelines:   preview.changed_pipelines
+		unchanged_pipelines: preview.unchanged_pipelines
+		restart_listeners:   preview.restart_listeners
+		drain_engines:       preview.drain_engines
+		reload_transforms:   preview.reload_transforms
+		reload_relays:       preview.reload_relays
+		reasons:             preview.reasons
+	}
 }

@@ -50,6 +50,9 @@ fn (mut app App) internal_admin_dispatch(req admin.InternalAdminRequest) admin.I
 			}
 			return admin.InternalAdminResponse.json(json.encode(preview))
 		}
+		'/runtime/plan/replacement/state' {
+			return admin.InternalAdminResponse.json(json.encode(app.runtime_plan_replacement_snapshot()))
+		}
 		'/runtime/transformers' {
 			return admin.InternalAdminResponse.json(json.encode(app.transformers.snapshot()))
 		}

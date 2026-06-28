@@ -58,6 +58,21 @@ pub fn (mut app App) admin_runtime_plan_replacement(mut ctx Context) veb.Result 
 	})
 }
 
+@['/admin/runtime/plan/replacement/state'; get]
+pub fn (mut app App) admin_runtime_plan_replacement_state(mut ctx Context) veb.Result {
+	req := admin_data_plane_request(ctx, '/admin/runtime/plan/replacement/state')
+	if !app.control_plane.admin.on_data_plane {
+		return admin_data_plane_text(mut app, mut ctx, 'GET', req, 404, 'Not Found', {
+			'admin_endpoint': 'runtime_plan_replacement_state'
+			'error':          'not_found'
+		})
+	}
+	body := json.encode(app.runtime_plan_replacement_snapshot())
+	return admin_data_plane_json(mut app, mut ctx, 'GET', req, 200, body, {
+		'admin_endpoint': 'runtime_plan_replacement_state'
+	})
+}
+
 @['/admin/runtime/plan/replacement/apply'; post]
 pub fn (mut app App) admin_runtime_plan_replacement_apply(mut ctx Context) veb.Result {
 	req := admin_data_plane_request(ctx, '/admin/runtime/plan/replacement/apply')
