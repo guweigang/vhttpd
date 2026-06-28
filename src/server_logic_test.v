@@ -9,6 +9,7 @@ import os
 import provider
 import worker
 import server_lifecycle
+import runtime_plan
 
 fn new_shutdown_test_lifecycle() executor.LogicExecutorLifecycle {
 	return executor.LogicExecutorLifecycle{
@@ -420,6 +421,145 @@ egress = "adapter:app_b"
 	assert multi_cfg.listeners[1].runtime_cfg.port == 18452
 	assert multi_cfg.listeners[1].runtime_cfg.plan_listener_id == 'web_b'
 	assert multi_cfg.listeners[1].runtime_cfg.executor_plan.executor.kind() == 'vjsx'
+}
+
+fn test_websocket_relay_listeners_share_matching_http_relay_delivery_app() {
+	plan := runtime_plan.RuntimePlan{
+		listeners: {
+			'web_a':   runtime_plan.ListenerPlan{
+				id:       'web_a'
+				protocol: 'http'
+			}
+			'web_b':   runtime_plan.ListenerPlan{
+				id:       'web_b'
+				protocol: 'http'
+			}
+			'relay_a': runtime_plan.ListenerPlan{
+				id:       'relay_a'
+				protocol: 'websocket'
+			}
+			'relay_b': runtime_plan.ListenerPlan{
+				id:       'relay_b'
+				protocol: 'websocket'
+			}
+		}
+		adapters:  {
+			'relay_a': runtime_plan.AdapterPlan{
+				id:      'relay_a'
+				kind:    'relay-delivery'
+				options: runtime_plan.PlanOptions{
+					strings: {
+						'target': 'relay:edge_a'
+					}
+				}
+			}
+			'relay_b': runtime_plan.AdapterPlan{
+				id:      'relay_b'
+				kind:    'relay-delivery'
+				options: runtime_plan.PlanOptions{
+					strings: {
+						'target': 'relay:edge_b'
+					}
+				}
+			}
+		}
+		pipelines: [
+			runtime_plan.PipelinePlan{
+				id:      'web_a/relay'
+				ingress: runtime_plan.ResourceRef{
+					domain: .listener
+					id:     'web_a'
+				}
+				egress:  runtime_plan.ResourceRef{
+					domain: .adapter
+					id:     'relay_a'
+				}
+			},
+			runtime_plan.PipelinePlan{
+				id:      'web_b/relay'
+				ingress: runtime_plan.ResourceRef{
+					domain: .listener
+					id:     'web_b'
+				}
+				egress:  runtime_plan.ResourceRef{
+					domain: .adapter
+					id:     'relay_b'
+				}
+			},
+		]
+		relays:    {
+			'edge_a': runtime_plan.RelayPlan{
+				id:      'edge_a'
+				mode:    'hub'
+				carrier: 'websocket'
+				ingress: runtime_plan.ResourceRef{
+					domain: .listener
+					id:     'relay_a'
+				}
+			}
+			'edge_b': runtime_plan.RelayPlan{
+				id:      'edge_b'
+				mode:    'hub'
+				carrier: 'websocket'
+				ingress: runtime_plan.ResourceRef{
+					domain: .listener
+					id:     'relay_b'
+				}
+			}
+		}
+	}
+	mut web_a_app := &App{}
+	mut web_b_app := &App{}
+	mut relay_a_app := &App{}
+	mut relay_b_app := &App{}
+	mut bindings := [
+		MultiServerAppBinding{
+			listener: server_lifecycle.ListenerRuntimeBinding{
+				id:          'web_a'
+				runtime_cfg: server_runtime_config_fixture_for_listener(plan, 'web_a')
+			}
+			app:      web_a_app
+		},
+		MultiServerAppBinding{
+			listener: server_lifecycle.ListenerRuntimeBinding{
+				id:          'web_b'
+				runtime_cfg: server_runtime_config_fixture_for_listener(plan, 'web_b')
+			}
+			app:      web_b_app
+		},
+		MultiServerAppBinding{
+			listener: server_lifecycle.ListenerRuntimeBinding{
+				id:          'relay_a'
+				runtime_cfg: server_runtime_config_fixture_for_listener(plan, 'relay_a')
+			}
+			app:      relay_a_app
+		},
+		MultiServerAppBinding{
+			listener: server_lifecycle.ListenerRuntimeBinding{
+				id:          'relay_b'
+				runtime_cfg: server_runtime_config_fixture_for_listener(plan, 'relay_b')
+			}
+			app:      relay_b_app
+		},
+	]
+
+	share_websocket_listener_apps(mut bindings)
+
+	assert bindings[0].app == web_a_app
+	assert bindings[1].app == web_b_app
+	assert bindings[2].app == web_a_app
+	assert bindings[3].app == web_b_app
+}
+
+fn server_runtime_config_fixture_for_listener(plan runtime_plan.RuntimePlan, listener_id string) server_lifecycle.ServerRuntimeConfig {
+	return server_lifecycle.ServerRuntimeConfig{
+		plan:             plan
+		plan_listener_id: listener_id
+		executor_plan:    executor.LogicExecutorRuntimePlan{
+			executor:  executor.DisabledLogicExecutor{}
+			lifecycle: executor.disabled_executor_lifecycle()
+		}
+	}
 }
 
 fn test_load_vhttpd_config_supports_route_cache_control() {

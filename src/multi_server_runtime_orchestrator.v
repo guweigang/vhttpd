@@ -3,6 +3,7 @@ module main
 import config
 import server_lifecycle
 import log
+import runtime_plan
 
 struct MultiServerAppBinding {
 mut:
@@ -25,27 +26,63 @@ fn build_multi_server_apps(runtime_cfg server_lifecycle.MultiServerRuntimeConfig
 }
 
 fn share_websocket_listener_apps(mut bindings []MultiServerAppBinding) {
-	mut shared_app := &App(unsafe { nil })
-	for binding in bindings {
-		listener_plan := binding.listener.runtime_cfg.plan.listeners[binding.listener.runtime_cfg.plan_listener_id] or {
-			continue
-		}
-		if listener_plan.protocol.trim_space().to_lower() != 'websocket' {
-			shared_app = binding.app
-			break
-		}
-	}
-	if isnil(shared_app) {
-		return
-	}
 	for i in 0 .. bindings.len {
 		listener_plan := bindings[i].listener.runtime_cfg.plan.listeners[bindings[i].listener.runtime_cfg.plan_listener_id] or {
 			continue
 		}
-		if listener_plan.protocol.trim_space().to_lower() == 'websocket' {
-			bindings[i].app = shared_app
+		if listener_plan.protocol.trim_space().to_lower() != 'websocket' {
+			continue
+		}
+		if owner_idx := relay_delivery_owner_binding_index(bindings, bindings[i].listener.runtime_cfg.plan_listener_id) {
+			bindings[i].app = bindings[owner_idx].app
 		}
 	}
+}
+
+fn relay_delivery_owner_binding_index(bindings []MultiServerAppBinding, websocket_listener_id string) ?int {
+	for relay_id in relay_ids_for_websocket_listener(bindings, websocket_listener_id) {
+		for idx, binding in bindings {
+			listener_plan := binding.listener.runtime_cfg.plan.listeners[binding.listener.runtime_cfg.plan_listener_id] or {
+				continue
+			}
+			if listener_plan.protocol.trim_space().to_lower() == 'websocket' {
+				continue
+			}
+			if listener_has_relay_delivery_target(binding.listener.runtime_cfg.plan,
+				binding.listener.runtime_cfg.plan_listener_id, relay_id) {
+				return idx
+			}
+		}
+	}
+	return none
+}
+
+fn relay_ids_for_websocket_listener(bindings []MultiServerAppBinding, websocket_listener_id string) []string {
+	mut ids := []string{}
+	for binding in bindings {
+		for relay_id, relay_plan in binding.listener.runtime_cfg.plan.relays {
+			ingress := relay_plan.ingress or { continue }
+			if ingress.domain == .listener && ingress.id == websocket_listener_id && relay_id !in ids {
+				ids << relay_id
+			}
+		}
+	}
+	ids.sort()
+	return ids
+}
+
+fn listener_has_relay_delivery_target(plan runtime_plan.RuntimePlan, listener_id string, relay_id string) bool {
+	target := 'relay:${relay_id}'
+	for pipeline in plan.listener_pipelines(listener_id) {
+		if pipeline.egress.domain != .adapter {
+			continue
+		}
+		adapter := plan.adapters[pipeline.egress.id] or { continue }
+		if adapter.kind == 'relay-delivery' && adapter.options.strings['target'] == target {
+			return true
+		}
+	}
+	return false
 }
 
 fn run_multi_server(args []string, cfg config.VhttpdConfig) {
