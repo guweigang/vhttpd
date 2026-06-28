@@ -129,6 +129,24 @@ pub fn response_completion_missing(outbound OutboundOutcome, send_result Carrier
 	}
 }
 
+pub fn (mut rt Runtime) response_completion_after_send(outbound OutboundOutcome, send_result CarrierSendResult) ResponseCompletionOutcome {
+	sent := response_completion_sent(outbound, send_result)
+	if sent.action == .failed {
+		return sent
+	}
+	if outbound.completion.mode != 'wait' {
+		return sent
+	}
+	target_id := completion_target_id(outbound.frame)
+	frames := rt.drain_returned_frames_for(outbound.frame.channel_id, target_id) or {
+		return response_completion_missing(outbound, send_result)
+	}
+	if frames.len == 0 {
+		return response_completion_missing(outbound, send_result)
+	}
+	return response_completion_from_returned(outbound, send_result, frames[0])
+}
+
 pub fn response_completion_delivery_outcome(completion ResponseCompletionOutcome) dispatch.DeliveryOutcome {
 	match completion.action {
 		.completed {

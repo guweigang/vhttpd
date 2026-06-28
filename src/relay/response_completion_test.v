@@ -203,6 +203,118 @@ fn test_response_completion_missing_reports_target() {
 	assert completion.fields['relay_event'] == 'response_completion.missing'
 }
 
+fn test_runtime_response_completion_after_send_keeps_accepted_async() {
+	mut rt := new_runtime(runtime_plan.RuntimePlan{}) or { panic(err) }
+	outbound := OutboundOutcome{
+		action:     .ready
+		trace_id:   'trace_1'
+		frame_id:   'frm_1'
+		completion: ResponseCompletionPolicy{
+			mode: 'accepted'
+		}
+		frame:      WireFrame{
+			version:    wire_version
+			kind:       .data
+			id:         'frm_1'
+			trace_id:   'trace_1'
+			channel_id: 'chan_1'
+		}
+	}
+
+	completion := rt.response_completion_after_send(outbound, CarrierSendResult{
+		ok:       true
+		trace_id: 'trace_1'
+		frame_id: 'frm_1'
+	})
+
+	assert completion.action == .sent
+	assert completion.target_id == 'frm_1'
+}
+
+fn test_runtime_response_completion_after_send_completes_wait_from_returned_frame() {
+	mut rt := new_runtime(runtime_plan.RuntimePlan{}) or { panic(err) }
+	rt.handle_frame(WireFrame{
+		version:    wire_version
+		kind:       .open
+		id:         'frm_open'
+		trace_id:   'trace_1'
+		channel_id: 'chan_1'
+	}, 'node_1', 4)
+	rt.handle_frame(WireFrame{
+		version:       wire_version
+		kind:          .data
+		id:            'relay-response:frm_1'
+		trace_id:      'trace_1'
+		channel_id:    'chan_1'
+		exchange_kind: 'response'
+		metadata:      {
+			'status': '203'
+		}
+		body:          'completed'
+	}, 'node_1', 4)
+	outbound := OutboundOutcome{
+		action:     .ready
+		trace_id:   'trace_1'
+		frame_id:   'frm_1'
+		completion: ResponseCompletionPolicy{
+			mode: 'wait'
+		}
+		frame:      WireFrame{
+			version:    wire_version
+			kind:       .data
+			id:         'frm_1'
+			trace_id:   'trace_1'
+			channel_id: 'chan_1'
+		}
+	}
+
+	completion := rt.response_completion_after_send(outbound, CarrierSendResult{
+		ok:       true
+		trace_id: 'trace_1'
+		frame_id: 'frm_1'
+	})
+
+	assert completion.action == .completed
+	assert completion.delivery.status == 203
+	assert completion.delivery.body == 'completed'
+	assert rt.snapshot().returned_frames == 0
+}
+
+fn test_runtime_response_completion_after_send_reports_missing_wait_response() {
+	mut rt := new_runtime(runtime_plan.RuntimePlan{}) or { panic(err) }
+	rt.handle_frame(WireFrame{
+		version:    wire_version
+		kind:       .open
+		id:         'frm_open'
+		trace_id:   'trace_1'
+		channel_id: 'chan_1'
+	}, 'node_1', 4)
+	outbound := OutboundOutcome{
+		action:     .ready
+		trace_id:   'trace_1'
+		frame_id:   'frm_1'
+		completion: ResponseCompletionPolicy{
+			mode: 'wait'
+		}
+		frame:      WireFrame{
+			version:    wire_version
+			kind:       .data
+			id:         'frm_1'
+			trace_id:   'trace_1'
+			channel_id: 'chan_1'
+		}
+	}
+
+	completion := rt.response_completion_after_send(outbound, CarrierSendResult{
+		ok:       true
+		trace_id: 'trace_1'
+		frame_id: 'frm_1'
+	})
+
+	assert completion.action == .missing
+	assert completion.error == 'relay_returned_frame_not_found:chan_1:frm_1'
+}
+
 fn test_response_completion_delivery_outcome_preserves_completed_response() {
 	completion := ResponseCompletionOutcome{
 		action:     .completed
