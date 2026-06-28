@@ -76,3 +76,29 @@ pub fn (mut rt Runtime) track_outbound_delivery(outbound OutboundOutcome, defaul
 	}
 	return rt.handle_frame(outbound.frame, 'local:${outbound.relay_id}', default_buffer_limit)
 }
+
+pub fn (mut rt Runtime) finish_outbound_delivery(outbound OutboundOutcome) ForwardingOutcome {
+	if outbound.frame.channel_id.trim_space() == '' {
+		return ForwardingOutcome{
+			action:   .rejected
+			trace_id: outbound.trace_id
+			frame_id: outbound.frame_id
+			error:    'relay_outbound_missing_channel_id'
+		}
+	}
+	if !rt.channels.retire_channel(outbound.frame.channel_id) {
+		return ForwardingOutcome{
+			action:     .rejected
+			channel_id: outbound.frame.channel_id
+			trace_id:   outbound.trace_id
+			frame_id:   outbound.frame_id
+			error:      'relay_channel_unknown:${outbound.frame.channel_id}'
+		}
+	}
+	return ForwardingOutcome{
+		action:     .closed
+		channel_id: outbound.frame.channel_id
+		trace_id:   outbound.trace_id
+		frame_id:   outbound.frame_id
+	}
+}

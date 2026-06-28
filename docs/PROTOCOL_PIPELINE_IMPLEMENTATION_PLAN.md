@@ -1201,6 +1201,7 @@ Progress as of 2026-06-27:
 - `P6.70` relay-delivery terminal adapter added: V2 pipelines can now use a generic `relay-delivery` adapter to project HTTP or relay exchanges into `dispatch.relay_delivery` outcomes with explicit completion policy metadata, and a public relay example wires HTTP ingress to a relay hub without provider-specific code
 - `P6.71` HTTP relay wait completion enabled: HTTP relay delivery now supports the explicit `wait` completion policy with a bounded timeout, allowing public HTTP ingress to render returned relay responses while keeping `stream` unsupported until streaming bridge semantics are implemented
 - `P6.72` relay outbound channel tracking added: HTTP relay delivery now records outbound frames in the local relay runtime before carrier send, so returned response frames can be correlated and drained for wait completions; a public-to-agent relay contract test locks trace, channel, response target, and HTTP response reconstruction
+- `P6.73` relay wait channel retirement added: completed, failed, or timed-out HTTP relay wait deliveries now retire their local outbound channels and correlations, preventing request/response relay traffic from consuming bounded channel capacity after terminal completion
 
 Batches:
 

@@ -144,6 +144,7 @@ fn test_public_http_relay_delivery_reaches_agent_pipeline_and_returns_response()
 	assert http_outcome.metadata['trace_id'] == 'trace-public'
 	assert http_outcome.metadata['relay_event'] == 'response_completion.completed'
 	assert http_outcome.metadata['target_id'] == 'frm-public'
+	assert public_relay.snapshot().channel_count == 0
 }
 
 fn test_dispatch_and_send_relay_ingress_frame_reports_send_result() {

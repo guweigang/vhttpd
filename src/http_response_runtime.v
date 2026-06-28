@@ -191,6 +191,7 @@ fn relay_delivery_http_completion_supported(mode string) bool {
 fn relay_delivery_wait_http_outcome(mut rt relay.Runtime, outbound relay.OutboundOutcome, send_result relay.CarrierSendResult) dispatch.DeliveryOutcome {
 	sent := relay.response_completion_sent(outbound, send_result)
 	if sent.action == .failed {
+		rt.finish_outbound_delivery(outbound)
 		return relay.response_completion_delivery_outcome(sent)
 	}
 	timeout_ms := relay_delivery_wait_timeout_ms(outbound.completion.timeout_ms)
@@ -198,10 +199,12 @@ fn relay_delivery_wait_http_outcome(mut rt relay.Runtime, outbound relay.Outboun
 	for time.now().unix_milli() <= deadline_ms {
 		completion := rt.response_completion_after_send(outbound, send_result)
 		if completion.action != .missing {
+			rt.finish_outbound_delivery(outbound)
 			return relay.response_completion_delivery_outcome(completion)
 		}
 		time.sleep(relay_delivery_wait_poll_ms * time.millisecond)
 	}
+	rt.finish_outbound_delivery(outbound)
 	return relay.response_completion_delivery_outcome(relay.response_completion_missing(outbound,
 		send_result))
 }

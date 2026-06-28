@@ -63,6 +63,23 @@ pub fn (mut registry ChannelRegistry) close_channel(channel_id string) bool {
 	return true
 }
 
+pub fn (mut registry ChannelRegistry) retire_channel(channel_id string) bool {
+	if channel_id !in registry.channels {
+		return false
+	}
+	registry.channels.delete(channel_id)
+	mut remove_ids := []string{}
+	for correlation_id, mapped_channel_id in registry.correlations {
+		if mapped_channel_id == channel_id {
+			remove_ids << correlation_id
+		}
+	}
+	for correlation_id in remove_ids {
+		registry.correlations.delete(correlation_id)
+	}
+	return true
+}
+
 pub fn (mut registry ChannelRegistry) bind_correlation(correlation_id string, channel_id string) ! {
 	if correlation_id.trim_space() == '' {
 		return error('relay_channel_missing_correlation_id')

@@ -107,3 +107,45 @@ fn test_track_outbound_delivery_rejects_unavailable_outbound() {
 	assert tracking.frame_id == 'req_1'
 	assert tracking.error == 'relay_carrier_unavailable:edge'
 }
+
+fn test_finish_outbound_delivery_retires_local_channel() {
+	mut rt := empty_runtime()
+	rt.register_carrier('edge', 'carrier_edge') or { panic(err) }
+	outbound := rt.prepare_outbound_delivery(dispatch.relay_delivery_outcome('relay:edge', {
+		'trace_id':       'trace_1'
+		'request_id':     'req_1'
+		'channel_id':     'chan_1'
+		'correlation_id': 'corr_1'
+		'frame_kind':     'open'
+	}))
+	rt.track_outbound_delivery(outbound, 32)
+
+	finished := rt.finish_outbound_delivery(outbound)
+
+	assert finished.action == .closed
+	assert finished.channel_id == 'chan_1'
+	assert rt.snapshot().channel_count == 0
+	assert rt.channels.channel_for_correlation('corr_1') == none
+}
+
+fn test_finish_outbound_delivery_reports_missing_channel() {
+	mut rt := empty_runtime()
+	outbound := OutboundOutcome{
+		action:   .ready
+		trace_id: 'trace_1'
+		frame_id: 'frm_1'
+		frame:    WireFrame{
+			version:    wire_version
+			kind:       .open
+			id:         'frm_1'
+			trace_id:   'trace_1'
+			channel_id: 'missing'
+		}
+	}
+
+	finished := rt.finish_outbound_delivery(outbound)
+
+	assert finished.action == .rejected
+	assert finished.channel_id == 'missing'
+	assert finished.error == 'relay_channel_unknown:missing'
+}

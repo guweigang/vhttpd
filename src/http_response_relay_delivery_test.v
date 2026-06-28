@@ -166,6 +166,7 @@ fn test_relay_delivery_send_http_outcome_can_complete_wait_from_returned_frame()
 	assert outcome.body == 'done'
 	assert outcome.metadata['relay_event'] == 'response_completion.completed'
 	assert outcome.metadata['target_id'] == 'req_1'
+	assert rt.snapshot().channel_count == 0
 }
 
 fn test_relay_delivery_send_http_outcome_times_out_wait_without_returned_frame() {
@@ -176,6 +177,7 @@ fn test_relay_delivery_send_http_outcome_times_out_wait_without_returned_frame()
 		'request_id': 'req_1'
 		'channel_id': 'chan_1'
 	}, 'wait', 1))
+	rt.track_outbound_delivery(projection, 4)
 
 	outcome := relay_delivery_send_http_outcome(mut rt, projection, relay.CarrierSendResult{
 		ok:       true
@@ -190,4 +192,5 @@ fn test_relay_delivery_send_http_outcome_times_out_wait_without_returned_frame()
 	assert outcome.metadata['relay_event'] == 'response_completion.missing'
 	assert outcome.metadata['completion_mode'] == 'wait'
 	assert outcome.metadata['completion_timeout_ms'] == '1'
+	assert rt.snapshot().channel_count == 0
 }
