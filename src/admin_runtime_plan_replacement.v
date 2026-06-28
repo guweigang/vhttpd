@@ -98,10 +98,11 @@ struct RuntimePlanReplacementFinalizeResult {
 }
 
 struct RuntimePlanReplacementPreparedRuntime {
-	plan     runtime_plan.RuntimePlan
-	engines  EngineRuntime
-	routes   []RuntimeRouteRule
-	listener string
+	plan              runtime_plan.RuntimePlan
+	engines           EngineRuntime
+	primary_lifecycle executor.LogicExecutorLifecycle
+	routes            []RuntimeRouteRule
+	listener          string
 }
 
 fn (mut app App) preview_runtime_plan_replacement(config_path string) !RuntimePlanReplacementPreview {
@@ -228,12 +229,38 @@ fn (mut app App) finalize_runtime_plan_replacement() RuntimePlanReplacementFinal
 			pending:     pending
 		}
 	}
+	mut prepared := app.prepare_runtime_plan_replacement_runtime(pending) or {
+		return RuntimePlanReplacementFinalizeResult{
+			config_path: pending.config_path
+			applied:     false
+			status:      'rejected'
+			strategy:    pending.strategy
+			error:       err.msg()
+			pending:     pending
+		}
+	}
+	app.apply_prepared_runtime_plan_replacement(mut prepared) or {
+		return RuntimePlanReplacementFinalizeResult{
+			config_path: pending.config_path
+			applied:     false
+			status:      'rejected'
+			strategy:    pending.strategy
+			error:       err.msg()
+			pending:     pending
+		}
+	}
+	app.emit('runtime.plan.replaced', {
+		'config_path':          pending.config_path
+		'changed_pipelines':    pending.changed_pipelines.join(',')
+		'unchanged_pipelines':  pending.unchanged_pipelines.join(',')
+		'drain_engines':        pending.drain_engines.join(',')
+		'replacement_strategy': pending.strategy
+	})
 	return RuntimePlanReplacementFinalizeResult{
 		config_path: pending.config_path
-		applied:     false
-		status:      'blocked'
+		applied:     true
+		status:      'applied'
 		strategy:    pending.strategy
-		error:       'runtime_plan_replacement_requires_engine_runtime_rebuild'
 		pending:     pending
 	}
 }
@@ -250,11 +277,50 @@ fn (mut app App) prepare_runtime_plan_replacement_runtime(pending RuntimePlanRep
 	next_engines := build_engine_runtime_from_plan(app.legacy_config, next_executor_plan,
 		next_plan, listener_id, next_routes, app.app_build_cfg)
 	return RuntimePlanReplacementPreparedRuntime{
-		plan:     next_plan
-		engines:  next_engines
-		routes:   next_routes
-		listener: listener_id
+		plan:              next_plan
+		engines:           next_engines
+		primary_lifecycle: next_executor_plan.lifecycle
+		routes:            next_routes
+		listener:          listener_id
 	}
+}
+
+fn (mut app App) apply_prepared_runtime_plan_replacement(mut prepared RuntimePlanReplacementPreparedRuntime) ! {
+	mut next_engines := prepared.engines
+	apply_runtime_scheme_to_engine_runtime(mut next_engines, app.lifecycle.data_plane_scheme)
+	port := app.build_engine_lifecycle_port()
+	mut facade := app.as_facade()
+	next_engines.start(prepared.primary_lifecycle, port, mut facade)
+	mut old_engines := app.engines
+	old_primary_lifecycle := engine_primary_lifecycle_or_disabled(old_engines)
+	updated_pipelines := PipelineRuntime.new(prepared.plan, prepared.listener, prepared.routes,
+		app.assets.root_real, app.pipelines.http.worker_root,
+		next_engines.primary.worker_backend.env.clone(), next_engines.additional.clone())
+	updated_transformers := TransformerRuntimeHub.from_plan(prepared.plan)
+	updated_mcp := mcp_state_from_plan(prepared.plan, prepared.listener)
+	updated_openai := openai_state_from_plan(prepared.plan, prepared.listener)
+	plan_json := json.encode(prepared.plan)
+
+	app.mu.@lock()
+	app.plan = prepared.plan
+	app.engines = next_engines
+	app.pipelines = updated_pipelines
+	app.transformers = updated_transformers
+	app.protocols.runtime_plan_json = plan_json
+	app.protocols.mcp = updated_mcp
+	app.protocols.openai = updated_openai
+	app.replacement.pending = RuntimePlanReplacementPendingSnapshot{}
+	app.replacement.applied_total++
+	app.mu.unlock()
+
+	old_engines.stop(old_primary_lifecycle, port)
+}
+
+fn engine_primary_lifecycle_or_disabled(engines EngineRuntime) executor.LogicExecutorLifecycle {
+	spec := executor.builtin_executor_spec_find(engines.primary_kind()) or {
+		return executor.disabled_executor_lifecycle()
+	}
+	return spec.lifecycle
 }
 
 fn (mut app App) apply_lightweight_runtime_plan(next_plan runtime_plan.RuntimePlan) {

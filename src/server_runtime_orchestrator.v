@@ -78,7 +78,11 @@ fn (mut lifecycle ProcessLifecycle) start(mut app App, runtime_cfg server_lifecy
 }
 
 fn apply_runtime_scheme_to_worker_envs(mut app App, scheme string) {
-	app.engines.apply_scheme(scheme)
+	apply_runtime_scheme_to_engine_runtime(mut app.engines, scheme)
+}
+
+fn apply_runtime_scheme_to_engine_runtime(mut engines EngineRuntime, scheme string) {
+	engines.apply_scheme(scheme)
 }
 
 fn serve_server_runtime(mut app App, runtime_cfg server_lifecycle.ServerRuntimeConfig) {

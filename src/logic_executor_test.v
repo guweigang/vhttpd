@@ -516,18 +516,64 @@ fn test_internal_admin_runtime_plan_replacement_finalize_waits_for_drain() {
 	assert result.pending.drain_statuses[0].inflight_requests == 1
 }
 
-fn test_internal_admin_runtime_plan_replacement_finalize_blocks_engine_rebuild_until_supported() {
+fn test_internal_admin_runtime_plan_replacement_finalize_applies_ready_engine_runtime() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_plan_replacement_finalize_engine_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	config_file := os.join_path(temp_dir, 'next.toml')
+	next_entry := os.join_path(temp_dir, 'app-next.php')
+	os.write_file(next_entry, '<?php echo "next";') or { panic(err) }
+	os.write_file(config_file, '
+version = 2
+
+[listeners.web]
+protocol = "http"
+transport = "tcp"
+host = "127.0.0.1"
+port = 18080
+
+[engines.app]
+kind = "php-worker"
+entry = "${next_entry}"
+autostart = false
+
+[adapters.app]
+kind = "http-handler"
+engine = "engine:app"
+
+[[pipelines]]
+id = "site/app"
+ingress = "listener:web"
+match.paths = ["*"]
+egress = "adapter:app"
+') or {
+		panic(err)
+	}
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
 	mut app := App{
-		replacement: RuntimePlanReplacementRuntime{
+		legacy_config: config.default_vhttpd_config()
+		app_build_cfg: server_lifecycle.AppRuntimeBuildConfig{
+			plan_listener_id:        'web'
+			worker_queue_capacity:   8
+			worker_queue_timeout_ms: 25
+			workdir:                 temp_dir
+		}
+		replacement:   RuntimePlanReplacementRuntime{
 			pending: RuntimePlanReplacementPendingSnapshot{
 				active:        true
-				config_path:   '/tmp/next.toml'
+				config_path:   config_file
 				strategy:      'engine_drain_required'
 				ready:         true
 				drain_engines: ['app']
 			}
 		}
-		engines:     EngineRuntime{
+		pipelines:     PipelineRuntime{
+			http: HttpRoutingRuntime{
+				listener_id: 'web'
+			}
+		}
+		engines:       EngineRuntime{
 			primary: worker.WorkerState{
 				worker_backend: worker.WorkerBackendRuntime{
 					managed_workers: [
@@ -549,12 +595,16 @@ fn test_internal_admin_runtime_plan_replacement_finalize_blocks_engine_rebuild_u
 	})
 	result := json.decode(RuntimePlanReplacementFinalizeResult, resp.body) or { panic(err) }
 
-	assert resp.status == 409
-	assert !result.applied
-	assert result.status == 'blocked'
-	assert result.error == 'runtime_plan_replacement_requires_engine_runtime_rebuild'
+	assert resp.status == 200
+	assert result.applied
+	assert result.status == 'applied'
+	assert result.error == ''
 	assert result.pending.ready
 	assert result.pending.drain_statuses[0].ready_count == 1
+	assert app.plan.engines['app'].options.strings['entry'] == next_entry
+	assert app.engines.primary.worker_backend.cmd.contains(next_entry)
+	assert app.engines.primary.worker_backend.queue_capacity == 8
+	assert !app.replacement.pending.active
 }
 
 fn test_runtime_plan_replacement_prepares_next_engine_runtime() {
