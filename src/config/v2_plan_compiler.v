@@ -589,6 +589,11 @@ fn validate_adapter_semantics(plan runtime_plan.RuntimePlan) ! {
 					return error('runtime_plan_adapter_empty_fixed_response:${id}')
 				}
 			}
+			'relay-delivery' {
+				if adapter.options.strings['target'].trim_space() == '' {
+					return error('runtime_plan_adapter_missing_target:${id}')
+				}
+			}
 			else {}
 		}
 	}

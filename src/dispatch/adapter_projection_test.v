@@ -101,6 +101,48 @@ fn test_terminal_adapter_from_reject_plan() {
 	assert outcome.error_class == 'policy_blocked'
 }
 
+fn test_terminal_adapter_from_relay_delivery_plan() {
+	plan_adapter := runtime_plan.AdapterPlan{
+		id:      'relay'
+		kind:    'relay-delivery'
+		options: runtime_plan.PlanOptions{
+			strings:     {
+				'target':          'relay:edge'
+				'completion_mode': 'accepted'
+			}
+			ints:        {
+				'completion_timeout_ms': 1000
+			}
+			string_maps: {
+				'metadata': {
+					'frame_kind': 'open'
+					'route':      'relay/local-response'
+				}
+			}
+		}
+	}
+	mut adapter := terminal_adapter_from_plan(plan_adapter) or { panic('missing adapter') }
+	mut services := RuntimeServices(ProjectionTestServices{
+		trace: 'trace-relay'
+	})
+	exchange := http_request_exchange(HttpIngressRequest{
+		method:     'GET'
+		path:       '/relay'
+		request_id: 'req-relay'
+		trace_id:   'trace-relay'
+	})
+
+	outcome := adapter.deliver(mut services, exchange) or { panic(err) }
+
+	assert adapter.id() == 'relay'
+	assert outcome.kind == .relay_delivery
+	assert outcome.target == 'relay:edge'
+	assert outcome.metadata['frame_kind'] == 'open'
+	assert outcome.metadata['route'] == 'relay/local-response'
+	assert outcome.metadata['completion_mode'] == 'accepted'
+	assert outcome.metadata['completion_timeout_ms'] == '1000'
+}
+
 fn test_terminal_adapter_from_plan_ignores_non_terminal_adapters() {
 	plan_adapter := runtime_plan.AdapterPlan{
 		id:   'php'
@@ -117,6 +159,13 @@ fn test_adapter_descriptor_marks_terminal_and_runtime_adapters() {
 	assert fixed.id == 'health'
 	assert fixed.terminal
 	assert fixed.capabilities.request_response
+
+	relay_delivery := adapter_descriptor_from_plan(runtime_plan.AdapterPlan{
+		id:   'relay'
+		kind: 'relay-delivery'
+	})
+	assert relay_delivery.terminal
+	assert relay_delivery.capabilities.request_response
 
 	http_handler := adapter_descriptor_from_plan(runtime_plan.AdapterPlan{
 		id:   'php'

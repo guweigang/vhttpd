@@ -7,7 +7,7 @@ pub fn adapter_descriptor_from_plan(adapter runtime_plan.AdapterPlan) AdapterDes
 		id:           adapter.id
 		kind:         adapter.kind
 		capabilities: adapter_capabilities(adapter.kind)
-		terminal:     adapter.kind in ['fixed-response', 'reject']
+		terminal:     adapter.kind in ['fixed-response', 'reject', 'relay-delivery']
 	}
 }
 
@@ -72,10 +72,31 @@ pub fn terminal_adapter_from_plan(adapter runtime_plan.AdapterPlan) ?EgressAdapt
 			return EgressAdapter(reject_adapter(adapter.id, status,
 				adapter.options.strings['error'], adapter.options.strings['error_class']))
 		}
+		'relay-delivery' {
+			return EgressAdapter(relay_delivery_adapter(adapter.id,
+				adapter.options.strings['target'], adapter.options.strings['completion_mode'],
+				adapter.options.ints['completion_timeout_ms'],
+				relay_delivery_adapter_metadata(adapter.options)))
+		}
 		else {
 			return none
 		}
 	}
+}
+
+fn relay_delivery_adapter_metadata(options runtime_plan.PlanOptions) map[string]string {
+	mut metadata := if source := options.string_maps['metadata'] {
+		source.clone()
+	} else {
+		map[string]string{}
+	}
+	for key in ['frame_kind', 'route', 'channel_id', 'correlation_id'] {
+		value := options.strings[key] or { '' }
+		if value.trim_space() != '' {
+			metadata[key] = value
+		}
+	}
+	return metadata
 }
 
 fn fixed_response_status(options runtime_plan.PlanOptions) int {

@@ -197,6 +197,99 @@ fn test_compile_v2_runtime_plan_loads_relay_agent_example() {
 	assert plan.pipeline('relay/local-response')?.egress.str() == 'adapter:local-response'
 }
 
+fn test_compile_v2_runtime_plan_loads_relay_public_example() {
+	config_path := os.join_path(os.dir(@FILE), '..', '..', 'examples', 'config',
+		'relay-public-v2.toml')
+	text := os.read_file(config_path) or { panic(err) }
+	cfg := toml.decode[V2Config](text) or { panic(err) }
+
+	plan := compile_v2_runtime_plan(cfg, '', false) or { panic(err) }
+
+	assert plan.listeners['web'].protocol == 'http'
+	assert plan.listeners['relay'].protocol == 'websocket'
+	assert plan.relays['edge'].ingress?.str() == 'listener:relay'
+	assert plan.adapters['relay-edge'].kind == 'relay-delivery'
+	assert plan.adapters['relay-edge'].options.strings['target'] == 'relay:edge'
+	assert plan.adapters['relay-edge'].options.strings['frame_kind'] == 'open'
+	assert plan.adapters['relay-edge'].options.strings['route'] == 'relay/local-response'
+	assert plan.pipeline('public/relay')?.ingress.str() == 'listener:web'
+	assert plan.pipeline('public/relay')?.egress.str() == 'adapter:relay-edge'
+}
+
+fn test_compile_v2_runtime_plan_allows_relay_delivery_adapter() {
+	cfg := V2Config{
+		listeners: {
+			'web': V2ListenerSpec{}
+		}
+		adapters:  {
+			'relay': V2AdapterSpec{
+				kind:        'relay-delivery'
+				options:     {
+					'target':          'relay:edge'
+					'completion_mode': 'accepted'
+					'frame_kind':      'open'
+					'route':           'relay/local-response'
+				}
+				int_options: {
+					'completion_timeout_ms': 1000
+				}
+			}
+		}
+		pipelines: [
+			V2PipelineSpec{
+				id:      'public/relay'
+				ingress: 'listener:web'
+				match:   V2MatchSpec{
+					paths: ['/relay']
+				}
+				egress:  'adapter:relay'
+			},
+		]
+		relays:    {
+			'edge': V2RelaySpec{
+				mode:    'hub'
+				carrier: 'websocket'
+			}
+		}
+	}
+
+	plan := compile_v2_runtime_plan(cfg, '', false) or { panic(err) }
+
+	assert plan.adapters['relay'].kind == 'relay-delivery'
+	assert plan.adapters['relay'].options.strings['target'] == 'relay:edge'
+	assert plan.adapters['relay'].options.strings['completion_mode'] == 'accepted'
+	assert plan.adapters['relay'].options.strings['frame_kind'] == 'open'
+	assert plan.adapters['relay'].options.strings['route'] == 'relay/local-response'
+	assert plan.adapters['relay'].options.ints['completion_timeout_ms'] == 1000
+	assert plan.pipeline('public/relay')?.egress.str() == 'adapter:relay'
+}
+
+fn test_compile_v2_runtime_plan_rejects_relay_delivery_adapter_without_target() {
+	cfg := V2Config{
+		listeners: {
+			'web': V2ListenerSpec{}
+		}
+		adapters:  {
+			'relay': V2AdapterSpec{
+				kind: 'relay-delivery'
+			}
+		}
+		pipelines: [
+			V2PipelineSpec{
+				id:      'public/relay'
+				ingress: 'listener:web'
+				egress:  'adapter:relay'
+			},
+		]
+	}
+
+	if _ := compile_v2_runtime_plan(cfg, '', false) {
+		assert false
+	} else {
+		assert err.msg() == 'runtime_plan_adapter_missing_target:relay'
+	}
+}
+
 fn test_compile_v2_runtime_plan_rejects_http_handler_without_engine() {
 	cfg := V2Config{
 		listeners: {

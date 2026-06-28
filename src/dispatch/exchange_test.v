@@ -260,6 +260,40 @@ fn test_reject_adapter_defaults_status_and_error_class() {
 	assert adapter.error_class == 'rejected'
 }
 
+fn test_relay_delivery_adapter_projects_http_request_to_relay_delivery() {
+	mut services := RuntimeServices(TestServices{
+		trace: 'trace-relay'
+	})
+	exchange := http_request_exchange(HttpIngressRequest{
+		method:      'POST'
+		path:        '/relay'
+		body:        'payload'
+		request_id:  'req-relay'
+		trace_id:    'trace-original'
+		exchange_id: 'ex-relay'
+		pipeline:    'public/relay'
+	})
+	mut adapter := EgressAdapter(relay_delivery_adapter('adapter:relay', 'relay:edge', 'accepted',
+		0, {
+		'frame_kind': 'open'
+		'route':      'relay/local-response'
+	}))
+
+	outcome := adapter.deliver(mut services, exchange) or { panic(err) }
+
+	assert adapter.id() == 'adapter:relay'
+	assert outcome.kind == .relay_delivery
+	assert outcome.target == 'relay:edge'
+	assert outcome.metadata['trace_id'] == 'trace-relay'
+	assert outcome.metadata['request_id'] == 'req-relay'
+	assert outcome.metadata['frame_id'] == 'ex-relay'
+	assert outcome.metadata['channel_id'] == 'req-relay'
+	assert outcome.metadata['frame_kind'] == 'open'
+	assert outcome.metadata['route'] == 'relay/local-response'
+	assert outcome.metadata['body'] == 'payload'
+	assert outcome.metadata['completion_mode'] == 'accepted'
+}
+
 fn test_pipeline_dispatcher_contract() {
 	mut services := RuntimeServices(TestServices{
 		trace: 'trace-3'

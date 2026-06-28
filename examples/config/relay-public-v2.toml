@@ -1,0 +1,43 @@
+version = 2
+
+[server]
+timezone = "Asia/Shanghai"
+pid_file = "/tmp/vhttpd_relay_public_v2.pid"
+
+[observability]
+event_log = "/tmp/vhttpd_relay_public_v2.events.ndjson"
+
+[listeners.web]
+protocol = "http"
+transport = "tcp"
+host = "127.0.0.1"
+port = 19920
+
+[listeners.relay]
+protocol = "websocket"
+transport = "tcp"
+host = "127.0.0.1"
+port = 19921
+
+[relays.edge]
+mode = "hub"
+carrier = "websocket"
+listener = "listener:relay"
+path = "/vhttpd/relay"
+node_id = "hub-local"
+token = "change-me"
+max_channels = 1024
+channel_buffer = 64
+
+[adapters.relay-edge]
+kind = "relay-delivery"
+options.target = "relay:edge"
+options.completion_mode = "accepted"
+options.frame_kind = "open"
+options.route = "relay/local-response"
+
+[[pipelines]]
+id = "public/relay"
+ingress = "listener:web"
+match.paths = ["/relay"]
+egress = "adapter:relay-edge"
