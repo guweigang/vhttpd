@@ -473,6 +473,12 @@ fn test_internal_admin_runtime_plan_replacement_finalize_requires_pending() {
 	assert !result.applied
 	assert result.status == 'rejected'
 	assert result.error == 'runtime_plan_replacement_no_pending'
+	state := app.runtime_plan_replacement_snapshot()
+	assert state.finalizes_total == 1
+	assert state.finalized_total == 0
+	assert state.last_finalize.kind == 'finalize'
+	assert state.last_finalize.status == 'rejected'
+	assert state.last_finalize.error == 'runtime_plan_replacement_no_pending'
 }
 
 fn test_internal_admin_runtime_plan_replacement_finalize_waits_for_drain() {
@@ -514,6 +520,11 @@ fn test_internal_admin_runtime_plan_replacement_finalize_waits_for_drain() {
 	assert result.status == 'waiting_for_drain'
 	assert result.error == 'runtime_plan_replacement_drain_not_ready'
 	assert result.pending.drain_statuses[0].inflight_requests == 1
+	state := app.runtime_plan_replacement_snapshot()
+	assert state.finalizes_total == 1
+	assert state.finalized_total == 0
+	assert state.last_finalize.status == 'waiting_for_drain'
+	assert state.last_finalize.drain_statuses[0].inflight_requests == 1
 }
 
 fn test_internal_admin_runtime_plan_replacement_finalize_applies_ready_engine_runtime() {
@@ -605,6 +616,13 @@ egress = "adapter:app"
 	assert app.engines.primary.worker_backend.cmd.contains(next_entry)
 	assert app.engines.primary.worker_backend.queue_capacity == 8
 	assert !app.replacement.pending.active
+	state := app.runtime_plan_replacement_snapshot()
+	assert state.finalizes_total == 1
+	assert state.finalized_total == 1
+	assert state.applied_total == 1
+	assert state.last_finalize.status == 'applied'
+	assert state.last_finalize.applied
+	assert state.last_finalize.drain_statuses[0].ready_count == 1
 }
 
 fn test_runtime_plan_replacement_prepares_next_engine_runtime() {

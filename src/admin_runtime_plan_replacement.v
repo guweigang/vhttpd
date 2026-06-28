@@ -8,14 +8,17 @@ import time
 
 struct RuntimePlanReplacementRuntime {
 mut:
-	previews_total int
-	applies_total  int
-	applied_total  int
-	draining_total int
-	rejected_total int
-	pending        RuntimePlanReplacementPendingSnapshot
-	last_preview   RuntimePlanReplacementAttemptSnapshot
-	last_apply     RuntimePlanReplacementAttemptSnapshot
+	previews_total  int
+	applies_total   int
+	finalizes_total int
+	applied_total   int
+	finalized_total int
+	draining_total  int
+	rejected_total  int
+	pending         RuntimePlanReplacementPendingSnapshot
+	last_preview    RuntimePlanReplacementAttemptSnapshot
+	last_apply      RuntimePlanReplacementAttemptSnapshot
+	last_finalize   RuntimePlanReplacementAttemptSnapshot
 }
 
 struct RuntimePlanReplacementAttemptSnapshot {
@@ -52,14 +55,17 @@ pub:
 }
 
 struct RuntimePlanReplacementRuntimeSnapshot {
-	previews_total int
-	applies_total  int
-	applied_total  int
-	draining_total int
-	rejected_total int
-	pending        RuntimePlanReplacementPendingSnapshot
-	last_preview   RuntimePlanReplacementAttemptSnapshot
-	last_apply     RuntimePlanReplacementAttemptSnapshot
+	previews_total  int
+	applies_total   int
+	finalizes_total int
+	applied_total   int
+	finalized_total int
+	draining_total  int
+	rejected_total  int
+	pending         RuntimePlanReplacementPendingSnapshot
+	last_preview    RuntimePlanReplacementAttemptSnapshot
+	last_apply      RuntimePlanReplacementAttemptSnapshot
+	last_finalize   RuntimePlanReplacementAttemptSnapshot
 }
 
 struct RuntimePlanReplacementPreview {
@@ -206,21 +212,25 @@ fn (mut app App) apply_runtime_plan_replacement(config_path string) !RuntimePlan
 
 fn (mut app App) finalize_runtime_plan_replacement() RuntimePlanReplacementFinalizeResult {
 	pending := app.refresh_pending_runtime_plan_replacement() or {
-		return RuntimePlanReplacementFinalizeResult{
+		result := RuntimePlanReplacementFinalizeResult{
 			applied: false
 			status:  'rejected'
 			error:   err.msg()
 		}
+		app.record_runtime_plan_replacement_finalize(result)
+		return result
 	}
 	if !pending.active {
-		return RuntimePlanReplacementFinalizeResult{
+		result := RuntimePlanReplacementFinalizeResult{
 			applied: false
 			status:  'rejected'
 			error:   'runtime_plan_replacement_no_pending'
 		}
+		app.record_runtime_plan_replacement_finalize(result)
+		return result
 	}
 	if !pending.ready {
-		return RuntimePlanReplacementFinalizeResult{
+		result := RuntimePlanReplacementFinalizeResult{
 			config_path: pending.config_path
 			applied:     false
 			status:      'waiting_for_drain'
@@ -228,9 +238,11 @@ fn (mut app App) finalize_runtime_plan_replacement() RuntimePlanReplacementFinal
 			error:       'runtime_plan_replacement_drain_not_ready'
 			pending:     pending
 		}
+		app.record_runtime_plan_replacement_finalize(result)
+		return result
 	}
 	mut prepared := app.prepare_runtime_plan_replacement_runtime(pending) or {
-		return RuntimePlanReplacementFinalizeResult{
+		result := RuntimePlanReplacementFinalizeResult{
 			config_path: pending.config_path
 			applied:     false
 			status:      'rejected'
@@ -238,9 +250,11 @@ fn (mut app App) finalize_runtime_plan_replacement() RuntimePlanReplacementFinal
 			error:       err.msg()
 			pending:     pending
 		}
+		app.record_runtime_plan_replacement_finalize(result)
+		return result
 	}
 	app.apply_prepared_runtime_plan_replacement(mut prepared) or {
-		return RuntimePlanReplacementFinalizeResult{
+		result := RuntimePlanReplacementFinalizeResult{
 			config_path: pending.config_path
 			applied:     false
 			status:      'rejected'
@@ -248,6 +262,8 @@ fn (mut app App) finalize_runtime_plan_replacement() RuntimePlanReplacementFinal
 			error:       err.msg()
 			pending:     pending
 		}
+		app.record_runtime_plan_replacement_finalize(result)
+		return result
 	}
 	app.emit('runtime.plan.replaced', {
 		'config_path':          pending.config_path
@@ -256,13 +272,15 @@ fn (mut app App) finalize_runtime_plan_replacement() RuntimePlanReplacementFinal
 		'drain_engines':        pending.drain_engines.join(',')
 		'replacement_strategy': pending.strategy
 	})
-	return RuntimePlanReplacementFinalizeResult{
+	result := RuntimePlanReplacementFinalizeResult{
 		config_path: pending.config_path
 		applied:     true
 		status:      'applied'
 		strategy:    pending.strategy
 		pending:     pending
 	}
+	app.record_runtime_plan_replacement_finalize(result)
+	return result
 }
 
 fn (mut app App) prepare_runtime_plan_replacement_runtime(pending RuntimePlanReplacementPendingSnapshot) !RuntimePlanReplacementPreparedRuntime {
@@ -310,7 +328,6 @@ fn (mut app App) apply_prepared_runtime_plan_replacement(mut prepared RuntimePla
 	app.protocols.mcp = updated_mcp
 	app.protocols.openai = updated_openai
 	app.replacement.pending = RuntimePlanReplacementPendingSnapshot{}
-	app.replacement.applied_total++
 	app.mu.unlock()
 
 	old_engines.stop(old_primary_lifecycle, port)
@@ -386,6 +403,19 @@ fn (mut app App) record_runtime_plan_replacement_apply(result RuntimePlanReplace
 		result.status, result.applied, result.error, result.drains, result.preview)
 }
 
+fn (mut app App) record_runtime_plan_replacement_finalize(result RuntimePlanReplacementFinalizeResult) {
+	app.mu.@lock()
+	defer {
+		app.mu.unlock()
+	}
+	app.replacement.finalizes_total++
+	if result.applied {
+		app.replacement.finalized_total++
+		app.replacement.applied_total++
+	}
+	app.replacement.last_finalize = runtime_plan_replacement_attempt_from_finalize(result)
+}
+
 fn (mut app App) runtime_plan_replacement_snapshot() RuntimePlanReplacementRuntimeSnapshot {
 	app.refresh_pending_runtime_plan_replacement() or {}
 	app.mu.@lock()
@@ -393,14 +423,17 @@ fn (mut app App) runtime_plan_replacement_snapshot() RuntimePlanReplacementRunti
 		app.mu.unlock()
 	}
 	return RuntimePlanReplacementRuntimeSnapshot{
-		previews_total: app.replacement.previews_total
-		applies_total:  app.replacement.applies_total
-		applied_total:  app.replacement.applied_total
-		draining_total: app.replacement.draining_total
-		rejected_total: app.replacement.rejected_total
-		pending:        app.replacement.pending
-		last_preview:   app.replacement.last_preview
-		last_apply:     app.replacement.last_apply
+		previews_total:  app.replacement.previews_total
+		applies_total:   app.replacement.applies_total
+		finalizes_total: app.replacement.finalizes_total
+		applied_total:   app.replacement.applied_total
+		finalized_total: app.replacement.finalized_total
+		draining_total:  app.replacement.draining_total
+		rejected_total:  app.replacement.rejected_total
+		pending:         app.replacement.pending
+		last_preview:    app.replacement.last_preview
+		last_apply:      app.replacement.last_apply
+		last_finalize:   app.replacement.last_finalize
 	}
 }
 
@@ -447,6 +480,23 @@ fn runtime_plan_replacement_attempt_from_preview(kind string, status string, app
 		reload_transforms:   preview.reload_transforms
 		reload_relays:       preview.reload_relays
 		reasons:             preview.reasons
+	}
+}
+
+fn runtime_plan_replacement_attempt_from_finalize(result RuntimePlanReplacementFinalizeResult) RuntimePlanReplacementAttemptSnapshot {
+	return RuntimePlanReplacementAttemptSnapshot{
+		ts_unix:             time.now().unix()
+		kind:                'finalize'
+		config_path:         result.config_path
+		status:              result.status
+		strategy:            result.strategy
+		allowed:             result.applied
+		applied:             result.applied
+		error:               result.error
+		drain_statuses:      result.pending.drain_statuses
+		changed_pipelines:   result.pending.changed_pipelines
+		unchanged_pipelines: result.pending.unchanged_pipelines
+		drain_engines:       result.pending.drain_engines
 	}
 }
 
