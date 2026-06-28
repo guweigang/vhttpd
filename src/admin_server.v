@@ -201,6 +201,22 @@ pub fn (mut app AdminApp) admin_runtime_plan_replacement_apply(mut ctx Context) 
 	})
 }
 
+@['/admin/runtime/plan/replacement/finalize'; post]
+pub fn (mut app AdminApp) admin_runtime_plan_replacement_finalize(mut ctx Context) veb.Result {
+	req := admin_plane_request(ctx, '/admin/runtime/plan/replacement/finalize')
+	if !app.admin_authorized(ctx) {
+		return admin_plane_forbidden(mut app, mut ctx, 'POST', req)
+	}
+	result := app.shared.finalize_runtime_plan_replacement()
+	status := runtime_plan_replacement_finalize_status_code(result)
+	return admin_plane_json_response(mut app, mut ctx, 'POST', req, status, json.encode(result), {
+		'admin_endpoint': 'runtime_plan_replacement_finalize'
+		'applied':        '${result.applied}'
+		'status':         result.status
+		'error':          result.error
+	})
+}
+
 @['/admin/runtime/transformers'; get]
 pub fn (mut app AdminApp) admin_runtime_transformers(mut ctx Context) veb.Result {
 	req := admin_plane_request(ctx, '/admin/runtime/transformers')

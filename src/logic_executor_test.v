@@ -458,6 +458,104 @@ egress = "adapter:app"
 	assert state.pending.drain_statuses[0].inflight_requests == 0
 }
 
+fn test_internal_admin_runtime_plan_replacement_finalize_requires_pending() {
+	mut app := App{}
+
+	resp := app.internal_admin_dispatch(admin.InternalAdminRequest{
+		mode:   'vhttpd_admin'
+		method: 'POST'
+		path:   '/admin/runtime/plan/replacement/finalize'
+	})
+	result := json.decode(RuntimePlanReplacementFinalizeResult, resp.body) or { panic(err) }
+
+	assert resp.status == 409
+	assert !result.applied
+	assert result.status == 'rejected'
+	assert result.error == 'runtime_plan_replacement_no_pending'
+}
+
+fn test_internal_admin_runtime_plan_replacement_finalize_waits_for_drain() {
+	mut app := App{
+		replacement: RuntimePlanReplacementRuntime{
+			pending: RuntimePlanReplacementPendingSnapshot{
+				active:        true
+				config_path:   '/tmp/next.toml'
+				strategy:      'engine_drain_required'
+				ready:         false
+				drain_engines: ['app']
+			}
+		}
+		engines:     EngineRuntime{
+			primary: worker.WorkerState{
+				worker_backend: worker.WorkerBackendRuntime{
+					managed_workers: [
+						transport.ManagedWorker{
+							socket_path:       '/tmp/app-wait.sock'
+							inflight_requests: 1
+							draining:          true
+						},
+					]
+				}
+				logic_executor: executor.SocketWorkerExecutor{}
+			}
+		}
+	}
+
+	resp := app.internal_admin_dispatch(admin.InternalAdminRequest{
+		mode:   'vhttpd_admin'
+		method: 'POST'
+		path:   '/admin/runtime/plan/replacement/finalize'
+	})
+	result := json.decode(RuntimePlanReplacementFinalizeResult, resp.body) or { panic(err) }
+
+	assert resp.status == 409
+	assert !result.applied
+	assert result.status == 'waiting_for_drain'
+	assert result.error == 'runtime_plan_replacement_drain_not_ready'
+	assert result.pending.drain_statuses[0].inflight_requests == 1
+}
+
+fn test_internal_admin_runtime_plan_replacement_finalize_blocks_engine_rebuild_until_supported() {
+	mut app := App{
+		replacement: RuntimePlanReplacementRuntime{
+			pending: RuntimePlanReplacementPendingSnapshot{
+				active:        true
+				config_path:   '/tmp/next.toml'
+				strategy:      'engine_drain_required'
+				ready:         true
+				drain_engines: ['app']
+			}
+		}
+		engines:     EngineRuntime{
+			primary: worker.WorkerState{
+				worker_backend: worker.WorkerBackendRuntime{
+					managed_workers: [
+						transport.ManagedWorker{
+							socket_path: '/tmp/app-ready-finalize.sock'
+							draining:    true
+						},
+					]
+				}
+				logic_executor: executor.SocketWorkerExecutor{}
+			}
+		}
+	}
+
+	resp := app.internal_admin_dispatch(admin.InternalAdminRequest{
+		mode:   'vhttpd_admin'
+		method: 'POST'
+		path:   '/admin/runtime/plan/replacement/finalize'
+	})
+	result := json.decode(RuntimePlanReplacementFinalizeResult, resp.body) or { panic(err) }
+
+	assert resp.status == 409
+	assert !result.applied
+	assert result.status == 'blocked'
+	assert result.error == 'runtime_plan_replacement_requires_engine_runtime_rebuild'
+	assert result.pending.ready
+	assert result.pending.drain_statuses[0].ready_count == 1
+}
+
 fn test_internal_admin_runtime_plan_replacement_reports_drain_ready() {
 	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_plan_replacement_drain_ready_test')
 	os.mkdir_all(temp_dir) or { panic(err) }

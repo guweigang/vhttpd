@@ -87,6 +87,15 @@ struct RuntimePlanReplacementApplyResult {
 	preview     RuntimePlanReplacementPreview
 }
 
+struct RuntimePlanReplacementFinalizeResult {
+	config_path string
+	applied     bool
+	status      string
+	strategy    string
+	error       string
+	pending     RuntimePlanReplacementPendingSnapshot
+}
+
 fn (mut app App) preview_runtime_plan_replacement(config_path string) !RuntimePlanReplacementPreview {
 	normalized_path := config_path.trim_space()
 	if normalized_path == '' {
@@ -184,6 +193,41 @@ fn (mut app App) apply_runtime_plan_replacement(config_path string) !RuntimePlan
 	}
 	app.record_runtime_plan_replacement_apply(result)
 	return result
+}
+
+fn (mut app App) finalize_runtime_plan_replacement() RuntimePlanReplacementFinalizeResult {
+	pending := app.refresh_pending_runtime_plan_replacement() or {
+		return RuntimePlanReplacementFinalizeResult{
+			applied: false
+			status:  'rejected'
+			error:   err.msg()
+		}
+	}
+	if !pending.active {
+		return RuntimePlanReplacementFinalizeResult{
+			applied: false
+			status:  'rejected'
+			error:   'runtime_plan_replacement_no_pending'
+		}
+	}
+	if !pending.ready {
+		return RuntimePlanReplacementFinalizeResult{
+			config_path: pending.config_path
+			applied:     false
+			status:      'waiting_for_drain'
+			strategy:    pending.strategy
+			error:       'runtime_plan_replacement_drain_not_ready'
+			pending:     pending
+		}
+	}
+	return RuntimePlanReplacementFinalizeResult{
+		config_path: pending.config_path
+		applied:     false
+		status:      'blocked'
+		strategy:    pending.strategy
+		error:       'runtime_plan_replacement_requires_engine_runtime_rebuild'
+		pending:     pending
+	}
 }
 
 fn (mut app App) apply_lightweight_runtime_plan(next_plan runtime_plan.RuntimePlan) {
@@ -334,6 +378,13 @@ fn runtime_plan_replacement_apply_status_code(result RuntimePlanReplacementApply
 	}
 	if result.status in ['draining', 'drain_ready'] {
 		return 202
+	}
+	return 409
+}
+
+fn runtime_plan_replacement_finalize_status_code(result RuntimePlanReplacementFinalizeResult) int {
+	if result.applied {
+		return 200
 	}
 	return 409
 }

@@ -34,6 +34,21 @@ fn (mut app App) internal_admin_dispatch(req admin.InternalAdminRequest) admin.I
 		}
 		return admin.InternalAdminResponse.json(json.encode(result))
 	}
+	if method == 'POST' && path == '/runtime/plan/replacement/finalize' {
+		result := app.finalize_runtime_plan_replacement()
+		status := runtime_plan_replacement_finalize_status_code(result)
+		if status != 200 {
+			return admin.InternalAdminResponse{
+				status:  status
+				headers: {
+					'content-type': 'application/json; charset=utf-8'
+				}
+				body:    json.encode(result)
+				error:   result.error
+			}
+		}
+		return admin.InternalAdminResponse.json(json.encode(result))
+	}
 	if method == 'POST' && path == '/workers/drain' {
 		engine := (req.query['engine'] or { req.query['kind'] or { '' } }).trim_space()
 		status := app.drain_engine(engine) or {
