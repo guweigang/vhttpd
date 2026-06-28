@@ -231,6 +231,8 @@ fn test_compile_v2_runtime_plan_loads_relay_public_example() {
 	assert plan.adapters['relay-edge'].options.strings['route'] == 'relay/local-response'
 	assert plan.pipeline('public/relay')?.ingress.str() == 'listener:web'
 	assert plan.pipeline('public/relay')?.egress.str() == 'adapter:relay-edge'
+	assert plan.relay_ids_for_listener('relay') == ['edge']
+	assert plan.relay_delivery_owner_listener_ids('relay') == ['web']
 }
 
 fn test_compile_v2_runtime_plan_allows_relay_delivery_adapter() {

@@ -47,6 +47,51 @@ pub fn (plan RuntimePlan) relay_pipelines(relay_id string) []PipelinePlan {
 	return pipelines
 }
 
+pub fn (plan RuntimePlan) relay_ids_for_listener(listener_id string) []string {
+	target_listener_id := listener_id.trim_space()
+	mut ids := []string{}
+	for relay_id, relay in plan.relays {
+		ingress := relay.ingress or { continue }
+		if ingress.domain == .listener && ingress.id == target_listener_id {
+			ids << relay_id
+		}
+	}
+	ids.sort()
+	return ids
+}
+
+pub fn (plan RuntimePlan) listener_has_relay_delivery_target(listener_id string, relay_id string) bool {
+	target := 'relay:${relay_id.trim_space()}'
+	for pipeline in plan.listener_pipelines(listener_id) {
+		if pipeline.egress.domain != .adapter {
+			continue
+		}
+		adapter := plan.adapters[pipeline.egress.id] or { continue }
+		if adapter.kind == 'relay-delivery' && adapter.options.strings['target'] == target {
+			return true
+		}
+	}
+	return false
+}
+
+pub fn (plan RuntimePlan) relay_delivery_owner_listener_ids(websocket_listener_id string) []string {
+	mut owners := []string{}
+	for relay_id in plan.relay_ids_for_listener(websocket_listener_id) {
+		mut listener_ids := plan.listeners.keys()
+		listener_ids.sort()
+		for listener_id in listener_ids {
+			listener := plan.listeners[listener_id]
+			if listener.protocol.trim_space().to_lower() == 'websocket' {
+				continue
+			}
+			if plan.listener_has_relay_delivery_target(listener_id, relay_id) && listener_id !in owners {
+				owners << listener_id
+			}
+		}
+	}
+	return owners
+}
+
 pub fn (plan RuntimePlan) listener_adapter(listener_id string, kind string) ?AdapterPlan {
 	for pipeline in plan.listener_pipelines(listener_id) {
 		if pipeline.egress.domain != .adapter {

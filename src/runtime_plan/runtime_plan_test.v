@@ -302,3 +302,96 @@ fn test_runtime_plan_relay_pipeline_query_preserves_declaration_order() {
 	assert plan.relay_pipelines('edge').map(it.id) == ['edge/local/open', 'edge/local/message']
 	assert plan.relay_pipelines('missing').len == 0
 }
+
+fn test_runtime_plan_relay_delivery_owner_queries_match_by_relay_target() {
+	plan := RuntimePlan{
+		listeners: {
+			'web_a':   ListenerPlan{
+				id:       'web_a'
+				protocol: 'http'
+			}
+			'web_b':   ListenerPlan{
+				id:       'web_b'
+				protocol: 'http'
+			}
+			'relay_a': ListenerPlan{
+				id:       'relay_a'
+				protocol: 'websocket'
+			}
+			'relay_b': ListenerPlan{
+				id:       'relay_b'
+				protocol: 'websocket'
+			}
+		}
+		relays:    {
+			'edge_a': RelayPlan{
+				id:      'edge_a'
+				mode:    'hub'
+				carrier: 'websocket'
+				ingress: ResourceRef{
+					domain: .listener
+					id:     'relay_a'
+				}
+			}
+			'edge_b': RelayPlan{
+				id:      'edge_b'
+				mode:    'hub'
+				carrier: 'websocket'
+				ingress: ResourceRef{
+					domain: .listener
+					id:     'relay_b'
+				}
+			}
+		}
+		adapters:  {
+			'relay_a': AdapterPlan{
+				id:      'relay_a'
+				kind:    'relay-delivery'
+				options: PlanOptions{
+					strings: {
+						'target': 'relay:edge_a'
+					}
+				}
+			}
+			'relay_b': AdapterPlan{
+				id:      'relay_b'
+				kind:    'relay-delivery'
+				options: PlanOptions{
+					strings: {
+						'target': 'relay:edge_b'
+					}
+				}
+			}
+		}
+		pipelines: [
+			PipelinePlan{
+				id:      'web_a/relay'
+				ingress: ResourceRef{
+					domain: .listener
+					id:     'web_a'
+				}
+				egress:  ResourceRef{
+					domain: .adapter
+					id:     'relay_a'
+				}
+			},
+			PipelinePlan{
+				id:      'web_b/relay'
+				ingress: ResourceRef{
+					domain: .listener
+					id:     'web_b'
+				}
+				egress:  ResourceRef{
+					domain: .adapter
+					id:     'relay_b'
+				}
+			},
+		]
+	}
+
+	assert plan.relay_ids_for_listener('relay_a') == ['edge_a']
+	assert plan.listener_has_relay_delivery_target('web_a', 'edge_a')
+	assert !plan.listener_has_relay_delivery_target('web_a', 'edge_b')
+	assert plan.relay_delivery_owner_listener_ids('relay_a') == ['web_a']
+	assert plan.relay_delivery_owner_listener_ids('relay_b') == ['web_b']
+}
