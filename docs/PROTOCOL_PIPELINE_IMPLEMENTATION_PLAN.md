@@ -1208,6 +1208,7 @@ Progress as of 2026-06-27:
 - `P6.77` relay-delivery runtime route fixed: HTTP runtime routes now expose `relay-delivery` as a terminal adapter path, WebSocket upgrade requests are routed before HTTP protocol dispatch, and no-logic listeners can still serve terminal adapter routes; the public relay smoke now validates HTTP -> WebSocket relay hub -> local agent -> HTTP response end to end
 - `P6.78` relay WebSocket listener ownership bound: multi-listener runtime sharing now binds each WebSocket relay listener to the matching HTTP `relay-delivery` owner app by relay target, preserving carrier/channel state for paired public relay listeners without merging unrelated HTTP listener state
 - `P6.79` relay owner plan queries added: relay listener to relay id lookup and relay-delivery owner listener matching now live in `runtime_plan`, so multi-listener runtime binding consumes compiled plan semantics instead of reinterpreting relay-delivery topology in the orchestrator
+- `P6.80` relay acceptance evidence refreshed: relay pipeline/runtime/agent tests validate trace-preserving public HTTP -> relay -> agent -> HTTP response flow and deterministic reconnect state, while the repository Paseo VJSX skeleton test suite remains green against the same branch
 
 Batches:
 
@@ -1221,11 +1222,11 @@ Batches:
 
 Acceptance:
 
-- public HTTP request reaches selected local vhttpd and returns a response
-- trace ID crosses both nodes
-- reconnect and target-unavailable behavior are deterministic
-- Paseo compatibility remains green
-- relay core contains no Feishu/Paseo payload logic
+- public HTTP request reaches selected local vhttpd and returns a response. Covered by `src/relay_pipeline_runtime_test.v` and the public/local relay smoke.
+- trace ID crosses both nodes. Covered by `test_public_http_relay_delivery_reaches_agent_pipeline_and_returns_response`.
+- reconnect and target-unavailable behavior are deterministic. Covered by `src/websocket_relay_agent_runtime_test.v`, `src/relay/runtime_test.v`, and `src/http_response_relay_delivery_test.v`.
+- Paseo compatibility remains green. Covered by `make test src/inproc_vjsx_executor_test.v`.
+- relay core contains no Feishu/Paseo payload logic. Covered structurally by keeping provider policy in VJSX/provider ports and generic relay contracts under `src/relay`.
 
 ### Phase 7: hot plan replacement and hardening
 
