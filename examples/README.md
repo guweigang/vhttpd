@@ -27,6 +27,7 @@ make build vhttpd
 - `/Users/guweigang/Source/vhttpd/examples/config/relay-hub-v2.toml`
 - `/Users/guweigang/Source/vhttpd/examples/config/relay-public-v2.toml`
 - `/Users/guweigang/Source/vhttpd/examples/config/relay-agent-v2.toml`
+- `/Users/guweigang/Source/vhttpd/examples/config/relay-agent-local-v2.toml`
 - `/Users/guweigang/Source/vhttpd/examples/config/symfony.toml`
 - `/Users/guweigang/Source/vhttpd/examples/config/laravel.toml`
 - `/Users/guweigang/Source/vhttpd/examples/config/wordpress.toml`
@@ -45,9 +46,30 @@ make build vhttpd
 - `db-upstream-pg.toml` 演示 `vhttpd` 托管 postgresql 连接池，配置写在 `[db.pgsql]`
 - `relay-hub-v2.toml` 演示 v2 配置里的通用 WebSocket relay hub
 - `relay-public-v2.toml` 演示 public HTTP listener 通过 `relay-delivery` adapter 投递到通用 relay hub 并等待返回响应
-- `relay-agent-v2.toml` 演示 v2 配置里的 relay agent 和 `relay:*` pipeline ingress
+- `relay-agent-v2.toml` 演示 v2 配置里的 relay agent 和 `relay:*` pipeline ingress，默认不自动连接 hub
+- `relay-agent-local-v2.toml` 演示本地 smoke 用的 autostart relay agent
 - `paseo-relay.toml` 演示一个 `vhttpd + vjsx` 的 Paseo relay skeleton
 - 这些变量都在 `[worker.env]`，会传给 php-worker，可在 PHP 里直接 `getenv('KEY')`
+
+## Relay V2 本地 Smoke
+
+先启动 public + hub 进程：
+
+```bash
+./vhttpd --config /Users/guweigang/Source/vhttpd/examples/config/relay-public-v2.toml
+```
+
+再启动 local agent：
+
+```bash
+./vhttpd --config /Users/guweigang/Source/vhttpd/examples/config/relay-agent-local-v2.toml
+```
+
+验证 public HTTP 会经 relay 返回 local agent 响应：
+
+```bash
+curl --noproxy '*' -i http://127.0.0.1:19920/relay
+```
 
 ## Paseo Relay Skeleton
 

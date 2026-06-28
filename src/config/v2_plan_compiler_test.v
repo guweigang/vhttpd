@@ -197,6 +197,21 @@ fn test_compile_v2_runtime_plan_loads_relay_agent_example() {
 	assert plan.pipeline('relay/local-response')?.egress.str() == 'adapter:local-response'
 }
 
+fn test_compile_v2_runtime_plan_loads_relay_agent_local_example() {
+	config_path := os.join_path(os.dir(@FILE), '..', '..', 'examples', 'config',
+		'relay-agent-local-v2.toml')
+	text := os.read_file(config_path) or { panic(err) }
+	cfg := toml.decode[V2Config](text) or { panic(err) }
+
+	plan := compile_v2_runtime_plan(cfg, '', false) or { panic(err) }
+
+	assert plan.relays['edge'].mode == 'agent'
+	assert plan.relays['edge'].options.strings['url'] == 'ws://127.0.0.1:19921/vhttpd/relay'
+	assert plan.relays['edge'].options.bools['autostart']
+	assert plan.pipeline('relay/local-response')?.ingress.str() == 'relay:edge'
+	assert plan.pipeline('relay/local-response')?.egress.str() == 'adapter:local-response'
+}
+
 fn test_compile_v2_runtime_plan_loads_relay_public_example() {
 	config_path := os.join_path(os.dir(@FILE), '..', '..', 'examples', 'config',
 		'relay-public-v2.toml')
