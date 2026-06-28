@@ -23,6 +23,7 @@ fn test_feishu_card_bridge_dispatch_delivery_outcome_projects_relay_delivery() {
 	assert outcome.metadata['relay_carrier'] == 'websocket'
 	assert outcome.metadata['relay_direction'] == 'dispatch'
 	assert outcome.metadata['relay_client_id'] == 'local-main'
+	assert outcome.metadata['completion_mode'] == 'accepted'
 	assert outcome.metadata['request_id'] == 'bridge-1'
 	assert outcome.metadata['trace_id'] == 'trace-1'
 	assert outcome.metadata['event_kind'] == 'action'
@@ -53,6 +54,7 @@ fn test_feishu_card_bridge_proxy_delivery_outcome_projects_relay_delivery() {
 	assert outcome.metadata['relay_protocol'] == 'feishu_card_bridge'
 	assert outcome.metadata['relay_carrier'] == 'websocket'
 	assert outcome.metadata['relay_direction'] == 'proxy'
+	assert outcome.metadata['completion_mode'] == 'accepted'
 	assert outcome.metadata['request_id'] == 'bridge-proxy-1'
 	assert outcome.metadata['action'] == 'send'
 	assert outcome.metadata['trace_id'] == 'trace-2'
@@ -65,8 +67,7 @@ fn test_feishu_card_bridge_proxy_delivery_outcome_projects_relay_delivery() {
 }
 
 fn test_feishu_card_bridge_server_session_delivery_outcome_projects_session() {
-	outcome := feishu_card_bridge_server_session_delivery_outcome('local-main', 'req-1',
-		'trace-1')
+	outcome := feishu_card_bridge_server_session_delivery_outcome('local-main', 'req-1', 'trace-1')
 
 	assert outcome.kind == .session_plan
 	assert outcome.status == 101

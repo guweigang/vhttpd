@@ -1194,6 +1194,7 @@ Progress as of 2026-06-27:
 - `P6.63` relay response completion policy projection added: relay delivery metadata now projects into an explicit completion policy (`accepted`, `wait`, or `stream`) with optional timeout, and outbound outcomes expose that policy for future HTTP/stream bridge behavior without adding blocking IO yet
 - `P6.64` HTTP relay completion policy guard added: HTTP relay delivery now accepts only the explicit async `accepted` policy and returns a traceable unsupported-policy failure for `wait` or `stream`, preventing accidental async downgrades before blocking/stream bridge support lands
 - `P6.65` relay delivery completion helper added: dispatch now exposes a small relay-delivery constructor that writes stable completion policy metadata, so providers and transformers can request async/wait/stream behavior without hand-rolling relay-specific keys
+- `P6.66` Feishu relay completion policy adoption added: Feishu bridge relay-delivery projections now use the shared dispatch completion helper and declare the existing async `accepted` policy explicitly, keeping provider behavior aligned with generic relay completion semantics
 
 Batches:
 
