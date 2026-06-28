@@ -202,6 +202,124 @@ egress = "adapter:admin"
 	assert preview.next_schema_version == 2
 }
 
+fn test_internal_admin_runtime_plan_replacement_apply_updates_lightweight_routes() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_plan_replacement_apply_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	current_file := os.join_path(temp_dir, 'current.toml')
+	config_file := os.join_path(temp_dir, 'next.toml')
+	current_text := '
+version = 2
+
+[listeners.web]
+protocol = "http"
+transport = "tcp"
+host = "127.0.0.1"
+port = 18080
+
+[adapters.hello]
+kind = "fixed-response"
+options.status = "200"
+options.body = "old"
+
+[[pipelines]]
+id = "site/hello"
+ingress = "listener:web"
+match.paths = ["/hello"]
+egress = "adapter:hello"
+'
+	os.write_file(current_file, current_text) or { panic(err) }
+	os.write_file(config_file, current_text.replace('options.body = "old"', 'options.body = "new"')) or {
+		panic(err)
+	}
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	current_plan := config.load_runtime_plan_file(current_file) or { panic(err) }
+	mut app := App{
+		plan:         current_plan
+		protocols:    ProtocolRuntimeHub{
+			runtime_plan_json: json.encode(current_plan)
+		}
+		pipelines:    PipelineRuntime.new(current_plan, 'web', runtime_routes_from_plan(current_plan,
+			'web'), '', '', map[string]string{}, map[string]&worker.WorkerState{})
+		transformers: TransformerRuntimeHub.from_plan(current_plan)
+	}
+	resp := app.internal_admin_dispatch(admin.InternalAdminRequest{
+		mode:   'vhttpd_admin'
+		method: 'POST'
+		path:   '/admin/runtime/plan/replacement/apply'
+		query:  {
+			'config': config_file
+		}
+	})
+	assert resp.status == 200
+	result := json.decode(RuntimePlanReplacementApplyResult, resp.body) or { panic(err) }
+	assert result.applied
+	assert result.status == 'applied'
+	assert app.protocols.runtime_plan_json.contains('"body":"new"')
+	assert app.pipelines.http.rules.len == 1
+	assert app.pipelines.http.rules[0].body == 'new'
+	assert app.plan.adapters['hello'].options.strings['body'] == 'new'
+}
+
+fn test_internal_admin_runtime_plan_replacement_apply_rejects_engine_drain() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_plan_replacement_apply_reject_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	current_file := os.join_path(temp_dir, 'current.toml')
+	config_file := os.join_path(temp_dir, 'next.toml')
+	current_text := '
+version = 2
+
+[listeners.web]
+protocol = "http"
+transport = "tcp"
+host = "127.0.0.1"
+port = 18080
+
+[engines.app]
+kind = "php-worker"
+entry = "/tmp/app.php"
+
+[adapters.app]
+kind = "http-handler"
+engine = "engine:app"
+
+[[pipelines]]
+id = "site/app"
+ingress = "listener:web"
+match.paths = ["*"]
+egress = "adapter:app"
+'
+	os.write_file(current_file, current_text) or { panic(err) }
+	os.write_file(config_file, current_text.replace('entry = "/tmp/app.php"',
+		'entry = "/tmp/app-next.php"')) or { panic(err) }
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	current_plan := config.load_runtime_plan_file(current_file) or { panic(err) }
+	mut app := App{
+		plan:      current_plan
+		protocols: ProtocolRuntimeHub{
+			runtime_plan_json: json.encode(current_plan)
+		}
+		pipelines: PipelineRuntime.new(current_plan, 'web', runtime_routes_from_plan(current_plan,
+			'web'), '', '', map[string]string{}, map[string]&worker.WorkerState{})
+	}
+	resp := app.internal_admin_dispatch(admin.InternalAdminRequest{
+		mode:   'vhttpd_admin'
+		method: 'POST'
+		path:   '/admin/runtime/plan/replacement/apply'
+		query:  {
+			'config': config_file
+		}
+	})
+	assert resp.status == 409
+	result := json.decode(RuntimePlanReplacementApplyResult, resp.body) or { panic(err) }
+	assert !result.applied
+	assert result.error == 'runtime_plan_replacement_requires_engine_drain'
+	assert app.plan.engines['app'].options.strings['entry'] == '/tmp/app.php'
+}
+
 fn test_admin_runtime_snapshot_exposes_relay_summary() {
 	mut app := App{
 		relay: relay.empty_runtime()

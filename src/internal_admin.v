@@ -14,10 +14,28 @@ fn (mut app App) internal_admin_dispatch(req admin.InternalAdminRequest) admin.I
 	if req.mode != 'vhttpd_admin' {
 		return admin.InternalAdminResponse.error(400, 'invalid_mode')
 	}
-	if req.method.trim_space().to_upper() != 'GET' {
+	path := admin.InternalAdminRequest.normalize_admin_path(req.path)
+	method := req.method.trim_space().to_upper()
+	if method == 'POST' && path == '/runtime/plan/replacement/apply' {
+		config_path := (req.query['config'] or { req.query['path'] or { '' } }).trim_space()
+		result := app.apply_runtime_plan_replacement(config_path) or {
+			return admin.InternalAdminResponse.bad_request(err.msg())
+		}
+		if !result.applied {
+			return admin.InternalAdminResponse{
+				status:  409
+				headers: {
+					'content-type': 'application/json; charset=utf-8'
+				}
+				body:    json.encode(result)
+				error:   result.error
+			}
+		}
+		return admin.InternalAdminResponse.json(json.encode(result))
+	}
+	if method != 'GET' {
 		return admin.InternalAdminResponse.error(405, 'method_not_allowed')
 	}
-	path := admin.InternalAdminRequest.normalize_admin_path(req.path)
 	match path {
 		'/executors' {
 			return admin.InternalAdminResponse.json(json.encode(app.admin_logic_executor_specs_snapshot()))

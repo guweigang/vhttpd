@@ -165,6 +165,30 @@ pub fn (mut app AdminApp) admin_runtime_plan_replacement(mut ctx Context) veb.Re
 	})
 }
 
+@['/admin/runtime/plan/replacement/apply'; post]
+pub fn (mut app AdminApp) admin_runtime_plan_replacement_apply(mut ctx Context) veb.Result {
+	req := admin_plane_request(ctx, '/admin/runtime/plan/replacement/apply')
+	if !app.admin_authorized(ctx) {
+		return admin_plane_forbidden(mut app, mut ctx, 'POST', req)
+	}
+	config_path := (ctx.query['config'] or { ctx.query['path'] or { '' } }).trim_space()
+	result := app.shared.apply_runtime_plan_replacement(config_path) or {
+		return admin_plane_json_response(mut app, mut ctx, 'POST', req, 400, json.encode({
+			'error': err.msg()
+		}), {
+			'admin_endpoint': 'runtime_plan_replacement_apply'
+			'error':          err.msg()
+		})
+	}
+	status := if result.applied { 200 } else { 409 }
+	return admin_plane_json_response(mut app, mut ctx, 'POST', req, status, json.encode(result), {
+		'admin_endpoint': 'runtime_plan_replacement_apply'
+		'applied':        '${result.applied}'
+		'status':         result.status
+		'error':          result.error
+	})
+}
+
 @['/admin/runtime/transformers'; get]
 pub fn (mut app AdminApp) admin_runtime_transformers(mut ctx Context) veb.Result {
 	req := admin_plane_request(ctx, '/admin/runtime/transformers')
