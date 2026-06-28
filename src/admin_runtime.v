@@ -91,7 +91,7 @@ pub fn (mut app App) admin_runtime_plan_replacement_apply(mut ctx Context) veb.R
 			'error':          err.msg()
 		})
 	}
-	status := if result.applied { 200 } else { 409 }
+	status := runtime_plan_replacement_apply_status_code(result)
 	return admin_data_plane_json(mut app, mut ctx, 'POST', req, status, json.encode(result), {
 		'admin_endpoint': 'runtime_plan_replacement_apply'
 		'applied':        '${result.applied}'

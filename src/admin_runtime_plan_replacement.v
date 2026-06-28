@@ -10,6 +10,7 @@ mut:
 	previews_total int
 	applies_total  int
 	applied_total  int
+	draining_total int
 	rejected_total int
 	last_preview   RuntimePlanReplacementAttemptSnapshot
 	last_apply     RuntimePlanReplacementAttemptSnapshot
@@ -25,6 +26,7 @@ struct RuntimePlanReplacementAttemptSnapshot {
 	applied             bool
 	error               string
 	actions             []runtime_plan.PlanReplacementAction
+	drain_statuses      []EngineDrainStatus
 	changed_pipelines   []string
 	unchanged_pipelines []string
 	restart_listeners   []string
@@ -38,6 +40,7 @@ struct RuntimePlanReplacementRuntimeSnapshot {
 	previews_total int
 	applies_total  int
 	applied_total  int
+	draining_total int
 	rejected_total int
 	last_preview   RuntimePlanReplacementAttemptSnapshot
 	last_apply     RuntimePlanReplacementAttemptSnapshot
@@ -65,6 +68,7 @@ struct RuntimePlanReplacementApplyResult {
 	status      string
 	strategy    string
 	error       string
+	drains      []EngineDrainStatus
 	preview     RuntimePlanReplacementPreview
 }
 
@@ -114,6 +118,28 @@ fn (mut app App) apply_runtime_plan_replacement(config_path string) !RuntimePlan
 	preview :=
 		runtime_plan_replacement_preview_from_diff(normalized_path, app.plan, next_plan, diff)
 	if !execution.allowed {
+		if execution.strategy == 'engine_drain_required' {
+			mut drains := []EngineDrainStatus{}
+			for engine_id in diff.drain_engines {
+				pool := app.resolve_engine_worker_pool(engine_id)
+				drains << app.drain_engine(pool)!
+			}
+			result := RuntimePlanReplacementApplyResult{
+				config_path: normalized_path
+				applied:     false
+				status:      'draining'
+				strategy:    execution.strategy
+				drains:      drains
+				preview:     preview
+			}
+			app.emit('runtime.plan.replacement.draining', {
+				'config_path':          normalized_path
+				'drain_engines':        diff.drain_engines.join(',')
+				'replacement_strategy': execution.strategy
+			})
+			app.record_runtime_plan_replacement_apply(result)
+			return result
+		}
 		result := RuntimePlanReplacementApplyResult{
 			config_path: normalized_path
 			applied:     false
@@ -176,7 +202,7 @@ fn (mut app App) record_runtime_plan_replacement_preview(preview RuntimePlanRepl
 	}
 	app.replacement.previews_total++
 	app.replacement.last_preview = runtime_plan_replacement_attempt_from_preview('preview',
-		'previewed', false, '', preview)
+		'previewed', false, '', []EngineDrainStatus{}, preview)
 }
 
 fn (mut app App) record_runtime_plan_replacement_apply(result RuntimePlanReplacementApplyResult) {
@@ -187,11 +213,13 @@ fn (mut app App) record_runtime_plan_replacement_apply(result RuntimePlanReplace
 	app.replacement.applies_total++
 	if result.applied {
 		app.replacement.applied_total++
+	} else if result.status == 'draining' {
+		app.replacement.draining_total++
 	} else {
 		app.replacement.rejected_total++
 	}
 	app.replacement.last_apply = runtime_plan_replacement_attempt_from_preview('apply',
-		result.status, result.applied, result.error, result.preview)
+		result.status, result.applied, result.error, result.drains, result.preview)
 }
 
 fn (mut app App) runtime_plan_replacement_snapshot() RuntimePlanReplacementRuntimeSnapshot {
@@ -203,13 +231,14 @@ fn (mut app App) runtime_plan_replacement_snapshot() RuntimePlanReplacementRunti
 		previews_total: app.replacement.previews_total
 		applies_total:  app.replacement.applies_total
 		applied_total:  app.replacement.applied_total
+		draining_total: app.replacement.draining_total
 		rejected_total: app.replacement.rejected_total
 		last_preview:   app.replacement.last_preview
 		last_apply:     app.replacement.last_apply
 	}
 }
 
-fn runtime_plan_replacement_attempt_from_preview(kind string, status string, applied bool, error string, preview RuntimePlanReplacementPreview) RuntimePlanReplacementAttemptSnapshot {
+fn runtime_plan_replacement_attempt_from_preview(kind string, status string, applied bool, error string, drain_statuses []EngineDrainStatus, preview RuntimePlanReplacementPreview) RuntimePlanReplacementAttemptSnapshot {
 	return RuntimePlanReplacementAttemptSnapshot{
 		ts_unix:             time.now().unix()
 		kind:                kind
@@ -220,6 +249,7 @@ fn runtime_plan_replacement_attempt_from_preview(kind string, status string, app
 		applied:             applied
 		error:               error
 		actions:             preview.actions
+		drain_statuses:      drain_statuses
 		changed_pipelines:   preview.changed_pipelines
 		unchanged_pipelines: preview.unchanged_pipelines
 		restart_listeners:   preview.restart_listeners
@@ -228,4 +258,29 @@ fn runtime_plan_replacement_attempt_from_preview(kind string, status string, app
 		reload_relays:       preview.reload_relays
 		reasons:             preview.reasons
 	}
+}
+
+fn (app &App) resolve_engine_worker_pool(engine_id string) string {
+	normalized := engine_id.trim_space()
+	if normalized == '' {
+		return ''
+	}
+	if normalized in app.engines.additional {
+		return normalized
+	}
+	tail := normalized.all_after_last('/')
+	if tail != normalized && tail in app.engines.additional {
+		return tail
+	}
+	return ''
+}
+
+fn runtime_plan_replacement_apply_status_code(result RuntimePlanReplacementApplyResult) int {
+	if result.applied {
+		return 200
+	}
+	if result.status == 'draining' {
+		return 202
+	}
+	return 409
 }

@@ -7,6 +7,7 @@ import json
 import os
 import relay
 import worker
+import upstream.transport
 
 fn test_disabled_logic_executor_identity() {
 	disabled_executor := executor.DisabledLogicExecutor{}
@@ -288,7 +289,7 @@ egress = "adapter:hello"
 	assert state.last_apply.changed_pipelines == ['site/hello']
 }
 
-fn test_internal_admin_runtime_plan_replacement_apply_rejects_engine_drain() {
+fn test_internal_admin_runtime_plan_replacement_apply_starts_engine_drain() {
 	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_plan_replacement_apply_reject_test')
 	os.mkdir_all(temp_dir) or { panic(err) }
 	current_file := os.join_path(temp_dir, 'current.toml')
@@ -328,6 +329,19 @@ egress = "adapter:app"
 		protocols: ProtocolRuntimeHub{
 			runtime_plan_json: json.encode(current_plan)
 		}
+		engines:   EngineRuntime{
+			primary: worker.WorkerState{
+				worker_backend: worker.WorkerBackendRuntime{
+					managed_workers: [
+						transport.ManagedWorker{
+							socket_path:       '/tmp/app.sock'
+							inflight_requests: 1
+						},
+					]
+				}
+				logic_executor: executor.SocketWorkerExecutor{}
+			}
+		}
 		pipelines: PipelineRuntime.new(current_plan, 'web', runtime_routes_from_plan(current_plan,
 			'web'), '', '', map[string]string{}, map[string]&worker.WorkerState{})
 	}
@@ -339,19 +353,27 @@ egress = "adapter:app"
 			'config': config_file
 		}
 	})
-	assert resp.status == 409
+	assert resp.status == 202
 	result := json.decode(RuntimePlanReplacementApplyResult, resp.body) or { panic(err) }
 	assert !result.applied
+	assert result.status == 'draining'
 	assert result.strategy == 'engine_drain_required'
-	assert result.error == 'runtime_plan_replacement_requires_engine_drain'
+	assert result.error == ''
+	assert result.drains.len == 1
+	assert result.drains[0].worker_count == 1
+	assert result.drains[0].inflight_requests == 1
 	assert app.plan.engines['app'].options.strings['entry'] == '/tmp/app.php'
+	assert app.engines.primary.worker_backend.managed_workers[0].draining
 	state := app.runtime_plan_replacement_snapshot()
 	assert state.applies_total == 1
 	assert state.applied_total == 0
-	assert state.rejected_total == 1
-	assert state.last_apply.status == 'rejected'
+	assert state.draining_total == 1
+	assert state.rejected_total == 0
+	assert state.last_apply.status == 'draining'
 	assert state.last_apply.strategy == 'engine_drain_required'
-	assert state.last_apply.error == 'runtime_plan_replacement_requires_engine_drain'
+	assert state.last_apply.error == ''
+	assert state.last_apply.drain_statuses.len == 1
+	assert state.last_apply.drain_statuses[0].inflight_requests == 1
 }
 
 fn test_admin_runtime_snapshot_exposes_relay_summary() {

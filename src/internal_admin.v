@@ -21,9 +21,10 @@ fn (mut app App) internal_admin_dispatch(req admin.InternalAdminRequest) admin.I
 		result := app.apply_runtime_plan_replacement(config_path) or {
 			return admin.InternalAdminResponse.bad_request(err.msg())
 		}
-		if !result.applied {
+		status := runtime_plan_replacement_apply_status_code(result)
+		if status != 200 {
 			return admin.InternalAdminResponse{
-				status:  409
+				status:  status
 				headers: {
 					'content-type': 'application/json; charset=utf-8'
 				}
