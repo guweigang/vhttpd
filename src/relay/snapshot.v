@@ -9,6 +9,7 @@ pub:
 	carrier_count    int
 	session_count    int
 	pending_frames   int
+	returned_frames  int
 	agents           []AgentSnapshot
 	carriers         []CarrierSnapshot
 	channels         []ChannelSnapshot
@@ -33,6 +34,7 @@ pub:
 	trace_id     string
 	open         bool
 	buffered_len int
+	returned_len int
 }
 
 pub struct CarrierSnapshot {
@@ -43,14 +45,15 @@ pub:
 
 pub struct SessionSnapshot {
 pub:
-	id            string
+	id             string
 	endpoint_count int
 	link_count     int
 	pending_frames int
 }
 
 pub fn runtime_snapshot(descriptors map[string]RelayDescriptor, agents []AgentState, channels ChannelRegistry, sessions SessionRegistry) RelayRuntimeSnapshot {
-	return runtime_snapshot_with_carriers(descriptors, agents, channels, sessions, new_carrier_registry())
+	return runtime_snapshot_with_carriers(descriptors, agents, channels, sessions,
+		new_carrier_registry())
 }
 
 pub fn runtime_snapshot_with_carriers(descriptors map[string]RelayDescriptor, agents []AgentState, channels ChannelRegistry, sessions SessionRegistry, carriers CarrierRegistry) RelayRuntimeSnapshot {
@@ -64,7 +67,9 @@ pub fn runtime_snapshot_with_carriers(descriptors map[string]RelayDescriptor, ag
 		open_channels:    channel_items.filter(it.open).len
 		carrier_count:    carrier_items.len
 		session_count:    session_items.len
-		pending_frames:   channel_pending_total(channel_items) + session_pending_total(session_items)
+		pending_frames:   channel_pending_total(channel_items) +
+			session_pending_total(session_items)
+		returned_frames:  channel_returned_total(channel_items)
 		agents:           agent_snapshots(agents)
 		carriers:         carrier_items
 		channels:         channel_items
@@ -100,6 +105,7 @@ fn build_channel_snapshots(registry ChannelRegistry) []ChannelSnapshot {
 			trace_id:     channel.trace_id
 			open:         channel.open
 			buffered_len: channel.buffered.len
+			returned_len: channel.buffered.filter(frame_is_pipeline_response(it)).len
 		}
 	}
 	return out
@@ -142,6 +148,14 @@ fn channel_pending_total(channels []ChannelSnapshot) int {
 	mut total := 0
 	for channel in channels {
 		total += channel.buffered_len
+	}
+	return total
+}
+
+fn channel_returned_total(channels []ChannelSnapshot) int {
+	mut total := 0
+	for channel in channels {
+		total += channel.returned_len
 	}
 	return total
 }

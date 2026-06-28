@@ -133,6 +133,7 @@ fn (mut app App) admin_relay_runtime_snapshot() executor.AdminRelayRuntimeSummar
 		carrier_count:    snapshot.carrier_count
 		session_count:    snapshot.session_count
 		pending_frames:   snapshot.pending_frames
+		returned_frames:  snapshot.returned_frames
 		agents:           snapshot.agents.map(executor.AdminRelayAgentSummary{
 			node_id:            it.node_id
 			relay_id:           it.relay_id
@@ -152,6 +153,7 @@ fn (mut app App) admin_relay_runtime_snapshot() executor.AdminRelayRuntimeSummar
 			trace_id:     it.trace_id
 			open:         it.open
 			buffered_len: it.buffered_len
+			returned_len: it.returned_len
 		})
 		sessions:         snapshot.sessions.map(executor.AdminRelaySessionSummary{
 			id:             it.id

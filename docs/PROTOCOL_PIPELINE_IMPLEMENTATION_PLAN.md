@@ -1185,6 +1185,7 @@ Progress as of 2026-06-27:
 - `P6.54` relay response redispatch guard added: response/error frames produced by relay pipelines are now kept out of relay-ingress pipeline dispatch, preventing response ping-pong while still allowing request/session frames to enter configured pipelines
 - `P6.55` relay returned-frame outcome added: relay core now classifies pipeline response/error frames as returned inbound frames, queues them on the channel without redispatch, and emits `inbound.returned` for traceable return-path observation
 - `P6.56` relay returned-frame drain added: relay channels can now drain only pipeline response/error frames while preserving pending data frames, giving callers a focused return-path consumption API without losing buffered channel traffic
+- `P6.57` relay returned-frame snapshot added: relay runtime and admin snapshots now expose returned-frame counts separately from buffered pending frames, making return-path buildup visible without changing existing pending-frame totals
 
 Batches:
 

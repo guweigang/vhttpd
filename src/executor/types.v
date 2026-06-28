@@ -189,6 +189,7 @@ pub:
 	trace_id     string
 	open         bool
 	buffered_len int
+	returned_len int
 }
 
 pub struct AdminRelayCarrierSummary {
@@ -214,6 +215,7 @@ pub:
 	carrier_count    int
 	session_count    int
 	pending_frames   int
+	returned_frames  int
 	agents           []AdminRelayAgentSummary
 	carriers         []AdminRelayCarrierSummary
 	channels         []AdminRelayChannelSummary
