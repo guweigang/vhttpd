@@ -12,6 +12,7 @@ mut:
 	applied_total  int
 	draining_total int
 	rejected_total int
+	pending        RuntimePlanReplacementPendingSnapshot
 	last_preview   RuntimePlanReplacementAttemptSnapshot
 	last_apply     RuntimePlanReplacementAttemptSnapshot
 }
@@ -36,12 +37,26 @@ struct RuntimePlanReplacementAttemptSnapshot {
 	reasons             []string
 }
 
+struct RuntimePlanReplacementPendingSnapshot {
+pub:
+	active              bool
+	config_path         string
+	strategy            string
+	ready               bool
+	drain_statuses      []EngineDrainStatus
+	changed_pipelines   []string
+	unchanged_pipelines []string
+	drain_engines       []string
+	next_schema_version int
+}
+
 struct RuntimePlanReplacementRuntimeSnapshot {
 	previews_total int
 	applies_total  int
 	applied_total  int
 	draining_total int
 	rejected_total int
+	pending        RuntimePlanReplacementPendingSnapshot
 	last_preview   RuntimePlanReplacementAttemptSnapshot
 	last_apply     RuntimePlanReplacementAttemptSnapshot
 }
@@ -127,7 +142,7 @@ fn (mut app App) apply_runtime_plan_replacement(config_path string) !RuntimePlan
 			result := RuntimePlanReplacementApplyResult{
 				config_path: normalized_path
 				applied:     false
-				status:      'draining'
+				status:      if drain_statuses_ready(drains) { 'drain_ready' } else { 'draining' }
 				strategy:    execution.strategy
 				drains:      drains
 				preview:     preview
@@ -213,8 +228,20 @@ fn (mut app App) record_runtime_plan_replacement_apply(result RuntimePlanReplace
 	app.replacement.applies_total++
 	if result.applied {
 		app.replacement.applied_total++
-	} else if result.status == 'draining' {
+		app.replacement.pending = RuntimePlanReplacementPendingSnapshot{}
+	} else if result.status in ['draining', 'drain_ready'] {
 		app.replacement.draining_total++
+		app.replacement.pending = RuntimePlanReplacementPendingSnapshot{
+			active:              true
+			config_path:         result.config_path
+			strategy:            result.strategy
+			ready:               result.status == 'drain_ready'
+			drain_statuses:      result.drains
+			changed_pipelines:   result.preview.changed_pipelines
+			unchanged_pipelines: result.preview.unchanged_pipelines
+			drain_engines:       result.preview.drain_engines
+			next_schema_version: result.preview.next_schema_version
+		}
 	} else {
 		app.replacement.rejected_total++
 	}
@@ -233,6 +260,7 @@ fn (mut app App) runtime_plan_replacement_snapshot() RuntimePlanReplacementRunti
 		applied_total:  app.replacement.applied_total
 		draining_total: app.replacement.draining_total
 		rejected_total: app.replacement.rejected_total
+		pending:        app.replacement.pending
 		last_preview:   app.replacement.last_preview
 		last_apply:     app.replacement.last_apply
 	}
@@ -279,8 +307,20 @@ fn runtime_plan_replacement_apply_status_code(result RuntimePlanReplacementApply
 	if result.applied {
 		return 200
 	}
-	if result.status == 'draining' {
+	if result.status in ['draining', 'drain_ready'] {
 		return 202
 	}
 	return 409
+}
+
+fn drain_statuses_ready(statuses []EngineDrainStatus) bool {
+	if statuses.len == 0 {
+		return false
+	}
+	for status in statuses {
+		if status.ready_count < status.worker_count {
+			return false
+		}
+	}
+	return true
 }
