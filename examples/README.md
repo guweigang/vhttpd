@@ -71,6 +71,8 @@ make build vhttpd
 curl --noproxy '*' -i http://127.0.0.1:19920/relay
 ```
 
+`relay-public-v2.toml` 里 `listener:web` 和 `listener:relay` 是一组 public relay 入口：HTTP pipeline 通过 `adapter:relay-edge` 指向 `relay:edge`，WebSocket listener 承载同一个 relay hub，所以 runtime 会把这两个 listener 绑定到同一个 relay owner app，保证 wait 响应能拿到同一份 carrier/channel 状态。
+
 ## Paseo Relay Skeleton
 
 直接启动：

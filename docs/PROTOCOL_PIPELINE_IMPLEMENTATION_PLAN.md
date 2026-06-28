@@ -1205,6 +1205,8 @@ Progress as of 2026-06-27:
 - `P6.74` relay HTTP tracking policy tightened: async `accepted` relay deliveries no longer create local outbound channels, while `wait` deliveries retain the bounded tracking lifecycle required for response correlation
 - `P6.75` relay target-unavailable contract added: public HTTP relay delivery now has a higher-level deterministic test for missing relay carriers, preserving trace/channel/completion metadata while returning a stable 503 without creating local wait channels
 - `P6.76` runnable relay local-agent example added: examples now include an autostart local agent config and documented smoke flow for public HTTP -> relay hub -> local relay pipeline response, while retaining the inert agent example for topology-only configuration
+- `P6.77` relay-delivery runtime route fixed: HTTP runtime routes now expose `relay-delivery` as a terminal adapter path, WebSocket upgrade requests are routed before HTTP protocol dispatch, and no-logic listeners can still serve terminal adapter routes; the public relay smoke now validates HTTP -> WebSocket relay hub -> local agent -> HTTP response end to end
+- `P6.78` relay WebSocket listener ownership bound: multi-listener runtime sharing now binds each WebSocket relay listener to the matching HTTP `relay-delivery` owner app by relay target, preserving carrier/channel state for paired public relay listeners without merging unrelated HTTP listener state
 
 Batches:
 
