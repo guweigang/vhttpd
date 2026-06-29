@@ -372,6 +372,8 @@ egress = "adapter:app"
 	assert state.rejected_total == 0
 	assert state.pending.active
 	assert state.pending.config_path == config_file
+	assert state.pending.config_hash == result.config_hash
+	assert state.pending.config_hash.len == 64
 	assert !state.pending.ready
 	assert state.pending.created_at_unix > 0
 	assert state.pending.updated_at_unix >= state.pending.created_at_unix
@@ -456,6 +458,8 @@ egress = "adapter:app"
 
 	assert state.pending.active
 	assert state.pending.ready
+	assert state.pending.config_hash == result.config_hash
+	assert state.pending.config_hash.len == 64
 	assert state.pending.created_at_unix > 0
 	assert state.pending.updated_at_unix >= state.pending.created_at_unix
 	assert state.pending.drain_statuses.len == 1
@@ -746,6 +750,99 @@ egress = "adapter:app"
 	assert state.last_finalize.drain_statuses[0].ready_count == 1
 }
 
+fn test_internal_admin_runtime_plan_replacement_finalize_rejects_changed_pending_config() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_plan_replacement_finalize_changed_config_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	current_file := os.join_path(temp_dir, 'current.toml')
+	config_file := os.join_path(temp_dir, 'next.toml')
+	current_text := '
+version = 2
+
+[listeners.web]
+protocol = "http"
+transport = "tcp"
+host = "127.0.0.1"
+port = 18080
+
+[engines.app]
+kind = "php-worker"
+entry = "/tmp/app.php"
+
+[adapters.app]
+kind = "http-handler"
+engine = "engine:app"
+
+[[pipelines]]
+id = "site/app"
+ingress = "listener:web"
+match.paths = ["*"]
+egress = "adapter:app"
+'
+	os.write_file(current_file, current_text) or { panic(err) }
+	os.write_file(config_file, current_text.replace('entry = "/tmp/app.php"',
+		'entry = "/tmp/app-next.php"')) or { panic(err) }
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	current_plan := config.load_runtime_plan_file(current_file) or { panic(err) }
+	mut app := App{
+		plan:      current_plan
+		protocols: ProtocolRuntimeHub{
+			runtime_plan_json: json.encode(current_plan)
+		}
+		engines:   EngineRuntime{
+			primary: worker.WorkerState{
+				worker_backend: worker.WorkerBackendRuntime{
+					managed_workers: [
+						transport.ManagedWorker{
+							socket_path: '/tmp/app-changed-config.sock'
+						},
+					]
+				}
+				logic_executor: executor.SocketWorkerExecutor{}
+			}
+		}
+		pipelines: PipelineRuntime.new(current_plan, 'web', runtime_routes_from_plan(current_plan,
+			'web'), '', '', map[string]string{}, map[string]&worker.WorkerState{})
+	}
+	apply_resp := app.internal_admin_dispatch(admin.InternalAdminRequest{
+		mode:   'vhttpd_admin'
+		method: 'POST'
+		path:   '/admin/runtime/plan/replacement/apply'
+		query:  {
+			'config': config_file
+		}
+	})
+	apply_result := json.decode(RuntimePlanReplacementApplyResult, apply_resp.body) or {
+		panic(err)
+	}
+	assert apply_resp.status == 202
+	assert apply_result.status == 'drain_ready'
+	assert apply_result.config_hash.len == 64
+
+	os.write_file(config_file, current_text.replace('entry = "/tmp/app.php"',
+		'entry = "/tmp/app-mutated.php"')) or { panic(err) }
+	finalize_resp := app.internal_admin_dispatch(admin.InternalAdminRequest{
+		mode:   'vhttpd_admin'
+		method: 'POST'
+		path:   '/admin/runtime/plan/replacement/finalize'
+	})
+	finalize_result := json.decode(RuntimePlanReplacementFinalizeResult, finalize_resp.body) or {
+		panic(err)
+	}
+
+	assert finalize_resp.status == 409
+	assert !finalize_result.applied
+	assert finalize_result.status == 'rejected'
+	assert finalize_result.error == 'runtime_plan_replacement_config_changed'
+	assert app.replacement.pending.active
+	assert app.plan.engines['app'].options.strings['entry'] == '/tmp/app.php'
+	state := app.runtime_plan_replacement_snapshot()
+	assert state.finalizes_total == 1
+	assert state.finalized_total == 0
+	assert state.last_finalize.error == 'runtime_plan_replacement_config_changed'
+}
+
 fn test_runtime_plan_replacement_prepares_next_engine_runtime() {
 	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_plan_replacement_prepare_engine_test')
 	os.mkdir_all(temp_dir) or { panic(err) }
@@ -884,6 +981,8 @@ egress = "adapter:app"
 	state := app.runtime_plan_replacement_snapshot()
 	assert state.pending.active
 	assert state.pending.ready
+	assert state.pending.config_hash == result.config_hash
+	assert state.pending.config_hash.len == 64
 	assert state.pending.created_at_unix > 0
 	assert state.pending.updated_at_unix >= state.pending.created_at_unix
 	assert state.pending.drain_statuses[0].ready_count == 1

@@ -1,8 +1,10 @@
 module main
 
 import config
+import crypto.sha256
 import executor
 import json
+import os
 import runtime_plan
 import time
 import worker
@@ -49,6 +51,7 @@ struct RuntimePlanReplacementPendingSnapshot {
 pub:
 	active              bool
 	config_path         string
+	config_hash         string
 	strategy            string
 	ready               bool
 	created_at_unix     i64
@@ -95,6 +98,7 @@ struct RuntimePlanReplacementPreview {
 
 struct RuntimePlanReplacementApplyResult {
 	config_path string
+	config_hash string
 	applied     bool
 	status      string
 	strategy    string
@@ -175,6 +179,11 @@ fn runtime_plan_replacement_preview_from_pending(pending RuntimePlanReplacementP
 	}
 }
 
+fn runtime_plan_replacement_config_hash(config_path string) !string {
+	text := os.read_file(config_path)!
+	return sha256.sum(text.bytes()).hex().to_lower()
+}
+
 fn (mut app App) apply_runtime_plan_replacement(config_path string) !RuntimePlanReplacementApplyResult {
 	normalized_path := config_path.trim_space()
 	if normalized_path == '' {
@@ -194,6 +203,7 @@ fn (mut app App) apply_runtime_plan_replacement(config_path string) !RuntimePlan
 		app.record_runtime_plan_replacement_apply(result)
 		return result
 	}
+	next_config_hash := runtime_plan_replacement_config_hash(normalized_path)!
 	next_plan := config.load_runtime_plan_file(normalized_path)!
 	diff := runtime_plan.diff_runtime_plan_replacement(app.plan, next_plan)
 	execution := runtime_plan.execution_plan_for_replacement(diff)
@@ -208,6 +218,7 @@ fn (mut app App) apply_runtime_plan_replacement(config_path string) !RuntimePlan
 			}
 			result := RuntimePlanReplacementApplyResult{
 				config_path: normalized_path
+				config_hash: next_config_hash
 				applied:     false
 				status:      if drain_statuses_ready(drains) { 'drain_ready' } else { 'draining' }
 				strategy:    execution.strategy
@@ -224,6 +235,7 @@ fn (mut app App) apply_runtime_plan_replacement(config_path string) !RuntimePlan
 		}
 		result := RuntimePlanReplacementApplyResult{
 			config_path: normalized_path
+			config_hash: next_config_hash
 			applied:     false
 			status:      'rejected'
 			strategy:    execution.strategy
@@ -244,6 +256,7 @@ fn (mut app App) apply_runtime_plan_replacement(config_path string) !RuntimePlan
 	})
 	result := RuntimePlanReplacementApplyResult{
 		config_path: normalized_path
+		config_hash: next_config_hash
 		applied:     true
 		status:      'applied'
 		strategy:    execution.strategy
@@ -377,6 +390,10 @@ fn (mut app App) prepare_runtime_plan_replacement_runtime(pending RuntimePlanRep
 	if !pending.active {
 		return error('runtime_plan_replacement_no_pending')
 	}
+	current_hash := runtime_plan_replacement_config_hash(pending.config_path)!
+	if pending.config_hash != '' && current_hash != pending.config_hash {
+		return error('runtime_plan_replacement_config_changed')
+	}
 	next_plan := config.load_runtime_plan_file(pending.config_path)!
 	listener_id := app.pipelines.http.listener_id
 	next_routes := runtime_routes_from_plan(next_plan, listener_id)
@@ -507,6 +524,7 @@ fn (mut app App) record_runtime_plan_replacement_apply(result RuntimePlanReplace
 		app.replacement.pending = RuntimePlanReplacementPendingSnapshot{
 			active:              true
 			config_path:         result.config_path
+			config_hash:         result.config_hash
 			strategy:            result.strategy
 			ready:               result.status == 'drain_ready'
 			created_at_unix:     now
