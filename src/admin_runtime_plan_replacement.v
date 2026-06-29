@@ -12,14 +12,17 @@ mut:
 	previews_total  int
 	applies_total   int
 	finalizes_total int
+	cancels_total   int
 	applied_total   int
 	finalized_total int
+	cancelled_total int
 	draining_total  int
 	rejected_total  int
 	pending         RuntimePlanReplacementPendingSnapshot
 	last_preview    RuntimePlanReplacementAttemptSnapshot
 	last_apply      RuntimePlanReplacementAttemptSnapshot
 	last_finalize   RuntimePlanReplacementAttemptSnapshot
+	last_cancel     RuntimePlanReplacementAttemptSnapshot
 }
 
 struct RuntimePlanReplacementAttemptSnapshot {
@@ -59,14 +62,17 @@ struct RuntimePlanReplacementRuntimeSnapshot {
 	previews_total  int
 	applies_total   int
 	finalizes_total int
+	cancels_total   int
 	applied_total   int
 	finalized_total int
+	cancelled_total int
 	draining_total  int
 	rejected_total  int
 	pending         RuntimePlanReplacementPendingSnapshot
 	last_preview    RuntimePlanReplacementAttemptSnapshot
 	last_apply      RuntimePlanReplacementAttemptSnapshot
 	last_finalize   RuntimePlanReplacementAttemptSnapshot
+	last_cancel     RuntimePlanReplacementAttemptSnapshot
 }
 
 struct RuntimePlanReplacementPreview {
@@ -297,23 +303,27 @@ fn (mut app App) cancel_runtime_plan_replacement() RuntimePlanReplacementCancelR
 	pending := app.replacement.pending
 	app.mu.unlock()
 	if !pending.active {
-		return RuntimePlanReplacementCancelResult{
+		result := RuntimePlanReplacementCancelResult{
 			cancelled: false
 			status:    'rejected'
 			error:     'runtime_plan_replacement_no_pending'
 		}
+		app.record_runtime_plan_replacement_cancel(result)
+		return result
 	}
 	mut resumed := []EngineDrainStatus{}
 	for engine_id in pending.drain_engines {
 		pool := app.resolve_engine_worker_pool(engine_id)
 		status := app.resume_engine(pool) or {
-			return RuntimePlanReplacementCancelResult{
+			result := RuntimePlanReplacementCancelResult{
 				cancelled: false
 				status:    'rejected'
 				error:     err.msg()
 				pending:   pending
 				resumed:   resumed
 			}
+			app.record_runtime_plan_replacement_cancel(result)
+			return result
 		}
 		resumed << status
 	}
@@ -325,12 +335,14 @@ fn (mut app App) cancel_runtime_plan_replacement() RuntimePlanReplacementCancelR
 		'drain_engines':        pending.drain_engines.join(',')
 		'replacement_strategy': pending.strategy
 	})
-	return RuntimePlanReplacementCancelResult{
+	result := RuntimePlanReplacementCancelResult{
 		cancelled: true
 		status:    'cancelled'
 		pending:   pending
 		resumed:   resumed
 	}
+	app.record_runtime_plan_replacement_cancel(result)
+	return result
 }
 
 fn (mut app App) prepare_runtime_plan_replacement_runtime(pending RuntimePlanReplacementPendingSnapshot) !RuntimePlanReplacementPreparedRuntime {
@@ -494,6 +506,18 @@ fn (mut app App) record_runtime_plan_replacement_finalize(result RuntimePlanRepl
 	app.replacement.last_finalize = runtime_plan_replacement_attempt_from_finalize(result)
 }
 
+fn (mut app App) record_runtime_plan_replacement_cancel(result RuntimePlanReplacementCancelResult) {
+	app.mu.@lock()
+	defer {
+		app.mu.unlock()
+	}
+	app.replacement.cancels_total++
+	if result.cancelled {
+		app.replacement.cancelled_total++
+	}
+	app.replacement.last_cancel = runtime_plan_replacement_attempt_from_cancel(result)
+}
+
 fn (mut app App) runtime_plan_replacement_snapshot() RuntimePlanReplacementRuntimeSnapshot {
 	app.refresh_pending_runtime_plan_replacement() or {}
 	app.mu.@lock()
@@ -504,14 +528,17 @@ fn (mut app App) runtime_plan_replacement_snapshot() RuntimePlanReplacementRunti
 		previews_total:  app.replacement.previews_total
 		applies_total:   app.replacement.applies_total
 		finalizes_total: app.replacement.finalizes_total
+		cancels_total:   app.replacement.cancels_total
 		applied_total:   app.replacement.applied_total
 		finalized_total: app.replacement.finalized_total
+		cancelled_total: app.replacement.cancelled_total
 		draining_total:  app.replacement.draining_total
 		rejected_total:  app.replacement.rejected_total
 		pending:         app.replacement.pending
 		last_preview:    app.replacement.last_preview
 		last_apply:      app.replacement.last_apply
 		last_finalize:   app.replacement.last_finalize
+		last_cancel:     app.replacement.last_cancel
 	}
 }
 
@@ -575,6 +602,22 @@ fn runtime_plan_replacement_attempt_from_finalize(result RuntimePlanReplacementF
 		changed_pipelines:   result.pending.changed_pipelines
 		unchanged_pipelines: result.pending.unchanged_pipelines
 		drain_engines:       result.pending.drain_engines
+	}
+}
+
+fn runtime_plan_replacement_attempt_from_cancel(result RuntimePlanReplacementCancelResult) RuntimePlanReplacementAttemptSnapshot {
+	return RuntimePlanReplacementAttemptSnapshot{
+		ts_unix:           time.now().unix()
+		kind:              'cancel'
+		config_path:       result.pending.config_path
+		status:            result.status
+		strategy:          result.pending.strategy
+		allowed:           result.cancelled
+		applied:           false
+		error:             result.error
+		drain_statuses:    result.resumed
+		changed_pipelines: result.pending.changed_pipelines
+		drain_engines:     result.pending.drain_engines
 	}
 }
 

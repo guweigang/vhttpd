@@ -495,6 +495,12 @@ fn test_internal_admin_runtime_plan_replacement_cancel_requires_pending() {
 	assert !result.cancelled
 	assert result.status == 'rejected'
 	assert result.error == 'runtime_plan_replacement_no_pending'
+	state := app.runtime_plan_replacement_snapshot()
+	assert state.cancels_total == 1
+	assert state.cancelled_total == 0
+	assert state.last_cancel.kind == 'cancel'
+	assert state.last_cancel.status == 'rejected'
+	assert state.last_cancel.error == 'runtime_plan_replacement_no_pending'
 }
 
 fn test_internal_admin_runtime_plan_replacement_cancel_resumes_pending_workers() {
@@ -538,6 +544,12 @@ fn test_internal_admin_runtime_plan_replacement_cancel_resumes_pending_workers()
 	assert result.resumed[0].changed
 	assert !app.replacement.pending.active
 	assert !app.engines.primary.worker_backend.managed_workers[0].draining
+	state := app.runtime_plan_replacement_snapshot()
+	assert state.cancels_total == 1
+	assert state.cancelled_total == 1
+	assert state.last_cancel.status == 'cancelled'
+	assert state.last_cancel.drain_statuses.len == 1
+	assert state.last_cancel.drain_statuses[0].changed
 }
 
 fn test_internal_admin_runtime_plan_replacement_finalize_waits_for_drain() {
