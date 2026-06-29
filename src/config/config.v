@@ -154,6 +154,16 @@ pub mut:
 	cache_control string
 }
 
+pub fn AssetsRuntime.new(enabled bool, prefix string, root string, root_real string, cache_control string) AssetsRuntime {
+	return AssetsRuntime{
+		enabled:       enabled
+		prefix:        prefix
+		root:          root
+		root_real:     root_real
+		cache_control: cache_control
+	}
+}
+
 pub struct RuntimeConfig {
 pub mut:
 	timezone string = 'Asia/Shanghai'

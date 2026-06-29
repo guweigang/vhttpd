@@ -37,9 +37,10 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 		plan:          runtime_plan_for_app
 		legacy_config: cfg
 		app_build_cfg: build_cfg
-		control_plane: control_plane_runtime_from_build_config(build_cfg)
-		lifecycle:     process_lifecycle_runtime_started_now()
-		assets:        assets_runtime_from_build_config(build_cfg)
+		control_plane: ControlPlaneRuntime.new(build_cfg)
+		lifecycle:     ProcessLifecycle.started_now()
+		assets:        config.AssetsRuntime.new(build_cfg.assets_enabled, build_cfg.assets_prefix,
+			build_cfg.assets_root, build_cfg.assets_root_real, build_cfg.assets_cache_control)
 		protocols:     protocol_runtime_hub_from_plan(cfg, runtime_plan_for_app, plan_listener_id)
 		transport:     transport_runtime_hub_from_plan(runtime_plan_for_app, plan_listener_id)
 		websocket:     WebSocketRuntime.new(executor_plan.bootstrap.websocket_dispatch_mode)

@@ -79,8 +79,9 @@ fn test_refactor_contract_app_runtime_builder_uses_runtime_hub_builders() {
 	assert !source.contains('TransportRuntimeHub{')
 	assert source.contains('protocol_runtime_hub_from_plan(cfg, runtime_plan_for_app, plan_listener_id)')
 	assert source.contains('transport_runtime_hub_from_plan(runtime_plan_for_app, plan_listener_id)')
-	assert source.contains('control_plane_runtime_from_build_config(build_cfg)')
-	assert source.contains('assets_runtime_from_build_config(build_cfg)')
+	assert source.contains('ControlPlaneRuntime.new(build_cfg)')
+	assert source.contains('ProcessLifecycle.started_now()')
+	assert source.contains('config.AssetsRuntime.new(')
 }
 
 fn test_refactor_contract_runtime_plan_replacement_uses_runtime_builders() {
