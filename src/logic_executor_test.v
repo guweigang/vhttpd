@@ -546,6 +546,7 @@ port = 18080
 kind = "php-worker"
 entry = "${next_entry}"
 autostart = false
+socket = "/tmp/vhttpd-finalize-external.sock"
 
 [adapters.app]
 kind = "http-handler"

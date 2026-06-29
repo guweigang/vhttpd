@@ -5,6 +5,7 @@ import executor
 import json
 import runtime_plan
 import time
+import worker
 
 struct RuntimePlanReplacementRuntime {
 mut:
@@ -309,6 +310,10 @@ fn (mut app App) apply_prepared_runtime_plan_replacement(mut prepared RuntimePla
 	port := app.build_engine_lifecycle_port()
 	mut facade := app.as_facade()
 	next_engines.start(prepared.primary_lifecycle, port, mut facade)
+	validate_replacement_engine_runtime_ready(next_engines) or {
+		next_engines.stop(prepared.primary_lifecycle, port)
+		return err
+	}
 	mut old_engines := app.engines
 	old_primary_lifecycle := engine_primary_lifecycle_or_disabled(old_engines)
 	updated_pipelines := PipelineRuntime.new(prepared.plan, prepared.listener, prepared.routes,
@@ -338,6 +343,30 @@ fn engine_primary_lifecycle_or_disabled(engines EngineRuntime) executor.LogicExe
 		return executor.disabled_executor_lifecycle()
 	}
 	return spec.lifecycle
+}
+
+fn validate_replacement_engine_runtime_ready(engines EngineRuntime) ! {
+	validate_replacement_worker_state_ready('main', engines.primary)!
+	for name, state in engines.additional {
+		validate_replacement_worker_state_ready(name, *state)!
+	}
+}
+
+fn validate_replacement_worker_state_ready(kind string, state worker.WorkerState) ! {
+	if state.worker_backend_mode == .disabled {
+		return
+	}
+	if state.worker_backend.sockets.len == 0 {
+		return error('runtime_plan_replacement_worker_sockets_empty:${kind}')
+	}
+	if !state.worker_backend.autostart {
+		return
+	}
+	diagnostics := worker_selection_diagnostics_for_state(state)
+	if diagnostics.any(it.probe_error == '') {
+		return
+	}
+	return error('runtime_plan_replacement_engine_not_ready:${kind}')
 }
 
 fn (mut app App) apply_lightweight_runtime_plan(next_plan runtime_plan.RuntimePlan) {

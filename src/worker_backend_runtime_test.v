@@ -144,6 +144,47 @@ fn test_engine_runtime_reads_drain_status_without_mutating_workers() {
 	assert !cgi.worker_backend.managed_workers[0].draining
 }
 
+fn test_replacement_worker_readiness_skips_disabled_worker_backend() {
+	state := worker.WorkerState{
+		worker_backend_mode: .disabled
+	}
+
+	validate_replacement_worker_state_ready('vjsx', state) or { panic(err) }
+}
+
+fn test_replacement_worker_readiness_skips_external_worker_backend() {
+	state := worker.WorkerState{
+		worker_backend_mode: .required
+		worker_backend:      worker.WorkerBackendRuntime{
+			sockets:   ['/tmp/external-worker.sock']
+			autostart: false
+		}
+	}
+
+	validate_replacement_worker_state_ready('php', state) or { panic(err) }
+}
+
+fn test_replacement_worker_readiness_rejects_unready_autostart_pool() {
+	state := worker.WorkerState{
+		worker_backend_mode: .required
+		worker_backend:      worker.WorkerBackendRuntime{
+			sockets:         ['/tmp/vhttpd-missing-replacement-worker.sock']
+			autostart:       true
+			managed_workers: [
+				transport.ManagedWorker{
+					socket_path: '/tmp/vhttpd-missing-replacement-worker.sock'
+				},
+			]
+		}
+	}
+
+	if _ := validate_replacement_worker_state_ready('php', state) {
+		assert false
+	} else {
+		assert err.msg() == 'runtime_plan_replacement_engine_not_ready:php'
+	}
+}
+
 fn test_engine_runtime_drain_unknown_engine_reports_error() {
 	mut runtime := EngineRuntime{}
 
