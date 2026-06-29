@@ -84,7 +84,8 @@ pub fn (plan RuntimePlan) relay_delivery_owner_listener_ids(websocket_listener_i
 			if listener.protocol.trim_space().to_lower() == 'websocket' {
 				continue
 			}
-			if plan.listener_has_relay_delivery_target(listener_id, relay_id) && listener_id !in owners {
+			if plan.listener_has_relay_delivery_target(listener_id, relay_id)
+				&& listener_id !in owners {
 				owners << listener_id
 			}
 		}
@@ -141,6 +142,25 @@ pub fn (plan RuntimePlan) listener_fallback_engine(listener_id string) ?EnginePl
 		}
 		return plan.engines[engine_ref.id] or { return none }
 	}
+	engines := plan.listener_http_handler_engines(listener_id)
+	for engine in engines {
+		if engine_id_matches_executor_name(engine.id, 'default') {
+			return engine
+		}
+	}
+	for engine in engines {
+		if engine.kind.trim_space().to_lower().replace('_', '-') != 'php-cgi' {
+			return engine
+		}
+	}
+	if engines.len > 0 {
+		return engines[0]
+	}
+	return none
+}
+
+fn (plan RuntimePlan) listener_http_handler_engines(listener_id string) []EnginePlan {
+	mut engines := []EnginePlan{}
 	for pipeline in plan.listener_pipelines(listener_id) {
 		if pipeline.egress.domain != .adapter {
 			continue
@@ -153,9 +173,12 @@ pub fn (plan RuntimePlan) listener_fallback_engine(listener_id string) ?EnginePl
 		if engine_ref.domain != .engine {
 			continue
 		}
-		return plan.engines[engine_ref.id] or { continue }
+		engine := plan.engines[engine_ref.id] or { continue }
+		if !engines.any(it.id == engine.id) {
+			engines << engine
+		}
 	}
-	return none
+	return engines
 }
 
 pub fn (plan RuntimePlan) listener_resource(listener_id string, category string) ?ResourcePlan {
@@ -173,23 +196,33 @@ pub fn (plan RuntimePlan) listener_resource(listener_id string, category string)
 }
 
 pub fn (plan RuntimePlan) listener_named_engine(listener_id string, executor_name string) ?EnginePlan {
+	normalized_executor := executor_name.trim_space()
 	for pipeline in plan.listener_pipelines(listener_id) {
 		if pipeline.egress.domain != .adapter {
 			continue
 		}
 		adapter := plan.adapters[pipeline.egress.id] or { continue }
 		engine_ref := adapter.engine or { continue }
-		if engine_ref.domain != .engine || !engine_ref.id.ends_with('/${executor_name}') {
+		if engine_ref.domain != .engine
+			|| !engine_id_matches_executor_name(engine_ref.id, normalized_executor) {
 			continue
 		}
 		return plan.engines[engine_ref.id] or { continue }
 	}
 	for _, transform in plan.transforms {
 		engine_ref := transform.engine or { continue }
-		if engine_ref.domain != .engine || !engine_ref.id.ends_with('/${executor_name}') {
+		if engine_ref.domain != .engine
+			|| !engine_id_matches_executor_name(engine_ref.id, normalized_executor) {
 			continue
 		}
 		return plan.engines[engine_ref.id] or { continue }
 	}
 	return none
+}
+
+fn engine_id_matches_executor_name(engine_id string, executor_name string) bool {
+	if executor_name == '' {
+		return false
+	}
+	return engine_id == executor_name || engine_id.ends_with('/${executor_name}')
 }

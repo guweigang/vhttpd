@@ -217,6 +217,43 @@ fn test_runtime_plan_listener_query_helpers() {
 	assert plan.first_relay_by_carrier('websocket')?.id == 'site/bridge'
 }
 
+fn test_runtime_plan_listener_named_engine_accepts_plain_engine_ids() {
+	plan := RuntimePlan{
+		engines:   {
+			'php-cgi': EnginePlan{
+				id:   'php-cgi'
+				kind: 'php-cgi'
+			}
+		}
+		adapters:  {
+			'cgi': AdapterPlan{
+				id:     'cgi'
+				kind:   'http-handler'
+				engine: ResourceRef{
+					domain: .engine
+					id:     'php-cgi'
+				}
+			}
+		}
+		pipelines: [
+			PipelinePlan{
+				id:      'admin'
+				ingress: ResourceRef{
+					domain: .listener
+					id:     'web'
+				}
+				egress:  ResourceRef{
+					domain: .adapter
+					id:     'cgi'
+				}
+			},
+		]
+	}
+
+	engine := plan.listener_named_engine('web', 'php-cgi') or { panic('missing php-cgi engine') }
+	assert engine.id == 'php-cgi'
+}
+
 fn test_runtime_plan_listener_fallback_engine_uses_first_http_handler_when_no_named_fallback() {
 	plan := RuntimePlan{
 		engines:   {
@@ -258,6 +295,66 @@ fn test_runtime_plan_listener_fallback_engine_uses_first_http_handler_when_no_na
 	engine := plan.listener_fallback_engine('web') or { panic('missing engine') }
 	assert engine.id == 'site/vjsx'
 	assert engine.options.ints['read_timeout_ms'] == 1234
+}
+
+fn test_runtime_plan_listener_fallback_engine_prefers_non_cgi_handler() {
+	plan := RuntimePlan{
+		engines:   {
+			'php-cgi': EnginePlan{
+				id:   'php-cgi'
+				kind: 'php-cgi'
+			}
+			'php':     EnginePlan{
+				id:   'php'
+				kind: 'php-worker'
+			}
+		}
+		adapters:  {
+			'cgi':    AdapterPlan{
+				id:     'cgi'
+				kind:   'http-handler'
+				engine: ResourceRef{
+					domain: .engine
+					id:     'php-cgi'
+				}
+			}
+			'worker': AdapterPlan{
+				id:     'worker'
+				kind:   'http-handler'
+				engine: ResourceRef{
+					domain: .engine
+					id:     'php'
+				}
+			}
+		}
+		pipelines: [
+			PipelinePlan{
+				id:      'compat'
+				ingress: ResourceRef{
+					domain: .listener
+					id:     'web'
+				}
+				egress:  ResourceRef{
+					domain: .adapter
+					id:     'cgi'
+				}
+			},
+			PipelinePlan{
+				id:      'front'
+				ingress: ResourceRef{
+					domain: .listener
+					id:     'web'
+				}
+				egress:  ResourceRef{
+					domain: .adapter
+					id:     'worker'
+				}
+			},
+		]
+	}
+
+	engine := plan.listener_fallback_engine('web') or { panic('missing fallback engine') }
+	assert engine.id == 'php'
 }
 
 fn test_runtime_plan_relay_pipeline_query_preserves_declaration_order() {

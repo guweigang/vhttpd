@@ -1,7 +1,11 @@
 module main
 
+import config
+import executor
 import json
+import os
 import runtime_plan
+import server_lifecycle
 
 fn test_runtime_plan_with_projection_diagnostics_appends_to_runtime_visible_plan() {
 	plan := runtime_plan.RuntimePlan{
@@ -87,4 +91,24 @@ fn test_runtime_plan_with_projection_diagnostics_is_idempotent() {
 	assert once.diagnostics.len == 3
 	assert twice.diagnostics.len == once.diagnostics.len
 	assert twice.diagnostics.map(it.message) == once.diagnostics.map(it.message)
+}
+
+fn test_build_engine_runtime_from_v2_plan_keeps_plain_named_additional_engines() {
+	repo_root := os.real_path(os.join_path(os.dir(@FILE), '..'))
+	config_file := os.join_path(repo_root, 'examples', 'wordpress', 'vhttpd-v2.toml')
+	plan := config.load_runtime_plan_file(config_file) or { panic(err) }
+	routes := runtime_routes_from_plan(plan, 'web')
+	cfg := config.default_vhttpd_config()
+	executor_plan := executor.LogicExecutorRuntimePlan.resolve_from_plan([]string{}, cfg, plan,
+		'web') or { panic(err) }
+
+	engine_runtime := build_engine_runtime_from_plan(cfg, executor_plan, plan, 'web', routes, server_lifecycle.AppRuntimeBuildConfig{
+		plan_listener_id: 'web'
+		workdir:          repo_root
+	})
+
+	cgi := engine_runtime.additional['php-cgi'] or { panic('missing php-cgi worker') }
+	assert cgi.logic_executor.kind() == 'php-cgi'
+	assert cgi.worker_backend.cmd.contains('php-cgi')
+	assert cgi.worker_backend.sockets.len > 0
 }
