@@ -65,6 +65,78 @@ fn openai_state_from_plan(plan runtime_plan.RuntimePlan, listener_id string) ope
 	}
 }
 
+fn protocol_runtime_diagnostics_from_plan(plan runtime_plan.RuntimePlan, listener_id string) []runtime_plan.PlanDiagnostic {
+	mut diagnostics := []runtime_plan.PlanDiagnostic{}
+	adapter := plan.listener_adapter(listener_id, 'openai') or { return diagnostics }
+	diagnostics << openai_adapter_diagnostics(adapter)
+	return diagnostics
+}
+
+fn openai_adapter_diagnostics(adapter runtime_plan.AdapterPlan) []runtime_plan.PlanDiagnostic {
+	mut diagnostics := []runtime_plan.PlanDiagnostic{}
+	mut backend_ids := map[string]bool{}
+	for record in adapter.options.record_lists['backends'] {
+		id := record['id'] or {
+			diagnostics << runtime_plan.PlanDiagnostic{
+				severity: 'error'
+				code:     'openai_backend_missing_id'
+				path:     'adapters.${adapter.id}.options.backends'
+				message:  'openai adapter ${adapter.id} has a backend record without id'
+			}
+			continue
+		}
+		if id.trim_space() == '' {
+			diagnostics << runtime_plan.PlanDiagnostic{
+				severity: 'error'
+				code:     'openai_backend_missing_id'
+				path:     'adapters.${adapter.id}.options.backends'
+				message:  'openai adapter ${adapter.id} has a backend record without id'
+			}
+			continue
+		}
+		backend_ids[id] = true
+	}
+	default_backend := adapter.options.strings['default_backend']
+	if default_backend.trim_space() != '' && default_backend !in backend_ids {
+		diagnostics << runtime_plan.PlanDiagnostic{
+			severity: 'error'
+			code:     'openai_default_backend_missing'
+			path:     'adapters.${adapter.id}.options.default_backend'
+			message:  'openai adapter ${adapter.id} references missing default backend ${default_backend}'
+		}
+	}
+	for record in adapter.options.record_lists['routes'] {
+		id := record['id'] or {
+			diagnostics << runtime_plan.PlanDiagnostic{
+				severity: 'error'
+				code:     'openai_route_missing_id'
+				path:     'adapters.${adapter.id}.options.routes'
+				message:  'openai adapter ${adapter.id} has a route record without id'
+			}
+			continue
+		}
+		if id.trim_space() == '' {
+			diagnostics << runtime_plan.PlanDiagnostic{
+				severity: 'error'
+				code:     'openai_route_missing_id'
+				path:     'adapters.${adapter.id}.options.routes'
+				message:  'openai adapter ${adapter.id} has a route record without id'
+			}
+			continue
+		}
+		backend := record['backend']
+		if backend.trim_space() != '' && backend !in backend_ids {
+			diagnostics << runtime_plan.PlanDiagnostic{
+				severity: 'error'
+				code:     'openai_route_backend_missing'
+				path:     'adapters.${adapter.id}.options.routes.${id}.backend'
+				message:  'openai route ${id} references missing backend ${backend}'
+			}
+		}
+	}
+	return diagnostics
+}
+
 fn openai_backends_from_adapter(adapter runtime_plan.AdapterPlan) map[string]config.OpenAIBackendConfig {
 	mut backends := map[string]config.OpenAIBackendConfig{}
 	for record in adapter.options.record_lists['backends'] {

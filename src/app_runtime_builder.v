@@ -33,6 +33,8 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 	db_settings := db_runtime_settings_from_plan(runtime_plan_for_app, plan_listener_id)
 	cache_enabled, cache_socket := cache_runtime_settings_from_plan(runtime_plan_for_app,
 		plan_listener_id)
+	runtime_plan_for_app = runtime_plan_with_appended_diagnostics(runtime_plan_for_app, protocol_runtime_diagnostics_from_plan(runtime_plan_for_app,
+		plan_listener_id))
 	mcp_state := mcp_state_from_plan(runtime_plan_for_app, plan_listener_id)
 	openai_state := openai_state_from_plan(runtime_plan_for_app, plan_listener_id)
 	plugin_configs := plugin_configs_from_plan(runtime_plan_for_app)
@@ -144,6 +146,8 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 fn runtime_plan_with_runtime_diagnostics(cfg config.VhttpdConfig, executor_plan executor.LogicExecutorRuntimePlan, plan runtime_plan.RuntimePlan, listener_id string, routes []RuntimeRouteRule, build_cfg server_lifecycle.AppRuntimeBuildConfig) runtime_plan.RuntimePlan {
 	mut runtime_visible_plan := runtime_plan_with_projection_diagnostics(plan)
 	runtime_visible_plan = runtime_plan_with_appended_diagnostics(runtime_visible_plan, runtime_route_projection_diagnostics(runtime_visible_plan,
+		listener_id))
+	runtime_visible_plan = runtime_plan_with_appended_diagnostics(runtime_visible_plan, protocol_runtime_diagnostics_from_plan(runtime_visible_plan,
 		listener_id))
 	engine_build := build_engine_runtime_with_diagnostics_from_plan(cfg, executor_plan,
 		runtime_visible_plan, listener_id, routes, build_cfg)
