@@ -19,7 +19,7 @@ import server_lifecycle
 import runtime_plan
 
 fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executor_plan executor.LogicExecutorRuntimePlan, cfg config.VhttpdConfig, plan runtime_plan.RuntimePlan, build_cfg server_lifecycle.AppRuntimeBuildConfig) &App {
-	runtime_plan_for_app := runtime_plan_with_projection_diagnostics(plan)
+	mut runtime_plan_for_app := runtime_plan_with_projection_diagnostics(plan)
 	// 1. Build request-time routes only from the resolved plan for this listener.
 	plan_listener_id := if build_cfg.plan_listener_id != '' {
 		build_cfg.plan_listener_id
@@ -37,8 +37,11 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 	plan_provider_settings := provider_runtime_settings_from_plan(runtime_plan_for_app,
 		provider_settings)
 
-	engine_runtime := build_engine_runtime_from_plan(cfg, executor_plan, runtime_plan_for_app,
-		plan_listener_id, runtime_routes, build_cfg)
+	engine_build := build_engine_runtime_with_diagnostics_from_plan(cfg, executor_plan,
+		runtime_plan_for_app, plan_listener_id, runtime_routes, build_cfg)
+	engine_runtime := engine_build.runtime
+	runtime_plan_for_app = runtime_plan_with_appended_diagnostics(runtime_plan_for_app,
+		engine_build.diagnostics)
 
 	return &App{
 		plan:          runtime_plan_for_app
@@ -134,16 +137,36 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 }
 
 fn build_engine_runtime_from_plan(cfg config.VhttpdConfig, executor_plan executor.LogicExecutorRuntimePlan, plan runtime_plan.RuntimePlan, listener_id string, routes []RuntimeRouteRule, build_cfg server_lifecycle.AppRuntimeBuildConfig) EngineRuntime {
-	return EngineRuntime{
-		primary:    worker_state_from_executor_plan(executor_plan, build_cfg,
-			build_cfg.worker_queue_capacity, build_cfg.worker_queue_timeout_ms)
-		additional: build_additional_engine_workers_from_plan(cfg, executor_plan, plan,
-			listener_id, routes, build_cfg)
+	return build_engine_runtime_with_diagnostics_from_plan(cfg, executor_plan, plan, listener_id,
+		routes, build_cfg).runtime
+}
+
+struct EngineRuntimeBuildResult {
+	runtime     EngineRuntime
+	diagnostics []runtime_plan.PlanDiagnostic
+}
+
+struct AdditionalEngineWorkersBuildResult {
+	workers     map[string]&worker.WorkerState
+	diagnostics []runtime_plan.PlanDiagnostic
+}
+
+fn build_engine_runtime_with_diagnostics_from_plan(cfg config.VhttpdConfig, executor_plan executor.LogicExecutorRuntimePlan, plan runtime_plan.RuntimePlan, listener_id string, routes []RuntimeRouteRule, build_cfg server_lifecycle.AppRuntimeBuildConfig) EngineRuntimeBuildResult {
+	additional := build_additional_engine_workers_with_diagnostics_from_plan(cfg, executor_plan,
+		plan, listener_id, routes, build_cfg)
+	return EngineRuntimeBuildResult{
+		runtime:     EngineRuntime{
+			primary:    worker_state_from_executor_plan(executor_plan, build_cfg,
+				build_cfg.worker_queue_capacity, build_cfg.worker_queue_timeout_ms)
+			additional: additional.workers
+		}
+		diagnostics: additional.diagnostics
 	}
 }
 
-fn build_additional_engine_workers_from_plan(cfg config.VhttpdConfig, executor_plan executor.LogicExecutorRuntimePlan, plan runtime_plan.RuntimePlan, listener_id string, routes []RuntimeRouteRule, build_cfg server_lifecycle.AppRuntimeBuildConfig) map[string]&worker.WorkerState {
+fn build_additional_engine_workers_with_diagnostics_from_plan(cfg config.VhttpdConfig, executor_plan executor.LogicExecutorRuntimePlan, plan runtime_plan.RuntimePlan, listener_id string, routes []RuntimeRouteRule, build_cfg server_lifecycle.AppRuntimeBuildConfig) AdditionalEngineWorkersBuildResult {
 	mut add_workers := map[string]&worker.WorkerState{}
+	mut diagnostics := []runtime_plan.PlanDiagnostic{}
 	for route in routes {
 		mut executor_names := []string{}
 		if route.executor != '' {
@@ -159,7 +182,15 @@ fn build_additional_engine_workers_from_plan(cfg config.VhttpdConfig, executor_p
 			}
 			if engine := plan.listener_named_engine(listener_id, executor_name) {
 				sub_plan := executor.LogicExecutorRuntimePlan.resolve_additional_engine_from_plan(cfg,
-					engine, executor_name) or { continue }
+					engine, executor_name) or {
+					diagnostics << runtime_plan.PlanDiagnostic{
+						severity: 'error'
+						code:     'additional_engine_runtime_failed'
+						path:     'engines.${engine.id}'
+						message:  'failed to build additional engine ${engine.id}: ${err.msg()}'
+					}
+					continue
+				}
 				sub_queue_capacity := if engine.options.ints['queue_capacity'] > 0 {
 					engine.options.ints['queue_capacity']
 				} else {
@@ -176,7 +207,20 @@ fn build_additional_engine_workers_from_plan(cfg config.VhttpdConfig, executor_p
 			}
 		}
 	}
-	return add_workers
+	return AdditionalEngineWorkersBuildResult{
+		workers:     add_workers
+		diagnostics: diagnostics
+	}
+}
+
+fn runtime_plan_with_appended_diagnostics(plan runtime_plan.RuntimePlan, diagnostics []runtime_plan.PlanDiagnostic) runtime_plan.RuntimePlan {
+	if diagnostics.len == 0 {
+		return plan
+	}
+	return runtime_plan.RuntimePlan{
+		...plan
+		diagnostics: runtime_plan_append_unique_diagnostics(plan.diagnostics, diagnostics)
+	}
 }
 
 fn worker_state_from_executor_plan(plan executor.LogicExecutorRuntimePlan, build_cfg server_lifecycle.AppRuntimeBuildConfig, queue_capacity int, queue_timeout_ms int) worker.WorkerState {

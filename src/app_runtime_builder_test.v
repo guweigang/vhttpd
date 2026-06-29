@@ -4,6 +4,7 @@ import config
 import executor
 import json
 import os
+import provider
 import runtime_plan
 import server_lifecycle
 
@@ -111,4 +112,88 @@ fn test_build_engine_runtime_from_v2_plan_keeps_plain_named_additional_engines()
 	assert cgi.logic_executor.kind() == 'php-cgi'
 	assert cgi.worker_backend.cmd.contains('php-cgi')
 	assert cgi.worker_backend.sockets.len > 0
+}
+
+fn test_build_engine_runtime_records_additional_engine_diagnostics() {
+	plan := runtime_plan.RuntimePlan{
+		listeners: {
+			'web': runtime_plan.ListenerPlan{
+				id:       'web'
+				protocol: 'http'
+			}
+		}
+		engines:   {
+			'app':    runtime_plan.EnginePlan{
+				id:   'app'
+				kind: 'php-worker'
+			}
+			'broken': runtime_plan.EnginePlan{
+				id:   'broken'
+				kind: 'not-a-real-executor'
+			}
+		}
+		adapters:  {
+			'app':    runtime_plan.AdapterPlan{
+				id:     'app'
+				kind:   'http-handler'
+				engine: runtime_plan.ResourceRef{
+					domain: .engine
+					id:     'app'
+				}
+			}
+			'broken': runtime_plan.AdapterPlan{
+				id:     'broken'
+				kind:   'http-handler'
+				engine: runtime_plan.ResourceRef{
+					domain: .engine
+					id:     'broken'
+				}
+			}
+		}
+		pipelines: [
+			runtime_plan.PipelinePlan{
+				id:      'site/app'
+				ingress: runtime_plan.ResourceRef{
+					domain: .listener
+					id:     'web'
+				}
+				egress:  runtime_plan.ResourceRef{
+					domain: .adapter
+					id:     'app'
+				}
+			},
+			runtime_plan.PipelinePlan{
+				id:      'site/broken'
+				ingress: runtime_plan.ResourceRef{
+					domain: .listener
+					id:     'web'
+				}
+				egress:  runtime_plan.ResourceRef{
+					domain: .adapter
+					id:     'broken'
+				}
+			},
+		]
+	}
+	cfg := config.default_vhttpd_config()
+	executor_plan := executor.LogicExecutorRuntimePlan.resolve_from_plan([]string{}, cfg, plan,
+		'web') or { panic(err) }
+	routes := runtime_routes_from_plan(plan, 'web')
+
+	result := build_engine_runtime_with_diagnostics_from_plan(cfg, executor_plan, plan, 'web',
+		routes, server_lifecycle.AppRuntimeBuildConfig{})
+
+	assert 'broken' !in result.runtime.additional
+	assert result.diagnostics.len == 1
+	assert result.diagnostics[0].severity == 'error'
+	assert result.diagnostics[0].code == 'additional_engine_runtime_failed'
+	assert result.diagnostics[0].path == 'engines.broken'
+	assert result.diagnostics[0].message.contains('unsupported executor kind: not-a-real-executor')
+
+	app := build_app_runtime(provider.ProviderRuntimeSettings{}, executor_plan, cfg, plan, server_lifecycle.AppRuntimeBuildConfig{
+		plan_listener_id: 'web'
+	})
+	assert app.plan.diagnostics.any(it.code == 'additional_engine_runtime_failed'
+		&& it.path == 'engines.broken')
+	assert app.protocols.runtime_plan_json.contains('"additional_engine_runtime_failed"')
 }
