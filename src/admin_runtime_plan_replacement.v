@@ -104,6 +104,14 @@ struct RuntimePlanReplacementFinalizeResult {
 	pending     RuntimePlanReplacementPendingSnapshot
 }
 
+struct RuntimePlanReplacementCancelResult {
+	cancelled bool
+	status    string
+	error     string
+	pending   RuntimePlanReplacementPendingSnapshot
+	resumed   []EngineDrainStatus
+}
+
 struct RuntimePlanReplacementPreparedRuntime {
 	plan              runtime_plan.RuntimePlan
 	engines           EngineRuntime
@@ -282,6 +290,47 @@ fn (mut app App) finalize_runtime_plan_replacement() RuntimePlanReplacementFinal
 	}
 	app.record_runtime_plan_replacement_finalize(result)
 	return result
+}
+
+fn (mut app App) cancel_runtime_plan_replacement() RuntimePlanReplacementCancelResult {
+	app.mu.@lock()
+	pending := app.replacement.pending
+	app.mu.unlock()
+	if !pending.active {
+		return RuntimePlanReplacementCancelResult{
+			cancelled: false
+			status:    'rejected'
+			error:     'runtime_plan_replacement_no_pending'
+		}
+	}
+	mut resumed := []EngineDrainStatus{}
+	for engine_id in pending.drain_engines {
+		pool := app.resolve_engine_worker_pool(engine_id)
+		status := app.resume_engine(pool) or {
+			return RuntimePlanReplacementCancelResult{
+				cancelled: false
+				status:    'rejected'
+				error:     err.msg()
+				pending:   pending
+				resumed:   resumed
+			}
+		}
+		resumed << status
+	}
+	app.mu.@lock()
+	app.replacement.pending = RuntimePlanReplacementPendingSnapshot{}
+	app.mu.unlock()
+	app.emit('runtime.plan.replacement.cancelled', {
+		'config_path':          pending.config_path
+		'drain_engines':        pending.drain_engines.join(',')
+		'replacement_strategy': pending.strategy
+	})
+	return RuntimePlanReplacementCancelResult{
+		cancelled: true
+		status:    'cancelled'
+		pending:   pending
+		resumed:   resumed
+	}
 }
 
 fn (mut app App) prepare_runtime_plan_replacement_runtime(pending RuntimePlanReplacementPendingSnapshot) !RuntimePlanReplacementPreparedRuntime {
@@ -556,6 +605,13 @@ fn runtime_plan_replacement_apply_status_code(result RuntimePlanReplacementApply
 
 fn runtime_plan_replacement_finalize_status_code(result RuntimePlanReplacementFinalizeResult) int {
 	if result.applied {
+		return 200
+	}
+	return 409
+}
+
+fn runtime_plan_replacement_cancel_status_code(result RuntimePlanReplacementCancelResult) int {
+	if result.cancelled {
 		return 200
 	}
 	return 409

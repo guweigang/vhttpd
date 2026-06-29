@@ -29,6 +29,14 @@ fn (mut runtime EngineRuntime) engine_drain_status(kind string) !EngineDrainStat
 	return worker_state_drain_status(mut *state, kind)
 }
 
+fn (mut runtime EngineRuntime) resume_engine(kind string) !EngineDrainStatus {
+	if kind == '' || kind == 'main' || kind == 'primary' || kind == runtime.primary_kind() {
+		return resume_worker_state(mut runtime.primary, if kind == '' { 'main' } else { kind })
+	}
+	mut state := runtime.additional[kind] or { return error('unknown_executor_kind:${kind}') }
+	return resume_worker_state(mut *state, kind)
+}
+
 fn (mut app App) drain_engine(kind string) !EngineDrainStatus {
 	status := app.engines.drain_engine(kind)!
 	app.emit('admin.worker.drain', {
@@ -44,6 +52,19 @@ fn (mut app App) drain_engine(kind string) !EngineDrainStatus {
 
 fn (mut app App) engine_drain_status(kind string) !EngineDrainStatus {
 	return app.engines.engine_drain_status(kind)
+}
+
+fn (mut app App) resume_engine(kind string) !EngineDrainStatus {
+	status := app.engines.resume_engine(kind)!
+	app.emit('admin.worker.resume', {
+		'engine':            status.engine
+		'worker_count':      '${status.worker_count}'
+		'draining_count':    '${status.draining_count}'
+		'inflight_requests': '${status.inflight_requests}'
+		'ready_count':       '${status.ready_count}'
+		'changed':           '${status.changed}'
+	})
+	return status
 }
 
 fn drain_worker_state(mut state worker.WorkerState, kind string) EngineDrainStatus {
@@ -76,6 +97,32 @@ fn drain_worker_state(mut state worker.WorkerState, kind string) EngineDrainStat
 		draining_count:    draining_count
 		inflight_requests: inflight_requests
 		ready_count:       ready_count
+		changed:           changed
+	}
+}
+
+fn resume_worker_state(mut state worker.WorkerState, kind string) EngineDrainStatus {
+	state.mu.@lock()
+	defer {
+		state.mu.unlock()
+	}
+	mut inflight_requests := i64(0)
+	mut changed := false
+	for idx, managed in state.worker_backend.managed_workers {
+		mut worker_item := managed
+		if worker_item.draining {
+			worker_item.draining = false
+			state.worker_backend.managed_workers[idx] = worker_item
+			changed = true
+		}
+		inflight_requests += worker_item.inflight_requests
+	}
+	return EngineDrainStatus{
+		engine:            kind
+		worker_count:      state.worker_backend.managed_workers.len
+		draining_count:    0
+		inflight_requests: inflight_requests
+		ready_count:       0
 		changed:           changed
 	}
 }

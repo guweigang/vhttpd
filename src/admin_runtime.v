@@ -119,6 +119,25 @@ pub fn (mut app App) admin_runtime_plan_replacement_finalize(mut ctx Context) ve
 	})
 }
 
+@['/admin/runtime/plan/replacement/cancel'; post]
+pub fn (mut app App) admin_runtime_plan_replacement_cancel(mut ctx Context) veb.Result {
+	req := admin_data_plane_request(ctx, '/admin/runtime/plan/replacement/cancel')
+	if !app.control_plane.admin.on_data_plane {
+		return admin_data_plane_text(mut app, mut ctx, 'POST', req, 404, 'Not Found', {
+			'admin_endpoint': 'runtime_plan_replacement_cancel'
+			'error':          'not_found'
+		})
+	}
+	result := app.cancel_runtime_plan_replacement()
+	status := runtime_plan_replacement_cancel_status_code(result)
+	return admin_data_plane_json(mut app, mut ctx, 'POST', req, status, json.encode(result), {
+		'admin_endpoint': 'runtime_plan_replacement_cancel'
+		'cancelled':      '${result.cancelled}'
+		'status':         result.status
+		'error':          result.error
+	})
+}
+
 @['/admin/runtime/transformers'; get]
 pub fn (mut app App) admin_runtime_transformers(mut ctx Context) veb.Result {
 	req := admin_data_plane_request(ctx, '/admin/runtime/transformers')

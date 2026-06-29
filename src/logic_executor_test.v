@@ -481,6 +481,65 @@ fn test_internal_admin_runtime_plan_replacement_finalize_requires_pending() {
 	assert state.last_finalize.error == 'runtime_plan_replacement_no_pending'
 }
 
+fn test_internal_admin_runtime_plan_replacement_cancel_requires_pending() {
+	mut app := App{}
+
+	resp := app.internal_admin_dispatch(admin.InternalAdminRequest{
+		mode:   'vhttpd_admin'
+		method: 'POST'
+		path:   '/admin/runtime/plan/replacement/cancel'
+	})
+	result := json.decode(RuntimePlanReplacementCancelResult, resp.body) or { panic(err) }
+
+	assert resp.status == 409
+	assert !result.cancelled
+	assert result.status == 'rejected'
+	assert result.error == 'runtime_plan_replacement_no_pending'
+}
+
+fn test_internal_admin_runtime_plan_replacement_cancel_resumes_pending_workers() {
+	mut app := App{
+		replacement: RuntimePlanReplacementRuntime{
+			pending: RuntimePlanReplacementPendingSnapshot{
+				active:        true
+				config_path:   '/tmp/next.toml'
+				strategy:      'engine_drain_required'
+				ready:         true
+				drain_engines: ['app']
+			}
+		}
+		engines:     EngineRuntime{
+			primary: worker.WorkerState{
+				worker_backend: worker.WorkerBackendRuntime{
+					managed_workers: [
+						transport.ManagedWorker{
+							socket_path:       '/tmp/app-cancel.sock'
+							inflight_requests: 1
+							draining:          true
+						},
+					]
+				}
+				logic_executor: executor.SocketWorkerExecutor{}
+			}
+		}
+	}
+
+	resp := app.internal_admin_dispatch(admin.InternalAdminRequest{
+		mode:   'vhttpd_admin'
+		method: 'POST'
+		path:   '/admin/runtime/plan/replacement/cancel'
+	})
+	result := json.decode(RuntimePlanReplacementCancelResult, resp.body) or { panic(err) }
+
+	assert resp.status == 200
+	assert result.cancelled
+	assert result.status == 'cancelled'
+	assert result.resumed.len == 1
+	assert result.resumed[0].changed
+	assert !app.replacement.pending.active
+	assert !app.engines.primary.worker_backend.managed_workers[0].draining
+}
+
 fn test_internal_admin_runtime_plan_replacement_finalize_waits_for_drain() {
 	mut app := App{
 		replacement: RuntimePlanReplacementRuntime{
