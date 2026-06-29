@@ -197,6 +197,17 @@ fn (mut app App) emit_runtime_plan_replacement_rejected(result RuntimePlanReplac
 	})
 }
 
+fn runtime_plan_diagnostic_codes(plan runtime_plan.RuntimePlan) string {
+	mut codes := []string{}
+	for diagnostic in plan.diagnostics {
+		if diagnostic.code != '' && diagnostic.code !in codes {
+			codes << diagnostic.code
+		}
+	}
+	codes.sort()
+	return codes.join(',')
+}
+
 fn (mut app App) apply_runtime_plan_replacement(config_path string) !RuntimePlanReplacementApplyResult {
 	normalized_path := config_path.trim_space()
 	if normalized_path == '' {
@@ -293,6 +304,8 @@ fn (mut app App) apply_runtime_plan_replacement(config_path string) !RuntimePlan
 	app.emit('runtime.plan.replaced', {
 		'config_path':          normalized_path
 		'changed_pipelines':    diff.changed_pipelines.join(',')
+		'diagnostic_codes':     runtime_plan_diagnostic_codes(app.plan)
+		'diagnostics_count':    '${app.plan.diagnostics.len}'
 		'unchanged_pipelines':  diff.unchanged_pipelines.join(',')
 		'reload_transforms':    diff.reload_transforms.join(',')
 		'replacement_allowed':  '${diff.allowed}'
@@ -368,6 +381,8 @@ fn (mut app App) finalize_runtime_plan_replacement() RuntimePlanReplacementFinal
 	app.emit('runtime.plan.replaced', {
 		'config_path':          pending.config_path
 		'changed_pipelines':    pending.changed_pipelines.join(',')
+		'diagnostic_codes':     runtime_plan_diagnostic_codes(prepared.plan)
+		'diagnostics_count':    '${prepared.plan.diagnostics.len}'
 		'unchanged_pipelines':  pending.unchanged_pipelines.join(',')
 		'drain_engines':        pending.drain_engines.join(',')
 		'replacement_strategy': pending.strategy

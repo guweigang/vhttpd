@@ -301,6 +301,7 @@ fn test_internal_admin_runtime_plan_replacement_apply_updates_lightweight_routes
 	os.mkdir_all(temp_dir) or { panic(err) }
 	current_file := os.join_path(temp_dir, 'current.toml')
 	config_file := os.join_path(temp_dir, 'next.toml')
+	event_log := os.join_path(temp_dir, 'events.ndjson')
 	current_text := '
 version = 2
 
@@ -339,13 +340,16 @@ egress = "adapter:ws"
 	}
 	current_plan := config.load_runtime_plan_file(current_file) or { panic(err) }
 	mut app := App{
-		plan:         current_plan
-		protocols:    ProtocolRuntimeHub{
+		plan:          current_plan
+		protocols:     ProtocolRuntimeHub{
 			runtime_plan_json: json.encode(current_plan)
 		}
-		pipelines:    PipelineRuntime.new(current_plan, 'web', runtime_routes_from_plan(current_plan,
+		pipelines:     PipelineRuntime.new(current_plan, 'web', runtime_routes_from_plan(current_plan,
 			'web'), '', '', map[string]string{}, map[string]&worker.WorkerState{})
-		transformers: TransformerRuntimeHub.from_plan(current_plan)
+		transformers:  TransformerRuntimeHub.from_plan(current_plan)
+		control_plane: ControlPlaneRuntime{
+			event_log: event_log
+		}
 	}
 	resp := app.internal_admin_dispatch(admin.InternalAdminRequest{
 		mode:   'vhttpd_admin'
@@ -366,6 +370,10 @@ egress = "adapter:ws"
 	assert app.pipelines.http.rules.len == 1
 	assert app.pipelines.http.rules[0].body == 'new'
 	assert app.plan.adapters['hello'].options.strings['body'] == 'new'
+	event_log_text := os.read_file(event_log) or { panic(err) }
+	assert event_log_text.contains('"type":"runtime.plan.replaced"')
+	assert event_log_text.contains('"diagnostics_count":"')
+	assert event_log_text.contains('"diagnostic_codes":"pipeline_capability_mismatch"')
 	state := app.runtime_plan_replacement_snapshot()
 	assert state.applies_total == 1
 	assert state.applied_total == 1
