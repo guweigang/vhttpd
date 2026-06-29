@@ -300,7 +300,20 @@ fn (mut app App) apply_runtime_plan_replacement(config_path string) !RuntimePlan
 		app.record_runtime_plan_replacement_apply(result)
 		return result
 	}
-	app.apply_lightweight_runtime_plan(next_plan)
+	app.apply_lightweight_runtime_plan(next_plan) or {
+		result := RuntimePlanReplacementApplyResult{
+			config_path: normalized_path
+			config_hash: next_config_hash
+			applied:     false
+			status:      'rejected'
+			strategy:    execution.strategy
+			error:       err.msg()
+			preview:     preview
+		}
+		app.emit_runtime_plan_replacement_rejected(result)
+		app.record_runtime_plan_replacement_apply(result)
+		return result
+	}
 	app.emit('runtime.plan.replaced', {
 		'config_path':          normalized_path
 		'changed_pipelines':    diff.changed_pipelines.join(',')
@@ -548,19 +561,11 @@ fn validate_replacement_worker_state_ready(kind string, state worker.WorkerState
 	return error('runtime_plan_replacement_engine_not_ready:${kind}')
 }
 
-fn (mut app App) apply_lightweight_runtime_plan(next_plan_raw runtime_plan.RuntimePlan) {
+fn (mut app App) apply_lightweight_runtime_plan(next_plan_raw runtime_plan.RuntimePlan) ! {
 	listener_id := app.pipelines.http.listener_id
 	routes := runtime_routes_from_plan(next_plan_raw, listener_id)
 	next_executor_plan := executor.LogicExecutorRuntimePlan.resolve_from_plan([]string{},
-		app.legacy_config, next_plan_raw, listener_id) or {
-		// The apply preview already classified this as lightweight. If executor projection fails here,
-		// keep applying the validated plan and expose existing diagnostics instead of aborting.
-		executor.LogicExecutorRuntimePlan{
-			executor:            app.engines.primary.logic_executor
-			worker_backend_mode: app.engines.primary.worker_backend_mode
-			lifecycle:           engine_primary_lifecycle_or_disabled(app.engines)
-		}
-	}
+		app.legacy_config, next_plan_raw, listener_id)!
 	next_plan := runtime_plan_with_runtime_diagnostics(app.legacy_config, next_executor_plan,
 		next_plan_raw, listener_id, routes, app.app_build_cfg)
 	primary_env := app.engines.primary.worker_backend.env.clone()

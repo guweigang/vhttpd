@@ -386,6 +386,88 @@ egress = "adapter:ws"
 	assert state.last_apply.changed_pipelines == ['site/hello']
 }
 
+fn test_internal_admin_runtime_plan_replacement_apply_rejects_lightweight_executor_projection_failure() {
+	temp_dir := os.join_path(os.temp_dir(),
+		'vhttpd_plan_replacement_lightweight_executor_fail_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	current_file := os.join_path(temp_dir, 'current.toml')
+	config_file := os.join_path(temp_dir, 'next.toml')
+	current_text := '
+version = 2
+
+[listeners.web]
+protocol = "http"
+transport = "tcp"
+host = "127.0.0.1"
+port = 18080
+
+[engines.bad]
+kind = "php-worker"
+entry = "/tmp/vhttpd-missing-lightweight-worker.php"
+
+[adapters.bad]
+kind = "http-handler"
+engine = "engine:bad"
+
+[adapters.hello]
+kind = "fixed-response"
+options.status = "200"
+options.body = "old"
+
+[[pipelines]]
+id = "site/bad"
+ingress = "listener:web"
+match.paths = ["/bad"]
+egress = "adapter:bad"
+
+[[pipelines]]
+id = "site/hello"
+ingress = "listener:web"
+match.paths = ["/hello"]
+egress = "adapter:hello"
+'
+	os.write_file(current_file, current_text) or { panic(err) }
+	os.write_file(config_file, current_text.replace('options.body = "old"', 'options.body = "new"')) or {
+		panic(err)
+	}
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	current_plan := config.load_runtime_plan_file(current_file) or { panic(err) }
+	mut app := App{
+		plan:      current_plan
+		protocols: ProtocolRuntimeHub{
+			runtime_plan_json: json.encode(current_plan)
+		}
+		engines:   EngineRuntime{
+			primary: worker.WorkerState{
+				logic_executor: executor.SocketWorkerExecutor{}
+			}
+		}
+		pipelines: PipelineRuntime.new(current_plan, 'web', runtime_routes_from_plan(current_plan,
+			'web'), '', '', map[string]string{}, map[string]&worker.WorkerState{})
+	}
+	resp := app.internal_admin_dispatch(admin.InternalAdminRequest{
+		mode:   'vhttpd_admin'
+		method: 'POST'
+		path:   '/admin/runtime/plan/replacement/apply'
+		query:  {
+			'config': config_file
+		}
+	})
+	assert resp.status == 409
+	result := json.decode(RuntimePlanReplacementApplyResult, resp.body) or { panic(err) }
+	assert !result.applied
+	assert result.status == 'rejected'
+	assert result.strategy == 'lightweight'
+	assert result.error.contains('php_worker_entry_not_found:/tmp/vhttpd-missing-lightweight-worker.php')
+	assert app.plan.adapters['hello'].options.strings['body'] == 'old'
+	state := app.runtime_plan_replacement_snapshot()
+	assert state.applies_total == 1
+	assert state.rejected_total == 1
+	assert state.last_apply.error.contains('php_worker_entry_not_found:/tmp/vhttpd-missing-lightweight-worker.php')
+}
+
 fn test_internal_admin_runtime_plan_replacement_apply_starts_engine_drain() {
 	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_plan_replacement_apply_reject_test')
 	os.mkdir_all(temp_dir) or { panic(err) }
