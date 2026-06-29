@@ -179,8 +179,10 @@ fn runtime_route_from_pipeline(plan runtime_plan.RuntimePlan, pipeline runtime_p
 			route.executor = 'static'
 			route.root = adapter.options.strings['root']
 			route.upload_dir = adapter.options.strings['legacy_upload_dir']
-			route.on_completed = legacy_completion_handler_from_plan(plan,
-				adapter.options.strings['completed_pipeline'])
+			if plan.source.compatibility {
+				route.on_completed = legacy_completion_handler_from_plan(plan,
+					adapter.options.strings['completed_pipeline'])
+			}
 		}
 		'upload' {
 			route.executor = 'upload'
@@ -189,7 +191,9 @@ fn runtime_route_from_pipeline(plan runtime_plan.RuntimePlan, pipeline runtime_p
 				route.max_body_bytes = adapter.options.ints['max_body_bytes']
 			}
 			completed_pipeline := adapter.options.strings['completed_pipeline']
-			route.on_completed = legacy_completion_handler_from_plan(plan, completed_pipeline)
+			if plan.source.compatibility {
+				route.on_completed = legacy_completion_handler_from_plan(plan, completed_pipeline)
+			}
 			route.upload_completed_transform_refs = completed_transform_refs_from_plan(plan,
 				completed_pipeline)
 			route.upload_completed_pipeline_id = completed_pipeline_id_from_plan(completed_pipeline)

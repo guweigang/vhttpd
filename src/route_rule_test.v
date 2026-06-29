@@ -476,7 +476,7 @@ fn test_wordpress_v2_example_projects_http_pipelines_to_runtime_routes() {
 	upload := routes.filter(it.pipeline_id == 'uploads.accept')[0]
 	assert upload.executor == 'upload'
 	assert upload.upload_dir == '/tmp/vhttpd-wordpress-uploads'
-	assert upload.on_completed == 'vjsx:wordpress.upload.completed'
+	assert upload.on_completed == ''
 	assert upload.upload_completed_ingress_ref == 'listener:web'
 	assert upload.upload_completed_pipeline_id == 'upload.completed'
 	assert upload.upload_completed_transform_refs == ['transform:upload-completed']
