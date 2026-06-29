@@ -468,6 +468,7 @@ fn test_internal_admin_runtime_plan_replacement_apply_rejects_engine_without_wor
 	os.mkdir_all(temp_dir) or { panic(err) }
 	current_file := os.join_path(temp_dir, 'current.toml')
 	config_file := os.join_path(temp_dir, 'next.toml')
+	event_log := os.join_path(temp_dir, 'events.ndjson')
 	current_text := '
 version = 2
 
@@ -517,16 +518,19 @@ egress = "terminal:accepted"
 	}
 	current_plan := config.load_runtime_plan_file(current_file) or { panic(err) }
 	mut app := App{
-		plan:      current_plan
-		protocols: ProtocolRuntimeHub{
+		plan:          current_plan
+		protocols:     ProtocolRuntimeHub{
 			runtime_plan_json: json.encode(current_plan)
 		}
-		engines:   EngineRuntime{
+		engines:       EngineRuntime{
 			primary: worker.WorkerState{
 				logic_executor: executor.SocketWorkerExecutor{}
 			}
 		}
-		pipelines: PipelineRuntime.new(current_plan, 'web', runtime_routes_from_plan(current_plan,
+		control_plane: ControlPlaneRuntime{
+			event_log: event_log
+		}
+		pipelines:     PipelineRuntime.new(current_plan, 'web', runtime_routes_from_plan(current_plan,
 			'web'), '', '', map[string]string{}, map[string]&worker.WorkerState{})
 	}
 	resp := app.internal_admin_dispatch(admin.InternalAdminRequest{
@@ -556,6 +560,10 @@ egress = "terminal:accepted"
 	assert state.last_apply.error == 'runtime_plan_replacement_engine_has_no_worker_pool:upload-events'
 	assert state.last_apply.drain_engines == ['upload-events']
 	assert state.last_apply.changed_pipelines == ['upload.completed']
+	event_log_text := os.read_file(event_log) or { panic(err) }
+	assert event_log_text.contains('"type":"runtime.plan.replacement.rejected"')
+	assert event_log_text.contains('"error":"runtime_plan_replacement_engine_has_no_worker_pool:upload-events"')
+	assert event_log_text.contains('"drain_engines":"upload-events"')
 }
 
 fn test_runtime_plan_replacement_snapshot_exposes_pending_refresh_error() {

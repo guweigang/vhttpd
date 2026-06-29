@@ -185,6 +185,18 @@ fn runtime_plan_replacement_config_hash(config_path string) !string {
 	return sha256.sum(text.bytes()).hex().to_lower()
 }
 
+fn (mut app App) emit_runtime_plan_replacement_rejected(result RuntimePlanReplacementApplyResult) {
+	app.emit('runtime.plan.replacement.rejected', {
+		'config_path':          result.config_path
+		'config_hash':          result.config_hash
+		'changed_pipelines':    result.preview.changed_pipelines.join(',')
+		'drain_engines':        result.preview.drain_engines.join(',')
+		'error':                result.error
+		'replacement_strategy': result.strategy
+		'status':               result.status
+	})
+}
+
 fn (mut app App) apply_runtime_plan_replacement(config_path string) !RuntimePlanReplacementApplyResult {
 	normalized_path := config_path.trim_space()
 	if normalized_path == '' {
@@ -201,6 +213,7 @@ fn (mut app App) apply_runtime_plan_replacement(config_path string) !RuntimePlan
 			drains:      pending.drain_statuses
 			preview:     runtime_plan_replacement_preview_from_pending(pending)
 		}
+		app.emit_runtime_plan_replacement_rejected(result)
 		app.record_runtime_plan_replacement_apply(result)
 		return result
 	}
@@ -225,6 +238,7 @@ fn (mut app App) apply_runtime_plan_replacement(config_path string) !RuntimePlan
 						drains:      drains
 						preview:     preview
 					}
+					app.emit_runtime_plan_replacement_rejected(result)
 					app.record_runtime_plan_replacement_apply(result)
 					return result
 				}
@@ -239,6 +253,7 @@ fn (mut app App) apply_runtime_plan_replacement(config_path string) !RuntimePlan
 						drains:      drains
 						preview:     preview
 					}
+					app.emit_runtime_plan_replacement_rejected(result)
 					app.record_runtime_plan_replacement_apply(result)
 					return result
 				}
@@ -270,6 +285,7 @@ fn (mut app App) apply_runtime_plan_replacement(config_path string) !RuntimePlan
 			error:       execution.error
 			preview:     preview
 		}
+		app.emit_runtime_plan_replacement_rejected(result)
 		app.record_runtime_plan_replacement_apply(result)
 		return result
 	}
