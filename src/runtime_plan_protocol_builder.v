@@ -3,8 +3,24 @@ module main
 import api.mcp.protocol as mcp_protocol
 import api.openai
 import config
+import json
+import plugin
 import runtime_plan
 import state_store
+
+fn protocol_runtime_hub_from_plan(cfg config.VhttpdConfig, plan runtime_plan.RuntimePlan, listener_id string) ProtocolRuntimeHub {
+	plugin_configs := plugin_configs_from_plan(plan)
+	return ProtocolRuntimeHub{
+		runtime_config_json: json.encode(cfg)
+		runtime_plan_json:   json.encode(plan)
+		plugins:             plugin.PluginState{
+			configs: plugin_configs.clone()
+			vjsx:    build_vjsx_plugin_runtimes(plugin_configs)
+		}
+		mcp:                 mcp_state_from_plan(plan, listener_id)
+		openai:              openai_state_from_plan(plan, listener_id)
+	}
+}
 
 fn mcp_state_from_plan(plan runtime_plan.RuntimePlan, listener_id string) mcp_protocol.McpState {
 	adapter := plan.listener_adapter(listener_id, 'mcp') or {

@@ -66,3 +66,15 @@ fn test_refactor_contract_app_runtime_builder_does_not_construct_provider_specif
 	assert !source.contains('feishu.FeishuState')
 	assert source.contains('provider_runtime_hub_from_settings(plan_provider_settings)')
 }
+
+fn test_refactor_contract_app_runtime_builder_uses_runtime_hub_builders() {
+	source := refactor_contract_source_file('app_runtime_builder.v')
+	assert !source.contains('import cachex')
+	assert !source.contains('import dbx')
+	assert !source.contains('import plugin')
+	assert !source.contains('import json')
+	assert !source.contains('ProtocolRuntimeHub{')
+	assert !source.contains('TransportRuntimeHub{')
+	assert source.contains('protocol_runtime_hub_from_plan(cfg, runtime_plan_for_app, plan_listener_id)')
+	assert source.contains('transport_runtime_hub_from_plan(runtime_plan_for_app, plan_listener_id)')
+}

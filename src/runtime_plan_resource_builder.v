@@ -1,12 +1,21 @@
 module main
 
+import cachex
+import dbx
 import provider
 import runtime_plan
 
-fn db_runtime_settings_from_plan(plan runtime_plan.RuntimePlan, listener_id string) provider.DbRuntimeSettings {
-	resource := plan.listener_resource(listener_id, 'db') or {
-		return provider.DbRuntimeSettings{}
+fn transport_runtime_hub_from_plan(plan runtime_plan.RuntimePlan, listener_id string) TransportRuntimeHub {
+	db_settings := db_runtime_settings_from_plan(plan, listener_id)
+	cache_enabled, cache_socket := cache_runtime_settings_from_plan(plan, listener_id)
+	return TransportRuntimeHub{
+		db:    dbx.Runtime.from_settings(db_settings)
+		cache: cachex.Runtime.new(cache_enabled, cache_socket)
 	}
+}
+
+fn db_runtime_settings_from_plan(plan runtime_plan.RuntimePlan, listener_id string) provider.DbRuntimeSettings {
+	resource := plan.listener_resource(listener_id, 'db') or { return provider.DbRuntimeSettings{} }
 	driver := provider.normalize_db_driver(resource.kind)
 	return provider.DbRuntimeSettings{
 		enabled:      true
