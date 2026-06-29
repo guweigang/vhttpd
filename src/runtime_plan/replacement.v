@@ -474,9 +474,13 @@ fn string_list_map_fingerprint(values map[string][]string) string {
 	keys.sort()
 	mut parts := []string{}
 	for key in keys {
-		parts << '${key}=[${string_list_fingerprint(values[key])}]'
+		parts << '${key}=[${ordered_string_list_fingerprint(values[key])}]'
 	}
 	return parts.join(',')
+}
+
+fn ordered_string_list_fingerprint(values []string) string {
+	return values.join(',')
 }
 
 fn nested_string_map_fingerprint(values map[string]map[string]string) string {

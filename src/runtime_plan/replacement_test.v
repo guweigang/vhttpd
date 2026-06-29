@@ -161,6 +161,71 @@ fn test_plan_replacement_resource_change_affects_referencing_engine_pipeline() {
 	assert diff.unchanged_pipelines.len == 0
 }
 
+fn test_plan_replacement_resource_string_list_order_is_significant() {
+	old := RuntimePlan{
+		resources: {
+			'db/app': ResourcePlan{
+				id:       'db/app'
+				category: 'db'
+				kind:     'mysql'
+				options:  PlanOptions{
+					string_lists: {
+						'init_sql': ['SET a = 1', 'SET b = 2']
+					}
+				}
+			}
+		}
+		engines:   {
+			'app': EnginePlan{
+				id:        'app'
+				kind:      'php-worker'
+				resources: [ResourceRef{ domain: .resource, id: 'db/app' }]
+			}
+		}
+		adapters:  {
+			'app': AdapterPlan{
+				id:     'app'
+				kind:   'http-handler'
+				engine: ResourceRef{
+					domain: .engine
+					id:     'app'
+				}
+			}
+		}
+		pipelines: [
+			PipelinePlan{
+				id:      'site/app'
+				ingress: ResourceRef{
+					domain: .listener
+					id:     'web'
+				}
+				egress:  ResourceRef{
+					domain: .adapter
+					id:     'app'
+				}
+			},
+		]
+	}
+	new := RuntimePlan{
+		...old
+		resources: {
+			'db/app': ResourcePlan{
+				...old.resources['db/app']
+				options: PlanOptions{
+					string_lists: {
+						'init_sql': ['SET b = 2', 'SET a = 1']
+					}
+				}
+			}
+		}
+	}
+
+	diff := diff_runtime_plan_replacement(old, new)
+
+	assert diff.changed_pipelines == ['site/app']
+	assert diff.unchanged_pipelines.len == 0
+}
+
 fn test_plan_replacement_ignores_engine_resource_order() {
 	old := RuntimePlan{
 		resources: {
@@ -240,6 +305,64 @@ fn test_plan_replacement_ignores_engine_resource_order() {
 	assert diff.drain_engines.len == 0
 	assert diff.changed_pipelines.len == 0
 	assert diff.unchanged_pipelines == ['site/app']
+}
+
+fn test_plan_replacement_engine_string_list_order_is_significant() {
+	old := RuntimePlan{
+		engines:   {
+			'app': EnginePlan{
+				id:      'app'
+				kind:    'php-worker'
+				options: PlanOptions{
+					string_lists: {
+						'extensions': ['/tmp/a.so', '/tmp/b.so']
+					}
+				}
+			}
+		}
+		adapters:  {
+			'app': AdapterPlan{
+				id:     'app'
+				kind:   'http-handler'
+				engine: ResourceRef{
+					domain: .engine
+					id:     'app'
+				}
+			}
+		}
+		pipelines: [
+			PipelinePlan{
+				id:      'site/app'
+				ingress: ResourceRef{
+					domain: .listener
+					id:     'web'
+				}
+				egress:  ResourceRef{
+					domain: .adapter
+					id:     'app'
+				}
+			},
+		]
+	}
+	new := RuntimePlan{
+		...old
+		engines: {
+			'app': EnginePlan{
+				...old.engines['app']
+				options: PlanOptions{
+					string_lists: {
+						'extensions': ['/tmp/b.so', '/tmp/a.so']
+					}
+				}
+			}
+		}
+	}
+
+	diff := diff_runtime_plan_replacement(old, new)
+
+	assert diff.drain_engines == ['app']
+	assert diff.changed_pipelines == ['site/app']
+	assert diff.unchanged_pipelines.len == 0
 }
 
 fn test_plan_replacement_rejects_unsafe_stateful_transform_switch() {
