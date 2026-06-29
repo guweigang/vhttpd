@@ -57,3 +57,12 @@ fn test_refactor_contract_generic_runtime_builders_do_not_special_case_wordpress
 		assert !source.to_lower().contains('wordpress')
 	}
 }
+
+fn test_refactor_contract_app_runtime_builder_does_not_construct_provider_specific_state() {
+	source := refactor_contract_source_file('app_runtime_builder.v')
+	assert !source.contains('import codex')
+	assert !source.contains('import feishu')
+	assert !source.contains('codex.CodexState')
+	assert !source.contains('feishu.FeishuState')
+	assert source.contains('provider_runtime_hub_from_settings(plan_provider_settings)')
+}

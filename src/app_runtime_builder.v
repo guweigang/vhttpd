@@ -3,14 +3,12 @@ module main
 import cachex
 import dbx
 import config
-import codex
 import log
 import provider
 import json
 import time
 import admin
 import plugin
-import feishu
 import executor
 import server_lifecycle
 import runtime_plan
@@ -89,51 +87,7 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 		relay:         relay_build.runtime
 		transformers:  TransformerRuntimeHub.from_plan(runtime_plan_for_app)
 		engines:       engine_runtime
-		providers:     ProviderRuntimeHub{
-			registry:  ProviderHost{
-				registry: map[string]Provider{}
-				specs:    map[string]ProviderSpec{}
-			}
-			instances: provider.ProviderInstanceRegistry{
-				specs: map[string]provider.ProviderInstanceSpec{}
-			}
-			codex:     codex.CodexState{
-				ollama_enabled: plan_provider_settings.ollama_enabled
-				runtime:        codex.ProviderRuntime{
-					enabled:             plan_provider_settings.codex.enabled
-					url:                 plan_provider_settings.codex.url
-					model:               plan_provider_settings.codex.model
-					effort:              plan_provider_settings.codex.effort
-					cwd:                 plan_provider_settings.codex.cwd
-					approval_policy:     plan_provider_settings.codex.approval_policy
-					sandbox:             plan_provider_settings.codex.sandbox
-					reconnect_delay_ms:  plan_provider_settings.codex.reconnect_delay_ms
-					flush_interval_ms:   plan_provider_settings.codex.flush_interval_ms
-					pending_rpcs:        map[int]codex.PendingRpc{}
-					stream_map:          map[string][]codex.CodexTarget{}
-					err_bursts:          map[string][]string{}
-					err_pending_flushes: map[string]bool{}
-					thread_stream_map:   map[string]string{}
-				}
-				instances:      map[string]codex.ProviderRuntime{}
-			}
-			feishu:    feishu.FeishuState{
-				enabled:                    plan_provider_settings.feishu.enabled
-				open_base_url:              plan_provider_settings.feishu.open_base_url
-				reconnect_delay_ms:         plan_provider_settings.feishu.reconnect_delay_ms
-				token_refresh_skew_seconds: plan_provider_settings.feishu.token_refresh_skew_seconds
-				recent_event_limit:         plan_provider_settings.feishu.recent_event_limit
-				static_apps:                plan_provider_settings.feishu.apps.clone()
-				apps:                       plan_provider_settings.feishu.apps.clone()
-				runtime:                    map[string]feishu.ProviderRuntime{}
-				buffers:                    map[string]feishu.StreamBuffer{}
-				card_bridge_enabled_flag:   plan_provider_settings.bridge.enabled
-				card_bridge_ws_url:         plan_provider_settings.bridge.ws_url
-				card_bridge_client_id:      plan_provider_settings.bridge.client_id
-				card_bridge_token:          plan_provider_settings.bridge.token
-				card_bridge_target_id:      plan_provider_settings.bridge.target_id
-			}
-		}
+		providers:     provider_runtime_hub_from_settings(plan_provider_settings)
 		pipelines:     PipelineRuntime.new(runtime_plan_for_app, plan_listener_id, runtime_routes,
 			build_cfg.assets_root_real, build_cfg.workdir, executor_plan.bootstrap.worker_env,
 			engine_runtime.additional)
