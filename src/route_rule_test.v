@@ -559,3 +559,30 @@ fn test_upload_completed_exchange_uses_projected_pipeline_identity() {
 	assert exchange.ingress == 'adapter:upload-event'
 	assert exchange.pipeline == 'uploads.completed'
 }
+
+fn test_upload_completed_transform_dispatch_distinguishes_missing_from_failed_transform() {
+	resp := UploadResponse{
+		ok:         true
+		event:      'upload.completed'
+		upload_id:  'upl_1'
+		filename:   'demo.txt'
+		trace_id:   'trace-1'
+		request_id: 'req-1'
+	}
+	fields := {
+		'route': '/vhttpd/uploads'
+	}
+	mut app := App{}
+
+	missing := app.dispatch_upload_completed_transforms(RuntimeRouteRule{}, '', resp, fields)
+	assert !missing.attempted
+	assert !missing.ok
+
+	failed := app.dispatch_upload_completed_transforms(RuntimeRouteRule{
+		upload_completed_transform_refs: ['transform:missing']
+		upload_completed_ingress_ref:    'listener:web'
+		upload_completed_pipeline_id:    'upload.completed'
+	}, '', resp, fields)
+	assert failed.attempted
+	assert !failed.ok
+}

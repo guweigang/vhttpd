@@ -156,6 +156,11 @@ fn upload_completed_dispatch_status(outcome executor.HttpLogicDispatchOutcome) i
 	return 0
 }
 
+struct UploadCompletedTransformDispatchResult {
+	attempted bool
+	ok        bool
+}
+
 fn upload_completed_dispatch_fields(resp UploadResponse, route string, handler string, status string) map[string]string {
 	mut out := map[string]string{}
 	out['upload_id'] = resp.upload_id.clone()
@@ -206,10 +211,10 @@ fn upload_completed_exchange_for_pipeline(resp UploadResponse, fields map[string
 	}
 }
 
-fn (mut app App) dispatch_upload_completed_transforms(rule RuntimeRouteRule, handler string, resp UploadResponse, fields map[string]string) bool {
+fn (mut app App) dispatch_upload_completed_transforms(rule RuntimeRouteRule, handler string, resp UploadResponse, fields map[string]string) UploadCompletedTransformDispatchResult {
 	transform_refs := rule.upload_completed_transform_refs
 	if transform_refs.len == 0 {
-		return false
+		return UploadCompletedTransformDispatchResult{}
 	}
 	route := fields['route'] or { '' }
 	mut services := noop_dispatch_services(resp.trace_id)
@@ -220,7 +225,9 @@ fn (mut app App) dispatch_upload_completed_transforms(rule RuntimeRouteRule, han
 		failed['error'] = err.msg()
 		failed['transforms'] = transform_refs.join(',')
 		app.emit('upload.completed.transform_failed', failed)
-		return false
+		return UploadCompletedTransformDispatchResult{
+			attempted: true
+		}
 	}
 	mut ok := upload_completed_dispatch_fields(resp, route, handler, if result.halted {
 		'halted'
@@ -232,7 +239,10 @@ fn (mut app App) dispatch_upload_completed_transforms(rule RuntimeRouteRule, han
 		ok['transform'] = result.transform
 	}
 	app.emit('upload.completed.dispatch', ok)
-	return true
+	return UploadCompletedTransformDispatchResult{
+		attempted: true
+		ok:        true
+	}
 }
 
 fn (mut app App) dispatch_upload_completed_vjsx(handler string, resp UploadResponse, fields map[string]string) {
@@ -329,7 +339,8 @@ fn handle_upload_route(mut app App, mut ctx Context, rule RuntimeRouteRule, meth
 		'trace_id':     trace_id
 	}
 	app.emit('upload.completed', fields)
-	if !app.dispatch_upload_completed_transforms(rule, handler, resp, fields) {
+	transform_dispatch := app.dispatch_upload_completed_transforms(rule, handler, resp, fields)
+	if !transform_dispatch.attempted {
 		app.dispatch_upload_completed_vjsx(handler, resp, fields)
 	}
 	mut headers := {
