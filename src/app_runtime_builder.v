@@ -39,7 +39,7 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 	openai_state := openai_state_from_plan(runtime_plan_for_app, plan_listener_id)
 	plugin_configs := plugin_configs_from_plan(runtime_plan_for_app)
 	plan_provider_settings := provider_runtime_settings_from_plan(runtime_plan_for_app,
-		provider_settings)
+		plan_listener_id, provider_settings)
 
 	engine_build := build_engine_runtime_with_diagnostics_from_plan(cfg, executor_plan,
 		runtime_plan_for_app, plan_listener_id, runtime_routes, build_cfg)

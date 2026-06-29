@@ -5,9 +5,9 @@ import feishu
 import provider
 import runtime_plan
 
-fn provider_runtime_settings_from_plan(plan runtime_plan.RuntimePlan, fallback provider.ProviderRuntimeSettings) provider.ProviderRuntimeSettings {
-	feishu_settings := feishu_runtime_settings_from_plan(plan) or { fallback.feishu }
-	codex_settings, ollama_enabled := codex_runtime_settings_from_plan(plan, fallback)
+fn provider_runtime_settings_from_plan(plan runtime_plan.RuntimePlan, listener_id string, fallback provider.ProviderRuntimeSettings) provider.ProviderRuntimeSettings {
+	feishu_settings := feishu_runtime_settings_from_plan(plan, listener_id) or { fallback.feishu }
+	codex_settings, ollama_enabled := codex_runtime_settings_from_plan(plan, listener_id, fallback)
 	bridge_settings := bridge_runtime_settings_from_plan(plan) or { fallback.bridge }
 	return provider.ProviderRuntimeSettings{
 		feishu:         feishu_settings
@@ -18,8 +18,8 @@ fn provider_runtime_settings_from_plan(plan runtime_plan.RuntimePlan, fallback p
 	}
 }
 
-fn feishu_runtime_settings_from_plan(plan runtime_plan.RuntimePlan) ?provider.FeishuRuntimeSettings {
-	adapter := plan.first_adapter_by_kind('feishu-events')?
+fn feishu_runtime_settings_from_plan(plan runtime_plan.RuntimePlan, listener_id string) ?provider.FeishuRuntimeSettings {
+	adapter := provider_adapter_for_listener(plan, listener_id, 'feishu-events')?
 	return provider.FeishuRuntimeSettings{
 		enabled:                    adapter.options.bools['enabled']
 		open_base_url:              feishu.RuntimeWsEndpointData.normalize_open_base(adapter.options.strings['open_base_url'])
@@ -59,10 +59,11 @@ fn feishu_apps_from_adapter(adapter runtime_plan.AdapterPlan) map[string]config.
 	return apps
 }
 
-fn codex_runtime_settings_from_plan(plan runtime_plan.RuntimePlan, fallback provider.ProviderRuntimeSettings) (provider.CodexRuntimeSettings, bool) {
-	adapter := plan.first_adapter_by_kind('codex') or {
-		if openai_adapter := plan.first_adapter_by_kind('openai') {
-			return fallback.codex, openai_adapter.options.bools['ollama_enabled'] || fallback.ollama_enabled
+fn codex_runtime_settings_from_plan(plan runtime_plan.RuntimePlan, listener_id string, fallback provider.ProviderRuntimeSettings) (provider.CodexRuntimeSettings, bool) {
+	adapter := provider_adapter_for_listener(plan, listener_id, 'codex') or {
+		if openai_adapter := provider_adapter_for_listener(plan, listener_id, 'openai') {
+			return fallback.codex, openai_adapter.options.bools['ollama_enabled']
+				|| fallback.ollama_enabled
 		}
 		return fallback.codex, fallback.ollama_enabled
 	}
@@ -105,6 +106,16 @@ fn codex_runtime_settings_from_plan(plan runtime_plan.RuntimePlan, fallback prov
 			400
 		}
 	}, adapter.options.bools['ollama_enabled'] || fallback.ollama_enabled
+}
+
+fn provider_adapter_for_listener(plan runtime_plan.RuntimePlan, listener_id string, kind string) ?runtime_plan.AdapterPlan {
+	if adapter := plan.listener_adapter(listener_id, kind) {
+		return adapter
+	}
+	if plan.source.compatibility {
+		return plan.first_adapter_by_kind(kind)
+	}
+	return none
 }
 
 fn bridge_runtime_settings_from_plan(plan runtime_plan.RuntimePlan) ?provider.BridgeRuntimeSettings {

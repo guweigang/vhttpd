@@ -2275,7 +2275,8 @@ fn test_provider_runtime_settings_are_projected_from_runtime_plan() {
 		target_id: 'remote'
 	}
 	plan := config.compile_v1_runtime_plan(cfg) or { panic(err) }
-	settings := provider_runtime_settings_from_plan(plan, provider.ProviderRuntimeSettings{})
+	settings :=
+		provider_runtime_settings_from_plan(plan, 'default', provider.ProviderRuntimeSettings{})
 
 	assert settings.feishu.enabled
 	assert settings.feishu.open_base_url == 'https://open.feishu.test'
@@ -2288,6 +2289,83 @@ fn test_provider_runtime_settings_are_projected_from_runtime_plan() {
 	assert settings.bridge.enabled
 	assert settings.bridge.ws_url == 'wss://relay.test'
 	assert settings.bridge.target_id == 'remote'
+}
+
+fn test_provider_runtime_settings_are_scoped_to_listener_pipeline() {
+	fallback := provider.ProviderRuntimeSettings{
+		codex: provider.CodexRuntimeSettings{
+			enabled: false
+			model:   'fallback-model'
+		}
+	}
+	plan := runtime_plan.RuntimePlan{
+		listeners: {
+			'web':   runtime_plan.ListenerPlan{
+				id:       'web'
+				protocol: 'http'
+			}
+			'admin': runtime_plan.ListenerPlan{
+				id:       'admin'
+				protocol: 'http'
+			}
+		}
+		adapters:  {
+			'app':   runtime_plan.AdapterPlan{
+				id:      'app'
+				kind:    'fixed-response'
+				options: runtime_plan.PlanOptions{
+					strings: {
+						'status': '200'
+						'body':   'ok'
+					}
+				}
+			}
+			'codex': runtime_plan.AdapterPlan{
+				id:      'codex'
+				kind:    'codex'
+				options: runtime_plan.PlanOptions{
+					bools:   {
+						'enabled': true
+					}
+					strings: {
+						'model': 'admin-model'
+					}
+				}
+			}
+		}
+		pipelines: [
+			runtime_plan.PipelinePlan{
+				id:      'web/app'
+				ingress: runtime_plan.ResourceRef{
+					domain: .listener
+					id:     'web'
+				}
+				egress:  runtime_plan.ResourceRef{
+					domain: .adapter
+					id:     'app'
+				}
+			},
+			runtime_plan.PipelinePlan{
+				id:      'admin/codex'
+				ingress: runtime_plan.ResourceRef{
+					domain: .listener
+					id:     'admin'
+				}
+				egress:  runtime_plan.ResourceRef{
+					domain: .adapter
+					id:     'codex'
+				}
+			},
+		]
+	}
+
+	web_settings := provider_runtime_settings_from_plan(plan, 'web', fallback)
+	admin_settings := provider_runtime_settings_from_plan(plan, 'admin', fallback)
+
+	assert !web_settings.codex.enabled
+	assert web_settings.codex.model == 'fallback-model'
+	assert admin_settings.codex.enabled
+	assert admin_settings.codex.model == 'admin-model'
 }
 
 fn test_prepare_server_runtime_files_creates_parent_dirs_and_pid_file() {
