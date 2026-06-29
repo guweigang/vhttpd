@@ -7,7 +7,6 @@ import codex
 import log
 import provider
 import json
-import relay
 import time
 import admin
 import dispatch
@@ -163,30 +162,6 @@ fn runtime_plan_with_appended_diagnostics(plan runtime_plan.RuntimePlan, diagnos
 	return runtime_plan.RuntimePlan{
 		...plan
 		diagnostics: runtime_plan_append_unique_diagnostics(plan.diagnostics, diagnostics)
-	}
-}
-
-struct RelayRuntimeBuildResult {
-	runtime     relay.Runtime
-	diagnostics []runtime_plan.PlanDiagnostic
-}
-
-fn relay_runtime_with_diagnostics_from_plan(plan runtime_plan.RuntimePlan) RelayRuntimeBuildResult {
-	runtime := relay.new_runtime(plan) or {
-		return RelayRuntimeBuildResult{
-			runtime:     relay.empty_runtime()
-			diagnostics: [
-				runtime_plan.PlanDiagnostic{
-					severity: 'error'
-					code:     'relay_runtime_failed'
-					path:     'relays'
-					message:  'failed to build relay runtime: ${err.msg()}'
-				},
-			]
-		}
-	}
-	return RelayRuntimeBuildResult{
-		runtime: runtime
 	}
 }
 
