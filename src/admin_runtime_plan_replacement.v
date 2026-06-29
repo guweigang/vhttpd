@@ -378,6 +378,10 @@ fn (mut app App) finalize_runtime_plan_replacement() RuntimePlanReplacementFinal
 		return result
 	}
 	if !pending.ready {
+		mut inflight_requests := i64(0)
+		for drain_status in pending.drain_statuses {
+			inflight_requests += drain_status.inflight_requests
+		}
 		result := RuntimePlanReplacementFinalizeResult{
 			config_path: pending.config_path
 			applied:     false
@@ -386,6 +390,12 @@ fn (mut app App) finalize_runtime_plan_replacement() RuntimePlanReplacementFinal
 			error:       'runtime_plan_replacement_drain_not_ready'
 			pending:     pending
 		}
+		app.emit('runtime.plan.replacement.finalize_waiting', {
+			'config_path':          pending.config_path
+			'drain_engines':        pending.drain_engines.join(',')
+			'inflight_requests':    '${inflight_requests}'
+			'replacement_strategy': pending.strategy
+		})
 		app.record_runtime_plan_replacement_finalize(result)
 		return result
 	}

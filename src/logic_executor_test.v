@@ -1235,8 +1235,14 @@ fn test_internal_admin_runtime_plan_replacement_cancel_resumes_pending_workers()
 }
 
 fn test_internal_admin_runtime_plan_replacement_finalize_waits_for_drain() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_plan_replacement_finalize_wait_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	event_log := os.join_path(temp_dir, 'events.ndjson')
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
 	mut app := App{
-		replacement: RuntimePlanReplacementRuntime{
+		replacement:   RuntimePlanReplacementRuntime{
 			pending: RuntimePlanReplacementPendingSnapshot{
 				active:        true
 				config_path:   '/tmp/next.toml'
@@ -1245,7 +1251,7 @@ fn test_internal_admin_runtime_plan_replacement_finalize_waits_for_drain() {
 				drain_engines: ['app']
 			}
 		}
-		engines:     EngineRuntime{
+		engines:       EngineRuntime{
 			primary: worker.WorkerState{
 				worker_backend: worker.WorkerBackendRuntime{
 					managed_workers: [
@@ -1258,6 +1264,9 @@ fn test_internal_admin_runtime_plan_replacement_finalize_waits_for_drain() {
 				}
 				logic_executor: executor.SocketWorkerExecutor{}
 			}
+		}
+		control_plane: ControlPlaneRuntime{
+			event_log: event_log
 		}
 	}
 
@@ -1278,6 +1287,12 @@ fn test_internal_admin_runtime_plan_replacement_finalize_waits_for_drain() {
 	assert state.finalized_total == 0
 	assert state.last_finalize.status == 'waiting_for_drain'
 	assert state.last_finalize.drain_statuses[0].inflight_requests == 1
+	event_log_text := os.read_file(event_log) or { panic(err) }
+	assert event_log_text.contains('"type":"runtime.plan.replacement.finalize_waiting"')
+	assert event_log_text.contains('"config_path":"/tmp/next.toml"')
+	assert event_log_text.contains('"replacement_strategy":"engine_drain_required"')
+	assert event_log_text.contains('"drain_engines":"app"')
+	assert event_log_text.contains('"inflight_requests":"1"')
 }
 
 fn test_internal_admin_runtime_plan_replacement_finalize_applies_ready_engine_runtime() {
