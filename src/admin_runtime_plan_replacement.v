@@ -518,12 +518,10 @@ fn (mut app App) prepare_runtime_plan_replacement_runtime(pending RuntimePlanRep
 	next_routes := runtime_routes_from_plan(next_plan_raw, listener_id)
 	next_executor_plan := executor.LogicExecutorRuntimePlan.resolve_from_plan([]string{},
 		app.legacy_config, next_plan_raw, listener_id)!
+	next_plan := runtime_plan_with_runtime_diagnostics(app.legacy_config, next_executor_plan,
+		next_plan_raw, listener_id, next_routes, app.app_build_cfg)
 	engine_build := build_engine_runtime_with_diagnostics_from_plan(app.legacy_config,
-		next_executor_plan, next_plan_raw, listener_id, next_routes, app.app_build_cfg)
-	mut next_plan := runtime_plan_with_projection_diagnostics(next_plan_raw)
-	next_plan = runtime_plan_with_appended_diagnostics(next_plan, engine_build.diagnostics)
-	relay_build := relay_runtime_with_diagnostics_from_plan(next_plan)
-	next_plan = runtime_plan_with_appended_diagnostics(next_plan, relay_build.diagnostics)
+		next_executor_plan, next_plan, listener_id, next_routes, app.app_build_cfg)
 	return RuntimePlanReplacementPreparedRuntime{
 		plan:              next_plan
 		engines:           engine_build.runtime
