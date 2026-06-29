@@ -153,11 +153,21 @@ kind = "http-handler"
 engine = "engine:app"
 options = { custom_adapter_flag = "ok" }
 
+[transforms.rewrite]
+kind = "vjsx"
+engine = "engine:app"
+handler = "rewrite.handle"
+options = { custom_transform_flag = "ok" }
+
+[transforms.rewrite.bool_options]
+stateful = true
+
 [[pipelines]]
 id = "site"
 ingress = "listener:web"
 match.paths = ["*"]
 match.headers = { x_custom = "yes" }
+transforms = ["transform:rewrite"]
 egress = "adapter:app"
 ') or {
 		panic(err)
@@ -169,6 +179,8 @@ egress = "adapter:app"
 	plan := load_runtime_plan_file(config_file) or { panic(err) }
 	assert plan.engines['app'].options.strings['custom_flag'] == 'ok'
 	assert plan.adapters['app'].options.strings['custom_adapter_flag'] == 'ok'
+	assert plan.transforms['rewrite'].options.strings['custom_transform_flag'] == 'ok'
+	assert plan.transforms['rewrite'].options.bools['stateful']
 	assert plan.pipelines[0].match.headers['x_custom'] == 'yes'
 }
 
