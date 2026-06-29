@@ -254,6 +254,103 @@ fn test_runtime_plan_listener_named_engine_accepts_plain_engine_ids() {
 	assert engine.id == 'php-cgi'
 }
 
+fn test_runtime_plan_listener_resource_checks_all_listener_http_engines() {
+	plan := RuntimePlan{
+		resources: {
+			'db/web':   ResourcePlan{
+				id:       'db/web'
+				category: 'db'
+				kind:     'mysql'
+			}
+			'db/admin': ResourcePlan{
+				id:       'db/admin'
+				category: 'db'
+				kind:     'pgsql'
+			}
+		}
+		engines:   {
+			'web/fallback': EnginePlan{
+				id:   'web/fallback'
+				kind: 'php-worker'
+			}
+			'web/app':      EnginePlan{
+				id:        'web/app'
+				kind:      'php-worker'
+				resources: [ResourceRef{ domain: .resource, id: 'db/web' }]
+			}
+			'admin/app':    EnginePlan{
+				id:        'admin/app'
+				kind:      'php-worker'
+				resources: [ResourceRef{ domain: .resource, id: 'db/admin' }]
+			}
+		}
+		adapters:  {
+			'web/fallback': AdapterPlan{
+				id:     'web/fallback'
+				kind:   'http-handler'
+				engine: ResourceRef{
+					domain: .engine
+					id:     'web/fallback'
+				}
+			}
+			'web/app':      AdapterPlan{
+				id:     'web/app'
+				kind:   'http-handler'
+				engine: ResourceRef{
+					domain: .engine
+					id:     'web/app'
+				}
+			}
+			'admin/app':    AdapterPlan{
+				id:     'admin/app'
+				kind:   'http-handler'
+				engine: ResourceRef{
+					domain: .engine
+					id:     'admin/app'
+				}
+			}
+		}
+		pipelines: [
+			PipelinePlan{
+				id:      'web/app'
+				ingress: ResourceRef{
+					domain: .listener
+					id:     'web'
+				}
+				egress:  ResourceRef{
+					domain: .adapter
+					id:     'web/app'
+				}
+			},
+			PipelinePlan{
+				id:      'web/fallback'
+				ingress: ResourceRef{
+					domain: .listener
+					id:     'web'
+				}
+				egress:  ResourceRef{
+					domain: .adapter
+					id:     'web/fallback'
+				}
+			},
+			PipelinePlan{
+				id:      'admin/app'
+				ingress: ResourceRef{
+					domain: .listener
+					id:     'admin'
+				}
+				egress:  ResourceRef{
+					domain: .adapter
+					id:     'admin/app'
+				}
+			},
+		]
+	}
+
+	assert plan.listener_resource('web', 'db')?.id == 'db/web'
+	assert plan.listener_resource('admin', 'db')?.id == 'db/admin'
+}
+
 fn test_runtime_plan_listener_fallback_engine_uses_first_http_handler_when_no_named_fallback() {
 	plan := RuntimePlan{
 		engines:   {

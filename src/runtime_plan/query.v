@@ -182,14 +182,24 @@ fn (plan RuntimePlan) listener_http_handler_engines(listener_id string) []Engine
 }
 
 pub fn (plan RuntimePlan) listener_resource(listener_id string, category string) ?ResourcePlan {
-	engine := plan.listener_fallback_engine(listener_id) or { return none }
-	for reference in engine.resources {
-		if reference.domain != .resource {
-			continue
+	mut engines := []EnginePlan{}
+	if engine := plan.listener_fallback_engine(listener_id) {
+		engines << engine
+	}
+	for engine in plan.listener_http_handler_engines(listener_id) {
+		if !engines.any(it.id == engine.id) {
+			engines << engine
 		}
-		resource := plan.resources[reference.id] or { continue }
-		if resource.category == category {
-			return resource
+	}
+	for engine in engines {
+		for reference in engine.resources {
+			if reference.domain != .resource {
+				continue
+			}
+			resource := plan.resources[reference.id] or { continue }
+			if resource.category == category {
+				return resource
+			}
 		}
 	}
 	return none
