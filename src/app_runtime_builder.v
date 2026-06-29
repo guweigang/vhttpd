@@ -139,9 +139,14 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 	}
 }
 
-fn build_engine_runtime_from_plan(cfg config.VhttpdConfig, executor_plan executor.LogicExecutorRuntimePlan, plan runtime_plan.RuntimePlan, listener_id string, routes []RuntimeRouteRule, build_cfg server_lifecycle.AppRuntimeBuildConfig) EngineRuntime {
-	return build_engine_runtime_with_diagnostics_from_plan(cfg, executor_plan, plan, listener_id,
-		routes, build_cfg).runtime
+fn runtime_plan_with_runtime_diagnostics(cfg config.VhttpdConfig, executor_plan executor.LogicExecutorRuntimePlan, plan runtime_plan.RuntimePlan, listener_id string, routes []RuntimeRouteRule, build_cfg server_lifecycle.AppRuntimeBuildConfig) runtime_plan.RuntimePlan {
+	mut runtime_visible_plan := runtime_plan_with_projection_diagnostics(plan)
+	engine_build := build_engine_runtime_with_diagnostics_from_plan(cfg, executor_plan,
+		runtime_visible_plan, listener_id, routes, build_cfg)
+	runtime_visible_plan = runtime_plan_with_appended_diagnostics(runtime_visible_plan,
+		engine_build.diagnostics)
+	relay_build := relay_runtime_with_diagnostics_from_plan(runtime_visible_plan)
+	return runtime_plan_with_appended_diagnostics(runtime_visible_plan, relay_build.diagnostics)
 }
 
 struct EngineRuntimeBuildResult {

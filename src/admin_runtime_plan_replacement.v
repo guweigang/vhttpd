@@ -448,16 +448,20 @@ fn (mut app App) prepare_runtime_plan_replacement_runtime(pending RuntimePlanRep
 	if pending.config_hash != '' && current_hash != pending.config_hash {
 		return error('runtime_plan_replacement_config_changed')
 	}
-	next_plan := config.load_runtime_plan_file(pending.config_path)!
+	next_plan_raw := config.load_runtime_plan_file(pending.config_path)!
 	listener_id := app.pipelines.http.listener_id
-	next_routes := runtime_routes_from_plan(next_plan, listener_id)
+	next_routes := runtime_routes_from_plan(next_plan_raw, listener_id)
 	next_executor_plan := executor.LogicExecutorRuntimePlan.resolve_from_plan([]string{},
-		app.legacy_config, next_plan, listener_id)!
-	next_engines := build_engine_runtime_from_plan(app.legacy_config, next_executor_plan,
-		next_plan, listener_id, next_routes, app.app_build_cfg)
+		app.legacy_config, next_plan_raw, listener_id)!
+	engine_build := build_engine_runtime_with_diagnostics_from_plan(app.legacy_config,
+		next_executor_plan, next_plan_raw, listener_id, next_routes, app.app_build_cfg)
+	mut next_plan := runtime_plan_with_projection_diagnostics(next_plan_raw)
+	next_plan = runtime_plan_with_appended_diagnostics(next_plan, engine_build.diagnostics)
+	relay_build := relay_runtime_with_diagnostics_from_plan(next_plan)
+	next_plan = runtime_plan_with_appended_diagnostics(next_plan, relay_build.diagnostics)
 	return RuntimePlanReplacementPreparedRuntime{
 		plan:              next_plan
-		engines:           next_engines
+		engines:           engine_build.runtime
 		primary_lifecycle: next_executor_plan.lifecycle
 		routes:            next_routes
 		listener:          listener_id
@@ -529,9 +533,21 @@ fn validate_replacement_worker_state_ready(kind string, state worker.WorkerState
 	return error('runtime_plan_replacement_engine_not_ready:${kind}')
 }
 
-fn (mut app App) apply_lightweight_runtime_plan(next_plan runtime_plan.RuntimePlan) {
+fn (mut app App) apply_lightweight_runtime_plan(next_plan_raw runtime_plan.RuntimePlan) {
 	listener_id := app.pipelines.http.listener_id
-	routes := runtime_routes_from_plan(next_plan, listener_id)
+	routes := runtime_routes_from_plan(next_plan_raw, listener_id)
+	next_executor_plan := executor.LogicExecutorRuntimePlan.resolve_from_plan([]string{},
+		app.legacy_config, next_plan_raw, listener_id) or {
+		// The apply preview already classified this as lightweight. If executor projection fails here,
+		// keep applying the validated plan and expose existing diagnostics instead of aborting.
+		executor.LogicExecutorRuntimePlan{
+			executor:            app.engines.primary.logic_executor
+			worker_backend_mode: app.engines.primary.worker_backend_mode
+			lifecycle:           engine_primary_lifecycle_or_disabled(app.engines)
+		}
+	}
+	next_plan := runtime_plan_with_runtime_diagnostics(app.legacy_config, next_executor_plan,
+		next_plan_raw, listener_id, routes, app.app_build_cfg)
 	primary_env := app.engines.primary.worker_backend.env.clone()
 	additional_workers := app.engines.additional.clone()
 	updated_pipelines := PipelineRuntime.new(next_plan, listener_id, routes, app.assets.root_real,

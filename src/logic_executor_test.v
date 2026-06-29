@@ -315,11 +315,20 @@ kind = "fixed-response"
 options.status = "200"
 options.body = "old"
 
+[adapters.ws]
+kind = "websocket"
+
 [[pipelines]]
 id = "site/hello"
 ingress = "listener:web"
 match.paths = ["/hello"]
 egress = "adapter:hello"
+
+[[pipelines]]
+id = "ws-on-http"
+ingress = "listener:web"
+match.paths = ["/ws"]
+egress = "adapter:ws"
 '
 	os.write_file(current_file, current_text) or { panic(err) }
 	os.write_file(config_file, current_text.replace('options.body = "old"', 'options.body = "new"')) or {
@@ -353,6 +362,7 @@ egress = "adapter:hello"
 	assert result.strategy == 'lightweight'
 	assert result.preview.actions[0].kind == 'swap_lightweight_runtime'
 	assert app.protocols.runtime_plan_json.contains('"body":"new"')
+	assert app.protocols.runtime_plan_json.contains('"pipeline_capability_mismatch"')
 	assert app.pipelines.http.rules.len == 1
 	assert app.pipelines.http.rules[0].body == 'new'
 	assert app.plan.adapters['hello'].options.strings['body'] == 'new'
@@ -1113,6 +1123,10 @@ entry = "${next_entry}"
 kind = "http-handler"
 engine = "engine:app"
 
+[relays.bad]
+mode = "agent"
+node_id = "node-1"
+
 [[pipelines]]
 id = "site/app"
 ingress = "listener:web"
@@ -1154,6 +1168,7 @@ egress = "adapter:app"
 	assert prepared.engines.primary.worker_backend.cmd.contains(next_entry)
 	assert prepared.engines.primary.worker_backend.queue_capacity == 8
 	assert prepared.routes.len == 1
+	assert prepared.plan.diagnostics.any(it.code == 'relay_runtime_failed')
 }
 
 fn test_internal_admin_runtime_plan_replacement_reports_drain_ready() {

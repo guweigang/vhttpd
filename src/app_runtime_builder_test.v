@@ -103,10 +103,11 @@ fn test_build_engine_runtime_from_v2_plan_keeps_plain_named_additional_engines()
 	executor_plan := executor.LogicExecutorRuntimePlan.resolve_from_plan([]string{}, cfg, plan,
 		'web') or { panic(err) }
 
-	engine_runtime := build_engine_runtime_from_plan(cfg, executor_plan, plan, 'web', routes, server_lifecycle.AppRuntimeBuildConfig{
+	engine_runtime := build_engine_runtime_with_diagnostics_from_plan(cfg, executor_plan, plan,
+		'web', routes, server_lifecycle.AppRuntimeBuildConfig{
 		plan_listener_id: 'web'
 		workdir:          repo_root
-	})
+	}).runtime
 
 	cgi := engine_runtime.additional['php-cgi'] or { panic('missing php-cgi worker') }
 	assert cgi.logic_executor.kind() == 'php-cgi'
