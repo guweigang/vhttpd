@@ -69,12 +69,30 @@ fn test_refactor_contract_app_runtime_builder_does_not_construct_provider_specif
 
 fn test_refactor_contract_app_runtime_builder_uses_runtime_hub_builders() {
 	source := refactor_contract_source_file('app_runtime_builder.v')
+	assert !source.contains('import admin')
 	assert !source.contains('import cachex')
 	assert !source.contains('import dbx')
 	assert !source.contains('import plugin')
 	assert !source.contains('import json')
+	assert !source.contains('import time')
 	assert !source.contains('ProtocolRuntimeHub{')
 	assert !source.contains('TransportRuntimeHub{')
 	assert source.contains('protocol_runtime_hub_from_plan(cfg, runtime_plan_for_app, plan_listener_id)')
 	assert source.contains('transport_runtime_hub_from_plan(runtime_plan_for_app, plan_listener_id)')
+	assert source.contains('control_plane_runtime_from_build_config(build_cfg)')
+	assert source.contains('assets_runtime_from_build_config(build_cfg)')
+}
+
+fn test_refactor_contract_runtime_plan_replacement_uses_runtime_builders() {
+	source := refactor_contract_source_file('admin_runtime_plan_replacement.v')
+	assert !source.contains('import json')
+	assert !source.contains('mcp_state_from_plan')
+	assert !source.contains('openai_state_from_plan')
+	assert !source.contains('app.protocols.runtime_plan_json =')
+	assert !source.contains('app.protocols.mcp =')
+	assert !source.contains('app.protocols.openai =')
+	assert source.contains('PipelineRuntime.new(')
+	assert source.contains('TransformerRuntimeHub.from_plan(')
+	assert source.contains('protocol_runtime_plan_update_from_plan(')
+	assert source.contains('app.protocols.apply_plan_update(protocol_update)')
 }

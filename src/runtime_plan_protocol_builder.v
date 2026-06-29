@@ -8,18 +8,39 @@ import plugin
 import runtime_plan
 import state_store
 
+struct ProtocolRuntimePlanUpdate {
+	runtime_plan_json string
+	mcp               mcp_protocol.McpState
+	openai            openai.OpenaiState
+}
+
 fn protocol_runtime_hub_from_plan(cfg config.VhttpdConfig, plan runtime_plan.RuntimePlan, listener_id string) ProtocolRuntimeHub {
 	plugin_configs := plugin_configs_from_plan(plan)
+	update := protocol_runtime_plan_update_from_plan(plan, listener_id)
 	return ProtocolRuntimeHub{
 		runtime_config_json: json.encode(cfg)
-		runtime_plan_json:   json.encode(plan)
+		runtime_plan_json:   update.runtime_plan_json
 		plugins:             plugin.PluginState{
 			configs: plugin_configs.clone()
 			vjsx:    build_vjsx_plugin_runtimes(plugin_configs)
 		}
-		mcp:                 mcp_state_from_plan(plan, listener_id)
-		openai:              openai_state_from_plan(plan, listener_id)
+		mcp:                 update.mcp
+		openai:              update.openai
 	}
+}
+
+fn protocol_runtime_plan_update_from_plan(plan runtime_plan.RuntimePlan, listener_id string) ProtocolRuntimePlanUpdate {
+	return ProtocolRuntimePlanUpdate{
+		runtime_plan_json: json.encode(plan)
+		mcp:               mcp_state_from_plan(plan, listener_id)
+		openai:            openai_state_from_plan(plan, listener_id)
+	}
+}
+
+fn (mut hub ProtocolRuntimeHub) apply_plan_update(update ProtocolRuntimePlanUpdate) {
+	hub.runtime_plan_json = update.runtime_plan_json
+	hub.mcp = update.mcp
+	hub.openai = update.openai
 }
 
 fn mcp_state_from_plan(plan runtime_plan.RuntimePlan, listener_id string) mcp_protocol.McpState {

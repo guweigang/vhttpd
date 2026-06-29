@@ -3,7 +3,6 @@ module main
 import config
 import crypto.sha256
 import executor
-import json
 import os
 import runtime_plan
 import time
@@ -547,18 +546,14 @@ fn (mut app App) apply_prepared_runtime_plan_replacement(mut prepared RuntimePla
 		app.assets.root_real, app.pipelines.http.worker_root,
 		next_engines.primary.worker_backend.env.clone(), next_engines.additional.clone())
 	updated_transformers := TransformerRuntimeHub.from_plan(prepared.plan)
-	updated_mcp := mcp_state_from_plan(prepared.plan, prepared.listener)
-	updated_openai := openai_state_from_plan(prepared.plan, prepared.listener)
-	plan_json := json.encode(prepared.plan)
+	protocol_update := protocol_runtime_plan_update_from_plan(prepared.plan, prepared.listener)
 
 	app.mu.@lock()
 	app.plan = prepared.plan
 	app.engines = next_engines
 	app.pipelines = updated_pipelines
 	app.transformers = updated_transformers
-	app.protocols.runtime_plan_json = plan_json
-	app.protocols.mcp = updated_mcp
-	app.protocols.openai = updated_openai
+	app.protocols.apply_plan_update(protocol_update)
 	app.replacement.pending = RuntimePlanReplacementPendingSnapshot{}
 	app.mu.unlock()
 
@@ -608,9 +603,7 @@ fn (mut app App) apply_lightweight_runtime_plan(next_plan_raw runtime_plan.Runti
 	updated_pipelines := PipelineRuntime.new(next_plan, listener_id, routes, app.assets.root_real,
 		app.pipelines.http.worker_root, primary_env, additional_workers)
 	updated_transformers := TransformerRuntimeHub.from_plan(next_plan)
-	updated_mcp := mcp_state_from_plan(next_plan, listener_id)
-	updated_openai := openai_state_from_plan(next_plan, listener_id)
-	plan_json := json.encode(next_plan)
+	protocol_update := protocol_runtime_plan_update_from_plan(next_plan, listener_id)
 
 	app.mu.@lock()
 	defer {
@@ -619,9 +612,7 @@ fn (mut app App) apply_lightweight_runtime_plan(next_plan_raw runtime_plan.Runti
 	app.plan = next_plan
 	app.pipelines = updated_pipelines
 	app.transformers = updated_transformers
-	app.protocols.runtime_plan_json = plan_json
-	app.protocols.mcp = updated_mcp
-	app.protocols.openai = updated_openai
+	app.protocols.apply_plan_update(protocol_update)
 }
 
 fn (mut app App) record_runtime_plan_replacement_preview(preview RuntimePlanReplacementPreview) {

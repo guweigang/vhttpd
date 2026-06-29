@@ -3,8 +3,6 @@ module main
 import config
 import log
 import provider
-import time
-import admin
 import executor
 import server_lifecycle
 import runtime_plan
@@ -39,25 +37,9 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 		plan:          runtime_plan_for_app
 		legacy_config: cfg
 		app_build_cfg: build_cfg
-		control_plane: ControlPlaneRuntime{
-			event_log:  build_cfg.event_log
-			http_stats: HttpStats{}
-			admin:      admin.AdminState{
-				internal_socket: build_cfg.internal_admin_socket
-				on_data_plane:   !build_cfg.admin_enabled
-				token:           build_cfg.admin_token
-			}
-		}
-		lifecycle:     ProcessLifecycle{
-			started_at_unix: time.now().unix()
-		}
-		assets:        config.AssetsRuntime{
-			enabled:       build_cfg.assets_enabled
-			prefix:        build_cfg.assets_prefix
-			root:          build_cfg.assets_root
-			root_real:     build_cfg.assets_root_real
-			cache_control: build_cfg.assets_cache_control
-		}
+		control_plane: control_plane_runtime_from_build_config(build_cfg)
+		lifecycle:     process_lifecycle_runtime_started_now()
+		assets:        assets_runtime_from_build_config(build_cfg)
 		protocols:     protocol_runtime_hub_from_plan(cfg, runtime_plan_for_app, plan_listener_id)
 		transport:     transport_runtime_hub_from_plan(runtime_plan_for_app, plan_listener_id)
 		websocket:     WebSocketRuntime.new(executor_plan.bootstrap.websocket_dispatch_mode)
