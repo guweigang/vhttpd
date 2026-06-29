@@ -459,6 +459,51 @@ egress = "adapter:app"
 	assert state.pending.drain_statuses[0].inflight_requests == 0
 }
 
+fn test_internal_admin_runtime_plan_replacement_apply_rejects_when_pending_exists() {
+	mut app := App{
+		replacement: RuntimePlanReplacementRuntime{
+			pending: RuntimePlanReplacementPendingSnapshot{
+				active:              true
+				config_path:         '/tmp/current-pending.toml'
+				strategy:            'engine_drain_required'
+				ready:               false
+				drain_engines:       ['app']
+				changed_pipelines:   ['site/app']
+				unchanged_pipelines: ['site/admin']
+				next_schema_version: 2
+			}
+		}
+	}
+
+	resp := app.internal_admin_dispatch(admin.InternalAdminRequest{
+		mode:   'vhttpd_admin'
+		method: 'POST'
+		path:   '/admin/runtime/plan/replacement/apply'
+		query:  {
+			'config': '/tmp/next.toml'
+		}
+	})
+	result := json.decode(RuntimePlanReplacementApplyResult, resp.body) or { panic(err) }
+
+	assert resp.status == 409
+	assert !result.applied
+	assert result.status == 'rejected'
+	assert result.error == 'runtime_plan_replacement_pending_exists'
+	assert result.config_path == '/tmp/next.toml'
+	assert result.strategy == 'engine_drain_required'
+	assert result.preview.config_path == '/tmp/current-pending.toml'
+	assert result.preview.drain_engines == ['app']
+	assert result.preview.changed_pipelines == ['site/app']
+	assert result.preview.unchanged_pipelines == ['site/admin']
+	assert result.preview.next_schema_version == 2
+	state := app.runtime_plan_replacement_snapshot()
+	assert state.applies_total == 1
+	assert state.rejected_total == 1
+	assert state.pending.active
+	assert state.pending.config_path == '/tmp/current-pending.toml'
+	assert state.last_apply.error == 'runtime_plan_replacement_pending_exists'
+}
+
 fn test_internal_admin_runtime_plan_replacement_finalize_requires_pending() {
 	mut app := App{}
 
