@@ -173,6 +173,7 @@ fn runtime_route_from_pipeline(plan runtime_plan.RuntimePlan, pipeline runtime_p
 	match adapter.kind {
 		'http-handler' {
 			route.executor = runtime_executor_name(plan, adapter)
+			route.engine_id = runtime_engine_id(plan, adapter)
 		}
 		'static' {
 			route.executor = 'static'
@@ -190,6 +191,8 @@ fn runtime_route_from_pipeline(plan runtime_plan.RuntimePlan, pipeline runtime_p
 			completed_pipeline := adapter.options.strings['completed_pipeline']
 			route.on_completed = legacy_completion_handler_from_plan(plan, completed_pipeline)
 			route.upload_completed_transform_refs = completed_transform_refs_from_plan(plan,
+				completed_pipeline)
+			route.upload_completed_engine_ids = completed_engine_ids_from_plan(plan,
 				completed_pipeline)
 		}
 		'fixed-response' {
@@ -230,6 +233,37 @@ fn runtime_executor_name(plan runtime_plan.RuntimePlan, adapter runtime_plan.Ada
 		return ''
 	}
 	return engine_ref.id.all_after_last('/')
+}
+
+fn runtime_engine_id(plan runtime_plan.RuntimePlan, adapter runtime_plan.AdapterPlan) string {
+	engine_ref := adapter.engine or { return '' }
+	if engine_ref.id !in plan.engines {
+		return ''
+	}
+	if plan.source.compatibility {
+		return ''
+	}
+	return engine_ref.id
+}
+
+fn completed_engine_ids_from_plan(plan runtime_plan.RuntimePlan, pipeline_ref string) []string {
+	ref := runtime_plan.parse_ref(pipeline_ref) or { return []string{} }
+	if ref.domain != .pipeline {
+		return []string{}
+	}
+	pipeline := plan.pipeline(ref.id) or { return []string{} }
+	mut ids := []string{}
+	for transform_ref in pipeline.transforms {
+		transform := plan.transforms[transform_ref.id] or { continue }
+		engine_ref := transform.engine or { continue }
+		if engine_ref.domain != .engine || engine_ref.id !in plan.engines {
+			continue
+		}
+		if engine_ref.id !in ids {
+			ids << engine_ref.id
+		}
+	}
+	return ids
 }
 
 fn legacy_completion_handler_from_plan(plan runtime_plan.RuntimePlan, value string) string {

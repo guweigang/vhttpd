@@ -26,6 +26,7 @@ pub mut:
 	match_query                     map[string]string
 	re                              regex.RE
 	executor                        string
+	engine_id                       string
 	rewrite                         string
 	rewrite_strip_prefix            string
 	root                            string
@@ -39,6 +40,7 @@ pub mut:
 	denied_query_patterns           map[string]string
 	upload_dir                      string
 	on_completed                    string
+	upload_completed_engine_ids     []string
 	status                          int
 	location                        string
 	body                            string

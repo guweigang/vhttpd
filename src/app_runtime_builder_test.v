@@ -115,6 +115,162 @@ fn test_build_engine_runtime_from_v2_plan_keeps_plain_named_additional_engines()
 	assert cgi.worker_backend.sockets.len > 0
 }
 
+fn test_build_engine_runtime_keeps_distinct_v2_completion_engines_with_same_executor_kind() {
+	repo_root := os.real_path(os.join_path(os.dir(@FILE), '..'))
+	vjsx_entry := os.join_path(repo_root, 'examples', 'vjsx', 'api-demo-handler.mts')
+	plan := runtime_plan.RuntimePlan{
+		listeners:  {
+			'web': runtime_plan.ListenerPlan{
+				id:       'web'
+				protocol: 'http'
+			}
+		}
+		engines:    {
+			'upload-a/vjsx': runtime_plan.EnginePlan{
+				id:      'upload-a/vjsx'
+				kind:    'vjsx'
+				options: runtime_plan.PlanOptions{
+					strings: {
+						'entry': vjsx_entry
+					}
+					ints:    {
+						'thread_count': 1
+					}
+				}
+			}
+			'upload-b/vjsx': runtime_plan.EnginePlan{
+				id:      'upload-b/vjsx'
+				kind:    'vjsx'
+				options: runtime_plan.PlanOptions{
+					strings: {
+						'entry': vjsx_entry
+					}
+					ints:    {
+						'thread_count': 2
+					}
+				}
+			}
+		}
+		adapters:   {
+			'upload-a':     runtime_plan.AdapterPlan{
+				id:      'upload-a'
+				kind:    'upload'
+				options: runtime_plan.PlanOptions{
+					strings: {
+						'root':               '/tmp/upload-a'
+						'completed_pipeline': 'pipeline:upload-a.completed'
+					}
+				}
+			}
+			'upload-b':     runtime_plan.AdapterPlan{
+				id:      'upload-b'
+				kind:    'upload'
+				options: runtime_plan.PlanOptions{
+					strings: {
+						'root':               '/tmp/upload-b'
+						'completed_pipeline': 'pipeline:upload-b.completed'
+					}
+				}
+			}
+			'upload-event': runtime_plan.AdapterPlan{
+				id:   'upload-event'
+				kind: 'event-ingress'
+			}
+		}
+		transforms: {
+			'upload-a/completed': runtime_plan.TransformPlan{
+				id:     'upload-a/completed'
+				kind:   'vjsx'
+				engine: runtime_plan.ResourceRef{
+					domain: .engine
+					id:     'upload-a/vjsx'
+				}
+			}
+			'upload-b/completed': runtime_plan.TransformPlan{
+				id:     'upload-b/completed'
+				kind:   'vjsx'
+				engine: runtime_plan.ResourceRef{
+					domain: .engine
+					id:     'upload-b/vjsx'
+				}
+			}
+		}
+		pipelines:  [
+			runtime_plan.PipelinePlan{
+				id:      'upload-a'
+				ingress: runtime_plan.ResourceRef{
+					domain: .listener
+					id:     'web'
+				}
+				egress:  runtime_plan.ResourceRef{
+					domain: .adapter
+					id:     'upload-a'
+				}
+			},
+			runtime_plan.PipelinePlan{
+				id:         'upload-a.completed'
+				ingress:    runtime_plan.ResourceRef{
+					domain: .adapter
+					id:     'upload-event'
+				}
+				transforms: [
+					runtime_plan.ResourceRef{
+						domain: .transform
+						id:     'upload-a/completed'
+					},
+				]
+				egress:     runtime_plan.ResourceRef{
+					domain: .terminal
+					id:     'ack'
+				}
+			},
+			runtime_plan.PipelinePlan{
+				id:      'upload-b'
+				ingress: runtime_plan.ResourceRef{
+					domain: .listener
+					id:     'web'
+				}
+				egress:  runtime_plan.ResourceRef{
+					domain: .adapter
+					id:     'upload-b'
+				}
+			},
+			runtime_plan.PipelinePlan{
+				id:         'upload-b.completed'
+				ingress:    runtime_plan.ResourceRef{
+					domain: .adapter
+					id:     'upload-event'
+				}
+				transforms: [
+					runtime_plan.ResourceRef{
+						domain: .transform
+						id:     'upload-b/completed'
+					},
+				]
+				egress:     runtime_plan.ResourceRef{
+					domain: .terminal
+					id:     'ack'
+				}
+			},
+		]
+	}
+	cfg := config.default_vhttpd_config()
+	executor_plan := executor.LogicExecutorRuntimePlan.resolve_from_plan([]string{}, cfg, plan,
+		'web') or { panic(err) }
+	routes := runtime_routes_from_plan(plan, 'web')
+
+	engine_runtime := build_engine_runtime_with_diagnostics_from_plan(cfg, executor_plan, plan,
+		'web', routes, server_lifecycle.AppRuntimeBuildConfig{}).runtime
+
+	assert 'upload-a/vjsx' in engine_runtime.additional
+	assert 'upload-b/vjsx' in engine_runtime.additional
+	assert 'vjsx' !in engine_runtime.additional
+	upload_a := engine_runtime.additional['upload-a/vjsx'] or { panic('missing upload-a/vjsx') }
+	upload_b := engine_runtime.additional['upload-b/vjsx'] or { panic('missing upload-b/vjsx') }
+	assert upload_a.logic_executor.kind() == 'vjsx'
+	assert upload_b.logic_executor.kind() == 'vjsx'
+}
+
 fn test_build_engine_runtime_records_additional_engine_diagnostics() {
 	plan := runtime_plan.RuntimePlan{
 		listeners: {

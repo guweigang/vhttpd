@@ -118,13 +118,20 @@ fn (rt PipelineRuntime) http_dispatch_plan(rule ?RuntimeRouteRule, original_targ
 		return HttpPipelineDispatchPlan{
 			rule:        matched
 			target:      matched.rewrite_target(original_target)
-			executor:    matched.executor
+			executor:    matched.dispatch_executor()
 			pipeline_id: matched.pipeline_id
 		}
 	}
 	return HttpPipelineDispatchPlan{
 		target: original_target
 	}
+}
+
+fn (rule RuntimeRouteRule) dispatch_executor() string {
+	if rule.engine_id != '' {
+		return rule.engine_id
+	}
+	return rule.executor
 }
 
 fn (rt PipelineRuntime) http_ingress_request(method string, path string, plan HttpPipelineDispatchPlan, body_on_head string, remote_addr string, request_id string, trace_id string, start_ms i64) HttpIngressRequest {

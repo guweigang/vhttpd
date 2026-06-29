@@ -39,12 +39,13 @@ fn (mut runtime EngineRuntime) start(primary_lifecycle executor.LogicExecutorLif
 		log.error('[vhttpd] logic executor warmup failed: ${err_msg}')
 	}
 	for name, mut state in runtime.additional {
-		spec := executor.builtin_executor_spec_find(name) or { continue }
+		kind := state.logic_executor.kind()
+		spec := executor.builtin_executor_spec_find(kind) or { continue }
 		mut ctx := engine_lifecycle_context(state, port)
 		spec.lifecycle.start(mut ctx)
 		state.worker_backend.managed_workers = ctx.worker_backend_managed_workers
 		state.logic_executor.warmup(mut facade) or {
-			log.error('[vhttpd] additional logic executor warmup failed kind=${name}: ${err.msg()}')
+			log.error('[vhttpd] additional logic executor warmup failed pool=${name} kind=${kind}: ${err.msg()}')
 		}
 	}
 }
@@ -54,8 +55,9 @@ fn (mut runtime EngineRuntime) stop(primary_lifecycle executor.LogicExecutorLife
 	primary_lifecycle.stop(mut primary_ctx)
 	runtime.primary.worker_backend.managed_workers = primary_ctx.worker_backend_managed_workers
 	runtime.primary.logic_executor.close()
-	for name, mut state in runtime.additional {
-		spec := executor.builtin_executor_spec_find(name) or { continue }
+	for _, mut state in runtime.additional {
+		kind := state.logic_executor.kind()
+		spec := executor.builtin_executor_spec_find(kind) or { continue }
 		mut ctx := engine_lifecycle_context(state, port)
 		spec.lifecycle.stop(mut ctx)
 		state.worker_backend.managed_workers = ctx.worker_backend_managed_workers

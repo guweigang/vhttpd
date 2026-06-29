@@ -493,16 +493,19 @@ fn test_wordpress_v2_example_projects_http_pipelines_to_runtime_routes() {
 
 	compat_entrypoint := routes.filter(it.pipeline_id == 'wordpress.compat-entrypoints')[0]
 	assert compat_entrypoint.executor == 'php-cgi'
+	assert compat_entrypoint.engine_id == 'php-cgi'
 	assert compat_entrypoint.matches('/wp-login.php')
 
 	rest := routes.filter(it.pipeline_id == 'rest.pretty-route')[0]
 	assert rest.executor == 'php-cgi'
+	assert rest.engine_id == 'php-cgi'
 	assert rest.rewrite == '/index.php?rest_route=$path_remainder'
 	assert rest.rewrite_strip_prefix == '/wp-json'
 	assert rest.max_body_bytes == 1048576
 
 	front := routes.filter(it.pipeline_id == 'wordpress.front-page')[0]
 	assert front.executor == 'php'
+	assert front.engine_id == 'php'
 	assert front.response_cache_ttl_ms == 30000
 	assert front.cache_bypass_cookie_patterns.contains('wordpress_logged_in_*')
 	assert front.cache_ignore_cookie_patterns.contains('wordpress_test_cookie')

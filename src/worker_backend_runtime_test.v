@@ -49,6 +49,33 @@ fn test_engine_runtime_resolves_named_dispatch_and_worker_settings() {
 	assert runtime.worker_env('php-cgi')['POOL'] == 'cgi'
 }
 
+fn test_engine_runtime_resolves_dispatch_by_engine_id_pool_key() {
+	runtime := EngineRuntime{
+		primary:    worker.WorkerState{
+			worker_backend: worker.WorkerBackendRuntime{
+				read_timeout_ms: 100
+			}
+			logic_executor: executor.SocketWorkerExecutor{}
+		}
+		additional: {
+			'upload-a/vjsx': &worker.WorkerState{
+				worker_backend: worker.WorkerBackendRuntime{
+					read_timeout_ms: 250
+					env:             {
+						'POOL': 'upload-a'
+					}
+				}
+				logic_executor: executor.InProcVjsxExecutor{}
+			}
+		}
+	}
+	selection := runtime.dispatch_selection('upload-a/vjsx')
+	assert selection.pool == 'upload-a/vjsx'
+	assert selection.executor_kind() == 'vjsx'
+	assert runtime.read_timeout_ms('upload-a/vjsx') == 250
+	assert runtime.worker_env('upload-a/vjsx')['POOL'] == 'upload-a'
+}
+
 fn test_engine_runtime_tracks_request_start_across_pools() {
 	mut runtime := EngineRuntime{
 		primary:    worker.WorkerState{
