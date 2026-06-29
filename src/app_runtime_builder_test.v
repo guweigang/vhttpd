@@ -197,3 +197,69 @@ fn test_build_engine_runtime_records_additional_engine_diagnostics() {
 		&& it.path == 'engines.broken')
 	assert app.protocols.runtime_plan_json.contains('"additional_engine_runtime_failed"')
 }
+
+fn test_build_app_runtime_records_relay_runtime_diagnostics() {
+	plan := runtime_plan.RuntimePlan{
+		listeners: {
+			'web': runtime_plan.ListenerPlan{
+				id:       'web'
+				protocol: 'http'
+			}
+		}
+		engines:   {
+			'app': runtime_plan.EnginePlan{
+				id:   'app'
+				kind: 'php-worker'
+			}
+		}
+		adapters:  {
+			'app': runtime_plan.AdapterPlan{
+				id:     'app'
+				kind:   'http-handler'
+				engine: runtime_plan.ResourceRef{
+					domain: .engine
+					id:     'app'
+				}
+			}
+		}
+		pipelines: [
+			runtime_plan.PipelinePlan{
+				id:      'site/app'
+				ingress: runtime_plan.ResourceRef{
+					domain: .listener
+					id:     'web'
+				}
+				egress:  runtime_plan.ResourceRef{
+					domain: .adapter
+					id:     'app'
+				}
+			},
+		]
+		relays:    {
+			'bad': runtime_plan.RelayPlan{
+				id:      'bad'
+				mode:    'agent'
+				options: runtime_plan.PlanOptions{
+					strings: {
+						'node_id': 'node-1'
+					}
+				}
+			}
+		}
+	}
+	relay_build := relay_runtime_with_diagnostics_from_plan(plan)
+	assert relay_build.runtime.descriptors.len == 0
+	assert relay_build.diagnostics.len == 1
+	assert relay_build.diagnostics[0].code == 'relay_runtime_failed'
+	assert relay_build.diagnostics[0].path == 'relays'
+	assert relay_build.diagnostics[0].message.contains('relay_descriptor_agent_missing_url:bad')
+
+	cfg := config.default_vhttpd_config()
+	executor_plan := executor.LogicExecutorRuntimePlan.resolve_from_plan([]string{}, cfg, plan,
+		'web') or { panic(err) }
+	app := build_app_runtime(provider.ProviderRuntimeSettings{}, executor_plan, cfg, plan, server_lifecycle.AppRuntimeBuildConfig{
+		plan_listener_id: 'web'
+	})
+	assert app.plan.diagnostics.any(it.code == 'relay_runtime_failed')
+	assert app.protocols.runtime_plan_json.contains('"relay_runtime_failed"')
+}

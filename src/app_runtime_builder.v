@@ -42,6 +42,9 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 	engine_runtime := engine_build.runtime
 	runtime_plan_for_app = runtime_plan_with_appended_diagnostics(runtime_plan_for_app,
 		engine_build.diagnostics)
+	relay_build := relay_runtime_with_diagnostics_from_plan(runtime_plan_for_app)
+	runtime_plan_for_app = runtime_plan_with_appended_diagnostics(runtime_plan_for_app,
+		relay_build.diagnostics)
 
 	return &App{
 		plan:          runtime_plan_for_app
@@ -82,7 +85,7 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 		}
 		websocket:     WebSocketRuntime.new(executor_plan.bootstrap.websocket_dispatch_mode)
 		upstreams:     UpstreamRuntimeRegistry.new()
-		relay:         relay_runtime_from_plan(runtime_plan_for_app)
+		relay:         relay_build.runtime
 		transformers:  TransformerRuntimeHub.from_plan(runtime_plan_for_app)
 		engines:       engine_runtime
 		providers:     ProviderRuntimeHub{
@@ -247,8 +250,28 @@ fn worker_state_from_executor_plan(plan executor.LogicExecutorRuntimePlan, build
 	}
 }
 
-fn relay_runtime_from_plan(plan runtime_plan.RuntimePlan) relay.Runtime {
-	return relay.new_runtime(plan) or { relay.empty_runtime() }
+struct RelayRuntimeBuildResult {
+	runtime     relay.Runtime
+	diagnostics []runtime_plan.PlanDiagnostic
+}
+
+fn relay_runtime_with_diagnostics_from_plan(plan runtime_plan.RuntimePlan) RelayRuntimeBuildResult {
+	runtime := relay.new_runtime(plan) or {
+		return RelayRuntimeBuildResult{
+			runtime:     relay.empty_runtime()
+			diagnostics: [
+				runtime_plan.PlanDiagnostic{
+					severity: 'error'
+					code:     'relay_runtime_failed'
+					path:     'relays'
+					message:  'failed to build relay runtime: ${err.msg()}'
+				},
+			]
+		}
+	}
+	return RelayRuntimeBuildResult{
+		runtime: runtime
+	}
 }
 
 fn runtime_plan_with_projection_diagnostics(plan runtime_plan.RuntimePlan) runtime_plan.RuntimePlan {
