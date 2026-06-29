@@ -558,6 +558,71 @@ egress = "terminal:accepted"
 	assert state.last_apply.changed_pipelines == ['upload.completed']
 }
 
+fn test_runtime_plan_replacement_snapshot_exposes_pending_refresh_error() {
+	mut app := App{
+		plan:        runtime_plan.RuntimePlan{
+			engines:   {
+				'php':           runtime_plan.EnginePlan{
+					id:   'php'
+					kind: 'php-worker'
+				}
+				'upload-events': runtime_plan.EnginePlan{
+					id:   'upload-events'
+					kind: 'vjsx'
+				}
+			}
+			adapters:  {
+				'wordpress-worker': runtime_plan.AdapterPlan{
+					id:     'wordpress-worker'
+					kind:   'http-handler'
+					engine: runtime_plan.ResourceRef{
+						domain: .engine
+						id:     'php'
+					}
+				}
+			}
+			pipelines: [
+				runtime_plan.PipelinePlan{
+					id:      'wordpress.front-page'
+					ingress: runtime_plan.ResourceRef{
+						domain: .listener
+						id:     'web'
+					}
+					egress:  runtime_plan.ResourceRef{
+						domain: .adapter
+						id:     'wordpress-worker'
+					}
+				},
+			]
+		}
+		pipelines:   PipelineRuntime{
+			http: HttpRoutingRuntime{
+				listener_id: 'web'
+			}
+		}
+		engines:     EngineRuntime{
+			primary: worker.WorkerState{
+				logic_executor: executor.SocketWorkerExecutor{}
+			}
+		}
+		replacement: RuntimePlanReplacementRuntime{
+			pending: RuntimePlanReplacementPendingSnapshot{
+				active:        true
+				config_path:   '/tmp/next.toml'
+				strategy:      'engine_drain_required'
+				drain_engines: ['upload-events']
+			}
+		}
+	}
+
+	state := app.runtime_plan_replacement_snapshot()
+	assert state.applies_total == 0
+	assert state.pending.active
+	assert state.pending.config_path == '/tmp/next.toml'
+	assert state.pending.drain_engines == ['upload-events']
+	assert state.pending.refresh_error == 'runtime_plan_replacement_engine_has_no_worker_pool:upload-events'
+}
+
 fn test_runtime_plan_replacement_snapshot_refreshes_pending_drain_ready() {
 	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_plan_replacement_refresh_drain_test')
 	os.mkdir_all(temp_dir) or { panic(err) }

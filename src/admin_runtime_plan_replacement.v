@@ -56,6 +56,7 @@ pub:
 	ready               bool
 	created_at_unix     i64
 	updated_at_unix     i64
+	refresh_error       string
 	drain_statuses      []EngineDrainStatus
 	changed_pipelines   []string
 	unchanged_pipelines []string
@@ -604,10 +605,19 @@ fn (mut app App) record_runtime_plan_replacement_cancel(result RuntimePlanReplac
 }
 
 fn (mut app App) runtime_plan_replacement_snapshot() RuntimePlanReplacementRuntimeSnapshot {
-	app.refresh_pending_runtime_plan_replacement() or {}
+	mut refresh_error := ''
+	app.refresh_pending_runtime_plan_replacement() or { refresh_error = err.msg() }
 	app.mu.@lock()
 	defer {
 		app.mu.unlock()
+	}
+	pending := if refresh_error == '' {
+		app.replacement.pending
+	} else {
+		RuntimePlanReplacementPendingSnapshot{
+			...app.replacement.pending
+			refresh_error: refresh_error
+		}
 	}
 	return RuntimePlanReplacementRuntimeSnapshot{
 		previews_total:  app.replacement.previews_total
@@ -619,7 +629,7 @@ fn (mut app App) runtime_plan_replacement_snapshot() RuntimePlanReplacementRunti
 		cancelled_total: app.replacement.cancelled_total
 		draining_total:  app.replacement.draining_total
 		rejected_total:  app.replacement.rejected_total
-		pending:         app.replacement.pending
+		pending:         pending
 		last_preview:    app.replacement.last_preview
 		last_apply:      app.replacement.last_apply
 		last_finalize:   app.replacement.last_finalize
