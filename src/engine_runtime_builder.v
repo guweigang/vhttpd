@@ -97,7 +97,7 @@ fn additional_engine_build_targets_for_route(plan runtime_plan.RuntimePlan, list
 		targets << additional_engine_build_target(plan, additional_engine_executor_name(engine),
 			engine)
 	}
-	if route.upload_completed_engine_ids.len == 0
+	if plan.source.compatibility && route.upload_completed_engine_ids.len == 0
 		&& route.on_completed.trim_space().starts_with('vjsx:') {
 		if engine := plan.listener_named_engine(listener_id, 'vjsx') {
 			targets << additional_engine_build_target(plan, 'vjsx', engine)

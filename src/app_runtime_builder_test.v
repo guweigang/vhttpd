@@ -271,6 +271,54 @@ fn test_build_engine_runtime_keeps_distinct_v2_completion_engines_with_same_exec
 	assert upload_b.logic_executor.kind() == 'vjsx'
 }
 
+fn test_build_engine_runtime_ignores_legacy_upload_completion_handler_for_v2_plan() {
+	plan := runtime_plan.RuntimePlan{
+		listeners: {
+			'web': runtime_plan.ListenerPlan{
+				id:       'web'
+				protocol: 'http'
+			}
+		}
+		engines:   {
+			'events/vjsx': runtime_plan.EnginePlan{
+				id:   'events/vjsx'
+				kind: 'vjsx'
+			}
+		}
+		adapters:  {
+			'upload': runtime_plan.AdapterPlan{
+				id:   'upload'
+				kind: 'upload'
+			}
+		}
+		pipelines: [
+			runtime_plan.PipelinePlan{
+				id:      'upload'
+				ingress: runtime_plan.ResourceRef{
+					domain: .listener
+					id:     'web'
+				}
+				egress:  runtime_plan.ResourceRef{
+					domain: .adapter
+					id:     'upload'
+				}
+			},
+		]
+	}
+	cfg := config.default_vhttpd_config()
+	executor_plan := executor.LogicExecutorRuntimePlan.resolve_from_plan([]string{}, cfg, plan,
+		'web') or { panic(err) }
+	result := build_engine_runtime_with_diagnostics_from_plan(cfg, executor_plan, plan, 'web', [
+		RuntimeRouteRule{
+			executor:     'upload'
+			on_completed: 'vjsx:uploads.completed'
+		},
+	], server_lifecycle.AppRuntimeBuildConfig{})
+
+	assert result.runtime.additional.len == 0
+	assert result.diagnostics.len == 0
+}
+
 fn test_build_engine_runtime_records_additional_engine_diagnostics() {
 	plan := runtime_plan.RuntimePlan{
 		listeners: {
