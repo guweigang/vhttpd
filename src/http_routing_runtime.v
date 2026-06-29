@@ -40,6 +40,8 @@ pub mut:
 	denied_query_patterns           map[string]string
 	upload_dir                      string
 	on_completed                    string
+	upload_completed_ingress_ref    string
+	upload_completed_pipeline_id    string
 	upload_completed_engine_ids     []string
 	status                          int
 	location                        string

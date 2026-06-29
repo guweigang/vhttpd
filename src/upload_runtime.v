@@ -175,7 +175,17 @@ fn upload_completed_dispatch_fields(resp UploadResponse, route string, handler s
 	return out
 }
 
-fn upload_completed_exchange(resp UploadResponse, fields map[string]string) dispatch.Exchange {
+fn upload_completed_exchange_for_pipeline(resp UploadResponse, fields map[string]string, ingress_ref string, pipeline_id string) dispatch.Exchange {
+	ingress := if ingress_ref.trim_space() == '' {
+		'adapter:upload'
+	} else {
+		ingress_ref.trim_space()
+	}
+	pipeline := if pipeline_id.trim_space() == '' {
+		'upload.completed'
+	} else {
+		pipeline_id.trim_space()
+	}
 	return dispatch.Exchange{
 		identity: dispatch.ExchangeIdentity{
 			id:         resp.upload_id
@@ -183,8 +193,8 @@ fn upload_completed_exchange(resp UploadResponse, fields map[string]string) disp
 			trace_id:   resp.trace_id
 		}
 		kind:     .event
-		ingress:  'adapter:upload'
-		pipeline: 'upload.completed'
+		ingress:  ingress
+		pipeline: pipeline
 		headers:  map[string]string{}
 		metadata: fields.clone()
 		payload:  dispatch.EventPayload{
@@ -196,13 +206,15 @@ fn upload_completed_exchange(resp UploadResponse, fields map[string]string) disp
 	}
 }
 
-fn (mut app App) dispatch_upload_completed_transforms(transform_refs []string, handler string, resp UploadResponse, fields map[string]string) bool {
+fn (mut app App) dispatch_upload_completed_transforms(rule RuntimeRouteRule, handler string, resp UploadResponse, fields map[string]string) bool {
+	transform_refs := rule.upload_completed_transform_refs
 	if transform_refs.len == 0 {
 		return false
 	}
 	route := fields['route'] or { '' }
 	mut services := noop_dispatch_services(resp.trace_id)
-	mut exchange := upload_completed_exchange(resp, fields)
+	mut exchange := upload_completed_exchange_for_pipeline(resp, fields,
+		rule.upload_completed_ingress_ref, rule.upload_completed_pipeline_id)
 	result := app.run_transform_refs(transform_refs, mut services, mut exchange) or {
 		mut failed := upload_completed_dispatch_fields(resp, route, handler, '')
 		failed['error'] = err.msg()
@@ -317,8 +329,7 @@ fn handle_upload_route(mut app App, mut ctx Context, rule RuntimeRouteRule, meth
 		'trace_id':     trace_id
 	}
 	app.emit('upload.completed', fields)
-	if !app.dispatch_upload_completed_transforms(rule.upload_completed_transform_refs, handler,
-		resp, fields) {
+	if !app.dispatch_upload_completed_transforms(rule, handler, resp, fields) {
 		app.dispatch_upload_completed_vjsx(handler, resp, fields)
 	}
 	mut headers := {

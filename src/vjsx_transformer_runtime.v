@@ -73,10 +73,19 @@ fn vjsx_transformer_dispatch_request(entry TransformerRuntimeEntry, exchange dis
 	return VjsxEventDispatchRequest{
 		event:      vjsx_transformer_event_name(exchange)
 		handler:    entry.handler
+		executor:   vjsx_transformer_executor(entry)
 		payload:    json.encode(payload)
 		trace_id:   exchange.identity.trace_id
 		request_id: exchange.identity.request_id
 	}
+}
+
+fn vjsx_transformer_executor(entry TransformerRuntimeEntry) string {
+	engine_ref := entry.engine.trim_space()
+	if engine_ref.starts_with('engine:') {
+		return engine_ref.all_after('engine:')
+	}
+	return engine_ref
 }
 
 fn (mut app App) dispatch_vjsx_transformer(entry TransformerRuntimeEntry, exchange dispatch.Exchange) !dispatch.TransformAction {

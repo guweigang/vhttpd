@@ -192,6 +192,9 @@ fn runtime_route_from_pipeline(plan runtime_plan.RuntimePlan, pipeline runtime_p
 			route.on_completed = legacy_completion_handler_from_plan(plan, completed_pipeline)
 			route.upload_completed_transform_refs = completed_transform_refs_from_plan(plan,
 				completed_pipeline)
+			route.upload_completed_pipeline_id = completed_pipeline_id_from_plan(completed_pipeline)
+			route.upload_completed_ingress_ref = completed_ingress_ref_from_plan(plan,
+				completed_pipeline)
 			route.upload_completed_engine_ids = completed_engine_ids_from_plan(plan,
 				completed_pipeline)
 		}
@@ -222,6 +225,23 @@ fn completed_transform_refs_from_plan(plan runtime_plan.RuntimePlan, pipeline_re
 	}
 	pipeline := plan.pipeline(ref.id) or { return []string{} }
 	return pipeline.transforms.map(it.str())
+}
+
+fn completed_pipeline_id_from_plan(pipeline_ref string) string {
+	ref := runtime_plan.parse_ref(pipeline_ref) or { return '' }
+	if ref.domain != .pipeline {
+		return ''
+	}
+	return ref.id
+}
+
+fn completed_ingress_ref_from_plan(plan runtime_plan.RuntimePlan, pipeline_ref string) string {
+	ref := runtime_plan.parse_ref(pipeline_ref) or { return '' }
+	if ref.domain != .pipeline {
+		return ''
+	}
+	pipeline := plan.pipeline(ref.id) or { return '' }
+	return pipeline.ingress.str()
 }
 
 fn runtime_executor_name(plan runtime_plan.RuntimePlan, adapter runtime_plan.AdapterPlan) string {

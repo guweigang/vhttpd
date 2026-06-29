@@ -7,6 +7,7 @@ import net.http
 struct VjsxEventDispatchRequest {
 	event       string
 	handler     string
+	executor    string
 	payload     string
 	trace_id    string
 	request_id  string
@@ -62,5 +63,14 @@ fn (mut app App) dispatch_vjsx_event(req VjsxEventDispatchRequest) !executor.Htt
 		trace_id:      req.trace_id
 		request_id:    req.request_id
 	}
-	return app.engines.dispatch_http_for_kind('vjsx', mut facade, dispatch_req)!
+	return app.engines.dispatch_http_for_kind(app.vjsx_event_dispatch_executor(req.executor), mut
+		facade, dispatch_req)!
+}
+
+fn (app App) vjsx_event_dispatch_executor(executor_name string) string {
+	clean := executor_name.trim_space()
+	if clean != '' && clean in app.engines.additional {
+		return clean
+	}
+	return 'vjsx'
 }
