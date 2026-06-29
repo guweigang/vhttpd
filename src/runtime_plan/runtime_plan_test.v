@@ -768,6 +768,8 @@ fn test_runtime_plan_relay_delivery_owner_queries_match_by_relay_target() {
 	assert plan.relay_ids_for_listener('relay_a') == ['edge_a']
 	assert plan.listener_has_relay_delivery_target('web_a', 'edge_a')
 	assert !plan.listener_has_relay_delivery_target('web_a', 'edge_b')
+	assert plan.listener_relay_delivery_target_ids('web_a') == ['edge_a']
+	assert plan.listener_relay_delivery_target_ids('web_b') == ['edge_b']
 	assert plan.relay_delivery_owner_listener_ids('relay_a') == ['web_a']
 	assert plan.relay_delivery_owner_listener_ids('relay_b') == ['web_b']
 }

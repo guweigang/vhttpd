@@ -60,6 +60,29 @@ pub fn (plan RuntimePlan) relay_ids_for_listener(listener_id string) []string {
 	return ids
 }
 
+pub fn (plan RuntimePlan) listener_relay_delivery_target_ids(listener_id string) []string {
+	mut ids := []string{}
+	for pipeline in plan.listener_pipelines(listener_id) {
+		if pipeline.egress.domain != .adapter {
+			continue
+		}
+		adapter := plan.adapters[pipeline.egress.id] or { continue }
+		if adapter.kind != 'relay-delivery' {
+			continue
+		}
+		target := adapter.options.strings['target']
+		reference := parse_ref(target) or { continue }
+		if reference.domain != .relay || reference.id !in plan.relays {
+			continue
+		}
+		if reference.id !in ids {
+			ids << reference.id
+		}
+	}
+	ids.sort()
+	return ids
+}
+
 pub fn (plan RuntimePlan) listener_has_relay_delivery_target(listener_id string, relay_id string) bool {
 	target := 'relay:${relay_id.trim_space()}'
 	for pipeline in plan.listener_pipelines(listener_id) {

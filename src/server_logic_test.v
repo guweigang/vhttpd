@@ -2368,6 +2368,118 @@ fn test_provider_runtime_settings_are_scoped_to_listener_pipeline() {
 	assert admin_settings.codex.model == 'admin-model'
 }
 
+fn test_provider_bridge_settings_are_scoped_to_listener_relay_target() {
+	plan := runtime_plan.RuntimePlan{
+		listeners: {
+			'web_a':   runtime_plan.ListenerPlan{
+				id:       'web_a'
+				protocol: 'http'
+			}
+			'web_b':   runtime_plan.ListenerPlan{
+				id:       'web_b'
+				protocol: 'http'
+			}
+			'relay_a': runtime_plan.ListenerPlan{
+				id:       'relay_a'
+				protocol: 'websocket'
+			}
+			'relay_b': runtime_plan.ListenerPlan{
+				id:       'relay_b'
+				protocol: 'websocket'
+			}
+		}
+		relays:    {
+			'edge_a': runtime_plan.RelayPlan{
+				id:      'edge_a'
+				carrier: 'websocket'
+				ingress: runtime_plan.ResourceRef{
+					domain: .listener
+					id:     'relay_a'
+				}
+				options: runtime_plan.PlanOptions{
+					strings: {
+						'enabled': 'true'
+						'url':     'wss://edge-a.test'
+						'node_id': 'local-a'
+					}
+				}
+			}
+			'edge_b': runtime_plan.RelayPlan{
+				id:      'edge_b'
+				carrier: 'websocket'
+				ingress: runtime_plan.ResourceRef{
+					domain: .listener
+					id:     'relay_b'
+				}
+				options: runtime_plan.PlanOptions{
+					strings: {
+						'enabled': 'true'
+						'url':     'wss://edge-b.test'
+						'node_id': 'local-b'
+					}
+				}
+			}
+		}
+		adapters:  {
+			'relay_a': runtime_plan.AdapterPlan{
+				id:      'relay_a'
+				kind:    'relay-delivery'
+				options: runtime_plan.PlanOptions{
+					strings: {
+						'target': 'relay:edge_a'
+					}
+				}
+			}
+			'relay_b': runtime_plan.AdapterPlan{
+				id:      'relay_b'
+				kind:    'relay-delivery'
+				options: runtime_plan.PlanOptions{
+					strings: {
+						'target': 'relay:edge_b'
+					}
+				}
+			}
+		}
+		pipelines: [
+			runtime_plan.PipelinePlan{
+				id:      'web_a/relay'
+				ingress: runtime_plan.ResourceRef{
+					domain: .listener
+					id:     'web_a'
+				}
+				egress:  runtime_plan.ResourceRef{
+					domain: .adapter
+					id:     'relay_a'
+				}
+			},
+			runtime_plan.PipelinePlan{
+				id:      'web_b/relay'
+				ingress: runtime_plan.ResourceRef{
+					domain: .listener
+					id:     'web_b'
+				}
+				egress:  runtime_plan.ResourceRef{
+					domain: .adapter
+					id:     'relay_b'
+				}
+			},
+		]
+	}
+
+	web_a_settings :=
+		provider_runtime_settings_from_plan(plan, 'web_a', provider.ProviderRuntimeSettings{})
+	web_b_settings :=
+		provider_runtime_settings_from_plan(plan, 'web_b', provider.ProviderRuntimeSettings{})
+	relay_a_settings :=
+		provider_runtime_settings_from_plan(plan, 'relay_a', provider.ProviderRuntimeSettings{})
+
+	assert web_a_settings.bridge.ws_url == 'wss://edge-a.test'
+	assert web_a_settings.bridge.client_id == 'local-a'
+	assert web_b_settings.bridge.ws_url == 'wss://edge-b.test'
+	assert web_b_settings.bridge.client_id == 'local-b'
+	assert relay_a_settings.bridge.ws_url == 'wss://edge-a.test'
+}
+
 fn test_prepare_server_runtime_files_creates_parent_dirs_and_pid_file() {
 	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_runtime_files_test')
 	event_log := os.join_path(temp_dir, 'logs', 'events.ndjson')

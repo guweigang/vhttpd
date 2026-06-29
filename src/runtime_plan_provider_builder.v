@@ -8,11 +8,10 @@ import runtime_plan
 fn provider_runtime_settings_from_plan(plan runtime_plan.RuntimePlan, listener_id string, fallback provider.ProviderRuntimeSettings) provider.ProviderRuntimeSettings {
 	feishu_settings := feishu_runtime_settings_from_plan(plan, listener_id) or { fallback.feishu }
 	codex_settings, ollama_enabled := codex_runtime_settings_from_plan(plan, listener_id, fallback)
-	bridge_settings := bridge_runtime_settings_from_plan(plan) or { fallback.bridge }
 	return provider.ProviderRuntimeSettings{
 		feishu:         feishu_settings
 		codex:          codex_settings
-		bridge:         bridge_settings
+		bridge:         bridge_settings_from_plan(plan, listener_id) or { fallback.bridge }
 		db:             fallback.db
 		ollama_enabled: ollama_enabled
 	}
@@ -118,8 +117,8 @@ fn provider_adapter_for_listener(plan runtime_plan.RuntimePlan, listener_id stri
 	return none
 }
 
-fn bridge_runtime_settings_from_plan(plan runtime_plan.RuntimePlan) ?provider.BridgeRuntimeSettings {
-	relay := plan.first_relay_by_carrier('websocket')?
+fn bridge_settings_from_plan(plan runtime_plan.RuntimePlan, listener_id string) ?provider.BridgeRuntimeSettings {
+	relay := bridge_relay_for_listener(plan, listener_id)?
 	return provider.BridgeRuntimeSettings{
 		enabled:   config.CliArgs.parse_boolish(relay.options.strings['enabled'])
 		ws_url:    relay.options.strings['url']
@@ -127,4 +126,23 @@ fn bridge_runtime_settings_from_plan(plan runtime_plan.RuntimePlan) ?provider.Br
 		token:     relay.options.strings['token']
 		target_id: relay.options.strings['target_id']
 	}
+}
+
+fn bridge_relay_for_listener(plan runtime_plan.RuntimePlan, listener_id string) ?runtime_plan.RelayPlan {
+	for relay_id in plan.listener_relay_delivery_target_ids(listener_id) {
+		relay := plan.relays[relay_id] or { continue }
+		if relay.carrier == 'websocket' {
+			return relay
+		}
+	}
+	for relay_id in plan.relay_ids_for_listener(listener_id) {
+		relay := plan.relays[relay_id] or { continue }
+		if relay.carrier == 'websocket' {
+			return relay
+		}
+	}
+	if plan.source.compatibility {
+		return plan.first_relay_by_carrier('websocket')
+	}
+	return none
 }
