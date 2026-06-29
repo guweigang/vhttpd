@@ -33,6 +33,26 @@ fn runtime_route_projection_diagnostics(plan runtime_plan.RuntimePlan, listener_
 		if pipeline.id.ends_with('_fallback') || pipeline.id.ends_with('_assets') {
 			continue
 		}
+		for reference in pipeline.transforms {
+			if reference.id !in plan.transforms {
+				diagnostics << runtime_plan.PlanDiagnostic{
+					severity: 'error'
+					code:     'runtime_route_missing_transform'
+					path:     'pipelines.${pipeline.id}.transforms'
+					message:  'pipeline ${pipeline.id} references missing transform ${reference.str()}'
+				}
+			}
+		}
+		for reference in pipeline.policies {
+			if reference.id !in plan.policies {
+				diagnostics << runtime_plan.PlanDiagnostic{
+					severity: 'error'
+					code:     'runtime_route_missing_policy'
+					path:     'pipelines.${pipeline.id}.policies'
+					message:  'pipeline ${pipeline.id} references missing policy ${reference.str()}'
+				}
+			}
+		}
 		route := runtime_route_from_pipeline(plan, pipeline) or {
 			diagnostics << runtime_plan.PlanDiagnostic{
 				severity: 'warning'

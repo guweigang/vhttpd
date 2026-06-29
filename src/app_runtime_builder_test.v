@@ -314,3 +314,67 @@ fn test_build_app_runtime_records_route_projection_diagnostics() {
 		&& it.path == 'pipelines.site/bad-regexp.match.path_regexp')
 	assert app.protocols.runtime_plan_json.contains('"runtime_route_invalid_path_regexp"')
 }
+
+fn test_build_app_runtime_records_missing_route_reference_diagnostics() {
+	plan := runtime_plan.RuntimePlan{
+		listeners: {
+			'web': runtime_plan.ListenerPlan{
+				id:       'web'
+				protocol: 'http'
+			}
+		}
+		adapters:  {
+			'hello': runtime_plan.AdapterPlan{
+				id:      'hello'
+				kind:    'fixed-response'
+				options: runtime_plan.PlanOptions{
+					strings: {
+						'status': '200'
+						'body':   'ok'
+					}
+				}
+			}
+		}
+		pipelines: [
+			runtime_plan.PipelinePlan{
+				id:         'site/missing-refs'
+				ingress:    runtime_plan.ResourceRef{
+					domain: .listener
+					id:     'web'
+				}
+				transforms: [
+					runtime_plan.ResourceRef{
+						domain: .transform
+						id:     'missing-rewrite'
+					},
+				]
+				policies:   [
+					runtime_plan.ResourceRef{
+						domain: .policy
+						id:     'missing-cache'
+					},
+				]
+				egress:     runtime_plan.ResourceRef{
+					domain: .adapter
+					id:     'hello'
+				}
+			},
+		]
+	}
+	cfg := config.default_vhttpd_config()
+	executor_plan := executor.LogicExecutorRuntimePlan.resolve_from_plan([]string{}, cfg, plan,
+		'web') or { panic(err) }
+	app := build_app_runtime(provider.ProviderRuntimeSettings{}, executor_plan, cfg, plan, server_lifecycle.AppRuntimeBuildConfig{
+		plan_listener_id: 'web'
+	})
+
+	assert app.pipelines.http.rules.len == 1
+	assert app.plan.diagnostics.any(it.code == 'runtime_route_missing_transform'
+		&& it.path == 'pipelines.site/missing-refs.transforms'
+		&& it.message.contains('transform:missing-rewrite'))
+	assert app.plan.diagnostics.any(it.code == 'runtime_route_missing_policy'
+		&& it.path == 'pipelines.site/missing-refs.policies'
+		&& it.message.contains('policy:missing-cache'))
+	assert app.protocols.runtime_plan_json.contains('"runtime_route_missing_transform"')
+	assert app.protocols.runtime_plan_json.contains('"runtime_route_missing_policy"')
+}
