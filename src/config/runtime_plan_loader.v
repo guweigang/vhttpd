@@ -48,8 +48,50 @@ pub fn load_runtime_plan_file(config_path string) !runtime_plan.RuntimePlan {
 
 fn decode_v2_config_strict(text string) !V2Config {
 	doc := toml.parse_text(text)!
-	validate_v2_config_keys(doc.to_any().as_map())!
-	return doc.decode[V2Config]()!
+	root := doc.to_any().as_map()
+	validate_v2_config_keys(root)!
+	mut cfg := doc.decode[V2Config]()!
+	apply_v2_record_options(root, mut cfg)
+	return cfg
+}
+
+fn apply_v2_record_options(root map[string]toml.Any, mut cfg V2Config) {
+	if adapters_any := root['adapters'] {
+		adapters_root := adapters_any.as_map()
+		for id, spec_any in adapters_root {
+			spec_root := spec_any.as_map()
+			record_options_any := spec_root['record_options'] or { continue }
+			mut adapter := cfg.adapters[id] or { continue }
+			adapter.record_options = decode_v2_record_options(record_options_any)
+			cfg.adapters[id] = adapter
+		}
+	}
+	if transforms_any := root['transforms'] {
+		transforms_root := transforms_any.as_map()
+		for id, spec_any in transforms_root {
+			spec_root := spec_any.as_map()
+			record_options_any := spec_root['record_options'] or { continue }
+			mut transform := cfg.transforms[id] or { continue }
+			transform.record_options = decode_v2_record_options(record_options_any)
+			cfg.transforms[id] = transform
+		}
+	}
+}
+
+fn decode_v2_record_options(record_options_any toml.Any) map[string][]map[string]string {
+	mut record_options := map[string][]map[string]string{}
+	for name, records_any in record_options_any.as_map() {
+		mut records := []map[string]string{}
+		for record_any in records_any.array() {
+			mut record := map[string]string{}
+			for key, value in record_any.as_map() {
+				record[key] = value.string()
+			}
+			records << record
+		}
+		record_options[name] = records
+	}
+	return record_options
 }
 
 fn resolve_v2_config_variables_and_paths(mut cfg V2Config, config_path string) ! {

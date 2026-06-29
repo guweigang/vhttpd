@@ -184,6 +184,59 @@ egress = "adapter:app"
 	assert plan.pipelines[0].match.headers['x_custom'] == 'yes'
 }
 
+fn test_load_runtime_plan_file_allows_record_options() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_runtime_plan_loader_record_options_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	config_file := os.join_path(temp_dir, 'vhttpd.toml')
+	os.write_file(config_file, '
+version = 2
+
+[listeners.web]
+protocol = "http"
+transport = "tcp"
+host = "127.0.0.1"
+port = 18082
+
+[engines.app]
+kind = "vjsx"
+entry = "app.mts"
+
+[adapters.app]
+kind = "http-handler"
+engine = "engine:app"
+
+[adapters.openai]
+kind = "openai"
+options = { default_backend = "main" }
+record_options = { backends = [{ id = "main", kind = "openai_http", base_url = "https://api.example.test/v1" }] }
+
+[transforms.rewrite]
+kind = "vjsx"
+engine = "engine:app"
+handler = "rewrite.handle"
+record_options = { rules = [{ from = "/old", to = "/new" }] }
+
+[[pipelines]]
+id = "site"
+ingress = "listener:web"
+transforms = ["transform:rewrite"]
+egress = "adapter:app"
+') or {
+		panic(err)
+	}
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+
+	plan := load_runtime_plan_file(config_file) or { panic(err) }
+	assert plan.transforms['rewrite'].options.record_lists['rules'].len == 1
+	assert plan.transforms['rewrite'].options.record_lists['rules'][0]['from'] == '/old'
+	assert plan.transforms['rewrite'].options.record_lists['rules'][0]['to'] == '/new'
+	assert plan.adapters['openai'].options.record_lists['backends'].len == 1
+	assert plan.adapters['openai'].options.record_lists['backends'][0]['id'] == 'main'
+	assert plan.adapters['openai'].options.record_lists['backends'][0]['base_url'] == 'https://api.example.test/v1'
+}
+
 fn test_load_runtime_plan_file_accepts_hello_v2_example() {
 	repo_root := os.real_path(os.join_path(os.dir(@FILE), '..', '..'))
 	config_file := os.join_path(repo_root, 'examples', 'config', 'hello-v2.toml')
