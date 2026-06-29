@@ -213,8 +213,35 @@ fn (mut app App) apply_runtime_plan_replacement(config_path string) !RuntimePlan
 		if execution.strategy == 'engine_drain_required' {
 			mut drains := []EngineDrainStatus{}
 			for engine_id in diff.drain_engines {
-				pool := app.resolve_engine_worker_pool(engine_id)!
-				drains << app.drain_engine(pool)!
+				pool := app.resolve_engine_worker_pool(engine_id) or {
+					result := RuntimePlanReplacementApplyResult{
+						config_path: normalized_path
+						config_hash: next_config_hash
+						applied:     false
+						status:      'rejected'
+						strategy:    execution.strategy
+						error:       err.msg()
+						drains:      drains
+						preview:     preview
+					}
+					app.record_runtime_plan_replacement_apply(result)
+					return result
+				}
+				drain := app.drain_engine(pool) or {
+					result := RuntimePlanReplacementApplyResult{
+						config_path: normalized_path
+						config_hash: next_config_hash
+						applied:     false
+						status:      'rejected'
+						strategy:    execution.strategy
+						error:       err.msg()
+						drains:      drains
+						preview:     preview
+					}
+					app.record_runtime_plan_replacement_apply(result)
+					return result
+				}
+				drains << drain
 			}
 			result := RuntimePlanReplacementApplyResult{
 				config_path: normalized_path

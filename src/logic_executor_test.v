@@ -463,6 +463,101 @@ egress = "adapter:app"
 	assert state.last_apply.drain_statuses[0].inflight_requests == 1
 }
 
+fn test_internal_admin_runtime_plan_replacement_apply_rejects_engine_without_worker_pool() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_plan_replacement_apply_embedded_engine_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	current_file := os.join_path(temp_dir, 'current.toml')
+	config_file := os.join_path(temp_dir, 'next.toml')
+	current_text := '
+version = 2
+
+[listeners.web]
+protocol = "http"
+transport = "tcp"
+host = "127.0.0.1"
+port = 18080
+
+[engines.app]
+kind = "php-worker"
+entry = "/tmp/app.php"
+
+[engines.upload-events]
+kind = "vjsx"
+entry = "/tmp/upload.mts"
+thread_count = 1
+
+[adapters.app]
+kind = "http-handler"
+engine = "engine:app"
+
+[transforms.upload-completed]
+kind = "vjsx"
+engine = "engine:upload-events"
+handler = "upload.completed"
+
+[[pipelines]]
+id = "site/app"
+ingress = "listener:web"
+match.paths = ["*"]
+egress = "adapter:app"
+
+[[pipelines]]
+id = "upload.completed"
+ingress = "listener:web"
+match.metadata = { event = "upload.completed" }
+transforms = ["transform:upload-completed"]
+egress = "terminal:accepted"
+'
+	os.write_file(current_file, current_text) or { panic(err) }
+	os.write_file(config_file, current_text.replace('thread_count = 1', 'thread_count = 2')) or {
+		panic(err)
+	}
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	current_plan := config.load_runtime_plan_file(current_file) or { panic(err) }
+	mut app := App{
+		plan:      current_plan
+		protocols: ProtocolRuntimeHub{
+			runtime_plan_json: json.encode(current_plan)
+		}
+		engines:   EngineRuntime{
+			primary: worker.WorkerState{
+				logic_executor: executor.SocketWorkerExecutor{}
+			}
+		}
+		pipelines: PipelineRuntime.new(current_plan, 'web', runtime_routes_from_plan(current_plan,
+			'web'), '', '', map[string]string{}, map[string]&worker.WorkerState{})
+	}
+	resp := app.internal_admin_dispatch(admin.InternalAdminRequest{
+		mode:   'vhttpd_admin'
+		method: 'POST'
+		path:   '/admin/runtime/plan/replacement/apply'
+		query:  {
+			'config': config_file
+		}
+	})
+	assert resp.status == 409
+	result := json.decode(RuntimePlanReplacementApplyResult, resp.body) or { panic(err) }
+	assert !result.applied
+	assert result.status == 'rejected'
+	assert result.strategy == 'engine_drain_required'
+	assert result.error == 'runtime_plan_replacement_engine_has_no_worker_pool:upload-events'
+	assert result.preview.drain_engines == ['upload-events']
+	assert result.preview.changed_pipelines == ['upload.completed']
+	assert result.drains.len == 0
+	state := app.runtime_plan_replacement_snapshot()
+	assert state.applies_total == 1
+	assert state.applied_total == 0
+	assert state.draining_total == 0
+	assert state.rejected_total == 1
+	assert !state.pending.active
+	assert state.last_apply.status == 'rejected'
+	assert state.last_apply.error == 'runtime_plan_replacement_engine_has_no_worker_pool:upload-events'
+	assert state.last_apply.drain_engines == ['upload-events']
+	assert state.last_apply.changed_pipelines == ['upload.completed']
+}
+
 fn test_runtime_plan_replacement_snapshot_refreshes_pending_drain_ready() {
 	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_plan_replacement_refresh_drain_test')
 	os.mkdir_all(temp_dir) or { panic(err) }
