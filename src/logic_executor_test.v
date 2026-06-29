@@ -545,6 +545,79 @@ egress = "adapter:hello"
 	assert event_log_text.contains('"replacement_strategy":"relay_reload_required"')
 }
 
+fn test_internal_admin_runtime_plan_replacement_apply_rejects_listener_restart_required() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_plan_replacement_listener_restart_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	current_file := os.join_path(temp_dir, 'current.toml')
+	config_file := os.join_path(temp_dir, 'next.toml')
+	event_log := os.join_path(temp_dir, 'events.ndjson')
+	current_text := '
+version = 2
+
+[listeners.web]
+protocol = "http"
+transport = "tcp"
+host = "127.0.0.1"
+port = 18080
+
+[adapters.hello]
+kind = "fixed-response"
+options.status = "200"
+options.body = "ok"
+
+[[pipelines]]
+id = "site/hello"
+ingress = "listener:web"
+match.paths = ["/hello"]
+egress = "adapter:hello"
+'
+	os.write_file(current_file, current_text) or { panic(err) }
+	os.write_file(config_file, current_text.replace('port = 18080', 'port = 18081')) or {
+		panic(err)
+	}
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	current_plan := config.load_runtime_plan_file(current_file) or { panic(err) }
+	mut app := App{
+		plan:          current_plan
+		protocols:     ProtocolRuntimeHub{
+			runtime_plan_json: json.encode(current_plan)
+		}
+		control_plane: ControlPlaneRuntime{
+			event_log: event_log
+		}
+		pipelines:     PipelineRuntime{
+			http: HttpRoutingRuntime{
+				listener_id: 'web'
+			}
+		}
+	}
+	resp := app.internal_admin_dispatch(admin.InternalAdminRequest{
+		mode:   'vhttpd_admin'
+		method: 'POST'
+		path:   '/admin/runtime/plan/replacement/apply'
+		query:  {
+			'config': config_file
+		}
+	})
+	assert resp.status == 409
+	result := json.decode(RuntimePlanReplacementApplyResult, resp.body) or { panic(err) }
+	assert !result.applied
+	assert result.status == 'rejected'
+	assert result.strategy == 'listener_restart_required'
+	assert result.error == 'runtime_plan_replacement_requires_listener_restart'
+	assert result.preview.restart_listeners == ['web']
+	assert app.plan.listeners['web'].port == 18080
+	state := app.runtime_plan_replacement_snapshot()
+	assert state.applies_total == 1
+	assert state.rejected_total == 1
+	assert state.last_apply.restart_listeners == ['web']
+	event_log_text := os.read_file(event_log) or { panic(err) }
+	assert event_log_text.contains('"type":"runtime.plan.replacement.rejected"')
+	assert event_log_text.contains('"replacement_strategy":"listener_restart_required"')
+}
+
 fn test_internal_admin_runtime_plan_replacement_apply_starts_engine_drain() {
 	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_plan_replacement_apply_reject_test')
 	os.mkdir_all(temp_dir) or { panic(err) }
