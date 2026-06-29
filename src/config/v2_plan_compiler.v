@@ -66,6 +66,7 @@ fn compile_v2_runtime_plan_with_diagnostics(cfg V2Config, source_path string, co
 				bools:        spec.bool_options.clone()
 				string_lists: spec.list_options.clone()
 				string_maps:  spec.map_options.clone()
+				record_lists: spec.record_options.clone()
 			}
 		}
 	}

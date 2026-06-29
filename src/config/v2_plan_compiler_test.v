@@ -80,22 +80,30 @@ fn test_compile_v2_runtime_plan_resolves_transform_typed_options() {
 		}
 		transforms: {
 			'rewrite': V2TransformSpec{
-				kind:         'vjsx'
-				engine:       'engine:vjsx'
-				handler:      'rewrite.handle'
-				bool_options: {
+				kind:           'vjsx'
+				engine:         'engine:vjsx'
+				handler:        'rewrite.handle'
+				bool_options:   {
 					'stateful': true
 				}
-				int_options:  {
+				int_options:    {
 					'limit': 10
 				}
-				list_options: {
+				list_options:   {
 					'stages': ['a', 'b']
 				}
-				map_options:  {
+				map_options:    {
 					'labels': {
 						'app': 'demo'
 					}
+				}
+				record_options: {
+					'rules': [
+						{
+							'from': '/old'
+							'to':   '/new'
+						},
+					]
 				}
 			}
 		}
@@ -120,6 +128,7 @@ fn test_compile_v2_runtime_plan_resolves_transform_typed_options() {
 	assert plan.transforms['rewrite'].options.ints['limit'] == 10
 	assert plan.transforms['rewrite'].options.string_lists['stages'] == ['a', 'b']
 	assert plan.transforms['rewrite'].options.string_maps['labels']['app'] == 'demo'
+	assert plan.transforms['rewrite'].options.record_lists['rules'][0]['from'] == '/old'
 }
 
 fn test_compile_v2_runtime_plan_rejects_unresolved_reference() {
