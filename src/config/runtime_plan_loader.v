@@ -51,18 +51,31 @@ fn decode_v2_config_strict(text string) !V2Config {
 	root := doc.to_any().as_map()
 	validate_v2_config_keys(root)!
 	mut cfg := doc.decode[V2Config]()!
-	apply_v2_record_options(root, mut cfg)
+	apply_v2_extension_options(root, mut cfg)
 	return cfg
 }
 
-fn apply_v2_record_options(root map[string]toml.Any, mut cfg V2Config) {
+fn apply_v2_extension_options(root map[string]toml.Any, mut cfg V2Config) {
 	if adapters_any := root['adapters'] {
 		adapters_root := adapters_any.as_map()
 		for id, spec_any in adapters_root {
 			spec_root := spec_any.as_map()
-			record_options_any := spec_root['record_options'] or { continue }
 			mut adapter := cfg.adapters[id] or { continue }
-			adapter.record_options = decode_v2_record_options(record_options_any)
+			if int_options_any := spec_root['int_options'] {
+				adapter.int_options = decode_v2_int_options(int_options_any)
+			}
+			if bool_options_any := spec_root['bool_options'] {
+				adapter.bool_options = decode_v2_bool_options(bool_options_any)
+			}
+			if list_options_any := spec_root['list_options'] {
+				adapter.list_options = decode_v2_list_options(list_options_any)
+			}
+			if map_options_any := spec_root['map_options'] {
+				adapter.map_options = decode_v2_map_options(map_options_any)
+			}
+			if record_options_any := spec_root['record_options'] {
+				adapter.record_options = decode_v2_record_options(record_options_any)
+			}
 			cfg.adapters[id] = adapter
 		}
 	}
@@ -70,12 +83,61 @@ fn apply_v2_record_options(root map[string]toml.Any, mut cfg V2Config) {
 		transforms_root := transforms_any.as_map()
 		for id, spec_any in transforms_root {
 			spec_root := spec_any.as_map()
-			record_options_any := spec_root['record_options'] or { continue }
 			mut transform := cfg.transforms[id] or { continue }
-			transform.record_options = decode_v2_record_options(record_options_any)
+			if int_options_any := spec_root['int_options'] {
+				transform.int_options = decode_v2_int_options(int_options_any)
+			}
+			if bool_options_any := spec_root['bool_options'] {
+				transform.bool_options = decode_v2_bool_options(bool_options_any)
+			}
+			if list_options_any := spec_root['list_options'] {
+				transform.list_options = decode_v2_list_options(list_options_any)
+			}
+			if map_options_any := spec_root['map_options'] {
+				transform.map_options = decode_v2_map_options(map_options_any)
+			}
+			if record_options_any := spec_root['record_options'] {
+				transform.record_options = decode_v2_record_options(record_options_any)
+			}
 			cfg.transforms[id] = transform
 		}
 	}
+}
+
+fn decode_v2_int_options(options_any toml.Any) map[string]int {
+	mut options := map[string]int{}
+	for key, value in options_any.as_map() {
+		options[key] = value.int()
+	}
+	return options
+}
+
+fn decode_v2_bool_options(options_any toml.Any) map[string]bool {
+	mut options := map[string]bool{}
+	for key, value in options_any.as_map() {
+		options[key] = value.bool()
+	}
+	return options
+}
+
+fn decode_v2_list_options(options_any toml.Any) map[string][]string {
+	mut options := map[string][]string{}
+	for key, values_any in options_any.as_map() {
+		options[key] = values_any.array().map(it.string())
+	}
+	return options
+}
+
+fn decode_v2_map_options(options_any toml.Any) map[string]map[string]string {
+	mut options := map[string]map[string]string{}
+	for key, values_any in options_any.as_map() {
+		mut values := map[string]string{}
+		for item_key, item_value in values_any.as_map() {
+			values[item_key] = item_value.string()
+		}
+		options[key] = values.clone()
+	}
+	return options
 }
 
 fn decode_v2_record_options(record_options_any toml.Any) map[string][]map[string]string {

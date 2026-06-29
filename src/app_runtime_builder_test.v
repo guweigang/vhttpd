@@ -524,6 +524,58 @@ fn test_build_app_runtime_records_openai_protocol_diagnostics() {
 	assert app.protocols.runtime_plan_json.contains('"openai_route_backend_missing"')
 }
 
+fn test_build_app_runtime_loads_openai_protocol_records_from_v2_toml() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_app_runtime_openai_records_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	config_file := os.join_path(temp_dir, 'vhttpd.toml')
+	os.write_file(config_file, '
+version = 2
+
+[listeners.web]
+protocol = "http"
+transport = "tcp"
+host = "127.0.0.1"
+port = 18082
+
+[adapters.openai]
+kind = "openai"
+options = { default_backend = "main", base_path = "/ai" }
+list_options = { chat = ["gpt-a", "gpt-b"] }
+record_options = { backends = [{ id = "main", kind = "openai_http", base_url = "https://api.example.test/v1", api_key_env = "TEST_OPENAI_KEY" }], routes = [{ id = "chat", model = "gpt-a", backend = "main", upstream_model = "gpt-upstream" }] }
+
+[[pipelines]]
+id = "site/openai"
+ingress = "listener:web"
+match.paths = ["/ai/*"]
+egress = "adapter:openai"
+') or {
+		panic(err)
+	}
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	plan := config.load_runtime_plan_file(config_file) or { panic(err) }
+	cfg := config.default_vhttpd_config()
+	executor_plan := executor.LogicExecutorRuntimePlan.resolve_from_plan([]string{}, cfg, plan,
+		'web') or { panic(err) }
+	app := build_app_runtime(provider.ProviderRuntimeSettings{}, executor_plan, cfg, plan, server_lifecycle.AppRuntimeBuildConfig{
+		plan_listener_id: 'web'
+		workdir:          temp_dir
+	})
+
+	assert app.protocols.openai.enabled
+	assert app.protocols.openai.base_path == '/ai'
+	assert app.protocols.openai.default_backend == 'main'
+	assert app.protocols.openai.backends['main'].kind == 'openai_http'
+	assert app.protocols.openai.backends['main'].base_url == 'https://api.example.test/v1'
+	assert app.protocols.openai.backends['main'].api_key_env == 'TEST_OPENAI_KEY'
+	assert app.protocols.openai.routes['chat'].model == 'gpt-a'
+	assert app.protocols.openai.routes['chat'].models == ['gpt-a', 'gpt-b']
+	assert app.protocols.openai.routes['chat'].backend == 'main'
+	assert app.protocols.openai.routes['chat'].upstream_model == 'gpt-upstream'
+	assert app.plan.diagnostics.len == 0
+}
+
 fn test_build_app_runtime_records_mcp_protocol_diagnostics() {
 	plan := runtime_plan.RuntimePlan{
 		listeners: {
