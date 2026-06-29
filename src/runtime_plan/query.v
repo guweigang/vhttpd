@@ -219,7 +219,7 @@ pub fn (plan RuntimePlan) listener_named_engine(listener_id string, executor_nam
 		}
 		return plan.engines[engine_ref.id] or { continue }
 	}
-	for _, transform in plan.transforms {
+	for transform in plan.listener_transform_plans(listener_id) {
 		engine_ref := transform.engine or { continue }
 		if engine_ref.domain != .engine
 			|| !engine_id_matches_executor_name(engine_ref.id, normalized_executor) {
@@ -227,7 +227,48 @@ pub fn (plan RuntimePlan) listener_named_engine(listener_id string, executor_nam
 		}
 		return plan.engines[engine_ref.id] or { continue }
 	}
+	if plan.source.compatibility {
+		for _, transform in plan.transforms {
+			engine_ref := transform.engine or { continue }
+			if engine_ref.domain != .engine
+				|| !engine_id_matches_executor_name(engine_ref.id, normalized_executor) {
+				continue
+			}
+			return plan.engines[engine_ref.id] or { continue }
+		}
+	}
 	return none
+}
+
+fn (plan RuntimePlan) listener_transform_plans(listener_id string) []TransformPlan {
+	mut transforms := []TransformPlan{}
+	mut seen := map[string]bool{}
+	for pipeline in plan.listener_pipelines(listener_id) {
+		plan.append_pipeline_transform_plans(pipeline, mut transforms, mut seen)
+		if pipeline.egress.domain != .adapter {
+			continue
+		}
+		adapter := plan.adapters[pipeline.egress.id] or { continue }
+		completed_pipeline := adapter.options.strings['completed_pipeline']
+		reference := parse_ref(completed_pipeline) or { continue }
+		if reference.domain != .pipeline {
+			continue
+		}
+		event_pipeline := plan.pipeline(reference.id) or { continue }
+		plan.append_pipeline_transform_plans(event_pipeline, mut transforms, mut seen)
+	}
+	return transforms
+}
+
+fn (plan RuntimePlan) append_pipeline_transform_plans(pipeline PipelinePlan, mut transforms []TransformPlan, mut seen map[string]bool) {
+	for reference in pipeline.transforms {
+		if reference.domain != .transform || seen[reference.id] {
+			continue
+		}
+		transform := plan.transforms[reference.id] or { continue }
+		seen[reference.id] = true
+		transforms << transform
+	}
 }
 
 fn engine_id_matches_executor_name(engine_id string, executor_name string) bool {

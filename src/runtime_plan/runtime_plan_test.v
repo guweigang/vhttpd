@@ -351,6 +351,188 @@ fn test_runtime_plan_listener_resource_checks_all_listener_http_engines() {
 	assert plan.listener_resource('admin', 'db')?.id == 'db/admin'
 }
 
+fn test_runtime_plan_listener_named_engine_uses_listener_transform_closure() {
+	plan := RuntimePlan{
+		engines:    {
+			'web/vjsx':     EnginePlan{
+				id:   'web/vjsx'
+				kind: 'vjsx'
+			}
+			'admin/vjsx':   EnginePlan{
+				id:   'admin/vjsx'
+				kind: 'vjsx'
+			}
+			'upload/vjsx':  EnginePlan{
+				id:   'upload/vjsx'
+				kind: 'vjsx'
+			}
+			'foreign/vjsx': EnginePlan{
+				id:   'foreign/vjsx'
+				kind: 'vjsx'
+			}
+		}
+		adapters:   {
+			'web/app':      AdapterPlan{
+				id:      'web/app'
+				kind:    'fixed-response'
+				options: PlanOptions{
+					strings: {
+						'status': '200'
+						'body':   'ok'
+					}
+				}
+			}
+			'admin/app':    AdapterPlan{
+				id:      'admin/app'
+				kind:    'fixed-response'
+				options: PlanOptions{
+					strings: {
+						'status': '200'
+						'body':   'admin'
+					}
+				}
+			}
+			'web/upload':   AdapterPlan{
+				id:      'web/upload'
+				kind:    'upload'
+				options: PlanOptions{
+					strings: {
+						'root':               '/tmp/uploads'
+						'completed_pipeline': 'pipeline:web/upload.completed'
+					}
+				}
+			}
+			'media/upload': AdapterPlan{
+				id:      'media/upload'
+				kind:    'upload'
+				options: PlanOptions{
+					strings: {
+						'root':               '/tmp/media'
+						'completed_pipeline': 'pipeline:media/upload.completed'
+					}
+				}
+			}
+			'upload-event': AdapterPlan{
+				id:   'upload-event'
+				kind: 'event-ingress'
+			}
+		}
+		transforms: {
+			'web/rewrite':      TransformPlan{
+				id:     'web/rewrite'
+				kind:   'vjsx'
+				engine: ResourceRef{
+					domain: .engine
+					id:     'web/vjsx'
+				}
+			}
+			'admin/rewrite':    TransformPlan{
+				id:     'admin/rewrite'
+				kind:   'vjsx'
+				engine: ResourceRef{
+					domain: .engine
+					id:     'admin/vjsx'
+				}
+			}
+			'upload/completed': TransformPlan{
+				id:     'upload/completed'
+				kind:   'vjsx'
+				engine: ResourceRef{
+					domain: .engine
+					id:     'upload/vjsx'
+				}
+			}
+			'foreign/orphan':   TransformPlan{
+				id:     'foreign/orphan'
+				kind:   'vjsx'
+				engine: ResourceRef{
+					domain: .engine
+					id:     'foreign/vjsx'
+				}
+			}
+		}
+		pipelines:  [
+			PipelinePlan{
+				id:         'web/app'
+				ingress:    ResourceRef{
+					domain: .listener
+					id:     'web'
+				}
+				transforms: [ResourceRef{ domain: .transform, id: 'web/rewrite' }]
+				egress:     ResourceRef{
+					domain: .adapter
+					id:     'web/app'
+				}
+			},
+			PipelinePlan{
+				id:      'web/upload'
+				ingress: ResourceRef{
+					domain: .listener
+					id:     'web'
+				}
+				egress:  ResourceRef{
+					domain: .adapter
+					id:     'web/upload'
+				}
+			},
+			PipelinePlan{
+				id:         'web/upload.completed'
+				ingress:    ResourceRef{
+					domain: .adapter
+					id:     'upload-event'
+				}
+				transforms: [ResourceRef{ domain: .transform, id: 'upload/completed' }]
+				egress:     ResourceRef{
+					domain: .terminal
+					id:     'ack'
+				}
+			},
+			PipelinePlan{
+				id:      'media/upload'
+				ingress: ResourceRef{
+					domain: .listener
+					id:     'media'
+				}
+				egress:  ResourceRef{
+					domain: .adapter
+					id:     'media/upload'
+				}
+			},
+			PipelinePlan{
+				id:         'media/upload.completed'
+				ingress:    ResourceRef{
+					domain: .adapter
+					id:     'upload-event'
+				}
+				transforms: [ResourceRef{ domain: .transform, id: 'upload/completed' }]
+				egress:     ResourceRef{
+					domain: .terminal
+					id:     'ack'
+				}
+			},
+			PipelinePlan{
+				id:         'admin/app'
+				ingress:    ResourceRef{
+					domain: .listener
+					id:     'admin'
+				}
+				transforms: [ResourceRef{ domain: .transform, id: 'admin/rewrite' }]
+				egress:     ResourceRef{
+					domain: .adapter
+					id:     'admin/app'
+				}
+			},
+		]
+	}
+
+	assert plan.listener_named_engine('web', 'vjsx')?.id == 'web/vjsx'
+	assert plan.listener_transform_plans('web').map(it.id) == ['web/rewrite', 'upload/completed']
+	assert plan.listener_named_engine('admin', 'vjsx')?.id == 'admin/vjsx'
+	assert plan.listener_transform_plans('admin').map(it.id) == ['admin/rewrite']
+	assert plan.listener_named_engine('media', 'vjsx')?.id == 'upload/vjsx'
+	assert plan.listener_transform_plans('media').map(it.id) == ['upload/completed']
+}
+
 fn test_runtime_plan_listener_fallback_engine_uses_first_http_handler_when_no_named_fallback() {
 	plan := RuntimePlan{
 		engines:   {
