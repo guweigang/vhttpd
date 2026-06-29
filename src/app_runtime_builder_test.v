@@ -523,3 +523,50 @@ fn test_build_app_runtime_records_openai_protocol_diagnostics() {
 	assert app.protocols.runtime_plan_json.contains('"openai_route_missing_id"')
 	assert app.protocols.runtime_plan_json.contains('"openai_route_backend_missing"')
 }
+
+fn test_build_app_runtime_records_mcp_protocol_diagnostics() {
+	plan := runtime_plan.RuntimePlan{
+		listeners: {
+			'web': runtime_plan.ListenerPlan{
+				id:       'web'
+				protocol: 'http'
+			}
+		}
+		adapters:  {
+			'mcp': runtime_plan.AdapterPlan{
+				id:      'mcp'
+				kind:    'mcp'
+				options: runtime_plan.PlanOptions{
+					strings: {
+						'sampling_capability_policy': 'surprise'
+					}
+				}
+			}
+		}
+		pipelines: [
+			runtime_plan.PipelinePlan{
+				id:      'site/mcp'
+				ingress: runtime_plan.ResourceRef{
+					domain: .listener
+					id:     'web'
+				}
+				egress:  runtime_plan.ResourceRef{
+					domain: .adapter
+					id:     'mcp'
+				}
+			},
+		]
+	}
+	cfg := config.default_vhttpd_config()
+	executor_plan := executor.LogicExecutorRuntimePlan.resolve_from_plan([]string{}, cfg, plan,
+		'web') or { panic(err) }
+	app := build_app_runtime(provider.ProviderRuntimeSettings{}, executor_plan, cfg, plan, server_lifecycle.AppRuntimeBuildConfig{
+		plan_listener_id: 'web'
+	})
+
+	assert app.protocols.mcp.sampling_capability_policy == 'warn'
+	assert app.plan.diagnostics.any(it.code == 'mcp_sampling_capability_policy_invalid'
+		&& it.path == 'adapters.mcp.options.sampling_capability_policy'
+		&& it.message.contains('surprise'))
+	assert app.protocols.runtime_plan_json.contains('"mcp_sampling_capability_policy_invalid"')
+}

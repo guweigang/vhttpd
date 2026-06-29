@@ -67,8 +67,26 @@ fn openai_state_from_plan(plan runtime_plan.RuntimePlan, listener_id string) ope
 
 fn protocol_runtime_diagnostics_from_plan(plan runtime_plan.RuntimePlan, listener_id string) []runtime_plan.PlanDiagnostic {
 	mut diagnostics := []runtime_plan.PlanDiagnostic{}
-	adapter := plan.listener_adapter(listener_id, 'openai') or { return diagnostics }
-	diagnostics << openai_adapter_diagnostics(adapter)
+	if adapter := plan.listener_adapter(listener_id, 'mcp') {
+		diagnostics << mcp_adapter_diagnostics(adapter)
+	}
+	if adapter := plan.listener_adapter(listener_id, 'openai') {
+		diagnostics << openai_adapter_diagnostics(adapter)
+	}
+	return diagnostics
+}
+
+fn mcp_adapter_diagnostics(adapter runtime_plan.AdapterPlan) []runtime_plan.PlanDiagnostic {
+	mut diagnostics := []runtime_plan.PlanDiagnostic{}
+	policy := adapter.options.strings['sampling_capability_policy'].trim_space()
+	if policy != '' && policy.to_lower() !in ['warn', 'drop', 'error'] {
+		diagnostics << runtime_plan.PlanDiagnostic{
+			severity: 'warning'
+			code:     'mcp_sampling_capability_policy_invalid'
+			path:     'adapters.${adapter.id}.options.sampling_capability_policy'
+			message:  'mcp adapter ${adapter.id} has invalid sampling capability policy ${policy}; falling back to warn'
+		}
+	}
 	return diagnostics
 }
 
