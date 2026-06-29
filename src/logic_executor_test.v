@@ -6,6 +6,7 @@ import executor
 import json
 import os
 import relay
+import runtime_plan
 import server_lifecycle
 import worker
 import upstream.transport
@@ -77,10 +78,67 @@ fn test_plan_engine_ids_resolve_to_worker_pools() {
 		}
 	}
 
-	assert app.resolve_engine_worker_pool('php') == ''
-	assert app.resolve_engine_worker_pool('site/php') == ''
-	assert app.resolve_engine_worker_pool('php-cgi') == 'php-cgi'
-	assert app.resolve_engine_worker_pool('site/php-cgi') == 'php-cgi'
+	assert (app.resolve_engine_worker_pool('php') or { panic(err) }) == ''
+	assert (app.resolve_engine_worker_pool('site/php') or { panic(err) }) == ''
+	assert (app.resolve_engine_worker_pool('php-cgi') or { panic(err) }) == 'php-cgi'
+	assert (app.resolve_engine_worker_pool('site/php-cgi') or { panic(err) }) == 'php-cgi'
+}
+
+fn test_plan_engine_without_worker_pool_does_not_resolve_to_primary() {
+	app := App{
+		plan:      runtime_plan.RuntimePlan{
+			engines:   {
+				'php':           runtime_plan.EnginePlan{
+					id:   'php'
+					kind: 'php-worker'
+				}
+				'upload-events': runtime_plan.EnginePlan{
+					id:   'upload-events'
+					kind: 'vjsx'
+				}
+			}
+			adapters:  {
+				'wordpress-worker': runtime_plan.AdapterPlan{
+					id:     'wordpress-worker'
+					kind:   'http-handler'
+					engine: runtime_plan.ResourceRef{
+						domain: .engine
+						id:     'php'
+					}
+				}
+			}
+			pipelines: [
+				runtime_plan.PipelinePlan{
+					id:      'wordpress.front-page'
+					ingress: runtime_plan.ResourceRef{
+						domain: .listener
+						id:     'web'
+					}
+					egress:  runtime_plan.ResourceRef{
+						domain: .adapter
+						id:     'wordpress-worker'
+					}
+				},
+			]
+		}
+		pipelines: PipelineRuntime{
+			http: HttpRoutingRuntime{
+				listener_id: 'web'
+			}
+		}
+		engines:   EngineRuntime{
+			primary: worker.WorkerState{
+				logic_executor: executor.SocketWorkerExecutor{}
+			}
+		}
+	}
+
+	assert (app.resolve_engine_worker_pool('php') or { panic(err) }) == ''
+	if _ := app.resolve_engine_worker_pool('upload-events') {
+		assert false
+	} else {
+		assert err.msg() == 'runtime_plan_replacement_engine_has_no_worker_pool:upload-events'
+	}
 }
 
 fn test_logic_executor_can_hold_inproc_vjsx_executor() {

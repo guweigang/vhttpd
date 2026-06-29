@@ -213,7 +213,7 @@ fn (mut app App) apply_runtime_plan_replacement(config_path string) !RuntimePlan
 		if execution.strategy == 'engine_drain_required' {
 			mut drains := []EngineDrainStatus{}
 			for engine_id in diff.drain_engines {
-				pool := app.resolve_engine_worker_pool(engine_id)
+				pool := app.resolve_engine_worker_pool(engine_id)!
 				drains << app.drain_engine(pool)!
 			}
 			result := RuntimePlanReplacementApplyResult{
@@ -354,7 +354,17 @@ fn (mut app App) cancel_runtime_plan_replacement() RuntimePlanReplacementCancelR
 	}
 	mut resumed := []EngineDrainStatus{}
 	for engine_id in pending.drain_engines {
-		pool := app.resolve_engine_worker_pool(engine_id)
+		pool := app.resolve_engine_worker_pool(engine_id) or {
+			result := RuntimePlanReplacementCancelResult{
+				cancelled: false
+				status:    'rejected'
+				error:     err.msg()
+				pending:   pending
+				resumed:   resumed
+			}
+			app.record_runtime_plan_replacement_cancel(result)
+			return result
+		}
 		status := app.resume_engine(pool) or {
 			result := RuntimePlanReplacementCancelResult{
 				cancelled: false
@@ -607,7 +617,7 @@ fn (mut app App) refresh_pending_runtime_plan_replacement() !RuntimePlanReplacem
 	}
 	mut drain_statuses := []EngineDrainStatus{}
 	for engine_id in pending.drain_engines {
-		pool := app.resolve_engine_worker_pool(engine_id)
+		pool := app.resolve_engine_worker_pool(engine_id)!
 		drain_statuses << app.engine_drain_status(pool)!
 	}
 	ready := drain_statuses_ready(drain_statuses)
@@ -687,19 +697,38 @@ fn runtime_plan_replacement_attempt_from_cancel(result RuntimePlanReplacementCan
 	}
 }
 
-fn (app &App) resolve_engine_worker_pool(engine_id string) string {
+fn (app &App) resolve_engine_worker_pool(engine_id string) !string {
 	normalized := engine_id.trim_space()
 	if normalized == '' {
+		return ''
+	}
+	primary_kind := app.engines.primary_kind()
+	if normalized == 'main' || normalized == 'primary' || normalized == primary_kind {
 		return ''
 	}
 	if normalized in app.engines.additional {
 		return normalized
 	}
 	tail := normalized.all_after_last('/')
+	if tail != normalized && (tail == primary_kind || tail == 'primary' || tail == 'main') {
+		return ''
+	}
 	if tail != normalized && tail in app.engines.additional {
 		return tail
 	}
-	return ''
+	if app.plan.engines.len == 0 {
+		return ''
+	}
+	if primary := app.plan.listener_fallback_engine(app.pipelines.http.listener_id) {
+		primary_tail := primary.id.all_after_last('/')
+		if normalized == primary.id || normalized == primary_tail {
+			return ''
+		}
+	}
+	if normalized in app.plan.engines {
+		return error('runtime_plan_replacement_engine_has_no_worker_pool:${normalized}')
+	}
+	return error('runtime_plan_replacement_unknown_engine_pool:${normalized}')
 }
 
 fn runtime_plan_replacement_apply_status_code(result RuntimePlanReplacementApplyResult) int {
