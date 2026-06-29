@@ -369,7 +369,7 @@ fn resource_fingerprint(value ResourcePlan) string {
 }
 
 fn engine_fingerprint(value EnginePlan) string {
-	return '${value.id}|${value.kind}|${refs_fingerprint(value.resources)}|${string_list_fingerprint(value.capabilities)}|${options_fingerprint(value.options)}'
+	return '${value.id}|${value.kind}|${sorted_refs_fingerprint(value.resources)}|${string_list_fingerprint(value.capabilities)}|${options_fingerprint(value.options)}'
 }
 
 fn adapter_fingerprint(value AdapterPlan) string {
@@ -417,6 +417,15 @@ fn refs_fingerprint(values []ResourceRef) string {
 	for value in values {
 		refs << value.str()
 	}
+	return refs.join(',')
+}
+
+fn sorted_refs_fingerprint(values []ResourceRef) string {
+	mut refs := []string{}
+	for value in values {
+		refs << value.str()
+	}
+	refs.sort()
 	return refs.join(',')
 }
 

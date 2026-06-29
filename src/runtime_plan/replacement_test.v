@@ -161,6 +161,87 @@ fn test_plan_replacement_resource_change_affects_referencing_engine_pipeline() {
 	assert diff.unchanged_pipelines.len == 0
 }
 
+fn test_plan_replacement_ignores_engine_resource_order() {
+	old := RuntimePlan{
+		resources: {
+			'db/app':    ResourcePlan{
+				id:       'db/app'
+				category: 'db'
+				kind:     'mysql'
+			}
+			'cache/app': ResourcePlan{
+				id:       'cache/app'
+				category: 'cache'
+				kind:     'session-store'
+			}
+		}
+		engines:   {
+			'app': EnginePlan{
+				id:        'app'
+				kind:      'php-worker'
+				resources: [
+					ResourceRef{
+						domain: .resource
+						id:     'db/app'
+					},
+					ResourceRef{
+						domain: .resource
+						id:     'cache/app'
+					},
+				]
+			}
+		}
+		adapters:  {
+			'app': AdapterPlan{
+				id:     'app'
+				kind:   'http-handler'
+				engine: ResourceRef{
+					domain: .engine
+					id:     'app'
+				}
+			}
+		}
+		pipelines: [
+			PipelinePlan{
+				id:      'site/app'
+				ingress: ResourceRef{
+					domain: .listener
+					id:     'web'
+				}
+				egress:  ResourceRef{
+					domain: .adapter
+					id:     'app'
+				}
+			},
+		]
+	}
+	new := RuntimePlan{
+		...old
+		engines: {
+			'app': EnginePlan{
+				...old.engines['app']
+				resources: [
+					ResourceRef{
+						domain: .resource
+						id:     'cache/app'
+					},
+					ResourceRef{
+						domain: .resource
+						id:     'db/app'
+					},
+				]
+			}
+		}
+	}
+
+	diff := diff_runtime_plan_replacement(old, new)
+
+	assert diff.allowed
+	assert diff.drain_engines.len == 0
+	assert diff.changed_pipelines.len == 0
+	assert diff.unchanged_pipelines == ['site/app']
+}
+
 fn test_plan_replacement_rejects_unsafe_stateful_transform_switch() {
 	old := RuntimePlan{
 		transforms: {
