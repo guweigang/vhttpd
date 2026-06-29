@@ -160,7 +160,7 @@ fn validate_v2_config_keys(root map[string]toml.Any) ! {
 		'root', 'base_url', 'timeout_ms', 'max_body_bytes', 'completed_pipeline', 'topic', 'options',
 		'int_options', 'bool_options', 'list_options', 'map_options', 'record_options'])!
 	validate_named_specs(root, 'transforms', ['kind', 'engine', 'handler', 'target', 'strip_prefix',
-		'options'])!
+		'options', 'int_options', 'bool_options', 'list_options', 'map_options'])!
 	validate_policy_specs(root)!
 	validate_pipeline_specs(root)!
 	validate_named_specs(root, 'relays', ['mode', 'carrier', 'listener', 'auth', 'url', 'path',

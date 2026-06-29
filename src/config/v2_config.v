@@ -181,6 +181,10 @@ pub mut:
 	target       string
 	strip_prefix string @[toml: 'strip_prefix']
 	options      map[string]string
+	int_options  map[string]int               @[toml: 'int_options']
+	bool_options map[string]bool              @[toml: 'bool_options']
+	list_options map[string][]string          @[toml: 'list_options']
+	map_options  map[string]map[string]string @[toml: 'map_options']
 }
 
 pub struct V2PolicySpecs {

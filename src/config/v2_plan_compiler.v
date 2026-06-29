@@ -58,10 +58,14 @@ fn compile_v2_runtime_plan_with_diagnostics(cfg V2Config, source_path string, co
 			engine:  engine_ref.option()
 			handler: spec.handler
 			options: runtime_plan.PlanOptions{
-				strings: merge_string_options({
+				strings:      merge_string_options({
 					'target':       spec.target
 					'strip_prefix': spec.strip_prefix
 				}, spec.options)
+				ints:         spec.int_options.clone()
+				bools:        spec.bool_options.clone()
+				string_lists: spec.list_options.clone()
+				string_maps:  spec.map_options.clone()
 			}
 		}
 	}

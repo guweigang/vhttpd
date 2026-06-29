@@ -64,6 +64,64 @@ fn test_compile_v2_runtime_plan_resolves_references_and_options() {
 	assert plan.pipelines[0].policies[0].str() == 'policy:limits/body'
 }
 
+fn test_compile_v2_runtime_plan_resolves_transform_typed_options() {
+	cfg := V2Config{
+		listeners:  {
+			'web': V2ListenerSpec{}
+		}
+		adapters:   {
+			'ok': V2AdapterSpec{
+				kind:    'fixed-response'
+				options: {
+					'status': '200'
+					'body':   'ok'
+				}
+			}
+		}
+		transforms: {
+			'rewrite': V2TransformSpec{
+				kind:         'vjsx'
+				engine:       'engine:vjsx'
+				handler:      'rewrite.handle'
+				bool_options: {
+					'stateful': true
+				}
+				int_options:  {
+					'limit': 10
+				}
+				list_options: {
+					'stages': ['a', 'b']
+				}
+				map_options:  {
+					'labels': {
+						'app': 'demo'
+					}
+				}
+			}
+		}
+		engines:    {
+			'vjsx': V2EngineSpec{
+				kind:  'vjsx'
+				entry: '/tmp/rewrite.mts'
+			}
+		}
+		pipelines:  [
+			V2PipelineSpec{
+				id:         'app'
+				ingress:    'listener:web'
+				transforms: ['transform:rewrite']
+				egress:     'adapter:ok'
+			},
+		]
+	}
+	plan := compile_v2_runtime_plan(cfg, '', false) or { panic(err) }
+
+	assert plan.transforms['rewrite'].options.bools['stateful']
+	assert plan.transforms['rewrite'].options.ints['limit'] == 10
+	assert plan.transforms['rewrite'].options.string_lists['stages'] == ['a', 'b']
+	assert plan.transforms['rewrite'].options.string_maps['labels']['app'] == 'demo'
+}
+
 fn test_compile_v2_runtime_plan_rejects_unresolved_reference() {
 	cfg := V2Config{
 		listeners: {
