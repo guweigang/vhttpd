@@ -538,8 +538,7 @@ fn (mut app App) record_runtime_plan_replacement_apply(result RuntimePlanReplace
 	} else {
 		app.replacement.rejected_total++
 	}
-	app.replacement.last_apply = runtime_plan_replacement_attempt_from_preview('apply',
-		result.status, result.applied, result.error, result.drains, result.preview)
+	app.replacement.last_apply = runtime_plan_replacement_attempt_from_apply(result)
 }
 
 fn (mut app App) record_runtime_plan_replacement_finalize(result RuntimePlanReplacementFinalizeResult) {
@@ -643,6 +642,15 @@ fn runtime_plan_replacement_attempt_from_preview(kind string, status string, app
 		reload_transforms:   preview.reload_transforms
 		reload_relays:       preview.reload_relays
 		reasons:             preview.reasons
+	}
+}
+
+fn runtime_plan_replacement_attempt_from_apply(result RuntimePlanReplacementApplyResult) RuntimePlanReplacementAttemptSnapshot {
+	attempt := runtime_plan_replacement_attempt_from_preview('apply', result.status,
+		result.applied, result.error, result.drains, result.preview)
+	return RuntimePlanReplacementAttemptSnapshot{
+		...attempt
+		config_path: result.config_path
 	}
 }
 

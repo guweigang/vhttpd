@@ -509,6 +509,7 @@ fn test_internal_admin_runtime_plan_replacement_apply_rejects_when_pending_exist
 	assert state.rejected_total == 1
 	assert state.pending.active
 	assert state.pending.config_path == '/tmp/current-pending.toml'
+	assert state.last_apply.config_path == '/tmp/next.toml'
 	assert state.last_apply.error == 'runtime_plan_replacement_pending_exists'
 }
 
