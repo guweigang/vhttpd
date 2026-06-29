@@ -208,6 +208,26 @@ fn runtime_plan_diagnostic_codes(plan runtime_plan.RuntimePlan) string {
 	return codes.join(',')
 }
 
+fn (mut app App) emit_runtime_plan_replacement_finalize_rejected(result RuntimePlanReplacementFinalizeResult) {
+	app.emit('runtime.plan.replacement.finalize_rejected', {
+		'config_path':          result.config_path
+		'error':                result.error
+		'operation':            'finalize'
+		'replacement_strategy': result.strategy
+		'status':               result.status
+	})
+}
+
+fn (mut app App) emit_runtime_plan_replacement_cancel_rejected(result RuntimePlanReplacementCancelResult) {
+	app.emit('runtime.plan.replacement.cancel_rejected', {
+		'config_path':          result.pending.config_path
+		'error':                result.error
+		'operation':            'cancel'
+		'replacement_strategy': result.pending.strategy
+		'status':               result.status
+	})
+}
+
 fn (mut app App) apply_runtime_plan_replacement(config_path string) !RuntimePlanReplacementApplyResult {
 	normalized_path := config_path.trim_space()
 	if normalized_path == '' {
@@ -343,6 +363,7 @@ fn (mut app App) finalize_runtime_plan_replacement() RuntimePlanReplacementFinal
 			status:  'rejected'
 			error:   err.msg()
 		}
+		app.emit_runtime_plan_replacement_finalize_rejected(result)
 		app.record_runtime_plan_replacement_finalize(result)
 		return result
 	}
@@ -352,6 +373,7 @@ fn (mut app App) finalize_runtime_plan_replacement() RuntimePlanReplacementFinal
 			status:  'rejected'
 			error:   'runtime_plan_replacement_no_pending'
 		}
+		app.emit_runtime_plan_replacement_finalize_rejected(result)
 		app.record_runtime_plan_replacement_finalize(result)
 		return result
 	}
@@ -376,6 +398,7 @@ fn (mut app App) finalize_runtime_plan_replacement() RuntimePlanReplacementFinal
 			error:       err.msg()
 			pending:     pending
 		}
+		app.emit_runtime_plan_replacement_finalize_rejected(result)
 		app.record_runtime_plan_replacement_finalize(result)
 		return result
 	}
@@ -388,6 +411,7 @@ fn (mut app App) finalize_runtime_plan_replacement() RuntimePlanReplacementFinal
 			error:       err.msg()
 			pending:     pending
 		}
+		app.emit_runtime_plan_replacement_finalize_rejected(result)
 		app.record_runtime_plan_replacement_finalize(result)
 		return result
 	}
@@ -421,6 +445,7 @@ fn (mut app App) cancel_runtime_plan_replacement() RuntimePlanReplacementCancelR
 			status:    'rejected'
 			error:     'runtime_plan_replacement_no_pending'
 		}
+		app.emit_runtime_plan_replacement_cancel_rejected(result)
 		app.record_runtime_plan_replacement_cancel(result)
 		return result
 	}
@@ -434,6 +459,7 @@ fn (mut app App) cancel_runtime_plan_replacement() RuntimePlanReplacementCancelR
 				pending:   pending
 				resumed:   resumed
 			}
+			app.emit_runtime_plan_replacement_cancel_rejected(result)
 			app.record_runtime_plan_replacement_cancel(result)
 			return result
 		}
@@ -445,6 +471,7 @@ fn (mut app App) cancel_runtime_plan_replacement() RuntimePlanReplacementCancelR
 				pending:   pending
 				resumed:   resumed
 			}
+			app.emit_runtime_plan_replacement_cancel_rejected(result)
 			app.record_runtime_plan_replacement_cancel(result)
 			return result
 		}

@@ -1100,7 +1100,17 @@ fn test_internal_admin_runtime_plan_replacement_apply_rejects_when_pending_exist
 }
 
 fn test_internal_admin_runtime_plan_replacement_finalize_requires_pending() {
-	mut app := App{}
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_plan_replacement_finalize_no_pending_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	event_log := os.join_path(temp_dir, 'events.ndjson')
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	mut app := App{
+		control_plane: ControlPlaneRuntime{
+			event_log: event_log
+		}
+	}
 
 	resp := app.internal_admin_dispatch(admin.InternalAdminRequest{
 		mode:   'vhttpd_admin'
@@ -1119,10 +1129,24 @@ fn test_internal_admin_runtime_plan_replacement_finalize_requires_pending() {
 	assert state.last_finalize.kind == 'finalize'
 	assert state.last_finalize.status == 'rejected'
 	assert state.last_finalize.error == 'runtime_plan_replacement_no_pending'
+	event_log_text := os.read_file(event_log) or { panic(err) }
+	assert event_log_text.contains('"type":"runtime.plan.replacement.finalize_rejected"')
+	assert event_log_text.contains('"operation":"finalize"')
+	assert event_log_text.contains('"error":"runtime_plan_replacement_no_pending"')
 }
 
 fn test_internal_admin_runtime_plan_replacement_cancel_requires_pending() {
-	mut app := App{}
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_plan_replacement_cancel_no_pending_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	event_log := os.join_path(temp_dir, 'events.ndjson')
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	mut app := App{
+		control_plane: ControlPlaneRuntime{
+			event_log: event_log
+		}
+	}
 
 	resp := app.internal_admin_dispatch(admin.InternalAdminRequest{
 		mode:   'vhttpd_admin'
@@ -1141,6 +1165,10 @@ fn test_internal_admin_runtime_plan_replacement_cancel_requires_pending() {
 	assert state.last_cancel.kind == 'cancel'
 	assert state.last_cancel.status == 'rejected'
 	assert state.last_cancel.error == 'runtime_plan_replacement_no_pending'
+	event_log_text := os.read_file(event_log) or { panic(err) }
+	assert event_log_text.contains('"type":"runtime.plan.replacement.cancel_rejected"')
+	assert event_log_text.contains('"operation":"cancel"')
+	assert event_log_text.contains('"error":"runtime_plan_replacement_no_pending"')
 }
 
 fn test_internal_admin_runtime_plan_replacement_cancel_resumes_pending_workers() {
