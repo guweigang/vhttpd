@@ -1172,8 +1172,14 @@ fn test_internal_admin_runtime_plan_replacement_cancel_requires_pending() {
 }
 
 fn test_internal_admin_runtime_plan_replacement_cancel_resumes_pending_workers() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_plan_replacement_cancel_success_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	event_log := os.join_path(temp_dir, 'events.ndjson')
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
 	mut app := App{
-		replacement: RuntimePlanReplacementRuntime{
+		replacement:   RuntimePlanReplacementRuntime{
 			pending: RuntimePlanReplacementPendingSnapshot{
 				active:        true
 				config_path:   '/tmp/next.toml'
@@ -1182,7 +1188,7 @@ fn test_internal_admin_runtime_plan_replacement_cancel_resumes_pending_workers()
 				drain_engines: ['app']
 			}
 		}
-		engines:     EngineRuntime{
+		engines:       EngineRuntime{
 			primary: worker.WorkerState{
 				worker_backend: worker.WorkerBackendRuntime{
 					managed_workers: [
@@ -1195,6 +1201,9 @@ fn test_internal_admin_runtime_plan_replacement_cancel_resumes_pending_workers()
 				}
 				logic_executor: executor.SocketWorkerExecutor{}
 			}
+		}
+		control_plane: ControlPlaneRuntime{
+			event_log: event_log
 		}
 	}
 
@@ -1218,6 +1227,11 @@ fn test_internal_admin_runtime_plan_replacement_cancel_resumes_pending_workers()
 	assert state.last_cancel.status == 'cancelled'
 	assert state.last_cancel.drain_statuses.len == 1
 	assert state.last_cancel.drain_statuses[0].changed
+	event_log_text := os.read_file(event_log) or { panic(err) }
+	assert event_log_text.contains('"type":"runtime.plan.replacement.cancelled"')
+	assert event_log_text.contains('"config_path":"/tmp/next.toml"')
+	assert event_log_text.contains('"replacement_strategy":"engine_drain_required"')
+	assert event_log_text.contains('"drain_engines":"app"')
 }
 
 fn test_internal_admin_runtime_plan_replacement_finalize_waits_for_drain() {
@@ -1270,6 +1284,7 @@ fn test_internal_admin_runtime_plan_replacement_finalize_applies_ready_engine_ru
 	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_plan_replacement_finalize_engine_test')
 	os.mkdir_all(temp_dir) or { panic(err) }
 	config_file := os.join_path(temp_dir, 'next.toml')
+	event_log := os.join_path(temp_dir, 'events.ndjson')
 	next_entry := os.join_path(temp_dir, 'app-next.php')
 	os.write_file(next_entry, '<?php echo "next";') or { panic(err) }
 	os.write_file(config_file, '
@@ -1337,6 +1352,9 @@ egress = "adapter:app"
 				logic_executor: executor.SocketWorkerExecutor{}
 			}
 		}
+		control_plane: ControlPlaneRuntime{
+			event_log: event_log
+		}
 	}
 
 	resp := app.internal_admin_dispatch(admin.InternalAdminRequest{
@@ -1363,6 +1381,12 @@ egress = "adapter:app"
 	assert state.last_finalize.status == 'applied'
 	assert state.last_finalize.applied
 	assert state.last_finalize.drain_statuses[0].ready_count == 1
+	event_log_text := os.read_file(event_log) or { panic(err) }
+	assert event_log_text.contains('"type":"runtime.plan.replaced"')
+	assert event_log_text.contains('"config_path":"${config_file}"')
+	assert event_log_text.contains('"replacement_strategy":"engine_drain_required"')
+	assert event_log_text.contains('"drain_engines":"app"')
+	assert event_log_text.contains('"diagnostics_count":"')
 }
 
 fn test_internal_admin_runtime_plan_replacement_finalize_rejects_changed_pending_config() {
