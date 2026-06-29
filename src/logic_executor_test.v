@@ -63,6 +63,26 @@ fn test_app_facade_returns_env_for_named_executor_pool() {
 	}
 }
 
+fn test_plan_engine_ids_resolve_to_worker_pools() {
+	app := App{
+		engines: EngineRuntime{
+			primary:    worker.WorkerState{
+				logic_executor: executor.SocketWorkerExecutor{}
+			}
+			additional: {
+				'php-cgi': &worker.WorkerState{
+					logic_executor: executor.PhpCgiExecutor{}
+				}
+			}
+		}
+	}
+
+	assert app.resolve_engine_worker_pool('php') == ''
+	assert app.resolve_engine_worker_pool('site/php') == ''
+	assert app.resolve_engine_worker_pool('php-cgi') == 'php-cgi'
+	assert app.resolve_engine_worker_pool('site/php-cgi') == 'php-cgi'
+}
+
 fn test_logic_executor_can_hold_inproc_vjsx_executor() {
 	mut logic_executor := executor.LogicExecutor(new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
 		thread_count: 1
