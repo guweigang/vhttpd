@@ -51,6 +51,8 @@ pub:
 	config_path         string
 	strategy            string
 	ready               bool
+	created_at_unix     i64
+	updated_at_unix     i64
 	drain_statuses      []EngineDrainStatus
 	changed_pipelines   []string
 	unchanged_pipelines []string
@@ -491,6 +493,7 @@ fn (mut app App) record_runtime_plan_replacement_preview(preview RuntimePlanRepl
 }
 
 fn (mut app App) record_runtime_plan_replacement_apply(result RuntimePlanReplacementApplyResult) {
+	now := time.now().unix()
 	app.mu.@lock()
 	defer {
 		app.mu.unlock()
@@ -506,6 +509,8 @@ fn (mut app App) record_runtime_plan_replacement_apply(result RuntimePlanReplace
 			config_path:         result.config_path
 			strategy:            result.strategy
 			ready:               result.status == 'drain_ready'
+			created_at_unix:     now
+			updated_at_unix:     now
 			drain_statuses:      result.drains
 			changed_pipelines:   result.preview.changed_pipelines
 			unchanged_pipelines: result.preview.unchanged_pipelines
@@ -591,8 +596,9 @@ fn (mut app App) refresh_pending_runtime_plan_replacement() !RuntimePlanReplacem
 	ready := drain_statuses_ready(drain_statuses)
 	updated := RuntimePlanReplacementPendingSnapshot{
 		...pending
-		ready:          ready
-		drain_statuses: drain_statuses
+		ready:           ready
+		updated_at_unix: time.now().unix()
+		drain_statuses:  drain_statuses
 	}
 	app.mu.@lock()
 	app.replacement.pending = updated

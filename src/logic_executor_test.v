@@ -373,6 +373,8 @@ egress = "adapter:app"
 	assert state.pending.active
 	assert state.pending.config_path == config_file
 	assert !state.pending.ready
+	assert state.pending.created_at_unix > 0
+	assert state.pending.updated_at_unix >= state.pending.created_at_unix
 	assert state.pending.drain_statuses.len == 1
 	assert state.last_apply.status == 'draining'
 	assert state.last_apply.strategy == 'engine_drain_required'
@@ -454,6 +456,8 @@ egress = "adapter:app"
 
 	assert state.pending.active
 	assert state.pending.ready
+	assert state.pending.created_at_unix > 0
+	assert state.pending.updated_at_unix >= state.pending.created_at_unix
 	assert state.pending.drain_statuses.len == 1
 	assert state.pending.drain_statuses[0].ready_count == 1
 	assert state.pending.drain_statuses[0].inflight_requests == 0
@@ -880,6 +884,8 @@ egress = "adapter:app"
 	state := app.runtime_plan_replacement_snapshot()
 	assert state.pending.active
 	assert state.pending.ready
+	assert state.pending.created_at_unix > 0
+	assert state.pending.updated_at_unix >= state.pending.created_at_unix
 	assert state.pending.drain_statuses[0].ready_count == 1
 }
 
