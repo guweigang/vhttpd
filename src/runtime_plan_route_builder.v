@@ -24,6 +24,41 @@ fn runtime_routes_from_plan(plan runtime_plan.RuntimePlan, listener_id string) [
 	return routes
 }
 
+fn runtime_route_projection_diagnostics(plan runtime_plan.RuntimePlan, listener_id string) []runtime_plan.PlanDiagnostic {
+	mut diagnostics := []runtime_plan.PlanDiagnostic{}
+	for pipeline in plan.pipelines {
+		if pipeline.ingress.domain != .listener || pipeline.ingress.id != listener_id {
+			continue
+		}
+		if pipeline.id.ends_with('_fallback') || pipeline.id.ends_with('_assets') {
+			continue
+		}
+		route := runtime_route_from_pipeline(plan, pipeline) or {
+			diagnostics << runtime_plan.PlanDiagnostic{
+				severity: 'warning'
+				code:     'runtime_route_projection_failed'
+				path:     'pipelines.${pipeline.id}'
+				message:  'pipeline ${pipeline.id} cannot be projected to an HTTP runtime route'
+			}
+			continue
+		}
+		if route.executor in ['mcp', 'openai'] {
+			continue
+		}
+		if route.match_path_regexp != '' {
+			regex.regex_opt(route.match_path_regexp) or {
+				diagnostics << runtime_plan.PlanDiagnostic{
+					severity: 'error'
+					code:     'runtime_route_invalid_path_regexp'
+					path:     'pipelines.${pipeline.id}.match.path_regexp'
+					message:  'pipeline ${pipeline.id} has invalid path regexp: ${err.msg()}'
+				}
+			}
+		}
+	}
+	return diagnostics
+}
+
 fn runtime_route_from_pipeline(plan runtime_plan.RuntimePlan, pipeline runtime_plan.PipelinePlan) ?RuntimeRouteRule {
 	mut route := RuntimeRouteRule{
 		pipeline_id:       pipeline.id

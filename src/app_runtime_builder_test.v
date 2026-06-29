@@ -264,3 +264,53 @@ fn test_build_app_runtime_records_relay_runtime_diagnostics() {
 	assert app.plan.diagnostics.any(it.code == 'relay_runtime_failed')
 	assert app.protocols.runtime_plan_json.contains('"relay_runtime_failed"')
 }
+
+fn test_build_app_runtime_records_route_projection_diagnostics() {
+	plan := runtime_plan.RuntimePlan{
+		listeners: {
+			'web': runtime_plan.ListenerPlan{
+				id:       'web'
+				protocol: 'http'
+			}
+		}
+		adapters:  {
+			'hello': runtime_plan.AdapterPlan{
+				id:      'hello'
+				kind:    'fixed-response'
+				options: runtime_plan.PlanOptions{
+					strings: {
+						'status': '200'
+						'body':   'ok'
+					}
+				}
+			}
+		}
+		pipelines: [
+			runtime_plan.PipelinePlan{
+				id:      'site/bad-regexp'
+				ingress: runtime_plan.ResourceRef{
+					domain: .listener
+					id:     'web'
+				}
+				match:   runtime_plan.MatchPlan{
+					path_regexp: '('
+				}
+				egress:  runtime_plan.ResourceRef{
+					domain: .adapter
+					id:     'hello'
+				}
+			},
+		]
+	}
+	cfg := config.default_vhttpd_config()
+	executor_plan := executor.LogicExecutorRuntimePlan.resolve_from_plan([]string{}, cfg, plan,
+		'web') or { panic(err) }
+	app := build_app_runtime(provider.ProviderRuntimeSettings{}, executor_plan, cfg, plan, server_lifecycle.AppRuntimeBuildConfig{
+		plan_listener_id: 'web'
+	})
+
+	assert app.pipelines.http.rules.len == 0
+	assert app.plan.diagnostics.any(it.code == 'runtime_route_invalid_path_regexp'
+		&& it.path == 'pipelines.site/bad-regexp.match.path_regexp')
+	assert app.protocols.runtime_plan_json.contains('"runtime_route_invalid_path_regexp"')
+}

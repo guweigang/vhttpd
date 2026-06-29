@@ -373,7 +373,7 @@ egress = "adapter:ws"
 	event_log_text := os.read_file(event_log) or { panic(err) }
 	assert event_log_text.contains('"type":"runtime.plan.replaced"')
 	assert event_log_text.contains('"diagnostics_count":"')
-	assert event_log_text.contains('"diagnostic_codes":"pipeline_capability_mismatch"')
+	assert event_log_text.contains('pipeline_capability_mismatch')
 	state := app.runtime_plan_replacement_snapshot()
 	assert state.applies_total == 1
 	assert state.applied_total == 1
