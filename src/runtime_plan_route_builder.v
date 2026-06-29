@@ -53,6 +53,10 @@ fn runtime_route_projection_diagnostics(plan runtime_plan.RuntimePlan, listener_
 				}
 			}
 		}
+		if diagnostic := runtime_route_projection_preflight_diagnostic(plan, pipeline) {
+			diagnostics << diagnostic
+			continue
+		}
 		route := runtime_route_from_pipeline(plan, pipeline) or {
 			diagnostics << runtime_plan.PlanDiagnostic{
 				severity: 'warning'
@@ -77,6 +81,38 @@ fn runtime_route_projection_diagnostics(plan runtime_plan.RuntimePlan, listener_
 		}
 	}
 	return diagnostics
+}
+
+fn runtime_route_projection_preflight_diagnostic(plan runtime_plan.RuntimePlan, pipeline runtime_plan.PipelinePlan) ?runtime_plan.PlanDiagnostic {
+	if pipeline.egress.domain == .terminal {
+		return none
+	}
+	if pipeline.egress.domain != .adapter {
+		return runtime_plan.PlanDiagnostic{
+			severity: 'error'
+			code:     'runtime_route_unsupported_egress'
+			path:     'pipelines.${pipeline.id}.egress'
+			message:  'pipeline ${pipeline.id} cannot be projected to an HTTP runtime route from egress ${pipeline.egress.str()}'
+		}
+	}
+	adapter := plan.adapters[pipeline.egress.id] or {
+		return runtime_plan.PlanDiagnostic{
+			severity: 'error'
+			code:     'runtime_route_missing_adapter'
+			path:     'pipelines.${pipeline.id}.egress'
+			message:  'pipeline ${pipeline.id} references missing adapter ${pipeline.egress.str()}'
+		}
+	}
+	if adapter.kind !in ['http-handler', 'static', 'upload', 'fixed-response', 'relay-delivery',
+		'mcp', 'openai'] {
+		return runtime_plan.PlanDiagnostic{
+			severity: 'warning'
+			code:     'runtime_route_unsupported_adapter'
+			path:     'adapters.${adapter.id}'
+			message:  'adapter ${adapter.id} with kind ${adapter.kind} cannot be projected to an HTTP runtime route'
+		}
+	}
+	return none
 }
 
 fn runtime_route_from_pipeline(plan runtime_plan.RuntimePlan, pipeline runtime_plan.PipelinePlan) ?RuntimeRouteRule {

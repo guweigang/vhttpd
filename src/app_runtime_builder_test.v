@@ -378,3 +378,74 @@ fn test_build_app_runtime_records_missing_route_reference_diagnostics() {
 	assert app.protocols.runtime_plan_json.contains('"runtime_route_missing_transform"')
 	assert app.protocols.runtime_plan_json.contains('"runtime_route_missing_policy"')
 }
+
+fn test_build_app_runtime_records_route_preflight_diagnostics() {
+	plan := runtime_plan.RuntimePlan{
+		listeners: {
+			'web': runtime_plan.ListenerPlan{
+				id:       'web'
+				protocol: 'http'
+			}
+		}
+		adapters:  {
+			'ws': runtime_plan.AdapterPlan{
+				id:   'ws'
+				kind: 'websocket'
+			}
+		}
+		pipelines: [
+			runtime_plan.PipelinePlan{
+				id:      'site/missing-adapter'
+				ingress: runtime_plan.ResourceRef{
+					domain: .listener
+					id:     'web'
+				}
+				egress:  runtime_plan.ResourceRef{
+					domain: .adapter
+					id:     'missing'
+				}
+			},
+			runtime_plan.PipelinePlan{
+				id:      'site/resource-egress'
+				ingress: runtime_plan.ResourceRef{
+					domain: .listener
+					id:     'web'
+				}
+				egress:  runtime_plan.ResourceRef{
+					domain: .resource
+					id:     'cache'
+				}
+			},
+			runtime_plan.PipelinePlan{
+				id:      'site/ws-adapter'
+				ingress: runtime_plan.ResourceRef{
+					domain: .listener
+					id:     'web'
+				}
+				egress:  runtime_plan.ResourceRef{
+					domain: .adapter
+					id:     'ws'
+				}
+			},
+		]
+	}
+	cfg := config.default_vhttpd_config()
+	executor_plan := executor.LogicExecutorRuntimePlan.resolve_from_plan([]string{}, cfg, plan,
+		'web') or { panic(err) }
+	app := build_app_runtime(provider.ProviderRuntimeSettings{}, executor_plan, cfg, plan, server_lifecycle.AppRuntimeBuildConfig{
+		plan_listener_id: 'web'
+	})
+
+	assert app.pipelines.http.rules.len == 0
+	assert app.plan.diagnostics.any(it.code == 'runtime_route_missing_adapter'
+		&& it.path == 'pipelines.site/missing-adapter.egress'
+		&& it.message.contains('adapter:missing'))
+	assert app.plan.diagnostics.any(it.code == 'runtime_route_unsupported_egress'
+		&& it.path == 'pipelines.site/resource-egress.egress'
+		&& it.message.contains('resource:cache'))
+	assert app.plan.diagnostics.any(it.code == 'runtime_route_unsupported_adapter'
+		&& it.path == 'adapters.ws' && it.message.contains('websocket'))
+	assert app.protocols.runtime_plan_json.contains('"runtime_route_missing_adapter"')
+	assert app.protocols.runtime_plan_json.contains('"runtime_route_unsupported_egress"')
+	assert app.protocols.runtime_plan_json.contains('"runtime_route_unsupported_adapter"')
+}
