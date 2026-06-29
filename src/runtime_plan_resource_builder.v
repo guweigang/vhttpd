@@ -5,7 +5,7 @@ import dbx
 import provider
 import runtime_plan
 
-fn transport_runtime_hub_from_plan(plan runtime_plan.RuntimePlan, listener_id string) TransportRuntimeHub {
+fn TransportRuntimeHub.from_plan(plan runtime_plan.RuntimePlan, listener_id string) TransportRuntimeHub {
 	db_settings := db_runtime_settings_from_plan(plan, listener_id)
 	cache_enabled, cache_socket := cache_runtime_settings_from_plan(plan, listener_id)
 	return TransportRuntimeHub{

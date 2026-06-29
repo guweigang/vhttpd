@@ -14,7 +14,7 @@ struct ProtocolRuntimePlanUpdate {
 	openai            openai.OpenaiState
 }
 
-fn protocol_runtime_hub_from_plan(cfg config.VhttpdConfig, plan runtime_plan.RuntimePlan, listener_id string) ProtocolRuntimeHub {
+fn ProtocolRuntimeHub.from_plan(cfg config.VhttpdConfig, plan runtime_plan.RuntimePlan, listener_id string) ProtocolRuntimeHub {
 	plugin_configs := plugin_configs_from_plan(plan)
 	update := protocol_runtime_plan_update_from_plan(plan, listener_id)
 	return ProtocolRuntimeHub{

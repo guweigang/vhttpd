@@ -4,7 +4,7 @@ import codex
 import feishu
 import provider
 
-fn provider_runtime_hub_from_settings(settings provider.ProviderRuntimeSettings) ProviderRuntimeHub {
+fn ProviderRuntimeHub.new(settings provider.ProviderRuntimeSettings) ProviderRuntimeHub {
 	return ProviderRuntimeHub{
 		registry:  ProviderHost{
 			registry: map[string]Provider{}

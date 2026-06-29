@@ -64,7 +64,7 @@ fn test_refactor_contract_app_runtime_builder_does_not_construct_provider_specif
 	assert !source.contains('import feishu')
 	assert !source.contains('codex.CodexState')
 	assert !source.contains('feishu.FeishuState')
-	assert source.contains('provider_runtime_hub_from_settings(plan_provider_settings)')
+	assert source.contains('ProviderRuntimeHub.new(plan_provider_settings)')
 }
 
 fn test_refactor_contract_app_runtime_builder_uses_runtime_hub_builders() {
@@ -77,8 +77,8 @@ fn test_refactor_contract_app_runtime_builder_uses_runtime_hub_builders() {
 	assert !source.contains('import time')
 	assert !source.contains('ProtocolRuntimeHub{')
 	assert !source.contains('TransportRuntimeHub{')
-	assert source.contains('protocol_runtime_hub_from_plan(cfg, runtime_plan_for_app, plan_listener_id)')
-	assert source.contains('transport_runtime_hub_from_plan(runtime_plan_for_app, plan_listener_id)')
+	assert source.contains('ProtocolRuntimeHub.from_plan(cfg, runtime_plan_for_app, plan_listener_id)')
+	assert source.contains('TransportRuntimeHub.from_plan(runtime_plan_for_app, plan_listener_id)')
 	assert source.contains('ControlPlaneRuntime.new(build_cfg)')
 	assert source.contains('ProcessLifecycle.started_now()')
 	assert source.contains('config.AssetsRuntime.new(')

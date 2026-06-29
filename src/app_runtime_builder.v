@@ -41,14 +41,14 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 		lifecycle:     ProcessLifecycle.started_now()
 		assets:        config.AssetsRuntime.new(build_cfg.assets_enabled, build_cfg.assets_prefix,
 			build_cfg.assets_root, build_cfg.assets_root_real, build_cfg.assets_cache_control)
-		protocols:     protocol_runtime_hub_from_plan(cfg, runtime_plan_for_app, plan_listener_id)
-		transport:     transport_runtime_hub_from_plan(runtime_plan_for_app, plan_listener_id)
+		protocols:     ProtocolRuntimeHub.from_plan(cfg, runtime_plan_for_app, plan_listener_id)
+		transport:     TransportRuntimeHub.from_plan(runtime_plan_for_app, plan_listener_id)
 		websocket:     WebSocketRuntime.new(executor_plan.bootstrap.websocket_dispatch_mode)
 		upstreams:     UpstreamRuntimeRegistry.new()
 		relay:         relay_build.runtime
 		transformers:  TransformerRuntimeHub.from_plan(runtime_plan_for_app)
 		engines:       engine_runtime
-		providers:     provider_runtime_hub_from_settings(plan_provider_settings)
+		providers:     ProviderRuntimeHub.new(plan_provider_settings)
 		pipelines:     PipelineRuntime.new(runtime_plan_for_app, plan_listener_id, runtime_routes,
 			build_cfg.assets_root_real, build_cfg.workdir, executor_plan.bootstrap.worker_env,
 			engine_runtime.additional)
