@@ -542,18 +542,13 @@ fn (mut app App) apply_prepared_runtime_plan_replacement(mut prepared RuntimePla
 	}
 	mut old_engines := app.engines
 	old_primary_lifecycle := engine_primary_lifecycle_or_disabled(old_engines)
-	updated_pipelines := PipelineRuntime.new(prepared.plan, prepared.listener, prepared.routes,
-		app.assets.root_real, app.pipelines.http.worker_root,
+	projection := RuntimePlanRuntimeProjection.from_plan(prepared.plan, prepared.listener,
+		prepared.routes, app.assets.root_real, app.pipelines.http.worker_root,
 		next_engines.primary.worker_backend.env.clone(), next_engines.additional.clone())
-	updated_transformers := TransformerRuntimeHub.from_plan(prepared.plan)
-	protocol_update := protocol_runtime_plan_update_from_plan(prepared.plan, prepared.listener)
 
 	app.mu.@lock()
-	app.plan = prepared.plan
 	app.engines = next_engines
-	app.pipelines = updated_pipelines
-	app.transformers = updated_transformers
-	app.protocols.apply_plan_update(protocol_update)
+	app.apply_runtime_plan_runtime_projection(prepared.plan, projection)
 	app.replacement.pending = RuntimePlanReplacementPendingSnapshot{}
 	app.mu.unlock()
 
@@ -600,19 +595,14 @@ fn (mut app App) apply_lightweight_runtime_plan(next_plan_raw runtime_plan.Runti
 		next_plan_raw, listener_id, routes, app.app_build_cfg)
 	primary_env := app.engines.primary.worker_backend.env.clone()
 	additional_workers := app.engines.additional.clone()
-	updated_pipelines := PipelineRuntime.new(next_plan, listener_id, routes, app.assets.root_real,
-		app.pipelines.http.worker_root, primary_env, additional_workers)
-	updated_transformers := TransformerRuntimeHub.from_plan(next_plan)
-	protocol_update := protocol_runtime_plan_update_from_plan(next_plan, listener_id)
+	projection := RuntimePlanRuntimeProjection.from_plan(next_plan, listener_id, routes,
+		app.assets.root_real, app.pipelines.http.worker_root, primary_env, additional_workers)
 
 	app.mu.@lock()
 	defer {
 		app.mu.unlock()
 	}
-	app.plan = next_plan
-	app.pipelines = updated_pipelines
-	app.transformers = updated_transformers
-	app.protocols.apply_plan_update(protocol_update)
+	app.apply_runtime_plan_runtime_projection(next_plan, projection)
 }
 
 fn (mut app App) record_runtime_plan_replacement_preview(preview RuntimePlanReplacementPreview) {
