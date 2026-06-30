@@ -54,6 +54,8 @@ Progress markers:
 
 Purpose: prove compatibility paths still work while v2 adoption is rolling out.
 
+Progress: Partial. `tests/e2e/config_acceptance_test.sh` now starts a generated v1 config, serves a vjsx request, and verifies `server.started`. Compatibility-only fallback documentation is still pending.
+
 Checks:
 
 - Start one legacy/v1 config successfully.
@@ -70,6 +72,8 @@ Acceptance signal:
 ### 2. V2 Simple Site Smoke
 
 Purpose: prove the new config model works without compatibility fallback.
+
+Progress: Partial. `tests/e2e/config_acceptance_test.sh` now starts a generated v2 config and verifies basic pipeline dispatch plus trace-id propagation. Missing-reference diagnostics and example-style audit are still pending.
 
 Checks:
 
@@ -90,6 +94,8 @@ Acceptance signal:
 
 Purpose: validate the real showcase workload against v2 config and runtime boundaries.
 
+Progress: Pending.
+
 Checks:
 
 - Start the WordPress example using v2 config.
@@ -109,6 +115,8 @@ Acceptance signal:
 
 Purpose: prove pipeline is the site-level composition unit and multiple sites bind correctly.
 
+Progress: Pending.
+
 Checks:
 
 - Start one vhttpd process with two listeners or site bindings.
@@ -126,6 +134,8 @@ Acceptance signal:
 ### 5. Relay Smoke
 
 Purpose: prove configured relay works in a real two-process topology.
+
+Progress: Partial. `tests/e2e/config_acceptance_test.sh` now starts public relay and local agent processes, then verifies a request reaches the local agent and returns. Reconnect, backpressure, and admin snapshot checks are still pending.
 
 Checks:
 
@@ -146,6 +156,8 @@ Acceptance signal:
 
 Purpose: prove transforms are configurable protocol/runtime units, not hardcoded paths.
 
+Progress: Pending.
+
 Checks:
 
 - Configure HTTP/WebSocket or relay ingress through a transform pipeline.
@@ -163,6 +175,8 @@ Acceptance signal:
 ### 7. Event and Upload Completion Pipeline Smoke
 
 Purpose: prove non-request/response ingress paths use the same pipeline model.
+
+Progress: Partial. PHP worker stream-dispatch now has unit coverage and `tests/e2e/config_acceptance_test.sh` verifies SSE through worker `open`/`next`. Upload-completed and generic event ingress smoke are still pending.
 
 Checks:
 
@@ -182,6 +196,8 @@ Acceptance signal:
 
 Purpose: prove runtime providers and worker dispatch behave under real startup/load conditions.
 
+Progress: Pending.
+
 Checks:
 
 - Run real provider startup with configured Codex, Feishu, and DB/cache where available.
@@ -200,6 +216,8 @@ Acceptance signal:
 
 Purpose: prove the runtime is inspectable as a generic gateway.
 
+Progress: Pending.
+
 Checks:
 
 - For every smoke scenario above, confirm logs/events include `trace_id`.
@@ -215,6 +233,8 @@ Acceptance signal:
 ### 10. Boundary and Documentation Cleanup
 
 Purpose: prevent the refactor from regressing into App-level or product-specific coupling.
+
+Progress: Pending.
 
 Checks:
 
