@@ -310,6 +310,26 @@ pub mut:
 
 // ── App-level Feishu State ──
 
+pub struct BridgeSettings {
+pub:
+	enabled   bool
+	ws_url    string
+	client_id string
+	token     string
+	target_id string
+}
+
+pub struct StateSettings {
+pub:
+	enabled                    bool
+	open_base_url              string
+	reconnect_delay_ms         int
+	token_refresh_skew_seconds int
+	recent_event_limit         int
+	apps                       map[string]config.FeishuAppConfig
+	bridge                     BridgeSettings
+}
+
 pub struct FeishuState {
 pub mut:
 	mu                         sync.Mutex
@@ -342,4 +362,23 @@ pub mut:
 	card_bridge_client_id     string
 	card_bridge_token         string
 	card_bridge_target_id     string
+}
+
+pub fn FeishuState.new(settings StateSettings) FeishuState {
+	return FeishuState{
+		enabled:                    settings.enabled
+		open_base_url:              settings.open_base_url
+		reconnect_delay_ms:         settings.reconnect_delay_ms
+		token_refresh_skew_seconds: settings.token_refresh_skew_seconds
+		recent_event_limit:         settings.recent_event_limit
+		static_apps:                settings.apps.clone()
+		apps:                       settings.apps.clone()
+		runtime:                    map[string]ProviderRuntime{}
+		buffers:                    map[string]StreamBuffer{}
+		card_bridge_enabled_flag:   settings.bridge.enabled
+		card_bridge_ws_url:         settings.bridge.ws_url
+		card_bridge_client_id:      settings.bridge.client_id
+		card_bridge_token:          settings.bridge.token
+		card_bridge_target_id:      settings.bridge.target_id
+	}
 }

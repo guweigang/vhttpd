@@ -67,6 +67,17 @@ fn test_refactor_contract_app_runtime_builder_does_not_construct_provider_specif
 	assert source.contains('ProviderRuntimeHub.new(plan_provider_settings)')
 }
 
+fn test_refactor_contract_provider_runtime_builder_uses_provider_state_constructors() {
+	source := refactor_contract_source_file('provider_runtime_builder.v')
+	assert !source.contains('codex.CodexState{')
+	assert !source.contains('codex.ProviderRuntime{')
+	assert !source.contains('feishu.FeishuState{')
+	assert !source.contains('map[int]codex.PendingRpc{}')
+	assert !source.contains('map[string]feishu.ProviderRuntime{}')
+	assert source.contains('codex.CodexState.new(')
+	assert source.contains('feishu.FeishuState.new(')
+}
+
 fn test_refactor_contract_app_runtime_builder_uses_runtime_hub_builders() {
 	source := refactor_contract_source_file('app_runtime_builder.v')
 	assert !source.contains('import admin')

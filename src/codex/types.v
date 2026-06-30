@@ -68,16 +68,16 @@ pub:
 
 pub struct ProviderRuntime {
 pub mut:
-	instance            string
-	enabled             bool
-	url                 string
-	model               string
-	effort              string
-	cwd                 string
-	approval_policy     string
-	sandbox             string
-	reconnect_delay_ms  int
-	flush_interval_ms   int
+	instance                string
+	enabled                 bool
+	url                     string
+	model                   string
+	effort                  string
+	cwd                     string
+	approval_policy         string
+	sandbox                 string
+	reconnect_delay_ms      int
+	flush_interval_ms       int
 	connected               bool
 	ws_url                  string
 	last_connect_at_unix    i64
@@ -241,10 +241,51 @@ pub fn (rt &ProviderRuntime) state_view() RuntimeStateView {
 
 // ── Codex State ──
 
+pub struct RuntimeSettings {
+pub:
+	enabled            bool
+	url                string
+	model              string
+	effort             string
+	cwd                string
+	approval_policy    string
+	sandbox            string
+	reconnect_delay_ms int
+	flush_interval_ms  int
+	ollama_enabled     bool
+}
+
 pub struct CodexState {
 pub mut:
-	mu              sync.Mutex
-	runtime         ProviderRuntime
-	instances       map[string]ProviderRuntime
-	ollama_enabled  bool
+	mu             sync.Mutex
+	runtime        ProviderRuntime
+	instances      map[string]ProviderRuntime
+	ollama_enabled bool
+}
+
+pub fn CodexState.new(settings RuntimeSettings) CodexState {
+	return CodexState{
+		ollama_enabled: settings.ollama_enabled
+		runtime:        ProviderRuntime.new(settings)
+		instances:      map[string]ProviderRuntime{}
+	}
+}
+
+pub fn ProviderRuntime.new(settings RuntimeSettings) ProviderRuntime {
+	return ProviderRuntime{
+		enabled:             settings.enabled
+		url:                 settings.url
+		model:               settings.model
+		effort:              settings.effort
+		cwd:                 settings.cwd
+		approval_policy:     settings.approval_policy
+		sandbox:             settings.sandbox
+		reconnect_delay_ms:  settings.reconnect_delay_ms
+		flush_interval_ms:   settings.flush_interval_ms
+		pending_rpcs:        map[int]PendingRpc{}
+		stream_map:          map[string][]CodexTarget{}
+		err_bursts:          map[string][]string{}
+		err_pending_flushes: map[string]bool{}
+		thread_stream_map:   map[string]string{}
+	}
 }
