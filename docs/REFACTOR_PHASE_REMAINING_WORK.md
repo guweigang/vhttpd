@@ -17,7 +17,7 @@ This document records the remaining acceptance work after the v2 runtime/config 
 - Stage 7 runtime isolation and module closure: code-complete.
 - Automated test matrix: green as of 2026-06-30.
 - Product-level acceptance: in progress.
-- Completed acceptance slice: automated config smoke now covers V1 basic compatibility, V2 simple pipeline dispatch, multi-site listener/pipeline routing, relay happy path, and PHP worker stream-dispatch SSE.
+- Completed acceptance slice: automated config smoke now covers V1 basic compatibility, V2 simple pipeline dispatch, multi-site listener/pipeline routing, HTTP protocol transform dispatch through native/vjsx implementations, relay happy path, and PHP worker stream-dispatch SSE.
 
 Validated automated commands:
 
@@ -156,7 +156,7 @@ Acceptance signal:
 
 Purpose: prove transforms are configurable protocol/runtime units, not hardcoded paths.
 
-Progress: Pending.
+Progress: Partial. `tests/e2e/config_acceptance_test.sh` now validates the same HTTP `/convert` ingress through native and vjsx transform implementations by TOML-only selection. It also verifies vjsx transform failure status, `x-vhttpd-error-class`, and trace-id propagation. WebSocket/relay ingress and timeout/invalid-output failure cases are still pending.
 
 Checks:
 
@@ -216,7 +216,7 @@ Acceptance signal:
 
 Purpose: prove the runtime is inspectable as a generic gateway.
 
-Progress: Pending.
+Progress: Partial. The automated config smoke checks trace-id propagation across V2 HTTP dispatch, multi-site listener/pipeline routing, native/vjsx transform dispatch, relay, and PHP worker stream dispatch. Full admin snapshot verification is still pending.
 
 Checks:
 
