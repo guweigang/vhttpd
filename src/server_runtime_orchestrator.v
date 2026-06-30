@@ -54,7 +54,9 @@ fn start_server_runtime(mut app App, runtime_cfg server_lifecycle.ServerRuntimeC
 
 fn (mut lifecycle ProcessLifecycle) start(mut app App, runtime_cfg server_lifecycle.ServerRuntimeConfig) {
 	log.debug('[vhttpd] start_server_runtime: initializing app runtime site=${runtime_cfg.site_id}')
-	AppStartupHooks.initialize_runtime(mut app, runtime_cfg.internal_admin_socket)
+	TransportStartupRuntime.initialize(mut app, runtime_cfg.internal_admin_socket)
+	go InternalAdminRuntime.serve(mut app, runtime_cfg.internal_admin_socket)
+	ProviderStartupRuntime.initialize(mut app)
 	scheme := server_runtime_scheme(runtime_cfg)
 	lifecycle.data_plane_scheme = scheme
 	apply_runtime_scheme_to_worker_envs(mut app, scheme)
@@ -64,17 +66,23 @@ fn (mut lifecycle ProcessLifecycle) start(mut app App, runtime_cfg server_lifecy
 	app.engines.start(runtime_cfg.executor_plan.lifecycle, port, mut facade)
 
 	log.debug('[vhttpd] start_server_runtime: mounting assets')
-	AppStartupHooks.mount_assets(mut app)
+	AssetStartupRuntime.mount(mut app)
 	log.debug('[vhttpd] start_server_runtime: installing middleware')
-	AppStartupHooks.install_middleware(mut app)
-	AppStartupHooks.emit_server_started(mut app, scheme, runtime_cfg.host, runtime_cfg.port,
-		runtime_cfg.admin_enabled, runtime_cfg.admin_host, runtime_cfg.admin_port)
+	AssetStartupRuntime.install_middleware(mut app)
+	ControlPlaneStartupRuntime.emit_server_started(mut app, scheme, runtime_cfg.host,
+		runtime_cfg.port, runtime_cfg.admin_enabled, runtime_cfg.admin_host, runtime_cfg.admin_port)
 	log.debug('[vhttpd] start_server_runtime: starting admin plane')
-	AppStartupHooks.start_admin_plane(mut app, runtime_cfg.admin_enabled, runtime_cfg.admin_host,
-		runtime_cfg.admin_port, runtime_cfg.admin_token)
+	ControlPlaneStartupRuntime.start_admin_plane(mut app, runtime_cfg.admin_enabled,
+		runtime_cfg.admin_host, runtime_cfg.admin_port, runtime_cfg.admin_token)
 	log.debug('[vhttpd] start_server_runtime: starting upstream providers')
-	AppStartupHooks.start_upstream_providers(mut app)
-	AppStartupHooks.log_runtime_endpoints(app, scheme, runtime_cfg.host, runtime_cfg.port)
+	ProviderStartupRuntime.start_upstreams(mut app)
+	log_runtime_endpoints(app, scheme, runtime_cfg.host, runtime_cfg.port)
+}
+
+fn log_runtime_endpoints(app &App, scheme string, host string, port int) {
+	AssetStartupRuntime.log_endpoint(app)
+	TransportStartupRuntime.log_endpoints(app)
+	log.info('[vhttpd] Data Plane: ${scheme}://${host}:${port}/')
 }
 
 fn apply_runtime_scheme_to_worker_envs(mut app App, scheme string) {

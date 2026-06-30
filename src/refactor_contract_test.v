@@ -95,6 +95,20 @@ fn test_refactor_contract_app_runtime_builder_uses_runtime_hub_builders() {
 	assert source.contains('config.AssetsRuntime.new(')
 }
 
+fn test_refactor_contract_startup_runtime_is_split_by_domain() {
+	orchestrator := refactor_contract_source_file('server_runtime_orchestrator.v')
+	assert !os.exists(os.join_path(os.dir(@FILE), 'server_startup_hooks.v'))
+	for runtime_name in [
+		'TransportStartupRuntime.initialize(',
+		'ProviderStartupRuntime.initialize(',
+		'AssetStartupRuntime.mount(',
+		'ControlPlaneStartupRuntime.emit_server_started(',
+		'ProviderStartupRuntime.start_upstreams(',
+	] {
+		assert orchestrator.contains(runtime_name)
+	}
+}
+
 fn test_refactor_contract_runtime_plan_replacement_uses_runtime_builders() {
 	action_sources := [
 		refactor_contract_source_file('admin_runtime_plan_replacement_apply.v'),
