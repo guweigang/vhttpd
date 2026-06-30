@@ -44,6 +44,12 @@ The following refactor tracks are covered by code changes and automated tests:
 
 Run this checklist before declaring the whole refactor goal complete.
 
+Progress markers:
+
+- Completed: the acceptance item is covered by automated smoke and the remaining checks are either done or tracked elsewhere.
+- Partial: the first automated slice passes, but listed checks still remain.
+- Pending: no product-level smoke has passed yet.
+
 ### 1. V1 Compatibility Smoke
 
 Purpose: prove compatibility paths still work while v2 adoption is rolling out.
