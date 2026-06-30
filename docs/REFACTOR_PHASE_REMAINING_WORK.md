@@ -115,7 +115,7 @@ Acceptance signal:
 
 Purpose: prove pipeline is the site-level composition unit and multiple sites bind correctly.
 
-Progress: Pending.
+Progress: Partial. `tests/e2e/config_acceptance_test.sh` now starts one vhttpd process with two HTTP listeners, verifies each listener selects its own pipeline, checks `x-vhttpd-pipeline`, and confirms per-site trace IDs appear in the event log. Admin/runtime snapshot verification is still pending.
 
 Checks:
 
