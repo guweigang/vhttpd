@@ -17,7 +17,7 @@ This document records the remaining acceptance work after the v2 runtime/config 
 - Stage 7 runtime isolation and module closure: code-complete.
 - Automated test matrix: green as of 2026-06-30.
 - Product-level acceptance: in progress.
-- Completed acceptance slice: automated config smoke now covers V1 basic compatibility, V2 simple pipeline dispatch, relay happy path, and PHP worker stream-dispatch SSE.
+- Completed acceptance slice: automated config smoke now covers V1 basic compatibility, V2 simple pipeline dispatch, multi-site listener/pipeline routing, relay happy path, and PHP worker stream-dispatch SSE.
 
 Validated automated commands:
 
