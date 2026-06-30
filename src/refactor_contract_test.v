@@ -86,6 +86,7 @@ fn test_refactor_contract_app_runtime_builder_uses_runtime_hub_builders() {
 
 fn test_refactor_contract_runtime_plan_replacement_uses_runtime_builders() {
 	source := refactor_contract_source_file('admin_runtime_plan_replacement.v')
+	runtime_source := refactor_contract_source_file('admin_runtime_plan_replacement_runtime.v')
 	assert !source.contains('import json')
 	assert !source.contains('mcp_state_from_plan')
 	assert !source.contains('openai_state_from_plan')
@@ -96,6 +97,6 @@ fn test_refactor_contract_runtime_plan_replacement_uses_runtime_builders() {
 	assert !source.contains('TransformerRuntimeHub.from_plan(')
 	assert !source.contains('protocol_runtime_plan_update_from_plan(')
 	assert !source.contains('app.protocols.apply_plan_update(')
-	assert source.contains('RuntimePlanRuntimeProjection.from_plan(')
-	assert source.contains('app.apply_runtime_plan_runtime_projection(')
+	assert runtime_source.contains('RuntimePlanRuntimeProjection.from_plan(')
+	assert runtime_source.contains('app.apply_runtime_plan_runtime_projection(')
 }
