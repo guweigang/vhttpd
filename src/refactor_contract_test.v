@@ -85,18 +85,22 @@ fn test_refactor_contract_app_runtime_builder_uses_runtime_hub_builders() {
 }
 
 fn test_refactor_contract_runtime_plan_replacement_uses_runtime_builders() {
-	source := refactor_contract_source_file('admin_runtime_plan_replacement.v')
+	action_sources := [
+		refactor_contract_source_file('admin_runtime_plan_replacement_apply.v'),
+		refactor_contract_source_file('admin_runtime_plan_replacement_finalize.v'),
+		refactor_contract_source_file('admin_runtime_plan_replacement_cancel.v'),
+	].join('\n')
 	runtime_source := refactor_contract_source_file('admin_runtime_plan_replacement_runtime.v')
-	assert !source.contains('import json')
-	assert !source.contains('mcp_state_from_plan')
-	assert !source.contains('openai_state_from_plan')
-	assert !source.contains('app.protocols.runtime_plan_json =')
-	assert !source.contains('app.protocols.mcp =')
-	assert !source.contains('app.protocols.openai =')
-	assert !source.contains('PipelineRuntime.new(')
-	assert !source.contains('TransformerRuntimeHub.from_plan(')
-	assert !source.contains('protocol_runtime_plan_update_from_plan(')
-	assert !source.contains('app.protocols.apply_plan_update(')
+	assert !action_sources.contains('import json')
+	assert !action_sources.contains('mcp_state_from_plan')
+	assert !action_sources.contains('openai_state_from_plan')
+	assert !action_sources.contains('app.protocols.runtime_plan_json =')
+	assert !action_sources.contains('app.protocols.mcp =')
+	assert !action_sources.contains('app.protocols.openai =')
+	assert !action_sources.contains('PipelineRuntime.new(')
+	assert !action_sources.contains('TransformerRuntimeHub.from_plan(')
+	assert !action_sources.contains('protocol_runtime_plan_update_from_plan(')
+	assert !action_sources.contains('app.protocols.apply_plan_update(')
 	assert runtime_source.contains('RuntimePlanRuntimeProjection.from_plan(')
 	assert runtime_source.contains('app.apply_runtime_plan_runtime_projection(')
 }
