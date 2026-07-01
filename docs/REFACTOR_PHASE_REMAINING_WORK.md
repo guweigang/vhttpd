@@ -242,7 +242,7 @@ Acceptance signal:
 
 Purpose: prevent the refactor from regressing into App-level or product-specific coupling.
 
-Progress: Pending.
+Progress: Completed for the current refactor scope. `src/refactor_contract_test.v` passes and guards the key boundaries: generic runtime builders do not special-case WordPress, `app_runtime_builder.v` constructs runtime hubs through module-owned constructors, startup is split by domain runtime, runtime-plan replacement uses projection builders, and legacy upload/provider fallbacks are compatibility-only. Configuration concepts are documented in `docs/CONFIGURATION_MODEL_V2.md` and `docs/PROTOCOL_PIPELINE_RELAY_ARCHITECTURE.md`, including resources, listeners, adapters, transforms, relays, policies, pipelines, multi-site listener binding, and the rule that native V and VJSX transforms are interchangeable implementations behind the same pipeline boundary.
 
 Checks:
 
@@ -258,6 +258,7 @@ Acceptance signal:
 - `src/refactor_contract_test.v` passes.
 - Production code paths use runtime builders/hubs for construction and plan projection.
 - No new catch-all App hook or mixed runtime file replaces split modules.
+- Config concept docs describe entity resources separately from the site-level pipeline composition.
 
 ## Definition of Done
 
