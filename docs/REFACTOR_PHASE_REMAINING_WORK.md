@@ -17,7 +17,7 @@ This document records the remaining acceptance work after the v2 runtime/config 
 - Stage 7 runtime isolation and module closure: code-complete.
 - Automated test matrix: green as of 2026-07-01.
 - Product-level acceptance: in progress.
-- Completed acceptance slice: automated config smoke now covers V1 basic compatibility, V2 simple pipeline dispatch, V2 missing-reference diagnostics, multi-site listener/pipeline routing with admin plan visibility, HTTP protocol transform dispatch through native/vjsx implementations with transformer snapshots, relay happy path with runtime/admin visibility, V2 provider runtime/admin visibility for Codex and Feishu, provider instance add/update through admin APIs, DB/cache runtime snapshots on independent admin port plus data-plane admin modes, real PHP cache socket operations, upload-completed and generic event pipeline dispatch, PHP worker stream-dispatch SSE, and worker busy-state/admin queue visibility.
+- Completed acceptance slice: automated config smoke now covers V1 basic compatibility, V2 simple pipeline dispatch, V2 missing-reference diagnostics, multi-site listener/pipeline routing with admin plan visibility, WordPress V2 worker/static/security routing with response-cache cookie behavior, HTTP protocol transform dispatch through native/vjsx implementations with transformer snapshots, relay happy path with runtime/admin visibility, V2 provider runtime/admin visibility for Codex and Feishu, provider instance add/update through admin APIs, DB/cache runtime snapshots on independent admin port plus data-plane admin modes, real PHP cache socket operations, upload-completed and generic event pipeline dispatch, PHP worker stream-dispatch SSE, and worker busy-state/admin queue visibility.
 
 Validated automated commands:
 
@@ -55,13 +55,19 @@ Progress markers:
 
 Purpose: prove compatibility paths still work while v2 adoption is rolling out.
 
-Progress: Partial. `tests/e2e/config_acceptance_test.sh` now starts a generated v1 config, serves a vjsx request, and verifies `server.started`. Compatibility-only fallback documentation is still pending.
+Progress: Completed for the current smoke scope. `tests/e2e/config_acceptance_test.sh` now starts a generated v1 config, serves a vjsx request, and verifies `server.started`. Compatibility-only fallback ownership is documented below.
 
 Checks:
 
 - Start one legacy/v1 config successfully.
 - Serve a basic HTTP request.
 - Confirm compatibility-only fallbacks are documented with owner and removal condition.
+
+Compatibility fallback owner and removal condition:
+
+- Owner: `src/config/v1_plan_compat.v` owns legacy-to-V2 projection for `[worker]`, `[executor]`, `[[routes]]`, legacy assets, DB/cache, and upload-completed compatibility.
+- Boundary: runtime modules consume the compiled `RuntimePlan`; they must not branch on legacy config shape.
+- Removal condition: remove the fallback only after shipped examples and downstream deployments have migrated to `version = 2` resources/adapters/transforms/pipelines, and after a release note names the last supported legacy config version.
 
 Related stages: Stage 1, Stage 2.
 
@@ -96,11 +102,11 @@ Acceptance signal:
 
 Purpose: validate the real showcase workload against v2 config and runtime boundaries.
 
-Progress: Pending. WordPress-specific v2 smoke is not yet automated.
+Progress: Partial. `tests/e2e/config_acceptance_test.sh` now starts a generated WordPress-shaped V2 config against a temporary WordPress root, runs a real PHP worker through `examples/wordpress/app.php`, verifies `/meta` framework metadata and missing-`wp-config.php` install detection without DB, serves `wp-content` and `wp-includes` assets through static pipelines, applies asset cache-control, denies core PHP files through the security pipeline, verifies the front page reaches the worker redirect path, checks admin plan visibility for WordPress pipelines, preserves trace IDs for worker/static requests, and validates response-cache behavior for anonymous requests, `wordpress_test_cookie` ignore, and `wordpress_logged_in_*` bypass. Full installed WordPress/WooCommerce browser flows still need manual or environment-backed validation.
 
 Checks:
 
-- Start the WordPress example using v2 config.
+- Start the WordPress-shaped example using v2 config without requiring a real database.
 - Verify HTTPS scheme in PHP/worker-generated URLs.
 - Verify logged-in admin bar assets, static assets, cart, checkout, and REST API loopback.
 - Verify response cache headers and logged-in cookie bypass behavior.
@@ -110,7 +116,7 @@ Related stages: Stage 2, Stage 3, Stage 6, Stage 7.
 
 Acceptance signal:
 
-- WordPress pages and admin flows work under v2 config.
+- Generated WordPress V2 smoke passes, and installed WordPress pages/admin flows work under v2 config.
 - No generic vhttpd runtime module contains WordPress-specific compatibility logic.
 
 ### 4. Multi-Site Smoke
