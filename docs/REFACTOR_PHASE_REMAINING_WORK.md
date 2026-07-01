@@ -136,7 +136,7 @@ Acceptance signal:
 
 Purpose: prove configured relay works in a real two-process topology.
 
-Progress: Partial. `tests/e2e/config_acceptance_test.sh` now starts public relay and local agent processes, verifies a request reaches the local agent and returns, checks public relay runtime descriptor/carrier visibility, and checks the agent admin plan exposes the relay pipeline. Reconnect and backpressure checks are still pending.
+Progress: Partial. `tests/e2e/config_acceptance_test.sh` now starts public relay and local agent processes, verifies a request reaches the local agent and returns, checks public relay runtime descriptor/carrier visibility, and checks the agent admin plan exposes the relay pipeline. Agent restart/reconnect is now covered; backpressure checks under interrupted or slow local server are still pending.
 
 Checks:
 
