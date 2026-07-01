@@ -73,7 +73,7 @@ Acceptance signal:
 
 Purpose: prove the new config model works without compatibility fallback.
 
-Progress: Completed for the current smoke scope. `tests/e2e/config_acceptance_test.sh` now starts a generated v2 config and verifies basic pipeline dispatch plus trace-id propagation. It also verifies missing adapter, transform, listener, and resource references emit clear `runtime_plan_unresolved_ref` diagnostics. `src/config/runtime_plan_loader_test.v` also scans repository V2 example TOML files, rejects legacy v1-only sections such as `[worker]`, `[executor]`, and `[[routes]]`, and verifies the examples load without compatibility fallback.
+Progress: Completed for the current smoke scope. `tests/e2e/config_acceptance_test.sh` now starts a generated v2 config and verifies basic pipeline dispatch plus trace-id propagation. It also verifies missing adapter, transform, listener, and resource references fail startup with a non-zero CLI exit and emit clear `runtime_plan_unresolved_ref` diagnostics. `src/config/runtime_plan_loader_test.v` also scans repository V2 example TOML files, rejects legacy v1-only sections such as `[worker]`, `[executor]`, and `[[routes]]`, and verifies the examples load without compatibility fallback.
 
 Checks:
 
