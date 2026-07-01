@@ -6,7 +6,7 @@ tags:
   - v2-config
   - validation
 status: draft
-updated: 2026-06-30
+updated: 2026-07-01
 ---
 # Refactor Phase Remaining Work
 
@@ -15,9 +15,9 @@ This document records the remaining acceptance work after the v2 runtime/config 
 ## Current Status
 
 - Stage 7 runtime isolation and module closure: code-complete.
-- Automated test matrix: green as of 2026-06-30.
+- Automated test matrix: green as of 2026-07-01.
 - Product-level acceptance: in progress.
-- Completed acceptance slice: automated config smoke now covers V1 basic compatibility, V2 simple pipeline dispatch, multi-site listener/pipeline routing, HTTP protocol transform dispatch through native/vjsx implementations, relay happy path, and PHP worker stream-dispatch SSE.
+- Completed acceptance slice: automated config smoke now covers V1 basic compatibility, V2 simple pipeline dispatch, V2 missing-reference diagnostics, multi-site listener/pipeline routing with admin plan visibility, HTTP protocol transform dispatch through native/vjsx implementations with transformer snapshots, relay happy path with runtime/admin visibility, V2 provider runtime/admin visibility, provider instance add/update through admin APIs, upload-completed and generic event pipeline dispatch, PHP worker stream-dispatch SSE, and worker busy-state/admin queue visibility.
 
 Validated automated commands:
 
@@ -73,7 +73,7 @@ Acceptance signal:
 
 Purpose: prove the new config model works without compatibility fallback.
 
-Progress: Partial. `tests/e2e/config_acceptance_test.sh` now starts a generated v2 config and verifies basic pipeline dispatch plus trace-id propagation. Missing-reference diagnostics and example-style audit are still pending.
+Progress: Completed for the current smoke scope. `tests/e2e/config_acceptance_test.sh` now starts a generated v2 config and verifies basic pipeline dispatch plus trace-id propagation. It also verifies missing adapter, transform, listener, and resource references emit clear `runtime_plan_unresolved_ref` diagnostics. `src/config/runtime_plan_loader_test.v` also scans repository V2 example TOML files, rejects legacy v1-only sections such as `[worker]`, `[executor]`, and `[[routes]]`, and verifies the examples load without compatibility fallback.
 
 Checks:
 
@@ -88,13 +88,14 @@ Acceptance signal:
 
 - Real v2 TOML loads without compatibility fallback.
 - Basic HTTP pipeline dispatch succeeds.
+- Missing-reference diagnostics identify the unresolved resource ref.
 - Admin/runtime diagnostics expose the selected pipeline and resources.
 
 ### 3. WordPress V2 Smoke
 
 Purpose: validate the real showcase workload against v2 config and runtime boundaries.
 
-Progress: Pending.
+Progress: Pending. WordPress-specific v2 smoke is not yet automated.
 
 Checks:
 
@@ -115,7 +116,7 @@ Acceptance signal:
 
 Purpose: prove pipeline is the site-level composition unit and multiple sites bind correctly.
 
-Progress: Partial. `tests/e2e/config_acceptance_test.sh` now starts one vhttpd process with two HTTP listeners, verifies each listener selects its own pipeline, checks `x-vhttpd-pipeline`, and confirms per-site trace IDs appear in the event log. Admin/runtime snapshot verification is still pending.
+Progress: Partial. `tests/e2e/config_acceptance_test.sh` now starts one vhttpd process with two HTTP listeners, verifies each listener selects its own pipeline, checks `x-vhttpd-pipeline`, confirms per-site trace IDs appear in the event log, and verifies each data-plane admin plan exposes the expected pipeline/listener state. Broader runtime snapshot coverage is still pending.
 
 Checks:
 
@@ -135,7 +136,7 @@ Acceptance signal:
 
 Purpose: prove configured relay works in a real two-process topology.
 
-Progress: Partial. `tests/e2e/config_acceptance_test.sh` now starts public relay and local agent processes, then verifies a request reaches the local agent and returns. Reconnect, backpressure, and admin snapshot checks are still pending.
+Progress: Partial. `tests/e2e/config_acceptance_test.sh` now starts public relay and local agent processes, verifies a request reaches the local agent and returns, checks public relay runtime descriptor/carrier visibility, and checks the agent admin plan exposes the relay pipeline. Reconnect and backpressure checks are still pending.
 
 Checks:
 
@@ -156,7 +157,7 @@ Acceptance signal:
 
 Purpose: prove transforms are configurable protocol/runtime units, not hardcoded paths.
 
-Progress: Partial. `tests/e2e/config_acceptance_test.sh` now validates the same HTTP `/convert` ingress through native and vjsx transform implementations by TOML-only selection. It also verifies vjsx transform failure status, `x-vhttpd-error-class`, and trace-id propagation. WebSocket/relay ingress and timeout/invalid-output failure cases are still pending.
+Progress: Partial. `tests/e2e/config_acceptance_test.sh` now validates the same HTTP `/convert` ingress through native and vjsx transform implementations by TOML-only selection. It also verifies vjsx transform failure status, `x-vhttpd-error-class`, trace-id propagation, admin transformer snapshots, and admin plan visibility for transform pipelines. WebSocket/relay ingress and timeout/invalid-output failure cases are still pending.
 
 Checks:
 
@@ -176,7 +177,7 @@ Acceptance signal:
 
 Purpose: prove non-request/response ingress paths use the same pipeline model.
 
-Progress: Partial. PHP worker stream-dispatch now has unit coverage and `tests/e2e/config_acceptance_test.sh` verifies SSE through worker `open`/`next`. Upload-completed and generic event ingress smoke are still pending.
+Progress: Completed for the current smoke scope. `tests/e2e/config_acceptance_test.sh` now starts a V2 upload route with `adapter:upload`, routes `upload.completed` through an event pipeline with a vjsx transform, verifies upload acceptance, verifies `upload.completed.dispatch`, records the transform id, and preserves trace IDs. It also dispatches a generic `inventory.changed` event through `/admin/runtime/events`, selects the configured event pipeline, runs the vjsx transform, records transform metadata, and preserves trace IDs. PHP worker stream-dispatch also has unit coverage and e2e verification through worker `open`/`next`.
 
 Checks:
 
@@ -196,7 +197,7 @@ Acceptance signal:
 
 Purpose: prove runtime providers and worker dispatch behave under real startup/load conditions.
 
-Progress: Pending.
+Progress: Partial. `tests/e2e/config_acceptance_test.sh` now starts a V2 config with a configured Codex adapter, verifies provider registration through `/admin/providers` and `/admin/providers/specs`, verifies the Codex runtime snapshot through `/admin/runtime/codex`, verifies provider runtime visibility through `/admin/providers/runtimes`, confirms the provider pipeline appears in `/admin/runtime/plan`, upserts and updates a dynamic Codex provider instance through `/admin/runtime/provider-instances`, verifies the instance snapshot, and preserves trace IDs for provider baseline/upsert requests. The same script also starts a real PHP worker pool, verifies a baseline request, observes an in-flight busy worker through `/admin/workers`, verifies queue capacity/timeout in `/admin/runtime`, and confirms trace-id preservation for the busy request. Feishu/DB/cache provider startup and true concurrent queue timeout/reject smoke are still pending.
 
 Checks:
 
@@ -216,7 +217,7 @@ Acceptance signal:
 
 Purpose: prove the runtime is inspectable as a generic gateway.
 
-Progress: Partial. The automated config smoke checks trace-id propagation across V2 HTTP dispatch, multi-site listener/pipeline routing, native/vjsx transform dispatch, relay, and PHP worker stream dispatch. Full admin snapshot verification is still pending.
+Progress: Partial. The automated config smoke checks trace-id propagation across V2 HTTP dispatch, multi-site listener/pipeline routing, native/vjsx transform dispatch, relay, provider runtime baseline dispatch, provider instance admin upsert, upload-completed event dispatch, PHP worker stream dispatch, and worker busy-state handling. It also verifies admin plan visibility for multi-site/protocol/relay/provider pipelines, admin transformer snapshots for native/vjsx transforms, relay runtime descriptor/carrier visibility, provider runtime snapshots for Codex, provider instance snapshots, upload event transform dispatch metadata, and worker runtime queue/busy snapshots. Feishu/DB/cache provider snapshots and broader failure/backpressure observations still need coverage.
 
 Checks:
 
