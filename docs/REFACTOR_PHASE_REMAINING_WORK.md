@@ -157,7 +157,7 @@ Acceptance signal:
 
 Purpose: prove transforms are configurable protocol/runtime units, not hardcoded paths.
 
-Progress: Partial. `tests/e2e/config_acceptance_test.sh` now validates the same HTTP `/convert` ingress through native and vjsx transform implementations by TOML-only selection. It also verifies vjsx transform failure status, `x-vhttpd-error-class`, trace-id propagation, admin transformer snapshots, and admin plan visibility for transform pipelines. WebSocket/relay ingress and timeout/invalid-output failure cases are still pending.
+Progress: Completed for the current smoke scope. `tests/e2e/config_acceptance_test.sh` now validates the same HTTP `/convert` ingress through native and vjsx transform implementations by TOML-only selection. It also verifies vjsx transform failure status, `x-vhttpd-error-class`, thrown-handler failure reporting as `502`, trace-id propagation for both failed and thrown transforms, admin transformer snapshots, event-log handler failure observations, and admin plan visibility for transform pipelines. WebSocket/relay ingress and timeout/invalid-output failure cases remain tracked as broader protocol coverage, not blockers for the current HTTP conversion smoke.
 
 Checks:
 
