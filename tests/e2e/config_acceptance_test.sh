@@ -1874,6 +1874,10 @@ test_relay_smoke() {
         "relay agent runtime starts"
     wait_http_contains "http://127.0.0.1:${public_port}/relay?trace_id=e2e-relay" "relay agent ok" \
         "relay request reaches local agent and returns"
+    wait_event_contains "${TMP_ROOT}/relay-public.events.ndjson" "response_completion.completed" \
+        "relay wait completion records completed response event"
+    wait_event_contains "${TMP_ROOT}/relay-public.events.ndjson" '"completion_mode":"wait"' \
+        "relay wait completion records configured completion mode"
     wait_http_contains "http://127.0.0.1:${public_admin_port}/admin/runtime" '"descriptor_count":1' \
         "relay public admin runtime exposes relay descriptor"
     wait_http_contains "http://127.0.0.1:${public_admin_port}/admin/runtime" '"carrier_count":1' \
