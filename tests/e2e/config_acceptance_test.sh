@@ -654,15 +654,43 @@ write_wordpress_v2_smoke_config() {
     local file="$1"
     local port="$2"
     local wp_root="$3"
+    local label="${4:-wordpress-v2}"
+    local include_db="${5:-0}"
+    local short_socket_prefix="/tmp/vhq-$$-${label}"
+    local db_resource_block=""
+    local php_resources='"resource:storage/wordpress", "resource:cache/wordpress"'
+    local db_env_block=""
+    if [[ "$include_db" == "1" ]]; then
+        local db_host="${VHTTPD_E2E_DB_HOST:-127.0.0.1}"
+        local db_port="${VHTTPD_E2E_DB_PORT:-3306}"
+        local db_user="${VHTTPD_E2E_DB_USER:-root}"
+        local db_password="${VHTTPD_E2E_DB_PASSWORD:-}"
+        local db_name="${VHTTPD_E2E_WP_DB_NAME:-${VHTTPD_E2E_DB_NAME:-wordpress}}"
+        db_resource_block="[resources.db.wordpress]
+kind = \"mysql\"
+host = \"${db_host}\"
+port = ${db_port}
+username = \"${db_user}\"
+password = \"${db_password}\"
+database = \"${db_name}\"
+pool_size = 2
+idle_ping_ms = 30000
+init_sql = [\"SET NAMES utf8mb4\", \"SET SESSION sql_mode = ''\"]
+options = { socket = \"${short_socket_prefix}-db.sock\", pool_name = \"wordpress\" }"
+        php_resources='"resource:db/wordpress", '"${php_resources}"
+        db_env_block="VHTTPD_DB_SOCKET = \"${short_socket_prefix}-db.sock\"
+VHTTPD_DB_POOL = \"wordpress\"
+VHTTPD_DB_TIMEOUT_MS = \"3000\""
+    fi
     cat >"$file" <<EOF
 version = 2
 
 [server]
 timezone = "Asia/Shanghai"
-pid_file = "${TMP_ROOT}/wordpress-v2.pid"
+pid_file = "${TMP_ROOT}/${label}.pid"
 
 [observability]
-event_log = "${TMP_ROOT}/wordpress-v2.events.ndjson"
+event_log = "${TMP_ROOT}/${label}.events.ndjson"
 
 [listeners.web]
 protocol = "http"
@@ -674,10 +702,12 @@ port = ${port}
 kind = "filesystem"
 root = "${wp_root}"
 
+${db_resource_block}
+
 [resources.cache.wordpress]
 kind = "session-store"
-socket = "${TMP_ROOT}/wordpress-v2-cache.sock"
-namespace = "wordpress-smoke"
+socket = "${short_socket_prefix}-cache.sock"
+namespace = "${label}"
 
 [engines.php]
 kind = "php-worker"
@@ -685,14 +715,15 @@ entry = "${REPO_ROOT}/php/package/bin/vphp-worker"
 app = "${REPO_ROOT}/examples/wordpress/app.php"
 autostart = true
 pool_size = 1
-socket = "${TMP_ROOT}/wordpress-v2.sock"
+socket = "${short_socket_prefix}.sock"
 queue_capacity = 8
 queue_timeout_ms = 1000
-resources = ["resource:storage/wordpress", "resource:cache/wordpress"]
+resources = [${php_resources}]
 
 [engines.php.env]
 VPHP_WP_ROOT = "${wp_root}"
 VHTTPD_VENDOR = "${REPO_ROOT}/php/package"
+${db_env_block}
 VHTTPD_SCHEME = "http"
 VHTTPD_REQUEST_SCHEME = "http"
 
@@ -757,7 +788,7 @@ egress = "adapter:wordpress-worker"
 id = "wordpress.front-page"
 group = "wordpress.dynamic"
 ingress = "listener:web"
-match.paths = ["/", "/index.php"]
+match.paths = ["*"]
 egress = "adapter:wordpress-worker"
 EOF
 }
@@ -1653,6 +1684,61 @@ test_wordpress_v2_smoke() {
         "wordpress v2 cache bypass reason is observable in event log"
 }
 
+test_wordpress_installed_v2_smoke() {
+    if [[ -z "${VHTTPD_E2E_WP_ROOT:-}" ]]; then
+        ok "wordpress installed v2 smoke skipped unless VHTTPD_E2E_WP_ROOT is set"
+        return 0
+    fi
+    if [[ ! -f "${VHTTPD_E2E_WP_ROOT}/wp-config.php" ]] || [[ ! -f "${VHTTPD_E2E_WP_ROOT}/wp-load.php" ]]; then
+        ko "wordpress installed v2 smoke root is a WordPress install"
+        echo "    VHTTPD_E2E_WP_ROOT=${VHTTPD_E2E_WP_ROOT}"
+        return 1
+    fi
+
+    local port
+    local admin_port
+    port="$(free_port)"
+    admin_port="$(free_port)"
+    local config="${TMP_ROOT}/wordpress-installed-v2.toml"
+    if [[ "${VHTTPD_E2E_DB_LIVE:-0}" != "1" ]]; then
+        ok "wordpress installed v2 smoke skipped unless VHTTPD_E2E_DB_LIVE=1"
+        return 0
+    fi
+    write_wordpress_v2_smoke_config "$config" "$port" "$VHTTPD_E2E_WP_ROOT" "wordpress-installed-v2" "1"
+    start_vhttpd "wordpress-installed-v2" --config "$config" --admin-port "$admin_port" >/dev/null
+    local base_url="http://127.0.0.1:${port}"
+    local canonical_base="${VHTTPD_E2E_WP_SITE_URL:-http://127.0.0.1:8080}"
+    canonical_base="${canonical_base%/}"
+    wait_http_contains "${base_url}/meta?trace_id=e2e-wordpress-installed-meta" \
+        '"framework":"wordpress"' "wordpress installed v2 serves metadata"
+    wait_http_contains "${base_url}/meta?trace_id=e2e-wordpress-installed-meta" \
+        '"site_name":' "wordpress installed v2 exposes site metadata"
+    wait_http_status_contains "${base_url}/?trace_id=e2e-wordpress-installed-home" \
+        "301" "Redirecting to ${canonical_base}/" \
+        "wordpress installed v2 front page reaches WordPress canonical redirect"
+    wait_http_status_contains "${base_url}/cart?trace_id=e2e-wordpress-installed-cart" \
+        "301" "Redirecting to ${canonical_base}/cart" \
+        "wordpress installed v2 WooCommerce cart reaches WordPress canonical redirect"
+    wait_http_status_contains "${base_url}/checkout?trace_id=e2e-wordpress-installed-checkout" \
+        "301" "Redirecting to ${canonical_base}/checkout" \
+        "wordpress installed v2 WooCommerce checkout reaches WordPress canonical redirect"
+    wait_http_status_contains "${base_url}/wp-json/?trace_id=e2e-wordpress-installed-rest" \
+        "301" "Redirecting to ${canonical_base}/wp-json/" \
+        "wordpress installed v2 REST index reaches WordPress canonical redirect"
+    wait_http_header_contains "${base_url}/wp-includes/css/dist/block-library/style.min.css?trace_id=e2e-wordpress-installed-asset" \
+        "cache-control" "max-age=3600" \
+        "wordpress installed v2 serves core admin/static asset through static pipeline"
+    wait_http_header_contains_with_cookie "${base_url}/meta?trace_id=e2e-wordpress-installed-cache-bypass" \
+        "wordpress_logged_in_e2e=token" "x-vhttpd-cache" "bypass" \
+        "wordpress installed v2 bypasses cache for logged-in cookie"
+    wait_http_contains "http://127.0.0.1:${admin_port}/admin/runtime/plan" '"wordpress.front-page"' \
+        "wordpress installed v2 admin plan exposes dynamic pipeline"
+    wait_event_contains "${TMP_ROOT}/wordpress-installed-v2.events.ndjson" "e2e-wordpress-installed-cart" \
+        "wordpress installed v2 cart request preserves trace id"
+    wait_event_contains "${TMP_ROOT}/wordpress-installed-v2.events.ndjson" "e2e-wordpress-installed-rest" \
+        "wordpress installed v2 REST request preserves trace id"
+}
+
 test_protocol_conversion_smoke() {
     echo ""
     echo "6. Protocol conversion smoke"
@@ -2209,6 +2295,7 @@ test_v2_simple_site_smoke
 test_v2_diagnostics_smoke
 test_multisite_smoke
 test_wordpress_v2_smoke
+test_wordpress_installed_v2_smoke
 test_protocol_conversion_smoke
 test_relay_smoke
 test_provider_runtime_smoke
