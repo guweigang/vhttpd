@@ -2256,6 +2256,12 @@ test_worker_queue_smoke() {
         print_logs
         return 1
     fi
+    wait_http_contains "http://127.0.0.1:${controlled_admin_port}/admin/runtime" '"queue_depth":0' \
+        "controlled worker admin runtime clears queue depth after release"
+    wait_http_contains "http://127.0.0.1:${controlled_admin_port}/admin/workers" '"served_requests":' \
+        "controlled worker admin snapshot exposes served request count"
+    wait_event_contains "${TMP_ROOT}/controlled-worker-queue.events.ndjson" "e2e-worker-queued-success" \
+        "controlled worker queued success preserves trace id"
 
     rm -f "$controlled_release"
     curl -fsS --max-time 20 "${controlled_base_url}/hold?trace_id=e2e-worker-controlled-timeout-hold" >"$controlled_timeout_hold_body" 2>/dev/null &
