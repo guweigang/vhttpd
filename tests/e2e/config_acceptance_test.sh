@@ -1796,8 +1796,12 @@ test_protocol_conversion_smoke() {
     wait_http_post_contains "http://127.0.0.1:${vjsx_admin_port}/admin/runtime/plan/replacement/apply?config=${next_vjsx_config}" \
         '{}' '"status":"applied"' \
         "protocol vjsx replacement apply is lightweight"
+    wait_event_contains "${TMP_ROOT}/protocol-vjsx.events.ndjson" "runtime.plan.replaced" \
+        "protocol vjsx replacement emits plan replaced event"
     wait_http_contains "http://127.0.0.1:${vjsx_port}/convert?trace_id=e2e-proto-vjsx-replaced" \
         "vjsx transform next ok" "protocol vjsx pipeline uses replaced transform runtime"
+    wait_event_contains "${TMP_ROOT}/protocol-vjsx.events.ndjson" "e2e-proto-vjsx-replaced" \
+        "protocol vjsx replaced request preserves trace id"
 }
 
 test_v1_compat_smoke() {
