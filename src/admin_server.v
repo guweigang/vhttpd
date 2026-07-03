@@ -364,6 +364,58 @@ pub fn (mut app AdminApp) admin_runtime_provider_instances(mut ctx Context) veb.
 	})
 }
 
+@['/admin/runtime/provider-instances'; post]
+pub fn (mut app AdminApp) admin_runtime_provider_instance_upsert(mut ctx Context) veb.Result {
+	req := admin_plane_request(ctx, '/admin/runtime/provider-instances')
+	if !app.admin_authorized(ctx) {
+		return admin_plane_forbidden(mut app, mut ctx, 'POST', req)
+	}
+	result := app.shared.admin_provider_instance_upsert_from_body(ctx.req.data) or {
+		status := if err.msg() == 'invalid_json' || err.msg() == 'missing_provider' {
+			400
+		} else {
+			422
+		}
+		return admin_plane_json_response(mut app, mut ctx, 'POST', req, status, json.encode(admin.AdminErrorResponse{
+			error: err.msg()
+		}), {
+			'admin_endpoint': 'runtime_provider_instances'
+			'admin_action':   'provider_instance_upsert'
+			'error':          err.msg()
+		})
+	}
+	return admin_plane_json_response(mut app, mut ctx, 'POST', req, 200, json.encode(result), {
+		'admin_endpoint': 'runtime_provider_instances'
+		'admin_action':   'provider_instance_upsert'
+		'provider':       result.snapshot.provider
+		'instance':       result.snapshot.instance
+	})
+}
+
+@['/admin/runtime/events'; post]
+pub fn (mut app AdminApp) admin_runtime_events_dispatch(mut ctx Context) veb.Result {
+	req := admin_plane_request(ctx, '/admin/runtime/events')
+	if !app.admin_authorized(ctx) {
+		return admin_plane_forbidden(mut app, mut ctx, 'POST', req)
+	}
+	result := app.shared.dispatch_runtime_event(ctx.req.data, req.req_id, req.trace_id) or {
+		return admin_plane_json_response(mut app, mut ctx, 'POST', req, 400, json.encode(admin.AdminErrorResponse{
+			error: err.msg()
+		}), {
+			'admin_endpoint': 'runtime_events'
+			'admin_action':   'event_dispatch'
+			'error':          err.msg()
+		})
+	}
+	return admin_plane_json_response(mut app, mut ctx, 'POST', req, 202, json.encode(result), {
+		'admin_endpoint': 'runtime_events'
+		'admin_action':   'event_dispatch'
+		'pipeline':       result.pipeline
+		'ingress':        result.ingress
+		'event':          result.name
+	})
+}
+
 @['/admin/runtime/feishu'; get]
 pub fn (mut app AdminApp) admin_runtime_feishu(mut ctx Context) veb.Result {
 	req := admin_plane_request(ctx, '/admin/runtime/feishu')
@@ -376,6 +428,18 @@ pub fn (mut app AdminApp) admin_runtime_feishu(mut ctx Context) veb.Result {
 	})
 }
 
+@['/admin/runtime/codex'; get]
+pub fn (mut app AdminApp) admin_runtime_codex(mut ctx Context) veb.Result {
+	req := admin_plane_request(ctx, '/admin/runtime/codex')
+	if !app.admin_authorized(ctx) {
+		return admin_plane_forbidden(mut app, mut ctx, 'GET', req)
+	}
+	body := app.shared.provider_runtime_snapshot('codex') or { '{}' }
+	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, body, {
+		'admin_endpoint': 'runtime_codex'
+	})
+}
+
 @['/admin/runtime/db'; get]
 pub fn (mut app AdminApp) admin_runtime_db(mut ctx Context) veb.Result {
 	req := admin_plane_request(ctx, '/admin/runtime/db')
@@ -385,6 +449,18 @@ pub fn (mut app AdminApp) admin_runtime_db(mut ctx Context) veb.Result {
 	body := app.shared.provider_runtime_snapshot('db') or { '{}' }
 	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, body, {
 		'admin_endpoint': 'runtime_db'
+	})
+}
+
+@['/admin/runtime/cache'; get]
+pub fn (mut app AdminApp) admin_runtime_cache(mut ctx Context) veb.Result {
+	req := admin_plane_request(ctx, '/admin/runtime/cache')
+	if !app.admin_authorized(ctx) {
+		return admin_plane_forbidden(mut app, mut ctx, 'GET', req)
+	}
+	body := app.shared.provider_runtime_snapshot('cache') or { '{}' }
+	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, body, {
+		'admin_endpoint': 'runtime_cache'
 	})
 }
 
@@ -420,7 +496,7 @@ pub fn (mut app AdminApp) admin_runtime_feishu_send(mut ctx Context) veb.Result 
 			'error':          'invalid_json'
 		})
 	}
-	result := app.shared.feishu_runtime_send_message(send_req) or {
+	result := app.shared.providers.feishu_provider_runtime_send_message(send_req, mut app.shared) or {
 		return admin_plane_json_response(mut app, mut ctx, 'POST', req, 502, json.encode(admin.AdminFeishuSendResponse{
 			ok:    false
 			error: err.msg()

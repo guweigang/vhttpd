@@ -31,6 +31,7 @@ fn runtime_plan_replacement_preview_from_diff(config_path string, current_plan r
 		restart_listeners:      diff.restart_listeners
 		drain_engines:          diff.drain_engines
 		reload_transforms:      diff.reload_transforms
+		reload_providers:       diff.reload_providers
 		reload_relays:          diff.reload_relays
 		reasons:                diff.reasons
 		current_schema_version: current_plan.source.schema_version

@@ -9,6 +9,7 @@ pub fn (mut app App) provider_runtime_snapshot(name string) ?string {
 	feishu_name := provider.ProviderName.feishu()
 	codex_name := provider.ProviderName.codex()
 	db_name := provider.ProviderName.db()
+	cache_name := provider.ProviderName.cache()
 	return match name {
 		feishu_name {
 			json.encode(app.providers.feishu_runtime_snapshot())
@@ -18,6 +19,9 @@ pub fn (mut app App) provider_runtime_snapshot(name string) ?string {
 		}
 		db_name {
 			app.db_runtime_snapshot()
+		}
+		cache_name {
+			app.cache_runtime_snapshot()
 		}
 		else {
 			mut spec := app.get_provider_spec(name) or { return none }

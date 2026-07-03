@@ -326,21 +326,36 @@ final class Profiler
         $reportJson = json_encode($report, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
 
         $jsCode = '';
-        $localJsFile = dirname(__DIR__, 3) . '/v-profiler/v-profiler-ui.js';
-        if (is_file($localJsFile)) {
-            $jsCode = file_get_contents($localJsFile);
-        } else {
-            $jsFile = dirname(__DIR__, 3) . '/wordpress/v-profiler-ui.js';
-            if (is_file($jsFile)) {
-                $jsCode = file_get_contents($jsFile);
-            } elseif (defined('WPMU_PLUGIN_DIR') && is_file(WPMU_PLUGIN_DIR . '/v-profiler/v-profiler-ui.js')) {
-                $jsCode = file_get_contents(WPMU_PLUGIN_DIR . '/v-profiler/v-profiler-ui.js');
-            } elseif (defined('WPMU_PLUGIN_DIR') && is_file(WPMU_PLUGIN_DIR . '/v-profiler-ui.js')) {
-                $jsCode = file_get_contents(WPMU_PLUGIN_DIR . '/v-profiler-ui.js');
-            } elseif (defined('WP_PLUGIN_DIR') && is_file(WP_PLUGIN_DIR . '/v-profiler/v-profiler-ui.js')) {
-                $jsCode = file_get_contents(WP_PLUGIN_DIR . '/v-profiler/v-profiler-ui.js');
-            } elseif (defined('WP_PLUGIN_DIR') && is_file(WP_PLUGIN_DIR . '/v-profiler-ui.js')) {
-                $jsCode = file_get_contents(WP_PLUGIN_DIR . '/v-profiler-ui.js');
+        $pluginDir = null;
+
+        // Try to resolve plugin root directory dynamically
+        $dir = dirname(__DIR__, 3);
+        if (is_file($dir . '/v-profiler.php')) {
+            $pluginDir = $dir;
+        } elseif (is_file($dir . '/wordpress/v-profiler.php')) {
+            $pluginDir = $dir . '/wordpress';
+        }
+
+        $candidates = [];
+        if ($pluginDir !== null) {
+            $candidates[] = $pluginDir . '/v-profiler/v-profiler-ui.js';
+            $candidates[] = $pluginDir . '/v-profiler-ui.js';
+        }
+        if (defined('WP_PLUGIN_DIR')) {
+            $candidates[] = WP_PLUGIN_DIR . '/v-profiler/v-profiler/v-profiler-ui.js';
+            $candidates[] = WP_PLUGIN_DIR . '/v-profiler/v-profiler-ui.js';
+        }
+        if (defined('WPMU_PLUGIN_DIR')) {
+            $candidates[] = WPMU_PLUGIN_DIR . '/v-profiler/v-profiler/v-profiler-ui.js';
+            $candidates[] = WPMU_PLUGIN_DIR . '/v-profiler-ui.js';
+        }
+
+        foreach ($candidates as $candidate) {
+            if (is_file($candidate)) {
+                $jsCode = file_get_contents($candidate);
+                if ($jsCode !== '') {
+                    break;
+                }
             }
         }
 
@@ -570,10 +585,25 @@ final class Profiler
 
     private static function getPluginSlug(string $file): ?string
     {
-        $pattern = '/wp-content\/plugins\/([^\/]+)/';
-        if (preg_match($pattern, $file, $matches)) {
-            return $matches[1];
+        $file = str_replace('\\', '/', $file);
+        
+        $pluginDir = defined('WP_PLUGIN_DIR') ? str_replace('\\', '/', WP_PLUGIN_DIR) : '';
+        $muPluginDir = defined('WPMU_PLUGIN_DIR') ? str_replace('\\', '/', WPMU_PLUGIN_DIR) : '';
+
+        // 匹配普通插件目录
+        if ($pluginDir !== '' && str_starts_with($file, $pluginDir)) {
+            $relative = ltrim(substr($file, strlen($pluginDir)), '/');
+            $parts = explode('/', $relative);
+            return $parts[0] !== '' ? $parts[0] : null;
         }
+
+        // 匹配必须插件 (mu-plugins) 目录
+        if ($muPluginDir !== '' && str_starts_with($file, $muPluginDir)) {
+            $relative = ltrim(substr($file, strlen($muPluginDir)), '/');
+            $parts = explode('/', $relative);
+            return $parts[0] !== '' ? $parts[0] : null;
+        }
+
         return null;
     }
 

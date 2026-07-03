@@ -18,9 +18,13 @@ pub fn ProviderName.db() string {
 	return 'db'
 }
 
+pub fn ProviderName.cache() string {
+	return 'cache'
+}
+
 pub fn ProviderName.default_instance(name string) string {
 	return match name {
-		'feishu', 'codex', 'ollama', 'db' { 'main' }
+		'feishu', 'codex', 'ollama', 'db', 'cache' { 'main' }
 		else { '' }
 	}
 }

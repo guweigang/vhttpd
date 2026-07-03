@@ -45,6 +45,8 @@ pub:
 	logic_executor_kind              fn () string                                 = unsafe { nil }
 	logic_executor_model             fn () executor.LogicExecutorModel            = unsafe { nil }
 	logic_executor_provider          fn () string                                 = unsafe { nil }
+	pipeline_runtime_snapshot        fn () executor.AdminPipelineRuntimeSummary   = unsafe { nil }
+	listener_runtime_snapshots       fn () []executor.AdminListenerRuntimeSummary = unsafe { nil }
 	provider_runtime_capabilities    fn () map[string]bool                        = unsafe { nil }
 	provider_runtime_gateway_count   fn () int                                    = unsafe { nil }
 	relay_runtime_snapshot           fn () executor.AdminRelayRuntimeSummary      = unsafe { nil }

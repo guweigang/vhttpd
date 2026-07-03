@@ -272,6 +272,14 @@ queue_timeout_ms = 55
 kind = "http-handler"
 engine = "engine:vjsx"
 
+[providers.feishu.runtime]
+driver = "vjsx"
+plugin = "feishu_runtime"
+engine = "engine:vjsx"
+
+[providers.feishu.capabilities]
+send_message = "feishu.message.send"
+
 [[pipelines]]
 id = "site"
 ingress = "listener:web"
@@ -301,6 +309,10 @@ egress = "adapter:app"
 	assert runtime_cfg.app_build_cfg.worker_max_requests == 333
 	assert runtime_cfg.app_build_cfg.worker_queue_capacity == 44
 	assert runtime_cfg.app_build_cfg.worker_queue_timeout_ms == 55
+	assert runtime_cfg.plan.providers['feishu'].driver == 'vjsx'
+	assert runtime_cfg.plan.providers['feishu'].plugin == 'feishu_runtime'
+	assert runtime_cfg.plan.providers['feishu'].engine?.str() == 'engine:vjsx'
+	assert runtime_cfg.plan.providers['feishu'].capabilities['send_message'] == 'feishu.message.send'
 }
 
 fn test_runtime_timezone_prefers_v2_runtime_plan() {
@@ -406,9 +418,8 @@ egress = "adapter:app_b"
 	cfg := config.load_vhttpd_config(['--config', config_file]) or { panic(err) }
 	assert !cfg.uses_multi_listener()
 	assert should_run_multi_server(['--config', config_file], cfg)
-	multi_cfg := server_lifecycle.resolve_multi_server_runtime_config(['--config', config_file], cfg) or {
-		panic(err)
-	}
+	multi_cfg := server_lifecycle.resolve_multi_server_runtime_config(['--config', config_file,
+		'--admin-port', '19992'], cfg) or { panic(err) }
 	assert !multi_cfg.single_mode
 	assert multi_cfg.listeners.len == 2
 	assert multi_cfg.listeners[0].id == 'web_a'
@@ -416,11 +427,14 @@ egress = "adapter:app_b"
 	assert multi_cfg.listeners[0].runtime_cfg.port == 18451
 	assert multi_cfg.listeners[0].runtime_cfg.plan_listener_id == 'web_a'
 	assert multi_cfg.listeners[0].runtime_cfg.executor_plan.executor.kind() == 'vjsx'
+	assert multi_cfg.listeners[0].runtime_cfg.admin_enabled
+	assert multi_cfg.listeners[0].runtime_cfg.admin_port == 19992
 	assert multi_cfg.listeners[1].id == 'web_b'
 	assert multi_cfg.listeners[1].runtime_cfg.host == '127.0.0.12'
 	assert multi_cfg.listeners[1].runtime_cfg.port == 18452
 	assert multi_cfg.listeners[1].runtime_cfg.plan_listener_id == 'web_b'
 	assert multi_cfg.listeners[1].runtime_cfg.executor_plan.executor.kind() == 'vjsx'
+	assert !multi_cfg.listeners[1].runtime_cfg.admin_enabled
 }
 
 fn test_websocket_relay_listeners_share_matching_http_relay_delivery_app() {
@@ -2291,6 +2305,282 @@ fn test_provider_runtime_settings_are_projected_from_runtime_plan() {
 	assert settings.bridge.target_id == 'remote'
 }
 
+fn test_provider_runtime_settings_include_v2_provider_driver_plugin() {
+	plan := runtime_plan.RuntimePlan{
+		providers: {
+			'feishu': runtime_plan.ProviderPlan{
+				id:           'feishu'
+				driver:       'vjsx'
+				plugin:       'feishu-provider-runtime'
+				capabilities: {
+					'send_message': 'feishu.message.send'
+				}
+			}
+		}
+	}
+	settings :=
+		provider_runtime_settings_from_plan(plan, 'web', provider.ProviderRuntimeSettings{})
+
+	assert settings.runtime_drivers['feishu'] == 'vjsx'
+	assert settings.runtime_plugins['feishu'] == 'feishu-provider-runtime'
+	assert settings.runtime_capabilities['feishu']['send_message'] == 'feishu.message.send'
+	assert settings.feishu.runtime_driver == 'vjsx'
+	assert settings.feishu.runtime_plugin == 'feishu-provider-runtime'
+}
+
+fn test_build_app_runtime_applies_v2_provider_runtime_driver_plugin() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_provider_runtime_build_app_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	plugin_file := os.join_path(temp_dir, 'provider-runtime.mts')
+	os.write_file(plugin_file, 'export function plugin(req) { return { ok: true }; }') or {
+		panic(err)
+	}
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	plan := runtime_plan.RuntimePlan{
+		listeners: {
+			'web': runtime_plan.ListenerPlan{
+				id:       'web'
+				protocol: 'http'
+			}
+		}
+		engines:   {
+			'provider-runtime': runtime_plan.EnginePlan{
+				id:      'provider-runtime'
+				kind:    'vjsx'
+				options: runtime_plan.PlanOptions{
+					strings: {
+						'entry': plugin_file
+					}
+				}
+			}
+		}
+		adapters:  {
+			'provider-send': runtime_plan.AdapterPlan{
+				id:      'provider-send'
+				kind:    'provider-action'
+				options: runtime_plan.PlanOptions{
+					strings: {
+						'provider': 'feishu'
+						'action':   'send_message'
+					}
+				}
+			}
+		}
+		providers: {
+			'feishu': runtime_plan.ProviderPlan{
+				id:     'feishu'
+				driver: 'vjsx'
+				plugin: 'feishu-provider-runtime'
+				engine: runtime_plan.ResourceRef{
+					domain: .engine
+					id:     'provider-runtime'
+				}
+			}
+		}
+		pipelines: [
+			runtime_plan.PipelinePlan{
+				id:      'provider/action'
+				ingress: runtime_plan.ResourceRef{
+					domain: .listener
+					id:     'web'
+				}
+				egress:  runtime_plan.ResourceRef{
+					domain: .adapter
+					id:     'provider-send'
+				}
+			},
+		]
+	}
+	executor_plan := executor.LogicExecutorRuntimePlan{
+		executor:  executor.DisabledLogicExecutor{}
+		lifecycle: executor.disabled_executor_lifecycle()
+	}
+	mut app := build_app_runtime(provider.ProviderRuntimeSettings{}, executor_plan,
+		config.default_vhttpd_config(), plan, server_lifecycle.AppRuntimeBuildConfig{
+		plan_listener_id: 'web'
+	})
+	defer {
+		app.close_all_plugins()
+	}
+
+	assert app.providers.provider_runtime_driver('feishu') == 'vjsx'
+	assert app.providers.provider_runtime_plugin('feishu') == 'feishu-provider-runtime'
+	assert 'feishu-provider-runtime' in app.protocols.plugins.configs
+	assert 'feishu-provider-runtime' in app.protocols.plugins.vjsx
+}
+
+fn test_build_app_runtime_applies_v2_provider_runtime_from_toml() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_provider_runtime_toml_build_app_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	plugin_file := os.join_path(temp_dir, 'provider-runtime.mts')
+	config_file := os.join_path(temp_dir, 'vhttpd.toml')
+	os.write_file(plugin_file, 'export function plugin(req) { return { ok: true }; }') or {
+		panic(err)
+	}
+	os.write_file(config_file, '
+version = 2
+
+[listeners.web]
+protocol = "http"
+transport = "tcp"
+host = "127.0.0.1"
+port = 18080
+
+[engines.provider-runtime]
+kind = "vjsx"
+entry = "${plugin_file}"
+runtime_profile = "node"
+thread_count = 1
+
+[providers.feishu.runtime]
+driver = "vjsx"
+plugin = "feishu-provider-runtime"
+engine = "engine:provider-runtime"
+
+[providers.feishu.capabilities]
+send_message = "feishu.message.send"
+
+[adapters.provider-send]
+kind = "provider-action"
+provider = "feishu"
+action = "send_message"
+
+[[pipelines]]
+id = "provider/action"
+ingress = "listener:web"
+match.methods = ["POST"]
+match.paths = ["/provider-action"]
+egress = "adapter:provider-send"
+') or {
+		panic(err)
+	}
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	plan := config.load_runtime_plan_file(config_file) or { panic(err) }
+	executor_plan := executor.LogicExecutorRuntimePlan{
+		executor:  executor.DisabledLogicExecutor{}
+		lifecycle: executor.disabled_executor_lifecycle()
+	}
+	mut app := build_app_runtime(provider.ProviderRuntimeSettings{}, executor_plan,
+		config.default_vhttpd_config(), plan, server_lifecycle.AppRuntimeBuildConfig{
+		plan_listener_id: 'web'
+	})
+	defer {
+		app.close_all_plugins()
+	}
+
+	assert app.providers.provider_runtime_driver('feishu') == 'vjsx'
+	assert app.providers.provider_runtime_plugin('feishu') == 'feishu-provider-runtime'
+	assert app.providers.provider_runtime_capability('feishu', 'send_message') == 'feishu.message.send'
+	assert 'feishu-provider-runtime' in app.protocols.plugins.configs
+	assert 'feishu-provider-runtime' in app.protocols.plugins.vjsx
+}
+
+fn test_provider_startup_keeps_v2_provider_runtime_driver() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_provider_runtime_startup_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	plugin_file := os.join_path(temp_dir, 'provider-runtime.mts')
+	os.write_file(plugin_file, '
+export function plugin(req) {
+  return {
+    ok: true,
+    source: "vjsx-provider-action",
+    capability: req.capability,
+    provider: req.metadata.provider,
+    action: req.metadata.action,
+  };
+}
+') or {
+		panic(err)
+	}
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	plan := runtime_plan.RuntimePlan{
+		listeners: {
+			'web': runtime_plan.ListenerPlan{
+				id:       'web'
+				protocol: 'http'
+			}
+		}
+		engines:   {
+			'provider-runtime': runtime_plan.EnginePlan{
+				id:      'provider-runtime'
+				kind:    'vjsx'
+				options: runtime_plan.PlanOptions{
+					strings: {
+						'entry': plugin_file
+					}
+				}
+			}
+		}
+		adapters:  {
+			'provider-send': runtime_plan.AdapterPlan{
+				id:      'provider-send'
+				kind:    'provider-action'
+				options: runtime_plan.PlanOptions{
+					strings: {
+						'provider': 'feishu'
+						'action':   'send_message'
+					}
+				}
+			}
+		}
+		providers: {
+			'feishu': runtime_plan.ProviderPlan{
+				id:           'feishu'
+				driver:       'vjsx'
+				plugin:       'feishu-provider-runtime'
+				engine:       runtime_plan.ResourceRef{
+					domain: .engine
+					id:     'provider-runtime'
+				}
+				capabilities: {
+					'send_message': 'feishu.message.send'
+				}
+			}
+		}
+		pipelines: [
+			runtime_plan.PipelinePlan{
+				id:      'provider/action'
+				ingress: runtime_plan.ResourceRef{
+					domain: .listener
+					id:     'web'
+				}
+				egress:  runtime_plan.ResourceRef{
+					domain: .adapter
+					id:     'provider-send'
+				}
+			},
+		]
+	}
+	executor_plan := executor.LogicExecutorRuntimePlan{
+		executor:  executor.DisabledLogicExecutor{}
+		lifecycle: executor.disabled_executor_lifecycle()
+	}
+	mut app := build_app_runtime(provider.ProviderRuntimeSettings{}, executor_plan,
+		config.default_vhttpd_config(), plan, server_lifecycle.AppRuntimeBuildConfig{
+		plan_listener_id: 'web'
+	})
+	defer {
+		app.close_all_plugins()
+	}
+	ProviderStartupRuntime.initialize(mut app)
+	resp := app.dispatch_provider_runtime_action(ProviderRuntimeActionRequest{
+		provider: 'feishu'
+		action:   'send_message'
+		payload:  '{"receive_id":"chat"}'
+	})
+
+	assert app.providers.provider_runtime_driver('feishu') == 'vjsx'
+	assert resp.ok
+	assert resp.result.contains('"source":"vjsx-provider-action"')
+	assert resp.result.contains('"capability":"feishu.message.send"')
+}
+
 fn test_provider_runtime_settings_are_scoped_to_listener_pipeline() {
 	fallback := provider.ProviderRuntimeSettings{
 		codex: provider.CodexRuntimeSettings{
@@ -2742,6 +3032,66 @@ fn test_resolve_multi_server_runtime_config_builds_listener_bound_sites() {
 	assert multi_cfg.listeners[1].site_cfg.vjsx.module_root == vjsx_root
 	assert !multi_cfg.listeners[1].runtime_cfg.admin_enabled
 	assert os.exists(pid_file)
+}
+
+fn test_resolve_multi_server_runtime_config_uses_cli_admin_port_for_owner() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_multi_listener_cli_admin_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	vjsx_root := os.join_path(temp_dir, 'app')
+	vjsx_app := os.join_path(vjsx_root, 'app.mts')
+	os.mkdir_all(vjsx_root) or { panic(err) }
+	os.write_file(vjsx_app,
+		'export default { async handle() { return { status: 200, body: "ok" }; } };') or {
+		panic(err)
+	}
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	mut cfg := config.default_vhttpd_config()
+	cfg.config_path = os.join_path(temp_dir, 'vhttpd.toml')
+	cfg.admin.port = 0
+	cfg.listeners = {
+		'a': config.ListenerConfig{
+			host: '127.0.0.1'
+			port: 18091
+			site: 'a'
+		}
+		'b': config.ListenerConfig{
+			host: '127.0.0.1'
+			port: 18092
+			site: 'b'
+		}
+	}
+	cfg.sites = {
+		'a': config.SiteConfig{
+			project_root: vjsx_root
+			executor:     config.ExecutorConfig{
+				kind: 'vjsx'
+			}
+			vjsx:         config.VjsxConfig{
+				app_entry: './app.mts'
+			}
+		}
+		'b': config.SiteConfig{
+			project_root: vjsx_root
+			executor:     config.ExecutorConfig{
+				kind: 'vjsx'
+			}
+			vjsx:         config.VjsxConfig{
+				app_entry: './app.mts'
+			}
+		}
+	}
+	multi_cfg := server_lifecycle.resolve_multi_server_runtime_config(['--admin-port', '19991'], cfg) or {
+		panic(err)
+	}
+	assert !multi_cfg.single_mode
+	assert multi_cfg.listeners.len == 2
+	assert multi_cfg.listeners[0].id == 'a'
+	assert multi_cfg.listeners[0].runtime_cfg.admin_enabled
+	assert multi_cfg.listeners[0].runtime_cfg.admin_port == 19991
+	assert multi_cfg.listeners[1].id == 'b'
+	assert !multi_cfg.listeners[1].runtime_cfg.admin_enabled
 }
 
 fn test_resolve_multi_server_runtime_config_rejects_unknown_site_binding() {

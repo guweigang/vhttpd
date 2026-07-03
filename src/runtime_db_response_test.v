@@ -118,3 +118,15 @@ fn test_cache_runtime_local_value_helpers_respect_ttl() {
 		assert true
 	}
 }
+
+fn test_cache_runtime_provider_snapshot_exposes_transport_state() {
+	mut app := App{
+		transport: TransportRuntimeHub{
+			cache: cachex.Runtime.new(true, '/tmp/vhttpd-cache-test.sock')
+		}
+	}
+	snapshot := app.provider_runtime_snapshot('cache') or { panic('missing cache snapshot') }
+	assert snapshot.contains('"enabled":true')
+	assert snapshot.contains('/tmp/vhttpd-cache-test.sock')
+	assert snapshot.contains('"keys":0')
+}

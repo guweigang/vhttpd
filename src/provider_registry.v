@@ -14,19 +14,8 @@ mut:
 	snapshot(mut ctx provider.RuntimeContext) string
 }
 
-// Global registry (kept minimal and simple).
-// The registry is now owned by App to avoid top-level mutable globals which
-// can be problematic across V versions. Helper functions below remain for
-// convenience but are thin wrappers around App methods when called with an
-// App reference.
-
-// NOTE: App now exposes methods to register and query providers via
-// ProviderHost on App, instead of top-level mutable globals.
-// The old global helpers (register_provider, get_provider, provider_names)
-// have been removed to eliminate unrecoverable panics in production code.
-
-// Provider registry helpers. Registry access is protected by App.mu at callers
-// that share the hub across request handlers.
+// Provider registry helpers. Registry access is owned by ProviderRuntimeHub;
+// callers that share the hub across request handlers protect access with App.mu.
 fn (mut host ProviderHost) ensure_maps() {
 	if host.registry.len == 0 {
 		host.registry = map[string]Provider{}

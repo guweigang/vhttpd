@@ -9,6 +9,8 @@ import feishu
 pub struct FeishuRuntimeSettings {
 pub:
 	enabled                    bool
+	runtime_driver             string
+	runtime_plugin             string
 	open_base_url              string
 	reconnect_delay_ms         int
 	token_refresh_skew_seconds int
@@ -56,11 +58,14 @@ pub:
 
 pub struct ProviderRuntimeSettings {
 pub:
-	feishu         FeishuRuntimeSettings
-	codex          CodexRuntimeSettings
-	bridge         BridgeRuntimeSettings
-	db             DbRuntimeSettings
-	ollama_enabled bool
+	runtime_drivers      map[string]string
+	runtime_plugins      map[string]string
+	runtime_capabilities map[string]map[string]string
+	feishu               FeishuRuntimeSettings
+	codex                CodexRuntimeSettings
+	bridge               BridgeRuntimeSettings
+	db                   DbRuntimeSettings
+	ollama_enabled       bool
 }
 
 pub fn ProviderRuntimeSettings.resolve(args []string, cfg config.VhttpdConfig) ProviderRuntimeSettings {
@@ -107,10 +112,17 @@ pub fn ProviderRuntimeSettings.resolve(args []string, cfg config.VhttpdConfig) P
 			app_secret: feishu_app_secret
 		}
 	}
+	runtime_drivers, runtime_plugins := provider_runtime_maps_from_config(cfg)
+	runtime_capabilities := provider_runtime_capability_maps_from_config(cfg)
 
 	return ProviderRuntimeSettings{
-		feishu:         FeishuRuntimeSettings{
+		runtime_drivers:      runtime_drivers
+		runtime_plugins:      runtime_plugins
+		runtime_capabilities: runtime_capabilities
+		feishu:               FeishuRuntimeSettings{
 			enabled:                    feishu_enabled
+			runtime_driver:             runtime_drivers['feishu'] or { 'native' }
+			runtime_plugin:             runtime_plugins['feishu'] or { '' }
 			open_base_url:              feishu_open_base_url
 			reconnect_delay_ms:         if cfg.feishu.reconnect_delay_ms > 0 {
 				cfg.feishu.reconnect_delay_ms
@@ -129,7 +141,7 @@ pub fn ProviderRuntimeSettings.resolve(args []string, cfg config.VhttpdConfig) P
 			}
 			apps:                       feishu_apps.clone()
 		}
-		codex:          CodexRuntimeSettings{
+		codex:           CodexRuntimeSettings{
 			enabled:            cfg.codex.enabled
 			url:                if cfg.codex.url.trim_space() != '' {
 				cfg.codex.url
@@ -168,14 +180,14 @@ pub fn ProviderRuntimeSettings.resolve(args []string, cfg config.VhttpdConfig) P
 				400
 			}
 		}
-		bridge:         BridgeRuntimeSettings{
+		bridge:          BridgeRuntimeSettings{
 			enabled:   cfg.feishu.bridge.enabled
 			ws_url:    cfg.feishu.bridge.ws_url
 			client_id: cfg.feishu.bridge.client_id
 			token:     cfg.feishu.bridge.token
 			target_id: cfg.feishu.bridge.target_id
 		}
-		db:             DbRuntimeSettings{
+		db:              DbRuntimeSettings{
 			enabled:      cfg.db.enabled
 			socket:       if cfg.db.socket.trim_space() != '' {
 				cfg.db.socket
@@ -205,8 +217,51 @@ pub fn ProviderRuntimeSettings.resolve(args []string, cfg config.VhttpdConfig) P
 				cfg.db.mysql.init_sql.clone()
 			}
 		}
-		ollama_enabled: config.CliArgs.bool_or(args, '--ollama-enabled', false)
+		ollama_enabled:  config.CliArgs.bool_or(args, '--ollama-enabled', false)
 	}
+}
+
+fn provider_runtime_capability_maps_from_config(cfg config.VhttpdConfig) map[string]map[string]string {
+	mut capability_routes := map[string]map[string]string{}
+	for name, provider_cfg in cfg.providers {
+		if provider_cfg.capabilities.len > 0 {
+			capability_routes[name] = provider_cfg.capabilities.clone()
+		}
+	}
+	return capability_routes
+}
+
+fn provider_runtime_maps_from_config(cfg config.VhttpdConfig) (map[string]string, map[string]string) {
+	mut drivers := map[string]string{}
+	mut plugins := map[string]string{}
+	drivers['feishu'] = normalize_runtime_driver(cfg.feishu.runtime_driver)
+	if cfg.feishu.runtime_plugin.trim_space() != '' {
+		plugins['feishu'] = cfg.feishu.runtime_plugin
+	}
+	for name, provider_cfg in cfg.providers {
+		runtime_driver := if provider_cfg.runtime.driver.trim_space() != '' {
+			provider_cfg.runtime.driver
+		} else {
+			provider_cfg.runtime_driver
+		}
+		runtime_plugin := if provider_cfg.runtime.plugin.trim_space() != '' {
+			provider_cfg.runtime.plugin
+		} else {
+			provider_cfg.runtime_plugin
+		}
+		drivers[name] = normalize_runtime_driver(runtime_driver)
+		if runtime_plugin.trim_space() != '' {
+			plugins[name] = runtime_plugin
+		} else {
+			plugins.delete(name)
+		}
+	}
+	for name in ['codex', 'db', 'cache'] {
+		if name !in drivers {
+			drivers[name] = 'native'
+		}
+	}
+	return drivers, plugins
 }
 
 pub fn normalize_db_driver(name string) string {
@@ -224,6 +279,24 @@ pub fn normalize_db_driver(name string) string {
 			} else {
 				'mysql'
 			}
+		}
+	}
+}
+
+pub fn normalize_runtime_driver(name string) string {
+	driver := name.trim_space().to_lower()
+	if driver == '' {
+		return 'native'
+	}
+	return match driver {
+		'native', 'v', 'builtin' {
+			'native'
+		}
+		'vjsx', 'js', 'javascript', 'typescript', 'ts' {
+			'vjsx'
+		}
+		else {
+			driver
 		}
 	}
 }

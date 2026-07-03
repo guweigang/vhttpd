@@ -12,6 +12,7 @@ pub mut:
 	adapters      map[string]V2AdapterSpec
 	transforms    map[string]V2TransformSpec
 	policies      V2PolicySpecs
+	providers     map[string]V2ProviderSpec
 	pipelines     []V2PipelineSpec
 	relays        map[string]V2RelaySpec
 }
@@ -157,6 +158,12 @@ pub mut:
 	kind               string
 	engine             string
 	storage            string
+	provider           string
+	action             string
+	capability         string
+	runtime_driver     string @[toml: 'runtime_driver']
+	runtime_plugin     string @[toml: 'runtime_plugin']
+	runtime_engine     string @[toml: 'runtime_engine']
 	document_root      string @[toml: 'document_root']
 	index              string
 	root               string
@@ -248,6 +255,22 @@ pub mut:
 	events            []string
 	options           map[string]string
 	record_options    map[string][]map[string]string @[toml: 'record_options']
+}
+
+pub struct V2ProviderSpec {
+pub mut:
+	runtime        V2ProviderRuntimeSpec
+	capabilities   map[string]string
+	runtime_driver string @[toml: 'runtime_driver']
+	runtime_plugin string @[toml: 'runtime_plugin']
+	options        map[string]string
+}
+
+pub struct V2ProviderRuntimeSpec {
+pub mut:
+	driver string = 'native'
+	plugin string
+	engine string
 }
 
 pub struct V2PipelineSpec {

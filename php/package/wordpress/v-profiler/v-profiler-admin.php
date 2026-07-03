@@ -24,6 +24,7 @@ add_filter('plugin_action_links', function (array $actions, string $plugin_file)
     if ($plugin_file === 'v-profiler.php' || $plugin_file === 'v-profiler/v-profiler.php' || $plugin_file === 'v-profiler-loader.php') {
         $settings_url = admin_url('admin.php?page=v-profiler-settings');
         $actions['settings'] = '<a href="' . esc_url($settings_url) . '">Settings</a>';
+        $actions['github'] = '<a href="https://github.com/guweigang/vhttpd" target="_blank" rel="noopener noreferrer">vhttpd GitHub</a>';
     }
     return $actions;
 }, 10, 2);
@@ -32,6 +33,7 @@ add_filter('network_admin_plugin_action_links', function (array $actions, string
     if ($plugin_file === 'v-profiler.php' || $plugin_file === 'v-profiler/v-profiler.php' || $plugin_file === 'v-profiler-loader.php') {
         $settings_url = admin_url('admin.php?page=v-profiler-settings');
         $actions['settings'] = '<a href="' . esc_url($settings_url) . '">Settings</a>';
+        $actions['github'] = '<a href="https://github.com/guweigang/vhttpd" target="_blank" rel="noopener noreferrer">vhttpd GitHub</a>';
     }
     return $actions;
 }, 10, 2);
@@ -465,32 +467,32 @@ function v_profiler_render_admin_page(): void {
                 <!-- Restricted Box -->
                 <div class="v-mode-box <?php echo $current_mode === 'restricted' ? 'selected' : ''; ?>" 
                      onclick="document.getElementById('switch-restricted-form').submit()">
-                    <span class="v-badge-mode orange">Restricted</span>
-                    <h4 class="v-mode-title">受限调试模式</h4>
-                    <span class="v-mode-desc">
-                        不写入 wp-content。仅进行性能与日志诊断。安全兼容 Nginx 架构。
-                    </span>
-                    <form id="switch-restricted-form" method="post" action="" style="display:none;">
-                        <?php wp_nonce_field('v_profiler_admin_action', 'v_profiler_nonce'); ?>
-                        <input type="hidden" name="v_profiler_action" value="switch_mode">
-                        <input type="hidden" name="target_mode" value="restricted">
-                    </form>
+                     <span class="v-badge-mode orange">Restricted</span>
+                     <h4 class="v-mode-title">受限调试模式</h4>
+                     <span class="v-mode-desc">
+                         不写入 wp-content。仅进行性能与日志诊断。安全兼容 Nginx 架构。
+                     </span>
+                     <form id="switch-restricted-form" method="post" action="" style="display:none;">
+                         <?php wp_nonce_field('v_profiler_admin_action', 'v_profiler_nonce'); ?>
+                         <input type="hidden" name="v_profiler_action" value="switch_mode">
+                         <input type="hidden" name="target_mode" value="restricted">
+                     </form>
                 </div>
 
                 <!-- Full vhttpd Box -->
                 <?php if ($is_vhttpd) : ?>
                 <div class="v-mode-box <?php echo $current_mode === 'full' ? 'selected' : ''; ?>" 
                      onclick="document.getElementById('switch-full-form').submit()">
-                    <span class="v-badge-mode green">Enterprise</span>
-                    <h4 class="v-mode-title">完整极速模式</h4>
-                    <span class="v-mode-desc">
-                        部署加速文件。接管 SQL 握手与缓存管理。获取 10x 商业加速与企业安全加固。
-                    </span>
-                    <form id="switch-full-form" method="post" action="" style="display:none;">
-                        <?php wp_nonce_field('v_profiler_admin_action', 'v_profiler_nonce'); ?>
-                        <input type="hidden" name="v_profiler_action" value="switch_mode">
-                        <input type="hidden" name="target_mode" value="full">
-                    </form>
+                     <span class="v-badge-mode green">Enterprise</span>
+                     <h4 class="v-mode-title">完整极速模式</h4>
+                     <span class="v-mode-desc">
+                         部署加速文件。接管 SQL 握手与缓存管理。获取 10x 商业加速与企业安全加固。
+                     </span>
+                     <form id="switch-full-form" method="post" action="" style="display:none;">
+                         <?php wp_nonce_field('v_profiler_admin_action', 'v_profiler_nonce'); ?>
+                         <input type="hidden" name="v_profiler_action" value="switch_mode">
+                         <input type="hidden" name="target_mode" value="full">
+                     </form>
                 </div>
                 <?php else : ?>
                 <div class="v-mode-box disabled" style="opacity: 0.5; cursor: not-allowed; border-color: rgba(255,255,255,0.02);" title="当前非 vhttpd 环境，不可用">
@@ -502,6 +504,19 @@ function v_profiler_render_admin_page(): void {
                 </div>
                 <?php endif; ?>
             </div>
+        </div>
+
+        <!-- Section: Guest Debugging Tips -->
+        <div class="v-section">
+            <h3 class="v-section-title">🔍 游客与多角色调试指引 (Guest & Multi-role Debugging)</h3>
+            <p style="margin:0 0 12px 0; font-size:12px; color:#cbd5e1; line-height:1.5;">
+                由于系统采用<strong>无状态 (Stateless)</strong> 且<strong>零数据库写入</strong>的设计，调试状态是通过加密 Cookie 维持的：
+            </p>
+            <ul style="margin: 0 0 5px 20px; padding: 0; list-style-type: disc; font-size: 11px; color: #94a3b8; line-height: 1.6;">
+                <li><strong>启用调试</strong>：以管理员身份登录并访问一次网站，系统会自动在当前浏览器中植入 <code>v_profiler_debug</code> 加密 Cookie（有效期 3 天）。</li>
+                <li><strong>游客/其他角色测试</strong>：在已植入 Cookie 的浏览器中，直接退出管理员账号或切换到其他普通账号，工具栏（Toolbar）依然会正常显示。</li>
+                <li><strong>关闭调试/隐藏工具栏</strong>：在浏览器地址栏访问带 <code>?v_profiler_logout=1</code> 的 URL，即可立即清除 Cookie 并停用调试。</li>
+            </ul>
         </div>
     </div>
     <?php

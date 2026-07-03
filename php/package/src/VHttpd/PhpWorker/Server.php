@@ -46,7 +46,7 @@ final class Server
             throw new \RuntimeException('vhttpd app entry not found: ' . $appPath);
         }
 
-        $app = require $appPath;
+        $app = self::normalizeApp(require $appPath);
         if (!is_callable($app)) {
             throw new \RuntimeException('vhttpd app entry must return a callable');
         }
@@ -124,11 +124,52 @@ final class Server
         return $error === 0 || in_array($error, $wouldBlock, true);
     }
 
+    private static function normalizeApp(mixed $app): mixed
+    {
+        if (is_callable($app)) {
+            return $app;
+        }
+        if (!is_array($app)) {
+            return $app;
+        }
+
+        $http = $app['http'] ?? null;
+        $stream = $app['stream'] ?? null;
+        if (!is_callable($http) && !is_callable($stream)) {
+            return $app;
+        }
+
+        return static function (array $payload, array $envelope = []) use ($http, $stream): mixed {
+            $mode = (string) ($payload['mode'] ?? '');
+            if ($mode === 'stream' && is_callable($stream)) {
+                return $stream($payload);
+            }
+            if (is_callable($http)) {
+                return $http($payload, $envelope);
+            }
+
+            return [
+                'mode' => 'stream',
+                'strategy' => 'dispatch',
+                'event' => 'open',
+                'id' => (string) ($payload['id'] ?? ''),
+                'handled' => false,
+                'done' => true,
+                'stream_type' => 'sse',
+                'content_type' => 'text/event-stream',
+                'headers' => [],
+                'state' => [],
+                'chunks' => [],
+            ];
+        };
+    }
+
     /**
      * @param \Socket $conn
      */
     private function handleConnection($conn): void
     {
+        $payload = [];
         try {
             $raw = self::readFrame($conn);
             $payload = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
@@ -141,12 +182,20 @@ final class Server
                 self::writeStreamResponse($conn, $payload, $result);
                 return;
             }
+            if (($payload['mode'] ?? '') === 'stream') {
+                self::writeFrame($conn, json_encode(self::normalizeStreamDispatchResponse($payload, $result), JSON_THROW_ON_ERROR));
+                return;
+            }
             self::writeFrame($conn, json_encode(self::normalizeResponse($payload, $result), JSON_THROW_ON_ERROR));
         } catch (Throwable $e) {
             if (str_contains($e->getMessage(), 'unexpected EOF')) {
                 return;
             }
             try {
+                if (($payload['mode'] ?? '') === 'stream') {
+                    self::writeFrame($conn, json_encode(self::streamErrorResponse($payload, $e), JSON_THROW_ON_ERROR));
+                    return;
+                }
                 self::writeFrame($conn, json_encode(self::errorResponse($e), JSON_THROW_ON_ERROR));
             } catch (Throwable) {
                 return;
@@ -231,6 +280,69 @@ final class Server
             'headers' => $headers,
             'body' => (string) ($result['body'] ?? ''),
         ];
+    }
+
+    private static function normalizeStreamDispatchResponse(array $request, mixed $result): array
+    {
+        if (!is_array($result)) {
+            $result = [];
+        }
+
+        return [
+            'mode' => 'stream',
+            'strategy' => (string) ($result['strategy'] ?? $request['strategy'] ?? 'dispatch'),
+            'event' => (string) ($result['event'] ?? $request['event'] ?? ''),
+            'id' => (string) ($result['id'] ?? $request['id'] ?? ''),
+            'handled' => (bool) ($result['handled'] ?? false),
+            'done' => (bool) ($result['done'] ?? true),
+            'stream_type' => (string) ($result['stream_type'] ?? 'sse'),
+            'content_type' => (string) ($result['content_type'] ?? 'text/event-stream'),
+            'headers' => self::normalizeHeaders($result['headers'] ?? []),
+            'state' => self::normalizeStringMap($result['state'] ?? []),
+            'chunks' => self::normalizeStreamChunks($result['chunks'] ?? []),
+            'error' => (string) ($result['error'] ?? ''),
+            'error_class' => (string) ($result['error_class'] ?? ''),
+        ];
+    }
+
+    private static function normalizeStreamChunks(mixed $chunks): array
+    {
+        if (!is_array($chunks)) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($chunks as $chunk) {
+            if (!is_array($chunk)) {
+                $chunk = ['data' => (string) $chunk];
+            }
+            $retry = $chunk['retry'] ?? 0;
+            $out[] = [
+                'event' => (string) ($chunk['event'] ?? ''),
+                'id' => (string) ($chunk['id'] ?? ''),
+                'data' => (string) ($chunk['data'] ?? ''),
+                'retry' => is_numeric($retry) ? (int) $retry : 0,
+            ];
+        }
+
+        return $out;
+    }
+
+    private static function normalizeStringMap(mixed $value): array
+    {
+        if (!is_array($value)) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($value as $key => $item) {
+            if (!is_string($key) && !is_int($key)) {
+                continue;
+            }
+            $out[(string) $key] = is_array($item) ? implode(', ', array_map('strval', $item)) : (string) $item;
+        }
+
+        return $out;
     }
 
     /**
@@ -333,6 +445,25 @@ final class Server
                 'x-vhttpd-error-class' => $e::class,
             ],
             'body' => 'Worker Error: ' . $e->getMessage(),
+        ];
+    }
+
+    private static function streamErrorResponse(array $request, Throwable $e): array
+    {
+        return [
+            'mode' => 'stream',
+            'strategy' => (string) ($request['strategy'] ?? 'dispatch'),
+            'event' => 'error',
+            'id' => (string) ($request['id'] ?? ''),
+            'handled' => true,
+            'done' => true,
+            'stream_type' => 'sse',
+            'content_type' => 'text/event-stream',
+            'headers' => [],
+            'state' => [],
+            'chunks' => [],
+            'error' => $e->getMessage(),
+            'error_class' => $e::class,
         ];
     }
 }

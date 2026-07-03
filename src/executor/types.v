@@ -163,6 +163,33 @@ pub:
 	details   LogicExecutorAdminDetails
 }
 
+pub struct AdminPipelineRouteSummary {
+pub:
+	pipeline_id string
+	group       string
+	ingress     string
+	egress      string
+	executor    string
+	methods     []string
+	paths       []string
+}
+
+pub struct AdminPipelineRuntimeSummary {
+pub:
+	listener_id string
+	route_count int
+	routes      []AdminPipelineRouteSummary
+}
+
+pub struct AdminListenerRuntimeSummary {
+pub:
+	listener_id string
+	site_id     string
+	host        string
+	port        int
+	pipelines   AdminPipelineRuntimeSummary
+}
+
 pub struct AdminActiveCounts {
 pub:
 	websockets   int
@@ -228,6 +255,8 @@ pub:
 	uptime_seconds  i64
 	worker_pool     AdminWorkerPoolSummary
 	logic_executor  AdminLogicExecutorSummary
+	pipelines       AdminPipelineRuntimeSummary
+	listeners       []AdminListenerRuntimeSummary
 	capabilities    map[string]bool
 	active          AdminActiveCounts
 	relay           AdminRelayRuntimeSummary

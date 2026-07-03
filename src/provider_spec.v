@@ -24,6 +24,7 @@ pub:
 	enabled          bool
 	has_handler      bool
 	has_runtime      bool
+	runtime_driver   string = 'native'
 	command_matchers []command.CommandMatcher
 	route_kind       command.ProviderRouteKind
 pub mut:
@@ -47,6 +48,11 @@ fn (host ProviderHost) admin_specs_snapshot() []provider.AdminProviderSpecSnapsh
 			enabled:          spec.enabled
 			has_handler:      spec.has_handler
 			has_runtime:      spec.has_runtime
+			runtime_driver:   if spec.runtime_driver.trim_space() == '' {
+				'native'
+			} else {
+				spec.runtime_driver
+			}
 			command_matchers: matcher_rows
 			route_kind:       spec.route_kind.snapshot_value()
 		}
@@ -64,6 +70,11 @@ fn (host ProviderHost) specs_copy() []ProviderSpec {
 			enabled:          spec.enabled
 			has_handler:      spec.has_handler
 			has_runtime:      spec.has_runtime
+			runtime_driver:   if spec.runtime_driver.trim_space() == '' {
+				'native'
+			} else {
+				spec.runtime_driver
+			}
 			command_matchers: spec.command_matchers.clone()
 			route_kind:       spec.route_kind
 			provider:         spec.provider

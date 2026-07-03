@@ -6,16 +6,69 @@ import provider
 
 fn ProviderRuntimeHub.new(settings provider.ProviderRuntimeSettings) ProviderRuntimeHub {
 	return ProviderRuntimeHub{
-		registry:  ProviderHost{
+		registry:             ProviderHost{
 			registry: map[string]Provider{}
 			specs:    map[string]ProviderSpec{}
 		}
-		instances: provider.ProviderInstanceRegistry{
+		runtime_drivers:      settings.runtime_drivers.clone()
+		runtime_plugins:      settings.runtime_plugins.clone()
+		runtime_capabilities: settings.runtime_capabilities.clone()
+		instances:            provider.ProviderInstanceRegistry{
 			specs: map[string]provider.ProviderInstanceSpec{}
 		}
-		codex:     codex_state_from_settings(settings)
-		feishu:    feishu_state_from_settings(settings)
+		codex:           codex_state_from_settings(settings)
+		feishu:          feishu_state_from_settings(settings)
 	}
+}
+
+fn (hub ProviderRuntimeHub) provider_runtime_driver(name string) string {
+	driver := hub.runtime_drivers[name] or { '' }
+	if driver.trim_space() == '' {
+		return 'native'
+	}
+	return driver
+}
+
+fn (hub ProviderRuntimeHub) provider_runtime_plugin(name string) string {
+	return hub.runtime_plugins[name] or { '' }
+}
+
+fn (hub ProviderRuntimeHub) provider_runtime_capability(provider_name string, action string) string {
+	if capabilities := hub.runtime_capabilities[provider_name] {
+		capability := capabilities[action] or { '' }
+		if capability.trim_space() != '' {
+			return capability
+		}
+	}
+	return 'provider.${provider_name}.${action}'
+}
+
+fn (mut hub ProviderRuntimeHub) apply_provider_runtime_settings(settings provider.ProviderRuntimeSettings) {
+	hub.runtime_drivers = settings.runtime_drivers.clone()
+	hub.runtime_plugins = settings.runtime_plugins.clone()
+	hub.runtime_capabilities = settings.runtime_capabilities.clone()
+	for name, spec in hub.registry.specs {
+		hub.registry.specs[name] = ProviderSpec{
+			...spec
+			runtime_driver: hub.provider_runtime_driver(name)
+		}
+	}
+}
+
+fn (hub ProviderRuntimeHub) provider_runtime_settings_snapshot() provider.ProviderRuntimeSettings {
+	return provider.ProviderRuntimeSettings{
+		runtime_drivers:      hub.runtime_drivers.clone()
+		runtime_plugins:      hub.runtime_plugins.clone()
+		runtime_capabilities: hub.runtime_capabilities.clone()
+		feishu:               provider.FeishuRuntimeSettings{
+			runtime_driver: hub.provider_runtime_driver('feishu')
+			runtime_plugin: hub.provider_runtime_plugin('feishu')
+		}
+	}
+}
+
+fn (mut app App) provider_runtime_settings_snapshot() provider.ProviderRuntimeSettings {
+	return app.providers.provider_runtime_settings_snapshot()
 }
 
 fn codex_state_from_settings(settings provider.ProviderRuntimeSettings) codex.CodexState {

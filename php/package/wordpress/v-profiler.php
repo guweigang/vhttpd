@@ -1,9 +1,11 @@
 <?php
 /**
- * Plugin Name: v-Profiler for WordPress
- * Description: Zero-dependency, ultra-performance debugger toolbar for WordPress sites running on vhttpd.
+ * Plugin Name: v-Profiler
+ * Plugin URI: https://github.com/guweigang/vhttpd
+ * Description: Zero-dependency, ultra-performance debugger toolbar for WordPress. Compatible with Nginx/FPM, with enhanced features on vhttpd.
  * Version: 0.1.0
  * Author: guweigang
+ * Author URI: https://github.com/guweigang
  */
 
 declare(strict_types=1);
@@ -66,8 +68,8 @@ add_filter('determine_current_user', static function ($userId) {
     return $userId;
 }, 1);
 
-// 3. 在 init 阶段校验用户身份
-add_action('init', static function (): void {
+// 3. 在 set_current_user 阶段校验用户身份（兼容长驻 Worker 每次请求的生命周期）
+add_action('set_current_user', static function (): void {
     $debug = defined('WP_DEBUG') && WP_DEBUG;
 
     // 检查是否在 wp-config.php 中禁用了挂件
@@ -75,18 +77,48 @@ add_action('init', static function (): void {
         Profiler::stopAndDeactivate();
         return;
     }
+
+    $cookieName = 'v_profiler_debug';
+    $cookieValue = hash_hmac('sha256', 'v_profiler_auth_session', defined('SECURE_AUTH_KEY') ? SECURE_AUTH_KEY : 'default_salt');
+    
+    // 如果用户在 URL 传入注销参数，主动清除 Cookie
+    if (isset($_GET['v_profiler_logout'])) {
+        $cookiePath = defined('COOKIEPATH') ? COOKIEPATH : '/';
+        $cookieDomain = defined('COOKIE_DOMAIN') ? COOKIE_DOMAIN : '';
+        $isSecure = is_ssl();
+        setcookie($cookieName, '', time() - 3600, $cookiePath, $cookieDomain, $isSecure, true);
+        $_COOKIE[$cookieName] = '';
+    }
     
     $canManage = current_user_can('manage_options');
     
+    // 如果是登录的管理员，自动为其写入/更新调试授权 Cookie，支持登出或切换账号后继续调试
+    if ($canManage) {
+        $cookiePath = defined('COOKIEPATH') ? COOKIEPATH : '/';
+        $cookieDomain = defined('COOKIE_DOMAIN') ? COOKIE_DOMAIN : '';
+        $isSecure = is_ssl();
+        if (!isset($_COOKIE[$cookieName]) || $_COOKIE[$cookieName] !== $cookieValue) {
+            setcookie($cookieName, $cookieValue, time() + 3 * 24 * 3600, $cookiePath, $cookieDomain, $isSecure, true);
+            $_COOKIE[$cookieName] = $cookieValue;
+        }
+    }
+
+    // 检查调试 Cookie 状态
+    $hasDebugCookie = false;
+    if (isset($_COOKIE[$cookieName]) && $_COOKIE[$cookieName] === $cookieValue) {
+        $hasDebugCookie = true;
+    }
+    
     // 写入诊断日志，方便查看激活状态
     error_log(sprintf(
-        '[v-Profiler] Auth Check: WP_DEBUG=%s, current_user_can(manage_options)=%s, request_uri=%s',
+        '[v-Profiler] Auth Check: WP_DEBUG=%s, current_user_can(manage_options)=%s, has_debug_cookie=%s, request_uri=%s',
         $debug ? 'true' : 'false',
         $canManage ? 'true' : 'false',
+        $hasDebugCookie ? 'true' : 'false',
         $_SERVER['REQUEST_URI'] ?? 'unknown'
     ));
 
-    if ($debug && $canManage) {
+    if ($debug && ($canManage || $hasDebugCookie)) {
         Profiler::activate();
     } else {
         // 普通访客或调试关闭时，立即停止采集并撤销错误捕获

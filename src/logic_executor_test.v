@@ -182,6 +182,42 @@ fn test_admin_runtime_snapshot_exposes_embedded_logic_executor_identity() {
 	assert snapshot.logic_executor.details.enable_fs
 }
 
+fn test_admin_runtime_snapshot_exposes_pipeline_runtime_summary() {
+	mut app := App{
+		pipelines: PipelineRuntime{
+			http: HttpRoutingRuntime{
+				listener_id: 'blog'
+				rules:       [
+					RuntimeRouteRule{
+						pipeline_id:  'blog/home'
+						pipeline_group: 'site:blog'
+						ingress_id:   'listener:blog'
+						egress_ref:   'adapter:blog-home'
+						match_method: ['GET']
+						match_path:   ['*']
+						executor:     'php'
+					},
+				]
+			}
+		}
+		engines:   EngineRuntime{
+			primary: worker.WorkerState{
+				logic_executor: executor.SocketWorkerExecutor{}
+			}
+		}
+	}
+	snapshot := app.admin_runtime_snapshot()
+	assert snapshot.pipelines.listener_id == 'blog'
+	assert snapshot.pipelines.route_count == 1
+	assert snapshot.pipelines.routes[0].pipeline_id == 'blog/home'
+	assert snapshot.pipelines.routes[0].group == 'site:blog'
+	assert snapshot.pipelines.routes[0].ingress == 'listener:blog'
+	assert snapshot.pipelines.routes[0].egress == 'adapter:blog-home'
+	assert snapshot.pipelines.routes[0].executor == 'php'
+	assert snapshot.pipelines.routes[0].methods == ['GET']
+	assert snapshot.pipelines.routes[0].paths == ['*']
+}
+
 fn test_internal_admin_runtime_exposes_worker_logic_executor_identity() {
 	mut app := App{
 		engines: EngineRuntime{
@@ -803,12 +839,14 @@ egress = "adapter:app"
 	assert state.last_apply.drain_statuses[0].inflight_requests == 1
 }
 
-fn test_internal_admin_runtime_plan_replacement_apply_rejects_engine_without_worker_pool() {
+fn test_internal_admin_runtime_plan_replacement_apply_reloads_transform_engine_without_worker_drain() {
 	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_plan_replacement_apply_embedded_engine_test')
 	os.mkdir_all(temp_dir) or { panic(err) }
 	current_file := os.join_path(temp_dir, 'current.toml')
 	config_file := os.join_path(temp_dir, 'next.toml')
 	event_log := os.join_path(temp_dir, 'events.ndjson')
+	app_file := os.join_path(temp_dir, 'app.php')
+	os.write_file(app_file, '<?php echo "ok";') or { panic(err) }
 	current_text := '
 version = 2
 
@@ -820,7 +858,7 @@ port = 18080
 
 [engines.app]
 kind = "php-worker"
-entry = "/tmp/app.php"
+entry = "${app_file}"
 
 [engines.upload-events]
 kind = "vjsx"
@@ -881,29 +919,32 @@ egress = "terminal:accepted"
 			'config': config_file
 		}
 	})
-	assert resp.status == 409
+	assert resp.status == 200
 	result := json.decode(RuntimePlanReplacementApplyResult, resp.body) or { panic(err) }
-	assert !result.applied
-	assert result.status == 'rejected'
-	assert result.strategy == 'engine_drain_required'
-	assert result.error == 'runtime_plan_replacement_engine_has_no_worker_pool:upload-events'
-	assert result.preview.drain_engines == ['upload-events']
+	assert result.applied
+	assert result.status == 'applied'
+	assert result.strategy == 'lightweight'
+	assert result.error == ''
+	assert result.preview.drain_engines.len == 0
+	assert result.preview.reload_transforms == ['upload-completed']
 	assert result.preview.changed_pipelines == ['upload.completed']
-	assert result.drains.len == 0
+	assert result.preview.actions[0].kind == 'swap_lightweight_runtime'
+	assert result.preview.actions[0].targets == ['upload-completed', 'upload.completed']
+	assert app.plan.engines['upload-events'].options.ints['thread_count'] == 2
 	state := app.runtime_plan_replacement_snapshot()
 	assert state.applies_total == 1
-	assert state.applied_total == 0
+	assert state.applied_total == 1
 	assert state.draining_total == 0
-	assert state.rejected_total == 1
+	assert state.rejected_total == 0
 	assert !state.pending.active
-	assert state.last_apply.status == 'rejected'
-	assert state.last_apply.error == 'runtime_plan_replacement_engine_has_no_worker_pool:upload-events'
-	assert state.last_apply.drain_engines == ['upload-events']
+	assert state.last_apply.status == 'applied'
+	assert state.last_apply.error == ''
+	assert state.last_apply.drain_engines.len == 0
+	assert state.last_apply.reload_transforms == ['upload-completed']
 	assert state.last_apply.changed_pipelines == ['upload.completed']
 	event_log_text := os.read_file(event_log) or { panic(err) }
-	assert event_log_text.contains('"type":"runtime.plan.replacement.rejected"')
-	assert event_log_text.contains('"error":"runtime_plan_replacement_engine_has_no_worker_pool:upload-events"')
-	assert event_log_text.contains('"drain_engines":"upload-events"')
+	assert event_log_text.contains('"type":"runtime.plan.replaced"')
+	assert event_log_text.contains('"reload_transforms":"upload-completed"')
 }
 
 fn test_runtime_plan_replacement_snapshot_exposes_pending_refresh_error() {

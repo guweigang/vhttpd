@@ -45,8 +45,10 @@ pub fn (e SocketWorkerExecutor) dispatch_http(mut app AppFacade, req HttpLogicDi
 	mut socket_port := worker_socket_port(app)
 	config_port := worker_backend_config_port(app)
 	selected_socket := socket_port.worker_backend_select_socket_for_kind(e.kind())!
-	mut conn := unix.connect_stream(selected_socket)!
-	socket_port.on_worker_request_started(selected_socket)
+	mut conn := unix.connect_stream(selected_socket) or {
+		socket_port.on_worker_request_released(selected_socket)
+		return error(err.msg())
+	}
 	read_timeout := config_port.worker_backend_read_timeout_ms_for_kind(e.kind())
 	if read_timeout > 0 {
 		conn.set_read_timeout(time.millisecond * read_timeout)
@@ -97,7 +99,10 @@ pub fn (e SocketWorkerExecutor) open_websocket_session(mut app AppFacade, req We
 	mut socket_port := worker_socket_port(app)
 	config_port := worker_backend_config_port(app)
 	selected_socket := socket_port.worker_backend_select_socket_queued()!
-	mut worker_conn := unix.connect_stream(selected_socket)!
+	mut worker_conn := unix.connect_stream(selected_socket) or {
+		socket_port.on_worker_request_released(selected_socket)
+		return error(err.msg())
+	}
 	read_timeout := config_port.worker_backend_read_timeout_ms()
 	if read_timeout > 0 {
 		worker_conn.set_read_timeout(time.millisecond * read_timeout)
@@ -105,10 +110,12 @@ pub fn (e SocketWorkerExecutor) open_websocket_session(mut app AppFacade, req We
 	accepted, status, body := socket_port.worker_websocket_open(mut worker_conn, req.req,
 		req.remote_addr, req.path, req.request_id, req.trace_id) or {
 		worker_conn.close() or {}
+		socket_port.on_worker_request_finished(selected_socket)
 		return error(err.msg())
 	}
 	if !accepted {
 		worker_conn.close() or {}
+		socket_port.on_worker_request_finished(selected_socket)
 		return WebSocketSessionOpenOutcome{
 			accepted: false
 			status:   status

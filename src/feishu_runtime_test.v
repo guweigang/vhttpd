@@ -8,6 +8,9 @@ import config
 import json
 import crypto.sha256
 import net.http
+import os
+import plugin
+import runtime_plan
 import time
 import toml
 import ws
@@ -319,14 +322,14 @@ fn test_feishu_runtime_http_fetch_serializes_parallel_requests() {
 
 fn test_feishu_runtime_send_and_update_share_one_http_lane() {
 	mut app := new_feishu_http_test_app()
-	send_result := app.feishu_runtime_send_message(feishu.SendMessageRequest{
+	send_result := app.providers.feishu_runtime_send_message(feishu.SendMessageRequest{
 		app:             'main'
 		receive_id_type: 'chat_id'
 		receive_id:      'oc_1'
 		msg_type:        'interactive'
 		content:         '{"elements":[{"tag":"markdown","content":"hello 1"}]}'
 	}) or { panic(err) }
-	update_result := app.feishu_runtime_update_message(feishu.UpdateMessageRequest{
+	update_result := app.providers.feishu_runtime_update_message(feishu.UpdateMessageRequest{
 		app:        'main'
 		message_id: 'om_2'
 		msg_type:   'interactive'
@@ -338,9 +341,299 @@ fn test_feishu_runtime_send_and_update_share_one_http_lane() {
 	assert app.providers.feishu.http_test_inflight == 0
 }
 
+fn test_provider_runtime_driver_reports_missing_vjsx_plugin() {
+	mut app := new_feishu_http_test_app()
+	app.providers.runtime_drivers = {
+		'feishu': 'vjsx'
+	}
+	if _ := app.providers.feishu_provider_runtime_send_message(feishu.SendMessageRequest{
+		app:             'main'
+		receive_id_type: 'chat_id'
+		receive_id:      'oc_1'
+		msg_type:        'text'
+		text:            'hello'
+	}, mut app)
+	{
+		assert false
+	} else {
+		assert err.msg() == 'provider_runtime_vjsx_plugin_missing:feishu'
+	}
+	assert app.providers.feishu.http_test_calls == 0
+}
+
+fn test_provider_runtime_driver_reports_unknown_driver() {
+	mut app := new_feishu_http_test_app()
+	app.providers.runtime_drivers = {
+		'feishu': 'python'
+	}
+	if _ := app.providers.feishu_provider_runtime_update_message(feishu.UpdateMessageRequest{
+		app:        'main'
+		message_id: 'om_1'
+		msg_type:   'interactive'
+		content:    '{}'
+	}, mut app)
+	{
+		assert false
+	} else {
+		assert err.msg() == 'provider_runtime_unknown_driver:feishu:python'
+	}
+	assert app.providers.feishu.http_test_calls == 0
+}
+
+fn test_provider_runtime_action_dispatch_calls_native_driver() {
+	mut app := new_feishu_http_test_app()
+	before_calls := app.providers.feishu.http_test_calls
+	payload := json.encode(feishu.SendMessageRequest{
+		app:             'main'
+		receive_id_type: 'chat_id'
+		receive_id:      'oc_action'
+		msg_type:        'text'
+		text:            'hello'
+	})
+	resp := app.dispatch_provider_runtime_action(ProviderRuntimeActionRequest{
+		provider: 'feishu'
+		action:   'send_message'
+		payload:  payload
+		trace_id: 'trace_action_native'
+	})
+
+	assert resp.ok
+	assert resp.provider == 'feishu'
+	assert resp.action == 'send_message'
+	result := json.decode(feishu.SendMessageResult, resp.result) or { panic(err) }
+	assert result.ok
+	assert result.message_id.starts_with('om_test_')
+	assert app.providers.feishu.http_test_calls > before_calls
+}
+
+fn test_feishu_provider_runtime_vjsx_driver_calls_configured_plugin() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_feishu_provider_vjsx_driver_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	plugin_file := os.join_path(temp_dir, 'feishu-provider.mts')
+	os.write_file(plugin_file, "
+export function plugin(req) {
+  const payload = JSON.parse(req.payload);
+  if (req.op === 'send_message') {
+    if (req.capability !== 'feishu.message.send') {
+      return { ok: false, error: 'capability:' + req.capability };
+    }
+    return { ok: true, message_id: 'vjsx-send-' + payload.receive_id };
+  }
+  if (req.op === 'update_message') {
+    return { ok: true, message_id: 'vjsx-update-' + payload.message_id };
+  }
+  if (req.op === 'upload_image') {
+    return { ok: true, image_key: 'vjsx-image-' + payload.filename };
+  }
+  return { ok: false, error: 'unsupported:' + req.op };
+}
+") or {
+		panic(err)
+	}
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	plugins := {
+		'feishu-provider': config.PluginConfig{
+			kind:            'vjsx'
+			app_entry:       plugin_file
+			runtime_profile: 'node'
+			thread_count:    1
+		}
+	}
+	mut app := new_feishu_http_test_app()
+	app.providers.runtime_drivers = {
+		'feishu': 'vjsx'
+	}
+	app.providers.runtime_plugins = {
+		'feishu': 'feishu-provider'
+	}
+	app.providers.runtime_capabilities = {
+		'feishu': {
+			'send_message': 'feishu.message.send'
+		}
+	}
+	app.protocols.plugins = plugin.PluginState{
+		configs: plugins
+		vjsx:    build_vjsx_plugin_runtimes(plugins)
+	}
+	defer {
+		app.close_all_plugins()
+	}
+	send_result := app.providers.feishu_provider_runtime_send_message(feishu.SendMessageRequest{
+		app:             'main'
+		receive_id_type: 'chat_id'
+		receive_id:      'oc_vjsx'
+		msg_type:        'text'
+		text:            'hello'
+	}, mut app) or { panic(err) }
+	update_result := app.providers.feishu_provider_runtime_update_message(feishu.UpdateMessageRequest{
+		app:        'main'
+		message_id: 'om_vjsx'
+		msg_type:   'interactive'
+		content:    '{}'
+	}, mut app) or { panic(err) }
+	upload_result := app.providers.feishu_provider_runtime_upload_image(feishu.UploadImageRequest{
+		app:            'main'
+		filename:       'demo.png'
+		content_type:   'image/png'
+		data_base64:    'AA=='
+		content_length: 1
+	}, mut app) or { panic(err) }
+	assert send_result.message_id == 'vjsx-send-oc_vjsx'
+	assert update_result.message_id == 'vjsx-update-om_vjsx'
+	assert upload_result.image_key == 'vjsx-image-demo.png'
+	assert app.providers.feishu.http_test_calls == 0
+}
+
+fn test_provider_runtime_action_dispatch_calls_vjsx_driver() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_provider_action_vjsx_driver_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	plugin_file := os.join_path(temp_dir, 'provider-action.mts')
+	os.write_file(plugin_file, "
+export function plugin(req) {
+  const payload = JSON.parse(req.payload);
+  if (req.capability !== 'feishu.message.send') {
+    return { ok: false, error: 'capability:' + req.capability };
+  }
+  return { ok: true, message_id: 'generic-' + payload.receive_id, trace_id: req.trace_id };
+}
+") or {
+		panic(err)
+	}
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	plugins := {
+		'provider-action': config.PluginConfig{
+			kind:            'vjsx'
+			app_entry:       plugin_file
+			runtime_profile: 'node'
+			thread_count:    1
+		}
+	}
+	mut app := new_feishu_http_test_app()
+	app.providers.runtime_drivers = {
+		'feishu': 'vjsx'
+	}
+	app.providers.runtime_plugins = {
+		'feishu': 'provider-action'
+	}
+	app.providers.runtime_capabilities = {
+		'feishu': {
+			'send_message': 'feishu.message.send'
+		}
+	}
+	app.protocols.plugins = plugin.PluginState{
+		configs: plugins
+		vjsx:    build_vjsx_plugin_runtimes(plugins)
+	}
+	defer {
+		app.close_all_plugins()
+	}
+	resp := app.dispatch_provider_runtime_action(ProviderRuntimeActionRequest{
+		provider: 'feishu'
+		action:   'send_message'
+		payload:  json.encode(feishu.SendMessageRequest{
+			app:             'main'
+			receive_id_type: 'chat_id'
+			receive_id:      'oc_generic'
+			msg_type:        'text'
+			text:            'hello'
+		})
+		trace_id: 'trace_action_vjsx'
+	})
+	result := json.decode(feishu.SendMessageResult, resp.result) or { panic(err) }
+
+	assert resp.ok
+	assert result.message_id == 'generic-oc_generic'
+	assert app.providers.feishu.http_test_calls == 0
+}
+
+fn test_pipeline_runtime_provider_action_adapter_dispatches_vjsx_driver() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_pipeline_provider_action_vjsx_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	plugin_file := os.join_path(temp_dir, 'pipeline-provider-action.mts')
+	os.write_file(plugin_file, "
+export function plugin(req) {
+  const payload = JSON.parse(req.payload);
+  return {
+    ok: true,
+    message_id: 'pipeline-' + payload.receive_id,
+    metadata_pipeline: req.metadata.pipeline_id,
+    metadata_adapter: req.metadata.adapter_id,
+  };
+}
+") or {
+		panic(err)
+	}
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	plugins := {
+		'pipeline-provider-action': config.PluginConfig{
+			kind:            'vjsx'
+			app_entry:       plugin_file
+			runtime_profile: 'node'
+			thread_count:    1
+		}
+	}
+	mut app := new_feishu_http_test_app()
+	app.providers.runtime_drivers = {
+		'feishu': 'vjsx'
+	}
+	app.providers.runtime_plugins = {
+		'feishu': 'pipeline-provider-action'
+	}
+	app.protocols.plugins = plugin.PluginState{
+		configs: plugins
+		vjsx:    build_vjsx_plugin_runtimes(plugins)
+	}
+	defer {
+		app.close_all_plugins()
+	}
+	rt := PipelineRuntime{}
+	adapter := runtime_plan.AdapterPlan{
+		id:      'provider-send'
+		kind:    'provider-action'
+		options: runtime_plan.PlanOptions{
+			strings: {
+				'provider': 'feishu'
+				'action':   'send_message'
+			}
+		}
+	}
+	rule := RuntimeRouteRule{
+		pipeline_id: 'provider.send'
+		ingress_id:  'listener:web'
+	}
+	req := MatchedHttpPipelineRequest{
+		method:            'POST'
+		path:              '/provider/send'
+		normalized_target: '/provider/send'
+		req_id:            'req-provider-action'
+		trace_id:          'trace-provider-action'
+	}
+	resp := rt.dispatch_http_provider_action(mut app, adapter, 'provider-send', rule, req,
+		json.encode(feishu.SendMessageRequest{
+			app:             'main'
+			receive_id_type: 'chat_id'
+			receive_id:      'oc_pipeline'
+			msg_type:        'text'
+			text:            'hello'
+		}))
+	result := json.decode(feishu.SendMessageResult, resp.result) or { panic(err) }
+
+	assert resp.ok
+	assert result.message_id == 'pipeline-oc_pipeline'
+	assert resp.result.contains('"metadata_pipeline":"provider.send"')
+	assert resp.result.contains('"metadata_adapter":"provider-send"')
+	assert app.providers.feishu.http_test_calls == 0
+}
+
 fn test_feishu_runtime_send_message_supports_message_reply_target() {
 	mut app := new_feishu_http_test_app()
-	send_result := app.feishu_runtime_send_message(feishu.SendMessageRequest{
+	send_result := app.providers.feishu_runtime_send_message(feishu.SendMessageRequest{
 		app:             'main'
 		receive_id_type: 'message_id'
 		receive_id:      'om_source_1'
@@ -969,7 +1262,7 @@ fn test_feishu_update_message_rejects_non_interactive_message_id_updates_locally
 			}
 		}
 	}
-	app.feishu_runtime_update_message(feishu.UpdateMessageRequest{
+	app.providers.feishu_runtime_update_message(feishu.UpdateMessageRequest{
 		app:             'main'
 		message_id:      'om_123'
 		message_id_type: 'message_id'

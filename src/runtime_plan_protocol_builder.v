@@ -10,6 +10,7 @@ import state_store
 
 struct ProtocolRuntimePlanUpdate {
 	runtime_plan_json string
+	plugin_configs    map[string]config.PluginConfig
 	mcp               mcp_protocol.McpState
 	openai            openai.OpenaiState
 }
@@ -32,6 +33,7 @@ fn ProtocolRuntimeHub.from_plan(cfg config.VhttpdConfig, plan runtime_plan.Runti
 fn protocol_runtime_plan_update_from_plan(plan runtime_plan.RuntimePlan, listener_id string) ProtocolRuntimePlanUpdate {
 	return ProtocolRuntimePlanUpdate{
 		runtime_plan_json: json.encode(plan)
+		plugin_configs:    plugin_configs_from_plan(plan)
 		mcp:               mcp_state_from_plan(plan, listener_id)
 		openai:            openai_state_from_plan(plan, listener_id)
 	}
@@ -39,8 +41,55 @@ fn protocol_runtime_plan_update_from_plan(plan runtime_plan.RuntimePlan, listene
 
 fn (mut hub ProtocolRuntimeHub) apply_plan_update(update ProtocolRuntimePlanUpdate) {
 	hub.runtime_plan_json = update.runtime_plan_json
+	hub.apply_plugin_config_update(update.plugin_configs)
 	hub.mcp = update.mcp
 	hub.openai = update.openai
+}
+
+fn (mut hub ProtocolRuntimeHub) apply_plugin_config_update(configs map[string]config.PluginConfig) {
+	old_configs := hub.plugins.configs.clone()
+	old_vjsx := hub.plugins.vjsx.clone()
+	mut next_vjsx := map[string]InProcVjsxExecutor{}
+	mut names := configs.keys()
+	names.sort()
+	for name in names {
+		cfg := configs[name]
+		old_cfg := old_configs[name] or {
+			built := build_vjsx_plugin_runtimes({
+				name: cfg
+			})
+			if runtime := built[name] {
+				next_vjsx[name] = runtime
+			}
+			continue
+		}
+		if plugin_config_fingerprint(old_cfg) == plugin_config_fingerprint(cfg) {
+			if runtime := old_vjsx[name] {
+				next_vjsx[name] = runtime
+			}
+			continue
+		}
+		if runtime := old_vjsx[name] {
+			runtime.close()
+		}
+		built := build_vjsx_plugin_runtimes({
+			name: cfg
+		})
+		if runtime := built[name] {
+			next_vjsx[name] = runtime
+		}
+	}
+	for name, runtime in old_vjsx {
+		if name !in configs {
+			runtime.close()
+		}
+	}
+	hub.plugins.configs = configs.clone()
+	hub.plugins.vjsx = next_vjsx.clone()
+}
+
+fn plugin_config_fingerprint(cfg config.PluginConfig) string {
+	return json.encode(cfg)
 }
 
 fn mcp_state_from_plan(plan runtime_plan.RuntimePlan, listener_id string) mcp_protocol.McpState {
@@ -238,22 +287,60 @@ fn plugin_configs_from_plan(plan runtime_plan.RuntimePlan) map[string]config.Plu
 		name := id.all_after_last('/')
 		engine_ref := transform.engine or { continue }
 		engine := plan.engines[engine_ref.id] or { continue }
-		configs[name] = config.PluginConfig{
-			kind:              transform.kind
-			entry:             engine.options.strings['entry']
-			app_entry:         engine.options.strings['entry']
-			module_root:       engine.options.strings['module_root']
-			build_root:        engine.options.strings['build_root']
-			signature_root:    engine.options.strings['signature_root']
-			signature_include: engine.options.string_lists['signature_include'].clone()
-			signature_exclude: engine.options.string_lists['signature_exclude'].clone()
-			runtime_profile:   engine.options.strings['runtime_profile']
-			thread_count:      engine.options.ints['thread_count']
-			max_requests:      engine.options.ints['max_requests']
-			enable_fs:         engine.options.bools['enable_fs']
-			enable_process:    engine.options.bools['enable_process']
-			enable_network:    engine.options.bools['enable_network']
+		configs[name] = plugin_config_from_engine(transform.kind, engine)
+	}
+	mut provider_ids := plan.providers.keys()
+	provider_ids.sort()
+	for id in provider_ids {
+		provider := plan.providers[id]
+		if provider.plugin.trim_space() == '' {
+			continue
 		}
+		engine_ref := provider.engine or { continue }
+		engine := plan.engines[engine_ref.id] or { continue }
+		kind := if engine.kind.trim_space() != '' { engine.kind } else { provider.driver }
+		configs[provider.plugin] = plugin_config_from_engine(kind, engine)
+	}
+	mut adapter_ids := plan.adapters.keys()
+	adapter_ids.sort()
+	for id in adapter_ids {
+		adapter := plan.adapters[id]
+		if adapter.kind != 'provider-action' {
+			continue
+		}
+		plugin_name := adapter.options.strings['runtime_plugin'].trim_space()
+		engine_raw := adapter.options.strings['runtime_engine'].trim_space()
+		if plugin_name == '' || engine_raw == '' {
+			continue
+		}
+		engine_ref := runtime_plan.parse_ref(engine_raw) or { continue }
+		if engine_ref.domain != .engine {
+			continue
+		}
+		engine := plan.engines[engine_ref.id] or { continue }
+		driver := adapter.options.strings['runtime_driver']
+		kind := if engine.kind.trim_space() != '' { engine.kind } else { driver }
+		configs[plugin_name] = plugin_config_from_engine(kind, engine)
 	}
 	return configs
+}
+
+fn plugin_config_from_engine(kind string, engine runtime_plan.EnginePlan) config.PluginConfig {
+	entry := engine.options.strings['entry']
+	return config.PluginConfig{
+		kind:              kind
+		entry:             entry
+		app_entry:         entry
+		module_root:       engine.options.strings['module_root']
+		build_root:        engine.options.strings['build_root']
+		signature_root:    engine.options.strings['signature_root']
+		signature_include: engine.options.string_lists['signature_include'].clone()
+		signature_exclude: engine.options.string_lists['signature_exclude'].clone()
+		runtime_profile:   engine.options.strings['runtime_profile']
+		thread_count:      engine.options.ints['thread_count']
+		max_requests:      engine.options.ints['max_requests']
+		enable_fs:         engine.options.bools['enable_fs']
+		enable_process:    engine.options.bools['enable_process']
+		enable_network:    engine.options.bools['enable_network']
+	}
 }

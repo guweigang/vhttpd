@@ -134,7 +134,8 @@ fn test_build_engine_runtime_keeps_distinct_v2_completion_engines_with_same_exec
 						'entry': vjsx_entry
 					}
 					ints:    {
-						'thread_count': 1
+						'thread_count':    1
+						'read_timeout_ms': 222
 					}
 				}
 			}
@@ -260,7 +261,9 @@ fn test_build_engine_runtime_keeps_distinct_v2_completion_engines_with_same_exec
 	routes := runtime_routes_from_plan(plan, 'web')
 
 	engine_runtime := build_engine_runtime_with_diagnostics_from_plan(cfg, executor_plan, plan,
-		'web', routes, server_lifecycle.AppRuntimeBuildConfig{}).runtime
+		'web', routes, server_lifecycle.AppRuntimeBuildConfig{
+		worker_read_timeout_ms: 777
+	}).runtime
 
 	assert 'upload-a/vjsx' in engine_runtime.additional
 	assert 'upload-b/vjsx' in engine_runtime.additional
@@ -269,6 +272,8 @@ fn test_build_engine_runtime_keeps_distinct_v2_completion_engines_with_same_exec
 	upload_b := engine_runtime.additional['upload-b/vjsx'] or { panic('missing upload-b/vjsx') }
 	assert upload_a.logic_executor.kind() == 'vjsx'
 	assert upload_b.logic_executor.kind() == 'vjsx'
+	assert upload_a.worker_backend.read_timeout_ms == 222
+	assert upload_b.worker_backend.read_timeout_ms == 777
 }
 
 fn test_build_engine_runtime_ignores_legacy_upload_completion_handler_for_v2_plan() {

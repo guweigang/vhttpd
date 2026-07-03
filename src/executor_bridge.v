@@ -80,6 +80,11 @@ pub fn (mut w AppFacadeWrapper) on_worker_request_finished(socket_path string) {
 	app.on_worker_request_finished(socket_path)
 }
 
+pub fn (mut w AppFacadeWrapper) on_worker_request_released(socket_path string) {
+	mut app := unsafe { &App(w.app_ptr) }
+	app.on_worker_request_released(socket_path)
+}
+
 pub fn (mut w AppFacadeWrapper) worker_websocket_open(mut conn unix.StreamConn, req http.Request, remote_addr string, path string, req_id string, trace_id string) !(bool, int, string) {
 	mut app := unsafe { &App(w.app_ptr) }
 	return app.worker_websocket_open(mut conn, req, remote_addr, path, req_id, trace_id)

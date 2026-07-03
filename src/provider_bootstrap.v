@@ -1,4 +1,5 @@
 module main
+
 import provider
 
 // Provider bootstrap is intentionally isolated from transport/runtime startup
@@ -14,21 +15,25 @@ fn (mut app App) bootstrap_providers() {
 			mut feishu_ctx := app.build_provider_context('feishu')
 			provider_register_and_start(mut app, 'feishu', mut p, mut feishu_ctx)
 			app.register_provider_spec(ProviderSpec{
-				name:        'feishu'
-				enabled:     true
-				has_handler: true
-				has_runtime: true
+				name:             'feishu'
+				enabled:          true
+				has_handler:      true
+				has_runtime:      true
+				runtime_driver:   app.providers.provider_runtime_driver('feishu')
 				command_matchers: [
-					provider.CommandMatcher{kind: provider.CommandMatcherKind.prefix, value: 'feishu.message.'},
+					provider.CommandMatcher{
+						kind:  provider.CommandMatcherKind.prefix
+						value: 'feishu.message.'
+					},
 				]
-				route_kind: provider.ProviderRouteKind.feishu
-				provider:    p
-				handler:     h
-				runtime:     ProviderRuntimeAdapter{
+				route_kind:       provider.ProviderRouteKind.feishu
+				provider:         p
+				handler:          h
+				runtime:          ProviderRuntimeAdapter{
 					provider: p
 					ctx:      feishu_ctx
 				}
-				lifecycle_ctx: feishu_ctx
+				lifecycle_ctx:    feishu_ctx
 			})
 		}
 	}
@@ -41,25 +46,28 @@ fn (mut app App) bootstrap_providers() {
 			mut codex_ctx := app.build_provider_context('codex')
 			provider_register_and_start(mut app, 'codex', mut p, mut codex_ctx)
 			app.register_provider_spec(ProviderSpec{
-				name:        'codex'
-				enabled:     true
-				has_handler: true
-				has_runtime: true
+				name:             'codex'
+				enabled:          true
+				has_handler:      true
+				has_runtime:      true
+				runtime_driver:   app.providers.provider_runtime_driver('codex')
 				command_matchers: [
-					provider.CommandMatcher{kind: provider.CommandMatcherKind.prefix, value: 'codex.'},
+					provider.CommandMatcher{
+						kind:  provider.CommandMatcherKind.prefix
+						value: 'codex.'
+					},
 				]
-				route_kind: provider.ProviderRouteKind.codex
-				provider:    p
-				handler:     h
-				runtime:     ProviderRuntimeAdapter{
+				route_kind:       provider.ProviderRouteKind.codex
+				provider:         p
+				handler:          h
+				runtime:          ProviderRuntimeAdapter{
 					provider: p
 					ctx:      codex_ctx
 				}
-				lifecycle_ctx: codex_ctx
+				lifecycle_ctx:    codex_ctx
 			})
 		}
 	}
-
 
 	// Database upstream (runtime skeleton)
 	if app.provider_bootstrap_enabled('db') {
@@ -67,19 +75,20 @@ fn (mut app App) bootstrap_providers() {
 		mut db_ctx := app.build_provider_context('db')
 		provider_register_and_start(mut app, 'db', mut p, mut db_ctx)
 		app.register_provider_spec(ProviderSpec{
-			name:        'db'
-			enabled:     true
-			has_handler: false
-			has_runtime: true
+			name:             'db'
+			enabled:          true
+			has_handler:      false
+			has_runtime:      true
+			runtime_driver:   app.providers.provider_runtime_driver('db')
 			command_matchers: []provider.CommandMatcher{}
-			route_kind: provider.ProviderRouteKind.generic
-			provider:    p
-			handler:     provider.NoopProviderCommandHandler{}
-			runtime:     ProviderRuntimeAdapter{
+			route_kind:       provider.ProviderRouteKind.generic
+			provider:         p
+			handler:          provider.NoopProviderCommandHandler{}
+			runtime:          ProviderRuntimeAdapter{
 				provider: p
 				ctx:      db_ctx
 			}
-			lifecycle_ctx: db_ctx
+			lifecycle_ctx:    db_ctx
 		})
 	}
 
@@ -91,21 +100,25 @@ fn (mut app App) bootstrap_providers() {
 			mut ollama_ctx := app.build_provider_context('ollama')
 			provider_register_and_start(mut app, 'ollama', mut p, mut ollama_ctx)
 			app.register_provider_spec(ProviderSpec{
-				name:        'ollama'
-				enabled:     true
-				has_handler: true
-				has_runtime: true
+				name:             'ollama'
+				enabled:          true
+				has_handler:      true
+				has_runtime:      true
+				runtime_driver:   app.providers.provider_runtime_driver('ollama')
 				command_matchers: [
-					provider.CommandMatcher{kind: provider.CommandMatcherKind.prefix, value: 'ollama.message.'},
+					provider.CommandMatcher{
+						kind:  provider.CommandMatcherKind.prefix
+						value: 'ollama.message.'
+					},
 				]
-				route_kind: provider.ProviderRouteKind.ollama
-				provider:    p
-				handler:     h
-				runtime:     ProviderRuntimeAdapter{
+				route_kind:       provider.ProviderRouteKind.ollama
+				provider:         p
+				handler:          h
+				runtime:          ProviderRuntimeAdapter{
 					provider: p
 					ctx:      ollama_ctx
 				}
-				lifecycle_ctx: ollama_ctx
+				lifecycle_ctx:    ollama_ctx
 			})
 		}
 	}

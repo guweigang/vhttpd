@@ -72,6 +72,87 @@ fn test_provider_runtime_snapshots_expose_registered_runtime() {
 	assert snapshots[0].snapshot == '{}'
 }
 
+fn test_provider_runtime_driver_is_configurable() {
+	mut settings := provider.ProviderRuntimeSettings.resolve([], config.VhttpdConfig{
+		feishu:    config.FeishuConfig{
+			enabled: true
+			apps:    {
+				'main': config.FeishuAppConfig{
+					app_id:     'app'
+					app_secret: 'secret'
+				}
+			}
+		}
+		providers: {
+			'feishu': config.ProviderConfig{
+				runtime: config.ProviderRuntimeConfig{
+					driver: 'typescript'
+					plugin: 'feishu_runtime'
+				}
+				capabilities: {
+					'send_message': 'feishu.message.send'
+				}
+			}
+		}
+	})
+	assert settings.feishu.runtime_driver == 'vjsx'
+	assert settings.feishu.runtime_plugin == 'feishu_runtime'
+	assert settings.runtime_drivers['feishu'] == 'vjsx'
+	assert settings.runtime_plugins['feishu'] == 'feishu_runtime'
+	assert settings.runtime_capabilities['feishu']['send_message'] == 'feishu.message.send'
+	mut app := App{
+		providers: ProviderRuntimeHub.new(settings)
+	}
+	app.bootstrap_providers()
+	specs := app.admin_provider_specs_snapshot()
+	feishu_spec := specs.filter(it.name == 'feishu')[0]
+	assert feishu_spec.runtime_driver == 'vjsx'
+}
+
+fn test_provider_runtime_settings_apply_refreshes_admin_spec_driver() {
+	mut app := App{
+		providers: ProviderRuntimeHub.new(provider.ProviderRuntimeSettings{
+			runtime_drivers: {
+				'feishu': 'native'
+			}
+		})
+	}
+	app.register_provider_spec(ProviderSpec{
+		name:             'feishu'
+		enabled:          true
+		has_handler:      true
+		has_runtime:      true
+		runtime_driver:   'native'
+		command_matchers: []provider.CommandMatcher{}
+		route_kind:       .feishu
+		provider:         FeishuProvider{}
+		handler:          provider.NoopProviderCommandHandler{}
+		runtime:          NoopProviderRuntime{}
+	})
+
+	app.providers.apply_provider_runtime_settings(provider.ProviderRuntimeSettings{
+		runtime_drivers: {
+			'feishu': 'vjsx'
+		}
+		runtime_plugins: {
+			'feishu': 'feishu_runtime'
+		}
+		runtime_capabilities: {
+			'feishu': {
+				'send_message': 'feishu.message.send'
+			}
+		}
+	})
+	specs := app.admin_provider_specs_snapshot()
+	feishu_spec := specs.filter(it.name == 'feishu')[0]
+
+	assert app.providers.provider_runtime_driver('feishu') == 'vjsx'
+	assert app.providers.provider_runtime_plugin('feishu') == 'feishu_runtime'
+	assert app.providers.provider_runtime_capability('feishu', 'send_message') == 'feishu.message.send'
+	assert app.providers.provider_runtime_capability('feishu', 'update_message') == 'provider.feishu.update_message'
+	assert feishu_spec.runtime_driver == 'vjsx'
+}
+
 fn test_provider_enabled_and_runtime_snapshot_use_host() {
 	mut app := App{
 		providers: ProviderRuntimeHub{
@@ -309,6 +390,40 @@ fn test_admin_provider_instance_snapshots_include_dynamic_and_static_compat_rows
 	assert !snapshots[2].runtime_connected
 	assert snapshots[2].runtime_url == 'wss://feishu.local/main'
 	assert snapshots[2].config_fields == ['app_id', 'app_secret']
+}
+
+fn test_admin_provider_instance_upsert_rejects_invalid_config_without_storing() {
+	mut app := App{
+		providers: ProviderRuntimeHub{
+			codex:     codex.CodexState{
+				runtime: codex.ProviderRuntime{}
+			}
+			instances: provider.ProviderInstanceRegistry{
+				specs: map[string]provider.ProviderInstanceSpec{}
+			}
+		}
+	}
+	mut rejected := false
+	if _ := app.admin_provider_instance_upsert_from_body('{"provider":"codex","instance":"broken","config_json":"{bad json","desired_state":"connected"}') {
+		assert false
+	} else {
+		rejected = true
+		assert err.msg().contains('provider_instance_invalid_codex_config')
+	}
+	assert rejected
+	if _ := app.provider_instance_get('codex', 'broken') {
+		assert false
+	} else {
+		assert true
+	}
+	result := app.admin_provider_instance_upsert_from_body('{"provider":"codex","instance":"project_demo","config_json":"{\\"url\\":\\"ws://127.0.0.1:1/project-demo\\",\\"model\\":\\"e2e\\"}","desired_state":"connected"}') or {
+		panic(err)
+	}
+	assert result.ok
+	assert result.status == 'upserted'
+	assert result.snapshot.provider == 'codex'
+	assert result.snapshot.instance == 'project_demo'
+	assert result.snapshot.config_fields == ['model', 'url']
 }
 
 fn test_provider_runtime_upstream_snapshot_helpers() {

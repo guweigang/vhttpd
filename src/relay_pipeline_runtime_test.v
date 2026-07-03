@@ -1,6 +1,9 @@
 module main
 
 import dispatch
+import config
+import os
+import plugin
 import relay
 import runtime_plan
 import worker
@@ -393,6 +396,99 @@ fn test_dispatch_relay_pipeline_exchange_delivers_terminal_adapter() {
 	assert outcome.status == 202
 	assert outcome.body == 'relay ok'
 	assert outcome.channel_id == 'chan-1'
+}
+
+fn test_dispatch_relay_pipeline_exchange_delivers_provider_action_adapter() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_relay_provider_action_vjsx_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	plugin_file := os.join_path(temp_dir, 'relay-provider-action.mts')
+	os.write_file(plugin_file, "
+export function plugin(req) {
+  const payload = JSON.parse(req.payload);
+  return {
+    ok: true,
+    message_id: 'relay-' + payload.receive_id,
+    metadata_pipeline: req.metadata.pipeline_id,
+    metadata_channel: req.metadata.channel_id,
+  };
+}
+") or {
+		panic(err)
+	}
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	plugins := {
+		'relay-provider-action': config.PluginConfig{
+			kind:            'vjsx'
+			app_entry:       plugin_file
+			runtime_profile: 'node'
+			thread_count:    1
+		}
+	}
+	mut app := App{
+		plan:      runtime_plan.RuntimePlan{
+			adapters:  {
+				'provider-send': runtime_plan.AdapterPlan{
+					id:      'provider-send'
+					kind:    'provider-action'
+					options: runtime_plan.PlanOptions{
+						strings: {
+							'provider': 'feishu'
+							'action':   'send_message'
+						}
+					}
+				}
+			}
+			pipelines: [
+				runtime_plan.PipelinePlan{
+					id:      'edge/provider-send'
+					ingress: runtime_plan.ResourceRef{
+						domain: .relay
+						id:     'edge'
+					}
+					egress:  runtime_plan.ResourceRef{
+						domain: .adapter
+						id:     'provider-send'
+					}
+				},
+			]
+		}
+		providers: ProviderRuntimeHub{
+			runtime_drivers: {
+				'feishu': 'vjsx'
+			}
+			runtime_plugins: {
+				'feishu': 'relay-provider-action'
+			}
+		}
+	}
+	app.protocols.plugins = plugin.PluginState{
+		configs: plugins
+		vjsx:    build_vjsx_plugin_runtimes(plugins)
+	}
+	defer {
+		app.close_all_plugins()
+	}
+	mut exchange := dispatch.relay_ingress_exchange(dispatch.RelayIngressRequest{
+		relay_id:   'edge'
+		frame_id:   'frm-provider'
+		trace_id:   'trace-provider'
+		request_id: 'req-provider'
+		pipeline:   'edge/provider-send'
+		channel_id: 'chan-provider'
+		session_id: 'sess-provider'
+		body:       '{"receive_id":"oc_relay"}'
+	})
+
+	outcome := app.dispatch_relay_pipeline_exchange(mut exchange)
+
+	assert outcome.action == 'response'
+	assert outcome.status == 200
+	assert outcome.channel_id == 'chan-provider'
+	assert outcome.body.contains('"message_id":"relay-oc_relay"')
+	assert outcome.body.contains('"metadata_pipeline":"edge/provider-send"')
+	assert outcome.body.contains('"metadata_channel":"chan-provider"')
 }
 
 fn test_relay_pipeline_outcome_with_send_result_preserves_dispatch_fields() {

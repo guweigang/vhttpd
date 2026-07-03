@@ -8,6 +8,7 @@ pub:
 	restart_listeners   []string
 	drain_engines       []string
 	reload_transforms   []string
+	reload_providers    []string
 	reload_relays       []string
 	reasons             []string
 }
@@ -31,9 +32,11 @@ pub fn diff_runtime_plan_replacement(old RuntimePlan, new RuntimePlan) PlanRepla
 	changed_listeners := changed_listener_ids(old, new)
 	changed_resources := changed_resource_ids(old, new)
 	changed_engines := changed_engine_ids(old, new)
+	drain_engines := drain_engine_ids_for_replacement(old, new, changed_engines)
 	changed_adapters := changed_adapter_ids(old, new)
-	changed_transforms := changed_transform_ids(old, new)
+	changed_transforms := changed_transform_ids(old, new, changed_engines)
 	changed_policies := changed_policy_ids(old, new)
+	changed_providers := changed_provider_ids(old, new, changed_engines)
 	changed_relays := changed_relay_ids(old, new)
 	mut unchanged_pipelines := []string{}
 	mut changed_pipelines := []string{}
@@ -60,19 +63,47 @@ pub fn diff_runtime_plan_replacement(old RuntimePlan, new RuntimePlan) PlanRepla
 		unchanged_pipelines: unchanged_pipelines
 		changed_pipelines:   changed_pipelines
 		restart_listeners:   changed_listeners
-		drain_engines:       changed_engines
+		drain_engines:       drain_engines
 		reload_transforms:   changed_transforms
+		reload_providers:    changed_providers
 		reload_relays:       changed_relays
 		reasons:             reasons
 	}
 }
 
+fn drain_engine_ids_for_replacement(old RuntimePlan, new RuntimePlan, changed_engines []string) []string {
+	mut adapter_engine_ids := map[string]bool{}
+	for _, adapter in old.adapters {
+		if engine := adapter.engine {
+			if engine.domain == .engine {
+				adapter_engine_ids[engine.id] = true
+			}
+		}
+	}
+	for _, adapter in new.adapters {
+		if engine := adapter.engine {
+			if engine.domain == .engine {
+				adapter_engine_ids[engine.id] = true
+			}
+		}
+	}
+	mut out := []string{}
+	for id in changed_engines {
+		if adapter_engine_ids[id] {
+			out << id
+		}
+	}
+	return out
+}
+
 pub fn execution_plan_for_replacement(diff PlanReplacementDiff) PlanReplacementExecutionPlan {
 	mut actions := []PlanReplacementAction{}
-	if diff.changed_pipelines.len > 0 || diff.reload_transforms.len > 0 {
+	if diff.changed_pipelines.len > 0 || diff.reload_transforms.len > 0
+		|| diff.reload_providers.len > 0 {
 		actions << PlanReplacementAction{
 			kind:    'swap_lightweight_runtime'
-			targets: map_key_union(diff.changed_pipelines, diff.reload_transforms)
+			targets: map_key_union(map_key_union(diff.changed_pipelines, diff.reload_transforms),
+				diff.reload_providers)
 		}
 	}
 	if diff.restart_listeners.len > 0 {
@@ -289,13 +320,15 @@ fn changed_adapter_ids(old RuntimePlan, new RuntimePlan) []string {
 	return out
 }
 
-fn changed_transform_ids(old RuntimePlan, new RuntimePlan) []string {
+fn changed_transform_ids(old RuntimePlan, new RuntimePlan, changed_engines []string) []string {
 	mut ids := map_key_union(old.transforms.keys(), new.transforms.keys())
 	mut out := []string{}
 	for id in ids {
-		if transform_fingerprint(old.transforms[id] or { TransformPlan{} }) != transform_fingerprint(new.transforms[id] or {
-			TransformPlan{}
-		}) {
+		old_transform := old.transforms[id] or { TransformPlan{} }
+		new_transform := new.transforms[id] or { TransformPlan{} }
+		if transform_fingerprint(old_transform) != transform_fingerprint(new_transform)
+			|| optional_ref_engine_changed(old_transform.engine, new_transform.engine,
+				changed_engines) {
 			out << id
 		}
 	}
@@ -313,6 +346,35 @@ fn changed_policy_ids(old RuntimePlan, new RuntimePlan) []string {
 		}
 	}
 	return out
+}
+
+fn changed_provider_ids(old RuntimePlan, new RuntimePlan, changed_engines []string) []string {
+	mut ids := map_key_union(old.providers.keys(), new.providers.keys())
+	mut out := []string{}
+	for id in ids {
+		old_provider := old.providers[id] or { ProviderPlan{} }
+		new_provider := new.providers[id] or { ProviderPlan{} }
+		if provider_fingerprint(old_provider) != provider_fingerprint(new_provider)
+			|| optional_ref_engine_changed(old_provider.engine, new_provider.engine,
+				changed_engines) {
+			out << id
+		}
+	}
+	return out
+}
+
+fn optional_ref_engine_changed(old_ref ?ResourceRef, new_ref ?ResourceRef, changed_engines []string) bool {
+	if old_engine := old_ref {
+		if old_engine.domain == .engine && old_engine.id in changed_engines {
+			return true
+		}
+	}
+	if new_engine := new_ref {
+		if new_engine.domain == .engine && new_engine.id in changed_engines {
+			return true
+		}
+	}
+	return false
 }
 
 fn changed_relay_ids(old RuntimePlan, new RuntimePlan) []string {
@@ -382,6 +444,10 @@ fn transform_fingerprint(value TransformPlan) string {
 
 fn policy_fingerprint(value PolicyPlan) string {
 	return '${value.id}|${value.category}|${value.kind}|${options_fingerprint(value.options)}'
+}
+
+fn provider_fingerprint(value ProviderPlan) string {
+	return '${value.id}|${value.driver}|${value.plugin}|${optional_ref_fingerprint(value.engine)}|${string_map_fingerprint(value.capabilities)}|${options_fingerprint(value.options)}'
 }
 
 fn pipeline_fingerprint(value PipelinePlan) string {

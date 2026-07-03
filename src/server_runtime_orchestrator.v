@@ -4,6 +4,7 @@ import log
 import net
 import net.openssl
 import os
+import runtime
 import veb
 import server_lifecycle
 
@@ -100,6 +101,7 @@ fn serve_server_runtime(mut app App, runtime_cfg server_lifecycle.ServerRuntimeC
 			host:                 runtime_cfg.host
 			port:                 runtime_cfg.port
 			family:               .ip
+			nr_workers:           runtime.nr_jobs()
 			show_startup_message: false
 			ssl_config:           openssl.SSLConnectConfig{
 				cert:     runtime_cfg.ssl_cert
@@ -112,6 +114,7 @@ fn serve_server_runtime(mut app App, runtime_cfg server_lifecycle.ServerRuntimeC
 		host:                 runtime_cfg.host
 		port:                 runtime_cfg.port
 		family:               .ip
+		nr_workers:           runtime.nr_jobs()
 		show_startup_message: false
 	) or { report_server_runtime_failure(mut app, err.msg()) }
 }

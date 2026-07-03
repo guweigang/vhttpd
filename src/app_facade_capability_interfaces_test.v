@@ -13,6 +13,7 @@ fn accepts_worker_backend_config_facade(f executor.WorkerBackendConfigFacade) bo
 fn accepts_worker_socket_facade(mut f executor.WorkerSocketFacade) bool {
 	f.on_worker_request_started('/tmp/noop.sock')
 	f.on_worker_request_finished('/tmp/noop.sock')
+	f.on_worker_request_released('/tmp/noop.sock')
 	return true
 }
 

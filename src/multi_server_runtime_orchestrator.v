@@ -60,25 +60,26 @@ fn relay_delivery_owner_binding_index(bindings []MultiServerAppBinding, websocke
 	return none
 }
 
-fn run_multi_server(args []string, cfg config.VhttpdConfig) {
+fn run_multi_server(args []string, cfg config.VhttpdConfig) ! {
 	log.debug('[vhttpd] run_multi_server: resolving multi-server config')
 	runtime_cfg := server_lifecycle.resolve_multi_server_runtime_config(args, cfg) or {
 		log.error('multi server runtime config resolve failed: ${err}')
-		return
+		return err
 	}
 	if runtime_cfg.single_mode {
 		log.debug('[vhttpd] run_multi_server: fallback to single mode')
-		run_single_server(args, cfg)
+		run_single_server(args, cfg)!
 		return
 	}
 	if runtime_cfg.listeners.len == 0 {
-		log.error('multi server runtime start failed: no listeners configured')
-		return
+		msg := 'multi server runtime start failed: no listeners configured'
+		log.error(msg)
+		return error(msg)
 	}
 	for binding in runtime_cfg.listeners {
 		preflight_server_bind(binding.runtime_cfg) or {
 			log.error('[vhttpd] ${err.msg()}')
-			return
+			return err
 		}
 	}
 	mut apps := build_multi_server_apps(runtime_cfg)

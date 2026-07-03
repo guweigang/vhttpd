@@ -23,6 +23,7 @@ mut:
 	worker_backend_select_socket_for_kind(kind string) !string
 	on_worker_request_started(socket_path string)
 	on_worker_request_finished(socket_path string)
+	on_worker_request_released(socket_path string)
 	worker_websocket_open(mut conn unix.StreamConn, req http.Request, remote_addr string, path string, req_id string, trace_id string) !(bool, int, string)
 }
 
@@ -167,6 +168,10 @@ pub fn (mut port WorkerSocketPort) on_worker_request_started(socket_path string)
 
 pub fn (mut port WorkerSocketPort) on_worker_request_finished(socket_path string) {
 	port.inner.on_worker_request_finished(socket_path)
+}
+
+pub fn (mut port WorkerSocketPort) on_worker_request_released(socket_path string) {
+	port.inner.on_worker_request_released(socket_path)
 }
 
 pub fn (mut port WorkerSocketPort) worker_websocket_open(mut conn unix.StreamConn, req http.Request, remote_addr string, path string, req_id string, trace_id string) !(bool, int, string) {

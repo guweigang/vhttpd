@@ -444,6 +444,238 @@ fn test_plan_replacement_allows_stateful_transform_with_externalized_state() {
 	assert diff.reasons.len == 0
 }
 
+fn test_plan_replacement_provider_runtime_change_is_lightweight() {
+	old := RuntimePlan{
+		providers: {
+			'feishu': ProviderPlan{
+				id:     'feishu'
+				driver: 'native'
+			}
+		}
+	}
+	new := RuntimePlan{
+		providers: {
+			'feishu': ProviderPlan{
+				id:     'feishu'
+				driver: 'vjsx'
+				plugin: 'feishu_runtime'
+			}
+		}
+	}
+
+	diff := diff_runtime_plan_replacement(old, new)
+	plan := execution_plan_for_replacement(diff)
+
+	assert diff.allowed
+	assert diff.reload_providers == ['feishu']
+	assert plan.allowed
+	assert plan.strategy == 'lightweight'
+	assert plan.actions.len == 1
+	assert plan.actions[0].kind == 'swap_lightweight_runtime'
+	assert plan.actions[0].targets == ['feishu']
+}
+
+fn test_plan_replacement_provider_runtime_engine_change_does_not_drain_worker_engine() {
+	old := RuntimePlan{
+		engines:   {
+			'feishu_runtime': EnginePlan{
+				id:      'feishu_runtime'
+				kind:    'vjsx'
+				options: PlanOptions{
+					strings: {
+						'entry': 'providers/feishu-old.mts'
+					}
+				}
+			}
+		}
+		providers: {
+			'feishu': ProviderPlan{
+				id:     'feishu'
+				driver: 'vjsx'
+				plugin: 'feishu_runtime'
+				engine: ResourceRef{
+					domain: .engine
+					id:     'feishu_runtime'
+				}
+			}
+		}
+	}
+	new := RuntimePlan{
+		...old
+		engines: {
+			'feishu_runtime': EnginePlan{
+				...old.engines['feishu_runtime']
+				options: PlanOptions{
+					strings: {
+						'entry': 'providers/feishu-new.mts'
+					}
+				}
+			}
+		}
+	}
+
+	diff := diff_runtime_plan_replacement(old, new)
+	plan := execution_plan_for_replacement(diff)
+
+	assert diff.allowed
+	assert diff.drain_engines.len == 0
+	assert diff.reload_providers == ['feishu']
+	assert plan.allowed
+	assert plan.strategy == 'lightweight'
+	assert plan.actions.len == 1
+	assert plan.actions[0].kind == 'swap_lightweight_runtime'
+	assert plan.actions[0].targets == ['feishu']
+}
+
+fn test_plan_replacement_transform_engine_change_reloads_transform_without_drain() {
+	old := RuntimePlan{
+		engines:    {
+			'bridge_runtime': EnginePlan{
+				id:      'bridge_runtime'
+				kind:    'vjsx'
+				options: PlanOptions{
+					strings: {
+						'entry': 'transforms/bridge-old.mts'
+					}
+				}
+			}
+		}
+		transforms: {
+			'bridge': TransformPlan{
+				id:      'bridge'
+				kind:    'vjsx'
+				engine:  ResourceRef{
+					domain: .engine
+					id:     'bridge_runtime'
+				}
+				handler: 'bridge.transform'
+			}
+		}
+	}
+	new := RuntimePlan{
+		...old
+		engines: {
+			'bridge_runtime': EnginePlan{
+				...old.engines['bridge_runtime']
+				options: PlanOptions{
+					strings: {
+						'entry': 'transforms/bridge-new.mts'
+					}
+				}
+			}
+		}
+	}
+
+	diff := diff_runtime_plan_replacement(old, new)
+	plan := execution_plan_for_replacement(diff)
+
+	assert diff.allowed
+	assert diff.drain_engines.len == 0
+	assert diff.reload_transforms == ['bridge']
+	assert plan.allowed
+	assert plan.strategy == 'lightweight'
+	assert plan.actions.len == 1
+	assert plan.actions[0].kind == 'swap_lightweight_runtime'
+	assert plan.actions[0].targets == ['bridge']
+}
+
+fn test_plan_replacement_relay_change_requires_relay_reload() {
+	old := RuntimePlan{
+		relays: {
+			'edge': RelayPlan{
+				id:      'edge'
+				mode:    'public'
+				carrier: 'websocket'
+				options: PlanOptions{
+					strings: {
+						'path': '/relay'
+					}
+				}
+			}
+		}
+	}
+	new := RuntimePlan{
+		...old
+		relays: {
+			'edge': RelayPlan{
+				...old.relays['edge']
+				options: PlanOptions{
+					strings: {
+						'path': '/relay-next'
+					}
+				}
+			}
+		}
+	}
+
+	diff := diff_runtime_plan_replacement(old, new)
+	plan := execution_plan_for_replacement(diff)
+
+	assert diff.allowed
+	assert diff.reload_relays == ['edge']
+	assert !plan.allowed
+	assert plan.strategy == 'relay_reload_required'
+	assert plan.error == 'runtime_plan_replacement_requires_relay_reload'
+	assert plan.actions.len == 1
+	assert plan.actions[0].kind == 'reload_relays'
+	assert plan.actions[0].targets == ['edge']
+}
+
+fn test_plan_replacement_relay_ingress_change_marks_pipeline_changed() {
+	old := RuntimePlan{
+		relays:    {
+			'edge': RelayPlan{
+				id:      'edge'
+				mode:    'agent'
+				carrier: 'websocket'
+				options: PlanOptions{
+					strings: {
+						'url': 'ws://127.0.0.1:8080/relay'
+					}
+				}
+			}
+		}
+		adapters:  {
+			'response': AdapterPlan{
+				id:   'response'
+				kind: 'fixed-response'
+			}
+		}
+		pipelines: [
+			PipelinePlan{
+				id:      'relay/local-response'
+				ingress: ResourceRef{
+					domain: .relay
+					id:     'edge'
+				}
+				egress:  ResourceRef{
+					domain: .adapter
+					id:     'response'
+				}
+			},
+		]
+	}
+	new := RuntimePlan{
+		...old
+		relays: {
+			'edge': RelayPlan{
+				...old.relays['edge']
+				options: PlanOptions{
+					strings: {
+						'url': 'ws://127.0.0.1:9090/relay'
+					}
+				}
+			}
+		}
+	}
+
+	diff := diff_runtime_plan_replacement(old, new)
+
+	assert diff.reload_relays == ['edge']
+	assert diff.changed_pipelines == ['relay/local-response']
+	assert diff.unchanged_pipelines.len == 0
+}
+
 fn test_plan_replacement_execution_plan_allows_lightweight_swap() {
 	diff := PlanReplacementDiff{
 		allowed:             true

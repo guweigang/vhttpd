@@ -64,6 +64,8 @@ pub fn (mut a NoOpAppFacade) on_worker_request_started(_socket_path string) {}
 
 pub fn (mut a NoOpAppFacade) on_worker_request_finished(_socket_path string) {}
 
+pub fn (mut a NoOpAppFacade) on_worker_request_released(_socket_path string) {}
+
 pub fn (mut a NoOpAppFacade) worker_websocket_open(mut _conn unix.StreamConn, _req http.Request, _remote_addr string, _path string, _req_id string, _trace_id string) !(bool, int, string) {
 	return error('noop')
 }

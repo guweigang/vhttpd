@@ -9,17 +9,12 @@ struct WorkerBackendDispatchRuntime {}
 
 struct WorkerBackendDispatchContext {
 	open_fn    fn () !worker.WorkerBackendConnection = unsafe { nil }
-	start_fn   fn (string) = unsafe { nil }
 	finish_fn  fn (string) = unsafe { nil }
 	timeout_ms int
 }
 
 fn (ctx WorkerBackendDispatchContext) open() !worker.WorkerBackendConnection {
 	return ctx.open_fn()
-}
-
-fn (ctx WorkerBackendDispatchContext) started(socket_path string) {
-	ctx.start_fn(socket_path)
 }
 
 fn (ctx WorkerBackendDispatchContext) finished(socket_path string) {
@@ -31,9 +26,6 @@ fn (mut app App) build_worker_backend_dispatch_context() WorkerBackendDispatchCo
 		open_fn:    fn [mut app] () !worker.WorkerBackendConnection {
 			return app.worker_backend_open_connection()
 		}
-		start_fn:   fn [mut app] (socket_path string) {
-			app.on_worker_request_started(socket_path)
-		}
 		finish_fn:  fn [mut app] (socket_path string) {
 			app.on_worker_request_finished(socket_path)
 		}
@@ -43,7 +35,6 @@ fn (mut app App) build_worker_backend_dispatch_context() WorkerBackendDispatchCo
 
 fn WorkerBackendDispatchRuntime.stream(ctx WorkerBackendDispatchContext, req transport.StreamDispatchRequest) !transport.StreamDispatchResponse {
 	mut worker_conn := ctx.open()!
-	ctx.started(worker_conn.socket_path)
 	defer {
 		ctx.finished(worker_conn.socket_path)
 		worker_conn.close()
@@ -55,7 +46,6 @@ fn WorkerBackendDispatchRuntime.stream(ctx WorkerBackendDispatchContext, req tra
 
 fn WorkerBackendDispatchRuntime.mcp(ctx WorkerBackendDispatchContext, req transport.WorkerMcpDispatchRequest) !transport.WorkerMcpDispatchResponse {
 	mut worker_conn := ctx.open()!
-	ctx.started(worker_conn.socket_path)
 	defer {
 		ctx.finished(worker_conn.socket_path)
 		worker_conn.close()
@@ -67,7 +57,6 @@ fn WorkerBackendDispatchRuntime.mcp(ctx WorkerBackendDispatchContext, req transp
 
 fn WorkerBackendDispatchRuntime.websocket_upstream(ctx WorkerBackendDispatchContext, req transport.WorkerWebSocketUpstreamDispatchRequest) !transport.WorkerWebSocketUpstreamDispatchResponse {
 	mut worker_conn := ctx.open()!
-	ctx.started(worker_conn.socket_path)
 	defer {
 		ctx.finished(worker_conn.socket_path)
 		worker_conn.close()
@@ -81,7 +70,6 @@ fn WorkerBackendDispatchRuntime.websocket_upstream(ctx WorkerBackendDispatchCont
 
 fn WorkerBackendDispatchRuntime.websocket_event(ctx WorkerBackendDispatchContext, frame transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse {
 	mut worker_conn := ctx.open()!
-	ctx.started(worker_conn.socket_path)
 	defer {
 		ctx.finished(worker_conn.socket_path)
 		worker_conn.close()

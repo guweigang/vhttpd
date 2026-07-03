@@ -73,23 +73,23 @@ fn (mut app App) feishu_provider_pull_ws_endpoint(app_name string) !string {
 	return error('feishu ws endpoint request failed: ${last_error}')
 }
 
-fn (mut app App) feishu_runtime_tenant_access_token(app_name string) !string {
-	_ := app.providers.feishu.app_config(app_name)!
+fn (mut hub ProviderRuntimeHub) feishu_runtime_tenant_access_token(app_name string) !string {
+	_ := hub.feishu.app_config(app_name)!
 	now := time.now().unix()
-	app.providers.feishu.mu.@lock()
-	if runtime := app.providers.feishu.runtime[app_name] {
+	hub.feishu.mu.@lock()
+	if runtime := hub.feishu.runtime[app_name] {
 		if runtime.tenant_access_token != ''
-			&& now + i64(app.providers.feishu.token_refresh_skew_seconds) < runtime.tenant_access_token_expire_unix {
+			&& now + i64(hub.feishu.token_refresh_skew_seconds) < runtime.tenant_access_token_expire_unix {
 			token := runtime.tenant_access_token
-			app.providers.feishu.mu.unlock()
+			hub.feishu.mu.unlock()
 			return token
 		}
 	}
-	app.providers.feishu.mu.unlock()
-	app_cfg := app.providers.feishu.app_config(app_name)!
+	hub.feishu.mu.unlock()
+	app_cfg := hub.feishu.app_config(app_name)!
 	body := feishu.TenantTokenResponse.request_body(app_cfg.app_id, app_cfg.app_secret)
-	resp := (&app.providers.feishu).http_fetch(
-		url:    '${app.providers.feishu.open_base_url}/auth/v3/tenant_access_token/internal'
+	resp := (&hub.feishu).http_fetch(
+		url:    '${hub.feishu.open_base_url}/auth/v3/tenant_access_token/internal'
 		method: .post
 		data:   body
 		header: http.new_header(key: .content_type, value: 'application/json; charset=utf-8')
@@ -98,8 +98,8 @@ fn (mut app App) feishu_runtime_tenant_access_token(app_name string) !string {
 		return error('feishu tenant token request failed with status ${resp.status_code}')
 	}
 	token, expire := feishu.TenantTokenResponse.parse(resp.body)!
-	mut runtime := app.providers.feishu.ensure(app_name)
+	mut runtime := hub.feishu.ensure(app_name)
 	runtime.cache_tenant_access_token(token, now + expire)
-	app.providers.feishu.update_runtime(app_name, runtime)
+	hub.feishu.update_runtime(app_name, runtime)
 	return token
 }

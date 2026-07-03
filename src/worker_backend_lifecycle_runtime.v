@@ -142,6 +142,10 @@ fn (mut app App) on_worker_request_finished(socket_path string) {
 	app.engines.request_finished(port, socket_path)
 }
 
+fn (mut app App) on_worker_request_released(socket_path string) {
+	app.engines.request_released(socket_path)
+}
+
 fn (mut runtime EngineRuntime) ensure_workers_alive_for_state(port EngineLifecyclePort, mut ws worker.WorkerState) {
 	if !ws.worker_backend.autostart || ws.worker_backend.managed_workers.len == 0 {
 		return

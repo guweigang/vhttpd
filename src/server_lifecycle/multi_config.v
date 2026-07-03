@@ -44,7 +44,8 @@ pub fn resolve_multi_server_runtime_config(args []string, cfg config.VhttpdConfi
 	listeners := cfg.resolve_multi_listeners()!
 	mut listener_ids := listeners.keys()
 	listener_ids.sort()
-	admin_owner_listener_id := if cfg.admin.port > 0 && listener_ids.len > 0 {
+	admin_port := config.CliArgs.int_or(args, '--admin-port', cfg.admin.port)
+	admin_owner_listener_id := if admin_port > 0 && listener_ids.len > 0 {
 		listener_ids[0]
 	} else {
 		''
@@ -95,7 +96,8 @@ pub fn resolve_multi_server_runtime_config(args []string, cfg config.VhttpdConfi
 fn resolve_plan_multi_server_runtime_config(args []string, cfg config.VhttpdConfig, plan runtime_plan.RuntimePlan) !MultiServerRuntimeConfig {
 	mut listener_ids := plan.listeners.keys()
 	listener_ids.sort()
-	admin_owner_listener_id := if cfg.admin.port > 0 && listener_ids.len > 0 {
+	admin_port := config.CliArgs.int_or(args, '--admin-port', cfg.admin.port)
+	admin_owner_listener_id := if admin_port > 0 && listener_ids.len > 0 {
 		listener_ids[0]
 	} else {
 		''

@@ -24,6 +24,7 @@ pub:
 	adapters      map[string]AdapterPlan
 	transforms    map[string]TransformPlan
 	policies      map[string]PolicyPlan
+	providers     map[string]ProviderPlan
 	pipelines     []PipelinePlan
 	relays        map[string]RelayPlan
 	diagnostics   []PlanDiagnostic
@@ -140,6 +141,16 @@ pub:
 	category string
 	kind     string
 	options  PlanOptions
+}
+
+pub struct ProviderPlan {
+pub:
+	id           string
+	driver       string = 'native'
+	plugin       string
+	engine       ?ResourceRef
+	capabilities map[string]string
+	options      PlanOptions
 }
 
 pub struct PipelinePlan {

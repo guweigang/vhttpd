@@ -57,6 +57,7 @@ pub fn compile_v1_to_v2(cfg VhttpdConfig) !V2Config {
 			log_level: 'info'
 		}
 	}
+	target.providers = v1_provider_specs(cfg)
 	if cfg.admin.port > 0 {
 		target.listeners['control'] = V2ListenerSpec{
 			protocol:  'http'
@@ -96,6 +97,36 @@ pub fn compile_v1_to_v2(cfg VhttpdConfig) !V2Config {
 		compile_v1_site(site_cfg, site_id, listener_id, mut target)!
 	}
 	return target
+}
+
+fn v1_provider_specs(cfg VhttpdConfig) map[string]V2ProviderSpec {
+	mut providers := map[string]V2ProviderSpec{}
+	for name, provider_cfg in cfg.providers {
+		providers[name] = V2ProviderSpec{
+			runtime:        V2ProviderRuntimeSpec{
+				driver: provider_cfg.runtime.driver
+				plugin: provider_cfg.runtime.plugin
+			}
+			capabilities:   provider_cfg.capabilities.clone()
+			runtime_driver: provider_cfg.runtime_driver
+			runtime_plugin: provider_cfg.runtime_plugin
+		}
+	}
+	feishu_driver := cfg.feishu.runtime_driver.trim_space()
+	feishu_plugin := cfg.feishu.runtime_plugin.trim_space()
+	if feishu_plugin != '' || (feishu_driver != '' && feishu_driver != 'native') {
+		existing := providers['feishu'] or { V2ProviderSpec{} }
+		providers['feishu'] = V2ProviderSpec{
+			...existing
+			runtime:        V2ProviderRuntimeSpec{
+				driver: if feishu_driver != '' { feishu_driver } else { existing.runtime.driver }
+				plugin: if feishu_plugin != '' { feishu_plugin } else { existing.runtime.plugin }
+			}
+			runtime_driver: if feishu_driver != '' { feishu_driver } else { existing.runtime_driver }
+			runtime_plugin: if feishu_plugin != '' { feishu_plugin } else { existing.runtime_plugin }
+		}
+	}
+	return providers
 }
 
 fn v1_listener_spec(host string, port int, ssl ServerSslConfig) V2ListenerSpec {

@@ -111,6 +111,12 @@ fn (mut app App) build_admin_context() admin.RuntimeContext {
 		logic_executor_provider:                fn [app] () string {
 			return app.logic_executor_provider()
 		}
+		pipeline_runtime_snapshot:              fn [app] () executor.AdminPipelineRuntimeSummary {
+			return app.admin_pipeline_runtime_snapshot()
+		}
+		listener_runtime_snapshots:             fn () []executor.AdminListenerRuntimeSummary {
+			return active_runtime_listener_summaries()
+		}
 		provider_runtime_capabilities:          fn [mut app] () map[string]bool {
 			return app.provider_runtime_capabilities()
 		}
@@ -120,6 +126,23 @@ fn (mut app App) build_admin_context() admin.RuntimeContext {
 		relay_runtime_snapshot:                 fn [mut app] () executor.AdminRelayRuntimeSummary {
 			return app.admin_relay_runtime_snapshot()
 		}
+	}
+}
+
+fn (app App) admin_pipeline_runtime_snapshot() executor.AdminPipelineRuntimeSummary {
+	routes := app.pipelines.http.rules.map(executor.AdminPipelineRouteSummary{
+		pipeline_id: it.pipeline_id
+		group:       it.pipeline_group
+		ingress:     it.ingress_id
+		egress:      it.egress_ref
+		executor:    it.dispatch_executor()
+		methods:     it.match_method.clone()
+		paths:       it.match_path.clone()
+	})
+	return executor.AdminPipelineRuntimeSummary{
+		listener_id: app.pipelines.http.listener_id
+		route_count: routes.len
+		routes:      routes
 	}
 }
 

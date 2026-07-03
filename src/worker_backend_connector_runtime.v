@@ -8,6 +8,7 @@ struct WorkerBackendConnectorRuntime {}
 
 struct WorkerBackendConnectorContext {
 	select_socket_fn fn () !string                  = unsafe { nil }
+	release_fn       fn (string)                    = unsafe { nil }
 	emit_fn          fn (string, map[string]string) = unsafe { nil }
 }
 
@@ -17,6 +18,10 @@ fn (ctx WorkerBackendConnectorContext) select_socket() !string {
 
 fn (ctx WorkerBackendConnectorContext) emit(kind string, fields map[string]string) {
 	ctx.emit_fn(kind, fields)
+}
+
+fn (ctx WorkerBackendConnectorContext) release(socket_path string) {
+	ctx.release_fn(socket_path)
 }
 
 fn (mut app App) worker_backend_open_connection() !worker.WorkerBackendConnection {
@@ -29,6 +34,9 @@ fn (mut app App) build_worker_backend_connector_context() WorkerBackendConnector
 	return WorkerBackendConnectorContext{
 		select_socket_fn: fn [mut app] () !string {
 			return app.worker_backend_select_socket_queued()
+		}
+		release_fn:       fn [mut app] (socket_path string) {
+			app.on_worker_request_released(socket_path)
 		}
 		emit_fn:          fn [mut app] (kind string, fields map[string]string) {
 			app.emit(kind, fields)
@@ -68,6 +76,7 @@ fn WorkerBackendConnectorRuntime.connect_selected(ctx WorkerBackendConnectorCont
 		}
 		mut conn := unix.connect_stream(socket_path) or {
 			last_err = err.msg()
+			ctx.release(socket_path)
 			ctx.emit('worker.connect.failed', {
 				'socket':  socket_path
 				'attempt': '${attempt + 1}'

@@ -68,6 +68,21 @@ fn (r ActiveRuntimeRegistry) config_snapshot() []server_lifecycle.ServerRuntimeC
 	return r.cfgs.clone()
 }
 
+fn (r ActiveRuntimeRegistry) listener_summaries() []executor.AdminListenerRuntimeSummary {
+	mut summaries := []executor.AdminListenerRuntimeSummary{cap: r.apps.len}
+	for i, app in r.apps {
+		cfg := r.cfgs[i] or { continue }
+		summaries << executor.AdminListenerRuntimeSummary{
+			listener_id: cfg.plan_listener_id
+			site_id:     cfg.site_id
+			host:        cfg.host
+			port:        cfg.port
+			pipelines:   app.admin_pipeline_runtime_snapshot()
+		}
+	}
+	return summaries
+}
+
 fn register_active_runtime(app &App, cfg server_lifecycle.ServerRuntimeConfig) {
 	unsafe {
 		g_active_runtime_registry.register(app, cfg)
@@ -89,6 +104,12 @@ fn active_runtime_is_shutting_down() bool {
 fn active_runtime_config_snapshot() []server_lifecycle.ServerRuntimeConfig {
 	unsafe {
 		return g_active_runtime_registry.config_snapshot()
+	}
+}
+
+fn active_runtime_listener_summaries() []executor.AdminListenerRuntimeSummary {
+	unsafe {
+		return g_active_runtime_registry.listener_summaries()
 	}
 }
 
@@ -252,14 +273,14 @@ fn validate_args(args []string) ! {
 	}
 }
 
-fn run_single_server(args []string, cfg config.VhttpdConfig) {
+fn run_single_server(args []string, cfg config.VhttpdConfig) ! {
 	runtime_cfg := server_lifecycle.ServerRuntimeConfig.resolve(args, cfg) or {
 		log.error('server runtime config resolve failed: ${err}')
-		return
+		return err
 	}
 	preflight_server_bind(runtime_cfg) or {
 		log.error('[vhttpd] ${err.msg()}')
-		return
+		return err
 	}
 	mut app := build_app_runtime(runtime_cfg.provider_settings, runtime_cfg.executor_plan, cfg,
 		runtime_cfg.plan, runtime_cfg.app_build_cfg)
@@ -274,10 +295,10 @@ fn run_single_server(args []string, cfg config.VhttpdConfig) {
 	serve_server_runtime(mut app, runtime_cfg)
 }
 
-fn run_server(args []string) {
+fn run_server(args []string) ! {
 	cfg := config.load_vhttpd_config(args) or {
 		log.error('config load failed: ${err}')
-		return
+		return err
 	}
 	configure_runtime_timezone(runtime_timezone_from_plan_or_config(args, cfg))
 	log.debug('[vhttpd] run_server: timezone configured')
@@ -290,11 +311,11 @@ fn run_server(args []string) {
 	}
 	if should_run_multi_server(args, cfg) {
 		log.debug('[vhttpd] run_server: entering multi_server mode')
-		run_multi_server(args, cfg)
+		run_multi_server(args, cfg)!
 		return
 	}
 	log.debug('[vhttpd] run_server: entering single_server mode')
-	run_single_server(args, cfg)
+	run_single_server(args, cfg)!
 }
 
 fn should_run_multi_server(args []string, cfg config.VhttpdConfig) bool {
@@ -346,5 +367,5 @@ fn main() {
 		eprintln('run `vhttpd --help` for usage.')
 		exit(2)
 	}
-	run_server(args)
+	run_server(args) or { exit(1) }
 }

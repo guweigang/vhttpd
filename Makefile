@@ -1,4 +1,4 @@
-.PHONY: build vhttpd prod build-prod build-db prepare-build-src deps-core deps-vjsx deps-db deps-full doctor demo-vslim demo-ai demo-symfony demo-laravel demo-wordpress package-wp-plugin psr-matrix test test-fast test-inproc test-codexbot test-codexbot-fast test-codexbot-lifecycle test-profile-codexbot test-all
+.PHONY: build vhttpd prod build-prod build-db prepare-build-src deps-core deps-vjsx deps-db deps-full doctor demo-vslim demo-ai demo-symfony demo-laravel demo-wordpress package-wp-plugin psr-matrix test test-fast test-php test-e2e test-inproc test-codexbot test-codexbot-fast test-codexbot-lifecycle test-profile-codexbot test-all
 
 ROOT := $(CURDIR)
 SRC_DIR := $(ROOT)/src
@@ -46,13 +46,24 @@ FAST_TEST_MODULE_DIRS := $(shell find $(SRC_DIR) -mindepth 2 -name '*_test.v' \
 	! -name 'db_*' \
 	-exec dirname {} \; | sort -u)
 
-TEST_FILES_FROM_GOALS := $(filter %.v,$(MAKECMDGOALS))
+PHP_TEST_FILES := $(shell find $(ROOT)/php/package/tests -name '*_test.php' | sort)
+
+TEST_V_FILES_FROM_GOALS := $(filter %.v,$(MAKECMDGOALS))
+TEST_PHP_FILES_FROM_GOALS := $(filter %.php,$(MAKECMDGOALS))
+TEST_FILES_FROM_GOALS := $(strip $(TEST_V_FILES_FROM_GOALS) $(TEST_PHP_FILES_FROM_GOALS))
 ifneq ($(filter test test-fast,$(MAKECMDGOALS)),)
-ifneq ($(TEST_FILES_FROM_GOALS),)
-FAST_TEST_FILES := $(TEST_FILES_FROM_GOALS)
+ifneq ($(TEST_V_FILES_FROM_GOALS),)
+FAST_TEST_FILES := $(TEST_V_FILES_FROM_GOALS)
 FAST_TEST_MODULE_DIRS :=
-.PHONY: $(TEST_FILES_FROM_GOALS)
 endif
+endif
+ifneq ($(filter test test-php,$(MAKECMDGOALS)),)
+ifneq ($(TEST_PHP_FILES_FROM_GOALS),)
+PHP_TEST_FILES := $(TEST_PHP_FILES_FROM_GOALS)
+endif
+endif
+ifneq ($(TEST_FILES_FROM_GOALS),)
+.PHONY: $(TEST_FILES_FROM_GOALS)
 endif
 
 # In-proc vjsx tests (non-codexbot).
@@ -131,7 +142,20 @@ package-wp-plugin:
 psr-matrix:
 	@$(MAKE) -C $(ROOT)/../vphpx/vslim psr-matrix
 
-test: test-fast
+SELECTED_TEST_TARGETS :=
+ifneq ($(TEST_V_FILES_FROM_GOALS),)
+SELECTED_TEST_TARGETS += test-fast
+endif
+ifneq ($(TEST_PHP_FILES_FROM_GOALS),)
+SELECTED_TEST_TARGETS += test-php
+endif
+
+TEST_TARGETS := test-fast test-php
+ifneq ($(TEST_FILES_FROM_GOALS),)
+TEST_TARGETS := $(SELECTED_TEST_TARGETS)
+endif
+
+test: $(TEST_TARGETS)
 
 test-e2e:
 	@bash $(ROOT)/tests/e2e/run.sh
@@ -144,6 +168,12 @@ test-fast:
 	@set -e; for test_dir in $(FAST_TEST_MODULE_DIRS); do \
 		echo "==> v test $${test_dir}"; \
 		$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_FLAGS) $(V_TEST_FLAGS) test "$${test_dir}"; \
+	done
+
+test-php:
+	@set -e; for test_file in $(PHP_TEST_FILES); do \
+		echo "==> php $${test_file}"; \
+		php "$${test_file}"; \
 	done
 
 $(TEST_FILES_FROM_GOALS):

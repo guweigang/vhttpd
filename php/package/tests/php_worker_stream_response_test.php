@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../src/VHttpd/Wire/FrameCodec.php';
 require_once __DIR__ . '/../src/VHttpd/PhpWorker/StreamResponse.php';
+require_once __DIR__ . '/../src/VHttpd/PhpWorker/StreamApp.php';
 require_once __DIR__ . '/../src/VHttpd/PhpWorker/Server.php';
 
 use VHttpd\PhpWorker\Server;

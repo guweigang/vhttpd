@@ -6,6 +6,7 @@ import config
 import dispatch
 import json
 import net.http
+import runtime_plan
 import upstream.transport
 
 fn test_route_rule_path_matching() {
@@ -512,6 +513,54 @@ fn test_wordpress_v2_example_projects_http_pipelines_to_runtime_routes() {
 	assert front.response_cache_ttl_ms == 30000
 	assert front.cache_bypass_cookie_patterns.contains('wordpress_logged_in_*')
 	assert front.cache_ignore_cookie_patterns.contains('wordpress_test_cookie')
+}
+
+fn test_provider_action_adapter_projects_to_http_runtime_route() {
+	plan := runtime_plan.RuntimePlan{
+		listeners: {
+			'web': runtime_plan.ListenerPlan{
+				id:       'web'
+				protocol: 'http'
+			}
+		}
+		adapters:  {
+			'provider-send': runtime_plan.AdapterPlan{
+				id:      'provider-send'
+				kind:    'provider-action'
+				options: runtime_plan.PlanOptions{
+					strings: {
+						'provider': 'feishu'
+						'action':   'send_message'
+					}
+				}
+			}
+		}
+		pipelines: [
+			runtime_plan.PipelinePlan{
+				id:      'provider.send'
+				ingress: runtime_plan.ResourceRef{
+					domain: .listener
+					id:     'web'
+				}
+				match:   runtime_plan.MatchPlan{
+					methods: ['POST']
+					paths:   ['/provider/send']
+				}
+				egress:  runtime_plan.ResourceRef{
+					domain: .adapter
+					id:     'provider-send'
+				}
+			},
+		]
+	}
+
+	routes := runtime_routes_from_plan(plan, 'web')
+
+	assert routes.len == 1
+	assert routes[0].pipeline_id == 'provider.send'
+	assert routes[0].executor == 'provider-action'
+	assert routes[0].egress_ref == 'adapter:provider-send'
+	assert routes[0].matches_http_request('POST', '/provider/send', map[string]string{})
 }
 
 fn test_upload_completed_exchange_carries_upload_event_payload() {

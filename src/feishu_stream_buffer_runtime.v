@@ -52,13 +52,13 @@ fn (mut app App) feishu_runtime_buffer_patch(req upstream.UpstreamSendRequest) {
 		}
 
 		card_payload := feishu.SendMessageRequest.streaming_card(req.text, segment_index)
-		send_result := app.feishu_runtime_send_message(feishu.SendMessageRequest{
+		send_result := app.providers.feishu_provider_runtime_send_message(feishu.SendMessageRequest{
 			app:             app_name
 			receive_id_type: receive_id_type
 			receive_id:      receive_id
 			msg_type:        'interactive'
 			content:         card_payload
-		}) or {
+		}, mut app) or {
 			log.error('[feishu] ❌ open next preview failed for ${current_target}: ${err}')
 			return
 		}
@@ -105,13 +105,13 @@ fn (mut app App) feishu_runtime_send_followup_segment(buf feishu.StreamBuffer, m
 	} else {
 		feishu.SendMessageRequest.streaming_card(markdown, buf.segment_index)
 	}
-	send_result := app.feishu_runtime_send_message(feishu.SendMessageRequest{
+	send_result := app.providers.feishu_provider_runtime_send_message(feishu.SendMessageRequest{
 		app:             buf.app
 		receive_id_type: buf.receive_id_type
 		receive_id:      buf.receive_id
 		msg_type:        'interactive'
 		content:         card_payload
-	})!
+	}, mut app)!
 	if buf.stream_id.trim_space() != '' {
 		app.codex_add_stream_target(app.codex_resolve_instance_for_stream(buf.stream_id),
 			buf.stream_id, codex.CodexTarget{
@@ -162,12 +162,12 @@ fn (mut app App) feishu_runtime_flush_pending_buffers() {
 			continue
 		}
 		card_payload := feishu.SendMessageRequest.streaming_card(preview_markdown, 1)
-		app.feishu_runtime_update_message(feishu.UpdateMessageRequest{
+		app.providers.feishu_provider_runtime_update_message(feishu.UpdateMessageRequest{
 			app:        buf.app
 			message_id: buf.message_id
 			msg_type:   'interactive'
 			content:    card_payload
-		}) or {
+		}, mut app) or {
 			log.error('[feishu] ❌ preview flush failed for ${buf.message_id}: ${err}')
 			continue
 		}
@@ -225,12 +225,12 @@ fn (mut app App) feishu_runtime_flush_buffer(message_id string, template_content
 		} else {
 			feishu.SendMessageRequest.interactive_markdown_card(head)
 		}
-		app.feishu_runtime_update_message(feishu.UpdateMessageRequest{
+		app.providers.feishu_provider_runtime_update_message(feishu.UpdateMessageRequest{
 			app:        buf.app
 			message_id: buf.message_id
 			msg_type:   'interactive'
 			content:    final_head
-		})!
+		}, mut app)!
 		mut segment := 2
 		mut last_message_id := buf.message_id
 		for tail != '' {
@@ -269,12 +269,12 @@ fn (mut app App) feishu_runtime_flush_buffer(message_id string, template_content
 	if preview_markdown == '' {
 		return
 	}
-	app.feishu_runtime_update_message(feishu.UpdateMessageRequest{
+	app.providers.feishu_provider_runtime_update_message(feishu.UpdateMessageRequest{
 		app:        buf.app
 		message_id: buf.message_id
 		msg_type:   'interactive'
 		content:    feishu.SendMessageRequest.streaming_card(preview_markdown, 1)
-	})!
+	}, mut app)!
 	app.providers.feishu.mu.@lock()
 	if mut active := app.providers.feishu.buffers[buf.message_id] {
 		active.last_flush = time.now().unix_milli()

@@ -167,6 +167,13 @@ fn test_adapter_descriptor_marks_terminal_and_runtime_adapters() {
 	assert relay_delivery.terminal
 	assert relay_delivery.capabilities.request_response
 
+	provider_action := adapter_descriptor_from_plan(runtime_plan.AdapterPlan{
+		id:   'provider-send'
+		kind: 'provider-action'
+	})
+	assert provider_action.terminal
+	assert provider_action.capabilities.request_response
+
 	http_handler := adapter_descriptor_from_plan(runtime_plan.AdapterPlan{
 		id:   'php'
 		kind: 'http-handler'

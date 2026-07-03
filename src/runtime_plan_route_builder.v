@@ -104,7 +104,7 @@ fn runtime_route_projection_preflight_diagnostic(plan runtime_plan.RuntimePlan, 
 		}
 	}
 	if adapter.kind !in ['http-handler', 'static', 'upload', 'fixed-response', 'relay-delivery',
-		'mcp', 'openai'] {
+		'provider-action', 'mcp', 'openai'] {
 		return runtime_plan.PlanDiagnostic{
 			severity: 'warning'
 			code:     'runtime_route_unsupported_adapter'
@@ -210,6 +210,9 @@ fn runtime_route_from_pipeline(plan runtime_plan.RuntimePlan, pipeline runtime_p
 		}
 		'relay-delivery' {
 			route.executor = 'relay-delivery'
+		}
+		'provider-action' {
+			route.executor = 'provider-action'
 		}
 		'mcp', 'openai' {
 			route.executor = adapter.kind

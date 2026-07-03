@@ -45,7 +45,8 @@ fn (mut app App) apply_prepared_runtime_plan_replacement(mut prepared RuntimePla
 	old_primary_lifecycle := engine_primary_lifecycle_or_disabled(old_engines)
 	projection := RuntimePlanRuntimeProjection.from_plan(prepared.plan, prepared.listener,
 		prepared.routes, app.assets.root_real, app.pipelines.http.worker_root,
-		next_engines.primary.worker_backend.env.clone(), next_engines.additional.clone())
+		next_engines.primary.worker_backend.env.clone(), next_engines.additional.clone(),
+		app.provider_runtime_settings_snapshot())
 
 	app.mu.@lock()
 	app.engines = next_engines
@@ -97,7 +98,8 @@ fn (mut app App) apply_lightweight_runtime_plan(next_plan_raw runtime_plan.Runti
 	primary_env := app.engines.primary.worker_backend.env.clone()
 	additional_workers := app.engines.additional.clone()
 	projection := RuntimePlanRuntimeProjection.from_plan(next_plan, listener_id, routes,
-		app.assets.root_real, app.pipelines.http.worker_root, primary_env, additional_workers)
+		app.assets.root_real, app.pipelines.http.worker_root, primary_env, additional_workers,
+		app.provider_runtime_settings_snapshot())
 
 	app.mu.@lock()
 	defer {

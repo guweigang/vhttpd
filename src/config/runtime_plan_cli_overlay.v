@@ -20,6 +20,7 @@ pub fn runtime_plan_apply_cli_overrides(args []string, cfg VhttpdConfig, plan ru
 		adapters:      adapters_with_cli_overrides(args, plan.adapters)
 		transforms:    plan.transforms.clone()
 		policies:      plan.policies.clone()
+		providers:     plan.providers.clone()
 		pipelines:     plan.pipelines.clone()
 		relays:        relays_with_cli_overrides(args, plan.relays)
 		diagnostics:   plan.diagnostics.clone()

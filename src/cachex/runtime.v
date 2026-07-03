@@ -77,6 +77,10 @@ pub fn (mut rt Runtime) request_stop() &unix.StreamListener {
 }
 
 pub fn (mut rt Runtime) snapshot_json(ready bool) string {
+	rt.mu.@lock()
+	defer {
+		rt.mu.unlock()
+	}
 	return json.encode(Snapshot{
 		enabled:          rt.enabled
 		socket:           rt.socket

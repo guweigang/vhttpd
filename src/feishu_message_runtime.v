@@ -6,51 +6,58 @@ import log
 import net.http
 import feishu
 
-fn (mut app App) feishu_runtime_send_message(req feishu.SendMessageRequest) !feishu.SendMessageResult {
-	app_name := app.providers.feishu.resolve_app_name(req.app)!
-	if !app.providers.feishu_runtime_ready() {
+fn (mut hub ProviderRuntimeHub) feishu_runtime_send_message(req feishu.SendMessageRequest) !feishu.SendMessageResult {
+	return hub.feishu_native_send_message(req)
+}
+
+fn (mut hub ProviderRuntimeHub) feishu_native_send_message(req feishu.SendMessageRequest) !feishu.SendMessageResult {
+	app_name := hub.feishu.resolve_app_name(req.app)!
+	if !hub.feishu_runtime_ready() {
 		return error('feishu gateway is not configured')
 	}
 	receive_id_type, receive_id, msg_type, content := req.resolve_params()!
-	token := app.feishu_runtime_tenant_access_token(app_name)!
+	token := hub.feishu_runtime_tenant_access_token(app_name)!
 	mut header := http.new_header(key: .content_type, value: 'application/json; charset=utf-8')
 	header.add_custom('authorization', 'Bearer ${token}') or {} // safe to ignore: header append on detached request
-	url := feishu.SendMessageRequest.api_url(app.providers.feishu.open_base_url, receive_id_type,
-		receive_id)
+	url := feishu.SendMessageRequest.api_url(hub.feishu.open_base_url, receive_id_type, receive_id)
 	payload := feishu.SendMessageRequest.api_payload(msg_type, content, receive_id, req.uuid,
 		receive_id_type)
 	log.info('[feishu] 📤 sending message: method=POST url=${url} payload=${payload.len} bytes')
-	resp := (&app.providers.feishu).http_fetch(
+	resp := (&hub.feishu).http_fetch(
 		url:    url
 		method: .post
 		data:   payload
 		header: header
 	) or {
-		app.providers.feishu.note_send(app_name, false)
+		hub.feishu.note_send(app_name, false)
 		log.error('[feishu] ❌ send fetch failed: ${err}')
 		return err
 	}
 	log.info('[feishu] 📩 send response: status=${resp.status_code} body=${resp.body}')
 	if resp.status_code != 200 {
-		app.providers.feishu.note_send(app_name, false)
+		hub.feishu.note_send(app_name, false)
 		return error('feishu message send failed with status ${resp.status_code}: ${resp.body}')
 	}
 	decoded := json.decode(feishu.SendMessageResponse, resp.body) or {
-		app.providers.feishu.note_send(app_name, false)
+		hub.feishu.note_send(app_name, false)
 		return error('invalid feishu send response: ${err}')
 	}
 	if decoded.code != 0 {
-		app.providers.feishu.note_send(app_name, false)
+		hub.feishu.note_send(app_name, false)
 		return error('feishu send error: ${decoded.msg}')
 	}
-	app.providers.feishu.note_send(app_name, true)
+	hub.feishu.note_send(app_name, true)
 	return feishu.SendMessageResult{
 		ok:         true
 		message_id: decoded.data.message_id
 	}
 }
 
-fn (mut app App) feishu_runtime_upload_image(req feishu.UploadImageRequest) !feishu.UploadImageResult {
+fn (mut hub ProviderRuntimeHub) feishu_runtime_upload_image(req feishu.UploadImageRequest) !feishu.UploadImageResult {
+	return hub.feishu_native_upload_image(req)
+}
+
+fn (mut hub ProviderRuntimeHub) feishu_native_upload_image(req feishu.UploadImageRequest) !feishu.UploadImageResult {
 	if req.content_length > feishu_runtime_max_upload_image_bytes {
 		return error('image_too_large')
 	}
@@ -58,18 +65,22 @@ fn (mut app App) feishu_runtime_upload_image(req feishu.UploadImageRequest) !fei
 	if data == '' {
 		return error('invalid_image_data')
 	}
-	return app.feishu_runtime_upload_image_bytes(req, data.bytes())
+	return hub.feishu_native_upload_image_bytes(req, data.bytes())
 }
 
-fn (mut app App) feishu_runtime_upload_image_bytes(req feishu.UploadImageRequest, data []u8) !feishu.UploadImageResult {
-	app_name := app.providers.feishu.resolve_app_name(req.app)!
+fn (mut hub ProviderRuntimeHub) feishu_runtime_upload_image_bytes(req feishu.UploadImageRequest, data []u8) !feishu.UploadImageResult {
+	return hub.feishu_native_upload_image_bytes(req, data)
+}
+
+fn (mut hub ProviderRuntimeHub) feishu_native_upload_image_bytes(req feishu.UploadImageRequest, data []u8) !feishu.UploadImageResult {
+	app_name := hub.feishu.resolve_app_name(req.app)!
 	if data.len == 0 {
 		return error('missing_image_data')
 	}
 	if data.len > feishu_runtime_max_upload_image_bytes {
 		return error('image_too_large')
 	}
-	token := app.feishu_runtime_tenant_access_token(app_name)!
+	token := hub.feishu_runtime_tenant_access_token(app_name)!
 	image_type := if req.image_type.trim_space() == '' {
 		'message'
 	} else {
@@ -87,7 +98,7 @@ fn (mut app App) feishu_runtime_upload_image_bytes(req feishu.UploadImageRequest
 	}
 	config := feishu.UploadImageRequest.multipart_config(image_type, filename, content_type, data,
 		token)
-	resp := (&app.providers.feishu).http_post_multipart_form('${app.providers.feishu.open_base_url}/im/v1/images',
+	resp := (&hub.feishu).http_post_multipart_form('${hub.feishu.open_base_url}/im/v1/images',
 		config) or { return error('feishu image upload request failed: ${err.msg()}') }
 	if resp.status_code < 200 || resp.status_code >= 300 {
 		return error('feishu image upload failed with status ${resp.status_code}')
@@ -104,17 +115,21 @@ fn (mut app App) feishu_runtime_upload_image_bytes(req feishu.UploadImageRequest
 	}
 }
 
-fn (mut app App) feishu_runtime_update_message(req feishu.UpdateMessageRequest) !feishu.SendMessageResult {
-	app_name := app.providers.feishu.resolve_app_name(req.app)!
-	if !app.providers.feishu_runtime_ready() {
+fn (mut hub ProviderRuntimeHub) feishu_runtime_update_message(req feishu.UpdateMessageRequest) !feishu.SendMessageResult {
+	return hub.feishu_native_update_message(req)
+}
+
+fn (mut hub ProviderRuntimeHub) feishu_native_update_message(req feishu.UpdateMessageRequest) !feishu.SendMessageResult {
+	app_name := hub.feishu.resolve_app_name(req.app)!
+	if !hub.feishu_runtime_ready() {
 		return error('feishu gateway is not configured')
 	}
 	message_id_type, target, msg_type, mut content_raw := req.resolve_params()!
 
 	// Support buffer placeholder replacement or auto-append
 	if target != '' {
-		app.providers.feishu.mu.@lock()
-		if buf := app.providers.feishu.buffers[target] {
+		hub.feishu.mu.@lock()
+		if buf := hub.feishu.buffers[target] {
 			if content_raw.contains('{{content}}') {
 				escaped := buf.content.replace('\\', '\\\\').replace('"', '\\"').replace('\n',
 					'\\n')
@@ -122,39 +137,39 @@ fn (mut app App) feishu_runtime_update_message(req feishu.UpdateMessageRequest) 
 				log.info('[feishu] 🧩 replaced {{content}} placeholder')
 			}
 		}
-		app.providers.feishu.mu.unlock()
+		hub.feishu.mu.unlock()
 	}
 
-	token := app.feishu_runtime_tenant_access_token(app_name)!
+	token := hub.feishu_runtime_tenant_access_token(app_name)!
 	mut header := http.new_header(key: .content_type, value: 'application/json; charset=utf-8')
 	header.add_custom('authorization', 'Bearer ${token}') or {} // safe to ignore: header append on detached request
-	url, method, payload := feishu.UpdateMessageRequest.api_request(app.providers.feishu.open_base_url,
+	url, method, payload := feishu.UpdateMessageRequest.api_request(hub.feishu.open_base_url,
 		message_id_type, target, msg_type, content_raw, req.uuid)!
 	log.info('[feishu] 📤 sending update: method=${method} url=${url} payload=${payload.len} bytes')
-	resp := (&app.providers.feishu).http_fetch(
+	resp := (&hub.feishu).http_fetch(
 		url:    url
 		method: method
 		data:   payload
 		header: header
 	) or {
-		app.providers.feishu.note_send(app_name, false)
+		hub.feishu.note_send(app_name, false)
 		log.error('[feishu] ❌ update fetch failed: ${err}')
 		return err
 	}
 	log.info('[feishu] 📩 update response: status=${resp.status_code} body=${resp.body}')
 	if resp.status_code != 200 {
-		app.providers.feishu.note_send(app_name, false)
+		hub.feishu.note_send(app_name, false)
 		return error('feishu message update failed with status ${resp.status_code}: ${resp.body}')
 	}
 	decoded := json.decode(feishu.SendMessageResponse, resp.body) or {
-		app.providers.feishu.note_send(app_name, false)
+		hub.feishu.note_send(app_name, false)
 		return error('invalid feishu update response: ${err}')
 	}
 	if decoded.code != 0 {
-		app.providers.feishu.note_send(app_name, false)
+		hub.feishu.note_send(app_name, false)
 		return error('feishu update error: ${decoded.msg}')
 	}
-	app.providers.feishu.note_send(app_name, true)
+	hub.feishu.note_send(app_name, true)
 	return feishu.SendMessageResult{
 		ok:         true
 		message_id: if decoded.data.message_id.trim_space() != '' {

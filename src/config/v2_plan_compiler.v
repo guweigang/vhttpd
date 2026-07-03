@@ -1,6 +1,8 @@
 module config
 
+import os
 import runtime_plan
+import toml
 
 pub fn compile_v2_runtime_plan(cfg V2Config, source_path string, compatibility bool) !runtime_plan.RuntimePlan {
 	return compile_v2_runtime_plan_with_diagnostics(cfg, source_path, compatibility, [])
@@ -43,7 +45,7 @@ fn compile_v2_runtime_plan_with_diagnostics(cfg V2Config, source_path string, co
 		storage_ref := parse_optional_ref(spec.storage, .resource)!
 		adapters[id] = runtime_plan.AdapterPlan{
 			id:      id
-			kind:    spec.kind
+			kind:    compile_v2_adapter_kind(spec.kind)
 			engine:  engine_ref.option()
 			storage: storage_ref.option()
 			options: compile_v2_adapter_options(spec)
@@ -71,6 +73,32 @@ fn compile_v2_runtime_plan_with_diagnostics(cfg V2Config, source_path string, co
 		}
 	}
 	policies := compile_v2_policies(cfg.policies)
+	mut providers := map[string]runtime_plan.ProviderPlan{}
+	provider_specs := v2_provider_specs_for_compile(cfg, source_path)
+	for id, spec in provider_specs {
+		driver := if spec.runtime.driver.trim_space() != '' {
+			spec.runtime.driver
+		} else {
+			spec.runtime_driver
+		}
+		plugin := if spec.runtime.plugin.trim_space() != '' {
+			spec.runtime.plugin
+		} else {
+			spec.runtime_plugin
+		}
+		engine_ref := parse_optional_ref(spec.runtime.engine, .engine)!
+		providers[id] = runtime_plan.ProviderPlan{
+			id:           id
+			driver:       if driver.trim_space() != '' { driver } else { 'native' }
+			plugin:       plugin
+			engine:       engine_ref.option()
+			capabilities: spec.capabilities.clone()
+			options:      runtime_plan.PlanOptions{
+				strings: spec.options.clone()
+			}
+		}
+	}
+	providers = compile_provider_action_adapter_provider_plans(cfg.adapters, providers)!
 	mut pipelines := []runtime_plan.PipelinePlan{cap: cfg.pipelines.len}
 	mut pipeline_ids := map[string]bool{}
 	for spec in cfg.pipelines {
@@ -160,12 +188,82 @@ fn compile_v2_runtime_plan_with_diagnostics(cfg V2Config, source_path string, co
 		adapters:      adapters
 		transforms:    transforms
 		policies:      policies
+		providers:     providers
 		pipelines:     pipelines
 		relays:        relays
 		diagnostics:   diagnostics.clone()
 	}
 	validate_runtime_plan_references(plan)!
 	return plan
+}
+
+fn v2_provider_specs_for_compile(cfg V2Config, source_path string) map[string]V2ProviderSpec {
+	if cfg.providers.len > 0 || source_path.trim_space() == '' || !os.is_file(source_path) {
+		return cfg.providers.clone()
+	}
+	text := os.read_file(source_path) or { return cfg.providers.clone() }
+	doc := toml.parse_text(text) or { return cfg.providers.clone() }
+	return v2_provider_specs_from_text(text, doc, cfg.providers)
+}
+
+fn compile_provider_action_adapter_provider_plans(adapters map[string]V2AdapterSpec, current map[string]runtime_plan.ProviderPlan) !map[string]runtime_plan.ProviderPlan {
+	mut providers := map[string]runtime_plan.ProviderPlan{}
+	for id, provider_plan in current {
+		providers[id] = provider_plan
+	}
+	for _, spec in adapters {
+		if compile_v2_adapter_kind(spec.kind) != 'provider-action' {
+			continue
+		}
+		provider_id := spec.provider.trim_space()
+		if provider_id == '' {
+			continue
+		}
+		driver := spec.runtime_driver.trim_space()
+		plugin := spec.runtime_plugin.trim_space()
+		engine := spec.runtime_engine.trim_space()
+		capability := spec.capability.trim_space()
+		if driver == '' && plugin == '' && engine == '' && capability == '' {
+			continue
+		}
+		existing := providers[provider_id] or {
+			runtime_plan.ProviderPlan{
+				id: provider_id
+			}
+		}
+		engine_ref := parse_optional_ref(engine, .engine)!
+		mut capabilities := existing.capabilities.clone()
+		if capability != '' && spec.action.trim_space() != '' {
+			capabilities[spec.action.trim_space()] = capability
+		}
+		providers[provider_id] = runtime_plan.ProviderPlan{
+			...existing
+			driver:       if driver != '' { normalize_v2_provider_runtime_driver(driver) } else { existing.driver }
+			plugin:       if plugin != '' { plugin } else { existing.plugin }
+			engine:       if engine != '' { engine_ref.option() } else { existing.engine }
+			capabilities: capabilities
+		}
+	}
+	return providers
+}
+
+fn normalize_v2_provider_runtime_driver(name string) string {
+	driver := name.trim_space().to_lower()
+	if driver == '' {
+		return 'native'
+	}
+	return match driver {
+		'native', 'v', 'builtin' { 'native' }
+		'vjsx', 'js', 'javascript', 'typescript', 'ts' { 'vjsx' }
+		else { driver }
+	}
+}
+
+fn compile_v2_adapter_kind(kind string) string {
+	match kind.trim_space() {
+		'event' { return 'event-ingress' }
+		else { return kind }
+	}
 }
 
 fn compile_v2_tls_plan(spec V2TlsSpec) runtime_plan.TlsPlan {
@@ -387,6 +485,12 @@ fn compile_v2_adapter_options(spec V2AdapterSpec) runtime_plan.PlanOptions {
 			'base_url':           spec.base_url
 			'completed_pipeline': spec.completed_pipeline
 			'topic':              spec.topic
+			'provider':           spec.provider
+			'action':             spec.action
+			'capability':         spec.capability
+			'runtime_driver':     spec.runtime_driver
+			'runtime_plugin':     spec.runtime_plugin
+			'runtime_engine':     spec.runtime_engine
 		}, spec.options)
 		ints:         merge_int_options(nonzero_int_options({
 			'timeout_ms':     spec.timeout_ms
@@ -597,6 +701,14 @@ fn validate_adapter_semantics(plan runtime_plan.RuntimePlan) ! {
 			'relay-delivery' {
 				if adapter.options.strings['target'].trim_space() == '' {
 					return error('runtime_plan_adapter_missing_target:${id}')
+				}
+			}
+			'provider-action' {
+				if adapter.options.strings['provider'].trim_space() == '' {
+					return error('runtime_plan_adapter_missing_provider:${id}')
+				}
+				if adapter.options.strings['action'].trim_space() == '' {
+					return error('runtime_plan_adapter_missing_action:${id}')
 				}
 			}
 			else {}

@@ -270,6 +270,17 @@ fn (mut runtime EngineRuntime) request_finished(port EngineLifecyclePort, socket
 	}
 }
 
+fn (mut runtime EngineRuntime) request_released(socket_path string) {
+	if engine_worker_request_released(mut runtime.primary, socket_path) {
+		return
+	}
+	for _, mut state in runtime.additional {
+		if engine_worker_request_released(mut *state, socket_path) {
+			return
+		}
+	}
+}
+
 fn (mut runtime EngineRuntime) select_socket_for_kind(port EngineLifecyclePort, kind string) !string {
 	if kind == '' || kind == runtime.primary_kind() {
 		primary_kind := runtime.primary_kind()
@@ -288,6 +299,23 @@ fn engine_worker_request_started(mut state worker.WorkerState, socket_path strin
 	}
 	mut managed := state.worker_backend.managed_workers[idx]
 	managed.inflight_requests++
+	state.worker_backend.managed_workers[idx] = managed
+	return true
+}
+
+fn engine_worker_request_released(mut state worker.WorkerState, socket_path string) bool {
+	state.mu.@lock()
+	defer {
+		state.mu.unlock()
+	}
+	idx := worker_index_by_socket_in_state_unlocked(state, socket_path)
+	if idx < 0 || idx >= state.worker_backend.managed_workers.len {
+		return false
+	}
+	mut managed := state.worker_backend.managed_workers[idx]
+	if managed.inflight_requests > 0 {
+		managed.inflight_requests--
+	}
 	state.worker_backend.managed_workers[idx] = managed
 	return true
 }

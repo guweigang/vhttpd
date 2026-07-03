@@ -23,9 +23,19 @@ fn (mut app App) call_plugin(req PluginCallRequest) !PluginCallResponse {
 	if cfg.kind.trim_space().to_lower() !in ['', 'vjsx'] {
 		return error('plugin_unsupported_kind:${name}:${cfg.kind}')
 	}
-	executor := app.protocols.plugins.vjsx[name] or { return error('plugin_runtime_unavailable:${name}') }
+	executor := app.protocols.plugins.vjsx[name] or {
+		return error('plugin_runtime_unavailable:${name}')
+	}
 	mut facade := app.as_facade()
 	return executor.call_plugin(mut facade, req)
+}
+
+fn (mut app App) provider_runtime_plugin_call(req PluginCallRequest) !PluginCallResponse {
+	return app.call_plugin(req)
+}
+
+fn (mut app App) dispatch_provider_runtime_action(req ProviderRuntimeActionRequest) ProviderRuntimeActionResponse {
+	return app.providers.dispatch_provider_runtime_action(req, mut app)
 }
 
 fn (mut app App) call_plugin_stream(req PluginCallRequest, on_frame PluginStreamFrameFn) !PluginStreamCallResponse {
@@ -37,7 +47,9 @@ fn (mut app App) call_plugin_stream(req PluginCallRequest, on_frame PluginStream
 	if cfg.kind.trim_space().to_lower() !in ['', 'vjsx'] {
 		return error('plugin_unsupported_kind:${name}:${cfg.kind}')
 	}
-	executor := app.protocols.plugins.vjsx[name] or { return error('plugin_runtime_unavailable:${name}') }
+	executor := app.protocols.plugins.vjsx[name] or {
+		return error('plugin_runtime_unavailable:${name}')
+	}
 	mut facade := app.as_facade()
 	return executor.call_plugin_stream(mut facade, req, on_frame)
 }

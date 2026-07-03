@@ -2,6 +2,7 @@ module main
 
 import dispatch
 import relay
+import runtime_plan
 import ws
 
 struct RelayPipelineDispatchOutcome {
@@ -169,6 +170,9 @@ fn (mut app App) dispatch_relay_pipeline_adapter_egress(adapter_id string, mut s
 		return relay_pipeline_failure(exchange, 404, 'relay_adapter_unknown:${adapter_id}',
 			'relay_adapter_unknown')
 	}
+	if adapter_plan.kind == 'provider-action' {
+		return app.dispatch_relay_provider_action_adapter(adapter_plan, adapter_id, exchange)
+	}
 	mut adapter := dispatch.terminal_adapter_from_plan(adapter_plan) or {
 		return relay_pipeline_failure(exchange, 501,
 			'relay_pipeline_egress_unsupported:adapter:${adapter_id}',
@@ -178,6 +182,24 @@ fn (mut app App) dispatch_relay_pipeline_adapter_egress(adapter_id string, mut s
 		return relay_pipeline_failure(exchange, 500, err.msg(), 'relay_adapter_failed')
 	}
 	return relay_pipeline_outcome_from_delivery(exchange, delivery)
+}
+
+fn (mut app App) dispatch_relay_provider_action_adapter(adapter_plan runtime_plan.AdapterPlan, adapter_id string, exchange dispatch.Exchange) RelayPipelineDispatchOutcome {
+	payload := provider_action_payload(adapter_plan, relay_pipeline_exchange_body(exchange))
+	resp := app.dispatch_provider_action_adapter(adapter_plan, adapter_id, payload,
+		exchange.identity.request_id, exchange.identity.trace_id, {
+		'pipeline_id': exchange.pipeline
+		'ingress':     exchange.ingress
+		'exchange_id': exchange.identity.id
+		'channel_id':  exchange.metadata['channel_id'] or { '' }
+	})
+	if !resp.ok {
+		return relay_pipeline_failure(exchange, 500, resp.error, 'relay_provider_action_failed')
+	}
+	return relay_pipeline_success_with_body(exchange, 'response',
+		provider_action_response_status(adapter_plan), resp.result, {
+		'content-type': provider_action_response_content_type(adapter_plan)
+	})
 }
 
 fn relay_pipeline_terminal_outcome(exchange dispatch.Exchange, egress string) RelayPipelineDispatchOutcome {

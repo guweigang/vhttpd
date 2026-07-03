@@ -181,12 +181,28 @@ pub mut:
 pub struct FeishuConfig {
 pub mut:
 	enabled                    bool
+	runtime_driver             string = 'native' @[toml: 'runtime_driver']
+	runtime_plugin             string @[toml: 'runtime_plugin']
 	open_base_url              string = 'https://open.feishu.cn/open-apis' @[toml: 'open_base_url']
 	reconnect_delay_ms         int    = 3000    @[toml: 'reconnect_delay_ms']
 	token_refresh_skew_seconds int    = 60    @[toml: 'token_refresh_skew_seconds']
 	recent_event_limit         int    = 20    @[toml: 'recent_event_limit']
 	apps                       map[string]FeishuAppConfig
 	bridge                     BridgeConfig
+}
+
+pub struct ProviderRuntimeConfig {
+pub mut:
+	driver string = 'native'
+	plugin string
+}
+
+pub struct ProviderConfig {
+pub mut:
+	runtime        ProviderRuntimeConfig
+	capabilities   map[string]string
+	runtime_driver string = 'native' @[toml: 'runtime_driver']
+	runtime_plugin string @[toml: 'runtime_plugin']
 }
 
 pub struct FeishuAppConfig {
@@ -360,6 +376,7 @@ pub mut:
 	php_site           PhpSiteConfig
 	vjsx               VjsxConfig
 	plugins            map[string]PluginConfig
+	providers          map[string]ProviderConfig
 	websocket_affinity WebSocketAffinityConfig @[toml: 'websocket_affinity']
 	websocket_actor    WebSocketActorConfig    @[toml: 'websocket_actor']
 	assets             AssetsConfig
@@ -386,6 +403,7 @@ pub mut:
 	php_site           PhpSiteConfig
 	vjsx               VjsxConfig
 	plugins            map[string]PluginConfig
+	providers          map[string]ProviderConfig
 	websocket_affinity WebSocketAffinityConfig @[toml: 'websocket_affinity']
 	websocket_actor    WebSocketActorConfig    @[toml: 'websocket_actor']
 	admin              AdminConfig
@@ -445,6 +463,7 @@ pub fn load_vhttpd_config(args []string) !VhttpdConfig {
 	decode_feishu_config(doc, mut cfg)!
 	decode_openai_root_config(doc, mut cfg)!
 	decode_plugins_root_config(doc, mut cfg)!
+	decode_providers_root_config(doc, mut cfg)!
 	decode_root_executors_config(doc, mut cfg)!
 	if root_any := doc.value_opt('bridge') {
 		root := root_any.as_map()
@@ -500,9 +519,9 @@ pub fn decode_feishu_config(doc toml.Doc, mut cfg VhttpdConfig) ! {
 			}
 		}
 		for name, value in root {
-			if name in ['enabled', 'open_base_url', 'reconnect_delay_ms',
-				'token_refresh_skew_seconds', 'recent_event_limit', 'app_id', 'app_secret',
-				'verification_token', 'encrypt_key'] {
+			if name in ['enabled', 'runtime_driver', 'runtime_plugin', 'open_base_url',
+				'reconnect_delay_ms', 'token_refresh_skew_seconds', 'recent_event_limit', 'app_id',
+				'app_secret', 'verification_token', 'encrypt_key'] {
 				continue
 			}
 			if value is map[string]toml.Any {
@@ -537,6 +556,67 @@ fn decode_plugins_root_config(doc toml.Doc, mut cfg VhttpdConfig) ! {
 	if root_any := doc.value_opt('plugins') {
 		root := root_any.as_map()
 		cfg.plugins = decode_plugins_config_map(root)
+	}
+}
+
+fn decode_provider_runtime_config_map(entry map[string]toml.Any) ProviderRuntimeConfig {
+	mut cfg := ProviderRuntimeConfig{}
+	if 'driver' in entry {
+		cfg.driver = toml_string_from_map(entry, 'driver', cfg.driver)
+	}
+	if 'plugin' in entry {
+		cfg.plugin = toml_string_from_map(entry, 'plugin', cfg.plugin)
+	}
+	return cfg
+}
+
+fn decode_provider_config_map(entry map[string]toml.Any) ProviderConfig {
+	mut cfg := ProviderConfig{}
+	if 'runtime_driver' in entry {
+		cfg.runtime_driver = toml_string_from_map(entry, 'runtime_driver', cfg.runtime_driver)
+		cfg.runtime.driver = cfg.runtime_driver
+	}
+	if 'runtime_plugin' in entry {
+		cfg.runtime_plugin = toml_string_from_map(entry, 'runtime_plugin', cfg.runtime_plugin)
+		cfg.runtime.plugin = cfg.runtime_plugin
+	}
+	if runtime_any := entry['runtime'] {
+		if runtime_any is map[string]toml.Any {
+			cfg.runtime = decode_provider_runtime_config_map(runtime_any)
+			cfg.runtime_driver = cfg.runtime.driver
+			cfg.runtime_plugin = cfg.runtime.plugin
+		}
+	}
+	if capabilities_any := entry['capabilities'] {
+		if capabilities_any is map[string]toml.Any {
+			cfg.capabilities = decode_string_map(capabilities_any)
+		}
+	}
+	return cfg
+}
+
+fn decode_string_map(entry map[string]toml.Any) map[string]string {
+	mut values := map[string]string{}
+	for key, value in entry {
+		values[key] = value.string()
+	}
+	return values
+}
+
+fn decode_providers_config_map(entry map[string]toml.Any) map[string]ProviderConfig {
+	mut providers := map[string]ProviderConfig{}
+	for name, value in entry {
+		if value is map[string]toml.Any {
+			providers[name] = decode_provider_config_map(value)
+		}
+	}
+	return providers
+}
+
+fn decode_providers_root_config(doc toml.Doc, mut cfg VhttpdConfig) ! {
+	if root_any := doc.value_opt('providers') {
+		root := root_any.as_map()
+		cfg.providers = decode_providers_config_map(root)
 	}
 }
 
@@ -1607,6 +1687,43 @@ pub fn resolve_config_variables(mut cfg VhttpdConfig, config_path string) ! {
 			}
 		}
 		cfg.plugins = next_plugins.clone()
+		mut next_providers := map[string]ProviderConfig{}
+		for name, provider_cfg in cfg.providers {
+			runtime_driver, runtime_driver_changed := expand_config_string(provider_cfg.runtime.driver,
+				'providers.${name}.runtime', vars, env_map, false)!
+			runtime_plugin, runtime_plugin_changed := expand_config_string(provider_cfg.runtime.plugin,
+				'providers.${name}.runtime', vars, env_map, false)!
+			legacy_driver, legacy_driver_changed := expand_config_string(provider_cfg.runtime_driver,
+				'providers.${name}', vars, env_map, false)!
+			legacy_plugin, legacy_plugin_changed := expand_config_string(provider_cfg.runtime_plugin,
+				'providers.${name}', vars, env_map, false)!
+			mut capabilities := map[string]string{}
+			mut capabilities_changed := false
+			for action, capability in provider_cfg.capabilities {
+				next_capability, capability_changed := expand_config_string(capability,
+					'providers.${name}.capabilities', vars, env_map, false)!
+				capabilities[action] = next_capability
+				if capability_changed {
+					capabilities_changed = true
+				}
+			}
+			next_providers[name] = ProviderConfig{
+				runtime:        ProviderRuntimeConfig{
+					driver: runtime_driver
+					plugin: runtime_plugin
+				}
+				capabilities:   capabilities
+				runtime_driver: legacy_driver
+				runtime_plugin: legacy_plugin
+			}
+			if runtime_driver_changed || runtime_plugin_changed || legacy_driver_changed
+				|| legacy_plugin_changed || capabilities_changed {
+				changed = true
+			}
+		}
+		if next_providers.len > 0 {
+			cfg.providers = next_providers.clone()
+		}
 		for i, raw in cfg.worker.sockets {
 			next, c := expand_config_string(raw, 'worker', vars, env_map, false)!
 			if c {
@@ -1668,6 +1785,10 @@ pub fn resolve_config_variables(mut cfg VhttpdConfig, config_path string) ! {
 			'assets', vars, env_map, changed)!
 		cfg.runtime.timezone, changed = expand_config_string(cfg.runtime.timezone, 'runtime', vars,
 			env_map, changed)!
+		cfg.feishu.runtime_driver, changed = expand_config_string(cfg.feishu.runtime_driver,
+			'feishu', vars, env_map, changed)!
+		cfg.feishu.runtime_plugin, changed = expand_config_string(cfg.feishu.runtime_plugin,
+			'feishu', vars, env_map, changed)!
 		cfg.feishu.open_base_url, changed = expand_config_string(cfg.feishu.open_base_url,
 			'feishu', vars, env_map, changed)!
 		mut next_apps := map[string]FeishuAppConfig{}
@@ -2126,6 +2247,8 @@ pub fn build_config_variable_map(cfg VhttpdConfig) map[string]string {
 		'mcp.session_ttl_seconds':        '${cfg.mcp.session_ttl_seconds}'
 		'mcp.sampling_capability_policy': cfg.mcp.sampling_capability_policy
 		'feishu.enabled':                 '${cfg.feishu.enabled}'
+		'feishu.runtime_driver':          cfg.feishu.runtime_driver
+		'feishu.runtime_plugin':          cfg.feishu.runtime_plugin
 		'feishu.open_base_url':           cfg.feishu.open_base_url
 		'feishu.bridge.enabled':          '${cfg.feishu.bridge.enabled}'
 		'feishu.bridge.ws_url':           cfg.feishu.bridge.ws_url
@@ -2168,6 +2291,15 @@ pub fn build_config_variable_map(cfg VhttpdConfig) map[string]string {
 		vars['plugins.${name}.build_root'] = plugin.build_root
 		vars['plugins.${name}.signature_root'] = plugin.signature_root
 		vars['plugins.${name}.runtime_profile'] = plugin.runtime_profile
+	}
+	for name, provider_cfg in cfg.providers {
+		vars['providers.${name}.runtime.driver'] = provider_cfg.runtime.driver
+		vars['providers.${name}.runtime.plugin'] = provider_cfg.runtime.plugin
+		vars['providers.${name}.runtime_driver'] = provider_cfg.runtime_driver
+		vars['providers.${name}.runtime_plugin'] = provider_cfg.runtime_plugin
+		for action, capability in provider_cfg.capabilities {
+			vars['providers.${name}.capabilities.${action}'] = capability
+		}
 	}
 	return vars
 }

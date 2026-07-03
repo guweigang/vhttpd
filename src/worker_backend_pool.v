@@ -27,7 +27,7 @@ fn next_worker_socket_for_state(mut ws worker.WorkerState) ?string {
 	return socket_path
 }
 
-fn next_idle_worker_socket_for_state(mut ws worker.WorkerState) ?string {
+fn lease_idle_worker_socket_for_state(mut ws worker.WorkerState) ?string {
 	ws.mu.@lock()
 	defer {
 		ws.mu.unlock()
@@ -49,6 +49,8 @@ fn next_idle_worker_socket_for_state(mut ws worker.WorkerState) ?string {
 		if !isnil(w.proc) && !w.proc.is_alive() {
 			continue
 		}
+		w.inflight_requests++
+		ws.worker_backend.managed_workers[worker_idx] = w
 		ws.worker_backend.rr_index = (idx + 1) % ws.worker_backend.sockets.len
 		return socket_path
 	}
@@ -69,12 +71,7 @@ fn (mut runtime EngineRuntime) select_socket_for_state_core(port EngineLifecycle
 	mut draining_ready := []int{}
 	if autostart && managed_worker_len > 0 {
 		for _ in 0 .. socket_len {
-			socket_path := next_idle_worker_socket_for_state(mut ws) or { break }
-			mut probe_conn := unix.connect_stream(socket_path) or {
-				last_err = err.msg()
-				continue
-			}
-			probe_conn.close() or {}
+			socket_path := lease_idle_worker_socket_for_state(mut ws) or { break }
 			return socket_path
 		}
 		ws.mu.@lock()

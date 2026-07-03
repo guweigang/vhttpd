@@ -108,6 +108,143 @@ fn test_engine_runtime_tracks_request_start_across_pools() {
 	assert cgi.worker_backend.managed_workers[0].served_requests == 1
 }
 
+fn test_engine_runtime_queued_selector_times_out_when_worker_stays_busy() {
+	mut runtime := EngineRuntime{}
+	mut state := worker.WorkerState{
+		worker_backend: worker.WorkerBackendRuntime{
+			sockets:          ['/tmp/vhttpd-busy-worker.sock']
+			autostart:       true
+			queue_capacity:  1
+			queue_timeout_ms: 15
+			queue_poll_ms:    5
+			managed_workers: [
+				transport.ManagedWorker{
+					socket_path:        '/tmp/vhttpd-busy-worker.sock'
+					inflight_requests: 1
+					next_retry_ts:      9_223_372_036_854
+				},
+			]
+		}
+	}
+	port := EngineLifecyclePort{
+		emit_fn: fn (_kind string, _fields map[string]string) {}
+	}
+
+	if _ := runtime.select_socket_queued_for_state(port, 'php', mut state) {
+		assert false
+	} else {
+		assert err.msg() == 'worker queue timeout'
+	}
+	assert state.stat_queue_waits_total == 1
+	assert state.stat_queue_timeouts_total == 1
+	assert state.worker_backend.queue_waiting_requests == 0
+}
+
+fn test_engine_runtime_queued_selector_rejects_when_queue_is_full() {
+	mut runtime := EngineRuntime{}
+	mut state := worker.WorkerState{
+		worker_backend: worker.WorkerBackendRuntime{
+			sockets:                ['/tmp/vhttpd-full-worker.sock']
+			autostart:             true
+			queue_capacity:        1
+			queue_timeout_ms:      15
+			queue_poll_ms:         5
+			queue_waiting_requests: 1
+			managed_workers: [
+				transport.ManagedWorker{
+					socket_path:        '/tmp/vhttpd-full-worker.sock'
+					inflight_requests: 1
+					next_retry_ts:      9_223_372_036_854
+				},
+			]
+		}
+	}
+	port := EngineLifecyclePort{
+		emit_fn: fn (_kind string, _fields map[string]string) {}
+	}
+
+	if _ := runtime.select_socket_queued_for_state(port, 'php', mut state) {
+		assert false
+	} else {
+		assert err.msg() == 'worker queue full'
+	}
+	assert state.stat_queue_waits_total == 0
+	assert state.stat_queue_rejected_total == 1
+	assert state.stat_queue_timeouts_total == 0
+	assert state.worker_backend.queue_waiting_requests == 1
+}
+
+fn test_engine_runtime_queued_selector_times_out_after_leased_worker_stays_busy() {
+	mut runtime := EngineRuntime{}
+	mut state := worker.WorkerState{
+		worker_backend: worker.WorkerBackendRuntime{
+			sockets:          ['/tmp/vhttpd-leased-worker.sock']
+			autostart:       true
+			queue_capacity:  1
+			queue_timeout_ms: 15
+			queue_poll_ms:    5
+			managed_workers: [
+				transport.ManagedWorker{
+					socket_path:   '/tmp/vhttpd-leased-worker.sock'
+					next_retry_ts: 9_223_372_036_854
+				},
+			]
+		}
+	}
+	port := EngineLifecyclePort{
+		emit_fn: fn (_kind string, _fields map[string]string) {}
+	}
+
+	socket := runtime.select_socket_queued_for_state(port, 'php', mut state) or { panic(err) }
+	assert socket == '/tmp/vhttpd-leased-worker.sock'
+	assert state.worker_backend.managed_workers[0].inflight_requests == 1
+	if _ := runtime.select_socket_queued_for_state(port, 'php', mut state) {
+		assert false
+	} else {
+		assert err.msg() == 'worker queue timeout'
+	}
+	assert state.stat_queue_waits_total == 1
+	assert state.stat_queue_timeouts_total == 1
+	assert state.worker_backend.queue_waiting_requests == 0
+	runtime.worker_request_finished(port, mut state, socket)
+	assert state.worker_backend.managed_workers[0].inflight_requests == 0
+}
+
+fn test_engine_runtime_release_does_not_count_served_request() {
+	mut runtime := EngineRuntime{
+		primary: worker.WorkerState{
+			worker_backend: worker.WorkerBackendRuntime{
+				sockets:    ['/tmp/vhttpd-release-worker.sock']
+				autostart: true
+				managed_workers: [
+					transport.ManagedWorker{
+						socket_path:   '/tmp/vhttpd-release-worker.sock'
+						next_retry_ts: 9_223_372_036_854
+					},
+				]
+			}
+		}
+	}
+	port := EngineLifecyclePort{
+		emit_fn: fn (_kind string, _fields map[string]string) {}
+	}
+
+	socket := runtime.select_socket_queued_for_state(port, 'php', mut runtime.primary) or {
+		panic(err)
+	}
+	assert socket == '/tmp/vhttpd-release-worker.sock'
+	assert runtime.primary.worker_backend.managed_workers[0].inflight_requests == 1
+	runtime.request_released(socket)
+	assert runtime.primary.worker_backend.managed_workers[0].inflight_requests == 0
+	assert runtime.primary.worker_backend.managed_workers[0].served_requests == 0
+	socket2 := runtime.select_socket_queued_for_state(port, 'php', mut runtime.primary) or {
+		panic(err)
+	}
+	runtime.request_finished(port, socket2)
+	assert runtime.primary.worker_backend.managed_workers[0].inflight_requests == 0
+	assert runtime.primary.worker_backend.managed_workers[0].served_requests == 1
+}
+
 fn test_engine_runtime_marks_additional_engine_workers_draining() {
 	mut runtime := EngineRuntime{
 		additional: {

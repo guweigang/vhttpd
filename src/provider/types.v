@@ -17,6 +17,7 @@ pub:
 	enabled          bool
 	has_handler      bool     @[json: 'has_handler']
 	has_runtime      bool     @[json: 'has_runtime']
+	runtime_driver   string   @[json: 'runtime_driver']
 	command_matchers []string @[json: 'command_matchers']
 	route_kind       string   @[json: 'route_kind']
 }

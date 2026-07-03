@@ -8,13 +8,54 @@ import runtime_plan
 fn provider_runtime_settings_from_plan(plan runtime_plan.RuntimePlan, listener_id string, fallback provider.ProviderRuntimeSettings) provider.ProviderRuntimeSettings {
 	feishu_settings := feishu_runtime_settings_from_plan(plan, listener_id) or { fallback.feishu }
 	codex_settings, ollama_enabled := codex_runtime_settings_from_plan(plan, listener_id, fallback)
+	runtime_drivers, runtime_plugins := provider_runtime_maps_from_plan(plan, fallback)
+	runtime_capabilities := provider_runtime_capability_maps_from_plan(plan, fallback)
+	feishu_driver := runtime_drivers['feishu'] or { fallback.feishu.runtime_driver }
+	feishu_plugin := runtime_plugins['feishu'] or { fallback.feishu.runtime_plugin }
 	return provider.ProviderRuntimeSettings{
-		feishu:         feishu_settings
+		runtime_drivers:      runtime_drivers
+		runtime_plugins:      runtime_plugins
+		runtime_capabilities: runtime_capabilities
+		feishu:               provider.FeishuRuntimeSettings{
+			...feishu_settings
+			runtime_driver: feishu_driver
+			runtime_plugin: feishu_plugin
+		}
 		codex:          codex_settings
 		bridge:         bridge_settings_from_plan(plan, listener_id) or { fallback.bridge }
 		db:             fallback.db
 		ollama_enabled: ollama_enabled
 	}
+}
+
+fn provider_runtime_capability_maps_from_plan(plan runtime_plan.RuntimePlan, fallback provider.ProviderRuntimeSettings) map[string]map[string]string {
+	mut capabilities := fallback.runtime_capabilities.clone()
+	for id, provider_plan in plan.providers {
+		if provider_plan.capabilities.len > 0 {
+			capabilities[id] = provider_plan.capabilities.clone()
+		} else {
+			capabilities.delete(id)
+		}
+	}
+	return capabilities
+}
+
+fn provider_runtime_maps_from_plan(plan runtime_plan.RuntimePlan, fallback provider.ProviderRuntimeSettings) (map[string]string, map[string]string) {
+	mut drivers := fallback.runtime_drivers.clone()
+	mut plugins := fallback.runtime_plugins.clone()
+	for id, provider_plan in plan.providers {
+		driver := provider_plan.driver.trim_space()
+		if driver != '' {
+			drivers[id] = provider.normalize_runtime_driver(driver)
+		}
+		plugin := provider_plan.plugin.trim_space()
+		if plugin != '' {
+			plugins[id] = plugin
+		} else {
+			plugins.delete(id)
+		}
+	}
+	return drivers, plugins
 }
 
 fn feishu_runtime_settings_from_plan(plan runtime_plan.RuntimePlan, listener_id string) ?provider.FeishuRuntimeSettings {

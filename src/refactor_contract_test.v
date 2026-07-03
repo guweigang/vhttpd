@@ -15,7 +15,7 @@ fn assert_call_guarded_by_compatibility(source string, call string) {
 		mut guarded := false
 		mut j := i - 1
 		for j >= 0 && i - j <= 4 {
-			if lines[j].contains('if plan.source.compatibility') {
+			if lines[j].contains('.source.compatibility') {
 				guarded = true
 				break
 			}
@@ -33,7 +33,7 @@ fn test_refactor_contract_provider_global_fallbacks_are_compatibility_only() {
 
 fn test_refactor_contract_upload_completion_legacy_fallback_is_compatibility_only() {
 	source := refactor_contract_source_file('engine_runtime_builder.v')
-	assert source.contains('if plan.source.compatibility && route.upload_completed_engine_ids.len == 0')
+	assert source.contains('.source.compatibility && route.upload_completed_engine_ids.len == 0')
 	assert source.contains("route.on_completed.trim_space().starts_with('vjsx:')")
 }
 

@@ -3,6 +3,7 @@ module main
 import dispatch
 import log
 import os
+import runtime_plan
 import veb
 
 struct MatchedHttpPipelineRequest {
@@ -43,6 +44,9 @@ fn (rt PipelineRuntime) try_handle_matched_http(mut app App, mut ctx Context, ru
 		return render_http_terminal_adapter(mut app, mut ctx, req.method, req.path,
 			req.normalized_target, req.query, req.body_on_head, req.remote_addr, req.req_id,
 			req.trace_id, req.start_ms, rule, mut terminal_adapter)
+	}
+	if result := run_http_route_transforms(mut app, mut ctx, rule, req) {
+		return result
 	}
 	if rule.status > 0 {
 		mut outcome_headers := map[string]string{}
@@ -109,6 +113,28 @@ fn (rt PipelineRuntime) try_handle_matched_http(mut app App, mut ctx Context, ru
 			req.normalized_target, req.query, req.body_on_head, req.remote_addr, req.req_id,
 			req.trace_id, req.start_ms, rule, mut terminal_adapter)
 	}
+	if rule.executor == 'provider-action' {
+		adapter_id := rule.egress_ref.trim_string_left('adapter:')
+		adapter_plan := app.plan.adapters[adapter_id] or {
+			return HttpResponseRuntime.dispatch_error(mut app, mut ctx, http_ingress_request_for_rule(req.method,
+				req.path, req.path, req.body_on_head, req.remote_addr, req.req_id, req.trace_id,
+				req.start_ms, rule), 'provider_action_adapter_missing:${adapter_id}')
+		}
+		payload := provider_action_payload(adapter_plan, ctx.req.data)
+		resp := rt.dispatch_http_provider_action(mut app, adapter_plan, adapter_id, rule, req,
+			payload)
+		if !resp.ok {
+			return HttpResponseRuntime.dispatch_error(mut app, mut ctx, http_ingress_request_for_rule(req.method,
+				req.path, req.path, req.body_on_head, req.remote_addr, req.req_id, req.trace_id,
+				req.start_ms, rule), resp.error)
+		}
+		outcome := dispatch.response_outcome(provider_action_response_status(adapter_plan), {
+			'content-type': provider_action_response_content_type(adapter_plan)
+		}, resp.result)
+		return HttpResponseRuntime.delivery_outcome(mut app, mut ctx, http_ingress_request_for_rule(req.method,
+			req.path, req.path, req.body_on_head, req.remote_addr, req.req_id, req.trace_id,
+			req.start_ms, rule), outcome, rule)
+	}
 	if rule.executor == 'none' {
 		log.info('[http] ⇠ pipeline none (block) trace_id=${req.trace_id} pipeline=${rule.pipeline_id}')
 		mut terminal_adapter := dispatch.EgressAdapter(dispatch.fixed_response_adapter('route/none',
@@ -118,6 +144,15 @@ fn (rt PipelineRuntime) try_handle_matched_http(mut app App, mut ctx Context, ru
 			req.trace_id, req.start_ms, rule, mut terminal_adapter)
 	}
 	return none
+}
+
+fn (rt PipelineRuntime) dispatch_http_provider_action(mut app App, adapter_plan runtime_plan.AdapterPlan, adapter_id string, rule RuntimeRouteRule, req MatchedHttpPipelineRequest, payload string) ProviderRuntimeActionResponse {
+	return app.dispatch_provider_action_adapter(adapter_plan, adapter_id, payload, req.req_id,
+		req.trace_id, {
+		'pipeline_id': rule.pipeline_id
+		'method':      req.method
+		'path':        req.normalized_target
+	})
 }
 
 fn (rt PipelineRuntime) try_handle_http_dispatch_plan(mut app App, mut ctx Context, plan HttpPipelineDispatchPlan, req MatchedHttpPipelineRequest, headers map[string]string) ?veb.Result {

@@ -417,7 +417,6 @@ fn handle_worker_websocket_session(mut app App, mut client_conn net.TcpConn, mut
 		'path':          path
 		'worker_socket': selected_socket
 	})
-	app.on_worker_request_started(selected_socket)
 	defer {
 		runtime_trace('ws.session.defer', {
 			'request_id':    req_id

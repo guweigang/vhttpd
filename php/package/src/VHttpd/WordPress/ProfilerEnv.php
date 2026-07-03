@@ -24,6 +24,12 @@ final class ProfilerEnv
             || getenv('VHTTPD_DB_SOCKET') !== false
             || getenv('VHTTPD_CACHE_SOCKET') !== false
             || getenv('VHTTPD_INTERNAL_ADMIN_SOCKET') !== false
+            || isset($_SERVER['VHTTPD_DB_SOCKET'])
+            || isset($_SERVER['VHTTPD_CACHE_SOCKET'])
+            || isset($_SERVER['VHTTPD_INTERNAL_ADMIN_SOCKET'])
+            || isset($_ENV['VHTTPD_DB_SOCKET'])
+            || isset($_ENV['VHTTPD_CACHE_SOCKET'])
+            || isset($_ENV['VHTTPD_INTERNAL_ADMIN_SOCKET'])
         );
 
         return self::$isVHttpd;
@@ -120,10 +126,33 @@ final class ProfilerEnv
             return false;
         }
 
-        $dbSrc = self::getPluginDir() . '/db.php';
-        $ocSrc = self::getPluginDir() . '/object-cache.php';
+        $pluginDir = self::getPluginDir();
+        $dbCandidates = [
+            $pluginDir . '/v-profiler/db.php',
+            $pluginDir . '/db.php',
+        ];
+        $ocCandidates = [
+            $pluginDir . '/v-profiler/object-cache.php',
+            $pluginDir . '/object-cache.php',
+        ];
 
-        if (!is_file($dbSrc) || !is_file($ocSrc)) {
+        $dbSrc = '';
+        foreach ($dbCandidates as $candidate) {
+            if (is_file($candidate)) {
+                $dbSrc = $candidate;
+                break;
+            }
+        }
+
+        $ocSrc = '';
+        foreach ($ocCandidates as $candidate) {
+            if (is_file($candidate)) {
+                $ocSrc = $candidate;
+                break;
+            }
+        }
+
+        if ($dbSrc === '' || $ocSrc === '') {
             return false;
         }
 
@@ -170,7 +199,7 @@ final class ProfilerEnv
 <?php
 /**
  * Plugin Name: v-Profiler Loader
- * Description: High-performance MUST-USE loader for v-Profiler telemetry module (vhttpd).
+ * Description: High-performance MUST-USE loader for v-Profiler telemetry module.
  * Version: 0.1.0
  * Author: guweigang
  *
@@ -178,7 +207,7 @@ final class ProfilerEnv
  */
 declare(strict_types=1);
 
-$vProfilerEntry = dirname(__DIR__) . '/plugins/v-profiler/v-profiler.php';
+$vProfilerEntry = (defined('WP_PLUGIN_DIR') ? WP_PLUGIN_DIR : dirname(__DIR__) . '/plugins') . '/v-profiler/v-profiler.php';
 if (file_exists($vProfilerEntry)) {
     require_once $vProfilerEntry;
 }
@@ -269,6 +298,12 @@ PHP;
 
     private static function getPluginDir(): string
     {
+        // 优先使用当前文件物理路径推导的插件根目录
+        $dir = dirname(__DIR__, 3);
+        if (is_file($dir . '/v-profiler.php')) {
+            return $dir;
+        }
+
         if (defined('WP_PLUGIN_DIR')) {
             return WP_PLUGIN_DIR . '/v-profiler';
         }

@@ -7,7 +7,8 @@ pub fn adapter_descriptor_from_plan(adapter runtime_plan.AdapterPlan) AdapterDes
 		id:           adapter.id
 		kind:         adapter.kind
 		capabilities: adapter_capabilities(adapter.kind)
-		terminal:     adapter.kind in ['fixed-response', 'reject', 'relay-delivery']
+		terminal:     adapter.kind in ['fixed-response', 'reject', 'relay-delivery',
+			'provider-action']
 	}
 }
 

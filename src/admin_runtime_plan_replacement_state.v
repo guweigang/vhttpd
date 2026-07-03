@@ -152,6 +152,7 @@ fn runtime_plan_replacement_attempt_from_preview(kind string, status string, app
 		restart_listeners:   preview.restart_listeners
 		drain_engines:       preview.drain_engines
 		reload_transforms:   preview.reload_transforms
+		reload_providers:    preview.reload_providers
 		reload_relays:       preview.reload_relays
 		reasons:             preview.reasons
 	}

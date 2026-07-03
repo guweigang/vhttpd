@@ -49,10 +49,84 @@ pub fn load_runtime_plan_file(config_path string) !runtime_plan.RuntimePlan {
 fn decode_v2_config_strict(text string) !V2Config {
 	doc := toml.parse_text(text)!
 	root := doc.to_any().as_map()
-	validate_v2_config_keys(root)!
+	validate_v2_config_keys(doc, root)!
 	mut cfg := doc.decode[V2Config]()!
+	apply_v2_provider_specs(text, doc, mut cfg)
 	apply_v2_extension_options(root, mut cfg)
 	return cfg
+}
+
+fn apply_v2_provider_specs(text string, doc toml.Doc, mut cfg V2Config) {
+	providers := v2_provider_specs_from_text(text, doc, cfg.providers)
+	if providers.len > 0 {
+		cfg.providers = providers.clone()
+	}
+}
+
+fn v2_provider_specs_from_text(text string, doc toml.Doc, existing map[string]V2ProviderSpec) map[string]V2ProviderSpec {
+	mut provider_ids := provider_ids_from_v2_text(text)
+	if providers_any := doc.value_opt('providers') {
+		providers_root := providers_any.as_map()
+		for id in providers_root.keys() {
+			provider_ids[id] = true
+		}
+	}
+	if provider_ids.len > 0 {
+		mut providers := map[string]V2ProviderSpec{}
+		for id, provider in existing {
+			providers[id] = provider
+		}
+		mut ids := provider_ids.keys()
+		ids.sort()
+		for id in ids {
+			mut provider := providers[id] or { V2ProviderSpec{} }
+			if runtime_any := doc.value_opt('providers.${id}.runtime') {
+				runtime_root := runtime_any.as_map()
+				mut runtime := provider.runtime
+				if driver_any := runtime_root['driver'] {
+					runtime.driver = driver_any.string()
+				}
+				if plugin_any := runtime_root['plugin'] {
+					runtime.plugin = plugin_any.string()
+				}
+				if engine_any := runtime_root['engine'] {
+					runtime.engine = engine_any.string()
+				}
+				provider.runtime = runtime
+			}
+			if capabilities_any := doc.value_opt('providers.${id}.capabilities') {
+				provider.capabilities = decode_v2_string_options(capabilities_any)
+			}
+			if runtime_driver_any := doc.value_opt('providers.${id}.runtime_driver') {
+				provider.runtime_driver = runtime_driver_any.string()
+			}
+			if runtime_plugin_any := doc.value_opt('providers.${id}.runtime_plugin') {
+				provider.runtime_plugin = runtime_plugin_any.string()
+			}
+			if options_any := doc.value_opt('providers.${id}.options') {
+				provider.options = decode_v2_string_options(options_any)
+			}
+			providers[id] = provider
+		}
+		return providers
+	}
+	return existing.clone()
+}
+
+fn provider_ids_from_v2_text(text string) map[string]bool {
+	mut ids := map[string]bool{}
+	for raw_line in text.split_into_lines() {
+		line := raw_line.trim_space()
+		if !line.starts_with('[providers.') {
+			continue
+		}
+		table := line.trim_left('[').trim_right(']')
+		parts := table.split('.')
+		if parts.len >= 2 && parts[0] == 'providers' && parts[1].trim_space() != '' {
+			ids[parts[1].trim_space()] = true
+		}
+	}
+	return ids
 }
 
 fn apply_v2_extension_options(root map[string]toml.Any, mut cfg V2Config) {
@@ -102,6 +176,14 @@ fn apply_v2_extension_options(root map[string]toml.Any, mut cfg V2Config) {
 			cfg.transforms[id] = transform
 		}
 	}
+}
+
+fn decode_v2_string_options(options_any toml.Any) map[string]string {
+	mut options := map[string]string{}
+	for key, value in options_any.as_map() {
+		options[key] = value.string()
+	}
+	return options
 }
 
 fn decode_v2_int_options(options_any toml.Any) map[string]int {
@@ -245,9 +327,10 @@ fn resolve_v2_path_string(raw string, root string, scope string, vars map[string
 	return resolve_config_path(root, value)
 }
 
-fn validate_v2_config_keys(root map[string]toml.Any) ! {
+fn validate_v2_config_keys(doc toml.Doc, root map[string]toml.Any) ! {
 	validate_keys(root, '', ['version', 'server', 'listeners', 'control', 'observability',
-		'resources', 'engines', 'adapters', 'transforms', 'policies', 'pipelines', 'relays'])!
+		'resources', 'engines', 'adapters', 'transforms', 'policies', 'providers', 'pipelines',
+		'relays'])!
 	validate_optional_table(root, 'server', ['timezone', 'pid_file', 'shutdown_timeout_ms'])!
 	validate_listener_specs(root)!
 	validate_optional_table(root, 'control', ['listener', 'token', 'internal_socket'])!
@@ -261,15 +344,33 @@ fn validate_v2_config_keys(root map[string]toml.Any) ! {
 		'signature_include', 'signature_exclude', 'resources', 'capabilities', 'env', 'args',
 		'extensions', 'options'])!
 	validate_named_specs(root, 'adapters', ['kind', 'engine', 'storage', 'document_root', 'index',
-		'root', 'base_url', 'timeout_ms', 'max_body_bytes', 'completed_pipeline', 'topic', 'options',
-		'int_options', 'bool_options', 'list_options', 'map_options', 'record_options'])!
+		'root', 'base_url', 'timeout_ms', 'max_body_bytes', 'completed_pipeline', 'topic',
+		'provider', 'action', 'capability', 'runtime_driver', 'runtime_plugin', 'runtime_engine',
+		'options', 'int_options', 'bool_options', 'list_options', 'map_options', 'record_options'])!
 	validate_named_specs(root, 'transforms', ['kind', 'engine', 'handler', 'target', 'strip_prefix',
 		'options', 'int_options', 'bool_options', 'list_options', 'map_options', 'record_options'])!
 	validate_policy_specs(root)!
+	validate_provider_specs(doc)!
 	validate_pipeline_specs(root)!
 	validate_named_specs(root, 'relays', ['mode', 'carrier', 'listener', 'auth', 'url', 'path',
 		'node_id', 'token', 'autostart', 'max_channels', 'channel_buffer', 'reconnect_delay_ms',
 		'options'])!
+}
+
+fn validate_provider_specs(doc toml.Doc) ! {
+	value := doc.value_opt('providers') or { return }
+	if value is map[string]toml.Any {
+		for id, spec_any in value {
+			if spec_any is map[string]toml.Any {
+				validate_keys(spec_any, 'providers.${id}', ['runtime', 'capabilities', 'runtime_driver',
+					'runtime_plugin', 'options'])!
+				runtime_any := spec_any['runtime'] or { continue }
+				if runtime_any is map[string]toml.Any {
+					validate_keys(runtime_any, 'providers.${id}.runtime', ['driver', 'plugin', 'engine'])!
+				}
+			}
+		}
+	}
 }
 
 fn validate_keys(entry map[string]toml.Any, path string, allowed []string) ! {

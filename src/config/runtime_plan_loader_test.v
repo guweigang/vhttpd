@@ -1,5 +1,6 @@
 module config
 
+import json
 import os
 
 fn test_load_runtime_plan_file_uses_strict_v2_when_version_is_two() {
@@ -68,6 +69,106 @@ document_root = "/srv/legacy"
 	assert plan.listeners['default'].port == 18081
 	assert plan.adapters['legacy/default'].options.strings['document_root'] == '/srv/legacy'
 	assert plan.diagnostics.any(it.code == 'legacy_schema')
+}
+
+fn test_load_vhttpd_config_accepts_provider_runtime_driver_map() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_provider_runtime_config_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	config_file := os.join_path(temp_dir, 'vhttpd.toml')
+	os.write_file(config_file, '
+[paths]
+root = "${temp_dir}"
+provider_plugin = "plugins/feishu-runtime.mts"
+
+[plugins.feishu_runtime]
+kind = "vjsx"
+app_entry = "\${paths.provider_plugin}"
+runtime_profile = "node"
+
+[providers.feishu.runtime]
+driver = "typescript"
+plugin = "feishu_runtime"
+
+[providers.feishu.capabilities]
+send_message = "feishu.message.send"
+') or {
+		panic(err)
+	}
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+
+	cfg := load_vhttpd_config([config_file]) or { panic(err) }
+	assert cfg.providers['feishu'].runtime.driver == 'typescript'
+	assert cfg.providers['feishu'].runtime.plugin == 'feishu_runtime'
+	assert cfg.providers['feishu'].capabilities['send_message'] == 'feishu.message.send'
+	assert cfg.plugins['feishu_runtime'].app_entry.ends_with('/plugins/feishu-runtime.mts')
+}
+
+fn test_load_runtime_plan_file_projects_v2_provider_runtime_driver_map() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_provider_runtime_plan_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	config_file := os.join_path(temp_dir, 'vhttpd.toml')
+	os.write_file(config_file, '
+version = 2
+
+[listeners.web]
+protocol = "http"
+transport = "tcp"
+host = "127.0.0.1"
+port = 18082
+
+[engines.vjsx]
+kind = "vjsx"
+entry = "app.mts"
+
+[adapters.app]
+kind = "http-handler"
+engine = "engine:vjsx"
+
+[providers.feishu.runtime]
+driver = "typescript"
+plugin = "feishu_runtime"
+engine = "engine:vjsx"
+
+[providers.feishu.capabilities]
+send_message = "feishu.message.send"
+upload_image = "feishu.image.upload"
+
+[[pipelines]]
+id = "site"
+ingress = "listener:web"
+match.paths = ["*"]
+egress = "adapter:app"
+') or {
+		panic(err)
+	}
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+
+	plan := load_runtime_plan_file(config_file) or { panic(err) }
+	assert plan.providers['feishu'].driver == 'typescript'
+	assert plan.providers['feishu'].plugin == 'feishu_runtime'
+	assert plan.providers['feishu'].engine?.str() == 'engine:vjsx'
+	assert plan.providers['feishu'].capabilities['send_message'] == 'feishu.message.send'
+	assert plan.providers['feishu'].capabilities['upload_image'] == 'feishu.image.upload'
+	encoded := json.encode(plan)
+	assert encoded.contains('"providers":{"feishu"')
+	assert encoded.contains('"plugin":"feishu_runtime"')
+}
+
+fn test_provider_ids_from_v2_text_detects_nested_provider_tables() {
+	ids := provider_ids_from_v2_text('
+[providers.feishu.runtime]
+driver = "vjsx"
+
+[providers.custom.capabilities]
+send = "custom.send"
+')
+
+	assert ids['feishu']
+	assert ids['custom']
 }
 
 fn test_load_runtime_plan_file_rejects_unsupported_version() {
@@ -249,6 +350,30 @@ fn test_load_runtime_plan_file_accepts_hello_v2_example() {
 	assert plan.pipelines[0].id == 'hello'
 }
 
+fn test_repository_v2_examples_are_strict_v2_style() {
+	repo_root := os.real_path(os.join_path(os.dir(@FILE), '..', '..'))
+	examples := [
+		os.join_path(repo_root, 'examples', 'config', 'hello-v2.toml'),
+		os.join_path(repo_root, 'examples', 'config', 'relay-hub-v2.toml'),
+		os.join_path(repo_root, 'examples', 'config', 'relay-public-v2.toml'),
+		os.join_path(repo_root, 'examples', 'config', 'relay-agent-v2.toml'),
+		os.join_path(repo_root, 'examples', 'config', 'relay-agent-local-v2.toml'),
+		os.join_path(repo_root, 'examples', 'wordpress', 'vhttpd-v2.toml'),
+	]
+	legacy_sections := ['[files]', '[worker]', '[executor]', '[php]', '[vjsx]', '[admin]',
+		'[[routes]]']
+	for config_file in examples {
+		text := os.read_file(config_file) or { panic(err) }
+		assert text.contains('version = 2')
+		normalized := '\n${text}'
+		for section in legacy_sections {
+			assert !normalized.contains('\n${section}')
+		}
+		plan := load_runtime_plan_file(config_file) or { panic(err) }
+		assert !plan.source.compatibility
+	}
+}
+
 fn test_load_runtime_plan_file_accepts_wordpress_v2_example() {
 	repo_root := os.real_path(os.join_path(os.dir(@FILE), '..', '..'))
 	config_file := os.join_path(repo_root, 'examples', 'wordpress', 'vhttpd-v2.toml')
@@ -274,6 +399,129 @@ fn test_load_runtime_plan_file_accepts_wordpress_v2_example() {
 	assert plan.pipeline('wordpress.front-page')?.egress.str() == 'adapter:wordpress-worker'
 	assert plan.pipeline('rest.pretty-route')?.transforms[0].str() == 'transform:wp-json-rewrite'
 	assert plan.pipeline('upload.completed')?.transforms[0].str() == 'transform:upload-completed'
+}
+
+fn test_load_runtime_plan_file_normalizes_v2_event_adapter_kind() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_runtime_plan_loader_event_adapter_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	config_file := os.join_path(temp_dir, 'vhttpd.toml')
+	os.write_file(config_file, '
+version = 2
+
+[listeners.web]
+protocol = "http"
+host = "127.0.0.1"
+port = 18080
+
+[adapters.event]
+kind = "event"
+topic = "inventory.changed"
+
+[adapters.health]
+kind = "fixed-response"
+options.status = "200"
+options.body = "ok"
+
+[[pipelines]]
+id = "health"
+ingress = "listener:web"
+match.paths = ["/health"]
+egress = "adapter:health"
+
+[[pipelines]]
+id = "inventory.changed"
+ingress = "adapter:event"
+match.metadata = { event = "inventory.changed" }
+egress = "adapter:event"
+') or {
+		panic(err)
+	}
+	plan := load_runtime_plan_file(config_file) or { panic(err) }
+	assert plan.adapters['event'].kind == 'event-ingress'
+}
+
+fn test_load_runtime_plan_file_accepts_v2_provider_action_adapter() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_runtime_plan_loader_provider_action_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	config_file := os.join_path(temp_dir, 'vhttpd.toml')
+	os.write_file(config_file, '
+version = 2
+
+[listeners.web]
+protocol = "http"
+host = "127.0.0.1"
+port = 18080
+
+[adapters.provider_send]
+kind = "provider-action"
+provider = "feishu"
+action = "send_message"
+runtime_driver = "vjsx"
+runtime_plugin = "feishu_runtime"
+runtime_engine = "engine:provider_runtime"
+capability = "feishu.message.send"
+
+[engines.provider_runtime]
+kind = "vjsx"
+entry = "provider-runtime.mts"
+
+[[pipelines]]
+id = "provider.send"
+ingress = "listener:web"
+match.methods = ["POST"]
+match.paths = ["/provider/send"]
+egress = "adapter:provider_send"
+') or {
+		panic(err)
+	}
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+
+	plan := load_runtime_plan_file(config_file) or { panic(err) }
+	assert plan.adapters['provider_send'].kind == 'provider-action'
+	assert plan.adapters['provider_send'].options.strings['provider'] == 'feishu'
+	assert plan.adapters['provider_send'].options.strings['action'] == 'send_message'
+	assert plan.providers['feishu'].driver == 'vjsx'
+	assert plan.providers['feishu'].plugin == 'feishu_runtime'
+	assert plan.providers['feishu'].engine?.str() == 'engine:provider_runtime'
+	assert plan.providers['feishu'].capabilities['send_message'] == 'feishu.message.send'
+}
+
+fn test_load_runtime_plan_file_rejects_v2_provider_action_without_provider() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_runtime_plan_loader_provider_action_bad_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	config_file := os.join_path(temp_dir, 'vhttpd.toml')
+	os.write_file(config_file, '
+version = 2
+
+[listeners.web]
+protocol = "http"
+host = "127.0.0.1"
+port = 18080
+
+[adapters.provider_send]
+kind = "provider-action"
+action = "send_message"
+
+[[pipelines]]
+id = "provider.send"
+ingress = "listener:web"
+match.methods = ["POST"]
+match.paths = ["/provider/send"]
+egress = "adapter:provider_send"
+') or {
+		panic(err)
+	}
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+
+	if _ := load_runtime_plan_file(config_file) {
+		assert false
+	} else {
+		assert err.msg() == 'runtime_plan_adapter_missing_provider:provider_send'
+	}
 }
 
 fn test_load_runtime_plan_file_resolves_v2_relative_paths_and_env_defaults() {

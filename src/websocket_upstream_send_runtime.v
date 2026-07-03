@@ -10,7 +10,7 @@ fn (mut app App) websocket_upstream_provider_send(provider string, req upstream.
 				return app.providers.feishu_card_bridge_proxy_send(req)
 			}
 			result :=
-				app.feishu_runtime_send_message(feishu.SendMessageRequest.from_upstream_request(req))!
+				app.providers.feishu_provider_runtime_send_message(feishu.SendMessageRequest.from_upstream_request(req), mut app)!
 			return result.to_upstream_send_result(provider,
 				app.providers.feishu.resolve_app_name(req.instance)!)
 		}
@@ -40,7 +40,7 @@ fn (mut app App) websocket_upstream_provider_update(provider string, req upstrea
 				return app.providers.feishu_card_bridge_proxy_update(req)
 			}
 			result :=
-				app.feishu_runtime_update_message(feishu.UpdateMessageRequest.from_upstream_request(req))!
+				app.providers.feishu_provider_runtime_update_message(feishu.UpdateMessageRequest.from_upstream_request(req), mut app)!
 			return result.to_upstream_update_result(provider,
 				app.providers.feishu.resolve_app_name(req.instance)!)
 		}

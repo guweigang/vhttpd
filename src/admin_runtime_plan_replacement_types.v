@@ -37,6 +37,7 @@ struct RuntimePlanReplacementAttemptSnapshot {
 	restart_listeners   []string
 	drain_engines       []string
 	reload_transforms   []string
+	reload_providers    []string
 	reload_relays       []string
 	reasons             []string
 }
@@ -85,6 +86,7 @@ struct RuntimePlanReplacementPreview {
 	restart_listeners      []string
 	drain_engines          []string
 	reload_transforms      []string
+	reload_providers       []string
 	reload_relays          []string
 	reasons                []string
 	current_schema_version int

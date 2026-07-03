@@ -87,6 +87,8 @@ pub fn (mut s AdminState) runtime_snapshot(ctx RuntimeContext) executor.AdminRun
 			provider:  ctx.logic_executor_provider()
 			details:   ctx.logic_executor_admin_details()
 		}
+		pipelines: ctx.pipeline_runtime_snapshot()
+		listeners: ctx.listener_runtime_snapshots()
 		capabilities: capabilities
 		active: executor.AdminActiveCounts{
 			websockets:   ctx.ws_hub_active_conns()

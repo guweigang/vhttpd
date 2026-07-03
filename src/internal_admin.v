@@ -179,7 +179,8 @@ fn (mut app App) internal_gateway_dispatch(req admin.InternalAdminRequest, binar
 			}
 			mut result := feishu.UploadImageResult{}
 			if binary_payload.len > 0 {
-				result = app.feishu_runtime_upload_image_bytes(upload_req, binary_payload) or {
+				result = app.providers.feishu_provider_runtime_upload_image_bytes(upload_req,
+					binary_payload, mut app) or {
 					return admin.InternalAdminResponse{
 						status:  502
 						headers: {
@@ -192,7 +193,7 @@ fn (mut app App) internal_gateway_dispatch(req admin.InternalAdminRequest, binar
 					}
 				}
 			} else {
-				result = app.feishu_runtime_upload_image(upload_req) or {
+				result = app.providers.feishu_provider_runtime_upload_image(upload_req, mut app) or {
 					return admin.InternalAdminResponse{
 						status:  502
 						headers: {
