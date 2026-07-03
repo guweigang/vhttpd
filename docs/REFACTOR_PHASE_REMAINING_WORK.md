@@ -6,7 +6,7 @@ tags:
   - v2-config
   - validation
 status: draft
-updated: 2026-07-01
+updated: 2026-07-03
 ---
 # Refactor Phase Remaining Work
 
@@ -16,8 +16,9 @@ This document records the remaining acceptance work after the v2 runtime/config 
 
 - Stage 7 runtime isolation and module closure: code-complete.
 - Automated test matrix: green as of 2026-07-01.
+- Latest acceptance verification: `make build` and `bash tests/e2e/config_acceptance_test.sh` passed on 2026-07-03 with 152 config-acceptance checks green.
 - Product-level acceptance: in progress.
-- Completed acceptance slice: automated config smoke now covers V1 basic compatibility, V2 simple pipeline dispatch, V2 missing-reference diagnostics, multi-site listener/pipeline routing with admin plan visibility, WordPress V2 worker/static/security routing with response-cache cookie behavior, HTTP protocol transform dispatch through native/vjsx implementations with transformer snapshots, relay happy path with runtime/admin visibility, V2 provider runtime/admin visibility for Codex and Feishu, provider instance add/update through admin APIs, DB/cache runtime snapshots on independent admin port plus data-plane admin modes, real PHP cache socket operations, upload-completed and generic event pipeline dispatch, PHP worker stream-dispatch SSE, and worker busy-state/admin queue visibility.
+- Completed acceptance slice: automated config smoke now covers V1 basic compatibility, V2 simple pipeline dispatch, V2 missing-reference diagnostics, multi-site listener/pipeline routing with admin plan visibility, WordPress V2 worker/static/security routing with response-cache cookie behavior, HTTP protocol transform dispatch through native/vjsx implementations with transformer snapshots and hot replacement, relay happy path/reconnect/fail-fast behavior with runtime/admin visibility, V2 provider runtime/admin visibility for Codex and Feishu, provider-action dispatch through configurable vjsx provider runtime with hot replacement, provider instance add/update through admin APIs, DB/cache runtime snapshots on independent admin port plus data-plane admin modes, real PHP cache socket operations, upload-completed and generic event pipeline dispatch, PHP worker stream-dispatch SSE, and controlled worker busy/queue/full/timeout visibility.
 
 Validated automated commands:
 
