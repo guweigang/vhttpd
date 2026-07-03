@@ -1188,6 +1188,11 @@ write_db_runtime_config() {
     local file="$1"
     local port="$2"
     local label="${3:-db-runtime}"
+    local db_host="${VHTTPD_E2E_DB_HOST:-127.0.0.1}"
+    local db_port="${VHTTPD_E2E_DB_PORT:-3306}"
+    local db_user="${VHTTPD_E2E_DB_USER:-root}"
+    local db_password="${VHTTPD_E2E_DB_PASSWORD:-}"
+    local db_name="${VHTTPD_E2E_DB_NAME:-vhttpd_e2e}"
     cat >"$file" <<EOF
 [server]
 host = "127.0.0.1"
@@ -1204,11 +1209,11 @@ driver = "mysql"
 pool_name = "default"
 
 [db.mysql]
-host = "127.0.0.1"
-port = 3306
-username = "root"
-password = ""
-database = "vhttpd_e2e"
+host = "${db_host}"
+port = ${db_port}
+username = "${db_user}"
+password = "${db_password}"
+database = "${db_name}"
 pool_size = 2
 idle_ping_ms = 30000
 init_sql = ["SET SESSION sql_mode = ''"]
@@ -1225,6 +1230,35 @@ thread_count = 1
 host = "127.0.0.1"
 port = 0
 token = ""
+EOF
+}
+
+write_db_runtime_live_probe() {
+    local file="$1"
+    local socket="$2"
+    cat >"$file" <<EOF
+<?php
+declare(strict_types=1);
+
+require_once '${REPO_ROOT}/php/package/src/VHttpd/Wire/FrameCodec.php';
+require_once '${REPO_ROOT}/php/package/src/VHttpd/Wire/JsonClient.php';
+require_once '${REPO_ROOT}/php/package/src/VHttpd/DbGateway/Client.php';
+
+\$_SERVER['VHTTPD_TRACE_ID'] = 'e2e-db-runtime-live';
+\$_SERVER['VHTTPD_REQUEST_ID'] = 'req-e2e-db-runtime-live';
+\$client = new VHttpd\DbGateway\Client('${socket}', 'default', 1.0, 5.0);
+\$ping = \$client->ping(3000);
+if ((\$ping['driver'] ?? '') !== 'mysql') {
+    fwrite(STDERR, "unexpected driver: " . json_encode(\$ping) . "\n");
+    exit(1);
+}
+\$result = \$client->query('SELECT 42 AS probe_value', [], '', 3000);
+\$rows = \$result['rows'] ?? [];
+if (!isset(\$rows[0]['probe_value']) || (string) \$rows[0]['probe_value'] !== '42') {
+    fwrite(STDERR, "unexpected query result: " . json_encode(\$result) . "\n");
+    exit(2);
+}
+echo "OK\n";
 EOF
 }
 
@@ -1897,7 +1931,10 @@ test_db_runtime_smoke() {
     port="$(free_port)"
     admin_port="$(free_port)"
     local config="${TMP_ROOT}/db-runtime.toml"
+    local probe="${TMP_ROOT}/db-runtime-live-probe.php"
+    local socket="${TMP_ROOT}/db-runtime.sock"
     write_db_runtime_config "$config" "$port"
+    write_db_runtime_live_probe "$probe" "$socket"
     start_vhttpd "db-runtime" --config "$config" --admin-port "$admin_port" >/dev/null
     wait_http_contains "http://127.0.0.1:${port}/hello?trace_id=e2e-db-health" '"name":"world"' \
         "db runtime config serves baseline request"
@@ -1920,6 +1957,23 @@ test_db_runtime_smoke() {
         "db runtime request preserves trace id"
     wait_event_contains "${TMP_ROOT}/db-runtime.events.ndjson" "server.started" \
         "db runtime emits server.started"
+    if [[ "${VHTTPD_E2E_DB_LIVE:-0}" == "1" ]]; then
+        if php "$probe" >/dev/null 2>"${TMP_ROOT}/db-runtime-live-probe.err"; then
+            ok "db runtime socket serves live mysql query"
+        else
+            ko "db runtime socket serves live mysql query"
+            echo "    probe stderr:"
+            sed 's/^/      /' "${TMP_ROOT}/db-runtime-live-probe.err" 2>/dev/null || true
+            print_logs
+            return 1
+        fi
+        wait_http_contains "http://127.0.0.1:${admin_port}/admin/runtime/db" \
+            '"total_queries":1' "db admin runtime records live query count"
+        wait_http_contains "http://127.0.0.1:${admin_port}/admin/runtime/db" \
+            'e2e-db-runtime-live' "db admin runtime records live query trace id"
+    else
+        ok "db live query smoke skipped unless VHTTPD_E2E_DB_LIVE=1"
+    fi
 }
 
 test_cache_runtime_smoke() {
