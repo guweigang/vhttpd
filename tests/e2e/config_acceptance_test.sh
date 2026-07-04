@@ -2345,10 +2345,15 @@ test_provider_runtime_smoke() {
     wait_http_post_contains "http://127.0.0.1:${admin_port}/admin/runtime/provider-instances?trace_id=e2e-provider-update" \
         "$update_body" '"desired_state":"paused"' \
         "provider admin can update dynamic instance desired state"
+    wait_http_contains "http://127.0.0.1:${admin_port}/admin/runtime/provider-instances?provider=codex" \
+        '"desired_state":"paused"' \
+        "provider instance snapshot reflects updated desired state"
     wait_event_contains "${TMP_ROOT}/provider-runtime.events.ndjson" "e2e-provider-health" \
         "provider runtime request preserves trace id"
     wait_event_contains "${TMP_ROOT}/provider-runtime.events.ndjson" "e2e-provider-upsert" \
         "provider instance upsert preserves trace id"
+    wait_event_contains "${TMP_ROOT}/provider-runtime.events.ndjson" "e2e-provider-update" \
+        "provider instance update preserves trace id"
 
     local mcp_port
     local mcp_admin_port
