@@ -1848,6 +1848,20 @@ test_wordpress_installed_v2_smoke() {
     wait_http_header_contains "${base_url}/wp-includes/css/dist/block-library/style.min.css?trace_id=e2e-wordpress-installed-asset" \
         "cache-control" "max-age=3600" \
         "wordpress installed v2 serves core admin/static asset through static pipeline"
+    if [[ -f "${VHTTPD_E2E_WP_ROOT}/wp-admin/css/common.min.css" ]]; then
+        wait_http_header_contains "${base_url}/wp-admin/css/common.min.css?trace_id=e2e-wordpress-installed-wp-admin-asset" \
+            "cache-control" "max-age=3600" \
+            "wordpress installed v2 serves wp-admin asset through static pipeline"
+    else
+        ok "wordpress installed v2 wp-admin asset check skipped when common.min.css is absent"
+    fi
+    if [[ -f "${VHTTPD_E2E_WP_ROOT}/wp-includes/css/admin-bar.min.css" ]]; then
+        wait_http_header_contains "${base_url}/wp-includes/css/admin-bar.min.css?trace_id=e2e-wordpress-installed-admin-bar-asset" \
+            "cache-control" "max-age=3600" \
+            "wordpress installed v2 serves admin bar asset through static pipeline"
+    else
+        ok "wordpress installed v2 admin bar asset check skipped when admin-bar.min.css is absent"
+    fi
     wait_http_header_contains_with_cookie "${base_url}/meta?trace_id=e2e-wordpress-installed-cache-bypass" \
         "wordpress_logged_in_e2e=token" "x-vhttpd-cache" "bypass" \
         "wordpress installed v2 bypasses cache for logged-in cookie"
