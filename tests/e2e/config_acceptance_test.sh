@@ -1142,6 +1142,42 @@ egress = "adapter:feishu"
 EOF
 }
 
+write_mcp_runtime_config() {
+    local file="$1"
+    local port="$2"
+    local label="${3:-mcp-runtime}"
+    cat >"$file" <<EOF
+version = 2
+
+[server]
+timezone = "Asia/Shanghai"
+pid_file = "${TMP_ROOT}/${label}.pid"
+
+[observability]
+event_log = "${TMP_ROOT}/${label}.events.ndjson"
+
+[listeners.web]
+protocol = "http"
+transport = "tcp"
+host = "127.0.0.1"
+port = ${port}
+
+[adapters.mcp]
+kind = "mcp"
+options.sampling_capability_policy = "surprise"
+int_options.max_sessions = 7
+int_options.max_pending_messages = 5
+int_options.session_ttl_seconds = 99
+list_options.allowed_origins = ["http://127.0.0.1:${port}"]
+
+[[pipelines]]
+id = "mcp/runtime"
+ingress = "listener:web"
+match.paths = ["/mcp"]
+egress = "adapter:mcp"
+EOF
+}
+
 write_provider_action_vjsx_handler() {
     local file="$1"
     local source="${2:-vjsx-provider-action}"
@@ -2015,6 +2051,31 @@ test_provider_runtime_smoke() {
         "provider runtime request preserves trace id"
     wait_event_contains "${TMP_ROOT}/provider-runtime.events.ndjson" "e2e-provider-upsert" \
         "provider instance upsert preserves trace id"
+
+    local mcp_port
+    local mcp_admin_port
+    mcp_port="$(free_port)"
+    mcp_admin_port="$(free_port)"
+    local mcp_config="${TMP_ROOT}/mcp-runtime.toml"
+    write_mcp_runtime_config "$mcp_config" "$mcp_port"
+    start_vhttpd "mcp-runtime" --config "$mcp_config" --admin-port "$mcp_admin_port" >/dev/null
+    wait_http_contains "http://127.0.0.1:${mcp_admin_port}/admin/runtime/mcp" '"max_sessions":7' \
+        "mcp admin runtime exposes max sessions"
+    wait_http_contains "http://127.0.0.1:${mcp_admin_port}/admin/runtime/mcp" '"max_pending_messages":5' \
+        "mcp admin runtime exposes pending message limit"
+    wait_http_contains "http://127.0.0.1:${mcp_admin_port}/admin/runtime/mcp" '"session_ttl_seconds":99' \
+        "mcp admin runtime exposes session ttl"
+    wait_http_contains "http://127.0.0.1:${mcp_admin_port}/admin/runtime/mcp" '"sampling_capability_policy":"warn"' \
+        "mcp admin runtime normalizes invalid sampling policy"
+    wait_http_contains "http://127.0.0.1:${mcp_admin_port}/admin/runtime/plan" '"mcp_sampling_capability_policy_invalid"' \
+        "mcp admin plan exposes sampling policy diagnostic"
+    local mcp_data_plane_port
+    mcp_data_plane_port="$(free_port)"
+    local mcp_data_plane_config="${TMP_ROOT}/mcp-runtime-dataplane.toml"
+    write_mcp_runtime_config "$mcp_data_plane_config" "$mcp_data_plane_port" "mcp-runtime-dataplane"
+    start_vhttpd "mcp-runtime-dataplane" --config "$mcp_data_plane_config" >/dev/null
+    wait_http_contains "http://127.0.0.1:${mcp_data_plane_port}/admin/runtime/mcp" '"max_sessions":7' \
+        "mcp data-plane admin exposes runtime"
 }
 
 test_db_runtime_smoke() {
