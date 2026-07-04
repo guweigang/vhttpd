@@ -102,7 +102,9 @@ fn provider_runtime_maps_from_plan(plan runtime_plan.RuntimePlan, fallback provi
 }
 
 fn feishu_runtime_settings_from_plan(plan runtime_plan.RuntimePlan, listener_id string) ?provider.FeishuRuntimeSettings {
-	adapter := provider_adapter_for_listener(plan, listener_id, 'feishu-events')?
+	adapter := provider_adapter_for_listener(plan, listener_id, 'feishu-events') or {
+		provider_adapter_for_ingress(plan, 'feishu', 'feishu-events')?
+	}
 	return provider.FeishuRuntimeSettings{
 		enabled:                    adapter.options.bools['enabled']
 		open_base_url:              feishu.RuntimeWsEndpointData.normalize_open_base(adapter.options.strings['open_base_url'])
@@ -197,6 +199,22 @@ fn provider_adapter_for_listener(plan runtime_plan.RuntimePlan, listener_id stri
 	}
 	if plan.source.compatibility {
 		return plan.first_adapter_by_kind(kind)
+	}
+	return none
+}
+
+fn provider_adapter_for_ingress(plan runtime_plan.RuntimePlan, provider_id string, kind string) ?runtime_plan.AdapterPlan {
+	for pipeline in plan.pipelines {
+		if pipeline.ingress.domain != .provider || pipeline.ingress.id != provider_id {
+			continue
+		}
+		if pipeline.egress.domain != .adapter {
+			continue
+		}
+		adapter := plan.adapters[pipeline.egress.id] or { continue }
+		if adapter.kind == kind {
+			return adapter
+		}
 	}
 	return none
 }

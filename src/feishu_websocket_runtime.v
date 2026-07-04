@@ -117,7 +117,8 @@ fn (mut app App) feishu_provider_handle_binary_message(instance string, mut conn
 	mut ack_headers := map[string]string{}
 	mut ack_data := ''
 	mut bridged := false
-	if app.providers.feishu.card_bridge_target_id.trim_space() != ''
+	if app.providers.feishu_card_bridge_enabled()
+		&& app.providers.feishu.card_bridge_target_id.trim_space() != ''
 		&& feishu.RuntimeEventSnapshot.should_dispatch_upstream(summary) {
 		log.info('[feishu] 🔁 bridging upstream event to local runtime target=${app.providers.feishu.card_bridge_target_id} trace_id=${trace_id} event_type=${summary.event_type} message_id=${summary.message_id}')
 		bridge_resp := app.providers.feishu_card_bridge_dispatch_callback(app_name, trace_id,

@@ -1372,6 +1372,261 @@ export default handle;
 EOF
 }
 
+write_provider_websocket_upstream_handler() {
+    local file="$1"
+    cat >"$file" <<'EOF'
+function handle(ctx) {
+  const event = ctx.jsonBody({});
+  return ctx.json({
+    ok: true,
+    provider: event.metadata.provider,
+    instance: event.metadata.instance,
+    event: event.event,
+    eventType: event.metadata.event_type,
+    source: event.metadata.source,
+    traceId: event.trace_id,
+  }, 202);
+}
+
+export function handshake(req) {
+  const payload = JSON.parse(req.payload);
+  return {
+    send: [{
+      text: JSON.stringify({
+        type: "hello",
+        provider: payload.provider,
+        instance: payload.instance,
+      }),
+    }],
+  };
+}
+
+export function normalize(req) {
+  const payload = JSON.parse(req.payload);
+  const event = JSON.parse(payload.payload);
+  return {
+    topic: "provider.feishu",
+    name: event.header.event_type,
+    data: JSON.stringify({
+      message_id: event.event.message.message_id,
+      text: JSON.parse(event.event.message.content).text,
+    }),
+    metadata: {
+      ...payload.metadata,
+      source: "provider-ws-upstream-e2e",
+    },
+    request_id: req.request_id,
+    trace_id: req.trace_id,
+  };
+}
+
+globalThis.__vhttpd_handle = handle;
+export default handle;
+EOF
+}
+
+write_provider_websocket_upstream_probe() {
+    local file="$1"
+    cat >"$file" <<'EOF'
+import crypto from "node:crypto";
+import fs from "node:fs/promises";
+import http from "node:http";
+
+const openPort = Number(process.argv[2]);
+const wsPort = Number(process.argv[3]);
+const outFile = process.argv[4];
+if (!openPort || !wsPort || !outFile) {
+  console.error("usage: node provider-ws-upstream.mjs <open-port> <ws-port> <out-file>");
+  process.exit(2);
+}
+
+const state = {
+  endpointRequested: false,
+  handshake: "",
+  handshakeType: "",
+  pushed: false,
+  ack: false,
+};
+
+function varint(value) {
+  let current = BigInt(value);
+  const out = [];
+  for (;;) {
+    if ((current & ~0x7fn) === 0n) {
+      out.push(Number(current));
+      return Buffer.from(out);
+    }
+    out.push(Number((current & 0x7fn) | 0x80n));
+    current >>= 7n;
+  }
+}
+
+function fieldKey(field, wire) {
+  return varint((BigInt(field) << 3n) | BigInt(wire));
+}
+
+function bytesField(field, payload) {
+  const body = Buffer.isBuffer(payload) ? payload : Buffer.from(String(payload));
+  return Buffer.concat([fieldKey(field, 2), varint(body.length), body]);
+}
+
+function stringField(field, payload) {
+  return bytesField(field, Buffer.from(String(payload)));
+}
+
+function header(key, value) {
+  return Buffer.concat([stringField(1, key), stringField(2, value)]);
+}
+
+function feishuPushFrame() {
+  const payload = JSON.stringify({
+    schema: "2.0",
+    header: {
+      event_id: "evt-provider-ws-upstream",
+      event_type: "im.message.receive_v1",
+    },
+    event: {
+      sender: {
+        sender_id: { open_id: "ou_provider_ws_upstream" },
+        tenant_key: "tenant_provider_ws_upstream",
+      },
+      message: {
+        message_id: "om-provider-ws-upstream",
+        message_type: "text",
+        chat_id: "oc-provider-ws-upstream",
+        chat_type: "group",
+        create_time: "1710000000",
+        content: JSON.stringify({ text: "hello from fake upstream" }),
+      },
+    },
+  });
+  return Buffer.concat([
+    fieldKey(1, 0), varint(1701),
+    fieldKey(4, 0), varint(1),
+    bytesField(5, header("type", "event")),
+    bytesField(5, header("trace_id", "trace-provider-ws-upstream")),
+    bytesField(5, header("seq", "1701")),
+    stringField(6, "json"),
+    stringField(7, "application/json"),
+    bytesField(8, Buffer.from(payload)),
+    stringField(9, "provider-ws-upstream"),
+  ]);
+}
+
+function wsFrame(opcode, payload) {
+  const body = Buffer.isBuffer(payload) ? payload : Buffer.from(String(payload));
+  const head = [];
+  head.push(0x80 | opcode);
+  if (body.length < 126) {
+    head.push(body.length);
+  } else if (body.length < 65536) {
+    head.push(126, (body.length >> 8) & 0xff, body.length & 0xff);
+  } else {
+    throw new Error("test frame too large");
+  }
+  return Buffer.concat([Buffer.from(head), body]);
+}
+
+function parseClientFrame(buffer) {
+  if (buffer.length < 2) return null;
+  const opcode = buffer[0] & 0x0f;
+  const masked = (buffer[1] & 0x80) !== 0;
+  let length = buffer[1] & 0x7f;
+  let offset = 2;
+  if (length === 126) {
+    if (buffer.length < 4) return null;
+    length = buffer.readUInt16BE(2);
+    offset = 4;
+  } else if (length === 127) {
+    throw new Error("large test frames are unsupported");
+  }
+  const mask = masked ? buffer.subarray(offset, offset + 4) : null;
+  if (masked) offset += 4;
+  if (buffer.length < offset + length) return null;
+  const payload = Buffer.from(buffer.subarray(offset, offset + length));
+  if (mask) {
+    for (let i = 0; i < payload.length; i++) payload[i] ^= mask[i % 4];
+  }
+  return { opcode, payload, consumed: offset + length };
+}
+
+async function finish() {
+  await fs.writeFile(outFile, JSON.stringify(state));
+  openServer.close();
+  wsServer.close();
+  setTimeout(() => process.exit(state.endpointRequested && state.handshake && state.pushed && state.ack ? 0 : 1), 25);
+}
+
+const openServer = http.createServer((req, res) => {
+  if (req.url.includes("/callback/ws/endpoint")) {
+    state.endpointRequested = true;
+    res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
+    res.end(JSON.stringify({
+      code: 0,
+      msg: "ok",
+      data: {
+        URL: `ws://127.0.0.1:${wsPort}/callback`,
+        ClientConfig: { PingInterval: 60, ReconnectInterval: 60, ReconnectNonce: 1, ReconnectCount: 1 },
+      },
+    }));
+    return;
+  }
+  res.writeHead(404);
+  res.end("not found");
+});
+
+const wsServer = http.createServer();
+wsServer.on("upgrade", (req, socket) => {
+  const key = req.headers["sec-websocket-key"];
+  const accept = crypto.createHash("sha1")
+    .update(`${key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`)
+    .digest("base64");
+  socket.write([
+    "HTTP/1.1 101 Switching Protocols",
+    "Upgrade: websocket",
+    "Connection: Upgrade",
+    `Sec-WebSocket-Accept: ${accept}`,
+    "\r\n",
+  ].join("\r\n"));
+  let pending = Buffer.alloc(0);
+  socket.on("data", (chunk) => {
+    pending = Buffer.concat([pending, chunk]);
+    for (;;) {
+      const frame = parseClientFrame(pending);
+      if (!frame) return;
+      pending = pending.subarray(frame.consumed);
+      if (frame.opcode === 1) {
+        state.handshake = frame.payload.toString("utf8");
+        try {
+          state.handshakeType = JSON.parse(state.handshake).type || "";
+        } catch {
+          state.handshakeType = "";
+        }
+        socket.write(wsFrame(2, feishuPushFrame()));
+        state.pushed = true;
+      } else if (frame.opcode === 2) {
+        state.ack = true;
+        finish().catch((err) => {
+          console.error(err);
+          process.exit(1);
+        });
+      }
+    }
+  });
+});
+
+await Promise.all([
+  new Promise((resolve) => openServer.listen(openPort, "127.0.0.1", resolve)),
+  new Promise((resolve) => wsServer.listen(wsPort, "127.0.0.1", resolve)),
+]);
+
+setTimeout(async () => {
+  await fs.writeFile(outFile, JSON.stringify(state));
+  process.exit(1);
+}, 10000);
+EOF
+}
+
 write_provider_ingress_event_config() {
     local file="$1"
     local port="$2"
@@ -1425,13 +1680,82 @@ handler = "feishu.provider.event"
 [[pipelines]]
 id = "provider/health"
 ingress = "listener:web"
-match.paths = ["/health"]
+match.paths = ["/provider-health"]
 egress = "adapter:health"
 
 [[pipelines]]
 id = "provider/feishu-events"
 ingress = "provider:feishu"
 match.metadata = { event = "im.message.receive_v1", instance = "main" }
+transforms = ["transform:feishu-provider-event"]
+egress = "adapter:feishu-events"
+EOF
+}
+
+write_provider_websocket_upstream_config() {
+    local file="$1"
+    local port="$2"
+    local open_base_url="$3"
+    local handler="$4"
+    cat >"$file" <<EOF
+version = 2
+
+[server]
+timezone = "Asia/Shanghai"
+pid_file = "${TMP_ROOT}/provider-ws-upstream.pid"
+
+[observability]
+event_log = "${TMP_ROOT}/provider-ws-upstream.events.ndjson"
+
+[listeners.web]
+protocol = "http"
+transport = "tcp"
+host = "127.0.0.1"
+port = ${port}
+
+[providers.feishu.runtime]
+driver = "native"
+protocol = "websocket"
+plugin = "feishu-provider-hooks"
+engine = "engine:provider-events"
+
+[providers.feishu.hooks]
+handshake = "handshake"
+normalize = "normalize"
+
+[engines.provider-events]
+kind = "vjsx"
+entry = "${handler}"
+runtime_profile = "node"
+thread_count = 1
+
+[adapters.health]
+kind = "fixed-response"
+options.status = "200"
+options.body = "provider websocket upstream ok"
+
+[adapters.feishu-events]
+kind = "feishu-events"
+bool_options.enabled = true
+options.open_base_url = "${open_base_url}"
+int_options.reconnect_delay_ms = 60000
+record_options = { apps = [{ id = "main", app_id = "e2e-feishu-app", app_secret = "e2e-feishu-secret", verification_token = "e2e-feishu-token", encrypt_key = "" }] }
+
+[transforms.feishu-provider-event]
+kind = "vjsx"
+engine = "engine:provider-events"
+handler = "feishu.provider.event"
+
+[[pipelines]]
+id = "provider/health"
+ingress = "listener:web"
+match.paths = ["/provider-health"]
+egress = "adapter:health"
+
+[[pipelines]]
+id = "provider/feishu-ws-upstream"
+ingress = "provider:feishu"
+match.metadata = { event = "im.message.receive_v1", instance = "main", source = "provider-ws-upstream-e2e" }
 transforms = ["transform:feishu-provider-event"]
 egress = "adapter:feishu-events"
 EOF
@@ -2508,6 +2832,44 @@ test_provider_runtime_smoke() {
         "provider ingress event records transform id"
     wait_event_contains "${TMP_ROOT}/provider-ingress-event.events.ndjson" "e2e-provider-ingress-event" \
         "provider ingress event preserves trace id"
+
+    local provider_ws_port
+    local provider_ws_open_port
+    local provider_ws_fake_port
+    local provider_ws_admin_port
+    provider_ws_port="$(free_port)"
+    provider_ws_open_port="$(free_port)"
+    provider_ws_fake_port="$(free_port)"
+    provider_ws_admin_port="$(free_port)"
+    local provider_ws_handler="${TMP_ROOT}/provider-ws-upstream.mts"
+    local provider_ws_probe="${TMP_ROOT}/provider-ws-upstream-probe.mjs"
+    local provider_ws_probe_out="${TMP_ROOT}/provider-ws-upstream-probe.out.json"
+    local provider_ws_config="${TMP_ROOT}/provider-ws-upstream.toml"
+    write_provider_websocket_upstream_handler "$provider_ws_handler"
+    write_provider_websocket_upstream_probe "$provider_ws_probe"
+    node "$provider_ws_probe" "$provider_ws_open_port" "$provider_ws_fake_port" "$provider_ws_probe_out" \
+        >"${TMP_ROOT}/provider-ws-upstream-probe.log" 2>"${TMP_ROOT}/provider-ws-upstream-probe.err" &
+    local provider_ws_probe_pid=$!
+    PIDS+=("$provider_ws_probe_pid")
+    write_provider_websocket_upstream_config "$provider_ws_config" "$provider_ws_port" \
+        "http://127.0.0.1:${provider_ws_open_port}/open-apis" "$provider_ws_handler"
+    start_vhttpd "provider-ws-upstream" --config "$provider_ws_config" --admin-port "$provider_ws_admin_port" >/dev/null
+    wait_http_contains "http://127.0.0.1:${provider_ws_port}/provider-health" \
+        "provider websocket upstream ok" "provider websocket upstream runtime serves health"
+    wait_event_contains "$provider_ws_probe_out" '"endpointRequested":true' \
+        "provider websocket upstream pulls endpoint from fake OpenAPI"
+    wait_event_contains "$provider_ws_probe_out" '"handshakeType":"hello"' \
+        "provider websocket upstream dispatches vjsx handshake"
+    wait_event_contains "$provider_ws_probe_out" '"ack":true' \
+        "provider websocket upstream acknowledges pushed event"
+    wait_event_contains "${TMP_ROOT}/provider-ws-upstream.events.ndjson" "provider-ws-upstream-e2e" \
+        "provider websocket upstream normalize dispatches provider pipeline"
+    wait_event_contains "${TMP_ROOT}/provider-ws-upstream.events.ndjson" "trace-provider-ws-upstream" \
+        "provider websocket upstream preserves pushed trace id"
+    wait_event_contains "${TMP_ROOT}/provider-ws-upstream.events.ndjson" "transform:feishu-provider-event" \
+        "provider websocket upstream records transform id"
+    wait_http_contains "http://127.0.0.1:${provider_ws_admin_port}/admin/runtime/feishu" '"received_frames":1' \
+        "provider websocket upstream admin records received frame"
 
     local data_plane_port
     data_plane_port="$(free_port)"

@@ -2305,6 +2305,60 @@ fn test_provider_runtime_settings_are_projected_from_runtime_plan() {
 	assert settings.bridge.target_id == 'remote'
 }
 
+fn test_provider_runtime_settings_accept_feishu_provider_ingress_adapter() {
+	plan := runtime_plan.RuntimePlan{
+		adapters:  {
+			'feishu-events': runtime_plan.AdapterPlan{
+				id:      'feishu-events'
+				kind:    'feishu-events'
+				options: runtime_plan.PlanOptions{
+					strings:      {
+						'open_base_url': 'https://open.feishu.provider/open-apis'
+					}
+					ints:         {
+						'reconnect_delay_ms': 456
+					}
+					bools:        {
+						'enabled': true
+					}
+					record_lists: {
+						'apps': [
+							{
+								'id':                 'main'
+								'app_id':             'provider-app'
+								'app_secret':         'provider-secret'
+								'verification_token': 'provider-token'
+								'encrypt_key':        ''
+							},
+						]
+					}
+				}
+			}
+		}
+		pipelines: [
+			runtime_plan.PipelinePlan{
+				id:      'provider/feishu-events'
+				ingress: runtime_plan.ResourceRef{
+					domain: .provider
+					id:     'feishu'
+				}
+				egress:  runtime_plan.ResourceRef{
+					domain: .adapter
+					id:     'feishu-events'
+				}
+			},
+		]
+	}
+	settings :=
+		provider_runtime_settings_from_plan(plan, 'web', provider.ProviderRuntimeSettings{})
+
+	assert settings.feishu.enabled
+	assert settings.feishu.open_base_url == 'https://open.feishu.provider/open-apis'
+	assert settings.feishu.reconnect_delay_ms == 456
+	assert settings.feishu.apps['main'].app_id == 'provider-app'
+	assert settings.feishu.apps['main'].verification_token == 'provider-token'
+}
+
 fn test_provider_runtime_settings_include_v2_provider_driver_plugin() {
 	plan := runtime_plan.RuntimePlan{
 		providers: {
