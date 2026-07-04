@@ -94,6 +94,40 @@ fn (hub ProviderRuntimeHub) provider_specs_copy() []ProviderSpec {
 	return hub.registry.specs_copy()
 }
 
+fn add_provider_runtime_name(mut names []string, mut seen map[string]bool, name string) {
+	trimmed := name.trim_space()
+	if trimmed == '' || seen[trimmed] {
+		return
+	}
+	seen[trimmed] = true
+	names << trimmed
+}
+
+fn (hub ProviderRuntimeHub) configured_provider_runtime_names() []string {
+	mut names := []string{}
+	mut seen := map[string]bool{}
+	for name, _ in hub.runtime_drivers {
+		add_provider_runtime_name(mut names, mut seen, name)
+	}
+	for name, _ in hub.runtime_protocols {
+		add_provider_runtime_name(mut names, mut seen, name)
+	}
+	for name, _ in hub.runtime_plugins {
+		add_provider_runtime_name(mut names, mut seen, name)
+	}
+	for name, _ in hub.runtime_capabilities {
+		add_provider_runtime_name(mut names, mut seen, name)
+	}
+	for name, _ in hub.runtime_hooks {
+		add_provider_runtime_name(mut names, mut seen, name)
+	}
+	for name, _ in hub.runtime_options {
+		add_provider_runtime_name(mut names, mut seen, name)
+	}
+	names.sort()
+	return names
+}
+
 pub fn (mut app App) admin_provider_specs_snapshot() []provider.AdminProviderSpecSnapshot {
 	app.mu.@lock()
 	defer {
@@ -112,16 +146,47 @@ pub fn (mut app App) provider_specs_copy() []ProviderSpec {
 
 pub fn (mut app App) admin_provider_runtimes_snapshot() []provider.AdminProviderRuntimeSnapshot {
 	mut specs := app.provider_specs_copy()
-	mut snapshots := []provider.AdminProviderRuntimeSnapshot{cap: specs.len}
+	configured_names := app.providers.configured_provider_runtime_names()
+	mut snapshots := []provider.AdminProviderRuntimeSnapshot{cap: specs.len + configured_names.len}
+	mut seen := map[string]bool{}
 	for mut spec in specs {
 		mut snapshot := '{}'
 		if spec.has_runtime {
 			snapshot = spec.runtime.snapshot(mut spec.lifecycle_ctx)
 		}
+		seen[spec.name] = true
 		snapshots << provider.AdminProviderRuntimeSnapshot{
-			name:     spec.name
-			enabled:  spec.enabled
-			snapshot: snapshot
+			name:           spec.name
+			enabled:        spec.enabled
+			runtime_driver: app.providers.provider_runtime_driver(spec.name)
+			protocol:       app.providers.provider_runtime_protocol(spec.name)
+			plugin:         app.providers.provider_runtime_plugin(spec.name)
+			capabilities:   app.providers.runtime_capabilities[spec.name] or {
+				map[string]string{}
+			}
+			hooks:          app.providers.runtime_hooks[spec.name] or {
+				map[string]string{}
+			}
+			snapshot:       snapshot
+		}
+	}
+	for name in configured_names {
+		if seen[name] {
+			continue
+		}
+		snapshots << provider.AdminProviderRuntimeSnapshot{
+			name:           name
+			enabled:        true
+			runtime_driver: app.providers.provider_runtime_driver(name)
+			protocol:       app.providers.provider_runtime_protocol(name)
+			plugin:         app.providers.provider_runtime_plugin(name)
+			capabilities:   app.providers.runtime_capabilities[name] or {
+				map[string]string{}
+			}
+			hooks:          app.providers.runtime_hooks[name] or {
+				map[string]string{}
+			}
+			snapshot:       '{}'
 		}
 	}
 	return snapshots

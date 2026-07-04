@@ -24,9 +24,14 @@ pub:
 
 pub struct AdminProviderRuntimeSnapshot {
 pub:
-	name     string
-	enabled  bool
-	snapshot string
+	name           string
+	enabled        bool
+	runtime_driver string @[json: 'runtime_driver']
+	protocol       string
+	plugin         string
+	capabilities   map[string]string
+	hooks          map[string]string
+	snapshot       string
 }
 
 // ProviderInstanceSpec stores an instance's desired configuration.

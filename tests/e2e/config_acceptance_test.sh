@@ -2489,6 +2489,14 @@ test_provider_runtime_smoke() {
     write_provider_ingress_event_handler "$provider_ingress_handler"
     write_provider_ingress_event_config "$provider_ingress_config" "$provider_ingress_port" "$provider_ingress_handler"
     start_vhttpd "provider-ingress-event" --config "$provider_ingress_config" --admin-port "$provider_ingress_admin_port" >/dev/null
+    wait_http_contains "http://127.0.0.1:${provider_ingress_admin_port}/admin/providers/runtimes" '"protocol":"websocket"' \
+        "provider ingress admin runtimes expose websocket protocol"
+    wait_http_contains "http://127.0.0.1:${provider_ingress_admin_port}/admin/providers/runtimes" '"plugin":"feishu-provider-hooks"' \
+        "provider ingress admin runtimes expose hook plugin"
+    wait_http_contains "http://127.0.0.1:${provider_ingress_admin_port}/admin/providers/runtimes" '"handshake":"handshake"' \
+        "provider ingress admin runtimes expose handshake hook"
+    wait_http_contains "http://127.0.0.1:${provider_ingress_admin_port}/admin/providers/runtimes" '"normalize":"normalize"' \
+        "provider ingress admin runtimes expose normalize hook"
     local provider_ingress_body
     provider_ingress_body='{"ingress":"provider:feishu","topic":"provider.feishu","name":"im.message.receive_v1","metadata":{"instance":"main"},"data":"{\"message_id\":\"om-provider-ingress\"}"}'
     wait_http_post_contains "http://127.0.0.1:${provider_ingress_admin_port}/admin/runtime/events?trace_id=e2e-provider-ingress-event" \

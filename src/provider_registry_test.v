@@ -85,7 +85,7 @@ fn test_provider_runtime_driver_is_configurable() {
 		}
 		providers: {
 			'feishu': config.ProviderConfig{
-				runtime: config.ProviderRuntimeConfig{
+				runtime:      config.ProviderRuntimeConfig{
 					driver: 'typescript'
 					plugin: 'feishu_runtime'
 				}
@@ -131,10 +131,13 @@ fn test_provider_runtime_settings_apply_refreshes_admin_spec_driver() {
 	})
 
 	app.providers.apply_provider_runtime_settings(provider.ProviderRuntimeSettings{
-		runtime_drivers: {
+		runtime_drivers:      {
 			'feishu': 'vjsx'
 		}
-		runtime_plugins: {
+		runtime_protocols:    {
+			'feishu': 'websocket'
+		}
+		runtime_plugins:      {
 			'feishu': 'feishu_runtime'
 		}
 		runtime_capabilities: {
@@ -142,15 +145,72 @@ fn test_provider_runtime_settings_apply_refreshes_admin_spec_driver() {
 				'send_message': 'feishu.message.send'
 			}
 		}
+		runtime_hooks:        {
+			'feishu': {
+				'handshake': 'handshake'
+				'normalize': 'normalize'
+			}
+		}
 	})
 	specs := app.admin_provider_specs_snapshot()
 	feishu_spec := specs.filter(it.name == 'feishu')[0]
 
 	assert app.providers.provider_runtime_driver('feishu') == 'vjsx'
+	assert app.providers.provider_runtime_protocol('feishu') == 'websocket'
 	assert app.providers.provider_runtime_plugin('feishu') == 'feishu_runtime'
 	assert app.providers.provider_runtime_capability('feishu', 'send_message') == 'feishu.message.send'
 	assert app.providers.provider_runtime_capability('feishu', 'update_message') == 'provider.feishu.update_message'
+	assert app.providers.provider_runtime_hook('feishu', 'handshake') == 'handshake'
+	assert app.providers.provider_runtime_hook('feishu', 'normalize') == 'normalize'
 	assert feishu_spec.runtime_driver == 'vjsx'
+	runtime_snapshots := app.admin_provider_runtimes_snapshot()
+	feishu_runtime := runtime_snapshots.filter(it.name == 'feishu')[0]
+	assert feishu_runtime.runtime_driver == 'vjsx'
+	assert feishu_runtime.protocol == 'websocket'
+	assert feishu_runtime.plugin == 'feishu_runtime'
+	assert feishu_runtime.capabilities['send_message'] == 'feishu.message.send'
+	assert feishu_runtime.hooks['handshake'] == 'handshake'
+	assert feishu_runtime.hooks['normalize'] == 'normalize'
+}
+
+fn test_provider_runtime_admin_snapshot_exposes_configured_runtime_without_registered_spec() {
+	mut app := App{
+		providers: ProviderRuntimeHub.new(provider.ProviderRuntimeSettings{
+			runtime_drivers:      {
+				'feishu': 'native'
+			}
+			runtime_protocols:    {
+				'feishu': 'websocket'
+			}
+			runtime_plugins:      {
+				'feishu': 'feishu-provider-hooks'
+			}
+			runtime_hooks:        {
+				'feishu': {
+					'handshake': 'handshake'
+					'normalize': 'normalize'
+				}
+			}
+			runtime_capabilities: {
+				'feishu': {
+					'send_message': 'feishu.message.send'
+				}
+			}
+		})
+	}
+
+	runtime_snapshots := app.admin_provider_runtimes_snapshot()
+	assert runtime_snapshots.len == 1
+	feishu_runtime := runtime_snapshots[0]
+	assert feishu_runtime.name == 'feishu'
+	assert feishu_runtime.enabled
+	assert feishu_runtime.runtime_driver == 'native'
+	assert feishu_runtime.protocol == 'websocket'
+	assert feishu_runtime.plugin == 'feishu-provider-hooks'
+	assert feishu_runtime.hooks['handshake'] == 'handshake'
+	assert feishu_runtime.hooks['normalize'] == 'normalize'
+	assert feishu_runtime.capabilities['send_message'] == 'feishu.message.send'
+	assert feishu_runtime.snapshot == '{}'
 }
 
 fn test_provider_enabled_and_runtime_snapshot_use_host() {
