@@ -249,6 +249,45 @@ expect_http_status_contains_once() {
     return 1
 }
 
+expect_http_status_header_contains_once() {
+    local url="$1"
+    local expected_status="$2"
+    local header="$3"
+    local needle="$4"
+    local label="$5"
+    local max_time="${6:-3}"
+    local header_file="${TMP_ROOT}/headers.$RANDOM"
+    local lower_header
+    local status
+    lower_header="$(printf '%s' "$header" | tr '[:upper:]' '[:lower:]')"
+    status="$(curl -sS --max-time "$max_time" -D "$header_file" -o /dev/null -w '%{http_code}' "$url" 2>/dev/null || true)"
+    if [[ "$status" == "$expected_status" ]] && awk -v h="$lower_header" -v n="$needle" '
+        BEGIN { found = 0 }
+        {
+            line = $0
+            sub(/\r$/, "", line)
+            lower = tolower(line)
+            if (index(lower, h ":") == 1 && index(line, n) > 0) {
+                found = 1
+            }
+        }
+        END { exit(found ? 0 : 1) }
+    ' "$header_file"; then
+        ok "$label"
+        return 0
+    fi
+    ko "$label"
+    echo "    url: $url"
+    echo "    expected status: $expected_status"
+    echo "    actual status: ${status:-}"
+    echo "    header: $header"
+    echo "    expected header value: $needle"
+    echo "    actual headers:"
+    sed 's/^/      /' "$header_file" 2>/dev/null || true
+    print_logs
+    return 1
+}
+
 wait_http_post_contains() {
     local url="$1"
     local data="$2"
@@ -1707,7 +1746,7 @@ autostart = true
 read_timeout_ms = 5000
 pool_size = 1
 queue_capacity = 1
-queue_timeout_ms = 1000
+queue_timeout_ms = 2500
 queue_poll_ms = 10
 socket = "${worker_socket}"
 cmd = "php ${worker_script}"
@@ -1893,12 +1932,20 @@ test_wordpress_installed_v2_smoke() {
     wait_http_header_contains_with_cookie "${base_url}/meta?trace_id=e2e-wordpress-installed-cache-bypass" \
         "wordpress_logged_in_e2e=token" "x-vhttpd-cache" "bypass" \
         "wordpress installed v2 bypasses cache for logged-in cookie"
+    wait_http_header_contains_with_cookie "${base_url}/meta?trace_id=e2e-wordpress-installed-wc-cache-bypass" \
+        "woocommerce_items_in_cart=1" "x-vhttpd-cache" "bypass" \
+        "wordpress installed v2 bypasses cache for WooCommerce cart cookie"
+    wait_http_header_contains_with_cookie "${base_url}/meta?trace_id=e2e-wordpress-installed-wc-cache-bypass" \
+        "woocommerce_items_in_cart=1" "x-vhttpd-cache-reason" "cookie:woocommerce_items_in_cart" \
+        "wordpress installed v2 reports WooCommerce cache bypass reason"
     wait_http_contains "http://127.0.0.1:${admin_port}/admin/runtime/plan" '"wordpress.front-page"' \
         "wordpress installed v2 admin plan exposes dynamic pipeline"
     wait_event_contains "${TMP_ROOT}/wordpress-installed-v2.events.ndjson" "e2e-wordpress-installed-cart" \
         "wordpress installed v2 cart request preserves trace id"
     wait_event_contains "${TMP_ROOT}/wordpress-installed-v2.events.ndjson" "e2e-wordpress-installed-rest" \
         "wordpress installed v2 REST request preserves trace id"
+    wait_event_contains "${TMP_ROOT}/wordpress-installed-v2.events.ndjson" '"cache_reason":"cookie:woocommerce_items_in_cart"' \
+        "wordpress installed v2 WooCommerce cache bypass reason is observable"
 }
 
 test_protocol_conversion_smoke() {
@@ -2450,7 +2497,7 @@ test_worker_queue_smoke() {
     local controlled_base_url="http://127.0.0.1:${controlled_port}"
     wait_http_contains "${controlled_base_url}/fast" "controlled worker ok" \
         "controlled worker queue runtime serves baseline request"
-    wait_http_contains "http://127.0.0.1:${controlled_admin_port}/admin/runtime" '"queue_timeout_ms":1000' \
+    wait_http_contains "http://127.0.0.1:${controlled_admin_port}/admin/runtime" '"queue_timeout_ms":2500' \
         "controlled worker admin runtime exposes queue timeout"
 
     curl -fsS --max-time 20 "${controlled_base_url}/hold?trace_id=e2e-worker-controlled-hold" >"$controlled_hold_body" 2>/dev/null &
@@ -2500,10 +2547,10 @@ test_worker_queue_smoke() {
     wait_http_contains "http://127.0.0.1:${controlled_admin_port}/admin/workers" '"inflight_requests":1' \
         "controlled worker admin snapshot exposes busy worker before timeout"
     expect_http_status_contains_once "${controlled_base_url}/fast?trace_id=e2e-worker-queue-timeout" \
-        "504" "" "controlled worker second request times out in queue" "3"
-    wait_http_header_contains "${controlled_base_url}/fast?trace_id=e2e-worker-queue-timeout-header" \
-        "x-vhttpd-error-class" "worker_queue_timeout" \
-        "controlled worker queue timeout exposes error class"
+        "504" "" "controlled worker second request times out in queue" "5"
+    expect_http_status_header_contains_once "${controlled_base_url}/fast?trace_id=e2e-worker-queue-timeout-header" \
+        "504" "x-vhttpd-error-class" "worker_queue_timeout" \
+        "controlled worker queue timeout exposes error class" "5"
     : >"$controlled_release"
     wait "$controlled_timeout_hold_pid" >/dev/null 2>&1 || true
     if grep -q "held by controlled worker" "$controlled_timeout_hold_body"; then
