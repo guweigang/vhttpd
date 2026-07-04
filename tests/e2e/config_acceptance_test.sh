@@ -2117,6 +2117,8 @@ test_protocol_conversion_smoke() {
         "protocol vjsx transform preserves trace id"
     wait_event_contains "${TMP_ROOT}/protocol-vjsx.events.ndjson" "e2e-proto-fail" \
         "protocol vjsx transform failure preserves trace id"
+    wait_event_contains "${TMP_ROOT}/protocol-vjsx.events.ndjson" "vjsx_transformer_failed" \
+        "protocol vjsx transform failure is observable in event log"
     wait_event_contains "${TMP_ROOT}/protocol-vjsx.events.ndjson" "e2e-proto-throw" \
         "protocol vjsx transform exception preserves trace id"
     wait_event_contains "${TMP_ROOT}/protocol-vjsx.events.ndjson" "inproc_vjsx_executor_handler_failed" \
