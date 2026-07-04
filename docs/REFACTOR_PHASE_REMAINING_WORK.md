@@ -16,7 +16,7 @@ This document records the remaining acceptance work after the v2 runtime/config 
 
 - Stage 7 runtime isolation and module closure: code-complete.
 - Automated test matrix: green as of 2026-07-01.
-- Latest acceptance verification: `bash tests/e2e/config_acceptance_test.sh` passed on 2026-07-04 with 177 config-acceptance checks green; `VHTTPD_E2E_DB_LIVE=1 VHTTPD_E2E_DB_PASSWORD=... VHTTPD_E2E_WP_ROOT=/Users/guweigang/wwwroot/wordpress bash tests/e2e/config_acceptance_test.sh` passed on 2026-07-04 with 195 checks green against local MySQL plus the installed WordPress/WooCommerce site.
+- Latest acceptance verification: `bash tests/e2e/config_acceptance_test.sh` passed on 2026-07-04 with 178 config-acceptance checks green; `VHTTPD_E2E_DB_LIVE=1 VHTTPD_E2E_DB_PASSWORD=... VHTTPD_E2E_WP_ROOT=/Users/guweigang/wwwroot/wordpress bash tests/e2e/config_acceptance_test.sh` passed on 2026-07-04 with 196 checks green against local MySQL plus the installed WordPress/WooCommerce site.
 - Product-level acceptance: in progress.
 - Completed acceptance slice: automated config smoke now covers V1 basic compatibility, V2 simple pipeline dispatch, V2 missing-reference diagnostics, multi-site listener/pipeline routing with admin plan visibility, WordPress V2 worker/static/security/REST OPTIONS routing with response-cache cookie behavior, HTTP protocol transform dispatch through native/vjsx implementations with transformer snapshots, hot replacement, and replacement event visibility, relay happy path/reconnect/fail-fast behavior with runtime/admin visibility, V2 WebSocket dispatch startup/probe/admin/log visibility, installed WordPress wp-admin/admin-bar static asset routing, V2 provider runtime/admin visibility for Codex and Feishu, provider-action dispatch through configurable vjsx provider runtime with hot replacement, provider instance add/update through admin APIs, MCP runtime/admin snapshots, DB/cache runtime snapshots on independent admin port plus data-plane admin modes, live MySQL query smoke, real PHP cache socket operations, upload-completed and generic event pipeline dispatch, PHP worker stream-dispatch SSE, and controlled worker busy/queue/full/timeout/release-cleanup visibility.
 
@@ -144,7 +144,7 @@ Acceptance signal:
 
 Purpose: prove configured relay works in a real two-process topology.
 
-Progress: Completed for the current smoke scope. `tests/e2e/config_acceptance_test.sh` now starts public relay and local agent processes, verifies a request reaches the local agent and returns, checks public relay runtime descriptor/carrier visibility, checks the agent admin plan exposes the relay pipeline, verifies disconnected-agent requests fail fast with 503 while preserving trace/error observations, restarts the agent, and verifies public relay delivery recovers after reconnect.
+Progress: Completed for the current smoke scope. `tests/e2e/config_acceptance_test.sh` now starts public relay and local agent processes, verifies a request reaches the local agent and returns, checks public relay runtime descriptor/carrier visibility, checks the agent admin plan exposes the relay pipeline, verifies disconnected-agent requests fail fast with 503 plus `relay_carrier_unavailable` response headers while preserving trace/error observations, restarts the agent, and verifies public relay delivery recovers after reconnect.
 
 Checks:
 
