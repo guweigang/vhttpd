@@ -2059,6 +2059,9 @@ test_protocol_conversion_smoke() {
         "protocol vjsx transform failure exposes error class"
     wait_http_status_contains "http://127.0.0.1:${vjsx_port}/throw?trace_id=e2e-proto-throw" \
         "502" "" "protocol vjsx transform exception is reported"
+    wait_http_header_contains "http://127.0.0.1:${vjsx_port}/throw?trace_id=e2e-proto-throw-header" \
+        "x-vhttpd-error-class" "transport_error" \
+        "protocol vjsx transform exception exposes error class"
     wait_event_contains "${TMP_ROOT}/protocol-vjsx.events.ndjson" "e2e-proto-vjsx" \
         "protocol vjsx transform preserves trace id"
     wait_event_contains "${TMP_ROOT}/protocol-vjsx.events.ndjson" "e2e-proto-fail" \
