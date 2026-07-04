@@ -126,6 +126,20 @@ fn test_transform_descriptor_from_plan_carries_handler_and_capabilities() {
 	assert transform.capabilities.events
 }
 
+fn test_ingress_descriptors_include_provider_event_ingress() {
+	plan := runtime_plan.RuntimePlan{
+		providers: {
+			'feishu': runtime_plan.ProviderPlan{
+				id: 'feishu'
+			}
+		}
+	}
+	descriptors := ingress_descriptors_from_plan(plan)
+
+	assert descriptors['provider:feishu'].id == 'provider:feishu'
+	assert descriptors['provider:feishu'].capabilities.events
+}
+
 fn test_pipeline_descriptor_with_runtime_descriptors_uses_egress_capabilities_only() {
 	pipeline := runtime_plan.PipelinePlan{
 		id:         'event/upload'

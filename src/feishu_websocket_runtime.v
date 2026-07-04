@@ -106,6 +106,8 @@ fn (mut app App) feishu_provider_handle_binary_message(instance string, mut conn
 		'action_value':      summary.action_value
 		'token':             summary.token
 	})
+	app.dispatch_feishu_provider_ingress_event(app_name, trace_id, seq_id, 'websocket', summary,
+		payload)
 	mut ack_status := 200
 	mut ack_headers := map[string]string{}
 	mut ack_data := ''

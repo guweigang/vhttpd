@@ -3,7 +3,7 @@ module runtime_plan
 fn test_resource_reference_round_trip() {
 	for value in ['listener:public', 'resource:db/wordpress', 'engine:php', 'adapter:assets',
 		'transform:rewrite', 'policy:cache/assets', 'pipeline:upload_completed', 'relay:edge',
-		'terminal:ack'] {
+		'provider:feishu', 'terminal:ack'] {
 		reference := parse_ref(value) or { panic(err) }
 		assert reference.str() == value
 	}

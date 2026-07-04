@@ -81,6 +81,9 @@ fn pipeline_projection_ingress_exists(plan runtime_plan.RuntimePlan, reference r
 		.relay {
 			reference.id in plan.relays
 		}
+		.provider {
+			reference.id in plan.providers
+		}
 		else {
 			false
 		}

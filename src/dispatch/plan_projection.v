@@ -16,6 +16,13 @@ pub fn ingress_descriptor_from_relay_plan(relay runtime_plan.RelayPlan) IngressD
 	}
 }
 
+pub fn ingress_descriptor_from_provider_plan(provider runtime_plan.ProviderPlan) IngressDescriptor {
+	return IngressDescriptor{
+		id:           'provider:${provider.id}'
+		capabilities: provider_capabilities(provider.id)
+	}
+}
+
 pub fn ingress_descriptors_from_plan(plan runtime_plan.RuntimePlan) map[string]IngressDescriptor {
 	mut descriptors := map[string]IngressDescriptor{}
 	for id, listener in plan.listeners {
@@ -23,6 +30,9 @@ pub fn ingress_descriptors_from_plan(plan runtime_plan.RuntimePlan) map[string]I
 	}
 	for id, relay in plan.relays {
 		descriptors['relay:${id}'] = ingress_descriptor_from_relay_plan(relay)
+	}
+	for id, provider in plan.providers {
+		descriptors['provider:${id}'] = ingress_descriptor_from_provider_plan(provider)
 	}
 	for id, adapter in adapter_descriptors_from_plan(plan) {
 		if adapter.kind == 'event-ingress' {
@@ -143,7 +153,7 @@ pub fn pipeline_capability_issues_from_plan(plan runtime_plan.RuntimePlan) []Pip
 	ingresses := ingress_descriptors_from_plan(plan)
 	mut issues := []PipelineCapabilityIssue{}
 	for pipeline in plan.pipelines {
-		if pipeline.ingress.domain !in [.listener, .adapter, .relay] {
+		if pipeline.ingress.domain !in [.listener, .adapter, .relay, .provider] {
 			continue
 		}
 		ingress := ingresses[pipeline.ingress.str()] or { continue }
@@ -247,6 +257,13 @@ fn relay_capabilities(carrier string) Capabilities {
 				events:           true
 			}
 		}
+	}
+}
+
+fn provider_capabilities(provider string) Capabilities {
+	_ = provider
+	return Capabilities{
+		events: true
 	}
 }
 

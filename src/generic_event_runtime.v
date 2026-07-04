@@ -32,6 +32,10 @@ pub:
 
 fn (mut app App) dispatch_runtime_event(raw string, fallback_request_id string, fallback_trace_id string) !RuntimeEventDispatchResponse {
 	req := json.decode(RuntimeEventDispatchRequest, raw)!
+	return app.dispatch_runtime_event_request(req, fallback_request_id, fallback_trace_id)!
+}
+
+fn (mut app App) dispatch_runtime_event_request(req RuntimeEventDispatchRequest, fallback_request_id string, fallback_trace_id string) !RuntimeEventDispatchResponse {
 	trace_id := if req.trace_id.trim_space() != '' {
 		req.trace_id.trim_space()
 	} else {

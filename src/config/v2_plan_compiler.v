@@ -238,7 +238,11 @@ fn compile_provider_action_adapter_provider_plans(adapters map[string]V2AdapterS
 		}
 		providers[provider_id] = runtime_plan.ProviderPlan{
 			...existing
-			driver:       if driver != '' { normalize_v2_provider_runtime_driver(driver) } else { existing.driver }
+			driver:       if driver != '' {
+				normalize_v2_provider_runtime_driver(driver)
+			} else {
+				existing.driver
+			}
 			plugin:       if plugin != '' { plugin } else { existing.plugin }
 			engine:       if engine != '' { engine_ref.option() } else { existing.engine }
 			capabilities: capabilities
@@ -669,6 +673,7 @@ fn validate_plan_ref_exists(reference runtime_plan.ResourceRef, plan runtime_pla
 		.policy { reference.id in plan.policies }
 		.pipeline { plan.pipeline(reference.id) != none }
 		.relay { reference.id in plan.relays }
+		.provider { reference.id in plan.providers }
 		.terminal { true }
 	}
 

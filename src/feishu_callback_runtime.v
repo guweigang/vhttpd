@@ -84,6 +84,13 @@ fn (mut app App) feishu_callback_by_app(mut ctx Context, raw_app string) veb.Res
 	})
 	log.info('[feishu] 📩 callback received: type=${summary.event_type} kind=${summary.event_kind} chat_id=${summary.chat_id} msg_id=${summary.message_id}')
 	log.info('[feishu][debug] callback.payload.${summary.event_type}: ${payload}')
+	callback_activity_id := if summary.event_id != '' {
+		summary.event_id
+	} else {
+		'callback-${time.now().unix_micro()}'
+	}
+	app.dispatch_feishu_provider_ingress_event(app_name, trace_id, callback_activity_id,
+		'callback', summary, payload)
 	if summary.event_type == 'card.action.trigger'
 		&& app.providers.feishu.card_bridge_target_id.trim_space() != '' {
 		bridge_resp := app.providers.feishu_card_bridge_dispatch_callback(app_name, trace_id,
@@ -111,11 +118,7 @@ fn (mut app App) feishu_callback_by_app(mut ctx Context, raw_app string) veb.Res
 	}
 	if app.has_websocket_upstream_logic_executor()
 		&& feishu.RuntimeEventSnapshot.should_dispatch_upstream(summary) {
-		activity_id := if summary.event_id != '' {
-			summary.event_id
-		} else {
-			'callback-${time.now().unix_micro()}'
-		}
+		activity_id := callback_activity_id
 		mut activity_snapshot := upstream.UpstreamActivitySnapshot{
 			provider:    websocket_upstream_provider_feishu
 			instance:    app_name

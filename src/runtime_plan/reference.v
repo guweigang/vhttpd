@@ -9,6 +9,7 @@ pub enum RefDomain {
 	policy
 	pipeline
 	relay
+	provider
 	terminal
 }
 
@@ -35,9 +36,11 @@ pub fn parse_ref(value string) !ResourceRef {
 		'policy' { RefDomain.policy }
 		'pipeline' { RefDomain.pipeline }
 		'relay' { RefDomain.relay }
+		'provider' { RefDomain.provider }
 		'terminal' { RefDomain.terminal }
 		else { return error('plan_ref_unknown_domain:${domain_name}') }
 	}
+
 	return ResourceRef{
 		domain: domain
 		id:     id

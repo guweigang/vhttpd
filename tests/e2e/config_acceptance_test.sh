@@ -1336,6 +1336,84 @@ egress = "adapter:inventory-events"
 EOF
 }
 
+write_provider_ingress_event_handler() {
+    local file="$1"
+    cat >"$file" <<'EOF'
+function handle(ctx) {
+  const event = ctx.jsonBody({});
+  return ctx.json({
+    ok: true,
+    provider: event.metadata.provider,
+    instance: event.metadata.instance,
+    event: event.event,
+    eventType: event.metadata.event_type,
+    traceId: event.trace_id,
+  }, 202);
+}
+
+globalThis.__vhttpd_handle = handle;
+export default handle;
+EOF
+}
+
+write_provider_ingress_event_config() {
+    local file="$1"
+    local port="$2"
+    local handler="$3"
+    cat >"$file" <<EOF
+version = 2
+
+[server]
+timezone = "Asia/Shanghai"
+pid_file = "${TMP_ROOT}/provider-ingress-event.pid"
+
+[observability]
+event_log = "${TMP_ROOT}/provider-ingress-event.events.ndjson"
+
+[listeners.web]
+protocol = "http"
+transport = "tcp"
+host = "127.0.0.1"
+port = ${port}
+
+[providers.feishu.runtime]
+driver = "native"
+
+[engines.provider-events]
+kind = "vjsx"
+entry = "${handler}"
+runtime_profile = "node"
+thread_count = 1
+
+[adapters.health]
+kind = "fixed-response"
+options.status = "200"
+options.body = "provider ingress event ok"
+
+[adapters.feishu-events]
+kind = "event"
+topic = "provider.feishu"
+
+[transforms.feishu-provider-event]
+kind = "vjsx"
+engine = "engine:provider-events"
+handler = "feishu.provider.event"
+
+[[pipelines]]
+id = "provider/health"
+ingress = "listener:web"
+match.paths = ["/health"]
+egress = "adapter:health"
+
+[[pipelines]]
+id = "provider/feishu-events"
+ingress = "provider:feishu"
+match.metadata = { event = "im.message.receive_v1", instance = "main" }
+transforms = ["transform:feishu-provider-event"]
+egress = "adapter:feishu-events"
+EOF
+}
+
 write_provider_runtime_config() {
     local file="$1"
     local port="$2"
@@ -2378,6 +2456,28 @@ test_provider_runtime_smoke() {
         "provider-action runtime request preserves trace id"
     wait_event_contains "${TMP_ROOT}/provider-action-runtime.events.ndjson" "e2e-provider-action-replaced" \
         "provider-action replaced request preserves trace id"
+
+    local provider_ingress_port
+    local provider_ingress_admin_port
+    provider_ingress_port="$(free_port)"
+    provider_ingress_admin_port="$(free_port)"
+    local provider_ingress_handler="${TMP_ROOT}/provider-ingress-event.mts"
+    local provider_ingress_config="${TMP_ROOT}/provider-ingress-event.toml"
+    write_provider_ingress_event_handler "$provider_ingress_handler"
+    write_provider_ingress_event_config "$provider_ingress_config" "$provider_ingress_port" "$provider_ingress_handler"
+    start_vhttpd "provider-ingress-event" --config "$provider_ingress_config" --admin-port "$provider_ingress_admin_port" >/dev/null
+    local provider_ingress_body
+    provider_ingress_body='{"ingress":"provider:feishu","topic":"provider.feishu","name":"im.message.receive_v1","metadata":{"instance":"main"},"data":"{\"message_id\":\"om-provider-ingress\"}"}'
+    wait_http_post_contains "http://127.0.0.1:${provider_ingress_admin_port}/admin/runtime/events?trace_id=e2e-provider-ingress-event" \
+        "$provider_ingress_body" '"pipeline":"provider/feishu-events"' \
+        "provider ingress event dispatch selects provider pipeline"
+    wait_event_contains "${TMP_ROOT}/provider-ingress-event.events.ndjson" "provider:feishu" \
+        "provider ingress event records provider ingress"
+    wait_event_contains "${TMP_ROOT}/provider-ingress-event.events.ndjson" "transform:feishu-provider-event" \
+        "provider ingress event records transform id"
+    wait_event_contains "${TMP_ROOT}/provider-ingress-event.events.ndjson" "e2e-provider-ingress-event" \
+        "provider ingress event preserves trace id"
+
     local data_plane_port
     data_plane_port="$(free_port)"
     local data_plane_config="${TMP_ROOT}/provider-runtime-dataplane.toml"

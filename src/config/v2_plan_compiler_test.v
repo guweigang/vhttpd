@@ -151,6 +151,60 @@ fn test_compile_v2_runtime_plan_rejects_unresolved_reference() {
 	}
 }
 
+fn test_compile_v2_runtime_plan_accepts_provider_ingress_pipeline() {
+	cfg := V2Config{
+		listeners:  {
+			'admin': V2ListenerSpec{}
+		}
+		control:    V2ControlSpec{
+			listener: 'listener:admin'
+		}
+		providers:  {
+			'feishu': V2ProviderSpec{
+				runtime: V2ProviderRuntimeSpec{
+					driver: 'native'
+				}
+			}
+		}
+		engines:    {
+			'events': V2EngineSpec{
+				kind:  'vjsx'
+				entry: '/tmp/provider-events.mts'
+			}
+		}
+		transforms: {
+			'feishu-event': V2TransformSpec{
+				kind:    'vjsx'
+				engine:  'engine:events'
+				handler: 'feishu.event'
+			}
+		}
+		adapters:   {
+			'feishu-events': V2AdapterSpec{
+				kind:  'event'
+				topic: 'provider.feishu'
+			}
+		}
+		pipelines:  [
+			V2PipelineSpec{
+				id:         'provider.feishu.events'
+				ingress:    'provider:feishu'
+				match:      V2MatchSpec{
+					metadata: {
+						'event': 'im.message.receive_v1'
+					}
+				}
+				transforms: ['transform:feishu-event']
+				egress:     'adapter:feishu-events'
+			},
+		]
+	}
+	plan := compile_v2_runtime_plan(cfg, '', false) or { panic(err) }
+
+	assert plan.pipelines[0].ingress.str() == 'provider:feishu'
+	assert plan.providers['feishu'].driver == 'native'
+}
+
 fn test_compile_v2_runtime_plan_rejects_wrong_reference_domain() {
 	cfg := V2Config{
 		engines: {

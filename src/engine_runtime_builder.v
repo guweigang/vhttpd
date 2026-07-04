@@ -56,6 +56,10 @@ fn build_additional_engine_workers_with_diagnostics_from_plan(cfg config.VhttpdC
 		add_worker_for_target(cfg, executor_plan, target, build_cfg, mut add_workers, mut
 			diagnostics)
 	}
+	for target in targets.for_provider_ingress_pipelines() {
+		add_worker_for_target(cfg, executor_plan, target, build_cfg, mut add_workers, mut
+			diagnostics)
+	}
 	return AdditionalEngineWorkersBuildResult{
 		workers:     add_workers
 		diagnostics: diagnostics
@@ -110,6 +114,20 @@ fn (targets AdditionalEngineTargets) for_event_pipelines() []AdditionalEngineBui
 		}
 		adapter := targets.plan.adapters[pipeline.ingress.id] or { continue }
 		if adapter.kind != 'event-ingress' {
+			continue
+		}
+		out << targets.from_transform_refs(pipeline.transforms)
+	}
+	return targets.unique(out)
+}
+
+fn (targets AdditionalEngineTargets) for_provider_ingress_pipelines() []AdditionalEngineBuildTarget {
+	mut out := []AdditionalEngineBuildTarget{}
+	for pipeline in targets.plan.pipelines {
+		if pipeline.ingress.domain != .provider {
+			continue
+		}
+		if pipeline.ingress.id !in targets.plan.providers {
 			continue
 		}
 		out << targets.from_transform_refs(pipeline.transforms)
