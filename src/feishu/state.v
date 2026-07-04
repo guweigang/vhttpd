@@ -39,6 +39,17 @@ pub fn (mut s FeishuState) note_connected(name string, ws_url string) {
 	s.update_runtime(name, runtime)
 }
 
+pub fn (mut s FeishuState) runtime_ws_url(name string) string {
+	s.mu.@lock()
+	defer {
+		s.mu.unlock()
+	}
+	if runtime := s.runtime[name] {
+		return runtime.ws_url
+	}
+	return ''
+}
+
 pub fn (mut s FeishuState) note_disconnected(name string, reason string) {
 	log.error('[feishu] ❌ disconnected: name=${name} reason=${reason}')
 	mut runtime := s.ensure(name)

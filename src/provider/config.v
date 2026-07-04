@@ -61,6 +61,7 @@ pub:
 	runtime_drivers      map[string]string
 	runtime_plugins      map[string]string
 	runtime_capabilities map[string]map[string]string
+	runtime_options      map[string]map[string]string
 	feishu               FeishuRuntimeSettings
 	codex                CodexRuntimeSettings
 	bridge               BridgeRuntimeSettings
@@ -114,11 +115,13 @@ pub fn ProviderRuntimeSettings.resolve(args []string, cfg config.VhttpdConfig) P
 	}
 	runtime_drivers, runtime_plugins := provider_runtime_maps_from_config(cfg)
 	runtime_capabilities := provider_runtime_capability_maps_from_config(cfg)
+	runtime_options := provider_runtime_option_maps_from_config(cfg)
 
 	return ProviderRuntimeSettings{
 		runtime_drivers:      runtime_drivers
 		runtime_plugins:      runtime_plugins
 		runtime_capabilities: runtime_capabilities
+		runtime_options:      runtime_options
 		feishu:               FeishuRuntimeSettings{
 			enabled:                    feishu_enabled
 			runtime_driver:             runtime_drivers['feishu'] or { 'native' }
@@ -141,7 +144,7 @@ pub fn ProviderRuntimeSettings.resolve(args []string, cfg config.VhttpdConfig) P
 			}
 			apps:                       feishu_apps.clone()
 		}
-		codex:           CodexRuntimeSettings{
+		codex:                CodexRuntimeSettings{
 			enabled:            cfg.codex.enabled
 			url:                if cfg.codex.url.trim_space() != '' {
 				cfg.codex.url
@@ -180,14 +183,14 @@ pub fn ProviderRuntimeSettings.resolve(args []string, cfg config.VhttpdConfig) P
 				400
 			}
 		}
-		bridge:          BridgeRuntimeSettings{
+		bridge:               BridgeRuntimeSettings{
 			enabled:   cfg.feishu.bridge.enabled
 			ws_url:    cfg.feishu.bridge.ws_url
 			client_id: cfg.feishu.bridge.client_id
 			token:     cfg.feishu.bridge.token
 			target_id: cfg.feishu.bridge.target_id
 		}
-		db:              DbRuntimeSettings{
+		db:                   DbRuntimeSettings{
 			enabled:      cfg.db.enabled
 			socket:       if cfg.db.socket.trim_space() != '' {
 				cfg.db.socket
@@ -217,7 +220,7 @@ pub fn ProviderRuntimeSettings.resolve(args []string, cfg config.VhttpdConfig) P
 				cfg.db.mysql.init_sql.clone()
 			}
 		}
-		ollama_enabled:  config.CliArgs.bool_or(args, '--ollama-enabled', false)
+		ollama_enabled:       config.CliArgs.bool_or(args, '--ollama-enabled', false)
 	}
 }
 
@@ -229,6 +232,11 @@ fn provider_runtime_capability_maps_from_config(cfg config.VhttpdConfig) map[str
 		}
 	}
 	return capability_routes
+}
+
+fn provider_runtime_option_maps_from_config(cfg config.VhttpdConfig) map[string]map[string]string {
+	_ = cfg
+	return map[string]map[string]string{}
 }
 
 fn provider_runtime_maps_from_config(cfg config.VhttpdConfig) (map[string]string, map[string]string) {

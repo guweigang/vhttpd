@@ -1378,6 +1378,13 @@ port = ${port}
 
 [providers.feishu.runtime]
 driver = "native"
+plugin = "feishu-provider-hooks"
+engine = "engine:provider-events"
+
+[providers.feishu.options]
+websocket_handshake_plugin = "feishu-provider-hooks"
+websocket_normalize_plugin = "feishu-provider-hooks"
+websocket_normalize_capability = "feishu.event.normalize"
 
 [engines.provider-events]
 kind = "vjsx"

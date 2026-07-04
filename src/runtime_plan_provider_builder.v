@@ -10,21 +10,23 @@ fn provider_runtime_settings_from_plan(plan runtime_plan.RuntimePlan, listener_i
 	codex_settings, ollama_enabled := codex_runtime_settings_from_plan(plan, listener_id, fallback)
 	runtime_drivers, runtime_plugins := provider_runtime_maps_from_plan(plan, fallback)
 	runtime_capabilities := provider_runtime_capability_maps_from_plan(plan, fallback)
+	runtime_options := provider_runtime_option_maps_from_plan(plan, fallback)
 	feishu_driver := runtime_drivers['feishu'] or { fallback.feishu.runtime_driver }
 	feishu_plugin := runtime_plugins['feishu'] or { fallback.feishu.runtime_plugin }
 	return provider.ProviderRuntimeSettings{
 		runtime_drivers:      runtime_drivers
 		runtime_plugins:      runtime_plugins
 		runtime_capabilities: runtime_capabilities
+		runtime_options:      runtime_options
 		feishu:               provider.FeishuRuntimeSettings{
 			...feishu_settings
 			runtime_driver: feishu_driver
 			runtime_plugin: feishu_plugin
 		}
-		codex:          codex_settings
-		bridge:         bridge_settings_from_plan(plan, listener_id) or { fallback.bridge }
-		db:             fallback.db
-		ollama_enabled: ollama_enabled
+		codex:                codex_settings
+		bridge:               bridge_settings_from_plan(plan, listener_id) or { fallback.bridge }
+		db:                   fallback.db
+		ollama_enabled:       ollama_enabled
 	}
 }
 
@@ -38,6 +40,18 @@ fn provider_runtime_capability_maps_from_plan(plan runtime_plan.RuntimePlan, fal
 		}
 	}
 	return capabilities
+}
+
+fn provider_runtime_option_maps_from_plan(plan runtime_plan.RuntimePlan, fallback provider.ProviderRuntimeSettings) map[string]map[string]string {
+	mut options := fallback.runtime_options.clone()
+	for id, provider_plan in plan.providers {
+		if provider_plan.options.strings.len > 0 {
+			options[id] = provider_plan.options.strings.clone()
+		} else {
+			options.delete(id)
+		}
+	}
+	return options
 }
 
 fn provider_runtime_maps_from_plan(plan runtime_plan.RuntimePlan, fallback provider.ProviderRuntimeSettings) (map[string]string, map[string]string) {

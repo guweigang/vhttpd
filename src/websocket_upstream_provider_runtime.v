@@ -37,6 +37,7 @@ fn (mut app App) build_websocket_upstream_runtime_context() ws.UpstreamRuntimeCo
 			app.websocket_upstream_provider_handle_message(provider, instance, mut ws_client, msg)!
 		}
 		post_connect_fn:    fn [mut app] (provider string, instance string, ws_url string, mut client websocket.Client) {
+			app.dispatch_provider_websocket_handshake(provider, instance, ws_url, mut client)
 			if provider == websocket_upstream_provider_feishu {
 				mut feishu_app_ref := unsafe { &app }
 				go FeishuRuntimeHeartbeat.loop(mut feishu_app_ref, instance, ws_url, mut client)
