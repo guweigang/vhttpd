@@ -598,6 +598,90 @@ egress = "adapter:local-response"
 EOF
 }
 
+write_websocket_dispatch_config() {
+    local file="$1"
+    local port="$2"
+    cat >"$file" <<EOF
+version = 2
+
+[server]
+timezone = "Asia/Shanghai"
+pid_file = "${TMP_ROOT}/websocket-dispatch.pid"
+
+[observability]
+event_log = "${TMP_ROOT}/websocket-dispatch.events.ndjson"
+
+[listeners.ws]
+protocol = "websocket"
+transport = "tcp"
+host = "127.0.0.1"
+port = ${port}
+
+[engines.ws]
+kind = "vjsx"
+entry = "${REPO_ROOT}/examples/ws-min/app.mts"
+runtime_profile = "node"
+thread_count = 1
+websocket_dispatch = true
+
+[adapters.ws]
+kind = "http-handler"
+engine = "engine:ws"
+
+[[pipelines]]
+id = "websocket/dispatch"
+ingress = "listener:ws"
+match.paths = ["*"]
+egress = "adapter:ws"
+EOF
+}
+
+write_websocket_probe() {
+    local file="$1"
+    cat >"$file" <<'EOF'
+const url = process.argv[2];
+const out = process.argv[3];
+if (!url || !out) {
+  console.error("usage: node websocket-probe.mjs <url> <out>");
+  process.exit(2);
+}
+const fs = await import("node:fs/promises");
+const messages = [];
+let opened = false;
+let closed = false;
+const socket = new WebSocket(url);
+const timeout = setTimeout(() => {
+  console.error("websocket probe timed out");
+  socket.close();
+  process.exit(1);
+}, 5000);
+socket.addEventListener("open", () => {
+  opened = true;
+});
+socket.addEventListener("message", (event) => {
+  messages.push(String(event.data));
+  if (String(event.data).includes('"sync"')) {
+    socket.send(JSON.stringify({ type: "ping" }));
+  }
+  if (String(event.data).includes('"pong"')) {
+    socket.close(1000, "probe done");
+  }
+});
+socket.addEventListener("close", async () => {
+  closed = true;
+  clearTimeout(timeout);
+  await fs.writeFile(out, JSON.stringify({ opened, closed, messages }, null, 2));
+  if (!opened || !messages.some((m) => m.includes('"sync"')) || !messages.some((m) => m.includes('"pong"'))) {
+    process.exit(1);
+  }
+  process.exit(0);
+});
+socket.addEventListener("error", (event) => {
+  console.error("websocket probe error", event.message || String(event));
+});
+EOF
+}
+
 write_multisite_config() {
     local file="$1"
     local blog_port="$2"
@@ -1944,9 +2028,49 @@ test_relay_smoke() {
         "relay request recovers after agent reconnect"
 }
 
+test_websocket_dispatch_smoke() {
+    echo ""
+    echo "8. WebSocket dispatch smoke"
+    local port
+    port="$(free_port)"
+    local config="${TMP_ROOT}/websocket-dispatch.toml"
+    local probe="${TMP_ROOT}/websocket-probe.mjs"
+    local probe_out="${TMP_ROOT}/websocket-probe.out.json"
+    write_websocket_dispatch_config "$config" "$port"
+    write_websocket_probe "$probe"
+    start_vhttpd "websocket-dispatch" --config "$config" >/dev/null
+    wait_event_contains "${TMP_ROOT}/websocket-dispatch.events.ndjson" "server.started" \
+        "websocket dispatch runtime starts"
+    if node "$probe" "ws://127.0.0.1:${port}/ws?trace_id=e2e-websocket-dispatch" "$probe_out" >/dev/null 2>"${TMP_ROOT}/websocket-probe.err"; then
+        ok "websocket dispatch probe receives sync and pong"
+    else
+        ko "websocket dispatch probe receives sync and pong"
+        echo "    probe stderr:"
+        sed 's/^/      /' "${TMP_ROOT}/websocket-probe.err" 2>/dev/null || true
+        echo "    probe output:"
+        sed 's/^/      /' "$probe_out" 2>/dev/null || true
+        print_logs
+        return 1
+    fi
+    if grep -q 'sync' "$probe_out" && grep -q 'pong' "$probe_out"; then
+        ok "websocket dispatch probe records expected messages"
+    else
+        ko "websocket dispatch probe records expected messages"
+        sed 's/^/      /' "$probe_out" 2>/dev/null || true
+        print_logs
+        return 1
+    fi
+    wait_http_contains "http://127.0.0.1:${port}/admin/runtime/websockets" '"active_connections":0' \
+        "websocket admin runtime exposes closed connection state"
+    wait_event_contains "${TMP_ROOT}/websocket-dispatch.log" "e2e-websocket-dispatch" \
+        "websocket dispatch log preserves trace id"
+    wait_event_contains "${TMP_ROOT}/websocket-dispatch.log" "Quit client listener" \
+        "websocket dispatch records listener completion"
+}
+
 test_stream_dispatch_smoke() {
     echo ""
-    echo "13. Stream dispatch smoke"
+    echo "14. Stream dispatch smoke"
     local port
     port="$(free_port)"
     local config="${TMP_ROOT}/stream-dispatch.toml"
@@ -1962,7 +2086,7 @@ test_stream_dispatch_smoke() {
 
 test_provider_runtime_smoke() {
     echo ""
-    echo "8. Provider runtime smoke"
+    echo "9. Provider runtime smoke"
     local port
     local admin_port
     port="$(free_port)"
@@ -2080,7 +2204,7 @@ test_provider_runtime_smoke() {
 
 test_db_runtime_smoke() {
     echo ""
-    echo "9. DB runtime smoke"
+    echo "10. DB runtime smoke"
     local port
     local admin_port
     port="$(free_port)"
@@ -2133,7 +2257,7 @@ test_db_runtime_smoke() {
 
 test_cache_runtime_smoke() {
     echo ""
-    echo "10. Cache runtime smoke"
+    echo "11. Cache runtime smoke"
     local port
     local admin_port
     port="$(free_port)"
@@ -2180,7 +2304,7 @@ test_cache_runtime_smoke() {
 
 test_upload_event_pipeline_smoke() {
     echo ""
-    echo "11. Upload event pipeline smoke"
+    echo "12. Upload event pipeline smoke"
     local port
     port="$(free_port)"
     local handler="${TMP_ROOT}/upload-event-handler.mts"
@@ -2203,7 +2327,7 @@ test_upload_event_pipeline_smoke() {
 
 test_generic_event_pipeline_smoke() {
     echo ""
-    echo "12. Generic event pipeline smoke"
+    echo "13. Generic event pipeline smoke"
     local port
     local admin_port
     port="$(free_port)"
@@ -2228,7 +2352,7 @@ test_generic_event_pipeline_smoke() {
 
 test_worker_queue_smoke() {
     echo ""
-    echo "14. Worker queue smoke"
+    echo "15. Worker queue smoke"
     local port
     local admin_port
     port="$(free_port)"
@@ -2373,6 +2497,7 @@ test_wordpress_v2_smoke
 test_wordpress_installed_v2_smoke
 test_protocol_conversion_smoke
 test_relay_smoke
+test_websocket_dispatch_smoke
 test_provider_runtime_smoke
 test_db_runtime_smoke
 test_cache_runtime_smoke
