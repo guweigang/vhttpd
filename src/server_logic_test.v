@@ -2317,9 +2317,10 @@ fn test_provider_runtime_settings_include_v2_provider_driver_plugin() {
 				}
 				options:      runtime_plan.PlanOptions{
 					strings: {
-						'websocket_handshake_plugin':     'feishu-provider-runtime'
-						'websocket_normalize_plugin':     'feishu-provider-runtime'
-						'websocket_normalize_capability': 'feishu.event.normalize'
+						'protocol':             'websocket'
+						'handshake_plugin':     'feishu-provider-runtime'
+						'normalize_plugin':     'feishu-provider-runtime'
+						'normalize_capability': 'feishu.event.normalize'
 					}
 				}
 			}
@@ -2330,9 +2331,9 @@ fn test_provider_runtime_settings_include_v2_provider_driver_plugin() {
 	assert settings.runtime_drivers['feishu'] == 'vjsx'
 	assert settings.runtime_plugins['feishu'] == 'feishu-provider-runtime'
 	assert settings.runtime_capabilities['feishu']['send_message'] == 'feishu.message.send'
-	assert settings.runtime_options['feishu']['websocket_handshake_plugin'] == 'feishu-provider-runtime'
-	assert settings.runtime_options['feishu']['websocket_normalize_plugin'] == 'feishu-provider-runtime'
-	assert settings.runtime_options['feishu']['websocket_normalize_capability'] == 'feishu.event.normalize'
+	assert settings.runtime_options['feishu']['handshake_plugin'] == 'feishu-provider-runtime'
+	assert settings.runtime_options['feishu']['normalize_plugin'] == 'feishu-provider-runtime'
+	assert settings.runtime_options['feishu']['normalize_capability'] == 'feishu.event.normalize'
 	assert settings.feishu.runtime_driver == 'vjsx'
 	assert settings.feishu.runtime_plugin == 'feishu-provider-runtime'
 }
@@ -2452,9 +2453,10 @@ engine = "engine:provider-runtime"
 send_message = "feishu.message.send"
 
 [providers.feishu.options]
-websocket_handshake_plugin = "feishu-provider-runtime"
-websocket_normalize_plugin = "feishu-provider-runtime"
-websocket_normalize_capability = "feishu.event.normalize"
+protocol = "websocket"
+handshake_plugin = "feishu-provider-runtime"
+normalize_plugin = "feishu-provider-runtime"
+normalize_capability = "feishu.event.normalize"
 
 [adapters.provider-send]
 kind = "provider-action"
@@ -2489,9 +2491,9 @@ egress = "adapter:provider-send"
 	assert app.providers.provider_runtime_driver('feishu') == 'vjsx'
 	assert app.providers.provider_runtime_plugin('feishu') == 'feishu-provider-runtime'
 	assert app.providers.provider_runtime_capability('feishu', 'send_message') == 'feishu.message.send'
-	assert app.providers.provider_runtime_option('feishu', 'websocket_handshake_plugin') == 'feishu-provider-runtime'
-	assert app.providers.provider_runtime_option('feishu', 'websocket_normalize_plugin') == 'feishu-provider-runtime'
-	assert app.providers.provider_runtime_option('feishu', 'websocket_normalize_capability') == 'feishu.event.normalize'
+	assert app.providers.provider_runtime_option('feishu', 'handshake_plugin') == 'feishu-provider-runtime'
+	assert app.providers.provider_runtime_option('feishu', 'normalize_plugin') == 'feishu-provider-runtime'
+	assert app.providers.provider_runtime_option('feishu', 'normalize_capability') == 'feishu.event.normalize'
 	assert 'feishu-provider-runtime' in app.protocols.plugins.configs
 	assert 'feishu-provider-runtime' in app.protocols.plugins.vjsx
 }

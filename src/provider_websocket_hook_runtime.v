@@ -38,19 +38,33 @@ pub:
 }
 
 fn (mut app App) provider_websocket_hook_plugin(provider_name string, hook string) string {
-	option_plugin := app.providers.provider_runtime_option(provider_name,
-		'websocket_${hook}_plugin')
+	if app.providers.provider_runtime_option(provider_name, 'protocol').trim_space().to_lower() !in [
+		'websocket',
+		'ws',
+	] {
+		return ''
+	}
+	option_plugin := app.providers.provider_runtime_option(provider_name, '${hook}_plugin')
 	if option_plugin.trim_space() != '' {
 		return option_plugin.trim_space()
+	}
+	legacy_plugin := app.providers.provider_runtime_option(provider_name,
+		'websocket_${hook}_plugin')
+	if legacy_plugin.trim_space() != '' {
+		return legacy_plugin.trim_space()
 	}
 	return ''
 }
 
 fn (mut app App) provider_websocket_hook_capability(provider_name string, hook string) string {
-	option_capability := app.providers.provider_runtime_option(provider_name,
-		'websocket_${hook}_capability')
+	option_capability := app.providers.provider_runtime_option(provider_name, '${hook}_capability')
 	if option_capability.trim_space() != '' {
 		return option_capability.trim_space()
+	}
+	legacy_capability := app.providers.provider_runtime_option(provider_name,
+		'websocket_${hook}_capability')
+	if legacy_capability.trim_space() != '' {
+		return legacy_capability.trim_space()
 	}
 	return app.providers.provider_runtime_capability(provider_name, 'websocket_${hook}')
 }

@@ -78,7 +78,8 @@ export function plugin(req) {
 			}
 			runtime_options: {
 				'feishu': {
-					'websocket_normalize_plugin': 'feishu-ws-hooks'
+					'protocol':         'websocket'
+					'normalize_plugin': 'feishu-ws-hooks'
 				}
 			}
 		})
