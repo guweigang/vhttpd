@@ -2214,6 +2214,8 @@ test_relay_smoke() {
         "relay agent runtime starts"
     wait_http_contains "http://127.0.0.1:${public_port}/relay?trace_id=e2e-relay" "relay agent ok" \
         "relay request reaches local agent and returns"
+    wait_event_contains "${TMP_ROOT}/relay-public.events.ndjson" "e2e-relay" \
+        "relay successful request preserves trace id"
     wait_event_contains "${TMP_ROOT}/relay-public.events.ndjson" "response_completion.completed" \
         "relay wait completion records completed response event"
     wait_event_contains "${TMP_ROOT}/relay-public.events.ndjson" '"completion_mode":"wait"' \
@@ -2245,6 +2247,8 @@ test_relay_smoke() {
         "relay agent restarts after disconnect"
     wait_http_contains "http://127.0.0.1:${public_port}/relay?trace_id=e2e-relay-reconnect" "relay agent ok" \
         "relay request recovers after agent reconnect"
+    wait_event_contains "${TMP_ROOT}/relay-public.events.ndjson" "e2e-relay-reconnect" \
+        "relay reconnect request preserves trace id"
 }
 
 test_websocket_dispatch_smoke() {
