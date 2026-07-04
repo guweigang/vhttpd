@@ -86,6 +86,9 @@ fn v2_provider_specs_from_text(text string, doc toml.Doc, existing map[string]V2
 				if driver_any := runtime_root['driver'] {
 					runtime.driver = driver_any.string()
 				}
+				if protocol_any := runtime_root['protocol'] {
+					runtime.protocol = protocol_any.string()
+				}
 				if plugin_any := runtime_root['plugin'] {
 					runtime.plugin = plugin_any.string()
 				}
@@ -93,6 +96,9 @@ fn v2_provider_specs_from_text(text string, doc toml.Doc, existing map[string]V2
 					runtime.engine = engine_any.string()
 				}
 				provider.runtime = runtime
+			}
+			if hooks_any := doc.value_opt('providers.${id}.hooks') {
+				provider.hooks = decode_v2_string_options(hooks_any)
 			}
 			if capabilities_any := doc.value_opt('providers.${id}.capabilities') {
 				provider.capabilities = decode_v2_string_options(capabilities_any)

@@ -354,6 +354,7 @@ fn test_repository_v2_examples_are_strict_v2_style() {
 	repo_root := os.real_path(os.join_path(os.dir(@FILE), '..', '..'))
 	examples := [
 		os.join_path(repo_root, 'examples', 'config', 'hello-v2.toml'),
+		os.join_path(repo_root, 'examples', 'config', 'provider-websocket-feishu.toml'),
 		os.join_path(repo_root, 'examples', 'config', 'relay-hub-v2.toml'),
 		os.join_path(repo_root, 'examples', 'config', 'relay-public-v2.toml'),
 		os.join_path(repo_root, 'examples', 'config', 'relay-agent-v2.toml'),
@@ -372,6 +373,24 @@ fn test_repository_v2_examples_are_strict_v2_style() {
 		plan := load_runtime_plan_file(config_file) or { panic(err) }
 		assert !plan.source.compatibility
 	}
+}
+
+fn test_load_runtime_plan_file_accepts_provider_websocket_feishu_example() {
+	repo_root := os.real_path(os.join_path(os.dir(@FILE), '..', '..'))
+	config_file := os.join_path(repo_root, 'examples', 'config', 'provider-websocket-feishu.toml')
+	plan := load_runtime_plan_file(config_file) or { panic(err) }
+	assert plan.source.schema_version == 2
+	assert !plan.source.compatibility
+	assert plan.providers['feishu'].driver == 'native'
+	assert plan.providers['feishu'].protocol == 'websocket'
+	assert plan.providers['feishu'].plugin == 'feishu-provider-hooks'
+	assert plan.providers['feishu'].engine?.str() == 'engine:provider_events'
+	assert plan.providers['feishu'].options.string_maps['hooks']['handshake'] == 'handshake'
+	assert plan.providers['feishu'].options.string_maps['hooks']['normalize'] == 'normalize'
+	assert plan.adapters['feishu_events'].kind == 'feishu-events'
+	assert plan.adapters['feishu_events'].options.record_lists['apps'].len == 1
+	assert plan.pipeline('provider.feishu.events')?.ingress.str() == 'provider:feishu'
+	assert plan.pipeline('provider.feishu.events')?.transforms[0].str() == 'transform:feishu_event'
 }
 
 fn test_load_runtime_plan_file_accepts_wordpress_v2_example() {
