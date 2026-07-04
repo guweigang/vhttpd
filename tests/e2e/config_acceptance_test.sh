@@ -96,6 +96,31 @@ wait_http_contains() {
     return 1
 }
 
+wait_http_contains_with_header() {
+    local url="$1"
+    local header="$2"
+    local needle="$3"
+    local label="$4"
+    local body_file="${TMP_ROOT}/body.$RANDOM"
+    for _ in $(seq 1 80); do
+        if curl -fsS -H "$header" --max-time 2 "$url" >"$body_file" 2>/dev/null; then
+            if grep -q "$needle" "$body_file"; then
+                ok "$label"
+                return 0
+            fi
+        fi
+        sleep 0.25
+    done
+    ko "$label"
+    echo "    url: $url"
+    echo "    header: $header"
+    echo "    expected: $needle"
+    echo "    last body:"
+    sed 's/^/      /' "$body_file" 2>/dev/null || true
+    print_logs
+    return 1
+}
+
 wait_http_header_contains() {
     local url="$1"
     local header="$2"
@@ -1833,6 +1858,9 @@ test_wordpress_installed_v2_smoke() {
         '"framework":"wordpress"' "wordpress installed v2 serves metadata"
     wait_http_contains "${base_url}/meta?trace_id=e2e-wordpress-installed-meta" \
         '"site_name":' "wordpress installed v2 exposes site metadata"
+    wait_http_contains_with_header "${base_url}/meta?trace_id=e2e-wordpress-installed-https" \
+        "X-Forwarded-Proto: https" '"home":"https' \
+        "wordpress installed v2 honors forwarded https scheme"
     wait_http_status_contains "${base_url}/?trace_id=e2e-wordpress-installed-home" \
         "301" "Redirecting to ${canonical_base}/" \
         "wordpress installed v2 front page reaches WordPress canonical redirect"
