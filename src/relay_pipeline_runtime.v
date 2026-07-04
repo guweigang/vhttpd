@@ -1,5 +1,6 @@
 module main
 
+import api.mcp.protocol as mcp_protocol
 import dispatch
 import relay
 import runtime_plan
@@ -173,6 +174,9 @@ fn (mut app App) dispatch_relay_pipeline_adapter_egress(adapter_id string, mut s
 	if adapter_plan.kind == 'provider-action' {
 		return app.dispatch_relay_provider_action_adapter(adapter_plan, adapter_id, exchange)
 	}
+	if adapter_plan.kind == 'mcp' {
+		return app.dispatch_relay_mcp_adapter(adapter_plan, adapter_id, exchange)
+	}
 	mut adapter := dispatch.terminal_adapter_from_plan(adapter_plan) or {
 		return relay_pipeline_failure(exchange, 501,
 			'relay_pipeline_egress_unsupported:adapter:${adapter_id}',
@@ -182,6 +186,59 @@ fn (mut app App) dispatch_relay_pipeline_adapter_egress(adapter_id string, mut s
 		return relay_pipeline_failure(exchange, 500, err.msg(), 'relay_adapter_failed')
 	}
 	return relay_pipeline_outcome_from_delivery(exchange, delivery)
+}
+
+fn (mut app App) dispatch_relay_mcp_adapter(_adapter_plan runtime_plan.AdapterPlan, _adapter_id string, exchange dispatch.Exchange) RelayPipelineDispatchOutcome {
+	body := relay_pipeline_exchange_body(exchange)
+	mut headers := exchange.headers.clone()
+	protocol_version := headers['mcp-protocol-version'] or {
+		mcp_protocol.Session.default_protocol_version()
+	}
+	session_id := headers['mcp-session-id'] or { exchange.metadata['mcp_session_id'] or { '' } }
+	method := exchange.metadata['http_method'] or { 'POST' }
+	path := exchange.metadata['path'] or { '/mcp' }
+	req := app.kernel_mcp_dispatch_request(method, path, headers, protocol_version, body,
+		exchange.metadata['remote_addr'] or { '' }, exchange.identity.request_id,
+		exchange.identity.trace_id, session_id,
+		mcp_protocol.Session.extract_client_capabilities_json(body))
+	outcome := app.kernel_dispatch_mcp_handled(req) or {
+		return relay_pipeline_failure(exchange, 500, err.msg(), 'relay_mcp_dispatch_failed')
+	}
+	resp := outcome.response
+	mut response_headers := resp.headers.clone()
+	mut response_session_id := resp.session_id
+	if response_session_id == '' && session_id == ''
+		&& (body.contains('"method":"initialize"') || body.contains('"method": "initialize"')) {
+		response_session_id = mcp_protocol.Session.generate_id()
+	}
+	if response_session_id != '' {
+		response_headers['mcp-session-id'] = response_session_id
+		if session_id == ''
+			&& (body.contains('"method":"initialize"') || body.contains('"method": "initialize"')) {
+			app.protocols.mcp.ensure_session(response_session_id, if resp.protocol_version != '' {
+				resp.protocol_version
+			} else {
+				protocol_version
+			}, exchange.identity.request_id, exchange.identity.trace_id, '/mcp')
+		}
+	}
+	if resp.protocol_version != '' {
+		response_headers['mcp-protocol-version'] = resp.protocol_version
+	} else if protocol_version != '' {
+		response_headers['mcp-protocol-version'] = protocol_version
+	}
+	if resp.error != '' {
+		return relay_pipeline_success_with_body(exchange, 'response', if resp.status > 0 {
+			resp.status
+		} else {
+			500
+		}, if resp.body != '' { resp.body } else { resp.error }, response_headers)
+	}
+	return relay_pipeline_success_with_body(exchange, 'response', if resp.status > 0 {
+		resp.status
+	} else {
+		200
+	}, resp.body, response_headers)
 }
 
 fn (mut app App) dispatch_relay_provider_action_adapter(adapter_plan runtime_plan.AdapterPlan, adapter_id string, exchange dispatch.Exchange) RelayPipelineDispatchOutcome {

@@ -56,11 +56,18 @@ pub fn (mut adapter RelayDeliveryAdapter) deliver(mut services RuntimeServices, 
 	if body != '' {
 		metadata['body'] = body
 	}
+	if request := relay_delivery_adapter_request(exchange) {
+		metadata['http_method'] = request.method
+		metadata['path'] = request.path
+	}
 	if services.trace_id() != '' {
 		metadata['trace_id'] = services.trace_id()
 	}
-	return relay_delivery_outcome_with_completion(adapter.target, metadata,
-		adapter.completion_mode, adapter.timeout_ms)
+	return DeliveryOutcome{
+		...relay_delivery_outcome_with_completion(adapter.target, metadata,
+			adapter.completion_mode, adapter.timeout_ms)
+		headers: exchange.headers.clone()
+	}
 }
 
 pub fn (mut adapter RelayDeliveryAdapter) close() {
@@ -88,5 +95,12 @@ fn relay_delivery_adapter_body(exchange Exchange) string {
 		SessionPayload { return exchange.payload.message }
 		ErrorPayload { return exchange.payload.message }
 		EmptyPayload { return '' }
+	}
+}
+
+fn relay_delivery_adapter_request(exchange Exchange) ?RequestPayload {
+	match exchange.payload {
+		RequestPayload { return exchange.payload }
+		else { return none }
 	}
 }

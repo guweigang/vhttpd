@@ -13,6 +13,9 @@ fn (hub ProtocolRuntimeHub) try_route_http(mut app App, mut ctx Context, method 
 }
 
 fn (rt ProtocolIngressRuntime) try_route_http_request(mut app App, mut ctx Context, req ProtocolHttpRequest) ?veb.Result {
+	if app.pipelines.has_protocol_http_override(req) {
+		return none
+	}
 	if result := rt.openai.try_route_http(mut app, mut ctx, req) {
 		return result
 	}

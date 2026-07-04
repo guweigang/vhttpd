@@ -15,6 +15,7 @@ pub:
 	pipeline       string
 	kind           ExchangeKind = .session_message
 	body           string
+	headers        map[string]string
 	metadata       map[string]string
 	created_at_ms  i64
 	deadline_at_ms i64
@@ -48,7 +49,7 @@ pub fn relay_ingress_exchange(req RelayIngressRequest) Exchange {
 		pipeline:       req.pipeline
 		created_at_ms:  req.created_at_ms
 		deadline_at_ms: req.deadline_at_ms
-		headers:        map[string]string{}
+		headers:        req.headers.clone()
 		metadata:       metadata
 		payload:        SessionPayload{
 			session_id: req.session_id

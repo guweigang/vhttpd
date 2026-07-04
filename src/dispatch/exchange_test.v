@@ -267,6 +267,9 @@ fn test_relay_delivery_adapter_projects_http_request_to_relay_delivery() {
 	exchange := http_request_exchange(HttpIngressRequest{
 		method:      'POST'
 		path:        '/relay'
+		headers:     {
+			'x-relay-test': '1'
+		}
 		body:        'payload'
 		request_id:  'req-relay'
 		trace_id:    'trace-original'
@@ -291,7 +294,10 @@ fn test_relay_delivery_adapter_projects_http_request_to_relay_delivery() {
 	assert outcome.metadata['frame_kind'] == 'open'
 	assert outcome.metadata['route'] == 'relay/local-response'
 	assert outcome.metadata['body'] == 'payload'
+	assert outcome.metadata['http_method'] == 'POST'
+	assert outcome.metadata['path'] == '/relay'
 	assert outcome.metadata['completion_mode'] == 'accepted'
+	assert outcome.headers['x-relay-test'] == '1'
 }
 
 fn test_pipeline_dispatcher_contract() {

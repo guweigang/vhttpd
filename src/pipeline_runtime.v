@@ -105,6 +105,21 @@ fn (rt PipelineRuntime) match_http_request(req HttpPipelineMatchRequest) ?Runtim
 	return rt.http.match_compiled_http_exchange(exchange)
 }
 
+fn (rt PipelineRuntime) has_protocol_http_override(req ProtocolHttpRequest) bool {
+	rule := rt.match_http_request(HttpPipelineMatchRequest{
+		method:            req.method
+		normalized_target: req.normalized_target
+		query:             req.query
+		headers:           req.headers
+		body:              req.body
+		remote_addr:       ''
+		req_id:            req.request_id
+		trace_id:          req.trace_id
+		start_ms:          req.start_ms
+	}) or { return false }
+	return rule.executor !in ['mcp', 'openai']
+}
+
 fn (rt PipelineRuntime) http_directory_slash_redirect(normalized_target string, query_string string) ?string {
 	return directory_slash_redirect_location(rt.http.document_root, normalized_target, query_string)
 }

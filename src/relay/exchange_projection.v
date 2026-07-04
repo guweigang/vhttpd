@@ -18,6 +18,7 @@ pub fn relay_ingress_request_from_frame(relay_id string, carrier_id string, fram
 		pipeline:      pipeline_id
 		kind:          relay_exchange_kind_from_frame(frame)
 		body:          frame.body
+		headers:       frame.headers.clone()
 		metadata:      frame.metadata.clone()
 		created_at_ms: created_at_ms
 	}

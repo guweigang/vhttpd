@@ -62,6 +62,7 @@ pub fn wire_frame_from_delivery_outcome(outcome dispatch.DeliveryOutcome) WireFr
 		route:          metadata['route'] or { metadata['pipeline'] or { '' } }
 		exchange_kind:  metadata['exchange_kind'] or { '' }
 		metadata:       metadata
+		headers:        outcome.headers.clone()
 		body:           metadata['body'] or { metadata['payload'] or { '' } }
 	}
 }

@@ -356,6 +356,43 @@ fn test_compile_v2_runtime_plan_loads_relay_public_example() {
 	assert plan.relay_delivery_owner_listener_ids('relay') == ['web']
 }
 
+fn test_compile_v2_runtime_plan_loads_mcp_relay_public_example() {
+	config_path := os.join_path(os.dir(@FILE), '..', '..', 'examples', 'config',
+		'mcp-relay-public-v2.toml')
+	text := os.read_file(config_path) or { panic(err) }
+	cfg := toml.decode[V2Config](text) or { panic(err) }
+
+	plan := compile_v2_runtime_plan(cfg, '', false) or { panic(err) }
+
+	assert plan.listeners['web'].protocol == 'http'
+	assert plan.listeners['relay'].protocol == 'websocket'
+	assert plan.relays['edge'].mode == 'hub'
+	assert plan.relays['edge'].ingress?.str() == 'listener:relay'
+	assert plan.adapters['mcp-relay'].kind == 'relay-delivery'
+	assert plan.adapters['mcp-relay'].options.strings['target'] == 'relay:edge'
+	assert plan.adapters['mcp-relay'].options.strings['route'] == 'relay/local-mcp'
+	assert plan.pipeline('public/mcp-relay')?.ingress.str() == 'listener:web'
+	assert plan.pipeline('public/mcp-relay')?.egress.str() == 'adapter:mcp-relay'
+	assert plan.relay_delivery_owner_listener_ids('relay') == ['web']
+}
+
+fn test_compile_v2_runtime_plan_loads_mcp_relay_local_example() {
+	config_path := os.join_path(os.dir(@FILE), '..', '..', 'examples', 'config',
+		'mcp-relay-local-v2.toml')
+	text := os.read_file(config_path) or { panic(err) }
+	cfg := toml.decode[V2Config](text) or { panic(err) }
+
+	plan := compile_v2_runtime_plan(cfg, '', false) or { panic(err) }
+
+	assert plan.engines['php'].kind == 'php-worker'
+	assert plan.relays['edge'].mode == 'agent'
+	assert plan.relays['edge'].options.strings['url'] == 'ws://127.0.0.1:19931/vhttpd/relay'
+	assert plan.adapters['mcp'].kind == 'mcp'
+	assert plan.adapters['mcp'].engine?.str() == 'engine:php'
+	assert plan.pipeline('relay/local-mcp')?.ingress.str() == 'relay:edge'
+	assert plan.pipeline('relay/local-mcp')?.egress.str() == 'adapter:mcp'
+}
+
 fn test_compile_v2_runtime_plan_allows_relay_delivery_adapter() {
 	cfg := V2Config{
 		listeners: {

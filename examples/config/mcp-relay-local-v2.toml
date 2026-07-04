@@ -1,0 +1,35 @@
+version = 2
+
+[server]
+timezone = "Asia/Shanghai"
+pid_file = "/tmp/vhttpd_mcp_relay_local_v2.pid"
+
+[observability]
+event_log = "/tmp/vhttpd_mcp_relay_local_v2.events.ndjson"
+
+[engines.php]
+kind = "php-worker"
+entry = "./php/package/bin/php-worker"
+app = "./examples/mcp-app.php"
+autostart = true
+pool_size = 1
+socket = "/tmp/vhttpd_mcp_relay_local.sock"
+
+[relays.edge]
+mode = "agent"
+carrier = "websocket"
+url = "ws://127.0.0.1:19931/vhttpd/relay"
+node_id = "mcp-relay-local"
+token = "change-me"
+autostart = true
+reconnect_delay_ms = 1000
+channel_buffer = 64
+
+[adapters.mcp]
+kind = "mcp"
+engine = "engine:php"
+
+[[pipelines]]
+id = "relay/local-mcp"
+ingress = "relay:edge"
+egress = "adapter:mcp"

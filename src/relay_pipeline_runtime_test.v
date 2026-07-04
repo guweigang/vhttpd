@@ -1,12 +1,101 @@
 module main
 
-import dispatch
 import config
+import dispatch
+import executor
 import os
 import plugin
 import relay
 import runtime_plan
+import upstream.transport
 import worker
+
+struct RelayMcpTestExecutor {}
+
+fn (e RelayMcpTestExecutor) model() executor.LogicExecutorModel {
+	_ = e
+	return .worker
+}
+
+fn (e RelayMcpTestExecutor) kind() string {
+	_ = e
+	return 'relay-mcp-test'
+}
+
+fn (e RelayMcpTestExecutor) provider() string {
+	_ = e
+	return 'relay-mcp-test'
+}
+
+fn (e RelayMcpTestExecutor) admin_details() executor.LogicExecutorAdminDetails {
+	_ = e
+	return executor.LogicExecutorAdminDetails{
+		kind:     'relay-mcp-test'
+		provider: 'relay-mcp-test'
+		model:    executor.LogicExecutorModel.worker.str()
+	}
+}
+
+fn (e RelayMcpTestExecutor) warmup(mut app executor.AppFacade) ! {
+	_ = e
+	_ = app
+}
+
+fn (e RelayMcpTestExecutor) close() {
+	_ = e
+}
+
+fn (e RelayMcpTestExecutor) dispatch_http(mut app executor.AppFacade, req executor.HttpLogicDispatchRequest) !executor.HttpLogicDispatchOutcome {
+	_ = e
+	_ = app
+	_ = req
+	return error('not_used')
+}
+
+fn (e RelayMcpTestExecutor) open_websocket_session(mut app executor.AppFacade, req executor.WebSocketSessionOpenRequest) !executor.WebSocketSessionOpenOutcome {
+	_ = e
+	_ = app
+	_ = req
+	return error('not_used')
+}
+
+fn (e RelayMcpTestExecutor) dispatch_stream(mut app executor.AppFacade, req transport.StreamDispatchRequest) !transport.StreamDispatchResponse {
+	_ = e
+	_ = app
+	_ = req
+	return error('not_used')
+}
+
+fn (e RelayMcpTestExecutor) dispatch_mcp(mut app executor.AppFacade, req transport.WorkerMcpDispatchRequest) !transport.WorkerMcpDispatchResponse {
+	_ = e
+	_ = app
+	return transport.WorkerMcpDispatchResponse{
+		mode:             'mcp'
+		event:            'message'
+		id:               req.id
+		handled:          true
+		status:           200
+		headers:          {
+			'content-type': 'application/json'
+		}
+		body:             '{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"${req.protocol_version}","capabilities":{},"serverInfo":{"name":"relay-test","version":"1.0.0"}}}'
+		protocol_version: req.protocol_version
+	}
+}
+
+fn (e RelayMcpTestExecutor) dispatch_websocket_upstream(mut app executor.AppFacade, req transport.WorkerWebSocketUpstreamDispatchRequest) !transport.WorkerWebSocketUpstreamDispatchResponse {
+	_ = e
+	_ = app
+	_ = req
+	return error('not_used')
+}
+
+fn (e RelayMcpTestExecutor) dispatch_websocket_event(mut app executor.AppFacade, frame transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse {
+	_ = e
+	_ = app
+	_ = frame
+	return error('not_used')
+}
 
 fn test_dispatch_relay_ingress_frame_runs_terminal_response_pipeline() {
 	mut app := App{
@@ -242,6 +331,109 @@ fn test_pipeline_runtime_matches_relay_delivery_http_route() {
 	assert matched.pipeline_id == 'public/relay'
 	assert plan_for_request.executor == 'relay-delivery'
 	assert plan_for_request.pipeline_id == 'public/relay'
+}
+
+fn test_relay_delivery_pipeline_can_override_protocol_mcp_route() {
+	plan := runtime_plan.RuntimePlan{
+		adapters:  {
+			'relay-edge': runtime_plan.AdapterPlan{
+				id:      'relay-edge'
+				kind:    'relay-delivery'
+				options: runtime_plan.PlanOptions{
+					strings: {
+						'target':          'relay:edge'
+						'completion_mode': 'wait'
+					}
+				}
+			}
+		}
+		pipelines: [
+			runtime_plan.PipelinePlan{
+				id:      'public/mcp-relay'
+				ingress: runtime_plan.ResourceRef{
+					domain: .listener
+					id:     'web'
+				}
+				match:   runtime_plan.MatchPlan{
+					methods: ['GET', 'POST', 'DELETE']
+					paths:   ['/mcp']
+				}
+				egress:  runtime_plan.ResourceRef{
+					domain: .adapter
+					id:     'relay-edge'
+				}
+			},
+		]
+	}
+	routes := runtime_routes_from_plan(plan, 'web')
+	runtime := PipelineRuntime.new(plan, 'web', routes, '', '', map[string]string{},
+		map[string]&worker.WorkerState{})
+
+	assert runtime.has_protocol_http_override(ProtocolHttpRequest{
+		method:            'POST'
+		target:            '/mcp'
+		normalized_target: '/mcp'
+		query:             map[string]string{}
+		headers:           map[string]string{}
+		body:              '{"jsonrpc":"2.0"}'
+		request_id:        'req-mcp-relay'
+		trace_id:          'trace-mcp-relay'
+		start_ms:          123
+	})
+}
+
+fn test_dispatch_relay_pipeline_exchange_delivers_mcp_adapter() {
+	mut app := App{
+		plan:    runtime_plan.RuntimePlan{
+			adapters: {
+				'mcp': runtime_plan.AdapterPlan{
+					id:      'mcp'
+					kind:    'mcp'
+					options: runtime_plan.PlanOptions{
+						ints: {
+							'max_sessions': 7
+						}
+					}
+				}
+			}
+		}
+		engines: EngineRuntime{
+			primary: worker.WorkerState{
+				logic_executor: RelayMcpTestExecutor{}
+			}
+		}
+	}
+	mut exchange := dispatch.relay_ingress_exchange(dispatch.RelayIngressRequest{
+		relay_id:    'edge'
+		carrier_id:  'agent:edge'
+		frame_id:    'frm-mcp'
+		channel_id:  'chan-mcp'
+		session_id:  'chan-mcp'
+		trace_id:    'trace-mcp'
+		request_id:  'req-mcp'
+		exchange_id: 'frm-mcp'
+		ingress:     'relay:edge'
+		pipeline:    'relay/local-mcp'
+		kind:        .request
+		body:        '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"relay-test","version":"1"}}}'
+		headers:     {
+			'content-type':         'application/json'
+			'mcp-protocol-version': '2025-06-18'
+		}
+		metadata:    {
+			'http_method': 'POST'
+			'path':        '/mcp'
+		}
+	})
+
+	mut services := noop_dispatch_services('trace-mcp')
+	outcome := app.dispatch_relay_pipeline_adapter_egress('mcp', mut services, exchange)
+
+	assert outcome.action == 'response'
+	assert outcome.status == 200
+	assert outcome.headers['mcp-protocol-version'] == '2025-06-18'
+	assert outcome.headers['mcp-session-id'] != ''
+	assert outcome.body.contains('"serverInfo"')
 }
 
 fn test_dispatch_and_send_relay_ingress_frame_reports_send_result() {
