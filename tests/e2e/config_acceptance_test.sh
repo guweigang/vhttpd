@@ -329,6 +329,49 @@ expect_http_method_status_header_contains_once() {
     return 1
 }
 
+expect_http_method_with_header_status_header_contains_once() {
+    local method="$1"
+    local url="$2"
+    local request_header="$3"
+    local expected_status="$4"
+    local header="$5"
+    local needle="$6"
+    local label="$7"
+    local max_time="${8:-3}"
+    local header_file="${TMP_ROOT}/headers.$RANDOM"
+    local lower_header
+    local status
+    lower_header="$(printf '%s' "$header" | tr '[:upper:]' '[:lower:]')"
+    status="$(curl -sS -X "$method" -H "$request_header" --max-time "$max_time" -D "$header_file" -o /dev/null -w '%{http_code}' "$url" 2>/dev/null || true)"
+    if [[ "$status" == "$expected_status" ]] && awk -v h="$lower_header" -v n="$needle" '
+        BEGIN { found = 0 }
+        {
+            line = $0
+            sub(/\r$/, "", line)
+            lower = tolower(line)
+            if (index(lower, h ":") == 1 && index(line, n) > 0) {
+                found = 1
+            }
+        }
+        END { exit(found ? 0 : 1) }
+    ' "$header_file"; then
+        ok "$label"
+        return 0
+    fi
+    ko "$label"
+    echo "    method: $method"
+    echo "    url: $url"
+    echo "    request header: $request_header"
+    echo "    expected status: $expected_status"
+    echo "    actual status: ${status:-}"
+    echo "    header: $header"
+    echo "    expected header value: $needle"
+    echo "    actual headers:"
+    sed 's/^/      /' "$header_file" 2>/dev/null || true
+    print_logs
+    return 1
+}
+
 wait_http_post_contains() {
     local url="$1"
     local data="$2"
@@ -2376,6 +2419,11 @@ test_provider_runtime_smoke() {
         "mcp admin runtime normalizes invalid sampling policy"
     wait_http_contains "http://127.0.0.1:${mcp_admin_port}/admin/runtime/plan" '"mcp_sampling_capability_policy_invalid"' \
         "mcp admin plan exposes sampling policy diagnostic"
+    expect_http_method_with_header_status_header_contains_once "DELETE" \
+        "http://127.0.0.1:${mcp_port}/mcp?trace_id=e2e-mcp-delete-missing-session" \
+        "Origin: http://127.0.0.1:${mcp_port}" \
+        "400" "x-vhttpd-error-class" "missing_session_id" \
+        "mcp delete without session id exposes error class"
     local mcp_data_plane_port
     mcp_data_plane_port="$(free_port)"
     local mcp_data_plane_config="${TMP_ROOT}/mcp-runtime-dataplane.toml"
