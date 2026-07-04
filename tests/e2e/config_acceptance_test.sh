@@ -2180,6 +2180,9 @@ test_relay_smoke() {
     wait "$agent_pid" >/dev/null 2>&1 || true
     wait_http_status_contains "http://127.0.0.1:${public_port}/relay?trace_id=e2e-relay-disconnected" "503" "" \
         "relay request fails fast while agent is disconnected"
+    wait_http_header_contains "http://127.0.0.1:${public_port}/relay?trace_id=e2e-relay-disconnected-header" \
+        "x-vhttpd-error-class" "relay_carrier_unavailable" \
+        "relay disconnected failure exposes error class"
     wait_event_contains "${TMP_ROOT}/relay-public.events.ndjson" "e2e-relay-disconnected" \
         "relay disconnected failure preserves trace id"
     wait_event_contains "${TMP_ROOT}/relay-public.events.ndjson" "relay_carrier_unavailable" \
