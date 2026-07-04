@@ -1971,6 +1971,12 @@ test_wordpress_installed_v2_smoke() {
     wait_http_contains_with_header "${base_url}/meta?trace_id=e2e-wordpress-installed-https" \
         "X-Forwarded-Proto: https" '"home":"https' \
         "wordpress installed v2 honors forwarded https scheme"
+    wait_http_header_contains "${base_url}/meta?cache_case=installed-set-cookie&trace_id=e2e-wordpress-installed-cache-set-cookie" \
+        "x-vhttpd-cache" "bypass" \
+        "wordpress installed v2 bypasses cache when worker sets cookies"
+    wait_http_header_contains "${base_url}/meta?cache_case=installed-set-cookie&trace_id=e2e-wordpress-installed-cache-set-cookie" \
+        "x-vhttpd-cache-reason" "set_cookie" \
+        "wordpress installed v2 reports set-cookie cache bypass reason"
     wait_http_status_contains "${base_url}/?trace_id=e2e-wordpress-installed-home" \
         "301" "Redirecting to ${canonical_base}/" \
         "wordpress installed v2 front page reaches WordPress canonical redirect"
