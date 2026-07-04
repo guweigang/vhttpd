@@ -59,8 +59,10 @@ pub:
 pub struct ProviderRuntimeSettings {
 pub:
 	runtime_drivers      map[string]string
+	runtime_protocols    map[string]string
 	runtime_plugins      map[string]string
 	runtime_capabilities map[string]map[string]string
+	runtime_hooks        map[string]map[string]string
 	runtime_options      map[string]map[string]string
 	feishu               FeishuRuntimeSettings
 	codex                CodexRuntimeSettings
@@ -119,8 +121,10 @@ pub fn ProviderRuntimeSettings.resolve(args []string, cfg config.VhttpdConfig) P
 
 	return ProviderRuntimeSettings{
 		runtime_drivers:      runtime_drivers
+		runtime_protocols:    map[string]string{}
 		runtime_plugins:      runtime_plugins
 		runtime_capabilities: runtime_capabilities
+		runtime_hooks:        map[string]map[string]string{}
 		runtime_options:      runtime_options
 		feishu:               FeishuRuntimeSettings{
 			enabled:                    feishu_enabled

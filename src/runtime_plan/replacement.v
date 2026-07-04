@@ -327,8 +327,7 @@ fn changed_transform_ids(old RuntimePlan, new RuntimePlan, changed_engines []str
 		old_transform := old.transforms[id] or { TransformPlan{} }
 		new_transform := new.transforms[id] or { TransformPlan{} }
 		if transform_fingerprint(old_transform) != transform_fingerprint(new_transform)
-			|| optional_ref_engine_changed(old_transform.engine, new_transform.engine,
-				changed_engines) {
+			|| optional_ref_engine_changed(old_transform.engine, new_transform.engine, changed_engines) {
 			out << id
 		}
 	}
@@ -355,8 +354,7 @@ fn changed_provider_ids(old RuntimePlan, new RuntimePlan, changed_engines []stri
 		old_provider := old.providers[id] or { ProviderPlan{} }
 		new_provider := new.providers[id] or { ProviderPlan{} }
 		if provider_fingerprint(old_provider) != provider_fingerprint(new_provider)
-			|| optional_ref_engine_changed(old_provider.engine, new_provider.engine,
-				changed_engines) {
+			|| optional_ref_engine_changed(old_provider.engine, new_provider.engine, changed_engines) {
 			out << id
 		}
 	}
@@ -447,7 +445,7 @@ fn policy_fingerprint(value PolicyPlan) string {
 }
 
 fn provider_fingerprint(value ProviderPlan) string {
-	return '${value.id}|${value.driver}|${value.plugin}|${optional_ref_fingerprint(value.engine)}|${string_map_fingerprint(value.capabilities)}|${options_fingerprint(value.options)}'
+	return '${value.id}|${value.driver}|${value.protocol}|${value.plugin}|${optional_ref_fingerprint(value.engine)}|${string_map_fingerprint(value.capabilities)}|${options_fingerprint(value.options)}'
 }
 
 fn pipeline_fingerprint(value PipelinePlan) string {

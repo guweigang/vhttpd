@@ -11,10 +11,7 @@ fn test_provider_websocket_normalize_hook_dispatches_provider_ingress_event() {
 	os.mkdir_all(temp_dir) or { panic(err) }
 	plugin_file := os.join_path(temp_dir, 'provider-ws-hooks.mts')
 	os.write_file(plugin_file, "
-export function plugin(req) {
-  if (req.op !== 'websocket_normalize') {
-    return { skip: true };
-  }
+export function normalize(req) {
   const payload = JSON.parse(req.payload);
   const event = JSON.parse(payload.payload);
   return {
@@ -73,13 +70,15 @@ export function plugin(req) {
 			]
 		}
 		providers: ProviderRuntimeHub.new(provider.ProviderRuntimeSettings{
-			runtime_plugins: {
+			runtime_protocols: {
+				'feishu': 'websocket'
+			}
+			runtime_plugins:   {
 				'feishu': 'feishu-ws-hooks'
 			}
-			runtime_options: {
+			runtime_hooks:     {
 				'feishu': {
-					'protocol':         'websocket'
-					'normalize_plugin': 'feishu-ws-hooks'
+					'normalize': 'normalize'
 				}
 			}
 		})
@@ -93,6 +92,13 @@ export function plugin(req) {
 	defer {
 		app.close_all_plugins()
 	}
+
+	resp := app.call_provider_websocket_hook('feishu', 'main', 'normalize',
+		'wss://provider.test/ws', '{"type":"im.message.receive_v1","text":"hello"}', {
+		'transport': 'websocket'
+	}, 'req-normalize-probe', 'trace-normalize-probe') or { panic(err) }
+	assert resp.result.contains('im.message.receive_v1')
+	assert resp.result.contains('vjsx-normalize')
 
 	ok := app.dispatch_provider_websocket_normalized_event('feishu', 'main',
 		'wss://provider.test/ws', '{"type":"im.message.receive_v1","text":"hello"}', {

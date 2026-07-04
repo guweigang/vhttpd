@@ -39,7 +39,11 @@ fn InProcVjsxEntryResolver.module_aliases(kind string) []string {
 			['snapshot', 'lane_snapshot', 'laneSnapshot']
 		}
 		else {
-			[]string{}
+			if kind.trim_space() != '' {
+				[kind.trim_space()]
+			} else {
+				[]string{}
+			}
 		}
 	}
 }

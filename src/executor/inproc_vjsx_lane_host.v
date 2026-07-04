@@ -106,6 +106,19 @@ fn (host VjsxLaneHost) call_global_entry(kind string, arg vjsx.Value) !vjsx.Valu
 	ctx := host.context()
 	global_name := InProcVjsxEntryResolver.global_handler_name(kind)
 	if global_name == '' {
+		exports_value := ctx.js_global('__vhttpd_module_exports')
+		defer {
+			exports_value.free()
+		}
+		if exports_value.is_object() && exports_value.has(kind) {
+			handler := exports_value.get(kind)
+			defer {
+				handler.free()
+			}
+			if handler.is_function() {
+				return host.session.call(handler, arg)
+			}
+		}
 		return error('inproc_vjsx_executor_missing_${kind}_handler')
 	}
 	handler := ctx.js_global(global_name)

@@ -9,14 +9,18 @@ fn provider_runtime_settings_from_plan(plan runtime_plan.RuntimePlan, listener_i
 	feishu_settings := feishu_runtime_settings_from_plan(plan, listener_id) or { fallback.feishu }
 	codex_settings, ollama_enabled := codex_runtime_settings_from_plan(plan, listener_id, fallback)
 	runtime_drivers, runtime_plugins := provider_runtime_maps_from_plan(plan, fallback)
+	runtime_protocols := provider_runtime_protocol_maps_from_plan(plan, fallback)
 	runtime_capabilities := provider_runtime_capability_maps_from_plan(plan, fallback)
+	runtime_hooks := provider_runtime_hook_maps_from_plan(plan, fallback)
 	runtime_options := provider_runtime_option_maps_from_plan(plan, fallback)
 	feishu_driver := runtime_drivers['feishu'] or { fallback.feishu.runtime_driver }
 	feishu_plugin := runtime_plugins['feishu'] or { fallback.feishu.runtime_plugin }
 	return provider.ProviderRuntimeSettings{
 		runtime_drivers:      runtime_drivers
+		runtime_protocols:    runtime_protocols
 		runtime_plugins:      runtime_plugins
 		runtime_capabilities: runtime_capabilities
+		runtime_hooks:        runtime_hooks
 		runtime_options:      runtime_options
 		feishu:               provider.FeishuRuntimeSettings{
 			...feishu_settings
@@ -40,6 +44,31 @@ fn provider_runtime_capability_maps_from_plan(plan runtime_plan.RuntimePlan, fal
 		}
 	}
 	return capabilities
+}
+
+fn provider_runtime_protocol_maps_from_plan(plan runtime_plan.RuntimePlan, fallback provider.ProviderRuntimeSettings) map[string]string {
+	mut protocols := fallback.runtime_protocols.clone()
+	for id, provider_plan in plan.providers {
+		protocol := provider_plan.protocol.trim_space()
+		if protocol != '' {
+			protocols[id] = protocol
+		} else {
+			protocols.delete(id)
+		}
+	}
+	return protocols
+}
+
+fn provider_runtime_hook_maps_from_plan(plan runtime_plan.RuntimePlan, fallback provider.ProviderRuntimeSettings) map[string]map[string]string {
+	mut hooks := fallback.runtime_hooks.clone()
+	for id, provider_plan in plan.providers {
+		if provider_plan.options.string_maps['hooks'].len > 0 {
+			hooks[id] = provider_plan.options.string_maps['hooks'].clone()
+		} else {
+			hooks.delete(id)
+		}
+	}
+	return hooks
 }
 
 fn provider_runtime_option_maps_from_plan(plan runtime_plan.RuntimePlan, fallback provider.ProviderRuntimeSettings) map[string]map[string]string {

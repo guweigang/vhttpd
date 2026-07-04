@@ -1202,6 +1202,22 @@ function handle(ctx) {
   }, 202);
 }
 
+export function handshake() {
+  return { send: [] };
+}
+
+export function normalize(req) {
+  const payload = JSON.parse(req.payload);
+  return {
+    topic: 'provider.feishu',
+    name: payload.metadata.event_type || 'provider.feishu',
+    data: payload.payload,
+    metadata: payload.metadata,
+    request_id: req.request_id,
+    trace_id: req.trace_id,
+  };
+}
+
 globalThis.__vhttpd_handle = handle;
 export default handle;
 EOF
@@ -1378,14 +1394,13 @@ port = ${port}
 
 [providers.feishu.runtime]
 driver = "native"
+protocol = "websocket"
 plugin = "feishu-provider-hooks"
 engine = "engine:provider-events"
 
-[providers.feishu.options]
-protocol = "websocket"
-handshake_plugin = "feishu-provider-hooks"
-normalize_plugin = "feishu-provider-hooks"
-normalize_capability = "feishu.event.normalize"
+[providers.feishu.hooks]
+handshake = "handshake"
+normalize = "normalize"
 
 [engines.provider-events]
 kind = "vjsx"

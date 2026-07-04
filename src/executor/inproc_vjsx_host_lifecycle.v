@@ -92,14 +92,6 @@ pub fn (e InProcVjsxExecutor) ensure_lane_host(idx int) ! {
 			|| InProcVjsxEntryResolver.module_has_callable(&module_binding_value, 'openai')
 			|| InProcVjsxEntryResolver.global_has_callable(ctx, 'plugin')
 			|| InProcVjsxEntryResolver.global_has_callable(ctx, 'openai')
-		if !has_http_handler && !has_websocket_handler && !has_upstream_handler
-			&& !has_plugin_handler {
-			mut cleanup_binding := module_binding_value
-			cleanup_binding.close()
-			session.close()
-			os.rmdir_all(temp_root) or {} // safe to ignore: temp dir may already be removed
-			return error('inproc_vjsx_executor_missing_handler')
-		}
 		bind_handlers := ctx.js_global('__vhttpd_bind_handlers')
 		defer {
 			bind_handlers.free()

@@ -147,6 +147,7 @@ pub struct ProviderPlan {
 pub:
 	id           string
 	driver       string = 'native'
+	protocol     string
 	plugin       string
 	engine       ?ResourceRef
 	capabilities map[string]string

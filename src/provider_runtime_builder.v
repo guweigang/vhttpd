@@ -11,8 +11,10 @@ fn ProviderRuntimeHub.new(settings provider.ProviderRuntimeSettings) ProviderRun
 			specs:    map[string]ProviderSpec{}
 		}
 		runtime_drivers:      settings.runtime_drivers.clone()
+		runtime_protocols:    settings.runtime_protocols.clone()
 		runtime_plugins:      settings.runtime_plugins.clone()
 		runtime_capabilities: settings.runtime_capabilities.clone()
+		runtime_hooks:        settings.runtime_hooks.clone()
 		runtime_options:      settings.runtime_options.clone()
 		instances:            provider.ProviderInstanceRegistry{
 			specs: map[string]provider.ProviderInstanceSpec{}
@@ -34,6 +36,17 @@ fn (hub ProviderRuntimeHub) provider_runtime_plugin(name string) string {
 	return hub.runtime_plugins[name] or { '' }
 }
 
+fn (hub ProviderRuntimeHub) provider_runtime_protocol(name string) string {
+	return hub.runtime_protocols[name] or { '' }
+}
+
+fn (hub ProviderRuntimeHub) provider_runtime_hook(provider_name string, hook string) string {
+	if hooks := hub.runtime_hooks[provider_name] {
+		return hooks[hook] or { '' }
+	}
+	return ''
+}
+
 fn (hub ProviderRuntimeHub) provider_runtime_capability(provider_name string, action string) string {
 	if capabilities := hub.runtime_capabilities[provider_name] {
 		capability := capabilities[action] or { '' }
@@ -53,8 +66,10 @@ fn (hub ProviderRuntimeHub) provider_runtime_option(provider_name string, key st
 
 fn (mut hub ProviderRuntimeHub) apply_provider_runtime_settings(settings provider.ProviderRuntimeSettings) {
 	hub.runtime_drivers = settings.runtime_drivers.clone()
+	hub.runtime_protocols = settings.runtime_protocols.clone()
 	hub.runtime_plugins = settings.runtime_plugins.clone()
 	hub.runtime_capabilities = settings.runtime_capabilities.clone()
+	hub.runtime_hooks = settings.runtime_hooks.clone()
 	hub.runtime_options = settings.runtime_options.clone()
 	for name, spec in hub.registry.specs {
 		hub.registry.specs[name] = ProviderSpec{
@@ -67,8 +82,10 @@ fn (mut hub ProviderRuntimeHub) apply_provider_runtime_settings(settings provide
 fn (hub ProviderRuntimeHub) provider_runtime_settings_snapshot() provider.ProviderRuntimeSettings {
 	return provider.ProviderRuntimeSettings{
 		runtime_drivers:      hub.runtime_drivers.clone()
+		runtime_protocols:    hub.runtime_protocols.clone()
 		runtime_plugins:      hub.runtime_plugins.clone()
 		runtime_capabilities: hub.runtime_capabilities.clone()
+		runtime_hooks:        hub.runtime_hooks.clone()
 		runtime_options:      hub.runtime_options.clone()
 		feishu:               provider.FeishuRuntimeSettings{
 			runtime_driver: hub.provider_runtime_driver('feishu')

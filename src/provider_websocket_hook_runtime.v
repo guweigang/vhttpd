@@ -38,35 +38,22 @@ pub:
 }
 
 fn (mut app App) provider_websocket_hook_plugin(provider_name string, hook string) string {
-	if app.providers.provider_runtime_option(provider_name, 'protocol').trim_space().to_lower() !in [
+	_ = hook
+	if app.providers.provider_runtime_protocol(provider_name).trim_space().to_lower() !in [
 		'websocket',
 		'ws',
 	] {
 		return ''
 	}
-	option_plugin := app.providers.provider_runtime_option(provider_name, '${hook}_plugin')
-	if option_plugin.trim_space() != '' {
-		return option_plugin.trim_space()
-	}
-	legacy_plugin := app.providers.provider_runtime_option(provider_name,
-		'websocket_${hook}_plugin')
-	if legacy_plugin.trim_space() != '' {
-		return legacy_plugin.trim_space()
-	}
-	return ''
+	return app.providers.provider_runtime_plugin(provider_name)
 }
 
-fn (mut app App) provider_websocket_hook_capability(provider_name string, hook string) string {
-	option_capability := app.providers.provider_runtime_option(provider_name, '${hook}_capability')
-	if option_capability.trim_space() != '' {
-		return option_capability.trim_space()
+fn (mut app App) provider_websocket_hook_method(provider_name string, hook string) string {
+	method := app.providers.provider_runtime_hook(provider_name, hook).trim_space()
+	if method != '' {
+		return method
 	}
-	legacy_capability := app.providers.provider_runtime_option(provider_name,
-		'websocket_${hook}_capability')
-	if legacy_capability.trim_space() != '' {
-		return legacy_capability.trim_space()
-	}
-	return app.providers.provider_runtime_capability(provider_name, 'websocket_${hook}')
+	return hook
 }
 
 fn provider_websocket_hook_payload(provider_name string, instance string, ws_url string, payload string, metadata map[string]string) string {
@@ -86,7 +73,7 @@ fn (mut app App) call_provider_websocket_hook(provider_name string, instance str
 	}
 	return app.call_plugin(PluginCallRequest{
 		plugin:     plugin_name
-		capability: app.provider_websocket_hook_capability(provider_name, hook)
+		capability: app.provider_websocket_hook_method(provider_name, hook)
 		op:         'websocket_${hook}'
 		request_id: request_id
 		trace_id:   trace_id

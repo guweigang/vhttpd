@@ -344,9 +344,9 @@ fn validate_v2_config_keys(doc toml.Doc, root map[string]toml.Any) ! {
 		'signature_include', 'signature_exclude', 'resources', 'capabilities', 'env', 'args',
 		'extensions', 'options'])!
 	validate_named_specs(root, 'adapters', ['kind', 'engine', 'storage', 'document_root', 'index',
-		'root', 'base_url', 'timeout_ms', 'max_body_bytes', 'completed_pipeline', 'topic',
-		'provider', 'action', 'capability', 'runtime_driver', 'runtime_plugin', 'runtime_engine',
-		'options', 'int_options', 'bool_options', 'list_options', 'map_options', 'record_options'])!
+		'root', 'base_url', 'timeout_ms', 'max_body_bytes', 'completed_pipeline', 'topic', 'provider',
+		'action', 'capability', 'runtime_driver', 'runtime_plugin', 'runtime_engine', 'options',
+		'int_options', 'bool_options', 'list_options', 'map_options', 'record_options'])!
 	validate_named_specs(root, 'transforms', ['kind', 'engine', 'handler', 'target', 'strip_prefix',
 		'options', 'int_options', 'bool_options', 'list_options', 'map_options', 'record_options'])!
 	validate_policy_specs(root)!
@@ -362,11 +362,12 @@ fn validate_provider_specs(doc toml.Doc) ! {
 	if value is map[string]toml.Any {
 		for id, spec_any in value {
 			if spec_any is map[string]toml.Any {
-				validate_keys(spec_any, 'providers.${id}', ['runtime', 'capabilities', 'runtime_driver',
-					'runtime_plugin', 'options'])!
+				validate_keys(spec_any, 'providers.${id}', ['runtime', 'hooks', 'capabilities',
+					'runtime_driver', 'runtime_plugin', 'options'])!
 				runtime_any := spec_any['runtime'] or { continue }
 				if runtime_any is map[string]toml.Any {
-					validate_keys(runtime_any, 'providers.${id}.runtime', ['driver', 'plugin', 'engine'])!
+					validate_keys(runtime_any, 'providers.${id}.runtime', ['driver', 'protocol',
+						'plugin', 'engine'])!
 				}
 			}
 		}

@@ -260,6 +260,7 @@ pub mut:
 pub struct V2ProviderSpec {
 pub mut:
 	runtime        V2ProviderRuntimeSpec
+	hooks          map[string]string
 	capabilities   map[string]string
 	runtime_driver string @[toml: 'runtime_driver']
 	runtime_plugin string @[toml: 'runtime_plugin']
@@ -268,9 +269,10 @@ pub mut:
 
 pub struct V2ProviderRuntimeSpec {
 pub mut:
-	driver string = 'native'
-	plugin string
-	engine string
+	driver   string = 'native'
+	protocol string
+	plugin   string
+	engine   string
 }
 
 pub struct V2PipelineSpec {

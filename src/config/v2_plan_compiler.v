@@ -90,11 +90,15 @@ fn compile_v2_runtime_plan_with_diagnostics(cfg V2Config, source_path string, co
 		providers[id] = runtime_plan.ProviderPlan{
 			id:           id
 			driver:       if driver.trim_space() != '' { driver } else { 'native' }
+			protocol:     spec.runtime.protocol
 			plugin:       plugin
 			engine:       engine_ref.option()
 			capabilities: spec.capabilities.clone()
 			options:      runtime_plan.PlanOptions{
-				strings: spec.options.clone()
+				strings:     spec.options.clone()
+				string_maps: {
+					'hooks': spec.hooks.clone()
+				}
 			}
 		}
 	}
