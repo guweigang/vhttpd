@@ -288,6 +288,47 @@ expect_http_status_header_contains_once() {
     return 1
 }
 
+expect_http_method_status_header_contains_once() {
+    local method="$1"
+    local url="$2"
+    local expected_status="$3"
+    local header="$4"
+    local needle="$5"
+    local label="$6"
+    local max_time="${7:-3}"
+    local header_file="${TMP_ROOT}/headers.$RANDOM"
+    local lower_header
+    local status
+    lower_header="$(printf '%s' "$header" | tr '[:upper:]' '[:lower:]')"
+    status="$(curl -sS -X "$method" --max-time "$max_time" -D "$header_file" -o /dev/null -w '%{http_code}' "$url" 2>/dev/null || true)"
+    if [[ "$status" == "$expected_status" ]] && awk -v h="$lower_header" -v n="$needle" '
+        BEGIN { found = 0 }
+        {
+            line = $0
+            sub(/\r$/, "", line)
+            lower = tolower(line)
+            if (index(lower, h ":") == 1 && index(line, n) > 0) {
+                found = 1
+            }
+        }
+        END { exit(found ? 0 : 1) }
+    ' "$header_file"; then
+        ok "$label"
+        return 0
+    fi
+    ko "$label"
+    echo "    method: $method"
+    echo "    url: $url"
+    echo "    expected status: $expected_status"
+    echo "    actual status: ${status:-}"
+    echo "    header: $header"
+    echo "    expected header value: $needle"
+    echo "    actual headers:"
+    sed 's/^/      /' "$header_file" 2>/dev/null || true
+    print_logs
+    return 1
+}
+
 wait_http_post_contains() {
     local url="$1"
     local data="$2"
@@ -892,6 +933,11 @@ kind = "fixed-response"
 options.status = "403"
 options.body = "Forbidden"
 
+[adapters.empty-204]
+kind = "fixed-response"
+options.status = "204"
+options.body = ""
+
 [policies.cache.asset-short]
 cache_control = "public, max-age=3600"
 
@@ -900,6 +946,12 @@ cache_control = "public, max-age=30"
 ttl_ms = 30000
 bypass_cookie_patterns = ["wordpress_logged_in_*", "wordpress_sec_*", "wp-postpass_*", "comment_author_*", "woocommerce_items_in_cart", "woocommerce_cart_hash", "wp_woocommerce_session_*"]
 ignore_cookie_patterns = ["wordpress_test_cookie", "wp-settings-*", "wp-settings-time-*"]
+
+[policies.response.wp-json-options.headers]
+Access-Control-Allow-Methods = "GET, HEAD, OPTIONS"
+Access-Control-Allow-Headers = "Content-Type, Authorization"
+Access-Control-Max-Age = "600"
+X-Content-Type-Options = "nosniff"
 
 [[pipelines]]
 id = "assets.by-extension"
@@ -923,6 +975,15 @@ group = "wordpress.security"
 ingress = "listener:web"
 match.paths = ["/wp-config.php", "/wp-config-sample.php", "/wp-load.php", "/wp-settings.php", "/wp-blog-header.php"]
 egress = "adapter:forbidden"
+
+[[pipelines]]
+id = "rest.pretty-options"
+group = "wordpress.rest"
+ingress = "listener:web"
+match.methods = ["OPTIONS"]
+match.paths = ["/wp-json", "/wp-json/*"]
+policies = ["policy:response/wp-json-options"]
+egress = "adapter:empty-204"
 
 [[pipelines]]
 id = "wordpress.meta"
@@ -1840,6 +1901,14 @@ test_wordpress_v2_smoke() {
     wait_http_header_contains_with_cookie "http://127.0.0.1:${port}/meta?cache_case=login&trace_id=e2e-wordpress-v2-cache-bypass" \
         "wordpress_logged_in_abc=token" "x-vhttpd-cache-reason" "cookie:wordpress_logged_in_abc" \
         "wordpress v2 response cache reports logged-in bypass reason"
+    expect_http_method_status_header_contains_once "OPTIONS" \
+        "http://127.0.0.1:${port}/wp-json?trace_id=e2e-wordpress-v2-rest-options" \
+        "204" "access-control-allow-methods" "GET, HEAD, OPTIONS" \
+        "wordpress v2 REST OPTIONS returns CORS methods"
+    expect_http_method_status_header_contains_once "OPTIONS" \
+        "http://127.0.0.1:${port}/wp-json?trace_id=e2e-wordpress-v2-rest-options" \
+        "204" "x-content-type-options" "nosniff" \
+        "wordpress v2 REST OPTIONS applies response headers"
     wait_http_contains "http://127.0.0.1:${port}/wp-content/themes/demo/style.css?trace_id=e2e-wordpress-v2-asset" \
         'vhttpd wordpress smoke' "wordpress v2 static pipeline serves wp-content asset"
     wait_http_header_contains "http://127.0.0.1:${port}/wp-content/themes/demo/style.css" \
@@ -1856,6 +1925,8 @@ test_wordpress_v2_smoke() {
         "wordpress v2 admin plan exposes wordpress asset pipeline"
     wait_http_contains "http://127.0.0.1:${admin_port}/admin/runtime/plan" '"security.deny-core-files"' \
         "wordpress v2 admin plan exposes security pipeline"
+    wait_http_contains "http://127.0.0.1:${admin_port}/admin/runtime/plan" '"rest.pretty-options"' \
+        "wordpress v2 admin plan exposes REST options pipeline"
     wait_event_contains "${TMP_ROOT}/wordpress-v2.events.ndjson" "e2e-wordpress-v2-meta" \
         "wordpress v2 worker request preserves trace id"
     wait_event_contains "${TMP_ROOT}/wordpress-v2.events.ndjson" "e2e-wordpress-v2-asset" \
