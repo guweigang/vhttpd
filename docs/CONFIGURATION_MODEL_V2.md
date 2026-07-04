@@ -474,6 +474,22 @@ api_key = "${env.OPENAI_API_KEY}"
 
 This avoids new global `[feishu]` or `[openai]` schemas.
 
+Provider runtimes that maintain outbound/native protocol connections keep the transport protocol on the runtime spec and expose business hooks as method names on one plugin module:
+
+```toml
+[providers.feishu.runtime]
+driver = "native"
+protocol = "websocket"
+plugin = "feishu-provider-hooks"
+engine = "engine:provider-events"
+
+[providers.feishu.hooks]
+handshake = "handshake"
+normalize = "normalize"
+```
+
+The native runtime owns connection lifecycle, reconnects, and frame IO. The VJSX plugin owns business-level handshakes and event normalization by exporting matching functions from the same module, for example `export function handshake(ctx)` and `export function normalize(ctx)`. Hook values are method names, not separate plugin identifiers or dotted capability names.
+
 ### Transforms
 
 Transforms operate on Exchanges:
