@@ -2021,6 +2021,8 @@ test_wordpress_installed_v2_smoke() {
         "wordpress installed v2 cart request preserves trace id"
     wait_event_contains "${TMP_ROOT}/wordpress-installed-v2.events.ndjson" "e2e-wordpress-installed-rest" \
         "wordpress installed v2 REST request preserves trace id"
+    wait_event_contains "${TMP_ROOT}/wordpress-installed-v2.events.ndjson" '"cache_reason":"set_cookie"' \
+        "wordpress installed v2 set-cookie cache bypass reason is observable"
     wait_event_contains "${TMP_ROOT}/wordpress-installed-v2.events.ndjson" '"cache_reason":"cookie:woocommerce_items_in_cart"' \
         "wordpress installed v2 WooCommerce cache bypass reason is observable"
 }
