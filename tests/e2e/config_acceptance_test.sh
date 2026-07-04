@@ -2325,6 +2325,10 @@ test_provider_runtime_smoke() {
     wait_http_post_contains "http://127.0.0.1:${action_port}/provider-action?trace_id=e2e-provider-action-replaced" \
         '{"receive_id":"chat-e2e"}' '"source":"vjsx-provider-action-next"' \
         "provider-action pipeline uses replaced vjsx provider runtime"
+    wait_event_contains "${TMP_ROOT}/provider-action-runtime.events.ndjson" "e2e-provider-action" \
+        "provider-action runtime request preserves trace id"
+    wait_event_contains "${TMP_ROOT}/provider-action-runtime.events.ndjson" "e2e-provider-action-replaced" \
+        "provider-action replaced request preserves trace id"
     local data_plane_port
     data_plane_port="$(free_port)"
     local data_plane_config="${TMP_ROOT}/provider-runtime-dataplane.toml"
