@@ -436,6 +436,53 @@ fn test_dispatch_relay_pipeline_exchange_delivers_mcp_adapter() {
 	assert outcome.body.contains('"serverInfo"')
 }
 
+fn test_dispatch_relay_pipeline_exchange_rejects_mcp_upstream_without_url() {
+	mut app := App{
+		plan: runtime_plan.RuntimePlan{
+			adapters: {
+				'local-mcp': runtime_plan.AdapterPlan{
+					id:   'local-mcp'
+					kind: 'mcp-upstream'
+				}
+			}
+		}
+	}
+	mut exchange := dispatch.relay_ingress_exchange(dispatch.RelayIngressRequest{
+		relay_id:    'edge'
+		carrier_id:  'agent:edge'
+		frame_id:    'frm-mcp-upstream'
+		channel_id:  'chan-mcp-upstream'
+		trace_id:    'trace-mcp-upstream'
+		request_id:  'req-mcp-upstream'
+		exchange_id: 'frm-mcp-upstream'
+		ingress:     'relay:edge'
+		pipeline:    'relay/local-mcp'
+		kind:        .request
+		body:        '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+		headers:     {
+			'content-type': 'application/json'
+		}
+		metadata:    {
+			'http_method': 'POST'
+			'path':        '/mcp'
+		}
+	})
+
+	mut services := noop_dispatch_services('trace-mcp-upstream')
+	outcome := app.dispatch_relay_pipeline_adapter_egress('local-mcp', mut services, exchange)
+
+	assert outcome.action == 'failed'
+	assert outcome.status == 500
+	assert outcome.error_class == 'mcp_upstream_missing_url'
+}
+
+fn test_mcp_upstream_http_method_normalizes_methods() {
+	assert mcp_upstream_http_method('POST').str() == 'POST'
+	assert mcp_upstream_http_method('delete').str() == 'DELETE'
+	assert mcp_upstream_http_method('OPTIONS').str() == 'OPTIONS'
+	assert mcp_upstream_http_method('').str() == 'GET'
+}
+
 fn test_dispatch_and_send_relay_ingress_frame_reports_send_result() {
 	mut app := App{
 		plan: runtime_plan.RuntimePlan{

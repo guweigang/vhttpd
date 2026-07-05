@@ -267,6 +267,9 @@ fn test_relay_delivery_adapter_projects_http_request_to_relay_delivery() {
 	exchange := http_request_exchange(HttpIngressRequest{
 		method:      'POST'
 		path:        '/relay'
+		query:       {
+			'trace_id': 'trace-query'
+		}
 		headers:     {
 			'x-relay-test': '1'
 		}
@@ -296,6 +299,7 @@ fn test_relay_delivery_adapter_projects_http_request_to_relay_delivery() {
 	assert outcome.metadata['body'] == 'payload'
 	assert outcome.metadata['http_method'] == 'POST'
 	assert outcome.metadata['path'] == '/relay'
+	assert outcome.metadata['query.trace_id'] == 'trace-query'
 	assert outcome.metadata['completion_mode'] == 'accepted'
 	assert outcome.headers['x-relay-test'] == '1'
 }

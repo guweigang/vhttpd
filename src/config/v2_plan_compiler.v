@@ -712,6 +712,11 @@ fn validate_adapter_semantics(plan runtime_plan.RuntimePlan) ! {
 					return error('runtime_plan_adapter_missing_target:${id}')
 				}
 			}
+			'mcp-upstream' {
+				if adapter.options.strings['url'].trim_space() == '' {
+					return error('runtime_plan_adapter_missing_url:${id}')
+				}
+			}
 			'provider-action' {
 				if adapter.options.strings['provider'].trim_space() == '' {
 					return error('runtime_plan_adapter_missing_provider:${id}')

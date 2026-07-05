@@ -1,0 +1,27 @@
+version = 2
+
+[server]
+timezone = "Asia/Shanghai"
+pid_file = "/tmp/vhttpd_mcp_relay_local_upstream_v2.pid"
+
+[observability]
+event_log = "/tmp/vhttpd_mcp_relay_local_upstream_v2.events.ndjson"
+
+[relays.edge]
+mode = "agent"
+carrier = "websocket"
+url = "ws://127.0.0.1:19931/vhttpd/relay"
+node_id = "mcp-relay-local-upstream"
+token = "change-me"
+autostart = true
+reconnect_delay_ms = 1000
+channel_buffer = 64
+
+[adapters.local-mcp]
+kind = "mcp-upstream"
+options.url = "http://127.0.0.1:3001/mcp"
+
+[[pipelines]]
+id = "relay/local-mcp"
+ingress = "relay:edge"
+egress = "adapter:local-mcp"

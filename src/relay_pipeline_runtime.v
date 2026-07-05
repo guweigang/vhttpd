@@ -2,6 +2,7 @@ module main
 
 import api.mcp.protocol as mcp_protocol
 import dispatch
+import net.http
 import relay
 import runtime_plan
 import ws
@@ -177,6 +178,9 @@ fn (mut app App) dispatch_relay_pipeline_adapter_egress(adapter_id string, mut s
 	if adapter_plan.kind == 'mcp' {
 		return app.dispatch_relay_mcp_adapter(adapter_plan, adapter_id, exchange)
 	}
+	if adapter_plan.kind == 'mcp-upstream' {
+		return app.dispatch_relay_mcp_upstream_adapter(adapter_plan, adapter_id, exchange)
+	}
 	mut adapter := dispatch.terminal_adapter_from_plan(adapter_plan) or {
 		return relay_pipeline_failure(exchange, 501,
 			'relay_pipeline_egress_unsupported:adapter:${adapter_id}',
@@ -239,6 +243,50 @@ fn (mut app App) dispatch_relay_mcp_adapter(_adapter_plan runtime_plan.AdapterPl
 	} else {
 		200
 	}, resp.body, response_headers)
+}
+
+fn (mut app App) dispatch_relay_mcp_upstream_adapter(adapter_plan runtime_plan.AdapterPlan, adapter_id string, exchange dispatch.Exchange) RelayPipelineDispatchOutcome {
+	_ = app
+	target_url := adapter_plan.options.strings['url'].trim_space()
+	if target_url == '' {
+		return relay_pipeline_failure(exchange, 500, 'mcp_upstream_missing_url:${adapter_id}',
+			'mcp_upstream_missing_url')
+	}
+	method := exchange.metadata['http_method'] or { 'POST' }
+	body := relay_pipeline_exchange_body(exchange)
+	mut header := http.new_header()
+	for name, value in exchange.headers {
+		if name.to_lower() in ['host', 'content-length'] {
+			continue
+		}
+		header.add_custom(name, value) or {}
+	}
+	resp := http.fetch(http.FetchConfig{
+		url:    target_url
+		method: mcp_upstream_http_method(method)
+		header: header
+		data:   body
+	}) or {
+		return relay_pipeline_failure(exchange, 502, err.msg(), 'mcp_upstream_fetch_failed')
+	}
+	mut response_headers := map[string]string{}
+	for key in resp.header.keys() {
+		response_headers[key.to_lower()] = resp.header.get_custom(key) or { '' }
+	}
+	return relay_pipeline_success_with_body(exchange, 'response', resp.status_code, resp.body,
+		response_headers)
+}
+
+fn mcp_upstream_http_method(method string) http.Method {
+	return match method.trim_space().to_upper() {
+		'POST' { .post }
+		'PUT' { .put }
+		'PATCH' { .patch }
+		'DELETE' { .delete }
+		'HEAD' { .head }
+		'OPTIONS' { .options }
+		else { .get }
+	}
 }
 
 fn (mut app App) dispatch_relay_provider_action_adapter(adapter_plan runtime_plan.AdapterPlan, adapter_id string, exchange dispatch.Exchange) RelayPipelineDispatchOutcome {

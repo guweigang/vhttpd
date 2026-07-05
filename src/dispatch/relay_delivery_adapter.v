@@ -59,6 +59,9 @@ pub fn (mut adapter RelayDeliveryAdapter) deliver(mut services RuntimeServices, 
 	if request := relay_delivery_adapter_request(exchange) {
 		metadata['http_method'] = request.method
 		metadata['path'] = request.path
+		for key, value in request.query {
+			metadata['query.${key}'] = value
+		}
 	}
 	if services.trace_id() != '' {
 		metadata['trace_id'] = services.trace_id()

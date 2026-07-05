@@ -393,6 +393,21 @@ fn test_compile_v2_runtime_plan_loads_mcp_relay_local_example() {
 	assert plan.pipeline('relay/local-mcp')?.egress.str() == 'adapter:mcp'
 }
 
+fn test_compile_v2_runtime_plan_loads_mcp_relay_local_upstream_example() {
+	config_path := os.join_path(os.dir(@FILE), '..', '..', 'examples', 'config',
+		'mcp-relay-local-upstream-v2.toml')
+	text := os.read_file(config_path) or { panic(err) }
+	cfg := toml.decode[V2Config](text) or { panic(err) }
+
+	plan := compile_v2_runtime_plan(cfg, '', false) or { panic(err) }
+
+	assert plan.relays['edge'].mode == 'agent'
+	assert plan.adapters['local-mcp'].kind == 'mcp-upstream'
+	assert plan.adapters['local-mcp'].options.strings['url'] == 'http://127.0.0.1:3001/mcp'
+	assert plan.pipeline('relay/local-mcp')?.ingress.str() == 'relay:edge'
+	assert plan.pipeline('relay/local-mcp')?.egress.str() == 'adapter:local-mcp'
+}
+
 fn test_compile_v2_runtime_plan_allows_relay_delivery_adapter() {
 	cfg := V2Config{
 		listeners: {
@@ -464,6 +479,35 @@ fn test_compile_v2_runtime_plan_rejects_relay_delivery_adapter_without_target() 
 		assert false
 	} else {
 		assert err.msg() == 'runtime_plan_adapter_missing_target:relay'
+	}
+}
+
+fn test_compile_v2_runtime_plan_rejects_mcp_upstream_adapter_without_url() {
+	cfg := V2Config{
+		adapters: {
+			'local-mcp': V2AdapterSpec{
+				kind: 'mcp-upstream'
+			}
+		}
+		pipelines: [
+			V2PipelineSpec{
+				id:      'relay/local-mcp'
+				ingress: 'relay:edge'
+				egress:  'adapter:local-mcp'
+			},
+		]
+		relays:   {
+			'edge': V2RelaySpec{
+				mode:    'agent'
+				carrier: 'websocket'
+			}
+		}
+	}
+
+	if _ := compile_v2_runtime_plan(cfg, '', false) {
+		assert false
+	} else {
+		assert err.msg() == 'runtime_plan_adapter_missing_url:local-mcp'
 	}
 }
 

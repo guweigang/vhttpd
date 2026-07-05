@@ -47,6 +47,13 @@ fn adapter_capabilities(kind string) Capabilities {
 				sessions:         true
 			}
 		}
+		'mcp-upstream' {
+			return Capabilities{
+				request_response: true
+				stream_output:    true
+				sessions:         true
+			}
+		}
 		else {
 			return Capabilities{
 				request_response: true
