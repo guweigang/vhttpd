@@ -1,0 +1,27 @@
+version = 2
+
+[listeners.paseo]
+protocol = "http"
+transport = "tcp"
+host = "0.0.0.0"
+port = 19901
+
+[engines.paseo]
+kind = "vjsx"
+entry = "./app.mts"
+module_root = "."
+build_root = "../../tmp/paseo-relay-vjsx-build"
+runtime_profile = "node"
+thread_count = 4
+websocket_dispatch = true
+
+[adapters.paseo]
+kind = "http-handler"
+engine = "engine:paseo"
+
+[[pipelines]]
+id = "paseo.relay"
+group = "paseo"
+ingress = "listener:paseo"
+match.paths = ["*"]
+egress = "adapter:paseo"
