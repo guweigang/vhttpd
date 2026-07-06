@@ -1,0 +1,27 @@
+[paths]
+root = "../../"
+vjsx_app = "${root}/examples/admin-control/app.mts"
+vjsx_build_root = "${root}/tmp/admin-control-vjsx-build"
+
+[files]
+pid_file = "${paths.root}/tmp/vhttpd_admin_control.pid"
+event_log = "${paths.root}/tmp/vhttpd_admin_control.events.ndjson"
+
+[runtime]
+timezone = "Asia/Shanghai"
+
+[admin]
+host = "127.0.0.1"
+port = 20211
+token = "Abcd.1234"
+
+[sites.admin_control]
+host = "127.0.0.1"
+port = 20210
+root = "${paths.root}/examples/admin-control"
+executor = "vjsx"
+app = "${paths.vjsx_app}"
+vjsx.build_root = "${paths.vjsx_build_root}"
+vjsx.runtime_profile = "node"
+vjsx.thread_count = 4
+vjsx.enable_network = true

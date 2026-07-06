@@ -3,6 +3,7 @@ module config
 pub struct V2Config {
 pub mut:
 	version       int = 2
+	include       []string
 	server        V2ServerSpec
 	listeners     map[string]V2ListenerSpec
 	control       V2ControlSpec
@@ -288,13 +289,14 @@ pub mut:
 
 pub struct V2MatchSpec {
 pub mut:
-	methods     []string
-	hosts       []string
-	paths       []string
-	path_regexp string @[toml: 'path_regexp']
-	query       map[string]string
-	headers     map[string]string
-	metadata    map[string]string
+	methods      []string
+	hosts        []string
+	paths        []string
+	path_regexp  string   @[toml: 'path_regexp']
+	path_regexps []string @[toml: 'path_regexps']
+	query        map[string][]string
+	headers      map[string]string
+	metadata     map[string]string
 }
 
 pub struct V2RelaySpec {

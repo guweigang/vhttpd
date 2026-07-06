@@ -34,6 +34,272 @@ pub fn (mut app App) admin_runtime_plan(mut ctx Context) veb.Result {
 	})
 }
 
+@['/admin/events'; get]
+pub fn (mut app App) admin_events(mut ctx Context) veb.Result {
+	req := admin_data_plane_request(ctx, '/admin/events')
+	if !app.control_plane.admin.on_data_plane {
+		return admin_data_plane_text(mut app, mut ctx, 'GET', req, 404, 'Not Found', {
+			'admin_endpoint': 'events'
+			'error':          'not_found'
+		})
+	}
+	limit := admin.AdminQuery.limit(ctx.query['limit'] or { '' }, 100, 1000)
+	events := app.admin_state_list_events(limit) or {
+		return admin_data_plane_json(mut app, mut ctx, 'GET', req, 500, json.encode(admin.AdminErrorResponse{
+			error: err.msg()
+		}), {
+			'admin_endpoint': 'events'
+			'error':          err.msg()
+		})
+	}
+	return admin_data_plane_json(mut app, mut ctx, 'GET', req, 200, json.encode(events), {
+		'admin_endpoint': 'events'
+	})
+}
+
+@['/admin/runtime/graph'; get]
+pub fn (mut app App) admin_runtime_graph(mut ctx Context) veb.Result {
+	req := admin_data_plane_request(ctx, '/admin/runtime/graph')
+	if !app.control_plane.admin.on_data_plane {
+		return admin_data_plane_text(mut app, mut ctx, 'GET', req, 404, 'Not Found', {
+			'admin_endpoint': 'runtime_graph'
+			'error':          'not_found'
+		})
+	}
+	body := json.encode(app.admin_runtime_graph_snapshot())
+	return admin_data_plane_json(mut app, mut ctx, 'GET', req, 200, body, {
+		'admin_endpoint': 'runtime_graph'
+	})
+}
+
+@['/admin/schema'; get]
+pub fn (mut app App) admin_schema(mut ctx Context) veb.Result {
+	req := admin_data_plane_request(ctx, '/admin/schema')
+	if !app.control_plane.admin.on_data_plane {
+		return admin_data_plane_text(mut app, mut ctx, 'GET', req, 404, 'Not Found', {
+			'admin_endpoint': 'schema'
+			'error':          'not_found'
+		})
+	}
+	return admin_data_plane_json(mut app, mut ctx, 'GET', req, 200, json.encode(admin_schema_catalog()),
+		{
+		'admin_endpoint': 'schema'
+	})
+}
+
+@['/admin/schema/:domain'; get]
+pub fn (mut app App) admin_schema_domain(mut ctx Context, domain string) veb.Result {
+	req := admin_data_plane_request(ctx, '/admin/schema/${domain}')
+	if !app.control_plane.admin.on_data_plane {
+		return admin_data_plane_text(mut app, mut ctx, 'GET', req, 404, 'Not Found', {
+			'admin_endpoint': 'schema_domain'
+			'error':          'not_found'
+		})
+	}
+	item := admin_schema_domain(domain) or {
+		return admin_data_plane_json(mut app, mut ctx, 'GET', req, 404, json.encode(admin.AdminErrorResponse{
+			error: 'schema_domain_not_found'
+		}), {
+			'admin_endpoint': 'schema_domain'
+			'error':          'schema_domain_not_found'
+		})
+	}
+	return admin_data_plane_json(mut app, mut ctx, 'GET', req, 200, json.encode(item), {
+		'admin_endpoint': 'schema_domain'
+		'domain':         domain
+	})
+}
+
+@['/admin/schema/:domain/:kind'; get]
+pub fn (mut app App) admin_schema_kind(mut ctx Context, domain string, kind string) veb.Result {
+	req := admin_data_plane_request(ctx, '/admin/schema/${domain}/${kind}')
+	if !app.control_plane.admin.on_data_plane {
+		return admin_data_plane_text(mut app, mut ctx, 'GET', req, 404, 'Not Found', {
+			'admin_endpoint': 'schema_kind'
+			'error':          'not_found'
+		})
+	}
+	item := admin_schema_kind(domain, kind) or {
+		return admin_data_plane_json(mut app, mut ctx, 'GET', req, 404, json.encode(admin.AdminErrorResponse{
+			error: 'schema_kind_not_found'
+		}), {
+			'admin_endpoint': 'schema_kind'
+			'error':          'schema_kind_not_found'
+		})
+	}
+	return admin_data_plane_json(mut app, mut ctx, 'GET', req, 200, json.encode(item), {
+		'admin_endpoint': 'schema_kind'
+		'domain':         domain
+		'kind':           kind
+	})
+}
+
+@['/admin/drafts'; get]
+pub fn (mut app App) admin_drafts(mut ctx Context) veb.Result {
+	req := admin_data_plane_request(ctx, '/admin/drafts')
+	if !app.control_plane.admin.on_data_plane {
+		return admin_data_plane_text(mut app, mut ctx, 'GET', req, 404, 'Not Found', {
+			'admin_endpoint': 'drafts'
+			'error':          'not_found'
+		})
+	}
+	drafts := app.admin_state_list_drafts() or {
+		return admin_data_plane_json(mut app, mut ctx, 'GET', req, 500, json.encode(admin.AdminErrorResponse{
+			error: err.msg()
+		}), {
+			'admin_endpoint': 'drafts'
+			'error':          err.msg()
+		})
+	}
+	return admin_data_plane_json(mut app, mut ctx, 'GET', req, 200, json.encode(drafts), {
+		'admin_endpoint': 'drafts'
+	})
+}
+
+@['/admin/drafts'; post]
+pub fn (mut app App) admin_drafts_create(mut ctx Context) veb.Result {
+	req := admin_data_plane_request(ctx, '/admin/drafts')
+	if !app.control_plane.admin.on_data_plane {
+		return admin_data_plane_text(mut app, mut ctx, 'POST', req, 404, 'Not Found', {
+			'admin_endpoint': 'drafts'
+			'error':          'not_found'
+		})
+	}
+	id := ctx.query['id'] or { '' }
+	entry := app.admin_state_put_draft(id, ctx.req.data) or {
+		return admin_data_plane_json(mut app, mut ctx, 'POST', req, 400, json.encode(admin.AdminErrorResponse{
+			error: err.msg()
+		}), {
+			'admin_endpoint': 'drafts'
+			'error':          err.msg()
+		})
+	}
+	return admin_data_plane_json(mut app, mut ctx, 'POST', req, 200, json.encode(entry), {
+		'admin_endpoint': 'drafts'
+		'admin_action':   'draft_save'
+		'draft_id':       entry.key
+	})
+}
+
+@['/admin/drafts/:id'; get]
+pub fn (mut app App) admin_draft_get(mut ctx Context, id string) veb.Result {
+	req := admin_data_plane_request(ctx, '/admin/drafts/${id}')
+	if !app.control_plane.admin.on_data_plane {
+		return admin_data_plane_text(mut app, mut ctx, 'GET', req, 404, 'Not Found', {
+			'admin_endpoint': 'draft'
+			'error':          'not_found'
+		})
+	}
+	entry := app.admin_state_get_draft(id) or {
+		return admin_data_plane_json(mut app, mut ctx, 'GET', req, 404, json.encode(admin.AdminErrorResponse{
+			error: err.msg()
+		}), {
+			'admin_endpoint': 'draft'
+			'error':          err.msg()
+		})
+	}
+	return admin_data_plane_json(mut app, mut ctx, 'GET', req, 200, json.encode(entry), {
+		'admin_endpoint': 'draft'
+		'draft_id':       entry.key
+	})
+}
+
+@['/admin/drafts/:id'; put]
+pub fn (mut app App) admin_draft_put(mut ctx Context, id string) veb.Result {
+	req := admin_data_plane_request(ctx, '/admin/drafts/${id}')
+	if !app.control_plane.admin.on_data_plane {
+		return admin_data_plane_text(mut app, mut ctx, 'PUT', req, 404, 'Not Found', {
+			'admin_endpoint': 'draft'
+			'error':          'not_found'
+		})
+	}
+	entry := app.admin_state_put_draft(id, ctx.req.data) or {
+		return admin_data_plane_json(mut app, mut ctx, 'PUT', req, 400, json.encode(admin.AdminErrorResponse{
+			error: err.msg()
+		}), {
+			'admin_endpoint': 'draft'
+			'error':          err.msg()
+		})
+	}
+	return admin_data_plane_json(mut app, mut ctx, 'PUT', req, 200, json.encode(entry), {
+		'admin_endpoint': 'draft'
+		'admin_action':   'draft_save'
+		'draft_id':       entry.key
+	})
+}
+
+@['/admin/drafts/:id'; delete]
+pub fn (mut app App) admin_draft_delete(mut ctx Context, id string) veb.Result {
+	req := admin_data_plane_request(ctx, '/admin/drafts/${id}')
+	if !app.control_plane.admin.on_data_plane {
+		return admin_data_plane_text(mut app, mut ctx, 'DELETE', req, 404, 'Not Found', {
+			'admin_endpoint': 'draft'
+			'error':          'not_found'
+		})
+	}
+	app.admin_state_delete_draft(id) or {
+		return admin_data_plane_json(mut app, mut ctx, 'DELETE', req, 400, json.encode(admin.AdminErrorResponse{
+			error: err.msg()
+		}), {
+			'admin_endpoint': 'draft'
+			'error':          err.msg()
+		})
+	}
+	return admin_data_plane_json(mut app, mut ctx, 'DELETE', req, 200, json.encode(AdminDraftDeleteResponse{
+		ok:       true
+		draft_id: id
+	}), {
+		'admin_endpoint': 'draft'
+		'admin_action':   'draft_delete'
+		'draft_id':       id
+	})
+}
+
+@['/admin/drafts/:id/validate'; post]
+pub fn (mut app App) admin_draft_validate(mut ctx Context, id string) veb.Result {
+	req := admin_data_plane_request(ctx, '/admin/drafts/${id}/validate')
+	if !app.control_plane.admin.on_data_plane {
+		return admin_data_plane_text(mut app, mut ctx, 'POST', req, 404, 'Not Found', {
+			'admin_endpoint': 'draft_validate'
+			'error':          'not_found'
+		})
+	}
+	result := app.admin_state_validate_draft(id)
+	status := if result.ok { 200 } else { 422 }
+	return admin_data_plane_json(mut app, mut ctx, 'POST', req, status, json.encode(result), {
+		'admin_endpoint': 'draft_validate'
+		'draft_id':       id
+		'ok':             '${result.ok}'
+		'error':          result.error
+	})
+}
+
+@['/admin/drafts/:id/diff'; get]
+pub fn (mut app App) admin_draft_diff(mut ctx Context, id string) veb.Result {
+	req := admin_data_plane_request(ctx, '/admin/drafts/${id}/diff')
+	if !app.control_plane.admin.on_data_plane {
+		return admin_data_plane_text(mut app, mut ctx, 'GET', req, 404, 'Not Found', {
+			'admin_endpoint': 'draft_diff'
+			'error':          'not_found'
+		})
+	}
+	preview := app.admin_state_diff_draft(id) or {
+		return admin_data_plane_json(mut app, mut ctx, 'GET', req, 422, json.encode(admin.AdminErrorResponse{
+			error: err.msg()
+		}), {
+			'admin_endpoint': 'draft_diff'
+			'draft_id':       id
+			'error':          err.msg()
+		})
+	}
+	return admin_data_plane_json(mut app, mut ctx, 'GET', req, 200, json.encode(preview), {
+		'admin_endpoint': 'draft_diff'
+		'draft_id':       id
+		'allowed':        '${preview.allowed}'
+		'strategy':       preview.strategy
+	})
+}
+
 @['/admin/runtime/plan/replacement'; get]
 pub fn (mut app App) admin_runtime_plan_replacement(mut ctx Context) veb.Result {
 	req := admin_data_plane_request(ctx, '/admin/runtime/plan/replacement')

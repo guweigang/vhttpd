@@ -118,13 +118,14 @@ fn compile_v2_runtime_plan_with_diagnostics(cfg V2Config, source_path string, co
 			group:      spec.group
 			ingress:    runtime_plan.parse_ref(spec.ingress)!
 			match:      runtime_plan.MatchPlan{
-				methods:     spec.match.methods.clone()
-				hosts:       spec.match.hosts.clone()
-				paths:       spec.match.paths.clone()
-				path_regexp: spec.match.path_regexp
-				query:       spec.match.query.clone()
-				headers:     spec.match.headers.clone()
-				metadata:    spec.match.metadata.clone()
+				methods:      spec.match.methods.clone()
+				hosts:        spec.match.hosts.clone()
+				paths:        spec.match.paths.clone()
+				path_regexp:  spec.match.path_regexp
+				path_regexps: compile_v2_path_regexps(spec.match)
+				query:        spec.match.query.clone()
+				headers:      spec.match.headers.clone()
+				metadata:     spec.match.metadata.clone()
 			}
 			transforms: parse_ref_list(spec.transforms, .transform)!
 			policies:   parse_ref_list(spec.policies, .policy)!
@@ -199,6 +200,19 @@ fn compile_v2_runtime_plan_with_diagnostics(cfg V2Config, source_path string, co
 	}
 	validate_runtime_plan_references(plan)!
 	return plan
+}
+
+fn compile_v2_path_regexps(match_spec V2MatchSpec) []string {
+	mut values := []string{}
+	if match_spec.path_regexp.trim_space() != '' {
+		values << match_spec.path_regexp
+	}
+	for value in match_spec.path_regexps {
+		if value.trim_space() != '' && value !in values {
+			values << value
+		}
+	}
+	return values
 }
 
 fn v2_provider_specs_for_compile(cfg V2Config, source_path string) map[string]V2ProviderSpec {

@@ -604,3 +604,36 @@ egress = "adapter:app"
 	assert plan.adapters['app'].options.strings['document_root'] == os.join_path(config_dir,
 		'public')
 }
+
+fn test_load_runtime_plan_file_compiles_wordpress_paseo_admin_stack_example() {
+	config_file := os.join_path(os.dir(@FILE), '..', '..', 'examples', 'wordpress',
+		'wordpress-paseo-admin-v2.toml')
+	plan := load_runtime_plan_file(config_file) or { panic(err) }
+	assert plan.control.listener?.str() == 'listener:control'
+	assert plan.control.token == 'Abcd.1234'
+	assert plan.listeners['web'].port == 8080
+	assert plan.listeners['admin_ui'].port == 20210
+	assert plan.listeners['control'].port == 20211
+	assert plan.listeners['paseo'].port == 19901
+	assert plan.engines['php'].kind == 'php-worker'
+	assert plan.engines['admin-ui'].kind == 'vjsx'
+	assert plan.engines['paseo'].kind == 'vjsx'
+	assert plan.engines['paseo'].options.bools['websocket_dispatch'] == true
+	assert plan.adapters['admin-ui'].engine?.str() == 'engine:admin-ui'
+	assert plan.adapters['paseo'].engine?.str() == 'engine:paseo'
+	assert plan.pipelines.any(it.id == 'admin.ui' && it.ingress.str() == 'listener:admin_ui'
+		&& it.egress.str() == 'adapter:admin-ui')
+	assert plan.pipelines.any(it.id == 'paseo.relay' && it.ingress.str() == 'listener:paseo'
+		&& it.egress.str() == 'adapter:paseo')
+	assert plan.pipelines.any(it.id == 'wordpress.front-page')
+	assert plan.pipelines.any(it.id == 'security.deny-protected-php'
+		&& it.match.path_regexps.len == 3)
+	assert !plan.pipelines.any(it.id == 'security.deny-upload-php')
+	assert !plan.pipelines.any(it.id == 'security.deny-includes-php')
+	assert !plan.pipelines.any(it.id == 'security.deny-admin-includes-php')
+	assert plan.pipelines.any(it.id == 'woocommerce.account-page-by-id'
+		&& it.match.query['page_id'] == ['9', '10', '11'])
+	assert !plan.pipelines.any(it.id == 'woocommerce.cart-page')
+	assert !plan.pipelines.any(it.id == 'woocommerce.checkout-page')
+	assert !plan.pipelines.any(it.id == 'woocommerce.account-page')
+}

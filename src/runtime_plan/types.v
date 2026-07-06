@@ -167,13 +167,14 @@ pub:
 
 pub struct MatchPlan {
 pub:
-	methods     []string
-	hosts       []string
-	paths       []string
-	path_regexp string
-	query       map[string]string
-	headers     map[string]string
-	metadata    map[string]string
+	methods      []string
+	hosts        []string
+	paths        []string
+	path_regexp  string
+	path_regexps []string
+	query        map[string][]string
+	headers      map[string]string
+	metadata     map[string]string
 }
 
 pub struct RelayPlan {

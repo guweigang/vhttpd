@@ -22,9 +22,11 @@ pub mut:
 	match_host                      []string
 	match_path                      []string
 	match_path_regexp               string
+	match_path_regexps              []string
 	match_headers                   map[string]string
-	match_query                     map[string]string
+	match_query                     map[string][]string
 	re                              regex.RE
+	res                             []regex.RE
 	executor                        string
 	engine_id                       string
 	rewrite                         string
@@ -200,7 +202,16 @@ fn (r RuntimeRouteRule) matches_compiled_http_request(method string, path string
 		return false
 	}
 	mut path_matched := false
-	if r.match_path_regexp != '' {
+	if r.match_path_regexps.len > 0 {
+		for compiled in r.res {
+			mut re_mutable := compiled
+			start, _ := re_mutable.find(path)
+			if start >= 0 {
+				path_matched = true
+				break
+			}
+		}
+	} else if r.match_path_regexp != '' {
 		mut re_mutable := r.re
 		start, _ := re_mutable.find(path)
 		if start >= 0 {
@@ -224,13 +235,25 @@ fn (r RuntimeRouteRule) matches_compiled_http_request(method string, path string
 			return false
 		}
 	}
-	for key, expected in r.match_query {
+	for key, expected_values in r.match_query {
 		actual := query[key] or { return false }
-		if !match_query(expected, actual) {
+		if !match_query_values(expected_values, actual) {
 			return false
 		}
 	}
 	return true
+}
+
+fn match_query_values(patterns []string, value string) bool {
+	if patterns.len == 0 {
+		return false
+	}
+	for pattern in patterns {
+		if match_query(pattern, value) {
+			return true
+		}
+	}
+	return false
 }
 
 fn route_match_string_list(patterns []string, value string, case_insensitive bool) bool {

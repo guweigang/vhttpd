@@ -16,7 +16,20 @@ fn runtime_routes_from_plan(plan runtime_plan.RuntimePlan, listener_id string) [
 		if route.executor in ['mcp', 'openai'] {
 			continue
 		}
-		if route.match_path_regexp != '' {
+		if route.match_path_regexps.len > 0 {
+			mut compiled := []regex.RE{}
+			mut ok := true
+			for pattern in route.match_path_regexps {
+				compiled << (regex.regex_opt(pattern) or {
+					ok = false
+					break
+				})
+			}
+			if !ok {
+				continue
+			}
+			route.res = compiled
+		} else if route.match_path_regexp != '' {
 			route.re = regex.regex_opt(route.match_path_regexp) or { continue }
 		}
 		routes << route
@@ -69,7 +82,22 @@ fn runtime_route_projection_diagnostics(plan runtime_plan.RuntimePlan, listener_
 		if route.executor in ['mcp', 'openai'] {
 			continue
 		}
-		if route.match_path_regexp != '' {
+		for idx, pattern in route.match_path_regexps {
+			regex.regex_opt(pattern) or {
+				diagnostic_path := if idx == 0 && pipeline.match.path_regexp == pattern {
+					'pipelines.${pipeline.id}.match.path_regexp'
+				} else {
+					'pipelines.${pipeline.id}.match.path_regexps.${idx}'
+				}
+				diagnostics << runtime_plan.PlanDiagnostic{
+					severity: 'error'
+					code:     'runtime_route_invalid_path_regexp'
+					path:     diagnostic_path
+					message:  'pipeline ${pipeline.id} has invalid path regexp: ${err.msg()}'
+				}
+			}
+		}
+		if route.match_path_regexps.len == 0 && route.match_path_regexp != '' {
 			regex.regex_opt(route.match_path_regexp) or {
 				diagnostics << runtime_plan.PlanDiagnostic{
 					severity: 'error'
@@ -117,18 +145,19 @@ fn runtime_route_projection_preflight_diagnostic(plan runtime_plan.RuntimePlan, 
 
 fn runtime_route_from_pipeline(plan runtime_plan.RuntimePlan, pipeline runtime_plan.PipelinePlan) ?RuntimeRouteRule {
 	mut route := RuntimeRouteRule{
-		pipeline_id:       pipeline.id
-		pipeline_group:    pipeline.group
-		ingress_id:        pipeline.ingress.str()
-		egress_ref:        pipeline.egress.str()
-		policy_refs:       pipeline.policies.map(it.str())
-		transform_refs:    pipeline.transforms.map(it.str())
-		match_method:      pipeline.match.methods.clone()
-		match_host:        pipeline.match.hosts.clone()
-		match_path:        pipeline.match.paths.clone()
-		match_path_regexp: pipeline.match.path_regexp
-		match_headers:     pipeline.match.headers.clone()
-		match_query:       pipeline.match.query.clone()
+		pipeline_id:        pipeline.id
+		pipeline_group:     pipeline.group
+		ingress_id:         pipeline.ingress.str()
+		egress_ref:         pipeline.egress.str()
+		policy_refs:        pipeline.policies.map(it.str())
+		transform_refs:     pipeline.transforms.map(it.str())
+		match_method:       pipeline.match.methods.clone()
+		match_host:         pipeline.match.hosts.clone()
+		match_path:         pipeline.match.paths.clone()
+		match_path_regexp:  pipeline.match.path_regexp
+		match_path_regexps: pipeline.match.path_regexps.clone()
+		match_headers:      pipeline.match.headers.clone()
+		match_query:        pipeline.match.query.clone()
 	}
 	for reference in pipeline.transforms {
 		transform := plan.transforms[reference.id] or { continue }

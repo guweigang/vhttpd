@@ -413,7 +413,7 @@ fn test_http_exchange_matcher_matches_request_values() {
 		hosts:   ['example.test']
 		paths:   ['/wp-content/*']
 		query:   {
-			'ver': '*'
+			'ver': ['*']
 		}
 		headers: {
 			'x-api-key': '*'
@@ -431,7 +431,7 @@ fn test_http_exchange_matcher_matches_request_values() {
 		methods: ['GET']
 		paths:   ['/wp-content/*']
 		query:   {
-			'missing': '*'
+			'missing': ['*']
 		}
 	})
 }

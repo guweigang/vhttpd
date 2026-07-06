@@ -466,7 +466,7 @@ fn tls_fingerprint(value TlsPlan) string {
 }
 
 fn match_fingerprint(value MatchPlan) string {
-	return '${string_list_fingerprint(value.methods)}|${string_list_fingerprint(value.hosts)}|${string_list_fingerprint(value.paths)}|${value.path_regexp}|${string_map_fingerprint(value.query)}|${string_map_fingerprint(value.headers)}|${string_map_fingerprint(value.metadata)}'
+	return '${string_list_fingerprint(value.methods)}|${string_list_fingerprint(value.hosts)}|${string_list_fingerprint(value.paths)}|${value.path_regexp}|${string_list_fingerprint(value.path_regexps)}|${string_list_map_fingerprint(value.query)}|${string_map_fingerprint(value.headers)}|${string_map_fingerprint(value.metadata)}'
 }
 
 fn optional_ref_fingerprint(value ?ResourceRef) string {

@@ -167,6 +167,39 @@ fn test_inproc_vjsx_executor_repo_api_demo_handler_runs() {
 	assert outcome.response.body.contains('"wantsJson":true')
 }
 
+fn test_inproc_vjsx_executor_admin_control_app_renders_shell() {
+	app_file := os.join_path(os.dir(@FILE), '..', 'examples', 'admin-control', 'app.mts')
+	assert os.exists(app_file)
+	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
+		thread_count:    1
+		app_entry:       app_file
+		module_root:     os.dir(app_file)
+		runtime_profile: 'node'
+	})
+	defer {
+		executor.close()
+	}
+	mut app := InProcTestApp{}
+	req := http.Request{
+		method: .get
+		url:    '/'
+		host:   'admin-control.test'
+	}
+	outcome := executor.dispatch_http(mut app, exec.HttpLogicDispatchRequest{
+		method:      'GET'
+		path:        '/'
+		req:         req
+		remote_addr: '127.0.0.1'
+		trace_id:    'trace_admin_control'
+		request_id:  'req_admin_control'
+	}) or { panic(err) }
+	assert outcome.response.status == 200
+	assert outcome.response.headers['content-type'].contains('text/html')
+	assert outcome.response.body.contains('<h1>vhttpd Admin</h1>')
+	assert outcome.response.body.contains('/api/admin/runtime/graph')
+	assert outcome.response.body.contains('id="metrics"')
+}
+
 fn test_inproc_vjsx_executor_identity_and_lane_bootstrap() {
 	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
 		thread_count:    3

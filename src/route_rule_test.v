@@ -71,11 +71,30 @@ fn test_route_rule_regex_matching() {
 	assert rule2.matches('/style.css') == false
 }
 
+fn test_route_rule_multiple_regex_matching_uses_or_semantics() {
+	re_upload := regex.regex_opt('^/wp-content/uploads/.*\\.php$') or {
+		assert false
+		return
+	}
+	re_includes := regex.regex_opt('^/wp-includes/.*\\.php$') or {
+		assert false
+		return
+	}
+	rule := RuntimeRouteRule{
+		match_path_regexps: ['^/wp-content/uploads/.*\\.php$', '^/wp-includes/.*\\.php$']
+		res:                [re_upload, re_includes]
+	}
+	assert rule.matches('/wp-content/uploads/shell.php')
+	assert rule.matches('/wp-includes/version.php')
+	assert !rule.matches('/wp-admin/includes/plugin.php')
+	assert !rule.matches('/wp-content/uploads/image.png')
+}
+
 fn test_route_rule_query_matching() {
 	rule := RuntimeRouteRule{
 		match_path:  ['/index.php']
 		match_query: {
-			'rest_route': '*'
+			'rest_route': ['*']
 		}
 	}
 	assert rule.matches_request('/index.php', {
@@ -85,6 +104,25 @@ fn test_route_rule_query_matching() {
 	assert rule.matches_request('/', {
 		'rest_route': '/wp/v2/users/me'
 	}) == false
+}
+
+fn test_route_rule_query_matching_supports_value_lists() {
+	rule := RuntimeRouteRule{
+		match_path:  ['/', '/index.php']
+		match_query: {
+			'page_id': ['9', '10', '11']
+		}
+	}
+	assert rule.matches_request('/index.php', {
+		'page_id': '9'
+	})
+	assert rule.matches_request('/', {
+		'page_id': '11'
+	})
+	assert !rule.matches_request('/', {
+		'page_id': '12'
+	})
+	assert !rule.matches_request('/', map[string]string{})
 }
 
 fn test_route_rule_method_matching() {

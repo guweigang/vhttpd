@@ -35,8 +35,7 @@ pub fn load_runtime_plan_file(config_path string) !runtime_plan.RuntimePlan {
 	text := os.read_file(config_path)!
 	version := detect_config_version(text)!
 	if version == v2_config_version {
-		mut cfg := decode_v2_config_strict(text)!
-		resolve_v2_config_variables_and_paths(mut cfg, config_path)!
+		mut cfg := load_v2_config_file_with_includes(config_path)!
 		return compile_v2_runtime_plan(cfg, os.abs_path(config_path), false)
 	}
 	if version == legacy_config_version {
@@ -46,6 +45,66 @@ pub fn load_runtime_plan_file(config_path string) !runtime_plan.RuntimePlan {
 	return error('runtime_plan_unsupported_version:${version}')
 }
 
+pub fn load_runtime_plan_text(text string, source_path string) !runtime_plan.RuntimePlan {
+	version := detect_config_version(text)!
+	if version == v2_config_version {
+		mut cfg := decode_v2_config_text_with_includes(text, source_path)!
+		abs_source := if source_path.trim_space() == '' { '' } else { os.abs_path(source_path) }
+		return compile_v2_runtime_plan(cfg, abs_source, false)
+	}
+	if version == legacy_config_version {
+		return error('runtime_plan_text_legacy_config_unsupported')
+	}
+	return error('runtime_plan_unsupported_version:${version}')
+}
+
+fn load_v2_config_file_with_includes(config_path string) !V2Config {
+	mut seen := map[string]bool{}
+	return load_v2_config_file_with_seen(config_path, mut seen)
+}
+
+fn load_v2_config_file_with_seen(config_path string, mut seen map[string]bool) !V2Config {
+	abs_path := os.abs_path(config_path)
+	if seen[abs_path] {
+		return error('v2_config_include_cycle:${abs_path}')
+	}
+	seen[abs_path] = true
+	text := os.read_file(abs_path)!
+	mut cfg := decode_v2_config_strict(text)!
+	include_paths := cfg.include.clone()
+	cfg.include = []string{}
+	resolve_v2_config_variables_and_paths(mut cfg, abs_path)!
+	for include_path in include_paths {
+		resolved := resolve_config_path(resolve_config_base_dir(abs_path), include_path)
+		child := load_v2_config_file_with_seen(resolved, mut seen)!
+		merge_v2_config_include(mut cfg, child, resolved)!
+	}
+	seen.delete(abs_path)
+	return cfg
+}
+
+fn decode_v2_config_text_with_includes(text string, source_path string) !V2Config {
+	mut cfg := decode_v2_config_strict(text)!
+	include_paths := cfg.include.clone()
+	cfg.include = []string{}
+	resolve_v2_config_variables_and_paths(mut cfg, source_path)!
+	if include_paths.len == 0 {
+		return cfg
+	}
+	if source_path.trim_space() == '' {
+		return error('v2_config_include_requires_source_path')
+	}
+	mut seen := {
+		os.abs_path(source_path): true
+	}
+	for include_path in include_paths {
+		resolved := resolve_config_path(resolve_config_base_dir(source_path), include_path)
+		child := load_v2_config_file_with_seen(resolved, mut seen)!
+		merge_v2_config_include(mut cfg, child, resolved)!
+	}
+	return cfg
+}
+
 fn decode_v2_config_strict(text string) !V2Config {
 	doc := toml.parse_text(text)!
 	root := doc.to_any().as_map()
@@ -53,7 +112,75 @@ fn decode_v2_config_strict(text string) !V2Config {
 	mut cfg := doc.decode[V2Config]()!
 	apply_v2_provider_specs(text, doc, mut cfg)
 	apply_v2_extension_options(root, mut cfg)
+	apply_v2_pipeline_match_queries(root, mut cfg)
 	return cfg
+}
+
+fn merge_v2_config_include(mut target V2Config, source V2Config, source_path string) ! {
+	merge_v2_named_map[V2ListenerSpec](mut target.listeners, source.listeners, 'listeners',
+		source_path)!
+	merge_v2_resources(mut target.resources, source.resources, source_path)!
+	merge_v2_named_map[V2EngineSpec](mut target.engines, source.engines, 'engines', source_path)!
+	merge_v2_named_map[V2AdapterSpec](mut target.adapters, source.adapters, 'adapters', source_path)!
+	merge_v2_named_map[V2TransformSpec](mut target.transforms, source.transforms, 'transforms',
+		source_path)!
+	merge_v2_policies_include(mut target.policies, source.policies, source_path)!
+	merge_v2_named_map[V2ProviderSpec](mut target.providers, source.providers, 'providers',
+		source_path)!
+	merge_v2_named_map[V2RelaySpec](mut target.relays, source.relays, 'relays', source_path)!
+	merge_v2_pipelines(mut target.pipelines, source.pipelines, source_path)!
+}
+
+fn merge_v2_named_map[T](mut target map[string]T, source map[string]T, domain string, source_path string) ! {
+	for id, value in source {
+		if id in target {
+			return error('v2_config_include_duplicate:${domain}.${id}:${source_path}')
+		}
+		target[id] = value
+	}
+}
+
+fn merge_v2_resources(mut target V2ResourceSpecs, source V2ResourceSpecs, source_path string) ! {
+	merge_v2_named_map[V2DbResourceSpec](mut target.db, source.db, 'resources.db', source_path)!
+	merge_v2_named_map[V2CacheResourceSpec](mut target.cache, source.cache, 'resources.cache',
+		source_path)!
+	merge_v2_named_map[V2StorageResourceSpec](mut target.storage, source.storage,
+		'resources.storage', source_path)!
+	merge_v2_named_map[V2SecretResourceSpec](mut target.secret, source.secret, 'resources.secret',
+		source_path)!
+}
+
+fn merge_v2_policies_include(mut target V2PolicySpecs, source V2PolicySpecs, source_path string) ! {
+	merge_v2_named_map[V2CachePolicySpec](mut target.cache, source.cache, 'policies.cache',
+		source_path)!
+	merge_v2_named_map[V2LimitPolicySpec](mut target.limits, source.limits, 'policies.limits',
+		source_path)!
+	merge_v2_named_map[V2SecurityPolicySpec](mut target.security, source.security,
+		'policies.security', source_path)!
+	merge_v2_named_map[V2ResponsePolicySpec](mut target.response, source.response,
+		'policies.response', source_path)!
+	merge_v2_named_map[V2RetryPolicySpec](mut target.retry, source.retry, 'policies.retry',
+		source_path)!
+	merge_v2_named_map[V2ConcurrencyPolicySpec](mut target.concurrency, source.concurrency,
+		'policies.concurrency', source_path)!
+}
+
+fn merge_v2_pipelines(mut target []V2PipelineSpec, source []V2PipelineSpec, source_path string) ! {
+	mut seen := map[string]bool{}
+	for pipeline in target {
+		if pipeline.id.trim_space() != '' {
+			seen[pipeline.id] = true
+		}
+	}
+	for pipeline in source {
+		if pipeline.id.trim_space() != '' && seen[pipeline.id] {
+			return error('v2_config_include_duplicate:pipelines.${pipeline.id}:${source_path}')
+		}
+		if pipeline.id.trim_space() != '' {
+			seen[pipeline.id] = true
+		}
+		target << pipeline
+	}
 }
 
 fn apply_v2_provider_specs(text string, doc toml.Doc, mut cfg V2Config) {
@@ -184,10 +311,52 @@ fn apply_v2_extension_options(root map[string]toml.Any, mut cfg V2Config) {
 	}
 }
 
+fn apply_v2_pipeline_match_queries(root map[string]toml.Any, mut cfg V2Config) {
+	pipelines_any := root['pipelines'] or { return }
+	if pipelines_any is []toml.Any {
+		for index, pipeline_any in pipelines_any {
+			if index >= cfg.pipelines.len {
+				continue
+			}
+			if pipeline_any is map[string]toml.Any {
+				match_any := pipeline_any['match'] or { continue }
+				if match_any is map[string]toml.Any {
+					query_any := match_any['query'] or { continue }
+					mut pipeline := cfg.pipelines[index]
+					pipeline.match.query = decode_v2_query_options(query_any)
+					cfg.pipelines[index] = pipeline
+				}
+			}
+		}
+	}
+}
+
 fn decode_v2_string_options(options_any toml.Any) map[string]string {
 	mut options := map[string]string{}
 	for key, value in options_any.as_map() {
 		options[key] = value.string()
+	}
+	return options
+}
+
+fn decode_v2_query_options(options_any toml.Any) map[string][]string {
+	mut options := map[string][]string{}
+	for key, value_any in options_any.as_map() {
+		if value_any is []toml.Any {
+			mut values := []string{}
+			for item in value_any {
+				value := item.string().trim_space()
+				if value != '' {
+					values << value
+				}
+			}
+			options[key] = values.clone()
+			continue
+		}
+		value := value_any.string().trim_space()
+		if value != '' {
+			options[key] = [value]
+		}
 	}
 	return options
 }
@@ -334,7 +503,7 @@ fn resolve_v2_path_string(raw string, root string, scope string, vars map[string
 }
 
 fn validate_v2_config_keys(doc toml.Doc, root map[string]toml.Any) ! {
-	validate_keys(root, '', ['version', 'server', 'listeners', 'control', 'observability',
+	validate_keys(root, '', ['version', 'include', 'server', 'listeners', 'control', 'observability',
 		'resources', 'engines', 'adapters', 'transforms', 'policies', 'providers', 'pipelines',
 		'relays'])!
 	validate_optional_table(root, 'server', ['timezone', 'pid_file', 'shutdown_timeout_ms'])!
@@ -484,7 +653,7 @@ fn validate_pipeline_specs(root map[string]toml.Any) ! {
 				match_any := spec_any['match'] or { continue }
 				if match_any is map[string]toml.Any {
 					validate_keys(match_any, '${path}.match', ['methods', 'hosts', 'paths',
-						'path_regexp', 'query', 'headers', 'metadata'])!
+						'path_regexp', 'path_regexps', 'query', 'headers', 'metadata'])!
 				}
 			}
 		}

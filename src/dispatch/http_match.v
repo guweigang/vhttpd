@@ -5,7 +5,7 @@ pub:
 	methods []string
 	hosts   []string
 	paths   []string
-	query   map[string]string
+	query   map[string][]string
 	headers map[string]string
 }
 
@@ -23,9 +23,9 @@ pub fn http_exchange_matches(exchange Exchange, matcher HttpMatch) bool {
 	if !match_path_list(matcher.paths, request.path) {
 		return false
 	}
-	for key, expected in matcher.query {
+	for key, expected_values in matcher.query {
 		actual := request.query[key] or { return false }
-		if !match_value_pattern(expected, actual) {
+		if !match_value_patterns(expected_values, actual) {
 			return false
 		}
 	}
@@ -36,6 +36,18 @@ pub fn http_exchange_matches(exchange Exchange, matcher HttpMatch) bool {
 		}
 	}
 	return true
+}
+
+pub fn match_value_patterns(patterns []string, value string) bool {
+	if patterns.len == 0 {
+		return false
+	}
+	for pattern in patterns {
+		if match_value_pattern(pattern, value) {
+			return true
+		}
+	}
+	return false
 }
 
 pub fn request_payload(exchange Exchange) ?RequestPayload {

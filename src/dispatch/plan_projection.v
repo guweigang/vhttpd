@@ -288,7 +288,7 @@ pub fn listener_pipeline_descriptors_with_adapters(plan runtime_plan.RuntimePlan
 
 pub fn match_basic_http_pipeline(plan runtime_plan.RuntimePlan, listener_id string, exchange Exchange) ?PipelineDescriptor {
 	for pipeline in plan.listener_pipelines(listener_id) {
-		if pipeline.match.path_regexp.trim_space() != '' {
+		if pipeline.match.path_regexp.trim_space() != '' || pipeline.match.path_regexps.len > 0 {
 			continue
 		}
 		matcher := http_match_from_plan(pipeline)
@@ -301,7 +301,7 @@ pub fn match_basic_http_pipeline(plan runtime_plan.RuntimePlan, listener_id stri
 
 pub fn match_basic_http_pipeline_with_adapters(plan runtime_plan.RuntimePlan, listener_id string, exchange Exchange, adapters map[string]AdapterDescriptor) ?PipelineDescriptor {
 	for pipeline in plan.listener_pipelines(listener_id) {
-		if pipeline.match.path_regexp.trim_space() != '' {
+		if pipeline.match.path_regexp.trim_space() != '' || pipeline.match.path_regexps.len > 0 {
 			continue
 		}
 		matcher := http_match_from_plan(pipeline)

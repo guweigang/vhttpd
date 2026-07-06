@@ -256,7 +256,7 @@ fn compile_v1_site(cfg VhttpdConfig, site_id string, listener_id string, mut tar
 				methods:     route.match.method.clone()
 				paths:       route.match.path.clone()
 				path_regexp: route.match.path_regexp
-				query:       route.match.query.clone()
+				query:       string_map_to_list_map(route.match.query)
 			}
 			transforms: transform_refs
 			policies:   policy_refs
@@ -273,6 +273,14 @@ fn compile_v1_site(cfg VhttpdConfig, site_id string, listener_id string, mut tar
 		}
 		egress:  'adapter:${default_adapter_id}'
 	}
+}
+
+fn string_map_to_list_map(values map[string]string) map[string][]string {
+	mut out := map[string][]string{}
+	for key, value in values {
+		out[key] = [value]
+	}
+	return out
 }
 
 fn compile_v1_resources(cfg VhttpdConfig, scope string, mut target V2Config) []string {
@@ -613,8 +621,8 @@ fn compile_v1_route_egress(route RouteRuleConfig, cfg VhttpdConfig, scope string
 	}
 	if executor_name == 'static' {
 		adapter_id := '${scope}/route_${order}_static'
-		completed_pipeline := compile_v1_upload_completed_pipeline(route.on_completed, cfg,
-			scope, order, listener_id, site_id, mut target)
+		completed_pipeline := compile_v1_upload_completed_pipeline(route.on_completed, cfg, scope,
+			order, listener_id, site_id, mut target)
 		target.adapters[adapter_id] = V2AdapterSpec{
 			kind:               'static'
 			root:               if route.root != '' { route.root } else { cfg.site.document_root }
