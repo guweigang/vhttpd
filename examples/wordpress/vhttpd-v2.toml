@@ -253,24 +253,14 @@ match.paths = [
 egress = "adapter:forbidden"
 
 [[pipelines]]
-id = "security.deny-upload-php"
+id = "security.deny-protected-php"
 group = "wordpress.security"
 ingress = "listener:web"
-match.path_regexp = "^/wp-content/uploads/.*\\.php$"
-egress = "adapter:forbidden"
-
-[[pipelines]]
-id = "security.deny-includes-php"
-group = "wordpress.security"
-ingress = "listener:web"
-match.path_regexp = "^/wp-includes/.*\\.php$"
-egress = "adapter:forbidden"
-
-[[pipelines]]
-id = "security.deny-admin-includes-php"
-group = "wordpress.security"
-ingress = "listener:web"
-match.path_regexp = "^/wp-admin/includes/.*\\.php$"
+match.path_regexps = [
+    "^/wp-content/uploads/.*\\.php$",
+    "^/wp-includes/.*\\.php$",
+    "^/wp-admin/includes/.*\\.php$"
+]
 egress = "adapter:forbidden"
 
 [[pipelines]]
@@ -278,7 +268,7 @@ id = "rest.query-route"
 group = "wordpress.rest"
 ingress = "listener:web"
 match.paths = ["/index.php"]
-match.query = { rest_route = "*" }
+match.query = { rest_route = ["*"] }
 egress = "adapter:wordpress-cgi"
 
 [[pipelines]]
@@ -347,38 +337,12 @@ policies = [
 egress = "adapter:wordpress-cgi"
 
 [[pipelines]]
-id = "woocommerce.cart-page"
+id = "woocommerce.account-page-by-id"
 group = "wordpress.dynamic.compat"
 ingress = "listener:web"
 match.methods = ["GET", "HEAD"]
 match.paths = ["/", "/index.php"]
-match.query = { page_id = "9" }
-policies = [
-    "policy:limits/wordpress-request",
-    "policy:cache/private-no-store"
-]
-egress = "adapter:wordpress-cgi"
-
-[[pipelines]]
-id = "woocommerce.checkout-page"
-group = "wordpress.dynamic.compat"
-ingress = "listener:web"
-match.methods = ["GET", "HEAD"]
-match.paths = ["/", "/index.php"]
-match.query = { page_id = "10" }
-policies = [
-    "policy:limits/wordpress-request",
-    "policy:cache/private-no-store"
-]
-egress = "adapter:wordpress-cgi"
-
-[[pipelines]]
-id = "woocommerce.account-page"
-group = "wordpress.dynamic.compat"
-ingress = "listener:web"
-match.methods = ["GET", "HEAD"]
-match.paths = ["/", "/index.php"]
-match.query = { page_id = "11" }
+match.query = { page_id = ["9", "10", "11"] }
 policies = [
     "policy:limits/wordpress-request",
     "policy:cache/private-no-store"
@@ -391,7 +355,7 @@ group = "wordpress.dynamic.worker"
 ingress = "listener:web"
 match.methods = ["GET", "HEAD"]
 match.paths = ["/", "/index.php"]
-match.query = { page_id = "*" }
+match.query = { page_id = ["*"] }
 policies = [
     "policy:limits/wordpress-request",
     "policy:cache/private-no-store"
@@ -404,7 +368,7 @@ group = "wordpress.dynamic.compat"
 ingress = "listener:web"
 match.methods = ["POST", "PUT", "PATCH", "DELETE"]
 match.paths = ["/", "/index.php"]
-match.query = { page_id = "*" }
+match.query = { page_id = ["*"] }
 policies = [
     "policy:limits/wordpress-request",
     "policy:cache/private-no-store"
@@ -416,7 +380,7 @@ id = "woocommerce.ajax"
 group = "wordpress.dynamic.compat"
 ingress = "listener:web"
 match.paths = ["/", "/index.php"]
-match.query = { wc-ajax = "*" }
+match.query = { wc-ajax = ["*"] }
 policies = [
     "policy:limits/wordpress-request",
     "policy:cache/private-no-store"
@@ -429,7 +393,7 @@ group = "wordpress.dynamic.worker"
 ingress = "listener:web"
 match.methods = ["GET", "HEAD"]
 match.paths = ["/", "/index.php"]
-match.query = { add-to-cart = "*" }
+match.query = { add-to-cart = ["*"] }
 policies = [
     "policy:limits/wordpress-request",
     "policy:cache/private-no-store"
@@ -442,7 +406,7 @@ group = "wordpress.dynamic.compat"
 ingress = "listener:web"
 match.methods = ["POST", "PUT", "PATCH", "DELETE"]
 match.paths = ["/", "/index.php"]
-match.query = { add-to-cart = "*" }
+match.query = { add-to-cart = ["*"] }
 policies = [
     "policy:limits/wordpress-request",
     "policy:cache/private-no-store"
