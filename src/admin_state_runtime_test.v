@@ -9,26 +9,30 @@ fn admin_state_runtime_test_root(name string) string {
 }
 
 fn admin_state_runtime_plan_text(body string) string {
+	return admin_state_named_runtime_plan_text('web', 18080, body)
+}
+
+fn admin_state_named_runtime_plan_text(id string, port int, body string) string {
 	return '
 version = 2
 
-[listeners.web]
+[listeners.${id}]
 protocol = "http"
 transport = "tcp"
 host = "127.0.0.1"
-port = 18080
+port = ${port}
 
-[adapters.hello]
+[adapters.${id}]
 kind = "fixed-response"
 
-[adapters.hello.options]
+[adapters.${id}.options]
 status = "200"
 body = "${body}"
 
 [[pipelines]]
-id = "web"
-ingress = "listener:web"
-egress = "adapter:hello"
+id = "${id}"
+ingress = "listener:${id}"
+egress = "adapter:${id}"
 
 [pipelines.match]
 paths = ["*"]
@@ -50,7 +54,7 @@ fn test_admin_state_validate_and_diff_draft() {
 		DataPlaneRuntime: DataPlaneRuntime{
 			plan: current_plan
 		}
-		control_plane: ControlPlaneRuntime{
+		control_plane:    ControlPlaneRuntime{
 			event_log: event_log
 		}
 	}
@@ -90,4 +94,79 @@ fn test_admin_state_validate_draft_reports_compile_error() {
 	validation := app.admin_state_validate_draft('bad')
 	assert !validation.ok
 	assert validation.error != ''
+}
+
+fn test_admin_state_publish_draft_writes_include_and_keeps_main_config_valid() {
+	root := admin_state_runtime_test_root('vhttpd_admin_state_publish')
+	defer {
+		os.rmdir_all(root) or {}
+	}
+	admin_dir := os.join_path(root, 'admin')
+	os.mkdir_all(admin_dir) or { panic(err) }
+	current_file := os.join_path(admin_dir, 'admin.toml')
+	event_log := os.join_path(root, 'events.ndjson')
+	os.write_file(event_log, '') or { panic(err) }
+	os.write_file(current_file, admin_state_named_runtime_plan_text('admin', 18081, 'admin')) or {
+		panic(err)
+	}
+	current_plan := config.load_runtime_plan_file(current_file) or { panic(err) }
+	mut app := App{
+		DataPlaneRuntime: DataPlaneRuntime{
+			plan: current_plan
+		}
+		control_plane:    ControlPlaneRuntime{
+			event_log: event_log
+		}
+	}
+	app.admin_state_put_draft('app.demo.toml', admin_state_named_runtime_plan_text('demo', 18082,
+		'demo')) or { panic(err) }
+
+	result := app.admin_state_publish_draft('app.demo.toml', '../examples/demo/demo-v2.toml')
+	assert result.ok
+	assert result.config_path == current_file
+	assert result.include_path == '../examples/demo/demo-v2.toml'
+	assert result.updated_main
+	assert os.exists(os.join_path(root, 'examples', 'demo', 'demo-v2.toml'))
+	main_text := os.read_file(current_file) or { panic(err) }
+	assert main_text.contains('"../examples/demo/demo-v2.toml"')
+	plan := config.load_runtime_plan_file(current_file) or { panic(err) }
+	pipeline_ids := plan.pipelines.map(it.id)
+	assert pipeline_ids.contains('admin')
+	assert pipeline_ids.contains('demo')
+
+	second := app.admin_state_publish_draft('app.demo.toml', '../examples/demo/demo-v2.toml')
+	assert second.ok
+	assert !second.updated_main
+	second_main_text := os.read_file(current_file) or { panic(err) }
+	assert second_main_text.count('"../examples/demo/demo-v2.toml"') == 1
+}
+
+fn test_admin_state_publish_draft_rejects_path_outside_project() {
+	root := admin_state_runtime_test_root('vhttpd_admin_state_publish_outside')
+	defer {
+		os.rmdir_all(root) or {}
+	}
+	admin_dir := os.join_path(root, 'admin')
+	os.mkdir_all(admin_dir) or { panic(err) }
+	current_file := os.join_path(admin_dir, 'admin.toml')
+	event_log := os.join_path(root, 'events.ndjson')
+	os.write_file(event_log, '') or { panic(err) }
+	os.write_file(current_file, admin_state_named_runtime_plan_text('admin', 18083, 'admin')) or {
+		panic(err)
+	}
+	current_plan := config.load_runtime_plan_file(current_file) or { panic(err) }
+	mut app := App{
+		DataPlaneRuntime: DataPlaneRuntime{
+			plan: current_plan
+		}
+		control_plane:    ControlPlaneRuntime{
+			event_log: event_log
+		}
+	}
+	app.admin_state_put_draft('outside', admin_state_named_runtime_plan_text('outside', 18084,
+		'outside')) or { panic(err) }
+
+	result := app.admin_state_publish_draft('outside', '../../outside.toml')
+	assert !result.ok
+	assert result.error.contains('admin_draft_publish_path_outside_project')
 }

@@ -12,15 +12,15 @@ struct AdminDraftDeleteResponse {
 }
 
 struct AdminDraftPlanCounts {
-	listeners  int
-	resources  int
-	engines    int
-	adapters   int
-	transforms int
-	policies   int
-	providers  int
-	pipelines  int
-	relays     int
+	listeners   int
+	resources   int
+	engines     int
+	adapters    int
+	transforms  int
+	policies    int
+	providers   int
+	pipelines   int
+	relays      int
 	diagnostics int
 }
 
@@ -31,6 +31,16 @@ struct AdminDraftValidationResult {
 	schema_version int
 	counts         AdminDraftPlanCounts
 	diagnostics    []runtime_plan.PlanDiagnostic
+}
+
+struct AdminDraftPublishResult {
+	draft_id     string
+	ok           bool
+	error        string
+	config_path  string
+	path         string
+	include_path string
+	updated_main bool
 }
 
 fn (mut app App) open_admin_state_store() !admin_state_store.FileStore {
@@ -122,6 +132,198 @@ fn (mut app App) admin_state_validate_draft(id string) AdminDraftValidationResul
 fn (mut app App) admin_state_diff_draft(id string) !RuntimePlanReplacementPreview {
 	next_plan := app.admin_state_compile_draft(id)!
 	return app.preview_runtime_plan_replacement_for_plan('draft:${id}', next_plan)
+}
+
+fn (mut app App) admin_state_publish_draft(id string, raw_path string) AdminDraftPublishResult {
+	target_path := raw_path.trim_space()
+	if target_path == '' {
+		return AdminDraftPublishResult{
+			draft_id:    id
+			ok:          false
+			error:       'admin_draft_publish_path_required'
+			config_path: app.admin_state_draft_source_path()
+		}
+	}
+	entry := app.admin_state_get_draft(id) or {
+		return AdminDraftPublishResult{
+			draft_id:    id
+			ok:          false
+			error:       err.msg()
+			config_path: app.admin_state_draft_source_path()
+		}
+	}
+	config_path := app.admin_state_draft_source_path()
+	resolved := admin_state_resolve_publish_path(config_path, target_path) or {
+		return AdminDraftPublishResult{
+			draft_id:    id
+			ok:          false
+			error:       err.msg()
+			config_path: config_path
+		}
+	}
+	config.load_runtime_plan_text(entry.value, resolved.path) or {
+		return AdminDraftPublishResult{
+			draft_id:     id
+			ok:           false
+			error:        err.msg()
+			config_path:  config_path
+			path:         resolved.path
+			include_path: resolved.include_path
+		}
+	}
+	old_main := os.read_file(config_path) or {
+		return AdminDraftPublishResult{
+			draft_id:    id
+			ok:          false
+			error:       err.msg()
+			config_path: config_path
+		}
+	}
+	old_target_exists := os.exists(resolved.path)
+	old_target := if old_target_exists { os.read_file(resolved.path) or { '' } } else { '' }
+	new_main := admin_state_add_include_to_config(old_main, resolved.include_path)
+	os.mkdir_all(os.dir(resolved.path)) or {
+		return AdminDraftPublishResult{
+			draft_id:     id
+			ok:           false
+			error:        err.msg()
+			config_path:  config_path
+			path:         resolved.path
+			include_path: resolved.include_path
+		}
+	}
+	os.write_file(resolved.path, entry.value) or {
+		return AdminDraftPublishResult{
+			draft_id:     id
+			ok:           false
+			error:        err.msg()
+			config_path:  config_path
+			path:         resolved.path
+			include_path: resolved.include_path
+		}
+	}
+	os.write_file(config_path, new_main) or {
+		admin_state_restore_publish_target(resolved.path, old_target, old_target_exists)
+		return AdminDraftPublishResult{
+			draft_id:     id
+			ok:           false
+			error:        err.msg()
+			config_path:  config_path
+			path:         resolved.path
+			include_path: resolved.include_path
+		}
+	}
+	config.load_runtime_plan_file(config_path) or {
+		admin_state_restore_publish_target(resolved.path, old_target, old_target_exists)
+		os.write_file(config_path, old_main) or {}
+		return AdminDraftPublishResult{
+			draft_id:     id
+			ok:           false
+			error:        err.msg()
+			config_path:  config_path
+			path:         resolved.path
+			include_path: resolved.include_path
+		}
+	}
+	mut store := app.open_admin_state_store() or {
+		return AdminDraftPublishResult{
+			draft_id:     id
+			ok:           false
+			error:        err.msg()
+			config_path:  config_path
+			path:         resolved.path
+			include_path: resolved.include_path
+		}
+	}
+	store.append_event('admin.draft.published', {
+		'draft_id':     id
+		'path':         resolved.path
+		'include_path': resolved.include_path
+	}) or {}
+	app.emit('admin.draft.published', {
+		'draft_id':     id
+		'path':         resolved.path
+		'include_path': resolved.include_path
+	})
+	return AdminDraftPublishResult{
+		draft_id:     id
+		ok:           true
+		config_path:  config_path
+		path:         resolved.path
+		include_path: resolved.include_path
+		updated_main: new_main != old_main
+	}
+}
+
+struct AdminDraftPublishPath {
+	path         string
+	include_path string
+}
+
+fn admin_state_resolve_publish_path(config_path string, raw_path string) !AdminDraftPublishPath {
+	config_dir := os.dir(os.abs_path(config_path))
+	repo_root := os.dir(config_dir)
+	clean := raw_path.trim_space()
+	target_abs := if os.is_abs_path(clean) {
+		os.abs_path(clean)
+	} else {
+		os.abs_path(os.join_path(config_dir, clean))
+	}
+	separator := os.path_separator
+	if target_abs == repo_root || !target_abs.starts_with(repo_root + separator) {
+		return error('admin_draft_publish_path_outside_project:${clean}')
+	}
+	include_path := admin_state_relative_path(config_dir, target_abs)
+	return AdminDraftPublishPath{
+		path:         target_abs
+		include_path: include_path
+	}
+}
+
+fn admin_state_relative_path(base string, target string) string {
+	separator := os.path_separator
+	prefix := base.trim_right(separator) + separator
+	if target.starts_with(prefix) {
+		return './' + target[prefix.len..]
+	}
+	parent := os.dir(base).trim_right(separator) + separator
+	if target.starts_with(parent) {
+		return '../' + target[parent.len..]
+	}
+	return target
+}
+
+fn admin_state_add_include_to_config(text string, include_path string) string {
+	needle := '"${include_path}"'
+	if text.contains(needle) {
+		return text
+	}
+	start := text.index('include = [') or { -1 }
+	if start >= 0 {
+		rest := text[start..]
+		close_rel := rest.index(']') or { -1 }
+		if close_rel >= 0 {
+			close_idx := start + close_rel
+			insert := '  ${needle},\n'
+			return text[..close_idx] + insert + text[close_idx..]
+		}
+	}
+	insert := 'include = [\n  ${needle},\n]\n\n'
+	lines := text.split_into_lines()
+	if lines.len > 0 && lines[0].trim_space().starts_with('version') {
+		return lines[0] + '\n\n' + insert + lines[1..].join('\n')
+	}
+	return insert + text
+}
+
+fn admin_state_restore_publish_target(path string, old_value string, existed bool) {
+	if existed {
+		os.write_file(path, old_value) or {}
+		return
+	}
+	if os.exists(path) {
+		os.rm(path) or {}
+	}
 }
 
 fn admin_draft_plan_counts(plan runtime_plan.RuntimePlan) AdminDraftPlanCounts {

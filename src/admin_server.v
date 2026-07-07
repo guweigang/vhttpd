@@ -218,8 +218,8 @@ pub fn (mut app AdminApp) admin_schema(mut ctx Context) veb.Result {
 	if !app.admin_authorized(ctx) {
 		return admin_plane_forbidden(mut app, mut ctx, 'GET', req)
 	}
-	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, json.encode(admin_schema_catalog()),
-		{
+	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200,
+		json.encode(admin_schema_catalog()), {
 		'admin_endpoint': 'schema'
 	})
 }
@@ -867,6 +867,24 @@ pub fn (mut app AdminApp) admin_draft_diff(mut ctx Context, id string) veb.Resul
 		'draft_id':       id
 		'allowed':        '${preview.allowed}'
 		'strategy':       preview.strategy
+	})
+}
+
+@['/admin/drafts/:id/publish'; post]
+pub fn (mut app AdminApp) admin_draft_publish(mut ctx Context, id string) veb.Result {
+	req := admin_plane_request(ctx, '/admin/drafts/${id}/publish')
+	if !app.admin_authorized(ctx) {
+		return admin_plane_forbidden(mut app, mut ctx, 'POST', req)
+	}
+	target_path := (ctx.query['path'] or { ctx.query['include_path'] or { '' } }).trim_space()
+	result := app.shared.admin_state_publish_draft(id, target_path)
+	status := if result.ok { 200 } else { 422 }
+	return admin_plane_json_response(mut app, mut ctx, 'POST', req, status, json.encode(result), {
+		'admin_endpoint': 'draft_publish'
+		'admin_action':   'draft_publish'
+		'draft_id':       id
+		'ok':             '${result.ok}'
+		'error':          result.error
 	})
 }
 

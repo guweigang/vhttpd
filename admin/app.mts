@@ -245,6 +245,10 @@ function adminControlHtml(ctx) {
       border-color: var(--accent);
       color: #ffffff;
     }
+    .button.danger {
+      border-color: #f0b3ad;
+      color: var(--danger);
+    }
     .side-button {
       height: 34px;
       border: 1px solid #4b6476;
@@ -570,6 +574,17 @@ function adminControlHtml(ctx) {
       margin-right: 5px;
       margin-bottom: 5px;
     }
+    .draft-editor {
+      margin-top: 12px;
+      display: grid;
+      gap: 12px;
+    }
+    .draft-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
     .hidden { display: none; }
     @media (max-width: 860px) {
       .shell { grid-template-columns: 1fr; }
@@ -748,7 +763,34 @@ function adminControlHtml(ctx) {
         <section id="view-drafts" class="view hidden">
           <div class="panel">
             <div class="panel-header"><h3>Drafts</h3><span id="draftCount" class="pill gray">0</span></div>
-            <div class="panel-body"><div id="drafts"></div></div>
+            <div class="panel-body">
+              <div id="drafts"></div>
+              <div id="draftEditor" class="draft-editor hidden">
+                <div class="form-grid">
+                  <div class="form-field">
+                    <label for="draftId">Draft ID</label>
+                    <input id="draftId" autocomplete="off" readonly>
+                  </div>
+                  <div class="form-field">
+                    <label for="draftPublishPath">Publish Include Path</label>
+                    <input id="draftPublishPath" autocomplete="off" placeholder="../examples/my-app/my-app-v2.toml">
+                  </div>
+                  <div class="form-field full">
+                    <label for="draftBody">TOML</label>
+                    <textarea id="draftBody" spellcheck="false"></textarea>
+                  </div>
+                </div>
+                <div class="draft-actions">
+                  <button id="saveDraft" class="button primary">Save</button>
+                  <button id="validateDraft" class="button">Validate</button>
+                  <button id="diffDraft" class="button">Diff</button>
+                  <button id="publishDraft" class="button">Publish Include</button>
+                  <button id="applyPublishedConfig" class="button">Hot Apply</button>
+                  <button id="deleteDraft" class="button danger">Delete</button>
+                </div>
+                <pre id="draftResult"></pre>
+              </div>
+            </div>
           </div>
         </section>
         <section id="view-events" class="view hidden">
@@ -779,7 +821,9 @@ function adminControlHtml(ctx) {
       activeView: "dashboard",
       data: {},
       errors: {},
-      history: []
+      history: [],
+      activeDraftId: "",
+      draftPublishResult: null
     };
     const $ = (id) => document.getElementById(id);
     const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => ({
@@ -806,6 +850,20 @@ function adminControlHtml(ctx) {
       try { body = text ? JSON.parse(text) : null; } catch (_) {}
       if (!response.ok) {
         const error = body && body.error ? body.error : response.status + " " + response.statusText;
+        throw new Error(error);
+      }
+      return body;
+    }
+    async function apiRequest(path, options) {
+      const response = await fetch(endpointUrl(path), {
+        ...(options || {}),
+        headers: { ...authHeaders(), ...((options && options.headers) || {}) }
+      });
+      const text = await response.text();
+      let body = text;
+      try { body = text ? JSON.parse(text) : null; } catch (_) {}
+      if (!response.ok) {
+        const error = body && body.error ? body.error : text || response.status + " " + response.statusText;
         throw new Error(error);
       }
       return body;
@@ -1356,6 +1414,9 @@ function adminControlHtml(ctx) {
           }
         });
         $("appDraftState").textContent = "saved";
+        state.activeDraftId = draftId;
+        $("draftPublishPath").value = $("newAppIncludePath").value.trim() || defaultPublishPath(draftId);
+        await openDraft(draftId);
         await refresh();
       } catch (err) {
         $("appDraftState").textContent = "error";
@@ -1395,11 +1456,100 @@ function adminControlHtml(ctx) {
     function renderDrafts() {
       const drafts = asArray(state.data.drafts);
       $("draftCount").textContent = drafts.length + " drafts";
-      $("drafts").innerHTML = table(["Id", "Updated", "Bytes"], drafts.map((draft) => [
+      $("drafts").innerHTML = table(["Id", "Updated", "Bytes", "Actions"], drafts.map((draft) => {
+        const id = draft.key || draft.id || "";
+        return [
         '<span class="pill blue">' + esc(draft.key || draft.id || "") + '</span>',
         esc(draft.updated_at || draft.updatedAt || ""),
-        esc(draft.bytes || draft.size || "")
-      ]));
+        esc(draft.bytes || draft.size || String(draft.value || "").length),
+        '<button class="button" data-draft-open="' + esc(id) + '">Open</button>'
+      ];
+      }));
+    }
+    function defaultPublishPath(draftId) {
+      let id = safeId(String(draftId || "").replace(/^app[.]/, "").replace(/[.]toml$/, ""));
+      if (!id) id = "new_app";
+      return "../examples/" + id + "/" + id + "-v2.toml";
+    }
+    function showDraftResult(value) {
+      $("draftResult").textContent = typeof value === "string" ? value : JSON.stringify(value, null, 2);
+    }
+    async function openDraft(id) {
+      const draft = await apiRequest("/api/admin/drafts/" + encodeURIComponent(id));
+      state.activeDraftId = draft.key || id;
+      state.draftPublishResult = null;
+      $("draftEditor").classList.remove("hidden");
+      $("draftId").value = state.activeDraftId;
+      $("draftBody").value = draft.value || "";
+      if (!$("draftPublishPath").value.trim() || $("draftPublishPath").dataset.draftId !== state.activeDraftId) {
+        $("draftPublishPath").value = defaultPublishPath(state.activeDraftId);
+      }
+      $("draftPublishPath").dataset.draftId = state.activeDraftId;
+      showDraftResult({ draft_id: state.activeDraftId, status: "opened" });
+      selectView("drafts");
+    }
+    async function saveDraftEditor() {
+      const id = state.activeDraftId || $("draftId").value.trim();
+      if (!id) throw new Error("draft_id_required");
+      const result = await apiRequest("/api/admin/drafts/" + encodeURIComponent(id), {
+        method: "PUT",
+        headers: { "content-type": "text/plain; charset=utf-8" },
+        body: $("draftBody").value
+      });
+      showDraftResult(result);
+      await refresh();
+    }
+    async function validateDraftEditor() {
+      const id = state.activeDraftId || $("draftId").value.trim();
+      const result = await apiRequest("/api/admin/drafts/" + encodeURIComponent(id) + "/validate", { method: "POST" });
+      showDraftResult(result);
+    }
+    async function diffDraftEditor() {
+      const id = state.activeDraftId || $("draftId").value.trim();
+      const result = await apiRequest("/api/admin/drafts/" + encodeURIComponent(id) + "/diff");
+      showDraftResult(result);
+    }
+    async function publishDraftEditor() {
+      const id = state.activeDraftId || $("draftId").value.trim();
+      const includePath = $("draftPublishPath").value.trim() || defaultPublishPath(id);
+      const result = await apiRequest("/api/admin/drafts/" + encodeURIComponent(id) + "/publish?path=" + encodeURIComponent(includePath), {
+        method: "POST"
+      });
+      state.draftPublishResult = result;
+      showDraftResult(result);
+      await refresh();
+    }
+    async function applyPublishedConfig() {
+      const configPath = state.draftPublishResult && state.draftPublishResult.config_path ? state.draftPublishResult.config_path : "";
+      if (!configPath) throw new Error("publish_first");
+      const result = await apiRequest("/api/admin/runtime/plan/replacement/apply?config=" + encodeURIComponent(configPath), {
+        method: "POST"
+      });
+      showDraftResult(result);
+      await refresh();
+    }
+    async function deleteDraftEditor() {
+      const id = state.activeDraftId || $("draftId").value.trim();
+      if (!id) throw new Error("draft_id_required");
+      const result = await apiRequest("/api/admin/drafts/" + encodeURIComponent(id), { method: "DELETE" });
+      state.activeDraftId = "";
+      state.draftPublishResult = null;
+      $("draftEditor").classList.add("hidden");
+      showDraftResult(result);
+      await refresh();
+    }
+    async function runDraftAction(action) {
+      try {
+        showDraftResult({ status: "running", action });
+        if (action === "save") await saveDraftEditor();
+        if (action === "validate") await validateDraftEditor();
+        if (action === "diff") await diffDraftEditor();
+        if (action === "publish") await publishDraftEditor();
+        if (action === "apply") await applyPublishedConfig();
+        if (action === "delete") await deleteDraftEditor();
+      } catch (err) {
+        showDraftResult({ ok: false, error: err && err.message ? err.message : String(err) });
+      }
     }
     function renderEvents() {
       const events = asArray(state.data.events);
@@ -1440,6 +1590,18 @@ function adminControlHtml(ctx) {
     $("refresh").addEventListener("click", refresh);
     $("generateAppConfig").addEventListener("click", generateAppToml);
     $("saveAppDraft").addEventListener("click", saveAppDraft);
+    $("saveDraft").addEventListener("click", () => runDraftAction("save"));
+    $("validateDraft").addEventListener("click", () => runDraftAction("validate"));
+    $("diffDraft").addEventListener("click", () => runDraftAction("diff"));
+    $("publishDraft").addEventListener("click", () => runDraftAction("publish"));
+    $("applyPublishedConfig").addEventListener("click", () => runDraftAction("apply"));
+    $("deleteDraft").addEventListener("click", () => runDraftAction("delete"));
+    $("drafts").addEventListener("click", (event) => {
+      const target = event.target && event.target.closest ? event.target.closest("[data-draft-open]") : null;
+      if (target) {
+        openDraft(target.getAttribute("data-draft-open")).catch((err) => showDraftResult({ ok: false, error: err && err.message ? err.message : String(err) }));
+      }
+    });
     for (const id of ["newAppId", "newAppKind", "newAppPort", "newAppHost", "newAppEntry", "newAppModuleRoot"]) {
       $(id).addEventListener("input", generateAppToml);
       $(id).addEventListener("change", generateAppToml);

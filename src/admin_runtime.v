@@ -81,8 +81,8 @@ pub fn (mut app App) admin_schema(mut ctx Context) veb.Result {
 			'error':          'not_found'
 		})
 	}
-	return admin_data_plane_json(mut app, mut ctx, 'GET', req, 200, json.encode(admin_schema_catalog()),
-		{
+	return admin_data_plane_json(mut app, mut ctx, 'GET', req, 200,
+		json.encode(admin_schema_catalog()), {
 		'admin_endpoint': 'schema'
 	})
 }
@@ -297,6 +297,27 @@ pub fn (mut app App) admin_draft_diff(mut ctx Context, id string) veb.Result {
 		'draft_id':       id
 		'allowed':        '${preview.allowed}'
 		'strategy':       preview.strategy
+	})
+}
+
+@['/admin/drafts/:id/publish'; post]
+pub fn (mut app App) admin_draft_publish(mut ctx Context, id string) veb.Result {
+	req := admin_data_plane_request(ctx, '/admin/drafts/${id}/publish')
+	if !app.control_plane.admin.on_data_plane {
+		return admin_data_plane_text(mut app, mut ctx, 'POST', req, 404, 'Not Found', {
+			'admin_endpoint': 'draft_publish'
+			'error':          'not_found'
+		})
+	}
+	target_path := (ctx.query['path'] or { ctx.query['include_path'] or { '' } }).trim_space()
+	result := app.admin_state_publish_draft(id, target_path)
+	status := if result.ok { 200 } else { 422 }
+	return admin_data_plane_json(mut app, mut ctx, 'POST', req, status, json.encode(result), {
+		'admin_endpoint': 'draft_publish'
+		'admin_action':   'draft_publish'
+		'draft_id':       id
+		'ok':             '${result.ok}'
+		'error':          result.error
 	})
 }
 
