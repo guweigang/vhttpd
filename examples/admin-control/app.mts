@@ -432,6 +432,126 @@ function adminControlHtml(ctx) {
       gap: 8px;
       grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     }
+    .viz-grid {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: minmax(0, 1.35fr) minmax(320px, .65fr);
+    }
+    .viz-stack {
+      display: grid;
+      gap: 12px;
+    }
+    .flow-map {
+      min-height: 360px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcfe;
+      overflow: hidden;
+    }
+    .flow-map.compact {
+      min-height: 250px;
+    }
+    .flow-svg {
+      display: block;
+      width: 100%;
+      height: auto;
+      min-height: 250px;
+    }
+    .flow-link {
+      stroke: #b7c2cf;
+      stroke-width: 1.5;
+      fill: none;
+    }
+    .flow-link.hot {
+      stroke: var(--accent);
+      stroke-width: 2.2;
+    }
+    .flow-node rect {
+      fill: #ffffff;
+      stroke: var(--line-strong);
+      rx: 6;
+    }
+    .flow-node.listener rect { fill: #eef4ff; stroke: #94a3d8; }
+    .flow-node.pipeline rect { fill: #edf7f6; stroke: #84bfb8; }
+    .flow-node.adapter rect { fill: #fff7ed; stroke: #ddb179; }
+    .flow-node.engine rect { fill: #f6f0ff; stroke: #b69ae4; }
+    .flow-node text {
+      fill: var(--text);
+      font-size: 12px;
+      font-weight: 650;
+    }
+    .flow-node .sub {
+      fill: var(--muted);
+      font-size: 10px;
+      font-weight: 500;
+    }
+    .bar-list {
+      display: grid;
+      gap: 10px;
+    }
+    .bar-row {
+      display: grid;
+      gap: 5px;
+    }
+    .bar-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .bar-track {
+      height: 10px;
+      border-radius: 999px;
+      background: #e8edf3;
+      overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%;
+      border-radius: inherit;
+      background: var(--accent);
+      min-width: 2px;
+    }
+    .sparkline {
+      width: 100%;
+      height: 72px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcfe;
+    }
+    .sparkline path {
+      fill: none;
+      stroke: var(--accent-2);
+      stroke-width: 2;
+    }
+    .sparkline .area {
+      fill: rgba(29, 78, 216, .08);
+      stroke: none;
+    }
+    .health-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .health-item {
+      min-height: 68px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      background: #ffffff;
+    }
+    .health-item strong {
+      display: block;
+      font-size: 20px;
+      line-height: 1.1;
+      margin-bottom: 6px;
+      letter-spacing: 0;
+    }
+    .health-item span {
+      color: var(--muted);
+      font-size: 12px;
+    }
     .node {
       border: 1px solid var(--line);
       border-radius: 8px;
@@ -456,6 +576,7 @@ function adminControlHtml(ctx) {
       .sidebar { position: static; }
       .side-form { margin-top: 0; }
       .metrics, .split { grid-template-columns: 1fr; }
+      .viz-grid { grid-template-columns: 1fr; }
       .topbar { align-items: flex-start; flex-direction: column; }
       .toolbar { justify-content: flex-start; }
       .row { grid-template-columns: 1fr; }
@@ -472,6 +593,7 @@ function adminControlHtml(ctx) {
       </div>
       <nav class="nav" aria-label="Admin sections">
         <button data-view="dashboard" aria-selected="true">Dashboard</button>
+        <button data-view="observability">Observability</button>
         <button data-view="apps">Applications</button>
         <button data-view="graph">Runtime Graph</button>
         <button data-view="schema">Schema</button>
@@ -498,6 +620,10 @@ function adminControlHtml(ctx) {
         <div id="status" class="status">Idle</div>
         <section id="view-dashboard" class="view grid">
           <div class="grid metrics" id="metrics"></div>
+          <div class="panel">
+            <div class="panel-header"><h3>Live Topology</h3><span id="dashboardTopologyCount" class="pill gray">0</span></div>
+            <div class="panel-body"><div id="dashboardTopology" class="flow-map compact"></div></div>
+          </div>
           <div class="grid split">
             <div class="panel">
               <div class="panel-header"><h3>Applications</h3><span id="dashboardAppCount" class="pill gray">0</span></div>
@@ -517,6 +643,39 @@ function adminControlHtml(ctx) {
               <div class="panel-header"><h3>Runtime</h3><span id="runtimeState" class="pill gray">unknown</span></div>
               <div class="panel-body"><div id="runtimeSummary" class="list"></div></div>
             </div>
+          </div>
+        </section>
+        <section id="view-observability" class="view hidden grid">
+          <div class="grid metrics" id="observabilityMetrics"></div>
+          <div class="viz-grid">
+            <div class="panel">
+              <div class="panel-header"><h3>Request Flow</h3><span id="observabilityFlowCount" class="pill gray">0</span></div>
+              <div class="panel-body"><div id="observabilityFlow" class="flow-map"></div></div>
+            </div>
+            <div class="viz-stack">
+              <div class="panel">
+                <div class="panel-header"><h3>Route Executors</h3><span id="executorMixCount" class="pill gray">0</span></div>
+                <div class="panel-body"><div id="executorMix" class="bar-list"></div></div>
+              </div>
+              <div class="panel">
+                <div class="panel-header"><h3>Health</h3><span id="healthState" class="pill gray">unknown</span></div>
+                <div class="panel-body"><div id="healthGrid" class="health-grid"></div></div>
+              </div>
+            </div>
+          </div>
+          <div class="grid split">
+            <div class="panel">
+              <div class="panel-header"><h3>Traffic Trend</h3><span id="trafficTrendCount" class="pill gray">0 samples</span></div>
+              <div class="panel-body"><div id="trafficTrend"></div></div>
+            </div>
+            <div class="panel">
+              <div class="panel-header"><h3>Recent Event Types</h3><span id="eventMixCount" class="pill gray">0</span></div>
+              <div class="panel-body"><div id="eventMix" class="bar-list"></div></div>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-header"><h3>Listener Routes</h3><span id="routeTableCount" class="pill gray">0</span></div>
+            <div class="panel-body"><div id="routeTable"></div></div>
           </div>
         </section>
         <section id="view-apps" class="view hidden grid">
@@ -619,7 +778,8 @@ function adminControlHtml(ctx) {
     const state = {
       activeView: "dashboard",
       data: {},
-      errors: {}
+      errors: {},
+      history: []
     };
     const $ = (id) => document.getElementById(id);
     const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => ({
@@ -665,6 +825,7 @@ function adminControlHtml(ctx) {
         state.data[name] = data;
         if (error) state.errors[name] = error;
       }
+      recordTelemetrySample();
       render();
     }
     function selectView(name) {
@@ -677,6 +838,7 @@ function adminControlHtml(ctx) {
       }
       $("viewTitle").textContent = {
         dashboard: "Dashboard",
+        observability: "Observability",
         graph: "Runtime Graph",
         apps: "Applications",
         schema: "Schema",
@@ -703,6 +865,152 @@ function adminControlHtml(ctx) {
       return '<table><thead><tr>' + headers.map((h) => '<th>' + esc(h) + '</th>').join("") + '</tr></thead><tbody>' +
         rows.map((row) => '<tr>' + row.map((cell) => '<td>' + cell + '</td>').join("") + '</tr>').join("") +
         '</tbody></table>';
+    }
+    function nestedNumber(value, path, fallback) {
+      const result = path.split(".").reduce((current, key) => current && current[key] !== undefined ? current[key] : undefined, value);
+      const number = Number(result);
+      return Number.isFinite(number) ? number : fallback;
+    }
+    function runtimeStats() {
+      return state.data.stats || (state.data.runtime && state.data.runtime.stats) || {};
+    }
+    function httpRequestsTotal() {
+      const stats = runtimeStats();
+      return nestedNumber(stats, "http.requests_total", Number(stats.requests_total ?? stats.http_requests_total ?? 0));
+    }
+    function httpErrorsTotal() {
+      const stats = runtimeStats();
+      return nestedNumber(stats, "http.errors_total", Number(stats.errors_total ?? stats.http_errors_total ?? 0));
+    }
+    function collectRuntimeRoutes() {
+      const runtime = state.data.runtime || {};
+      const rows = [];
+      for (const listener of asArray(runtime.listeners)) {
+        for (const route of asArray(listener.pipelines && listener.pipelines.routes)) {
+          rows.push({ ...route, listener_id: listener.listener_id || route.ingress || "" });
+        }
+      }
+      for (const route of asArray(runtime.pipelines && runtime.pipelines.routes)) {
+        rows.push(route);
+      }
+      const seen = {};
+      return rows.filter((route) => {
+        const key = [route.listener_id, route.pipeline_id, route.egress].join("|");
+        if (seen[key]) return false;
+        seen[key] = true;
+        return true;
+      });
+    }
+    function countBy(items, mapper) {
+      const counts = {};
+      for (const item of items) {
+        const key = mapper(item) || "unknown";
+        counts[key] = (counts[key] || 0) + 1;
+      }
+      return counts;
+    }
+    function recordTelemetrySample() {
+      state.history.push({
+        at: Date.now(),
+        requests: httpRequestsTotal(),
+        errors: httpErrorsTotal(),
+        events: asArray(state.data.events).length
+      });
+      if (state.history.length > 36) {
+        state.history = state.history.slice(state.history.length - 36);
+      }
+    }
+    function renderBars(record) {
+      const entries = Object.entries(record).filter(([, value]) => Number(value) > 0).sort((a, b) => Number(b[1]) - Number(a[1]));
+      if (!entries.length) return '<div class="value-text">No data</div>';
+      const max = Math.max(...entries.map(([, value]) => Number(value)), 1);
+      return entries.map(([label, value]) => {
+        const pct = Math.max(2, Math.round(Number(value) / max * 100));
+        return '<div class="bar-row"><div class="bar-meta"><span>' + esc(label) + '</span><strong>' + esc(value) + '</strong></div>' +
+          '<div class="bar-track"><div class="bar-fill" style="width:' + pct + '%"></div></div></div>';
+      }).join("");
+    }
+    function renderSparkline(samples, key) {
+      const values = samples.map((sample) => Number(sample[key] || 0));
+      const width = 520;
+      const height = 72;
+      if (values.length < 2) {
+        return '<svg class="sparkline" viewBox="0 0 ' + width + ' ' + height + '" role="img"><path d=""></path></svg>';
+      }
+      const min = Math.min(...values);
+      const max = Math.max(...values);
+      const span = Math.max(max - min, 1);
+      const points = values.map((value, index) => {
+        const x = values.length === 1 ? 0 : index / (values.length - 1) * (width - 16) + 8;
+        const y = height - 10 - ((value - min) / span * (height - 22));
+        return [x, y];
+      });
+      const line = points.map(([x, y], index) => (index ? "L" : "M") + x.toFixed(1) + " " + y.toFixed(1)).join(" ");
+      const area = line + " L " + points[points.length - 1][0].toFixed(1) + " " + (height - 8) + " L " + points[0][0].toFixed(1) + " " + (height - 8) + " Z";
+      return '<svg class="sparkline" viewBox="0 0 ' + width + ' ' + height + '" role="img">' +
+        '<path class="area" d="' + area + '"></path><path d="' + line + '"></path></svg>';
+    }
+    function renderTopology(limit) {
+      const graph = state.data.graph || {};
+      const nodes = asArray(graph.nodes);
+      const edges = asArray(graph.edges);
+      const byRef = {};
+      for (const node of nodes) byRef[node.ref] = node;
+      const pipelines = nodes.filter((node) => node.domain === "pipeline").slice(0, limit || 14);
+      const listenerRefs = unique(edges.filter((edge) => edge.kind === "ingress" && pipelines.some((node) => node.ref === edge.to)).map((edge) => edge.from));
+      const egressRefs = unique(edges.filter((edge) => edge.kind === "egress" && pipelines.some((node) => node.ref === edge.from)).map((edge) => edge.to));
+      const engineRefs = unique(edges.filter((edge) => edge.kind === "adapter_uses_engine" && egressRefs.includes(edge.from)).map((edge) => edge.to));
+      const columns = [
+        { domain: "listener", x: 24, refs: listenerRefs },
+        { domain: "pipeline", x: 230, refs: pipelines.map((node) => node.ref) },
+        { domain: "adapter", x: 520, refs: egressRefs },
+        { domain: "engine", x: 720, refs: engineRefs }
+      ];
+      const width = 900;
+      const rowHeight = 42;
+      const height = Math.max(260, Math.max(...columns.map((column) => column.refs.length), 1) * rowHeight + 34);
+      const positions = {};
+      const nodeParts = [];
+      for (const column of columns) {
+        const refs = column.refs.length ? column.refs : [];
+        refs.forEach((ref, index) => {
+          const node = byRef[ref] || { ref, label: ref, domain: column.domain, kind: "" };
+          const y = 18 + index * rowHeight;
+          const w = column.domain === "pipeline" ? 220 : 150;
+          positions[ref] = { x: column.x, y, w, h: 30 };
+          const label = String(node.label || node.id || ref).slice(0, column.domain === "pipeline" ? 28 : 18);
+          const sub = String(node.kind || node.domain || "").slice(0, 18);
+          nodeParts.push('<g class="flow-node ' + esc(column.domain) + '" transform="translate(' + column.x + ',' + y + ')">' +
+            '<rect width="' + w + '" height="30" rx="6"></rect><text x="9" y="14">' + esc(label) + '</text><text class="sub" x="9" y="25">' + esc(sub) + '</text></g>');
+        });
+      }
+      const linkParts = [];
+      function addLink(from, to, kind) {
+        const a = positions[from];
+        const b = positions[to];
+        if (!a || !b) return;
+        const x1 = a.x + a.w;
+        const y1 = a.y + a.h / 2;
+        const x2 = b.x;
+        const y2 = b.y + b.h / 2;
+        const mx = (x1 + x2) / 2;
+        linkParts.push('<path class="flow-link ' + (kind === "ingress" || kind === "egress" ? "hot" : "") + '" d="M' + x1 + ' ' + y1 + ' C' + mx + ' ' + y1 + ' ' + mx + ' ' + y2 + ' ' + x2 + ' ' + y2 + '"></path>');
+      }
+      for (const edge of edges) {
+        if (positions[edge.from] && positions[edge.to]) {
+          addLink(edge.from, edge.to, edge.kind);
+        }
+      }
+      if (!nodeParts.length) return '<div class="value-text">No topology data</div>';
+      return '<svg class="flow-svg" viewBox="0 0 ' + width + ' ' + height + '" role="img">' + linkParts.join("") + nodeParts.join("") + '</svg>';
+    }
+    function unique(values) {
+      const seen = {};
+      return values.filter((value) => {
+        if (!value || seen[value]) return false;
+        seen[value] = true;
+        return true;
+      });
     }
     function renderDashboard() {
       const runtime = state.data.runtime || {};
@@ -732,6 +1040,8 @@ function adminControlHtml(ctx) {
         metric("Drafts", drafts.length, "file-backed admin state"),
         metric("Events", events.length, "recent admin events")
       ].join("");
+      $("dashboardTopologyCount").textContent = Math.min(graphPipelines.length, 10) + "/" + graphPipelines.length + " flows";
+      $("dashboardTopology").innerHTML = renderTopology(10);
       $("dashboardAppCount").textContent = appTotal + " apps";
       if (apps.length) {
         $("dashboardApps").innerHTML = table(["App", "Type", "Listeners", "Pipelines", "Engines", "Status"], apps.map((app) => [
@@ -907,6 +1217,72 @@ function adminControlHtml(ctx) {
           }) + '</div>';
       }).join("") || '<div class="value-text">No application groups detected</div>';
     }
+    function renderObservability() {
+      const runtime = state.data.runtime || {};
+      const stats = runtimeStats();
+      const events = asArray(state.data.events);
+      const graph = state.data.graph || {};
+      const graphPipelines = asArray(graph.nodes).filter((node) => node.domain === "pipeline");
+      const routes = collectRuntimeRoutes();
+      const requests = httpRequestsTotal();
+      const errors = httpErrorsTotal();
+      const errorRate = requests > 0 ? (errors / requests * 100).toFixed(2) + "%" : "0%";
+      const active = runtime.active || {};
+      const relay = runtime.relay || {};
+      $("observabilityMetrics").innerHTML = [
+        metric("HTTP Requests", requests, "total since start"),
+        metric("HTTP Errors", errors, errorRate + " error rate"),
+        metric("Runtime Routes", routes.length, "projected HTTP routes"),
+        metric("Open Channels", Number(relay.open_channels || 0), "relay channels"),
+        metric("WebSockets", Number(active.websockets || runtime.active_websockets || 0), "active sessions"),
+        metric("Uptime", formatDuration(Number(stats.uptime_seconds || runtime.uptime_seconds || 0)), "process lifetime")
+      ].join("");
+      $("observabilityFlowCount").textContent = Math.min(graphPipelines.length, 18) + "/" + graphPipelines.length + " flows";
+      $("observabilityFlow").innerHTML = renderTopology(18);
+      const executorCounts = countBy(routes, (route) => route.executor || "none");
+      $("executorMixCount").textContent = Object.keys(executorCounts).length + " kinds";
+      $("executorMix").innerHTML = renderBars(executorCounts);
+      $("healthState").textContent = keys(state.errors).length ? "degraded" : "ok";
+      $("healthState").className = "pill " + (keys(state.errors).length ? "red" : "");
+      $("healthGrid").innerHTML = [
+        healthItem(errors, "HTTP errors"),
+        healthItem(nestedNumber(stats, "worker.rejected_total", 0), "worker rejects"),
+        healthItem(nestedNumber(stats, "worker.timeouts_total", 0), "worker timeouts"),
+        healthItem(nestedNumber(stats, "upstream.plan_errors_total", 0), "upstream errors"),
+        healthItem(nestedNumber(stats, "mcp.pending_dropped_total", 0), "MCP drops"),
+        healthItem(nestedNumber(stats, "feishu.send_errors", 0), "Feishu send errors")
+      ].join("");
+      $("trafficTrendCount").textContent = state.history.length + " samples";
+      $("trafficTrend").innerHTML = renderSparkline(state.history, "requests") + rows({
+        "Requests total": requests,
+        "Errors total": errors,
+        "Last sample": state.history.length ? new Date(state.history[state.history.length - 1].at).toLocaleTimeString() : ""
+      });
+      const eventCounts = countBy(events, (event) => event.type || event.action || "event");
+      $("eventMixCount").textContent = events.length + " events";
+      $("eventMix").innerHTML = renderBars(eventCounts);
+      $("routeTableCount").textContent = routes.length + " routes";
+      $("routeTable").innerHTML = table(["Listener", "Pipeline", "Executor", "Methods", "Paths"], routes.map((route) => [
+        '<span class="pill">' + esc(route.listener_id || "") + '</span>',
+        '<span class="pill blue">' + esc(route.pipeline_id || "") + '</span>',
+        esc(route.executor || "none"),
+        esc(asArray(route.methods).join(", ") || "*"),
+        esc(asArray(route.paths).join(", ") || "*")
+      ]));
+    }
+    function healthItem(value, label) {
+      const number = Number(value || 0);
+      return '<div class="health-item"><strong>' + esc(number) + '</strong><span>' + esc(label) + '</span></div>';
+    }
+    function formatDuration(seconds) {
+      if (!Number.isFinite(seconds) || seconds <= 0) return "0s";
+      const days = Math.floor(seconds / 86400);
+      const hours = Math.floor(seconds % 86400 / 3600);
+      const minutes = Math.floor(seconds % 3600 / 60);
+      if (days) return days + "d " + hours + "h";
+      if (hours) return hours + "h " + minutes + "m";
+      return minutes + "m";
+    }
     function safeId(raw) {
       return String(raw || "").trim().toLowerCase().replace(/[^a-z0-9_.-]+/g, "_").replace(/^_+|_+$/g, "");
     }
@@ -1040,6 +1416,7 @@ function adminControlHtml(ctx) {
     function render() {
       renderStatus();
       renderDashboard();
+      renderObservability();
       renderApps();
       renderGraph();
       renderSchema();
