@@ -170,3 +170,54 @@ fn test_admin_state_publish_draft_rejects_path_outside_project() {
 	assert !result.ok
 	assert result.error.contains('admin_draft_publish_path_outside_project')
 }
+
+fn test_admin_state_config_file_draft_opens_include_and_publishes_to_source() {
+	root := admin_state_runtime_test_root('vhttpd_admin_state_config_file_draft')
+	defer {
+		os.rmdir_all(root) or {}
+	}
+	admin_dir := os.join_path(root, 'admin')
+	include_dir := os.join_path(root, 'examples', 'demo')
+	os.mkdir_all(admin_dir) or { panic(err) }
+	os.mkdir_all(include_dir) or { panic(err) }
+	current_file := os.join_path(admin_dir, 'admin.toml')
+	include_file := os.join_path(include_dir, 'demo-v2.toml')
+	event_log := os.join_path(root, 'events.ndjson')
+	os.write_file(event_log, '') or { panic(err) }
+	os.write_file(current_file,
+		'version = 2\n\ninclude = [\n  "../examples/demo/demo-v2.toml",\n]\n\n' +
+		admin_state_named_runtime_plan_text('admin', 18085, 'admin').replace('version = 2\n\n', '')) or {
+		panic(err)
+	}
+	os.write_file(include_file, admin_state_named_runtime_plan_text('demo', 18086, 'demo')) or {
+		panic(err)
+	}
+	current_plan := config.load_runtime_plan_file(current_file) or { panic(err) }
+	mut app := App{
+		DataPlaneRuntime: DataPlaneRuntime{
+			plan: current_plan
+		}
+		control_plane:    ControlPlaneRuntime{
+			event_log: event_log
+		}
+	}
+
+	files := app.admin_state_list_config_files()
+	assert files.len == 2
+	assert files.any(it.role == 'main' && it.path == current_file)
+	assert files.any(it.role == 'include' && it.include_path == '../examples/demo/demo-v2.toml')
+
+	draft := app.admin_state_open_config_file_draft('../examples/demo/demo-v2.toml')
+	assert draft.ok
+	assert draft.include_path == '../examples/demo/demo-v2.toml'
+	assert draft.entry.value.contains('body = "demo"')
+	validation := app.admin_state_validate_draft(draft.draft_id)
+	assert validation.ok
+
+	app.admin_state_put_draft(draft.draft_id, admin_state_named_runtime_plan_text('demo', 18086,
+		'changed')) or { panic(err) }
+	published := app.admin_state_publish_draft(draft.draft_id, '')
+	assert published.ok
+	assert !published.updated_main
+	assert os.read_file(include_file) or { panic(err) }.contains('body = "changed"')
+}

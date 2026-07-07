@@ -2,6 +2,7 @@ module main
 
 import config
 import admin_state_store
+import json
 import os
 import runtime_plan
 import time
@@ -41,6 +42,29 @@ struct AdminDraftPublishResult {
 	path         string
 	include_path string
 	updated_main bool
+}
+
+struct AdminDraftMetadata {
+	source_path  string
+	include_path string
+}
+
+struct AdminConfigFileEntry {
+	role         string
+	path         string
+	include_path string
+	exists       bool
+	bytes        int
+	draft_id     string
+}
+
+struct AdminConfigFileDraftResult {
+	ok           bool
+	error        string
+	draft_id     string
+	path         string
+	include_path string
+	entry        admin_state_store.Entry
 }
 
 fn (mut app App) open_admin_state_store() !admin_state_store.FileStore {
@@ -91,9 +115,22 @@ fn (mut app App) admin_state_put_draft(id string, value string) !admin_state_sto
 	return entry
 }
 
+fn (mut app App) admin_state_put_draft_metadata(id string, metadata AdminDraftMetadata) ! {
+	draft_id := admin_state_draft_id(id)
+	mut store := app.open_admin_state_store()!
+	store.put('draft_meta', draft_id, json.encode(metadata))!
+}
+
+fn (mut app App) admin_state_get_draft_metadata(id string) ?AdminDraftMetadata {
+	mut store := app.open_admin_state_store() or { return none }
+	entry := store.get('draft_meta', id) or { return none }
+	return json.decode(AdminDraftMetadata, entry.value) or { none }
+}
+
 fn (mut app App) admin_state_delete_draft(id string) ! {
 	mut store := app.open_admin_state_store()!
 	store.delete('drafts', id)!
+	store.delete('draft_meta', id) or {}
 	store.append_event('admin.draft.deleted', {
 		'draft_id': id
 	}) or {}
@@ -109,7 +146,13 @@ fn (mut app App) admin_state_list_events(limit int) ![]admin_state_store.Event {
 
 fn (mut app App) admin_state_compile_draft(id string) !runtime_plan.RuntimePlan {
 	entry := app.admin_state_get_draft(id)!
-	return config.load_runtime_plan_text(entry.value, app.admin_state_draft_source_path())!
+	metadata := app.admin_state_get_draft_metadata(id) or { AdminDraftMetadata{} }
+	source_path := if metadata.source_path.trim_space() != '' {
+		metadata.source_path
+	} else {
+		app.admin_state_draft_source_path()
+	}
+	return config.load_runtime_plan_text(entry.value, source_path)!
 }
 
 fn (mut app App) admin_state_validate_draft(id string) AdminDraftValidationResult {
@@ -134,8 +177,92 @@ fn (mut app App) admin_state_diff_draft(id string) !RuntimePlanReplacementPrevie
 	return app.preview_runtime_plan_replacement_for_plan('draft:${id}', next_plan)
 }
 
+fn (mut app App) admin_state_list_config_files() []AdminConfigFileEntry {
+	config_path := os.abs_path(app.admin_state_draft_source_path())
+	config_dir := os.dir(config_path)
+	main_exists := os.exists(config_path)
+	mut files := [
+		AdminConfigFileEntry{
+			role:     'main'
+			path:     config_path
+			exists:   main_exists
+			bytes:    if main_exists { int(os.file_size(config_path)) } else { 0 }
+			draft_id: admin_state_config_draft_id(config_path)
+		},
+	]
+	text := os.read_file(config_path) or { return files }
+	for include_path in admin_state_extract_include_paths(text) {
+		resolved := if os.is_abs_path(include_path) {
+			os.abs_path(include_path)
+		} else {
+			os.abs_path(os.join_path(config_dir, include_path))
+		}
+		exists := os.exists(resolved)
+		files << AdminConfigFileEntry{
+			role:         'include'
+			path:         resolved
+			include_path: include_path
+			exists:       exists
+			bytes:        if exists { int(os.file_size(resolved)) } else { 0 }
+			draft_id:     admin_state_config_draft_id(resolved)
+		}
+	}
+	return files
+}
+
+fn (mut app App) admin_state_open_config_file_draft(raw_path string) AdminConfigFileDraftResult {
+	target := raw_path.trim_space()
+	if target == '' {
+		return AdminConfigFileDraftResult{
+			ok:    false
+			error: 'admin_config_file_path_required'
+		}
+	}
+	config_path := app.admin_state_draft_source_path()
+	resolved := admin_state_resolve_config_file_path(config_path, target) or {
+		return AdminConfigFileDraftResult{
+			ok:    false
+			error: err.msg()
+		}
+	}
+	text := os.read_file(resolved.path) or {
+		return AdminConfigFileDraftResult{
+			ok:           false
+			error:        err.msg()
+			path:         resolved.path
+			include_path: resolved.include_path
+		}
+	}
+	draft_id := admin_state_config_draft_id(resolved.path)
+	entry := app.admin_state_put_draft(draft_id, text) or {
+		return AdminConfigFileDraftResult{
+			ok:           false
+			error:        err.msg()
+			draft_id:     draft_id
+			path:         resolved.path
+			include_path: resolved.include_path
+		}
+	}
+	app.admin_state_put_draft_metadata(draft_id, AdminDraftMetadata{
+		source_path:  resolved.path
+		include_path: resolved.include_path
+	}) or {}
+	return AdminConfigFileDraftResult{
+		ok:           true
+		draft_id:     draft_id
+		path:         resolved.path
+		include_path: resolved.include_path
+		entry:        entry
+	}
+}
+
 fn (mut app App) admin_state_publish_draft(id string, raw_path string) AdminDraftPublishResult {
-	target_path := raw_path.trim_space()
+	metadata := app.admin_state_get_draft_metadata(id) or { AdminDraftMetadata{} }
+	target_path := if raw_path.trim_space() != '' {
+		raw_path.trim_space()
+	} else {
+		metadata.include_path.trim_space()
+	}
 	if target_path == '' {
 		return AdminDraftPublishResult{
 			draft_id:    id
@@ -280,6 +407,32 @@ fn admin_state_resolve_publish_path(config_path string, raw_path string) !AdminD
 	}
 }
 
+fn admin_state_resolve_config_file_path(config_path string, raw_path string) !AdminDraftPublishPath {
+	config_abs := os.abs_path(config_path)
+	config_dir := os.dir(config_abs)
+	clean := raw_path.trim_space()
+	target_abs := if os.is_abs_path(clean) {
+		os.abs_path(clean)
+	} else {
+		os.abs_path(os.join_path(config_dir, clean))
+	}
+	repo_root := os.dir(config_dir)
+	separator := os.path_separator
+	if target_abs != config_abs
+		&& (target_abs == repo_root || !target_abs.starts_with(repo_root + separator)) {
+		return error('admin_config_file_path_outside_project:${clean}')
+	}
+	include_path := if target_abs == config_abs {
+		''
+	} else {
+		admin_state_relative_path(config_dir, target_abs)
+	}
+	return AdminDraftPublishPath{
+		path:         target_abs
+		include_path: include_path
+	}
+}
+
 fn admin_state_relative_path(base string, target string) string {
 	separator := os.path_separator
 	prefix := base.trim_right(separator) + separator
@@ -291,6 +444,66 @@ fn admin_state_relative_path(base string, target string) string {
 		return '../' + target[parent.len..]
 	}
 	return target
+}
+
+fn admin_state_config_draft_id(path string) string {
+	name := os.file_name(path)
+	clean := name.trim_space().replace('.toml', '')
+	return 'config.${admin_state_safe_id(clean)}.toml'
+}
+
+fn admin_state_safe_id(raw string) string {
+	mut out := []u8{}
+	for ch in raw.to_lower().bytes() {
+		if (ch >= `a` && ch <= `z`) || (ch >= `0` && ch <= `9`) {
+			out << ch
+			continue
+		}
+		if ch in [`-`, `_`, `.`] {
+			out << ch
+			continue
+		}
+		out << `_`
+	}
+	clean := out.bytestr().trim('_')
+	if clean == '' {
+		return 'config'
+	}
+	return clean
+}
+
+fn admin_state_extract_include_paths(text string) []string {
+	mut paths := []string{}
+	mut in_include := false
+	for line in text.split_into_lines() {
+		clean := line.trim_space()
+		if clean.starts_with('include') && clean.contains('[') {
+			in_include = true
+		}
+		if in_include {
+			paths << admin_state_extract_quoted_values(clean)
+			if clean.contains(']') {
+				in_include = false
+			}
+		}
+	}
+	return paths
+}
+
+fn admin_state_extract_quoted_values(line string) []string {
+	mut values := []string{}
+	mut start := -1
+	for idx, ch in line {
+		if ch == `"` {
+			if start < 0 {
+				start = idx + 1
+			} else {
+				values << line[start..idx]
+				start = -1
+			}
+		}
+	}
+	return values
 }
 
 fn admin_state_add_include_to_config(text string, include_path string) string {

@@ -694,6 +694,10 @@ function adminControlHtml(ctx) {
           </div>
         </section>
         <section id="view-apps" class="view hidden grid">
+          <div class="panel">
+            <div class="panel-header"><h3>Config Files</h3><span id="configFileCount" class="pill gray">0</span></div>
+            <div class="panel-body"><div id="configFiles"></div></div>
+          </div>
           <div class="grid split">
             <div class="panel">
               <div class="panel-header"><h3>Applications</h3><span id="appCount" class="pill gray">0</span></div>
@@ -730,6 +734,38 @@ function adminControlHtml(ctx) {
                   <div class="form-field full">
                     <label for="newAppModuleRoot">Module Root</label>
                     <input id="newAppModuleRoot" autocomplete="off" placeholder=".">
+                  </div>
+                  <div class="form-field">
+                    <label for="newPipelineId">Pipeline ID</label>
+                    <input id="newPipelineId" autocomplete="off" placeholder="my_app.app">
+                  </div>
+                  <div class="form-field">
+                    <label for="newIngressRef">Ingress Ref</label>
+                    <input id="newIngressRef" autocomplete="off" placeholder="listener:my_app">
+                  </div>
+                  <div class="form-field">
+                    <label for="newMatchMethods">Match Methods</label>
+                    <input id="newMatchMethods" autocomplete="off" placeholder="GET,POST">
+                  </div>
+                  <div class="form-field">
+                    <label for="newMatchPaths">Match Paths</label>
+                    <input id="newMatchPaths" autocomplete="off" value="*">
+                  </div>
+                  <div class="form-field">
+                    <label for="newMatchHosts">Match Hosts</label>
+                    <input id="newMatchHosts" autocomplete="off" placeholder="example.test">
+                  </div>
+                  <div class="form-field">
+                    <label for="newPolicyRefs">Policies</label>
+                    <input id="newPolicyRefs" autocomplete="off" placeholder="policy:limits/default">
+                  </div>
+                  <div class="form-field">
+                    <label for="newTransformRefs">Transforms</label>
+                    <input id="newTransformRefs" autocomplete="off" placeholder="transform:auth">
+                  </div>
+                  <div class="form-field">
+                    <label for="newEgressRef">Egress Ref</label>
+                    <input id="newEgressRef" autocomplete="off" placeholder="adapter:my_app">
                   </div>
                   <div class="form-field full">
                     <label for="newAppIncludePath">Include Path</label>
@@ -812,6 +848,7 @@ function adminControlHtml(ctx) {
     const endpoints = {
       runtime: "/api/admin/runtime",
       graph: "/api/admin/runtime/graph",
+      configFiles: "/api/admin/config/files",
       schema: "/api/admin/schema",
       drafts: "/api/admin/drafts",
       events: "/api/admin/events?limit=80",
@@ -1275,6 +1312,22 @@ function adminControlHtml(ctx) {
           }) + '</div>';
       }).join("") || '<div class="value-text">No application groups detected</div>';
     }
+    function renderConfigFiles() {
+      const files = asArray(state.data.configFiles);
+      $("configFileCount").textContent = files.length + " files";
+      $("configFiles").innerHTML = table(["Role", "Path", "Bytes", "Actions"], files.map((file) => {
+        const editable = file.role !== "main" && file.exists !== false;
+        const action = editable
+          ? '<button class="button" data-config-draft="' + esc(file.include_path || file.path || "") + '">Edit Draft</button>'
+          : '<span class="pill gray">' + esc(file.role === "main" ? "base" : "missing") + '</span>';
+        return [
+          '<span class="pill ' + (file.role === "main" ? "blue" : "") + '">' + esc(file.role || "include") + '</span>',
+          esc(file.include_path || file.path || ""),
+          esc(file.bytes || 0),
+          action
+        ];
+      }));
+    }
     function renderObservability() {
       const runtime = state.data.runtime || {};
       const stats = runtimeStats();
@@ -1347,6 +1400,12 @@ function adminControlHtml(ctx) {
     function quoteToml(value) {
       return JSON.stringify(String(value || ""));
     }
+    function csvValues(value) {
+      return String(value || "").split(",").map((item) => item.trim()).filter(Boolean);
+    }
+    function tomlStringArray(values) {
+      return "[" + values.map(quoteToml).join(", ") + "]";
+    }
     function generateAppToml() {
       const id = safeId($("newAppId").value);
       const kind = $("newAppKind").value;
@@ -1355,7 +1414,18 @@ function adminControlHtml(ctx) {
       const entry = $("newAppEntry").value.trim();
       const moduleRoot = $("newAppModuleRoot").value.trim();
       const appId = id || "new_app";
+      const pipelineId = $("newPipelineId").value.trim() || appId + ".app";
+      const ingressRef = $("newIngressRef").value.trim() || "listener:" + appId;
+      const egressRef = $("newEgressRef").value.trim() || "adapter:" + appId;
+      const methods = csvValues($("newMatchMethods").value);
+      const paths = csvValues($("newMatchPaths").value || "*");
+      const hosts = csvValues($("newMatchHosts").value);
+      const policies = csvValues($("newPolicyRefs").value);
+      const transforms = csvValues($("newTransformRefs").value);
       $("newAppId").value = appId;
+      if (!$("newPipelineId").value.trim()) $("newPipelineId").value = pipelineId;
+      if (!$("newIngressRef").value.trim()) $("newIngressRef").value = ingressRef;
+      if (!$("newEgressRef").value.trim()) $("newEgressRef").value = egressRef;
       if (!$("newAppIncludePath").value.trim()) {
         $("newAppIncludePath").value = "../examples/" + appId + "/" + appId + "-v2.toml";
       }
@@ -1389,11 +1459,15 @@ function adminControlHtml(ctx) {
           'options = { status = "200", body = "ok" }\\n\\n';
       }
       body += '[[pipelines]]\\n' +
-        'id = "' + appId + '.app"\\n' +
+        'id = ' + quoteToml(pipelineId) + '\\n' +
         'group = "' + appId + '"\\n' +
-        'ingress = "listener:' + appId + '"\\n' +
-        'match.paths = ["*"]\\n' +
-        'egress = "adapter:' + appId + '"\\n';
+        'ingress = ' + quoteToml(ingressRef) + '\\n';
+      if (policies.length) body += 'policies = ' + tomlStringArray(policies) + '\\n';
+      if (transforms.length) body += 'transforms = ' + tomlStringArray(transforms) + '\\n';
+      if (methods.length) body += 'match.methods = ' + tomlStringArray(methods) + '\\n';
+      if (hosts.length) body += 'match.hosts = ' + tomlStringArray(hosts) + '\\n';
+      body += 'match.paths = ' + tomlStringArray(paths.length ? paths : ["*"]) + '\\n' +
+        'egress = ' + quoteToml(egressRef) + '\\n';
       $("newAppToml").value = body;
       return body;
     }
@@ -1488,6 +1562,14 @@ function adminControlHtml(ctx) {
       showDraftResult({ draft_id: state.activeDraftId, status: "opened" });
       selectView("drafts");
     }
+    async function openConfigFileDraft(path) {
+      const result = await apiRequest("/api/admin/config/files/draft?path=" + encodeURIComponent(path), { method: "POST" });
+      state.draftPublishResult = null;
+      $("draftPublishPath").value = result.include_path || path;
+      await openDraft(result.draft_id);
+      $("draftPublishPath").value = result.include_path || path;
+      showDraftResult(result);
+    }
     async function saveDraftEditor() {
       const id = state.activeDraftId || $("draftId").value.trim();
       if (!id) throw new Error("draft_id_required");
@@ -1568,6 +1650,7 @@ function adminControlHtml(ctx) {
       renderDashboard();
       renderObservability();
       renderApps();
+      renderConfigFiles();
       renderGraph();
       renderSchema();
       renderDrafts();
@@ -1602,7 +1685,13 @@ function adminControlHtml(ctx) {
         openDraft(target.getAttribute("data-draft-open")).catch((err) => showDraftResult({ ok: false, error: err && err.message ? err.message : String(err) }));
       }
     });
-    for (const id of ["newAppId", "newAppKind", "newAppPort", "newAppHost", "newAppEntry", "newAppModuleRoot"]) {
+    $("configFiles").addEventListener("click", (event) => {
+      const target = event.target && event.target.closest ? event.target.closest("[data-config-draft]") : null;
+      if (target) {
+        openConfigFileDraft(target.getAttribute("data-config-draft")).catch((err) => showDraftResult({ ok: false, error: err && err.message ? err.message : String(err) }));
+      }
+    });
+    for (const id of ["newAppId", "newAppKind", "newAppPort", "newAppHost", "newAppEntry", "newAppModuleRoot", "newPipelineId", "newIngressRef", "newMatchMethods", "newMatchPaths", "newMatchHosts", "newPolicyRefs", "newTransformRefs", "newEgressRef"]) {
       $(id).addEventListener("input", generateAppToml);
       $(id).addEventListener("change", generateAppToml);
     }

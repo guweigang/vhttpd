@@ -284,6 +284,35 @@ pub fn (mut app AdminApp) admin_drafts(mut ctx Context) veb.Result {
 	})
 }
 
+@['/admin/config/files'; get]
+pub fn (mut app AdminApp) admin_config_files(mut ctx Context) veb.Result {
+	req := admin_plane_request(ctx, '/admin/config/files')
+	if !app.admin_authorized(ctx) {
+		return admin_plane_forbidden(mut app, mut ctx, 'GET', req)
+	}
+	files := app.shared.admin_state_list_config_files()
+	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, json.encode(files), {
+		'admin_endpoint': 'config_files'
+	})
+}
+
+@['/admin/config/files/draft'; post]
+pub fn (mut app AdminApp) admin_config_file_draft(mut ctx Context) veb.Result {
+	req := admin_plane_request(ctx, '/admin/config/files/draft')
+	if !app.admin_authorized(ctx) {
+		return admin_plane_forbidden(mut app, mut ctx, 'POST', req)
+	}
+	target_path := (ctx.query['path'] or { ctx.query['include_path'] or { '' } }).trim_space()
+	result := app.shared.admin_state_open_config_file_draft(target_path)
+	status := if result.ok { 200 } else { 422 }
+	return admin_plane_json_response(mut app, mut ctx, 'POST', req, status, json.encode(result), {
+		'admin_endpoint': 'config_file_draft'
+		'admin_action':   'config_file_draft'
+		'draft_id':       result.draft_id
+		'error':          result.error
+	})
+}
+
 @['/admin/drafts'; post]
 pub fn (mut app AdminApp) admin_drafts_create(mut ctx Context) veb.Result {
 	req := admin_plane_request(ctx, '/admin/drafts')
