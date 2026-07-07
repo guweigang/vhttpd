@@ -5,12 +5,14 @@ import dispatch
 import feishu
 import json
 import log
+import os
 import time
 import upstream.transport
 import veb
 
 pub struct AdminApp {
 	veb.Middleware[Context]
+	veb.StaticHandler
 pub:
 	admin_host  string
 	admin_port  int
@@ -70,6 +72,24 @@ fn admin_plane_text_response(mut admin_app AdminApp, mut ctx Context, method str
 	}, body), event_metadata), none)
 }
 
+fn admin_ui_dir_path() string {
+	candidates := [
+		os.join_path(os.getwd(), 'admin', 'ui'),
+		os.join_path(os.dir(os.executable()), 'admin', 'ui'),
+		os.join_path(os.dir(@FILE), '..', 'admin', 'ui'),
+	]
+	for candidate in candidates {
+		if os.is_dir(candidate) {
+			return candidate
+		}
+	}
+	return candidates[0]
+}
+
+fn admin_ui_file_path(name string) string {
+	return os.join_path(admin_ui_dir_path(), name)
+}
+
 fn admin_plane_forbidden(mut admin_app AdminApp, mut ctx Context, method string, req AdminPlaneRequest) veb.Result {
 	return admin_plane_json_response(mut admin_app, mut ctx, method, req, 403, json.encode(admin.AdminErrorResponse{
 		error: 'forbidden'
@@ -88,7 +108,7 @@ fn (app &App) api_authorized(ctx Context) bool {
 	return admin.AdminAuth.authorized(app.control_plane.admin.token, headers, ctx.query)
 }
 
-@[get]
+@['/health'; get]
 pub fn (mut app AdminApp) health(mut ctx Context) veb.Result {
 	req := admin_plane_request(ctx, '/health')
 	return admin_plane_text_response(mut app, mut ctx, 'GET', req, 200, 'OK', map[string]string{})
@@ -923,6 +943,21 @@ fn run_admin_server(mut shared_app App, host string, port int, token string) {
 		admin_port:  port
 		admin_token: token
 		shared:      unsafe { shared_app }
+	}
+	admin_app.mount_static_folder_at(admin_ui_dir_path(), '/admin/ui') or {
+		log.error('admin ui mount failed: ${err}')
+	}
+	admin_app.serve_static('/admin/ui', admin_ui_file_path('index.html')) or {
+		log.error('admin ui index alias failed: ${err}')
+	}
+	admin_app.serve_static('/', admin_ui_file_path('index.html')) or {
+		log.error('admin ui root alias failed: ${err}')
+	}
+	admin_app.serve_static('/admin/ui/app', admin_ui_file_path('app.js')) or {
+		log.error('admin ui app alias failed: ${err}')
+	}
+	admin_app.serve_static('/admin/ui/style', admin_ui_file_path('style.css')) or {
+		log.error('admin ui style alias failed: ${err}')
 	}
 	veb.run_at[AdminApp, Context](mut admin_app,
 		host:                 host

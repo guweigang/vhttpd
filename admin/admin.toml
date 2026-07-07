@@ -18,32 +18,6 @@ transport = "tcp"
 host = "127.0.0.1"
 port = 20210
 
-[listeners.control]
-protocol = "http"
-transport = "tcp"
-host = "127.0.0.1"
-port = 20211
-
 [control]
-listener = "listener:control"
+listener = "listener:admin_ui"
 token = "Abcd.1234"
-
-[engines.admin-ui]
-kind = "vjsx"
-entry = "./app.mts"
-module_root = "."
-build_root = "../tmp/admin-control-vjsx-build"
-runtime_profile = "node"
-thread_count = 4
-enable_network = true
-
-[adapters.admin-ui]
-kind = "http-handler"
-engine = "engine:admin-ui"
-
-[[pipelines]]
-id = "admin.ui"
-group = "admin"
-ingress = "listener:admin_ui"
-match.paths = ["*"]
-egress = "adapter:admin-ui"

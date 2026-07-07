@@ -16,6 +16,9 @@ fn preflight_bind_addr(addr string) ! {
 }
 
 fn preflight_server_bind(runtime_cfg server_lifecycle.ServerRuntimeConfig) ! {
+	if !runtime_cfg.serve_data_plane {
+		return
+	}
 	host := runtime_cfg.host.trim_space()
 	port := runtime_cfg.port
 	if port <= 0 {
@@ -95,6 +98,9 @@ fn apply_runtime_scheme_to_engine_runtime(mut engines EngineRuntime, scheme stri
 }
 
 fn serve_server_runtime(mut app App, runtime_cfg server_lifecycle.ServerRuntimeConfig) {
+	if !runtime_cfg.serve_data_plane {
+		return
+	}
 	if runtime_cfg.ssl_enabled && runtime_cfg.ssl_cert.trim_space() != ''
 		&& runtime_cfg.ssl_cert_key.trim_space() != '' {
 		veb.run_at[App, Context](mut app,

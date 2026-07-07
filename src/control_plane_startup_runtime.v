@@ -24,8 +24,8 @@ fn ControlPlaneStartupRuntime.start_admin_plane(mut app App, admin_enabled bool,
 			'host': admin_host
 			'port': '${admin_port}'
 		})
-		log.info('[vhttpd] Control Plane (admin): http://${admin_host}:${admin_port}/admin')
+		log.info('[vhttpd] Control Plane (admin): http://${admin_host}:${admin_port}/admin/ui')
 	} else {
-		log.info('[vhttpd] Control Plane (admin): disabled (served on Data Plane /admin)')
+		log.info('[vhttpd] Control Plane (admin): disabled')
 	}
 }

@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>vhttpd Admin</title>
+  <link rel="stylesheet" href="/admin/ui/style.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <h1>vhttpd Admin</h1>
+        <span id="stateDot" class="state-dot"></span>
+      </div>
+      <nav class="nav" aria-label="Admin sections">
+        <button data-view="dashboard" aria-selected="true">Dashboard</button>
+        <button data-view="observability">Observability</button>
+        <button data-view="apps">Applications</button>
+        <button data-view="graph">Runtime Graph</button>
+        <button data-view="schema">Schema</button>
+        <button data-view="drafts">Drafts</button>
+        <button data-view="events">Events</button>
+        <button data-view="raw">Raw</button>
+      </nav>
+      <div class="side-form">
+        <label for="adminToken">Admin Token</label>
+        <div class="side-actions">
+          <input id="adminToken" autocomplete="off" type="password" placeholder="x-vhttpd-admin-token">
+          <button id="applyToken" class="side-button icon" title="Apply token" aria-label="Apply token">OK</button>
+        </div>
+      </div>
+    </aside>
+    <section class="content">
+      <header class="topbar">
+        <h2 id="viewTitle">Dashboard</h2>
+        <div class="toolbar">
+          <button id="refresh" class="button primary">Refresh</button>
+        </div>
+      </header>
+      <main class="main">
+        <div id="status" class="status">Idle</div>
+        <section id="view-dashboard" class="view grid">
+          <div class="grid metrics" id="metrics"></div>
+          <div class="panel">
+            <div class="panel-header"><h3>Live Topology</h3><span id="dashboardTopologyCount" class="pill gray">0</span></div>
+            <div class="panel-body"><div id="dashboardTopology" class="flow-map compact"></div></div>
+          </div>
+          <div class="grid split">
+            <div class="panel">
+              <div class="panel-header"><h3>Applications</h3><span id="dashboardAppCount" class="pill gray">0</span></div>
+              <div class="panel-body"><div id="dashboardApps"></div></div>
+            </div>
+            <div class="panel">
+              <div class="panel-header"><h3>Listening Ports</h3><span id="listenerCount" class="pill gray">0</span></div>
+              <div class="panel-body"><div id="listenerPorts"></div></div>
+            </div>
+          </div>
+          <div class="grid split">
+            <div class="panel">
+              <div class="panel-header"><h3>Pipeline Flow</h3><span id="pipelineCount" class="pill gray">0</span></div>
+              <div class="panel-body"><div id="pipelineFlows"></div></div>
+            </div>
+            <div class="panel">
+              <div class="panel-header"><h3>Runtime</h3><span id="runtimeState" class="pill gray">unknown</span></div>
+              <div class="panel-body"><div id="runtimeSummary" class="list"></div></div>
+            </div>
+          </div>
+        </section>
+        <section id="view-observability" class="view hidden grid">
+          <div class="grid metrics" id="observabilityMetrics"></div>
+          <div class="viz-grid">
+            <div class="panel">
+              <div class="panel-header"><h3>Request Flow</h3><span id="observabilityFlowCount" class="pill gray">0</span></div>
+              <div class="panel-body"><div id="observabilityFlow" class="flow-map"></div></div>
+            </div>
+            <div class="viz-stack">
+              <div class="panel">
+                <div class="panel-header"><h3>Route Executors</h3><span id="executorMixCount" class="pill gray">0</span></div>
+                <div class="panel-body"><div id="executorMix" class="bar-list"></div></div>
+              </div>
+              <div class="panel">
+                <div class="panel-header"><h3>Health</h3><span id="healthState" class="pill gray">unknown</span></div>
+                <div class="panel-body"><div id="healthGrid" class="health-grid"></div></div>
+              </div>
+            </div>
+          </div>
+          <div class="grid split">
+            <div class="panel">
+              <div class="panel-header"><h3>Traffic Trend</h3><span id="trafficTrendCount" class="pill gray">0 samples</span></div>
+              <div class="panel-body"><div id="trafficTrend"></div></div>
+            </div>
+            <div class="panel">
+              <div class="panel-header"><h3>Recent Event Types</h3><span id="eventMixCount" class="pill gray">0</span></div>
+              <div class="panel-body"><div id="eventMix" class="bar-list"></div></div>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-header"><h3>Listener Routes</h3><span id="routeTableCount" class="pill gray">0</span></div>
+            <div class="panel-body"><div id="routeTable"></div></div>
+          </div>
+        </section>
+        <section id="view-apps" class="view hidden grid">
+          <div class="panel">
+            <div class="panel-header"><h3>Config Files</h3><span id="configFileCount" class="pill gray">0</span></div>
+            <div class="panel-body"><div id="configFiles"></div></div>
+          </div>
+          <div class="grid split">
+            <div class="panel">
+              <div class="panel-header"><h3>Applications</h3><span id="appCount" class="pill gray">0</span></div>
+              <div class="panel-body"><div id="apps" class="app-list"></div></div>
+            </div>
+            <div class="panel">
+              <div class="panel-header"><h3>New App Config</h3><span id="appDraftState" class="pill gray">draft</span></div>
+              <div class="panel-body">
+                <div class="form-grid">
+                  <div class="form-field">
+                    <label for="newAppId">App ID</label>
+                    <input id="newAppId" autocomplete="off" placeholder="my_app">
+                  </div>
+                  <div class="form-field">
+                    <label for="newAppKind">Kind</label>
+                    <select id="newAppKind">
+                      <option value="vjsx">VJSX HTTP</option>
+                      <option value="static">Static Files</option>
+                      <option value="fixed-response">Fixed Response</option>
+                    </select>
+                  </div>
+                  <div class="form-field">
+                    <label for="newAppPort">Listener Port</label>
+                    <input id="newAppPort" autocomplete="off" inputmode="numeric" placeholder="20300">
+                  </div>
+                  <div class="form-field">
+                    <label for="newAppHost">Host</label>
+                    <input id="newAppHost" autocomplete="off" value="127.0.0.1">
+                  </div>
+                  <div class="form-field full">
+                    <label for="newAppEntry">Entry / Root</label>
+                    <input id="newAppEntry" autocomplete="off" placeholder="./app.mts">
+                  </div>
+                  <div class="form-field full">
+                    <label for="newAppModuleRoot">Module Root</label>
+                    <input id="newAppModuleRoot" autocomplete="off" placeholder=".">
+                  </div>
+                  <div class="form-field">
+                    <label for="newPipelineId">Pipeline ID</label>
+                    <input id="newPipelineId" autocomplete="off" placeholder="my_app.app">
+                  </div>
+                  <div class="form-field">
+                    <label for="newIngressRef">Ingress Ref</label>
+                    <input id="newIngressRef" autocomplete="off" placeholder="listener:my_app">
+                  </div>
+                  <div class="form-field">
+                    <label for="newMatchMethods">Match Methods</label>
+                    <input id="newMatchMethods" autocomplete="off" placeholder="GET,POST">
+                  </div>
+                  <div class="form-field">
+                    <label for="newMatchPaths">Match Paths</label>
+                    <input id="newMatchPaths" autocomplete="off" value="*">
+                  </div>
+                  <div class="form-field">
+                    <label for="newMatchHosts">Match Hosts</label>
+                    <input id="newMatchHosts" autocomplete="off" placeholder="example.test">
+                  </div>
+                  <div class="form-field">
+                    <label for="newPolicyRefs">Policies</label>
+                    <input id="newPolicyRefs" autocomplete="off" placeholder="policy:limits/default">
+                  </div>
+                  <div class="form-field">
+                    <label for="newTransformRefs">Transforms</label>
+                    <input id="newTransformRefs" autocomplete="off" placeholder="transform:auth">
+                  </div>
+                  <div class="form-field">
+                    <label for="newEgressRef">Egress Ref</label>
+                    <input id="newEgressRef" autocomplete="off" placeholder="adapter:my_app">
+                  </div>
+                  <div class="form-field full">
+                    <label for="newAppIncludePath">Include Path</label>
+                    <input id="newAppIncludePath" autocomplete="off" placeholder="../examples/my-app/my-app-v2.toml">
+                  </div>
+                  <div class="form-field full">
+                    <label for="newAppToml">Generated TOML</label>
+                    <textarea id="newAppToml" spellcheck="false"></textarea>
+                  </div>
+                </div>
+                <div class="toolbar" style="justify-content:flex-start; margin-top:12px">
+                  <button id="generateAppConfig" class="button">Generate</button>
+                  <button id="saveAppDraft" class="button primary">Save Draft</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+        <section id="view-graph" class="view hidden">
+          <div class="panel">
+            <div class="panel-header"><h3>Nodes</h3><span id="graphCount" class="pill gray">0</span></div>
+            <div class="panel-body"><div id="graphNodes" class="graph-list"></div></div>
+          </div>
+        </section>
+        <section id="view-schema" class="view hidden">
+          <div class="panel">
+            <div class="panel-header"><h3>Catalog</h3><span id="schemaCount" class="pill gray">0</span></div>
+            <div class="panel-body"><div id="schemaCatalog"></div></div>
+          </div>
+        </section>
+        <section id="view-drafts" class="view hidden">
+          <div class="panel">
+            <div class="panel-header"><h3>Drafts</h3><span id="draftCount" class="pill gray">0</span></div>
+            <div class="panel-body">
+              <div id="drafts"></div>
+              <div id="draftEditor" class="draft-editor hidden">
+                <div class="form-grid">
+                  <div class="form-field">
+                    <label for="draftId">Draft ID</label>
+                    <input id="draftId" autocomplete="off" readonly>
+                  </div>
+                  <div class="form-field">
+                    <label for="draftPublishPath">Publish Include Path</label>
+                    <input id="draftPublishPath" autocomplete="off" placeholder="../examples/my-app/my-app-v2.toml">
+                  </div>
+                  <div class="form-field full">
+                    <label for="draftBody">TOML</label>
+                    <textarea id="draftBody" spellcheck="false"></textarea>
+                  </div>
+                </div>
+                <div class="draft-actions">
+                  <button id="saveDraft" class="button primary">Save</button>
+                  <button id="validateDraft" class="button">Validate</button>
+                  <button id="diffDraft" class="button">Diff</button>
+                  <button id="publishDraft" class="button">Publish Include</button>
+                  <button id="applyPublishedConfig" class="button">Hot Apply</button>
+                  <button id="deleteDraft" class="button danger">Delete</button>
+                </div>
+                <pre id="draftResult"></pre>
+              </div>
+            </div>
+          </div>
+        </section>
+        <section id="view-events" class="view hidden">
+          <div class="panel">
+            <div class="panel-header"><h3>Events</h3><span id="eventCount" class="pill gray">0</span></div>
+            <div class="panel-body"><div id="events"></div></div>
+          </div>
+        </section>
+        <section id="view-raw" class="view hidden">
+          <div class="panel">
+            <div class="panel-header"><h3>Snapshot</h3><span class="pill gray">json</span></div>
+            <div class="panel-body"><pre id="raw"></pre></div>
+          </div>
+        </section>
+      </main>
+    </section>
+  </div>
+  <script src="/admin/ui/app.js"></script>
+</body>
+</html>

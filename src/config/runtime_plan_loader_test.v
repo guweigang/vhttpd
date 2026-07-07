@@ -608,20 +608,15 @@ egress = "adapter:app"
 fn test_load_runtime_plan_file_compiles_wordpress_paseo_admin_stack_example() {
 	config_file := os.join_path(os.dir(@FILE), '..', '..', 'admin', 'admin.toml')
 	plan := load_runtime_plan_file(config_file) or { panic(err) }
-	assert plan.control.listener?.str() == 'listener:control'
+	assert plan.control.listener?.str() == 'listener:admin_ui'
 	assert plan.control.token == 'Abcd.1234'
 	assert plan.listeners['web'].port == 8080
 	assert plan.listeners['admin_ui'].port == 20210
-	assert plan.listeners['control'].port == 20211
 	assert plan.listeners['paseo'].port == 19901
 	assert plan.engines['php'].kind == 'php-worker'
-	assert plan.engines['admin-ui'].kind == 'vjsx'
 	assert plan.engines['paseo'].kind == 'vjsx'
 	assert plan.engines['paseo'].options.bools['websocket_dispatch'] == true
-	assert plan.adapters['admin-ui'].engine?.str() == 'engine:admin-ui'
 	assert plan.adapters['paseo'].engine?.str() == 'engine:paseo'
-	assert plan.pipelines.any(it.id == 'admin.ui' && it.ingress.str() == 'listener:admin_ui'
-		&& it.egress.str() == 'adapter:admin-ui')
 	assert plan.pipelines.any(it.id == 'paseo.relay' && it.ingress.str() == 'listener:paseo'
 		&& it.egress.str() == 'adapter:paseo')
 	assert plan.pipelines.any(it.id == 'wordpress.front-page')

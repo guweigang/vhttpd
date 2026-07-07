@@ -39,6 +39,7 @@ pub:
 	ssl_enabled           bool
 	ssl_cert              string
 	ssl_cert_key          string
+	serve_data_plane      bool
 	pid_file              string
 	admin_enabled         bool
 	admin_host            string
@@ -98,12 +99,22 @@ pub fn ServerRuntimeConfig.resolve_for_target_with_plan(args []string, cfg confi
 	assets_root := assets_cfg.root
 	assets_root_real := if assets_root.trim_space() == '' { '' } else { os.real_path(assets_root) }
 	assets_cache_control := assets_cfg.cache_control
+	plan_admin_listener_value := plan_admin_listener_plan(resolved_plan)
 	admin_host_arg := config.CliArgs.string_or(args, '--admin-host', cfg.admin.host).trim_space()
-	admin_port := config.CliArgs.int_or(args, '--admin-port', cfg.admin.port)
+	admin_port := config.CliArgs.int_or(args, '--admin-port', plan_admin_port(resolved_plan,
+		cfg.admin.port))
 	admin_token := config.CliArgs.string_or(args, '--admin-token', plan_admin_token(resolved_plan,
 		cfg.admin.token))
 	admin_enabled := admin_enabled_override && admin_port > 0
-	admin_host := if admin_host_arg == '' { '127.0.0.1' } else { admin_host_arg }
+	admin_host := if admin_host_arg == '' {
+		if plan_admin_listener_value.host.trim_space() == '' {
+			'127.0.0.1'
+		} else {
+			plan_admin_listener_value.host
+		}
+	} else {
+		admin_host_arg
+	}
 	ssl_cert := config.CliArgs.string_or(args, '--ssl-cert', ssl.cert)
 	ssl_cert_key := config.CliArgs.string_or(args, '--ssl-key', ssl.cert_key)
 	ssl_enabled := ssl.enabled || (ssl_cert.trim_space() != '' && ssl_cert_key.trim_space() != '')
@@ -128,6 +139,7 @@ pub fn ServerRuntimeConfig.resolve_for_target_with_plan(args []string, cfg confi
 		ssl_enabled:           ssl_enabled
 		ssl_cert:              ssl_cert
 		ssl_cert_key:          ssl_cert_key
+		serve_data_plane:      !plan_listener_is_control_listener(resolved_plan, plan_listener_id)
 		pid_file:              pid_file
 		admin_enabled:         admin_enabled
 		admin_host:            admin_host
@@ -186,6 +198,37 @@ fn plan_pid_file(plan runtime_plan.RuntimePlan, fallback string) string {
 
 fn plan_admin_token(plan runtime_plan.RuntimePlan, fallback string) string {
 	return if plan.control.token.trim_space() != '' { plan.control.token } else { fallback }
+}
+
+fn plan_admin_port(plan runtime_plan.RuntimePlan, fallback int) int {
+	if listener := plan_admin_listener(plan) {
+		if listener.port > 0 {
+			return listener.port
+		}
+	}
+	return fallback
+}
+
+fn plan_admin_listener_plan(plan runtime_plan.RuntimePlan) runtime_plan.ListenerPlan {
+	return plan_admin_listener(plan) or { runtime_plan.ListenerPlan{} }
+}
+
+fn plan_admin_listener(plan runtime_plan.RuntimePlan) ?runtime_plan.ListenerPlan {
+	if control_listener := plan.control.listener {
+		if control_listener.domain == .listener {
+			if listener := plan.listeners[control_listener.id] {
+				return listener
+			}
+		}
+	}
+	return none
+}
+
+fn plan_listener_is_control_listener(plan runtime_plan.RuntimePlan, listener_id string) bool {
+	if control_listener := plan.control.listener {
+		return control_listener.domain == .listener && control_listener.id == listener_id
+	}
+	return false
 }
 
 fn plan_worker_int_option(engine runtime_plan.EnginePlan, key string, fallback int) int {

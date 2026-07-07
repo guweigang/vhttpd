@@ -96,8 +96,13 @@ pub fn resolve_multi_server_runtime_config(args []string, cfg config.VhttpdConfi
 fn resolve_plan_multi_server_runtime_config(args []string, cfg config.VhttpdConfig, plan runtime_plan.RuntimePlan) !MultiServerRuntimeConfig {
 	mut listener_ids := plan.listeners.keys()
 	listener_ids.sort()
-	admin_port := config.CliArgs.int_or(args, '--admin-port', cfg.admin.port)
-	admin_owner_listener_id := if admin_port > 0 && listener_ids.len > 0 {
+	admin_owner_listener_id := if control_listener := plan.control.listener {
+		if control_listener.domain == .listener {
+			control_listener.id
+		} else {
+			''
+		}
+	} else if listener_ids.len > 0 {
 		listener_ids[0]
 	} else {
 		''
