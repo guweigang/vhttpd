@@ -812,6 +812,7 @@ function adminControlHtml(ctx) {
     const endpoints = {
       runtime: "/api/admin/runtime",
       graph: "/api/admin/runtime/graph",
+      apps: "/api/admin/apps",
       schema: "/api/admin/schema",
       drafts: "/api/admin/drafts",
       events: "/api/admin/events?limit=80",
