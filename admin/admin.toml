@@ -1,0 +1,49 @@
+version = 2
+
+include = [
+  "../examples/wordpress/vhttpd-v2.toml",
+  "../examples/paseo-relay/paseo-v2.toml",
+]
+
+[server]
+timezone = "Asia/Shanghai"
+pid_file = "/tmp/vhttpd_wordpress_paseo_admin.pid"
+
+[observability]
+event_log = "/tmp/vhttpd_wordpress_paseo_admin.events.ndjson"
+
+[listeners.admin_ui]
+protocol = "http"
+transport = "tcp"
+host = "127.0.0.1"
+port = 20210
+
+[listeners.control]
+protocol = "http"
+transport = "tcp"
+host = "127.0.0.1"
+port = 20211
+
+[control]
+listener = "listener:control"
+token = "Abcd.1234"
+
+[engines.admin-ui]
+kind = "vjsx"
+entry = "./app.mts"
+module_root = "."
+build_root = "../tmp/admin-control-vjsx-build"
+runtime_profile = "node"
+thread_count = 4
+enable_network = true
+
+[adapters.admin-ui]
+kind = "http-handler"
+engine = "engine:admin-ui"
+
+[[pipelines]]
+id = "admin.ui"
+group = "admin"
+ingress = "listener:admin_ui"
+match.paths = ["*"]
+egress = "adapter:admin-ui"

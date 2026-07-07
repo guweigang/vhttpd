@@ -1,6 +1,6 @@
 [paths]
-root = "../../"
-vjsx_app = "${root}/examples/admin-control/app.mts"
+root = "../"
+vjsx_app = "${root}/admin/app.mts"
 vjsx_build_root = "${root}/tmp/admin-control-vjsx-build"
 
 [files]
@@ -18,7 +18,7 @@ token = "Abcd.1234"
 [sites.admin_control]
 host = "127.0.0.1"
 port = 20210
-root = "${paths.root}/examples/admin-control"
+root = "${paths.root}/admin"
 executor = "vjsx"
 app = "${paths.vjsx_app}"
 vjsx.build_root = "${paths.vjsx_build_root}"

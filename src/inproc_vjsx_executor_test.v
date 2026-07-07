@@ -168,7 +168,7 @@ fn test_inproc_vjsx_executor_repo_api_demo_handler_runs() {
 }
 
 fn test_inproc_vjsx_executor_admin_control_app_renders_shell() {
-	app_file := os.join_path(os.dir(@FILE), '..', 'examples', 'admin-control', 'app.mts')
+	app_file := os.join_path(os.dir(@FILE), '..', 'admin', 'app.mts')
 	assert os.exists(app_file)
 	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
 		thread_count:    1
@@ -198,6 +198,7 @@ fn test_inproc_vjsx_executor_admin_control_app_renders_shell() {
 	assert outcome.response.body.contains('<h1>vhttpd Admin</h1>')
 	assert outcome.response.body.contains('/api/admin/runtime/graph')
 	assert outcome.response.body.contains('id="metrics"')
+	assert outcome.response.body.contains('Observability')
 }
 
 fn test_inproc_vjsx_executor_identity_and_lane_bootstrap() {
