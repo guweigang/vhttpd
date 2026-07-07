@@ -606,8 +606,7 @@ egress = "adapter:app"
 }
 
 fn test_load_runtime_plan_file_compiles_wordpress_paseo_admin_stack_example() {
-	config_file := os.join_path(os.dir(@FILE), '..', '..', 'examples', 'wordpress',
-		'wordpress-paseo-admin-v2.toml')
+	config_file := os.join_path(os.dir(@FILE), '..', '..', 'admin', 'admin.toml')
 	plan := load_runtime_plan_file(config_file) or { panic(err) }
 	assert plan.control.listener?.str() == 'listener:control'
 	assert plan.control.token == 'Abcd.1234'

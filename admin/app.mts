@@ -710,15 +710,15 @@ function adminControlHtml(ctx) {
                   </div>
                   <div class="form-field full">
                     <label for="newAppEntry">Entry / Root</label>
-                    <input id="newAppEntry" autocomplete="off" placeholder="../my-app/app.mts">
+                    <input id="newAppEntry" autocomplete="off" placeholder="./app.mts">
                   </div>
                   <div class="form-field full">
                     <label for="newAppModuleRoot">Module Root</label>
-                    <input id="newAppModuleRoot" autocomplete="off" placeholder="../my-app">
+                    <input id="newAppModuleRoot" autocomplete="off" placeholder=".">
                   </div>
                   <div class="form-field full">
                     <label for="newAppIncludePath">Include Path</label>
-                    <input id="newAppIncludePath" autocomplete="off" placeholder="../my-app/my-app-v2.toml">
+                    <input id="newAppIncludePath" autocomplete="off" placeholder="../examples/my-app/my-app-v2.toml">
                   </div>
                   <div class="form-field full">
                     <label for="newAppToml">Generated TOML</label>
@@ -1299,7 +1299,7 @@ function adminControlHtml(ctx) {
       const appId = id || "new_app";
       $("newAppId").value = appId;
       if (!$("newAppIncludePath").value.trim()) {
-        $("newAppIncludePath").value = "../" + appId + "/" + appId + "-v2.toml";
+        $("newAppIncludePath").value = "../examples/" + appId + "/" + appId + "-v2.toml";
       }
       let body = 'version = 2\\n\\n' +
         '[listeners.' + appId + ']\\n' +
