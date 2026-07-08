@@ -121,6 +121,55 @@
       font-size: 12px;
       line-height: 1.45;
     }
+    .code-editor {
+      position: relative;
+      height: min(62vh, 620px);
+      min-height: 360px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #0f1720;
+      overflow: hidden;
+    }
+    .code-editor textarea,
+    .code-highlight {
+      position: absolute;
+      inset: 0;
+      margin: 0;
+      border: 0;
+      border-radius: 0;
+      padding: 14px 16px;
+      overflow: auto;
+      white-space: pre;
+      tab-size: 2;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+    .code-editor textarea {
+      min-height: 0;
+      resize: none;
+      background: transparent;
+      color: transparent;
+      caret-color: #e8eef8;
+      outline: none;
+      z-index: 2;
+    }
+    .code-editor textarea::selection {
+      background: rgba(96, 165, 250, .32);
+      color: transparent;
+    }
+    .code-highlight {
+      pointer-events: none;
+      color: #d8e2ef;
+      z-index: 1;
+    }
+    .tok-comment { color: #7f8ea3; }
+    .tok-string { color: #8bd5ca; }
+    .tok-number { color: #f4bf75; }
+    .tok-key,
+    .tok-section { color: #7dd3fc; font-weight: 700; }
+    .tok-keyword { color: #c4b5fd; font-weight: 700; }
+    .tok-bool { color: #fda4af; }
     .sidebar input {
       border-color: #445166;
       background: #161d27;

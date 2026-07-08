@@ -2,6 +2,7 @@ const endpoints = {
       runtime: "/admin/runtime",
       graph: "/admin/runtime/graph",
       configFiles: "/admin/config/files",
+      sourceFiles: "/admin/source/files",
       schema: "/admin/schema",
       drafts: "/admin/drafts",
       events: "/admin/events?limit=80",
@@ -13,6 +14,9 @@ const endpoints = {
       errors: {},
       history: [],
       activeDraftId: "",
+      activeSourceDraftId: "",
+      activeSourcePath: "",
+      activeSourceLanguage: "",
       draftPublishResult: null
     };
     const $ = (id) => document.getElementById(id);
@@ -89,6 +93,7 @@ const endpoints = {
         observability: "Observability",
         graph: "Runtime Graph",
         apps: "Applications",
+        editor: "Editor",
         schema: "Schema",
         drafts: "Drafts",
         events: "Events",
@@ -481,6 +486,86 @@ const endpoints = {
         ];
       }));
     }
+    function renderSourceFiles() {
+      const files = asArray(state.data.sourceFiles);
+      $("sourceFileCount").textContent = files.length + " files";
+      $("sourceFiles").innerHTML = table(["Type", "Path", "Bytes", "Actions"], files.map((file) => {
+        const path = file.include_path || file.path || "";
+        const editable = file.exists !== false && file.language;
+        return [
+          '<span class="pill ' + (file.language === "toml" ? "blue" : "") + '">' + esc(file.language || file.role || "source") + '</span>',
+          esc(path),
+          esc(file.bytes || 0),
+          editable
+            ? '<button class="button" data-source-open="' + esc(path) + '">Open</button>'
+            : '<span class="pill gray">missing</span>'
+        ];
+      }));
+    }
+    function sourceLanguageFromPath(path) {
+      const ext = String(path || "").split(".").pop().toLowerCase();
+      if (ext === "toml") return "toml";
+      if (["ts", "mts", "cts"].includes(ext)) return "typescript";
+      if (["js", "mjs", "cjs"].includes(ext)) return "javascript";
+      return "text";
+    }
+    function highlightSource(text, language) {
+      const source = String(text || "");
+      if (language === "toml") return highlightToml(source);
+      if (language === "typescript" || language === "javascript") return highlightTypescript(source);
+      return esc(source);
+    }
+    function highlightToml(text) {
+      return text.split("\n").map((line) => {
+        const match = line.match(/^(\s*)(\[[^\]]+\])/);
+        if (match) {
+          return esc(match[1]) + '<span class="tok-section">' + esc(match[2]) + '</span>' + esc(line.slice(match[0].length));
+        }
+        const commentIndex = line.indexOf("#");
+        const code = commentIndex >= 0 ? line.slice(0, commentIndex) : line;
+        const comment = commentIndex >= 0 ? line.slice(commentIndex) : "";
+        const rendered = esc(code)
+          .replace(/^(\s*)([A-Za-z0-9_.-]+)(\s*=)/, '$1<span class="tok-key">$2</span>$3')
+          .replace(/(&quot;[^&]*?&quot;)/g, '<span class="tok-string">$1</span>')
+          .replace(/\b(true|false)\b/g, '<span class="tok-bool">$1</span>')
+          .replace(/\b(\d+(?:\.\d+)?)\b/g, '<span class="tok-number">$1</span>');
+        return rendered + (comment ? '<span class="tok-comment">' + esc(comment) + '</span>' : "");
+      }).join("\n");
+    }
+    function highlightTypescript(text) {
+      const keywords = "as|async|await|break|case|catch|class|const|continue|default|delete|do|else|export|extends|false|finally|for|from|function|if|import|in|interface|let|new|null|of|return|switch|throw|true|try|type|undefined|var|while";
+      const pattern = new RegExp("(//.*$|/\\*[\\s\\S]*?\\*/|'(?:\\\\.|[^'])*'|\"(?:\\\\.|[^\"])*\"|`(?:\\\\.|[^`])*`|\\b(?:" + keywords + ")\\b|\\b\\d+(?:\\.\\d+)?\\b)", "gm");
+      let out = "";
+      let last = 0;
+      text.replace(pattern, (token, _match, offset) => {
+        out += esc(text.slice(last, offset));
+        const safe = esc(token);
+        if (token.startsWith("//") || token.startsWith("/*")) out += '<span class="tok-comment">' + safe + '</span>';
+        else if (token.startsWith("'") || token.startsWith('"') || token.startsWith("`")) out += '<span class="tok-string">' + safe + '</span>';
+        else if (/^\d/.test(token)) out += '<span class="tok-number">' + safe + '</span>';
+        else if (token === "true" || token === "false" || token === "null" || token === "undefined") out += '<span class="tok-bool">' + safe + '</span>';
+        else out += '<span class="tok-keyword">' + safe + '</span>';
+        last = offset + token.length;
+        return token;
+      });
+      return out + esc(text.slice(last));
+    }
+    function updateSourceHighlight() {
+      const input = $("sourceEditorInput");
+      $("sourceEditorHighlight").innerHTML = highlightSource(input.value, state.activeSourceLanguage) + "\n";
+    }
+    function syncSourceEditorScroll() {
+      const input = $("sourceEditorInput");
+      const highlight = $("sourceEditorHighlight");
+      highlight.scrollTop = input.scrollTop;
+      highlight.scrollLeft = input.scrollLeft;
+    }
+    function setSourceEditorValue(value, language) {
+      state.activeSourceLanguage = language || state.activeSourceLanguage || "text";
+      $("sourceEditorInput").value = value || "";
+      updateSourceHighlight();
+      syncSourceEditorScroll();
+    }
     function renderObservability() {
       const runtime = state.data.runtime || {};
       const stats = runtimeStats();
@@ -723,6 +808,69 @@ const endpoints = {
       $("draftPublishPath").value = result.include_path || path;
       showDraftResult(result);
     }
+    function showSourceResult(value) {
+      $("sourceResult").textContent = typeof value === "string" ? value : JSON.stringify(value, null, 2);
+    }
+    async function openSourceFileDraft(path) {
+      const result = await apiRequest("/admin/source/files/draft?path=" + encodeURIComponent(path), { method: "POST" });
+      if (!result.ok) throw new Error(result.error || "source_open_failed");
+      state.activeSourceDraftId = result.draft_id;
+      state.activeSourcePath = result.include_path || path;
+      state.activeSourceLanguage = result.language || sourceLanguageFromPath(state.activeSourcePath);
+      $("sourceEditorPanel").classList.remove("hidden");
+      $("sourcePath").value = state.activeSourcePath;
+      $("sourceLanguage").value = state.activeSourceLanguage;
+      $("sourceDraftId").value = state.activeSourceDraftId;
+      $("sourceEditorState").textContent = "opened";
+      setSourceEditorValue(result.entry && result.entry.value ? result.entry.value : "", state.activeSourceLanguage);
+      showSourceResult(result);
+      selectView("editor");
+    }
+    async function saveSourceDraftEditor() {
+      const id = state.activeSourceDraftId || $("sourceDraftId").value.trim();
+      if (!id) throw new Error("source_draft_id_required");
+      $("sourceEditorState").textContent = "saving";
+      const result = await apiRequest("/admin/drafts/" + encodeURIComponent(id), {
+        method: "PUT",
+        headers: { "content-type": "text/plain; charset=utf-8" },
+        body: $("sourceEditorInput").value
+      });
+      $("sourceEditorState").textContent = "saved";
+      showSourceResult(result);
+      await refresh();
+    }
+    async function publishSourceDraftEditor() {
+      const id = state.activeSourceDraftId || $("sourceDraftId").value.trim();
+      const path = state.activeSourcePath || $("sourcePath").value.trim();
+      if (!id || !path) throw new Error("source_publish_target_required");
+      $("sourceEditorState").textContent = "publishing";
+      const result = await apiRequest("/admin/source/drafts/" + encodeURIComponent(id) + "/publish?path=" + encodeURIComponent(path), {
+        method: "POST"
+      });
+      $("sourceEditorState").textContent = result.ok ? "published" : "error";
+      showSourceResult(result);
+      await refresh();
+    }
+    async function validateSourceDraftEditor() {
+      if (state.activeSourceLanguage !== "toml") {
+        showSourceResult({ ok: false, error: "validate_only_supports_toml" });
+        return;
+      }
+      const id = state.activeSourceDraftId || $("sourceDraftId").value.trim();
+      const result = await apiRequest("/admin/drafts/" + encodeURIComponent(id) + "/validate", { method: "POST" });
+      showSourceResult(result);
+    }
+    async function runSourceAction(action) {
+      try {
+        showSourceResult({ status: "running", action });
+        if (action === "save") await saveSourceDraftEditor();
+        if (action === "publish") await publishSourceDraftEditor();
+        if (action === "validate") await validateSourceDraftEditor();
+      } catch (err) {
+        $("sourceEditorState").textContent = "error";
+        showSourceResult({ ok: false, error: err && err.message ? err.message : String(err) });
+      }
+    }
     async function saveDraftEditor() {
       const id = state.activeDraftId || $("draftId").value.trim();
       if (!id) throw new Error("draft_id_required");
@@ -804,6 +952,7 @@ const endpoints = {
       renderObservability();
       renderApps();
       renderConfigFiles();
+      renderSourceFiles();
       renderGraph();
       renderSchema();
       renderDrafts();
@@ -826,6 +975,26 @@ const endpoints = {
     $("refresh").addEventListener("click", refresh);
     $("generateAppConfig").addEventListener("click", generateAppToml);
     $("saveAppDraft").addEventListener("click", saveAppDraft);
+    $("saveSourceDraft").addEventListener("click", () => runSourceAction("save"));
+    $("publishSourceDraft").addEventListener("click", () => runSourceAction("publish"));
+    $("validateSourceDraft").addEventListener("click", () => runSourceAction("validate"));
+    $("sourceEditorInput").addEventListener("input", updateSourceHighlight);
+    $("sourceEditorInput").addEventListener("scroll", syncSourceEditorScroll);
+    $("sourceEditorInput").addEventListener("keydown", (event) => {
+      if (event.key === "Tab") {
+        event.preventDefault();
+        const input = event.currentTarget;
+        const start = input.selectionStart;
+        const end = input.selectionEnd;
+        input.value = input.value.slice(0, start) + "  " + input.value.slice(end);
+        input.selectionStart = input.selectionEnd = start + 2;
+        updateSourceHighlight();
+      }
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
+        event.preventDefault();
+        runSourceAction("save");
+      }
+    });
     $("saveDraft").addEventListener("click", () => runDraftAction("save"));
     $("validateDraft").addEventListener("click", () => runDraftAction("validate"));
     $("diffDraft").addEventListener("click", () => runDraftAction("diff"));
@@ -842,6 +1011,12 @@ const endpoints = {
       const target = event.target && event.target.closest ? event.target.closest("[data-config-draft]") : null;
       if (target) {
         openConfigFileDraft(target.getAttribute("data-config-draft")).catch((err) => showDraftResult({ ok: false, error: err && err.message ? err.message : String(err) }));
+      }
+    });
+    $("sourceFiles").addEventListener("click", (event) => {
+      const target = event.target && event.target.closest ? event.target.closest("[data-source-open]") : null;
+      if (target) {
+        openSourceFileDraft(target.getAttribute("data-source-open")).catch((err) => showSourceResult({ ok: false, error: err && err.message ? err.message : String(err) }));
       }
     });
     for (const id of ["newAppId", "newAppKind", "newAppPort", "newAppHost", "newAppEntry", "newAppModuleRoot", "newPipelineId", "newIngressRef", "newMatchMethods", "newMatchPaths", "newMatchHosts", "newPolicyRefs", "newTransformRefs", "newEgressRef"]) {

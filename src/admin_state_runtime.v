@@ -67,6 +67,35 @@ struct AdminConfigFileDraftResult {
 	entry        admin_state_store.Entry
 }
 
+struct AdminSourceFileEntry {
+	role         string
+	path         string
+	include_path string
+	language     string
+	exists       bool
+	bytes        int
+	draft_id     string
+}
+
+struct AdminSourceFileDraftResult {
+	ok           bool
+	error        string
+	draft_id     string
+	path         string
+	include_path string
+	language     string
+	entry        admin_state_store.Entry
+}
+
+struct AdminSourcePublishResult {
+	draft_id string
+	ok       bool
+	error    string
+	path     string
+	language string
+	bytes    int
+}
+
 fn (mut app App) open_admin_state_store() !admin_state_store.FileStore {
 	event_log := app.control_plane.event_log.trim_space()
 	root := if event_log != '' {
@@ -256,6 +285,163 @@ fn (mut app App) admin_state_open_config_file_draft(raw_path string) AdminConfig
 	}
 }
 
+fn (mut app App) admin_state_list_source_files() []AdminSourceFileEntry {
+	config_path := os.abs_path(app.admin_state_draft_source_path())
+	config_dir := os.dir(config_path)
+	repo_root := admin_state_repo_root(config_path)
+	mut files := []AdminSourceFileEntry{}
+	mut seen := map[string]bool{}
+	for file in app.admin_state_list_config_files() {
+		files << admin_state_source_file_entry(repo_root, file.role, file.path, file.include_path)
+		seen[os.abs_path(file.path)] = true
+	}
+	for _, engine in app.plan.engines {
+		entry := engine.options.strings['entry'].trim_space()
+		if entry == '' {
+			continue
+		}
+		module_root := engine.options.strings['module_root'].trim_space()
+		resolved := admin_state_resolve_engine_source_path(config_dir, module_root, entry)
+		if resolved == '' || seen[resolved] || !admin_state_source_file_allowed(resolved) {
+			continue
+		}
+		files << admin_state_source_file_entry(repo_root, 'typescript', resolved, admin_state_relative_path(config_dir,
+			resolved))
+		seen[resolved] = true
+	}
+	return files
+}
+
+fn (mut app App) admin_state_open_source_file_draft(raw_path string) AdminSourceFileDraftResult {
+	resolved := app.admin_state_resolve_source_file_path(raw_path) or {
+		return AdminSourceFileDraftResult{
+			ok:    false
+			error: err.msg()
+		}
+	}
+	text := os.read_file(resolved.path) or {
+		return AdminSourceFileDraftResult{
+			ok:           false
+			error:        err.msg()
+			path:         resolved.path
+			include_path: resolved.include_path
+			language:     admin_state_source_language(resolved.path)
+		}
+	}
+	repo_root := admin_state_repo_root(app.admin_state_draft_source_path())
+	draft_id := admin_state_source_draft_id(repo_root, resolved.path)
+	entry := app.admin_state_put_draft(draft_id, text) or {
+		return AdminSourceFileDraftResult{
+			ok:           false
+			error:        err.msg()
+			draft_id:     draft_id
+			path:         resolved.path
+			include_path: resolved.include_path
+			language:     admin_state_source_language(resolved.path)
+		}
+	}
+	app.admin_state_put_draft_metadata(draft_id, AdminDraftMetadata{
+		source_path:  resolved.path
+		include_path: resolved.include_path
+	}) or {}
+	return AdminSourceFileDraftResult{
+		ok:           true
+		draft_id:     draft_id
+		path:         resolved.path
+		include_path: resolved.include_path
+		language:     admin_state_source_language(resolved.path)
+		entry:        entry
+	}
+}
+
+fn (mut app App) admin_state_publish_source_draft(id string, raw_path string) AdminSourcePublishResult {
+	metadata := app.admin_state_get_draft_metadata(id) or { AdminDraftMetadata{} }
+	target := if raw_path.trim_space() != '' {
+		raw_path.trim_space()
+	} else {
+		metadata.source_path.trim_space()
+	}
+	if target == '' {
+		return AdminSourcePublishResult{
+			draft_id: id
+			ok:       false
+			error:    'admin_source_publish_path_required'
+		}
+	}
+	resolved := app.admin_state_resolve_source_file_path(target) or {
+		return AdminSourcePublishResult{
+			draft_id: id
+			ok:       false
+			error:    err.msg()
+		}
+	}
+	entry := app.admin_state_get_draft(id) or {
+		return AdminSourcePublishResult{
+			draft_id: id
+			ok:       false
+			error:    err.msg()
+			path:     resolved.path
+			language: admin_state_source_language(resolved.path)
+		}
+	}
+	old_exists := os.exists(resolved.path)
+	old_value := if old_exists { os.read_file(resolved.path) or { '' } } else { '' }
+	os.mkdir_all(os.dir(resolved.path)) or {
+		return AdminSourcePublishResult{
+			draft_id: id
+			ok:       false
+			error:    err.msg()
+			path:     resolved.path
+			language: admin_state_source_language(resolved.path)
+		}
+	}
+	os.write_file(resolved.path, entry.value) or {
+		return AdminSourcePublishResult{
+			draft_id: id
+			ok:       false
+			error:    err.msg()
+			path:     resolved.path
+			language: admin_state_source_language(resolved.path)
+		}
+	}
+	if admin_state_source_language(resolved.path) == 'toml' {
+		config.load_runtime_plan_file(app.admin_state_draft_source_path()) or {
+			admin_state_restore_publish_target(resolved.path, old_value, old_exists)
+			return AdminSourcePublishResult{
+				draft_id: id
+				ok:       false
+				error:    err.msg()
+				path:     resolved.path
+				language: 'toml'
+			}
+		}
+	}
+	mut store := app.open_admin_state_store() or {
+		return AdminSourcePublishResult{
+			draft_id: id
+			ok:       false
+			error:    err.msg()
+			path:     resolved.path
+			language: admin_state_source_language(resolved.path)
+		}
+	}
+	store.append_event('admin.source.published', {
+		'draft_id': id
+		'path':     resolved.path
+	}) or {}
+	app.emit('admin.source.published', {
+		'draft_id': id
+		'path':     resolved.path
+	})
+	return AdminSourcePublishResult{
+		draft_id: id
+		ok:       true
+		path:     resolved.path
+		language: admin_state_source_language(resolved.path)
+		bytes:    entry.value.len
+	}
+}
+
 fn (mut app App) admin_state_publish_draft(id string, raw_path string) AdminDraftPublishResult {
 	metadata := app.admin_state_get_draft_metadata(id) or { AdminDraftMetadata{} }
 	target_path := if raw_path.trim_space() != '' {
@@ -433,6 +619,59 @@ fn admin_state_resolve_config_file_path(config_path string, raw_path string) !Ad
 	}
 }
 
+fn (app App) admin_state_resolve_source_file_path(raw_path string) !AdminDraftPublishPath {
+	config_path := app.admin_state_draft_source_path()
+	config_abs := os.abs_path(config_path)
+	config_dir := os.dir(config_abs)
+	repo_root := admin_state_repo_root(config_abs)
+	clean := raw_path.trim_space()
+	if clean == '' {
+		return error('admin_source_file_path_required')
+	}
+	target_abs := if os.is_abs_path(clean) {
+		os.abs_path(clean)
+	} else {
+		os.abs_path(os.join_path(config_dir, clean))
+	}
+	separator := os.path_separator
+	if target_abs == repo_root || !target_abs.starts_with(repo_root + separator) {
+		return error('admin_source_file_path_outside_project:${clean}')
+	}
+	if !admin_state_source_file_allowed(target_abs) {
+		return error('admin_source_file_extension_not_allowed:${clean}')
+	}
+	return AdminDraftPublishPath{
+		path:         target_abs
+		include_path: if target_abs == config_abs {
+			''
+		} else {
+			admin_state_relative_path(config_dir, target_abs)
+		}
+	}
+}
+
+fn admin_state_repo_root(config_path string) string {
+	return os.dir(os.dir(os.abs_path(config_path)))
+}
+
+fn admin_state_resolve_engine_source_path(config_dir string, module_root string, entry string) string {
+	if entry.trim_space() == '' {
+		return ''
+	}
+	if os.is_abs_path(entry) {
+		return os.abs_path(entry)
+	}
+	if module_root.trim_space() != '' {
+		base := if os.is_abs_path(module_root) {
+			module_root
+		} else {
+			os.join_path(config_dir, module_root)
+		}
+		return os.abs_path(os.join_path(base, entry))
+	}
+	return os.abs_path(os.join_path(config_dir, entry))
+}
+
 fn admin_state_relative_path(base string, target string) string {
 	separator := os.path_separator
 	prefix := base.trim_right(separator) + separator
@@ -450,6 +689,46 @@ fn admin_state_config_draft_id(path string) string {
 	name := os.file_name(path)
 	clean := name.trim_space().replace('.toml', '')
 	return 'config.${admin_state_safe_id(clean)}.toml'
+}
+
+fn admin_state_source_draft_id(repo_root string, path string) string {
+	separator := os.path_separator
+	target := os.abs_path(path)
+	prefix := repo_root.trim_right(separator) + separator
+	rel := if target.starts_with(prefix) { target[prefix.len..] } else { os.file_name(target) }
+	return 'source.${admin_state_safe_id(rel)}'
+}
+
+fn admin_state_source_file_entry(repo_root string, role string, path string, include_path string) AdminSourceFileEntry {
+	resolved := os.abs_path(path)
+	exists := os.exists(resolved)
+	return AdminSourceFileEntry{
+		role:         role
+		path:         resolved
+		include_path: include_path
+		language:     admin_state_source_language(resolved)
+		exists:       exists
+		bytes:        if exists { int(os.file_size(resolved)) } else { 0 }
+		draft_id:     admin_state_source_draft_id(repo_root, resolved)
+	}
+}
+
+fn admin_state_source_file_allowed(path string) bool {
+	return admin_state_source_language(path) in ['toml', 'typescript', 'javascript']
+}
+
+fn admin_state_source_language(path string) string {
+	ext := os.file_ext(path).to_lower()
+	if ext == '.toml' {
+		return 'toml'
+	}
+	if ext in ['.ts', '.mts', '.cts'] {
+		return 'typescript'
+	}
+	if ext in ['.js', '.mjs', '.cjs'] {
+		return 'javascript'
+	}
+	return ''
 }
 
 fn admin_state_safe_id(raw string) string {

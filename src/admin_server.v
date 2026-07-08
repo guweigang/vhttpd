@@ -333,6 +333,35 @@ pub fn (mut app AdminApp) admin_config_file_draft(mut ctx Context) veb.Result {
 	})
 }
 
+@['/admin/source/files'; get]
+pub fn (mut app AdminApp) admin_source_files(mut ctx Context) veb.Result {
+	req := admin_plane_request(ctx, '/admin/source/files')
+	if !app.admin_authorized(ctx) {
+		return admin_plane_forbidden(mut app, mut ctx, 'GET', req)
+	}
+	files := app.shared.admin_state_list_source_files()
+	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, json.encode(files), {
+		'admin_endpoint': 'source_files'
+	})
+}
+
+@['/admin/source/files/draft'; post]
+pub fn (mut app AdminApp) admin_source_file_draft(mut ctx Context) veb.Result {
+	req := admin_plane_request(ctx, '/admin/source/files/draft')
+	if !app.admin_authorized(ctx) {
+		return admin_plane_forbidden(mut app, mut ctx, 'POST', req)
+	}
+	target_path := (ctx.query['path'] or { ctx.query['include_path'] or { '' } }).trim_space()
+	result := app.shared.admin_state_open_source_file_draft(target_path)
+	status := if result.ok { 200 } else { 400 }
+	return admin_plane_json_response(mut app, mut ctx, 'POST', req, status, json.encode(result), {
+		'admin_endpoint': 'source_file_draft'
+		'admin_action':   'source_file_draft'
+		'draft_id':       result.draft_id
+		'error':          result.error
+	})
+}
+
 @['/admin/drafts'; post]
 pub fn (mut app AdminApp) admin_drafts_create(mut ctx Context) veb.Result {
 	req := admin_plane_request(ctx, '/admin/drafts')
@@ -352,6 +381,24 @@ pub fn (mut app AdminApp) admin_drafts_create(mut ctx Context) veb.Result {
 		'admin_endpoint': 'drafts'
 		'admin_action':   'draft_save'
 		'draft_id':       entry.key
+	})
+}
+
+@['/admin/source/drafts/:id/publish'; post]
+pub fn (mut app AdminApp) admin_source_draft_publish(mut ctx Context, id string) veb.Result {
+	req := admin_plane_request(ctx, '/admin/source/drafts/${id}/publish')
+	if !app.admin_authorized(ctx) {
+		return admin_plane_forbidden(mut app, mut ctx, 'POST', req)
+	}
+	target_path := (ctx.query['path'] or { ctx.query['include_path'] or { '' } }).trim_space()
+	result := app.shared.admin_state_publish_source_draft(id, target_path)
+	status := if result.ok { 200 } else { 422 }
+	return admin_plane_json_response(mut app, mut ctx, 'POST', req, status, json.encode(result), {
+		'admin_endpoint': 'source_draft_publish'
+		'admin_action':   'source_draft_publish'
+		'draft_id':       id
+		'ok':             '${result.ok}'
+		'error':          result.error
 	})
 }
 

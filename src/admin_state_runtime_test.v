@@ -221,3 +221,101 @@ fn test_admin_state_config_file_draft_opens_include_and_publishes_to_source() {
 	assert !published.updated_main
 	assert os.read_file(include_file) or { panic(err) }.contains('body = "changed"')
 }
+
+fn test_admin_state_source_file_draft_opens_and_publishes_typescript() {
+	root := admin_state_runtime_test_root('vhttpd_admin_state_source_file_draft')
+	defer {
+		os.rmdir_all(root) or {}
+	}
+	admin_dir := os.join_path(root, 'admin')
+	app_dir := os.join_path(root, 'examples', 'plugin')
+	os.mkdir_all(admin_dir) or { panic(err) }
+	os.mkdir_all(app_dir) or { panic(err) }
+	current_file := os.join_path(admin_dir, 'admin.toml')
+	plugin_file := os.join_path(app_dir, 'app.mts')
+	event_log := os.join_path(root, 'events.ndjson')
+	os.write_file(event_log, '') or { panic(err) }
+	os.write_file(plugin_file, 'export function handler() { return "old"; }\n') or { panic(err) }
+	os.write_file(current_file, '
+version = 2
+
+[listeners.plugin]
+protocol = "http"
+transport = "tcp"
+host = "127.0.0.1"
+port = 18087
+
+[engines.plugin]
+kind = "vjsx"
+entry = "../examples/plugin/app.mts"
+module_root = "../examples/plugin"
+
+[adapters.plugin]
+kind = "http-handler"
+engine = "engine:plugin"
+
+[[pipelines]]
+id = "plugin.app"
+ingress = "listener:plugin"
+egress = "adapter:plugin"
+
+[pipelines.match]
+paths = ["*"]
+') or {
+		panic(err)
+	}
+	current_plan := config.load_runtime_plan_file(current_file) or { panic(err) }
+	mut app := App{
+		DataPlaneRuntime: DataPlaneRuntime{
+			plan: current_plan
+		}
+		control_plane:    ControlPlaneRuntime{
+			event_log: event_log
+		}
+	}
+
+	files := app.admin_state_list_source_files()
+	assert files.any(it.language == 'toml' && it.path == current_file)
+	assert files.any(it.language == 'typescript' && it.path == plugin_file)
+
+	draft := app.admin_state_open_source_file_draft('../examples/plugin/app.mts')
+	assert draft.ok
+	assert draft.language == 'typescript'
+	assert draft.entry.value.contains('return "old"')
+
+	app.admin_state_put_draft(draft.draft_id, 'export function handler() { return "new"; }\n') or {
+		panic(err)
+	}
+	published := app.admin_state_publish_source_draft(draft.draft_id, '')
+	assert published.ok
+	assert published.language == 'typescript'
+	assert os.read_file(plugin_file) or { panic(err) }.contains('return "new"')
+}
+
+fn test_admin_state_source_file_rejects_outside_project() {
+	root := admin_state_runtime_test_root('vhttpd_admin_state_source_file_outside')
+	defer {
+		os.rmdir_all(root) or {}
+	}
+	admin_dir := os.join_path(root, 'admin')
+	os.mkdir_all(admin_dir) or { panic(err) }
+	current_file := os.join_path(admin_dir, 'admin.toml')
+	event_log := os.join_path(root, 'events.ndjson')
+	os.write_file(event_log, '') or { panic(err) }
+	os.write_file(current_file, admin_state_named_runtime_plan_text('admin', 18088, 'admin')) or {
+		panic(err)
+	}
+	current_plan := config.load_runtime_plan_file(current_file) or { panic(err) }
+	mut app := App{
+		DataPlaneRuntime: DataPlaneRuntime{
+			plan: current_plan
+		}
+		control_plane:    ControlPlaneRuntime{
+			event_log: event_log
+		}
+	}
+
+	result := app.admin_state_open_source_file_draft('../../outside.mts')
+	assert !result.ok
+	assert result.error.contains('admin_source_file_path_outside_project')
+}

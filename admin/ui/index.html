@@ -17,6 +17,7 @@
         <button data-view="dashboard" aria-selected="true">Dashboard</button>
         <button data-view="observability">Observability</button>
         <button data-view="apps">Applications</button>
+        <button data-view="editor">Editor</button>
         <button data-view="graph">Runtime Graph</button>
         <button data-view="schema">Schema</button>
         <button data-view="drafts">Drafts</button>
@@ -188,6 +189,44 @@
                   <button id="saveAppDraft" class="button primary">Save Draft</button>
                 </div>
               </div>
+            </div>
+          </div>
+        </section>
+        <section id="view-editor" class="view hidden grid">
+          <div class="panel">
+            <div class="panel-header"><h3>Source Files</h3><span id="sourceFileCount" class="pill gray">0</span></div>
+            <div class="panel-body"><div id="sourceFiles"></div></div>
+          </div>
+          <div id="sourceEditorPanel" class="panel hidden">
+            <div class="panel-header"><h3>Editor</h3><span id="sourceEditorState" class="pill gray">idle</span></div>
+            <div class="panel-body">
+              <div class="form-grid">
+                <div class="form-field full">
+                  <label for="sourcePath">Path</label>
+                  <input id="sourcePath" autocomplete="off" readonly>
+                </div>
+                <div class="form-field">
+                  <label for="sourceLanguage">Language</label>
+                  <input id="sourceLanguage" autocomplete="off" readonly>
+                </div>
+                <div class="form-field">
+                  <label for="sourceDraftId">Draft ID</label>
+                  <input id="sourceDraftId" autocomplete="off" readonly>
+                </div>
+                <div class="form-field full">
+                  <label for="sourceEditorInput">Source</label>
+                  <div class="code-editor" id="sourceCodeEditor">
+                    <pre class="code-highlight" id="sourceEditorHighlight" aria-hidden="true"></pre>
+                    <textarea id="sourceEditorInput" spellcheck="false" autocomplete="off"></textarea>
+                  </div>
+                </div>
+              </div>
+              <div class="draft-actions">
+                <button id="saveSourceDraft" class="button primary">Save Draft</button>
+                <button id="publishSourceDraft" class="button">Publish Source</button>
+                <button id="validateSourceDraft" class="button">Validate TOML</button>
+              </div>
+              <pre id="sourceResult"></pre>
             </div>
           </div>
         </section>
