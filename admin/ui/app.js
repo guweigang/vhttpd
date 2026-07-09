@@ -233,7 +233,7 @@ const endpoints = {
           positions[ref] = { x: column.x, y, w, h: 30 };
           const label = String(node.label || node.id || ref).slice(0, column.domain === "pipeline" ? 28 : 18);
           const sub = String(node.kind || node.domain || "").slice(0, 18);
-          nodeParts.push('<g class="flow-node ' + esc(column.domain) + '" transform="translate(' + column.x + ',' + y + ')">' +
+          nodeParts.push('<g class="flow-node ' + esc(column.domain) + '" data-node-ref="' + esc(ref) + '" tabindex="0" role="button" transform="translate(' + column.x + ',' + y + ')">' +
             '<rect width="' + w + '" height="30" rx="6"></rect><text x="9" y="14">' + esc(label) + '</text><text class="sub" x="9" y="25">' + esc(sub) + '</text></g>');
         });
       }
@@ -513,7 +513,14 @@ const endpoints = {
       const source = String(text || "");
       if (language === "toml") return highlightToml(source);
       if (language === "typescript" || language === "javascript") return highlightTypescript(source);
+      if (language === "json") return highlightJson(source);
       return esc(source);
+    }
+    function lineNumbers(text) {
+      const lines = String(text || "").split("\n").length;
+      let out = "";
+      for (let i = 1; i <= Math.max(lines, 1); i++) out += i + "\n";
+      return out;
     }
     function highlightToml(text) {
       return text.split("\n").map((line) => {
@@ -550,21 +557,58 @@ const endpoints = {
       });
       return out + esc(text.slice(last));
     }
+    function highlightJson(text) {
+      const pattern = /("(?:\\.|[^"\\])*"(?=\s*:)|"(?:\\.|[^"\\])*"|\btrue\b|\bfalse\b|\bnull\b|-?\b\d+(?:\.\d+)?(?:e[+-]?\d+)?\b)/gi;
+      let out = "";
+      let last = 0;
+      text.replace(pattern, (token, _match, offset) => {
+        out += esc(text.slice(last, offset));
+        const safe = esc(token);
+        if (token[0] === '"' && /"\s*$/.test(token)) out += '<span class="tok-key">' + safe + '</span>';
+        else if (token[0] === '"') out += '<span class="tok-string">' + safe + '</span>';
+        else if (token === "true" || token === "false" || token === "null") out += '<span class="tok-bool">' + safe + '</span>';
+        else out += '<span class="tok-number">' + safe + '</span>';
+        last = offset + token.length;
+        return token;
+      });
+      return out + esc(text.slice(last));
+    }
+    function editorParts(prefix) {
+      return {
+        input: $(prefix + "Input") || $(prefix),
+        highlight: $(prefix + "Highlight"),
+        lines: $(prefix + "Lines")
+      };
+    }
+    function updateEditorHighlight(prefix, language) {
+      const parts = editorParts(prefix);
+      if (!parts.input || !parts.highlight) return;
+      parts.highlight.innerHTML = highlightSource(parts.input.value, language) + "\n";
+      if (parts.lines) parts.lines.textContent = lineNumbers(parts.input.value);
+    }
+    function syncEditorScroll(prefix) {
+      const parts = editorParts(prefix);
+      if (!parts.input || !parts.highlight) return;
+      parts.highlight.scrollTop = parts.input.scrollTop;
+      parts.highlight.scrollLeft = parts.input.scrollLeft;
+      if (parts.lines) parts.lines.scrollTop = parts.input.scrollTop;
+    }
+    function setEditorValue(prefix, value, language) {
+      const parts = editorParts(prefix);
+      if (!parts.input) return;
+      parts.input.value = value || "";
+      updateEditorHighlight(prefix, language || "text");
+      syncEditorScroll(prefix);
+    }
     function updateSourceHighlight() {
-      const input = $("sourceEditorInput");
-      $("sourceEditorHighlight").innerHTML = highlightSource(input.value, state.activeSourceLanguage) + "\n";
+      updateEditorHighlight("sourceEditor", state.activeSourceLanguage);
     }
     function syncSourceEditorScroll() {
-      const input = $("sourceEditorInput");
-      const highlight = $("sourceEditorHighlight");
-      highlight.scrollTop = input.scrollTop;
-      highlight.scrollLeft = input.scrollLeft;
+      syncEditorScroll("sourceEditor");
     }
     function setSourceEditorValue(value, language) {
       state.activeSourceLanguage = language || state.activeSourceLanguage || "text";
-      $("sourceEditorInput").value = value || "";
-      updateSourceHighlight();
-      syncSourceEditorScroll();
+      setEditorValue("sourceEditor", value, state.activeSourceLanguage);
     }
     function renderObservability() {
       const runtime = state.data.runtime || {};
@@ -750,7 +794,7 @@ const endpoints = {
       $("graphCount").textContent = nodes.length + " nodes";
       $("graphNodes").innerHTML = nodes.map((node) => {
         const meta = node.metadata && typeof node.metadata === "object" ? node.metadata : {};
-        return '<div class="node"><strong>' + esc(node.ref || node.id) + '</strong>' +
+        return '<div class="node clickable-node" data-node-ref="' + esc(node.ref || node.id) + '"><strong>' + esc(node.ref || node.id) + '</strong>' +
           '<span class="pill">' + esc(node.domain) + '</span>' +
           '<span class="pill gray">' + esc(node.kind || "-") + '</span>' +
           '<div class="value-text">' + esc(Object.entries(meta).filter(([, value]) => value).map(([key, value]) => key + "=" + value).join("  ")) + '</div></div>';
@@ -792,7 +836,7 @@ const endpoints = {
       state.draftPublishResult = null;
       $("draftEditor").classList.remove("hidden");
       $("draftId").value = state.activeDraftId;
-      $("draftBody").value = draft.value || "";
+      setEditorValue("draftEditor", draft.value || "", "toml");
       if (!$("draftPublishPath").value.trim() || $("draftPublishPath").dataset.draftId !== state.activeDraftId) {
         $("draftPublishPath").value = defaultPublishPath(state.activeDraftId);
       }
@@ -877,7 +921,7 @@ const endpoints = {
       const result = await apiRequest("/admin/drafts/" + encodeURIComponent(id), {
         method: "PUT",
         headers: { "content-type": "text/plain; charset=utf-8" },
-        body: $("draftBody").value
+        body: $("draftEditorInput").value
       });
       showDraftResult(result);
       await refresh();
@@ -944,7 +988,35 @@ const endpoints = {
       ]));
     }
     function renderRaw() {
-      $("raw").textContent = JSON.stringify({ data: state.data, errors: state.errors }, null, 2);
+      setEditorValue("rawEditor", JSON.stringify({ data: state.data, errors: state.errors }, null, 2), "json");
+    }
+    function graphNodeByRef(ref) {
+      const graph = state.data.graph || {};
+      return asArray(graph.nodes).find((node) => node.ref === ref || node.id === ref);
+    }
+    function graphEdgesForRef(ref) {
+      const graph = state.data.graph || {};
+      return asArray(graph.edges).filter((edge) => edge.from === ref || edge.to === ref);
+    }
+    function showNodeDetails(ref) {
+      const node = graphNodeByRef(ref);
+      if (!node) return;
+      const edges = graphEdgesForRef(node.ref || ref);
+      $("nodeModalTitle").textContent = node.label || node.id || node.ref || "Node";
+      $("nodeModalSubtitle").textContent = [node.ref, node.domain, node.kind].filter(Boolean).join(" / ");
+      $("nodeModalSummary").innerHTML = rows({
+        "Ref": node.ref || "",
+        "Domain": node.domain || "",
+        "Kind": node.kind || "",
+        "Group": node.group || "",
+        "Incoming": edges.filter((edge) => edge.to === node.ref).map((edge) => edge.from + " (" + edge.kind + ")").join(", "),
+        "Outgoing": edges.filter((edge) => edge.from === node.ref).map((edge) => edge.to + " (" + edge.kind + ")").join(", ")
+      });
+      setEditorValue("nodeEditor", JSON.stringify({ node, edges }, null, 2), "json");
+      $("nodeModal").classList.remove("hidden");
+    }
+    function closeNodeDetails() {
+      $("nodeModal").classList.add("hidden");
     }
     function render() {
       renderStatus();
@@ -1001,6 +1073,23 @@ const endpoints = {
     $("publishDraft").addEventListener("click", () => runDraftAction("publish"));
     $("applyPublishedConfig").addEventListener("click", () => runDraftAction("apply"));
     $("deleteDraft").addEventListener("click", () => runDraftAction("delete"));
+    $("draftEditorInput").addEventListener("input", () => updateEditorHighlight("draftEditor", "toml"));
+    $("draftEditorInput").addEventListener("scroll", () => syncEditorScroll("draftEditor"));
+    $("draftEditorInput").addEventListener("keydown", (event) => {
+      if (event.key === "Tab") {
+        event.preventDefault();
+        const input = event.currentTarget;
+        const start = input.selectionStart;
+        const end = input.selectionEnd;
+        input.value = input.value.slice(0, start) + "  " + input.value.slice(end);
+        input.selectionStart = input.selectionEnd = start + 2;
+        updateEditorHighlight("draftEditor", "toml");
+      }
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
+        event.preventDefault();
+        runDraftAction("save");
+      }
+    });
     $("drafts").addEventListener("click", (event) => {
       const target = event.target && event.target.closest ? event.target.closest("[data-draft-open]") : null;
       if (target) {
@@ -1011,6 +1100,31 @@ const endpoints = {
       const target = event.target && event.target.closest ? event.target.closest("[data-config-draft]") : null;
       if (target) {
         openConfigFileDraft(target.getAttribute("data-config-draft")).catch((err) => showDraftResult({ ok: false, error: err && err.message ? err.message : String(err) }));
+      }
+    });
+    function openNodeFromEvent(event) {
+      const target = event.target && event.target.closest ? event.target.closest("[data-node-ref]") : null;
+      if (!target) return;
+      showNodeDetails(target.getAttribute("data-node-ref"));
+    }
+    for (const id of ["dashboardTopology", "observabilityFlow", "graphNodes"]) {
+      $(id).addEventListener("click", openNodeFromEvent);
+      $(id).addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          openNodeFromEvent(event);
+        }
+      });
+    }
+    $("closeNodeModal").addEventListener("click", closeNodeDetails);
+    $("nodeModal").addEventListener("click", (event) => {
+      if (event.target && event.target.getAttribute && event.target.getAttribute("data-modal-close") === "node") {
+        closeNodeDetails();
+      }
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !$("nodeModal").classList.contains("hidden")) {
+        closeNodeDetails();
       }
     });
     $("sourceFiles").addEventListener("click", (event) => {

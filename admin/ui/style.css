@@ -131,7 +131,8 @@
       overflow: hidden;
     }
     .code-editor textarea,
-    .code-highlight {
+    .code-highlight,
+    .code-lines {
       position: absolute;
       inset: 0;
       margin: 0;
@@ -145,6 +146,22 @@
       font-size: 13px;
       line-height: 1.55;
     }
+    .code-editor textarea,
+    .code-highlight {
+      padding-left: 62px;
+    }
+    .code-lines {
+      right: auto;
+      width: 48px;
+      padding: 14px 8px 14px 0;
+      text-align: right;
+      color: #64748b;
+      background: #111b26;
+      border-right: 1px solid rgba(148, 163, 184, .22);
+      user-select: none;
+      z-index: 3;
+      overflow: hidden;
+    }
     .code-editor textarea {
       min-height: 0;
       resize: none;
@@ -152,7 +169,7 @@
       color: transparent;
       caret-color: #e8eef8;
       outline: none;
-      z-index: 2;
+      z-index: 4;
     }
     .code-editor textarea::selection {
       background: rgba(96, 165, 250, .32);
@@ -161,7 +178,10 @@
     .code-highlight {
       pointer-events: none;
       color: #d8e2ef;
-      z-index: 1;
+      z-index: 2;
+    }
+    .code-editor.readonly textarea {
+      cursor: default;
     }
     .tok-comment { color: #7f8ea3; }
     .tok-string { color: #8bd5ca; }
@@ -449,6 +469,15 @@
       stroke: var(--line-strong);
       rx: 6;
     }
+    .flow-node {
+      cursor: pointer;
+      outline: none;
+    }
+    .flow-node:hover rect,
+    .flow-node:focus rect {
+      stroke: var(--accent);
+      stroke-width: 2;
+    }
     .flow-node.listener rect { fill: #eef4ff; stroke: #94a3d8; }
     .flow-node.pipeline rect { fill: #edf7f6; stroke: #84bfb8; }
     .flow-node.adapter rect { fill: #fff7ed; stroke: #ddb179; }
@@ -547,6 +576,70 @@
       display: inline-flex;
       margin-right: 5px;
       margin-bottom: 5px;
+    }
+    .clickable-node {
+      cursor: pointer;
+    }
+    .clickable-node:hover {
+      border-color: var(--accent);
+      background: #f7fbfb;
+    }
+    .modal.hidden { display: none; }
+    .modal {
+      position: fixed;
+      inset: 0;
+      z-index: 30;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+    .modal-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(15, 23, 32, .48);
+    }
+    .modal-panel {
+      position: relative;
+      width: min(940px, 96vw);
+      max-height: min(820px, 92vh);
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: 0 24px 80px rgba(15, 23, 32, .26);
+      overflow: hidden;
+    }
+    .modal-header {
+      min-height: 58px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+    }
+    .modal-header h3 {
+      margin: 0;
+      font-size: 16px;
+      line-height: 1.2;
+    }
+    .modal-subtitle {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+    .modal-body {
+      min-height: 0;
+      display: grid;
+      gap: 12px;
+      padding: 12px;
+      overflow: auto;
+    }
+    .modal-code {
+      height: 420px;
+      min-height: 260px;
     }
     .draft-editor {
       margin-top: 12px;

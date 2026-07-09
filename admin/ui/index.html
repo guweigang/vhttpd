@@ -216,6 +216,7 @@
                 <div class="form-field full">
                   <label for="sourceEditorInput">Source</label>
                   <div class="code-editor" id="sourceCodeEditor">
+                    <pre class="code-lines" id="sourceEditorLines" aria-hidden="true"></pre>
                     <pre class="code-highlight" id="sourceEditorHighlight" aria-hidden="true"></pre>
                     <textarea id="sourceEditorInput" spellcheck="false" autocomplete="off"></textarea>
                   </div>
@@ -258,8 +259,12 @@
                     <input id="draftPublishPath" autocomplete="off" placeholder="../examples/my-app/my-app-v2.toml">
                   </div>
                   <div class="form-field full">
-                    <label for="draftBody">TOML</label>
-                    <textarea id="draftBody" spellcheck="false"></textarea>
+                    <label for="draftEditorInput">TOML</label>
+                    <div class="code-editor" id="draftCodeEditor">
+                      <pre class="code-lines" id="draftEditorLines" aria-hidden="true"></pre>
+                      <pre class="code-highlight" id="draftEditorHighlight" aria-hidden="true"></pre>
+                      <textarea id="draftEditorInput" spellcheck="false" autocomplete="off"></textarea>
+                    </div>
                   </div>
                 </div>
                 <div class="draft-actions">
@@ -284,11 +289,37 @@
         <section id="view-raw" class="view hidden">
           <div class="panel">
             <div class="panel-header"><h3>Snapshot</h3><span class="pill gray">json</span></div>
-            <div class="panel-body"><pre id="raw"></pre></div>
+            <div class="panel-body">
+              <div class="code-editor readonly" id="rawCodeEditor">
+                <pre class="code-lines" id="rawEditorLines" aria-hidden="true"></pre>
+                <pre class="code-highlight" id="rawEditorHighlight" aria-hidden="true"></pre>
+                <textarea id="rawEditorInput" spellcheck="false" autocomplete="off" readonly></textarea>
+              </div>
+            </div>
           </div>
         </section>
       </main>
     </section>
+  </div>
+  <div id="nodeModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="nodeModalTitle">
+    <div class="modal-backdrop" data-modal-close="node"></div>
+    <div class="modal-panel">
+      <div class="modal-header">
+        <div>
+          <h3 id="nodeModalTitle">Node</h3>
+          <div id="nodeModalSubtitle" class="modal-subtitle"></div>
+        </div>
+        <button id="closeNodeModal" class="button" type="button">Close</button>
+      </div>
+      <div class="modal-body">
+        <div id="nodeModalSummary" class="list"></div>
+        <div class="code-editor readonly modal-code" id="nodeCodeEditor">
+          <pre class="code-lines" id="nodeEditorLines" aria-hidden="true"></pre>
+          <pre class="code-highlight" id="nodeEditorHighlight" aria-hidden="true"></pre>
+          <textarea id="nodeEditorInput" spellcheck="false" autocomplete="off" readonly></textarea>
+        </div>
+      </div>
+    </div>
   </div>
   <script src="/admin/ui/app.js"></script>
 </body>
