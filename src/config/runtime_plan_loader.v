@@ -638,7 +638,9 @@ fn validate_policy_specs(root map[string]toml.Any) ! {
 		validate_named_specs(value, 'response', ['headers'])!
 		validate_named_specs(value, 'retry', ['max_attempts', 'backoff_ms', 'backoff_max_ms'])!
 		validate_named_specs(value, 'concurrency', ['max_in_flight', 'queue_capacity',
-			'queue_timeout_ms'])!
+			'queue_timeout_ms', 'max_queue_per_key', 'affinity_enabled', 'actor_enabled',
+			'actor_fallback', 'affinity_source', 'affinity_key', 'affinity_scope',
+			'affinity_fallback', 'events', 'options', 'record_options'])!
 	}
 }
 

@@ -12,7 +12,9 @@ pub fn LogicExecutorRuntimePlan.resolve_from_plan(args []string, legacy_cfg conf
 			legacy_cfg.worker.websocket_dispatch, legacy_cfg.worker.autostart,
 			legacy_cfg.worker.cmd, legacy_cfg.worker.env.clone())!
 	}
-	return LogicExecutorRuntimePlan.resolve_engine_from_plan(legacy_cfg, engine)!
+	cfg := vhttpd_config_with_websocket_dispatch_policy_from_plan(legacy_cfg, plan, listener_id,
+		engine.id)
+	return LogicExecutorRuntimePlan.resolve_engine_from_plan(cfg, engine)!
 }
 
 pub fn LogicExecutorRuntimePlan.resolve_engine_from_plan(legacy_cfg config.VhttpdConfig, engine runtime_plan.EnginePlan) !LogicExecutorRuntimePlan {
@@ -106,6 +108,94 @@ fn vjsx_config_from_engine_plan(engine runtime_plan.EnginePlan, fallback config.
 		enable_fs:         bool_option_or(options, 'enable_fs', fallback.enable_fs)
 		enable_process:    bool_option_or(options, 'enable_process', fallback.enable_process)
 		enable_network:    bool_option_or(options, 'enable_network', fallback.enable_network)
+	}
+}
+
+fn vhttpd_config_with_websocket_dispatch_policy_from_plan(cfg config.VhttpdConfig, plan runtime_plan.RuntimePlan, listener_id string, engine_id string) config.VhttpdConfig {
+	mut resolved := cfg
+	for pipeline in plan.listener_pipelines(listener_id) {
+		if pipeline.egress.domain != .adapter {
+			continue
+		}
+		adapter := plan.adapters[pipeline.egress.id] or { continue }
+		engine_ref := adapter.engine or { continue }
+		if engine_ref.domain != .engine || engine_ref.id != engine_id {
+			continue
+		}
+		for policy_ref in pipeline.policies {
+			if policy_ref.domain != .policy {
+				continue
+			}
+			policy := plan.policies[policy_ref.id] or { continue }
+			if policy.category != 'concurrency' {
+				continue
+			}
+			apply_websocket_dispatch_concurrency_policy(policy, mut resolved)
+		}
+	}
+	return resolved
+}
+
+fn apply_websocket_dispatch_concurrency_policy(policy runtime_plan.PolicyPlan, mut cfg config.VhttpdConfig) {
+	options := policy.options
+	if 'affinity_enabled' in options.bools {
+		cfg.websocket_affinity.enabled = options.bools['affinity_enabled']
+	}
+	if source := options.strings['affinity_source'] {
+		if source != '' {
+			cfg.websocket_affinity.source = source
+		}
+	}
+	if key := options.strings['affinity_key'] {
+		if key != '' {
+			cfg.websocket_affinity.key = key
+		}
+	}
+	if scope := options.strings['affinity_scope'] {
+		if scope != '' {
+			cfg.websocket_affinity.scope = scope
+		}
+	}
+	if fallback := options.strings['affinity_fallback'] {
+		if fallback != '' {
+			cfg.websocket_affinity.fallback = fallback
+		}
+	}
+	if 'actor_enabled' in options.bools {
+		cfg.websocket_actor.enabled = options.bools['actor_enabled']
+	}
+	if fallback := options.strings['actor_fallback'] {
+		if fallback != '' {
+			cfg.websocket_actor.fallback = fallback
+		}
+	}
+	if queue_timeout_ms := options.ints['queue_timeout_ms'] {
+		if queue_timeout_ms != 0 {
+			cfg.websocket_actor.queue_timeout_ms = queue_timeout_ms
+		}
+	}
+	if max_queue_per_key := options.ints['max_queue_per_key'] {
+		if max_queue_per_key != 0 {
+			cfg.websocket_actor.max_queue_per_key = max_queue_per_key
+		}
+	}
+	if events := options.string_lists['events'] {
+		if events.len > 0 {
+			cfg.websocket_actor.events = events.clone()
+		}
+	}
+	if sources := options.record_lists['sources'] {
+		if sources.len > 0 {
+			mut actor_sources := []config.WebSocketActorSourceConfig{cap: sources.len}
+			for source in sources {
+				actor_sources << config.WebSocketActorSourceConfig{
+					typ:        source['type']
+					key:        source['key']
+					class_name: source['class']
+				}
+			}
+			cfg.websocket_actor.sources = actor_sources
+		}
 	}
 }
 

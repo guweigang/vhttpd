@@ -131,6 +131,82 @@ fn test_compile_v2_runtime_plan_resolves_transform_typed_options() {
 	assert plan.transforms['rewrite'].options.record_lists['rules'][0]['from'] == '/old'
 }
 
+fn test_compile_v2_runtime_plan_preserves_websocket_concurrency_policy() {
+	cfg := V2Config{
+		listeners: {
+			'web': V2ListenerSpec{}
+		}
+		engines:   {
+			'app': V2EngineSpec{
+				kind:               'vjsx'
+				entry:              '/tmp/app.mts'
+				websocket_dispatch: true
+			}
+		}
+		adapters:  {
+			'app': V2AdapterSpec{
+				kind:   'http-handler'
+				engine: 'engine:app'
+			}
+		}
+		policies:  V2PolicySpecs{
+			concurrency: {
+				'ws': V2ConcurrencyPolicySpec{
+					queue_timeout_ms:  30000
+					max_queue_per_key: 1024
+					affinity_enabled:  true
+					affinity_source:   'query'
+					affinity_key:      'serverId'
+					affinity_scope:    'lane'
+					affinity_fallback: 'reject'
+					actor_enabled:     true
+					actor_fallback:    'unkeyed'
+					events:            ['open', 'message', 'close']
+					record_options:    {
+						'sources': [
+							{
+								'type': 'connection_cache'
+							},
+							{
+								'type':  'query'
+								'key':   'connectionId'
+								'class': 'conn'
+							},
+							{
+								'type': 'app'
+							},
+						]
+					}
+				}
+			}
+		}
+		pipelines: [
+			V2PipelineSpec{
+				id:       'ws'
+				ingress:  'listener:web'
+				policies: ['policy:concurrency/ws']
+				egress:   'adapter:app'
+			},
+		]
+	}
+	plan := compile_v2_runtime_plan(cfg, '', false) or { panic(err) }
+	policy := plan.policies['concurrency/ws']
+
+	assert plan.engines['app'].options.bools['websocket_dispatch']
+	assert plan.pipelines[0].policies[0].str() == 'policy:concurrency/ws'
+	assert policy.options.bools['affinity_enabled']
+	assert policy.options.bools['actor_enabled']
+	assert policy.options.strings['affinity_source'] == 'query'
+	assert policy.options.strings['affinity_key'] == 'serverId'
+	assert policy.options.strings['affinity_fallback'] == 'reject'
+	assert policy.options.strings['actor_fallback'] == 'unkeyed'
+	assert policy.options.ints['queue_timeout_ms'] == 30000
+	assert policy.options.ints['max_queue_per_key'] == 1024
+	assert policy.options.string_lists['events'] == ['open', 'message', 'close']
+	assert policy.options.record_lists['sources'][1]['key'] == 'connectionId'
+	assert policy.options.record_lists['sources'][1]['class'] == 'conn'
+}
+
 fn test_compile_v2_runtime_plan_rejects_unresolved_reference() {
 	cfg := V2Config{
 		listeners: {
