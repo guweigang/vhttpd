@@ -1075,6 +1075,8 @@ const endpoints = {
     $("deleteDraft").addEventListener("click", () => runDraftAction("delete"));
     $("draftEditorInput").addEventListener("input", () => updateEditorHighlight("draftEditor", "toml"));
     $("draftEditorInput").addEventListener("scroll", () => syncEditorScroll("draftEditor"));
+    $("rawEditorInput").addEventListener("scroll", () => syncEditorScroll("rawEditor"));
+    $("nodeEditorInput").addEventListener("scroll", () => syncEditorScroll("nodeEditor"));
     $("draftEditorInput").addEventListener("keydown", (event) => {
       if (event.key === "Tab") {
         event.preventDefault();
@@ -1126,6 +1128,12 @@ const endpoints = {
       if (event.key === "Escape" && !$("nodeModal").classList.contains("hidden")) {
         closeNodeDetails();
       }
+    });
+    window.addEventListener("resize", () => {
+      syncEditorScroll("sourceEditor");
+      syncEditorScroll("draftEditor");
+      syncEditorScroll("rawEditor");
+      syncEditorScroll("nodeEditor");
     });
     $("sourceFiles").addEventListener("click", (event) => {
       const target = event.target && event.target.closest ? event.target.closest("[data-source-open]") : null;
