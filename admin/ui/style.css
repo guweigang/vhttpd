@@ -139,6 +139,7 @@
       margin: 0;
       border: 0;
       border-radius: 0;
+      max-height: none;
       padding: 14px 16px;
       overflow: auto;
       white-space: pre;
@@ -678,8 +679,8 @@
       min-height: 180px;
     }
     #rawCodeEditor {
-      --viewer-height: calc(100vh - 170px);
-      min-height: 420px;
+      --viewer-height: 220px;
+      min-height: 220px;
     }
     .draft-editor {
       margin-top: 12px;
