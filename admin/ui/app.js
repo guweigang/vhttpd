@@ -583,6 +583,7 @@ const endpoints = {
     function updateEditorHighlight(prefix, language) {
       const parts = editorParts(prefix);
       if (!parts.input || !parts.highlight) return;
+      resizeEditor(prefix);
       parts.highlight.innerHTML = highlightSource(parts.input.value, language) + "\n";
       if (parts.lines) parts.lines.textContent = lineNumbers(parts.input.value);
     }
@@ -593,10 +594,28 @@ const endpoints = {
       parts.highlight.scrollLeft = parts.input.scrollLeft;
       if (parts.lines) parts.lines.scrollTop = parts.input.scrollTop;
     }
+    function resizeEditor(prefix) {
+      const parts = editorParts(prefix);
+      if (!parts.input) return;
+      const editor = parts.input.closest(".code-editor");
+      if (!editor) return;
+      const lines = Math.max(String(parts.input.value || "").split("\n").length, 1);
+      const lineHeight = 20.15;
+      const chrome = 30;
+      const min = editor.id === "rawCodeEditor" ? 220 : editor.classList.contains("modal-code") ? 180 : 220;
+      const max = editor.id === "rawCodeEditor"
+        ? Math.max(260, window.innerHeight - 170)
+        : editor.classList.contains("modal-code")
+          ? Math.max(240, Math.min(520, Math.round(window.innerHeight * 0.56)))
+          : Math.max(280, Math.min(620, Math.round(window.innerHeight * 0.62)));
+      const height = Math.max(min, Math.min(max, Math.ceil(lines * lineHeight + chrome)));
+      editor.style.setProperty("--editor-height", height + "px");
+    }
     function setEditorValue(prefix, value, language) {
       const parts = editorParts(prefix);
       if (!parts.input) return;
       parts.input.value = value || "";
+      resizeEditor(prefix);
       updateEditorHighlight(prefix, language || "text");
       syncEditorScroll(prefix);
     }
@@ -1130,6 +1149,10 @@ const endpoints = {
       }
     });
     window.addEventListener("resize", () => {
+      resizeEditor("sourceEditor");
+      resizeEditor("draftEditor");
+      resizeEditor("rawEditor");
+      resizeEditor("nodeEditor");
       syncEditorScroll("sourceEditor");
       syncEditorScroll("draftEditor");
       syncEditorScroll("rawEditor");

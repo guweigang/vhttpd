@@ -123,8 +123,9 @@
     }
     .code-editor {
       position: relative;
-      height: min(62vh, 620px);
-      min-height: 360px;
+      height: var(--editor-height, 260px);
+      min-height: 160px;
+      max-height: var(--editor-max-height, min(62vh, 620px));
       border: 1px solid var(--line);
       border-radius: 6px;
       background: #0f1720;
@@ -604,7 +605,7 @@
     .modal-panel {
       position: relative;
       width: min(940px, 96vw);
-      height: min(820px, calc(100vh - 48px));
+      max-height: calc(100vh - 48px);
       display: grid;
       grid-template-rows: auto minmax(0, 1fr);
       background: var(--surface);
@@ -635,6 +636,7 @@
     }
     .modal-body {
       min-height: 0;
+      max-height: calc(100vh - 130px);
       display: grid;
       gap: 12px;
       padding: 12px;
@@ -642,12 +644,12 @@
       overscroll-behavior: contain;
     }
     .modal-code {
-      height: min(520px, 56vh);
-      min-height: 260px;
+      --editor-max-height: min(520px, 56vh);
+      min-height: 180px;
     }
     #rawCodeEditor {
-      height: calc(100vh - 170px);
-      min-height: 520px;
+      --editor-max-height: calc(100vh - 170px);
+      min-height: 220px;
     }
     .draft-editor {
       margin-top: 12px;
