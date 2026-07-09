@@ -590,6 +590,11 @@ const endpoints = {
     function syncEditorScroll(prefix) {
       const parts = editorParts(prefix);
       if (!parts.input || !parts.highlight) return;
+      const editor = parts.input.closest(".code-editor");
+      if (editor && editor.classList.contains("readonly")) {
+        if (parts.lines) parts.lines.scrollTop = parts.highlight.scrollTop;
+        return;
+      }
       parts.highlight.scrollTop = parts.input.scrollTop;
       parts.highlight.scrollLeft = parts.input.scrollLeft;
       if (parts.lines) parts.lines.scrollTop = parts.input.scrollTop;
@@ -1095,8 +1100,8 @@ const endpoints = {
     $("deleteDraft").addEventListener("click", () => runDraftAction("delete"));
     $("draftEditorInput").addEventListener("input", () => updateEditorHighlight("draftEditor", "toml"));
     $("draftEditorInput").addEventListener("scroll", () => syncEditorScroll("draftEditor"));
-    $("rawEditorInput").addEventListener("scroll", () => syncEditorScroll("rawEditor"));
-    $("nodeEditorInput").addEventListener("scroll", () => syncEditorScroll("nodeEditor"));
+    $("rawEditorHighlight").addEventListener("scroll", () => syncEditorScroll("rawEditor"));
+    $("nodeEditorHighlight").addEventListener("scroll", () => syncEditorScroll("nodeEditor"));
     $("draftEditorInput").addEventListener("keydown", (event) => {
       if (event.key === "Tab") {
         event.preventDefault();

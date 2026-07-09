@@ -182,12 +182,20 @@
       z-index: 2;
     }
     .code-editor.readonly textarea {
-      cursor: default;
+      display: none;
     }
     .code-editor.readonly {
       height: var(--viewer-height, min(62vh, 620px));
       min-height: 0;
       max-height: none;
+    }
+    .code-editor.readonly .code-highlight {
+      pointer-events: auto;
+      z-index: 4;
+      overflow: auto;
+    }
+    .code-editor.readonly .code-lines {
+      z-index: 5;
     }
     .tok-comment { color: #7f8ea3; }
     .tok-string { color: #8bd5ca; }
