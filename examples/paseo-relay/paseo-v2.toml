@@ -19,9 +19,27 @@ websocket_dispatch = true
 kind = "http-handler"
 engine = "engine:paseo"
 
+[policies.concurrency.paseo_websocket]
+queue_timeout_ms = 30000
+max_queue_per_key = 1024
+affinity_enabled = false
+affinity_source = "app"
+affinity_key = "serverId"
+affinity_scope = "lane"
+affinity_fallback = "reject"
+actor_enabled = true
+actor_fallback = "unkeyed"
+events = ["open", "message", "close", "info"]
+record_options.sources = [
+  { type = "connection_cache" },
+  { type = "query", key = "connectionId", class = "conn" },
+  { type = "app" },
+]
+
 [[pipelines]]
 id = "paseo.relay"
 group = "paseo"
 ingress = "listener:paseo"
 match.paths = ["*"]
+policies = ["policy:concurrency/paseo_websocket"]
 egress = "adapter:paseo"
