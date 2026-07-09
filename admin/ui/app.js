@@ -599,6 +599,7 @@ const endpoints = {
       if (!parts.input) return;
       const editor = parts.input.closest(".code-editor");
       if (!editor) return;
+      if (editor.classList.contains("readonly")) return;
       const lines = Math.max(String(parts.input.value || "").split("\n").length, 1);
       const lineHeight = 20.15;
       const chrome = 30;

@@ -184,6 +184,11 @@
     .code-editor.readonly textarea {
       cursor: default;
     }
+    .code-editor.readonly {
+      height: var(--viewer-height, min(62vh, 620px));
+      min-height: 0;
+      max-height: none;
+    }
     .tok-comment { color: #7f8ea3; }
     .tok-string { color: #8bd5ca; }
     .tok-number { color: #f4bf75; }
@@ -644,12 +649,12 @@
       overscroll-behavior: contain;
     }
     .modal-code {
-      --editor-max-height: min(520px, 56vh);
+      --viewer-height: min(520px, 56vh);
       min-height: 180px;
     }
     #rawCodeEditor {
-      --editor-max-height: calc(100vh - 170px);
-      min-height: 220px;
+      --viewer-height: calc(100vh - 170px);
+      min-height: 420px;
     }
     .draft-editor {
       margin-top: 12px;
