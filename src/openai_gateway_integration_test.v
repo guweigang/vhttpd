@@ -48,7 +48,9 @@ fn openai_integration_free_port_pair() (int, int) {
 
 fn openai_integration_wait_for_http(url string) {
 	for _ in 0 .. 80 {
-		http.fetch(url: url, method: .get) or {
+		mut header := http.new_header()
+		header.set_custom('Connection', 'close') or {}
+		http.fetch(url: url, method: .get, header: header) or {
 			time.sleep(25 * time.millisecond)
 			continue
 		}
