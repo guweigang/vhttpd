@@ -2,223 +2,1179 @@
 schema_version: 1
 locale: zh-CN
 branch: refactor/v2
-exported_at: "2026-06-04T03:55:18Z"
+nodes_managed: true
+exported_at: "2026-07-16T07:45:06Z"
 modules:
     "":
-        dir_name: vhttpd 多模态应用运行时编排
-        title: vhttpd 多模态应用运行时编排
+        dir_name: vhttpd 单进程运行时与多协议网关聚合根
+        title: vhttpd 单进程运行时与多协议网关聚合根
         scope:
             - README.md
-            - REPO_SPLIT_NOTES.md
-            - TODO_REFACTOR.md
-            - .gitignore
             - Makefile
             - v.mod
             - vhttpd.toml
-            - bench/
-            - scripts/
-            - tests/
-            - tools/
-            - dbsrc/
-            - .github/
-            - .omo/
+            - .gitignore
+            - .mcp.json
+            - opencode.json
+            - REPO_SPLIT_NOTES.md
+            - TODO_REFACTOR.md
             - .env.example
+            - .okignore
             - test_bin
         source_files: []
-        children: []
+        children:
+            - admin_interface
+            - admin_ui
+            - codex_integration
+            - config_examples
+            - core_engine
+            - deploy_scripts
+            - dispatch_system
+            - docs_and_articles
+            - examples
+            - feishu_integration
+            - mcp_integration
+            - openai_api
+            - php_package
+            - provider_framework
+            - relay_system
+            - runtime_executors
+            - state_and_config
+            - upstream_system
+            - websocket_system
+            - worker_backend
         depends_on: []
         related_to: []
-    core_runtime:
-        dir_name: vhttpd 核心运行时编排引擎
-        title: vhttpd 核心运行时编排引擎
+    admin_interface:
+        dir_name: vhttpd Admin 管理面与内部网关聚合层
+        title: vhttpd Admin 管理面与内部网关聚合层
         scope:
-            - src/
+            - src/admin/
+            - src/admin_runtime.v
+            - src/admin_runtime_context.v
+            - src/admin_server.v
+            - src/admin_apps_runtime.v
+            - src/admin_data_plane_response_runtime.v
+            - src/admin_provider_runtime.v
+            - src/admin_schema_runtime.v
+            - src/admin_state_runtime.v
+            - src/admin_workers.v
+            - src/admin_runtime_graph.v
+            - src/admin_runtime_plan_replacement_runtime.v
+            - src/admin_runtime_plan_replacement_preview.v
+            - src/admin_runtime_plan_replacement_apply.v
+            - src/admin_runtime_plan_replacement_cancel.v
+            - src/admin_runtime_plan_replacement_finalize.v
+            - src/admin_runtime_plan_replacement_events.v
+            - src/admin_runtime_plan_replacement_state.v
+            - src/admin_runtime_plan_replacement_types.v
+            - src/admin_state_store/
+            - src/internal_admin.v
         source_files: []
         children:
-            - core_runtime/command_kernel
-            - core_runtime/jsonutils_state_store
-            - core_runtime/config_logging
-            - core_runtime/server_orchestration
-            - core_runtime/executor
-            - core_runtime/websocket
-            - core_runtime/feishu
-            - core_runtime/transport
-            - core_runtime/provider_registry
-            - core_runtime/openai
-            - core_runtime/worker_backend
+            - admin_interface/admin_core
+            - admin_interface/apps_providers_schema
+            - admin_interface/data_plane_responses
+            - admin_interface/plan_replacement_workflow
+            - admin_interface/runtime_graph
+            - admin_interface/state_and_workers
         depends_on: []
         related_to: []
-    core_runtime/command_kernel:
-        dir_name: 命令内核与执行引擎
-        title: 命令内核与执行引擎
+    admin_interface/admin_core:
+        dir_name: Admin 内部 API 核心类型与运行时快照
+        title: Admin 内部 API 核心类型与运行时快照
         scope:
-            - src/command.v
+            - src/admin/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    admin_interface/apps_providers_schema:
+        dir_name: 管理面板运行时快照与配置 Schema
+        title: 管理面板运行时快照与配置 Schema
+        scope:
+            - src/admin_apps_runtime.v
+            - src/admin_provider_runtime.v
+            - src/admin_schema_runtime.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    admin_interface/data_plane_responses:
+        dir_name: 管理面与内部网关 HTTP_Unix Socket 服务
+        title: 管理面与内部网关 HTTP/Unix Socket 服务
+        scope:
+            - src/admin_data_plane_response_runtime.v
+            - src/admin_server.v
+            - src/internal_admin.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    admin_interface/plan_replacement_workflow:
+        dir_name: 运行时计划替换工作流（Preview_Apply_Finalize_Cancel）
+        title: 运行时计划替换工作流（Preview/Apply/Finalize/Cancel）
+        scope:
+            - src/admin_runtime_plan_replacement_runtime.v
+            - src/admin_runtime_plan_replacement_preview.v
+            - src/admin_runtime_plan_replacement_apply.v
+            - src/admin_runtime_plan_replacement_cancel.v
+            - src/admin_runtime_plan_replacement_finalize.v
+            - src/admin_runtime_plan_replacement_events.v
+            - src/admin_runtime_plan_replacement_state.v
+            - src/admin_runtime_plan_replacement_types.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    admin_interface/runtime_graph:
+        dir_name: 运行时与计划管理 Admin API
+        title: 运行时与计划管理 Admin API
+        scope:
+            - src/admin_runtime_graph.v
+            - src/admin_runtime.v
+            - src/admin_runtime_context.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    admin_interface/state_and_workers:
+        dir_name: 管理员状态运行时与 Worker 管理接口
+        title: 管理员状态运行时与 Worker 管理接口
+        scope:
+            - src/admin_state_runtime.v
+            - src/admin_workers.v
+            - src/admin_state_store/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    admin_ui:
+        dir_name: vhttpd 管理控制台前端 (Admin UI)
+        title: vhttpd 管理控制台前端 (Admin UI)
+        scope:
+            - admin/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    codex_integration:
+        dir_name: Codex Provider WebSocket 集成运行时
+        title: Codex Provider WebSocket 集成运行时
+        scope:
+            - src/codex/
+            - src/codex_rpc_runtime.v
+            - src/codex_rpc_request_runtime.v
+            - src/codex_rpc_response_runtime.v
+            - src/codex_rpc_send_runtime.v
+            - src/codex_turn_runtime.v
+            - src/codex_notification_runtime.v
+            - src/codex_provider_runtime_state.v
+            - src/codex_provider_types.v
+            - src/codex_provider_lifecycle_runtime.v
+            - src/codex_provider_websocket_runtime.v
+            - src/codex_runtime_test.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    config_examples:
+        dir_name: vhttpd 配置示例与模板集
+        title: vhttpd 配置示例与模板集
+        scope:
+            - config/
+            - examples/config/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    core_engine:
+        dir_name: vhttpd 核心引擎运行时
+        title: vhttpd 核心引擎运行时
+        scope:
+            - src/engine_runtime.v
+            - src/engine_runtime_builder.v
+            - src/server.v
+            - src/server_lifecycle/
+            - src/runtime_hubs.v
+            - src/app_runtime_core_builder.v
+            - src/app_composition_runtime.v
+            - src/pipeline_runtime.v
+            - src/http_pipeline_runtime.v
+            - src/stream_runtime.v
+            - src/transport_startup_runtime.v
+            - src/control_plane_startup_runtime.v
+            - src/multi_server_runtime_orchestrator.v
+            - src/server_shutdown_hooks.v
+            - src/host_builtin_runtime.v
+            - src/protocol_ingress_runtime.v
+            - src/asset_startup_runtime.v
+            - src/cache_runtime.v
+            - src/upload_runtime.v
+            - src/command/
             - src/command_executor.v
-            - src/command_executor_test.v
             - src/command_handlers.v
-            - src/command_test.v
+            - src/generic_event_runtime.v
+            - src/main.v
         source_files: []
-        children: []
+        children:
+            - core_engine/command_system
+            - core_engine/engine_and_app_composition
+            - core_engine/http_pipeline_runtime
+            - core_engine/server_lifecycle_and_orchestrator
+            - core_engine/startup_and_hosting
+            - core_engine/stream_and_protocol_ingress
         depends_on: []
-        related_to:
-            - path: core_runtime/openai
-    core_runtime/config_logging:
-        dir_name: 配置加载与运行时日志初始化
-        title: 配置加载与运行时日志初始化
+        related_to: []
+    core_engine/command_system:
+        dir_name: 上游命令执行与路由子系统
+        title: 上游命令执行与路由子系统
         scope:
-            - src/config/
-            - src/logging/
+            - src/command/
+            - src/command_executor.v
+            - src/command_handlers.v
         source_files: []
         children: []
         depends_on: []
         related_to: []
-    core_runtime/executor:
-        dir_name: 进程内 VJSX 执行引擎
-        title: 进程内 VJSX 执行引擎
+    core_engine/engine_and_app_composition:
+        dir_name: 引擎与应用程序运行时组装层
+        title: 引擎与应用程序运行时组装层
         scope:
-            - src/executor/
+            - src/engine_runtime.v
+            - src/engine_runtime_builder.v
+            - src/app_composition_runtime.v
+            - src/app_runtime_core_builder.v
+            - src/runtime_hubs.v
         source_files: []
         children: []
         depends_on: []
-        related_to:
-            - path: core_runtime/jsonutils_state_store
-    core_runtime/feishu:
-        dir_name: 飞书卡片桥接与运行时集成
-        title: 飞书卡片桥接与运行时集成
+        related_to: []
+    core_engine/http_pipeline_runtime:
+        dir_name: HTTP_Relay_Upload 管道运行时
+        title: HTTP/Relay/Upload 管道运行时
         scope:
-            - src/feishu_card_bridge.v
-            - src/feishu_runtime.v
-            - src/feishu_runtime_test.v
+            - src/pipeline_runtime.v
+            - src/http_pipeline_runtime.v
+            - src/cache_runtime.v
+            - src/upload_runtime.v
         source_files: []
         children: []
         depends_on: []
-        related_to:
-            - path: core_runtime/websocket
-    core_runtime/jsonutils_state_store:
-        dir_name: JSON工具与内存状态存储
-        title: JSON工具与内存状态存储
+        related_to: []
+    core_engine/server_lifecycle_and_orchestrator:
+        dir_name: 服务器进程生命周期与多监听器编排
+        title: 服务器进程生命周期与多监听器编排
         scope:
-            - src/jsonutils/
-            - src/state_store/
+            - src/server_lifecycle/
+            - src/multi_server_runtime_orchestrator.v
+            - src/server_shutdown_hooks.v
+            - src/server.v
         source_files: []
         children: []
         depends_on: []
-        related_to:
-            - path: core_runtime/executor
-    core_runtime/openai:
-        dir_name: OpenAI 网关集成与运行时
-        title: OpenAI 网关集成与运行时
+        related_to: []
+    core_engine/startup_and_hosting:
+        dir_name: 进程启动与运行时宿主
+        title: 进程启动与运行时宿主
         scope:
-            - src/openai_gateway_integration_test.v
-            - src/openai_runtime.v
-            - src/openai_runtime_test.v
+            - src/transport_startup_runtime.v
+            - src/control_plane_startup_runtime.v
+            - src/asset_startup_runtime.v
+            - src/host_builtin_runtime.v
+            - src/main.v
         source_files: []
         children: []
         depends_on: []
-        related_to:
-            - path: core_runtime/command_kernel
-    core_runtime/provider_registry:
-        dir_name: 上游提供者注册与生命周期管理
-        title: 上游提供者注册与生命周期管理
+        related_to: []
+    core_engine/stream_and_protocol_ingress:
+        dir_name: 运行时入口与协议接入层
+        title: 运行时入口与协议接入层
         scope:
-            - src/provider_bootstrap.v
-            - src/provider_bootstrap_test.v
-            - src/provider_config.v
-            - src/provider_instance_runtime.v
-            - src/provider_registry.v
-            - src/provider_registry_test.v
-            - src/provider_spec.v
+            - src/stream_runtime.v
+            - src/protocol_ingress_runtime.v
+            - src/generic_event_runtime.v
         source_files: []
         children: []
         depends_on: []
-        related_to:
-            - path: core_runtime/server_orchestration
-    core_runtime/server_orchestration:
-        dir_name: Vhttpd 核心运行时编排与执行引擎
-        title: Vhttpd 核心运行时编排与执行引擎
-        scope:
-            - src/
-        source_files: []
-        children: []
-        depends_on: []
-        related_to:
-            - path: core_runtime/provider_registry
-    core_runtime/transport:
-        dir_name: 运行时传输与会话管理
-        title: 运行时传输与会话管理
-        scope:
-            - src/transport/
-        source_files: []
-        children: []
-        depends_on: []
-        related_to:
-            - path: core_runtime/worker_backend
-    core_runtime/websocket:
-        dir_name: WebSocket 运行时与上游桥接
-        title: WebSocket 运行时与上游桥接
-        scope:
-            - src/websocket_binary_support_test.v
-            - src/websocket_dispatch_lifecycle_test.v
-            - src/websocket_runtime.v
-            - src/websocket_upstream_runtime.v
-            - src/websocket_upstream_runtime_test.v
-        source_files: []
-        children: []
-        depends_on: []
-        related_to:
-            - path: core_runtime/feishu
-    core_runtime/worker_backend:
-        dir_name: Worker Backend Runtime & Transport
-        title: Worker Backend Runtime & Transport
-        scope:
-            - src/worker_backend_dispatch.v
-            - src/worker_backend_pool.v
-            - src/worker_backend_queue.v
-            - src/worker_backend_runtime.v
-            - src/worker_backend_runtime_test.v
-            - src/worker_backend_transport.v
-        source_files: []
-        children: []
-        depends_on: []
-        related_to:
-            - path: core_runtime/transport
-            - path: php_sdk
-    deploy_config:
-        dir_name: 部署配置与系统服务集成
-        title: 部署配置与系统服务集成
+        related_to: []
+    deploy_scripts:
+        dir_name: 部署、安装与基准测试辅助脚本
+        title: 部署、安装与基准测试辅助脚本
         scope:
             - deploy/
-            - config/
+            - scripts/
+            - bench/
+            - tools/
+            - tests/
         source_files: []
         children: []
         depends_on: []
         related_to: []
-    documentation:
-        dir_name: vhttpd 架构与运行时文档体系
-        title: vhttpd 架构与运行时文档体系
+    dispatch_system:
+        dir_name: 分发内核与运行时调度层（Dispatch Kernel & Runtime）
+        title: 分发内核与运行时调度层（Dispatch Kernel & Runtime）
         scope:
-            - docs/
+            - src/dispatch/
+            - src/kernel_dispatch.v
+            - src/dispatch_context.v
+            - src/route_rule_test.v
+        source_files: []
+        children:
+            - dispatch_system/adapter_layer
+            - dispatch_system/exchange_projection
+            - dispatch_system/kernel_runtime
+            - dispatch_system/plan_validation
+            - dispatch_system/routing_rules
+        depends_on: []
+        related_to: []
+    dispatch_system/adapter_layer:
+        dir_name: 出站适配器层（Egress Adapter Layer）
+        title: 出站适配器层（Egress Adapter Layer）
+        scope:
+            - src/dispatch/adapter.v
+            - src/dispatch/fixed_response_adapter.v
+            - src/dispatch/reject_adapter.v
+            - src/dispatch/relay_delivery_adapter.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    dispatch_system/exchange_projection:
+        dir_name: 交换模型与运行时计划投影
+        title: 交换模型与运行时计划投影
+        scope:
+            - src/dispatch/exchange.v
+            - src/dispatch/adapter_projection.v
+            - src/dispatch/plan_projection.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    dispatch_system/kernel_runtime:
+        dir_name: 内核分发与运行时服务适配层
+        title: 内核分发与运行时服务适配层
+        scope:
+            - src/dispatch/kernel.v
+            - src/dispatch/pipeline.v
+            - src/dispatch/context.v
+            - src/dispatch/runtime_services.v
+            - src/dispatch/relay.v
+            - src/kernel_dispatch.v
+            - src/dispatch_context.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    dispatch_system/plan_validation:
+        dir_name: 运行时计划校验与投影（Plan Validation & Projection）
+        title: 运行时计划校验与投影（Plan Validation & Projection）
+        scope:
+            - src/dispatch/plan_validation.v
+            - src/dispatch/plan_validation_test.v
+            - src/dispatch/plan_projection_test.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    dispatch_system/routing_rules:
+        dir_name: HTTP 路由匹配与规则引擎
+        title: HTTP 路由匹配与规则引擎
+        scope:
+            - src/dispatch/http_match.v
+            - src/dispatch/http.v
+            - src/route_rule_test.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    docs_and_articles:
+        dir_name: vhttpd 对外教程与产品叙事文档
+        title: vhttpd 对外教程与产品叙事文档
+        scope:
             - articles/
         source_files: []
         children: []
         depends_on: []
         related_to: []
     examples:
-        dir_name: CodexBot 集成示例与协议适配层
-        title: CodexBot 集成示例与协议适配层
+        dir_name: vhttpd 示例应用与配置集
+        title: vhttpd 示例应用与配置集
         scope:
             - examples/
         source_files: []
         children: []
         depends_on: []
         related_to: []
-    php_sdk:
-        dir_name: VHttpd PHP 运行时与集成 SDK
-        title: VHttpd PHP 运行时与集成 SDK
+    feishu_integration:
+        dir_name: 飞书（Feishu）Provider 运行时集成
+        title: 飞书（Feishu）Provider 运行时集成
+        scope:
+            - src/feishu/
+            - src/feishu_http_runtime.v
+            - src/feishu_callback_runtime.v
+            - src/feishu_ingress_event_runtime.v
+            - src/feishu_message_runtime.v
+            - src/feishu_card_bridge_client_runtime.v
+            - src/feishu_card_bridge_runtime.v
+            - src/feishu_card_bridge_server_runtime.v
+            - src/feishu_provider_runtime.v
+            - src/feishu_provider_connection_runtime.v
+            - src/feishu_provider_runtime_port.v
+            - src/feishu_provider_state_runtime.v
+            - src/feishu_websocket_runtime.v
+            - src/feishu_stream_buffer_runtime.v
+            - src/feishu_bridge_delivery_projection.v
+            - src/feishu_runtime_test.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    mcp_integration:
+        dir_name: MCP (Model Context Protocol) 运行时与 HTTP_SSE 接入层
+        title: MCP (Model Context Protocol) 运行时与 HTTP/SSE 接入层
+        scope:
+            - src/api/mcp/
+            - src/mcp_runtime.v
+            - src/mcp_protocol_ingress_port.v
+            - src/mcp_response_runtime.v
+            - src/mcp_session_lifecycle_runtime.v
+            - src/mcp_session_queue_runtime.v
+            - src/mcp_session_stream_runtime.v
+            - src/mcp_exchange_projection.v
+            - src/mcp_session_delivery_projection.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    openai_api:
+        dir_name: OpenAI 协议网关与运行时
+        title: OpenAI 协议网关与运行时
+        scope:
+            - src/api/openai/
+            - src/openai_app_runtime.v
+            - src/openai_chat_runtime.v
+            - src/openai_responses_runtime.v
+            - src/openai_responses_executor_runtime.v
+            - src/openai_models_runtime.v
+            - src/openai_planning_runtime.v
+            - src/openai_proxy_runtime.v
+            - src/openai_plugin_planning_runtime.v
+            - src/openai_protocol_ingress_port.v
+            - src/openai_stream_proxy_runtime.v
+            - src/openai_mapped_stream_proxy_runtime.v
+            - src/openai_mapped_stream_state.v
+            - src/openai_executor_once_runtime.v
+            - src/openai_executor_stream_runtime.v
+            - src/openai_executor_plugin_runtime.v
+            - src/openai_runtime_context.v
+            - src/openai_runtime_test.v
+            - src/openai_http_runtime_helpers.v
+            - src/openai_gateway_integration_test.v
+            - src/openai_app_runtime.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    php_package:
+        dir_name: VHttpd PHP 运行时与 VSlim 应用框架
+        title: VHttpd PHP 运行时与 VSlim 应用框架
         scope:
             - php/
         source_files: []
         children: []
         depends_on: []
-        related_to:
-            - path: core_runtime/worker_backend
+        related_to: []
+    provider_framework:
+        dir_name: Provider 运行时框架
+        title: Provider 运行时框架
+        scope:
+            - src/provider/
+            - src/provider_registry.v
+            - src/provider_bootstrap.v
+            - src/provider_runtime_builder.v
+            - src/provider_runtime_driver.v
+            - src/provider_runtime_hub.v
+            - src/provider_runtime_state.v
+            - src/provider_runtime_catalog.v
+            - src/provider_runtime_dispatch.v
+            - src/provider_action_adapter_runtime.v
+            - src/provider_instance_admin_runtime.v
+            - src/provider_spec.v
+            - src/provider_startup_runtime.v
+            - src/provider_websocket_hook_runtime.v
+            - src/provider_ingress_event_runtime.v
+            - src/provider_runtime_upstream_control.v
+        source_files: []
+        children:
+            - provider_framework/adapters_and_hooks
+            - provider_framework/registry_and_bootstrap
+            - provider_framework/spec_and_lifecycle
+        depends_on: []
+        related_to: []
+    provider_framework/adapters_and_hooks:
+        dir_name: Provider 运行时适配器与事件入口
+        title: Provider 运行时适配器与事件入口
+        scope:
+            - src/provider_action_adapter_runtime.v
+            - src/provider_instance_admin_runtime.v
+            - src/provider_websocket_hook_runtime.v
+            - src/provider_ingress_event_runtime.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    provider_framework/registry_and_bootstrap:
+        dir_name: Provider 注册表与运行时引导
+        title: Provider 注册表与运行时引导
+        scope:
+            - src/provider_registry.v
+            - src/provider_bootstrap.v
+            - src/provider_runtime_builder.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    provider_framework/spec_and_lifecycle:
+        dir_name: Provider 规范、实例与运行时配置
+        title: Provider 规范、实例与运行时配置
+        scope:
+            - src/provider/spec.v
+            - src/provider/instance.v
+            - src/provider/config.v
+            - src/provider/context.v
+            - src/provider/name.v
+            - src/provider/types.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    relay_system:
+        dir_name: VHTTPD Relay 子系统
+        title: VHTTPD Relay 子系统
+        scope:
+            - src/relay/
+            - src/relay_pipeline_runtime.v
+            - src/relay_pipeline_runtime_test.v
+            - src/relay_runtime_builder.v
+        source_files: []
+        children:
+            - relay_system/core_runtime
+            - relay_system/forwarding
+            - relay_system/messaging_core
+            - relay_system/pipeline_runtime
+            - relay_system/registration_snapshot
+            - relay_system/wire_protocol
+        depends_on: []
+        related_to: []
+    relay_system/core_runtime:
+        dir_name: 中继运行时与 Agent 连接状态机
+        title: 中继运行时与 Agent 连接状态机
+        scope:
+            - src/relay/runtime.v
+            - src/relay/runtime_test.v
+            - src/relay/agent_state.v
+            - src/relay/agent_handshake.v
+            - src/relay/agent_handshake_test.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    relay_system/forwarding:
+        dir_name: Relay 帧转发与入_出站编排
+        title: Relay 帧转发与入/出站编排
+        scope:
+            - src/relay/inbound.v
+            - src/relay/outbound.v
+            - src/relay/forwarding.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    relay_system/messaging_core:
+        dir_name: Relay 消息核心：通道、会话与传输载体
+        title: Relay 消息核心：通道、会话与传输载体
+        scope:
+            - src/relay/carrier.v
+            - src/relay/channel.v
+            - src/relay/session.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    relay_system/pipeline_runtime:
+        dir_name: Relay 管道运行时与构建器
+        title: Relay 管道运行时与构建器
+        scope:
+            - src/relay_pipeline_runtime.v
+            - src/relay_pipeline_runtime_test.v
+            - src/relay_runtime_builder.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    relay_system/registration_snapshot:
+        dir_name: 中继注册、运行时快照与交换投影
+        title: 中继注册、运行时快照与交换投影
+        scope:
+            - src/relay/registration.v
+            - src/relay/snapshot.v
+            - src/relay/exchange_projection.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    relay_system/wire_protocol:
+        dir_name: Relay 线框协议与响应完成编排
+        title: Relay 线框协议与响应完成编排
+        scope:
+            - src/relay/wire.v
+            - src/relay/delivery.v
+            - src/relay/response_completion.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    runtime_executors:
+        dir_name: vhttpd 逻辑执行器运行时与桥接层
+        title: vhttpd 逻辑执行器运行时与桥接层
+        scope:
+            - src/executor/
+            - src/executor_bridge.v
+            - src/logic_executor_test.v
+            - src/executor_capability_interfaces_test.v
+            - src/executor_registry.v
+        source_files: []
+        children:
+            - runtime_executors/inproc_vjsx_runtime
+            - runtime_executors/runtime_plan
+            - runtime_executors/shared_interfaces_registry
+            - runtime_executors/tests
+        depends_on: []
+        related_to: []
+    runtime_executors/inproc_vjsx_runtime:
+        dir_name: In-Process VJSX 执行器运行时
+        title: In-Process VJSX 执行器运行时
+        scope:
+            - src/executor/
+        source_files: []
+        children:
+            - runtime_executors/inproc_vjsx_runtime/bootstrap_startup
+            - runtime_executors/inproc_vjsx_runtime/host_apis
+            - runtime_executors/inproc_vjsx_runtime/lanes_host_pool_workers
+            - runtime_executors/inproc_vjsx_runtime/lanes_state_context
+            - runtime_executors/inproc_vjsx_runtime/plugins_streaming
+            - runtime_executors/inproc_vjsx_runtime/runtime_core_shared_types
+            - runtime_executors/inproc_vjsx_runtime/sessions_lifecycle
+            - runtime_executors/inproc_vjsx_runtime/websocket_layer
+        depends_on: []
+        related_to: []
+    runtime_executors/inproc_vjsx_runtime/bootstrap_startup:
+        dir_name: VJSX 进程内启动期运行时与引导
+        title: VJSX 进程内启动期运行时与引导
+        scope:
+            - src/executor/inproc_vjsx_bootstrap_runtime.v
+            - src/executor/inproc_vjsx_entry_resolver.v
+            - src/executor/inproc_vjsx_startup_runtime.v
+            - src/executor/inproc_vjsx_startup_codec.v
+            - src/executor/inproc_vjsx_startup_hook_runtime.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    runtime_executors/inproc_vjsx_runtime/host_apis:
+        dir_name: VJSX 宿主 API 与运行时桥接层
+        title: VJSX 宿主 API 与运行时桥接层
+        scope:
+            - src/executor/inproc_vjsx_host_api.v
+            - src/executor/inproc_vjsx_host_api_types.v
+            - src/executor/inproc_vjsx_host_config_api.v
+            - src/executor/inproc_vjsx_host_dispatch_api.v
+            - src/executor/inproc_vjsx_host_fs_api.v
+            - src/executor/inproc_vjsx_host_http_fetch_api.v
+            - src/executor/inproc_vjsx_host_lifecycle.v
+            - src/executor/inproc_vjsx_host_runtime_api.v
+            - src/executor/inproc_vjsx_host_session_store_api.v
+            - src/executor/inproc_vjsx_host_shutdown.v
+            - src/executor/vjsx_host_loader.v
+            - src/executor/vjsx_host_signature.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    runtime_executors/inproc_vjsx_runtime/lanes_host_pool_workers:
+        dir_name: VJSX Lane 池化与 Worker 运行时
+        title: VJSX Lane 池化与 Worker 运行时
+        scope:
+            - src/executor/inproc_vjsx_lane_host.v
+            - src/executor/inproc_vjsx_lane_pool.v
+            - src/executor/inproc_vjsx_lane_worker_facade.v
+            - src/executor/inproc_vjsx_lane_worker_runtime.v
+            - src/executor/inproc_vjsx_lane_worker_task_handlers.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    runtime_executors/inproc_vjsx_runtime/lanes_state_context:
+        dir_name: VJSX Lane 运行时状态与会话上下文
+        title: VJSX Lane 运行时状态与会话上下文
+        scope:
+            - src/executor/inproc_vjsx_lane_state.v
+            - src/executor/inproc_vjsx_lane_session_context.v
+            - src/executor/inproc_vjsx_lane_wakeup_runtime.v
+            - src/executor/inproc_vjsx_lane_types.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    runtime_executors/inproc_vjsx_runtime/plugins_streaming:
+        dir_name: In-Process VJSX 插件运行时与响应编解码
+        title: In-Process VJSX 插件运行时与响应编解码
+        scope:
+            - src/executor/inproc_vjsx_plugin_runtime.v
+            - src/executor/inproc_vjsx_plugin_stream_runtime.v
+            - src/executor/inproc_vjsx_response_codec.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    runtime_executors/inproc_vjsx_runtime/runtime_core_shared_types:
+        dir_name: In-Process VJSX 运行时核心共享类型与调度
+        title: In-Process VJSX 运行时核心共享类型与调度
+        scope:
+            - src/executor/inproc_vjsx_constants.v
+            - src/executor/inproc_vjsx_dispatch_runtime.v
+            - src/executor/inproc_vjsx_error.v
+            - src/executor/inproc_vjsx_runtime_event.v
+            - src/executor/inproc_vjsx_runtime_payload.v
+            - src/executor/inproc_vjsx_runtime_types.v
+            - src/executor/inproc_vjsx_signature_refresh.v
+            - src/executor/inproc_vjsx_snapshot_json.v
+            - src/executor/inproc_vjsx_snapshot_runtime.v
+            - src/executor/inproc_vjsx_types.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    runtime_executors/inproc_vjsx_runtime/sessions_lifecycle:
+        dir_name: VJSX 内嵌执行器生命周期与会话管理
+        title: VJSX 内嵌执行器生命周期与会话管理
+        scope:
+            - src/executor/inproc_vjsx_codex_sessions.v
+            - src/executor/inproc_vjsx_runtime_session.v
+            - src/executor/inproc_vjsx_lifecycle.v
+            - src/executor/lifecycle.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    runtime_executors/inproc_vjsx_runtime/websocket_layer:
+        dir_name: In-Process VJSX WebSocket 执行器
+        title: In-Process VJSX WebSocket 执行器
+        scope:
+            - src/executor/inproc_vjsx_websocket_actor_policy.v
+            - src/executor/inproc_vjsx_websocket_actor_runtime.v
+            - src/executor/inproc_vjsx_websocket_affinity_runtime.v
+            - src/executor/inproc_vjsx_websocket_affinity_state.v
+            - src/executor/inproc_vjsx_websocket_callback_runtime.v
+            - src/executor/inproc_vjsx_websocket_dispatch_js.v
+            - src/executor/inproc_vjsx_websocket_event_runtime.v
+            - src/executor/inproc_vjsx_websocket_js.v
+            - src/executor/inproc_vjsx_websocket_lane_query_runtime.v
+            - src/executor/inproc_vjsx_websocket_mailbox.v
+            - src/executor/inproc_vjsx_websocket_policy.v
+            - src/executor/inproc_vjsx_websocket_request.v
+            - src/executor/inproc_vjsx_websocket_response_codec.v
+            - src/executor/inproc_vjsx_websocket_runtime_payload.v
+            - src/executor/inproc_vjsx_websocket_session_store_js.v
+            - src/executor/inproc_vjsx_websocket_task_awaiter.v
+            - src/executor/inproc_vjsx_websocket_types.v
+            - src/executor/inproc_vjsx_websocket_upstream_runtime.v
+        source_files: []
+        children:
+            - runtime_executors/inproc_vjsx_runtime/websocket_layer/actor_policy
+            - runtime_executors/inproc_vjsx_runtime/websocket_layer/affinity_callback
+            - runtime_executors/inproc_vjsx_runtime/websocket_layer/event_upstream_lane
+            - runtime_executors/inproc_vjsx_runtime/websocket_layer/js_integration
+            - runtime_executors/inproc_vjsx_runtime/websocket_layer/request_response_payload
+            - runtime_executors/inproc_vjsx_runtime/websocket_layer/types_mailbox_awaiter
+        depends_on: []
+        related_to: []
+    runtime_executors/inproc_vjsx_runtime/websocket_layer/actor_policy:
+        dir_name: WebSocket Actor 亲和与路由策略
+        title: WebSocket Actor 亲和与路由策略
+        scope:
+            - src/executor/inproc_vjsx_websocket_actor_policy.v
+            - src/executor/inproc_vjsx_websocket_actor_runtime.v
+            - src/executor/inproc_vjsx_websocket_policy.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    runtime_executors/inproc_vjsx_runtime/websocket_layer/affinity_callback:
+        dir_name: In-Process VJSX WebSocket 亲和性回调运行时
+        title: In-Process VJSX WebSocket 亲和性回调运行时
+        scope:
+            - src/executor/inproc_vjsx_websocket_affinity_runtime.v
+            - src/executor/inproc_vjsx_websocket_affinity_state.v
+            - src/executor/inproc_vjsx_websocket_callback_runtime.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    runtime_executors/inproc_vjsx_runtime/websocket_layer/event_upstream_lane:
+        dir_name: VJSX WebSocket 事件上行路由与亲和性_Actor 决策运行时
+        title: VJSX WebSocket 事件上行路由与亲和性/Actor 决策运行时
+        scope:
+            - src/executor/inproc_vjsx_websocket_event_runtime.v
+            - src/executor/inproc_vjsx_websocket_upstream_runtime.v
+            - src/executor/inproc_vjsx_websocket_lane_query_runtime.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    runtime_executors/inproc_vjsx_runtime/websocket_layer/js_integration:
+        dir_name: VJSX WebSocket JS 运行时桥接层
+        title: VJSX WebSocket JS 运行时桥接层
+        scope:
+            - src/executor/inproc_vjsx_websocket_dispatch_js.v
+            - src/executor/inproc_vjsx_websocket_js.v
+            - src/executor/inproc_vjsx_websocket_session_store_js.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    runtime_executors/inproc_vjsx_runtime/websocket_layer/request_response_payload:
+        dir_name: WebSocket 请求_响应载荷编解码
+        title: WebSocket 请求/响应载荷编解码
+        scope:
+            - src/executor/inproc_vjsx_websocket_request.v
+            - src/executor/inproc_vjsx_websocket_response_codec.v
+            - src/executor/inproc_vjsx_websocket_runtime_payload.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    runtime_executors/inproc_vjsx_runtime/websocket_layer/types_mailbox_awaiter:
+        dir_name: In-Process VJSX WebSocket 任务调度与等待原语
+        title: In-Process VJSX WebSocket 任务调度与等待原语
+        scope:
+            - src/executor/inproc_vjsx_websocket_types.v
+            - src/executor/inproc_vjsx_websocket_mailbox.v
+            - src/executor/inproc_vjsx_websocket_task_awaiter.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    runtime_executors/runtime_plan:
+        dir_name: 运行时执行器计划与选择
+        title: 运行时执行器计划与选择
+        scope:
+            - src/executor/runtime_plan.v
+            - src/executor/runtime_plan_bridge.v
+            - src/executor/runtime_selection.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    runtime_executors/shared_interfaces_registry:
+        dir_name: 逻辑执行器共享接口与类型定义
+        title: 逻辑执行器共享接口与类型定义
+        scope:
+            - src/executor/logic_executor_interfaces.v
+            - src/executor/logic_executor_ports.v
+            - src/executor/types.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    runtime_executors/tests:
+        dir_name: 执行器与运行时计划替换集成测试
+        title: 执行器与运行时计划替换集成测试
+        scope:
+            - src/logic_executor_test.v
+            - src/executor_capability_interfaces_test.v
+            - src/executor/runtime_plan_bridge_test.v
+            - src/executor/vjsx_host_signature_test.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    state_and_config:
+        dir_name: vhttpd 运行时基础设施层
+        title: vhttpd 运行时基础设施层
+        scope:
+            - src/config/
+            - src/state_store/
+            - src/admin_state_store/
+            - src/runtime_plan/
+            - src/jsonutils/
+            - src/logging/
+            - src/cachex/
+            - src/dbx/
+        source_files: []
+        children:
+            - state_and_config/config_and_runtime_plan
+            - state_and_config/runtime_utils
+            - state_and_config/state_stores
+        depends_on: []
+        related_to: []
+    state_and_config/config_and_runtime_plan:
+        dir_name: 配置加载与运行时计划编译
+        title: 配置加载与运行时计划编译
+        scope:
+            - src/config/
+            - src/runtime_plan/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    state_and_config/runtime_utils:
+        dir_name: 运行时工具集（JSON 探测、日志、缓存与数据库 Unix Socket 服务）
+        title: 运行时工具集（JSON 探测、日志、缓存与数据库 Unix Socket 服务）
+        scope:
+            - src/jsonutils/
+            - src/logging/
+            - src/cachex/
+            - src/dbx/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    state_and_config/state_stores:
+        dir_name: 状态存储抽象与内存_文件实现
+        title: 状态存储抽象与内存/文件实现
+        scope:
+            - src/state_store/
+            - src/admin_state_store/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    upstream_system:
+        dir_name: 上游计划运行时与 Provider 抽象层
+        title: 上游计划运行时与 Provider 抽象层
+        scope:
+            - src/upstream/
+            - src/upstream_runtime.v
+            - src/upstream_runtime_registry.v
+            - src/upstream_plan_delivery_projection.v
+            - src/upstream_plan_delivery_projection_test.v
+        source_files: []
+        children:
+            - upstream_system/provider_codex_ollama
+            - upstream_system/provider_feishu
+            - upstream_system/runtime_and_plan_projection
+            - upstream_system/transport
+        depends_on: []
+        related_to: []
+    upstream_system/provider_codex_ollama:
+        dir_name: Codex 与 Ollama 上游 Provider 类型定义
+        title: Codex 与 Ollama 上游 Provider 类型定义
+        scope:
+            - src/upstream/provider/codex/
+            - src/upstream/provider/ollama/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    upstream_system/provider_feishu:
+        dir_name: 飞书（Feishu）上游消息提供商实现
+        title: 飞书（Feishu）上游消息提供商实现
+        scope:
+            - src/upstream/provider/feishu/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    upstream_system/runtime_and_plan_projection:
+        dir_name: 上游计划运行时与投递投影
+        title: 上游计划运行时与投递投影
+        scope:
+            - src/upstream_runtime.v
+            - src/upstream_runtime_registry.v
+            - src/upstream_plan_delivery_projection.v
+            - src/upstream_plan_delivery_projection_test.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    upstream_system/transport:
+        dir_name: 上游 Worker 进程与传输协议层
+        title: 上游 Worker 进程与传输协议层
+        scope:
+            - src/upstream/transport/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    websocket_system:
+        dir_name: WebSocket 运行时与接入编排层
+        title: WebSocket 运行时与接入编排层
+        scope:
+            - src/ws/
+            - src/websocket_runtime.v
+            - src/websocket_ingress_runtime.v
+            - src/websocket_upgrade.v
+            - src/websocket_owner_runtime.v
+            - src/websocket_exchange_projection.v
+            - src/websocket_session_delivery_projection.v
+            - src/websocket_relay_runtime.v
+            - src/websocket_relay_agent_runtime.v
+            - src/websocket_upstream_provider_runtime.v
+            - src/websocket_upstream_send_runtime.v
+            - src/websocket_upstream_types.v
+            - src/websocket_upstream_admin_runtime.v
+            - src/websocket_binary_support_test.v
+            - src/websocket_dispatch_lifecycle_test.v
+            - src/websocket_upstream_provider_control.v
+            - src/websocket_upstream_fixture_runtime.v
+            - src/websocket_upstream_runtime_test.v
+        source_files: []
+        children:
+            - websocket_system/core_ws_subsystem
+            - websocket_system/ingress_upgrade
+            - websocket_system/session_exchange_projections
+            - websocket_system/tests_and_fixtures
+            - websocket_system/upstream_provider
+        depends_on: []
+        related_to: []
+    websocket_system/core_ws_subsystem:
+        dir_name: WebSocket Hub 核心子系统
+        title: WebSocket Hub 核心子系统
+        scope:
+            - src/ws/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    websocket_system/ingress_upgrade:
+        dir_name: WebSocket 接入与升级桥接层
+        title: WebSocket 接入与升级桥接层
+        scope:
+            - src/websocket_ingress_runtime.v
+            - src/websocket_upgrade.v
+            - src/websocket_runtime.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    websocket_system/session_exchange_projections:
+        dir_name: WebSocket 会话交换与交付投影
+        title: WebSocket 会话交换与交付投影
+        scope:
+            - src/websocket_exchange_projection.v
+            - src/websocket_session_delivery_projection.v
+            - src/websocket_owner_runtime.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    websocket_system/tests_and_fixtures:
+        dir_name: WebSocket 系统测试与 Fixture 运行时
+        title: WebSocket 系统测试与 Fixture 运行时
+        scope:
+            - src/websocket_binary_support_test.v
+            - src/websocket_dispatch_lifecycle_test.v
+            - src/websocket_upstream_fixture_runtime.v
+            - src/websocket_upstream_runtime_test.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    websocket_system/upstream_provider:
+        dir_name: WebSocket 上游 Provider 运行时与路由
+        title: WebSocket 上游 Provider 运行时与路由
+        scope:
+            - src/websocket_upstream_provider_runtime.v
+            - src/websocket_upstream_send_runtime.v
+            - src/websocket_upstream_types.v
+            - src/websocket_upstream_admin_runtime.v
+            - src/websocket_upstream_provider_control.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    worker_backend:
+        dir_name: Worker 后端运行时编排层
+        title: Worker 后端运行时编排层
+        scope:
+            - src/worker/
+            - src/worker_backend_connector_runtime.v
+            - src/worker_backend_dispatch.v
+            - src/worker_backend_dispatch_transport.v
+            - src/worker_backend_drain_runtime.v
+            - src/worker_backend_error_classifier_test.v
+            - src/worker_backend_lifecycle_runtime.v
+            - src/worker_backend_pool.v
+            - src/worker_backend_queue.v
+            - src/worker_backend_runtime_test.v
+            - src/worker_backend_selection_diagnostics.v
+            - src/worker_stream_delivery_projection.v
+            - src/worker_stream_delivery_projection_test.v
+            - src/worker_websocket_dispatch_command_runtime.v
+            - src/worker_backend_admin_runtime.v
+        source_files: []
+        children:
+            - worker_backend/core_runtime
+            - worker_backend/dispatch_transport
+            - worker_backend/drain_error_diagnostics
+            - worker_backend/shared_worker_types
+            - worker_backend/stream_delivery_projection
+        depends_on: []
+        related_to: []
+    worker_backend/core_runtime:
+        dir_name: Worker 后端运行时：连接、生命周期与队列
+        title: Worker 后端运行时：连接、生命周期与队列
+        scope:
+            - src/worker_backend_connector_runtime.v
+            - src/worker_backend_lifecycle_runtime.v
+            - src/worker_backend_pool.v
+            - src/worker_backend_queue.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    worker_backend/dispatch_transport:
+        dir_name: Worker 后端分发与 WebSocket 命令执行
+        title: Worker 后端分发与 WebSocket 命令执行
+        scope:
+            - src/worker_backend_dispatch.v
+            - src/worker_backend_dispatch_transport.v
+            - src/worker_websocket_dispatch_command_runtime.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    worker_backend/drain_error_diagnostics:
+        dir_name: Worker 后端排障与 Drain 运行时
+        title: Worker 后端排障与 Drain 运行时
+        scope:
+            - src/worker_backend_drain_runtime.v
+            - src/worker_backend_error_classifier_test.v
+            - src/worker_backend_selection_diagnostics.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    worker_backend/shared_worker_types:
+        dir_name: Worker 后端运行时与共享类型
+        title: Worker 后端运行时与共享类型
+        scope:
+            - src/worker_backend_admin_runtime.v
+            - src/worker/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    worker_backend/stream_delivery_projection:
+        dir_name: Worker 流式响应投递投影
+        title: Worker 流式响应投递投影
+        scope:
+            - src/worker_stream_delivery_projection.v
+            - src/worker_stream_delivery_projection_test.v
+            - src/worker_backend_runtime_test.v
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []

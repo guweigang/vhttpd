@@ -14,3 +14,5 @@ examples/codexbot-app/codex.sqlite
 php/package/composer.lock
 php/package/vendor/
 /dist/
+.codex/
+.opencode/

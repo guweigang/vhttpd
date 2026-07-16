@@ -1,9 +1,0 @@
-schema_version: 1
-module_path: deploy_config
-title: 部署配置与系统服务集成
-scope:
-    - deploy/
-    - config/
-source_files: []
-depends_on: []
-related_to: []
