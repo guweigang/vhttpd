@@ -1,12 +1,8 @@
 site_name: vhttpd 文档
 site_url: https://your-username.github.io/vhttpd/
 theme:
-  name: material
+  name: readthedocs
   language: zh
-markdown_extensions:
-  - toc:
-      permalink: true
-      slugify: !!python/name:pymdownx.slugs.slugify
 plugins:
   - search
   - mermaid2:
