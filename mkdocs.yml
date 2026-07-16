@@ -1,11 +1,16 @@
 site_name: vhttpd 文档
 site_url: https://your-username.github.io/vhttpd/
 theme:
-  name: readthedocs
+  name: material
   language: zh
 plugins:
   - search
-  - mermaid2
+markdown_extensions:
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
 nav:
   - Home: index.md
   - 快速开始: 快速开始.md
