@@ -1,41 +1,19 @@
 # API 参考
 
 <cite>
-**本文引用的文件**
+**本文引用的文件**   
 - [README.md](file://README.md)
-- [INTERNAL_HOST_SOCKET_PROTOCOL.md](file://docs/INTERNAL_HOST_SOCKET_PROTOCOL.md)
-- [MCP.md](file://docs/MCP.md)
-- [MCP_APP_API.md](file://docs/MCP_APP_API.md)
-- [WEBSOCKET_EVENT_BUS_PLAN.md](file://docs/WEBSOCKET_EVENT_BUS_PLAN.md)
-- [WEBSOCKET_MESSAGE_DISPATCH_PLAN.md](file://docs/WEBSOCKET_MESSAGE_DISPATCH_PLAN.md)
+- [admin_server.v](file://src/admin_server.v)
+- [mcp_runtime.v](file://src/mcp_runtime.v)
 - [WEBSOCKET_MVP_PLAN.md](file://docs/WEBSOCKET_MVP_PLAN.md)
 - [WEBSOCKET_PHASE2_IMPLEMENTATION_PLAN.md](file://docs/WEBSOCKET_PHASE2_IMPLEMENTATION_PLAN.md)
-- [WEBSOCKET_UPSTREAM_PLAN.md](file://docs/WEBSOCKET_UPSTREAM_PLAN.md)
-- [codex_stream_message.md](file://docs/codex_stream_message.md)
-- [transport_contract.md](file://docs/transport_contract.md)
-- [admin_server.v](file://src/admin_server.v)
-- [internal_admin.v](file://src/internal_admin.v)
-- [websocket_runtime.v](file://src/websocket_runtime.v)
-- [mcp_runtime.v](file://src/mcp_runtime.v)
-- [server.v](file://src/server.v)
-- [worker_backend_transport.v](file://src/worker_backend_transport.v)
-- [worker_protocol.v](file://src/transport/worker_protocol.v)
-- [vhttpd.toml](file://vhttpd.toml)
-- [config.v](file://src/config/config.v)
-- [runtime_config.v](file://src/config/runtime_config.v)
-- [embedded_host.v](file://src/config/embedded_host.v)
-- [args.v](file://src/config/args.v)
-- [app.php](file://examples/hello-app.php)
-- [mcp-app.php](file://examples/mcp-app.php)
-- [mcp-feishu-app.php](file://examples/mcp-feishu-app.php)
-- [websocket_echo_app.php](file://examples/websocket_echo_app.php)
-- [codexbot-app/app.php](file://examples/codexbot-app/app.php)
-- [codexbot-app/views/admin_dashboard.html](file://examples/codexbot-app/views/admin_dashboard.html)
-- [codexbot-app/views/admin_live_page.html](file://examples/codexbot-app/views/admin_live_page.html)
-- [codexbot-app/views/admin_live_panel.html](file://examples/codexbot-app/views/admin_live_panel.html)
-- [config/hello.toml](file://examples/config/hello.toml)
-- [config/mcp.toml](file://examples/config/mcp.toml)
-- [config/websocket-echo.toml](file://examples/config/websocket-echo.toml)
+- [MCP.md](file://docs/MCP.md)
+- [MCP_MVP_PLAN.md](file://docs/MCP_MVP_PLAN.md)
+- [ws/runtime.v](file://src/ws/runtime.v)
+- [ws/dispatch_session.v](file://src/ws/dispatch_session.v)
+- [examples/config/mcp.toml](file://examples/config/mcp.toml)
+- [examples/config/websocket-echo.toml](file://examples/config/websocket-echo.toml)
+- [examples/public/websocket_echo_app.js](file://examples/public/websocket_echo_app.js)
 </cite>
 
 ## 目录
@@ -45,396 +23,273 @@
 4. [架构总览](#架构总览)
 5. [详细组件分析](#详细组件分析)
 6. [依赖关系分析](#依赖关系分析)
-7. [性能考虑](#性能考虑)
+7. [性能与限流](#性能与限流)
 8. [故障排查指南](#故障排查指南)
 9. [结论](#结论)
-10. [附录](#附录)
+10. [附录：客户端集成与调试](#附录客户端集成与调试)
 
 ## 简介
-本文件为 vhttpd 的全面 API 参考，覆盖以下 API 类别与主题：
-- Admin API：运行时状态查询、工作进程控制、调试接口
-- HTTP API：请求/响应规范、错误码定义
-- WebSocket API：连接协议、消息格式、事件类型
-- MCP API（JSON-RPC）：工具调用、能力协商机制
-- 内部主机套接字协议：用于理解 vhttpd 内部通信机制
-- 认证、速率限制、版本兼容性等通用主题
+本参考文档面向 vhttpd 的对外 API，覆盖三类接口：
+- HTTP REST API（含健康检查、管理面、网关发送等）
+- WebSocket API（连接建立、消息格式、事件类型、实时交互模式）
+- MCP JSON-RPC API（Streamable HTTP 传输、会话管理、工具调用）
 
-本参考面向 API 使用者与集成开发者，提供参数说明、返回值格式与使用示例指引，并通过图示帮助理解数据流与交互。
+文档提供请求/响应示例、错误码说明、安全与限流建议，以及客户端集成与调试方法。
 
 ## 项目结构
-vhttpd 采用模块化设计，核心由“服务器内核 + 运行时模块 + 传输层 + 配置系统”构成。Admin API 与内部管理通道在独立模块中实现；HTTP/WebSocket/MCP 等对外接口由运行时模块承载；内部通信通过“内部主机套接字协议”完成。
+vhttpd 将协议接入与运行时能力解耦：HTTP/WebSocket/流式传输由 ingress 层统一接入，再分发到逻辑执行器（php-worker、vjsx 等），并通过 admin 面暴露运行态观测与控制能力。MCP 作为 Streamable HTTP 协议在 /mcp 路径上实现；WebSocket 通过 Upgrade 机制桥接到 worker；管理面集中在 /admin/*。
 
 ```mermaid
 graph TB
-subgraph "核心"
-MAIN["主程序入口<br/>src/main.v"]
-SERVER["HTTP 服务器内核<br/>src/server.v"]
-ADMIN["Admin 服务<br/>src/admin_server.v"]
-WS["WebSocket 运行时<br/>src/websocket_runtime.v"]
-MCP["MCP 运行时<br/>src/mcp_runtime.v"]
-end
-subgraph "传输层"
-WTP["工作进程传输协议<br/>src/transport/worker_protocol.v"]
-WBT["工作进程后端传输<br/>src/worker_backend_transport.v"]
-end
-subgraph "配置"
-CFG["应用配置<br/>src/config/config.v"]
-RCFG["运行时配置<br/>src/config/runtime_config.v"]
-EHOST["嵌入式主机配置<br/>src/config/embedded_host.v"]
-ARGS["命令行参数<br/>src/config/args.v"]
-end
-MAIN --> SERVER
-SERVER --> ADMIN
-SERVER --> WS
-SERVER --> MCP
-SERVER --> WTP
-SERVER --> WBT
-CFG --> SERVER
-RCFG --> SERVER
-EHOST --> SERVER
-ARGS --> MAIN
+Client["客户端/浏览器/MCP客户端"] --> Ingress["协议接入<br/>HTTP/WebSocket/流"]
+Ingress --> Admin["管理面 /admin/*"]
+Ingress --> Mcp["MCP /mcp"]
+Ingress --> Ws["WebSocket 升级"]
+Ingress --> App["业务路由/静态资源"]
+Admin --> Runtime["运行时快照/控制"]
+Mcp --> Worker["PHP/vjsx 执行器"]
+Ws --> Worker
 ```
 
 图表来源
-- [server.v](file://src/server.v)
-- [admin_server.v](file://src/admin_server.v)
-- [websocket_runtime.v](file://src/websocket_runtime.v)
-- [mcp_runtime.v](file://src/mcp_runtime.v)
-- [worker_protocol.v](file://src/transport/worker_protocol.v)
-- [worker_backend_transport.v](file://src/worker_backend_transport.v)
-- [config.v](file://src/config/config.v)
-- [runtime_config.v](file://src/config/runtime_config.v)
-- [embedded_host.v](file://src/config/embedded_host.v)
-- [args.v](file://src/config/args.v)
+- [README.md:84-126](file://README.md#L84-L126)
+- [admin_server.v:111-141](file://src/admin_server.v#L111-L141)
+- [mcp_runtime.v:134-138](file://src/mcp_runtime.v#L134-L138)
+- [ws/dispatch_session.v:1-35](file://src/ws/dispatch_session.v#L1-L35)
 
 章节来源
-- [README.md](file://README.md)
-- [server.v](file://src/server.v)
-- [admin_server.v](file://src/admin_server.v)
-- [websocket_runtime.v](file://src/websocket_runtime.v)
-- [mcp_runtime.v](file://src/mcp_runtime.v)
-- [worker_protocol.v](file://src/transport/worker_protocol.v)
-- [worker_backend_transport.v](file://src/worker_backend_transport.v)
-- [config.v](file://src/config/config.v)
-- [runtime_config.v](file://src/config/runtime_config.v)
-- [embedded_host.v](file://src/config/embedded_host.v)
-- [args.v](file://src/config/args.v)
+- [README.md:84-126](file://README.md#L84-L126)
 
 ## 核心组件
-- Admin 服务：提供运行时状态查询、工作进程控制、调试接口等管理能力
-- WebSocket 运行时：负责连接建立、消息分发、事件广播
-- MCP 运行时：承载 JSON-RPC 工具调用与能力协商
-- 传输层：封装工作进程间通信协议与帧格式
-- 配置系统：加载应用配置、运行时配置与嵌入式主机设置
+- 管理面 API：健康检查、工作进程、统计、运行时快照、计划替换、事件投递、上游/WS/MCP 状态查询等
+- MCP 服务：POST /mcp 接收 JSON-RPC，支持 initialize、tools/resources/prompts 等，SSE 推送通知
+- WebSocket：基于 Upgrade 的长连接，文本帧双向通信，房间与会元数据管理能力
+- 网关发送：面向外部 provider 的上行发送接口（如 Feishu）
 
 章节来源
-- [admin_server.v](file://src/admin_server.v)
-- [websocket_runtime.v](file://src/websocket_runtime.v)
-- [mcp_runtime.v](file://src/mcp_runtime.v)
-- [worker_protocol.v](file://src/transport/worker_protocol.v)
-- [config.v](file://src/config/config.v)
-- [runtime_config.v](file://src/config/runtime_config.v)
-- [embedded_host.v](file://src/config/embedded_host.v)
-- [args.v](file://src/config/args.v)
+- [README.md:1147-1221](file://README.md#L1147-L1221)
+- [admin_server.v:111-141](file://src/admin_server.v#L111-L141)
+- [mcp_runtime.v:11-132](file://src/mcp_runtime.v#L11-L132)
+- [WEBSOCKET_MVP_PLAN.md:123-224](file://docs/WEBSOCKET_MVP_PLAN.md#L123-L224)
 
 ## 架构总览
-下图展示 Admin API、HTTP API、WebSocket API、MCP API 以及内部主机套接字协议之间的交互关系与数据流向。
+下图展示从客户端到执行器的关键路径与管理面观测点。
 
 ```mermaid
-graph TB
-subgraph "外部接口"
-HTTP["HTTP API"]
-WS["WebSocket API"]
-MCP["MCP API(JSON-RPC)"]
-ADMIN["Admin API"]
-end
-subgraph "核心服务"
-SRV["HTTP 服务器内核"]
-WSRV["WebSocket 运行时"]
-MSRV["MCP 运行时"]
-ASRV["Admin 服务"]
-end
-subgraph "内部通信"
-IHS["内部主机套接字协议"]
-TP["传输协议"]
-end
-HTTP --> SRV
-WS --> WSRV
-MCP --> MSRV
-ADMIN --> ASRV
-SRV --> IHS
-WSRV --> IHS
-MSRV --> IHS
-ASRV --> IHS
-IHS --> TP
+sequenceDiagram
+participant C as "客户端"
+participant A as "管理面 /admin/*"
+participant M as "MCP /mcp"
+participant W as "WebSocket 升级"
+participant E as "执行器(php/vjsx)"
+participant R as "运行时/快照"
+C->>A : GET /health, /admin/workers, ...
+A-->>C : JSON/文本响应
+C->>M : POST /mcp (JSON-RPC)
+M->>E : 转发为 mode=mcp 的请求
+E-->>M : JSON-RPC 结果/SSE队列
+M-->>C : application/json 或 SSE text/event-stream
+C->>W : HTTP GET + Upgrade : websocket
+W->>E : open/message/close 帧
+E-->>W : accept/send/close/error 帧
+W-->>C : WebSocket 文本/二进制帧
+A->>R : 读取运行时快照/图/事件
+R-->>A : JSON 快照
 ```
 
 图表来源
-- [server.v](file://src/server.v)
-- [websocket_runtime.v](file://src/websocket_runtime.v)
-- [mcp_runtime.v](file://src/mcp_runtime.v)
-- [admin_server.v](file://src/admin_server.v)
-- [INTERNAL_HOST_SOCKET_PROTOCOL.md](file://docs/INTERNAL_HOST_SOCKET_PROTOCOL.md)
-- [transport_contract.md](file://docs/transport_contract.md)
+- [admin_server.v:111-141](file://src/admin_server.v#L111-L141)
+- [mcp_runtime.v:11-132](file://src/mcp_runtime.v#L11-L132)
+- [ws/dispatch_session.v:1-35](file://src/ws/dispatch_session.v#L1-L35)
+- [README.md:1147-1221](file://README.md#L1147-L1221)
 
 ## 详细组件分析
 
-### Admin API
-Admin API 提供对运行时状态的查询、工作进程的控制与调试能力。典型场景包括：
-- 查询当前运行实例数、负载与健康状态
-- 控制工作进程启停、重启与扩容缩容
-- 获取内部日志与诊断信息
+### HTTP REST API（管理面与网关）
+- 认证模型
+  - 当未配置 token 时，管理端点在管理端口开放
+  - 配置 token 后，需在请求头 x-vhttpd-admin-token 或查询参数 admin_token 中携带
+  - 缺失或无效返回 403 Forbidden
+- 端口暴露策略
+  - admin-port=0：/admin/* 在服务端口提供
+  - admin-port>0：/admin/* 仅在服务端口返回 404，改由独立管理端口提供
 
-请求与响应规范
-- 方法：HTTP GET/POST
-- 路径：/admin/*
-- 认证：可选（取决于部署配置）
-- 响应：JSON 结构，包含状态码、消息与数据体
+常用端点（节选）
+- GET /health
+  - 用途：健康检查
+  - 响应：200 OK
+- GET /admin/workers
+  - 用途：工作进程池快照
+  - 响应：application/json; charset=utf-8
+- GET /admin/stats
+  - 用途：进程级统计
+  - 响应：application/json; charset=utf-8
+- GET /admin/runtime
+  - 用途：运行时能力与活跃连接/会话计数
+  - 响应：application/json; charset=utf-8
+- GET /admin/runtime/upstreams
+  - 用途：阶段3上游会话摘要
+  - 可选参数：details=1, limit, offset
+  - 响应：application/json; charset=utf-8
+- GET /admin/runtime/websockets
+  - 用途：活跃 WS 连接与房间快照
+  - 可选参数：details=1, limit, offset, room, conn_id
+  - 响应：application/json; charset=utf-8
+- GET /admin/runtime/mcp
+  - 用途：活跃 MCP 会话快照
+  - 可选参数：details=1, limit, offset, session_id, protocol_version
+  - 响应：application/json; charset=utf-8
+- DELETE /mcp
+  - 用途：终止单个 MCP 会话
+  - 必需：Mcp-Session-Id 头或 session_id 查询
+  - 响应：application/json; charset=utf-8
+- POST /admin/workers/restart?id=<worker_id>
+  - 用途：重启指定 worker
+  - 响应：JSON
+- POST /admin/workers/restart/all
+  - 用途：重启所有 managed workers
+  - 响应：JSON
 
-典型端点
-- GET /admin/status
-  - 功能：查询运行时状态
-  - 请求参数：无
-  - 返回字段：运行实例数、负载、健康状态、时间戳
-- POST /admin/workers/restart
-  - 功能：重启工作进程
-  - 请求参数：无
-  - 返回字段：操作结果与进度
-- GET /admin/diagnose
-  - 功能：获取诊断信息
-  - 请求参数：无
-  - 返回字段：内部日志摘要、内存与 CPU 指标
-
-使用示例
-- 使用 curl 查询状态
-  - curl -s http://localhost:8080/admin/status
-- 使用浏览器访问诊断页面
-  - 打开 http://localhost:8080/admin/diagnose
-
-章节来源
-- [admin_server.v](file://src/admin_server.v)
-- [internal_admin.v](file://src/internal_admin.v)
-- [vhttpd.toml](file://vhttpd.toml)
-
-### HTTP API
-HTTP API 是 vhttpd 对外的主要接口，支持静态资源、动态路由与流式响应。请求/响应规范如下：
-- 方法：GET/POST/PUT/DELETE 等标准方法
-- 路径：/ 或应用自定义路由
-- 头部：Content-Type、Authorization 等
-- 响应：JSON 或二进制流，错误码遵循统一约定
-
-请求格式
-- 路径参数：通过 URL 指定
-- 查询参数：通过 ?key=value&... 指定
-- 请求体：application/json 或 multipart/form-data
-
-响应结构
-- 成功：{ "code": 0, "message": "success", "data": {...} }
-- 失败：{ "code": N, "message": "...", "data": null }
-
-错误码定义
-- 0：成功
-- 1xxx：通用错误
-- 2xxx：业务错误
-- 3xxx：鉴权/权限错误
-- 4xxx：参数/请求错误
-- 5xxx：服务器内部错误
-
-使用示例
-- 发送 JSON 请求
-  - curl -X POST http://localhost:8080/ -H "Content-Type: application/json" -d '{...}'
-- 获取流式响应
-  - curl -N http://localhost:8080/stream
+认证与鉴权
+- 使用 x-vhttpd-admin-token 或 ?admin_token=...
+- 失败返回 403 Forbidden
 
 章节来源
-- [server.v](file://src/server.v)
-- [transport_contract.md](file://docs/transport_contract.md)
-- [config.v](file://src/config/config.v)
+- [README.md:1147-1221](file://README.md#L1147-L1221)
+- [admin_server.v:101-141](file://src/admin_server.v#L101-L141)
 
 ### WebSocket API
-WebSocket API 支持实时双向通信，适用于聊天、通知与事件总线等场景。协议要点：
-- 协议升级：GET /ws 以进行 HTTP 到 WebSocket 的升级
-- 消息格式：文本或二进制帧，建议使用 JSON 文本帧
-- 事件类型：消息推送、心跳、连接状态变更、业务事件
-
-消息格式
-- 心跳：{"type":"ping"} / {"type":"pong"}
-- 业务事件：{"type":"event","event":"...","payload":{}}
-
-事件类型
-- 连接事件：connected、disconnected
-- 业务事件：chat.message、notification.update、stream.chunk
-
-使用示例
-- 连接与订阅
-  - ws://localhost:8080/ws?subscribe=chat
-- 发送消息
-  - {"type":"message","content":"hello"}
-
-章节来源
-- [websocket_runtime.v](file://src/websocket_runtime.v)
-- [WEBSOCKET_MVP_PLAN.md](file://docs/WEBSOCKET_MVP_PLAN.md)
-- [WEBSOCKET_MESSAGE_DISPATCH_PLAN.md](file://docs/WEBSOCKET_MESSAGE_DISPATCH_PLAN.md)
-- [WEBSOCKET_EVENT_BUS_PLAN.md](file://docs/WEBSOCKET_EVENT_BUS_PLAN.md)
-- [WEBSOCKET_PHASE2_IMPLEMENTATION_PLAN.md](file://docs/WEBSOCKET_PHASE2_IMPLEMENTATION_PLAN.md)
-- [WEBSOCKET_UPSTREAM_PLAN.md](file://docs/WEBSOCKET_UPSTREAM_PLAN.md)
-
-### MCP API（JSON-RPC）
-MCP API 基于 JSON-RPC，用于工具调用与能力协商。核心流程：
-- 初始化：initialize 请求，协商版本与能力
-- 工具调用：tool/call 请求，携带工具名与参数
-- 通知：server 通过通知推送进度与结果
-
-JSON-RPC 规范
-- 请求对象：包含 jsonrpc、id、method、params
-- 响应对象：包含 jsonrpc、id、result 或 error
-- 错误对象：包含 code、message、data
-
-能力协商
-- initializeParams：声明支持的能力集合
-- initializeResponse：确认能力与版本
-
-工具调用
-- tool/call：调用指定工具，返回 tool/result 或 tool/error 通知
-
-使用示例
-- 初始化
-  - {"jsonrpc":"2.0","id":1,"method":"initialize","params":{...}}
-- 调用工具
-  - {"jsonrpc":"2.0","id":2,"method":"tool/call","params":{"name":"...","arguments":{}}}
+- 连接建立
+  - 标准 HTTP GET + Upgrade: websocket 握手
+  - 校验必要头部（Upgrade、Connection、Sec-WebSocket-Key）
+- 帧协议（vhttpd ↔ php-worker）
+  - vhttpd → worker：open、message、close
+  - worker → vhttpd：accept、send、close、error
+- 消息格式（示例）
+  - open：包含 path、query、headers、remote_addr、request_id、trace_id 等
+  - message：opcode=text/binary，data 为负载
+  - close：code、reason
+  - send：opcode、data
+  - error：error_class、error
+- 第二阶段增强（websocket_dispatch）
+  - 新增 result/error 响应帧，commands 列表支持 broadcast、send、join、leave、set_meta、clear_meta 等命令
+- 房间与会元数据
+  - join/leave 房间
+  - set_meta/clear_meta 维护连接元数据
+  - presence_snapshot 获取成员与用户列表
 
 章节来源
-- [mcp_runtime.v](file://src/mcp_runtime.v)
-- [MCP.md](file://docs/MCP.md)
-- [MCP_APP_API.md](file://docs/MCP_APP_API.md)
+- [WEBSOCKET_MVP_PLAN.md:123-224](file://docs/WEBSOCKET_MVP_PLAN.md#L123-L224)
+- [WEBSOCKET_PHASE2_IMPLEMENTATION_PLAN.md:254-327](file://docs/WEBSOCKET_PHASE2_IMPLEMENTATION_PLAN.md#L254-L327)
+- [ws/runtime.v:259-343](file://src/ws/runtime.v#L259-L343)
+- [ws/dispatch_session.v:1-35](file://src/ws/dispatch_session.v#L1-L35)
 
-### 内部主机套接字协议
-内部主机套接字协议用于 vhttpd 内部组件间的高效通信，支持多路复用与流控。协议要点：
-- 帧格式：包含类型、长度、序列号、负载
-- 多路复用：通过会话 ID 实现多路并发
-- 流控：基于窗口大小与背压机制
-- 错误处理：统一错误码与重试策略
-
-典型交互
-- 握手：建立会话并交换元数据
-- 数据：按帧发送请求/响应
-- 关闭：优雅断开并清理资源
+### MCP JSON-RPC API（Streamable HTTP）
+- 传输方式
+  - POST /mcp：接收 JSON-RPC 请求，返回 application/json
+  - GET /mcp：SSE 推送（text/event-stream），用于服务端通知与采样
+  - DELETE /mcp：按会话终止
+- 会话管理
+  - 通过 Mcp-Session-Id 维持会话
+  - initialize 可创建新会话并记录客户端能力
+  - 支持 sampling 能力策略（warn/drop/error）
+- 典型方法
+  - initialize、ping
+  - tools/list、tools/call
+  - resources/list、resources/read
+  - prompts/list、prompts/get
+- 请求/响应要点
+  - 请求体为标准 JSON-RPC 2.0
+  - 响应可能包含 commands 与 messages 队列（SSE）
+  - 错误类：empty_body、origin_forbidden、worker_unavailable、bad_gateway 等
+- 安全与策略
+  - Origin 白名单校验
+  - 协议版本协商（MCP-Protocol-Version）
+  - 采样能力声明与策略控制
 
 章节来源
-- [INTERNAL_HOST_SOCKET_PROTOCOL.md](file://docs/INTERNAL_HOST_SOCKET_PROTOCOL.md)
-- [worker_protocol.v](file://src/transport/worker_protocol.v)
-- [worker_backend_transport.v](file://src/worker_backend_transport.v)
+- [MCP.md:12-97](file://docs/MCP.md#L12-L97)
+- [MCP_MVP_PLAN.md:234-331](file://docs/MCP_MVP_PLAN.md#L234-L331)
+- [mcp_runtime.v:11-132](file://src/mcp_runtime.v#L11-L132)
+- [examples/config/mcp.toml:24-32](file://examples/config/mcp.toml#L24-L32)
 
 ## 依赖关系分析
-- Admin 服务依赖服务器内核与配置系统，提供运行时管理能力
-- WebSocket 与 MCP 作为扩展服务，通过统一内核接入
-- 传输层为各服务提供稳定的数据通道
-- 配置系统贯穿启动与运行期，决定行为与边界
+- 管理面与运行时
+  - 管理端点通过共享运行时对象读取快照与执行控制操作
+- MCP 与执行器
+  - /mcp 请求经内核调度至 PHP/vjsx 执行器，mode=mcp
+- WebSocket 与执行器
+  - 升级后的连接通过 dispatch session 桥接到 worker，双向帧交换
 
 ```mermaid
 graph LR
-CFG["配置系统"] --> SRV["服务器内核"]
-SRV --> ADMIN["Admin 服务"]
-SRV --> WS["WebSocket 运行时"]
-SRV --> MCP["MCP 运行时"]
-SRV --> TP["传输层"]
+Admin["/admin/*"] --> Shared["共享运行时"]
+Mcp["/mcp"] --> Kernel["内核调度"]
+Kernel --> Exec["执行器(php/vjsx)"]
+Ws["WebSocket"] --> Dispatch["dispatch_session"]
+Dispatch --> Exec
 ```
 
 图表来源
-- [config.v](file://src/config/config.v)
-- [server.v](file://src/server.v)
-- [admin_server.v](file://src/admin_server.v)
-- [websocket_runtime.v](file://src/websocket_runtime.v)
-- [mcp_runtime.v](file://src/mcp_runtime.v)
-- [worker_protocol.v](file://src/transport/worker_protocol.v)
+- [admin_server.v:111-141](file://src/admin_server.v#L111-L141)
+- [mcp_runtime.v:40-57](file://src/mcp_runtime.v#L40-L57)
+- [ws/dispatch_session.v:1-35](file://src/ws/dispatch_session.v#L1-L35)
 
 章节来源
-- [config.v](file://src/config/config.v)
-- [server.v](file://src/server.v)
-- [admin_server.v](file://src/admin_server.v)
-- [websocket_runtime.v](file://src/websocket_runtime.v)
-- [mcp_runtime.v](file://src/mcp_runtime.v)
-- [worker_protocol.v](file://src/transport/worker_protocol.v)
+- [admin_server.v:111-141](file://src/admin_server.v#L111-L141)
+- [mcp_runtime.v:40-57](file://src/mcp_runtime.v#L40-L57)
+- [ws/dispatch_session.v:1-35](file://src/ws/dispatch_session.v#L1-L35)
 
-## 性能考虑
-- 连接池与复用：合理配置连接上限与空闲超时，避免频繁握手
-- 流式传输：对大响应采用分块传输，降低内存峰值
-- 背压与限速：在高负载时启用限速与排队策略
-- 缓存与压缩：对静态资源启用缓存与压缩，减少带宽占用
-- 日志采样：生产环境建议开启日志采样，避免 I/O 抖动
+## 性能与限流
+- 并发与队列
+  - WebSocket 存在 pending 队列与生命周期控制，避免在 closing/closed 阶段写入
+  - MCP 支持 max_sessions、max_pending_messages、session_ttl_seconds 等策略
+- 超时与重试
+  - worker 读超时、重启退避等参数影响整体吞吐与稳定性
+- 建议
+  - 合理设置 pool_size、read_timeout_ms、queue_capacity、queue_timeout_ms
+  - 对 SSE/WS 场景关注 pending 队列长度与清理策略
+  - 对 MCP 启用合理的 sampling_capability_policy 与 allowed_origins
+
+章节来源
+- [ws/runtime.v:103-133](file://src/ws/runtime.v#L103-L133)
+- [examples/config/mcp.toml:24-32](file://examples/config/mcp.toml#L24-L32)
+- [README.md:468-502](file://README.md#L468-L502)
 
 ## 故障排查指南
-常见问题与定位步骤
-- 无法连接 Admin 接口
-  - 检查监听地址与端口配置
-  - 确认防火墙与代理设置
-- WebSocket 断连
-  - 查看心跳与 ping/pong 是否正常
-  - 检查客户端订阅参数是否正确
-- MCP 工具调用失败
-  - 核对工具名与参数结构
-  - 查看初始化能力是否满足需求
-- 内部通信异常
-  - 检查内部主机套接字协议的帧格式与序列号
-  - 关注流控与背压指标
+- 管理面鉴权失败
+  - 现象：403 Forbidden
+  - 排查：确认 x-vhttpd-admin-token 或 ?admin_token 是否正确
+- MCP 初始化失败
+  - 现象：400 empty_body、403 origin_forbidden、501 worker_unavailable
+  - 排查：检查请求体是否为合法 JSON-RPC、Origin 是否在白名单、是否启用逻辑执行器
+- WebSocket 握手失败
+  - 现象：非 101 切换
+  - 排查：确保 GET + Upgrade: websocket + Connection: Upgrade + Sec-WebSocket-Key 齐全
+- 连接关闭与重连
+  - 现象：close 帧或异常断开
+  - 排查：观察 worker 侧 error 帧与 reason，检查网络与 worker 存活
 
 章节来源
-- [admin_server.v](file://src/admin_server.v)
-- [websocket_runtime.v](file://src/websocket_runtime.v)
-- [mcp_runtime.v](file://src/mcp_runtime.v)
-- [INTERNAL_HOST_SOCKET_PROTOCOL.md](file://docs/INTERNAL_HOST_SOCKET_PROTOCOL.md)
+- [admin_server.v:101-141](file://src/admin_server.v#L101-L141)
+- [mcp_runtime.v:18-39](file://src/mcp_runtime.v#L18-L39)
+- [WEBSOCKET_MVP_PLAN.md:112-122](file://docs/WEBSOCKET_MVP_PLAN.md#L112-L122)
 
 ## 结论
-vhttpd 的 API 生态以统一的服务器内核为核心，Admin、HTTP、WebSocket、MCP 与内部主机套接字协议协同工作，既满足外部集成需求，又保证内部通信的高性能与稳定性。建议在生产环境中结合配置系统与监控体系，持续优化性能与可靠性。
+vhttpd 以统一的协议接入层承载 HTTP、WebSocket 与 MCP，配合多执行器与丰富的管理面能力，形成可扩展的运行时平台。通过清晰的认证与安全策略、完善的运行时观测与诊断接口，便于在生产环境中稳定集成与运维。
 
-## 附录
-
-### 认证机制
-- Admin 接口：可选认证，建议启用基于令牌或双向 TLS 的认证方式
-- HTTP 接口：支持 Bearer Token、Basic Auth 或自定义头部
-- WebSocket 接口：通过查询参数或 Upgrade 头传递认证信息
-- MCP 接口：支持 OAuth 或自定义鉴权方案
-
-章节来源
-- [admin_server.v](file://src/admin_server.v)
-- [websocket_runtime.v](file://src/websocket_runtime.v)
-- [mcp_runtime.v](file://src/mcp_runtime.v)
-
-### 速率限制
-- 全局限流：基于 IP 或令牌的 QPS 限制
-- 路由级限流：针对特定端点设置配额
-- 用户级限流：基于用户标识的差异化配额
-- 退避策略：指数退避与滑动窗口相结合
+## 附录：客户端集成与调试
+- 管理面
+  - 使用 cURL 或浏览器访问 /admin/*，带上 x-vhttpd-admin-token 或 ?admin_token=...
+- WebSocket
+  - 使用浏览器控制台或示例页面 examples/public/websocket_echo_app.js 进行连接与收发测试
+  - 参考 websocket-echo.toml 启动最小可用环境
+- MCP
+  - 使用任意 JSON-RPC 客户端向 POST /mcp 发送 initialize 与工具调用
+  - 通过 GET /mcp 订阅 SSE 通知，注意 Mcp-Session-Id 与协议版本
+  - 参考 mcp.toml 配置 allowed_origins 与采样策略
 
 章节来源
-- [server.v](file://src/server.v)
-
-### 版本兼容性
-- HTTP API：语义化版本控制，PATCH 与 MINOR 变更向后兼容
-- WebSocket API：版本通过查询参数或协议版本协商
-- MCP API：遵循 JSON-RPC 2.0，能力协商确保兼容性
-- 内部协议：向后兼容，新增字段采用可选方式
-
-章节来源
-- [transport_contract.md](file://docs/transport_contract.md)
-- [MCP.md](file://docs/MCP.md)
-
-### 使用示例索引
-- Admin API
-  - 查询状态：curl -s http://localhost:8080/admin/status
-  - 诊断信息：打开 http://localhost:8080/admin/diagnose
-- HTTP API
-  - 发送 JSON：curl -X POST http://localhost:8080/ -H "Content-Type: application/json" -d '{...}'
-  - 流式响应：curl -N http://localhost:8080/stream
-- WebSocket API
-  - 连接：ws://localhost:8080/ws?subscribe=chat
-  - 发送消息：{"type":"message","content":"hello"}
-- MCP API
-  - 初始化：{"jsonrpc":"2.0","id":1,"method":"initialize","params":{...}}
-  - 工具调用：{"jsonrpc":"2.0","id":2,"method":"tool/call","params":{"name":"...","arguments":{}}}
-
-章节来源
-- [admin_server.v](file://src/admin_server.v)
-- [websocket_runtime.v](file://src/websocket_runtime.v)
-- [mcp_runtime.v](file://src/mcp_runtime.v)
-- [server.v](file://src/server.v)
+- [examples/public/websocket_echo_app.js:1-45](file://examples/public/websocket_echo_app.js#L1-L45)
+- [examples/config/websocket-echo.toml:1-28](file://examples/config/websocket-echo.toml#L1-L28)
+- [examples/config/mcp.toml:1-39](file://examples/config/mcp.toml#L1-L39)

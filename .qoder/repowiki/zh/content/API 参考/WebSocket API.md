@@ -1,16 +1,17 @@
 # WebSocket API
 
 <cite>
-**本文引用的文件**
-- [websocket_runtime.v](file://src/websocket_runtime.v)
-- [websocket_upstream_runtime.v](file://src/websocket_upstream_runtime.v)
-- [app_states.v](file://src/app_states.v)
-- [transport_handle.v](file://src/transport/transport_handle.v)
-- [websocket_echo_app.php](file://examples/websocket_echo_app.php)
-- [websocket_binary_support_test.v](file://src/websocket_binary_support_test.v)
-- [inproc_vjsx_executor_test.v](file://src/inproc_vjsx_executor_test.v)
-- [main.v](file://src/main.v)
-- [inproc_vjsx_http_facade.js](file://src/inproc_vjsx_http_facade.js)
+**本文引用的文件**   
+- [README.md](file://README.md)
+- [websocket_ingress_runtime.v](file://src/websocket_ingress_runtime.v)
+- [dispatch_session.v](file://src/ws/dispatch_session.v)
+- [hub_runtime.v](file://src/ws/hub_runtime.v)
+- [runtime.v](file://src/ws/runtime.v)
+- [types.v](file://src/ws/types.v)
+- [WEBSOCKET_PHASE2_IMPLEMENTATION_PLAN.md](file://docs/WEBSOCKET_PHASE2_IMPLEMENTATION_PLAN.md)
+- [WEBSOCKET_EVENT_BUS_PLAN.md](file://docs/WEBSOCKET_EVENT_BUS_PLAN.md)
+- [websocket_echo.toml](file://examples/config/websocket-echo.toml)
+- [websocket_echo_app.js](file://examples/public/websocket_echo_app.js)
 </cite>
 
 ## 目录
@@ -20,447 +21,470 @@
 4. [架构总览](#架构总览)
 5. [详细组件分析](#详细组件分析)
 6. [依赖关系分析](#依赖关系分析)
-7. [性能考量](#性能考量)
+7. [性能考虑](#性能考虑)
 8. [故障排查指南](#故障排查指南)
 9. [结论](#结论)
 10. [附录](#附录)
 
 ## 简介
-本文件为 vhttpd 的 WebSocket API 详细文档，覆盖连接建立、消息传递与连接管理机制；记录消息格式、事件类型与协议规范；说明握手过程、认证方式与会话管理；提供消息编解码规则与错误处理机制；解释实时通信模式与状态同步机制；并给出连接断开、重连与故障恢复流程，以及客户端集成示例与最佳实践。
+本文件为 vhttpd 的 WebSocket API 完整文档，覆盖连接建立流程、握手协议、消息格式定义、事件类型与实时交互模式；说明连接管理、会话亲和性、房间系统、消息广播等功能；包含连接生命周期管理、重连机制、错误处理与断线恢复策略；提供完整的消息格式示例、事件订阅模式、客户端实现指南和性能优化建议；并记录 WebSocket 代理、负载均衡和高可用配置要点。
+
+vhttpd 在传输层支持 HTTP/WebSocket/流式响应，在运行时层提供上游流式执行、外部 worker 编排、内嵌宿主执行、MCP 等能力。WebSocket 同时支持两种模式：
+- Phase 1（长连接桥接）：worker 持有长连接，vhttpd 作为透传桥。
+- Phase 2（事件分发）：vhttpd 持有连接，worker 以短任务方式处理 open/message/close 事件，返回命令列表由 vhttpd 执行。
+
+**章节来源**
+- [README.md:45-83](file://README.md#L45-L83)
+- [README.md:191-208](file://README.md#L191-L208)
 
 ## 项目结构
-vhttpd 的 WebSocket 能力由以下模块协同实现：
-- WebSocket 运行时：负责连接生命周期、房间（频道）管理、消息分发与广播、命令执行与回传。
-- WebSocket 上游运行时：负责与外部上游（如飞书、Codex 等）建立双向 WebSocket 连接，转发事件与命令。
-- 应用状态：维护 WebSocket Hub 的全局状态（连接、房间、元数据、待发送队列等）。
-- 传输层：定义统一的 Worker WebSocket 帧结构与传输句柄。
-- 示例与测试：提供 PHP 客户端示例与二进制帧支持测试，验证文本/二进制帧编解码。
+WebSocket 相关代码主要分布在以下模块：
+- 接入与升级：HTTP 到 WebSocket 的升级、握手、路由选择（Phase 1/Phase 2）
+- 分发会话：Phase 2 的连接生命周期与消息派发
+- Hub 状态与房间：连接注册、房间成员、元数据、广播、快照
+- 类型与帧：统一的 Worker 帧结构与命令语义
+- 计划与设计文档：Phase 2 的事件分发模型、事件总线扩展方向
 
 ```mermaid
 graph TB
-subgraph "WebSocket 运行时"
-WSRT["websocket_runtime.v<br/>连接/房间/广播/命令执行"]
-end
-subgraph "WebSocket 上游运行时"
-WU["websocket_upstream_runtime.v<br/>上游连接/事件/命令"]
-end
-subgraph "应用状态"
-AS["app_states.v<br/>Hub 状态/并发控制"]
-end
-subgraph "传输层"
-TH["transport_handle.v<br/>Worker 帧/传输句柄"]
-end
-subgraph "示例与测试"
-EX["websocket_echo_app.php<br/>PHP 客户端示例"]
-BT["websocket_binary_support_test.v<br/>二进制帧测试"]
-end
-WSRT --> AS
-WU --> AS
-TH --> WSRT
-TH --> WU
-EX --> WSRT
-BT --> WSRT
+Client["客户端浏览器"] --> Ingress["HTTP 接入<br/>websocket_ingress_runtime.v"]
+Ingress --> |Phase 1| Bridge["长连接桥接<br/>handle_worker_websocket_session"]
+Ingress --> |Phase 2| Dispatch["事件分发会话<br/>ws.handle_dispatch_session"]
+Dispatch --> Hub["Hub 状态与房间<br/>ws.hub_runtime / ws.runtime"]
+Bridge --> Worker["php-worker 长连接"]
+Dispatch --> Worker
+Hub --> Admin["管理快照/房间/连接"]
 ```
 
 **图表来源**
-- [websocket_runtime.v:1-120](file://src/websocket_runtime.v#L1-L120)
-- [websocket_upstream_runtime.v:1-120](file://src/websocket_upstream_runtime.v#L1-L120)
-- [app_states.v:23-42](file://src/app_states.v#L23-L42)
-- [transport_handle.v:1-21](file://src/transport/transport_handle.v#L1-L21)
-- [websocket_echo_app.php:1-60](file://examples/websocket_echo_app.php#L1-L60)
-- [websocket_binary_support_test.v:1-61](file://src/websocket_binary_support_test.v#L1-L61)
+- [websocket_ingress_runtime.v:279-339](file://src/websocket_ingress_runtime.v#L279-L339)
+- [websocket_ingress_runtime.v:413-482](file://src/websocket_ingress_runtime.v#L413-L482)
+- [dispatch_session.v:11-35](file://src/ws/dispatch_session.v#L11-L35)
+- [hub_runtime.v:174-334](file://src/ws/hub_runtime.v#L174-L334)
 
 **章节来源**
-- [websocket_runtime.v:1-120](file://src/websocket_runtime.v#L1-L120)
-- [websocket_upstream_runtime.v:1-120](file://src/websocket_upstream_runtime.v#L1-L120)
-- [app_states.v:23-42](file://src/app_states.v#L23-L42)
-- [transport_handle.v:1-21](file://src/transport/transport_handle.v#L1-L21)
-- [websocket_echo_app.php:1-60](file://examples/websocket_echo_app.php#L1-L60)
-- [websocket_binary_support_test.v:1-61](file://src/websocket_binary_support_test.v#L1-L61)
+- [websocket_ingress_runtime.v:279-339](file://src/websocket_ingress_runtime.v#L279-L339)
+- [dispatch_session.v:11-35](file://src/ws/dispatch_session.v#L11-L35)
+- [hub_runtime.v:174-334](file://src/ws/hub_runtime.v#L174-L334)
 
 ## 核心组件
-- WebSocket Hub 状态与并发控制
-  - Hub 维护连接表、房间成员、连接元数据、待发送队列，并通过互斥锁保证并发安全。
-  - 发送路径使用独立的发送互斥锁，避免竞态。
-- 连接生命周期与阶段
-  - 连接阶段包括 opening/open/closing/closed，用于控制消息入队与发送。
-  - 提供标记打开、开始关闭、清理等原子操作，确保幂等与一致性。
-- 房间与元数据
-  - 支持加入/离开房间、设置/清除元数据；提供房间存在性快照与成员元数据快照。
-- 消息分发与广播
-  - 支持向单连接、房间广播、向目标连接发送；对未就绪连接进行入队缓存。
-- 命令执行与失败回传
-  - Worker 层下发命令（如 send/send_to/join/leave/set_meta/clear_meta/broadcast/close），执行后可返回失败或触发关闭。
-- 上游 WebSocket
-  - 自动拉起上游连接，按提供商（飞书、Codex、Fixture）处理消息与事件，支持自动重连与活动记录。
-- 传输帧与句柄
-  - WorkerWebSocketFrame 描述一次 WebSocket 事件或命令；TransportHandle 描述传输层句柄。
+- 接入与升级
+  - 检测 Upgrade 请求、解析 key、选择 Phase 1 或 Phase 2 路径
+  - Phase 1：与 php-worker 建立 Unix Socket 长连接，双向转发
+  - Phase 2：完成握手后直接由 vhttpd 持有连接，按事件派发至 worker
+- 分发会话（Phase 2）
+  - 维护连接生命周期状态机（opening/open/closing/closed）
+  - 构建 open/message/close 事件帧，调用 RuntimeContext 派发
+  - 执行 worker 返回的命令（send/send_to/join/leave/broadcast/close/set_meta/clear_meta）
+- Hub 状态与房间
+  - 连接注册/注销、房间成员管理、连接元数据
+  - 发送队列与延迟写入、批量广播、存在性快照
+- 类型与帧
+  - 统一 Worker 帧结构，包含 mode/event/id/opcode/data/rooms/metadata/presence 等字段
+  - 命令失败回退与关闭策略
 
 **章节来源**
-- [app_states.v:23-42](file://src/app_states.v#L23-L42)
-- [websocket_runtime.v:44-96](file://src/websocket_runtime.v#L44-L96)
-- [websocket_runtime.v:173-296](file://src/websocket_runtime.v#L173-L296)
-- [websocket_runtime.v:323-596](file://src/websocket_runtime.v#L323-L596)
-- [websocket_runtime.v:598-783](file://src/websocket_runtime.v#L598-L783)
-- [websocket_upstream_runtime.v:1-120](file://src/websocket_upstream_runtime.v#L1-L120)
-- [transport_handle.v:1-21](file://src/transport/transport_handle.v#L1-L21)
+- [websocket_ingress_runtime.v:16-30](file://src/websocket_ingress_runtime.v#L16-L30)
+- [dispatch_session.v:11-35](file://src/ws/dispatch_session.v#L11-L35)
+- [types.v:11-120](file://src/ws/types.v#L11-L120)
+- [runtime.v:24-47](file://src/ws/runtime.v#L24-L47)
+- [hub_runtime.v:369-436](file://src/ws/hub_runtime.v#L369-L436)
 
 ## 架构总览
-vhttpd 的 WebSocket 架构分为两条主线：
-- 内部调度线：客户端经 HTTP 升级到 V 的 net.websocket，消息进入内核后转换为 WorkerWebSocketFrame，交由应用侧（如 PHP Worker）处理，再通过命令回传给 Hub 执行发送/房间/元数据等操作。
-- 上游连接线：根据配置自动拉起与上游的 WebSocket 连接，接收上游事件并注入到内核，同时支持从内核下发命令到上游。
+下图展示从客户端到 worker 的两条路径以及 Hub 的房间与广播能力。
 
 ```mermaid
 sequenceDiagram
 participant C as "客户端"
-participant V as "V 内核"
-participant K as "内核调度"
-participant A as "应用处理器"
-participant H as "WebSocket Hub"
-C->>V : "HTTP 升级请求"
-V->>K : "建立连接并注册回调"
-K->>A : "onOpen 事件"
-A-->>H : "命令 : join/set_meta 等"
-H-->>A : "执行结果/状态快照"
-C->>K : "发送消息"
-K->>A : "onMessage 事件"
-A-->>H : "命令 : send/send_to/broadcast/close"
-H-->>C : "写入消息/关闭连接"
-```
-
-**图表来源**
-- [main.v:329-368](file://src/main.v#L329-L368)
-- [websocket_runtime.v:360-390](file://src/websocket_runtime.v#L360-L390)
-- [websocket_runtime.v:785-849](file://src/websocket_runtime.v#L785-L849)
-
-## 详细组件分析
-
-### 连接建立与握手
-- HTTP 升级：客户端发起 HTTP 升级请求，V 内核接管并创建 net.websocket 客户端。
-- 回调注册：内核注册消息回调，将帧转换为 WorkerWebSocketFrame 并投递到应用侧。
-- 初次握手：应用在 onOpen 中决定是否接受连接、初始化房间与元数据。
-
-```mermaid
-sequenceDiagram
-participant Client as "客户端"
-participant Kernel as "V 内核"
-participant Handler as "消息回调"
-participant App as "应用处理器"
-Client->>Kernel : "Upgrade 请求"
-Kernel->>Handler : "注册消息回调"
-Handler->>App : "onOpen(frame)"
-App-->>Kernel : "接受/拒绝"
-Kernel-->>Client : "升级成功/失败"
-```
-
-**图表来源**
-- [main.v:329-368](file://src/main.v#L329-L368)
-- [websocket_runtime.v:360-390](file://src/websocket_runtime.v#L360-L390)
-
-**章节来源**
-- [main.v:329-368](file://src/main.v#L329-L368)
-- [websocket_runtime.v:360-390](file://src/websocket_runtime.v#L360-L390)
-
-### 消息编解码与帧格式
-- 支持的帧类型
-  - 文本帧：直接使用字符串作为负载。
-  - 二进制帧：负载为 Base64 编码的原始字节串。
-  - 控制帧：不被支持，收到后会触发关闭。
-- 负载转换
-  - Hub 将 Base64 字符串解码为二进制字节，或将文本帧保持为字符串。
-- Worker 帧字段
-  - 包含事件类型（open/message/close）、连接标识、路径、查询参数、头部、远端地址、请求/追踪 ID、房间列表、元数据、opcode 与 data 等。
-
-```mermaid
-flowchart TD
-Start(["收到 WebSocket 消息"]) --> CheckOpcode["检查 opcode"]
-CheckOpcode --> IsText{"是否文本帧?"}
-IsText --> |是| UseText["使用字符串负载"]
-IsText --> |否| IsBinary{"是否二进制帧?"}
-IsBinary --> |是| DecodeBase64["Base64 解码为字节"]
-IsBinary --> |否| Reject["拒绝并关闭连接"]
-UseText --> BuildFrame["构建 WorkerWebSocketFrame"]
-DecodeBase64 --> BuildFrame
-Reject --> End(["结束"])
-BuildFrame --> End
-```
-
-**图表来源**
-- [websocket_binary_support_test.v:6-38](file://src/websocket_binary_support_test.v#L6-L38)
-- [websocket_runtime.v:126-138](file://src/websocket_runtime.v#L126-L138)
-
-**章节来源**
-- [websocket_binary_support_test.v:6-38](file://src/websocket_binary_support_test.v#L6-L38)
-- [websocket_runtime.v:126-138](file://src/websocket_runtime.v#L126-L138)
-
-### 事件类型与协议规范
-- 事件类型
-  - open：连接建立，通常用于初始化房间与元数据。
-  - message：消息到达，携带 opcode 与 data。
-  - close：主动或被动关闭，可带关闭码与原因。
-- 命令类型（由应用侧下发）
-  - send/send_to：向指定连接发送消息。
-  - join/leave：加入/离开房间。
-  - set_meta/clear_meta：设置/清除连接元数据。
-  - broadcast/broadcast_dispatch：广播消息或广播并触发下游处理。
-  - close：关闭指定连接。
-- 失败回传
-  - 当命令执行失败时，返回 WorkerWebSocketDispatchCommandFailure，包含事件、目标、opcode、错误信息与错误类。
-
-```mermaid
-sequenceDiagram
-participant App as "应用处理器"
-participant Hub as "WebSocket Hub"
-participant Peer as "对端连接"
-App->>Hub : "命令 : send/target_id/opcode/data"
-alt 发送成功
-Hub-->>Peer : "写入消息"
-Hub-->>App : "无失败"
-else 发送失败
-Hub-->>App : "返回命令失败"
+participant I as "接入层<br/>websocket_ingress_runtime.v"
+participant D as "分发会话<br/>ws.dispatch_session"
+participant H as "Hub 状态<br/>ws.hub_runtime/ws.runtime"
+participant W as "php-worker"
+Note over I : 检测 Upgrade 与 key
+I->>I : is_websocket_upgrade()
+alt Phase 2 启用
+I->>D : handle_dispatch_session(...)
+D->>H : register_conn(..., lifecycle)
+D->>W : dispatch_event(open_frame)
+W-->>D : commands[]
+D->>H : command_result(commands)
+D-->>C : 握手成功/执行 open 命令
+else Phase 1 桥接
+I->>W : 建立 unix socket 长连接
+I->>W : write_websocket_frame(open)
+W-->>I : accept/close/error/done
+I-->>C : 101 Switching Protocols
+loop 消息往返
+C-->>I : text/binary frame
+I->>W : message/close 帧
+W-->>I : send/close/done 帧
+I-->>C : 转发结果
+end
 end
 ```
 
 **图表来源**
-- [websocket_runtime.v:785-849](file://src/websocket_runtime.v#L785-L849)
+- [websocket_ingress_runtime.v:279-339](file://src/websocket_ingress_runtime.v#L279-L339)
+- [websocket_ingress_runtime.v:413-482](file://src/websocket_ingress_runtime.v#L413-L482)
+- [dispatch_session.v:11-35](file://src/ws/dispatch_session.v#L11-L35)
+- [hub_runtime.v:174-334](file://src/ws/hub_runtime.v#L174-L334)
 
-**章节来源**
-- [websocket_runtime.v:785-849](file://src/websocket_runtime.v#L785-L849)
+## 详细组件分析
 
-### 房间与元数据管理
-- 房间管理
-  - 加入/离开房间：维护房间成员映射与连接房间集合。
-  - 广播：遍历房间成员，对已连接者直接发送，未连接者入队等待。
-- 元数据管理
-  - 设置/清除元数据：键值对存储于连接元数据表中。
-  - 快照：提供房间成员快照、成员元数据快照、房间人数快照与在线用户快照。
-- 存在性与快照
-  - 提供房间存在性与成员列表快照，便于上层通知或调试。
+### 连接建立与握手协议
+- 握手入口
+  - 检查 GET 方法、Upgrade=websocket、Connection 包含 upgrade、Sec-WebSocket-Key 非空
+  - 若匹配则进入 WebSocket 处理分支
+- Phase 1（长连接桥接）
+  - 通过 engines.open_websocket_session 获取 worker 连接
+  - 向 worker 发送 open 帧，等待 accept/close/error/done
+  - 成功后 101 切换协议，进入消息循环
+- Phase 2（事件分发）
+  - 完成 net.websocket 握手后，注册连接并派发 open 事件
+  - worker 返回命令列表，vhttpd 执行（如 set_meta/join/send）
+  - 握手完成后进入消息派发循环
 
 ```mermaid
-classDiagram
-class WebSocketHubState {
-+conns
-+room_members
-+conn_rooms
-+conn_meta
-+pending
-+dispatch_mode
-+recent_dispatch_limit
-+auto_start_dynamic_upstreams
-+upstream_started
-+fixture_runtime
-+recent_activities
-+upstream_sessions
-}
-class HubConn {
-+id
-+client
-+lifecycle
-}
-class HubPendingMessage {
-+data
-+opcode
-}
-WebSocketHubState --> HubConn : "维护"
-WebSocketHubState --> HubPendingMessage : "队列"
+flowchart TD
+Start(["HTTP 请求"]) --> Check["检测 Upgrade 与 Key"]
+Check --> |不满足| Reject["返回 426 Upgrade Required"]
+Check --> |满足| Mode{"是否启用 Phase 2?"}
+Mode --> |是| P2["handle_dispatch_session<br/>注册连接 -> 派发 open -> 执行命令"]
+Mode --> |否| P1["open_websocket_session -> 发送 open 帧 -> 等待 accept/done"]
+P1 --> Handshake["101 Switching Protocols"]
+P2 --> Handshake
+Handshake --> Loop["消息循环/事件派发"]
 ```
 
 **图表来源**
-- [app_states.v:23-42](file://src/app_states.v#L23-L42)
-- [websocket_runtime.v:60-96](file://src/websocket_runtime.v#L60-L96)
+- [websocket_ingress_runtime.v:16-30](file://src/websocket_ingress_runtime.v#L16-L30)
+- [websocket_ingress_runtime.v:279-339](file://src/websocket_ingress_runtime.v#L279-L339)
+- [websocket_ingress_runtime.v:413-482](file://src/websocket_ingress_runtime.v#L413-L482)
+- [dispatch_session.v:11-35](file://src/ws/dispatch_session.v#L11-L35)
 
 **章节来源**
-- [app_states.v:23-42](file://src/app_states.v#L23-L42)
-- [websocket_runtime.v:392-596](file://src/websocket_runtime.v#L392-L596)
+- [websocket_ingress_runtime.v:16-30](file://src/websocket_ingress_runtime.v#L16-L30)
+- [websocket_ingress_runtime.v:279-339](file://src/websocket_ingress_runtime.v#L279-L339)
+- [websocket_ingress_runtime.v:413-482](file://src/websocket_ingress_runtime.v#L413-L482)
+- [dispatch_session.v:11-35](file://src/ws/dispatch_session.v#L11-L35)
 
-### 连接管理与生命周期
-- 阶段机
-  - opening → open → closing → closed，用于控制消息入队与发送。
-- 关闭流程
-  - 标记关闭、清理连接、关闭底层客户端、清理房间与元数据。
-- 清理与回收
-  - 注销连接、删除房间成员、清空待发送队列。
+### 事件类型与消息格式
+- 事件类型
+  - open：连接建立时派发，携带 path/query/headers/remote_addr/rooms/metadata/presence
+  - message：文本/二进制帧到达时派发，opcode 为 text/binary
+  - close：对端或本地触发关闭时派发，携带 code/reason
+- 帧结构关键字段
+  - mode：'websocket' 或 'websocket_dispatch'
+  - event：'open'/'message'/'close'/'accept'/'done'/'error'
+  - id/request_id/trace_id：追踪标识
+  - opcode/data：消息载荷（binary 使用 base64）
+  - rooms/metadata：当前连接所在房间与元数据
+  - presence：房间成员、成员元数据、计数、用户列表快照
+- 命令列表（worker 返回）
+  - send/send_to：向指定连接发送
+  - join/leave：加入/离开房间
+  - broadcast：向房间广播（可排除某连接）
+  - close：主动关闭目标连接
+  - set_meta/clear_meta：设置/清除连接元数据
+
+```mermaid
+classDiagram
+class WorkerWebSocketFrame {
++string mode
++string event
++string id
++string request_id
++string trace_id
++string opcode
++string data
++map~string,string~ query
++map~string,string~ headers
++string remote_addr
++string path
++[]string rooms
++map~string,string~ metadata
++map~string,[]string~ room_members
++map~string,map~string,string~~ member_metadata
++map~string,int~ room_counts
++map~string,[]string~ presence_users
+}
+class Command {
++string event
++string id
++string target_id
++string room
++string data
++string opcode
++int code
++string reason
++string except_id
++string key
++string value
+}
+WorkerWebSocketFrame --> Command : "commands[]"
+```
+
+**图表来源**
+- [types.v:11-120](file://src/ws/types.v#L11-L120)
+- [hub_runtime.v:369-436](file://src/ws/hub_runtime.v#L369-L436)
+
+**章节来源**
+- [types.v:11-120](file://src/ws/types.v#L11-L120)
+- [hub_runtime.v:369-436](file://src/ws/hub_runtime.v#L369-L436)
+- [WEBSOCKET_PHASE2_IMPLEMENTATION_PLAN.md:221-293](file://docs/WEBSOCKET_PHASE2_IMPLEMENTATION_PLAN.md#L221-L293)
+
+### 连接生命周期与状态机
+- 状态机阶段
+  - opening → open：握手完成且标记开放
+  - open → closing：收到 close 或由 worker 发起关闭
+  - closing → closed：清理完成
+- 关键行为
+  - can_process_messages：仅 open 且未通知关闭时可处理消息
+  - can_send：open 且未通知关闭且非 worker 发起关闭时可发送
+  - can_queue：opening/open 且未通知关闭时可入队
+  - mark_open/mark_closing/begin_peer_close/begin_cleanup：受互斥锁保护的状态迁移
+- 连接注册与清理
+  - register_conn/unregister_conn：维护 conns/conn_rooms/room_members/conn_meta/pending
+  - cleanup_conn：删除连接、房间成员、元数据与待发消息
 
 ```mermaid
 stateDiagram-v2
 [*] --> opening
-opening --> open : "标记为 open"
-open --> closing : "开始关闭"
-closing --> closed : "清理完成"
-closed --> [*]
+opening --> open : "mark_open()"
+open --> closing : "begin_peer_close()/begin_worker_close()"
+closing --> closed : "begin_cleanup()"
+open --> open : "can_process_messages()"
+open --> open : "can_send()/can_queue()"
 ```
 
 **图表来源**
-- [websocket_runtime.v:173-296](file://src/websocket_runtime.v#L173-L296)
-- [websocket_runtime.v:298-321](file://src/websocket_runtime.v#L298-L321)
+- [types.v:11-120](file://src/ws/types.v#L11-L120)
+- [runtime.v:24-47](file://src/ws/runtime.v#L24-L47)
 
 **章节来源**
-- [websocket_runtime.v:173-296](file://src/websocket_runtime.v#L173-L296)
-- [websocket_runtime.v:298-321](file://src/websocket_runtime.v#L298-L321)
+- [types.v:11-120](file://src/ws/types.v#L11-L120)
+- [runtime.v:24-47](file://src/ws/runtime.v#L24-L47)
 
-### 上游 WebSocket 与事件注入
-- 自动拉起
-  - 根据提供商与实例名，自动拉起上游 WebSocket 连接，支持重连策略。
-- 事件注入
-  - 将上游事件注入到内核，生成活动快照，记录错误与命令执行情况。
-- 命令下发
-  - 支持从内核下发命令到上游（如发送消息、更新消息），并记录活动。
+### 房间系统与消息广播
+- 房间成员管理
+  - join/leave：维护 room_members 与 conn_rooms 双向映射
+  - rooms_snapshot/meta_snapshot：查询连接所在房间与元数据
+  - presence_snapshot：聚合房间成员、成员元数据、计数与用户列表
+- 广播与定向发送
+  - hub_broadcast：遍历房间成员，跳过 except_id，已连接直接写，未连接入队
+  - hub_send_to：单发，支持入队与延迟写入
+  - broadcast_dispatch：将 info 帧派发到房间内所有连接的 worker，再转发命令
+
+```mermaid
+flowchart TD
+A["广播请求"] --> B["查找房间成员"]
+B --> C{"是否已连接?"}
+C --> |是| D["立即写入 client"]
+C --> |否| E["入队 pending"]
+D --> F["统计 delivered++"]
+E --> F
+F --> G["返回 delivered 数量"]
+```
+
+**图表来源**
+- [runtime.v:259-301](file://src/ws/runtime.v#L259-L301)
+- [runtime.v:303-342](file://src/ws/runtime.v#L303-L342)
+- [hub_runtime.v:217-251](file://src/ws/hub_runtime.v#L217-L251)
+
+**章节来源**
+- [runtime.v:259-301](file://src/ws/runtime.v#L259-L301)
+- [runtime.v:303-342](file://src/ws/runtime.v#L303-L342)
+- [hub_runtime.v:217-251](file://src/ws/hub_runtime.v#L217-L251)
+
+### 事件订阅与命令执行（Phase 2）
+- 事件构建与派发
+  - build_frame：封装 method/path/query/headers/remote_addr/rooms/metadata/presence 等上下文
+  - dispatch_event：将事件帧提交给 worker（inproc vjsx 或 php-worker）
+- 命令执行与失败回退
+  - command_result：执行命令，支持 has_close/failures
+  - followup_failure：根据失败情况决定是否关闭连接及关闭码/原因
+- 消息处理闭环
+  - on_message：校验 opcode，构建 message 帧，派发并执行命令
+  - on_close：派发 close 帧，执行最终命令，清理资源
 
 ```mermaid
 sequenceDiagram
-participant App as "应用"
-participant Up as "上游提供商"
-participant Kernel as "内核"
-participant Hub as "WebSocket Hub"
-App->>Up : "建立连接"
-Up-->>Kernel : "事件/消息"
-Kernel->>Hub : "注入事件帧"
-Hub-->>App : "触发 onMessage/onInfo 等"
-App-->>Kernel : "命令 : send/update"
-Kernel->>Up : "转发命令"
+participant C as "客户端"
+participant D as "分发会话"
+participant H as "Hub"
+participant W as "Worker"
+C->>D : text/binary frame
+D->>H : presence/rooms/metadata
+D->>W : dispatch_event(message_frame)
+W-->>D : commands[]
+D->>H : command_result(commands)
+alt has_close
+D-->>C : close(code, reason)
+else failures
+D->>H : followup_failure(...)
+H-->>D : ?close_frame
+D-->>C : close(code, reason)
+else ok
+D-->>C : 继续监听
+end
 ```
 
 **图表来源**
-- [websocket_upstream_runtime.v:771-823](file://src/websocket_upstream_runtime.v#L771-L823)
-- [websocket_upstream_runtime.v:285-305](file://src/websocket_upstream_runtime.v#L285-L305)
+- [dispatch_session.v:126-168](file://src/ws/dispatch_session.v#L126-L168)
+- [hub_runtime.v:115-134](file://src/ws/hub_runtime.v#L115-L134)
 
 **章节来源**
-- [websocket_upstream_runtime.v:771-823](file://src/websocket_upstream_runtime.v#L771-L823)
-- [websocket_upstream_runtime.v:285-305](file://src/websocket_upstream_runtime.v#L285-L305)
+- [dispatch_session.v:126-168](file://src/ws/dispatch_session.v#L126-L168)
+- [hub_runtime.v:115-134](file://src/ws/hub_runtime.v#L115-L134)
 
-### 认证与会话管理
-- 认证
-  - 管理端与网关接口均提供鉴权校验，未授权请求返回 403。
-- 会话标识
-  - 使用连接 ID、请求 ID、追踪 ID、房间列表与元数据进行会话关联与追踪。
-- 会话快照
-  - 提供连接与房间快照，支持过滤与分页。
-
-**章节来源**
-- [websocket_upstream_runtime.v:983-1019](file://src/websocket_upstream_runtime.v#L983-L1019)
-- [websocket_upstream_runtime.v:1021-1114](file://src/websocket_upstream_runtime.v#L1021-L1114)
-- [websocket_runtime.v:851-977](file://src/websocket_runtime.v#L851-L977)
-
-### 错误处理与故障恢复
-- 帧类型错误
-  - 不支持的帧类型将导致连接关闭（例如控制帧）。
-- 发送失败
-  - 命令执行失败时返回失败帧，可选择关闭连接或继续处理。
-- 上游连接异常
-  - 连接失败、监听失败或错误回调触发后，按重连策略自动重试。
-- 断线重连
-  - Hub 在连接关闭后清理资源；应用侧可在 onOpen 中重新加入房间与恢复状态。
+### 连接管理与会话亲和性
+- 连接注册
+  - register_conn：保存 worker_socket、method、path、query、headers、remote_addr、client、lifecycle
+- 亲和性与路由
+  - Phase 1：基于 worker 选择的长连接，保持同一 worker 会话
+  - Phase 2：vhttpd 持有连接，按事件选择可用 worker，适合水平扩展
+- 元数据与会话状态
+  - set_meta/clear_meta：连接级键值存储
+  - rooms：连接加入的房间集合
+  - presence：房间成员与用户视图
 
 **章节来源**
-- [main.v:347-357](file://src/main.v#L347-L357)
-- [websocket_runtime.v:785-849](file://src/websocket_runtime.v#L785-L849)
-- [websocket_upstream_runtime.v:799-822](file://src/websocket_upstream_runtime.v#L799-L822)
+- [runtime.v:49-68](file://src/ws/runtime.v#L49-L68)
+- [runtime.v:168-197](file://src/ws/runtime.v#L168-L197)
+- [runtime.v:199-242](file://src/ws/runtime.v#L199-L242)
 
-### 客户端集成示例
-- PHP 客户端示例
-  - 提供一个简单的 echo WebSocket 应用，演示 onOpen/onMessage/onClose 的基本用法。
-- 二进制帧支持
-  - 测试覆盖了二进制帧的编码/解码与文本帧的处理，确保客户端可发送二进制数据。
+### 错误处理与断线恢复策略
+- 错误分类与响应
+  - worker 返回 error/close/done 帧，vhttpd 转换为 HTTP 错误或 WebSocket close
+  - 不支持的 opcode 直接关闭连接（1003）
+- 超时与重试
+  - 读/写超时由底层网络控制，建议在客户端实现指数退避重连
+- 断线恢复
+  - 客户端侧：捕获 close 事件，延迟重连，必要时重建房间与元数据
+  - 服务端侧：on_close 派发 close 事件，允许 worker 做最后清理
 
 **章节来源**
-- [websocket_echo_app.php:224-239](file://examples/websocket_echo_app.php#L224-L239)
-- [websocket_binary_support_test.v:1-61](file://src/websocket_binary_support_test.v#L1-L61)
+- [websocket_ingress_runtime.v:103-160](file://src/websocket_ingress_runtime.v#L103-L160)
+- [websocket_ingress_runtime.v:223-277](file://src/websocket_ingress_runtime.v#L223-L277)
+- [dispatch_session.v:184-203](file://src/ws/dispatch_session.v#L184-L203)
+
+### 客户端实现指南
+- 基本流程
+  - 建立连接，监听 open/message/close/error
+  - 发送文本或二进制帧（二进制需 base64 编码）
+  - 处理服务器关闭码与原因
+- 示例应用
+  - 前端演示脚本位于 examples/public/websocket_echo_app.js
+  - 配置文件 examples/config/websocket-echo.toml 用于快速启动 echo 服务
+
+**章节来源**
+- [websocket_echo_app.js:1-45](file://examples/public/websocket_echo_app.js#L1-L45)
+- [websocket_echo.toml:1-28](file://examples/config/websocket-echo.toml#L1-L28)
 
 ## 依赖关系分析
-- 组件耦合
-  - WebSocket Hub 与应用状态强耦合，通过互斥锁保证并发安全。
-  - 传输层抽象（WorkerWebSocketFrame/TransportHandle）降低上层与底层实现的耦合。
+- 内部依赖
+  - websocket_ingress_runtime.v 依赖 ws 模块（分发会话、Hub、类型）
+  - ws.dispatch_session 依赖 ws.hub_runtime 与 ws.runtime
+  - ws.hub_runtime 依赖 upstream.transport 的帧构造与派发接口
 - 外部依赖
-  - net.websocket 提供底层 WebSocket 能力。
-  - JSON 用于事件与命令的序列化。
-- 循环依赖
-  - 未发现循环依赖迹象；各模块职责清晰，接口稳定。
+  - net.websocket：握手、帧解析、ping/pong、关闭生命周期
+  - sync：互斥锁、并发安全
+  - veb：HTTP 上下文与结果封装
 
 ```mermaid
 graph LR
-TR["transport_handle.v"] --> RT["websocket_runtime.v"]
-TR --> U["websocket_upstream_runtime.v"]
-RT --> AS["app_states.v"]
-U --> AS
-EX["websocket_echo_app.php"] --> RT
-BT["websocket_binary_support_test.v"] --> RT
+Ingress["websocket_ingress_runtime.v"] --> WS["ws.* (dispatch/hub/runtime/types)"]
+WS --> Transport["upstream.transport"]
+WS --> NetWS["net.websocket"]
+WS --> Sync["sync"]
+Ingress --> Veb["veb"]
 ```
 
 **图表来源**
-- [transport_handle.v:1-21](file://src/transport/transport_handle.v#L1-L21)
-- [websocket_runtime.v:1-120](file://src/websocket_runtime.v#L1-L120)
-- [websocket_upstream_runtime.v:1-120](file://src/websocket_upstream_runtime.v#L1-L120)
-- [app_states.v:23-42](file://src/app_states.v#L23-L42)
-- [websocket_echo_app.php:1-60](file://examples/websocket_echo_app.php#L1-L60)
-- [websocket_binary_support_test.v:1-61](file://src/websocket_binary_support_test.v#L1-L61)
+- [websocket_ingress_runtime.v:1-15](file://src/websocket_ingress_runtime.v#L1-L15)
+- [dispatch_session.v:1-8](file://src/ws/dispatch_session.v#L1-L8)
+- [hub_runtime.v:1-6](file://src/ws/hub_runtime.v#L1-L6)
+- [runtime.v:1-5](file://src/ws/runtime.v#L1-L5)
+- [types.v:1-8](file://src/ws/types.v#L1-L8)
 
 **章节来源**
-- [transport_handle.v:1-21](file://src/transport/transport_handle.v#L1-L21)
-- [websocket_runtime.v:1-120](file://src/websocket_runtime.v#L1-L120)
-- [websocket_upstream_runtime.v:1-120](file://src/websocket_upstream_runtime.v#L1-L120)
-- [app_states.v:23-42](file://src/app_states.v#L23-L42)
-- [websocket_echo_app.php:1-60](file://examples/websocket_echo_app.php#L1-L60)
-- [websocket_binary_support_test.v:1-61](file://src/websocket_binary_support_test.v#L1-L61)
+- [websocket_ingress_runtime.v:1-15](file://src/websocket_ingress_runtime.v#L1-L15)
+- [dispatch_session.v:1-8](file://src/ws/dispatch_session.v#L1-L8)
+- [hub_runtime.v:1-6](file://src/ws/hub_runtime.v#L1-L6)
+- [runtime.v:1-5](file://src/ws/runtime.v#L1-L5)
+- [types.v:1-8](file://src/ws/types.v#L1-L8)
 
-## 性能考量
-- 并发控制
-  - Hub 使用多把互斥锁（Hub、发送、上游）隔离不同临界区，减少锁竞争。
-- 待发送队列
-  - 对未就绪连接的消息进行入队缓存，避免丢包并在连接就绪后批量发送。
+## 性能考虑
+- 连接与命令批处理
+  - 使用 Hub 的 pending 队列避免阻塞写入，flush_pending 在连接开放后批量发送
 - 广播优化
-  - 广播时区分已连接与未连接成员，分别处理，减少无效写入。
-- 上游重连
-  - 提供指数退避与固定延迟策略，避免频繁重试造成资源浪费。
+  - 先收集目标，再逐条发送，减少锁竞争
+- 读写分离
+  - send_mu 独立于 mu，降低发送路径锁冲突
+- 事件分发
+  - Phase 2 将业务逻辑解耦到 worker，提升可扩展性
+- 观察与诊断
+  - 利用 admin 快照查看活跃连接、房间与成员分布
+
+[本节为通用指导，无需具体文件引用]
 
 ## 故障排查指南
 - 常见问题
-  - 控制帧导致连接关闭：确认客户端仅发送文本/二进制帧。
-  - 发送失败：检查命令返回的失败帧，定位具体事件与目标。
-  - 上游连接失败：查看重连日志与错误回调，确认提供商配置。
-- 排查步骤
-  - 启用追踪头，结合请求/追踪 ID 定位事件链路。
-  - 使用管理端接口查看连接与房间快照，确认房间成员与元数据状态。
-  - 观察上游活动记录，定位命令执行与错误信息。
+  - 握手失败：检查 Upgrade/Key/Connection 头是否正确
+  - 不支持的帧类型：确保只发送 text/binary
+  - 连接无响应：确认 worker 返回 done/accept/close/error
+- 定位手段
+  - 查看 runtime_trace 日志（ws.session.start/enter/exit 等）
+  - 使用 admin 快照查看连接与房间状态
+- 恢复步骤
+  - 客户端重连并重建房间/元数据
+  - 服务端检查 worker 健康与命令执行结果
 
 **章节来源**
-- [main.v:347-357](file://src/main.v#L347-L357)
-- [websocket_runtime.v:785-849](file://src/websocket_runtime.v#L785-L849)
-- [websocket_upstream_runtime.v:799-822](file://src/websocket_upstream_runtime.v#L799-L822)
+- [websocket_ingress_runtime.v:103-160](file://src/websocket_ingress_runtime.v#L103-L160)
+- [websocket_ingress_runtime.v:223-277](file://src/websocket_ingress_runtime.v#L223-L277)
+- [hub_runtime.v:438-564](file://src/ws/hub_runtime.v#L438-L564)
 
 ## 结论
-vhttpd 的 WebSocket API 通过 Hub 与传输层抽象实现了高可用的实时通信能力，支持房间管理、元数据、命令回传与上游事件注入。其生命周期管理、并发控制与错误处理机制确保了在复杂场景下的稳定性与可观测性。配合示例与测试，开发者可快速集成并扩展 WebSocket 功能。
+vhttpd 的 WebSocket 方案通过 Phase 1 与 Phase 2 双模式兼顾简单与可扩展性。Phase 1 适合快速原型与简单场景；Phase 2 将连接所有权与业务逻辑解耦，便于横向扩展与高可用部署。结合 Hub 的房间与元数据能力，可实现高效的实时通信与广播。配合完善的错误处理与诊断工具，可在生产环境稳定运行。
+
+[本节为总结，无需具体文件引用]
 
 ## 附录
 
-### API 参考：Worker 帧字段
-- 事件类型：open/message/close
-- 连接标识：id/request_id/trace_id
-- 路径与上下文：path/query/headers/remote_addr
-- 房间与元数据：rooms/metadata
-- 消息内容：opcode（text/binary）与 data（Base64）
+### 消息格式示例（Phase 2）
+- 请求帧（event=message）
+  - mode: "websocket_dispatch"
+  - event: "message"
+  - id/request_id/trace_id: 追踪标识
+  - path/query/headers/remote_addr: 请求上下文
+  - opcode: "text"/"binary"
+  - data: 文本或 base64 编码的二进制
+  - rooms/metadata/presence: 房间与存在性快照
+- 响应帧（event=result）
+  - commands: 命令列表（send/send_to/join/leave/broadcast/close/set_meta/clear_meta）
+- 错误帧（event=error）
+  - error_class/error: 错误类别与描述
 
 **章节来源**
-- [websocket_runtime.v:126-138](file://src/websocket_runtime.v#L126-L138)
-- [websocket_runtime.v:360-390](file://src/websocket_runtime.v#L360-L390)
+- [WEBSOCKET_PHASE2_IMPLEMENTATION_PLAN.md:221-293](file://docs/WEBSOCKET_PHASE2_IMPLEMENTATION_PLAN.md#L221-L293)
 
-### 命令参考：应用侧可下发的命令
-- send/send_to：发送消息到指定连接
-- join/leave：加入/离开房间
-- set_meta/clear_meta：设置/清除元数据
-- broadcast/broadcast_dispatch：广播消息或广播并触发下游处理
-- close：关闭连接
-
-**章节来源**
-- [websocket_runtime.v:785-849](file://src/websocket_runtime.v#L785-L849)
-
-### 客户端最佳实践
-- 使用 Base64 编码二进制数据，确保跨语言兼容。
-- 在 onOpen 中初始化房间与元数据，避免后续状态不一致。
-- 对关键命令记录返回的失败信息，便于排障。
-- 在应用侧实现断线重连逻辑，必要时重新加入房间与恢复状态。
+### 事件总线与多节点扩展
+- 当前范围
+  - 单节点 Hub，跨 worker 扇出
+- 未来扩展
+  - 可选外部总线适配器（Redis/NATS）实现多节点扇出
+  - 房间分片、持久化订阅、二进制帧路由等
 
 **章节来源**
-- [websocket_binary_support_test.v:46-53](file://src/websocket_binary_support_test.v#L46-L53)
-- [websocket_echo_app.php:224-239](file://examples/websocket_echo_app.php#L224-L239)
-- [inproc_vjsx_executor_test.v:3464-3512](file://src/inproc_vjsx_executor_test.v#L3464-L3512)
+- [WEBSOCKET_EVENT_BUS_PLAN.md:405-444](file://docs/WEBSOCKET_EVENT_BUS_PLAN.md#L405-L444)
+
+### 代理、负载均衡与高可用配置
+- 代理与负载均衡
+  - 使用反向代理（如 nginx/Traefik）进行 TCP 层负载均衡，确保同一会话粘性（sticky session）
+  - 对于 Phase 2，由于连接由 vhttpd 持有，粘性策略应基于连接 ID 或源 IP
+- 高可用
+  - 多实例部署，结合外部总线适配器实现跨节点广播
+  - 健康检查与优雅关闭，确保连接迁移与资源释放
+
+[本节为概念性内容，无需具体文件引用]

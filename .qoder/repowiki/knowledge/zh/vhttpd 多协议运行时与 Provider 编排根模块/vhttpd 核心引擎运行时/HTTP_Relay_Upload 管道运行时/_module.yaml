@@ -1,0 +1,12 @@
+schema_version: 1
+module_path: core_engine/http_pipeline_runtime
+title: HTTP/Relay/Upload 管道运行时
+scope:
+    - src/pipeline_runtime.v
+    - src/http_pipeline_runtime.v
+    - src/cache_runtime.v
+    - src/upload_runtime.v
+source_files: []
+depends_on: []
+related_to:
+    - path: dispatch_system

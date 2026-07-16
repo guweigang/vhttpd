@@ -1,0 +1,22 @@
+schema_version: 1
+module_path: codex_integration
+title: Codex Provider WebSocket 集成运行时
+scope:
+    - src/codex/
+    - src/codex_rpc_runtime.v
+    - src/codex_rpc_request_runtime.v
+    - src/codex_rpc_response_runtime.v
+    - src/codex_rpc_send_runtime.v
+    - src/codex_turn_runtime.v
+    - src/codex_notification_runtime.v
+    - src/codex_provider_runtime_state.v
+    - src/codex_provider_types.v
+    - src/codex_provider_lifecycle_runtime.v
+    - src/codex_provider_websocket_runtime.v
+    - src/codex_runtime_test.v
+source_files: []
+depends_on: []
+related_to:
+    - path: provider_framework
+    - path: upstream_system
+    - path: websocket_system

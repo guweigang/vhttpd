@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: provider_framework/registry_and_bootstrap
+title: Provider 注册表与运行时引导
+scope:
+    - src/provider_registry.v
+    - src/provider_bootstrap.v
+    - src/provider_runtime_builder.v
+source_files: []
+depends_on: []
+related_to: []

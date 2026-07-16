@@ -1,0 +1,15 @@
+schema_version: 1
+module_path: admin_interface/plan_replacement_workflow
+title: 运行时计划替换工作流（Preview/Apply/Finalize/Cancel）
+scope:
+    - src/admin_runtime_plan_replacement_runtime.v
+    - src/admin_runtime_plan_replacement_preview.v
+    - src/admin_runtime_plan_replacement_apply.v
+    - src/admin_runtime_plan_replacement_cancel.v
+    - src/admin_runtime_plan_replacement_finalize.v
+    - src/admin_runtime_plan_replacement_events.v
+    - src/admin_runtime_plan_replacement_state.v
+    - src/admin_runtime_plan_replacement_types.v
+source_files: []
+depends_on: []
+related_to: []

@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: docs_and_articles
+title: vhttpd 架构文档与公开文章
+scope:
+    - docs/
+    - articles/
+source_files: []
+depends_on: []
+related_to:
+    - path: examples

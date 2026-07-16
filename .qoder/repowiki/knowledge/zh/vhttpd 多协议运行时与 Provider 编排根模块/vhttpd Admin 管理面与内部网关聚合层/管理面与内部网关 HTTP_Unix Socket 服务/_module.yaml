@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: admin_interface/data_plane_responses
+title: 管理面与内部网关 HTTP/Unix Socket 服务
+scope:
+    - src/admin_data_plane_response_runtime.v
+    - src/admin_server.v
+    - src/internal_admin.v
+source_files: []
+depends_on: []
+related_to: []
