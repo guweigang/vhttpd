@@ -1,0 +1,15 @@
+schema_version: 1
+module_path: state_and_config
+title: vhttpd 运行时基础设施层
+scope:
+    - src/config/
+    - src/state_store/
+    - src/admin_state_store/
+    - src/runtime_plan/
+    - src/jsonutils/
+    - src/logging/
+    - src/cachex/
+    - src/dbx/
+source_files: []
+depends_on: []
+related_to: []
