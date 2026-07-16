@@ -1,0 +1,17 @@
+[server]
+host = "127.0.0.1"
+port = 19882
+
+[executor]
+kind = "php-cgi"
+
+[worker]
+autostart = true
+pool_size = 2
+socket = "/tmp/vhttpd_wordpress_cgi.sock"
+
+[worker.env]
+VPHP_WP_ROOT = "/Users/guweigang/Source/vhttpd/examples/wordpress"
+
+[php]
+bin = "php-cgi"

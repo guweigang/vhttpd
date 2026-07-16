@@ -1,50 +1,61 @@
 module main
 
+import executor
+import feishu
+import upstream
+import upstream.transport
+import config
 import json
 import crypto.sha256
 import net.http
+import os
+import plugin
+import runtime_plan
 import time
 import toml
+import ws
 
 fn new_feishu_http_test_app() App {
 	return App{
-		feishu_enabled:       true
-		feishu_open_base_url: 'https://open.feishu.test/open-apis'
-		feishu_apps: {
-			'main': FeishuAppConfig{
-				app_id:             'cli_main'
-				app_secret:         'sec_main'
-				verification_token: 'verify_main'
-				encrypt_key:        'encrypt_main'
+		providers: ProviderRuntimeHub{
+			feishu: feishu.FeishuState{
+				enabled:            true
+				open_base_url:      'https://open.feishu.test/open-apis'
+				apps:               {
+					'main': config.FeishuAppConfig{
+						app_id:             'cli_main'
+						app_secret:         'sec_main'
+						verification_token: 'verify_main'
+						encrypt_key:        'encrypt_main'
+					}
+				}
+				runtime:            map[string]feishu.ProviderRuntime{}
+				buffers:            map[string]feishu.StreamBuffer{}
+				http_test_stub:     true
+				http_test_delay_ms: 40
 			}
 		}
-		feishu_runtime: map[string]FeishuProviderRuntime{}
-		feishu_buffers: map[string]FeishuStreamBuffer{}
-		feishu_http_test_stub: true
-		feishu_http_test_delay_ms: 40
 	}
 }
 
 fn feishu_test_concurrent_fetch(app &App, url string) int {
-	resp := feishu_runtime_http_fetch_locked(app, http.FetchConfig{
+	resp := (&app.providers.feishu).http_fetch(http.FetchConfig{
 		url:    url
 		method: .get
-	}) or {
-		panic(err)
-	}
+	}) or { panic(err) }
 	return resp.status_code
 }
 
 fn test_feishu_runtime_proto_roundtrip() {
-	frame := FeishuRuntimeProtoFrame{
+	frame := feishu.RuntimeProtoFrame{
 		seq_id:           42
-		method:           feishu_runtime_frame_type_data
+		method:           feishu.frame_type_data
 		headers:          [
-			FeishuRuntimeProtoHeader{
+			feishu.RuntimeProtoHeader{
 				key:   feishu_runtime_header_type
 				value: feishu_runtime_message_data
 			},
-			FeishuRuntimeProtoHeader{
+			feishu.RuntimeProtoHeader{
 				key:   feishu_runtime_header_trace
 				value: 'trace-1'
 			},
@@ -54,11 +65,11 @@ fn test_feishu_runtime_proto_roundtrip() {
 		payload:          '{"ok":true}'.bytes()
 		log_id_str:       'log-1'
 	}
-	encoded := feishu_runtime_proto_frame_encode(frame)
-	decoded := feishu_runtime_proto_frame_decode(encoded) or { panic(err) }
-	headers := feishu_runtime_header_map(decoded.headers)
+	encoded := frame.encode()
+	decoded := feishu.RuntimeProtoFrame.decode(encoded) or { panic(err) }
+	headers := feishu.RuntimeProtoHeader.to_map(decoded.headers)
 	assert decoded.seq_id == 42
-	assert decoded.method == feishu_runtime_frame_type_data
+	assert decoded.method == feishu.frame_type_data
 	assert headers[feishu_runtime_header_type] == feishu_runtime_message_data
 	assert headers[feishu_runtime_header_trace] == 'trace-1'
 	assert decoded.payload.bytestr() == '{"ok":true}'
@@ -66,53 +77,53 @@ fn test_feishu_runtime_proto_roundtrip() {
 }
 
 fn test_feishu_runtime_build_ack_preserves_message_type() {
-	frame := FeishuRuntimeProtoFrame{
-		seq_id:    42
-		log_id:    9
-		service:   17
-		method:    feishu_runtime_frame_type_data
+	frame := feishu.RuntimeProtoFrame{
+		seq_id:     42
+		log_id:     9
+		service:    17
+		method:     feishu.frame_type_data
 		log_id_str: 'log-9'
-		headers:   [
-			FeishuRuntimeProtoHeader{
+		headers:    [
+			feishu.RuntimeProtoHeader{
 				key:   feishu_runtime_header_type
 				value: feishu_runtime_message_event
 			},
-			FeishuRuntimeProtoHeader{
+			feishu.RuntimeProtoHeader{
 				key:   feishu_runtime_header_seq
 				value: '42'
 			},
-			FeishuRuntimeProtoHeader{
+			feishu.RuntimeProtoHeader{
 				key:   feishu_runtime_header_trace
 				value: 'trace-1'
 			},
 		]
 	}
-	ack := feishu_runtime_build_ack(frame, 200, map[string]string{}, '')
-	ack_headers := feishu_runtime_header_map(ack.headers)
+	ack := frame.ack(200, map[string]string{}, '')
+	ack_headers := feishu.RuntimeProtoHeader.to_map(ack.headers)
 	assert ack.seq_id == 42
 	assert ack.log_id == 9
 	assert ack.service == 17
 	assert ack.log_id_str == 'log-9'
 	assert ack_headers[feishu_runtime_header_type] == feishu_runtime_message_event
-	assert ack_headers[feishu_runtime_header_biz_rt] == '0'
+	assert ack_headers[feishu.header_biz_rt] == '0'
 	assert ack.payload.bytestr().contains('"code":200')
 }
 
 fn test_feishu_runtime_build_ack_carries_custom_response_payload() {
-	frame := FeishuRuntimeProtoFrame{
-		seq_id:    7
-		log_id:    3
-		service:   11
-		method:    feishu_runtime_frame_type_data
+	frame := feishu.RuntimeProtoFrame{
+		seq_id:     7
+		log_id:     3
+		service:    11
+		method:     feishu.frame_type_data
 		log_id_str: 'log-3'
-		headers:   [
-			FeishuRuntimeProtoHeader{
+		headers:    [
+			feishu.RuntimeProtoHeader{
 				key:   feishu_runtime_header_type
 				value: feishu_runtime_message_card
 			},
 		]
 	}
-	ack := feishu_runtime_build_ack(frame, 200, {
+	ack := frame.ack(200, {
 		'content-type': 'application/json'
 	}, '{"elements":[]}')
 	assert ack.payload.bytestr().contains('"data":"{\\"elements\\":[]}"')
@@ -120,28 +131,28 @@ fn test_feishu_runtime_build_ack_carries_custom_response_payload() {
 }
 
 fn test_feishu_runtime_build_pong_preserves_frame_metadata() {
-	frame := FeishuRuntimeProtoFrame{
-		seq_id:    7
-		log_id:    3
-		service:   11
-		method:    feishu_runtime_frame_type_control
-		log_id_str: 'log-3'
+	frame := feishu.RuntimeProtoFrame{
+		seq_id:           7
+		log_id:           3
+		service:          11
+		method:           feishu_runtime_frame_type_control
+		log_id_str:       'log-3'
 		payload_encoding: 'json'
 		payload_type:     'application/json'
 		payload:          '{"ping":1}'.bytes()
-		headers:   [
-			FeishuRuntimeProtoHeader{
+		headers:          [
+			feishu.RuntimeProtoHeader{
 				key:   feishu_runtime_header_type
 				value: feishu_runtime_message_ping
 			},
-			FeishuRuntimeProtoHeader{
+			feishu.RuntimeProtoHeader{
 				key:   feishu_runtime_header_seq
 				value: '7'
 			},
 		]
 	}
-	pong := feishu_runtime_build_pong(frame)
-	pong_headers := feishu_runtime_header_map(pong.headers)
+	pong := frame.pong()
+	pong_headers := feishu.RuntimeProtoHeader.to_map(pong.headers)
 	assert pong.seq_id == 7
 	assert pong.log_id == 3
 	assert pong.service == 11
@@ -153,7 +164,8 @@ fn test_feishu_runtime_build_pong_preserves_frame_metadata() {
 }
 
 fn test_feishu_runtime_event_summary() {
-	summary := feishu_runtime_event_summary('{"header":{"event_type":"im.message.receive_v1"},"event":{"sender":{"sender_id":{"open_id":"ou_sender"},"tenant_key":"tenant_a"},"message":{"message_id":"om_x","message_type":"text","chat_id":"oc_y","chat_type":"group","root_id":"om_root","parent_id":"om_parent","create_time":"1710000000"}}}')
+	summary :=
+		feishu.RuntimeEventSnapshot.summary_from_payload('{"header":{"event_type":"im.message.receive_v1"},"event":{"sender":{"sender_id":{"open_id":"ou_sender"},"tenant_key":"tenant_a"},"message":{"message_id":"om_x","message_type":"text","chat_id":"oc_y","chat_type":"group","root_id":"om_root","parent_id":"om_parent","create_time":"1710000000"}}}')
 	assert summary.event_kind == 'message'
 	assert summary.event_type == 'im.message.receive_v1'
 	assert summary.message_id == 'om_x'
@@ -171,12 +183,15 @@ fn test_feishu_runtime_event_summary() {
 }
 
 fn test_feishu_runtime_message_type_recognition() {
-	assert feishu_runtime_message_event in [feishu_runtime_message_data, feishu_runtime_message_event, feishu_runtime_message_card]
-	assert feishu_runtime_message_card in [feishu_runtime_message_data, feishu_runtime_message_event, feishu_runtime_message_card]
+	assert feishu_runtime_message_event in [feishu_runtime_message_data, feishu_runtime_message_event,
+		feishu_runtime_message_card]
+	assert feishu_runtime_message_card in [feishu_runtime_message_data, feishu_runtime_message_event,
+		feishu_runtime_message_card]
 }
 
 fn test_feishu_runtime_action_event_summary() {
-	summary := feishu_runtime_event_summary('{"schema":"2.0","header":{"event_id":"evt_action_1","event_type":"card.action.trigger"},"event":{"open_message_id":"om_open_1","action":{"tag":"button","value":{"action":"approve","ticket_id":"t_1"}}},"token":"verification_token","tenant_key":"tenant_action"}')
+	summary :=
+		feishu.RuntimeEventSnapshot.summary_from_payload('{"schema":"2.0","header":{"event_id":"evt_action_1","event_type":"card.action.trigger"},"event":{"open_message_id":"om_open_1","action":{"tag":"button","value":{"action":"approve","ticket_id":"t_1"}}},"token":"verification_token","tenant_key":"tenant_action"}')
 	assert summary.event_kind == 'action'
 	assert summary.event_id == 'evt_action_1'
 	assert summary.event_type == 'card.action.trigger'
@@ -191,15 +206,19 @@ fn test_feishu_runtime_action_event_summary() {
 
 fn test_feishu_runtime_callback_challenge_and_token_validation() {
 	payload := '{"type":"url_verification","challenge":"challenge_value","token":"verify_main"}'
-	assert feishu_runtime_callback_challenge(payload) == 'challenge_value'
+	assert feishu.CallbackChallengeResponse.challenge(payload) == 'challenge_value'
 	app := App{
-		feishu_enabled: true
-		feishu_apps: {
-			'main': FeishuAppConfig{
-				app_id:             'cli_main'
-				app_secret:         'sec_main'
-				verification_token: 'verify_main'
-				encrypt_key:        'encrypt_main'
+		providers: ProviderRuntimeHub{
+			feishu: feishu.FeishuState{
+				enabled: true
+				apps:    {
+					'main': config.FeishuAppConfig{
+						app_id:             'cli_main'
+						app_secret:         'sec_main'
+						verification_token: 'verify_main'
+						encrypt_key:        'encrypt_main'
+					}
+				}
 			}
 		}
 	}
@@ -217,8 +236,9 @@ fn test_feishu_runtime_callback_signature_validation() {
 	signature := sha256.sum('1710000000nonce-1encrypt_key_1${payload}'.bytes()).hex().to_lower()
 	mut signed_headers := headers.clone()
 	signed_headers['x-lark-signature'] = signature
-	assert feishu_runtime_callback_signature_valid(signed_headers, 'encrypt_key_1', payload)
-	assert !feishu_runtime_callback_signature_valid(signed_headers, 'wrong_key', payload)
+	assert feishu.CallbackChallengeResponse.signature_valid(signed_headers, 'encrypt_key_1',
+		payload)
+	assert !feishu.CallbackChallengeResponse.signature_valid(signed_headers, 'wrong_key', payload)
 }
 
 fn test_decode_feishu_multi_app_config() {
@@ -241,8 +261,8 @@ encrypt_key = "encrypt_openclaw"
 ') or {
 		panic(err)
 	}
-	mut cfg := default_vhttpd_config()
-	decode_feishu_config(doc, mut cfg) or { panic(err) }
+	mut cfg := config.default_vhttpd_config()
+	config.decode_feishu_config(doc, mut cfg) or { panic(err) }
 	assert cfg.feishu.apps['main']!.app_id == 'cli_main'
 	assert cfg.feishu.apps['main']!.app_secret == 'sec_main'
 	assert cfg.feishu.apps['main']!.verification_token == 'verify_main'
@@ -254,15 +274,15 @@ encrypt_key = "encrypt_openclaw"
 }
 
 fn test_feishu_runtime_build_message_content() {
-	text_content := feishu_runtime_build_message_content('text', '', 'pong', map[string]string{}) or {
+	text_content := feishu.SendMessageRequest.build_content('text', '', 'pong', map[string]string{}) or {
 		panic(err)
 	}
 	assert text_content == '{"text":"pong"}'
-	image_content := feishu_runtime_build_message_content('image', '', '', {
+	image_content := feishu.SendMessageRequest.build_content('image', '', '', {
 		'image_key': 'img_v2_123'
 	}) or { panic(err) }
 	assert image_content == '{"image_key":"img_v2_123"}'
-	media_content := feishu_runtime_build_message_content('media', '', '', {
+	media_content := feishu.SendMessageRequest.build_content('media', '', '', {
 		'file_key':  'file_v2_1'
 		'image_key': 'img_v2_1'
 		'file_name': 'demo.mp4'
@@ -272,7 +292,7 @@ fn test_feishu_runtime_build_message_content() {
 	assert media_content.contains('"image_key":"img_v2_1"')
 	assert media_content.contains('"file_name":"demo.mp4"')
 	assert media_content.contains('"duration":"3000"')
-	if _ := feishu_runtime_build_message_content('post', '', '', map[string]string{}) {
+	if _ := feishu.SendMessageRequest.build_content('post', '', '', map[string]string{}) {
 		assert false
 	} else {
 		assert err.msg().contains('missing raw content')
@@ -280,9 +300,9 @@ fn test_feishu_runtime_build_message_content() {
 }
 
 fn test_feishu_runtime_update_http_method() {
-	assert feishu_runtime_update_http_method('text') == .put
-	assert feishu_runtime_update_http_method('post') == .put
-	assert feishu_runtime_update_http_method('interactive') == .patch
+	assert feishu.UpdateMessageRequest.http_method_for('text') == .put
+	assert feishu.UpdateMessageRequest.http_method_for('post') == .put
+	assert feishu.UpdateMessageRequest.http_method_for('interactive') == .patch
 }
 
 fn test_feishu_runtime_http_fetch_serializes_parallel_requests() {
@@ -296,67 +316,349 @@ fn test_feishu_runtime_http_fetch_serializes_parallel_requests() {
 	assert t2.wait() == 200
 	assert t3.wait() == 200
 	elapsed_ms := time.since(start).milliseconds()
-	assert app.feishu_http_test_calls == 3
+	assert app.providers.feishu.http_test_calls == 3
 	assert elapsed_ms >= 100
 }
 
 fn test_feishu_runtime_send_and_update_share_one_http_lane() {
 	mut app := new_feishu_http_test_app()
-	send_result := app.feishu_runtime_send_message(FeishuRuntimeSendMessageRequest{
+	send_result := app.providers.feishu_runtime_send_message(feishu.SendMessageRequest{
 		app:             'main'
 		receive_id_type: 'chat_id'
 		receive_id:      'oc_1'
 		msg_type:        'interactive'
 		content:         '{"elements":[{"tag":"markdown","content":"hello 1"}]}'
-	}) or {
-		panic(err)
-	}
-	update_result := app.feishu_runtime_update_message(FeishuRuntimeUpdateMessageRequest{
+	}) or { panic(err) }
+	update_result := app.providers.feishu_runtime_update_message(feishu.UpdateMessageRequest{
 		app:        'main'
 		message_id: 'om_2'
 		msg_type:   'interactive'
 		content:    '{"elements":[{"tag":"markdown","content":"update 2"}]}'
-	}) or {
-		panic(err)
-	}
+	}) or { panic(err) }
 	assert send_result.message_id.starts_with('om_test_')
 	assert update_result.message_id == 'om_updated'
-	assert app.feishu_http_test_calls >= 3
-	assert app.feishu_http_test_inflight == 0
+	assert app.providers.feishu.http_test_calls >= 3
+	assert app.providers.feishu.http_test_inflight == 0
+}
+
+fn test_provider_runtime_driver_reports_missing_vjsx_plugin() {
+	mut app := new_feishu_http_test_app()
+	app.providers.runtime_drivers = {
+		'feishu': 'vjsx'
+	}
+	if _ := app.providers.feishu_provider_runtime_send_message(feishu.SendMessageRequest{
+		app:             'main'
+		receive_id_type: 'chat_id'
+		receive_id:      'oc_1'
+		msg_type:        'text'
+		text:            'hello'
+	}, mut app)
+	{
+		assert false
+	} else {
+		assert err.msg() == 'provider_runtime_vjsx_plugin_missing:feishu'
+	}
+	assert app.providers.feishu.http_test_calls == 0
+}
+
+fn test_provider_runtime_driver_reports_unknown_driver() {
+	mut app := new_feishu_http_test_app()
+	app.providers.runtime_drivers = {
+		'feishu': 'python'
+	}
+	if _ := app.providers.feishu_provider_runtime_update_message(feishu.UpdateMessageRequest{
+		app:        'main'
+		message_id: 'om_1'
+		msg_type:   'interactive'
+		content:    '{}'
+	}, mut app)
+	{
+		assert false
+	} else {
+		assert err.msg() == 'provider_runtime_unknown_driver:feishu:python'
+	}
+	assert app.providers.feishu.http_test_calls == 0
+}
+
+fn test_provider_runtime_action_dispatch_calls_native_driver() {
+	mut app := new_feishu_http_test_app()
+	before_calls := app.providers.feishu.http_test_calls
+	payload := json.encode(feishu.SendMessageRequest{
+		app:             'main'
+		receive_id_type: 'chat_id'
+		receive_id:      'oc_action'
+		msg_type:        'text'
+		text:            'hello'
+	})
+	resp := app.dispatch_provider_runtime_action(ProviderRuntimeActionRequest{
+		provider: 'feishu'
+		action:   'send_message'
+		payload:  payload
+		trace_id: 'trace_action_native'
+	})
+
+	assert resp.ok
+	assert resp.provider == 'feishu'
+	assert resp.action == 'send_message'
+	result := json.decode(feishu.SendMessageResult, resp.result) or { panic(err) }
+	assert result.ok
+	assert result.message_id.starts_with('om_test_')
+	assert app.providers.feishu.http_test_calls > before_calls
+}
+
+fn test_feishu_provider_runtime_vjsx_driver_calls_configured_plugin() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_feishu_provider_vjsx_driver_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	plugin_file := os.join_path(temp_dir, 'feishu-provider.mts')
+	os.write_file(plugin_file, "
+export function plugin(req) {
+  const payload = JSON.parse(req.payload);
+  if (req.op === 'send_message') {
+    if (req.capability !== 'feishu.message.send') {
+      return { ok: false, error: 'capability:' + req.capability };
+    }
+    return { ok: true, message_id: 'vjsx-send-' + payload.receive_id };
+  }
+  if (req.op === 'update_message') {
+    return { ok: true, message_id: 'vjsx-update-' + payload.message_id };
+  }
+  if (req.op === 'upload_image') {
+    return { ok: true, image_key: 'vjsx-image-' + payload.filename };
+  }
+  return { ok: false, error: 'unsupported:' + req.op };
+}
+") or {
+		panic(err)
+	}
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	plugins := {
+		'feishu-provider': config.PluginConfig{
+			kind:            'vjsx'
+			app_entry:       plugin_file
+			runtime_profile: 'node'
+			thread_count:    1
+		}
+	}
+	mut app := new_feishu_http_test_app()
+	app.providers.runtime_drivers = {
+		'feishu': 'vjsx'
+	}
+	app.providers.runtime_plugins = {
+		'feishu': 'feishu-provider'
+	}
+	app.providers.runtime_capabilities = {
+		'feishu': {
+			'send_message': 'feishu.message.send'
+		}
+	}
+	app.protocols.plugins = plugin.PluginState{
+		configs: plugins
+		vjsx:    build_vjsx_plugin_runtimes(plugins)
+	}
+	defer {
+		app.close_all_plugins()
+	}
+	send_result := app.providers.feishu_provider_runtime_send_message(feishu.SendMessageRequest{
+		app:             'main'
+		receive_id_type: 'chat_id'
+		receive_id:      'oc_vjsx'
+		msg_type:        'text'
+		text:            'hello'
+	}, mut app) or { panic(err) }
+	update_result := app.providers.feishu_provider_runtime_update_message(feishu.UpdateMessageRequest{
+		app:        'main'
+		message_id: 'om_vjsx'
+		msg_type:   'interactive'
+		content:    '{}'
+	}, mut app) or { panic(err) }
+	upload_result := app.providers.feishu_provider_runtime_upload_image(feishu.UploadImageRequest{
+		app:            'main'
+		filename:       'demo.png'
+		content_type:   'image/png'
+		data_base64:    'AA=='
+		content_length: 1
+	}, mut app) or { panic(err) }
+	assert send_result.message_id == 'vjsx-send-oc_vjsx'
+	assert update_result.message_id == 'vjsx-update-om_vjsx'
+	assert upload_result.image_key == 'vjsx-image-demo.png'
+	assert app.providers.feishu.http_test_calls == 0
+}
+
+fn test_provider_runtime_action_dispatch_calls_vjsx_driver() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_provider_action_vjsx_driver_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	plugin_file := os.join_path(temp_dir, 'provider-action.mts')
+	os.write_file(plugin_file, "
+export function plugin(req) {
+  const payload = JSON.parse(req.payload);
+  if (req.capability !== 'feishu.message.send') {
+    return { ok: false, error: 'capability:' + req.capability };
+  }
+  return { ok: true, message_id: 'generic-' + payload.receive_id, trace_id: req.trace_id };
+}
+") or {
+		panic(err)
+	}
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	plugins := {
+		'provider-action': config.PluginConfig{
+			kind:            'vjsx'
+			app_entry:       plugin_file
+			runtime_profile: 'node'
+			thread_count:    1
+		}
+	}
+	mut app := new_feishu_http_test_app()
+	app.providers.runtime_drivers = {
+		'feishu': 'vjsx'
+	}
+	app.providers.runtime_plugins = {
+		'feishu': 'provider-action'
+	}
+	app.providers.runtime_capabilities = {
+		'feishu': {
+			'send_message': 'feishu.message.send'
+		}
+	}
+	app.protocols.plugins = plugin.PluginState{
+		configs: plugins
+		vjsx:    build_vjsx_plugin_runtimes(plugins)
+	}
+	defer {
+		app.close_all_plugins()
+	}
+	resp := app.dispatch_provider_runtime_action(ProviderRuntimeActionRequest{
+		provider: 'feishu'
+		action:   'send_message'
+		payload:  json.encode(feishu.SendMessageRequest{
+			app:             'main'
+			receive_id_type: 'chat_id'
+			receive_id:      'oc_generic'
+			msg_type:        'text'
+			text:            'hello'
+		})
+		trace_id: 'trace_action_vjsx'
+	})
+	result := json.decode(feishu.SendMessageResult, resp.result) or { panic(err) }
+
+	assert resp.ok
+	assert result.message_id == 'generic-oc_generic'
+	assert app.providers.feishu.http_test_calls == 0
+}
+
+fn test_pipeline_runtime_provider_action_adapter_dispatches_vjsx_driver() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_pipeline_provider_action_vjsx_test')
+	os.mkdir_all(temp_dir) or { panic(err) }
+	plugin_file := os.join_path(temp_dir, 'pipeline-provider-action.mts')
+	os.write_file(plugin_file, "
+export function plugin(req) {
+  const payload = JSON.parse(req.payload);
+  return {
+    ok: true,
+    message_id: 'pipeline-' + payload.receive_id,
+    metadata_pipeline: req.metadata.pipeline_id,
+    metadata_adapter: req.metadata.adapter_id,
+  };
+}
+") or {
+		panic(err)
+	}
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	plugins := {
+		'pipeline-provider-action': config.PluginConfig{
+			kind:            'vjsx'
+			app_entry:       plugin_file
+			runtime_profile: 'node'
+			thread_count:    1
+		}
+	}
+	mut app := new_feishu_http_test_app()
+	app.providers.runtime_drivers = {
+		'feishu': 'vjsx'
+	}
+	app.providers.runtime_plugins = {
+		'feishu': 'pipeline-provider-action'
+	}
+	app.protocols.plugins = plugin.PluginState{
+		configs: plugins
+		vjsx:    build_vjsx_plugin_runtimes(plugins)
+	}
+	defer {
+		app.close_all_plugins()
+	}
+	rt := PipelineRuntime{}
+	adapter := runtime_plan.AdapterPlan{
+		id:      'provider-send'
+		kind:    'provider-action'
+		options: runtime_plan.PlanOptions{
+			strings: {
+				'provider': 'feishu'
+				'action':   'send_message'
+			}
+		}
+	}
+	rule := RuntimeRouteRule{
+		pipeline_id: 'provider.send'
+		ingress_id:  'listener:web'
+	}
+	req := MatchedHttpPipelineRequest{
+		method:            'POST'
+		path:              '/provider/send'
+		normalized_target: '/provider/send'
+		req_id:            'req-provider-action'
+		trace_id:          'trace-provider-action'
+	}
+	resp := rt.dispatch_http_provider_action(mut app, adapter, 'provider-send', rule, req,
+		json.encode(feishu.SendMessageRequest{
+			app:             'main'
+			receive_id_type: 'chat_id'
+			receive_id:      'oc_pipeline'
+			msg_type:        'text'
+			text:            'hello'
+		}))
+	result := json.decode(feishu.SendMessageResult, resp.result) or { panic(err) }
+
+	assert resp.ok
+	assert result.message_id == 'pipeline-oc_pipeline'
+	assert resp.result.contains('"metadata_pipeline":"provider.send"')
+	assert resp.result.contains('"metadata_adapter":"provider-send"')
+	assert app.providers.feishu.http_test_calls == 0
 }
 
 fn test_feishu_runtime_send_message_supports_message_reply_target() {
 	mut app := new_feishu_http_test_app()
-	send_result := app.feishu_runtime_send_message(FeishuRuntimeSendMessageRequest{
+	send_result := app.providers.feishu_runtime_send_message(feishu.SendMessageRequest{
 		app:             'main'
 		receive_id_type: 'message_id'
 		receive_id:      'om_source_1'
 		msg_type:        'text'
 		text:            'reply in thread'
-	}) or {
-		panic(err)
-	}
+	}) or { panic(err) }
 	assert send_result.ok
 	assert send_result.message_id.starts_with('om_reply_')
 }
 
 fn test_feishu_runtime_followup_segment_supports_message_reply_target() {
 	mut app := new_feishu_http_test_app()
-	followup_id := app.feishu_runtime_send_followup_segment(FeishuStreamBuffer{
+	followup_id := app.feishu_runtime_send_followup_segment(feishu.StreamBuffer{
 		message_id:      'om_placeholder_1'
 		app:             'main'
 		stream_id:       'codex:ts_test_followup_reply'
 		receive_id:      'om_source_2'
 		receive_id_type: 'message_id'
 		segment_index:   2
-	}, 'followup in thread', false, '') or {
-		panic(err)
-	}
+	}, 'followup in thread', false, '') or { panic(err) }
 	assert followup_id.starts_with('om_reply_')
 }
 
 fn test_feishu_runtime_normalize_streaming_send_wraps_text_as_interactive_card() {
-	req := WebSocketUpstreamSendRequest{
+	req := ws.UpstreamSendRequest{
 		provider:     'feishu'
 		instance:     'main'
 		target_type:  'chat_id'
@@ -364,7 +666,7 @@ fn test_feishu_runtime_normalize_streaming_send_wraps_text_as_interactive_card()
 		message_type: 'text'
 		text:         'hello stream'
 	}
-	normalized := feishu_runtime_normalize_streaming_send(req)
+	normalized := req.normalize_feishu_streaming()
 	assert normalized.message_type == 'interactive'
 	assert normalized.content.contains('"elements"')
 	assert normalized.content.contains('hello stream')
@@ -373,7 +675,7 @@ fn test_feishu_runtime_normalize_streaming_send_wraps_text_as_interactive_card()
 }
 
 fn test_feishu_runtime_normalize_streaming_send_preserves_existing_interactive_card() {
-	req := WebSocketUpstreamSendRequest{
+	req := ws.UpstreamSendRequest{
 		provider:     'feishu'
 		instance:     'main'
 		target_type:  'chat_id'
@@ -381,20 +683,20 @@ fn test_feishu_runtime_normalize_streaming_send_preserves_existing_interactive_c
 		message_type: 'interactive'
 		content:      '{"elements":[{"tag":"markdown","content":"ready"}]}'
 	}
-	normalized := feishu_runtime_normalize_streaming_send(req)
+	normalized := req.normalize_feishu_streaming()
 	assert normalized.message_type == 'interactive'
 	assert normalized.content == req.content
 }
 
 fn test_feishu_runtime_streaming_preview_markdown_keeps_short_content() {
 	content := 'short preview'
-	preview := feishu_runtime_streaming_preview_markdown(content)
+	preview := feishu.StreamBuffer.streaming_preview_markdown(content)
 	assert preview == content
 }
 
 fn test_feishu_runtime_streaming_preview_markdown_truncates_long_content() {
 	content := 'A'.repeat(feishu_stream_buffer_rollover_runes + 500)
-	preview := feishu_runtime_streaming_preview_markdown(content)
+	preview := feishu.StreamBuffer.streaming_preview_markdown(content)
 	assert preview.contains('预览已截断')
 	assert preview.contains('完整结果会在结束时自动分段发送')
 	assert preview.runes().len <= feishu_stream_buffer_rollover_runes
@@ -403,7 +705,7 @@ fn test_feishu_runtime_streaming_preview_markdown_truncates_long_content() {
 fn test_feishu_runtime_flush_pending_buffers_flushes_same_tick_first_delta() {
 	mut app := new_feishu_http_test_app()
 	now := time.now().unix_milli()
-	app.feishu_buffers['om_buffer_1'] = FeishuStreamBuffer{
+	app.providers.feishu.buffers['om_buffer_1'] = feishu.StreamBuffer{
 		message_id:       'om_buffer_1'
 		app:              'main'
 		content:          'hello first delta'
@@ -416,16 +718,16 @@ fn test_feishu_runtime_flush_pending_buffers_flushes_same_tick_first_delta() {
 		segment_index:    1
 	}
 	app.feishu_runtime_flush_pending_buffers()
-	app.feishu_mu.@lock()
-	buf := app.feishu_buffers['om_buffer_1']
-	app.feishu_mu.unlock()
+	app.providers.feishu.mu.@lock()
+	buf := app.providers.feishu.buffers['om_buffer_1']
+	app.providers.feishu.mu.unlock()
 	assert buf.rendered_content == 'hello first delta'
 	assert buf.last_flush >= now - 500
-	assert app.feishu_http_test_calls >= 2
+	assert app.providers.feishu.http_test_calls >= 2
 }
 
 fn test_feishu_runtime_delay_update_card_body() {
-	body := feishu_runtime_delay_update_card_body('callback-token-1',
+	body := feishu.UpdateMessageRequest.delay_card_body('callback-token-1',
 		'{"config":{"wide_screen_mode":true},"elements":[{"tag":"markdown","content":"approved"}]}') or {
 		panic(err)
 	}
@@ -435,28 +737,28 @@ fn test_feishu_runtime_delay_update_card_body() {
 }
 
 fn test_feishu_runtime_root_base() {
-	assert feishu_runtime_root_base('https://open.feishu.cn/open-apis') == 'https://open.feishu.cn'
-	assert feishu_runtime_root_base('https://open.feishu.cn/open-apis/') == 'https://open.feishu.cn'
-	assert feishu_runtime_root_base('https://open.feishu.cn') == 'https://open.feishu.cn'
+	assert feishu.root_base('https://open.feishu.cn/open-apis') == 'https://open.feishu.cn'
+	assert feishu.root_base('https://open.feishu.cn/open-apis/') == 'https://open.feishu.cn'
+	assert feishu.root_base('https://open.feishu.cn') == 'https://open.feishu.cn'
 }
 
 fn test_feishu_runtime_ws_endpoint_urls() {
-	urls := feishu_runtime_ws_endpoint_urls('https://open.feishu.cn/open-apis')
+	urls := feishu.RuntimeWsEndpointData.endpoint_urls('https://open.feishu.cn/open-apis')
 	assert urls.len == 2
 	assert urls[0] == 'https://open.feishu.cn/open-apis/callback/ws/endpoint'
 	assert urls[1] == 'https://open.feishu.cn/callback/ws/endpoint'
-	root_urls := feishu_runtime_ws_endpoint_urls('https://open.feishu.cn')
+	root_urls := feishu.RuntimeWsEndpointData.endpoint_urls('https://open.feishu.cn')
 	assert root_urls == ['https://open.feishu.cn/callback/ws/endpoint']
 }
 
 fn test_feishu_runtime_ws_endpoint_body() {
-	body := feishu_runtime_ws_endpoint_body('cli_main', 'sec_main')
+	body := feishu.RuntimeWsEndpointData.request_body('cli_main', 'sec_main')
 	assert body.contains('"AppID":"cli_main"')
 	assert body.contains('"AppSecret":"sec_main"')
 }
 
 fn test_feishu_runtime_ws_endpoint_response_decode() {
-	decoded := json.decode(FeishuRuntimeWsEndpointResponse,
+	decoded := json.decode(feishu.RuntimeWsEndpointResponse,
 		'{"code":0,"msg":"","data":{"URL":"wss://msg-frontier.feishu.cn/ws/v2?ticket=test","ClientConfig":{"PingInterval":90,"ReconnectInterval":90,"ReconnectNonce":25,"ReconnectCount":-1}}}') or {
 		panic(err)
 	}
@@ -467,16 +769,20 @@ fn test_feishu_runtime_ws_endpoint_response_decode() {
 
 fn test_feishu_runtime_note_client_config() {
 	mut app := App{
-		feishu_enabled: true
-		feishu_apps: {
-			'main': FeishuAppConfig{
-				app_id:     'cli_main'
-				app_secret: 'sec_main'
+		providers: ProviderRuntimeHub{
+			feishu: feishu.FeishuState{
+				enabled: true
+				apps:    {
+					'main': config.FeishuAppConfig{
+						app_id:     'cli_main'
+						app_secret: 'sec_main'
+					}
+				}
+				runtime: map[string]feishu.ProviderRuntime{}
 			}
 		}
-		feishu_runtime: map[string]FeishuProviderRuntime{}
 	}
-	app.feishu_runtime_note_client_config('main', FeishuRuntimeClientConfig{
+	app.providers.feishu.note_client_config('main', feishu.RuntimeClientConfig{
 		ping_interval:      15
 		reconnect_interval: 90
 	})
@@ -485,60 +791,64 @@ fn test_feishu_runtime_note_client_config() {
 
 fn test_admin_feishu_runtime_chats_snapshot_dedupes_by_instance_and_chat() {
 	mut app := App{
-		feishu_runtime: {
-			'main': FeishuProviderRuntime{
-				name: 'main'
-				recent_events: [
-					FeishuRuntimeEventSnapshot{
-						chat_id:      'oc_chat_a'
-						chat_type:    'p2p'
-						event_type:   'im.message.receive_v1'
-						message_id:   'om_1'
-						message_type: 'text'
-						sender_id:    'ou_1'
-						create_time:  '1710000001'
-						received_at:  1710000001
-					},
-					FeishuRuntimeEventSnapshot{
-						chat_id:      'oc_chat_a'
-						chat_type:    'p2p'
-						event_type:   'im.message.receive_v1'
-						message_id:   'om_2'
-						message_type: 'text'
-						sender_id:    'ou_2'
-						create_time:  '1710000002'
-						received_at:  1710000002
-					},
-					FeishuRuntimeEventSnapshot{
-						chat_id:      'oc_chat_b'
-						chat_type:    'group'
-						event_type:   'im.message.receive_v1'
-						message_id:   'om_3'
-						message_type: 'image'
-						sender_id:    'ou_3'
-						create_time:  '1710000003'
-						received_at:  1710000003
-					},
-				]
-			}
-			'mac': FeishuProviderRuntime{
-				name: 'mac'
-				recent_events: [
-					FeishuRuntimeEventSnapshot{
-						chat_id:      'oc_chat_a'
-						chat_type:    'group'
-						event_type:   'im.message.receive_v1'
-						message_id:   'om_4'
-						message_type: 'post'
-						sender_id:    'ou_4'
-						create_time:  '1710000004'
-						received_at:  1710000004
-					},
-				]
+		providers: ProviderRuntimeHub{
+			feishu: feishu.FeishuState{
+				runtime: {
+					'main': feishu.ProviderRuntime{
+						name:          'main'
+						recent_events: [
+							feishu.RuntimeEventSnapshot{
+								chat_id:      'oc_chat_a'
+								chat_type:    'p2p'
+								event_type:   'im.message.receive_v1'
+								message_id:   'om_1'
+								message_type: 'text'
+								sender_id:    'ou_1'
+								create_time:  '1710000001'
+								received_at:  1710000001
+							},
+							feishu.RuntimeEventSnapshot{
+								chat_id:      'oc_chat_a'
+								chat_type:    'p2p'
+								event_type:   'im.message.receive_v1'
+								message_id:   'om_2'
+								message_type: 'text'
+								sender_id:    'ou_2'
+								create_time:  '1710000002'
+								received_at:  1710000002
+							},
+							feishu.RuntimeEventSnapshot{
+								chat_id:      'oc_chat_b'
+								chat_type:    'group'
+								event_type:   'im.message.receive_v1'
+								message_id:   'om_3'
+								message_type: 'image'
+								sender_id:    'ou_3'
+								create_time:  '1710000003'
+								received_at:  1710000003
+							},
+						]
+					}
+					'mac':  feishu.ProviderRuntime{
+						name:          'mac'
+						recent_events: [
+							feishu.RuntimeEventSnapshot{
+								chat_id:      'oc_chat_a'
+								chat_type:    'group'
+								event_type:   'im.message.receive_v1'
+								message_id:   'om_4'
+								message_type: 'post'
+								sender_id:    'ou_4'
+								create_time:  '1710000004'
+								received_at:  1710000004
+							},
+						]
+					}
+				}
 			}
 		}
 	}
-	snapshot := app.feishu_runtime_chats_snapshot(10, 0, '', '', '')
+	snapshot := app.providers.feishu.chats_snapshot(10, 0, '', '', '')
 	assert snapshot.returned_count == 3
 	assert snapshot.chats[0].instance == 'mac'
 	assert snapshot.chats[0].chat_id == 'oc_chat_a'
@@ -548,32 +858,36 @@ fn test_admin_feishu_runtime_chats_snapshot_dedupes_by_instance_and_chat() {
 	assert snapshot.chats[2].chat_id == 'oc_chat_a'
 	assert snapshot.chats[2].last_message_id == 'om_2'
 	assert snapshot.chats[2].seen_count == 2
-	filtered := app.feishu_runtime_chats_snapshot(10, 0, 'main', 'group', '')
+	filtered := app.providers.feishu.chats_snapshot(10, 0, 'main', 'group', '')
 	assert filtered.returned_count == 1
 	assert filtered.chats[0].chat_id == 'oc_chat_b'
 }
 
 fn test_admin_feishu_runtime_chats_snapshot_json_shape() {
 	mut app := App{
-		feishu_runtime: {
-			'main': FeishuProviderRuntime{
-				name: 'main'
-				recent_events: [
-					FeishuRuntimeEventSnapshot{
-						chat_id:      'oc_chat_a'
-						chat_type:    'p2p'
-						event_type:   'im.message.receive_v1'
-						message_id:   'om_1'
-						message_type: 'text'
-						sender_id:    'ou_1'
-						create_time:  '1710000001'
-						received_at:  1710000001
-					},
-				]
+		providers: ProviderRuntimeHub{
+			feishu: feishu.FeishuState{
+				runtime: {
+					'main': feishu.ProviderRuntime{
+						name:          'main'
+						recent_events: [
+							feishu.RuntimeEventSnapshot{
+								chat_id:      'oc_chat_a'
+								chat_type:    'p2p'
+								event_type:   'im.message.receive_v1'
+								message_id:   'om_1'
+								message_type: 'text'
+								sender_id:    'ou_1'
+								create_time:  '1710000001'
+								received_at:  1710000001
+							},
+						]
+					}
+				}
 			}
 		}
 	}
-	encoded := json.encode(app.feishu_runtime_chats_snapshot(10, 0, '', '', ''))
+	encoded := json.encode(app.providers.feishu.chats_snapshot(10, 0, '', '', ''))
 	assert encoded.contains('"chats"')
 	assert encoded.contains('"instance"')
 	assert encoded.contains('"chat_id"')
@@ -584,23 +898,27 @@ fn test_admin_feishu_runtime_chats_snapshot_json_shape() {
 }
 
 fn test_feishu_runtime_resolve_named_apps() {
-	app := App{
-		feishu_enabled: true
-		feishu_apps: {
-			'main': FeishuAppConfig{
-				app_id:     'cli_main'
-				app_secret: 'sec_main'
-			}
-			'openclaw': FeishuAppConfig{
-				app_id:     'cli_openclaw'
-				app_secret: 'sec_openclaw'
+	mut app := App{
+		providers: ProviderRuntimeHub{
+			feishu: feishu.FeishuState{
+				enabled: true
+				apps:    {
+					'main':     config.FeishuAppConfig{
+						app_id:     'cli_main'
+						app_secret: 'sec_main'
+					}
+					'openclaw': config.FeishuAppConfig{
+						app_id:     'cli_openclaw'
+						app_secret: 'sec_openclaw'
+					}
+				}
 			}
 		}
 	}
-	assert app.feishu_runtime_default_app_name() == 'main'
-	assert app.feishu_runtime_app_names() == ['main', 'openclaw']
-	assert app.feishu_runtime_resolve_app_name('')! == 'main'
-	assert app.feishu_runtime_resolve_app_name('openclaw')! == 'openclaw'
+	assert app.providers.feishu.default_app_name() == 'main'
+	assert app.providers.feishu.app_names() == ['main', 'openclaw']
+	assert app.providers.feishu.resolve_app_name('')! == 'main'
+	assert app.providers.feishu.resolve_app_name('openclaw')! == 'openclaw'
 	assert app.websocket_upstream_provider_enabled(websocket_upstream_provider_feishu, 'main')
 	assert app.websocket_upstream_provider_enabled(websocket_upstream_provider_feishu, 'openclaw')
 	assert !app.websocket_upstream_provider_enabled(websocket_upstream_provider_feishu, 'missing')
@@ -608,24 +926,28 @@ fn test_feishu_runtime_resolve_named_apps() {
 
 fn test_websocket_upstream_activity_snapshot_filters_and_limit() {
 	mut app := App{
-		websocket_upstream_recent_dispatch_limit: 2
-		websocket_upstream_recent_activities: []WebSocketUpstreamActivitySnapshot{}
+		websocket: WebSocketRuntime{
+			state: ws.HubState{
+				recent_dispatch_limit: 2
+				recent_activities:     []ws.UpstreamActivitySnapshot{}
+			}
+		}
 	}
-	app.websocket_upstream_record_activity(WebSocketUpstreamActivitySnapshot{
+	app.websocket_upstream_record_activity(upstream.UpstreamActivitySnapshot{
 		provider:    'feishu'
 		instance:    'main'
 		activity_id: 'a1'
 		received_at: 10
 		recorded_at: 10
 	})
-	app.websocket_upstream_record_activity(WebSocketUpstreamActivitySnapshot{
+	app.websocket_upstream_record_activity(upstream.UpstreamActivitySnapshot{
 		provider:    'feishu'
 		instance:    'openclaw'
 		activity_id: 'a2'
 		received_at: 20
 		recorded_at: 20
 	})
-	app.websocket_upstream_record_activity(WebSocketUpstreamActivitySnapshot{
+	app.websocket_upstream_record_activity(upstream.UpstreamActivitySnapshot{
 		provider:    'feishu'
 		instance:    'main'
 		activity_id: 'a3'
@@ -644,15 +966,19 @@ fn test_websocket_upstream_activity_snapshot_filters_and_limit() {
 
 fn test_execute_websocket_upstream_commands_skips_and_reports_errors() {
 	mut app := App{
-		feishu_apps: {
-			'main': FeishuAppConfig{
-				app_id:     'cli_main'
-				app_secret: 'sec_main'
+		providers: ProviderRuntimeHub{
+			feishu: feishu.FeishuState{
+				apps: {
+					'main': config.FeishuAppConfig{
+						app_id:     'cli_main'
+						app_secret: 'sec_main'
+					}
+				}
 			}
 		}
 	}
 	snapshots, last_error := app.execute_websocket_upstream_commands('dispatch-test', [
-		WorkerWebSocketUpstreamCommand{
+		transport.WorkerWebSocketUpstreamCommand{
 			event:    'noop'
 			provider: 'feishu'
 			instance: 'main'
@@ -660,7 +986,7 @@ fn test_execute_websocket_upstream_commands_skips_and_reports_errors() {
 				'source': 'unit-test'
 			}
 		},
-		WorkerWebSocketUpstreamCommand{
+		transport.WorkerWebSocketUpstreamCommand{
 			event:    'send'
 			provider: 'unknown'
 			instance: 'main'
@@ -682,20 +1008,24 @@ fn test_execute_websocket_upstream_commands_skips_and_reports_errors() {
 
 fn test_execute_websocket_upstream_commands_preserves_content_fields() {
 	mut app := App{
-		fixture_websocket_runtime: map[string]FixtureWebSocketUpstreamRuntime{}
+		websocket: WebSocketRuntime{
+			state: ws.HubState{
+				fixture_runtime: map[string]ws.FixtureRuntime{}
+			}
+		}
 	}
 	snapshots, last_error := app.execute_websocket_upstream_commands('dispatch-content-fields', [
-		WorkerWebSocketUpstreamCommand{
-			event:        'send'
-			provider:     websocket_upstream_provider_fixture
-			instance:     'demo'
-			target_type:  'fixture_target'
-			target:       'room-1'
-			message_type: 'image'
+		transport.WorkerWebSocketUpstreamCommand{
+			event:          'send'
+			provider:       websocket_upstream_provider_fixture
+			instance:       'demo'
+			target_type:    'fixture_target'
+			target:         'room-1'
+			message_type:   'image'
 			content_fields: {
 				'image_key': 'img_v2_123'
 			}
-			metadata: {
+			metadata:       {
 				'source': 'unit-test'
 			}
 		},
@@ -710,10 +1040,14 @@ fn test_execute_websocket_upstream_commands_preserves_content_fields() {
 
 fn test_execute_websocket_upstream_commands_updates_fixture_messages() {
 	mut app := App{
-		fixture_websocket_runtime: map[string]FixtureWebSocketUpstreamRuntime{}
+		websocket: WebSocketRuntime{
+			state: ws.HubState{
+				fixture_runtime: map[string]ws.FixtureRuntime{}
+			}
+		}
 	}
 	snapshots, last_error := app.execute_websocket_upstream_commands('dispatch-update', [
-		WorkerWebSocketUpstreamCommand{
+		transport.WorkerWebSocketUpstreamCommand{
 			event:        'update'
 			provider:     websocket_upstream_provider_fixture
 			instance:     'demo'
@@ -721,7 +1055,7 @@ fn test_execute_websocket_upstream_commands_updates_fixture_messages() {
 			target:       'fixture-msg-1'
 			message_type: 'interactive'
 			content:      '{"type":"template","data":{"template_id":"ctp_demo"}}'
-			metadata: {
+			metadata:     {
 				'source': 'unit-test'
 			}
 		},
@@ -736,10 +1070,14 @@ fn test_execute_websocket_upstream_commands_updates_fixture_messages() {
 
 fn test_admin_websocket_upstream_activities_snapshot_json_shape() {
 	mut app := App{
-		websocket_upstream_recent_dispatch_limit: 10
-		websocket_upstream_recent_activities: []WebSocketUpstreamActivitySnapshot{}
+		websocket: WebSocketRuntime{
+			state: ws.HubState{
+				recent_dispatch_limit: 10
+				recent_activities:     []ws.UpstreamActivitySnapshot{}
+			}
+		}
 	}
-	app.websocket_upstream_record_activity(WebSocketUpstreamActivitySnapshot{
+	app.websocket_upstream_record_activity(upstream.UpstreamActivitySnapshot{
 		provider:       'feishu'
 		instance:       'main'
 		trace_id:       'trace-1'
@@ -752,29 +1090,29 @@ fn test_admin_websocket_upstream_activities_snapshot_json_shape() {
 		received_at:    100
 		worker_handled: true
 		command_error:  ''
-		commands: [
-			WebSocketUpstreamCommandActivity{
-				event:        'send'
-				provider:     'feishu'
-				instance:     'main'
-				target_type:  'chat_id'
-				target:       'oc_1'
-				message_type: 'text'
-				text:         'pong'
-				metadata: {
+		commands:       [
+			executor.WebSocketUpstreamCommandActivity{
+				event:                'send'
+				provider:             'feishu'
+				instance:             'main'
+				target_type:          'chat_id'
+				target:               'oc_1'
+				message_type:         'text'
+				text:                 'pong'
+				metadata:             {
 					'source': 'dispatch-test'
 				}
-				source_activity_id: 'activity-1'
+				source_activity_id:   'activity-1'
 				source_command_index: 0
-				status:       'sent'
-				message_id:   'om_reply'
-				executed_at:  101
+				status:               'sent'
+				message_id:           'om_reply'
+				executed_at:          101
 			},
 		]
-		recorded_at: 102
+		recorded_at:    102
 	})
-	encoded := json.encode(app.admin_websocket_upstream_activities_snapshot(10, 0, 'feishu',
-		'main'))
+	encoded :=
+		json.encode(app.admin_websocket_upstream_activities_snapshot(10, 0, 'feishu', 'main'))
 	assert encoded.contains('"activities"')
 	assert encoded.contains('"provider":"feishu"')
 	assert encoded.contains('"instance":"main"')
@@ -790,12 +1128,16 @@ fn test_admin_websocket_upstream_activities_snapshot_json_shape() {
 
 fn test_fixture_websocket_provider_emit_and_send() {
 	mut app := App{
-		fixture_websocket_runtime: map[string]FixtureWebSocketUpstreamRuntime{}
-		websocket_upstream_recent_dispatch_limit: 10
-		websocket_upstream_recent_activities: []WebSocketUpstreamActivitySnapshot{}
+		websocket: WebSocketRuntime{
+			state: ws.HubState{
+				fixture_runtime:       map[string]ws.FixtureRuntime{}
+				recent_dispatch_limit: 10
+				recent_activities:     []ws.UpstreamActivitySnapshot{}
+			}
+		}
 	}
 	assert app.websocket_upstream_provider_enabled(websocket_upstream_provider_fixture, 'demo')
-	send_result := app.websocket_upstream_send(WebSocketUpstreamSendRequest{
+	send_result := app.websocket_upstream_send(upstream.UpstreamSendRequest{
 		provider:     websocket_upstream_provider_fixture
 		instance:     'demo'
 		target_type:  'fixture_target'
@@ -807,7 +1149,7 @@ fn test_fixture_websocket_provider_emit_and_send() {
 	assert send_result.provider == websocket_upstream_provider_fixture
 	assert send_result.instance == 'demo'
 	assert send_result.message_id.starts_with('fixture-msg-')
-	dispatch := app.fixture_websocket_emit(WebSocketUpstreamFixtureEmitRequest{
+	dispatch := app.fixture_websocket_emit(upstream.UpstreamFixtureEmitRequest{
 		instance:    'demo'
 		trace_id:    'trace-fixture'
 		event_type:  'fixture.message'
@@ -815,7 +1157,7 @@ fn test_fixture_websocket_provider_emit_and_send() {
 		target_type: 'fixture_target'
 		target:      'room-1'
 		payload:     '{"text":"hello"}'
-		metadata: {
+		metadata:    {
 			'source': 'unit-test'
 		}
 	}) or { panic(err) }
@@ -823,15 +1165,15 @@ fn test_fixture_websocket_provider_emit_and_send() {
 	assert dispatch.instance == 'demo'
 	assert dispatch.message_id == 'fixture-1'
 	assert dispatch.target == 'room-1'
-	events := app.admin_websocket_upstream_events_snapshot(10, 0, websocket_upstream_provider_fixture,
-		'demo')
+	events := app.admin_websocket_upstream_events_snapshot(10, 0,
+		websocket_upstream_provider_fixture, 'demo')
 	assert events.returned_count == 1
 	assert events.events[0].provider == websocket_upstream_provider_fixture
 	assert events.events[0].message_id == 'fixture-1'
 	assert events.events[0].target_type == 'fixture_target'
 	assert events.events[0].metadata['source'] == 'unit-test'
-	upstreams := app.admin_websocket_upstreams_snapshot(false, 10, 0, websocket_upstream_provider_fixture,
-		'demo')
+	upstreams := app.admin_websocket_upstreams_snapshot(false, 10, 0,
+		websocket_upstream_provider_fixture, 'demo')
 	assert upstreams.returned_count == 1
 	assert upstreams.sessions[0].provider == websocket_upstream_provider_fixture
 	assert upstreams.sessions[0].instance == 'demo'
@@ -839,49 +1181,53 @@ fn test_fixture_websocket_provider_emit_and_send() {
 
 fn test_admin_websocket_upstream_events_snapshot_projects_feishu_metadata() {
 	mut app := App{
-		feishu_enabled: true
-		feishu_apps: {
-			'main': FeishuAppConfig{
-				app_id:     'cli_main'
-				app_secret: 'sec_main'
-			}
-		}
-		feishu_runtime: {
-			'main': FeishuProviderRuntime{
-				name: 'main'
-				recent_events: [
-					FeishuRuntimeEventSnapshot{
-						seq_id:            'seq-1'
-						trace_id:          'trace-1'
-						action:            'im.message.receive_v1'
-						event_id:          'evt-1'
-						event_kind:        'message'
-						event_type:        'im.message.receive_v1'
-						message_id:        'om_1'
-						message_type:      'text'
-						chat_id:           'oc_1'
-						chat_type:         'group'
-						target_type:       'chat_id'
-						target:            'oc_1'
-						open_message_id:   ''
-						root_id:           'om_root'
-						parent_id:         'om_parent'
-						create_time:       '1710000000'
-						sender_id:         'ou_sender'
-						sender_id_type:    'open_id'
-						sender_tenant_key: 'tenant_a'
-						action_tag:        ''
-						action_value:      ''
-						token:             'token_a'
-						received_at:       100
-						payload:           '{"ok":true}'
-					},
-				]
+		providers: ProviderRuntimeHub{
+			feishu: feishu.FeishuState{
+				enabled: true
+				apps:    {
+					'main': config.FeishuAppConfig{
+						app_id:     'cli_main'
+						app_secret: 'sec_main'
+					}
+				}
+				runtime: {
+					'main': feishu.ProviderRuntime{
+						name:          'main'
+						recent_events: [
+							feishu.RuntimeEventSnapshot{
+								seq_id:            'seq-1'
+								trace_id:          'trace-1'
+								action:            'im.message.receive_v1'
+								event_id:          'evt-1'
+								event_kind:        'message'
+								event_type:        'im.message.receive_v1'
+								message_id:        'om_1'
+								message_type:      'text'
+								chat_id:           'oc_1'
+								chat_type:         'group'
+								target_type:       'chat_id'
+								target:            'oc_1'
+								open_message_id:   ''
+								root_id:           'om_root'
+								parent_id:         'om_parent'
+								create_time:       '1710000000'
+								sender_id:         'ou_sender'
+								sender_id_type:    'open_id'
+								sender_tenant_key: 'tenant_a'
+								action_tag:        ''
+								action_value:      ''
+								token:             'token_a'
+								received_at:       100
+								payload:           '{"ok":true}'
+							},
+						]
+					}
+				}
 			}
 		}
 	}
-	events := app.admin_websocket_upstream_events_snapshot(10, 0, websocket_upstream_provider_feishu,
-		'main')
+	events := app.admin_websocket_upstream_events_snapshot(10, 0,
+		websocket_upstream_provider_feishu, 'main')
 	assert events.returned_count == 1
 	assert events.events[0].provider == websocket_upstream_provider_feishu
 	assert events.events[0].target == 'oc_1'
@@ -900,19 +1246,23 @@ fn test_admin_websocket_upstream_events_snapshot_projects_feishu_metadata() {
 
 fn test_feishu_update_message_rejects_non_interactive_message_id_updates_locally() {
 	mut app := App{
-		feishu_enabled: true
-		feishu_apps: {
-			'main': FeishuAppConfig{
-				app_id: 'cli_main'
-			}
-		}
-		feishu_runtime: {
-			'main': FeishuProviderRuntime{
-				name: 'main'
+		providers: ProviderRuntimeHub{
+			feishu: feishu.FeishuState{
+				enabled: true
+				apps:    {
+					'main': config.FeishuAppConfig{
+						app_id: 'cli_main'
+					}
+				}
+				runtime: {
+					'main': feishu.ProviderRuntime{
+						name: 'main'
+					}
+				}
 			}
 		}
 	}
-	app.feishu_runtime_update_message(FeishuRuntimeUpdateMessageRequest{
+	app.providers.feishu_runtime_update_message(feishu.UpdateMessageRequest{
 		app:             'main'
 		message_id:      'om_123'
 		message_id_type: 'message_id'
@@ -926,10 +1276,10 @@ fn test_feishu_update_message_rejects_non_interactive_message_id_updates_locally
 }
 
 fn test_feishu_runtime_should_dispatch_upstream_ignores_message_read_event() {
-	assert !feishu_runtime_should_dispatch_upstream(FeishuRuntimeEventSummary{
+	assert !feishu.RuntimeEventSnapshot.should_dispatch_upstream(executor.FeishuRuntimeEventSummary{
 		event_type: 'im.message.message_read_v1'
 	})
-	assert feishu_runtime_should_dispatch_upstream(FeishuRuntimeEventSummary{
+	assert feishu.RuntimeEventSnapshot.should_dispatch_upstream(executor.FeishuRuntimeEventSummary{
 		event_type: 'im.message.receive_v1'
 	})
 }

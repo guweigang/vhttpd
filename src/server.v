@@ -1,11 +1,138 @@
 module main
 
+// ═══════════════════════════════════════════════════════════════════════
+// Lock Hierarchy (acquire in this order; NEVER acquire a lower lock while holding a higher one)
+//
+//   L0  app.mu                     — main mutex (providers, stats, event_log, general state)
+//   L1  app.engines.primary.mu              — worker backend pool & queue
+//   L2  app.websocket.state.mu              — WebSocket hub connections
+//   L3  app.websocket.state.upstream_mu     — WebSocket provider/fixture state
+//   L4  app.protocols.mcp.mu                 — MCP session manager
+//   L5  app.providers.feishu.mu              — Feishu runtime state
+//   L6  app.providers.feishu.card_bridge_mu  — Feishu card bridge clients
+//   L7  app.providers.codex.mu               — Codex runtime state
+//
+// Independent (no ordering constraint with above):
+//   app.websocket.state.send_mu             — WebSocket send serialization (short-lived, per-conn)
+//   app.providers.feishu.card_bridge_send_mu — Feishu card bridge send serialization
+//   app.providers.feishu.http_test_mu        — Feishu HTTP test stub (test-only)
+//
+// Rules:
+//   - When acquiring multiple locks, always acquire higher (lower number) first.
+//   - Use defer { mutex.unlock() } to ensure release on all paths.
+//   - Never hold L0 while calling into user-provided callbacks (plugins, executors).
+// ═══════════════════════════════════════════════════════════════════════
+import config
+import executor
 import log
 import os
+import logging
+import server_lifecycle
+import upstream.transport
 
 #include <time.h>
+#include <signal.h>
 
 fn C.tzset()
+fn C.kill(pid int, sig int) int
+
+__global (
+	g_active_runtime_registry ActiveRuntimeRegistry
+)
+
+struct ActiveRuntimeRegistry {
+mut:
+	apps             []&App
+	cfgs             []server_lifecycle.ServerRuntimeConfig
+	is_shutting_down bool
+}
+
+fn (mut r ActiveRuntimeRegistry) register(app &App, cfg server_lifecycle.ServerRuntimeConfig) {
+	r.apps << app
+	r.cfgs << cfg
+}
+
+fn (mut r ActiveRuntimeRegistry) begin_shutdown() bool {
+	if r.is_shutting_down {
+		return false
+	}
+	r.is_shutting_down = true
+	return true
+}
+
+fn (r ActiveRuntimeRegistry) shutting_down() bool {
+	return r.is_shutting_down
+}
+
+fn (r ActiveRuntimeRegistry) config_snapshot() []server_lifecycle.ServerRuntimeConfig {
+	return r.cfgs.clone()
+}
+
+fn (r ActiveRuntimeRegistry) listener_summaries() []executor.AdminListenerRuntimeSummary {
+	mut summaries := []executor.AdminListenerRuntimeSummary{cap: r.apps.len}
+	for i, app in r.apps {
+		cfg := r.cfgs[i] or { continue }
+		summaries << executor.AdminListenerRuntimeSummary{
+			listener_id: cfg.plan_listener_id
+			site_id:     cfg.site_id
+			host:        cfg.host
+			port:        cfg.port
+			pipelines:   app.admin_pipeline_runtime_snapshot()
+		}
+	}
+	return summaries
+}
+
+fn register_active_runtime(app &App, cfg server_lifecycle.ServerRuntimeConfig) {
+	unsafe {
+		g_active_runtime_registry.register(app, cfg)
+	}
+}
+
+fn begin_active_runtime_shutdown() bool {
+	unsafe {
+		return g_active_runtime_registry.begin_shutdown()
+	}
+}
+
+fn active_runtime_is_shutting_down() bool {
+	unsafe {
+		return g_active_runtime_registry.shutting_down()
+	}
+}
+
+fn active_runtime_config_snapshot() []server_lifecycle.ServerRuntimeConfig {
+	unsafe {
+		return g_active_runtime_registry.config_snapshot()
+	}
+}
+
+fn active_runtime_listener_summaries() []executor.AdminListenerRuntimeSummary {
+	unsafe {
+		return g_active_runtime_registry.listener_summaries()
+	}
+}
+
+fn vhttpd_signal_handler(sig os.Signal) {
+	if !begin_active_runtime_shutdown() {
+		return
+	}
+
+	log.info('[vhttpd] Received signal ${sig}. Cleaning up child process groups...')
+	for pid in transport.get_child_pids() {
+		if pid > 0 {
+			log.info('[vhttpd] Terminating child process group: PID ${pid}')
+			C.kill(-pid, 9)
+		}
+	}
+
+	for cfg in active_runtime_config_snapshot() {
+		os.rm(cfg.internal_admin_socket) or {}
+		os.rm(cfg.pid_file) or {}
+	}
+	log.info('[vhttpd] Cleanup complete. Exiting process.')
+	exit(128 + int(sig))
+}
 
 const vhttpd_version = '0.1.0'
 
@@ -15,6 +142,8 @@ const known_long_flags = [
 	'--config',
 	'--host',
 	'--port',
+	'--ssl-cert',
+	'--ssl-key',
 	'--event-log',
 	'--pid-file',
 	'--worker-read-timeout-ms',
@@ -53,6 +182,13 @@ const known_long_flags = [
 	'--ollama-enabled',
 ]
 
+// ── Global Lock Order ──
+// When acquiring multiple locks, always follow this hierarchy to avoid deadlocks:
+//   app.mu > app.providers.feishu.mu > app.websocket.state.mu > app.websocket.state.upstream_mu > app.upstreams.mu > app.protocols.mcp.mu > app.engines.primary.mu
+// Any function that needs more than one lock MUST acquire them in the above order
+// and release them in reverse order. Prefer defer for unlocks.
+// Reviewers: reject PRs that introduce out-of-order locking.
+
 fn has_flag(args []string, flags []string) bool {
 	for a in args {
 		for f in flags {
@@ -77,6 +213,8 @@ fn print_vhttpd_help() {
 	println('  --config <path>              TOML config file')
 	println('  --host <host>                Data plane host')
 	println('  --port <port>                Data plane port')
+	println('  --ssl-cert <path>            Enable HTTPS with this certificate')
+	println('  --ssl-key <path>             Private key for --ssl-cert')
 	println('  --admin-host <host>          Admin plane host')
 	println('  --admin-port <port>          Admin plane port')
 	println('  --admin-token <token>        Admin API token')
@@ -89,7 +227,7 @@ fn print_vhttpd_help() {
 	println('  --worker-queue-capacity <N>  Max waiting requests before immediate 503')
 	println('  --worker-queue-timeout-ms <N> Max wait time for a worker before 504')
 	println('  --worker-socket-prefix <p>   Advanced override for pool socket prefix')
-	println('  --executor <kind>            ${builtin_logic_executor_kinds_label()}')
+	println('  --executor <kind>            ${executor.builtin_executor_spec_kinds_label()}')
 	println('  --php-bin <path>             PHP binary for generated php worker command')
 	println('  --php-worker-entry <path>    PHP worker bootstrap script')
 	println('  --php-app-entry <path>       PHP app/bootstrap entry (injects VHTTPD_APP)')
@@ -135,36 +273,66 @@ fn validate_args(args []string) ! {
 	}
 }
 
-fn run_single_server(args []string, cfg VhttpdConfig) {
-	runtime_cfg := resolve_server_runtime_config(args, cfg) or {
+fn run_single_server(args []string, cfg config.VhttpdConfig) ! {
+	runtime_cfg := server_lifecycle.ServerRuntimeConfig.resolve(args, cfg) or {
 		log.error('server runtime config resolve failed: ${err}')
-		return
+		return err
 	}
-	mut app := build_app_runtime(runtime_cfg.provider_settings, runtime_cfg.executor_plan,
-		cfg, runtime_cfg.app_build_cfg)
+	preflight_server_bind(runtime_cfg) or {
+		log.error('[vhttpd] ${err.msg()}')
+		return err
+	}
+	mut app := build_app_runtime(runtime_cfg.provider_settings, runtime_cfg.executor_plan, cfg,
+		runtime_cfg.plan, runtime_cfg.app_build_cfg)
+	register_active_runtime(app, runtime_cfg)
 	defer {
-		shutdown_app_runtime(mut app, runtime_cfg)
+		if !active_runtime_is_shutting_down() {
+			shutdown_app_runtime(mut app, runtime_cfg)
+		}
 	}
 
 	start_server_runtime(mut app, runtime_cfg)
 	serve_server_runtime(mut app, runtime_cfg)
 }
 
-fn run_server(args []string) {
-	cfg := load_vhttpd_config(args) or {
+fn run_server(args []string) ! {
+	cfg := config.load_vhttpd_config(args) or {
 		log.error('config load failed: ${err}')
-		return
+		return err
 	}
-	configure_runtime_timezone(cfg.runtime.timezone)
+	configure_runtime_timezone(runtime_timezone_from_plan_or_config(args, cfg))
 	log.debug('[vhttpd] run_server: timezone configured')
 	os.signal_ignore(.pipe)
-	if config_uses_multi_listener(cfg) {
+	os.signal_opt(.int, vhttpd_signal_handler) or {
+		log.error('[vhttpd] Failed to register SIGINT handler: ${err}')
+	}
+	os.signal_opt(.term, vhttpd_signal_handler) or {
+		log.error('[vhttpd] Failed to register SIGTERM handler: ${err}')
+	}
+	if should_run_multi_server(args, cfg) {
 		log.debug('[vhttpd] run_server: entering multi_server mode')
-		run_multi_server(args, cfg)
+		run_multi_server(args, cfg)!
 		return
 	}
 	log.debug('[vhttpd] run_server: entering single_server mode')
-	run_single_server(args, cfg)
+	run_single_server(args, cfg)!
+}
+
+fn should_run_multi_server(args []string, cfg config.VhttpdConfig) bool {
+	if cfg.uses_multi_listener() {
+		return true
+	}
+	plan := config.load_runtime_plan_or_compile_config(args, cfg) or { return false }
+	return plan.listeners.len > 1
+}
+
+fn runtime_timezone_from_plan_or_config(args []string, cfg config.VhttpdConfig) string {
+	plan := config.load_runtime_plan_or_compile_config(args, cfg) or { return cfg.runtime.timezone }
+	return if plan.server.timezone.trim_space() != '' {
+		plan.server.timezone
+	} else {
+		cfg.runtime.timezone
+	}
 }
 
 fn configure_runtime_timezone(config_tz string) {
@@ -180,7 +348,7 @@ fn configure_runtime_timezone(config_tz string) {
 	}
 	os.setenv('TZ', tz, true)
 	C.tzset()
-	runtime_configure_logger()
+	logging.RuntimeLogger.configure()
 	log.info('vhttpd timezone: ${tz}')
 }
 
@@ -199,5 +367,5 @@ fn main() {
 		eprintln('run `vhttpd --help` for usage.')
 		exit(2)
 	}
-	run_server(args)
+	run_server(args) or { exit(1) }
 }

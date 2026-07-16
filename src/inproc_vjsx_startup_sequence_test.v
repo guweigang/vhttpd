@@ -1,5 +1,8 @@
 module main
 
+import config
+import upstream.transport
+import feishu
 import json
 import os
 
@@ -54,11 +57,18 @@ export default app;
 		warm_executor.close()
 	}
 	mut warm_app := App{
-		feishu_apps:    map[string]FeishuAppConfig{}
-		feishu_runtime: map[string]FeishuProviderRuntime{}
+		providers: ProviderRuntimeHub{
+			feishu: feishu.FeishuState{
+				apps:    map[string]config.FeishuAppConfig{}
+				runtime: map[string]feishu.ProviderRuntime{}
+			}
+		}
 	}
-	warm_executor.warmup(mut warm_app) or { panic(err) }
-	spec := warm_app.provider_instance_get('demo', 'main') or { panic('missing provider instance spec') }
+	mut warm_facade := warm_app.as_facade()
+	warm_executor.warmup(mut warm_facade) or { panic(err) }
+	spec := warm_app.provider_instance_get('demo', 'main') or {
+		panic('missing provider instance spec')
+	}
 	assert spec.config_json.contains('"value":"startup_value"')
 
 	startup_sequence_with_temp_db('codexbot_ts_startup_sequence.sqlite', fn (_ string) {
@@ -73,23 +83,22 @@ export default app;
 		defer {
 			repo_executor.close()
 		}
-		mut repo_app := App{}
-		resp := repo_executor.dispatch_websocket_upstream(mut repo_app,
-			WorkerWebSocketUpstreamDispatchRequest{
-				mode:        'websocket_upstream'
-				event:       'message'
-				id:          'codexbot_ts_startup_sequence'
-				provider:    'feishu'
-				instance:    'main'
-				trace_id:    'trace_codexbot_ts_startup_sequence'
-				event_type:  'im.message.receive_v1'
-				message_id:  'om_codexbot_ts_startup_sequence'
-				target:      'chat_codexbot_ts_startup_sequence'
-				target_type: 'chat_id'
-				payload:     startup_sequence_feishu_payload('/help', 'chat_codexbot_ts_startup_sequence',
-					'om_codexbot_ts_startup_sequence')
-				received_at: 1710002000
-			}) or { panic(err) }
+		mut repo_app := InProcTestApp{}
+		resp := repo_executor.dispatch_websocket_upstream(mut repo_app, transport.WorkerWebSocketUpstreamDispatchRequest{
+			mode:        'websocket_upstream'
+			event:       'message'
+			id:          'codexbot_ts_startup_sequence'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_startup_sequence'
+			event_type:  'im.message.receive_v1'
+			message_id:  'om_codexbot_ts_startup_sequence'
+			target:      'chat_codexbot_ts_startup_sequence'
+			target_type: 'chat_id'
+			payload:     startup_sequence_feishu_payload('/help',
+				'chat_codexbot_ts_startup_sequence', 'om_codexbot_ts_startup_sequence')
+			received_at: 1710002000
+		}) or { panic(err) }
 		assert resp.handled
 		assert resp.commands.len > 0
 	})

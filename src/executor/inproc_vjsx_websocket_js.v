@@ -1,0 +1,158 @@
+module executor
+
+import json
+import os
+import time
+import upstream.transport
+import vjsx
+
+struct InProcVjsxWebSocketJs {}
+
+fn InProcVjsxWebSocketJs.value_from_json(ctx &vjsx.Context, raw string) vjsx.Value {
+	if raw.trim_space() == '' {
+		return ctx.js_object()
+	}
+	return ctx.json_parse(raw)
+}
+
+fn InProcVjsxWebSocketJs.log_args(args []vjsx.Value) string {
+	mut parts := []string{cap: args.len}
+	for arg in args {
+		parts << arg.to_string()
+	}
+	return parts.join(' ')
+}
+
+fn InProcVjsxWebSocketJs.runtime(ctx &vjsx.Context, runtime_meta InProcVjsxRuntimeMeta, runtime_config_json string, mut app AppFacade) vjsx.Value {
+	mut runtime := ctx.js_object()
+	minimal_runtime := os.getenv('VHTTPD_VJSX_WS_MINIMAL_RUNTIME').trim_space().to_lower() in [
+		'1',
+		'true',
+		'yes',
+		'on',
+	]
+	mut capabilities := ctx.js_object()
+	capabilities.set('http', false)
+	capabilities.set('fetch', false)
+	capabilities.set('bridgeDispatch', false)
+	capabilities.set('websocketUpstream', false)
+	capabilities.set('websocketDispatch', true)
+	capabilities.set('fs', false)
+	capabilities.set('process', false)
+	capabilities.set('network', false)
+	runtime.set('provider', runtime_meta.provider)
+	runtime.set('executor', runtime_meta.executor)
+	runtime.set('dispatchKind', 'websocket')
+	runtime.set('laneId', runtime_meta.lane_id)
+	runtime.set('requestId', runtime_meta.request_id)
+	runtime.set('traceId', runtime_meta.trace_id)
+	runtime.set('appEntry', runtime_meta.app_entry)
+	runtime.set('moduleRoot', runtime_meta.module_root)
+	runtime.set('runtimeProfile', runtime_meta.runtime_profile)
+	runtime.set('threadCount', runtime_meta.thread_count)
+	runtime.set('capabilities', capabilities)
+	mut request := ctx.js_object()
+	request.set('id', runtime_meta.request_id)
+	request.set('traceId', runtime_meta.trace_id)
+	request.set('method', runtime_meta.method)
+	request.set('path', runtime_meta.path)
+	request.set('url', runtime_meta.path)
+	request.set('target', runtime_meta.request_target)
+	request.set('href', runtime_meta.request_target)
+	request.set('origin', '')
+	request.set('scheme', runtime_meta.request_scheme)
+	request.set('host', runtime_meta.request_host)
+	request.set('port', runtime_meta.request_port)
+	request.set('protocolVersion', runtime_meta.request_protocol_version)
+	request.set('remoteAddr', runtime_meta.request_remote_addr)
+	request.set('ip', runtime_meta.request_remote_addr)
+	request.set('server', InProcVjsxWebSocketJs.value_from_json(ctx,
+		json.encode(runtime_meta.request_server)))
+	runtime.set('request', request)
+	runtime.set('method', runtime_meta.method)
+	runtime.set('path', runtime_meta.path)
+	runtime.set('runtimeInitError', '')
+	if minimal_runtime {
+		return runtime
+	}
+	runtime.set('now', ctx.js_function(fn [ctx] (args []vjsx.Value) vjsx.Value {
+		_ = args
+		return ctx.js_i64(time.now().unix_milli())
+	}))
+	runtime.set('log', ctx.js_function(fn [ctx, runtime_meta] (args []vjsx.Value) vjsx.Value {
+		println('[vhttpd] ${runtime_meta.lane_id} ${runtime_meta.request_id} ${runtime_meta.trace_id} ${InProcVjsxWebSocketJs.log_args(args)}')
+		return ctx.js_undefined()
+	}))
+	runtime.set('warn', ctx.js_function(fn [ctx, runtime_meta] (args []vjsx.Value) vjsx.Value {
+		eprintln('[vhttpd] ${runtime_meta.lane_id} ${runtime_meta.request_id} ${runtime_meta.trace_id} ${InProcVjsxWebSocketJs.log_args(args)}')
+		return ctx.js_undefined()
+	}))
+	runtime.set('error', ctx.js_function(fn [ctx, runtime_meta] (args []vjsx.Value) vjsx.Value {
+		eprintln('[vhttpd] ${runtime_meta.lane_id} ${runtime_meta.request_id} ${runtime_meta.trace_id} ${InProcVjsxWebSocketJs.log_args(args)}')
+		return ctx.js_undefined()
+	}))
+	runtime.set('config', ctx.js_function(fn [ctx, runtime_config_json] (args []vjsx.Value) vjsx.Value {
+		path := if args.len > 0 { args[0].to_string().trim_space() } else { '' }
+		fallback := if args.len > 1 { args[1].dup_value() } else { ctx.js_undefined() }
+		raw := InProcVjsxHostApi.config_lookup(runtime_config_json, path)
+		if raw.trim_space() == '' {
+			return fallback
+		}
+		return ctx.js_string(raw)
+	}))
+	runtime.set('getConfig', ctx.js_function(fn [ctx, runtime_config_json] (args []vjsx.Value) vjsx.Value {
+		path := if args.len > 0 { args[0].to_string().trim_space() } else { '' }
+		fallback := if args.len > 1 { args[1].dup_value() } else { ctx.js_undefined() }
+		raw := InProcVjsxHostApi.config_lookup(runtime_config_json, path)
+		if raw.trim_space() == '' {
+			return fallback
+		}
+		return ctx.json_parse(raw)
+	}))
+	runtime.set('plan', ctx.js_function(fn [ctx, mut app] (args []vjsx.Value) vjsx.Value {
+		path := if args.len > 0 { args[0].to_string().trim_space() } else { '' }
+		fallback := if args.len > 1 { args[1].dup_value() } else { ctx.js_undefined() }
+		raw := InProcVjsxHostApi.config_lookup(app.get_runtime_plan_json(), path)
+		if raw.trim_space() == '' {
+			return fallback
+		}
+		return ctx.js_string(raw)
+	}))
+	runtime.set('getPlan', ctx.js_function(fn [ctx, mut app] (args []vjsx.Value) vjsx.Value {
+		path := if args.len > 0 { args[0].to_string().trim_space() } else { '' }
+		fallback := if args.len > 1 { args[1].dup_value() } else { ctx.js_undefined() }
+		raw := InProcVjsxHostApi.config_lookup(app.get_runtime_plan_json(), path)
+		if raw.trim_space() == '' {
+			return fallback
+		}
+		return ctx.json_parse(raw)
+	}))
+	InProcVjsxWebSocketJs.install_session_store(ctx, mut runtime)
+	InProcVjsxWebSocketJs.install_websocket_dispatch(ctx, mut runtime, mut app)
+	return runtime
+}
+
+fn InProcVjsxWebSocketJs.frame(ctx &vjsx.Context, frame transport.WorkerWebSocketFrame, runtime vjsx.Value) vjsx.Value {
+	mut js_frame := ctx.js_object()
+	js_frame.set('mode', if frame.mode != '' { frame.mode } else { 'websocket_dispatch' })
+	js_frame.set('event', if frame.event != '' { frame.event } else { 'message' })
+	js_frame.set('id', frame.id)
+	js_frame.set('path', frame.path)
+	js_frame.set('query', InProcVjsxWebSocketJs.value_from_json(ctx, json.encode(frame.query)))
+	js_frame.set('headers', InProcVjsxWebSocketJs.value_from_json(ctx, json.encode(frame.headers)))
+	js_frame.set('remoteAddr', frame.remote_addr)
+	js_frame.set('requestId', frame.request_id)
+	js_frame.set('traceId', frame.trace_id)
+	js_frame.set('targetId', frame.target_id)
+	js_frame.set('metadata',
+		InProcVjsxWebSocketJs.value_from_json(ctx, json.encode(frame.metadata)))
+	js_frame.set('status', frame.status)
+	js_frame.set('code', frame.code)
+	js_frame.set('reason', frame.reason)
+	js_frame.set('opcode', frame.opcode)
+	js_frame.set('data', frame.data)
+	js_frame.set('error', frame.error)
+	js_frame.set('errorClass', frame.error_class)
+	js_frame.set('runtime', runtime)
+	return js_frame
+}

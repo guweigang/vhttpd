@@ -1,263 +1,212 @@
 module main
 
+import config
+import provider
 import json
-import time
-import x.json2
+import upstream
 
-pub struct ProviderInstanceSpec {
-pub mut:
-	provider      string
-	instance      string
-	config_json   string
-	desired_state string
-	created_at    i64
-	updated_at    i64
+struct ProviderInstanceStaticSpec {
+	spec   provider.ProviderInstanceSpec
+	source string
 }
 
-pub struct AdminProviderInstanceSnapshot {
-pub:
-	provider           string
-	instance           string
-	source             string
-	stored             bool
-	runtime_configured bool     @[json: 'runtime_configured']
-	runtime_connected  bool     @[json: 'runtime_connected']
-	runtime_url        string   @[json: 'runtime_url']
-	config_present     bool     @[json: 'config_present']
-	config_fields      []string @[json: 'config_fields']
-	desired_state      string   @[json: 'desired_state']
-	created_at         i64      @[json: 'created_at']
-	updated_at         i64      @[json: 'updated_at']
+struct ProviderInstanceRuntimeContext {
+	runtime_snapshot_fn fn (string, string) (upstream.UpstreamSnapshot, bool) = unsafe { nil }
+	source_fn           fn (string, string) string                         = unsafe { nil }
+	static_specs_fn     fn () []ProviderInstanceStaticSpec                 = unsafe { nil }
+	static_spec_fn      fn (string, string) ?provider.ProviderInstanceSpec = unsafe { nil }
+	apply_fn            fn (provider.ProviderInstanceSpec) !               = unsafe { nil }
+	provider_enabled_fn fn (string) bool = unsafe { nil }
 }
 
-fn provider_instance_normalize_name(instance string) string {
-	name := instance.trim_space()
-	if name == '' || name == 'default' {
-		return 'main'
-	}
-	return name
+struct ProviderInstanceRuntime {}
+
+fn (ctx ProviderInstanceRuntimeContext) runtime_snapshot(provider_name string, instance string) (upstream.UpstreamSnapshot, bool) {
+	return ctx.runtime_snapshot_fn(provider_name, instance)
 }
 
-fn provider_instance_key(provider string, instance string) string {
-	return '${provider.trim_space()}/${provider_instance_normalize_name(instance)}'
+fn (ctx ProviderInstanceRuntimeContext) source(provider_name string, instance string) string {
+	return ctx.source_fn(provider_name, instance)
 }
 
-fn provider_instance_config_fields(config_json string) []string {
-	raw := config_json.trim_space()
-	if raw == '' {
-		return []string{}
-	}
-	parsed := json2.decode[json2.Any](raw) or { return []string{} }
-	root := parsed.as_map()
-	mut fields := []string{}
-	for key, _ in root {
-		fields << key
-	}
-	fields.sort()
-	return fields
+fn (ctx ProviderInstanceRuntimeContext) static_specs() []ProviderInstanceStaticSpec {
+	return ctx.static_specs_fn()
 }
 
-fn provider_instance_runtime_snapshot(mut app App, provider string, instance string) (WebSocketUpstreamSnapshot, bool) {
-	if snapshot := app.provider_runtime_upstream_snapshot(provider, instance) {
-		return snapshot, true
-	}
-	return WebSocketUpstreamSnapshot{}, false
+fn (ctx ProviderInstanceRuntimeContext) static_spec(provider_name string, instance string) ?provider.ProviderInstanceSpec {
+	return ctx.static_spec_fn(provider_name, instance)
 }
 
-pub fn (mut app App) provider_instance_upsert(spec ProviderInstanceSpec) ProviderInstanceSpec {
-	key := provider_instance_key(spec.provider, spec.instance)
-	now_ms := time.now().unix_milli()
-	existing := app.provider_instance_specs[key] or { ProviderInstanceSpec{} }
-	next := ProviderInstanceSpec{
-		provider:      spec.provider.trim_space()
-		instance:      provider_instance_normalize_name(spec.instance)
-		config_json:   spec.config_json
-		desired_state: if spec.desired_state.trim_space() == '' {
-			'connected'
-		} else {
-			spec.desired_state.trim_space()
+fn (ctx ProviderInstanceRuntimeContext) apply(spec provider.ProviderInstanceSpec) ! {
+	ctx.apply_fn(spec)!
+}
+
+fn (ctx ProviderInstanceRuntimeContext) provider_enabled(provider_name string) bool {
+	return ctx.provider_enabled_fn(provider_name)
+}
+
+fn (mut app App) build_provider_instance_runtime_context() ProviderInstanceRuntimeContext {
+	return ProviderInstanceRuntimeContext{
+		runtime_snapshot_fn: fn [mut app] (provider_name string, instance string) (upstream.UpstreamSnapshot, bool) {
+			return app.provider_instance_runtime_snapshot(provider_name, instance)
 		}
-		created_at:    if existing.created_at > 0 { existing.created_at } else { now_ms }
-		updated_at:    now_ms
-	}
-	app.provider_instance_specs[key] = next
-	return next
-}
-
-pub fn (app &App) provider_instance_get(provider string, instance string) ?ProviderInstanceSpec {
-	key := provider_instance_key(provider, instance)
-	if key !in app.provider_instance_specs {
-		return none
-	}
-	return app.provider_instance_specs[key]
-}
-
-pub fn (app &App) provider_instance_list(provider string) []ProviderInstanceSpec {
-	mut out := []ProviderInstanceSpec{}
-	for _, spec in app.provider_instance_specs {
-		if provider.trim_space() != '' && spec.provider != provider.trim_space() {
-			continue
-		}
-		out << spec
-	}
-	out.sort_with_compare(fn (a &ProviderInstanceSpec, b &ProviderInstanceSpec) int {
-		left := '${a.provider}/${a.instance}'
-		right := '${b.provider}/${b.instance}'
-		if left < right {
-			return -1
-		}
-		if left > right {
-			return 1
-		}
-		return 0
-	})
-	return out
-}
-
-pub fn (mut app App) admin_provider_instance_snapshots(provider_filter string) []AdminProviderInstanceSnapshot {
-	filter := provider_filter.trim_space()
-	mut out := []AdminProviderInstanceSnapshot{}
-	for _, spec in app.provider_instance_specs {
-		if filter != '' && spec.provider != filter {
-			continue
-		}
-		upstream, upstream_ok := provider_instance_runtime_snapshot(mut app, spec.provider,
-			spec.instance)
-		out << AdminProviderInstanceSnapshot{
-			provider:           spec.provider
-			instance:           spec.instance
-			source:             match spec.provider {
-				'feishu' { app.feishu_runtime_app_source(spec.instance) }
+		source_fn:           fn [mut app] (provider_name string, instance string) string {
+			return match provider_name {
+				'feishu' { app.providers.feishu_runtime_app_source(instance) }
 				'codex' { 'dynamic' }
 				else { 'dynamic' }
 			}
-			stored:             true
-			runtime_configured: upstream_ok && upstream.configured
-			runtime_connected:  upstream_ok && upstream.connected
-			runtime_url:        if upstream_ok { upstream.url } else { '' }
-			config_present:     spec.config_json.trim_space() != ''
-			config_fields:      provider_instance_config_fields(spec.config_json)
-			desired_state:      spec.desired_state
-			created_at:         spec.created_at
-			updated_at:         spec.updated_at
 		}
-	}
-	if filter == '' || filter == 'feishu' {
-		for name, cfg in app.feishu_static_apps {
-			if app.provider_instance_get('feishu', name) != none {
-				continue
+		static_specs_fn:     fn [mut app] () []ProviderInstanceStaticSpec {
+			mut specs := []ProviderInstanceStaticSpec{}
+			for name, cfg in app.providers.feishu.static_apps {
+				specs << ProviderInstanceStaticSpec{
+					source: 'static'
+					spec:   provider.ProviderInstanceSpec{
+						provider:      'feishu'
+						instance:      name
+						config_json:   json.encode(cfg)
+						desired_state: 'connected'
+					}
+				}
 			}
-			upstream, upstream_ok := provider_instance_runtime_snapshot(mut app, 'feishu',
-				name)
-			out << AdminProviderInstanceSnapshot{
-				provider:           'feishu'
-				instance:           name
-				source:             'static'
-				stored:             false
-				runtime_configured: upstream_ok && upstream.configured
-				runtime_connected:  upstream_ok && upstream.connected
-				runtime_url:        if upstream_ok { upstream.url } else { '' }
-				config_present:     true
-				config_fields:      provider_instance_config_fields(json.encode(cfg))
-				desired_state:      'connected'
-				created_at:         0
-				updated_at:         0
+			return specs
+		}
+		static_spec_fn:      fn [mut app] (provider_name string, instance string) ?provider.ProviderInstanceSpec {
+			if provider_name == 'feishu' {
+				if cfg := app.providers.feishu.apps[instance] {
+					return provider.ProviderInstanceSpec{
+						provider:      'feishu'
+						instance:      instance
+						config_json:   json.encode(cfg)
+						desired_state: 'connected'
+					}
+				}
+			}
+			return none
+		}
+		apply_fn:            fn [mut app] (spec provider.ProviderInstanceSpec) ! {
+			match spec.provider {
+				'feishu' {
+					if spec.config_json.trim_space() == '' {
+						return
+					}
+					cfg := json.decode(config.FeishuAppConfig, spec.config_json) or {
+						return error('provider_instance_invalid_feishu_config:${err}')
+					}
+					app.providers.feishu.apps[spec.instance] = cfg
+					app.providers.feishu.ensure(spec.instance)
+					_ = app.ensure_websocket_upstream_provider_running('feishu', spec.instance)
+				}
+				'codex' {
+					if spec.config_json.trim_space() == '' {
+						return
+					}
+					cfg := json.decode(config.CodexConfig, spec.config_json) or {
+						return error('provider_instance_invalid_codex_config:${err}')
+					}
+					mut rt := app.codex_runtime_ensure_instance(spec.instance)
+					if cfg.url.trim_space() != '' {
+						rt.url = cfg.url
+					}
+					if cfg.model.trim_space() != '' {
+						rt.model = cfg.model
+					}
+					if cfg.effort.trim_space() != '' {
+						rt.effort = cfg.effort
+					}
+					if cfg.cwd.trim_space() != '' {
+						rt.cwd = cfg.cwd
+					}
+					if cfg.approval_policy.trim_space() != '' {
+						rt.approval_policy = cfg.approval_policy
+					}
+					if cfg.sandbox.trim_space() != '' {
+						rt.sandbox = cfg.sandbox
+					}
+					if cfg.reconnect_delay_ms > 0 {
+						rt.reconnect_delay_ms = cfg.reconnect_delay_ms
+					}
+					if cfg.flush_interval_ms > 0 {
+						rt.flush_interval_ms = cfg.flush_interval_ms
+					}
+					app.providers.codex.update(spec.instance, rt)
+					_ = app.ensure_websocket_upstream_provider_running('codex', spec.instance)
+				}
+				else {}
 			}
 		}
-	}
-	out.sort_with_compare(fn (a &AdminProviderInstanceSnapshot, b &AdminProviderInstanceSnapshot) int {
-		left := '${a.provider}/${a.instance}'
-		right := '${b.provider}/${b.instance}'
-		if left < right {
-			return -1
+		provider_enabled_fn: fn [mut app] (provider_name string) bool {
+			return app.provider_enabled(provider_name)
 		}
-		if left > right {
-			return 1
-		}
-		return 0
-	})
-	return out
-}
-
-pub fn (mut app App) provider_instance_apply(spec ProviderInstanceSpec) ! {
-	match spec.provider {
-		'feishu' {
-			if spec.config_json.trim_space() == '' {
-				return
-			}
-			cfg := json.decode(FeishuAppConfig, spec.config_json) or {
-				return error('provider_instance_invalid_feishu_config:${err}')
-			}
-			app.feishu_apps[spec.instance] = cfg
-			app.feishu_runtime_ensure(spec.instance)
-			_ = app.ensure_websocket_upstream_provider_running('feishu', spec.instance)
-		}
-		'codex' {
-			if spec.config_json.trim_space() == '' {
-				return
-			}
-			cfg := json.decode(CodexConfig, spec.config_json) or {
-				return error('provider_instance_invalid_codex_config:${err}')
-			}
-			mut rt := app.codex_runtime_ensure_instance(spec.instance)
-			if cfg.url.trim_space() != '' {
-				rt.url = cfg.url
-			}
-			if cfg.model.trim_space() != '' {
-				rt.model = cfg.model
-			}
-			if cfg.effort.trim_space() != '' {
-				rt.effort = cfg.effort
-			}
-			if cfg.cwd.trim_space() != '' {
-				rt.cwd = cfg.cwd
-			}
-			if cfg.approval_policy.trim_space() != '' {
-				rt.approval_policy = cfg.approval_policy
-			}
-			if cfg.sandbox.trim_space() != '' {
-				rt.sandbox = cfg.sandbox
-			}
-			if cfg.reconnect_delay_ms > 0 {
-				rt.reconnect_delay_ms = cfg.reconnect_delay_ms
-			}
-			if cfg.flush_interval_ms > 0 {
-				rt.flush_interval_ms = cfg.flush_interval_ms
-			}
-			app.codex_runtime_update(spec.instance, rt)
-			_ = app.ensure_websocket_upstream_provider_running('codex', spec.instance)
-		}
-		else {}
 	}
 }
 
-pub fn (mut app App) provider_instance_ensure(provider string, instance string) !ProviderInstanceSpec {
-	normalized_instance := provider_instance_normalize_name(instance)
-	if spec := app.provider_instance_get(provider, normalized_instance) {
-		if provider in ['codex', 'feishu'] {
-			app.provider_instance_apply(spec) or {}
+fn (mut app App) provider_instance_runtime_snapshot(provider_name string, instance string) (upstream.UpstreamSnapshot, bool) {
+	if snapshot := app.provider_runtime_upstream_snapshot(provider_name, instance) {
+		return snapshot, true
+	}
+	return upstream.UpstreamSnapshot{}, false
+}
+
+fn (mut hub ProviderRuntimeHub) provider_instance_upsert(spec provider.ProviderInstanceSpec) provider.ProviderInstanceSpec {
+	return hub.instances.upsert(spec)
+}
+
+fn (hub ProviderRuntimeHub) provider_instance_get(provider_name string, instance string) ?provider.ProviderInstanceSpec {
+	return hub.instances.get(provider_name, instance)
+}
+
+fn (hub ProviderRuntimeHub) provider_instance_list(provider_name string) []provider.ProviderInstanceSpec {
+	return hub.instances.list(provider_name)
+}
+
+pub fn (mut app App) provider_instance_upsert(spec provider.ProviderInstanceSpec) provider.ProviderInstanceSpec {
+	return app.providers.provider_instance_upsert(spec)
+}
+
+pub fn (app &App) provider_instance_get(provider_name string, instance string) ?provider.ProviderInstanceSpec {
+	return app.providers.provider_instance_get(provider_name, instance)
+}
+
+pub fn (app &App) provider_instance_list(provider_name string) []provider.ProviderInstanceSpec {
+	return app.providers.provider_instance_list(provider_name)
+}
+
+fn ProviderInstanceRuntime.apply(ctx ProviderInstanceRuntimeContext, spec provider.ProviderInstanceSpec) ! {
+	ctx.apply(spec)!
+}
+
+pub fn (mut app App) provider_instance_apply(spec provider.ProviderInstanceSpec) ! {
+	ctx := app.build_provider_instance_runtime_context()
+	ProviderInstanceRuntime.apply(ctx, spec)!
+}
+
+fn ProviderInstanceRuntime.ensure(mut registry provider.ProviderInstanceRegistry, ctx ProviderInstanceRuntimeContext, provider_name string, instance string) !provider.ProviderInstanceSpec {
+	normalized_instance := provider.ProviderInstanceSpec.normalize_instance_name(instance)
+	if spec := registry.get(provider_name, normalized_instance) {
+		if provider_name in ['codex', 'feishu'] {
+			ProviderInstanceRuntime.apply(ctx, spec) or {}
 		}
 		return spec
 	}
-	if provider == 'feishu' {
-		if cfg := app.feishu_apps[normalized_instance] {
-			spec := app.provider_instance_upsert(ProviderInstanceSpec{
-				provider:      'feishu'
-				instance:      normalized_instance
-				config_json:   json.encode(cfg)
-				desired_state: 'connected'
-			})
-			app.provider_instance_apply(spec) or {}
-			return spec
-		}
+	if static_spec := ctx.static_spec(provider_name, normalized_instance) {
+		spec := registry.upsert(static_spec)
+		ProviderInstanceRuntime.apply(ctx, spec) or {}
+		return spec
 	}
-	if provider == 'codex' && normalized_instance == 'main' && app.provider_enabled('codex') {
-		return app.provider_instance_upsert(ProviderInstanceSpec{
+	if provider_name == 'codex' && normalized_instance == 'main' && ctx.provider_enabled('codex') {
+		return registry.upsert(provider.ProviderInstanceSpec{
 			provider:      'codex'
 			instance:      'main'
 			config_json:   ''
 			desired_state: 'connected'
 		})
 	}
-	return error('provider_instance_not_found:${provider}/${normalized_instance}')
+	return error('provider_instance_not_found:${provider_name}/${normalized_instance}')
+}
+
+pub fn (mut app App) provider_instance_ensure(provider_name string, instance string) !provider.ProviderInstanceSpec {
+	ctx := app.build_provider_instance_runtime_context()
+	return ProviderInstanceRuntime.ensure(mut app.providers.instances, ctx, provider_name, instance)
 }

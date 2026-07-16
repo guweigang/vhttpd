@@ -1,0 +1,912 @@
+module config
+
+import os
+import toml
+
+fn test_compile_v2_runtime_plan_resolves_references_and_options() {
+	cfg := V2Config{
+		listeners: {
+			'web': V2ListenerSpec{
+				protocol:  'http'
+				transport: 'tcp'
+				host:      '127.0.0.1'
+				port:      8080
+			}
+		}
+		resources: V2ResourceSpecs{
+			db: {
+				'app': V2DbResourceSpec{
+					kind:      'mysql'
+					database:  'app'
+					pool_size: 4
+				}
+			}
+		}
+		engines:   {
+			'php': V2EngineSpec{
+				kind:      'php-worker'
+				entry:     'vendor/bin/vphp-worker'
+				resources: ['resource:db/app']
+			}
+		}
+		adapters:  {
+			'app': V2AdapterSpec{
+				kind:   'http-handler'
+				engine: 'engine:php'
+			}
+		}
+		policies:  V2PolicySpecs{
+			limits: {
+				'body': V2LimitPolicySpec{
+					max_body_bytes: 1024
+				}
+			}
+		}
+		pipelines: [
+			V2PipelineSpec{
+				id:       'app'
+				ingress:  'listener:web'
+				match:    V2MatchSpec{
+					paths: ['*']
+				}
+				policies: ['policy:limits/body']
+				egress:   'adapter:app'
+			},
+		]
+	}
+	plan := compile_v2_runtime_plan(cfg, '/tmp/vhttpd.toml', false) or { panic(err) }
+	assert !plan.source.compatibility
+	assert plan.listeners['web'].port == 8080
+	assert plan.resources['db/app'].options.strings['database'] == 'app'
+	assert plan.resources['db/app'].options.ints['pool_size'] == 4
+	assert plan.engines['php'].resources[0].str() == 'resource:db/app'
+	assert plan.adapters['app'].engine?.str() == 'engine:php'
+	assert plan.pipelines[0].policies[0].str() == 'policy:limits/body'
+}
+
+fn test_compile_v2_runtime_plan_resolves_transform_typed_options() {
+	cfg := V2Config{
+		listeners:  {
+			'web': V2ListenerSpec{}
+		}
+		adapters:   {
+			'ok': V2AdapterSpec{
+				kind:    'fixed-response'
+				options: {
+					'status': '200'
+					'body':   'ok'
+				}
+			}
+		}
+		transforms: {
+			'rewrite': V2TransformSpec{
+				kind:           'vjsx'
+				engine:         'engine:vjsx'
+				handler:        'rewrite.handle'
+				bool_options:   {
+					'stateful': true
+				}
+				int_options:    {
+					'limit': 10
+				}
+				list_options:   {
+					'stages': ['a', 'b']
+				}
+				map_options:    {
+					'labels': {
+						'app': 'demo'
+					}
+				}
+				record_options: {
+					'rules': [
+						{
+							'from': '/old'
+							'to':   '/new'
+						},
+					]
+				}
+			}
+		}
+		engines:    {
+			'vjsx': V2EngineSpec{
+				kind:  'vjsx'
+				entry: '/tmp/rewrite.mts'
+			}
+		}
+		pipelines:  [
+			V2PipelineSpec{
+				id:         'app'
+				ingress:    'listener:web'
+				transforms: ['transform:rewrite']
+				egress:     'adapter:ok'
+			},
+		]
+	}
+	plan := compile_v2_runtime_plan(cfg, '', false) or { panic(err) }
+
+	assert plan.transforms['rewrite'].options.bools['stateful']
+	assert plan.transforms['rewrite'].options.ints['limit'] == 10
+	assert plan.transforms['rewrite'].options.string_lists['stages'] == ['a', 'b']
+	assert plan.transforms['rewrite'].options.string_maps['labels']['app'] == 'demo'
+	assert plan.transforms['rewrite'].options.record_lists['rules'][0]['from'] == '/old'
+}
+
+fn test_compile_v2_runtime_plan_preserves_websocket_concurrency_policy() {
+	cfg := V2Config{
+		listeners: {
+			'web': V2ListenerSpec{}
+		}
+		engines:   {
+			'app': V2EngineSpec{
+				kind:               'vjsx'
+				entry:              '/tmp/app.mts'
+				websocket_dispatch: true
+			}
+		}
+		adapters:  {
+			'app': V2AdapterSpec{
+				kind:   'http-handler'
+				engine: 'engine:app'
+			}
+		}
+		policies:  V2PolicySpecs{
+			concurrency: {
+				'ws': V2ConcurrencyPolicySpec{
+					queue_timeout_ms:  30000
+					max_queue_per_key: 1024
+					affinity_enabled:  true
+					affinity_source:   'query'
+					affinity_key:      'serverId'
+					affinity_scope:    'lane'
+					affinity_fallback: 'reject'
+					actor_enabled:     true
+					actor_fallback:    'unkeyed'
+					events:            ['open', 'message', 'close']
+					record_options:    {
+						'sources': [
+							{
+								'type': 'connection_cache'
+							},
+							{
+								'type':  'query'
+								'key':   'connectionId'
+								'class': 'conn'
+							},
+							{
+								'type': 'app'
+							},
+						]
+					}
+				}
+			}
+		}
+		pipelines: [
+			V2PipelineSpec{
+				id:       'ws'
+				ingress:  'listener:web'
+				policies: ['policy:concurrency/ws']
+				egress:   'adapter:app'
+			},
+		]
+	}
+	plan := compile_v2_runtime_plan(cfg, '', false) or { panic(err) }
+	policy := plan.policies['concurrency/ws']
+
+	assert plan.engines['app'].options.bools['websocket_dispatch']
+	assert plan.pipelines[0].policies[0].str() == 'policy:concurrency/ws'
+	assert policy.options.bools['affinity_enabled']
+	assert policy.options.bools['actor_enabled']
+	assert policy.options.strings['affinity_source'] == 'query'
+	assert policy.options.strings['affinity_key'] == 'serverId'
+	assert policy.options.strings['affinity_fallback'] == 'reject'
+	assert policy.options.strings['actor_fallback'] == 'unkeyed'
+	assert policy.options.ints['queue_timeout_ms'] == 30000
+	assert policy.options.ints['max_queue_per_key'] == 1024
+	assert policy.options.string_lists['events'] == ['open', 'message', 'close']
+	assert policy.options.record_lists['sources'][1]['key'] == 'connectionId'
+	assert policy.options.record_lists['sources'][1]['class'] == 'conn'
+}
+
+fn test_compile_v2_runtime_plan_rejects_unresolved_reference() {
+	cfg := V2Config{
+		listeners: {
+			'web': V2ListenerSpec{}
+		}
+		pipelines: [
+			V2PipelineSpec{
+				id:      'broken'
+				ingress: 'listener:web'
+				egress:  'adapter:missing'
+			},
+		]
+	}
+	if _ := compile_v2_runtime_plan(cfg, '', false) {
+		assert false
+	} else {
+		assert err.msg() == 'runtime_plan_unresolved_ref:adapter:missing'
+	}
+}
+
+fn test_compile_v2_runtime_plan_accepts_provider_ingress_pipeline() {
+	cfg := V2Config{
+		listeners:  {
+			'admin': V2ListenerSpec{}
+		}
+		control:    V2ControlSpec{
+			listener: 'listener:admin'
+		}
+		providers:  {
+			'feishu': V2ProviderSpec{
+				runtime: V2ProviderRuntimeSpec{
+					driver: 'native'
+				}
+			}
+		}
+		engines:    {
+			'events': V2EngineSpec{
+				kind:  'vjsx'
+				entry: '/tmp/provider-events.mts'
+			}
+		}
+		transforms: {
+			'feishu-event': V2TransformSpec{
+				kind:    'vjsx'
+				engine:  'engine:events'
+				handler: 'feishu.event'
+			}
+		}
+		adapters:   {
+			'feishu-events': V2AdapterSpec{
+				kind:  'event'
+				topic: 'provider.feishu'
+			}
+		}
+		pipelines:  [
+			V2PipelineSpec{
+				id:         'provider.feishu.events'
+				ingress:    'provider:feishu'
+				match:      V2MatchSpec{
+					metadata: {
+						'event': 'im.message.receive_v1'
+					}
+				}
+				transforms: ['transform:feishu-event']
+				egress:     'adapter:feishu-events'
+			},
+		]
+	}
+	plan := compile_v2_runtime_plan(cfg, '', false) or { panic(err) }
+
+	assert plan.pipelines[0].ingress.str() == 'provider:feishu'
+	assert plan.providers['feishu'].driver == 'native'
+}
+
+fn test_compile_v2_runtime_plan_rejects_wrong_reference_domain() {
+	cfg := V2Config{
+		engines: {
+			'php': V2EngineSpec{
+				resources: ['adapter:not-a-resource']
+			}
+		}
+	}
+	if _ := compile_v2_runtime_plan(cfg, '', false) {
+		assert false
+	} else {
+		assert err.msg() == 'runtime_plan_ref_domain:adapter:not-a-resource:expected_resource'
+	}
+}
+
+fn test_compile_v2_runtime_plan_rejects_listener_without_pipeline() {
+	cfg := V2Config{
+		listeners: {
+			'web': V2ListenerSpec{}
+		}
+	}
+	if _ := compile_v2_runtime_plan(cfg, '', false) {
+		assert false
+	} else {
+		assert err.msg() == 'runtime_plan_listener_without_pipeline:web'
+	}
+}
+
+fn test_compile_v2_runtime_plan_allows_control_listener_without_pipeline() {
+	cfg := V2Config{
+		listeners: {
+			'control': V2ListenerSpec{}
+		}
+		control:   V2ControlSpec{
+			listener: 'listener:control'
+		}
+	}
+	plan := compile_v2_runtime_plan(cfg, '', false) or { panic(err) }
+	assert plan.control.listener?.str() == 'listener:control'
+}
+
+fn test_compile_v2_runtime_plan_allows_relay_listener_without_pipeline() {
+	cfg := V2Config{
+		listeners: {
+			'relay': V2ListenerSpec{}
+		}
+		relays:    {
+			'edge': V2RelaySpec{
+				listener: 'listener:relay'
+				carrier:  'websocket'
+			}
+		}
+	}
+	plan := compile_v2_runtime_plan(cfg, '', false) or { panic(err) }
+	assert plan.relays['edge'].ingress?.str() == 'listener:relay'
+}
+
+fn test_compile_v2_runtime_plan_preserves_relay_hub_path() {
+	cfg := V2Config{
+		listeners: {
+			'relay': V2ListenerSpec{
+				protocol: 'websocket'
+			}
+		}
+		relays:    {
+			'edge': V2RelaySpec{
+				mode:      'hub'
+				listener:  'listener:relay'
+				carrier:   'websocket'
+				path:      '/vhttpd/relay'
+				node_id:   'hub_1'
+				autostart: true
+			}
+		}
+	}
+
+	plan := compile_v2_runtime_plan(cfg, '', false) or { panic(err) }
+
+	assert plan.relays['edge'].ingress?.str() == 'listener:relay'
+	assert plan.relays['edge'].options.strings['path'] == '/vhttpd/relay'
+	assert plan.relays['edge'].options.strings['node_id'] == 'hub_1'
+	assert plan.relays['edge'].options.bools['autostart']
+}
+
+fn test_compile_v2_runtime_plan_loads_relay_hub_example() {
+	config_path := os.join_path(os.dir(@FILE), '..', '..', 'examples', 'config',
+		'relay-hub-v2.toml')
+	text := os.read_file(config_path) or { panic(err) }
+	cfg := toml.decode[V2Config](text) or { panic(err) }
+
+	plan := compile_v2_runtime_plan(cfg, '', false) or { panic(err) }
+
+	assert plan.listeners['relay'].protocol == 'websocket'
+	assert plan.relays['edge'].ingress?.str() == 'listener:relay'
+	assert plan.relays['edge'].options.strings['path'] == '/vhttpd/relay'
+	assert plan.relays['edge'].options.strings['node_id'] == 'hub-local'
+}
+
+fn test_compile_v2_runtime_plan_loads_relay_agent_example() {
+	config_path := os.join_path(os.dir(@FILE), '..', '..', 'examples', 'config',
+		'relay-agent-v2.toml')
+	text := os.read_file(config_path) or { panic(err) }
+	cfg := toml.decode[V2Config](text) or { panic(err) }
+
+	plan := compile_v2_runtime_plan(cfg, '', false) or { panic(err) }
+
+	assert plan.relays['edge'].mode == 'agent'
+	assert plan.relays['edge'].options.strings['url'] == 'ws://127.0.0.1:19921/vhttpd/relay'
+	assert plan.relays['edge'].options.bools['autostart'] == false
+	assert plan.pipeline('relay/local-response')?.ingress.str() == 'relay:edge'
+	assert plan.pipeline('relay/local-response')?.egress.str() == 'adapter:local-response'
+}
+
+fn test_compile_v2_runtime_plan_loads_relay_agent_local_example() {
+	config_path := os.join_path(os.dir(@FILE), '..', '..', 'examples', 'config',
+		'relay-agent-local-v2.toml')
+	text := os.read_file(config_path) or { panic(err) }
+	cfg := toml.decode[V2Config](text) or { panic(err) }
+
+	plan := compile_v2_runtime_plan(cfg, '', false) or { panic(err) }
+
+	assert plan.relays['edge'].mode == 'agent'
+	assert plan.relays['edge'].options.strings['url'] == 'ws://127.0.0.1:19921/vhttpd/relay'
+	assert plan.relays['edge'].options.bools['autostart']
+	assert plan.pipeline('relay/local-response')?.ingress.str() == 'relay:edge'
+	assert plan.pipeline('relay/local-response')?.egress.str() == 'adapter:local-response'
+}
+
+fn test_compile_v2_runtime_plan_loads_relay_public_example() {
+	config_path := os.join_path(os.dir(@FILE), '..', '..', 'examples', 'config',
+		'relay-public-v2.toml')
+	text := os.read_file(config_path) or { panic(err) }
+	cfg := toml.decode[V2Config](text) or { panic(err) }
+
+	plan := compile_v2_runtime_plan(cfg, '', false) or { panic(err) }
+
+	assert plan.listeners['web'].protocol == 'http'
+	assert plan.listeners['relay'].protocol == 'websocket'
+	assert plan.relays['edge'].ingress?.str() == 'listener:relay'
+	assert plan.adapters['relay-edge'].kind == 'relay-delivery'
+	assert plan.adapters['relay-edge'].options.strings['target'] == 'relay:edge'
+	assert plan.adapters['relay-edge'].options.strings['completion_mode'] == 'wait'
+	assert plan.adapters['relay-edge'].options.ints['completion_timeout_ms'] == 30000
+	assert plan.adapters['relay-edge'].options.strings['frame_kind'] == 'open'
+	assert plan.adapters['relay-edge'].options.strings['route'] == 'relay/local-response'
+	assert plan.pipeline('public/relay')?.ingress.str() == 'listener:web'
+	assert plan.pipeline('public/relay')?.egress.str() == 'adapter:relay-edge'
+	assert plan.relay_ids_for_listener('relay') == ['edge']
+	assert plan.relay_delivery_owner_listener_ids('relay') == ['web']
+}
+
+fn test_compile_v2_runtime_plan_loads_mcp_relay_public_example() {
+	config_path := os.join_path(os.dir(@FILE), '..', '..', 'examples', 'config',
+		'mcp-relay-public-v2.toml')
+	text := os.read_file(config_path) or { panic(err) }
+	cfg := toml.decode[V2Config](text) or { panic(err) }
+
+	plan := compile_v2_runtime_plan(cfg, '', false) or { panic(err) }
+
+	assert plan.listeners['web'].protocol == 'http'
+	assert plan.listeners['relay'].protocol == 'websocket'
+	assert plan.relays['edge'].mode == 'hub'
+	assert plan.relays['edge'].ingress?.str() == 'listener:relay'
+	assert plan.adapters['mcp-relay'].kind == 'relay-delivery'
+	assert plan.adapters['mcp-relay'].options.strings['target'] == 'relay:edge'
+	assert plan.adapters['mcp-relay'].options.strings['route'] == 'relay/local-mcp'
+	assert plan.pipeline('public/mcp-relay')?.ingress.str() == 'listener:web'
+	assert plan.pipeline('public/mcp-relay')?.egress.str() == 'adapter:mcp-relay'
+	assert plan.relay_delivery_owner_listener_ids('relay') == ['web']
+}
+
+fn test_compile_v2_runtime_plan_loads_mcp_relay_local_example() {
+	config_path := os.join_path(os.dir(@FILE), '..', '..', 'examples', 'config',
+		'mcp-relay-local-v2.toml')
+	text := os.read_file(config_path) or { panic(err) }
+	cfg := toml.decode[V2Config](text) or { panic(err) }
+
+	plan := compile_v2_runtime_plan(cfg, '', false) or { panic(err) }
+
+	assert plan.engines['php'].kind == 'php-worker'
+	assert plan.relays['edge'].mode == 'agent'
+	assert plan.relays['edge'].options.strings['url'] == 'ws://127.0.0.1:19931/vhttpd/relay'
+	assert plan.adapters['mcp'].kind == 'mcp'
+	assert plan.adapters['mcp'].engine?.str() == 'engine:php'
+	assert plan.pipeline('relay/local-mcp')?.ingress.str() == 'relay:edge'
+	assert plan.pipeline('relay/local-mcp')?.egress.str() == 'adapter:mcp'
+}
+
+fn test_compile_v2_runtime_plan_loads_mcp_relay_local_upstream_example() {
+	config_path := os.join_path(os.dir(@FILE), '..', '..', 'examples', 'config',
+		'mcp-relay-local-upstream-v2.toml')
+	text := os.read_file(config_path) or { panic(err) }
+	cfg := toml.decode[V2Config](text) or { panic(err) }
+
+	plan := compile_v2_runtime_plan(cfg, '', false) or { panic(err) }
+
+	assert plan.relays['edge'].mode == 'agent'
+	assert plan.adapters['local-mcp'].kind == 'mcp-upstream'
+	assert plan.adapters['local-mcp'].options.strings['url'] == 'http://127.0.0.1:3001/mcp'
+	assert plan.pipeline('relay/local-mcp')?.ingress.str() == 'relay:edge'
+	assert plan.pipeline('relay/local-mcp')?.egress.str() == 'adapter:local-mcp'
+}
+
+fn test_compile_v2_runtime_plan_allows_relay_delivery_adapter() {
+	cfg := V2Config{
+		listeners: {
+			'web': V2ListenerSpec{}
+		}
+		adapters:  {
+			'relay': V2AdapterSpec{
+				kind:        'relay-delivery'
+				options:     {
+					'target':          'relay:edge'
+					'completion_mode': 'accepted'
+					'frame_kind':      'open'
+					'route':           'relay/local-response'
+				}
+				int_options: {
+					'completion_timeout_ms': 1000
+				}
+			}
+		}
+		pipelines: [
+			V2PipelineSpec{
+				id:      'public/relay'
+				ingress: 'listener:web'
+				match:   V2MatchSpec{
+					paths: ['/relay']
+				}
+				egress:  'adapter:relay'
+			},
+		]
+		relays:    {
+			'edge': V2RelaySpec{
+				mode:    'hub'
+				carrier: 'websocket'
+			}
+		}
+	}
+
+	plan := compile_v2_runtime_plan(cfg, '', false) or { panic(err) }
+
+	assert plan.adapters['relay'].kind == 'relay-delivery'
+	assert plan.adapters['relay'].options.strings['target'] == 'relay:edge'
+	assert plan.adapters['relay'].options.strings['completion_mode'] == 'accepted'
+	assert plan.adapters['relay'].options.strings['frame_kind'] == 'open'
+	assert plan.adapters['relay'].options.strings['route'] == 'relay/local-response'
+	assert plan.adapters['relay'].options.ints['completion_timeout_ms'] == 1000
+	assert plan.pipeline('public/relay')?.egress.str() == 'adapter:relay'
+}
+
+fn test_compile_v2_runtime_plan_rejects_relay_delivery_adapter_without_target() {
+	cfg := V2Config{
+		listeners: {
+			'web': V2ListenerSpec{}
+		}
+		adapters:  {
+			'relay': V2AdapterSpec{
+				kind: 'relay-delivery'
+			}
+		}
+		pipelines: [
+			V2PipelineSpec{
+				id:      'public/relay'
+				ingress: 'listener:web'
+				egress:  'adapter:relay'
+			},
+		]
+	}
+
+	if _ := compile_v2_runtime_plan(cfg, '', false) {
+		assert false
+	} else {
+		assert err.msg() == 'runtime_plan_adapter_missing_target:relay'
+	}
+}
+
+fn test_compile_v2_runtime_plan_rejects_mcp_upstream_adapter_without_url() {
+	cfg := V2Config{
+		adapters: {
+			'local-mcp': V2AdapterSpec{
+				kind: 'mcp-upstream'
+			}
+		}
+		pipelines: [
+			V2PipelineSpec{
+				id:      'relay/local-mcp'
+				ingress: 'relay:edge'
+				egress:  'adapter:local-mcp'
+			},
+		]
+		relays:   {
+			'edge': V2RelaySpec{
+				mode:    'agent'
+				carrier: 'websocket'
+			}
+		}
+	}
+
+	if _ := compile_v2_runtime_plan(cfg, '', false) {
+		assert false
+	} else {
+		assert err.msg() == 'runtime_plan_adapter_missing_url:local-mcp'
+	}
+}
+
+fn test_compile_v2_runtime_plan_rejects_http_handler_without_engine() {
+	cfg := V2Config{
+		listeners: {
+			'web': V2ListenerSpec{}
+		}
+		adapters:  {
+			'app': V2AdapterSpec{
+				kind: 'http-handler'
+			}
+		}
+		pipelines: [
+			V2PipelineSpec{
+				id:      'site'
+				ingress: 'listener:web'
+				egress:  'adapter:app'
+			},
+		]
+	}
+	if _ := compile_v2_runtime_plan(cfg, '', false) {
+		assert false
+	} else {
+		assert err.msg() == 'runtime_plan_adapter_missing_engine:app'
+	}
+}
+
+fn test_compile_v2_runtime_plan_rejects_static_adapter_without_root_or_storage() {
+	cfg := V2Config{
+		listeners: {
+			'web': V2ListenerSpec{}
+		}
+		adapters:  {
+			'assets': V2AdapterSpec{
+				kind: 'static'
+			}
+		}
+		pipelines: [
+			V2PipelineSpec{
+				id:      'assets'
+				ingress: 'listener:web'
+				egress:  'adapter:assets'
+			},
+		]
+	}
+	if _ := compile_v2_runtime_plan(cfg, '', false) {
+		assert false
+	} else {
+		assert err.msg() == 'runtime_plan_adapter_missing_storage:assets'
+	}
+}
+
+fn test_compile_v2_runtime_plan_allows_static_adapter_with_storage_ref() {
+	cfg := V2Config{
+		listeners: {
+			'web': V2ListenerSpec{}
+		}
+		resources: V2ResourceSpecs{
+			storage: {
+				'public': V2StorageResourceSpec{
+					kind: 'filesystem'
+					root: '/srv/public'
+				}
+			}
+		}
+		adapters:  {
+			'assets': V2AdapterSpec{
+				kind:    'static'
+				storage: 'resource:storage/public'
+			}
+		}
+		pipelines: [
+			V2PipelineSpec{
+				id:      'assets'
+				ingress: 'listener:web'
+				egress:  'adapter:assets'
+			},
+		]
+	}
+	plan := compile_v2_runtime_plan(cfg, '', false) or { panic(err) }
+	assert plan.adapters['assets'].storage?.str() == 'resource:storage/public'
+}
+
+fn test_compile_v2_runtime_plan_allows_compatibility_static_adapter_without_root() {
+	cfg := V2Config{
+		listeners: {
+			'web': V2ListenerSpec{}
+		}
+		adapters:  {
+			'assets': V2AdapterSpec{
+				kind: 'static'
+			}
+		}
+		pipelines: [
+			V2PipelineSpec{
+				id:      'assets'
+				ingress: 'listener:web'
+				egress:  'adapter:assets'
+			},
+		]
+	}
+	plan := compile_v2_runtime_plan(cfg, '', true) or { panic(err) }
+	assert plan.source.compatibility
+	assert plan.adapters['assets'].kind == 'static'
+}
+
+fn test_compile_v2_runtime_plan_rejects_empty_fixed_response_adapter() {
+	cfg := V2Config{
+		listeners: {
+			'web': V2ListenerSpec{}
+		}
+		adapters:  {
+			'empty': V2AdapterSpec{
+				kind: 'fixed-response'
+			}
+		}
+		pipelines: [
+			V2PipelineSpec{
+				id:      'empty'
+				ingress: 'listener:web'
+				egress:  'adapter:empty'
+			},
+		]
+	}
+	if _ := compile_v2_runtime_plan(cfg, '', false) {
+		assert false
+	} else {
+		assert err.msg() == 'runtime_plan_adapter_empty_fixed_response:empty'
+	}
+}
+
+fn test_compile_v2_runtime_plan_rejects_unknown_engine_kind() {
+	cfg := V2Config{
+		listeners: {
+			'web': V2ListenerSpec{}
+		}
+		engines:   {
+			'app': V2EngineSpec{
+				kind:  'python'
+				entry: 'app.py'
+			}
+		}
+		adapters:  {
+			'app': V2AdapterSpec{
+				kind:   'http-handler'
+				engine: 'engine:app'
+			}
+		}
+		pipelines: [
+			V2PipelineSpec{
+				id:      'app'
+				ingress: 'listener:web'
+				egress:  'adapter:app'
+			},
+		]
+	}
+	if _ := compile_v2_runtime_plan(cfg, '', false) {
+		assert false
+	} else {
+		assert err.msg() == 'runtime_plan_engine_unknown_kind:app:python'
+	}
+}
+
+fn test_compile_v2_runtime_plan_rejects_engine_missing_entry() {
+	cfg := V2Config{
+		listeners: {
+			'web': V2ListenerSpec{}
+		}
+		engines:   {
+			'app': V2EngineSpec{
+				kind: 'php-worker'
+			}
+		}
+		adapters:  {
+			'app': V2AdapterSpec{
+				kind:   'http-handler'
+				engine: 'engine:app'
+			}
+		}
+		pipelines: [
+			V2PipelineSpec{
+				id:      'app'
+				ingress: 'listener:web'
+				egress:  'adapter:app'
+			},
+		]
+	}
+	if _ := compile_v2_runtime_plan(cfg, '', false) {
+		assert false
+	} else {
+		assert err.msg() == 'runtime_plan_engine_missing_entry:app'
+	}
+}
+
+fn test_compile_v2_runtime_plan_allows_compatibility_engine_missing_entry() {
+	cfg := V2Config{
+		listeners: {
+			'web': V2ListenerSpec{}
+		}
+		engines:   {
+			'app': V2EngineSpec{
+				kind: 'php-worker'
+			}
+		}
+		adapters:  {
+			'app': V2AdapterSpec{
+				kind:   'http-handler'
+				engine: 'engine:app'
+			}
+		}
+		pipelines: [
+			V2PipelineSpec{
+				id:      'app'
+				ingress: 'listener:web'
+				egress:  'adapter:app'
+			},
+		]
+	}
+	plan := compile_v2_runtime_plan(cfg, '', true) or { panic(err) }
+	assert plan.source.compatibility
+}
+
+fn test_compile_v2_runtime_plan_rejects_unknown_transform_kind() {
+	cfg := V2Config{
+		listeners:  {
+			'web': V2ListenerSpec{}
+		}
+		transforms: {
+			'rewrite': V2TransformSpec{
+				kind:    'lua'
+				handler: 'rewrite'
+			}
+		}
+		adapters:   {
+			'app': V2AdapterSpec{
+				kind:    'fixed-response'
+				options: {
+					'body': 'ok'
+				}
+			}
+		}
+		pipelines:  [
+			V2PipelineSpec{
+				id:         'app'
+				ingress:    'listener:web'
+				transforms: ['transform:rewrite']
+				egress:     'adapter:app'
+			},
+		]
+	}
+	if _ := compile_v2_runtime_plan(cfg, '', false) {
+		assert false
+	} else {
+		assert err.msg() == 'runtime_plan_transform_unknown_kind:rewrite:lua'
+	}
+}
+
+fn test_compile_v2_runtime_plan_rejects_vjsx_transform_without_engine() {
+	cfg := V2Config{
+		listeners:  {
+			'web': V2ListenerSpec{}
+		}
+		transforms: {
+			'auth': V2TransformSpec{
+				kind:    'vjsx'
+				handler: 'auth.check'
+			}
+		}
+		adapters:   {
+			'app': V2AdapterSpec{
+				kind:    'fixed-response'
+				options: {
+					'body': 'ok'
+				}
+			}
+		}
+		pipelines:  [
+			V2PipelineSpec{
+				id:         'app'
+				ingress:    'listener:web'
+				transforms: ['transform:auth']
+				egress:     'adapter:app'
+			},
+		]
+	}
+	if _ := compile_v2_runtime_plan(cfg, '', false) {
+		assert false
+	} else {
+		assert err.msg() == 'runtime_plan_transform_missing_engine:auth'
+	}
+}
+
+fn test_compile_v2_runtime_plan_rejects_transform_missing_handler() {
+	cfg := V2Config{
+		listeners:  {
+			'web': V2ListenerSpec{}
+		}
+		transforms: {
+			'rewrite': V2TransformSpec{
+				kind: 'native'
+			}
+		}
+		adapters:   {
+			'app': V2AdapterSpec{
+				kind:    'fixed-response'
+				options: {
+					'body': 'ok'
+				}
+			}
+		}
+		pipelines:  [
+			V2PipelineSpec{
+				id:         'app'
+				ingress:    'listener:web'
+				transforms: ['transform:rewrite']
+				egress:     'adapter:app'
+			},
+		]
+	}
+	if _ := compile_v2_runtime_plan(cfg, '', false) {
+		assert false
+	} else {
+		assert err.msg() == 'runtime_plan_transform_missing_handler:rewrite'
+	}
+}

@@ -12,10 +12,10 @@ read_timeout_ms = 60000
 pool_size = 1
 stream_dispatch = true
 socket = "/tmp/vhttpd_stream_dispatch_worker.sock"
-cmd = "php /Users/guweigang/Source/vhttpd/php/package/bin/php-worker"
+cmd = "php ./php/package/bin/php-worker"
 
 [worker.env]
-VHTTPD_APP = "/Users/guweigang/Source/vhttpd/examples/stream-dispatch-app.php"
+VHTTPD_APP = "./examples/stream-dispatch-app.php"
 
 [admin]
 host = "127.0.0.1"
@@ -25,5 +25,5 @@ token = ""
 [assets]
 enabled = false
 prefix = "/assets"
-root = "/Users/guweigang/Source/vhttpd/examples/public"
+root = "./examples/public"
 cache_control = "public, max-age=3600"

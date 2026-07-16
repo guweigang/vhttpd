@@ -81,7 +81,7 @@ import {
 } from "./state.mjs";
 
 const CODEXBOT_TS_BUILD = "codexbot-ts-2026-04-01-idle-session-fix";
-const ENABLE_ITEM_RENDER_STREAMS = true;
+const ENABLE_ITEM_RENDER_STREAMS = typeof __vhttpd_enable_item_render_streams__ !== 'undefined' ? __vhttpd_enable_item_render_streams__ : true;
 const FEISHU_INBOUND_DEDUPE_WINDOW_MS = 2 * 60 * 1000;
 const FEISHU_INBOUND_DEDUPE_LIMIT = 1024;
 const ACTIVE_STREAM_STALE_MS = positiveIntegerEnv("CODEXBOT_TS_ACTIVE_STREAM_STALE_MS", 3 * 60 * 1000);

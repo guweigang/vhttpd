@@ -1,0 +1,28 @@
+version = 2
+
+[server]
+timezone = "Asia/Shanghai"
+pid_file = "/tmp/vhttpd_relay_agent_local_v2.pid"
+
+[observability]
+event_log = "/tmp/vhttpd_relay_agent_local_v2.events.ndjson"
+
+[relays.edge]
+mode = "agent"
+carrier = "websocket"
+url = "ws://127.0.0.1:19921/vhttpd/relay"
+node_id = "agent-local"
+token = "change-me"
+autostart = true
+reconnect_delay_ms = 1000
+channel_buffer = 64
+
+[adapters.local-response]
+kind = "fixed-response"
+options.status = "200"
+options.body = "relay agent ok"
+
+[[pipelines]]
+id = "relay/local-response"
+ingress = "relay:edge"
+egress = "adapter:local-response"

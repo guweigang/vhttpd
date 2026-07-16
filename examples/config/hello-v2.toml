@@ -1,0 +1,30 @@
+version = 2
+
+[server]
+timezone = "Asia/Shanghai"
+pid_file = "/tmp/vhttpd_hello_v2.pid"
+
+[observability]
+event_log = "/tmp/vhttpd_hello_v2.events.ndjson"
+
+[listeners.web]
+protocol = "http"
+transport = "tcp"
+host = "127.0.0.1"
+port = 19882
+
+[engines.hello]
+kind = "vjsx"
+entry = "./examples/vjsx/hello-handler.mts"
+runtime_profile = "node"
+thread_count = 1
+
+[adapters.hello]
+kind = "http-handler"
+engine = "engine:hello"
+
+[[pipelines]]
+id = "hello"
+ingress = "listener:web"
+match.paths = ["*"]
+egress = "adapter:hello"

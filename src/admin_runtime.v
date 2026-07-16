@@ -1,341 +1,672 @@
 module main
 
+import admin
 import json
-import time
 import veb
-
-struct AdminRuntimeStats {
-	started_at_unix                        i64
-	uptime_seconds                         i64
-	http_requests_total                    i64
-	http_errors_total                      i64
-	http_timeouts_total                    i64
-	http_streams_total                     i64
-	admin_actions_total                    i64
-	worker_queue_waits_total               i64
-	worker_queue_rejected_total            i64
-	worker_queue_timeouts_total            i64
-	upstream_plans_total                   i64
-	upstream_plan_errors_total             i64
-	mcp_sessions_expired_total             i64
-	mcp_sessions_evicted_total             i64
-	mcp_pending_dropped_total              i64
-	mcp_sampling_capability_warnings_total i64
-	mcp_sampling_capability_dropped_total  i64
-	mcp_sampling_capability_errors_total   i64
-	feishu_connect_attempts                i64
-	feishu_connect_successes               i64
-	feishu_received_frames                 i64
-	feishu_acked_events                    i64
-	feishu_messages_sent                   i64
-	feishu_send_errors                     i64
-}
-
-struct AdminRuntimeSummary {
-	started_at_unix          i64
-	uptime_seconds           i64
-	worker_pool_size         int
-	worker_backend_mode      string
-	worker_queue_capacity    int
-	worker_queue_timeout_ms  int
-	worker_queue_depth       int
-	logic_executor           string
-	logic_executor_lifecycle string
-	logic_executor_model     string
-	logic_provider           string
-	logic_executor_details   LogicExecutorAdminDetails
-	capabilities             map[string]bool
-	active_websockets        int
-	active_upstreams         int
-	active_mcp_sessions      int
-	active_gateways          int
-	stats                    AdminRuntimeStats
-}
-
-fn (mut app App) admin_stats_snapshot() AdminRuntimeStats {
-	app.mu.@lock()
-	defer {
-		app.mu.unlock()
-	}
-	feishu_metrics := app.provider_runtime_metrics('feishu')
-	now := time.now().unix()
-	started := if app.started_at_unix > 0 { app.started_at_unix } else { now }
-	uptime := if now > started { now - started } else { 0 }
-	return AdminRuntimeStats{
-		started_at_unix:                        started
-		uptime_seconds:                         uptime
-		http_requests_total:                    app.stat_http_requests_total
-		http_errors_total:                      app.stat_http_errors_total
-		http_timeouts_total:                    app.stat_http_timeouts_total
-		http_streams_total:                     app.stat_http_streams_total
-		admin_actions_total:                    app.stat_admin_actions_total
-		worker_queue_waits_total:               app.stat_worker_queue_waits_total
-		worker_queue_rejected_total:            app.stat_worker_queue_rejected_total
-		worker_queue_timeouts_total:            app.stat_worker_queue_timeouts_total
-		upstream_plans_total:                   app.stat_upstream_plans_total
-		upstream_plan_errors_total:             app.stat_upstream_plan_errors_total
-		mcp_sessions_expired_total:             app.stat_mcp_sessions_expired_total
-		mcp_sessions_evicted_total:             app.stat_mcp_sessions_evicted_total
-		mcp_pending_dropped_total:              app.stat_mcp_pending_dropped_total
-		mcp_sampling_capability_warnings_total: app.stat_mcp_sampling_capability_warnings_total
-		mcp_sampling_capability_dropped_total:  app.stat_mcp_sampling_capability_dropped_total
-		mcp_sampling_capability_errors_total:   app.stat_mcp_sampling_capability_errors_total
-		feishu_connect_attempts:                feishu_metrics.connect_attempts
-		feishu_connect_successes:               feishu_metrics.connect_successes
-		feishu_received_frames:                 feishu_metrics.received_frames
-		feishu_acked_events:                    feishu_metrics.acked_events
-		feishu_messages_sent:                   feishu_metrics.messages_sent
-		feishu_send_errors:                     feishu_metrics.send_errors
-	}
-}
-
-fn (mut app App) admin_runtime_snapshot() AdminRuntimeSummary {
-	stats := app.admin_stats_snapshot()
-	mut active_websockets := 0
-	app.ws_hub_mu.@lock()
-	active_websockets = app.ws_hub_conns.len
-	app.ws_hub_mu.unlock()
-	mut active_upstreams := 0
-	app.upstream_mu.@lock()
-	active_upstreams = app.upstream_sessions.len
-	app.upstream_mu.unlock()
-	mut active_mcp_sessions := 0
-	app.mcp_mu.@lock()
-	app.mcp_prune_sessions_locked(time.now().unix())
-	active_mcp_sessions = app.mcp_sessions.len
-	app.mcp_mu.unlock()
-	mut worker_queue_depth := 0
-	app.pool_mu.@lock()
-	worker_queue_depth = app.worker_backend.queue_waiting_requests
-	app.pool_mu.unlock()
-	mut capabilities := map[string]bool{}
-	capabilities['http'] = true
-	capabilities['stream'] = true
-	capabilities['stream_direct'] = true
-	capabilities['stream_dispatch'] = app.stream_dispatch
-	capabilities['stream_upstream_plan'] = true
-	capabilities['websocket'] = true
-	capabilities['websocket_dispatch'] = app.websocket_dispatch_mode
-	capabilities['mcp'] = true
-	capabilities['websocket_upstream'] = true
-	for key, value in app.provider_runtime_capabilities() {
-		capabilities[key] = value
-	}
-	logic_details := app.logic_executor_admin_details()
-	return AdminRuntimeSummary{
-		started_at_unix:          stats.started_at_unix
-		uptime_seconds:           stats.uptime_seconds
-		worker_pool_size:         app.worker_backend.sockets.len
-		worker_backend_mode:      '${app.worker_backend_mode}'
-		worker_queue_capacity:    app.worker_backend.queue_capacity
-		worker_queue_timeout_ms:  app.worker_backend.queue_timeout_ms
-		worker_queue_depth:       worker_queue_depth
-		logic_executor:           app.logic_executor_kind()
-		logic_executor_lifecycle: app.logic_executor_lifecycle
-		logic_executor_model:     '${app.logic_executor_model()}'
-		logic_provider:           app.logic_executor_provider()
-		logic_executor_details:   logic_details
-		capabilities:             capabilities
-		active_websockets:        active_websockets
-		active_upstreams:         active_upstreams
-		active_mcp_sessions:      active_mcp_sessions
-		active_gateways:          app.provider_runtime_gateway_count()
-		stats:                    stats
-	}
-}
-
-fn admin_query_boolish(raw string) bool {
-	return raw.trim_space().to_lower() in ['1', 'true', 'yes', 'on']
-}
-
-fn admin_query_limit(raw string, default_value int, max_value int) int {
-	mut value := raw.trim_space().int()
-	if value <= 0 {
-		value = default_value
-	}
-	if value > max_value {
-		value = max_value
-	}
-	return value
-}
-
-fn admin_query_offset(raw string) int {
-	mut value := raw.trim_space().int()
-	if value < 0 {
-		value = 0
-	}
-	return value
-}
 
 @['/admin/runtime'; get]
 pub fn (mut app App) admin_runtime(mut ctx Context) veb.Result {
-	if !app.admin_on_data_plane {
-		ctx.res.set_status(.not_found)
-		return ctx.text('Not Found')
+	req := admin_data_plane_request(ctx, '/admin/runtime')
+	if !app.control_plane.admin.on_data_plane {
+		return admin_data_plane_text(mut app, mut ctx, 'GET', req, 404, 'Not Found', {
+			'admin_endpoint': 'runtime'
+			'error':          'not_found'
+		})
 	}
-	path := if ctx.req.url == '' { '/admin/runtime' } else { ctx.req.url }
-	req_id := resolve_request_id(ctx, path)
-	trace_id := resolve_trace_id(ctx, path)
 	body := json.encode(app.admin_runtime_snapshot())
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-	ctx.set_content_type('application/json; charset=utf-8')
-	app.emit('http.request', {
-		'method':     'GET'
-		'path':       '/admin/runtime'
-		'status':     '200'
-		'request_id': req_id
-		'trace_id':   trace_id
+	return admin_data_plane_json(mut app, mut ctx, 'GET', req, 200, body, {
+		'admin_endpoint': 'runtime'
 	})
-	return ctx.text(body)
+}
+
+@['/admin/runtime/plan'; get]
+pub fn (mut app App) admin_runtime_plan(mut ctx Context) veb.Result {
+	req := admin_data_plane_request(ctx, '/admin/runtime/plan')
+	if !app.control_plane.admin.on_data_plane {
+		return admin_data_plane_text(mut app, mut ctx, 'GET', req, 404, 'Not Found', {
+			'admin_endpoint': 'runtime_plan'
+			'error':          'not_found'
+		})
+	}
+	body := app.protocols.runtime_plan_json
+	return admin_data_plane_json(mut app, mut ctx, 'GET', req, 200, body, {
+		'admin_endpoint': 'runtime_plan'
+	})
+}
+
+@['/admin/events'; get]
+pub fn (mut app App) admin_events(mut ctx Context) veb.Result {
+	req := admin_data_plane_request(ctx, '/admin/events')
+	if !app.control_plane.admin.on_data_plane {
+		return admin_data_plane_text(mut app, mut ctx, 'GET', req, 404, 'Not Found', {
+			'admin_endpoint': 'events'
+			'error':          'not_found'
+		})
+	}
+	limit := admin.AdminQuery.limit(ctx.query['limit'] or { '' }, 100, 1000)
+	events := app.admin_state_list_events(limit) or {
+		return admin_data_plane_json(mut app, mut ctx, 'GET', req, 500, json.encode(admin.AdminErrorResponse{
+			error: err.msg()
+		}), {
+			'admin_endpoint': 'events'
+			'error':          err.msg()
+		})
+	}
+	return admin_data_plane_json(mut app, mut ctx, 'GET', req, 200, json.encode(events), {
+		'admin_endpoint': 'events'
+	})
+}
+
+@['/admin/runtime/graph'; get]
+pub fn (mut app App) admin_runtime_graph(mut ctx Context) veb.Result {
+	req := admin_data_plane_request(ctx, '/admin/runtime/graph')
+	if !app.control_plane.admin.on_data_plane {
+		return admin_data_plane_text(mut app, mut ctx, 'GET', req, 404, 'Not Found', {
+			'admin_endpoint': 'runtime_graph'
+			'error':          'not_found'
+		})
+	}
+	body := json.encode(app.admin_runtime_graph_snapshot())
+	return admin_data_plane_json(mut app, mut ctx, 'GET', req, 200, body, {
+		'admin_endpoint': 'runtime_graph'
+	})
+}
+
+@['/admin/schema'; get]
+pub fn (mut app App) admin_schema(mut ctx Context) veb.Result {
+	req := admin_data_plane_request(ctx, '/admin/schema')
+	if !app.control_plane.admin.on_data_plane {
+		return admin_data_plane_text(mut app, mut ctx, 'GET', req, 404, 'Not Found', {
+			'admin_endpoint': 'schema'
+			'error':          'not_found'
+		})
+	}
+	return admin_data_plane_json(mut app, mut ctx, 'GET', req, 200,
+		json.encode(admin_schema_catalog()), {
+		'admin_endpoint': 'schema'
+	})
+}
+
+@['/admin/schema/:domain'; get]
+pub fn (mut app App) admin_schema_domain(mut ctx Context, domain string) veb.Result {
+	req := admin_data_plane_request(ctx, '/admin/schema/${domain}')
+	if !app.control_plane.admin.on_data_plane {
+		return admin_data_plane_text(mut app, mut ctx, 'GET', req, 404, 'Not Found', {
+			'admin_endpoint': 'schema_domain'
+			'error':          'not_found'
+		})
+	}
+	item := admin_schema_domain(domain) or {
+		return admin_data_plane_json(mut app, mut ctx, 'GET', req, 404, json.encode(admin.AdminErrorResponse{
+			error: 'schema_domain_not_found'
+		}), {
+			'admin_endpoint': 'schema_domain'
+			'error':          'schema_domain_not_found'
+		})
+	}
+	return admin_data_plane_json(mut app, mut ctx, 'GET', req, 200, json.encode(item), {
+		'admin_endpoint': 'schema_domain'
+		'domain':         domain
+	})
+}
+
+@['/admin/schema/:domain/:kind'; get]
+pub fn (mut app App) admin_schema_kind(mut ctx Context, domain string, kind string) veb.Result {
+	req := admin_data_plane_request(ctx, '/admin/schema/${domain}/${kind}')
+	if !app.control_plane.admin.on_data_plane {
+		return admin_data_plane_text(mut app, mut ctx, 'GET', req, 404, 'Not Found', {
+			'admin_endpoint': 'schema_kind'
+			'error':          'not_found'
+		})
+	}
+	item := admin_schema_kind(domain, kind) or {
+		return admin_data_plane_json(mut app, mut ctx, 'GET', req, 404, json.encode(admin.AdminErrorResponse{
+			error: 'schema_kind_not_found'
+		}), {
+			'admin_endpoint': 'schema_kind'
+			'error':          'schema_kind_not_found'
+		})
+	}
+	return admin_data_plane_json(mut app, mut ctx, 'GET', req, 200, json.encode(item), {
+		'admin_endpoint': 'schema_kind'
+		'domain':         domain
+		'kind':           kind
+	})
+}
+
+@['/admin/drafts'; get]
+pub fn (mut app App) admin_drafts(mut ctx Context) veb.Result {
+	req := admin_data_plane_request(ctx, '/admin/drafts')
+	if !app.control_plane.admin.on_data_plane {
+		return admin_data_plane_text(mut app, mut ctx, 'GET', req, 404, 'Not Found', {
+			'admin_endpoint': 'drafts'
+			'error':          'not_found'
+		})
+	}
+	drafts := app.admin_state_list_drafts() or {
+		return admin_data_plane_json(mut app, mut ctx, 'GET', req, 500, json.encode(admin.AdminErrorResponse{
+			error: err.msg()
+		}), {
+			'admin_endpoint': 'drafts'
+			'error':          err.msg()
+		})
+	}
+	return admin_data_plane_json(mut app, mut ctx, 'GET', req, 200, json.encode(drafts), {
+		'admin_endpoint': 'drafts'
+	})
+}
+
+@['/admin/config/files'; get]
+pub fn (mut app App) admin_config_files(mut ctx Context) veb.Result {
+	req := admin_data_plane_request(ctx, '/admin/config/files')
+	if !app.control_plane.admin.on_data_plane {
+		return admin_data_plane_text(mut app, mut ctx, 'GET', req, 404, 'Not Found', {
+			'admin_endpoint': 'config_files'
+			'error':          'not_found'
+		})
+	}
+	files := app.admin_state_list_config_files()
+	return admin_data_plane_json(mut app, mut ctx, 'GET', req, 200, json.encode(files), {
+		'admin_endpoint': 'config_files'
+	})
+}
+
+@['/admin/config/files/draft'; post]
+pub fn (mut app App) admin_config_file_draft(mut ctx Context) veb.Result {
+	req := admin_data_plane_request(ctx, '/admin/config/files/draft')
+	if !app.control_plane.admin.on_data_plane {
+		return admin_data_plane_text(mut app, mut ctx, 'POST', req, 404, 'Not Found', {
+			'admin_endpoint': 'config_file_draft'
+			'error':          'not_found'
+		})
+	}
+	target_path := (ctx.query['path'] or { ctx.query['include_path'] or { '' } }).trim_space()
+	result := app.admin_state_open_config_file_draft(target_path)
+	status := if result.ok { 200 } else { 422 }
+	return admin_data_plane_json(mut app, mut ctx, 'POST', req, status, json.encode(result), {
+		'admin_endpoint': 'config_file_draft'
+		'admin_action':   'config_file_draft'
+		'draft_id':       result.draft_id
+		'error':          result.error
+	})
+}
+
+@['/admin/drafts'; post]
+pub fn (mut app App) admin_drafts_create(mut ctx Context) veb.Result {
+	req := admin_data_plane_request(ctx, '/admin/drafts')
+	if !app.control_plane.admin.on_data_plane {
+		return admin_data_plane_text(mut app, mut ctx, 'POST', req, 404, 'Not Found', {
+			'admin_endpoint': 'drafts'
+			'error':          'not_found'
+		})
+	}
+	id := ctx.query['id'] or { '' }
+	entry := app.admin_state_put_draft(id, ctx.req.data) or {
+		return admin_data_plane_json(mut app, mut ctx, 'POST', req, 400, json.encode(admin.AdminErrorResponse{
+			error: err.msg()
+		}), {
+			'admin_endpoint': 'drafts'
+			'error':          err.msg()
+		})
+	}
+	return admin_data_plane_json(mut app, mut ctx, 'POST', req, 200, json.encode(entry), {
+		'admin_endpoint': 'drafts'
+		'admin_action':   'draft_save'
+		'draft_id':       entry.key
+	})
+}
+
+@['/admin/drafts/:id'; get]
+pub fn (mut app App) admin_draft_get(mut ctx Context, id string) veb.Result {
+	req := admin_data_plane_request(ctx, '/admin/drafts/${id}')
+	if !app.control_plane.admin.on_data_plane {
+		return admin_data_plane_text(mut app, mut ctx, 'GET', req, 404, 'Not Found', {
+			'admin_endpoint': 'draft'
+			'error':          'not_found'
+		})
+	}
+	entry := app.admin_state_get_draft(id) or {
+		return admin_data_plane_json(mut app, mut ctx, 'GET', req, 404, json.encode(admin.AdminErrorResponse{
+			error: err.msg()
+		}), {
+			'admin_endpoint': 'draft'
+			'error':          err.msg()
+		})
+	}
+	return admin_data_plane_json(mut app, mut ctx, 'GET', req, 200, json.encode(entry), {
+		'admin_endpoint': 'draft'
+		'draft_id':       entry.key
+	})
+}
+
+@['/admin/drafts/:id'; put]
+pub fn (mut app App) admin_draft_put(mut ctx Context, id string) veb.Result {
+	req := admin_data_plane_request(ctx, '/admin/drafts/${id}')
+	if !app.control_plane.admin.on_data_plane {
+		return admin_data_plane_text(mut app, mut ctx, 'PUT', req, 404, 'Not Found', {
+			'admin_endpoint': 'draft'
+			'error':          'not_found'
+		})
+	}
+	entry := app.admin_state_put_draft(id, ctx.req.data) or {
+		return admin_data_plane_json(mut app, mut ctx, 'PUT', req, 400, json.encode(admin.AdminErrorResponse{
+			error: err.msg()
+		}), {
+			'admin_endpoint': 'draft'
+			'error':          err.msg()
+		})
+	}
+	return admin_data_plane_json(mut app, mut ctx, 'PUT', req, 200, json.encode(entry), {
+		'admin_endpoint': 'draft'
+		'admin_action':   'draft_save'
+		'draft_id':       entry.key
+	})
+}
+
+@['/admin/drafts/:id'; delete]
+pub fn (mut app App) admin_draft_delete(mut ctx Context, id string) veb.Result {
+	req := admin_data_plane_request(ctx, '/admin/drafts/${id}')
+	if !app.control_plane.admin.on_data_plane {
+		return admin_data_plane_text(mut app, mut ctx, 'DELETE', req, 404, 'Not Found', {
+			'admin_endpoint': 'draft'
+			'error':          'not_found'
+		})
+	}
+	app.admin_state_delete_draft(id) or {
+		return admin_data_plane_json(mut app, mut ctx, 'DELETE', req, 400, json.encode(admin.AdminErrorResponse{
+			error: err.msg()
+		}), {
+			'admin_endpoint': 'draft'
+			'error':          err.msg()
+		})
+	}
+	return admin_data_plane_json(mut app, mut ctx, 'DELETE', req, 200, json.encode(AdminDraftDeleteResponse{
+		ok:       true
+		draft_id: id
+	}), {
+		'admin_endpoint': 'draft'
+		'admin_action':   'draft_delete'
+		'draft_id':       id
+	})
+}
+
+@['/admin/drafts/:id/validate'; post]
+pub fn (mut app App) admin_draft_validate(mut ctx Context, id string) veb.Result {
+	req := admin_data_plane_request(ctx, '/admin/drafts/${id}/validate')
+	if !app.control_plane.admin.on_data_plane {
+		return admin_data_plane_text(mut app, mut ctx, 'POST', req, 404, 'Not Found', {
+			'admin_endpoint': 'draft_validate'
+			'error':          'not_found'
+		})
+	}
+	result := app.admin_state_validate_draft(id)
+	status := if result.ok { 200 } else { 422 }
+	return admin_data_plane_json(mut app, mut ctx, 'POST', req, status, json.encode(result), {
+		'admin_endpoint': 'draft_validate'
+		'draft_id':       id
+		'ok':             '${result.ok}'
+		'error':          result.error
+	})
+}
+
+@['/admin/drafts/:id/diff'; get]
+pub fn (mut app App) admin_draft_diff(mut ctx Context, id string) veb.Result {
+	req := admin_data_plane_request(ctx, '/admin/drafts/${id}/diff')
+	if !app.control_plane.admin.on_data_plane {
+		return admin_data_plane_text(mut app, mut ctx, 'GET', req, 404, 'Not Found', {
+			'admin_endpoint': 'draft_diff'
+			'error':          'not_found'
+		})
+	}
+	preview := app.admin_state_diff_draft(id) or {
+		return admin_data_plane_json(mut app, mut ctx, 'GET', req, 422, json.encode(admin.AdminErrorResponse{
+			error: err.msg()
+		}), {
+			'admin_endpoint': 'draft_diff'
+			'draft_id':       id
+			'error':          err.msg()
+		})
+	}
+	return admin_data_plane_json(mut app, mut ctx, 'GET', req, 200, json.encode(preview), {
+		'admin_endpoint': 'draft_diff'
+		'draft_id':       id
+		'allowed':        '${preview.allowed}'
+		'strategy':       preview.strategy
+	})
+}
+
+@['/admin/drafts/:id/publish'; post]
+pub fn (mut app App) admin_draft_publish(mut ctx Context, id string) veb.Result {
+	req := admin_data_plane_request(ctx, '/admin/drafts/${id}/publish')
+	if !app.control_plane.admin.on_data_plane {
+		return admin_data_plane_text(mut app, mut ctx, 'POST', req, 404, 'Not Found', {
+			'admin_endpoint': 'draft_publish'
+			'error':          'not_found'
+		})
+	}
+	target_path := (ctx.query['path'] or { ctx.query['include_path'] or { '' } }).trim_space()
+	result := app.admin_state_publish_draft(id, target_path)
+	status := if result.ok { 200 } else { 422 }
+	return admin_data_plane_json(mut app, mut ctx, 'POST', req, status, json.encode(result), {
+		'admin_endpoint': 'draft_publish'
+		'admin_action':   'draft_publish'
+		'draft_id':       id
+		'ok':             '${result.ok}'
+		'error':          result.error
+	})
+}
+
+@['/admin/runtime/plan/replacement'; get]
+pub fn (mut app App) admin_runtime_plan_replacement(mut ctx Context) veb.Result {
+	req := admin_data_plane_request(ctx, '/admin/runtime/plan/replacement')
+	if !app.control_plane.admin.on_data_plane {
+		return admin_data_plane_text(mut app, mut ctx, 'GET', req, 404, 'Not Found', {
+			'admin_endpoint': 'runtime_plan_replacement'
+			'error':          'not_found'
+		})
+	}
+	config_path := (ctx.query['config'] or { ctx.query['path'] or { '' } }).trim_space()
+	preview := app.preview_runtime_plan_replacement(config_path) or {
+		return admin_data_plane_json(mut app, mut ctx, 'GET', req, 400, json.encode({
+			'error': err.msg()
+		}), {
+			'admin_endpoint': 'runtime_plan_replacement'
+			'error':          err.msg()
+		})
+	}
+	return admin_data_plane_json(mut app, mut ctx, 'GET', req, 200, json.encode(preview), {
+		'admin_endpoint': 'runtime_plan_replacement'
+		'allowed':        '${preview.allowed}'
+	})
+}
+
+@['/admin/runtime/plan/replacement/state'; get]
+pub fn (mut app App) admin_runtime_plan_replacement_state(mut ctx Context) veb.Result {
+	req := admin_data_plane_request(ctx, '/admin/runtime/plan/replacement/state')
+	if !app.control_plane.admin.on_data_plane {
+		return admin_data_plane_text(mut app, mut ctx, 'GET', req, 404, 'Not Found', {
+			'admin_endpoint': 'runtime_plan_replacement_state'
+			'error':          'not_found'
+		})
+	}
+	body := json.encode(app.runtime_plan_replacement_snapshot())
+	return admin_data_plane_json(mut app, mut ctx, 'GET', req, 200, body, {
+		'admin_endpoint': 'runtime_plan_replacement_state'
+	})
+}
+
+@['/admin/runtime/plan/replacement/apply'; post]
+pub fn (mut app App) admin_runtime_plan_replacement_apply(mut ctx Context) veb.Result {
+	req := admin_data_plane_request(ctx, '/admin/runtime/plan/replacement/apply')
+	if !app.control_plane.admin.on_data_plane {
+		return admin_data_plane_text(mut app, mut ctx, 'POST', req, 404, 'Not Found', {
+			'admin_endpoint': 'runtime_plan_replacement_apply'
+			'error':          'not_found'
+		})
+	}
+	config_path := (ctx.query['config'] or { ctx.query['path'] or { '' } }).trim_space()
+	result := app.apply_runtime_plan_replacement(config_path) or {
+		return admin_data_plane_json(mut app, mut ctx, 'POST', req, 400, json.encode({
+			'error': err.msg()
+		}), {
+			'admin_endpoint': 'runtime_plan_replacement_apply'
+			'error':          err.msg()
+		})
+	}
+	status := runtime_plan_replacement_apply_status_code(result)
+	return admin_data_plane_json(mut app, mut ctx, 'POST', req, status, json.encode(result), {
+		'admin_endpoint': 'runtime_plan_replacement_apply'
+		'applied':        '${result.applied}'
+		'status':         result.status
+		'error':          result.error
+	})
+}
+
+@['/admin/runtime/plan/replacement/finalize'; post]
+pub fn (mut app App) admin_runtime_plan_replacement_finalize(mut ctx Context) veb.Result {
+	req := admin_data_plane_request(ctx, '/admin/runtime/plan/replacement/finalize')
+	if !app.control_plane.admin.on_data_plane {
+		return admin_data_plane_text(mut app, mut ctx, 'POST', req, 404, 'Not Found', {
+			'admin_endpoint': 'runtime_plan_replacement_finalize'
+			'error':          'not_found'
+		})
+	}
+	result := app.finalize_runtime_plan_replacement()
+	status := runtime_plan_replacement_finalize_status_code(result)
+	return admin_data_plane_json(mut app, mut ctx, 'POST', req, status, json.encode(result), {
+		'admin_endpoint': 'runtime_plan_replacement_finalize'
+		'applied':        '${result.applied}'
+		'status':         result.status
+		'error':          result.error
+	})
+}
+
+@['/admin/runtime/plan/replacement/cancel'; post]
+pub fn (mut app App) admin_runtime_plan_replacement_cancel(mut ctx Context) veb.Result {
+	req := admin_data_plane_request(ctx, '/admin/runtime/plan/replacement/cancel')
+	if !app.control_plane.admin.on_data_plane {
+		return admin_data_plane_text(mut app, mut ctx, 'POST', req, 404, 'Not Found', {
+			'admin_endpoint': 'runtime_plan_replacement_cancel'
+			'error':          'not_found'
+		})
+	}
+	result := app.cancel_runtime_plan_replacement()
+	status := runtime_plan_replacement_cancel_status_code(result)
+	return admin_data_plane_json(mut app, mut ctx, 'POST', req, status, json.encode(result), {
+		'admin_endpoint': 'runtime_plan_replacement_cancel'
+		'cancelled':      '${result.cancelled}'
+		'status':         result.status
+		'error':          result.error
+	})
+}
+
+@['/admin/runtime/transformers'; get]
+pub fn (mut app App) admin_runtime_transformers(mut ctx Context) veb.Result {
+	req := admin_data_plane_request(ctx, '/admin/runtime/transformers')
+	if !app.control_plane.admin.on_data_plane {
+		return admin_data_plane_text(mut app, mut ctx, 'GET', req, 404, 'Not Found', {
+			'admin_endpoint': 'runtime_transformers'
+			'error':          'not_found'
+		})
+	}
+	body := json.encode(app.transformers.snapshot())
+	return admin_data_plane_json(mut app, mut ctx, 'GET', req, 200, body, {
+		'admin_endpoint': 'runtime_transformers'
+	})
 }
 
 @['/admin/runtime/upstreams'; get]
 pub fn (mut app App) admin_runtime_upstreams(mut ctx Context) veb.Result {
-	if !app.admin_on_data_plane {
-		ctx.res.set_status(.not_found)
-		return ctx.text('Not Found')
+	req := admin_data_plane_request(ctx, '/admin/runtime/upstreams')
+	if !app.control_plane.admin.on_data_plane {
+		return admin_data_plane_text(mut app, mut ctx, 'GET', req, 404, 'Not Found', {
+			'admin_endpoint': 'runtime_upstreams'
+			'error':          'not_found'
+		})
 	}
-	path := if ctx.req.url == '' { '/admin/runtime/upstreams' } else { ctx.req.url }
-	req_id := resolve_request_id(ctx, path)
-	trace_id := resolve_trace_id(ctx, path)
-	details := admin_query_boolish(ctx.query['details'] or { 'false' })
-	limit := admin_query_limit(ctx.query['limit'] or { '' }, 100, 1000)
-	offset := admin_query_offset(ctx.query['offset'] or { '' })
+	details := admin.AdminQuery.parse_boolish(ctx.query['details'] or { 'false' })
+	limit := admin.AdminQuery.limit(ctx.query['limit'] or { '' }, 100, 1000)
+	offset := admin.AdminQuery.offset(ctx.query['offset'] or { '' })
 	role_filter := (ctx.query['role'] or { '' }).trim_space()
 	provider_filter := (ctx.query['provider'] or { '' }).trim_space()
 	body := json.encode(app.admin_upstreams_snapshot(details, limit, offset, role_filter,
 		provider_filter))
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-	ctx.set_content_type('application/json; charset=utf-8')
-	app.emit('http.request', {
-		'method':     'GET'
-		'path':       '/admin/runtime/upstreams'
-		'status':     '200'
-		'request_id': req_id
-		'trace_id':   trace_id
+	return admin_data_plane_json(mut app, mut ctx, 'GET', req, 200, body, {
+		'admin_endpoint': 'runtime_upstreams'
 	})
-	return ctx.text(body)
 }
 
 @['/admin/runtime/websockets'; get]
 pub fn (mut app App) admin_runtime_websockets(mut ctx Context) veb.Result {
-	if !app.admin_on_data_plane {
-		ctx.res.set_status(.not_found)
-		return ctx.text('Not Found')
+	req := admin_data_plane_request(ctx, '/admin/runtime/websockets')
+	if !app.control_plane.admin.on_data_plane {
+		return admin_data_plane_text(mut app, mut ctx, 'GET', req, 404, 'Not Found', {
+			'admin_endpoint': 'runtime_websockets'
+			'error':          'not_found'
+		})
 	}
-	path := if ctx.req.url == '' { '/admin/runtime/websockets' } else { ctx.req.url }
-	req_id := resolve_request_id(ctx, path)
-	trace_id := resolve_trace_id(ctx, path)
-	details := admin_query_boolish(ctx.query['details'] or { 'false' })
-	limit := admin_query_limit(ctx.query['limit'] or { '' }, 100, 1000)
-	offset := admin_query_offset(ctx.query['offset'] or { '' })
+	details := admin.AdminQuery.parse_boolish(ctx.query['details'] or { 'false' })
+	limit := admin.AdminQuery.limit(ctx.query['limit'] or { '' }, 100, 1000)
+	offset := admin.AdminQuery.offset(ctx.query['offset'] or { '' })
 	room_filter := (ctx.query['room'] or { '' }).trim_space()
 	conn_filter := (ctx.query['conn_id'] or { '' }).trim_space()
-	body := json.encode(app.admin_websockets_snapshot(details, limit, offset, room_filter,
-		conn_filter))
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-	ctx.set_content_type('application/json; charset=utf-8')
-	app.emit('http.request', {
-		'method':     'GET'
-		'path':       '/admin/runtime/websockets'
-		'status':     '200'
-		'request_id': req_id
-		'trace_id':   trace_id
+	body := json.encode(app.websocket.snapshot(details, limit, offset, room_filter, conn_filter))
+	return admin_data_plane_json(mut app, mut ctx, 'GET', req, 200, body, {
+		'admin_endpoint': 'runtime_websockets'
 	})
-	return ctx.text(body)
 }
 
 @['/admin/runtime/mcp'; get]
 pub fn (mut app App) admin_runtime_mcp(mut ctx Context) veb.Result {
-	if !app.admin_on_data_plane {
-		ctx.res.set_status(.not_found)
-		return ctx.text('Not Found')
+	req := admin_data_plane_request(ctx, '/admin/runtime/mcp')
+	if !app.control_plane.admin.on_data_plane {
+		return admin_data_plane_text(mut app, mut ctx, 'GET', req, 404, 'Not Found', {
+			'admin_endpoint': 'runtime_mcp'
+			'error':          'not_found'
+		})
 	}
-	path := if ctx.req.url == '' { '/admin/runtime/mcp' } else { ctx.req.url }
-	req_id := resolve_request_id(ctx, path)
-	trace_id := resolve_trace_id(ctx, path)
-	details := admin_query_boolish(ctx.query['details'] or { 'false' })
-	limit := admin_query_limit(ctx.query['limit'] or { '' }, 100, 1000)
-	offset := admin_query_offset(ctx.query['offset'] or { '' })
+	details := admin.AdminQuery.parse_boolish(ctx.query['details'] or { 'false' })
+	limit := admin.AdminQuery.limit(ctx.query['limit'] or { '' }, 100, 1000)
+	offset := admin.AdminQuery.offset(ctx.query['offset'] or { '' })
 	session_filter := (ctx.query['session_id'] or { '' }).trim_space()
 	protocol_filter := (ctx.query['protocol_version'] or { '' }).trim_space()
-	body := json.encode(app.admin_mcp_snapshot(details, limit, offset, session_filter,
+	body := json.encode(app.protocols.mcp.snapshot(details, limit, offset, session_filter,
 		protocol_filter))
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-	ctx.set_content_type('application/json; charset=utf-8')
-	app.emit('http.request', {
-		'method':     'GET'
-		'path':       '/admin/runtime/mcp'
-		'status':     '200'
-		'request_id': req_id
-		'trace_id':   trace_id
+	return admin_data_plane_json(mut app, mut ctx, 'GET', req, 200, body, {
+		'admin_endpoint': 'runtime_mcp'
 	})
-	return ctx.text(body)
 }
 
 @['/admin/runtime/provider-instances'; get]
 pub fn (mut app App) admin_runtime_provider_instances(mut ctx Context) veb.Result {
-	if !app.admin_on_data_plane {
-		ctx.res.set_status(.not_found)
-		return ctx.text('Not Found')
+	req := admin_data_plane_request(ctx, '/admin/runtime/provider-instances')
+	if !app.control_plane.admin.on_data_plane {
+		return admin_data_plane_text(mut app, mut ctx, 'GET', req, 404, 'Not Found', {
+			'admin_endpoint': 'runtime_provider_instances'
+			'error':          'not_found'
+		})
 	}
-	path := if ctx.req.url == '' { '/admin/runtime/provider-instances' } else { ctx.req.url }
-	req_id := resolve_request_id(ctx, path)
-	trace_id := resolve_trace_id(ctx, path)
 	provider_filter := (ctx.query['provider'] or { '' }).trim_space()
 	body := json.encode(app.admin_provider_instance_snapshots(provider_filter))
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-	ctx.set_content_type('application/json; charset=utf-8')
-	app.emit('http.request', {
-		'method':     'GET'
-		'path':       '/admin/runtime/provider-instances'
-		'status':     '200'
-		'request_id': req_id
-		'trace_id':   trace_id
+	return admin_data_plane_json(mut app, mut ctx, 'GET', req, 200, body, {
+		'admin_endpoint': 'runtime_provider_instances'
 	})
-	return ctx.text(body)
 }
 
-@['/admin/providers/specs'; get]
-pub fn (mut app App) admin_provider_specs(mut ctx Context) veb.Result {
-	if !app.admin_on_data_plane {
-		ctx.res.set_status(.not_found)
-		return ctx.text('Not Found')
+@['/admin/runtime/provider-instances'; post]
+pub fn (mut app App) admin_runtime_provider_instance_upsert(mut ctx Context) veb.Result {
+	req := admin_data_plane_request(ctx, '/admin/runtime/provider-instances')
+	if !app.control_plane.admin.on_data_plane {
+		return admin_data_plane_text(mut app, mut ctx, 'POST', req, 404, 'Not Found', {
+			'admin_endpoint': 'runtime_provider_instances'
+			'error':          'not_found'
+		})
 	}
-	path := if ctx.req.url == '' { '/admin/providers/specs' } else { ctx.req.url }
-	req_id := resolve_request_id(ctx, path)
-	trace_id := resolve_trace_id(ctx, path)
-	body := json.encode(app.admin_provider_specs_snapshot())
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-	ctx.set_content_type('application/json; charset=utf-8')
-	app.emit('http.request', {
-		'method':     'GET'
-		'path':       '/admin/providers/specs'
-		'status':     '200'
-		'request_id': req_id
-		'trace_id':   trace_id
+	result := app.admin_provider_instance_upsert_from_body(ctx.req.data) or {
+		status := if err.msg() == 'invalid_json' || err.msg() == 'missing_provider' {
+			400
+		} else {
+			422
+		}
+		return admin_data_plane_json(mut app, mut ctx, 'POST', req, status, json.encode({
+			'error': err.msg()
+		}), {
+			'admin_endpoint': 'runtime_provider_instances'
+			'admin_action':   'provider_instance_upsert'
+			'error':          err.msg()
+		})
+	}
+	return admin_data_plane_json(mut app, mut ctx, 'POST', req, 200, json.encode(result), {
+		'admin_endpoint': 'runtime_provider_instances'
+		'admin_action':   'provider_instance_upsert'
+		'provider':       result.snapshot.provider
+		'instance':       result.snapshot.instance
 	})
-	return ctx.text(body)
 }
 
-@['/admin/providers/runtimes'; get]
-pub fn (mut app App) admin_provider_runtimes(mut ctx Context) veb.Result {
-	if !app.admin_on_data_plane {
-		ctx.res.set_status(.not_found)
-		return ctx.text('Not Found')
+@['/admin/runtime/events'; post]
+pub fn (mut app App) admin_runtime_events_dispatch(mut ctx Context) veb.Result {
+	req := admin_data_plane_request(ctx, '/admin/runtime/events')
+	if !app.control_plane.admin.on_data_plane {
+		return admin_data_plane_text(mut app, mut ctx, 'POST', req, 404, 'Not Found', {
+			'admin_endpoint': 'runtime_events'
+			'error':          'not_found'
+		})
 	}
-	path := if ctx.req.url == '' { '/admin/providers/runtimes' } else { ctx.req.url }
-	req_id := resolve_request_id(ctx, path)
-	trace_id := resolve_trace_id(ctx, path)
-	body := json.encode(app.admin_provider_runtimes_snapshot())
-	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
-	ctx.set_content_type('application/json; charset=utf-8')
-	app.emit('http.request', {
-		'method':     'GET'
-		'path':       '/admin/providers/runtimes'
-		'status':     '200'
-		'request_id': req_id
-		'trace_id':   trace_id
+	result := app.dispatch_runtime_event(ctx.req.data, req.req_id, req.trace_id) or {
+		return admin_data_plane_json(mut app, mut ctx, 'POST', req, 400, json.encode({
+			'error': err.msg()
+		}), {
+			'admin_endpoint': 'runtime_events'
+			'admin_action':   'event_dispatch'
+			'error':          err.msg()
+		})
+	}
+	return admin_data_plane_json(mut app, mut ctx, 'POST', req, 202, json.encode(result), {
+		'admin_endpoint': 'runtime_events'
+		'admin_action':   'event_dispatch'
+		'pipeline':       result.pipeline
+		'ingress':        result.ingress
+		'event':          result.name
 	})
-	return ctx.text(body)
+}
+
+@['/admin/runtime/codex'; get]
+pub fn (mut app App) admin_runtime_codex(mut ctx Context) veb.Result {
+	req := admin_data_plane_request(ctx, '/admin/runtime/codex')
+	if !app.control_plane.admin.on_data_plane {
+		return admin_data_plane_text(mut app, mut ctx, 'GET', req, 404, 'Not Found', {
+			'admin_endpoint': 'runtime_codex'
+			'error':          'not_found'
+		})
+	}
+	body := app.provider_runtime_snapshot('codex') or { '{}' }
+	return admin_data_plane_json(mut app, mut ctx, 'GET', req, 200, body, {
+		'admin_endpoint': 'runtime_codex'
+	})
+}
+
+@['/admin/runtime/feishu'; get]
+pub fn (mut app App) admin_runtime_feishu(mut ctx Context) veb.Result {
+	req := admin_data_plane_request(ctx, '/admin/runtime/feishu')
+	if !app.control_plane.admin.on_data_plane {
+		return admin_data_plane_text(mut app, mut ctx, 'GET', req, 404, 'Not Found', {
+			'admin_endpoint': 'runtime_feishu'
+			'error':          'not_found'
+		})
+	}
+	body := app.provider_runtime_snapshot('feishu') or { '{}' }
+	return admin_data_plane_json(mut app, mut ctx, 'GET', req, 200, body, {
+		'admin_endpoint': 'runtime_feishu'
+	})
+}
+
+@['/admin/runtime/db'; get]
+pub fn (mut app App) admin_runtime_db(mut ctx Context) veb.Result {
+	req := admin_data_plane_request(ctx, '/admin/runtime/db')
+	if !app.control_plane.admin.on_data_plane {
+		return admin_data_plane_text(mut app, mut ctx, 'GET', req, 404, 'Not Found', {
+			'admin_endpoint': 'runtime_db'
+			'error':          'not_found'
+		})
+	}
+	body := app.provider_runtime_snapshot('db') or { '{}' }
+	return admin_data_plane_json(mut app, mut ctx, 'GET', req, 200, body, {
+		'admin_endpoint': 'runtime_db'
+	})
+}
+
+@['/admin/runtime/cache'; get]
+pub fn (mut app App) admin_runtime_cache(mut ctx Context) veb.Result {
+	req := admin_data_plane_request(ctx, '/admin/runtime/cache')
+	if !app.control_plane.admin.on_data_plane {
+		return admin_data_plane_text(mut app, mut ctx, 'GET', req, 404, 'Not Found', {
+			'admin_endpoint': 'runtime_cache'
+			'error':          'not_found'
+		})
+	}
+	body := app.provider_runtime_snapshot('cache') or { '{}' }
+	return admin_data_plane_json(mut app, mut ctx, 'GET', req, 200, body, {
+		'admin_endpoint': 'runtime_cache'
+	})
 }

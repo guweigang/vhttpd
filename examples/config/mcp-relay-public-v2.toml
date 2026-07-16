@@ -1,0 +1,45 @@
+version = 2
+
+[server]
+timezone = "Asia/Shanghai"
+pid_file = "/tmp/vhttpd_mcp_relay_public_v2.pid"
+
+[observability]
+event_log = "/tmp/vhttpd_mcp_relay_public_v2.events.ndjson"
+
+[listeners.web]
+protocol = "http"
+transport = "tcp"
+host = "127.0.0.1"
+port = 19930
+
+[listeners.relay]
+protocol = "websocket"
+transport = "tcp"
+host = "127.0.0.1"
+port = 19931
+
+[relays.edge]
+mode = "hub"
+carrier = "websocket"
+listener = "listener:relay"
+path = "/vhttpd/relay"
+node_id = "mcp-relay-public"
+token = "change-me"
+max_channels = 1024
+channel_buffer = 64
+
+[adapters.mcp-relay]
+kind = "relay-delivery"
+options.target = "relay:edge"
+options.completion_mode = "wait"
+int_options.completion_timeout_ms = 30000
+options.frame_kind = "open"
+options.route = "relay/local-mcp"
+
+[[pipelines]]
+id = "public/mcp-relay"
+ingress = "listener:web"
+match.methods = ["POST", "DELETE"]
+match.paths = ["/mcp"]
+egress = "adapter:mcp-relay"

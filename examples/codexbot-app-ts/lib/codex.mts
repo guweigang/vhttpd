@@ -354,10 +354,7 @@ export function extractAssistantItemsFromThreadReadResult(result: ThreadReadResp
   if (normalizedTurnId) {
     const matchedTurn = turns.find((turn) => turn.id === normalizedTurnId);
     if (matchedTurn) {
-      const matchedItems = extractAssistantItemsFromTurn(matchedTurn);
-      if (matchedItems.length) {
-        return matchedItems;
-      }
+      return extractAssistantItemsFromTurn(matchedTurn);
     }
   }
   for (let index = turns.length - 1; index >= 0; index -= 1) {

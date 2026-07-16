@@ -9,12 +9,12 @@ event_log = "/tmp/vhttpd_wordpress.events.ndjson"
 [worker]
 autostart = true
 read_timeout_ms = 3000
-socket = "/tmp/vslim_wordpress.sock"
-cmd = "php -d extension=/Users/guweigang/Source/vphpx/vslim/vslim.so /Users/guweigang/Source/vhttpd/php/package/bin/php-worker"
+socket = "/tmp/vphp_wordpress.sock"
+cmd = "php ./examples/wordpress/vendor/bin/vphp-worker"
 
 [worker.env]
-VHTTPD_APP = "/Users/guweigang/Source/vhttpd/examples/wordpress/app.php"
-VSLIM_WP_ROOT = "/ABS/PATH/TO/WORDPRESS"
+VHTTPD_APP = "./examples/wordpress/app.php"
+VPHP_WP_ROOT = "/ABS/PATH/TO/WORDPRESS"
 
 [admin]
 host = "127.0.0.1"

@@ -11,10 +11,10 @@ autostart = true
 pool_size = 2
 socket = "/tmp/vhttpd_mcp_worker.sock"
 read_timeout_ms = 3000
-cmd = "php -d extension=/Users/guweigang/Source/vphpx/vslim/vslim.so /Users/guweigang/Source/vhttpd/php/package/bin/php-worker"
+cmd = "php -d extension=${env.VSLIM_EXT:-} ./php/package/bin/php-worker"
 
 [worker.env]
-VHTTPD_APP = "/Users/guweigang/Source/vhttpd/examples/mcp-app.php"
+VHTTPD_APP = "./examples/mcp-app.php"
 
 [admin]
 host = "127.0.0.1"
@@ -34,5 +34,5 @@ allowed_origins = [
 [assets]
 enabled = false
 prefix = "/assets"
-root = "/Users/guweigang/Source/vhttpd/examples/public"
+root = "./examples/public"
 cache_control = "public, max-age=3600"

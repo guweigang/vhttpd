@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: worker_backend/dispatch_transport
+title: Worker 后端分发与 WebSocket 命令执行
+scope:
+    - src/worker_backend_dispatch.v
+    - src/worker_backend_dispatch_transport.v
+    - src/worker_websocket_dispatch_command_runtime.v
+source_files: []
+depends_on: []
+related_to: []

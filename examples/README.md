@@ -24,24 +24,54 @@ make build vhttpd
 - `/Users/guweigang/Source/vhttpd/examples/config/stream-bench.toml`
 - `/Users/guweigang/Source/vhttpd/examples/config/ollama-proxy.toml`
 - `/Users/guweigang/Source/vhttpd/examples/config/mcp.toml`
+- `/Users/guweigang/Source/vhttpd/examples/config/relay-hub-v2.toml`
+- `/Users/guweigang/Source/vhttpd/examples/config/relay-public-v2.toml`
+- `/Users/guweigang/Source/vhttpd/examples/config/relay-agent-v2.toml`
+- `/Users/guweigang/Source/vhttpd/examples/config/relay-agent-local-v2.toml`
 - `/Users/guweigang/Source/vhttpd/examples/config/symfony.toml`
 - `/Users/guweigang/Source/vhttpd/examples/config/laravel.toml`
 - `/Users/guweigang/Source/vhttpd/examples/config/wordpress.toml`
 - `/Users/guweigang/Source/vhttpd/examples/config/db-upstream.toml`
 - `/Users/guweigang/Source/vhttpd/examples/config/db-upstream-pg.toml`
-- `/Users/guweigang/Source/vhttpd/examples/config/paseo-relay.toml`
+- `/Users/guweigang/Source/vhttpd/examples/paseo-relay/paseo-relay.toml`
 
 说明：
 
 - `vhttpd.multi.example.toml` 演示一个进程同时监听两个端口，分别跑 PHP 和 vjsx site
 - `symfony.toml` / `laravel.toml` 需要先安装各自 `vendor` 依赖
-- `wordpress.toml` 需要把 `VSLIM_WP_ROOT=/ABS/PATH/TO/WORDPRESS` 改成真实路径
+- `wordpress.toml` 需要把 `VPHP_WP_ROOT=/ABS/PATH/TO/WORDPRESS` 改成真实路径
 - `ollama-proxy.toml` 里 `OLLAMA_CHAT_URL / OLLAMA_MODEL / OLLAMA_API_KEY` 可按需改
 - `ollama-proxy.toml` 也支持 `OLLAMA_STREAM_FIXTURE`，可离线验证 phase-3 upstream plan
 - `db-upstream.toml` 演示 `vhttpd` 托管 mysql 连接池，并通过 unix socket 暴露 `db` runtime，上游可通过 `/admin/runtime/db` 查看状态
 - `db-upstream-pg.toml` 演示 `vhttpd` 托管 postgresql 连接池，配置写在 `[db.pgsql]`
-- `paseo-relay.toml` 演示一个 `vhttpd + vjsx` 的 Paseo relay skeleton，建议保持 `vjsx.thread_count = 1`
+- `relay-hub-v2.toml` 演示 v2 配置里的通用 WebSocket relay hub
+- `relay-public-v2.toml` 演示 public HTTP listener 通过 `relay-delivery` adapter 投递到通用 relay hub 并等待返回响应
+- `relay-agent-v2.toml` 演示 v2 配置里的 relay agent 和 `relay:*` pipeline ingress，默认不自动连接 hub
+- `relay-agent-local-v2.toml` 演示本地 smoke 用的 autostart relay agent
+- `paseo-relay.toml` 演示一个 `vhttpd + vjsx` 的 Paseo relay skeleton
 - 这些变量都在 `[worker.env]`，会传给 php-worker，可在 PHP 里直接 `getenv('KEY')`
+
+## Relay V2 本地 Smoke
+
+先启动 public + hub 进程：
+
+```bash
+./vhttpd --config /Users/guweigang/Source/vhttpd/examples/config/relay-public-v2.toml
+```
+
+再启动 local agent：
+
+```bash
+./vhttpd --config /Users/guweigang/Source/vhttpd/examples/config/relay-agent-local-v2.toml
+```
+
+验证 public HTTP 会经 relay 返回 local agent 响应：
+
+```bash
+curl --noproxy '*' -i http://127.0.0.1:19920/relay
+```
+
+`relay-public-v2.toml` 里 `listener:web` 和 `listener:relay` 是一组 public relay 入口：HTTP pipeline 通过 `adapter:relay-edge` 指向 `relay:edge`，WebSocket listener 承载同一个 relay hub，所以 runtime 会把这两个 listener 绑定到同一个 relay owner app，保证 wait 响应能拿到同一份 carrier/channel 状态。
 
 ## Paseo Relay Skeleton
 
@@ -49,7 +79,7 @@ make build vhttpd
 
 ```bash
 cd /Users/guweigang/Source/vhttpd
-./vhttpd --config /Users/guweigang/Source/vhttpd/examples/config/paseo-relay.toml
+./vhttpd --config /Users/guweigang/Source/vhttpd/examples/paseo-relay/paseo-relay.toml
 ```
 
 可用端点：
@@ -390,5 +420,5 @@ curl --noproxy '*' http://127.0.0.1:19995/admin/runtime | jq '.stats.mcp_samplin
 ```bash
 make -C /Users/guweigang/Source/vhttpd demo-symfony
 make -C /Users/guweigang/Source/vhttpd demo-laravel
-VSLIM_WP_ROOT=/abs/path/to/wordpress make -C /Users/guweigang/Source/vhttpd demo-wordpress
+VPHP_WP_ROOT=/abs/path/to/wordpress make -C /Users/guweigang/Source/vhttpd demo-wordpress
 ```

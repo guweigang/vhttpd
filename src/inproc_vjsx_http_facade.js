@@ -273,8 +273,14 @@ globalThis.__vhttpd_create_runtime = function(meta) {
               op: "keys",
               key: ""
             }, undefined);
-            if (!resp || !resp.ok || typeof resp.value !== "string" || !resp.value) {
+            if (!resp || !resp.ok) {
               return fallbackValue;
+            }
+            if (Array.isArray(resp.keys)) {
+              return resp.keys;
+            }
+            if (typeof resp.value !== "string" || !resp.value) {
+              return [];
             }
             try {
               const parsed = JSON.parse(String(resp.value));

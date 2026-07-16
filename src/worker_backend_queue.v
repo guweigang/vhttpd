@@ -1,81 +1,129 @@
 module main
 
 import time
+import worker
+import json
 
-fn (mut app App) try_enter_worker_queue() bool {
-	if app.worker_backend.queue_capacity <= 0 || app.worker_backend.queue_timeout_ms <= 0 {
+struct WorkerBackendQueue {}
+
+struct WorkerBackendQueueMetrics {}
+
+fn WorkerBackendQueue.try_enter_state(mut ws worker.WorkerState) bool {
+	if ws.worker_backend.queue_capacity <= 0 || ws.worker_backend.queue_timeout_ms <= 0 {
 		return false
 	}
-	app.pool_mu.@lock()
+	ws.mu.@lock()
 	defer {
-		app.pool_mu.unlock()
+		ws.mu.unlock()
 	}
-	if app.worker_backend.queue_waiting_requests >= app.worker_backend.queue_capacity {
+	if ws.worker_backend.queue_waiting_requests >= ws.worker_backend.queue_capacity {
 		return false
 	}
-	app.worker_backend.queue_waiting_requests++
+	ws.worker_backend.queue_waiting_requests++
 	return true
 }
 
-fn (mut app App) leave_worker_queue() {
-	app.pool_mu.@lock()
+fn WorkerBackendQueue.leave_state(mut ws worker.WorkerState) {
+	ws.mu.@lock()
 	defer {
-		app.pool_mu.unlock()
+		ws.mu.unlock()
 	}
-	if app.worker_backend.queue_waiting_requests > 0 {
-		app.worker_backend.queue_waiting_requests--
+	if ws.worker_backend.queue_waiting_requests > 0 {
+		ws.worker_backend.queue_waiting_requests--
 	}
 }
 
-fn (mut app App) note_worker_queue_wait() {
-	app.mu.@lock()
+fn WorkerBackendQueueMetrics.note_wait_state(mut ws worker.WorkerState) {
+	ws.mu.@lock()
 	defer {
-		app.mu.unlock()
+		ws.mu.unlock()
 	}
-	app.stat_worker_queue_waits_total++
+	ws.stat_queue_waits_total++
 }
 
-fn (mut app App) note_worker_queue_rejected() {
-	app.mu.@lock()
+fn WorkerBackendQueueMetrics.note_rejected_state(mut ws worker.WorkerState) {
+	ws.mu.@lock()
 	defer {
-		app.mu.unlock()
+		ws.mu.unlock()
 	}
-	app.stat_worker_queue_rejected_total++
+	ws.stat_queue_rejected_total++
 }
 
-fn (mut app App) note_worker_queue_timeout() {
-	app.mu.@lock()
+fn WorkerBackendQueueMetrics.note_timeout_state(mut ws worker.WorkerState) {
+	ws.mu.@lock()
 	defer {
-		app.mu.unlock()
+		ws.mu.unlock()
 	}
-	app.stat_worker_queue_timeouts_total++
+	ws.stat_queue_timeouts_total++
 }
 
-fn (mut app App) worker_backend_select_socket_queued() !string {
-	socket_path := app.worker_backend_select_socket() or {
+fn (mut runtime EngineRuntime) select_socket_queued_for_state(port EngineLifecyclePort, kind string, mut ws worker.WorkerState) !string {
+	socket_path := runtime.select_socket_for_state_core(port, kind, mut ws) or {
 		if err.msg() != 'all workers busy' {
+			port.emit_fn('worker.select.failed', {
+				'kind':             kind
+				'error':            err.msg()
+				'diagnostics_json': json.encode(worker_selection_diagnostics_for_state(ws))
+			})
 			return error(err.msg())
 		}
-		if !app.try_enter_worker_queue() {
-			app.note_worker_queue_rejected()
+		if !WorkerBackendQueue.try_enter_state(mut ws) {
+			WorkerBackendQueueMetrics.note_rejected_state(mut ws)
+			port.emit_fn('worker.select.failed', {
+				'kind':             kind
+				'error':            'worker queue full'
+				'diagnostics_json': json.encode(worker_selection_diagnostics_for_state(ws))
+			})
 			return error('worker queue full')
 		}
-		app.note_worker_queue_wait()
+		WorkerBackendQueueMetrics.note_wait_state(mut ws)
 		defer {
-			app.leave_worker_queue()
+			WorkerBackendQueue.leave_state(mut ws)
 		}
-		timeout_ms := if app.worker_backend.queue_timeout_ms > 0 { app.worker_backend.queue_timeout_ms } else { 0 }
-		poll_ms := if app.worker_backend.queue_poll_ms > 0 { app.worker_backend.queue_poll_ms } else { 10 }
+		timeout_ms := if ws.worker_backend.queue_timeout_ms > 0 {
+			ws.worker_backend.queue_timeout_ms
+		} else {
+			0
+		}
+		poll_ms := if ws.worker_backend.queue_poll_ms > 0 {
+			ws.worker_backend.queue_poll_ms
+		} else {
+			10
+		}
 		deadline := time.now().add(time.millisecond * timeout_ms)
+		mut success := false
+		mut last_socket := ''
+		mut select_err := err
 		for time.now() < deadline {
 			time.sleep(time.millisecond * poll_ms)
-			socket := app.worker_backend_select_socket() or {
+			socket := runtime.select_socket_for_state_core(port, kind, mut ws) or {
+				select_err = err
 				continue
 			}
-			return socket
+			last_socket = socket
+			success = true
+			break
 		}
-		app.note_worker_queue_timeout()
+		if success {
+			return last_socket
+		}
+		WorkerBackendQueueMetrics.note_timeout_state(mut ws)
+		port.emit_fn('worker.select.failed', {
+			'kind':             kind
+			'error':            'worker queue timeout: ' + select_err.msg()
+			'diagnostics_json': json.encode(worker_selection_diagnostics_for_state(ws))
+		})
 		return error('worker queue timeout')
 	}
 	return socket_path
+}
+
+fn (mut app App) worker_backend_select_socket_queued() !string {
+	port := app.build_engine_lifecycle_port()
+	return app.engines.select_socket_for_kind(port, '')
+}
+
+fn (mut app App) worker_backend_select_socket_queued_for_state(kind string, mut state worker.WorkerState) !string {
+	port := app.build_engine_lifecycle_port()
+	return app.engines.select_socket_queued_for_state(port, kind, mut state)
 }

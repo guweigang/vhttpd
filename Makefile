@@ -1,4 +1,4 @@
-.PHONY: build vhttpd prod build-prod build-db prepare-build-src deps-core deps-vjsx deps-db deps-full doctor demo-vslim demo-ai demo-symfony demo-laravel demo-wordpress psr-matrix test test-fast test-inproc test-codexbot test-codexbot-fast test-codexbot-lifecycle test-profile-codexbot test-all
+.PHONY: build vhttpd prod build-prod build-db prepare-build-src deps-core deps-vjsx deps-db deps-full doctor demo-vslim demo-ai demo-symfony demo-laravel demo-wordpress package-wp-plugin psr-matrix test test-fast test-php test-e2e test-inproc test-codexbot test-codexbot-fast test-codexbot-lifecycle test-profile-codexbot test-all
 
 ROOT := $(CURDIR)
 SRC_DIR := $(ROOT)/src
@@ -14,7 +14,7 @@ V_TLS_FLAGS := -d use_openssl
 else
 V_TLS_FLAGS := -d mbedtls_client_read_timeout_ms=120000
 endif
-V_FLAGS ?= $(V_TLS_FLAGS)
+V_FLAGS ?= $(V_TLS_FLAGS) -enable-globals
 V_PROD_FLAGS ?= -prod
 V_NOCACHE_FLAGS ?= -nocache
 WITH_DB ?= 1
@@ -22,9 +22,9 @@ VJSX_DIR ?= $(shell if [ -x "$(ROOT)/../vjsx/scripts/ensure-quickjs.sh" ]; then 
 LOCAL_QUICKJS ?= $(abspath $(ROOT)/../quickjs)
 VJS_QUICKJS_PATH ?= $(shell if [ -f "$(LOCAL_QUICKJS)/quickjs.c" ] && [ -f "$(LOCAL_QUICKJS)/quickjs-c-atomics.h" ] && grep -q 'QJS_VERSION_MAJOR' "$(LOCAL_QUICKJS)/quickjs.h" 2>/dev/null; then printf "%s" "$(LOCAL_QUICKJS)"; else VJS_QUICKJS_WORK_ROOT="$(ROOT)" "$(VJSX_DIR)/scripts/ensure-quickjs.sh"; fi)
 VJSX_FLAGS ?= -d build_quickjs
+V_TEST_FLAGS ?= -d vjsx_sqlite
 V_ENV = VJS_QUICKJS_PATH="$(VJS_QUICKJS_PATH)"
 
-DB_IMPL_DIR := $(ROOT)/dbsrc
 BUILD_STAGE_ROOT := $(ROOT)/tmp/vbuildsrc
 BUILD_STAGE_DIR := $(BUILD_STAGE_ROOT)
 
@@ -34,57 +34,64 @@ else
 V_DB_FLAGS :=
 endif
 
-FAST_TEST_FILES := \
-	$(SRC_DIR)/codex_runtime_test.v \
-	$(SRC_DIR)/command_executor_test.v \
-	$(SRC_DIR)/command_test.v \
-	$(SRC_DIR)/feishu_runtime_test.v \
-	$(SRC_DIR)/json_utils_test.v \
-	$(SRC_DIR)/kernel_dispatch_test.v \
-	$(SRC_DIR)/logic_executor_test.v \
-	$(SRC_DIR)/provider_bootstrap_test.v \
-	$(SRC_DIR)/provider_registry_test.v \
-	$(SRC_DIR)/server_logic_test.v \
-	$(SRC_DIR)/websocket_upstream_runtime_test.v \
-	$(SRC_DIR)/worker_backend_runtime_test.v
+# Auto-discover test files so new *_test.v files under src/ are picked up automatically.
+# Unit tests: exclude inproc (heavy) and db (needs network) tests.
+# Top-level tests can run as files; sub-module tests must run by directory so V
+# includes their sibling module files instead of compiling a naked test file.
+FAST_TEST_FILES := $(shell find $(SRC_DIR) -maxdepth 1 -name '*_test.v' \
+	! -name 'inproc_*' \
+	! -name 'db_*')
+FAST_TEST_MODULE_DIRS := $(shell find $(SRC_DIR) -mindepth 2 -name '*_test.v' \
+	! -name 'inproc_*' \
+	! -name 'db_*' \
+	-exec dirname {} \; | sort -u)
 
-INPROC_TEST_FILES := \
-	$(SRC_DIR)/inproc_vjsx_executor_test.v \
-	$(SRC_DIR)/inproc_vjsx_host_api_test.v \
-	$(SRC_DIR)/inproc_vjsx_startup_sequence_test.v \
-	$(SRC_DIR)/inproc_vjsx_warmup_test.v
+PHP_TEST_FILES := $(shell find $(ROOT)/php/package/tests -name '*_test.php' | sort)
 
-CODEXBOT_TEST_FILES := \
-	$(SRC_DIR)/inproc_vjsx_executor_codexbot_core_test.v \
-	$(SRC_DIR)/inproc_vjsx_executor_codexbot_lifecycle_test.v \
-	$(SRC_DIR)/inproc_vjsx_executor_codexbot_projects_test.v \
-	$(SRC_DIR)/inproc_vjsx_executor_codexbot_read_rpc_test.v \
-	$(SRC_DIR)/inproc_vjsx_executor_codexbot_semantics_test.v \
-	$(SRC_DIR)/inproc_vjsx_executor_codexbot_threads_test.v
+TEST_V_FILES_FROM_GOALS := $(filter %.v,$(MAKECMDGOALS))
+TEST_PHP_FILES_FROM_GOALS := $(filter %.php,$(MAKECMDGOALS))
+TEST_FILES_FROM_GOALS := $(strip $(TEST_V_FILES_FROM_GOALS) $(TEST_PHP_FILES_FROM_GOALS))
+ifneq ($(filter test test-fast,$(MAKECMDGOALS)),)
+ifneq ($(TEST_V_FILES_FROM_GOALS),)
+FAST_TEST_FILES := $(TEST_V_FILES_FROM_GOALS)
+FAST_TEST_MODULE_DIRS :=
+endif
+endif
+ifneq ($(filter test test-php,$(MAKECMDGOALS)),)
+ifneq ($(TEST_PHP_FILES_FROM_GOALS),)
+PHP_TEST_FILES := $(TEST_PHP_FILES_FROM_GOALS)
+endif
+endif
+ifneq ($(TEST_FILES_FROM_GOALS),)
+.PHONY: $(TEST_FILES_FROM_GOALS)
+endif
 
-CODEXBOT_LIFECYCLE_TEST_FILES := \
-	$(SRC_DIR)/inproc_vjsx_executor_codexbot_lifecycle_test.v
+# In-proc vjsx tests (non-codexbot).
+INPROC_TEST_FILES := $(shell find $(SRC_DIR) -name 'inproc_*_test.v' \
+	! -name '*codexbot*')
 
-CODEXBOT_FAST_TEST_FILES := \
-	$(SRC_DIR)/inproc_vjsx_executor_codexbot_core_test.v \
-	$(SRC_DIR)/inproc_vjsx_executor_codexbot_projects_test.v \
-	$(SRC_DIR)/inproc_vjsx_executor_codexbot_read_rpc_test.v \
-	$(SRC_DIR)/inproc_vjsx_executor_codexbot_semantics_test.v \
-	$(SRC_DIR)/inproc_vjsx_executor_codexbot_threads_test.v
+# Codexbot in-proc tests (full suite).
+CODEXBOT_TEST_FILES := $(shell find $(SRC_DIR) -name 'inproc_*codexbot*_test.v')
+
+# Codexbot lifecycle only.
+CODEXBOT_LIFECYCLE_TEST_FILES := $(shell find $(SRC_DIR) -name '*codexbot_lifecycle_test.v')
+
+# Codexbot fast suite (excludes lifecycle).
+CODEXBOT_FAST_TEST_FILES := $(shell find $(SRC_DIR) -name 'inproc_*codexbot*_test.v' \
+	! -name '*codexbot_lifecycle_test.v')
 
 prepare-build-src:
 	@rm -rf $(BUILD_STAGE_ROOT)
 	@mkdir -p $(BUILD_STAGE_DIR)
 	@if command -v rsync >/dev/null 2>&1; then \
-		rsync -a --exclude='*_test_helpers.v' --exclude='test_*.v' $(SRC_DIR)/ $(BUILD_STAGE_DIR)/; \
+		rsync -a --exclude='*_test.v' --exclude='*_test_support.v' --exclude='test_*.v' --exclude='inproc_vjsx_executor_codexbot_helpers.v' $(SRC_DIR)/ $(BUILD_STAGE_DIR)/; \
 	else \
 		cp -R $(SRC_DIR)/. $(BUILD_STAGE_DIR)/; \
-		find $(BUILD_STAGE_DIR) -name '*_test_helpers.v' -delete; \
+		find $(BUILD_STAGE_DIR) -name '*_test.v' -delete; \
+		find $(BUILD_STAGE_DIR) -name '*_test_support.v' -delete; \
 		find $(BUILD_STAGE_DIR) -name 'test_*.v' -delete; \
+		find $(BUILD_STAGE_DIR) -name 'inproc_vjsx_executor_codexbot_helpers.v' -delete; \
 	fi
-ifeq ($(WITH_DB),1)
-	@cp $(DB_IMPL_DIR)/*.v $(BUILD_STAGE_DIR)/
-endif
 
 build: prepare-build-src
 	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_FLAGS) $(V_DB_FLAGS) $(V_GC_FLAG) -o $(VHTTPD_BIN) $(BUILD_STAGE_DIR)
@@ -129,28 +136,63 @@ demo-laravel:
 demo-wordpress:
 	@$(ROOT)/examples/run_demo.sh wordpress
 
+package-wp-plugin:
+	@php $(ROOT)/scripts/package-wordpress-plugin.php
+
 psr-matrix:
 	@$(MAKE) -C $(ROOT)/../vphpx/vslim psr-matrix
 
-test: test-fast
+SELECTED_TEST_TARGETS :=
+ifneq ($(TEST_V_FILES_FROM_GOALS),)
+SELECTED_TEST_TARGETS += test-fast
+endif
+ifneq ($(TEST_PHP_FILES_FROM_GOALS),)
+SELECTED_TEST_TARGETS += test-php
+endif
+
+TEST_TARGETS := test-fast test-php
+ifneq ($(TEST_FILES_FROM_GOALS),)
+TEST_TARGETS := $(SELECTED_TEST_TARGETS)
+endif
+
+test: $(TEST_TARGETS)
+
+test-e2e:
+	@bash $(ROOT)/tests/e2e/run.sh
 
 test-fast:
-	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) test $(FAST_TEST_FILES)
+	@set -e; for test_file in $(FAST_TEST_FILES); do \
+		echo "==> v test $${test_file}"; \
+		$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_FLAGS) $(V_TEST_FLAGS) test "$${test_file}"; \
+	done
+	@set -e; for test_dir in $(FAST_TEST_MODULE_DIRS); do \
+		echo "==> v test $${test_dir}"; \
+		$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_FLAGS) $(V_TEST_FLAGS) test "$${test_dir}"; \
+	done
+
+test-php:
+	@set -e; for test_file in $(PHP_TEST_FILES); do \
+		echo "==> php $${test_file}"; \
+		php "$${test_file}"; \
+	done
+
+$(TEST_FILES_FROM_GOALS):
+	@:
 
 test-inproc:
-	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) test $(INPROC_TEST_FILES)
+	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_FLAGS) $(V_TEST_FLAGS) test $(INPROC_TEST_FILES)
 
 test-codexbot:
-	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) test $(CODEXBOT_TEST_FILES)
+	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_FLAGS) $(V_TEST_FLAGS) test $(CODEXBOT_TEST_FILES)
 
 test-codexbot-fast:
-	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) test $(CODEXBOT_FAST_TEST_FILES)
+	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_FLAGS) $(V_TEST_FLAGS) test $(CODEXBOT_FAST_TEST_FILES)
 
 test-codexbot-lifecycle:
-	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) test $(CODEXBOT_LIFECYCLE_TEST_FILES)
+	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_FLAGS) $(V_TEST_FLAGS) test $(CODEXBOT_LIFECYCLE_TEST_FILES)
 
 test-profile-codexbot:
 	@/bin/zsh $(ROOT)/tools/profile_codexbot_tests.sh $(ROOT)
 
 test-all:
-	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) test $(SRC_DIR)
+	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_FLAGS) $(V_TEST_FLAGS) test $(SRC_DIR)

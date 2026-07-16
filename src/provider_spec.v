@@ -1,44 +1,14 @@
 module main
 
-pub enum ProviderRouteKind {
-	codex
-	feishu
-	openai
-	ollama
-	generic
-}
-
-pub enum CommandMatcherKind {
-	prefix
-	exact
-}
-
-pub struct CommandMatcher {
-pub:
-	kind  CommandMatcherKind
-	value string
-}
-
-pub fn (m CommandMatcher) matches(command_type string) bool {
-	if m.value.trim_space() == '' {
-		return false
-	}
-	return match m.kind {
-		.prefix { command_type.starts_with(m.value) }
-		.exact { command_type == m.value }
-	}
-}
-
-// ProviderCommandHandler bridges provider-specific command execution.
-pub interface ProviderCommandHandler {
-	execute(command WorkerWebSocketUpstreamCommand, normalized NormalizedCommand, mut snapshot WebSocketUpstreamCommandActivity) (bool, string)
-}
+import provider
+import command
 
 // ProviderRuntime represents optional provider-owned runtime lifecycle hooks.
 pub interface ProviderRuntime {
-	start(mut app App) !
-	stop(mut app App) !
-	snapshot(mut app App) string
+mut:
+	start(mut ctx provider.RuntimeContext) !
+	stop(mut ctx provider.RuntimeContext) !
+	snapshot(mut ctx provider.RuntimeContext) string
 }
 
 pub struct ProviderHost {
@@ -54,55 +24,116 @@ pub:
 	enabled          bool
 	has_handler      bool
 	has_runtime      bool
-	command_matchers []CommandMatcher
-	route_kind       ProviderRouteKind
+	runtime_driver   string = 'native'
+	command_matchers []command.CommandMatcher
+	route_kind       command.ProviderRouteKind
 pub mut:
-	provider Provider
-	handler  ProviderCommandHandler
-	runtime  ProviderRuntime
+	provider      Provider
+	handler       provider.ProviderCommandHandler
+	runtime       ProviderRuntime
+	lifecycle_ctx provider.RuntimeContext
 }
 
-pub struct AdminProviderSpecSnapshot {
-pub:
-	name             string
-	enabled          bool
-	has_handler      bool     @[json: 'has_handler']
-	has_runtime      bool     @[json: 'has_runtime']
-	command_matchers []string @[json: 'command_matchers']
-	route_kind       string   @[json: 'route_kind']
-}
-
-pub struct AdminProviderRuntimeSnapshot {
-pub:
-	name     string
-	enabled  bool
-	snapshot string
-}
-
-pub fn (mut app App) admin_provider_specs_snapshot() []AdminProviderSpecSnapshot {
-	app.mu.@lock()
-	defer {
-		app.mu.unlock()
-	}
-	mut names := app.providers.specs.keys()
-	names.sort()
-	mut out := []AdminProviderSpecSnapshot{cap: names.len}
+fn (host ProviderHost) admin_specs_snapshot() []provider.AdminProviderSpecSnapshot {
+	names := host.names()
+	mut out := []provider.AdminProviderSpecSnapshot{cap: names.len}
 	for name in names {
-		spec := app.providers.specs[name] or { continue }
+		spec := host.specs[name] or { continue }
 		mut matcher_rows := []string{}
 		for matcher in spec.command_matchers {
 			matcher_rows << '${matcher.kind.str()}:${matcher.value}'
 		}
-		out << AdminProviderSpecSnapshot{
+		out << provider.AdminProviderSpecSnapshot{
 			name:             spec.name
 			enabled:          spec.enabled
 			has_handler:      spec.has_handler
 			has_runtime:      spec.has_runtime
+			runtime_driver:   if spec.runtime_driver.trim_space() == '' {
+				'native'
+			} else {
+				spec.runtime_driver
+			}
 			command_matchers: matcher_rows
-			route_kind:       spec.route_kind.str()
+			route_kind:       spec.route_kind.snapshot_value()
 		}
 	}
 	return out
+}
+
+fn (host ProviderHost) specs_copy() []ProviderSpec {
+	names := host.names()
+	mut specs := []ProviderSpec{cap: names.len}
+	for name in names {
+		spec := host.specs[name] or { continue }
+		specs << ProviderSpec{
+			name:             spec.name
+			enabled:          spec.enabled
+			has_handler:      spec.has_handler
+			has_runtime:      spec.has_runtime
+			runtime_driver:   if spec.runtime_driver.trim_space() == '' {
+				'native'
+			} else {
+				spec.runtime_driver
+			}
+			command_matchers: spec.command_matchers.clone()
+			route_kind:       spec.route_kind
+			provider:         spec.provider
+			handler:          spec.handler
+			runtime:          spec.runtime
+			lifecycle_ctx:    spec.lifecycle_ctx
+		}
+	}
+	return specs
+}
+
+fn (hub ProviderRuntimeHub) admin_specs_snapshot() []provider.AdminProviderSpecSnapshot {
+	return hub.registry.admin_specs_snapshot()
+}
+
+fn (hub ProviderRuntimeHub) provider_specs_copy() []ProviderSpec {
+	return hub.registry.specs_copy()
+}
+
+fn add_provider_runtime_name(mut names []string, mut seen map[string]bool, name string) {
+	trimmed := name.trim_space()
+	if trimmed == '' || seen[trimmed] {
+		return
+	}
+	seen[trimmed] = true
+	names << trimmed
+}
+
+fn (hub ProviderRuntimeHub) configured_provider_runtime_names() []string {
+	mut names := []string{}
+	mut seen := map[string]bool{}
+	for name, _ in hub.runtime_drivers {
+		add_provider_runtime_name(mut names, mut seen, name)
+	}
+	for name, _ in hub.runtime_protocols {
+		add_provider_runtime_name(mut names, mut seen, name)
+	}
+	for name, _ in hub.runtime_plugins {
+		add_provider_runtime_name(mut names, mut seen, name)
+	}
+	for name, _ in hub.runtime_capabilities {
+		add_provider_runtime_name(mut names, mut seen, name)
+	}
+	for name, _ in hub.runtime_hooks {
+		add_provider_runtime_name(mut names, mut seen, name)
+	}
+	for name, _ in hub.runtime_options {
+		add_provider_runtime_name(mut names, mut seen, name)
+	}
+	names.sort()
+	return names
+}
+
+pub fn (mut app App) admin_provider_specs_snapshot() []provider.AdminProviderSpecSnapshot {
+	app.mu.@lock()
+	defer {
+		app.mu.unlock()
+	}
+	return app.providers.admin_specs_snapshot()
 }
 
 pub fn (mut app App) provider_specs_copy() []ProviderSpec {
@@ -110,86 +141,91 @@ pub fn (mut app App) provider_specs_copy() []ProviderSpec {
 	defer {
 		app.mu.unlock()
 	}
-	mut names := app.providers.specs.keys()
-	names.sort()
-	mut specs := []ProviderSpec{cap: names.len}
-	for name in names {
-		spec := app.providers.specs[name] or { continue }
-		specs << ProviderSpec{
-			name:             spec.name
-			enabled:          spec.enabled
-			has_handler:      spec.has_handler
-			has_runtime:      spec.has_runtime
-			command_matchers: spec.command_matchers.clone()
-			route_kind:       spec.route_kind
-			provider:         spec.provider
-			handler:          spec.handler
-			runtime:          spec.runtime
-		}
-	}
-	return specs
+	return app.providers.provider_specs_copy()
 }
 
-pub fn (mut app App) admin_provider_runtimes_snapshot() []AdminProviderRuntimeSnapshot {
-	specs := app.provider_specs_copy()
-	mut snapshots := []AdminProviderRuntimeSnapshot{cap: specs.len}
-	for spec in specs {
+pub fn (mut app App) admin_provider_runtimes_snapshot() []provider.AdminProviderRuntimeSnapshot {
+	mut specs := app.provider_specs_copy()
+	configured_names := app.providers.configured_provider_runtime_names()
+	mut snapshots := []provider.AdminProviderRuntimeSnapshot{cap: specs.len + configured_names.len}
+	mut seen := map[string]bool{}
+	for mut spec in specs {
 		mut snapshot := '{}'
 		if spec.has_runtime {
-			snapshot = spec.runtime.snapshot(mut app)
+			snapshot = spec.runtime.snapshot(mut spec.lifecycle_ctx)
 		}
-		snapshots << AdminProviderRuntimeSnapshot{
-			name:     spec.name
-			enabled:  spec.enabled
-			snapshot: snapshot
+		seen[spec.name] = true
+		snapshots << provider.AdminProviderRuntimeSnapshot{
+			name:           spec.name
+			enabled:        spec.enabled
+			runtime_driver: app.providers.provider_runtime_driver(spec.name)
+			protocol:       app.providers.provider_runtime_protocol(spec.name)
+			plugin:         app.providers.provider_runtime_plugin(spec.name)
+			capabilities:   app.providers.runtime_capabilities[spec.name] or {
+				map[string]string{}
+			}
+			hooks:          app.providers.runtime_hooks[spec.name] or {
+				map[string]string{}
+			}
+			snapshot:       snapshot
+		}
+	}
+	for name in configured_names {
+		if seen[name] {
+			continue
+		}
+		snapshots << provider.AdminProviderRuntimeSnapshot{
+			name:           name
+			enabled:        true
+			runtime_driver: app.providers.provider_runtime_driver(name)
+			protocol:       app.providers.provider_runtime_protocol(name)
+			plugin:         app.providers.provider_runtime_plugin(name)
+			capabilities:   app.providers.runtime_capabilities[name] or {
+				map[string]string{}
+			}
+			hooks:          app.providers.runtime_hooks[name] or {
+				map[string]string{}
+			}
+			snapshot:       '{}'
 		}
 	}
 	return snapshots
 }
 
-// No-op defaults let specs be constructed safely while keeping behavior stable.
-pub struct NoopProviderCommandHandler {}
-
-pub fn (h NoopProviderCommandHandler) execute(command WorkerWebSocketUpstreamCommand, normalized NormalizedCommand, mut snapshot WebSocketUpstreamCommandActivity) (bool, string) {
-	_ = command
-	_ = normalized
-	_ = snapshot
-	return false, ''
-}
-
 pub struct NoopProviderRuntime {}
 
-pub fn (r NoopProviderRuntime) start(mut app App) ! {
-	_ = app
+pub fn (mut r NoopProviderRuntime) start(mut ctx provider.RuntimeContext) ! {
+	_ = ctx
 	return
 }
 
-pub fn (r NoopProviderRuntime) stop(mut app App) ! {
-	_ = app
+pub fn (mut r NoopProviderRuntime) stop(mut ctx provider.RuntimeContext) ! {
+	_ = ctx
 	return
 }
 
-pub fn (r NoopProviderRuntime) snapshot(mut app App) string {
-	_ = app
+pub fn (mut r NoopProviderRuntime) snapshot(mut ctx provider.RuntimeContext) string {
+	_ = ctx
 	return '{}'
 }
 
 // Adapter for existing Provider interface so runtime hooks can remain optional.
 pub struct ProviderRuntimeAdapter {
-pub:
+pub mut:
 	provider Provider
+	ctx      provider.RuntimeContext
 }
 
-pub fn (r ProviderRuntimeAdapter) start(mut app App) ! {
-	r.provider.start(mut app)!
+pub fn (mut r ProviderRuntimeAdapter) start(mut ctx provider.RuntimeContext) ! {
+	r.provider.start(mut r.ctx)!
 	return
 }
 
-pub fn (r ProviderRuntimeAdapter) stop(mut app App) ! {
-	r.provider.stop(mut app)!
+pub fn (mut r ProviderRuntimeAdapter) stop(mut ctx provider.RuntimeContext) ! {
+	r.provider.stop(mut r.ctx)!
 	return
 }
 
-pub fn (r ProviderRuntimeAdapter) snapshot(mut app App) string {
-	return r.provider.snapshot(mut app)
+pub fn (mut r ProviderRuntimeAdapter) snapshot(mut ctx provider.RuntimeContext) string {
+	return r.provider.snapshot(mut r.ctx)
 }

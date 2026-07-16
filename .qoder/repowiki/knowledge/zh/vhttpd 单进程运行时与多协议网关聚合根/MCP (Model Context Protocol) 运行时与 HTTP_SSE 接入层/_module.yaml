@@ -1,0 +1,16 @@
+schema_version: 1
+module_path: mcp_integration
+title: MCP (Model Context Protocol) 运行时与 HTTP/SSE 接入层
+scope:
+    - src/api/mcp/
+    - src/mcp_runtime.v
+    - src/mcp_protocol_ingress_port.v
+    - src/mcp_response_runtime.v
+    - src/mcp_session_lifecycle_runtime.v
+    - src/mcp_session_queue_runtime.v
+    - src/mcp_session_stream_runtime.v
+    - src/mcp_exchange_projection.v
+    - src/mcp_session_delivery_projection.v
+source_files: []
+depends_on: []
+related_to: []

@@ -61,8 +61,12 @@ Primary classes:
 - `VPhp\\VHttpd\\Upstream\\WebSocket\\EventRouter`
 - `VPhp\\VSlim\\Psr7Adapter`
 - `VPhp\\VHttpd\\PhpWorker\\Server`
-- `VPhp\\VHttpd\\PhpWorker\\Client`
+- `VHttpd\\PhpWorker\\Request`
+- `VHttpd\\PhpWorker\\Response`
+- `VHttpd\\PhpWorker\\Client`
 - `VPhp\\VHttpd\\PhpWorker\\StreamResponse`
+- `VHttpd\\Wire\\FrameCodec`
+- `VHttpd\\Wire\\JsonClient`
 - `VPhp\\VSlim\\WebSocket\\App`
 - `VPhp\\VHttpd\\PhpWorker\\WebSocket\\Connection`
 - `VPhp\\VHttpd\\PhpWorker\\WebSocket\\CommandSink`
@@ -71,8 +75,10 @@ Primary classes:
 - `VPhp\\VSlim\\App\\Feishu\\BotApp`
 - `VPhp\\VSlim\\App\\Feishu\\BotHandler`
 - `VPhp\\VSlim\\App\\Feishu\\BotAdapter`
-- `VPhp\\VSlim\\DbGateway\\PDO` (experimental)
-- `VPhp\\VSlim\\DbGateway\\PDOStatement` (experimental)
+- `VHttpd\\Db\\Client` (experimental)
+- `VHttpd\\WordPress\\Wpdb` (experimental)
+- `VSlim\\DbGateway\\PDO` (experimental)
+- `VSlim\\DbGateway\\PDOStatement` (experimental)
 - `VSlim\\Container` (PSR-11, provided by `vslim.so` when `psr` extension is enabled)
 - `VSlim\\Container\\NotFoundException` (provided by `vslim.so`)
 - `VSlim\\Container\\ContainerException` (provided by `vslim.so`)
@@ -500,30 +506,103 @@ $app->get('/stream/text', function () {
 
 ## Experimental DB gateway client
 
+The database pool lives in vhttpd. PHP code, whether running as a long-lived
+`php-worker` or as short-lived `php-cgi`, only opens a lightweight framed JSON
+client to the vhttpd DB runtime socket.
+
 ```php
 <?php
 
 declare(strict_types=1);
 
-use VSlim\DbGateway\PDO;
+use VHttpd\DbGateway\Client;
 
-$db = new PDO('/tmp/vhttpd_db.sock');
+$db = Client::fromEnv();
 $db->ping();
 
-$stmt = $db->prepare('SELECT id, name FROM users WHERE id = ?');
-$stmt->execute([123]);
-$row = $stmt->fetch();
+$result = $db->query('SELECT id, name FROM users WHERE id = ?', [123]);
+$row = $result['rows'][0] ?? null;
 
-$db->beginTransaction();
+$sessionId = $db->beginTransaction();
 try {
-    $db->execute('UPDATE accounts SET balance = balance - ? WHERE id = ?', [100, 1]);
-    $db->execute('UPDATE accounts SET balance = balance + ? WHERE id = ?', [100, 2]);
-    $db->commit();
+    $db->execute('UPDATE accounts SET balance = balance - ? WHERE id = ?', [100, 1], $sessionId);
+    $db->execute('UPDATE accounts SET balance = balance + ? WHERE id = ?', [100, 2], $sessionId);
+    $db->commit($sessionId);
 } catch (Throwable $e) {
-    $db->rollBack();
+    $db->rollback($sessionId);
     throw $e;
 }
 ```
+
+For PDO-style application code, use the experimental facade:
+
+```php
+use VHttpd\DbGateway\PDO;
+
+$pdo = new PDO(getenv('VHTTPD_DB_SOCKET') ?: '/tmp/vhttpd_db.sock', getenv('VHTTPD_DB_POOL') ?: 'default');
+```
+
+## Cache Gateway
+
+When vhttpd starts `[cache]`, PHP code can access the shared in-memory cache
+through the same JSON frame transport:
+
+```php
+use VHttpd\Cache\Client;
+
+$cache = Client::fromEnv(defaultNamespace: 'wordpress');
+$cache->set('page:home', $html, 60_000);
+$html = $cache->get('page:home');
+```
+
+The cache gateway currently uses vhttpd's memory-backed SessionStore semantics:
+namespaced string keys, optional TTL, key listing, existence checks, delete, and
+compare-and-swap patch operations. Redis can be added behind the same client
+protocol later without changing PHP application code.
+
+The cache and DB clients speak vhttpd runtime protocols over the same 4-byte
+length-prefixed JSON frame format used by PHP workers. DB requests look like:
+
+```json
+{"version":1,"mode":"db","op":"query","pool":"default","session_id":"","sql":"SELECT 1","params":[],"timeout_ms":1000}
+```
+
+## Experimental WordPress DB bridge
+
+Include the bridge from `wp-config.php` when WordPress is launched by vhttpd:
+
+```php
+<?php
+
+if (($vendor = getenv('VHTTPD_VENDOR')) !== false && $vendor !== '') {
+    require_once rtrim($vendor, '/') . '/wordpress/vhttpd-db.php';
+}
+```
+
+Set `VHTTPD_VENDOR`, `VHTTPD_DB_SOCKET`, `VHTTPD_DB_POOL`, and optionally
+`VHTTPD_DB_TIMEOUT_MS` in the vhttpd PHP executor environment. The bridge
+prepares `VHttpd\WordPress\Wpdb` before WordPress boots, so no
+`wp-content/db.php` drop-in is required. It does not shim plugins that bypass
+`$wpdb` and call `mysqli_*` directly.
+
+## Experimental WordPress Object Cache
+
+WordPress only loads external object caches through the official
+`wp-content/object-cache.php` drop-in. Keep that file as a tiny environment
+loader and let vhttpd provide the implementation:
+
+```php
+<?php
+
+if (($vendor = getenv('VHTTPD_VENDOR')) !== false && $vendor !== '') {
+    require_once rtrim($vendor, '/') . '/wordpress/object-cache.php';
+}
+```
+
+Set `VHTTPD_CACHE_SOCKET` in the vhttpd PHP executor environment. The drop-in
+uses `VHttpd\WordPress\ObjectCache`, keeps a local per-request cache, and
+persists serializable values through `VHttpd\Cache\Client`. If the cache socket
+is unavailable, WordPress falls back to the local cache for the current request.
 
 ## VSlim global container (PSR-11)
 

@@ -1,5 +1,6 @@
 module main
 
+import executor as exec
 import net.http
 import os
 
@@ -23,22 +24,22 @@ export default function handle(ctx) {
 	defer {
 		os.rmdir_all(temp_dir) or {}
 	}
-	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
+	mut runner := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
 		thread_count:    1
 		app_entry:       app_file
 		module_root:     temp_dir
 		runtime_profile: 'node'
 	})
 	defer {
-		executor.close()
+		runner.close()
 	}
-	mut app := App{}
+	mut app := InProcTestApp{}
 	req := http.Request{
 		method: .get
 		url:    '/host-api'
 		host:   'example.test'
 	}
-	outcome := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	outcome := runner.dispatch_http(mut app, exec.HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/host-api'
 		req:         req
@@ -64,11 +65,13 @@ export default function handle(ctx) {
   if (ctx.path === "/set") {
     return ctx.json({
       ok: store.set("srv:test", { count: 1, status: "ready" }, { ttlMs: 60000 }),
+      okSecond: store.set("srv:other", { count: 2 }, { ttlMs: 60000 }),
       existsAfterSet: store.exists("srv:test")
     }, 200);
   }
   return ctx.json({
     value: store.get("srv:test", null),
+    keys: store.keys([]),
     exists: store.exists("srv:test")
   }, 200);
 }
@@ -78,17 +81,17 @@ export default function handle(ctx) {
 	defer {
 		os.rmdir_all(temp_dir) or {}
 	}
-	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
+	mut runner := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
 		thread_count:    2
 		app_entry:       app_file
 		module_root:     temp_dir
 		runtime_profile: 'node'
 	})
 	defer {
-		executor.close()
+		runner.close()
 	}
-	mut app := App{}
-	set_outcome := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	mut app := InProcTestApp{}
+	set_outcome := runner.dispatch_http(mut app, exec.HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/set'
 		req:         http.Request{
@@ -104,7 +107,7 @@ export default function handle(ctx) {
 	assert set_outcome.response.body.contains('"ok":true')
 	assert set_outcome.response.body.contains('"existsAfterSet":true')
 
-	get_outcome := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	get_outcome := runner.dispatch_http(mut app, exec.HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/get'
 		req:         http.Request{
@@ -120,6 +123,7 @@ export default function handle(ctx) {
 	assert get_outcome.response.body.contains('"exists":true')
 	assert get_outcome.response.body.contains('"status":"ready"')
 	assert get_outcome.response.body.contains('"count":1')
+	assert get_outcome.response.body.contains('"keys":["srv:other","srv:test"]')
 }
 
 fn test_inproc_vjsx_runtime_session_store_patch_updates_across_requests() {
@@ -158,17 +162,17 @@ export default function handle(ctx) {
 	defer {
 		os.rmdir_all(temp_dir) or {}
 	}
-	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
+	mut runner := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
 		thread_count:    2
 		app_entry:       app_file
 		module_root:     temp_dir
 		runtime_profile: 'node'
 	})
 	defer {
-		executor.close()
+		runner.close()
 	}
-	mut app := App{}
-	_ := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	mut app := InProcTestApp{}
+	_ := runner.dispatch_http(mut app, exec.HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/seed'
 		req:         http.Request{
@@ -181,7 +185,7 @@ export default function handle(ctx) {
 		request_id:  'req_session_store_patch_seed'
 	}) or { panic(err) }
 
-	patch_outcome := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	patch_outcome := runner.dispatch_http(mut app, exec.HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/patch'
 		req:         http.Request{
@@ -197,7 +201,7 @@ export default function handle(ctx) {
 	assert patch_outcome.response.body.contains('"status":"patched"')
 	assert patch_outcome.response.body.contains('"count":2')
 
-	get_outcome := executor.dispatch_http(mut app, HttpLogicDispatchRequest{
+	get_outcome := runner.dispatch_http(mut app, exec.HttpLogicDispatchRequest{
 		method:      'GET'
 		path:        '/get'
 		req:         http.Request{

@@ -10,10 +10,10 @@ event_log = "/tmp/vhttpd_ai_stream.events.ndjson"
 autostart = true
 read_timeout_ms = 3000
 socket = "/tmp/vslim_ai_stream.sock"
-cmd = "php -d extension=/Users/guweigang/Source/vphpx/vslim/vslim.so /Users/guweigang/Source/vhttpd/php/package/bin/php-worker"
+cmd = "php -d extension=${env.VSLIM_EXT:-} ./php/package/bin/php-worker"
 
 [worker.env]
-VHTTPD_APP = "/Users/guweigang/Source/vhttpd/examples/ai-stream-app.php"
+VHTTPD_APP = "./examples/ai-stream-app.php"
 
 [admin]
 host = "127.0.0.1"

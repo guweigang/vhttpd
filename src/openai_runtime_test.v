@@ -1,12 +1,16 @@
 module main
 
+import config
+import api.openai
+import plugin
 import os
 import x.json2
 
 fn test_openai_relative_path_matches_configured_base_path() {
-	assert openai_relative_path('/v1/models', '/v1') or { '' } == '/models'
-	assert openai_relative_path('api/openai/chat/completions?trace=1', '/api/openai') or { '' } == '/chat/completions'
-	if _ := openai_relative_path('/api/other/models', '/api/openai') {
+	ctx := openai_path_context()
+	assert ctx.relative_path('/v1/models', '/v1') or { '' } == '/models'
+	assert ctx.relative_path('api/openai/chat/completions?trace=1', '/api/openai') or { '' } == '/chat/completions'
+	if _ := ctx.relative_path('/api/other/models', '/api/openai') {
 		assert false
 	} else {
 		assert true
@@ -15,19 +19,23 @@ fn test_openai_relative_path_matches_configured_base_path() {
 
 fn test_openai_route_resolution_maps_public_model_to_upstream_model() {
 	mut app := App{
-		openai_enabled:         true
-		openai_base_path:       '/v1'
-		openai_default_backend: 'default'
-		openai_backends:        {
-			'default': OpenAIBackendConfig{
-				base_url: 'https://upstream.test/v1'
-			}
-		}
-		openai_routes:          {
-			'gpt-4o-mini': OpenAIRouteConfig{
-				models:         ['gpt-4o-mini', 'mini']
-				backend:        'default'
-				upstream_model: 'upstream-mini'
+		protocols: ProtocolRuntimeHub{
+			openai: openai.OpenaiState{
+				enabled:         true
+				base_path:       '/v1'
+				default_backend: 'default'
+				backends:        {
+					'default': config.OpenAIBackendConfig{
+						base_url: 'https://upstream.test/v1'
+					}
+				}
+				routes:          {
+					'gpt-4o-mini': config.OpenAIRouteConfig{
+						models:         ['gpt-4o-mini', 'mini']
+						backend:        'default'
+						upstream_model: 'upstream-mini'
+					}
+				}
 			}
 		}
 	}
@@ -39,19 +47,23 @@ fn test_openai_route_resolution_maps_public_model_to_upstream_model() {
 
 fn test_openai_responses_builtin_plan_uses_responses_path() {
 	mut app := App{
-		openai_enabled:         true
-		openai_base_path:       '/v1'
-		openai_default_backend: 'default'
-		openai_backends:        {
-			'default': OpenAIBackendConfig{
-				base_url: 'https://upstream.test/v1'
-			}
-		}
-		openai_routes:          {
-			'public': OpenAIRouteConfig{
-				models:         ['public-model']
-				backend:        'default'
-				upstream_model: 'upstream-model'
+		protocols: ProtocolRuntimeHub{
+			openai: openai.OpenaiState{
+				enabled:         true
+				base_path:       '/v1'
+				default_backend: 'default'
+				backends:        {
+					'default': config.OpenAIBackendConfig{
+						base_url: 'https://upstream.test/v1'
+					}
+				}
+				routes:          {
+					'public': config.OpenAIRouteConfig{
+						models:         ['public-model']
+						backend:        'default'
+						upstream_model: 'upstream-model'
+					}
+				}
 			}
 		}
 	}
@@ -65,7 +77,7 @@ fn test_openai_responses_builtin_plan_uses_responses_path() {
 }
 
 fn test_openai_replace_model_in_body_keeps_other_fields() {
-	body := openai_replace_model_in_body('{"model":"public","messages":[{"role":"user","content":"hi"}],"stream":true}',
+	body := openai.OpenAIResolvedPlan.replace_model('{"model":"public","messages":[{"role":"user","content":"hi"}],"stream":true}',
 		'upstream')
 	root := json2.decode[json2.Any](body) or { panic(err) }.as_map()
 	assert (root['model'] or { json2.Any('') }).str() == 'upstream'
@@ -109,7 +121,7 @@ upstream_model = "gpt-4o-mini"
 		os.rm(config_file) or {}
 		os.rmdir_all(temp_dir) or {}
 	}
-	cfg := load_vhttpd_config(['--config', config_file]) or { panic(err) }
+	cfg := config.load_vhttpd_config(['--config', config_file]) or { panic(err) }
 	assert cfg.openai.enabled
 	assert cfg.openai.base_path == '/openai/v1'
 	assert cfg.openai.plugin == 'planner'
@@ -151,7 +163,7 @@ export function openai(req) {
 		os.rmdir_all(temp_dir) or {}
 	}
 	plugins := {
-		'planner': PluginConfig{
+		'planner': config.PluginConfig{
 			kind:            'vjsx'
 			app_entry:       plugin_file
 			runtime_profile: 'node'
@@ -159,18 +171,26 @@ export function openai(req) {
 		}
 	}
 	mut app := App{
-		started_at_unix:        123
-		openai_enabled:         true
-		openai_base_path:       '/v1'
-		openai_plugin:          'planner'
-		openai_default_backend: 'mock'
-		openai_backends:        {
-			'mock': OpenAIBackendConfig{
-				base_url: 'https://mock.openai.test/v1'
+		lifecycle: ProcessLifecycle{
+			started_at_unix: 123
+		}
+		protocols: ProtocolRuntimeHub{
+			plugins: plugin.PluginState{
+				configs: plugins
+				vjsx:    build_vjsx_plugin_runtimes(plugins)
+			}
+			openai:  openai.OpenaiState{
+				enabled:         true
+				base_path:       '/v1'
+				plugin:          'planner'
+				default_backend: 'mock'
+				backends:        {
+					'mock': config.OpenAIBackendConfig{
+						base_url: 'https://mock.openai.test/v1'
+					}
+				}
 			}
 		}
-		plugin_configs:         plugins
-		plugin_vjsx:            build_vjsx_plugin_runtimes(plugins)
 	}
 	defer {
 		app.close_all_plugins()
@@ -202,7 +222,7 @@ export function openai(req) {
 		os.rmdir_all(temp_dir) or {}
 	}
 	plugins := {
-		'planner': PluginConfig{
+		'planner': config.PluginConfig{
 			kind:            'vjsx'
 			app_entry:       plugin_file
 			runtime_profile: 'node'
@@ -210,11 +230,17 @@ export function openai(req) {
 		}
 	}
 	mut app := App{
-		openai_enabled:   true
-		openai_base_path: '/v1'
-		openai_plugin:    'planner'
-		plugin_configs:   plugins
-		plugin_vjsx:      build_vjsx_plugin_runtimes(plugins)
+		protocols: ProtocolRuntimeHub{
+			plugins: plugin.PluginState{
+				configs: plugins
+				vjsx:    build_vjsx_plugin_runtimes(plugins)
+			}
+			openai:  openai.OpenaiState{
+				enabled:   true
+				base_path: '/v1'
+				plugin:    'planner'
+			}
+		}
 	}
 	defer {
 		app.close_all_plugins()
@@ -241,7 +267,7 @@ export function openai(_req) {
 		os.rmdir_all(temp_dir) or {}
 	}
 	plugins := {
-		'planner': PluginConfig{
+		'planner': config.PluginConfig{
 			kind:            'vjsx'
 			app_entry:       plugin_file
 			runtime_profile: 'node'
@@ -249,24 +275,30 @@ export function openai(_req) {
 		}
 	}
 	mut app := App{
-		openai_enabled:         true
-		openai_base_path:       '/v1'
-		openai_plugin:          'planner'
-		openai_default_backend: 'mock'
-		openai_backends:        {
-			'mock': OpenAIBackendConfig{
-				base_url: 'https://mock.openai.test/v1'
+		protocols: ProtocolRuntimeHub{
+			plugins: plugin.PluginState{
+				configs: plugins
+				vjsx:    build_vjsx_plugin_runtimes(plugins)
+			}
+			openai:  openai.OpenaiState{
+				enabled:         true
+				base_path:       '/v1'
+				plugin:          'planner'
+				default_backend: 'mock'
+				backends:        {
+					'mock': config.OpenAIBackendConfig{
+						base_url: 'https://mock.openai.test/v1'
+					}
+				}
+				routes:          {
+					'public': config.OpenAIRouteConfig{
+						models:         ['public-model']
+						backend:        'mock'
+						upstream_model: 'builtin-upstream-model'
+					}
+				}
 			}
 		}
-		openai_routes:          {
-			'public': OpenAIRouteConfig{
-				models:         ['public-model']
-				backend:        'mock'
-				upstream_model: 'builtin-upstream-model'
-			}
-		}
-		plugin_configs:         plugins
-		plugin_vjsx:            build_vjsx_plugin_runtimes(plugins)
 	}
 	defer {
 		app.close_all_plugins()
@@ -280,47 +312,47 @@ export function openai(_req) {
 
 fn test_openai_plugin_plan_validation_rejects_missing_backend() {
 	raw := '{"method":"POST","path":"/chat/completions","body":"{}"}'
-	plan := openai_upstream_plan_from_plugin_json_with_defaults(raw, '/chat/completions',
+	plan := openai.OpenAIUpstreamPlan.from_plugin_json(raw, '/chat/completions',
 		'openai.chat.completion') or { panic(err) }
 	mut app := App{}
 	_ := app
 	if plan.backend.trim_space() == '' {
-		err := openai_plan_error('openai_plugin_plan_missing_backend',
+		err := openai.OpenAIResolvedPlan.plan_error('openai_plugin_plan_missing_backend',
 			'plugin plan must include backend')
-		assert openai_plan_error_code(err.msg()) == 'openai_plugin_plan_missing_backend'
-		assert openai_plan_error_message(err.msg()) == 'plugin plan must include backend'
+		assert openai.OpenAIResolvedPlan.plan_error_code(err.msg()) == 'openai_plugin_plan_missing_backend'
+		assert openai.OpenAIResolvedPlan.plan_error_message(err.msg()) == 'plugin plan must include backend'
 		return
 	}
 	assert false
 }
 
 fn test_openai_plugin_plan_validation_rejects_invalid_method_and_path() {
-	openai_validate_plan_method('TRACE') or {
-		assert openai_plan_error_code(err.msg()) == 'openai_plugin_plan_invalid_method'
-		assert openai_plan_error_message(err.msg()).contains('TRACE')
+	openai.OpenAIResolvedPlan.validate_method('TRACE') or {
+		assert openai.OpenAIResolvedPlan.plan_error_code(err.msg()) == 'openai_plugin_plan_invalid_method'
+		assert openai.OpenAIResolvedPlan.plan_error_message(err.msg()).contains('TRACE')
 	}
-	openai_validate_plan_path('chat/completions') or {
-		assert openai_plan_error_code(err.msg()) == 'openai_plugin_plan_invalid_path'
-		assert openai_plan_error_message(err.msg()).contains('start with /')
+	openai.OpenAIResolvedPlan.validate_path('chat/completions') or {
+		assert openai.OpenAIResolvedPlan.plan_error_code(err.msg()) == 'openai_plugin_plan_invalid_path'
+		assert openai.OpenAIResolvedPlan.plan_error_message(err.msg()).contains('start with /')
 	}
-	assert openai_validate_stream_mode('mapped') or { panic(err) } == 'mapped'
-	openai_validate_response_codec('xml', 'mapped') or {
-		assert openai_plan_error_code(err.msg()) == 'openai_plugin_plan_unsupported_response_codec'
-		assert openai_plan_error_message(err.msg()).contains('xml')
+	assert openai.OpenAIResolvedPlan.validate_stream_mode('mapped') or { panic(err) } == 'mapped'
+	openai.OpenAIResolvedPlan.validate_response_codec('xml', 'mapped') or {
+		assert openai.OpenAIResolvedPlan.plan_error_code(err.msg()) == 'openai_plugin_plan_unsupported_response_codec'
+		assert openai.OpenAIResolvedPlan.plan_error_message(err.msg()).contains('xml')
 	}
-	openai_validate_output_protocol('custom.protocol', 'mapped') or {
-		assert openai_plan_error_code(err.msg()) == 'openai_plugin_plan_unsupported_output_protocol'
-		assert openai_plan_error_message(err.msg()).contains('custom.protocol')
+	openai.OpenAIResolvedPlan.validate_output_protocol('custom.protocol', 'mapped') or {
+		assert openai.OpenAIResolvedPlan.plan_error_code(err.msg()) == 'openai_plugin_plan_unsupported_output_protocol'
+		assert openai.OpenAIResolvedPlan.plan_error_message(err.msg()).contains('custom.protocol')
 	}
-	assert openai_validate_mapper('plugin') or { panic(err) } == 'plugin'
-	openai_validate_mapper('remote') or {
-		assert openai_plan_error_code(err.msg()) == 'openai_plugin_plan_unsupported_mapper'
-		assert openai_plan_error_message(err.msg()).contains('remote')
+	assert openai.OpenAIResolvedPlan.validate_mapper('plugin') or { panic(err) } == 'plugin'
+	openai.OpenAIResolvedPlan.validate_mapper('remote') or {
+		assert openai.OpenAIResolvedPlan.plan_error_code(err.msg()) == 'openai_plugin_plan_unsupported_mapper'
+		assert openai.OpenAIResolvedPlan.plan_error_message(err.msg()).contains('remote')
 	}
 }
 
 fn test_openai_plugin_plan_sanitizes_hop_by_hop_headers() {
-	headers := openai_sanitize_plan_headers({
+	headers := openai.OpenAIResolvedPlan.sanitize_headers({
 		'x-ok':              'yes'
 		'connection':        'close'
 		'transfer-encoding': 'chunked'
@@ -337,7 +369,7 @@ fn test_openai_plugin_plan_sanitizes_hop_by_hop_headers() {
 fn test_openai_mapped_once_ndjson_aggregates_chat_completion() {
 	body := '{"message":{"content":"你"},"done":false}\n' +
 		'{"message":{"content":"好"},"done":false}\n' + '{"done":true}\n'
-	mapped := openai_map_once_response(OpenAIResolvedPlan{
+	mapped := openai.map_once_response(openai.OpenAIResolvedPlan{
 		model:           'public-model'
 		stream_mode:     'mapped'
 		response_codec:  'ndjson'
@@ -356,7 +388,7 @@ fn test_openai_mapped_once_ndjson_aggregates_tool_calls() {
 		'{"message":{"tool_calls":[{"index":0,"id":"call_search","type":"function","function":{"name":"search","arguments":"{\\"q\\":\\"vh"}}]},"done":false}\n' +
 		'{"message":{"tool_calls":[{"index":0,"function":{"arguments":"ttpd\\"}"}}]},"done":false}\n' +
 		'{"done":true}\n'
-	mapped := openai_map_once_response(OpenAIResolvedPlan{
+	mapped := openai.map_once_response(openai.OpenAIResolvedPlan{
 		model:           'public-model'
 		stream_mode:     'mapped'
 		response_codec:  'ndjson'
@@ -378,7 +410,7 @@ fn test_openai_mapped_once_ndjson_aggregates_tool_calls() {
 fn test_openai_mapped_once_ndjson_normalizes_usage() {
 	body := '{"message":{"content":"hi"},"done":false}\n' +
 		'{"done":true,"prompt_eval_count":7,"eval_count":11}\n'
-	mapped := openai_map_once_response(OpenAIResolvedPlan{
+	mapped := openai.map_once_response(openai.OpenAIResolvedPlan{
 		model:           'public-model'
 		stream_mode:     'mapped'
 		response_codec:  'ndjson'

@@ -29,17 +29,19 @@ pub struct DbPoolHandle {
 pub mut:
 	driver     string
 	mysql_pool mysql.ConnectionPool
-	pg_pool    pg.ConnectionPool
+	pg_pool    &pg.DB = unsafe { nil }
 }
 
 pub struct DbSessionHandle {
 pub mut:
 	driver     string
 	mysql_conn mysql.DB
-	pg_conn    pg.DB
+	pg_conn    &pg.Conn = unsafe { nil }
 }
 
-fn normalize_db_driver_name(name string) string {
+struct DbDriverName {}
+
+fn DbDriverName.normalize(name string) string {
 	driver := name.trim_space().to_lower()
 	return match driver {
 		'pg', 'postgres', 'postgresql' {
@@ -58,8 +60,8 @@ fn normalize_db_driver_name(name string) string {
 	}
 }
 
-fn db_driver_capabilities(name string) DbDriverCapabilities {
-	return match normalize_db_driver_name(name) {
+fn DbDriverName.capabilities(name string) DbDriverCapabilities {
+	return match DbDriverName.normalize(name) {
 		'mysql' {
 			DbDriverCapabilities{
 				pool:         true
@@ -84,8 +86,8 @@ fn db_driver_capabilities(name string) DbDriverCapabilities {
 	}
 }
 
-fn db_open_pool(settings DbRuntimeSettings) !DbPoolHandle {
-	driver := normalize_db_driver_name(settings.driver)
+fn DbPoolHandle.open(settings DbRuntimeSettings) !DbPoolHandle {
+	driver := DbDriverName.normalize(settings.driver)
 	host := if settings.host.trim_space() != '' { settings.host } else { '127.0.0.1' }
 	default_port := if driver == 'pgsql' { 5432 } else { 3306 }
 	port := u32(if settings.port > 0 { settings.port } else { default_port })
@@ -112,13 +114,15 @@ fn db_open_pool(settings DbRuntimeSettings) !DbPoolHandle {
 		'pgsql', 'pg', 'postgres', 'postgresql' {
 			DbPoolHandle{
 				driver:  'pgsql'
-				pg_pool: pg.new_connection_pool(pg.Config{
+				pg_pool: pg.connect(pg.Config{
 					host:     host
 					port:     int(port)
 					user:     settings.username
 					password: settings.password
 					dbname:   database
-				}, pool_size)!
+				}, pg.PoolConfig{
+					max_open_conns: pool_size
+				})!
 			}
 		}
 		else {
@@ -127,19 +131,19 @@ fn db_open_pool(settings DbRuntimeSettings) !DbPoolHandle {
 	}
 }
 
-fn db_pool_close(mut pool DbPoolHandle) {
+fn (mut pool DbPoolHandle) close() {
 	match pool.driver {
 		'mysql' {
 			pool.mysql_pool.close()
 		}
 		'pgsql' {
-			pool.pg_pool.close()
+			pool.pg_pool.close() or {}
 		}
 		else {}
 	}
 }
 
-fn db_pool_acquire(mut pool DbPoolHandle) !DbSessionHandle {
+fn (mut pool DbPoolHandle) acquire() !DbSessionHandle {
 	return match pool.driver {
 		'mysql' {
 			DbSessionHandle{
@@ -150,7 +154,7 @@ fn db_pool_acquire(mut pool DbPoolHandle) !DbSessionHandle {
 		'pgsql' {
 			DbSessionHandle{
 				driver:  'pgsql'
-				pg_conn: pool.pg_pool.acquire()!
+				pg_conn: pool.pg_pool.conn()!
 			}
 		}
 		else {
@@ -159,7 +163,7 @@ fn db_pool_acquire(mut pool DbPoolHandle) !DbSessionHandle {
 	}
 }
 
-fn db_pool_release(mut pool DbPoolHandle, session DbSessionHandle) {
+fn (mut pool DbPoolHandle) release(session DbSessionHandle) {
 	match pool.driver {
 		'mysql' {
 			if session.driver == 'mysql' {
@@ -168,14 +172,14 @@ fn db_pool_release(mut pool DbPoolHandle, session DbSessionHandle) {
 		}
 		'pgsql' {
 			if session.driver == 'pgsql' {
-				pool.pg_pool.release(session.pg_conn)
+				session.pg_conn.close() or {}
 			}
 		}
 		else {}
 	}
 }
 
-fn db_session_close(mut session DbSessionHandle) ! {
+fn (mut session DbSessionHandle) close() ! {
 	match session.driver {
 		'mysql' {
 			session.mysql_conn.close()!
@@ -189,7 +193,7 @@ fn db_session_close(mut session DbSessionHandle) ! {
 	}
 }
 
-fn db_session_ping(mut session DbSessionHandle) !bool {
+fn (mut session DbSessionHandle) ping() !bool {
 	return match session.driver {
 		'mysql' {
 			session.mysql_conn.ping()!
@@ -204,14 +208,14 @@ fn db_session_ping(mut session DbSessionHandle) !bool {
 	}
 }
 
-fn db_session_begin(mut session DbSessionHandle) ! {
+fn (mut session DbSessionHandle) begin() ! {
 	match session.driver {
 		'mysql' {
 			session.mysql_conn.autocommit(false)!
 			session.mysql_conn.begin()!
 		}
 		'pgsql' {
-			session.pg_conn.begin(pg.PQTransactionParam{})!
+			session.pg_conn.begin_on_conn(pg.PQTransactionParam{})!
 		}
 		else {
 			return error('unsupported_driver')
@@ -219,7 +223,7 @@ fn db_session_begin(mut session DbSessionHandle) ! {
 	}
 }
 
-fn db_session_commit(mut session DbSessionHandle) ! {
+fn (mut session DbSessionHandle) commit() ! {
 	match session.driver {
 		'mysql' {
 			session.mysql_conn.commit()!
@@ -233,7 +237,7 @@ fn db_session_commit(mut session DbSessionHandle) ! {
 	}
 }
 
-fn db_session_rollback(mut session DbSessionHandle) ! {
+fn (mut session DbSessionHandle) rollback() ! {
 	match session.driver {
 		'mysql' {
 			session.mysql_conn.rollback()!
@@ -247,7 +251,7 @@ fn db_session_rollback(mut session DbSessionHandle) ! {
 	}
 }
 
-fn db_session_reset_for_pool(mut session DbSessionHandle) ! {
+fn (mut session DbSessionHandle) reset_for_pool() ! {
 	match session.driver {
 		'mysql' {
 			session.mysql_conn.autocommit(true)!
@@ -315,14 +319,14 @@ fn mysql_stmt_query_rows(mut conn mysql.DB, query string, params []string) !DbQu
 	}
 }
 
-fn db_result_column_key(columns []string, idx int) string {
+fn DbQueryResult.column_key(columns []string, idx int) string {
 	if idx >= 0 && idx < columns.len && columns[idx] != '' {
 		return columns[idx]
 	}
 	return '${idx}'
 }
 
-fn db_session_query(mut session DbSessionHandle, query string, params []string) !DbQueryResult {
+fn (mut session DbSessionHandle) query(query string, params []string) !DbQueryResult {
 	return match session.driver {
 		'mysql' {
 			if params.len == 0 {
@@ -357,7 +361,7 @@ fn db_session_query(mut session DbSessionHandle, query string, params []string) 
 			for row in result.rows {
 				mut item := map[string]string{}
 				for i, value in row.vals {
-					key := db_result_column_key(columns, i)
+					key := DbQueryResult.column_key(columns, i)
 					item[key] = value or { '' }
 				}
 				rows << item
@@ -373,7 +377,7 @@ fn db_session_query(mut session DbSessionHandle, query string, params []string) 
 	}
 }
 
-fn db_session_execute(mut session DbSessionHandle, query string, params []string) !DbExecResult {
+fn (mut session DbSessionHandle) execute(query string, params []string) !DbExecResult {
 	return match session.driver {
 		'mysql' {
 			if params.len == 0 {

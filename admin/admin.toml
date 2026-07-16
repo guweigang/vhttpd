@@ -1,0 +1,23 @@
+version = 2
+
+include = [
+  "../examples/wordpress/vhttpd-v2.toml",
+  "../examples/paseo-relay/paseo-v2.toml",
+]
+
+[server]
+timezone = "Asia/Shanghai"
+pid_file = "/tmp/vhttpd_wordpress_paseo_admin.pid"
+
+[observability]
+event_log = "/tmp/vhttpd_wordpress_paseo_admin.events.ndjson"
+
+[listeners.admin_ui]
+protocol = "http"
+transport = "tcp"
+host = "127.0.0.1"
+port = 20210
+
+[control]
+listener = "listener:admin_ui"
+token = "Abcd.1234"

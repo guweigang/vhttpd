@@ -1,30 +1,56 @@
 module main
 
+import config
+import api.openai
+import provider
 import net
 import net.http
 import os
+import state_store
 import time
 import veb
+import ws
+import feishu
+import codex
+import api.mcp.protocol as mcp_protocol
+import plugin
 
 fn openai_integration_free_port_pair() (int, int) {
-	seed := int((time.now().unix_milli() + os.getpid()) % 10000)
-	for i in 0 .. 1000 {
-		port := 30000 + ((seed + i) % 20000)
-		mut first := net.listen_tcp(.ip, '127.0.0.1:${port}') or { continue }
-		mut second := net.listen_tcp(.ip, '127.0.0.1:${port + 1}') or {
-			first.close() or {}
-			continue
-		}
+	mut first := net.listen_tcp(.ip, '127.0.0.1:0') or {
+		panic('openai integration could not reserve first TCP port: ${err}')
+	}
+	first_addr := first.addr() or {
+		first.close() or {}
+		panic('openai integration could not inspect first TCP port: ${err}')
+	}
+	first_port := first_addr.port() or {
+		first.close() or {}
+		panic('openai integration could not parse first TCP port: ${err}')
+	}
+	mut second := net.listen_tcp(.ip, '127.0.0.1:0') or {
+		first.close() or {}
+		panic('openai integration could not reserve second TCP port: ${err}')
+	}
+	second_addr := second.addr() or {
 		first.close() or {}
 		second.close() or {}
-		return port, port + 1
+		panic('openai integration could not inspect second TCP port: ${err}')
 	}
-	panic('openai integration could not find free TCP port pair')
+	second_port := second_addr.port() or {
+		first.close() or {}
+		second.close() or {}
+		panic('openai integration could not parse second TCP port: ${err}')
+	}
+	first.close() or {}
+	second.close() or {}
+	return first_port, second_port
 }
 
 fn openai_integration_wait_for_http(url string) {
 	for _ in 0 .. 80 {
-		http.fetch(url: url, method: .get) or {
+		mut header := http.new_header()
+		header.set_custom('Connection', 'close') or {}
+		http.fetch(url: url, method: .get, header: header) or {
 			time.sleep(25 * time.millisecond)
 			continue
 		}
@@ -223,10 +249,10 @@ fn openai_integration_mock_fallback_upstream(port int, request_log string, ready
 
 fn openai_integration_start_gateway(port int, upstream_port int, plugin_file string) {
 	plugins := if plugin_file.trim_space() == '' {
-		map[string]PluginConfig{}
+		map[string]config.PluginConfig{}
 	} else {
 		{
-			'planner': PluginConfig{
+			'planner': config.PluginConfig{
 				kind:            'vjsx'
 				app_entry:       plugin_file
 				runtime_profile: 'node'
@@ -235,52 +261,76 @@ fn openai_integration_start_gateway(port int, upstream_port int, plugin_file str
 		}
 	}
 	mut app := App{
-		event_log:                  ''
-		started_at_unix:            time.now().unix()
-		openai_enabled:             true
-		openai_base_path:           '/v1'
-		openai_plugin:              if plugin_file.trim_space() == '' { '' } else { 'planner' }
-		openai_default_backend:     'mock'
-		openai_endpoints:           OpenAIEndpointsConfig{}
-		openai_backends:            {
-			'mock':   OpenAIBackendConfig{
-				base_url: 'http://127.0.0.1:${upstream_port}/v1'
+		control_plane: ControlPlaneRuntime{
+			event_log: ''
+		}
+		lifecycle:     ProcessLifecycle{
+			started_at_unix: time.now().unix()
+		}
+		protocols:     ProtocolRuntimeHub{
+			plugins: plugin.PluginState{
+				configs: plugins
+				vjsx:    build_vjsx_plugin_runtimes(plugins)
 			}
-			'backup': OpenAIBackendConfig{
-				base_url: 'http://127.0.0.1:${upstream_port}/v1'
+			openai:  openai.OpenaiState{
+				enabled:         true
+				base_path:       '/v1'
+				plugin:          if plugin_file.trim_space() == '' { '' } else { 'planner' }
+				default_backend: 'mock'
+				endpoints:       config.OpenAIEndpointsConfig{}
+				backends:        {
+					'mock':   config.OpenAIBackendConfig{
+						base_url: 'http://127.0.0.1:${upstream_port}/v1'
+					}
+					'backup': config.OpenAIBackendConfig{
+						base_url: 'http://127.0.0.1:${upstream_port}/v1'
+					}
+					'exec':   config.OpenAIBackendConfig{
+						kind:     'executor'
+						executor: 'planner'
+					}
+				}
+				routes:          {
+					'public': config.OpenAIRouteConfig{
+						models:         ['public-model']
+						backend:        'mock'
+						upstream_model: 'builtin-upstream-model'
+					}
+				}
+				responses:       state_store.MemoryStateStore.new[openai.OpenAIResponseRecord]()
 			}
-			'exec':   OpenAIBackendConfig{
-				kind:     'executor'
-				executor: 'planner'
+			mcp:     mcp_protocol.McpState{
+				sessions: map[string]mcp_protocol.Session{}
 			}
 		}
-		openai_routes:              {
-			'public': OpenAIRouteConfig{
-				models:         ['public-model']
-				backend:        'mock'
-				upstream_model: 'builtin-upstream-model'
+		websocket:     WebSocketRuntime{
+			state: ws.HubState{
+				conns:            map[string]ws.HubConn{}
+				room_members:     map[string]map[string]bool{}
+				conn_rooms:       map[string]map[string]bool{}
+				conn_meta:        map[string]map[string]string{}
+				pending:          map[string][]ws.HubPendingMessage{}
+				upstream_started: map[string]bool{}
+				fixture_runtime:  map[string]ws.FixtureRuntime{}
 			}
 		}
-		plugin_configs:             plugins
-		plugin_vjsx:                build_vjsx_plugin_runtimes(plugins)
-		openai_responses:           new_memory_state_store[OpenAIResponseRecord]()
-		upstream_sessions:          map[string]UpstreamRuntimeSession{}
-		mcp_sessions:               map[string]McpSession{}
-		ws_hub_conns:               map[string]HubConn{}
-		ws_hub_room_members:        map[string]map[string]bool{}
-		ws_hub_conn_rooms:          map[string]map[string]bool{}
-		ws_hub_conn_meta:           map[string]map[string]string{}
-		ws_hub_pending:             map[string][]HubPendingMessage{}
-		feishu_runtime:             map[string]FeishuProviderRuntime{}
-		websocket_upstream_started: map[string]bool{}
-		providers:                  ProviderHost{
-			registry: map[string]Provider{}
-			specs:    map[string]ProviderSpec{}
+		upstreams:     UpstreamRuntimeRegistry.new()
+		providers:     ProviderRuntimeHub{
+			registry:  ProviderHost{
+				registry: map[string]Provider{}
+				specs:    map[string]ProviderSpec{}
+			}
+			instances: provider.ProviderInstanceRegistry{
+				specs: map[string]provider.ProviderInstanceSpec{}
+			}
+			codex:     codex.CodexState{
+				instances: map[string]codex.ProviderRuntime{}
+			}
+			feishu:    feishu.FeishuState{
+				runtime: map[string]feishu.ProviderRuntime{}
+				buffers: map[string]feishu.StreamBuffer{}
+			}
 		}
-		fixture_websocket_runtime:  map[string]FixtureWebSocketUpstreamRuntime{}
-		provider_instance_specs:    map[string]ProviderInstanceSpec{}
-		codex_instances:            map[string]CodexProviderRuntime{}
-		feishu_buffers:             map[string]FeishuStreamBuffer{}
 	}
 	veb.run_at[App, Context](mut app,
 		host:                 '127.0.0.1'
@@ -718,8 +768,7 @@ fn test_openai_gateway_stream_passthrough_dechunks_upstream_sse() {
 	upstream_port, gateway_port := openai_integration_free_port_pair()
 	request_log := os.join_path(temp_dir, 'upstream.request.txt')
 	ready_file := os.join_path(temp_dir, 'upstream.ready')
-	spawn openai_integration_mock_upstream(upstream_port, 'stream_chunked', request_log,
-		ready_file)
+	spawn openai_integration_mock_upstream(upstream_port, 'stream_chunked', request_log, ready_file)
 	openai_integration_wait_for_file(ready_file)
 	spawn openai_integration_start_gateway(gateway_port, upstream_port, '')
 	openai_integration_wait_for_http('http://127.0.0.1:${gateway_port}/health')
@@ -743,7 +792,8 @@ fn test_openai_gateway_stream_passthrough_dechunks_upstream_sse() {
 }
 
 fn test_openai_gateway_stream_passthrough_writes_chunked_response_boundary() {
-	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_openai_gateway_stream_response_chunked_integration_test')
+	temp_dir := os.join_path(os.temp_dir(),
+		'vhttpd_openai_gateway_stream_response_chunked_integration_test')
 	os.rmdir_all(temp_dir) or {}
 	os.mkdir_all(temp_dir) or { panic(err) }
 	defer {
@@ -780,7 +830,8 @@ fn test_openai_gateway_stream_passthrough_writes_chunked_response_boundary() {
 }
 
 fn test_openai_gateway_stream_passthrough_finishes_on_done_before_upstream_close() {
-	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_openai_gateway_stream_done_boundary_integration_test')
+	temp_dir := os.join_path(os.temp_dir(),
+		'vhttpd_openai_gateway_stream_done_boundary_integration_test')
 	os.rmdir_all(temp_dir) or {}
 	os.mkdir_all(temp_dir) or { panic(err) }
 	defer {
@@ -821,8 +872,7 @@ fn test_openai_gateway_mapped_ollama_ndjson_stream_outputs_openai_sse() {
 	request_log := os.join_path(temp_dir, 'upstream.request.txt')
 	ready_file := os.join_path(temp_dir, 'upstream.ready')
 	plugin_file := openai_integration_write_ollama_plugin(temp_dir)
-	spawn openai_integration_mock_upstream(upstream_port, 'ollama_ndjson', request_log,
-		ready_file)
+	spawn openai_integration_mock_upstream(upstream_port, 'ollama_ndjson', request_log, ready_file)
 	openai_integration_wait_for_file(ready_file)
 	spawn openai_integration_start_gateway(gateway_port, upstream_port, plugin_file)
 	openai_integration_wait_for_http('http://127.0.0.1:${gateway_port}/health')
@@ -929,8 +979,7 @@ fn test_openai_gateway_mapped_ndjson_usage_aggregates_non_stream() {
 	request_log := os.join_path(temp_dir, 'upstream.request.txt')
 	ready_file := os.join_path(temp_dir, 'upstream.ready')
 	plugin_file := openai_integration_write_usage_plugin(temp_dir)
-	spawn openai_integration_mock_upstream(upstream_port, 'usage_ndjson', request_log,
-		ready_file)
+	spawn openai_integration_mock_upstream(upstream_port, 'usage_ndjson', request_log, ready_file)
 	openai_integration_wait_for_file(ready_file)
 	spawn openai_integration_start_gateway(gateway_port, upstream_port, plugin_file)
 	openai_integration_wait_for_http('http://127.0.0.1:${gateway_port}/health')
@@ -962,8 +1011,7 @@ fn test_openai_gateway_mapped_ndjson_usage_outputs_stream_final_chunk() {
 	request_log := os.join_path(temp_dir, 'upstream.request.txt')
 	ready_file := os.join_path(temp_dir, 'upstream.ready')
 	plugin_file := openai_integration_write_usage_plugin(temp_dir)
-	spawn openai_integration_mock_upstream(upstream_port, 'usage_ndjson', request_log,
-		ready_file)
+	spawn openai_integration_mock_upstream(upstream_port, 'usage_ndjson', request_log, ready_file)
 	openai_integration_wait_for_file(ready_file)
 	spawn openai_integration_start_gateway(gateway_port, upstream_port, plugin_file)
 	openai_integration_wait_for_http('http://127.0.0.1:${gateway_port}/health')
@@ -1014,7 +1062,8 @@ fn test_openai_gateway_executor_backend_non_stream_uses_vjsx_app() {
 }
 
 fn test_openai_gateway_executor_backend_stream_uses_vjsx_frames() {
-	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_openai_gateway_executor_stream_integration_test')
+	temp_dir := os.join_path(os.temp_dir(),
+		'vhttpd_openai_gateway_executor_stream_integration_test')
 	os.rmdir_all(temp_dir) or {}
 	os.mkdir_all(temp_dir) or { panic(err) }
 	defer {
@@ -1051,8 +1100,7 @@ fn test_openai_gateway_responses_passthrough_non_stream() {
 	upstream_port, gateway_port := openai_integration_free_port_pair()
 	request_log := os.join_path(temp_dir, 'upstream.request.txt')
 	ready_file := os.join_path(temp_dir, 'upstream.ready')
-	spawn openai_integration_mock_upstream(upstream_port, 'responses_json', request_log,
-		ready_file)
+	spawn openai_integration_mock_upstream(upstream_port, 'responses_json', request_log, ready_file)
 	openai_integration_wait_for_file(ready_file)
 	spawn openai_integration_start_gateway(gateway_port, upstream_port, '')
 	openai_integration_wait_for_http('http://127.0.0.1:${gateway_port}/health')
@@ -1073,7 +1121,8 @@ fn test_openai_gateway_responses_passthrough_non_stream() {
 }
 
 fn test_openai_gateway_responses_passthrough_stream() {
-	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_openai_gateway_responses_stream_integration_test')
+	temp_dir := os.join_path(os.temp_dir(),
+		'vhttpd_openai_gateway_responses_stream_integration_test')
 	os.rmdir_all(temp_dir) or {}
 	os.mkdir_all(temp_dir) or { panic(err) }
 	defer {
@@ -1105,7 +1154,8 @@ fn test_openai_gateway_responses_passthrough_stream() {
 }
 
 fn test_openai_gateway_responses_executor_stream_uses_async_iterable_events() {
-	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_openai_gateway_responses_executor_stream_integration_test')
+	temp_dir := os.join_path(os.temp_dir(),
+		'vhttpd_openai_gateway_responses_executor_stream_integration_test')
 	os.rmdir_all(temp_dir) or {}
 	os.mkdir_all(temp_dir) or { panic(err) }
 	defer {
@@ -1132,7 +1182,8 @@ fn test_openai_gateway_responses_executor_stream_uses_async_iterable_events() {
 }
 
 fn test_openai_gateway_responses_executor_non_stream_registers_response() {
-	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_openai_gateway_responses_executor_registry_integration_test')
+	temp_dir := os.join_path(os.temp_dir(),
+		'vhttpd_openai_gateway_responses_executor_registry_integration_test')
 	os.rmdir_all(temp_dir) or {}
 	os.mkdir_all(temp_dir) or { panic(err) }
 	defer {
@@ -1162,7 +1213,8 @@ fn test_openai_gateway_responses_executor_non_stream_registers_response() {
 }
 
 fn test_openai_gateway_responses_executor_stream_registers_completed_response() {
-	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_openai_gateway_responses_executor_stream_registry_integration_test')
+	temp_dir := os.join_path(os.temp_dir(),
+		'vhttpd_openai_gateway_responses_executor_stream_registry_integration_test')
 	os.rmdir_all(temp_dir) or {}
 	os.mkdir_all(temp_dir) or { panic(err) }
 	defer {
@@ -1193,7 +1245,8 @@ fn test_openai_gateway_responses_executor_stream_registers_completed_response() 
 }
 
 fn test_openai_gateway_responses_retrieve_preserves_query() {
-	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_openai_gateway_responses_retrieve_integration_test')
+	temp_dir := os.join_path(os.temp_dir(),
+		'vhttpd_openai_gateway_responses_retrieve_integration_test')
 	os.rmdir_all(temp_dir) or {}
 	os.mkdir_all(temp_dir) or { panic(err) }
 	defer {
@@ -1218,7 +1271,8 @@ fn test_openai_gateway_responses_retrieve_preserves_query() {
 }
 
 fn test_openai_gateway_responses_cancel_passthrough() {
-	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_openai_gateway_responses_cancel_integration_test')
+	temp_dir := os.join_path(os.temp_dir(),
+		'vhttpd_openai_gateway_responses_cancel_integration_test')
 	os.rmdir_all(temp_dir) or {}
 	os.mkdir_all(temp_dir) or { panic(err) }
 	defer {
@@ -1254,8 +1308,7 @@ fn test_openai_gateway_plugin_frame_mapper_outputs_openai_sse() {
 	request_log := os.join_path(temp_dir, 'upstream.request.txt')
 	ready_file := os.join_path(temp_dir, 'upstream.ready')
 	plugin_file := openai_integration_write_frame_mapper_plugin(temp_dir)
-	spawn openai_integration_mock_upstream(upstream_port, 'custom_ndjson', request_log,
-		ready_file)
+	spawn openai_integration_mock_upstream(upstream_port, 'custom_ndjson', request_log, ready_file)
 	openai_integration_wait_for_file(ready_file)
 	spawn openai_integration_start_gateway(gateway_port, upstream_port, plugin_file)
 	openai_integration_wait_for_http('http://127.0.0.1:${gateway_port}/health')
@@ -1278,7 +1331,8 @@ fn test_openai_gateway_plugin_frame_mapper_outputs_openai_sse() {
 }
 
 fn test_openai_gateway_plugin_frame_mapper_can_emit_tool_calls() {
-	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_openai_gateway_plugin_tool_call_integration_test')
+	temp_dir := os.join_path(os.temp_dir(),
+		'vhttpd_openai_gateway_plugin_tool_call_integration_test')
 	os.rmdir_all(temp_dir) or {}
 	os.mkdir_all(temp_dir) or { panic(err) }
 	defer {
@@ -1288,8 +1342,7 @@ fn test_openai_gateway_plugin_frame_mapper_can_emit_tool_calls() {
 	request_log := os.join_path(temp_dir, 'upstream.request.txt')
 	ready_file := os.join_path(temp_dir, 'upstream.ready')
 	plugin_file := openai_integration_write_plugin_tool_call_mapper(temp_dir)
-	spawn openai_integration_mock_upstream(upstream_port, 'custom_ndjson', request_log,
-		ready_file)
+	spawn openai_integration_mock_upstream(upstream_port, 'custom_ndjson', request_log, ready_file)
 	openai_integration_wait_for_file(ready_file)
 	spawn openai_integration_start_gateway(gateway_port, upstream_port, plugin_file)
 	openai_integration_wait_for_http('http://127.0.0.1:${gateway_port}/health')
@@ -1372,7 +1425,8 @@ fn test_openai_gateway_non_stream_plugin_fallback_retries_backup_plan() {
 }
 
 fn test_openai_gateway_stream_plugin_fallback_retries_before_sse_headers() {
-	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_openai_gateway_stream_fallback_integration_test')
+	temp_dir := os.join_path(os.temp_dir(),
+		'vhttpd_openai_gateway_stream_fallback_integration_test')
 	os.rmdir_all(temp_dir) or {}
 	os.mkdir_all(temp_dir) or { panic(err) }
 	defer {
@@ -1405,7 +1459,8 @@ fn test_openai_gateway_stream_plugin_fallback_retries_before_sse_headers() {
 }
 
 fn test_openai_gateway_mapped_stream_plugin_fallback_retries_before_sse_headers() {
-	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_openai_gateway_mapped_fallback_integration_test')
+	temp_dir := os.join_path(os.temp_dir(),
+		'vhttpd_openai_gateway_mapped_fallback_integration_test')
 	os.rmdir_all(temp_dir) or {}
 	os.mkdir_all(temp_dir) or { panic(err) }
 	defer {
@@ -1448,8 +1503,7 @@ fn test_openai_gateway_stream_upstream_error_is_openai_error() {
 	upstream_port, gateway_port := openai_integration_free_port_pair()
 	request_log := os.join_path(temp_dir, 'upstream.request.txt')
 	ready_file := os.join_path(temp_dir, 'upstream.ready')
-	spawn openai_integration_mock_upstream(upstream_port, 'stream_error', request_log,
-		ready_file)
+	spawn openai_integration_mock_upstream(upstream_port, 'stream_error', request_log, ready_file)
 	openai_integration_wait_for_file(ready_file)
 	spawn openai_integration_start_gateway(gateway_port, upstream_port, '')
 	openai_integration_wait_for_http('http://127.0.0.1:${gateway_port}/health')
@@ -1479,8 +1533,7 @@ fn test_openai_gateway_plugin_mapper_error_is_openai_sse_error() {
 	request_log := os.join_path(temp_dir, 'upstream.request.txt')
 	ready_file := os.join_path(temp_dir, 'upstream.ready')
 	plugin_file := openai_integration_write_mapper_error_plugin(temp_dir)
-	spawn openai_integration_mock_upstream(upstream_port, 'custom_ndjson', request_log,
-		ready_file)
+	spawn openai_integration_mock_upstream(upstream_port, 'custom_ndjson', request_log, ready_file)
 	openai_integration_wait_for_file(ready_file)
 	spawn openai_integration_start_gateway(gateway_port, upstream_port, plugin_file)
 	openai_integration_wait_for_http('http://127.0.0.1:${gateway_port}/health')

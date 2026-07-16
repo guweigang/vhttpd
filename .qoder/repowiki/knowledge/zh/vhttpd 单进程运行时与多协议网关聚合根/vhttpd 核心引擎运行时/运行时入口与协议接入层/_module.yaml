@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: core_engine/stream_and_protocol_ingress
+title: 运行时入口与协议接入层
+scope:
+    - src/stream_runtime.v
+    - src/protocol_ingress_runtime.v
+    - src/generic_event_runtime.v
+source_files: []
+depends_on: []
+related_to: []

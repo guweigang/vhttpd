@@ -8,10 +8,11 @@ timezone = "Asia/Shanghai"
 [worker]
 autostart = true
 pool_size = 4
-cmd = "php -d extension=/Users/guweigang/Source/vphpx/vslim/vslim.so /Users/guweigang/Source/vhttpd/php/package/bin/php-worker"
+# Use ${env.VSLIM_EXT} for the PHP extension path; it typically lives outside this repo.
+cmd = "php -d extension=${env.VSLIM_EXT:-} ./php/package/bin/php-worker"
 
 [worker.env]
-VHTTPD_APP = "/Users/guweigang/Source/vhttpd/examples/codexbot-app.php"
+VHTTPD_APP = "./examples/codexbot-app.php"
 
 [feishu]
 enabled = true

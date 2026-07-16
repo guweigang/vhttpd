@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: upstream_system/provider_feishu
+title: 飞书（Feishu）上游消息提供商实现
+scope:
+    - src/upstream/provider/feishu/
+source_files: []
+depends_on: []
+related_to: []

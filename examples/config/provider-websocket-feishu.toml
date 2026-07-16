@@ -1,0 +1,60 @@
+version = 2
+
+[server]
+timezone = "Asia/Shanghai"
+pid_file = "/tmp/vhttpd_provider_websocket_feishu.pid"
+
+[observability]
+event_log = "/tmp/vhttpd_provider_websocket_feishu.events.ndjson"
+
+[listeners.web]
+protocol = "http"
+transport = "tcp"
+host = "127.0.0.1"
+port = 19886
+
+[engines.provider_events]
+kind = "vjsx"
+entry = "./examples/vjsx/feishu-provider-hooks.mts"
+runtime_profile = "node"
+thread_count = 1
+
+[providers.feishu.runtime]
+driver = "native"
+protocol = "websocket"
+plugin = "feishu-provider-hooks"
+engine = "engine:provider_events"
+
+[providers.feishu.hooks]
+handshake = "handshake"
+normalize = "normalize"
+
+[adapters.health]
+kind = "fixed-response"
+options.status = "200"
+options.body = "provider websocket feishu ok"
+
+[adapters.feishu_events]
+kind = "feishu-events"
+bool_options.enabled = true
+options.open_base_url = "https://open.feishu.cn/open-apis"
+int_options.reconnect_delay_ms = 3000
+record_options = { apps = [{ id = "main", app_id = "${env.FEISHU_APP_ID:-}", app_secret = "${env.FEISHU_APP_SECRET:-}", verification_token = "${env.FEISHU_VERIFICATION_TOKEN:-}", encrypt_key = "${env.FEISHU_ENCRYPT_KEY:-}" }] }
+
+[transforms.feishu_event]
+kind = "vjsx"
+engine = "engine:provider_events"
+handler = "feishu.provider.event"
+
+[[pipelines]]
+id = "provider.health"
+ingress = "listener:web"
+match.paths = ["/health"]
+egress = "adapter:health"
+
+[[pipelines]]
+id = "provider.feishu.events"
+ingress = "provider:feishu"
+match.metadata = { instance = "main" }
+transforms = ["transform:feishu_event"]
+egress = "adapter:feishu_events"

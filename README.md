@@ -1419,7 +1419,7 @@ Package source layout:
   `Manager`、`Psr7Adapter`、`PhpWorker/*`
 - `php/package/src/VSlim/Psr7Adapter.php`
 - `php/package/src/VSlim/Stream/*`
-- `php/package/src/VSlim/DbGateway/*`
+- `php/package/src/VHttpd/DbGateway/*`
 
 ## Current direction
 
