@@ -1,0 +1,28 @@
+schema_version: 1
+module_path: openai_api
+title: OpenAI 协议网关与运行时
+scope:
+    - src/api/openai/
+    - src/openai_app_runtime.v
+    - src/openai_chat_runtime.v
+    - src/openai_responses_runtime.v
+    - src/openai_responses_executor_runtime.v
+    - src/openai_models_runtime.v
+    - src/openai_planning_runtime.v
+    - src/openai_proxy_runtime.v
+    - src/openai_plugin_planning_runtime.v
+    - src/openai_protocol_ingress_port.v
+    - src/openai_stream_proxy_runtime.v
+    - src/openai_mapped_stream_proxy_runtime.v
+    - src/openai_mapped_stream_state.v
+    - src/openai_executor_once_runtime.v
+    - src/openai_executor_stream_runtime.v
+    - src/openai_executor_plugin_runtime.v
+    - src/openai_runtime_context.v
+    - src/openai_runtime_test.v
+    - src/openai_http_runtime_helpers.v
+    - src/openai_gateway_integration_test.v
+    - src/openai_app_runtime.v
+source_files: []
+depends_on: []
+related_to: []

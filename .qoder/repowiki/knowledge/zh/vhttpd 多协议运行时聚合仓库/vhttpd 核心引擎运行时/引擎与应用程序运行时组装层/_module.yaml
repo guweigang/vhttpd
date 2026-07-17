@@ -1,0 +1,12 @@
+schema_version: 1
+module_path: core_engine/engine_and_app_composition
+title: 引擎与应用程序运行时组装层
+scope:
+    - src/engine_runtime.v
+    - src/engine_runtime_builder.v
+    - src/app_composition_runtime.v
+    - src/app_runtime_core_builder.v
+    - src/runtime_hubs.v
+source_files: []
+depends_on: []
+related_to: []

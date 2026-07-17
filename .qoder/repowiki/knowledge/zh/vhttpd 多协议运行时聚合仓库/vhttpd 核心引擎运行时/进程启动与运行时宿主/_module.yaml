@@ -1,0 +1,12 @@
+schema_version: 1
+module_path: core_engine/startup_and_hosting
+title: 进程启动与运行时宿主
+scope:
+    - src/transport_startup_runtime.v
+    - src/control_plane_startup_runtime.v
+    - src/asset_startup_runtime.v
+    - src/host_builtin_runtime.v
+    - src/main.v
+source_files: []
+depends_on: []
+related_to: []

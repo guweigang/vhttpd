@@ -1,0 +1,11 @@
+schema_version: 1
+module_path: state_and_config/runtime_utils
+title: 运行时工具集（JSON 探测、日志、缓存与数据库 Unix Socket 服务）
+scope:
+    - src/jsonutils/
+    - src/logging/
+    - src/cachex/
+    - src/dbx/
+source_files: []
+depends_on: []
+related_to: []
