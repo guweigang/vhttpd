@@ -1,9 +1,0 @@
-schema_version: 1
-module_path: upstream_system/provider_codex_ollama
-title: Codex 与 Ollama 上游 Provider 类型定义
-scope:
-    - src/upstream/provider/codex/
-    - src/upstream/provider/ollama/
-source_files: []
-depends_on: []
-related_to: []

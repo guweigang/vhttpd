@@ -3,11 +3,11 @@ schema_version: 1
 locale: zh-CN
 branch: refactor/v2
 nodes_managed: true
-exported_at: "2026-07-16T07:45:06Z"
+exported_at: "2026-07-17T02:55:28Z"
 modules:
     "":
-        dir_name: vhttpd 单进程运行时与多协议网关聚合根
-        title: vhttpd 单进程运行时与多协议网关聚合根
+        dir_name: vhttpd 多协议运行时聚合仓库
+        title: vhttpd 多协议运行时聚合仓库
         scope:
             - README.md
             - Makefile
