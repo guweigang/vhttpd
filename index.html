@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VHTTPD — Digital Ecology Runtime</title>
+<meta name="description" content="面向 PHP / TypeScript / AI 应用的高性能 Transport Runtime">
+<style>
+/* ===== Reset & Base ===== */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --bg: #0a0e17;
+  --bg-card: #111827;
+  --bg-card-hover: #1a2332;
+  --text: #e2e8f0;
+  --text-muted: #94a3b8;
+  --accent: #5eead4;
+  --accent2: #818cf8;
+  --accent3: #fb923c;
+  --border: #1e293b;
+  --radius: 12px;
+  --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
+}
+html { scroll-behavior: smooth; }
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+a { color: var(--accent); text-decoration: none; transition: opacity .2s; }
+a:hover { opacity: .8; }
+code { font-family: var(--mono); font-size: .9em; }
+
+/* ===== Utility ===== */
+.container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+.section { padding: 100px 0; }
+.section-label {
+  display: inline-block;
+  font-size: .75rem;
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: rgba(94,234,212,.1);
+  padding: 6px 16px;
+  border-radius: 20px;
+  margin-bottom: 16px;
+}
+.section-title {
+  font-size: clamp(1.8rem, 4vw, 2.5rem);
+  font-weight: 700;
+  line-height: 1.2;
+  margin-bottom: 16px;
+}
+.section-desc {
+  font-size: 1.1rem;
+  color: var(--text-muted);
+  max-width: 640px;
+  margin-bottom: 48px;
+}
+.grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; }
+.grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; }
+.grid-4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; }
+
+/* ===== Navbar ===== */
+.nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  background: rgba(10,14,23,.85);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border);
+}
+.nav-inner {
+  display: flex; align-items: center; justify-content: space-between;
+  height: 64px;
+}
+.nav-brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.15rem; }
+.nav-brand img { height: 32px; }
+.nav-links { display: flex; gap: 28px; list-style: none; }
+.nav-links a { color: var(--text-muted); font-size: .9rem; font-weight: 500; }
+.nav-links a:hover { color: var(--text); }
+.nav-cta {
+  background: var(--accent);
+  color: var(--bg);
+  padding: 8px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: .9rem;
+  transition: transform .2s, box-shadow .2s;
+}
+.nav-cta:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(94,234,212,.3); opacity: 1; }
+
+/* ===== Hero ===== */
+.hero {
+  position: relative;
+  min-height: 100vh;
+  display: flex; align-items: center;
+  padding-top: 64px;
+  overflow: hidden;
+}
+.hero::before {
+  content: '';
+  position: absolute;
+  top: -200px; left: 50%; transform: translateX(-50%);
+  width: 800px; height: 800px;
+  background: radial-gradient(circle, rgba(94,234,212,.08) 0%, transparent 70%);
+  pointer-events: none;
+}
+.hero::after {
+  content: '';
+  position: absolute;
+  bottom: -100px; right: -100px;
+  width: 500px; height: 500px;
+  background: radial-gradient(circle, rgba(129,140,248,.06) 0%, transparent 70%);
+  pointer-events: none;
+}
+.hero-content { position: relative; z-index: 1; text-align: center; max-width: 800px; margin: 0 auto; }
+.hero-logo { width: 120px; margin-bottom: 32px; filter: drop-shadow(0 0 40px rgba(94,234,212,.2)); }
+.hero h1 {
+  font-size: clamp(2.2rem, 6vw, 3.8rem);
+  font-weight: 800;
+  line-height: 1.1;
+  margin-bottom: 20px;
+  background: linear-gradient(135deg, #e2e8f0 0%, var(--accent) 50%, var(--accent2) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.hero-sub {
+  font-size: clamp(1rem, 2.5vw, 1.25rem);
+  color: var(--text-muted);
+  margin-bottom: 40px;
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.hero-actions { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+.btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 14px 28px;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 1rem;
+  transition: all .2s;
+  cursor: pointer;
+  border: none;
+}
+.btn-primary {
+  background: var(--accent);
+  color: var(--bg);
+}
+.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(94,234,212,.3); opacity: 1; }
+.btn-secondary {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.btn-secondary:hover { border-color: var(--accent); background: rgba(94,234,212,.05); }
+
+/* ===== Terminal ===== */
+.terminal {
+  margin-top: 48px;
+  background: #0d1117;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  text-align: left;
+  max-width: 640px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.terminal-bar {
+  display: flex; gap: 8px;
+  padding: 12px 16px;
+  background: #161b22;
+  border-bottom: 1px solid var(--border);
+}
+.terminal-dot { width: 12px; height: 12px; border-radius: 50%; }
+.terminal-dot:nth-child(1) { background: #ff5f57; }
+.terminal-dot:nth-child(2) { background: #ffbd2e; }
+.terminal-dot:nth-child(3) { background: #28c840; }
+.terminal-body {
+  padding: 20px;
+  font-family: var(--mono);
+  font-size: .9rem;
+  line-height: 1.8;
+  color: var(--text-muted);
+}
+.terminal-body .prompt { color: var(--accent); }
+.terminal-body .flag { color: var(--accent2); }
+.terminal-body .comment { color: #4a5568; }
+
+/* ===== Features ===== */
+.feature-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 32px;
+  transition: all .3s;
+}
+.feature-card:hover {
+  border-color: rgba(94,234,212,.3);
+  background: var(--bg-card-hover);
+  transform: translateY(-4px);
+}
+.feature-icon {
+  width: 48px; height: 48px;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.5rem;
+  margin-bottom: 20px;
+}
+.feature-icon.teal { background: rgba(94,234,212,.12); }
+.feature-icon.indigo { background: rgba(129,140,248,.12); }
+.feature-icon.orange { background: rgba(251,146,60,.12); }
+.feature-card h3 { font-size: 1.15rem; font-weight: 700; margin-bottom: 10px; }
+.feature-card p { color: var(--text-muted); font-size: .95rem; }
+
+/* ===== Architecture ===== */
+.arch-section { background: linear-gradient(180deg, var(--bg) 0%, #0f1629 100%); }
+.arch-diagram {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 40px;
+  overflow-x: auto;
+}
+.arch-diagram pre {
+  font-family: var(--mono);
+  font-size: .85rem;
+  line-height: 1.8;
+  color: var(--text-muted);
+  white-space: pre;
+}
+.arch-diagram .hl-accent { color: var(--accent); }
+.arch-diagram .hl-indigo { color: var(--accent2); }
+.arch-diagram .hl-orange { color: var(--accent3); }
+.arch-diagram .hl-dim { color: #4a5568; }
+
+/* ===== Comparison ===== */
+.compare-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.compare-table th, .compare-table td {
+  padding: 16px 24px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  font-size: .95rem;
+}
+.compare-table th {
+  background: #0f1629;
+  font-weight: 600;
+  color: var(--text);
+}
+.compare-table th:last-child { color: var(--accent); }
+.compare-table td:last-child { color: var(--accent); }
+.compare-table tr:last-child td { border-bottom: none; }
+
+/* ===== Code Block ===== */
+.code-block {
+  background: #0d1117;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  font-family: var(--mono);
+  font-size: .85rem;
+  line-height: 1.8;
+  overflow-x: auto;
+  color: var(--text-muted);
+}
+.code-block .key { color: var(--accent2); }
+.code-block .val { color: var(--accent); }
+.code-block .comment { color: #4a5568; }
+.code-block .section-name { color: var(--accent3); }
+
+/* ===== CTA ===== */
+.cta-section {
+  text-align: center;
+  background: linear-gradient(180deg, var(--bg) 0%, #0f1629 100%);
+}
+.cta-section .section-title {
+  background: linear-gradient(135deg, var(--text) 0%, var(--accent) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ===== Footer ===== */
+.footer {
+  border-top: 1px solid var(--border);
+  padding: 48px 0;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: .85rem;
+}
+.footer-links { display: flex; gap: 24px; justify-content: center; margin-bottom: 16px; flex-wrap: wrap; }
+.footer-links a { color: var(--text-muted); }
+.footer-links a:hover { color: var(--accent); }
+
+/* ===== Responsive ===== */
+@media (max-width: 768px) {
+  .nav-links { display: none; }
+  .section { padding: 64px 0; }
+  .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+  .compare-table th, .compare-table td { padding: 12px 14px; font-size: .85rem; }
+}
+
+/* ===== Animations ===== */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.hero-content > * { animation: fadeUp .8s ease both; }
+.hero-content > *:nth-child(1) { animation-delay: .1s; }
+.hero-content > *:nth-child(2) { animation-delay: .2s; }
+.hero-content > *:nth-child(3) { animation-delay: .35s; }
+.hero-content > *:nth-child(4) { animation-delay: .5s; }
+.hero-content > *:nth-child(5) { animation-delay: .65s; }
+
+/* Grid lines background */
+.grid-bg {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(94,234,212,.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(94,234,212,.03) 1px, transparent 1px);
+  background-size: 60px 60px;
+  pointer-events: none;
+}
+</style>
+</head>
+<body>
+
+<!-- ===== Navbar ===== -->
+<nav class="nav">
+  <div class="container nav-inner">
+    <a href="#" class="nav-brand">
+      <img src="assets/vhttpd_logo.png" alt="vhttpd">
+      VHTTPD
+    </a>
+    <ul class="nav-links">
+      <li><a href="#features">特性</a></li>
+      <li><a href="#architecture">架构</a></li>
+      <li><a href="#comparison">对比</a></li>
+      <li><a href="#quickstart">快速开始</a></li>
+      <li><a href="https://github.com/guweigang/vhttpd" target="_blank">GitHub</a></li>
+    </ul>
+    <a href="#quickstart" class="nav-cta">开始使用</a>
+  </div>
+</nav>
+
+<!-- ===== Hero ===== -->
+<section class="hero">
+  <div class="grid-bg"></div>
+  <div class="container hero-content">
+    <img class="hero-logo" src="assets/vhttpd_logo.png" alt="vhttpd logo">
+    <h1>Digital Ecology Runtime</h1>
+    <p class="hero-sub">
+      面向 PHP / TypeScript / AI 应用的高性能 Transport Runtime。<br>
+      统一承载 HTTP、WebSocket、SSE、MCP 与上游流。
+    </p>
+    <div class="hero-actions">
+      <a href="#quickstart" class="btn btn-primary">快速开始 →</a>
+      <a href="https://github.com/guweigang/vhttpd" target="_blank" class="btn btn-secondary">GitHub</a>
+    </div>
+    <div class="terminal">
+      <div class="terminal-bar">
+        <div class="terminal-dot"></div>
+        <div class="terminal-dot"></div>
+        <div class="terminal-dot"></div>
+      </div>
+      <div class="terminal-body">
+        <span class="comment"># 一行启动 PHP 应用</span><br>
+        <span class="prompt">$</span> ./vhttpd --config config/vhttpd.example.toml<br><br>
+        <span class="comment"># 或一行启动 TypeScript 应用</span><br>
+        <span class="prompt">$</span> ./vhttpd --executor vjsx --vjsx-entry app.mts
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== Features ===== -->
+<section class="section" id="features">
+  <div class="container">
+    <span class="section-label">核心特性</span>
+    <h2 class="section-title">一个 Runtime，统一所有协议与执行模型</h2>
+    <p class="section-desc">
+      不再需要为 HTTP、WebSocket、SSE、MCP、AI Stream 各自搭建独立服务。
+      vhttpd 在协议层和业务逻辑之间提供统一的 transport runtime。
+    </p>
+    <div class="grid-3">
+      <div class="feature-card">
+        <div class="feature-icon teal">⚡</div>
+        <h3>多协议接入</h3>
+        <p>HTTP、WebSocket、SSE、text stream、MCP Streamable HTTP — 统一 ingress，统一调度。</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon indigo">🔧</div>
+        <h3>多执行器模型</h3>
+        <p>PHP worker 承载成熟业务，vjsx 嵌入式 TypeScript 处理快速变化的协议适配与插件逻辑。</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon orange">🌊</div>
+        <h3>上游流编排</h3>
+        <p>原生支持 Ollama、OpenAI 等上游 token stream，自动映射为下游 SSE 或 text stream。</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon teal">🤖</div>
+        <h3>AI Gateway</h3>
+        <p>OpenAI-compatible gateway、Ollama proxy、MCP server — 一个 runtime 全部承载。</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon indigo"></div>
+        <h3>WebSocket Upstream</h3>
+        <p>飞书等长连接事件入口作为上游 provider，事件自动路由到 worker，支持 MCP 桥接。</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon orange">📊</div>
+        <h3>可观测运维</h3>
+        <p>Admin plane 暴露 worker pool、queue、upstream sessions、MCP sessions、runtime stats。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== Architecture ===== -->
+<section class="section arch-section" id="architecture">
+  <div class="container">
+    <span class="section-label">系统架构</span>
+    <h2 class="section-title">轻量核心，丰富扩展</h2>
+    <p class="section-desc">
+      vhttpd 基于 V 语言和 veb 构建，核心专注 transport 与 runtime 调度，
+      业务逻辑交给可插拔的 executor 和 plugin。
+    </p>
+    <div class="arch-diagram">
+<pre><span class="hl-dim">  Clients / Browsers / MCP Clients</span>
+           │
+           ▼
+<span class="hl-accent">┌─────────────────────────────────────────────┐</span>
+<span class="hl-accent">│</span>  <span class="hl-accent">vhttpd runtime</span>                              <span class="hl-accent">│</span>
+<span class="hl-accent">│</span>  ┌───────────────────────────────────────┐  <span class="hl-accent">│</span>
+<span class="hl-accent">│</span>  │ Protocol Ingress                      │  <span class="hl-accent">│</span>
+<span class="hl-accent">│</span>  │ HTTP │ WebSocket │ Stream             │  <span class="hl-accent">│</span>
+<span class="hl-accent">│</span>  └───────────────┬───────────────────────┘  <span class="hl-accent">│</span>
+<span class="hl-accent">│</span>                  ▼                            <span class="hl-accent">│</span>
+<span class="hl-accent">│</span>  ┌───────────────────────────────────────┐  <span class="hl-accent">│</span>
+<span class="hl-accent">│</span>  │ <span class="hl-indigo">Runtime Modules</span>                       │  <span class="hl-accent">│</span>
+<span class="hl-accent">│</span>  │ Stream │ Upstream │ WebSocket │ MCP   │  <span class="hl-accent">│</span>
+<span class="hl-accent">│</span>  │ Worker Pool │ Admin                   │  <span class="hl-accent">│</span>
+<span class="hl-accent">│</span>  └───────────────┬───────────────────────┘  <span class="hl-accent">│</span>
+<span class="hl-accent">│</span>                  ▼                            <span class="hl-accent">│</span>
+<span class="hl-accent">│</span>  ┌───────────────────────────────────────┐  <span class="hl-accent">│</span>
+<span class="hl-accent">│</span>  │ <span class="hl-orange">Logic Executors</span>                       │  <span class="hl-accent">│</span>
+<span class="hl-accent">│</span>  │ php-worker │ vjsx embedded            │  <span class="hl-accent">│</span>
+<span class="hl-accent">│</span>  └──────────┬──────────────┬─────────────┘  <span class="hl-accent">│</span>
+<span class="hl-accent">└─────────────┼──────────────┼────────────────</span>
+              ▼              ▼
+    <span class="hl-dim">PHP App / Framework</span>   <span class="hl-dim">vjsx TypeScript App</span>
+</pre>
+    </div>
+  </div>
+</section>
+
+<!-- ===== Comparison ===== -->
+<section class="section" id="comparison">
+  <div class="container">
+    <span class="section-label">对比优势</span>
+    <h2 class="section-title">为什么选择 vhttpd？</h2>
+    <p class="section-desc">
+      传统 nginx + PHP-FPM 能工作，但面对 AI streaming、WebSocket、MCP 等现代场景时，
+      需要大量 infra tuning。vhttpd 为这些场景提供一等公民支持。
+    </p>
+    <table class="compare-table">
+      <thead>
+        <tr>
+          <th>维度</th>
+          <th>nginx + PHP-FPM</th>
+          <th>vhttpd + php-worker</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Streaming 支持</td>
+          <td>可行，但需大量 infra tuning</td>
+          <td>一等公民：worker stream frames</td>
+        </tr>
+        <tr>
+          <td>应用 API 形态</td>
+          <td>依赖框架 / flush 特定实现</td>
+          <td>统一 StreamResponse (text / sse)</td>
+        </tr>
+        <tr>
+          <td>传输语义</td>
+          <td>间接通过 proxy / FPM 行为</td>
+          <td>显式 start / chunk / error / end</td>
+        </tr>
+        <tr>
+          <td>AI Token Streaming</td>
+          <td>通常每个项目各自实现</td>
+          <td>可复用的 runtime 模式</td>
+        </tr>
+        <tr>
+          <td>WebSocket</td>
+          <td>非 PHP-FPM 自然形态</td>
+          <td>原生支持 + dispatch 模式</td>
+        </tr>
+        <tr>
+          <td>MCP / AI Gateway</td>
+          <td>需额外服务</td>
+          <td>内置 Streamable HTTP + upstream</td>
+        </tr>
+        <tr>
+          <td>Worker 管理</td>
+          <td>分散在多个组件</td>
+          <td>统一 pool / queue / restart / stats</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ===== Quick Start ===== -->
+<section class="section" id="quickstart" style="background: linear-gradient(180deg, var(--bg) 0%, #0f1629 100%);">
+  <div class="container">
+    <span class="section-label">快速开始</span>
+    <h2 class="section-title">3 分钟跑起来</h2>
+    <p class="section-desc">
+      从构建到运行，只需几步。支持 TOML 配置、CLI 参数、多监听器模式。
+    </p>
+    <div class="grid-2">
+      <div>
+        <h3 style="font-size:1.1rem; margin-bottom:16px; color:var(--accent);">构建</h3>
+        <div class="code-block">
+          <span class="comment"># 安装依赖</span><br>
+          make deps-core<br><br>
+          <span class="comment"># 构建开发版</span><br>
+          make vhttpd<br><br>
+          <span class="comment"># 或构建生产版</span><br>
+          make prod
+        </div>
+      </div>
+      <div>
+        <h3 style="font-size:1.1rem; margin-bottom:16px; color:var(--accent);">运行</h3>
+        <div class="code-block">
+          <span class="comment"># TOML 配置（推荐）</span><br>
+          ./vhttpd --config config/vhttpd.example.toml<br><br>
+          <span class="comment"># 或 CLI 直接启动</span><br>
+          ./vhttpd --host 0.0.0.0 --port 19881 \<br>
+          &nbsp;&nbsp;--worker-pool-size 4 \<br>
+          &nbsp;&nbsp;--worker-autostart 1 \<br>
+          &nbsp;&nbsp;--worker-cmd <span class="val">'php php-worker'</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top: 48px;">
+      <h3 style="font-size:1.1rem; margin-bottom:16px; color:var(--accent);">TOML 配置示例</h3>
+      <div class="code-block">
+        <span class="section-name">[server]</span><br>
+        host = <span class="val">"0.0.0.0"</span><br>
+        port = <span class="val">19881</span><br><br>
+        <span class="section-name">[executor]</span><br>
+        kind = <span class="val">"php"</span><br><br>
+        <span class="section-name">[worker]</span><br>
+        autostart = <span class="val">true</span><br>
+        pool_size = <span class="val">4</span><br>
+        max_requests = <span class="val">5000</span><br><br>
+        <span class="section-name">[admin]</span><br>
+        host = <span class="val">"127.0.0.1"</span><br>
+        port = <span class="val">19981</span><br>
+        token = <span class="val">"change-me"</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== Use Cases ===== -->
+<section class="section">
+  <div class="container">
+    <span class="section-label">应用场景</span>
+    <h2 class="section-title">vhttpd 适合谁？</h2>
+    <p class="section-desc">
+      如果你的应用涉及以下场景，vhttpd 将显著提升开发与运维效率。
+    </p>
+    <div class="grid-4">
+      <div class="feature-card" style="text-align:center; padding:24px;">
+        <div style="font-size:2rem; margin-bottom:12px;">🧠</div>
+        <h3 style="font-size:1rem;">AI Token Streaming</h3>
+        <p style="font-size:.85rem;">PHP 应用接入 SSE / AI 流式响应</p>
+      </div>
+      <div class="feature-card" style="text-align:center; padding:24px;">
+        <div style="font-size:2rem; margin-bottom:12px;">🤖</div>
+        <h3 style="font-size:1rem;">AI Gateway</h3>
+        <p style="font-size:.85rem;">OpenAI / Ollama / MCP 统一接入</p>
+      </div>
+      <div class="feature-card" style="text-align:center; padding:24px;">
+        <div style="font-size:2rem; margin-bottom:12px;">💬</div>
+        <h3 style="font-size:1rem;">飞书 Bot</h3>
+        <p style="font-size:.85rem;">PHP / TS 飞书机器人与事件处理</p>
+      </div>
+      <div class="feature-card" style="text-align:center; padding:24px;">
+        <div style="font-size:2rem; margin-bottom:12px;">🔄</div>
+        <h3 style="font-size:1rem;">WebSocket Relay</h3>
+        <p style="font-size:.85rem;">实时连接编排与消息分发</p>
+      </div>
+      <div class="feature-card" style="text-align:center; padding:24px;">
+        <div style="font-size:2rem; margin-bottom:12px;">🔌</div>
+        <h3 style="font-size:1rem;">MCP Server</h3>
+        <p style="font-size:.85rem;">Streamable HTTP 协议承载</p>
+      </div>
+      <div class="feature-card" style="text-align:center; padding:24px;">
+        <div style="font-size:2rem; margin-bottom:12px;">📦</div>
+        <h3 style="font-size:1rem;">Laravel / Symfony</h3>
+        <p style="font-size:.85rem;">现代框架的高性能 runtime</p>
+      </div>
+      <div class="feature-card" style="text-align:center; padding:24px;">
+        <div style="font-size:2rem; margin-bottom:12px;">🌐</div>
+        <h3 style="font-size:1rem;">WordPress</h3>
+        <p style="font-size:.85rem;">传统 CMS 获得流式能力</p>
+      </div>
+      <div class="feature-card" style="text-align:center; padding:24px;">
+        <div style="font-size:2rem; margin-bottom:12px;">️</div>
+        <h3 style="font-size:1rem;">TypeScript Plugin</h3>
+        <p style="font-size:.85rem;">vjsx 快速扩展协议适配逻辑</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== CTA ===== -->
+<section class="section cta-section">
+  <div class="container">
+    <h2 class="section-title">准备好构建你的 Digital Ecology Runtime 了吗？</h2>
+    <p class="section-desc" style="margin-left:auto; margin-right:auto;">
+      协议很多、流很多、worker 很多 — 但你不想把系统拆得很碎。<br>
+      vhttpd 就是为此而生的。
+    </p>
+    <div class="hero-actions">
+      <a href="#quickstart" class="btn btn-primary">快速开始 →</a>
+      <a href="https://github.com/guweigang/vhttpd" target="_blank" class="btn btn-secondary">查看源码</a>
+      <a href="docs/index.html" class="btn btn-secondary">阅读文档</a>
+    </div>
+  </div>
+</section>
+
+<!-- ===== Footer ===== -->
+<footer class="footer">
+  <div class="container">
+    <div class="footer-links">
+      <a href="https://github.com/guweigang/vhttpd">GitHub</a>
+      <a href="docs/index.html">文档</a>
+      <a href="https://github.com/guweigang/vhttpd/releases">Releases</a>
+      <a href="https://github.com/guweigang/vhttpd/issues">Issues</a>
+    </div>
+    <p>Built with V Language & veb. Licensed under MIT.</p>
+  </div>
+</footer>
+
+</body>
+</html>
