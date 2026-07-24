@@ -1,0 +1,12 @@
+schema_version: 1
+module_path: core_engine/server_lifecycle_and_orchestrator
+title: 服务器进程生命周期与多监听器编排
+scope:
+    - src/server_lifecycle/
+    - src/multi_server_runtime_orchestrator.v
+    - src/server_shutdown_hooks.v
+    - src/server.v
+source_files: []
+depends_on: []
+related_to:
+    - path: admin_interface/data_plane_responses
