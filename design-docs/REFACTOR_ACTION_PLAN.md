@@ -98,7 +98,17 @@ Admin reads capture live subsystem references; pipeline and relay snapshots belo
 
 Validation: strict DB-enabled V3 build, 14 related ownership/integration/worker/ws/OpenAI test files, safety lint, and git diff --check pass. New regressions verify live admin reads, App-free upstream register/snapshot/validation handling, narrow carrier ownership, and injected kernel broadcast dispatch with hub state updates. The empty-constructor negative probe yields 108 required-field diagnostics. Complete E2E passes 207 CLI/config checks plus Node/PHP regressions. Evidence is recorded in tmp/runtime-contexts-validation/.
 
-Linux preflight remains stopped on unrelated tracked .qoder changes under the recorded skill rule. DB live queries were not enabled. Production/Linux, full-suite and codexbot lifecycle checks, remaining pointer placeholders, and broader ownership work remain pending before declaring V2 complete.
+Linux preflight remains stopped on unrelated tracked .qoder changes under the recorded skill rule. DB live queries were not enabled. Production/Linux, full-suite and broader ownership work remain pending before declaring V2 complete. The relay pointer and codexbot lifecycle follow-up is recorded below.
+
+### Relay session ownership and required App bindings — 2026-10-14
+
+RelayWebSocketBridgeState no longer stores App or recovers unsafe App aliases. It requires the relay runtime, an event sink, one-method RelayIngressDispatchHost, lifecycle state and a narrow ws.RelaySessionContext. This five-callback session context is built by WebSocketRuntime and is shared by relay hub/agent paths without retaining kernel callbacks. App handshake/state assembly is isolated in app_websocket_relay_runtime.v. Relay core has no App dependency, and its remaining unsafe operations are the three typed callback-state casts required by the WebSocket library.
+
+EventDispatchServices retains an explicit event sink and trace ID instead of App; HTTP/relay assembly injects the ControlPlaneRuntime sink. AdminApp.shared and MultiServerAppBinding.app require references at construction and have no nil defaults. Regression fixtures use the real required state constructor. New regressions verify idempotent lifecycle/hub cleanup and trace/event-counter behavior. An empty-constructor compiler probe rejects omitted session callbacks, relay dependencies, lifecycle state, event sink and App bindings.
+
+Validation: strict DB-enabled V3 build, 7 relay/session/server/ws test files, safety lint and git diff --check pass. Complete E2E passes 207 CLI/config checks plus Node/PHP regressions. Previously pending codexbot lifecycle validation also passes all 27 test functions, covering cancellation, restoration across restart, completion/final-answer and error handling. Evidence is recorded in tmp/relay-ownership-validation/.
+
+Linux remains stopped at unrelated tracked .qoder changes under the recorded VM rule. Whole-project full suite, production/Linux coverage, optional resource-handle audit and remaining broader ownership remain pending.
 
 ---
 
