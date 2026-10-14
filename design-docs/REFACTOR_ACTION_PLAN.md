@@ -82,6 +82,14 @@ The SSE demo now supplies a generator factory instead of sharing a consumed Gene
 
 Validation: complete E2E passes with 4 CLI and 203 config/runtime checks, FAIL 0, plus the Node and PHP regressions. Provider handshake/message/ack and SSE first-open/reopen pass. Safety lint, diff and script syntax checks pass. Evidence is recorded in tmp/e2e-stability-validation/. This slice changes the fixtures, example and test lifecycle; it uses the already verified V3 binary. Linux remains pending under the recorded VM preflight rule.
 
+### StreamRuntimeContext explicit injection — 2026-10-14
+
+StreamRuntimeContext removes all four nil callback defaults. Emit/open/next/close callbacks and a narrow open-failure renderer are required constructor inputs. app_stream_runtime.v owns App assembly and the existing dispatch/direct-stream entry adapters. Stream dispatch no longer receives App; the open-error response uses the injected renderer. The context, dispatch execution, and direct stream execution files contain no App reference. Existing fallback, HTTP 500 error metadata, events, and close behavior are preserved.
+
+Validation: final DB-enabled V3 build, 4 related context/stream-projection/server test files, and safety lint pass. Three new regressions verify callback/correlation forwarding, App-free fallback/error rendering, and best-effort close state/error injection. A negative compiler probe using the actual context source rejects an empty constructor with five required-field errors. Complete E2E passes 207 CLI/config checks plus Node/PHP regressions, including provider handshake and SSE open/reopen. git diff --check passes. Logs are recorded in tmp/stream-context-validation/.
+
+Linux preflight still finds unrelated tracked .qoder changes and stops under the recorded skill rule; Linux/production, full-suite, and codexbot lifecycle coverage remain pending. Continue the remaining runtime context ownership and safety work before closing the milestones.
+
 ---
 
 ## Milestone 0 — Preparation (½ day)

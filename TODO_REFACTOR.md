@@ -39,7 +39,7 @@
 
 ### 2.2 App struct decomposition (in progress)
 
-2026-10-14: after establishing V3 compatibility, removed `src/executor_bridge.v` and its `voidptr` casts. `App` directly implements the existing executor capability interfaces in `src/app_executor_facade.v`; facade reads and mutations retain the original App. `make lint-safety` guards this executor boundary before `test-fast`. Subsystem ownership remains in progress; command handlers and provider bridge/mapper paths now use required or optional narrow hosts instead of nil App pointers and unsafe App conversions. See the [current action plan](design-docs/REFACTOR_ACTION_PLAN.md) for scope, validation, and next steps.
+2026-10-14: after establishing V3 compatibility, removed `src/executor_bridge.v` and its `voidptr` casts. `App` directly implements the existing executor capability interfaces in `src/app_executor_facade.v`; facade reads and mutations retain the original App. `make lint-safety` guards this executor boundary before `test-fast`. Subsystem ownership remains in progress; command handlers and provider bridge/mapper paths now use required or optional narrow hosts instead of nil App pointers and unsafe App conversions. StreamRuntimeContext now requires all five callbacks, including open-error rendering. App stream assembly/entry adapters live in app_stream_runtime.v; stream context and execution files have no App dependency. V3 build, 4 related test files, the negative compiler probe, safety lint and 207 E2E checks pass. See the [current action plan](design-docs/REFACTOR_ACTION_PLAN.md) for scope, validation, and next steps.
 
 Per the roadmap, after domain modules are extracted:
 - Extract subsystem state from `App` into independent structs (`WorkerState`, `FeishuState`, etc.)
