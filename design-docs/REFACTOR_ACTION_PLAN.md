@@ -58,7 +58,13 @@ Validation: strict V3 build with DB enabled, 8 related command/provider/instance
 
 Parallel compilation became unusually slow while other project builds were active; the remaining integration checks completed in isolated/serial runs. The new contract also exposed the shutdown fixture's deferred context assignment, which was corrected before its successful rerun. Two E2E attempts missed the provider handshake probe deadline. The final build and the preceding slice's passing binary have identical SHA-256 hashes; after compilation ended and this slice's leftover test processes were cleaned up, an isolated rerun passed all 206 E2E checks with the original timeout unchanged. Logs and expected compiler failures are recorded in `tmp/runtime-context-injection-validation/`.
 
-Linux/production, full-suite, and codexbot lifecycle coverage remain pending. The VM preflight still found pre-existing unrelated tracked `.qoder` changes; Linux validation stopped under the Linux testing skill's recorded preflight rule. Next: consolidate provider lifecycle context ownership between ProviderSpec and ProviderRuntimeAdapter, then continue the remaining runtime ownership and safety work before closing the milestones.
+### Provider lifecycle context ownership — 2026-10-14
+
+ProviderSpec is now the sole registered lifecycle-context holder. ProviderRuntimeAdapter retains only its required Provider and forwards the caller's context to start, stop, and snapshot. All five bootstrap/registry adapter construction sites drop their extra context field. ProviderSpec provides the lifecycle invocation methods used by admin and generic runtime snapshots and shutdown. Shutdown captures a list of complete specs under App.mu and invokes stop outside the lock; the two parallel runtime/context arrays and their hub wrapper are removed, preserving the prior map iteration behavior and stop-error reporting.
+
+Validation: strict V3 build with DB enabled, 4 related lifecycle/bootstrap/registry/server test files, safety lint, and `git diff --check` pass on macOS. New regressions replace a registered spec's context and verify that start, shutdown, admin snapshots, and generic runtime snapshots use the replacement; they also verify that context mutations made by a Provider pass back through the adapter to the caller. Safety lint prevents RuntimeContext storage from returning to ProviderRuntimeAdapter. All 206 E2E checks pass on the first run with the verified binary. Logs are recorded in `tmp/provider-lifecycle-context-validation/`.
+
+Linux/production, full-suite, and codexbot lifecycle coverage remain pending. The VM preflight still found pre-existing unrelated tracked `.qoder` changes; Linux validation stopped under the Linux testing skill's recorded preflight rule. Next: unify provider bootstrap registration and context construction, then continue the remaining runtime ownership and safety work before closing the milestones.
 
 ---
 
