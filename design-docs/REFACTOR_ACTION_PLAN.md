@@ -72,7 +72,15 @@ Each enabled provider now assembles one complete ProviderSpec with one lifecycle
 
 Validation: final DB-enabled V3 build, 4 related bootstrap/lifecycle/registry/server test files, safety lint, and git diff --check pass. New regressions cover complete-spec visibility, lifecycle context mutation and failure persistence, error events, and shutdown. Original isolated provider and SSE scenarios pass on both the previous verified binary and the new binary. Logs are recorded in tmp/provider-bootstrap-validation/.
 
-Full E2E remains unresolved: three attempts stopped at provider WebSocket handshake waiting, SSE HTTP 404, and handshake waiting respectively; the second attempt passed the provider scenarios. No test scripts or timeouts were weakened. Linux validation stopped at the existing unrelated tracked .qoder changes under the recorded VM preflight rule. Full-suite and codexbot lifecycle coverage remain pending.
+Initial full E2E attempts stopped at provider WebSocket handshake waiting, SSE HTTP 404, and handshake waiting respectively; the second attempt passed the provider scenarios. The follow-up below resolves this validation gap. Linux validation stopped at the existing unrelated tracked .qoder changes under the recorded VM preflight rule. Full-suite and codexbot lifecycle coverage remain pending.
+
+### Provider WebSocket and SSE E2E stability — 2026-10-14
+
+The provider upstream probe now consumes WebSocket bytes in Node's HTTP upgrade head buffer. A deterministic integration regression sends the upgrade request and masked frames in one write: the previous probe times out, while the fixed probe completes. The unchanged 10-second protocol deadline now begins at upgrade instead of counting vhttpd cold startup. Each independent acceptance scenario stops and reaps its test processes; relay startup no longer registers PIDs in a discarded command-substitution subshell. This removes accumulated servers/workers/embedded runtimes from later scenarios. Preserved timing logs show the original probe expiring around late startup, before the handshake dispatch completed.
+
+The SSE demo now supplies a generator factory instead of sharing a consumed Generator across connections. Repeated stream opens previously reproduced a Cannot rewind a generator that was already run exception. PHP regression coverage verifies completion/reopen, interruption/reconnect, and independent readers. Acceptance coverage now checks a second complete SSE connection. Optional diagnostic artifact retention is available without changing normal cleanup.
+
+Validation: complete E2E passes with 4 CLI and 203 config/runtime checks, FAIL 0, plus the Node and PHP regressions. Provider handshake/message/ack and SSE first-open/reopen pass. Safety lint, diff and script syntax checks pass. Evidence is recorded in tmp/e2e-stability-validation/. This slice changes the fixtures, example and test lifecycle; it uses the already verified V3 binary. Linux remains pending under the recorded VM preflight rule.
 
 ---
 
