@@ -10,7 +10,17 @@ The V3 compatibility baseline is established. The first Milestone 1 slice remove
 
 **Deviation from the original Milestone 1 plan:** V3 compiles the direct typed interface successfully, so the current slice preserves the existing live-reference capability contracts instead of replacing them with snapshots. This avoids stale configuration during runtime plan replacement. The original [review finding 2.2](CODE_REVIEW_2026_08_06.md) describes the removed workaround. Splitting the remaining broad AppFacade dependency into subsystem-owned capabilities, full-suite validation, and Linux/production validation are still pending; Milestone 1 is not closed.
 
-Validation for this slice: strict V3 build and 206 end-to-end checks pass on macOS (4 CLI checks and 202 config/runtime checks). The facade, executor, and worker integration suites also pass (3 test files, including both new live-reference regressions). `git diff --check` and `make lint-safety` pass. Next: audit remaining worker backend App dependencies against the existing WorkerState and capability interfaces before extending Milestone 2.
+Validation for this slice: strict V3 build and 206 end-to-end checks pass on macOS (4 CLI checks and 202 config/runtime checks). The facade, executor, and worker integration suites also pass (3 test files, including both new live-reference regressions). `git diff --check` and `make lint-safety` pass. 
+
+### Milestone 2 worker ownership slice — 2026-10-14
+
+Pool selection, queue accounting, process ensure/restart, request accounting, drain/resume, and selection diagnostics now live under `src/worker/` as WorkerState operations. Connection retries and stream/MCP/WebSocket transport dispatch also live in that module with explicit callback contexts. `worker.LifecyclePort` owns the event dependency with a safe no-op default; connector and dispatch callbacks are required at construction.
+
+`EngineRuntime` retains primary/named-pool routing. `src/app_worker_backend.v` collects application adapters and supplies callbacks for events, pool selection, and request completion. Three unused App helpers were removed. `worker.DrainStatus` is shared by worker administration and runtime-plan replacement, with the existing response fields preserved. The core module references neither App nor EngineRuntime; `make lint-safety` now enforces this boundary. Existing mutex acquisition order, queue error classes, and request/release accounting were preserved.
+
+Validation: strict V3 build with DB enabled passes on macOS; 4 integration test files and 3 standalone worker test files pass. New regressions cover concurrent exclusive leasing, busy/draining worker exclusion, drain/resume counters, and immediate queue backpressure. All 206 E2E checks pass (4 CLI plus 202 config/runtime checks), including controlled queue-full, queued completion, timeout, and replacement scenarios. Full-suite and Linux validation remain pending; the VM compiler is unchanged and the mounted checkout contains pre-existing unrelated tracked changes, so the Linux testing skill's preflight stop rule applies.
+
+Next: review the remaining engine registry/admin ownership and narrow executor capabilities against the new worker module before marking Milestone 2 complete.
 
 ---
 

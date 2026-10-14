@@ -34,7 +34,7 @@
 |----------|-----------|----------|-------|
 | 🟡 | executor_config | Zero `App` dependency | PHP worker command/env builder. Blocked by type deps on LogicExecutor/LogicExecutorLifecycle in main module. |
 | 🔴 | command (command.v, command_executor.v, command_handlers.v) | Heavily coupled to `App` | Handlers call `app.codex_*`, `app.feishu_*`. Needs ExecutorHost interface extraction first. |
-| 🔴 | worker_backend (worker_backend_*.v) | Lifecycle methods are `App` methods | Core infrastructure. Needs App struct decomposition first. |
+| 🟡 | worker_backend | Core pool/queue/lifecycle/drain and protocol transport live in `src/worker/`; App adapters remain in `app_worker_backend.v` | V3 build, 7 test files, and 206 E2E checks pass. Engine routing/admin ownership and Linux coverage remain pending. |
 | 🔴 | executor family (logic_executor.v, executor_*.v) | `LogicExecutor` interface takes `mut app App` | Circular import blocker. Needs interface extraction. |
 
 ### 2.2 App struct decomposition (in progress)
