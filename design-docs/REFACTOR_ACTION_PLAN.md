@@ -128,7 +128,19 @@ Mailbox selection now returns an optional WebSocketMailboxSelection containing t
 
 Validation: DB-enabled V3 build, 8 related test files after a targeted retest, 5 new ownership/mailbox test functions, missing-dependency compiler rejection, safety lint and git diff --check pass. Complete E2E passes all 207 CLI/config checks plus Node/PHP regressions. The new fixture initially triggered a V3 generic Value equality C-generation error; shared-state/slot identity assertions now compare addresses, and optional selections use explicit bindings. The final retest has zero V errors, warnings or notices. Evidence is in tmp/task-ownership-validation/.
 
-The built executor sources match the final workspace sources. Linux remains stopped at pre-existing tracked .qoder changes under the VM skill rule. Global worker PID registry lifetime, concurrent shutdown ownership, whole-project suite and production/Linux coverage remain broader follow-ups; this does not mark all V2 work complete.
+The built executor sources match the final workspace sources. Linux remains stopped at pre-existing tracked .qoder changes under the VM skill rule. Concurrent shutdown ownership, whole-project suite and production/Linux coverage remain broader follow-ups; this does not mark all V2 work complete. The managed worker PID follow-up is recorded below.
+
+### Managed worker process registry ownership — 2026-10-14
+
+The process_runtime module owns one process-wide ManagedProcessRegistry of actual os.Process handles, with serialized launch, observation, retirement and shutdown. Initial start, ensure/retry and restart all register immediately through the same entry point. Normal stop, failed readiness and natural exit remove the owner record before reap; a stale handle cannot unregister a replacement merely because its numeric PID matches. WNOWAIT observes exit without freeing the PID before group cleanup. Snapshots prune exited children, and process shutdown drains the registry and rejects later launches. Transport/worker paths no longer maintain a raw global PID array or independently spawn/probe/reap managed children. Admin snapshots suppress retired PID/RSS fields.
+
+SIGINT/SIGTERM callbacks only perform an errno-preserving nonblocking pipe write; an ordinary thread logs and drains the registry. The pipe is close-on-exec. Active-runtime registration/config snapshots are synchronized, and App summary callbacks run after releasing that registry lock. Normal/error return from the server entry also drains the process owner.
+
+Validation repaired two V3 boundary issues: a fixed-array C out-parameter did not produce usable pipe FDs, so pipe creation returns an explicitly declared C typedef structure by value; a mutable optional proc check lost the replacement handle during restart, so retire_process returns whether ownership was transferred instead. The blocked pipe test was sampled and stopped, and the known orphan from the failed restart fixture was identified by its unique path/PGID and reaped. Corrected regressions pass and no test processes remain.
+
+DB-enabled V3 build, 10 related test files after targeted retests, 8 new process/PID test functions, safety lint and git diff --check pass. Two real-server Node regressions restart the worker through admin, verify old PID removal, then send SIGTERM/SIGINT and confirm the replacement exits. They run in the full E2E entry point, which passes 207 CLI/config checks plus these regressions and the existing Node/PHP stream/upgrade regressions. Final built process/worker/transport/server sources match the workspace. The verified binary is copied to the workspace. Evidence is in tmp/pid-registry-validation/.
+
+Linux preflight initially timed out waiting for OrbStack services; a later read-only retry succeeded and still found the unrelated tracked .qoder changes, so runtime testing stopped under the VM skill rule. Full-suite, production/Linux, live DB and broader concurrent executor shutdown validation remain pending before V2 completion.
 
 ---
 
