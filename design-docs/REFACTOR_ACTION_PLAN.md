@@ -108,7 +108,17 @@ EventDispatchServices retains an explicit event sink and trace ID instead of App
 
 Validation: strict DB-enabled V3 build, 7 relay/session/server/ws test files, safety lint and git diff --check pass. Complete E2E passes 207 CLI/config checks plus Node/PHP regressions. Previously pending codexbot lifecycle validation also passes all 27 test functions, covering cancellation, restoration across restart, completion/final-answer and error handling. Evidence is recorded in tmp/relay-ownership-validation/.
 
-Linux remains stopped at unrelated tracked .qoder changes under the recorded VM rule. Whole-project full suite, production/Linux coverage, optional resource-handle audit and remaining broader ownership remain pending.
+Linux remains stopped at unrelated tracked .qoder changes under the recorded VM rule. Whole-project full suite, production/Linux coverage and broader ownership remain pending. The resource-handle follow-up is recorded below.
+
+### Optional resource handles and closing ownership — 2026-10-14
+
+Cache/DB listeners, executor stream/session outcomes, managed worker processes, PostgreSQL pool/session handles, Codex/Feishu provider connections, MCP SSE connections and VJSX lane session/module handles now use explicit options. Required WebSocket lifecycle references and broadcast targets no longer have nil defaults; worker WebSocket ingress creates a real open lifecycle. OpenAI/NDJSON callback state is cast directly from injected user_ptr without a fake nil intermediate.
+
+Closing responsibility is explicit: listener stop and HTTP stream take clear the stored handle before handing it off; lane destroy releases module before session regardless of initialization flags, and unpublished sessions are closed on bootstrap failure. Worker pool stop mutates the actual slots; failed startup/restart reaps the newly created process. PostgreSQL operations reject absent driver-specific handles and repeated close is safe. Feishu outbound cleanup only clears the matching connection, preserving a replacement from reconnect.
+
+MCP and WebSocket flush preserve queued messages while a transport is unbound. Complete E2E initially exposed an invalid client reference in Hub flush after the optional migration; a locked take_pending_batch now explicitly unwraps the client into a required reference and transfers the messages before writing outside the lock. A real-client regression checks pointer identity and safe writes; the corrected full E2E passes 207 CLI/config checks plus Node/PHP regressions.
+
+Evidence and the ownership inventory are in tmp/resource-handles-validation/. Remaining null sites are external C ABI checks and internal executor state/task-slot construction; required task construction and the empty mailbox selection need a separate follow-up. The global worker PID registry also remains a broader lifecycle topic. Live DB, whole-project suite, production and Linux runtime validation remain pending.
 
 ---
 
