@@ -88,7 +88,17 @@ StreamRuntimeContext removes all four nil callback defaults. Emit/open/next/clos
 
 Validation: final DB-enabled V3 build, 4 related context/stream-projection/server test files, and safety lint pass. Three new regressions verify callback/correlation forwarding, App-free fallback/error rendering, and best-effort close state/error injection. A negative compiler probe using the actual context source rejects an empty constructor with five required-field errors. Complete E2E passes 207 CLI/config checks plus Node/PHP regressions, including provider handshake and SSE open/reopen. git diff --check passes. Logs are recorded in tmp/stream-context-validation/.
 
-Linux preflight still finds unrelated tracked .qoder changes and stops under the recorded skill rule; Linux/production, full-suite, and codexbot lifecycle coverage remain pending. Continue the remaining runtime context ownership and safety work before closing the milestones.
+Linux preflight still finds unrelated tracked .qoder changes and stops under the recorded skill rule; Linux/production, full-suite, and codexbot lifecycle coverage remain pending. Continue the remaining ownership and safety work before closing the milestones.
+
+### Remaining runtime callback injection and ownership — 2026-10-14
+
+104 remaining nil function defaults are removed from admin, WebSocket hub/upstream/relay-agent, upstream/I/O, DB server/runtime, OpenAI path, and executor lifecycle/factory/kernel declarations. All require explicit injection. Four new narrow callbacks are also required: upstream validation-error rendering and the three relay-carrier capabilities. The global source safety check now rejects nil function defaults anywhere in src.
+
+Admin reads capture live subsystem references; pipeline and relay snapshots belong to their owners. Upstream registry owns context construction, while App forwarding and error rendering live in app_upstream_runtime.v. Upstream execution no longer receives App. WebSocket state context construction remains on WebSocketRuntime, with App kernel assembly isolated in app_websocket_runtime.v. Command execution requires the supplied kernel instead of constructing an empty port, preserving it through broadcast dispatch and returned commands. Relay carriers retain only a three-callback context. Relay agent protocol contexts and WebSocket contexts have separate explicit ownership; relay/control callbacks capture their owners, and pipeline dispatch uses a narrow host.
+
+Validation: strict DB-enabled V3 build, 14 related ownership/integration/worker/ws/OpenAI test files, safety lint, and git diff --check pass. New regressions verify live admin reads, App-free upstream register/snapshot/validation handling, narrow carrier ownership, and injected kernel broadcast dispatch with hub state updates. The empty-constructor negative probe yields 108 required-field diagnostics. Complete E2E passes 207 CLI/config checks plus Node/PHP regressions. Evidence is recorded in tmp/runtime-contexts-validation/.
+
+Linux preflight remains stopped on unrelated tracked .qoder changes under the recorded skill rule. DB live queries were not enabled. Production/Linux, full-suite and codexbot lifecycle checks, remaining pointer placeholders, and broader ownership work remain pending before declaring V2 complete.
 
 ---
 
