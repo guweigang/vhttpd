@@ -37,7 +37,9 @@
 | 🔴 | worker_backend (worker_backend_*.v) | Lifecycle methods are `App` methods | Core infrastructure. Needs App struct decomposition first. |
 | 🔴 | executor family (logic_executor.v, executor_*.v) | `LogicExecutor` interface takes `mut app App` | Circular import blocker. Needs interface extraction. |
 
-### 2.2 App struct decomposition (not started)
+### 2.2 App struct decomposition (in progress)
+
+2026-10-14: after establishing V3 compatibility, removed `src/executor_bridge.v` and its `voidptr` casts. `App` directly implements the existing executor capability interfaces in `src/app_executor_facade.v`; facade reads and mutations retain the original App. `make lint-safety` guards this executor boundary before `test-fast`. Subsystem ownership and the remaining provider callback casts still need work. See the [current action plan](design-docs/REFACTOR_ACTION_PLAN.md) for scope, validation, and next steps.
 
 Per the roadmap, after domain modules are extracted:
 - Extract subsystem state from `App` into independent structs (`WorkerState`, `FeishuState`, etc.)
