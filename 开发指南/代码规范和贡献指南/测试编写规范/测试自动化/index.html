@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../../../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
       
@@ -29,7 +29,7 @@
       
     
     
-      <link rel="stylesheet" href="../../../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../../../assets/stylesheets/main.ec1eaa64.min.css">
       
       
 
@@ -8410,7 +8410,7 @@ J --&gt; K["打包产物并上传"]</code></pre>
 <li>测试编排与筛选（Makefile）</li>
 <li>自动发现 V 单元测试文件，排除重型 inproc 与网络相关 db 测试</li>
 <li>提供多组目标：test-fast、test-php、test-inproc、test-codexbot、test-codexbot-fast、test-codexbot-lifecycle、test-all</li>
-<li>支持通过命令行目标直接指定单个 <em>.v 或 </em>.php 文件进行选择性运行</li>
+<li>支持通过命令行目标直接指定单个 *.v 或 *.php 文件进行选择性运行</li>
 <li>端到端测试套件（tests/e2e）</li>
 <li>run.sh 作为统一入口，顺序执行冒烟与配置验收测试</li>
 <li>smoke_test.sh 验证二进制基本能力（--help/--version/未知选项）</li>
@@ -8459,7 +8459,7 @@ CI-&gt;&gt;ART : 上传打包产物</code></pre>
 <ul>
 <li>快速单元与模块测试</li>
 <li>目标：test-fast</li>
-<li>行为：自动发现顶层 <em>_test.v 与子目录 </em><em>test.v 所在目录，跳过 inproc</em><em> 与 db_</em> 测试</li>
+<li>行为：自动发现顶层 <em><em>test.v 与子目录 <em><em>test.v 所在目录，跳过 inproc</em></em> 与 db</em></em> 测试</li>
 <li>选择性运行：可直接将目标指向具体 *.v 文件，例如 make test-fast src/foo/bar_test.v</li>
 <li>PHP 测试</li>
 <li>目标：test-php</li>
@@ -8589,7 +8589,7 @@ C --&gt; H["清理进程与临时文件"]</code></pre>
 <h2 id="_12">依赖关系分析</h2>
 <ul>
 <li>Makefile 与测试目标</li>
-<li>自动发现 <em>_test.v 与 </em>_test.php，支持按目标选择</li>
+<li>自动发现 *_test.v 与 *_test.php，支持按目标选择</li>
 <li>提供分组目标（fast/inproc/codexbot/all）</li>
 <li>CI 与 Makefile</li>
 <li>CI 在构建前执行 make test-fast，构建后执行 Smoke 测试</li>
@@ -8723,7 +8723,7 @@ CI --&gt; Doctor["doctor.sh"]</code></pre>
       <script id="__config" type="application/json">{"annotate": null, "base": "../../../..", "features": [], "search": "../../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "\u5df2\u590d\u5236", "clipboard.copy": "\u590d\u5236", "search.result.more.one": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.more.other": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 # \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.none": "\u6ca1\u6709\u627e\u5230\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.one": "\u627e\u5230 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.other": "# \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.placeholder": "\u952e\u5165\u4ee5\u5f00\u59cb\u641c\u7d22", "search.result.term.missing": "\u7f3a\u5c11", "select.version": "\u9009\u62e9\u5f53\u524d\u7248\u672c"}, "version": null}</script>
     
     
-      <script src="../../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../../../assets/javascripts/bundle.d7400e89.min.js"></script>
       
     
   </body>

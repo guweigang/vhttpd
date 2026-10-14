@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
       
@@ -29,7 +29,7 @@
       
     
     
-      <link rel="stylesheet" href="../../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.ec1eaa64.min.css">
       
       
 
@@ -8464,10 +8464,10 @@ R --&gt; M</code></pre>
 <h2 id="_5">核心组件</h2>
 <ul>
 <li>测试发现与执行</li>
-<li>通过 Makefile 自动发现 src 下的 <em>_test.v 与 php/package/tests 下的 </em>_test.php。</li>
+<li>通过 Makefile 自动发现 src 下的 *_test.v 与 php/package/tests 下的 *_test.php。</li>
 <li>提供多目标：test-fast、test-php、test-e2e、test-inproc、test-codexbot、test-all。</li>
 <li>测试分类</li>
-<li>快速单元：排除 inproc_<em> 与 db_</em> 等重型或需网络的用例。</li>
+<li>快速单元：排除 inproc_* 与 db_* 等重型或需网络的用例。</li>
 <li>In-process vjsx：inproc_*_test.v（非 codexbot）。</li>
 <li>CodexBot 套件：全量、仅生命周期、快速子集。</li>
 <li>E2E 与冒烟</li>
@@ -8515,7 +8515,7 @@ K6--&gt;&gt;Dev : 阈值与指标报告</code></pre>
 <li>与源码同目录，命名 *_test.v；子模块测试以目录为单位运行，确保包含同级模块文件。</li>
 <li>通过 find 自动发现，避免手动维护列表。</li>
 <li>分类与过滤</li>
-<li>test-fast：排除 inproc_<em> 与 db_</em>，适合频繁运行。</li>
+<li>test-fast：排除 inproc_* 与 db_*，适合频繁运行。</li>
 <li>test-inproc：inproc_*_test.v（不含 codexbot）。</li>
 <li>test-codexbot / test-codexbot-fast / test-codexbot-lifecycle：针对特定子系统。</li>
 <li>典型测试文件示例（路径）</li>
@@ -8527,7 +8527,7 @@ K6--&gt;&gt;Dev : 阈值与指标报告</code></pre>
 <li><a href="file://src/server_logic_test.v">src/server_logic_test.v</a></li>
 <li><a href="file://src/sqlite_test_support.v">src/sqlite_test_support.v</a></li>
 <li>最佳实践</li>
-<li>将重型或网络依赖的用例放入 inproc_<em> 或 db_</em> 前缀，以便被 test-fast 排除。</li>
+<li>将重型或网络依赖的用例放入 inproc_* 或 db_* 前缀，以便被 test-fast 排除。</li>
 <li>使用 sqlite_test_support.v 提供的辅助能力构造轻量测试数据。</li>
 <li>对复杂逻辑采用小粒度断言，便于定位失败原因。</li>
 </ul>
@@ -8771,7 +8771,7 @@ K6 --&gt; BIN</code></pre>
       <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": [], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "\u5df2\u590d\u5236", "clipboard.copy": "\u590d\u5236", "search.result.more.one": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.more.other": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 # \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.none": "\u6ca1\u6709\u627e\u5230\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.one": "\u627e\u5230 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.other": "# \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.placeholder": "\u952e\u5165\u4ee5\u5f00\u59cb\u641c\u7d22", "search.result.term.missing": "\u7f3a\u5c11", "select.version": "\u9009\u62e9\u5f53\u524d\u7248\u672c"}, "version": null}</script>
     
     
-      <script src="../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../../assets/javascripts/bundle.d7400e89.min.js"></script>
       
     
   </body>

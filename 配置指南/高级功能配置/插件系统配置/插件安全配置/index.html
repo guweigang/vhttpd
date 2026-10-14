@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../../../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
       
@@ -29,7 +29,7 @@
       
     
     
-      <link rel="stylesheet" href="../../../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../../../assets/stylesheets/main.ec1eaa64.min.css">
       
       
 
@@ -8605,7 +8605,7 @@ ApplyPolicies --&gt; Egress["出站适配器/固定响应"]</code></pre>
 <ul>
 <li>配置到执行器的依赖链</li>
 <li>config.v 定义 PluginConfig/VjsxConfig 等结构</li>
-<li>v1_plan_compat.v 将旧版 plugins 映射为 V2 引擎与转换，透传 enable_<em> 与 signature_</em></li>
+<li>v1_plan_compat.v 将旧版 plugins 映射为 V2 引擎与转换，透传 enable_* 与 signature_*</li>
 <li>inproc_vjsx_* 系列在运行时依据配置决定是否放行 IO/网络</li>
 <li>管道与策略作为横切关注点，独立于插件能力开关，但共同构成访问控制面</li>
 </ul>
@@ -8665,7 +8665,7 @@ POL["CONFIGURATION_MODEL_V2.md&lt;br/&gt;Pipeline/Policy"] --&gt; WP["wordpress/
 <li>默认关闭 enable_fs 与 enable_network，按需开启</li>
 <li>使用 signature_root/include/exclude 精确限定可信文件集合</li>
 <li>安全配置模板（要点）</li>
-<li>在站点或全局 plugins 中声明 enable_<em> 与 signature_</em></li>
+<li>在站点或全局 plugins 中声明 enable_* 与 signature_*</li>
 <li>在 pipelines 中为敏感路径添加 deny 或固定响应</li>
 <li>在 policies.limits.* 中设置合理的 max_body_bytes 与 timeout_ms</li>
 <li>漏洞防护策略</li>
@@ -8729,7 +8729,7 @@ POL["CONFIGURATION_MODEL_V2.md&lt;br/&gt;Pipeline/Policy"] --&gt; WP["wordpress/
       <script id="__config" type="application/json">{"annotate": null, "base": "../../../..", "features": [], "search": "../../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "\u5df2\u590d\u5236", "clipboard.copy": "\u590d\u5236", "search.result.more.one": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.more.other": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 # \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.none": "\u6ca1\u6709\u627e\u5230\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.one": "\u627e\u5230 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.other": "# \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.placeholder": "\u952e\u5165\u4ee5\u5f00\u59cb\u641c\u7d22", "search.result.term.missing": "\u7f3a\u5c11", "select.version": "\u9009\u62e9\u5f53\u524d\u7248\u672c"}, "version": null}</script>
     
     
-      <script src="../../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../../../assets/javascripts/bundle.d7400e89.min.js"></script>
       
     
   </body>

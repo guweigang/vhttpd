@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
       
@@ -29,7 +29,7 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
       
       
 
@@ -8455,8 +8455,8 @@
 <p>本文件系统化梳理 vhttpd 的管理平面能力，覆盖 Web 管理界面、Admin API、安全机制、配置与扩展方式，以及监控告警与运维最佳实践。文档面向运维与平台工程师，既提供高层概览，也给出代码级映射与可操作指引。</p>
 <h2 id="_4">项目结构</h2>
 <p>管理平面由“控制面（Admin Plane）”和“数据面（Data Plane）”两部分组成：
-- 控制面：独立监听地址/端口，承载 /health、/admin/<em> 等管理接口与静态 UI。
-- 数据面：当 admin-port=0 时，/admin/</em> 会回落到数据面端口；否则仅在控制面暴露。</p>
+- 控制面：独立监听地址/端口，承载 /health、/admin/* 等管理接口与静态 UI。
+- 数据面：当 admin-port=0 时，/admin/* 会回落到数据面端口；否则仅在控制面暴露。</p>
 <pre class="mermaid"><code>graph TB
 subgraph "控制面"
 A["Admin App&lt;br/&gt;HTTP 服务"]
@@ -8868,7 +8868,7 @@ AP --&gt; WORKER["worker_backend_admin_runtime.v"]</code></pre>
       <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": [], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "\u5df2\u590d\u5236", "clipboard.copy": "\u590d\u5236", "search.result.more.one": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.more.other": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 # \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.none": "\u6ca1\u6709\u627e\u5230\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.one": "\u627e\u5230 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.other": "# \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.placeholder": "\u952e\u5165\u4ee5\u5f00\u59cb\u641c\u7d22", "search.result.term.missing": "\u7f3a\u5c11", "select.version": "\u9009\u62e9\u5f53\u524d\u7248\u672c"}, "version": null}</script>
     
     
-      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
       
     
   </body>
