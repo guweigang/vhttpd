@@ -64,7 +64,15 @@ ProviderSpec is now the sole registered lifecycle-context holder. ProviderRuntim
 
 Validation: strict V3 build with DB enabled, 4 related lifecycle/bootstrap/registry/server test files, safety lint, and `git diff --check` pass on macOS. New regressions replace a registered spec's context and verify that start, shutdown, admin snapshots, and generic runtime snapshots use the replacement; they also verify that context mutations made by a Provider pass back through the adapter to the caller. Safety lint prevents RuntimeContext storage from returning to ProviderRuntimeAdapter. All 206 E2E checks pass on the first run with the verified binary. Logs are recorded in `tmp/provider-lifecycle-context-validation/`.
 
-Linux/production, full-suite, and codexbot lifecycle coverage remain pending. The VM preflight still found pre-existing unrelated tracked `.qoder` changes; Linux validation stopped under the Linux testing skill's recorded preflight rule. Next: unify provider bootstrap registration and context construction, then continue the remaining runtime ownership and safety work before closing the milestones.
+Linux/production, full-suite, and codexbot lifecycle coverage remain pending. The VM preflight still found pre-existing unrelated tracked `.qoder` changes; Linux validation stopped under the Linux testing skill's recorded preflight rule. Next: continue the remaining runtime ownership and safety work before closing the milestones.
+
+### Provider bootstrap registration and context construction — 2026-10-14
+
+Each enabled provider now assembles one complete ProviderSpec with one lifecycle context, then registers and runs that spec. Bootstrap no longer calls the generic registration API that constructed a second context. Full-spec registration synchronizes both provider lookup maps. The complete spec is visible before init; init mutations are published before start, and final context mutations are retained on successful startup and init/start failure. Existing failure events remain unchanged.
+
+Validation: final DB-enabled V3 build, 4 related bootstrap/lifecycle/registry/server test files, safety lint, and git diff --check pass. New regressions cover complete-spec visibility, lifecycle context mutation and failure persistence, error events, and shutdown. Original isolated provider and SSE scenarios pass on both the previous verified binary and the new binary. Logs are recorded in tmp/provider-bootstrap-validation/.
+
+Full E2E remains unresolved: three attempts stopped at provider WebSocket handshake waiting, SSE HTTP 404, and handshake waiting respectively; the second attempt passed the provider scenarios. No test scripts or timeouts were weakened. Linux validation stopped at the existing unrelated tracked .qoder changes under the recorded VM preflight rule. Full-suite and codexbot lifecycle coverage remain pending.
 
 ---
 
