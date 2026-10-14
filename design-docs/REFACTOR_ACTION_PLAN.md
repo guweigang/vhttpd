@@ -20,7 +20,15 @@ Pool selection, queue accounting, process ensure/restart, request accounting, dr
 
 Validation: strict V3 build with DB enabled passes on macOS; 4 integration test files and 3 standalone worker test files pass. New regressions cover concurrent exclusive leasing, busy/draining worker exclusion, drain/resume counters, and immediate queue backpressure. All 206 E2E checks pass (4 CLI plus 202 config/runtime checks), including controlled queue-full, queued completion, timeout, and replacement scenarios. Full-suite and Linux validation remain pending; the VM compiler is unchanged and the mounted checkout contains pre-existing unrelated tracked changes, so the Linux testing skill's preflight stop rule applies.
 
-Next: review the remaining engine registry/admin ownership and narrow executor capabilities against the new worker module before marking Milestone 2 complete.
+### Engine administration and executor capabilities — 2026-10-14
+
+WorkerState now owns restart-by-id/restart-all, process and pool snapshots, queue metrics, backend lifecycle context construction/start/stop, and scheme/environment mutation. `src/worker/admin.v`, `metrics.v`, and `backend_lifecycle.v` contain these operations without an admin or application dependency. `EngineRuntime` delegates per-pool operations and retains pool selection and executor orchestration. The application layer projects worker snapshots into the existing admin response types, preserving JSON fields and restart error strings.
+
+The five worker facade ports now store and accept only their corresponding capability interfaces: backend config, sockets, stream, MCP, and WebSocket dispatch. They no longer retain a complete AppFacade. SocketWorkerExecutor and PhpCgiExecutor keep their polymorphic AppFacade entry points as adapters; their HTTP algorithms and the socket WebSocket-open algorithm live in `src/executor/worker_dispatch_core.v`, accepting only WorkerSocketFacade and WorkerBackendConfigFacade. Embedded executor host paths still use the broader facade and remain future work.
+
+Validation: strict V3 build with DB enabled, 8 worker/executor module test files, 4 integration test files, and all 206 E2E checks pass on macOS. New tests exercise hosts implementing only a single capability, live mutation through narrow ports, both HTTP cores without unrelated App capabilities, detached admin snapshots, restart errors, metrics, and lifecycle configuration isolation. Safety lint now prevents complete AppFacade references in worker ports/dispatch core. Full-suite and Linux validation remain pending under the previously recorded VM preflight stop rule.
+
+Next: consolidate engine registry lookup and audit embedded-executor host capabilities before marking Milestone 2 complete.
 
 ---
 
