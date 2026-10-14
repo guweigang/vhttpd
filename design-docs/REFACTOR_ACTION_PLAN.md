@@ -118,7 +118,7 @@ Closing responsibility is explicit: listener stop and HTTP stream take clear the
 
 MCP and WebSocket flush preserve queued messages while a transport is unbound. Complete E2E initially exposed an invalid client reference in Hub flush after the optional migration; a locked take_pending_batch now explicitly unwraps the client into a required reference and transfers the messages before writing outside the lock. A real-client regression checks pointer identity and safe writes; the corrected full E2E passes 207 CLI/config checks plus Node/PHP regressions.
 
-Evidence and the ownership inventory are in tmp/resource-handles-validation/. Remaining null sites are external C ABI checks and internal executor state/task-slot construction; required task construction and the empty mailbox selection need a separate follow-up. The global worker PID registry also remains a broader lifecycle topic. Live DB, whole-project suite, production and Linux runtime validation remain pending.
+Validation: strict DB-enabled V3 build, 17 distinct related test files (including corrected targeted retests), complete E2E, safety lint and git diff --check pass. The first batches contained two repaired compilation failures; their successful retests and the first E2E crash are preserved with the final results. The verified binary is copied to the workspace. Evidence and the ownership inventory are in tmp/resource-handles-validation/. Remaining null sites are external C ABI checks and internal executor state/task-slot construction; required task construction and the empty mailbox selection need a separate follow-up. The global worker PID registry also remains a broader lifecycle topic. Live DB, whole-project suite, production and Linux runtime validation remain pending.
 
 ---
 
