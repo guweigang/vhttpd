@@ -142,6 +142,16 @@ DB-enabled V3 build, 10 related test files after targeted retests, 8 new process
 
 Linux preflight initially timed out waiting for OrbStack services; a later read-only retry succeeded and still found the unrelated tracked .qoder changes, so runtime testing stopped under the VM skill rule. Full-suite, production/Linux, live DB and broader concurrent executor shutdown validation remain pending before V2 completion.
 
+### Executor concurrent shutdown ownership — 2026-10-14
+
+Executor close is terminal and has one synchronized admission boundary. Lane acquisition, all five bounded queue submissions, mailbox scheduling and bootstrap reject new work after stopping begins. Queue submissions never block while holding the lifecycle mutex. Pending mailbox entries complete with an explicit closed error; a scheduler that selected a task before stopping cancels its task instead of restoring it. The owner notifies every lane worker before joining any of them; workers drain accepted tasks through the same loop and block normally when idle. Signature refresh is joined, and direct lane leases, mailbox schedulers and host builders finish before module/session destruction. Concurrent close callers await the same completed teardown.
+
+Wakeup scheduling is disabled and sleeping deliveries notice cancellation promptly. Host remembrance and late actor/affinity binding writes cannot restore closed state. Actor probes now transfer one lane lease to the worker instead of releasing it twice; failed direct WebSocket and affinity submissions release the caller-owned lease.
+
+DB-enabled V3 build, 8 related test files (128 functions, including 6 new concurrent shutdown regressions), safety lint and git diff --check pass after targeted retests. One relay cold-start request exceeded its existing 10-second deadline while production build ran concurrently; the complete 70-function executor file passed independently without changing code or timeouts. Both logs are retained. Final full E2E passes 207 CLI/config checks plus upgrade-frame, two worker restart/signal and PHP SSE regressions. All 78 executor production sources match build staging, and the verified binary is copied to the workspace. Evidence is in tmp/executor-shutdown-validation/.
+
+Linux remains stopped at unrelated tracked .qoder changes under the VM skill rule. Close cooperatively waits for admitted execution; whole-project suite, production load/forced-abort behavior, live DB and Linux runtime coverage remain pending before V2 completion.
+
 ---
 
 ## Milestone 0 — Preparation (½ day)
