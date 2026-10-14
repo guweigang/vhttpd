@@ -164,6 +164,16 @@ Linux again stops at the existing unrelated tracked .qoder changes under the VM 
 
 ---
 
+### Card bridge session and registry ownership — 2026-10-15
+
+The resource review covered card bridge server/client sessions, upstream reconnect/heartbeat paths, cache/DB listeners and shutdown hooks. This slice fixes confirmed card bridge registry races: unregister now requires the actual connection identity, so an old close callback or failed send cannot remove a replacement registered under the same client ID. Required registration references no longer carry a redundant nil guard.
+
+The server session owns an explicit optional accepted client. Acceptance captures ownership without publishing; the attached callback publishes only after the 101 response has been written and WebSocket callbacks installed. Deferred teardown takes the optional handle once, removes only its own registration, closes its connection and closes the transferred TCP handle even when handshaking fails before callbacks are installed. The registry borrows connection handles and does not own session teardown.
+
+DB-enabled V3 build, 3 related test files (16 functions, including 6 new bridge lifecycle regressions), safety lint and git diff --check pass. Tests cover stale unregister/close, unpublished handshake failure, repeated teardown, failed sends and actual TCP EOF after replacement, plus native provider handshake/normalization. An existing test's nil assertion on an optional handle failed in the initial run; both assertions now explicitly compare with none, and the complete affected file passes. Final full E2E passes 207 CLI/config checks plus upgrade-frame, worker restart/signal and PHP SSE regressions. All 401 production V sources match build staging; the verified binary is copied to the workspace. Evidence is in tmp/bridge-owner-validation/.
+
+Linux read-only preflight again finds unrelated tracked .qoder changes; runtime testing stops under the VM skill rule. Listener startup/stop overlap and upstream/bridge heartbeat stop/join ownership remain the next review slices. This change does not claim completion of all subsystem ownership, the whole-project suite, production load or live DB/Linux runtime validation.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
