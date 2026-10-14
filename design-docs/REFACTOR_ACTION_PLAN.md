@@ -28,7 +28,15 @@ The five worker facade ports now store and accept only their corresponding capab
 
 Validation: strict V3 build with DB enabled, 8 worker/executor module test files, 4 integration test files, and all 206 E2E checks pass on macOS. New tests exercise hosts implementing only a single capability, live mutation through narrow ports, both HTTP cores without unrelated App capabilities, detached admin snapshots, restart errors, metrics, and lifecycle configuration isolation. Safety lint now prevents complete AppFacade references in worker ports/dispatch core. Full-suite and Linux validation remain pending under the previously recorded VM preflight stop rule.
 
-Next: consolidate engine registry lookup and audit embedded-executor host capabilities before marking Milestone 2 complete.
+### Registry lookup and embedded host boundary — 2026-10-14
+
+`src/engine_registry.v` provides a single `lookup_engine` entry point with explicit worker-config, strict executor-kind, dispatch-pool, and drain-pool policies. Configuration getters, socket selection, HTTP kind dispatch, and drain/resume all use it. Existing behavior is preserved: dispatch pools prefer a named key and fall back to primary; worker config gives the primary kind precedence; strict HTTP kind lookup does not add empty-key aliases; drain additionally accepts empty/main/primary aliases. Lookup results retain the original WorkerState and distinguish primary identity from a named pool literally called `main`.
+
+Embedded executor lane state, tasks, request contexts, host APIs, plugins, snapshot/startup paths, and dispatch internals now use `executor.EmbeddedHost`. It composes only runtime configuration, platform events/snapshots, provider bridge, command envelopes, and WebSocket command execution. It has no worker socket/configuration or transport dispatch methods. Seven uniform LogicExecutor entry points keep AppFacade only in `inproc_vjsx_facade_adapter.v`, adapting it to EmbeddedHost once. The internal host and lane references remain live across configuration updates; a JavaScript HTTP test verifies this using a host that implements no worker capabilities. Safety lint prevents broad AppFacade references outside the embedded adapter.
+
+Validation: strict V3 build, 4 executor module test files, 5 registry/worker/executor integration files, and 3 embedded runtime test files pass on macOS. The last group includes all 70 inproc executor test functions plus host API and startup coverage. All 206 E2E checks pass on an isolated rerun. The first E2E run overlapped heavy compilation and missed the provider WebSocket probe's 10-second deadline; it passed with the same binary after that load ended. A pre-existing snapshot assertion assumed JSON object key order; it now decodes the snapshot and asserts the HTTP capability value semantically.
+
+Linux/production and the remaining full-suite/codexbot coverage remain pending under the recorded VM preflight stop rule. Next: centralize embedded request-host access and replace interface nil placeholders with explicit optional host lookup before closing the remaining safety work.
 
 ---
 
