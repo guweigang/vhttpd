@@ -152,6 +152,16 @@ DB-enabled V3 build, 8 related test files (128 functions, including 6 new concur
 
 Linux remains stopped at unrelated tracked .qoder changes under the VM skill rule. Close cooperatively waits for admitted execution; whole-project suite, production load/forced-abort behavior, live DB and Linux runtime coverage remain pending before V2 completion.
 
+### Executor task timeout and cancellation ownership — 2026-10-14
+
+Every queued slot now shares an ExecutorTaskControl with pending/running/completed/cancelled state, one winning cancellation reason and one terminal notification. All five queue classes use one timeout path. Pending cancellation removes mailbox/registry ownership and retracts a lane lease once; cancelled channel copies are skipped without releasing a later owner's lease. Running tasks retain their lease until their worker exits. The vjsx atomic interrupt cancels running JS, and the worker destroys an interrupted session before releasing its lane. Unpublished sessions attach cancellation before evaluation and detach it before close.
+
+Snapshot, warmup and pump tasks also acquire exclusive lane ownership. Busy maintenance tasks briefly requeue and resume after the direct owner exits; timeout and shutdown stop retries. Mailbox scheduling no longer blocks while acquiring a lane. Affinity release cancels pending registered tasks even if already selected from the mailbox. Cancelled/failed WebSocket open and close clear connection/actor bindings. Normal completion releases ownership before notification, while repeated cleanup preserves the winning outcome.
+
+DB-enabled V3 build, 8 related test files (125 functions, including 11 new cancellation regressions), safety lint and git diff --check pass after targeted retests. Actual infinite JS interruption, poisoned-session rebuild, busy-lane resumption, selected mailbox release, open/close binding cleanup and single notification are covered. The 70-function executor file, startup and 30 logic/plan replacement functions pass; the final binding change also passes a targeted 23-function WebSocket retest. Final full E2E passes 207 CLI/config checks plus upgrade-frame, two worker restart/signal and PHP SSE regressions. Timeout constants were not increased. All 79 executor production sources match build staging; the verified binary is copied to the workspace. Evidence is in tmp/executor-cancel-validation/.
+
+Linux again stops at the existing unrelated tracked .qoder changes under the VM skill rule. Blocking native callbacks and direct synchronous calls remain cooperative; their session/lane is not destroyed while executing. Whole-project suite, production load, live DB and Linux runtime validation remain broader follow-ups before V2 completion.
+
 ---
 
 ## Milestone 0 — Preparation (½ day)
