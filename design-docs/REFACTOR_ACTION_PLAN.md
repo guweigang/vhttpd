@@ -36,7 +36,13 @@ Embedded executor lane state, tasks, request contexts, host APIs, plugins, snaps
 
 Validation: strict V3 build, 4 executor module test files, 5 registry/worker/executor integration files, and 3 embedded runtime test files pass on macOS. The last group includes all 70 inproc executor test functions plus host API and startup coverage. All 206 E2E checks pass on an isolated rerun. The first E2E run overlapped heavy compilation and missed the provider WebSocket probe's 10-second deadline; it passed with the same binary after that load ended. A pre-existing snapshot assertion assumed JSON object key order; it now decodes the snapshot and asserts the HTTP capability value semantically.
 
-Linux/production and the remaining full-suite/codexbot coverage remain pending under the recorded VM preflight stop rule. Next: centralize embedded request-host access and replace interface nil placeholders with explicit optional host lookup before closing the remaining safety work.
+### Optional embedded request-host lookup — 2026-10-14
+
+`src/executor/inproc_vjsx_request_host.v` centralizes host lookup with explicit request-only, lane fallback, and executor fallback policies. It captures the host and request metadata under one state lock and releases that lock before invoking host services. Request context, lane-retained host, and executor-retained host now store `?EmbeddedHost`; empty and destroyed hosts use `none`. Nine unsafe interface nil placeholders are removed from config, emit, bridge/WebSocket dispatch, snapshot, affinity, and actor paths. Request-only APIs stop resolving after request completion; asynchronous WebSocket dispatch retains its lane host without expired trace metadata, while snapshot retains its executor fallback.
+
+Validation: strict V3 build with DB enabled, 4 executor module test files, and 3 embedded integration test files pass on macOS (including all 70 inproc executor functions). New lookup and real JavaScript callback tests cover absent hosts, invalid lane indexes, request precedence, metadata normalization, live host mutations, request clearing, lane destruction, and fallback behavior. Safety lint guards against unsafe host interface placeholders; `git diff --check` passes. All 206 E2E checks pass with the verified binary (4 CLI plus 202 config/runtime checks). Logs are recorded in `tmp/request-host-validation/`.
+
+Linux/production and the remaining full-suite/codexbot coverage remain pending. The VM preflight again found pre-existing unrelated tracked `.qoder` changes; Linux validation stopped under the Linux testing skill's recorded preflight rule. Next: continue the remaining command/provider safety decomposition and close full-suite/codexbot and Linux coverage before marking the milestones complete.
 
 ---
 
