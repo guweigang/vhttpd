@@ -428,6 +428,20 @@ The final DB-enabled V3 build, CLI smoke, formatting, safety lint and git diff -
 
 Linux remains read-only under the VM testing skill because unrelated tracked changes persist. This slice does not claim atomic whole-App configuration snapshots, resolved provider/relay timing stability, complete V2 refactoring, or whole-project/live SQL/load/HTTPS lifecycle validation. Broader ownership audits and cooperative/native execution limits remain pending.
 
+### Provider WebSocket hello deadline: confirmed cause and fix — 2026-10-15
+
+The provider handshake investigation confirms that the old upstream path upgraded the WebSocket before lazily creating the plugin runtime, installing the Node/TypeScript profile, loading the module and running its handshake hook. Server executor warmup used a separate owner and did not warm this plugin. This cold work consumed the probe's existing 10-second post-upgrade hello/push/ack budget; the original intermittent failure dispatched about 10.3 seconds after connection.
+
+Each connection attempt now prepares and parses its handshake result before opening the transport. A required prepare_fn returns that attempt's activation callback; activation sends the prepared result without invoking the JS handshake hook again. Stop/enabled checks reject late connections after preparation, preparation errors fail before transport creation, and activation errors follow owned session cleanup without starting heartbeat jobs. Every reconnect prepares a fresh result. Bridge and no-hook factories inject explicit no-op preparation. A handshake_prepared event records the cost separately from actual handshake_dispatched.
+
+Debug evidence also found fixture feedback: probe output JSON was inside the default signature root. The probe writes it on successful completion or deadline expiry, so it could trigger another load after failure/completion. It was not the initial timeout trigger. The fixture now tracks only its generated handler; global JSON source watching remains unchanged. A new real E2E assertion verifies prepared -> connected -> dispatched ordering.
+
+The controlled old/new comparison uses the same 11-second handshake preparation and unchanged 10-second peer deadline. The old binary fails with no hello/ack even after excluding probe JSON. The fixed binary spends 16,462 ms preparing before connection and then passes all nine hello/push/ack/pipeline/order checks. Three normal cold launches also pass nine checks each, with preparation costs of 4,626 / 6,299 / 4,662 ms and no host resets.
+
+All 32 distinct V functions across five related files pass, including five new preparation/cancellation/failure/reconnect lifecycle regressions. The actual JS handshake/normalize fixture retains its 3-second exchange assertions after preparation. Final DB-enabled V3 build, CLI smoke, formatting, shell syntax, safety lint and git diff --check pass; 414 production V files and one C header match staging. The first post-fix complete E2E passes 204 config + 4 CLI checks (208 total), plus Node upgrade/worker-signal and PHP stream regressions. The verified binary is copied to the workspace. Commands, source/binary hashes, original failure and old/new fixtures are retained in `tmp/provider-handshake-validation/report.txt`.
+
+The identified provider hello deadline cause and its fixture feedback are fixed; cold preparation still has its existing cost and cooperative cancellation limits. Linux remains read-only under the VM skill because unrelated tracked changes persist. Whole-project, live native DB, real HTTPS/service and production-load validation remain pending. The earlier separate relay timeout is not diagnosed by this fix, and broader V2 ownership work remains open.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
