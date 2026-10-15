@@ -310,6 +310,18 @@ Validation: seven new owner functions and 21 App Codex functions pass (28 distin
 
 Full E2E, the whole-project suite, live DB and production/load validation were not run for this slice. This validates the ordinary lifecycle shutdown boundary; the SIGINT/SIGTERM path was not expanded into full network/provider teardown. Linux preflight stopped on existing unrelated tracked .qoder changes under the VM testing skill rule. The earlier intermittent relay timeout and broader ownership audit remain pending.
 
+### Shared background-network stop phase for process signals — 2026-10-15
+
+SIGINT/SIGTERM now use the same background-network notification/wait phase as ordinary ProcessLifecycle shutdown. BackgroundNetworkStop retains required internal-admin/MCP owner references, an optional listener generation and the exact upstream/bridge runs accepted at notification. Waiting needs these owners only. The active-runtime registry snapshots registered Apps under its mutex, releases that mutex, requests every App's stop ticket before waiting for any, and then performs the existing managed-worker and PID-file cleanup. Executors/workers remain available while already claimed callbacks finish.
+
+This closes the previous signal-path gap for registered upstream/reconnect/heartbeat tasks, bridge tasks, MCP streams and Codex delayed jobs, alongside the already owned internal admin listener. Repeated stop tickets keep admission closed and can be waited more than once. Ordinary shutdown retains its engine/provider cleanup ordering after the shared phase.
+
+Validation: three new functions pass, including two executed child fixtures using actual SIGTERM/SIGINT. Each fixture has two registered Apps, upstream/bridge run callbacks, a Codex timer, a live MCP SSE TCP stream and an accepted partial admin frame. Completion markers must exist before exit; callbacks verify another App was already notified and can read the active registry during shutdown. Exit codes remain 143/130, owned admin sockets are removed and PID files are cleaned. Eight internal-admin functions and the focused ordinary shutdown case also pass. That older case now owns a real listener, isolates startup events before checking stop-event order and uses a unique temporary directory, replacing its synthetic socket file.
+
+Two real PHP worker restart/signal cleanup cases pass against the new DB-enabled V3 binary. CLI help/version, safety lint and diff check pass; all 408 staged production V files and the native header match the workspace. Total: 14 distinct regressions, three new; only the selected shutdown case from server_logic_test.v was run.
+
+Full E2E, the whole-project suite, live DB and production/load validation were not run for this slice. The signal path now joins the named background owners; HTTP ingress draining, DB/cache terminal teardown and full App finalizers on signals remain outside this change. Claimed application callbacks complete cooperatively. Linux preflight stopped on existing unrelated tracked .qoder changes under the VM testing skill rule. The earlier intermittent relay timeout and broader lifecycle audit remain pending.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
