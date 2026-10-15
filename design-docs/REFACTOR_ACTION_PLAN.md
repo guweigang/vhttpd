@@ -300,6 +300,16 @@ Startup-failure coverage uses a too-long socket path; native bind/listen failure
 
 Full E2E, the whole-project suite, live DB and production/load validation were not run for this slice. Linux preflight stopped on existing unrelated tracked .qoder changes under the VM testing skill rule. The earlier intermittent relay timeout remains unresolved. Native Unix bind-failure cleanup/inheritance policy and other subsystem ownership audits remain outside this slice; this is not whole-refactor completion.
 
+### Codex delayed error-burst task ownership — 2026-10-15
+
+Codex error aggregation now belongs to a live ErrorBurstOwner retained by CodexState, rather than mutable maps copied with ProviderRuntime snapshots. Instance/stream grouping, first-seen message order, duplicate suppression and the 500ms aggregation window are preserved. Enqueue returns an explicit optional job only when a new timer is reserved; runtime snapshot updates cannot overwrite its pending messages.
+
+Each job reserves a unique codex/error-burst/ run in the existing upstream lifecycle registry before spawn. Provider pause/restart and ordinary ProcessLifecycle shutdown therefore cancel pending delays and wait for accepted callbacks through their existing ownership boundary. Taking a burst claims that exact job once; a claimed callback may finish before its run is released. Old timer callbacks and repeated finalizers cannot consume or remove a replacement burst. Cancellation uses the registered run's interruptible wait, with no independent sleep thread or separate shutdown registry.
+
+Validation: seven new owner functions and 21 App Codex functions pass (28 distinct, 10 new). Coverage includes concurrent producers, normalization/deduplication, distinct owners sharing a registry, stale claim/finalizer isolation, reserved-but-unstarted work, claimed dispatch completion, long-delay shutdown, provider stop/restart, snapshot overwrite isolation and executor-close ordering. The App test executor now requires its state reference and supplies an actual delivery channel. The DB-enabled V3 build, CLI help/version, safety lint and diff check also pass; all 408 staged production V files and the native process header match the workspace. An initial test-helper missing-return compilation error was corrected without changing production timeout thresholds.
+
+Full E2E, the whole-project suite, live DB and production/load validation were not run for this slice. This validates the ordinary lifecycle shutdown boundary; the SIGINT/SIGTERM path was not expanded into full network/provider teardown. Linux preflight stopped on existing unrelated tracked .qoder changes under the VM testing skill rule. The earlier intermittent relay timeout and broader ownership audit remain pending.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
