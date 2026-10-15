@@ -288,6 +288,18 @@ Validation: 10 process-module functions pass, including five new regressions exe
 
 Full E2E, the whole-project suite and production/load validation were not run for this slice. Linux preflight stopped on existing unrelated tracked .qoder changes under the VM testing skill rule. The earlier intermittent relay timeout remains unresolved; this signal-owner slice does not establish its cause or fix it.
 
+### Internal admin listener and accepted-request ownership — 2026-10-15
+
+The internal Unix admin/gateway listener now belongs to one required InternalAdminRuntime retained by ProcessLifecycle. Startup reserves the shared listener owner before spawning; shutdown closes admission permanently for that process runtime, interrupts registered connections and waits outside App/registry locks. The serving loop owns listener close/unlink, while each serial request handler closes its original connection before completing its owner token. Unread/decoded requests cannot enter App dispatch after stop; already admitted dispatch completes before engine/provider teardown.
+
+Ordinary process lifecycle shutdown joins this owner before stopping engines. SIGINT/SIGTERM snapshots registered Apps, notifies every internal admin owner before waiting for any, then performs the existing worker and PID-file cleanup. Both paths no longer unlink the internal socket independently. Delayed startup cannot publish after stop, and concurrent closers wait for the same serving generation.
+
+Validation: eight new real Unix-socket lifecycle functions pass, covering partial frame headers, partial binary uploads, delayed startup, immediate/concurrent stops, startup failure/retry, protocol error cleanup, ordinary process shutdown and the multi-App signal-registry path. Five shared listener-owner functions and two MCP HTTP stream shutdown functions also pass. The DB-enabled V3 build, CLI help/version, safety lint and diff check pass; two real worker restart/SIGINT/SIGTERM cleanup regressions pass against the new binary. All 407 staged production V files and the native process header match the workspace.
+
+An initial fixture compilation required explicit optional-generation unwrapping and a disabled executor lifecycle; corrected fixtures passed without weakening required injection. A superseded compiler invocation was stopped before tests when an existing-path bind-failure fixture was found incompatible with V's automatic Unix-path unlinking. Final startup-failure coverage uses a too-long socket path. Slow MCP compilation was sampled in V3 code generation; its two native tests subsequently passed.
+
+Full E2E, the whole-project suite, live DB and production/load validation were not run for this slice. Linux preflight stopped on existing unrelated tracked .qoder changes under the VM testing skill rule. The earlier intermittent relay timeout remains unresolved. Native Unix bind-failure cleanup/inheritance policy and other subsystem ownership audits remain outside this slice; this is not whole-refactor completion.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
