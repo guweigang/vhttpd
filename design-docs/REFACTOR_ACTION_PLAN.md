@@ -278,6 +278,16 @@ DB-enabled V3 build, CLI help/version, safety lint and diff checks pass. All 407
 
 Full E2E and the whole-project suite were not run for this slice. Linux preflight again found existing unrelated tracked .qoder changes and stopped under the VM testing skill rule. Broader ownership, production/load and cross-platform validation remain pending.
 
+### Shutdown signal pipe installation ownership — 2026-10-15
+
+Shutdown signal registration now has one process-lifetime owner with an explicit optional pipe and serialized installation. Repeated or concurrent installation is rejected after the first success, preserving the original callback, pipe and waiter. Candidate descriptors are closed on every failed installation; the native signal callback sees a volatile sig_atomic_t descriptor published only after both handlers are installed. Successful pipes remain alive until process exit so in-flight signal callbacks cannot access a retired descriptor.
+
+SIGTERM installation failure restores the former SIGINT disposition. A restoration failure is reported explicitly, leaves the candidate unpublished and allows a later installation retry; a remaining callback has no published fd to write. Signals handled during the uncommitted installation window are not queued. This change does not add dynamic handler replacement or shutdown-time pipe retirement.
+
+Validation: 10 process-module functions pass, including five new regressions executed in isolated child processes. They check first/second handler failures, rollback failure, previous-disposition restoration, descriptor closure/reuse, retry, concurrent single-owner installation, descriptor flags and real SIGINT/SIGTERM delivery. The DB-enabled V3 build, CLI help/version, safety lint and diff check pass. Two real worker restart/signal cleanup regressions also pass; all 407 staged production V files and the signal C header match the workspace.
+
+Full E2E, the whole-project suite and production/load validation were not run for this slice. Linux preflight stopped on existing unrelated tracked .qoder changes under the VM testing skill rule. The earlier intermittent relay timeout remains unresolved; this signal-owner slice does not establish its cause or fix it.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
