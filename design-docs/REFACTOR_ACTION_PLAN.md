@@ -174,6 +174,18 @@ DB-enabled V3 build, 3 related test files (16 functions, including 6 new bridge 
 
 Linux read-only preflight again finds unrelated tracked .qoder changes; runtime testing stops under the VM skill rule. Listener startup/stop overlap and upstream/bridge heartbeat stop/join ownership remain the next review slices. This change does not claim completion of all subsystem ownership, the whole-project suite, production load or live DB/Linux runtime validation.
 
+### Cache and DB listener generation ownership — 2026-10-15
+
+Cache and DB listeners now share listener_runtime.Owner. It holds one optional listener and serializes startup, publication, stop and deferred cleanup by generation. Production startup reserves synchronously before spawning, so a delayed serving loop cannot undo a subsequent stop. Duplicate starts are rejected before touching the socket path; DB provider start reports db_listener_busy. A candidate that loses publication remains local to its serving loop and is closed there. Published handles are closed/unlinked exactly once by their generation's finalizer; stale finalizers and state/error updates cannot affect a replacement.
+
+Stop returns an optional generation instead of transferring a listener to another thread. Provider stop and cache shutdown wait for that generation outside App.mu. Waiting ignores newer generations. DB keeps the reservation through session/pool cleanup, preventing a new listener from starting while old shared-resource cleanup runs. The listening socket lifetime is separate from the existing accepted-request lifecycle.
+
+The shared listen helper explicitly sets the Unix listener nonblocking and uses a 100 ms accept timeout. Real socket regression tests exposed that the current V library otherwise blocks in its initial accept call despite an accept timeout. Idle polling does not record runtime errors, and accepted sockets observed after stop are closed instead of dispatched.
+
+Final DB-enabled V3 build, 6 related test files (20 distinct functions, including 12 new lifecycle regressions), safety lint and git diff --check pass. Coverage includes simultaneous start reservation, stop before bind/publication, duplicate starts, failed bind, stale teardown, cleanup barriers, three real cache ping/restart cycles, ten immediate start/stop cycles and eight concurrent provider stops followed by restart. The non-DB branch also passes all 5 resource-handle tests after correcting its remaining old callback signature. Earlier fixture/compiler failures and the blocking-accept regression are retained with their final passing retests. Full E2E passes 207 CLI/config checks plus upgrade-frame, worker restart/signal and PHP SSE regressions. All 402 production V sources match final build staging; the verified binary is copied to the workspace. Evidence is in tmp/listener-owner-validation/.
+
+Linux read-only preflight again stops at unrelated tracked .qoder changes under the VM skill rule. Upstream/bridge reconnect and heartbeat stop/join ownership remain the next review slice. Whole-project suite, production load, live DB and Linux runtime validation remain broader follow-ups before V2 completion.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
