@@ -414,6 +414,20 @@ Six related files pass 42 distinct V functions, including ten new regressions fo
 
 Linux remains read-only under the VM skill's stop rule because unrelated tracked changes persist. Whole-project, DB-disabled, live native SQL, production/load and real TLS shutdown validation remain pending. Accepted callbacks/native connect remain cooperative or use existing timeouts. The earlier intermittent relay timeout is not diagnosed by this slice; broader ownership audits and HTTPS lifecycle support remain pending.
 
+### Protocol runtime ownership across plan reload — 2026-10-15
+
+The remaining runtime-plan audit found that applying a protocol projection replaced the entire McpState and OpenaiState. Even an unrelated plugin/route reload could discard live MCP stream registrations, token sequence, queues, metrics and terminal stop admission, and replace the original OpenAI response store. The baseline regression reproduced lost stream ownership, missing stop state and missing saved responses.
+
+ProtocolRuntimePlanUpdate now carries resource-free MCP/OpenAI Settings. Initial assembly constructs owners once; reload updates configuration in place. MCP retains its mutex, session/stream registry, monotonically allocated tokens, pending messages, counters and stopping flag. Capacity/TTL changes take effect at existing admission/pruning boundaries. OpenAI retains the original response store and its lock, records and expiry metadata. Borrowed references remain attached to the same owners.
+
+MCP settings updates, origin policy reads, queue policy/counters and admin counter reads now synchronize through McpState.mu. Queue processing no longer acquires App.mu while holding the MCP lock, removing the inverse order against plan reload; event emission occurs after releasing the protocol lock.
+
+Six related files pass 40 distinct V functions, including five new regressions. Coverage includes repeated reload with an attached stream, replacement registration without losing older owned tasks, terminal admission, original response-store access/expiry, 1000 concurrent reloads and 1000 message enqueues, and a real HTTP SSE stream that delivers after the full projection path and joins ordinary App shutdown. The initial extraction run captured obsolete session initializer fields; those were removed and the affected five-function file passes its focused rerun. The other selected files pass, with logs retained.
+
+The final DB-enabled V3 build, CLI smoke, formatting, safety lint and git diff --check pass. All 414 production V files plus one C header match staging, and the verified binary is copied to the workspace. Complete E2E initially failed the existing provider hello handshake deadline: dispatch occurred about 10.3 seconds after connection, beyond the unchanged 10-second probe limit. A separate project's compilation was observed during diagnosis, without establishing causation. The same binary's unchanged full rerun passes 207 CLI/config checks plus Node upgrade/worker-signal and PHP stream regressions. Failed and passing logs/fixtures, commands and hashes are retained in `tmp/protocol-reload-owner-validation/report.txt`; no deadline was relaxed.
+
+Linux remains read-only under the VM testing skill because unrelated tracked changes persist. This slice does not claim atomic whole-App configuration snapshots, resolved provider/relay timing stability, complete V2 refactoring, or whole-project/live SQL/load/HTTPS lifecycle validation. Broader ownership audits and cooperative/native execution limits remain pending.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
