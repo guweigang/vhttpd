@@ -322,6 +322,18 @@ Two real PHP worker restart/signal cleanup cases pass against the new DB-enabled
 
 Full E2E, the whole-project suite, live DB and production/load validation were not run for this slice. The signal path now joins the named background owners; HTTP ingress draining, DB/cache terminal teardown and full App finalizers on signals remain outside this change. Claimed application callbacks complete cooperatively. Linux preflight stopped on existing unrelated tracked .qoder changes under the VM testing skill rule. The earlier intermittent relay timeout and broader lifecycle audit remain pending.
 
+### Cache/DB terminal process shutdown ownership — 2026-10-15
+
+Ordinary ProcessLifecycle shutdown and SIGINT/SIGTERM now join the background-network phase before terminally stopping cache/DB. AuxiliaryTransportStop retains required listener-owner references and explicit optional generations; configuration enabled flags no longer decide whether opened resources are cleaned. The signal registry requests all registered Apps' auxiliary stops before waiting for any. Listener owners interrupt accepted requests and keep native close/unlink in the serving loop.
+
+A terminal listener boundary rejects new reservations even after generation cleanup or shutdown-before-start. Provider-level request_stop remains restartable. DB stop closes pool/transaction admission before draining requests; final session/pool cleanup waits outside App.mu after listener exit. This also cleans embedded DB resources opened without a listener and a pool whose listener startup was canceled. Repeated finalization is idempotent; existing origin-preserving nontransaction pool leases retain their disposal contract.
+
+Validation: seven listener-owner functions, seven cache functions, four new App auxiliary functions, five DB listener functions, three extended signal functions and the focused ordinary shutdown case pass: 27 distinct V functions. Two actual worker restart/signal cases against the new binary also pass, for 29 distinct regressions, eight new. The generic terminal-before-start case additionally passes with DB disabled, without increasing the distinct count. Signal fixtures use real SIGTERM/SIGINT, two Apps, actual cache/DB Unix sockets and partial frames; background callbacks verify auxiliary listeners remain available until that earlier phase ends. App cases cover mutable enabled flags, active transaction release before pool close, absent listeners and canceled startup. Pool/session tests inject a six-callback factory without native DB connections.
+
+DB-enabled V3 build, CLI help/version, safety lint and diff check pass. All 408 staged production V files and one native header match the workspace; root vhttpd is byte-identical to the tested binary. Existing compiler diagnostics remain; the DB-disabled fixture also has four unused imports used by its DB-enabled cases. Commands, hashes, patch and raw logs are retained under tmp/auxiliary-shutdown-owner-validation/.
+
+Full E2E, the whole-project suite, live DB and production/load validation were not run. Linux checks stopped after read-only status because of pre-existing unrelated tracked .qoder changes, following the VM skill's stop rule. Full HTTP ingress draining and App engine/plugin signal finalizers, the earlier intermittent relay timeout and broader lifecycle audits remain pending. Claimed application/native work remains cooperative; this is not whole-refactor completion.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
