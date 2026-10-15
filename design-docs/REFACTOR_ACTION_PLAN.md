@@ -374,6 +374,18 @@ The DB-enabled V3 build, CLI help/version, safety lint and diff check pass. Comp
 
 HTTPS draining remains limited by V's SSL lifecycle API; transferred streams keep their existing subsystem owners. Accepted callbacks/native work remains cooperative. Whole-project, live SQL, DB-disabled and production/load checks were not run. Linux preflight/final checks were read-only because unrelated tracked VM changes trigger the testing skill's stop rule. Broader lifecycle audits and the earlier intermittent relay timeout remain pending; this is not whole-refactor completion.
 
+### Taken-over HTTP stream session cleanup — 2026-10-15
+
+The remaining stream audit found that dispatch streams and direct SSE/passthrough streams could return after a header/chunk write failure without closing their manually taken-over HTTP connection. Each handled stream now owns that socket through an unconditional exit cleanup. Dispatch logical-session close is in the same scope, called once with the latest successfully accepted state even if the close callback itself fails. Direct streams retain their borrowed worker connection; HttpResponseRuntime.stream remains responsible for closing it and releasing the worker reservation.
+
+Dispatch read/worker failures now pass the transport or worker error class to session close rather than reporting completed. Header/chunk/final-chunk write failures use client_write_error; successful streams retain completed. Open failures and unhandled requests remain outside takeover and keep their existing fallback/rendering path. Reusable OpenAI response paths and incoming WebSocket session ownership were reviewed but are not changed by this focused manual-takeover fix.
+
+Validation: nine distinct V functions pass across two files, six new. Real TCP descriptors are verified closed after header/chunk failures, successful GET/HEAD streams and transport/worker failures. Tests cover a failing close callback, last-state propagation, final-chunk write failure and both direct modes leaving a real Unix worker descriptor open and usable for its outer owner. Three existing stream context/fallback functions pass. The first run's two failing assertions used passthrough as a dispatch protocol type; dispatch requires text, so those fixtures were corrected and all six new functions passed. Production logic and timeout constants were unchanged by the fixture correction. Logs and the pre-format passing test source are retained.
+
+The DB-enabled V3 build, CLI help/version, formatting, safety lint and diff check pass. Complete E2E passes 207 CLI/config checks, Node upgrade-frame and two actual worker restart/signal cases, plus PHP stream reopen/reconnect/independent-reader regression. Standard installed-WordPress/live-DB opt-in scenarios remain skipped. All 411 staged production V files and the native header match workspace hashes; workspace vhttpd matches the tested binary. Evidence: `tmp/stream-session-owner-validation/report.txt`.
+
+This establishes cleanup when these synchronous manual-takeover handlers return, without adding forced cancellation of an active stream or upstream callback. Incoming upgraded WebSocket session/task shutdown, HTTPS lifecycle support, broader ownership audits, whole-project/live SQL/load validation and the earlier intermittent relay timeout remain pending. Linux preflight/final checks remain read-only under the testing skill's stop rule because unrelated tracked VM changes persist.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
