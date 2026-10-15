@@ -252,6 +252,20 @@ Validation: five related files pass all 24 distinct functions, including 11 new 
 
 The first socket test attempt was blocked by sandbox bind permissions; the authorized retry and final rerun pass. Full E2E, the whole-project suite and production load were not run for this slice. Linux preflight found existing unrelated tracked .qoder changes and stopped under the VM testing skill rule. Broader subsystem ownership and cross-platform validation remain pending.
 
+### Executor lane wakeup ownership and shutdown — 2026-10-15
+
+The remaining background-task review found that lane wakeups were matched only by deadline and generation, and were excluded from executor close completion. An old task could match an identical replacement, and callbacks retained by a retired session could cancel or schedule work against its replacement lane.
+
+Each host/session now owns a callback scope with a required state reference. Each scheduled wakeup has a separate heap identity, registered and counted before spawn. Deadline lookup uses explicit optional results instead of an empty wakeup placeholder. Replacement, cancellation, reset and failed bootstrap retire only the matching scope/job; repeated completion cannot decrement the count twice. Comparisons explicitly use addresses to avoid the structural reference equality observed with the local V3 compiler.
+
+Due timers wait for host publication. Pump tasks retain an optional originating scope: session-owned wakeups validate that scope against the worker's current host, while explicit manual pumps retain their existing behavior. A queued stale wakeup therefore cannot pump a replacement session. Host destruction retires callbacks before releasing module/session handles, and executor close rejects new wakeups, cancels sleepers, drains workers and waits for all registered wakeup tasks before destroying hosts.
+
+Validation: five related files pass 97 distinct functions, including nine new wakeup regressions, six concurrent-shutdown functions, eleven cancellation functions, one partial-host resource cleanup test and all seventy embedded executor functions. New cases cover identical replacement values, stale callbacks and queued pumps, delayed spawn, long sleepers, failed bootstrap, host reset and publication ordering. DB-enabled V3 build, CLI help/version, safety lint and diff checks pass; all 407 staged production V sources match the working tree. Evidence and the patch for this slice are retained in `tmp/lane-wakeup-owner-validation/`.
+
+The first compile exposed an unwrapped option and an incorrect test API name; the next run exposed structural reference equality in the identical-job regression. These were corrected before the passing core and integration runs. The first full embedded suite timed out in the relay binary-frame case after 64 passing functions. Its isolated test and the complete unchanged 70-function rerun both pass with the original timeouts. High host load was observed during isolation, but causality is unconfirmed; failure evidence is retained and contention stability remains pending.
+
+Full E2E, the whole-project suite and production load validation were not run for this slice. Linux preflight again stopped on existing unrelated tracked .qoder changes under the VM testing skill rule. The broader ownership and cross-platform milestones remain open.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
