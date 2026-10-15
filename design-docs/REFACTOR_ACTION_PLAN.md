@@ -442,6 +442,14 @@ All 32 distinct V functions across five related files pass, including five new p
 
 The identified provider hello deadline cause and its fixture feedback are fixed; cold preparation still has its existing cost and cooperative cancellation limits. Linux remains read-only under the VM skill because unrelated tracked changes persist. Whole-project, live native DB, real HTTPS/service and production-load validation remain pending. The earlier separate relay timeout is not diagnosed by this fix, and broader V2 ownership work remains open.
 
+### Plugin runtime replacement ownership — 2026-10-15
+
+PluginState now owns synchronized configuration/runtime publication, lookup, pending retirement batches and terminal shutdown admission. Identical configurations reuse the existing executor; changed or removed instances stay owned until their accepted lanes drain. Both lightweight and prepared App plan replacements publish under App.mu and finish plugin retirement only after releasing it. This removes the path that waited for active plugin callbacks while holding the App lock. Normal and streaming plugin calls capture their config/runtime pair under the same owner lock. Final shutdown joins current and outstanding retired instances; concurrent closers share teardown, and late publication cannot recreate a closed plugin owner.
+
+Validation: 22 distinct V functions across six original test source files pass (four new). Five App test files ran with unchanged test bodies through one temporary combined entry to avoid repeated App compilation; its source and input hashes are retained. The new cases cover instance reuse/retirement, a busy retired lane joined by concurrent shutdown, terminal admission, lookup errors and actual lightweight projection releasing App.mu before old-lane draining. Final DB-enabled V3 build, CLI smoke, formatting, safety lint and full E2E pass (208 CLI/config checks plus Node/PHP regressions). All 415 production V files and one C header match staging; the workspace binary matches the tested artifact.
+
+Initial missing-entry fixtures and a V3 deep-comparison code-generation failure were corrected and their logs retained. The first combined run passed 18/19 root functions; the existing SIGINT child fixture missed its unchanged five-second pre-ready warmup deadline under host load. An isolated rebuild of the same test source passes all 19 root functions, and the final owner module passes all three. No timeout thresholds changed. Linux remains stopped at read-only preflight on unrelated tracked VM changes under the testing skill's rule. Evidence, isolated patch, hashes and failed/passing logs are in `tmp/plugin-owner-validation/report.txt`. Wider ownership, production-load timing, whole-project and live-DB validation remain pending.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
