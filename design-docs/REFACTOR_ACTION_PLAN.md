@@ -334,6 +334,18 @@ DB-enabled V3 build, CLI help/version, safety lint and diff check pass. All 408 
 
 Full E2E, the whole-project suite, live DB and production/load validation were not run. Linux checks stopped after read-only status because of pre-existing unrelated tracked .qoder changes, following the VM skill's stop rule. Full HTTP ingress draining and App engine/plugin signal finalizers, the earlier intermittent relay timeout and broader lifecycle audits remain pending. Claimed application/native work remains cooperative; this is not whole-refactor completion.
 
+### Relay agent reconnect and session ownership — 2026-10-15
+
+Relay agents now reserve a unique relay-agent/<id> run in the existing WebSocket upstream registry before spawn. Repeated or concurrent autostart keeps one active loop. The loop receives explicit contexts, descriptor, registry and run; ordinary shutdown and SIGINT/SIGTERM therefore cancel and join it through the existing background-stop phase. There is no separate shutdown registry.
+
+Reconnect waits use Run.wait. Each successful connection owns a connection_runtime.Session with a CLOEXEC interrupt descriptor and a required reference in callback state. Stop interrupts the connected reader; stopped sessions skip message dispatch. Carrier/hub cleanup, session detachment, client close and interrupt-descriptor release finish before the run leaves the registry. Failed setup and hello paths retain cleanup responsibility, and already claimed prepare/payload callbacks finish before shutdown returns.
+
+Validation: six new lifecycle functions, seven existing agent functions, 12 connection-owner functions, five relay routing/cleanup functions and three existing signal functions pass (33 distinct V functions). Two actual worker restart/signal cases also pass: 35 distinct regressions, six new. New cases cover shutdown-before-spawn, cancellation of an hour-long backoff, blocked prepare with no late connection, real connected reader interruption, blocked payload completion before carrier removal and eight concurrent autostarts. Initial compile errors in channel receive, spawned registry reference passing and an option-get test helper were corrected; failure evidence is retained.
+
+The existing relay E2E scenario passes all 18 checks against the newly built binary, including forwarding, trace/completion events, admin diagnostics, disconnect, restart and request recovery. Only test_relay_smoke was selected from config_acceptance_test.sh; helper/scenario bodies and timeout thresholds are unchanged. DB-enabled V3 build, CLI help/version, safety lint and diff check pass. All 408 staged production V files and one native header match the workspace; root vhttpd equals the tested binary. Commands, source hashes, patch, raw logs and generated E2E artifacts are retained under tmp/relay-agent-owner-validation/.
+
+Full E2E, the whole-project suite, live SQL, DB-disabled build and production/load checks were not run for this slice. Linux preflight/final status remain read-only because unrelated tracked .qoder changes trigger the VM skill's stop rule. An already claimed native connect/handshake still follows the existing WebSocket timeout; connected I/O and backoff cancellation are covered, while callbacks finish cooperatively. HTTP ingress/admin HTTP draining, full App signal finalizers, the earlier intermittent relay timeout and broader lifecycle audits remain pending.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
