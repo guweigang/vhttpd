@@ -200,6 +200,20 @@ The initial parallel unit run exceeded the provider fixture's existing 3-second 
 
 Linux preflight again stops at unrelated tracked .qoder changes under the VM skill rule. Whole-project suite, production load, live provider/DB and Linux runtime coverage remain broader validation follow-ups; accepted-request/session ownership remains separate from these reconnect runs.
 
+### Accepted cache/DB request ownership — 2026-10-15
+
+Cache and DB listeners now register every accepted connection with their listener generation before spawning its handler. Dispatch admission is synchronized with stop. The owner retains only unfinished requests, removes records on completion, and refuses to finish the generation while handlers remain. A stopped generation cannot publish late work into a restarted listener.
+
+Each request owns a duplicate interrupt descriptor created atomically with F_DUPFD_CLOEXEC. Stop shuts down this owned descriptor to wake blocked frame reads/writes without closing a borrowed, potentially recycled descriptor. The handler closes its original connection before completing its token; completion releases the duplicate exactly once. The close-on-exec assertion prevents the new interrupt descriptor from surviving worker exec.
+
+The serving loop drains handlers outside application locks before listener close/unlink. DB teardown waits for admitted dispatch to return before cleaning transaction sessions and closing the pool, and retains its generation reservation throughout cleanup. Native DB calls remain cooperative: shutdown does not force-free resources underneath executing driver code.
+
+Validation: 5 related files cover 23 distinct test functions, including 5 new regressions. Final listener/cache retests (10 functions), DB lifecycle retest (5 functions), earlier App integration/resource-handle checks (8 functions), the final DB-enabled V3 build, safety lint and git diff --check pass. Tests cover partial headers/bodies, dispatch/cleanup barriers, duplicate stop, stale tokens, close-on-exec, concurrent provider stop and restart. All 404 production V sources match final build staging. Evidence is in tmp/accepted-request-owner-validation/.
+
+The initial complete E2E attempt failed the provider WebSocket handshake while the fixture also recorded lane warmup timeout and delayed initialization; another project's V compilation was active. The failure log and generated provider fixture are retained. An unchanged full E2E rerun is pending; timeout constants are unchanged and contention stability is not claimed resolved. One superseded build was stopped after confirming its process identities so the close-on-exec correction could be included.
+
+Linux preflight stops at the existing unrelated tracked .qoder changes under the VM skill rule. Whole-project suite, production load, live DB/provider and Linux validation remain pending. Other subsystems' accepted-request lifetimes and transaction-session leasing remain further ownership review work.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
