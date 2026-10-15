@@ -214,6 +214,20 @@ The initial complete E2E attempt failed the provider WebSocket handshake while t
 
 Linux preflight stops at the existing unrelated tracked .qoder changes under the VM skill rule. Whole-project suite, production load, live DB/provider and Linux validation remain pending. Other subsystems' accepted-request lifetimes and transaction-session leasing remain further ownership review work.
 
+### Transaction session leases and retirement — 2026-10-15
+
+The DB transaction registry now retains TransactionSession owners rather than copies of native SessionHandle values. Each entry transfers its optional handle to one ConnectionLease at a time. Other borrowers wait outside App.mu; native driver methods also serialize against release/retirement on the lease itself. Regular release returns the mutated handle to its transaction owner. Released leases reject driver access, and repeated/stale release cannot end a newer lease.
+
+Commit and rollback acquire an exclusive terminal lease and then close admission for the entry. Retirement keeps that entry active and registered until reset, pool return or discard finishes. Detachment checks owner identity. Ordinary SQL errors release the lease while retaining the transaction; connection loss and terminal failures retire it once. All acquisition paths have a fallback deferred release, including nontransactional ping errors. Missing transaction lookup returns invalid_session without creating a pool.
+
+Runtime.request_stop closes transaction admission and wakes parked borrowers before listener request draining begins. Cleanup waits outside App locks for executing leases, attempts rollback on abandoned transactions, then closes their handles before pool teardown. It no longer enables MySQL autocommit before abandoning a transaction. Failed PostgreSQL handles use the native pool's release/replacement lifecycle rather than opening a temporary replacement pool.
+
+Validation: 3 related files cover 19 distinct functions, including 14 new regressions. The final transaction module (9) and App integration (5) pass after the stop-notification correction; 5 listener regressions passed earlier. Six DB-disabled lease tests also pass. Coverage includes 24 concurrent borrowers, terminal admission waiting behind an active query, closure waking waiters, retirement/drain barriers, stale release/detach, query/commit/rollback errors, repeated connection-loss cleanup, and a real accepted Unix-socket request parked on a transaction during provider stop/restart. Safety lint guards against raw-handle transaction lookup. All 405 production V sources match build staging. Final DB-enabled build and CLI smoke are running. Evidence is in tmp/db-transaction-lease-validation/.
+
+An added test helper initially failed V3's return-path check; its timeout now explicitly terminates outside select and final retests pass. One superseded own validation process tree was stopped after PID checks before the stop-order correction. Both diagnostic and successful logs are retained.
+
+These tests use real threads/sockets and unavailable-driver error paths; live MySQL/PostgreSQL statements and the complete E2E suite were not run for this slice. Native driver operations remain cooperative, and borrower ordering has no FIFO guarantee. Linux preflight stops at the existing unrelated tracked .qoder changes under the VM skill rule. Whole-project suite, production load, live DB and Linux coverage remain pending.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
