@@ -402,6 +402,18 @@ The DB-enabled V3 build, CLI help/version, new-file formatting, safety lint and 
 
 Already claimed application callbacks and native connect operations remain cooperative or follow their existing timeouts. This does not add HTTPS lifecycle control or forced termination of arbitrary native work. Whole-project, DB-disabled, live SQL and production/load validation were not run. Linux preflight/final checks were read-only because unrelated tracked VM changes trigger the testing skill's stop rule. Broader ownership audits and the earlier intermittent relay timeout remain pending; this is not whole-refactor completion.
 
+### Hub session identity and explicit close-task ownership — 2026-10-15
+
+The remaining WebSocket hub audit found that ID-only finalizers could mutate a replacement connection, and the previous incoming-owner slice could skip closing an outgoing relay agent because it had no incoming serving run. Owned mark/cleanup/close operations now compare lifecycle identity under the hub mutex. Relay agents explicitly bind their actual outbound Session before activation; close tasks borrow retained interrupt descriptors and join the existing terminal owner. Released sessions and failed reservations release their task slots explicitly.
+
+Incoming worker/dispatch/relay wrappers now inject the exact optional serving run through their runtime contexts. Registration no longer guesses ownership from an original fd, which can be reused while an older run is still registered. Generic registration explicitly has no serving scope; outbound Session binding clears any incoming scope. Child tasks reject stopped or finished parents.
+
+Close-frame writers capture an immutable SDK client snapshot before listening, retain its shared writer lock/state and protocol role, and replace only the borrowed TCP descriptor with their retained task handle. Client masking and terminal-state checks use the SDK implementation. The serving reader remains responsible for native Client.close. TLS-marked clients send no plaintext frame and instead interrupt their owned transport; the regression simulates the TLS flag and does not claim live TLS graceful close.
+
+Six related files pass 42 distinct V functions, including ten new regressions for stale session identities, outbound closure, SDK masking/state, TLS transport guarding and explicit serving scope. After the final explicit-scope refinement, all 31 affected hub/ingress/inbound/dispatch functions pass again. The final DB-enabled V3 build, CLI smoke, updated test formatting, safety lint and git diff --check pass. Complete E2E passes both before and after that refinement; the final run passes 207 CLI/config checks plus Node upgrade/worker-signal and PHP stream regressions. All 412 production V files and one C header match staging; the verified binary is copied to the workspace. Commands, incremental logs, hashes and retained E2E artifacts are recorded in `tmp/hub-session-identity-validation/report.txt`.
+
+Linux remains read-only under the VM skill's stop rule because unrelated tracked changes persist. Whole-project, DB-disabled, live native SQL, production/load and real TLS shutdown validation remain pending. Accepted callbacks/native connect remain cooperative or use existing timeouts. The earlier intermittent relay timeout is not diagnosed by this slice; broader ownership audits and HTTPS lifecycle support remain pending.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
