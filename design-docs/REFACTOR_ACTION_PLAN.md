@@ -266,6 +266,18 @@ The first compile exposed an unwrapped option and an incorrect test API name; th
 
 Full E2E, the whole-project suite and production load validation were not run for this slice. Linux preflight again stopped on existing unrelated tracked .qoder changes under the VM testing skill rule. The broader ownership and cross-platform milestones remain open.
 
+### WebSocket interrupt descriptor ownership across exec — 2026-10-15
+
+The remaining handle review found that connection_runtime.Session created its owned interrupt socket with plain dup. That clears close-on-exec protection, allowing an executed worker child to inherit the auxiliary descriptor. Session.connected now uses atomic F_DUPFD_CLOEXEC, matching the policy already used by listener request and MCP stream interruption handles. The existing native duplication error is preserved.
+
+The constructor explicitly rejects a WebSocket client whose nullable library TCP field is not connected. Session retains the optional interrupt descriptor; release closes only this owned duplicate, leaving the borrowed connection to the client lifecycle. A failed duplicate does not close other connections, and late stop/release keeps its existing protection against recycled descriptors. Safety lint rejects plain dup in this production owner.
+
+Validation: three related files pass 22 distinct functions, including four new regressions. A real executed child receives both the Session interrupt descriptor and an intentionally inheritable control descriptor. With the old implementation it exits 42 because the interrupt descriptor survives exec; after the fix it exits successfully while the control remains open. Other new cases cover an unconnected library client, native duplication failure and release preserving the borrowed socket. Existing upstream and provider reconnect/heartbeat/handshake cleanup tests pass.
+
+DB-enabled V3 build, CLI help/version, safety lint and diff checks pass. All 407 staged production V sources match the working tree. Evidence and the patch for this slice are retained in `tmp/websocket-interrupt-owner-validation/`. The first upstream test command omitted required QuickJS build flags and was rejected by the dependency check; the corrected standard command passes without a source workaround.
+
+Full E2E and the whole-project suite were not run for this slice. Linux preflight again found existing unrelated tracked .qoder changes and stopped under the VM testing skill rule. Broader ownership, production/load and cross-platform validation remain pending.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
