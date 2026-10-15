@@ -240,6 +240,18 @@ Validation: four related files cover 37 distinct regression functions, including
 
 Tests use real threads and Unix sockets, injected factories, and a native empty MySQL channel without a live DB handle. Live MySQL/PostgreSQL statements, complete E2E, the whole-project suite and production load were not run for this slice. Linux preflight stopped on existing unrelated tracked .qoder changes under the VM skill rule. Broader ownership and live-driver failure/recovery coverage remain pending.
 
+### MCP SSE stream ownership and shutdown — 2026-10-15
+
+The remaining resource review found that MCP stream workers resolved their connection by session ID on every flush. A replaced worker could therefore drain the replacement stream's queue, while expiry and eviction removed session records without retiring the associated stream task. HTTP header-write failure after connection takeover also lacked an owning cleanup path.
+
+SessionStream now owns each transferred TCP connection and a close-on-exec interrupt descriptor. Session records retain an explicit optional stream reference, and McpState separately tracks accepted streams until physical cleanup completes. Registration precedes header writing and spawn; the HTTP adapter retains cleanup responsibility until handoff succeeds. Headers, complete SSE message frames, keepalive and close share one per-stream write lock. Cancellation interrupts socket I/O through the owned duplicate; only the stream cleanup path closes the original connection.
+
+Replacement, deletion, TTL expiry and capacity eviction cancel the affected stream by identity. A retiring worker flushes only its own still-current binding, and identity-checked cleanup cannot detach a replacement or a recreated session ID. Process shutdown closes stream admission, notifies MCP together with the upstream/bridge owners, then waits outside application/protocol locks before engine teardown. Client-capability lookup now holds the session mutex. Safety lint guards against restoring session-ID-based binding and flushing in the HTTP stream adapter.
+
+Validation: five related files pass all 24 distinct functions, including 11 new regressions. Coverage includes real TCP connections through the HTTP handoff, replacement message delivery and process-shutdown hooks; module tests exercise delayed startup, header failure, delete/recreate, expiry/eviction, concurrent frame writes, blocked-write interruption and repeat cleanup. The final standalone V3 module run passes without DB enabled; the four App/integration files pass with DB enabled. DB-enabled V3 build, CLI help/version, safety lint and diff checks pass. All 407 staged production V sources match the working tree. Evidence is retained in `tmp/mcp-stream-owner-validation/`.
+
+The first socket test attempt was blocked by sandbox bind permissions; the authorized retry and final rerun pass. Full E2E, the whole-project suite and production load were not run for this slice. Linux preflight found existing unrelated tracked .qoder changes and stopped under the VM testing skill rule. Broader subsystem ownership and cross-platform validation remain pending.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
