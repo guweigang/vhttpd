@@ -228,6 +228,18 @@ An added test helper initially failed V3's return-path check; its timeout now ex
 
 These tests use real threads/sockets and unavailable-driver error paths; live MySQL/PostgreSQL statements and the complete E2E suite were not run for this slice. Native driver operations remain cooperative, and borrower ordering has no FIFO guarantee. Linux preflight stops at the existing unrelated tracked .qoder changes under the VM skill rule. Whole-project suite, production load, live DB and Linux coverage remain pending.
 
+### DB pool construction, refill and shutdown ownership — 2026-10-15
+
+DB runtime now owns one PoolOwner with an explicit optional pool, replacing the copied native handle and independent readiness flag. Required factory callbacks centralize native creation, borrowing, return and disposal. Concurrent startup shares one build result, failed builds allow retry, and shutdown joins unfinished construction and refill cleanup. Physical creation and close run outside App.mu; concurrent closers wait for one teardown, with generation checks protecting restart.
+
+ConnectionLease and transaction sessions retain their originating pool, generation and one-time capacity permit. Returns and disposal use that origin after restart instead of entering a replacement pool. MySQL refill uses the original settings with a single connection, admits each retired lease once, and disposes late replacements before the job completes. Stop prevents new refill work. Native partial MySQL construction closes already-created connections, pool teardown continues after individual close errors, and initialization failure disposes the borrowed handle; these driver fault paths were compiled and reviewed without a live database fault test.
+
+Capacity admission includes idle transactions and wakes parked borrowers on stop before listener draining. This fixes the full-pool shutdown dependency between a waiting request and transaction cleanup. Native MySQL empty-channel acquisition also observes cancellation. Running driver calls remain cooperative, and borrower ordering has no FIFO guarantee.
+
+Validation: four related files cover 37 distinct regression functions, including 18 new functions. The existing session/listener tests passed in the initial sweep; the final DB-enabled pool/App retest passed all 23 functions. Sixteen DB-disabled functions, DB-enabled V3 build, CLI help/version, safety lint and diff checks passed. All 406 staged production V sources match the working tree, and the root binary matches the verified build. Evidence is retained in `tmp/db-pool-owner-validation/`.
+
+Tests use real threads and Unix sockets, injected factories, and a native empty MySQL channel without a live DB handle. Live MySQL/PostgreSQL statements, complete E2E, the whole-project suite and production load were not run for this slice. Linux preflight stopped on existing unrelated tracked .qoder changes under the VM skill rule. Broader ownership and live-driver failure/recovery coverage remain pending.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
