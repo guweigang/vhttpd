@@ -186,6 +186,20 @@ Final DB-enabled V3 build, 6 related test files (20 distinct functions, includin
 
 Linux read-only preflight again stops at unrelated tracked .qoder changes under the VM skill rule. Upstream/bridge reconnect and heartbeat stop/join ownership remain the next review slice. Whole-project suite, production load, live DB and Linux runtime validation remain broader follow-ups before V2 completion.
 
+### Upstream and bridge reconnect/heartbeat ownership — 2026-10-15
+
+WebSocketRuntime now owns a connection_runtime.Registry instead of a permanent started-key map. Each reconnect run reserves before spawning and releases by identity. Provider stop pauses admission until explicit start; application shutdown closes admission permanently. Provider and process shutdown notify all upstream and Feishu background owners before waiting, outside App locks and before disposing engines/plugins.
+
+Each connected attempt has a Session with broadcast stop state and an owned duplicate socket descriptor. Stop wakes the reader through shutdown on that descriptor, preventing a late stop from touching a recycled original descriptor. The WebSocket reader retains closing responsibility. Session teardown stops and joins the task handles returned by post-connect before releasing borrowed connection references and its interrupt descriptor. Backoff, heartbeat and initialization delays are interruptible; a stopped endpoint lookup cannot publish a late connection. Failed HTTP upgrades close unpublished TCP connections. Codex initialization write failures stop the session and follow the reconnect cleanup path.
+
+Outbound card bridge uses the same upstream loop. Feishu heartbeat, Codex heartbeat/initialization, bridge heartbeat and Feishu buffer flusher now have explicit owners and completion waits. Reconnect joins the old session tasks before creating another attempt; final disconnect state is applied after those tasks exit. In-flight endpoint requests, dial/handshake operations and business callbacks still finish cooperatively under their existing network/execution deadlines; this change does not force-free executing native resources.
+
+Final DB-enabled V3 build, 5 related test files (29 distinct functions, including 18 new regressions), safety lint and git diff --check pass after targeted retests. Coverage includes broadcast cancellation, stop/pause/resume admission, cross-owner notification, stale release/detach, descriptor reuse safety, endpoint/backoff cancellation, failed upgrade EOF, reader wakeup and child-join barriers, two real bridge reconnect cycles, Codex initialization cancellation/failure and flusher/provider stop. The provider fixture now explicitly stops and waits for its run. All 403 production V sources match final build staging; the verified binary is copied to the workspace. Evidence is in tmp/reconnect-owner-validation/.
+
+The initial parallel unit run exceeded the provider fixture's existing 3-second hello deadline; its isolated unchanged retest passed (about 1.38 seconds for the native handshake/message case). An initial full E2E run also failed the provider hello check and recorded lane warmup delays while another project was building on the host. The complete unchanged E2E rerun passed 207 CLI/config checks plus upgrade-frame, worker restart/signal and PHP SSE regressions after that build ended. Both failed and passing logs are retained; timeout constants were not increased, and performance under host contention is not claimed resolved. An EOF assertion in the new rejected-upgrade fixture was corrected to recognize io.Eof; its five-function file passes. One superseded compiler group was cancelled after verifying process identities.
+
+Linux preflight again stops at unrelated tracked .qoder changes under the VM skill rule. Whole-project suite, production load, live provider/DB and Linux runtime coverage remain broader validation follow-ups; accepted-request/session ownership remains separate from these reconnect runs.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
