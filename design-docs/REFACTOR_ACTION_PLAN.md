@@ -644,6 +644,14 @@ Validation: 93 related test functions pass, including 9 new deterministic regres
 
 Linux validation remains stopped at the skill's preflight rule because the mounted checkout contains pre-existing unrelated tracked .qoder/.gitignore changes; no VM builds, tests or toolchain mutations were performed. Full V-suite, load, live-DB and wider subsystem coverage remain separate follow-ups; this slice does not close the overall refactor milestones.
 
+### MCP route lookup and metadata callback ownership — 2026-10-16
+
+The remaining ownership audit found that MCP route assembly called executor.provider() while holding App.mu, allowing a reentrant metadata callback to deadlock publication. It also constructed a current-engine candidate before resolving an already-bound session. The protocol owner now exposes an explicit optional route lookup: missing, expired, retired and stopped sessions reject admission; an existing bound route returns directly without invoking unrelated current-engine metadata. For new/unbound routes, App.mu captures only state and the executor port; metadata runs outside that lock, and the candidate retains the captured executor/provider pair. Final protocol admission rechecks shutdown and candidate retirement before binding, preserving a concurrently selected existing route.
+
+Nine new regressions cover reentrant metadata publication, a blocked callback permitting concurrent publication, retained routes skipping current metadata, shutdown/retirement/deletion during candidate construction, optional lookup states and expiry. All 60 distinct related test functions pass (43 application tests plus 17 protocol tests). The final DB-enabled V3 build, formatting verification, safety lint and git diff --check pass. Complete E2E passes all 208 CLI/config/runtime checks plus Node and PHP regressions. The tested binary is installed as vhttpd; exact source inputs, isolated diff, logs and retained E2E fixtures are in tmp/mcp-route-admission-validation/.
+
+This slice changes route lookup/admission and callback lock ownership; existing session/stream owners retain their stop, wait and native cleanup responsibilities. Linux remains stopped by the recorded skill preflight rule because of pre-existing unrelated tracked .qoder/.gitignore changes. Full V-suite, load/live-DB and wider subsystem coverage remain separate follow-ups.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
