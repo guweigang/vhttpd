@@ -502,6 +502,18 @@ Validation: 39 distinct V functions pass after targeted retesting across seven o
 
 Final DB-enabled V3 build, CLI smoke, formatting, safety lint and complete E2E pass (208 CLI/config checks plus Node/PHP regressions). All 418 production V sources and one C header match staging; tested/workspace binary hashes match. Linux remains stopped at read-only preflight under the testing skill's tracked-change rule. Native Unix timeout policy, whole-project, production-load, live SQL, Linux, HTTPS lifecycle and broader engine/request snapshot ownership remain pending. Evidence and the isolated patch are in `tmp/worker-connection-owner-validation/report.txt`.
 
+### Worker queue deadline and connector retry ownership — 2026-10-16
+
+The remaining retry audit reproduced three problems through the public connector/queue paths: outer connection retries repeated terminal queue backpressure, nested selection loops multiplied a ten-attempt budget into 100 attempts, and a poll that slept beyond its deadline could still grant a newly idle worker. All three original regressions fail on the saved pre-change implementation.
+
+Connection selection and dialing now share one ten-attempt budget. Queue-full and queue-timeout errors return immediately because the queue already owns its wait/deadline; a failed connection still releases its selected lease once before another attempt. The standalone selection helper retains its API and behavior.
+
+Queue polling sleeps only for the remaining deadline and checks expiry before selection. Readiness that returns a lease after expiry returns it to the same WorkerState without served-request accounting. Non-busy selection failures preserve their actual error and release the waiter instead of becoming a queue timeout. The existing deferred wait-slot release remains the one cleanup path.
+
+Validation: 49 distinct DB-enabled V functions pass across nine original source files: seven new queue/retry regressions, sixteen existing worker module functions and 26 App/HTTP stream/context functions. Coverage includes terminal backpressure, the complete retry budget, late polling/selection, lease and waiter counts, configuration removal, release-before-retry and transient recovery with ownership transfer. Two temporary combined entries preserve original bodies and input hashes. The first test-helper compile errors were corrected before the recorded three-failure original proof and final passing runs; no production timeout threshold or retry interval was increased.
+
+Final DB-enabled V3 build, CLI smoke, formatting, safety lint and complete E2E pass (208 CLI/config checks plus Node/PHP regressions). All 418 production V sources and one C header match staging; tested/workspace binary hashes match. Linux remains stopped at read-only preflight under the testing skill's tracked-change rule. Queue checks prevent expired admission after readiness returns; they do not preempt readiness/dial I/O or define a complete HTTP request deadline. Whole-project, production-load, live SQL, Linux, native Unix I/O policy and broader engine/request ownership remain pending. Evidence and the isolated patch are in `tmp/worker-queue-retry-validation/report.txt`.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
