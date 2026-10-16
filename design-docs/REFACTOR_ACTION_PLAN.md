@@ -470,6 +470,18 @@ Validation: 60 distinct V functions across seven original test files pass, inclu
 
 Linux remains stopped at read-only preflight because unrelated tracked VM changes persist under the Linux testing skill's explicit rule. Whole-project, production-load, live SQL, Linux, HTTPS lifecycle and broader admin-workflow/request snapshot audits remain pending. No timeout thresholds changed. Evidence, the isolated patch, original failure probes and identity manifests are in `tmp/connection-stop-ticket-validation/report.txt`.
 
+### Admin replacement workflow admission and pending generation — 2026-10-16
+
+The remaining management-path audit found that apply, finalize and cancel checked pending state independently before acting on the same drain resources. Status refresh also unconditionally wrote its captured pending snapshot back, allowing an old read to restore a cancelled/finalized request or overwrite an identical later request.
+
+RuntimePlanReplacementRuntime now owns synchronized exclusive admission for public mutating workflows. Contending operations return a structured 409 with `runtime_plan_replacement_busy`; terminal App shutdown rejects new operations with `runtime_plan_replacement_app_stopping`. Each accepted scope belongs to the existing App shutdown owner through drain/resume, candidate startup, publication, retirement and result recording, including errors. Busy contenders release their temporary lifecycle count. Callbacks and I/O remain outside App.mu.
+
+Each pending publication and clear advances an owner-local generation. Refresh publishes only against its captured generation and otherwise returns current state. Worker pool resolution and pure drain-accounting reads share publication exclusion, while plan diffs and previews use one captured published plan. No nil placeholders or unsafe conversions were added.
+
+Validation: 55 distinct V functions pass across five original test sources, including eight new workflow regressions and 47 existing admin/replacement/protocol/signal functions. Coverage includes one winner among concurrent claims, failure admission release, 409/pending preservation, cancelled and identical-later refresh isolation, terminal rejection and a real public cancel blocked on worker accounting while shutdown waits for resume and result completion. The combined test entry preserves original bodies and input hashes. DB-enabled V3 build, CLI smoke, formatting, safety lint and complete E2E pass (208 CLI/config checks plus Node/PHP regressions). All 417 production V sources and one C header match staging; workspace and tested binary hashes match.
+
+Linux remains stopped at read-only preflight under the VM skill's explicit rule for unrelated tracked changes. No timeout thresholds changed. Direct internal replacement helpers retain their existing concurrency policy; whole-project, production-load, live SQL, Linux, HTTPS lifecycle and wider admin/request snapshot audits remain pending. Evidence, the isolated patch and identity manifests are in `tmp/replacement-workflow-validation/report.txt`.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
