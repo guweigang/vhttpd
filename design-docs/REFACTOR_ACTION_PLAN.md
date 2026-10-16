@@ -482,6 +482,16 @@ Validation: 55 distinct V functions pass across five original test sources, incl
 
 Linux remains stopped at read-only preflight under the VM skill's explicit rule for unrelated tracked changes. No timeout thresholds changed. Direct internal replacement helpers retain their existing concurrency policy; whole-project, production-load, live SQL, Linux, HTTPS lifecycle and wider admin/request snapshot audits remain pending. Evidence, the isolated patch and identity manifests are in `tmp/replacement-workflow-validation/report.txt`.
 
+### Replacement worker-batch validation before state changes — 2026-10-16
+
+The remaining failure-path audit reproduced partial worker state changes in both replacement apply and cancel. Resolving engine IDs inside the mutation loop meant a later unavailable pool rejected apply after earlier workers had drained without pending ownership, or rejected cancel after earlier workers had resumed while pending remained active. The original two public-operation regressions both fail on the saved pre-change implementation.
+
+Apply and cancel now preflight the complete ordered worker-pool list before the first state change. Preflight runs under App publication exclusion within the existing admitted public workflow; that workflow retains routing and shutdown ownership through accounting, events and result recording. No borrowed state reference escapes lookup. Actual drain/resume and event emission continue through existing adapters outside App.mu.
+
+Validation: 55 distinct DB-enabled V functions pass across five original test sources, including four new batch regressions and 51 existing admin/workflow/replacement/signal functions. The new cases check unchanged flags, counters and pending generation on failure; repairing a missing pool and retrying; multi-pool event counts; unknown-engine errors; and alias/status ordering. The final four-function rebuild also passes after replacing direct pointer-valued test map access with explicit optional lookup. Original failing probes, combined runner and input hashes are retained. Final DB-enabled V3 build, CLI smoke, formatting, safety lint and complete E2E pass (208 CLI/config checks plus Node/PHP regressions). All 418 production V sources and one C header match staging; tested/workspace binary hashes match.
+
+Linux remains stopped at read-only preflight under the VM skill's tracked-change rule. No timeout thresholds changed. This validates target-resolution failure before side effects; it does not add a simultaneous transaction across independent worker admin commands. Whole-project, production-load, live SQL, Linux, HTTPS lifecycle and broader admin/request snapshot audits remain pending. Evidence, the isolated patch and identity manifests are in `tmp/replacement-worker-batch-validation/report.txt`.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
