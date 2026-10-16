@@ -492,6 +492,16 @@ Validation: 55 distinct DB-enabled V functions pass across five original test so
 
 Linux remains stopped at read-only preflight under the VM skill's tracked-change rule. No timeout thresholds changed. This validates target-resolution failure before side effects; it does not add a simultaneous transaction across independent worker admin commands. Whole-project, production-load, live SQL, Linux, HTTPS lifecycle and broader admin/request snapshot audits remain pending. Evidence, the isolated patch and identity manifests are in `tmp/replacement-worker-batch-validation/report.txt`.
 
+### Short worker connection handle ownership and completion order — 2026-10-16
+
+The remaining handle audit found that WorkerBackendConnection directly copied a native Unix connection. Repeated or copied wrappers could close a descriptor after the OS had reused it, and four RPC adapters reported worker completion before releasing the transport. Three deterministic regressions fail against the saved original implementation: repeated close, copied close and native-close ordering.
+
+Value copies now share one private connection owner with an explicit optional handle. Empty/closed wrappers have no usable connection and all frame operations reject late access with `worker_connection_closed`. Close closes admission, interrupts the still-owned socket, joins in-flight frame I/O and releases the native descriptor once. State and frame locks have a defined order; the state lock is not held while waiting for I/O. Stream, MCP and both WebSocket RPC adapters close transport before their one completion callback on success and errors. Constructor signatures remain compatible, with raw-alias ownership transfer stated in source. No App dependency, nil placeholder or unsafe operation was added.
+
+Validation: 39 distinct V functions pass after targeted retesting across seven original test sources: nine new connection regressions, four worker lifecycle/connector/drain functions and 26 App/worker/stream/context integration functions. Tests exercise actual descriptor reuse, concurrent aliases, owner isolation, closed operations, shared timeout state, interrupted blocked reads and all four RPC error cleanup paths. The original module command stopped a timeout fixture that used a blocking socket; the corrected fixture explicitly enables nonblocking timeout polling, and the standalone final nine-function rebuild passes. An initial immutable-parameter constructor diagnostic was corrected with a mutable heap-capable local. Failed/stopped and final passing evidence is retained; production timeout thresholds and socket mode were unchanged.
+
+Final DB-enabled V3 build, CLI smoke, formatting, safety lint and complete E2E pass (208 CLI/config checks plus Node/PHP regressions). All 418 production V sources and one C header match staging; tested/workspace binary hashes match. Linux remains stopped at read-only preflight under the testing skill's tracked-change rule. Native Unix timeout policy, whole-project, production-load, live SQL, Linux, HTTPS lifecycle and broader engine/request snapshot ownership remain pending. Evidence and the isolated patch are in `tmp/worker-connection-owner-validation/report.txt`.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
