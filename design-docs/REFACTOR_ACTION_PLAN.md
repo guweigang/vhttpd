@@ -580,6 +580,18 @@ Validation: all 98 related test functions pass (84 integration and 14 MCP/SSE mo
 
 This closes the identified MCP and inbound WebSocket generation gaps. Per-slot process restart leases, wider runtime snapshots, native I/O policy/API limits, whole-project tests, production load and live DB validation remain follow-ups. Linux supplemental validation stops after read-only preflight under the testing skill because the mounted checkout contains unrelated tracked changes.
 
+## Single-slot worker request leases — 2026-10-16
+
+Completed the per-slot restart lease follow-up. Request selection now returns a lease bound to the socket path and slot generation. A generation fence covers native connection establishment; retirement revokes selected old leases before replacing the process, and successful readiness publishes a fresh generation. Failed replacement leaves the slot unavailable. Active request/session IO runs outside this fence, and administrative restart retains its existing forceful behavior.
+
+Lease completion settles once, joins concurrent duplicate completion, and only updates the matching generation. Queue deadline cleanup and connection retries release the exact acquired lease. Deferred max-request and drain restarts also verify their captured generation, so an intervening restart cannot retire the new process.
+
+A per-request host owns selection, connection, release and finish across worker RPC and the built-in HTTP/FastCGI/WebSocket paths. Connector dialing is explicitly injected; the executor exposes the owned connection capability. Unowned or mismatched completion callbacks are ignored. Removed unused bare App connection wrappers and corrected snapshot fixtures to complete requests acquired by the same context. A retired lease rejected before dialing reports `worker_slot_restarted` (HTTP 503).
+
+Validation: 138 distinct related test functions passed (15 new, 123 existing: worker 53, main 80, executor 5). Regression cases cover real worker PID replacement, selected-before-dial retirement, stale completion, duplicate completion joining, queued acquisition, retry, failed restart, shutdown and generation-checked automatic restart. The V3 DB-enabled build, formatting, safety lint and diff checks passed. Full E2E passed: 204 config/runtime checks plus 4 CLI checks, with the Node upgrade probe, two managed-worker lifecycle tests and PHP stream checks also passing. Evidence and exact source/input hashes are retained under `tmp/slot-request-lease-validation/`.
+
+Native dialing, readiness and timeout policies remain unchanged. Legacy socket-only/custom facade contracts remain compatible; generation ownership is provided by the built-in lease-aware paths. Wider runtime snapshots, native IO limits, full-suite/load/live-DB coverage and Linux validation remain audit follow-ups. Linux testing stopped after read-only preflight because the VM checkout contains pre-existing tracked changes, as required by the Linux testing skill.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
