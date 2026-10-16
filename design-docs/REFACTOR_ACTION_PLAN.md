@@ -534,6 +534,16 @@ Validation: 87 distinct DB-enabled V functions pass across 17 original test sour
 
 This completes worker backend admission/context ownership. Native readiness/I/O and callbacks remain cooperative or subject to existing timeouts; HTTPS API limits, broader request/runtime ownership, whole-project suite, production load, live DB and Linux validation remain pending. Evidence and the isolated patch are in `tmp/worker-backend-admission-validation/report.txt`.
 
+### Worker RPC request snapshots — 2026-10-16
+
+Worker RPC contexts retained a timeout from their construction but looked up live App.engines again for selection, dial-failure release and completion. Runtime publication could redirect a saved context to a new pool, strand an original lease or decrement a replacement pool using the same socket name. Four original regressions fail, including a real Unix MCP response arriving after publication.
+
+WorkerBackendRequestSnapshot now captures the primary worker reference under App.mu, its timeout under WorkerState.mu, its executor kind and injected lifecycle event port. All selection/dial retries, failed-dial release and completion retain that same state through the shared stream/MCP/WebSocket-upstream/WebSocket-event RPC context. Locks protect capture only; existing close-before-accounting ordering is preserved. A snapshot of a stopped generation fails explicitly instead of selecting a replacement. The readiness helper now borrows WorkerState, including additional pools, so diagnostics use the original mutex rather than copying it.
+
+Validation: 57 distinct DB-enabled V functions pass across nine input sources (nine new and 48 existing). New cases cover same-name completion/release, selection after publication, a real in-flight MCP exchange, paired timeout/open identity, stopped-generation rejection, failed-dial release, independent snapshots and readiness waiting on the original lock. Final DB-enabled V3/OpenSSL build, CLI smoke, formatting, safety lint and complete E2E pass (208 CLI/config checks plus Node/PHP regressions), with matching production staging and tested/workspace binary hashes. Linux remains stopped at read-only preflight under the tracked-change rule. Evidence and the isolated patch are in `tmp/worker-request-snapshot-validation/report.txt`.
+
+This fixes the identity boundary of an individual worker transport RPC; capturing a snapshot does not keep a retired backend running. Whole HTTP/FastCGI and long-lived WebSocket facade/outcome ownership, multi-RPC stream/session routing, per-slot restart leases and wider engine dispatch snapshots remain audit follow-ups. Native preemption, HTTPS API limits, whole-project suite, production load, live DB and Linux validation remain pending.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
