@@ -558,6 +558,14 @@ The first 64-case integration run passed all then-new cases but two existing sig
 
 This completes selected-pool, connection handoff and completion ownership for the built-in native transports. Backend retirement and native I/O timeout/cancellation policies are unchanged; HTTP graceful draining remains cooperative and WebSocket interruption uses its existing ingress owner. Multi-RPC stream/session routing, per-slot restart leases, wider runtime dispatch snapshots, HTTPS lifecycle API limits, whole-project suite, production load, live DB and Linux validation remain follow-ups.
 
+### Dispatch stream generation ownership — 2026-10-16
+
+HTTP dispatch streams now retain the WorkerState selected by the HTTP ingress and construct one stream context from it. Open, next and close capture the same LogicExecutorStreamPort. The built-in socket executor receives a narrow WorkerStreamDispatchFacade backed by one WorkerBackendRequestSnapshot, keeping pool selection, timeout and completion accounting on the original generation even when the App publishes a replacement with the same socket path. Embedded and custom executors retain their selected executor through the existing facade adapter. Event and failure-rendering callbacks remain application services.
+
+Four new regressions cover publication before/after open, same-path worker accounting, close after a failed next RPC, embedded executor identity and a fresh context selecting the replacement, plus publication between HTTP engine selection and context construction. All 24 related test functions pass (4 new and 20 existing), as do the V3 DB-enabled build, format verification, safety lint and diff check. Complete E2E passes: 204 config/runtime and 4 CLI checks plus Node/PHP regressions. Evidence and exact input hashes are in `tmp/stream-generation-validation/`.
+
+This slice binds the executor and pool for HTTP dispatch streams; it does not pin an individual worker process or keep a retired backend running. Existing retirement/admission errors still apply. Other multi-RPC protocols, per-slot restart leases, wider runtime snapshots, whole-project tests, production load and live DB validation remain follow-ups. Linux supplemental validation stops after read-only preflight because the mounted checkout still contains unrelated tracked changes, under the Linux VM testing skill's explicit stop rule.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
