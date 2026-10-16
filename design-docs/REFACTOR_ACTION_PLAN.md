@@ -678,6 +678,16 @@ Validation: all 54 distinct related functions pass (31 bridge/application and 23
 
 This closes the queued-send slice's in-flight I/O follow-up for bridge-owned writes. The guard relies on the SDK close/state-lock contract and the tested V3 shared-reference representation; future SDK/compiler changes must retain these regressions. Existing session interrupt owners still cancel blocked I/O before shutdown joins. Linux remains stopped by the recorded skill preflight rule because of unrelated tracked changes in the mounted checkout. Full V-suite, load/live-DB and wider subsystem audits remain separate follow-ups.
 
+### Unix listener pathname ownership — 2026-10-17
+
+The shared listener_runtime handle now owns both the native descriptor and the socket pathname identity for cache, DB and internal admin. Startup binds without the SDK's implicit unlink; cache/DB no longer remove paths before binding. Existing live sockets, regular files, dangling symlinks and stale sockets are rejected without replacement. Stale sockets now require explicit cleanup after confirming their former owner has stopped. Failed construction closes its descriptor; successful descriptors are close-on-exec and retain nonblocking accept polling.
+
+After request drain, the serving owner closes this handle once and only unlinks a socket entry whose device/inode still matches its captured identity. Withdrawn candidates use the same cleanup. Independent owners competing for a path have one kernel bind winner. Old finalization preserves a replacement already present at its identity check. This is lifecycle coordination for cooperating listeners, not atomic protection against arbitrary external filesystem changes between lstat and unlink.
+
+Validation: 69 distinct related functions pass (13 listener-runtime, 8 cache, 27 DB and 21 application/resource tests), including 9 new regression functions. They cover competing independent starts, existing files/symlinks/live and stale sockets, replacement socket/file preservation, repeat close, conflict reservation release and DB shared-pool preservation. A cache fixture now waits for synchronized started publication rather than pathname existence; bind creates the entry before listen is ready. An isolated SDK-startup comparison fails 4 of the 6 new path regressions as expected. Final DB-enabled V3 production build, helper/test format verification, safety lint and git diff --check pass. Complete E2E passes 208 CLI/config/runtime checks plus Node upgrade/PID and PHP stream regressions. The tested binary is installed as vhttpd. Inputs, isolated diff, logs and retained E2E artifacts are in tmp/unix-listener-path-validation/.
+
+Linux preflight/final status were read-only. Validation remains stopped by the Linux testing skill's unrelated tracked-change rule; no VM build, tests or dependency changes were made. Full V-suite, load/live-DB and wider subsystem audits remain separate follow-ups.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
