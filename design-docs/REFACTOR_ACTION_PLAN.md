@@ -450,6 +450,16 @@ Validation: 22 distinct V functions across six original test source files pass (
 
 Initial missing-entry fixtures and a V3 deep-comparison code-generation failure were corrected and their logs retained. The first combined run passed 18/19 root functions; the existing SIGINT child fixture missed its unchanged five-second pre-ready warmup deadline under host load. An isolated rebuild of the same test source passes all 19 root functions, and the final owner module passes all three. No timeout thresholds changed. Linux remains stopped at read-only preflight on unrelated tracked VM changes under the testing skill's rule. Evidence, isolated patch, hashes and failed/passing logs are in `tmp/plugin-owner-validation/report.txt`. Wider ownership, production-load timing, whole-project and live-DB validation remain pending.
 
+### Replacement admission and engine generation lifecycle — 2026-10-16
+
+Prepared and lightweight runtime replacement now register accepted work with the App's existing shutdown owner before doing work. The scope covers candidate startup/warmup, publication, and old engine/plugin retirement, including failure cleanup. Shutdown closes admission and joins these scopes before releasing dependent transports and engines; a late replacement returns `runtime_plan_replacement_app_stopping` without starting or publishing its unstarted candidate.
+
+Prepared publication now captures exactly the displaced engine while holding App.mu. Live engine/provider projection inputs, projection application and exchange share that lock; warmup, backend callbacks and old cleanup stay outside it. A started EngineRuntime retains an explicit optional primary lifecycle policy and uses that same generation's policy for rollback, retirement and final shutdown. Unstarted runtimes retain the caller fallback. This prevents final cleanup from selecting a previous backend's lifecycle through the original configuration or losing a custom lifecycle through kind lookup.
+
+Validation: 41 distinct V functions across six original test sources pass (seven new). New cases cover shutdown during warmup/old cleanup, prepared/lightweight rejection after stop, readiness rollback, joined plugin retirement, 12 concurrent replacements retiring every displaced generation once, and custom backend lifecycle identity across replacement and final shutdown. Thirty-four existing App/signal/plugin/protocol/MCP/admin replacement regressions pass through a temporary combined entry with unchanged test bodies and explicit selection; inputs and runner are retained. Final DB-enabled V3 build, CLI smoke, formatting, safety lint and first-run complete E2E pass (208 CLI/config checks plus Node/PHP regressions). Source/staging and tested/workspace binary hashes match.
+
+Two initial test-helper compile mistakes were corrected before the passing runs; their logs are retained, and timeout thresholds are unchanged. Linux remains read-only under the testing skill because unrelated tracked VM changes persist. Whole-project, DB-disabled, live SQL, Linux, production-load, HTTPS lifecycle and broader admin-workflow/request snapshot audits remain pending. Evidence and the isolated patch are in `tmp/replacement-shutdown-validation/report.txt`.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
