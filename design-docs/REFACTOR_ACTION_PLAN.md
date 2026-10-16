@@ -460,6 +460,16 @@ Validation: 41 distinct V functions across six original test sources pass (seven
 
 Two initial test-helper compile mistakes were corrected before the passing runs; their logs are retained, and timeout thresholds are unchanged. Linux remains read-only under the testing skill because unrelated tracked VM changes persist. Whole-project, DB-disabled, live SQL, Linux, production-load, HTTPS lifecycle and broader admin-workflow/request snapshot audits remain pending. Evidence and the isolated patch are in `tmp/replacement-shutdown-validation/report.txt`.
 
+### Connection registry stop-ticket ownership — 2026-10-16
+
+The remaining ownership review found that completed connection stops retained zero-count prefix entries indefinitely, and that the raw registry/prefix/run-array waiting API allowed repeated waiting to release a later stop request's admission count. Isolated probes against the saved pre-change implementation reproduce both failures.
+
+Each stop/pause request now returns a heap StopTicket retaining its original registry, prefix and accepted run snapshot. Waiting joins the selected runs outside owner locks, then releases its admission count exactly once under synchronization and removes zero-count entries. Concurrent waiters share completion; overlapping tickets, explicit pauses and terminal shutdown remain effective. Provider shutdown still notifies both upstream and bridge owners before waiting for either, with no new App dependency or nil placeholder.
+
+Validation: 60 distinct V functions across seven original test files pass, including five new regressions for repeated/concurrent waiting, dynamic-prefix reclamation, overlapping scopes, owner isolation and terminal shutdown. The four App/provider source files ran with unchanged test bodies through a temporary combined entry; its source and input hashes are retained. The initial DB-enabled combined run passed 34 functions but exposed two tests explicitly requiring DB-disabled compilation; the corrected DB-disabled run passes all 36. The final service build remains DB-enabled. V3 build, CLI smoke, formatting, safety lint and complete E2E pass (208 CLI/config checks plus Node/PHP regressions). All 416 production V files and one C header match staging; tested and workspace binary hashes match.
+
+Linux remains stopped at read-only preflight because unrelated tracked VM changes persist under the Linux testing skill's explicit rule. Whole-project, production-load, live SQL, Linux, HTTPS lifecycle and broader admin-workflow/request snapshot audits remain pending. No timeout thresholds changed. Evidence, the isolated patch, original failure probes and identity manifests are in `tmp/connection-stop-ticket-validation/report.txt`.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
