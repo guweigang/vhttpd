@@ -514,6 +514,14 @@ Validation: 49 distinct DB-enabled V functions pass across nine original source 
 
 Final DB-enabled V3 build, CLI smoke, formatting, safety lint and complete E2E pass (208 CLI/config checks plus Node/PHP regressions). All 418 production V sources and one C header match staging; tested/workspace binary hashes match. Linux remains stopped at read-only preflight under the testing skill's tracked-change rule. Queue checks prevent expired admission after readiness returns; they do not preempt readiness/dial I/O or define a complete HTTP request deadline. Whole-project, production-load, live SQL, Linux, native Unix I/O policy and broader engine/request ownership remain pending. Evidence and the isolated patch are in `tmp/worker-queue-retry-validation/report.txt`.
 
+### Worker lifecycle event lock ownership — 2026-10-16
+
+Worker start/restart and failure-retry events previously invoked injected callbacks while holding WorkerState.mu. A callback reading metrics or reentering worker operations could deadlock and prevent later cleanup. All six publication paths now commit slot state and process retirement under the existing mutex, then release it before invoking the event sink. Payloads retain the local committed snapshot, and no slot write follows the callback, preserving reentrant mutations.
+
+Four new regressions fail on the saved original implementation and pass after the fix, covering real child-process start/restart success and readiness failure. A nonblocking lock probe diagnoses the old behavior without hanging; callbacks read metrics and check committed process/retry state, while success callbacks also mutate state. Existing native launch/readiness serialization and timeout values remain unchanged.
+
+Validation: 53 distinct DB-enabled V functions pass across ten original test sources (four new and 49 existing functions). Final DB-enabled V3/OpenSSL build, CLI smoke, formatting, safety lint and complete E2E pass (208 CLI/config checks plus Node/PHP regressions). All 418 production V sources, one C header and two support inputs match staging; tested/workspace binary hashes match. Linux remains stopped at read-only preflight under the testing skill's tracked-change rule. Worker backend start/stop admission and context publication, native readiness/I/O preemption, broader ownership, whole-project suite, production load and live DB validation remain pending. Evidence and the isolated patch are in `tmp/worker-event-lifecycle-validation/report.txt`.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
