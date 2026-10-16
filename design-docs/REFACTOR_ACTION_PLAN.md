@@ -660,6 +660,14 @@ Three new regression functions cover SSE/text, open done/not-done, best-effort c
 
 HEAD still uses the existing open/close callbacks and their transport timeouts; this slice removes body consumption and does not introduce a new cancellation protocol for external worker processes. Linux remains stopped by the recorded skill preflight rule because the mounted checkout has unrelated tracked changes. Full V-suite, load/live-DB and wider subsystem audits remain separate follow-ups.
 
+### Bridge queued-send connection selection — 2026-10-16
+
+The remaining connection audit found that both bridge send directions borrowed a registry client before waiting for card_bridge_send_mu. A reconnect or withdrawal during that wait could leave the queued sender using an obsolete connection. Both directions now acquire the existing send lock before resolving the optional current client; registry locks are still released before network I/O. The inbound send path also drops an unnecessary unsafe pointer alias. Existing identity-checked removal and native close ownership are preserved.
+
+Three new regressions use real sockets and WebSocket frames to exercise replacement and withdrawal while the send lock is held in both directions, plus invalid inputs that must bypass the queue. An isolated copy of the old implementation fails both replacement and withdrawal regressions; the fixed version passes all three. All 28 related test functions pass with DB enabled, covering bridge callbacks, reconnect/heartbeat shutdown, resource handles and provider context ownership. The final DB-enabled V3 build, formatting verification, safety lint and git diff --check pass. Complete E2E passes all 208 CLI/config/runtime checks plus Node and PHP regressions. The tested binary is installed as vhttpd. Exact sources, the isolated baseline, hashes, logs and E2E fixtures are in tmp/bridge-send-queue-validation/.
+
+This slice fixes client selection across send-queue waiting. It does not add a lease spanning already-running WebSocket I/O or change the native client's close synchronization. Linux remains stopped by the recorded skill preflight rule because the mounted checkout has unrelated tracked changes. Full V-suite, load/live-DB and wider subsystem audits remain separate follow-ups.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
