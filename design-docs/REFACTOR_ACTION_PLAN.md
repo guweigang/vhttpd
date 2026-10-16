@@ -592,6 +592,16 @@ Validation: 138 distinct related test functions passed (15 new, 123 existing: wo
 
 Native dialing, readiness and timeout policies remain unchanged. Legacy socket-only/custom facade contracts remain compatible; generation ownership is provided by the built-in lease-aware paths. Wider runtime snapshots, native IO limits, full-suite/load/live-DB coverage and Linux validation remain audit follow-ups. Linux testing stopped after read-only preflight because the VM checkout contains pre-existing tracked changes, as required by the Linux testing skill.
 
+## Dispatch registry and one-shot RPC snapshots — 2026-10-16
+
+Closed a remaining dispatch generation gap: EngineRuntime's ordinary stream, MCP, WebSocket upstream and WebSocket event methods selected an executor but allowed SocketWorkerExecutor to call back through the App and resolve a different current backend. Each method now retains a SessionDispatchHost built from the selected state, so native dialing, timeout configuration and completion share the same worker generation. WebSocket upstream now has the same narrow worker-dispatch capability as the other RPC ports; custom and embedded executors retain their existing facade contract.
+
+Kernel stream/upstream/event entry points acquire an EngineRuntime snapshot under the App publication lock, then invoke executors after releasing it. The snapshot owns a cloned named-engine lookup map while retaining the selected states. Vjsx event dispatch resolves the requested engine and performs HTTP dispatch against that same snapshot. This prevents a publication between lookup and invocation from mixing generations without holding the App lock across callbacks or IO.
+
+Validation passed: 61 distinct related test functions, including 9 new functions covering all four RPC kinds, publication before dialing, in-flight success and transport failure, completion accounting, independent named lookup maps, retired backend admission and an executor callback that re-enters runtime publication. The V3 DB-enabled build, formatting, safety lint and diff checks passed. Full E2E passed (204 config/runtime plus 4 CLI checks), along with the Node upgrade probe, both managed-worker signal lifecycle tests and PHP stream reopen/reconnect/readers. Exact inputs, source hashes, isolated diff, logs and retained fixtures are under `tmp/dispatch-runtime-snapshot-validation/`.
+
+These snapshots retain references, not independent native resource ownership: backend shutdown still owns stop/release, and an old snapshot cannot fall forward to a live replacement when its own backend rejects admission. This slice does not change administrative restart, native IO deadlines, custom executor facade semantics or provider/admin snapshot policies. Broader subsystem snapshot audits and full-suite/load/live-DB coverage remain follow-ups. Linux tests stopped after read-only preflight under the skill's pre-existing tracked-change rule; the VM's unrelated edits were preserved.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
