@@ -668,6 +668,16 @@ Three new regressions use real sockets and WebSocket frames to exercise replacem
 
 This slice fixes client selection across send-queue waiting. It does not add a lease spanning already-running WebSocket I/O or change the native client's close synchronization. Linux remains stopped by the recorded skill preflight rule because the mounted checkout has unrelated tracked changes. Full V-suite, load/live-DB and wider subsystem audits remain separate follow-ups.
 
+### Bridge in-flight send leases and native close ownership — 2026-10-17
+
+Bridge registries now hold one connection_runtime.WebSocketSender per published connection rather than a raw Client. Registration returns that exact owner to the client/server callback state; queued sends, heartbeat and callback replies share its admission and lease accounting. Replacement/withdrawal retires the old owner without waiting under the registry lock. Callback state retains its own generation and cannot send through a replacement; teardown clears optional owners and joins accepted work outside registry locks. The reader/session remains the sole native close owner.
+
+Each send holds a read lease on the original ClientState while native Client.close must acquire its write lock to enter closing before TCP/TLS teardown. A writer snapshot captured on the registration/reader thread preserves the native frame-write lock and transport references without copying a concurrently running reader. It has an independent open state, avoiding recursive original-state lock acquisition while close is waiting. Under V3, a shared-field struct update preserves the original shared reference, so the constructor uses a narrowly scoped compiler-derived pointer-slot copy to detach only that reference. State-isolation assertions and actual TCP/WSS close tests cover this compatibility boundary. Native connection identity checks reject a reused Client generation; the owner never closes borrowed native handles.
+
+Validation: all 54 distinct related functions pass (31 bridge/application and 23 connection-runtime), including 9 new functions. They cover owner replacement/withdrawal, callback/registry owner identity, close joining successful and failed sends, terminal admission, actual WSS frames, interruption of a blocked infinite write before close, native Client replacement and recycled-fd protection. The final DB-enabled V3 build, format verification, safety lint, Python fixture syntax and git diff --check pass. Complete E2E passes all 208 CLI/config/runtime checks plus Node and PHP regressions. The tested binary is installed as vhttpd. Exact inputs, isolated diff, TLS fixture, logs and retained E2E artifacts are in tmp/bridge-send-lease-validation/.
+
+This closes the queued-send slice's in-flight I/O follow-up for bridge-owned writes. The guard relies on the SDK close/state-lock contract and the tested V3 shared-reference representation; future SDK/compiler changes must retain these regressions. Existing session interrupt owners still cancel blocked I/O before shutdown joins. Linux remains stopped by the recorded skill preflight rule because of unrelated tracked changes in the mounted checkout. Full V-suite, load/live-DB and wider subsystem audits remain separate follow-ups.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
