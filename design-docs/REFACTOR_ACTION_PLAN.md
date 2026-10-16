@@ -578,7 +578,7 @@ The audit also checked provider upstream notifications and OpenAI executor plugi
 
 Validation: all 98 related test functions pass (84 integration and 14 MCP/SSE module functions, including 19 new regressions). Coverage includes a real HTTP WebSocket upgrade followed by publication/message/close, pre-activation cancellation, failed upgrade, concurrent close/cleanup, recipient-owned info dispatch, reused native-worker socket accounting, MCP POST across replacement, deleted/reused IDs during an in-flight RPC, stale queue/capability writes and scoped retirement of an active SSE stream. The V3 DB-enabled build, format verification, safety lint and diff check pass. Complete E2E passes 204 config/runtime and 4 CLI checks plus Node/PHP regressions. Exact inputs, hashes, raw logs and retained E2E fixtures are in `tmp/multi-rpc-generation-validation/`.
 
-This closes the identified MCP and inbound dispatch-WebSocket generation gaps. Per-slot process restart leases, wider runtime snapshots, native I/O policy/API limits, whole-project tests, production load and live DB validation remain follow-ups. Linux supplemental validation stops after read-only preflight under the testing skill because the mounted checkout contains unrelated tracked changes.
+This closes the identified MCP and inbound WebSocket generation gaps. Per-slot process restart leases, wider runtime snapshots, native I/O policy/API limits, whole-project tests, production load and live DB validation remain follow-ups. Linux supplemental validation stops after read-only preflight under the testing skill because the mounted checkout contains unrelated tracked changes.
 
 ## Milestone 0 — Preparation (½ day)
 
