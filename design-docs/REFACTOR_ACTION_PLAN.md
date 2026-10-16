@@ -634,6 +634,16 @@ Validation passed: 85 distinct related test functions (7 new, 78 existing) spann
 
 Published RuntimePlan containers remain immutable after publication; the internal view retains them rather than copying native/runtime handles. Configuration projection inputs are coherent per capture, not a transaction spanning multiple HTTP requests. Custom runtime payload callbacks and live subsystem counters retain their domain read semantics, and filesystem observations are not a filesystem transaction. Replacement control workflows, full-suite/load/live-DB coverage and wider subsystem audits remain separate follow-ups. Linux build/tests stopped after read-only preflight under the skill's pre-existing tracked-change rule; unrelated edits were preserved.
 
+### Replacement control publication snapshots — 2026-10-16
+
+Replacement preview, preparation and application now capture one plan generation together with listener, scheme and build inputs under App.mu. Preview reads reserve a sequence before file I/O: a delayed older read or a preview of a displaced plan cannot overwrite a newer preview record. Lightweight and prepared application validate the captured generation at publication; a conflict returns runtime_plan_replacement_stale_base and retires only the unpublished candidate outside the lock. Public replacement workflows retain their existing admission and shutdown scopes.
+
+Successful publication returns a receipt captured inside the commit lock. Replacement events use that receipt and the operation's preview/pending values, including the existing lightweight reload_transforms field, rather than re-reading App after retirement callbacks. Pending state and retained/returned history clone collection buffers, including nested action targets. A refresh error is associated only with its captured pending generation. Published RuntimePlan values remain immutable and the views own no native resource handles.
+
+Validation: 93 related test functions pass, including 9 new deterministic regressions for reordered previews, captured schemas, stale publication conflicts, candidate retirement, reentrant publication during retirement, event fields, collection isolation and pending-error ownership. The existing preparation fixture now passes an explicit base snapshot. The final DB-enabled V3 build, formatting verification, safety lint and git diff --check pass. Complete E2E passes all 208 CLI/config/runtime checks plus the Node coalesced-upgrade and managed-worker signal regressions and PHP stream regressions. The tested binary is installed as vhttpd. Exact sources, hashes, isolated diff, logs and retained E2E fixtures are in tmp/replacement-control-snapshot-validation/.
+
+Linux validation remains stopped at the skill's preflight rule because the mounted checkout contains pre-existing unrelated tracked .qoder/.gitignore changes; no VM builds, tests or toolchain mutations were performed. Full V-suite, load, live-DB and wider subsystem coverage remain separate follow-ups; this slice does not close the overall refactor milestones.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
