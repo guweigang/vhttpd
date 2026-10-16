@@ -652,6 +652,14 @@ Nine new regressions cover reentrant metadata publication, a blocked callback pe
 
 This slice changes route lookup/admission and callback lock ownership; existing session/stream owners retain their stop, wait and native cleanup responsibilities. Linux remains stopped by the recorded skill preflight rule because of pre-existing unrelated tracked .qoder/.gitignore changes. Full V-suite, load/live-DB and wider subsystem coverage remain separate follow-ups.
 
+### HEAD stream completion and resource release — 2026-10-16
+
+The remaining resource audit found that streaming HEAD requests suppressed payload writes but still consumed dispatch-next responses or direct worker frames until stream completion. An endless SSE could therefore retain a HEAD request and its resources indefinitely. Non-SSE HEAD responses also wrote a terminating chunk after their headers. Dispatch HEAD now skips next calls and body framing, then closes the logical stream once with its captured open state. Direct SSE/passthrough HEAD skips worker reads and body framing, returning to the existing outer owner for worker-socket close and request-lease completion. GET behavior and existing ownership boundaries are preserved.
+
+Three new regression functions cover SSE/text, open done/not-done, best-effort close failure, case-normalized HEAD, unread direct worker frames, HTTP descriptor release and physical worker close before exactly-once lease completion. The existing GET/HEAD regression now checks headers-only HEAD and the open state used for close. All 38 related functions across seven files pass; the final DB-enabled V3 build, formatting verification, safety lint and git diff --check pass. Complete E2E passes all 208 CLI/config/runtime checks plus Node and PHP regressions. The tested binary is installed as vhttpd. Exact sources, hashes, isolated diff, logs and retained E2E fixtures are in tmp/stream-head-lifecycle-validation/.
+
+HEAD still uses the existing open/close callbacks and their transport timeouts; this slice removes body consumption and does not introduce a new cancellation protocol for external worker processes. Linux remains stopped by the recorded skill preflight rule because the mounted checkout has unrelated tracked changes. Full V-suite, load/live-DB and wider subsystem audits remain separate follow-ups.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
