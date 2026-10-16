@@ -602,6 +602,16 @@ Validation passed: 61 distinct related test functions, including 9 new functions
 
 These snapshots retain references, not independent native resource ownership: backend shutdown still owns stop/release, and an old snapshot cannot fall forward to a live replacement when its own backend rejects admission. This slice does not change administrative restart, native IO deadlines, custom executor facade semantics or provider/admin snapshot policies. Broader subsystem snapshot audits and full-suite/load/live-DB coverage remain follow-ups. Linux tests stopped after read-only preflight under the skill's pre-existing tracked-change rule; the VM's unrelated edits were preserved.
 
+## Provider directory and admin publication snapshots — 2026-10-16
+
+Closed two snapshot ownership gaps. Provider dispatch contexts previously copied ProviderRuntimeHub (including mutex-bearing runtime state) into closures while resolving launch URLs through the current App. Directory construction now projects instance names, readiness/bootstrap/enabled flags and Codex launch URLs/errors into ordinary data. The App publication lock protects directory assembly; the Codex state lock covers its configuration reads. Returned instance arrays are cloned. Read-only construction and launch projection do not initialize Codex runtime instances; the explicit ensure operation still registers instances with the same configuration resolver.
+
+Admin context construction now captures one worker metrics value, the selected executor and pipeline/provider directory under the publication lock. Executor description callbacks run after unlocking, allowing callback re-entry without deadlock. Subsequent reads from that context retain the captured configuration and engine view; a fresh context observes a new publication. Existing live counters continue to read their actual subsystem owners. Snapshot values do not own connections, workers, sessions or shutdown.
+
+Validation passed: 68 distinct related test functions (7 new, 61 existing) across provider registry/bootstrap/lifecycle, instance context, admin state/apps/graph, Codex runtime and context ownership. The related suite runs with DB disabled because two registry checks explicitly require the uncompiled DB contract. Separately, the V3 production build with DB enabled passed, as did formatting, safety lint and diff checks. Full E2E passed (204 config/runtime plus 4 CLI checks), together with the Node upgrade probe, both managed-worker signal lifecycle tests and PHP stream reopen/reconnect/readers. Exact input hashes, isolated diff, logs and retained fixtures are under `tmp/provider-admin-snapshot-validation/`.
+
+Feishu endpoint discovery remains an explicit live network operation, and provider lifecycle contexts retain their existing start/stop owners. The admin response is not a global atomic sample of every live subsystem counter. Provider instance control-command write serialization and other admin-specific projections remain audit follow-ups, alongside full-suite/load/live-DB coverage. Linux build/tests stopped after read-only preflight under the skill's pre-existing tracked-change rule; unrelated VM edits were preserved.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
