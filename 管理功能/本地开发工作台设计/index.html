@@ -8030,6 +8030,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#54-local-remote-relay" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.4 工作台全局设置与 local / remote Relay
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -8459,6 +8470,42 @@
 <h3 id="53">5.3 配置文件变更冲突</h3>
 <p>外部编辑器与 Admin UI 可以修改同一项目。发布前检查原始文件版本；文件已经改变时拒绝直接覆盖，提示重新读取并检查差异。宿主不做后台配置同步写入。</p>
 <p>移除宿主中的项目登记不删除项目目录或源码。</p>
+<h3 id="54-local-remote-relay">5.4 工作台全局设置与 local / remote Relay</h3>
+<p>工作台提供独立的全局设置页，所有登记项目共享二进制路径、外部编辑器路径及两套 Relay 连接档案。local / remote 表示连接目标的部署位置；在运行时，两套档案都使用 agent 主动连接 hub，而不是新增 Relay 协议模式。</p>
+<table>
+<thead>
+<tr>
+<th>配置层</th>
+<th>负责内容</th>
+<th>生效方式</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>宿主全局</td>
+<td>local / remote hub 的 WebSocket 地址、节点标识、token 环境变量名、重连间隔和通道缓冲</td>
+<td>保存档案、校验并导出 v2 Relay 配置；不会仅因保存而建立连接</td>
+</tr>
+<tr>
+<td>项目 TOML / Admin UI</td>
+<td>是否接入、Relay 名称、ingress、pipeline、路由与处理目标</td>
+<td>项目显式引入配置，经 Admin 校验、发布及运行时应用或重启</td>
+</tr>
+<tr>
+<td>vhttpd Relay 运行时</td>
+<td>WebSocket 认证、连接、重连、帧传递与通道生命周期</td>
+<td>复用现有 agent / hub 实现</td>
+</tr>
+<tr>
+<td>vjsx</td>
+<td>被项目 pipeline 分发的业务处理</td>
+<td>不负责宿主设置和连接档案持久化</td>
+</tr>
+</tbody>
+</table>
+<p>第一步实现可编辑、持久化和导出的连接档案。导出文件只包含 Relay agent 声明，不包含项目业务 pipeline；界面明确显示“未连接”，不能把格式校验成功称为连接成功。后续再提供项目绑定向导和真实连接状态，并以目标 hub 的认证与帧往返作为验收依据。</p>
+<p>local 默认使用 loopback 的 ws 地址；非 loopback 目标要求 wss。地址不允许 userinfo、查询串或 fragment，凭据只保存环境变量名称，不保存 token 值。导出的 token 使用现有环境引用机制。连接凭据与 Admin 登录凭据分开管理。</p>
+<p>保存全局设置不修改当前运行实例；二进制变更从下一次启动生效。外部编辑器通过独立可执行文件及参数数组打开源码，不拼接 shell 命令。未配置时使用系统文本编辑器。</p>
 <h2 id="6">6. 启动、停止与恢复</h2>
 <h3 id="61">6.1 启动流程</h3>
 <ol>
@@ -8471,7 +8518,7 @@
 <li>失败后保留日志、退出码和明确原因；不打开无法使用的页面。</li>
 </ol>
 <p>预检查端口不能排除启动竞争；最终以真实启动结果为准。管理地址发生冲突时报告错误，不自动修改用户项目配置。</p>
-<p>实例关联认证和浏览器认证复用现有 Admin token 机制。MVP 不引入自动登录桥接：首次打开时按现有页面输入 token。宿主如提供复制功能，应由用户主动触发，不在日志或浏览器 URL 中放置 token。</p>
+<p>宿主每次启动使用临时 Admin token 验证实例身份。浏览器登录使用 30 秒有效的一次性票据，经本地临时页面 POST 兑换 HttpOnly、SameSite=Strict 会话 Cookie；管理 token 与登录票据均不进入 URL，页面不再持久化 token 到 localStorage。票据只能兑换一次，重启实例使旧会话失效。</p>
 <h3 id="62">6.2 进程状态</h3>
 <div class="highlight"><pre><span></span><code>stopped → starting → running → stopping → stopped
              │         │
