@@ -688,6 +688,18 @@ Validation: 69 distinct related functions pass (13 listener-runtime, 8 cache, 27
 
 Linux preflight/final status were read-only. Validation remains stopped by the Linux testing skill's unrelated tracked-change rule; no VM build, tests or dependency changes were made. Full V-suite, load/live-DB and wider subsystem audits remain separate follow-ups.
 
+### Process-owned PID files — 2026-10-17
+
+PID files now belong to process_runtime.PidFiles rather than App shutdown bindings or configuration filenames. Configuration resolution prepares parent directories without publishing a PID. Single-server startup acquires its file only after bind preflight; multi-server startup preflights every listener before acquiring all distinct paths as a batch. Native exclusive creation preserves existing files and symlinks, including stale PID entries; stale files require explicit cleanup after confirming the former owner has stopped. Startup acquisition failures are logged for both entry paths.
+
+The owner retains close-on-exec descriptors and fstat identities, deduplicates shared listener paths, verifies repeated acquisition against identity/content, and rolls back only newly created files when a batch fails. Terminal, idempotent cleanup checks device/inode and PID text before unlinking, then closes each owned descriptor once. Ordinary server exit cleans up after App finalization; signal exit cleans up after App and managed-process shutdown. Configuration-derived PID deletions were removed from App finalization and signal handling. Replacement inodes and in-place content changes survive cleanup. External filesystem mutation between identity/content checks and unlink remains outside this cooperating-owner synchronization boundary.
+
+Validation: 118 distinct related V functions pass (24 process-runtime and 94 configuration/startup/finalization/signal/application functions), including 12 new functions. The new real-process E2E file adds 5 passing cases for SIGTERM/SIGINT, competing processes, failed bind preflight and same-PID replacement inode preservation. The retained previous binary fails 3 of those 5 cases as expected. An initial integrated run exposed a missing startup diagnostic; logging and an entry-level regression were added. The provider E2E fixture also gave two independent services one PID path; those services now have distinct paths, preserving the production exclusivity rule.
+
+The final DB-enabled V3 build, new-file formatting, Node/shell syntax checks, safety lint and git diff --check pass. Complete E2E passes all 208 CLI/config/runtime checks, the 5 new PID cases, existing Node upgrade/worker PID tests and PHP stream regressions. The tested binary is installed as vhttpd. Exact inputs, this-turn diff, negative comparison, diagnostic attempts, final logs and retained E2E artifacts are in tmp/pid-file-owner-validation/.
+
+Linux preflight/final status were read-only; the tracked-change stop rule still prevents VM builds/tests. Full V-suite, load/live-DB, Linux and wider subsystem audits remain separate follow-ups.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
