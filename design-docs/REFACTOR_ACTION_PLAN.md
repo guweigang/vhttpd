@@ -714,6 +714,37 @@ The final DB-enabled V3 build, format checks for changed construction/query file
 
 Linux preflight/final status remain read-only because the mounted checkout has unrelated tracked changes and the testing skill's stop rule applies. Full V-suite, load/live-DB, Linux and wider subsystem audits remain separate follow-ups.
 
+### Ownership follow-ups reconciled after documentation service recovery — 2026-10-17
+
+The following four checkpoints were validated while OpenKnowledge was unavailable. Their code and logs are retained locally; documentation is now reconciled without changing the earlier checkpoint history.
+
+#### Admin state file-store directory and I/O ownership
+
+Independent request-local FileStore values previously had independent mutexes. [File-store operations](../src/admin_state_store/store.v) now share a stable directory lock inode across requests, Apps and processes; each operation borrows and closes its own close-on-exec descriptor. Readers share a lease and writers use an exclusive lease. The lock file stays in place so waiters retain the same synchronization identity. [Native file ownership](../src/admin_state_store/files.c.v) keeps UUID/O_EXCL temporary files until exact-path rename commits, cleans ordinary failures and rolls back a failed event append's partial tail. Three before-source probes reproduce the original read/append/rename defects. Synchronization is per cooperating operation, without a transaction across draft/metadata/event calls or a new fsync/crash-durability guarantee.
+
+#### Relay MCP session completion and dispatch ownership
+
+Relay initialization previously registered an unbound session, allowing a later RPC to bind to a replacement executor. [Shared completion](../src/mcp_session_completion.v) now takes the protocol owner and captured dispatch route for HTTP and relay. [Relay dispatch](../src/relay_pipeline_runtime.v) preserves existing request session identity, retains initialization capabilities and queues response messages against that route and the existing sampling policy. Conflicting initialization returns 409. Deleted/stopped/retired owners cannot receive late publication, and runtime retirement can find relay-created sessions and stop/wait their SSE streams through the existing native-close owner. A retained original-method probe confirms missing route/capabilities/messages and incorrect generation/response-ID behavior.
+
+#### Upload persistence and ordinary-failure cleanup
+
+HTTP uploads previously wrote directly to their final path, leaving partial files on write failure. [Upload storage](../src/upload_store/file.c.v) owns an exclusive UUID temporary file and close-on-exec descriptor until all bytes are written and the descriptor is closed. Exact-path, non-overwriting publication transfers the completed file to persistent storage; ordinary failures reclaim the unpublished path. Existing files, directories and symlinks survive collisions, including a target appearing during the write. [HTTP upload regressions](../src/upload_persistence_owner_test.v) use a separate RLIMIT_FSIZE process: original os.write_file leaves 4096 bytes, while the corrected HTTP route returns 500 with no upload/temp file or upload.completed event. The shared directory remains operator-owned. Publication requires same-directory filesystem hard-link support; no copy/overwrite fallback, fsync guarantee or forced-process-death temporary-file sweeping is added.
+
+#### MCP admin snapshot publication ownership
+
+[MCP snapshots](../src/api/mcp/protocol/state.v) previously captured sessions under the owner mutex but read limits, TTL, origin arrays and sampling policy after unlocking. Hot reload could mix complete settings publications and race origin-array copying. A private snapshot_view now captures pruning decisions, filtered rows and normalized configuration under one lock. A pure page helper sorts and paginates detached rows after releasing it; no live session, stream, dispatch token or settings array is retained. Negative bounds are clamped and page-end calculation uses remaining rows to avoid overflow. [Snapshot tests](../src/api/mcp/protocol/snapshot_test.v) cover retained views, concurrent publications, native cleanup ownership after expiry, defaults/filters and extreme pagination. An isolated before-source probe inserts a test-only scheduling point after the first original limit read and demonstrates old capacity mixed with new TTL/origins/policy in both brief and detailed responses.
+
+| Checkpoint | Related permanent V functions passed | New functions | Retained evidence |
+| --- | ---: | ---: | --- |
+| Admin file store | 45 | 7 | `tmp/admin-store-owner-validation/` |
+| Relay MCP ownership | 75 | 7 | `tmp/relay-mcp-owner-validation/` |
+| Upload persistence | 66 | 8 | `tmp/upload-owner-validation/` |
+| MCP snapshot ownership | 51 | 5 | `tmp/mcp-snapshot-owner-validation/` |
+
+These are per-checkpoint counts with overlapping suites, not an aggregate unique-test count. Relay and snapshot evidence also retain separate before-source probes. Every checkpoint passed a DB-enabled V3 application build, changed-file format/safety/diff checks and complete default E2E: 209 CLI/config/runtime checks plus Node and PHP regressions. The current tested binary includes all four changes; its final build has 434 staged production V inputs. This turn's first E2E was deliberately interrupted, with its partial log retained; unchanged source/test/build hashes and no remaining test services were verified before a complete passing rerun.
+
+Linux validation remains pending: the earlier admin-store checkpoint hit the skill's unrelated-tracked-change stop rule; later read-only VM preflights timed out without VM mutations. Current command/toolchain/input hashes, isolated diff, logs, final status and regular E2E artifacts are retained in the evidence folders. Full V-suite, load/live-DB, Linux and wider subsystem audits remain separate follow-ups.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
