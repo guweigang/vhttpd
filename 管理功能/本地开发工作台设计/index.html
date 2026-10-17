@@ -8031,10 +8031,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#54-local-remote-relay" class="md-nav__link">
+  <a href="#54-relay" class="md-nav__link">
     <span class="md-ellipsis">
       
-        5.4 工作台全局设置与 local / remote Relay
+        5.4 Relay 归属于项目运行计划
       
     </span>
   </a>
@@ -8470,42 +8470,41 @@
 <h3 id="53">5.3 配置文件变更冲突</h3>
 <p>外部编辑器与 Admin UI 可以修改同一项目。发布前检查原始文件版本；文件已经改变时拒绝直接覆盖，提示重新读取并检查差异。宿主不做后台配置同步写入。</p>
 <p>移除宿主中的项目登记不删除项目目录或源码。</p>
-<h3 id="54-local-remote-relay">5.4 工作台全局设置与 local / remote Relay</h3>
-<p>工作台提供独立的全局设置页，所有登记项目共享二进制路径、外部编辑器路径及两套 Relay 连接档案。local / remote 表示连接目标的部署位置；在运行时，两套档案都使用 agent 主动连接 hub，而不是新增 Relay 协议模式。</p>
+<h3 id="54-relay">5.4 Relay 归属于项目运行计划</h3>
+<p>以现有代码归属为准：Relay 声明来自项目 TOML 的 <code>relays</code>，经配置编译进入该项目的 RuntimePlan，再由实例建立连接、通道与会话。agent / hub 是运行角色，local / remote 只是节点部署位置，不新增工作台全局开关或第二份连接配置。</p>
 <table>
 <thead>
 <tr>
-<th>配置层</th>
-<th>负责内容</th>
-<th>生效方式</th>
+<th>层级</th>
+<th>职责</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>宿主全局</td>
-<td>local / remote hub 的 WebSocket 地址、节点标识、token 环境变量名、重连间隔和通道缓冲</td>
-<td>保存档案、校验并导出 v2 Relay 配置；不会仅因保存而建立连接</td>
+<td>项目 TOML</td>
+<td>声明 Relay 的角色、carrier、URL / listener、节点标识、认证引用、重连参数及关联 pipeline</td>
 </tr>
 <tr>
-<td>项目 TOML / Admin UI</td>
-<td>是否接入、Relay 名称、ingress、pipeline、路由与处理目标</td>
-<td>项目显式引入配置，经 Admin 校验、发布及运行时应用或重启</td>
+<td>ui2 宿主</td>
+<td>从同一配置编译器读取项目概览，展示 agent / hub、脱敏地址、关联 pipeline，并打开配置和源码</td>
+</tr>
+<tr>
+<td>Admin UI / API</td>
+<td>编辑和发布项目配置；从实例运行时读取 agent 状态、连接尝试、错误、carrier、channel 与 session</td>
 </tr>
 <tr>
 <td>vhttpd Relay 运行时</td>
-<td>WebSocket 认证、连接、重连、帧传递与通道生命周期</td>
-<td>复用现有 agent / hub 实现</td>
+<td>认证、连接、重连、帧分发与生命周期管理</td>
 </tr>
 <tr>
 <td>vjsx</td>
-<td>被项目 pipeline 分发的业务处理</td>
-<td>不负责宿主设置和连接档案持久化</td>
+<td>仅执行项目 pipeline 中被分发的业务逻辑</td>
 </tr>
 </tbody>
 </table>
-<p>第一步实现可编辑、持久化和导出的连接档案。导出文件只包含 Relay agent 声明，不包含项目业务 pipeline；界面明确显示“未连接”，不能把格式校验成功称为连接成功。后续再提供项目绑定向导和真实连接状态，并以目标 hub 的认证与帧往返作为验收依据。</p>
-<p>local 默认使用 loopback 的 ws 地址；非 loopback 目标要求 wss。地址不允许 userinfo、查询串或 fragment，凭据只保存环境变量名称，不保存 token 值。导出的 token 使用现有环境引用机制。连接凭据与 Admin 登录凭据分开管理。</p>
-<p>保存全局设置不修改当前运行实例；二进制变更从下一次启动生效。外部编辑器通过独立可执行文件及参数数组打开源码，不拼接 shell 命令。未配置时使用系统文本编辑器。</p>
+<p>依据为 <a href="../../src/config/v2_plan_compiler.v">项目配置编译</a>、<a href="../../src/relay/runtime.v">Relay 运行时</a>、<a href="../../src/admin_runtime_context.v">Admin 运行时快照</a>及现有 <a href="../../examples/config/relay-agent-local-v2.toml">agent 示例</a>、<a href="../../examples/config/relay-hub-v2.toml">hub 示例</a>。</p>
+<p>宿主中的磁盘配置概览不能称为连接成功，也不能代替实例的生效配置。管理员应在 Admin UI 校验、发布并按运行时支持的方式应用或重启。跨项目可复用参数目前可通过已有 include 与环境引用机制组织；若以后出现共享连接档案的实际需求，再单独设计其引用、凭据和覆盖优先级。</p>
+<p>本轮继续交付项目配置 / Relay 概览、系统文本编辑器入口及 Admin UI Relay 运行态视图。不会仅因查看项目而建立远端连接或改写 TOML。</p>
 <h2 id="6">6. 启动、停止与恢复</h2>
 <h3 id="61">6.1 启动流程</h3>
 <ol>
