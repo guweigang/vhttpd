@@ -700,6 +700,20 @@ The final DB-enabled V3 build, new-file formatting, Node/shell syntax checks, sa
 
 Linux preflight/final status were read-only; the tracked-change stop rule still prevents VM builds/tests. Full V-suite, load/live-DB, Linux and wider subsystem audits remain separate follow-ups.
 
+### Shared multi-listener App construction and startup ownership — 2026-10-17
+
+A pure runtime-plan query now selects each listener's available App owner before allocation. Multi-listener configuration validates targets first, resolves actual owners before forward aliases, and injects the owner's concrete executor plan into aliases without constructing another executor. Alias endpoint/TLS/listener metadata stays distinct. The independent admin-plane configuration also follows the actual App owner when its selected listener is an alias.
+
+App construction allocates only real owners, then assembles listener bindings in their original order. The former construct-then-overwrite sharing step was removed: VJSX constructors already start lane workers, so replacing those Apps previously abandoned executor/plugin workers. Startup and shutdown now use the same identity-based canonical binding selection. Each shared App initializes and warms up once using the configuration that constructed it, while every listener still serves its own endpoint.
+
+Resolved executors have an explicit handoff boundary. Failed configuration assembly closes newly resolved owner executors; preflight/PID acquisition failures close untransferred executors once per real owner. The single-mode multi-server fallback consumes its already resolved configuration instead of resolving and allocating again. Successfully built Apps retain normal finalization ownership.
+
+Validation: 134 distinct related V functions pass (30 runtime-plan and 104 configuration/construction/engine/plugin/startup/shutdown functions), including 8 new functions. Regressions cover forward aliases and stable binding order, independent listeners, canonical TLS/startup configuration, single warmup, a real plugin lane-worker owner and close, borrowed executor identity, admin ownership and pre-handoff cleanup. A real-process comparison records two startup events with the retained previous binary and one with the final binary; both probes verify the independent admin port, SIGTERM exit and PID cleanup.
+
+The final DB-enabled V3 build, format checks for changed construction/query files, shell syntax, safety lint and git diff --check pass. Complete E2E passes 209 CLI/config/runtime checks (including a new shared-relay single-initialization assertion), existing Node upgrade/managed-process/PID cases and PHP stream regressions. The tested binary is installed as vhttpd. Exact inputs, this-turn diff, real-process probes, logs and retained E2E artifacts are in tmp/multi-app-owner-validation/.
+
+Linux preflight/final status remain read-only because the mounted checkout has unrelated tracked changes and the testing skill's stop rule applies. Full V-suite, load/live-DB, Linux and wider subsystem audits remain separate follow-ups.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
