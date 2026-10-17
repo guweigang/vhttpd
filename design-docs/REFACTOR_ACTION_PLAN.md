@@ -771,7 +771,7 @@ Seven new [regression functions](../src/transform_engine_owner_test.v) cover rep
 
 [VJSX transforms](../src/vjsx_transformer_runtime.v) and [upload completion](../src/upload_runtime.v) now discard only unclaimed ownership. Removing their unconditional finish_worker call prevents an ignored result copy from ending accounting while another consumer still holds its transferred connection. Existing physical close-before-finish behavior remains for unclaimed results.
 
-Six new [regression functions](../src/result_discard_owner_test.v) cover raw/leased discarded HTTP and WebSocket results, already-transferred lease isolation across all four consumers, and empty-lease error cleanup. The first 52-function related suite passes. Final validation includes three original-source probes for retained HTTP/WebSocket resources and premature transform lease completion; V3/DB build and final checks are in progress. Evidence is retained in `tmp/result-discard-owner-validation/`.
+Six new [regression functions](../src/result_discard_owner_test.v) cover raw/leased discarded HTTP and WebSocket results, already-transferred lease isolation across all four consumers, and empty-lease error cleanup. All 52 permanent related functions (six new) and three original-source probes pass (55 combined), reproducing retained HTTP/WebSocket resources and premature transform lease completion before the fix. The DB-enabled V3 build passes with 437 staged production V inputs matching the workspace; formatting, safety lint and diff checks pass. Complete default E2E is in progress. Linux preflight timed out after 15 seconds without VM mutations/tests. Evidence is retained in `tmp/result-discard-owner-validation/`.
 
 ## Milestone 0 — Preparation (½ day)
 
