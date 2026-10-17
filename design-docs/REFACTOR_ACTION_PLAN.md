@@ -809,6 +809,12 @@ Seven new [regressions](../src/codex_state_owner_test.v) cover detached reads/pu
 
 Seven new [regressions](../src/codex_rpc_send_owner_test.v) cover disconnected admission, actual socket write failure, failed turn sending, successful TCP sends, response consumption, same-wire-ID replacement (including inconsistent runtime display names), publication/identity preservation and 512 concurrent registrations/cleanup. Two original-source probes reproduce ordinary/resume admission leaks and failed-turn pending leaks. The final authoritative-instance-key version passes all 84 permanent related functions (seven new) and both original-source probes (86 combined), as does the DB-enabled V3 Boehm build with 439 matching staged production V inputs. The initial version and final extended instance-key assertion both passed. Complete default E2E passes all 209 CLI/config/runtime checks plus Node/PHP regressions. Source/test/stage inputs were re-verified after E2E, and the tested binary is installed (SHA256 `422dad7a8a07c0d45a18f149f4259abf3059293c94dee8f20cf0a53432a55bb8`). Formatting, safety lint and diff checks pass. Linux read-only preflight timed out after 15 seconds without VM mutations/tests. Evidence: `tmp/codex-rpc-send-owner-validation/`.
 
+### Codex disconnect pending RPC and prepared connection ownership — 2026-10-17
+
+[Disconnect cleanup](../src/codex/types.v) now drains pending RPCs belonging to the closed connection under the existing state-owner lock. The wire counter stays monotonic; logical stream targets and thread routing retain their separate lifetime. Detached snapshots remain unchanged. [Prepared turns](../src/codex_turn_runtime.v) capture the connection together with their registration and check registration identity before sending, so a turn cannot select a replacement connection at send time. Failed sending releases only its own registration.
+
+Five new [regressions](../src/codex_disconnect_owner_test.v) cover main/named instance cleanup and isolation, snapshot retention, monotonic IDs, captured-connection sending, disconnect/reconnect rejection, consumed-registration rejection and concurrent per-instance cleanup. An original-source probe retains the old disconnect body to reproduce pending RPC retention. Build, related regressions and E2E validation are in progress; evidence: `tmp/codex-disconnect-owner-validation/`.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
