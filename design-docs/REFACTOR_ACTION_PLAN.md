@@ -867,6 +867,12 @@ A new [E2E regression](../tests/e2e/executor_lane_warmup_probe.py), included in 
 
 Six new decoder tests and ten existing asset/TypeScript lifecycle tests pass, including 64 repeated bootstrap/context-close cycles, asset overrides, malformed members and concurrent independent results. The DB-enabled V3 Boehm build and complete default E2E pass: new delayed-warmup regression, all 209 existing CLI/config/runtime checks and Node/PHP regressions. Format, ownership lint and both repositories' diff checks pass. All 444 frozen vhttpd production inputs and task/dependency manifests match after testing; the tested binary is installed atomically and its help invocation verified (SHA256 `011a7c646d347ffb198d153211d9488be38508937f9358d3d24f452e17b53df5`). Linux read-only preflight passes, but pre-existing tracked edits trigger the Linux skill stop rule; no VM builds/tests. Evidence, dependency patch, before/after snapshots, stack samples, failed diagnostic fixtures and complete E2E artifacts are retained in `tmp/lane-warmup-validation/`.
 
+### Executor lane build-directory ownership — 2026-10-17
+
+Audit found that executors with the same entry, source signature and lane index in one process shared a deterministic build directory. Resetting or closing either executor could recursively remove files still owned by the other. The path is now only a naming prefix: each host construction reserves a fresh directory with an OS-random suffix and exclusive mkdir, then transfers a shared cleanup handle to the published lane. Failure before publication releases that reservation after session cleanup. Module and script loaders receive the reserved path explicitly; a bare path no longer grants host cleanup authority.
+
+Eight new regression tests cover independent reservations, concurrent allocation/release, stale cleanup handles, two real executors and lane replacement, both module and script entries, session/entry bootstrap failures and invalid parents. Related executor tests and a DB-enabled build are being validated against frozen source snapshots; final results will be recorded here. Evidence is retained in `tmp/lane-build-owner-validation/`.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
