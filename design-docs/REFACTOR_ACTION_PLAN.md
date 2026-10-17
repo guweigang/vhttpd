@@ -765,6 +765,14 @@ Six new [regression functions](../src/http_dispatch_view_test.v) cover callback 
 
 Seven new [regression functions](../src/transform_engine_owner_test.v) cover replacement during a transform callback, retained HTTP/pipeline engines, named fallback isolation, retired origin errors, raw/leased stream cleanup, rejected response cleanup and standalone ownership transfer. The final related run passes all 90 permanent functions (seven new) and two original-source probes, which reproduce engine retargeting and an unconsumed stream owner before the fix. The DB-enabled V3 build passes with all 437 production V inputs matching staging; formatting, safety lint and diff checks pass. Complete default E2E passes all 209 CLI/config/runtime checks plus Node/PHP regressions. Source/test/stage hashes were reverified after E2E, and the tested binary is installed (SHA256 `7c5adaf4b57b3604faf06af94fed62b196843c92e757a07293c9cbee4ba18c65`). Linux preflight/final read-only queries each timed out after 15 seconds without VM changes or tests. Evidence is retained in `tmp/transform-engine-owner-validation/report.txt`. Full V-suite/load/live-DB, Linux and wider subsystem audits remain separate follow-ups.
 
+### Discarded dispatch outcome and transferred lease ownership — 2026-10-17
+
+[HTTP rendering](../src/http_response_runtime.v) and [native WebSocket opening](../src/websocket_ingress_runtime.v) now defer unclaimed-outcome cleanup, covering ordinary responses, invalid upstream plans, rejected opens and missing native connections. Successful stream/WebSocket takeover retains cleanup with its actual consumer. [Outcome close semantics](../src/executor/types.v) explicitly document that discarding a copy cannot finish a transferred lease.
+
+[VJSX transforms](../src/vjsx_transformer_runtime.v) and [upload completion](../src/upload_runtime.v) now discard only unclaimed ownership. Removing their unconditional finish_worker call prevents an ignored result copy from ending accounting while another consumer still holds its transferred connection. Existing physical close-before-finish behavior remains for unclaimed results.
+
+Six new [regression functions](../src/result_discard_owner_test.v) cover raw/leased discarded HTTP and WebSocket results, already-transferred lease isolation across all four consumers, and empty-lease error cleanup. The first 52-function related suite passes. Final validation includes three original-source probes for retained HTTP/WebSocket resources and premature transform lease completion; V3/DB build and final checks are in progress. Evidence is retained in `tmp/result-discard-owner-validation/`.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
