@@ -745,6 +745,12 @@ These are per-checkpoint counts with overlapping suites, not an aggregate unique
 
 Linux validation remains pending: the earlier admin-store checkpoint hit the skill's unrelated-tracked-change stop rule; later read-only VM preflights timed out without VM mutations. Current command/toolchain/input hashes, isolated diff, logs, final status and regular E2E artifacts are retained in the evidence folders. Full V-suite, load/live-DB, Linux and wider subsystem audits remain separate follow-ups.
 
+### Event and relay pipeline dispatch publication ownership — 2026-10-17
+
+[PipelineDispatchView](../src/pipeline_dispatch_view.v) captures the immutable plan, relay ingress descriptors and transform registry together under App.mu. [Generic event dispatch](../src/generic_event_runtime.v) retains that view through route selection and transforms; [relay dispatch](../src/relay_pipeline_runtime.v) retains it through ingress fan-out and adapter selection. The shared [transform runner](../src/vjsx_transformer_runtime.v) captures one registry before executing callbacks, so later steps cannot fall forward into a replacement registration. Publication locks are released before callbacks or delivery. This view owns configuration references only; engine/native-handle admission and retirement retain their existing owners.
+
+Six new [regression tests](../src/pipeline_dispatch_owner_test.v) cover callback-triggered replacement, newly registered entries, retained event/relay routing, concurrent publication coherence and ingress/metadata rejection. Validation is in progress; evidence is being retained in `tmp/pipeline-dispatch-owner-validation/`. The initial related run exposed an incorrectly named terminal-adapter test fixture; that fixture is corrected for the final run. Linux preflight timed out after 15 seconds without VM mutations or runtime tests.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
