@@ -8505,7 +8505,7 @@
 </table>
 <p>依据为 <a href="../../src/config/v2_plan_compiler.v">项目配置编译</a>、<a href="../../src/relay/runtime.v">Relay 运行时</a>、<a href="../../src/admin_runtime_context.v">Admin 运行时快照</a>及现有 <a href="../../examples/config/relay-agent-local-v2.toml">agent 示例</a>、<a href="../../examples/config/relay-hub-v2.toml">hub 示例</a>。</p>
 <p>宿主中的磁盘配置概览不能称为连接成功，也不能代替实例的生效配置。管理员应在 Admin UI 校验、发布并按运行时支持的方式应用或重启。跨项目可复用参数目前可通过已有 include 与环境引用机制组织；若以后出现共享连接档案的实际需求，再单独设计其引用、凭据和覆盖优先级。</p>
-<p>已交付项目配置 / Relay 概览、系统文本编辑器入口和 Admin UI Relay 运行态视图。Admin UI 的 Relay 表单支持在 v2 项目主配置中新建、编辑 agent / hub、连接 URL / WebSocket listener、节点、Token 或环境引用、自动连接与通道参数，并把当前文件的 Pipeline 绑定为 Relay 入站或出站。出站使用每条 Pipeline 独立的 relay-delivery adapter，指定远端 Pipeline ID；其他 match、transforms、policies 与未编辑的 TOML 保留。</p>
+<p>已交付项目配置 / Relay 概览、系统文本编辑器入口和 Admin UI Relay 运行态视图。Admin UI 的 Relay 表单支持在 v2 项目主配置及任意层级的 include 文件中新建、编辑 agent / hub、连接 URL / WebSocket listener、节点、Token 或环境引用、自动连接与通道参数，并把当前文件的 Pipeline 绑定为 Relay 入站或出站。出站使用每条 Pipeline 独立的 relay-delivery adapter，指定远端 Pipeline ID；其他 match、transforms、policies 与未编辑的 TOML 保留。</p>
 <p>编辑流程为：载入磁盘配置 → 保存草稿并校验 → 查看完整 TOML 与运行计划差异 → 发布到原配置文件 → 检查生效状态。发布前重新读取主配置，内容变化则要求重新编辑；服务端发布校验整个项目。表单修改会使先前校验失效，未校验不能发布。主配置使用现有源码发布接口覆盖原文件，避免配置片段发布接口把主配置加入自己的 include。</p>
 <p>当前运行计划替换对 Relay 描述符变更返回 relay_reload_required，页面显示“已发布，待工作台重启”；监听器变更同样由宿主重启。只有替换预览允许的变更才启用运行计划应用；重启或应用后再次检查磁盘与运行计划差异，确认一致才显示已生效。浏览器不控制整个进程。表单暂不改写 include 内的定义或复杂内联 / 多行字段，这些继续使用现有 Editor 编辑。</p>
 <p>验证覆盖无效引用拒绝、保留未编辑 TOML、入站 / 出站绑定、发布后尚未生效，以及本机 Hub / Agent 重启后 registered 和真实 HTTP 接力响应。查看配置不会自行建立远端连接或改写 TOML。</p>
