@@ -59,7 +59,7 @@ tags:
 
 首次 Admin UI 冷启动还复现了并发创建草稿目录导致 `File exists` 的误报。状态目录现在逐级创建，在每一级接受其他请求刚创建的目录，仍拒绝普通文件和真实权限错误。新增[多层目录并发初始化回归](../../src/admin_state_store/initialization_test.v)，并在 zip 隔离验收中增加 32 个并发首次草稿请求。实现见[状态目录初始化](../../src/admin_state_store/store.v)。
 
-当前构建要求 Apple Silicon、macOS 27.0，验收主机为 macOS 27.0.1。本机分发评估返回 `override=security disabled`，因此无法证明默认安全设置下的下载首次打开会通过；不修改安全设置或清除隔离标记。Developer ID 签名、Apple 公证及另一台干净 Mac 的真实下载首次打开尚未完成。
+上轮构建要求 Apple Silicon、macOS 27.0；本轮兼容构建将部署目标调整为 macOS 15.0，运行验收主机仍为 macOS 27.0.1，旧系统实机结论见下文。本机分发评估返回 `override=security disabled`，因此无法证明默认安全设置下的下载首次打开会通过；不修改安全设置或清除隔离标记。Developer ID 签名、Apple 公证及另一台干净 Mac 的真实下载首次打开尚未完成。
 
 Linux 补充验证只检查了环境：共享工作树有大量既有 tracked 改动，按验证技能的停止条件保留现场；未运行 Linux 构建或测试，本轮结论不覆盖 Linux。
 
