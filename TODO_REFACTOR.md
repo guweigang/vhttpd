@@ -59,6 +59,8 @@ State-store shared/exclusive lock waiters now verify the current regular lock in
 
 Relay endpoint rebinding now removes old link-index membership and shares cleanup with close, preserving peer endpoints and link-owned pending frames. Original regressions4 fail / preservation1 passes; fixed Relay125, DB-enabled build, safety/format/diff and complete standard E2E (metrics, CLI4/config-runtime205) pass. Evidence: `tmp/relay-endpoint-owner-validation/report.txt`. Candidate retained separately and final inputs match; Linux stops at read-only preflight on 352 tracked changes including existing work.
 
+Relay reopened channels now retire their previous correlations using shared reopen/close/retire cleanup, preserving mappings owned by other channels and the first-open fast path. Old correlation fallback cannot enqueue into or close the replacement. Original regressions4 fail / preservation1 passes; final Relay130, DB-enabled build, safety/format/diff and complete standard E2E (metrics, CLI4/config-runtime205) pass. Evidence: `tmp/relay-channel-owner-validation/report.txt`. Final inputs match; candidate retained separately. Linux stops at read-only preflight on 353 tracked changes including existing work.
+
 Full-suite/load/live-DB, Linux and wider subsystem audits remain separate follow-ups. Linux validation remains deferred under the skill's pre-existing tracked-change stop rule. Evidence is in `tmp/worker-request-snapshot-validation/report.txt`. Broader ownership, whole-project suite, production load, live DB and Linux validation remain pending; direct/native execution remains cooperative. See the [current action plan](design-docs/REFACTOR_ACTION_PLAN.md) for scope, validation, and next steps.
 
 Per the roadmap, after domain modules are extracted:
