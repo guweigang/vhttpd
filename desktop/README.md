@@ -13,7 +13,7 @@ tags:
 
 ## 下载、安装与首次打开
 
-兼容构建目标为 Apple Silicon（arm64）、**macOS 15.0（Sequoia）及以上**。宿主、运行程序及包内每个动态库均按实际 Mach-O 最低版本检查，超过 15.0 的候选包会被拒绝，App 声明同步写入 `LSMinimumSystemVersion`。同一份 CI 源码构建候选包已在 GitHub 的 macOS 15.7.9 和 26.6.2 arm64 runner 上通过解压、搬移、新建、失败重试、配置发布、重启生效及恢复回归，见[目标系统运行证据](./ci/results/39132490236/verification.json)。这是两个真实目标系统虚拟机上的自动化运行验证；Finder、GUI 控件和浏览器交互尚未完成目标系统验收，本机 macOS 27 的原生手动验收也不能替代这些环节。两个目标系统的 Gatekeeper 策略评估均拒绝当前 ad-hoc 包，仍需 Developer ID 签名和公证。Intel Mac、实体 Mac 默认设置下的首次安装尚未验证；macOS 14 及以下不在当前目标范围。实现见[依赖封装](./package_macos.py)与[安装包检查](./verify_macos_release.py)。
+兼容构建目标为 Apple Silicon（arm64）、**macOS 15.0（Sequoia）及以上**。宿主、运行程序及包内每个动态库均按实际 Mach-O 最低版本检查，超过 15.0 的候选包会被拒绝，App 声明同步写入 `LSMinimumSystemVersion`。同一份 CI 源码构建候选包已在 GitHub 的 macOS 15.7.9 和 26.6.2 arm64 runner 上通过解压、搬移、新建、失败重试、配置发布、重启生效及恢复回归，见[目标系统运行证据](./ci/results/39132490236/verification.json)。这是两个真实目标系统虚拟机上的自动化运行验证；Finder、GUI 控件和浏览器交互尚未完成目标系统验收，本机 macOS 27 的原生手动验收也不能替代这些环节。两个目标系统的 Gatekeeper 策略评估均拒绝当前 ad-hoc 包；当前沿用 aidatastudio 的 unsigned 预览交付方式，不要求 Apple 证书，不将此策略拒绝混同为运行失败或自动放行。Intel Mac、实体 Mac 默认设置下的首次安装尚未验证；macOS 14 及以下不在当前目标范围。实现见[依赖封装](./package_macos.py)与[安装包检查](./verify_macos_release.py)。
 
 1. 解压 `vhttpd-workbench-macos-arm64-0.1.0.zip`，得到 `vhttpd-workbench.app` 和 `安装说明.txt`。
 2. 把整个 `.app` 拖入“应用程序”或自己的“应用程序”目录；保留完整包，不要只复制其中的可执行文件。建议先放到固定位置，再创建或导入项目。
@@ -28,7 +28,11 @@ tags:
 
 构建阶段使用[固定工具链提交](./ci/toolchain.env)和[兼容补丁](./ci/prepare_toolchain.sh)，测试阶段使用全新 HOME、仅系统 PATH，并禁止验收进程读取原用户目录、源码 checkout、Homebrew 或执行编译工具。目标系统运行失败时保留该 runner 的环境记录及日志。Finder 打开、GUI 控件、浏览器交互与 Gatekeeper 下载放行单独记录，不以 CLI 回归代替。
 
-正式签名候选包通过手动 `release_mode=signed` 进入 `macos-release` Environment，完成 Developer ID 签名、Apple 公证、App 票据装订及两个系统的下载策略检查。所需证书、Team ID、API Key 或 Apple ID Secrets，以及当前未完成项见[Mac 签名与公证配置](../docs/管理功能/Mac签名与公证配置.md)。没有凭据时不会降级生成已公证包。
+**当前无需 Apple 配置，直接使用默认 `release_mode=unsigned`。** 在成功运行的 Actions 页面下载 `workbench-macos-arm64-unsigned-verified`：它只在 macOS 15/26 两个系统均通过后生成，包含原始安装 zip、SHA256SUMS、acceptance.json 和验收说明.txt，保留 14 天。`workbench-macos-arm64-candidate` 是供 CI 验收使用的中间产物。可在下载目录执行 `shasum -a 256 -c SHA256SUMS` 核对安装 zip，再按上述步骤解压完整应用。
+
+如系统阻止首次打开，先核对来源和校验值，再由用户本人决定是否在“系统设置 → 隐私与安全性”针对本应用选择“仍要打开”；受管理设备可能不允许。无需安装开发环境，不提供关闭全局安全检查或清除隔离标记的安装步骤。Finder、目标系统 GUI 与浏览器操作尚未由 CI 自动化验收。
+
+手动 `release_mode=signed` 及 `macos-release` Environment 保留为后续可选路径，当前不执行或要求配置。未来需要签名公证时再参照[Mac 签名与公证配置](../docs/管理功能/Mac签名与公证配置.md)。
 
 ## 从源码构建（仅开发者）
 

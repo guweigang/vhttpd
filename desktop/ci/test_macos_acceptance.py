@@ -52,6 +52,13 @@ class AcceptanceTests(unittest.TestCase):
                 collect(self.download, self.evidence, {})
         self.assertFalse((self.download / 'acceptance.json').exists())
 
+    def test_checksum_file_must_work_from_the_download_directory(self):
+        sums = self.download / 'SHA256SUMS'
+        sums.write_text(sums.read_text().replace('candidate.zip', 'desktop/bin/candidate.zip'))
+        with self.assertRaises(ValueError):
+            collect(self.download, self.evidence, {})
+        self.assertFalse((self.download / 'acceptance.json').exists())
+
 
 if __name__ == '__main__':
     unittest.main()

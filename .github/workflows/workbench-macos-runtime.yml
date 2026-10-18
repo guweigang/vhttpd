@@ -58,7 +58,7 @@ jobs:
           archive=desktop/bin/vhttpd-workbench-macos-arm64-0.1.0.zip
           checksum=$(shasum -a 256 "$archive")
           echo "sha256=${checksum%% *}" >> "$GITHUB_OUTPUT"
-          shasum -a 256 "$archive" > desktop/bin/SHA256SUMS
+          echo "${checksum%% *}  ${archive##*/}" > desktop/bin/SHA256SUMS
       - name: Store CI-built candidate
         uses: actions/upload-artifact@v4
         with:

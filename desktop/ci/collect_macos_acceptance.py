@@ -13,7 +13,8 @@ def collect(download, evidence, env=os.environ):
         raise ValueError('Expected exactly one CI-built download')
     archive = archives[0]
     checksum = hashlib.sha256(archive.read_bytes()).hexdigest()
-    if (download / 'SHA256SUMS').read_text().split()[0] != checksum:
+    checksum_fields = (download / 'SHA256SUMS').read_text().split()
+    if checksum_fields != [checksum, archive.name]:
         raise ValueError('Download checksum does not match SHA256SUMS')
     targets = []
     for major in ('15', '26'):
