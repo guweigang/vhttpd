@@ -975,6 +975,14 @@ Original control: two replacement regressions fail and normal release passes. Th
 
 This identity check does not make recursive traversal atomic against arbitrary external renames. No Vjsx/SDK sources were edited. Linux read-only preflight stops on 349 existing tracked changes as required by the project skill, without VM mutation or tests. Full V, live DB/installed WordPress and broader load coverage remain separate.
 
+### Legacy Admin draft publication transaction ownership — 2026-10-18
+
+The single-source and include draft publishers still bypassed the leased FileStore transaction: direct writes modified hardlink peers and symlink targets, while failed include publication left newly created directories. Both paths now use the existing missing-source-capable staged transaction for the lease, preflight, full-set source recheck, atomic file publication, post-validation, compensation and cleanup. Include target and main config form one changeset. The store opens before any publication. Callbacks capture request data without borrowing App; the old App-level best-effort restore helper and direct writes are removed. Existing-file modes are preserved; new files/directories use the transaction's private 0600/0700 modes. Existing parent aliases (including platform temp paths) are resolved before snapshotting, while final symlinks, non-regular targets and read failures are rejected.
+
+The three new regressions fail against original source (nine existing tests pass); all 12 Admin draft tests pass with the fix, covering include/source publication, nested project validation, repeated publication, hardlink/mode preservation, failed include cleanup and symlink preservation. Safety lint, new-test formatting and diff checks pass. A DB-enabled V3/QuickJS/OpenSSL/Boehm candidate builds from 455 frozen V sources and passes CLI help. Standard complete E2E passes with this candidate: five fixture tests, both delayed lane warmups (6.624 s total, six pauses), provider WebSocket, worker/PID/signal, login/Relay/PHP stream dispatch, CLI4 and config/runtime205. Existing deadlines and fault budgets are unchanged. Final frozen/live production, selected tests, SDK/vjsx and E2E input manifests match. Evidence: `tmp/legacy-draft-ownership-validation/`; candidate retained independently without installing root `vhttpd`.
+
+This does not add cross-file crash recovery or atomicity against arbitrary external filesystem writers; publication events remain best-effort. No SDK/vjsx edits. Linux read-only preflight stops on 349 existing tracked changes under the project VM skill, with no VM mutation or tests. Full V, live DB/installed WordPress and broader load coverage remain separate.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
