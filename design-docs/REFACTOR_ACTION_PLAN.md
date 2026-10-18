@@ -983,6 +983,14 @@ The three new regressions fail against original source (nine existing tests pass
 
 This does not add cross-file crash recovery or atomicity against arbitrary external filesystem writers; publication events remain best-effort. No SDK/vjsx edits. Linux read-only preflight stops on 349 existing tracked changes under the project VM skill, with no VM mutation or tests. Full V, live DB/installed WordPress and broader load coverage remain separate.
 
+### Cache and embedded session-store TTL lifecycle boundary — 2026-10-18
+
+The remaining state-lifetime audit found unchecked i64 millisecond-to-Duration multiplications in direct cache writes, cache protocol SET/CAS and embedded session-store SET/CAS. Oversized positive TTLs could wrap to no expiry, while an extreme negative CAS TTL could wrap to a 1 ms lifetime. All five sites now use `state_store.ttl_from_milliseconds`: nonpositive values consistently mean no expiry, and positive values above 9223372036854 ms return `state_store_ttl_out_of_range` before any mutation. Existing values survive rejected writes; direct cache error counters remain accurate. Delete operations still ignore TTL. No new pruning worker or clock-policy change.
+
+Original controls reproduce three cache failures (one valid-boundary pass) and two actual QuickJS host-callback failures. The fix passes 21 related tests: six generic store/conversion tests, thirteen cache TTL/listener-lifecycle tests, and two embedded host-callback tests. Positive SET/CAS expiry, maximum valid TTL, preservation after rejection, no-expiry negatives and delete semantics are covered. Cache Unix binds initially hit sandbox EPERM; the identical compiled binary passes with approved local socket access, with the environmental failure retained. Safety lint, new-source/test formatting and diff checks pass. A DB-enabled V3/QuickJS/OpenSSL/Boehm candidate builds from 458 frozen production V inputs and passes CLI help. Standard complete E2E passes with that candidate: five fixture tests, both delayed real lane warmups, provider WebSocket, worker/PID/signal, login/Relay/PHP stream dispatch, CLI4 and config/runtime205. Existing deadlines/fault budgets are unchanged. Final frozen/live production, test stages, selected tests, SDK/vjsx and E2E manifests match. Evidence: `tmp/state-ttl-lifecycle-validation/`; candidate retained independently without installing root `vhttpd`.
+
+No SDK/vjsx edits. Linux read-only preflight stops on 349 existing tracked changes under the project VM skill, without VM mutation or tests. Full V, live DB/installed WordPress and broader load coverage remain separate.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
