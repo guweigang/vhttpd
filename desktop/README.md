@@ -13,7 +13,7 @@ tags:
 
 ## 下载、安装与首次打开
 
-兼容构建目标为 Apple Silicon（arm64）、**macOS 15.0（Sequoia）及以上**。宿主、运行程序及包内每个动态库均按实际 Mach-O 最低版本检查，超过 15.0 的候选包会被拒绝，App 声明同步写入 `LSMinimumSystemVersion`。当前运行验收系统仍为 macOS 27.0.1，不能将构建检查视为 macOS 15/26 的实机验证。Intel Mac 与另一台干净 Mac 尚未验证；macOS 14 及以下不在当前目标范围。实现见[依赖封装](./package_macos.py)与[安装包检查](./verify_macos_release.py)。
+兼容构建目标为 Apple Silicon（arm64）、**macOS 15.0（Sequoia）及以上**。宿主、运行程序及包内每个动态库均按实际 Mach-O 最低版本检查，超过 15.0 的候选包会被拒绝，App 声明同步写入 `LSMinimumSystemVersion`。同一份 CI 源码构建候选包已在 GitHub 的 macOS 15.7.9 和 26.6.2 arm64 runner 上通过解压、搬移、新建、失败重试、配置发布、重启生效及恢复回归，见[目标系统运行证据](./ci/results/39132490236/verification.json)。这是两个真实目标系统虚拟机上的自动化运行验证；Finder、GUI 控件和浏览器交互尚未完成目标系统验收，本机 macOS 27 的原生手动验收也不能替代这些环节。两个目标系统的 Gatekeeper 策略评估均拒绝当前 ad-hoc 包，仍需 Developer ID 签名和公证。Intel Mac、实体 Mac 默认设置下的首次安装尚未验证；macOS 14 及以下不在当前目标范围。实现见[依赖封装](./package_macos.py)与[安装包检查](./verify_macos_release.py)。
 
 1. 解压 `vhttpd-workbench-macos-arm64-0.1.0.zip`，得到 `vhttpd-workbench.app` 和 `安装说明.txt`。
 2. 把整个 `.app` 拖入“应用程序”或自己的“应用程序”目录；保留完整包，不要只复制其中的可执行文件。建议先放到固定位置，再创建或导入项目。

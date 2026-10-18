@@ -73,7 +73,13 @@ Linux 补充验证只检查了环境：共享工作树有大量既有 tracked �
 
 最终 zip 中宿主、运行程序及 11 个动态库的实际 Mach-O `minos` 全部为 15.0，`LSMinimumSystemVersion` 同步为 15.0，zip 内容与交付 App 一致。在本机 macOS 27.0.1、全新 HOME、仅系统 PATH、禁止读取开发目录/Homebrew/V 模块及执行编译工具的隔离环境下，两模板、新建登记、业务响应、失败修正重试、跨 include 发布、待生效、宿主重启、生效检查、脱敏历史比较与跨文件恢复、32 个并发首次草稿请求全部通过。使用最终包内运行程序重跑[常用配置跨 include 回归](../../tests/e2e/admin_common_config_test.mjs)也通过，覆盖 HTTP 监听、路由、vjsx 执行器、出口 Adapter 新增删除与六次实例启动。离线安装说明同步更新。
 
-**验证边界：** 本轮没有 macOS 15 或 26 实机；部署目标与当前系统运行通过不等于旧系统全部行为已验证。macOS 14 及以下不在当前目标范围，Intel、默认 Gatekeeper 下真实下载首次打开、Developer ID 签名与 Apple 公证仍未验收。
+## CI 源码构建与 macOS 15/26 实际运行
+
+交付候选包改为由[GitHub Actions](../../.github/workflows/workbench-macos-runtime.yml)从源码构建，源码测试分支不包含开发机的 App 或 zip。V、启动编译器、TCC、vjsx 和 ui2 使用固定提交；当前源码需要的依赖兼容补丁随[工具链准备脚本](../../desktop/ci/prepare_toolchain.sh)固定。干净 CI 中修复了 V 自举时 UTF-8 locale 导致 awk 截断 C 源码的问题，并将 vjsx 补丁缩小为 ABI 与接口可见性修正，保留上游压缩资源加载函数。
+
+[已归档的运行证据](../../desktop/ci/results/39132490236/verification.json)记录同一 CI 候选包在 **macOS 15.7.9（24G830）**和 **macOS 26.6.2（25G83）**两个 arm64 runner 上均通过。包 SHA256 为 `3713596476fc836a76d2e1dda203e1398bab51f7cba10a96cca3cf5de0bed13f`。两台 runner 都重新解压、搬移完整 App，核对签名和最低版本，再在全新 HOME、仅系统 PATH、禁止读取原用户目录、checkout、Homebrew 及执行编译工具的条件下运行宿主生产可执行文件；覆盖两个模板、新建登记、初始化失败修正重试、真实 HTTP 响应、跨 include 发布、待重启、宿主重启、整项目生效检查、脱敏版本比较与跨文件恢复。构建与独立系统运行任务全部成功，原始运行标识和日志摘要保存在上述证据文件。
+
+**验证边界：** 这是 GitHub 提供的真实目标 macOS 虚拟机自动化验证，使用宿主与管理器的原生生产可执行文件及真实实例，不包含 Finder 首次打开、GUI 控件或浏览器交互。两个系统的 `spctl` 策略评估都记录为 `rejected`，不是 Gatekeeper 首次下载放行通过；Developer ID 签名、公证及实体 Mac 默认安全设置下的完整首次安装仍待完成。macOS 14 及以下不在当前目标范围，Intel 尚未验收。
 
 ## 自动化证据
 
