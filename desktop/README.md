@@ -13,7 +13,7 @@ tags:
 
 ## 下载、安装与首次打开
 
-当前包为 Apple Silicon（arm64）构建，最低要求 **macOS 27.0**；版本要求来自宿主、运行程序和包内动态库的实际 Mach-O 信息，写入 `LSMinimumSystemVersion`。本次验收系统为 macOS 27.0.1。Intel Mac、较早 macOS 与另一台干净 Mac 尚未验证。实现见[依赖封装](./package_macos.py)。
+兼容构建目标为 Apple Silicon（arm64）、**macOS 15.0（Sequoia）及以上**。宿主、运行程序及包内每个动态库均按实际 Mach-O 最低版本检查，超过 15.0 的候选包会被拒绝，App 声明同步写入 `LSMinimumSystemVersion`。当前运行验收系统仍为 macOS 27.0.1，不能将构建检查视为 macOS 15/26 的实机验证。Intel Mac、macOS 14 及以下及另一台干净 Mac 尚未验证。实现见[依赖封装](./package_macos.py)与[安装包检查](./verify_macos_release.py)。
 
 1. 解压 `vhttpd-workbench-macos-arm64-0.1.0.zip`，得到 `vhttpd-workbench.app` 和 `安装说明.txt`。
 2. 把整个 `.app` 拖入“应用程序”或自己的“应用程序”目录；保留完整包，不要只复制其中的可执行文件。建议先放到固定位置，再创建或导入项目。
@@ -32,6 +32,8 @@ tags:
 ```
 
 ui2 固定到 [ui2.commit](./ui2.commit) 中的版本。已有依赖 checkout 的版本不符或含源码修改时，构建会拒绝覆盖。构建先完成新包，再替换旧包，不原地截断正在运行的可执行文件。
+
+[兼容依赖锁](./macos-dependencies.json)记录 macOS 15 arm64 的官方 Homebrew bottle URL 与 SHA256；[隔离依赖工具](./macos_dependencies.py)下载、核验到项目 `.deps/macos-sequoia`，不会安装、升级或替换系统 Homebrew。构建首次需要联网，后续复用校验通过的缓存。编译器显式设置部署目标并重定向依赖搜索路径；生产包仍带齐所需动态库，用户无需执行这些开发步骤。
 
 ## 第一次使用
 
