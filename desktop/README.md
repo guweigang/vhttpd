@@ -28,6 +28,8 @@ tags:
 
 构建阶段使用[固定工具链提交](./ci/toolchain.env)和[兼容补丁](./ci/prepare_toolchain.sh)，测试阶段使用全新 HOME、仅系统 PATH，并禁止验收进程读取原用户目录、源码 checkout、Homebrew 或执行编译工具。目标系统运行失败时保留该 runner 的环境记录及日志。Finder 打开、GUI 控件、浏览器交互与 Gatekeeper 下载放行单独记录，不以 CLI 回归代替。
 
+正式签名候选包通过手动 `release_mode=signed` 进入 `macos-release` Environment，完成 Developer ID 签名、Apple 公证、App 票据装订及两个系统的下载策略检查。所需证书、Team ID、API Key 或 Apple ID Secrets，以及当前未完成项见[Mac 签名与公证配置](../docs/管理功能/Mac签名与公证配置.md)。没有凭据时不会降级生成已公证包。
+
 ## 从源码构建（仅开发者）
 
 安装预编译包不需要以下步骤。开发构建需要 PATH 中可用的 V 和仓库编译依赖；脚本以 `-prod` 构建运行程序和宿主，使 `$embed_file` 资源实际进入二进制，最后生成带安装说明的 zip。运行程序使用隔离的临时源码目录，不覆盖仓库根目录已有的 vhttpd：
