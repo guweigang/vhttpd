@@ -11,11 +11,20 @@ tags:
 
 宿主使用 V/ui2 原生窗口，负责项目、进程、日志和配置版本；浏览器 Admin UI 负责编辑、校验、发布和运行观测。第一版以 macOS 本地开发者预览交付，职责见[工作台设计](../docs/管理功能/本地开发工作台设计.md)。
 
-## 打开应用
+## 下载、安装与首次打开
 
-构建结果是 `desktop/bin/vhttpd-workbench.app`，可以在 Finder 中打开，也可以复制整个 `.app` 到其他目录使用。包内包含 vhttpd、Admin UI 和所需的非系统动态库；新建模板使用 script 模式，不需要安装 V 或 Node。当前包是本机架构构建，使用 ad-hoc 签名，尚未进行 Developer ID 签名和 Apple 公证，不能据此声称已完成面向所有 Mac 的公开分发验证。打包实现见[构建脚本](./build.sh)、[依赖封装](./package_macos.py)与[运行环境路径](./host/environment.v)。
+当前包为 Apple Silicon（arm64）构建，最低要求 **macOS 27.0**；版本要求来自宿主、运行程序和包内动态库的实际 Mach-O 信息，写入 `LSMinimumSystemVersion`。本次验收系统为 macOS 27.0.1。Intel Mac、较早 macOS 与另一台干净 Mac 尚未验证。实现见[依赖封装](./package_macos.py)。
 
-从源码构建时，需要 PATH 中可用的 V，以及仓库根目录已构建的 vhttpd：
+1. 解压 `vhttpd-workbench-macos-arm64-0.1.0.zip`，得到 `vhttpd-workbench.app` 和 `安装说明.txt`。
+2. 把整个 `.app` 拖入“应用程序”或自己的“应用程序”目录；保留完整包，不要只复制其中的可执行文件。建议先放到固定位置，再创建或导入项目。
+3. 在 Finder 中打开应用。无需运行安装脚本、构建命令或先打开终端。包内包含 vhttpd、Admin UI、品牌素材和所需非系统动态库；内置两个 vjsx script 模板不要求安装 V、Node、npm、Homebrew 或 Xcode。导入使用其他执行器、原生扩展或外部服务的项目，仍需其对应依赖。
+4. 打开后按下文“第一次使用”创建项目；源码保存到自己选择的可写目录，与 `.app` 分开。
+
+**系统首次打开限制：** 当前包仅有 ad-hoc 签名，没有 Developer ID 签名和 Apple 公证。下载隔离检查可能阻止打开，因此“无开发环境依赖”不等于“已保证所有 Mac 下载后直接放行”。本机系统分发评估显示安全检查已关闭，不能用于证明 Gatekeeper 放行；未修改系统安全设置，也未清除下载隔离标记。正式面向其他用户分发仍需签名、公证，并在另一台保持默认安全设置的干净 Mac 上验证真实下载后的首次打开。不建议为使用预览版关闭系统安全检查。
+
+## 从源码构建（仅开发者）
+
+安装预编译包不需要以下步骤。开发构建需要 PATH 中可用的 V 和仓库编译依赖；脚本以 `-prod` 构建运行程序和宿主，使 `$embed_file` 资源实际进入二进制，最后生成带安装说明的 zip。运行程序使用隔离的临时源码目录，不覆盖仓库根目录已有的 vhttpd：
 
 ```bash
 ./desktop/build.sh
