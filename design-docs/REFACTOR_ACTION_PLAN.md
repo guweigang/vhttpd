@@ -949,6 +949,16 @@ The DB-enabled V3 Boehm production build and complete standard E2E pass, includi
 
 Protection is scoped to attachment/publication; pre-attachment allocation/accept and fork-only children are outside this change. Linux read-only preflight stops on 349 existing tracked changes under the project skill; no VM build/test or mutation. Full V, live-DB/installed WordPress and wider load opt-ins remain separate coverage. Evidence and retained failed controls are in `tmp/ingress-native-fd-validation/report.txt`.
 
+### Event and trace log append descriptor ownership — 2026-10-18
+
+`ControlPlaneRuntime.emit()` and `runtime_trace()` used `os.open_append()`, whose current stdio allocator leaves the native log descriptor inheritable. A standalone probe using that exact previous allocation API reproduces inheritance through a real exec (`flags=0`), with an intentionally inheritable duplicate as a positive control. Both callers now use `logging.append_line()`: each append allocates one `O_APPEND | O_CLOEXEC` descriptor, writes the line and closes exactly once on success or error. The close-on-exec policy applies atomically at allocation. JSON fields, newline/append behavior, file mode/umask and best-effort logging remain unchanged; failed event-log opens still preserve request statistics. There is no shared persistent file handle or nullable writer callback.
+
+All 11 related tests pass: five log-owner tests cover live exec exclusion, success/failure cleanup, retry, Unicode/empty lines, invalid/open failures and concurrent small-record append; six composition/observation tests include the new failed-log-open statistics regression. The DB-enabled V3 Boehm build and complete standard E2E pass, including five fixture unit tests, two delayed real warmups, all Node/PHP suites and 209 CLI/config/runtime checks (4 + 205). Fault injection and timeout settings are unchanged. The frozen tree has 452 production V inputs and preserves existing HTTP metrics work; this task changes only two logging call sites and adds the append implementation, with no new SDK/vjsx edits.
+
+All production V source/stage bytes, SDK/vjsx and related-test manifests match after validation. A concurrent edit changed `tests/e2e/admin_http_metrics_test.mjs`, which is neither invoked nor imported by the standard entry point; all actual standard E2E inputs still match, and the separate drift record is retained. Another task also replaced the root binary. Preserve it: the tested candidate SHA256 `48489db64df5519f35d84de2cffe8c7599147364f394fad370a4d5af00fbc47a` is retained separately and `--help` verified, not installed over the concurrent binary. Evidence is in `tmp/log-append-owner-validation/report.txt`.
+
+The append API does not add fsync durability, failed-write rollback or a cross-process whole-record locking guarantee. Linux read-only preflight stops on 349 existing tracked changes under the project skill; no VM build/test or mutation. Full V, live-DB/installed WordPress and broader load coverage remain separate.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
