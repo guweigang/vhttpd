@@ -2,6 +2,12 @@ name: Build and verify Mac workbench
 
 on:
   workflow_dispatch:
+    inputs:
+      release_mode:
+        description: 'unsigned preview or Developer ID signed and notarized candidate'
+        type: choice
+        default: unsigned
+        options: [unsigned, signed]
   push:
     branches: [main, codex/mac-workbench-runtime-checks]
     paths:
@@ -35,6 +41,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Check signing release contract
+        run: |
+          python3 -m unittest discover -s desktop/ci -p 'test_macos_signing.py'
+          bash -n desktop/ci/verify_installed_macos.sh
       - name: Install build-only pkg-config
         run: brew install pkgconf
       - name: Prepare pinned V, vjsx and QuickJS toolchain
@@ -93,6 +103,98 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: workbench-macos-${{ matrix.os }}-evidence
+          path: |
+            ${{ steps.verify.outputs.report }}/*.txt
+            ${{ steps.verify.outputs.report }}/*.log
+          retention-days: 7
+
+  sign-and-notarize:
+    name: Developer ID signing and Apple notarization
+    if: github.event_name == 'workflow_dispatch' && inputs.release_mode == 'signed'
+    needs: [build, installed-runtime]
+    environment: macos-release
+    runs-on: macos-15
+    timeout-minutes: 35
+    outputs:
+      sha256: ${{ steps.sign.outputs.sha256 }}
+      archive: ${{ steps.sign.outputs.archive }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: workbench-macos-arm64-candidate
+          path: candidate
+      - name: Sign, notarize, staple and verify
+        id: sign
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          CANDIDATE_SHA256: ${{ needs.build.outputs.sha256 }}
+        run: python3 desktop/ci/sign_notarize_macos.py candidate/vhttpd-workbench-macos-arm64-0.1.0.zip signed "$CANDIDATE_SHA256"
+      - name: Store signed and stapled candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: workbench-macos-arm64-signed-notarized-candidate
+          path: |
+            signed/*-signed-notarized.zip
+            signed/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 7
+      - name: Store notarization status and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workbench-macos-notarization-status
+          path: |
+            signed/notarization.json
+            signed/notary-log.json
+          if-no-files-found: ignore
+          retention-days: 7
+
+  signed-installed-runtime:
+    name: Notarized download on macOS ${{ matrix.os }} arm64
+    needs: sign-and-notarize
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: '15'
+            runner: macos-15
+          - os: '26'
+            runner: macos-26
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: desktop/ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: workbench-macos-arm64-signed-notarized-candidate
+          path: candidate
+      - name: Verify quarantined notarized app and runtime
+        id: verify
+        env:
+          CANDIDATE_SHA256: ${{ needs.sign-and-notarize.outputs.sha256 }}
+          CANDIDATE_ARCHIVE: ${{ needs.sign-and-notarize.outputs.archive }}
+          EXPECTED_OS: ${{ matrix.os }}
+          REQUIRE_NOTARIZATION: '1'
+        run: bash desktop/ci/verify_installed_macos.sh "candidate/$CANDIDATE_ARCHIVE" "$EXPECTED_OS" "$CANDIDATE_SHA256"
+      - name: Store signed target-system evidence
+        if: always() && steps.verify.outputs.report != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: workbench-macos-${{ matrix.os }}-signed-evidence
           path: |
             ${{ steps.verify.outputs.report }}/*.txt
             ${{ steps.verify.outputs.report }}/*.log

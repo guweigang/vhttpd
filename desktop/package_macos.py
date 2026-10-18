@@ -50,7 +50,9 @@ def archive(app, output):
     run('/usr/bin/codesign', '--verify', '--deep', '--strict', str(app))
     with tempfile.TemporaryDirectory(prefix='vhttpd-release-') as directory:
         staging = Path(directory)
-        shutil.copytree(app, staging / app.name, symlinks=True)
+        # Preserve the notarization ticket and macOS metadata when archiving a
+        # stapled app; generic filesystem copies can lose extended attributes.
+        run('/usr/bin/ditto', str(app), str(staging / app.name))
         run('/usr/bin/ditto', '-c', '-k', '--sequesterRsrc', str(staging), str(output))
     # ditto omits the ZIP UTF-8 filename flag. Add the Chinese guide through
     # zipfile so other unzip tools display its name correctly as well.

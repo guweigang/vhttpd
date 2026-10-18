@@ -37,7 +37,8 @@ fi
   /usr/bin/uname -m
   echo "archive_sha256=$checksum"
   echo 'coverage=archive extraction, bundle relocation, native host manager and runtime, HTTP, cross-include publication/restart/effectiveness/history'
-  echo 'not_covered=Finder opening, GUI controls, browser interaction, Gatekeeper download approval'
+  echo 'not_covered=Finder opening, GUI controls, browser interaction'
+  echo "require_notarization=${REQUIRE_NOTARIZATION:-0}"
 } > "$report/environment.txt"
 record_result() {
   local result="$1"
@@ -59,8 +60,23 @@ app="$report/Applications with spaces/vhttpd-workbench.app"
 minimum="$(/usr/bin/plutil -extract LSMinimumSystemVersion raw "$app/Contents/Info.plist")"
 [[ "$minimum" == 15.0 ]]
 /usr/bin/file "$app/Contents/MacOS/vhttpd-workbench" "$app/Contents/Resources/runtime/vhttpd" > "$report/binaries.txt"
-# Record policy assessment separately. CI is not a downloaded Finder first-open test.
-/usr/sbin/spctl --assess --type execute --verbose=4 "$app" > "$report/gatekeeper.txt" 2>&1 || true
+if [[ "${REQUIRE_NOTARIZATION:-0}" == 1 ]]; then
+  # Add the downloaded-file marker; never clear quarantine to make a test pass.
+  quarantine_time="$(printf '%x' "$(/bin/date +%s)")"
+  /usr/bin/xattr -w com.apple.quarantine "0083;$quarantine_time;vhttpdCI;$(/usr/bin/uuidgen)" "$app"
+  /usr/bin/xcrun stapler validate "$app" > "$report/stapler.txt" 2>&1
+  /usr/bin/codesign -d --verbose=4 "$app" > "$report/developer-id.txt" 2>&1
+  /usr/bin/grep -q '^Authority=Developer ID Application:' "$report/developer-id.txt"
+  /usr/bin/grep -q '^Timestamp=' "$report/developer-id.txt"
+  /usr/bin/grep -Eq '^CodeDirectory .*flags=.*runtime' "$report/developer-id.txt"
+  /usr/sbin/spctl --assess --type execute --verbose=4 "$app" > "$report/gatekeeper.txt" 2>&1
+  /usr/bin/grep -q '^source=Notarized Developer ID$' "$report/gatekeeper.txt"
+  /usr/bin/syspolicy_check distribution "$app" > "$report/distribution.txt" 2>&1
+  echo 'PASS notarization ticket and Gatekeeper/distribution policy with quarantine'
+else
+  # Unsigned previews record policy rejection separately from functional tests.
+  /usr/sbin/spctl --assess --type execute --verbose=4 "$app" > "$report/gatekeeper.txt" 2>&1 || true
+fi
 /bin/cat > "$report/no-development.sb" <<'SB'
 (version 1)
 (allow default)
