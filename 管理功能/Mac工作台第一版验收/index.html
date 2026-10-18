@@ -7958,6 +7958,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#developer-id" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Developer ID 签名与公证接线
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#_5" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -8119,6 +8130,9 @@
 <p>交付候选包改为由<a href="../../.github/workflows/workbench-macos-runtime.yml">GitHub Actions</a>从源码构建，源码测试分支不包含开发机的 App 或 zip。V、启动编译器、TCC、vjsx 和 ui2 使用固定提交；当前源码需要的依赖兼容补丁随<a href="../../desktop/ci/prepare_toolchain.sh">工具链准备脚本</a>固定。干净 CI 中修复了 V 自举时 UTF-8 locale 导致 awk 截断 C 源码的问题，并将 vjsx 补丁缩小为 ABI 与接口可见性修正，保留上游压缩资源加载函数。</p>
 <p><a href="../../desktop/ci/results/39132490236/verification.json">已归档的运行证据</a>记录同一 CI 候选包在 **macOS 15.7.9（24G830）**和 **macOS 26.6.2（25G83）**两个 arm64 runner 上均通过。包 SHA256 为 <code>3713596476fc836a76d2e1dda203e1398bab51f7cba10a96cca3cf5de0bed13f</code>。两台 runner 都重新解压、搬移完整 App，核对签名和最低版本，再在全新 HOME、仅系统 PATH、禁止读取原用户目录、checkout、Homebrew 及执行编译工具的条件下运行宿主生产可执行文件；覆盖两个模板、新建登记、初始化失败修正重试、真实 HTTP 响应、跨 include 发布、待重启、宿主重启、整项目生效检查、脱敏版本比较与跨文件恢复。构建与独立系统运行任务全部成功，原始运行标识和日志摘要保存在上述证据文件。</p>
 <p><strong>验证边界：</strong> 这是 GitHub 提供的真实目标 macOS 虚拟机自动化验证，使用宿主与管理器的原生生产可执行文件及真实实例，不包含 Finder 首次打开、GUI 控件或浏览器交互。两个系统的 <code>spctl</code> 策略评估都记录为 <code>rejected</code>，不是 Gatekeeper 首次下载放行通过；Developer ID 签名、公证及实体 Mac 默认安全设置下的完整首次安装仍待完成。macOS 14 及以下不在当前目标范围，Intel 尚未验收。</p>
+<h2 id="developer-id">Developer ID 签名与公证接线</h2>
+<p><a href="../Mac%E7%AD%BE%E5%90%8D%E4%B8%8E%E5%85%AC%E8%AF%81%E9%85%8D%E7%BD%AE/">签名与公证配置清单</a>列出 GitHub <code>macos-release</code> Environment 所需的 Apple 配置。工作流增加手动 <code>release_mode=signed</code>：在源码构建和 macOS 15/26 运行回归通过后，依次签名包内运行程序、动态库和 App，要求公证 Accepted、装订并重新封装，随后在两个目标系统重新解压检查下载策略与整项目发布、重启生效。签名、公证或系统策略检查失败时不产生可交付的签名候选包。8 项发布链路模拟测试通过，覆盖拒绝结果、Team ID 不符、装订失败与安全策略关闭等情况。</p>
+<p>仓库尚未配置 Apple Secrets 和 <code>macos-release</code> Environment，真实签名、公证与签名包下载策略验收未执行；这些测试不代替实体 Mac 的浏览器下载、Finder 首次打开和原生窗口操作。本轮仅接分发链路，不增加工作台功能。</p>
 <h2 id="_5">自动化证据</h2>
 <ul>
 <li>宿主 <code>desktop/host</code> 共 10 个测试文件分批通过；新增包内运行程序优先选择、开发模式回退、业务端口占用及通配访问地址验证。见<a href="../../desktop/host/environment_test.v">路径回归</a>与<a href="../../desktop/host/manager_test.v">启动回归</a>。</li>
