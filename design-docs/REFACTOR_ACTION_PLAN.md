@@ -1041,6 +1041,12 @@ Restore failure cleanup tracked newly created parent directories only by pathnam
 
 Validation: the original algorithm fails the replacement-directory regression. All 10 related restore/publication tests pass, including descriptor CLOEXEC/release, rollback, recreation, mode preservation and source guards. The DB-enabled V3/QuickJS/OpenSSL/Boehm build, safety lint, changed-source/test formatting and diff checks pass. Complete standard E2E passes, including metrics, provider WebSocket, worker/PID/signals, Relay/PHP and CLI4/config-runtime205. Both delayed warmups finish in 8.924 s with unchanged budgets. Evidence: `tmp/restore-directory-owner-validation/report.txt`, control/fixed logs, manifests and separately retained candidate; root binary is not replaced. Captured/live production and validation inputs match at completion. Linux stops at read-only preflight on 350 existing tracked changes under the project VM skill; full V, throughput and opt-in live DB/installed WordPress remain separate.
 
+### Configuration staged-file ownership — 2026-10-18
+
+Configuration publication, restore and compensation now retain a CLOEXEC descriptor and captured inode identity for each staged file through cleanup. Commit and cleanup require the temporary path to remain a regular file with that identity. A replacement file or symlink is preserved and rejected; committed siblings are compensated and all operation descriptors close before the store lease is released. This does not make external filesystem rename windows atomic or protect in-place content mutation.
+
+Validation: all four replacement regressions fail on the original snapshot; all 15 related tests pass on the fix, including descriptor release/CLOEXEC and existing restore/publication coverage. The DB-enabled V3/QuickJS/OpenSSL/Boehm build, safety lint, changed-file formatting and diff checks pass. Complete standard E2E passes, including metrics, provider WebSocket, worker/PID/signals, Relay/PHP and CLI4/config-runtime205. Two delayed warmups finish in 24.422 s with unchanged budgets. Evidence: `tmp/config-stage-owner-validation/report.txt`, control/fixed logs, input manifests and separately retained candidate; root binary is not replaced. Final production/test/dependency hashes match. Linux stops at read-only preflight on 350 existing tracked changes under the project VM skill. Whole-project V, throughput and opt-in live DB/installed WordPress remain separate.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
