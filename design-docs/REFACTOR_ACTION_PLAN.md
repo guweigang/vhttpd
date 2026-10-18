@@ -1015,6 +1015,14 @@ Validation: global safety lint, 9 related unit tests, DB-enabled V3/QuickJS/Open
 
 Evidence: `tmp/timing-owner-validation/report.txt`, manifests, original failure/control logs and separately retained candidate; root binary is not replaced. Frozen/live production and captured test/dependency inputs match at completion. Linux stops at read-only preflight on 349 existing tracked changes under the project VM skill; full V, standard full E2E, broader load and opt-in live DB were not run this turn.
 
+### Deterministic metrics load admission — 2026-10-18
+
+The preceding metrics E2E timeout is resolved as a fixture admission assumption. A simultaneous burst of short HTTP handlers does not guarantee executor concurrency: the inspected macOS fasthttp reactor accepts up to 32 sockets in a batch and executes their handlers synchronously on the accepting worker. Requests can serialize before executor admission, or wait less than the queue deadline. In the old failing run all 14 overload requests returned 200, with a maximum measured queue wait of 855.683 ms, below the 1000 ms timeout. The candidate's earlier wait for observable queue occupancy and the old binary's wait for timeout counter growth therefore had no guaranteed trigger.
+
+The fixture now first occupies a lane with a bounded, private file gate and waits for its entered marker before opening contenders. It releases the successful queue after observing a measurable wait; the timeout case retains the owner until an actual contending request times out. Finally blocks release gates and settle requests. Queue occupancy, timeout accounting, stage/privacy and final zero-waiter/zero-occupancy assertions remain. No production scheduling, timing budget or SDK change is needed. `tests/e2e/run.sh` now includes the previously omitted metrics E2E.
+
+Validation: corrected metrics passes on both old and timing candidate binaries; the final old run observes 3 waits/1 timeout, and the final candidate run inside complete E2E observes 6 waits/1 timeout, both ending at zero waiting/occupied. All 9 related observation/timing tests, global safety and syntax/diff checks pass. Complete standard E2E passes, including metrics, provider WebSocket, signal/worker/Relay/PHP and CLI4/config-runtime205. Both delayed lane warmups finish in 5.824 s with unchanged fault/deadline budgets. Evidence: `tmp/metrics-load-validation/report.txt`, original failure logs, reactor source excerpts, current logs and manifests. Production/dependency inputs match the reused DB-enabled V3 candidate; no redundant rebuild or root binary replacement. Linux stops at read-only preflight on 350 existing tracked changes under the project VM skill; full V, wider throughput and opt-in live DB/installed WordPress remain separate.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
