@@ -71,7 +71,7 @@ Linux 补充验证只检查了环境：共享工作树有大量既有 tracked �
 
 [构建脚本](../../desktop/build.sh)显式设置 macOS 15.0，并通过[隔离依赖工具](../../desktop/macos_dependencies.py)使用[固定 URL 与 SHA256 的依赖锁](../../desktop/macos-dependencies.json)，下载官方 arm64 Sequoia bottle 到项目 `.deps`，不改动系统 Homebrew。保留数据库、TLS 和 Boehm GC；GC 从源码参与兼容构建，避免隔离 pkg-config 后自动切换内存管理模式。移除 V 的 MacPorts/Intel Homebrew 回退路径，编译保持可用性诊断，链接拒绝版本等有效警告。[封装](../../desktop/package_macos.py)与[zip 检查](../../desktop/verify_macos_release.py)同时拒绝最低版本高于 15.0 的二进制。反向检查确认旧 27.0 宿主被拒绝，测试代码使用 macOS 26 的 NSGlassEffectView 也被编译器拒绝。
 
-最终 zip 中宿主、运行程序及 11 个动态库的实际 Mach-O `minos` 全部为 15.0，`LSMinimumSystemVersion` 同步为 15.0，zip 内容与交付 App 一致。在本机 macOS 27.0.1、全新 HOME、仅系统 PATH、禁止读取开发目录/Homebrew/V 模块及执行编译工具的隔离环境下，两模板、新建登记、业务响应、失败修正重试、跨 include 发布、待生效、宿主重启、生效检查、脱敏历史比较与跨文件恢复、32 个并发首次草稿请求全部通过。离线安装说明同步更新。
+最终 zip 中宿主、运行程序及 11 个动态库的实际 Mach-O `minos` 全部为 15.0，`LSMinimumSystemVersion` 同步为 15.0，zip 内容与交付 App 一致。在本机 macOS 27.0.1、全新 HOME、仅系统 PATH、禁止读取开发目录/Homebrew/V 模块及执行编译工具的隔离环境下，两模板、新建登记、业务响应、失败修正重试、跨 include 发布、待生效、宿主重启、生效检查、脱敏历史比较与跨文件恢复、32 个并发首次草稿请求全部通过。使用最终包内运行程序重跑[常用配置跨 include 回归](../../tests/e2e/admin_common_config_test.mjs)也通过，覆盖 HTTP 监听、路由、vjsx 执行器、出口 Adapter 新增删除与六次实例启动。离线安装说明同步更新。
 
 **验证边界：** 本轮没有 macOS 15 或 26 实机；部署目标与当前系统运行通过不等于旧系统全部行为已验证。macOS 14 及以下不在当前目标范围，Intel、默认 Gatekeeper 下真实下载首次打开、Developer ID 签名与 Apple 公证仍未验收。
 
