@@ -71,7 +71,7 @@ ui2 固定到 [ui2.commit](./ui2.commit) 中的版本。已有依赖 checkout �
 python3 desktop/verify_macos_release.py desktop/bin/vhttpd-workbench-macos-arm64-0.1.0.zip
 ```
 
-该检查从 zip 解压到仓库外含空格的目录，核对签名、arm64、动态库相对路径、最低系统版本与离线说明；随后使用全新 HOME、仅系统工具的 PATH，禁止读取开发目录、Homebrew 和 V 模块，并禁止执行 Xcode 编译工具，运行两个真实模板及启动失败后重试流程。它验证开发环境独立性，不模拟另一台 Mac，也不代表 Gatekeeper 已放行。见[安装包回归](./verify_macos_release.py)。
+该检查从 zip 解压到仓库外含空格的目录，核对签名、arm64、动态库相对路径、最低系统版本与离线说明；随后使用全新 HOME、仅系统工具的 PATH，禁止读取开发目录、Homebrew 和 V 模块，并禁止执行 Xcode 编译工具，运行两个真实模板及启动失败后重试流程，并验证 32 个并发首次草稿请求不会因创建目录竞争而失败。它验证开发环境独立性，不模拟另一台 Mac，也不代表 Gatekeeper 已放行。见[安装包回归](./verify_macos_release.py)。
 
 使用构建好的应用直接执行真实主流程检查：
 
