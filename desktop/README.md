@@ -13,7 +13,7 @@ tags:
 
 ## 下载、安装与首次打开
 
-兼容构建目标为 Apple Silicon（arm64）、**macOS 15.0（Sequoia）及以上**。宿主、运行程序及包内每个动态库均按实际 Mach-O 最低版本检查，超过 15.0 的候选包会被拒绝，App 声明同步写入 `LSMinimumSystemVersion`。当前运行验收系统仍为 macOS 27.0.1，不能将构建检查视为 macOS 15/26 的实机验证。Intel Mac、macOS 14 及以下及另一台干净 Mac 尚未验证。实现见[依赖封装](./package_macos.py)与[安装包检查](./verify_macos_release.py)。
+兼容构建目标为 Apple Silicon（arm64）、**macOS 15.0（Sequoia）及以上**。宿主、运行程序及包内每个动态库均按实际 Mach-O 最低版本检查，超过 15.0 的候选包会被拒绝，App 声明同步写入 `LSMinimumSystemVersion`。当前运行验收系统仍为 macOS 27.0.1，不能将构建检查视为 macOS 15/26 的实机验证。Intel Mac 与另一台干净 Mac 尚未验证；macOS 14 及以下不在当前目标范围。实现见[依赖封装](./package_macos.py)与[安装包检查](./verify_macos_release.py)。
 
 1. 解压 `vhttpd-workbench-macos-arm64-0.1.0.zip`，得到 `vhttpd-workbench.app` 和 `安装说明.txt`。
 2. 把整个 `.app` 拖入“应用程序”或自己的“应用程序”目录；保留完整包，不要只复制其中的可执行文件。建议先放到固定位置，再创建或导入项目。
