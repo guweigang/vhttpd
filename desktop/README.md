@@ -22,6 +22,12 @@ tags:
 
 **系统首次打开限制：** 当前包仅有 ad-hoc 签名，没有 Developer ID 签名和 Apple 公证。下载隔离检查可能阻止打开，因此“无开发环境依赖”不等于“已保证所有 Mac 下载后直接放行”。本机系统分发评估显示安全检查已关闭，不能用于证明 Gatekeeper 放行；未修改系统安全设置，也未清除下载隔离标记。正式面向其他用户分发仍需签名、公证，并在另一台保持默认安全设置的干净 Mac 上验证真实下载后的首次打开。不建议为使用预览版关闭系统安全检查。
 
+## CI 构建与目标系统验收
+
+交付候选包由[GitHub Actions 源码构建流程](../.github/workflows/workbench-macos-runtime.yml)生成：macOS 15 arm64 构建完整 `.app` 与 zip，记录 SHA256 后保存为 CI 构建产物；macOS 15 和 26 的独立 runner 下载同一候选包，再执行[系统工具验收脚本](./ci/verify_installed_macos.sh)。不将开发机的 App 或 zip 提交到源码仓库。
+
+构建阶段使用[固定工具链提交](./ci/toolchain.env)和[兼容补丁](./ci/prepare_toolchain.sh)，测试阶段使用全新 HOME、仅系统 PATH，并禁止验收进程读取原用户目录、源码 checkout、Homebrew 或执行编译工具。目标系统运行失败时保留该 runner 的环境记录及日志。Finder 打开、GUI 控件、浏览器交互与 Gatekeeper 下载放行单独记录，不以 CLI 回归代替。
+
 ## 从源码构建（仅开发者）
 
 安装预编译包不需要以下步骤。开发构建需要 PATH 中可用的 V 和仓库编译依赖；脚本以 `-prod` 构建运行程序和宿主，使 `$embed_file` 资源实际进入二进制，最后生成带安装说明的 zip。运行程序使用隔离的临时源码目录，不覆盖仓库根目录已有的 vhttpd：
