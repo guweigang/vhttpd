@@ -8092,6 +8092,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#mac" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mac 第一版收敛与验收
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#63" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -8587,6 +8598,8 @@
 <li>异常详情直接显示配置来源，点击后进入对应 include 中的具体路由表单并突出显示；继续沿用整项目校验、发布和宿主重启生效。操作记录依据 <code>at_unix</code> 和 <code>fields.draft_id</code> 展示时间与对象。指标实现见 <a href="../../src/http_observation_runtime.v">请求观测</a>、<a href="../../src/server.v">监听汇总</a>、<a href="../../src/executor/admin_http_metrics.v">指标类型</a> 及 <a href="../../tests/e2e/admin_http_metrics_test.mjs">多监听回归</a>。</li>
 </ul>
 <p>实现见 <a href="../../admin/ui/overview.js">总览状态模型</a>、<a href="../../admin/ui/app.js">Admin UI</a> 与 <a href="../../tests/admin-ui/overview.test.cjs">总览回归</a>。</p>
+<h3 id="mac">Mac 第一版收敛与验收</h3>
+<p>2026-10-18 冻结功能扩展，按新用户完整主流程收敛为 Mac 本地开发者预览。已修复空列表和待生效界面的 ui2 重复元素 ID、从差异 / 恢复页重启后看不到进度、独立包资源和动态库依赖、登记位置、通配访问地址和端口冲突提示。项目从创建、自动登录、表单校验发布到宿主重启、版本预览恢复与重新打开已验证；具体证据与未纳入范围见 <a href="../Mac%E5%B7%A5%E4%BD%9C%E5%8F%B0%E7%AC%AC%E4%B8%80%E7%89%88%E9%AA%8C%E6%94%B6/">Mac 第一版验收</a>，使用方法见 <a href="../../desktop/README.md">Mac 工作台说明</a>。当前交付为本机 arm64 构建及 ad-hoc 签名，尚未公证，不将本地验收结论扩展为所有 Mac 的公开分发验证。</p>
 <h3 id="63">6.3 进程状态</h3>
 <div class="highlight"><pre><span></span><code>stopped → starting → running → stopping → stopped
              │         │
