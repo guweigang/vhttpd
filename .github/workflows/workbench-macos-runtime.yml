@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       release_mode:
-        description: 'unsigned preview or Developer ID signed and notarized candidate'
+        description: 'unsigned preview (no Apple credentials required); signed is optional'
         type: choice
         default: unsigned
         options: [unsigned, signed]
@@ -43,7 +43,7 @@ jobs:
           python-version: '3.12'
       - name: Check signing release contract
         run: |
-          python3 -m unittest discover -s desktop/ci -p 'test_macos_signing.py'
+          python3 -m unittest discover -s desktop/ci -p 'test_macos_*.py'
           bash -n desktop/ci/verify_installed_macos.sh
       - name: Install build-only pkg-config
         run: brew install pkgconf
@@ -107,6 +107,50 @@ jobs:
             ${{ steps.verify.outputs.report }}/*.txt
             ${{ steps.verify.outputs.report }}/*.log
           retention-days: 7
+
+  accepted-preview:
+    name: Collect verified unsigned preview download
+    if: github.event_name != 'workflow_dispatch' || inputs.release_mode == 'unsigned'
+    needs: [build, installed-runtime]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: desktop/ci
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: workbench-macos-arm64-candidate
+          path: download
+      - uses: actions/download-artifact@v4
+        with:
+          name: workbench-macos-15-evidence
+          path: evidence/macos-15
+      - uses: actions/download-artifact@v4
+        with:
+          name: workbench-macos-26-evidence
+          path: evidence/macos-26
+      - name: Verify both target results and describe the download
+        run: python3 desktop/ci/collect_macos_acceptance.py download evidence
+      - name: Store verified preview download
+        uses: actions/upload-artifact@v4
+        with:
+          name: workbench-macos-arm64-unsigned-verified
+          path: download/*
+          if-no-files-found: error
+          retention-days: 14
+      - name: Summarize the download
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'SUMMARY'
+          ## Mac developer preview ready
+          Download **workbench-macos-arm64-unsigned-verified** from this run's Artifacts.
+          It contains the CI-built ZIP, SHA256SUMS, acceptance.json and 验收说明.txt.
+          The same ZIP passed extraction and isolated runtime checks on macOS 15 and 26 arm64.
+          **No Apple credentials required.** This is an ad-hoc signed preview, without Apple notarization.
+          Gatekeeper assessment is recorded separately; GUI/Finder/browser first launch is not covered by these runtime checks.
+          SUMMARY
 
   sign-and-notarize:
     name: Developer ID signing and Apple notarization

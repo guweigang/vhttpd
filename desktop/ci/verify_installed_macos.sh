@@ -75,7 +75,10 @@ if [[ "${REQUIRE_NOTARIZATION:-0}" == 1 ]]; then
   echo 'PASS notarization ticket and Gatekeeper/distribution policy with quarantine'
 else
   # Unsigned previews record policy rejection separately from functional tests.
-  /usr/sbin/spctl --assess --type execute --verbose=4 "$app" > "$report/gatekeeper.txt" 2>&1 || true
+  policy_exit=0
+  /usr/sbin/spctl --assess --type execute --verbose=4 "$app" > "$report/gatekeeper.txt" 2>&1 || policy_exit=$?
+  echo "$policy_exit" > "$report/gatekeeper-exit.txt"
+  echo "Unsigned preview: Gatekeeper exit=$policy_exit; policy assessment is recorded separately from runtime acceptance."
 fi
 /bin/cat > "$report/no-development.sb" <<'SB'
 (version 1)
