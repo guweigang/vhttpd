@@ -959,6 +959,14 @@ All production V source/stage bytes, SDK/vjsx and related-test manifests match a
 
 The append API does not add fsync durability, failed-write rollback or a cross-process whole-record locking guarantee. Linux read-only preflight stops on 349 existing tracked changes under the project skill; no VM build/test or mutation. Full V, live-DB/installed WordPress and broader load coverage remain separate.
 
+### Configuration publication and compensation source ownership — 2026-10-18
+
+The file-store audit found that publication after preflight/staging and compensation after failed post-validation compared bytes without repeating the initial regular-file/non-symlink guard. A source replaced by a symlink with matching bytes could therefore be overwritten. `verify_config_file` now shares the type and expected-content checks across admission, publication and compensation. Compensation preserves a changed path, reports failure and continues restoring other files; staged temporary files still clean up under the same directory lease.
+
+Two deterministic replacement regressions fail on the original implementation (16 existing tests pass); all 18 store/publication/restore tests pass with the fix. All 36 selected Admin UI tests, safety lint, new-test formatting and diff checks pass. The DB-enabled V3/QuickJS/OpenSSL/Boehm candidate compiles from 452 frozen production V inputs and passes CLI help. Both related E2E scenarios pass with that candidate: common HTTP/route/vjsx cross-include publication through six starts, and Relay/Pipeline/Adapter cross-include publication serving real traffic (2/2; existing deadlines unchanged). Evidence and before/after sources: `tmp/config-publication-owner-validation/`. The tested binary is retained there, without replacing root `vhttpd`.
+
+These are boundary checks under the cooperating store lease, not an atomic filesystem compare-and-swap against arbitrary external writers or cross-file crash recovery. Linux read-only preflight stops on 349 preexisting tracked changes, as required by the project VM skill; no Linux build/test or mutation. Full V/full E2E, live DB/installed WordPress and wider load coverage remain separate.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
