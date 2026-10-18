@@ -999,6 +999,14 @@ All three original controls fail; the corrected implementation passes ten worker
 
 Evidence: `tmp/worker-readiness-owner-validation/`; tested candidate retained separately without installing root `vhttpd`. Own sources/native header, frozen stages, selected tests, SDK/vjsx and invoked E2E inputs match. Concurrent live edits in admin/executor load and lane-pool sources are recorded separately and are outside this candidate's validation; an uninvoked metrics test also changed concurrently. No SDK/vjsx edits. Linux read-only preflight stops on 349 existing tracked changes under the project VM skill, without VM mutation or tests, so the Linux native branch is not claimed tested. Full V, live DB/installed WordPress and broader load coverage remain separate.
 
+### Independent App shutdown error ownership — 2026-10-18
+
+An HTTP lifecycle-control error previously returned before joining admin HTTP and inbound WebSocket ingress tickets, then abandoned healthy independent Apps and marked all claimed shutdown owners failed. Stop tickets now join every independent ingress and retain per-App errors. Successfully drained Apps complete background/auxiliary teardown and executor → plugin → provider finalization; an App whose ingress termination cannot be confirmed retains its dependencies. All unique shutdown owners are joined before aggregate errors return, including owners already claimed by another caller. HTTP Owner error semantics remain unchanged.
+
+Validation: original algorithms fail both new regressions; the fixed candidate passes 8 App shutdown and 7 HTTP owner tests. The DB-enabled V3/QuickJS/OpenSSL/Boehm build and standard complete E2E pass (CLI4/config-runtime205; both delayed lane warmups complete in 7.098 s). Formatting and diff checks pass. Global safety lint **fails** on the existing/concurrent `executor/types.v` timing pointer's `unsafe { nil }` default, also present in the control snapshot; this shutdown change does not modify or suppress it.
+
+Evidence: `tmp/shutdown-error-drain-validation/report.txt`, logs, manifests and separately retained `vhttpd-tested`; root binary is not replaced. Frozen/live production, selected tests, native headers, SDK/vjsx and E2E inputs match at completion. Linux read-only preflight stops on 349 existing tracked changes under the project VM skill, without Linux build/test or mutation. Full V, load and opt-in live DB/installed WordPress coverage remain separate; the global safety failure remains open.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
