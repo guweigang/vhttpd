@@ -81,6 +81,12 @@ Linux 补充验证只检查了环境：共享工作树有大量既有 tracked �
 
 **验证边界：** 这是 GitHub 提供的真实目标 macOS 虚拟机自动化验证，使用宿主与管理器的原生生产可执行文件及真实实例，不包含 Finder 首次打开、GUI 控件或浏览器交互。两个系统的 `spctl` 策略评估都记录为 `rejected`，不是 Gatekeeper 首次下载放行通过；Developer ID 签名、公证及实体 Mac 默认安全设置下的完整首次安装仍待完成。macOS 14 及以下不在当前目标范围，Intel 尚未验收。
 
+## Developer ID 签名与公证接线
+
+[签名与公证配置清单](./Mac签名与公证配置.md)列出 GitHub `macos-release` Environment 所需的 Apple 配置。工作流增加手动 `release_mode=signed`：在源码构建和 macOS 15/26 运行回归通过后，依次签名包内运行程序、动态库和 App，要求公证 Accepted、装订并重新封装，随后在两个目标系统重新解压检查下载策略与整项目发布、重启生效。签名、公证或系统策略检查失败时不产生可交付的签名候选包。8 项发布链路模拟测试通过，覆盖拒绝结果、Team ID 不符、装订失败与安全策略关闭等情况。
+
+仓库尚未配置 Apple Secrets 和 `macos-release` Environment，真实签名、公证与签名包下载策略验收未执行；这些测试不代替实体 Mac 的浏览器下载、Finder 首次打开和原生窗口操作。本轮仅接分发链路，不增加工作台功能。
+
 ## 自动化证据
 
 - 宿主 `desktop/host` 共 10 个测试文件分批通过；新增包内运行程序优先选择、开发模式回退、业务端口占用及通配访问地址验证。见[路径回归](../../desktop/host/environment_test.v)与[启动回归](../../desktop/host/manager_test.v)。
