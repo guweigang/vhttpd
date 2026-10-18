@@ -7928,7 +7928,7 @@
   <a href="#_4" class="md-nav__link">
     <span class="md-ellipsis">
       
-        自动化证据
+        安装包与首次启动复验
       
     </span>
   </a>
@@ -7937,6 +7937,17 @@
       
         <li class="md-nav__item">
   <a href="#_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        自动化证据
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_6" class="md-nav__link">
     <span class="md-ellipsis">
       
         交付范围与限制
@@ -8071,7 +8082,12 @@
 </tbody>
 </table>
 <p>本次最终包原生窗口复验通过：从空列表创建项目，端口冲突后直接重试，选择 JSON API 模板并在含空格目录“创建并启动”，浏览器自动登录；无效端口阻止发布，修正后整项目校验发布，宿主显示待重启，点击后 PID 更新、自动确认配置一致，并自动重新登录 Admin UI。业务监听由旧端口切换到新端口后，新端口返回该项目的真实响应，旧端口已关闭。路由未匹配请求沿用运行时默认处理器，不以“旧路径必须返回 404”作为通用验收条件。相关回归及构建均针对本机 Mac，交付边界保持为本地开发者预览。</p>
-<h2 id="_4">自动化证据</h2>
+<h2 id="_4">安装包与首次启动复验</h2>
+<p>本次禁止读取开发目录后，旧包暴露了两处真实依赖：宿主会回读仓库的 vjsx 模板，运行程序会回读 vjsx 模块仓库的内置 JS。此前同机搬移与动态库相对路径检查不足以证明资源完全独立。</p>
+<p>修复为宿主和运行程序均采用生产嵌入构建；生产模式还要求显式处理现有的 Result 传播、Map 缺失分支和进程执行 API。新增<a href="../../desktop/verify_macos_release.py">交付 zip 隔离检查</a>，在替换上一份交付物之前验证真正的压缩包。包内附有离线安装说明，并从 Mach-O 元信息生成最低系统版本。本节最终包的隔离运行、首次界面和签名复验仍在进行，尚不以此段声明新包通过。</p>
+<p>当前构建要求 Apple Silicon、macOS 27.0，验收主机为 macOS 27.0.1。本机分发评估返回 <code>override=security disabled</code>，因此无法证明默认安全设置下的下载首次打开会通过；不修改安全设置或清除隔离标记。Developer ID 签名、Apple 公证及另一台干净 Mac 的真实下载首次打开尚未完成。</p>
+<p>Linux 补充验证只检查了环境：共享工作树有大量既有 tracked 改动，按验证技能的停止条件保留现场；未运行 Linux 构建或测试，本轮结论不覆盖 Linux。</p>
+<h2 id="_5">自动化证据</h2>
 <ul>
 <li>宿主 <code>desktop/host</code> 共 10 个测试文件分批通过；新增包内运行程序优先选择、开发模式回退、业务端口占用及通配访问地址验证。见<a href="../../desktop/host/environment_test.v">路径回归</a>与<a href="../../desktop/host/manager_test.v">启动回归</a>。</li>
 <li><a href="../../desktop/ui_state_test.v">ui2 界面回归</a>通过，覆盖空列表、新建与失败提示、各进程状态与配置状态、差异 / 历史 / 恢复页，以及重启后立即返回工作台。</li>
@@ -8081,7 +8097,7 @@
 <li><a href="../../desktop/status_smoke.v">持久化历史 smoke</a>：仓库外完整包副本的跨 include 发布、脱敏版本对比、跨会话恢复及重启检查通过。临时路径使用规范化真实路径，避免 macOS <code>/tmp</code> 别名被历史存储的符号链接保护拒绝。</li>
 <li>最终包通过 <code>codesign --verify --deep --strict</code>；构建脚本语法检查、封装脚本编译检查及补丁空白检查通过。</li>
 </ul>
-<h2 id="_5">交付范围与限制</h2>
+<h2 id="_6">交付范围与限制</h2>
 <p>交付 <code>desktop/bin/vhttpd-workbench.app</code>，以及 <code>desktop/bin/vhttpd-workbench-macos-arm64-0.1.0.zip</code>。本轮验证为当前 Apple Silicon Mac，本机 <code>.app</code> 搬移不依赖原仓库；未执行另一台干净 Mac 或 Intel Mac 的验证。</p>
 <p>当前使用 ad-hoc 签名，尚未进行 Developer ID 签名和 Apple 公证，因此结论限于本地开发者预览，不称为已完成公开分发。重启后浏览器旧会话会失效；宿主就绪后自动打开默认浏览器并重新登录，自动打开失败时仍可手动点击“打开浏览器”。高级选项继续编辑来源 TOML；同时管理一个本地实例。内嵌 vjsx 的独立执行超时未采集，近期指标与慢请求样本按既定上限保留。Windows/Linux、WebView、自动更新、后台常驻和崩溃后接管不纳入本轮。</p>
 <p>版本历史保存恢复所需的原始配置，按本机文件权限保护，不加密；显示给用户的敏感字段差异继续脱敏。这些边界沿用现有设计，本轮未扩展新产品功能。</p>
