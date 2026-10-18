@@ -57,6 +57,8 @@ tags:
 
 修复为宿主和运行程序均采用生产嵌入构建；生产模式还要求显式处理现有的 Result 传播、Map 缺失分支和进程执行 API。新增[交付 zip 隔离检查](../../desktop/verify_macos_release.py)，在替换上一份交付物之前验证真正的压缩包。包内附有离线安装说明，并从 Mach-O 元信息生成最低系统版本。本节最终包的隔离运行、首次界面和签名复验仍在进行，尚不以此段声明新包通过。
 
+首次 Admin UI 冷启动还复现了并发创建草稿目录导致 `File exists` 的误报。状态目录现在逐级创建，在每一级接受其他请求刚创建的目录，仍拒绝普通文件和真实权限错误。新增[多层目录并发初始化回归](../../src/admin_state_store/initialization_test.v)，并在 zip 隔离验收中增加 32 个并发首次草稿请求。实现见[状态目录初始化](../../src/admin_state_store/store.v)。
+
 当前构建要求 Apple Silicon、macOS 27.0，验收主机为 macOS 27.0.1。本机分发评估返回 `override=security disabled`，因此无法证明默认安全设置下的下载首次打开会通过；不修改安全设置或清除隔离标记。Developer ID 签名、Apple 公证及另一台干净 Mac 的真实下载首次打开尚未完成。
 
 Linux 补充验证只检查了环境：共享工作树有大量既有 tracked 改动，按验证技能的停止条件保留现场；未运行 Linux 构建或测试，本轮结论不覆盖 Linux。
