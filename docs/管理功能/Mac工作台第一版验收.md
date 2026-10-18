@@ -65,6 +65,16 @@ Linux 补充验证只检查了环境：共享工作树有大量既有 tracked �
 
 最终交付包同时通过标准 ZIP UTF-8 文件名检查，包外的 `安装说明.txt` 可由不同解压工具正确识别。使用最终生产运行程序重跑跨 include 的监听、路由、执行器和 Adapter 新增删除、校验、发布及重启生效回归通过；隔离原生工作台正常退出后，测试端口全部释放。
 
+## macOS 15 兼容构建复验
+
+最低构建目标已从 27.0 降到 **15.0（Sequoia）**，仍仅交付 Apple Silicon arm64。原先 27.0 的来源既包括宿主和运行程序未设置部署目标，也包括本机 Homebrew 的高版本动态库；仅调整 plist 无法解决。
+
+[构建脚本](../../desktop/build.sh)显式设置 macOS 15.0，并通过[隔离依赖工具](../../desktop/macos_dependencies.py)使用[固定 URL 与 SHA256 的依赖锁](../../desktop/macos-dependencies.json)，下载官方 arm64 Sequoia bottle 到项目 `.deps`，不改动系统 Homebrew。保留数据库、TLS 和 Boehm GC；GC 从源码参与兼容构建，避免隔离 pkg-config 后自动切换内存管理模式。移除 V 的 MacPorts/Intel Homebrew 回退路径，编译保持可用性诊断，链接拒绝版本等有效警告。[封装](../../desktop/package_macos.py)与[zip 检查](../../desktop/verify_macos_release.py)同时拒绝最低版本高于 15.0 的二进制。反向检查确认旧 27.0 宿主被拒绝，测试代码使用 macOS 26 的 NSGlassEffectView 也被编译器拒绝。
+
+最终 zip 中宿主、运行程序及 11 个动态库的实际 Mach-O `minos` 全部为 15.0，`LSMinimumSystemVersion` 同步为 15.0，zip 内容与交付 App 一致。在本机 macOS 27.0.1、全新 HOME、仅系统 PATH、禁止读取开发目录/Homebrew/V 模块及执行编译工具的隔离环境下，两模板、新建登记、业务响应、失败修正重试、跨 include 发布、待生效、宿主重启、生效检查、脱敏历史比较与跨文件恢复、32 个并发首次草稿请求全部通过。离线安装说明同步更新。
+
+**验证边界：** 本轮没有 macOS 15 或 26 实机；部署目标与当前系统运行通过不等于旧系统全部行为已验证。macOS 14 及以下不在当前目标范围，Intel、默认 Gatekeeper 下真实下载首次打开、Developer ID 签名与 Apple 公证仍未验收。
+
 ## 自动化证据
 
 - 宿主 `desktop/host` 共 10 个测试文件分批通过；新增包内运行程序优先选择、开发模式回退、业务端口占用及通配访问地址验证。见[路径回归](../../desktop/host/environment_test.v)与[启动回归](../../desktop/host/manager_test.v)。
