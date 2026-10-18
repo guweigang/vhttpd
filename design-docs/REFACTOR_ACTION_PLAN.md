@@ -873,6 +873,12 @@ Audit found that executors with the same entry, source signature and lane index 
 
 Eight new regression tests plus 29 existing executor tests and one original naming/deletion-block probe pass (38/38). Coverage includes independent reservations, concurrent allocation/release, stale cleanup handles, two real executors and lane replacement, module and script entries, session/entry bootstrap failures and invalid parents. The original-block probe reproduces peer-file deletion; it is not an original production binary. The DB-enabled V3 Boehm build and complete default E2E pass: delayed lane warmup regression, 209 CLI/config/runtime checks and Node/PHP regressions. Format, ownership lint and diff checks pass. All 446 frozen production inputs and source/dependency/test manifests match after validation; the tested binary is installed atomically and `--help` verified (SHA256 `9fcb3e48d6cefa0499a4a5849c35d978e0ed8844c21b06c6f613e20b58936593`). The previous task's local vjsx decoder changes remain unchanged and unpublished. Linux read-only preflight passes, but existing tracked edits trigger the Linux skill stop rule; no VM builds/tests. Evidence, incremental patch, frozen inputs, failed fixture attempts, complete E2E logs and tested binary are retained in `tmp/lane-build-owner-validation/`.
 
+### CommonJS script lane mirror lifetime — 2026-10-18
+
+Follow-up audit found that the non-module `.js` host path still delegated CommonJS evaluation to `runtimejs.run_runtime_entry`. That convenience API deletes its requested mirror when evaluation returns, while lane handlers can issue deferred imports later. The host loader now uses the existing CommonJS detector and explicitly builds/evaluates this module form without the convenience runner's cleanup defer; the lane's optional directory owner remains responsible for final cleanup. Ordinary JavaScript retains global-script evaluation and does not eagerly resolve unused imports. The local vjsx dependency exposes its existing detector as a public API; detector behavior is unchanged.
+
+Seven new regression tests cover deferred imports after bootstrap, peer/reset isolation, explicit `.cjs` parity, node profile, ordinary global scripts with unused missing imports, evaluation failure and resolution failure. Validation against frozen inputs is in progress; evidence is retained in `tmp/commonjs-lane-lifetime-validation/`.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
