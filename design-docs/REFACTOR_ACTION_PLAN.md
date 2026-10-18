@@ -939,6 +939,14 @@ The final DB-enabled V3 Boehm build and complete standard `tests/e2e/run.sh` pas
 
 The new bootstrap budget remains finite; arbitrary scheduling pressure can still exceed it. Linux read-only preflight again stops on 349 existing tracked changes under the project skill, with no VM build/test or mutation. Full V, live-DB/installed WordPress and broader load opt-ins are separate coverage.
 
+### Inbound WebSocket and MCP stream native descriptor publication — 2026-10-18
+
+`ws.IngressRun.attach()` and `McpState.attach_stream()` protected only their cancellation duplicates with close-on-exec. Their original live sockets could still be inherited by a subsequently executed worker and outlive serving-process cleanup. Both owners now preserve existing descriptor flags and set `FD_CLOEXEC` on the original before publishing the attachment. Failure closes the new duplicate and rejects registration. WebSocket release still closes only the cancellation handles, leaving original close with its caller; MCP stream finalization still owns native close before identity-checked registry removal.
+
+Five real fork/exec regressions use an explicitly inheritable socket as a positive control, proving exclusion is not an artifact of a child process that closes every FD. They cover accepted/outbound ingress attachments, already protected originals, live I/O, caller ownership after repeated WebSocket release and repeated MCP finalization. The old implementation has three expected failures (one MCP, two WebSocket); the other 40 cases pass. The repaired implementation passes all 43 related tests (24 MCP, 19 WebSocket), including existing stream replacement, stop/drain, snapshot and close-task ownership cases. Ownership lint and test formatting checks pass.
+
+The DB-enabled V3 production build is in progress; complete standard E2E will run against the frozen candidate. All 448 production inputs are captured, with only these two owner files changed from the preceding tested version and no new SDK/vjsx edits. Protection is scoped to attachment/publication; pre-attachment allocation/accept and fork-only children are outside this change. Linux read-only preflight stops on 349 existing tracked changes under the project skill; no VM build/test or mutation. Evidence is retained in `tmp/ingress-native-fd-validation/report.txt`.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
