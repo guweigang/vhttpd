@@ -1007,6 +1007,14 @@ Validation: original algorithms fail both new regressions; the fixed candidate p
 
 Evidence: `tmp/shutdown-error-drain-validation/report.txt`, logs, manifests and separately retained `vhttpd-tested`; root binary is not replaced. Frozen/live production, selected tests, native headers, SDK/vjsx and E2E inputs match at completion. Linux read-only preflight stops on 349 existing tracked changes under the project VM skill, without Linux build/test or mutation. Full V, load and opt-in live DB/installed WordPress coverage remain separate; the global safety failure remains open.
 
+### Explicit optional HTTP timing ownership — 2026-10-18
+
+The timing safety failure from the preceding checkpoint is resolved. HTTP Context owns an optional `HttpRequestTiming`; synchronous executor dispatch borrows the explicit optional reference. Queue success/error and vjsx defers unwrap it, absent observations yield unavailable stages, and retained admin samples store value snapshots. Nested adapter timing retains its union semantics. No timing reference is retained in lane/session context, and no new timer or native handle is introduced. Global safety scans now also cover Context and timing/adapter ownership sources; restoring the original Context nil placeholder is rejected.
+
+Validation: global safety lint, 9 related unit tests, DB-enabled V3/QuickJS/OpenSSL/Boehm build, formatting and diff checks pass. Queue timeout tests explicitly occupy a lane and verify timing presence/absence, no vjsx measurement on queue failure and drained waiter accounting. Existing observation registry test fixtures now inject the required disabled executor lifecycle. A focused copy of the HTTP metrics integration before its load probe passes stage/snapshot/error/privacy checks. The unchanged larger metrics E2E **fails** during concurrent load-state waits on both the candidate (waiting/full occupancy) and the prior binary (queue timeout count increase); the scheduling cause remains unresolved, and no whole-metrics/full-E2E success is claimed. Deadlines and canonical assertions are unchanged.
+
+Evidence: `tmp/timing-owner-validation/report.txt`, manifests, original failure/control logs and separately retained candidate; root binary is not replaced. Frozen/live production and captured test/dependency inputs match at completion. Linux stops at read-only preflight on 349 existing tracked changes under the project VM skill; full V, standard full E2E, broader load and opt-in live DB were not run this turn.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.

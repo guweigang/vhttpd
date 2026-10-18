@@ -1,71 +1,72 @@
 ---
-title: ui2 项目工作台原型
-description: macOS 本地宿主的启动方法、项目选择、进程启停、浏览器管理界面及验证命令。
+title: Mac 本地工作台使用与验收
+description: ui2 Mac 工作台第一版的运行、配置发布、失败恢复与验收方式。
 tags:
   - desktop
   - ui2
-  - prototype
+  - macos
+  - acceptance
 ---
-# ui2 项目工作台原型
+# Mac 本地工作台
 
-这是[本地开发工作台设计](../docs/管理功能/本地开发工作台设计.md)的第一步实现，当前只交付 macOS 本地原型。宿主使用 ui2 原生窗口；Admin UI 继续通过系统默认浏览器访问。
+宿主使用 V/ui2 原生窗口，负责项目、进程、日志和配置版本；浏览器 Admin UI 负责编辑、校验、发布和运行观测。第一版以 macOS 本地开发者预览交付，职责见[工作台设计](../docs/管理功能/本地开发工作台设计.md)。
 
-## 运行
+## 打开应用
 
-在仓库根目录执行：
+构建结果是 `desktop/bin/vhttpd-workbench.app`，可以在 Finder 中打开，也可以复制整个 `.app` 到其他目录使用。包内包含 vhttpd、Admin UI 和所需的非系统动态库；新建模板使用 script 模式，不需要安装 V 或 Node。当前包是本机架构构建，使用 ad-hoc 签名，尚未进行 Developer ID 签名和 Apple 公证，不能据此声称已完成面向所有 Mac 的公开分发验证。打包实现见[构建脚本](./build.sh)、[依赖封装](./package_macos.py)与[运行环境路径](./host/environment.v)。
+
+从源码构建时，需要 PATH 中可用的 V，以及仓库根目录已构建的 vhttpd：
 
 ```bash
+./desktop/build.sh
 ./desktop/run.sh
 ```
 
-需要 PATH 中可用的 V，以及仓库根目录已有的 vhttpd 二进制。原型不自动编译或替换 vhttpd。也可以指定二进制：
+ui2 固定到 [ui2.commit](./ui2.commit) 中的版本。已有依赖 checkout 的版本不符或含源码修改时，构建会拒绝覆盖。构建先完成新包，再替换旧包，不原地截断正在运行的可执行文件。
 
-```bash
-VHTTPD_DESKTOP_BINARY=/absolute/path/to/vhttpd ./desktop/run.sh
-```
+## 第一次使用
 
-[构建脚本](./build.sh)将 ui2 下载到仓库的 .deps/ui2，并固定到 [ui2.commit](./ui2.commit) 中的版本；已有 checkout 不匹配或有源码修改时会拒绝继续，不覆盖本地修改。构建结果位于 desktop/bin/vhttpd-workbench.app，可直接用 Finder 或 open 打开。
+1. 打开后点击“新建 vjsx 项目”，选择 HTTP 入门或 JSON API 模板、项目名称与存放目录。保留“创建后立即启动，并打开浏览器 Admin UI”即可一次完成创建与启动。
+2. 宿主等待管理认证和业务监听就绪，随后打开默认浏览器自动登录；无需复制 token，token 不进入 URL。可点击“访问业务服务”验证真实响应。
+3. 在 Admin UI 的“项目配置”修改常用表单；高级选项使用来源 TOML。先“保存并校验”，通过后“发布配置”。修改覆盖主配置及全部 include 的整项目校验。
+4. 宿主自动显示“配置待生效”。查看差异，或点击“重启并生效”；宿主完成后自动检查整个项目。重启会轮换实例凭据；浏览器提示登录失效时，在宿主点击“打开浏览器”重新登录。
+5. 总览查看监听、路由、执行器和近期请求；慢请求明细可关联宿主完成日志及配置来源。宿主关闭时停止自己启动的实例，关闭浏览器不会停止服务。
+6. “版本历史”可查看脱敏差异、预览并恢复所选已生效版本；项目未运行时也可恢复。恢复后继续整项目校验与生效检查，需要重启时会明确提示。
 
-这是当前 checkout 的开发构建：运行时会使用编译时的仓库路径，不能将 .app 单独复制到其他电脑作为安装包。
+入口与行为见[宿主界面](./main.v)、[新建项目](./create_project.v)、[浏览器交接](./host/browser_login.v)、[生效状态](./host/config_status.v)、[配置恢复](./host/config_rollback.v)和[Admin UI](../admin/ui/common-config-ui.js)。
 
-## 操作流程
+项目登记默认保存在 `~/Library/Application Support/vhttpd-workbench/projects.json`，版本历史保存在同目录的 `recovery/`。升级时可迁移当前开发 checkout 的旧登记，不移动项目源码。历史按本机文件权限保存，包含恢复所需的原始配置内容，不加密；界面差异对敏感字段脱敏。需保管好本地文件。实现见[登记](./host/project.v)与[历史存储](./host/recovery_store.v)。
 
-1. 左侧选择 hello-vjsx 或 api-playground。两个示例均为 vjsx HTTP 应用，用于验证项目切换；此原型尚未提供 SSE 项目模板。
-2. 点击“启动项目”。宿主检查实际配置和管理端口，以参数数组创建 vhttpd 子进程。
-3. 管理接口认证通过且应用端口开始监听后，显示“运行中”，并自动调用系统默认浏览器打开 Admin UI。
-4. 点击“复制临时管理 token”，在浏览器的 Admin Token 输入框粘贴并应用。每次启动都会使用新 token；它通过明确的 --admin-token CLI 覆盖传递，不改项目配置、不写入 URL 或日志，也不持久化。它仍会存在于本机进程参数中，后续正式版本可以设计更合适的凭据交接方式。
-5. 点击“停止”正常关闭实例；点击“重启”先关闭再启动。停止超时后显示“强制停止”，需要用户确认。
-6. 停止后可以切换项目。关闭浏览器不停止服务；退出宿主会请求停止它拥有的实例，退出收尾超时才强制清理本次进程组。
+## 遇到失败
 
-两个示例使用的数据端口 / 管理端口分别是 19881 / 19981、19882 / 19982。若端口已被占用，宿主会报告错误，不自动改端口，也不会接管或结束占用端口的其他进程。
+- 名称非法、目录存在或不可写：按表单提示更换名称或目录。已有项目文件不会覆盖；文件已创建但登记失败时，保留目录并通过“导入已有项目”重新登记。
+- 运行程序缺失：使用左侧“选择 vhttpd…”；项目目录被移动时重新导入。正常独立包已包含运行程序。
+- 端口占用：停止由自己管理的占用服务，或在配置中改端口后重试；工作台不会接管或结束其他进程。
+- 启动失败：查看项目下方日志。冷启动等待上限为 90 秒；停止超时后提供需确认的“强制停止”，仅针对本次进程组。
+- 校验不通过：修正提示后再次校验，发布按钮不会提前启用。发布失败应先重新读取并核对外部修改；不会以接口失败推断配置已生效。
+- 重启后浏览器登录失效：从宿主“打开浏览器”重新建立自动登录；不需要寻找或复制运行 token。
 
-“导入项目”先选择已有 TOML 文件，再选择项目工作目录。宿主复用现有配置解析器处理 v1/v2 配置、include 和变量展开；管理入口需为本机 HTTP 地址且配置中有非空 token。项目登记保存在 desktop/.local/projects.json，不复制项目源码或配置。
-
-具体界面与行为以[宿主入口](./main.v)、[配置适配](./host/project.v)、[进程管理](./host/manager.v)和[后台执行循环](./host/worker.v)为准。
+失败与清理逻辑见[进程管理](./host/manager.v)、[后台循环](./host/worker.v)和[模板生成](./host/templates.v)。
 
 ## 验证
 
-构建并运行两项目真实端到端检查：
+使用构建好的应用直接执行真实主流程检查：
 
 ```bash
-./desktop/run.sh --smoke
+desktop/bin/vhttpd-workbench.app/Contents/MacOS/vhttpd-workbench --smoke
+desktop/bin/vhttpd-workbench.app/Contents/MacOS/vhttpd-workbench --persistent-status-smoke
 ```
 
-检查会创建临时配置和空闲端口，依次验证两个示例的认证就绪、错误 token 拒绝、应用响应、Admin 页面、正常停止和管理端口释放；结束后清理测试实例与临时目录。该模式默认不打开浏览器，浏览器操作通过实际窗口检查。
-
-仅运行宿主的配置与进程测试：
+第一项验证两个模板的创建、登记、认证就绪、业务响应、Admin UI、正常停止与端口释放；第二项验证跨 include 发布、待生效、重启检查、脱敏版本比较、重新创建宿主管理器后的离线恢复与历史记录。夹具使用规范化的临时路径并清理自己启动的实例，支持在仓库外的完整包副本上执行。见[主流程回归](./smoke.v)与[发布恢复回归](./status_smoke.v)。
 
 ```bash
-v -path "$PWD/desktop|$PWD/src|@vlib|@vmodules" test desktop/host
+v -enable-globals -path "$PWD/desktop|$PWD/src|@vlib|@vmodules" test desktop/host
+v -enable-globals -path "$PWD/desktop|$PWD/src|$PWD/.deps|@vlib|@vmodules" test desktop/ui_state_test.v
+node --test tests/admin-ui/*.test.cjs
 ```
 
-[测试源码](./host/manager_test.v)覆盖配置 include 与路径解析、登记持久化、端口冲突、重复启动、启动超时、日志脱敏、显式强制停止及意外退出。
+[界面回归](./ui_state_test.v)直接验证 ui2 元素树，覆盖空列表、新建、运行、待生效、失败、历史、恢复以及重启返回工作台；防止重复元素标识导致白屏或状态冻结。详细验收见[Mac 第一版验收记录](../docs/管理功能/Mac工作台第一版验收.md)。
 
-## 当前边界
+## 第一版边界
 
-- 同时运行一个受管理实例；不接管外部实例，不提供后台常驻模式。
-- 当前以 vjsx 示例完成主路径验证；PHP worker 等进程树的完整收尾不在本轮验证范围。
-- 未提供 WebView、浏览器调用宿主 API、新建项目向导、内置代码编辑器或自动登录。
-- 尚未交付 Windows/Linux、签名安装包、自动更新、宿主崩溃恢复。
-- 当前窗口采用固定的工作台布局，后续再完善紧凑尺寸与系统外观适配。
-- 未修改 vhttpd 核心运行时或现有 Admin UI。
+同时管理一个本地实例；不接管外部服务。第一版主路径为 vjsx HTTP 项目与本机 HTTP 管理监听。常用配置表单之外保留源码编辑。近期指标和慢请求样本有内存保留上限；内嵌 vjsx 的独立执行超时尚未采集，不能把未采集显示为零。Windows/Linux、WebView、自动更新、后台常驻和崩溃后接管不属于本版验收范围。
