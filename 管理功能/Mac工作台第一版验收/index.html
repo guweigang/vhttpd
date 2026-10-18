@@ -8088,6 +8088,7 @@
 <p>首次 Admin UI 冷启动还复现了并发创建草稿目录导致 <code>File exists</code> 的误报。状态目录现在逐级创建，在每一级接受其他请求刚创建的目录，仍拒绝普通文件和真实权限错误。新增<a href="../../src/admin_state_store/initialization_test.v">多层目录并发初始化回归</a>，并在 zip 隔离验收中增加 32 个并发首次草稿请求。实现见<a href="../../src/admin_state_store/store.v">状态目录初始化</a>。</p>
 <p>当前构建要求 Apple Silicon、macOS 27.0，验收主机为 macOS 27.0.1。本机分发评估返回 <code>override=security disabled</code>，因此无法证明默认安全设置下的下载首次打开会通过；不修改安全设置或清除隔离标记。Developer ID 签名、Apple 公证及另一台干净 Mac 的真实下载首次打开尚未完成。</p>
 <p>Linux 补充验证只检查了环境：共享工作树有大量既有 tracked 改动，按验证技能的停止条件保留现场；未运行 Linux 构建或测试，本轮结论不覆盖 Linux。</p>
+<p>最终交付包同时通过标准 ZIP UTF-8 文件名检查，包外的 <code>安装说明.txt</code> 可由不同解压工具正确识别。使用最终生产运行程序重跑跨 include 的监听、路由、执行器和 Adapter 新增删除、校验、发布及重启生效回归通过；隔离原生工作台正常退出后，测试端口全部释放。</p>
 <h2 id="_5">自动化证据</h2>
 <ul>
 <li>宿主 <code>desktop/host</code> 共 10 个测试文件分批通过；新增包内运行程序优先选择、开发模式回退、业务端口占用及通配访问地址验证。见<a href="../../desktop/host/environment_test.v">路径回归</a>与<a href="../../desktop/host/manager_test.v">启动回归</a>。</li>
