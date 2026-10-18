@@ -967,6 +967,14 @@ Two deterministic replacement regressions fail on the original implementation (1
 
 These are boundary checks under the cooperating store lease, not an atomic filesystem compare-and-swap against arbitrary external writers or cross-file crash recovery. Linux read-only preflight stops on 349 preexisting tracked changes, as required by the project VM skill; no Linux build/test or mutation. Full V/full E2E, live DB/installed WordPress and wider load coverage remain separate.
 
+### Executor build-directory inode ownership — 2026-10-18
+
+The cleanup audit reproduced deletion of a replacement directory, and deletion through a replacement symlink, when an unreleased build-directory owner's original path was moved/reused. The shared owner now retains a close-on-exec directory descriptor and device/inode identity; release removes only a matching directory, retains the handle for retry on an owned cleanup failure, and retires/closes it once on disappearance or replacement. A moved tree is left at its new path. Builders now use an `output` child under the stable owned parent, since Vjsx recreates the requested output directory. Session/module teardown still precedes directory release. The invalid-parent test no longer constructs an incomplete placeholder owner.
+
+Original control: two replacement regressions fail and normal release passes. The first full related attempt caught Vjsx recreating the owner root (5 failures); the corrected parent/child layout passes all 21 related tests, including compile-time root identity, 64 concurrent reservations with duplicate release, lane replacement, failed bootstrap/session cleanup, CommonJS deferred imports and actual exec descriptor exclusion with an inheritable positive control. Safety lint, new source/test formatting and diff checks pass. A DB-enabled V3/QuickJS/OpenSSL/Boehm candidate builds from 455 frozen V sources (including captured concurrent admin workbench changes, not authored by this step) and passes CLI help. Evidence: `tmp/build-directory-identity-validation/`; candidate retained separately without installing root `vhttpd`.
+
+This identity check does not make recursive traversal atomic against arbitrary external renames. No Vjsx/SDK sources were edited. Linux read-only preflight stops on 349 existing tracked changes as required by the project skill, without VM mutation or tests. Full V, live DB/installed WordPress and broader load coverage remain separate.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
