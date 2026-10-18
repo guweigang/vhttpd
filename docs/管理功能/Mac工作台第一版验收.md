@@ -1,8 +1,8 @@
 ---
 title: Mac 工作台第一版验收
-description: 按新用户主流程验收 ui2 Mac 工作台，记录修复、可交付范围与验证限制。
-date: 2026-10-18
-status: verified-local-preview
+description: unsigned 预览包在 macOS 15/26 的源码 CI、下载校验、配置发布与重启生效结果及人工验收边界。
+date: 2026-10-19
+status: verified-unsigned-ci
 tags:
   - desktop
   - ui2
@@ -10,6 +10,10 @@ tags:
   - acceptance
 ---
 # Mac 工作台第一版验收
+
+**2026-10-19 无证书预览包验收：通过。** CI `39177190783` 从源码构建的同一个 arm64 下载包，在 macOS **15.7.9 / 26.6.2** 上均通过解压搬移、新建、失败重试、跨 include 发布、宿主重启生效与历史恢复。已实际下载最终产物，SHA256 与 zip 完整性检查通过；无开发环境依赖。下载 Actions 的 `workbench-macos-arm64-unsigned-verified`，内含 zip、SHA256SUMS、acceptance.json 和验收说明，保留 14 天。见[本轮验收元数据](./assets/mac-workbench-ci-39177190783.json)。
+
+当前按 unsigned 开发者预览交付，无需 Apple 证书。两个系统的 Gatekeeper 均返回 `rejected`（退出码 3）；这不是运行失败，也不是默认下载放行。Finder、目标系统窗口与浏览器首次操作未纳入此次 CI 自动化验收，受系统拦截时需由用户本人核对来源后决定是否针对该应用允许打开。安装步骤见[使用说明](../../desktop/README.md)。
 
 本轮冻结功能范围，按“创建 → 启动 → 自动登录 → 编辑校验 → 发布 → 待生效 → 宿主重启 → 版本恢复 → 退出重新打开”验收。结论：本机 Apple Silicon Mac 的本地开发者预览主流程已通过，保留 ui2 原生宿主与浏览器 Admin UI 的职责边界。使用步骤见[Mac 工作台说明](../../desktop/README.md)，设计见[职责与范围](./本地开发工作台设计.md)。
 
@@ -81,7 +85,13 @@ Linux 补充验证只检查了环境：共享工作树有大量既有 tracked �
 
 **验证边界：** 这是 GitHub 提供的真实目标 macOS 虚拟机自动化验证，使用宿主与管理器的原生生产可执行文件及真实实例，不包含 Finder 首次打开、GUI 控件或浏览器交互。两个系统的 `spctl` 策略评估都记录为 `rejected`，不是 Gatekeeper 首次下载放行通过；Developer ID 签名、公证及实体 Mac 默认安全设置下的完整首次安装仍待完成。macOS 14 及以下不在当前目标范围，Intel 尚未验收。
 
-## Developer ID 签名与公证接线
+## 无证书 CI 预览包验收
+
+当前按用户确认采用与 aidatastudio 相同的 unsigned CI 预览交付方式，不要求 Apple 证书，不以签名公证阻塞当前预览验收。[工作流](../../.github/workflows/workbench-macos-runtime.yml)先从源码构建，再由 macOS 15/26 独立 runner 下载同一份 zip；两个目标系统均成功后，[验收汇总](../../desktop/ci/collect_macos_acceptance.py)核对版本、架构、包 SHA256 及 PASS 结果，生成 `workbench-macos-arm64-unsigned-verified`。
+
+统一下载产物包含安装 zip、可在下载目录直接使用的 SHA256SUMS、acceptance.json 和验收说明.txt，保留 14 天。源码仓库不包含本地编译包；任一系统失败不会生成该验收通过的下载入口。Gatekeeper 原始输出与退出码单独保留，不把 unsigned 包的策略拒绝计作运行失败，也不宣称默认下载放行。Finder、目标系统 GUI 和浏览器交互仍属于人工验收范围。具体步骤见[使用说明](../../desktop/README.md)。
+
+## 可选的 Developer ID 签名与公证接线
 
 [签名与公证配置清单](./Mac签名与公证配置.md)列出 GitHub `macos-release` Environment 所需的 Apple 配置。工作流增加手动 `release_mode=signed`：在源码构建和 macOS 15/26 运行回归通过后，依次签名包内运行程序、动态库和 App，要求公证 Accepted、装订并重新封装，随后在两个目标系统重新解压检查下载策略与整项目发布、重启生效。签名、公证或系统策略检查失败时不产生可交付的签名候选包。8 项发布链路模拟测试通过，覆盖拒绝结果、Team ID 不符、装订失败与安全策略关闭等情况。
 
