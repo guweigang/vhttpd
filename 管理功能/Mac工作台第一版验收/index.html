@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="按新用户主流程验收 ui2 Mac 工作台，记录修复、可交付范围与验证限制。">
+        <meta name="description" content="unsigned 预览包在 macOS 15/26 的源码 CI、下载校验、配置发布与重启生效结果及人工验收边界。">
       
       
       
@@ -8019,6 +8019,8 @@
 
 
 <h1 id="mac">Mac 工作台第一版验收</h1>
+<p><strong>2026-10-19 无证书预览包验收：通过。</strong> CI <code>39177190783</code> 从源码构建的同一个 arm64 下载包，在 macOS <strong>15.7.9 / 26.6.2</strong> 上均通过解压搬移、新建、失败重试、跨 include 发布、宿主重启生效与历史恢复。已实际下载最终产物，SHA256 与 zip 完整性检查通过；无开发环境依赖。下载 Actions 的 <code>workbench-macos-arm64-unsigned-verified</code>，内含 zip、SHA256SUMS、acceptance.json 和验收说明，保留 14 天。见<a href="./assets/mac-workbench-ci-39177190783.json">本轮验收元数据</a>。</p>
+<p>当前按 unsigned 开发者预览交付，无需 Apple 证书。两个系统的 Gatekeeper 均返回 <code>rejected</code>（退出码 3）；这不是运行失败，也不是默认下载放行。Finder、目标系统窗口与浏览器首次操作未纳入此次 CI 自动化验收，受系统拦截时需由用户本人核对来源后决定是否针对该应用允许打开。安装步骤见<a href="../../desktop/README.md">使用说明</a>。</p>
 <p>本轮冻结功能范围，按“创建 → 启动 → 自动登录 → 编辑校验 → 发布 → 待生效 → 宿主重启 → 版本恢复 → 退出重新打开”验收。结论：本机 Apple Silicon Mac 的本地开发者预览主流程已通过，保留 ui2 原生宿主与浏览器 Admin UI 的职责边界。使用步骤见<a href="../../desktop/README.md">Mac 工作台说明</a>，设计见<a href="../%E6%9C%AC%E5%9C%B0%E5%BC%80%E5%8F%91%E5%B7%A5%E4%BD%9C%E5%8F%B0%E8%AE%BE%E8%AE%A1/">职责与范围</a>。</p>
 <h2 id="_1">本轮修复</h2>
 <table>
