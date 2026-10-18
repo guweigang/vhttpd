@@ -1,8 +1,8 @@
 ---
 title: Mac 签名与公证配置
-description: 工作台 GitHub CI 的 Developer ID 签名、公证凭据清单、票据装订和下载策略验收。
-date: 2026-10-18
-status: configuration-required
+description: 当前采用 unsigned CI 预览交付；本页保留后续可选 Developer ID 签名、公证配置。
+date: 2026-10-19
+status: optional-signing
 tags:
   - desktop
   - macos
@@ -11,13 +11,15 @@ tags:
 ---
 # Mac 签名与公证配置
 
-工作台沿用 aidatastudio 的 Apple 配置名称，使用[源码构建工作流](../../.github/workflows/workbench-macos-runtime.yml)中的手动 `release_mode=signed`。普通 push、PR 和默认 unsigned 模式只做源码构建与运行回归；Apple 凭据只传入 `macos-release` Environment 下的签名步骤。实现见[签名与公证脚本](../../desktop/ci/sign_notarize_macos.py)。
+**当前交付采用无 Apple 证书的 unsigned 开发者预览，不需要配置本页的 Apple Secrets。** 用户已确认 aidatastudio 同样没有 Apple 证书；本轮以其 unsigned CI 方式构建并验收下载包，不以签名、公证作为预览交付的前提。
 
-当前状态：接线与失败门禁已实现，vhttpd 尚未配置 Apple Secrets 或 `macos-release` Environment，因此真实证书签名、公证和最终下载放行仍待执行。此前 macOS 15/26 的通过结果仅覆盖未公证包的运行回归，见[第一版验收](./Mac工作台第一版验收.md)。
+[源码构建工作流](../../.github/workflows/workbench-macos-runtime.yml)默认使用 `release_mode=unsigned`。源码构建后，macOS 15/26 独立 runner 下载同一个 zip，检查解压搬移、新建、失败重试、跨 include 发布、重启生效及恢复；两者均通过才生成 `workbench-macos-arm64-unsigned-verified` 下载产物。包旁附 SHA256SUMS、acceptance.json 和验收说明.txt，记录真实目标系统版本、源码提交及 Gatekeeper 输出。见[使用说明](../../desktop/README.md)与[第一版验收](./Mac工作台第一版验收.md)。
+
+无证书包仍有 ad-hoc 签名，运行验收通过不代表 Gatekeeper 下载自动放行；Finder、目标系统窗口与浏览器首次打开单独记录。工作流保留手动 `release_mode=signed` 作为后续可选路径，Apple 凭据仅传入 `macos-release` Environment 的签名步骤，当前没有执行或要求准备该路径。实现见[签名与公证脚本](../../desktop/ci/sign_notarize_macos.py)。
 
 ## 需要准备的配置
 
-在拥有 Developer ID 签名资格的 Apple 开发者团队下，准备一份有效的 **Developer ID Application** 证书。需从持有对应私钥的 Mac 导出 `.p12`，仅有 `.cer` 文件不足以完成此脚本的签名。可复用 aidatastudio 使用的同团队证书；GitHub 无法从另一仓库读取 Secret 的明文，需要重新配置或使用允许 vhttpd 访问的组织 Secret。
+在拥有 Developer ID 签名资格的 Apple 开发者团队下，准备一份有效的 **Developer ID Application** 证书。需从持有对应私钥的 Mac 导出 `.p12`，仅有 `.cer` 文件不足以完成此脚本的签名。aidatastudio 当前也没有该证书。如未来购买并配置 Apple 开发者签名，需自行准备有效证书和私钥；GitHub 无法从另一仓库读取 Secret 的明文。
 
 建议全部填入 `guweigang/vhttpd → Settings → Environments → macos-release → Environment secrets`，不把证书、私钥或密码发到聊天、提交到仓库或写入日志。
 
