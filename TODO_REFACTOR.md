@@ -63,6 +63,8 @@ Relay reopened channels now retire their previous correlations using shared reop
 
 Relay initial-buffer admission and correlation lookup now copy arrays and nested frame metadata/headers; internal forwarding resolves IDs without copying buffers. Control4 fail / preserved isolation3 pass; final Relay137, DB-enabled build, safety/format/diff and complete standard E2E (metrics, CLI4/config-runtime205) pass. Normal enqueue/session paths remain unchanged based on control evidence. Evidence: `tmp/relay-frame-owner-validation/report.txt`. Final inputs match; candidate retained separately. Linux stops at read-only preflight on 354 tracked changes including existing work.
 
+Relay channel initial buffers now enforce normalized frame-count limits before copying/publishing, preserving existing live or closed registrations and correlations on rejection. Original regressions4 fail / boundary1 passes; fixed Relay142, DB-enabled build, safety/format/diff and complete standard E2E (metrics, CLI4/config-runtime205) pass. Evidence: `tmp/relay-buffer-admission-validation/report.txt`. Final inputs match; candidate retained separately. Linux stops at read-only preflight on 354 tracked changes including existing work.
+
 Full-suite/load/live-DB, Linux and wider subsystem audits remain separate follow-ups. Linux validation remains deferred under the skill's pre-existing tracked-change stop rule. Evidence is in `tmp/worker-request-snapshot-validation/report.txt`. Broader ownership, whole-project suite, production load, live DB and Linux validation remain pending; direct/native execution remains cooperative. See the [current action plan](design-docs/REFACTOR_ACTION_PLAN.md) for scope, validation, and next steps.
 
 Per the roadmap, after domain modules are extracted:
