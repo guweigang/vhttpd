@@ -1,8 +1,8 @@
 ---
 title: Mac 工作台第一版验收
-description: 按新用户主流程验收 ui2 Mac 工作台，记录修复、可交付范围与验证限制。
-date: 2026-10-18
-status: verified-local-preview
+description: unsigned 预览包在 macOS 15/26 的源码 CI、下载校验、配置发布与重启生效结果及人工验收边界。
+date: 2026-10-19
+status: verified-unsigned-ci
 tags:
   - desktop
   - ui2
@@ -10,6 +10,10 @@ tags:
   - acceptance
 ---
 # Mac 工作台第一版验收
+
+**2026-10-19 无证书预览包验收：通过。** CI `39177190783` 从源码构建的同一个 arm64 下载包，在 macOS **15.7.9 / 26.6.2** 上均通过解压搬移、新建、失败重试、跨 include 发布、宿主重启生效与历史恢复。已实际下载最终产物，SHA256 与 zip 完整性检查通过；无开发环境依赖。下载 Actions 的 `workbench-macos-arm64-unsigned-verified`，内含 zip、SHA256SUMS、acceptance.json 和验收说明，保留 14 天。见[本轮验收元数据](./assets/mac-workbench-ci-39177190783.json)。
+
+当前按 unsigned 开发者预览交付，无需 Apple 证书。两个系统的 Gatekeeper 均返回 `rejected`（退出码 3）；这不是运行失败，也不是默认下载放行。Finder、目标系统窗口与浏览器首次操作未纳入此次 CI 自动化验收，受系统拦截时需由用户本人核对来源后决定是否针对该应用允许打开。安装步骤见[使用说明](../../desktop/README.md)。
 
 本轮冻结功能范围，按“创建 → 启动 → 自动登录 → 编辑校验 → 发布 → 待生效 → 宿主重启 → 版本恢复 → 退出重新打开”验收。结论：本机 Apple Silicon Mac 的本地开发者预览主流程已通过，保留 ui2 原生宿主与浏览器 Admin UI 的职责边界。使用步骤见[Mac 工作台说明](../../desktop/README.md)，设计见[职责与范围](./本地开发工作台设计.md)。
 
