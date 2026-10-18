@@ -1,5 +1,8 @@
 #!/bin/bash
 set -euo pipefail
+# The V bootstrap filters generated C containing arbitrary byte strings with
+# awk. A UTF-8 runner locale can truncate that stream before compilation.
+export LC_ALL=C
 root="$(cd "$(dirname "$0")/../.." && pwd)"
 # shellcheck source=desktop/ci/toolchain.env
 source "$root/desktop/ci/toolchain.env"
@@ -24,7 +27,9 @@ git -C "$toolchain/v" apply --check "$root/desktop/ci/patches/v-websocket.patch"
 git -C "$toolchain/v" apply "$root/desktop/ci/patches/v-websocket.patch"
 git -C "$toolchain/vjsx" apply --check "$root/desktop/ci/patches/vjsx-runtime.patch"
 git -C "$toolchain/vjsx" apply "$root/desktop/ci/patches/vjsx-runtime.patch"
-make -C "$toolchain/v" CC=cc
+checkout_pinned "$VC_REPO" "$VC_COMMIT" "$toolchain/v/vc"
+checkout_pinned "$TCC_REPO" "$TCC_COMMIT" "$toolchain/v/thirdparty/tcc"
+make -C "$toolchain/v" local=1 CC=cc
 "$toolchain/v/v" version
 mkdir -p "$HOME/.vmodules"
 if [[ -e "$HOME/.vmodules/vjsx" || -L "$HOME/.vmodules/vjsx" ]]; then
