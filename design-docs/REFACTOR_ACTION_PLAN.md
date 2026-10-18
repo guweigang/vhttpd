@@ -991,6 +991,14 @@ Original controls reproduce three cache failures (one valid-boundary pass) and t
 
 No SDK/vjsx edits. Linux read-only preflight stops on 349 existing tracked changes under the project VM skill, without VM mutation or tests. Full V, live DB/installed WordPress and broader load coverage remain separate.
 
+### Managed worker socket-readiness ownership — 2026-10-18
+
+The startup audit reproduced publication of an unready managed child when its configured socket path was already served by an unrelated listener. Initial startup, delayed slot startup and slot restart now share a managed-process readiness check: under the registry's identity/unreaped-PID boundary, the connected probe must belong to the live registered child's process group. Descendant listeners are accepted; unrelated listeners and exited candidates are rejected. Probes close before return, and existing failure paths retire/reap the candidate and retain retry scheduling. The generic socket-only probe remains unchanged. Existing 5000/1500 ms deadlines remain, with explicit earlier failure for dead children or ownership mismatch. This is local managed-process ownership, not a new protocol/authentication flow.
+
+All three original controls fail; the corrected implementation passes ten worker ownership/PID/Unix-dial tests, including real descendant-process listening. The final test binary also passes with a minimal PATH-only environment. Failed control assertions initially expanded Process environments; local file logs are redacted and new assertions report boolean state, without changing product environment inheritance. A DB-enabled V3/QuickJS/OpenSSL/Boehm candidate builds from 460 frozen V inputs and its native header, passes CLI help and standard complete E2E (five fixture tests, both delayed warmups, provider WebSocket, worker/PID/signal, login/Relay/PHP, CLI4/config-runtime205). Existing fixture deadlines and fault budgets are unchanged. Safety lint, new-test formatting and diff checks pass.
+
+Evidence: `tmp/worker-readiness-owner-validation/`; tested candidate retained separately without installing root `vhttpd`. Own sources/native header, frozen stages, selected tests, SDK/vjsx and invoked E2E inputs match. Concurrent live edits in admin/executor load and lane-pool sources are recorded separately and are outside this candidate's validation; an uninvoked metrics test also changed concurrently. No SDK/vjsx edits. Linux read-only preflight stops on 349 existing tracked changes under the project VM skill, without VM mutation or tests, so the Linux native branch is not claimed tested. Full V, live DB/installed WordPress and broader load coverage remain separate.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
