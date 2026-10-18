@@ -81,7 +81,13 @@ Linux 补充验证只检查了环境：共享工作树有大量既有 tracked �
 
 **验证边界：** 这是 GitHub 提供的真实目标 macOS 虚拟机自动化验证，使用宿主与管理器的原生生产可执行文件及真实实例，不包含 Finder 首次打开、GUI 控件或浏览器交互。两个系统的 `spctl` 策略评估都记录为 `rejected`，不是 Gatekeeper 首次下载放行通过；Developer ID 签名、公证及实体 Mac 默认安全设置下的完整首次安装仍待完成。macOS 14 及以下不在当前目标范围，Intel 尚未验收。
 
-## Developer ID 签名与公证接线
+## 无证书 CI 预览包验收
+
+当前按用户确认采用与 aidatastudio 相同的 unsigned CI 预览交付方式，不要求 Apple 证书，不以签名公证阻塞当前预览验收。[工作流](../../.github/workflows/workbench-macos-runtime.yml)先从源码构建，再由 macOS 15/26 独立 runner 下载同一份 zip；两个目标系统均成功后，[验收汇总](../../desktop/ci/collect_macos_acceptance.py)核对版本、架构、包 SHA256 及 PASS 结果，生成 `workbench-macos-arm64-unsigned-verified`。
+
+统一下载产物包含安装 zip、可在下载目录直接使用的 SHA256SUMS、acceptance.json 和验收说明.txt，保留 14 天。源码仓库不包含本地编译包；任一系统失败不会生成该验收通过的下载入口。Gatekeeper 原始输出与退出码单独保留，不把 unsigned 包的策略拒绝计作运行失败，也不宣称默认下载放行。Finder、目标系统 GUI 和浏览器交互仍属于人工验收范围。具体步骤见[使用说明](../../desktop/README.md)。
+
+## 可选的 Developer ID 签名与公证接线
 
 [签名与公证配置清单](./Mac签名与公证配置.md)列出 GitHub `macos-release` Environment 所需的 Apple 配置。工作流增加手动 `release_mode=signed`：在源码构建和 macOS 15/26 运行回归通过后，依次签名包内运行程序、动态库和 App，要求公证 Accepted、装订并重新封装，随后在两个目标系统重新解压检查下载策略与整项目发布、重启生效。签名、公证或系统策略检查失败时不产生可交付的签名候选包。8 项发布链路模拟测试通过，覆盖拒绝结果、Team ID 不符、装订失败与安全策略关闭等情况。
 
