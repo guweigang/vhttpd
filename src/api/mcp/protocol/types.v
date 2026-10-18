@@ -1,6 +1,5 @@
 module protocol
 
-import net
 import sync
 import time
 
@@ -16,7 +15,8 @@ pub mut:
 	started_at_unix          i64
 	last_activity_unix       i64
 	client_capabilities_json string
-	conn                     &net.TcpConn = unsafe { nil }
+	stream                   ?&SessionStream
+	dispatch                 ?&SessionDispatch
 	pending                  []string
 }
 
@@ -81,6 +81,10 @@ pub fn McpState.normalize_sampling_capability_policy(raw string) string {
 }
 
 pub struct McpState {
+mut:
+	stopping       bool
+	stream_counter u64
+	streams        map[u64]&SessionStream
 pub mut:
 	mu                                      sync.Mutex
 	max_sessions                            int

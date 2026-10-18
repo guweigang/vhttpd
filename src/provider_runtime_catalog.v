@@ -28,6 +28,8 @@ fn (hub ProviderRuntimeHub) provider_bootstrap_enabled(name string, db_transport
 }
 
 pub fn (app &App) provider_bootstrap_enabled(name string) bool {
+	app.mu.@lock()
+	defer { app.mu.unlock() }
 	return app.providers.provider_bootstrap_enabled(name, app.transport.db.enabled)
 }
 
@@ -60,6 +62,8 @@ fn (hub ProviderRuntimeHub) provider_runtime_ready(name string, db_transport_ena
 }
 
 pub fn (mut app App) provider_runtime_ready(name string) bool {
+	app.mu.@lock()
+	defer { app.mu.unlock() }
 	return app.providers.provider_runtime_ready(name, app.transport.db.enabled)
 }
 
@@ -71,6 +75,8 @@ fn (hub ProviderRuntimeHub) provider_runtime_default_instance(name string) strin
 }
 
 pub fn (mut app App) provider_runtime_default_instance(name string) string {
+	app.mu.@lock()
+	defer { app.mu.unlock() }
 	return app.providers.provider_runtime_default_instance(name)
 }
 
@@ -119,5 +125,7 @@ fn (hub ProviderRuntimeHub) provider_runtime_instances(name string, db_transport
 }
 
 pub fn (mut app App) provider_runtime_instances(name string) []string {
+	app.mu.@lock()
+	defer { app.mu.unlock() }
 	return app.providers.provider_runtime_instances(name, app.transport.db.enabled)
 }

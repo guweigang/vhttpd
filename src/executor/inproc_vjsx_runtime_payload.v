@@ -1,6 +1,6 @@
 module executor
 
-import json
+import json2 as json
 import upstream.transport
 
 struct InProcVjsxRequestPayload {}
@@ -42,5 +42,5 @@ fn (e InProcVjsxExecutor) build_runtime_payload(lane VjsxExecutionLane, req Http
 		request_server:           server
 		method:                   req.method.to_upper()
 		path:                     normalized_path
-	})
+	}, escape_unicode: true, time_as_unix: true)
 }

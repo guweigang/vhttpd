@@ -1,6 +1,6 @@
 module executor
 
-import json
+import json2 as json
 import vjsx
 
 fn InProcVjsxWebSocketJs.install_session_store(ctx &vjsx.Context, mut runtime vjsx.Value) {
@@ -32,7 +32,7 @@ fn InProcVjsxWebSocketJs.install_session_store(ctx &vjsx.Context, mut runtime vj
 				namespace: namespace
 				op:        'get'
 				key:       key
-			}))
+			}, escape_unicode: true, time_as_unix: true))
 			defer {
 				payload.free()
 			}
@@ -40,7 +40,7 @@ fn InProcVjsxWebSocketJs.install_session_store(ctx &vjsx.Context, mut runtime vj
 			defer {
 				resp_raw.free()
 			}
-			resp := json.decode(InProcVjsxHostSessionStoreResponse, resp_raw.to_string()) or {
+			resp := json.decode[InProcVjsxHostSessionStoreResponse](resp_raw.to_string()) or {
 				return fallback
 			}
 			if !resp.ok || !resp.found || resp.value.trim_space() == '' {
@@ -78,7 +78,7 @@ fn InProcVjsxWebSocketJs.install_session_store(ctx &vjsx.Context, mut runtime vj
 				key:       key
 				value:     value
 				ttl_ms:    ttl_ms
-			}))
+			}, escape_unicode: true, time_as_unix: true))
 			defer {
 				payload.free()
 			}
@@ -86,7 +86,7 @@ fn InProcVjsxWebSocketJs.install_session_store(ctx &vjsx.Context, mut runtime vj
 			defer {
 				resp_raw.free()
 			}
-			resp := json.decode(InProcVjsxHostSessionStoreResponse, resp_raw.to_string()) or {
+			resp := json.decode[InProcVjsxHostSessionStoreResponse](resp_raw.to_string()) or {
 				return ctx.js_bool(false)
 			}
 			return ctx.js_bool(resp.ok)
@@ -112,7 +112,7 @@ fn InProcVjsxWebSocketJs.install_session_store(ctx &vjsx.Context, mut runtime vj
 				namespace: namespace
 				op:        'delete'
 				key:       key
-			}))
+			}, escape_unicode: true, time_as_unix: true))
 			defer {
 				payload.free()
 			}
@@ -120,7 +120,7 @@ fn InProcVjsxWebSocketJs.install_session_store(ctx &vjsx.Context, mut runtime vj
 			defer {
 				resp_raw.free()
 			}
-			resp := json.decode(InProcVjsxHostSessionStoreResponse, resp_raw.to_string()) or {
+			resp := json.decode[InProcVjsxHostSessionStoreResponse](resp_raw.to_string()) or {
 				return ctx.js_bool(false)
 			}
 			return ctx.js_bool(resp.ok)
@@ -146,7 +146,7 @@ fn InProcVjsxWebSocketJs.install_session_store(ctx &vjsx.Context, mut runtime vj
 				namespace: namespace
 				op:        'exists'
 				key:       key
-			}))
+			}, escape_unicode: true, time_as_unix: true))
 			defer {
 				payload.free()
 			}
@@ -154,7 +154,7 @@ fn InProcVjsxWebSocketJs.install_session_store(ctx &vjsx.Context, mut runtime vj
 			defer {
 				resp_raw.free()
 			}
-			resp := json.decode(InProcVjsxHostSessionStoreResponse, resp_raw.to_string()) or {
+			resp := json.decode[InProcVjsxHostSessionStoreResponse](resp_raw.to_string()) or {
 				return ctx.js_bool(false)
 			}
 			return ctx.js_bool(resp.ok && resp.found)
@@ -179,7 +179,7 @@ fn InProcVjsxWebSocketJs.install_session_store(ctx &vjsx.Context, mut runtime vj
 			payload := ctx.js_string(json.encode(InProcVjsxHostSessionStoreRequest{
 				namespace: namespace
 				op:        'keys'
-			}))
+			}, escape_unicode: true, time_as_unix: true))
 			defer {
 				payload.free()
 			}
@@ -187,14 +187,14 @@ fn InProcVjsxWebSocketJs.install_session_store(ctx &vjsx.Context, mut runtime vj
 			defer {
 				resp_raw.free()
 			}
-			resp := json.decode(InProcVjsxHostSessionStoreResponse, resp_raw.to_string()) or {
+			resp := json.decode[InProcVjsxHostSessionStoreResponse](resp_raw.to_string()) or {
 				return fallback
 			}
 			if !resp.ok {
 				return fallback
 			}
 			if resp.keys.len > 0 {
-				return ctx.json_parse(json.encode(resp.keys))
+				return ctx.json_parse(json.encode(resp.keys, escape_unicode: true, time_as_unix: true))
 			}
 			if resp.value.trim_space() != '' {
 				return ctx.json_parse(resp.value)

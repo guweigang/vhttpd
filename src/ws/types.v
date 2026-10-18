@@ -1,10 +1,12 @@
 module ws
 
 import command
+import connection_runtime
 import executor
 import feishu
 import net.websocket
 import sync
+import upstream.transport
 
 // ── WebSocket Dispatch Connection State Machine ──
 
@@ -21,6 +23,9 @@ pub mut:
 	phase                  DispatchConnPhase = .opening
 	close_notified         bool
 	worker_initiated_close bool
+	socket_close_requested bool
+	requested_code         int
+	requested_reason       string
 	mu                     sync.Mutex
 }
 
@@ -72,6 +77,26 @@ pub fn (state &DispatchConnState) mark_closing() bool {
 	return true
 }
 
+pub fn (state &DispatchConnState) claim_socket_close(code int, reason string) bool {
+	state.mu.@lock()
+	defer { state.mu.unlock() }
+	if state.phase == .closed || state.socket_close_requested { return false }
+	unsafe {
+		state.requested_code = code
+		state.requested_reason = reason
+		state.socket_close_requested = true
+		state.phase = .closing
+	}
+	return true
+}
+
+pub fn (state &DispatchConnState) close_details(code int, reason string) (int, string) {
+	state.mu.@lock()
+	defer { state.mu.unlock() }
+	if state.socket_close_requested { return state.requested_code, state.requested_reason }
+	return code, reason
+}
+
 pub fn (state &DispatchConnState) begin_worker_close() bool {
 	state.mu.@lock()
 	defer { state.mu.unlock() }
@@ -120,6 +145,11 @@ pub fn (state &DispatchConnState) begin_cleanup() bool {
 
 // ── Hub Types ──
 
+pub struct EventDispatch {
+pub:
+	call_fn fn (transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse @[required]
+}
+
 pub struct HubConn {
 pub:
 	id            string
@@ -132,8 +162,12 @@ pub:
 	headers       map[string]string
 	remote_addr   string
 pub mut:
-	client    &websocket.Client  = unsafe { nil }
-	lifecycle &DispatchConnState = unsafe { nil }
+	client       ?&websocket.Client
+	close_writer ?&websocket.Client
+	dispatch     ?EventDispatch
+	serving      ?&IngressRun
+	outbound     ?&connection_runtime.Session
+	lifecycle    &DispatchConnState @[required]
 }
 
 pub struct HubPendingMessage {
@@ -146,11 +180,13 @@ pub struct HubSendTarget {
 pub:
 	id string
 pub mut:
-	client &websocket.Client = unsafe { nil }
+	client &websocket.Client @[required]
 }
 
 pub struct HubDispatchTarget {
 pub:
+	lifecycle   &DispatchConnState @[required]
+	dispatch    ?EventDispatch
 	id          string
 	method      string
 	request_id  string
@@ -360,6 +396,7 @@ pub:
 
 pub struct HubState {
 pub mut:
+	ingress                      &IngressOwner = &IngressOwner{}
 	mu                           sync.Mutex
 	send_mu                      sync.Mutex
 	upstream_mu                  sync.Mutex
@@ -371,7 +408,6 @@ pub mut:
 	dispatch_mode                bool
 	recent_dispatch_limit        int
 	auto_start_dynamic_upstreams bool
-	upstream_started             map[string]bool
 	fixture_runtime              map[string]FixtureRuntime
 	recent_activities            []UpstreamActivitySnapshot
 }

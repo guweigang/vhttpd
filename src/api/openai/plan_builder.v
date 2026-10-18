@@ -70,7 +70,7 @@ pub fn OpenAIResolvedPlan.replace_model(body string, upstream_model string) stri
 		return body
 	}
 	parsed := json2.decode[json2.Any](body) or { return body }
-	mut root := parsed.as_map()
+	mut root := parsed.as_map().clone()
 	root['model'] = json2.Any(upstream_model)
 	return json2.Any(root).json_str()
 }
@@ -236,7 +236,7 @@ pub fn OpenAIResolvedPlan.builtin_from_route_for_endpoint_method(route OpenAIRes
 // from_plugin_json parses an upstream plan from JSON with fallback defaults.
 pub fn OpenAIUpstreamPlan.from_plugin_json(raw string, default_path string, default_output_protocol string) !OpenAIUpstreamPlan {
 	parsed := json2.decode[json2.Any](raw)!
-	mut root := parsed.as_map()
+	mut root := parsed.as_map().clone()
 	if plan_any := root['plan'] {
 		root = plan_any.as_map()
 	}

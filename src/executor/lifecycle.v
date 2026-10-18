@@ -14,15 +14,14 @@ pub mut:
 	worker_env              map[string]string
 }
 
-// LogicExecutorLifecycle uses function pointers instead of an interface
-// so the start/stop closures can capture App from module main without
-// creating circular imports.
+// LogicExecutorLifecycle supplies backend preparation/start/stop callbacks
+// without coupling executor code to the application type.
 pub struct LogicExecutorLifecycle {
 pub:
-	name_fn             fn () string                                                          = unsafe { nil }
-	prepare_bootstrap_fn fn ([]string, config.VhttpdConfig, mut ExecutorBootstrapState) !      = unsafe { nil }
-	start_fn            fn (mut LifecycleRuntimeContext)                                      = unsafe { nil }
-	stop_fn             fn (mut LifecycleRuntimeContext)                                      = unsafe { nil }
+	name_fn              fn () string @[required]
+	prepare_bootstrap_fn fn ([]string, config.VhttpdConfig, mut ExecutorBootstrapState) ! @[required]
+	start_fn             fn (mut LifecycleRuntimeContext) @[required]
+	stop_fn              fn (mut LifecycleRuntimeContext) @[required]
 }
 
 pub fn (l LogicExecutorLifecycle) name() string {
@@ -41,8 +40,7 @@ pub fn (l LogicExecutorLifecycle) stop(mut ctx LifecycleRuntimeContext) {
 	l.stop_fn(mut ctx)
 }
 
-// LifecycleRuntimeContext carries closures for lifecycle operations that
-// need access to App state (worker pool management, event emission).
+// LifecycleRuntimeContext carries backend values and an event sink from the owning pool.
 pub struct LifecycleRuntimeContext {
 pub mut:
 	worker_backend_autostart       bool
@@ -51,14 +49,14 @@ pub mut:
 	worker_backend_sockets         []string          = []
 	worker_backend_workdir         string
 	worker_backend_managed_workers []transport.ManagedWorker = []
-	emit                           fn (string, map[string]string) = unsafe { nil }
+	emit                           fn (string, map[string]string) @[required]
 }
 
 // ── Disabled (noop) lifecycle ──
 
 pub fn disabled_executor_lifecycle() LogicExecutorLifecycle {
 	return LogicExecutorLifecycle{
-		name_fn: fn () string {
+		name_fn:              fn () string {
 			return 'disabled'
 		}
 		prepare_bootstrap_fn: fn (args []string, cfg config.VhttpdConfig, mut state ExecutorBootstrapState) ! {
@@ -70,10 +68,10 @@ pub fn disabled_executor_lifecycle() LogicExecutorLifecycle {
 			state.stream_dispatch = false
 			state.websocket_dispatch_mode = false
 		}
-		start_fn: fn (mut ctx LifecycleRuntimeContext) {
+		start_fn:             fn (mut ctx LifecycleRuntimeContext) {
 			_ = ctx
 		}
-		stop_fn: fn (mut ctx LifecycleRuntimeContext) {
+		stop_fn:              fn (mut ctx LifecycleRuntimeContext) {
 			_ = ctx
 		}
 	}
@@ -83,7 +81,7 @@ pub fn disabled_executor_lifecycle() LogicExecutorLifecycle {
 
 pub fn php_worker_executor_lifecycle() LogicExecutorLifecycle {
 	return LogicExecutorLifecycle{
-		name_fn: fn () string {
+		name_fn:              fn () string {
 			return 'php_worker_host'
 		}
 		prepare_bootstrap_fn: fn (args []string, cfg config.VhttpdConfig, mut state ExecutorBootstrapState) ! {
@@ -94,7 +92,7 @@ pub fn php_worker_executor_lifecycle() LogicExecutorLifecycle {
 				state.worker_cmd = php_worker_runtime_build_command(php_cfg)!
 			}
 		}
-		start_fn: fn (mut ctx LifecycleRuntimeContext) {
+		start_fn:             fn (mut ctx LifecycleRuntimeContext) {
 			if !ctx.worker_backend_autostart {
 				return
 			}
@@ -111,7 +109,7 @@ pub fn php_worker_executor_lifecycle() LogicExecutorLifecycle {
 			}
 			for worker in ctx.worker_backend_managed_workers {
 				mut w := worker
-				if !isnil(w.proc) && w.proc.is_alive() {
+				if w.process_alive() {
 					ctx.emit('worker.started', {
 						'worker_id':     '${w.id}'
 						'socket':        w.socket_path
@@ -128,7 +126,7 @@ pub fn php_worker_executor_lifecycle() LogicExecutorLifecycle {
 				}
 			}
 		}
-		stop_fn: fn (mut ctx LifecycleRuntimeContext) {
+		stop_fn:              fn (mut ctx LifecycleRuntimeContext) {
 			transport.ManagedWorkerPool.stop(mut ctx.worker_backend_managed_workers)
 		}
 	}
@@ -137,7 +135,7 @@ pub fn php_worker_executor_lifecycle() LogicExecutorLifecycle {
 pub fn php_cgi_executor_lifecycle() LogicExecutorLifecycle {
 	mut l := php_worker_executor_lifecycle()
 	return LogicExecutorLifecycle{
-		name_fn: fn () string {
+		name_fn:              fn () string {
 			return 'php_cgi_host'
 		}
 		prepare_bootstrap_fn: fn (args []string, cfg config.VhttpdConfig, mut state ExecutorBootstrapState) ! {
@@ -148,8 +146,8 @@ pub fn php_cgi_executor_lifecycle() LogicExecutorLifecycle {
 				state.worker_cmd = php_cgi_runtime_build_command(php_cfg)!
 			}
 		}
-		start_fn: l.start_fn
-		stop_fn: l.stop_fn
+		start_fn:             l.start_fn
+		stop_fn:              l.stop_fn
 	}
 }
 
@@ -157,7 +155,7 @@ pub fn php_cgi_executor_lifecycle() LogicExecutorLifecycle {
 
 pub fn embedded_executor_lifecycle() LogicExecutorLifecycle {
 	return LogicExecutorLifecycle{
-		name_fn: fn () string {
+		name_fn:              fn () string {
 			return 'embedded_host'
 		}
 		prepare_bootstrap_fn: fn (args []string, cfg config.VhttpdConfig, mut state ExecutorBootstrapState) ! {
@@ -168,10 +166,10 @@ pub fn embedded_executor_lifecycle() LogicExecutorLifecycle {
 			state.worker_cmd = ''
 			state.stream_dispatch = false
 		}
-		start_fn: fn (mut ctx LifecycleRuntimeContext) {
+		start_fn:             fn (mut ctx LifecycleRuntimeContext) {
 			_ = ctx
 		}
-		stop_fn: fn (mut ctx LifecycleRuntimeContext) {
+		stop_fn:              fn (mut ctx LifecycleRuntimeContext) {
 			_ = ctx
 		}
 	}

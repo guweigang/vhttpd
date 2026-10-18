@@ -1,0 +1,99 @@
+name: Build and verify Mac workbench
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, codex/mac-workbench-runtime-checks]
+    paths:
+      - .github/workflows/workbench-macos-runtime.yml
+      - desktop/**
+      - src/**
+      - admin/ui/**
+      - Makefile
+      - v.mod
+  pull_request:
+    paths:
+      - .github/workflows/workbench-macos-runtime.yml
+      - desktop/**
+      - src/**
+      - admin/ui/**
+      - Makefile
+      - v.mod
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build candidate from source (macOS 15 arm64)
+    runs-on: macos-15
+    timeout-minutes: 45
+    outputs:
+      sha256: ${{ steps.package.outputs.sha256 }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install build-only pkg-config
+        run: brew install pkgconf
+      - name: Prepare pinned V, vjsx and QuickJS toolchain
+        run: bash desktop/ci/prepare_toolchain.sh
+      - name: Build and verify the complete app
+        run: bash desktop/build.sh
+      - name: Record candidate identity
+        id: package
+        shell: bash
+        run: |
+          archive=desktop/bin/vhttpd-workbench-macos-arm64-0.1.0.zip
+          checksum=$(shasum -a 256 "$archive")
+          echo "sha256=${checksum%% *}" >> "$GITHUB_OUTPUT"
+          shasum -a 256 "$archive" > desktop/bin/SHA256SUMS
+      - name: Store CI-built candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: workbench-macos-arm64-candidate
+          path: |
+            desktop/bin/vhttpd-workbench-macos-arm64-0.1.0.zip
+            desktop/bin/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 7
+
+  installed-runtime:
+    name: Installed app on macOS ${{ matrix.os }} arm64
+    needs: build
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: '15'
+            runner: macos-15
+          - os: '26'
+            runner: macos-26
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: desktop/ci
+      - name: Download the same CI-built candidate
+        uses: actions/download-artifact@v4
+        with:
+          name: workbench-macos-arm64-candidate
+          path: candidate
+      - name: Verify installed app without development tools
+        id: verify
+        shell: bash
+        env:
+          CANDIDATE_SHA256: ${{ needs.build.outputs.sha256 }}
+          EXPECTED_OS: ${{ matrix.os }}
+        run: bash desktop/ci/verify_installed_macos.sh candidate/vhttpd-workbench-macos-arm64-0.1.0.zip "$EXPECTED_OS" "$CANDIDATE_SHA256"
+      - name: Store target-system evidence
+        if: always() && steps.verify.outputs.report != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: workbench-macos-${{ matrix.os }}-evidence
+          path: |
+            ${{ steps.verify.outputs.report }}/*.txt
+            ${{ steps.verify.outputs.report }}/*.log
+          retention-days: 7

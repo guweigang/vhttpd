@@ -59,11 +59,7 @@ fn (mut state OpenAIStreamProxyState) ensure_headers_written() ! {
 // Keep as a free function: static-method callbacks can pass syntax checks and
 // fail later during C generation, as seen with websocket callback symbols.
 fn openai_progress_body_cb(request &http.Request, chunk []u8, _body_read_so_far u64, _body_expected_size u64, status_code int) ! {
-	mut state := &OpenAIStreamProxyState(unsafe { nil })
-	pstate := unsafe { &voidptr(&state) }
-	unsafe {
-		*pstate = request.user_ptr
-	}
+	mut state := unsafe { &OpenAIStreamProxyState(request.user_ptr) }
 	if status_code > 0 {
 		state.status_code = status_code
 	}

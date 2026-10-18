@@ -9,7 +9,7 @@ pub struct RelaySession {
 pub:
 	id string
 pub mut:
-	endpoints       map[string]RelayEndpoint
+	endpoints         map[string]RelayEndpoint
 	endpoints_by_link map[string][]string
 	pending_by_link   map[string][]WireFrame
 }
@@ -40,6 +40,12 @@ pub fn (mut registry SessionRegistry) open_endpoint(endpoint RelayEndpoint) ! {
 			pending_by_link:   map[string][]WireFrame{}
 		}
 	}
+	// A replacement endpoint owns only its current link. Retire the previous
+	// reverse index before publishing the new registration; pending frames stay
+	// owned by their original link and other endpoints remain registered.
+	if previous := session.endpoints[endpoint.id] {
+		if previous.link_id != endpoint.link_id { session.remove_endpoint_index(previous) }
+	}
 	session.endpoints[endpoint.id] = endpoint
 	mut endpoint_ids := session.endpoints_by_link[endpoint.link_id] or { []string{} }
 	if endpoint.id !in endpoint_ids {
@@ -53,19 +59,22 @@ pub fn (mut registry SessionRegistry) close_endpoint(session_id string, endpoint
 	mut session := registry.sessions[session_id] or { return false }
 	endpoint := session.endpoints[endpoint_id] or { return false }
 	session.endpoints.delete(endpoint_id)
-	mut endpoint_ids := session.endpoints_by_link[endpoint.link_id] or { []string{} }
-	endpoint_ids = endpoint_ids.filter(it != endpoint_id)
-	if endpoint_ids.len == 0 {
-		session.endpoints_by_link.delete(endpoint.link_id)
-	} else {
-		session.endpoints_by_link[endpoint.link_id] = endpoint_ids
-	}
+	session.remove_endpoint_index(endpoint)
 	if session.endpoints.len == 0 && session.pending_by_link.len == 0 {
 		registry.sessions.delete(session_id)
 		return true
 	}
 	registry.sessions[session_id] = session
 	return true
+}
+
+fn (mut session RelaySession) remove_endpoint_index(endpoint RelayEndpoint) {
+	endpoint_ids := (session.endpoints_by_link[endpoint.link_id] or { []string{} }).filter(it != endpoint.id)
+	if endpoint_ids.len == 0 {
+		session.endpoints_by_link.delete(endpoint.link_id)
+	} else {
+		session.endpoints_by_link[endpoint.link_id] = endpoint_ids
+	}
 }
 
 pub fn (registry SessionRegistry) targets(session_id string, link_id string, role string, except_endpoint_id string) []RelayEndpoint {

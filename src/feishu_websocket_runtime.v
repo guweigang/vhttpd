@@ -1,7 +1,7 @@
 module main
 
 import executor
-import json
+import json2 as json
 import log
 import net.websocket as websock
 import time
@@ -41,7 +41,7 @@ fn (mut app App) feishu_provider_handle_binary_message(instance string, mut conn
 	if frame.method == 3 || msg_type == feishu_runtime_message_pong {
 		log.info('[feishu] 💓 heartbeat pong received')
 		if frame.payload.len > 0 {
-			cfg := json.decode(feishu.RuntimeClientConfig, frame.payload.bytestr()) or {
+			cfg := json.decode[feishu.RuntimeClientConfig](frame.payload.bytestr()) or {
 				feishu.RuntimeClientConfig{}
 			}
 			app.providers.feishu.note_client_config(app_name, cfg)

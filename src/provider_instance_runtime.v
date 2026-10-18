@@ -1,8 +1,7 @@
 module main
 
-import config
 import provider
-import json
+import json2 as json
 import upstream
 
 struct ProviderInstanceStaticSpec {
@@ -11,12 +10,12 @@ struct ProviderInstanceStaticSpec {
 }
 
 struct ProviderInstanceRuntimeContext {
-	runtime_snapshot_fn fn (string, string) (upstream.UpstreamSnapshot, bool) = unsafe { nil }
-	source_fn           fn (string, string) string                         = unsafe { nil }
-	static_specs_fn     fn () []ProviderInstanceStaticSpec                 = unsafe { nil }
-	static_spec_fn      fn (string, string) ?provider.ProviderInstanceSpec = unsafe { nil }
-	apply_fn            fn (provider.ProviderInstanceSpec) !               = unsafe { nil }
-	provider_enabled_fn fn (string) bool = unsafe { nil }
+	runtime_snapshot_fn fn (string, string) (upstream.UpstreamSnapshot, bool) @[required]
+	source_fn           fn (string, string) string                         @[required]
+	static_specs_fn     fn () []ProviderInstanceStaticSpec                 @[required]
+	static_spec_fn      fn (string, string) ?provider.ProviderInstanceSpec @[required]
+	apply_fn            fn (provider.ProviderInstanceSpec) !               @[required]
+	provider_enabled_fn fn (string) bool @[required]
 }
 
 struct ProviderInstanceRuntime {}
@@ -45,10 +44,13 @@ fn (ctx ProviderInstanceRuntimeContext) provider_enabled(provider_name string) b
 	return ctx.provider_enabled_fn(provider_name)
 }
 
-fn (mut app App) build_provider_instance_runtime_context() ProviderInstanceRuntimeContext {
+fn (mut app App) build_provider_instance_runtime_context_unlocked() ProviderInstanceRuntimeContext {
 	return ProviderInstanceRuntimeContext{
 		runtime_snapshot_fn: fn [mut app] (provider_name string, instance string) (upstream.UpstreamSnapshot, bool) {
-			return app.provider_instance_runtime_snapshot(provider_name, instance)
+			if snap := app.providers.provider_runtime_upstream_snapshot(provider_name, instance, app.transport.db.enabled) {
+				return snap, true
+			}
+			return upstream.UpstreamSnapshot{}, false
 		}
 		source_fn:           fn [mut app] (provider_name string, instance string) string {
 			return match provider_name {
@@ -65,7 +67,7 @@ fn (mut app App) build_provider_instance_runtime_context() ProviderInstanceRunti
 					spec:   provider.ProviderInstanceSpec{
 						provider:      'feishu'
 						instance:      name
-						config_json:   json.encode(cfg)
+						config_json:   json.encode(cfg, escape_unicode: true, time_as_unix: true)
 						desired_state: 'connected'
 					}
 				}
@@ -78,7 +80,7 @@ fn (mut app App) build_provider_instance_runtime_context() ProviderInstanceRunti
 					return provider.ProviderInstanceSpec{
 						provider:      'feishu'
 						instance:      instance
-						config_json:   json.encode(cfg)
+						config_json:   json.encode(cfg, escape_unicode: true, time_as_unix: true)
 						desired_state: 'connected'
 					}
 				}
@@ -86,58 +88,11 @@ fn (mut app App) build_provider_instance_runtime_context() ProviderInstanceRunti
 			return none
 		}
 		apply_fn:            fn [mut app] (spec provider.ProviderInstanceSpec) ! {
-			match spec.provider {
-				'feishu' {
-					if spec.config_json.trim_space() == '' {
-						return
-					}
-					cfg := json.decode(config.FeishuAppConfig, spec.config_json) or {
-						return error('provider_instance_invalid_feishu_config:${err}')
-					}
-					app.providers.feishu.apps[spec.instance] = cfg
-					app.providers.feishu.ensure(spec.instance)
-					_ = app.ensure_websocket_upstream_provider_running('feishu', spec.instance)
-				}
-				'codex' {
-					if spec.config_json.trim_space() == '' {
-						return
-					}
-					cfg := json.decode(config.CodexConfig, spec.config_json) or {
-						return error('provider_instance_invalid_codex_config:${err}')
-					}
-					mut rt := app.codex_runtime_ensure_instance(spec.instance)
-					if cfg.url.trim_space() != '' {
-						rt.url = cfg.url
-					}
-					if cfg.model.trim_space() != '' {
-						rt.model = cfg.model
-					}
-					if cfg.effort.trim_space() != '' {
-						rt.effort = cfg.effort
-					}
-					if cfg.cwd.trim_space() != '' {
-						rt.cwd = cfg.cwd
-					}
-					if cfg.approval_policy.trim_space() != '' {
-						rt.approval_policy = cfg.approval_policy
-					}
-					if cfg.sandbox.trim_space() != '' {
-						rt.sandbox = cfg.sandbox
-					}
-					if cfg.reconnect_delay_ms > 0 {
-						rt.reconnect_delay_ms = cfg.reconnect_delay_ms
-					}
-					if cfg.flush_interval_ms > 0 {
-						rt.flush_interval_ms = cfg.flush_interval_ms
-					}
-					app.providers.codex.update(spec.instance, rt)
-					_ = app.ensure_websocket_upstream_provider_running('codex', spec.instance)
-				}
-				else {}
-			}
+			app.provider_instance_apply(spec)!
 		}
+
 		provider_enabled_fn: fn [mut app] (provider_name string) bool {
-			return app.provider_enabled(provider_name)
+			return app.providers.provider_enabled(provider_name, app.providers.provider_bootstrap_enabled(provider_name, app.transport.db.enabled))
 		}
 	}
 }
@@ -162,14 +117,20 @@ fn (hub ProviderRuntimeHub) provider_instance_list(provider_name string) []provi
 }
 
 pub fn (mut app App) provider_instance_upsert(spec provider.ProviderInstanceSpec) provider.ProviderInstanceSpec {
+	app.mu.@lock()
+	defer { app.mu.unlock() }
 	return app.providers.provider_instance_upsert(spec)
 }
 
 pub fn (app &App) provider_instance_get(provider_name string, instance string) ?provider.ProviderInstanceSpec {
+	app.mu.@lock()
+	defer { app.mu.unlock() }
 	return app.providers.provider_instance_get(provider_name, instance)
 }
 
 pub fn (app &App) provider_instance_list(provider_name string) []provider.ProviderInstanceSpec {
+	app.mu.@lock()
+	defer { app.mu.unlock() }
 	return app.providers.provider_instance_list(provider_name)
 }
 
@@ -178,8 +139,13 @@ fn ProviderInstanceRuntime.apply(ctx ProviderInstanceRuntimeContext, spec provid
 }
 
 pub fn (mut app App) provider_instance_apply(spec provider.ProviderInstanceSpec) ! {
-	ctx := app.build_provider_instance_runtime_context()
-	ProviderInstanceRuntime.apply(ctx, spec)!
+	prepared := prepare_provider_instance(spec)!
+	if !app.lifecycle.shutdown.begin_start() { return error('provider_instance_app_stopping') }
+	defer { app.lifecycle.shutdown.end_start() }
+	app.mu.@lock()
+	app.apply_provider_instance_unlocked(prepared)
+	app.mu.unlock()
+	app.start_provider_instance(prepared)
 }
 
 fn ProviderInstanceRuntime.ensure(mut registry provider.ProviderInstanceRegistry, ctx ProviderInstanceRuntimeContext, provider_name string, instance string) !provider.ProviderInstanceSpec {
@@ -207,6 +173,36 @@ fn ProviderInstanceRuntime.ensure(mut registry provider.ProviderInstanceRegistry
 }
 
 pub fn (mut app App) provider_instance_ensure(provider_name string, instance string) !provider.ProviderInstanceSpec {
-	ctx := app.build_provider_instance_runtime_context()
-	return ProviderInstanceRuntime.ensure(mut app.providers.instances, ctx, provider_name, instance)
+	if !app.lifecycle.shutdown.begin_start() { return error('provider_instance_app_stopping') }
+	defer { app.lifecycle.shutdown.end_start() }
+	app.mu.@lock()
+	spec := app.ensure_provider_instance_unlocked(provider_name, instance) or {
+		app.mu.unlock()
+		return err
+	}
+	app.mu.unlock()
+	// Resolving a run always uses current configuration after publication.
+	_ = app.ensure_websocket_upstream_provider_running(spec.provider, spec.instance)
+	return spec
+}
+
+fn (mut app App) ensure_provider_instance_unlocked(provider_name string, instance string) !provider.ProviderInstanceSpec {
+	name := provider_name.trim_space()
+	normalized := provider.ProviderInstanceSpec.normalize_instance_name(instance)
+	if spec := app.providers.provider_instance_get(name, normalized) {
+		if prepared := prepare_provider_instance(spec) {
+			app.apply_provider_instance_unlocked(prepared)
+		}
+		return spec
+	}
+	ctx := app.build_provider_instance_runtime_context_unlocked()
+	if spec := ctx.static_spec(name, normalized) {
+		prepared := prepare_provider_instance(spec)!
+		app.apply_provider_instance_unlocked(prepared)
+		return app.providers.provider_instance_upsert(spec)
+	}
+	if name == 'codex' && normalized == 'main' && ctx.provider_enabled(name) {
+		return app.providers.provider_instance_upsert(provider.ProviderInstanceSpec{ provider: name, instance: normalized, desired_state: 'connected' })
+	}
+	return error('provider_instance_not_found:${name}/${normalized}')
 }

@@ -1,8 +1,8 @@
 module executor
 
-import json
+import json2 as json
 
-fn (e InProcVjsxExecutor) call_plugin_once(mut app AppFacade, req PluginCallRequest) !PluginCallResponse {
+fn (e InProcVjsxExecutor) call_plugin_once(mut app EmbeddedHost, req PluginCallRequest) !PluginCallResponse {
 	e.bootstrap_placeholder()!
 	lane := e.acquire_next_lane(inproc_vjsx_lane_wait_timeout_ms)!
 	defer {
@@ -35,7 +35,7 @@ fn (e InProcVjsxExecutor) call_plugin_once(mut app AppFacade, req PluginCallRequ
 	mut host := state.hosts[idx]
 	state.mu.unlock()
 	ctx := host.context()
-	req_obj := ctx.json_parse(json.encode(req))
+	req_obj := ctx.json_parse(json.encode(req, escape_unicode: true, time_as_unix: true))
 	defer {
 		req_obj.free()
 	}
@@ -73,7 +73,7 @@ fn (e InProcVjsxExecutor) call_plugin_once(mut app AppFacade, req PluginCallRequ
 	}
 }
 
-pub fn (e InProcVjsxExecutor) call_plugin(mut app AppFacade, req PluginCallRequest) !PluginCallResponse {
+pub fn (e InProcVjsxExecutor) call_plugin(mut app EmbeddedHost, req PluginCallRequest) !PluginCallResponse {
 	e.remember_app(mut app)
 	mut last_err := 'inproc_vjsx_executor_plugin_call_failed'
 	for attempt in 0 .. inproc_vjsx_dispatch_retry_attempts {

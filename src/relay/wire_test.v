@@ -2,6 +2,22 @@ module relay
 
 import dispatch
 
+fn test_wire_json_preserves_unicode_and_escaping() {
+	frame := WireFrame{
+		version: wire_version
+		kind: .data
+		id: 'unicode-1'
+		trace_id: 'trace-1'
+		channel_id: 'channel-1'
+		body: '你好 🌍 "quoted"\nnext'
+	}
+	raw := encode_frame(frame) or { panic(err) }
+	assert raw.contains('\\u4f60\\u597d')
+	assert raw.contains('\\n')
+	decoded := decode_frame(raw) or { panic(err) }
+	assert decoded.body == frame.body
+}
+
 fn test_encode_decode_roundtrip_preserves_trace_and_channel() {
 	frame := WireFrame{
 		version:        wire_version

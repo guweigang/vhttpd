@@ -1,6 +1,6 @@
 module feishu
 
-import json
+import json2 as json
 
 // ── Endpoint URL Helpers ──
 
@@ -36,5 +36,5 @@ pub fn RuntimeWsEndpointData.request_body(app_id string, app_secret string) stri
 	return json.encode({
 		'AppID':     app_id
 		'AppSecret': app_secret
-	})
+	}, escape_unicode: true, time_as_unix: true)
 }

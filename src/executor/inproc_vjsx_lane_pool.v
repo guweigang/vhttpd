@@ -3,14 +3,12 @@ module executor
 import time
 
 pub fn (e InProcVjsxExecutor) select_next_lane() !VjsxExecutionLane {
-	if isnil(e.state) {
-		return error('inproc_vjsx_executor_state_missing')
-	}
 	mut state := e.state
 	state.mu.@lock()
 	defer {
 		state.mu.unlock()
 	}
+	if state.stopping { return error('inproc_vjsx_executor_closed') }
 	if state.lanes.len == 0 {
 		return error('inproc_vjsx_executor_no_lanes')
 	}
@@ -30,9 +28,6 @@ pub fn (e InProcVjsxExecutor) select_next_lane() !VjsxExecutionLane {
 }
 
 fn (e InProcVjsxExecutor) force_select_lane_by_id(lane_id string) !VjsxExecutionLane {
-	if isnil(e.state) {
-		return error('inproc_vjsx_executor_state_missing')
-	}
 	if lane_id.trim_space() == '' {
 		return error('inproc_vjsx_executor_lane_id_missing')
 	}
@@ -41,6 +36,7 @@ fn (e InProcVjsxExecutor) force_select_lane_by_id(lane_id string) !VjsxExecution
 	defer {
 		state.mu.unlock()
 	}
+	if state.stopping { return error('inproc_vjsx_executor_closed') }
 	for idx, lane in state.lanes {
 		if lane.id != lane_id {
 			continue
@@ -52,9 +48,6 @@ fn (e InProcVjsxExecutor) force_select_lane_by_id(lane_id string) !VjsxExecution
 }
 
 fn (e InProcVjsxExecutor) select_lane_by_id(lane_id string) !VjsxExecutionLane {
-	if isnil(e.state) {
-		return error('inproc_vjsx_executor_state_missing')
-	}
 	if lane_id.trim_space() == '' {
 		return error('inproc_vjsx_executor_lane_id_missing')
 	}
@@ -63,6 +56,7 @@ fn (e InProcVjsxExecutor) select_lane_by_id(lane_id string) !VjsxExecutionLane {
 	defer {
 		state.mu.unlock()
 	}
+	if state.stopping { return error('inproc_vjsx_executor_closed') }
 	for idx, lane in state.lanes {
 		if lane.id != lane_id {
 			continue
@@ -81,14 +75,43 @@ fn (e InProcVjsxExecutor) select_lane_by_id(lane_id string) !VjsxExecutionLane {
 }
 
 pub fn (e InProcVjsxExecutor) acquire_next_lane(timeout_ms int) !VjsxExecutionLane {
+	return e.acquire_next_lane_tracked(timeout_ms, false)
+}
+
+fn (e InProcVjsxExecutor) acquire_next_lane_tracked(timeout_ms int, track_http bool) !VjsxExecutionLane {
+	mut waiting := false
+	defer {
+		if waiting {
+			mut state := e.state
+			state.mu.@lock()
+			state.http_waiting--
+			state.mu.unlock()
+		}
+	}
+
 	mut remaining_ms := if timeout_ms > 0 { timeout_ms } else { 0 }
-	deadline := time.now().add(time.millisecond * remaining_ms)
+	deadline := time.sys_mono_now() + i64(remaining_ms) * 1000000
 	for {
 		lane := e.select_next_lane() or {
 			if err.msg() != 'inproc_vjsx_executor_no_available_lane' {
 				return error(err.msg())
 			}
-			if remaining_ms <= 0 || time.now() >= deadline {
+			if track_http && !waiting {
+				mut state := e.state
+				state.mu.@lock()
+				state.http_waiting++
+				state.http_queue_waits++
+				state.mu.unlock()
+				waiting = true
+			}
+			if remaining_ms <= 0 || time.sys_mono_now() >= deadline {
+				if track_http {
+					mut state := e.state
+					state.mu.@lock()
+					state.http_queue_timeouts++
+					state.http_last_queue_timeout = time.now().unix()
+					state.mu.unlock()
+				}
 				return error(err.msg())
 			}
 			time.sleep(time.millisecond * inproc_vjsx_lane_wait_poll_ms)
@@ -124,7 +147,7 @@ fn (e InProcVjsxExecutor) acquire_lane_by_id(lane_id string, timeout_ms int) !Vj
 }
 
 pub fn (e InProcVjsxExecutor) release_lane(lane_id string) {
-	if isnil(e.state) || lane_id == '' {
+	if lane_id == '' {
 		return
 	}
 	mut state := e.state

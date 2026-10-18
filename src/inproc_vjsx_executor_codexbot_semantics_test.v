@@ -4,28 +4,28 @@ import executor as exec
 import upstream.transport
 import net.http
 import os
-import json
+import json2 as json
 import time
 
 fn codexbot_semantics_payload(text string, chat_id string, message_id string) string {
 	content_json := json.encode({
 		'text': text
-	})
-	return '{"event":{"sender":{"sender_id":{"open_id":"ou_test_user"}},"message":{"message_id":"${message_id}","chat_id":"${chat_id}","message_type":"text","content":${json.encode(content_json)}}}}'
+	}, escape_unicode: true, time_as_unix: true)
+	return '{"event":{"sender":{"sender_id":{"open_id":"ou_test_user"}},"message":{"message_id":"${message_id}","chat_id":"${chat_id}","message_type":"text","content":${json.encode(content_json, escape_unicode: true, time_as_unix: true)}}}}'
 }
 
 fn codexbot_semantics_thread_payload(text string, chat_id string, message_id string, root_id string, parent_id string) string {
 	content_json := json.encode({
 		'text': text
-	})
-	return '{"event":{"sender":{"sender_id":{"open_id":"ou_test_user"}},"message":{"message_id":"${message_id}","chat_id":"${chat_id}","message_type":"text","root_id":"${root_id}","parent_id":"${parent_id}","content":${json.encode(content_json)}}}}'
+	}, escape_unicode: true, time_as_unix: true)
+	return '{"event":{"sender":{"sender_id":{"open_id":"ou_test_user"}},"message":{"message_id":"${message_id}","chat_id":"${chat_id}","message_type":"text","root_id":"${root_id}","parent_id":"${parent_id}","content":${json.encode(content_json, escape_unicode: true, time_as_unix: true)}}}}'
 }
 
 fn codexbot_semantics_payload_with_event(text string, chat_id string, message_id string, event_id string, create_time string) string {
 	content_json := json.encode({
 		'text': text
-	})
-	return '{"header":{"event_id":"${event_id}","event_type":"im.message.receive_v1"},"event":{"sender":{"sender_id":{"open_id":"ou_test_user"}},"message":{"message_id":"${message_id}","chat_id":"${chat_id}","message_type":"text","create_time":"${create_time}","content":${json.encode(content_json)}}}}'
+	}, escape_unicode: true, time_as_unix: true)
+	return '{"header":{"event_id":"${event_id}","event_type":"im.message.receive_v1"},"event":{"sender":{"sender_id":{"open_id":"ou_test_user"}},"message":{"message_id":"${message_id}","chat_id":"${chat_id}","message_type":"text","create_time":"${create_time}","content":${json.encode(content_json, escape_unicode: true, time_as_unix: true)}}}}'
 }
 
 fn codexbot_semantics_with_temp_db(db_name string, run fn ()) {

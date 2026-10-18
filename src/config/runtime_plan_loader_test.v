@@ -1,6 +1,6 @@
 module config
 
-import json
+import json2 as json
 import os
 
 fn test_load_runtime_plan_file_uses_strict_v2_when_version_is_two() {
@@ -153,7 +153,7 @@ egress = "adapter:app"
 	assert plan.providers['feishu'].engine?.str() == 'engine:vjsx'
 	assert plan.providers['feishu'].capabilities['send_message'] == 'feishu.message.send'
 	assert plan.providers['feishu'].capabilities['upload_image'] == 'feishu.image.upload'
-	encoded := json.encode(plan)
+	encoded := json.encode(plan, escape_unicode: true, time_as_unix: true)
 	assert encoded.contains('"providers":{"feishu"')
 	assert encoded.contains('"plugin":"feishu_runtime"')
 }

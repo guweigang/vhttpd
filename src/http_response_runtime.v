@@ -52,6 +52,8 @@ fn HttpResponseRuntime.dispatch_error(mut app App, mut ctx Context, req HttpIngr
 }
 
 fn HttpResponseRuntime.delivery_outcome(mut app App, mut ctx Context, req HttpIngressRequest, outcome dispatch.DeliveryOutcome, matched_rule ?RuntimeRouteRule) veb.Result {
+	ctx.begin_observed_adapter()
+	defer { ctx.end_observed_adapter() }
 	if outcome.kind == .file {
 		return HttpResponseRuntime.file_outcome(mut app, mut ctx, req, outcome, matched_rule)
 	}
@@ -142,7 +144,7 @@ fn (mut app App) dispatch_relay_delivery(outcome dispatch.DeliveryOutcome) dispa
 			return relay_delivery_tracking_http_outcome(outbound, tracking)
 		}
 	}
-	mut carrier := ws.new_relay_carrier(app.build_websocket_runtime_context(), outbound.carrier_id)
+	mut carrier := ws.new_relay_carrier(app.websocket.build_relay_carrier_context(), outbound.carrier_id)
 	send_result := relay.send_to_carrier(mut carrier, outbound)
 	return relay_delivery_send_http_outcome(mut app.relay, outbound, send_result)
 }
@@ -263,24 +265,29 @@ fn HttpResponseRuntime.file_outcome(mut app App, mut ctx Context, req HttpIngres
 	return ctx.file(outcome.path)
 }
 
-fn HttpResponseRuntime.render(mut app App, mut ctx Context, req HttpIngressRequest, mut outcome executor.HttpLogicDispatchOutcome, dispatch_plan HttpPipelineDispatchPlan) veb.Result {
+fn HttpResponseRuntime.render(mut app App, mut ctx Context, req HttpIngressRequest, mut outcome executor.HttpLogicDispatchOutcome, dispatch_plan HttpPipelineDispatchPlan, pipelines PipelineRuntime) veb.Result {
+	ctx.begin_observed_adapter()
+	defer { ctx.end_observed_adapter() }
+	defer { outcome.close_live_conn() }
 	if outcome.kind == .stream {
 		return HttpResponseRuntime.stream(mut app, mut ctx, req, mut outcome)
 	}
 	if outcome.kind == .upstream_plan {
 		return HttpResponseRuntime.upstream_plan(mut app, mut ctx, req, outcome)
 	}
-	return HttpResponseRuntime.normal(mut app, mut ctx, req, outcome, dispatch_plan)
+	return HttpResponseRuntime.normal(mut app, mut ctx, req, outcome, dispatch_plan, pipelines)
 }
 
 fn HttpResponseRuntime.stream(mut app App, mut ctx Context, req HttpIngressRequest, mut outcome executor.HttpLogicDispatchOutcome) veb.Result {
 	log.info('[http] ⇠ dispatch stream method=${req.method.to_upper()} path=${req.path} trace_id=${req.trace_id} request_id=${req.request_id} socket=${outcome.socket_path} duration_ms=${time.now().unix_milli() - req.start_ms}')
-	mut conn := outcome.conn
-	selected_socket := outcome.socket_path
+	mut conn := outcome.take_live_conn() or {
+		outcome.close_live_conn()
+		return HttpResponseRuntime.dispatch_error(mut app, mut ctx, req, 'worker_stream_connection_missing')
+	}
 	start := outcome.stream_start
 	defer {
 		conn.close() or {}
-		app.on_worker_request_finished(selected_socket)
+		outcome.finish_worker()
 	}
 	if (start.stream_type == 'sse' || start.content_type.starts_with('text/event-stream'))
 		&& req.method.to_upper() != 'HEAD' {
@@ -294,16 +301,16 @@ fn HttpResponseRuntime.stream(mut app App, mut ctx Context, req HttpIngressReque
 fn HttpResponseRuntime.upstream_plan(mut app App, mut ctx Context, req HttpIngressRequest, outcome executor.HttpLogicDispatchOutcome) veb.Result {
 	log.info('[http] ⇠ dispatch upstream_plan method=${req.method.to_upper()} path=${req.path} trace_id=${req.trace_id} request_id=${req.request_id} duration_ms=${time.now().unix_milli() - req.start_ms}')
 	upstream_runtime := app.build_upstream_runtime_context()
-	return UpstreamRuntimeContext.execute_plan(upstream_runtime, mut app, mut ctx,
+	return UpstreamRuntimeContext.execute_plan(upstream_runtime, mut ctx,
 		outcome.upstream_plan, req.method, req.path, req.request_id, req.trace_id, req.start_ms)
 }
 
-fn HttpResponseRuntime.normal(mut app App, mut ctx Context, req HttpIngressRequest, outcome executor.HttpLogicDispatchOutcome, dispatch_plan HttpPipelineDispatchPlan) veb.Result {
+fn HttpResponseRuntime.normal(mut app App, mut ctx Context, req HttpIngressRequest, outcome executor.HttpLogicDispatchOutcome, dispatch_plan HttpPipelineDispatchPlan, pipelines PipelineRuntime) veb.Result {
 	delivery := worker_response_delivery_outcome(outcome.response)
 	log.info('[http] ⇠ dispatch response method=${req.method.to_upper()} path=${req.path} trace_id=${req.trace_id} request_id=${req.request_id} status=${delivery.status} body_len=${delivery.body.len} duration_ms=${time.now().unix_milli() - req.start_ms}')
 	mut cache_result := ''
 	mut cache_reason := ''
-	cache_store := app.pipelines.http_response_cache_store(mut app.transport.cache, dispatch_plan,
+	cache_store := pipelines.http_response_cache_store(mut app.transport.cache, dispatch_plan,
 		req.method, ctx.req, delivery)
 	cache_result = cache_store.result
 	cache_reason = cache_store.reason

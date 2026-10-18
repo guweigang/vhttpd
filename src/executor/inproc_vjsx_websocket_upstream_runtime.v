@@ -1,9 +1,9 @@
 module executor
 
-import json
+import json2 as json
 import upstream.transport
 
-fn (e InProcVjsxExecutor) dispatch_websocket_upstream_once(mut app AppFacade, req transport.WorkerWebSocketUpstreamDispatchRequest) !transport.WorkerWebSocketUpstreamDispatchResponse {
+fn (e InProcVjsxExecutor) dispatch_websocket_upstream_once(mut app EmbeddedHost, req transport.WorkerWebSocketUpstreamDispatchRequest) !transport.WorkerWebSocketUpstreamDispatchResponse {
 	e.bootstrap_placeholder()!
 	lane := e.acquire_next_lane(inproc_vjsx_lane_wait_timeout_ms)!
 	defer {
@@ -36,7 +36,7 @@ fn (e InProcVjsxExecutor) dispatch_websocket_upstream_once(mut app AppFacade, re
 	mut host := state.hosts[idx]
 	state.mu.unlock()
 	ctx := host.context()
-	frame_obj := ctx.json_parse(json.encode(req))
+	frame_obj := ctx.json_parse(json.encode(req, escape_unicode: true, time_as_unix: true))
 	defer {
 		frame_obj.free()
 	}
@@ -105,7 +105,7 @@ fn (e InProcVjsxExecutor) dispatch_websocket_upstream_once(mut app AppFacade, re
 	return InProcVjsxResponseCodec.websocket_upstream_from_js_value(normalized, req)
 }
 
-pub fn (e InProcVjsxExecutor) dispatch_websocket_upstream(mut app AppFacade, req transport.WorkerWebSocketUpstreamDispatchRequest) !transport.WorkerWebSocketUpstreamDispatchResponse {
+pub fn (e InProcVjsxExecutor) dispatch_websocket_upstream_with_host(mut app EmbeddedHost, req transport.WorkerWebSocketUpstreamDispatchRequest) !transport.WorkerWebSocketUpstreamDispatchResponse {
 	e.remember_app(mut app)
 	mut last_err := 'inproc_vjsx_executor_dispatch_failed'
 	for attempt in 0 .. inproc_vjsx_dispatch_retry_attempts {

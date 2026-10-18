@@ -1,10 +1,20 @@
 module executor
 
 import upstream.transport
+import time
 
-fn (e InProcVjsxExecutor) dispatch_http_once(mut app AppFacade, req HttpLogicDispatchRequest) !HttpLogicDispatchOutcome {
+fn (e InProcVjsxExecutor) dispatch_http_once(mut app EmbeddedHost, req HttpLogicDispatchRequest) !HttpLogicDispatchOutcome {
 	e.bootstrap_placeholder()!
-	lane := e.acquire_next_lane(inproc_vjsx_lane_wait_timeout_ms)!
+	queue_started := time.sys_mono_now()
+	mut queue_finished := false
+	defer {
+		if !queue_finished {
+			if mut timing := req.timing { timing.queue_ns += time.sys_mono_now() - queue_started; timing.queue_observed = true }
+		}
+	}
+	lane := e.acquire_next_lane_tracked(inproc_vjsx_lane_wait_timeout_ms,true)!
+	if mut timing := req.timing { timing.queue_ns += time.sys_mono_now() - queue_started; timing.queue_observed = true }
+	queue_finished = true
 	defer {
 		e.release_lane(lane.id)
 	}
@@ -60,6 +70,8 @@ fn (e InProcVjsxExecutor) dispatch_http_once(mut app AppFacade, req HttpLogicDis
 	defer {
 		js_ctx.free()
 	}
+	vjsx_started := time.sys_mono_now()
+	defer { if mut timing := req.timing { timing.vjsx_ns += time.sys_mono_now() - vjsx_started; timing.vjsx_observed = true } }
 	mut result := host.call_entry('http', js_ctx) or {
 		if err.msg() == 'inproc_vjsx_executor_missing_http_handler'
 			|| err.msg() == 'inproc_vjsx_executor_missing_handler' {
@@ -97,7 +109,7 @@ fn (e InProcVjsxExecutor) dispatch_http_once(mut app AppFacade, req HttpLogicDis
 	}
 }
 
-pub fn (e InProcVjsxExecutor) dispatch_http(mut app AppFacade, req HttpLogicDispatchRequest) !HttpLogicDispatchOutcome {
+pub fn (e InProcVjsxExecutor) dispatch_http_with_host(mut app EmbeddedHost, req HttpLogicDispatchRequest) !HttpLogicDispatchOutcome {
 	e.remember_app(mut app)
 	mut last_err := 'inproc_vjsx_executor_dispatch_failed'
 	for attempt in 0 .. inproc_vjsx_dispatch_retry_attempts {
@@ -114,21 +126,21 @@ pub fn (e InProcVjsxExecutor) dispatch_http(mut app AppFacade, req HttpLogicDisp
 	return error(last_err)
 }
 
-pub fn (e InProcVjsxExecutor) open_websocket_session(mut app AppFacade, req WebSocketSessionOpenRequest) !WebSocketSessionOpenOutcome {
+pub fn (e InProcVjsxExecutor) open_websocket_session_with_host(mut app EmbeddedHost, req WebSocketSessionOpenRequest) !WebSocketSessionOpenOutcome {
 	e.remember_app(mut app)
 	_ = app
 	_ = req
 	return InProcVjsxError.not_ready('open_websocket_session')
 }
 
-pub fn (e InProcVjsxExecutor) dispatch_stream(mut app AppFacade, req transport.StreamDispatchRequest) !transport.StreamDispatchResponse {
+pub fn (e InProcVjsxExecutor) dispatch_stream_with_host(mut app EmbeddedHost, req transport.StreamDispatchRequest) !transport.StreamDispatchResponse {
 	e.remember_app(mut app)
 	_ = app
 	_ = req
 	return InProcVjsxError.not_ready('dispatch_stream')
 }
 
-pub fn (e InProcVjsxExecutor) dispatch_mcp(mut app AppFacade, req transport.WorkerMcpDispatchRequest) !transport.WorkerMcpDispatchResponse {
+pub fn (e InProcVjsxExecutor) dispatch_mcp_with_host(mut app EmbeddedHost, req transport.WorkerMcpDispatchRequest) !transport.WorkerMcpDispatchResponse {
 	e.remember_app(mut app)
 	_ = app
 	_ = req

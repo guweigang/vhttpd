@@ -55,6 +55,7 @@ fn test_provider_runtime_snapshots_expose_registered_runtime() {
 		}
 	}
 	app.register_provider_spec(ProviderSpec{
+		lifecycle_ctx:    provider.RuntimeContext.noop()
 		name:             'ollama'
 		enabled:          true
 		has_handler:      false
@@ -118,6 +119,7 @@ fn test_provider_runtime_settings_apply_refreshes_admin_spec_driver() {
 		})
 	}
 	app.register_provider_spec(ProviderSpec{
+		lifecycle_ctx:    provider.RuntimeContext.noop()
 		name:             'feishu'
 		enabled:          true
 		has_handler:      true
@@ -222,6 +224,7 @@ fn test_provider_enabled_and_runtime_snapshot_use_host() {
 		}
 	}
 	app.register_provider_spec(ProviderSpec{
+		lifecycle_ctx:    provider.RuntimeContext.noop()
 		name:             'test-provider'
 		enabled:          true
 		has_handler:      false

@@ -1,6 +1,6 @@
 module main
 
-import json
+import json2 as json
 import log
 import time
 
@@ -24,7 +24,7 @@ fn (mut app App) dispatch_feishu_message_sent(stream_id string, message_id strin
 		json.encode({
 			'stream_id':  stream_id
 			'message_id': message_id
-		}),
+		}, escape_unicode: true, time_as_unix: true),
 		time.now().unix(),
 		map[string]string{},
 	)
@@ -54,7 +54,7 @@ fn (mut app App) dispatch_feishu_message_updated(stream_id string, message_id st
 		json.encode({
 			'stream_id':  stream_id
 			'message_id': message_id
-		}),
+		}, escape_unicode: true, time_as_unix: true),
 		time.now().unix(),
 		map[string]string{},
 	)

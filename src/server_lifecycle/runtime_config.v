@@ -72,12 +72,23 @@ pub fn ServerRuntimeConfig.resolve_for_target(args []string, cfg config.VhttpdCo
 
 pub fn ServerRuntimeConfig.resolve_for_target_with_plan(args []string, cfg config.VhttpdConfig, listener_id string, site_id string, host string, port int, ssl config.ServerSslConfig, admin_enabled_override bool, plan runtime_plan.RuntimePlan, plan_listener_id string) !ServerRuntimeConfig {
 	resolved_plan := config.runtime_plan_apply_cli_overrides(args, cfg, plan, plan_listener_id)
+	executor_plan := executor.LogicExecutorRuntimePlan.resolve_from_plan(args, cfg, resolved_plan,
+		plan_listener_id)!
+	mut transferred := false
+	defer { if !transferred { executor_plan.executor.close() } }
+	result := resolve_server_runtime_target(args, cfg, listener_id, site_id, host, port, ssl,
+		admin_enabled_override, resolved_plan, plan_listener_id, executor_plan)!
+	transferred = true
+	return result
+}
+
+// The caller explicitly supplies the executor owner; aliases borrow the same
+// resolved plan without constructing a second set of lane workers.
+fn resolve_server_runtime_target(args []string, cfg config.VhttpdConfig, listener_id string, site_id string, host string, port int, ssl config.ServerSslConfig, admin_enabled_override bool, resolved_plan runtime_plan.RuntimePlan, plan_listener_id string, executor_plan executor.LogicExecutorRuntimePlan) !ServerRuntimeConfig {
 	event_log := config.CliArgs.string_or(args, '--event-log', plan_event_log(resolved_plan,
 		cfg.files.event_log))
 	pid_file := config.CliArgs.string_or(args, '--pid-file', plan_pid_file(resolved_plan,
 		cfg.files.pid_file))
-	executor_plan := executor.LogicExecutorRuntimePlan.resolve_from_plan(args, cfg, resolved_plan,
-		plan_listener_id)!
 	engine := resolved_plan.listener_fallback_engine(plan_listener_id) or {
 		runtime_plan.EnginePlan{}
 	}
@@ -296,9 +307,10 @@ fn assets_cache_control_from_plan(plan runtime_plan.RuntimePlan, listener_id str
 	return fallback
 }
 
+// Configuration resolution prepares directories only; the process owner creates
+// PID files after every listener has passed bind preflight.
 pub fn prepare_server_runtime_files_for_label(event_log string, pid_file string, socket_label string) !string {
 	os.mkdir_all(os.dir(event_log))!
 	os.mkdir_all(os.dir(pid_file))!
-	os.write_file(pid_file, '${os.getpid()}')!
 	return admin.AdminState.default_socket_for(socket_label)
 }

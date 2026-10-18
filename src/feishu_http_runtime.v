@@ -2,7 +2,7 @@ module main
 
 import admin
 import dispatch
-import json
+import json2 as json
 import time
 import veb
 
@@ -30,7 +30,7 @@ fn feishu_admin_error(req FeishuHttpRequest, mut app App, mut ctx Context, statu
 		'content-type': 'application/json; charset=utf-8'
 	}, json.encode(admin.AdminErrorResponse{
 		error: error
-	})), {
+	}, escape_unicode: true, time_as_unix: true)), {
 		'provider': 'feishu'
 		'error':    error
 	}), none)

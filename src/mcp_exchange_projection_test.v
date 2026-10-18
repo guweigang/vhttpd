@@ -4,6 +4,26 @@ import api.mcp.protocol as mcp_protocol
 import dispatch
 import upstream.transport
 
+fn test_mcp_sampling_capability_policy_counts_each_outcome() {
+	for policy in ['warn', 'drop', 'error'] {
+		mut app := App{}
+		app.protocols.mcp.sampling_capability_policy = policy
+		app.protocols.mcp.sessions['session-1'] = mcp_protocol.Session{
+			id: 'session-1'
+			client_capabilities_json: '{}'
+		}
+		result := McpRuntime.queue_message(mut app, 'session-1',
+			'{"jsonrpc":"2.0","method":"sampling/createMessage"}')
+		assert result.queued == (policy == 'warn')
+		assert result.error == (policy == 'error')
+		session := app.protocols.mcp.sessions['session-1'] or { panic('session missing') }
+		assert session.pending.len == if policy == 'warn' { 1 } else { 0 }
+		assert app.protocols.mcp.stat_sampling_capability_warnings_total == if policy == 'warn' { 1 } else { 0 }
+		assert app.protocols.mcp.stat_sampling_capability_dropped_total == if policy == 'drop' { 1 } else { 0 }
+		assert app.protocols.mcp.stat_sampling_capability_errors_total == if policy == 'error' { 1 } else { 0 }
+	}
+}
+
 fn test_mcp_dispatch_request_projects_to_exchange() {
 	ctx := McpExchangeContext{
 		request_id: 'req-1'

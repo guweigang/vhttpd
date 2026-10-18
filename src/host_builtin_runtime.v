@@ -1,7 +1,7 @@
 module main
 
 import dispatch
-import json
+import json2 as json
 import log
 import time
 import upstream.transport
@@ -115,7 +115,7 @@ pub fn (mut app App) events_stream(mut ctx Context) veb.Result {
 			'trace_id':   trace_id
 			'seq':        '${i + 1}'
 			'ts':         '${time.now().unix()}'
-		})
+		}, escape_unicode: true, time_as_unix: true)
 		stream.send_message(id: '${req_id}-${i + 1}', event: 'ping', data: payload) or {
 			return veb.no_result()
 		}

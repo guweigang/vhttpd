@@ -1,16 +1,7 @@
 module main
 
+import worker
 import time
-
-fn (mut app App) record_runtime_plan_replacement_preview(preview RuntimePlanReplacementPreview) {
-	app.mu.@lock()
-	defer {
-		app.mu.unlock()
-	}
-	app.replacement.previews_total++
-	app.replacement.last_preview = runtime_plan_replacement_attempt_from_preview('preview',
-		'previewed', false, '', []EngineDrainStatus{}, preview)
-}
 
 fn (mut app App) record_runtime_plan_replacement_apply(result RuntimePlanReplacementApplyResult) {
 	now := time.now().unix()
@@ -21,9 +12,10 @@ fn (mut app App) record_runtime_plan_replacement_apply(result RuntimePlanReplace
 	app.replacement.applies_total++
 	if result.applied {
 		app.replacement.applied_total++
-		app.replacement.pending = RuntimePlanReplacementPendingSnapshot{}
+		app.replacement.clear_pending()
 	} else if result.status in ['draining', 'drain_ready'] {
 		app.replacement.draining_total++
+		app.replacement.pending_generation++
 		app.replacement.pending = RuntimePlanReplacementPendingSnapshot{
 			active:              true
 			config_path:         result.config_path
@@ -32,16 +24,16 @@ fn (mut app App) record_runtime_plan_replacement_apply(result RuntimePlanReplace
 			ready:               result.status == 'drain_ready'
 			created_at_unix:     now
 			updated_at_unix:     now
-			drain_statuses:      result.drains
-			changed_pipelines:   result.preview.changed_pipelines
-			unchanged_pipelines: result.preview.unchanged_pipelines
-			drain_engines:       result.preview.drain_engines
+			drain_statuses:      result.drains.clone()
+			changed_pipelines:   result.preview.changed_pipelines.clone()
+			unchanged_pipelines: result.preview.unchanged_pipelines.clone()
+			drain_engines:       result.preview.drain_engines.clone()
 			next_schema_version: result.preview.next_schema_version
 		}
 	} else {
 		app.replacement.rejected_total++
 	}
-	app.replacement.last_apply = runtime_plan_replacement_attempt_from_apply(result)
+	app.replacement.last_apply = runtime_plan_replacement_attempt_from_apply(result).detached()
 }
 
 fn (mut app App) record_runtime_plan_replacement_finalize(result RuntimePlanReplacementFinalizeResult) {
@@ -54,7 +46,7 @@ fn (mut app App) record_runtime_plan_replacement_finalize(result RuntimePlanRepl
 		app.replacement.finalized_total++
 		app.replacement.applied_total++
 	}
-	app.replacement.last_finalize = runtime_plan_replacement_attempt_from_finalize(result)
+	app.replacement.last_finalize = runtime_plan_replacement_attempt_from_finalize(result).detached()
 }
 
 fn (mut app App) record_runtime_plan_replacement_cancel(result RuntimePlanReplacementCancelResult) {
@@ -66,24 +58,20 @@ fn (mut app App) record_runtime_plan_replacement_cancel(result RuntimePlanReplac
 	if result.cancelled {
 		app.replacement.cancelled_total++
 	}
-	app.replacement.last_cancel = runtime_plan_replacement_attempt_from_cancel(result)
+	app.replacement.last_cancel = runtime_plan_replacement_attempt_from_cancel(result).detached()
 }
 
 fn (mut app App) runtime_plan_replacement_snapshot() RuntimePlanReplacementRuntimeSnapshot {
+	app.mu.@lock()
+	refresh_generation := app.replacement.pending_generation
+	app.mu.unlock()
 	mut refresh_error := ''
 	app.refresh_pending_runtime_plan_replacement() or { refresh_error = err.msg() }
 	app.mu.@lock()
 	defer {
 		app.mu.unlock()
 	}
-	pending := if refresh_error == '' {
-		app.replacement.pending
-	} else {
-		RuntimePlanReplacementPendingSnapshot{
-			...app.replacement.pending
-			refresh_error: refresh_error
-		}
-	}
+	pending := app.replacement.pending_for_refresh_error(refresh_generation, refresh_error)
 	return RuntimePlanReplacementRuntimeSnapshot{
 		previews_total:  app.replacement.previews_total
 		applies_total:   app.replacement.applies_total
@@ -95,10 +83,10 @@ fn (mut app App) runtime_plan_replacement_snapshot() RuntimePlanReplacementRunti
 		draining_total:  app.replacement.draining_total
 		rejected_total:  app.replacement.rejected_total
 		pending:         pending
-		last_preview:    app.replacement.last_preview
-		last_apply:      app.replacement.last_apply
-		last_finalize:   app.replacement.last_finalize
-		last_cancel:     app.replacement.last_cancel
+		last_preview:    app.replacement.last_preview.detached()
+		last_apply:      app.replacement.last_apply.detached()
+		last_finalize:   app.replacement.last_finalize.detached()
+		last_cancel:     app.replacement.last_cancel.detached()
 	}
 }
 
@@ -107,20 +95,37 @@ fn (mut app App) runtime_plan_replacement_pending_snapshot() RuntimePlanReplacem
 	defer {
 		app.mu.unlock()
 	}
-	return app.replacement.pending
+	return app.replacement.pending.detached()
 }
 
 fn (mut app App) refresh_pending_runtime_plan_replacement() !RuntimePlanReplacementPendingSnapshot {
 	app.mu.@lock()
-	pending := app.replacement.pending
+	pending := app.replacement.pending.detached()
+	generation := app.replacement.pending_generation
 	app.mu.unlock()
 	if !pending.active {
 		return pending
 	}
-	mut drain_statuses := []EngineDrainStatus{}
+	mut drain_statuses := []worker.DrainStatus{}
 	for engine_id in pending.drain_engines {
-		pool := app.resolve_engine_worker_pool(engine_id)!
-		drain_statuses << app.engine_drain_status(pool)!
+		// Resolve and observe the same engine generation while publication is excluded.
+		// Drain status only reads worker accounting under its mutex; no callbacks or I/O.
+		app.mu.@lock()
+		if app.replacement.pending_generation != generation {
+			current := app.replacement.pending.detached()
+			app.mu.unlock()
+			return current
+		}
+		pool := app.resolve_engine_worker_pool(engine_id) or {
+			app.mu.unlock()
+			return err
+		}
+		status := app.engine_drain_status(pool) or {
+			app.mu.unlock()
+			return err
+		}
+		app.mu.unlock()
+		drain_statuses << status
 	}
 	ready := drain_statuses_ready(drain_statuses)
 	updated := RuntimePlanReplacementPendingSnapshot{
@@ -129,13 +134,10 @@ fn (mut app App) refresh_pending_runtime_plan_replacement() !RuntimePlanReplacem
 		updated_at_unix: time.now().unix()
 		drain_statuses:  drain_statuses
 	}
-	app.mu.@lock()
-	app.replacement.pending = updated
-	app.mu.unlock()
-	return updated
+	return app.publish_pending_runtime_plan_refresh(generation, updated)
 }
 
-fn runtime_plan_replacement_attempt_from_preview(kind string, status string, applied bool, error string, drain_statuses []EngineDrainStatus, preview RuntimePlanReplacementPreview) RuntimePlanReplacementAttemptSnapshot {
+fn runtime_plan_replacement_attempt_from_preview(kind string, status string, applied bool, error string, drain_statuses []worker.DrainStatus, preview RuntimePlanReplacementPreview) RuntimePlanReplacementAttemptSnapshot {
 	return RuntimePlanReplacementAttemptSnapshot{
 		ts_unix:             time.now().unix()
 		kind:                kind
@@ -258,7 +260,7 @@ fn runtime_plan_replacement_cancel_status_code(result RuntimePlanReplacementCanc
 	return 409
 }
 
-fn drain_statuses_ready(statuses []EngineDrainStatus) bool {
+fn drain_statuses_ready(statuses []worker.DrainStatus) bool {
 	if statuses.len == 0 {
 		return false
 	}

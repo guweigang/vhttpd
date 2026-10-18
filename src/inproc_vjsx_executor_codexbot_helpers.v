@@ -3,7 +3,7 @@ module main
 import executor as exec
 import upstream.transport
 import os
-import json
+import json2 as json
 import net.http
 
 struct CodexbotTsTestHarness {
@@ -19,22 +19,22 @@ fn codexbot_ts_build_root() string {
 fn codexbot_ts_feishu_payload(text string, chat_id string, message_id string) string {
 	content_json := json.encode({
 		'text': text
-	})
-	return '{"event":{"sender":{"sender_id":{"open_id":"ou_test_user"}},"message":{"message_id":"${message_id}","chat_id":"${chat_id}","message_type":"text","content":${json.encode(content_json)}}}}'
+	}, escape_unicode: true, time_as_unix: true)
+	return '{"event":{"sender":{"sender_id":{"open_id":"ou_test_user"}},"message":{"message_id":"${message_id}","chat_id":"${chat_id}","message_type":"text","content":${json.encode(content_json, escape_unicode: true, time_as_unix: true)}}}}'
 }
 
 fn codexbot_ts_feishu_thread_payload(text string, chat_id string, message_id string, root_id string, parent_id string) string {
 	content_json := json.encode({
 		'text': text
-	})
-	return '{"event":{"sender":{"sender_id":{"open_id":"ou_test_user"}},"message":{"message_id":"${message_id}","chat_id":"${chat_id}","message_type":"text","root_id":"${root_id}","parent_id":"${parent_id}","content":${json.encode(content_json)}}}}'
+	}, escape_unicode: true, time_as_unix: true)
+	return '{"event":{"sender":{"sender_id":{"open_id":"ou_test_user"}},"message":{"message_id":"${message_id}","chat_id":"${chat_id}","message_type":"text","root_id":"${root_id}","parent_id":"${parent_id}","content":${json.encode(content_json, escape_unicode: true, time_as_unix: true)}}}}'
 }
 
 fn codexbot_ts_feishu_payload_with_event(text string, chat_id string, message_id string, event_id string, create_time string) string {
 	content_json := json.encode({
 		'text': text
-	})
-	return '{"header":{"event_id":"${event_id}","event_type":"im.message.receive_v1"},"event":{"sender":{"sender_id":{"open_id":"ou_test_user"}},"message":{"message_id":"${message_id}","chat_id":"${chat_id}","message_type":"text","create_time":"${create_time}","content":${json.encode(content_json)}}}}'
+	}, escape_unicode: true, time_as_unix: true)
+	return '{"header":{"event_id":"${event_id}","event_type":"im.message.receive_v1"},"event":{"sender":{"sender_id":{"open_id":"ou_test_user"}},"message":{"message_id":"${message_id}","chat_id":"${chat_id}","message_type":"text","create_time":"${create_time}","content":${json.encode(content_json, escape_unicode: true, time_as_unix: true)}}}}'
 }
 
 fn codexbot_ts_feishu_action_payload(request_id string, decision string, open_message_id string, event_id string) string {
@@ -43,7 +43,7 @@ fn codexbot_ts_feishu_action_payload(request_id string, decision string, open_me
 		'requestId': request_id
 		'decision':  decision
 	}
-	return '{"header":{"event_id":"${event_id}","event_type":"card.action.trigger"},"event":{"open_message_id":"${open_message_id}","action":{"tag":"button","value":${json.encode(value_json)}}}}'
+	return '{"header":{"event_id":"${event_id}","event_type":"card.action.trigger"},"event":{"open_message_id":"${open_message_id}","action":{"tag":"button","value":${json.encode(value_json, escape_unicode: true, time_as_unix: true)}}}}'
 }
 
 fn codexbot_ts_with_temp_db(db_name string, run fn (string)) {

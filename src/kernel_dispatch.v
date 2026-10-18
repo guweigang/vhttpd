@@ -3,16 +3,18 @@ module main
 import upstream.transport
 import executor
 import dispatch
+import api.mcp.protocol as mcp_protocol
 
 struct KernelDispatchFailureMapper {}
 
 fn (mut app App) kernel_dispatch_stream(req transport.StreamDispatchRequest) !transport.StreamDispatchResponse {
+	mut engines := app.engine_runtime_snapshot()
 	_ = executor.KernelDispatchEnvelope{
 		kind:    .stream
-		context: DispatchContext.from_stream_dispatch_provider(req, app.logic_executor_provider())
+		context: DispatchContext.from_stream_dispatch_provider(req, engines.logic_executor_provider())
 	}
 	mut facade := app.as_facade()
-	return app.engines.dispatch_stream(mut facade, req)
+	return engines.dispatch_stream(mut facade, req)
 }
 
 fn kernel_stream_dispatch_failure(resp transport.StreamDispatchResponse) ?executor.KernelStreamDispatchFailure {
@@ -28,16 +30,20 @@ fn KernelDispatchFailureMapper.from_stream_response(resp transport.StreamDispatc
 }
 
 fn (mut app App) kernel_dispatch_mcp(req transport.WorkerMcpDispatchRequest) !transport.WorkerMcpDispatchResponse {
-	_ = executor.KernelDispatchEnvelope{
-		kind:    .mcp
-		context: DispatchContext.from_mcp_dispatch_provider(req, app.logic_executor_provider())
-	}
-	mut facade := app.as_facade()
-	return app.engines.dispatch_mcp(mut facade, req)
+	route := app.mcp_dispatch_route(req.session_id)!
+	return route.call_fn(req)
 }
 
 fn (mut app App) kernel_dispatch_mcp_handled(req transport.WorkerMcpDispatchRequest) !executor.KernelMcpDispatchOutcome {
-	resp := app.kernel_dispatch_mcp(req)!
+	route := app.mcp_dispatch_route(req.session_id)!
+	return app.kernel_dispatch_mcp_handled_on_route(req, route)
+}
+
+fn (mut app App) kernel_dispatch_mcp_handled_on_route(req transport.WorkerMcpDispatchRequest, route &mcp_protocol.SessionDispatch) !executor.KernelMcpDispatchOutcome {
+	resp := route.call_fn(req)!
+	if !app.protocols.mcp.dispatch_current(req.session_id, route) {
+		return error('mcp_session_unavailable')
+	}
 	if resp.error != '' || resp.commands.len == 0 {
 		return executor.KernelMcpDispatchOutcome{
 			response:          resp
@@ -45,7 +51,7 @@ fn (mut app App) kernel_dispatch_mcp_handled(req transport.WorkerMcpDispatchRequ
 			command_error:     ''
 		}
 	}
-	ctx := DispatchContext.from_mcp_dispatch_provider(req, app.logic_executor_provider())
+	ctx := DispatchContext.from_mcp_dispatch_provider(req, route.provider)
 	command_snapshots, command_error := app.execute_command_envelopes_with_snapshots(req.id, ctx,
 		resp.commands)
 	return executor.KernelMcpDispatchOutcome{
@@ -56,9 +62,10 @@ fn (mut app App) kernel_dispatch_mcp_handled(req transport.WorkerMcpDispatchRequ
 }
 
 fn (mut app App) kernel_dispatch_websocket_upstream(req transport.WorkerWebSocketUpstreamDispatchRequest) !transport.WorkerWebSocketUpstreamDispatchResponse {
+	mut engines := app.engine_runtime_snapshot()
 	_ = executor.KernelDispatchEnvelope.from_websocket_upstream(req)
 	mut facade := app.as_facade()
-	return app.engines.dispatch_websocket_upstream(mut facade, req)
+	return engines.dispatch_websocket_upstream(mut facade, req)
 }
 
 fn (mut app App) kernel_dispatch_websocket_upstream_handled(req transport.WorkerWebSocketUpstreamDispatchRequest) !executor.KernelWebSocketUpstreamDispatchOutcome {
@@ -81,13 +88,14 @@ fn (mut app App) kernel_dispatch_websocket_upstream_handled(req transport.Worker
 }
 
 fn (mut app App) kernel_dispatch_websocket_event(frame transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse {
+	mut engines := app.engine_runtime_snapshot()
 	_ = executor.KernelDispatchEnvelope{
 		kind:    .websocket_dispatch
 		context: DispatchContext.from_websocket_dispatch_provider(frame,
-			app.logic_executor_provider())
+			engines.logic_executor_provider())
 	}
 	mut facade := app.as_facade()
-	return app.engines.dispatch_websocket_event(mut facade, frame)
+	return engines.dispatch_websocket_event(mut facade, frame)
 }
 
 fn kernel_dispatch_transport_failure(err_msg string) executor.KernelDispatchTransportFailure {

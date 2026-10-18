@@ -1,7 +1,7 @@
 module main
 
 import encoding.base64
-import json
+import json2 as json
 import log
 import net.http
 import feishu
@@ -38,7 +38,7 @@ fn (mut hub ProviderRuntimeHub) feishu_native_send_message(req feishu.SendMessag
 		hub.feishu.note_send(app_name, false)
 		return error('feishu message send failed with status ${resp.status_code}: ${resp.body}')
 	}
-	decoded := json.decode(feishu.SendMessageResponse, resp.body) or {
+	decoded := json.decode[feishu.SendMessageResponse](resp.body) or {
 		hub.feishu.note_send(app_name, false)
 		return error('invalid feishu send response: ${err}')
 	}
@@ -103,7 +103,7 @@ fn (mut hub ProviderRuntimeHub) feishu_native_upload_image_bytes(req feishu.Uplo
 	if resp.status_code < 200 || resp.status_code >= 300 {
 		return error('feishu image upload failed with status ${resp.status_code}')
 	}
-	decoded := json.decode(feishu.UploadImageResponse, resp.body) or {
+	decoded := json.decode[feishu.UploadImageResponse](resp.body) or {
 		return error('invalid_feishu_image_upload_response')
 	}
 	if decoded.code != 0 || decoded.data.image_key.trim_space() == '' {
@@ -161,7 +161,7 @@ fn (mut hub ProviderRuntimeHub) feishu_native_update_message(req feishu.UpdateMe
 		hub.feishu.note_send(app_name, false)
 		return error('feishu message update failed with status ${resp.status_code}: ${resp.body}')
 	}
-	decoded := json.decode(feishu.SendMessageResponse, resp.body) or {
+	decoded := json.decode[feishu.SendMessageResponse](resp.body) or {
 		hub.feishu.note_send(app_name, false)
 		return error('invalid feishu update response: ${err}')
 	}

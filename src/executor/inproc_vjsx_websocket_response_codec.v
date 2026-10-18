@@ -1,6 +1,6 @@
 module executor
 
-import json
+import json2 as json
 import log
 import upstream.transport
 import vjsx
@@ -34,7 +34,7 @@ fn InProcVjsxResponseCodec.websocket_upstream_from_js_value(val vjsx.Value, req 
 			body:     ''
 		}
 	}
-	normalized := json.decode(InProcVjsxWebSocketUpstreamResult, raw) or {
+	normalized := json.decode[InProcVjsxWebSocketUpstreamResult](raw) or {
 		InProcVjsxWebSocketUpstreamResult{}
 	}
 	return transport.WorkerWebSocketUpstreamDispatchResponse{
@@ -66,7 +66,7 @@ fn InProcVjsxResponseCodec.websocket_from_json(raw string, frame transport.Worke
 			commands: []transport.WorkerWebSocketFrame{}
 		}
 	}
-	normalized := json.decode(InProcVjsxWebSocketResult, raw) or { InProcVjsxWebSocketResult{} }
+	normalized := json.decode[InProcVjsxWebSocketResult](raw) or { InProcVjsxWebSocketResult{} }
 	if frame.event in ['open', 'message'] {
 		log.debug('[vhttpd] websocket_response decode_done event=${frame.event} request_id=${frame.request_id} accepted=${normalized.accepted} closed=${normalized.closed} commands=${normalized.commands.len} affinity_key=${normalized.affinity_key} error=${normalized.error} error_class=${normalized.error_class}')
 	}
@@ -91,5 +91,5 @@ fn InProcVjsxResponseCodec.websocket_handler_missing_result(frame transport.Work
 		accepted: false
 		closed:   false
 		commands: []transport.WorkerWebSocketFrame{}
-	})
+	}, escape_unicode: true, time_as_unix: true)
 }

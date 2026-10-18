@@ -114,6 +114,8 @@ fn (mut hub ProviderRuntimeHub) feishu_runtime_snapshot() feishu.RuntimeSnapshot
 }
 
 fn (mut app App) feishu_runtime_snapshot() feishu.RuntimeSnapshot {
+	app.mu.@lock()
+	defer { app.mu.unlock() }
 	return app.providers.feishu_runtime_snapshot()
 }
 
@@ -128,13 +130,19 @@ fn (mut hub ProviderRuntimeHub) feishu_runtime_app_snapshot(name string) ?feishu
 }
 
 fn (mut app App) feishu_runtime_app_snapshot(name string) ?feishu.RuntimeAppSnapshot {
+	app.mu.@lock()
+	defer { app.mu.unlock() }
 	return app.providers.feishu_runtime_app_snapshot(name)
 }
 
 fn (mut app App) provider_runtime_feishu_snapshot() feishu.RuntimeSnapshot {
+	app.mu.@lock()
+	defer { app.mu.unlock() }
 	return app.providers.feishu_runtime_snapshot()
 }
 
 fn (mut app App) provider_runtime_feishu_app_snapshot(name string) ?feishu.RuntimeAppSnapshot {
+	app.mu.@lock()
+	defer { app.mu.unlock() }
 	return app.providers.feishu_runtime_app_snapshot(name)
 }

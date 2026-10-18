@@ -68,16 +68,16 @@ pub:
 
 pub struct ProviderRuntime {
 pub mut:
-	instance            string
-	enabled             bool
-	url                 string
-	model               string
-	effort              string
-	cwd                 string
-	approval_policy     string
-	sandbox             string
-	reconnect_delay_ms  int
-	flush_interval_ms   int
+	instance                string
+	enabled                 bool
+	url                     string
+	model                   string
+	effort                  string
+	cwd                     string
+	approval_policy         string
+	sandbox                 string
+	reconnect_delay_ms      int
+	flush_interval_ms       int
 	connected               bool
 	ws_url                  string
 	last_connect_at_unix    i64
@@ -90,7 +90,7 @@ pub mut:
 	initialized             bool
 	thread_id               string
 	active_stream_id        string
-	conn                    &ws.Client = unsafe { nil }
+	conn                    ?&ws.Client
 	stream_map              map[string][]CodexTarget
 	rpc_id_counter          int
 	pending_rpcs            map[int]PendingRpc
@@ -134,7 +134,7 @@ pub fn (rt &ProviderRuntime) current_stream_id() string {
 	return rt.active_stream_id
 }
 
-pub fn (rt &ProviderRuntime) connection() &ws.Client {
+pub fn (rt &ProviderRuntime) connection() ?&ws.Client {
 	return rt.conn
 }
 
@@ -167,7 +167,7 @@ pub fn (mut rt ProviderRuntime) note_disconnected(reason string) {
 	rt.initialized = false
 	rt.last_disconnect_at_unix = time.now().unix()
 	rt.last_error = reason
-	rt.conn = unsafe { nil }
+	rt.conn = none
 	rt.thread_id = ''
 	rt.read_fallbacks = map[string]ReadFallback{}
 }
@@ -243,8 +243,8 @@ pub fn (rt &ProviderRuntime) state_view() RuntimeStateView {
 
 pub struct CodexState {
 pub mut:
-	mu              sync.Mutex
-	runtime         ProviderRuntime
-	instances       map[string]ProviderRuntime
-	ollama_enabled  bool
+	mu             sync.Mutex
+	runtime        ProviderRuntime
+	instances      map[string]ProviderRuntime
+	ollama_enabled bool
 }

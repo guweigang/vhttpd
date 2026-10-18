@@ -2,7 +2,7 @@ module main
 
 import config
 import executor
-import json
+import json2 as json
 import os
 import provider
 import runtime_plan
@@ -51,7 +51,7 @@ fn test_runtime_plan_with_projection_diagnostics_appends_to_runtime_visible_plan
 	assert runtime_visible_plan.diagnostics[1].code == 'pipeline_capability_mismatch'
 	assert runtime_visible_plan.diagnostics[1].path == 'pipelines.ws-on-http'
 
-	encoded := json.encode(runtime_visible_plan)
+	encoded := json.encode(runtime_visible_plan, escape_unicode: true, time_as_unix: true)
 	assert encoded.contains('"diagnostics"')
 	assert encoded.contains('"pipeline_capability_mismatch"')
 	assert encoded.contains('"pipelines.ws-on-http"')

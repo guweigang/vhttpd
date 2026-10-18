@@ -153,8 +153,6 @@ fn worker_websocket_message_cb(mut ws_client websocket.Client, msg &websocket.Me
 			'error':      err.msg()
 		})
 		ws_client.close(1011, 'Worker bridge write failed') or {}
-		state.rt.unregister_conn(state.conn_id)
-		state.worker_conn.close() or {}
 		return
 	}
 	state.cb_mu.unlock()
@@ -174,8 +172,6 @@ fn worker_websocket_message_cb(mut ws_client websocket.Client, msg &websocket.Me
 				'error':      err.msg()
 			})
 			ws_client.close(1011, 'Worker bridge read failed') or {}
-			state.rt.unregister_conn(state.conn_id)
-			state.worker_conn.close() or {}
 			return
 		}
 		state.cb_mu.unlock()
@@ -220,8 +216,9 @@ fn worker_websocket_message_cb(mut ws_client websocket.Client, msg &websocket.Me
 	}
 }
 
-fn worker_websocket_close_cb(mut _ws websocket.Client, code int, reason string, ref voidptr) ! {
+fn worker_websocket_close_cb(mut _ws websocket.Client, reported_code int, reported_reason string, ref voidptr) ! {
 	mut state := unsafe { &ws.BridgeState(ref) }
+	code, reason := state.lifecycle.close_details(reported_code, reported_reason)
 	state.cb_mu.@lock()
 	runtime_trace('ws.close.enter', {
 		'conn_id':          state.conn_id
@@ -267,8 +264,6 @@ fn worker_websocket_close_cb(mut _ws websocket.Client, code int, reason string, 
 			}
 		}
 	}
-	state.rt.unregister_conn(state.conn_id)
-	state.worker_conn.close() or {}
 	state.cb_mu.unlock()
 	runtime_trace('ws.close.exit', {
 		'conn_id':    state.conn_id
@@ -285,56 +280,72 @@ fn proxy_worker_websocket(mut app App, mut ctx Context, method string, path stri
 	if method.to_upper() != 'GET' || key == '' || !is_websocket_upgrade(ctx.req) {
 		return websocket_http_response(mut app, mut ctx, method, path, remote_addr, req_id,
 			trace_id, start_ms, 426, {
-			'content-type': 'text/plain; charset=utf-8'
-			'upgrade':      'websocket'
-		}, 'Upgrade Required', 'upgrade_required')
+				'content-type': 'text/plain; charset=utf-8'
+				'upgrade':      'websocket'
+			}, 'Upgrade Required', 'upgrade_required')
 	}
 	normalized_path, query_string := transport.normalize_request_target(path)
 	query := transport.parse_query_map(query_string)
 	headers := transport.header_map_from_request(ctx.req)
-	if descriptor := relay_websocket_path_descriptor(app, normalized_path) {
+	if descriptor := relay_websocket_path_descriptor(app.relay, normalized_path) {
+		mut run := reserve_inbound_websocket(mut app, ctx) or { return inbound_websocket_unavailable(mut ctx) }
 		ctx.takeover_conn()
 		ctx.conn.set_write_timeout(time.infinite)
 		ctx.conn.set_read_timeout(time.infinite)
 		mut conn := ctx.conn
-		spawn handle_relay_websocket_session(mut app, mut conn, key, method.to_upper(),
+		spawn run_relay_websocket_session(mut run, mut app, mut conn, key, method.to_upper(),
 			normalized_path, query, headers, remote_addr, req_id, trace_id, descriptor)
 		return veb.no_result()
 	}
 	if app.websocket.dispatch_enabled() {
 		return proxy_worker_websocket_dispatch(mut app, mut ctx, method, path)
 	}
+	mut run := reserve_inbound_websocket(mut app, ctx) or { return inbound_websocket_unavailable(mut ctx) }
+	mut transferred := false
+	defer { if !transferred { run.finish() } }
 	mut facade := app.as_facade()
-	mut ws_open := app.engines.open_websocket_session(mut facade, executor.WebSocketSessionOpenRequest{
-		req:         ctx.req
-		remote_addr: remote_addr
-		path:        path
-		request_id:  req_id
-		trace_id:    trace_id
+	app.mu.@lock()
+	mut engines := app.engines
+	app.mu.unlock()
+	mut ws_open := engines.open_websocket_session(mut facade, executor.WebSocketSessionOpenRequest{
+		register_conn_fn: fn [mut run] (fd int) bool { return run.attach(fd) }
+		req:              ctx.req
+		remote_addr:      remote_addr
+		path:             path
+		request_id:       req_id
+		trace_id:         trace_id
 	}) or {
 		err_msg := err.msg()
 		status, error_class := transport.classify_worker_backend_error(err_msg)
 		return websocket_http_response(mut app, mut ctx, method, path, remote_addr, req_id,
 			trace_id, start_ms, status, {
-			'content-type': 'text/plain; charset=utf-8'
-		}, 'Bad Gateway', error_class)
+				'content-type': 'text/plain; charset=utf-8'
+			}, 'Bad Gateway', error_class)
 	}
+	defer { ws_open.close_live_conn() }
 	if !ws_open.accepted {
 		return websocket_http_response(mut app, mut ctx, method, path, remote_addr, req_id,
 			trace_id, start_ms, ws_open.status, {
-			'content-type': 'text/plain; charset=utf-8'
-		}, ws_open.body, '')
+				'content-type': 'text/plain; charset=utf-8'
+			}, ws_open.body, '')
 	}
 
+	mut worker_conn := ws_open.take_live_conn() or {
+		return websocket_http_response(mut app, mut ctx, method, path, remote_addr, req_id,
+			trace_id, start_ms, 502, {
+				'content-type': 'text/plain; charset=utf-8'
+			},
+			'Bad Gateway', 'worker_websocket_connection_missing')
+	}
 	delivery := worker_websocket_session_delivery_outcome(ws_open, req_id, path)
 	selected_socket := delivery.metadata['worker_socket'] or { ws_open.socket_path }
 	ctx.takeover_conn()
 	ctx.conn.set_write_timeout(time.infinite)
 	ctx.conn.set_read_timeout(time.infinite)
 	mut conn := ctx.conn
-	mut worker_conn := ws_open.conn
-	spawn handle_worker_websocket_session(mut app, mut conn, mut worker_conn, selected_socket, key,
-		method.to_upper(), path, req_id, trace_id, start_ms)
+	transferred = true
+	spawn run_worker_websocket_session(mut run, app.build_websocket_runtime_context_for_state(engines.primary), mut conn, mut worker_conn, selected_socket, key,
+		method.to_upper(), path, req_id, trace_id, start_ms, ws_open.lease)
 	return veb.no_result()
 }
 
@@ -347,15 +358,19 @@ fn proxy_worker_websocket_dispatch(mut app App, mut ctx Context, method string, 
 	normalized_path, query_string := transport.normalize_request_target(path)
 	query := transport.parse_query_map(query_string)
 	headers := transport.header_map_from_request(ctx.req)
-	if descriptor := relay_websocket_path_descriptor(app, normalized_path) {
+	if descriptor := relay_websocket_path_descriptor(app.relay, normalized_path) {
+		mut run := reserve_inbound_websocket(mut app, ctx) or { return inbound_websocket_unavailable(mut ctx) }
 		ctx.takeover_conn()
 		ctx.conn.set_write_timeout(time.infinite)
 		ctx.conn.set_read_timeout(time.infinite)
 		mut conn := ctx.conn
-		spawn handle_relay_websocket_session(mut app, mut conn, key, method.to_upper(),
+		spawn run_relay_websocket_session(mut run, mut app, mut conn, key, method.to_upper(),
 			normalized_path, query, headers, remote_addr, req_id, trace_id, descriptor)
 		return veb.no_result()
 	}
+	mut run := reserve_inbound_websocket(mut app, ctx) or { return inbound_websocket_unavailable(mut ctx) }
+	mut transferred := false
+	defer { if !transferred { run.finish() } }
 	websocket_runtime := app.build_websocket_runtime_context()
 	presence := websocket_runtime.presence(req_id)
 	open_frame := websocket_runtime.build_frame('open', method, normalized_path, query, headers,
@@ -367,18 +382,18 @@ fn proxy_worker_websocket_dispatch(mut app App, mut ctx Context, method string, 
 		log.error('[vhttpd] kernel_dispatch_websocket_event failed trace_id=${trace_id} path=${normalized_path} error=${err_msg}')
 		return websocket_http_response(mut app, mut ctx, method, path, remote_addr, req_id,
 			trace_id, start_ms, 502, {
-			'content-type': 'text/plain; charset=utf-8'
-		}, 'Bad Gateway', 'transport_error')
+				'content-type': 'text/plain; charset=utf-8'
+			}, 'Bad Gateway', 'transport_error')
 	}
 	if resp.event == 'error' {
 		return websocket_http_response(mut app, mut ctx, method, path, remote_addr, req_id,
 			trace_id, start_ms, 500, {
-			'content-type': 'text/plain; charset=utf-8'
-		}, 'WebSocket open failed', if resp.error_class != '' {
-			resp.error_class
-		} else {
-			'worker_runtime_error'
-		})
+				'content-type': 'text/plain; charset=utf-8'
+			}, 'WebSocket open failed', if resp.error_class != '' {
+				resp.error_class
+			} else {
+				'worker_runtime_error'
+			})
 	}
 	if !resp.accepted {
 		result := websocket_runtime.command_result(resp.commands)
@@ -388,13 +403,13 @@ fn proxy_worker_websocket_dispatch(mut app App, mut ctx Context, method string, 
 			body := if close_frame.reason != '' { close_frame.reason } else { 'Forbidden' }
 			return websocket_http_response(mut app, mut ctx, method, path, remote_addr, req_id,
 				trace_id, start_ms, status, {
-				'content-type': 'text/plain; charset=utf-8'
-			}, body, '')
+					'content-type': 'text/plain; charset=utf-8'
+				}, body, '')
 		}
 		return websocket_http_response(mut app, mut ctx, method, path, remote_addr, req_id,
 			trace_id, start_ms, 403, {
-			'content-type': 'text/plain; charset=utf-8'
-		}, 'Forbidden', '')
+				'content-type': 'text/plain; charset=utf-8'
+			}, 'Forbidden', '')
 	}
 	delivery := dispatch_websocket_session_delivery_outcome(resp, req_id, normalized_path)
 	open_command_count := (delivery.metadata['command_count'] or { '${resp.commands.len}' }).int()
@@ -404,13 +419,14 @@ fn proxy_worker_websocket_dispatch(mut app App, mut ctx Context, method string, 
 	ctx.conn.set_write_timeout(time.infinite)
 	ctx.conn.set_read_timeout(time.infinite)
 	mut conn := ctx.conn
-	spawn ws.handle_dispatch_session(app.build_websocket_runtime_context(), mut conn, key,
+	transferred = true
+	spawn ws.run_dispatch_session(mut run, websocket_runtime, mut conn, key,
 		method.to_upper(), normalized_path, query, headers, remote_addr, req_id, trace_id,
 		start_ms, open_commands)
 	return veb.no_result()
 }
 
-fn handle_worker_websocket_session(mut app App, mut client_conn net.TcpConn, mut worker_conn unix.StreamConn, selected_socket string, key string, method string, path string, req_id string, trace_id string, start_ms i64) {
+fn handle_worker_websocket_session(rt ws.RuntimeContext, mut client_conn net.TcpConn, mut worker_conn unix.StreamConn, selected_socket string, key string, method string, path string, req_id string, trace_id string, start_ms i64, serving ?&ws.IngressRun, lease ?&executor.WorkerRequestLease) {
 	runtime_trace('ws.session.start', {
 		'request_id':    req_id
 		'trace_id':      trace_id
@@ -424,11 +440,12 @@ fn handle_worker_websocket_session(mut app App, mut client_conn net.TcpConn, mut
 			'path':          path
 			'worker_socket': selected_socket
 		})
-		app.on_worker_request_finished(selected_socket)
+		if mut owned := lease { owned.finish() }
 	}
-	mut ws_server := websocket.new_server(.ip, 0, '')
-	websocket_runtime := app.build_websocket_runtime_context()
+	mut ws_server, captured := ws.managed_server()
+	websocket_runtime := rt.with_ingress(serving)
 	mut state := &ws.BridgeState{
+		lifecycle:     &ws.DispatchConnState{ phase: .open }
 		worker_conn:   worker_conn
 		rt:            websocket_runtime
 		worker_socket: selected_socket
@@ -439,7 +456,12 @@ fn handle_worker_websocket_session(mut app App, mut client_conn net.TcpConn, mut
 		trace_id:      trace_id
 		start_ms:      start_ms
 	}
-	ws_server.on_connect(fn [mut state] (mut sc websocket.ServerClient) !bool {
+	defer {
+		state.lifecycle.mark_closing()
+		state.rt.unregister_conn(state.conn_id, state.lifecycle)
+		state.worker_conn.close() or {}
+	}
+	ws_server.on_attached(fn [mut state] (mut sc websocket.ServerClient) ! {
 		runtime_trace('ws.session.connect', {
 			'conn_id':       state.conn_id
 			'request_id':    state.request_id
@@ -448,20 +470,18 @@ fn handle_worker_websocket_session(mut app App, mut client_conn net.TcpConn, mut
 		})
 		state.rt.register_conn(state.conn_id, state.worker_socket, state.method, state.request_id,
 			state.trace_id, state.path, map[string]string{}, map[string]string{}, '', sc.client,
-			unsafe { nil })
-		return true
-	}) or {}
+			state.lifecycle)
+		state.rt.flush_pending(state.conn_id)
+	})
 	ws_server.on_message_ref(worker_websocket_message_cb, state)
 	ws_server.on_close_ref(worker_websocket_close_cb, state)
-	ws_server.handle_handshake(mut client_conn, key) or {
+	ws.managed_handshake(mut ws_server, mut client_conn, key, captured) or {
 		runtime_trace('ws.session.handshake.error', {
 			'conn_id':    state.conn_id
 			'request_id': state.request_id
 			'path':       state.path
 			'error':      err.msg()
 		})
-		state.rt.unregister_conn(state.conn_id)
-		state.worker_conn.close() or {}
 		return
 	}
 	state.rt.flush_pending(state.conn_id)
@@ -470,12 +490,30 @@ fn handle_worker_websocket_session(mut app App, mut client_conn net.TcpConn, mut
 		'request_id':     state.request_id
 		'close_notified': if state.close_notified { 'true' } else { 'false' }
 	})
-	if !state.close_notified {
-		state.rt.unregister_conn(state.conn_id)
-		state.worker_conn.close() or {}
-		runtime_trace('ws.session.cleanup.no_close', {
-			'conn_id':    state.conn_id
-			'request_id': state.request_id
-		})
+}
+
+fn reserve_inbound_websocket(mut app App, ctx Context) ?&ws.IngressRun {
+	mut run := app.websocket.state.ingress.reserve() or { return none }
+	fd := if !isnil(ctx.conn) { ctx.conn.sock.handle } else { ctx.client_fd }
+	if !run.attach(fd) {
+		run.finish()
+		return none
 	}
+	return run
+}
+
+fn inbound_websocket_unavailable(mut ctx Context) veb.Result {
+	ctx.res.set_status(.service_unavailable)
+	return ctx.text('WebSocket server shutting down')
+}
+
+fn run_worker_websocket_session(mut run ws.IngressRun, rt ws.RuntimeContext, mut client_conn net.TcpConn, mut worker_conn unix.StreamConn, selected_socket string, key string, method string, path string, req_id string, trace_id string, start_ms i64, lease ?&executor.WorkerRequestLease) {
+	defer { run.finish() }
+	if run.stopped() {
+		client_conn.close() or {}
+		worker_conn.close() or {}
+		if mut owned := lease { owned.finish() }
+		return
+	}
+	handle_worker_websocket_session(rt, mut client_conn, mut worker_conn, selected_socket, key, method, path, req_id, trace_id, start_ms, &run, lease)
 }

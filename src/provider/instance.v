@@ -20,6 +20,8 @@ pub fn ProviderInstanceStore.upsert(mut specs map[string]ProviderInstanceSpec, s
 
 // upsert creates or updates a provider instance spec in the registry.
 pub fn (mut registry ProviderInstanceRegistry) upsert(spec ProviderInstanceSpec) ProviderInstanceSpec {
+	registry.mu.@lock()
+	defer { registry.mu.unlock() }
 	return ProviderInstanceStore.upsert(mut registry.specs, spec)
 }
 
@@ -32,7 +34,9 @@ pub fn ProviderInstanceStore.get(specs map[string]ProviderInstanceSpec, provider
 }
 
 // get retrieves a provider instance spec by name.
-pub fn (registry ProviderInstanceRegistry) get(provider_name string, instance string) ?ProviderInstanceSpec {
+pub fn (registry &ProviderInstanceRegistry) get(provider_name string, instance string) ?ProviderInstanceSpec {
+	registry.mu.@lock()
+	defer { registry.mu.unlock() }
 	return ProviderInstanceStore.get(registry.specs, provider_name, instance)
 }
 
@@ -60,6 +64,8 @@ pub fn ProviderInstanceStore.list(specs map[string]ProviderInstanceSpec, provide
 }
 
 // list returns provider instance specs, optionally filtered by provider name.
-pub fn (registry ProviderInstanceRegistry) list(provider_name string) []ProviderInstanceSpec {
+pub fn (registry &ProviderInstanceRegistry) list(provider_name string) []ProviderInstanceSpec {
+	registry.mu.@lock()
+	defer { registry.mu.unlock() }
 	return ProviderInstanceStore.list(registry.specs, provider_name)
 }

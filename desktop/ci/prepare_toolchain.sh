@@ -1,0 +1,40 @@
+#!/bin/bash
+set -euo pipefail
+root="$(cd "$(dirname "$0")/../.." && pwd)"
+# shellcheck source=desktop/ci/toolchain.env
+source "$root/desktop/ci/toolchain.env"
+: "${RUNNER_TEMP:?RUNNER_TEMP is required}"
+: "${GITHUB_PATH:?GITHUB_PATH is required}"
+: "${GITHUB_ENV:?GITHUB_ENV is required}"
+toolchain="$RUNNER_TEMP/vhttpd-workbench-toolchain"
+mkdir -p "$toolchain"
+checkout_pinned() {
+  local repository="$1" revision="$2" destination="$3"
+  git init "$destination"
+  git -C "$destination" remote add origin "$repository"
+  git -C "$destination" fetch --depth 1 origin "$revision"
+  git -C "$destination" checkout --detach FETCH_HEAD
+  [[ "$(git -C "$destination" rev-parse HEAD)" == "$revision" ]]
+}
+checkout_pinned "$V_REPO" "$V_COMMIT" "$toolchain/v"
+checkout_pinned "$VJSX_REPO" "$VJSX_COMMIT" "$toolchain/vjsx"
+# Freeze the dependency changes used by this workspace, rather than relying on
+# unpublished edits in a developer's V/vjsx checkout.
+git -C "$toolchain/v" apply --check "$root/desktop/ci/patches/v-websocket.patch"
+git -C "$toolchain/v" apply "$root/desktop/ci/patches/v-websocket.patch"
+git -C "$toolchain/vjsx" apply --check "$root/desktop/ci/patches/vjsx-runtime.patch"
+git -C "$toolchain/vjsx" apply "$root/desktop/ci/patches/vjsx-runtime.patch"
+make -C "$toolchain/v" CC=cc
+"$toolchain/v/v" version
+mkdir -p "$HOME/.vmodules"
+if [[ -e "$HOME/.vmodules/vjsx" || -L "$HOME/.vmodules/vjsx" ]]; then
+  echo 'Refusing to replace an existing vjsx module in the build environment.' >&2
+  exit 1
+fi
+ln -s "$toolchain/vjsx" "$HOME/.vmodules/vjsx"
+quickjs="$(VJS_QUICKJS_WORK_ROOT="$root" "$toolchain/vjsx/scripts/ensure-quickjs.sh")"
+echo "$toolchain/v" >> "$GITHUB_PATH"
+{
+  echo "VJSX_DIR=$toolchain/vjsx"
+  echo "VJS_QUICKJS_PATH=$quickjs"
+} >> "$GITHUB_ENV"

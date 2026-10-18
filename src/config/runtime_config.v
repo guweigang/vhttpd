@@ -561,9 +561,11 @@ pub fn (global_cfg VhttpdConfig) with_site(site_cfg SiteConfig) VhttpdConfig {
 	}
 	cfg.server.ssl = global_cfg.server.ssl.merge(site_cfg.ssl)
 	cfg.worker = global_cfg.worker.merge(site_cfg.worker)
-	if cfg.site.document_root.trim_space() != '' && cfg.worker.env['DOCUMENT_ROOT'] == '' {
-		cfg.worker.env['DOCUMENT_ROOT'] = cfg.site.document_root
+	mut worker_env := cfg.worker.env.clone()
+	if cfg.site.document_root.trim_space() != '' && worker_env['DOCUMENT_ROOT'] == '' {
+		worker_env['DOCUMENT_ROOT'] = cfg.site.document_root
 	}
+	cfg.worker.env = worker_env
 	cfg.executor = global_cfg.executor.merge(site_cfg.executor, site_cfg)
 	cfg.php = global_cfg.php.merge(site_cfg.php)
 	cfg.php_site = global_cfg.php_site.merge(site_cfg.php_site)

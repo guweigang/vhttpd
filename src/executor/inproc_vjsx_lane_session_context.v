@@ -5,7 +5,7 @@ import upstream.transport
 struct InProcVjsxRequestContext {
 mut:
 	active     bool
-	app        AppFacade = NoOpAppFacade{}
+	app        ?EmbeddedHost
 	lane_id    string
 	request_id string
 	trace_id   string
@@ -13,8 +13,8 @@ mut:
 	path       string
 }
 
-fn (e InProcVjsxExecutor) activate_lane_request_context(idx int, mut app AppFacade, lane_id string, req HttpLogicDispatchRequest) {
-	if isnil(e.state) || idx < 0 {
+fn (e InProcVjsxExecutor) activate_lane_request_context(idx int, mut app EmbeddedHost, lane_id string, req HttpLogicDispatchRequest) {
+	if idx < 0 {
 		return
 	}
 	mut state := e.state
@@ -28,7 +28,7 @@ fn (e InProcVjsxExecutor) activate_lane_request_context(idx int, mut app AppFaca
 	normalized_path, _ := transport.WorkerHttpRequestCodec.normalize_request_target(req.path)
 	state.hosts[idx].request_ctx = InProcVjsxRequestContext{
 		active:     true
-		app:        app
+		app:        EmbeddedHost(app)
 		lane_id:    lane_id
 		request_id: req.request_id
 		trace_id:   req.trace_id
@@ -39,7 +39,7 @@ fn (e InProcVjsxExecutor) activate_lane_request_context(idx int, mut app AppFaca
 }
 
 fn (e InProcVjsxExecutor) clear_lane_request_context(idx int) {
-	if isnil(e.state) || idx < 0 {
+	if idx < 0 {
 		return
 	}
 	mut state := e.state
@@ -54,9 +54,6 @@ fn (e InProcVjsxExecutor) clear_lane_request_context(idx int) {
 }
 
 pub fn (e InProcVjsxExecutor) pump_all_lane_sessions() ! {
-	if isnil(e.state) {
-		return
-	}
 	mut state := e.state
 	state.mu.@lock()
 	lanes := state.lanes.clone()

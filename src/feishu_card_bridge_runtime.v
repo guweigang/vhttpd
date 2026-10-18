@@ -1,7 +1,8 @@
 module main
 
 import executor
-import json
+import connection_runtime
+import json2 as json
 import log
 import net.websocket
 import os
@@ -13,7 +14,7 @@ struct FeishuCardBridgeRuntime {}
 
 struct FeishuCardBridgeContext {
 mut:
-	state &feishu.FeishuState = unsafe { nil }
+	state &feishu.FeishuState @[required]
 }
 
 fn (mut providers ProviderRuntimeHub) feishu_card_bridge_context() FeishuCardBridgeContext {
@@ -57,58 +58,101 @@ fn (providers &ProviderRuntimeHub) feishu_card_bridge_enabled() bool {
 	return providers.feishu.card_bridge_enabled_flag && providers.feishu.card_bridge_ws_url.trim_space() != ''
 }
 
-fn (mut bridge FeishuCardBridgeContext) set_client_conn(client &websocket.Client) {
+fn (mut bridge FeishuCardBridgeContext) set_client_conn(client &websocket.Client) &connection_runtime.WebSocketSender {
 	bridge.state.card_bridge_mu.@lock()
-	bridge.state.card_bridge_client_conn = unsafe { client }
-	bridge.state.card_bridge_mu.unlock()
+	defer { bridge.state.card_bridge_mu.unlock() }
+	if mut current := bridge.state.card_bridge_client_conn {
+		if voidptr(current.client) == voidptr(client) { return current }
+		current.retire()
+		bridge.cancel_sender_pending_unlocked(current)
+	}
+	owner := connection_runtime.WebSocketSender.new(client)
+	bridge.state.card_bridge_client_conn = owner
+	return owner
 }
 
-fn (mut bridge FeishuCardBridgeContext) clear_client_conn() {
+fn (mut bridge FeishuCardBridgeContext) clear_client_conn(client &websocket.Client) {
 	bridge.state.card_bridge_mu.@lock()
-	bridge.state.card_bridge_client_conn = unsafe { nil }
-	bridge.state.card_bridge_mu.unlock()
+	defer { bridge.state.card_bridge_mu.unlock() }
+	if mut current := bridge.state.card_bridge_client_conn {
+		if voidptr(current.client) == voidptr(client) {
+			current.retire()
+			bridge.cancel_sender_pending_unlocked(current)
+			bridge.state.card_bridge_client_conn = none
+		}
+	}
+}
+
+// These raw-client getters are observations only; asynchronous sends borrow the owner.
+fn (mut bridge FeishuCardBridgeContext) client_conn() ?&websocket.Client {
+	owner := bridge.client_sender('') or { return none }
+	return owner.client
+}
+
+fn (mut bridge FeishuCardBridgeContext) client(client_id string) ?&websocket.Client {
+	if client_id == '' { return none }
+	owner := bridge.client_sender(client_id) or { return none }
+	return owner.client
+}
+
+fn (mut bridge FeishuCardBridgeContext) client_sender(client_id string) ?&connection_runtime.WebSocketSender {
+	bridge.state.card_bridge_mu.@lock()
+	defer { bridge.state.card_bridge_mu.unlock() }
+	if client_id == '' { return bridge.state.card_bridge_client_conn }
+	return bridge.state.card_bridge_clients[client_id] or { return none }
 }
 
 fn (mut bridge FeishuCardBridgeContext) send_to_server(payload string) bool {
 	if payload == '' {
 		return false
 	}
-	mut client := &websocket.Client(unsafe { nil })
-	bridge.state.card_bridge_mu.@lock()
-	if !isnil(bridge.state.card_bridge_client_conn) {
-		client = unsafe { bridge.state.card_bridge_client_conn }
-	}
-	bridge.state.card_bridge_mu.unlock()
-	if isnil(client) {
-		return false
-	}
 	bridge.state.card_bridge_send_mu.@lock()
 	defer {
 		bridge.state.card_bridge_send_mu.unlock()
 	}
-	client.write_string(payload) or {
+	// Resolve after queue admission: a reconnect may replace the borrowed client
+	// while this sender waits for an earlier write to finish.
+	mut sender := bridge.client_sender('') or { return false }
+	sender.write_string(payload) or {
 		log.error('[bridge] ❌ send to server failed: ${err}')
-		bridge.clear_client_conn()
+		bridge.clear_client_conn(sender.client)
 		return false
 	}
 	return true
 }
 
-fn (mut bridge FeishuCardBridgeContext) register_client(client_id string, client &websocket.Client) {
-	if client_id == '' || isnil(client) {
-		return
-	}
+fn (mut bridge FeishuCardBridgeContext) register_client(client_id string, client &websocket.Client) ?&connection_runtime.WebSocketSender {
+	if client_id == '' { return none }
 	bridge.state.card_bridge_mu.@lock()
-	bridge.state.card_bridge_clients[client_id] = unsafe { client }
+	if mut current := bridge.state.card_bridge_clients[client_id] {
+		if voidptr(current.client) == voidptr(client) {
+			bridge.state.card_bridge_mu.unlock()
+			return current
+		}
+		current.retire()
+		bridge.cancel_sender_pending_unlocked(current)
+	}
+	owner := connection_runtime.WebSocketSender.new(client)
+	bridge.state.card_bridge_clients[client_id] = owner
 	bridge.state.card_bridge_mu.unlock()
 	log.info('[bridge] ✅ feishu card bridge client connected: ${client_id}')
+	return owner
 }
 
-fn (mut bridge FeishuCardBridgeContext) unregister_client(client_id string) {
-	if client_id == '' {
+// Withdrawal closes owner admission; stale callbacks cannot retire a replacement.
+fn (mut bridge FeishuCardBridgeContext) unregister_client(client_id string, client &websocket.Client) {
+	if client_id == '' { return }
+	bridge.state.card_bridge_mu.@lock()
+	mut current := bridge.state.card_bridge_clients[client_id] or {
+		bridge.state.card_bridge_mu.unlock()
 		return
 	}
-	bridge.state.card_bridge_mu.@lock()
+	if voidptr(current.client) != voidptr(client) {
+		bridge.state.card_bridge_mu.unlock()
+		return
+	}
+	current.retire()
+	bridge.cancel_sender_pending_unlocked(current)
 	bridge.state.card_bridge_clients.delete(client_id)
 	bridge.state.card_bridge_mu.unlock()
 	log.info('[bridge] ℹ️ feishu card bridge client disconnected: ${client_id}')
@@ -129,32 +173,33 @@ fn (mut bridge FeishuCardBridgeContext) send(client_id string, payload string) b
 	if client_id == '' || payload == '' {
 		return false
 	}
-	mut client := &websocket.Client(unsafe { nil })
-	bridge.state.card_bridge_mu.@lock()
-	if conn := bridge.state.card_bridge_clients[client_id] {
-		client = unsafe { conn }
-	}
-	bridge.state.card_bridge_mu.unlock()
-	if isnil(client) {
-		return false
-	}
 	bridge.state.card_bridge_send_mu.@lock()
 	defer {
 		bridge.state.card_bridge_send_mu.unlock()
 	}
-	mut c := unsafe { client }
-	c.write_string(payload) or {
+	// Registry removal or reconnect while queued must invalidate the old borrow.
+	mut sender := bridge.client_sender(client_id) or { return false }
+	sender.write_string(payload) or {
 		log.error('[bridge] ❌ send failed client=${client_id}: ${err}')
-		bridge.unregister_client(client_id)
+		bridge.unregister_client(client_id, sender.client)
 		return false
 	}
 	return true
 }
 
-fn (mut bridge FeishuCardBridgeContext) store_pending(request_id string, ch chan executor.FeishuCardBridgeResult) {
+// Both request directions allocate and publish under the state owner's mutex.
+// Wall-clock timestamps are correlation data, not unique registration identities.
+fn (mut bridge FeishuCardBridgeContext) register_pending(ch chan executor.FeishuCardBridgeResult, client_id string) !string {
 	bridge.state.card_bridge_mu.@lock()
-	bridge.state.card_bridge_pending[request_id] = ch
-	bridge.state.card_bridge_mu.unlock()
+	defer { bridge.state.card_bridge_mu.unlock() }
+	sender := bridge.state.card_bridge_clients[client_id] or { return error('bridge_client_unavailable:${client_id}') }
+	if bridge.state.card_bridge_request_seq == u64(0xffffffffffffffff) {
+		return error('bridge_request_id_exhausted')
+	}
+	bridge.state.card_bridge_request_seq++
+	request_id := 'bridge-${bridge.state.card_bridge_request_seq}'
+	bridge.state.card_bridge_pending[request_id] = feishu.CardBridgePending{ sender: sender, ch: ch }
+	return request_id
 }
 
 fn (mut bridge FeishuCardBridgeContext) take_pending(request_id string) ?chan executor.FeishuCardBridgeResult {
@@ -165,15 +210,23 @@ fn (mut bridge FeishuCardBridgeContext) take_pending(request_id string) ?chan ex
 	if request_id !in bridge.state.card_bridge_pending {
 		return none
 	}
-	ch := bridge.state.card_bridge_pending[request_id]
+	pending := bridge.state.card_bridge_pending[request_id] or { return none }
+	ch := pending.ch
 	bridge.state.card_bridge_pending.delete(request_id)
 	return ch
 }
 
-fn (mut bridge FeishuCardBridgeContext) store_proxy_pending(request_id string, ch chan feishu.BridgeProxyResult) {
+fn (mut bridge FeishuCardBridgeContext) register_proxy_pending(ch chan feishu.BridgeProxyResult) !string {
 	bridge.state.card_bridge_mu.@lock()
-	bridge.state.card_bridge_proxy_pending[request_id] = ch
-	bridge.state.card_bridge_mu.unlock()
+	defer { bridge.state.card_bridge_mu.unlock() }
+	sender := bridge.state.card_bridge_client_conn or { return error('bridge_connection_unavailable') }
+	if bridge.state.card_bridge_request_seq == u64(0xffffffffffffffff) {
+		return error('bridge_request_id_exhausted')
+	}
+	bridge.state.card_bridge_request_seq++
+	request_id := 'bridge-proxy-${bridge.state.card_bridge_request_seq}'
+	bridge.state.card_bridge_proxy_pending[request_id] = feishu.CardBridgeProxyPending{ sender: sender, ch: ch }
+	return request_id
 }
 
 fn (mut bridge FeishuCardBridgeContext) take_proxy_pending(request_id string) ?chan feishu.BridgeProxyResult {
@@ -184,7 +237,8 @@ fn (mut bridge FeishuCardBridgeContext) take_proxy_pending(request_id string) ?c
 	if request_id !in bridge.state.card_bridge_proxy_pending {
 		return none
 	}
-	ch := bridge.state.card_bridge_proxy_pending[request_id]
+	pending := bridge.state.card_bridge_proxy_pending[request_id] or { return none }
+	ch := pending.ch
 	bridge.state.card_bridge_proxy_pending.delete(request_id)
 	return ch
 }
@@ -198,9 +252,8 @@ fn (mut providers ProviderRuntimeHub) feishu_card_bridge_dispatch_callback(app_n
 	if !bridge.has_client(client_id) {
 		return error('bridge_client_unavailable:${client_id}')
 	}
-	request_id := 'bridge-${time.now().unix_micro()}'
 	ch := chan executor.FeishuCardBridgeResult{cap: 1}
-	bridge.store_pending(request_id, ch)
+	request_id := bridge.register_pending(ch, client_id)!
 	defer {
 		dummy := bridge.take_pending(request_id) or { ch }
 		_ = dummy
@@ -225,7 +278,10 @@ fn (mut providers ProviderRuntimeHub) feishu_card_bridge_dispatch_callback(app_n
 	delivery := feishu_card_bridge_dispatch_delivery_outcome(client_id, frame)
 	relay_client_id := delivery.metadata['relay_client_id'] or { client_id }
 	log.info('[bridge] 🔁 dispatch -> local target=${delivery.target} client=${relay_client_id} request_id=${request_id} trace_id=${trace_id} event_kind=${summary.event_kind} event_type=${summary.event_type} message_id=${summary.message_id} target=${summary.target}')
-	if !bridge.send(relay_client_id, json.encode(frame)) {
+	if !bridge.send_pending(request_id, client_id, json.encode(frame,
+		escape_unicode: true
+		time_as_unix:   true
+	)) {
 		return error('bridge_send_failed:${relay_client_id}')
 	}
 	select {
@@ -249,10 +305,9 @@ fn (mut providers ProviderRuntimeHub) feishu_card_bridge_proxy_request(action st
 	if !providers.feishu_card_bridge_enabled() {
 		return error('bridge_disabled')
 	}
-	request_id := 'bridge-proxy-${time.now().unix_micro()}'
 	ch := chan feishu.BridgeProxyResult{cap: 1}
 	mut bridge := providers.feishu_card_bridge_context()
-	bridge.store_proxy_pending(request_id, ch)
+	request_id := bridge.register_proxy_pending(ch)!
 	defer {
 		dummy := bridge.take_proxy_pending(request_id) or { ch }
 		_ = dummy
@@ -270,7 +325,10 @@ fn (mut providers ProviderRuntimeHub) feishu_card_bridge_proxy_request(action st
 	}} action=${delivery.metadata['action'] or { action }} instance=${req.instance} target=${req.target} target_type=${req.target_type} stream_id=${delivery.metadata['stream_id'] or {
 		''
 	}} message_type=${req.message_type}')
-	if !bridge.send_to_server(json.encode(frame)) {
+	if !bridge.send_proxy_pending(request_id, json.encode(frame,
+		escape_unicode: true
+		time_as_unix:   true
+	)) {
 		return error('bridge_send_failed:server')
 	}
 	select {

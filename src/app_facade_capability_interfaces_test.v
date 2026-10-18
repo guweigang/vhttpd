@@ -2,6 +2,29 @@ module main
 
 import executor
 
+fn test_app_facade_reads_live_configuration_after_creation() {
+	mut app := App{}
+	app.protocols.runtime_config_json = '{"generation":1}'
+	app.protocols.runtime_plan_json = '{"version":2,"generation":1}'
+	facade := app.as_facade()
+	app.protocols.runtime_config_json = '{"generation":2}'
+	app.protocols.runtime_plan_json = '{"version":2,"generation":2}'
+	assert facade.get_runtime_config_json() == app.protocols.runtime_config_json
+	assert facade.get_runtime_plan_json() == app.protocols.runtime_plan_json
+}
+
+fn test_app_facade_updates_original_app_counters() {
+	mut app := App{}
+	mut facade := app.as_facade()
+	facade.emit('http.request', {
+		'status': '503'
+		'error_class': 'timeout'
+	})
+	assert app.control_plane.http_stats.requests_total == 1
+	assert app.control_plane.http_stats.errors_total == 1
+	assert app.control_plane.http_stats.timeouts_total == 1
+}
+
 fn accepts_runtime_config_facade(f executor.RuntimeConfigFacade) bool {
 	return f.get_runtime_config_json() != ''
 }

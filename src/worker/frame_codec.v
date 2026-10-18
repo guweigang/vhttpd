@@ -1,6 +1,6 @@
 module worker
 
-import json
+import json2 as json
 import net.unix
 import upstream.transport
 
@@ -44,29 +44,32 @@ pub fn WorkerBackendFrameCodec.read_bytes(mut conn unix.StreamConn) ![]u8 {
 
 pub fn WorkerBackendFrameCodec.read_stream_response(mut conn unix.StreamConn) !transport.StreamDispatchResponse {
 	raw := WorkerBackendFrameCodec.read(mut conn)!
-	return json.decode(transport.StreamDispatchResponse, raw)!
+	return json.decode[transport.StreamDispatchResponse](raw)!
 }
 
 pub fn WorkerBackendFrameCodec.read_mcp_response(mut conn unix.StreamConn) !transport.WorkerMcpDispatchResponse {
 	raw := WorkerBackendFrameCodec.read(mut conn)!
-	return json.decode(transport.WorkerMcpDispatchResponse, raw)!
+	return json.decode[transport.WorkerMcpDispatchResponse](raw)!
 }
 
 pub fn WorkerBackendFrameCodec.read_websocket_upstream_response(mut conn unix.StreamConn) !transport.WorkerWebSocketUpstreamDispatchResponse {
 	raw := WorkerBackendFrameCodec.read(mut conn)!
-	return json.decode(transport.WorkerWebSocketUpstreamDispatchResponse, raw)!
+	return json.decode[transport.WorkerWebSocketUpstreamDispatchResponse](raw)!
 }
 
 pub fn WorkerBackendFrameCodec.read_websocket_frame(mut conn unix.StreamConn) !transport.WorkerWebSocketFrame {
 	raw := WorkerBackendFrameCodec.read(mut conn)!
-	return json.decode(transport.WorkerWebSocketFrame, raw)!
+	return json.decode[transport.WorkerWebSocketFrame](raw)!
 }
 
 pub fn WorkerBackendFrameCodec.write_websocket_frame(mut conn unix.StreamConn, frame transport.WorkerWebSocketFrame) ! {
-	WorkerBackendFrameCodec.write(mut conn, json.encode(frame))!
+	WorkerBackendFrameCodec.write(mut conn, json.encode(frame,
+		escape_unicode: true
+		time_as_unix:   true
+	))!
 }
 
 pub fn WorkerBackendFrameCodec.read_websocket_dispatch_response(mut conn unix.StreamConn) !transport.WorkerWebSocketDispatchResponse {
 	raw := WorkerBackendFrameCodec.read(mut conn)!
-	return json.decode(transport.WorkerWebSocketDispatchResponse, raw)!
+	return json.decode[transport.WorkerWebSocketDispatchResponse](raw)!
 }

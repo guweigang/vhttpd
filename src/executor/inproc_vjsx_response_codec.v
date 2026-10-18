@@ -1,6 +1,6 @@
 module executor
 
-import json
+import json2 as json
 import upstream.transport
 import vjsx
 
@@ -15,7 +15,7 @@ fn InProcVjsxResponseCodec.headers_from_js_value(val vjsx.Value) map[string]stri
 	if raw.trim_space() == '' || raw.trim_space() == 'undefined' || raw.trim_space() == 'null' {
 		return out
 	}
-	return json.decode(map[string]string, raw) or {
+	return json.decode[map[string]string](raw) or {
 		map[string]string{}
 	}
 }

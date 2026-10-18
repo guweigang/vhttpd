@@ -52,6 +52,7 @@ fn test_command_route_from_normalized_provider_message_send_for_feishu() {
 		}
 	}
 	app.register_provider_spec(ProviderSpec{
+		lifecycle_ctx:    provider.RuntimeContext.noop()
 		name:             'feishu'
 		enabled:          true
 		has_handler:      true
@@ -87,6 +88,7 @@ fn test_command_route_from_normalized_stream_append_for_feishu() {
 		}
 	}
 	app.register_provider_spec(ProviderSpec{
+		lifecycle_ctx:    provider.RuntimeContext.noop()
 		name:             'feishu'
 		enabled:          true
 		has_handler:      true
@@ -122,6 +124,7 @@ fn test_command_route_from_normalized_stream_fail_for_feishu() {
 		}
 	}
 	app.register_provider_spec(ProviderSpec{
+		lifecycle_ctx:    provider.RuntimeContext.noop()
 		name:             'feishu'
 		enabled:          true
 		has_handler:      true
@@ -186,6 +189,7 @@ fn test_command_route_from_command_codex_control() {
 		}
 	}
 	app.register_provider_spec(ProviderSpec{
+		lifecycle_ctx:    provider.RuntimeContext.noop()
 		name:             'codex'
 		enabled:          true
 		has_handler:      true
@@ -220,6 +224,7 @@ fn test_command_route_from_command_feishu_message_prefix() {
 		}
 	}
 	app.register_provider_spec(ProviderSpec{
+		lifecycle_ctx:    provider.RuntimeContext.noop()
 		name:             'feishu'
 		enabled:          true
 		has_handler:      true
@@ -270,6 +275,7 @@ fn test_command_route_from_command_ollama_message_prefix() {
 		}
 	}
 	app.register_provider_spec(ProviderSpec{
+		lifecycle_ctx:    provider.RuntimeContext.noop()
 		name:             'ollama'
 		enabled:          true
 		has_handler:      true
@@ -301,6 +307,7 @@ fn test_provider_spec_command_matchers_are_exposed_in_snapshot() {
 		}
 	}
 	app.register_provider_spec(ProviderSpec{
+		lifecycle_ctx:    provider.RuntimeContext.noop()
 		name:             'feishu'
 		enabled:          true
 		has_handler:      true

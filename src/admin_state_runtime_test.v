@@ -186,7 +186,7 @@ fn test_admin_state_config_file_draft_opens_include_and_publishes_to_source() {
 	os.write_file(event_log, '') or { panic(err) }
 	os.write_file(current_file,
 		'version = 2\n\ninclude = [\n  "../examples/demo/demo-v2.toml",\n]\n\n' +
-		admin_state_named_runtime_plan_text('admin', 18085, 'admin').replace('version = 2\n\n', '')) or {
+			admin_state_named_runtime_plan_text('admin', 18085, 'admin').replace('version = 2\n\n', '')) or {
 		panic(err)
 	}
 	os.write_file(include_file, admin_state_named_runtime_plan_text('demo', 18086, 'demo')) or {
@@ -318,4 +318,54 @@ fn test_admin_state_source_file_rejects_outside_project() {
 	result := app.admin_state_open_source_file_draft('../../outside.mts')
 	assert !result.ok
 	assert result.error.contains('admin_source_file_path_outside_project')
+}
+
+fn test_nested_include_draft_validates_and_publishes_as_entire_project() {
+	root := admin_state_runtime_test_root('vhttpd_admin_include_context')
+	os.mkdir_all(os.join_path(root, 'config', 'nested')) or { panic(err) }
+	defer { os.rmdir_all(root) or {} }
+	main_path := os.join_path(root, 'config', 'vhttpd.toml')
+	group := os.join_path(root, 'config', 'group.toml')
+	source := os.join_path(root, 'config', 'nested', 'relay.toml')
+	event_log := os.join_path(root, 'events.ndjson')
+	main_text := admin_state_runtime_plan_text('ok').replace('version = 2', 'version = 2\ninclude = ["group.toml"]')
+	original := '[relays.edge]\nmode="agent"\nurl="ws://localhost:19921/relay"\nnode_id="before"\nautostart=false\n[[pipelines]]\nid="remote"\ningress="relay:edge"\negress="adapter:web"\n'
+	os.write_file(main_path, main_text) or { panic(err) }
+	os.write_file(group, 'include=["nested/relay.toml"]\n') or { panic(err) }
+	os.write_file(source, original) or { panic(err) }
+	plan := config.load_runtime_plan_file(main_path) or { panic(err) }
+	mut app := App{
+		DataPlaneRuntime: DataPlaneRuntime{ plan: plan }
+		control_plane:    ControlPlaneRuntime{ event_log: event_log }
+	}
+	files := app.admin_state_list_config_files()
+	assert files.len == 3
+	assert files[2].relay_ids == ['edge']
+	assert files[2].parent_path == group
+	opened := app.admin_state_open_config_file_draft(source)
+	assert opened.ok
+	changed := original.replace('before', 'after')
+	entry := app.admin_state_put_project_config_draft('unique-relay', source, changed) or { panic(err) }
+	validation := app.admin_state_validate_draft(entry.key)
+	assert validation.ok, validation.error
+	assert validation.counts.pipelines == 2
+	assert validation.counts.relays == 1
+	assert os.read_file(source) or { panic(err) } == original
+	diff := app.admin_state_diff_draft(entry.key) or { panic(err) }
+	assert diff.strategy == 'relay_reload_required'
+	assert diff.restart_listeners == []
+	published := app.admin_state_publish_source_draft(entry.key, source)
+	assert published.ok, published.error
+	assert os.read_file(main_path) or { panic(err) } == main_text
+	assert os.read_file(source) or { panic(err) } == changed
+	// A changed sibling is revalidated before publication, even after an earlier success.
+	app.admin_state_put_project_config_draft('invalid-project', source, original) or { panic(err) }
+	os.write_file(main_path, main_text.replace('adapter:web', 'adapter:missing')) or { panic(err) }
+	invalid := app.admin_state_publish_source_draft('invalid-project', source)
+	assert !invalid.ok
+	assert os.read_file(source) or { panic(err) } == changed
+}
+
+fn test_config_draft_identity_distinguishes_same_basename_in_nested_includes() {
+	assert admin_state_config_draft_id('/tmp/project/a/relay.toml') != admin_state_config_draft_id('/tmp/project/b/relay.toml')
 }

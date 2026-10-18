@@ -11,11 +11,7 @@ import worker
 // Keep as a free function: static-method callbacks can pass syntax checks and
 // fail later during C generation, as seen with websocket callback symbols.
 fn openai_mapped_progress_body_cb(request &http.Request, chunk []u8, _body_read_so_far u64, _body_expected_size u64, status_code int) ! {
-	mut state := &OpenAIMappedStreamProxyState(unsafe { nil })
-	pstate := unsafe { &voidptr(&state) }
-	unsafe {
-		*pstate = request.user_ptr
-	}
+	mut state := unsafe { &OpenAIMappedStreamProxyState(request.user_ptr) }
 	if status_code > 0 {
 		state.status_code = status_code
 	}
@@ -85,7 +81,7 @@ fn OpenAIProxyRuntime.mapped_stream(mut app App, mut ctx Context, plan openai.Op
 	headers['x-vhttpd-trace-id'] = trace_id
 	headers['x-vhttpd-openai-backend'] = plan.backend_name
 	mut state := &OpenAIMappedStreamProxyState{
-		app:              unsafe { &app }
+		mapper_host:      OpenAIFrameMapperHost(app)
 		conn:             client_conn
 		method:           method
 		status_code:      200

@@ -1,6 +1,8 @@
 module main
 
-import json
+import ws
+import connection_runtime
+import json2 as json
 import log
 import net
 import net.websocket
@@ -14,8 +16,44 @@ import veb
 @[heap]
 struct FeishuCardBridgeServerState {
 mut:
-	app       &App = unsafe { nil }
+	host      FeishuBridgeProxyHost   @[required]
+	bridge    FeishuCardBridgeContext @[required]
 	client_id string
+	client    ?&websocket.Client
+	sender    ?&connection_runtime.WebSocketSender
+}
+
+fn (mut state FeishuCardBridgeServerState) reply(payload string) ! {
+	mut sender := state.sender or { return error('bridge_connection_unavailable') }
+	sender.write_string(payload)!
+}
+
+// The session owns closing the accepted connection; the registry only borrows it.
+// This also runs when the handshake fails before close callbacks are installed.
+fn (mut state FeishuCardBridgeServerState) release_client() {
+	owned := state.client
+	state.client = none
+	writer := state.sender
+	state.sender = none
+	if mut owner := writer { owner.retire() }
+	if mut client := owned {
+		state.bridge.unregister_client(state.client_id, client)
+		client.close(1000, 'bridge session ended') or {}
+	}
+	if mut owner := writer { owner.wait_idle() }
+}
+
+fn feishu_card_bridge_server_connect_cb(mut sc websocket.ServerClient, ref voidptr) !bool {
+	mut state := unsafe { &FeishuCardBridgeServerState(ref) }
+	state.client = sc.client
+	return true
+}
+
+fn feishu_card_bridge_server_attached_cb(mut sc websocket.ServerClient, ref voidptr) ! {
+	mut state := unsafe { &FeishuCardBridgeServerState(ref) }
+	feishu_card_bridge_server_connect_cb(mut sc, ref)!
+	// Publish only after the handshake response was written successfully.
+	state.sender = state.bridge.register_client(state.client_id, sc.client)
 }
 
 fn feishu_card_bridge_http_response(mut app App, mut ctx Context, method string, path string, req_id string, trace_id string, start_ms i64, status int, headers map[string]string, body string, error_class string) veb.Result {
@@ -39,33 +77,35 @@ fn feishu_card_bridge_http_response(mut app App, mut ctx Context, method string,
 // during C compilation with undeclared `__static__*_cb` symbols.
 fn feishu_card_bridge_server_message_cb(mut _ws websocket.Client, msg &websocket.Message, ref voidptr) ! {
 	mut state := unsafe { &FeishuCardBridgeServerState(ref) }
-	mut bridge := state.app.providers.feishu_card_bridge_context()
+	mut bridge := state.bridge
 	if msg.opcode != .text_frame {
 		return
 	}
 	raw := msg.payload.bytestr()
-	envelope := json.decode(feishu.BridgeEnvelope, raw) or {
+	envelope := json.decode[feishu.BridgeEnvelope](raw) or {
 		log.error('[bridge] ❌ invalid bridge envelope: ${err}')
 		return
 	}
 	if envelope.type_ == feishu.bridge_ping_type {
-		hb := json.decode(feishu.BridgeHeartbeatFrame, raw) or { feishu.BridgeHeartbeatFrame{} }
+		hb := json.decode[feishu.BridgeHeartbeatFrame](raw) or { feishu.BridgeHeartbeatFrame{} }
 		log.info('[bridge] 💓 heartbeat ping received: request_id=${hb.request_id} trace_id=${hb.trace_id}')
-		mut ws_hb := unsafe { _ws }
-		ws_hb.write_string(json.encode(feishu.BridgeHeartbeatFrame{
+		state.reply(json.encode(feishu.BridgeHeartbeatFrame{
 			type_:      feishu.bridge_pong_type
 			request_id: hb.request_id
 			trace_id:   hb.trace_id
 			sent_at:    time.now().unix_milli()
-		})) or {} // safe to ignore: write failure usually means peer disconnected
+		},
+			escape_unicode: true
+			time_as_unix:   true
+		)) or {} // safe to ignore: write failure usually means peer disconnected
 		return
 	}
 	if envelope.type_ == feishu.card_bridge_result_type {
-		result := json.decode(feishu.BridgeDispatchResult, raw) or {
+		result := json.decode[feishu.BridgeDispatchResult](raw) or {
 			log.error('[bridge] ❌ invalid result frame: ${err}')
 			return
 		}
-		ch := bridge.take_pending(result.request_id) or { return }
+		ch := bridge.take_pending_from(result.request_id, &_ws) or { return }
 		ch <- executor.FeishuCardBridgeResult{
 			status:  if result.status > 0 { result.status } else { 200 }
 			headers: result.headers.clone()
@@ -77,7 +117,7 @@ fn feishu_card_bridge_server_message_cb(mut _ws websocket.Client, msg &websocket
 	if envelope.type_ != feishu.bridge_proxy_request_type {
 		return
 	}
-	req := json.decode(feishu.BridgeProxyRequest, raw) or {
+	req := json.decode[feishu.BridgeProxyRequest](raw) or {
 		log.error('[bridge] ❌ invalid proxy request frame: ${err}')
 		return
 	}
@@ -92,10 +132,12 @@ fn feishu_card_bridge_server_message_cb(mut _ws websocket.Client, msg &websocket
 	}
 	match req.action {
 		'send' {
-			send_result := state.app.websocket_upstream_send(req.request) or {
+			send_result := state.host.websocket_upstream_send(req.request) or {
 				result.error = err.msg()
-				mut ws_err := unsafe { _ws }
-				ws_err.write_string(json.encode(result)) or {} // safe to ignore: write failure usually means peer disconnected
+				state.reply(json.encode(result,
+					escape_unicode: true
+					time_as_unix:   true
+				)) or {} // safe to ignore: write failure usually means peer disconnected
 				return
 			}
 			result.ok = send_result.ok
@@ -105,7 +147,7 @@ fn feishu_card_bridge_server_message_cb(mut _ws websocket.Client, msg &websocket
 			result.error = send_result.error
 			stream_id := (req.request.metadata['stream_id'] or { '' }).trim_space()
 			if result.ok && result.message_id.trim_space() != '' && stream_id != '' {
-				state.app.providers.feishu.register_stream_buffer(result.message_id, stream_id, if req.request.instance.trim_space() != '' {
+				state.host.command_feishu_state().register_stream_buffer(result.message_id, stream_id, if req.request.instance.trim_space() != '' {
 					req.request.instance
 				} else {
 					result.instance
@@ -113,10 +155,12 @@ fn feishu_card_bridge_server_message_cb(mut _ws websocket.Client, msg &websocket
 			}
 		}
 		'update' {
-			update_result := state.app.websocket_upstream_update(req.request) or {
+			update_result := state.host.websocket_upstream_update(req.request) or {
 				result.error = err.msg()
-				mut ws_err := unsafe { _ws }
-				ws_err.write_string(json.encode(result)) or {} // safe to ignore: write failure usually means peer disconnected
+				state.reply(json.encode(result,
+					escape_unicode: true
+					time_as_unix:   true
+				)) or {} // safe to ignore: write failure usually means peer disconnected
 				return
 			}
 			result.ok = update_result.ok
@@ -126,17 +170,19 @@ fn feishu_card_bridge_server_message_cb(mut _ws websocket.Client, msg &websocket
 			result.error = update_result.error
 		}
 		'append' {
-			state.app.feishu_runtime_buffer_patch(req.request)
+			state.host.feishu_runtime_buffer_patch(req.request)
 			result.ok = true
 			result.provider = 'feishu'
 			result.instance = req.request.instance
 			result.message_id = req.request.target
 		}
 		'finish' {
-			state.app.feishu_runtime_flush_buffer(req.request.target, req.request.content, true) or {
+			state.host.feishu_runtime_flush_buffer(req.request.target, req.request.content, true) or {
 				result.error = err.msg()
-				mut ws_err := unsafe { _ws }
-				ws_err.write_string(json.encode(result)) or {} // safe to ignore: write failure usually means peer disconnected
+				state.reply(json.encode(result,
+					escape_unicode: true
+					time_as_unix:   true
+				)) or {} // safe to ignore: write failure usually means peer disconnected
 				return
 			}
 			result.ok = true
@@ -145,11 +191,13 @@ fn feishu_card_bridge_server_message_cb(mut _ws websocket.Client, msg &websocket
 			result.message_id = req.request.target
 		}
 		'fail' {
-			state.app.providers.feishu.clear_buffer(req.request.target)
-			update_result := state.app.websocket_upstream_update(req.request) or {
+			state.host.command_feishu_state().clear_buffer(req.request.target)
+			update_result := state.host.websocket_upstream_update(req.request) or {
 				result.error = err.msg()
-				mut ws_err := unsafe { _ws }
-				ws_err.write_string(json.encode(result)) or {} // safe to ignore: write failure usually means peer disconnected
+				state.reply(json.encode(result,
+					escape_unicode: true
+					time_as_unix:   true
+				)) or {} // safe to ignore: write failure usually means peer disconnected
 				return
 			}
 			result.ok = update_result.ok
@@ -163,11 +211,13 @@ fn feishu_card_bridge_server_message_cb(mut _ws websocket.Client, msg &websocket
 		}
 	}
 
-	mut ws2 := unsafe { _ws }
 	log.info('[bridge] 📤 proxy result: request_id=${req.request_id} trace_id=${req.request.metadata['trace_id'] or {
 		''
 	}} action=${req.action} ok=${result.ok} message_id=${result.message_id} error=${result.error}')
-	ws2.write_string(json.encode(result)) or {
+	state.reply(json.encode(result,
+		escape_unicode: true
+		time_as_unix:   true
+	)) or {
 		log.error('[bridge] ❌ failed to send proxy result: ${err}')
 	}
 }
@@ -175,27 +225,26 @@ fn feishu_card_bridge_server_message_cb(mut _ws websocket.Client, msg &websocket
 // C callback trampoline; keep as a free function, see note above.
 fn feishu_card_bridge_server_close_cb(mut _ws websocket.Client, _code int, _reason string, ref voidptr) ! {
 	mut state := unsafe { &FeishuCardBridgeServerState(ref) }
-	mut bridge := state.app.providers.feishu_card_bridge_context()
-	bridge.unregister_client(state.client_id)
+	mut bridge := state.bridge
+	bridge.unregister_client(state.client_id, &_ws)
 }
 
-fn FeishuCardBridgeRuntime.handle_server_session(mut app App, mut conn net.TcpConn, key string, client_id string, req_id string) {
-	mut server := websocket.new_server(.ip, 0, '')
+fn FeishuCardBridgeRuntime.handle_server_session(mut host FeishuBridgeProxyHost, mut conn net.TcpConn, key string, client_id string, req_id string) {
+	mut server, captured := ws.managed_server()
 	mut state := &FeishuCardBridgeServerState{
-		app:       unsafe { &app }
+		host:      host
+		bridge:    host.bridge_context()
 		client_id: client_id
 	}
-	server.on_connect(fn [mut app, state] (mut sc websocket.ServerClient) !bool {
-		mut bridge := app.providers.feishu_card_bridge_context()
-		bridge.register_client(state.client_id, sc.client)
-		return true
-	}) or {} // safe to ignore: write failure usually means peer disconnected
+	defer {
+		state.release_client()
+	}
+
+	server.on_attached_ref(feishu_card_bridge_server_attached_cb, state)
 	// Keep these as free-function trampolines; see callback note above.
 	server.on_message_ref(feishu_card_bridge_server_message_cb, state)
 	server.on_close_ref(feishu_card_bridge_server_close_cb, state)
-	server.handle_handshake(mut conn, key) or {
-		mut bridge := app.providers.feishu_card_bridge_context()
-		bridge.unregister_client(client_id)
+	ws.managed_handshake(mut server, mut conn, key, captured) or {
 		log.error('[bridge] ❌ bridge ws handshake failed req=${req_id}: ${err}')
 	}
 }
@@ -216,17 +265,17 @@ pub fn (mut app App) feishu_card_bridge_ws(mut ctx Context) veb.Result {
 	if normalized_path != '/bridge/ws' {
 		return feishu_card_bridge_http_response(mut app, mut ctx, 'GET', path, req_id, trace_id,
 			start_ms, 404, {
-			'content-type': 'text/plain; charset=utf-8'
-		}, 'Not Found', 'not_found')
+				'content-type': 'text/plain; charset=utf-8'
+			}, 'Not Found', 'not_found')
 	}
 	key := WebSocketUpgrade.key(ctx.req)
 	if ctx.req.method.str().to_upper() != 'GET' || key == ''
 		|| !WebSocketUpgrade.is_upgrade(ctx.req) {
 		return feishu_card_bridge_http_response(mut app, mut ctx, 'GET', path, req_id, trace_id,
 			start_ms, 426, {
-			'content-type': 'text/plain; charset=utf-8'
-			'upgrade':      'websocket'
-		}, 'Upgrade Required', 'upgrade_required')
+				'content-type': 'text/plain; charset=utf-8'
+				'upgrade':      'websocket'
+			}, 'Upgrade Required', 'upgrade_required')
 	}
 	_, query_string := transport.WorkerHttpRequestCodec.normalize_request_target(path)
 	query := transport.WorkerHttpRequestCodec.parse_query_map(query_string)
@@ -236,16 +285,26 @@ pub fn (mut app App) feishu_card_bridge_ws(mut ctx Context) veb.Result {
 	if client_id == '' || (expected != '' && token != expected) {
 		return feishu_card_bridge_http_response(mut app, mut ctx, 'GET', path, req_id, trace_id,
 			start_ms, 403, {
-			'content-type': 'text/plain; charset=utf-8'
-		}, 'Forbidden', 'forbidden')
+				'content-type': 'text/plain; charset=utf-8'
+			}, 'Forbidden', 'forbidden')
 	}
 	delivery := feishu_card_bridge_server_session_delivery_outcome(client_id, req_id, trace_id)
 	relay_client_id := delivery.metadata['relay_client_id'] or { client_id }
+	mut run := reserve_inbound_websocket(mut app, ctx) or { return inbound_websocket_unavailable(mut ctx) }
 	ctx.takeover_conn()
 	ctx.conn.set_write_timeout(time.infinite)
 	ctx.conn.set_read_timeout(time.infinite)
 	mut conn := ctx.conn
-	spawn FeishuCardBridgeRuntime.handle_server_session(mut app, mut conn, key, relay_client_id,
+	spawn FeishuCardBridgeRuntime.run_server_session(mut run, mut app, mut conn, key, relay_client_id,
 		req_id)
 	return veb.no_result()
+}
+
+fn FeishuCardBridgeRuntime.run_server_session(mut run ws.IngressRun, mut host FeishuBridgeProxyHost, mut conn net.TcpConn, key string, client_id string, req_id string) {
+	defer { run.finish() }
+	if run.stopped() {
+		conn.close() or {}
+		return
+	}
+	FeishuCardBridgeRuntime.handle_server_session(mut host, mut conn, key, client_id, req_id)
 }

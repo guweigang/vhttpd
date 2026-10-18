@@ -1,7 +1,7 @@
 module main
 
 import dispatch
-import json
+import json2 as json
 
 struct VjsxTransformerPayload {
 	transform_id string
@@ -74,7 +74,7 @@ fn vjsx_transformer_dispatch_request(entry TransformerRuntimeEntry, exchange dis
 		event:      vjsx_transformer_event_name(exchange)
 		handler:    entry.handler
 		executor:   vjsx_transformer_executor(entry)
-		payload:    json.encode(payload)
+		payload:    json.encode(payload, escape_unicode: true, time_as_unix: true)
 		trace_id:   exchange.identity.trace_id
 		request_id: exchange.identity.request_id
 	}
@@ -88,12 +88,15 @@ fn vjsx_transformer_executor(entry TransformerRuntimeEntry) string {
 	return engine_ref
 }
 
-fn (mut app App) dispatch_vjsx_transformer(entry TransformerRuntimeEntry, exchange dispatch.Exchange) !dispatch.TransformAction {
+fn (mut app App) dispatch_vjsx_transformer(entry TransformerRuntimeEntry, exchange dispatch.Exchange, engines EngineRuntime) !dispatch.TransformAction {
 	if entry.handler.trim_space() == '' {
 		return error('vjsx_transformer_missing_handler:${entry.id}')
 	}
 	req := vjsx_transformer_dispatch_request(entry, exchange)
-	outcome := app.dispatch_vjsx_event(req)!
+	mut outcome := app.dispatch_vjsx_event_on_runtime(req, engines)!
+	defer {
+		outcome.close_live_conn()
+	}
 	if outcome.kind != .response {
 		return dispatch.continue_pipeline_action()
 	}
@@ -105,13 +108,18 @@ fn (mut app App) dispatch_vjsx_transformer(entry TransformerRuntimeEntry, exchan
 }
 
 fn (mut app App) run_transform_refs(refs []string, mut services dispatch.RuntimeServices, mut exchange dispatch.Exchange) !TransformPipelineResult {
+	return app.run_transform_refs_on_view(app.transform_dispatch_view(), refs, mut services, mut exchange)!
+}
+
+fn (mut app App) run_transform_refs_on_view(view TransformDispatchView, refs []string, mut services dispatch.RuntimeServices, mut exchange dispatch.Exchange) !TransformPipelineResult {
+	mut hub := view.transformers
 	for ref in refs {
 		id := transform_id_from_ref(ref)
-		entry := app.transformers.entry(id) or { return error('transformer not registered: ${id}') }
+		entry := hub.entry(id) or { return error('transformer not registered: ${id}') }
 		action := if entry.kind == 'vjsx' {
-			app.dispatch_vjsx_transformer(entry, exchange)!
+			app.dispatch_vjsx_transformer(entry, exchange, view.engines)!
 		} else {
-			app.transformers.transform(id, mut services, mut exchange)!
+			hub.transform(id, mut services, mut exchange)!
 		}
 		if action.kind != .continue_pipeline {
 			return TransformPipelineResult{

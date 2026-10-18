@@ -2,7 +2,7 @@ module main
 
 import cachex
 import dispatch
-import json
+import json2 as json
 import net.http
 import os
 import regex
@@ -89,8 +89,9 @@ fn http_routing_document_root(assets_root string, primary_env map[string]string,
 		}
 	}
 	for _, state in additional_workers {
+		env := state.env_snapshot()
 		for key in ['DOCUMENT_ROOT', 'VPHP_WP_ROOT'] {
-			if root := state.worker_backend.env[key] {
+			if root := env[key] {
 				if root != '' {
 					return root
 				}
@@ -137,7 +138,7 @@ fn (rt HttpRoutingRuntime) response_cache_get(mut cache cachex.Runtime, rule Run
 	}
 	key := route_response_cache_key(method, target)
 	raw := cache.get_value('edge.response', key) or { return none }
-	return json.decode(EdgeCachedHttpResponse, raw) or { none }
+	return json.decode[EdgeCachedHttpResponse](raw) or { none }
 }
 
 fn (rt HttpRoutingRuntime) response_cache_set(mut cache cachex.Runtime, rule RuntimeRouteRule, method string, target string, cached EdgeCachedHttpResponse) {
@@ -145,7 +146,10 @@ fn (rt HttpRoutingRuntime) response_cache_set(mut cache cachex.Runtime, rule Run
 		return
 	}
 	key := route_response_cache_key(method, target)
-	cache.set_value('edge.response', key, json.encode(cached), i64(rule.response_cache_ttl_ms))
+	cache.set_value('edge.response', key, json.encode(cached,
+		escape_unicode: true
+		time_as_unix:   true
+	), i64(rule.response_cache_ttl_ms))
 }
 
 fn match_path(pattern string, path string) bool {

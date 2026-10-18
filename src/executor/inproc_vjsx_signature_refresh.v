@@ -5,9 +5,6 @@ import time
 struct InProcVjsxSignatureRefresh {}
 
 fn InProcVjsxSignatureRefresh.loop(mut state VjsxExecutorState) {
-	if isnil(state) {
-		return
-	}
 	mut last_probe := ''
 	mut pending_since := i64(0)
 	for {
@@ -68,9 +65,6 @@ fn InProcVjsxSignatureRefresh.loop(mut state VjsxExecutorState) {
 }
 
 fn (e InProcVjsxExecutor) current_source_signature() string {
-	if isnil(e.state) {
-		return ''
-	}
 	mut state := e.state
 	state.mu.@lock()
 	mut cached := state.cached_source_signature

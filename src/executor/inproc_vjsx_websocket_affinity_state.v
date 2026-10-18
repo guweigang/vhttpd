@@ -4,13 +4,17 @@ import log
 import upstream.transport
 
 pub fn (e InProcVjsxExecutor) release_websocket_connection_affinity(frame transport.WorkerWebSocketFrame) {
-	if isnil(e.state) || frame.id.trim_space() == '' {
+	if frame.id.trim_space() == '' {
 		return
 	}
+	mut cancelled := []&ExecutorTaskControl{}
 	mut state := e.state
 	state.mu.@lock()
 	defer {
 		state.mu.unlock()
+		for mut control in cancelled {
+			e.cancel_task(mut control, 'inproc_vjsx_executor_websocket_affinity_released')
+		}
 	}
 	lane_id := state.websocket_connection_lane_by_id[frame.id] or { '' }
 	affinity_key := state.websocket_connection_affinity_key_by_id[frame.id] or { '' }
@@ -26,6 +30,7 @@ pub fn (e InProcVjsxExecutor) release_websocket_connection_affinity(frame transp
 			if lane_id != '' && !WebSocketAffinityPolicy.should_pin_lane(frame, affinity_key) {
 				state.websocket_affinity_lane_by_key.delete(affinity_key)
 			}
+			cancelled << state.pending_mailbox_controls_locked(affinity_key)
 			state.websocket_mailbox_by_key.delete(affinity_key)
 			state.websocket_mailbox_running_by_key.delete(affinity_key)
 			mut next_pending_keys := []string{}
@@ -42,22 +47,24 @@ pub fn (e InProcVjsxExecutor) release_websocket_connection_affinity(frame transp
 }
 
 pub fn (e InProcVjsxExecutor) release_websocket_affinity_key(affinity_key string) {
-	if isnil(e.state) {
-		return
-	}
 	key := affinity_key.trim_space()
 	if key == '' {
 		return
 	}
+	mut cancelled := []&ExecutorTaskControl{}
 	mut state := e.state
 	state.mu.@lock()
 	defer {
 		state.mu.unlock()
+		for mut control in cancelled {
+			e.cancel_task(mut control, 'inproc_vjsx_executor_websocket_affinity_released')
+		}
 	}
 	if key in state.websocket_affinity_ref_count_by_key {
 		mut remaining := state.websocket_affinity_ref_count_by_key[key] - 1
 		if remaining <= 0 {
 			state.websocket_affinity_ref_count_by_key.delete(key)
+			cancelled << state.pending_mailbox_controls_locked(key)
 			state.websocket_mailbox_by_key.delete(key)
 			state.websocket_mailbox_running_by_key.delete(key)
 			mut next_pending_keys := []string{}
@@ -74,7 +81,7 @@ pub fn (e InProcVjsxExecutor) release_websocket_affinity_key(affinity_key string
 }
 
 pub fn (e InProcVjsxExecutor) migrate_websocket_connection_affinity(frame transport.WorkerWebSocketFrame, affinity_key string, current_lane_id string) {
-	if isnil(e.state) || frame.id.trim_space() == '' {
+	if frame.id.trim_space() == '' {
 		return
 	}
 	new_key := affinity_key.trim_space()
@@ -86,6 +93,7 @@ pub fn (e InProcVjsxExecutor) migrate_websocket_connection_affinity(frame transp
 	defer {
 		state.mu.unlock()
 	}
+	if state.stopping { return }
 	old_key := state.websocket_connection_affinity_key_by_id[frame.id] or { '' }
 	if old_key == new_key {
 		return

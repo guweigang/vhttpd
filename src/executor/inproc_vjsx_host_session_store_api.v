@@ -1,7 +1,7 @@
 module executor
 
-import json
-import time
+import json2 as json
+import state_store
 import vjsx
 
 fn InProcVjsxHostApi.session_store_builder(mut state VjsxExecutorState, idx int) vjsx.HostValueBuilder {
@@ -11,30 +11,30 @@ fn InProcVjsxHostApi.session_store_builder(mut state VjsxExecutorState, idx int)
 			if args.len == 0 {
 				return ctx.js_string(json.encode(InProcVjsxHostSessionStoreResponse{
 					error: 'missing_session_store_request'
-				}))
+				}, escape_unicode: true, time_as_unix: true))
 			}
 			raw := args[0].to_string().trim_space()
 			if raw == '' {
 				return ctx.js_string(json.encode(InProcVjsxHostSessionStoreResponse{
 					error: 'missing_session_store_request'
-				}))
+				}, escape_unicode: true, time_as_unix: true))
 			}
-			req := json.decode(InProcVjsxHostSessionStoreRequest, raw) or {
+			req := json.decode[InProcVjsxHostSessionStoreRequest](raw) or {
 				return ctx.js_string(json.encode(InProcVjsxHostSessionStoreResponse{
 					error: 'invalid_session_store_request'
-				}))
+				}, escape_unicode: true, time_as_unix: true))
 			}
 			namespace := req.namespace.trim_space()
 			key := req.key.trim_space()
 			if namespace == '' {
 				return ctx.js_string(json.encode(InProcVjsxHostSessionStoreResponse{
 					error: 'session_store_namespace_missing'
-				}))
+				}, escape_unicode: true, time_as_unix: true))
 			}
 			if key == '' && req.op != 'keys' {
 				return ctx.js_string(json.encode(InProcVjsxHostSessionStoreResponse{
 					error: 'session_store_key_missing'
-				}))
+				}, escape_unicode: true, time_as_unix: true))
 			}
 			full_key := '${namespace}:${key}'
 			return match req.op {
@@ -43,32 +43,28 @@ fn InProcVjsxHostApi.session_store_builder(mut state VjsxExecutorState, idx int)
 						return ctx.js_string(json.encode(InProcVjsxHostSessionStoreResponse{
 							ok:    true
 							found: false
-						}))
+						}, escape_unicode: true, time_as_unix: true))
 					}
 					ctx.js_string(json.encode(InProcVjsxHostSessionStoreResponse{
 						ok:    true
 						found: true
 						value: value
-					}))
+					}, escape_unicode: true, time_as_unix: true))
 				}
 				'set' {
-					if req.ttl_ms > 0 {
-						state.session_store.set_with_ttl(full_key, req.value,
-							req.ttl_ms * time.millisecond) or {
-							return ctx.js_string(json.encode(InProcVjsxHostSessionStoreResponse{
-								error: err.msg()
-							}))
-						}
-					} else {
-						state.session_store.set(full_key, req.value) or {
-							return ctx.js_string(json.encode(InProcVjsxHostSessionStoreResponse{
-								error: err.msg()
-							}))
-						}
+					ttl := state_store.ttl_from_milliseconds(req.ttl_ms) or {
+						return ctx.js_string(json.encode(InProcVjsxHostSessionStoreResponse{
+							error: err.msg()
+						}, escape_unicode: true, time_as_unix: true))
+					}
+					state.session_store.set_with_ttl(full_key, req.value, ttl) or {
+						return ctx.js_string(json.encode(InProcVjsxHostSessionStoreResponse{
+							error: err.msg()
+						}, escape_unicode: true, time_as_unix: true))
 					}
 					ctx.js_string(json.encode(InProcVjsxHostSessionStoreResponse{
 						ok: true
-					}))
+					}, escape_unicode: true, time_as_unix: true))
 				}
 				'patch' {
 					mut swapped := false
@@ -77,42 +73,47 @@ fn InProcVjsxHostApi.session_store_builder(mut state VjsxExecutorState, idx int)
 							req.expected_found, req.expected_value) or {
 							return ctx.js_string(json.encode(InProcVjsxHostSessionStoreResponse{
 								error: err.msg()
-							}))
+							}, escape_unicode: true, time_as_unix: true))
 						}
 					} else {
-						swapped = state.session_store.compare_and_swap_set_with_ttl(full_key,
-							req.expected_found, req.expected_value, req.value,
-							req.ttl_ms * time.millisecond) or {
+						ttl := state_store.ttl_from_milliseconds(req.ttl_ms) or {
 							return ctx.js_string(json.encode(InProcVjsxHostSessionStoreResponse{
 								error: err.msg()
-							}))
+							}, escape_unicode: true, time_as_unix: true))
+						}
+						swapped = state.session_store.compare_and_swap_set_with_ttl(full_key,
+							req.expected_found, req.expected_value, req.value,
+							ttl) or {
+							return ctx.js_string(json.encode(InProcVjsxHostSessionStoreResponse{
+								error: err.msg()
+							}, escape_unicode: true, time_as_unix: true))
 						}
 					}
 					if !swapped {
 						return ctx.js_string(json.encode(InProcVjsxHostSessionStoreResponse{
 							ok:       false
 							conflict: true
-						}))
+						}, escape_unicode: true, time_as_unix: true))
 					}
 					ctx.js_string(json.encode(InProcVjsxHostSessionStoreResponse{
 						ok: true
-					}))
+					}, escape_unicode: true, time_as_unix: true))
 				}
 				'delete' {
 					state.session_store.delete(full_key) or {
 						return ctx.js_string(json.encode(InProcVjsxHostSessionStoreResponse{
 							error: err.msg()
-						}))
+						}, escape_unicode: true, time_as_unix: true))
 					}
 					ctx.js_string(json.encode(InProcVjsxHostSessionStoreResponse{
 						ok: true
-					}))
+					}, escape_unicode: true, time_as_unix: true))
 				}
 				'exists' {
 					ctx.js_string(json.encode(InProcVjsxHostSessionStoreResponse{
 						ok:    true
 						found: state.session_store.exists(full_key)
-					}))
+					}, escape_unicode: true, time_as_unix: true))
 				}
 				'keys' {
 					prefix := '${namespace}:'
@@ -122,12 +123,12 @@ fn InProcVjsxHostApi.session_store_builder(mut state VjsxExecutorState, idx int)
 						ok:    true
 						found: keys.len > 0
 						keys:  keys
-					}))
+					}, escape_unicode: true, time_as_unix: true))
 				}
 				else {
 					ctx.js_string(json.encode(InProcVjsxHostSessionStoreResponse{
 						error: 'unsupported_session_store_op:${req.op}'
-					}))
+					}, escape_unicode: true, time_as_unix: true))
 				}
 			}
 		})

@@ -1,6 +1,5 @@
 module protocol
 
-import net
 import time
 
 // ── Session Lifecycle (must be called while s.mu is held) ──
@@ -22,6 +21,9 @@ pub fn (mut s McpState) prune_sessions_locked(now i64) {
 		}
 	}
 	for id in expired {
+		if session := s.sessions[id] {
+			if mut stream := session.stream { stream.request_stop() }
+		}
 		s.sessions.delete(id)
 	}
 	if expired.len > 0 {
@@ -47,6 +49,9 @@ pub fn (mut s McpState) evict_one_locked() {
 		}
 	}
 	if candidate_id != '' {
+		if session := s.sessions[candidate_id] {
+			if mut stream := session.stream { stream.request_stop() }
+		}
 		s.sessions.delete(candidate_id)
 		s.stat_sessions_evicted_total++
 	}
@@ -59,6 +64,10 @@ pub fn (mut s McpState) ensure_session(session_id string, protocol_version strin
 	defer {
 		s.mu.unlock()
 	}
+	return s.ensure_session_locked(session_id, protocol_version, req_id, trace_id, path)
+}
+
+fn (mut s McpState) ensure_session_locked(session_id string, protocol_version string, req_id string, trace_id string, path string) Session {
 	now := time.now().unix()
 	s.prune_sessions_locked(now)
 	if existing := s.sessions[session_id] {
@@ -92,7 +101,6 @@ pub fn (mut s McpState) ensure_session(session_id string, protocol_version strin
 		started_at_unix:          now
 		last_activity_unix:       now
 		client_capabilities_json: ''
-		conn:                     unsafe { nil }
 		pending:                  []string{}
 	}
 	s.sessions[session_id] = session
@@ -114,40 +122,6 @@ pub fn (mut s McpState) set_client_capabilities(session_id string, raw string) b
 		return true
 	}
 	return false
-}
-
-pub fn (mut s McpState) bind_conn(session_id string, conn &net.TcpConn) bool {
-	if session_id == '' || isnil(conn) {
-		return false
-	}
-	s.mu.@lock()
-	defer {
-		s.mu.unlock()
-	}
-	if mut session := s.sessions[session_id] {
-		session.conn = unsafe { conn }
-		session.last_activity_unix = time.now().unix()
-		s.sessions[session_id] = session
-		return true
-	}
-	return false
-}
-
-pub fn (mut s McpState) unbind_conn(session_id string, conn &net.TcpConn) {
-	if session_id == '' {
-		return
-	}
-	s.mu.@lock()
-	defer {
-		s.mu.unlock()
-	}
-	if mut session := s.sessions[session_id] {
-		if isnil(conn) || session.conn == unsafe { conn } {
-			session.conn = unsafe { nil }
-			session.last_activity_unix = time.now().unix()
-			s.sessions[session_id] = session
-		}
-	}
 }
 
 // ── Message Queue & Flush ──
@@ -196,38 +170,18 @@ pub fn (mut s McpState) do_queue(session_id string, raw string) QueueResult {
 	}
 }
 
-pub fn (mut s McpState) flush_session(session_id string) bool {
-	if session_id == '' {
-		return false
-	}
-	mut client := &net.TcpConn(unsafe { nil })
-	mut pending := []string{}
-	s.mu.@lock()
-	if session := s.sessions[session_id] {
-		client = session.conn
-		pending = session.pending.clone()
-		if mut writable := s.sessions[session_id] {
-			writable.pending = []string{}
-			writable.last_activity_unix = time.now().unix()
-			s.sessions[session_id] = writable
-		}
-	}
-	s.mu.unlock()
-	if isnil(client) {
-		return false
-	}
-	for raw in pending {
-		if !Session.write_sse_json(mut client, raw) {
-			return false
-		}
-	}
-	return true
-}
-
 // ── Snapshot ──
 
 pub fn (mut s McpState) snapshot(details bool, limit int, offset int, session_filter string, protocol_filter string) RuntimeSnapshot {
+	view := s.snapshot_view(session_filter, protocol_filter)
+	return view.page(details, limit, offset)
+}
+
+// Capture rows, prune decisions and configuration at one publication boundary.
+// No session, stream, dispatch token or mutable settings array escapes the lock.
+fn (mut s McpState) snapshot_view(session_filter string, protocol_filter string) RuntimeSnapshot {
 	s.mu.@lock()
+	defer { s.mu.unlock() }
 	s.prune_sessions_locked(time.now().unix())
 	mut sessions := []SessionSnapshot{}
 	for _, session in s.sessions {
@@ -246,46 +200,12 @@ pub fn (mut s McpState) snapshot(details bool, limit int, offset int, session_fi
 			started_at_unix:          session.started_at_unix
 			last_activity_unix:       session.last_activity_unix
 			pending_count:            session.pending.len
-			connected:                !isnil(session.conn)
+			connected:                session.stream != none
 			client_capabilities_json: session.client_capabilities_json
 		}
 	}
-	s.mu.unlock()
-	sessions.sort(a.started_at_unix < b.started_at_unix)
-	total := sessions.len
-	if !details {
-		return RuntimeSnapshot{
-			active_sessions:            total
-			returned_sessions:          0
-			details:                    false
-			limit:                      limit
-			offset:                     offset
-			session_id:                 session_filter
-			protocol_version:           protocol_filter
-			max_sessions:               if s.max_sessions > 0 { s.max_sessions } else { 1000 }
-			max_pending_messages:       if s.max_pending_messages > 0 {
-				s.max_pending_messages
-			} else {
-				128
-			}
-			session_ttl_seconds:        if s.session_ttl_seconds > 0 {
-				s.session_ttl_seconds
-			} else {
-				900
-			}
-			allowed_origins:            s.allowed_origins.clone()
-			sampling_capability_policy: McpState.normalize_sampling_capability_policy(s.sampling_capability_policy)
-			sessions:                   []SessionSnapshot{}
-		}
-	}
-	start := if offset < total { offset } else { total }
-	end := if start + limit < total { start + limit } else { total }
 	return RuntimeSnapshot{
-		active_sessions:            total
-		returned_sessions:          end - start
-		details:                    true
-		limit:                      limit
-		offset:                     offset
+		active_sessions:            sessions.len
 		session_id:                 session_filter
 		protocol_version:           protocol_filter
 		max_sessions:               if s.max_sessions > 0 { s.max_sessions } else { 1000 }
@@ -301,13 +221,45 @@ pub fn (mut s McpState) snapshot(details bool, limit int, offset int, session_fi
 		}
 		allowed_origins:            s.allowed_origins.clone()
 		sampling_capability_policy: McpState.normalize_sampling_capability_policy(s.sampling_capability_policy)
-		sessions:                   sessions[start..end].clone()
+		sessions:                   sessions
+	}
+}
+
+// Formatting owns only detached rows/settings. It never reads the live owner or
+// holds its mutex while sorting and paginating a potentially large session list.
+fn (view RuntimeSnapshot) page(details bool, limit int, offset int) RuntimeSnapshot {
+	clean_limit := if limit > 0 { limit } else { 0 }
+	clean_offset := if offset > 0 { offset } else { 0 }
+	if !details {
+		return RuntimeSnapshot{
+			...view
+			details:           false
+			limit:             clean_limit
+			offset:            clean_offset
+			returned_sessions: 0
+			sessions:          []SessionSnapshot{}
+		}
+	}
+	mut sessions := view.sessions.clone()
+	sessions.sort(a.started_at_unix < b.started_at_unix)
+	start := if clean_offset < sessions.len { clean_offset } else { sessions.len }
+	remaining := sessions.len - start
+	count := if clean_limit < remaining { clean_limit } else { remaining }
+	return RuntimeSnapshot{
+		...view
+		details:           true
+		limit:             clean_limit
+		offset:            clean_offset
+		returned_sessions: count
+		sessions:          sessions[start..start + count].clone()
 	}
 }
 
 // ── Query ──
 
-pub fn (s &McpState) origin_allowed(headers map[string]string) bool {
+pub fn (mut s McpState) origin_allowed(headers map[string]string) bool {
+	s.mu.@lock()
+	defer { s.mu.unlock() }
 	if s.allowed_origins.len == 0 {
 		return true
 	}
@@ -324,27 +276,24 @@ pub fn (s &McpState) origin_allowed(headers map[string]string) bool {
 }
 
 pub fn (mut s McpState) delete_session(session_id string) bool {
-	if session_id == '' {
-		return false
-	}
-	mut client := &net.TcpConn(unsafe { nil })
+	if session_id == '' { return false }
 	s.mu.@lock()
+	defer { s.mu.unlock() }
 	if session := s.sessions[session_id] {
-		client = session.conn
+		if mut stream := session.stream { stream.request_stop() }
 		s.sessions.delete(session_id)
+		return true
 	}
-	s.mu.unlock()
-	if !isnil(client) {
-		client.close() or {}
-	}
-	return true
+	return false
 }
 
-pub fn (s &McpState) client_capabilities_for_request(session_id string, raw string) string {
+pub fn (mut s McpState) client_capabilities_for_request(session_id string, raw string) string {
 	body_caps := Session.extract_client_capabilities_json(raw)
 	if body_caps != '' {
 		return body_caps
 	}
+	s.mu.@lock()
+	defer { s.mu.unlock() }
 	if session_id != '' {
 		if session := s.sessions[session_id] {
 			return session.client_capabilities_json

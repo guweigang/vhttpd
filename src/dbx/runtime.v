@@ -4,10 +4,13 @@ $if enable_db ? {
 	import db.mysql
 	import db.pg
 	import os
+	import net.unix
+	import net
 }
+
 import encoding.base64
-import json
-import net.unix
+import json2 as json
+import listener_runtime
 import provider
 import time
 
@@ -86,8 +89,7 @@ pub mut:
 	started             bool
 	started_at_unix     i64
 	last_error          string
-	pool_ready          bool
-	pool                PoolHandle
+	pool_owner          &PoolOwner = &PoolOwner{}
 	total_queries       u64
 	total_executes      u64
 	failed_queries      u64
@@ -97,16 +99,38 @@ pub mut:
 	recent_queries      []QueryObservation
 	active_transactions int
 	session_counter     u64
-	stop_requested      bool
-	listener            &unix.StreamListener = unsafe { nil }
-	tx_sessions         map[string]SessionHandle
+	listener_owner      listener_runtime.Owner
+	tx_sessions         map[string]&TransactionSession
+	transactions_closing bool
 }
 
-pub fn (mut rt Runtime) request_stop() &unix.StreamListener {
-	rt.stop_requested = true
-	listener := rt.listener
+pub fn (rt Runtime) pool_is_ready() bool {
+	mut owner := rt.pool_owner
+	return owner.is_ready()
+}
+
+// Call under the runtime metadata lock (App.mu in the application adapter).
+pub fn (mut rt Runtime) request_stop() ?u64 {
+	return rt.request_stop_with(false)
+}
+
+pub fn (mut rt Runtime) request_shutdown() ?u64 {
+	return rt.request_stop_with(true)
+}
+
+fn (mut rt Runtime) request_stop_with(terminal bool) ?u64 {
+	// Reject parked transaction borrowers before the listener drains handlers.
+	// Otherwise each waiter could enter native work after the active request.
+	rt.pool_owner.request_stop()
+	rt.transactions_closing = true
+	for _, mut owner in rt.tx_sessions { owner.request_close() }
+	generation := if terminal {
+		rt.listener_owner.request_shutdown()
+	} else {
+		rt.listener_owner.request_stop()
+	}
 	rt.started = false
-	return listener
+	return generation
 }
 
 pub fn (mut rt Runtime) mark_not_compiled() {
@@ -306,8 +330,8 @@ pub struct Server {}
 // ServerContext is the closure-based interface for server dispatch operations.
 pub struct ServerContext {
 pub:
-	driver_fn   fn () string          = unsafe { nil }
-	dispatch_fn fn (Request) Response = unsafe { nil }
+	driver_fn   fn () string          @[required]
+	dispatch_fn fn (Request) Response @[required]
 }
 
 pub fn (ctx ServerContext) driver() string {
@@ -342,16 +366,16 @@ pub fn DriverName.normalize(name string) string {
 // RuntimeContext is the closure-based interface that Server.run needs from the App.
 pub struct RuntimeContext {
 pub:
-	mark_listen_error_fn fn (string) = unsafe { nil }
-	mark_started_fn      fn (i64, &unix.StreamListener) string = unsafe { nil }
-	mark_stopped_fn      fn ()               = unsafe { nil }
-	stop_requested_fn    fn () bool          = unsafe { nil }
-	note_error_fn        fn (string)         = unsafe { nil }
-	cleanup_sessions_fn  fn ()               = unsafe { nil }
-	close_pool_fn        fn ()               = unsafe { nil }
-	build_server_ctx_fn  fn () ServerContext = unsafe { nil }
-	emit_started_fn      fn (string, string) = unsafe { nil }
-	emit_error_fn        fn (string, string) = unsafe { nil }
+	lifecycle           &listener_runtime.Owner @[required]
+	mark_listen_error_fn fn (u64, string) @[required]
+	mark_started_fn      fn (u64, i64) ?string @[required]
+	mark_stopped_fn      fn (u64)               @[required]
+	note_error_fn        fn (string)         @[required]
+	cleanup_sessions_fn  fn ()               @[required]
+	close_pool_fn        fn ()               @[required]
+	build_server_ctx_fn  fn () ServerContext @[required]
+	emit_started_fn      fn (string, string) @[required]
+	emit_error_fn        fn (string, string) @[required]
 }
 
 // ── enable_db: real types ──
@@ -393,7 +417,7 @@ $if enable_db ? {
 		mysql_config mysql.Config
 		pool_size    int
 		idle_ping_ms int
-		pg_pool      &pg.DB = unsafe { nil }
+		pg_pool      ?&pg.DB
 	}
 
 	pub struct SessionHandle {
@@ -402,7 +426,7 @@ $if enable_db ? {
 		init_sql           []string
 		mysql_conn         mysql.DB
 		mysql_last_used_ms i64
-		pg_conn            &pg.Conn = unsafe { nil }
+		pg_conn            ?&pg.Conn
 	}
 }
 
@@ -505,7 +529,10 @@ $if enable_db ? {
 				mut mysql_pool := chan MySqlPooledConn{cap: pool_size}
 				for _ in 0 .. pool_size {
 					mysql_pool <- MySqlPooledConn{
-						conn:         mysql_connect_initialized(mysql_config, settings.init_sql)!
+						conn:         mysql_connect_initialized(mysql_config, settings.init_sql) or {
+							for mysql_pool.len > 0 { mut opened := <-mysql_pool; opened.conn.close() or {} }
+							return err
+						}
 						last_used_ms: time.now().unix_milli()
 					}
 				}
@@ -543,22 +570,36 @@ $if enable_db ? {
 			'mysql' {
 				for _ in 0 .. pool.mysql_pool.len {
 					mut pooled := <-pool.mysql_pool or { break }
-					pooled.conn.close() or { break }
+					pooled.conn.close() or {}
 				}
 			}
 			'pgsql' {
-				pool.pg_pool.close() or {}
+				if mut handle := pool.pg_pool { handle.close() or {} }
+				pool.pg_pool = none
 			}
 			else {}
 		}
 	}
 
 	pub fn (mut pool PoolHandle) acquire() !SessionHandle {
+		return pool.acquire_until(pool_acquire_running)!
+	}
+
+	fn pool_acquire_running() bool { return false }
+
+	fn mysql_acquire_slot(available chan MySqlPooledConn, should_stop fn () bool) !MySqlPooledConn {
+		for {
+			if should_stop() { return error('db_stopping') }
+			select { conn := <-available { return conn } else {} }
+			time.sleep(time.millisecond)
+		}
+	}
+
+	pub fn (mut pool PoolHandle) acquire_until(should_stop fn () bool) !SessionHandle {
+		if should_stop() { return error('db_stopping') }
 		return match pool.driver {
 			'mysql' {
-				mut pooled := <-pool.mysql_pool or {
-					return error('Failed to acquire a connection from the pool')
-				}
+				mut pooled := mysql_acquire_slot(pool.mysql_pool, should_stop)!
 				if pool.idle_ping_ms > 0
 					&& time.now().unix_milli() - pooled.last_used_ms >= i64(pool.idle_ping_ms) {
 					pooled.conn.ping() or {
@@ -572,13 +613,14 @@ $if enable_db ? {
 					mysql_conn:         pooled.conn
 					mysql_last_used_ms: pooled.last_used_ms
 				}
-				session.apply_init_sql()!
+				session.apply_init_sql() or { session.close() or {}; return err }
 				session
 			}
 			'pgsql' {
+				mut handle := pool.pg_pool or { return error('pgsql_pool_unavailable') }
 				SessionHandle{
 					driver:  'pgsql'
-					pg_conn: pool.pg_pool.conn()!
+					pg_conn: handle.conn()!
 				}
 			}
 			else {
@@ -599,7 +641,7 @@ $if enable_db ? {
 			}
 			'pgsql' {
 				if session.driver == 'pgsql' {
-					session.pg_conn.close() or {}
+					if mut handle := session.pg_conn { handle.close() or {} }
 				}
 			}
 			else {}
@@ -612,7 +654,9 @@ $if enable_db ? {
 				session.mysql_conn.close()!
 			}
 			'pgsql' {
-				session.pg_conn.close()!
+				handle := session.pg_conn or { return }
+				session.pg_conn = none
+				handle.close()!
 			}
 			else {
 				return error('unsupported_driver')
@@ -626,7 +670,8 @@ $if enable_db ? {
 				session.mysql_conn.ping()!
 			}
 			'pgsql' {
-				rows := session.pg_conn.exec('select 1')!
+				handle := session.pg_conn or { return error('pgsql_session_unavailable') }
+				rows := handle.exec('select 1')!
 				rows.len > 0
 			}
 			else {
@@ -642,7 +687,8 @@ $if enable_db ? {
 				session.mysql_conn.begin()!
 			}
 			'pgsql' {
-				session.pg_conn.begin_on_conn(pg.PQTransactionParam{})!
+				handle := session.pg_conn or { return error('pgsql_session_unavailable') }
+				handle.begin_on_conn(pg.PQTransactionParam{})!
 			}
 			else {
 				return error('unsupported_driver')
@@ -656,7 +702,8 @@ $if enable_db ? {
 				session.mysql_conn.commit()!
 			}
 			'pgsql' {
-				session.pg_conn.commit()!
+				handle := session.pg_conn or { return error('pgsql_session_unavailable') }
+				handle.commit()!
 			}
 			else {
 				return error('unsupported_driver')
@@ -670,7 +717,8 @@ $if enable_db ? {
 				session.mysql_conn.rollback()!
 			}
 			'pgsql' {
-				session.pg_conn.rollback()!
+				handle := session.pg_conn or { return error('pgsql_session_unavailable') }
+				handle.rollback()!
 			}
 			else {
 				return error('unsupported_driver')
@@ -824,11 +872,12 @@ $if enable_db ? {
 				}
 			}
 			'pgsql' {
+				handle := session.pg_conn or { return error('pgsql_session_unavailable') }
 				mut result := pg.Result{}
 				if params.len == 0 {
-					result = session.pg_conn.exec_result(query)!
+					result = handle.exec_result(query)!
 				} else {
-					result = session.pg_conn.exec_param_many_result(query, params)!
+					result = handle.exec_param_many_result(query, params)!
 				}
 				mut columns := []string{len: result.cols.len}
 				for name, idx in result.cols {
@@ -883,11 +932,12 @@ $if enable_db ? {
 				}
 			}
 			'pgsql' {
+				handle := session.pg_conn or { return error('pgsql_session_unavailable') }
 				mut result := pg.Result{}
 				if params.len == 0 {
-					result = session.pg_conn.exec_result(query)!
+					result = handle.exec_result(query)!
 				} else {
-					result = session.pg_conn.exec_param_many_result(query, params)!
+					result = handle.exec_param_many_result(query, params)!
 				}
 				ExecResult{
 					affected_rows:      result.rows.len
@@ -924,7 +974,7 @@ $if enable_db ? {
 			idle_ping_ms: settings.idle_ping_ms
 			init_sql:     settings.init_sql.clone()
 			started:      false
-			tx_sessions:  map[string]SessionHandle{}
+			tx_sessions:  map[string]&TransactionSession{}
 		}
 	}
 
@@ -941,7 +991,7 @@ $if enable_db ? {
 			database:            rt.database
 			pool_size:           rt.pool_size
 			idle_ping_ms:        rt.idle_ping_ms
-			pool_ready:          rt.pool_ready
+			pool_ready:          rt.pool_is_ready()
 			started:             rt.started
 			started_at_unix:     rt.started_at_unix
 			last_error:          rt.last_error
@@ -961,7 +1011,7 @@ $if enable_db ? {
 				savepoints:   caps.savepoints
 			}
 			snapshot_at_unix:    time.now().unix()
-		})
+		}, escape_unicode: true, time_as_unix: true)
 	}
 
 	pub fn (rt Runtime) settings() provider.DbRuntimeSettings {
@@ -981,21 +1031,6 @@ $if enable_db ? {
 		}
 	}
 
-	pub fn (rt Runtime) single_connection_settings() provider.DbRuntimeSettings {
-		settings := rt.settings()
-		return provider.DbRuntimeSettings{
-			driver:       settings.driver
-			pool_name:    settings.pool_name
-			host:         settings.host
-			port:         settings.port
-			username:     settings.username
-			password:     settings.password
-			database:     settings.database
-			pool_size:    1
-			idle_ping_ms: settings.idle_ping_ms
-			init_sql:     settings.init_sql.clone()
-		}
-	}
 
 	pub fn (mut rt Runtime) note_error(message string) {
 		rt.last_error = message
@@ -1027,86 +1062,66 @@ $if enable_db ? {
 		return 'dbtx_${time.now().unix_micro()}_${rt.session_counter}'
 	}
 
-	pub fn (mut rt Runtime) track_transaction(session_id string, conn SessionHandle) string {
-		rt.tx_sessions[session_id] = conn
+	pub fn (mut rt Runtime) track_transaction(session_id string, conn SessionHandle) !string {
+		return rt.register_transaction(session_id, conn, none)!
+	}
+
+	pub fn (mut rt Runtime) track_transaction_lease(session_id string, mut lease ConnectionLease) !string {
+		if rt.transactions_closing { return error('db_stopping') }
+		if session_id in rt.tx_sessions { return error('duplicate_session') }
+		conn := lease.release() or { return error('db_lease_released') }
+		return rt.register_transaction(session_id, conn, lease.pool_origin)!
+	}
+
+	fn (mut rt Runtime) register_transaction(session_id string, conn SessionHandle, origin ?PoolOrigin) !string {
+		if rt.transactions_closing { return error('db_stopping') }
+		if session_id in rt.tx_sessions { return error('duplicate_session') }
+		rt.tx_sessions[session_id] = &TransactionSession{id: session_id, connection: conn, pool_origin: origin}
 		rt.active_transactions = rt.tx_sessions.len
 		return rt.driver
 	}
 
-	pub fn (mut rt Runtime) mark_started(started_at_unix i64, listener &unix.StreamListener) string {
+	pub fn (mut rt Runtime) mark_started(generation u64, started_at_unix i64) ?string {
+		if rt.listener_owner.should_stop(generation) || !rt.pool_owner.reopen() { return none }
 		rt.started = true
+		rt.transactions_closing = false
 		rt.started_at_unix = started_at_unix
 		rt.last_error = ''
-		rt.stop_requested = false
-		rt.listener = unsafe { listener }
 		return rt.driver
 	}
 
-	pub fn (mut rt Runtime) mark_stopped() {
-		rt.listener = unsafe { nil }
-		rt.started = false
-		rt.stop_requested = false
+	pub fn (mut rt Runtime) mark_stopped(generation u64) {
+		if rt.listener_owner.is_current(generation) { rt.started = false }
 	}
 
-	pub fn (rt Runtime) stop_requested_flag() bool {
-		return rt.stop_requested
+	pub fn (mut rt Runtime) mark_listen_error(generation u64, message string) {
+		if !rt.listener_owner.should_stop(generation) {
+			rt.started = false
+			rt.last_error = message
+		}
 	}
 
-	pub fn (mut rt Runtime) mark_listen_error(message string) {
-		rt.started = false
-		rt.last_error = message
-	}
-
-	pub fn (mut rt Runtime) drain_sessions() []SessionHandle {
-		mut sessions := []SessionHandle{}
+	pub fn (mut rt Runtime) drain_sessions() []&TransactionSession {
+		rt.transactions_closing = true
+		mut sessions := []&TransactionSession{}
 		for _, conn in rt.tx_sessions {
 			sessions << conn
 		}
-		rt.tx_sessions = map[string]SessionHandle{}
+		rt.tx_sessions = map[string]&TransactionSession{}
 		rt.active_transactions = 0
 		return sessions
 	}
 
-	pub fn (mut rt Runtime) detach_pool() (bool, PoolHandle) {
-		pool_ready := rt.pool_ready
-		mut pool := rt.pool
-		rt.pool_ready = false
-		return pool_ready, pool
-	}
 
-	pub fn (mut rt Runtime) detach_transaction(session_id string) (bool, PoolHandle) {
-		rt.tx_sessions.delete(session_id)
+	pub fn (mut rt Runtime) detach_transaction(owner &TransactionSession) {
+		if current := rt.tx_sessions[owner.id] {
+			if voidptr(current) == voidptr(owner) { rt.tx_sessions.delete(owner.id) }
+		}
 		rt.active_transactions = rt.tx_sessions.len
-		pool_ready := rt.pool_ready
-		mut pool := rt.pool
-		return pool_ready, pool
 	}
 
-	pub fn (rt Runtime) pool_settings_if_needed() !provider.DbRuntimeSettings {
-		caps := DriverName.capabilities(rt.driver)
-		if !caps.pool {
-			return error('unsupported_driver')
-		}
-		if rt.pool_ready {
-			return error('pool_ready')
-		}
-		return rt.settings()
-	}
 
-	pub fn (mut rt Runtime) install_pool_if_missing(pool PoolHandle) bool {
-		if rt.pool_ready {
-			return false
-		}
-		rt.pool = pool
-		rt.pool_ready = true
-		return true
-	}
-
-	pub fn (rt Runtime) pool_handle() (bool, PoolHandle) {
-		return rt.pool_ready, rt.pool
-	}
-
-	pub fn (rt Runtime) transaction_session(session_id string) ?SessionHandle {
+	pub fn (rt Runtime) transaction_session(session_id string) ?&TransactionSession {
 		return rt.tx_sessions[session_id] or { return none }
 	}
 
@@ -1144,52 +1159,80 @@ $if enable_db ? {
 		return body.bytestr()
 	}
 
-	fn Server.handle_connection(ctx ServerContext, mut conn unix.StreamConn) {
+	fn Server.handle_connection(ctx ServerContext, mut lifecycle listener_runtime.Owner, mut conn unix.StreamConn, generation u64, request u64) {
 		defer {
 			conn.close() or {}
+			lifecycle.complete_request(request)
 		}
 		payload := FrameCodec.read(mut conn) or { return }
-		req := json.decode(Request, payload) or {
-			FrameCodec.write(mut conn, json.encode(Response.error(ctx.driver(), 'invalid_json'))) or {}
+		if !lifecycle.begin_request(generation, request) { return }
+		req := json.decode[Request](payload) or {
+			FrameCodec.write(mut conn, json.encode(Response.error(ctx.driver(), 'invalid_json'),
+				escape_unicode: true
+				time_as_unix:   true
+			)) or {}
 			return
 		}
 		resp := ctx.dispatch(req)
-		FrameCodec.write(mut conn, json.encode(resp)) or {}
+		FrameCodec.write(mut conn, json.encode(resp, escape_unicode: true, time_as_unix: true)) or {}
+	}
+
+	// Start takes the reservation synchronously, before scheduling the serving loop.
+	pub fn Server.start(ctx RuntimeContext, socket_path string) bool {
+		if socket_path.trim_space() == '' { return false }
+		mut lifecycle := ctx.lifecycle
+		generation := lifecycle.reserve() or { return false }
+		spawn Server.run_reserved(ctx, socket_path, generation)
+		return true
 	}
 
 	pub fn Server.run(ctx RuntimeContext, socket_path string) {
-		if socket_path.trim_space() == '' {
-			return
-		}
-		os.mkdir_all(os.dir(socket_path)) or {}
-		if os.exists(socket_path) {
-			os.rm(socket_path) or {}
-		}
-		mut listener := unix.listen_stream(socket_path) or {
-			ctx.mark_listen_error_fn(err.msg())
-			ctx.emit_error_fn(socket_path, err.msg())
-			return
-		}
-		driver := ctx.mark_started_fn(time.now().unix(), listener)
-		ctx.emit_started_fn(socket_path, driver)
+		if socket_path.trim_space() == '' { return }
+		mut lifecycle := ctx.lifecycle
+		generation := lifecycle.reserve() or { return }
+		Server.run_reserved(ctx, socket_path, generation)
+	}
+
+	fn Server.run_reserved(ctx RuntimeContext, socket_path string, generation u64) {
+		mut lifecycle := ctx.lifecycle
+		mut published := false
 		defer {
-			ctx.mark_stopped_fn()
-			ctx.cleanup_sessions_fn()
-			ctx.close_pool_fn()
+			// Drain handlers before destroying transaction sessions or their pool.
+			lifecycle.drain_requests(generation)
+			// Keep the reservation until shared DB resources are cleaned as well.
+			if published {
+				ctx.cleanup_sessions_fn()
+				ctx.close_pool_fn()
+			}
+			ctx.mark_stopped_fn(generation)
+			lifecycle.finish(generation)
 		}
+		if lifecycle.should_stop(generation) { return }
+		os.mkdir_all(os.dir(socket_path)) or {}
+		mut listener := listener_runtime.listen(socket_path) or {
+			ctx.mark_listen_error_fn(generation, err.msg())
+			if !lifecycle.should_stop(generation) { ctx.emit_error_fn(socket_path, err.msg()) }
+			return
+		}
+		published = lifecycle.publish(generation, listener)
+		if !published { listener.close() or {}; return }
+		driver := ctx.mark_started_fn(generation, time.now().unix()) or { return }
+		ctx.emit_started_fn(socket_path, driver)
 		server_ctx := ctx.build_server_ctx_fn()
-		for {
+		for !lifecycle.should_stop(generation) {
 			mut conn := listener.accept() or {
-				if ctx.stop_requested_fn() {
-					break
-				}
+				if lifecycle.should_stop(generation) { break }
+				if err.code() == net.err_timed_out_code { continue }
 				ctx.note_error_fn(err.msg())
 				ctx.emit_error_fn(socket_path, err.msg())
 				continue
 			}
-			go Server.handle_connection(server_ctx, mut conn)
+			if lifecycle.should_stop(generation) { conn.close() or {}; break }
+			request := lifecycle.accept_request(generation, conn.sock.handle) or { conn.close() or {}; continue }
+			go Server.handle_connection(server_ctx, mut lifecycle, mut conn, generation, request)
 		}
 	}
+
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -1236,7 +1279,7 @@ $if !enable_db ? {
 			database:            rt.database
 			pool_size:           rt.pool_size
 			idle_ping_ms:        rt.idle_ping_ms
-			pool_ready:          rt.pool_ready
+			pool_ready:          rt.pool_is_ready()
 			started:             rt.started
 			started_at_unix:     rt.started_at_unix
 			last_error:          rt.last_error
@@ -1250,7 +1293,7 @@ $if !enable_db ? {
 			ready:               ready
 			capabilities:        SnapshotCapabilities{}
 			snapshot_at_unix:    time.now().unix()
-		})
+		}, escape_unicode: true, time_as_unix: true)
 	}
 
 	pub fn (rt Runtime) normalized_pool_name() string {
@@ -1266,8 +1309,18 @@ $if !enable_db ? {
 	// ── Server (!enable_db) ──
 
 	pub fn Server.run(ctx RuntimeContext, socket_path string) {
-		_ = socket_path
-		ctx.mark_listen_error_fn('db_not_compiled')
+		mut lifecycle := ctx.lifecycle
+		generation := lifecycle.reserve() or { return }
+		defer {
+			ctx.mark_stopped_fn(generation)
+			lifecycle.finish(generation)
+		}
+		ctx.mark_listen_error_fn(generation, 'db_not_compiled')
 		ctx.emit_error_fn(socket_path, 'db_not_compiled')
+	}
+
+	pub fn Server.start(ctx RuntimeContext, socket_path string) bool {
+		Server.run(ctx, socket_path)
+		return false
 	}
 }

@@ -1,34 +1,37 @@
 module main
 
-import json
+import json2 as json
 import log
 import net.http
 import net.websocket as websock
 import time
 import feishu
+import connection_runtime
 
 struct FeishuRuntimeHeartbeat {}
 
-fn FeishuRuntimeHeartbeat.loop(mut app App, instance string, ws_url string, mut client websock.Client) {
+fn FeishuRuntimeHeartbeat.loop(state &feishu.FeishuState, instance string, ws_url string, mut session connection_runtime.Session, mut client websock.Client) {
 	service_id := feishu.RuntimeProtoFrame.service_id_from_ws_url(ws_url)
 	if service_id <= 0 {
 		return
 	}
-	mut interval_seconds := app.providers.feishu.ping_interval_seconds(instance)
+	mut interval_seconds := state.ping_interval_seconds(instance)
 	if interval_seconds <= 0 {
 		interval_seconds = 5
 	}
-	for client.get_state() == .open {
+	for !session.stopped() && client.get_state() == .open {
 		ping := feishu.RuntimeProtoFrame.client_ping(service_id)
 		client.write(ping.encode(), .binary_frame) or {
 			log.error('[feishu] ❌ ping send failed: ${err}')
+			session.note_reason('heartbeat:${err}')
+			session.request_stop()
 			return
 		}
 		log.info('[feishu] 💓 heartbeat sent')
 		if client.get_state() != .open {
 			return
 		}
-		time.sleep(interval_seconds * time.second)
+		if !session.wait(interval_seconds * time.second) { return }
 	}
 }
 
@@ -55,7 +58,7 @@ fn (mut app App) feishu_provider_pull_ws_endpoint(app_name string) !string {
 		if resp.status_code != 200 {
 			return error('feishu ws endpoint request failed with status ${resp.status_code}')
 		}
-		decoded := json.decode(feishu.RuntimeWsEndpointResponse, resp.body)!
+		decoded := json.decode[feishu.RuntimeWsEndpointResponse](resp.body)!
 		if decoded.code != 0 || decoded.data.url.trim_space() == '' {
 			detail := if decoded.msg.trim_space() != '' {
 				decoded.msg

@@ -13,14 +13,15 @@ fn test_websocket_open_projects_to_session_exchange() {
 		pipeline:   'ws.pipeline'
 	}
 	ex := websocket_session_open_exchange(executor.WebSocketSessionOpenRequest{
-		req:         http.Request{
+		register_conn_fn: fn (_ int) bool { return true }
+		req:              http.Request{
 			method: .get
 			url:    '/ws'
 		}
-		remote_addr: '127.0.0.1:50000'
-		path:        '/ws'
-		request_id:  'req-1'
-		trace_id:    'trace-1'
+		remote_addr:      '127.0.0.1:50000'
+		path:             '/ws'
+		request_id:       'req-1'
+		trace_id:         'trace-1'
 	}, executor.WebSocketSessionOpenOutcome{
 		accepted:    true
 		status:      101

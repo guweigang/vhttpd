@@ -1,6 +1,6 @@
 module executor
 
-import json
+import json2 as json
 import os
 import time
 import upstream.transport
@@ -23,7 +23,7 @@ fn InProcVjsxWebSocketJs.log_args(args []vjsx.Value) string {
 	return parts.join(' ')
 }
 
-fn InProcVjsxWebSocketJs.runtime(ctx &vjsx.Context, runtime_meta InProcVjsxRuntimeMeta, runtime_config_json string, mut app AppFacade) vjsx.Value {
+fn InProcVjsxWebSocketJs.runtime(ctx &vjsx.Context, runtime_meta InProcVjsxRuntimeMeta, runtime_config_json string, mut app EmbeddedHost) vjsx.Value {
 	mut runtime := ctx.js_object()
 	minimal_runtime := os.getenv('VHTTPD_VJSX_WS_MINIMAL_RUNTIME').trim_space().to_lower() in [
 		'1',
@@ -67,7 +67,7 @@ fn InProcVjsxWebSocketJs.runtime(ctx &vjsx.Context, runtime_meta InProcVjsxRunti
 	request.set('remoteAddr', runtime_meta.request_remote_addr)
 	request.set('ip', runtime_meta.request_remote_addr)
 	request.set('server', InProcVjsxWebSocketJs.value_from_json(ctx,
-		json.encode(runtime_meta.request_server)))
+		json.encode(runtime_meta.request_server, escape_unicode: true, time_as_unix: true)))
 	runtime.set('request', request)
 	runtime.set('method', runtime_meta.method)
 	runtime.set('path', runtime_meta.path)
@@ -138,14 +138,14 @@ fn InProcVjsxWebSocketJs.frame(ctx &vjsx.Context, frame transport.WorkerWebSocke
 	js_frame.set('event', if frame.event != '' { frame.event } else { 'message' })
 	js_frame.set('id', frame.id)
 	js_frame.set('path', frame.path)
-	js_frame.set('query', InProcVjsxWebSocketJs.value_from_json(ctx, json.encode(frame.query)))
-	js_frame.set('headers', InProcVjsxWebSocketJs.value_from_json(ctx, json.encode(frame.headers)))
+	js_frame.set('query', InProcVjsxWebSocketJs.value_from_json(ctx, json.encode(frame.query, escape_unicode: true, time_as_unix: true)))
+	js_frame.set('headers', InProcVjsxWebSocketJs.value_from_json(ctx, json.encode(frame.headers, escape_unicode: true, time_as_unix: true)))
 	js_frame.set('remoteAddr', frame.remote_addr)
 	js_frame.set('requestId', frame.request_id)
 	js_frame.set('traceId', frame.trace_id)
 	js_frame.set('targetId', frame.target_id)
 	js_frame.set('metadata',
-		InProcVjsxWebSocketJs.value_from_json(ctx, json.encode(frame.metadata)))
+		InProcVjsxWebSocketJs.value_from_json(ctx, json.encode(frame.metadata, escape_unicode: true, time_as_unix: true)))
 	js_frame.set('status', frame.status)
 	js_frame.set('code', frame.code)
 	js_frame.set('reason', frame.reason)

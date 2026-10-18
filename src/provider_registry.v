@@ -26,9 +26,7 @@ fn (mut host ProviderHost) ensure_maps() {
 }
 
 fn (mut host ProviderHost) register_provider(name string, p Provider, ctx provider.RuntimeContext) {
-	host.ensure_maps()
-	host.registry[name] = p
-	host.specs[name] = ProviderSpec{
+	host.register_spec(ProviderSpec{
 		name:             name
 		enabled:          true
 		has_handler:      false
@@ -39,14 +37,14 @@ fn (mut host ProviderHost) register_provider(name string, p Provider, ctx provid
 		handler:          provider.NoopProviderCommandHandler{}
 		runtime:          ProviderRuntimeAdapter{
 			provider: p
-			ctx:      ctx
 		}
 		lifecycle_ctx:    ctx
-	}
+	})
 }
 
 fn (mut host ProviderHost) register_spec(spec ProviderSpec) {
 	host.ensure_maps()
+	host.registry[spec.name] = spec.provider
 	host.specs[spec.name] = spec
 }
 
@@ -68,7 +66,7 @@ fn (host ProviderHost) enabled(name string, bootstrap_enabled bool) bool {
 	return bootstrap_enabled
 }
 
-fn (host ProviderHost) runtime(name string) ?ProviderRuntime {
+fn (host ProviderHost) runtime(name string) ?ProviderLifecycleRuntime {
 	if spec := host.specs[name] {
 		return spec.runtime
 	}
@@ -81,14 +79,12 @@ fn (host ProviderHost) names() []string {
 	return keys
 }
 
-fn (host ProviderHost) runtimes_with_contexts() ([]ProviderRuntime, []provider.RuntimeContext) {
-	mut runtimes := []ProviderRuntime{}
-	mut contexts := []provider.RuntimeContext{}
+fn (host ProviderHost) lifecycle_specs() []ProviderSpec {
+	mut specs := []ProviderSpec{cap: host.specs.len}
 	for _, spec in host.specs {
-		runtimes << spec.runtime
-		contexts << spec.lifecycle_ctx
+		specs << spec
 	}
-	return runtimes, contexts
+	return specs
 }
 
 fn (mut hub ProviderRuntimeHub) register_provider(name string, p Provider, ctx provider.RuntimeContext) {
@@ -111,16 +107,12 @@ fn (hub ProviderRuntimeHub) provider_enabled(name string, bootstrap_enabled bool
 	return hub.registry.enabled(name, bootstrap_enabled)
 }
 
-fn (hub ProviderRuntimeHub) get_provider_runtime(name string) ?ProviderRuntime {
+fn (hub ProviderRuntimeHub) get_provider_runtime(name string) ?ProviderLifecycleRuntime {
 	return hub.registry.runtime(name)
 }
 
 fn (hub ProviderRuntimeHub) provider_names() []string {
 	return hub.registry.names()
-}
-
-fn (hub ProviderRuntimeHub) provider_runtimes_with_contexts() ([]ProviderRuntime, []provider.RuntimeContext) {
-	return hub.registry.runtimes_with_contexts()
 }
 
 pub fn (mut app App) register_provider(name string, p Provider) {
@@ -165,7 +157,7 @@ pub fn (mut app App) provider_enabled(name string) bool {
 	return app.providers.provider_enabled(name, bootstrap_enabled)
 }
 
-pub fn (mut app App) get_provider_runtime(name string) ?ProviderRuntime {
+pub fn (mut app App) get_provider_runtime(name string) ?ProviderLifecycleRuntime {
 	app.mu.@lock()
 	defer {
 		app.mu.unlock()
@@ -184,10 +176,10 @@ pub fn (mut app App) provider_names() []string {
 // Helpers to run provider lifecycle across registered providers.
 pub fn (mut app App) stop_all_providers() {
 	app.mu.@lock()
-	mut runtimes, mut contexts := app.providers.provider_runtimes_with_contexts()
+	mut specs := app.providers.registry.lifecycle_specs()
 	app.mu.unlock()
-	for i, mut runtime in runtimes {
-		runtime.stop(mut contexts[i]) or {
+	for mut spec in specs {
+		spec.stop_runtime() or {
 			app.emit('provider.stop_failed', {
 				'error': err.msg()
 			})

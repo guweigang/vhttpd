@@ -25,6 +25,6 @@ mut:
 
 struct EngineRuntime {
 mut:
-	primary    worker.WorkerState
+	primary    &worker.WorkerState = &worker.WorkerState{}
 	additional map[string]&worker.WorkerState
 }

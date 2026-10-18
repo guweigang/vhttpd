@@ -28,13 +28,14 @@ import log
 import os
 import logging
 import server_lifecycle
-import upstream.transport
+import process_runtime
+import sync
+import time
 
 #include <time.h>
 #include <signal.h>
 
 fn C.tzset()
-fn C.kill(pid int, sig int) int
 
 __global (
 	g_active_runtime_registry ActiveRuntimeRegistry
@@ -42,17 +43,23 @@ __global (
 
 struct ActiveRuntimeRegistry {
 mut:
+	mu               sync.Mutex
 	apps             []&App
 	cfgs             []server_lifecycle.ServerRuntimeConfig
 	is_shutting_down bool
 }
 
 fn (mut r ActiveRuntimeRegistry) register(app &App, cfg server_lifecycle.ServerRuntimeConfig) {
+	r.mu.@lock()
+	defer { r.mu.unlock() }
+	if r.is_shutting_down { return }
 	r.apps << app
 	r.cfgs << cfg
 }
 
 fn (mut r ActiveRuntimeRegistry) begin_shutdown() bool {
+	r.mu.@lock()
+	defer { r.mu.unlock() }
 	if r.is_shutting_down {
 		return false
 	}
@@ -60,24 +67,64 @@ fn (mut r ActiveRuntimeRegistry) begin_shutdown() bool {
 	return true
 }
 
-fn (r ActiveRuntimeRegistry) shutting_down() bool {
+fn (r &ActiveRuntimeRegistry) shutting_down() bool {
+	r.mu.@lock()
+	defer { r.mu.unlock() }
 	return r.is_shutting_down
 }
 
-fn (r ActiveRuntimeRegistry) config_snapshot() []server_lifecycle.ServerRuntimeConfig {
+// Stop admission and notify every App before waiting for any background task.
+// Keep executors/workers alive until already claimed callbacks have returned.
+fn (mut r ActiveRuntimeRegistry) stop_runtime_transports() {
+	r.mu.@lock()
+	mut apps := r.apps.clone()
+	r.mu.unlock()
+	for stopped in stop_app_transports(mut apps) {
+		if stopped.failure != '' { log.error('Transport shutdown failed: ${stopped.failure}') }
+	}
+}
+
+fn (mut r ActiveRuntimeRegistry) shutdown_apps() ! {
+	r.mu.@lock()
+	mut bindings := []RuntimeShutdownBinding{cap: r.apps.len}
+	for index, app in r.apps { bindings << RuntimeShutdownBinding{app: app, cfg: r.cfgs[index]} }
+	r.mu.unlock()
+	shutdown_runtime_bindings(bindings)!
+}
+
+fn (r &ActiveRuntimeRegistry) config_snapshot() []server_lifecycle.ServerRuntimeConfig {
+	r.mu.@lock()
+	defer { r.mu.unlock() }
 	return r.cfgs.clone()
 }
 
-fn (r ActiveRuntimeRegistry) listener_summaries() []executor.AdminListenerRuntimeSummary {
-	mut summaries := []executor.AdminListenerRuntimeSummary{cap: r.apps.len}
-	for i, app in r.apps {
-		cfg := r.cfgs[i] or { continue }
+fn (r &ActiveRuntimeRegistry) listener_summaries() []executor.AdminListenerRuntimeSummary {
+	r.mu.@lock()
+	apps := r.apps.clone()
+	cfgs := r.cfgs.clone()
+	r.mu.unlock()
+	mut summaries := []executor.AdminListenerRuntimeSummary{cap: apps.len}
+	for i, app in apps {
+		cfg := cfgs[i] or { continue }
+		pipelines := app.admin_pipeline_runtime_snapshot()
+		app.control_plane.mu.@lock()
+		metrics := app.control_plane.http_observations.total
+		mut route_metrics := []executor.AdminHttpRouteMetrics{}
+		mut ids := app.control_plane.http_observations.routes.keys()
+		ids.sort()
+		for id in ids { route_metrics << executor.AdminHttpRouteMetrics{pipeline_id: id, metrics: app.control_plane.http_observations.routes[id]} }
+		errors := app.control_plane.http_observations.errors.clone()
+		app.control_plane.mu.unlock()
 		summaries << executor.AdminListenerRuntimeSummary{
 			listener_id: cfg.plan_listener_id
 			site_id:     cfg.site_id
 			host:        cfg.host
 			port:        cfg.port
-			pipelines:   app.admin_pipeline_runtime_snapshot()
+			pipelines:   pipelines
+			is_control: !cfg.serve_data_plane
+			http_metrics: metrics
+			route_metrics: route_metrics
+			recent_errors: errors
 		}
 	}
 	return summaries
@@ -113,23 +160,16 @@ fn active_runtime_listener_summaries() []executor.AdminListenerRuntimeSummary {
 	}
 }
 
-fn vhttpd_signal_handler(sig os.Signal) {
+fn vhttpd_shutdown_runtime(sig os.Signal) {
 	if !begin_active_runtime_shutdown() {
 		return
 	}
 
 	log.info('[vhttpd] Received signal ${sig}. Cleaning up child process groups...')
-	for pid in transport.get_child_pids() {
-		if pid > 0 {
-			log.info('[vhttpd] Terminating child process group: PID ${pid}')
-			C.kill(-pid, 9)
-		}
-	}
+	unsafe { g_active_runtime_registry.shutdown_apps() or { log.error('App signal shutdown failed: ${err}') } }
+	process_runtime.shutdown_managed_processes()
 
-	for cfg in active_runtime_config_snapshot() {
-		os.rm(cfg.internal_admin_socket) or {}
-		os.rm(cfg.pid_file) or {}
-	}
+	process_runtime.close_pid_files()
 	log.info('[vhttpd] Cleanup complete. Exiting process.')
 	exit(128 + int(sig))
 }
@@ -278,12 +318,24 @@ fn run_single_server(args []string, cfg config.VhttpdConfig) ! {
 		log.error('server runtime config resolve failed: ${err}')
 		return err
 	}
+	run_single_server_with_config(cfg, runtime_cfg)!
+}
+
+fn run_single_server_with_config(cfg config.VhttpdConfig, runtime_cfg server_lifecycle.ServerRuntimeConfig) ! {
+	mut transferred := false
+	defer { if !transferred { runtime_cfg.executor_plan.executor.close() } }
 	preflight_server_bind(runtime_cfg) or {
 		log.error('[vhttpd] ${err.msg()}')
 		return err
 	}
+	process_runtime.acquire_pid_files([runtime_cfg.pid_file]) or {
+		log.error('[vhttpd] ${err.msg()}')
+		return err
+	}
+	defer { process_runtime.close_pid_files() }
 	mut app := build_app_runtime(runtime_cfg.provider_settings, runtime_cfg.executor_plan, cfg,
 		runtime_cfg.plan, runtime_cfg.app_build_cfg)
+	transferred = true
 	register_active_runtime(app, runtime_cfg)
 	defer {
 		if !active_runtime_is_shutting_down() {
@@ -293,6 +345,7 @@ fn run_single_server(args []string, cfg config.VhttpdConfig) ! {
 
 	start_server_runtime(mut app, runtime_cfg)
 	serve_server_runtime(mut app, runtime_cfg)
+	wait_for_active_runtime_shutdown()
 }
 
 fn run_server(args []string) ! {
@@ -303,11 +356,10 @@ fn run_server(args []string) ! {
 	configure_runtime_timezone(runtime_timezone_from_plan_or_config(args, cfg))
 	log.debug('[vhttpd] run_server: timezone configured')
 	os.signal_ignore(.pipe)
-	os.signal_opt(.int, vhttpd_signal_handler) or {
-		log.error('[vhttpd] Failed to register SIGINT handler: ${err}')
-	}
-	os.signal_opt(.term, vhttpd_signal_handler) or {
-		log.error('[vhttpd] Failed to register SIGTERM handler: ${err}')
+	process_runtime.install_shutdown_signal_handler(vhttpd_shutdown_runtime)!
+	defer {
+		process_runtime.shutdown_managed_processes()
+		process_runtime.close_pid_files()
 	}
 	if should_run_multi_server(args, cfg) {
 		log.debug('[vhttpd] run_server: entering multi_server mode')
@@ -368,4 +420,10 @@ fn main() {
 		exit(2)
 	}
 	run_server(args) or { exit(1) }
+}
+
+// HTTP shutdown makes serving return before the signal worker finishes cleanup.
+// Keep the main routine alive until that worker exits the process with 128+sig.
+fn wait_for_active_runtime_shutdown() {
+	for active_runtime_is_shutting_down() { time.sleep(time.millisecond) }
 }

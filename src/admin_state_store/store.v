@@ -1,15 +1,14 @@
 module admin_state_store
 
 import os
-import json
-import sync
+import json2 as json
 import time
 
 pub struct Entry {
 pub:
-	namespace string
-	key       string
-	value     string
+	namespace       string
+	key             string
+	value           string
 	updated_at_unix i64 @[json: 'updated_at_unix']
 }
 
@@ -24,8 +23,6 @@ pub:
 pub struct FileStore {
 pub:
 	root string
-mut:
-	mu sync.Mutex
 }
 
 pub fn FileStore.new(root string) !FileStore {
@@ -33,13 +30,26 @@ pub fn FileStore.new(root string) !FileStore {
 	if clean == '' {
 		return error('admin_state_store_missing_root')
 	}
-	os.mkdir_all(clean)!
+	ensure_state_directory(clean)!
 	return FileStore{
 		root: clean
 	}
 }
 
+// First-load requests create parents independently. Accept a directory another
+// request just created at each level, while preserving real file/permission errors.
+fn ensure_state_directory(path string) ! {
+	if os.is_dir(path) { return }
+	parent := os.dir(path)
+	if parent != path && parent != '' { ensure_state_directory(parent)! }
+	os.mkdir(path) or {
+		if !os.is_dir(path) { return err }
+	}
+}
+
 pub fn (mut store FileStore) get(namespace string, key string) !Entry {
+	lease := lock_directory(store.root, false)!
+	defer { lease.release() }
 	ns := sanitize_segment(namespace)!
 	k := sanitize_segment(key)!
 	path := store.entry_path(ns, k)
@@ -47,9 +57,9 @@ pub fn (mut store FileStore) get(namespace string, key string) !Entry {
 		return error('admin_state_store_key_missing:${ns}/${k}')
 	}
 	return Entry{
-		namespace: ns
-		key:       k
-		value:     value
+		namespace:       ns
+		key:             k
+		value:           value
 		updated_at_unix: os.file_last_mod_unix(path)
 	}
 }
@@ -57,16 +67,14 @@ pub fn (mut store FileStore) get(namespace string, key string) !Entry {
 pub fn (mut store FileStore) put(namespace string, key string, value string) !Entry {
 	ns := sanitize_segment(namespace)!
 	k := sanitize_segment(key)!
-	store.mu.@lock()
-	defer {
-		store.mu.unlock()
-	}
+	lease := lock_directory(store.root, true)!
+	defer { lease.release() }
 	path := store.entry_path(ns, k)
 	atomic_write(path, value)!
 	return Entry{
-		namespace: ns
-		key:       k
-		value:     value
+		namespace:       ns
+		key:             k
+		value:           value
 		updated_at_unix: time.now().unix()
 	}
 }
@@ -74,10 +82,8 @@ pub fn (mut store FileStore) put(namespace string, key string, value string) !En
 pub fn (mut store FileStore) delete(namespace string, key string) ! {
 	ns := sanitize_segment(namespace)!
 	k := sanitize_segment(key)!
-	store.mu.@lock()
-	defer {
-		store.mu.unlock()
-	}
+	lease := lock_directory(store.root, true)!
+	defer { lease.release() }
 	path := store.entry_path(ns, k)
 	if os.exists(path) {
 		os.rm(path)!
@@ -85,6 +91,8 @@ pub fn (mut store FileStore) delete(namespace string, key string) ! {
 }
 
 pub fn (mut store FileStore) list(namespace string) ![]Entry {
+	lease := lock_directory(store.root, false)!
+	defer { lease.release() }
 	ns := sanitize_segment(namespace)!
 	dir := store.namespace_dir(ns)
 	if !os.exists(dir) {
@@ -98,9 +106,9 @@ pub fn (mut store FileStore) list(namespace string) ![]Entry {
 		key := name[..name.len - 5]
 		path := os.join_path(dir, name)
 		entries << Entry{
-			namespace: ns
-			key:       key
-			value:     os.read_file(path)!
+			namespace:       ns
+			key:             key
+			value:           os.read_file(path)!
 			updated_at_unix: os.file_last_mod_unix(path)
 		}
 	}
@@ -113,26 +121,21 @@ pub fn (mut store FileStore) append_event(type_ string, fields map[string]string
 	if clean_type == '' {
 		return error('admin_state_store_event_type_missing')
 	}
+	lease := lock_directory(store.root, true)!
+	defer { lease.release() }
 	event := Event{
 		id:      'evt_${time.now().unix_micro()}'
 		type_:   clean_type
 		at_unix: time.now().unix()
 		fields:  fields.clone()
 	}
-	store.mu.@lock()
-	defer {
-		store.mu.unlock()
-	}
-	os.mkdir_all(store.root)!
-	mut file := os.open_append(store.events_path())!
-	defer {
-		file.close()
-	}
-	file.writeln(json.encode(event))!
+	append_line(store.events_path(), json.encode(event, escape_unicode: true, time_as_unix: true))!
 	return event
 }
 
 pub fn (mut store FileStore) list_events(limit int) ![]Event {
+	lease := lock_directory(store.root, false)!
+	defer { lease.release() }
 	path := store.events_path()
 	if !os.exists(path) {
 		return []Event{}
@@ -144,7 +147,7 @@ pub fn (mut store FileStore) list_events(limit int) ![]Event {
 		if clean == '' {
 			continue
 		}
-		events << json.decode(Event, clean)!
+		events << json.decode[Event](clean)!
 	}
 	if limit <= 0 || events.len <= limit {
 		return events
@@ -182,12 +185,4 @@ fn sanitize_segment(raw string) !string {
 		return error('admin_state_store_invalid_segment:${clean}')
 	}
 	return out.bytestr()
-}
-
-fn atomic_write(path string, value string) ! {
-	dir := os.dir(path)
-	os.mkdir_all(dir)!
-	tmp_path := os.join_path(dir, '.${os.file_name(path)}.${time.now().unix_micro()}.tmp')
-	os.write_file(tmp_path, value)!
-	os.mv(tmp_path, path)!
 }

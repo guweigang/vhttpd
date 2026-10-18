@@ -7,10 +7,9 @@ import codex
 // Codex app-server wire format: JSON-RPC 2.0 with "jsonrpc":"2.0" OMITTED.
 
 fn (mut app App) codex_next_rpc_id(instance string) int {
-	mut rt := app.codex_runtime_ensure_instance(instance)
-	id := rt.next_rpc_id()
-	app.providers.codex.update(instance, rt)
-	return id
+	return app.providers.codex_runtime_mutate[int](instance, fn (mut rt codex.ProviderRuntime) int {
+		return rt.next_rpc_id()
+	})
 }
 
 // ── WebSocket text message handler ──────────────────────────────────────
@@ -23,8 +22,7 @@ fn (mut app App) codex_provider_handle_text_message(instance string, raw string)
 	codex.RpcDebug.log('frame.raw', raw)
 
 	classification := codex.RpcFrame.classify(raw)
-	log.info('[codex] 🔎 instance=${codex.ProviderRuntime.normalize_instance(instance)} frame #${frame_count} ${codex.RpcFrame.summary(raw,
-		classification)}')
+	log.info('[codex] 🔎 instance=${codex.ProviderRuntime.normalize_instance(instance)} frame #${frame_count} ${codex.RpcFrame.summary(raw, classification)}')
 
 	if classification.is_response {
 		app.codex_handle_response(instance, classification, raw)

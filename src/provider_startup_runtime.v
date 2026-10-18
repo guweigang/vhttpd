@@ -6,17 +6,21 @@ struct ProviderStartupRuntime {}
 
 fn ProviderStartupRuntime.initialize(mut app App) {
 	app.providers.feishu_card_bridge_apply_env_fallbacks()
-	if app.providers.feishu.enabled {
-		go app.feishu_runtime_run_buffer_flusher()
-	}
-	if app.providers.feishu_card_bridge_enabled() {
-		go FeishuCardBridgeRuntime.run_client(mut app)
-	}
+	ProviderStartupRuntime.start_feishu_background(mut app)
 	app.bootstrap_providers()
 	relay_agents_started := app.start_relay_agents_once('relay-agent-startup')
 	if relay_agents_started > 0 {
 		log.info('[vhttpd] Relay Agents: started ${relay_agents_started}')
 	}
+}
+
+fn ProviderStartupRuntime.start_feishu_background(mut app App) {
+	if app.providers.feishu.enabled {
+		if mut run := app.providers.feishu.background_runs.reserve('buffer-flusher') {
+			go app.feishu_runtime_run_buffer_flusher(mut run)
+		}
+	}
+	if app.providers.feishu_card_bridge_enabled() { FeishuCardBridgeRuntime.start_client(mut app) }
 }
 
 fn ProviderStartupRuntime.start_upstreams(mut app App) {

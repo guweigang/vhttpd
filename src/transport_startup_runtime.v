@@ -11,7 +11,7 @@ fn TransportStartupRuntime.initialize(mut app App, internal_admin_socket string)
 	}
 	if app.transport.cache.enabled && app.transport.cache.socket.trim_space() != '' {
 		app.engines.set_primary_env('VHTTPD_CACHE_SOCKET', app.transport.cache.socket)
-		go app.cache_runtime_server_run(app.transport.cache.socket)
+		app.cache_runtime_server_start(app.transport.cache.socket)
 	}
 }
 

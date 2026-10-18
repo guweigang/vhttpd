@@ -1,10 +1,10 @@
 module feishu
 
 import config
+import connection_runtime
 import executor
 import sync
 import time
-import net.websocket
 
 // ── HTTP Lane Types (shared references) ──
 
@@ -215,7 +215,15 @@ pub fn (mut rt ProviderRuntime) push_event(snapshot RuntimeEventSnapshot, limit 
 
 // ── Stream Buffer ──
 
+@[heap]
+struct StreamBufferIdentity {}
+
 pub struct StreamBuffer {
+mut:
+	identity         ?&StreamBufferIdentity
+	rollover         ?&BufferRolloverIdentity
+	finish           ?&BufferFinishIdentity
+	rollover_content string
 pub:
 	message_id string
 pub mut:
@@ -330,6 +338,18 @@ pub:
 	bridge                     BridgeSettings
 }
 
+pub struct CardBridgePending {
+pub:
+	sender &connection_runtime.WebSocketSender  @[required]
+	ch     chan executor.FeishuCardBridgeResult @[required]
+}
+
+pub struct CardBridgeProxyPending {
+pub:
+	sender &connection_runtime.WebSocketSender @[required]
+	ch     chan BridgeProxyResult              @[required]
+}
+
 pub struct FeishuState {
 pub mut:
 	mu                         sync.Mutex
@@ -353,10 +373,12 @@ pub mut:
 	// feishu card bridge
 	card_bridge_mu            sync.Mutex
 	card_bridge_send_mu       sync.Mutex
-	card_bridge_clients       map[string]&websocket.Client                    = map[string]&websocket.Client{}
-	card_bridge_pending       map[string]chan executor.FeishuCardBridgeResult = map[string]chan executor.FeishuCardBridgeResult{}
-	card_bridge_proxy_pending map[string]chan BridgeProxyResult               = map[string]chan BridgeProxyResult{}
-	card_bridge_client_conn   &websocket.Client = unsafe { nil }
+	card_bridge_request_seq   u64
+	card_bridge_clients       map[string]&connection_runtime.WebSocketSender = map[string]&connection_runtime.WebSocketSender{}
+	card_bridge_pending       map[string]CardBridgePending                   = map[string]CardBridgePending{}
+	card_bridge_proxy_pending map[string]CardBridgeProxyPending              = map[string]CardBridgeProxyPending{}
+	card_bridge_client_conn   ?&connection_runtime.WebSocketSender
+	background_runs           connection_runtime.Registry
 	card_bridge_enabled_flag  bool
 	card_bridge_ws_url        string
 	card_bridge_client_id     string

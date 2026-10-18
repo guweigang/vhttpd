@@ -1,7 +1,9 @@
 module main
 
-import json
+import executor
+import json2 as json
 import os
+import logging
 import time
 import veb
 import veb.request_id
@@ -10,6 +12,12 @@ import upstream.transport
 pub struct Context {
 	veb.Context
 	request_id.RequestIdContext
+mut:
+	observed_pipeline string
+	// Request-owned observation state; absent for unobserved/upgrade requests.
+	observed_timing ?&executor.HttpRequestTiming
+	observed_adapter_depth int
+	observed_adapter_started i64
 }
 
 @[heap]
@@ -30,11 +38,8 @@ fn runtime_trace(label string, fields map[string]string) {
 	for k, v in fields {
 		row[k] = v
 	}
-	mut f := os.open_append('/tmp/vhttpd_runtime_trace.log') or { return }
-	defer {
-		f.close()
-	}
-	f.writeln(json.encode(row)) or {}
+	logging.append_line('/tmp/vhttpd_runtime_trace.log', json.encode(row,
+		escape_unicode: true, time_as_unix: true)) or {}
 }
 
 fn resolve_trace_id(ctx Context, path string) string {

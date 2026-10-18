@@ -74,28 +74,9 @@ fn relay_frame_should_dispatch_pipeline(frame relay.WireFrame) bool {
 	return frame.kind in [.open, .data, .end, .cancel]
 }
 
-struct AppDispatchServices {
-mut:
-	app   &App = unsafe { nil }
-	trace string
-}
-
-fn (services AppDispatchServices) trace_id() string {
-	return services.trace
-}
-
-fn (services AppDispatchServices) emit(event string, fields map[string]string) {
-	if isnil(services.app) {
-		return
-	}
-	unsafe {
-		mut app := services.app
-		app.emit(event, fields)
-	}
-}
-
 fn (mut app App) dispatch_relay_ingress_frame(relay_id string, carrier_id string, frame relay.WireFrame, created_at_ms i64) []RelayPipelineDispatchOutcome {
-	exchanges := app.pipelines.relay.ingress_exchanges(relay_id, carrier_id, frame, created_at_ms)
+	view := app.pipeline_dispatch_view()
+	exchanges := view.relay.ingress_exchanges(relay_id, carrier_id, frame, created_at_ms)
 	if exchanges.len == 0 {
 		return [
 			RelayPipelineDispatchOutcome{
@@ -111,14 +92,14 @@ fn (mut app App) dispatch_relay_ingress_frame(relay_id string, carrier_id string
 	mut outcomes := []RelayPipelineDispatchOutcome{cap: exchanges.len}
 	for item in exchanges {
 		mut exchange := item
-		outcomes << app.dispatch_relay_pipeline_exchange(mut exchange)
+		outcomes << app.dispatch_relay_pipeline_exchange_on_view(view, mut exchange)
 	}
 	return outcomes
 }
 
 fn (mut app App) dispatch_and_send_relay_ingress_frame(relay_id string, carrier_id string, frame relay.WireFrame, created_at_ms i64) []RelayPipelineDispatchOutcome {
 	mut outcomes := app.dispatch_relay_ingress_frame(relay_id, carrier_id, frame, created_at_ms)
-	mut carrier := ws.new_relay_carrier(app.build_websocket_runtime_context(), carrier_id)
+	mut carrier := ws.new_relay_carrier(app.websocket.build_relay_carrier_context(), carrier_id)
 	for i, outcome in outcomes {
 		response_frame := relay_pipeline_response_frame(outcome)
 		send_result := carrier.send(response_frame)
@@ -145,15 +126,16 @@ fn relay_pipeline_outcome_with_send_result(outcome RelayPipelineDispatchOutcome,
 }
 
 fn (mut app App) dispatch_relay_pipeline_exchange(mut exchange dispatch.Exchange) RelayPipelineDispatchOutcome {
-	pipeline := app.plan.pipeline(exchange.pipeline) or {
+	return app.dispatch_relay_pipeline_exchange_on_view(app.pipeline_dispatch_view(), mut exchange)
+}
+
+fn (mut app App) dispatch_relay_pipeline_exchange_on_view(view PipelineDispatchView, mut exchange dispatch.Exchange) RelayPipelineDispatchOutcome {
+	pipeline := view.plan.pipeline(exchange.pipeline) or {
 		return relay_pipeline_failure(exchange, 404, 'relay_pipeline_unknown:${exchange.pipeline}',
 			'relay_pipeline_unknown')
 	}
-	mut services := dispatch.RuntimeServices(AppDispatchServices{
-		app:   unsafe { &app }
-		trace: exchange.identity.trace_id
-	})
-	transform_result := app.run_transform_refs(pipeline.transforms.map(it.str()), mut services, mut
+	mut services := app_dispatch_services(mut app, exchange.identity.trace_id)
+	transform_result := app.run_transform_refs_on_view(view.transform_dispatch_view(), pipeline.transforms.map(it.str()), mut services, mut
 		exchange) or {
 		return relay_pipeline_failure(exchange, 500, err.msg(), 'relay_transform_failed')
 	}
@@ -161,14 +143,18 @@ fn (mut app App) dispatch_relay_pipeline_exchange(mut exchange dispatch.Exchange
 		return relay_pipeline_transform_action(exchange, transform_result)
 	}
 	if pipeline.egress.domain == .adapter {
-		return app.dispatch_relay_pipeline_adapter_egress(pipeline.egress.id, mut services,
+		return app.dispatch_relay_pipeline_adapter_egress_on_view(view, pipeline.egress.id, mut services,
 			exchange)
 	}
 	return relay_pipeline_terminal_outcome(exchange, pipeline.egress.str())
 }
 
 fn (mut app App) dispatch_relay_pipeline_adapter_egress(adapter_id string, mut services dispatch.RuntimeServices, exchange dispatch.Exchange) RelayPipelineDispatchOutcome {
-	adapter_plan := app.plan.adapters[adapter_id] or {
+	return app.dispatch_relay_pipeline_adapter_egress_on_view(app.pipeline_dispatch_view(), adapter_id, mut services, exchange)
+}
+
+fn (mut app App) dispatch_relay_pipeline_adapter_egress_on_view(view PipelineDispatchView, adapter_id string, mut services dispatch.RuntimeServices, exchange dispatch.Exchange) RelayPipelineDispatchOutcome {
+	adapter_plan := view.plan.adapters[adapter_id] or {
 		return relay_pipeline_failure(exchange, 404, 'relay_adapter_unknown:${adapter_id}',
 			'relay_adapter_unknown')
 	}
@@ -204,26 +190,26 @@ fn (mut app App) dispatch_relay_mcp_adapter(_adapter_plan runtime_plan.AdapterPl
 	req := app.kernel_mcp_dispatch_request(method, path, headers, protocol_version, body,
 		exchange.metadata['remote_addr'] or { '' }, exchange.identity.request_id,
 		exchange.identity.trace_id, session_id,
-		mcp_protocol.Session.extract_client_capabilities_json(body))
-	outcome := app.kernel_dispatch_mcp_handled(req) or {
+		app.protocols.mcp.client_capabilities_for_request(session_id, body))
+	route := app.mcp_dispatch_route(session_id) or {
+		return relay_pipeline_failure(exchange, 500, err.msg(), 'relay_mcp_dispatch_failed')
+	}
+	outcome := app.kernel_dispatch_mcp_handled_on_route(req, route) or {
 		return relay_pipeline_failure(exchange, 500, err.msg(), 'relay_mcp_dispatch_failed')
 	}
 	resp := outcome.response
 	mut response_headers := resp.headers.clone()
-	mut response_session_id := resp.session_id
-	if response_session_id == '' && session_id == ''
-		&& (body.contains('"method":"initialize"') || body.contains('"method": "initialize"')) {
-		response_session_id = mcp_protocol.Session.generate_id()
+	response_session_id := McpRuntime.complete_dispatch_session(mut app.protocols.mcp, req, resp, route) or {
+		return relay_pipeline_failure(exchange, 409, err.msg(), 'relay_mcp_session_changed')
 	}
 	if response_session_id != '' {
 		response_headers['mcp-session-id'] = response_session_id
-		if session_id == ''
-			&& (body.contains('"method":"initialize"') || body.contains('"method": "initialize"')) {
-			app.protocols.mcp.ensure_session(response_session_id, if resp.protocol_version != '' {
-				resp.protocol_version
-			} else {
-				protocol_version
-			}, exchange.identity.request_id, exchange.identity.trace_id, '/mcp')
+	}
+	for raw_message in resp.messages {
+		if response_session_id == '' { continue }
+		queued := McpRuntime.queue_message_for_dispatch(mut app, response_session_id, raw_message, route)
+		if queued.error {
+			return relay_pipeline_failure(exchange, 409, 'Sampling capability required', queued.error_class)
 		}
 	}
 	if resp.protocol_version != '' {
@@ -293,18 +279,18 @@ fn (mut app App) dispatch_relay_provider_action_adapter(adapter_plan runtime_pla
 	payload := provider_action_payload(adapter_plan, relay_pipeline_exchange_body(exchange))
 	resp := app.dispatch_provider_action_adapter(adapter_plan, adapter_id, payload,
 		exchange.identity.request_id, exchange.identity.trace_id, {
-		'pipeline_id': exchange.pipeline
-		'ingress':     exchange.ingress
-		'exchange_id': exchange.identity.id
-		'channel_id':  exchange.metadata['channel_id'] or { '' }
-	})
+			'pipeline_id': exchange.pipeline
+			'ingress':     exchange.ingress
+			'exchange_id': exchange.identity.id
+			'channel_id':  exchange.metadata['channel_id'] or { '' }
+		})
 	if !resp.ok {
 		return relay_pipeline_failure(exchange, 500, resp.error, 'relay_provider_action_failed')
 	}
 	return relay_pipeline_success_with_body(exchange, 'response',
 		provider_action_response_status(adapter_plan), resp.result, {
-		'content-type': provider_action_response_content_type(adapter_plan)
-	})
+			'content-type': provider_action_response_content_type(adapter_plan)
+		})
 }
 
 fn relay_pipeline_terminal_outcome(exchange dispatch.Exchange, egress string) RelayPipelineDispatchOutcome {

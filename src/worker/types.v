@@ -47,15 +47,21 @@ pub fn (rt &WorkerBackendRuntime) enabled() bool {
 }
 
 // WorkerState holds the worker subsystem state.
+@[heap]
 pub struct WorkerState {
 pub mut:
-	mu                  sync.Mutex
-	worker_backend      WorkerBackendRuntime
-	worker_backend_mode executor.WorkerBackendMode = .required
-	logic_executor      executor.LogicExecutor     = executor.SocketWorkerExecutor{}
-	lifecycle           string
-	stream_dispatch     bool
+	mu                        sync.Mutex
+	worker_backend            WorkerBackendRuntime
+	worker_backend_mode       executor.WorkerBackendMode = .required
+	logic_executor            executor.LogicExecutor     = executor.SocketWorkerExecutor{}
+	lifecycle                 string
+	stream_dispatch           bool
 	stat_queue_waits_total    i64
 	stat_queue_rejected_total i64
 	stat_queue_timeouts_total i64
+mut:
+	slot_generations map[string]&SlotGeneration
+	backend_start    ?&BackendStart
+	backend_started  bool
+	backend_stop     ?&BackendStop
 }

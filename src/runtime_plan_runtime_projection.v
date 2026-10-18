@@ -21,10 +21,12 @@ fn RuntimePlanRuntimeProjection.from_plan(plan runtime_plan.RuntimePlan, listene
 	}
 }
 
-fn (mut app App) apply_runtime_plan_runtime_projection(plan runtime_plan.RuntimePlan, projection RuntimePlanRuntimeProjection) {
+fn (mut app App) apply_runtime_plan_runtime_projection(plan runtime_plan.RuntimePlan, projection RuntimePlanRuntimeProjection) int {
+	app.replacement.plan_generation++
 	app.plan = plan
 	app.pipelines = projection.pipelines
 	app.transformers = projection.transformers
-	app.protocols.apply_plan_update(projection.protocol_update)
+	retirement := app.protocols.publish_plan_update(projection.protocol_update)
 	app.providers.apply_provider_runtime_settings(projection.providers)
+	return retirement
 }

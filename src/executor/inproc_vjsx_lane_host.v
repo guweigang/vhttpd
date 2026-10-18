@@ -1,6 +1,5 @@
 module executor
 
-import os
 import vjsx
 
 struct VjsxLaneHost {
@@ -10,70 +9,72 @@ mut:
 	dirty             bool
 	source_signature  string
 	is_module_entry   bool
-	temp_root         string
-	app_ref           AppFacade            = NoOpAppFacade{}
-	session           &vjsx.RuntimeSession = unsafe { nil }
-	module_binding    &vjsx.ScriptModule   = unsafe { nil }
+	build_directory   ?&VjsxBuildDirectory
+	app_ref           ?EmbeddedHost
+	wakeup_owner      ?&VjsxLaneWakeupOwner
+	session           ?&vjsx.RuntimeSession
+	module_binding    ?&vjsx.ScriptModule
 	request_ctx       InProcVjsxRequestContext
 }
 
 fn VjsxLaneHost.empty() VjsxLaneHost {
-	return VjsxLaneHost{
-		session:        unsafe { nil }
-		module_binding: unsafe { nil }
-	}
+	return VjsxLaneHost{}
 }
 
 fn (mut host VjsxLaneHost) destroy() {
-	if host.is_module_entry && !isnil(host.module_binding) && !host.module_binding.is_closed() {
-		host.module_binding.close()
-		host.module_binding = unsafe { nil }
+	if owner := host.wakeup_owner { owner.retire() }
+	host.wakeup_owner = none
+	// Module values depend on the session context: release them first.
+	if mut binding := host.module_binding {
+		if !binding.is_closed() { binding.close() }
 	}
-	if host.initialized && !isnil(host.session) && !host.session.is_closed() {
-		host.session.close()
-		host.session = unsafe { nil }
+	host.module_binding = none
+	if mut session := host.session {
+		if !session.is_closed() { session.close() }
 	}
-	if host.temp_root.trim_space() != '' {
-		os.rmdir_all(host.temp_root) or {} // safe to ignore: temp dir may already be removed
-	}
+	host.session = none
+	if mut directory := host.build_directory { directory.release() }
+	host.build_directory = none
 	host.initialized = false
 	host.startup_completed = false
 	host.dirty = false
 	host.source_signature = ''
 	host.is_module_entry = false
-	host.temp_root = ''
-	host.app_ref = unsafe { nil }
+	host.app_ref = none
 	host.request_ctx = InProcVjsxRequestContext{}
 }
 
-// VjsxLaneHost facade: thin host-side wrapper around the lane session. Keep
-// executor call sites on host methods rather than long free-function chains.
+// The lane owns both resources. Callers borrow only a live session.
+fn (host VjsxLaneHost) session_handle() ?&vjsx.RuntimeSession {
+	session := host.session or { return none }
+	if session.is_closed() { return none }
+	return session
+}
+
+fn (host VjsxLaneHost) module_handle() ?&vjsx.ScriptModule {
+	binding := host.module_binding or { return none }
+	if binding.is_closed() { return none }
+	return binding
+}
+
 fn (host VjsxLaneHost) context() &vjsx.Context {
-	if isnil(host.session) {
-		panic('inproc_vjsx_executor_session_missing')
-	}
-	return host.session.context()
+	session := host.session_handle() or { panic('inproc_vjsx_executor_session_missing') }
+	return session.context()
 }
 
 fn (host VjsxLaneHost) resolve_value(val vjsx.Value) !vjsx.Value {
-	if isnil(host.session) || host.session.is_closed() {
-		return error('inproc_vjsx_executor_session_missing')
-	}
-	return host.session.resolve_value(val)
+	session := host.session_handle() or { return error('inproc_vjsx_executor_session_missing') }
+	return session.resolve_value(val)
 }
 
 fn (host VjsxLaneHost) pump_until_idle() {
-	if isnil(host.session) || host.session.is_closed() {
-		return
-	}
-	host.session.pump_until_idle()
+	session := host.session_handle() or { return }
+	session.pump_until_idle()
 }
 
 fn (host VjsxLaneHost) call_handler(handler vjsx.Value, args ...vjsx.AnyValue) !vjsx.Value {
-	if isnil(host.session) || host.session.is_closed() {
-		return error('inproc_vjsx_executor_session_missing')
-	}
-	return host.session.call(handler, ...args)
+	session := host.session_handle() or { return error('inproc_vjsx_executor_session_missing') }
+	return session.call(handler, ...args)
 }
 
 fn (host VjsxLaneHost) call_handler_resolved(handler vjsx.Value, args ...vjsx.AnyValue) !vjsx.Value {
@@ -85,10 +86,8 @@ fn (host VjsxLaneHost) call_handler_resolved(handler vjsx.Value, args ...vjsx.An
 }
 
 fn (host VjsxLaneHost) call_global(name string, args ...vjsx.AnyValue) !vjsx.Value {
-	if isnil(host.session) || host.session.is_closed() {
-		return error('inproc_vjsx_executor_session_missing')
-	}
-	return host.session.call_global(name, ...args)
+	session := host.session_handle() or { return error('inproc_vjsx_executor_session_missing') }
+	return session.call_global(name, ...args)
 }
 
 fn (host VjsxLaneHost) call_global_resolved(name string, args ...vjsx.AnyValue) !vjsx.Value {
@@ -100,9 +99,7 @@ fn (host VjsxLaneHost) call_global_resolved(name string, args ...vjsx.AnyValue) 
 }
 
 fn (host VjsxLaneHost) call_global_entry(kind string, arg vjsx.Value) !vjsx.Value {
-	if isnil(host.session) || host.session.is_closed() {
-		return error('inproc_vjsx_executor_session_missing')
-	}
+	session := host.session_handle() or { return error('inproc_vjsx_executor_session_missing') }
 	ctx := host.context()
 	global_name := InProcVjsxEntryResolver.global_handler_name(kind)
 	if global_name == '' {
@@ -116,7 +113,7 @@ fn (host VjsxLaneHost) call_global_entry(kind string, arg vjsx.Value) !vjsx.Valu
 				handler.free()
 			}
 			if handler.is_function() {
-				return host.session.call(handler, arg)
+				return session.call(handler, arg)
 			}
 		}
 		return error('inproc_vjsx_executor_missing_${kind}_handler')
@@ -128,14 +125,11 @@ fn (host VjsxLaneHost) call_global_entry(kind string, arg vjsx.Value) !vjsx.Valu
 	if handler.is_undefined() || !handler.is_function() {
 		return error('inproc_vjsx_executor_missing_${kind}_handler')
 	}
-	return host.session.call(handler, arg)
+	return session.call(handler, arg)
 }
 
 fn (host VjsxLaneHost) call_module_entry(kind string, arg vjsx.Value) !vjsx.Value {
-	if isnil(host.module_binding) {
-		return error('inproc_vjsx_executor_missing_${kind}_handler')
-	}
-	module_binding := host.module_binding
+	module_binding := host.module_handle() or { return error('inproc_vjsx_executor_missing_${kind}_handler') }
 	aliases := InProcVjsxEntryResolver.module_aliases(kind)
 	if module_binding.has_export('default') {
 		default_export := module_binding.default_export() or {
@@ -176,7 +170,7 @@ fn (host VjsxLaneHost) call_module_entry(kind string, arg vjsx.Value) !vjsx.Valu
 }
 
 fn (host VjsxLaneHost) call_entry(kind string, arg vjsx.Value) !vjsx.Value {
-	if host.is_module_entry && !isnil(host.module_binding) {
+	if host.is_module_entry && host.module_handle() != none {
 		return host.call_module_entry(kind, arg) or {
 			if err.msg() != 'inproc_vjsx_executor_missing_${kind}_handler' {
 				return err

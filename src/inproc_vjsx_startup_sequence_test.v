@@ -3,14 +3,14 @@ module main
 import config
 import upstream.transport
 import feishu
-import json
+import json2 as json
 import os
 
 fn startup_sequence_feishu_payload(text string, chat_id string, message_id string) string {
 	content_json := json.encode({
 		'text': text
-	})
-	return '{"event":{"sender":{"sender_id":{"open_id":"ou_test_user"}},"message":{"message_id":"${message_id}","chat_id":"${chat_id}","message_type":"text","content":${json.encode(content_json)}}}}'
+	}, escape_unicode: true, time_as_unix: true)
+	return '{"event":{"sender":{"sender_id":{"open_id":"ou_test_user"}},"message":{"message_id":"${message_id}","chat_id":"${chat_id}","message_type":"text","content":${json.encode(content_json, escape_unicode: true, time_as_unix: true)}}}}'
 }
 
 fn startup_sequence_with_temp_db(db_name string, run fn (string)) {

@@ -15,6 +15,7 @@ pub:
 // ── Pending RPC ──
 
 pub struct PendingRpc {
+	registration ?&PendingRpcIdentity
 pub:
 	instance   string
 	method     string
@@ -68,37 +69,36 @@ pub:
 
 pub struct ProviderRuntime {
 pub mut:
-	instance                string
-	enabled                 bool
-	url                     string
-	model                   string
-	effort                  string
-	cwd                     string
-	approval_policy         string
-	sandbox                 string
-	reconnect_delay_ms      int
-	flush_interval_ms       int
-	connected               bool
-	ws_url                  string
-	last_connect_at_unix    i64
-	last_disconnect_at_unix i64
-	last_error              string
-	connect_attempts        i64
-	connect_successes       i64
-	received_frames         i64
-	last_frame_at_unix_ms   i64
-	initialized             bool
-	thread_id               string
-	active_stream_id        string
-	conn                    &ws.Client = unsafe { nil }
-	stream_map              map[string][]CodexTarget
-	rpc_id_counter          int
-	pending_rpcs            map[int]PendingRpc
-	err_bursts              map[string][]string
-	err_pending_flushes     map[string]bool
-	thread_stream_map       map[string]string
-	read_fallback_seq       int
-	read_fallbacks          map[string]ReadFallback
+	configuration_generation u64
+	instance                 string
+	enabled                  bool
+	url                      string
+	model                    string
+	effort                   string
+	cwd                      string
+	approval_policy          string
+	sandbox                  string
+	reconnect_delay_ms       int
+	flush_interval_ms        int
+	connected                bool
+	ws_url                   string
+	last_connect_at_unix     i64
+	last_disconnect_at_unix  i64
+	last_error               string
+	connect_attempts         i64
+	connect_successes        i64
+	received_frames          i64
+	last_frame_at_unix_ms    i64
+	initialized              bool
+	thread_id                string
+	active_stream_id         string
+	conn                     ?&ws.Client
+	stream_map               map[string][]CodexTarget
+	rpc_id_counter           int
+	pending_rpcs             map[int]PendingRpc
+	thread_stream_map        map[string]string
+	read_fallback_seq        int
+	read_fallbacks           map[string]ReadFallback
 }
 
 // ── ProviderRuntime Methods ──
@@ -134,7 +134,7 @@ pub fn (rt &ProviderRuntime) current_stream_id() string {
 	return rt.active_stream_id
 }
 
-pub fn (rt &ProviderRuntime) connection() &ws.Client {
+pub fn (rt &ProviderRuntime) connection() ?&ws.Client {
 	return rt.conn
 }
 
@@ -167,8 +167,11 @@ pub fn (mut rt ProviderRuntime) note_disconnected(reason string) {
 	rt.initialized = false
 	rt.last_disconnect_at_unix = time.now().unix()
 	rt.last_error = reason
-	rt.conn = unsafe { nil }
+	rt.conn = none
 	rt.thread_id = ''
+	// Responses belong to the closed connection; reconnect does not replay RPCs.
+	// Keep the counter monotonic so late responses cannot reuse new wire IDs.
+	rt.pending_rpcs = map[int]PendingRpc{}
 	rt.read_fallbacks = map[string]ReadFallback{}
 }
 
@@ -257,6 +260,7 @@ pub:
 
 pub struct CodexState {
 pub mut:
+	error_bursts   &ErrorBurstOwner = &ErrorBurstOwner{}
 	mu             sync.Mutex
 	runtime        ProviderRuntime
 	instances      map[string]ProviderRuntime
@@ -273,19 +277,17 @@ pub fn CodexState.new(settings RuntimeSettings) CodexState {
 
 pub fn ProviderRuntime.new(settings RuntimeSettings) ProviderRuntime {
 	return ProviderRuntime{
-		enabled:             settings.enabled
-		url:                 settings.url
-		model:               settings.model
-		effort:              settings.effort
-		cwd:                 settings.cwd
-		approval_policy:     settings.approval_policy
-		sandbox:             settings.sandbox
-		reconnect_delay_ms:  settings.reconnect_delay_ms
-		flush_interval_ms:   settings.flush_interval_ms
-		pending_rpcs:        map[int]PendingRpc{}
-		stream_map:          map[string][]CodexTarget{}
-		err_bursts:          map[string][]string{}
-		err_pending_flushes: map[string]bool{}
-		thread_stream_map:   map[string]string{}
+		enabled:            settings.enabled
+		url:                settings.url
+		model:              settings.model
+		effort:             settings.effort
+		cwd:                settings.cwd
+		approval_policy:    settings.approval_policy
+		sandbox:            settings.sandbox
+		reconnect_delay_ms: settings.reconnect_delay_ms
+		flush_interval_ms:  settings.flush_interval_ms
+		pending_rpcs:       map[int]PendingRpc{}
+		stream_map:         map[string][]CodexTarget{}
+		thread_stream_map:  map[string]string{}
 	}
 }

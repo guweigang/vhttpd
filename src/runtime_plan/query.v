@@ -116,6 +116,17 @@ pub fn (plan RuntimePlan) relay_delivery_owner_listener_ids(websocket_listener_i
 	return owners
 }
 
+// Resolve aliases before allocating executors or Apps. Relay delivery owners
+// are non-WebSocket listeners, so this relation cannot form alias cycles.
+pub fn (plan RuntimePlan) listener_app_owner_id(listener_id string, available []string) string {
+	listener := plan.listeners[listener_id] or { return listener_id }
+	if listener.protocol.trim_space().to_lower() != 'websocket' { return listener_id }
+	for owner in plan.relay_delivery_owner_listener_ids(listener_id) {
+		if owner in available { return owner }
+	}
+	return listener_id
+}
+
 pub fn (plan RuntimePlan) listener_adapter(listener_id string, kind string) ?AdapterPlan {
 	for pipeline in plan.listener_pipelines(listener_id) {
 		if pipeline.egress.domain != .adapter {

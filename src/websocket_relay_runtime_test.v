@@ -2,6 +2,8 @@ module main
 
 import relay
 import runtime_plan
+import dispatch
+import ws
 
 fn test_relay_websocket_path_descriptor_matches_explicit_hub_path() {
 	mut app := App{}
@@ -24,25 +26,19 @@ fn test_relay_websocket_path_descriptor_matches_explicit_hub_path() {
 		}
 	}) or { panic(err) }
 
-	descriptor := relay_websocket_path_descriptor(app, '/vhttpd/relay?token=ignored') or {
+	descriptor := relay_websocket_path_descriptor(app.relay, '/vhttpd/relay?token=ignored') or {
 		panic('missing relay')
 	}
-	missing := relay_websocket_path_descriptor(app, '/ordinary/ws')
+	missing := relay_websocket_path_descriptor(app.relay, '/ordinary/ws')
 
 	assert descriptor.id == 'edge'
 	assert missing == none
 }
 
 fn test_relay_websocket_event_fields_add_request_context() {
-	mut state := &RelayWebSocketBridgeState{
-		descriptor: relay.RelayDescriptor{
-			id: 'edge'
-		}
-		conn_id:    'carrier_1'
-		path:       '/vhttpd/relay'
-		request_id: 'req_1'
-		trace_id:   'trace_1'
-	}
+	mut app := &App{}
+	mut state := app.build_relay_websocket_state(relay.RelayDescriptor{ id: 'edge' }, 'GET', '/vhttpd/relay', {}, {}, '', 'req_1', 'trace_1')
+	state.conn_id = 'carrier_1'
 
 	fields := relay_websocket_event_fields({
 		'relay_event': 'inbound.registered'
@@ -59,13 +55,8 @@ fn test_relay_websocket_event_fields_add_request_context() {
 }
 
 fn test_relay_registration_path_mismatch_rejects_other_relay_id() {
-	mut state := &RelayWebSocketBridgeState{
-		descriptor: relay.RelayDescriptor{
-			id: 'edge'
-		}
-		conn_id:    'carrier_1'
-		trace_id:   'trace_1'
-	}
+	mut app := &App{}
+	mut state := app.build_relay_websocket_state(relay.RelayDescriptor{ id: 'edge' }, 'GET', '/vhttpd/relay', {}, {}, '', 'carrier_1', 'trace_1')
 
 	mismatch := relay_registration_path_mismatch(state, relay.InboundOutcome{
 		action:     .registered
@@ -83,4 +74,33 @@ fn test_relay_registration_path_mismatch_rejects_other_relay_id() {
 	assert mismatch.error == 'relay_websocket_relay_mismatch:other:edge'
 	assert mismatch.trace_id == 'trace_2'
 	assert matched == none
+}
+
+fn test_relay_websocket_finalize_cleans_the_owner_state_once() {
+	mut app := &App{}
+	mut state := app.build_relay_websocket_state(relay.RelayDescriptor{ id: 'edge' }, 'GET', '/relay', {}, {}, '', 'req', 'trace')
+	app.websocket.state.conns['req'] = ws.HubConn{ id: 'req', lifecycle: state.lifecycle }
+	app.websocket.state.pending['req'] = [ws.HubPendingMessage{ data: 'queued' }]
+	relay_websocket_finalize(mut state)
+	assert state.lifecycle.phase() == .closed
+	assert 'req' !in app.websocket.state.conns
+	assert 'req' !in app.websocket.state.pending
+	relay_websocket_finalize(mut state)
+	assert state.lifecycle.phase() == .closed
+}
+
+fn test_dispatch_event_services_keep_trace_and_required_event_sink() {
+	mut control := &ControlPlaneRuntime{}
+	mut services := dispatch.RuntimeServices(EventDispatchServices{
+		trace:   'trace'
+		emit_fn: fn [mut control] (kind string, fields map[string]string) {
+			control.emit(kind, fields)
+		}
+	})
+	assert services.trace_id() == 'trace'
+	services.emit('http.request', {
+		'status': '503'
+	})
+	assert control.http_stats.requests_total == 1
+	assert control.http_stats.errors_total == 1
 }

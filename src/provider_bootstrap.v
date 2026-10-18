@@ -12,9 +12,7 @@ fn (mut app App) bootstrap_providers() {
 		if app.provider_bootstrap_enabled('feishu') {
 			mut p := FeishuProvider{}
 			h := FeishuCommandHandler.new(mut app)
-			mut feishu_ctx := app.build_provider_context('feishu')
-			provider_register_and_start(mut app, 'feishu', mut p, mut feishu_ctx)
-			app.register_provider_spec(ProviderSpec{
+			mut spec := ProviderSpec{
 				name:             'feishu'
 				enabled:          true
 				has_handler:      true
@@ -31,10 +29,10 @@ fn (mut app App) bootstrap_providers() {
 				handler:          h
 				runtime:          ProviderRuntimeAdapter{
 					provider: p
-					ctx:      feishu_ctx
 				}
-				lifecycle_ctx:    feishu_ctx
-			})
+				lifecycle_ctx:    app.build_provider_context('feishu')
+			}
+			app.register_and_start_provider(mut spec)
 		}
 	}
 
@@ -43,9 +41,7 @@ fn (mut app App) bootstrap_providers() {
 		if app.provider_bootstrap_enabled('codex') {
 			mut p := CodexProvider{}
 			h := CodexCommandHandler.new(mut app)
-			mut codex_ctx := app.build_provider_context('codex')
-			provider_register_and_start(mut app, 'codex', mut p, mut codex_ctx)
-			app.register_provider_spec(ProviderSpec{
+			mut spec := ProviderSpec{
 				name:             'codex'
 				enabled:          true
 				has_handler:      true
@@ -62,19 +58,17 @@ fn (mut app App) bootstrap_providers() {
 				handler:          h
 				runtime:          ProviderRuntimeAdapter{
 					provider: p
-					ctx:      codex_ctx
 				}
-				lifecycle_ctx:    codex_ctx
-			})
+				lifecycle_ctx:    app.build_provider_context('codex')
+			}
+			app.register_and_start_provider(mut spec)
 		}
 	}
 
 	// Database upstream (runtime skeleton)
 	if app.provider_bootstrap_enabled('db') {
 		mut p := DbProvider{}
-		mut db_ctx := app.build_provider_context('db')
-		provider_register_and_start(mut app, 'db', mut p, mut db_ctx)
-		app.register_provider_spec(ProviderSpec{
+		mut spec := ProviderSpec{
 			name:             'db'
 			enabled:          true
 			has_handler:      false
@@ -86,10 +80,10 @@ fn (mut app App) bootstrap_providers() {
 			handler:          provider.NoopProviderCommandHandler{}
 			runtime:          ProviderRuntimeAdapter{
 				provider: p
-				ctx:      db_ctx
 			}
-			lifecycle_ctx:    db_ctx
-		})
+			lifecycle_ctx:    app.build_provider_context('db')
+		}
+		app.register_and_start_provider(mut spec)
 	}
 
 	// Ollama (currently skeleton adapter)
@@ -97,9 +91,7 @@ fn (mut app App) bootstrap_providers() {
 		if app.provider_bootstrap_enabled('ollama') {
 			mut p := OllamaProvider{}
 			h := GenericUpstreamCommandHandler.new(mut app)
-			mut ollama_ctx := app.build_provider_context('ollama')
-			provider_register_and_start(mut app, 'ollama', mut p, mut ollama_ctx)
-			app.register_provider_spec(ProviderSpec{
+			mut spec := ProviderSpec{
 				name:             'ollama'
 				enabled:          true
 				has_handler:      true
@@ -116,26 +108,30 @@ fn (mut app App) bootstrap_providers() {
 				handler:          h
 				runtime:          ProviderRuntimeAdapter{
 					provider: p
-					ctx:      ollama_ctx
 				}
-				lifecycle_ctx:    ollama_ctx
-			})
+				lifecycle_ctx:    app.build_provider_context('ollama')
+			}
+			app.register_and_start_provider(mut spec)
 		}
 	}
 }
 
-fn provider_register_and_start(mut app App, name string, mut p Provider, mut ctx provider.RuntimeContext) {
-	app.register_provider(name, p)
-	p.init(mut ctx) or {
+// Register before init so callbacks can find the complete spec. Publish any
+// context/provider mutations after init and on every exit, including failures.
+fn (mut app App) register_and_start_provider(mut spec ProviderSpec) {
+	app.register_provider_spec(spec)
+	defer { app.register_provider_spec(spec) }
+	spec.provider.init(mut spec.lifecycle_ctx) or {
 		app.emit('provider.init_failed', {
-			'name':  name
+			'name':  spec.name
 			'error': err.msg()
 		})
 		return
 	}
-	p.start(mut ctx) or {
+	app.register_provider_spec(spec)
+	spec.start_runtime() or {
 		app.emit('provider.start_failed', {
-			'name':  name
+			'name':  spec.name
 			'error': err.msg()
 		})
 	}

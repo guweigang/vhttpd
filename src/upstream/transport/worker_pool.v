@@ -1,38 +1,10 @@
 module transport
 
+import connection_runtime
 import log
-import net.unix
 import os
+import process_runtime
 import time
-
-#include <signal.h>
-
-fn C.kill(pid int, sig int) int
-
-__global (
-	g_managed_worker_processes ManagedWorkerProcessRegistry
-)
-
-struct ManagedWorkerProcessRegistry {
-mut:
-	child_pids []int
-}
-
-fn (mut r ManagedWorkerProcessRegistry) register_child_pid(pid int) {
-	if pid > 0 {
-		r.child_pids << pid
-	}
-}
-
-fn (r ManagedWorkerProcessRegistry) child_pid_snapshot() []int {
-	return r.child_pids.clone()
-}
-
-pub fn get_child_pids() []int {
-	unsafe {
-		return g_managed_worker_processes.child_pid_snapshot()
-	}
-}
 
 pub struct ManagedWorker {
 pub mut:
@@ -40,7 +12,7 @@ pub mut:
 	socket_path       string
 	worker_cmd        string
 	worker_env        map[string]string
-	proc              &os.Process = unsafe { nil }
+	proc              ?&os.Process
 	restart_count     int
 	last_exit_ts      i64
 	next_retry_ts     i64
@@ -63,11 +35,31 @@ pub struct ManagedWorkerPool {}
 pub fn ManagedWorker.wait_for_socket(socket_path string, timeout_ms int) ! {
 	deadline := time.now().add(time.millisecond * timeout_ms)
 	for time.now() < deadline {
-		mut conn := unix.connect_stream(socket_path) or {
+		mut conn := connection_runtime.dial_unix(socket_path) or {
 			time.sleep(100 * time.millisecond)
 			continue
 		}
 		conn.close() or {}
+		return
+	}
+	return error('worker socket not ready: ${socket_path}')
+}
+
+// A connectable path can belong to another process. Managed startup publishes
+// only a live registered child's socket (including children in its process group).
+pub fn ManagedWorker.wait_for_process_socket(mut proc os.Process, socket_path string, timeout_ms int) ! {
+	deadline := time.now().add(time.millisecond * timeout_ms)
+	for time.now() < deadline {
+		if !process_runtime.managed_process_alive(mut proc) {
+			return error('worker exited before socket ready: ${socket_path}')
+		}
+		mut conn := connection_runtime.dial_unix(socket_path) or {
+			time.sleep(100 * time.millisecond)
+			continue
+		}
+		owned := process_runtime.managed_process_owns_socket(proc, conn.sock.handle)
+		conn.close() or {}
+		if !owned { return error('worker socket ownership mismatch: ${socket_path}') }
 		return
 	}
 	return error('worker socket not ready: ${socket_path}')
@@ -100,11 +92,25 @@ pub fn ManagedWorker.merge_env(base map[string]string, extra map[string]string) 
 	return merged
 }
 
+pub fn ManagedWorker.launch_process(command string, environment map[string]string, workdir string) !&os.Process {
+	return process_runtime.launch_managed_process(process_runtime.LaunchConfig{
+		command:     command
+		environment: environment
+		workdir:     workdir
+	})!
+}
+
+pub fn (mut w ManagedWorker) retire_process() bool {
+	mut proc := w.proc or { return false }
+	w.proc = none
+	process_runtime.retire_managed_process(mut proc, false)
+	return true
+}
+
 pub fn ManagedWorker.start(id int, worker_cmd string, worker_env map[string]string, worker_socket string, workdir string, pool_size int) !ManagedWorker {
 	cmd := ManagedWorker.command_with_socket(worker_cmd, worker_socket, pool_size)!
 	mut merged_env := ManagedWorker.merge_env(os.environ(), worker_env)
 	merged_env['VHTTPD_PARENT_PID'] = '${os.getpid()}'
-	mut proc := os.new_process('/bin/sh')
 	redirect_cmd := if cmd.contains('vphp-worker') {
 		'exec ${cmd} >> /tmp/vhttpd_php_worker_${id}.log 2>&1'
 	} else if cmd.contains('php-cgi') {
@@ -112,15 +118,11 @@ pub fn ManagedWorker.start(id int, worker_cmd string, worker_env map[string]stri
 	} else {
 		cmd
 	}
-	proc.set_args(['-lc', redirect_cmd])
-	proc.set_environment(merged_env)
-	proc.set_work_folder(workdir)
-	proc.use_pgroup = true
-	proc.run()
-	unsafe {
-		g_managed_worker_processes.register_child_pid(proc.pid)
+	mut proc := ManagedWorker.launch_process(redirect_cmd, merged_env, workdir)!
+	ManagedWorker.wait_for_process_socket(mut proc, worker_socket, 5000) or {
+		process_runtime.retire_managed_process(mut proc, false)
+		return err
 	}
-	ManagedWorker.wait_for_socket(worker_socket, 5000)!
 	return ManagedWorker{
 		id:                id
 		socket_path:       worker_socket
@@ -152,26 +154,25 @@ pub fn ManagedWorker.build_slot(id int, worker_cmd string, worker_env map[string
 	}
 }
 
+pub fn (mut w ManagedWorker) process_alive() bool {
+	mut proc := w.proc or { return false }
+	return process_runtime.managed_process_alive(mut proc)
+}
+
+pub fn (mut w ManagedWorker) process_exited() bool {
+	mut proc := w.proc or { return false }
+	return !process_runtime.managed_process_alive(mut proc)
+}
+
 pub fn (mut w ManagedWorker) stop() {
-	if isnil(w.proc) {
-		return
-	}
-	// 向整个子进程组发送 SIGTERM，允许后代进程优雅退出
-	C.kill(-w.proc.pid, 15)
-
-	time.sleep(200 * time.millisecond)
-
-	// 无论 /bin/sh 是否已经退出，向整个进程组发送 SIGKILL 以防顽固残留
-	w.proc.signal_pgkill()
-
-	w.proc.wait()
-	w.proc.close()
+	mut proc := w.proc or { return }
+	w.proc = none
+	process_runtime.retire_managed_process(mut proc, true)
 }
 
 pub fn ManagedWorkerPool.stop(mut workers []ManagedWorker) {
 	for i in 0 .. workers.len {
-		mut w := workers[i]
-		w.stop()
+		workers[i].stop()
 	}
 }
 

@@ -4,151 +4,100 @@ import dbx
 
 $if enable_db ? {
 	fn (mut app App) db_runtime_ensure_pool() ! {
-		app.mu.@lock()
-		settings := app.transport.db.pool_settings_if_needed() or {
-			app.mu.unlock()
-			if err.msg() == 'pool_ready' {
-				return
-			}
-			return err
-		}
-		app.mu.unlock()
-		mut pool := dbx.PoolHandle.open(settings)!
-		app.mu.@lock()
-		installed := app.transport.db.install_pool_if_missing(pool)
-		if !installed {
-			app.mu.unlock()
-			pool.close()
-			return
-		}
-		app.mu.unlock()
+		app.db_runtime_ensure_pool_with(dbx.PoolFactory.native())!
 	}
 
-	fn (mut app App) db_runtime_release_conn(conn dbx.SessionHandle, session_id string) {
-		if session_id != '' {
-			return
-		}
+	fn (mut app App) db_runtime_ensure_pool_with(factory dbx.PoolFactory) ! {
 		app.mu.@lock()
-		pool_ready, mut pool := app.transport.db.pool_handle()
+		settings := app.transport.db.settings()
+		mut owner := app.transport.db.pool_owner
 		app.mu.unlock()
-		if pool_ready {
-			pool.release(conn)
-		}
+		if !dbx.DriverName.capabilities(settings.driver).pool { return error('unsupported_driver') }
+		owner.ensure(settings, factory)!
 	}
 
-	fn (mut app App) db_runtime_release_failed_conn(mut conn dbx.SessionHandle, session_id string, message string) {
+	fn (mut app App) db_runtime_release_conn(mut lease dbx.ConnectionLease) {
+		lease.release_to_pool()
+	}
+
+	fn (mut app App) db_runtime_release_failed_conn(mut lease dbx.ConnectionLease, message string) {
 		if !dbx.is_connection_lost_error(message) {
-			app.db_runtime_release_conn(conn, session_id)
+			app.db_runtime_release_conn(mut lease)
 			return
 		}
-		if session_id != '' {
-			app.mu.@lock()
-			pool_ready, _ := app.transport.db.detach_transaction(session_id)
-			app.mu.unlock()
-			if pool_ready {
-				app.db_runtime_discard_conn(mut conn)
-			} else {
-				conn.close() or {}
-			}
-			return
-		}
-		app.db_runtime_discard_conn(mut conn)
+		app.db_runtime_finalize_tx_session(mut lease, false) or {}
 	}
 
-	fn (mut app App) db_runtime_acquire_conn(session_id string) !dbx.SessionHandle {
-		app.db_runtime_ensure_pool()!
+	fn (mut app App) db_runtime_acquire_conn(session_id string, finalizing bool) !&dbx.ConnectionLease {
 		if session_id != '' {
 			app.mu.@lock()
-			conn := app.transport.db.transaction_session(session_id) or {
+			mut owner := app.transport.db.transaction_session(session_id) or {
 				app.mu.unlock()
 				return error('invalid_session')
 			}
 			app.mu.unlock()
-			return conn
+			return owner.borrow(finalizing)!
 		}
+		app.db_runtime_ensure_pool()!
 		app.mu.@lock()
-		_, mut pool := app.transport.db.pool_handle()
+		mut owner := app.transport.db.pool_owner
 		app.mu.unlock()
-		return pool.acquire()!
+		return owner.acquire()!
 	}
 
-	fn (mut app App) db_runtime_discard_conn(mut conn dbx.SessionHandle) {
-		conn.close() or {}
-		app.mu.@lock()
-		pool_ready, _ := app.transport.db.pool_handle()
-		settings := app.transport.db.single_connection_settings()
-		app.mu.unlock()
-		if !pool_ready {
-			return
+	fn (mut app App) db_runtime_discard_conn(mut conn dbx.SessionHandle, lease &dbx.ConnectionLease) {
+		driver := conn.driver
+		lease.close_connection(mut conn)
+		// PostgreSQL's native pool retires bad slots on release and replenishes on acquire.
+		if driver != 'mysql' { return }
+		lease.refill_pool() or {
+			if err.msg() != 'db_stopping' && err.msg() != 'db_pool_unavailable' {
+				app.db_runtime_note_error(err.msg())
+			}
 		}
-		replacement := dbx.PoolHandle.open(settings) or {
-			app.db_runtime_note_error(err.msg())
-			return
-		}
-		mut replacement_pool := replacement
-		mut replacement_session := replacement_pool.acquire() or {
-			replacement_pool.close()
-			app.db_runtime_note_error(err.msg())
-			return
-		}
-		replacement_pool.close()
-		app.mu.@lock()
-		still_ready, mut pool := app.transport.db.pool_handle()
-		app.mu.unlock()
-		if still_ready {
-			pool.release(replacement_session)
-			return
-		}
-		replacement_session.close() or {}
 	}
 
-	fn (mut app App) db_runtime_finalize_tx_session(session_id string, mut conn dbx.SessionHandle, reusable bool) ! {
-		app.mu.@lock()
-		pool_ready, mut pool := app.transport.db.detach_transaction(session_id)
-		app.mu.unlock()
+	fn (mut app App) db_runtime_finalize_tx_session(mut lease dbx.ConnectionLease, reusable bool) ! {
+		mut conn := lease.retire() or { return }
+		// Keep the entry registered and active until physical disposal finishes.
+		defer {
+			lease.finish_retirement()
+			if owner := lease.transaction_owner() {
+				app.mu.@lock()
+				app.transport.db.detach_transaction(owner)
+				app.mu.unlock()
+			}
+		}
 		if reusable {
 			conn.reset_for_pool() or {
-				app.db_runtime_discard_conn(mut conn)
+				app.db_runtime_discard_conn(mut conn, lease)
 				return err
 			}
-			if pool_ready {
-				pool.release(conn)
-			} else {
-				conn.close() or {}
-			}
+			lease.return_connection(conn)
 			return
 		}
-		conn.reset_for_pool() or {}
-		app.db_runtime_discard_conn(mut conn)
+		conn.rollback() or {}
+		app.db_runtime_discard_conn(mut conn, lease)
 	}
 
 	fn (mut app App) db_runtime_cleanup_sessions() {
 		app.mu.@lock()
 		mut sessions := app.transport.db.drain_sessions()
 		app.mu.unlock()
-		for mut conn in sessions {
-			conn.reset_for_pool() or {}
-			conn.close() or {}
+		// Close admission for every transaction before waiting for any borrower.
+		for mut owner in sessions { owner.request_close() }
+		for mut owner in sessions {
+			if mut conn := owner.drain() {
+				conn.rollback() or {}
+				owner.close_connection(mut conn)
+			}
 		}
 	}
 
 	fn (mut app App) db_runtime_close_pool() {
 		app.mu.@lock()
-		pool_ready, mut pool := app.transport.db.detach_pool()
+		mut owner := app.transport.db.pool_owner
 		app.mu.unlock()
-		if pool_ready {
-			pool.close()
-		}
-	}
-}
-
-$if !enable_db ? {
-	fn (mut app App) db_runtime_finalize_tx_session(session_id string, mut conn dbx.SessionHandle, reusable bool) ! {
-		_ = session_id
-		_ = reusable
-		_ = conn
-		app.mu.@lock()
-		app.transport.db.clear_transaction_count()
-		app.mu.unlock()
+		owner.close()
 	}
 }

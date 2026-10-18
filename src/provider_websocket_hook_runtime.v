@@ -1,9 +1,10 @@
 module main
 
 import encoding.base64
-import json
+import json2 as json
 import net.websocket
 import time
+import ws
 
 struct ProviderWebSocketHookFrame {
 pub:
@@ -63,7 +64,7 @@ fn provider_websocket_hook_payload(provider_name string, instance string, ws_url
 		url:      ws_url
 		payload:  payload
 		metadata: metadata
-	})
+	}, escape_unicode: true, time_as_unix: true)
 }
 
 fn (mut app App) call_provider_websocket_hook(provider_name string, instance string, hook string, ws_url string, payload string, metadata map[string]string, request_id string, trace_id string) !PluginCallResponse {
@@ -83,10 +84,11 @@ fn (mut app App) call_provider_websocket_hook(provider_name string, instance str
 	})!
 }
 
-fn (mut app App) dispatch_provider_websocket_handshake(provider_name string, instance string, ws_url string, mut client websocket.Client) {
+fn (mut app App) prepare_provider_websocket_handshake(provider_name string, instance string, ws_url string) !ws.UpstreamPreparation {
 	if app.provider_websocket_hook_plugin(provider_name, 'handshake') == '' {
-		return
+		return ws.UpstreamPreparation{ activate_fn: fn (mut _ websocket.Client) ! {} }
 	}
+	start_ms := time.now().unix_milli()
 	request_id := 'provider-${provider_name}-${instance}-handshake-${time.now().unix_micro()}'
 	metadata := {
 		'provider': provider_name
@@ -94,52 +96,61 @@ fn (mut app App) dispatch_provider_websocket_handshake(provider_name string, ins
 		'hook':     'handshake'
 		'url':      ws_url
 	}
-	resp := app.call_provider_websocket_hook(provider_name, instance, 'handshake', ws_url, '',
-		metadata, request_id, request_id) or {
+	resp := app.call_provider_websocket_hook(provider_name, instance, 'handshake', ws_url, '', metadata, request_id, request_id) or {
 		app.emit('provider.websocket.handshake_failed', {
 			'provider': provider_name
 			'instance': instance
 			'error':    err.msg()
 		})
-		return
+		return err
 	}
-	result := json.decode(ProviderWebSocketHandshakeResult, resp.result) or {
+	result := json.decode[ProviderWebSocketHandshakeResult](resp.result) or {
 		app.emit('provider.websocket.handshake_failed', {
 			'provider': provider_name
 			'instance': instance
 			'error':    'invalid_result:${err.msg()}'
 		})
-		return
+		return error('invalid_result:${err.msg()}')
 	}
 	mut frames := result.send.clone()
 	frames << result.frames
-	for frame in frames {
-		if frame.text != '' {
-			client.write_string(frame.text) or {
-				app.emit('provider.websocket.handshake_failed', {
-					'provider': provider_name
-					'instance': instance
-					'error':    'send_text:${err.msg()}'
-				})
-				return
+	app.emit('provider.websocket.handshake_prepared', {
+		'provider':    provider_name
+		'instance':    instance
+		'frames':      '${frames.len}'
+		'duration_ms': '${time.now().unix_milli() - start_ms}'
+	})
+	return ws.UpstreamPreparation{
+		activate_fn: fn [mut app, provider_name, instance, frames] (mut client websocket.Client) ! {
+			for frame in frames {
+				if frame.text != '' {
+					client.write_string(frame.text) or {
+						app.emit('provider.websocket.handshake_failed', {
+							'provider': provider_name
+							'instance': instance
+							'error':    'send_text:${err.msg()}'
+						})
+						return err
+					}
+				} else if frame.binary != '' {
+					bytes := base64.decode(frame.binary)
+					client.write(bytes, .binary_frame) or {
+						app.emit('provider.websocket.handshake_failed', {
+							'provider': provider_name
+							'instance': instance
+							'error':    'send_binary:${err.msg()}'
+						})
+						return err
+					}
+				}
 			}
-		} else if frame.binary != '' {
-			bytes := base64.decode(frame.binary)
-			client.write(bytes, .binary_frame) or {
-				app.emit('provider.websocket.handshake_failed', {
-					'provider': provider_name
-					'instance': instance
-					'error':    'send_binary:${err.msg()}'
-				})
-				return
-			}
+			app.emit('provider.websocket.handshake_dispatched', {
+				'provider': provider_name
+				'instance': instance
+				'frames':   '${frames.len}'
+			})
 		}
 	}
-	app.emit('provider.websocket.handshake_dispatched', {
-		'provider': provider_name
-		'instance': instance
-		'frames':   '${frames.len}'
-	})
 }
 
 fn (mut app App) dispatch_provider_websocket_normalized_event(provider_name string, instance string, ws_url string, raw_payload string, metadata map[string]string, request_id string, trace_id string) bool {
@@ -157,7 +168,7 @@ fn (mut app App) dispatch_provider_websocket_normalized_event(provider_name stri
 		})
 		return false
 	}
-	result := json.decode(ProviderWebSocketNormalizeResult, resp.result) or {
+	result := json.decode[ProviderWebSocketNormalizeResult](resp.result) or {
 		app.emit('provider.websocket.normalize_failed', {
 			'provider':   provider_name
 			'instance':   instance
@@ -176,8 +187,13 @@ fn (mut app App) dispatch_provider_websocket_normalized_event(provider_name stri
 	}
 	event_metadata['provider'] = provider_name
 	event_metadata['instance'] = instance
-	name := if result.name.trim_space() != '' { result.name.trim_space() } else { event_metadata['event_type'] or {
-			'provider.${provider_name}'} }
+	name := if result.name.trim_space() != '' {
+		result.name.trim_space()
+	} else {
+		event_metadata['event_type'] or {
+			'provider.${provider_name}'
+		}
+	}
 	event_trace_id := if result.trace_id.trim_space() != '' {
 		result.trace_id.trim_space()
 	} else {

@@ -106,8 +106,8 @@ fn resolve_forward_channel_id(registry ChannelRegistry, frame WireFrame) ?string
 		}
 	}
 	if frame.correlation_id != '' {
-		if channel := registry.channel_for_correlation(frame.correlation_id) {
-			return channel.id
+		if channel_id := registry.channel_id_for_correlation(frame.correlation_id) {
+			return channel_id
 		}
 	}
 	return none

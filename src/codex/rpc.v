@@ -4,6 +4,7 @@ import jsonutils
 import log
 import net.websocket as ws
 import time
+import connection_runtime
 
 // ── JSON-RPC Classification ──
 
@@ -319,16 +320,18 @@ pub fn RpcDebug.log(label string, raw string) {
 // ── WebSocket Ping ──
 
 // ping_loop sends periodic WebSocket pings until the connection closes.
-pub fn ping_loop(mut client ws.Client) {
-	for client.get_state() == .open {
+pub fn ping_loop(mut session connection_runtime.Session, mut client ws.Client) {
+	for !session.stopped() && client.get_state() == .open {
 		client.ping() or {
 			log.error('[codex] ❌ ping failed: ${err}')
+			session.note_reason('heartbeat:${err}')
+			session.request_stop()
 			return
 		}
-		time.sleep(20 * time.second)
+		if !session.wait(20 * time.second) { return }
 	}
 }
 
-pub fn WebSocketHeartbeat.loop(mut client ws.Client) {
-	ping_loop(mut client)
+pub fn WebSocketHeartbeat.loop(mut session connection_runtime.Session, mut client ws.Client) {
+	ping_loop(mut session, mut client)
 }

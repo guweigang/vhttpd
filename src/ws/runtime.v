@@ -2,6 +2,7 @@ module ws
 
 import encoding.base64
 import net.websocket
+import connection_runtime
 
 // ── Payload helpers ──
 
@@ -26,6 +27,11 @@ pub fn (mut s HubState) cleanup_conn(conn_id string) {
 		return
 	}
 	s.mu.@lock()
+	s.cleanup_locked(conn_id)
+	s.mu.unlock()
+}
+
+fn (mut s HubState) cleanup_locked(conn_id string) {
 	s.conns.delete(conn_id)
 	if rooms := s.conn_rooms[conn_id] {
 		for room, _ in rooms.clone() {
@@ -43,13 +49,64 @@ pub fn (mut s HubState) cleanup_conn(conn_id string) {
 	s.conn_rooms.delete(conn_id)
 	s.conn_meta.delete(conn_id)
 	s.pending.delete(conn_id)
-	s.mu.unlock()
+}
+
+// A finalizer owns a lifecycle identity, not whichever session now uses the ID.
+pub fn (mut s HubState) cleanup_owned(conn_id string, lifecycle &DispatchConnState) {
+	if conn_id == '' { return }
+	s.mu.@lock()
+	defer { s.mu.unlock() }
+	if current := s.conns[conn_id] {
+		if voidptr(current.lifecycle) != voidptr(lifecycle) { return }
+	}
+	s.cleanup_locked(conn_id)
+}
+
+pub fn (mut s HubState) mark_owned_closing(conn_id string, lifecycle &DispatchConnState) bool {
+	if conn_id == '' { return false }
+	s.mu.@lock()
+	defer { s.mu.unlock() }
+	if current := s.conns[conn_id] {
+		if voidptr(current.lifecycle) != voidptr(lifecycle) { return false }
+		s.pending.delete(conn_id)
+		return lifecycle.mark_closing()
+	}
+	s.pending.delete(conn_id)
+	return false
+}
+
+pub fn (mut s HubState) unregister_owned(conn_id string, lifecycle &DispatchConnState) {
+	lifecycle.mark_closing()
+	if lifecycle.begin_cleanup() { s.cleanup_owned(conn_id, lifecycle) }
+}
+
+pub fn (mut s HubState) bind_outbound(conn_id string, lifecycle &DispatchConnState, session &connection_runtime.Session) bool {
+	s.mu.@lock()
+	defer { s.mu.unlock() }
+	mut current := s.conns[conn_id] or { return false }
+	if voidptr(current.lifecycle) != voidptr(lifecycle) { return false }
+	current.outbound = session
+	current.serving = none
+	s.conns[conn_id] = current
+	return true
 }
 
 pub fn (mut s HubState) register_conn(conn_id string, worker_socket string, method string, req_id string, trace_id string, path string, query map[string]string, headers map[string]string, remote_addr string, client &websocket.Client, lifecycle &DispatchConnState) {
+	s.register_owned_conn(conn_id, worker_socket, method, req_id, trace_id, path, query, headers, remote_addr, client, lifecycle, none)
+}
+
+pub fn (mut s HubState) register_owned_conn(conn_id string, worker_socket string, method string, req_id string, trace_id string, path string, query map[string]string, headers map[string]string, remote_addr string, client &websocket.Client, lifecycle &DispatchConnState, serving ?&IngressRun) {
+	s.register_owned_dispatch_conn(conn_id, worker_socket, method, req_id, trace_id, path, query, headers, remote_addr, client, lifecycle, serving, none)
+}
+
+pub fn (mut s HubState) register_owned_dispatch_conn(conn_id string, worker_socket string, method string, req_id string, trace_id string, path string, query map[string]string, headers map[string]string, remote_addr string, client &websocket.Client, lifecycle &DispatchConnState, serving ?&IngressRun, dispatch ?EventDispatch) {
 	if conn_id == '' || isnil(client) {
 		return
 	}
+	// Registration runs before listen starts. Snapshot only once here, so close
+	// tasks never copy the live reader's mutable buffers/fragments concurrently.
+	writer := &websocket.Client{ ...client }
+
 	s.mu.@lock()
 	s.conns[conn_id] = HubConn{
 		id:            conn_id
@@ -62,6 +119,9 @@ pub fn (mut s HubState) register_conn(conn_id string, worker_socket string, meth
 		headers:       headers.clone()
 		remote_addr:   remote_addr
 		client:        unsafe { client }
+		close_writer:  writer
+		dispatch:      dispatch
+		serving:       serving
 		lifecycle:     unsafe { lifecycle }
 	}
 	s.mu.unlock()
@@ -76,9 +136,6 @@ pub fn (mut s HubState) conn_open(conn_id string) bool {
 		s.mu.unlock()
 	}
 	if hub_conn := s.conns[conn_id] {
-		if isnil(hub_conn.lifecycle) {
-			return true
-		}
 		return hub_conn.lifecycle.can_queue()
 	}
 	return false
@@ -100,35 +157,26 @@ pub fn (mut s HubState) mark_closing(conn_id string) bool {
 	return false
 }
 
-pub fn (mut s HubState) flush_pending(conn_id string) {
-	if conn_id == '' {
-		return
-	}
-	mut client := &websocket.Client(unsafe { nil })
-	mut pending := []HubPendingMessage{}
+struct PendingSendBatch {
+	client   &websocket.Client @[required]
+	messages []HubPendingMessage
+}
+
+fn (mut s HubState) take_pending_batch(conn_id string) ?PendingSendBatch {
 	s.mu.@lock()
-	if hub_conn := s.conns[conn_id] {
-		phase := hub_conn.lifecycle.phase()
-		if phase == .closing || phase == .closed {
-			s.mu.unlock()
-			return
-		}
-		if phase != .open {
-			s.mu.unlock()
-			return
-		}
-		client = hub_conn.client
-	}
-	if queued := s.pending[conn_id] {
-		pending = queued.clone()
-		s.pending.delete(conn_id)
-	}
-	s.mu.unlock()
-	if isnil(client) {
-		return
-	}
-	for item in pending {
-		s.send_client(conn_id, client, item.data, item.opcode)
+	defer { s.mu.unlock() }
+	hub_conn := s.conns[conn_id] or { return none }
+	if hub_conn.lifecycle.phase() != .open { return none }
+	client := hub_conn.client or { return none }
+	pending := s.pending[conn_id] or { return none }
+	s.pending.delete(conn_id)
+	return PendingSendBatch{ client: client, messages: pending.clone() }
+}
+
+pub fn (mut s HubState) flush_pending(conn_id string) {
+	batch := s.take_pending_batch(conn_id) or { return }
+	for item in batch.messages {
+		s.send_client(conn_id, batch.client, item.data, item.opcode)
 	}
 }
 
@@ -338,5 +386,13 @@ pub fn (mut s HubState) send_client(conn_id string, client &websocket.Client, da
 		return true
 	}
 	c.write(payload, code) or { return false }
+	return true
+}
+
+// An unregistered accepted open still needs cleanup; a replacement does not.
+pub fn (mut s HubState) can_cleanup_owned(id string, lifecycle &DispatchConnState) bool {
+	s.mu.@lock()
+	defer { s.mu.unlock() }
+	if current := s.conns[id] { return voidptr(current.lifecycle) == voidptr(lifecycle) }
 	return true
 }

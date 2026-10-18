@@ -2,15 +2,15 @@ module main
 
 import encoding.base64
 import feishu
-import json
+import json2 as json
 
 fn (mut hub ProviderRuntimeHub) feishu_provider_runtime_send_message(req feishu.SendMessageRequest, mut caller ProviderRuntimePluginCaller) !feishu.SendMessageResult {
 	raw := hub.provider_runtime_call(ProviderRuntimeInvocation{
 		provider: 'feishu'
 		action:   'send_message'
-		payload:  json.encode(req)
+		payload:  json.encode(req, escape_unicode: true, time_as_unix: true)
 	}, mut caller)!
-	result := json.decode(feishu.SendMessageResult, raw) or {
+	result := json.decode[feishu.SendMessageResult](raw) or {
 		return error('provider_runtime_driver_invalid_result:feishu:send_message:${err.msg()}')
 	}
 	if !result.ok && result.error.trim_space() != '' {
@@ -23,9 +23,9 @@ fn (mut hub ProviderRuntimeHub) feishu_provider_runtime_update_message(req feish
 	raw := hub.provider_runtime_call(ProviderRuntimeInvocation{
 		provider: 'feishu'
 		action:   'update_message'
-		payload:  json.encode(req)
+		payload:  json.encode(req, escape_unicode: true, time_as_unix: true)
 	}, mut caller)!
-	result := json.decode(feishu.SendMessageResult, raw) or {
+	result := json.decode[feishu.SendMessageResult](raw) or {
 		return error('provider_runtime_driver_invalid_result:feishu:update_message:${err.msg()}')
 	}
 	if !result.ok && result.error.trim_space() != '' {
@@ -38,9 +38,9 @@ fn (mut hub ProviderRuntimeHub) feishu_provider_runtime_upload_image(req feishu.
 	raw := hub.provider_runtime_call(ProviderRuntimeInvocation{
 		provider: 'feishu'
 		action:   'upload_image'
-		payload:  json.encode(req)
+		payload:  json.encode(req, escape_unicode: true, time_as_unix: true)
 	}, mut caller)!
-	result := json.decode(feishu.UploadImageResult, raw) or {
+	result := json.decode[feishu.UploadImageResult](raw) or {
 		return error('provider_runtime_driver_invalid_result:feishu:upload_image:${err.msg()}')
 	}
 	if !result.ok && result.error.trim_space() != '' {

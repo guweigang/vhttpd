@@ -2,14 +2,31 @@ module ws
 
 import relay
 
+pub struct RelayCarrierContext {
+pub:
+	conn_open_fn    fn (string) bool                 @[required]
+	send_to_fn      fn (string, string, string) bool @[required]
+	close_target_fn fn (string, int, string)         @[required]
+}
+
+pub fn (ctx RelayCarrierContext) conn_open(id string) bool { return ctx.conn_open_fn(id) }
+
+pub fn (ctx RelayCarrierContext) send_to(id string, data string, opcode string) bool {
+	return ctx.send_to_fn(id, data, opcode)
+}
+
+pub fn (ctx RelayCarrierContext) close_target(id string, code int, reason string) {
+	ctx.close_target_fn(id, code, reason)
+}
+
 pub struct RelayCarrier {
 pub:
 	conn_id string
 pub mut:
-	rt RuntimeContext
+	rt RelayCarrierContext @[required]
 }
 
-pub fn new_relay_carrier(rt RuntimeContext, conn_id string) RelayCarrier {
+pub fn new_relay_carrier(rt RelayCarrierContext, conn_id string) RelayCarrier {
 	return RelayCarrier{
 		rt:      rt
 		conn_id: conn_id

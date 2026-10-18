@@ -167,9 +167,9 @@ fn test_public_http_relay_delivery_reaches_agent_pipeline_and_returns_response()
 	}
 	mut public_adapter := dispatch.EgressAdapter(dispatch.relay_delivery_adapter('relay-edge',
 		'relay:edge', 'wait', 1000, {
-		'frame_kind': 'open'
-		'route':      'relay/local-response'
-	}))
+			'frame_kind': 'open'
+			'route':      'relay/local-response'
+		}))
 	public_delivery := public_adapter.deliver(mut public_services, public_exchange) or {
 		panic(err)
 	}
@@ -398,7 +398,7 @@ fn test_dispatch_relay_pipeline_exchange_delivers_mcp_adapter() {
 			}
 		}
 		engines: EngineRuntime{
-			primary: worker.WorkerState{
+			primary: &worker.WorkerState{
 				logic_executor: RelayMcpTestExecutor{}
 			}
 		}

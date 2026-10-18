@@ -20,6 +20,10 @@ pub mut:
 	buffered []WireFrame
 }
 
+fn (channel RelayChannel) owned_copy() RelayChannel {
+	return RelayChannel{ ...channel, buffered: channel.buffered.map(it.owned_copy()) }
+}
+
 pub fn new_channel_registry(max_channels int) ChannelRegistry {
 	return ChannelRegistry{
 		max_channels: if max_channels > 0 { max_channels } else { 1024 }
@@ -38,11 +42,15 @@ pub fn (mut registry ChannelRegistry) open_channel(channel RelayChannel) ! {
 	if channel.id !in registry.channels && registry.channels.len >= registry.max_channels {
 		return error('relay_channel_limit_exceeded:${registry.max_channels}')
 	}
+	owned := channel.owned_copy()
 	normalized := RelayChannel{
-		...channel
+		...owned
 		open:         true
 		buffer_limit: if channel.buffer_limit > 0 { channel.buffer_limit } else { 64 }
 	}
+	// Reopening publishes a new registration. Correlations belong to the
+	// retired registration and must not resolve into this replacement.
+	if channel.id in registry.channels { registry.remove_channel_correlations(channel.id) }
 	registry.channels[channel.id] = normalized
 }
 
@@ -51,15 +59,7 @@ pub fn (mut registry ChannelRegistry) close_channel(channel_id string) bool {
 	channel.open = false
 	channel.buffered = []WireFrame{}
 	registry.channels[channel_id] = channel
-	mut remove_ids := []string{}
-	for correlation_id, mapped_channel_id in registry.correlations {
-		if mapped_channel_id == channel_id {
-			remove_ids << correlation_id
-		}
-	}
-	for correlation_id in remove_ids {
-		registry.correlations.delete(correlation_id)
-	}
+	registry.remove_channel_correlations(channel_id)
 	return true
 }
 
@@ -68,6 +68,11 @@ pub fn (mut registry ChannelRegistry) retire_channel(channel_id string) bool {
 		return false
 	}
 	registry.channels.delete(channel_id)
+	registry.remove_channel_correlations(channel_id)
+	return true
+}
+
+fn (mut registry ChannelRegistry) remove_channel_correlations(channel_id string) {
 	mut remove_ids := []string{}
 	for correlation_id, mapped_channel_id in registry.correlations {
 		if mapped_channel_id == channel_id {
@@ -77,7 +82,6 @@ pub fn (mut registry ChannelRegistry) retire_channel(channel_id string) bool {
 	for correlation_id in remove_ids {
 		registry.correlations.delete(correlation_id)
 	}
-	return true
 }
 
 pub fn (mut registry ChannelRegistry) bind_correlation(correlation_id string, channel_id string) ! {
@@ -93,9 +97,17 @@ pub fn (mut registry ChannelRegistry) bind_correlation(correlation_id string, ch
 	registry.correlations[correlation_id] = channel_id
 }
 
-pub fn (registry ChannelRegistry) channel_for_correlation(correlation_id string) ?RelayChannel {
+// Internal routing needs only the identity, not a copy of every queued frame.
+fn (registry ChannelRegistry) channel_id_for_correlation(correlation_id string) ?string {
 	channel_id := registry.correlations[correlation_id] or { return none }
-	return registry.channels[channel_id] or { none }
+	if channel_id !in registry.channels { return none }
+	return channel_id
+}
+
+pub fn (registry ChannelRegistry) channel_for_correlation(correlation_id string) ?RelayChannel {
+	channel_id := registry.channel_id_for_correlation(correlation_id) or { return none }
+	channel := registry.channels[channel_id] or { return none }
+	return channel.owned_copy()
 }
 
 pub fn (mut registry ChannelRegistry) enqueue(channel_id string, frame WireFrame) ! {

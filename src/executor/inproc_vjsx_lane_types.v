@@ -3,11 +3,6 @@ module executor
 import sync
 import upstream.transport
 
-struct VjsxLaneWakeup {
-	wake_at_ms i64
-	generation u64
-}
-
 struct InProcVjsxLaneSnapshotTaskResult {
 	ok    bool
 	raw   string
@@ -16,16 +11,17 @@ struct InProcVjsxLaneSnapshotTaskResult {
 
 struct InProcVjsxLaneSnapshotTaskSlot {
 mut:
-	mu     sync.Mutex
-	result InProcVjsxLaneSnapshotTaskResult
-	ready  bool
+	control &ExecutorTaskControl = &ExecutorTaskControl{}
+	mu      sync.Mutex
+	result  InProcVjsxLaneSnapshotTaskResult
+	ready   bool
 }
 
 struct InProcVjsxLaneSnapshotTask {
-	app  AppFacade = NoOpAppFacade{}
-	done chan bool
+	app  EmbeddedHost @[required]
+	done chan bool    @[required]
 mut:
-	slot &InProcVjsxLaneSnapshotTaskSlot = unsafe { nil }
+	slot &InProcVjsxLaneSnapshotTaskSlot @[required]
 }
 
 struct InProcVjsxLaneWarmupTaskResult {
@@ -35,16 +31,18 @@ struct InProcVjsxLaneWarmupTaskResult {
 
 struct InProcVjsxLaneWarmupTaskSlot {
 mut:
-	mu     sync.Mutex
-	result InProcVjsxLaneWarmupTaskResult
-	ready  bool
+	bootstrapped chan u64 = chan u64{cap: 1}
+	control &ExecutorTaskControl = &ExecutorTaskControl{}
+	mu      sync.Mutex
+	result  InProcVjsxLaneWarmupTaskResult
+	ready   bool
 }
 
 struct InProcVjsxLaneWarmupTask {
-	app  AppFacade = NoOpAppFacade{}
-	done chan bool
+	app  EmbeddedHost @[required]
+	done chan bool    @[required]
 mut:
-	slot &InProcVjsxLaneWarmupTaskSlot = unsafe { nil }
+	slot &InProcVjsxLaneWarmupTaskSlot @[required]
 }
 
 struct InProcVjsxLanePumpTaskResult {
@@ -54,15 +52,17 @@ struct InProcVjsxLanePumpTaskResult {
 
 struct InProcVjsxLanePumpTaskSlot {
 mut:
-	mu     sync.Mutex
-	result InProcVjsxLanePumpTaskResult
-	ready  bool
+	control &ExecutorTaskControl = &ExecutorTaskControl{}
+	mu      sync.Mutex
+	result  InProcVjsxLanePumpTaskResult
+	ready   bool
 }
 
 struct InProcVjsxLanePumpTask {
-	done chan bool
+	wakeup_owner ?&VjsxLaneWakeupOwner
+	done chan bool @[required]
 mut:
-	slot &InProcVjsxLanePumpTaskSlot = unsafe { nil }
+	slot &InProcVjsxLanePumpTaskSlot @[required]
 }
 
 struct InProcVjsxLaneAffinityTaskResult {
@@ -74,18 +74,19 @@ struct InProcVjsxLaneAffinityTaskResult {
 
 struct InProcVjsxLaneAffinityTaskSlot {
 mut:
-	mu     sync.Mutex
-	result InProcVjsxLaneAffinityTaskResult
-	ready  bool
+	control &ExecutorTaskControl = &ExecutorTaskControl{}
+	mu      sync.Mutex
+	result  InProcVjsxLaneAffinityTaskResult
+	ready   bool
 }
 
 struct InProcVjsxLaneAffinityTask {
-	app   AppFacade = NoOpAppFacade{}
+	app   EmbeddedHost @[required]
 	frame transport.WorkerWebSocketFrame
-	done  chan bool
+	done  chan bool @[required]
 	kind  string
 mut:
-	slot &InProcVjsxLaneAffinityTaskSlot = unsafe { nil }
+	slot &InProcVjsxLaneAffinityTaskSlot @[required]
 }
 
 struct VjsxLaneWorker {

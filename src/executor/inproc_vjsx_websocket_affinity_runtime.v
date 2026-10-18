@@ -6,24 +6,23 @@ fn (e InProcVjsxExecutor) websocket_affinity_probe_lane() !VjsxExecutionLane {
 	return e.acquire_next_lane(inproc_vjsx_lane_wait_timeout_ms)
 }
 
-fn (e InProcVjsxExecutor) request_lane_affinity(mut app AppFacade, lane VjsxExecutionLane, frame transport.WorkerWebSocketFrame) !WebSocketAffinityDecision {
+fn (e InProcVjsxExecutor) request_lane_affinity(mut app EmbeddedHost, lane VjsxExecutionLane, frame transport.WorkerWebSocketFrame) !WebSocketAffinityDecision {
 	worker := e.lane_worker_by_id(lane.id) or {
+		e.release_lane(lane.id)
 		return error('inproc_vjsx_executor_lane_worker_missing')
 	}
 	done_ch := chan bool{cap: 1}
 	mut slot := &InProcVjsxLaneAffinityTaskSlot{}
-	worker.affinity_tasks <- InProcVjsxLaneAffinityTask{
+	e.submit_affinity_task(worker, InProcVjsxLaneAffinityTask{
 		app:   app
 		frame: frame
 		slot:  slot
 		done:  done_ch
+	}) or {
+		e.release_lane(lane.id)
+		return error(err.msg())
 	}
-	select {
-		_ := <-done_ch {}
-		inproc_vjsx_lane_task_timeout {
-			return error('inproc_vjsx_executor_websocket_affinity_timeout')
-		}
-	}
+	e.await_task(done_ch, mut slot.control, inproc_vjsx_lane_task_timeout, 'inproc_vjsx_executor_websocket_affinity_timeout')!
 	slot.mu.@lock()
 	result := slot.result
 	ready := slot.ready
@@ -37,15 +36,12 @@ fn (e InProcVjsxExecutor) request_lane_affinity(mut app AppFacade, lane VjsxExec
 	return result.value
 }
 
-fn (e InProcVjsxExecutor) resolve_websocket_affinity_key_from_app(mut app AppFacade, frame transport.WorkerWebSocketFrame) !WebSocketAffinityDecision {
+fn (e InProcVjsxExecutor) resolve_websocket_affinity_key_from_app(mut app EmbeddedHost, frame transport.WorkerWebSocketFrame) !WebSocketAffinityDecision {
 	lane := e.websocket_affinity_probe_lane()!
 	return e.request_lane_affinity(mut app, lane, frame)
 }
 
 fn (e InProcVjsxExecutor) resolve_websocket_affinity(frame transport.WorkerWebSocketFrame) !WebSocketAffinityDecision {
-	if isnil(e.state) {
-		return error('inproc_vjsx_executor_state_missing')
-	}
 	mut state := e.state
 	config := state.facade.config.websocket_affinity
 	state.mu.@lock()
@@ -56,11 +52,7 @@ fn (e InProcVjsxExecutor) resolve_websocket_affinity(frame transport.WorkerWebSo
 	}
 	if decision.key == '' {
 		if WebSocketAffinityPolicy.normalize_source(config.source) == 'app' {
-			mut app_ref := AppFacade(unsafe { nil })
-			state.mu.@lock()
-			app_ref = state.app_ref
-			state.mu.unlock()
-			if isnil(app_ref) {
+			mut app_ref := state.remembered_host() or {
 				return error('inproc_vjsx_executor_app_missing')
 			}
 			decision = e.resolve_websocket_affinity_key_from_app(mut app_ref, frame) or {
@@ -78,9 +70,6 @@ fn (e InProcVjsxExecutor) resolve_websocket_affinity(frame transport.WorkerWebSo
 }
 
 pub fn (e InProcVjsxExecutor) acquire_websocket_lane(frame transport.WorkerWebSocketFrame) !(VjsxExecutionLane, string) {
-	if isnil(e.state) {
-		return error('inproc_vjsx_executor_state_missing')
-	}
 	mut state := e.state
 	config := state.facade.config.websocket_affinity
 	state.mu.@lock()
@@ -91,11 +80,7 @@ pub fn (e InProcVjsxExecutor) acquire_websocket_lane(frame transport.WorkerWebSo
 	}
 	if affinity.key == '' {
 		if WebSocketAffinityPolicy.normalize_source(config.source) == 'app' {
-			mut app_ref := AppFacade(unsafe { nil })
-			state.mu.@lock()
-			app_ref = state.app_ref
-			state.mu.unlock()
-			if isnil(app_ref) {
+			mut app_ref := state.remembered_host() or {
 				return error('inproc_vjsx_executor_app_missing')
 			}
 			affinity = e.resolve_websocket_affinity_key_from_app(mut app_ref, frame) or {
@@ -146,9 +131,6 @@ pub fn (e InProcVjsxExecutor) acquire_websocket_lane(frame transport.WorkerWebSo
 }
 
 fn (e InProcVjsxExecutor) resolve_websocket_dispatch_affinity(frame transport.WorkerWebSocketFrame) !(string, int, bool) {
-	if isnil(e.state) {
-		return error('inproc_vjsx_executor_state_missing')
-	}
 	mut state := e.state
 	config := state.facade.config.websocket_affinity
 	state.mu.@lock()
@@ -159,11 +141,7 @@ fn (e InProcVjsxExecutor) resolve_websocket_dispatch_affinity(frame transport.Wo
 	}
 	if affinity.key == '' {
 		if WebSocketAffinityPolicy.normalize_source(config.source) == 'app' {
-			mut app_ref := AppFacade(unsafe { nil })
-			state.mu.@lock()
-			app_ref = state.app_ref
-			state.mu.unlock()
-			if isnil(app_ref) {
+			mut app_ref := state.remembered_host() or {
 				return error('inproc_vjsx_executor_app_missing')
 			}
 			affinity = e.resolve_websocket_affinity_key_from_app(mut app_ref, frame) or {

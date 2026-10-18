@@ -1,6 +1,6 @@
 module executor
 
-import json
+import json2 as json
 import net.http
 import vjsx
 
@@ -23,20 +23,20 @@ fn InProcVjsxHostApi.http_fetch_builder(mut state VjsxExecutorState, idx int) vj
 				return ctx.js_string(json.encode(InProcVjsxHostHttpFetchResponse{
 					ok:    false
 					error: 'network_disabled'
-				}))
+				}, escape_unicode: true, time_as_unix: true))
 			}
-			parsed := json.decode(InProcVjsxHostHttpFetchRequest, raw) or {
+			parsed := json.decode[InProcVjsxHostHttpFetchRequest](raw) or {
 				return ctx.js_string(json.encode(InProcVjsxHostHttpFetchResponse{
 					ok:    false
 					error: 'invalid_fetch_request'
-				}))
+				}, escape_unicode: true, time_as_unix: true))
 			}
 			url := parsed.url.trim_space()
 			if url == '' {
 				return ctx.js_string(json.encode(InProcVjsxHostHttpFetchResponse{
 					ok:    false
 					error: 'missing_url'
-				}))
+				}, escape_unicode: true, time_as_unix: true))
 			}
 			method_raw := parsed.method.trim_space()
 			method := match method_raw.to_upper() {
@@ -63,7 +63,7 @@ fn InProcVjsxHostApi.http_fetch_builder(mut state VjsxExecutorState, idx int) vj
 				return ctx.js_string(json.encode(InProcVjsxHostHttpFetchResponse{
 					ok:    false
 					error: err.msg()
-				}))
+				}, escape_unicode: true, time_as_unix: true))
 			}
 			mut response_headers := map[string]string{}
 			for key in resp.header.keys() {
@@ -74,7 +74,7 @@ fn InProcVjsxHostApi.http_fetch_builder(mut state VjsxExecutorState, idx int) vj
 				status:  resp.status_code
 				body:    resp.body
 				headers: response_headers
-			}))
+			}, escape_unicode: true, time_as_unix: true))
 		})
 	}
 }

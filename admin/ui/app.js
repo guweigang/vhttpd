@@ -6,10 +6,12 @@ const endpoints = {
       schema: "/admin/schema",
       drafts: "/admin/drafts",
       events: "/admin/events?limit=80",
+      executorLoads: "/admin/http/executors",
       stats: "/admin/stats"
     };
     const state = {
       activeView: "dashboard",
+      authRequired: false,
       data: {},
       errors: {},
       history: [],
@@ -17,7 +19,24 @@ const endpoints = {
       activeSourceDraftId: "",
       activeSourcePath: "",
       activeSourceLanguage: "",
-      draftPublishResult: null
+      draftPublishResult: null,
+      configDraft: false,
+      draftBusy: false,
+      validatedDraft: "",
+      refreshing: false,
+      trafficListener: "",
+      trafficPipeline: null,
+      trafficWindow: 60,
+      trafficStatus: 'all',
+      trafficSort: 'errors',
+      trafficSlowMs: 500,
+      trafficSequence: 0,
+      trafficSamples: null,
+      trafficSampleError: null,
+      trafficSampleSequence: 0,
+      trafficLogFocus: null,
+      trafficFocus: null,
+      refreshedAt: null
     };
     const $ = (id) => document.getElementById(id);
     const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => ({
@@ -38,13 +57,15 @@ const endpoints = {
       return path;
     }
     async function loadEndpoint(name, path) {
-      const response = await fetch(endpointUrl(path), { headers: authHeaders() });
+      const response = await fetch(endpointUrl(path), { headers: authHeaders(), cache: "no-store", signal: AbortSignal.timeout(8000) });
       const text = await response.text();
       let body = text;
       try { body = text ? JSON.parse(text) : null; } catch (_) {}
       if (!response.ok) {
         const error = body && body.error ? body.error : response.status + " " + response.statusText;
-        throw new Error(error);
+        const failure = new Error(error);
+        failure.status = response.status;
+        throw failure;
       }
       return body;
     }
@@ -62,26 +83,84 @@ const endpoints = {
       }
       return body;
     }
-    async function refresh() {
-      $("status").textContent = "Loading";
+    async function refresh(background = false) {
+      if (state.refreshing) return;
+      state.refreshing = true;
+      $("refresh").disabled = true;
+      if (!background) $("status").textContent = "正在更新项目状态…";
       $("stateDot").className = "state-dot";
-      state.errors = {};
-      const entries = await Promise.all(Object.entries(endpoints).map(async ([name, path]) => {
+      const authenticated = await checkBrowserSession();
+      if (!authenticated && !$("adminToken").value.trim()) {
+        state.data = {}; state.errors = {}; state.authRequired = true;
+        state.refreshing = false; $("refresh").disabled = false;
+        render(); return;
+      }
+      if (!background) state.errors = {};
+      state.authRequired = false;
+      const entries = await Promise.all(Object.entries(endpoints).filter(([name]) => !background || ["runtime", "graph", "stats", "events", "configFiles", "executorLoads"].includes(name)).map(async ([name, path]) => {
         try {
           return [name, await loadEndpoint(name, path), null];
         } catch (err) {
-          return [name, null, err && err.message ? err.message : String(err)];
+          return [name, null, err && err.message ? err.message : String(err), err && err.status];
         }
       }));
-      for (const [name, data, error] of entries) {
+      for (const [name, data, error, status] of entries) {
+        if (status === 403) state.authRequired = true;
+        delete state.errors[name];
         state.data[name] = data;
         if (error) state.errors[name] = error;
       }
+      const main = asArray(state.data.configFiles).find(file => file.role === "main");
+      state.data.plan = null;
+      delete state.errors.plan;
+      if (main && main.path && !state.authRequired) {
+        try { state.data.plan = await loadEndpoint("plan", "/admin/runtime/plan/replacement?config=" + encodeURIComponent(main.path)); }
+        catch (error) { state.errors.plan = "整项目生效检查暂不可用"; }
+      }
+      if (!state.authRequired) await loadTrafficWindow(false);
+      state.refreshedAt = new Date();
+      state.refreshing = false;
+      $("refresh").disabled = false;
       recordTelemetrySample();
       render();
+      window.dispatchEvent(new Event("vhttpd:refreshed"));
+    }
+    async function loadTrafficWindow(renderAfter = true) {
+      const sequence=++state.trafficSequence;
+      state.data.traffic=null; delete state.errors.traffic;
+      if(renderAfter)renderDashboard();
+      const query=new URLSearchParams({window:String(state.trafficWindow),listener:state.trafficListener});
+      if(state.trafficPipeline!==null){query.set('route','1');query.set('pipeline',state.trafficPipeline);}
+      try { const data=await loadEndpoint('traffic','/admin/http/traffic?'+query);if(sequence===state.trafficSequence)state.data.traffic=data; }
+      catch(error){if(sequence===state.trafficSequence)state.errors.traffic='近期窗口读取失败，请刷新重试';}
+      if(sequence===state.trafficSequence && state.trafficFocus)await loadTrafficDetails(false);
+      if(sequence===state.trafficSequence && renderAfter)renderDashboard();
+    }
+    async function loadTrafficDetails(renderAfter=true) {
+      const sequence=++state.trafficSampleSequence;
+      state.trafficSamples=null;state.trafficSampleError=null;
+      if(!state.trafficFocus)return;
+      if(renderAfter)renderDashboard();
+      const [listener,pipeline]=state.trafficFocus;
+      const query=new URLSearchParams({listener,pipeline,window:String(state.trafficWindow),min_ms:'1'});
+      try { const data=await loadEndpoint('requestDetails','/admin/http/requests?'+query);if(sequence===state.trafficSampleSequence)state.trafficSamples=data; }
+      catch(error){if(sequence===state.trafficSampleSequence)state.trafficSampleError='慢请求明细读取失败，请重试。';}
+      if(sequence===state.trafficSampleSequence && renderAfter)renderDashboard();
+    }
+    function renderRequestStages(model) {
+      if(!model.available)return '<p>'+esc(model.bottleneck)+'</p>';
+      return '<p><strong>'+esc(model.bottleneck)+'</strong></p><div class="request-stages">'+model.rows.map(row=>'<div><span>'+esc(row.label)+'</span><strong>'+esc(row.measured?row.ms.toFixed(2)+' ms':'未经过或未采集')+'</strong><div class="stage-track"><span style="width:'+row.share.toFixed(2)+'%"></span></div></div>').join('')+'</div>';
+    }
+    function renderSlowRequests(route) {
+      const model=TrafficRequests.select(state.trafficSamples,[route.listener,route.id],state.trafficWindow,state.trafficSlowMs);
+      const heading='<h4>最近慢请求（≥ '+esc(state.trafficSlowMs)+' ms）</h4><details class="stage-definition"><summary>分阶段耗时口径</summary><p>排队：等待内嵌 vjsx 执行槽；vjsx：HTTP JS 入口、Promise 解析、结果归一化及清理，包含 JS 内部等待；出口：终端交付、响应处理及上游 / 流等待。其他处理包含路由、初始化和未细分部分。各阶段不是 CPU 耗时；不支持的阶段显示未采集。</p></details>';
+      if(!model.available)return heading+'<p>'+esc(state.trafficSampleError || '慢请求明细正在读取或已过期。')+'</p><button class="button" data-traffic-reload>刷新明细</button><span id="trafficCopyStatus" role="status"></span>';
+      return heading+'<p>最近 '+state.trafficWindow/60+' 分钟，找到 '+model.requests.length+' 条保留的慢请求。每路由保留最近 50 条处理耗时 ≥ 1 ms 的已完成请求，明细不是全量记录；重启后清空。明细按完成时间精确筛选，趋势按 10 秒桶聚合。'+(model.retained>=50?'已达保留上限，较早请求可能已被淘汰。':'')+'</p>'+
+        (model.requests.length?model.requests.map(item=>'<article class="request-sample"><div><strong>'+esc(new Date(item.at_unix*1000).toLocaleString())+'</strong><span>'+esc(item.method)+' · HTTP '+esc(item.status)+' · <strong>'+esc(item.duration_ms)+' ms</strong></span></div>'+renderRequestStages(item.stages)+'<p>定位编号：<button class="button" data-traffic-locate="'+esc(item.observation_id)+'" title="在宿主工作台筛选此请求日志">'+esc(item.observation_id)+'</button> <button class="button" data-traffic-copy="'+esc(item.observation_id)+'">复制编号</button></p><details '+(state.trafficLogFocus===item.observation_id?'open':'')+'><summary data-traffic-log="'+esc(item.observation_id)+'">查看关联完成日志</summary><pre>'+esc(item.log_line)+'</pre><small>此处只展示已采集的请求完成日志。可在宿主日志中搜索相同编号。</small></details></article>').join(''):'<p>保留的请求中没有符合当前时间和阈值的样本；这不表示未发生过慢请求。</p>')+'<button class="button" data-traffic-reload>刷新明细</button><span id="trafficCopyStatus" role="status"></span>';
     }
     function selectView(name) {
       state.activeView = name;
+      if (["editor", "graph", "schema", "drafts", "raw"].includes(name)) $("advancedNav").open = true;
       for (const button of document.querySelectorAll(".nav button")) {
         button.setAttribute("aria-selected", button.dataset.view === name ? "true" : "false");
       }
@@ -89,26 +168,24 @@ const endpoints = {
         view.classList.toggle("hidden", view.id !== "view-" + name);
       }
       $("viewTitle").textContent = {
-        dashboard: "Dashboard",
-        observability: "Observability",
-        graph: "Runtime Graph",
-        apps: "Applications",
-        editor: "Editor",
-        schema: "Schema",
-        drafts: "Drafts",
-        events: "Events",
-        raw: "Raw"
+        dashboard: "运行总览",
+        observability: "流量与指标",
+        graph: "运行计划图",
+        relay: "Relay",
+        apps: "项目配置",
+        editor: "源码编辑",
+        schema: "配置参考",
+        drafts: "配置草稿",
+        events: "操作记录",
+        raw: "原始快照"
       }[name] || name;
     }
     function renderStatus() {
-      const errors = keys(state.errors);
-      if (errors.length) {
-        $("status").innerHTML = '<span class="pill red">error</span>' + esc(errors.map((key) => key + ": " + state.errors[key]).join(" | "));
-        $("stateDot").className = "state-dot error";
-        return;
-      }
-      $("status").innerHTML = '<span class="pill">connected</span>' + new Date().toLocaleString();
-      $("stateDot").className = "state-dot ok";
+      const runtimeOK = !!state.data.runtime && !state.errors.runtime && !state.authRequired;
+      $("status").textContent = state.authRequired ? "登录已失效，请从 Mac 工作台重新打开管理界面。" :
+        (runtimeOK ? "管理接口已连接" : "管理接口未连接，以下状态无法确认") +
+        (state.refreshedAt ? " · 最近检查 " + state.refreshedAt.toLocaleTimeString() : "");
+      $("stateDot").className = "state-dot " + (runtimeOK ? "ok" : "error");
     }
     function metric(label, value, sub) {
       return '<div class="panel metric"><div class="label">' + esc(label) + '</div><div class="value">' + esc(value) + '</div><div class="sub">' + esc(sub || "") + '</div></div>';
@@ -163,7 +240,11 @@ const endpoints = {
       return counts;
     }
     function recordTelemetrySample() {
+      if (state.errors.runtime || state.errors.stats || !state.data.runtime || !runtimeStats().http) return;
+      const started = state.data.runtime.started_at_unix;
+      if (state.history.length && state.history[state.history.length - 1].started !== started) state.history = [];
       state.history.push({
+        started,
         at: Date.now(),
         requests: httpRequestsTotal(),
         errors: httpErrorsTotal(),
@@ -266,94 +347,79 @@ const endpoints = {
       });
     }
     function renderDashboard() {
-      const runtime = state.data.runtime || {};
-      const stats = state.data.stats || {};
-      const appsSnapshot = state.data.apps || {};
-      const graph = state.data.graph || {};
-      const drafts = asArray(state.data.drafts);
-      const events = asArray(state.data.events);
-      const apps = asArray(appsSnapshot.apps);
-      const listeners = asArray(appsSnapshot.listeners);
-      const pipelineFlows = asArray(appsSnapshot.pipelines);
-      const counts = appsSnapshot.counts || {};
-      const nodes = asArray(graph.nodes);
-      const graphPipelines = nodes.filter((node) => node.domain === "pipeline");
-      const graphListeners = nodes.filter((node) => node.domain === "listener");
-      const graphRelays = nodes.filter((node) => node.domain === "relay");
-      const graphGroups = apps.length ? [] : appGroupsFromGraph();
-      const appTotal = counts.apps ?? (apps.length || graphGroups.length);
-      const pipelineTotal = counts.pipelines ?? (pipelineFlows.length || graphPipelines.length);
-      const listenerTotal = counts.listeners ?? (listeners.length || graphListeners.length);
-      const typeCounts = appKindCounts(apps);
-      $("metrics").innerHTML = [
-        metric("Applications", appTotal, typeCounts || "runtime groups"),
-        metric("Listeners", listenerTotal, "bound ports"),
-        metric("Pipelines", pipelineTotal, "configured flows"),
-        metric("Relays", counts.relays ?? graphRelays.length, count(runtime.relay || runtime.relays || {}) + " runtime items"),
-        metric("Drafts", drafts.length, "file-backed admin state"),
-        metric("Events", events.length, "recent admin events")
-      ].join("");
-      $("dashboardTopologyCount").textContent = Math.min(graphPipelines.length, 10) + "/" + graphPipelines.length + " flows";
-      $("dashboardTopology").innerHTML = renderTopology(10);
-      $("dashboardAppCount").textContent = appTotal + " apps";
-      if (apps.length) {
-        $("dashboardApps").innerHTML = table(["App", "Type", "Listeners", "Pipelines", "Engines", "Status"], apps.map((app) => [
-          '<span class="pill blue">' + esc(app.label || app.id) + '</span>',
-          esc(app.kind || "mixed"),
-          esc(asArray(app.listeners).map(listenerLabel).join(", ")),
-          esc(asArray(app.pipelines).map((pipeline) => pipeline.id).join(", ")),
-          esc(asArray(app.engines).map((engine) => engine.id + " (" + (engine.kind || "-") + ")").join(", ")),
-          '<span class="pill ' + (app.status === "ok" ? "" : "red") + '">' + esc(app.status || "ok") + '</span>'
-        ]));
-      } else {
-        $("dashboardApps").innerHTML = table(["App", "Listeners", "Pipelines", "Engines", "Status"], graphGroups.map((group) => {
-          const byDomain = (domain) => group.nodes.filter((node) => node.domain === domain);
-          return [
-            '<span class="pill blue">' + esc(group.id) + '</span>',
-            esc(byDomain("listener").map((node) => node.label || node.id).join(", ")),
-            esc(byDomain("pipeline").map((node) => node.label || node.id).join(", ")),
-            esc(byDomain("engine").map((node) => (node.label || node.id) + " (" + (node.kind || "-") + ")").join(", ")),
-            '<span class="pill">ok</span>'
-          ];
-        }));
-      }
-      $("listenerCount").textContent = listenerTotal + " listeners";
-      $("listenerPorts").innerHTML = listeners.length ? table(["Listener", "Protocol", "Address", "Control"], listeners.map((listener) => [
-        '<span class="pill">' + esc(listener.id) + '</span>',
-        esc([listener.protocol, listener.transport].filter(Boolean).join("/")),
-        esc((listener.host || "0.0.0.0") + ":" + (listener.port || "")),
-        listener.control ? '<span class="pill blue">admin</span>' : '<span class="pill gray">app</span>'
-      ])) : table(["Listener", "Protocol", "Address", "Control"], graphListeners.map((node) => {
-        const meta = node.metadata || {};
-        return [
-          '<span class="pill">' + esc(node.label || node.id) + '</span>',
-          esc([node.kind, meta.transport].filter(Boolean).join("/")),
-          esc((meta.host || "0.0.0.0") + ":" + (meta.port || "")),
-          node.id === "control" ? '<span class="pill blue">admin</span>' : '<span class="pill gray">app</span>'
-        ];
-      }));
-      $("pipelineCount").textContent = pipelineTotal + " flows";
-      if (pipelineFlows.length) {
-        $("pipelineFlows").innerHTML = table(["Pipeline", "Match", "Flow"], pipelineFlows.map((pipeline) => [
-          '<span class="pill blue">' + esc(pipeline.id) + '</span>',
-          esc(pipeline.match || "*"),
-          esc(asArray(pipeline.flow).join(" -> "))
-        ]));
-      } else {
-        $("pipelineFlows").innerHTML = table(["Id", "Match", "Egress"], graphPipelines.map((node) => [
-          '<span class="pill blue">' + esc(node.label || node.id) + '</span>',
-          esc((node.metadata && (node.metadata.paths || node.metadata.methods)) || ""),
-          esc((asArray(graph.edges).find((edge) => edge.from === node.ref && edge.kind === "egress") || {}).to || "")
-        ]));
-      }
-      $("runtimeState").textContent = errorsLabel();
-      $("runtimeSummary").innerHTML = rows({
-        "HTTP requests": stats.requests_total ?? stats.http_requests_total ?? "",
-        "HTTP errors": stats.errors_total ?? stats.http_errors_total ?? "",
-        "Active websockets": runtime.active_websockets ?? runtime.activeWebsockets ?? "",
-        "Active upstreams": runtime.active_upstreams ?? runtime.activeUpstreams ?? "",
-        "Worker mode": runtime.worker_backend_mode ?? runtime.workerBackendMode ?? ""
-      });
+      const model = AdminOverview.build(state.data, state.errors, state.authRequired);
+      $("overviewProject").textContent = model.project;
+      $("overviewPath").textContent = model.path;
+      $("overviewStates").innerHTML = model.states.map(item => '<article class="state-card ' + esc(item.tone) + '"><span>' + esc(item.label) + '</span><strong>' + esc(item.title) + '</strong><p>' + esc(item.detail) + '</p></article>').join("");
+      $("overviewAttention").innerHTML = model.notices.map(item => '<div class="attention-item ' + esc(item.tone) + '"><div><strong>' + esc(item.title) + '</strong><p>' + esc(item.detail) + '</p></div>' + (item.view ? '<button class="button" data-overview-view="' + esc(item.view) + '">' + esc(item.action) + '</button>' : '') + '</div>').join("");
+      $("metrics").innerHTML = model.metrics.map(item => metric(item.label, item.value, item.detail)).join("");
+      renderExecutorOverview();
+      renderBusinessTraffic(model.business);
+      $("overviewChains").innerHTML = model.chains.length ? model.chains.map(chain => '<article class="request-chain"><div class="chain-heading"><strong>' + esc(chain.label) + '</strong><span class="value-text">' + esc(chain.match) + '</span></div><div class="chain-steps">' + chain.steps.map(step => '<button class="chain-step" data-node-ref="' + esc(step.ref) + '"><small>' + esc(step.label) + '</small><strong>' + esc(step.name) + '</strong><span>' + esc(step.detail) + '</span></button>').join('<span class="chain-arrow" aria-hidden="true">→</span>') + '</div></article>').join("") : '<p class="value-text">' + esc(model.graphAvailable ? '尚无请求链路，前往项目配置添加监听和路由。' : '无法读取运行计划，恢复管理连接后重试。') + '</p>';
+      $("overviewEvents").innerHTML = model.events.length ? table(["时间", "操作", "对象"], model.events.map(event => [esc(event.time), esc(event.type), esc(event.target)])) : '<p class="value-text">' + (state.errors.events ? '操作记录暂不可用。' : '暂无操作记录。此处记录配置操作，不是业务请求日志。') + '</p>';
+      $("overviewSources").innerHTML = model.sources.length ? model.sources.map(file => '<div class="overview-source"><span class="pill gray">' + esc(file.role === 'main' ? '主配置' : 'Include') + '</span><span title="' + esc(file.path) + '">' + esc(file.label) + '</span><button class="button" data-overview-source="' + esc(file.path) + '">编辑</button></div>').join('') : '<p class="value-text">配置来源暂不可用。</p>';
+    }
+    function executorModel(){return ExecutorOverview.build(state.authRequired || state.errors.executorLoads?null:state.data.executorLoads,asArray(state.data.configFiles));}
+    function executorSourceButton(path,id,type,label){return '<button class="button" data-executor-source="'+esc(path)+'" data-executor-id="'+esc(id)+'" data-executor-type="'+esc(type)+'">'+esc(label)+'</button>';}
+    function executorCard(item){
+      const load=item.load;
+      const concurrency=item.concurrency?load.occupied+' / '+load.capacity+' 槽 · 槽内任务 '+load.inflight:'—';
+      const limits=item.known?'排队期限 '+load.queue_timeout_ms+' ms；'+(load.embedded?'独立执行超时：未采集':'后端读取期限 '+load.execution_timeout_ms+' ms'):'限制未确认';
+      const routes=item.routes.map(route=>'<div class="executor-binding"><strong>'+esc(route.pipeline_id || '默认处理')+'</strong> → '+esc(route.adapter_id || '默认出口')+' '+route.sources.map(path=>executorSourceButton(path,route.pipeline_id,'route','编辑路由来源')).join('')+route.adapterSources.map(path=>executorSourceButton(path,route.adapter_id,'adapter','编辑出口来源')).join('')+'</div>').join('');
+      return '<article class="executor-card"><h4>'+esc(item.listener_id+' / '+(item.primary?'默认池':item.pool))+' · '+esc(item.kind)+'</h4><p><strong>'+esc(item.status)+'</strong> · 占用 '+esc(concurrency)+' · HTTP 排队 '+(item.known?esc(load.waiting):'—')+' 人</p><p>累计排队等待 '+(item.known?esc(load.queue_waits_total):'—')+' 次 · 累计排队超时 '+(item.known?esc(load.queue_timeouts_total):'—')+' 次'+(item.recentTimeout?' · 最近 1 分钟出现过排队超时':'')+'</p><p class="value-text">'+esc(limits)+'；历史超时不代表当前仍阻塞。</p><p>'+item.engineSources.map(source=>executorSourceButton(source.path,source.id,'engine','编辑执行器 '+source.id)).join(' ')+'</p>'+(routes || '<p class="value-text">没有显式 HTTP 路由绑定；默认池可能服务未匹配请求或其他共享任务。</p>')+'</article>';
+    }
+    function renderExecutorOverview(){
+      const model=executorModel();
+      $('executorStatus').textContent=model.available?'截至 '+new Date(model.at*1000).toLocaleTimeString()+' · '+model.instances.length+' 个执行器实例':'执行器负载未确认；连接恢复后自动重试。';
+      const routed=model.instances.filter(item=>item.routes.length),other=model.instances.filter(item=>!item.routes.length);
+      $('executorInstances').innerHTML=model.available?routed.map(executorCard).join('')+(other.length?'<details><summary>其他执行器与默认池（'+other.length+'）</summary>'+other.map(executorCard).join('')+'</details>':'') || '<p>没有已登记的执行器实例。</p>':'';
+    }
+    function renderRouteExecutor(route){
+      const model=executorModel();
+      const instances=ExecutorOverview.forRoute(model,route.listener,route.id);
+      return '<h4>对应执行器当前状态</h4><p class="value-text">此处为当前采样'+(model.available?'（截至 '+esc(new Date(model.at*1000).toLocaleTimeString())+'）':'')+'，不是该历史请求发生时的负载快照。</p>'+(model.available?instances.map(executorCard).join('') || '<p>此路由没有已确认的执行器绑定（终端出口或已移除的历史路由不会推断绑定）。</p>':'<p>执行器负载未确认。</p>');
+    }
+    function renderTrafficChart(title,points,key,unit,secondKey) {
+      const valid=points.filter(point=>point[key]!==null);
+      if(!valid.length)return '<article class="traffic-chart"><h4>'+esc(title)+'</h4><p class="value-text">暂无已完成请求的样本</p></article>';
+      const max=Math.max(1,...valid.map(point=>point[key]),...(secondKey?points.map(point=>point[secondKey] || 0):[]));
+      const x=i=>20+i*280/Math.max(1,points.length-1),y=value=>92-value/max*68;
+      const line=field=>points.map((point,i)=>point[field]===null?'':(i===0 || points[i-1][field]===null?'M':'L')+x(i).toFixed(1)+' '+y(point[field]).toFixed(1)).join(' ');
+      const circles=points.map((point,i)=>point[key]===null?'':'<circle cx="'+x(i)+'" cy="'+y(point[key])+'" r="2"><title>'+esc(new Date(point.at*1000).toLocaleTimeString()+' · '+point[key].toFixed(2)+' '+unit+' · '+point.count+' 次 / '+point.span+' 秒')+'</title></circle>').join('');
+      return '<article class="traffic-chart"><h4>'+esc(title)+'</h4><svg viewBox="0 0 320 125" role="img" aria-label="'+esc(title+'，最多 '+max.toFixed(1)+' '+unit)+'"><text x="20" y="15">'+esc(max.toFixed(1)+' '+unit)+'</text><path class="trend-line" d="'+line(key)+'"/>'+(secondKey?'<path class="trend-max" d="'+line(secondKey)+'"/>':'')+circles+'<text x="20" y="117">'+esc(new Date(points[0].at*1000).toLocaleTimeString())+'</text><text x="300" y="117" text-anchor="end">'+esc(new Date(points[points.length-1].at*1000).toLocaleTimeString())+'</text></svg>'+(secondKey?'<small>实线：平均 · 虚线：最大；空白表示无请求</small>':'<small>悬停采样点查看时间与请求数</small>')+'</article>';
+    }
+    function renderBusinessTraffic(business) {
+      if (business.available && state.trafficListener && !business.listeners.some(listener=>listener.id===state.trafficListener)) state.trafficListener='';
+      const options='<option value="">全部监听</option>'+business.listeners.map(listener=>'<option value="'+esc(listener.id)+'">'+esc(listener.id)+' · '+esc(listener.address)+'</option>').join('');
+      if (business.available && $('trafficListener').innerHTML !== options) $('trafficListener').innerHTML=options;
+      $('trafficListener').value=state.trafficListener;
+      const candidates=business.routes.filter(route=>!state.trafficListener || route.listener===state.trafficListener);
+      const routeIds=[...new Set(candidates.map(route=>route.id))];
+      if(business.available && state.trafficPipeline!==null && !routeIds.includes(state.trafficPipeline))state.trafficPipeline=null;
+      const routeOptions='<option value="">全部路由</option>'+routeIds.map(id=>'<option value="'+esc(JSON.stringify(id))+'">'+esc(candidates.find(route=>route.id===id).label)+'</option>').join('');
+      if(business.available && $('trafficPipeline').innerHTML!==routeOptions)$('trafficPipeline').innerHTML=routeOptions;
+      $('trafficPipeline').value=state.trafficPipeline===null?'':JSON.stringify(state.trafficPipeline);
+      const model=TrafficTrends.build(state.data.traffic,business,{listener:state.trafficListener,pipeline:state.trafficPipeline,seconds:state.trafficWindow,status:state.trafficStatus,sort:state.trafficSort,slowMs:state.trafficSlowMs});
+      const number=value=>value===null?'—':value.toFixed(2);
+      $('trafficWindowStatus').textContent=model.available?'截至 '+new Date(model.at*1000).toLocaleTimeString()+' · 最近 '+state.trafficWindow/60+' 分钟（10 秒桶） · 实际覆盖 '+model.span+' 秒'+(model.warmup?'，启动后尚未覆盖完整窗口':'')+(!$('autoRefresh').checked?' · 自动刷新已暂停':''):(state.errors.traffic || '近期窗口未确认或已过期；不将未知状态显示为零。');
+      $('trafficWindowMetrics').innerHTML=[metric('近期请求速率',number(model.rps)+' req/s','已完成请求 / 实际覆盖秒数'),metric('近期错误率',number(model.errorRate)+'%',model.metrics?model.metrics.errors_total+' / '+model.metrics.requests_total+' 次（4xx + 5xx）':'暂无有效请求样本'),metric('近期平均 / P95',model.latency.average,'P95 '+model.latency.p95+' · 分桶估计')].join('');
+      $('trafficCharts').innerHTML=model.available?[renderTrafficChart('请求速率',model.points,'requests','req/s'),renderTrafficChart('错误率',model.points,'errorRate','%'),renderTrafficChart('处理耗时',model.points,'average','ms','maximum')].join(''):'<p class="value-text">趋势暂不可用；恢复连接后自动读取服务端保留的窗口。</p>';
+      $('trafficCoverage').textContent=model.available?'近期错误 '+model.recentIssues+' 条 · 仅历史错误 '+model.historicalIssues+' 条 · 慢路由 '+model.slowRoutes+' 条':'近期状态未确认；历史累计仍保留。';
+      const value=(metrics,key)=>metrics?esc(metrics[key] ?? '—'):'—';
+      const latencyCell=metrics=>{const v=AdminOverview.latency(metrics);return '<strong>'+esc(v.average)+'</strong><small>P95 '+esc(v.p95)+' · 最大 '+esc(v.max)+'</small>';};
+      $('trafficListeners').innerHTML=table(['监听 / 地址','近期请求','近期 4xx / 5xx','历史累计错误','近期处理耗时','窗口状态','操作'],model.listeners.map(listener=>[
+        '<strong>'+esc(listener.id)+'</strong><br><small>'+esc(listener.address)+'</small>',value(listener.recent,'requests_total'),value(listener.recent,'client_errors_total')+' / '+value(listener.recent,'server_errors_total'),value(listener.historical,'errors_total'),latencyCell(listener.recent),esc(listener.status),'<button class="button" data-traffic-listener="'+esc(listener.id)+'">查看路由</button>'
+      ]));
+      $('trafficRoutes').innerHTML=model.rows.length?table(['路由 / 匹配','监听','近期请求','近期 / 累计错误','近期处理耗时','窗口状态','定位'],model.rows.map(route=>[
+        '<strong>'+esc(route.label)+'</strong><br><small>'+esc(route.match || (route.id?'历史路由 / 已移除':'无编译路由'))+'</small>',esc(route.listener),value(route.recent,'requests_total'),value(route.recent,'errors_total')+' / '+value(route.metrics,'errors_total'),latencyCell(route.recent),esc(route.status),'<button class="button" data-traffic-route="'+esc(JSON.stringify([route.listener,route.id]))+'">'+(route.slow?'查看慢请求':route.recentIssue || route.historicalIssue?'定位异常':'查看详情')+'</button>'
+      ])):'<p class="value-text">此范围没有符合条件的路由。没有请求或读取失败不表示故障已恢复。</p>';
+      const focus=state.trafficFocus,route=focus && model.allRows.find(route=>route.listener===focus[0] && route.id===focus[1]);
+      $('trafficDetails').classList.toggle('hidden',!route);if(!route)return;
+      const failures=business.failures.filter(error=>error.listener===route.listener && error.pipeline_id===route.id);
+      $('trafficDetails').innerHTML='<div class="panel-header"><h4>'+esc(route.listener+' → '+route.label)+'</h4><button class="button" data-traffic-close>关闭详情</button></div><p>'+esc(route.status)+'；近期错误 '+value(route.recent,'errors_total')+' 次，历史累计 '+value(route.metrics,'errors_total')+' 次。</p>'+
+        (route.source?'<p class="value-text">配置来源：'+esc(route.source)+'</p><button class="button" data-traffic-source="'+esc(route.source)+'" data-traffic-pipeline="'+esc(route.id)+'">编辑此路由来源</button>':'<p class="value-text">未找到当前配置来源，请检查默认处理或历史路由。</p>')+
+        renderRouteExecutor(route)+renderSlowRequests(route)+'<details><summary>最近错误样本（每监听最多 20 条）</summary>'+
+        (failures.length?table(['时间','范围','状态码','处理耗时','日志定位编号'],failures.map(error=>[esc(new Date(error.at_unix*1000).toLocaleString()),model.available && error.at_unix>=state.data.traffic.start_unix && error.at_unix<=state.data.traffic.at_unix?'所选近期窗口':'历史样本',esc(error.status),esc(error.duration_ms)+' ms','<button class="button" data-traffic-locate="'+esc(error.observation_id)+'" title="在宿主工作台筛选此请求日志">'+esc(error.observation_id)+'</button>'])):'<p class="value-text">没有保留的错误样本，可能已超出最近 20 条的范围。</p>')+'</details><p class="value-text">在工作台日志搜索定位编号；响应头 x-vhttpd-observation-id 也包含该编号。延迟以已完成请求为准，进行中的长请求尚未计入。</p>';
     }
     function appKindCounts(apps) {
       const counts = {};
@@ -474,9 +540,9 @@ const endpoints = {
       const files = asArray(state.data.configFiles);
       $("configFileCount").textContent = files.length + " files";
       $("configFiles").innerHTML = table(["Role", "Path", "Bytes", "Actions"], files.map((file) => {
-        const editable = file.role !== "main" && file.exists !== false;
+        const editable = file.exists !== false;
         const action = editable
-          ? '<button class="button" data-config-draft="' + esc(file.include_path || file.path || "") + '">Edit Draft</button>'
+          ? '<button class="button" data-config-draft="' + esc(file.include_path || file.path || "") + '">编辑 TOML</button>'
           : '<span class="pill gray">' + esc(file.role === "main" ? "base" : "missing") + '</span>';
         return [
           '<span class="pill ' + (file.role === "main" ? "blue" : "") + '">' + esc(file.role || "include") + '</span>',
@@ -646,6 +712,8 @@ const endpoints = {
     function renderObservability() {
       const runtime = state.data.runtime || {};
       const stats = runtimeStats();
+      const available = !!state.data.runtime && !state.errors.runtime && !state.errors.stats && !!stats.http;
+      const stat = path => available ? nestedNumber(stats, path, null) : null;
       const events = asArray(state.data.events);
       const graph = state.data.graph || {};
       const graphPipelines = asArray(graph.nodes).filter((node) => node.domain === "pipeline");
@@ -656,27 +724,27 @@ const endpoints = {
       const active = runtime.active || {};
       const relay = runtime.relay || {};
       $("observabilityMetrics").innerHTML = [
-        metric("HTTP Requests", requests, "total since start"),
-        metric("HTTP Errors", errors, errorRate + " error rate"),
-        metric("Runtime Routes", routes.length, "projected HTTP routes"),
-        metric("Open Channels", Number(relay.open_channels || 0), "relay channels"),
-        metric("WebSockets", Number(active.websockets || runtime.active_websockets || 0), "active sessions"),
-        metric("Uptime", formatDuration(Number(stats.uptime_seconds || runtime.uptime_seconds || 0)), "process lifetime")
+        metric("管理 HTTP 请求", available ? requests : "—", "当前管理监听累计"),
+        metric("管理 HTTP 错误", available ? errors : "—", available ? errorRate + " 累计错误率" : "统计暂不可用"),
+        metric("已登记路由", state.data.runtime ? routes.length : "—", "运行时 HTTP 路由"),
+        metric("Relay 通道", state.data.runtime ? (relay.open_channels ?? "—") : "—", "当前打开的通道"),
+        metric("WebSocket", state.data.runtime ? (active.websockets ?? "—") : "—", "当前管理实例中的会话"),
+        metric("运行时长", state.data.runtime ? formatDuration(Number(runtime.uptime_seconds)) : "—", "当前进程")
       ].join("");
       $("observabilityFlowCount").textContent = Math.min(graphPipelines.length, 18) + "/" + graphPipelines.length + " flows";
       $("observabilityFlow").innerHTML = renderTopology(18);
       const executorCounts = countBy(routes, (route) => route.executor || "none");
       $("executorMixCount").textContent = Object.keys(executorCounts).length + " kinds";
       $("executorMix").innerHTML = renderBars(executorCounts);
-      $("healthState").textContent = keys(state.errors).length ? "degraded" : "ok";
-      $("healthState").className = "pill " + (keys(state.errors).length ? "red" : "");
+      $("healthState").textContent = available ? "本次进程累计" : "统计未确认";
+      $("healthState").className = "pill gray";
       $("healthGrid").innerHTML = [
-        healthItem(errors, "HTTP errors"),
-        healthItem(nestedNumber(stats, "worker.rejected_total", 0), "worker rejects"),
-        healthItem(nestedNumber(stats, "worker.timeouts_total", 0), "worker timeouts"),
-        healthItem(nestedNumber(stats, "upstream.plan_errors_total", 0), "upstream errors"),
-        healthItem(nestedNumber(stats, "mcp.pending_dropped_total", 0), "MCP drops"),
-        healthItem(nestedNumber(stats, "feishu.send_errors", 0), "Feishu send errors")
+        healthItem(stat("http.errors_total"), "管理 HTTP 错误"),
+        healthItem(stat("worker.rejected_total"), "worker rejects"),
+        healthItem(stat("worker.timeouts_total"), "worker timeouts"),
+        healthItem(stat("upstream.plan_errors_total"), "upstream errors"),
+        healthItem(stat("mcp.pending_dropped_total"), "MCP drops"),
+        healthItem(stat("feishu.send_errors"), "Feishu send errors")
       ].join("");
       $("trafficTrendCount").textContent = state.history.length + " samples";
       $("trafficTrend").innerHTML = renderSparkline(state.history, "requests") + rows({
@@ -697,7 +765,7 @@ const endpoints = {
       ]));
     }
     function healthItem(value, label) {
-      const number = Number(value || 0);
+      const number = value == null ? "—" : Number(value);
       return '<div class="health-item"><strong>' + esc(number) + '</strong><span>' + esc(label) + '</span></div>';
     }
     function formatDuration(seconds) {
@@ -864,6 +932,15 @@ const endpoints = {
       $("draftResult").textContent = typeof value === "string" ? value : JSON.stringify(value, null, 2);
     }
     async function openDraft(id) {
+      if (state.draftBusy) return;
+      state.configDraft = false;
+      state.validatedDraft = "";
+      $("draftEditorHome").appendChild($("draftEditor"));
+      $("draftPublishPath").readOnly = false;
+      $("draftStage").textContent = "修改后保存并校验，再发布配置。";
+      updateDraftButtons();
+      $("applyPublishedConfig").classList.add("hidden");
+      $("configDraftNote").classList.remove("hidden");
       const draft = await apiRequest("/admin/drafts/" + encodeURIComponent(id));
       state.activeDraftId = draft.key || id;
       state.draftPublishResult = null;
@@ -878,11 +955,23 @@ const endpoints = {
       selectView("drafts");
     }
     async function openConfigFileDraft(path) {
+      if (state.draftBusy) return;
       const result = await apiRequest("/admin/config/files/draft?path=" + encodeURIComponent(path), { method: "POST" });
+      if (!result.ok) throw new Error(result.error || "无法打开配置来源");
       state.draftPublishResult = null;
       $("draftPublishPath").value = result.include_path || path;
       await openDraft(result.draft_id);
       $("draftPublishPath").value = result.include_path || path;
+      $("applyPublishedConfig").classList.add("hidden");
+      $("configDraftNote").classList.remove("hidden");
+      state.configDraft = true;
+      $("draftPublishPath").readOnly = true;
+      $("draftStage").textContent = "配置来源：" + (result.include_path || path) + "。修改后按整个项目校验。";
+      $("configEditorSlot").classList.remove("hidden");
+      $("configEditorSlot").appendChild($("draftEditor"));
+      selectView("apps");
+      $("draftEditor").scrollIntoView({block: "start"});
+      updateDraftButtons();
       showDraftResult(result);
     }
     function showSourceResult(value) {
@@ -960,22 +1049,35 @@ const endpoints = {
       await refresh();
     }
     async function validateDraftEditor() {
+      state.validatedDraft = "";
+      $("draftStage").textContent = "正在保存草稿并校验整个项目…";
+      await saveDraftEditor();
+      const candidate = draftFingerprint();
       const id = state.activeDraftId || $("draftId").value.trim();
       const result = await apiRequest("/admin/drafts/" + encodeURIComponent(id) + "/validate", { method: "POST" });
       showDraftResult(result);
+      state.validatedDraft = result.ok ? candidate : "";
+      $("draftStage").textContent = result.ok ? "整个项目校验通过，可以发布配置。" : "校验失败：" + (result.error || "请查看技术详情并修正配置。");
     }
     async function diffDraftEditor() {
+      await validateDraftEditor();
+      if (state.validatedDraft !== draftFingerprint()) return;
+      $("draftTechnical").open = true;
       const id = state.activeDraftId || $("draftId").value.trim();
       const result = await apiRequest("/admin/drafts/" + encodeURIComponent(id) + "/diff");
       showDraftResult(result);
     }
     async function publishDraftEditor() {
+      if (state.validatedDraft !== draftFingerprint()) throw new Error("配置已修改，请先保存并校验。");
       const id = state.activeDraftId || $("draftId").value.trim();
       const includePath = $("draftPublishPath").value.trim() || defaultPublishPath(id);
       const result = await apiRequest("/admin/drafts/" + encodeURIComponent(id) + "/publish?path=" + encodeURIComponent(includePath), {
         method: "POST"
       });
+      if (!result.ok) throw new Error(result.error || "发布失败");
+      state.validatedDraft = "";
       state.draftPublishResult = result;
+      $("draftStage").textContent = "已发布到项目文件。回到工作台，点击‘重启并生效’，工作台会自动检查整个项目。";
       showDraftResult(result);
       await refresh();
     }
@@ -998,7 +1100,27 @@ const endpoints = {
       showDraftResult(result);
       await refresh();
     }
+    function draftFingerprint() {
+      return JSON.stringify([state.activeDraftId, $("draftPublishPath").value, $("draftEditorInput").value]);
+    }
+    function updateDraftButtons() {
+      for (const id of ["saveDraft", "validateDraft", "diffDraft", "deleteDraft", "applyPublishedConfig"]) $(id).disabled = state.draftBusy;
+      $("publishDraft").disabled = state.draftBusy || !state.validatedDraft || state.validatedDraft !== draftFingerprint();
+      $("draftEditorInput").readOnly = state.draftBusy;
+      $("draftPublishPath").readOnly = state.draftBusy || state.configDraft;
+      $("saveDraft").classList.toggle("hidden", state.configDraft);
+      $("draftId").parentElement.classList.toggle("hidden", state.configDraft);
+      document.querySelector('label[for="draftPublishPath"]').textContent = state.configDraft ? "配置来源（发布写回此文件）" : "Publish Include Path";
+    }
+    function invalidateDraft() {
+      state.validatedDraft = "";
+      $("draftStage").textContent = "有未发布修改，请保存并校验整个项目。";
+      updateDraftButtons();
+    }
     async function runDraftAction(action) {
+      if (state.draftBusy) return;
+      state.draftBusy = true;
+      updateDraftButtons();
       try {
         showDraftResult({ status: "running", action });
         if (action === "save") await saveDraftEditor();
@@ -1009,16 +1131,16 @@ const endpoints = {
         if (action === "delete") await deleteDraftEditor();
       } catch (err) {
         showDraftResult({ ok: false, error: err && err.message ? err.message : String(err) });
-      }
+        const message = err.message || String(err);
+        $("draftStage").textContent = message.startsWith("runtime_plan_unresolved_ref:")
+          ? "校验失败：配置引用不存在（" + message.slice("runtime_plan_unresolved_ref:".length) + "），请检查 Pipeline 引用并重新校验。"
+          : (action === "validate" ? "项目校验失败：" : "操作失败：") + message;
+      } finally { state.draftBusy = false; updateDraftButtons(); }
     }
     function renderEvents() {
-      const events = asArray(state.data.events);
-      $("eventCount").textContent = events.length + " events";
-      $("events").innerHTML = table(["Time", "Type", "Target"], events.map((event) => [
-        esc(event.ts || event.time || event.created_at || ""),
-        '<span class="pill gray">' + esc(event.type || event.action || "") + '</span>',
-        esc(event.key || event.target || event.draft_id || "")
-      ]));
+      const events = AdminOverview.eventRows(state.data.events);
+      $("eventCount").textContent = events.length + " 条记录";
+      $("events").innerHTML = table(["时间", "操作", "对象"], events.map(event => [esc(event.time),esc(event.type),esc(event.target)]));
     }
     function renderRaw() {
       setEditorValue("rawEditor", JSON.stringify({ data: state.data, errors: state.errors }, null, 2), "json");
@@ -1051,10 +1173,38 @@ const endpoints = {
     function closeNodeDetails() {
       $("nodeModal").classList.add("hidden");
     }
+    function renderRelay() {
+      const runtime = state.data.runtime;
+      const relay = runtime && runtime.relay;
+      const available = !!relay && !state.errors.runtime;
+      $("relayAvailability").textContent = available
+        ? "Runtime snapshot. Refresh to read the latest connection and channel state."
+        : "Relay runtime unavailable. Start the instance and sign in to read its state.";
+      $("relayMetrics").innerHTML = available ? [
+        metric("Configured Relays", relay.descriptor_count ?? "—", "this instance"),
+        metric("Agents", relay.agent_count ?? "—", "runtime agents"),
+        metric("Carriers", relay.carrier_count ?? "—", "registered carriers"),
+        metric("Open Channels", relay.open_channels ?? "—", "runtime channels"),
+        metric("Sessions", relay.session_count ?? "—", "runtime sessions"),
+        metric("Pending Frames", relay.pending_frames ?? "—", "buffered frames")
+      ].join("") : "";
+      $("relayAgents").innerHTML = table(["Relay", "Node", "State", "Attempts", "Next attempt", "Last error"], asArray(relay && relay.agents).map(agent => [
+        esc(agent.relay_id), esc(agent.node_id), esc(agent.state), esc(agent.attempt),
+        esc(agent.state === "backoff" && agent.next_attempt_at_ms > 0 ? new Date(agent.next_attempt_at_ms).toLocaleString() : "—"), esc(agent.last_error || "—")
+      ]));
+      $("relayCarriers").innerHTML = table(["Relay", "Carrier"], asArray(relay && relay.carriers).map(carrier => [esc(carrier.relay_id), esc(carrier.carrier_id)]));
+      $("relayChannels").innerHTML = table(["Channel", "Node", "Route", "State", "Buffered", "Returned"], asArray(relay && relay.channels).map(channel => [
+        esc(channel.id), esc(channel.node_id), esc(channel.route), channel.open ? "open" : "closed", esc(channel.buffered_len), esc(channel.returned_len)
+      ]));
+      $("relaySessions").innerHTML = table(["Session", "Endpoints", "Links", "Pending frames"], asArray(relay && relay.sessions).map(session => [
+        esc(session.id), esc(session.endpoint_count), esc(session.link_count), esc(session.pending_frames)
+      ]));
+    }
     function render() {
       renderStatus();
       renderDashboard();
       renderObservability();
+      renderRelay();
       renderApps();
       renderConfigFiles();
       renderSourceFiles();
@@ -1065,9 +1215,30 @@ const endpoints = {
       renderRaw();
     }
     localStorage.removeItem("vhttpd.admin.base");
-    $("adminToken").value = localStorage.getItem("vhttpd.admin.token") || "";
+    // Remove legacy persistence. Manual tokens remain only in this page's memory.
+    localStorage.removeItem("vhttpd.admin.token");
+    $("adminToken").value = "";
+    async function checkBrowserSession() {
+      let authenticated = false;
+      try {
+        const response = await fetch("/admin/auth/session", { cache: "no-store", credentials: "same-origin", signal: AbortSignal.timeout(8000) });
+        if (response.ok) authenticated = (await response.json()).authenticated === true;
+      } catch (_) {}
+      $("authStatus").textContent = authenticated ? "已通过工作台登录" : "从工作台打开可自动登录；也可手动填写 token。";
+      $("logout").hidden = !authenticated;
+      $("tokenLabel").hidden = authenticated;
+      $("tokenActions").style.display = authenticated ? "none" : "";
+      if (authenticated) $("adminToken").value = "";
+      return authenticated;
+    }
+    $("logout").addEventListener("click", async () => {
+      try {
+        await apiRequest("/admin/auth/logout", { method: "POST" });
+        $("adminToken").value = "";
+        await refresh();
+      } catch (error) { $("authStatus").textContent = error.message; }
+    });
     function applyToken() {
-      localStorage.setItem("vhttpd.admin.token", $("adminToken").value.trim());
       refresh();
     }
     $("applyToken").addEventListener("click", applyToken);
@@ -1077,7 +1248,7 @@ const endpoints = {
         applyToken();
       }
     });
-    $("refresh").addEventListener("click", refresh);
+    $("refresh").addEventListener("click", () => refresh());
     $("generateAppConfig").addEventListener("click", generateAppToml);
     $("saveAppDraft").addEventListener("click", saveAppDraft);
     $("saveSourceDraft").addEventListener("click", () => runSourceAction("save"));
@@ -1106,7 +1277,15 @@ const endpoints = {
     $("publishDraft").addEventListener("click", () => runDraftAction("publish"));
     $("applyPublishedConfig").addEventListener("click", () => runDraftAction("apply"));
     $("deleteDraft").addEventListener("click", () => runDraftAction("delete"));
-    $("draftEditorInput").addEventListener("input", () => updateEditorHighlight("draftEditor", "toml"));
+    $("draftEditorInput").addEventListener("input", () => { updateEditorHighlight("draftEditor", "toml"); invalidateDraft(); });
+    $("draftPublishPath").addEventListener("input", invalidateDraft);
+    $("configureProject").addEventListener("click", () => {
+      if (state.draftBusy) return;
+      if (window.CommonConfigUI) { CommonConfigUI.open(); return; }
+      if (state.configDraft && state.activeDraftId) { selectView("apps"); $("draftEditor").scrollIntoView({block:"start"}); return; }
+      const main = asArray(state.data.configFiles).find(file => file.role === "main");
+      if (main) openConfigFileDraft(main.path).catch(err => { $("status").textContent = err.message; });
+    });
     $("draftEditorInput").addEventListener("scroll", () => syncEditorScroll("draftEditor"));
     $("rawEditorHighlight").addEventListener("scroll", () => syncEditorScroll("rawEditor"));
     $("nodeEditorHighlight").addEventListener("scroll", () => syncEditorScroll("nodeEditor"));
@@ -1119,10 +1298,11 @@ const endpoints = {
         input.value = input.value.slice(0, start) + "  " + input.value.slice(end);
         input.selectionStart = input.selectionEnd = start + 2;
         updateEditorHighlight("draftEditor", "toml");
+        invalidateDraft();
       }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
         event.preventDefault();
-        runDraftAction("save");
+        runDraftAction(state.configDraft ? "validate" : "save");
       }
     });
     $("drafts").addEventListener("click", (event) => {
@@ -1142,7 +1322,7 @@ const endpoints = {
       if (!target) return;
       showNodeDetails(target.getAttribute("data-node-ref"));
     }
-    for (const id of ["dashboardTopology", "observabilityFlow", "graphNodes"]) {
+    for (const id of ["overviewChains", "observabilityFlow", "graphNodes"]) {
       $(id).addEventListener("click", openNodeFromEvent);
       $(id).addEventListener("keydown", (event) => {
         if (event.key === "Enter" || event.key === " ") {
@@ -1185,6 +1365,55 @@ const endpoints = {
     for (const button of document.querySelectorAll(".nav button")) {
       button.addEventListener("click", () => selectView(button.dataset.view));
     }
+    $('trafficListener').addEventListener('change',()=>{state.trafficListener=$('trafficListener').value;state.trafficPipeline=null;loadTrafficWindow();});
+    $('trafficPipeline').addEventListener('change',()=>{state.trafficPipeline=$('trafficPipeline').value?JSON.parse($('trafficPipeline').value):null;loadTrafficWindow();});
+    $('trafficWindow').addEventListener('change',()=>{state.trafficWindow=Number($('trafficWindow').value);loadTrafficWindow();});
+    $('trafficStatus').addEventListener('change',()=>{state.trafficStatus=$('trafficStatus').value;renderDashboard();});
+    $('trafficSort').addEventListener('change',()=>{state.trafficSort=$('trafficSort').value;renderDashboard();});
+    $('trafficSlowMs').addEventListener('change',()=>{state.trafficSlowMs=Math.min(3600000,Math.max(1,Number($('trafficSlowMs').value)||500));$('trafficSlowMs').value=state.trafficSlowMs;renderDashboard();});
+    $('trafficSlowMs').addEventListener('input',()=>{const value=Number($('trafficSlowMs').value);if(value>0){state.trafficSlowMs=Math.min(3600000,value);renderDashboard();}});
+    $('findSlowRoutes').addEventListener('click',()=>{state.trafficSlowMs=Math.min(3600000,Math.max(1,Number($('trafficSlowMs').value)||500));$('trafficSlowMs').value=state.trafficSlowMs;state.trafficStatus='slow';state.trafficSort='slow';$('trafficStatus').value='slow';$('trafficSort').value='slow';renderDashboard();});
+    $('autoRefresh').addEventListener('change',()=>renderDashboard());
+    $('trafficPanel').addEventListener('click', event=> {
+      const target=event.target.closest('[data-traffic-listener],[data-traffic-route],[data-traffic-close],[data-traffic-source],[data-traffic-reload],[data-traffic-copy],[data-traffic-log],[data-traffic-locate]');
+      if(!target)return;
+      if(target.hasAttribute('data-traffic-locate')) {
+        const focus=state.trafficFocus;if(!focus)return;
+        apiRequest('/admin/workbench/log-focus',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({listener:focus[0],pipeline:focus[1],observation_id:target.dataset.trafficLocate})}).then(()=>{const status=$('trafficCopyStatus');if(status)status.textContent='已发送到工作台，将自动筛选此请求日志。';}).catch(()=>{const status=$('trafficCopyStatus');if(status)status.textContent='无法连接工作台或记录已过期，请从工作台重新打开此项目并刷新明细。';});return;
+      }
+      if(target.hasAttribute('data-traffic-log')) {state.trafficLogFocus=target.parentElement.open?null:target.dataset.trafficLog;return;}
+      if(target.hasAttribute('data-traffic-reload')) { loadTrafficDetails();return; }
+      if(target.hasAttribute('data-traffic-copy')) { navigator.clipboard.writeText(target.dataset.trafficCopy).then(()=>{$('trafficCopyStatus').textContent='定位编号已复制';}).catch(()=>{$('trafficCopyStatus').textContent='无法自动复制，请选中编号复制。';});return; }
+      if(target.hasAttribute('data-traffic-source')) {
+        selectView('apps');
+        CommonConfigUI.openSource(target.dataset.trafficSource,target.dataset.trafficPipeline).then(opened=>{if(!opened)return openConfigFileDraft(target.dataset.trafficSource);}).catch(error=>{$('commonStage').textContent=error.message;});return;
+      }
+      if(target.hasAttribute('data-traffic-close')) {state.trafficFocus=null;++state.trafficSampleSequence;state.trafficSamples=null;}
+      if(target.hasAttribute('data-traffic-listener')) { state.trafficListener=target.dataset.trafficListener;state.trafficPipeline=null;loadTrafficWindow();return; }
+      if(target.hasAttribute('data-traffic-route')) {state.trafficFocus=JSON.parse(target.dataset.trafficRoute);loadTrafficDetails();}
+      renderDashboard();
+      if(state.trafficFocus)$('trafficDetails').scrollIntoView({block:'nearest'});
+    });
+    $('view-dashboard').addEventListener('click',event=>{
+      const button=event.target.closest('[data-executor-source]');if(!button)return;
+      selectView('apps');
+      CommonConfigUI.openSource(button.dataset.executorSource,button.dataset.executorId,button.dataset.executorType).then(opened=>{if(!opened)return openConfigFileDraft(button.dataset.executorSource);}).catch(error=>{$('commonStage').textContent=error.message;});
+    });
+    $("view-dashboard").addEventListener("click", event => {
+      const action = event.target.closest("[data-overview-view],[data-overview-source]");
+      if (!action) return;
+      if (action.dataset.overviewSource) {
+        selectView("apps");
+        CommonConfigUI.openSource(action.dataset.overviewSource).then(opened => { if (!opened) return openConfigFileDraft(action.dataset.overviewSource); }).catch(error => { $("commonStage").textContent = error.message; });
+      } else if (action.dataset.overviewView === "traffic") {
+        state.trafficStatus="recent"; $("trafficStatus").value="recent"; renderDashboard(); $("trafficPanel").scrollIntoView({block:"start"});
+      } else if (action.dataset.overviewView === "apps") {
+        $("configureProject").click();
+      } else { selectView(action.dataset.overviewView); }
+    });
+    setInterval(() => {
+      if ($("autoRefresh").checked && !state.authRequired && !document.hidden) refresh(true);
+    }, 5000);
     selectView("dashboard");
     refresh();
   
