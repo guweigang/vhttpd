@@ -53,6 +53,8 @@ Configuration restore now retains created-directory inode/fd ownership through r
 
 Configuration staging now retains inode/fd ownership through publish, restore and compensation, preserving replaced temporary entries and closing descriptors before the store lease. Original replacement regressions4 fail; fixed related15, DB-enabled production build, safety/format/diff and complete standard E2E (metrics, CLI4/config-runtime205) pass. Evidence: `tmp/config-stage-owner-validation/report.txt`. External pathname races are not atomic. Candidate retained separately; Linux stops at read-only preflight on 350 existing tracked changes.
 
+State-store atomic writes and configuration staging now share temporary inode/fd ownership, preserving replaced temporary paths on commit rejection and writer failure. Original replacement4 fail; fixed admin-state30, DB-enabled build, safety/format/diff and complete standard E2E (metrics, CLI4/config-runtime205) pass. Creation modes are preserved. Evidence: `tmp/state-atomic-owner-validation/report.txt`. Candidate retained separately; external pathname windows remain non-atomic. Linux stops at read-only preflight on 351 tracked changes including existing work.
+
 Full-suite/load/live-DB, Linux and wider subsystem audits remain separate follow-ups. Linux validation remains deferred under the skill's pre-existing tracked-change stop rule. Evidence is in `tmp/worker-request-snapshot-validation/report.txt`. Broader ownership, whole-project suite, production load, live DB and Linux validation remain pending; direct/native execution remains cooperative. See the [current action plan](design-docs/REFACTOR_ACTION_PLAN.md) for scope, validation, and next steps.
 
 Per the roadmap, after domain modules are extracted:
