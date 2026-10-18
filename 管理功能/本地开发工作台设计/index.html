@@ -8576,7 +8576,9 @@
 <li>每条 Pipeline 展示输入监听、路由、出口 Adapter 和关联执行器 / Relay；点击组件查看关联。这是计划绑定关系，不标成实时请求追踪。</li>
 <li>展示最近配置操作及配置来源，来源可直接进入同页表单；常用导航统一中文，高级工具与旧应用生成器默认折叠。</li>
 <li>状态每 5 秒刷新，可暂停；不重载正在编辑的表单。页面隐藏或认证失效时暂停轮询，接口请求有超时限制。</li>
-<li>当前 <code>/admin/stats</code> 和运行快照中的 HTTP 计数来自管理监听，没有汇总各业务监听。因此明确标为管理 HTTP 计数，不作为业务流量或故障率；真正的业务监听指标聚合仍需后续补齐。操作记录依据 <code>at_unix</code> 和 <code>fields.draft_id</code> 展示时间与对象。</li>
+<li>总览从 <code>/admin/runtime</code> 的业务监听快照聚合 HTTP 路由指标，管理监听及管理 API 轮询不计入。每个监听和路由显示本次进程已完成请求、4xx、5xx、408/504 超时、平均 / P95 / 最大处理耗时和最近状态码。耗时使用单调时钟，计至处理结束（流响应计至流结束），不代表网络传输耗时；WebSocket 与绕过路由的框架资产不计入此范围。P95 以累计直方图估计，边界为 1/5/10/50/100/500/1000/5000 ms 与 +Inf，跨监听相加桶计数后再计算，不能平均各监听的 P95。重启后从零累计；缺少统计显示“—”，没有已完成请求时不生成延迟值。<code>/admin/stats</code> 的既有管理计数保持原含义。</li>
+<li>路由表支持按监听筛选和只看错误记录，最近请求失败优先展示；明确区分最近失败与历史累计错误。每监听仅保留最近 20 条错误的时间、路由 ID、方法、状态、处理耗时及服务端生成的日志定位编号，不返回请求正文、查询参数和错误原文。响应头 <code>x-vhttpd-observation-id</code> 与 <code>[http.observation]</code> 日志可关联。路由指标限制为 512 个 ID，额外历史 ID 汇入有明确名称的桶，不以 URL 为键无限增长。默认处理与协议入口单独展示；已移除的历史路由不冒充当前配置。</li>
+<li>异常详情直接显示配置来源，点击后进入对应 include 中的具体路由表单并突出显示；继续沿用整项目校验、发布和宿主重启生效。操作记录依据 <code>at_unix</code> 和 <code>fields.draft_id</code> 展示时间与对象。指标实现见 <a href="../../src/http_observation_runtime.v">请求观测</a>、<a href="../../src/server.v">监听汇总</a>、<a href="../../src/executor/admin_http_metrics.v">指标类型</a> 及 <a href="../../tests/e2e/admin_http_metrics_test.mjs">多监听回归</a>。</li>
 </ul>
 <p>实现见 <a href="../../admin/ui/overview.js">总览状态模型</a>、<a href="../../admin/ui/app.js">Admin UI</a> 与 <a href="../../tests/admin-ui/overview.test.cjs">总览回归</a>。</p>
 <h3 id="63">6.3 进程状态</h3>
