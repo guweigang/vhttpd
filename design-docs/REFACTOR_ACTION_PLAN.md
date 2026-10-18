@@ -1095,6 +1095,12 @@ WorkerRequestLease now admits at most one connection under the same mutex as tra
 
 Validation: four original-snapshot ownership regressions fail; final related32 pass (executor6 including concurrent admission and gated finish overlap; HTTP/FastCGI/stream/result-discard26). DB-enabled V3/QuickJS/OpenSSL/Boehm build, safety lint, changed-file formatting and diff checks pass. Complete standard E2E passes, including metrics, provider WebSocket, worker/PID/signals and CLI4/config-runtime205; two delayed warmups finish in7.395 s with unchanged budgets. Evidence: `tmp/worker-lease-admission-validation/report.txt`, original/fixed logs, input manifests and separately retained candidate; root binary is not replaced. Final input hashes match. Linux stops at read-only preflight on360 tracked changes including existing work under the VM skill. Broader ownership audits, whole-project V, throughput and opt-in live DB/installed WordPress remain separate.
 
+### Relay open admission and registration ownership — 2026-10-19
+
+Open forwarding now validates a supplied correlation ID before creating or replacing a channel, sharing direct binding's validation helper. Previously a whitespace-only correlation was rejected only after publication, consuming capacity or erasing an existing registration's queued frames/correlations and reactivating closed state. Rejection now preserves the original registration. Empty optional IDs, literal valid IDs and successful replacement behavior remain unchanged; caller synchronization is unchanged.
+
+Validation: final original-snapshot control fails four ownership regressions and passes the valid/optional-ID compatibility case. All 153 Relay module tests pass, including outbound tracking and existing lifecycle coverage. DB-enabled V3/QuickJS/OpenSSL/Boehm build, safety lint, changed-file formatting and diff checks pass. Complete standard E2E passes (metrics, provider WebSocket, worker/PID/signals, Relay/PHP and CLI4/config-runtime205); two delayed warmups finish in 6.419 s with unchanged budgets. Evidence: `tmp/relay-open-admission-validation/report.txt`, original/final logs, input manifests and separately retained candidate; root binary is not replaced. Final input hashes match. Linux stops at read-only preflight on 360 tracked changes including existing work under the VM skill. Broader ownership audits, whole-project V, throughput and opt-in live DB/installed WordPress remain separate.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
