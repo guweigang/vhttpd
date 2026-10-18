@@ -8132,7 +8132,7 @@
 <p><strong>验证边界：</strong> 这是 GitHub 提供的真实目标 macOS 虚拟机自动化验证，使用宿主与管理器的原生生产可执行文件及真实实例，不包含 Finder 首次打开、GUI 控件或浏览器交互。两个系统的 <code>spctl</code> 策略评估都记录为 <code>rejected</code>，不是 Gatekeeper 首次下载放行通过；Developer ID 签名、公证及实体 Mac 默认安全设置下的完整首次安装仍待完成。macOS 14 及以下不在当前目标范围，Intel 尚未验收。</p>
 <h2 id="developer-id">Developer ID 签名与公证接线</h2>
 <p><a href="../Mac%E7%AD%BE%E5%90%8D%E4%B8%8E%E5%85%AC%E8%AF%81%E9%85%8D%E7%BD%AE/">签名与公证配置清单</a>列出 GitHub <code>macos-release</code> Environment 所需的 Apple 配置。工作流增加手动 <code>release_mode=signed</code>：在源码构建和 macOS 15/26 运行回归通过后，依次签名包内运行程序、动态库和 App，要求公证 Accepted、装订并重新封装，随后在两个目标系统重新解压检查下载策略与整项目发布、重启生效。签名、公证或系统策略检查失败时不产生可交付的签名候选包。8 项发布链路模拟测试通过，覆盖拒绝结果、Team ID 不符、装订失败与安全策略关闭等情况。</p>
-<p>仓库尚未配置 Apple Secrets 和 <code>macos-release</code> Environment，真实签名、公证与签名包下载策略验收未执行；这些测试不代替实体 Mac 的浏览器下载、Finder 首次打开和原生窗口操作。本轮仅接分发链路，不增加工作台功能。</p>
+<p>本轮 CI 运行 <code>39135115917</code> 的源码构建及 macOS 15/26 独立运行回归全部成功，普通 push 下签名公证和签名包验收任务按预期跳过。仓库尚未配置 Apple Secrets 和 <code>macos-release</code> Environment，真实签名、公证与签名包下载策略验收未执行；这些测试不代替实体 Mac 的浏览器下载、Finder 首次打开和原生窗口操作。本轮仅接分发链路，不增加工作台功能。</p>
 <h2 id="_5">自动化证据</h2>
 <ul>
 <li>宿主 <code>desktop/host</code> 共 10 个测试文件分批通过；新增包内运行程序优先选择、开发模式回退、业务端口占用及通配访问地址验证。见<a href="../../desktop/host/environment_test.v">路径回归</a>与<a href="../../desktop/host/manager_test.v">启动回归</a>。</li>
