@@ -7947,6 +7947,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#ci-macos-1526" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CI 源码构建与 macOS 15/26 实际运行
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#_5" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -8104,7 +8115,10 @@
 <p>最低构建目标已从 27.0 降到 <strong>15.0（Sequoia）</strong>，仍仅交付 Apple Silicon arm64。原先 27.0 的来源既包括宿主和运行程序未设置部署目标，也包括本机 Homebrew 的高版本动态库；仅调整 plist 无法解决。</p>
 <p><a href="../../desktop/build.sh">构建脚本</a>显式设置 macOS 15.0，并通过<a href="../../desktop/macos_dependencies.py">隔离依赖工具</a>使用<a href="../../desktop/macos-dependencies.json">固定 URL 与 SHA256 的依赖锁</a>，下载官方 arm64 Sequoia bottle 到项目 <code>.deps</code>，不改动系统 Homebrew。保留数据库、TLS 和 Boehm GC；GC 从源码参与兼容构建，避免隔离 pkg-config 后自动切换内存管理模式。移除 V 的 MacPorts/Intel Homebrew 回退路径，编译保持可用性诊断，链接拒绝版本等有效警告。<a href="../../desktop/package_macos.py">封装</a>与<a href="../../desktop/verify_macos_release.py">zip 检查</a>同时拒绝最低版本高于 15.0 的二进制。反向检查确认旧 27.0 宿主被拒绝，测试代码使用 macOS 26 的 NSGlassEffectView 也被编译器拒绝。</p>
 <p>最终 zip 中宿主、运行程序及 11 个动态库的实际 Mach-O <code>minos</code> 全部为 15.0，<code>LSMinimumSystemVersion</code> 同步为 15.0，zip 内容与交付 App 一致。在本机 macOS 27.0.1、全新 HOME、仅系统 PATH、禁止读取开发目录/Homebrew/V 模块及执行编译工具的隔离环境下，两模板、新建登记、业务响应、失败修正重试、跨 include 发布、待生效、宿主重启、生效检查、脱敏历史比较与跨文件恢复、32 个并发首次草稿请求全部通过。使用最终包内运行程序重跑<a href="../../tests/e2e/admin_common_config_test.mjs">常用配置跨 include 回归</a>也通过，覆盖 HTTP 监听、路由、vjsx 执行器、出口 Adapter 新增删除与六次实例启动。离线安装说明同步更新。</p>
-<p><strong>验证边界：</strong> 本轮没有 macOS 15 或 26 实机；部署目标与当前系统运行通过不等于旧系统全部行为已验证。macOS 14 及以下不在当前目标范围，Intel、默认 Gatekeeper 下真实下载首次打开、Developer ID 签名与 Apple 公证仍未验收。</p>
+<h2 id="ci-macos-1526">CI 源码构建与 macOS 15/26 实际运行</h2>
+<p>交付候选包改为由<a href="../../.github/workflows/workbench-macos-runtime.yml">GitHub Actions</a>从源码构建，源码测试分支不包含开发机的 App 或 zip。V、启动编译器、TCC、vjsx 和 ui2 使用固定提交；当前源码需要的依赖兼容补丁随<a href="../../desktop/ci/prepare_toolchain.sh">工具链准备脚本</a>固定。干净 CI 中修复了 V 自举时 UTF-8 locale 导致 awk 截断 C 源码的问题，并将 vjsx 补丁缩小为 ABI 与接口可见性修正，保留上游压缩资源加载函数。</p>
+<p><a href="../../desktop/ci/results/39132490236/verification.json">已归档的运行证据</a>记录同一 CI 候选包在 **macOS 15.7.9（24G830）**和 **macOS 26.6.2（25G83）**两个 arm64 runner 上均通过。包 SHA256 为 <code>3713596476fc836a76d2e1dda203e1398bab51f7cba10a96cca3cf5de0bed13f</code>。两台 runner 都重新解压、搬移完整 App，核对签名和最低版本，再在全新 HOME、仅系统 PATH、禁止读取原用户目录、checkout、Homebrew 及执行编译工具的条件下运行宿主生产可执行文件；覆盖两个模板、新建登记、初始化失败修正重试、真实 HTTP 响应、跨 include 发布、待重启、宿主重启、整项目生效检查、脱敏版本比较与跨文件恢复。构建与独立系统运行任务全部成功，原始运行标识和日志摘要保存在上述证据文件。</p>
+<p><strong>验证边界：</strong> 这是 GitHub 提供的真实目标 macOS 虚拟机自动化验证，使用宿主与管理器的原生生产可执行文件及真实实例，不包含 Finder 首次打开、GUI 控件或浏览器交互。两个系统的 <code>spctl</code> 策略评估都记录为 <code>rejected</code>，不是 Gatekeeper 首次下载放行通过；Developer ID 签名、公证及实体 Mac 默认安全设置下的完整首次安装仍待完成。macOS 14 及以下不在当前目标范围，Intel 尚未验收。</p>
 <h2 id="_5">自动化证据</h2>
 <ul>
 <li>宿主 <code>desktop/host</code> 共 10 个测试文件分批通过；新增包内运行程序优先选择、开发模式回退、业务端口占用及通配访问地址验证。见<a href="../../desktop/host/environment_test.v">路径回归</a>与<a href="../../desktop/host/manager_test.v">启动回归</a>。</li>
