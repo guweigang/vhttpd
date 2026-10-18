@@ -919,6 +919,14 @@ Validation: six alternating default bounded-probe observations pass (three per b
 
 Stronger 2 ms scheduling remains a pressure boundary: with the bounded probe, three prespecified observations per binary each yield one success and two deadline failures. These failures are retained and are not counted as passing checks or evidence of arbitrary-load immunity. This result also fails to isolate a candidate-only regression. Requested fault input is bounded; real OS scheduling, GC and JS execution time are not guaranteed. Python/shell syntax, ownership lint and diff checks pass. Linux read-only preflight is stopped by the project's existing tracked-change rule; no VM build/test. Evidence, all failed/successful controls and the final binary are in `tmp/lane-startup-diff-validation/report.txt` and its sibling artifacts. This resolves the earlier default-E2E validation gap; broader load/live-DB/full-V coverage remains separate.
 
+### DB acquisition publication and stop ownership — 2026-10-18
+
+A pool acquisition may cross a stop request while a driver waits, pings or initializes its native connection. `dbx.PoolOwner.acquire()` previously published the returned connection without rechecking admission. It now checks stop/close/generation under the owner mutex before publishing the lease. Rejected connections use the retained resource's disposer, with the acquisition activity and capacity permit held until disposal finishes. Pool close and reopen therefore cannot overtake late-candidate cleanup. Already admitted leases retain their existing origin and lifetime contract; this does not make synchronous driver I/O interruptible.
+
+Deterministic callback barriers reproduce the old defect (10 previous tests pass; the new regression returns `unexpected_lease`). Three new regressions cover rejection after stop, close/reopen waiting for disposal and error capacity recovery. The combined pool/transaction/listener tests pass in both profiles: 19 without DB and 30 with DB, including the native MySQL wait and local listener lifecycle branches. The DB-enabled test binary requires local socket permission; its first sandbox run stops at the listener bind, and the exact executable then passes all 30 with local network access. Ownership lint and incremental diff checks pass.
+
+Production build and complete E2E validation are in progress. Concurrent executor warmup edits were detected after this task's 448-file production snapshot was frozen; they are preserved and are outside these DB validation results. The candidate will be retained separately rather than installed over the live workspace. Linux read-only preflight finds 349 existing tracked changes and stops under the project skill's explicit rule; no VM build/test or mutation. Evidence is retained in `tmp/db-acquire-publication-validation/`.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
