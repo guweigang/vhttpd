@@ -1307,6 +1307,16 @@ Complete standard E2E passes on its first full run (CLI 4/config-runtime 205, al
 
 Linux stopped at read-only preflight on pre-existing tracked changes under the VM skill. Linux V is clean local-dev (V 0.5.2, 4f3082f); no Linux build/test or dependency mutation was performed. Wider subsystem audits, whole-project V suites, prolonged load and opt-in live DB/installed WordPress remain separate.
 
+### Relay outbound completion registration ownership — 2026-10-19
+
+A local HTTP Relay wait could outlive its channel registration. [Outbound finalization](../src/relay/outbound.v) previously deleted by channel ID, while [response completion](../src/relay/response_completion.v) consumed by channel ID and public request target. An old request could therefore consume a replacement's response or remove its channel/correlations even when all public wire IDs were reused. Each [channel open](../src/relay/channel.v) now mints a private registration identity. Outbound tracking captures it once; failed, missing or repeated tracking grants no authority. Consumption and retirement require an exact match under the channel mutex. [Forwarding](../src/relay/forwarding.v), public registry operations and [channel snapshots](../src/relay/snapshot.v) use that same mutex, with forwarding holding it across lookup and publication. Closed matching channels remain releasable, and fresh executions can reuse public IDs.
+
+Validation: six of eight initial [module regressions](../src/relay/outbound_registration_owner_test.v) and all three [HTTP regressions](../src/relay_outbound_registration_owner_test.v) fail against saved originals; two module controls remain passing. Final tests add runtime isolation and concurrent reopen/queue/snapshot versus stale completion. All thirteen new functions pass. The complete Relay module plus five main integration suites pass 207 functions across 34 files, covering HTTP wait/send failure, pipelines, WebSocket and MCP. Existing wait fixtures now explicitly establish successful tracking; an ignored failed data-frame tracking attempt in the timeout fixture was corrected to an open frame while retaining its 504/error-class/final-cleanup assertions. The initial fixture failure is preserved in the evidence. Safety lint, touched formatting, diff checks and the independent DB-enabled build pass.
+
+Complete standard E2E passes on its first full run (CLI 4/config-runtime 205, all standard fixtures, real public-to-agent Relay wait completion and eight cold-hub concurrent Relay cases). Final sources match staged build inputs; source/test/candidate hashes match and the root binary is unchanged. Evidence: `tmp/relay-outbound-owner-validation/report.txt`, `incremental.diff` and companion logs. No SDK, E2E fixture or threshold change was made.
+
+Linux stopped at read-only preflight on pre-existing tracked changes under the VM skill; Linux V is clean local-dev (V 0.5.2, 4f3082f), with no Linux build/test or dependency mutation. This slice guards local channel completion ownership; incoming frames retain the existing wire/correlation protocol. Wider registry audits, whole-project V suites, prolonged load and opt-in live DB/installed WordPress remain separate.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
