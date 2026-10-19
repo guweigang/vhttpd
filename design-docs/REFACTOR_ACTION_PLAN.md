@@ -1277,6 +1277,16 @@ Complete standard E2E passes on the second full run (CLI 4/config-runtime 205, a
 
 Linux stopped at read-only preflight on pre-existing tracked changes under the VM skill. Linux V is clean local-dev (V 0.5.2, 4f3082f); no VM build/test or dependency mutation was performed. Wider command-publication ownership, pending-queue expiry, whole-project V suites and opt-in live DB/installed WordPress remain separate.
 
+### MCP activity admission and expiration ownership — 2026-10-19
+
+Dispatch lookup and snapshots already pruned expired MCP sessions, but several other activity updates could revive them before pruning: direct/application queue admission, capability updates, the sampling-capability query, SSE attach/flush and delayed stream finish. The [session owner](../src/api/mcp/protocol/state.v) now shares one target-session expiration helper with pruning and those activity boundaries. The helper checks the configured TTL before activity refresh, removes the expired session and increments expiration accounting once. Hot paths check only their target session. Queue retirement/shutdown rejection still occurs before mutation or sampling/capacity accounting. The [SSE owner](../src/api/mcp/protocol/session_stream.v) still owns native close and stream-registry removal; expiration only requests cancellation. Identity checks precede expiry during flush/finish, protecting replacement streams. [GET validation](../src/mcp_session_stream_runtime.v) expires the target before takeover, so an already expired session returns 404; attach independently rechecks before acquiring the socket.
+
+Validation: eight of nine [new regression functions](../src/mcp_ttl_admission_owner_test.v) fail on the original implementation; the live sliding-TTL control remains passing. Final tests verify no resurrection or post-expiry output, exactly-once expiration accounting, rejection before socket transfer, retained physical-close ownership, and normal sliding renewal. Four main suites plus the complete five-file MCP protocol module pass 51 functions. The active queue-policy fixture now uses current activity time instead of Unix 123; stopped/retired no-mutation fixtures keep their old timestamps and assertions. The module sweep also exposed an [FD-inheritance test](../src/api/mcp/protocol/native_inheritance_test.v) depending on helpers from a separately compiled test file; local fixtures make both native/interrupt ownership checks runnable.
+
+Safety lint, touched formatting, diff checks and the independent DB-enabled build pass. Complete standard E2E passes on the first full run (CLI 4/config-runtime 205, all standard fixtures and eight cold-hub concurrent Relay cases). The previously recorded metrics timing discrepancy did not recur; no threshold or SDK change was made. Final hashes match the build inputs and the root binary is unchanged. Evidence: `tmp/mcp-ttl-admission-owner-validation/report.txt` and companion logs.
+
+Linux remains stopped at read-only preflight on pre-existing tracked changes under the VM skill. Linux V is clean local-dev (V 0.5.2, 4f3082f); no Linux build/test or dependency mutation was performed. Wider subsystem auditing, whole-project V suites, prolonged load and opt-in live DB/installed WordPress remain separate.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
