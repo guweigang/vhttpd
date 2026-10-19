@@ -91,6 +91,16 @@ Linux 补充验证只检查了环境：共享工作树有大量既有 tracked �
 
 统一下载产物包含安装 zip、可在下载目录直接使用的 SHA256SUMS、acceptance.json 和验收说明.txt，保留 14 天。源码仓库不包含本地编译包；任一系统失败不会生成该验收通过的下载入口。Gatekeeper 原始输出与退出码单独保留，不把 unsigned 包的策略拒绝计作运行失败，也不宣称默认下载放行。Finder、目标系统 GUI 和浏览器交互仍属于人工验收范围。具体步骤见[使用说明](../../desktop/README.md)。
 
+## tag 发布流程接入
+
+[源码工作流](../../.github/workflows/workbench-macos-runtime.yml)增加 `vMAJOR.MINOR.PATCH` 及 SemVer 预发布 tag 的触发。tag 版本统一用于 zip 文件名、App 的完整版本和离线安装说明；两个目标系统仍下载同一个源码构建包完成验收。[Release 附件准备与发布](../../desktop/ci/macos_release.py)随后核对包内容、版本、SHA256、源码提交与两系统结果，生成安装包、独立安装说明、覆盖全部附件的校验文件及两份验收记录。
+
+发布写权限只授予 tag push 后、验收汇总成功的发布任务。先上传到本流程拥有的 Draft，完成后才公开；同源码的 Draft 可重试，已有公开版本及无关 Draft 不覆盖。上传前和公开前均检查远端 tag 仍指向被验收的提交。预发布后缀映射为 GitHub Pre-release。19 项本地发布链路测试通过，包含上传失败保留 Draft、版本或源码不一致、tag 移动及已公开版本保护。工作流语法检查通过；旧版 actionlint 对已实际使用的 macos-26 标签不识别，该单项提示不影响其它表达式与权限检查。
+
+CI `39185790650`（源码 `1461fc13002a2bf91135f77d9fb7f74ec16bcf57`）的源码构建、macOS **15.7.9 / 26.6.2** 运行回归及 Release 附件准备检查全部通过；普通分支 push 的公开发布任务按预期跳过。实际下载该运行产物后，使用 `v0.1.0` tag 元数据做仅准备附件的演练，App 完整版本与数字版本均为 `0.1.0`，zip 与安装说明、验收 JSON、验收说明四份附件的 SHA256 校验全部通过。zip SHA256 为 `45cbeb8807552f43f31c38966e30121c443bf73b5e8996b3d6bb96f2f465ed22`，见[本轮发布准备证据](./assets/mac-workbench-tag-ci-39185790650.json)。
+
+本轮不指定新版本或推送发布 tag，不创建实际公开 Release；完整实际上传与公开将在维护者推送包含这些改动的实际版本 tag 时执行。具体命令与下载校验方式见[发布说明](../../desktop/README.md)。
+
 ## 可选的 Developer ID 签名与公证接线
 
 [签名与公证配置清单](./Mac签名与公证配置.md)列出 GitHub `macos-release` Environment 所需的 Apple 配置。工作流增加手动 `release_mode=signed`：在源码构建和 macOS 15/26 运行回归通过后，依次签名包内运行程序、动态库和 App，要求公证 Accepted、装订并重新封装，随后在两个目标系统重新解压检查下载策略与整项目发布、重启生效。签名、公证或系统策略检查失败时不产生可交付的签名候选包。8 项发布链路模拟测试通过，覆盖拒绝结果、Team ID 不符、装订失败与安全策略关闭等情况。
