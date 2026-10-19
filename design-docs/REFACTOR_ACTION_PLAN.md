@@ -1243,6 +1243,14 @@ Validation: all seven [new regressions](../src/openai_mapped_terminal_owner_test
 
 Linux stopped at read-only preflight on pre-existing tracked changes under the VM skill. Linux V remains clean local-dev (V 0.5.2, 4f3082f); no Linux build/test or dependency mutation was performed. Further subsystem audits, whole-project V suites, prolonged load and opt-in live DB/installed WordPress remain separate.
 
+### OpenAI executor stream terminal and generator ownership — 2026-10-19
+
+The executor Chat and Responses batch paths continued processing mappings after completion. Chat could write beyond its final HTTP chunk; Responses could emit later deltas and duplicate completion events. The [Chat output owner](../src/openai_executor_stream_runtime.v) now shares terminal-aware mapping output between callbacks and batch results, claims terminal/error rows before I/O, and stops batch iteration at completion or write failure. The [Responses owner](../src/openai_responses_executor_runtime.v) separates wire termination from optional completed-body caching: `response.completed`, `response.failed` and `response.incomplete` write their terminal event then cancel the generator through the existing callback/iterator-return path. Generator `finally` finishes before the lane is released; only completed bodies retain existing cache eligibility. Responses batches also stop at their first completed mapping.
+
+Validation: five [new real-plugin/TCP cases](../src/openai_executor_terminal_owner_test.v) fail on the original code by emitting late content; all seven new cases pass after the fix. Probes verify `finally` execution, no execution after terminal yield, successful subsequent use of the single lane, completed-body caching, and preserved Chat cancellation/nonterminal natural EOF. Five suites pass 64 functions, including 28 real TCP OpenAI gateway integration cases, eight HTTP response-owner and seven prior mapped-terminal cases. Safety lint, touched formatting, diff checks and the independent DB-enabled candidate build pass. Complete standard E2E passes on the first attempt (CLI 4/config-runtime 205 and all standard fixtures). Evidence: `tmp/openai-executor-terminal-owner-validation/report.txt`; tested hashes match and the root binary/SDK fixes are preserved.
+
+Linux stopped at read-only preflight on pre-existing tracked changes under the VM skill. Linux V remains clean local-dev (V 0.5.2, 4f3082f); no Linux build/test or dependency mutation was performed. Broader subsystem audits, whole-project V suites, prolonged load and opt-in live DB/installed WordPress remain separate.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
