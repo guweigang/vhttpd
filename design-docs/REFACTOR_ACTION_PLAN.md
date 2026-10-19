@@ -1259,6 +1259,14 @@ Validation: four of five [new regressions](../src/openai_passthrough_fallback_ow
 
 Linux stopped at read-only preflight on pre-existing tracked changes under the VM skill. Linux V remains clean local-dev (V 0.5.2, 4f3082f); no Linux build/test or dependency mutation was performed. General SSE terminal parsing policy, wider subsystem audits, whole-project V suites, prolonged load and opt-in live DB/installed WordPress remain separate.
 
+### OpenAI passthrough SSE terminal-event ownership — 2026-10-19
+
+The [passthrough stream owner](../src/openai_stream_proxy_runtime.v) previously recognized `[DONE]` by substring after forwarding the entire progress callback. Content/comment/other-field text could therefore end a live stream; incomplete records could terminate early; a valid no-space data field was missed; and payload after a terminal event in the same callback escaped into the response. Completion now requires an exact single-data-field terminal event and its blank-line boundary. A bounded line-prefix recognizer handles fragmented LF/CRLF/CR, optional field space and the initial UTF-8 BOM without accumulating event bodies. It claims completion before output, publishes only through the terminal boundary, and resets with each fallback attempt. The existing fetch-abort owner releases the upstream connection at that boundary.
+
+Validation: four failure classes reproduce on the original implementation in `baseline.log`; all seven [new regressions](../src/openai_passthrough_terminal_owner_test.v) pass on the final source. They cover false markers, incomplete events, same-callback trailing bytes, fragmented endings/BOM, late callbacks, fallback reset, and real plain/chunked upstream sockets kept open after the terminal event. Six related suites pass 68 functions, including all 28 gateway integration cases and prior fallback/mapped/executor ownership regressions. Safety lint, touched formatting, diff checks and an independent DB-enabled build pass. Complete standard E2E passes on the first attempt (CLI 4/config-runtime 205 and all standard fixtures). Evidence: `tmp/openai-passthrough-terminal-owner-validation/report.txt`; final input hashes match the candidate source and the root binary is unchanged.
+
+Linux remains stopped at read-only preflight because of pre-existing tracked changes under the VM skill; no Linux build/test or dependency mutation was performed. Linux V is clean local-dev (V 0.5.2, 4f3082f). Wider subsystem audits, whole-project V suites, prolonged load and opt-in live DB/installed WordPress remain separate.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
