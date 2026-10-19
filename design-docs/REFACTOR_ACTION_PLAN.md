@@ -1297,6 +1297,16 @@ Complete standard E2E passes on the first full run (CLI 4/config-runtime 205, al
 
 Linux stopped at read-only preflight on pre-existing tracked changes under the VM skill. Linux V is clean local-dev (V 0.5.2, 4f3082f); no Linux build/test or dependency mutation was performed. Wider subsystem audits, whole-project V suites, prolonged load and opt-in live DB/installed WordPress remain separate.
 
+### Codex delayed error-burst stream-release ownership — 2026-10-19
+
+Stream release retired routes and pending RPC routing, but a previously queued error-burst timer could still dispatch business output after release. The [error-burst owner](../src/codex/error_burst_owner.v) now revokes matching unclaimed jobs, requests stop and leaves final registry release to the original task. Already-claimed callbacks retain completion ownership and remain joinable. The [App release boundary](../src/codex_provider_runtime_state.v) serializes route retirement, error revocation and new error admission under the Codex state mutex. Cross-instance release also finds error-only jobs without materialized runtime instances. Exact-job identity continues to protect a fresh burst reusing the same stream ID from an old finalizer; release does not permanently blacklist that ID.
+
+Validation: seven of nine [new regression functions](../src/codex_error_release_owner_test.v) fail against the saved original implementation, including actual delayed business delivery; two positive controls pass. All nine pass after the fix, covering route/error-only release, alias and instance isolation, orphan jobs, stream reuse, shutdown joining until original finish, delayed delivery rejection, claimed callbacks and empty release. Nine main suites plus the complete Codex module pass 78 functions. Safety lint, touched formatting, diff checks and the independent DB-enabled build pass.
+
+Complete standard E2E passes on its first full run (CLI 4/config-runtime 205, all standard fixtures and eight cold-hub concurrent Relay cases). Final source hashes match staged build inputs and the root binary is unchanged. Evidence: `tmp/codex-error-release-owner-validation/report.txt`, `incremental.diff` and companion logs. No SDK, fixture-threshold or E2E test change was made.
+
+Linux stopped at read-only preflight on pre-existing tracked changes under the VM skill. Linux V is clean local-dev (V 0.5.2, 4f3082f); no Linux build/test or dependency mutation was performed. Wider subsystem audits, whole-project V suites, prolonged load and opt-in live DB/installed WordPress remain separate.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
