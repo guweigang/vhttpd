@@ -1159,6 +1159,16 @@ Validation: original source snapshots fail six ownership regressions (two SSE le
 
 Linux remains stopped at read-only preflight on pre-existing tracked changes in the shared mounted checkout under the VM skill. Linux compiler is clean on local-dev (V0.5.2,4f3082f); no Linux build/tests or dependency changes were performed. Broader subsystem ownership, whole-project V, production load/packaging and opt-in live DB/installed WordPress remain separate.
 
+### NDJSON terminal stream and HTTP callback abort ownership — 2026-10-19
+
+Ordinary NDJSON execution now owns an explicit terminal state after publishing the final row's content and done event. Buffered/later rows cannot publish after completion; fixture iteration stops. The HTTP callback uses a private typed completion signal to unwind the upstream reader, allowing the existing application owner to close the downstream connection and retire its runtime registration without waiting for HTTP EOF. Write/transport failures remain errors. Sources: [NDJSON streamer](../src/upstream/ndjson_streamer.v) and [lifecycle regressions](../src/upstream_ndjson_lifecycle_test.v).
+
+The host V SDK's HTTP/1.1 transport previously retried callback aborts on idempotent requests and wrapped away the original type on non-idempotent requests. Its internal callback-error marker now prevents replay and preserves the caller's original error type/code at Request.do. Direct plain-HTTP cleanup also defers its sole socket close across write/read/callback failures. The local SDK fix is preserved as [a portable dependency patch](../scripts/patches/v-http-progress-error-owner.patch), with [12 standalone callback cases](../tests/fixtures/http_progress_error_probe.v). Existing JSON decoder and WebSocket SDK changes are preserved; the patch targets host V 0.5.2 890d55b.
+
+Validation: the original application fails five regressions and preserves two compatibility/error cases; an application-only fix still fails HTTP termination because of the SDK behavior. Final related application suites pass 52 distinct functions (NDJSON 8, registry 7, stream session 9, gateway 28). The 8 new regressions pass again against the final dependency. SDK callback cases pass all 12 fresh/reused/direct GET/POST and raw/body-progress scenarios, preserving original errors and confirming remote EOF; all 12 existing SDK connection-pool tests also pass on the final dependency. DB-enabled V3/QuickJS/OpenSSL/Boehm build, safety lint, touched formatting, diff checks and dependency reverse-check pass. Complete standard E2E passes (CLI 4/config-runtime 205 plus standard Node/PHP/provider/Relay/metrics/MCP/SSE/warmup fixtures). Evidence and independent candidate: `tmp/upstream-ndjson-owner-validation/report.txt`; final input hashes match and the root binary is unchanged.
+
+Linux remains stopped at read-only preflight on pre-existing tracked changes in the shared mounted checkout under the VM skill. The Linux compiler is clean on local-dev (V 0.5.2, 4f3082f); no Linux builds/tests or dependency changes were performed. Runtime callback-abort probes cover plain HTTP/1.1 only; TLS/H2/H3 abort scenarios, broader subsystem audits, whole-project V, load/packaging and opt-in live DB/installed WordPress remain separate.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
