@@ -34,6 +34,35 @@ tags:
 
 手动 `release_mode=signed` 及 `macos-release` Environment 保留为后续可选路径，当前不执行或要求配置。未来需要签名公证时再参照[Mac 签名与公证配置](../docs/管理功能/Mac签名与公证配置.md)。
 
+## 按 tag 发布 Mac 下载包
+
+[发布工作流](../.github/workflows/workbench-macos-runtime.yml)监听 `v` 开头的 SemVer tag，例如 `v1.2.3` 或 `v1.2.3-rc.1`。先把这些构建与发布改动合入准备发布的分支并提交，确认当前提交就是要交付的源码；未提交的工作区修改不会进入 tag 或安装包。再创建并推送实际版本 tag，以下版本号只是示例：
+
+```bash
+release_tag=v1.2.3
+git tag -a "$release_tag" -m "vhttpd $release_tag"
+git push origin "refs/tags/$release_tag"
+```
+
+CI 从该 tag 的源码构建 unsigned 包，包名、App 内版本与离线安装说明使用同一版本号；带预发布后缀的 tag 自动生成 GitHub Pre-release。App 的系统版本字段采用数字部分，完整版本另存 `VHTTPDReleaseVersion`。流程不需要 Apple Secrets，也不需要新增发布 PAT，只有最后的发布任务具有内置 `GITHUB_TOKEN` 的 `contents: write` 权限。普通分支、PR 和手动验收不会公开 Release。
+
+macOS 15/26 下载同一 zip 并完成隔离运行验收后，才允许准备 Release 附件。发布阶段还会核对包 SHA256、验收源码提交、App 版本和安装说明，并在上传前及公开前再次核对远端 tag 未被移动。先创建 Draft，上传成功后再公开；中断后可重跑同源码 tag 的本流程 Draft，已公开版本和无关 Draft 不覆盖。需要修正已公开版本时使用新 tag。
+
+以 `v1.2.3` 为例，Release 包含：
+
+- `vhttpd-workbench-macos-arm64-1.2.3.zip`：两版本实际验收过的原始安装包，不在发布阶段重新构建。
+- `vhttpd-workbench-macos-arm64-1.2.3-INSTALL-zh.txt`：可在打开 App 前阅读的安装和首次使用说明，zip 内也有中文说明。
+- `vhttpd-workbench-macos-arm64-1.2.3-SHA256SUMS.txt`：覆盖 zip、安装说明及验收附件。
+- 同前缀的 `acceptance.json` 和 `ACCEPTANCE-zh.txt`：源码、系统版本、通过范围与 Gatekeeper 限制。
+
+从 Releases 下载 zip、安装说明和校验文件到同一目录。可用下面的命令校验已下载的附件，确认输出中包含安装 zip 的 `OK`；若 zip、说明和两份验收附件均已下载，可去掉 `--ignore-missing` 做完整校验：
+
+```bash
+shasum -a 256 -c vhttpd-workbench-macos-arm64-1.2.3-SHA256SUMS.txt --ignore-missing
+```
+
+公开 Release 使用 GitHub 的常规 Release 资产下载入口；CI Artifact 仍保留 14 天供预览。公开发布不改变 unsigned 包的系统首次打开限制，详见上述安装说明。实现见[版本解析](./workbench_version.py)、[发布门禁与附件](./ci/macos_release.py)和[失败场景回归](./ci/test_macos_release.py)。
+
 ## 从源码构建（仅开发者）
 
 安装预编译包不需要以下步骤。开发构建需要 PATH 中可用的 V 和仓库编译依赖；脚本以 `-prod` 构建运行程序和宿主，使 `$embed_file` 资源实际进入二进制，最后生成带安装说明的 zip。运行程序使用隔离的临时源码目录，不覆盖仓库根目录已有的 vhttpd：
