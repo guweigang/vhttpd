@@ -1201,6 +1201,16 @@ Validation: the original five cleanup/binding regressions fail before the fix. A
 
 Linux remains stopped at read-only preflight on pre-existing tracked changes under the VM skill; Linux V remains clean on local-dev (V 0.5.2, 4f3082f). No Linux builds/tests or dependency changes were performed. Sustained real-client mailbox churn/load, broader audits, whole-project V suites, production packaging and opt-in live DB/installed WordPress remain separate.
 
+### WebSocket affinity connection binding and terminal ownership — 2026-10-19
+
+The mailbox lane binder recorded connection/key maps without adding connection references, so last close could leave pending work without withdrawal/cancellation. Initial binding now adds one reference atomically; repeated binding is idempotent. A queued pre-migration frame also cannot implicitly move a connection back to a different old key. Explicit migration now joins an existing target key's canonical lane rather than displacing it with the source lane; a fresh target still inherits the source/current lane. Sources: [binding owner](../src/executor/inproc_vjsx_websocket_mailbox.v), [reference release and migration](../src/executor/inproc_vjsx_websocket_affinity_state.v) and [ownership regressions](../src/executor/affinity_binding_owner_test.v).
+
+A denied open returns before a native WebSocket session starts, so it cannot rely on a future close callback ([ingress denial](../src/websocket_ingress_runtime.v)). The [response finalizer](../src/executor/inproc_vjsx_websocket_event_runtime.v) now releases affinity/actor state for denied opens and close events before response-supplied migration or cache publication. This prevents retained denied-open registrations and phantom persistent keys created from close replies. Accepted-open actor caching and the existing process-lifetime sticky key→lane policy remain intact; this slice does not add eviction/TTL to that lane map.
+
+Validation: the original four binding/reference/migration regressions fail before the fix. After those fixes, three additional denied-open/close publication cases fail and are corrected. Final suites pass 104 distinct functions (9 new affinity/terminal cases, 8 prior mailbox ownership, 11 cancellation, 6 concurrent shutdown and all 70 main executor integration cases). They cover accepted-open caching/close cleanup, fresh-target migration and existing sticky lane behavior as well as the new failure cases. Final DB-enabled V3/QuickJS/OpenSSL/Boehm build, safety lint, touched formatting and diff checks pass. Complete standard E2E passes on the first attempt this iteration (CLI 4/config-runtime 205 plus standard warmup/Node/PHP/metrics/Provider/Relay/MCP/SSE fixtures). Evidence and independent candidate: `tmp/affinity-binding-owner-validation/report.txt`. Captured input hashes match; the root binary and existing SDK fixes are preserved.
+
+Linux remains stopped at read-only preflight on pre-existing tracked changes under the VM skill; Linux V remains clean on local-dev (V 0.5.2, 4f3082f). No Linux builds/tests or dependency changes were performed. Broader audits, whole-project V suites, prolonged churn/load, production packaging and opt-in live DB/installed WordPress remain separate.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
