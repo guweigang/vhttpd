@@ -1151,6 +1151,14 @@ Validation: final Relay lifecycle/agent/path/event tests16 and concurrent identi
 
 The original one-off admin ECONNREFUSED remains unconfirmed: this turn's 150 additional original-candidate runs produce two registration failures but no connection refusal, and the cold decoder probe does not reproduce a process crash. These registration fixes are not claimed as its root cause. Linux stops at read-only preflight under the VM skill on 362 tracked changes including existing work; the Linux SDK is not patched or tested. Original connection refusal, whole-project V, production load and opt-in live DB/installed WordPress remain open.
 
+### HTTP response stream close ownership — 2026-10-19
+
+The built-in SSE endpoint now defers closing its manually taken-over connection across both successful completion and failed retry/event writes; the first failed write returns without attempting a second HTTP response. OpenAI passthrough, mapped, executor and Responses executor streams retain veb's reusable ownership on error: handlers leave the descriptor open and mark response Connection: close so the framework retires it after the handler returns. This prevents direct close while veb still tracks the descriptor. Sources: [built-in SSE](../src/host_builtin_runtime.v), [OpenAI streaming](../src/openai_stream_proxy_runtime.v), and [ownership regressions](../src/http_response_owner_test.v).
+
+Validation: original source snapshots fail six ownership regressions (two SSE leaks and four premature OpenAI closes) and preserve normal SSE completion. Final coverage passes all 49 distinct related functions: new owner 8, stream-session 9, HTTP-ingress 4 and OpenAI-gateway 28. The live-server regression verifies EOF after the error response, subsequent health traffic and terminal shutdown. DB-enabled V3/QuickJS/OpenSSL/Boehm development build, safety lint, touched formatting and diff checks pass. Complete standard E2E passes (CLI4/config-runtime205 plus provider/WebSocket/Relay/metrics/MCP/SSE/Node/PHP/warmup fixtures). Evidence and independent candidate: `tmp/http-response-owner-validation/report.txt`; selected final source hashes match. Existing SDK changes are preserved.
+
+Linux remains stopped at read-only preflight on pre-existing tracked changes in the shared mounted checkout under the VM skill. Linux compiler is clean on local-dev (V0.5.2,4f3082f); no Linux build/tests or dependency changes were performed. Broader subsystem ownership, whole-project V, production load/packaging and opt-in live DB/installed WordPress remain separate.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
