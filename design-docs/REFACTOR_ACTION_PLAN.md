@@ -1251,6 +1251,14 @@ Validation: five [new real-plugin/TCP cases](../src/openai_executor_terminal_own
 
 Linux stopped at read-only preflight on pre-existing tracked changes under the VM skill. Linux V remains clean local-dev (V 0.5.2, 4f3082f); no Linux build/test or dependency mutation was performed. Broader subsystem audits, whole-project V suites, prolonged load and opt-in live DB/installed WordPress remain separate.
 
+### OpenAI passthrough fallback response ownership — 2026-10-19
+
+The primary request normalized the private `[DONE]` fetch abort to success, while the fallback helper reported it as an error. After a primary HTTP error, a successful fallback SSE response could therefore be followed by a second HTTP response. True fallback fetch failures could also fall through with reset status 200 and stale primary error information. The [passthrough owner](../src/openai_stream_proxy_runtime.v) now uses the same completion-aware fetch helper for primary/fallback requests and handles fallback errors before the old response-selection fallthrough: failures before output return 502 with their own error; failures after commit only finalize/close the existing response. Empty progress calls no longer prematurely commit headers, and short plain error bodies buffered by chunk auto-detection are retained at EOF. Done-state late progress cannot mutate the response.
+
+Validation: four of five [new regressions](../src/openai_passthrough_fallback_owner_test.v) fail on the original code; the natural-EOF control remains passing. Real upstream TCP fixtures, a planner plugin and raw downstream bytes verify one HTTP response, plain/chunked completion, malformed-upstream 502 behavior and backup HTTP status/error retention. Six suites pass 69 functions, including 28 real TCP OpenAI gateway integration cases, HTTP socket ownership and prior mapped/executor terminal regressions. Safety lint, touched formatting, diff checks and the independent DB-enabled candidate build pass. Complete standard E2E passes on the first attempt (CLI 4/config-runtime 205 and all standard fixtures). Evidence: `tmp/openai-passthrough-fallback-owner-validation/report.txt`; tested hashes match and the root binary/SDK fixes are preserved.
+
+Linux stopped at read-only preflight on pre-existing tracked changes under the VM skill. Linux V remains clean local-dev (V 0.5.2, 4f3082f); no Linux build/test or dependency mutation was performed. General SSE terminal parsing policy, wider subsystem audits, whole-project V suites, prolonged load and opt-in live DB/installed WordPress remain separate.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
