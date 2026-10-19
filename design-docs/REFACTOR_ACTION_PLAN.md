@@ -1235,6 +1235,14 @@ Validation: three [new negative regressions](../src/websocket_broadcast_close_ow
 
 Linux stopped at read-only preflight because the mounted checkout contains pre-existing tracked changes under the VM skill. Linux V remains clean local-dev (V 0.5.2, 4f3082f), with no Linux build/test or dependency changes. This slice covers terminal close ownership; wider command publication audits, whole-project V suites, prolonged load and opt-in live DB/installed WordPress remain separate.
 
+### OpenAI mapped stream terminal and fallback ownership — 2026-10-19
+
+A completed NDJSON row could finish the downstream HTTP stream while the [mapped progress callback](../src/openai_mapped_stream_proxy_runtime.v) continued mapping later rows in the same network chunk. Direct EOF tail processing and late callbacks could also write after completion or mutate terminal status; mapper errors could invoke the plugin and emit errors repeatedly. The [mapped stream owner](../src/openai_mapped_stream_state.v) now claims terminal rows/errors before I/O, including failed terminal writes, and ignores subsequent direct rows. The callback clears pending tail data and aborts fetch immediately at completion, rejects late callbacks before mutation, and stops row processing on write failure while preserving its original error. Fallback now receives a fresh chunk decoder instead of inheriting the primary request's plain/chunked/completed state.
+
+Validation: all seven [new regressions](../src/openai_mapped_terminal_owner_test.v) fail on the original implementation and pass after the fix. They verify raw TCP terminal output, fragmented/unterminated tails, mapper-error invocation count, late status updates, decoder isolation and terminal write failure. Four related suites pass 57 functions, including 28 real TCP OpenAI gateway integration cases and eight HTTP response-owner cases. Safety lint, touched formatting, diff checks and the independent DB-enabled candidate build pass. Complete standard E2E passes on the first attempt (CLI 4/config-runtime 205 and all standard fixtures). Evidence: `tmp/openai-mapped-terminal-owner-validation/report.txt`; tested input hashes match, with the root binary and existing SDK fixes preserved.
+
+Linux stopped at read-only preflight on pre-existing tracked changes under the VM skill. Linux V remains clean local-dev (V 0.5.2, 4f3082f); no Linux build/test or dependency mutation was performed. Further subsystem audits, whole-project V suites, prolonged load and opt-in live DB/installed WordPress remain separate.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
