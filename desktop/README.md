@@ -131,6 +131,7 @@ python3 desktop/verify_macos_release.py desktop/bin/vhttpd-workbench-macos-arm64
 ```bash
 desktop/bin/vhttpd-workbench.app/Contents/MacOS/vhttpd-workbench --smoke
 desktop/bin/vhttpd-workbench.app/Contents/MacOS/vhttpd-workbench --persistent-status-smoke
+desktop/bin/vhttpd-workbench.app/Contents/MacOS/vhttpd-workbench --shared-relay-smoke
 ```
 
 第一项验证真实 vjsx 语法错误导致的初始化失败、失败实例回收及修正后同项目重试，并验证两个模板的创建、登记、认证就绪、业务响应、Admin UI、正常停止与端口释放；第二项验证跨 include 发布、待生效、重启检查、脱敏版本比较、重新创建宿主管理器后的离线恢复与历史记录。夹具使用规范化的临时路径并清理自己启动的实例，支持在仓库外的完整包副本上执行。见[主流程回归](./smoke.v)与[发布恢复回归](./status_smoke.v)。
