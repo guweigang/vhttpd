@@ -103,7 +103,7 @@ ui2 固定到 [ui2.commit](./ui2.commit) 中的版本。已有依赖 checkout �
 
 侧栏显示当前所选 vhttpd 的实际程序版本和来源（App 内置、已下载或本地选择）；版本读取自该程序的 `--version`，与 Desktop 的 App 版本分别处理。“管理运行环境”显示完整路径，并提供下载、取消、重试、选择本地程序和切回 App 内置版本。项目运行期间不允许切换运行包。选择结果保存在本机 `runtime-selection.json`，重新打开工作台后仍使用该路径；路径失效时明确显示不可用，不悄悄退回开发 checkout。
 
-官方下载安装复用 [tag 发布流程](../.github/workflows/workbench-macos-runtime.yml)的完整 Mac zip 与同版本 SHA256SUMS 文件，从 GitHub 最新正式 Release 下载，校验后仅安装其中的运行程序、Admin UI 和动态库到 Application Support 下的 `runtimes/`。用户无需 V、Node、Python、npm、Homebrew 或编译工具；下载、解压和检查使用 macOS 系统工具。安装前检查路径、符号链接、解压体积、arm64 架构、代码签名及动态库相对依赖。校验通过才提交新的选择，旧运行包保留。完整 App 已内置运行包，首次使用通常不需要下载。
+官方下载安装复用 [tag 发布流程](../.github/workflows/workbench-macos-runtime.yml)的完整 Mac zip 与同版本 SHA256SUMS 文件，从 GitHub 最新正式 Release 下载，校验后仅安装其中的运行程序、Admin UI 和动态库到 Application Support 下的 `runtimes/`。用户无需 V、Node、Python、npm、Homebrew 或编译工具；下载、解压和检查使用 macOS 系统工具。安装前检查路径、符号链接、解压体积、arm64 架构、macOS 15.0 最低版本兼容性、代码签名及动态库相对依赖。架构、版本和依赖通过 V 原生 Mach-O 解析完成，不调用可能依赖 Xcode 的 lipo/otool。校验通过才提交新的选择，旧运行包保留。完整 App 已内置运行包，首次使用通常不需要下载。
 
 新建或启动项目时如发现运行包缺失，会直接进入运行环境页；安装或选择有效运行包后继续启动该项目并打开 Admin UI。失败后可重试，项目源码保持不变。仓库尚未提供正式 Release 或网络不可达时会显示对应提示，保留本地选择入口；CI Artifact 不作为公开下载源，也不会在用户电脑上执行源码构建。官方包延续当前 unsigned 预览的系统首次打开限制，见上文安装说明。
 
