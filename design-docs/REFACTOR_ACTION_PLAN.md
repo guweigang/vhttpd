@@ -1169,6 +1169,14 @@ Validation: the original application fails five regressions and preserves two co
 
 Linux remains stopped at read-only preflight on pre-existing tracked changes in the shared mounted checkout under the VM skill. The Linux compiler is clean on local-dev (V 0.5.2, 4f3082f); no Linux builds/tests or dependency changes were performed. Runtime callback-abort probes cover plain HTTP/1.1 only; TLS/H2/H3 abort scenarios, broader subsystem audits, whole-project V, load/packaging and opt-in live DB/installed WordPress remain separate.
 
+### Feishu provider runtime state and event snapshot ownership — 2026-10-19
+
+Live Feishu receiver, sender, reconnect/config and event activity previously used separately locked ensure/mutate/update operations. Concurrent writes could replace one another's counters, connection state, token cache and event history. Each activity entrypoint now reads, mutates and publishes under one FeishuState mutex acquisition. Tenant-token refresh uses a narrow cache commit after HTTP completes; network work remains outside the state mutex. Public ensure snapshots and explicit replacement inputs own their event arrays. Sources: [state owner](../src/feishu/state.v), [token refresh caller](../src/feishu_provider_connection_runtime.v) and [ownership regressions](../src/feishu_state_owner_test.v). The unused legacy upstream/provider/feishu copy is outside this live-path slice.
+
+Validation: all three original regressions fail before the fix, including 1024 concurrent connection attempts collapsing to 172 and two event-array alias failures. Final tests pass 60 distinct functions (5 new ownership/concurrency/retention cases, 45 existing Feishu runtime and 10 provider-instance control). DB-enabled V3/QuickJS/OpenSSL/Boehm candidate build, safety lint, touched formatting and diff checks pass. The first complete E2E attempt fails a metrics burst's lane deadline with HTTP 502; its runtime log records about 1005ms waiting. The unchanged metrics case passes in isolation, then the same candidate passes complete standard E2E (CLI 4/config-runtime 205 plus standard warmup/Node/PHP/provider/Relay/metrics/MCP/SSE fixtures). The initial failure is retained, and its root cause is not established by those successful reruns. Evidence and independent candidate: `tmp/feishu-runtime-owner-validation/report.txt`. Input hashes match; the root binary and existing SDK dependency fixes are preserved.
+
+Linux stops at read-only preflight under the VM skill because the mounted checkout has pre-existing tracked changes; the Linux compiler remains clean on local-dev (V 0.5.2, 4f3082f). No Linux builds/tests or dependency changes were performed. Broader subsystem review, whole-project V suites, load/packaging and opt-in live DB/installed WordPress remain separate.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
