@@ -1267,6 +1267,16 @@ Validation: four failure classes reproduce on the original implementation in `ba
 
 Linux remains stopped at read-only preflight because of pre-existing tracked changes under the VM skill; no Linux build/test or dependency mutation was performed. Linux V is clean local-dev (V 0.5.2, 4f3082f). Wider subsystem audits, whole-project V suites, prolonged load and opt-in live DB/installed WordPress remain separate.
 
+### WebSocket absent-registration cleanup ownership — 2026-10-19
+
+The [Hub lifecycle owner](../src/ws/runtime.v) already rejected an owned close without a matching registration, but its owned mark/cleanup paths still deleted pending messages when the registration was absent. A detached or duplicate finalizer could therefore erase messages queued for a future open under the same routing ID. Shared Hub removal now requires a present registration with the same lifecycle identity; absent owned mark/cleanup calls leave the routing state alone. Explicit key-based cancellation and cleanup of a matching registration remain intact. The unregistered accepted-open logical close path remains available, and its lifecycle still finishes exactly once.
+
+Validation: the original code produces five failed queue assertions plus a real TCP delivery timeout in the [eight new regressions](../src/websocket_detached_cleanup_owner_test.v). The final version passes those tests, including dispatch/Relay cleanup, exactly-once logical close, matching-owner cleanup, explicit cancellation and delivery of the retained queue to a new socket. Five main suites and all eleven ws module suites pass 90 functions. The module sweep also exposed [an inheritance test](../src/ws/ingress_inheritance_test.v) using a helper from another independently compiled test file; it now owns its local socket-pair fixture, and all three exec/descriptor cases pass. Safety lint, touched formatting, diff checks and the independent DB-enabled build pass.
+
+Complete standard E2E passes on the second full run (CLI 4/config-runtime 205, all standard fixtures and eight cold-hub concurrent Relay cases). The first run stopped at the metrics fixture's duration >=100ms assertion, observing 65ms despite its 120ms Date.now loop. The unchanged metrics test then passed alone and in the full rerun; its timing discrepancy is not root-caused or hidden by a threshold change. Both attempts and the failed runtime log are retained in `tmp/websocket-detached-cleanup-owner-validation/report.txt` and companion logs. Final source hashes match; the root binary is unchanged.
+
+Linux stopped at read-only preflight on pre-existing tracked changes under the VM skill. Linux V is clean local-dev (V 0.5.2, 4f3082f); no VM build/test or dependency mutation was performed. Wider command-publication ownership, pending-queue expiry, whole-project V suites and opt-in live DB/installed WordPress remain separate.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
