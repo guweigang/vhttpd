@@ -75,6 +75,8 @@ MCP direct/application queues now share owner-locked shutdown, route identity an
 
 Embedded JS sessionStore now releases property-published function temporaries, unused success fallbacks and owned TTL property values, while preserving returned fallback identity. Original QuickJS heap regressions5 fail / compatibility1 passes; final related8, DB-enabled build, safety/format/diff and complete standard E2E (metrics, CLI4/config-runtime205) pass. Evidence: `tmp/js-session-store-owner-validation/report.txt`. Final inputs match; candidate retained separately. Linux stops at read-only preflight on 360 tracked changes including existing work.
 
+Embedded WebSocket runtime/frame bridges now release property-published temporary objects/callbacks and unused successful config/plan/dispatch fallbacks, preserving returned values and fallback identity. Original heap regressions8 fail; final related16, DB-enabled build, safety/format/diff and complete standard E2E (metrics, CLI4/config-runtime205) pass. Evidence: `tmp/js-websocket-owner-validation/report.txt`. Final inputs match; candidate retained separately. Linux stops at read-only preflight on 360 tracked changes including existing work.
+
 Full-suite/load/live-DB, Linux and wider subsystem audits remain separate follow-ups. Linux validation remains deferred under the skill's pre-existing tracked-change stop rule. Evidence is in `tmp/worker-request-snapshot-validation/report.txt`. Broader ownership, whole-project suite, production load, live DB and Linux validation remain pending; direct/native execution remains cooperative. See the [current action plan](design-docs/REFACTOR_ACTION_PLAN.md) for scope, validation, and next steps.
 
 Per the roadmap, after domain modules are extracted:
