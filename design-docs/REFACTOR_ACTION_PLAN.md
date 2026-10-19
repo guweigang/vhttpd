@@ -1227,6 +1227,14 @@ Validation: three of the six [new tests](../src/ws/upstream_history_owner_test.v
 
 Linux stopped at read-only preflight on pre-existing tracked changes under the VM skill. Linux V remains clean local-dev (V 0.5.2, 4f3082f); no Linux build/test or dependency mutation was performed. Whole-project V suites, prolonged load, opt-in live DB/installed WordPress and further subsystem audits remain separate.
 
+### WebSocket broadcast terminal close ownership — 2026-10-19
+
+Broadcast dispatch captured a target lifecycle but closed by reusable connection ID after its response or failure followup. If a replacement appeared during either callback, an old terminal result could close it and discard its queue. Both [broadcast terminal paths](../src/ws/hub_runtime.v) now pass the captured lifecycle to the existing owned-close operation. Its hub-mutex critical section validates the identity before claiming close and removing pending data. Owned close also returns when the expected registration is absent, preserving pending messages whose ownership it cannot establish; explicit key-only cancellation retains its existing behavior.
+
+Validation: three [new negative regressions](../src/websocket_broadcast_close_owner_test.v) fail on the original implementation (two replacements incorrectly become `closing`, and absent-owner cleanup removes the queue). All six new cases pass after the fix, including current-owner close codes/reasons and explicit key-only cancellation. Five related suites pass 39 functions, covering dispatch lifecycle, cross-generation RPC/session routing, hub and connection identity. Safety lint, touched formatting, diff checks and the independent DB-enabled candidate build pass. Complete standard E2E passes on the first attempt (CLI 4/config-runtime 205 and all standard fixtures). Evidence: `tmp/broadcast-close-owner-validation/report.txt`; tested source/test/binary hashes match and the root binary is unchanged.
+
+Linux stopped at read-only preflight because the mounted checkout contains pre-existing tracked changes under the VM skill. Linux V remains clean local-dev (V 0.5.2, 4f3082f), with no Linux build/test or dependency changes. This slice covers terminal close ownership; wider command publication audits, whole-project V suites, prolonged load and opt-in live DB/installed WordPress remain separate.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
