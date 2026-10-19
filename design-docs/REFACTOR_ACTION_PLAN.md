@@ -1287,6 +1287,16 @@ Safety lint, touched formatting, diff checks and the independent DB-enabled buil
 
 Linux remains stopped at read-only preflight on pre-existing tracked changes under the VM skill. Linux V is clean local-dev (V 0.5.2, 4f3082f); no Linux build/test or dependency mutation was performed. Wider subsystem auditing, whole-project V suites, prolonged load and opt-in live DB/installed WordPress remain separate.
 
+### Codex released-stream pending RPC routing ownership — 2026-10-19
+
+Stream release already cleared message targets, active/thread routes and read fallback, but pending RPCs still supplied fallback routing and send admission. A late successful response could replace the current thread and dispatch to a released stream; a late error could schedule a delayed business error burst; a prepared request could still write after release. The [stream owner](../src/codex/runtime.v) now retires matching pending RPC routing while retaining the response record. The private retirement marker is copied with snapshots, excluded from pending-stream fallback, and checked by [registration send admission](../src/codex/state.v). Fresh registrations start live. The [response owner](../src/codex_rpc_response_runtime.v) consumes a retired record and returns before thread capture, error aggregation or business dispatch. Keeping response identity avoids turning a released RPC into an unmatched response that could fall back to a new active stream. Matching records remain until response consumption, send cancellation or disconnect; other streams and instances stay independently owned.
+
+Validation: seven of eight [new regressions](../src/codex_released_rpc_owner_test.v) fail on the original implementation; the active-response delivery control remains passing. Final tests verify pending-only release/idempotence, send-admission retirement, retained response identity, other pending routes, late success/error rejection, real TCP rejection of a prepared send, stream-ID reuse and normal live delivery. Six main suites plus the complete Codex module pass 58 functions, including previous reverse-route, send cleanup, admission, disconnect and error-burst ownership checks. Safety lint, touched formatting, diff checks and the independent DB-enabled build pass.
+
+Complete standard E2E passes on the first full run (CLI 4/config-runtime 205, all standard fixtures and eight cold-hub concurrent Relay cases). Final hashes match staged build inputs and the root binary is unchanged. Evidence: `tmp/codex-released-rpc-owner-validation/report.txt` and companion logs. No SDK or E2E-threshold change was made.
+
+Linux stopped at read-only preflight on pre-existing tracked changes under the VM skill. Linux V is clean local-dev (V 0.5.2, 4f3082f); no Linux build/test or dependency mutation was performed. Wider subsystem audits, whole-project V suites, prolonged load and opt-in live DB/installed WordPress remain separate.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
