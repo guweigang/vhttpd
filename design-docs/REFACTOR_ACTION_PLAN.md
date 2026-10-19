@@ -1219,6 +1219,14 @@ Validation: all four [new regressions](../src/codex_stream_route_owner_test.v) f
 
 Linux stopped at read-only preflight because the mounted checkout contains pre-existing tracked changes, as required by the VM skill. Linux V is clean local-dev (V 0.5.2, 4f3082f); no Linux builds/tests or dependency mutations were performed. Broader subsystem audits, whole-project V suites, opt-in live DB/installed WordPress and prolonged load remain separate.
 
+### WebSocket upstream fixture history ownership — 2026-10-19
+
+Fixture send/event updates read and published runtime values under separate locks, so concurrent calls overwrote counters and history. Public runtime lookup also exposed its event array, and full runtime replacement retained the caller's array. The [upstream owner](../src/ws/upstream.v) now keeps incremental ensure/read/mutate/publish under one `upstream_mu` critical section, with a private locked lookup. Public snapshots and replacement input own both the event array and each event's metadata map. Existing history bounds and APIs are preserved. Activity-command and event-publication isolation probes already pass and are retained as protective coverage without changes to those paths.
+
+Validation: three of the six [new tests](../src/ws/upstream_history_owner_test.v) fail on the original implementation; the concurrent regression retains only 237 of 768 successful-send updates (165 on a second negative run). An array-only repair exposes the two remaining nested-metadata failures before the final fix. Final suites pass 74 functions across five files, covering complete concurrent counters/events, snapshot/input isolation, bounded history, upstream lifecycle, hub identity and application-level WebSocket/Feishu integration. Safety lint, touched formatting, diff checks and the independent final DB-enabled candidate build pass. Complete standard E2E passes on the first attempt: CLI 4/config-runtime 205 and all standard fixtures, including eight cold-hub concurrent-first-Relay-message regressions. Evidence: `tmp/upstream-history-owner-validation/report.txt`; tested input hashes match and the root binary is unchanged.
+
+Linux stopped at read-only preflight on pre-existing tracked changes under the VM skill. Linux V remains clean local-dev (V 0.5.2, 4f3082f); no Linux build/test or dependency mutation was performed. Whole-project V suites, prolonged load, opt-in live DB/installed WordPress and further subsystem audits remain separate.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
