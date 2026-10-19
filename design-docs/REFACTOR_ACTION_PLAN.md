@@ -1211,6 +1211,14 @@ Validation: the original four binding/reference/migration regressions fail befor
 
 Linux remains stopped at read-only preflight on pre-existing tracked changes under the VM skill; Linux V remains clean on local-dev (V 0.5.2, 4f3082f). No Linux builds/tests or dependency changes were performed. Broader audits, whole-project V suites, prolonged churn/load, production packaging and opt-in live DB/installed WordPress remain separate.
 
+### Codex released-stream reverse-route ownership — 2026-10-19
+
+Stream release cleared message targets and the active-stream field but left thread→stream routes and read-fallback records behind. A subsequent notification could still select the released stream through its retained thread binding, and route-only/fallback-only release incorrectly reported no change. The [runtime release operation](../src/codex/runtime.v) now removes every thread binding whose current value matches the released stream and retires its fallback record under the existing CodexState mutation lock. Reusable thread identity, bindings already moved to another stream, other streams and other instances are preserved; empty IDs remain a no-op and repeated release is idempotent. Pending-RPC cancellation and notification fallback policy are unchanged.
+
+Validation: all four [new regressions](../src/codex_stream_route_owner_test.v) fail on the original implementation and pass after the fix. Seven related suites pass 54 distinct functions, covering stream release, runtime notification routing, state snapshots, RPC admission/send failure and disconnect ownership. Safety lint, touched formatting, diff checks and the independent DB-enabled candidate build pass. Complete standard E2E passes on the first attempt (CLI 4/config-runtime 205 plus all standard fixtures). Evidence: `tmp/codex-stream-route-owner-validation/report.txt`; tested input hashes match and the root binary is unchanged.
+
+Linux stopped at read-only preflight because the mounted checkout contains pre-existing tracked changes, as required by the VM skill. Linux V is clean local-dev (V 0.5.2, 4f3082f); no Linux builds/tests or dependency mutations were performed. Broader subsystem audits, whole-project V suites, opt-in live DB/installed WordPress and prolonged load remain separate.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
