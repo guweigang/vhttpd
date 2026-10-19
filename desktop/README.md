@@ -89,6 +89,16 @@ ui2 固定到 [ui2.commit](./ui2.commit) 中的版本。已有依赖 checkout �
 
 项目登记默认保存在 `~/Library/Application Support/vhttpd-workbench/projects.json`，版本历史保存在同目录的 `recovery/`。升级时可迁移当前开发 checkout 的旧登记，不移动项目源码。历史按本机文件权限保存，包含恢复所需的原始配置内容，不加密；界面差异对敏感字段脱敏。需保管好本地文件。实现见[登记](./host/project.v)与[历史存储](./host/recovery_store.v)。
 
+## 共享远端 Relay 连接
+
+左侧“远端 Relay”维护可跨项目复用的连接库。新建连接时填写名称、Hub 的 WebSocket 地址、远端 Relay ID 和 Token。Relay ID 必须与远端 Hub 配置一致；Token 独立填写，地址不接受认证信息或查询参数。Token 输入隐藏，本地 `shared-relays.json` 使用仅当前用户可读写的权限保存，不加密；请勿公开分享数据目录。
+
+“测试连接”依次检查网络、TLS（wss）、WebSocket 升级和 Relay 认证，显示失败阶段与耗时。探测使用独立的认证 ping/pong，既不注册业务 Agent，也不替换已有连接；远端需要包含安全探测支持的 vhttpd。旧版服务等待超时会显示认证或协议不匹配提示，不回退到普通注册。测试通过只代表本次探测成功，不表示项目已连接。
+
+先保存连接、启动所选项目，再点击“在项目中使用”。Desktop 自动登录 Admin UI，交接的是尚未发布的独立草稿，项目源码此时不变。可在 Admin UI 选择主配置或 include 来源、绑定 Pipeline、启用自动连接，再保存校验和发布；继续使用整项目校验、宿主待重启提示、重启后的生效检查。每次交接生成独立 Node ID；项目已有同名 Relay 时提示编辑原配置。修改或删除连接库条目不会改动已有项目。
+
+实现与回归见[连接库](./host/shared_relays.v)、[安全探测](./host/relay_probe.v)、[项目草稿交接](./host/shared_relay_import.v)、[Admin UI 导入](../admin/ui/relay-ui.js)和[跨 include 运行回归](./shared_relay_smoke.v)。
+
 ## 升级、移除与数据位置
 
 升级前先退出工作台，再替换整个 `.app`；无需移动项目目录或重新安装开发工具。安装包旁的 `安装说明.txt` 同时保存在应用的 `Contents/Resources/` 中，可离线查看。第一版不自动更新。
