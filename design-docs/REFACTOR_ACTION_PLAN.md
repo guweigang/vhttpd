@@ -1133,6 +1133,14 @@ Validation: final original control fails four regressions and passes pending-Err
 
 Evidence: `tmp/js-exception-owner-validation/report.txt`, original/final and failed/rerun logs, diagnostic child logs, manifests and separately retained candidate; root binary is not replaced. Own source/tests, dependencies and runtime-loaded JS match captured inputs. Concurrent `admin_config_changeset.v` edits were preserved and excluded from the frozen candidate, recorded as the sole live production drift. Initial throw-fixture ownership was corrected before final control/fixed runs. Linux stops at read-only preflight on 362 tracked changes including existing work under the VM skill. Initial cross-include intermittency, broader JS/ownership audits, whole-project V, throughput, standalone -prod/release and opt-in live DB/installed WordPress remain separate.
 
+### Cross-include E2E failure diagnostics — 2026-10-19
+
+The original ECONNREFUSED remains unresolved. Recovered process-level runtime trace associates the failed port with the first hub process, before the planned restart completed; it has no normal hub stop record. The original test deleted its service logs and omitted the request path/exit status, so this does not establish a process/listener root cause. A narrow OS log query returned no matching event. No speculative production change or request retry was added.
+
+The cross-include E2E now preserves failed fixtures, bounded request history, drained child logs and explicit exit/signal/spawn-error metadata. Fetch errors include method/port/path and retain their cause. Successful cleanup remains unchanged unless KEEP_TMP is enabled. Missing-binary and self-SIGTERM negative probes verify diagnostic retention and cleanup without hanging. Syntax, safety lint and diff checks pass. Of 232 bounded diagnostic repeats, 231 pass and one hits a separate post-restart registration timeout while admin HTTP remains responsive; none reproduces the original refusal. The separate timeout is retained and is not assumed to share the original root cause.
+
+Both complete standard E2E runs pass (CLI4/config-runtime205 plus protocol/provider/Relay/metrics fixtures); the final run uses the final diagnostic code. These use the identical previously frozen candidate to investigate that exact failure, not a new production build. Concurrent admin changes and Relay connection-probe changes remain outside this binary's validation. Evidence: `tmp/cross-include-connection-validation/report.txt`, per-run logs, original runtime trace, negative-probe metadata, hashes and retained fixtures. Linux stops at read-only preflight under the VM skill on 362 tracked changes including existing work. Root-cause confirmation and a demonstrated fix for the original refusal are still required; passing reruns do not close this item.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
