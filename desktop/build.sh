@@ -5,6 +5,9 @@ if [[ "$(uname -s)" != Darwin ]]; then
   exit 1
 fi
 root="$(cd "$(dirname "$0")/.." && pwd)"
+version="$(python3 "$root/desktop/workbench_version.py" --field version)"
+bundle_version="$(python3 "$root/desktop/workbench_version.py" --field bundle_version)"
+archive_name="vhttpd-workbench-macos-arm64-$version.zip"
 ui2_root="$root/.deps/ui2"
 revision="$(cat "$root/desktop/ui2.commit")"
 if [[ ! -d "$ui2_root/.git" ]]; then
@@ -57,7 +60,7 @@ v -prod -nocache -cc "$build_dir/clang-compatible" -d use_bundled_libgc -w -enab
 # Replace the directory entry atomically; never truncate the executable that
 # a running workbench has mapped into memory.
 mv -f "$build_dir/vhttpd-workbench" "$app/Contents/MacOS/vhttpd-workbench"
-cat > "$app/Contents/Info.plist" <<'PLIST'
+cat > "$app/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
@@ -65,14 +68,15 @@ cat > "$app/Contents/Info.plist" <<'PLIST'
 <key>CFBundleIdentifier</key><string>io.vhttpd.workbench.prototype</string>
 <key>CFBundleName</key><string>vhttpd Workbench</string>
 <key>CFBundleIconFile</key><string>vhttpd-macos.icns</string>
-<key>CFBundleShortVersionString</key><string>0.1.0</string>
-<key>CFBundleVersion</key><string>1</string>
+<key>CFBundleShortVersionString</key><string>$bundle_version</string>
+<key>CFBundleVersion</key><string>$bundle_version</string>
+<key>VHTTPDReleaseVersion</key><string>$version</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>NSHighResolutionCapable</key><true/>
 </dict></plist>
 PLIST
 python3 "$root/desktop/package_macos.py" "$root" "$app"
-archive="$build_dir/vhttpd-workbench-macos-arm64-0.1.0.zip"
+archive="$build_dir/$archive_name"
 python3 "$root/desktop/package_macos.py" --archive "$app" "$archive"
 # Validate the archive before replacing the previous deliverables.
 python3 "$root/desktop/verify_macos_release.py" "$archive"
@@ -83,5 +87,5 @@ if ! mv "$app" "$target_app"; then
   if [[ -d "$build_dir/previous.app" ]]; then mv "$build_dir/previous.app" "$target_app"; fi
   exit 1
 fi
-mv -f "$archive" "$root/desktop/bin/vhttpd-workbench-macos-arm64-0.1.0.zip"
+mv -f "$archive" "$root/desktop/bin/$archive_name"
 echo "$target_app"

@@ -1,4 +1,4 @@
-vhttpd Mac 工作台 0.1.0 — 本地开发者预览
+vhttpd Mac 工作台 @VERSION@ — 本地开发者预览
 
 适用范围
 - Apple Silicon Mac（arm64），构建目标为 macOS 15.0（Sequoia）及以上。
@@ -10,7 +10,7 @@ vhttpd Mac 工作台 0.1.0 — 本地开发者预览
   自己导入的项目如使用其他执行器、原生扩展或外部服务，仍需其对应依赖。
 
 安装
-1. 解压 vhttpd-workbench-macos-arm64-0.1.0.zip。
+1. 解压 vhttpd-workbench-macos-arm64-@VERSION@.zip。
 2. 把整个 vhttpd-workbench.app 拖入“应用程序”或自己的“应用程序”目录。
    保留完整 .app；不要只复制包内可执行文件。无需运行安装脚本或构建命令。
 3. 在 Finder 中打开应用。建议先移入固定目录，再创建或导入项目。

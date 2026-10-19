@@ -114,7 +114,9 @@ def package(root, app):
             if not dependency.startswith(('/usr/lib/', '/System/Library/', '@loader_path/')):
                 raise RuntimeError(f'Non-portable dependency: {dependency}')
     minimum = stamp_minimum_macos(app, [app / 'Contents/MacOS/vhttpd-workbench', *modified])
-    shutil.copy2(root / 'desktop/assets/INSTALL-zh.txt', app / 'Contents/Resources/INSTALL-zh.txt')
+    guide = (root / 'desktop/assets/INSTALL-zh.txt').read_text()
+    info = plistlib.loads((app / 'Contents/Info.plist').read_bytes())
+    (app / 'Contents/Resources/INSTALL-zh.txt').write_text(guide.replace('@VERSION@', info['VHTTPDReleaseVersion']))
     run('/usr/bin/codesign', '--force', '--deep', '--sign', '-', str(app))
     print(f'Minimum macOS from bundled binaries: {minimum}')
     print(f'Bundled runtime, Admin UI and {len(copied)} libraries: {app}')

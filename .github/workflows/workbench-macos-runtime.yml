@@ -10,6 +10,7 @@ on:
         options: [unsigned, signed]
   push:
     branches: [main, codex/mac-workbench-runtime-checks]
+    tags: ['v[0-9]*']
     paths:
       - .github/workflows/workbench-macos-runtime.yml
       - desktop/**
@@ -36,11 +37,16 @@ jobs:
     timeout-minutes: 45
     outputs:
       sha256: ${{ steps.package.outputs.sha256 }}
+      archive: ${{ steps.version.outputs.archive }}
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Resolve tag and package version
+        id: version
+        run: python3 desktop/workbench_version.py
       - name: Check signing release contract
         run: |
           python3 -m unittest discover -s desktop/ci -p 'test_macos_*.py'
@@ -55,16 +61,18 @@ jobs:
         id: package
         shell: bash
         run: |
-          archive=desktop/bin/vhttpd-workbench-macos-arm64-0.1.0.zip
+          archive="desktop/bin/$ARCHIVE_NAME"
           checksum=$(shasum -a 256 "$archive")
           echo "sha256=${checksum%% *}" >> "$GITHUB_OUTPUT"
           echo "${checksum%% *}  ${archive##*/}" > desktop/bin/SHA256SUMS
+        env:
+          ARCHIVE_NAME: ${{ steps.version.outputs.archive }}
       - name: Store CI-built candidate
         uses: actions/upload-artifact@v4
         with:
           name: workbench-macos-arm64-candidate
           path: |
-            desktop/bin/vhttpd-workbench-macos-arm64-0.1.0.zip
+            desktop/bin/${{ steps.version.outputs.archive }}
             desktop/bin/SHA256SUMS
           if-no-files-found: error
           retention-days: 7
@@ -96,8 +104,9 @@ jobs:
         shell: bash
         env:
           CANDIDATE_SHA256: ${{ needs.build.outputs.sha256 }}
+          CANDIDATE_ARCHIVE: ${{ needs.build.outputs.archive }}
           EXPECTED_OS: ${{ matrix.os }}
-        run: bash desktop/ci/verify_installed_macos.sh candidate/vhttpd-workbench-macos-arm64-0.1.0.zip "$EXPECTED_OS" "$CANDIDATE_SHA256"
+        run: bash desktop/ci/verify_installed_macos.sh "candidate/$CANDIDATE_ARCHIVE" "$EXPECTED_OS" "$CANDIDATE_SHA256"
       - name: Store target-system evidence
         if: always() && steps.verify.outputs.report != ''
         uses: actions/upload-artifact@v4
@@ -116,7 +125,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          sparse-checkout: desktop/ci
+          sparse-checkout: desktop
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -134,6 +143,8 @@ jobs:
           path: evidence/macos-26
       - name: Verify both target results and describe the download
         run: python3 desktop/ci/collect_macos_acceptance.py download evidence
+      - name: Verify release attachments and version consistency
+        run: python3 desktop/ci/macos_release.py prepare download release-assets
       - name: Store verified preview download
         uses: actions/upload-artifact@v4
         with:
@@ -151,6 +162,33 @@ jobs:
           **No Apple credentials required.** This is an ad-hoc signed preview, without Apple notarization.
           Gatekeeper assessment is recorded separately; GUI/Finder/browser first launch is not covered by these runtime checks.
           SUMMARY
+
+  publish-release:
+    name: Publish accepted unsigned Mac assets
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    needs: [build, accepted-preview]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    concurrency:
+      group: mac-workbench-release-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: desktop
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: workbench-macos-arm64-unsigned-verified
+          path: download
+      - name: Prepare versioned assets, upload draft and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 desktop/ci/macos_release.py publish download release-assets
 
   sign-and-notarize:
     name: Developer ID signing and Apple notarization
@@ -184,7 +222,8 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           CANDIDATE_SHA256: ${{ needs.build.outputs.sha256 }}
-        run: python3 desktop/ci/sign_notarize_macos.py candidate/vhttpd-workbench-macos-arm64-0.1.0.zip signed "$CANDIDATE_SHA256"
+          CANDIDATE_ARCHIVE: ${{ needs.build.outputs.archive }}
+        run: python3 desktop/ci/sign_notarize_macos.py "candidate/$CANDIDATE_ARCHIVE" signed "$CANDIDATE_SHA256"
       - name: Store signed and stapled candidate
         uses: actions/upload-artifact@v4
         with:
