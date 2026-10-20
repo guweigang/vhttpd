@@ -1349,6 +1349,16 @@ Complete standard E2E passes on its first full run (CLI 4/config-runtime 205, al
 
 Linux stopped at read-only preflight on pre-existing tracked changes under the VM skill; Linux V is clean local-dev (V 0.5.2, 4f3082f), with no Linux build/test or dependency mutation. This slice covers the Relay module and Runtime session API; it does not establish that the native WebSocket path triggered this bug. Public maps remain compatibility fields and require API access for concurrency safety. Cross-registry publication, whole-project V suites, prolonged load and opt-in live DB/installed WordPress remain separate.
 
+### Outbound Session publication into the WebSocket Hub — 2026-10-20
+
+The [Hub binding boundary](../src/ws/runtime.v) checked lifecycle identity but accepted foreign or retired Sessions, a closing lifecycle, replacement of an existing outbound owner and duplicate Session publication. The [connection Session](../src/connection_runtime/owner.c.v) now captures its original native Client/TCP connection and provides a synchronized, one-time attachment claim. The [connect path](../src/connection_runtime/websocket_connect.c.v) publishes the successful native candidate under the same stop mutex. Hub publication holds hub → lifecycle → Session admission locks through assignment, validates the original connection and retirement state, and preserves existing state on rejection. It performs no callbacks or network I/O. Cleanup remains with the original connection loop; cancellation after successful admission follows that loop's existing shutdown path.
+
+Validation: seven of eight initial [regression functions](../src/ws/outbound_publication_owner_test.v) fail assertions on saved production originals, while the current-owner control passes. All nine final functions pass, including concurrent publication of one Session into two independent Hubs with exactly one winner. Nine related files pass 64 functions across publication, Hub identity, pending-message ownership, retained descriptors, native inheritance, cancellation, writers and real Relay agent connection/shutdown. No existing test fixture or assertion was changed. Safety lint, touched formatting, diff checks and an independent DB-enabled build pass.
+
+Complete standard E2E passes on its first full run (CLI 4/config-runtime 205, all standard fixtures, HTTP metrics and eight cold-hub concurrent Relay cases). Three production inputs match staged build sources; final source/test/candidate hashes match and the root binary is unchanged. Evidence: `tmp/hub-session-publication-validation/report.txt`, `incremental.diff`, saved originals and companion logs. Initial fixture compiler diagnostics are retained separately from the actual failing regression evidence. No SDK or E2E threshold changes were made.
+
+Linux stopped at read-only preflight on pre-existing tracked changes under the VM skill; Linux V is clean local-dev (V 0.5.2, 4f3082f), with no Linux build/test or dependency mutation. This slice protects Session attachment into the Hub and its lifecycle admission; it does not make every runtime registry publication transactional. Wider publication audits, whole-project V suites, prolonged load and opt-in live DB/installed WordPress remain separate.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
