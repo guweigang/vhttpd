@@ -239,6 +239,14 @@
 
 优先看这个文件。
 
+### Feishu 首次创建授权（2026-10-20）
+
+[创建授权状态](../src/feishu/creation.v)归 `FeishuState` 所有：在同一把 `mu` 下签发、消费、撤销和释放一次性凭证，并管理远端签发尚未完成时的临时归属。未消费凭证与临时签发记录合计最多 4096 项，300 秒过期；已消费或撤销的凭证立即移除，无需保存历史代际表。
+
+[可信应用入口](../src/feishu_creation_runtime.v)和[请求期 Vjsx host 能力](../src/executor/inproc_vjsx_creation_api.v)负责签发；命令准入不能临时补签。流式初始 send 需要服务端代际和独立的 `creation_token`；首次 bind 还必须持有绑定该物理消息 ID 的专属凭证，与已有缓冲替换所需的 `stream_generation` CAS 分开。[原生命令入口](../src/command_handlers.v)和[桥接入口](../src/feishu_card_bridge_server_runtime.v)分别在自己的状态中消费凭证，随后沿用既有 HTTP 完成与跨注册表发布保护。
+
+[物理消息变更](../src/feishu/initial_send.v)会撤销该 ID 尚未消费的 bind 凭证及远端签发归属，因此跨流重绑再清理也不能让旧首次 bind 重建目标。[控制撤销](../src/feishu/control_generation.v)可以在首次投递前取消凭证；[失败终结](../src/feishu/stream_command.v)也清理失去最后归属的创建授权，同时保留已准入的同代发送。TypeScript 的[流状态](../examples/codexbot-app-ts/lib/state.mjs)持久化签发结果，[命令构造器](../examples/codexbot-app-ts/lib/commands.mts)只序列化捕获的凭证；其他生产端也必须接入可信签发，旧格式首次创建会被拒绝。跨宿主撤销传播仍是独立边界。
+
 ### [`/Users/guweigang/Source/vhttpd/src/feishu_runtime_test.v`](/Users/guweigang/Source/vhttpd/src/feishu_runtime_test.v)
 
 角色：
