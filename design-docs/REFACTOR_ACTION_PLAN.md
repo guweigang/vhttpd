@@ -1359,6 +1359,16 @@ Complete standard E2E passes on its first full run (CLI 4/config-runtime 205, al
 
 Linux stopped at read-only preflight on pre-existing tracked changes under the VM skill; Linux V is clean local-dev (V 0.5.2, 4f3082f), with no Linux build/test or dependency mutation. This slice protects Session attachment into the Hub and its lifecycle admission; it does not make every runtime registry publication transactional. Wider publication audits, whole-project V suites, prolonged load and opt-in live DB/installed WordPress remain separate.
 
+### Provider bootstrap completion publication — 2026-10-20
+
+The [bootstrap completion](../src/provider_bootstrap.v) unconditionally republished its local spec after lock-free init/start callbacks. Replacement during either callback could be overwritten; stopping during an active callback stopped an unfinished context and allowed that callback to start or publish again. The [provider host](../src/provider_spec.v) now assigns an independent registration identity with active-bootstrap and retirement state. [Registry stop](../src/provider_registry.v) revokes each registration before callbacks and leaves active bootstrap cleanup with its original completion owner. Completion commits provider/spec entries only into its exact current, non-retired registration, preserves independently refreshed metadata, and otherwise stops its captured final context outside App.mu. Already-admitted callbacks may complete; a retired initialization cannot obtain a new start admission. Repeated stop is once per registration, and an explicit fresh registration gets a new identity. Bootstrap uses the existing shutdown startup gate, so late starts are refused and full shutdown joins callback completion and final cleanup.
+
+All six initial [regression functions](../src/provider_publication_owner_test.v) fail assertions against saved production originals. All nine final functions pass, covering replacement during successful/failed init and start, reentrant stop, blocked asynchronous init revocation, late startup refusal, metadata refresh, repeated stop/fresh registration and shutdown joining. Existing bootstrap success/failure controls and five ShutdownOwner checks also pass. No existing test fixture or assertion was modified. An independent DB-enabled candidate build, safety lint, touched formatting and diff checks pass; three production inputs match staged build sources and the root binary is unchanged.
+
+Validation in progress: lifecycle-context and provider-registry suites, followed by complete standard E2E. Evidence so far: `tmp/provider-publication-owner-validation/`, including saved originals, actual failing assertions, isolated fixture compiler diagnostics, the candidate and `incremental.diff`.
+
+Linux stopped at read-only preflight on pre-existing tracked changes under the VM skill; Linux V is clean local-dev (V 0.5.2, 4f3082f), with no Linux build/test or dependency mutation. This slice owns bootstrap callback completion across provider/spec publication and stop revocation. It preserves diagnostic specs after stop and does not turn arbitrary direct ProviderHost map mutation or already-completed manual registration replacement into a managed resource transfer.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
