@@ -1339,6 +1339,16 @@ Complete standard E2E passes on its first full run (CLI 4/config-runtime 205, al
 
 Linux stopped at read-only preflight on pre-existing tracked changes under the VM skill; Linux V is clean local-dev (V 0.5.2, 4f3082f), with no Linux build/test or dependency mutation. This slice guards logical carrier attachment at prepared-send admission; native target capture, queued-message and channel completion lifetimes retain their separate owners. Wider cross-registry publication audits, whole-project V suites, prolonged load and opt-in live DB/installed WordPress remain separate.
 
+### Relay session queue admission and endpoint handoff — 2026-10-20
+
+The [session registry](../src/relay/session.v) updated endpoint indexes and pending queues without synchronization. Three new concurrent regressions fail against saved originals: 800 successful admissions drained only 354 frames, a capacity-17 queue admitted 31 frames, and endpoint opening raced route-or-buffer admission so a buffered frame was not transferred to its endpoint. Registry operations now share a mutex; private unlocked helpers let [routing and endpoint opening](../src/relay/session_routing.v) hold it across their complete select-or-buffer and publish-and-drain transactions. Capacity checks and reported buffered counts belong to that same admission. [Session snapshots](../src/relay/snapshot.v) use the same lock as endpoint rebind/close, target selection and queue transfer.
+
+Validation: all three original regressions pass after the fix. The final [concurrency suite](../src/relay/session_concurrency_owner_test.v) also checks concurrent snapshot/rebind consistency and rejected-operation lock release with pending-frame preservation. Seven related suites pass 42 functions across session, routing, rebind, snapshot, Runtime and frame-queue ownership. Safety lint, touched formatting, diff checks and an independent DB-enabled build pass. No existing test fixture or assertion was changed.
+
+Complete standard E2E passes on its first full run (CLI 4/config-runtime 205, all standard fixtures, HTTP metrics and eight cold-hub concurrent Relay cases). Three production files match staged build sources; final production/test/candidate hashes match and the root binary is unchanged. Evidence: `tmp/relay-session-concurrency-validation/report.txt`, `incremental.diff`, saved originals and companion logs. No SDK or E2E threshold changes were made.
+
+Linux stopped at read-only preflight on pre-existing tracked changes under the VM skill; Linux V is clean local-dev (V 0.5.2, 4f3082f), with no Linux build/test or dependency mutation. This slice covers the Relay module and Runtime session API; it does not establish that the native WebSocket path triggered this bug. Public maps remain compatibility fields and require API access for concurrency safety. Cross-registry publication, whole-project V suites, prolonged load and opt-in live DB/installed WordPress remain separate.
+
 ## Milestone 0 — Preparation (½ day)
 
 **Goal:** baseline the current state so we can measure each milestone.
