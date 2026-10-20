@@ -347,7 +347,19 @@
 
 服务端为每条连接保留最多 4096 个 create 请求的结果或终结失败，重复请求不会在消费、撤销或凭证过期后重新签发；满时拒绝，不逐出重放证据，当前原生代理客户端会关闭并重连。连接退休后清空这些记录，无全局退休历史表。新连接必须显式获取新凭证。原生可信凭证通过桥接发送时在准入处取得该连接的发布归属；原生本地资源不因另一连接退休而被删除。
 
-[状态回归](../src/feishu/bridge_authority_test.v)、[跨注册表集成回归](../src/feishu_cross_host_revocation_test.v)与[双 hub E2E](../tests/e2e/feishu_bridge_revocation_test.mjs)覆盖重连、精确清理、迟到结果、失败撤销、首次 bind/rebind 撤销归属、静默过期及真实单向丢包；双 hub 测试已加入标准 E2E。这里只补充跨宿主撤销及原发布归属，不新增通用远端 bind/rebind 发布协议。
+[状态回归](../src/feishu/bridge_authority_test.v)、[跨注册表集成回归](../src/feishu_cross_host_revocation_test.v)与[双 hub E2E](../tests/e2e/feishu_bridge_revocation_test.mjs)覆盖重连、精确清理、迟到结果、失败撤销、首次 bind/rebind 撤销归属、静默过期及真实单向丢包；双 hub 测试已加入标准 E2E。该轮只补充撤销及原发布归属；后续 bind/rebind 发布同步见下一节。
+
+### 跨宿主 bind/rebind 发布同步（2026-10-21）
+
+[绑定预留](../src/feishu/bridge_bind.v)把本地准入、远端发布和本地完成分开。首次 bind 在本地消费目标绑定凭证，以创建代际保留可撤销的待确认缓冲；rebind 保留旧 stream、实例和代际供 clear 使用。等待网络期间阻止新的流式命令、重绑、定时 flush 及旧身份的异步写回。请求捕获原连接和原远端 scope，释放状态锁后发送，不会改投重连后的连接。
+
+[桥接服务端](../src/feishu_card_bridge_server_runtime.v)的 `bind` 操作在状态锁内校验同一连接持有的目标、源 stream/实例与旧代际 CAS；首次创建则消费目标绑定的一次性凭证。成功后生成新的缓冲代际并返回。首次凭证已消费或旧 CAS 已失效时，迟到、重复请求均不能重新创建资源。服务端缓冲归桥接传输持有，发起端在确认后发布本地 Codex 目标。
+
+[命令入口](../src/command_handlers.v)收到结果后，在 Feishu → Codex 锁顺序下重新验证原预留身份和原连接租约，使用远端返回的同一代际更新本地缓冲与目标，随后发送回执。若期间已撤销、替换或断连，就拒绝迟到完成，并在原连接上按返回代际补偿清理远端；清理失败、超时或缺少代际的确认会关闭原连接，沿既有租约机制收敛，不恢复旧缓冲。待确认失败后的旧资源不会自动回滚复活。
+
+跨宿主确认存在远端已发布而本地仍待确认的短暂窗口，不提供分布式原子提交。此时本地拒绝命令；本地撤销后即使旧代际 clear 未删除远端新代际，迟到结果仍触发精确补偿，连接失效时由双方授权退休与租约回收。不能把未收到确认当作成功，也不能自动获取新凭证重放旧 bind。
+
+[状态回归](../src/feishu/bridge_bind_test.v)、[命令发布回归](../src/feishu_bridge_bind_publication_test.v)、[生产代理回归](../src/feishu_bridge_bind_transport_test.v)覆盖成功同步、待确认准入、撤销乱序、替换、断连、异常确认和补偿；[标准双 hub E2E](../tests/e2e/feishu_bridge_revocation_test.mjs)新增真实 bind/rebind、旧 CAS 与已撤销首次凭证的重放拒绝。
 
 ## Related Docs
 

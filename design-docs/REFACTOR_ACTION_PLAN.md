@@ -1704,6 +1704,10 @@ Linux stopped at read-only preflight under the [VM testing skill](../.agents/ski
 
 ---
 
+### 跨宿主绑定发布边界（2026-10-21）
+
+已增加 bind/rebind 的本地待确认预留、远端源代际 CAS 与确认后的配对发布；撤销、连接替换及迟到结果通过身份检查和原连接上的精确补偿收敛。协议、状态归属及分布式确认限制见 [Runtime Module Map](RUNTIME_MODULE_MAP.md)。相关状态、命令与真实桥接回归纳入现有测试入口；完整验证证据保存在本轮工作区的 `tmp/feishu-bridge-bind-validation/`。
+
 ## Cross-References
 
 - `TODO_REFACTOR.md` Phase 2.2 — `App` decomposition (M2, M3)
