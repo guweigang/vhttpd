@@ -337,6 +337,18 @@
 
 [状态回归](../src/feishu/external_creation_test.v)、[命令集成回归](../src/feishu_external_creation_admission_test.v)、[PHP/SQLite 回归](../php/package/tests/feishu_creation_test.php)与[真实 HTTP E2E](../tests/e2e/feishu_external_creation_test.mjs)覆盖获取、持久化、传递、乱序撤销、重放及进程重启；后两者已纳入标准 E2E 入口。
 
+### 跨宿主桥接撤销与连接租约（2026-10-20）
+
+[桥接授权](../src/feishu/bridge_authority.v)归具体连接持有，与可复用的 `client_id` 分开。桥接签发的凭证、本地镜像、已准入发送及缓冲保留这份归属；断连、同名连接替换或租约到期会在既有 Feishu → Codex 顺序下撤销授权、初始发布资格、缓冲和对应目标。旧连接的消息不能命中新连接的等待者，也不能续活新连接。迟到签发结果在落地时再检查原连接，迟到 HTTP、rollover、finish 与 failure 完成继续受原身份及租约检查约束。可信原生重注册会清除旧桥接归属；wire bind 则保留其实际取得的桥接归属，避免首次 bind 或重绑后的资源逃过断连清理。
+
+[连接注册和代理请求](../src/feishu_card_bridge_runtime.v)捕获原连接后发送，撤销不会改投重连后的连接。[session.clear](../src/command_handlers.v)先原子撤销本地状态及 Codex 目标，释放状态锁后通过窄能力传播到原连接；bind/rebind 后 clear 仍使用捕获的原远端 stream、实例和代际。服务端 clear 按连接及代际检查，重复或迟到 clear 不会删除其他连接或新代资源。未消费凭证撤销继续是独立操作；已消费 HTTP 和已发布资源使用 clear。代理失败或结果不确定会关闭原传输并撤销该连接上的本地资源，因此同连接其他流也需重新签发，不会保留一个可继续使用的失联授权。旧撤销重试无法关闭替代连接。
+
+[客户端](../src/feishu_card_bridge_client_runtime.v)和[服务端](../src/feishu_card_bridge_server_runtime.v)均使用 45 秒连接租约。既有 15 秒应用心跳及当前连接上的实际响应/消息可以在到期前续租；过期后心跳不能复活授权。独立的 watchdog 每秒检查，关闭失联连接并清理资源；首次创建和异步完成在状态锁内也检查到期。服务端 watchdog 归会话持有并等待退出，客户端 watchdog 归 provider session worker 持有并随其退出。这覆盖客户端单向收不到 pong、远端仍能收到 ping 的情况。网络分区期间无法声称即时远端确认；本地先拒绝重放，远端最迟在未续租后的租约及检查间隔内终结，已发出的外部 HTTP 副作用不能撤回。
+
+服务端为每条连接保留最多 4096 个 create 请求的结果或终结失败，重复请求不会在消费、撤销或凭证过期后重新签发；满时拒绝，不逐出重放证据，当前原生代理客户端会关闭并重连。连接退休后清空这些记录，无全局退休历史表。新连接必须显式获取新凭证。原生可信凭证通过桥接发送时在准入处取得该连接的发布归属；原生本地资源不因另一连接退休而被删除。
+
+[状态回归](../src/feishu/bridge_authority_test.v)、[跨注册表集成回归](../src/feishu_cross_host_revocation_test.v)与[双 hub E2E](../tests/e2e/feishu_bridge_revocation_test.mjs)覆盖重连、精确清理、迟到结果、失败撤销、首次 bind/rebind 撤销归属、静默过期及真实单向丢包；双 hub 测试已加入标准 E2E。这里只补充跨宿主撤销及原发布归属，不新增通用远端 bind/rebind 发布协议。
+
 ## Related Docs
 
 - [`/Users/guweigang/Source/vhttpd/docs/OVERVIEW.md`](/Users/guweigang/Source/vhttpd/docs/OVERVIEW.md)
