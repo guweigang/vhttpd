@@ -327,6 +327,16 @@
 - 改 Feishu provider 协议/鉴权/发送：`feishu_runtime.v`
 - 改 Codex provider 协议/RPC/turn/连接：`codex_runtime.v`
 
+### 外部与 PHP 创建凭证（2026-10-20）
+
+[Admin 签发入口](../src/admin_feishu_creation.v)仅位于独立 admin listener，必须配置非空 token 并传入 `x-vhttpd-admin-token`；query token、浏览器 cookie 和空 token 开放模式均不能签发。GET `/admin/runtime/feishu/creation` 返回本进程的 `epoch` 和服务端 `issued_at`；POST 同一路径接收这两项、随机 64 位十六进制 `request_id`、`stream_id`、`instance`、`kind=send|bind` 和 `message_id`（bind 必填，send 为空），返回 `generation/token`。成功响应使用 `Cache-Control: no-store`。
+
+[外部签发状态](../src/feishu/external_creation.v)在 Feishu mutex 下管理有期限的幂等记录，最多 4096 项、固定从捕获时间起 300 秒，满时拒绝而不逐出活跃记录。相同请求只能取得原凭证，消费、撤销或失败后不会补签；重用请求 ID 改 scope 会被拒绝，重启后旧 epoch 失效。POST `/admin/runtime/feishu/creation/revoke` 提交原签发请求，撤销尚未消费的凭证；即使撤销先到，也保留终结记录防止迟到 POST 创建。它不取消已准入 HTTP 或已发布资源，后者仍使用捕获代际的 `session.clear`。
+
+[PHP 客户端](../php/package/src/VHttpd/Feishu/CreationClient.php)从 `VHTTPD_ADMIN_BASE_URL` 和 `VHTTPD_ADMIN_TOKEN` 获取显式配置，不跟随重定向、不自动重试或续签。[不可变凭证](../php/package/src/VHttpd/Feishu/CreationLease.php)校验 stream、实例、操作和物理目标，只序列化捕获值。[PHP StreamService](../examples/codexbot-app/lib/Service/StreamService.php)在新建流时获取凭证，将代际、token、原签发请求与任务一起写入 SQLite；写入失败回滚并尝试撤销，失联凭证依赖有界过期回收。取消使用已保存代际。桥接撤销按精确 token、代际与 scope 回收远端凭证；迟到结果无法在本地发布时也尝试回收。网络失败会留下有期限远端凭证，本地准入仍按原归属拒绝；一般跨宿主生命周期取消仍是独立边界。
+
+[状态回归](../src/feishu/external_creation_test.v)、[命令集成回归](../src/feishu_external_creation_admission_test.v)、[PHP/SQLite 回归](../php/package/tests/feishu_creation_test.php)与[真实 HTTP E2E](../tests/e2e/feishu_external_creation_test.mjs)覆盖获取、持久化、传递、乱序撤销、重放及进程重启；后两者已纳入标准 E2E 入口。
+
 ## Related Docs
 
 - [`/Users/guweigang/Source/vhttpd/docs/OVERVIEW.md`](/Users/guweigang/Source/vhttpd/docs/OVERVIEW.md)
