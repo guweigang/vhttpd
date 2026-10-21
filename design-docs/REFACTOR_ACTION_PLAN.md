@@ -8,7 +8,7 @@ Track this file as milestones complete; cross-link any deviation back to the rev
 
 当前范围仅为 M4。已移除 `runtime_trace` 和硬编码 trace 文件，业务事件直接进入统一 emit；WebSocket 的原 `ws.*` 诊断经显式注入的 emit 能力记录为 `runtime.trace`，保留 label 与调用点字段。未新增独立 `runtime_trace_path`，避免重建第二条路径；日志说明更新在现有 [日志系统文档](../docs/开发指南/调试技巧和工具/日志系统.md)，不创建已经迁移掉的 `docs/OVERVIEW.md`。这是对原 M4 路径提案的明确调整，业务事件名、NDJSON 字段、统计、默认文本输出和生产 WARN 契约保持不变。新增 `VHTTPD_LOG_FORMAT=json` 的控制台格式，event log 写失败显式报 error，空路径显式禁用。
 
-当前冻结候选 M4-B：`tmp/m4-logging-validation/snapshot/`，输入清单 SHA-256 `6443bd722a3ce84010545c2d94dc3fd2cafcc0d952634fbc86c367cd656f5d52`。复用已冻结依赖并固定原生运行时，执行 logging/ws、生产模式日志回归、四个相关运行时文件、真正生产构建及原完整生产 E2E；新增文本/JSON 生产契约测试已加入 E2E 入口。验证正在进行，尚未核销 M4。中止的准备轮单独保留于 `attempt-a/`，不用于验收。上一轮 E 的 332/332 是旧候选证据，本轮不冒称重新执行全量矩阵，也不扩展局部生命周期审查。
+当前冻结候选 M4-C：`tmp/m4-logging-validation/snapshot/`，输入清单 SHA-256 `7df073e4a544ec7f2da518c9efb9044c7bda6900e3fe0dde8213f6dcf688a449`。复用已冻结依赖并固定原生运行时，执行 logging/ws、生产模式日志回归、四个相关运行时文件、真正生产构建及原完整生产 E2E；新增文本/JSON 正常运行与配置加载失败的生产契约测试已加入 E2E 入口。配置失败先于时区初始化，JSON 模式现提前初始化，文本模式不变；JSON 记录器释放自身互斥量并借用 stderr。验证正在进行，尚未核销 M4。中止的准备轮保留于 `attempt-a/`、`attempt-b/`，不用于验收。上一轮 E 的 332/332 是旧候选证据，本轮不冒称重新执行全量矩阵，也不扩展局部生命周期审查。
 
 ## 前轮 V2 验收阻塞修复与复验 — 2026-10-21～22（候选 E）
 
