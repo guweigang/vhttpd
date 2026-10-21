@@ -4,6 +4,25 @@ This plan turns the prioritized findings in [`CODE_REVIEW_2026_08_06.md`](CODE_R
 
 Track this file as milestones complete; cross-link any deviation back to the review.
 
+## V2 收尾验收 — 2026-10-21
+
+**当前结论：验收进行中，尚不能标为全部完成。** 本轮冻结源码快照，核销历史计划与执行完整矩阵，不再扩展新的局部生命周期审查。后续的历史进度段落保留其当日语境；本节汇总当前状态，旧段落中的 pending 不应直接当作今日状态，也不能用历史局部绿测替代本轮整体验收。
+
+| 里程碑 | 本轮核对 | 核销依据与仍需满足的条件 |
+|---|---|---|
+| M0 基线 | 历史证据不全，当前基线待补录 | 未找到 `pre-refactor-baseline` 标签；不能把当前提交伪装成重构前基线。记录本轮源码、工具链、构建与测试结果；缺少历史数据时不宣称性能改善。 |
+| M1 unsafe bridge | 实现目标已完成，整体验证待收口 | [类型化 App 适配](../src/app_executor_facade.v)与[安全检查](../scripts/lint_safety.sh)替代旧包装器；原先改成值快照的策略已由上文记录的 live capability 方案替代，不重复改写。仍需本轮矩阵与跨平台结果。 |
+| M2 Executor/worker 拆分 | 实现目标已完成，整体验证待收口 | [WorkerState](../src/worker/types.v)、[引擎编排](../src/engine_runtime.v)与[应用适配](../src/app_worker_backend.v)分离状态归属和应用装配；以矩阵验证现有实现，不再按旧文件名做机械搬迁。 |
+| M3 command/Feishu 拆分 | 实现目标已完成，整体验证待收口 | [命令能力接口](../src/command_host.v)、[Feishu 状态](../src/feishu/types.v)和[桥接能力接口](../src/feishu_card_bridge_host.v)已显式注入；近期发布、重放、背压及停止修复已落地，完整矩阵待本轮确认。 |
+| M4 日志统一 | 未完成 | [主入口](../src/main.v)仍保留 `runtime_trace()`、`/tmp/vhttpd_runtime_trace.log` 与 emit 双写；此前 CLOEXEC 修复只完成描述符安全，不能核销日志统一目标。 |
+| M5 CI 矩阵 | 部分完成 | [现有 workflow](../.github/workflows/vhttpd-binaries.yml)已有 PR fast/prod/E2E；未找到计划要求的 inproc/CodexBot PR 步骤及 nightly-full workflow，也没有本冻结版本的远端 CI 运行证据。[包同步](../.github/workflows/sync-vphp-package.yml)只发布 `php/package` 子树，`php/app` 排除与当前发布范围一致，不为无关应用变更触发包发布。 |
+| M6 可取消退避 | 实现目标已完成，整体验证待收口 | [会话取消与等待](../src/connection_runtime/owner.c.v)、[上游连接循环](../src/ws/upstream_runtime.v)及[桥接客户端](../src/feishu_card_bridge_client_runtime.v)以会话归属停止；短轮询保留，不能把所有 sleep 的存在都误当未实现。 |
+| M7 V1 弃用与默认示例 | 未完成 | [默认配置](../vhttpd.toml)仍是 V1 布局；[兼容投影](../src/config/v1_plan_compat.v)仍在原路径。原提案的移除日期不等于已发布承诺，仍需完成或明确批准调整范围后才能关闭。 |
+
+本轮候选快照位于 `tmp/v2-closeout-validation/snapshot/`；清单含 332 个 V 测试文件、2157 个直接声明的测试函数。`identity.json`、`source-manifest.json`、`test-inventory.json` 记录精确版本，不能仅用持续变化的 autosave HEAD 代表测试输入。所有矩阵目标使用该快照；测试失败后保留该目标的未执行部分，不能标绿。当前证据集中在 `tmp/v2-closeout-validation/`。
+
+**完成标准：** 同一冻结源码的正式测试矩阵与生产构建通过，生产二进制的完整 E2E 通过；跨平台验收阻塞消除；M4/M5/M7 的实际缺口完成，或由负责人明确接受移出本轮；历史基线缺失保持可见，当前指标不用于虚构前后提升。只有这些条件满足，才可把本节改为验收完成。Linux 预检目前命中技能的既存跟踪变更停止规则，未执行 Linux 构建、测试或环境修改。Live DB/已安装 WordPress 与长期负载是独立环境验收，默认 smoke 通过不代表已覆盖这些场景。
+
 ## Progress — 2026-10-14
 
 The V3 compatibility baseline is established. The first Milestone 1 slice removes the unsafe `AppFacadeWrapper`: `App` now implements `executor.AppFacade` directly in `src/app_executor_facade.v`, while transitional executor aliases and factory helpers live in `src/executor_types.v`. `src/executor_bridge.v` is deleted. The two new facade regressions verify that configuration updates remain visible and mutations affect the original App rather than a boxed copy. `make lint-safety` runs before `test-fast` and rejects raw App casts in the executor facade; provider callback casts remain a separate migration.

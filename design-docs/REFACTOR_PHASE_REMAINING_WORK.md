@@ -6,13 +6,19 @@ tags:
   - v2-config
   - validation
 status: draft
-updated: 2026-07-04
+updated: 2026-10-21
 ---
 # Refactor Phase Remaining Work
 
 This document records the remaining acceptance work after the v2 runtime/config refactor. The code refactor stages are treated as complete when the automated test matrix is green. The whole refactor goal is complete only after the product-level checklist below passes.
 
-## Current Status
+## 当前收尾验收（2026-10-21）
+
+V2 配置和运行时主体的既有验收结果保留在下方历史状态中；它们不能证明 10 月之后的所有安全加固已在同一版本完成整体验证。当前状态为**收尾验收进行中，仍有阻塞项**。逐项核销、剩余范围与完成标准以 [重构行动计划的收尾验收节](REFACTOR_ACTION_PLAN.md) 为准。
+
+本轮使用 `tmp/v2-closeout-validation/snapshot/` 冻结源码，清点 332 个 V 测试文件，分别运行正式 V、PHP、inproc、CodexBot、生产构建与 E2E 矩阵。结果和未执行部分必须逐目标记录；不能把此前局部组合回归或 7 月测试结果移作本轮全量通过。M4 日志统一、M5 CI 扩展、M7 V1 弃用/默认配置仍有实际缺口；Linux 验收被现有跟踪变更停止规则阻挡，不能据此标为已完成。
+
+## 历史状态（2026-07-04）
 
 - Stage 7 runtime isolation and module closure: code-complete.
 - Automated test matrix: green as of 2026-07-04. Re-verified `make test`, `make test-inproc`, `make test-codexbot-fast`, `make test-codexbot-lifecycle`, and `make test-e2e` after the provider hook observability and acceptance-status updates.
