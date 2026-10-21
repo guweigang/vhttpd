@@ -13,7 +13,7 @@ Track this file as milestones complete; cross-link any deviation back to the rev
 - B4：原因确认是 [生产日志默认级别](../src/logging/runtime_logger.v)为 WARN，而 E2E 断言 INFO 请求日志。metrics/Relay 的子进程与 config acceptance 显式设置 `VHTTPD_LOG_LEVEL=info`；生产默认级别、原断言及超时不变。同一首轮生产二进制的定向复测 11/11 通过，不能替代新候选的完整生产 E2E。
 - R1：本轮在执行正式矩阵前复制 V 编译器、V 源码、vjsx 与 QuickJS；复制的 vjsx 模块链接已指向冻结副本。运行前逐文件哈希、提交和本地修改清单保存在 `dependency-inputs.json`，PHP Composer vendor 也包含于应用快照。结果必须与运行后的输入完整性校验一起判定。
 
-新证据目录为 `tmp/v2-closeout-fix-validation/`。应用快照共 9,743 个文件，清单 SHA-256 为 `7ffcf640cabfbabc46e6840cdf91207e0ef7dad3c4719e195c61e735dadc84d4`；原二进制保留。正式矩阵使用冻结 PATH、VEXE、VMODULES、vjsx 与 QuickJS，VJOBS=2，取消 fail-fast；逐目标命令、时间和退出码写入 `matrix-results.json`。
+新证据目录为 `tmp/v2-closeout-fix-validation/`。应用快照排除 Pest 执行结果缓存后的输入数量与精确清单哈希见 `identity.json`；初始含缓存的清单保留在 `source-manifest-with-generated-pest-cache.json`，该修订只排除运行时产物，生产和测试源码未变化；原二进制保留。正式矩阵使用冻结 PATH、VEXE、VMODULES、vjsx 与 QuickJS，VJOBS=2，取消 fail-fast；逐目标命令、时间和退出码写入 `matrix-results.json`。
 
 当前正式快照上的 PHP 包、PHP 应用和安全检查已通过；生产构建、生产 E2E、V all/default/inproc/CodexBot 结果待运行完成后补录。Linux 只读预检已成功返回，挂载仓库仍有本轮之前的跟踪变更，技能停止规则继续适用；未执行 Linux 构建或环境修改。M4/M5/M7 的实际缺口保持原状态，不以本轮修复自动核销。
 
