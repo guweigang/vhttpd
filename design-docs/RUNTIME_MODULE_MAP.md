@@ -403,6 +403,16 @@
 
 [状态回归](../src/feishu/message_update_test.v)、[命令回归](../src/feishu_message_update_test.v)、[PHP 构造器回归](../tests/protocol/feishu-message-update.php)及[真实桥接 HTTP 回归](../tests/e2e/feishu_message_update_test.mjs)覆盖迟到包、HTTP 在途重绑/撤销/同 ID 重建、失败重试、重复更新和排队。已在 HTTP 前通过准入的外部 PATCH 可能在撤销后完成，Feishu API 不支持本地代际条件提交；本轮阻止其运行时完成发布、缓冲写回及新生命周期接管，不保证撤回已准入的外部副作用。外部通知的来源认证和跨事件业务授权仍为独立边界。
 
+### 原始 provider.message.send 准入与完成（2026-10-21）
+
+[Feishu 发送准入](../src/feishu/creation.v)不再给空白 scope 提供匿名 InitialSend。原始命令（含旧 Feishu 别名）必须先取得可信签发的非空 `stream_id`、`stream_generation` 和一次性 `creation_token`；删掉 scope、凭证或 provider 不能从已撤销命令恢复权限。[通用命令入口](../src/command_handlers.v)拒绝省略 provider 的 event-only send，并拒绝把 Codex 普通 send 转为原始 WebSocket 发送，调用者使用既有 RPC/控制入口。fixture 保持测试计数语义，未知 provider 仍报错。
+
+[桥接入口](../src/feishu_card_bridge_server_runtime.v)只能执行 Feishu 请求，其他 provider 在消耗凭证前拒绝；不能用 Feishu 创建凭证转投 Codex 或 fixture。空 scope 不发送到远端。原生及桥接 HTTP 完成只在原 InitialSend 仍有效时发布，结果代际必须等于准入时的签发代际。[桥接传输](../src/feishu_card_bridge_runtime.v)还要求成功、非空消息 ID 和原代际；缺字段、错误代际及失败确认均退休原连接。服务端也不能把空消息 ID 报告为成功提交。原有同 ID 冲突记录、重绑/撤销检查及不可变 sent 回执仍保护缓冲与目标的配对发布。
+
+这是 wire 命令的兼容性收紧：包括一次性回复在内的旧无 scope 或无凭证 send 均被拒绝，生产者应先显式取得创建上下文；不在入站命令中补签，不查询新代际来刷新旧权限。桥接两端需同步升级。受认证 admin 和宿主内部低层发送 API 维持其独立可信入口，不能把这些 API 的直接发送能力解释为 worker 命令权限。Codex RPC 的业务授权仍为独立边界。
+
+[状态回归](../src/feishu/raw_send_admission_test.v)、[真实执行器与桥接完成回归](../src/feishu_raw_send_boundary_test.v)及[真实 HTTP E2E](../tests/e2e/feishu_message_update_test.mjs)覆盖删 scope 重放、旧凭证、错误确认、空消息 ID、provider 转投及 HTTP 在途时连接替换和同 ID 重建。已在撤销前准入的外部 POST 仍可能完成并创建外部消息；本轮保证其迟到结果不能接管运行时新资源，不保证撤回外部副作用。
+
 ## Related Docs
 
 - [`/Users/guweigang/Source/vhttpd/docs/OVERVIEW.md`](/Users/guweigang/Source/vhttpd/docs/OVERVIEW.md)
