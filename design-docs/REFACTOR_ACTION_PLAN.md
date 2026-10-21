@@ -8,6 +8,8 @@ Track this file as milestones complete; cross-link any deviation back to the rev
 
 **当前状态：三项阻塞的修复已进入冻结候选，正式完整矩阵正在运行，尚未宣告验收通过。** 范围限于测试夹具、PHP SDK 自动加载与生产日志断言，不继续扩展局部生命周期审查。下方“首轮”保留失败现场，不能与本轮结果混用。
 
+**当前执行候选 C：** `tmp/v2-closeout-final-validation/snapshot/`，9,743 个输入文件，清单 SHA-256 `290254a2f8283dd396a03fd69de83254bc881e009f0cc24bae9b03e523b8ccf1`。本轮补修还包括函数作为回调值传递的 `config_check_ok` 与跨测试文件共享的 `NarrowCommandBridgeHost` 类型及方法；两者已移入测试支持文件，原单文件入口均通过。函数调用、回调值、共享类型三类引用复核已完成。已停止已知失败 B 的继续运行并保留部分结果，C 使用同一冻结依赖从头执行原始完整矩阵，所有最终结果以 `tmp/v2-closeout-final-validation/matrix-results.json` 为准。运行期间不再修改 C 的源码输入。
+
 - B1：将跨文件共用的 admin draft、HTTP worker session、config changeset、build directory 辅助函数移入对应的 `*_test_support.v`；原测试文件、用例和断言保留。未合并测试入口或排除文件。
 - B2：补齐 [仓库内 Upstream SDK](../php/package/src/VHttpd/Upstream/WebSocket/EventRouter.php)的真实事件路由、命令容器及序列化实现；[源码自动加载](../php/package/autoload.php)、[应用加载入口](../examples/codexbot-app/autoload.php)与 worker fallback 使用同一套 SDK。新增包回归验证事件分发、命令顺序和已捕获凭证。应用测试的旧重启命令计数现明确检查清理命令及 generation；取消测试在跨连接写入前关闭 SQLite 读取游标，保留取消和迟到事件的原断言。定向 Pest 79/79、557 条断言通过。
 - B4：原因确认是 [生产日志默认级别](../src/logging/runtime_logger.v)为 WARN，而 E2E 断言 INFO 请求日志。metrics/Relay 的子进程与 config acceptance 显式设置 `VHTTPD_LOG_LEVEL=info`；生产默认级别、原断言及超时不变。同一首轮生产二进制的定向复测 11/11 通过，不能替代新候选的完整生产 E2E。
