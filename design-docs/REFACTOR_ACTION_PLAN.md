@@ -19,7 +19,7 @@ Track this file as milestones complete; cross-link any deviation back to the rev
 | M6 可取消退避 | 实现目标已完成，整体验证待收口 | [会话取消与等待](../src/connection_runtime/owner.c.v)、[上游连接循环](../src/ws/upstream_runtime.v)及[桥接客户端](../src/feishu_card_bridge_client_runtime.v)以会话归属停止；短轮询保留，不能把所有 sleep 的存在都误当未实现。 |
 | M7 V1 弃用与默认示例 | 未完成 | [默认配置](../vhttpd.toml)仍是 V1 布局；[兼容投影](../src/config/v1_plan_compat.v)仍在原路径。原提案的移除日期不等于已发布承诺，仍需完成或明确批准调整范围后才能关闭。 |
 
-本轮候选快照位于 `tmp/v2-closeout-validation/snapshot/`；清单含 332 个 V 测试文件、2157 个直接声明的测试函数。`identity.json`、`source-manifest.json`、`test-inventory.json` 记录精确版本，不能仅用持续变化的 autosave HEAD 代表测试输入。所有矩阵目标使用该快照；测试失败后保留该目标的未执行部分，不能标绿。当前证据集中在 `tmp/v2-closeout-validation/`。
+本轮候选快照位于 `tmp/v2-closeout-validation/snapshot/`；清单含 332 个 V 测试文件、2157 个直接声明的测试函数。`identity.json`、`source-manifest.json`、`test-inventory.json` 记录精确版本，不能仅用持续变化的 autosave HEAD 代表测试输入。所有矩阵目标使用该快照；测试失败后保留该目标的未执行部分，不能标绿。当前证据集中在 `tmp/v2-closeout-validation/`。外部 V/vjsx 的 HEAD 与最初记录相同，但两个工作区含本地修改，本轮开始时未记录这些修改的文件哈希；`toolchain-final.json` 只能描述最终状态，不能证明整个运行期间外部依赖无漂移。应用快照无漂移的结论不覆盖这些外部输入；下一次可接受候选须一并冻结或预先记录它们。
 
 **完成标准：** 同一冻结源码的正式测试矩阵与生产构建通过，生产二进制的完整 E2E 通过；跨平台验收阻塞消除；M4/M5/M7 的实际缺口完成，或由负责人明确接受移出本轮；历史基线缺失保持可见，当前指标不用于虚构前后提升。只有这些条件满足，才可把本节改为验收完成。Linux 预检目前命中技能的既存跟踪变更停止规则，未执行 Linux 构建、测试或环境修改。Live DB/已安装 WordPress 与长期负载是独立环境验收，默认 smoke 通过不代表已覆盖这些场景。
 
