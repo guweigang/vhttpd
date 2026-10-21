@@ -369,7 +369,7 @@
 
 [命令完成](../src/command_handlers.v)只在原操作、身份和租约仍有效时应用状态。最终 finish 将本地准入镜像封口，preview 保持服务端确认的状态；旧确认不能把已封口的代际重新打开。fail 在 Feishu → Codex 顺序下撤销镜像和匹配目标。[原生执行器](../src/feishu_stream_command_runtime.v)也按身份撤销根缓冲及有效链接的后继链、分段目标，保留其他代际、其他平台和无关 peer。空缓冲 finish 直接原子封口，无需 HTTP。
 
-发起端镜像只持有准入和生命周期信息，远端 provider 持有内容、分段链与外部 HTTP。初始发送、绑定确认和流式操作会标记镜像；即使宿主同时配置原生 Feishu 和桥接，本地 flusher、preview/finish 提交和直接 append 也不能把镜像旧内容写回。镜像不复制远端完整内容与分段拓扑；clear/fail 的远端精确清理由远端拥有的链处理。
+发起端镜像只持有准入和生命周期信息，远端 provider 持有内容、分段链与外部 HTTP。生产代理要求目标已有桥接归属；原生缓冲在操作预留前拒绝，不会因代理失败被清理。初始发送、绑定确认和流式操作会标记镜像；即使宿主同时配置原生 Feishu 和桥接，本地 flusher、preview/finish 提交和直接 append 也不能把镜像旧内容写回。镜像不复制远端完整内容与分段拓扑；clear/fail 的远端精确清理由远端拥有的链处理。
 
 撤销、重绑或断连后迟到的成功结果不能发布本地完成，并按原连接、原 scope 和代际补偿 clear；不确定结果继续采用原连接退休及租约收敛。已准入外部 HTTP 副作用不能撤回，也不提供跨宿主瞬时原子提交。[PHP 事件路由](../examples/codexbot-app/lib/Upstream/ProviderEventRouter.php)不再让 `feishu.message.updated` 更新资源绑定，避免迟到失败通知覆盖新的消息和代际；sent 的初始发布权限仍属独立入口。
 
