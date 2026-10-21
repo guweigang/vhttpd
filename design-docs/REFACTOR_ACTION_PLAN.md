@@ -15,7 +15,7 @@ Track this file as milestones complete; cross-link any deviation back to the rev
 
 新证据目录为 `tmp/v2-closeout-fix-validation/`。应用快照排除 Pest 执行结果缓存后的输入数量与精确清单哈希见 `identity.json`；初始含缓存的清单保留在 `source-manifest-with-generated-pest-cache.json`，该修订只排除运行时产物，生产和测试源码未变化；原二进制保留。正式矩阵使用冻结 PATH、VEXE、VMODULES、vjsx 与 QuickJS，VJOBS=2，取消 fail-fast；逐目标命令、时间和退出码写入 `matrix-results.json`。
 
-候选 A 的 PHP 包 10 个脚本、PHP 应用 79 个用例（557 条断言）、安全检查与生产构建通过；其完整 E2E 已通过 metrics/Relay 日志断言，但在 WordPress worker 启动处暴露本轮 source loader 与 Composer 重复加载 runtime 的问题，完整错误及产物归档于 `attempt-a/`，不计为完整 E2E 通过。已修复 Composer 优先发现与兼容入口防重复加载，并增加无 Composer 的两份真实 SDK 共存回归；WordPress worker 已独立启动成功。当前候选 B 已重新冻结，输入清单 SHA-256 `26c01176bc37a14308efc59a3ca3395070f36cae6744f3dda66681be44b7a839`，正式矩阵从头执行，不混用候选 A 的结果。生产、E2E 和 V 原始目标的最终结果待补录。Linux 只读预检已成功返回，挂载仓库仍有本轮之前的跟踪变更，技能停止规则继续适用；未执行 Linux 构建或环境修改。M4/M5/M7 的实际缺口保持原状态，不以本轮修复自动核销。
+候选 A 的 PHP 包 10 个脚本、PHP 应用 79 个用例（557 条断言）、安全检查与生产构建通过；其完整 E2E 已通过 metrics/Relay 日志断言，但在 WordPress worker 启动处暴露本轮 source loader 与 Composer 重复加载 runtime 的问题，完整错误及产物归档于 `attempt-a/`，不计为完整 E2E 通过。已修复 Composer 优先发现与兼容入口防重复加载，并增加无 Composer 的两份真实 SDK 共存回归；WordPress worker 已独立启动成功。当前候选 B 已重新冻结，输入清单 SHA-256 `26c01176bc37a14308efc59a3ca3395070f36cae6744f3dda66681be44b7a839`，正式矩阵从头执行，不混用候选 A 的结果。候选 B 的生产构建重新通过，二进制 SHA-256 仍为 `51c6474eb776eead0d9f3123e3ad02493dc916bec64fe5d81534367ce3a51011`（10,758,096 字节）。完整生产 E2E 已通过，原 `run.sh` 全流程成功，配置验收 205 项、FAIL 0，CLI 4 项及所有前置 Node/PHP/协议/进程/桥接用例通过；原日志断言和超时保持不变。B2、B4 已在该候选复验通过，B1 及整体 V all/default/inproc/CodexBot 矩阵仍待完成。Linux 只读预检已成功返回，挂载仓库仍有本轮之前的跟踪变更，技能停止规则继续适用；未执行 Linux 构建或环境修改。M4/M5/M7 的实际缺口保持原状态，不以本轮修复自动核销。
 
 ## 首轮 V2 收尾验收 — 2026-10-21（历史结果）
 
