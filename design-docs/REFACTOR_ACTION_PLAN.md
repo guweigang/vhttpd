@@ -33,6 +33,23 @@ Track this file as milestones complete; cross-link any deviation back to the rev
 | B4 生产版日志契约 | 同一 `-prod` 二进制的完整 E2E 在 [metrics 日志断言](../tests/e2e/admin_http_metrics_test.mjs)第 88 行超时，独立复测同样失败；补跑 [Relay 身份测试](../tests/e2e/relay_connection_identity_test.mjs)在第 139 行等不到请求日志，配置验收停在 WebSocket trace 日志断言。metrics API、Relay 全部 ACK/admin 访问及 WebSocket 消息检查已通过，不能把这些日志失败写成 hub panic。9 组 Relay 退出记录均为测试主动终止（143），完整日志与 ACK 保存于 `relay-prod-artifacts/`。 | 在生产构建中落实既有日志/trace 契约并通过原断言；随后对最终候选重新执行完整 E2E。保留超时和断言，不以开发二进制的绿测替代。 |
 | M4/M5/M7 | 见上方里程碑核对表，仍为实际未完成项。[CI](../.github/workflows/vhttpd-binaries.yml)也尚未将仅测试文件的变更纳入 PR 触发路径。 | 实现并验证，或由负责人明确接受调整范围；记录决定后才能关闭。 |
 
+### 本轮矩阵结果
+
+| 目标 | 最终状态与覆盖范围 | 原始证据 |
+|---|---|---|
+| 生产构建 | 通过；DB/OpenSSL/QuickJS 开启、boehm GC，真正 `-prod` 产物 | `prod.log`、`production-binary.json` |
+| 安全检查 | 通过，来自正式 `make test` 的前置步骤 | `test.log` |
+| `make test` / fast | 未完成；首个 route 文件通过后停止重复编译，转由 all 汇总覆盖，不能标绿 | `test.log` |
+| `make test-all` | 失败：5 通过、1 编译失败；该入口剩余 326/332 未执行 | `test-all.log` |
+| `make test-php` | 通过，9 个脚本 | `php.log` |
+| PHP 应用 Pest | bootstrap 失败，0 用例执行 | `php-app-pest.log` |
+| `make test-inproc` | 通过，6/6 文件 | `inproc-final.log` |
+| `make test-codexbot-fast` | 通过，6/6 文件 | `codexbot-fast-final.log` |
+| `make test-codexbot-lifecycle` | 执行中，27 个声明的测试函数，尚无最终结果 | `codexbot-lifecycle-final.log` |
+| 旧 Feishu 单文件补测 | 通过 | `feishu-runtime-gate.log` |
+| 生产二进制完整 E2E | 失败；后续补跑和独立复测见 B4 及下文，不能视为全入口通过 | `e2e-prod-frozen.log`、`e2e-remainder.json` |
+| Linux | 未执行；预检停止，最终只读 OrbStack 复查超时 | `linux-preflight.log`、`linux-final-*-bounded.log` |
+
 ### 本轮生产构建与当前基线
 
 同一冻结源码的 `make prod WITH_DB=1 VPHP_V_GC=boehm` 已通过，OpenSSL/QuickJS 开启；二进制 SHA-256 为 `70b1400e4a5fa5add5fcb3c66395bea014e7da36f2aa07362df28e6d4d13ad6c`，10,741,584 字节。当前 arm64 主机的最小健康检查配置测得空闲 RSS 三次均为 24,416 KiB，20 次预热后 100 次单客户端顺序 `/health` 请求 p50 1.342 ms、p99 7.857 ms。每次请求新建连接；其他编译任务可能仍在运行，因此这些数值仅为本轮配置基线，不是性能门槛、吞吐测试或重构前后改善证据。构建墙钟约 1253 秒，由新建日志到链接产物时间估算，不冒充 `/usr/bin/time` 精确测量。精确方法和样本摘要见 `tmp/v2-closeout-validation/current-baseline.json`。
