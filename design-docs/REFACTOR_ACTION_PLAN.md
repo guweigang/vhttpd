@@ -11,7 +11,7 @@ Track this file as milestones complete; cross-link any deviation back to the rev
 | 里程碑 | 本轮核对 | 核销依据与仍需满足的条件 |
 |---|---|---|
 | M0 基线 | 历史证据不全，当前基线已补录 | 未找到 `pre-refactor-baseline` 标签；不能把当前提交伪装成重构前基线。记录本轮源码、工具链、构建与测试结果；缺少历史数据时不宣称性能改善。 |
-| M1 unsafe bridge | 实现目标已完成，整体验证待收口 | [类型化 App 适配](../src/app_executor_facade.v)与[安全检查](../scripts/lint_safety.sh)替代旧包装器；原先改成值快照的策略已由上文记录的 live capability 方案替代，不重复改写。仍需本轮矩阵与跨平台结果。 |
+| M1 unsafe bridge | 实现目标已完成，整体验证待收口 | [类型化 App 适配](../src/app_executor_facade.v)与[安全检查](../scripts/lint_safety.sh)替代旧包装器；原先改成值快照的策略已由后文记录的 live capability 方案替代，不重复改写。仍需本轮矩阵与跨平台结果。 |
 | M2 Executor/worker 拆分 | 实现目标已完成，整体验证待收口 | [WorkerState](../src/worker/types.v)、[引擎编排](../src/engine_runtime.v)与[应用适配](../src/app_worker_backend.v)分离状态归属和应用装配；以矩阵验证现有实现，不再按旧文件名做机械搬迁。 |
 | M3 command/Feishu 拆分 | 实现目标已完成，整体验证待收口 | [命令能力接口](../src/command_host.v)、[Feishu 状态](../src/feishu/types.v)和[桥接能力接口](../src/feishu_card_bridge_host.v)已显式注入；近期发布、重放、背压及停止修复已落地，完整矩阵待本轮确认。 |
 | M4 日志统一 | 未完成 | [主入口](../src/main.v)仍保留 `runtime_trace()`、`/tmp/vhttpd_runtime_trace.log` 与 emit 双写；此前 CLOEXEC 修复只完成描述符安全，不能核销日志统一目标。 |
@@ -29,7 +29,7 @@ Track this file as milestones complete; cross-link any deviation back to the rev
 |---|---|---|
 | B1 官方 V 全量入口 | `make test-all` 退出 2：5 个文件通过，`admin_draft_publication_owner_test.v` 编译失败，326 个文件因 fail-fast 未执行。该文件引用仅定义在 [另一测试文件](../src/admin_state_runtime_test.v)中的 `admin_state_runtime_test_root`、`admin_state_runtime_plan_text`；[失败调用点](../src/admin_draft_publication_owner_test.v)在官方独立文件编译中不可见。证据 `test-all.log`。 | 公共夹具成为每个正式入口都能看见的测试支持代码，或各文件自足；保留原断言并让单文件、fast 和 all 入口真正通过。不能通过排除文件或临时合并入口核销。 |
 | B2 PHP 应用 Pest | [Pest 配置](../examples/codexbot-app/phpunit.xml)在 [bootstrap](../examples/codexbot-app/autoload.php)缺少 `VHttpd\\Upstream\\WebSocket\\EventHandler` 时退出 2，没有执行用例。证据 `php-app-pest.log`。PHP 包的 9 个测试脚本已通过，不能据此覆盖应用 Pest。 | 明确并补齐真实 SDK/自动加载契约，bootstrap 正常后执行应用测试；不得伪造空接口替代 SDK。 |
-| B3 Linux | `linux-preflight.log` 记录本轮前已存在的跟踪变更；技能停止规则阻止构建和测试，编译器仍为 clean `local-dev`。 | 按技能要求获得可执行的工作区状态或明确的后续安排，保留既存修改，再对相同源码完成 Linux 验证；不能把 macOS 结果冒充跨平台。 |
+| B3 Linux | `linux-preflight.log` 记录本轮前已存在的跟踪变更；技能停止规则阻止构建和测试；初次预检编译器为 clean `local-dev`，最终只读复查因 OrbStack 超时未能完成，不能宣称已再次确认最终 VM 状态。 | 按技能要求获得可执行的工作区状态或明确的后续安排，保留既存修改，再对相同源码完成 Linux 验证；不能把 macOS 结果冒充跨平台。 |
 | B4 生产版日志契约 | 同一 `-prod` 二进制的完整 E2E 在 [metrics 日志断言](../tests/e2e/admin_http_metrics_test.mjs)第 88 行超时，独立复测同样失败；补跑 [Relay 身份测试](../tests/e2e/relay_connection_identity_test.mjs)在第 139 行等不到请求日志，配置验收停在 WebSocket trace 日志断言。metrics API、Relay 全部 ACK/admin 访问及 WebSocket 消息检查已通过，不能把这些日志失败写成 hub panic。9 组 Relay 退出记录均为测试主动终止（143），完整日志与 ACK 保存于 `relay-prod-artifacts/`。 | 在生产构建中落实既有日志/trace 契约并通过原断言；随后对最终候选重新执行完整 E2E。保留超时和断言，不以开发二进制的绿测替代。 |
 | M4/M5/M7 | 见上方里程碑核对表，仍为实际未完成项。[CI](../.github/workflows/vhttpd-binaries.yml)也尚未将仅测试文件的变更纳入 PR 触发路径。 | 实现并验证，或由负责人明确接受调整范围；记录决定后才能关闭。 |
 
