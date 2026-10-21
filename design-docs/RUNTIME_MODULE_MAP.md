@@ -371,9 +371,21 @@
 
 发起端镜像只持有准入和生命周期信息，远端 provider 持有内容、分段链与外部 HTTP。生产代理要求目标已有桥接归属；原生缓冲在操作预留前拒绝，不会因代理失败被清理。初始发送、绑定确认和流式操作会标记镜像；即使宿主同时配置原生 Feishu 和桥接，本地 flusher、preview/finish 提交和直接 append 也不能把镜像旧内容写回。镜像不复制远端完整内容与分段拓扑；clear/fail 的远端精确清理由远端拥有的链处理。
 
-撤销、重绑或断连后迟到的成功结果不能发布本地完成，并按原连接、原 scope 和代际补偿 clear；不确定结果继续采用原连接退休及租约收敛。已准入外部 HTTP 副作用不能撤回，也不提供跨宿主瞬时原子提交。[PHP 事件路由](../examples/codexbot-app/lib/Upstream/ProviderEventRouter.php)不再让 `feishu.message.updated` 更新资源绑定，避免迟到失败通知覆盖新的消息和代际；sent 的初始发布权限仍属独立入口。
+撤销、重绑或断连后迟到的成功结果不能发布本地完成，并按原连接、原 scope 和代际补偿 clear；不确定结果继续采用原连接退休及租约收敛。已准入外部 HTTP 副作用不能撤回，也不提供跨宿主瞬时原子提交。[PHP 事件路由](../examples/codexbot-app/lib/Upstream/ProviderEventRouter.php)不再让 `feishu.message.updated` 更新资源绑定，避免迟到失败通知覆盖新的消息和代际；sent 的绑定发布由下节的生产端预留和原子确认处理。
 
 [状态回归](../src/feishu/bridge_stream_operation_test.v)、[生产传输与命令回归](../src/feishu_bridge_stream_completion_test.v)、[PHP/SQLite 回归](../php/package/tests/feishu_creation_test.php)及[双 hub E2E](../tests/e2e/feishu_bridge_revocation_test.mjs)覆盖排队、重绑/撤销/断连、异常确认、原生配对清理、空 finish、rollover 后 fail，以及旧 finish/fail HTTP 在途时替代连接重建同一物理消息的场景。
+
+### 生产端 sent 回执绑定发布（2026-10-21）
+
+[PHP 创建服务](../examples/codexbot-app/lib/Service/StreamService.php)在返回发送命令前持久化实例和 `stream_publication_id`，初始 ID 来自可信签发请求的 `request_id`。[CreationLease](../php/package/src/VHttpd/Feishu/CreationLease.php)把该 ID 随创建凭证写入命令 metadata；它是生产端待完成任务的关联权限，不替代 hub 的一次性创建凭证或代际准入。
+
+[原生命令](../src/command_handlers.v)和[桥接服务端](../src/feishu_card_bridge_server_runtime.v)在实际绑定提交时建立独立的 [SentPublication](../src/feishu/sent_publication.v)。每个绑定拥有计数，rollover 链共享计数；分段 finish 继续递增。回执包含 `stream_id`、物理 `message_id`、`stream_generation`、`instance`、`publication_id`、整数 `publication_sequence`，在持有 Feishu 状态锁时捕获，解锁后派发；迟到派发不再按消息 ID 读取新绑定。重新注册清除原发布归属，重绑建立新计数；桥接服务端为发起镜像的首次回执预留序号 1，远端分段从后续序号继续。
+
+[StreamRepository](../examples/codexbot-app/lib/Repository/StreamRepository.php)只用一条 SQLite UPDATE 完成回执发布：实例及预存发布 ID 必须一致，流和任务仍可发布，序号必须递增；第一次有效确认可接收新绑定代际，后续确认还必须保持该代际。乱序、重复、旧发布 ID、终态、缺字段及不存在的行均不更新。任务取消先写终态，流终态同时清空发布 ID；即使随后只重开行状态，也不能恢复旧权限。[事件路由](../examples/codexbot-app/lib/Upstream/ProviderEventRouter.php)只允许 Feishu sent 走此确认入口，不从 trace_id 补 stream_id，也不在回执中获取凭证或创建记录。
+
+显式重绑生产者应先调用 `prepareBindingPublication(streamId, messageId, generation, expectedPublication, instance)`，在匹配旧消息、代际、发布 ID 和活跃状态时原子换用随机新发布 ID，再把返回 metadata 放进 bind 命令。预留后旧回执立即失效，包括新代际确认尚未到达时；失败不自动恢复旧发布权限。现有 PHP 示例没有业务级重绑入口，该方法提供显式预留接口，不能由 sent 自行调用。升级时旧数据库新增发布字段的默认值为空，不根据已存消息 ID 补发权限；发布端、hub、桥接两端和 PHP 消费端需一起升级。只带旧格式回执的已存任务需要新的显式生命周期。
+
+[状态测试](../src/feishu/sent_publication_test.v)、[命令及 V/PHP 互操作测试](../src/feishu_sent_publication_test.v)、[SQLite 回归](../tests/protocol/feishu-generation-receipt.php)和[真实 hub/worker/PHP E2E](../tests/e2e/feishu_sent_publication_test.mjs)覆盖同 ID 重绑、分段回执乱序、撤销、删除、迁移以及待确认窗口。该边界依赖生产端先撤销或替换自己的预留；它不提供独立于生产端状态的外部撤销订阅，不撤回已经完成的 HTTP 副作用，也不认证任意外部事件来源。
 
 ## Related Docs
 
