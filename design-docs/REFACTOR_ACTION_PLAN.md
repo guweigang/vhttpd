@@ -1511,7 +1511,7 @@ Linux stopped at read-only preflight under the [VM testing skill](../.agents/ski
 
 - [ ] Record current `vhttpd` binary size and build time on each platform from CI artifact logs.
 - [ ] Capture `make test-fast` baseline wall-clock and pass/fail counts.
-- [ ] Run `make prod` locally; record binary size, RSS at idle, and a single-request p50/p99.
+- [x] Run `make prod` locally; record binary size, RSS at idle, and a single-request p50/p99. — 2026-10-21 已补录当前验收版本，见本页生产基线及 `tmp/v2-closeout-validation/current-baseline.json`；这不是重构前历史基线。
 - [ ] Tag the current commit as `pre-refactor-baseline`.
 
 **Files touched:** none (read-only).
