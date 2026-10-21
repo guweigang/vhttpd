@@ -1768,6 +1768,16 @@ PHP 签发响应丢失、HTTP/JSON/凭证校验失败时，撤销捕获的原始
 
 旧 PHP Pest 仍因缺少 `VHttpd\Upstream\WebSocket\EventHandler` 在启动前失败。Linux 按 VM 技能的既存跟踪变更停止规则仅做只读预检及最终检查，无构建、测试、安装或环境修改。未宣称全项目 V、长期负载或实时跨网络撤销保证。
 
+### 桥接创建凭证满容量后的连接轮换（2026-10-21）
+
+修复前真实代理回归复现：明确的 `bridge_creation_capacity` 拒绝仍触发通用错误断连，连带删除有效绑定。现仅对已关联且无凭证的 create 容量拒绝保留连接；矛盾 ACK、超时或不确定失败仍退休捕获的原传输。连接 memo 容量标记归该连接授权，只有 grant、缓冲、发布、签发预留、待完成 RPC 和回调回执均结束才原子摘除并重连；全局 grant 容量拒绝不轮换，不重试签发或驱逐活连接的重放证据。详见 [Runtime Module Map](RUNTIME_MODULE_MAP.md)。
+
+真实双 hub 测试还复现 WebSocket 读循环同步执行命令、等待同一读循环处理代理结果的超时。回调改由每连接容量 16 的串行会话队列执行，读循环持续处理回执；任务捕获原 sender 和单次释放租约，回执交付后再允许空闲轮换。停止时取消原连接等待、排空任务并等待 worker；旧任务和旧清理不转投新连接或新一代缓冲。
+
+最终 147 个相关 V 回归已通过（107 状态、40 集成，含 7 个新增）；新增双 hub E2E 验证有效绑定保留、clear 回执先于轮换、同消息 ID 重建及迟到签发隔离。双 hub 在真实传输中注入签发前容量 ACK，模块回归检查实际 memo 上限。PHP 测试目标、DB/OpenSSL/QuickJS/Boehm 隔离构建、格式、安全、语法及本轮差异检查通过；481 个暂存文件匹配源码，根目录二进制未替换。完整标准 E2E 的最终结果与全部证据见 `tmp/feishu-bridge-capacity-validation/report.txt`。
+
+Linux 因既存跟踪变更按 VM 技能停止规则只做只读预检和最终检查，无构建、测试、安装或环境修改。真实网络故障仍退休其资源；不能撤回已准入的外部 HTTP 副作用，未宣称全项目 V 或长期负载覆盖。
+
 ## Cross-References
 
 - `TODO_REFACTOR.md` Phase 2.2 — `App` decomposition (M2, M3)
