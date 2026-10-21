@@ -1758,6 +1758,16 @@ PHP 签发响应丢失、HTTP/JSON/凭证校验失败时，撤销捕获的原始
 
 最终源码通过 140 个相关 V 回归函数（96 状态、44 集成，含 7 个新增），PHP 包与协议检查、Node 3 项检查均通过。完整标准 E2E 在最终隔离二进制上通过所有套件，包括 4 CLI + 205 配置/运行时检查、新增真实 PHP/TS 的 provider 拒绝、网络断开、遗漏/无效 clear、签发响应损坏后按原请求撤销与重放拒绝。DB/OpenSSL/QuickJS/Boehm 构建通过，481 个生产输入匹配源码；格式、安全、语法和本轮差异检查通过。精确输入、前后对照和结果记录在 `tmp/feishu-reply-failure-validation/report.txt`。旧 PHP Pest 仍因缺少 SDK 接口无法启动；Linux 因既存跟踪变更按 VM 技能停止规则仅做只读检查。根目录二进制未替换；已准入的外部 HTTP 副作用不可撤回。
 
+### 未消费创建凭证的过期与容量回收（2026-10-21）
+
+修复前状态回归复现：过期的首次 bind 凭证在惰性回收前仍可授权 clear，并撤销同目标的新凭证；发现接口、已过期请求和过期 finish 也不能共同回收三类遗留记录。现在 clear 先清除过期权限，grant、签发预留和外部请求 memo 共用回收逻辑；可信发现、签发、外部请求校验、finish 和既有 provider 维护入口均可回收，不新增后台任务，不撤回已经准入的 HTTP 操作。详见 [Runtime Module Map](RUNTIME_MODULE_MAP.md)。
+
+未过期的失败/撤销证据仍保留到原请求期限，满容量拒绝新意图；不能通过提前删除 memo 恢复签发。桥接 create 去重记录仍属于物理连接，容量满后更换连接权限域，旧连接和凭证保持退休。签发失败、执行中断或撤销不可达不延长原始 300 秒有效期，过期请求与重启前 epoch 均不能恢复资源。
+
+最终 159 个相关 V 回归通过（103 状态、56 运行时集成，含 7 个新增）；PHP 包/协议及 Node 8 项检查通过。真实 HTTP 回归使用服务端时间验证过期，实际填满 4096 个未消费意图，检查拒绝超额、不驱逐有效撤销证据及重启隔离。完整标准 E2E 通过全部套件，包括 4 CLI + 205 配置/运行时检查。DB/OpenSSL/QuickJS/Boehm 隔离构建通过，481 个生产输入匹配源码；格式、安全和本轮差异检查通过，根目录二进制未替换。原始快照、前后对照、精确输入和日志见 `tmp/feishu-creation-expiry-validation/report.txt`。
+
+旧 PHP Pest 仍因缺少 `VHttpd\Upstream\WebSocket\EventHandler` 在启动前失败。Linux 按 VM 技能的既存跟踪变更停止规则仅做只读预检及最终检查，无构建、测试、安装或环境修改。未宣称全项目 V、长期负载或实时跨网络撤销保证。
+
 ## Cross-References
 
 - `TODO_REFACTOR.md` Phase 2.2 — `App` decomposition (M2, M3)
