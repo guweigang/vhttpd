@@ -389,7 +389,7 @@
 
 ### 普通 provider.message.update 准入与完成（2026-10-21）
 
-[普通 Feishu 更新命令](../src/command_handlers.v)与[桥接 update 入口](../src/feishu_card_bridge_server_runtime.v)都需要当前 `stream_id`、实例、物理消息 ID 和非空 `stream_generation`；缺失或旧代际在 HTTP 前拒绝，不按消息 ID 推导新权限。未注册的外部消息须先通过可信 first-bind 建立绑定，不能以普通 update 自行建立生命周期。[通用命令入口](../src/command_handlers.v)同时拒绝 Codex 的普通 update（包括旧别名），返回 `codex_message_update_unsupported_use_rpc`：它过去会绕过 RPC/控制入口，直接作为原始 WebSocket 发送，且没有消息替换语义。调用者需使用既有 RPC 命令；fixture 更新只记录测试计数，未知 provider 仍报错。原始 provider send 和任意 Codex RPC 的业务授权不因此被宣称覆盖。
+[普通 Feishu 更新命令](../src/command_handlers.v)与[桥接 update 入口](../src/feishu_card_bridge_server_runtime.v)都需要当前 `stream_id`、实例、物理消息 ID 和非空 `stream_generation`；缺失或旧代际在 HTTP 前拒绝，不按消息 ID 推导新权限。未注册的外部消息须先通过可信 first-bind 建立绑定，不能以普通 update 自行建立生命周期。[通用命令入口](../src/command_handlers.v)拒绝省略 provider 的 event-only 更新，返回 `provider_message_update_provider_required`，避免低层默认 Feishu 绕开专用准入；同时拒绝通用 fallback 中 Codex 的普通 update（包括旧别名），返回 `codex_message_update_unsupported_use_rpc`：它过去会绕过 RPC/控制入口，直接作为原始 WebSocket 发送，且没有消息替换语义。调用者需使用既有 RPC 命令；fixture 更新只记录测试计数，未知 provider 仍报错。原始 provider send 和任意 Codex RPC 的业务授权不因此被宣称覆盖。
 
 [MessageUpdate](../src/feishu/message_update.v)保存原状态所有者、绑定身份和独立操作 token。准入在锁内暂停同一缓冲的流式准入，取消原 preview/rollover/finish 的发布资格；网络请求在锁外执行。同一绑定的普通更新沿既有门闩排队，等待后重新检查原门闩和代际；重绑、撤销不等待旧 HTTP，并可安装新门闩。HTTP 成功只有在原操作仍当前时才能提交和发出 updated 通知，错误或迟到清理不能碰新绑定。
 
