@@ -417,13 +417,23 @@
 
 [PHP OneShotReplyService](../examples/codexbot-app/lib/Service/OneShotReplyService.php)和[TS 回复上下文](../examples/codexbot-app-ts/lib/state.mjs)在构造新业务回复时各自分配独立临时 scope，并分别通过显式 admin HTTP 客户端和可信 host 签发一次性创建凭证。PHP 的普通文本、卡片、帮助和恢复提醒，以及 TS 的帮助、查询、选择和 busy/idle 等默认回复均接入此路径；长期任务与审批继续使用已捕获的流上下文。PHP 入站请求和 TS frame 的 Feishu 实例被捕获后随发送、清理传递，不再默认为其他实例。
 
-[PHP 回复出口](../examples/codexbot-app/lib/Upstream/BotResponseHelper.php)与[TS 回复出口](../examples/codexbot-app-ts/lib/feishu-session-helpers.mjs)把一次性回复展开为 send 后紧跟同 scope、代际和实例的 clear，移除仅生产端使用的标记。临时回复不创建数据库任务。`feishu:reply:` 是保留的一次性回复命名空间：原生与桥接发送仍先消费凭证，并在原归属锁内校验完成时的 scope、代际、消息 ID 冲突及桥接连接；成功后直接结束该次发送，不注册流缓冲、Codex 目标或 sent 绑定发布；同时记录物理消息变更，阻止更早的 send 结果或 first-bind 凭证迟到占用该消息。变更记录沿用已有在途操作计数，所有在途发送结束后释放。因此执行在 send 与 clear 之间中断、回执丢失或 clear 失败都不留下需后续命令回收的绑定。已经完成的一次性回复 clear 可以是无副作用的幂等空操作；旧清理不作用于其他代际或其他回复。纯序列化/展开不签发、不查询新代际；PHP 构造服务也拒绝把已带资源/凭证的命令当成新回复重新签发。签发失败直接失败，不回退为无 scope 发送。PHP 签发 POST 失败、响应丢失或解析/凭证校验失败时，用原始签发请求身份撤销，不重试签发，也不让撤销错误覆盖原错误；服务端撤销意图可先于迟到的签发到达。PHP/TS 的不可序列化回复内容在签发前失败。无法交付或无法撤销的未消费凭证最多保留原有 300 秒有效期；服务端容量限制与后续签发时过期清理限制保留量，重启更换 epoch，序列化不续期。不保证撤回已经准入的外部 HTTP 副作用。
+[PHP 回复出口](../examples/codexbot-app/lib/Upstream/BotResponseHelper.php)与[TS 回复出口](../examples/codexbot-app-ts/lib/feishu-session-helpers.mjs)把一次性回复展开为 send 后紧跟同 scope、代际和实例的 clear，移除仅生产端使用的标记。临时回复不创建数据库任务。`feishu:reply:` 是保留的一次性回复命名空间：原生与桥接发送仍先消费凭证，并在原归属锁内校验完成时的 scope、代际、消息 ID 冲突及桥接连接；成功后直接结束该次发送，不注册流缓冲、Codex 目标或 sent 绑定发布；同时记录物理消息变更，阻止更早的 send 结果或 first-bind 凭证迟到占用该消息。变更记录沿用已有在途操作计数，所有在途发送结束后释放。因此执行在 send 与 clear 之间中断、回执丢失或 clear 失败都不留下需后续命令回收的绑定。已经完成的一次性回复 clear 可以是无副作用的幂等空操作；旧清理不作用于其他代际或其他回复。纯序列化/展开不签发、不查询新代际；PHP 构造服务也拒绝把已带资源/凭证的命令当成新回复重新签发。签发失败直接失败，不回退为无 scope 发送。PHP 签发 POST 失败、响应丢失或解析/凭证校验失败时，用原始签发请求身份撤销，不重试签发，也不让撤销错误覆盖原错误；服务端撤销意图可先于迟到的签发到达。PHP/TS 的不可序列化回复内容在签发前失败。无法交付或无法撤销的未消费凭证最多保留原有 300 秒有效期；服务端容量限制保留量；签发、可信发现接口、外部请求检查和已存在的 provider 后台维护统一清理过期 grant、签发预留及外部请求去重记录，重启更换 epoch，序列化不续期。provider 未启用时不新增后台任务，后续可信入口仍可回收过期记录。不保证撤回已经准入的外部 HTTP 副作用。
 
 真实 HTTP 回归发现独立 control listener 原先构造了第二个 App，导致 admin 签发和数据端消费处于不同 Feishu 注册表。[App owner 查询](../src/runtime_plan/query.v)现在仅在 control listener 没有业务 pipeline、且可用非 WebSocket 数据 App 唯一时借用其 App；executor、注册表、撤销和关闭归属随同共享。control 自有业务 pipeline、数据 owner 不可用或多个独立数据 App 时保持隔离，不自动选取或合并。本轮不增加跨 App 签发路由。
 
 [PHP 协议/适配器检查](../tests/protocol/feishu-one-shot-reply.php)、[TS 协议检查](../tests/protocol/feishu-one-shot-reply.test.mjs)、[真实 TS 应用回归](../src/feishu_one_shot_producer_test.v)、[实例回归](../src/feishu_one_shot_instance_test.v)及[真实 PHP/TS E2E](../tests/e2e/feishu_one_shot_reply_test.mjs)覆盖捕获凭证、同代际清理、未发送撤销、消费后重放、删除 scope 重放和独立回复互不撤销；[查询测试](../src/runtime_plan/app_owner_query_test.v)与[App 生命周期测试](../src/multi_app_owner_test.v)覆盖 admin/data 共用注册表及只启动、关闭一次。
 
 [一次性完成状态回归](../src/feishu/reply_completion_test.v)检查无 clear 的重复完成、失败释放、撤销/重绑/断连后的迟到结果和未提交凭证过期；[执行器与断连回执回归](../src/feishu_reply_completion_test.v)检查真实原生 handler 和桥接回调在遗漏 clear 或结果投递失败时不发布流资源。真实 PHP/TS E2E 还注入 provider 拒绝、网络断开、无效清理和签发成功后损坏响应，验证旧凭证与原始签发意图均不能恢复已结束的回复。
+
+### 未消费创建凭证的过期与容量（2026-10-21）
+
+[创建状态](../src/feishu/creation.v)在同一状态锁内回收过期 grant、签发预留和外部请求 memo；失效桥接连接的未消费 grant 也不再占用签发容量。[可信发现与外部请求入口](../src/feishu/external_creation.v)在检查前回收，包括最终会被拒绝的过期请求；过期在途签发的 finish 不再遗留预留。正常 provider 使用既有 [buffer flusher](../src/feishu_stream_buffer_runtime.v) 做维护，无新增线程；回收不删除已准入 HTTP 操作、缓冲或 Codex 目标。
+
+首次 bind 的过期凭证曾可在尚未被惰性回收时授权 clear，并撤销同一物理目标的新凭证。[代际清理入口](../src/feishu/control_generation.v)现在先回收过期权限；仍有效的绑定和在途操作继续按原身份、代际检查。签发失败、执行中断和撤销不可达留下的未消费凭证不会续期，最长原始有效期仍为 300 秒。
+
+未消费 grant 与在途预留合计最多 4096，外部签发去重记录另有 4096 上限。未过期的成功、失败及撤销 memo 均保留到原请求期限；即使 grant 已消费或撤销，也不能提前驱逐 memo 来腾位，否则重放可能重新签发。满容量时明确拒绝；期限过后统一回收，原请求因旧时间戳拒绝，重启后原 epoch 与旧 token 均不能恢复资源。桥接 create 请求没有此时间戳协议，其去重证据仍属于整个物理连接生命周期；连接容量满后通过断连/重连取得新的权限域，旧请求不会因删除去重记录而在原连接上重获凭证。
+
+[状态回归](../src/feishu/creation_expiry_test.v)覆盖过期 clear、三类记录共同回收、满容量回收与有效权限保留、迟到完成及桥接去重边界；[真实 HTTP 回归](../tests/e2e/feishu_external_creation_test.mjs)以服务端时间测试过期，并实际填满 4096 容量、验证撤销证据与重启后的隔离，不修改生产 TTL 或系统时钟。
 
 ## Related Docs
 
