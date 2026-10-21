@@ -1756,7 +1756,7 @@ CodexBot 的 PHP/TS 一次性文本、帮助卡片和恢复提示已迁移到显
 
 PHP 签发响应丢失、HTTP/JSON/凭证校验失败时，撤销捕获的原始请求身份，不补签、不重试签发、不以清理失败掩盖原错误；PHP/TS 的不可序列化内容在签发前拒绝。未送达且撤销不可达的凭证仍按原始 300 秒期限与容量限制约束，不承诺网络故障时立即撤销；已经消费的凭证不会因发送失败恢复有效。
 
-本轮状态、执行器、PHP/Node 协议和真实 PHP/TS 失败 E2E 的精确输入、前后对照和结果记录在 `tmp/feishu-reply-failure-validation/report.txt`。旧 PHP Pest 仍因缺少 SDK 接口无法启动；Linux 因既存跟踪变更按 VM 技能停止规则仅做只读检查。根目录二进制未替换；已准入的外部 HTTP 副作用不可撤回。
+最终源码通过 140 个相关 V 回归函数（96 状态、44 集成，含 7 个新增），PHP 包与协议检查、Node 3 项检查均通过。完整标准 E2E 在最终隔离二进制上通过所有套件，包括 4 CLI + 205 配置/运行时检查、新增真实 PHP/TS 的 provider 拒绝、网络断开、遗漏/无效 clear、签发响应损坏后按原请求撤销与重放拒绝。DB/OpenSSL/QuickJS/Boehm 构建通过，481 个生产输入匹配源码；格式、安全、语法和本轮差异检查通过。精确输入、前后对照和结果记录在 `tmp/feishu-reply-failure-validation/report.txt`。旧 PHP Pest 仍因缺少 SDK 接口无法启动；Linux 因既存跟踪变更按 VM 技能停止规则仅做只读检查。根目录二进制未替换；已准入的外部 HTTP 副作用不可撤回。
 
 ## Cross-References
 
