@@ -8390,11 +8390,11 @@
 <p>VHTTPD 作为协议与执行宿主，提供 HTTP/WebSocket/流式能力，并通过插件化与上游计划（Upstream Plan）将不同 AI 服务统一暴露为兼容接口。</p>
 <h2 id="_4">项目结构</h2>
 <p>围绕第三方 AI 服务集成，仓库中与“网关/上游/插件”相关的核心位置如下：
-- 配置示例：examples/config 下的 openai-gateway*.toml、ollama-proxy.toml
+- 配置示例：examples/config 下的 openai-gateway<em>.toml、ollama-proxy.toml
 - 插件实现：examples/vjsx 下的 openai-gateway-plugin.mts、openai-dashscope-coding-plugin.mts
-- 运行时与网关逻辑：src 下 openai_<em>_runtime.v、provider_bootstrap.v、config.v
+- 运行时与网关逻辑：src 下 openai_</em>_runtime.v、provider_bootstrap.v、config.v
 - Ollama 类型定义：src/upstream/provider/ollama/types.v
-- PHP 侧 Ollama 客户端与工厂：php/package/src/VSlim/Stream/</em>
+- PHP 侧 Ollama 客户端与工厂：php/package/src/VSlim/Stream/*
 - 文档与设计说明：docs/OPENAI_AGGREGATION_GATEWAY_PLAN.md、docs/UPSTREAM_PLAN_PHASE3.md、articles/04-ai-streaming.md</p>
 <pre class="mermaid"><code>graph TB
 Client["客户端"] --&gt; Gateway["OpenAI 兼容网关&lt;br/&gt;/v1/*"]

@@ -1773,6 +1773,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#m42026-10-22" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        当前运行契约（M4，2026-10-22）
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#_2" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -8166,6 +8177,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#m42026-10-22" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        当前运行契约（M4，2026-10-22）
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#_2" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -8404,6 +8426,11 @@
 
 
 <h1 id="_1">日志系统</h1>
+<h2 id="m42026-10-22">当前运行契约（M4，2026-10-22）</h2>
+<p>业务事件和 WebSocket 诊断 trace 统一经 <code>App.emit</code> → <code>ControlPlaneRuntime.emit</code> 写入配置的 event log。V1 使用 <code>files.event_log</code>，V2 使用 <code>observability.event_log</code>；不再创建硬编码的 <code>/tmp/vhttpd_runtime_trace.log</code>，也不再额外复制 <code>emit.server.started</code> 等记录。业务事件保留原 <code>type</code>、Unix 秒字符串 <code>ts</code> 及各字段；请求和管理操作统计不因 trace 增加。WebSocket 诊断写为 <code>type=runtime.trace</code>，原 <code>ws.*</code> 名称保留在 <code>label</code>，同时保留调用点已有的请求、连接、trace 标识与诊断字段，并附进程 <code>pid</code>。空路径显式禁用文件输出，统计仍更新；配置路径写失败时向控制台记录 error，不回退到其他文件。</p>
+<p>控制台仍默认输出原文本格式，开发默认 INFO、生产默认 WARN，<code>VHTTPD_LOG_LEVEL</code> 覆盖规则不变。设置 <code>VHTTPD_LOG_FORMAT=json</code> 可输出每行一个 JSON 对象（<code>type=runtime.log</code>、<code>level</code>、<code>message</code>、<code>pid</code>、Unix 秒字符串 <code>ts</code>）；JSON 中的原消息会转义换行、引号与 Unicode。此模式沿用相同级别过滤，不改变 event log 的格式；未设置、<code>text</code> 或未知格式值使用原文本模式。帮助和版本命令仍是原命令行输出。</p>
+<p>实现与回归：<a href="../../../src/app_composition_runtime.v">统一事件入口</a>、<a href="../../../src/logging/runtime_logger.v">格式与过滤</a>、<a href="../../../src/logging/json_logger.v">JSON 记录器</a>、<a href="../../../src/ws/hub_runtime.v">WebSocket trace 接口</a>、<a href="../../../src/logging_contract_test.v">事件契约回归</a>、<a href="../../../tests/e2e/logging_contract_test.mjs">生产文本/JSON 回归</a>。</p>
+<p>下文保留原组件说明；旧图中的 <code>log.Log</code> 为默认文本分支，JSON 分支使用上述记录器。</p>
 <p><cite>
 <strong>本文引用的文件</strong>
 - <a href="file://src/logging/runtime_logger.v">src/logging/runtime_logger.v</a>
