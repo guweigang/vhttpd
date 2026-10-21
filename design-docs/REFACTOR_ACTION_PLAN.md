@@ -1750,6 +1750,14 @@ CodexBot 的 PHP/TS 一次性文本、帮助卡片和恢复提示已迁移到显
 
 旧 PHP Pest 仍在启动前因缺少 `VHttpd\Upstream\WebSocket\EventHandler` 失败，未伪造 SDK；Linux 因既存跟踪变更按 VM 技能停止规则仅做只读检查，未构建、测试或修改环境。未送达的临时凭证由服务端过期回收；已准入外部 HTTP 副作用不能撤回，本轮不宣称入站业务事件幂等或来源认证覆盖。
 
+### 一次性回复失败与清理边界（2026-10-21）
+
+上一版真实 E2E 可复现：省略 clear 后，一次性回复仍接受 append，说明发送与清理之间的中断会留下流缓冲。原生与桥接现在将保留的 `feishu:reply:` scope 作为终结式发送：先消费一次性凭证，完成时仍校验原 scope、代际、物理消息冲突和连接身份，但不发布缓冲、Codex 目标或 sent 绑定。后续 clear 不再承担成功发送的资源回收；失败发送与回执投递中断继续通过原 admission 的 defer 释放。详见 [Runtime Module Map](RUNTIME_MODULE_MAP.md)。
+
+PHP 签发响应丢失、HTTP/JSON/凭证校验失败时，撤销捕获的原始请求身份，不补签、不重试签发、不以清理失败掩盖原错误；PHP/TS 的不可序列化内容在签发前拒绝。未送达且撤销不可达的凭证仍按原始 300 秒期限与容量限制约束，不承诺网络故障时立即撤销；已经消费的凭证不会因发送失败恢复有效。
+
+本轮状态、执行器、PHP/Node 协议和真实 PHP/TS 失败 E2E 的精确输入、前后对照和结果记录在 `tmp/feishu-reply-failure-validation/report.txt`。旧 PHP Pest 仍因缺少 SDK 接口无法启动；Linux 因既存跟踪变更按 VM 技能停止规则仅做只读检查。根目录二进制未替换；已准入的外部 HTTP 副作用不可撤回。
+
 ## Cross-References
 
 - `TODO_REFACTOR.md` Phase 2.2 — `App` decomposition (M2, M3)
