@@ -423,6 +423,8 @@
 
 [PHP 协议/适配器检查](../tests/protocol/feishu-one-shot-reply.php)、[TS 协议检查](../tests/protocol/feishu-one-shot-reply.test.mjs)、[真实 TS 应用回归](../src/feishu_one_shot_producer_test.v)、[实例回归](../src/feishu_one_shot_instance_test.v)及[真实 PHP/TS E2E](../tests/e2e/feishu_one_shot_reply_test.mjs)覆盖捕获凭证、同代际清理、未发送撤销、消费后重放、删除 scope 重放和独立回复互不撤销；[查询测试](../src/runtime_plan/app_owner_query_test.v)与[App 生命周期测试](../src/multi_app_owner_test.v)覆盖 admin/data 共用注册表及只启动、关闭一次。
 
+[一次性完成状态回归](../src/feishu/reply_completion_test.v)检查无 clear 的重复完成、失败释放、撤销/重绑/断连后的迟到结果和未提交凭证过期；[执行器与断连回执回归](../src/feishu_reply_completion_test.v)检查真实原生 handler 和桥接回调在遗漏 clear 或结果投递失败时不发布流资源。真实 PHP/TS E2E 还注入 provider 拒绝、网络断开、无效清理和签发成功后损坏响应，验证旧凭证与原始签发意图均不能恢复已结束的回复。
+
 ## Related Docs
 
 - [`/Users/guweigang/Source/vhttpd/docs/OVERVIEW.md`](/Users/guweigang/Source/vhttpd/docs/OVERVIEW.md)
