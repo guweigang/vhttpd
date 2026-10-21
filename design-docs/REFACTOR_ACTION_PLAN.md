@@ -46,10 +46,12 @@ Track this file as milestones complete; cross-link any deviation back to the rev
 | PHP 应用 Pest | bootstrap 失败，0 用例执行 | `php-app-pest.log` |
 | `make test-inproc` | 通过，6/6 文件 | `inproc-final.log` |
 | `make test-codexbot-fast` | 通过，6/6 文件 | `codexbot-fast-final.log` |
-| `make test-codexbot-lifecycle` | 执行中，27 个声明的测试函数，尚无最终结果 | `codexbot-lifecycle-final.log` |
+| `make test-codexbot-lifecycle` | 通过，1/1 文件、27 个测试函数；运行约 379 秒 | `codexbot-lifecycle-final.log` |
 | 旧 Feishu 单文件补测 | 通过 | `feishu-runtime-gate.log` |
 | 生产二进制完整 E2E | 失败；后续补跑和独立复测见 B4 及下文，不能视为全入口通过 | `e2e-prod-frozen.log`、`e2e-remainder.json` |
 | Linux | 未执行；预检停止，最终只读 OrbStack 复查超时 | `linux-preflight.log`、`linux-final-*-bounded.log` |
+
+跨目标去重后，本轮共观察到 20 个 V 测试文件通过、1 个编译失败，另 311 个文件没有最终执行结果；逐文件名单见 `coverage-observed.json`。这包含从未完成的 fast 入口取得的 route 单文件结果与独立补测，不能把它写成全量目标已完成。所有已启动的最终测试目标均已结束，本轮没有为修复门禁而改动生产或测试源码。下一步限定为解除 B1/B2/B4、固定完整输入并重跑验收，处理 Linux 及 M4/M5/M7 的完成或明确延期决定，不再扩大局部安全审查。
 
 ### 本轮生产构建与当前基线
 
