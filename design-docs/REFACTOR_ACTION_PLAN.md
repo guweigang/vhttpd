@@ -6,13 +6,28 @@ Track this file as milestones complete; cross-link any deviation back to the rev
 
 ## V2 验收阻塞修复与复验 — 2026-10-21
 
-**当前状态：三项阻塞的修复已进入冻结候选，正式完整矩阵正在运行，尚未宣告验收通过。** 范围限于测试夹具、PHP SDK 自动加载与生产日志断言，不继续扩展局部生命周期审查。下方“首轮”保留失败现场，不能与本轮结果混用。
+**当前状态（2026-10-22）：本轮测试夹具、PHP SDK 自动加载、生产日志断言和输入完整性阻塞已解除；同一冻结候选 E 的 macOS 完整矩阵通过。V2 整体验收仍未关闭，剩余 Linux 与 M4/M5/M7。** 范围限于测试夹具、PHP SDK 自动加载与生产日志断言，不继续扩展局部生命周期审查。下方“首轮”保留失败现场，不能与本轮结果混用。
 
 **当前执行候选 E（2026-10-22）：** `tmp/v2-closeout-acceptance-validation/snapshot/`，9,743 个输入文件，清单 SHA-256 `dcc5e3ab9f21c8f7f0a95ea56c07faa4774e6deb25301832fd2508cde4184b58`。沿用冻结 V/vjsx/QuickJS，PHP、Node、Python 采用已校验哈希的固定路径。D 的完整 all 已收集：327/332 通过、5 个失败、无未执行文件，耗时约 5650 秒；源码与外部依赖无漂移，原二进制保留。D 的 PHP 包 10 个脚本、应用 79 个用例（557 条断言）、安全检查、生产构建与完整生产 E2E 均通过，但不能据此把 D 的整体验收标绿。
 
 E 只集中修复 D 暴露的五处测试问题：MCP sampling 夹具改用正式会话初始化和 capability API，避免零时间戳先被 TTL 回收；provider registry 的两项无 DB 编译断言加相应构建条件，并额外执行该文件 `WITH_DB=0`；runtime context 测试使用现有 Relay 绑定接口，检查未注册目标拒绝与已绑定目标入队；slot request lease 和 worker lifecycle event 的 `sleep`/异进程监听假夹具改为真实子进程持有 Unix socket。原策略、旧代完成、新代计数、事件重入和失败清理断言保留，未修改生产生命周期逻辑。
 
-E 先跑五处定向回归及无 DB 分支，然后在同一冻结输入上重新执行 PHP、安全检查、生产构建、完整生产 E2E 与 332 文件的正式 `make test-all`。用户已选择由全量逐家族覆盖，不重复运行包装入口；all、fast、inproc、CodexBot fast/lifecycle 已核对编译参数一致（含默认 `WITH_DB=1` 对应的 `enable_db`），最终仍须逐文件核对覆盖。结果以 E 的 `matrix-results.json` 和输入完整性校验为准，当前尚未完成，不能标绿。
+E 的正式复验已全部结束：五处定向回归及 provider registry 的无 DB 分支通过；PHP 包 10 个脚本、Pest 79 个用例/557 条断言、安全检查、真正 `-prod` 构建与完整生产 E2E 均通过。正式 `make test-all` 为 332/332 文件通过、0 失败、0 未执行，耗时 4899.5 秒。按用户选择，以全量逐文件结果核销 fast 318/318、inproc 6/6、CodexBot fast 6/6、lifecycle 1/1；各入口编译参数一致，未重复执行包装入口，不把覆盖结论写成独立命令已执行。DB 事务租约文件也在 all 中通过。生产产物 10,758,096 字节，SHA-256 `0d6eeb4f79902490413da36e13ad8374c7b3f222c7cead0315fced78e3a30e02`；完整 E2E 通过原入口，配置验收 205 项、FAIL 0，CLI 4 项与全部前置协议/PHP/进程/桥接检查通过。Live DB/安装态 WordPress 未启用，不以默认 smoke 冒充这些环境验收。
+
+最终证据位于 `tmp/v2-closeout-acceptance-validation/`：`matrix-results.json`、`coverage-observed.json`、`entrypoint-coverage-equivalence.json` 记录实际命令、退出码与逐家族覆盖；`integrity-final.json`、`native-integrity-final.json`、`root-source-integrity-final.json` 确认候选源码、冻结 V/vjsx/QuickJS、PHP/Node/Python/编译工具均无漂移，当前工作区源码与候选一致，原工作区二进制未替换。历史 A/B/C/D 失败保留，不与 E 拼接。
+
+| 验收项 | 本轮核销 | 剩余完成标准 |
+|---|---|---|
+| B1 V 夹具/构建条件 | 已解除：正式 all 332/332，DB 开/关分支均验证 | 本机矩阵完成；跨平台仍见 B3 |
+| B2 PHP SDK/自动加载 | 已解除：真实 SDK、Composer/源码入口、10 脚本及 Pest 79/557 通过 | 本轮无剩余实现项 |
+| B4 生产日志断言 | 已解除：显式 INFO 的原断言在 E 生产版完整 E2E 通过 | 生产默认 WARN 保持原契约 |
+| R1 输入完整性 | 已解除：源码/外部源码快照及原生运行时前后校验一致 | 后续更改须按新候选重新验证 |
+| M0 | 当前候选身份与测试证据齐全；重构前基线缺失保持可见 | 首轮性能数字只描述首轮产物，未宣称 E 性能改善 |
+| M1/M2/M3/M6 | 实现目标及本轮 macOS 完整矩阵已验证 | 仍需 Linux 同版本验收 |
+| B3 Linux | 未执行构建/测试；只读复查确认既存跟踪修改，V 为 clean `local-dev`、0.5.2 4f3082f | 按技能要求取得可执行工作区状态，再验证同版本；不重置既存修改 |
+| M4/M5/M7 | 仍未完成：日志统一、CI 扩展、V1 弃用/默认配置 | 完成并验证，或由负责人明确批准移出范围；不能自动核销 |
+
+V2 关闭条件仍为：上述同版本矩阵证据有效，Linux 阻塞解除，M4/M5/M7 完成或有明确的范围调整决定。本轮未扩展局部生命周期审查，也未修改生产生命周期逻辑。
 
 - B1：将跨文件共用的 admin draft、HTTP worker session、config changeset、build directory 辅助函数移入对应的 `*_test_support.v`；原测试文件、用例和断言保留。未合并测试入口或排除文件。
 - B2：补齐 [仓库内 Upstream SDK](../php/package/src/VHttpd/Upstream/WebSocket/EventRouter.php)的真实事件路由、命令容器及序列化实现；[源码自动加载](../php/package/autoload.php)、[应用加载入口](../examples/codexbot-app/autoload.php)与 worker fallback 使用同一套 SDK。新增包回归验证事件分发、命令顺序和已捕获凭证。应用测试的旧重启命令计数现明确检查清理命令及 generation；取消测试在跨连接写入前关闭 SQLite 读取游标，保留取消和迟到事件的原断言。定向 Pest 79/79、557 条断言通过。

@@ -6,7 +6,7 @@ tags:
   - v2-config
   - validation
 status: draft
-updated: 2026-10-21
+updated: 2026-10-22
 ---
 # Refactor Phase Remaining Work
 
@@ -14,9 +14,9 @@ This document records the remaining acceptance work after the v2 runtime/config 
 
 ## 当前收尾验收（2026-10-21）
 
-V2 配置和运行时主体的既有验收结果保留在下方历史状态中；它们不能证明 10 月之后的所有安全加固已在同一版本完成整体验证。当前状态为**收尾验收未通过，V2 尚不能关闭**。首轮复现了 V 跨文件夹具、PHP SDK 自动加载及生产 INFO 日志断言的阻塞；本轮已修复这三类问题并进入冻结候选复验。PHP 应用 79 个用例和包测试已通过，正式完整矩阵与新生产二进制 E2E 的最终结果仍待完成；不能提前覆盖首轮失败和未执行部分。逐项核销、剩余范围与完成标准以 [重构行动计划的收尾验收节](REFACTOR_ACTION_PLAN.md) 为准。
+V2 配置和运行时主体的既有验收结果保留在下方历史状态中。2026-10-22 已在同一冻结候选 E 上完成 macOS 整体验证：正式 V 全量 332/332，PHP 包 10 个脚本，Pest 79 个用例/557 条断言，安全检查、生产构建和完整生产 E2E（配置验收 205 项、FAIL 0，CLI 4 项）全部通过。本轮 V 夹具、PHP SDK 自动加载、生产日志断言和输入完整性阻塞已解除；**V2 整体验收仍未关闭，剩余 Linux 与 M4/M5/M7**。逐项核销与完成标准以 [重构行动计划的收尾验收节](REFACTOR_ACTION_PLAN.md) 为准。
 
-首轮证据保留于 `tmp/v2-closeout-validation/`；D 的正式全量已完整收集，327/332 文件通过、5 项测试夹具或构建条件失败，无未执行文件，PHP 与完整生产 E2E 通过，输入无漂移。五项修复已集中进入候选 E：`tmp/v2-closeout-acceptance-validation/snapshot/`，沿用冻结 V/vjsx/QuickJS，并固定校验 PHP/Node/Python 运行路径。E 先跑定向回归和无 DB 分支，再从头执行完整矩阵。按用户选择，以正式 all 的逐文件结果覆盖 fast、inproc、CodexBot fast/lifecycle，核对相同编译参数，不重复编译包装入口；PHP、生产构建与完整生产 E2E 单独执行。当前尚未完成 E，不能标绿。M4 日志统一、M5 CI 扩展、M7 V1 弃用/默认配置仍有实际缺口；Linux 只读复查成功，但既存跟踪变更停止规则继续阻挡构建和测试。
+最终证据位于 `tmp/v2-closeout-acceptance-validation/`，源码快照 9,743 个输入文件，清单 SHA-256 `dcc5e3ab9f21c8f7f0a95ea56c07faa4774e6deb25301832fd2508cde4184b58`。源码、冻结 V/vjsx/QuickJS、原生运行时前后校验无漂移，工作区源码与候选一致，原二进制保留。按用户选择，以正式 all 的逐文件结果覆盖 fast 318/318、inproc 6/6、CodexBot fast 6/6、lifecycle 1/1，各入口编译参数一致；未重复运行包装入口，不宣称独立命令已执行。五项修复先经定向回归，再在完整 all 中通过，provider registry 另有 `WITH_DB=0` 验证。A/B/C/D 与首轮失败保留为历史，不与 E 拼接。Live DB/安装态 WordPress 未启用，默认 smoke 不代表这些环境验收。M4 日志统一、M5 CI 扩展、M7 V1 弃用/默认配置仍有实际缺口；Linux 只读复查成功，但既存跟踪变更触发技能停止规则，未构建或测试。完成或明确调整这些剩余项后才能关闭 V2。
 
 ## 历史状态（2026-07-04）
 
