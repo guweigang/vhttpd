@@ -1712,6 +1712,14 @@ Linux stopped at read-only preflight under the [VM testing skill](../.agents/ski
 
 append/finish/fail 已增加原连接及代际确认、逐镜像排队、完成时身份复核和迟到补偿；finish 同步封口，fail 配对清理缓冲链与 Codex 目标。发起端镜像禁止写回 provider，PHP 更新回执也不再发布绑定。协议、升级及分布式确认限制见 [Runtime Module Map](RUNTIME_MODULE_MAP.md)；本轮相关回归和标准 E2E 的证据保存在 `tmp/feishu-bridge-stream-validation/`。
 
+### 生产端 sent 回执绑定发布边界（2026-10-21）
+
+原始 PHP 实现可复现迟到 `feishu.message.sent` 覆盖新代际及改写已取消绑定。创建服务现于返回命令前持久化发布 ID 和实例，可信创建请求 ID 随命令传递；原生及桥接发布在同一状态锁内捕获不可变回执，绑定独立计数、分段链共享递增序号。生产端以一条 SQLite UPDATE 匹配预存发布 ID、实例、有效任务/流状态、递增序号及确认后的代际；显式重绑先 CAS 换用新发布 ID，终态撤回旧权限。缺字段、旧格式、旧发布、乱序或重复回执不会补发凭证、创建记录或恢复旧绑定。协议与升级限制见 [Runtime Module Map](RUNTIME_MODULE_MAP.md)。
+
+最终相关回归通过 259 个 V 函数（81 状态层、178 集成层，6 个新增），包含实际 V 回执 JSON 到真实 PHP 路由/SQLite 的互操作；独立 PHP 创建、回执、双连接 SQLite、撤销、删除及迁移检查通过。完整标准 E2E 通过 4 CLI + 205 配置/运行时检查，零失败，并通过新增真实 hub/Unix worker/PHP 回执乱序用例、双 hub 撤销/重连及全部 8 次首条 Relay 并发冷启动。DB/OpenSSL/QuickJS/Boehm 隔离构建通过，480 个生产输入与工作区一致，根目录二进制未替换。最终一次测试夹具 vfmt 仅展开返回结构体；其编译输入的规范格式与最终源文件完全一致。
+
+证据与逐文件原始快照保存在 `tmp/feishu-sent-publication-validation/report.txt`。完整旧 PHP Pest 仍因缺少 `VHttpd\Upstream\WebSocket\EventHandler` 无法启动，未伪造 SDK；Linux 按 VM 技能的已有跟踪变更停止规则仅做只读检查，无构建、测试或环境修改。普通 provider update、任意外部事件来源认证、生产端之外的撤销订阅、全项目 V 和长期负载仍不属于本轮。生产者需先撤销/替换自己的预留，本轮不撤回已完成的 HTTP 副作用。
+
 ## Cross-References
 
 - `TODO_REFACTOR.md` Phase 2.2 — `App` decomposition (M2, M3)
