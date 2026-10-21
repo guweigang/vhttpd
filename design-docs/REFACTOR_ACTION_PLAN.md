@@ -31,6 +31,7 @@ Track this file as milestones complete; cross-link any deviation back to the rev
 | B2 PHP 应用 Pest | [Pest 配置](../examples/codexbot-app/phpunit.xml)在 [bootstrap](../examples/codexbot-app/autoload.php)缺少 `VHttpd\\Upstream\\WebSocket\\EventHandler` 时退出 2，没有执行用例。证据 `php-app-pest.log`。PHP 包的 9 个测试脚本已通过，不能据此覆盖应用 Pest。 | 明确并补齐真实 SDK/自动加载契约，bootstrap 正常后执行应用测试；不得伪造空接口替代 SDK。 |
 | B3 Linux | `linux-preflight.log` 记录本轮前已存在的跟踪变更；技能停止规则阻止构建和测试；初次预检编译器为 clean `local-dev`，最终只读复查因 OrbStack 超时未能完成，不能宣称已再次确认最终 VM 状态。 | 按技能要求获得可执行的工作区状态或明确的后续安排，保留既存修改，再对相同源码完成 Linux 验证；不能把 macOS 结果冒充跨平台。 |
 | B4 生产版日志契约 | 同一 `-prod` 二进制的完整 E2E 在 [metrics 日志断言](../tests/e2e/admin_http_metrics_test.mjs)第 88 行超时，独立复测同样失败；补跑 [Relay 身份测试](../tests/e2e/relay_connection_identity_test.mjs)在第 139 行等不到请求日志，配置验收停在 WebSocket trace 日志断言。metrics API、Relay 全部 ACK/admin 访问及 WebSocket 消息检查已通过，不能把这些日志失败写成 hub panic。9 组 Relay 退出记录均为测试主动终止（143），完整日志与 ACK 保存于 `relay-prod-artifacts/`。 | 在生产构建中落实既有日志/trace 契约并通过原断言；随后对最终候选重新执行完整 E2E。保留超时和断言，不以开发二进制的绿测替代。 |
+| R1 复现输入完整性 | 应用快照与产物可校验；外部 V/vjsx 含本地修改，只有最终文件哈希，缺少运行前的对应哈希。见 `toolchain-final.json`，本轮不能证明外部依赖全程无漂移。 | 下一次正式验收开始前一并冻结外部源码/依赖，或记录并复核全部输入哈希，再执行整个矩阵。 |
 | M4/M5/M7 | 见上方里程碑核对表，仍为实际未完成项。[CI](../.github/workflows/vhttpd-binaries.yml)也尚未将仅测试文件的变更纳入 PR 触发路径。 | 实现并验证，或由负责人明确接受调整范围；记录决定后才能关闭。 |
 
 ### 本轮矩阵结果
