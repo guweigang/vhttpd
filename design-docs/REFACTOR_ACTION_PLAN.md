@@ -6,7 +6,7 @@ Track this file as milestones complete; cross-link any deviation back to the rev
 
 ## V2 收尾验收 — 2026-10-21
 
-**当前结论：验收进行中，尚不能标为全部完成。** 本轮冻结源码快照，核销历史计划与执行完整矩阵，不再扩展新的局部生命周期审查。后续的历史进度段落保留其当日语境；本节汇总当前状态，旧段落中的 pending 不应直接当作今日状态，也不能用历史局部绿测替代本轮整体验收。
+**当前结论：收尾验收未通过，V2 尚不能关闭。** 本轮冻结源码快照，核销历史计划与执行完整矩阵，不再扩展新的局部生命周期审查。后续的历史进度段落保留其当日语境；本节汇总当前状态，旧段落中的 pending 不应直接当作今日状态，也不能用历史局部绿测替代本轮整体验收。
 
 | 里程碑 | 本轮核对 | 核销依据与仍需满足的条件 |
 |---|---|---|
@@ -30,6 +30,7 @@ Track this file as milestones complete; cross-link any deviation back to the rev
 | B1 官方 V 全量入口 | `make test-all` 退出 2：5 个文件通过，`admin_draft_publication_owner_test.v` 编译失败，326 个文件因 fail-fast 未执行。该文件引用仅定义在 [另一测试文件](../src/admin_state_runtime_test.v)中的 `admin_state_runtime_test_root`、`admin_state_runtime_plan_text`；[失败调用点](../src/admin_draft_publication_owner_test.v)在官方独立文件编译中不可见。证据 `test-all.log`。 | 公共夹具成为每个正式入口都能看见的测试支持代码，或各文件自足；保留原断言并让单文件、fast 和 all 入口真正通过。不能通过排除文件或临时合并入口核销。 |
 | B2 PHP 应用 Pest | [Pest 配置](../examples/codexbot-app/phpunit.xml)在 [bootstrap](../examples/codexbot-app/autoload.php)缺少 `VHttpd\\Upstream\\WebSocket\\EventHandler` 时退出 2，没有执行用例。证据 `php-app-pest.log`。PHP 包的 9 个测试脚本已通过，不能据此覆盖应用 Pest。 | 明确并补齐真实 SDK/自动加载契约，bootstrap 正常后执行应用测试；不得伪造空接口替代 SDK。 |
 | B3 Linux | `linux-preflight.log` 记录本轮前已存在的跟踪变更；技能停止规则阻止构建和测试，编译器仍为 clean `local-dev`。 | 按技能要求获得可执行的工作区状态或明确的后续安排，保留既存修改，再对相同源码完成 Linux 验证；不能把 macOS 结果冒充跨平台。 |
+| B4 生产版日志契约 | 同一 `-prod` 二进制的完整 E2E 在 [metrics 日志断言](../tests/e2e/admin_http_metrics_test.mjs)第 88 行超时，独立复测同样失败；补跑 [Relay 身份测试](../tests/e2e/relay_connection_identity_test.mjs)在第 139 行等不到请求日志，配置验收停在 WebSocket trace 日志断言。metrics API、Relay 全部 ACK/admin 访问及 WebSocket 消息检查已通过，不能把这些日志失败写成 hub panic。9 组 Relay 退出记录均为测试主动终止（143），完整日志与 ACK 保存于 `relay-prod-artifacts/`。 | 在生产构建中落实既有日志/trace 契约并通过原断言；随后对最终候选重新执行完整 E2E。保留超时和断言，不以开发二进制的绿测替代。 |
 | M4/M5/M7 | 见上方里程碑核对表，仍为实际未完成项。[CI](../.github/workflows/vhttpd-binaries.yml)也尚未将仅测试文件的变更纳入 PR 触发路径。 | 实现并验证，或由负责人明确接受调整范围；记录决定后才能关闭。 |
 
 ### 本轮生产构建与当前基线
