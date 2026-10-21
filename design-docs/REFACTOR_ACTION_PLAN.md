@@ -1740,6 +1740,16 @@ append/finish/fail 已增加原连接及代际确认、逐镜像排队、完成�
 
 测试夹具补齐真实 Feishu 路由注册及 narrow-host 成功路径的签发凭证；新增 E2E 清理改用重连后的当前连接和代际。V 对断言内条件表达式生成未声明 C 临时变量，改为等价的预期值局部变量后通过，未更改编译器或删除断言。精确输入、原始快照、补丁、修复前复现与完整日志见 `tmp/feishu-raw-send-validation/report.txt`。Linux 因既存跟踪变更按 VM 技能停止规则仅做只读预检及最终检查，无构建、测试或环境修改；未宣称全项目 V 或长期负载覆盖。
 
+### PHP/TS 一次性回复可信创建上下文（2026-10-21）
+
+CodexBot 的 PHP/TS 一次性文本、帮助卡片和恢复提示已迁移到显式可信签发：每条回复捕获独立 scope、实例、代际和凭证，序列化输出 send 与同代际 clear；撤销后重放不重新签发，签发失败不退回无 scope 命令。PHP 依赖图注入既有 CreationClient，事件与 TS frame 按调用捕获实例；长任务和审批继续使用已保存的上下文。协议与归属说明见 [Runtime Module Map](RUNTIME_MODULE_MAP.md)。
+
+真实 PHP HTTP 签发 E2E 另复现 control/data 分配独立 App，导致合法 admin 凭证无法消费。现仅当 control 无业务 pipeline 且存在唯一可用的非 WebSocket 业务 App 时共享该 App，统一凭证、撤销和关闭归属；缺少或存在多个候选时不合并。修复前原生探针及修复后互操作日志均已保留。
+
+完整标准 E2E 已通过，包括 4 CLI + 205 配置/运行时检查、新增真实 PHP/TS 获取、消费、精确清理、撤销及重放；独立 PHP/Node 协议、实例隔离、App 生命周期和 server logic 回归通过。真实 TS 生产端 80 个函数全部通过，加上实例隔离 1、归属查询 4、App 生命周期 7 和 server logic 81，本轮共通过 173 个相关 V 回归函数；精确构建输入和完整证据记录在 `tmp/feishu-one-shot-validation/report.txt`。DB/OpenSSL/QuickJS/Boehm 隔离构建通过，481 个输入匹配源码，根目录二进制未替换。
+
+旧 PHP Pest 仍在启动前因缺少 `VHttpd\Upstream\WebSocket\EventHandler` 失败，未伪造 SDK；Linux 因既存跟踪变更按 VM 技能停止规则仅做只读检查，未构建、测试或修改环境。未送达的临时凭证由服务端过期回收；已准入外部 HTTP 副作用不能撤回，本轮不宣称入站业务事件幂等或来源认证覆盖。
+
 ## Cross-References
 
 - `TODO_REFACTOR.md` Phase 2.2 — `App` decomposition (M2, M3)
