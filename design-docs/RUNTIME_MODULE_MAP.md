@@ -361,6 +361,20 @@
 
 [状态回归](../src/feishu/bridge_bind_test.v)、[命令发布回归](../src/feishu_bridge_bind_publication_test.v)、[生产代理回归](../src/feishu_bridge_bind_transport_test.v)覆盖成功同步、待确认准入、撤销乱序、替换、断连、异常确认和补偿；[标准双 hub E2E](../tests/e2e/feishu_bridge_revocation_test.mjs)新增真实 bind/rebind、旧 CAS 与已撤销首次凭证的重放拒绝。
 
+### 跨宿主 append/finish/fail 完成同步（2026-10-21）
+
+[操作预留](../src/feishu/bridge_stream_operation.v)捕获原缓冲身份、代际与连接；[逐镜像 gate](../src/feishu/bridge_stream_gate.v)在 Feishu/Codex 锁外串行处理同一物理目标的请求。等待者持有原 gate 和请求代际，醒来后重新校验；bind/rebind、clear 与连接退休不等待 gate，旧等待者不能转投替代缓冲。预留会阻止旧身份的 flush、finish 与 rollover 完成发布。
+
+[桥接结果](../src/feishu_card_bridge_server_runtime.v)携带原 `stream_generation`、物理 `message_id` 和 `stream_state=open|sealed|removed`。append/finish 执行后检查原准入仍有效，fail 在精确清理后确认 removed。[代理传输](../src/feishu_card_bridge_runtime.v)按原请求等待者和连接交付结果，拒绝缺失或错误代际、错误目标、错误状态及失败确认，关闭原连接；不会关闭替代连接。桥接两端应同步升级，旧端缺少确认字段时不降级为仅按消息 ID 接受。
+
+[命令完成](../src/command_handlers.v)只在原操作、身份和租约仍有效时应用状态。最终 finish 将本地准入镜像封口，preview 保持服务端确认的状态；旧确认不能把已封口的代际重新打开。fail 在 Feishu → Codex 顺序下撤销镜像和匹配目标。[原生执行器](../src/feishu_stream_command_runtime.v)也按身份撤销根缓冲及有效链接的后继链、分段目标，保留其他代际、其他平台和无关 peer。空缓冲 finish 直接原子封口，无需 HTTP。
+
+发起端镜像只持有准入和生命周期信息，远端 provider 持有内容、分段链与外部 HTTP。初始发送、绑定确认和流式操作会标记镜像；即使宿主同时配置原生 Feishu 和桥接，本地 flusher、preview/finish 提交和直接 append 也不能把镜像旧内容写回。镜像不复制远端完整内容与分段拓扑；clear/fail 的远端精确清理由远端拥有的链处理。
+
+撤销、重绑或断连后迟到的成功结果不能发布本地完成，并按原连接、原 scope 和代际补偿 clear；不确定结果继续采用原连接退休及租约收敛。已准入外部 HTTP 副作用不能撤回，也不提供跨宿主瞬时原子提交。[PHP 事件路由](../examples/codexbot-app/lib/Upstream/ProviderEventRouter.php)不再让 `feishu.message.updated` 更新资源绑定，避免迟到失败通知覆盖新的消息和代际；sent 的初始发布权限仍属独立入口。
+
+[状态回归](../src/feishu/bridge_stream_operation_test.v)、[生产传输与命令回归](../src/feishu_bridge_stream_completion_test.v)、[PHP/SQLite 回归](../php/package/tests/feishu_creation_test.php)及[双 hub E2E](../tests/e2e/feishu_bridge_revocation_test.mjs)覆盖排队、重绑/撤销/断连、异常确认、原生配对清理、空 finish、rollover 后 fail，以及旧 finish/fail HTTP 在途时替代连接重建同一物理消息的场景。
+
 ## Related Docs
 
 - [`/Users/guweigang/Source/vhttpd/docs/OVERVIEW.md`](/Users/guweigang/Source/vhttpd/docs/OVERVIEW.md)

@@ -1708,6 +1708,10 @@ Linux stopped at read-only preflight under the [VM testing skill](../.agents/ski
 
 已增加 bind/rebind 的本地待确认预留、远端源代际 CAS 与确认后的配对发布；撤销、连接替换及迟到结果通过身份检查和原连接上的精确补偿收敛。协议、状态归属及分布式确认限制见 [Runtime Module Map](RUNTIME_MODULE_MAP.md)。相关状态、命令与真实桥接回归纳入现有测试入口；完整验证证据保存在本轮工作区的 `tmp/feishu-bridge-bind-validation/`。
 
+### 跨宿主流式操作完成边界（2026-10-21）
+
+append/finish/fail 已增加原连接及代际确认、逐镜像排队、完成时身份复核和迟到补偿；finish 同步封口，fail 配对清理缓冲链与 Codex 目标。发起端镜像禁止写回 provider，PHP 更新回执也不再发布绑定。协议、升级及分布式确认限制见 [Runtime Module Map](RUNTIME_MODULE_MAP.md)；本轮相关回归和标准 E2E 的证据保存在 `tmp/feishu-bridge-stream-validation/`。
+
 ## Cross-References
 
 - `TODO_REFACTOR.md` Phase 2.2 — `App` decomposition (M2, M3)
