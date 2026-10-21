@@ -15,7 +15,7 @@ Track this file as milestones complete; cross-link any deviation back to the rev
 
 新证据目录为 `tmp/v2-closeout-fix-validation/`。应用快照排除 Pest 执行结果缓存后的输入数量与精确清单哈希见 `identity.json`；初始含缓存的清单保留在 `source-manifest-with-generated-pest-cache.json`，该修订只排除运行时产物，生产和测试源码未变化；原二进制保留。正式矩阵使用冻结 PATH、VEXE、VMODULES、vjsx 与 QuickJS，VJOBS=2，取消 fail-fast；逐目标命令、时间和退出码写入 `matrix-results.json`。
 
-当前正式快照上的 PHP 包、PHP 应用和安全检查已通过；生产构建、生产 E2E、V all/default/inproc/CodexBot 结果待运行完成后补录。Linux 只读预检已成功返回，挂载仓库仍有本轮之前的跟踪变更，技能停止规则继续适用；未执行 Linux 构建或环境修改。M4/M5/M7 的实际缺口保持原状态，不以本轮修复自动核销。
+当前正式快照上的 PHP 包 10 个脚本、PHP 应用 79 个用例（557 条断言）和安全检查已通过。冻结依赖的生产构建也已通过，二进制 10,758,096 字节，SHA-256 `51c6474eb776eead0d9f3123e3ad02493dc916bec64fe5d81534367ce3a51011`；生产 E2E 正在执行，随后继续 V all/default/inproc/CodexBot 原始目标，最终结果待补录。Linux 只读预检已成功返回，挂载仓库仍有本轮之前的跟踪变更，技能停止规则继续适用；未执行 Linux 构建或环境修改。M4/M5/M7 的实际缺口保持原状态，不以本轮修复自动核销。
 
 ## 首轮 V2 收尾验收 — 2026-10-21（历史结果）
 
