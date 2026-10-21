@@ -14,7 +14,7 @@ Track this file as milestones complete; cross-link any deviation back to the rev
 
 **前轮状态（2026-10-22，候选 E）：本轮测试夹具、PHP SDK 自动加载、生产日志断言和输入完整性阻塞已解除；同一冻结候选 E 的 macOS 完整矩阵通过。V2 整体验收仍未关闭，剩余 Linux 与 M4/M5/M7。** 范围限于测试夹具、PHP SDK 自动加载与生产日志断言，不继续扩展局部生命周期审查。下方“首轮”保留失败现场，不能与本轮结果混用。
 
-**当前执行候选 E（2026-10-22）：** `tmp/v2-closeout-acceptance-validation/snapshot/`，9,743 个输入文件，清单 SHA-256 `dcc5e3ab9f21c8f7f0a95ea56c07faa4774e6deb25301832fd2508cde4184b58`。沿用冻结 V/vjsx/QuickJS，PHP、Node、Python 采用已校验哈希的固定路径。D 的完整 all 已收集：327/332 通过、5 个失败、无未执行文件，耗时约 5650 秒；源码与外部依赖无漂移，原二进制保留。D 的 PHP 包 10 个脚本、应用 79 个用例（557 条断言）、安全检查、生产构建与完整生产 E2E 均通过，但不能据此把 D 的整体验收标绿。
+**前轮候选 E（2026-10-22）：** `tmp/v2-closeout-acceptance-validation/snapshot/`，9,743 个输入文件，清单 SHA-256 `dcc5e3ab9f21c8f7f0a95ea56c07faa4774e6deb25301832fd2508cde4184b58`。沿用冻结 V/vjsx/QuickJS，PHP、Node、Python 采用已校验哈希的固定路径。D 的完整 all 已收集：327/332 通过、5 个失败、无未执行文件，耗时约 5650 秒；源码与外部依赖无漂移，原二进制保留。D 的 PHP 包 10 个脚本、应用 79 个用例（557 条断言）、安全检查、生产构建与完整生产 E2E 均通过，但不能据此把 D 的整体验收标绿。
 
 E 只集中修复 D 暴露的五处测试问题：MCP sampling 夹具改用正式会话初始化和 capability API，避免零时间戳先被 TTL 回收；provider registry 的两项无 DB 编译断言加相应构建条件，并额外执行该文件 `WITH_DB=0`；runtime context 测试使用现有 Relay 绑定接口，检查未注册目标拒绝与已绑定目标入队；slot request lease 和 worker lifecycle event 的 `sleep`/异进程监听假夹具改为真实子进程持有 Unix socket。原策略、旧代完成、新代计数、事件重入和失败清理断言保留，未修改生产生命周期逻辑。
 
