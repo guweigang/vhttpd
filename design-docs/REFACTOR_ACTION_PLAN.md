@@ -37,7 +37,9 @@ Track this file as milestones complete; cross-link any deviation back to the rev
 
 同一冻结源码的 `make prod WITH_DB=1 VPHP_V_GC=boehm` 已通过，OpenSSL/QuickJS 开启；二进制 SHA-256 为 `70b1400e4a5fa5add5fcb3c66395bea014e7da36f2aa07362df28e6d4d13ad6c`，10,741,584 字节。当前 arm64 主机的最小健康检查配置测得空闲 RSS 三次均为 24,416 KiB，20 次预热后 100 次单客户端顺序 `/health` 请求 p50 1.342 ms、p99 7.857 ms。每次请求新建连接；其他编译任务可能仍在运行，因此这些数值仅为本轮配置基线，不是性能门槛、吞吐测试或重构前后改善证据。构建墙钟约 1253 秒，由新建日志到链接产物时间估算，不冒充 `/usr/bin/time` 精确测量。精确方法和样本摘要见 `tmp/v2-closeout-validation/current-baseline.json`。
 
-第一次生产 E2E 的 Admin UI 404 来自快照遗漏 `admin/ui` 运行时资源；补齐资源后保持二进制、生产源码和测试源码不变，从冻结目录重新运行。初始清单与补齐清单均保留；该诊断不能列为已确认产品缺陷。当前生产 E2E 与独立 inproc/CodexBot 家族仍在运行，完成后补记结果。
+第一次生产 E2E 的 Admin UI 404 来自快照遗漏 `admin/ui` 运行时资源；补齐 18 个运行时资源文件后保持二进制、生产源码和测试源码不变，从冻结目录重新运行。初始清单与补齐清单均保留；该诊断不能列为已确认产品缺陷。最终清单共 9,652 个文件，SHA-256 `3b24fa3618d592e1a441fb048bfb5e65a97463a4b1bdd050d071f266e6267c38`，校验无漂移；根目录原有二进制未替换。
+
+完整生产 E2E 已执行并失败：协议、进程生命周期、Admin 登录、可信签发/重放、跨宿主撤销/轮换/队列、sent/update 与 PHP/TS 一次性回复检查通过，随后 metrics 日志断言失败。原入口后续未到达的步骤已单独补跑：Relay UI/config/cross-include、PHP stream 示例和 CLI 4 项通过；Relay 身份与 config acceptance 在 B4 所列日志断言失败。配置验收在停止前通过 89 项，后续未执行部分不能核销。独立 metrics 复测同样失败。没有放宽原超时、删除断言或修改 `run.sh`；不能将这些补跑拼成“完整 E2E 通过”。完整矩阵及原始日志索引见 `tmp/v2-closeout-validation/matrix-results.json` 和 `report.txt`。
 
 ## Progress — 2026-10-14
 
