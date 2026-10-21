@@ -16,7 +16,7 @@ This document records the remaining acceptance work after the v2 runtime/config 
 
 V2 配置和运行时主体的既有验收结果保留在下方历史状态中；它们不能证明 10 月之后的所有安全加固已在同一版本完成整体验证。当前状态为**收尾验收未通过，V2 尚不能关闭**。首轮复现了 V 跨文件夹具、PHP SDK 自动加载及生产 INFO 日志断言的阻塞；本轮已修复这三类问题并进入冻结候选复验。PHP 应用 79 个用例和包测试已通过，正式完整矩阵与新生产二进制 E2E 的最终结果仍待完成；不能提前覆盖首轮失败和未执行部分。逐项核销、剩余范围与完成标准以 [重构行动计划的收尾验收节](REFACTOR_ACTION_PLAN.md) 为准。
 
-首轮证据保留于 `tmp/v2-closeout-validation/`；当前候选 D 位于 `tmp/v2-closeout-db-final-validation/snapshot/`，沿用冻结外部 V/vjsx/QuickJS 副本。C 的 all 暴露 Makefile 测试参数漏传 `enable_db`；已修正为与默认 `WITH_DB=1` 一致，两项 DB 原测试通过，D 从头复验。清点仍为 332 个 V 测试文件；按用户明确选择，以正式 `make test-all` 的逐文件结果覆盖 fast、inproc、CodexBot fast/lifecycle，并核对各入口相同编译参数，不重复编译包装入口。PHP、生产构建与完整生产 E2E 仍单独执行。结果和未执行部分必须逐目标记录；不能把此前局部组合回归或 7 月测试结果移作本轮全量通过。M4 日志统一、M5 CI 扩展、M7 V1 弃用/默认配置仍有实际缺口；Linux 验收被现有跟踪变更停止规则阻挡，不能据此标为已完成。
+首轮证据保留于 `tmp/v2-closeout-validation/`；D 的正式全量已完整收集，327/332 文件通过、5 项测试夹具或构建条件失败，无未执行文件，PHP 与完整生产 E2E 通过，输入无漂移。五项修复已集中进入候选 E：`tmp/v2-closeout-acceptance-validation/snapshot/`，沿用冻结 V/vjsx/QuickJS，并固定校验 PHP/Node/Python 运行路径。E 先跑定向回归和无 DB 分支，再从头执行完整矩阵。按用户选择，以正式 all 的逐文件结果覆盖 fast、inproc、CodexBot fast/lifecycle，核对相同编译参数，不重复编译包装入口；PHP、生产构建与完整生产 E2E 单独执行。当前尚未完成 E，不能标绿。M4 日志统一、M5 CI 扩展、M7 V1 弃用/默认配置仍有实际缺口；Linux 只读复查成功，但既存跟踪变更停止规则继续阻挡构建和测试。
 
 ## 历史状态（2026-07-04）
 
