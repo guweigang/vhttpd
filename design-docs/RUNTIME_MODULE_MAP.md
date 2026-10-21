@@ -345,7 +345,7 @@
 
 [客户端](../src/feishu_card_bridge_client_runtime.v)和[服务端](../src/feishu_card_bridge_server_runtime.v)均使用 45 秒连接租约。既有 15 秒应用心跳及当前连接上的实际响应/消息可以在到期前续租；过期后心跳不能复活授权。独立的 watchdog 每秒检查，关闭失联连接并清理资源；首次创建和异步完成在状态锁内也检查到期。服务端 watchdog 归会话持有并等待退出，客户端 watchdog 归 provider session worker 持有并随其退出。这覆盖客户端单向收不到 pong、远端仍能收到 ping 的情况。网络分区期间无法声称即时远端确认；本地先拒绝重放，远端最迟在未续租后的租约及检查间隔内终结，已发出的外部 HTTP 副作用不能撤回。
 
-服务端为每条连接保留最多 4096 个 create 请求的结果或终结失败，重复请求不会在消费、撤销或凭证过期后重新签发；满时拒绝，不逐出重放证据，当前原生代理客户端会关闭并重连。连接退休后清空这些记录，无全局退休历史表。新连接必须显式获取新凭证。原生可信凭证通过桥接发送时在准入处取得该连接的发布归属；原生本地资源不因另一连接退休而被删除。
+服务端为每条连接保留最多 4096 个 create 请求的结果或终结失败，重复请求不会在消费、撤销或凭证过期后重新签发；满时拒绝，不逐出重放证据。原生代理对已关联且不含凭证的明确容量拒绝保留有效连接，仅在该连接所有授权、缓冲、在途签发、RPC 和回调回执均已结束后退休并重连；全局授权容量拒绝不触发连接轮换。连接退休后清空这些记录，无全局退休历史表。新连接必须显式获取新凭证。原生可信凭证通过桥接发送时在准入处取得该连接的发布归属；原生本地资源不因另一连接退休而被删除。
 
 [状态回归](../src/feishu/bridge_authority_test.v)、[跨注册表集成回归](../src/feishu_cross_host_revocation_test.v)与[双 hub E2E](../tests/e2e/feishu_bridge_revocation_test.mjs)覆盖重连、精确清理、迟到结果、失败撤销、首次 bind/rebind 撤销归属、静默过期及真实单向丢包；双 hub 测试已加入标准 E2E。该轮只补充撤销及原发布归属；后续 bind/rebind 发布同步见下一节。
 
@@ -424,6 +424,14 @@
 [PHP 协议/适配器检查](../tests/protocol/feishu-one-shot-reply.php)、[TS 协议检查](../tests/protocol/feishu-one-shot-reply.test.mjs)、[真实 TS 应用回归](../src/feishu_one_shot_producer_test.v)、[实例回归](../src/feishu_one_shot_instance_test.v)及[真实 PHP/TS E2E](../tests/e2e/feishu_one_shot_reply_test.mjs)覆盖捕获凭证、同代际清理、未发送撤销、消费后重放、删除 scope 重放和独立回复互不撤销；[查询测试](../src/runtime_plan/app_owner_query_test.v)与[App 生命周期测试](../src/multi_app_owner_test.v)覆盖 admin/data 共用注册表及只启动、关闭一次。
 
 [一次性完成状态回归](../src/feishu/reply_completion_test.v)检查无 clear 的重复完成、失败释放、撤销/重绑/断连后的迟到结果和未提交凭证过期；[执行器与断连回执回归](../src/feishu_reply_completion_test.v)检查真实原生 handler 和桥接回调在遗漏 clear 或结果投递失败时不发布流资源。真实 PHP/TS E2E 还注入 provider 拒绝、网络断开、无效清理和签发成功后损坏响应，验证旧凭证与原始签发意图均不能恢复已结束的回复。
+
+### 桥接创建容量与连接轮换（2026-10-21）
+
+[代理入口](../src/feishu_card_bridge_runtime.v)只将当前连接对应请求的空凭证容量 ACK 视为确定的签发前拒绝；矛盾 ACK、超时和未知失败仍退休捕获的原连接。满容量标记归原 [BridgeAuthority](../src/feishu/bridge_authority.v) 所有，旧完成或清理不能转移到新连接。轮换在连接注册表锁与状态锁内检查并摘除原连接，锁外关闭该传输，不自动重试签发。有效 grant、缓冲、发送发布、临时签发预留、待完成 RPC 或回调回执存在时均不得轮换；全局 grant 压力不靠轮换解决。
+
+[客户端回调](../src/feishu_card_bridge_client_runtime.v)由每条连接持有一个容量 16 的串行工作队列，WebSocket 读循环继续接收该回调发出的代理 RPC 结果；否则等待自己的回执会阻塞读循环直到超时。每个任务捕获原 sender 和状态归属的单次释放租约，回执写出或失败后才释放；最后一次 clear 的回执不会被空闲轮换提前截断。会话停止取消原连接等待、排空任务并等待 worker 退出，旧任务不通过新 sender 回应。队列满明确返回 503。
+
+[状态回归](../src/feishu/bridge_capacity_test.v)、[传输回归](../src/feishu_bridge_capacity_test.v)和[双 hub E2E](../tests/e2e/feishu_bridge_capacity_test.mjs)检查容量拒绝保留有效绑定、全局容量不轮换、空闲轮换前回执交付、断连后的迟到签发、同消息 ID 重建与旧清理隔离。双 hub 测试在真实传输中注入签发前容量 ACK，模块测试负责实际 memo 上限；已经准入的外部 HTTP 副作用仍不可撤回。
 
 ### 未消费创建凭证的过期与容量（2026-10-21）
 
