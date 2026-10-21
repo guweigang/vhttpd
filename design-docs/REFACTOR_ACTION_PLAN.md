@@ -1720,6 +1720,16 @@ append/finish/fail 已增加原连接及代际确认、逐镜像排队、完成�
 
 证据与逐文件原始快照保存在 `tmp/feishu-sent-publication-validation/report.txt`。完整旧 PHP Pest 仍因缺少 `VHttpd\Upstream\WebSocket\EventHandler` 无法启动，未伪造 SDK；Linux 按 VM 技能的已有跟踪变更停止规则仅做只读检查，无构建、测试或环境修改。普通 provider update、任意外部事件来源认证、生产端之外的撤销订阅、全项目 V 和长期负载仍不属于本轮。生产者需先撤销/替换自己的预留，本轮不撤回已完成的 HTTP 副作用。
 
+### 普通 provider.message.update 边界（2026-10-21）
+
+普通 Feishu update 现匹配既有绑定的 scope、实例、消息 ID、非空代际及原桥接连接；准入捕获独立操作身份和内容快照，排队醒来后复核，异步完成只提交原生命周期。整卡成功保留绑定并关闭旧流式发布权，重绑恢复新的流式生命周期；桥接确认须携带原消息、代际和 message 状态，不确定确认退休原连接。模板使用所有端准入时内容且只替换一次，客户端快照不能覆盖所有端内容。PHP/TS 更新生产者传递保存的绑定上下文；通用入口拒绝缺 provider 更新和无替换语义的 Codex update fallback。协议与外部 HTTP 副作用限制见 [Runtime Module Map](RUNTIME_MODULE_MAP.md)。
+
+相关验证通过 89 个状态回归、187 个集成回归及 79 个生产端回归（其中 3 个生产端用例也纳入集成组）；PHP/SQLite 和 Node 协议测试通过。真实 App 执行器的前后对照确认空 provider 绕过路径已封堵。完整标准 E2E 通过全部测试，包括 4 CLI + 205 配置/运行时检查、新增普通更新 HTTP 在途重绑/撤销/同 ID 重建及模板所有权用例、双 hub、sent 回执和冷启动 Relay。DB/OpenSSL/QuickJS/Boehm 隔离构建通过，481 个输入与源码一致，根目录二进制未替换；格式、安全检查和本轮文件差异检查通过。
+
+原桥接测试夹具改为读取实际发出的完整 WebSocket 帧后再消费等待者，消除夹具抢先撤回发送租约的竞态。模板 E2E 初次预期遗漏已有 initial 内容，已根据实际 HTTP payload 修正为解析 JSON 后精确比较；不改变生产语义。临时 sent 通知 fallback 探针因该入口不执行返回命令而无效，已撤回，不作为覆盖证据。完整证据、原始快照、补丁、输入哈希及诊断在 `tmp/feishu-message-update-validation/report.txt`。
+
+完整旧 PHP Pest 仍因缺少 `VHttpd\Upstream\WebSocket\EventHandler` 无法启动。Linux 按 VM 测试技能的既存跟踪变更停止规则仅做只读预检及最终状态检查，无构建、测试或环境修改。已准入外部 PATCH 不能撤回；本轮保护本地完成发布和新代际资源，未宣称覆盖外部来源认证、全项目 V 或长期负载。
+
 ## Cross-References
 
 - `TODO_REFACTOR.md` Phase 2.2 — `App` decomposition (M2, M3)
