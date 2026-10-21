@@ -10,7 +10,7 @@ Track this file as milestones complete; cross-link any deviation back to the rev
 
 | 里程碑 | 本轮核对 | 核销依据与仍需满足的条件 |
 |---|---|---|
-| M0 基线 | 历史证据不全，当前基线待补录 | 未找到 `pre-refactor-baseline` 标签；不能把当前提交伪装成重构前基线。记录本轮源码、工具链、构建与测试结果；缺少历史数据时不宣称性能改善。 |
+| M0 基线 | 历史证据不全，当前基线已补录 | 未找到 `pre-refactor-baseline` 标签；不能把当前提交伪装成重构前基线。记录本轮源码、工具链、构建与测试结果；缺少历史数据时不宣称性能改善。 |
 | M1 unsafe bridge | 实现目标已完成，整体验证待收口 | [类型化 App 适配](../src/app_executor_facade.v)与[安全检查](../scripts/lint_safety.sh)替代旧包装器；原先改成值快照的策略已由上文记录的 live capability 方案替代，不重复改写。仍需本轮矩阵与跨平台结果。 |
 | M2 Executor/worker 拆分 | 实现目标已完成，整体验证待收口 | [WorkerState](../src/worker/types.v)、[引擎编排](../src/engine_runtime.v)与[应用适配](../src/app_worker_backend.v)分离状态归属和应用装配；以矩阵验证现有实现，不再按旧文件名做机械搬迁。 |
 | M3 command/Feishu 拆分 | 实现目标已完成，整体验证待收口 | [命令能力接口](../src/command_host.v)、[Feishu 状态](../src/feishu/types.v)和[桥接能力接口](../src/feishu_card_bridge_host.v)已显式注入；近期发布、重放、背压及停止修复已落地，完整矩阵待本轮确认。 |
@@ -22,6 +22,21 @@ Track this file as milestones complete; cross-link any deviation back to the rev
 本轮候选快照位于 `tmp/v2-closeout-validation/snapshot/`；清单含 332 个 V 测试文件、2157 个直接声明的测试函数。`identity.json`、`source-manifest.json`、`test-inventory.json` 记录精确版本，不能仅用持续变化的 autosave HEAD 代表测试输入。所有矩阵目标使用该快照；测试失败后保留该目标的未执行部分，不能标绿。当前证据集中在 `tmp/v2-closeout-validation/`。
 
 **完成标准：** 同一冻结源码的正式测试矩阵与生产构建通过，生产二进制的完整 E2E 通过；跨平台验收阻塞消除；M4/M5/M7 的实际缺口完成，或由负责人明确接受移出本轮；历史基线缺失保持可见，当前指标不用于虚构前后提升。只有这些条件满足，才可把本节改为验收完成。Linux 预检目前命中技能的既存跟踪变更停止规则，未执行 Linux 构建、测试或环境修改。Live DB/已安装 WordPress 与长期负载是独立环境验收，默认 smoke 通过不代表已覆盖这些场景。
+
+### 本轮已确认的验收阻塞
+
+| 编号 | 状态与证据 | 解除条件 |
+|---|---|---|
+| B1 官方 V 全量入口 | `make test-all` 退出 2：5 个文件通过，`admin_draft_publication_owner_test.v` 编译失败，326 个文件因 fail-fast 未执行。该文件引用仅定义在 [另一测试文件](../src/admin_state_runtime_test.v)中的 `admin_state_runtime_test_root`、`admin_state_runtime_plan_text`；[失败调用点](../src/admin_draft_publication_owner_test.v)在官方独立文件编译中不可见。证据 `test-all.log`。 | 公共夹具成为每个正式入口都能看见的测试支持代码，或各文件自足；保留原断言并让单文件、fast 和 all 入口真正通过。不能通过排除文件或临时合并入口核销。 |
+| B2 PHP 应用 Pest | [Pest 配置](../examples/codexbot-app/phpunit.xml)在 [bootstrap](../examples/codexbot-app/autoload.php)缺少 `VHttpd\\Upstream\\WebSocket\\EventHandler` 时退出 2，没有执行用例。证据 `php-app-pest.log`。PHP 包的 9 个测试脚本已通过，不能据此覆盖应用 Pest。 | 明确并补齐真实 SDK/自动加载契约，bootstrap 正常后执行应用测试；不得伪造空接口替代 SDK。 |
+| B3 Linux | `linux-preflight.log` 记录本轮前已存在的跟踪变更；技能停止规则阻止构建和测试，编译器仍为 clean `local-dev`。 | 按技能要求获得可执行的工作区状态或明确的后续安排，保留既存修改，再对相同源码完成 Linux 验证；不能把 macOS 结果冒充跨平台。 |
+| M4/M5/M7 | 见上方里程碑核对表，仍为实际未完成项。[CI](../.github/workflows/vhttpd-binaries.yml)也尚未将仅测试文件的变更纳入 PR 触发路径。 | 实现并验证，或由负责人明确接受调整范围；记录决定后才能关闭。 |
+
+### 本轮生产构建与当前基线
+
+同一冻结源码的 `make prod WITH_DB=1 VPHP_V_GC=boehm` 已通过，OpenSSL/QuickJS 开启；二进制 SHA-256 为 `70b1400e4a5fa5add5fcb3c66395bea014e7da36f2aa07362df28e6d4d13ad6c`，10,741,584 字节。当前 arm64 主机的最小健康检查配置测得空闲 RSS 三次均为 24,416 KiB，20 次预热后 100 次单客户端顺序 `/health` 请求 p50 1.342 ms、p99 7.857 ms。每次请求新建连接；其他编译任务可能仍在运行，因此这些数值仅为本轮配置基线，不是性能门槛、吞吐测试或重构前后改善证据。构建墙钟约 1253 秒，由新建日志到链接产物时间估算，不冒充 `/usr/bin/time` 精确测量。精确方法和样本摘要见 `tmp/v2-closeout-validation/current-baseline.json`。
+
+第一次生产 E2E 的 Admin UI 404 来自快照遗漏 `admin/ui` 运行时资源；补齐资源后保持二进制、生产源码和测试源码不变，从冻结目录重新运行。初始清单与补齐清单均保留；该诊断不能列为已确认产品缺陷。当前生产 E2E 与独立 inproc/CodexBot 家族仍在运行，完成后补记结果。
 
 ## Progress — 2026-10-14
 
