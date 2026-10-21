@@ -413,6 +413,16 @@
 
 [状态回归](../src/feishu/raw_send_admission_test.v)、[真实执行器与桥接完成回归](../src/feishu_raw_send_boundary_test.v)及[真实 HTTP E2E](../tests/e2e/feishu_message_update_test.mjs)覆盖删 scope 重放、旧凭证、错误确认、空消息 ID、provider 转投及 HTTP 在途时连接替换和同 ID 重建。已在撤销前准入的外部 POST 仍可能完成并创建外部消息；本轮保证其迟到结果不能接管运行时新资源，不保证撤回外部副作用。
 
+### PHP/TS 一次性回复可信创建上下文（2026-10-21）
+
+[PHP OneShotReplyService](../examples/codexbot-app/lib/Service/OneShotReplyService.php)和[TS 回复上下文](../examples/codexbot-app-ts/lib/state.mjs)在构造新业务回复时各自分配独立临时 scope，并分别通过显式 admin HTTP 客户端和可信 host 签发一次性创建凭证。PHP 的普通文本、卡片、帮助和恢复提醒，以及 TS 的帮助、查询、选择和 busy/idle 等默认回复均接入此路径；长期任务与审批继续使用已捕获的流上下文。PHP 入站请求和 TS frame 的 Feishu 实例被捕获后随发送、清理传递，不再默认为其他实例。
+
+[PHP 回复出口](../examples/codexbot-app/lib/Upstream/BotResponseHelper.php)与[TS 回复出口](../examples/codexbot-app-ts/lib/feishu-session-helpers.mjs)把一次性回复展开为 send 后紧跟同 scope、代际和实例的 clear，移除仅生产端使用的标记。临时回复不创建数据库任务；发送成功后回收运行时绑定，旧清理不作用于其他代际或其他回复。纯序列化/展开不签发、不查询新代际；PHP 构造服务也拒绝把已带资源/凭证的命令当成新回复重新签发。签发失败直接失败，不回退为无 scope 发送。无法交付的未消费凭证仍有服务端期限，不保证撤回已经准入的外部 HTTP 副作用。
+
+真实 HTTP 回归发现独立 control listener 原先构造了第二个 App，导致 admin 签发和数据端消费处于不同 Feishu 注册表。[App owner 查询](../src/runtime_plan/query.v)现在仅在 control listener 没有业务 pipeline、且可用非 WebSocket 数据 App 唯一时借用其 App；executor、注册表、撤销和关闭归属随同共享。control 自有业务 pipeline、数据 owner 不可用或多个独立数据 App 时保持隔离，不自动选取或合并。本轮不增加跨 App 签发路由。
+
+[PHP 协议/适配器检查](../tests/protocol/feishu-one-shot-reply.php)、[TS 协议检查](../tests/protocol/feishu-one-shot-reply.test.mjs)、[真实 TS 应用回归](../src/feishu_one_shot_producer_test.v)、[实例回归](../src/feishu_one_shot_instance_test.v)及[真实 PHP/TS E2E](../tests/e2e/feishu_one_shot_reply_test.mjs)覆盖捕获凭证、同代际清理、未发送撤销、消费后重放、删除 scope 重放和独立回复互不撤销；[查询测试](../src/runtime_plan/app_owner_query_test.v)与[App 生命周期测试](../src/multi_app_owner_test.v)覆盖 admin/data 共用注册表及只启动、关闭一次。
+
 ## Related Docs
 
 - [`/Users/guweigang/Source/vhttpd/docs/OVERVIEW.md`](/Users/guweigang/Source/vhttpd/docs/OVERVIEW.md)
