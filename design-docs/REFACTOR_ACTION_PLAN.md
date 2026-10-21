@@ -1730,6 +1730,16 @@ append/finish/fail 已增加原连接及代际确认、逐镜像排队、完成�
 
 完整旧 PHP Pest 仍因缺少 `VHttpd\Upstream\WebSocket\EventHandler` 无法启动。Linux 按 VM 测试技能的既存跟踪变更停止规则仅做只读预检及最终状态检查，无构建、测试或环境修改。已准入外部 PATCH 不能撤回；本轮保护本地完成发布和新代际资源，未宣称覆盖外部来源认证、全项目 V 或长期负载。
 
+### 原始 provider.message.send 边界（2026-10-21）
+
+旧版真实 HTTP 与状态测试均复现：删去 stream 后原始 Feishu send 可跳过可信创建凭证。现 wire send 必须携带非空 scope 和一次性创建凭证，通用入口拒绝缺 provider 及 Codex 普通 send fallback；Feishu 专用桥接拒绝转投其他 provider，并在消耗凭证前完成该检查。异步发布还匹配签发代际；桥接成功确认必须有非空消息 ID 和原代际，空消息 ID 的 HTTP 结果不能报告为提交成功。重绑、撤销和连接替换继续按原操作身份及物理 ID 冲突记录阻止旧资源发布。协议、可信 admin/宿主入口与外部 POST 副作用限制见 [Runtime Module Map](RUNTIME_MODULE_MAP.md)。
+
+本轮兼容性收紧包括旧的一次性无 scope 回复：调用方需先显式取得可信创建上下文，不在命令准入时补签或刷新旧代际；Codex 原始 send 改用 RPC/控制入口，桥接两端需同步升级。
+
+最终 281 个相关 V 回归通过（91 状态、190 集成），覆盖真实执行器路由、无 scope 重放、异常完成确认、重绑/撤销/断连与旧清理。完整标准 E2E 通过所有套件，包括 4 CLI + 205 配置/运行时检查、新增 provider 转投拒绝且不消耗凭证、空 HTTP 消息 ID、旧 POST 在途时替换连接并重建同一消息、双 hub、sent 和冷启动 Relay。DB/OpenSSL/QuickJS/Boehm 隔离构建通过，481 个输入匹配源码，根目录二进制未替换；格式、安全和本轮差异检查通过。
+
+测试夹具补齐真实 Feishu 路由注册及 narrow-host 成功路径的签发凭证；新增 E2E 清理改用重连后的当前连接和代际。V 对断言内条件表达式生成未声明 C 临时变量，改为等价的预期值局部变量后通过，未更改编译器或删除断言。精确输入、原始快照、补丁、修复前复现与完整日志见 `tmp/feishu-raw-send-validation/report.txt`。Linux 因既存跟踪变更按 VM 技能停止规则仅做只读预检及最终检查，无构建、测试或环境修改；未宣称全项目 V 或长期负载覆盖。
+
 ## Cross-References
 
 - `TODO_REFACTOR.md` Phase 2.2 — `App` decomposition (M2, M3)
