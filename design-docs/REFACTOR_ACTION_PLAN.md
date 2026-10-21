@@ -45,7 +45,7 @@ The V3 compatibility baseline is established. The first Milestone 1 slice remove
 
 **Deviation from the original Milestone 1 plan:** V3 compiles the direct typed interface successfully, so the current slice preserves the existing live-reference capability contracts instead of replacing them with snapshots. This avoids stale configuration during runtime plan replacement. The original [review finding 2.2](CODE_REVIEW_2026_08_06.md) describes the removed workaround. Splitting the remaining broad AppFacade dependency into subsystem-owned capabilities, full-suite validation, and Linux/production validation are still pending; Milestone 1 is not closed.
 
-Validation for this slice: strict V3 build and 206 end-to-end checks pass on macOS (4 CLI checks and 202 config/runtime checks). The facade, executor, and worker integration suites also pass (3 test files, including both new live-reference regressions). `git diff --check` and `make lint-safety` pass. 
+Validation for this slice: strict V3 build and 206 end-to-end checks pass on macOS (4 CLI checks and 202 config/runtime checks). The facade, executor, and worker integration suites also pass (3 test files, including both new live-reference regressions). `git diff --check` and `make lint-safety` pass.
 
 ### Milestone 2 worker ownership slice — 2026-10-14
 
