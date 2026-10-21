@@ -4,9 +4,15 @@ This plan turns the prioritized findings in [`CODE_REVIEW_2026_08_06.md`](CODE_R
 
 Track this file as milestones complete; cross-link any deviation back to the review.
 
-## V2 验收阻塞修复与复验 — 2026-10-21
+## M4 日志统一收尾 — 2026-10-22
 
-**当前状态（2026-10-22）：本轮测试夹具、PHP SDK 自动加载、生产日志断言和输入完整性阻塞已解除；同一冻结候选 E 的 macOS 完整矩阵通过。V2 整体验收仍未关闭，剩余 Linux 与 M4/M5/M7。** 范围限于测试夹具、PHP SDK 自动加载与生产日志断言，不继续扩展局部生命周期审查。下方“首轮”保留失败现场，不能与本轮结果混用。
+当前范围仅为 M4。已移除 `runtime_trace` 和硬编码 trace 文件，业务事件直接进入统一 emit；WebSocket 的原 `ws.*` 诊断经显式注入的 emit 能力记录为 `runtime.trace`，保留 label 与调用点字段。未新增独立 `runtime_trace_path`，避免重建第二条路径；日志说明更新在现有 [日志系统文档](../docs/开发指南/调试技巧和工具/日志系统.md)，不创建已经迁移掉的 `docs/OVERVIEW.md`。这是对原 M4 路径提案的明确调整，业务事件名、NDJSON 字段、统计、默认文本输出和生产 WARN 契约保持不变。新增 `VHTTPD_LOG_FORMAT=json` 的控制台格式，event log 写失败显式报 error，空路径显式禁用。
+
+当前冻结候选 M4-B：`tmp/m4-logging-validation/snapshot/`，输入清单 SHA-256 `6443bd722a3ce84010545c2d94dc3fd2cafcc0d952634fbc86c367cd656f5d52`。复用已冻结依赖并固定原生运行时，执行 logging/ws、生产模式日志回归、四个相关运行时文件、真正生产构建及原完整生产 E2E；新增文本/JSON 生产契约测试已加入 E2E 入口。验证正在进行，尚未核销 M4。中止的准备轮单独保留于 `attempt-a/`，不用于验收。上一轮 E 的 332/332 是旧候选证据，本轮不冒称重新执行全量矩阵，也不扩展局部生命周期审查。
+
+## 前轮 V2 验收阻塞修复与复验 — 2026-10-21～22（候选 E）
+
+**前轮状态（2026-10-22，候选 E）：本轮测试夹具、PHP SDK 自动加载、生产日志断言和输入完整性阻塞已解除；同一冻结候选 E 的 macOS 完整矩阵通过。V2 整体验收仍未关闭，剩余 Linux 与 M4/M5/M7。** 范围限于测试夹具、PHP SDK 自动加载与生产日志断言，不继续扩展局部生命周期审查。下方“首轮”保留失败现场，不能与本轮结果混用。
 
 **当前执行候选 E（2026-10-22）：** `tmp/v2-closeout-acceptance-validation/snapshot/`，9,743 个输入文件，清单 SHA-256 `dcc5e3ab9f21c8f7f0a95ea56c07faa4774e6deb25301832fd2508cde4184b58`。沿用冻结 V/vjsx/QuickJS，PHP、Node、Python 采用已校验哈希的固定路径。D 的完整 all 已收集：327/332 通过、5 个失败、无未执行文件，耗时约 5650 秒；源码与外部依赖无漂移，原二进制保留。D 的 PHP 包 10 个脚本、应用 79 个用例（557 条断言）、安全检查、生产构建与完整生产 E2E 均通过，但不能据此把 D 的整体验收标绿。
 
