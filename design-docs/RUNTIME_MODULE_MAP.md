@@ -387,6 +387,20 @@
 
 [状态测试](../src/feishu/sent_publication_test.v)、[命令及 V/PHP 互操作测试](../src/feishu_sent_publication_test.v)、[SQLite 回归](../tests/protocol/feishu-generation-receipt.php)和[真实 hub/worker/PHP E2E](../tests/e2e/feishu_sent_publication_test.mjs)覆盖同 ID 重绑、分段回执乱序、撤销、删除、迁移以及待确认窗口。该边界依赖生产端先撤销或替换自己的预留；它不提供独立于生产端状态的外部撤销订阅，不撤回已经完成的 HTTP 副作用，也不认证任意外部事件来源。
 
+### 普通 provider.message.update 准入与完成（2026-10-21）
+
+[普通 Feishu 更新命令](../src/command_handlers.v)与[桥接 update 入口](../src/feishu_card_bridge_server_runtime.v)都需要当前 `stream_id`、实例、物理消息 ID 和非空 `stream_generation`；缺失或旧代际在 HTTP 前拒绝，不按消息 ID 推导新权限。未注册的外部消息须先通过可信 first-bind 建立绑定，不能以普通 update 自行建立生命周期。其他 provider 仍由各自实现处理，本节不替它们声明 Feishu 的生命周期保证。
+
+[MessageUpdate](../src/feishu/message_update.v)保存原状态所有者、绑定身份和独立操作 token。准入在锁内暂停同一缓冲的流式准入，取消原 preview/rollover/finish 的发布资格；网络请求在锁外执行。同一绑定的普通更新沿既有门闩排队，等待后重新检查原门闩和代际；重绑、撤销不等待旧 HTTP，并可安装新门闩。HTTP 成功只有在原操作仍当前时才能提交和发出 updated 通知，错误或迟到清理不能碰新绑定。
+
+成功的整卡替换保留绑定、代际和跨宿主归属，清空旧流式内容并标记 `message_only`：后续普通更新仍可准入，旧 append/finish/fail、flusher、preview 和分段结果不能把旧文本写回。显式重绑清除该标记并建立新流式生命周期。HTTP 失败仅释放原操作，不按 ID 删除缓冲或目标；updated 仍是无绑定发布权的通知。
+
+桥接请求保留原物理连接、原远端 scope 和代际。服务端还检查请求连接确实拥有该资源；成功确认包含原 `stream_generation` 与 `stream_state=message`。发起端拒绝缺失、错误代际、错误消息或错误状态的确认，不将旧确认应用于重绑后的镜像。桥接双方须同步升级。
+
+[PHP 更新构造器](../examples/codexbot-app/lib/Service/CommandFactory.php)和[TS 更新构造器](../examples/codexbot-app-ts/lib/commands.mts)只序列化调用者传入的上下文/stream handle，不查询注册表刷新代际。PHP 的 RPC、错误和取消路径在工作开始时保存绑定上下文，任务上下文携带实例；TS RPC、通知、审批和取消路径传递已取得的 handle。ID-only 更新携带空权限并被拒绝。PHP Feishu 更新直接输出协议数组，可独立于旧示例 SDK 验证序列化；示例整体的 SDK 缺失仍单独记录。
+
+[状态回归](../src/feishu/message_update_test.v)、[命令回归](../src/feishu_message_update_test.v)、[PHP 构造器回归](../tests/protocol/feishu-message-update.php)及[真实桥接 HTTP 回归](../tests/e2e/feishu_message_update_test.mjs)覆盖迟到包、HTTP 在途重绑/撤销/同 ID 重建、失败重试、重复更新和排队。已在 HTTP 前通过准入的外部 PATCH 可能在撤销后完成，Feishu API 不支持本地代际条件提交；本轮阻止其运行时完成发布、缓冲写回及新生命周期接管，不保证撤回已准入的外部副作用。外部通知的来源认证和跨事件业务授权仍为独立边界。
+
 ## Related Docs
 
 - [`/Users/guweigang/Source/vhttpd/docs/OVERVIEW.md`](/Users/guweigang/Source/vhttpd/docs/OVERVIEW.md)
