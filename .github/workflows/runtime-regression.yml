@@ -1,0 +1,77 @@
+name: Runtime regression
+on:
+  workflow_call:
+    inputs:
+      os:
+        required: true
+        type: string
+      suite:
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ${{ inputs.os }}
+    timeout-minutes: 360
+    env:
+      VJOBS: 2
+      WITH_DB: 1
+      VHTTPD_BIN: ${{ github.workspace }}/tmp/ci/vhttpd
+      SUITE: ${{ inputs.suite }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: ./.github/actions/setup-runtime
+      - name: Run selected regression family
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ci-results tmp/ci
+          make lint-safety 2>&1 | tee ci-results/lint.log
+          case "$SUITE" in
+            inproc) target=test-inproc ;;
+            codexbot-fast) target=test-codexbot-fast ;;
+            # test-all includes CodexBot lifecycle with identical DB/compiler flags.
+            # Avoid recompiling the full lifecycle family a second time.
+            all) target=test-all ;;
+            *) echo "Unknown regression suite: $SUITE" >&2; exit 1 ;;
+          esac
+          make "$target" V_CC=cc WITH_DB=1 2>&1 | tee "ci-results/$SUITE.log"
+      - name: PHP package regressions (nightly)
+        if: inputs.suite == 'all'
+        shell: bash
+        run: |
+          set -euo pipefail
+          make test-php 2>&1 | tee ci-results/php.log
+      - name: Install locked CodexBot PHP test dependencies (nightly)
+        if: inputs.suite == 'all'
+        shell: bash
+        run: |
+          set -euo pipefail
+          composer install --working-dir=examples/codexbot-app --prefer-dist --no-interaction --no-progress 2>&1 | tee ci-results/composer.log
+      - name: CodexBot PHP regressions (nightly)
+        if: inputs.suite == 'all'
+        shell: bash
+        run: |
+          set -euo pipefail
+          composer --working-dir=examples/codexbot-app test 2>&1 | tee ci-results/pest.log
+      - name: Build production binary (nightly)
+        if: inputs.suite == 'all'
+        shell: bash
+        run: |
+          set -euo pipefail
+          make prod V_CC=cc VPHP_V_GC=boehm WITH_DB=1 2>&1 | tee ci-results/prod.log
+      - name: Full production E2E (nightly)
+        if: inputs.suite == 'all'
+        shell: bash
+        run: |
+          set -euo pipefail
+          VHTTPD_E2E_KEEP_TMP=1 make test-e2e 2>&1 | tee ci-results/e2e.log
+      - name: Upload regression evidence, including failures
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ${{ inputs.suite }}-${{ inputs.os }}-logs
+          path: ci-results/
+          if-no-files-found: warn
+          retention-days: 14
