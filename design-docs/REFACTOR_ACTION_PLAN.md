@@ -8,7 +8,11 @@ Track this file as milestones complete; cross-link any deviation back to the rev
 
 当前范围仅为 M4。已移除 `runtime_trace` 和硬编码 trace 文件，业务事件直接进入统一 emit；WebSocket 的原 `ws.*` 诊断经显式注入的 emit 能力记录为 `runtime.trace`，保留 label 与调用点字段。未新增独立 `runtime_trace_path`，避免重建第二条路径；日志说明更新在现有 [日志系统文档](../docs/开发指南/调试技巧和工具/日志系统.md)，不创建已经迁移掉的 `docs/OVERVIEW.md`。这是对原 M4 路径提案的明确调整，业务事件名、NDJSON 字段、统计、默认文本输出和生产 WARN 契约保持不变。新增 `VHTTPD_LOG_FORMAT=json` 的控制台格式，event log 写失败显式报 error，空路径显式禁用。
 
-当前冻结候选 M4-C：`tmp/m4-logging-validation/snapshot/`，输入清单 SHA-256 `7df073e4a544ec7f2da518c9efb9044c7bda6900e3fe0dde8213f6dcf688a449`。复用已冻结依赖并固定原生运行时，执行 logging/ws、生产模式日志回归、四个相关运行时文件、真正生产构建及原完整生产 E2E；新增文本/JSON 正常运行与配置加载失败的生产契约测试已加入 E2E 入口。配置失败先于时区初始化，JSON 模式现提前初始化，文本模式不变；JSON 记录器释放自身互斥量并借用 stderr。验证正在进行，尚未核销 M4。中止的准备轮保留于 `attempt-a/`、`attempt-b/`，不用于验收。上一轮 E 的 332/332 是旧候选证据，本轮不冒称重新执行全量矩阵，也不扩展局部生命周期审查。
+**M4 已完成实现及本轮 macOS 验收。** 最终证据位于 `tmp/m4-logging-validation/`，9,747 个输入文件，清单 SHA-256 `b3bd410575557e93b99e632dfc3eb4eaac856a8c273bb55e8d6a7916001bcedf`。logging/ws 15/15、相关运行时 4/4、生产模式日志回归 1/1、安全检查均通过；真正 `-prod`、DB/OpenSSL/QuickJS、boehm 生产产物为 10,742,064 字节，SHA-256 `bb5a3398113d82c55eabbadb91a25417cb62114bdd0d96b17723c459b4f3f304`。完整生产 E2E 已通过原入口：新增三项日志契约、配置验收 205 项/0 失败、CLI 4 项和其余前置检查均通过。补充黑盒验证默认 WARN、event log 写失败 error、健康请求与 SIGTERM 143 通过。
+
+JSON 运行日志的通道为 stderr，框架 stdout 启动提示保留文本。候选 C 首次新测试误将两者合并解析，已只修正测试通道假设，同时验证 stdout 原提示；生产 V 源码、V 测试输入和二进制完全未变（`production-equivalence.json`），不是拼接不同生产版本的绿测。之后完整 E2E 曾出现一次外部创建凭证的 3 秒请求超时；原样独立回归及完整入口复跑均通过，未改容量、断言或超时，原因尚未确认，失败保留于 `attempt-d-timeout/`。准备轮 `attempt-a/`、`attempt-b/` 与 C 失败现场均保留，不作为验收通过证据。
+
+最终源码、工作区源码、冻结 V/vjsx/QuickJS、原生运行时校验均无漂移；原工作区二进制保留，源码中已无 `runtime_trace` 与硬编码 trace 路径。日志文档已更新。上一轮 E 的 332/332 仍是旧候选的全量证据，本轮只执行用户要求的相关回归和完整生产 E2E，不冒称重跑整个 V 矩阵。Linux 命中既存跟踪修改停止规则，本轮只读检查，未构建或测试。**V2 剩余阻塞为 Linux、M5 CI 扩展与 M7 V1 弃用/默认配置；M4 不再列为实现缺口。**
 
 ## 前轮 V2 验收阻塞修复与复验 — 2026-10-21～22（候选 E）
 
@@ -1670,6 +1674,8 @@ Linux stopped at read-only preflight under the [VM testing skill](../.agents/ski
 ---
 
 ## Milestone 4 — Consolidate logging (½ day)
+
+**Completed — 2026-10-22:** runtime trace 与 emit 已统一到配置事件路径；原业务事件、统计、文本/WARN 契约保留，可选 JSON stderr 和失败诊断已落地，相关回归及完整生产 E2E 通过。最终输入、二进制、失败历史与验证范围见本文顶部 M4 收尾节。下方原始提案保留作历史：未新增第二个 trace 路径，说明文档使用现有日志系统页面；验证按用户要求执行相关回归与完整生产 E2E。
 
 **Goal:** merge `runtime_trace` (`src/main.v:33`) and `app.emit` (`src/app_composition_runtime.v:74`) into a single log path. Fixes finding 2.4 and 2.8 in one move.
 

@@ -14,9 +14,9 @@ This document records the remaining acceptance work after the v2 runtime/config 
 
 ## 当前收尾验收（2026-10-21）
 
-V2 配置和运行时主体的既有验收结果保留在下方历史状态中。2026-10-22 已在同一冻结候选 E 上完成 macOS 整体验证：正式 V 全量 332/332，PHP 包 10 个脚本，Pest 79 个用例/557 条断言，安全检查、生产构建和完整生产 E2E（配置验收 205 项、FAIL 0，CLI 4 项）全部通过。本轮 V 夹具、PHP SDK 自动加载、生产日志断言和输入完整性阻塞已解除；**V2 整体验收仍未关闭，剩余 Linux 与 M4/M5/M7**。逐项核销与完成标准以 [重构行动计划的收尾验收节](REFACTOR_ACTION_PLAN.md) 为准。
+V2 配置和运行时主体的既有验收结果保留在下方历史状态中。候选 E 的前轮 macOS 全量 332/332、PHP 与生产 E2E 通过证据继续保留。本轮（2026-10-22）已完成 M4 日志统一：移除硬编码 trace 文件与 emit 双写，保持原事件字段、统计和默认文本/WARN 契约，新增可选 stderr JSON、早期配置失败日志及写失败诊断。logging/ws 15/15、相关运行时 4/4、生产模式日志回归 1/1 及完整生产 E2E（新增日志契约 3 项、配置 205/0、CLI 4/0）通过。**V2 整体验收仍未关闭，剩余 Linux 与 M5/M7；M4 实现及本轮 macOS 验收已核销。** 详见 [重构行动计划](REFACTOR_ACTION_PLAN.md)。
 
-最终证据位于 `tmp/v2-closeout-acceptance-validation/`，源码快照 9,743 个输入文件，清单 SHA-256 `dcc5e3ab9f21c8f7f0a95ea56c07faa4774e6deb25301832fd2508cde4184b58`。源码、冻结 V/vjsx/QuickJS、原生运行时前后校验无漂移，工作区源码与候选一致，原二进制保留。按用户选择，以正式 all 的逐文件结果覆盖 fast 318/318、inproc 6/6、CodexBot fast 6/6、lifecycle 1/1，各入口编译参数一致；未重复运行包装入口，不宣称独立命令已执行。五项修复先经定向回归，再在完整 all 中通过，provider registry 另有 `WITH_DB=0` 验证。A/B/C/D 与首轮失败保留为历史，不与 E 拼接。Live DB/安装态 WordPress 未启用，默认 smoke 不代表这些环境验收。M4 日志统一、M5 CI 扩展、M7 V1 弃用/默认配置仍有实际缺口；Linux 只读复查成功，但既存跟踪变更触发技能停止规则，未构建或测试。完成或明确调整这些剩余项后才能关闭 V2。
+M4 最终证据为 `tmp/m4-logging-validation/`，输入清单 SHA-256 `b3bd410575557e93b99e632dfc3eb4eaac856a8c273bb55e8d6a7916001bcedf`；生产源码/二进制及 V 回归输入相同，最终仅修正新 E2E 对 stdout/stderr 的测试通道假设（`production-equivalence.json`）。源码、工作区与冻结依赖校验无漂移，原二进制保留。曾有一次外部创建凭证请求超时，原样独立回归及完整生产 E2E 复跑通过，原因未确认，原超时和断言未放宽。前轮 E 的完整矩阵证据位于 `tmp/v2-closeout-acceptance-validation/`，不作为本轮重跑全矩阵的声明。Linux 只读预检仍有既存跟踪修改，按技能停止规则未构建或测试；M5 CI 扩展与 M7 V1 弃用/默认配置仍待完成或明确调整范围。Live DB/安装态 WordPress 与长期负载未在本轮验收中启用。
 
 ## 历史状态（2026-07-04）
 
