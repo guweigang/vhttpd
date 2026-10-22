@@ -4,6 +4,9 @@ import os
 import sync
 import time
 
+// glibc exposes the SO_PEERCRED payload only with GNU feature visibility.
+#flag linux -D_GNU_SOURCE
+
 #include "@VMODROOT/src/process_runtime/posix_process.h"
 
 fn C.vhttpd_child_state(int) int
