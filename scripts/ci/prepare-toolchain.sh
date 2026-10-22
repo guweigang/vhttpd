@@ -25,7 +25,14 @@ for dependency in v vjsx; do
   git -C "$toolchain/$dependency" apply "$root/scripts/ci/$dependency-runtime.patch"
 done
 checkout_pinned "$VC_REPO" "$VC_COMMIT" "$toolchain/v/vc"
-checkout_pinned "$TCC_REPO" "$TCC_COMMIT" "$toolchain/v/thirdparty/tcc"
+case "$(uname -s):$(uname -m)" in
+  Linux:x86_64) selected_tcc="$TCC_LINUX_AMD64_COMMIT" ;;
+  Darwin:x86_64) selected_tcc="$TCC_MACOS_AMD64_COMMIT" ;;
+  Darwin:arm64) selected_tcc="$TCC_MACOS_ARM64_COMMIT" ;;
+  *) echo 'No pinned TCC bundle for this platform' >&2; exit 1 ;;
+esac
+checkout_pinned "$TCC_REPO" "$selected_tcc" "$toolchain/v/thirdparty/tcc"
+file "$toolchain/v/thirdparty/tcc/tcc.exe"
 checkout_pinned "$QUICKJS_REPO" "$QUICKJS_COMMIT" "$toolchain/quickjs"
 make -C "$toolchain/v" local=1 CC=cc
 "$toolchain/v/v" version
@@ -40,6 +47,7 @@ echo "$toolchain/v" >> "$GITHUB_PATH"
 mkdir -p "$root/ci-results"
 {
   cat "$root/scripts/ci/toolchain.env"
+  echo "TCC_SELECTED_COMMIT=$selected_tcc"
   git -C "$root" rev-parse HEAD
   shasum -a 256 "$root"/scripts/ci/*-runtime.patch
   "$toolchain/v/v" version
