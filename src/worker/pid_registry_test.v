@@ -6,7 +6,7 @@ import time
 import upstream.transport
 
 fn test_worker_restart_failure_and_retry_update_process_registry() {
-	path := '/private/tmp/vhttpd-pid-${os.getpid()}-${time.now().unix_micro()}.sock'
+	path := '/tmp/vhttpd-pid-${os.getpid()}-${time.now().unix_micro()}.sock'
 	old := transport.ManagedWorker.launch_process('exec sleep 30', {}, '') or { panic(err) }
 	old_pid := old.pid
 	mut state := WorkerState{
@@ -27,7 +27,7 @@ fn test_worker_restart_failure_and_retry_update_process_registry() {
 }
 
 fn test_initial_worker_readiness_failure_removes_registered_pid() {
-	path := '/private/tmp/vhttpd-initial-pid-${os.getpid()}-${time.now().unix_micro()}.sock'
+	path := '/tmp/vhttpd-initial-pid-${os.getpid()}-${time.now().unix_micro()}.sock'
 	mut failed := false
 	_ := transport.ManagedWorker.start(0, 'exit 0', {}, path, '', 1) or {
 		failed = true
@@ -38,7 +38,7 @@ fn test_initial_worker_readiness_failure_removes_registered_pid() {
 }
 
 fn test_successful_worker_restart_replaces_pid_and_stop_removes_it() {
-	root := '/private/tmp/vhttpd-pid-restart-${os.getpid()}-${time.now().unix_micro()}'
+	root := '/tmp/vhttpd-pid-restart-${os.getpid()}-${time.now().unix_micro()}'
 	os.mkdir_all(root) or { panic(err) }
 	defer { os.rmdir_all(root) or {} }
 	script := root + '/worker.py'

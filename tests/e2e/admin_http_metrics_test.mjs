@@ -136,7 +136,7 @@ export default function(ctx){
   console.log('Load checkpoints:',JSON.stringify({capacity:settled.capacity,waiting_after:afterTimeout.waiting,occupied_after:afterTimeout.occupied,queue_waits_total:afterTimeout.queue_waits_total,queue_timeouts_total:afterTimeout.queue_timeouts_total}));
   console.log('Verified per-listener totals, concurrent requests, 404/503/504, static adapter, slow vjsx, control exclusion and safe error samples');
 
- }catch(error){fs.copyFileSync(path.join(dir,'runtime.log'),'/private/tmp/vhttpd-business-metrics-failure.log');throw error;}finally{
+ }catch(error){fs.copyFileSync(path.join(dir,'runtime.log'),path.join(os.tmpdir(),'vhttpd-business-metrics-failure.log'));throw error;}finally{
   if(child && child.exitCode===null && child.signalCode===null){const done=new Promise(r=>child.once('exit',r));child.kill('SIGTERM');const force=setTimeout(()=>child.kill('SIGKILL'),15000);await done;clearTimeout(force);}
   fs.closeSync(output);fs.rmSync(dir,{recursive:true,force:true});
  }

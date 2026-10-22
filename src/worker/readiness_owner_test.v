@@ -8,7 +8,7 @@ import time
 import upstream.transport
 
 fn readiness_foreign_path() string {
-	return '/private/tmp/vhttpd-foreign-worker-${os.getpid()}-${time.sys_mono_now()}.sock'
+	return '/tmp/vhttpd-foreign-worker-${os.getpid()}-${time.sys_mono_now()}.sock'
 }
 
 fn readiness_preserved_listener(path string) ! {
@@ -70,7 +70,7 @@ fn test_slot_restart_does_not_publish_an_unrelated_listener() ! {
 }
 
 fn test_initial_worker_accepts_listener_in_its_descendant_process_group() ! {
-	root := '/private/tmp/vhttpd-worker-peer-${os.getpid()}-${time.sys_mono_now()}'
+	root := '/tmp/vhttpd-worker-peer-${os.getpid()}-${time.sys_mono_now()}'
 	os.mkdir_all(root)!
 	defer { os.rmdir_all(root) or {} }
 	script := root + '/worker.py'
