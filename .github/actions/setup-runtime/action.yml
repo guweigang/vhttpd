@@ -22,13 +22,13 @@ runs:
       run: |
         set -euo pipefail
         sudo apt-get update
-        sudo apt-get install -y --no-install-recommends build-essential ca-certificates default-libmysqlclient-dev libpq-dev libsqlite3-dev libgc-dev patchelf pkg-config libssl-dev zlib1g-dev
+        sudo apt-get install -y --no-install-recommends build-essential ca-certificates default-libmysqlclient-dev libpq-dev libsqlite3-dev libgc-dev patchelf pkg-config libssl-dev zlib1g-dev ripgrep
     - name: Install native libraries (macOS)
       if: runner.os == 'macOS'
       shell: bash
       run: |
         set -euo pipefail
-        brew install bdw-gc libpq mysql-client openssl@3 pkg-config sqlite
+        brew install bdw-gc libpq mysql-client openssl@3 pkg-config sqlite ripgrep
         mysql_prefix="$(brew --prefix mysql-client)"
         libpq_prefix="$(brew --prefix libpq)"
         openssl_prefix="$(brew --prefix openssl@3)"
