@@ -3051,6 +3051,8 @@ export default app;
 }
 
 fn test_inproc_vjsx_executor_repo_paseo_relay_skeleton_boots() {
+	// HTTP initializes this lane on the caller; WebSocket then reuses it on
+	// its worker thread. Keep both to cover QuickJS stack-anchor handoff.
 	app_file := os.join_path(os.dir(@FILE), '..', 'examples', 'paseo-relay', 'app.mts')
 	assert os.exists(app_file)
 	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{

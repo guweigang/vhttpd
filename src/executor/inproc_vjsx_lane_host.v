@@ -59,6 +59,10 @@ fn (host VjsxLaneHost) module_handle() ?&vjsx.ScriptModule {
 
 fn (host VjsxLaneHost) context() &vjsx.Context {
 	session := host.session_handle() or { panic('inproc_vjsx_executor_session_missing') }
+	// Lane ownership serializes entry, but HTTP and WebSocket turns can use
+	// different native threads. Refresh QuickJS before any raw Context call.
+	runtime := session.runtime()
+	runtime.update_stack_top()
 	return session.context()
 }
 
