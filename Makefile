@@ -165,14 +165,7 @@ test-e2e:
 	@bash $(ROOT)/tests/e2e/run.sh
 
 test-fast: lint-safety
-	@set -e; for test_file in $(FAST_TEST_FILES); do \
-		echo "==> v test $${test_file}"; \
-		$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_FLAGS) $(V_TEST_FLAGS) test "$${test_file}"; \
-	done
-	@set -e; for test_dir in $(FAST_TEST_MODULE_DIRS); do \
-		echo "==> v test $${test_dir}"; \
-		$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_FLAGS) $(V_TEST_FLAGS) test "$${test_dir}"; \
-	done
+	@VJOBS="$${VJOBS:-2}" $(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_FLAGS) $(V_TEST_FLAGS) test $(FAST_TEST_FILES) $(FAST_TEST_MODULE_DIRS)
 
 test-php:
 	@set -e; for test_file in $(PHP_TEST_FILES); do \

@@ -16,6 +16,8 @@ jobs:
     timeout-minutes: 360
     env:
       VJOBS: 2
+      VTEST_FAIL_FAST: '1'
+      VTEST_FAIL_FLAKY: '1'
       WITH_DB: 1
       VHTTPD_BIN: ${{ github.workspace }}/tmp/ci/vhttpd
       SUITE: ${{ inputs.suite }}

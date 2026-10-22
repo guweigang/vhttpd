@@ -34,7 +34,7 @@ esac
 checkout_pinned "$TCC_REPO" "$selected_tcc" "$toolchain/v/thirdparty/tcc"
 file "$toolchain/v/thirdparty/tcc/tcc.exe"
 checkout_pinned "$QUICKJS_REPO" "$QUICKJS_COMMIT" "$toolchain/quickjs"
-make -C "$toolchain/v" local=1 CC=cc
+make -C "$toolchain/v" local=1 CC=cc VFLAGS="-prod -cc cc"
 "$toolchain/v/v" version
 mkdir -p "$toolchain/modules"
 ln -s "$toolchain/vjsx" "$toolchain/modules/vjsx"
