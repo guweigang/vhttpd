@@ -11,9 +11,10 @@ fn request_slot_fixture(label string) (string, &worker.WorkerState, string) {
 	root := os.join_path(os.temp_dir(), 'rq-${os.getpid()}-${time.sys_mono_now()}')
 	os.mkdir_all(root) or { panic(err) }
 	path := root + '/worker.sock'
+	python := os.find_abs_path_of_executable('python3') or { panic(err) }
 	script := root + '/peer.py'
 	os.write_file(script, 'import os,socket,sys\np=sys.argv[1]\nif os.path.exists(p): os.unlink(p)\ns=socket.socket(socket.AF_UNIX); s.bind(p); s.listen()\nconnections=[]\nwhile True: connections.append(s.accept()[0])\n') or { panic(err) }
-	slot := transport.ManagedWorker.build_slot(1, 'python3 "${script}" "{socket}"', {}, path, 1) or { panic(err) }
+	slot := transport.ManagedWorker.build_slot(1, '"${python}" -S "${script}" "{socket}"', {}, path, 1) or { panic(err) }
 	mut state := &worker.WorkerState{ worker_backend: worker.WorkerBackendRuntime{ autostart: true, sockets: [path], read_timeout_ms: 1000, managed_workers: [slot] } }
 	state.ensure_slot(worker.LifecyclePort{}, 0)
 	assert state.worker_backend.managed_workers[0].proc != none, label

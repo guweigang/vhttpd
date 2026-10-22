@@ -73,10 +73,11 @@ fn test_initial_worker_accepts_listener_in_its_descendant_process_group() ! {
 	root := '/tmp/vhttpd-worker-peer-${os.getpid()}-${time.sys_mono_now()}'
 	os.mkdir_all(root)!
 	defer { os.rmdir_all(root) or {} }
+	python := os.find_abs_path_of_executable('python3')!
 	script := root + '/worker.py'
 	path := root + '/worker.sock'
 	os.write_file(script, 'import os,socket,sys,time\nif os.fork():\n time.sleep(30)\nelse:\n s=socket.socket(socket.AF_UNIX)\n s.bind(sys.argv[1])\n s.listen()\n time.sleep(30)\n')!
-	mut candidate := transport.ManagedWorker.start(0, 'python3 ${script} {socket}', {
+	mut candidate := transport.ManagedWorker.start(0, '"${python}" -S "${script}" "{socket}"', {
 		'PATH': os.getenv('PATH')
 	}, path, '', 1)!
 	defer { candidate.stop() }

@@ -9,12 +9,13 @@ import time
 fn slot_fixture(label string) (string, &WorkerState) {
 	root := os.join_path(os.temp_dir(), 'vhttpd-slot-${label}-${os.getpid()}-${time.now().unix_micro()}')
 	os.mkdir_all(root) or { panic(err) }
+	python := os.find_abs_path_of_executable('python3') or { panic(err) }
 	script := root + '/peer.py'
 	path := root + '/worker.sock'
 	os.write_file(script, 'import os,socket,sys\np=sys.argv[1]\nif os.path.exists(p): os.unlink(p)\ns=socket.socket(socket.AF_UNIX); s.bind(p); s.listen()\nwhile True:\n c,_=s.accept()\n try: c.sendall(str(os.getpid()).encode())\n except OSError: pass\n c.close()\n') or { panic(err) }
-	slot := transport.ManagedWorker.build_slot(1, 'python3 ${script} {socket}', {}, path, 1) or { panic(err) }
+	slot := transport.ManagedWorker.build_slot(1, '"${python}" -S "${script}" "{socket}"', {}, path, 1) or { panic(err) }
 	mut state := &WorkerState{ worker_backend: WorkerBackendRuntime{ autostart: true, sockets: [path], managed_workers: [slot], queue_capacity: 2, queue_timeout_ms: 2000, queue_poll_ms: 1 } }
-	state.ensure_slot(LifecyclePort{}, 0)
+	state.ensure_slot(LifecyclePort{ emit_fn: fn (kind string, fields map[string]string) { eprintln('lease fixture ${kind}: ${fields}') } }, 0)
 	assert state.worker_backend.managed_workers[0].proc != none
 	return root, state
 }

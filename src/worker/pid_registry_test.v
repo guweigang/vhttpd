@@ -21,7 +21,7 @@ fn test_worker_restart_failure_and_retry_update_process_registry() {
 	assert state.worker_backend.managed_workers[0].proc == none
 	assert process_runtime.managed_process_pids().len == 0
 	state.worker_backend.managed_workers[0].next_retry_ts = 0
-	state.ensure_slot(LifecyclePort{}, 0)
+	state.ensure_slot(LifecyclePort{ emit_fn: fn (kind string, fields map[string]string) { eprintln('pid fixture ${kind}: ${fields}') } }, 0)
 	assert state.worker_backend.managed_workers[0].proc == none
 	assert process_runtime.managed_process_pids().len == 0
 }
@@ -41,13 +41,14 @@ fn test_successful_worker_restart_replaces_pid_and_stop_removes_it() {
 	root := '/tmp/vhttpd-pid-restart-${os.getpid()}-${time.now().unix_micro()}'
 	os.mkdir_all(root) or { panic(err) }
 	defer { os.rmdir_all(root) or {} }
+	python := os.find_abs_path_of_executable('python3') or { panic(err) }
 	script := root + '/worker.py'
 	socket := root + '/worker.sock'
 	os.write_file(script, 'import os, socket, sys\np = sys.argv[1]\nif os.path.exists(p): os.unlink(p)\ns = socket.socket(socket.AF_UNIX)\ns.bind(p)\ns.listen()\nwhile True:\n c, _ = s.accept()\n c.close()\n') or { panic(err) }
-	slot := transport.ManagedWorker.build_slot(0, 'python3 ${script} {socket}', {}, socket, 1) or { panic(err) }
+	slot := transport.ManagedWorker.build_slot(0, '"${python}" -S "${script}" "{socket}"', {}, socket, 1) or { panic(err) }
 	mut state := WorkerState{ worker_backend: WorkerBackendRuntime{ autostart: true, managed_workers: [slot] } }
 	defer { transport.ManagedWorkerPool.stop(mut state.worker_backend.managed_workers) }
-	state.ensure_slot(LifecyclePort{}, 0)
+	state.ensure_slot(LifecyclePort{ emit_fn: fn (kind string, fields map[string]string) { eprintln('pid fixture ${kind}: ${fields}') } }, 0)
 	first := state.worker_backend.managed_workers[0].proc or {
 		process_runtime.shutdown_managed_processes()
 		panic('first worker missing')

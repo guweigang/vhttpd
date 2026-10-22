@@ -15,10 +15,11 @@ fn exercise_worker_lifecycle_event(restart bool, ready bool) {
 	os.mkdir_all(root) or { panic(err) }
 	defer { os.rmdir_all(root) or {} }
 	path := root + '/worker.sock'
+	python := os.find_abs_path_of_executable('python3') or { panic(err) }
 	script := root + '/peer.py'
 	os.write_file(script, 'import socket,sys\ns=socket.socket(socket.AF_UNIX); s.bind(sys.argv[1]); s.listen()\nwhile True:\n c,_=s.accept(); c.close()\n') or { panic(err) }
 	// Readiness requires the managed child itself to own the socket.
-	command := if ready { 'python3 "${script}" "${path}"' } else { 'sleep 30' }
+	command := if ready { '"${python}" -S "${script}" "${path}"' } else { 'sleep 30' }
 	// An overlong address fails before native connect allocates a descriptor.
 	socket := if ready { path } else { '/tmp/' + 'x'.repeat(200) }
 	mut state := &WorkerState{
@@ -29,6 +30,7 @@ fn exercise_worker_lifecycle_event(restart bool, ready bool) {
 				id:          7
 				socket_path: socket
 				worker_cmd:  command
+				worker_env:  os.environ()
 			}]
 		}
 	}
@@ -55,7 +57,7 @@ fn exercise_worker_lifecycle_event(restart bool, ready bool) {
 			assert fields['restart_count'] == '1'
 			assert state.worker_backend.managed_workers[0].restart_count == 1
 			if ready {
-				assert kind == if restart { 'worker.restarted' } else { 'worker.started' }
+				assert kind == if restart { 'worker.restarted' } else { 'worker.started' }, '${kind}: ${fields}'
 				assert state.worker_backend.managed_workers[0].process_alive()
 				assert state.worker_backend.managed_workers[0].next_retry_ts == 0
 				// Reentrant state mutation must survive returning from the callback.
