@@ -12,6 +12,8 @@ Track this file as milestones complete; cross-link any deviation back to the rev
 
 后续真实失败与处理：干净 runner 缺少安全检查依赖 `rg`，已显式安装 ripgrep。Linux inproc 的 HTTP→WebSocket 复用场景触发 QuickJS `Maximum call stack size exceeded`；会话被 lane 串行复用到另一原生线程时，原始 Context 入口未刷新 stack top，现已在借用入口刷新，保留原栈限制与断言。原失败日志与 artifact 保留于 `attempt-6cf92ea8/`；现有 Paseo Relay 回归组在本地优化编译器下通过，Linux 最终复跑待完成。另将原 fast 串行入口改为同一 V 调度器默认两路，核对仍为 320 项，双文件并行 smoke 通过；固定编译器的 `-prod -cc cc` 实构建通过。CI 设置失败即停且不忽略 flaky 失败，平台矩阵仍独立收集结果。
 
+`4ed3eb56` 的 Linux inproc 已 6/6 通过，确认线程栈交接修复；全量随后在 `native_inheritance_test.v` 暴露 glibc `struct ucred` 特性可见性缺失，已为 process_runtime 显式添加 Linux `_GNU_SOURCE` 编译旗标，macOS 严格工具链的该模块 4/4 回归通过。原 Linux C 编译失败会自动改用未打补丁的 V1，产生次生 API 错误；现已在所有 CI 平台禁用该回退，确保固定 V 及补丁的真实性。失败全量日志和已通过的 Linux inproc artifact 均保留于 `attempt-4ed3eb56/`。当前同提交矩阵仍在执行，尚未声称通过。
+
 远端验收首轮记录（已被后续基线提交取代）：8 个 CI 文件已隔离提交并推送至 `codex/m5-ci-acceptance`，初始提交 `c592fc3d97471e92df1de66ad611fedbe61e8951`；[验收 PR #21](https://github.com/guweigang/vhttpd/pull/21) 以 `refactor/v2` 为基线，[首轮 PR 三平台检查](https://github.com/guweigang/vhttpd/actions/runs/39705520231) 已启动。新 nightly 尚未进入默认分支时，可通过已注册的 binaries workflow 的 `validation=nightly` 手动入口调用相同 reusable 全量矩阵，不提前合并默认分支。当前工作区另有大量未提交 V2/M4 运行时及测试改动，是否纳入必要基线已向用户确认；初始 PR 仅含 CI 文件，其结果不得冒称整个本地候选的验收。原工作区暂存状态保留，桌面/UI/知识库元数据未发布。证据目录 `tmp/m5-remote-validation/`；最终结果待同一提交的 PR 与全量矩阵完成后核销。
 
 **M5 配置与本地验证已完成，远端验收尚未关闭。** 三平台 PR 检查新增 inproc/CodexBot fast，保留 fast → 生产构建 → 显式使用本次产物的 E2E；nightly 于 03:00 UTC 跑三平台 V 全量（含 lifecycle）、PHP package/Pest、生产构建和 E2E，失败也上传日志。V/vjsx/QuickJS 与 bootstrap 固定提交并携带已验收的本地补丁，action 固定 SHA，Node/Python/Composer 固定完整版本，PHP 固定 8.4 系列并记录实际补丁版本和系统库版本。
