@@ -6,7 +6,7 @@ Track this file as milestones complete; cross-link any deviation back to the rev
 
 ## M5 CI 矩阵收尾 — 2026-10-22
 
-当前候选 `4ed3eb56c442f264c5f5190cb0a02acb3afb52d6`：用户已明确批准发布必要 V2/M4 基线，334 个 V 测试对应的既有运行时、PHP SDK、CodexBot 示例、协议/E2E 夹具、Makefile 和安全脚本已单独提交。排除 `desktop/**`、视觉 UI 和知识库元数据，仅带入完整 E2E 所需的共享 `admin/ui/relay-config.js`。原工作区暂存状态保留，无新增局部审查。[PR 三平台检查](https://github.com/guweigang/vhttpd/actions/runs/39709593538) 与 [nightly 同构全量矩阵](https://github.com/guweigang/vhttpd/actions/runs/39709757815) 均已启动，结果未完成，不核销远端验收。
+当前候选 `b743cd1060729852b222bd6d69107d996d66bbf1`：用户已明确批准发布必要 V2/M4 基线，334 个 V 测试对应的既有运行时、PHP SDK、CodexBot 示例、协议/E2E 夹具、Makefile 和安全脚本已单独提交。排除 `desktop/**`、视觉 UI 和知识库元数据，仅带入完整 E2E 所需的共享 `admin/ui/relay-config.js`。原工作区暂存状态保留，无新增局部审查。[PR 三平台检查](https://github.com/guweigang/vhttpd/actions/runs/39712023892) 与 [nightly 同构全量矩阵](https://github.com/guweigang/vhttpd/actions/runs/39712136262) 均已启动，结果未完成，不核销远端验收。
 
 首个 Linux 失败已证实为 CI 依赖平台选择错误：macOS ARM TCC 包被用于全部平台，触发 builtin GC 链接失败。已改为 Linux amd64/macOS Intel/macOS ARM 各自固定提交；[原失败 artifact](https://github.com/guweigang/vhttpd/actions/runs/39705799202/artifacts/12394408740) 和 job 原始日志已保存。旧提交重复任务已取消，不拼接旧候选结果。
 
