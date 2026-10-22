@@ -6,7 +6,11 @@ Track this file as milestones complete; cross-link any deviation back to the rev
 
 ## M5 CI 矩阵收尾 — 2026-10-22
 
-远端验收已启动：8 个 CI 文件已隔离提交并推送至 `codex/m5-ci-acceptance`，初始提交 `c592fc3d97471e92df1de66ad611fedbe61e8951`；[验收 PR #21](https://github.com/guweigang/vhttpd/pull/21) 以 `refactor/v2` 为基线，[首轮 PR 三平台检查](https://github.com/guweigang/vhttpd/actions/runs/39705520231) 已启动。新 nightly 尚未进入默认分支时，可通过已注册的 binaries workflow 的 `validation=nightly` 手动入口调用相同 reusable 全量矩阵，不提前合并默认分支。当前工作区另有大量未提交 V2/M4 运行时及测试改动，是否纳入必要基线已向用户确认；初始 PR 仅含 CI 文件，其结果不得冒称整个本地候选的验收。原工作区暂存状态保留，桌面/UI/知识库元数据未发布。证据目录 `tmp/m5-remote-validation/`；最终结果待同一提交的 PR 与全量矩阵完成后核销。
+当前候选 `fd275acf9d5592a8037ed422509211acdce36345`：用户已明确批准发布必要 V2/M4 基线，334 个 V 测试对应的既有运行时、PHP SDK、CodexBot 示例、协议/E2E 夹具、Makefile 和安全脚本已单独提交。排除 `desktop/**`、视觉 UI 和知识库元数据，仅带入完整 E2E 所需的共享 `admin/ui/relay-config.js`。原工作区暂存状态保留，无新增局部审查。[PR 三平台检查](https://github.com/guweigang/vhttpd/actions/runs/39706839539) 与 [nightly 同构全量矩阵](https://github.com/guweigang/vhttpd/actions/runs/39706928127) 均已启动，结果未完成，不核销远端验收。
+
+首个 Linux 失败已证实为 CI 依赖平台选择错误：macOS ARM TCC 包被用于全部平台，触发 builtin GC 链接失败。已改为 Linux amd64/macOS Intel/macOS ARM 各自固定提交；[原失败 artifact](https://github.com/guweigang/vhttpd/actions/runs/39705799202/artifacts/12394408740) 和 job 原始日志已保存。旧提交重复任务已取消，不拼接旧候选结果。
+
+远端验收首轮记录（已被后续基线提交取代）：8 个 CI 文件已隔离提交并推送至 `codex/m5-ci-acceptance`，初始提交 `c592fc3d97471e92df1de66ad611fedbe61e8951`；[验收 PR #21](https://github.com/guweigang/vhttpd/pull/21) 以 `refactor/v2` 为基线，[首轮 PR 三平台检查](https://github.com/guweigang/vhttpd/actions/runs/39705520231) 已启动。新 nightly 尚未进入默认分支时，可通过已注册的 binaries workflow 的 `validation=nightly` 手动入口调用相同 reusable 全量矩阵，不提前合并默认分支。当前工作区另有大量未提交 V2/M4 运行时及测试改动，是否纳入必要基线已向用户确认；初始 PR 仅含 CI 文件，其结果不得冒称整个本地候选的验收。原工作区暂存状态保留，桌面/UI/知识库元数据未发布。证据目录 `tmp/m5-remote-validation/`；最终结果待同一提交的 PR 与全量矩阵完成后核销。
 
 **M5 配置与本地验证已完成，远端验收尚未关闭。** 三平台 PR 检查新增 inproc/CodexBot fast，保留 fast → 生产构建 → 显式使用本次产物的 E2E；nightly 于 03:00 UTC 跑三平台 V 全量（含 lifecycle）、PHP package/Pest、生产构建和 E2E，失败也上传日志。V/vjsx/QuickJS 与 bootstrap 固定提交并携带已验收的本地补丁，action 固定 SHA，Node/Python/Composer 固定完整版本，PHP 固定 8.4 系列并记录实际补丁版本和系统库版本。
 
