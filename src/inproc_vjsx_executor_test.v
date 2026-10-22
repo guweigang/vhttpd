@@ -2642,8 +2642,16 @@ export default app;
 		metadata:    map[string]string{}
 	}) or { panic(err) }
 	assert resp.accepted
-	time.sleep(80 * time.millisecond)
-	after_wakeup := app.websocket.snapshot(true, 10, 0, '', 'ws_timer_pump')
+	// Observe the asynchronous wakeup instead of assuming the worker ran in 80ms.
+	// Do not pump manually: the regression must still prove automatic delivery.
+	deadline := time.now().add(2 * time.second)
+	mut after_wakeup := app.websocket.snapshot(true, 10, 0, '', 'ws_timer_pump')
+	for time.now() < deadline {
+		if after_wakeup.connections.len == 1
+			&& after_wakeup.connections[0].metadata['timer_ready'] == '1' { break }
+		time.sleep(time.millisecond)
+		after_wakeup = app.websocket.snapshot(true, 10, 0, '', 'ws_timer_pump')
+	}
 	assert after_wakeup.connections.len == 1
 	assert after_wakeup.connections[0].metadata['timer_ready'] == '1'
 }
