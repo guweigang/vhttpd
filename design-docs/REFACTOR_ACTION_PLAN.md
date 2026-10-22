@@ -6,9 +6,11 @@ Track this file as milestones complete; cross-link any deviation back to the rev
 
 ## M5 CI 矩阵收尾 — 2026-10-22
 
-当前候选 `6cf92ea83856156ac66613cb4f921eca0c9c6156`：用户已明确批准发布必要 V2/M4 基线，334 个 V 测试对应的既有运行时、PHP SDK、CodexBot 示例、协议/E2E 夹具、Makefile 和安全脚本已单独提交。排除 `desktop/**`、视觉 UI 和知识库元数据，仅带入完整 E2E 所需的共享 `admin/ui/relay-config.js`。原工作区暂存状态保留，无新增局部审查。[PR 三平台检查](https://github.com/guweigang/vhttpd/actions/runs/39707260539) 与 [nightly 同构全量矩阵](https://github.com/guweigang/vhttpd/actions/runs/39707301196) 均已启动，结果未完成，不核销远端验收。
+当前候选 `4ed3eb56c442f264c5f5190cb0a02acb3afb52d6`：用户已明确批准发布必要 V2/M4 基线，334 个 V 测试对应的既有运行时、PHP SDK、CodexBot 示例、协议/E2E 夹具、Makefile 和安全脚本已单独提交。排除 `desktop/**`、视觉 UI 和知识库元数据，仅带入完整 E2E 所需的共享 `admin/ui/relay-config.js`。原工作区暂存状态保留，无新增局部审查。[PR 三平台检查](https://github.com/guweigang/vhttpd/actions/runs/39709593538) 与 [nightly 同构全量矩阵](https://github.com/guweigang/vhttpd/actions/runs/39709757815) 均已启动，结果未完成，不核销远端验收。
 
 首个 Linux 失败已证实为 CI 依赖平台选择错误：macOS ARM TCC 包被用于全部平台，触发 builtin GC 链接失败。已改为 Linux amd64/macOS Intel/macOS ARM 各自固定提交；[原失败 artifact](https://github.com/guweigang/vhttpd/actions/runs/39705799202/artifacts/12394408740) 和 job 原始日志已保存。旧提交重复任务已取消，不拼接旧候选结果。
+
+后续真实失败与处理：干净 runner 缺少安全检查依赖 `rg`，已显式安装 ripgrep。Linux inproc 的 HTTP→WebSocket 复用场景触发 QuickJS `Maximum call stack size exceeded`；会话被 lane 串行复用到另一原生线程时，原始 Context 入口未刷新 stack top，现已在借用入口刷新，保留原栈限制与断言。原失败日志与 artifact 保留于 `attempt-6cf92ea8/`；现有 Paseo Relay 回归组在本地优化编译器下通过，Linux 最终复跑待完成。另将原 fast 串行入口改为同一 V 调度器默认两路，核对仍为 320 项，双文件并行 smoke 通过；固定编译器的 `-prod -cc cc` 实构建通过。CI 设置失败即停且不忽略 flaky 失败，平台矩阵仍独立收集结果。
 
 远端验收首轮记录（已被后续基线提交取代）：8 个 CI 文件已隔离提交并推送至 `codex/m5-ci-acceptance`，初始提交 `c592fc3d97471e92df1de66ad611fedbe61e8951`；[验收 PR #21](https://github.com/guweigang/vhttpd/pull/21) 以 `refactor/v2` 为基线，[首轮 PR 三平台检查](https://github.com/guweigang/vhttpd/actions/runs/39705520231) 已启动。新 nightly 尚未进入默认分支时，可通过已注册的 binaries workflow 的 `validation=nightly` 手动入口调用相同 reusable 全量矩阵，不提前合并默认分支。当前工作区另有大量未提交 V2/M4 运行时及测试改动，是否纳入必要基线已向用户确认；初始 PR 仅含 CI 文件，其结果不得冒称整个本地候选的验收。原工作区暂存状态保留，桌面/UI/知识库元数据未发布。证据目录 `tmp/m5-remote-validation/`；最终结果待同一提交的 PR 与全量矩阵完成后核销。
 
