@@ -1735,7 +1735,7 @@ Linux stopped at read-only preflight under the [VM testing skill](../.agents/ski
 
 证据：`tmp/m5-ci-validation/`。本地为 macOS 27.0.1 ARM、PHP 8.5.11、Node 26.12.0、Python 3.15.0、Composer 2.9.2；CI 配置为 Ubuntu 24.04/macOS 15 Intel/ARM、PHP 8.4 系列、Node 22.14.0、Python 3.12.9、Composer 2.8.8。本地通过不冒称这套远端运行时的实跑。PHP 首次在沙箱内无法监听 Unix socket，放开所需执行权限后同一入口通过；原失败保留。运行时源码/TS 夹具无漂移，原二进制保留，未继续局部审查。
 
-**M5 配置实现与本地验证已完成，远端验收未关闭。** 完成标准：同一提交上的三个平台 fast/prod/E2E 与六个 inproc/CodexBot PR 检查通过；合并默认分支后观察 03:00 UTC 定时任务实际触发，三个 nightly 全量分支全部通过，并取得版本、补丁校验和与测试日志 artifacts。当前未推送/创建验收 PR，也没有定时运行或远端绿测证据，不核销这些验收项。Linux VM 仅只读检查，因既存跟踪修改命中技能停止规则，编译器仍为干净 `local-dev`、V 0.5.2 4f3082f；未在 VM 构建或测试。
+**M5 配置实现与本地验证已完成，远端验收未关闭。** 完成标准：同一提交上的三个平台 fast/prod/E2E 与六个 inproc/CodexBot PR 检查通过；合并默认分支后观察 03:00 UTC 定时任务实际触发，三个 nightly 全量分支全部通过，并取得版本、补丁校验和与测试日志 artifacts。必要 V2/M4 基线与 CI 已推送并创建 [验收 PR #21](https://github.com/guweigang/vhttpd/pull/21)，当前同提交矩阵及真实失败修复记录见本文最上方 M5 收尾段。定时工作流尚未合入默认分支，本轮手动验收调用相同 reusable 全量矩阵，不能冒称已观察自动 cron；不合并 PR，也不核销未完成的验收项。Linux 使用干净 GitHub Ubuntu runner 验证；原 OrbStack VM 保留既存跟踪修改，仍未在该 VM 构建或测试。
 
 **Goal:** catch e2e regressions on PR instead of waiting for a manual run.
 
@@ -1758,7 +1758,7 @@ Linux stopped at read-only preflight under the [VM testing skill](../.agents/ski
 
 **Rollback:** disable the workflow files via `gh workflow disable`.
 
-**Risk:** LOW. CI-only changes; no production surface affected.
+**Risk:** 原 M5 配置提案为 CI-only；本轮用户批准发布必要 V2/M4 基线，并修复真实 CI 失败，包含 QuickJS 原生线程交接入口、PHP worker accept 就绪等待等运行时改动。需以同提交三平台完整矩阵与生产 E2E 验证，不以纯 CI 配置变更的风险描述代替本轮实际范围。
 
 ---
 
