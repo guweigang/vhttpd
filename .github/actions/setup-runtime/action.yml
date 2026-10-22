@@ -38,6 +38,12 @@ runs:
           echo "CPPFLAGS=-I${mysql_prefix}/include/mysql -I${libpq_prefix}/include -I${openssl_prefix}/include -I${sqlite_prefix}/include ${CPPFLAGS:-}"
           echo "LDFLAGS=-L${mysql_prefix}/lib -L${libpq_prefix}/lib -L${openssl_prefix}/lib -L${sqlite_prefix}/lib ${LDFLAGS:-}"
         } >> "$GITHUB_ENV"
+    - name: Generate PHP package Composer loader
+      shell: bash
+      run: |
+        set -euo pipefail
+        mkdir -p ci-results
+        composer dump-autoload --working-dir=php/package --no-interaction 2>&1 | tee ci-results/php-autoload.log
     - name: Build fixed V/vjsx/QuickJS dependencies
       shell: bash
       run: |
