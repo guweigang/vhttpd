@@ -49,7 +49,7 @@ fn test_feishu_bridge_absent_and_attached_connection() {
 }
 
 fn test_listener_stop_defers_close_to_serving_owner() {
-	path := '/private/tmp/vhttpd-handle-${os.getpid()}-${time.now().unix_micro()}.sock'
+	path := '/tmp/vhttpd-handle-${os.getpid()}-${time.now().unix_micro()}.sock'
 	defer { os.rm(path) or {} }
 	mut listener := listener_runtime.listen(path) or { panic(err) }
 	mut cache := cachex.Runtime{}
