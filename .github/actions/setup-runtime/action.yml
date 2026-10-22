@@ -43,6 +43,14 @@ runs:
       run: |
         set -euo pipefail
         mkdir -p ci-results
+        # setup-php writes runner-global auth; public fixtures need no credentials.
+        export COMPOSER_HOME="${RUNNER_TEMP}/vhttpd-ci-composer"
+        export COMPOSER_AUTH='{}'
+        mkdir -p "$COMPOSER_HOME"
+        {
+          echo "COMPOSER_HOME=$COMPOSER_HOME"
+          echo 'COMPOSER_AUTH={}'
+        } >> "$GITHUB_ENV"
         composer dump-autoload --working-dir=php/package --no-interaction 2>&1 | tee ci-results/php-autoload.log
     - name: Build fixed V/vjsx/QuickJS dependencies
       shell: bash
