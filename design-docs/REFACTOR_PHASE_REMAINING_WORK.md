@@ -12,7 +12,7 @@ updated: 2026-10-22
 
 This document records the remaining acceptance work after the v2 runtime/config refactor. The code refactor stages are treated as complete when the automated test matrix is green. The whole refactor goal is complete only after the product-level checklist below passes.
 
-## 当前收尾验收（2026-10-21）
+## 当前收尾验收（2026-10-22）
 
 V2 配置和运行时主体的既有验收结果保留在下方历史状态中。候选 E 的前轮 macOS 全量 332/332、PHP 与生产 E2E 通过证据继续保留。本轮（2026-10-22）已完成 M4 日志统一：移除硬编码 trace 文件与 emit 双写，保持原事件字段、统计和默认文本/WARN 契约，新增可选 stderr JSON、早期配置失败日志及写失败诊断。logging/ws 15/15、相关运行时 4/4、生产模式日志回归 1/1 及完整生产 E2E（新增日志契约 3 项、配置 205/0、CLI 4/0）通过。**V2 整体验收仍未关闭，剩余 Linux 与 M5/M7；M4 实现及本轮 macOS 验收已核销。** 详见 [重构行动计划](REFACTOR_ACTION_PLAN.md)。
 
