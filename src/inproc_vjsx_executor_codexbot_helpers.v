@@ -13,7 +13,8 @@ mut:
 }
 
 fn codexbot_ts_build_root() string {
-	return os.join_path(os.temp_dir(), 'vhttpd_codexbot_ts_test_cache')
+	// V runs test files in separate processes; never share their build publication.
+	return os.join_path(os.temp_dir(), 'vhttpd_codexbot_ts_test_cache_${os.getpid()}')
 }
 
 fn codexbot_ts_feishu_payload(text string, chat_id string, message_id string) string {
