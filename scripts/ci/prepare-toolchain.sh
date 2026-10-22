@@ -57,3 +57,16 @@ if [[ "$(uname -s)" == Darwin ]]; then
 else
   dpkg-query -W > "$root/ci-results/native-packages.txt"
 fi
+
+python3 - "$root" <<'PY_IDENTITY'
+import json, os, pathlib, subprocess, sys
+root = pathlib.Path(sys.argv[1])
+def revision(ref):
+    return subprocess.check_output(['git', '-C', str(root), 'rev-parse', ref], text=True).strip()
+identity = {'source_commit': revision('HEAD'), 'source_tree': revision('HEAD^{tree}')}
+for key in ('GITHUB_RUN_ID', 'GITHUB_RUN_ATTEMPT', 'GITHUB_EVENT_NAME',
+            'GITHUB_SHA', 'GITHUB_WORKFLOW_REF', 'RUNNER_OS', 'RUNNER_ARCH',
+            'ImageOS', 'ImageVersion'):
+    identity[key] = os.environ.get(key)
+(root / 'ci-results' / 'identity.json').write_text(json.dumps(identity, indent=2) + '\n')
+PY_IDENTITY

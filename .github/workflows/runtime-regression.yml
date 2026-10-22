@@ -21,6 +21,8 @@ jobs:
       SUITE: ${{ inputs.suite }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: ./.github/actions/setup-runtime
       - name: Run selected regression family
         shell: bash
