@@ -39,6 +39,8 @@ jobs:
       VJOBS: 2
       VTEST_FAIL_FAST: '1'
       VTEST_FAIL_FLAKY: '1'
+      VTEST_HIDE_OK: '0'
+      VTEST_HIDE_SKIP: '0'
       V_MACOS_V3_NO_FALLBACK: '1' # Applies to every OS; keep the pinned compiler.
       WITH_DB: 1
       VHTTPD_BIN: ${{ github.workspace }}/tmp/ci/vhttpd
@@ -66,7 +68,8 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p ci-results tmp/ci
-          make test-fast V_CC=cc 2>&1 | tee ci-results/fast.log
+          # V disables ownership tests whenever GITHUB_ACTIONS=true.
+          env -u GITHUB_ACTIONS make test-fast V_CC=cc 2>&1 | tee ci-results/fast.log
 
       - name: Build production binary
         shell: bash

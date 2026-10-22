@@ -18,6 +18,8 @@ jobs:
       VJOBS: 2
       VTEST_FAIL_FAST: '1'
       VTEST_FAIL_FLAKY: '1'
+      VTEST_HIDE_OK: '0'
+      VTEST_HIDE_SKIP: '0'
       V_MACOS_V3_NO_FALLBACK: '1' # Applies to every OS; keep the pinned compiler.
       WITH_DB: 1
       VHTTPD_BIN: ${{ github.workspace }}/tmp/ci/vhttpd
@@ -41,7 +43,8 @@ jobs:
             all) target=test-all ;;
             *) echo "Unknown regression suite: $SUITE" >&2; exit 1 ;;
           esac
-          make "$target" V_CC=cc WITH_DB=1 2>&1 | tee "ci-results/$SUITE.log"
+          # Keep ownership tests enabled; the compiler otherwise skips them on GHA.
+          env -u GITHUB_ACTIONS make "$target" V_CC=cc WITH_DB=1 2>&1 | tee "ci-results/$SUITE.log"
       - name: PHP package regressions (nightly)
         if: inputs.suite == 'all'
         shell: bash
