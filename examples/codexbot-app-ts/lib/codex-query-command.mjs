@@ -42,7 +42,7 @@ export function createCodexQueryCommandHandler(deps) {
       handled: true,
       commands: [
         ...preflight,
-        deps.replyText(session, deps.codexRpcQueuedText(normalized.method), stream.streamId),
+        deps.replyText(session, deps.codexRpcQueuedText(normalized.method), stream),
         deps.codexRpcCall(normalized.method, params, stream.streamId, instance),
       ],
     };

@@ -2,13 +2,43 @@ module main
 
 import admin
 import feishu
-import json
+import json2 as json
 import net.unix
+import net
+import listener_runtime
+import sync
 import os
 import upstream
 import worker
 
-struct InternalAdminRuntime {}
+@[heap]
+struct InternalAdminRuntime {
+mut:
+	mu     sync.Mutex
+	owner  listener_runtime.Owner
+	closed bool
+}
+
+// Reserve synchronously before spawning so shutdown also joins delayed startup.
+fn (mut runtime InternalAdminRuntime) start(mut app App, socket_path string) ! {
+	runtime.mu.@lock()
+	defer { runtime.mu.unlock() }
+	if runtime.closed { return error('internal_admin_stopped') }
+	if socket_path.trim_space() == '' { return }
+	generation := runtime.owner.reserve() or { return error('internal_admin_busy') }
+	spawn runtime.serve(mut app, socket_path, generation)
+}
+
+fn (mut runtime InternalAdminRuntime) request_stop() ?u64 {
+	runtime.mu.@lock()
+	defer { runtime.mu.unlock() }
+	runtime.closed = true
+	return runtime.owner.request_stop()
+}
+
+fn (mut runtime InternalAdminRuntime) wait_stopped(generation u64) {
+	runtime.owner.wait_stopped(generation)
+}
 
 fn (mut app App) internal_admin_dispatch(req admin.InternalAdminRequest) admin.InternalAdminResponse {
 	if req.mode != 'vhttpd_admin' {
@@ -28,11 +58,14 @@ fn (mut app App) internal_admin_dispatch(req admin.InternalAdminRequest) admin.I
 				headers: {
 					'content-type': 'application/json; charset=utf-8'
 				}
-				body:    json.encode(result)
+				body:    json.encode(result, escape_unicode: true, time_as_unix: true)
 				error:   result.error
 			}
 		}
-		return admin.InternalAdminResponse.json(json.encode(result))
+		return admin.InternalAdminResponse.json(json.encode(result,
+			escape_unicode: true
+			time_as_unix:   true
+		))
 	}
 	if method == 'POST' && path == '/runtime/plan/replacement/finalize' {
 		result := app.finalize_runtime_plan_replacement()
@@ -43,11 +76,14 @@ fn (mut app App) internal_admin_dispatch(req admin.InternalAdminRequest) admin.I
 				headers: {
 					'content-type': 'application/json; charset=utf-8'
 				}
-				body:    json.encode(result)
+				body:    json.encode(result, escape_unicode: true, time_as_unix: true)
 				error:   result.error
 			}
 		}
-		return admin.InternalAdminResponse.json(json.encode(result))
+		return admin.InternalAdminResponse.json(json.encode(result,
+			escape_unicode: true
+			time_as_unix:   true
+		))
 	}
 	if method == 'POST' && path == '/runtime/plan/replacement/cancel' {
 		result := app.cancel_runtime_plan_replacement()
@@ -58,45 +94,69 @@ fn (mut app App) internal_admin_dispatch(req admin.InternalAdminRequest) admin.I
 				headers: {
 					'content-type': 'application/json; charset=utf-8'
 				}
-				body:    json.encode(result)
+				body:    json.encode(result, escape_unicode: true, time_as_unix: true)
 				error:   result.error
 			}
 		}
-		return admin.InternalAdminResponse.json(json.encode(result))
+		return admin.InternalAdminResponse.json(json.encode(result,
+			escape_unicode: true
+			time_as_unix:   true
+		))
 	}
 	if method == 'POST' && path == '/workers/drain' {
 		engine := (req.query['engine'] or { req.query['kind'] or { '' } }).trim_space()
 		status := app.drain_engine(engine) or {
 			return admin.InternalAdminResponse.error(404, err.msg())
 		}
-		return admin.InternalAdminResponse.json(json.encode(status))
+		return admin.InternalAdminResponse.json(json.encode(status,
+			escape_unicode: true
+			time_as_unix:   true
+		))
 	}
 	if method != 'GET' {
 		return admin.InternalAdminResponse.error(405, 'method_not_allowed')
 	}
 	match path {
 		'/executors' {
-			return admin.InternalAdminResponse.json(json.encode(app.admin_logic_executor_specs_snapshot()))
+			return admin.InternalAdminResponse.json(json.encode(app.admin_logic_executor_specs_snapshot(),
+				escape_unicode: true
+				time_as_unix:   true
+			))
 		}
 		'/runtime' {
-			return admin.InternalAdminResponse.json(json.encode(app.admin_runtime_snapshot()))
+			return admin.InternalAdminResponse.json(json.encode(app.admin_runtime_snapshot(),
+				escape_unicode: true
+				time_as_unix:   true
+			))
 		}
 		'/runtime/plan/replacement' {
 			config_path := (req.query['config'] or { req.query['path'] or { '' } }).trim_space()
 			preview := app.preview_runtime_plan_replacement(config_path) or {
 				return admin.InternalAdminResponse.bad_request(err.msg())
 			}
-			return admin.InternalAdminResponse.json(json.encode(preview))
+			return admin.InternalAdminResponse.json(json.encode(preview,
+				escape_unicode: true
+				time_as_unix:   true
+			))
 		}
 		'/runtime/plan/replacement/state' {
-			return admin.InternalAdminResponse.json(json.encode(app.runtime_plan_replacement_snapshot()))
+			return admin.InternalAdminResponse.json(json.encode(app.runtime_plan_replacement_snapshot(),
+				escape_unicode: true
+				time_as_unix:   true
+			))
 		}
 		'/runtime/transformers' {
-			return admin.InternalAdminResponse.json(json.encode(app.transformers.snapshot()))
+			return admin.InternalAdminResponse.json(json.encode(app.admin_transformer_snapshot(),
+				escape_unicode: true
+				time_as_unix:   true
+			))
 		}
 		'/runtime/provider-instances' {
 			provider := (req.query['provider'] or { '' }).trim_space()
-			return admin.InternalAdminResponse.json(json.encode(app.admin_provider_instance_snapshots(provider)))
+			return admin.InternalAdminResponse.json(json.encode(app.admin_provider_instance_snapshots(provider),
+				escape_unicode: true
+				time_as_unix:   true
+			))
 		}
 		'/runtime/feishu' {
 			return admin.InternalAdminResponse.json(app.provider_runtime_snapshot('feishu') or {
@@ -113,7 +173,10 @@ fn (mut app App) internal_admin_dispatch(req admin.InternalAdminRequest) admin.I
 			chat_type := (req.query['chat_type'] or { '' }).trim_space()
 			chat_id := (req.query['chat_id'] or { '' }).trim_space()
 			return admin.InternalAdminResponse.json(json.encode(app.providers.feishu.chats_snapshot(limit,
-				offset, instance, chat_type, chat_id)))
+				offset, instance, chat_type, chat_id),
+				escape_unicode: true
+				time_as_unix:   true
+			))
 		}
 		'/runtime/upstreams/websocket' {
 			details := admin.AdminQuery.parse_boolish(req.query['details'] or { 'false' })
@@ -122,7 +185,10 @@ fn (mut app App) internal_admin_dispatch(req admin.InternalAdminRequest) admin.I
 			provider := (req.query['provider'] or { '' }).trim_space()
 			instance := (req.query['instance'] or { '' }).trim_space()
 			return admin.InternalAdminResponse.json(json.encode(app.admin_websocket_upstreams_snapshot(details,
-				limit, offset, provider, instance)))
+				limit, offset, provider, instance),
+				escape_unicode: true
+				time_as_unix:   true
+			))
 		}
 		'/runtime/upstreams/websocket/events' {
 			limit := admin.AdminQuery.limit(req.query['limit'] or { '' }, 100, 1000)
@@ -130,7 +196,10 @@ fn (mut app App) internal_admin_dispatch(req admin.InternalAdminRequest) admin.I
 			provider := (req.query['provider'] or { '' }).trim_space()
 			instance := (req.query['instance'] or { '' }).trim_space()
 			return admin.InternalAdminResponse.json(json.encode(app.admin_websocket_upstream_events_snapshot(limit,
-				offset, provider, instance)))
+				offset, provider, instance),
+				escape_unicode: true
+				time_as_unix:   true
+			))
 		}
 		'/runtime/upstreams/websocket/activities' {
 			limit := admin.AdminQuery.limit(req.query['limit'] or { '' }, 100, 1000)
@@ -138,7 +207,10 @@ fn (mut app App) internal_admin_dispatch(req admin.InternalAdminRequest) admin.I
 			provider := (req.query['provider'] or { '' }).trim_space()
 			instance := (req.query['instance'] or { '' }).trim_space()
 			return admin.InternalAdminResponse.json(json.encode(app.admin_websocket_upstream_activities_snapshot(limit,
-				offset, provider, instance)))
+				offset, provider, instance),
+				escape_unicode: true
+				time_as_unix:   true
+			))
 		}
 		else {
 			return admin.InternalAdminResponse.error(404, 'not_found')
@@ -156,7 +228,7 @@ fn (mut app App) internal_gateway_dispatch(req admin.InternalAdminRequest, binar
 	path := admin.InternalAdminRequest.normalize_gateway_path(req.path)
 	match path {
 		'/upstreams/websocket/send', '/feishu/messages' {
-			send_req := json.decode(upstream.UpstreamSendRequest, req.body) or {
+			send_req := json.decode[upstream.UpstreamSendRequest](req.body) or {
 				return admin.InternalAdminResponse.bad_request('invalid_json')
 			}
 			result := app.websocket_upstream_send(send_req) or {
@@ -167,11 +239,14 @@ fn (mut app App) internal_gateway_dispatch(req admin.InternalAdminRequest, binar
 					}
 					body:    json.encode({
 						'error': err.msg()
-					})
+					}, escape_unicode: true, time_as_unix: true)
 					error:   err.msg()
 				}
 			}
-			return admin.InternalAdminResponse.json(json.encode(result))
+			return admin.InternalAdminResponse.json(json.encode(result,
+				escape_unicode: true
+				time_as_unix:   true
+			))
 		}
 		'/feishu/images' {
 			upload_req := feishu.UploadImageRequest.from_json(req.body) or {
@@ -188,7 +263,7 @@ fn (mut app App) internal_gateway_dispatch(req admin.InternalAdminRequest, binar
 						}
 						body:    json.encode({
 							'error': err.msg()
-						})
+						}, escape_unicode: true, time_as_unix: true)
 						error:   err.msg()
 					}
 				}
@@ -201,12 +276,15 @@ fn (mut app App) internal_gateway_dispatch(req admin.InternalAdminRequest, binar
 						}
 						body:    json.encode({
 							'error': err.msg()
-						})
+						}, escape_unicode: true, time_as_unix: true)
 						error:   err.msg()
 					}
 				}
 			}
-			return admin.InternalAdminResponse.json(json.encode(result))
+			return admin.InternalAdminResponse.json(json.encode(result,
+				escape_unicode: true
+				time_as_unix:   true
+			))
 		}
 		else {
 			return admin.InternalAdminResponse.error(404, 'not_found')
@@ -214,81 +292,106 @@ fn (mut app App) internal_gateway_dispatch(req admin.InternalAdminRequest, binar
 	}
 }
 
-fn run_internal_admin_server(mut app App, socket_path string) {
-	if socket_path.trim_space() == '' {
-		return
-	}
-	os.mkdir_all(os.dir(socket_path)) or {}
-	mut listener := unix.listen_stream(socket_path) or {
-		app.emit('internal_admin.error', {
-			'socket': socket_path
-			'error':  err.msg()
-		})
-		return
-	}
+fn (mut runtime InternalAdminRuntime) handle_connection(mut app App, mut conn unix.StreamConn, socket_path string, generation u64, request u64) {
 	defer {
+		conn.close() or {}
+		runtime.owner.complete_request(request)
+	}
+	payload := worker.WorkerBackendFrameCodec.read(mut conn) or {
+		return
+	}
+	req := json.decode[admin.InternalAdminRequest](payload) or {
+		app.emit('internal_admin.invalid_json', {
+			'socket':          socket_path
+			'payload_len':     '${payload.len}'
+			'payload_preview': if payload.len > 256 { payload[..256] } else { payload }
+		})
+		worker.WorkerBackendFrameCodec.write(mut conn, json.encode(admin.InternalAdminResponse.error(400,
+			'invalid_json'),
+			escape_unicode: true
+			time_as_unix:   true
+		)) or {}
+		return
+	}
+	mut binary_payload := []u8{}
+	if req.mode == 'vhttpd_gateway'
+		&& admin.InternalAdminRequest.normalize_gateway_path(req.path) == '/feishu/images' {
+		upload_req := feishu.UploadImageRequest.from_json(req.body) or {
+			worker.WorkerBackendFrameCodec.write(mut conn, json.encode(admin.InternalAdminResponse.error(400,
+				'invalid_json'),
+				escape_unicode: true
+				time_as_unix:   true
+			)) or {}
+			return
+		}
+		if upload_req.content_length > 0 {
+			binary_payload = worker.WorkerBackendFrameCodec.read_bytes(mut conn) or {
+				worker.WorkerBackendFrameCodec.write(mut conn, json.encode(admin.InternalAdminResponse.error(400,
+					'missing_binary_payload'),
+					escape_unicode: true
+					time_as_unix:   true
+				)) or {}
+				return
+			}
+			if binary_payload.len != upload_req.content_length {
+				worker.WorkerBackendFrameCodec.write(mut conn, json.encode(admin.InternalAdminResponse.error(400,
+					'invalid_binary_payload_length'),
+					escape_unicode: true
+					time_as_unix:   true
+				)) or {}
+				return
+			}
+		}
+	}
+	if !runtime.owner.begin_request(generation, request) { return }
+	resp := if req.mode == 'vhttpd_gateway' {
+		app.internal_gateway_dispatch(req, binary_payload)
+	} else {
+		app.internal_admin_dispatch(req)
+	}
+	worker.WorkerBackendFrameCodec.write(mut conn, json.encode(resp,
+		escape_unicode: true
+		time_as_unix:   true
+	)) or {}
+}
+
+fn (mut runtime InternalAdminRuntime) serve(mut app App, socket_path string, generation u64) {
+	defer {
+		runtime.owner.drain_requests(generation)
+		runtime.owner.finish(generation)
+	}
+	if runtime.owner.should_stop(generation) { return }
+	os.mkdir_all(os.dir(socket_path)) or {}
+	mut listener := listener_runtime.listen(socket_path) or {
+		if !runtime.owner.should_stop(generation) {
+			app.emit('internal_admin.error', {
+				'socket': socket_path
+				'error':  err.msg()
+			})
+		}
+		return
+	}
+	if !runtime.owner.publish(generation, listener) {
 		listener.close() or {}
+		return
 	}
 	app.emit('internal_admin.started', {
 		'socket': socket_path
 	})
-	for {
+	for !runtime.owner.should_stop(generation) {
 		mut conn := listener.accept() or {
+			if runtime.owner.should_stop(generation) { break }
+			if err.code() == net.err_timed_out_code { continue }
 			app.emit('internal_admin.error', {
 				'socket': socket_path
 				'error':  err.msg()
 			})
 			continue
 		}
-		payload := worker.WorkerBackendFrameCodec.read(mut conn) or {
+		request := runtime.owner.accept_request(generation, conn.sock.handle) or {
 			conn.close() or {}
 			continue
 		}
-		req := json.decode(admin.InternalAdminRequest, payload) or {
-			app.emit('internal_admin.invalid_json', {
-				'socket':          socket_path
-				'payload_len':     '${payload.len}'
-				'payload_preview': if payload.len > 256 { payload[..256] } else { payload }
-			})
-			worker.WorkerBackendFrameCodec.write(mut conn, json.encode(admin.InternalAdminResponse.error(400,
-				'invalid_json'))) or {}
-			conn.close() or {}
-			continue
-		}
-		mut binary_payload := []u8{}
-		if req.mode == 'vhttpd_gateway'
-			&& admin.InternalAdminRequest.normalize_gateway_path(req.path) == '/feishu/images' {
-			upload_req := feishu.UploadImageRequest.from_json(req.body) or {
-				worker.WorkerBackendFrameCodec.write(mut conn, json.encode(admin.InternalAdminResponse.error(400,
-					'invalid_json'))) or {}
-				conn.close() or {}
-				continue
-			}
-			if upload_req.content_length > 0 {
-				binary_payload = worker.WorkerBackendFrameCodec.read_bytes(mut conn) or {
-					worker.WorkerBackendFrameCodec.write(mut conn, json.encode(admin.InternalAdminResponse.error(400,
-						'missing_binary_payload'))) or {}
-					conn.close() or {}
-					continue
-				}
-				if binary_payload.len != upload_req.content_length {
-					worker.WorkerBackendFrameCodec.write(mut conn, json.encode(admin.InternalAdminResponse.error(400,
-						'invalid_binary_payload_length'))) or {}
-					conn.close() or {}
-					continue
-				}
-			}
-		}
-		resp := if req.mode == 'vhttpd_gateway' {
-			app.internal_gateway_dispatch(req, binary_payload)
-		} else {
-			app.internal_admin_dispatch(req)
-		}
-		worker.WorkerBackendFrameCodec.write(mut conn, json.encode(resp)) or {}
-		conn.close() or {}
+		runtime.handle_connection(mut app, mut conn, socket_path, generation, request)
 	}
-}
-
-fn InternalAdminRuntime.serve(mut app App, socket_path string) {
-	run_internal_admin_server(mut app, socket_path)
 }

@@ -1,7 +1,7 @@
 module feishu
 
 import command
-import json
+import json2 as json
 import net.http
 import upstream
 
@@ -24,7 +24,7 @@ pub fn SendMessageRequest.build_content(msg_type string, raw_content string, tex
 			}
 			return json.encode({
 				'text': text_value
-			})
+			}, escape_unicode: true, time_as_unix: true)
 		}
 		'image' {
 			image_key := content_fields['image_key'] or { '' }
@@ -33,7 +33,7 @@ pub fn SendMessageRequest.build_content(msg_type string, raw_content string, tex
 			}
 			return json.encode({
 				'image_key': image_key
-			})
+			}, escape_unicode: true, time_as_unix: true)
 		}
 		'file', 'audio', 'sticker' {
 			file_key := content_fields['file_key'] or { '' }
@@ -42,7 +42,7 @@ pub fn SendMessageRequest.build_content(msg_type string, raw_content string, tex
 			}
 			return json.encode({
 				'file_key': file_key
-			})
+			}, escape_unicode: true, time_as_unix: true)
 		}
 		'media' {
 			file_key := content_fields['file_key'] or { '' }
@@ -66,7 +66,7 @@ pub fn SendMessageRequest.build_content(msg_type string, raw_content string, tex
 				'image_key': image_key
 				'file_name': file_name
 				'duration':  duration
-			})
+			}, escape_unicode: true, time_as_unix: true)
 		}
 		'post', 'interactive', 'share_chat', 'share_user' {
 			return error('missing raw content for msg_type ${msg_type}')
@@ -89,7 +89,7 @@ pub fn SendMessageRequest.extract_markdown_text(raw_content string, text string,
 	if content == '' {
 		return ''
 	}
-	decoded := json.decode(TextContent, content) or { return content }
+	decoded := json.decode[TextContent](content) or { return content }
 	if decoded.text.trim_space() != '' {
 		return decoded.text
 	}
@@ -97,14 +97,14 @@ pub fn SendMessageRequest.extract_markdown_text(raw_content string, text string,
 }
 
 pub fn SendMessageRequest.interactive_markdown_card(markdown string) string {
-	return '{"elements":[{"tag":"markdown","content":${json.encode(markdown)}}]}'
+	return '{"elements":[{"tag":"markdown","content":${json.encode(markdown, escape_unicode: true, time_as_unix: true)}}]}'
 }
 
 pub fn SendMessageRequest.streaming_card(markdown string, segment_index int) string {
 	if segment_index <= 1 {
 		return SendMessageRequest.interactive_markdown_card(markdown)
 	}
-	return '{"elements":[{"tag":"note","elements":[{"tag":"plain_text","content":${json.encode('继续输出 · 第 ${segment_index} 段')}}]},{"tag":"markdown","content":${json.encode(markdown)}}]}'
+	return '{"elements":[{"tag":"note","elements":[{"tag":"plain_text","content":${json.encode('继续输出 · 第 ${segment_index} 段')}}]},{"tag":"markdown","content":${json.encode(markdown, escape_unicode: true, time_as_unix: true)}}]}'
 }
 
 pub fn UpdateMessageRequest.http_method_for(msg_type string) http.Method {
@@ -122,7 +122,7 @@ pub fn UpdateMessageRequest.delay_card_body(token string, raw_content string) !s
 	if card_content == '' {
 		return error('missing interactive card content')
 	}
-	token_json := json.encode(token)
+	token_json := json.encode(token, escape_unicode: true, time_as_unix: true)
 	return '{"token":${token_json},"card":${card_content}}'
 }
 
@@ -185,7 +185,7 @@ pub fn StreamBuffer.render_final_card(markdown string, template_content string) 
 	if template_content.trim_space() == '' {
 		return SendMessageRequest.interactive_markdown_card(markdown)
 	}
-	escaped_json := json.encode(markdown)
+	escaped_json := json.encode(markdown, escape_unicode: true, time_as_unix: true)
 	escaped := escaped_json[1..escaped_json.len - 1]
 	if template_content.contains('{{content}}') {
 		return template_content.replace('{{content}}', escaped)

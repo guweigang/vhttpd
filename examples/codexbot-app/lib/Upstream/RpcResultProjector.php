@@ -64,6 +64,7 @@ final class RpcResultProjector
             return null;
         }
 
+        $binding = $this->streamRepo->findByStreamId($streamId);
         $thread = $resultData['thread'] ?? $resultData;
         if (!is_array($thread) || $thread === []) {
             return null;
@@ -98,7 +99,7 @@ final class RpcResultProjector
         }
 
         $md = $this->threadViewHelper->renderThreadRead($thread);
-        return $this->responseHelper->command(CommandFactory::feishuUpdateMarkdown($streamId, $md, JSON_UNESCAPED_UNICODE));
+        return $this->responseHelper->command(CommandFactory::feishuUpdateMarkdown($binding ?? $streamId, $md, JSON_UNESCAPED_UNICODE));
     }
 
     public function handleTurnStart(string $method, bool $hasError, array $payload, string $streamId): void
@@ -135,6 +136,7 @@ final class RpcResultProjector
             return null;
         }
 
+        $binding = $this->streamRepo->findByStreamId($streamId);
         if ($method === 'thread/list' && $streamId !== '') {
             $stream = $this->streamRepo->findByStreamId($streamId);
             $task = $stream && !empty($stream['task_id'])
@@ -154,7 +156,7 @@ final class RpcResultProjector
 
                 if (!is_array($threads) || $threads === [] || !is_array($threads[0] ?? null)) {
                     return $this->responseHelper->command(CommandFactory::feishuUpdateMarkdown(
-                        $streamId,
+                        $binding ?? $streamId,
                         "⚠️ **当前项目下没有可用的历史 Thread**\n\n你可以先在这个项目里直接发任务开启一个新线程，再回来使用 `/use latest`。",
                         JSON_UNESCAPED_UNICODE
                     ));
@@ -164,7 +166,7 @@ final class RpcResultProjector
                 $latestThreadId = trim((string) ($latestThread['id'] ?? ''));
                 if ($latestThreadId === '') {
                     return $this->responseHelper->command(CommandFactory::feishuUpdateMarkdown(
-                        $streamId,
+                        $binding ?? $streamId,
                         "⚠️ **最近线程返回不完整**\n\n这次没有拿到可用的 thread_id，请先发送 `/threads` 手动检查。",
                         JSON_UNESCAPED_UNICODE
                     ));
@@ -185,7 +187,7 @@ final class RpcResultProjector
                     "• **标题**: {$title}\n\n" .
                     "下一次你直接发任务，或发送 `/thread` 时，我们会先尝试恢复这个线程；只有恢复成功后，才会正式绑定为当前会话。";
 
-                return $this->responseHelper->command(CommandFactory::feishuUpdateMarkdown($streamId, $md, JSON_UNESCAPED_UNICODE));
+                return $this->responseHelper->command(CommandFactory::feishuUpdateMarkdown($binding ?? $streamId, $md, JSON_UNESCAPED_UNICODE));
             }
         } else {
             $projectForThreads = null;
@@ -229,7 +231,7 @@ final class RpcResultProjector
         }
 
         if ($md !== '') {
-            return $this->responseHelper->command(CommandFactory::feishuUpdateMarkdown($streamId, $md));
+            return $this->responseHelper->command(CommandFactory::feishuUpdateMarkdown($binding ?? $streamId, $md));
         }
 
         return null;
@@ -241,6 +243,7 @@ final class RpcResultProjector
             return null;
         }
 
+        $binding = $this->streamRepo->findByStreamId($streamId);
         $taskId = str_replace('codex:', '', $streamId);
         $task = $taskId !== '' ? $this->taskRepo->findByTaskId($taskId) : null;
         if ($taskId !== '') {
@@ -264,6 +267,6 @@ final class RpcResultProjector
             "• **Path**: `{$path}`\n" .
             "• **Value**: `{$valueText}`";
 
-        return $this->responseHelper->command(CommandFactory::feishuUpdateMarkdown($streamId, $md, JSON_UNESCAPED_UNICODE));
+        return $this->responseHelper->command(CommandFactory::feishuUpdateMarkdown($binding ?? $streamId, $md, JSON_UNESCAPED_UNICODE));
     }
 }

@@ -2,29 +2,18 @@ module main
 
 import upstream.transport
 import ws
+import connection_runtime
 import net.websocket
 
 struct WebSocketKernelPort {
-	build_frame_fn    fn (string, string, string, map[string]string, map[string]string, string, string, string, string, string, int, string, []string, map[string]string, ws.PresenceSnapshot) transport.WorkerWebSocketFrame = unsafe { nil }
-	dispatch_event_fn fn (transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse = unsafe { nil }
-}
-
-fn (mut app App) build_websocket_kernel_port() WebSocketKernelPort {
-	return WebSocketKernelPort{
-		build_frame_fn:    fn [mut app] (event string, method string, path string, query map[string]string, headers map[string]string, remote_addr string, req_id string, trace_id string, opcode string, data string, code int, reason string, rooms []string, metadata map[string]string, presence ws.PresenceSnapshot) transport.WorkerWebSocketFrame {
-			return app.kernel_websocket_dispatch_frame(event, method, path, query, headers,
-				remote_addr, req_id, trace_id, opcode, data, code, reason, rooms, metadata,
-				presence.room_members, presence.member_metadata, presence.room_counts,
-				presence.presence_users)
-		}
-		dispatch_event_fn: fn [mut app] (frame transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse {
-			return app.kernel_dispatch_websocket_event(frame)
-		}
-	}
+	emit_fn           fn (string, map[string]string) @[required]
+	build_frame_fn    fn (string, string, string, map[string]string, map[string]string, string, string, string, string, string, int, string, []string, map[string]string, ws.PresenceSnapshot) transport.WorkerWebSocketFrame @[required]
+	dispatch_event_fn fn (transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse @[required]
 }
 
 fn (mut runtime WebSocketRuntime) build_context(kernel WebSocketKernelPort) ws.RuntimeContext {
 	return ws.RuntimeContext{
+		emit_fn:             kernel.emit_fn
 		dispatch_targets_fn: fn [mut runtime] (room string, except_id string) []ws.HubDispatchTarget {
 			return ws.hub_dispatch_targets(mut runtime.state, room, except_id)
 		}
@@ -44,24 +33,27 @@ fn (mut runtime WebSocketRuntime) build_context(kernel WebSocketKernelPort) ws.R
 		metadata_fn:         fn [mut runtime] (conn_id string) map[string]string {
 			return runtime.state.meta_snapshot(conn_id)
 		}
-		register_conn_fn:    fn [mut runtime] (conn_id string, worker_socket string, method string, req_id string, trace_id string, path string, query map[string]string, headers map[string]string, remote_addr string, client &websocket.Client, lifecycle &ws.DispatchConnState) {
-			runtime.state.register_conn(conn_id, worker_socket, method, req_id, trace_id, path,
-				query, headers, remote_addr, client, lifecycle)
+		register_conn_fn:    fn [mut runtime, kernel] (conn_id string, worker_socket string, method string, req_id string, trace_id string, path string, query map[string]string, headers map[string]string, remote_addr string, client &websocket.Client, lifecycle &ws.DispatchConnState, serving ?&ws.IngressRun) {
+			runtime.state.register_owned_dispatch_conn(conn_id, worker_socket, method, req_id, trace_id, path,
+				query, headers, remote_addr, client, lifecycle, serving, ws.EventDispatch{ call_fn: kernel.dispatch_event_fn })
 		}
 		conn_open_fn:        fn [mut runtime] (conn_id string) bool {
 			return runtime.state.conn_open(conn_id)
 		}
-		mark_closing_fn:     fn [mut runtime] (conn_id string) bool {
-			return runtime.state.mark_closing(conn_id)
+		mark_closing_fn:     fn [mut runtime] (conn_id string, lifecycle &ws.DispatchConnState) bool {
+			return runtime.state.mark_owned_closing(conn_id, lifecycle)
 		}
 		flush_pending_fn:    fn [mut runtime] (conn_id string) {
 			runtime.state.flush_pending(conn_id)
 		}
-		cleanup_conn_fn:     fn [mut runtime] (conn_id string) {
-			runtime.state.cleanup_conn(conn_id)
+		can_cleanup_fn:      fn [mut runtime] (id string, lifecycle &ws.DispatchConnState) bool {
+			return runtime.state.can_cleanup_owned(id, lifecycle)
 		}
-		unregister_conn_fn:  fn [mut runtime] (conn_id string) {
-			runtime.state.unregister_conn(conn_id)
+		cleanup_conn_fn:     fn [mut runtime] (conn_id string, lifecycle &ws.DispatchConnState) {
+			runtime.state.cleanup_owned(conn_id, lifecycle)
+		}
+		unregister_conn_fn:  fn [mut runtime] (conn_id string, lifecycle &ws.DispatchConnState) {
+			runtime.state.unregister_owned(conn_id, lifecycle)
 		}
 		send_to_fn:          fn [mut runtime] (conn_id string, data string, opcode string) bool {
 			return ws.hub_send_to(mut runtime.state, conn_id, data, opcode)
@@ -83,19 +75,17 @@ fn (mut runtime WebSocketRuntime) build_context(kernel WebSocketKernelPort) ws.R
 		}
 		build_frame_fn:      kernel.build_frame_fn
 		dispatch_event_fn:   kernel.dispatch_event_fn
-		command_result_fn:   fn [mut runtime] (commands []transport.WorkerWebSocketFrame) transport.WorkerWebSocketDispatchCommandsResult {
-			return runtime.execute_commands(commands)
+		command_result_fn:   fn [mut runtime, kernel] (commands []transport.WorkerWebSocketFrame) transport.WorkerWebSocketDispatchCommandsResult {
+			return runtime.execute_commands(commands, kernel)
 		}
 		followup_failure_fn: websocket_dispatch_followup_failures
+		close_owned_fn:      fn [mut runtime] (id string, lifecycle &ws.DispatchConnState, code int, reason string) {
+			ws.hub_close_owned_target(mut runtime.state, id, lifecycle, code, reason)
+		}
 		close_target_fn:     fn [mut runtime] (conn_id string, code int, reason string) {
 			ws.hub_close_target(mut runtime.state, conn_id, code, reason)
 		}
 	}
-}
-
-fn (mut app App) build_websocket_runtime_context() ws.RuntimeContext {
-	kernel := app.build_websocket_kernel_port()
-	return app.websocket.build_context(kernel)
 }
 
 // ── Dispatch followup (stub) ──
@@ -111,4 +101,36 @@ fn websocket_dispatch_followup_failures(conn_id string, method string, path stri
 	_ = trace_id
 	_ = failures
 	return none
+}
+
+fn (mut runtime WebSocketRuntime) build_relay_carrier_context() ws.RelayCarrierContext {
+	return ws.RelayCarrierContext{
+		bind_fn: fn [mut runtime] (id string) ws.RelayCarrierTarget {
+			return ws.hub_relay_carrier_target(mut runtime.state, id)
+		}
+	}
+}
+
+fn (mut runtime WebSocketRuntime) build_relay_session_context() ws.RelaySessionContext {
+	return ws.RelaySessionContext{
+		register_conn_fn: fn [mut runtime] (conn_id string, worker_socket string, method string, req_id string, trace_id string, path string, query map[string]string, headers map[string]string, remote_addr string, client &websocket.Client, lifecycle &ws.DispatchConnState, serving ?&ws.IngressRun) {
+			runtime.state.register_owned_conn(conn_id, worker_socket, method, req_id, trace_id, path,
+				query, headers, remote_addr, client, lifecycle, serving)
+		}
+		mark_closing_fn:  fn [mut runtime] (conn_id string, lifecycle &ws.DispatchConnState) bool {
+			return runtime.state.mark_owned_closing(conn_id, lifecycle)
+		}
+		flush_pending_fn: fn [mut runtime] (conn_id string) {
+			runtime.state.flush_pending(conn_id)
+		}
+		cleanup_conn_fn:  fn [mut runtime] (conn_id string, lifecycle &ws.DispatchConnState) {
+			runtime.state.cleanup_owned(conn_id, lifecycle)
+		}
+		bind_outbound_fn: fn [mut runtime] (id string, lifecycle &ws.DispatchConnState, session &connection_runtime.Session) bool {
+			return runtime.state.bind_outbound(id, lifecycle, session)
+		}
+		send_to_fn:       fn [mut runtime] (conn_id string, data string, opcode string) bool {
+			return ws.hub_send_to(mut runtime.state, conn_id, data, opcode)
+		}
+	}
 }

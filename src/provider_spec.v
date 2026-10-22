@@ -3,15 +3,25 @@ module main
 import provider
 import command
 
-// ProviderRuntime represents optional provider-owned runtime lifecycle hooks.
-pub interface ProviderRuntime {
+// ProviderLifecycleRuntime represents optional provider-owned runtime lifecycle hooks.
+pub interface ProviderLifecycleRuntime {
 mut:
 	start(mut ctx provider.RuntimeContext) !
 	stop(mut ctx provider.RuntimeContext) !
 	snapshot(mut ctx provider.RuntimeContext) string
 }
 
+// App.mu guards registration identity and callback completion ownership.
+@[heap]
+struct ProviderRegistration {
+mut:
+	bootstrapping bool
+	retired       bool
+}
+
 pub struct ProviderHost {
+mut:
+	registrations map[string]&ProviderRegistration
 pub mut:
 	registry map[string]Provider
 	specs    map[string]ProviderSpec
@@ -30,8 +40,31 @@ pub:
 pub mut:
 	provider      Provider
 	handler       provider.ProviderCommandHandler
-	runtime       ProviderRuntime
-	lifecycle_ctx provider.RuntimeContext
+	runtime       ProviderLifecycleRuntime
+	lifecycle_ctx provider.RuntimeContext @[required]
+}
+
+// ProviderSpec owns the lifecycle context; adapters only forward it.
+fn (mut spec ProviderSpec) start_runtime() ! {
+	spec.runtime.start(mut spec.lifecycle_ctx)!
+}
+
+fn (mut spec ProviderSpec) stop_runtime() ! {
+	spec.runtime.stop(mut spec.lifecycle_ctx)!
+}
+
+// Retire the captured provider without borrowing a broader global stop right.
+fn (mut spec ProviderSpec) stop_retired_runtime() ! {
+	if stop := spec.lifecycle_ctx.retired_stop {
+		mut ctx := provider.RuntimeContext{ ...spec.lifecycle_ctx, stop: stop }
+		spec.runtime.stop(mut ctx)!
+		return
+	}
+	spec.stop_runtime()!
+}
+
+fn (mut spec ProviderSpec) runtime_snapshot() string {
+	return spec.runtime.snapshot(mut spec.lifecycle_ctx)
 }
 
 fn (host ProviderHost) admin_specs_snapshot() []provider.AdminProviderSpecSnapshot {
@@ -144,52 +177,55 @@ pub fn (mut app App) provider_specs_copy() []ProviderSpec {
 	return app.providers.provider_specs_copy()
 }
 
-pub fn (mut app App) admin_provider_runtimes_snapshot() []provider.AdminProviderRuntimeSnapshot {
-	mut specs := app.provider_specs_copy()
-	configured_names := app.providers.configured_provider_runtime_names()
-	mut snapshots := []provider.AdminProviderRuntimeSnapshot{cap: specs.len + configured_names.len}
+// Capture configuration and selected callback owners together, then call outside
+// the publication lock. Custom snapshot hooks may re-enter runtime publication.
+struct ProviderAdminProjection {
+	row  provider.AdminProviderRuntimeSnapshot
+	spec ?ProviderSpec
+}
+
+fn (hub ProviderRuntimeHub) provider_admin_projections() []ProviderAdminProjection {
+	specs := hub.provider_specs_copy()
+	names := hub.configured_provider_runtime_names()
+	mut projections := []ProviderAdminProjection{cap: specs.len + names.len}
 	mut seen := map[string]bool{}
-	for mut spec in specs {
-		mut snapshot := '{}'
-		if spec.has_runtime {
-			snapshot = spec.runtime.snapshot(mut spec.lifecycle_ctx)
-		}
+	for spec in specs {
 		seen[spec.name] = true
-		snapshots << provider.AdminProviderRuntimeSnapshot{
-			name:           spec.name
-			enabled:        spec.enabled
-			runtime_driver: app.providers.provider_runtime_driver(spec.name)
-			protocol:       app.providers.provider_runtime_protocol(spec.name)
-			plugin:         app.providers.provider_runtime_plugin(spec.name)
-			capabilities:   app.providers.runtime_capabilities[spec.name] or {
-				map[string]string{}
-			}
-			hooks:          app.providers.runtime_hooks[spec.name] or {
-				map[string]string{}
-			}
-			snapshot:       snapshot
-		}
+		projections << ProviderAdminProjection{ row: hub.provider_admin_row(spec.name, spec.enabled), spec: spec }
 	}
-	for name in configured_names {
-		if seen[name] {
-			continue
-		}
-		snapshots << provider.AdminProviderRuntimeSnapshot{
-			name:           name
-			enabled:        true
-			runtime_driver: app.providers.provider_runtime_driver(name)
-			protocol:       app.providers.provider_runtime_protocol(name)
-			plugin:         app.providers.provider_runtime_plugin(name)
-			capabilities:   app.providers.runtime_capabilities[name] or {
-				map[string]string{}
-			}
-			hooks:          app.providers.runtime_hooks[name] or {
-				map[string]string{}
-			}
-			snapshot:       '{}'
-		}
+	for name in names {
+		if seen[name] { continue }
+		projections << ProviderAdminProjection{ row: hub.provider_admin_row(name, true) }
 	}
-	return snapshots
+	return projections
+}
+
+fn (hub ProviderRuntimeHub) provider_admin_row(name string, enabled bool) provider.AdminProviderRuntimeSnapshot {
+	return provider.AdminProviderRuntimeSnapshot{
+		name:           name
+		enabled:        enabled
+		runtime_driver: hub.provider_runtime_driver(name)
+		protocol:       hub.provider_runtime_protocol(name)
+		plugin:         hub.provider_runtime_plugin(name)
+		capabilities:   (hub.runtime_capabilities[name] or { map[string]string{} }).clone()
+		hooks:          (hub.runtime_hooks[name] or { map[string]string{} }).clone()
+		snapshot:       '{}'
+	}
+}
+
+pub fn (mut app App) admin_provider_runtimes_snapshot() []provider.AdminProviderRuntimeSnapshot {
+	app.mu.@lock()
+	projections := app.providers.provider_admin_projections()
+	app.mu.unlock()
+	mut rows := []provider.AdminProviderRuntimeSnapshot{cap: projections.len}
+	for projection in projections {
+		mut payload := '{}'
+		if mut spec := projection.spec {
+			if spec.has_runtime { payload = spec.runtime_snapshot() }
+		}
+		rows << provider.AdminProviderRuntimeSnapshot{ ...projection.row, snapshot: payload }
+	}
+	return rows
 }
 
 pub struct NoopProviderRuntime {}
@@ -212,20 +248,19 @@ pub fn (mut r NoopProviderRuntime) snapshot(mut ctx provider.RuntimeContext) str
 // Adapter for existing Provider interface so runtime hooks can remain optional.
 pub struct ProviderRuntimeAdapter {
 pub mut:
-	provider Provider
-	ctx      provider.RuntimeContext
+	provider Provider @[required]
 }
 
 pub fn (mut r ProviderRuntimeAdapter) start(mut ctx provider.RuntimeContext) ! {
-	r.provider.start(mut r.ctx)!
+	r.provider.start(mut ctx)!
 	return
 }
 
 pub fn (mut r ProviderRuntimeAdapter) stop(mut ctx provider.RuntimeContext) ! {
-	r.provider.stop(mut r.ctx)!
+	r.provider.stop(mut ctx)!
 	return
 }
 
 pub fn (mut r ProviderRuntimeAdapter) snapshot(mut ctx provider.RuntimeContext) string {
-	return r.provider.snapshot(mut r.ctx)
+	return r.provider.snapshot(mut ctx)
 }

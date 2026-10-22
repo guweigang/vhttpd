@@ -1,6 +1,7 @@
 module main
 
 import os
+import time
 import relay
 import runtime_plan
 import worker
@@ -27,7 +28,7 @@ fn test_control_plane_runtime_emits_event_and_updates_stats_without_app() {
 fn test_data_plane_runtime_owns_engine_state_without_app() {
 	data_plane := DataPlaneRuntime{
 		engines: EngineRuntime{
-			primary: worker.WorkerState{
+			primary: &worker.WorkerState{
 				worker_backend: worker.WorkerBackendRuntime{
 					sockets: ['/tmp/engine.sock']
 				}
@@ -41,8 +42,8 @@ fn test_data_plane_runtime_owns_relay_state_without_app() {
 	relay_runtime := relay.new_runtime(runtime_plan.RuntimePlan{
 		relays: {
 			'local': runtime_plan.RelayPlan{
-				id:   'local'
-				mode: 'agent'
+				id:      'local'
+				mode:    'agent'
 				options: runtime_plan.PlanOptions{
 					strings: {
 						'url': 'wss://relay.example.com'
@@ -61,4 +62,21 @@ fn test_process_lifecycle_defaults_to_http() {
 	lifecycle := ProcessLifecycle{}
 	assert lifecycle.started_at_unix == 0
 	assert lifecycle.data_plane_scheme == 'http'
+}
+
+fn test_failed_event_log_open_keeps_request_statistics() {
+	root := os.join_path(os.temp_dir(), 'vhttpd-event-log-error-${os.getpid()}-${time.now().unix_micro()}')
+	os.mkdir_all(root) or { panic(err) }
+	defer { os.rmdir_all(root) or {} }
+	mut control := ControlPlaneRuntime{ event_log: os.join_path(root, 'missing/events') }
+	control.emit('http.request', {
+		'status':        '504'
+		'error_class':   'timeout'
+		'response_mode': 'stream'
+	})
+	assert control.http_stats.requests_total == 1
+	assert control.http_stats.errors_total == 1
+	assert control.http_stats.timeouts_total == 1
+	assert control.http_stats.streams_total == 1
+	assert os.ls(root) or { panic(err) } == []string{}
 }

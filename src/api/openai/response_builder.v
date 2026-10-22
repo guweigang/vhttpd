@@ -189,7 +189,7 @@ pub fn response_body_from_completed_event(raw string) string {
 		return ''
 	}
 	response_any := root['response'] or { return '' }
-	mut response := response_any.as_map()
+	mut response := response_any.as_map().clone()
 	if (response['object'] or { json2.Any('') }).str() == '' {
 		response['object'] = json2.Any('response')
 	}

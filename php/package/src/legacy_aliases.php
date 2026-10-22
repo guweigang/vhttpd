@@ -2,7 +2,9 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/VHttpd/PhpWorker/Server.php';
+if (!class_exists(\VHttpd\PhpWorker\Server::class, false)) {
+    require_once __DIR__ . '/VHttpd/PhpWorker/Server.php';
+}
 
 if (!function_exists('vhttpd_stream_sse')) {
     function vhttpd_stream_sse(

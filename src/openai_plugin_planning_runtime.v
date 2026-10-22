@@ -1,7 +1,7 @@
 module main
 
 import api.openai
-import json
+import json2 as json
 
 fn (mut app App) openai_call_plugin(op string, payload string, req_id string, trace_id string, metadata map[string]string) !PluginCallResponse {
 	plugin_name := app.protocols.openai.plugin.trim_space()
@@ -26,7 +26,7 @@ fn (mut app App) openai_plugin_models(method string, path string, req_id string,
 		base_path:  app.protocols.openai.base_path
 		request_id: req_id
 		trace_id:   trace_id
-	}), req_id, trace_id, map[string]string{})!
+	}, escape_unicode: true, time_as_unix: true), req_id, trace_id, map[string]string{})!
 	if openai.OpenAIPluginPlanResult.not_handled(resp.result) {
 		return openai.OpenAIPluginModelsResult{}
 	}
@@ -91,7 +91,7 @@ fn (mut app App) openai_plugin_plan(model string, body string, method string, pa
 		base_path:  app.protocols.openai.base_path
 		request_id: req_id
 		trace_id:   trace_id
-	}), req_id, trace_id, {
+	}, escape_unicode: true, time_as_unix: true), req_id, trace_id, {
 		'model': model
 	})!
 	if openai.OpenAIPluginPlanResult.not_handled(resp.result) {
@@ -113,7 +113,7 @@ fn (mut app App) openai_plugin_responses_plan(model string, body string, method 
 		base_path:  app.protocols.openai.base_path
 		request_id: req_id
 		trace_id:   trace_id
-	}), req_id, trace_id, {
+	}, escape_unicode: true, time_as_unix: true), req_id, trace_id, {
 		'model': model
 	})!
 	if openai.OpenAIPluginPlanResult.not_handled(resp.result) {
@@ -143,7 +143,7 @@ fn (mut app App) openai_plugin_fallback_plan(model string, body string, method s
 		error_message:  error_message
 		request_id:     req_id
 		trace_id:       trace_id
-	}), req_id, trace_id, {
+	}, escape_unicode: true, time_as_unix: true), req_id, trace_id, {
 		'model':          model
 		'failed_backend': failed_plan.backend_name
 	})!

@@ -5,6 +5,7 @@ import net.websocket
 import relay
 import runtime_plan
 import ws
+import connection_runtime
 
 @[heap]
 struct RelayAgentSocketProbe {
@@ -67,6 +68,7 @@ fn test_relay_agent_socket_callbacks_report_disconnect() {
 	ctx := ws_relay_agent_runtime_test_context(mut probe)
 	mut state := &RelayAgentSocketState{
 		ctx:        ctx
+		session:    &connection_runtime.Session{}
 		descriptor: relay.RelayDescriptor{
 			id: 'edge'
 		}

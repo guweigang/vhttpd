@@ -1,3 +1,10 @@
+// Pass the captured stream handle, rather than looking up a newer generation by ID.
+function streamContext(stream) {
+  return typeof stream === "object" && stream !== null
+    ? { id: stream.streamId || "", generation: stream.streamGeneration || "" }
+    : { id: stream || "", generation: "" };
+}
+
 function normalizeCardMarkdown(markdown) {
   const text = typeof markdown === "string" ? markdown.replace(/\r\n/g, "\n").trim() : "";
   return text.replace(/\n{3,}/g, "\n\n");
@@ -19,6 +26,7 @@ function json(value) {
 }
 
 export function feishuCard(target, content, streamId, targetType = "chat_id") {
+  if (!streamContext(streamId).id) throw new Error("Feishu send requires captured creation context");
   const command = {
     type: "provider.message.send",
     provider: "feishu",
@@ -27,8 +35,10 @@ export function feishuCard(target, content, streamId, targetType = "chat_id") {
     message_type: "interactive",
     content: typeof content === "string" ? content : json(content || {}),
   };
+  if (typeof streamId === "object" && streamId !== null && streamId.streamInstance) command.instance = streamId.streamInstance;
   if (streamId) {
-    command.stream_id = streamId;
+    command.stream_id = streamContext(streamId).id;
+    command.metadata = { stream_generation: streamContext(streamId).generation, creation_token: typeof streamId === "object" && streamId !== null ? streamId.streamCreationToken || "" : "" };
   }
   return command;
 }
@@ -43,7 +53,8 @@ export function feishuUpdateCard(streamId, content) {
   return {
     type: "provider.message.update",
     provider: "feishu",
-    stream_id: streamId,
+    stream_id: streamContext(streamId).id,
+    metadata: { stream_generation: streamContext(streamId).generation },
     message_type: "interactive",
     content: typeof content === "string" ? content : json(content || {}),
   };
@@ -59,10 +70,11 @@ export function feishuStreamAppendText(streamId, text) {
   return {
     type: "stream.append",
     provider: "feishu",
-    stream_id: streamId,
+    stream_id: streamContext(streamId).id,
     text,
     metadata: {
       mode: "append",
+      stream_generation: streamContext(streamId).generation,
     },
   };
 }
@@ -71,11 +83,12 @@ export function feishuStreamFinish(streamId, templateContent = "") {
   return {
     type: "stream.finish",
     provider: "feishu",
-    stream_id: streamId,
+    stream_id: streamContext(streamId).id,
     message_type: "interactive",
     content: templateContent,
     metadata: {
       mode: "finish",
+      stream_generation: streamContext(streamId).generation,
       finish: "true",
     },
   };
@@ -107,7 +120,7 @@ export function codexRpcCall(method, params, streamId, instance = "") {
     provider: "codex",
     method,
     params: typeof params === "string" ? params : json(params),
-    stream_id: streamId,
+    stream_id: streamContext(streamId).id,
   };
   if (instance) {
     command.instance = instance;
@@ -146,7 +159,7 @@ export function codexSessionClear(streamId, threadId = "", instance = "") {
   const command = {
     type: "session.clear",
     provider: "codex",
-    stream_id: streamId,
+    stream_id: streamContext(streamId).id,
   };
   if (instance) {
     command.instance = instance;
@@ -162,6 +175,15 @@ export function feishuSessionClear(streamId) {
   return {
     type: "session.clear",
     provider: "feishu",
-    stream_id: streamId,
+    stream_id: streamContext(streamId).id,
+    metadata: { stream_generation: streamContext(streamId).generation },
   };
+}
+
+export function feishuSessionBind(stream, messageId, expectedGeneration = "") {
+  return { type: "session.bind", provider: "feishu", stream_id: streamContext(stream).id,
+    target_type: "message_id", target: messageId, metadata: {
+      stream_generation: expectedGeneration, creation_generation: streamContext(stream).generation,
+      creation_token: typeof stream === "object" && stream !== null ? stream.streamCreationToken || "" : "",
+    } };
 }

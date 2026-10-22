@@ -2,21 +2,17 @@ module main
 
 import upstream.transport
 import encoding.base64
-import json
+import json2 as json
 import net.unix
 import time
 import veb
 import worker
 
-fn HttpStreamRuntime.via_sse(mut app App, mut ctx Context, mut conn unix.StreamConn, start transport.WorkerStreamFrame, method string, path string, req_id string, trace_id string, start_ms i64) veb.Result {
-	stream_runtime := app.build_stream_runtime_context()
-	return HttpStreamRuntime.direct_sse(stream_runtime, mut ctx, mut conn, start, method, path,
-		req_id, trace_id, start_ms)
-}
-
 fn HttpStreamRuntime.direct_sse(rt StreamRuntimeContext, mut ctx Context, mut conn unix.StreamConn, start transport.WorkerStreamFrame, method string, path string, req_id string, trace_id string, start_ms i64) veb.Result {
 	delivery := worker_stream_start_delivery_outcome(start, 'sse')
 	ctx.takeover_conn()
+	// Worker socket ownership remains with HttpResponseRuntime.stream.
+	defer { ctx.conn.close() or {} }
 	status := if delivery.status > 0 { delivery.status } else { 200 }
 	mut headers := delivery.headers.clone()
 	headers['x-request-id'] = req_id
@@ -27,9 +23,10 @@ fn HttpStreamRuntime.direct_sse(rt StreamRuntimeContext, mut ctx Context, mut co
 	worker.WorkerHttpStreamWriter.write_headers_conn(mut ctx.conn, status, ctype, headers, false) or {
 		return veb.no_result()
 	}
-	for {
+	// HEAD returns to the outer worker owner after writing headers.
+	for method.to_upper() != 'HEAD' {
 		raw := worker.WorkerBackendFrameCodec.read(mut conn) or { break }
-		frame := json.decode(transport.WorkerStreamFrame, raw) or { continue }
+		frame := json.decode[transport.WorkerStreamFrame](raw) or { continue }
 		if frame.mode != 'stream' {
 			continue
 		}
@@ -54,7 +51,6 @@ fn HttpStreamRuntime.direct_sse(rt StreamRuntimeContext, mut ctx Context, mut co
 			break
 		}
 	}
-	ctx.conn.close() or {}
 	rt.emit('http.request', {
 		'method':          method.to_upper()
 		'path':            transport.WorkerHttpRequestCodec.normalize_path(path)
@@ -69,15 +65,11 @@ fn HttpStreamRuntime.direct_sse(rt StreamRuntimeContext, mut ctx Context, mut co
 	return veb.no_result()
 }
 
-fn HttpStreamRuntime.via_passthrough(mut app App, mut ctx Context, mut conn unix.StreamConn, start transport.WorkerStreamFrame, method string, path string, req_id string, trace_id string, start_ms i64) veb.Result {
-	stream_runtime := app.build_stream_runtime_context()
-	return HttpStreamRuntime.direct_passthrough(stream_runtime, mut ctx, mut conn, start, method,
-		path, req_id, trace_id, start_ms)
-}
-
 fn HttpStreamRuntime.direct_passthrough(rt StreamRuntimeContext, mut ctx Context, mut conn unix.StreamConn, start transport.WorkerStreamFrame, method string, path string, req_id string, trace_id string, start_ms i64) veb.Result {
 	delivery := worker_stream_start_delivery_outcome(start, 'passthrough')
 	ctx.takeover_conn()
+	// Worker socket ownership remains with HttpResponseRuntime.stream.
+	defer { ctx.conn.close() or {} }
 	status := if delivery.status > 0 { delivery.status } else { 200 }
 	mut headers := delivery.headers.clone()
 	headers['x-request-id'] = req_id
@@ -87,9 +79,10 @@ fn HttpStreamRuntime.direct_passthrough(rt StreamRuntimeContext, mut ctx Context
 	worker.WorkerHttpStreamWriter.write_headers_conn(mut ctx.conn, status, ctype, headers, true) or {
 		return veb.no_result()
 	}
-	for {
+	// HEAD returns to the outer worker owner after writing headers.
+	for method.to_upper() != 'HEAD' {
 		raw := worker.WorkerBackendFrameCodec.read(mut conn) or { break }
-		frame := json.decode(transport.WorkerStreamFrame, raw) or { continue }
+		frame := json.decode[transport.WorkerStreamFrame](raw) or { continue }
 		if frame.mode != 'stream' {
 			continue
 		}
@@ -119,8 +112,7 @@ fn HttpStreamRuntime.direct_passthrough(rt StreamRuntimeContext, mut ctx Context
 			break
 		}
 	}
-	ctx.conn.write_string('0\r\n\r\n') or {}
-	ctx.conn.close() or {}
+	if method.to_upper() != 'HEAD' { ctx.conn.write_string('0\r\n\r\n') or {} }
 	rt.emit('http.request', {
 		'method':          method.to_upper()
 		'path':            transport.WorkerHttpRequestCodec.normalize_path(path)

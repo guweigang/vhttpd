@@ -45,6 +45,12 @@ class Db
 
     private static function migrate(\PDO $pdo): void
     {
+        self::ensureColumn($pdo, "streams", "stream_instance", "ALTER TABLE streams ADD COLUMN stream_instance TEXT NOT NULL DEFAULT 'main'");
+        self::ensureColumn($pdo, "streams", "stream_publication_id", "ALTER TABLE streams ADD COLUMN stream_publication_id TEXT NOT NULL DEFAULT ''");
+        self::ensureColumn($pdo, "streams", "stream_receipt_sequence", "ALTER TABLE streams ADD COLUMN stream_receipt_sequence INTEGER NOT NULL DEFAULT 0");
+        self::ensureColumn($pdo, "streams", "stream_creation_request", "ALTER TABLE streams ADD COLUMN stream_creation_request TEXT NOT NULL DEFAULT '{}'");
+        self::ensureColumn($pdo, "streams", "stream_creation_token", "ALTER TABLE streams ADD COLUMN stream_creation_token TEXT NOT NULL DEFAULT ''");
+        self::ensureColumn($pdo, "streams", "stream_generation", "ALTER TABLE streams ADD COLUMN stream_generation TEXT NOT NULL DEFAULT ''");
         self::ensureColumn(
             $pdo,
             "projects",

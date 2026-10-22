@@ -6,7 +6,7 @@ import log
 import time
 
 pub struct CommandExecutor {
-	ctx            RuntimeContext
+	ctx            RuntimeContext @[required]
 	codex_enabled  bool
 	feishu_enabled bool
 	ollama_enabled bool

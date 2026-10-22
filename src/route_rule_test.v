@@ -4,7 +4,7 @@ import regex
 import os
 import config
 import dispatch
-import json
+import json2 as json
 import net.http
 import runtime_plan
 import upstream.transport
@@ -414,7 +414,7 @@ fn test_worker_request_payload_preserves_forwarded_https_scheme() {
 	req.header.set(.x_forwarded_proto, 'https')
 	raw := transport.WorkerHttpRequestCodec.encode_request('GET', '/index.php', req, '127.0.0.1',
 		'trace-1', 'req-1')
-	payload := json.decode(transport.WorkerRequestPayload, raw) or { panic(err) }
+	payload := json.decode[transport.WorkerRequestPayload](raw) or { panic(err) }
 	assert payload.scheme == 'https'
 	assert payload.port == '8080'
 	assert payload.headers['x-vhttpd-trace-id'] == 'trace-1'

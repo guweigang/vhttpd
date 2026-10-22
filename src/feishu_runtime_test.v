@@ -5,7 +5,7 @@ import feishu
 import upstream
 import upstream.transport
 import config
-import json
+import json2 as json
 import crypto.sha256
 import net.http
 import os
@@ -389,7 +389,7 @@ fn test_provider_runtime_action_dispatch_calls_native_driver() {
 		receive_id:      'oc_action'
 		msg_type:        'text'
 		text:            'hello'
-	})
+	}, escape_unicode: true, time_as_unix: true)
 	resp := app.dispatch_provider_runtime_action(ProviderRuntimeActionRequest{
 		provider: 'feishu'
 		action:   'send_message'
@@ -400,7 +400,7 @@ fn test_provider_runtime_action_dispatch_calls_native_driver() {
 	assert resp.ok
 	assert resp.provider == 'feishu'
 	assert resp.action == 'send_message'
-	result := json.decode(feishu.SendMessageResult, resp.result) or { panic(err) }
+	result := json.decode[feishu.SendMessageResult](resp.result) or { panic(err) }
 	assert result.ok
 	assert result.message_id.starts_with('om_test_')
 	assert app.providers.feishu.http_test_calls > before_calls
@@ -540,10 +540,10 @@ export function plugin(req) {
 			receive_id:      'oc_generic'
 			msg_type:        'text'
 			text:            'hello'
-		})
+		}, escape_unicode: true, time_as_unix: true)
 		trace_id: 'trace_action_vjsx'
 	})
-	result := json.decode(feishu.SendMessageResult, resp.result) or { panic(err) }
+	result := json.decode[feishu.SendMessageResult](resp.result) or { panic(err) }
 
 	assert resp.ok
 	assert result.message_id == 'generic-oc_generic'
@@ -621,8 +621,8 @@ export function plugin(req) {
 			receive_id:      'oc_pipeline'
 			msg_type:        'text'
 			text:            'hello'
-		}))
-	result := json.decode(feishu.SendMessageResult, resp.result) or { panic(err) }
+		}, escape_unicode: true, time_as_unix: true))
+	result := json.decode[feishu.SendMessageResult](resp.result) or { panic(err) }
 
 	assert resp.ok
 	assert result.message_id == 'pipeline-oc_pipeline'
@@ -758,7 +758,7 @@ fn test_feishu_runtime_ws_endpoint_body() {
 }
 
 fn test_feishu_runtime_ws_endpoint_response_decode() {
-	decoded := json.decode(feishu.RuntimeWsEndpointResponse,
+	decoded := json.decode[feishu.RuntimeWsEndpointResponse](
 		'{"code":0,"msg":"","data":{"URL":"wss://msg-frontier.feishu.cn/ws/v2?ticket=test","ClientConfig":{"PingInterval":90,"ReconnectInterval":90,"ReconnectNonce":25,"ReconnectCount":-1}}}') or {
 		panic(err)
 	}
@@ -887,7 +887,7 @@ fn test_admin_feishu_runtime_chats_snapshot_json_shape() {
 			}
 		}
 	}
-	encoded := json.encode(app.providers.feishu.chats_snapshot(10, 0, '', '', ''))
+	encoded := json.encode(app.providers.feishu.chats_snapshot(10, 0, '', '', ''), escape_unicode: true, time_as_unix: true)
 	assert encoded.contains('"chats"')
 	assert encoded.contains('"instance"')
 	assert encoded.contains('"chat_id"')
@@ -1112,7 +1112,7 @@ fn test_admin_websocket_upstream_activities_snapshot_json_shape() {
 		recorded_at:    102
 	})
 	encoded :=
-		json.encode(app.admin_websocket_upstream_activities_snapshot(10, 0, 'feishu', 'main'))
+		json.encode(app.admin_websocket_upstream_activities_snapshot(10, 0, 'feishu', 'main'), escape_unicode: true, time_as_unix: true)
 	assert encoded.contains('"activities"')
 	assert encoded.contains('"provider":"feishu"')
 	assert encoded.contains('"instance":"main"')

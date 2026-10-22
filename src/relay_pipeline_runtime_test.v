@@ -3,6 +3,8 @@ module main
 import config
 import dispatch
 import executor
+import net.websocket
+import ws
 import os
 import plugin
 import relay
@@ -167,9 +169,9 @@ fn test_public_http_relay_delivery_reaches_agent_pipeline_and_returns_response()
 	}
 	mut public_adapter := dispatch.EgressAdapter(dispatch.relay_delivery_adapter('relay-edge',
 		'relay:edge', 'wait', 1000, {
-		'frame_kind': 'open'
-		'route':      'relay/local-response'
-	}))
+			'frame_kind': 'open'
+			'route':      'relay/local-response'
+		}))
 	public_delivery := public_adapter.deliver(mut public_services, public_exchange) or {
 		panic(err)
 	}
@@ -398,7 +400,7 @@ fn test_dispatch_relay_pipeline_exchange_delivers_mcp_adapter() {
 			}
 		}
 		engines: EngineRuntime{
-			primary: worker.WorkerState{
+			primary: &worker.WorkerState{
 				logic_executor: RelayMcpTestExecutor{}
 			}
 		}
@@ -511,6 +513,8 @@ fn test_dispatch_and_send_relay_ingress_frame_reports_send_result() {
 	app.pipelines = PipelineRuntime.new(app.plan, 'default', []RuntimeRouteRule{}, '', '',
 		map[string]string{}, map[string]&worker.WorkerState{})
 
+	client := websocket.new_client('ws://127.0.0.1:1') or { panic(err) }
+	app.websocket.state.register_conn('agent:edge', '', 'GET', 'request', 'trace', '/', {}, {}, '', client, &ws.DispatchConnState{})
 	outcomes := app.dispatch_and_send_relay_ingress_frame('edge', 'agent:edge', relay.WireFrame{
 		version:    relay.wire_version
 		kind:       .data

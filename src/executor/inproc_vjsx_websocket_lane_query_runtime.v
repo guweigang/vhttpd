@@ -2,7 +2,7 @@ module executor
 
 import upstream.transport
 
-fn (e InProcVjsxExecutor) resolve_websocket_affinity_on_lane(mut app AppFacade, frame transport.WorkerWebSocketFrame, lane VjsxExecutionLane) !WebSocketAffinityDecision {
+fn (e InProcVjsxExecutor) resolve_websocket_affinity_on_lane(mut app EmbeddedHost, frame transport.WorkerWebSocketFrame, lane VjsxExecutionLane) !WebSocketAffinityDecision {
 	e.bootstrap_placeholder()!
 	idx := e.lane_index_by_id(lane.id)
 	if idx < 0 {
@@ -74,7 +74,7 @@ fn (e InProcVjsxExecutor) resolve_websocket_affinity_on_lane(mut app AppFacade, 
 	return decision
 }
 
-fn (e InProcVjsxExecutor) resolve_websocket_actor_on_lane(mut app AppFacade, frame transport.WorkerWebSocketFrame, lane VjsxExecutionLane) !WebSocketActorDecision {
+fn (e InProcVjsxExecutor) resolve_websocket_actor_on_lane(mut app EmbeddedHost, frame transport.WorkerWebSocketFrame, lane VjsxExecutionLane) !WebSocketActorDecision {
 	e.bootstrap_placeholder()!
 	idx := e.lane_index_by_id(lane.id)
 	if idx < 0 {

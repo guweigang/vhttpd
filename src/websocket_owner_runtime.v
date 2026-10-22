@@ -1,10 +1,12 @@
 module main
 
 import ws
+import connection_runtime
 
 struct WebSocketRuntime {
 mut:
 	state ws.HubState
+	upstream_runs connection_runtime.Registry
 }
 
 fn WebSocketRuntime.new(dispatch_mode bool) WebSocketRuntime {
@@ -18,7 +20,6 @@ fn WebSocketRuntime.new(dispatch_mode bool) WebSocketRuntime {
 			conn_rooms:                   map[string]map[string]bool{}
 			conn_meta:                    map[string]map[string]string{}
 			pending:                      map[string][]ws.HubPendingMessage{}
-			upstream_started:             map[string]bool{}
 			fixture_runtime:              map[string]ws.FixtureRuntime{}
 			recent_activities:            []ws.UpstreamActivitySnapshot{}
 		}
@@ -41,19 +42,6 @@ fn (runtime &WebSocketRuntime) dispatch_enabled() bool {
 
 fn (runtime &WebSocketRuntime) dynamic_upstream_autostart_enabled() bool {
 	return runtime.state.auto_start_dynamic_upstreams
-}
-
-fn (mut runtime WebSocketRuntime) mark_upstream_started(key string) bool {
-	if key == '' || key == '/' {
-		return false
-	}
-	runtime.state.upstream_mu.@lock()
-	defer { runtime.state.upstream_mu.unlock() }
-	if key in runtime.state.upstream_started {
-		return false
-	}
-	runtime.state.upstream_started[key] = true
-	return true
 }
 
 fn (mut runtime WebSocketRuntime) record_upstream_activity(snapshot ws.UpstreamActivitySnapshot) {

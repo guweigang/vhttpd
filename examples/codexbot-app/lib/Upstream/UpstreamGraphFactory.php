@@ -12,12 +12,15 @@ use CodexBot\Repository\StreamRepository;
 use CodexBot\Repository\TaskRepository;
 use CodexBot\Service\CodexSessionService;
 use CodexBot\Service\StreamService;
+use CodexBot\Service\OneShotReplyService;
 use CodexBot\Service\TaskStateService;
 use CodexBot\Service\WorkerAdminService;
 use VHttpd\Upstream\WebSocket\EventRouter;
 
 final class UpstreamGraphFactory
 {
+    public function __construct(private ?\VHttpd\Feishu\CreationClient $creationClient = null) {}
+
     public function create(): array
     {
         $projectRepo = new ProjectRepository();
@@ -28,7 +31,8 @@ final class UpstreamGraphFactory
         $streamRepo = new StreamRepository();
 
         $sessionService = new CodexSessionService($projectRepo);
-        $streamService = new StreamService($taskRepo, $streamRepo);
+        $streamService = new StreamService($taskRepo, $streamRepo, $this->creationClient);
+        $replyService = new OneShotReplyService($this->creationClient);
         $taskStateService = new TaskStateService($taskRepo, $streamRepo);
         $workerAdminService = new WorkerAdminService();
 
@@ -52,6 +56,7 @@ final class UpstreamGraphFactory
             $contextHelper,
             $responseHelper,
             $threadViewHelper,
+            $replyService,
         );
         $feishuInboundRouter = new FeishuInboundRouter(
             $channelRepo,
@@ -84,6 +89,7 @@ final class UpstreamGraphFactory
             $errorHelper,
             $responseHelper,
             $notificationLifecycleRouter,
+            $replyService,
         );
         $rpcResponseRouter = new RpcResponseRouter(
             $taskRepo,
@@ -123,6 +129,7 @@ final class UpstreamGraphFactory
             'stream_repo' => $streamRepo,
             'session_service' => $sessionService,
             'stream_service' => $streamService,
+            'reply_service' => $replyService,
             'task_state_service' => $taskStateService,
             'worker_admin_service' => $workerAdminService,
             'context_helper' => $contextHelper,

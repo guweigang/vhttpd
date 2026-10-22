@@ -60,8 +60,11 @@ pub:
 	counts      map[string]int
 }
 
-fn (app App) admin_apps_snapshot() AdminAppsSnapshot {
-	plan := app.plan
+fn (app &App) admin_apps_snapshot() AdminAppsSnapshot {
+	return admin_apps_from_plan(app.admin_plan_view().plan)
+}
+
+fn admin_apps_from_plan(plan runtime_plan.RuntimePlan) AdminAppsSnapshot {
 	mut builder := AdminAppsBuilder.new(plan)
 	for id, listener in plan.listeners {
 		builder.add_listener(id, listener)
@@ -240,7 +243,7 @@ fn (builder AdminAppsBuilder) finish() AdminAppsSnapshot {
 		apps:        apps
 		listeners:   listeners
 		pipelines:   pipelines
-		diagnostics: builder.plan.diagnostics
+		diagnostics: builder.plan.diagnostics.clone()
 		counts:      {
 			'apps':        apps.len
 			'listeners':   listeners.len

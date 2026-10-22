@@ -9,7 +9,7 @@ import net.websocket
 // ── Dispatch Session Lifecycle ──
 
 pub fn handle_dispatch_session(rt RuntimeContext, mut client_conn net.TcpConn, key string, method string, path string, query map[string]string, headers map[string]string, remote_addr string, req_id string, trace_id string, start_ms i64, open_commands []transport.WorkerWebSocketFrame) {
-	mut ws_server := websocket.new_server(.ip, 0, '')
+	mut ws_server, captured := managed_server()
 	mut lifecycle := &DispatchConnState{}
 	mut state := &DispatchBridgeState{
 		lifecycle:     lifecycle
@@ -31,7 +31,7 @@ pub fn handle_dispatch_session(rt RuntimeContext, mut client_conn net.TcpConn, k
 	defer {
 		dispatch_session_finalize(state)
 	}
-	ws_server.handle_handshake(mut client_conn, key) or { return }
+	managed_handshake(mut ws_server, mut client_conn, key, captured) or { return }
 }
 
 fn dispatch_session_attached_cb(mut sc websocket.ServerClient, ref voidptr) ! {
@@ -49,7 +49,7 @@ fn dispatch_session_attached_cb(mut sc websocket.ServerClient, ref voidptr) ! {
 
 pub fn dispatch_session_begin_local_close(mut state DispatchBridgeState) {
 	_ = state.lifecycle.begin_worker_close()
-	state.rt.mark_closing(state.conn_id)
+	state.rt.mark_closing(state.conn_id, state.lifecycle)
 }
 
 fn dispatch_session_close_current(state &DispatchBridgeState, code int, reason string) {
@@ -59,7 +59,7 @@ fn dispatch_session_close_current(state &DispatchBridgeState, code int, reason s
 	unsafe {
 		mut current := state
 		dispatch_session_begin_local_close(mut current)
-		current.rt.close_target(current.conn_id, code, reason)
+		current.rt.close_owned_target(current.conn_id, current.lifecycle, code, reason)
 	}
 }
 
@@ -111,15 +111,30 @@ fn dispatch_session_process_open(state &DispatchBridgeState) {
 }
 
 pub fn dispatch_session_finalize(state &DispatchBridgeState) {
-	if isnil(state) {
-		return
-	}
-	unsafe {
-		mut current := state
-		current.rt.mark_closing(current.conn_id)
-		if current.lifecycle.begin_cleanup() {
-			current.rt.cleanup_conn(current.conn_id)
+	dispatch_session_finalize_with_details(state, 1001, 'session_terminated')
+}
+
+fn dispatch_session_finalize_with_details(state &DispatchBridgeState, reported_code int, reported_reason string) {
+	if isnil(state) { return }
+	mut current := unsafe { state }
+	current.finalize_mu.@lock()
+	defer { current.finalize_mu.unlock() }
+	code, reason := current.lifecycle.close_details(reported_code, reported_reason)
+	should_process, worker_initiated := current.lifecycle.begin_peer_close()
+	current.rt.mark_closing(current.conn_id, current.lifecycle)
+	if should_process && current.rt.can_cleanup_fn(current.conn_id, current.lifecycle) {
+		presence := current.rt.presence(current.conn_id)
+		if resp := current.rt.dispatch_event(current.rt.build_frame('close', current.method, current.path,
+			current.query, current.headers, current.remote_addr, current.request_id, current.trace_id, '', '',
+			code, reason, current.rt.rooms(current.conn_id), current.rt.metadata(current.conn_id), presence)) {
+			if !worker_initiated && resp.event != 'error' {
+				current.rt.command_result(resp.commands)
+			}
 		}
+	}
+	current.lifecycle.mark_closing()
+	if current.lifecycle.begin_cleanup() {
+		current.rt.cleanup_conn(current.conn_id, current.lifecycle)
 	}
 }
 
@@ -181,23 +196,28 @@ pub fn dispatch_payload_from_message(msg &websocket.Message) (string, string, bo
 	}
 }
 
-fn dispatch_session_close_cb(mut ws_client websocket.Client, code int, reason string, ref voidptr) ! {
-	mut state := unsafe { &DispatchBridgeState(ref) }
-	_ = ws_client
-	should_process, worker_initiated := state.lifecycle.begin_peer_close()
-	if !should_process {
+fn dispatch_session_close_cb(mut ws_client websocket.Client, reported_code int, reported_reason string, ref voidptr) ! {
+	state := unsafe { &DispatchBridgeState(ref) }
+	dispatch_session_finalize_with_details(state, reported_code, reported_reason)
+}
+
+pub fn run_dispatch_session(mut run IngressRun, rt RuntimeContext, mut client_conn net.TcpConn, key string, method string, path string, query map[string]string, headers map[string]string, remote_addr string, req_id string, trace_id string, start_ms i64, open_commands []transport.WorkerWebSocketFrame) {
+	defer { run.finish() }
+	if run.stopped() {
+		client_conn.close() or {}
+		dispatch_session_finalize(&DispatchBridgeState{
+			lifecycle:   &DispatchConnState{}
+			rt:          rt
+			conn_id:     req_id
+			request_id:  req_id
+			trace_id:    trace_id
+			method:      method
+			path:        path
+			query:       query.clone()
+			headers:     headers.clone()
+			remote_addr: remote_addr
+		})
 		return
 	}
-	state.rt.mark_closing(state.conn_id)
-	presence := state.rt.presence(state.conn_id)
-	resp := state.rt.dispatch_event(state.rt.build_frame('close', state.method, state.path,
-		state.query, state.headers, state.remote_addr, state.request_id, state.trace_id, '', '',
-		code, reason, state.rt.rooms(state.conn_id), state.rt.metadata(state.conn_id), presence)) or {
-		dispatch_session_finalize(state)
-		return
-	}
-	if !worker_initiated && resp.event != 'error' {
-		state.rt.command_result(resp.commands)
-	}
-	dispatch_session_finalize(state)
+	handle_dispatch_session(rt.with_ingress(&run), mut client_conn, key, method, path, query, headers, remote_addr, req_id, trace_id, start_ms, open_commands)
 }

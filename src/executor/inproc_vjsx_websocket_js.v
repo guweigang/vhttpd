@@ -1,6 +1,6 @@
 module executor
 
-import json
+import json2 as json
 import os
 import time
 import upstream.transport
@@ -23,7 +23,7 @@ fn InProcVjsxWebSocketJs.log_args(args []vjsx.Value) string {
 	return parts.join(' ')
 }
 
-fn InProcVjsxWebSocketJs.runtime(ctx &vjsx.Context, runtime_meta InProcVjsxRuntimeMeta, runtime_config_json string, mut app AppFacade) vjsx.Value {
+fn InProcVjsxWebSocketJs.runtime(ctx &vjsx.Context, runtime_meta InProcVjsxRuntimeMeta, runtime_config_json string, mut app EmbeddedHost) vjsx.Value {
 	mut runtime := ctx.js_object()
 	minimal_runtime := os.getenv('VHTTPD_VJSX_WS_MINIMAL_RUNTIME').trim_space().to_lower() in [
 		'1',
@@ -32,6 +32,7 @@ fn InProcVjsxWebSocketJs.runtime(ctx &vjsx.Context, runtime_meta InProcVjsxRunti
 		'on',
 	]
 	mut capabilities := ctx.js_object()
+	defer { capabilities.free() }
 	capabilities.set('http', false)
 	capabilities.set('fetch', false)
 	capabilities.set('bridgeDispatch', false)
@@ -52,6 +53,7 @@ fn InProcVjsxWebSocketJs.runtime(ctx &vjsx.Context, runtime_meta InProcVjsxRunti
 	runtime.set('threadCount', runtime_meta.thread_count)
 	runtime.set('capabilities', capabilities)
 	mut request := ctx.js_object()
+	defer { request.free() }
 	request.set('id', runtime_meta.request_id)
 	request.set('traceId', runtime_meta.trace_id)
 	request.set('method', runtime_meta.method)
@@ -66,8 +68,10 @@ fn InProcVjsxWebSocketJs.runtime(ctx &vjsx.Context, runtime_meta InProcVjsxRunti
 	request.set('protocolVersion', runtime_meta.request_protocol_version)
 	request.set('remoteAddr', runtime_meta.request_remote_addr)
 	request.set('ip', runtime_meta.request_remote_addr)
-	request.set('server', InProcVjsxWebSocketJs.value_from_json(ctx,
-		json.encode(runtime_meta.request_server)))
+	server := InProcVjsxWebSocketJs.value_from_json(ctx,
+		json.encode(runtime_meta.request_server, escape_unicode: true, time_as_unix: true))
+	defer { server.free() }
+	request.set('server', server)
 	runtime.set('request', request)
 	runtime.set('method', runtime_meta.method)
 	runtime.set('path', runtime_meta.path)
@@ -75,58 +79,78 @@ fn InProcVjsxWebSocketJs.runtime(ctx &vjsx.Context, runtime_meta InProcVjsxRunti
 	if minimal_runtime {
 		return runtime
 	}
-	runtime.set('now', ctx.js_function(fn [ctx] (args []vjsx.Value) vjsx.Value {
+	now_fn := ctx.js_function(fn [ctx] (args []vjsx.Value) vjsx.Value {
 		_ = args
 		return ctx.js_i64(time.now().unix_milli())
-	}))
-	runtime.set('log', ctx.js_function(fn [ctx, runtime_meta] (args []vjsx.Value) vjsx.Value {
+	})
+	defer { now_fn.free() }
+	runtime.set('now', now_fn)
+	log_fn := ctx.js_function(fn [ctx, runtime_meta] (args []vjsx.Value) vjsx.Value {
 		println('[vhttpd] ${runtime_meta.lane_id} ${runtime_meta.request_id} ${runtime_meta.trace_id} ${InProcVjsxWebSocketJs.log_args(args)}')
 		return ctx.js_undefined()
-	}))
-	runtime.set('warn', ctx.js_function(fn [ctx, runtime_meta] (args []vjsx.Value) vjsx.Value {
+	})
+	defer { log_fn.free() }
+	runtime.set('log', log_fn)
+	warn_fn := ctx.js_function(fn [ctx, runtime_meta] (args []vjsx.Value) vjsx.Value {
 		eprintln('[vhttpd] ${runtime_meta.lane_id} ${runtime_meta.request_id} ${runtime_meta.trace_id} ${InProcVjsxWebSocketJs.log_args(args)}')
 		return ctx.js_undefined()
-	}))
-	runtime.set('error', ctx.js_function(fn [ctx, runtime_meta] (args []vjsx.Value) vjsx.Value {
+	})
+	defer { warn_fn.free() }
+	runtime.set('warn', warn_fn)
+	error_fn := ctx.js_function(fn [ctx, runtime_meta] (args []vjsx.Value) vjsx.Value {
 		eprintln('[vhttpd] ${runtime_meta.lane_id} ${runtime_meta.request_id} ${runtime_meta.trace_id} ${InProcVjsxWebSocketJs.log_args(args)}')
 		return ctx.js_undefined()
-	}))
-	runtime.set('config', ctx.js_function(fn [ctx, runtime_config_json] (args []vjsx.Value) vjsx.Value {
+	})
+	defer { error_fn.free() }
+	runtime.set('error', error_fn)
+	config_fn := ctx.js_function(fn [ctx, runtime_config_json] (args []vjsx.Value) vjsx.Value {
 		path := if args.len > 0 { args[0].to_string().trim_space() } else { '' }
 		fallback := if args.len > 1 { args[1].dup_value() } else { ctx.js_undefined() }
 		raw := InProcVjsxHostApi.config_lookup(runtime_config_json, path)
 		if raw.trim_space() == '' {
 			return fallback
 		}
+		fallback.free()
 		return ctx.js_string(raw)
-	}))
-	runtime.set('getConfig', ctx.js_function(fn [ctx, runtime_config_json] (args []vjsx.Value) vjsx.Value {
+	})
+	defer { config_fn.free() }
+	runtime.set('config', config_fn)
+	get_config_fn := ctx.js_function(fn [ctx, runtime_config_json] (args []vjsx.Value) vjsx.Value {
 		path := if args.len > 0 { args[0].to_string().trim_space() } else { '' }
 		fallback := if args.len > 1 { args[1].dup_value() } else { ctx.js_undefined() }
 		raw := InProcVjsxHostApi.config_lookup(runtime_config_json, path)
 		if raw.trim_space() == '' {
 			return fallback
 		}
+		fallback.free()
 		return ctx.json_parse(raw)
-	}))
-	runtime.set('plan', ctx.js_function(fn [ctx, mut app] (args []vjsx.Value) vjsx.Value {
+	})
+	defer { get_config_fn.free() }
+	runtime.set('getConfig', get_config_fn)
+	plan_fn := ctx.js_function(fn [ctx, mut app] (args []vjsx.Value) vjsx.Value {
 		path := if args.len > 0 { args[0].to_string().trim_space() } else { '' }
 		fallback := if args.len > 1 { args[1].dup_value() } else { ctx.js_undefined() }
 		raw := InProcVjsxHostApi.config_lookup(app.get_runtime_plan_json(), path)
 		if raw.trim_space() == '' {
 			return fallback
 		}
+		fallback.free()
 		return ctx.js_string(raw)
-	}))
-	runtime.set('getPlan', ctx.js_function(fn [ctx, mut app] (args []vjsx.Value) vjsx.Value {
+	})
+	defer { plan_fn.free() }
+	runtime.set('plan', plan_fn)
+	get_plan_fn := ctx.js_function(fn [ctx, mut app] (args []vjsx.Value) vjsx.Value {
 		path := if args.len > 0 { args[0].to_string().trim_space() } else { '' }
 		fallback := if args.len > 1 { args[1].dup_value() } else { ctx.js_undefined() }
 		raw := InProcVjsxHostApi.config_lookup(app.get_runtime_plan_json(), path)
 		if raw.trim_space() == '' {
 			return fallback
 		}
+		fallback.free()
 		return ctx.json_parse(raw)
-	}))
+	})
+	defer { get_plan_fn.free() }
+	runtime.set('getPlan', get_plan_fn)
 	InProcVjsxWebSocketJs.install_session_store(ctx, mut runtime)
 	InProcVjsxWebSocketJs.install_websocket_dispatch(ctx, mut runtime, mut app)
 	return runtime
@@ -138,14 +162,28 @@ fn InProcVjsxWebSocketJs.frame(ctx &vjsx.Context, frame transport.WorkerWebSocke
 	js_frame.set('event', if frame.event != '' { frame.event } else { 'message' })
 	js_frame.set('id', frame.id)
 	js_frame.set('path', frame.path)
-	js_frame.set('query', InProcVjsxWebSocketJs.value_from_json(ctx, json.encode(frame.query)))
-	js_frame.set('headers', InProcVjsxWebSocketJs.value_from_json(ctx, json.encode(frame.headers)))
+	query := InProcVjsxWebSocketJs.value_from_json(ctx, json.encode(frame.query,
+		escape_unicode: true
+		time_as_unix:   true
+	))
+	defer { query.free() }
+	js_frame.set('query', query)
+	headers := InProcVjsxWebSocketJs.value_from_json(ctx, json.encode(frame.headers,
+		escape_unicode: true
+		time_as_unix:   true
+	))
+	defer { headers.free() }
+	js_frame.set('headers', headers)
 	js_frame.set('remoteAddr', frame.remote_addr)
 	js_frame.set('requestId', frame.request_id)
 	js_frame.set('traceId', frame.trace_id)
 	js_frame.set('targetId', frame.target_id)
-	js_frame.set('metadata',
-		InProcVjsxWebSocketJs.value_from_json(ctx, json.encode(frame.metadata)))
+	metadata := InProcVjsxWebSocketJs.value_from_json(ctx, json.encode(frame.metadata,
+		escape_unicode: true
+		time_as_unix:   true
+	))
+	defer { metadata.free() }
+	js_frame.set('metadata', metadata)
 	js_frame.set('status', frame.status)
 	js_frame.set('code', frame.code)
 	js_frame.set('reason', frame.reason)

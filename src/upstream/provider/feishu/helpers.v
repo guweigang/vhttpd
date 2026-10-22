@@ -1,6 +1,6 @@
 module feishu
 
-import json
+import json2 as json
 import upstream
 import x.json2
 
@@ -128,7 +128,7 @@ pub:
 }
 
 pub fn UploadImageRequest.from_json(body string) !UploadImageRequest {
-	return json.decode(UploadImageRequest, body)
+	return json.decode[UploadImageRequest](body)
 }
 
 pub struct TextContent {

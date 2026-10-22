@@ -34,13 +34,12 @@ pub:
 
 pub struct RelayAgentRuntimeContext {
 pub:
-	websocket_rt       RuntimeContext
-	prepare_attempt_fn fn (relay.RelayDescriptor, string, i64) RelayAgentConnectAttempt = unsafe { nil }
-	handle_payload_fn  fn (string, string, string, i64, int) RelayAgentPayloadOutcome   = unsafe { nil }
-	disconnected_fn    fn (relay.RelayDescriptor, string, i64)     = unsafe { nil }
-	reconnect_delay_fn fn (relay.RelayDescriptor, string, i64) int = unsafe { nil }
-	attach_carrier_fn  fn (relay.RelayDescriptor, string, string)  = unsafe { nil }
-	detach_carrier_fn  fn (relay.RelayDescriptor, string, string)  = unsafe { nil }
+	prepare_attempt_fn fn (relay.RelayDescriptor, string, i64) RelayAgentConnectAttempt @[required]
+	handle_payload_fn  fn (string, string, string, i64, int) RelayAgentPayloadOutcome   @[required]
+	disconnected_fn    fn (relay.RelayDescriptor, string, i64)     @[required]
+	reconnect_delay_fn fn (relay.RelayDescriptor, string, i64) int @[required]
+	attach_carrier_fn  fn (relay.RelayDescriptor, string, string)  @[required]
+	detach_carrier_fn  fn (relay.RelayDescriptor, string, string)  @[required]
 }
 
 pub fn (ctx RelayAgentRuntimeContext) prepare_attempt(descriptor relay.RelayDescriptor, trace_id string, now_ms i64) RelayAgentConnectAttempt {

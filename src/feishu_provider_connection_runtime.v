@@ -1,34 +1,37 @@
 module main
 
-import json
+import json2 as json
 import log
 import net.http
 import net.websocket as websock
 import time
 import feishu
+import connection_runtime
 
 struct FeishuRuntimeHeartbeat {}
 
-fn FeishuRuntimeHeartbeat.loop(mut app App, instance string, ws_url string, mut client websock.Client) {
+fn FeishuRuntimeHeartbeat.loop(state &feishu.FeishuState, instance string, ws_url string, mut session connection_runtime.Session, mut client websock.Client) {
 	service_id := feishu.RuntimeProtoFrame.service_id_from_ws_url(ws_url)
 	if service_id <= 0 {
 		return
 	}
-	mut interval_seconds := app.providers.feishu.ping_interval_seconds(instance)
+	mut interval_seconds := state.ping_interval_seconds(instance)
 	if interval_seconds <= 0 {
 		interval_seconds = 5
 	}
-	for client.get_state() == .open {
+	for !session.stopped() && client.get_state() == .open {
 		ping := feishu.RuntimeProtoFrame.client_ping(service_id)
 		client.write(ping.encode(), .binary_frame) or {
 			log.error('[feishu] ❌ ping send failed: ${err}')
+			session.note_reason('heartbeat:${err}')
+			session.request_stop()
 			return
 		}
 		log.info('[feishu] 💓 heartbeat sent')
 		if client.get_state() != .open {
 			return
 		}
-		time.sleep(interval_seconds * time.second)
+		if !session.wait(interval_seconds * time.second) { return }
 	}
 }
 
@@ -55,7 +58,7 @@ fn (mut app App) feishu_provider_pull_ws_endpoint(app_name string) !string {
 		if resp.status_code != 200 {
 			return error('feishu ws endpoint request failed with status ${resp.status_code}')
 		}
-		decoded := json.decode(feishu.RuntimeWsEndpointResponse, resp.body)!
+		decoded := json.decode[feishu.RuntimeWsEndpointResponse](resp.body)!
 		if decoded.code != 0 || decoded.data.url.trim_space() == '' {
 			detail := if decoded.msg.trim_space() != '' {
 				decoded.msg
@@ -74,20 +77,12 @@ fn (mut app App) feishu_provider_pull_ws_endpoint(app_name string) !string {
 }
 
 fn (mut hub ProviderRuntimeHub) feishu_runtime_tenant_access_token(app_name string) !string {
-	_ := hub.feishu.app_config(app_name)!
 	now := time.now().unix()
-	hub.feishu.mu.@lock()
-	if runtime := hub.feishu.runtime[app_name] {
-		if runtime.tenant_access_token != ''
-			&& now + i64(hub.feishu.token_refresh_skew_seconds) < runtime.tenant_access_token_expire_unix {
-			token := runtime.tenant_access_token
-			hub.feishu.mu.unlock()
-			return token
-		}
+	request := hub.feishu.begin_tenant_token_request(app_name, now)!
+	if request.cached_token != '' {
+		return request.cached_token
 	}
-	hub.feishu.mu.unlock()
-	app_cfg := hub.feishu.app_config(app_name)!
-	body := feishu.TenantTokenResponse.request_body(app_cfg.app_id, app_cfg.app_secret)
+	body := feishu.TenantTokenResponse.request_body(request.app_id, request.app_secret)
 	resp := (&hub.feishu).http_fetch(
 		url:    '${hub.feishu.open_base_url}/auth/v3/tenant_access_token/internal'
 		method: .post
@@ -98,8 +93,8 @@ fn (mut hub ProviderRuntimeHub) feishu_runtime_tenant_access_token(app_name stri
 		return error('feishu tenant token request failed with status ${resp.status_code}')
 	}
 	token, expire := feishu.TenantTokenResponse.parse(resp.body)!
-	mut runtime := hub.feishu.ensure(app_name)
-	runtime.cache_tenant_access_token(token, now + expire)
-	hub.feishu.update_runtime(app_name, runtime)
+	if !hub.feishu.commit_tenant_token_request(request, token, now + expire) {
+		return error('feishu tenant token credentials changed')
+	}
 	return token
 }

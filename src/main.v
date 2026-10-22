@@ -1,7 +1,6 @@
 module main
 
-import json
-import os
+import executor
 import time
 import veb
 import veb.request_id
@@ -10,6 +9,12 @@ import upstream.transport
 pub struct Context {
 	veb.Context
 	request_id.RequestIdContext
+mut:
+	observed_pipeline string
+	// Request-owned observation state; absent for unobserved/upgrade requests.
+	observed_timing          ?&executor.HttpRequestTiming
+	observed_adapter_depth   int
+	observed_adapter_started i64
 }
 
 @[heap]
@@ -20,21 +25,6 @@ pub struct App {
 pub mut:
 	control_plane ControlPlaneRuntime
 	lifecycle     ProcessLifecycle
-}
-
-fn runtime_trace(label string, fields map[string]string) {
-	mut row := map[string]string{}
-	row['ts'] = time.now().format_ss_milli()
-	row['label'] = label
-	row['pid'] = '${os.getpid()}'
-	for k, v in fields {
-		row[k] = v
-	}
-	mut f := os.open_append('/tmp/vhttpd_runtime_trace.log') or { return }
-	defer {
-		f.close()
-	}
-	f.writeln(json.encode(row)) or {}
 }
 
 fn resolve_trace_id(ctx Context, path string) string {
@@ -73,10 +63,6 @@ fn resolve_request_id(ctx Context, path string) string {
 }
 
 fn (mut app App) emit(kind string, fields map[string]string) {
-	if kind in ['server.started', 'server.failed', 'server.stopped', 'admin.started', 'admin.failed',
-		'internal_admin.started', 'internal_admin.error', 'worker.select.failed'] {
-		runtime_trace('emit.${kind}', fields)
-	}
 	app.control_plane.emit(kind, fields)
 }
 

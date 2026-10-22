@@ -332,7 +332,7 @@ export function createCodexApprovalRouter(deps) {
     return {
       handled: true,
       commands: [
-        deps.feishuCard(parentStream.chatId, buildApprovalCardContent({ ...request, id: requestStateId }, parentStream), approvalStream.streamId, "chat_id"),
+        deps.feishuCard(parentStream.chatId, buildApprovalCardContent({ ...request, id: requestStateId }, parentStream), approvalStream, "chat_id"),
       ],
     };
   }
@@ -424,6 +424,7 @@ export function createCodexApprovalRouter(deps) {
         commands: [],
       };
     }
+    const approvalStream = await deps.getStreamState(state.approvalStreamId);
     const parentStream = state.parentStreamId ? await deps.getStreamState(state.parentStreamId) : undefined;
     await deps.upsertApprovalRequestState(state.requestId, {
       status: "resolved",
@@ -438,7 +439,7 @@ export function createCodexApprovalRouter(deps) {
     return {
       handled: true,
       commands: [
-        deps.feishuUpdateCard(state.approvalStreamId, buildApprovalStatusCard({
+        deps.feishuUpdateCard(approvalStream || {streamId: state.approvalStreamId}, buildApprovalStatusCard({
           ...state,
           status: "resolved",
         }, parentStream, {

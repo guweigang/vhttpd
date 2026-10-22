@@ -3,10 +3,11 @@ module main
 import crypto.sha256
 import dispatch
 import executor
-import json
+import json2 as json
 import net.http
 import os
 import rand
+import upload_store
 import veb
 
 struct UploadPayload {
@@ -205,13 +206,17 @@ fn upload_completed_exchange_for_pipeline(resp UploadResponse, fields map[string
 		payload:  dispatch.EventPayload{
 			topic:    'upload'
 			name:     'upload.completed'
-			data:     json.encode(resp)
+			data:     json.encode(resp, escape_unicode: true, time_as_unix: true)
 			metadata: fields.clone()
 		}
 	}
 }
 
 fn (mut app App) dispatch_upload_completed_transforms(rule RuntimeRouteRule, handler string, resp UploadResponse, fields map[string]string) UploadCompletedTransformDispatchResult {
+	return app.dispatch_upload_completed_transforms_on_view(app.transform_dispatch_view(), rule, handler, resp, fields)
+}
+
+fn (mut app App) dispatch_upload_completed_transforms_on_view(view TransformDispatchView, rule RuntimeRouteRule, handler string, resp UploadResponse, fields map[string]string) UploadCompletedTransformDispatchResult {
 	transform_refs := rule.upload_completed_transform_refs
 	if transform_refs.len == 0 {
 		return UploadCompletedTransformDispatchResult{}
@@ -220,7 +225,7 @@ fn (mut app App) dispatch_upload_completed_transforms(rule RuntimeRouteRule, han
 	mut services := noop_dispatch_services(resp.trace_id)
 	mut exchange := upload_completed_exchange_for_pipeline(resp, fields,
 		rule.upload_completed_ingress_ref, rule.upload_completed_pipeline_id)
-	result := app.run_transform_refs(transform_refs, mut services, mut exchange) or {
+	result := app.run_transform_refs_on_view(view, transform_refs, mut services, mut exchange) or {
 		mut failed := upload_completed_dispatch_fields(resp, route, handler, '')
 		failed['error'] = err.msg()
 		failed['transforms'] = transform_refs.join(',')
@@ -245,19 +250,19 @@ fn (mut app App) dispatch_upload_completed_transforms(rule RuntimeRouteRule, han
 	}
 }
 
-fn (mut app App) dispatch_upload_completed_vjsx(handler string, resp UploadResponse, fields map[string]string) {
+fn (mut app App) dispatch_upload_completed_vjsx(engines EngineRuntime, handler string, resp UploadResponse, fields map[string]string) {
 	clean_handler := handler.trim_space().clone()
 	if clean_handler == '' {
 		return
 	}
 	route := fields['route'] or { '' }
-	outcome := app.dispatch_vjsx_event(VjsxEventDispatchRequest{
+	mut outcome := app.dispatch_vjsx_event_on_runtime(VjsxEventDispatchRequest{
 		event:      'upload.completed'
 		handler:    clean_handler
 		payload:    vjsx_event_payload(resp)
 		trace_id:   resp.trace_id
 		request_id: resp.request_id
-	}) or {
+	}, engines) or {
 		mut failed := upload_completed_dispatch_fields(resp, route, clean_handler, '')
 		failed['error'] = err.msg()
 		if err.msg() == 'vjsx_executor_unavailable' {
@@ -268,12 +273,19 @@ fn (mut app App) dispatch_upload_completed_vjsx(handler string, resp UploadRespo
 		app.emit('upload.completed.dispatch_failed', failed)
 		return
 	}
+	defer {
+		outcome.close_live_conn()
+	}
 	ok := upload_completed_dispatch_fields(resp, route, clean_handler,
 		'${upload_completed_dispatch_status(outcome)}')
 	app.emit('upload.completed.dispatch', ok)
 }
 
 fn handle_upload_route(mut app App, mut ctx Context, rule RuntimeRouteRule, method string, path string, req_id string, trace_id string, start_ms i64, query map[string]string, body_on_head string, remote_addr string) veb.Result {
+	return handle_upload_route_on_view(mut app, mut ctx, app.transform_dispatch_view(), rule, method, path, req_id, trace_id, start_ms, query, body_on_head, remote_addr)
+}
+
+fn handle_upload_route_on_view(mut app App, mut ctx Context, view TransformDispatchView, rule RuntimeRouteRule, method string, path string, req_id string, trace_id string, start_ms i64, query map[string]string, body_on_head string, remote_addr string) veb.Result {
 	if method.to_upper() != 'POST' && method.to_upper() != 'PUT' {
 		mut terminal_adapter := dispatch.EgressAdapter(dispatch.fixed_response_adapter('route/upload_method',
 			405, map[string]string{}, 'Method Not Allowed'))
@@ -302,7 +314,7 @@ fn handle_upload_route(mut app App, mut ctx Context, rule RuntimeRouteRule, meth
 	upload_id := 'upl_' + rand.uuid_v4().replace('-', '')
 	stored_name := upload_id + '_' + filename
 	path_out := os.join_path(upload_dir, stored_name)
-	os.write_file(path_out, payload.body) or {
+	upload_store.save(path_out, payload.body) or {
 		mut terminal_adapter := dispatch.EgressAdapter(dispatch.fixed_response_adapter('route/upload_write',
 			500, map[string]string{}, 'upload write failed'))
 		return render_http_terminal_adapter(mut app, mut ctx, method, path, path, query,
@@ -339,9 +351,9 @@ fn handle_upload_route(mut app App, mut ctx Context, rule RuntimeRouteRule, meth
 		'trace_id':     trace_id
 	}
 	app.emit('upload.completed', fields)
-	transform_dispatch := app.dispatch_upload_completed_transforms(rule, handler, resp, fields)
+	transform_dispatch := app.dispatch_upload_completed_transforms_on_view(view, rule, handler, resp, fields)
 	if !transform_dispatch.attempted {
-		app.dispatch_upload_completed_vjsx(handler, resp, fields)
+		app.dispatch_upload_completed_vjsx(view.engines, handler, resp, fields)
 	}
 	mut headers := {
 		'content-type':       'application/json; charset=utf-8'
@@ -350,7 +362,10 @@ fn handle_upload_route(mut app App, mut ctx Context, rule RuntimeRouteRule, meth
 	if rule.cache_control.trim_space() != '' {
 		headers['cache-control'] = rule.cache_control
 	}
-	outcome := dispatch.response_outcome(201, headers, json.encode(resp))
+	outcome := dispatch.response_outcome(201, headers, json.encode(resp,
+		escape_unicode: true
+		time_as_unix:   true
+	))
 	return HttpResponseRuntime.delivery_outcome(mut app, mut ctx, http_ingress_request(method,
 		path, path, body_on_head, remote_addr, req_id, trace_id, start_ms), outcome, rule)
 }

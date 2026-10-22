@@ -268,6 +268,7 @@ fn test_runtime_response_completion_after_send_completes_wait_from_returned_fram
 		}
 	}
 
+	assert rt.track_outbound_delivery(outbound, 4).action == .queued
 	completion := rt.response_completion_after_send(outbound, CarrierSendResult{
 		ok:       true
 		trace_id: 'trace_1'
@@ -305,6 +306,7 @@ fn test_runtime_response_completion_after_send_reports_missing_wait_response() {
 		}
 	}
 
+	assert rt.track_outbound_delivery(outbound, 4).action == .queued
 	completion := rt.response_completion_after_send(outbound, CarrierSendResult{
 		ok:       true
 		trace_id: 'trace_1'

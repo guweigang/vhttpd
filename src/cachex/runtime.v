@@ -1,7 +1,9 @@
 module cachex
 
-import json
+import json2 as json
 import net.unix
+import net
+import listener_runtime
 import os
 import state_store
 import sync
@@ -30,8 +32,7 @@ pub mut:
 	last_error      string
 	total_ops       u64
 	failed_ops      u64
-	stop_requested  bool
-	listener        &unix.StreamListener = unsafe { nil }
+	listener_owner  listener_runtime.Owner
 	mu              sync.Mutex
 	store           state_store.MemoryStateStore[string]
 }
@@ -69,11 +70,34 @@ pub fn Runtime.new(enabled bool, socket string) Runtime {
 	}
 }
 
-pub fn (mut rt Runtime) request_stop() &unix.StreamListener {
-	rt.stop_requested = true
-	listener := rt.listener
+pub fn (mut rt Runtime) request_stop() ?u64 {
+	rt.mu.@lock()
+	defer { rt.mu.unlock() }
+	generation := rt.listener_owner.request_stop()
 	rt.started = false
-	return listener
+	return generation
+}
+
+pub fn (mut rt Runtime) request_shutdown() ?u64 {
+	rt.mu.@lock()
+	defer { rt.mu.unlock() }
+	generation := rt.listener_owner.request_shutdown()
+	rt.started = false
+	return generation
+}
+
+fn (mut rt Runtime) reserve_start() ?u64 {
+	rt.mu.@lock()
+	defer { rt.mu.unlock() }
+	return rt.listener_owner.reserve()
+}
+
+// Reserve before spawning, so a subsequent stop also cancels delayed startup.
+pub fn (mut rt Runtime) start(socket_path string) bool {
+	if socket_path.trim_space() == '' { return false }
+	generation := rt.reserve_start() or { return false }
+	spawn rt.run_reserved(socket_path, generation)
+	return true
 }
 
 pub fn (mut rt Runtime) snapshot_json(ready bool) string {
@@ -92,7 +116,7 @@ pub fn (mut rt Runtime) snapshot_json(ready bool) string {
 		keys:             rt.store.keys().len
 		ready:            ready
 		snapshot_at_unix: time.now().unix()
-	})
+	}, escape_unicode: true, time_as_unix: true)
 }
 
 pub fn (mut rt Runtime) get_value(namespace string, key string) ?string {
@@ -116,18 +140,15 @@ pub fn (mut rt Runtime) set_value(namespace string, key string, value string, tt
 	defer {
 		rt.mu.unlock()
 	}
-	if ttl_ms > 0 {
-		rt.store.set_with_ttl(cache_key, value, ttl_ms * time.millisecond) or {
-			rt.failed_ops++
-			rt.last_error = err.msg()
-			return false
-		}
-	} else {
-		rt.store.set(cache_key, value) or {
-			rt.failed_ops++
-			rt.last_error = err.msg()
-			return false
-		}
+	ttl := state_store.ttl_from_milliseconds(ttl_ms) or {
+		rt.failed_ops++
+		rt.last_error = err.msg()
+		return false
+	}
+	rt.store.set_with_ttl(cache_key, value, ttl) or {
+		rt.failed_ops++
+		rt.last_error = err.msg()
+		return false
 	}
 	rt.total_ops++
 	return true
@@ -222,13 +243,8 @@ fn (mut rt Runtime) dispatch(req Request) Response {
 			}
 		}
 		'set' {
-			if req.ttl_ms > 0 {
-				rt.store.set_with_ttl(cache_key, req.value, req.ttl_ms * time.millisecond) or {
-					return Response.error(err.msg())
-				}
-			} else {
-				rt.store.set(cache_key, req.value) or { return Response.error(err.msg()) }
-			}
+			ttl := state_store.ttl_from_milliseconds(req.ttl_ms) or { return Response.error(err.msg()) }
+			rt.store.set_with_ttl(cache_key, req.value, ttl) or { return Response.error(err.msg()) }
 			return Response.ok()
 		}
 		'patch' {
@@ -237,8 +253,9 @@ fn (mut rt Runtime) dispatch(req Request) Response {
 					return Response.error(err.msg())
 				}
 			} else {
+				ttl := state_store.ttl_from_milliseconds(req.ttl_ms) or { return Response.error(err.msg()) }
 				rt.store.compare_and_swap_set_with_ttl(cache_key, req.expected_found,
-					req.expected_value, req.value, req.ttl_ms * time.millisecond) or {
+					req.expected_value, req.value, ttl) or {
 					return Response.error(err.msg())
 				}
 			}
@@ -275,13 +292,18 @@ fn (mut rt Runtime) dispatch(req Request) Response {
 	}
 }
 
-fn Runtime.handle_connection(mut rt Runtime, mut conn unix.StreamConn) {
+fn Runtime.handle_connection(mut rt Runtime, mut conn unix.StreamConn, generation u64, request u64) {
 	defer {
 		conn.close() or {}
+		rt.listener_owner.complete_request(request)
 	}
 	payload := FrameCodec.read(mut conn) or { return }
-	req := json.decode(Request, payload) or {
-		FrameCodec.write(mut conn, json.encode(Response.error('invalid_json'))) or {}
+	if !rt.listener_owner.begin_request(generation, request) { return }
+	req := json.decode[Request](payload) or {
+		FrameCodec.write(mut conn, json.encode(Response.error('invalid_json'),
+			escape_unicode: true
+			time_as_unix:   true
+		)) or {}
 		return
 	}
 	rt.mu.@lock()
@@ -293,48 +315,54 @@ fn Runtime.handle_connection(mut rt Runtime, mut conn unix.StreamConn) {
 		rt.last_error = resp.error
 	}
 	rt.mu.unlock()
-	FrameCodec.write(mut conn, json.encode(resp)) or {}
+	FrameCodec.write(mut conn, json.encode(resp, escape_unicode: true, time_as_unix: true)) or {}
 }
 
 pub fn (mut rt Runtime) run(socket_path string) {
-	if socket_path.trim_space() == '' {
-		return
-	}
-	os.mkdir_all(os.dir(socket_path)) or {}
-	if os.exists(socket_path) {
-		os.rm(socket_path) or {}
-	}
-	mut listener := unix.listen_stream(socket_path) or {
+	if socket_path.trim_space() == '' { return }
+	generation := rt.reserve_start() or { return }
+	rt.run_reserved(socket_path, generation)
+}
+
+fn (mut rt Runtime) run_reserved(socket_path string, generation u64) {
+	defer {
+		rt.listener_owner.drain_requests(generation)
 		rt.mu.@lock()
-		rt.last_error = err.msg()
+		if rt.listener_owner.finish(generation) { rt.started = false }
+		rt.mu.unlock()
+	}
+	if rt.listener_owner.should_stop(generation) { return }
+	os.mkdir_all(os.dir(socket_path)) or {}
+	mut listener := listener_runtime.listen(socket_path) or {
+		rt.mu.@lock()
+		if !rt.listener_owner.should_stop(generation) { rt.last_error = err.msg() }
 		rt.mu.unlock()
 		return
 	}
 	rt.mu.@lock()
-	rt.listener = listener
-	rt.started = true
-	rt.started_at_unix = time.now().unix()
-	rt.last_error = ''
-	rt.mu.unlock()
-	defer {
-		rt.mu.@lock()
-		rt.started = false
-		rt.listener = unsafe { nil }
-		rt.mu.unlock()
+	published := rt.listener_owner.publish(generation, listener)
+	if published {
+		rt.started = true
+		rt.started_at_unix = time.now().unix()
+		rt.last_error = ''
 	}
-	for {
+	rt.mu.unlock()
+	if !published {
+		// Publication failed: the serving loop still owns this candidate.
+		listener.close() or {}
+		return
+	}
+	for !rt.listener_owner.should_stop(generation) {
 		mut conn := listener.accept() or {
+			if rt.listener_owner.should_stop(generation) { break }
+			if err.code() == net.err_timed_out_code { continue }
 			rt.mu.@lock()
-			should_stop := rt.stop_requested
-			if !should_stop {
-				rt.last_error = err.msg()
-			}
+			rt.last_error = err.msg()
 			rt.mu.unlock()
-			if should_stop {
-				break
-			}
 			continue
 		}
-		go Runtime.handle_connection(mut rt, mut conn)
+		if rt.listener_owner.should_stop(generation) { conn.close() or {}; break }
+		request := rt.listener_owner.accept_request(generation, conn.sock.handle) or { conn.close() or {}; continue }
+		go Runtime.handle_connection(mut rt, mut conn, generation, request)
 	}
 }

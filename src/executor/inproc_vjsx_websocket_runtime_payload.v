@@ -1,6 +1,6 @@
 module executor
 
-import json
+import json2 as json
 import upstream.transport
 
 fn (e InProcVjsxExecutor) build_websocket_upstream_runtime_payload(lane VjsxExecutionLane, req transport.WorkerWebSocketUpstreamDispatchRequest) string {
@@ -38,7 +38,7 @@ fn (e InProcVjsxExecutor) build_websocket_upstream_runtime_payload(lane VjsxExec
 		upstream_metadata:        req.metadata.clone()
 		method:                   ''
 		path:                     req.target
-	})
+	}, escape_unicode: true, time_as_unix: true)
 }
 
 fn (e InProcVjsxExecutor) websocket_runtime_meta(lane VjsxExecutionLane, frame transport.WorkerWebSocketFrame) InProcVjsxRuntimeMeta {
@@ -75,12 +75,12 @@ fn (e InProcVjsxExecutor) websocket_runtime_meta(lane VjsxExecutionLane, frame t
 }
 
 fn (e InProcVjsxExecutor) build_websocket_runtime_payload(lane VjsxExecutionLane, frame transport.WorkerWebSocketFrame) string {
-	return json.encode(e.websocket_runtime_meta(lane, frame))
+	return json.encode(e.websocket_runtime_meta(lane, frame), escape_unicode: true, time_as_unix: true)
 }
 
 fn (e InProcVjsxExecutor) build_websocket_frame_bundle_payload(lane VjsxExecutionLane, frame transport.WorkerWebSocketFrame) string {
 	return json.encode(InProcVjsxWebSocketFrameBundle{
 		raw:     frame
 		runtime: e.websocket_runtime_meta(lane, frame)
-	})
+	}, escape_unicode: true, time_as_unix: true)
 }

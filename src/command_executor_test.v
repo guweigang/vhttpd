@@ -52,6 +52,7 @@ fn test_command_route_from_normalized_provider_message_send_for_feishu() {
 		}
 	}
 	app.register_provider_spec(ProviderSpec{
+		lifecycle_ctx:    provider.RuntimeContext.noop()
 		name:             'feishu'
 		enabled:          true
 		has_handler:      true
@@ -87,6 +88,7 @@ fn test_command_route_from_normalized_stream_append_for_feishu() {
 		}
 	}
 	app.register_provider_spec(ProviderSpec{
+		lifecycle_ctx:    provider.RuntimeContext.noop()
 		name:             'feishu'
 		enabled:          true
 		has_handler:      true
@@ -122,6 +124,7 @@ fn test_command_route_from_normalized_stream_fail_for_feishu() {
 		}
 	}
 	app.register_provider_spec(ProviderSpec{
+		lifecycle_ctx:    provider.RuntimeContext.noop()
 		name:             'feishu'
 		enabled:          true
 		has_handler:      true
@@ -186,6 +189,7 @@ fn test_command_route_from_command_codex_control() {
 		}
 	}
 	app.register_provider_spec(ProviderSpec{
+		lifecycle_ctx:    provider.RuntimeContext.noop()
 		name:             'codex'
 		enabled:          true
 		has_handler:      true
@@ -220,6 +224,7 @@ fn test_command_route_from_command_feishu_message_prefix() {
 		}
 	}
 	app.register_provider_spec(ProviderSpec{
+		lifecycle_ctx:    provider.RuntimeContext.noop()
 		name:             'feishu'
 		enabled:          true
 		has_handler:      true
@@ -270,6 +275,7 @@ fn test_command_route_from_command_ollama_message_prefix() {
 		}
 	}
 	app.register_provider_spec(ProviderSpec{
+		lifecycle_ctx:    provider.RuntimeContext.noop()
 		name:             'ollama'
 		enabled:          true
 		has_handler:      true
@@ -301,6 +307,7 @@ fn test_provider_spec_command_matchers_are_exposed_in_snapshot() {
 		}
 	}
 	app.register_provider_spec(ProviderSpec{
+		lifecycle_ctx:    provider.RuntimeContext.noop()
 		name:             'feishu'
 		enabled:          true
 		has_handler:      true
@@ -627,6 +634,7 @@ fn test_feishu_handler_session_bind_message_registers_stream_target_and_buffer()
 			}
 		}
 	}
+	lease := app.providers.feishu.issue_wire_bind_creation('codex:task_002', 'main', 'om_reply_001') or { panic(err) }
 	mut handler := FeishuCommandHandler.new(mut app)
 	cmd := transport.WorkerWebSocketUpstreamCommand{
 		type_:       'session.bind'
@@ -635,6 +643,10 @@ fn test_feishu_handler_session_bind_message_registers_stream_target_and_buffer()
 		stream_id:   'codex:task_002'
 		target:      'om_reply_001'
 		target_type: 'message_id'
+		metadata:    {
+			'creation_generation': lease.generation
+			'creation_token':      lease.token
+		}
 	}
 	normalized := command.NormalizedCommand.from_worker_command(cmd)
 	mut snapshot := execmod.WebSocketUpstreamCommandActivity{}
@@ -668,6 +680,7 @@ fn test_feishu_handler_session_clear_message_removes_buffer_and_stream_target() 
 			feishu: feishu.FeishuState{
 				buffers: {
 					'om_reply_002': feishu.StreamBuffer{
+						generation: 'fixture'
 						message_id: 'om_reply_002'
 						stream_id:  'codex:task_003'
 					}
@@ -677,6 +690,9 @@ fn test_feishu_handler_session_clear_message_removes_buffer_and_stream_target() 
 	}
 	mut handler := FeishuCommandHandler.new(mut app)
 	cmd := transport.WorkerWebSocketUpstreamCommand{
+		metadata:    {
+			'stream_generation': 'fixture'
+		}
 		type_:       'session.clear'
 		provider:    'feishu'
 		stream_id:   'codex:task_003'
@@ -716,11 +732,13 @@ fn test_feishu_handler_session_clear_message_removes_buffer_chain() {
 			feishu: feishu.FeishuState{
 				buffers: {
 					'om_chain_1': feishu.StreamBuffer{
+						generation:      'fixture'
 						message_id:      'om_chain_1'
 						stream_id:       'codex:task_chain'
 						next_message_id: 'om_chain_2'
 					}
 					'om_chain_2': feishu.StreamBuffer{
+						generation: 'fixture'
 						message_id: 'om_chain_2'
 						stream_id:  'codex:task_chain'
 					}
@@ -730,6 +748,9 @@ fn test_feishu_handler_session_clear_message_removes_buffer_chain() {
 	}
 	mut handler := FeishuCommandHandler.new(mut app)
 	cmd := transport.WorkerWebSocketUpstreamCommand{
+		metadata:    {
+			'stream_generation': 'fixture'
+		}
 		type_:       'session.clear'
 		provider:    'feishu'
 		target:      'om_chain_1'
@@ -769,14 +790,17 @@ fn test_feishu_handler_session_clear_stream_id_removes_all_stream_buffers() {
 			feishu: feishu.FeishuState{
 				buffers: {
 					'om_stream_1': feishu.StreamBuffer{
+						generation: 'fixture'
 						message_id: 'om_stream_1'
 						stream_id:  'codex:task_stream_clear'
 					}
 					'om_stream_2': feishu.StreamBuffer{
+						generation: 'fixture'
 						message_id: 'om_stream_2'
 						stream_id:  'codex:task_stream_clear'
 					}
 					'om_other':    feishu.StreamBuffer{
+						generation: 'fixture'
 						message_id: 'om_other'
 						stream_id:  'codex:other'
 					}
@@ -786,6 +810,9 @@ fn test_feishu_handler_session_clear_stream_id_removes_all_stream_buffers() {
 	}
 	mut handler := FeishuCommandHandler.new(mut app)
 	cmd := transport.WorkerWebSocketUpstreamCommand{
+		metadata:  {
+			'stream_generation': 'fixture'
+		}
 		type_:     'session.clear'
 		provider:  'feishu'
 		stream_id: 'codex:task_stream_clear'

@@ -43,8 +43,8 @@ fn test_upstream_runtime_context_tracks_registry_metrics_and_snapshot() {
 		fixture_path:       '/tmp/mock-fixture.jsonl'
 	}
 
-	app.upstream_runtime_register(plan, 'post', '/v1/chat/completions?debug=1', 'req_up_1',
-		'trace_up_1')
+	registration := app.upstream_runtime_register(plan, 'post', '/v1/chat/completions?debug=1', 'req_up_1',
+		'trace_up_1') or { panic('missing registration') }
 	plans, _ := app.upstreams.totals()
 	assert plans == 1
 
@@ -60,23 +60,23 @@ fn test_upstream_runtime_context_tracks_registry_metrics_and_snapshot() {
 	_, errors := app.upstreams.totals()
 	assert errors == 1
 
-	app.upstream_runtime_unregister('req_up_1')
+	app.upstream_runtime_unregister(registration)
 	assert app.admin_upstreams_snapshot(false, 10, 0, '', '').active_count == 0
 }
 
 fn test_upstream_runtime_registry_is_independent_from_websocket_hub() {
 	mut registry := UpstreamRuntimeRegistry.new()
-	registry.register(transport.WorkerUpstreamPlanFrame{
+	registration := registry.register(transport.WorkerUpstreamPlanFrame{
 		name:      'generic_http'
 		transport: 'http'
 		codec:     'json'
-	}, 'GET', '/events?cursor=1', 'req_registry', 'trace_registry')
+	}, 'GET', '/events?cursor=1', 'req_registry', 'trace_registry') or { panic('missing registration') }
 	assert registry.active_count() == 1
 	plans, errors := registry.totals()
 	assert plans == 1
 	assert errors == 0
 	snapshot := registry.snapshot(true, 10, 0, '', 'generic_http')
 	assert snapshot.sessions[0].path == '/events'
-	registry.unregister('req_registry')
+	registry.unregister(registration)
 	assert registry.active_count() == 0
 }

@@ -23,6 +23,21 @@ pub:
 	websocket_actor            app_config.WebSocketActorConfig
 }
 
+// Each executor owns its configuration containers; snapshots own separate
+// containers too. Strings and actor-source scalar fields are immutable values.
+fn (config VjsxRuntimeFacadeConfig) owned_copy() VjsxRuntimeFacadeConfig {
+	return VjsxRuntimeFacadeConfig{
+		...config
+		signature_include: config.signature_include.clone()
+		signature_exclude: config.signature_exclude.clone()
+		websocket_actor:   app_config.WebSocketActorConfig{
+			...config.websocket_actor
+			sources: config.websocket_actor.sources.clone()
+			events:  config.websocket_actor.events.clone()
+		}
+	}
+}
+
 pub struct VjsxRuntimeFacade {
 pub mut:
 	config       VjsxRuntimeFacadeConfig
@@ -45,7 +60,18 @@ pub struct VjsxExecutorState {
 pub mut:
 	mu sync.Mutex
 mut:
-	app_ref                                 AppFacade = NoOpAppFacade{}
+	http_waiting                            int
+	http_queue_waits                        i64
+	http_queue_timeouts                     i64
+	http_last_queue_timeout                 i64
+	tasks                                   map[u64]&ExecutorTaskControl
+	active_task_by_lane                     map[string]&ExecutorTaskControl
+	stopping                                bool
+	closed                                  bool
+	mailbox_schedulers                      int
+	host_builders                           int
+	signature_refresh_thread                thread
+	app_ref                                 ?EmbeddedHost
 	facade                                  VjsxRuntimeFacade
 	session_store                           state_store.MemoryStateStore[string]
 	lanes                                   []VjsxExecutionLane
@@ -60,8 +86,10 @@ mut:
 	websocket_connection_actor_class_by_id  map[string]string
 	websocket_mailbox_by_key                map[string][]InProcVjsxWebSocketTask
 	websocket_mailbox_pending_keys          []string
-	websocket_mailbox_running_by_key        map[string]bool
-	lane_wakeup_by_id                       map[string]VjsxLaneWakeup
+	websocket_mailbox_running_by_key        map[string]u64 // selected task control identity
+	lane_wakeup_workers                     int
+	lane_wakeup_owners                      map[string]&VjsxLaneWakeupOwner
+	lane_wakeup_by_id                       map[string]&VjsxLaneWakeup
 	cached_source_probe                     string
 	cached_source_signature                 string
 	signature_refresh_started               bool
@@ -85,5 +113,5 @@ pub:
 	provider_name string = 'vjsx'
 	kind_name     string = 'vjsx'
 pub mut:
-	state &VjsxExecutorState = unsafe { nil }
+	state &VjsxExecutorState @[required]
 }

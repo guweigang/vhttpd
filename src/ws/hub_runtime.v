@@ -4,6 +4,9 @@ import upstream.transport
 import net.websocket
 import sync
 import net.unix
+import connection_runtime
+import net
+import os
 
 // PresenceSnapshot captures room/metadata presence data for a single connection.
 pub struct PresenceSnapshot {
@@ -19,27 +22,43 @@ pub:
 // narrow kernel port supplies protocol-frame construction and logic dispatch.
 pub struct RuntimeContext {
 pub:
-	dispatch_targets_fn fn (string, string) []HubDispatchTarget = unsafe { nil }
-	presence_fn         fn (string) PresenceSnapshot            = unsafe { nil }
-	rooms_fn            fn (string) []string                    = unsafe { nil }
-	metadata_fn         fn (string) map[string]string           = unsafe { nil }
-	register_conn_fn    fn (string, string, string, string, string, string, map[string]string, map[string]string, string, &websocket.Client, &DispatchConnState) = unsafe { nil }
-	conn_open_fn        fn (string) bool                        = unsafe { nil }
-	mark_closing_fn     fn (string) bool                        = unsafe { nil }
-	flush_pending_fn    fn (string)                             = unsafe { nil }
-	cleanup_conn_fn     fn (string)                             = unsafe { nil }
-	unregister_conn_fn  fn (string)                             = unsafe { nil }
-	send_to_fn          fn (string, string, string) bool        = unsafe { nil }
-	join_fn             fn (string, string) bool                = unsafe { nil }
-	leave_fn            fn (string, string) bool                = unsafe { nil }
-	set_meta_fn         fn (string, string, string) bool        = unsafe { nil }
-	clear_meta_fn       fn (string, string) bool                = unsafe { nil }
-	broadcast_fn        fn (string, string, string, string) int = unsafe { nil }
-	build_frame_fn      fn (string, string, string, map[string]string, map[string]string, string, string, string, string, string, int, string, []string, map[string]string, PresenceSnapshot) transport.WorkerWebSocketFrame = unsafe { nil }
-	dispatch_event_fn   fn (transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse        = unsafe { nil }
-	command_result_fn   fn ([]transport.WorkerWebSocketFrame) transport.WorkerWebSocketDispatchCommandsResult = unsafe { nil }
-	followup_failure_fn fn (string, string, string, map[string]string, map[string]string, string, string, string, []transport.WorkerWebSocketDispatchCommandFailure) ?transport.WorkerWebSocketFrame = unsafe { nil }
-	close_target_fn     fn (string, int, string) = unsafe { nil }
+	emit_fn             fn (string, map[string]string) @[required]
+	ingress_run         ?&IngressRun
+	dispatch_targets_fn fn (string, string) []HubDispatchTarget @[required]
+	presence_fn         fn (string) PresenceSnapshot            @[required]
+	rooms_fn            fn (string) []string                    @[required]
+	metadata_fn         fn (string) map[string]string           @[required]
+	register_conn_fn    fn (string, string, string, string, string, string, map[string]string, map[string]string, string, &websocket.Client, &DispatchConnState, ?&IngressRun) @[required]
+	conn_open_fn        fn (string) bool                     @[required]
+	mark_closing_fn     fn (string, &DispatchConnState) bool @[required]
+	flush_pending_fn    fn (string) @[required]
+	can_cleanup_fn      fn (string, &DispatchConnState) bool    @[required]
+	cleanup_conn_fn     fn (string, &DispatchConnState)         @[required]
+	unregister_conn_fn  fn (string, &DispatchConnState)         @[required]
+	send_to_fn          fn (string, string, string) bool        @[required]
+	join_fn             fn (string, string) bool                @[required]
+	leave_fn            fn (string, string) bool                @[required]
+	set_meta_fn         fn (string, string, string) bool        @[required]
+	clear_meta_fn       fn (string, string) bool                @[required]
+	broadcast_fn        fn (string, string, string, string) int @[required]
+	build_frame_fn      fn (string, string, string, map[string]string, map[string]string, string, string, string, string, string, int, string, []string, map[string]string, PresenceSnapshot) transport.WorkerWebSocketFrame @[required]
+	dispatch_event_fn   fn (transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse        @[required]
+	command_result_fn   fn ([]transport.WorkerWebSocketFrame) transport.WorkerWebSocketDispatchCommandsResult @[required]
+	followup_failure_fn fn (string, string, string, map[string]string, map[string]string, string, string, string, []transport.WorkerWebSocketDispatchCommandFailure) ?transport.WorkerWebSocketFrame @[required]
+	close_owned_fn      fn (string, &DispatchConnState, int, string) @[required]
+	close_target_fn     fn (string, int, string)                     @[required]
+}
+
+// Trace metadata shares the event sink; it never owns a second file.
+pub fn (rt RuntimeContext) trace(label string, fields map[string]string) {
+	mut data := fields.clone()
+	data['label'] = label
+	data['pid'] = '${os.getpid()}'
+	rt.emit_fn('runtime.trace', data)
+}
+
+pub fn (rt RuntimeContext) with_ingress(run ?&IngressRun) RuntimeContext {
+	return RuntimeContext{ ...rt, ingress_run: run }
 }
 
 pub fn (rt RuntimeContext) dispatch_targets(room string, except_id string) []HubDispatchTarget {
@@ -60,27 +79,27 @@ pub fn (rt RuntimeContext) metadata(conn_id string) map[string]string {
 
 pub fn (rt RuntimeContext) register_conn(conn_id string, worker_socket string, method string, req_id string, trace_id string, path string, query map[string]string, headers map[string]string, remote_addr string, client &websocket.Client, lifecycle &DispatchConnState) {
 	rt.register_conn_fn(conn_id, worker_socket, method, req_id, trace_id, path, query, headers,
-		remote_addr, client, lifecycle)
+		remote_addr, client, lifecycle, rt.ingress_run)
 }
 
 pub fn (rt RuntimeContext) conn_open(conn_id string) bool {
 	return rt.conn_open_fn(conn_id)
 }
 
-pub fn (rt RuntimeContext) mark_closing(conn_id string) bool {
-	return rt.mark_closing_fn(conn_id)
+pub fn (rt RuntimeContext) mark_closing(conn_id string, lifecycle &DispatchConnState) bool {
+	return rt.mark_closing_fn(conn_id, lifecycle)
 }
 
 pub fn (rt RuntimeContext) flush_pending(conn_id string) {
 	rt.flush_pending_fn(conn_id)
 }
 
-pub fn (rt RuntimeContext) cleanup_conn(conn_id string) {
-	rt.cleanup_conn_fn(conn_id)
+pub fn (rt RuntimeContext) cleanup_conn(conn_id string, lifecycle &DispatchConnState) {
+	rt.cleanup_conn_fn(conn_id, lifecycle)
 }
 
-pub fn (rt RuntimeContext) unregister_conn(conn_id string) {
-	rt.unregister_conn_fn(conn_id)
+pub fn (rt RuntimeContext) unregister_conn(conn_id string, lifecycle &DispatchConnState) {
+	rt.unregister_conn_fn(conn_id, lifecycle)
 }
 
 pub fn (rt RuntimeContext) send_to(conn_id string, data string, opcode string) bool {
@@ -129,6 +148,10 @@ pub fn (rt RuntimeContext) close_target(conn_id string, code int, reason string)
 	rt.close_target_fn(conn_id, code, reason)
 }
 
+pub fn (rt RuntimeContext) close_owned_target(conn_id string, lifecycle &DispatchConnState, code int, reason string) {
+	rt.close_owned_fn(conn_id, lifecycle, code, reason)
+}
+
 pub fn (rt RuntimeContext) process_worker_frame(frame transport.WorkerWebSocketFrame) ?transport.WorkerWebSocketDispatchCommandFailure {
 	return hub_process_worker_frame(rt, frame)
 }
@@ -140,7 +163,8 @@ pub fn (rt RuntimeContext) process_worker_frame(frame transport.WorkerWebSocketF
 pub struct BridgeState {
 pub mut:
 	worker_conn            unix.StreamConn
-	rt                     RuntimeContext
+	lifecycle              &DispatchConnState @[required]
+	rt                     RuntimeContext     @[required]
 	worker_socket          string
 	conn_id                string
 	method                 string
@@ -157,8 +181,9 @@ pub mut:
 @[heap]
 pub struct DispatchBridgeState {
 pub mut:
-	lifecycle     &DispatchConnState = unsafe { nil }
-	rt            RuntimeContext
+	finalize_mu   sync.Mutex
+	lifecycle     &DispatchConnState @[required]
+	rt            RuntimeContext     @[required]
 	open_commands []transport.WorkerWebSocketFrame
 	conn_id       string
 	method        string
@@ -175,19 +200,34 @@ pub mut:
 // These operate on ws.HubState directly, with zero App coupling.
 
 pub fn hub_send_to(mut hub HubState, conn_id string, data string, opcode string) bool {
+	return hub_send_expected(mut hub, conn_id, none, data, opcode)
+}
+
+pub fn hub_send_owned_to(mut hub HubState, conn_id string, lifecycle &DispatchConnState, data string, opcode string) bool {
+	return hub_send_expected(mut hub, conn_id, lifecycle, data, opcode)
+}
+
+fn hub_send_expected(mut hub HubState, conn_id string, expected ?&DispatchConnState, data string, opcode string) bool {
 	if conn_id == '' {
 		return false
 	}
-	mut client := &websocket.Client(unsafe { nil })
+	mut client_handle := ?&websocket.Client(none)
 	mut queued := false
 	hub.mu.@lock()
 	if hub_conn := hub.conns[conn_id] {
+		if lifecycle := expected {
+			if voidptr(hub_conn.lifecycle) != voidptr(lifecycle) {
+				hub.mu.unlock()
+				return false
+			}
+		}
 		if !hub_conn.lifecycle.can_send() {
 			if hub_conn.lifecycle.can_queue() {
 				mut pending := hub.pending[conn_id] or { []HubPendingMessage{} }
 				pending << HubPendingMessage{
-					data:   data
-					opcode: if opcode == '' { 'text' } else { opcode }
+					registration: hub_conn.lifecycle
+					data:         data
+					opcode:       if opcode == '' { 'text' } else { opcode }
 				}
 				hub.pending[conn_id] = pending
 				queued = true
@@ -197,8 +237,12 @@ pub fn hub_send_to(mut hub HubState, conn_id string, data string, opcode string)
 			hub.mu.unlock()
 			return false
 		}
-		client = hub_conn.client
+		client_handle = hub_conn.client
 	} else {
+		if expected != none {
+			hub.mu.unlock()
+			return false
+		}
 		mut pending := hub.pending[conn_id] or { []HubPendingMessage{} }
 		pending << HubPendingMessage{
 			data:   data
@@ -208,10 +252,11 @@ pub fn hub_send_to(mut hub HubState, conn_id string, data string, opcode string)
 		queued = true
 	}
 	hub.mu.unlock()
-	if isnil(client) {
-		return queued
-	}
-	return hub.send_client(conn_id, client, data, opcode)
+	client := client_handle or { return queued }
+	// The owned send has already admitted against this registration and captured
+	// its native handle. Do not resolve the ID again in send_client: a later
+	// opening registration must never receive this accepted task's queued data.
+	return hub.send_client(if expected != none { '' } else { conn_id }, client, data, opcode)
 }
 
 pub fn hub_broadcast(mut hub HubState, room string, data string, opcode string, except_id string) int {
@@ -226,9 +271,8 @@ pub fn hub_broadcast(mut hub HubState, room string, data string, opcode string, 
 				continue
 			}
 			if hub_conn := hub.conns[conn_id] {
-				targets << HubSendTarget{
-					id:     conn_id
-					client: unsafe { hub_conn.client }
+				if client := hub_conn.client {
+					targets << HubSendTarget{ id: conn_id, client: client }
 				}
 			} else {
 				mut pending := hub.pending[conn_id] or { []HubPendingMessage{} }
@@ -264,6 +308,8 @@ pub fn hub_dispatch_targets(mut hub HubState, room string, except_id string) []H
 			if hub_conn := hub.conns[conn_id] {
 				targets << HubDispatchTarget{
 					id:          conn_id
+					dispatch:    hub_conn.dispatch
+					lifecycle:   hub_conn.lifecycle
 					method:      if hub_conn.method == '' { 'GET' } else { hub_conn.method }
 					request_id:  hub_conn.request_id
 					trace_id:    hub_conn.trace_id
@@ -286,6 +332,7 @@ pub fn hub_broadcast_dispatch(rt RuntimeContext, room string, data string, excep
 	targets := rt.dispatch_targets(room, except_id)
 	mut delivered := 0
 	for target in targets {
+		if !rt.conn_open(target.id) || !rt.can_cleanup_fn(target.id, target.lifecycle) { continue }
 		presence := rt.presence(target.id)
 		base_frame := rt.build_frame('info', target.method, target.path, target.query,
 			target.headers, target.remote_addr, target.request_id, target.trace_id, 'text', data,
@@ -294,7 +341,11 @@ pub fn hub_broadcast_dispatch(rt RuntimeContext, room string, data string, excep
 			...base_frame
 			room: room
 		}
-		resp := rt.dispatch_event(info_frame) or { continue }
+		resp := if owner := target.dispatch {
+			owner.call_fn(info_frame) or { continue }
+		} else {
+			rt.dispatch_event(info_frame) or { continue }
+		}
 		mut forwarded_commands := []transport.WorkerWebSocketFrame{cap: resp.commands.len}
 		for cmd in resp.commands {
 			if cmd.event == 'send' || cmd.event == 'send_to' || cmd.event == 'join'
@@ -316,7 +367,7 @@ pub fn hub_broadcast_dispatch(rt RuntimeContext, room string, data string, excep
 		if result.has_close {
 			close_frame := result.close_frame
 			code := if close_frame.code > 0 { close_frame.code } else { 1000 }
-			rt.close_target(target.id, code, close_frame.reason)
+			rt.close_owned_target(target.id, target.lifecycle, code, close_frame.reason)
 			continue
 		}
 		if result.failures.len > 0 {
@@ -325,7 +376,7 @@ pub fn hub_broadcast_dispatch(rt RuntimeContext, room string, data string, excep
 				target.trace_id, result.failures)
 			{
 				code := if close_frame.code > 0 { close_frame.code } else { 1000 }
-				rt.close_target(target.id, code, close_frame.reason)
+				rt.close_owned_target(target.id, target.lifecycle, code, close_frame.reason)
 			}
 		}
 		delivered++
@@ -334,36 +385,70 @@ pub fn hub_broadcast_dispatch(rt RuntimeContext, room string, data string, excep
 }
 
 pub fn hub_close_target(mut hub HubState, conn_id string, code int, reason string) {
-	if conn_id == '' {
-		return
-	}
-	mut client := &websocket.Client(unsafe { nil })
+	hub_close_expected(mut hub, conn_id, none, code, reason)
+}
+
+pub fn hub_close_owned_target(mut hub HubState, conn_id string, lifecycle &DispatchConnState, code int, reason string) {
+	hub_close_expected(mut hub, conn_id, lifecycle, code, reason)
+}
+
+fn hub_close_expected(mut hub HubState, conn_id string, expected ?&DispatchConnState, code int, reason string) {
+	if conn_id == '' { return }
+	mut serving := ?&IngressRun(none)
+	mut outbound := ?&connection_runtime.Session(none)
+	mut client_handle := ?&websocket.Client(none)
 	hub.mu.@lock()
 	if hub_conn := hub.conns[conn_id] {
-		if !hub_conn.lifecycle.mark_closing() {
+		if lifecycle := expected {
+			if voidptr(lifecycle) != voidptr(hub_conn.lifecycle) {
+				hub.mu.unlock()
+				return
+			}
+		}
+		if !hub_conn.lifecycle.claim_socket_close(code, reason) {
 			hub.mu.unlock()
 			return
 		}
-		client = hub_conn.client
+		serving = hub_conn.serving
+		outbound = hub_conn.outbound
+		client_handle = hub_conn.close_writer
+	} else if expected != none {
+		// No matching registration remains to own the pending queue.
+		hub.mu.unlock()
+		return
 	}
 	hub.pending.delete(conn_id)
 	hub.mu.unlock()
-	if isnil(client) {
+	client := client_handle or { return }
+	if mut source := serving {
+		mut task := source.child() or { return }
+		spawn hub_close_client_owned(mut hub, mut task, client, code, reason)
 		return
 	}
-	spawn hub_close_client(mut hub, client, code, reason)
+	if mut session := outbound {
+		mut task := hub.ingress.reserve() or { return }
+		fd := session.duplicate_interrupt() or {
+			task.finish()
+			return
+		}
+		attached := task.attach(fd)
+		net.close(fd) or {}
+		if !attached {
+			task.finish()
+			return
+		}
+		spawn hub_close_client_owned(mut hub, mut task, client, code, reason)
+	}
 }
 
-pub fn hub_close_client(mut hub HubState, client &websocket.Client, code int, reason string) {
-	if isnil(client) {
-		return
+fn hub_close_client_owned(mut hub HubState, mut task IngressRun, client &websocket.Client, code int, reason string) {
+	defer {
+		task.request_stop()
+		task.finish()
 	}
 	hub.send_mu.@lock()
-	defer {
-		hub.send_mu.unlock()
-	}
-	mut c := unsafe { client }
-	c.close(code, reason) or {}
+	defer { hub.send_mu.unlock() }
+	task.write_client_close(client, code, reason)
 }
 
 pub fn hub_process_worker_frame(rt RuntimeContext, frame transport.WorkerWebSocketFrame) ?transport.WorkerWebSocketDispatchCommandFailure {

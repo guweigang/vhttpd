@@ -1,5 +1,6 @@
 module main
 
+import connection_runtime
 import log
 import time
 import upstream
@@ -11,89 +12,49 @@ const feishu_stream_buffer_rollover_runes = feishu.stream_buffer_rollover_runes
 // ── Stream Buffering ───────────────────────────────────────────────────
 
 fn (mut app App) feishu_runtime_buffer_patch(req upstream.UpstreamSendRequest) {
-	mut current_target := req.target
-	if current_target == '' {
+	claim := app.providers.feishu.append_buffer_patch(req.target, req.instance, req.text) or { return }
+	app.feishu_runtime_send_rollover(claim)
+}
+
+fn (mut app App) feishu_runtime_send_rollover(claim feishu.BufferRollover) {
+	mut committed := false
+	defer { if !committed { app.providers.feishu.cancel_buffer_rollover(claim) } }
+	buf := claim.buffer
+	card_payload := feishu.SendMessageRequest.streaming_card(claim.content, claim.segment_index)
+	result := app.providers.feishu_provider_runtime_send_message(feishu.SendMessageRequest{
+		app:             buf.app
+		receive_id_type: buf.receive_id_type
+		receive_id:      buf.receive_id
+		msg_type:        'interactive'
+		content:         card_payload
+	}, mut app) or {
+		log.error('[feishu] ❌ open next preview failed for ${buf.message_id}: ${err}')
 		return
 	}
-
-	for {
-		app.providers.feishu.mu.@lock()
-		if current_target !in app.providers.feishu.buffers {
-			app.providers.feishu.buffers[current_target] = feishu.StreamBuffer{
-				message_id:    current_target
-				app:           req.instance
-				last_flush:    time.now().unix_milli()
-				segment_index: 1
-			}
-		}
-		mut buf := app.providers.feishu.buffers[current_target]
-		if !buf.sealed {
-			buf.content += req.text
-			buf.last_delta = time.now().unix_milli()
-			app.providers.feishu.buffers[current_target] = buf
-			app.providers.feishu.mu.unlock()
-			return
-		}
-		if buf.next_message_id != '' {
-			next_target := buf.next_message_id
-			app.providers.feishu.mu.unlock()
-			current_target = next_target
-			continue
-		}
-		app_name := buf.app
-		stream_id := buf.stream_id
-		receive_id := buf.receive_id
-		receive_id_type := buf.receive_id_type
-		segment_index := if buf.segment_index > 0 { buf.segment_index + 1 } else { 2 }
-		app.providers.feishu.mu.unlock()
-
-		if receive_id.trim_space() == '' || receive_id_type.trim_space() == '' {
-			return
-		}
-
-		card_payload := feishu.SendMessageRequest.streaming_card(req.text, segment_index)
-		send_result := app.providers.feishu_provider_runtime_send_message(feishu.SendMessageRequest{
-			app:             app_name
-			receive_id_type: receive_id_type
-			receive_id:      receive_id
-			msg_type:        'interactive'
-			content:         card_payload
-		}, mut app) or {
-			log.error('[feishu] ❌ open next preview failed for ${current_target}: ${err}')
-			return
-		}
-
-		now := time.now().unix_milli()
-		app.providers.feishu.mu.@lock()
-		if mut sealed_buf := app.providers.feishu.buffers[current_target] {
-			if sealed_buf.next_message_id == '' {
-				sealed_buf.next_message_id = send_result.message_id
-				app.providers.feishu.buffers[current_target] = sealed_buf
-			}
-		}
-		app.providers.feishu.buffers[send_result.message_id] = feishu.StreamBuffer{
-			message_id:       send_result.message_id
-			app:              app_name
-			content:          req.text
-			rendered_content: req.text
-			last_delta:       now
-			last_flush:       now
-			stream_id:        stream_id
-			receive_id:       receive_id
-			receive_id_type:  receive_id_type
-			segment_index:    segment_index
-		}
-		app.providers.feishu.mu.unlock()
-		if stream_id != '' {
-			app.codex_add_stream_target(app.codex_resolve_instance_for_stream(stream_id),
-				stream_id, codex.CodexTarget{
-				platform:   'feishu'
-				message_id: send_result.message_id
-			})
-			app.dispatch_feishu_message_sent(stream_id, send_result.message_id)
-		}
-		return
+	if receipt := app.feishu_runtime_commit_rollover_receipt(claim, result.message_id) {
+		committed = true
+		app.dispatch_feishu_message_sent(receipt)
 	}
+}
+
+fn (mut app App) feishu_runtime_commit_rollover(claim feishu.BufferRollover, message_id string) bool {
+	return app.feishu_runtime_commit_rollover_receipt(claim, message_id) != none
+}
+
+fn (mut app App) feishu_runtime_commit_rollover_receipt(claim feishu.BufferRollover, message_id string) ?feishu.SentReceipt {
+	app.providers.feishu.mu.@lock()
+	defer { app.providers.feishu.mu.unlock() }
+	if !app.providers.feishu.commit_buffer_rollover_unlocked(claim, message_id, time.now().unix_milli()) {
+		return none
+	}
+	// State-only publication while the buffer owner is locked. Dispatch callbacks
+	// and all HTTP I/O run after unlock. Lock order is FeishuState then CodexState.
+	stream_id := claim.buffer.stream_id
+	if stream_id != '' {
+		app.codex_add_stream_target(app.codex_resolve_instance_for_stream(stream_id), stream_id,
+			codex.CodexTarget{ platform: 'feishu', message_id: message_id, stream_generation: claim.buffer.generation, buffer_message_id: message_id })
+	}
+	return app.providers.feishu.next_sent_receipt_unlocked(message_id, message_id)
 }
 
 fn (mut app App) feishu_runtime_send_followup_segment(buf feishu.StreamBuffer, markdown string, finish bool, template_content string) !string {
@@ -112,53 +73,66 @@ fn (mut app App) feishu_runtime_send_followup_segment(buf feishu.StreamBuffer, m
 		msg_type:        'interactive'
 		content:         card_payload
 	}, mut app)!
-	if buf.stream_id.trim_space() != '' {
-		app.codex_add_stream_target(app.codex_resolve_instance_for_stream(buf.stream_id),
-			buf.stream_id, codex.CodexTarget{
-			platform:   'feishu'
-			message_id: send_result.message_id
-		})
-		app.dispatch_feishu_message_sent(buf.stream_id, send_result.message_id)
-	}
+
 	return send_result.message_id
 }
 
-fn (mut app App) feishu_runtime_run_buffer_flusher() {
+// Transport-only followup sending above grants no target publication authority.
+fn (mut app App) feishu_runtime_send_finish_segment(claim feishu.BufferFinish, markdown string, finish bool, template_content string, segment_index int) !string {
+	if !app.providers.feishu.buffer_finish_is_current(claim) {
+		return error('feishu buffer finish retired')
+	}
+	mut buf := claim.buffer
+	buf.segment_index = segment_index
+	message_id := app.feishu_runtime_send_followup_segment(buf, markdown, finish, template_content)!
+	receipt := app.feishu_runtime_publish_finish_segment_receipt(claim, message_id) or {
+		return error('feishu buffer finish retired')
+	}
+	app.dispatch_feishu_message_sent(receipt)
+	return message_id
+}
+
+fn (mut app App) feishu_runtime_publish_finish_segment(claim feishu.BufferFinish, message_id string) bool {
+	return app.feishu_runtime_publish_finish_segment_receipt(claim, message_id) != none
+}
+
+fn (mut app App) feishu_runtime_publish_finish_segment_receipt(claim feishu.BufferFinish, message_id string) ?feishu.SentReceipt {
+	app.providers.feishu.mu.@lock()
+	defer { app.providers.feishu.mu.unlock() }
+	if message_id == '' || !app.providers.feishu.buffer_finish_is_current_unlocked(claim) {
+		return none
+	}
+	stream_id := claim.buffer.stream_id
+	if stream_id.trim_space() != '' {
+		app.codex_add_stream_target(app.codex_resolve_instance_for_stream(stream_id), stream_id,
+			codex.CodexTarget{ platform: 'feishu', message_id: message_id, stream_generation: claim.buffer.generation, buffer_message_id: claim.buffer.message_id })
+	}
+	return app.providers.feishu.next_sent_receipt_unlocked(claim.buffer.message_id, message_id)
+}
+
+fn (mut app App) feishu_runtime_run_buffer_flusher(mut run connection_runtime.Run) {
+	defer { app.providers.feishu.background_runs.release('buffer-flusher', mut run) }
 	log.info('[feishu] 🔄 stream buffer flusher started')
-	for {
-		time.sleep(400 * time.millisecond)
+	for run.wait(400 * time.millisecond) {
 		app.feishu_runtime_flush_pending_buffers()
 	}
 }
 
 fn (mut app App) feishu_runtime_flush_pending_buffers() {
+	app.providers.feishu.prune_expired_creations()
 	if app.providers.feishu_runtime_bridge_proxy_only() {
 		return
 	}
-	now := time.now().unix_milli()
-	mut to_flush := []feishu.StreamBuffer{}
-
-	app.providers.feishu.mu.@lock()
-	for _, buf in app.providers.feishu.buffers {
-		if buf.last_delta >= buf.last_flush && now - buf.last_flush >= 400
-			&& buf.content.trim_space() != '' {
-			to_flush << buf
-		}
-	}
-	app.providers.feishu.mu.unlock()
+	to_flush := app.providers.feishu.pending_buffer_snapshots(time.now().unix_milli())
 
 	for buf in to_flush {
+		if !app.providers.feishu.buffer_snapshot_is_current(buf) { continue }
 		preview_markdown := feishu.StreamBuffer.streaming_preview_markdown(buf.content)
 		if preview_markdown == '' {
 			continue
 		}
 		if preview_markdown == buf.rendered_content {
-			app.providers.feishu.mu.@lock()
-			if mut active := app.providers.feishu.buffers[buf.message_id] {
-				active.last_flush = time.now().unix_milli()
-				app.providers.feishu.buffers[buf.message_id] = active
-			}
-			app.providers.feishu.mu.unlock()
+			app.providers.feishu.commit_buffer_preview(buf, preview_markdown, time.now().unix_milli())
 			continue
 		}
 		card_payload := feishu.SendMessageRequest.streaming_card(preview_markdown, 1)
@@ -171,13 +145,7 @@ fn (mut app App) feishu_runtime_flush_pending_buffers() {
 			log.error('[feishu] ❌ preview flush failed for ${buf.message_id}: ${err}')
 			continue
 		}
-		app.providers.feishu.mu.@lock()
-		if mut active := app.providers.feishu.buffers[buf.message_id] {
-			active.last_flush = time.now().unix_milli()
-			active.rendered_content = preview_markdown
-			app.providers.feishu.buffers[buf.message_id] = active
-		}
-		app.providers.feishu.mu.unlock()
+		app.providers.feishu.commit_buffer_preview(buf, preview_markdown, time.now().unix_milli())
 	}
 }
 
@@ -189,16 +157,19 @@ fn (mut app App) feishu_runtime_flush_buffer(message_id string, template_content
 		}
 		return error('feishu_bridge_proxy_only')
 	}
-	app.providers.feishu.mu.@lock()
-	buf := app.providers.feishu.buffers[message_id] or {
-		app.providers.feishu.mu.unlock()
-		if finish {
-			log.info('[feishu] 🚿 explicit flush without buffer for msg_id=${message_id} (finish=true, fallback=no-op)')
-			return
-		}
+	buf := app.providers.feishu.buffer_snapshot(message_id) or {
+		if finish { return }
 		return error('no buffer found for message_id: ${message_id}')
 	}
-	app.providers.feishu.mu.unlock()
+	app.feishu_runtime_flush_captured_buffer(buf, template_content, finish)!
+}
+
+fn (mut app App) feishu_runtime_flush_captured_buffer(buf feishu.StreamBuffer, template_content string, finish bool) ! {
+	if !app.providers.feishu.buffer_snapshot_is_current(buf) {
+		return error('feishu_stream_command_retired')
+	}
+	message_id := buf.message_id
+	if buf.sealed { return }
 
 	log.info('[feishu] 🚿 explicit flush for msg_id=${message_id} (finish=${finish})')
 
@@ -215,9 +186,13 @@ fn (mut app App) feishu_runtime_flush_buffer(message_id string, template_content
 		}
 		content = content.trim_space()
 		if content == '' {
-			log.info('[feishu] 🚿 finish flush skipped for msg_id=${message_id} (empty buffer)')
+			if !app.providers.feishu.commit_buffer_finish(buf, '', buf.segment_index, time.now().unix_milli()) {
+				return error('feishu_stream_command_retired')
+			}
 			return
 		}
+		claim := app.providers.feishu.begin_buffer_finish(buf) or { return error('feishu buffer finish changed or in progress') }
+		defer { app.providers.feishu.cancel_buffer_finish(claim) }
 		head, mut tail := feishu.StreamBuffer.split_content_runes(content,
 			feishu_stream_buffer_rollover_runes)
 		final_head := if tail == '' {
@@ -237,31 +212,21 @@ fn (mut app App) feishu_runtime_flush_buffer(message_id string, template_content
 			head_chunk, next_tail := feishu.StreamBuffer.split_content_runes(tail,
 				feishu_stream_buffer_rollover_runes)
 			is_last := next_tail == ''
-			mut followup_buf := buf
-			followup_buf.segment_index = segment
-			last_message_id = app.feishu_runtime_send_followup_segment(followup_buf, head_chunk,
-				is_last, content_raw)!
+			last_message_id = app.feishu_runtime_send_finish_segment(claim, head_chunk,
+				is_last, content_raw, segment)!
 			tail = next_tail
 			segment++
 		}
-		app.providers.feishu.mu.@lock()
-		if mut active := app.providers.feishu.buffers[buf.message_id] {
-			active.content = ''
-			active.rendered_content = content
-			active.last_flush = time.now().unix_milli()
-			active.last_delta = active.last_flush
-			active.sealed = true
-			active.next_message_id = ''
-			active.segment_index = if last_message_id == buf.message_id { 1 } else { segment }
-			app.providers.feishu.buffers[buf.message_id] = active
+		segment_index := if last_message_id == buf.message_id { 1 } else { segment }
+		if !app.providers.feishu.commit_buffer_finish_claim(claim, content, segment_index, time.now().unix_milli()) {
+			return error('feishu buffer changed during finish')
 		}
-		if last_message_id != buf.message_id {
-			app.providers.feishu.buffers.delete(last_message_id)
-		}
-		app.providers.feishu.mu.unlock()
 		return
 	}
 
+	if !app.providers.feishu.buffer_snapshot_is_current(buf) {
+		return error('feishu buffer changed or finishing')
+	}
 	if buf.content.trim_space() == '' {
 		return
 	}
@@ -275,11 +240,7 @@ fn (mut app App) feishu_runtime_flush_buffer(message_id string, template_content
 		msg_type:   'interactive'
 		content:    feishu.SendMessageRequest.streaming_card(preview_markdown, 1)
 	}, mut app)!
-	app.providers.feishu.mu.@lock()
-	if mut active := app.providers.feishu.buffers[buf.message_id] {
-		active.last_flush = time.now().unix_milli()
-		active.rendered_content = preview_markdown
-		app.providers.feishu.buffers[buf.message_id] = active
+	if !app.providers.feishu.commit_buffer_preview(buf, preview_markdown, time.now().unix_milli()) {
+		return error('feishu_stream_command_retired')
 	}
-	app.providers.feishu.mu.unlock()
 }

@@ -68,8 +68,8 @@ pub fn (mut app App) provider_runtime_pull_url(name string, instance string) !st
 	feishu_name := provider.ProviderName.feishu()
 	codex_name := provider.ProviderName.codex()
 	return match name {
-		feishu_name { app.feishu_provider_pull_ws_endpoint(instance) }
-		codex_name { app.codex_provider_pull_url(instance) }
+		feishu_name { app.feishu_provider_pull_ws_endpoint(instance)! }
+		codex_name { app.codex_provider_pull_url(instance)! }
 		else { error('unknown provider ${name}') }
 	}
 }

@@ -10,13 +10,14 @@ function turnLifecycleText(stage) {
   return "### 本轮处理中\n\n处理中...";
 }
 
-function updateParentLifecycleCommands(streamId, text, deps = {}, options = {}) {
+function updateParentLifecycleCommands(stream, text, deps = {}, options = {}) {
+  const streamId = stream?.streamId || "";
   if (!streamId || typeof text !== "string" || text.trim() === "") {
     return [];
   }
-  const commands = [deps.feishuUpdateText(streamId, text)];
+  const commands = [deps.feishuUpdateText(stream, text)];
   if (options.finish) {
-    commands.push(deps.feishuStreamFinish(streamId));
+    commands.push(deps.feishuStreamFinish(stream));
   }
   return commands;
 }
@@ -36,7 +37,7 @@ function streamTextCommand(stream, streamId, text, deps) {
   if (deps.isPlainPromptStream(stream)) {
     return deps.sendStreamText(stream, text, streamId);
   }
-  return deps.feishuUpdateText(streamId, text);
+  return deps.feishuUpdateText(stream, text);
 }
 
 function joinPlainPromptAssistantItems(items) {
@@ -123,7 +124,7 @@ async function finishOutstandingItemStreams(parentStream, keepItemKeys, deps = {
       itemStreamId: render.itemStreamId,
       status: "finished",
     });
-    commands.push(deps.feishuStreamFinish(render.itemStreamId));
+    commands.push(deps.feishuStreamFinish(itemStream));
   }
   return commands;
 }
@@ -297,7 +298,7 @@ export function createCodexRpcResponseRouter(deps) {
           : renderedReadAnswer;
         return {
           handled: true,
-          commands: updateParentLifecycleCommands(response.streamId, parentText, deps, { finish: true })
+          commands: updateParentLifecycleCommands(stream, parentText, deps, { finish: true })
             .concat(itemCommands || []),
         };
       }
@@ -325,7 +326,7 @@ export function createCodexRpcResponseRouter(deps) {
         });
         return {
           handled: true,
-          commands: [deps.feishuUpdateText(response.streamId, errorText)],
+          commands: [deps.feishuUpdateText(stream, errorText)],
         };
       }
       deps.consumePendingThreadRename(renameThreadId);
@@ -341,7 +342,7 @@ export function createCodexRpcResponseRouter(deps) {
       });
       return {
         handled: true,
-        commands: [deps.feishuUpdateText(response.streamId, resultText)],
+        commands: [deps.feishuUpdateText(stream, resultText)],
       };
     }
     if (stream.prompt && stream.prompt.startsWith("/codex")) {
@@ -355,7 +356,7 @@ export function createCodexRpcResponseRouter(deps) {
         });
         return {
           handled: true,
-          commands: [deps.feishuUpdateText(response.streamId, errorText)],
+          commands: [deps.feishuUpdateText(stream, errorText)],
         };
       }
       const resultText = deps.formatCodexRpcResult(response.method, response.result, response.raw.result ?? response.raw);
@@ -367,7 +368,7 @@ export function createCodexRpcResponseRouter(deps) {
       });
       return {
         handled: true,
-        commands: [deps.feishuUpdateText(response.streamId, resultText)],
+        commands: [deps.feishuUpdateText(stream, resultText)],
       };
     }
     if (response.method === "turn/start" && !response.hasError) {
@@ -378,7 +379,7 @@ export function createCodexRpcResponseRouter(deps) {
       });
       return {
         handled: true,
-        commands: deps.isPlainPromptStream(stream) ? [] : [deps.feishuUpdateText(response.streamId, deps.taskRunningText(stream))],
+        commands: deps.isPlainPromptStream(stream) ? [] : [deps.feishuUpdateText(stream, deps.taskRunningText(stream))],
       };
     }
     if (response.hasError) {

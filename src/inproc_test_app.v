@@ -1,6 +1,8 @@
 module main
 
 import executor
+import feishu
+import json2 as json
 import net.http
 import net.unix
 import upstream.transport
@@ -10,7 +12,8 @@ import upstream.transport
 // without a fully initialized App.
 struct InProcTestApp {
 mut:
-	reserved int
+	reserved       int
+	creation_state feishu.FeishuState
 }
 
 fn (a InProcTestApp) get_runtime_config_json() string {
@@ -91,4 +94,13 @@ fn (mut a InProcTestApp) execute_websocket_dispatch_commands_result(_commands []
 
 fn (mut a InProcTestApp) run_command_envelopes(_request_id string, _dispatch_ctx DispatchContext, _commands []transport.WorkerWebSocketUpstreamCommand) string {
 	return ''
+}
+
+fn (mut a InProcTestApp) issue_feishu_stream_creation(stream_id string, app_name string, message_id string) !string {
+	lease := if message_id != '' {
+		a.creation_state.issue_wire_bind_creation(stream_id, app_name, message_id)!
+	} else {
+		a.creation_state.issue_wire_creation(stream_id, app_name)!
+	}
+	return json.encode(lease)
 }

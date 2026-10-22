@@ -3,10 +3,7 @@ module executor
 import log
 import time
 
-fn (e InProcVjsxExecutor) run_lane_startup(mut app AppFacade, idx int, lane VjsxExecutionLane) ! {
-	if isnil(e.state) {
-		return error('inproc_vjsx_executor_state_missing')
-	}
+fn (e InProcVjsxExecutor) run_lane_startup(mut app EmbeddedHost, idx int, lane VjsxExecutionLane) ! {
 	mut should_run := false
 	mut state := e.state
 	state.mu.@lock()
@@ -26,10 +23,7 @@ fn (e InProcVjsxExecutor) run_lane_startup(mut app AppFacade, idx int, lane Vjsx
 	state.mu.unlock()
 }
 
-fn (e InProcVjsxExecutor) run_app_startup(mut app AppFacade, idx int, lane VjsxExecutionLane) ! {
-	if isnil(e.state) {
-		return error('inproc_vjsx_executor_state_missing')
-	}
+fn (e InProcVjsxExecutor) run_app_startup(mut app EmbeddedHost, idx int, lane VjsxExecutionLane) ! {
 	mut source_signature := ''
 	mut state := e.state
 	state.mu.@lock()
@@ -80,7 +74,7 @@ fn (e InProcVjsxExecutor) run_app_startup(mut app AppFacade, idx int, lane VjsxE
 	}
 }
 
-fn (e InProcVjsxExecutor) run_startup_hooks(mut app AppFacade, idx int, lane VjsxExecutionLane) ! {
+fn (e InProcVjsxExecutor) run_startup_hooks(mut app EmbeddedHost, idx int, lane VjsxExecutionLane) ! {
 	log.debug('[vhttpd] startup_hooks begin lane=${lane.id} idx=${idx}')
 	e.run_lane_startup(mut app, idx, lane)!
 	e.run_app_startup(mut app, idx, lane)!

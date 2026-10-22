@@ -35,13 +35,13 @@ export function createItemRenderCoordinator(deps) {
     return `${parentStream.prompt || "codex item"}${suffix}`;
   }
 
-  function openItemStreamCard(parentStream, itemStreamId, notification) {
+  function openItemStreamCard(parentStream, itemStream, notification) {
     const openingText = itemStreamOpeningText(notification);
     const threadRootId = deps.threadRootIdFromSessionKey(parentStream?.sessionKey || "");
     if (threadRootId) {
-      return deps.feishuText(threadRootId, openingText, itemStreamId, "message_id");
+      return deps.feishuText(threadRootId, openingText, itemStream, "message_id");
     }
-    return deps.feishuText(parentStream.chatId, openingText, itemStreamId, "chat_id");
+    return deps.feishuText(parentStream.chatId, openingText, itemStream, "chat_id");
   }
 
   async function ensureNotificationItemRender(parentStream, notification) {
@@ -182,14 +182,14 @@ export function createItemRenderCoordinator(deps) {
       ? normalizedText.trim() !== ""
       : appendText.trim() !== "" || shouldAppendItemText(itemRender.itemStream, normalizedText);
     if (itemRender.opened) {
-      commands.push(openItemStreamCard(parentStream, itemRender.itemStream.streamId, notification));
+      commands.push(openItemStreamCard(parentStream, itemRender.itemStream, notification));
     }
     if (shouldAppend) {
       await deps.appendStreamDraft(itemRender.itemStream.streamId, appendText, {
         turnId: notification.turnId || itemRender.itemStream.turnId || "",
         lastEvent: notification.method || "codex.notification",
       });
-      commands.push(deps.feishuStreamAppendText(itemRender.itemStream.streamId, appendText));
+      commands.push(deps.feishuStreamAppendText(itemRender.itemStream, appendText));
     }
     if (options.finish) {
       await deps.finalizeStreamState(itemRender.itemStream.streamId, {
@@ -207,7 +207,7 @@ export function createItemRenderCoordinator(deps) {
         itemStreamId: itemRender.itemStream.streamId,
         status: "finished",
       });
-      commands.push(deps.feishuStreamFinish(itemRender.itemStream.streamId));
+      commands.push(deps.feishuStreamFinish(itemRender.itemStream));
     } else {
       await deps.upsertItemRenderState(parentStream.streamId, itemRender.itemKey, {
         itemId: notification.itemId || itemRender.itemRender?.itemId || "",

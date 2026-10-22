@@ -1,7 +1,7 @@
 module main
 
 import admin
-import json
+import json2 as json
 import time
 import veb
 
@@ -17,7 +17,7 @@ pub fn (mut app App) admin_workers(mut ctx Context) veb.Result {
 			'admin_endpoint': 'workers'
 		})
 	}
-	body := json.encode(app.worker_admin_snapshot())
+	body := json.encode(app.worker_admin_snapshot(), escape_unicode: true, time_as_unix: true)
 	return admin_data_plane_json_response(mut app, mut ctx, 'GET', path, req_id, trace_id,
 		start_ms, 200, body, {
 		'admin_endpoint': 'workers'
@@ -36,7 +36,7 @@ pub fn (mut app App) admin_stats(mut ctx Context) veb.Result {
 			'admin_endpoint': 'stats'
 		})
 	}
-	body := json.encode(app.admin_stats_snapshot())
+	body := json.encode(app.admin_stats_snapshot(), escape_unicode: true, time_as_unix: true)
 	return admin_data_plane_json_response(mut app, mut ctx, 'GET', path, req_id, trace_id,
 		start_ms, 200, body, {
 		'admin_endpoint': 'stats'
@@ -60,7 +60,7 @@ pub fn (mut app App) admin_restart_worker(mut ctx Context) veb.Result {
 		return admin_data_plane_json_response(mut app, mut ctx, 'POST', path, req_id, trace_id,
 			start_ms, 400, json.encode(admin.WorkerAdminErrorResponse{
 			error: 'missing worker id, use ?id=<worker_id>'
-		}), {
+		}, escape_unicode: true, time_as_unix: true), {
 			'admin_endpoint': 'workers.restart'
 			'error':          'missing_worker_id'
 		})
@@ -70,7 +70,7 @@ pub fn (mut app App) admin_restart_worker(mut ctx Context) veb.Result {
 		return admin_data_plane_json_response(mut app, mut ctx, 'POST', path, req_id, trace_id,
 			start_ms, 404, json.encode(admin.WorkerAdminErrorResponse{
 			error: err.msg()
-		}), {
+		}, escape_unicode: true, time_as_unix: true), {
 			'admin_endpoint': 'workers.restart'
 			'error':          err.msg()
 		})
@@ -87,7 +87,7 @@ pub fn (mut app App) admin_restart_worker(mut ctx Context) veb.Result {
 		ok:     true
 		mode:   'single'
 		worker: status
-	}), {
+	}, escape_unicode: true, time_as_unix: true), {
 		'admin_endpoint': 'workers.restart'
 		'worker_id':      '${worker_id}'
 	})
@@ -118,7 +118,7 @@ pub fn (mut app App) admin_restart_all_workers(mut ctx Context) veb.Result {
 		ok:        true
 		mode:      'all'
 		restarted: restarted
-	}), {
+	}, escape_unicode: true, time_as_unix: true), {
 		'admin_endpoint': 'workers.restart_all'
 		'restarted':      '${restarted}'
 	})
@@ -141,13 +141,13 @@ pub fn (mut app App) admin_drain_workers(mut ctx Context) veb.Result {
 		return admin_data_plane_json_response(mut app, mut ctx, 'POST', path, req_id, trace_id,
 			start_ms, 404, json.encode(admin.WorkerAdminErrorResponse{
 			error: err.msg()
-		}), {
+		}, escape_unicode: true, time_as_unix: true), {
 			'admin_endpoint': 'workers.drain'
 			'error':          err.msg()
 		})
 	}
 	return admin_data_plane_json_response(mut app, mut ctx, 'POST', path, req_id, trace_id,
-		start_ms, 200, json.encode(status), {
+		start_ms, 200, json.encode(status, escape_unicode: true, time_as_unix: true), {
 		'admin_endpoint':    'workers.drain'
 		'engine':            status.engine
 		'draining_count':    '${status.draining_count}'

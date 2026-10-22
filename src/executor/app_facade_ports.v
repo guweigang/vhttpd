@@ -38,9 +38,14 @@ mut:
 }
 
 pub interface WorkerWebSocketDispatchFacade {
+	WebSocketCommandFacade
 mut:
 	worker_backend_dispatch_websocket_upstream(req transport.WorkerWebSocketUpstreamDispatchRequest) !transport.WorkerWebSocketUpstreamDispatchResponse
 	worker_backend_dispatch_websocket_event(frame transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse
+}
+
+pub interface WebSocketCommandFacade {
+mut:
 	execute_websocket_dispatch_commands_result(commands []transport.WorkerWebSocketFrame) transport.WorkerWebSocketDispatchCommandsResult
 }
 
@@ -62,10 +67,10 @@ mut:
 
 pub struct WorkerStreamDispatchPort {
 mut:
-	inner AppFacade
+	inner WorkerStreamDispatchFacade
 }
 
-pub fn worker_stream_dispatch_port(inner AppFacade) WorkerStreamDispatchPort {
+pub fn worker_stream_dispatch_port(inner WorkerStreamDispatchFacade) WorkerStreamDispatchPort {
 	return WorkerStreamDispatchPort{
 		inner: inner
 	}
@@ -77,10 +82,10 @@ pub fn (mut port WorkerStreamDispatchPort) worker_backend_dispatch_stream(req tr
 
 pub struct WorkerMcpDispatchPort {
 mut:
-	inner AppFacade
+	inner WorkerMcpDispatchFacade
 }
 
-pub fn worker_mcp_dispatch_port(inner AppFacade) WorkerMcpDispatchPort {
+pub fn worker_mcp_dispatch_port(inner WorkerMcpDispatchFacade) WorkerMcpDispatchPort {
 	return WorkerMcpDispatchPort{
 		inner: inner
 	}
@@ -92,10 +97,10 @@ pub fn (mut port WorkerMcpDispatchPort) worker_backend_dispatch_mcp(req transpor
 
 pub struct WorkerWebSocketDispatchPort {
 mut:
-	inner AppFacade
+	inner WorkerWebSocketDispatchFacade
 }
 
-pub fn worker_websocket_dispatch_port(inner AppFacade) WorkerWebSocketDispatchPort {
+pub fn worker_websocket_dispatch_port(inner WorkerWebSocketDispatchFacade) WorkerWebSocketDispatchPort {
 	return WorkerWebSocketDispatchPort{
 		inner: inner
 	}
@@ -114,10 +119,10 @@ pub fn (mut port WorkerWebSocketDispatchPort) execute_websocket_dispatch_command
 }
 
 pub struct WorkerBackendConfigPort {
-	inner AppFacade
+	inner WorkerBackendConfigFacade
 }
 
-pub fn worker_backend_config_port(inner AppFacade) WorkerBackendConfigPort {
+pub fn worker_backend_config_port(inner WorkerBackendConfigFacade) WorkerBackendConfigPort {
 	return WorkerBackendConfigPort{
 		inner: inner
 	}
@@ -145,10 +150,10 @@ pub fn (port WorkerBackendConfigPort) worker_backend_read_timeout_ms_for_kind(ki
 
 pub struct WorkerSocketPort {
 mut:
-	inner AppFacade
+	inner WorkerSocketFacade
 }
 
-pub fn worker_socket_port(inner AppFacade) WorkerSocketPort {
+pub fn worker_socket_port(inner WorkerSocketFacade) WorkerSocketPort {
 	return WorkerSocketPort{
 		inner: inner
 	}

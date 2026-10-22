@@ -1,10 +1,21 @@
 module upstream
 
 import upstream.transport
-
-import json
+import json2 as json
 import net.http
 import os
+
+// This private error ends http.fetch through its callback unwind, which also
+// releases the upstream connection. Only this exact signal is normal completion.
+struct NdjsonStreamComplete {}
+
+fn (_ NdjsonStreamComplete) msg() string {
+	return 'upstream_ndjson_complete'
+}
+
+fn (_ NdjsonStreamComplete) code() int {
+	return 0
+}
 
 // ── Row/field helpers ──
 
@@ -76,11 +87,12 @@ pub fn (mut state ExecState) ensure_headers_written() ! {
 // ── Line/chunk parsing ──
 
 pub fn (mut state ExecState) write_line(line string) ! {
+	if state.completed { return }
 	trimmed := line.trim_space()
 	if trimmed == '' {
 		return
 	}
-	row := json.decode(OllamaNdjsonRow, trimmed) or { return }
+	row := json.decode[OllamaNdjsonRow](trimmed) or { return }
 	mut piece := row.field(state.field_path)
 	if piece == '' {
 		piece = row.field(state.fallback_field_path)
@@ -93,11 +105,12 @@ pub fn (mut state ExecState) write_line(line string) ! {
 	if row.done {
 		state.ensure_headers_written()!
 		state.write_done()!
+		state.completed = true
 	}
 }
 
 pub fn (mut state ExecState) flush_buffer() ! {
-	if state.line_buf.trim_space() == '' {
+	if state.completed || state.line_buf.trim_space() == '' {
 		state.line_buf = ''
 		return
 	}
@@ -106,7 +119,7 @@ pub fn (mut state ExecState) flush_buffer() ! {
 }
 
 pub fn (mut state ExecState) consume_chunk(chunk string) ! {
-	if chunk == '' {
+	if state.completed || chunk == '' {
 		return
 	}
 	state.line_buf += chunk
@@ -115,20 +128,19 @@ pub fn (mut state ExecState) consume_chunk(chunk string) ! {
 		line := state.line_buf[..idx]
 		state.line_buf = state.line_buf[idx + 1..]
 		state.write_line(line)!
+		if state.completed {
+			state.line_buf = ''
+			return
+		}
 	}
 }
 
 // ── HTTP progress callback ──
 
-const exec_nil = &ExecState(unsafe { nil })
-
 pub fn progress_body_cb(request &http.Request, chunk []u8, _body_read_so_far u64, _body_expected_size u64, _status_code int) ! {
-	mut state := unsafe { exec_nil }
-	pstate := unsafe { &voidptr(&state) }
-	unsafe {
-		*pstate = request.user_ptr
-	}
+	mut state := unsafe { &ExecState(request.user_ptr) }
 	state.consume_chunk(chunk.bytestr())!
+	if state.completed { return NdjsonStreamComplete{} }
 }
 
 // ── Plan validation & execution ──
@@ -158,14 +170,17 @@ pub fn ExecState.validate_plan(plan transport.WorkerUpstreamPlanFrame) ?string {
 }
 
 pub fn (mut state ExecState) execute_fixture(plan transport.WorkerUpstreamPlanFrame) ! {
+	if state.completed { return }
 	lines := os.read_lines(plan.fixture_path)!
 	for line in lines {
 		state.consume_chunk(line + '\n')!
+		if state.completed { break }
 	}
 	state.flush_buffer()!
 }
 
 pub fn (mut state ExecState) execute_http(plan transport.WorkerUpstreamPlanFrame) ! {
+	if state.completed { return }
 	mut header := http.new_header()
 	for name, value in plan.request_headers {
 		header.add_custom(name, value) or {}
@@ -179,6 +194,7 @@ pub fn (mut state ExecState) execute_http(plan transport.WorkerUpstreamPlanFrame
 		user_ptr:           state
 		stop_copying_limit: 65536
 	) or {
+		if err is NdjsonStreamComplete { return }
 		return err
 	}
 	state.flush_buffer()!

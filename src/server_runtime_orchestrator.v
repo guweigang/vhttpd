@@ -57,9 +57,16 @@ fn start_server_runtime(mut app App, runtime_cfg server_lifecycle.ServerRuntimeC
 }
 
 fn (mut lifecycle ProcessLifecycle) start(mut app App, runtime_cfg server_lifecycle.ServerRuntimeConfig) {
+	if !lifecycle.shutdown.begin_start() { return }
+	defer { lifecycle.shutdown.end_start() }
 	log.debug('[vhttpd] start_server_runtime: initializing app runtime site=${runtime_cfg.site_id}')
 	TransportStartupRuntime.initialize(mut app, runtime_cfg.internal_admin_socket)
-	go InternalAdminRuntime.serve(mut app, runtime_cfg.internal_admin_socket)
+	lifecycle.internal_admin.start(mut app, runtime_cfg.internal_admin_socket) or {
+		app.emit('internal_admin.error', {
+			'socket': runtime_cfg.internal_admin_socket
+			'error':  err.msg()
+		})
+	}
 	ProviderStartupRuntime.initialize(mut app)
 	scheme := server_runtime_scheme(runtime_cfg)
 	lifecycle.data_plane_scheme = scheme
@@ -116,13 +123,18 @@ fn serve_server_runtime(mut app App, runtime_cfg server_lifecycle.ServerRuntimeC
 		) or { report_server_runtime_failure(mut app, err.msg()) }
 		return
 	}
-	veb.run_at[App, Context](mut app,
-		host:                 runtime_cfg.host
-		port:                 runtime_cfg.port
-		family:               .ip
-		nr_workers:           runtime.nr_jobs()
-		show_startup_message: false
-	) or { report_server_runtime_failure(mut app, err.msg()) }
+	mut owner := app.lifecycle.http
+	mut run := owner.reserve('${runtime_cfg.host}:${runtime_cfg.port}') or { return }
+	install_http_ingress_admission(mut app)
+	owner.serve(mut run, fn [mut app, runtime_cfg] () {
+		veb.run_at[App, Context](mut app,
+			host:                 runtime_cfg.host
+			port:                 runtime_cfg.port
+			family:               .ip
+			nr_workers:           runtime.nr_jobs()
+			show_startup_message: false
+		) or { report_server_runtime_failure(mut app, err.msg()) }
+	})
 }
 
 fn report_server_runtime_failure(mut app App, err_msg string) {

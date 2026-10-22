@@ -3,6 +3,7 @@ module feishu
 import config
 import log
 import time
+import rand
 
 // ── Provider Runtime Lifecycle ──
 
@@ -11,6 +12,12 @@ pub fn (mut s FeishuState) ensure(name string) ProviderRuntime {
 	defer {
 		s.mu.unlock()
 	}
+	runtime := s.ensure_unlocked(name)
+	return ProviderRuntime{ ...runtime, recent_events: runtime.recent_events.clone() }
+}
+
+// Caller holds mu. Only the state owner may mutate and publish this value.
+fn (mut s FeishuState) ensure_unlocked(name string) ProviderRuntime {
 	if runtime := s.runtime[name] {
 		return runtime
 	}
@@ -19,24 +26,29 @@ pub fn (mut s FeishuState) ensure(name string) ProviderRuntime {
 	return runtime
 }
 
+// Explicit replacement owns its event array; activity updates use narrow methods.
 pub fn (mut s FeishuState) update_runtime(name string, runtime ProviderRuntime) {
 	s.mu.@lock()
-	s.runtime[name] = runtime
+	s.runtime[name] = ProviderRuntime{ ...runtime, recent_events: runtime.recent_events.clone() }
 	s.mu.unlock()
 }
 
 // ── Runtime Metrics ──
 
 pub fn (mut s FeishuState) note_connecting(name string) {
-	mut runtime := s.ensure(name)
+	s.mu.@lock()
+	defer { s.mu.unlock() }
+	mut runtime := s.ensure_unlocked(name)
 	runtime.note_connecting()
-	s.update_runtime(name, runtime)
+	s.runtime[name] = runtime
 }
 
 pub fn (mut s FeishuState) note_connected(name string, ws_url string) {
-	mut runtime := s.ensure(name)
+	s.mu.@lock()
+	defer { s.mu.unlock() }
+	mut runtime := s.ensure_unlocked(name)
 	runtime.note_connected(ws_url)
-	s.update_runtime(name, runtime)
+	s.runtime[name] = runtime
 }
 
 pub fn (mut s FeishuState) runtime_ws_url(name string) string {
@@ -52,39 +64,60 @@ pub fn (mut s FeishuState) runtime_ws_url(name string) string {
 
 pub fn (mut s FeishuState) note_disconnected(name string, reason string) {
 	log.error('[feishu] ❌ disconnected: name=${name} reason=${reason}')
-	mut runtime := s.ensure(name)
+	s.mu.@lock()
+	defer { s.mu.unlock() }
+	mut runtime := s.ensure_unlocked(name)
 	runtime.note_disconnected(reason)
-	s.update_runtime(name, runtime)
+	s.runtime[name] = runtime
 }
 
 pub fn (mut s FeishuState) note_frame(name string) {
-	mut runtime := s.ensure(name)
+	s.mu.@lock()
+	defer { s.mu.unlock() }
+	mut runtime := s.ensure_unlocked(name)
 	runtime.note_frame()
-	s.update_runtime(name, runtime)
+	s.runtime[name] = runtime
 }
 
 pub fn (mut s FeishuState) note_ack(name string) {
-	mut runtime := s.ensure(name)
+	s.mu.@lock()
+	defer { s.mu.unlock() }
+	mut runtime := s.ensure_unlocked(name)
 	runtime.note_ack()
-	s.update_runtime(name, runtime)
+	s.runtime[name] = runtime
 }
 
 pub fn (mut s FeishuState) note_send(name string, ok bool) {
-	mut runtime := s.ensure(name)
+	s.mu.@lock()
+	defer { s.mu.unlock() }
+	mut runtime := s.ensure_unlocked(name)
 	runtime.note_send(ok)
-	s.update_runtime(name, runtime)
+	s.runtime[name] = runtime
 }
 
 pub fn (mut s FeishuState) note_client_config(instance string, cfg RuntimeClientConfig) {
-	mut runtime := s.ensure(instance)
+	s.mu.@lock()
+	defer { s.mu.unlock() }
+	mut runtime := s.ensure_unlocked(instance)
 	runtime.note_client_config(cfg)
-	s.update_runtime(instance, runtime)
+	s.runtime[instance] = runtime
 }
 
 pub fn (mut s FeishuState) push_event(name string, snapshot RuntimeEventSnapshot) {
-	mut runtime := s.ensure(name)
+	s.mu.@lock()
+	defer { s.mu.unlock() }
+	mut runtime := s.ensure_unlocked(name)
 	runtime.push_event(snapshot, s.recent_event_limit)
-	s.update_runtime(name, runtime)
+	s.runtime[name] = runtime
+}
+
+// Token refresh commits only the cache fields, preserving concurrent activity.
+pub fn (mut s FeishuState) cache_tenant_access_token(name string, token string, expire_unix i64) {
+	s.mu.@lock()
+	defer { s.mu.unlock() }
+	mut runtime := s.ensure_unlocked(name)
+	runtime.cache_tenant_access_token(token, expire_unix)
+	s.runtime[name] = runtime
 }
 
 pub fn (mut s FeishuState) ping_interval_seconds(instance string) int {
@@ -150,14 +183,33 @@ pub fn (s &FeishuState) app_config(name string) !config.FeishuAppConfig {
 // ── Buffer Management ──
 
 pub fn (mut s FeishuState) register_stream_buffer(message_id string, stream_id string, app_name string, receive_id string, receive_id_type string, initial_content string) {
-	if message_id == '' {
-		return
-	}
-	now := time.now().unix_milli()
 	s.mu.@lock()
 	defer {
 		s.mu.unlock()
 	}
+	s.register_stream_buffer_unlocked(message_id, stream_id, app_name, receive_id, receive_id_type, initial_content)
+}
+
+// Caller holds FeishuState.mu across paired buffer/target publication. This
+// state-only transition invalidates captured asynchronous completion claims.
+pub fn (mut s FeishuState) register_stream_buffer_unlocked(message_id string, stream_id string, app_name string, receive_id string, receive_id_type string, initial_content string) {
+	if message_id == '' { return }
+	if old := s.buffers[message_id] {
+		s.revoke_creations_unlocked(old.stream_id)
+		s.revoke_initial_sends_unlocked(old.stream_id)
+	}
+	s.revoke_creations_unlocked(stream_id)
+	s.revoke_initial_sends_unlocked(stream_id)
+	s.register_stream_buffer_content_unlocked(message_id, stream_id, app_name, receive_id, receive_id_type, initial_content)
+}
+
+// Initial-send commit already owns admission and must not revoke current peers.
+fn (mut s FeishuState) register_stream_buffer_content_unlocked(message_id string, stream_id string, app_name string, receive_id string, receive_id_type string, initial_content string) {
+	if message_id == '' {
+		return
+	}
+	s.note_initial_send_message_unlocked(message_id)
+	now := time.now().unix_milli()
 	mut buf := s.buffers[message_id] or {
 		StreamBuffer{
 			message_id: message_id
@@ -165,6 +217,22 @@ pub fn (mut s FeishuState) register_stream_buffer(message_id string, stream_id s
 			last_flush: now
 		}
 	}
+	// A new owner or explicit content reset starts a new buffer lifecycle.
+	if (stream_id != '' && buf.stream_id != '' && stream_id != buf.stream_id)
+		|| (app_name != '' && buf.app != '' && app_name != buf.app) || initial_content != '' || buf.failure != none || buf.message_only || buf.message_update != none {
+		buf.content = ''
+		buf.rendered_content = ''
+		buf.sealed = false
+		buf.next_message_id = ''
+		buf.next_identity = none
+		buf.segment_index = 1
+		buf.rollover_content = ''
+	}
+	// A registration supersedes any in-flight claim. Same-owner queued text is
+	// retained for a later claim when this is only a metadata/context update.
+	buf.rollover = none
+	buf.finish = none
+	buf.failure = none
 	if app_name != '' {
 		buf.app = app_name
 	}
@@ -186,11 +254,123 @@ pub fn (mut s FeishuState) register_stream_buffer(message_id string, stream_id s
 		buf.last_delta = now
 		buf.last_flush = now
 	}
+	// Registration invalidates work captured before a rebind or content reset.
+	buf.message_update = none
+	buf.message_only = false
+	buf.sent_publication = none
+	buf.identity = &StreamBufferIdentity{}
+	buf.bridge_gate = none
+	buf.bridge_replica = false
+	buf.bridge_operation = none
+	buf.bind_pending = false
+	buf.bridge_owner = none
+	buf.bridge_generation = ''
+	buf.bridge_stream = ''
+	buf.bridge_app = ''
+	buf.generation = rand.uuid_v4()
 	s.buffers[message_id] = buf
+}
+
+// Capture a live buffer identity under its owner lock. Detached values alone
+// cannot authorize a later asynchronous writeback by message ID.
+pub fn (mut s FeishuState) buffer_snapshot(message_id string) ?StreamBuffer {
+	s.mu.@lock()
+	defer { s.mu.unlock() }
+	return s.buffer_snapshot_unlocked(message_id)
+}
+
+fn (mut s FeishuState) buffer_snapshot_unlocked(message_id string) ?StreamBuffer {
+	mut buf := s.buffers[message_id] or { return none }
+	if buf.identity == none {
+		buf.sent_publication = none
+		buf.identity = &StreamBufferIdentity{}
+		buf.generation = rand.uuid_v4()
+		s.buffers[message_id] = buf
+	}
+	return buf
+}
+
+pub fn (mut s FeishuState) pending_buffer_snapshots(now i64) []StreamBuffer {
+	s.mu.@lock()
+	defer { s.mu.unlock() }
+	mut pending := []StreamBuffer{}
+	for key in s.buffers.keys() {
+		buf := s.buffers[key] or { continue }
+		if !buf.message_only && buf.message_update == none && !buf.bridge_replica && buf.bridge_operation == none && !buf.bind_pending && !buf.sealed && buf.finish == none && buf.failure == none && buf.last_delta >= buf.last_flush && now - buf.last_flush >= 400 && buf.content.trim_space() != '' {
+			captured := s.buffer_snapshot_unlocked(key) or { continue }
+			pending << captured
+		}
+	}
+	return pending
+}
+
+fn (buf StreamBuffer) same_identity(other StreamBuffer) bool {
+	if other.message_only || other.message_update != none || other.bind_pending || other.bridge_operation != none {
+		return false
+	}
+	if owner := other.bridge_owner {
+		if !bridge_authority_live(owner) { return false }
+	}
+	identity := buf.identity or { return false }
+	current := other.identity or { return false }
+	return voidptr(identity) == voidptr(current)
+}
+
+pub fn (mut s FeishuState) buffer_snapshot_is_current(captured StreamBuffer) bool {
+	s.mu.@lock()
+	defer { s.mu.unlock() }
+	active := s.buffers[captured.message_id] or { return false }
+	return !active.bridge_replica && captured.same_identity(active) && active.finish == none && active.failure == none && active.sealed == captured.sealed && active.content == captured.content
+}
+
+pub fn (mut s FeishuState) commit_buffer_preview(captured StreamBuffer, rendered string, now i64) bool {
+	s.mu.@lock()
+	defer { s.mu.unlock() }
+	mut active := s.buffers[captured.message_id] or { return false }
+	if active.bridge_replica || !captured.same_identity(active) || active.finish != none || active.failure != none || active.sealed || active.last_flush != captured.last_flush || active.rendered_content != captured.rendered_content {
+		return false
+	}
+	// Record what was sent, but leave a concurrent delta eligible for the next
+	// flush, including deltas sharing the same millisecond timestamp.
+	active.rendered_content = rendered
+	if active.content == captured.content { active.last_flush = now }
+	s.buffers[captured.message_id] = active
+	return true
+}
+
+pub fn (mut s FeishuState) commit_buffer_finish(captured StreamBuffer, rendered string, segment_index int, now i64) bool {
+	s.mu.@lock()
+	defer { s.mu.unlock() }
+	active := s.buffers[captured.message_id] or { return false }
+	if active.finish != none { return false }
+	return s.commit_buffer_finish_unlocked(captured, rendered, segment_index, now)
+}
+
+fn (mut s FeishuState) commit_buffer_finish_unlocked(captured StreamBuffer, rendered string, segment_index int, now i64) bool {
+	mut active := s.buffers[captured.message_id] or { return false }
+	if active.bridge_replica || !captured.same_identity(active) || active.failure != none || active.sealed != captured.sealed || active.content != captured.content {
+		return false
+	}
+	active.finish = none
+	active.content = ''
+	active.rendered_content = rendered
+	active.last_flush = now
+	active.last_delta = now
+	active.sealed = true
+	active.next_message_id = ''
+	active.next_identity = none
+	active.segment_index = segment_index
+	s.buffers[captured.message_id] = active
+	return true
 }
 
 pub fn (mut s FeishuState) clear_buffer(message_id string) {
 	s.mu.@lock()
+	if old := s.buffers[message_id] {
+		s.revoke_creations_unlocked(old.stream_id)
+		s.revoke_initial_sends_unlocked(old.stream_id)
+	}
+	s.note_initial_send_message_unlocked(message_id)
 	s.buffers.delete(message_id)
 	s.mu.unlock()
 }
@@ -209,43 +389,76 @@ pub fn (mut s FeishuState) stream_id_for_buffer(message_id string) string {
 	return ''
 }
 
-pub fn (mut s FeishuState) clear_buffer_chain(message_id string) int {
-	if message_id == '' {
-		return 0
+// A release reports the ownership captured by the same transition that removes
+// the chain. Callers must not look up its stream in a separate preflight read.
+pub struct StreamBufferRelease {
+pub:
+	stream_id string
+	cleared   int
+}
+
+pub fn (mut s FeishuState) release_buffer_chain(message_id string, expected_stream_id string) ?StreamBufferRelease {
+	s.mu.@lock()
+	defer { s.mu.unlock() }
+	return s.release_buffer_chain_unlocked(message_id, expected_stream_id)
+}
+
+// Caller holds FeishuState.mu, including paired routing metadata cleanup.
+pub fn (mut s FeishuState) release_buffer_chain_unlocked(message_id string, expected_stream_id string) ?StreamBufferRelease {
+	if message_id == '' { return none }
+	root := s.buffers[message_id] or {
+		s.note_initial_send_message_unlocked(message_id)
+		return none
 	}
-	mut cleared := 0
+	if expected_stream_id != '' && root.stream_id != expected_stream_id { return none }
+	s.revoke_creations_unlocked(root.stream_id)
+	s.revoke_initial_sends_unlocked(root.stream_id)
 	mut current := message_id
+	mut cleared := 0
 	for current != '' {
-		mut next := ''
-		s.mu.@lock()
-		if buf := s.buffers[current] {
-			next = buf.next_message_id
-			s.buffers.delete(current)
-			cleared++
+		buf := s.buffers[current] or { break }
+		// A stale rollover link does not confer ownership of another stream's buffer.
+		if buf.stream_id != root.stream_id || (root.generation != '' && buf.generation != root.generation)
+			|| (root.app != '' && buf.app != root.app) {
+			break
 		}
-		s.mu.unlock()
-		current = next
+		s.note_initial_send_message_unlocked(current)
+		s.buffers.delete(current)
+		cleared++
+		if expected := buf.next_identity {
+			next := s.buffers[buf.next_message_id] or { break }
+			actual := next.identity or { break }
+			if voidptr(expected) != voidptr(actual) { break }
+		}
+		current = buf.next_message_id
 	}
-	return cleared
+	return StreamBufferRelease{ stream_id: root.stream_id, cleared: cleared }
+}
+
+pub fn (mut s FeishuState) clear_buffer_chain(message_id string) int {
+	released := s.release_buffer_chain(message_id, '') or { return 0 }
+	return released.cleared
 }
 
 pub fn (mut s FeishuState) clear_stream_buffers(stream_id string) int {
-	if stream_id == '' {
-		return 0
-	}
 	s.mu.@lock()
-	keys := s.buffers.keys()
-	s.mu.unlock()
+	defer { s.mu.unlock() }
+	return s.clear_stream_buffers_unlocked(stream_id)
+}
+
+// Caller holds FeishuState.mu, including paired routing metadata cleanup.
+pub fn (mut s FeishuState) clear_stream_buffers_unlocked(stream_id string) int {
+	if stream_id == '' { return 0 }
+	s.revoke_creations_unlocked(stream_id)
+	s.revoke_initial_sends_unlocked(stream_id)
 	mut cleared := 0
-	for key in keys {
-		s.mu.@lock()
-		buf := s.buffers[key] or {
-			s.mu.unlock()
-			continue
-		}
-		s.mu.unlock()
+	// Select and delete under one lock; linked IDs never expand stream ownership.
+	for key in s.buffers.keys() {
+		buf := s.buffers[key] or { continue }
 		if buf.stream_id == stream_id {
-			cleared += s.clear_buffer_chain(key)
+			s.note_initial_send_message_unlocked(key)
+			s.buffers.delete(key)
+			cleared++
 		}
 	}
 	return cleared
@@ -353,4 +566,12 @@ pub fn (mut s FeishuState) totals() (i64, i64, i64, i64, i64, i64) {
 		send_errors += runtime.send_errors
 	}
 	return connect_attempts, connect_successes, received_frames, acked_events, messages_sent, send_errors
+}
+
+// Only the initiating host marks mirrors; remote provider buffers stay writable.
+pub fn (mut s FeishuState) mark_bridge_replica_unlocked(message string) {
+	mut buf := s.buffers[message] or { return }
+	if buf.bridge_owner == none { return }
+	buf.bridge_replica = true
+	s.buffers[message] = buf
 }

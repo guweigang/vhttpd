@@ -20,6 +20,8 @@ pub:
 }
 
 pub fn route_session_frame(mut registry SessionRegistry, session_id string, link_id string, source_endpoint_id string, target_role string, frame WireFrame, pending_limit int) SessionRouteOutcome {
+	registry.mu.@lock()
+	defer { registry.mu.unlock() }
 	if session_id.trim_space() == '' {
 		return session_route_rejected(session_id, link_id, source_endpoint_id, frame,
 			'relay_session_missing_id')
@@ -28,9 +30,9 @@ pub fn route_session_frame(mut registry SessionRegistry, session_id string, link
 		return session_route_rejected(session_id, link_id, source_endpoint_id, frame,
 			'relay_session_missing_link_id')
 	}
-	targets := registry.targets(session_id, link_id, target_role, source_endpoint_id)
+	targets := registry.targets_unlocked(session_id, link_id, target_role, source_endpoint_id)
 	if targets.len == 0 {
-		registry.buffer_pending(session_id, link_id, frame, pending_limit) or {
+		registry.buffer_pending_unlocked(session_id, link_id, frame, pending_limit) or {
 			return session_route_rejected(session_id, link_id, source_endpoint_id, frame, err.msg())
 		}
 		return SessionRouteOutcome{
@@ -38,7 +40,7 @@ pub fn route_session_frame(mut registry SessionRegistry, session_id string, link
 			session_id:   session_id
 			link_id:      link_id
 			source_id:    source_endpoint_id
-			buffered_len: session_pending_len(registry, session_id, link_id)
+			buffered_len: session_pending_len_unlocked(registry, session_id, link_id)
 			trace_id:     frame.trace_id
 			frame_id:     frame.id
 		}
@@ -55,11 +57,13 @@ pub fn route_session_frame(mut registry SessionRegistry, session_id string, link
 }
 
 pub fn open_session_endpoint_and_drain(mut registry SessionRegistry, endpoint RelayEndpoint) ![]WireFrame {
-	registry.open_endpoint(endpoint)!
-	return registry.drain_pending(endpoint.session_id, endpoint.link_id)
+	registry.mu.@lock()
+	defer { registry.mu.unlock() }
+	registry.open_endpoint_unlocked(endpoint)!
+	return registry.drain_pending_unlocked(endpoint.session_id, endpoint.link_id)
 }
 
-fn session_pending_len(registry SessionRegistry, session_id string, link_id string) int {
+fn session_pending_len_unlocked(registry SessionRegistry, session_id string, link_id string) int {
 	session := registry.sessions[session_id] or { return 0 }
 	pending := session.pending_by_link[link_id] or { return 0 }
 	return pending.len

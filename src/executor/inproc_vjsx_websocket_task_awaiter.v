@@ -1,14 +1,7 @@
 module executor
 
-struct InProcVjsxWebSocketTaskAwaiter {}
-
-fn InProcVjsxWebSocketTaskAwaiter.result(done_ch chan bool, mut slot InProcVjsxWebSocketTaskSlot) !InProcVjsxWebSocketTaskResult {
-	select {
-		_ := <-done_ch {}
-		inproc_vjsx_lane_task_timeout {
-			return error('inproc_vjsx_executor_lane_task_timeout')
-		}
-	}
+fn (e InProcVjsxExecutor) await_websocket_result(done_ch chan bool, mut slot InProcVjsxWebSocketTaskSlot) !InProcVjsxWebSocketTaskResult {
+	e.await_task(done_ch, mut slot.control, inproc_vjsx_lane_task_timeout, 'inproc_vjsx_executor_lane_task_timeout')!
 	slot.mu.@lock()
 	result := slot.result
 	ready := slot.ready
@@ -22,11 +15,16 @@ fn InProcVjsxWebSocketTaskAwaiter.result(done_ch chan bool, mut slot InProcVjsxW
 	return result
 }
 
-fn InProcVjsxWebSocketTaskAwaiter.start(started_ch chan bool) ! {
+fn (e InProcVjsxExecutor) await_websocket_start(started chan bool, mut slot InProcVjsxWebSocketTaskSlot) ! {
 	select {
-		_ := <-started_ch {}
+		_ := <-started {
+		}
 		inproc_vjsx_websocket_queue_wait_timeout {
-			return error('inproc_vjsx_executor_websocket_queue_timeout')
+			e.cancel_task(mut slot.control, 'inproc_vjsx_executor_websocket_queue_timeout')
 		}
 	}
+	slot.control.mu.@lock()
+	reason := slot.control.reason
+	slot.control.mu.unlock()
+	if reason != '' { return error(reason) }
 }

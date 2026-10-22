@@ -1,4 +1,5 @@
 .PHONY: build vhttpd prod build-prod build-db prepare-build-src deps-core deps-vjsx deps-db deps-full doctor demo-vslim demo-ai demo-symfony demo-laravel demo-wordpress package-wp-plugin psr-matrix test test-fast test-php test-e2e test-inproc test-codexbot test-codexbot-fast test-codexbot-lifecycle test-profile-codexbot test-all
+.PHONY: lint-safety
 
 ROOT := $(CURDIR)
 SRC_DIR := $(ROOT)/src
@@ -22,7 +23,7 @@ VJSX_DIR ?= $(shell if [ -x "$(ROOT)/../vjsx/scripts/ensure-quickjs.sh" ]; then 
 LOCAL_QUICKJS ?= $(abspath $(ROOT)/../quickjs)
 VJS_QUICKJS_PATH ?= $(shell if [ -f "$(LOCAL_QUICKJS)/quickjs.c" ] && [ -f "$(LOCAL_QUICKJS)/quickjs-c-atomics.h" ] && grep -q 'QJS_VERSION_MAJOR' "$(LOCAL_QUICKJS)/quickjs.h" 2>/dev/null; then printf "%s" "$(LOCAL_QUICKJS)"; else VJS_QUICKJS_WORK_ROOT="$(ROOT)" "$(VJSX_DIR)/scripts/ensure-quickjs.sh"; fi)
 VJSX_FLAGS ?= -d build_quickjs
-V_TEST_FLAGS ?= -d vjsx_sqlite
+V_TEST_FLAGS ?= $(V_NOCACHE_FLAGS) -d vjsx_sqlite $(V_DB_FLAGS)
 V_ENV = VJS_QUICKJS_PATH="$(VJS_QUICKJS_PATH)"
 
 BUILD_STAGE_ROOT := $(ROOT)/tmp/vbuildsrc
@@ -121,6 +122,9 @@ deps-full:
 doctor:
 	@./scripts/doctor.sh
 
+lint-safety:
+	@bash $(ROOT)/scripts/lint_safety.sh
+
 demo-vslim:
 	@$(ROOT)/examples/run_demo.sh vslim
 
@@ -160,7 +164,7 @@ test: $(TEST_TARGETS)
 test-e2e:
 	@bash $(ROOT)/tests/e2e/run.sh
 
-test-fast:
+test-fast: lint-safety
 	@set -e; for test_file in $(FAST_TEST_FILES); do \
 		echo "==> v test $${test_file}"; \
 		$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_FLAGS) $(V_TEST_FLAGS) test "$${test_file}"; \

@@ -7,13 +7,13 @@ struct ProtocolIngressRuntime {
 	mcp    McpProtocolIngressPort
 }
 
-fn (hub ProtocolRuntimeHub) try_route_http(mut app App, mut ctx Context, method string, target string) ?veb.Result {
+fn (hub ProtocolRuntimeHub) try_route_http(mut app App, mut ctx Context, method string, target string, view HttpDispatchView) ?veb.Result {
 	req := new_protocol_http_request(ctx, method, target)
-	return hub.ingress.try_route_http_request(mut app, mut ctx, req)
+	return hub.ingress.try_route_http_request(mut app, mut ctx, req, view)
 }
 
-fn (rt ProtocolIngressRuntime) try_route_http_request(mut app App, mut ctx Context, req ProtocolHttpRequest) ?veb.Result {
-	if app.pipelines.has_protocol_http_override(req) {
+fn (rt ProtocolIngressRuntime) try_route_http_request(mut app App, mut ctx Context, req ProtocolHttpRequest, view HttpDispatchView) ?veb.Result {
+	if view.pipelines.has_protocol_http_override(req) {
 		return none
 	}
 	if result := rt.openai.try_route_http(mut app, mut ctx, req) {

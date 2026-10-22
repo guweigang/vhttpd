@@ -6,7 +6,33 @@ import upstream.transport
 import veb
 import worker
 
+// Streaming callbacks and batched executor results share one terminal owner.
+fn (mut state OpenAIMappedStreamProxyState) write_executor_mapping(mapping openai.OpenAIFrameMapping) !bool {
+	if state.done { return false }
+	if mapping.error != '' {
+		state.done = true
+		state.ensure_headers_written()!
+		OpenAIErrorResponseWriter.write_sse(mut state.conn, 'openai_executor_error', mapping.error, 'server_error')
+		return false
+	}
+	if mapping.done { state.done = true }
+	if mapping.content != '' || mapping.tool_calls.len > 0 {
+		state.ensure_headers_written()!
+		worker.WorkerHttpStreamWriter.write_chunk(mut state.conn, 'data: ${state.chunk_json(mapping)}\n\n')!
+	}
+	openai.OpenAIUsage.merge(mut state.usage, mapping.usage)
+	if mapping.done {
+		state.ensure_headers_written()!
+		state.write_usage_chunk()!
+		worker.WorkerHttpStreamWriter.write_chunk(mut state.conn, 'data: [DONE]\n\n')!
+		state.finish()!
+		return false
+	}
+	return true
+}
+
 fn OpenAIProxyRuntime.executor_stream(mut app App, mut ctx Context, plan openai.OpenAIResolvedPlan, method string, path string, req_id string, trace_id string, start_ms i64) veb.Result {
+	// veb retains socket ownership in reusable mode, including failure paths.
 	ctx.takeover_conn_reusable()
 	ctx.conn.set_write_timeout(time.infinite)
 	ctx.conn.set_read_timeout(time.infinite)
@@ -29,30 +55,8 @@ fn OpenAIProxyRuntime.executor_stream(mut app App, mut ctx Context, plan openai.
 		output_protocol:  plan.output_protocol
 		created:          int(time.now().unix())
 	}
-	stream_resp := app.openai_call_executor_stream(plan, method, path, req_id, trace_id, fn [mut state, mut client_conn] (raw string) !bool {
-		mapping := openai.OpenAIFrameMapping.from_plugin_result(raw)
-		if mapping.error != '' {
-			state.ensure_headers_written()!
-			OpenAIErrorResponseWriter.write_sse(mut client_conn, 'openai_executor_error',
-				mapping.error, 'server_error')
-			state.done = true
-			return false
-		}
-		if mapping.content != '' || mapping.tool_calls.len > 0 {
-			state.ensure_headers_written()!
-			worker.WorkerHttpStreamWriter.write_chunk(mut client_conn,
-				'data: ${state.chunk_json(mapping)}\n\n')!
-		}
-		openai.OpenAIUsage.merge(mut state.usage, mapping.usage)
-		if mapping.done && !state.done {
-			state.ensure_headers_written()!
-			state.write_usage_chunk()!
-			worker.WorkerHttpStreamWriter.write_chunk(mut client_conn, 'data: [DONE]\n\n')!
-			state.done = true
-			state.finish()!
-			return false
-		}
-		return true
+	stream_resp := app.openai_call_executor_stream(plan, method, path, req_id, trace_id, fn [mut state] (raw string) !bool {
+		return state.write_executor_mapping(openai.OpenAIFrameMapping.from_plugin_result(raw))!
 	}) or {
 		if !state.headers_written {
 			state.status_code = 502
@@ -64,7 +68,7 @@ fn OpenAIProxyRuntime.executor_stream(mut app App, mut ctx Context, plan openai.
 		if state.headers_written {
 			state.finish() or {}
 		}
-		client_conn.close() or {}
+		ctx.set_header(.connection, 'close')
 		app.emit('http.request', {
 			'method':      method.to_upper()
 			'path':        transport.WorkerHttpRequestCodec.normalize_path(path)
@@ -80,29 +84,15 @@ fn OpenAIProxyRuntime.executor_stream(mut app App, mut ctx Context, plan openai.
 	}
 	if !stream_resp.streamed {
 		for mapping in openai.OpenAIFrameMapping.executor_stream_mappings(stream_resp.response.result) {
-			if mapping.error != '' {
-				state.ensure_headers_written() or {}
-				OpenAIErrorResponseWriter.write_sse(mut client_conn, 'openai_executor_error',
-					mapping.error, 'server_error')
+			keep_streaming := state.write_executor_mapping(mapping) or {
 				state.done = true
 				break
 			}
-			if mapping.content != '' || mapping.tool_calls.len > 0 {
-				state.ensure_headers_written() or {}
-				worker.WorkerHttpStreamWriter.write_chunk(mut client_conn,
-					'data: ${state.chunk_json(mapping)}\n\n') or {}
-			}
-			openai.OpenAIUsage.merge(mut state.usage, mapping.usage)
-			if mapping.done && !state.done {
-				state.ensure_headers_written() or {}
-				state.write_usage_chunk() or {}
-				worker.WorkerHttpStreamWriter.write_chunk(mut client_conn, 'data: [DONE]\n\n') or {}
-				state.done = true
-				state.finish() or {}
-			}
+			if !keep_streaming { break }
 		}
 	}
 	if !state.done {
+		state.done = true
 		state.ensure_headers_written() or {}
 		state.write_usage_chunk() or {}
 		worker.WorkerHttpStreamWriter.write_chunk(mut client_conn, 'data: [DONE]\n\n') or {}

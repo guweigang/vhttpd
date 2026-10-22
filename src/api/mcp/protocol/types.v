@@ -1,8 +1,7 @@
 module protocol
 
-import net
 import sync
-import time
+import crypto.rand
 
 // ── MCP Session ──
 
@@ -16,7 +15,8 @@ pub mut:
 	started_at_unix          i64
 	last_activity_unix       i64
 	client_capabilities_json string
-	conn                     &net.TcpConn = unsafe { nil }
+	stream                   ?&SessionStream
+	dispatch                 ?&SessionDispatch
 	pending                  []string
 }
 
@@ -64,8 +64,17 @@ pub:
 
 // ── Session Utilities ──
 
-pub fn Session.generate_id() string {
-	return 'mcp_${time.now().unix_micro()}'
+// Session IDs are opaque correlation keys. Wall-clock precision cannot provide
+// uniqueness when independent initialize requests complete concurrently.
+pub fn Session.generate_id() !string {
+	bytes := rand.bytes(24)!
+	return 'mcp_${bytes.hex()}'
+}
+
+// Mutable queue storage belongs to McpState. Stream/dispatch references remain
+// observations governed by their existing identity and close owners.
+fn (session Session) snapshot_copy() Session {
+	return Session{ ...session, pending: session.pending.clone() }
 }
 
 pub fn Session.default_protocol_version() string {
@@ -81,6 +90,10 @@ pub fn McpState.normalize_sampling_capability_policy(raw string) string {
 }
 
 pub struct McpState {
+mut:
+	stopping       bool
+	stream_counter u64
+	streams        map[u64]&SessionStream
 pub mut:
 	mu                                      sync.Mutex
 	max_sessions                            int

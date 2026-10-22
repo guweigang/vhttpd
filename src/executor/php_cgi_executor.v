@@ -1,7 +1,5 @@
 module executor
 
-import net.unix
-import time
 import upstream.transport
 
 pub struct PhpCgiExecutor {}
@@ -40,45 +38,9 @@ pub fn (e PhpCgiExecutor) close() {
 }
 
 pub fn (e PhpCgiExecutor) dispatch_http(mut app AppFacade, req HttpLogicDispatchRequest) !HttpLogicDispatchOutcome {
-	_ = e
 	mut socket_port := worker_socket_port(app)
 	config_port := worker_backend_config_port(app)
-	selected_socket := socket_port.worker_backend_select_socket_for_kind(e.kind())!
-	mut conn := unix.connect_stream(selected_socket) or {
-		socket_port.on_worker_request_released(selected_socket)
-		return error(err.msg())
-	}
-	read_timeout := config_port.worker_backend_read_timeout_ms_for_kind(e.kind())
-	if read_timeout > 0 {
-		conn.set_read_timeout(time.millisecond * read_timeout)
-	}
-
-	// FastCGI executors can run in an additional pool with its own env.
-	env_overrides := config_port.worker_env_for_kind(e.kind())
-
-	original_path := if req.original_path != '' { req.original_path } else { req.path }
-	payload := transport.FastCgiCodec.encode_request(req.method, req.path, original_path, req.req,
-		req.remote_addr, req.trace_id, req.request_id, env_overrides)
-
-	conn.write_ptr(&payload[0], payload.len) or {
-		conn.close() or {}
-		socket_port.on_worker_request_finished(selected_socket)
-		return error(err.msg())
-	}
-
-	resp := transport.FastCgiCodec.decode_response(mut conn) or {
-		conn.close() or {}
-		socket_port.on_worker_request_finished(selected_socket)
-		return error('transport_error: decode fastcgi response failed: ${err.msg()}')
-	}
-
-	conn.close() or {}
-	socket_port.on_worker_request_finished(selected_socket)
-
-	return HttpLogicDispatchOutcome{
-		kind:     .response
-		response: resp
-	}
+	return e.dispatch_http_with_worker_ports(mut socket_port, config_port, req)
 }
 
 pub fn (e PhpCgiExecutor) open_websocket_session(mut app AppFacade, req WebSocketSessionOpenRequest) !WebSocketSessionOpenOutcome {

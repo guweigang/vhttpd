@@ -8,7 +8,7 @@ import { createCodexRpcHelpers } from "./codex-rpc-helpers.mjs";
 import { createCodexStatusHelpers } from "./codex-status-helpers.mjs";
 import { buildThreadStartParams, buildTurnStartParams } from "./codex-start-params.mjs";
 import { createBotTextHelpers } from "./bot-text-helpers.mjs";
-import { createFeishuSessionHelpers } from "./feishu-session-helpers.mjs";
+import { createFeishuSessionHelpers, completeReplyResponse } from "./feishu-session-helpers.mjs";
 import { normalizeMainInstanceAlias } from "./instance-alias.mjs";
 import { buildCodexPreflightCommands, ensureStreamCodexInstance, resolveCodexInstance } from "./codex-instance-policy.mjs";
 import { createItemRenderCoordinator } from "./item-render-coordinator.mjs";
@@ -41,6 +41,7 @@ import { mdBullet, mdInline, mdSection, mdText } from "./ui-text.mts";
 import { botDefaults } from "../config/config.mts";
 import providerConfig from "../config/provider-config.mts";
 import {
+  createReplyContext,
   appendStreamDraft,
   bindProjectToChat,
   clearSelectionScope,
@@ -212,6 +213,7 @@ const botTextHelpers = createBotTextHelpers({
 threadSessionCoordinatorDeps.threadBoundText = botTextHelpers.threadBoundText;
 
 const feishuSessionHelpers = createFeishuSessionHelpers({
+  createReplyContext,
   feishuText,
   helpText: botTextHelpers.helpText,
 });
@@ -613,7 +615,7 @@ export function createBotApp() {
     async websocket_upstream(frame) {
       frame.runtime.log("codexbot-app-ts upstream", CODEXBOT_TS_BUILD, frame.provider, frame.eventType, frame.target);
       if (frame.provider === "feishu" && (frame.eventType === "im.message.receive_v1" || frame.eventType === "card.action.trigger")) {
-        return routeFeishuCommand(frame);
+        return completeReplyResponse(await routeFeishuCommand(frame));
       }
       if (frame.provider === "codex" && frame.eventType === "codex.rpc.response") {
         return handleCodexRpcResponse(frame);

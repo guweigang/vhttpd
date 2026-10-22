@@ -4,6 +4,10 @@ import api.mcp.protocol as mcp_protocol
 import time
 
 fn McpRuntime.queue_message(mut app App, session_id string, raw string) mcp_protocol.QueueResult {
+	return McpRuntime.queue_message_for_dispatch(mut app, session_id, raw, none)
+}
+
+fn McpRuntime.queue_message_for_dispatch(mut app App, session_id string, raw string, expected ?&mcp_protocol.SessionDispatch) mcp_protocol.QueueResult {
 	if session_id == '' || raw == '' {
 		return mcp_protocol.QueueResult{
 			queued: false
@@ -14,11 +18,20 @@ fn McpRuntime.queue_message(mut app App, session_id string, raw string) mcp_prot
 	mut error_sampling_capability := false
 	mut session_trace_id := ''
 	mut session_request_id := ''
+	app.protocols.mcp.mu.@lock()
 	policy :=
 		mcp_protocol.McpState.normalize_sampling_capability_policy(app.protocols.mcp.sampling_capability_policy)
-	app.protocols.mcp.mu.@lock()
 	if mut session := app.protocols.mcp.sessions[session_id] {
-		session.last_activity_unix = time.now().unix()
+		if !app.protocols.mcp.queue_admitted_locked(session, expected) {
+			app.protocols.mcp.mu.unlock()
+			return mcp_protocol.QueueResult{}
+		}
+		now := time.now().unix()
+		if app.protocols.mcp.expire_session_locked(session_id, now) {
+			app.protocols.mcp.mu.unlock()
+			return mcp_protocol.QueueResult{}
+		}
+		session.last_activity_unix = now
 		session_trace_id = session.trace_id
 		session_request_id = session.request_id
 		if raw.contains('"method":"sampling/createMessage"')
@@ -43,18 +56,19 @@ fn McpRuntime.queue_message(mut app App, session_id string, raw string) mcp_prot
 			if session.pending.len > max_pending {
 				drop_count := session.pending.len - max_pending
 				session.pending = session.pending[drop_count..].clone()
-				app.mu.@lock()
 				app.protocols.mcp.stat_pending_dropped_total += drop_count
-				app.mu.unlock()
 			}
 		}
 		app.protocols.mcp.sessions[session_id] = session
+	} else {
+		app.protocols.mcp.mu.unlock()
+		return mcp_protocol.QueueResult{}
 	}
+	if warn_sampling_capability { app.protocols.mcp.stat_sampling_capability_warnings_total++ }
+	if drop_sampling_capability { app.protocols.mcp.stat_sampling_capability_dropped_total++ }
+	if error_sampling_capability { app.protocols.mcp.stat_sampling_capability_errors_total++ }
 	app.protocols.mcp.mu.unlock()
 	if warn_sampling_capability {
-		app.mu.@lock()
-		app.protocols.mcp.stat_sampling_capability_warnings_total
-		app.mu.unlock()
 		app.emit('mcp.capability.warning', {
 			'session_id':    session_id
 			'request_id':    session_request_id
@@ -63,9 +77,6 @@ fn McpRuntime.queue_message(mut app App, session_id string, raw string) mcp_prot
 		})
 	}
 	if drop_sampling_capability {
-		app.mu.@lock()
-		app.protocols.mcp.stat_sampling_capability_dropped_total
-		app.mu.unlock()
 		app.emit('mcp.capability.drop', {
 			'session_id': session_id
 			'request_id': session_request_id
@@ -78,9 +89,6 @@ fn McpRuntime.queue_message(mut app App, session_id string, raw string) mcp_prot
 		}
 	}
 	if error_sampling_capability {
-		app.mu.@lock()
-		app.protocols.mcp.stat_sampling_capability_errors_total
-		app.mu.unlock()
 		app.emit('mcp.capability.error', {
 			'session_id':  session_id
 			'request_id':  session_request_id

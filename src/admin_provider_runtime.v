@@ -1,6 +1,6 @@
 module main
 
-import json
+import json2 as json
 import veb
 
 @['/admin/providers/specs'; get]
@@ -11,7 +11,7 @@ pub fn (mut app App) admin_provider_specs(mut ctx Context) veb.Result {
 			'admin_endpoint': 'providers.specs'
 		})
 	}
-	body := json.encode(app.admin_provider_specs_snapshot())
+	body := json.encode(app.admin_provider_specs_snapshot(), escape_unicode: true, time_as_unix: true)
 	return admin_data_plane_json(mut app, mut ctx, 'GET', req, 200, body, {
 		'admin_endpoint': 'providers.specs'
 	})
@@ -25,7 +25,7 @@ pub fn (mut app App) admin_provider_runtimes(mut ctx Context) veb.Result {
 			'admin_endpoint': 'providers.runtimes'
 		})
 	}
-	body := json.encode(app.admin_provider_runtimes_snapshot())
+	body := json.encode(app.admin_provider_runtimes_snapshot(), escape_unicode: true, time_as_unix: true)
 	return admin_data_plane_json(mut app, mut ctx, 'GET', req, 200, body, {
 		'admin_endpoint': 'providers.runtimes'
 	})

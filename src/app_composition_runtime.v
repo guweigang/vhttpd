@@ -2,14 +2,15 @@ module main
 
 import admin
 import config
-import json
-import os
+import logging
+import log
 import relay
 import server_lifecycle
 import sync
-import time
 import executor
 import runtime_plan
+import http_runtime
+import process_runtime
 
 struct DataPlaneRuntime {
 mut:
@@ -34,21 +35,26 @@ mut:
 
 struct ControlPlaneRuntime {
 mut:
-	mu         sync.Mutex
-	admin      admin.AdminState
-	http_stats HttpStats
-	event_log  string
+	mu                sync.Mutex
+	admin             admin.AdminState
+	http_stats        HttpStats
+	http_observations HttpObservations
+	event_log         string
 }
 
 struct ProcessLifecycle {
 mut:
-	started_at_unix   i64
-	data_plane_scheme string = 'http'
+	shutdown                 &process_runtime.ShutdownOwner = &process_runtime.ShutdownOwner{}
+	http_admission_installed bool
+	http                     &http_runtime.Owner   = &http_runtime.Owner{}
+	admin_http               &http_runtime.Owner   = &http_runtime.Owner{}
+	internal_admin           &InternalAdminRuntime = &InternalAdminRuntime{}
+	started_at_unix          i64
+	data_plane_scheme        string = 'http'
 }
 
 fn (mut control ControlPlaneRuntime) emit(kind string, fields map[string]string) {
 	control.mu.@lock()
-	defer { control.mu.unlock() }
 	if kind == 'http.request' {
 		control.http_stats.inc_requests()
 		status := (fields['status'] or { '0' }).int()
@@ -65,15 +71,17 @@ fn (mut control ControlPlaneRuntime) emit(kind string, fields map[string]string)
 	if kind.starts_with('admin.') {
 		control.http_stats.inc_admin_actions()
 	}
-	mut row := map[string]string{}
-	row['type'] = kind
-	row['ts'] = '${time.now().unix()}'
-	for key, value in fields {
-		row[key] = value
+	path := control.event_log
+	if path == '' {
+		control.mu.unlock()
+		return
 	}
-	mut file := os.open_append(control.event_log) or { return }
-	defer { file.close() }
-	file.writeln(json.encode(row)) or {}
+	logging.append_line(path, logging.RuntimeLogger.event_json(kind, fields)) or {
+		control.mu.unlock()
+		log.error('[vhttpd] event_log append failed path=${path}: ${err.msg()}')
+		return
+	}
+	control.mu.unlock()
 }
 
 fn (mut control ControlPlaneRuntime) stats_snapshot(ctx admin.RuntimeContext) executor.AdminRuntimeStats {

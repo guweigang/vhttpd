@@ -8,15 +8,20 @@ fn (mut app App) preview_runtime_plan_replacement(config_path string) !RuntimePl
 	if normalized_path == '' {
 		return error('runtime_plan_replacement_missing_config')
 	}
+	read := app.begin_replacement_preview_read()
 	next_plan := config.load_runtime_plan_file(normalized_path)!
-	preview := app.preview_runtime_plan_replacement_for_plan(normalized_path, next_plan)
-	app.record_runtime_plan_replacement_preview(preview)
+	preview := runtime_plan_replacement_preview_for_base(normalized_path, next_plan, read.base)
+	app.record_replacement_preview_read(read, preview)
 	return preview
 }
 
 fn (mut app App) preview_runtime_plan_replacement_for_plan(config_path string, next_plan runtime_plan.RuntimePlan) RuntimePlanReplacementPreview {
-	diff := runtime_plan.diff_runtime_plan_replacement(app.plan, next_plan)
-	return runtime_plan_replacement_preview_from_diff(config_path, app.plan, next_plan, diff)
+	return runtime_plan_replacement_preview_for_base(config_path, next_plan, app.replacement_base_snapshot())
+}
+
+fn runtime_plan_replacement_preview_for_base(config_path string, next_plan runtime_plan.RuntimePlan, base RuntimePlanReplacementBase) RuntimePlanReplacementPreview {
+	diff := runtime_plan.diff_runtime_plan_replacement(base.plan, next_plan)
+	return runtime_plan_replacement_preview_from_diff(config_path, base.plan, next_plan, diff)
 }
 
 fn runtime_plan_replacement_preview_from_diff(config_path string, current_plan runtime_plan.RuntimePlan, next_plan runtime_plan.RuntimePlan, diff runtime_plan.PlanReplacementDiff) RuntimePlanReplacementPreview {

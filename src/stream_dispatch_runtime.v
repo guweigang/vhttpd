@@ -1,6 +1,5 @@
 module main
 
-import dispatch
 import upstream.transport
 import net
 import time
@@ -30,13 +29,7 @@ fn DispatchStreamSession.best_effort_close(rt StreamRuntimeContext, req_id strin
 	rt.dispatch_close(req_id, trace_id, state, reason) or { return }
 }
 
-fn HttpStreamRuntime.via_dispatch(mut app App, mut ctx Context, method string, path string, req_id string, trace_id string, remote_addr string) ?veb.Result {
-	stream_runtime := app.build_stream_runtime_context()
-	return HttpStreamRuntime.dispatch(mut app, stream_runtime, mut ctx, method, path, req_id,
-		trace_id, remote_addr)
-}
-
-fn HttpStreamRuntime.dispatch(mut app App, rt StreamRuntimeContext, mut ctx Context, method string, path string, req_id string, trace_id string, remote_addr string) ?veb.Result {
+fn HttpStreamRuntime.dispatch(rt StreamRuntimeContext, mut ctx Context, method string, path string, req_id string, trace_id string, remote_addr string) ?veb.Result {
 	normalized_path, query_string := transport.WorkerHttpRequestCodec.normalize_request_target(path)
 	query := transport.WorkerHttpRequestCodec.parse_query_map(query_string)
 	headers := transport.WorkerHttpRequestCodec.header_map_from_request(ctx.req)
@@ -44,24 +37,21 @@ fn HttpStreamRuntime.dispatch(mut app App, rt StreamRuntimeContext, mut ctx Cont
 	open_resp := rt.dispatch_open(method, normalized_path, ctx.req.data, remote_addr, req_id,
 		trace_id, query, headers) or { return none }
 	if failure := KernelDispatchFailureMapper.from_stream_response(open_resp) {
-		return HttpResponseRuntime.delivery_outcome(mut app, mut ctx, http_ingress_request(method,
-			path, path, '', remote_addr, req_id, trace_id, start_ms), dispatch.outcome_with_metadata(dispatch.response_outcome(500, {
-			'content-type':          'text/plain; charset=utf-8'
-			'x-vhttpd-error-class':  failure.error_class
-			'x-vhttpd-stream-mode':  'dispatch'
-			'x-vhttpd-stream-stage': 'open'
-		}, 'Internal Server Error'), {
-			'error_class':  failure.error_class
-			'error':        failure.error
-			'stream_mode':  'dispatch'
-			'stream_stage': 'open'
-		}), none)
+		return rt.render_open_failure_fn(mut ctx, http_ingress_request(method,
+			path, path, '', remote_addr, req_id, trace_id, start_ms), failure)
 	}
 	if !open_resp.handled {
 		return none
 	}
 	delivery := stream_dispatch_open_delivery_outcome(open_resp)
 	ctx.takeover_conn()
+	// Once open is handled, this scope owns both the logical stream and HTTP socket.
+	mut state := open_resp.state.clone()
+	mut close_reason := 'completed'
+	defer {
+		DispatchStreamSession.best_effort_close(rt, req_id, trace_id, state, close_reason)
+		ctx.conn.close() or {}
+	}
 	status := 200
 	stream_type := delivery.metadata['stream_type'] or { 'sse' }
 	content_type := delivery.headers['content-type'] or { 'text/event-stream' }
@@ -73,30 +63,29 @@ fn HttpStreamRuntime.dispatch(mut app App, rt StreamRuntimeContext, mut ctx Cont
 		response_headers['x-accel-buffering'] = 'no'
 		worker.WorkerHttpStreamWriter.write_headers_conn(mut ctx.conn, status, content_type,
 			response_headers, false) or {
-			DispatchStreamSession.best_effort_close(rt, req_id, trace_id, open_resp.state,
-				'client_write_error')
+			close_reason = 'client_write_error'
 			return veb.no_result()
 		}
 	} else {
 		worker.WorkerHttpStreamWriter.write_headers_conn(mut ctx.conn, status, content_type,
 			response_headers, true) or {
-			DispatchStreamSession.best_effort_close(rt, req_id, trace_id, open_resp.state,
-				'client_write_error')
+			close_reason = 'client_write_error'
 			return veb.no_result()
 		}
 	}
 	if method.to_upper() != 'HEAD' {
 		HttpStreamChunkWriter.write_dispatch_chunks(mut ctx.conn, stream_type, open_resp.chunks) or {
-			DispatchStreamSession.best_effort_close(rt, req_id, trace_id, open_resp.state,
-				'client_write_error')
+			close_reason = 'client_write_error'
 			return veb.no_result()
 		}
 	}
-	mut state := open_resp.state.clone()
-	mut done := open_resp.done
+	// HEAD owns the opened logical stream, but never consumes its body.
+	// Infinite streams must still reach the deferred close and socket release.
+	mut done := open_resp.done || method.to_upper() == 'HEAD'
 	for !done {
 		next_resp := rt.dispatch_next(method, normalized_path, remote_addr, req_id, trace_id,
 			query, headers, state) or {
+			close_reason = 'transport_error'
 			rt.emit('http.stream.error', {
 				'method':      method.to_upper()
 				'path':        transport.WorkerHttpRequestCodec.normalize_path(path)
@@ -108,6 +97,7 @@ fn HttpStreamRuntime.dispatch(mut app App, rt StreamRuntimeContext, mut ctx Cont
 			break
 		}
 		if failure := KernelDispatchFailureMapper.from_stream_response(next_resp) {
+			close_reason = failure.error_class
 			rt.emit('http.stream.error', {
 				'method':      method.to_upper()
 				'path':        transport.WorkerHttpRequestCodec.normalize_path(path)
@@ -122,17 +112,14 @@ fn HttpStreamRuntime.dispatch(mut app App, rt StreamRuntimeContext, mut ctx Cont
 		done = next_resp.done
 		if method.to_upper() != 'HEAD' {
 			HttpStreamChunkWriter.write_dispatch_chunks(mut ctx.conn, stream_type, next_resp.chunks) or {
-				DispatchStreamSession.best_effort_close(rt, req_id, trace_id, state,
-					'client_write_error')
+				close_reason = 'client_write_error'
 				return veb.no_result()
 			}
 		}
 	}
-	DispatchStreamSession.best_effort_close(rt, req_id, trace_id, state, 'completed')
-	if stream_type != 'sse' {
-		ctx.conn.write_string('0\r\n\r\n') or {}
+	if stream_type != 'sse' && method.to_upper() != 'HEAD' {
+		worker.WorkerHttpStreamWriter.write_final_chunk(mut ctx.conn) or { close_reason = 'client_write_error' }
 	}
-	ctx.conn.close() or {}
 	rt.emit('http.request', {
 		'method':          method.to_upper()
 		'path':            transport.WorkerHttpRequestCodec.normalize_path(path)

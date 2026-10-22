@@ -39,7 +39,7 @@ final class NotificationLifecycleRouter
                         'target' => $context['response_message_id'],
                         'stream_id' => $context['stream_id'],
                         'text' => $delta,
-                        'metadata' => ['mode' => 'append'],
+                        'metadata' => ['mode' => 'append', 'stream_generation' => (string) ($context['stream_generation'] ?? '')],
                     ]));
                 }
             }
@@ -65,7 +65,7 @@ final class NotificationLifecycleRouter
                         'target' => $context['response_message_id'],
                         'message_type' => 'interactive',
                         'content' => $this->errorHelper->buildErrorCard($errorMsg),
-                    ]));
+                    ], $context));
                 }
             }
             return ['handled' => true];
@@ -103,6 +103,7 @@ final class NotificationLifecycleRouter
                         'metadata' => [
                             'status' => 'completed',
                             'mode' => 'finish',
+                            'stream_generation' => (string) ($context['stream_generation'] ?? ''),
                         ],
                     ]));
                 }

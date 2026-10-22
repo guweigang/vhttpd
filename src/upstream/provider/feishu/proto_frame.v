@@ -1,6 +1,6 @@
 module feishu
 
-import json
+import json2 as json
 import net.urllib
 
 // ── Protobuf Encoding ──
@@ -298,7 +298,7 @@ pub fn (frame RuntimeProtoFrame) ack(status int, headers_ map[string]string, dat
 		code:    if status > 0 { status } else { 200 }
 		headers: headers_.clone()
 		data:    data
-	})
+	}, escape_unicode: true, time_as_unix: true)
 	return RuntimeProtoFrame{
 		seq_id:           frame.seq_id
 		log_id:           frame.log_id

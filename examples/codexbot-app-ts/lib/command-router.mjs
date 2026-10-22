@@ -33,6 +33,7 @@ export function createFeishuCommandRouter(deps) {
     }
     const text = inbound.text;
     const session = {
+      instance: frame.instance || "main",
       chatId: inbound.chatId,
       sessionKey: inbound.sessionKey || inbound.chatId,
       replyTarget: inbound.replyTarget || inbound.chatId,

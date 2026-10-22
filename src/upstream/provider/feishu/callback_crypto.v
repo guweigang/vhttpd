@@ -66,7 +66,7 @@ pub fn CallbackChallengeResponse.decrypt_payload(encrypt_key string, payload str
 	}
 	key := sha256.sum(encrypt_key.bytes())
 	iv := key[..aes.block_size].clone()
-	mut block := aes.new_cipher(key)
+	mut block := aes.new_cipher(key)!
 	mut mode := cipher.new_cbc(block, iv)
 	mut plaintext := []u8{len: ciphertext.len}
 	mode.decrypt_blocks(mut plaintext, ciphertext)

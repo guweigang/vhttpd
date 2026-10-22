@@ -13,11 +13,11 @@ pub:
 
 pub struct RegistrationResult {
 pub:
-	accepted   bool
-	node_id    string
-	relay_id   string
-	trace_id   string
-	error      string
+	accepted       bool
+	node_id        string
+	relay_id       string
+	trace_id       string
+	error          string
 	retry_after_ms int
 }
 
@@ -36,18 +36,18 @@ pub fn registration_request_from_descriptor(descriptor RelayDescriptor, trace_id
 pub fn registration_hello_frame(req RegistrationRequest) !WireFrame {
 	validate_registration_request(req)!
 	return WireFrame{
-		version:    wire_version
-		kind:       .hello
-		id:         'relay-hello:${req.node_id}'
-		trace_id:   req.trace_id
-		metadata:   {
+		version:  wire_version
+		kind:     .hello
+		id:       'relay-hello:${req.node_id}'
+		trace_id: req.trace_id
+		metadata: {
 			'node_id':      req.node_id
 			'relay_id':     req.relay_id
 			'mode':         req.mode.str()
 			'carrier':      req.carrier
 			'max_channels': req.max_channels.str()
 		}
-		headers:    registration_auth_headers(req)
+		headers:  registration_auth_headers(req)
 	}
 }
 
@@ -134,4 +134,18 @@ fn registration_auth_headers(req RegistrationRequest) map[string]string {
 	return {
 		'authorization': 'Bearer ${req.token}'
 	}
+}
+
+// Authenticate against the path-bound descriptor without registering or mutating runtime state.
+pub fn connection_probe_ack(frame WireFrame, descriptor RelayDescriptor) !WireFrame {
+	if frame.kind != .ping || frame.metadata['purpose'] != 'connection-test-v1' || frame.metadata['relay_id'] != descriptor.id {
+		return error('relay_probe_mismatch')
+	}
+	result := accept_registration(WireFrame{ ...frame, kind: .hello }, descriptor.token)!
+	if !result.accepted { return error('relay_probe_unauthorized') }
+	ack := registration_ack_frame(result)
+	return WireFrame{ ...ack, kind: .pong, metadata: {
+		...ack.metadata
+		'purpose': 'connection-test-v1'
+	} }
 }

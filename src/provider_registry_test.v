@@ -55,6 +55,7 @@ fn test_provider_runtime_snapshots_expose_registered_runtime() {
 		}
 	}
 	app.register_provider_spec(ProviderSpec{
+		lifecycle_ctx:    provider.RuntimeContext.noop()
 		name:             'ollama'
 		enabled:          true
 		has_handler:      false
@@ -118,6 +119,7 @@ fn test_provider_runtime_settings_apply_refreshes_admin_spec_driver() {
 		})
 	}
 	app.register_provider_spec(ProviderSpec{
+		lifecycle_ctx:    provider.RuntimeContext.noop()
 		name:             'feishu'
 		enabled:          true
 		has_handler:      true
@@ -222,6 +224,7 @@ fn test_provider_enabled_and_runtime_snapshot_use_host() {
 		}
 	}
 	app.register_provider_spec(ProviderSpec{
+		lifecycle_ctx:    provider.RuntimeContext.noop()
 		name:             'test-provider'
 		enabled:          true
 		has_handler:      false
@@ -750,46 +753,49 @@ fn test_provider_runtime_lifecycle_helpers_delegate_codex_runtime() {
 	assert app.providers.codex.runtime.last_error == 'test-close'
 }
 
-fn test_db_runtime_snapshot_without_compiled_support() {
-	mut app := App{
-		transport: TransportRuntimeHub{
-			db: dbx.Runtime.from_settings(provider.DbRuntimeSettings{
-				enabled: true
-				socket:  'tmp/vhttpd-db.sock'
-				driver:  'mysql'
-			})
-		}
-	}
-	assert !dbx.Runtime.compiled()
-	assert !app.provider_bootstrap_enabled('db')
-	snapshot := app.db_runtime_snapshot()
-	assert snapshot.contains('tmp/vhttpd-db.sock')
-	assert snapshot.contains('"compiled":false')
-	assert snapshot.contains('"last_error":"db_not_compiled"')
-}
-
-fn test_db_runtime_dispatch_reports_not_compiled() {
-	mut app := App{
-		transport: TransportRuntimeHub{
-			db: dbx.Runtime{
-				enabled: true
-				socket:  'tmp/vhttpd-db.sock'
-				driver:  'mysql'
+// These assertions cover the build without the DB feature; run this file with WITH_DB=0 too.
+$if !enable_db ? {
+	fn test_db_runtime_snapshot_without_compiled_support() {
+		mut app := App{
+			transport: TransportRuntimeHub{
+				db: dbx.Runtime.from_settings(provider.DbRuntimeSettings{
+					enabled: true
+					socket:  'tmp/vhttpd-db.sock'
+					driver:  'mysql'
+				})
 			}
 		}
+		assert !dbx.Runtime.compiled()
+		assert !app.provider_bootstrap_enabled('db')
+		snapshot := app.db_runtime_snapshot()
+		assert snapshot.contains('tmp/vhttpd-db.sock')
+		assert snapshot.contains('"compiled":false')
+		assert snapshot.contains('"last_error":"db_not_compiled"')
 	}
-	invalid := app.db_runtime_dispatch(dbx.Request{
-		mode: 'worker'
-		op:   'ping'
-	})
-	assert !invalid.ok
-	assert invalid.error == 'invalid_mode'
-	assert invalid.driver == 'mysql'
-	resp := app.db_runtime_dispatch(dbx.Request{
-		mode: 'db'
-		op:   'ping'
-	})
-	assert !resp.ok
-	assert resp.error == 'db_not_compiled'
-	assert resp.driver == 'mysql'
+
+	fn test_db_runtime_dispatch_reports_not_compiled() {
+		mut app := App{
+			transport: TransportRuntimeHub{
+				db: dbx.Runtime{
+					enabled: true
+					socket:  'tmp/vhttpd-db.sock'
+					driver:  'mysql'
+				}
+			}
+		}
+		invalid := app.db_runtime_dispatch(dbx.Request{
+			mode: 'worker'
+			op:   'ping'
+		})
+		assert !invalid.ok
+		assert invalid.error == 'invalid_mode'
+		assert invalid.driver == 'mysql'
+		resp := app.db_runtime_dispatch(dbx.Request{
+			mode: 'db'
+			op:   'ping'
+		})
+		assert !resp.ok
+		assert resp.error == 'db_not_compiled'
+		assert resp.driver == 'mysql'
+	}
 }

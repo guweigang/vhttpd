@@ -2,6 +2,7 @@ module transport
 
 pub fn classify_worker_backend_error(err_msg string) (int, string) {
 	msg := err_msg.to_lower()
+	if msg.contains('worker_slot_restarted') { return 503, 'worker_slot_restarted' }
 	if msg.contains('all workers busy') {
 		return 503, 'worker_pool_exhausted'
 	}

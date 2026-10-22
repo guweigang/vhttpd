@@ -5,6 +5,7 @@ import net.websocket as net_ws
 import time
 import upstream
 import codex
+import connection_runtime
 
 // ── Initialize handshake ────────────────────────────────────────────────
 // Must be called right after WebSocket connect, before any other RPC.
@@ -28,9 +29,10 @@ fn (mut app App) codex_send_initialized(instance string, mut conn net_ws.Client)
 	log.info('[codex] 🤝 sending initialized notification instance=${codex.ProviderRuntime.normalize_instance(instance)} ...')
 	msg := codex.RpcFrame.notification('initialized', '{}')
 	conn.write_string(msg)!
-	mut rt := app.codex_runtime_ensure_instance(instance)
-	rt.mark_initialized()
-	app.providers.codex.update(instance, rt)
+	app.providers.codex_runtime_mutate[bool](instance, fn (mut rt codex.ProviderRuntime) bool {
+		rt.mark_initialized()
+		return true
+	})
 	app.emit('codex.rpc.sent', {
 		'method':   'initialized'
 		'instance': codex.ProviderRuntime.normalize_instance(instance)
@@ -58,8 +60,11 @@ fn (mut app App) codex_send_thread_start(instance string, mut conn net_ws.Client
 
 // Called from run_websocket_upstream_provider after connect + on_connected.
 // Sends initialize request, waits briefly for response, then sends initialized.
-fn (mut app App) codex_post_connect_handshake(instance string, mut conn net_ws.Client) {
+fn (mut app App) codex_post_connect_handshake(instance string, mut session connection_runtime.Session, mut conn net_ws.Client) {
+	if session.stopped() { return }
 	app.codex_send_initialize(instance, mut conn) or {
+		session.note_reason('handshake:initialize:${err}')
+		session.request_stop()
 		app.emit('codex.handshake.failed', {
 			'phase':    'initialize'
 			'instance': codex.ProviderRuntime.normalize_instance(instance)
@@ -68,8 +73,10 @@ fn (mut app App) codex_post_connect_handshake(instance string, mut conn net_ws.C
 		return
 	}
 	// Small delay to allow the initialize response to arrive via the message callback
-	time.sleep(200 * time.millisecond)
+	if !session.wait(200 * time.millisecond) { return }
 	app.codex_send_initialized(instance, mut conn) or {
+		session.note_reason('handshake:initialized:${err}')
+		session.request_stop()
 		app.emit('codex.handshake.failed', {
 			'phase':    'initialized'
 			'instance': codex.ProviderRuntime.normalize_instance(instance)
@@ -79,8 +86,10 @@ fn (mut app App) codex_post_connect_handshake(instance string, mut conn net_ws.C
 	}
 
 	// Wait a bit and send thread/start to have an active thread
-	time.sleep(200 * time.millisecond)
+	if !session.wait(200 * time.millisecond) { return }
 	app.codex_send_thread_start(instance, mut conn) or {
+		session.note_reason('handshake:thread/start:${err}')
+		session.request_stop()
 		app.emit('codex.handshake.failed', {
 			'phase':    'thread/start'
 			'instance': codex.ProviderRuntime.normalize_instance(instance)
@@ -89,9 +98,11 @@ fn (mut app App) codex_post_connect_handshake(instance string, mut conn net_ws.C
 		return
 	}
 
-	mut rt := app.codex_runtime_ensure_instance(instance)
-	rt.attach_connection(conn)
-	app.providers.codex.update(instance, rt)
+	client := &conn
+	app.providers.codex_runtime_mutate[bool](instance, fn [client] (mut rt codex.ProviderRuntime) bool {
+		rt.attach_connection(client)
+		return true
+	})
 
 	app.emit('codex.handshake.completed', {
 		'phase':    'initialized'
@@ -104,10 +115,10 @@ fn (mut app App) codex_post_connect_handshake(instance string, mut conn net_ws.C
 fn (mut app App) codex_provider_send(req upstream.UpstreamSendRequest) !upstream.UpstreamSendResult {
 	instance := codex.ProviderRuntime.normalize_instance(req.instance)
 	rt := app.providers.codex.snapshot(instance)
-	mut conn := rt.connection()
+	mut conn := rt.connection() or { return error('codex provider not connected') }
 	connected := rt.is_connected()
 
-	if isnil(conn) || !connected {
+	if !connected {
 		return error('codex provider not connected')
 	}
 

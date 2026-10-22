@@ -14,6 +14,8 @@ pub enum HttpLogicDispatchKind {
 
 pub struct HttpLogicDispatchRequest {
 pub:
+	// Borrowed for synchronous dispatch only; the HTTP request owns this state.
+	timing        ?&HttpRequestTiming
 	method        string
 	path          string
 	original_path string
@@ -31,25 +33,47 @@ pub:
 	stream_start  transport.WorkerStreamFrame
 	upstream_plan transport.WorkerUpstreamPlanFrame
 pub mut:
-	conn &unix.StreamConn = unsafe { nil }
+	conn  ?&unix.StreamConn
+	lease ?&WorkerRequestLease
 }
 
+// Discard only unclaimed ownership. A transferred connection and its accounting
+// remain with the consumer that took it; discard must not call finish_worker.
 pub fn (mut outcome HttpLogicDispatchOutcome) close_live_conn() {
-	if isnil(outcome.conn) {
+	if mut lease := outcome.lease {
+		outcome.conn = none
+		lease.finish_owned(true)
 		return
 	}
-	outcome.conn.close() or {}
+	mut conn := outcome.take_live_conn() or { return }
+	conn.close() or {}
+}
+
+// Transfer closing responsibility to the stream renderer or cleanup path.
+pub fn (mut outcome HttpLogicDispatchOutcome) take_live_conn() ?&unix.StreamConn {
+	if mut lease := outcome.lease {
+		outcome.conn = none
+		return lease.take_connection()
+	}
+	conn := outcome.conn
+	outcome.conn = none
+	return conn
+}
+
+pub fn (outcome HttpLogicDispatchOutcome) finish_worker() {
+	if mut lease := outcome.lease { lease.finish() }
 }
 
 // ── WebSocket session types ──
 
 pub struct WebSocketSessionOpenRequest {
 pub:
-	req         http.Request
-	remote_addr string
-	path        string
-	request_id  string
-	trace_id    string
+	register_conn_fn fn (int) bool @[required]
+	req              http.Request
+	remote_addr      string
+	path             string
+	request_id       string
+	trace_id         string
 }
 
 pub struct WebSocketSessionOpenOutcome {
@@ -59,7 +83,33 @@ pub:
 	body        string
 	socket_path string
 pub mut:
-	conn &unix.StreamConn = unsafe { nil }
+	conn  ?&unix.StreamConn
+	lease ?&WorkerRequestLease
+}
+
+pub fn (mut outcome WebSocketSessionOpenOutcome) take_live_conn() ?&unix.StreamConn {
+	if mut lease := outcome.lease {
+		outcome.conn = none
+		return lease.take_connection()
+	}
+	conn := outcome.conn
+	outcome.conn = none
+	return conn
+}
+
+// As with HTTP results, discarding a copy cannot finish a transferred lease.
+pub fn (mut outcome WebSocketSessionOpenOutcome) close_live_conn() {
+	if mut lease := outcome.lease {
+		outcome.conn = none
+		lease.finish_owned(true)
+		return
+	}
+	mut conn := outcome.take_live_conn() or { return }
+	conn.close() or {}
+}
+
+pub fn (outcome WebSocketSessionOpenOutcome) finish_worker() {
+	if mut lease := outcome.lease { lease.finish() }
 }
 
 // ── Executor model types ──
@@ -183,11 +233,15 @@ pub:
 
 pub struct AdminListenerRuntimeSummary {
 pub:
-	listener_id string
-	site_id     string
-	host        string
-	port        int
-	pipelines   AdminPipelineRuntimeSummary
+	listener_id   string
+	site_id       string
+	host          string
+	port          int
+	pipelines     AdminPipelineRuntimeSummary
+	is_control    bool
+	http_metrics  AdminHttpMetrics
+	route_metrics []AdminHttpRouteMetrics
+	recent_errors []AdminHttpObservationError
 }
 
 pub struct AdminActiveCounts {
@@ -326,6 +380,7 @@ pub:
 
 pub struct WebSocketUpstreamCommandActivity {
 pub mut:
+	stream_generation    string
 	event                string
 	provider             string
 	instance             string

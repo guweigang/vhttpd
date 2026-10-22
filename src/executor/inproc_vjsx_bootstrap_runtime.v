@@ -2,7 +2,7 @@ module executor
 
 import log
 
-pub fn (e InProcVjsxExecutor) warmup(mut app AppFacade) ! {
+pub fn (e InProcVjsxExecutor) warmup_with_host(mut app EmbeddedHost) ! {
 	e.remember_app(mut app)
 	e.bootstrap_placeholder()!
 	for lane in e.lane_snapshot() {
@@ -13,14 +13,12 @@ pub fn (e InProcVjsxExecutor) warmup(mut app AppFacade) ! {
 }
 
 pub fn (e InProcVjsxExecutor) bootstrap_placeholder() ! {
-	if isnil(e.state) {
-		return error('inproc_vjsx_executor_state_missing')
-	}
 	mut state := e.state
 	state.mu.@lock()
 	defer {
 		state.mu.unlock()
 	}
+	if state.stopping { return error('inproc_vjsx_executor_closed') }
 	if state.facade.bootstrapped {
 		return
 	}
@@ -34,7 +32,7 @@ pub fn (e InProcVjsxExecutor) bootstrap_placeholder() ! {
 	}
 	if !state.signature_refresh_started {
 		state.signature_refresh_started = true
-		go InProcVjsxSignatureRefresh.loop(mut state)
+		state.signature_refresh_thread = spawn InProcVjsxSignatureRefresh.loop(mut state)
 	}
 	state.facade.bootstrapped = true
 	state.facade.last_error = ''

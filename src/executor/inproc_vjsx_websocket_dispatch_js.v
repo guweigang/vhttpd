@@ -1,10 +1,10 @@
 module executor
 
-import json
+import json2 as json
 import vjsx
 
-fn InProcVjsxWebSocketJs.install_websocket_dispatch(ctx &vjsx.Context, mut runtime vjsx.Value, mut app AppFacade) {
-	runtime.set('websocketDispatch', ctx.js_function(fn [ctx, mut app] (args []vjsx.Value) vjsx.Value {
+fn InProcVjsxWebSocketJs.install_websocket_dispatch(ctx &vjsx.Context, mut runtime vjsx.Value, mut app EmbeddedHost) {
+	dispatch_fn := ctx.js_function(fn [ctx, mut app] (args []vjsx.Value) vjsx.Value {
 		fallback := if args.len > 1 { args[1].dup_value() } else { ctx.js_undefined() }
 		if args.len == 0 {
 			return fallback
@@ -16,7 +16,7 @@ fn InProcVjsxWebSocketJs.install_websocket_dispatch(ctx &vjsx.Context, mut runti
 		req_raw := if raw.starts_with('[') {
 			'{"commands":${raw}}'
 		} else {
-			decoded := json.decode(InProcVjsxHostWebSocketDispatchRequest, raw) or {
+			decoded := json.decode[InProcVjsxHostWebSocketDispatchRequest](raw) or {
 				InProcVjsxHostWebSocketDispatchRequest{}
 			}
 			if decoded.commands.len > 0 {
@@ -25,7 +25,7 @@ fn InProcVjsxWebSocketJs.install_websocket_dispatch(ctx &vjsx.Context, mut runti
 				'{"commands":[${raw}]}'
 			}
 		}
-		req := json.decode(InProcVjsxHostWebSocketDispatchRequest, req_raw) or { return fallback }
+		req := json.decode[InProcVjsxHostWebSocketDispatchRequest](req_raw) or { return fallback }
 		result := app.execute_websocket_dispatch_commands_result(req.commands)
 		response := if result.has_close {
 			InProcVjsxHostWebSocketDispatchResponse{
@@ -46,6 +46,9 @@ fn InProcVjsxWebSocketJs.install_websocket_dispatch(ctx &vjsx.Context, mut runti
 				failures: result.failures
 			}
 		}
-		return ctx.json_parse(json.encode(response))
-	}))
+		fallback.free()
+		return ctx.json_parse(json.encode(response, escape_unicode: true, time_as_unix: true))
+	})
+	defer { dispatch_fn.free() }
+	runtime.set('websocketDispatch', dispatch_fn)
 }

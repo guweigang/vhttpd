@@ -1677,10 +1677,12 @@ globalThis.__vhttpd_bind_handlers = function(exportsValue) {
   if (typeof httpHandler === "function") {
     globalThis.__vhttpd_handle = httpHandler;
   }
-  if (typeof websocketHandler === "function") {
+  // Fallback resolution returns the current owner. Keep its wrapper rather
+  // than nesting another closure that retains and logs through the old one.
+  if (typeof websocketHandler === "function" && websocketHandler !== globalThis.__vhttpd_websocket_handle) {
     globalThis.__vhttpd_websocket_handle = globalThis.__vhttpd_wrap_handler("websocket", websocketHandler);
   }
-  if (typeof websocketUpstreamHandler === "function") {
+  if (typeof websocketUpstreamHandler === "function" && websocketUpstreamHandler !== globalThis.__vhttpd_websocket_upstream_handle) {
     globalThis.__vhttpd_websocket_upstream_handle = globalThis.__vhttpd_wrap_handler("websocket_upstream", websocketUpstreamHandler);
   }
   if (typeof startupHandler === "function") {

@@ -10,6 +10,7 @@ import provider
 import runtime_plan
 import time
 import ws
+import connection_runtime
 
 @[heap]
 struct ProviderWebSocketE2EServerRef {
@@ -194,15 +195,15 @@ export function normalize(req) {
 
 	resp := app.call_provider_websocket_hook('feishu', 'main', 'normalize',
 		'wss://provider.test/ws', '{"type":"im.message.receive_v1","text":"hello"}', {
-		'transport': 'websocket'
-	}, 'req-normalize-probe', 'trace-normalize-probe') or { panic(err) }
+			'transport': 'websocket'
+		}, 'req-normalize-probe', 'trace-normalize-probe') or { panic(err) }
 	assert resp.result.contains('im.message.receive_v1')
 	assert resp.result.contains('vjsx-normalize')
 
 	ok := app.dispatch_provider_websocket_normalized_event('feishu', 'main',
 		'wss://provider.test/ws', '{"type":"im.message.receive_v1","text":"hello"}', {
-		'transport': 'websocket'
-	}, 'req-normalize', 'trace-normalize')
+			'transport': 'websocket'
+		}, 'req-normalize', 'trace-normalize')
 
 	assert ok
 }
@@ -338,6 +339,9 @@ export function normalize(req) {
 	}
 
 	ws_url := 'ws://127.0.0.1:${port}/'
+	// Cold preparation has no connected peer deadline. The 3 s budget below
+	// measures the actual exchange after prepared bytes are available.
+	prepared := app.prepare_provider_websocket_handshake(websocket_upstream_provider_feishu, 'main', ws_url) or { panic(err) }
 	rt := ws.UpstreamRuntimeContext{
 		enabled_fn:         fn (_provider string, _instance string) bool {
 			return true
@@ -349,6 +353,9 @@ export function normalize(req) {
 		pull_url_fn:        fn [ws_url] (_provider string, _instance string) !string {
 			return ws_url
 		}
+		prepare_fn:         fn [prepared] (_ string, _ string, _ string) !ws.UpstreamPreparation {
+			return prepared
+		}
 		connected_fn:       fn [mut app] (provider_name string, instance string, url string) {
 			app.provider_runtime_on_connected(provider_name, instance, url)
 		}
@@ -356,18 +363,25 @@ export function normalize(req) {
 		handle_message_fn:  fn [mut app] (provider_name string, instance string, mut client websocket.Client, msg &websocket.Message) ! {
 			app.websocket_upstream_provider_handle_message(provider_name, instance, mut client, msg)!
 		}
-		post_connect_fn:    fn [mut app] (provider_name string, instance string, url string, mut client websocket.Client) {
-			app.dispatch_provider_websocket_handshake(provider_name, instance, url, mut client)
+		post_connect_fn:    fn (_ string, _ string, _ string, mut _session connection_runtime.Session, mut _ websocket.Client) []thread {
+			return []thread{}
 		}
+		release_client_fn:  fn (_ string, _ string, _ &websocket.Client) {}
 	}
-	spawn rt.run_provider(websocket_upstream_provider_feishu, 'main')
+	mut run := &connection_runtime.Run{}
+	worker := spawn rt.run_provider(websocket_upstream_provider_feishu, 'main', mut run)
+	defer {
+		run.request_stop()
+		worker.wait()
+	}
 
 	mut handshake := ''
 	select {
 		value := <-handshake_ch {
 			handshake = value
 		}
-		3 * time.second {}
+		3 * time.second {
+		}
 	}
 	assert handshake.contains('"type":"hello"')
 	assert handshake.contains('"provider":"feishu"')
@@ -378,7 +392,8 @@ export function normalize(req) {
 		value := <-ack_ch {
 			ack = value
 		}
-		3 * time.second {}
+		3 * time.second {
+		}
 	}
 	assert ack == 'ack'
 	assert provider_websocket_e2e_wait_for_event_log(event_log, '"type":"runtime.event.dispatch"')

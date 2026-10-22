@@ -1,6 +1,6 @@
 module admin
 
-import json
+import json2 as json
 import os
 
 // ── Worker admin types ──
@@ -232,7 +232,7 @@ pub fn InternalAdminResponse.error(status int, message string) InternalAdminResp
 		}
 		body:    json.encode({
 			'error': message
-		})
+		}, escape_unicode: true, time_as_unix: true)
 		error:   message
 	}
 }

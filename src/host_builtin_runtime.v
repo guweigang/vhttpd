@@ -1,7 +1,7 @@
 module main
 
 import dispatch
-import json
+import json2 as json
 import log
 import time
 import upstream.transport
@@ -108,14 +108,15 @@ pub fn (mut app App) events_stream(mut ctx Context) veb.Result {
 	ctx.set_custom_header('x-vhttpd-trace-id', trace_id) or {}
 	ctx.set_custom_header('x-accel-buffering', 'no') or {}
 	mut stream := sse.start_connection(mut ctx.Context)
-	stream.send_message(retry: 1000) or { return ctx.server_error_with_status(.not_implemented) }
+	defer { stream.close() }
+	stream.send_message(retry: 1000) or { return veb.no_result() }
 	for i in 0 .. count {
 		payload := json.encode({
 			'request_id': req_id
 			'trace_id':   trace_id
 			'seq':        '${i + 1}'
 			'ts':         '${time.now().unix()}'
-		})
+		}, escape_unicode: true, time_as_unix: true)
 		stream.send_message(id: '${req_id}-${i + 1}', event: 'ping', data: payload) or {
 			return veb.no_result()
 		}
@@ -123,8 +124,6 @@ pub fn (mut app App) events_stream(mut ctx Context) veb.Result {
 			time.sleep(time.millisecond * interval_ms)
 		}
 	}
-	stream.close()
-
 	app.emit('http.request', {
 		'method':      'GET'
 		'path':        '/events/stream'

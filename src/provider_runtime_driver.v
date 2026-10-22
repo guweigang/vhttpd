@@ -1,7 +1,7 @@
 module main
 
 import feishu
-import json
+import json2 as json
 import provider
 
 interface ProviderRuntimePluginCaller {
@@ -100,8 +100,8 @@ fn (mut hub ProviderRuntimeHub) provider_runtime_call_with_override(inv Provider
 	driver := provider_runtime_override_driver(provider_name, hub.provider_runtime_driver(provider_name),
 		override)
 	return match driver {
-		'native' { hub.provider_runtime_native_call(inv) }
-		'vjsx' { hub.provider_runtime_vjsx_call_with_override(inv, override, mut caller) }
+		'native' { hub.provider_runtime_native_call(inv)! }
+		'vjsx' { hub.provider_runtime_vjsx_call_with_override(inv, override, mut caller)! }
 		else { error('provider_runtime_unknown_driver:${provider_name}:${driver}') }
 	}
 }
@@ -123,7 +123,7 @@ fn provider_runtime_override_driver(provider_name string, fallback string, overr
 
 fn (mut hub ProviderRuntimeHub) provider_runtime_native_call(inv ProviderRuntimeInvocation) !string {
 	return match inv.provider {
-		'feishu' { hub.provider_runtime_native_feishu_call(inv) }
+		'feishu' { hub.provider_runtime_native_feishu_call(inv)! }
 		else { error('provider_runtime_native_driver_unavailable:${inv.provider}:${inv.action}') }
 	}
 }
@@ -131,16 +131,16 @@ fn (mut hub ProviderRuntimeHub) provider_runtime_native_call(inv ProviderRuntime
 fn (mut hub ProviderRuntimeHub) provider_runtime_native_feishu_call(inv ProviderRuntimeInvocation) !string {
 	return match inv.action {
 		'send_message' {
-			req := json.decode(feishu.SendMessageRequest, inv.payload)!
-			json.encode(hub.feishu_native_send_message(req)!)
+			req := json.decode[feishu.SendMessageRequest](inv.payload)!
+			json.encode(hub.feishu_native_send_message(req)!, escape_unicode: true, time_as_unix: true)
 		}
 		'update_message' {
-			req := json.decode(feishu.UpdateMessageRequest, inv.payload)!
-			json.encode(hub.feishu_native_update_message(req)!)
+			req := json.decode[feishu.UpdateMessageRequest](inv.payload)!
+			json.encode(hub.feishu_native_update_message(req)!, escape_unicode: true, time_as_unix: true)
 		}
 		'upload_image' {
-			req := json.decode(feishu.UploadImageRequest, inv.payload)!
-			json.encode(hub.feishu_native_upload_image(req)!)
+			req := json.decode[feishu.UploadImageRequest](inv.payload)!
+			json.encode(hub.feishu_native_upload_image(req)!, escape_unicode: true, time_as_unix: true)
 		}
 		else {
 			error('provider_runtime_native_action_unavailable:feishu:${inv.action}')

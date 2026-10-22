@@ -137,8 +137,17 @@ pub fn (mut rt Runtime) response_completion_after_send(outbound OutboundOutcome,
 	if outbound.completion.mode != 'wait' {
 		return sent
 	}
+	mut tracking := outbound.tracking
+	tracking.mu.@lock()
+	defer { tracking.mu.unlock() }
+	rt.channels.mu.@lock()
+	defer { rt.channels.mu.unlock() }
+	if !outbound.owns_channel_unlocked(rt.channels) {
+		missing := response_completion_missing(outbound, send_result)
+		return ResponseCompletionOutcome{ ...missing, action: .failed, error: 'relay_outbound_registration_retired:${outbound.frame.channel_id}', fields: response_completion_fields_with_action(missing.fields, 'failed') }
+	}
 	target_id := completion_target_id(outbound.frame)
-	frames := rt.drain_returned_frames_for(outbound.frame.channel_id, target_id) or {
+	frames := rt.channels.drain_returned_for_unlocked(outbound.frame.channel_id, target_id) or {
 		return response_completion_missing(outbound, send_result)
 	}
 	if frames.len == 0 {
@@ -212,7 +221,7 @@ fn relay_response_completion_failure_status(error string) int {
 		return 504
 	}
 	if error.contains('not_connected') || error.contains('unavailable')
-		|| error.contains('disabled') {
+		|| error.contains('disabled') || error.starts_with('relay_carrier_ownership_changed:') {
 		return 503
 	}
 	return 500

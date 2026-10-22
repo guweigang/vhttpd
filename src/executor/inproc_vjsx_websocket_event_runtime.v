@@ -3,7 +3,7 @@ module executor
 import log
 import upstream.transport
 
-fn (e InProcVjsxExecutor) dispatch_websocket_callback_on_lane(mut app AppFacade, frame transport.WorkerWebSocketFrame, lane VjsxExecutionLane) !string {
+fn (e InProcVjsxExecutor) dispatch_websocket_callback_on_lane(mut app EmbeddedHost, frame transport.WorkerWebSocketFrame, lane VjsxExecutionLane) !string {
 	e.bootstrap_placeholder()!
 	idx := e.lane_index_by_id(lane.id)
 	log.debug('[vhttpd] websocket_on_lane begin lane=${lane.id} idx=${idx} event=${frame.event} path=${frame.path} request_id=${frame.request_id} trace_id=${frame.trace_id}')
@@ -20,7 +20,10 @@ fn (e InProcVjsxExecutor) dispatch_websocket_callback_on_lane(mut app AppFacade,
 fn (e InProcVjsxExecutor) enqueue_websocket_task(task InProcVjsxWebSocketTask) ! {
 	lane, _ := e.acquire_websocket_lane(task.frame)!
 	e.bind_websocket_task_lane(task, lane.id)
-	e.dispatch_websocket_task_to_lane(task, lane.id)!
+	e.dispatch_websocket_task_to_lane(task, lane.id) or {
+		e.release_lane(lane.id)
+		return error(err.msg())
+	}
 }
 
 fn (e InProcVjsxExecutor) finalize_websocket_dispatch_response(frame transport.WorkerWebSocketFrame, affinity_key string, lane_id string, actor_key string, actor_class string, actor_persist bool, result InProcVjsxWebSocketTaskResult) transport.WorkerWebSocketDispatchResponse {
@@ -31,6 +34,13 @@ fn (e InProcVjsxExecutor) finalize_websocket_dispatch_response(frame transport.W
 	if frame.event == 'open' {
 		log.debug('[vhttpd] websocket finalize event=${frame.event} request_id=${frame.request_id} lane=${lane_id} input_affinity_key=${affinity_key} response_affinity_key=${response.affinity_key}')
 	}
+	// A denied open has no session owner that could later deliver close. Close
+	// replies likewise cannot grant a new binding after the connection retires.
+	if frame.event == 'close' || (frame.event == 'open' && !response.accepted) {
+		e.release_websocket_actor(frame)
+		e.release_websocket_connection_affinity(frame)
+		return response
+	}
 	if response.affinity_key.trim_space() != '' {
 		if frame.event == 'open' {
 			log.debug('[vhttpd] websocket finalize migrate event=${frame.event} request_id=${frame.request_id} lane=${lane_id} old_affinity_key=${affinity_key} new_affinity_key=${response.affinity_key}')
@@ -39,10 +49,7 @@ fn (e InProcVjsxExecutor) finalize_websocket_dispatch_response(frame transport.W
 	} else if frame.event == 'open' {
 		log.debug('[vhttpd] websocket finalize migrate_skip event=${frame.event} request_id=${frame.request_id} lane=${lane_id} old_affinity_key=${affinity_key} reason=empty_response_affinity_key')
 	}
-	if frame.event == 'close' {
-		e.release_websocket_actor(frame)
-		e.release_websocket_connection_affinity(frame)
-	} else if actor_persist && actor_key.trim_space() != '' && frame.id.trim_space() != '' {
+	if actor_persist && actor_key.trim_space() != '' && frame.id.trim_space() != '' {
 		e.cache_websocket_actor(frame, actor_key, actor_class)
 	}
 	if frame.event == 'open' {
@@ -50,7 +57,14 @@ fn (e InProcVjsxExecutor) finalize_websocket_dispatch_response(frame transport.W
 	return response
 }
 
-pub fn (e InProcVjsxExecutor) dispatch_websocket_event(mut app AppFacade, frame transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse {
+pub fn (e InProcVjsxExecutor) dispatch_websocket_event_with_host(mut app EmbeddedHost, frame transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse {
+	mut finalized := false
+	defer {
+		if !finalized && frame.event in ['open', 'close'] {
+			e.release_websocket_actor(frame)
+			e.release_websocket_connection_affinity(frame)
+		}
+	}
 	e.remember_app(mut app)
 	e.bootstrap_placeholder()!
 	if frame.event == 'open' {
@@ -91,10 +105,11 @@ pub fn (e InProcVjsxExecutor) dispatch_websocket_event(mut app AppFacade, frame 
 				actor_serialized: true
 			}
 			e.enqueue_websocket_mailbox_task(task)
-			InProcVjsxWebSocketTaskAwaiter.start(started_ch)!
-			result := InProcVjsxWebSocketTaskAwaiter.result(done_ch, mut slot)!
+			e.await_websocket_start(started_ch, mut slot)!
+			result := e.await_websocket_result(done_ch, mut slot)!
 			if frame.event == 'open' {
 			}
+			finalized = true
 			return e.finalize_websocket_dispatch_response(frame, '', '', actor.key,
 				actor.class_name, actor.persist, result)
 		}
@@ -130,8 +145,8 @@ pub fn (e InProcVjsxExecutor) dispatch_websocket_event(mut app AppFacade, frame 
 			affinity_priority: affinity_priority
 		}
 		e.enqueue_websocket_mailbox_task(task)
-		InProcVjsxWebSocketTaskAwaiter.start(started_ch)!
-		result := InProcVjsxWebSocketTaskAwaiter.result(done_ch, mut slot)!
+		e.await_websocket_start(started_ch, mut slot)!
+		result := e.await_websocket_result(done_ch, mut slot)!
 		if frame.event == 'open' {
 		}
 		mut state := e.state
@@ -140,6 +155,7 @@ pub fn (e InProcVjsxExecutor) dispatch_websocket_event(mut app AppFacade, frame 
 			state.websocket_affinity_lane_by_key[affinity_key] or { '' }
 		}
 		state.mu.unlock()
+		finalized = true
 		return e.finalize_websocket_dispatch_response(frame, affinity_key, lane_id, '', '', false,
 			result)
 	}
@@ -170,10 +186,14 @@ pub fn (e InProcVjsxExecutor) dispatch_websocket_event(mut app AppFacade, frame 
 		affinity_priority: affinity_priority
 	}
 	e.bind_websocket_task_lane(task, lane.id)
-	e.dispatch_websocket_task_to_lane(task, lane.id)!
-	result := InProcVjsxWebSocketTaskAwaiter.result(done_ch, mut slot)!
+	e.dispatch_websocket_task_to_lane(task, lane.id) or {
+		e.release_lane(lane.id)
+		return error(err.msg())
+	}
+	result := e.await_websocket_result(done_ch, mut slot)!
 	if frame.event == 'open' {
 	}
+	finalized = true
 	return e.finalize_websocket_dispatch_response(frame, direct_affinity_key, lane.id, '', '',
 		false, result)
 }

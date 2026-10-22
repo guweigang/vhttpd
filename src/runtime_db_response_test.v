@@ -2,7 +2,7 @@ module main
 
 import cachex
 import dbx
-import json
+import json2 as json
 import provider
 import time
 
@@ -87,7 +87,7 @@ fn test_db_runtime_classifies_connection_lost_errors() {
 }
 
 fn test_db_request_decodes_binary_safe_params() {
-	req := json.decode(dbx.Request,
+	req := json.decode[dbx.Request](
 		'{"params":["fallback"],"params_base64":["TzozMDoiQWN0aW9uU2NoZWR1bGVyX1NpbXBsZVNjaGVkdWxlIjoyOntzOjIyOiIAXgBzY2hlZHVsZWRfdGltZXN0YW1wIjtpOjE7fQ=="]}')!
 	params := req.decoded_params()
 	assert params.len == 1

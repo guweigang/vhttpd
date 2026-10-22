@@ -60,23 +60,92 @@ pub fn load_runtime_plan_text(text string, source_path string) !runtime_plan.Run
 
 fn load_v2_config_file_with_includes(config_path string) !V2Config {
 	mut seen := map[string]bool{}
-	return load_v2_config_file_with_seen(config_path, mut seen)
+	mut sources := []RuntimeConfigSource{}
+	return load_v2_config_file_with_overrides(config_path, '', map[string]string{}, mut seen, mut sources)
+}
+
+// RuntimeConfigSource describes declarations in a physical config file before include merging.
+// It contains identifiers only; credentials and resolved secret values are never returned.
+pub struct RuntimeConfigSource {
+pub:
+	path                string
+	parent_path         string
+	relay_ids           []string
+	pipeline_ids        []string
+	websocket_listeners []string
+	adapter_ids         []string
+	engine_ids          []string
+}
+
+pub fn runtime_config_sources(config_path string) ![]RuntimeConfigSource {
+	text := os.read_file(config_path)!
+	if detect_config_version(text)! != v2_config_version {
+		return [RuntimeConfigSource{ path: os.abs_path(config_path) }]
+	}
+	mut seen := map[string]bool{}
+	mut sources := []RuntimeConfigSource{}
+	load_v2_config_file_with_overrides(config_path, '', map[string]string{}, mut seen, mut sources)!
+	return sources
+}
+
+// Compile the entire project with unsaved file contents, preserving each include's
+// original base directory and the normal variable, cycle and duplicate checks.
+pub fn load_runtime_plan_with_overrides(config_path string, overrides map[string]string) !runtime_plan.RuntimePlan {
+	root := os.abs_path(config_path)
+	text := overrides[root] or { os.read_file(root)! }
+	if detect_config_version(text)! != v2_config_version {
+		return error('runtime_plan_text_legacy_config_unsupported')
+	}
+	mut seen := map[string]bool{}
+	mut sources := []RuntimeConfigSource{}
+	mut cfg := load_v2_config_file_with_overrides(root, '', overrides, mut seen, mut sources)!
+	for path, _ in overrides {
+		if !sources.any(it.path == path) {
+			return error('runtime_plan_override_not_in_project:${path}')
+		}
+	}
+	return compile_v2_runtime_plan(cfg, root, false)
 }
 
 fn load_v2_config_file_with_seen(config_path string, mut seen map[string]bool) !V2Config {
+	mut sources := []RuntimeConfigSource{}
+	return load_v2_config_file_with_overrides(config_path, '', map[string]string{}, mut seen, mut sources)
+}
+
+fn load_v2_config_file_with_overrides(config_path string, parent_path string, overrides map[string]string, mut seen map[string]bool, mut sources []RuntimeConfigSource) !V2Config {
 	abs_path := os.abs_path(config_path)
 	if seen[abs_path] {
 		return error('v2_config_include_cycle:${abs_path}')
 	}
 	seen[abs_path] = true
-	text := os.read_file(abs_path)!
+	text := overrides[abs_path] or { os.read_file(abs_path)! }
 	mut cfg := decode_v2_config_strict(text)!
 	include_paths := cfg.include.clone()
 	cfg.include = []string{}
 	resolve_v2_config_variables_and_paths(mut cfg, abs_path)!
+	mut relay_ids := cfg.relays.keys()
+	relay_ids.sort()
+	mut engine_ids := cfg.engines.keys()
+	engine_ids.sort()
+	mut adapter_ids := cfg.adapters.keys()
+	adapter_ids.sort()
+	mut websocket_listeners := []string{}
+	for id, listener in cfg.listeners {
+		if listener.protocol == 'websocket' { websocket_listeners << id }
+	}
+	websocket_listeners.sort()
+	sources << RuntimeConfigSource{
+		path:                abs_path
+		parent_path:         parent_path
+		relay_ids:           relay_ids
+		pipeline_ids:        cfg.pipelines.map(it.id)
+		websocket_listeners: websocket_listeners
+		adapter_ids:         adapter_ids
+		engine_ids: engine_ids
+	}
 	for include_path in include_paths {
 		resolved := resolve_config_path(resolve_config_base_dir(abs_path), include_path)
-		child := load_v2_config_file_with_seen(resolved, mut seen)!
+		child := load_v2_config_file_with_overrides(resolved, abs_path, overrides, mut seen, mut sources)!
 		merge_v2_config_include(mut cfg, child, resolved)!
 	}
 	seen.delete(abs_path)

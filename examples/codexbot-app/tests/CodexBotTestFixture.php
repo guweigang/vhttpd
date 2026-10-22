@@ -26,6 +26,17 @@ final class CodexBotTestFixture
     private ?array $graph = null;
     private ?AppRuntime $runtime = null;
 
+    private function graphFactory(): UpstreamGraphFactory
+    {
+        $client = new \VHttpd\Feishu\CreationClient('http://fixture.invalid', 'fixture-token',
+            static function (string $method, string $url, array $headers, ?string $body): array {
+                return ['status' => 200, 'body' => json_encode($method === 'GET'
+                    ? ['epoch' => str_repeat('a', 64), 'issued_at' => time()]
+                    : ['generation' => bin2hex(random_bytes(16)), 'token' => bin2hex(random_bytes(32))], JSON_THROW_ON_ERROR)];
+            });
+        return new UpstreamGraphFactory($client);
+    }
+
     public function bootstrap(string $dbSuffix = 'pest'): array
     {
         if (!isset(self::$booted[$dbSuffix])) {
@@ -33,7 +44,8 @@ final class CodexBotTestFixture
             codex_bot_test_init_schema($dbPath);
 
             putenv('VHTTPD_BOT_DB_PATH=' . $dbPath);
-            $app = require codex_bot_test_app_dir() . '/app.php';
+            require codex_bot_test_app_dir() . '/app.php';
+            $app = (new AppRuntime($this->graphFactory()))->handlers();
 
             self::$booted[$dbSuffix] = [
                 'db_path' => $dbPath,
@@ -84,7 +96,7 @@ final class CodexBotTestFixture
         $this->ensureBootstrapped();
 
         if (!is_array($this->graph)) {
-            $this->graph = (new UpstreamGraphFactory())->create();
+            $this->graph = $this->graphFactory()->create();
         }
 
         return $this->graph;
@@ -95,7 +107,7 @@ final class CodexBotTestFixture
         $this->ensureBootstrapped();
 
         if (!$this->runtime instanceof AppRuntime) {
-            $this->runtime = new AppRuntime();
+            $this->runtime = new AppRuntime($this->graphFactory());
         }
 
         return $this->runtime;
@@ -129,6 +141,11 @@ final class CodexBotTestFixture
     public function errorHelper(): BotErrorHelper
     {
         return $this->graph()['error_helper'];
+    }
+
+    public function replyService(): \CodexBot\Service\OneShotReplyService
+    {
+        return $this->graph()['reply_service'];
     }
 
     public function responseHelper(): BotResponseHelper

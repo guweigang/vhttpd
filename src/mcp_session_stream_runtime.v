@@ -31,6 +31,7 @@ fn mcp_handle_get_http(mut app App, mut ctx Context) veb.Result {
 			'{"error":"Missing Mcp-Session-Id"}', 'missing_session_id', map[string]string{})
 	}
 	app.protocols.mcp.mu.@lock()
+	app.protocols.mcp.expire_session_locked(session_id, time.now().unix())
 	session := app.protocols.mcp.sessions[session_id] or { mcp_protocol.Session{} }
 	app.protocols.mcp.mu.unlock()
 	if session.id == '' {
@@ -46,35 +47,26 @@ fn mcp_handle_get_http(mut app App, mut ctx Context) veb.Result {
 	response_headers['x-vhttpd-trace-id'] = trace_id
 	content_type := delivery.headers['content-type'] or { 'text/event-stream' }
 	status := if delivery.status > 0 { delivery.status } else { 200 }
-	worker.WorkerHttpStreamWriter.write_headers_conn(mut ctx.conn, status, content_type,
-		response_headers, false) or { return veb.no_result() }
 	mut conn := ctx.conn
-	spawn McpRuntime.handle_session_stream(mut app, mut conn, session_id, req_id, trace_id)
+	mut stream := app.protocols.mcp.attach_stream(session_id, conn) or {
+		conn.close() or {}
+		return veb.no_result()
+	}
+	mut handed_off := false
+	defer {
+		if !handed_off { app.protocols.mcp.finish_stream(session_id, mut stream) }
+	}
+	stream.start(fn [status, content_type, response_headers] (mut conn net.TcpConn) ! {
+		worker.WorkerHttpStreamWriter.write_headers_conn(mut conn, status, content_type,
+			response_headers, false)!
+	}) or { return veb.no_result() }
+	handed_off = true
+	spawn McpRuntime.handle_session_stream(mut app, mut stream, session_id, req_id, trace_id)
 	return veb.no_result()
 }
 
-fn McpRuntime.handle_session_stream(mut app App, mut conn net.TcpConn, session_id string, req_id string, trace_id string) {
-	app.protocols.mcp.bind_conn(session_id, conn)
-	app.protocols.mcp.flush_session(session_id)
-	conn.write_string(': connected\n\n') or {
-		app.protocols.mcp.unbind_conn(session_id, conn)
-		conn.close() or {}
-		return
-	}
-	mut last_keepalive_ms := time.now().unix_milli()
-	for {
-		time.sleep(200 * time.millisecond)
-		if !app.protocols.mcp.flush_session(session_id) {
-			break
-		}
-		now_ms := time.now().unix_milli()
-		if now_ms - last_keepalive_ms >= 15_000 {
-			conn.write_string(': keepalive\n\n') or { break }
-			last_keepalive_ms = now_ms
-		}
-	}
-	app.protocols.mcp.unbind_conn(session_id, conn)
-	conn.close() or {}
+fn McpRuntime.handle_session_stream(mut app App, mut stream mcp_protocol.SessionStream, session_id string, req_id string, trace_id string) {
+	app.protocols.mcp.run_stream(session_id, mut stream)
 	app.emit('http.request', {
 		'method':        'GET'
 		'path':          '/mcp'

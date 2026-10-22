@@ -1,6 +1,6 @@
 module main
 
-import json
+import json2 as json
 import log
 import time
 import upstream.transport
@@ -50,7 +50,7 @@ fn (mut app App) feishu_callback_by_app(mut ctx Context, raw_app string) veb.Res
 		}
 		return feishu_json_response(req_ctx, mut app, mut ctx, 200, json.encode(feishu.CallbackChallengeResponse{
 			challenge: challenge
-		}), 'challenge', app_name)
+		}, escape_unicode: true, time_as_unix: true), 'challenge', app_name)
 	}
 	if !app.providers.feishu_runtime_callback_token_valid(app_name, payload) {
 		return feishu_admin_error(req_ctx, mut app, mut ctx, 403, 'invalid_feishu_callback_token')
@@ -174,5 +174,5 @@ fn (mut app App) feishu_callback_by_app(mut ctx Context, raw_app string) veb.Res
 	return feishu_json_response(req_ctx, mut app, mut ctx, 200, json.encode(feishu.CallbackAckResponse{
 		code: 0
 		msg:  'ok'
-	}), summary.event_type, app_name)
+	}, escape_unicode: true, time_as_unix: true), summary.event_type, app_name)
 }

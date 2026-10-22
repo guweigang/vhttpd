@@ -10,7 +10,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_cancel_in_other_thread_does_no
 			'om_codexbot_thread_cancel_active', 'active thread task', 'om_thread_cancel_root_A',
 			'om_thread_cancel_parent_A') or { panic(err) }
 		assert first_resp.handled
-		assert first_resp.commands.len == 1
+		codexbot_ts_assert_single_response(first_resp.commands)
 		assert first_resp.commands[0].type_ == 'provider.rpc.call'
 
 		cancel_resp := harness.dispatch_feishu_thread_message('codexbot_ts_thread_cancel_other',
@@ -18,7 +18,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_cancel_in_other_thread_does_no
 			'om_codexbot_thread_cancel_other', '/cancel', 'om_thread_cancel_root_B',
 			'om_thread_cancel_parent_B') or { panic(err) }
 		assert cancel_resp.handled
-		assert cancel_resp.commands.len == 1
+		codexbot_ts_assert_single_response(cancel_resp.commands)
 		assert cancel_resp.commands[0].type_ == 'provider.message.send'
 		assert cancel_resp.commands[0].target_type == 'message_id'
 		assert cancel_resp.commands[0].target == 'om_codexbot_thread_cancel_other'
@@ -53,10 +53,12 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_cancel_detaches_active_stream(
 		assert cancel_resp.handled
 		assert cancel_resp.commands.len == 3
 		assert cancel_resp.commands[0].type_ == 'provider.message.update'
+		assert cancel_resp.commands[0].metadata['stream_generation'] != ''
 		assert cancel_resp.commands[0].stream_id == stream_id
 		assert cancel_resp.commands[0].content.contains('Detached the active run from this chat session.')
 		assert cancel_resp.commands[1].type_ == 'session.clear'
 		assert cancel_resp.commands[1].provider == 'feishu'
+		assert cancel_resp.commands[1].metadata['stream_generation'] != ''
 		assert cancel_resp.commands[1].stream_id == stream_id
 		assert cancel_resp.commands[2].type_ == 'session.clear'
 		assert cancel_resp.commands[2].provider == 'codex'
@@ -98,6 +100,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_cancel_interrupts_active_turn_
 		assert cancel_resp.handled
 		assert cancel_resp.commands.len == 4
 		assert cancel_resp.commands[0].type_ == 'provider.message.update'
+		assert cancel_resp.commands[0].metadata['stream_generation'] != ''
 		assert cancel_resp.commands[0].stream_id == stream_id
 		assert cancel_resp.commands[0].content.contains('**Cancelling**')
 		assert cancel_resp.commands[0].content.contains('Turn: `turn_cancel_interrupt_001`')
@@ -109,6 +112,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_cancel_interrupts_active_turn_
 		assert cancel_resp.commands[1].params.contains('"turnId":"turn_cancel_interrupt_001"')
 		assert cancel_resp.commands[2].type_ == 'session.clear'
 		assert cancel_resp.commands[2].provider == 'feishu'
+		assert cancel_resp.commands[2].metadata['stream_generation'] != ''
 		assert cancel_resp.commands[3].type_ == 'session.clear'
 		assert cancel_resp.commands[3].provider == 'codex'
 		assert cancel_resp.commands[3].target == 'thread_cancel_interrupt_001'
@@ -144,7 +148,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_existing_thread_starts_turn_di
 			'{"method":"thread/start","result":{"threadId":"thread_existing_001"},"has_error":false}') or {
 			panic(err)
 		}
-		assert first_rpc.commands.len == 1
+		codexbot_ts_assert_single_response(first_rpc.commands)
 		assert first_rpc.commands[0].method == 'turn/start'
 		_ = codexbot_ts_dispatch_codex_event(mut executor, mut app,
 			'codexbot_ts_existing_thread_turn_rpc', first_stream_id, 'codex.rpc.response',
@@ -166,7 +170,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_existing_thread_starts_turn_di
 			panic(err)
 		}
 		assert second_task.handled
-		assert second_task.commands.len == 1
+		codexbot_ts_assert_single_response(second_task.commands)
 		assert second_task.commands[0].type_ == 'provider.rpc.call'
 		assert second_task.commands[0].method == 'turn/start'
 		assert second_task.commands[0].params.contains('"threadId":"thread_existing_001"')
@@ -213,7 +217,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_reuses_thread_after_restart() 
 			'codexbot_ts_reuse_task_2', 'trace_codexbot_ts_reuse_task_2', 'chat_codexbot_ts_reuse',
 			'om_codexbot_reuse_task_2', 'second task') or { panic(err) }
 		assert second_task.handled
-		assert second_task.commands.len == 1
+		codexbot_ts_assert_single_response(second_task.commands)
 		assert second_task.commands[0].type_ == 'provider.rpc.call'
 		assert second_task.commands[0].method == 'turn/start'
 		assert second_task.commands[0].params.contains('"threadId":"thread_reuse_001"')
@@ -259,7 +263,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_recovers_when_reused_thread_is
 			'chat_codexbot_ts_recover_missing_thread', 'om_codexbot_recover_missing_thread_task_2',
 			'follow up task') or { panic(err) }
 		assert second_task.handled
-		assert second_task.commands.len == 1
+		codexbot_ts_assert_single_response(second_task.commands)
 		assert second_task.commands[0].method == 'turn/start'
 		assert second_task.commands[0].params.contains('"threadId":"thread_recover_missing_001"')
 		assert second_stream_id != ''
@@ -285,7 +289,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_recovers_when_reused_thread_is
 			panic(err)
 		}
 		assert restart_resp.handled
-		assert restart_resp.commands.len == 1
+		codexbot_ts_assert_single_response(restart_resp.commands)
 		assert restart_resp.commands[0].type_ == 'provider.rpc.call'
 		assert restart_resp.commands[0].method == 'turn/start'
 		assert restart_resp.commands[0].params.contains('"threadId":"thread_recover_missing_002"')
@@ -470,6 +474,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_turn_completed_falls_back_to_t
 		assert completed_resp.handled
 		assert completed_resp.commands.len == 2
 		assert completed_resp.commands[0].type_ == 'provider.message.update'
+		assert completed_resp.commands[0].metadata['stream_generation'] != ''
 		assert completed_resp.commands[0].text.contains('本轮处理中')
 		assert completed_resp.commands[1].type_ == 'provider.rpc.call'
 		assert completed_resp.commands[1].method == 'thread/read'
@@ -551,6 +556,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_preserves_multiple
 		assert read_resp.handled
 		assert read_resp.commands.len == 2
 		assert read_resp.commands[0].type_ == 'provider.message.update'
+		assert read_resp.commands[0].metadata['stream_generation'] != ''
 	})
 }
 
@@ -606,6 +612,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_recovers_missing_f
 		assert read_resp.handled
 		assert read_resp.commands.len == 2
 		assert read_resp.commands[0].type_ == 'provider.message.update'
+		assert read_resp.commands[0].metadata['stream_generation'] != ''
 		assert read_resp.commands[1].type_ == 'stream.finish'
 	})
 }
@@ -835,7 +842,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_persists_thread_path_from_thre
 		_ := harness.dispatch_codex_event('codexbot_ts_idle_status_thread', stream_id,
 			'codex.rpc.response',
 			'{"method":"thread/start","result":{"threadId":"thread_idle_001","thread":{"path":"' +
-			session_file.replace('\\', '\\\\').replace('"', '\\"') + '"}},"has_error":false}') or {
+				session_file.replace('\\', '\\\\').replace('"', '\\"') + '"}},"has_error":false}') or {
 			panic(err)
 		}
 		_ := harness.dispatch_codex_event('codexbot_ts_idle_status_turn', stream_id,
@@ -883,7 +890,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_idle_status_resolves_session_f
 
 		_ := harness.dispatch_codex_event('codexbot_ts_idle_status_lookup_thread', stream_id,
 			'codex.rpc.response', '{"method":"thread/start","result":{"threadId":"' + thread_id +
-			'"},"has_error":false}') or { panic(err) }
+				'"},"has_error":false}') or { panic(err) }
 		_ := harness.dispatch_codex_event('codexbot_ts_idle_status_lookup_turn', stream_id,
 			'codex.rpc.response',
 			'{"method":"turn/start","result":{"turn":{"id":"turn_idle_lookup_001"}},"has_error":false}') or {
@@ -934,7 +941,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_idle_status_after_commentary_s
 			panic(err)
 		}
 		assert idle_resp.handled
-		assert idle_resp.commands.len == 1
+		codexbot_ts_assert_single_response(idle_resp.commands)
 		assert idle_resp.commands[0].type_ == 'provider.rpc.call'
 		assert idle_resp.commands[0].method == 'thread/read'
 	})
@@ -966,7 +973,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_idle_status_prefers_richer_ses
 		_ = harness.dispatch_codex_event('codexbot_ts_idle_status_partial_thread_read_thread',
 			stream_id, 'codex.rpc.response',
 			'{"method":"thread/start","result":{"threadId":"thread_idle_partial_001","thread":{"path":"' +
-			session_file.replace('\\', '\\\\').replace('"', '\\"') + '"}},"has_error":false}') or {
+				session_file.replace('\\', '\\\\').replace('"', '\\"') + '"}},"has_error":false}') or {
 			panic(err)
 		}
 		_ = harness.dispatch_codex_event('codexbot_ts_idle_status_partial_thread_read_turn',
@@ -982,6 +989,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_idle_status_prefers_richer_ses
 		assert partial_read_resp.handled
 		assert partial_read_resp.commands.len == 2
 		assert partial_read_resp.commands[0].type_ == 'provider.message.update'
+		assert partial_read_resp.commands[0].metadata['stream_generation'] != ''
 		assert partial_read_resp.commands[0].text != ''
 		assert partial_read_resp.commands[1].type_ == 'stream.finish'
 
@@ -1005,7 +1013,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_idle_status_uses_current_turn_
 		session_file := os.join_path(session_dir, 'session.jsonl')
 		os.write_file(session_file,
 			'{"timestamp":"2026-03-31T12:00:00.000Z","turnId":"turn_idle_old_001","type":"event_msg","payload":{"type":"agent_message","message":"上一轮最后一条","phase":"final_answer"}}\n' +
-			'{"timestamp":"2026-03-31T12:01:00.000Z","turnId":"turn_idle_current_001","type":"event_msg","payload":{"type":"agent_message","message":"当前这一轮的新答案","phase":"final_answer"}}\n') or {
+				'{"timestamp":"2026-03-31T12:01:00.000Z","turnId":"turn_idle_current_001","type":"event_msg","payload":{"type":"agent_message","message":"当前这一轮的新答案","phase":"final_answer"}}\n') or {
 			panic(err)
 		}
 		defer {
@@ -1023,7 +1031,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_idle_status_uses_current_turn_
 		_ = harness.dispatch_codex_event('codexbot_ts_idle_status_turn_filtered_thread', stream_id,
 			'codex.rpc.response',
 			'{"method":"thread/start","result":{"threadId":"thread_idle_turn_filtered_001","thread":{"path":"' +
-			session_file.replace('\\', '\\\\').replace('"', '\\"') + '"}},"has_error":false}') or {
+				session_file.replace('\\', '\\\\').replace('"', '\\"') + '"}},"has_error":false}') or {
 			panic(err)
 		}
 		_ = harness.dispatch_codex_event('codexbot_ts_idle_status_turn_filtered_turn', stream_id,
@@ -1064,7 +1072,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_persists_error_stream_snapshot
 			panic(err)
 		}
 		assert error_resp.handled
-		assert error_resp.commands.len == 1
+		codexbot_ts_assert_single_response(error_resp.commands)
 		assert error_resp.commands[0].content.contains('**Codex RPC Error**')
 		assert error_resp.commands[0].content.contains('Method: `thread/start`')
 
@@ -1094,7 +1102,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_error_burst_surfaces_details()
 			panic(err)
 		}
 		assert error_resp.handled
-		assert error_resp.commands.len == 1
+		codexbot_ts_assert_single_response(error_resp.commands)
 		assert error_resp.commands[0].type_ == 'provider.message.send'
 		assert error_resp.commands[0].content.contains('**Codex RPC Error**')
 		assert error_resp.commands[0].content.contains('Method: `codex.error_burst`')

@@ -19,7 +19,7 @@ fn (a CommandHandlerAdapter) execute(cmd transport.WorkerWebSocketUpstreamComman
 // capture App, bridging the command sub-module to the main program.
 fn (mut app App) build_command_context() command.RuntimeContext {
 	mut generic_handler := GenericUpstreamCommandHandler.new(mut app)
-	generic_adapter := CommandHandlerAdapter{handler: generic_handler}
+	generic_adapter := CommandHandlerAdapter{ handler: generic_handler }
 	resolver_fn := fn [mut app] (normalized command.NormalizedCommand) command.ProviderRouteKind {
 		if normalized.is_codex_control() && command.CommandExecutor.codex_route_enabled() {
 			return .codex
@@ -59,16 +59,16 @@ fn (mut app App) build_command_context() command.RuntimeContext {
 			return none
 		}
 		spec := app.get_provider_spec(name) or { return none }
-		return command.Handler(CommandHandlerAdapter{handler: spec.handler})
+		return command.Handler(CommandHandlerAdapter{ handler: spec.handler })
 	}
 	upsert_fn := fn [mut app] (prov string, inst string, config string, state string) !command.InstanceOutcome {
-		spec := app.provider_instance_upsert(provider.ProviderInstanceSpec{
+		result := app.configure_provider_instance(provider.ProviderInstanceSpec{
 			provider:      prov
 			instance:      inst
 			config_json:   config
 			desired_state: state
-		})
-		app.provider_instance_apply(spec)!
+		})!
+		spec := result.spec
 		return command.InstanceOutcome{
 			provider: spec.provider
 			instance: spec.instance

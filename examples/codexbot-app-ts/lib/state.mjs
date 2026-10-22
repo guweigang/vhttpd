@@ -57,11 +57,17 @@ async function ensureChatStateTable(database) {
 
 async function ensureStreamStateTable(database) {
   if (!(await tableExists(database, "stream_state"))) {
-    await database.exec("create table stream_state (stream_id text primary key, session_key text not null, chat_id text not null, prompt text not null, project_key text not null, model text not null, cwd text not null, codex_instance text not null default '', thread_id text not null default '', thread_path text not null default '', turn_id text not null default '', draft text not null default '', status text not null default 'queued', result_text text not null default '', completed_at integer not null default 0, last_event text not null default '', created_at integer not null, updated_at integer not null)");
+    await database.exec("create table stream_state (stream_id text primary key, stream_generation text not null default '', stream_creation_token text not null default '', session_key text not null, chat_id text not null, prompt text not null, project_key text not null, model text not null, cwd text not null, codex_instance text not null default '', thread_id text not null default '', thread_path text not null default '', turn_id text not null default '', draft text not null default '', status text not null default 'queued', result_text text not null default '', completed_at integer not null default 0, last_event text not null default '', created_at integer not null, updated_at integer not null)");
     return;
   }
   const columns = await tableColumns(database, "stream_state");
   const names = new Set(columns.map((column) => column.name));
+  if (!names.has("stream_creation_token")) {
+    await database.exec("alter table stream_state add column stream_creation_token text not null default ''");
+  }
+  if (!names.has("stream_generation")) {
+    await database.exec("alter table stream_state add column stream_generation text not null default ''");
+  }
   if (!names.has("session_key")) {
     await database.exec("alter table stream_state add column session_key text not null default ''");
     await database.exec("update stream_state set session_key = chat_id where coalesce(session_key, '') = ''");
@@ -296,6 +302,8 @@ function asStreamState(row) {
   }
   return {
     streamId: row.stream_id,
+    streamGeneration: row.stream_generation || "",
+    streamCreationToken: row.stream_creation_token || "",
     sessionKey: row.session_key,
     chatId: row.chat_id,
     prompt: row.prompt,
@@ -380,7 +388,7 @@ async function selectChatState(sessionKey) {
 
 async function selectStreamState(streamId) {
   const database = await db();
-  const rows = await database.query("select stream_id, session_key, chat_id, prompt, project_key, model, cwd, codex_instance, thread_id, thread_path, turn_id, draft, status, result_text, completed_at, last_event, created_at, updated_at from stream_state where stream_id = ? limit 1", [streamId]);
+  const rows = await database.query("select stream_id, stream_generation, stream_creation_token, session_key, chat_id, prompt, project_key, model, cwd, codex_instance, thread_id, thread_path, turn_id, draft, status, result_text, completed_at, last_event, created_at, updated_at from stream_state where stream_id = ? limit 1", [streamId]);
   return asStreamState(rows[0]);
 }
 
@@ -499,6 +507,7 @@ export async function createStreamState(sessionKey, chatId, prompt) {
   const state = await ensureChatState(sessionKey, chatId);
   const stream = {
     streamId: nextStreamId(),
+    streamGeneration: "",
     sessionKey,
     chatId,
     prompt,
@@ -517,11 +526,16 @@ export async function createStreamState(sessionKey, chatId, prompt) {
     createdAt: now(),
     updatedAt: now(),
   };
+  const creation = issueStreamCreation(stream.streamId);
+  stream.streamGeneration = creation.generation;
+  stream.streamCreationToken = creation.token;
   const database = await db();
   await database.exec("begin immediate");
   try {
-    await database.exec("insert into stream_state (stream_id, session_key, chat_id, prompt, project_key, model, cwd, codex_instance, thread_id, thread_path, turn_id, draft, status, result_text, completed_at, last_event, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", [
+    await database.exec("insert into stream_state (stream_id, stream_generation, stream_creation_token, session_key, chat_id, prompt, project_key, model, cwd, codex_instance, thread_id, thread_path, turn_id, draft, status, result_text, completed_at, last_event, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", [
       stream.streamId,
+      stream.streamGeneration,
+      stream.streamCreationToken,
       stream.sessionKey,
       stream.chatId,
       stream.prompt,
@@ -562,6 +576,7 @@ export async function createDerivedStreamState(parentStreamId, options = {}) {
   const timestamp = now();
   const stream = {
     streamId: nextStreamId(),
+    streamGeneration: "",
     sessionKey: parent.sessionKey,
     chatId: parent.chatId,
     prompt: typeof options.prompt === "string" && options.prompt.trim() !== "" ? options.prompt : parent.prompt,
@@ -580,9 +595,14 @@ export async function createDerivedStreamState(parentStreamId, options = {}) {
     createdAt: timestamp,
     updatedAt: timestamp,
   };
+  const creation = issueStreamCreation(stream.streamId);
+  stream.streamGeneration = creation.generation;
+  stream.streamCreationToken = creation.token;
   const database = await db();
-  await database.exec("insert into stream_state (stream_id, session_key, chat_id, prompt, project_key, model, cwd, codex_instance, thread_id, thread_path, turn_id, draft, status, result_text, completed_at, last_event, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", [
+  await database.exec("insert into stream_state (stream_id, stream_generation, stream_creation_token, session_key, chat_id, prompt, project_key, model, cwd, codex_instance, thread_id, thread_path, turn_id, draft, status, result_text, completed_at, last_event, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", [
     stream.streamId,
+    stream.streamGeneration,
+    stream.streamCreationToken,
     stream.sessionKey,
     stream.chatId,
     stream.prompt,
@@ -751,7 +771,7 @@ export async function listRecentProjectThreads(projectKey, limit = 8) {
     return [];
   }
   const database = await db();
-  const rows = await database.query("select stream_id, session_key, chat_id, prompt, project_key, model, cwd, codex_instance, thread_id, thread_path, turn_id, draft, status, result_text, completed_at, last_event, created_at, updated_at from stream_state where project_key = ? and coalesce(thread_id, '') <> '' order by updated_at desc, stream_id asc", [projectKey]);
+  const rows = await database.query("select stream_id, stream_generation, stream_creation_token, session_key, chat_id, prompt, project_key, model, cwd, codex_instance, thread_id, thread_path, turn_id, draft, status, result_text, completed_at, last_event, created_at, updated_at from stream_state where project_key = ? and coalesce(thread_id, '') <> '' order by updated_at desc, stream_id asc", [projectKey]);
   const threads = [];
   const seen = new Set();
   for (const row of rows) {
@@ -787,7 +807,7 @@ export async function listRecentThreadStreams(threadId, limit = 3, filters = {})
   }
   params.push(limit);
   const rows = await database.query(
-    `select stream_id, session_key, chat_id, prompt, project_key, model, cwd, codex_instance, thread_id, thread_path, turn_id, draft, status, result_text, completed_at, last_event, created_at, updated_at from stream_state where ${clauses.join(" and ")} order by updated_at desc, stream_id desc limit ?`,
+    `select stream_id, stream_generation, stream_creation_token, session_key, chat_id, prompt, project_key, model, cwd, codex_instance, thread_id, thread_path, turn_id, draft, status, result_text, completed_at, last_event, created_at, updated_at from stream_state where ${clauses.join(" and ")} order by updated_at desc, stream_id desc limit ?`,
     params,
   );
   return rows.map(asStreamState).filter(Boolean);
@@ -1144,7 +1164,7 @@ export function resetChatThread(sessionKey, chatId) {
 export async function runtimeSnapshot() {
   const database = await db();
   const chats = await database.query("select session_key, chat_id, project_key, model, cwd, codex_instance, thread_id, thread_path, last_stream_id, updated_at from chat_state order by updated_at desc, session_key asc");
-  const streams = await database.query("select stream_id, session_key, chat_id, prompt, project_key, model, cwd, codex_instance, thread_id, thread_path, turn_id, draft, status, result_text, completed_at, last_event, created_at, updated_at from stream_state order by updated_at desc, stream_id asc");
+  const streams = await database.query("select stream_id, stream_generation, stream_creation_token, session_key, chat_id, prompt, project_key, model, cwd, codex_instance, thread_id, thread_path, turn_id, draft, status, result_text, completed_at, last_event, created_at, updated_at from stream_state order by updated_at desc, stream_id asc");
   const commandContexts = await database.query("select session_key, chat_id, scope, updated_at from command_context_state order by updated_at desc, session_key asc");
   const projects = await database.query("select project_key, repo_path, default_branch, default_model, default_codex_instance, created_at, updated_at from project_registry order by updated_at desc, project_key asc");
   const bindings = await database.query("select chat_id, project_key, is_primary, created_at, updated_at from project_binding_state order by updated_at desc, chat_id asc, project_key asc");
@@ -1182,4 +1202,23 @@ export async function runtimeSnapshot() {
     itemRenders: itemRenders.map(asItemRenderState),
     approvals: approvals.map(asApprovalRequestState),
   };
+}
+
+// Issuance is a trusted host call made once while constructing a new lifecycle.
+// Persisted/replayed commands retain this value and cannot mint it at ingress.
+function issueStreamCreation(streamId, instance = "") {
+  const host = globalThis.vhttpdHost;
+  const generation = host && typeof host.issueFeishuStream === "function"
+    ? host.issueFeishuStream(streamId, instance) : "";
+  if (!generation) throw new Error("feishu_creation_unavailable");
+  const lease = JSON.parse(generation);
+  if (!lease.generation || !lease.token) throw new Error("feishu_creation_unavailable");
+  return lease;
+}
+
+// One-shot replies own no database task. Capture a single trusted host grant.
+export function createReplyContext(instance = "main") {
+  const streamId = `feishu:reply:${nextStreamId()}`;
+  const creation = issueStreamCreation(streamId, instance);
+  return Object.freeze({ streamId, streamInstance: instance || "main", streamGeneration: creation.generation, streamCreationToken: creation.token });
 }

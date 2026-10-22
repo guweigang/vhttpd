@@ -1,9 +1,9 @@
 module executor
 
-import json
+import json2 as json
 import vjsx
 
-fn (e InProcVjsxExecutor) call_plugin_stream_once(mut app AppFacade, req PluginCallRequest, on_frame PluginStreamFrameFn) !PluginStreamCallResponse {
+fn (e InProcVjsxExecutor) call_plugin_stream_once(mut app EmbeddedHost, req PluginCallRequest, on_frame PluginStreamFrameFn) !PluginStreamCallResponse {
 	e.bootstrap_placeholder()!
 	lane := e.acquire_next_lane(inproc_vjsx_lane_wait_timeout_ms)!
 	defer {
@@ -36,7 +36,7 @@ fn (e InProcVjsxExecutor) call_plugin_stream_once(mut app AppFacade, req PluginC
 	mut host := state.hosts[idx]
 	state.mu.unlock()
 	ctx := host.context()
-	req_obj := ctx.json_parse(json.encode(req))
+	req_obj := ctx.json_parse(json.encode(req, escape_unicode: true, time_as_unix: true))
 	defer {
 		req_obj.free()
 	}
@@ -59,8 +59,9 @@ fn (e InProcVjsxExecutor) call_plugin_stream_once(mut app AppFacade, req PluginC
 	defer {
 		result.free()
 	}
-	if host.session.is_streamable_value(result) {
-		completed := host.session.stream_value(result, fn [on_frame] (frame vjsx.Value) !bool {
+	session := host.session_handle() or { return error('inproc_vjsx_executor_session_missing') }
+	if session.is_streamable_value(result) {
+		completed := session.stream_value(result, fn [on_frame] (frame vjsx.Value) !bool {
 			raw := frame.json_stringify()
 			return on_frame(raw)!
 		}) or {
@@ -94,7 +95,7 @@ fn (e InProcVjsxExecutor) call_plugin_stream_once(mut app AppFacade, req PluginC
 	}
 }
 
-pub fn (e InProcVjsxExecutor) call_plugin_stream(mut app AppFacade, req PluginCallRequest, on_frame PluginStreamFrameFn) !PluginStreamCallResponse {
+pub fn (e InProcVjsxExecutor) call_plugin_stream(mut app EmbeddedHost, req PluginCallRequest, on_frame PluginStreamFrameFn) !PluginStreamCallResponse {
 	e.remember_app(mut app)
 	return e.call_plugin_stream_once(mut app, req, on_frame)
 }

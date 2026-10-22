@@ -1,6 +1,6 @@
 module executor
 
-import json
+import json2 as json
 import log
 
 fn (e InProcVjsxExecutor) build_startup_runtime_payload(lane VjsxExecutionLane, kind string) string {
@@ -31,13 +31,10 @@ fn (e InProcVjsxExecutor) build_startup_runtime_payload(lane VjsxExecutionLane, 
 		request_server:           map[string]string{}
 		method:                   InProcVjsxStartupCodec.method(kind)
 		path:                     path
-	})
+	}, escape_unicode: true, time_as_unix: true)
 }
 
-fn (e InProcVjsxExecutor) execute_startup_hook(mut app AppFacade, idx int, lane VjsxExecutionLane, kind string) ! {
-	if isnil(e.state) {
-		return error('inproc_vjsx_executor_state_missing')
-	}
+fn (e InProcVjsxExecutor) execute_startup_hook(mut app EmbeddedHost, idx int, lane VjsxExecutionLane, kind string) ! {
 	log.debug('[vhttpd] startup_hook begin lane=${lane.id} idx=${idx} kind=${kind}')
 	e.ensure_lane_host(idx)!
 	mut state := e.state
@@ -82,7 +79,7 @@ fn (e InProcVjsxExecutor) execute_startup_hook(mut app AppFacade, idx int, lane 
 	defer {
 		js_runtime.free()
 	}
-	mut result := if host.is_module_entry && !isnil(host.module_binding) {
+	mut result := if host.is_module_entry && host.module_handle() != none {
 		host.call_entry(kind, js_runtime) or {
 			if err.msg() == 'inproc_vjsx_executor_missing_${kind}_handler' {
 				return

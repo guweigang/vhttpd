@@ -2,6 +2,7 @@ module provider
 
 import x.json2
 import command
+import sync
 
 // Type aliases for routing types now owned by the command module.
 pub type ProviderRouteKind = command.ProviderRouteKind
@@ -46,6 +47,7 @@ pub mut:
 }
 
 pub struct ProviderInstanceRegistry {
+	mu &sync.Mutex = &sync.Mutex{}
 pub mut:
 	specs map[string]ProviderInstanceSpec
 }

@@ -1,7 +1,7 @@
 module executor
 
 pub fn (e InProcVjsxExecutor) record_lane_success(lane_id string) {
-	if isnil(e.state) || lane_id == '' {
+	if lane_id == '' {
 		return
 	}
 	mut state := e.state
@@ -25,7 +25,7 @@ pub fn (e InProcVjsxExecutor) record_lane_success(lane_id string) {
 }
 
 pub fn (e InProcVjsxExecutor) record_lane_error(lane_id string, err_msg string) {
-	if isnil(e.state) || lane_id == '' {
+	if lane_id == '' {
 		return
 	}
 	mut state := e.state
@@ -48,7 +48,7 @@ pub fn (e InProcVjsxExecutor) record_lane_error(lane_id string, err_msg string) 
 }
 
 pub fn (e InProcVjsxExecutor) record_lane_soft_error(lane_id string, err_msg string) {
-	if isnil(e.state) || lane_id == '' {
+	if lane_id == '' {
 		return
 	}
 	normalized := InProcVjsxError.normalize_message(err_msg, 'inproc_vjsx_executor_unknown_error')
@@ -72,7 +72,7 @@ pub fn (e InProcVjsxExecutor) record_lane_soft_error(lane_id string, err_msg str
 }
 
 pub fn (e InProcVjsxExecutor) lane_index_by_id(lane_id string) int {
-	if isnil(e.state) || lane_id == '' {
+	if lane_id == '' {
 		return -1
 	}
 	mut state := e.state

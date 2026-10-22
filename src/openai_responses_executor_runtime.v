@@ -7,6 +7,22 @@ import veb
 import worker
 import x.json2
 
+// Completion of the wire stream owns generator cancellation independently of
+// whether a completed response body is eligible for the response registry.
+@[heap]
+struct OpenAIExecutorResponsesStreamState {
+mut:
+	completed_body string
+	done           bool
+}
+
+fn openai_executor_response_terminal(raw string) bool {
+	parsed := json2.decode[json2.Any](raw) or { return false }
+	root := parsed.as_map()
+	event_type := (root['event'] or { root['type'] or { json2.Any('') } }).str()
+	return event_type in ['response.completed', 'response.failed', 'response.incomplete']
+}
+
 fn OpenAIProxyRuntime.responses_executor_once(mut app App, mut ctx Context, plan openai.OpenAIResolvedPlan, method string, path string, req_id string, trace_id string, start_ms i64) veb.Result {
 	resp := app.openai_call_executor_op(plan, 'responses.execute', method, path, req_id, trace_id) or {
 		return OpenAIErrorResponseWriter.write(mut app, mut ctx, 502, path, method, req_id,
@@ -18,15 +34,16 @@ fn OpenAIProxyRuntime.responses_executor_once(mut app App, mut ctx Context, plan
 	return OpenAIResponseWriter.write(mut app, mut ctx, 200, path, method, req_id, trace_id,
 		start_ms, if method.to_upper() == 'HEAD' { '' } else { body },
 		'application/json; charset=utf-8', {
-		'x-vhttpd-openai-backend': plan.backend_name
-	}, {
-		'backend':  plan.backend_name
-		'executor': plan.backend.executor
-		'endpoint': 'responses'
-	})
+			'x-vhttpd-openai-backend': plan.backend_name
+		}, {
+			'backend':  plan.backend_name
+			'executor': plan.backend.executor
+			'endpoint': 'responses'
+		})
 }
 
 fn OpenAIProxyRuntime.responses_executor_stream(mut app App, mut ctx Context, plan openai.OpenAIResolvedPlan, method string, path string, req_id string, trace_id string, start_ms i64) veb.Result {
+	// veb retains socket ownership in reusable mode, including failure paths.
 	ctx.takeover_conn_reusable()
 	ctx.conn.set_write_timeout(time.infinite)
 	ctx.conn.set_read_timeout(time.infinite)
@@ -40,21 +57,23 @@ fn OpenAIProxyRuntime.responses_executor_stream(mut app App, mut ctx Context, pl
 	}
 	worker.WorkerHttpStreamWriter.write_headers_conn(mut client_conn, 200, 'text/event-stream',
 		headers, true) or {}
-	mut registry_state := &openai.OpenAIResponsesStreamRegistryState{}
+	mut registry_state := &OpenAIExecutorResponsesStreamState{}
 	stream_resp := app.openai_call_executor_stream_op(plan, 'responses.execute', method, path,
 		req_id, trace_id, fn [mut client_conn, mut registry_state] (raw string) !bool {
-		if registry_state.completed_body == '' {
-			registry_state.completed_body =
-				openai.OpenAIResponseBuilder.body_from_completed_event(raw)
-		}
-		worker.WorkerHttpStreamWriter.write_chunk(mut client_conn,
-			openai.OpenAIResponseBuilder.stream_event_from_raw(raw))!
-		return true
-	}) or {
+			if registry_state.done { return false }
+			registry_state.done = openai_executor_response_terminal(raw)
+			if registry_state.completed_body == '' {
+				registry_state.completed_body =
+					openai.OpenAIResponseBuilder.body_from_completed_event(raw)
+			}
+			worker.WorkerHttpStreamWriter.write_chunk(mut client_conn,
+				openai.OpenAIResponseBuilder.stream_event_from_raw(raw))!
+			return !registry_state.done
+		}) or {
 		OpenAIErrorResponseWriter.write_sse(mut client_conn, 'openai_executor_failed', err.msg(),
 			'server_error')
 		worker.WorkerHttpStreamWriter.write_final_chunk(mut client_conn) or {}
-		client_conn.close() or {}
+		ctx.set_header(.connection, 'close')
 		app.emit('http.request', {
 			'method':      method.to_upper()
 			'path':        transport.WorkerHttpRequestCodec.normalize_path(path)
@@ -72,7 +91,9 @@ fn OpenAIProxyRuntime.responses_executor_stream(mut app App, mut ctx Context, pl
 	if !stream_resp.streamed {
 		mut wrote_frame := false
 		for mapping in openai.OpenAIFrameMapping.executor_stream_mappings(stream_resp.response.result) {
+			if registry_state.done { break }
 			if mapping.error != '' {
+				registry_state.done = true
 				OpenAIErrorResponseWriter.write_sse(mut client_conn, 'openai_executor_error',
 					mapping.error, 'server_error')
 				wrote_frame = true
@@ -89,10 +110,12 @@ fn OpenAIProxyRuntime.responses_executor_stream(mut app App, mut ctx Context, pl
 				wrote_frame = true
 			}
 			if mapping.done {
+				registry_state.done = true
 				registry_state.completed_body = '{"id":"resp_${req_id}","object":"response","status":"completed","model":"${plan.model}"}'
 				worker.WorkerHttpStreamWriter.write_chunk(mut client_conn,
 					openai.OpenAIResponseBuilder.stream_event_from_raw('{"type":"response.completed","sequence_number":2,"response":${registry_state.completed_body}}')) or {}
 				wrote_frame = true
+				break
 			}
 		}
 		if !wrote_frame {

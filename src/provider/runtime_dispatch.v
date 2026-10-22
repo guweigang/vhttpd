@@ -10,11 +10,11 @@ pub struct UpstreamRuntimeMapper {}
 
 pub struct RuntimeDispatchContext {
 pub:
-	instances_fn         fn (string) []string        = unsafe { nil }
-	upstream_enabled_fn  fn (string, string) bool    = unsafe { nil }
-	bootstrap_enabled_fn fn (string) bool            = unsafe { nil }
-	ready_fn             fn (string) bool            = unsafe { nil }
-	pull_url_fn          fn (string, string) !string = unsafe { nil }
+	instances_fn         fn (string) []string        @[required]
+	upstream_enabled_fn  fn (string, string) bool    @[required]
+	bootstrap_enabled_fn fn (string) bool            @[required]
+	ready_fn             fn (string) bool            @[required]
+	pull_url_fn          fn (string, string) !string @[required]
 }
 
 pub fn (ctx RuntimeDispatchContext) instances(name string) []string {
