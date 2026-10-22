@@ -1705,6 +1705,10 @@ Linux stopped at read-only preflight under the [VM testing skill](../.agents/ski
 
 ## Milestone 5 — CI: e2e + inproc on every PR (½ day)
 
+**2026-10-22 实现进度：** PR 已补入 Linux amd64、macOS Intel/ARM 的 `test-inproc` 与 `test-codexbot-fast`，取消 PR 路径过滤，避免测试/PHP/CI 变更漏跑；原 fast → prod → E2E 保留，并显式使用本次构建的绝对二进制路径。新增 03:00 UTC 的 `nightly-full.yml` 与共享 `runtime-regression.yml`，三平台执行 V 全量、PHP package、锁文件安装的 CodexBot Pest、生产构建及完整 E2E，失败也上传日志。按用户确认，`test-all` 覆盖 lifecycle，不重复调用独立 lifecycle 入口。`sync-vphp-package.yml` 保持只发布 `php/package` 子树，`php/app` 有意不触发包发布；它的变更会触发运行时 PR 检查。
+
+依赖使用固定 V/vjsx/VC/TCC/QuickJS 提交及仓库内补丁，覆盖前轮验收的 JSON 解码器、HTTP、WebSocket 与 vjsx 修改，不再依赖本地未发布改动或远端浮动分支。Action 固定完整 SHA，Node/PHP/Python/Composer 固定版本；系统 apt/Homebrew 库记录实际安装版本，未声明完全密封构建。actionlint、shellcheck 与 YAML 初检通过；正在以全新目录验证真实依赖获取/补丁/编译。远端 PR 检查、定时触发和 nightly 绿测尚无本轮证据，M5 尚未完成远端验收。
+
 **Goal:** catch e2e regressions on PR instead of waiting for a manual run.
 
 **Scope:** `.github/workflows/vhttpd-binaries.yml`, `tests/e2e/run.sh`, `Makefile`.
