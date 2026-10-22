@@ -4,7 +4,13 @@ This plan turns the prioritized findings in [`CODE_REVIEW_2026_08_06.md`](CODE_R
 
 Track this file as milestones complete; cross-link any deviation back to the review.
 
-## M4 日志统一收尾 — 2026-10-22
+## M5 CI 矩阵收尾 — 2026-10-22
+
+**M5 配置与本地验证已完成，远端验收尚未关闭。** 三平台 PR 检查新增 inproc/CodexBot fast，保留 fast → 生产构建 → 显式使用本次产物的 E2E；nightly 于 03:00 UTC 跑三平台 V 全量（含 lifecycle）、PHP package/Pest、生产构建和 E2E，失败也上传日志。V/vjsx/QuickJS 与 bootstrap 固定提交并携带已验收的本地补丁，action 固定 SHA，Node/Python/Composer 固定完整版本，PHP 固定 8.4 系列并记录实际补丁版本和系统库版本。
+
+新获取并重建的工具链通过 inproc 6/6、CodexBot fast 6/6；PHP package 10/10、Pest 79 项/557 断言、actionlint/shellcheck 与矩阵配置检查通过。证据为 `tmp/m5-ci-validation/`，细节及远端完成标准见下方 Milestone 5。**V2 剩余为 M5 远端 PR/nightly 证据、Linux 验收与 M7；不再把 M5 CI 配置列为尚未实现。** 本轮未扩展局部审查，也未宣称重跑 334 个 V 全量或生产 E2E。
+
+## 前轮 M4 日志统一收尾 — 2026-10-22
 
 当前范围仅为 M4。已移除 `runtime_trace` 和硬编码 trace 文件，业务事件直接进入统一 emit；WebSocket 的原 `ws.*` 诊断经显式注入的 emit 能力记录为 `runtime.trace`，保留 label 与调用点字段。未新增独立 `runtime_trace_path`，避免重建第二条路径；日志说明更新在现有 [日志系统文档](../docs/开发指南/调试技巧和工具/日志系统.md)，不创建已经迁移掉的 `docs/OVERVIEW.md`。这是对原 M4 路径提案的明确调整，业务事件名、NDJSON 字段、统计、默认文本输出和生产 WARN 契约保持不变。新增 `VHTTPD_LOG_FORMAT=json` 的控制台格式，event log 写失败显式报 error，空路径显式禁用。
 
@@ -1707,7 +1713,11 @@ Linux stopped at read-only preflight under the [VM testing skill](../.agents/ski
 
 **2026-10-22 实现进度：** PR 已补入 Linux amd64、macOS Intel/ARM 的 `test-inproc` 与 `test-codexbot-fast`，取消 PR 路径过滤，避免测试/PHP/CI 变更漏跑；原 fast → prod → E2E 保留，并显式使用本次构建的绝对二进制路径。新增 03:00 UTC 的 `nightly-full.yml` 与共享 `runtime-regression.yml`，三平台执行 V 全量、PHP package、锁文件安装的 CodexBot Pest、生产构建及完整 E2E，失败也上传日志。按用户确认，`test-all` 覆盖 lifecycle，不重复调用独立 lifecycle 入口。`sync-vphp-package.yml` 保持只发布 `php/package` 子树，`php/app` 有意不触发包发布；它的变更会触发运行时 PR 检查。
 
-依赖使用固定 V/vjsx/VC/TCC/QuickJS 提交及仓库内补丁，覆盖前轮验收的 JSON 解码器、HTTP、WebSocket 与 vjsx 修改，不再依赖本地未发布改动或远端浮动分支。Action 固定完整 SHA，Node/Python/Composer 固定完整版本，PHP 固定 8.4 系列；已核实固定 setup-php 的 `parseVersion` 仅取前三个字符，不能把 `8.4.5` 配置误称为补丁版本锁。PHP 实际补丁版本与系统 apt/Homebrew 库均记录安装结果，未声明完全密封构建。actionlint、shellcheck 与 YAML 初检通过；正在以全新目录验证真实依赖获取/补丁/编译。远端 PR 检查、定时触发和 nightly 绿测尚无本轮证据，M5 尚未完成远端验收。
+依赖使用固定 V/vjsx/VC/TCC/QuickJS 提交及仓库内补丁，覆盖前轮验收的 JSON 解码器、HTTP、WebSocket 与 vjsx 修改，不再依赖本地未发布改动或远端浮动分支。Action 固定完整 SHA，Node/Python/Composer 固定完整版本，PHP 固定 8.4 系列；已核实固定 setup-php 的 `parseVersion` 仅取前三个字符，不能把 `8.4.5` 配置误称为补丁版本锁。PHP 实际补丁版本与系统 apt/Homebrew 库均记录安装结果，未声明完全密封构建。本地验证已完成：actionlint 1.7.12、全部 workflow/composite shell 块的 shellcheck、YAML/触发/矩阵/失败上传检查及安全检查通过；从远端全新获取固定提交、应用补丁并构建 V 成功，8,227 个 V、157 个 vjsx、38 个 QuickJS 相关源码文件与前轮冻结输入无差异。用新工具链原样运行 `make test-inproc V_CC=cc WITH_DB=1` 6/6（335.33 秒）与 `make test-codexbot-fast V_CC=cc WITH_DB=1` 6/6（467.35 秒）通过；PHP package 10/10、Pest 79 项/557 断言通过。Composer 锁文件有效且兼容 PHP 8.4。Make 发现的全量为 334 个 V 文件，包含 lifecycle；本轮仅确认其覆盖和配置，没有宣称已重跑全量或生产 E2E。
+
+证据：`tmp/m5-ci-validation/`。本地为 macOS 27.0.1 ARM、PHP 8.5.11、Node 26.12.0、Python 3.15.0、Composer 2.9.2；CI 配置为 Ubuntu 24.04/macOS 15 Intel/ARM、PHP 8.4 系列、Node 22.14.0、Python 3.12.9、Composer 2.8.8。本地通过不冒称这套远端运行时的实跑。PHP 首次在沙箱内无法监听 Unix socket，放开所需执行权限后同一入口通过；原失败保留。运行时源码/TS 夹具无漂移，原二进制保留，未继续局部审查。
+
+**M5 配置实现与本地验证已完成，远端验收未关闭。** 完成标准：同一提交上的三个平台 fast/prod/E2E 与六个 inproc/CodexBot PR 检查通过；合并默认分支后观察 03:00 UTC 定时任务实际触发，三个 nightly 全量分支全部通过，并取得版本、补丁校验和与测试日志 artifacts。当前未推送/创建验收 PR，也没有定时运行或远端绿测证据，不核销这些验收项。Linux VM 仅只读检查，因既存跟踪修改命中技能停止规则，编译器仍为干净 `local-dev`、V 0.5.2 4f3082f；未在 VM 构建或测试。
 
 **Goal:** catch e2e regressions on PR instead of waiting for a manual run.
 

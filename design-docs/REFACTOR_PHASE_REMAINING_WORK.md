@@ -14,6 +14,12 @@ This document records the remaining acceptance work after the v2 runtime/config 
 
 ## 当前收尾验收（2026-10-22）
 
+本轮 M5 CI 配置与本地验证已完成：PR 新增 Ubuntu 24.04、macOS 15 Intel/ARM 的 inproc/CodexBot fast 检查；nightly 于 03:00 UTC 执行三平台 V 全量（含 lifecycle）、PHP package/Pest、生产构建与完整 E2E，保存失败日志与工具链版本。V/vjsx/VC/TCC/QuickJS 固定提交并携带已验收补丁，action 固定 SHA，Node/Python/Composer 固定完整版本，PHP 固定 8.4 系列；PHP 实际补丁和 apt/Homebrew 库版本记录在 artifacts，未宣称完全密封构建。
+
+本地 actionlint/shellcheck、YAML/触发/矩阵及安全检查通过；远端重新获取并构建固定工具链后 inproc 6/6、CodexBot fast 6/6 通过，PHP package 10/10、Pest 79 项/557 断言通过。证据 `tmp/m5-ci-validation/`。本地运行时与 CI 配置不同，Make 仅确认全量 334 个 V 测试包含 lifecycle，本轮未重跑整个全量或生产 E2E。**M5 的远端 PR 检查、定时触发与 nightly 三平台绿测仍无证据，不核销远端验收；配置实现缺口已关闭。** Linux VM 仍因既存跟踪修改仅只读检查，M7 仍待处理；未扩展局部审查。
+
+以下保留前轮 M4 与候选 E 的验收记录：
+
 V2 配置和运行时主体的既有验收结果保留在下方历史状态中。候选 E 的前轮 macOS 全量 332/332、PHP 与生产 E2E 通过证据继续保留。本轮（2026-10-22）已完成 M4 日志统一：移除硬编码 trace 文件与 emit 双写，保持原事件字段、统计和默认文本/WARN 契约，新增可选 stderr JSON、早期配置失败日志及写失败诊断。logging/ws 15/15、相关运行时 4/4、生产模式日志回归 1/1 及完整生产 E2E（新增日志契约 3 项、配置 205/0、CLI 4/0）通过。**V2 整体验收仍未关闭，剩余 Linux 与 M5/M7；M4 实现及本轮 macOS 验收已核销。** 详见 [重构行动计划](REFACTOR_ACTION_PLAN.md)。
 
 M4 最终证据为 `tmp/m4-logging-validation/`，输入清单 SHA-256 `b3bd410575557e93b99e632dfc3eb4eaac856a8c273bb55e8d6a7916001bcedf`；生产源码/二进制及 V 回归输入相同，最终仅修正新 E2E 对 stdout/stderr 的测试通道假设（`production-equivalence.json`）。源码、工作区与冻结依赖校验无漂移，原二进制保留。曾有一次外部创建凭证请求超时，原样独立回归及完整生产 E2E 复跑通过，原因未确认，原超时和断言未放宽。前轮 E 的完整矩阵证据位于 `tmp/v2-closeout-acceptance-validation/`，不作为本轮重跑全矩阵的声明。Linux 只读预检仍有既存跟踪修改，按技能停止规则未构建或测试；M5 CI 扩展与 M7 V1 弃用/默认配置仍待完成或明确调整范围。Live DB/安装态 WordPress 与长期负载未在本轮验收中启用。
