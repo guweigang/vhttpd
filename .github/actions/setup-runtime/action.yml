@@ -15,7 +15,7 @@ runs:
         php-version: '8.4'
         coverage: none
         tools: composer:2.8.8
-        extensions: dom, mbstring, xml, xmlwriter, sqlite3, pdo_sqlite
+        extensions: dom, mbstring, xml, xmlwriter, sqlite3, pdo_sqlite, sockets, posix, pcntl
     - name: Install native libraries (Linux)
       if: runner.os == 'Linux'
       shell: bash
