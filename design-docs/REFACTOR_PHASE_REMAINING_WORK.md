@@ -18,7 +18,7 @@ This document records the remaining acceptance work after the v2 runtime/config 
 
 本地 actionlint/shellcheck、YAML/触发/矩阵及安全检查通过；远端重新获取并构建固定工具链后 inproc 6/6、CodexBot fast 6/6 通过，PHP package 10/10、Pest 79 项/557 断言通过。证据 `tmp/m5-ci-validation/`。本地运行时与 CI 配置不同，Make 仅确认全量 334 个 V 测试包含 lifecycle，本轮未重跑整个全量或生产 E2E。**M5 的远端 PR 检查、定时触发与 nightly 三平台绿测仍无证据，不核销远端验收；配置实现缺口已关闭。** Linux VM 仍因既存跟踪修改仅只读检查，M7 仍待处理；未扩展局部审查。
 
-远端验收正在 [PR #21](https://github.com/guweigang/vhttpd/pull/21) 执行，用户已批准包含必要 V2/M4 基线。当前源码提交为 `51f5e4faa15ff2d2f1f4edcedebb37a37fdbe4f0`，[PR 三平台矩阵](https://github.com/guweigang/vhttpd/actions/runs/39717322267) 与 [nightly 同构全量矩阵](https://github.com/guweigang/vhttpd/actions/runs/39717328058) 尚在执行，不核销。已处理真实验收失败：平台 TCC/GC、runner ripgrep、QuickJS 原生线程交接的 stack top、Linux `struct ucred` 特性可见性、固定编译器禁用非固定回退、PHP worker 基线遗漏及干净 Composer loader/auth 初始化；失败原日志/artifact 均保留。发布版与工作区选定的 1,433 个源码/配置一致，原二进制保留；干净发布目录 PHP 10/10 通过，具体证据与历史尝试见行动计划及 `tmp/m5-remote-validation/`。自动 cron 尚未进入默认分支，本轮手动调用相同 reusable 矩阵，不冒称已经观察到定时触发；M7 未启动。
+远端验收正在 [PR #21](https://github.com/guweigang/vhttpd/pull/21) 执行，用户已批准包含必要 V2/M4 基线。当前源码提交为 `fd4164dcb183cb63e49b9ce32735035214c791b4`，[PR 三平台矩阵](https://github.com/guweigang/vhttpd/actions/runs/39729386221) 与 [nightly 同构全量矩阵](https://github.com/guweigang/vhttpd/actions/runs/39729407316) 尚在执行，不核销。已处理真实验收失败：平台 TCC/GC、runner ripgrep、QuickJS 原生线程交接的 stack top、Linux `struct ucred` 特性可见性、固定编译器禁用非固定回退、PHP worker 基线遗漏及干净 Composer loader/auth 初始化；失败原日志/artifact 均保留。发布版与工作区选定的 1,433 个源码/配置一致，原二进制保留；干净发布目录 PHP 10/10 通过，具体证据与历史尝试见行动计划及 `tmp/m5-remote-validation/`。自动 cron 尚未进入默认分支，本轮手动调用相同 reusable 矩阵，不冒称已经观察到定时触发；M7 未启动。
 
 以下保留前轮 M4 与候选 E 的验收记录：
 
