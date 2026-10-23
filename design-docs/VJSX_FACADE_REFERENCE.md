@@ -197,6 +197,24 @@ No SQL is automatically replayed. Database/server transport limits remain
 necessary for permanently stalled native calls; KILL QUERY/PQcancel is not yet
 implemented. Cancelling JS waiting does not guarantee database-side cancellation.
 
+### TODO: Driver-supported server-side cancellation (deferred)
+
+Deferred at the user's request until V's database drivers provide the required
+safe cancellation APIs. No driver changes are part of the current implementation;
+the logical-cancellation contract above remains unchanged.
+
+- PostgreSQL: expose an independently owned `PGcancel` handle through `db.pg`,
+  then use `PQcancel` without concurrently accessing the active `PGconn`.
+- MySQL: add a supported cancellation API/connection identity to `db.mysql`,
+  then send `KILL QUERY` through an independent control connection.
+- Keep each lease reserved until its SQL and cancellation work have both ended.
+  Resolve completion/cancellation races without allowing a late cancel to affect
+  rollback, connection reset, or a subsequent borrower's query.
+- Verify actual server-side interruption on timeout and AbortSignal cancellation,
+  transaction rollback, pool recovery/reuse, and cancel-versus-completion races
+  against isolated MySQL and PostgreSQL instances. A prompt JS rejection alone
+  is not evidence that the SQL stopped.
+
 Integration tests require dedicated disposable databases named
 `vhttpd_async_test` (the fixture drops/recreates `vjsx_async_items`). Never point
 them at production. MySQL test user is `root` with no password; PostgreSQL test
