@@ -51,7 +51,7 @@ Methods:
 - `runtime.snapshot(input?, fallbackValue?)`
 - `runtime.readTextFile(path, fallbackValue?)`
 - `runtime.findCodexSessionPath(threadId, fallbackValue?)`
-- `runtime.httpFetch(input, fallbackValue?)`
+- `await runtime.httpFetch(input, fallbackValue?)`
 - `runtime.bridgeDispatch(input, fallbackValue?)`
 - `runtime.websocketDispatch(input, fallbackValue?)`
 
@@ -75,7 +75,7 @@ Current host helpers:
 - `vhttpdHost.snapshot()`
 - `vhttpdHost.readTextFile(path, fallbackValue?)`
 - `vhttpdHost.findCodexSessionPath(threadId, fallbackValue?)`
-- `vhttpdHost.httpFetch(input)`
+- `vhttpdHost.httpFetch(url, init)` (internal native fetch bridge)
 - `vhttpdHost.bridgeDispatch(input)`
 - `vhttpdHost.websocketDispatch(input)`
 
@@ -96,6 +96,39 @@ Current host helpers:
 - `remoteAddr`
 - `ip`
 - `server`
+
+## Asynchronous HTTP Fetch
+
+`runtime.httpFetch()` returns a Promise. Callers previously reading properties
+directly from its result must add `await`, including the network-disabled path.
+It uses vjsx's native background HTTP transport and shared host-async completion
+queue; it does not perform network I/O inside the JS lane.
+
+```js
+const controller = new AbortController();
+const [one, two] = await Promise.all([
+  ctx.runtime.httpFetch({ url: firstUrl, timeoutMs: 2000, signal: controller.signal }),
+  ctx.runtime.httpFetch({ url: secondUrl, timeoutMs: 2000 }),
+]);
+```
+
+Input accepts `url`, `method`, `headers`, `body`, `timeoutMs`, and `signal`.
+`timeoutMs` defaults to 30,000 and must be a finite positive number. The native
+transport also retains its own total deadline and concurrency limit; a larger
+per-call timeout does not extend those host limits. Success resolves to
+`{ ok: true, status, body, headers }`, including HTTP 4xx/5xx responses.
+Transport failures resolve to `{ ok: false, error, errorName }`. Cancellation
+uses `AbortError`; per-call timeout uses `TimeoutError`. A disabled network
+capability resolves to the supplied fallback (undefined by default).
+
+Completion callbacks only enqueue owner-scoped lane work. An idle lane drains
+the completion queue on its worker before pumping Promise continuations. Timer
+wakeups and completion wakeups have separate pending slots; retired session
+callbacks cannot wake a replacement session.
+
+Cancellation ends JS waiting promptly. An already-running V HTTP socket may
+continue until it finishes or reaches its transport timeout, retaining its
+native concurrency slot. The body is buffered before this facade returns.
 
 ## Request Context
 
