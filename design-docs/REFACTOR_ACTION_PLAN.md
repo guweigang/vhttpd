@@ -4,7 +4,11 @@ This plan turns the prioritized findings in [`CODE_REVIEW_2026_08_06.md`](CODE_R
 
 Track this file as milestones complete; cross-link any deviation back to the review.
 
-## M5 CI 矩阵收尾 — 2026-10-22
+## M5 CI 矩阵收尾 — 2026-10-22～23
+
+**最新候选 `f799afb43cff5de80dafda0c05792d97c187b787` 已推送，远端验收仍待完成。** [本轮 PR 三平台矩阵](https://github.com/guweigang/vhttpd/actions/runs/39878141715) 与 [本轮 nightly 同构全量矩阵](https://github.com/guweigang/vhttpd/actions/runs/39878136180) 均绑定该提交。本轮只改队列 E2E 夹具，成功/队列满场景与保留 2500ms 的超时场景各用独立 runtime，并增加 worker 的 hold 握手。3 秒客户端延迟注入：原夹具失败，修复后队列 **29/29**；同一生产二进制的完整本地 E2E **配置 207/0、CLI 4/0、全部前置检查通过**，日志 `tmp/m5-remote-validation/queue-fix-full-e2e-local.log`，对照证据 `queue-timing-repro/`。配置新增两项用于验证独立超时 runtime 的就绪及 2500ms 配置，原生产默认值和超时断言保持。前一提交全部 **14 份原始 ZIP** 已保存并核对摘要及源码 commit/tree，目录 `attempt-0ba-artifacts/`，整轮失败仍不能核销。原工作区暂存状态和二进制保留，未扩展局部审查。
+
+### 此前验收记录
 
 **候选 `0ba7292285e8e0207d4f4f9153a041aace6c92f3` 远端两轮验收均失败，M5 尚未关闭（2026-10-23 更新）。** 两轮仅 Linux 的生产 E2E 失败：PR 未观测到队列，nightly 的排队成功请求在 2500ms 返回 504，夹具约 6.8 秒才释放 worker。Linux fast 320/320、全量 334/334 均零跳过，PHP 10、Pest 79 通过；macOS Intel/ARM 全部任务及六项独立回归通过。原始 job 日志与两个失败 ZIP 已保存于 `tmp/m5-remote-validation/failure-0ba-*`，ZIP 的 GitHub SHA256 已核对。现仅修复队列夹具：成功/队列满场景采用独立预算，另启动新 runtime 保留 2500ms 超时断言，并由 worker 文件握手确认进入 hold。注入 3 秒客户端延迟后，原夹具可复现失败，修复后队列回归 29/29；完整本地生产 E2E 与新提交远端矩阵待完成。 [PR 三平台矩阵](https://github.com/guweigang/vhttpd/actions/runs/39751539550) 与 [nightly 同构全量矩阵](https://github.com/guweigang/vhttpd/actions/runs/39751565792) 均绑定该提交。测试命令单独去掉 `GITHUB_ACTIONS`，恢复原编译器自动跳过的 8 个 ownership 文件；日志显式输出每个通过/跳过项，最终要求 320/334 文件全部执行。自动跳过已用单文件复现，移除标记后的 ownership 与路径夹具 2/2 通过，原断言保留。Linux socket 夹具改用 `/tmp`。PHP worker 将空闲 accept 的固定 200ms 睡眠改为相同上限的就绪等待；同一生产二进制的原两秒 SSE/reopen 断言均通过，完成时间由 1770/1779ms 降为 438/430ms，PHP 包 10/10 通过；本地完整生产 E2E 已通过原入口，配置 205/0、CLI 与全部前置检查通过，证据 `tmp/m5-remote-validation/production-select-full-e2e-local.log`。本地产物与原工作区二进制隔离，不作为远端同提交矩阵的替代。Intel 原 setup 日志确认停在 PHP 安装，现固定 `setup-php` 2.40.0 提交 `eb7c497e18156a6bbabfef1d3a82760b9eda3962`，并显式安装 sockets/posix/pcntl；最终是否解除由新矩阵确认。所有历史失败保留，不拼接旧提交绿测。
 
