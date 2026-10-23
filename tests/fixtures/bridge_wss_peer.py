@@ -8,13 +8,22 @@ import ssl
 import sys
 
 root = pathlib.Path(sys.argv[1])
+
+
+def publish_file(name, content):
+    # Readers wait for existence: publish only after the entire value is ready.
+    temporary = root / (name + '.tmp')
+    temporary.write_text(content)
+    temporary.replace(root / name)
+
+
 ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
 ctx.load_cert_chain(root / 'cert.pem', root / 'key.pem')
 with socket.socket() as listener:
     listener.bind(('127.0.0.1', 0))
     listener.listen(1)
     listener.settimeout(10)
-    (root / 'port').write_text(str(listener.getsockname()[1]))
+    publish_file('port', str(listener.getsockname()[1]))
     raw, _ = listener.accept()
     with ctx.wrap_socket(raw, server_side=True) as conn:
         conn.settimeout(10)
@@ -47,7 +56,7 @@ with socket.socket() as listener:
                 payload = bytes(value ^ mask[i % 4] for i, value in enumerate(payload))
             opcode = first & 15
             if opcode == 8:
-                (root / 'frames.json').write_text(json.dumps(frames))
+                publish_file('frames.json', json.dumps(frames))
                 conn.sendall(bytes([0x88, len(payload)]) + payload)
                 break
             frames.append(payload.decode())
