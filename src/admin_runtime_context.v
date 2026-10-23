@@ -152,7 +152,7 @@ fn (mut app App) build_admin_context() admin.RuntimeContext {
 			return provider_ctx.gateway_count()
 		}
 		relay_runtime_snapshot:                 fn [mut relay_runtime] () executor.AdminRelayRuntimeSummary {
-			return relay_runtime.admin_snapshot()
+			return relay_admin_snapshot(mut relay_runtime)
 		}
 	}
 }
@@ -174,7 +174,7 @@ fn (runtime PipelineRuntime) admin_snapshot() executor.AdminPipelineRuntimeSumma
 	}
 }
 
-fn (mut runtime relay.Runtime) admin_snapshot() executor.AdminRelayRuntimeSummary {
+fn relay_admin_snapshot(mut runtime relay.Runtime) executor.AdminRelayRuntimeSummary {
 	snapshot := runtime.snapshot()
 	return executor.AdminRelayRuntimeSummary{
 		descriptor_count: snapshot.descriptor_count
@@ -232,5 +232,5 @@ fn (app &App) admin_pipeline_runtime_snapshot() executor.AdminPipelineRuntimeSum
 }
 
 fn (mut app App) admin_relay_runtime_snapshot() executor.AdminRelayRuntimeSummary {
-	return app.relay.admin_snapshot()
+	return relay_admin_snapshot(mut app.relay)
 }
