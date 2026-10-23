@@ -2099,6 +2099,11 @@ write_controlled_worker_queue_config() {
 host = "127.0.0.1"
 port = ${port}
 
+[server.ssl]
+enabled = true
+cert = "${TMP_ROOT}/controlled-queue.crt"
+cert_key = "${TMP_ROOT}/controlled-queue.key"
+
 [files]
 pid_file = "${TMP_ROOT}/controlled-worker-queue.pid"
 event_log = "${TMP_ROOT}/controlled-worker-queue.events.ndjson"
@@ -3012,12 +3017,34 @@ test_worker_queue_smoke() {
     local controlled_socket="/tmp/vhq-$$-${RANDOM}.sock"
     local controlled_release="${controlled_socket}.release"
     write_controlled_worker_script "$controlled_worker"
+    # Linux fasthttp binds connections to synchronous event-loop workers. A
+    # queued TCP flow can land behind /hold before reaching the worker queue.
+    # TLS dispatches each accepted connection independently on every platform,
+    # so these assertions measure worker admission rather than accept affinity.
+    cat >"${TMP_ROOT}/controlled-queue.cnf" <<'CERT'
+[req]
+distinguished_name = subject
+prompt = no
+x509_extensions = extensions
+[subject]
+CN = 127.0.0.1
+[extensions]
+subjectAltName = IP:127.0.0.1
+basicConstraints = critical,CA:TRUE
+keyUsage = critical,digitalSignature,keyEncipherment,keyCertSign
+CERT
+    openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+        -config "${TMP_ROOT}/controlled-queue.cnf" \
+        -keyout "${TMP_ROOT}/controlled-queue.key" \
+        -out "${TMP_ROOT}/controlled-queue.crt" >"${TMP_ROOT}/controlled-queue-tls.log" 2>&1
+    local CURL_CA_BUNDLE="${TMP_ROOT}/controlled-queue.crt"
+    export CURL_CA_BUNDLE
     # The successful queue must survive several admin/503 round trips before
     # release. Test the short timeout separately below, on a fresh runtime.
     write_controlled_worker_queue_config "$controlled_config" "$controlled_port" "$controlled_worker" "$controlled_socket" 30000
     rm -f "$controlled_release"
     start_vhttpd "controlled-worker-queue" --config "$controlled_config" --admin-port "$controlled_admin_port" >/dev/null
-    local controlled_base_url="http://127.0.0.1:${controlled_port}"
+    local controlled_base_url="https://127.0.0.1:${controlled_port}"
     wait_http_contains "${controlled_base_url}/fast" "controlled worker ok" \
         "controlled worker queue runtime serves baseline request"
     wait_http_contains "http://127.0.0.1:${controlled_admin_port}/admin/runtime" '"queue_timeout_ms":30000' \
@@ -3028,8 +3055,9 @@ test_worker_queue_smoke() {
     wait_controlled_worker_holding "${controlled_socket}.holding"
     wait_http_contains "http://127.0.0.1:${controlled_admin_port}/admin/workers" '"inflight_requests":1' \
         "controlled worker admin snapshot exposes busy worker"
-    curl -fsS --max-time 60 "${controlled_base_url}/fast?trace_id=e2e-worker-queued-success" >"$controlled_queued_body" 2>/dev/null &
+    curl -fsS --max-time 60 "${controlled_base_url}/fast?trace_id=e2e-worker-queued-success" >"$controlled_queued_body" 2>"${controlled_queued_body}.err" &
     local controlled_queued_pid=$!
+    LOG_FILES+=("${controlled_queued_body}.err")
     wait_http_contains "http://127.0.0.1:${controlled_admin_port}/admin/runtime" '"queue_depth":1' \
         "controlled worker admin runtime exposes queued request"
     expect_http_status_contains_once "${controlled_base_url}/fast?trace_id=e2e-worker-queue-full" \

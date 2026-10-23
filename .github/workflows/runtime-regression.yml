@@ -41,10 +41,13 @@ jobs:
             # test-all includes CodexBot lifecycle with identical DB/compiler flags.
             # Avoid recompiling the full lifecycle family a second time.
             all) target=test-all ;;
+            e2e) target= ;; # Production E2E preflight; full acceptance still uses all.
             *) echo "Unknown regression suite: $SUITE" >&2; exit 1 ;;
           esac
           # Keep ownership tests enabled; the compiler otherwise skips them on GHA.
-          env -u GITHUB_ACTIONS make "$target" V_CC=cc WITH_DB=1 2>&1 | tee "ci-results/$SUITE.log"
+          if [[ -n "$target" ]]; then
+            env -u GITHUB_ACTIONS make "$target" V_CC=cc WITH_DB=1 2>&1 | tee "ci-results/$SUITE.log"
+          fi
       - name: PHP package regressions (nightly)
         if: inputs.suite == 'all'
         shell: bash
@@ -64,13 +67,13 @@ jobs:
           set -euo pipefail
           composer --working-dir=examples/codexbot-app test 2>&1 | tee ci-results/pest.log
       - name: Build production binary (nightly)
-        if: inputs.suite == 'all'
+        if: inputs.suite == 'all' || inputs.suite == 'e2e'
         shell: bash
         run: |
           set -euo pipefail
           make prod V_CC=cc VPHP_V_GC=boehm WITH_DB=1 2>&1 | tee ci-results/prod.log
       - name: Full production E2E (nightly)
-        if: inputs.suite == 'all'
+        if: inputs.suite == 'all' || inputs.suite == 'e2e'
         shell: bash
         run: |
           set -euo pipefail

@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       validation:
-        description: 'PR gates or the same full matrix used by nightly'
+        description: 'PR gates, full nightly matrix, or production E2E preflight'
         type: choice
-        options: [pr, nightly]
+        options: [pr, nightly, e2e]
         default: pr
   push:
     branches:
@@ -31,7 +31,7 @@ permissions:
 
 jobs:
   build:
-    if: github.event_name != 'workflow_dispatch' || inputs.validation != 'nightly'
+    if: github.event_name != 'workflow_dispatch' || inputs.validation == 'pr'
     name: ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 360
@@ -120,7 +120,7 @@ jobs:
           retention-days: 14
 
   test-inproc-fast:
-    if: github.event_name != 'workflow_dispatch' || inputs.validation != 'nightly'
+    if: github.event_name != 'workflow_dispatch' || inputs.validation == 'pr'
     name: ${{ matrix.suite }} (${{ matrix.os }})
     strategy:
       fail-fast: false
@@ -135,7 +135,7 @@ jobs:
   # A registered workflow can dispatch the full matrix before the new scheduled
   # workflow is merged into the default branch. Both use the identical callee.
   nightly-acceptance:
-    if: github.event_name == 'workflow_dispatch' && inputs.validation == 'nightly'
+    if: github.event_name == 'workflow_dispatch' && (inputs.validation == 'nightly' || inputs.validation == 'e2e')
     strategy:
       fail-fast: false
       matrix:
@@ -143,4 +143,4 @@ jobs:
     uses: ./.github/workflows/runtime-regression.yml
     with:
       os: ${{ matrix.os }}
-      suite: all
+      suite: ${{ inputs.validation == 'e2e' && 'e2e' || 'all' }}
