@@ -1985,8 +1985,10 @@ if (str_starts_with($socket, 'unix://')) {
     $socket = substr($socket, 7);
 }
 $release = $socket . '.release';
+$holding = $socket . '.holding';
 @unlink($socket);
 @unlink($release);
+@unlink($holding);
 $server = stream_socket_server('unix://' . $socket, $errno, $errstr);
 if (!$server) {
     fwrite(STDERR, "listen failed: {$errstr}\n");
@@ -2026,10 +2028,12 @@ while (true) {
     $req = json_decode($raw, true) ?: [];
     $path = (string) ($req['path'] ?? '/');
     if ($path === '/hold') {
+        file_put_contents($holding, 'holding');
         $deadline = microtime(true) + 60.0;
         while (!file_exists($release) && microtime(true) < $deadline) {
             usleep(10_000);
         }
+        @unlink($holding);
         $body = 'held by controlled worker';
     } else {
         $body = 'controlled worker ok';
@@ -2089,6 +2093,7 @@ write_controlled_worker_queue_config() {
     local port="$2"
     local worker_script="$3"
     local worker_socket="$4"
+    local queue_timeout_ms="${5:-2500}"
     cat >"$file" <<EOF
 [server]
 host = "127.0.0.1"
@@ -2103,7 +2108,7 @@ autostart = true
 read_timeout_ms = 5000
 pool_size = 1
 queue_capacity = 1
-queue_timeout_ms = 2500
+queue_timeout_ms = ${queue_timeout_ms}
 queue_poll_ms = 10
 socket = "${worker_socket}"
 cmd = "php ${worker_script}"
@@ -2942,6 +2947,19 @@ test_generic_event_pipeline_smoke() {
         "generic event preserves trace id"
 }
 
+# Wait for the fixture itself to acknowledge /hold. An inflight admin snapshot
+# alone can still describe the preceding baseline request while it is retiring.
+wait_controlled_worker_holding() {
+    local marker="$1"
+    for _ in $(seq 1 200); do
+        [[ -f "$marker" ]] && return 0
+        sleep 0.05
+    done
+    ko "controlled worker acknowledges held request"
+    print_logs
+    return 1
+}
+
 test_worker_queue_smoke() {
     echo ""
     echo "15. Worker queue smoke"
@@ -2994,20 +3012,23 @@ test_worker_queue_smoke() {
     local controlled_socket="/tmp/vhq-$$-${RANDOM}.sock"
     local controlled_release="${controlled_socket}.release"
     write_controlled_worker_script "$controlled_worker"
-    write_controlled_worker_queue_config "$controlled_config" "$controlled_port" "$controlled_worker" "$controlled_socket"
+    # The successful queue must survive several admin/503 round trips before
+    # release. Test the short timeout separately below, on a fresh runtime.
+    write_controlled_worker_queue_config "$controlled_config" "$controlled_port" "$controlled_worker" "$controlled_socket" 30000
     rm -f "$controlled_release"
     start_vhttpd "controlled-worker-queue" --config "$controlled_config" --admin-port "$controlled_admin_port" >/dev/null
     local controlled_base_url="http://127.0.0.1:${controlled_port}"
     wait_http_contains "${controlled_base_url}/fast" "controlled worker ok" \
         "controlled worker queue runtime serves baseline request"
-    wait_http_contains "http://127.0.0.1:${controlled_admin_port}/admin/runtime" '"queue_timeout_ms":2500' \
-        "controlled worker admin runtime exposes queue timeout"
+    wait_http_contains "http://127.0.0.1:${controlled_admin_port}/admin/runtime" '"queue_timeout_ms":30000' \
+        "controlled worker admin runtime exposes successful queue budget"
 
-    curl -fsS --max-time 20 "${controlled_base_url}/hold?trace_id=e2e-worker-controlled-hold" >"$controlled_hold_body" 2>/dev/null &
+    curl -fsS --max-time 60 "${controlled_base_url}/hold?trace_id=e2e-worker-controlled-hold" >"$controlled_hold_body" 2>/dev/null &
     local controlled_hold_pid=$!
+    wait_controlled_worker_holding "${controlled_socket}.holding"
     wait_http_contains "http://127.0.0.1:${controlled_admin_port}/admin/workers" '"inflight_requests":1' \
         "controlled worker admin snapshot exposes busy worker"
-    curl -fsS --max-time 20 "${controlled_base_url}/fast?trace_id=e2e-worker-queued-success" >"$controlled_queued_body" 2>/dev/null &
+    curl -fsS --max-time 60 "${controlled_base_url}/fast?trace_id=e2e-worker-queued-success" >"$controlled_queued_body" 2>/dev/null &
     local controlled_queued_pid=$!
     wait_http_contains "http://127.0.0.1:${controlled_admin_port}/admin/runtime" '"queue_depth":1' \
         "controlled worker admin runtime exposes queued request"
@@ -3044,9 +3065,16 @@ test_worker_queue_smoke() {
     wait_event_contains "${TMP_ROOT}/controlled-worker-queue.events.ndjson" "e2e-worker-queued-success" \
         "controlled worker queued success preserves trace id"
 
-    rm -f "$controlled_release"
+    stop_test_processes
+    write_controlled_worker_queue_config "$controlled_config" "$controlled_port" "$controlled_worker" "$controlled_socket" 2500
+    start_vhttpd "controlled-worker-timeout" --config "$controlled_config" --admin-port "$controlled_admin_port" >/dev/null
+    wait_http_contains "${controlled_base_url}/fast" "controlled worker ok" \
+        "controlled timeout runtime serves baseline request"
+    wait_http_contains "http://127.0.0.1:${controlled_admin_port}/admin/runtime" '"queue_timeout_ms":2500' \
+        "controlled timeout runtime retains 2500 ms deadline"
     curl -fsS --max-time 20 "${controlled_base_url}/hold?trace_id=e2e-worker-controlled-timeout-hold" >"$controlled_timeout_hold_body" 2>/dev/null &
     local controlled_timeout_hold_pid=$!
+    wait_controlled_worker_holding "${controlled_socket}.holding"
     wait_http_contains "http://127.0.0.1:${controlled_admin_port}/admin/workers" '"inflight_requests":1' \
         "controlled worker admin snapshot exposes busy worker before timeout"
     expect_http_status_contains_once "${controlled_base_url}/fast?trace_id=e2e-worker-queue-timeout" \
