@@ -6,7 +6,9 @@ Track this file as milestones complete; cross-link any deviation back to the rev
 
 ## M5 CI 矩阵收尾 — 2026-10-22～23
 
-**最新验收候选为 `dc3767ca1d7d27cc4f9752ddc4827610cc060b46`（2026-10-24），远端仍未通过。** 已推送 [PR #21](https://github.com/guweigang/vhttpd/pull/21)，源码 tree `baa65922b72f1c2b495b9166b73aefe9af70e0fa`。[三平台 PR 检查](https://github.com/guweigang/vhttpd/actions/runs/39994907193) 与 [nightly 同构全量矩阵](https://github.com/guweigang/vhttpd/actions/runs/39994901630) 绑定同一新提交，独立重新执行全部 9+3 任务。最终仍须完整绿测及 15 份原始 artifact ZIP 的来源、摘要和测试计数核验，不拼接旧提交结果。
+**最新验收候选为 `50c330cc6dec8c0c3c6c6bd4a984298452bf36bd`（2026-10-24），远端仍未通过。** 已推送 [PR #21](https://github.com/guweigang/vhttpd/pull/21)，源码 tree `1aa2ab7ae73b382a9a19cbeba7c71dfb3b3b9a0b`。[三平台 PR 检查](https://github.com/guweigang/vhttpd/actions/runs/40007725540) 与 [nightly 同构全量矩阵](https://github.com/guweigang/vhttpd/actions/runs/40007740136) 已核对同一新提交，独立重新执行全部 9+3 任务。最终仍须完整绿测及 15 份原始 artifact ZIP 的来源、摘要和测试计数核验，不拼接旧提交结果。
+
+前一提交 `dc3767ca` 的 ARM 全量在 worker PID 注册表夹具失败（310 项通过后 `replacement missing`），其 ARM PR 主任务及六项独立回归通过。原失败日志与两轮最终全部 13 份 ZIP 已保存并核验摘要，见 `failure-dc376-arm-full.log`、`attempt-dc37-artifacts-proof.json`。Mac 单独在重启归属探测前注入 50ms 延迟，复现同一 panic，诊断为 `worker socket ownership mismatch`：Python 夹具 accept 后立即关闭连接，早于客户端原生对端检查。现将同一 worker 组的三份夹具改为等待客户端完成后再关闭，并补齐 PID 重启失败原因输出；原断言、生产时限和生产代码均保持。修复后相同注入 worker 14/14，移除全部注入的独立 worker 14/14，完整生产 E2E 配置 207/0、CLI 4/0、全部前置检查通过。Mac334 快照 824 文件中 821 个保持相同，仅三份 worker 测试夹具变化；生产二进制与固定本机执行文件摘要不变。源码提交与证据摘要见 `tmp/m5-remote-validation/pid-readiness-validation.json`。
 
 前一提交 `3323e0ee` 的 ARM PR 主任务及六项独立回归通过，但 Intel 全量在 TLS sender 夹具失败：端口文件已存在却尚未写入，读到空字符串，`wss://127.0.0.1:` 因而连接默认 443。两轮已取消，原失败日志与全部 13 份 ZIP 已保存并核验摘要，记录 `failure-3323-intel-full.log`、`attempt-3323-artifacts-proof.json`。现仅将该 Python 夹具的端口和帧结果改为同目录临时文件写完后原子替换。Mac 注入 150ms 写入延迟：原夹具复现同一 443 panic，修复后原 sender 回归通过，连接生命周期组 6/6、完整生产 E2E 配置 207/0 与 CLI 4/0、全部前置检查通过。超时和原断言不变，V/生产源码 824 文件及生产二进制均与 Mac334 快照一致；改动夹具的独立验证见 `tls-publication-validation.json`，新提交绑定见 `tls-publication-commit-binding.json`。
 
@@ -14,7 +16,8 @@ Track this file as milestones complete; cross-link any deviation back to the rev
 
 本轮修复：JS 回调捕获本地接口值，避免工厂返回后访问临时接口地址；插件退休映射缺失键显式解锁返回；worker 批次测试工厂显式返回 `&worker.WorkerState`，原断言保持。首次全量 259 项通过后遇到夹具编译失败的原日志及后续 75/75 排查结果均保留，最终 334/334 来自独立整轮，未拼接。完整证据及原始日志摘要见 `tmp/m5-remote-validation/mac-acceptance-complete.json`、`mac-final-inputs.json`、`mac-test-all.log` 与 `mac-production-e2e-final.log`。
 
-**覆盖范围与剩余验收：** 本机主工作区在验收期间另有数据库/异步 fetch 并行改动，未纳入冻结候选；差异清单记录于 `mac-concurrent-workspace-differences.json`，本轮五文件修复已同步回工作区，其余并行工作保持原状。本次结果不能表述为当前整个主工作区已通过。Live DB 与安装态 WordPress opt-in 未启用；本机 PHP/Node 在长时间验收期间更新过，因此最终将 PHP 8.5.12 ZTS、Node 26.12.1、Python 3.15.0 与 Composer 2.9.2 固定到实际文件路径和摘要，重新执行 PHP、Pest 及完整生产 E2E，全部退出码为 0，执行文件摘要前后不变；记录见 `mac-native-runtime-exit.json`。未宣称这些原生运行时与远端环境完全相同。2026-10-24 用户已授权提交并恢复远端，初始五文件修复保留在 `3323e0ee`；TLS 夹具原子发布修复已推送为 `dc3767ca`，该新提交的 PR 与全量矩阵正在独立重跑。完整远端验收及自动 cron 观察仍未完成，M5 保持未关闭。
+**覆盖范围与剩余验收：** 本机主工作区在验收期间另有数据库/异步 fetch 并行改动，未纳入冻结候选；差异清单记录于 `mac-concurrent-workspace-differences.json`，本轮五文件修复已同步回工作区，其余并行工作保持原状。本次结果不能表述为当前整个主工作区已通过。Live DB 与安装态 WordPress opt-in 未启用；本机 PHP/Node 在长时间验收期间更新过，因此最终将 PHP 8.5.12 ZTS、Node 26.12.1、Python 3.15.0 与 Composer 2.9.2 固定到实际文件路径和摘要，重新执行 PHP、Pest 及完整生产 E2E，全部退出码为 0，执行文件摘要前后不变；记录见 `mac-native-runtime-exit.json`。未宣称这些原生运行时与远端环境完全相同。2026-10-24 用户已授权提交并恢复远端，初始五文件修复保留在 `3323e0ee`，TLS 夹具原子发布为 `dc3767ca`，worker 探测夹具修复为 `50c330cc`；当前新提交的 PR 与全量矩阵正在独立重跑。
+完整远端验收及自动 cron 观察仍未完成，M5 保持未关闭。
 
 **前轮 cfda 记录（已因非本地类型方法定义失败取消）：** [本轮 PR 矩阵](https://github.com/guweigang/vhttpd/actions/runs/39944133414) 与 [本轮全量矩阵](https://github.com/guweigang/vhttpd/actions/runs/39944137424) 绑定同一提交。V/VC 仍固定为 `e21021d1`/`7ba7d3e`。前一候选已在 Linux 完成自举，随后首次两个全量测试编译失败：`config` 解析为标准库 `config.LoadOptions`，而非项目配置类型。原日志 `failure-c565-linux-full.log` 保留。现为所有 Make 编译入口明确指定模块路径：测试优先 `src`，生产优先移除测试辅助文件后的暂存源码树，再搜索 `@vlib`、`@vmodules`。Make dry-run 已核对两类入口的路径，实际编译仍以本轮矩阵为准；未恢复本机重型编译。
 
