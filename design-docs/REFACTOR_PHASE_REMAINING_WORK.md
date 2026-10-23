@@ -14,7 +14,7 @@ updated: 2026-10-23
 
 本轮修复：JS 回调捕获本地接口值，避免工厂返回后访问临时接口地址；插件退休映射缺失键显式解锁返回；worker 批次测试工厂显式返回 `&worker.WorkerState`，原断言保持。首次全量 259 项通过后遇到夹具编译失败的原日志及后续 75/75 排查结果均保留，最终 334/334 来自独立整轮，未拼接。完整证据及原始日志摘要见 `tmp/m5-remote-validation/mac-acceptance-complete.json`、`mac-final-inputs.json`、`mac-test-all.log` 与 `mac-production-e2e-final.log`。
 
-**覆盖范围与剩余验收：** 本机主工作区在验收期间另有数据库/异步 fetch 并行改动，未纳入冻结候选；差异清单记录于 `mac-concurrent-workspace-differences.json`，本轮五文件修复已同步回工作区，其余并行工作保持原状。本次结果不能表述为当前整个主工作区已通过。Live DB 与安装态 WordPress opt-in 未启用；本机 PHP/Node/Composer 等实际版本记录在证据中，未宣称与远端环境完全相同。用户明确要求先不要恢复远端：本轮未推送或触发 GitHub 矩阵，PR #21 的同提交远端全量验收及自动 cron 观察仍未完成，M5 保持未关闭。
+**覆盖范围与剩余验收：** 本机主工作区在验收期间另有数据库/异步 fetch 并行改动，未纳入冻结候选；差异清单记录于 `mac-concurrent-workspace-differences.json`，本轮五文件修复已同步回工作区，其余并行工作保持原状。本次结果不能表述为当前整个主工作区已通过。Live DB 与安装态 WordPress opt-in 未启用；本机 PHP/Node 在长时间验收期间更新过，因此最终将 PHP 8.5.12 ZTS、Node 26.12.1、Python 3.15.0 与 Composer 2.9.2 固定到实际文件路径和摘要，重新执行 PHP、Pest 及完整生产 E2E，全部退出码为 0，执行文件摘要前后不变；记录见 `mac-native-runtime-exit.json`。未宣称这些原生运行时与远端环境完全相同。用户明确要求先不要恢复远端：本轮未推送或触发 GitHub 矩阵，PR #21 的同提交远端全量验收及自动 cron 观察仍未完成，M5 保持未关闭。
 
 **前轮 cfda 记录（已因非本地类型方法定义失败取消）：** [本轮 PR 矩阵](https://github.com/guweigang/vhttpd/actions/runs/39944133414) 与 [本轮全量矩阵](https://github.com/guweigang/vhttpd/actions/runs/39944137424) 绑定同一提交。V/VC 仍固定为 `e21021d1`/`7ba7d3e`。前一候选已在 Linux 完成自举，随后首次两个全量测试编译失败：`config` 解析为标准库 `config.LoadOptions`，而非项目配置类型。原日志 `failure-c565-linux-full.log` 保留。现为所有 Make 编译入口明确指定模块路径：测试优先 `src`，生产优先移除测试辅助文件后的暂存源码树，再搜索 `@vlib`、`@vmodules`。Make dry-run 已核对两类入口的路径，实际编译仍以本轮矩阵为准；未恢复本机重型编译。
 
