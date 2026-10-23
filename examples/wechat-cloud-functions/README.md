@@ -1,7 +1,9 @@
-# 微信云函数风格应用示例
+# 小程序直连远端 vhttpd + vjsx
 
 这是一个普通的 **vhttpd + vjsx 应用**，只使用现有 HTTP、fetch 和异步数据库接口。
 不修改 vhttpd/vjsx 核心，不部署 CloudBase，也不声称完整兼容 `wx-server-sdk`。
+小程序通过 `wx.request` 直接请求自己的远端 HTTPS 服务，**不通过腾讯云函数转发**。
+保留 `exports.main(event, context)` 只是为了方便复用函数代码，不代表部署到微信云开发。
 
 提供的最小闭环：
 
@@ -60,20 +62,44 @@ export WECHAT_DB_NAME='your-db-name'
 
 ## 小程序端
 
-将 `client/wechat.js` 复制进小程序。先登录，再调用业务函数：
+将 `client/vhttpd.js` 复制进小程序，统一将客户端实例命名为 `vhttpd`。
+先登录，再直连远端服务调用业务函数：
 
 ```js
-const {createClient} = require('./wechat');
-const cloud = createClient({baseURL: 'https://your-api.example.com'});
+const {createClient} = require('./vhttpd');
+const vhttpd = createClient({baseURL: 'https://your-api.example.com'});
 
-await cloud.login();
-const {result} = await cloud.callFunction({name: 'getUser', data: {}});
+await vhttpd.login();
+const {result} = await vhttpd.callFunction({name: 'getUser', data: {}});
 console.log(result.user);
 ```
 
-这是应用自己的客户端封装，不会改写原生 `wx.cloud.callFunction()`。
+`vhttpd.login()` 内部用 `wx.login()` 取得 code，再通过 `wx.request` 直发远端
+`/auth/login`；`vhttpd.callFunction()` 同样通过 `wx.request` 直发 `/functions/<name>`。
+AppSecret 和 code 校验只在服务端处理，不需要 `wx.cloud.init()` 或云开发环境。
+这是应用自己的客户端封装，不会改写原生 `wx.cloud.callFunction()`，也不安装到 `wx` 对象。
 业务请求不会自动重试，避免写操作重放。401 会清除客户端会话；调用方应显式重新登录，
 而不是自动重发上一笔业务操作。`clearSession()` 只清除本地缓存，不撤销服务端令牌。
+
+### 从现有小程序迁移
+
+当前兼容的是 Promise 形式的 `{name, data}` 调用参数及返回值中的 `result`：
+
+```js
+// 原来
+const {result} = await wx.cloud.callFunction({name: 'getUser', data: {}});
+// 迁移后（先配置并登录上面的 vhttpd 实例）
+const {result} = await vhttpd.callFunction({name: 'getUser', data: {}});
+```
+
+因此这类业务调用可以将 **`wx.cloud.callFunction` 替换为 `vhttpd.callFunction`**，
+不需要修改 `name`、`data` 和 `result` 的使用方式。不要全局替换 `wx.`：
+`wx.login`、`wx.request`、页面导航、支付等客户端 API 仍由微信提供。
+
+这不是完整 SDK 的直接替换：`success/fail/complete` 回调、`config.env`、原生 SDK 的
+错误对象格式和其他选项尚未适配，需要改为当前 Promise 接口；`wx.cloud.database`、
+云存储及服务端 `wx-server-sdk` 调用也需另行迁移。远端函数还需显式注册、部署，
+使用本例的可信身份与 SQL API；只改客户端前缀不能自动迁移服务端依赖。
 
 ## 函数约定
 
