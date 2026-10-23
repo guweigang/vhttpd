@@ -6,7 +6,9 @@ Track this file as milestones complete; cross-link any deviation back to the rev
 
 ## M5 CI 矩阵收尾 — 2026-10-22～23
 
-**最新候选 `cfda16778f81cb9ca4de5ecbead6ce9480e7e304` 已推送，完整验收仍待完成。** [本轮 PR 矩阵](https://github.com/guweigang/vhttpd/actions/runs/39944133414) 与 [本轮全量矩阵](https://github.com/guweigang/vhttpd/actions/runs/39944137424) 绑定同一提交。V/VC 仍固定为 `e21021d1`/`7ba7d3e`。前一候选已在 Linux 完成自举，随后首次两个全量测试编译失败：`config` 解析为标准库 `config.LoadOptions`，而非项目配置类型。原日志 `failure-c565-linux-full.log` 保留。现为所有 Make 编译入口明确指定模块路径：测试优先 `src`，生产优先移除测试辅助文件后的暂存源码树，再搜索 `@vlib`、`@vmodules`。Make dry-run 已核对两类入口的路径，实际编译仍以本轮矩阵为准；未恢复本机重型编译。
+**最新候选 `ab6cd850d7d1743b00b5ee5af8021ba41b863694` 已推送，完整验收尚待完成。** [本轮 PR 矩阵](https://github.com/guweigang/vhttpd/actions/runs/39945511631) 与 [本轮全量矩阵](https://github.com/guweigang/vhttpd/actions/runs/39945504587) 绑定同一提交。前一候选的配置模块类型错误已消失；Linux inproc 随后因新编译器禁止主模块为外部 `relay.Runtime` 定义方法而失败，原日志 `failure-cfda-linux-inproc.log` 保留。现仅将该 admin 快照投影改成本地函数，更新两处调用，转换函数体及字段不变。Make 显式模块路径和固定 V/VC 保留，重新执行完整矩阵。
+
+**前轮 cfda 记录（已因非本地类型方法定义失败取消）：** [本轮 PR 矩阵](https://github.com/guweigang/vhttpd/actions/runs/39944133414) 与 [本轮全量矩阵](https://github.com/guweigang/vhttpd/actions/runs/39944137424) 绑定同一提交。V/VC 仍固定为 `e21021d1`/`7ba7d3e`。前一候选已在 Linux 完成自举，随后首次两个全量测试编译失败：`config` 解析为标准库 `config.LoadOptions`，而非项目配置类型。原日志 `failure-c565-linux-full.log` 保留。现为所有 Make 编译入口明确指定模块路径：测试优先 `src`，生产优先移除测试辅助文件后的暂存源码树，再搜索 `@vlib`、`@vmodules`。Make dry-run 已核对两类入口的路径，实际编译仍以本轮矩阵为准；未恢复本机重型编译。
 
 **前轮 c565 记录（已因配置模块解析失败取消）：** V 固定为包含三个已合并 PR 的 `e21021d1`，VC 更新至官方快照 `7ba7d3e44009617d70c849764f89415b1a517690`，其生成源 `ffc38ada` 是目标 V 的祖先；保留原 TCC 固定值和 vjsx 补丁，移除已由上游覆盖的 V 补丁。[新 PR 矩阵](https://github.com/guweigang/vhttpd/actions/runs/39942392144) 与 [新全量矩阵](https://github.com/guweigang/vhttpd/actions/runs/39942405068) 绑定同一提交。旧 VC 的 Linux 自举失败原日志及 10 份 ZIP 已保留并核验摘要。新 VC 的本地 bootstrap 因主机负载超过 400 而主动终止，只停止本任务编译，不记录为通过或编译器失败；以干净 runner 验证自举兼容性及完整矩阵。
 
