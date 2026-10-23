@@ -44,7 +44,8 @@ fn test_successful_worker_restart_replaces_pid_and_stop_removes_it() {
 	python := os.find_abs_path_of_executable('python3') or { panic(err) }
 	script := root + '/worker.py'
 	socket := root + '/worker.sock'
-	os.write_file(script, 'import os, socket, sys\np = sys.argv[1]\nif os.path.exists(p): os.unlink(p)\ns = socket.socket(socket.AF_UNIX)\ns.bind(p)\ns.listen()\nwhile True:\n c, _ = s.accept()\n c.close()\n') or { panic(err) }
+	// Keep the probe connected until its client finishes checking peer ownership.
+	os.write_file(script, 'import os, socket, sys\np = sys.argv[1]\nif os.path.exists(p): os.unlink(p)\ns = socket.socket(socket.AF_UNIX)\ns.bind(p)\ns.listen()\nwhile True:\n c, _ = s.accept()\n c.recv(1)\n c.close()\n') or { panic(err) }
 	slot := transport.ManagedWorker.build_slot(0, '"${python}" -S "${script}" "{socket}"', {}, socket, 1) or { panic(err) }
 	mut state := WorkerState{ worker_backend: WorkerBackendRuntime{ autostart: true, managed_workers: [slot] } }
 	defer { transport.ManagedWorkerPool.stop(mut state.worker_backend.managed_workers) }
@@ -54,7 +55,7 @@ fn test_successful_worker_restart_replaces_pid_and_stop_removes_it() {
 		panic('first worker missing')
 	}
 	assert first.pid in process_runtime.managed_process_pids()
-	state.restart_slot(LifecyclePort{}, 0, 'test restart')
+	state.restart_slot(LifecyclePort{ emit_fn: fn (kind string, fields map[string]string) { eprintln('pid fixture ${kind}: ${fields}') } }, 0, 'test restart')
 	second := state.worker_backend.managed_workers[0].proc or {
 		process_runtime.shutdown_managed_processes()
 		panic('replacement missing')

@@ -17,7 +17,7 @@ fn exercise_worker_lifecycle_event(restart bool, ready bool) {
 	path := root + '/worker.sock'
 	python := os.find_abs_path_of_executable('python3') or { panic(err) }
 	script := root + '/peer.py'
-	os.write_file(script, 'import socket,sys\ns=socket.socket(socket.AF_UNIX); s.bind(sys.argv[1]); s.listen()\nwhile True:\n c,_=s.accept(); c.close()\n') or { panic(err) }
+	os.write_file(script, 'import socket,sys\ns=socket.socket(socket.AF_UNIX); s.bind(sys.argv[1]); s.listen()\nwhile True:\n c,_=s.accept(); c.recv(1); c.close()\n') or { panic(err) }
 	// Readiness requires the managed child itself to own the socket.
 	command := if ready { '"${python}" -S "${script}" "${path}"' } else { 'sleep 30' }
 	// An overlong address fails before native connect allocates a descriptor.
