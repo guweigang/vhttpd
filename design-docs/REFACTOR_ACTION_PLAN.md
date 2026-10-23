@@ -6,7 +6,7 @@ Track this file as milestones complete; cross-link any deviation back to the rev
 
 ## M5 CI 矩阵收尾 — 2026-10-22～23
 
-**验收顺序已调整为先本机 macOS、再远端三平台（2026-10-23）。** 最近远端候选 `ab6cd850d7d1743b00b5ee5af8021ba41b863694` 的全量矩阵失败，仍运行的 PR 检查已取消；未通过 M5 验收。macOS Intel 与 Linux 日志均出现 `EmbeddedHost.get_runtime_plan_json` 接口 panic，11 份原始 ZIP 已保存并核对摘要（`tmp/m5-remote-validation/attempt-ab6c-artifacts-proof.json`）。本机干净的 V `e21021d`、禁用旧编译器回退后复现同一失败；生成 C 确认 JS 回调保留了调用方临时接口地址。现改为捕获本地接口值，原失败回归及新增延迟回调修改原 host 的断言通过。生产构建另补齐插件退休映射缺失键的显式处理，Mac 生产构建已通过；PHP 包与 Pest 79 项通过。完整 V 334 文件及该新二进制的完整生产 E2E 正在本机执行，结果未完成，不计为通过；本机完整验证通过前不再推送或启动远端矩阵。
+**本机 macOS 验收继续，远端矩阵保持暂停（2026-10-23）。** 最近远端候选 `ab6cd850d7d1743b00b5ee5af8021ba41b863694` 未通过 M5；11 份原始 ZIP 及摘要已保留。Mac 本机已复现并修复 JS 回调保留临时接口地址导致的 `EmbeddedHost.get_runtime_plan_json` panic，新增延迟回调修改原 host 的断言通过；生产构建补齐插件退休映射缺失键处理。首轮 V 全量在 259 文件通过后遇到 `replacement_worker_batch_test.v` 的四处引用字段编译错误，原日志保留为 `mac-test-all-before-worker-fixture.log`；已将该测试工厂显式改为返回 `&worker.WorkerState`，断言不变，原文件回归通过。正在检查原来未执行的 75 文件，然后以最终源码独立重跑完整 334 文件，不拼接前后结果冒称全量通过。原 e21021d 编译器的完整生产 E2E 两次通过（配置 207/0、CLI 4/0、全部前置检查），PHP 10 与 Pest 79/557 通过；同版本隔离优化编译器已通过两个关键回归，最终生产重建及完整 E2E 仍须完成。用户明确要求先完成本机全量，当前不推送或恢复远端验收；M5 保持未关闭。证据均位于 `tmp/m5-remote-validation/`。
 
 **前轮 cfda 记录（已因非本地类型方法定义失败取消）：** [本轮 PR 矩阵](https://github.com/guweigang/vhttpd/actions/runs/39944133414) 与 [本轮全量矩阵](https://github.com/guweigang/vhttpd/actions/runs/39944137424) 绑定同一提交。V/VC 仍固定为 `e21021d1`/`7ba7d3e`。前一候选已在 Linux 完成自举，随后首次两个全量测试编译失败：`config` 解析为标准库 `config.LoadOptions`，而非项目配置类型。原日志 `failure-c565-linux-full.log` 保留。现为所有 Make 编译入口明确指定模块路径：测试优先 `src`，生产优先移除测试辅助文件后的暂存源码树，再搜索 `@vlib`、`@vmodules`。Make dry-run 已核对两类入口的路径，实际编译仍以本轮矩阵为准；未恢复本机重型编译。
 
