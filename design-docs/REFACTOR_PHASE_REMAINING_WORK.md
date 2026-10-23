@@ -10,6 +10,8 @@ updated: 2026-10-23
 ---
 # Refactor Phase Remaining Work
 
+**最新状态（2026-10-23）：用户已要求恢复 M5 远端验收。** 已核对 V #31046/#31047/#31048 全部合并；固定 V 到 `e21021d10433ad9fa7fd45fd63e2dee79ec612ef`，移除已覆盖的 V 本地补丁，保留 vjsx 补丁。候选 `c4e6d1c0f8081801d4b2652127060af3bce358c5` 的 [PR 检查](https://github.com/guweigang/vhttpd/actions/runs/39938948778) 与 [全量检查](https://github.com/guweigang/vhttpd/actions/runs/39938943526) 已重新启动；bootstrap、相关回归及最终矩阵结果仍待完成，不核销 M5。下方暂停记录与旧候选结果仅作历史证据。
+
 This document records the remaining acceptance work after the v2 runtime/config refactor. The code refactor stages are treated as complete when the automated test matrix is green. The whole refactor goal is complete only after the product-level checklist below passes.
 
 ## 当前收尾验收（2026-10-22）

@@ -6,6 +6,10 @@ Track this file as milestones complete; cross-link any deviation back to the rev
 
 ## M5 CI 矩阵收尾 — 2026-10-22～23
 
+**2026-10-23 用户已要求恢复远端验收。** V 上游 #31046、#31047、#31048 均已合并，已核对合并提交及祖先关系。固定 V 到 `e21021d10433ad9fa7fd45fd63e2dee79ec612ef`，移除已覆盖的 `v-runtime.patch`，保留 vjsx 补丁及原 VC/TCC 固定值。新候选 `c4e6d1c0f8081801d4b2652127060af3bce358c5` 已推送；[本轮 PR 矩阵](https://github.com/guweigang/vhttpd/actions/runs/39938948778) 与 [本轮全量矩阵](https://github.com/guweigang/vhttpd/actions/runs/39938943526) 已启动，尚未通过验收。本地隔离 bootstrap 与相关上游回归继续验证，日志 `tmp/m5-remote-validation/upstream-bootstrap.log`；暂停前结果仅作历史记录。
+
+### 暂停及前轮记录
+
 **按用户要求，候选 `f799afb43cff5de80dafda0c05792d97c187b787` 的远端验收已暂停（2026-10-23），M5 未通过整体验收。** 本轮两次运行均已取消，监视进程已停止；保留取消前快照、已通过的五项独立回归及 artifacts；fast/全量/生产 E2E 未完成，不计为通过。记录见 `tmp/m5-remote-validation/paused-acceptance.json`。恢复由用户后续指令启动；届时先核对用户提交的 V 上游 [#31046 JSON 解码元数据并发初始化](https://github.com/vlang/v/pull/31046)、[#31047 HTTP progress 回调取消错误](https://github.com/vlang/v/pull/31047)、[#31048 WebSocket 拨号归属与客户端释放](https://github.com/vlang/v/pull/31048) 的落地版本与现有固定工具链补丁，重新冻结源码和依赖后，再跑同提交完整矩阵。 [本轮 PR 三平台矩阵](https://github.com/guweigang/vhttpd/actions/runs/39878141715) 与 [本轮 nightly 同构全量矩阵](https://github.com/guweigang/vhttpd/actions/runs/39878136180) 均绑定该提交。本轮只改队列 E2E 夹具，成功/队列满场景与保留 2500ms 的超时场景各用独立 runtime，并增加 worker 的 hold 握手。3 秒客户端延迟注入：原夹具失败，修复后队列 **29/29**；同一生产二进制的完整本地 E2E **配置 207/0、CLI 4/0、全部前置检查通过**，日志 `tmp/m5-remote-validation/queue-fix-full-e2e-local.log`，对照证据 `queue-timing-repro/`。配置新增两项用于验证独立超时 runtime 的就绪及 2500ms 配置，原生产默认值和超时断言保持。前一提交全部 **14 份原始 ZIP** 已保存并核对摘要及源码 commit/tree，目录 `attempt-0ba-artifacts/`，整轮失败仍不能核销。原工作区暂存状态和二进制保留，未扩展局部审查。
 
 ### 此前验收记录
