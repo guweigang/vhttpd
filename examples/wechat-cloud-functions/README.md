@@ -83,7 +83,7 @@ AppSecret 和 code 校验只在服务端处理，不需要 `wx.cloud.init()` 或
 
 ### 从现有小程序迁移
 
-当前兼容的是 Promise 形式的 `{name, data}` 调用参数及返回值中的 `result`：
+支持 Promise 和 `success/fail/complete` 回调，保留 `{name, data}` 参数和返回值中的 `result`：
 
 ```js
 // 原来
@@ -96,8 +96,26 @@ const {result} = await vhttpd.callFunction({name: 'getUser', data: {}});
 不需要修改 `name`、`data` 和 `result` 的使用方式。不要全局替换 `wx.`：
 `wx.login`、`wx.request`、页面导航、支付等客户端 API 仍由微信提供。
 
-这不是完整 SDK 的直接替换：`success/fail/complete` 回调、`config.env`、原生 SDK 的
-错误对象格式和其他选项尚未适配，需要改为当前 Promise 接口；`wx.cloud.database`、
+回调式调用也可以只替换函数前缀：
+
+```js
+vhttpd.callFunction({
+  name: 'getUser', data: {},
+  success(res) { console.log(res.result); },
+  fail(err) { console.error(err.errMsg); },
+  complete(res) { console.log('请求结束', res.errMsg); },
+});
+```
+
+每次调用先执行 `success` 或 `fail`，再执行一次 `complete`，两者收到同一个对象。
+成功对象包含 `{result, requestId, errMsg: 'callFunction:ok'}`；失败为 Error，包含
+`errMsg: 'callFunction:fail ...'`，HTTP 失败另保留 `status`。本地校验失败和网络失败
+也走 `fail/complete`。回调异步执行，即使传了回调仍返回 Promise，可混用 await；
+回调返回值不改变业务结果，也不等待 async 回调。回调抛异常仍执行 complete，随后
+返回的 Promise 拒绝（不会把 success 回调的异常当作业务失败再触发 fail）。
+仅使用回调、不消费 Promise 时不会产生未处理拒绝；混用时 await 仍会收到拒绝。
+
+这不是完整 SDK 的直接替换：`config.env`、腾讯云数字错误码和其他选项尚未适配；`wx.cloud.database`、
 云存储及服务端 `wx-server-sdk` 调用也需另行迁移。远端函数还需显式注册、部署，
 使用本例的可信身份与 SQL API；只改客户端前缀不能自动迁移服务端依赖。
 
