@@ -139,6 +139,8 @@ inside V; JS cannot choose a driver, connection URL, or another pool. This is an
 optional trusted host capability, independent of `enableNetwork`. Reduced hosts
 without database access reject with `database_unavailable`; disabled/uncompiled
 database access rejects rather than returning a successful empty result.
+Version-2 plans can use their existing `resources.db` configuration; the API
+currently binds the application's active dbx pool, not a JS-selectable pool map.
 
 ```js
 const db = ctx.runtime.db;
@@ -182,6 +184,8 @@ callback. A transaction object cannot be used after completion. Callback failure
 rolls back; lane close rolls back all owned transactions before returning their
 connections. Do not send raw BEGIN/COMMIT/ROLLBACK through query/execute, and do
 not nest transaction callbacks on an exhausted pool.
+Concurrent transaction statements are serialized but do not guarantee submission
+order; use sequential `await` for dependent statements.
 
 Cancellation is **logical cancellation**, not server-side SQL interruption.
 Queued cancelled work never executes. Already-running SQL keeps its lease until
