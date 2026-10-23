@@ -172,6 +172,7 @@ vhttpd。默认从 PATH 查找，兼容 Homebrew 与 macOS Postgres.app。可通
 - 伪造 body/header openid、伪造/缺失/过期令牌、非法 code、code 重放被拒绝或忽略。
 - 失败写入和 SQL 等待超时：HTTP 返回后立即从独立数据库连接检查写入已回滚。
 - 超时后的迟到写入被拒绝，正常调用提交，连接池继续可用。
+- 重启进程、切换到真实 `app.mts` 后会话仍可用，测试函数不暴露。
 
 真实微信联调仍需你提供有效 AppID/AppSecret，并在小程序通过 `wx.login()` 产生 code；
 本地替身的通过不等同于已完成真实微信平台联调。
