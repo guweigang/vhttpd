@@ -10,7 +10,11 @@ updated: 2026-10-23
 ---
 # Refactor Phase Remaining Work
 
-**本机 macOS 验收继续，远端矩阵保持暂停（2026-10-23）。** 最近远端候选 `ab6cd850d7d1743b00b5ee5af8021ba41b863694` 未通过 M5；11 份原始 ZIP 及摘要已保留。Mac 本机已复现并修复 JS 回调保留临时接口地址导致的 `EmbeddedHost.get_runtime_plan_json` panic，新增延迟回调修改原 host 的断言通过；生产构建补齐插件退休映射缺失键处理。首轮 V 全量在 259 文件通过后遇到 `replacement_worker_batch_test.v` 的四处引用字段编译错误，原日志保留为 `mac-test-all-before-worker-fixture.log`；已将该测试工厂显式改为返回 `&worker.WorkerState`，断言不变，原文件回归通过。正在检查原来未执行的 75 文件，然后以最终源码独立重跑完整 334 文件，不拼接前后结果冒称全量通过。原 e21021d 编译器的完整生产 E2E 两次通过（配置 207/0、CLI 4/0、全部前置检查），PHP 10 与 Pest 79/557 通过；同版本隔离优化编译器已通过两个关键回归，最终生产重建及完整 E2E 仍须完成。用户明确要求先完成本机全量，当前不推送或恢复远端验收；M5 保持未关闭。证据均位于 `tmp/m5-remote-validation/`。
+**冻结验收候选的本机 macOS ARM64 收尾通过，远端矩阵继续暂停（2026-10-23）。** 验收输入为批准的 V2/M4 基线 `ab6cd850d7d1743b00b5ee5af8021ba41b863694` 加本轮五个本地修复文件，补丁 SHA-256 `38e7f2ac1e21b248265eabc1962ebe0f37b775afd96e7b0e9726b8564c7e3a4d`；V 固定 `e21021d`，禁用旧编译器回退，依赖使用固定 vjsx/QuickJS 与仓库补丁。最终独立 `make test-all` **334/334、零失败、零跳过、退出码 0**，逐文件集合与预期 334 文件完全一致，覆盖 inproc 6、CodexBot fast 6 与 lifecycle 1。使用同一编译器及冻结生产源码的生产构建、完整生产 E2E **配置 207/0、CLI 4/0、全部前置检查**、PHP 包 **10/10**、Pest **79 项/557 断言**均通过。最终生产二进制 SHA-256 `3d1732db0b27cdc0cd50c46af5ad22c9d5fe36aa0599f2901df03feb6c344ddd`，824 个源码文件及 481 个暂存生产文件校验无漂移。
+
+本轮修复：JS 回调捕获本地接口值，避免工厂返回后访问临时接口地址；插件退休映射缺失键显式解锁返回；worker 批次测试工厂显式返回 `&worker.WorkerState`，原断言保持。首次全量 259 项通过后遇到夹具编译失败的原日志及后续 75/75 排查结果均保留，最终 334/334 来自独立整轮，未拼接。完整证据及原始日志摘要见 `tmp/m5-remote-validation/mac-acceptance-complete.json`、`mac-final-inputs.json`、`mac-test-all.log` 与 `mac-production-e2e-final.log`。
+
+**覆盖范围与剩余验收：** 本机主工作区在验收期间另有数据库/异步 fetch 并行改动，未纳入冻结候选；差异清单记录于 `mac-concurrent-workspace-differences.json`，本轮五文件修复已同步回工作区，其余并行工作保持原状。本次结果不能表述为当前整个主工作区已通过。Live DB 与安装态 WordPress opt-in 未启用；本机 PHP/Node/Composer 等实际版本记录在证据中，未宣称与远端环境完全相同。用户明确要求先不要恢复远端：本轮未推送或触发 GitHub 矩阵，PR #21 的同提交远端全量验收及自动 cron 观察仍未完成，M5 保持未关闭。
 
 **前轮 cfda 记录（已因非本地类型方法定义失败取消）：** [本轮 PR 矩阵](https://github.com/guweigang/vhttpd/actions/runs/39944133414) 与 [本轮全量矩阵](https://github.com/guweigang/vhttpd/actions/runs/39944137424) 绑定同一提交。V/VC 仍固定为 `e21021d1`/`7ba7d3e`。前一候选已在 Linux 完成自举，随后首次两个全量测试编译失败：`config` 解析为标准库 `config.LoadOptions`，而非项目配置类型。原日志 `failure-c565-linux-full.log` 保留。现为所有 Make 编译入口明确指定模块路径：测试优先 `src`，生产优先移除测试辅助文件后的暂存源码树，再搜索 `@vlib`、`@vmodules`。Make dry-run 已核对两类入口的路径，实际编译仍以本轮矩阵为准；未恢复本机重型编译。
 
