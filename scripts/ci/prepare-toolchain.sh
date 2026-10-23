@@ -20,10 +20,10 @@ checkout_pinned() {
 }
 checkout_pinned "$V_REPO" "$V_COMMIT" "$toolchain/v"
 checkout_pinned "$VJSX_REPO" "$VJSX_COMMIT" "$toolchain/vjsx"
-for dependency in v vjsx; do
-  git -C "$toolchain/$dependency" apply --check "$root/scripts/ci/$dependency-runtime.patch"
-  git -C "$toolchain/$dependency" apply "$root/scripts/ci/$dependency-runtime.patch"
-done
+# V includes merged upstream PRs #31046, #31047 and #31048.
+# Only vjsx still requires a repository-owned runtime patch.
+git -C "$toolchain/vjsx" apply --check "$root/scripts/ci/vjsx-runtime.patch"
+git -C "$toolchain/vjsx" apply "$root/scripts/ci/vjsx-runtime.patch"
 checkout_pinned "$VC_REPO" "$VC_COMMIT" "$toolchain/v/vc"
 case "$(uname -s):$(uname -m)" in
   Linux:x86_64) selected_tcc="$TCC_LINUX_AMD64_COMMIT" ;;
