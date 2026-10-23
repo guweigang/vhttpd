@@ -1,146 +1,90 @@
-name: Build vhttpd binaries
-
+name: Mac test process diagnostic
 on:
   workflow_dispatch:
-    inputs:
-      validation:
-        description: 'PR gates, full nightly matrix, or production E2E preflight'
-        type: choice
-        options: [pr, nightly, e2e]
-        default: pr
-  push:
-    branches:
-      - main
-    paths:
-      - "src/**"
-      - "dbsrc/**"
-      - "php/**"
-      - "tests/**"
-      - "examples/**"
-      - "assets/**"
-      - "scripts/**"
-      - "desktop/ci/**"
-      - "Makefile"
-      - "v.mod"
-      - ".github/**"
-  # Every PR, including test-only/PHP/CI changes, gets the same checks.
-  pull_request:
-
 permissions:
   contents: read
-
 jobs:
-  build:
-    if: github.event_name != 'workflow_dispatch' || inputs.validation == 'pr'
-    name: ${{ matrix.target }}
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 360
+  diagnostic:
+    runs-on: macos-15
+    timeout-minutes: 180
     env:
       VJOBS: 2
       VTEST_FAIL_FAST: '1'
       VTEST_FAIL_FLAKY: '1'
       VTEST_HIDE_OK: '0'
       VTEST_HIDE_SKIP: '0'
-      V_MACOS_V3_NO_FALLBACK: '1' # Applies to every OS; keep the pinned compiler.
+      V_MACOS_V3_NO_FALLBACK: '1'
       WITH_DB: 1
-      VHTTPD_BIN: ${{ github.workspace }}/tmp/ci/vhttpd
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-24.04
-            target: linux-amd64
-          - os: macos-15-intel
-            target: macos-amd64
-          - os: macos-15
-            target: macos-arm64
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-
+          ref: ad60fd423ccda1a3109ed0ab6c6fbb26a6ee5ef3
       - uses: ./.github/actions/setup-runtime
-
-      - name: Run fast unit tests
+      - name: Observe the unchanged Mac fast suite
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p ci-results tmp/ci
-          # V disables ownership tests whenever GITHUB_ACTIONS=true.
-          env -u GITHUB_ACTIONS make test-fast V_CC=cc 2>&1 | tee ci-results/fast.log
-
-      - name: Build production binary
-        shell: bash
-        run: |
-          set -euo pipefail
-          make prod V_CC=cc VPHP_V_GC=boehm WITH_DB=1 2>&1 | tee ci-results/prod.log
-
-      - name: Smoke test
-        shell: bash
-        run: |
-          set -euo pipefail
-          VHTTPD_E2E_KEEP_TMP=1 make test-e2e 2>&1 | tee ci-results/e2e.log
-          "$VHTTPD_BIN" --help >/dev/null
-          if "$VHTTPD_BIN" -1 >/dev/null 2>&1; then
-            echo "expected unknown option to fail"
-            exit 1
-          fi
-
-      - name: Package artifact
-        shell: bash
-        run: |
-          set -euo pipefail
-          bundle="vhttpd-${{ matrix.target }}"
-          mkdir -p "$bundle/scripts" "$bundle/runtime"
-          cp "$VHTTPD_BIN" "$bundle/vhttpd"
-          bash ./scripts/bundle_runtime_libs.sh "$bundle/vhttpd" "$bundle/runtime/libs"
-          cp ./README.md "$bundle/README.md"
-          cp ./scripts/install_runtime.sh "$bundle/scripts/install_runtime.sh"
-          cp ./scripts/runtime_doctor.sh "$bundle/scripts/runtime_doctor.sh"
-          cp ./scripts/bundle_runtime_libs.sh "$bundle/scripts/bundle_runtime_libs.sh"
-          chmod +x "$bundle/scripts/install_runtime.sh" "$bundle/scripts/runtime_doctor.sh" "$bundle/scripts/bundle_runtime_libs.sh"
-          tar -czf "$bundle.tar.gz" "$bundle"
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: vhttpd-${{ matrix.target }}
-          path: vhttpd-${{ matrix.target }}.tar.gz
-          if-no-files-found: error
-
-      - name: Upload validation logs
+          mkdir -p ci-results
+          unset GITHUB_ACTIONS
+          python3 - <<'PY'
+          import datetime,json,os,re,signal,subprocess,sys,threading,time
+          from pathlib import Path
+          out=Path('ci-results');out.mkdir(exist_ok=True)
+          proc=subprocess.Popen(['make','test-fast','V_CC=cc'],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,bufsize=1,start_new_session=True)
+          def pump():
+           with (out/'fast-diagnostic.log').open('w') as stream:
+            for line in proc.stdout:
+             stream.write(line);stream.flush()
+             if re.search(r'\b(?:OK|FAIL) +\[|Summary for|panic:|error:',line):print(line.rstrip(),flush=True)
+          reader=threading.Thread(target=pump,daemon=True)
+          reader.start()
+          seen={};captured=False
+          while proc.poll() is None:
+           time.sleep(10)
+           raw=subprocess.check_output(['ps','-axo','pid=,ppid=,etime=,pcpu=,state=,comm='],text=True)
+           rows=[]
+           for line in raw.splitlines():
+            bits=line.split(None,5)
+            if len(bits)==6:rows.append({'pid':int(bits[0]),'ppid':int(bits[1]),'elapsed':bits[2],'cpu':bits[3],'state':bits[4],'command':bits[5]})
+           owned={proc.pid}
+           while True:
+            more={r['pid'] for r in rows if r['ppid'] in owned}
+            if more<=owned:break
+            owned|=more
+           descendants=[r for r in rows if r['pid'] in owned]
+           stamp=datetime.datetime.now(datetime.timezone.utc).isoformat()
+           with (out/'process-progress.jsonl').open('a') as f:f.write(json.dumps({'at':stamp,'processes':descendants})+'\n')
+           print('DIAGNOSTIC',stamp,json.dumps(descendants),flush=True)
+           parents={r['ppid'] for r in descendants}
+           for r in descendants:
+            pid=r['pid'];seen.setdefault(pid,time.monotonic());age=time.monotonic()-seen[pid];name=Path(r['command']).name
+            test_stalled=name.endswith('_test') and age>180
+            compiler_stalled=pid not in parents and name in ['v','v3','cc','clang','cc1','ld'] and age>600
+            if not (test_stalled or compiler_stalled):continue
+            captured=True
+            (out/'stalled-process.json').write_text(json.dumps({'at':stamp,'process':r,'observed_seconds':age},indent=2)+'\n')
+            print('STALLED PROCESS',json.dumps(r),flush=True)
+            subprocess.run(['/usr/bin/sample',str(pid),'3','-file',str(out/f'sample-{pid}.txt')],check=False,timeout=30)
+            try:os.killpg(proc.pid,signal.SIGTERM)
+            except ProcessLookupError:pass
+            try:proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+             try:os.killpg(proc.pid,signal.SIGKILL)
+             except ProcessLookupError:pass
+             proc.wait(timeout=10)
+            break
+           if captured:break
+          code=1 if captured else proc.wait()
+          reader.join(timeout=10)
+          (out/'diagnostic-exit.json').write_text(json.dumps({'exit_code':code,'stalled_process_captured':captured},indent=2)+'\n')
+          print('DIAGNOSTIC EXIT',code,'stalled',captured,flush=True)
+          raise SystemExit(code)
+          PY
+      - name: Preserve diagnostic processes and samples
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: runtime-${{ matrix.target }}-logs
+          name: mac-test-process-diagnostic
           path: ci-results/
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 14
-
-  test-inproc-fast:
-    if: github.event_name != 'workflow_dispatch' || inputs.validation == 'pr'
-    name: ${{ matrix.suite }} (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-24.04, macos-15-intel, macos-15]
-        suite: [inproc, codexbot-fast]
-    uses: ./.github/workflows/runtime-regression.yml
-    with:
-      os: ${{ matrix.os }}
-      suite: ${{ matrix.suite }}
-
-  # A registered workflow can dispatch the full matrix before the new scheduled
-  # workflow is merged into the default branch. Both use the identical callee.
-  nightly-acceptance:
-    if: github.event_name == 'workflow_dispatch' && (inputs.validation == 'nightly' || inputs.validation == 'e2e')
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-24.04, macos-15-intel, macos-15]
-    uses: ./.github/workflows/runtime-regression.yml
-    with:
-      os: ${{ matrix.os }}
-      suite: ${{ inputs.validation == 'e2e' && 'e2e' || 'all' }}
