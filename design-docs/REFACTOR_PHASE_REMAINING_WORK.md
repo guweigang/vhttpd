@@ -10,7 +10,9 @@ updated: 2026-10-23
 ---
 # Refactor Phase Remaining Work
 
-**最新状态（2026-10-23）：用户已要求恢复 M5 远端验收。** 已核对 V #31046/#31047/#31048 全部合并；固定 V 到 `e21021d10433ad9fa7fd45fd63e2dee79ec612ef`，移除已覆盖的 V 本地补丁，保留 vjsx 补丁。候选 `c4e6d1c0f8081801d4b2652127060af3bce358c5` 的 [PR 检查](https://github.com/guweigang/vhttpd/actions/runs/39938948778) 与 [全量检查](https://github.com/guweigang/vhttpd/actions/runs/39938943526) 已重新启动；bootstrap、相关回归及最终矩阵结果仍待完成，不核销 M5。下方暂停记录与旧候选结果仅作历史证据。
+**最新候选 `c56572fc78520939fbfbffdc0c380c30b002cb58` 已推送，M5 验收继续执行、尚未通过。** V 固定为包含三个已合并 PR 的 `e21021d1`，VC 更新至官方快照 `7ba7d3e44009617d70c849764f89415b1a517690`，其生成源 `ffc38ada` 是目标 V 的祖先；保留原 TCC 固定值和 vjsx 补丁，移除已由上游覆盖的 V 补丁。[新 PR 矩阵](https://github.com/guweigang/vhttpd/actions/runs/39942392144) 与 [新全量矩阵](https://github.com/guweigang/vhttpd/actions/runs/39942405068) 绑定同一提交。旧 VC 的 Linux 自举失败原日志及 10 份 ZIP 已保留并核验摘要。新 VC 的本地 bootstrap 因主机负载超过 400 而主动终止，只停止本任务编译，不记录为通过或编译器失败；以干净 runner 验证自举兼容性及完整矩阵。
+
+**首轮恢复记录（c4e6，已失败并取消）：** 已核对 V #31046/#31047/#31048 全部合并；固定 V 到 `e21021d10433ad9fa7fd45fd63e2dee79ec612ef`，移除已覆盖的 V 本地补丁，保留 vjsx 补丁。候选 `c4e6d1c0f8081801d4b2652127060af3bce358c5` 的 [PR 检查](https://github.com/guweigang/vhttpd/actions/runs/39938948778) 与 [全量检查](https://github.com/guweigang/vhttpd/actions/runs/39938943526) 已重新启动；bootstrap、相关回归及最终矩阵结果仍待完成，不核销 M5。下方暂停记录与旧候选结果仅作历史证据。
 
 This document records the remaining acceptance work after the v2 runtime/config refactor. The code refactor stages are treated as complete when the automated test matrix is green. The whole refactor goal is complete only after the product-level checklist below passes.
 
