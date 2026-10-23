@@ -168,7 +168,8 @@ Deadlines include pool/transaction admission waits and are checked on workers
 as well as the owning JS lane. Workers carry only V data and completion ports;
 completion uses the same host-async queue and owner-scoped lane wakeups as HTTP.
 An owner-only 5ms compatibility pump also supports handlers awaiting results.
-Each lane accepts at most 64 outstanding native DB operations, with the existing
+Each lane accepts at most 64 outstanding native DB operations (plus 32 reserved
+rollback-cleanup admissions), with the existing
 shared pool limiting physical connections. Busy admission rejects immediately.
 
 `transaction(callback, options)` pins one pooled connection, serializes its SQL,
