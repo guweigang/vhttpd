@@ -15,6 +15,10 @@ V_TLS_FLAGS := -d use_openssl
 else
 V_TLS_FLAGS := -d mbedtls_client_read_timeout_ms=120000
 endif
+# Prefer project modules over same-named standard-library modules (e.g. config).
+# Keep stdlib and isolated dependencies in the explicit search path.
+V_MODULE_PATH ?= $(SRC_DIR)|@vlib|@vmodules
+V_MODULE_FLAGS = -path "$(V_MODULE_PATH)"
 V_FLAGS ?= $(V_TLS_FLAGS) -enable-globals
 V_PROD_FLAGS ?= -prod
 V_NOCACHE_FLAGS ?= -nocache
@@ -94,13 +98,16 @@ prepare-build-src:
 		find $(BUILD_STAGE_DIR) -name 'inproc_vjsx_executor_codexbot_helpers.v' -delete; \
 	fi
 
+# Production imports must use the staged tree, where test helpers are removed.
+build prod: V_MODULE_PATH = $(BUILD_STAGE_DIR)|@vlib|@vmodules
+
 build: prepare-build-src
-	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_FLAGS) $(V_DB_FLAGS) $(V_GC_FLAG) -o $(VHTTPD_BIN) $(BUILD_STAGE_DIR)
+	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_MODULE_FLAGS) $(V_FLAGS) $(V_DB_FLAGS) $(V_GC_FLAG) -o $(VHTTPD_BIN) $(BUILD_STAGE_DIR)
 
 vhttpd: build
 
 prod: prepare-build-src
-	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_FLAGS) $(V_DB_FLAGS) $(V_GC_FLAG) $(V_PROD_FLAGS) $(V_NOCACHE_FLAGS) -o $(VHTTPD_BIN) $(BUILD_STAGE_DIR)
+	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_MODULE_FLAGS) $(V_FLAGS) $(V_DB_FLAGS) $(V_GC_FLAG) $(V_PROD_FLAGS) $(V_NOCACHE_FLAGS) -o $(VHTTPD_BIN) $(BUILD_STAGE_DIR)
 
 build-prod: prod
 
@@ -165,7 +172,7 @@ test-e2e:
 	@bash $(ROOT)/tests/e2e/run.sh
 
 test-fast: lint-safety
-	@VJOBS="$${VJOBS:-2}" $(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_FLAGS) $(V_TEST_FLAGS) test $(FAST_TEST_FILES) $(FAST_TEST_MODULE_DIRS)
+	@VJOBS="$${VJOBS:-2}" $(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_MODULE_FLAGS) $(V_FLAGS) $(V_TEST_FLAGS) test $(FAST_TEST_FILES) $(FAST_TEST_MODULE_DIRS)
 
 test-php:
 	@set -e; for test_file in $(PHP_TEST_FILES); do \
@@ -177,19 +184,19 @@ $(TEST_FILES_FROM_GOALS):
 	@:
 
 test-inproc:
-	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_FLAGS) $(V_TEST_FLAGS) test $(INPROC_TEST_FILES)
+	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_MODULE_FLAGS) $(V_FLAGS) $(V_TEST_FLAGS) test $(INPROC_TEST_FILES)
 
 test-codexbot:
-	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_FLAGS) $(V_TEST_FLAGS) test $(CODEXBOT_TEST_FILES)
+	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_MODULE_FLAGS) $(V_FLAGS) $(V_TEST_FLAGS) test $(CODEXBOT_TEST_FILES)
 
 test-codexbot-fast:
-	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_FLAGS) $(V_TEST_FLAGS) test $(CODEXBOT_FAST_TEST_FILES)
+	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_MODULE_FLAGS) $(V_FLAGS) $(V_TEST_FLAGS) test $(CODEXBOT_FAST_TEST_FILES)
 
 test-codexbot-lifecycle:
-	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_FLAGS) $(V_TEST_FLAGS) test $(CODEXBOT_LIFECYCLE_TEST_FILES)
+	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_MODULE_FLAGS) $(V_FLAGS) $(V_TEST_FLAGS) test $(CODEXBOT_LIFECYCLE_TEST_FILES)
 
 test-profile-codexbot:
 	@/bin/zsh $(ROOT)/tools/profile_codexbot_tests.sh $(ROOT)
 
 test-all:
-	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_FLAGS) $(V_TEST_FLAGS) test $(SRC_DIR)
+	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_MODULE_FLAGS) $(V_FLAGS) $(V_TEST_FLAGS) test $(SRC_DIR)
