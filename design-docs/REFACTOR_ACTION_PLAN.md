@@ -6,7 +6,7 @@ Track this file as milestones complete; cross-link any deviation back to the rev
 
 ## M5 CI 矩阵收尾 — 2026-10-22～23
 
-**2026-10-23 用户已要求恢复远端验收。** V 上游 #31046、#31047、#31048 均已合并，已核对合并提交及祖先关系。固定 V 到 `e21021d10433ad9fa7fd45fd63e2dee79ec612ef`，移除已覆盖的 `v-runtime.patch`，保留 vjsx 补丁及原 VC/TCC 固定值。新候选 `c4e6d1c0f8081801d4b2652127060af3bce358c5` 已推送；[本轮 PR 矩阵](https://github.com/guweigang/vhttpd/actions/runs/39938948778) 与 [本轮全量矩阵](https://github.com/guweigang/vhttpd/actions/runs/39938943526) 已启动，尚未通过验收。本地隔离 bootstrap 与相关上游回归继续验证，日志 `tmp/m5-remote-validation/upstream-bootstrap.log`；暂停前结果仅作历史记录。
+**2026-10-23 用户已要求恢复远端验收。** V 上游 #31046、#31047、#31048 均已合并，已核对合并提交及祖先关系。固定 V 到 `e21021d10433ad9fa7fd45fd63e2dee79ec612ef`，移除已覆盖的 `v-runtime.patch`，保留 vjsx 补丁及原 VC/TCC 固定值。新候选 `c4e6d1c0f8081801d4b2652127060af3bce358c5` 已推送；[本轮 PR 矩阵](https://github.com/guweigang/vhttpd/actions/runs/39938948778) 与 [本轮全量矩阵](https://github.com/guweigang/vhttpd/actions/runs/39938943526) 已启动，尚未通过验收。首轮恢复后在 Linux 工具链 setup 失败：旧固定 VC 生成的 `v2` 自举最终编译器时段错误，尚未进入项目测试；两轮已请求取消，原日志 `tmp/m5-remote-validation/failure-c4e6-linux-codex.log` 保留。现将 VC 对齐到官方当天固定快照 `7ba7d3e44009617d70c849764f89415b1a517690`，本地重新自举，日志 `upstream-bootstrap-current-vc.log`，兼容性尚待确认；原 bootstrap 日志及暂停前结果仅作历史记录。
 
 ### 暂停及前轮记录
 
