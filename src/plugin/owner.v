@@ -75,7 +75,11 @@ pub fn (mut state PluginState) publish(input map[string]config.PluginConfig) int
 pub fn (mut state PluginState) finish_retirement(id int) {
 	if id == 0 { return }
 	state.mu.@lock()
-	batch := state.retiring[id].clone()
+	retiring := state.retiring[id] or {
+		state.mu.unlock()
+		return
+	}
+	batch := retiring.clone()
 	state.mu.unlock()
 	for runtime in batch { runtime.close() }
 	state.mu.@lock()

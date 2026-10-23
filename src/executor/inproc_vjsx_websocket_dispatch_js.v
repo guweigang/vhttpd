@@ -4,7 +4,8 @@ import json2 as json
 import vjsx
 
 fn InProcVjsxWebSocketJs.install_websocket_dispatch(ctx &vjsx.Context, mut runtime vjsx.Value, mut app EmbeddedHost) {
-	dispatch_fn := ctx.js_function(fn [ctx, mut app] (args []vjsx.Value) vjsx.Value {
+	callback_app := app
+	dispatch_fn := ctx.js_function(fn [ctx, callback_app] (args []vjsx.Value) vjsx.Value {
 		fallback := if args.len > 1 { args[1].dup_value() } else { ctx.js_undefined() }
 		if args.len == 0 {
 			return fallback
@@ -26,7 +27,9 @@ fn InProcVjsxWebSocketJs.install_websocket_dispatch(ctx &vjsx.Context, mut runti
 			}
 		}
 		req := json.decode[InProcVjsxHostWebSocketDispatchRequest](req_raw) or { return fallback }
-		result := app.execute_websocket_dispatch_commands_result(req.commands)
+		// Retain the interface value in the callback; mutate its original host per call.
+		mut callback_host := callback_app
+		result := callback_host.execute_websocket_dispatch_commands_result(req.commands)
 		response := if result.has_close {
 			InProcVjsxHostWebSocketDispatchResponse{
 				ok:              true

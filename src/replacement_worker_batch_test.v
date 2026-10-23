@@ -7,8 +7,8 @@ import runtime_plan
 import worker
 import upstream.transport
 
-fn batch_test_worker(socket string, draining bool) worker.WorkerState {
-	return worker.WorkerState{
+fn batch_test_worker(socket string, draining bool) &worker.WorkerState {
+	return &worker.WorkerState{
 		logic_executor: executor.SocketWorkerExecutor{}
 		worker_backend: worker.WorkerBackendRuntime{
 			managed_workers: [transport.ManagedWorker{ socket_path: socket, draining: draining, inflight_requests: 1 }]

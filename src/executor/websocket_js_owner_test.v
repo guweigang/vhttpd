@@ -6,11 +6,14 @@ import vjsx
 
 struct WsJsOwnerHost {
 	NoOpAppFacade
+mut:
+	dispatch_count int
 }
 
 fn (_ WsJsOwnerHost) get_runtime_plan_json() string { return '{"value":42}' }
 
-fn (mut _ WsJsOwnerHost) execute_websocket_dispatch_commands_result(commands []transport.WorkerWebSocketFrame) transport.WorkerWebSocketDispatchCommandsResult {
+fn (mut host WsJsOwnerHost) execute_websocket_dispatch_commands_result(commands []transport.WorkerWebSocketFrame) transport.WorkerWebSocketDispatchCommandsResult {
+	host.dispatch_count++
 	if commands.len > 0 && commands[0].event == 'close' {
 		return transport.WorkerWebSocketDispatchCommandsResult{ has_close: true, close_frame: transport.WorkerWebSocketFrame{ code: 1001, reason: 'done', target_id: 'target' } }
 	}
@@ -150,4 +153,18 @@ fn test_websocket_bridge_published_results_and_fallbacks_remain_live() {
 		if(!close.has_close || close.close_code !== 1001 || close.close_reason !== "done" || close.close_target_id !== "target") throw Error("close result");
 		if(!fallback.sentinel) throw Error("borrowed fallback");
 	')
+}
+
+fn test_websocket_callbacks_keep_host_after_runtime_factory_returns() {
+ mut session := vjsx.new_runtime_session()
+ defer { session.close() }
+ ctx := session.context()
+ mut host := &WsJsOwnerHost{}
+ runtime := ws_js_owner_runtime(ctx, mut host, false)
+ global := ctx.js_global()
+ global.set('runtime', runtime)
+ runtime.free()
+ global.free()
+ ws_js_owner_eval(ctx, 'if(runtime.getPlan("value") !== 42) throw Error("live plan"); runtime.websocketDispatch({event:"send"}); runtime.websocketDispatch({event:"close"});')
+ assert host.dispatch_count == 2
 }

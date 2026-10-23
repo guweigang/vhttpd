@@ -127,10 +127,12 @@ fn InProcVjsxWebSocketJs.runtime(ctx &vjsx.Context, runtime_meta InProcVjsxRunti
 	})
 	defer { get_config_fn.free() }
 	runtime.set('getConfig', get_config_fn)
-	plan_fn := ctx.js_function(fn [ctx, mut app] (args []vjsx.Value) vjsx.Value {
+	// Callbacks outlive the mutable interface argument supplied by the caller.
+	callback_app := app
+	plan_fn := ctx.js_function(fn [ctx, callback_app] (args []vjsx.Value) vjsx.Value {
 		path := if args.len > 0 { args[0].to_string().trim_space() } else { '' }
 		fallback := if args.len > 1 { args[1].dup_value() } else { ctx.js_undefined() }
-		raw := InProcVjsxHostApi.config_lookup(app.get_runtime_plan_json(), path)
+		raw := InProcVjsxHostApi.config_lookup(callback_app.get_runtime_plan_json(), path)
 		if raw.trim_space() == '' {
 			return fallback
 		}
@@ -139,10 +141,10 @@ fn InProcVjsxWebSocketJs.runtime(ctx &vjsx.Context, runtime_meta InProcVjsxRunti
 	})
 	defer { plan_fn.free() }
 	runtime.set('plan', plan_fn)
-	get_plan_fn := ctx.js_function(fn [ctx, mut app] (args []vjsx.Value) vjsx.Value {
+	get_plan_fn := ctx.js_function(fn [ctx, callback_app] (args []vjsx.Value) vjsx.Value {
 		path := if args.len > 0 { args[0].to_string().trim_space() } else { '' }
 		fallback := if args.len > 1 { args[1].dup_value() } else { ctx.js_undefined() }
-		raw := InProcVjsxHostApi.config_lookup(app.get_runtime_plan_json(), path)
+		raw := InProcVjsxHostApi.config_lookup(callback_app.get_runtime_plan_json(), path)
 		if raw.trim_space() == '' {
 			return fallback
 		}
