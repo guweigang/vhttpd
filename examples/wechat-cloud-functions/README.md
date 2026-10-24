@@ -86,6 +86,11 @@ VHTTPD_BIN="$PWD/vhttpd" node examples/wechat-cloud-functions/tests/dev-local.mj
 服务并删除该次临时数据；每次重启后，页面需要重新登录。可用 `WCF_LOCAL_PORT` 换端口，
 并同步修改页面地址。PostgreSQL 工具可用 WCF_INITDB / WCF_PG_CTL / WCF_PSQL 指定。
 
+本地脚本显式设置 `VHTTPD_VJSX_BOOTSTRAP_TIMEOUT_MS=120000`，给编译器/模块加载独立的
+冷启动预算；可覆盖为 1–300000 的整数毫秒。vhttpd 通用默认仍为 30000ms，业务函数、
+SQL 和 startup hook 期限不受影响。脚本等待默认与命名引擎两次顺序冷启动，并且必须通过
+登录与真实 SQL 查询才打印 READY；不要仅因 HTTP 端口已监听就开始点验。
+
 开发者工具关闭本机“校验合法域名”（个人 project.private.config.json 的
 setting.urlCheck=false），编译打开 `pages/vhttpd-demo/index`。页面默认请求
 `http://127.0.0.1:19886`；依次点登录、Promise 查询、回调查询。真机上的 127.0.0.1

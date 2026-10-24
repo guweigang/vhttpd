@@ -25,6 +25,22 @@ For bot-style apps, a convenient TS entry shape is:
 
 ## Runtime
 
+### Lane cold-start budget
+
+Compiler/runtime initialization and module graph loading have a separate
+30,000ms default deadline from the 10,000ms startup-hook deadline. On slower or
+busy machines, set `VHTTPD_VJSX_BOOTSTRAP_TIMEOUT_MS` to an integer in
+`1..300000` (for example `120000`). Invalid values reject warmup before a task
+is enqueued. The setting does not change HTTP, function, SQL or hook deadlines;
+expired warmup tasks still use owner-thread cleanup and the interrupt path.
+This is a bounded startup budget, not a way to run unbounded startup hooks.
+
+The local WeChat demo selects 120,000ms per cold start and waits for successful
+login plus SQL-backed `getUser` before reporting READY. A listening HTTP port
+or a 502 / `no_available_lane` response is not readiness.
+
+### Request metadata
+
 `ctx.runtime` exposes read-only execution metadata:
 
 - `provider`
