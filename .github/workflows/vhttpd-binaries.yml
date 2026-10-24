@@ -1,12 +1,17 @@
-name: Mac test process diagnostic
+name: Focused inbound lifecycle diagnostic
 on:
   workflow_dispatch:
+    inputs:
+      source_ref:
+        description: 'Exact acceptance source commit to verify'
+        required: true
+        type: string
 permissions:
   contents: read
 jobs:
   diagnostic:
     runs-on: macos-15
-    timeout-minutes: 180
+    timeout-minutes: 90
     env:
       VJOBS: 2
       VTEST_FAIL_FAST: '1'
@@ -18,73 +23,51 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ad60fd423ccda1a3109ed0ab6c6fbb26a6ee5ef3
+          ref: ${{ inputs.source_ref }}
       - uses: ./.github/actions/setup-runtime
-      - name: Observe the unchanged Mac fast suite
+      - name: Compile the unchanged inbound lifecycle test
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p ci-results
           unset GITHUB_ACTIONS
+          v -cc cc -d build_quickjs -path "$PWD/src|@vlib|@vmodules" -d use_openssl -enable-globals -nocache -d vjsx_sqlite -d enable_db -o "$PWD/ci-results/inbound_lifecycle_test" src/inbound_websocket_lifecycle_test.v 2>&1 | tee ci-results/inbound-build.log
+      - name: Repeat real signals and bound orphan admission
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset GITHUB_ACTIONS
           python3 - <<'PY'
-          import datetime,json,os,re,signal,subprocess,sys,threading,time
+          import json,os,signal,subprocess,tempfile,time
           from pathlib import Path
-          out=Path('ci-results');out.mkdir(exist_ok=True)
-          proc=subprocess.Popen(['make','test-fast','V_CC=cc'],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,bufsize=1,start_new_session=True)
-          def pump():
-           with (out/'fast-diagnostic.log').open('w') as stream:
-            for line in proc.stdout:
-             stream.write(line);stream.flush()
-             if re.search(r'\b(?:OK|FAIL) +\[|Summary for|panic:|error:',line):print(line.rstrip(),flush=True)
-          reader=threading.Thread(target=pump,daemon=True)
-          reader.start()
-          seen={};captured=False
-          while proc.poll() is None:
-           time.sleep(10)
-           raw=subprocess.check_output(['ps','-axo','pid=,ppid=,etime=,pcpu=,state=,comm='],text=True)
-           rows=[]
-           for line in raw.splitlines():
-            bits=line.split(None,5)
-            if len(bits)==6:rows.append({'pid':int(bits[0]),'ppid':int(bits[1]),'elapsed':bits[2],'cpu':bits[3],'state':bits[4],'command':bits[5]})
-           owned={proc.pid}
-           while True:
-            more={r['pid'] for r in rows if r['ppid'] in owned}
-            if more<=owned:break
-            owned|=more
-           descendants=[r for r in rows if r['pid'] in owned]
-           stamp=datetime.datetime.now(datetime.timezone.utc).isoformat()
-           with (out/'process-progress.jsonl').open('a') as f:f.write(json.dumps({'at':stamp,'processes':descendants})+'\n')
-           print('DIAGNOSTIC',stamp,json.dumps(descendants),flush=True)
-           parents={r['ppid'] for r in descendants}
-           for r in descendants:
-            pid=r['pid'];seen.setdefault(pid,time.monotonic());age=time.monotonic()-seen[pid];name=Path(r['command']).name
-            test_stalled=name.endswith('_test') and age>180
-            compiler_stalled=pid not in parents and name in ['v','v3','cc','clang','cc1','ld'] and age>600
-            if not (test_stalled or compiler_stalled):continue
-            captured=True
-            (out/'stalled-process.json').write_text(json.dumps({'at':stamp,'process':r,'observed_seconds':age},indent=2)+'\n')
-            print('STALLED PROCESS',json.dumps(r),flush=True)
-            subprocess.run(['/usr/bin/sample',str(pid),'3','-file',str(out/f'sample-{pid}.txt')],check=False,timeout=30)
-            try:os.killpg(proc.pid,signal.SIGTERM)
-            except ProcessLookupError:pass
-            try:proc.wait(timeout=10)
-            except subprocess.TimeoutExpired:
-             try:os.killpg(proc.pid,signal.SIGKILL)
-             except ProcessLookupError:pass
-             proc.wait(timeout=10)
-            break
-           if captured:break
-          code=1 if captured else proc.wait()
-          reader.join(timeout=10)
-          (out/'diagnostic-exit.json').write_text(json.dumps({'exit_code':code,'stalled_process_captured':captured},indent=2)+'\n')
-          print('DIAGNOSTIC EXIT',code,'stalled',captured,flush=True)
-          raise SystemExit(code)
+          out=Path('ci-results');binary=out.resolve()/'inbound_lifecycle_test';results=[]
+          for i in range(20):
+           start=time.monotonic();proc=subprocess.Popen([str(binary)],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,start_new_session=True)
+           try:stdout,_=proc.communicate(timeout=30)
+           except subprocess.TimeoutExpired:
+            rows=[]
+            for line in subprocess.check_output(['ps','-axo','pid=,ppid=,pgid=,etime=,comm='],text=True).splitlines():
+             fields=line.split(None,4)
+             if len(fields)==5 and int(fields[2])==proc.pid:rows.append(fields)
+            (out/'blocked-process-group.json').write_text(json.dumps(rows,indent=2)+'\n')
+            for row in rows:
+             if row[-1]=='<defunct>':continue
+             subprocess.run(['/usr/bin/sample',row[0],'3','-file',str(out/f'sample-{row[0]}.txt')],timeout=20,check=False)
+            os.killpg(proc.pid,signal.SIGKILL);stdout,_=proc.communicate(timeout=10);(out/f'inbound-repeat-{i+1}.log').write_bytes(stdout);print('STALLED',i+1,stdout.decode(errors='replace'),flush=True);raise SystemExit(124)
+           (out/f'inbound-repeat-{i+1}.log').write_bytes(stdout);elapsed=time.monotonic()-start;results.append({'iteration':i+1,'exit':proc.returncode,'seconds':elapsed});print('INBOUND',results[-1],flush=True)
+           if proc.returncode:print(stdout.decode(errors='replace'),flush=True);raise SystemExit(proc.returncode)
+          with tempfile.TemporaryDirectory(prefix='inbound-no-parent-') as root:
+           start=time.monotonic();r=subprocess.run([str(binary),'--inbound-signal',root],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=10);elapsed=time.monotonic()-start;(out/'no-parent.log').write_bytes(r.stdout);assert r.returncode!=0 and elapsed<8 and Path(root,'address').read_text().strip();boundary={'exit':r.returncode,'seconds':elapsed};print('BOUNDED CHILD',boundary,flush=True)
+          (out/'inbound-focused-result.json').write_text(json.dumps({'status':'passed','repeats':results,'no_parent':boundary},indent=2)+'\n');print('INBOUND20/20 AND BOUNDED CHILD PASSED',flush=True)
           PY
-      - name: Preserve diagnostic processes and samples
+      - name: Preserve focused results and samples
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: mac-test-process-diagnostic
-          path: ci-results/
+          name: inbound-lifecycle-focused-logs
+          path: |
+            ci-results/*.log
+            ci-results/*.json
+            ci-results/*.txt
           if-no-files-found: error
           retention-days: 14
