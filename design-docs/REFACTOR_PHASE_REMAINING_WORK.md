@@ -10,7 +10,7 @@ updated: 2026-10-23
 ---
 # Refactor Phase Remaining Work
 
-**最新验收候选为 `beb1fb6b36bf35c58dd2a110e78e7b38cee208c5`（2026-10-24），同提交远端矩阵进行中。** 已推送 [PR #21](https://github.com/guweigang/vhttpd/pull/21)，源码 tree `832224032e09888b9c0015055ec31122d2187695`。[三平台 PR 检查](https://github.com/guweigang/vhttpd/actions/runs/40058475402) 与 [nightly 同构全量矩阵](https://github.com/guweigang/vhttpd/actions/runs/40058501361) 绑定同一提交；另有 [Linux 原失败重放与修复20轮/完整 E2E 验证](https://github.com/guweigang/vhttpd/actions/runs/40058503654)，其诊断 workflow 提交 `bb6e9825` 与被测源码身份分开记录，不计入核心 9+3 任务和 15 份 ZIP。当前尚未核销远端验收。
+**最新验收候选为 `beb1fb6b36bf35c58dd2a110e78e7b38cee208c5`（2026-10-24），同提交远端矩阵进行中。** 已推送 [PR #21](https://github.com/guweigang/vhttpd/pull/21)，源码 tree `832224032e09888b9c0015055ec31122d2187695`。[三平台 PR 检查](https://github.com/guweigang/vhttpd/actions/runs/40058475402) 与 [nightly 同构全量矩阵](https://github.com/guweigang/vhttpd/actions/runs/40058501361) 绑定同一提交；另有 [Linux 原失败重放与修复20轮/完整 E2E 验证](https://github.com/guweigang/vhttpd/actions/runs/40058503654)，其诊断 workflow 提交 `bb6e9825` 与被测源码身份分开记录，不计入核心 9+3 任务和 15 份 ZIP。Linux 聚焦任务已通过：旧夹具第3次复现同一行122超时（occupied1/waiting0/超时计数0，释放后返回200），修复20/20及完整生产E2E207/0、CLI4/0通过，源码/tree/原始ZIP摘要已核验（`metrics-focused-linux-proof.json`）。核心9+3任务仍在运行，尚未核销远端验收。
 
 本候选仅改两份实际失败的 E2E 夹具。受控 metrics 业务 listener 使用单独受信 TLS，确保竞争连接进入执行器；另一业务 listener 和 admin 保持 HTTP。六个成功请求改为六轮明确的持有＋排队，限制持有时的文件轮询频率并去掉多余 120ms 后置忙等；保留原 200、waiting/occupied、queue_ms≥80、vjsx_ms≥100、超时拒绝及状态清零断言，生产固定一秒预算不变。日志契约夹具在原 60 秒窗口内等待两条原有 stdout 启动消息后执行原断言。Mac metrics20/20、同样注入 2 秒 stdout 采集延迟的原夹具失败/修复后通过、最终完整生产 E2E 配置207/0、CLI4/0及全部前置检查通过；固定原生执行文件与生产二进制摘要无漂移。V/生产源码824文件均与87a1相同。证据见 `tmp/m5-remote-validation/metrics-admission-validation.json`、`metrics-tls-mac20.log`、`metrics-tls-mac-full-e2e.log`。
 
