@@ -99,7 +99,9 @@ ui2 固定到 [ui2.commit](./ui2.commit) 中的版本。已有依赖 checkout �
 4. 安装位置固定为 SSH 用户的 `~/.local/share/vhttpd-workbench/runtime`；使用用户权限，无需 sudo、V、Node、Python 或编译工具。远端需有 OpenSSH/scp、POSIX shell、tar、base64、sha256sum 等基础系统工具，并兼容构建包的 Linux/glibc；架构正确不代表任意发行版都兼容。第一版不覆盖升级已安装运行包。
 5. 选择内置 vjsx 模板、实例名称和不同的业务/Admin 端口，点击“创建、启动并打开 Admin UI”。项目位于同一目录下的 `instances/<名称>`；自动生成并保存 Admin Token，使用 `--manual-restart` 脱离 SSH 启动，再通过 SSH 回环转发自动登录和检查整个项目的生效状态。初始业务与 Admin 均只监听远端 127.0.0.1，不自动对公网开放。失败时保留项目与私有实例记录；排除端口占用后用原名称和端口重试，不覆盖配置。
 
-服务器连接复用本次已认证的 SSH 会话；断开或退出 Desktop 会释放本机转发，远端实例继续运行。重新打开后可先连接服务器，再从“已运行实例”选中实例，复用服务器会话打开 Admin UI。当前同时连接一台服务器和一个实例；Windows/Linux Desktop、systemd、Docker/Compose、安装升级适配不在本次范围。
+服务器连接复用本次已认证的 SSH 会话；断开或退出 Desktop 会释放本机转发，远端实例继续运行。重新打开后可先连接服务器，再从“已运行实例”选中实例，复用服务器会话打开 Admin UI。当前同时连接一台服务器和一个实例；Windows/Linux Desktop、systemd、Docker/Compose、远端升级适配不在本次范围。
+
+[隔离 Linux 部署验收记录](./ci/results/remote-deploy-20261024/verification.json)覆盖空 HOME、完整 ELF 依赖、运行包校验、vjsx 创建启动、浏览器一次性登录、两份 include 校验发布、手工重启、整项目生效、SSH 会话复用、首次指纹取消/确认、指纹变化拦截，以及真实端口冲突后原实例重试。该记录来自本机 Mac 管理器连接 OrbStack ARM64 Linux，与公开 Release 或 GitHub CI 运行记录分别对待；本次没有触发 GitHub CI，也没有公开上传本机构建包。复验入口为[部署驱动](./ci/verify_remote_deploy_linux_vm.py)和[宿主测试](./host/remote_servers_test.v)，给驱动传入 Linux 完整运行程序、私有 sshd 工具路径及已编译的 Mac host 测试。
 
 ## 通过 SSH 管理远端实例
 
