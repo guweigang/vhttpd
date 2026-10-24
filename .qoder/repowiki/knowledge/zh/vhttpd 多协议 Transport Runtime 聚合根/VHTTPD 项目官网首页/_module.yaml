@@ -1,8 +1,0 @@
-schema_version: 1
-module_path: website_index
-title: VHTTPD 项目官网首页
-scope:
-    - index.html
-source_files: []
-depends_on: []
-related_to: []
