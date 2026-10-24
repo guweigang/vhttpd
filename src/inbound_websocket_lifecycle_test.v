@@ -164,6 +164,7 @@ fn testsuite_begin() {
 	root := os.args[2]
 	mut app := &App{}
 	mut listener := net.listen_tcp(.ip, '127.0.0.1:0') or { panic(err) }
+	listener.set_accept_timeout(5 * time.second)
 	addr := listener.addr() or { panic(err) }
 	app.engines.primary.logic_executor = InboundFinalizer{
 		close_fn: fn [mut app, root] () {
@@ -174,7 +175,9 @@ fn testsuite_begin() {
 	}
 	register_active_runtime(app, inbound_cfg())
 	process_runtime.install_shutdown_signal_handler(vhttpd_shutdown_runtime) or { panic(err) }
-	os.write_file(root + '/address', addr.str()) or { panic(err) }
+	// Existence is the parent readiness signal: publish only a complete address.
+	os.write_file(root + '/address.tmp', addr.str()) or { panic(err) }
+	os.rename(root + '/address.tmp', root + '/address') or { panic(err) }
 	mut server := listener.accept() or { panic(err) }
 	mut run := inbound_run(mut app, server)
 	spawn ws.run_dispatch_session(mut run, app.build_websocket_runtime_context(), mut server, 'dGhlIHNhbXBsZSBub25jZQ==', 'GET', '/ws', {}, {}, '', 'signal', 'trace', 0, [])
@@ -190,7 +193,13 @@ fn test_real_signals_join_inbound_session_before_process_exit() {
 		mut child := os.new_process(os.executable())
 		child.set_args(['--inbound-signal', root])
 		child.run()
-		defer { child.close() }
+		defer {
+			if child.is_alive() {
+				child.signal_kill()
+				child.wait()
+			}
+			child.close()
+		}
 		deadline := time.now().add(5 * time.second)
 		for !os.exists(root + '/address') {
 			assert time.now() < deadline
