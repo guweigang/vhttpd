@@ -17,7 +17,7 @@ test('common HTTP, route and vjsx forms publish cross-include changes and take e
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'vhttpd-common-config-'));
  const root=path.join(dir,'vhttpd.toml'), listener=path.join(dir,'http.toml'), routes=path.join(dir,'routes.toml'), app=path.join(dir,'app.toml');
  const web=await port(),admin=await port();let next=await port();while([web,admin].includes(next))next=await port();
- const token='common-config-local-test';let child;let logs='';let phase='initial';let starts=0;
+ const token='common-config-local-test';let child;let logs='';let phase='initial';let starts=0;let failure;
  const entry=fs.readFileSync(path.join(repo,'tests/e2e/fixtures/common-config-main.mjs'),'utf8');
  fs.writeFileSync(path.join(dir,'main.mjs'),entry);fs.writeFileSync(path.join(dir,'next.mjs'),entry.replaceAll('hello-vjsx','common-form-updated'));
  const original=`version=2\ninclude=["http.toml","routes.toml","app.toml"]\n[server]\npid_file="${dir}/runtime.pid"\n[observability]\nevent_log="${dir}/events.ndjson"\n[control]\nlistener="listener:admin"\ntoken="${token}"\n[listeners.admin]\nprotocol="http"\ntransport="tcp"\nhost="127.0.0.1"\nport=${admin}\n`;
@@ -26,7 +26,7 @@ test('common HTTP, route and vjsx forms publish cross-include changes and take e
  fs.writeFileSync(routes,'[[pipelines]]\nid="hello"\ningress="listener:web"\nmatch.paths=["/hello"]\nmatch.methods=["GET"]\negress="adapter:app"\n');
  fs.writeFileSync(app,'[engines.app]\nkind="vjsx"\nentry="main.mjs"\nruntime_profile="script"\nthread_count=1\n[adapters.app]\nkind="http-handler"\nengine="engine:app"\n');
  const request=async(url,options={})=>{const r=await fetch(`http://127.0.0.1:${admin}`+url,{...options,headers:{connection:'close','x-vhttpd-admin-token':token,...options.headers},signal:AbortSignal.timeout(3000)});const value=await r.json();if(!r.ok)throw Error(JSON.stringify(value));return value;};
- async function start(){ child=spawn(process.env.VHTTPD_BIN || path.join(repo,'vhttpd'),['--config',root],{cwd:dir,stdio:['ignore','pipe','pipe']});child.stdout.on('data',d=>{logs=(logs+d).slice(-16000);});child.stderr.on('data',d=>{logs=(logs+d).slice(-16000);});await until(async()=>{if(child.exitCode!==null || child.signalCode!==null)throw Error('instance exited');return (await request('/admin/runtime')).schema_version===2 || !!(await request('/admin/config/workspace')).files;});const first=starts++===0;/* A listener can initialize multiple engine sessions serially. */await until(async()=>{const response=await publicRequest(`http://127.0.0.1:${first?web:next}/${first?'hello':'updated'}`);const body=await response.text();return response.status===200 && body.length>0;},90000);process.stderr.write('Ready '+starts+' ('+phase+')\n'); }
+ async function start(){ child=spawn(process.env.VHTTPD_BIN || path.join(repo,'vhttpd'),['--config',root],{cwd:dir,stdio:['ignore','pipe','pipe']});child.stdout.on('data',d=>{logs=(logs+d).slice(-16000);});child.stderr.on('data',d=>{logs=(logs+d).slice(-16000);});await until(async()=>{if(child.exitCode!==null || child.signalCode!==null)throw Error('instance exited');return (await request('/admin/runtime')).schema_version===2 || !!(await request('/admin/config/workspace')).files;},90000);const first=starts++===0;/* A listener can initialize multiple engine sessions serially. */await until(async()=>{const response=await publicRequest(`http://127.0.0.1:${first?web:next}/${first?'hello':'updated'}`);const body=await response.text();return response.status===200 && body.length>0;},90000);process.stderr.write('Ready '+starts+' ('+phase+')\n'); }
  async function stop(){if(child && child.exitCode===null && child.signalCode===null){const done=new Promise(r=>child.once('exit',r));child.kill('SIGTERM');let forced=false;const force=setTimeout(()=>{forced=true;child.kill('SIGKILL');},15000);try{await done;}finally{clearTimeout(force);}if(forced)throw Error('Owned test instance did not shut down within 15 seconds');}}
  try {
   await start();
@@ -131,5 +131,9 @@ test('common HTTP, route and vjsx forms publish cross-include changes and take e
   assert.equal(fs.readFileSync(root,'utf8'),original);
   for(const f of [listener,routes,app])assert(!fs.readFileSync(f,'utf8').includes('extra-vjsx') && !fs.readFileSync(f,'utf8').includes('extra-out'));
 
- } catch(error) {throw Error('Phase '+phase+': '+error.message+'\n'+logs,{cause:error});} finally {await stop();fs.rmSync(dir,{recursive:true,force:true});}
+ } catch(error) {failure=Error('Phase '+phase+': '+error.message+'\n'+logs,{cause:error});throw failure;} finally {
+  try { await stop(); } catch(cleanup) { throw new AggregateError(failure?[failure,cleanup]:[cleanup],'Common config cleanup failed during '+phase); }
+  finally { if(process.env.VHTTPD_E2E_KEEP_TMP==='1') console.error('Retained common config fixture: '+dir);else fs.rmSync(dir,{recursive:true,force:true}); }
+ }
+
 });
