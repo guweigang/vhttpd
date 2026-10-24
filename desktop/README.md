@@ -89,9 +89,21 @@ ui2 固定到 [ui2.commit](./ui2.commit) 中的版本。已有依赖 checkout �
 
 项目登记默认保存在 `~/Library/Application Support/vhttpd-workbench/projects.json`，版本历史保存在同目录的 `recovery/`。升级时可迁移当前开发 checkout 的旧登记，不移动项目源码。历史按本机文件权限保存，包含恢复所需的原始配置内容，不加密；界面差异对敏感字段脱敏。需保管好本地文件。实现见[登记](./host/project.v)与[历史存储](./host/recovery_store.v)。
 
+## 远端服务器与运行环境
+
+左侧“远端服务器 · SSH”登记服务器，只填写 SSH 主机、用户、端口和认证方式，不要求预先部署 vhttpd，也不要求 Admin Token。密码和首次主机指纹确认沿用下文的 SSH 连接规则；密码仅用于本次认证，不落盘。服务器登记独立保存在本机权限保护的 `remote-servers.json`，与实例连接、共享 Relay 分开。实现见[服务器会话与安装](./host/remote_servers.v)和[原生界面](./remote_servers.v)。
+
+1. 点击“添加服务器”，选择密码或密钥，保存并连接；首次连接核对工作台展示的指纹。
+2. 点击“管理此服务器运行环境”，或在“管理运行环境”选择本机 Mac / 已登记服务器。连接成功后显示远端 Linux 架构、实际运行版本和安装目录。
+3. 尚未安装时，可下载官方 Release 完整包；没有正式 Release 或该架构附件时，可选择官方 GitHub CI 的 `vhttpd-linux-amd64.tar.gz` / `vhttpd-linux-arm64.tar.gz`，同名 `.sha256` 放在旁边。CI Artifact 外层 zip 需先解压。安装前在本机校验 SHA256、归档路径和文件类型，上传后再次校验；运行程序实际可执行且 Admin UI 完整才提交安装。运行包由[CI 构建](../.github/workflows/vhttpd-binaries.yml)，不上传开发机构建包。
+4. 安装位置固定为 SSH 用户的 `~/.local/share/vhttpd-workbench/runtime`；使用用户权限，无需 sudo、V、Node、Python 或编译工具。远端需有 OpenSSH/scp、POSIX shell、tar、base64、sha256sum 等基础系统工具，并兼容构建包的 Linux/glibc；架构正确不代表任意发行版都兼容。第一版不覆盖升级已安装运行包。
+5. 选择内置 vjsx 模板、实例名称和不同的业务/Admin 端口，点击“创建、启动并打开 Admin UI”。项目位于同一目录下的 `instances/<名称>`；自动生成并保存 Admin Token，使用 `--manual-restart` 脱离 SSH 启动，再通过 SSH 回环转发自动登录和检查整个项目的生效状态。初始业务与 Admin 均只监听远端 127.0.0.1，不自动对公网开放。失败时保留项目与私有实例记录；排除端口占用后用原名称和端口重试，不覆盖配置。
+
+服务器连接复用本次已认证的 SSH 会话；断开或退出 Desktop 会释放本机转发，远端实例继续运行。重新打开后可先连接服务器，再从“已运行实例”选中实例，复用服务器会话打开 Admin UI。当前同时连接一台服务器和一个实例；Windows/Linux Desktop、systemd、Docker/Compose、安装升级适配不在本次范围。
+
 ## 通过 SSH 管理远端实例
 
-左侧“远端实例 · SSH”管理已经运行的 vhttpd，与共享 Relay 连接库分别维护。可保存多个实例，第一版同时连接一个远端；连接另一个实例会关闭旧隧道，远端进程继续运行。当前实现 Mac Desktop + 系统 OpenSSH + 手工进程重启；不安装、升级或接管 systemd、Docker/Compose 服务。Windows/Linux Desktop 和这些进程管理方式保留为后续适配项，当前不显示为可用。
+“远端服务器”页中的“已运行实例”继续支持连接自行部署的 vhttpd；手动添加这种实例时才需要已有的 Admin 端口和 Token。Desktop 自动创建的实例已保存这两项。连接另一个实例会关闭旧转发，远端进程继续运行。当前支持 Mac Desktop + 系统 OpenSSH + 手工进程重启；Windows/Linux Desktop、systemd、Docker/Compose 保留后续适配边界。
 
 1. 远端使用包含工作台管理 API 的 vhttpd，配置独立的回环 Admin 监听和非空 Token；若允许 Desktop 重启，在原启动命令增加 `--manual-restart`。未启用时仍可连接并编辑配置，重启按钮明确禁用。已有旧进程需要由所有者先以此方式启动一次，Desktop 不替换程序或猜测原启动命令。
 2. 在 Desktop 添加实例，选择“密码登录”或“密钥 / SSH 配置”。支持已有 SSH Host 别名、用户、端口、可选私钥和系统 ssh-agent；用户名和 SSH 端口留空时沿用 SSH 配置。首次遇到未知主机，工作台会展示主机、密钥类型和 SHA256 指纹；通过服务器管理员或可信渠道核对后，点击“信任此主机并连接”继续，由系统 SSH 保存信任记录，取消则不保存。不需要先到终端确认指纹。已有记录发生指纹变化时显示红色提示并阻止连接，不发送密码、不自动覆盖原记录；需先通过可信渠道核对变更原因。交互式 MFA 暂不支持，带口令的私钥需预先解锁到系统 ssh-agent。
