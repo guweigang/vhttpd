@@ -4,9 +4,11 @@ This plan turns the prioritized findings in [`CODE_REVIEW_2026_08_06.md`](CODE_R
 
 Track this file as milestones complete; cross-link any deviation back to the review.
 
-## M5 CI 矩阵收尾 — 2026-10-22～23
+## M5 CI 矩阵收尾 — 2026-10-22～24
 
-**最新验收候选为 `beb1fb6b36bf35c58dd2a110e78e7b38cee208c5`（2026-10-24），同提交远端矩阵进行中。** 已推送 [PR #21](https://github.com/guweigang/vhttpd/pull/21)，源码 tree `832224032e09888b9c0015055ec31122d2187695`。[三平台 PR 检查](https://github.com/guweigang/vhttpd/actions/runs/40058475402) 与 [nightly 同构全量矩阵](https://github.com/guweigang/vhttpd/actions/runs/40058501361) 绑定同一提交；另有 [Linux 原失败重放与修复20轮/完整 E2E 验证](https://github.com/guweigang/vhttpd/actions/runs/40058503654)，其诊断 workflow 提交 `bb6e9825` 与被测源码身份分开记录，不计入核心 9+3 任务和 15 份 ZIP。Linux 聚焦任务已通过：旧夹具第3次复现同一行122超时（occupied1/waiting0/超时计数0，释放后返回200），修复20/20及完整生产E2E207/0、CLI4/0通过，源码/tree/原始ZIP摘要已核验（`metrics-focused-linux-proof.json`）。核心9+3任务仍在运行，尚未核销远端验收。
+**同一提交的远端手动验收已通过（2026-10-24）。** 验收提交 `beb1fb6b36bf35c58dd2a110e78e7b38cee208c5`，tree `832224032e09888b9c0015055ec31122d2187695`，已推送 [PR #21](https://github.com/guweigang/vhttpd/pull/21)。[三平台 PR 检查9/9](https://github.com/guweigang/vhttpd/actions/runs/40058475402) 与 [nightly 同构全量矩阵3/3](https://github.com/guweigang/vhttpd/actions/runs/40058501361) 全部成功：Ubuntu24.04、Mac Intel、Mac ARM 各自 fast320/320、inproc6/6、CodexBot fast6/6、全量334/334、PHP包10/10、Pest79项/557断言、生产构建及完整E2E（CLI4/0、配置207/0、全部前置检查）通过。12份测试日志逐文件集合与预期一致，没有漏跑或重复文件；全部15份核心原始ZIP已保存到 `tmp/m5-remote-validation/accepted-artifacts/`，源码commit/tree、GitHub SHA256及三平台ELF/Mach-O架构均已核验。最终清单 `acceptance-complete.json`，输入核对 `final-source-integrity.json`；PR描述保留每份ZIP的链接和摘要。
+
+[额外Linux重放与修复验证](https://github.com/guweigang/vhttpd/actions/runs/40058503654) 已通过：原夹具第3次复现同一行122超时（occupied1/waiting0/超时计数0，释放后返回200），修复20/20、完整E2E207/0及CLI4/0通过。诊断workflow提交`bb6e9825`与被测源码`beb1fb6b`分开记录，额外ZIP不计入15份核心归档，证据`metrics-focused-linux-proof.json`。本机Mac20/20、日志2秒延迟前后对照及完整生产E2E证据见`metrics-admission-validation.json`。**自动cron仍须工作流合入默认分支后观察，M5保留该观察项；不据本轮手动矩阵核销自动触发，也不核销M7。**
 
 本候选仅改两份实际失败的 E2E 夹具。受控 metrics 业务 listener 使用单独受信 TLS，确保竞争连接进入执行器；另一业务 listener 和 admin 保持 HTTP。六个成功请求改为六轮明确的持有＋排队，限制持有时的文件轮询频率并去掉多余 120ms 后置忙等；保留原 200、waiting/occupied、queue_ms≥80、vjsx_ms≥100、超时拒绝及状态清零断言，生产固定一秒预算不变。日志契约夹具在原 60 秒窗口内等待两条原有 stdout 启动消息后执行原断言。Mac metrics20/20、同样注入 2 秒 stdout 采集延迟的原夹具失败/修复后通过、最终完整生产 E2E 配置207/0、CLI4/0及全部前置检查通过；固定原生执行文件与生产二进制摘要无漂移。V/生产源码824文件均与87a1相同。证据见 `tmp/m5-remote-validation/metrics-admission-validation.json`、`metrics-tls-mac20.log`、`metrics-tls-mac-full-e2e.log`。
 
@@ -24,8 +26,8 @@ Track this file as milestones complete; cross-link any deviation back to the rev
 
 本轮修复：JS 回调捕获本地接口值，避免工厂返回后访问临时接口地址；插件退休映射缺失键显式解锁返回；worker 批次测试工厂显式返回 `&worker.WorkerState`，原断言保持。首次全量 259 项通过后遇到夹具编译失败的原日志及后续 75/75 排查结果均保留，最终 334/334 来自独立整轮，未拼接。完整证据及原始日志摘要见 `tmp/m5-remote-validation/mac-acceptance-complete.json`、`mac-final-inputs.json`、`mac-test-all.log` 与 `mac-production-e2e-final.log`。
 
-**覆盖范围与剩余验收：** 本机主工作区在验收期间另有数据库/异步 fetch 并行改动，未纳入冻结候选；差异清单记录于 `mac-concurrent-workspace-differences.json`，本轮五文件修复已同步回工作区，其余并行工作保持原状。本次结果不能表述为当前整个主工作区已通过。Live DB 与安装态 WordPress opt-in 未启用；本机 PHP/Node 在长时间验收期间更新过，因此最终将 PHP 8.5.12 ZTS、Node 26.12.1、Python 3.15.0 与 Composer 2.9.2 固定到实际文件路径和摘要，重新执行 PHP、Pest 及完整生产 E2E，全部退出码为 0，执行文件摘要前后不变；记录见 `mac-native-runtime-exit.json`。未宣称这些原生运行时与远端环境完全相同。2026-10-24 用户已授权提交并恢复远端，初始五文件修复为 `3323e0ee`，TLS 就绪文件原子发布为 `dc3767ca`，worker 探测夹具为 `50c330cc`，队列接入夹具与 E2E 预检为 `ad60fd42`，inbound 信号子进程就绪与回收夹具为 `87a1c705`；当前同提交 PR 与全量 nightly 正在运行。旧提交的三平台全量绿测仅作历史证据。
-完整远端验收及自动 cron 观察仍未完成，M5 保持未关闭。
+**覆盖范围与剩余验收：** 本机主工作区在验收期间另有数据库/异步 fetch 并行改动，未纳入冻结候选；差异清单记录于 `mac-concurrent-workspace-differences.json`，本轮五文件修复已同步回工作区，其余并行工作保持原状。本次结果不能表述为当前整个主工作区已通过。Live DB 与安装态 WordPress opt-in 未启用；本机 PHP/Node 在长时间验收期间更新过，因此最终将 PHP 8.5.12 ZTS、Node 26.12.1、Python 3.15.0 与 Composer 2.9.2 固定到实际文件路径和摘要，重新执行 PHP、Pest 及完整生产 E2E，全部退出码为 0，执行文件摘要前后不变；记录见 `mac-native-runtime-exit.json`。未宣称这些原生运行时与远端环境完全相同。2026-10-24 用户已授权提交并恢复远端，初始五文件修复为 `3323e0ee`，TLS 就绪文件原子发布为 `dc3767ca`，worker 探测夹具为 `50c330cc`，队列接入夹具与 E2E 预检为 `ad60fd42`，inbound 信号子进程就绪与回收夹具为 `87a1c705`，metrics 准入与日志就绪夹具为 `beb1fb6b`；最终同提交PR9/9与全量nightly同构3/3全部通过，15份核心原始ZIP已核验并保存。旧提交结果和失败原始证据独立保留，没有拼接为最终绿测。
+同提交远端手动矩阵验收已完成；自动 cron 待工作流合入默认分支后观察，M5 仅保留该观察项未核销。
 
 **前轮 cfda 记录（已因非本地类型方法定义失败取消）：** [本轮 PR 矩阵](https://github.com/guweigang/vhttpd/actions/runs/39944133414) 与 [本轮全量矩阵](https://github.com/guweigang/vhttpd/actions/runs/39944137424) 绑定同一提交。V/VC 仍固定为 `e21021d1`/`7ba7d3e`。前一候选已在 Linux 完成自举，随后首次两个全量测试编译失败：`config` 解析为标准库 `config.LoadOptions`，而非项目配置类型。原日志 `failure-c565-linux-full.log` 保留。现为所有 Make 编译入口明确指定模块路径：测试优先 `src`，生产优先移除测试辅助文件后的暂存源码树，再搜索 `@vlib`、`@vmodules`。Make dry-run 已核对两类入口的路径，实际编译仍以本轮矩阵为准；未恢复本机重型编译。
 
@@ -1772,7 +1774,7 @@ Linux stopped at read-only preflight under the [VM testing skill](../.agents/ski
 
 证据：`tmp/m5-ci-validation/`。本地为 macOS 27.0.1 ARM、PHP 8.5.11、Node 26.12.0、Python 3.15.0、Composer 2.9.2；CI 配置为 Ubuntu 24.04/macOS 15 Intel/ARM、PHP 8.4 系列、Node 22.14.0、Python 3.12.9、Composer 2.8.8。本地通过不冒称这套远端运行时的实跑。PHP 首次在沙箱内无法监听 Unix socket，放开所需执行权限后同一入口通过；原失败保留。运行时源码/TS 夹具无漂移，原二进制保留，未继续局部审查。
 
-**M5 配置实现与本地验证已完成，远端验收未关闭。** 完成标准：同一提交上的三个平台 fast/prod/E2E 与六个 inproc/CodexBot PR 检查通过；合并默认分支后观察 03:00 UTC 定时任务实际触发，三个 nightly 全量分支全部通过，并取得版本、补丁校验和与测试日志 artifacts。必要 V2/M4 基线与 CI 已推送并创建 [验收 PR #21](https://github.com/guweigang/vhttpd/pull/21)，当前同提交矩阵及真实失败修复记录见本文最上方 M5 收尾段。定时工作流尚未合入默认分支，本轮手动验收调用相同 reusable 全量矩阵，不能冒称已观察自动 cron；不合并 PR，也不核销未完成的验收项。Linux 使用干净 GitHub Ubuntu runner 验证；原 OrbStack VM 保留既存跟踪修改，仍未在该 VM 构建或测试。
+**M5 配置、本地验证和同提交远端手动矩阵验收已完成；自动 cron 观察尚待默认分支合入。** 完成标准：同一提交上的三个平台 fast/prod/E2E 与六个 inproc/CodexBot PR 检查通过；合并默认分支后观察 03:00 UTC 定时任务实际触发，三个 nightly 全量分支全部通过，并取得版本、补丁校验和与测试日志 artifacts。必要 V2/M4 基线与 CI 已推送并创建 [验收 PR #21](https://github.com/guweigang/vhttpd/pull/21)，当前同提交矩阵及真实失败修复记录见本文最上方 M5 收尾段。定时工作流尚未合入默认分支，本轮手动验收调用相同 reusable 全量矩阵，不能冒称已观察自动 cron；不合并 PR，也不核销未完成的验收项。Linux 使用干净 GitHub Ubuntu runner 验证；原 OrbStack VM 保留既存跟踪修改，仍未在该 VM 构建或测试。
 
 **Goal:** catch e2e regressions on PR instead of waiting for a manual run.
 
