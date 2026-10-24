@@ -218,3 +218,65 @@ fn test_due_timer_waits_for_host_publication_before_dispatch() {
 	owner.retire()
 	wakeup_assert_counts(mut state, 0, 0, 0)
 }
+
+fn test_async_wakeup_is_coalesced_without_replacing_or_cancelling_timer() {
+	mut state := &VjsxExecutorState{}
+	// Unpublished ownership keeps the async worker from dispatching while this
+	// test checks the two independently protected pending slots.
+	owner := state.new_lane_wakeup_owner('building') or { panic(err) }
+	mut timer := owner.reserve(time.now().unix_milli() + 60_000, 3) or { panic('missing timer') }
+	owner.schedule_async()
+	owner.schedule_async()
+	state.mu.@lock()
+	async_job := owner.async_job or { panic('missing async job') }
+	assert state.lane_wakeup_workers == 2
+	assert timer.current_locked()
+	assert async_job.current_locked()
+	state.mu.unlock()
+	owner.cancel(3)
+	state.mu.@lock()
+	assert !timer.current_locked()
+	assert async_job.current_locked()
+	state.mu.unlock()
+	owner.retire()
+	timer.finish()
+	deadline := time.now().add(time.second)
+	for {
+		state.mu.@lock()
+		pending := state.lane_wakeup_workers
+		state.mu.unlock()
+		if pending == 0 { break }
+		assert time.now() < deadline
+		time.sleep(time.millisecond)
+	}
+	owner.schedule_async()
+	wakeup_assert_counts(mut state, 0, 0, 0)
+}
+
+fn test_old_async_ready_callback_cannot_replace_new_session_completion_wakeup() {
+	mut state := &VjsxExecutorState{}
+	old := state.new_lane_wakeup_owner('lane') or { panic(err) }
+	old.schedule_async()
+	next := state.new_lane_wakeup_owner('lane') or { panic(err) }
+	next.schedule_async()
+	state.mu.@lock()
+	job := next.async_job or { panic('missing replacement async job') }
+	state.mu.unlock()
+	old.schedule_async()
+	old.cancel(0)
+	old.retire()
+	state.mu.@lock()
+	assert job.current_locked()
+	state.mu.unlock()
+	next.retire()
+	deadline := time.now().add(time.second)
+	for {
+		state.mu.@lock()
+		pending := state.lane_wakeup_workers
+		state.mu.unlock()
+		if pending == 0 { break }
+		assert time.now() < deadline
+		time.sleep(time.millisecond)
+	}
+	wakeup_assert_counts(mut state, 0, 0, 0)
+}

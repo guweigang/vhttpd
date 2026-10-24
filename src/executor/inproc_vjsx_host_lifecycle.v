@@ -72,6 +72,9 @@ pub fn (e InProcVjsxExecutor) ensure_lane_host(idx int) ! {
 		cancel_wake_fn: fn [wake_owner] (req vjsx.RuntimeSessionWakeCancelRequest) {
 			wake_owner.cancel(req.generation)
 		}
+		async_ready_fn: fn [wake_owner] (_req vjsx.RuntimeHostAsyncReadyRequest) {
+			wake_owner.schedule_async()
+		}
 	})
 	log.debug('[vhttpd] ensure_lane_host runtime ready lane=${lane_id} idx=${idx} module=${as_module} temp_root=${temp_root}')
 	mut ctx := session.context()

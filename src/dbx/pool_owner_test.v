@@ -4,6 +4,23 @@ import provider
 import sync
 import time
 
+fn test_cancelled_pool_waiter_never_acquires_after_capacity_returns() {
+	mut fixture := &PoolFixture{}
+	mut owner := &PoolOwner{}
+	owner.ensure(provider.DbRuntimeSettings{pool_size: 1}, fixture.factory()) or { panic(err) }
+	mut held := owner.acquire() or { panic(err) }
+	clock := time.new_stopwatch()
+	stop := fn [clock] () bool { return clock.elapsed() >= 20 * time.millisecond }
+	if _ := owner.acquire_until(stop) { assert false, 'cancelled waiter acquired a connection' }
+	else { assert err.msg() == 'db_cancelled' }
+	assert fixture.acquires == 1
+	held.release_to_pool()
+	mut recovered := owner.acquire() or { panic(err) }
+	recovered.release_to_pool()
+	assert fixture.acquires == 2
+	owner.close()
+}
+
 @[heap]
 struct PoolFixture {
 mut:

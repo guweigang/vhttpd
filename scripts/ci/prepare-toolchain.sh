@@ -21,9 +21,7 @@ checkout_pinned() {
 checkout_pinned "$V_REPO" "$V_COMMIT" "$toolchain/v"
 checkout_pinned "$VJSX_REPO" "$VJSX_COMMIT" "$toolchain/vjsx"
 # V includes merged upstream PRs #31046, #31047 and #31048.
-# Only vjsx still requires a repository-owned runtime patch.
-git -C "$toolchain/vjsx" apply --check "$root/scripts/ci/vjsx-runtime.patch"
-git -C "$toolchain/vjsx" apply "$root/scripts/ci/vjsx-runtime.patch"
+# vjsx includes the async fetch/timeout APIs and native runtime asset decoder.
 checkout_pinned "$VC_REPO" "$VC_COMMIT" "$toolchain/v/vc"
 case "$(uname -s):$(uname -m)" in
   Linux:x86_64) selected_tcc="$TCC_LINUX_AMD64_COMMIT" ;;
@@ -49,7 +47,6 @@ mkdir -p "$root/ci-results"
   cat "$root/scripts/ci/toolchain.env"
   echo "TCC_SELECTED_COMMIT=$selected_tcc"
   git -C "$root" rev-parse HEAD
-  shasum -a 256 "$root"/scripts/ci/*-runtime.patch
   "$toolchain/v/v" version
   cc --version
   php --version

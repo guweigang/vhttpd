@@ -17,6 +17,9 @@ fn InProcVjsxHostApi.install_http_facade(mut ctx vjsx.Context) ! {
 
 fn InProcVjsxHostApi.builder(mut state VjsxExecutorState, idx int) vjsx.HostValueBuilder {
 	return vjsx.host_object(vjsx.HostObjectField{
+		name:  'database'
+		value: InProcVjsxHostApi.database_builder(mut state, idx)
+	}, vjsx.HostObjectField{
 		name:  'issueFeishuStream'
 		value: InProcVjsxHostApi.feishu_creation_builder(mut state, idx)
 	}, vjsx.HostObjectField{

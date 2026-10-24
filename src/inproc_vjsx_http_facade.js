@@ -1,3 +1,101 @@
+// Parameters/results keep dbx string semantics (including its NULL => "").
+globalThis.__vhttpd_database_api = function(host) {
+  const invoke = async (op, sql, params = [], options = {}, session = "") => {
+    if (!host || typeof host.database !== "function") throw Error("database_unavailable");
+    const timeout = options.timeoutMs === undefined ? 30000 : Number(options.timeoutMs);
+    if (!Number.isSafeInteger(timeout) || timeout <= 0 || timeout > 2147483647) throw new TypeError("invalid_timeout");
+    if (!Array.isArray(params) || params.some(p => typeof p !== "string")) throw new TypeError("database params must be strings");
+    if (options.signal != null && typeof options.signal.addEventListener !== "function") throw new TypeError("signal must be an AbortSignal");
+    if ((op === "query" || op === "execute") && (typeof sql !== "string" || !sql.trim())) throw new TypeError("missing_sql");
+    const pending = host.database(JSON.stringify({op, sql: sql || "", params, timeout_ms: timeout, session_id: session}), options.signal);
+    // Compatibility await pumps QuickJS timers; lane completion wakeups handle
+    // detached Promises. Both paths drain the same owner-only completion queue.
+    const timer = setInterval(() => host.database("__drain"), 5);
+    try {
+      const result = JSON.parse(await pending);
+      // The current V pg.Result omits PQcmdTuples. Do not report its returned
+      // row count as the number of rows affected by a command.
+      if (op === "execute" && result.driver === "pgsql") result.affected_rows = null;
+      return result;
+    } finally { clearInterval(timer); }
+  };
+  return Object.freeze({
+    query: (sql, params, options) => invoke("query", sql, params, options),
+    execute: (sql, params, options) => invoke("execute", sql, params, options),
+    async transaction(callback, options = {}) {
+      if (typeof callback !== "function") throw new TypeError("transaction callback required");
+      const timeout = options.timeoutMs === undefined ? 30000 : Number(options.timeoutMs);
+      if (!Number.isSafeInteger(timeout) || timeout <= 0 || timeout > 2147483647) throw new TypeError("invalid_timeout");
+      const controller = new AbortController();
+      const parent = options.signal;
+      if (parent != null && typeof parent.addEventListener !== "function") throw new TypeError("signal must be an AbortSignal");
+      const forward = () => controller.abort(parent.reason);
+      if (parent) { if (parent.aborted) forward(); else parent.addEventListener("abort", forward, {once: true}); }
+      const timer = setTimeout(() => { const e = Error("transaction timed out"); e.name = "TimeoutError"; controller.abort(e); }, timeout);
+      let id = "", finished = false, abortListener, failed;
+      const pendingQueries = new Set();
+      const aborted = new Promise((_, reject) => {
+        abortListener = () => {
+          const e = controller.signal.reason instanceof Error ? controller.signal.reason : Error("transaction aborted");
+          if (e.name !== "TimeoutError") e.name = "AbortError";
+          reject(e);
+        };
+        controller.signal.addEventListener("abort", abortListener, {once: true});
+        if (controller.signal.aborted) abortListener();
+      });
+      // BEGIN can reject before this Promise is raced with the callback.
+      aborted.catch(() => {});
+      try {
+        const begin = await invoke("begin", "", [], {timeoutMs: timeout, signal: controller.signal});
+        id = begin.session_id;
+        const txCall = (op, sql, params, perQuery = {}) => {
+          if (finished || controller.signal.aborted) return Promise.reject(Error("transaction_closed"));
+          // The transaction owns cancellation; shorter per-query deadlines are allowed.
+          const child = perQuery.signal;
+          let signal = controller.signal, cleanup = () => {};
+          if (child != null) {
+            if (typeof child.addEventListener !== "function") return Promise.reject(new TypeError("signal must be an AbortSignal"));
+            const combined = new AbortController();
+            const outer = () => combined.abort(controller.signal.reason);
+            const inner = () => combined.abort(child.reason);
+            controller.signal.addEventListener("abort", outer, {once: true});
+            child.addEventListener("abort", inner, {once: true});
+            if (controller.signal.aborted) outer();
+            if (child.aborted) inner();
+            signal = combined.signal;
+            cleanup = () => { controller.signal.removeEventListener("abort", outer); child.removeEventListener("abort", inner); };
+          }
+          const pending = invoke(op, sql, params, {timeoutMs: perQuery.timeoutMs === undefined ? timeout : perQuery.timeoutMs, signal}, id);
+          pendingQueries.add(pending);
+          pending.then(() => { cleanup(); pendingQueries.delete(pending); }, error => { cleanup(); failed = failed || error; pendingQueries.delete(pending); });
+          return pending;
+        };
+        const tx = Object.freeze({query: (s,p,o) => txCall("query",s,p,o), execute: (s,p,o) => txCall("execute",s,p,o)});
+        const value = await Promise.race([Promise.resolve().then(() => callback(tx)), aborted]);
+        finished = true;
+        await Promise.race([Promise.all(Array.from(pendingQueries)), aborted]);
+        if (failed) throw failed;
+        await invoke("commit", "", [], {timeoutMs: timeout, signal: controller.signal}, id);
+        return value;
+      } catch (error) {
+        finished = true;
+        // Cleanup must not inherit an already-cancelled signal or hold up the
+        // rejection while an in-flight native SQL statement finishes.
+        if (id) {
+          const cleanup = invoke("rollback", "", [], {timeoutMs: 30000}, id).catch(() => {});
+          if (!controller.signal.aborted && error?.name !== "TimeoutError" && error?.name !== "AbortError") await cleanup;
+        }
+        if (controller.signal.aborted && controller.signal.reason?.name === "TimeoutError") throw controller.signal.reason;
+        throw error;
+      } finally {
+        clearTimeout(timer);
+        if (parent) parent.removeEventListener("abort", forward);
+        controller.signal.removeEventListener("abort", abortListener);
+      }
+    }
+  });
+};
+
 globalThis.__vhttpd_create_runtime = function(meta) {
   meta = meta && typeof meta === "object" ? meta : {};
   const freezeValue = (value) => {
@@ -95,6 +193,7 @@ globalThis.__vhttpd_create_runtime = function(meta) {
       runtimeProfile: meta.runtimeProfile,
       threadCount: meta.threadCount,
       capabilities,
+      db: globalThis.__vhttpd_database_api(hostApi),
       request,
       upstream,
       method: meta.method,
@@ -348,24 +447,54 @@ globalThis.__vhttpd_create_runtime = function(meta) {
         }
         return String(raw);
       },
-      httpFetch(input, fallbackValue = undefined) {
+      async httpFetch(input, fallbackValue = undefined) {
         if (!this.capabilities || !this.capabilities.network || typeof hostHttpFetch !== "function") {
           return fallbackValue;
         }
         const request = input && typeof input === "object" ? input : {};
-        const raw = hostHttpFetch(JSON.stringify({
-          url: typeof request.url === "string" ? request.url : "",
-          method: typeof request.method === "string" ? request.method : "GET",
-          body: request.body == null ? "" : String(request.body),
-          headers: request.headers && typeof request.headers === "object" ? request.headers : {},
-        }));
-        if (raw === undefined || raw === null || raw === "") {
-          return fallbackValue;
+        const url = typeof request.url === "string" ? request.url.trim() : "";
+        if (!url) return { ok: false, error: "missing_url", errorName: "TypeError" };
+        const timeoutMs = request.timeoutMs === undefined ? 30000 : Number(request.timeoutMs);
+        if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+          return { ok: false, error: "invalid_timeout", errorName: "TypeError" };
         }
+        let timer;
+        let removeAbort = () => {};
         try {
-          return JSON.parse(String(raw));
-        } catch (_) {
-          return fallbackValue;
+          const controller = new AbortController();
+          const signal = request.signal;
+          if (signal != null) {
+            if (typeof signal.aborted !== "boolean" || typeof signal.addEventListener !== "function") {
+              throw new TypeError("invalid_abort_signal");
+            }
+            const abort = () => controller.abort(signal.reason);
+            if (signal.aborted) abort();
+            else {
+              signal.addEventListener("abort", abort, { once: true });
+              removeAbort = () => signal.removeEventListener("abort", abort);
+            }
+          }
+          timer = setTimeout(() => {
+            const error = new Error("httpFetch timed out");
+            error.name = "TimeoutError";
+            controller.abort(error);
+          }, timeoutMs);
+          const response = await hostHttpFetch(url, {
+            method: typeof request.method === "string" ? request.method : "GET",
+            body: request.body == null ? undefined : String(request.body),
+            headers: request.headers && typeof request.headers === "object" ? request.headers : {},
+            signal: controller.signal,
+          });
+          const body = await response.text();
+          const headers = {};
+          response.headers.forEach((value, name) => { headers[name] = value; });
+          // ok denotes transport success, including HTTP 4xx/5xx responses.
+          return { ok: true, status: response.status, body, headers };
+        } catch (error) {
+          return { ok: false, error: String(error?.message ?? error), errorName: error?.name ?? "Error" };
+        } finally {
+          if (timer !== undefined) clearTimeout(timer);
+          removeAbort();
         }
       },
       bridgeDispatch(input, fallbackValue = undefined) {
@@ -538,7 +667,7 @@ globalThis.__vhttpd_create_runtime = function(meta) {
       findCodexSessionPath(_threadId, fallbackValue = "") {
         return fallbackValue;
       },
-      httpFetch(_input, fallbackValue = undefined) {
+      async httpFetch(_input, fallbackValue = undefined) {
         return fallbackValue;
       },
       bridgeDispatch(_input, fallbackValue = undefined) {
@@ -956,6 +1085,7 @@ globalThis.__vhttpd_create_websocket_runtime = function(meta) {
       runtimeProfile: typeof meta.runtimeProfile === "string" ? meta.runtimeProfile : "",
       threadCount: typeof meta.threadCount === "number" ? meta.threadCount : 0,
       capabilities,
+      db: globalThis.__vhttpd_database_api(hostApi),
       request,
       method: typeof meta.method === "string" ? meta.method : "",
       path: requestPath,

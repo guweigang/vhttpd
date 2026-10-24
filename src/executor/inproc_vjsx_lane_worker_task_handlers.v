@@ -133,10 +133,17 @@ fn InProcVjsxLaneWorkerRuntime.handle_pump_task(worker_executor InProcVjsxExecut
 		}
 	}
 	state_pump.mu.unlock()
-	if current { host.pump_until_idle() }
+	mut pump_error := ''
+	if current {
+		if mut session := host.session_handle() {
+			session.drain_host_async_events() or { pump_error = err.msg() }
+		}
+		if pump_error == '' { host.pump_until_idle() }
+	}
 	task.slot.mu.@lock()
 	task.slot.result = InProcVjsxLanePumpTaskResult{
-		ok: true
+		ok: pump_error == ''
+		error: pump_error
 	}
 	task.slot.ready = true
 	task.slot.mu.unlock()

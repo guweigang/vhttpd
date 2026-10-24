@@ -164,10 +164,16 @@ fn (mut permit PoolPermit) finish() {
 }
 
 pub fn (mut owner PoolOwner) acquire() !&ConnectionLease {
+	return owner.acquire_until(fn () bool { return false })
+}
+
+// Cancellation while queued must not enter the database later.
+pub fn (mut owner PoolOwner) acquire_until(cancelled fn () bool) !&ConnectionLease {
 	owner.mu.@lock()
 	generation := owner.generation
 	owner.mu.unlock()
 	for {
+		if cancelled() { return error('db_cancelled') }
 		owner.mu.@lock()
 		if owner.stopping || owner.closing || owner.closed || owner.generation != generation {
 			owner.mu.unlock()
@@ -185,11 +191,16 @@ pub fn (mut owner PoolOwner) acquire() !&ConnectionLease {
 		owner.mu.unlock()
 		defer { owner.finish_use() }
 		mut permit := &PoolPermit{owner: owner, generation: generation}
-		should_stop := fn [mut owner, generation] () bool { return owner.stopped_generation(generation) }
+		should_stop := fn [mut owner, generation, cancelled] () bool { return cancelled() || owner.stopped_generation(generation) }
 		mut conn := resource.factory.acquire_fn(resource.handle, should_stop) or { permit.finish(); return err }
 		owner.mu.@lock()
 		admitted := !owner.stopping && !owner.closing && !owner.closed && owner.generation == generation
 		owner.mu.unlock()
+		if cancelled() {
+			origin := PoolOrigin{owner: owner, resource: resource, generation: generation, permit: permit}
+			origin.return_connection(conn)
+			return error('db_cancelled')
+		}
 		if !admitted {
 			// Keep the acquisition active until the late connection is disposed.
 			defer { permit.finish() }
