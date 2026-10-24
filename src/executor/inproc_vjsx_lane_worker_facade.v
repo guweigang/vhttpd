@@ -88,6 +88,8 @@ fn (e InProcVjsxExecutor) request_lane_snapshot(mut app EmbeddedHost, lane VjsxE
 }
 
 fn (e InProcVjsxExecutor) request_lane_warmup(mut app EmbeddedHost, lane VjsxExecutionLane) ! {
+	// Validate before enqueueing: invalid settings must not leave a running task.
+	bootstrap_budget := inproc_vjsx_configured_bootstrap_budget()!
 	worker := e.lane_worker_by_id(lane.id) or {
 		return error('inproc_vjsx_executor_lane_worker_missing')
 	}
@@ -100,7 +102,7 @@ fn (e InProcVjsxExecutor) request_lane_warmup(mut app EmbeddedHost, lane VjsxExe
 		done: done_ch
 	})!
 	e.await_lane_warmup(slot.bootstrapped, done_ch, mut slot.control,
-		inproc_vjsx_lane_bootstrap_timeout, inproc_vjsx_lane_task_timeout)!
+		bootstrap_budget, inproc_vjsx_lane_task_timeout)!
 	slot.mu.@lock()
 	result := slot.result
 	ready := slot.ready
