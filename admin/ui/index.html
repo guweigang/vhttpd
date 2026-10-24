@@ -1,32 +1,44 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>vhttpd Admin</title>
+  <link rel="icon" href="/admin/ui/brand/favicon.ico?v=3" sizes="any">
+  <link rel="icon" type="image/png" sizes="32x32" href="/admin/ui/brand/favicon-32.png?v=3">
+  <link rel="apple-touch-icon" sizes="180x180" href="/admin/ui/brand/apple-touch-icon.png?v=3">
   <link rel="stylesheet" href="/admin/ui/style.css">
 </head>
 <body>
   <div class="shell">
     <aside class="sidebar">
       <div class="brand">
-        <h1>vhttpd Admin</h1>
+        <div class="brand-identity">
+          <img class="brand-mark" src="/admin/ui/brand/mark.png" width="40" height="40" alt="">
+          <div class="brand-copy"><h1>vhttpd</h1><p>Admin UI</p></div>
+        </div>
         <span id="stateDot" class="state-dot"></span>
       </div>
-      <nav class="nav" aria-label="Admin sections">
-        <button data-view="dashboard" aria-selected="true">Dashboard</button>
-        <button data-view="observability">Observability</button>
-        <button data-view="apps">Applications</button>
-        <button data-view="editor">Editor</button>
-        <button data-view="graph">Runtime Graph</button>
-        <button data-view="schema">Schema</button>
-        <button data-view="drafts">Drafts</button>
-        <button data-view="events">Events</button>
-        <button data-view="raw">Raw</button>
+      <nav class="nav" aria-label="管理导航">
+        <span class="nav-label">项目</span>
+        <button data-view="dashboard" aria-selected="true">运行总览</button>
+        <button data-view="apps">项目配置</button>
+        <button data-view="relay">Relay 连接与配置</button>
+        <button data-view="observability">流量与指标</button>
+        <button data-view="events">操作记录</button>
+        <details id="advancedNav"><summary>开发与高级工具</summary>
+          <button data-view="editor">源码编辑</button>
+          <button data-view="graph">运行计划图</button>
+          <button data-view="drafts">配置草稿</button>
+          <button data-view="schema">配置参考</button>
+          <button data-view="raw">原始快照</button>
+        </details>
       </nav>
       <div class="side-form">
-        <label for="adminToken">Admin Token</label>
-        <div class="side-actions">
+        <p id="authStatus" role="status">Checking session…</p>
+        <button id="logout" class="side-button" hidden>Sign out</button>
+        <label id="tokenLabel" for="adminToken" hidden>Admin Token (manual login)</label>
+        <div id="tokenActions" class="side-actions" style="display:none">
           <input id="adminToken" autocomplete="off" type="password" placeholder="x-vhttpd-admin-token">
           <button id="applyToken" class="side-button icon" title="Apply token" aria-label="Apply token">OK</button>
         </div>
@@ -34,41 +46,108 @@
     </aside>
     <section class="content">
       <header class="topbar">
-        <h2 id="viewTitle">Dashboard</h2>
+        <h2 id="viewTitle">运行总览</h2>
         <div class="toolbar">
-          <button id="refresh" class="button primary">Refresh</button>
+          <button id="configureProject" class="button">编辑项目配置</button>
+          <button id="refresh" class="button primary">立即刷新</button>
         </div>
       </header>
       <main class="main">
         <div id="status" class="status">Idle</div>
-        <section id="view-dashboard" class="view grid">
-          <div class="grid metrics" id="metrics"></div>
+        <section id="view-relay" class="view grid hidden">
+          <div class="panel"><div class="panel-header"><h3>Project Relay Runtime</h3></div><div class="panel-body">
+            <p>Relay belongs to this project's runtime plan. Agent and hub are roles; local and remote describe deployment locations. Edit relays and pipeline bindings in the project configuration.</p>
+            <p id="relayAvailability" role="status"></p>
+          </div></div>
           <div class="panel">
-            <div class="panel-header"><h3>Live Topology</h3><span id="dashboardTopologyCount" class="pill gray">0</span></div>
-            <div class="panel-body"><div id="dashboardTopology" class="flow-map compact"></div></div>
+            <div class="panel-header"><h3>Relay 配置</h3><button id="relayLoad" class="button">载入项目配置</button></div>
+            <div class="panel-body">
+              <p>选择主配置或任意层级的 include 文件，修改会写回该来源文件。校验、发布与生效检查均以项目主配置为入口。Hub 使用项目已有的 WebSocket listener。</p>
+              <div id="relayForm" class="hidden">
+                <label for="relaySource">配置来源</label><select id="relaySource"></select>
+                <p id="relayConfigPath" class="value-text"></p>
+                <div class="form-grid">
+                  <div><label for="relaySelect">Relay</label><select id="relaySelect"></select></div>
+                  <div><label for="relayId">Relay ID</label><input id="relayId" value="edge" autocomplete="off"></div>
+                  <div><label for="relayMode">角色</label><select id="relayMode"><option value="agent">Agent · 连接 Hub</option><option value="hub">Hub · 接受 Agent</option></select></div>
+                  <div><label for="relayNode">Node ID</label><input id="relayNode" value="agent-local" autocomplete="off"></div>
+                  <div><label for="relayUrl">Agent 连接地址</label><input id="relayUrl" placeholder="wss://hub.example.com/vhttpd/relay" autocomplete="off"></div>
+                  <div><label for="relayListener">Hub Listener</label><select id="relayListener"></select></div>
+                  <div><label for="relayPath">Hub 路径</label><input id="relayPath" value="/vhttpd/relay"></div>
+                  <div><label for="relayToken">Token / 环境变量引用</label><input id="relayToken" type="password" autocomplete="new-password" placeholder="${env.VHTTPD_RELAY_TOKEN:-}"></div>
+                  <div><label for="relayAutostart">Agent 自动连接</label><select id="relayAutostart"><option value="true">开启</option><option value="false">关闭</option></select></div>
+                  <div><label for="relayReconnect">重连间隔 ms</label><input id="relayReconnect" type="number" min="0" value="1000"></div>
+                  <div><label for="relayMax">最大通道数</label><input id="relayMax" type="number" min="1" value="1024"></div>
+                  <div><label for="relayBuffer">通道缓冲数</label><input id="relayBuffer" type="number" min="1" value="64"></div>
+                </div>
+                <h4>Pipeline 绑定</h4>
+                <p>可选择整个项目中的 Pipeline，Relay、Pipeline 和 Adapter 可以来自不同 include。一次草稿包含所有受影响文件；出站保留原来的 ingress、match、transforms 和 policies。</p>
+                <div class="form-grid">
+                  <div><label for="relayPipeline">项目 Pipeline</label><select id="relayPipeline"></select></div>
+                  <div><label for="relayDirection">方向</label><select id="relayDirection"><option value="incoming">入站：Relay → Adapter</option><option value="outgoing">出站：Pipeline → Relay</option></select></div>
+                  <div><label for="relayEgress">入站出口 Adapter</label><select id="relayEgress"></select></div>
+                  <div><label for="relayRoute">出站远端 Pipeline ID</label><input id="relayRoute" placeholder="relay/local-response"></div>
+                </div>
+                <p id="relayBindingLabel">已载入的 Pipeline 绑定</p>
+                <p id="relayPipelineSource" class="value-text"></p>
+                <p id="relayChangePaths" class="value-text"></p>
+                <div id="relayBindings" class="relay-bindings"></div>
+                <div class="toolbar relay-actions">
+                  <button id="relayValidate" class="button primary">1. 保存草稿并校验</button>
+                  <button id="relayPublish" class="button" disabled>2. 发布配置</button>
+                </div>
+                <p id="relayStage" role="status">尚未修改</p>
+                <details><summary>多文件 TOML 草稿（含敏感配置）</summary><pre id="relayToml" class="relay-preview"></pre></details>
+                <details><summary>校验 / 计划差异</summary><pre id="relayResult" class="relay-preview"></pre></details>
+              </div>
+              <p id="relayEditError" role="alert"></p>
+            </div>
+          </div>
+          <div class="grid metrics" id="relayMetrics"></div>
+          <div class="panel"><div class="panel-header"><h3>Agents</h3></div><div class="panel-body" id="relayAgents"></div></div>
+          <div class="panel"><div class="panel-header"><h3>Carriers</h3></div><div class="panel-body" id="relayCarriers"></div></div>
+          <div class="panel"><div class="panel-header"><h3>Channels</h3></div><div class="panel-body" id="relayChannels"></div></div>
+          <div class="panel"><div class="panel-header"><h3>Sessions</h3></div><div class="panel-body" id="relaySessions"></div></div>
+        </section>
+        <section id="view-dashboard" class="view grid">
+          <div class="overview-intro"><div><span class="eyebrow">PROJECT OVERVIEW</span><h3 id="overviewProject">当前项目</h3><p id="overviewPath" class="value-text"></p></div><label class="refresh-choice"><input id="autoRefresh" type="checkbox" checked>每 5 秒更新状态</label></div>
+          <div id="overviewStates" class="overview-states" aria-live="polite"></div>
+          <div id="overviewAttention" class="overview-attention" aria-live="polite"></div>
+          <div id="metrics" class="grid metrics"></div>
+          <div class="panel" id="executorPanel"><div class="panel-header"><h3>执行器负载与共享路由</h3></div><p class="panel-hint">当前采样与历史累计分开显示；同名配置在不同监听中可能为独立实例。槽占用包含共享任务，排队人数统计 HTTP 请求。</p><p id="executorStatus" class="value-text"></p><div id="executorInstances"></div><details><summary>配置与状态口径</summary><p>共享关系来自当前运行的 HTTP handler 绑定。执行槽占用也可能来自插件、WebSocket 等共享任务。并发与超时的高级选项可在来源 TOML 中调整，发布后仍须整项目校验并由工作台重启检查生效。内嵌排队期限当前固定，不套用 worker 队列配置；未采集的超时状态不显示为零。</p></details></div>
+          <div class="panel" id="trafficPanel">
+            <div class="panel-header"><div><h3>业务监听与路由</h3><p class="panel-hint">服务端保留最近 15 分钟，按 10 秒分段。统计已完成的 HTTP 路由请求；耗时含流结束，不含网络传输、WebSocket 和框架直出资产。</p></div></div>
+            <div class="panel-body">
+              <div class="traffic-controls">
+                <label for="trafficWindow">时间范围</label><select id="trafficWindow"><option value="60">最近 1 分钟</option><option value="300">最近 5 分钟</option><option value="900">最近 15 分钟</option></select>
+                <label for="trafficListener">监听</label><select id="trafficListener"><option value="">全部监听</option></select>
+                <label for="trafficPipeline">路由</label><select id="trafficPipeline"><option value="">全部路由</option></select>
+              </div>
+              <p id="trafficWindowStatus" class="value-text" role="status">正在读取近期窗口…</p>
+              <div id="trafficWindowMetrics" class="grid metrics"></div>
+              <div id="trafficCharts" class="traffic-charts" aria-label="近期请求与延迟趋势"></div>
+              <div class="traffic-controls">
+                <label for="trafficStatus">筛选</label><select id="trafficStatus"><option value="all">全部路由</option><option value="recent">近期有错误</option><option value="history">仅有历史错误</option><option value="slow">近期慢路由</option></select>
+                <label for="trafficSort">排序</label><select id="trafficSort"><option value="errors">近期错误优先</option><option value="slow">近期最大耗时优先</option><option value="requests">近期请求量优先</option></select>
+                <label for="trafficSlowMs">慢请求阈值 ms</label><input id="trafficSlowMs" type="number" min="1" max="3600000" value="500" step="100">
+                <button id="findSlowRoutes" class="button">找慢路由</button><span id="trafficCoverage" class="value-text"></span>
+              </div>
+              <div id="trafficListeners"></div>
+              <h4>路由运行情况</h4><div id="trafficRoutes"></div>
+              <div id="trafficDetails" class="hidden" role="region" aria-label="路由异常详情"></div>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-header"><div><h3>请求如何经过这个项目</h3><p class="panel-hint">运行计划中的绑定 · 点击组件查看关联；不代表请求追踪或端口探活</p></div><button class="button" data-overview-view="apps">编辑配置</button></div>
+            <div class="panel-body"><div id="overviewChains"></div></div>
           </div>
           <div class="grid split">
-            <div class="panel">
-              <div class="panel-header"><h3>Applications</h3><span id="dashboardAppCount" class="pill gray">0</span></div>
-              <div class="panel-body"><div id="dashboardApps"></div></div>
-            </div>
-            <div class="panel">
-              <div class="panel-header"><h3>Listening Ports</h3><span id="listenerCount" class="pill gray">0</span></div>
-              <div class="panel-body"><div id="listenerPorts"></div></div>
-            </div>
-          </div>
-          <div class="grid split">
-            <div class="panel">
-              <div class="panel-header"><h3>Pipeline Flow</h3><span id="pipelineCount" class="pill gray">0</span></div>
-              <div class="panel-body"><div id="pipelineFlows"></div></div>
-            </div>
-            <div class="panel">
-              <div class="panel-header"><h3>Runtime</h3><span id="runtimeState" class="pill gray">unknown</span></div>
-              <div class="panel-body"><div id="runtimeSummary" class="list"></div></div>
-            </div>
+            <div class="panel"><div class="panel-header"><h3>最近操作</h3><button class="button" data-overview-view="events">全部记录</button></div><div class="panel-body" id="overviewEvents"></div></div>
+            <div class="panel"><div class="panel-header"><h3>项目配置来源</h3><button class="button" data-overview-view="apps">配置与发布</button></div><div class="panel-body" id="overviewSources"></div></div>
           </div>
         </section>
         <section id="view-observability" class="view hidden grid">
+          <p class="status">指标来自当前管理监听的运行快照，尚未聚合所有业务监听。累计错误不表示当前故障；请求绑定图不代表实际请求追踪。</p>
           <div class="grid metrics" id="observabilityMetrics"></div>
           <div class="viz-grid">
             <div class="panel">
@@ -81,14 +160,14 @@
                 <div class="panel-body"><div id="executorMix" class="bar-list"></div></div>
               </div>
               <div class="panel">
-                <div class="panel-header"><h3>Health</h3><span id="healthState" class="pill gray">unknown</span></div>
+                <div class="panel-header"><h3>累计异常计数</h3><span id="healthState" class="pill gray">unknown</span></div>
                 <div class="panel-body"><div id="healthGrid" class="health-grid"></div></div>
               </div>
             </div>
           </div>
           <div class="grid split">
             <div class="panel">
-              <div class="panel-header"><h3>Traffic Trend</h3><span id="trafficTrendCount" class="pill gray">0 samples</span></div>
+              <div class="panel-header"><h3>管理请求累计采样</h3><span id="trafficTrendCount" class="pill gray">0 samples</span></div>
               <div class="panel-body"><div id="trafficTrend"></div></div>
             </div>
             <div class="panel">
@@ -102,6 +181,29 @@
           </div>
         </section>
         <section id="view-apps" class="view hidden grid">
+          <div class="panel" id="commonConfigPanel">
+            <div class="panel-header"><h3>常用配置</h3><button id="commonLoad" class="button">重新读取</button></div>
+            <div class="panel-body">
+              <p>HTTP 监听 → 路由 → 出口 Adapter → vjsx 执行器。保留未编辑的高级配置，修改写回原来源文件；相对路径沿用项目现有解析规则。</p>
+              <p id="commonProject" class="value-text"></p>
+              <div class="common-create toolbar">
+                <label for="commonNewSource">新增配置的来源文件</label><select id="commonNewSource" disabled></select>
+                <button id="commonAddListener" class="button" disabled>＋ HTTP 监听</button><button id="commonAddRoute" class="button" disabled>＋ HTTP 路由</button>
+                <button id="commonAddEngine" class="button" disabled>＋ vjsx 执行器</button><button id="commonAddAdapter" class="button" disabled>＋ 出口 Adapter</button>
+              </div>
+              <div id="commonDeletePanel" class="common-delete hidden" role="dialog" aria-labelledby="commonDeleteTitle">
+                <h4 id="commonDeleteTitle"></h4><div id="commonDeleteImpact"></div>
+                <label id="commonDeleteCascadeLabel"><input id="commonDeleteCascade" type="checkbox"><span id="commonDeleteCascadeText"></span></label>
+                <div class="draft-actions"><button id="commonDeleteCancel" class="button">取消</button><button id="commonDeleteConfirm" class="button danger">暂存删除</button></div>
+              </div>
+              <div id="commonFields"></div>
+              <div class="draft-actions"><button id="commonValidate" class="button primary" disabled>1. 保存并校验</button><button id="commonPublish" class="button" disabled>2. 发布配置</button></div>
+              <p id="commonStage" class="config-feedback" role="status" aria-live="polite">点击“编辑项目配置”载入常用配置。</p>
+              <details><summary>校验与差异详情</summary><pre id="commonResult"></pre></details>
+            </div>
+          </div>
+          <div id="configEditorSlot" class="panel"></div>
+          <details class="project-advanced"><summary>高级配置文件与应用生成器</summary>
           <div class="panel">
             <div class="panel-header"><h3>Config Files</h3><span id="configFileCount" class="pill gray">0</span></div>
             <div class="panel-body"><div id="configFiles"></div></div>
@@ -191,6 +293,7 @@
               </div>
             </div>
           </div>
+          </details>
         </section>
         <section id="view-editor" class="view hidden grid">
           <div class="panel">
@@ -248,7 +351,8 @@
             <div class="panel-header"><h3>Drafts</h3><span id="draftCount" class="pill gray">0</span></div>
             <div class="panel-body">
               <div id="drafts"></div>
-              <div id="draftEditor" class="draft-editor hidden">
+              <div id="draftEditorHome"><div id="draftEditor" class="draft-editor hidden">
+                <p id="draftStage" role="status"></p>
                 <div class="form-grid">
                   <div class="form-field">
                     <label for="draftId">Draft ID</label>
@@ -268,15 +372,16 @@
                   </div>
                 </div>
                 <div class="draft-actions">
-                  <button id="saveDraft" class="button primary">Save</button>
-                  <button id="validateDraft" class="button">Validate</button>
-                  <button id="diffDraft" class="button">Diff</button>
-                  <button id="publishDraft" class="button">Publish Include</button>
+                  <button id="saveDraft" class="button">保存草稿</button>
+                  <button id="validateDraft" class="button primary">1. 保存并校验</button>
+                  <button id="diffDraft" class="button">查看差异</button>
+                  <button id="publishDraft" class="button" disabled>2. 发布配置</button>
                   <button id="applyPublishedConfig" class="button">Hot Apply</button>
-                  <button id="deleteDraft" class="button danger">Delete</button>
+                  <button id="deleteDraft" class="button danger">丢弃草稿</button>
                 </div>
-                <pre id="draftResult"></pre>
-              </div>
+                <p id="configDraftNote" class="hidden">配置发布后，请返回宿主工作台检查生效状态；重启后会自动复查。</p>
+                <details id="draftTechnical"><summary>技术详情</summary><pre id="draftResult"></pre></details>
+              </div></div>
             </div>
           </div>
         </section>
@@ -321,6 +426,15 @@
       </div>
     </div>
   </div>
+  <script src="/admin/ui/relay-config.js"></script>
+  <script src="/admin/ui/config-source-link.js"></script>
+  <script src="/admin/ui/overview.js"></script>
+  <script src="/admin/ui/executor-overview.js"></script>
+  <script src="/admin/ui/traffic-trends.js"></script>
+  <script src="/admin/ui/traffic-requests.js"></script>
   <script src="/admin/ui/app.js"></script>
+  <script src="/admin/ui/common-config.js"></script>
+  <script src="/admin/ui/common-config-ui.js"></script>
+  <script src="/admin/ui/relay-ui.js"></script>
 </body>
 </html>
