@@ -18,3 +18,13 @@ php/package/vendor/
 .codex/
 .opencode/
 site/
+
+# Generated tool metadata
+/.qoder/
+
+# Python bytecode and cache
+__pycache__/
+*.py[cod]
+
+# Locally compiled V test executable
+/src/relay/connection_probe_test

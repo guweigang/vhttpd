@@ -1,9 +1,0 @@
-schema_version: 1
-module_path: worker_backend/shared_worker_types
-title: Worker 后端运行时与共享类型
-scope:
-    - src/worker_backend_admin_runtime.v
-    - src/worker/
-source_files: []
-depends_on: []
-related_to: []
