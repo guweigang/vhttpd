@@ -1,0 +1,4 @@
+.local/
+bin/
+examples/*/runtime.pid
+examples/*/events.ndjson

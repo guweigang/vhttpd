@@ -1,0 +1,108 @@
+diff --git a/function.v b/function.v
+index 51f005a..f1ce66b 100644
+--- a/function.v
++++ b/function.v
+@@ -1,7 +1,7 @@
+ module vjsx
+ 
+ // Original `type` JS Callback function from `qjs`
+-pub type JSCFunction = fn (&C.JSContext, JSValueConst, int, &JSValueConst) C.JSValue
++pub type JSCFunction = fn (&C.JSContext, JSValueConst, i32, &JSValueConst) C.JSValue
+ 
+ // `type` JS Callback function with `this`
+ pub type JSFunctionThis = fn (this Value, args []Value) Value
+@@ -54,9 +54,9 @@ fn C.JS_SetClassProto(&C.JSContext, C.JSClassID, C.JSValue)
+ fn C.JS_NewObjectProtoClass(&C.JSContext, JSValueConst, C.JSClassID) C.JSValue
+ 
+ fn (ctx &Context) js_fn_this(cb JSFunctionThis) JSCFunction {
+-	return fn [ctx, cb] (jctx &C.JSContext, this JSValueConst, len int, argv &JSValueConst) C.JSValue {
+-		mut args := []Value{cap: len}
+-		for i in 0 .. len {
++	return fn [ctx, cb] (jctx &C.JSContext, this JSValueConst, len i32, argv &JSValueConst) C.JSValue {
++		mut args := []Value{cap: int(len)}
++		for i in 0 .. int(len) {
+ 			args << ctx.c_val(unsafe { argv[i] })
+ 		}
+ 		return cb(ctx.c_val(this), args).ref
+@@ -64,9 +64,9 @@ fn (ctx &Context) js_fn_this(cb JSFunctionThis) JSCFunction {
+ }
+ 
+ fn (ctx &Context) js_fn_plain(cb JSFunction) JSCFunction {
+-	return fn [ctx, cb] (jctx &C.JSContext, this JSValueConst, len int, argv &JSValueConst) C.JSValue {
+-		mut args := []Value{cap: len}
+-		for i in 0 .. len {
++	return fn [ctx, cb] (jctx &C.JSContext, this JSValueConst, len i32, argv &JSValueConst) C.JSValue {
++		mut args := []Value{cap: int(len)}
++		for i in 0 .. int(len) {
+ 			args << ctx.c_val(unsafe { argv[i] })
+ 		}
+ 		return cb(args).ref
+@@ -130,9 +130,9 @@ pub fn (ctx &Context) js_class(cls ClassParams) Value {
+ 	}
+ 	proto := ctx.js_object()
+ 	C.JS_NewClass(ctx.rt.ref, ref, &def)
+-	c_ctor := fn [ctx, ctor, ref] (jctx &C.JSContext, new_target JSValueConst, len int, argv &JSValueConst) C.JSValue {
+-		mut args := []Value{cap: len}
+-		for i in 0 .. len {
++	c_ctor := fn [ctx, ctor, ref] (jctx &C.JSContext, new_target JSValueConst, len i32, argv &JSValueConst) C.JSValue {
++		mut args := []Value{cap: int(len)}
++		for i in 0 .. int(len) {
+ 			args << ctx.c_val(unsafe { argv[i] })
+ 		}
+ 		target := ctx.c_val(new_target)
+diff --git a/module.v b/module.v
+index 800fd65..95e6c0c 100644
+--- a/module.v
++++ b/module.v
+@@ -1,6 +1,6 @@
+ module vjsx
+ 
+-type JSModuleInitFunc = fn (&C.JSContext, &C.JSModuleDef) int
++type JSModuleInitFunc = fn (&C.JSContext, &C.JSModuleDef) i32
+ 
+ fn C.JS_NewCModule(&C.JSContext, &char, &JSModuleInitFunc) &C.JSModuleDef
+ 
+@@ -97,14 +97,14 @@ pub fn (mut m Module) export_default(any AnyValue) {
+ pub fn (mut m Module) create() &C.JSModuleDef {
+ 	exports := m.exports.clone()
+ 	values := m.values.clone()
+-	cb := fn [exports, values] (ctx &C.JSContext, mod &C.JSModuleDef) int {
++	cb := fn [exports, values] (ctx &C.JSContext, mod &C.JSModuleDef) i32 {
+ 		len := exports.len
+ 		for i in 0 .. len {
+ 			export := exports[i]
+ 			value := values[i].dup_value()
+ 			C.JS_SetModuleExport(ctx, mod, export, value.ref)
+ 		}
+-		return len
++		return i32(len)
+ 	}
+ 	ref := C.JS_NewCModule(m.ctx.ref, m.name.str, cb)
+ 	for export in exports {
+diff --git a/runtime_assets.v b/runtime_assets.v
+index 4cdec04..402a1cd 100644
+--- a/runtime_assets.v
++++ b/runtime_assets.v
+@@ -273,7 +273,7 @@ fn context_from_c_ctx(c_ctx &C.JSContext) &Context {
+ 	if isnil(opaque) {
+ 		return unsafe { nil }
+ 	}
+-	return &Context(opaque)
++	return unsafe { &Context(opaque) }
+ }
+ 
+ fn vjsx_runtime_module_normalize(ctx &C.JSContext, module_base_name &char, module_name &char, opaque voidptr) &char {
+diff --git a/runtimejs/ts_api.v b/runtimejs/ts_api.v
+index 4d52614..4cae50e 100644
+--- a/runtimejs/ts_api.v
++++ b/runtimejs/ts_api.v
+@@ -81,7 +81,8 @@ pub fn normalize_interactive_javascript(ctx &vjsx.Context, source string, script
+ 	return output.to_string()
+ }
+ 
+-fn is_commonjs_module(ctx &vjsx.Context, script_path string) !bool {
++// is_commonjs_module uses the installed runtime detector without resolving dependencies.
++pub fn is_commonjs_module(ctx &vjsx.Context, script_path string) !bool {
+ 	source := os.read_file(script_path)!
+ 	check_fn := ctx.js_global('__vjs_is_commonjs')
+ 	defer {

@@ -1,0 +1,286 @@
+name: Build and verify Mac workbench
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_mode:
+        description: 'unsigned preview (no Apple credentials required); signed is optional'
+        type: choice
+        default: unsigned
+        options: [unsigned, signed]
+  push:
+    branches: [main, codex/mac-workbench-runtime-checks]
+    tags: ['v[0-9]*']
+    paths:
+      - .github/workflows/workbench-macos-runtime.yml
+      - desktop/**
+      - '!desktop/**/*.md'
+      - src/**
+      - admin/ui/**
+      - Makefile
+      - v.mod
+  pull_request:
+    paths:
+      - .github/workflows/workbench-macos-runtime.yml
+      - desktop/**
+      - '!desktop/**/*.md'
+      - src/**
+      - admin/ui/**
+      - Makefile
+      - v.mod
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build candidate from source (macOS 15 arm64)
+    runs-on: macos-15
+    timeout-minutes: 45
+    outputs:
+      sha256: ${{ steps.package.outputs.sha256 }}
+      archive: ${{ steps.version.outputs.archive }}
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Resolve tag and package version
+        id: version
+        run: python3 desktop/workbench_version.py
+      - name: Check signing release contract
+        run: |
+          python3 -m unittest discover -s desktop/ci -p 'test_macos_*.py'
+          bash -n desktop/ci/verify_installed_macos.sh
+      - name: Install build-only pkg-config
+        run: brew install pkgconf
+      - name: Prepare pinned V, vjsx and QuickJS toolchain
+        run: bash desktop/ci/prepare_toolchain.sh
+      - name: Build and verify the complete app
+        run: bash desktop/build.sh
+      - name: Record candidate identity
+        id: package
+        shell: bash
+        run: |
+          archive="desktop/bin/$ARCHIVE_NAME"
+          checksum=$(shasum -a 256 "$archive")
+          echo "sha256=${checksum%% *}" >> "$GITHUB_OUTPUT"
+          echo "${checksum%% *}  ${archive##*/}" > desktop/bin/SHA256SUMS
+        env:
+          ARCHIVE_NAME: ${{ steps.version.outputs.archive }}
+      - name: Store CI-built candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: workbench-macos-arm64-candidate
+          path: |
+            desktop/bin/${{ steps.version.outputs.archive }}
+            desktop/bin/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 7
+
+  installed-runtime:
+    name: Installed app on macOS ${{ matrix.os }} arm64
+    needs: build
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: '15'
+            runner: macos-15
+          - os: '26'
+            runner: macos-26
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: desktop/ci
+      - name: Download the same CI-built candidate
+        uses: actions/download-artifact@v4
+        with:
+          name: workbench-macos-arm64-candidate
+          path: candidate
+      - name: Verify installed app without development tools
+        id: verify
+        shell: bash
+        env:
+          CANDIDATE_SHA256: ${{ needs.build.outputs.sha256 }}
+          CANDIDATE_ARCHIVE: ${{ needs.build.outputs.archive }}
+          EXPECTED_OS: ${{ matrix.os }}
+        run: bash desktop/ci/verify_installed_macos.sh "candidate/$CANDIDATE_ARCHIVE" "$EXPECTED_OS" "$CANDIDATE_SHA256"
+      - name: Store target-system evidence
+        if: always() && steps.verify.outputs.report != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: workbench-macos-${{ matrix.os }}-evidence
+          path: |
+            ${{ steps.verify.outputs.report }}/*.txt
+            ${{ steps.verify.outputs.report }}/*.log
+          retention-days: 7
+
+  accepted-preview:
+    name: Collect verified unsigned preview download
+    if: github.event_name != 'workflow_dispatch' || inputs.release_mode == 'unsigned'
+    needs: [build, installed-runtime]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: desktop
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: workbench-macos-arm64-candidate
+          path: download
+      - uses: actions/download-artifact@v4
+        with:
+          name: workbench-macos-15-evidence
+          path: evidence/macos-15
+      - uses: actions/download-artifact@v4
+        with:
+          name: workbench-macos-26-evidence
+          path: evidence/macos-26
+      - name: Verify both target results and describe the download
+        run: python3 desktop/ci/collect_macos_acceptance.py download evidence
+      - name: Verify release attachments and version consistency
+        run: python3 desktop/ci/macos_release.py prepare download release-assets
+      - name: Store verified preview download
+        uses: actions/upload-artifact@v4
+        with:
+          name: workbench-macos-arm64-unsigned-verified
+          path: download/*
+          if-no-files-found: error
+          retention-days: 14
+      - name: Summarize the download
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'SUMMARY'
+          ## Mac developer preview ready
+          Download **workbench-macos-arm64-unsigned-verified** from this run's Artifacts.
+          It contains the CI-built ZIP, SHA256SUMS, acceptance.json and 验收说明.txt.
+          The same ZIP passed extraction and isolated runtime checks on macOS 15 and 26 arm64.
+          **No Apple credentials required.** This is an ad-hoc signed preview, without Apple notarization.
+          Gatekeeper assessment is recorded separately; GUI/Finder/browser first launch is not covered by these runtime checks.
+          SUMMARY
+
+  publish-release:
+    name: Publish accepted unsigned Mac assets
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    needs: [build, accepted-preview]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    concurrency:
+      group: mac-workbench-release-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: desktop
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: workbench-macos-arm64-unsigned-verified
+          path: download
+      - name: Prepare versioned assets, upload draft and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 desktop/ci/macos_release.py publish download release-assets
+
+  sign-and-notarize:
+    name: Developer ID signing and Apple notarization
+    if: github.event_name == 'workflow_dispatch' && inputs.release_mode == 'signed'
+    needs: [build, installed-runtime]
+    environment: macos-release
+    runs-on: macos-15
+    timeout-minutes: 35
+    outputs:
+      sha256: ${{ steps.sign.outputs.sha256 }}
+      archive: ${{ steps.sign.outputs.archive }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: workbench-macos-arm64-candidate
+          path: candidate
+      - name: Sign, notarize, staple and verify
+        id: sign
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          CANDIDATE_SHA256: ${{ needs.build.outputs.sha256 }}
+          CANDIDATE_ARCHIVE: ${{ needs.build.outputs.archive }}
+        run: python3 desktop/ci/sign_notarize_macos.py "candidate/$CANDIDATE_ARCHIVE" signed "$CANDIDATE_SHA256"
+      - name: Store signed and stapled candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: workbench-macos-arm64-signed-notarized-candidate
+          path: |
+            signed/*-signed-notarized.zip
+            signed/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 7
+      - name: Store notarization status and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workbench-macos-notarization-status
+          path: |
+            signed/notarization.json
+            signed/notary-log.json
+          if-no-files-found: ignore
+          retention-days: 7
+
+  signed-installed-runtime:
+    name: Notarized download on macOS ${{ matrix.os }} arm64
+    needs: sign-and-notarize
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: '15'
+            runner: macos-15
+          - os: '26'
+            runner: macos-26
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: desktop/ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: workbench-macos-arm64-signed-notarized-candidate
+          path: candidate
+      - name: Verify quarantined notarized app and runtime
+        id: verify
+        env:
+          CANDIDATE_SHA256: ${{ needs.sign-and-notarize.outputs.sha256 }}
+          CANDIDATE_ARCHIVE: ${{ needs.sign-and-notarize.outputs.archive }}
+          EXPECTED_OS: ${{ matrix.os }}
+          REQUIRE_NOTARIZATION: '1'
+        run: bash desktop/ci/verify_installed_macos.sh "candidate/$CANDIDATE_ARCHIVE" "$EXPECTED_OS" "$CANDIDATE_SHA256"
+      - name: Store signed target-system evidence
+        if: always() && steps.verify.outputs.report != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: workbench-macos-${{ matrix.os }}-signed-evidence
+          path: |
+            ${{ steps.verify.outputs.report }}/*.txt
+            ${{ steps.verify.outputs.report }}/*.log
+          retention-days: 7

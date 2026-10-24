@@ -1,0 +1,2 @@
+/private/tmp/vhttpd-macos-runtime.Or2Gib/Applications with spaces/vhttpd-workbench.app/Contents/MacOS/vhttpd-workbench:   Mach-O 64-bit executable arm64
+/private/tmp/vhttpd-macos-runtime.Or2Gib/Applications with spaces/vhttpd-workbench.app/Contents/Resources/runtime/vhttpd: Mach-O 64-bit executable arm64
