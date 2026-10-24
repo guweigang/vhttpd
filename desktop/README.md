@@ -110,7 +110,7 @@ ui2 固定到 [ui2.commit](./ui2.commit) 中的版本。已有依赖 checkout �
 
 本次开发验收（2026-10-24）：
 
-- macOS 27 上用系统 OpenSSH 的独立回环测试服务跑通真实 SSH、一次性登录、两份 include 一起发布、远端手工重启、整个项目运行计划与文件版本确认、业务响应变化、重复操作编号保护、重连和错误 Token；未改动系统或用户的 SSH 配置。
+- macOS 27 上用系统 OpenSSH 客户端及独立回环测试端点跑通密钥、密码认证、首次指纹取消/确认、信任记录保存、重连不重复确认和指纹变化拦截。密码测试端点使用仅测试依赖 Paramiko，最终用户不需要安装。确认前、指纹变化拦截后都未发送密码，取消或变化时不改写信任记录；使用的都是测试专用 known_hosts，未改动系统或用户的 SSH 配置。同时通过一次性登录、两份 include 一起发布、远端手工重启、整个项目运行计划与文件版本确认、业务响应变化、重复操作编号保护、重连和错误 Token。[主机指纹验收记录](./ci/results/ssh-host-key-20261024/verification.json)保存本次范围与限制。
 - 完整 Mac 包通过解压搬移、签名和库路径检查、新建与启动失败重试、配置发布与恢复、运行包安装，以及全新 HOME、仅系统 PATH、禁止读取开发目录和执行编译器的沙箱验收。最低系统声明及所有二进制的构建目标仍为 macOS 15.0；不等于本次新增 SSH 功能已在 macOS 15/26 实际运行。
 - [SSH 验收脚本](./ci/verify_remote_ssh_macos.py)已接入 Mac CI 的构建阶段，针对包内的运行程序执行；本次尚未触发新版源码的 GitHub CI。开发者可先编译上述 host 回归文件，再给脚本传入 `--runtime` 和 `--host-test` 执行。
 - Linux VM 已按用户要求对齐 CI：V `890d55b`、bootstrap `bcfdc7f`、vjsx `eabab0f`，使用仓库版本化补丁及固定 QuickJS。旧 V 完整保存在 `/home/guweigang/v-local-dev-20261024-6b0886a`，原 `local-dev` 的 10 个本地提交保留；旧 vjsx checkout 也保留。GCC、`gc none`、禁用缓存的 `build` 和 `prod` 完整服务构建及真实 SSH 验收通过；4 组进程测试、4 项配置/重启回归和超时终态竞争回归通过。Mac 管理器通过远端工作区 API 读取配置，未把 Linux 路径当本地文件；两份 include 发布后，新启动标识、整个项目版本与运行计划同时确认生效，断开 SSH 后同一个新进程继续服务，实际 vjsx 请求也通过。见[验收证据](./ci/results/linux-ssh-20261024/verification.json)和[Linux SSH 验收驱动](./ci/verify_remote_ssh_linux_vm.py)。
