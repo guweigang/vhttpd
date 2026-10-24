@@ -13,6 +13,10 @@ const binary = process.env.VHTTPD_BIN;
 if (!binary || !existsSync(binary)) throw Error('Set VHTTPD_BIN to a DB-enabled vhttpd binary');
 const port = Number(process.env.WCF_LOCAL_PORT || 19886);
 if (!Number.isInteger(port) || port < 1024 || port > 65535) throw Error('Invalid WCF_LOCAL_PORT');
+const bootstrapMs = Number(process.env.VHTTPD_VJSX_BOOTSTRAP_TIMEOUT_MS || 120000);
+if (!Number.isInteger(bootstrapMs) || bootstrapMs < 1 || bootstrapMs > 300000) {
+  throw Error('VHTTPD_VJSX_BOOTSTRAP_TIMEOUT_MS must be 1..300000');
+}
 const availablePort = port => new Promise((resolve, reject) => {
   const server = createServer();
   server.on('error', reject);
@@ -103,6 +107,7 @@ egress = "adapter:wechat"
   server = spawn(binary, ['--config', config], {cwd: resolve(example, '../..'),
     env: {...process.env, WECHAT_APP_ID: 'local-demo', WECHAT_APP_SECRET: 'local-only-not-a-secret',
       WECHAT_DB_DRIVER: 'pgsql', WECHAT_FUNCTION_TIMEOUT_MS: '3000',
+      VHTTPD_VJSX_BOOTSTRAP_TIMEOUT_MS: String(bootstrapMs),
       VHTTPD_LOG_LEVEL: process.env.VHTTPD_LOG_LEVEL || 'error'}, stdio: ['ignore', 'pipe', 'pipe']});
   let serverError;
   server.on('error', error => { serverError = error; stopRequested(); });
@@ -111,7 +116,9 @@ egress = "adapter:wechat"
   server.stderr.on('data', data => process.stderr.write(data));
   const base = 'http://127.0.0.1:' + port;
   let ready = false;
-  const readyUntil = Date.now() + 120000;
+  // Default and named engine warmups are sequential. Allow both cold starts,
+  // without changing function / transaction timeouts or treating 502 as ready.
+  const readyUntil = Date.now() + 2 * bootstrapMs + 15000;
   let lastError;
   while (Date.now() < readyUntil) {
     if (serverError) throw serverError;
@@ -136,6 +143,7 @@ egress = "adapter:wechat"
   if (!ready) throw Error('vhttpd startup timed out: ' + lastError?.message);
   console.log('\nLOCAL DEMO READY: ' + base + '\nFAKE IDENTITY ONLY: local-demo-user (not a verified WeChat user)');
   console.log('Temporary PostgreSQL: ' + root + '\nCtrl-C stops both servers and removes only this temporary directory.');
+  console.log('Stop from another terminal: kill -TERM ' + process.pid);
   await stopped;
   if (serverError) throw serverError;
 } finally {
