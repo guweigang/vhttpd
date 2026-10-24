@@ -1,0 +1,12 @@
+schema_version: 1
+module_path: runtime_executors/inproc_vjsx_runtime/lanes_host_pool_workers
+title: VJSX Lane 池化与 Worker 运行时
+scope:
+    - src/executor/inproc_vjsx_lane_host.v
+    - src/executor/inproc_vjsx_lane_pool.v
+    - src/executor/inproc_vjsx_lane_worker_facade.v
+    - src/executor/inproc_vjsx_lane_worker_runtime.v
+    - src/executor/inproc_vjsx_lane_worker_task_handlers.v
+source_files: []
+depends_on: []
+related_to: []

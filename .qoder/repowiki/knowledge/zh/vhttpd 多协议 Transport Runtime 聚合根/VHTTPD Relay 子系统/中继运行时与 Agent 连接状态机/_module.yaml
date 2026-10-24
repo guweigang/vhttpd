@@ -1,0 +1,13 @@
+schema_version: 1
+module_path: relay_system/core_runtime
+title: 中继运行时与 Agent 连接状态机
+scope:
+    - src/relay/runtime.v
+    - src/relay/runtime_test.v
+    - src/relay/agent_state.v
+    - src/relay/agent_handshake.v
+    - src/relay/agent_handshake_test.v
+source_files: []
+depends_on: []
+related_to:
+    - path: dispatch_system/adapter_layer

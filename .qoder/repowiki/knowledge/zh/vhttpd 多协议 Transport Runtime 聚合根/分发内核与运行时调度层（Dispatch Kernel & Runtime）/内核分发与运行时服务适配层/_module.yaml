@@ -1,0 +1,17 @@
+schema_version: 1
+module_path: dispatch_system/kernel_runtime
+title: 内核分发与运行时服务适配层
+scope:
+    - src/dispatch/kernel.v
+    - src/dispatch/pipeline.v
+    - src/dispatch/context.v
+    - src/dispatch/runtime_services.v
+    - src/dispatch/relay.v
+    - src/kernel_dispatch.v
+    - src/dispatch_context.v
+source_files: []
+depends_on: []
+related_to:
+    - path: core_engine/engine_and_app_composition
+    - path: core_engine/stream_and_protocol_ingress
+    - path: worker_backend/dispatch_transport
