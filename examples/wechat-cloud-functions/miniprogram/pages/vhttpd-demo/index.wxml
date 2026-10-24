@@ -1,0 +1,25 @@
+<view class="demo">
+  <text class="eyebrow">COFFEE / BACKEND LAB</text>
+  <view class="title">小程序直连 vhttpd + vjsx</view>
+  <view class="subtitle">wx.request → 自有服务 → exports.main → SQL</view>
+  <view class="notice" wx:if="{{local}}">本地调试 · 模拟身份，不代表微信真实鉴权。仅在开发者工具使用，不经过腾讯云函数。</view>
+  <view class="notice" wx:else>远端 HTTPS · 需要服务端真实微信鉴权，并配置小程序 request 合法域名。</view>
+  <view class="card">
+    <view class="label">服务地址</view>
+    <input id="base-url" value="{{baseURL}}" bindinput="onBaseURLInput" disabled="{{busy}}" placeholder="https://your-api.example.com" />
+    <button id="login" bindtap="onLogin" disabled="{{busy}}" loading="{{busy}}">1. vhttpd.login 登录</button>
+    <view id="status" class="status">{{status}}</view>
+    <view wx:if="{{expiresAt}}" class="subtitle">会话有效期至 {{expiresAt}}</view>
+  </view>
+  <view class="card">
+    <view class="label">查询当前用户 · getUser</view>
+    <button id="promise-query" bindtap="onPromiseQuery" disabled="{{busy || !loggedIn}}">2. Promise / await 查询</button>
+    <button id="callback-query" bindtap="onCallbackQuery" disabled="{{busy || !loggedIn}}">3. success / fail / complete 查询</button>
+    <button id="clear-session" class="secondary" bindtap="onClearSession" disabled="{{busy}}">清除本地会话</button>
+    <view id="error" class="error" wx:if="{{error}}">{{error}}</view>
+    <view class="trace" wx:if="{{requestId}}">requestId: {{requestId}}</view>
+    <text id="user-result" class="result" selectable wx:if="{{userJSON}}">{{userJSON}}</text>
+    <view class="event" wx:for="{{events}}" wx:key="index">{{index + 1}}. {{item}}</view>
+  </view>
+  <view class="footer">不显示 code、token 或 AppSecret。业务请求失败不自动重试。</view>
+</view>

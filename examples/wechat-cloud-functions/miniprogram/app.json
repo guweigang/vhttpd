@@ -1,0 +1,5 @@
+{
+  "pages": ["pages/vhttpd-demo/index"],
+  "window": {"navigationBarTitleText": "vhttpd 直连示例"},
+  "style": "v2"
+}
