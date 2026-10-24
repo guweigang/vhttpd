@@ -11,6 +11,9 @@ struct AsyncFetchPeer {}
 fn (mut _ AsyncFetchPeer) handle(req http.Request) http.Response {
 	if req.url == '/slow' { time.sleep(300 * time.millisecond) }
 	mut headers := http.new_header()
+	// The fixture must release its bounded server workers after each response;
+	// pooled idle clients otherwise occupy both workers when VJOBS=2.
+	headers.set(.connection, 'close')
 	headers.add_custom('x-test', 'native') or { panic(err) }
 	return http.Response{ body: if req.url == '/echo' { req.data } else { 'ok' }, header: headers }
 }
@@ -39,6 +42,8 @@ fn test_http_fetch_native_parallel_timeout_abort_and_detached_lane_wakeup() {
 		listener:             listener
 		addr:                 '127.0.0.1:${port}'
 		handler:              AsyncFetchPeer{}
+		// Four simultaneous requests plus cancelled transports can overlap.
+		worker_num:           8
 		accept_timeout:       100 * time.millisecond
 		show_startup_message: false
 	}
@@ -89,7 +94,7 @@ fn test_http_fetch_native_parallel_timeout_abort_and_detached_lane_wakeup() {
 				check(!result.ok && result.errorName === "TimeoutError", "timeout failed");
 				check(Date.now() - started < 220, "timeout not prompt");
 				const echo = await runtime.httpFetch({url: base + "/echo", method: "POST", body: "after-timeout"});
-				check(echo.ok && echo.body === "after-timeout", "recovery failed");
+				check(echo.ok && echo.body === "after-timeout", "recovery failed: " + JSON.stringify(echo));
 				return ctx.text("timeout-ok");
 			}
 			if (ctx.path === "/detached") {
