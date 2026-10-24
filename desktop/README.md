@@ -89,6 +89,25 @@ ui2 固定到 [ui2.commit](./ui2.commit) 中的版本。已有依赖 checkout �
 
 项目登记默认保存在 `~/Library/Application Support/vhttpd-workbench/projects.json`，版本历史保存在同目录的 `recovery/`。升级时可迁移当前开发 checkout 的旧登记，不移动项目源码。历史按本机文件权限保存，包含恢复所需的原始配置内容，不加密；界面差异对敏感字段脱敏。需保管好本地文件。实现见[登记](./host/project.v)与[历史存储](./host/recovery_store.v)。
 
+## 通过 SSH 管理远端实例
+
+左侧“远端实例 · SSH”管理已经运行的 vhttpd，与共享 Relay 连接库分别维护。当前实现 Mac Desktop + 系统 OpenSSH + 手工进程重启；不安装、升级或接管 systemd、Docker/Compose 服务。Windows/Linux Desktop 和这些进程管理方式保留为后续适配项，当前不显示为可用。
+
+1. 远端使用包含工作台管理 API 的 vhttpd，配置独立的回环 Admin 监听和非空 Token；若允许 Desktop 重启，在原启动命令增加 `--manual-restart`。未启用时仍可连接并编辑配置，重启按钮明确禁用。已有旧进程需要由所有者先以此方式启动一次，Desktop 不替换程序或猜测原启动命令。
+2. 在系统终端用 SSH 验证主机指纹和密钥认证，再在 Desktop 添加实例。支持已有 SSH Host 别名、用户、端口、可选私钥，以及系统 ssh-agent。用户名和 SSH 端口留空时沿用 SSH 配置。第一版使用密钥认证；密码、交互式 MFA、未解锁私钥和首次指纹确认需要先在系统 SSH 中处理，不绕过主机校验。
+3. 填写远端 Admin 端口和 Token，点击“保存并连接”。隧道只绑定本机 127.0.0.1，访问的是远端 127.0.0.1 的管理端口；不要求将管理端口公开到网络。界面显示远端实际版本、平台、项目主配置来源、业务就绪状态和配置是否待生效。
+4. 点击“打开 Admin UI”自动登录。Desktop 的本机代理使用独立的一次性 POST 票据和 HttpOnly 会话，远端 Token 只在本机代理到 SSH 隧道的请求头中使用，不进入浏览器 URL、HTML 或跳转地址。代理检查 Host、Origin 和会话，并禁止浏览器调用远端进程重启 API。
+5. 在原 Admin UI 编辑、整项目校验并发布，可同时修改多个 include。回到 Desktop 查看“配置已发布，待远端重启后生效”，点击“重启并检查生效”。远端先重新校验完整项目和目标文件摘要，再执行显式启用的手工重启；新进程需业务就绪、启动标识变化，且已加载版本与整个项目磁盘版本同时匹配，才报告生效。
+6. 断开连接、切换连接或退出 Desktop，只关闭隧道和本机浏览器入口，远端继续运行。重新连接后查询实际状态，不依赖浏览器 Cookie 或本地项目路径。
+
+手工重启助手由远端当前可执行文件启动，继承原进程的工作目录、参数和环境，脱离原终端，等待旧进程完成清理；不通过历史 PID 杀进程。新进程日志写入项目旁私有的 `.var/vhttpd/workbench/` 目录，操作记录和短暂存在的启动描述文件使用当前用户权限保护；启动描述可能包含原命令行参数，使用后删除，不加密。日志仍需由实例所有者按项目的保密要求保管。
+
+重启使用操作编号避免重复执行。SSH 中断或等待超时后显示结果待确认或无法确认，继续查询，不自动再次重启；重新连接后可核对实际配置版本。若修改了远端 Admin Token 或管理监听端口，应更新此处连接后再检查。启动失败、预热未完成或配置再次变化不会报告成功。当前不提供 SSH 终端、远端文件浏览器、远端日志流及本地恢复历史；这些不影响 Admin UI 原有配置来源编辑、整项目校验和发布。
+
+连接记录保存在本机 `remote-instances.json`，文件权限为 0600，Token 不加密，输入隐藏；请勿公开分享数据目录。SSH 私钥只记录路径，不复制内容。包使用 macOS 自带 SSH，不新增 V、Node、Python 或 Homebrew 等最终用户依赖。
+
+实现见[远端连接与状态](./host/remote_instances.v)、[本机认证代理](./host/remote_proxy.v)、[原生界面](./remote_instances.v)、[远端手工重启](../src/admin_remote_control.v)和[回归](./host/remote_instances_test.v)。
+
 ## 共享远端 Relay 连接
 
 左侧“远端 Relay”维护可跨项目复用的连接库。新建连接时填写名称、Hub 的 WebSocket 地址、远端 Relay ID 和 Token。Relay ID 必须与远端 Hub 配置一致；Token 独立填写，地址不接受认证信息或查询参数。Token 输入隐藏，本地 `shared-relays.json` 使用仅当前用户可读写的权限保存，不加密；请勿公开分享数据目录。
