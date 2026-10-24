@@ -1,9 +1,0 @@
-schema_version: 1
-module_path: state_and_config/state_stores
-title: 状态存储抽象与内存/文件实现
-scope:
-    - src/state_store/
-    - src/admin_state_store/
-source_files: []
-depends_on: []
-related_to: []
