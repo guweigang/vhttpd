@@ -1,28 +1,31 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import net from 'node:net';import {spawn} from 'node:child_process';
+import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import net from 'node:net';import https from 'node:https';import {spawn,execFileSync} from 'node:child_process';
 const repo=process.cwd();const pause=ms=>new Promise(r=>setTimeout(r,ms));
 async function port(){const server=net.createServer();await new Promise(r=>server.listen(0,'127.0.0.1',r));const p=server.address().port;await new Promise(r=>server.close(r));return p;}
 async function until(fn,ms=60000){const end=Date.now()+ms;let last;while(Date.now()<end){try{if(await fn())return;}catch(e){last=e;}await pause(100);}throw last || Error('Timed out');}
 test('business HTTP metrics aggregate across listeners and preserve route/error/latency identity',{timeout:180000},async()=>{
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'vhttpd-http-metrics-'));const admin=await port(),web=await port(),second=await port();let child;
+ const cert=path.join(dir,'listener.crt'),key=path.join(dir,'listener.key'),certConfig=path.join(dir,'listener.cnf');
+ fs.writeFileSync(certConfig,'[req]\nprompt=no\ndistinguished_name=subject\nx509_extensions=extensions\n[subject]\nCN=127.0.0.1\n[extensions]\nsubjectAltName=IP:127.0.0.1\nbasicConstraints=critical,CA:TRUE\nkeyUsage=critical,digitalSignature,keyEncipherment,keyCertSign\n');
  const token='metrics-fixture-only';const root=path.join(dir,'vhttpd.toml');
  fs.writeFileSync(root,`version=2\ninclude=["listeners.toml","routes.toml","app.toml"]\n[server]\npid_file="${dir}/runtime.pid"\n[observability]\nevent_log="${dir}/events.ndjson"\n[control]\nlistener="listener:admin"\ntoken="${token}"\n[listeners.admin]\nprotocol="http"\nhost="127.0.0.1"\nport=${admin}\n`);
- fs.writeFileSync(path.join(dir,'listeners.toml'),`[listeners.web]\nprotocol="http"\nhost="127.0.0.1"\nport=${web}\n[listeners.second]\nprotocol="http"\nhost="127.0.0.1"\nport=${second}\n`);
+ fs.writeFileSync(path.join(dir,'listeners.toml'),`[listeners.web]\nprotocol="http"\nhost="127.0.0.1"\nport=${web}\n[listeners.web.tls]\nenabled=true\ncert="${cert}"\ncert_key="${key}"\n[listeners.second]\nprotocol="http"\nhost="127.0.0.1"\nport=${second}\n`);
  fs.writeFileSync(path.join(dir,'main.mjs'),`
 import fs from 'node:fs';
 const root=${JSON.stringify(dir)};
 export default function(ctx){
  const gate=ctx.queryParam('gate','');
- if(gate==='success' || gate==='timeout'){
+ if(gate.startsWith('success-') || gate==='timeout'){
   const file=root+'/'+gate;
   fs.writeFileSync(file+'.entered','ready');
   const guard=Date.now()+10000;
   while(!fs.existsSync(file+'.release')){
    if(Date.now()>guard)throw Error('metrics fixture gate was not released: '+gate);
+   const next=Date.now()+5;while(Date.now()<next){} // Bound filesystem polling while the lane is held.
   }
  }
- const end=Date.now()+120;while(Date.now()<end){}
+ if(!gate){const end=Date.now()+120;while(Date.now()<end){}}
  return ctx.json({ok:true},200);
 }`);
  fs.writeFileSync(path.join(dir,'asset.txt'),'asset contents');
@@ -31,9 +34,16 @@ export default function(ctx){
  fs.writeFileSync(path.join(dir,'routes.toml'),routes);
  const output=fs.openSync(path.join(dir,'runtime.log'),'a');
  const api=async suffix=>{const r=await fetch(`http://127.0.0.1:${admin}/admin/`+suffix,{headers:{'x-vhttpd-admin-token':token,connection:'close'},signal:AbortSignal.timeout(4000)});assert.equal(r.status,200);return r.json();};
- const req=async(p,url,status)=>{const r=await fetch(`http://127.0.0.1:${p}`+url,{headers:{connection:'close'},signal:AbortSignal.timeout(10000)});await r.text();assert.equal(r.status,status);return r.headers.get('x-vhttpd-observation-id');};
- // A burst can be accepted by one reactor and run serially. Occupy a handler
- // before opening competing connections so a free reactor must enter the queue.
+ // TLS dispatches accepted connections independently, so contenders reach the executor lane.
+ // Trust only this fixture certificate; keep the other business listener and admin on HTTP.
+ const requestWeb=url=>new Promise((resolve,reject)=>{
+  const request=https.get({hostname:'127.0.0.1',port:web,path:url,ca:fs.readFileSync(cert),agent:false,headers:{connection:'close'},signal:AbortSignal.timeout(10000)},response=>{
+   response.resume();response.once('error',reject);response.once('end',()=>resolve({status:response.statusCode,observationId:response.headers['x-vhttpd-observation-id']}));
+  });
+  request.once('error',reject);
+ });
+ const req=async(p,url,status)=>{if(p===web){const r=await requestWeb(url);assert.equal(r.status,status);return r.observationId;}const r=await fetch(`http://127.0.0.1:${p}`+url,{headers:{connection:'close'},signal:AbortSignal.timeout(10000)});await r.text();assert.equal(r.status,status);return r.headers.get('x-vhttpd-observation-id');};
+ // Hold the executor before opening independently dispatched competing connections.
  const withHeldLane=async(gate,target,run)=>{
   const release=()=>fs.writeFileSync(path.join(dir,gate+'.release'),'release');
   const held=req(web,target+'?gate='+gate,200).then(value=>({value}),error=>({error}));
@@ -47,6 +57,7 @@ export default function(ctx){
   }
  };
  try{
+  execFileSync('openssl',['req','-x509','-newkey','rsa:2048','-nodes','-days','1','-config',certConfig,'-keyout',key,'-out',cert],{stdio:['ignore','pipe','pipe']});
   child=spawn(process.env.VHTTPD_BIN || path.join(repo,'vhttpd'),['--config',root],{cwd:repo,env:{...process.env,VHTTPD_LOG_LEVEL:'info'},stdio:['ignore',output,output]});
   await until(async()=>{if(child.exitCode!==null)throw Error('Runtime exited');return (await api('runtime')).listeners.filter(l=>l.http_metrics).length===3;});
   await until(async()=>{await req(web,'/ok',200);return true;});
@@ -105,19 +116,21 @@ export default function(ctx){
   const sourceFiles=await api('config/files');assert(sourceFiles.find(file=>file.path.endsWith('/app.toml')).engine_ids.includes('slow'));
   assert(!JSON.stringify(executorSnapshot).includes('module_root'));assert(!JSON.stringify(executorSnapshot).includes('metrics-fixture-only'));
   const noExecutorAccess=await fetch(`http://127.0.0.1:${admin}/admin/http/executors`);assert.equal(noExecutorAccess.status,403);
-  await withHeldLane('success','/slow',async release=>{
-   const pending=Promise.allSettled(Array.from({length:6},()=>req(web,'/slow?token=stage-secret-do-not-store',200)));
-   let results;
+  // Exercise all six successful waits separately: each keeps the production 1s
+  // admission budget instead of adding six serial 120ms handlers to one deadline.
+  for(let i=0;i<6;i++)await withHeldLane('success-'+i,'/slow',async release=>{
+   const pending=req(web,'/slow?token=stage-secret-do-not-store',200).then(value=>({value}),error=>({error}));
+   let result;
    try{
     await until(async()=>{const load=selectedExecutor(await api('http/executors')).load;return load.waiting>0 && load.occupied===load.capacity;},5000);
     await pause(100); // Keep a measurable queue interval after observed admission.
-   }finally{release();results=await pending;}
-   for(const result of results){if(result.status==='rejected')throw result.reason;}
+   }finally{release();result=await pending;}
+   if(result.error)throw result.error;
   });
   const settled=selectedExecutor(await api('http/executors')).load;assert.equal(settled.waiting,0);assert.equal(settled.occupied,0);
   await withHeldLane('timeout','/shared-slow',async release=>{
-   const queued=fetch(`http://127.0.0.1:${web}/shared-slow`,{headers:{connection:'close'},signal:AbortSignal.timeout(10000)})
-    .then(async r=>{await r.text();return {status:r.status};}).catch(error=>({error}));
+   const queued=requestWeb('/shared-slow')
+    .then(r=>({status:r.status})).catch(error=>({error}));
    try{
     await until(async()=>selectedExecutor(await api('http/executors')).load.queue_timeouts_total>settled.queue_timeouts_total,5000);
     const result=await queued;
@@ -136,7 +149,7 @@ export default function(ctx){
   console.log('Load checkpoints:',JSON.stringify({capacity:settled.capacity,waiting_after:afterTimeout.waiting,occupied_after:afterTimeout.occupied,queue_waits_total:afterTimeout.queue_waits_total,queue_timeouts_total:afterTimeout.queue_timeouts_total}));
   console.log('Verified per-listener totals, concurrent requests, 404/503/504, static adapter, slow vjsx, control exclusion and safe error samples');
 
- }catch(error){fs.copyFileSync(path.join(dir,'runtime.log'),path.join(os.tmpdir(),'vhttpd-business-metrics-failure.log'));throw error;}finally{
+ }catch(error){fs.copyFileSync(path.join(dir,'runtime.log'),path.join(os.tmpdir(),'vhttpd-business-metrics-failure.log'));console.error('Metrics runtime tail:',fs.readFileSync(path.join(dir,'runtime.log'),'utf8').split('\n').slice(-60).join('\n'));throw error;}finally{
   if(child && child.exitCode===null && child.signalCode===null){const done=new Promise(r=>child.once('exit',r));child.kill('SIGTERM');const force=setTimeout(()=>child.kill('SIGKILL'),15000);await done;clearTimeout(force);}
   fs.closeSync(output);fs.rmSync(dir,{recursive:true,force:true});
  }

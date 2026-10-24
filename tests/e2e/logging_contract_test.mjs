@@ -28,6 +28,7 @@ for(const format of ['text','json']) test(`production logging preserves event id
    for(const row of consoleRows){assert.equal(row.type,'runtime.log');assert.ok(['debug','info','warn','error','fatal'].includes(row.level));assert.ok(Number(row.ts)>0);assert.equal(row.pid,String(child.pid));assert.equal(typeof row.message,'string');}
    assert.ok(consoleRows.some(r=>r.message.includes('vhttpd timezone:')));
   }else assert.match(stderr,/\[.*INFO.*\]/);
+  await until(()=>stdout.includes('[veb] Running multi-threaded app on http://') && stdout.includes('listening on http://'));
   assert.match(stdout,/\[veb\] Running multi-threaded app on http:\/\//);
   assert.match(stdout,/listening on http:\/\//);
  } finally {
