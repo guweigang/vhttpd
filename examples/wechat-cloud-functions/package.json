@@ -1,0 +1,9 @@
+{
+  "name": "vhttpd-wechat-cloud-functions-example",
+  "private": true,
+  "scripts": {
+    "test": "node --test --test-concurrency=1 tests/unit.test.mjs tests/miniprogram.test.mjs",
+    "test:e2e": "node tests/e2e.mjs",
+    "dev:local": "node tests/dev-local.mjs"
+  }
+}

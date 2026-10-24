@@ -1,6 +1,6 @@
 module main
 
-import json
+import json2 as json
 import provider
 import upstream
 import codex
@@ -12,10 +12,20 @@ pub fn (mut app App) provider_runtime_snapshot(name string) ?string {
 	cache_name := provider.ProviderName.cache()
 	return match name {
 		feishu_name {
-			json.encode(app.providers.feishu_runtime_snapshot())
+			app.mu.@lock()
+			defer { app.mu.unlock() }
+			json.encode(app.providers.feishu_runtime_snapshot(),
+				escape_unicode: true
+				time_as_unix:   true
+			)
 		}
 		codex_name {
-			json.encode(app.providers.admin_codex_snapshot(app.transport.db.enabled))
+			app.mu.@lock()
+			defer { app.mu.unlock() }
+			json.encode(app.providers.admin_codex_snapshot(app.transport.db.enabled),
+				escape_unicode: true
+				time_as_unix:   true
+			)
 		}
 		db_name {
 			app.db_runtime_snapshot()
@@ -25,7 +35,7 @@ pub fn (mut app App) provider_runtime_snapshot(name string) ?string {
 		}
 		else {
 			mut spec := app.get_provider_spec(name) or { return none }
-			spec.runtime.snapshot(mut spec.lifecycle_ctx)
+			spec.runtime_snapshot()
 		}
 	}
 }
@@ -56,6 +66,8 @@ fn (mut hub ProviderRuntimeHub) provider_runtime_upstream_snapshot(name string, 
 }
 
 pub fn (mut app App) provider_runtime_upstream_snapshot(name string, instance string) ?upstream.UpstreamSnapshot {
+	app.mu.@lock()
+	defer { app.mu.unlock() }
 	return app.providers.provider_runtime_upstream_snapshot(name, instance,
 		app.transport.db.enabled)
 }
@@ -71,6 +83,8 @@ fn (mut hub ProviderRuntimeHub) provider_runtime_upstream_snapshots(name string,
 }
 
 pub fn (mut app App) provider_runtime_upstream_snapshots(name string) []upstream.UpstreamSnapshot {
+	app.mu.@lock()
+	defer { app.mu.unlock() }
 	return app.providers.provider_runtime_upstream_snapshots(name, app.transport.db.enabled)
 }
 
@@ -92,6 +106,8 @@ fn (mut hub ProviderRuntimeHub) provider_runtime_upstream_events(name string, in
 }
 
 pub fn (mut app App) provider_runtime_upstream_events(name string, instance_filter string) []upstream.UpstreamEventSnapshot {
+	app.mu.@lock()
+	defer { app.mu.unlock() }
 	return app.providers.provider_runtime_upstream_events(name, instance_filter)
 }
 
@@ -123,5 +139,7 @@ fn (mut hub ProviderRuntimeHub) provider_runtime_metrics(name string, db_transpo
 }
 
 pub fn (mut app App) provider_runtime_metrics(name string) provider.ProviderRuntimeMetrics {
+	app.mu.@lock()
+	defer { app.mu.unlock() }
 	return app.providers.provider_runtime_metrics(name, app.transport.db.enabled)
 }

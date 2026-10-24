@@ -32,6 +32,17 @@ pub fn (port LogicExecutorHttpPort) dispatch_http(mut app AppFacade, req HttpLog
 	return port.inner.dispatch_http(mut app, req)
 }
 
+// Worker transports receive the exact pool selected by the owning runtime.
+pub fn (port LogicExecutorHttpPort) dispatch_http_with_worker_ports(mut app AppFacade, mut sockets WorkerSocketFacade, config WorkerBackendConfigFacade, req HttpLogicDispatchRequest) !HttpLogicDispatchOutcome {
+	if port.inner is SocketWorkerExecutor {
+		return port.inner.dispatch_http_with_worker_ports(mut sockets, config, req)
+	}
+	if port.inner is PhpCgiExecutor {
+		return port.inner.dispatch_http_with_worker_ports(mut sockets, config, req)
+	}
+	return port.inner.dispatch_http(mut app, req)
+}
+
 pub struct LogicExecutorStreamPort {
 	inner LogicExecutor
 }
@@ -43,6 +54,14 @@ pub fn logic_executor_stream_port(inner LogicExecutor) LogicExecutorStreamPort {
 }
 
 pub fn (port LogicExecutorStreamPort) dispatch_stream(mut app AppFacade, req transport.StreamDispatchRequest) !transport.StreamDispatchResponse {
+	return port.inner.dispatch_stream(mut app, req)
+}
+
+// A logical stream retains its executor and worker host across all RPCs.
+pub fn (port LogicExecutorStreamPort) dispatch_stream_with_worker_port(mut app AppFacade, mut host WorkerStreamDispatchFacade, req transport.StreamDispatchRequest) !transport.StreamDispatchResponse {
+	if port.inner is SocketWorkerExecutor {
+		return host.worker_backend_dispatch_stream(req)
+	}
 	return port.inner.dispatch_stream(mut app, req)
 }
 
@@ -60,6 +79,11 @@ pub fn (port LogicExecutorMcpPort) dispatch_mcp(mut app AppFacade, req transport
 	return port.inner.dispatch_mcp(mut app, req)
 }
 
+pub fn (port LogicExecutorMcpPort) dispatch_mcp_with_worker_port(mut app AppFacade, mut host WorkerMcpDispatchFacade, req transport.WorkerMcpDispatchRequest) !transport.WorkerMcpDispatchResponse {
+	if port.inner is SocketWorkerExecutor { return host.worker_backend_dispatch_mcp(req) }
+	return port.inner.dispatch_mcp(mut app, req)
+}
+
 pub struct LogicExecutorWebSocketSessionPort {
 	inner LogicExecutor
 }
@@ -71,6 +95,13 @@ pub fn logic_executor_websocket_session_port(inner LogicExecutor) LogicExecutorW
 }
 
 pub fn (port LogicExecutorWebSocketSessionPort) open_websocket_session(mut app AppFacade, req WebSocketSessionOpenRequest) !WebSocketSessionOpenOutcome {
+	return port.inner.open_websocket_session(mut app, req)
+}
+
+pub fn (port LogicExecutorWebSocketSessionPort) open_with_worker_ports(mut app AppFacade, mut sockets WorkerSocketFacade, config WorkerBackendConfigFacade, req WebSocketSessionOpenRequest) !WebSocketSessionOpenOutcome {
+	if port.inner is SocketWorkerExecutor {
+		return port.inner.open_websocket_session_with_worker_ports(mut sockets, config, req)
+	}
 	return port.inner.open_websocket_session(mut app, req)
 }
 
@@ -100,4 +131,28 @@ pub fn logic_executor_websocket_event_port(inner LogicExecutor) LogicExecutorWeb
 
 pub fn (port LogicExecutorWebSocketEventPort) dispatch_websocket_event(mut app AppFacade, frame transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse {
 	return port.inner.dispatch_websocket_event(mut app, frame)
+}
+
+pub interface WorkerWebSocketEventFacade {
+mut:
+	worker_backend_dispatch_websocket_event(req transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse
+}
+
+pub fn (port LogicExecutorWebSocketEventPort) dispatch_event_with_worker_port(mut app AppFacade, mut host WorkerWebSocketEventFacade, req transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse {
+	if port.inner is SocketWorkerExecutor {
+		return host.worker_backend_dispatch_websocket_event(req)
+	}
+	return port.inner.dispatch_websocket_event(mut app, req)
+}
+
+pub interface WorkerWebSocketUpstreamFacade {
+mut:
+	worker_backend_dispatch_websocket_upstream(req transport.WorkerWebSocketUpstreamDispatchRequest) !transport.WorkerWebSocketUpstreamDispatchResponse
+}
+
+pub fn (port LogicExecutorWebSocketUpstreamPort) dispatch_upstream_with_worker_port(mut app AppFacade, mut host WorkerWebSocketUpstreamFacade, req transport.WorkerWebSocketUpstreamDispatchRequest) !transport.WorkerWebSocketUpstreamDispatchResponse {
+	if port.inner is SocketWorkerExecutor {
+		return host.worker_backend_dispatch_websocket_upstream(req)
+	}
+	return port.inner.dispatch_websocket_upstream(mut app, req)
 }

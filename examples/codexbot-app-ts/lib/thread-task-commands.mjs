@@ -57,7 +57,7 @@ export function createThreadTaskCommandHandlers(deps) {
           handled: true,
           commands: [
             ...preflight,
-            deps.replyText(session, deps.threadRenameQueuedText(state.threadId, title), stream.streamId),
+            deps.replyText(session, deps.threadRenameQueuedText(state.threadId, title), stream),
             codexRpcCall("thread/name/set", { threadId: state.threadId, name: title }, stream.streamId, instance),
           ],
         };
@@ -178,7 +178,7 @@ export function createThreadTaskCommandHandlers(deps) {
         handled: true,
         commands: [
           ...preflight,
-          deps.replyText(session, `${deps.instanceUseSelectedText(next, state.codexInstance || "", project, next.threadId, true)}\n- ${deps.threadReadQueuedText()}`, stream.streamId),
+          deps.replyText(session, `${deps.instanceUseSelectedText(next, state.codexInstance || "", project, next.threadId, true)}\n- ${deps.threadReadQueuedText()}`, stream),
           codexRpcCall("thread/read", { threadId: next.threadId, includeTurns: true }, stream.streamId, instance),
         ],
       };
@@ -210,7 +210,7 @@ export function createThreadTaskCommandHandlers(deps) {
         handled: true,
         commands: [
           ...preflight,
-          deps.replyText(session, `${deps.threadSelectedText(next, latest.threadId, latest)}\n- ${deps.threadReadQueuedText()}`, stream.streamId),
+          deps.replyText(session, `${deps.threadSelectedText(next, latest.threadId, latest)}\n- ${deps.threadReadQueuedText()}`, stream),
           codexRpcCall("thread/read", { threadId: latest.threadId, includeTurns: true }, stream.streamId, instance),
         ],
       };
@@ -236,7 +236,7 @@ export function createThreadTaskCommandHandlers(deps) {
       handled: true,
       commands: [
         ...preflight,
-        deps.replyText(session, `${deps.threadSelectedText(next, value, selected)}\n- ${deps.threadReadQueuedText()}`, stream.streamId),
+        deps.replyText(session, `${deps.threadSelectedText(next, value, selected)}\n- ${deps.threadReadQueuedText()}`, stream),
         codexRpcCall("thread/read", { threadId: value, includeTurns: true }, stream.streamId, instance),
       ],
     };
@@ -267,9 +267,9 @@ export function createThreadTaskCommandHandlers(deps) {
       return {
         handled: true,
         commands: [
-          deps.feishuUpdateText(lastStream.streamId, interruptingText),
+          deps.feishuUpdateText(lastStream, interruptingText),
           deps.codexTurnInterrupt(lastStream.threadId, lastStream.turnId, lastStream.streamId, instance),
-          deps.feishuSessionClear(lastStream.streamId),
+          deps.feishuSessionClear(lastStream),
           deps.codexSessionClear(lastStream.streamId, lastStream.threadId, instance),
         ],
       };
@@ -285,8 +285,8 @@ export function createThreadTaskCommandHandlers(deps) {
     return {
       handled: true,
       commands: [
-        deps.feishuUpdateText(lastStream.streamId, detachedText),
-        deps.feishuSessionClear(lastStream.streamId),
+        deps.feishuUpdateText(lastStream, detachedText),
+        deps.feishuSessionClear(lastStream),
         deps.codexSessionClear(lastStream.streamId, state.threadId || lastStream.threadId || "", instance),
       ],
     };

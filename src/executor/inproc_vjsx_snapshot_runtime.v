@@ -1,6 +1,6 @@
 module executor
 
-import json
+import json2 as json
 
 fn (e InProcVjsxExecutor) build_snapshot_runtime_payload(lane VjsxExecutionLane) string {
 	config := e.facade_snapshot().config
@@ -28,13 +28,10 @@ fn (e InProcVjsxExecutor) build_snapshot_runtime_payload(lane VjsxExecutionLane)
 		request_server:           map[string]string{}
 		method:                   'SNAPSHOT'
 		path:                     '/.well-known/vhttpd/snapshot'
-	})
+	}, escape_unicode: true, time_as_unix: true)
 }
 
-fn (e InProcVjsxExecutor) execute_snapshot_hook(mut app AppFacade, idx int, lane VjsxExecutionLane) !string {
-	if isnil(e.state) {
-		return error('inproc_vjsx_executor_state_missing')
-	}
+fn (e InProcVjsxExecutor) execute_snapshot_hook(mut app EmbeddedHost, idx int, lane VjsxExecutionLane) !string {
 	e.ensure_lane_host(idx)!
 	e.run_app_startup(mut app, idx, lane)!
 	request_id := 'snapshot_${lane.id}'
@@ -66,7 +63,7 @@ fn (e InProcVjsxExecutor) execute_snapshot_hook(mut app AppFacade, idx int, lane
 	defer {
 		js_runtime.free()
 	}
-	mut result := if host.is_module_entry && !isnil(host.module_binding) {
+	mut result := if host.is_module_entry && host.module_handle() != none {
 		host.call_entry_resolved('snapshot', js_runtime) or {
 			if err.msg() != 'inproc_vjsx_executor_missing_snapshot_handler' {
 				return error('inproc_vjsx_executor_snapshot_failed:${err.msg()}')
@@ -95,10 +92,7 @@ fn (e InProcVjsxExecutor) execute_snapshot_hook(mut app AppFacade, idx int, lane
 	return raw
 }
 
-fn (e InProcVjsxExecutor) aggregate_runtime_lane_snapshots(mut app AppFacade, current_lane_id string) string {
-	if isnil(e.state) {
-		return InProcVjsxSnapshotJson.aggregate('all_lanes', 'runtime', current_lane_id, []string{})
-	}
+fn (e InProcVjsxExecutor) aggregate_runtime_lane_snapshots(mut app EmbeddedHost, current_lane_id string) string {
 	mut state := e.state
 	state.mu.@lock()
 	lanes := state.lanes.clone()
@@ -106,16 +100,13 @@ fn (e InProcVjsxExecutor) aggregate_runtime_lane_snapshots(mut app AppFacade, cu
 	mut items := []string{}
 	for lane in lanes {
 		items << InProcVjsxSnapshotJson.item(lane.id, true,
-			json.encode(app.admin_runtime_snapshot()), '')
+			json.encode(app.admin_runtime_snapshot(), escape_unicode: true, time_as_unix: true), '')
 	}
 	return InProcVjsxSnapshotJson.aggregate('all_lanes', 'runtime', current_lane_id, items)
 }
 
-fn (e InProcVjsxExecutor) aggregate_app_lane_snapshots(mut app AppFacade, current_lane_id string, include_current bool) string {
+fn (e InProcVjsxExecutor) aggregate_app_lane_snapshots(mut app EmbeddedHost, current_lane_id string, include_current bool) string {
 	scope := if include_current { 'all_lanes' } else { 'other_lanes' }
-	if isnil(e.state) {
-		return InProcVjsxSnapshotJson.aggregate(scope, 'app', current_lane_id, []string{})
-	}
 	mut state := e.state
 	state.mu.@lock()
 	lanes := state.lanes.clone()

@@ -323,7 +323,7 @@ pub mut:
 	card_bridge_clients       map[string]&websocket.Client                    = map[string]&websocket.Client{}
 	card_bridge_pending       map[string]chan executor.FeishuCardBridgeResult = map[string]chan executor.FeishuCardBridgeResult{}
 	card_bridge_proxy_pending map[string]chan BridgeProxyResult               = map[string]chan BridgeProxyResult{}
-	card_bridge_client_conn   &websocket.Client = unsafe { nil }
+	card_bridge_client_conn   ?&websocket.Client
 	card_bridge_enabled_flag  bool
 	card_bridge_ws_url        string
 	card_bridge_client_id     string

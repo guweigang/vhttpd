@@ -88,7 +88,12 @@ final class Server
             if (!$conn) {
                 if (self::isWouldBlock(socket_last_error($server))) {
                     socket_clear_error($server);
-                    usleep(200_000);
+                    // Wake as soon as the next dispatch connection arrives, while
+                    // retaining the bounded parent-liveness check during idle time.
+                    $read = [$server];
+                    $write = null;
+                    $except = null;
+                    @socket_select($read, $write, $except, 0, 200_000);
                     continue;
                 }
                 continue;

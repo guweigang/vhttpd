@@ -1,7 +1,7 @@
 module main
 
 import api.openai
-import json
+import json2 as json
 import veb
 
 fn (mut app App) openai_handle_models(mut ctx Context, method string, path string, req_id string, trace_id string, start_ms i64) veb.Result {
@@ -31,7 +31,7 @@ fn (mut app App) openai_handle_models(mut ctx Context, method string, path strin
 	}
 	body := json.encode(openai.OpenAIModelsResponse{
 		data: data
-	})
+	}, escape_unicode: true, time_as_unix: true)
 	return OpenAIResponseWriter.write(mut app, mut ctx, 200, path, method, req_id, trace_id,
 		start_ms, if method.to_upper() == 'HEAD' { '' } else { body },
 		'application/json; charset=utf-8', map[string]string{}, map[string]string{})

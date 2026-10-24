@@ -1,6 +1,6 @@
 module executor
 
-import json
+import json2 as json
 import upstream.transport
 import vjsx
 
@@ -15,7 +15,7 @@ fn InProcVjsxStartupCodec.commands_from_js_value(val vjsx.Value) []transport.Wor
 	if raw.trim_space() == '' || raw.trim_space() == 'undefined' || raw.trim_space() == 'null' {
 		return []transport.WorkerWebSocketUpstreamCommand{}
 	}
-	normalized := json.decode(InProcVjsxStartupResult, raw) or { InProcVjsxStartupResult{} }
+	normalized := json.decode[InProcVjsxStartupResult](raw) or { InProcVjsxStartupResult{} }
 	return normalized.commands
 }
 

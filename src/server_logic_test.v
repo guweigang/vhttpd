@@ -4,8 +4,9 @@ import admin
 import executor
 import upstream.transport
 import config
-import json
+import json2 as json
 import os
+import time
 import provider
 import worker
 import server_lifecycle
@@ -522,53 +523,26 @@ fn test_websocket_relay_listeners_share_matching_http_relay_delivery_app() {
 			}
 		}
 	}
-	mut web_a_app := &App{}
-	mut web_b_app := &App{}
-	mut relay_a_app := &App{}
-	mut relay_b_app := &App{}
-	mut bindings := [
-		MultiServerAppBinding{
-			listener: server_lifecycle.ListenerRuntimeBinding{
-				id:          'web_a'
-				runtime_cfg: server_runtime_config_fixture_for_listener(plan, 'web_a')
-			}
-			app:      web_a_app
-		},
-		MultiServerAppBinding{
-			listener: server_lifecycle.ListenerRuntimeBinding{
-				id:          'web_b'
-				runtime_cfg: server_runtime_config_fixture_for_listener(plan, 'web_b')
-			}
-			app:      web_b_app
-		},
-		MultiServerAppBinding{
-			listener: server_lifecycle.ListenerRuntimeBinding{
-				id:          'relay_a'
-				runtime_cfg: server_runtime_config_fixture_for_listener(plan, 'relay_a')
-			}
-			app:      relay_a_app
-		},
-		MultiServerAppBinding{
-			listener: server_lifecycle.ListenerRuntimeBinding{
-				id:          'relay_b'
-				runtime_cfg: server_runtime_config_fixture_for_listener(plan, 'relay_b')
-			}
-			app:      relay_b_app
-		},
-	]
-
-	share_websocket_listener_apps(mut bindings)
-
-	assert bindings[0].app == web_a_app
-	assert bindings[1].app == web_b_app
-	assert bindings[2].app == web_a_app
-	assert bindings[3].app == web_b_app
+	ids := ['web_a', 'web_b', 'relay_a', 'relay_b']
+	mut targets := []server_lifecycle.ListenerRuntimeBinding{}
+	for id in ids {
+		targets << server_lifecycle.ListenerRuntimeBinding{id: id, runtime_cfg: server_runtime_config_fixture_for_listener(plan, id)}
+	}
+	bindings := build_multi_server_apps(server_lifecycle.MultiServerRuntimeConfig{listeners: targets})
+	defer { for binding in unique_app_runtime_bindings(bindings.map(RuntimeShutdownBinding{app: it.app, cfg: it.listener.runtime_cfg})) {
+		mut app := binding.app
+		shutdown_app_runtime(mut app, binding.cfg)
+	} }
+	assert bindings[0].app != bindings[1].app
+	assert bindings[2].app == bindings[0].app
+	assert bindings[3].app == bindings[1].app
 }
 
 fn server_runtime_config_fixture_for_listener(plan runtime_plan.RuntimePlan, listener_id string) server_lifecycle.ServerRuntimeConfig {
 	return server_lifecycle.ServerRuntimeConfig{
 		plan:             plan
 		plan_listener_id: listener_id
+		app_build_cfg: server_lifecycle.AppRuntimeBuildConfig{plan_listener_id: listener_id}
 		executor_plan:    executor.LogicExecutorRuntimePlan{
 			executor:  executor.DisabledLogicExecutor{}
 			lifecycle: executor.disabled_executor_lifecycle()
@@ -1831,7 +1805,7 @@ fn test_internal_admin_executors_returns_builtin_executor_specs() {
 		path:   '/admin/executors'
 	})
 	assert resp.status == 200
-	snapshot := json.decode([]executor.AdminLogicExecutorSpecSnapshot, resp.body) or { panic(err) }
+	snapshot := json.decode[[]executor.AdminLogicExecutorSpecSnapshot](resp.body) or { panic(err) }
 	assert snapshot.len == 4
 	assert snapshot[0].kind == 'none'
 	assert snapshot[0].logic_provider == 'none'
@@ -1882,7 +1856,7 @@ fn test_php_worker_executor_lifecycle_prepares_worker_command_and_env() {
 fn test_runtime_scheme_is_injected_before_worker_start() {
 	mut app := App{
 		engines: EngineRuntime{
-			primary:    worker.WorkerState{
+			primary:    &worker.WorkerState{
 				worker_backend: worker.WorkerBackendRuntime{
 					env: {
 						'APP_ENV': 'dev'
@@ -1992,8 +1966,8 @@ fn test_resolve_logic_executor_runtime_plan_for_vjsx_disables_worker_bootstrap()
 	}
 	plan := executor.LogicExecutorRuntimePlan.resolve(['--executor', 'vjsx', '--vjsx-entry', app_file],
 		config.default_vhttpd_config(), ['/tmp/a.sock'], true, true, true, 'php worker.php', {
-		'VHTTPD_APP': '/tmp/app.php'
-	}) or { panic(err) }
+			'VHTTPD_APP': '/tmp/app.php'
+		}) or { panic(err) }
 	assert plan.executor.kind() == 'vjsx'
 	assert plan.lifecycle.name() == 'embedded_host'
 	assert plan.worker_backend_mode == .disabled
@@ -2464,8 +2438,8 @@ fn test_build_app_runtime_applies_v2_provider_runtime_driver_plugin() {
 	}
 	mut app := build_app_runtime(provider.ProviderRuntimeSettings{}, executor_plan,
 		config.default_vhttpd_config(), plan, server_lifecycle.AppRuntimeBuildConfig{
-		plan_listener_id: 'web'
-	})
+			plan_listener_id: 'web'
+		})
 	defer {
 		app.close_all_plugins()
 	}
@@ -2536,8 +2510,8 @@ egress = "adapter:provider-send"
 	}
 	mut app := build_app_runtime(provider.ProviderRuntimeSettings{}, executor_plan,
 		config.default_vhttpd_config(), plan, server_lifecycle.AppRuntimeBuildConfig{
-		plan_listener_id: 'web'
-	})
+			plan_listener_id: 'web'
+		})
 	defer {
 		app.close_all_plugins()
 	}
@@ -2636,8 +2610,8 @@ export function plugin(req) {
 	}
 	mut app := build_app_runtime(provider.ProviderRuntimeSettings{}, executor_plan,
 		config.default_vhttpd_config(), plan, server_lifecycle.AppRuntimeBuildConfig{
-		plan_listener_id: 'web'
-	})
+			plan_listener_id: 'web'
+		})
 	defer {
 		app.close_all_plugins()
 	}
@@ -2843,7 +2817,7 @@ fn test_provider_bridge_settings_are_scoped_to_listener_relay_target() {
 	assert relay_a_settings.bridge.ws_url == 'wss://edge-a.test'
 }
 
-fn test_prepare_server_runtime_files_creates_parent_dirs_and_pid_file() {
+fn test_prepare_server_runtime_files_creates_parent_dirs_without_publishing_pid() {
 	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_runtime_files_test')
 	event_log := os.join_path(temp_dir, 'logs', 'events.ndjson')
 	pid_file := os.join_path(temp_dir, 'run', 'vhttpd.pid')
@@ -2856,9 +2830,7 @@ fn test_prepare_server_runtime_files_creates_parent_dirs_and_pid_file() {
 	}
 	assert os.exists(os.dir(event_log))
 	assert os.exists(os.dir(pid_file))
-	assert os.exists(pid_file)
-	pid_text := os.read_file(pid_file) or { panic(err) }
-	assert pid_text.trim_space() == '${os.getpid()}'
+	assert !os.exists(pid_file)
 	assert internal_socket.starts_with('/tmp/vhttpd_admin_')
 }
 
@@ -2904,7 +2876,7 @@ fn test_resolve_server_runtime_config_builds_php_runtime_state() {
 	assert runtime_cfg.app_build_cfg.event_log == event_log
 	assert runtime_cfg.app_build_cfg.worker_queue_capacity == 9
 	assert runtime_cfg.internal_admin_socket.starts_with('/tmp/vhttpd_admin_')
-	assert os.exists(pid_file)
+	assert !os.exists(pid_file)
 }
 
 fn test_resolve_server_runtime_config_defaults_to_disabled_executor_without_app_logic() {
@@ -2928,7 +2900,7 @@ fn test_resolve_server_runtime_config_defaults_to_disabled_executor_without_app_
 	assert runtime_cfg.executor_plan.bootstrap.worker_sockets.len == 0
 	assert !runtime_cfg.executor_plan.bootstrap.worker_autostart
 	assert runtime_cfg.executor_plan.bootstrap.worker_cmd == ''
-	assert os.exists(pid_file)
+	assert !os.exists(pid_file)
 }
 
 fn test_resolve_server_runtime_config_builds_vjsx_embedded_runtime_state() {
@@ -2981,7 +2953,7 @@ fn test_resolve_server_runtime_config_builds_vjsx_embedded_runtime_state() {
 	assert runtime_cfg.app_build_cfg.assets_root == assets_root
 	assert runtime_cfg.app_build_cfg.assets_root_real == os.real_path(assets_root)
 	assert runtime_cfg.app_build_cfg.assets_cache_control == 'public, max-age=300'
-	assert os.exists(pid_file)
+	assert !os.exists(pid_file)
 }
 
 fn test_resolve_multi_server_runtime_config_keeps_single_site_compatibility() {
@@ -3104,7 +3076,7 @@ fn test_resolve_multi_server_runtime_config_builds_listener_bound_sites() {
 	assert multi_cfg.listeners[1].site_cfg.vjsx.app_entry == vjsx_app
 	assert multi_cfg.listeners[1].site_cfg.vjsx.module_root == vjsx_root
 	assert !multi_cfg.listeners[1].runtime_cfg.admin_enabled
-	assert os.exists(pid_file)
+	assert !os.exists(pid_file)
 }
 
 fn test_resolve_multi_server_runtime_config_uses_cli_admin_port_for_owner() {
@@ -3399,15 +3371,14 @@ fn test_resolve_embedded_host_runtime_config_normalizes_paths_and_lane_defaults(
 	assert cfg.enable_network
 }
 
-fn test_shutdown_app_runtime_stops_lifecycle_and_cleans_runtime_files() {
-	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_shutdown_runtime_test')
+fn test_shutdown_app_runtime_stops_lifecycle_and_preserves_unowned_pid_file() {
+	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_shutdown_runtime_test_${os.getpid()}_${time.now().unix_micro()}')
 	os.mkdir_all(temp_dir) or { panic(err) }
 	event_log := os.join_path(temp_dir, 'events.ndjson')
 	pid_file := os.join_path(temp_dir, 'vhttpd.pid')
 	internal_socket := os.join_path(temp_dir, 'internal-admin.sock')
 	os.write_file(event_log, '') or { panic(err) }
 	os.write_file(pid_file, '${os.getpid()}') or { panic(err) }
-	os.write_file(internal_socket, 'socket') or { panic(err) }
 	defer {
 		os.rmdir_all(temp_dir) or {}
 	}
@@ -3417,31 +3388,22 @@ fn test_shutdown_app_runtime_stops_lifecycle_and_cleans_runtime_files() {
 			event_log: event_log
 		}
 		engines:       EngineRuntime{
-			primary: worker.WorkerState{
+			primary: &worker.WorkerState{
 				logic_executor: TestShutdownLogicExecutor{
 					state: executor_state
 				}
 			}
 		}
-		providers:     ProviderRuntimeHub{
-			registry: ProviderHost{
-				specs: {
-					'test': ProviderSpec{
-						name:        'test'
-						enabled:     true
-						has_runtime: true
-						provider:    TestShutdownProvider{}
-						handler:     provider.NoopProviderCommandHandler{}
-						runtime:     TestShutdownProviderRuntime{}
-					}
-				}
-			}
-		}
 	}
-	mut test_ctx := app.build_provider_context('test')
-	mut spec_ref := app.providers.registry.specs['test']
-	spec_ref.lifecycle_ctx = test_ctx
-	app.providers.registry.specs['test'] = spec_ref
+	app.register_provider_spec(ProviderSpec{
+		name:          'test'
+		enabled:       true
+		has_runtime:   true
+		provider:      TestShutdownProvider{}
+		handler:       provider.NoopProviderCommandHandler{}
+		runtime:       TestShutdownProviderRuntime{}
+		lifecycle_ctx: app.build_provider_context('test')
+	})
 	runtime_cfg := server_lifecycle.ServerRuntimeConfig{
 		pid_file:              pid_file
 		internal_admin_socket: internal_socket
@@ -3454,9 +3416,18 @@ fn test_shutdown_app_runtime_stops_lifecycle_and_cleans_runtime_files() {
 			bootstrap:           executor.ExecutorBootstrapState{}
 		}
 	}
+	app.lifecycle.internal_admin.start(mut app, internal_socket) or { panic(err) }
+	admin_deadline := time.now().add(3 * time.second)
+	for !(os.read_file(event_log) or { '' }).contains('internal_admin.started') {
+		assert time.now() < admin_deadline
+		time.sleep(time.millisecond)
+	}
+	app.control_plane.mu.@lock()
+	os.write_file(event_log, '') or { panic(err) }
+	app.control_plane.mu.unlock()
 	shutdown_app_runtime(mut app, runtime_cfg)
 	assert executor_state.close_called
-	assert !os.exists(pid_file)
+	assert os.exists(pid_file)
 	assert !os.exists(internal_socket)
 	rows := os.read_lines(event_log) or { panic(err) }
 	mut non_empty_rows := []string{}

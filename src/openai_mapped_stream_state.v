@@ -1,15 +1,20 @@
 module main
 
 import api.openai
-import json
+import json2 as json
 import net
 import x.json2
 import worker
 
+interface OpenAIFrameMapperHost {
+mut:
+	openai_plugin_map_frame(plan openai.OpenAIResolvedPlan, frame string, req_id string, trace_id string) !openai.OpenAIFrameMapping
+}
+
 @[heap]
 struct OpenAIMappedStreamProxyState {
 mut:
-	app              &App = unsafe { nil }
+	mapper_host      ?OpenAIFrameMapperHost
 	conn             net.TcpConn
 	method           string
 	status_code      int
@@ -100,7 +105,10 @@ fn (mut app App) openai_plugin_map_frame(plan openai.OpenAIResolvedPlan, frame s
 		output_protocol: plan.output_protocol
 		request_id:      req_id
 		trace_id:        trace_id
-	}), req_id, trace_id, {
+	},
+		escape_unicode: true
+		time_as_unix:   true
+	), req_id, trace_id, {
 		'model':  plan.model
 		'mapper': 'plugin'
 	})!
@@ -108,8 +116,10 @@ fn (mut app App) openai_plugin_map_frame(plan openai.OpenAIResolvedPlan, frame s
 }
 
 fn (mut state OpenAIMappedStreamProxyState) map_line_with_plugin(line string) openai.OpenAIFrameMapping {
-	mut app := unsafe { &App(state.app) }
-	return app.openai_plugin_map_frame(openai.OpenAIResolvedPlan{
+	mut host := state.mapper_host or {
+		return openai.OpenAIFrameMapping{ done: true, handled: true, error: 'openai_frame_mapper_host_missing' }
+	}
+	return host.openai_plugin_map_frame(openai.OpenAIResolvedPlan{
 		model:           state.model
 		response_codec:  state.response_codec
 		output_protocol: state.output_protocol
@@ -123,6 +133,7 @@ fn (mut state OpenAIMappedStreamProxyState) map_line_with_plugin(line string) op
 }
 
 fn (mut state OpenAIMappedStreamProxyState) write_mapped_line(line string) ! {
+	if state.done { return }
 	trimmed := line.trim_space()
 	if trimmed == '' {
 		return
@@ -142,24 +153,26 @@ fn (mut state OpenAIMappedStreamProxyState) write_mapped_line(line string) ! {
 	}
 	if mapping.error != '' {
 		state.mapper_error = mapping.error
+		state.done = true
 		state.ensure_headers_written()!
 		OpenAIErrorResponseWriter.write_sse(mut state.conn, 'mapper_error', mapping.error,
 			'server_error')
-		state.done = true
 		state.finish()!
 		return
 	}
+	// Claim the terminal row before writing: a failed terminal write must not
+	// leave later callbacks or EOF tail processing able to reopen output.
+	if mapping.done { state.done = true }
 	if mapping.content != '' || mapping.tool_calls.len > 0 {
 		state.ensure_headers_written()!
 		worker.WorkerHttpStreamWriter.write_chunk(mut state.conn,
 			'data: ${state.chunk_json(mapping)}\n\n')!
 	}
 	openai.OpenAIUsage.merge(mut state.usage, mapping.usage)
-	if mapping.done && !state.done {
+	if mapping.done {
 		state.ensure_headers_written()!
 		state.write_usage_chunk()!
 		worker.WorkerHttpStreamWriter.write_chunk(mut state.conn, 'data: [DONE]\n\n')!
-		state.done = true
 		state.finish()!
 	}
 }
@@ -175,6 +188,7 @@ fn (mut state OpenAIMappedStreamProxyState) reset_for_plan(plan openai.OpenAIRes
 	state.done = false
 	state.mapper_error = ''
 	state.error_body = ''
+	state.chunk_decoder = openai.ChunkDecodeState{}
 	state.usage = map[string]int{}
 	state.final_written = false
 }

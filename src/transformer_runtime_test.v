@@ -2,7 +2,7 @@ module main
 
 import admin
 import dispatch
-import json
+import json2 as json
 import runtime_plan
 
 fn test_transformer_runtime_registers_native_transform_from_plan() {
@@ -102,7 +102,7 @@ fn test_internal_admin_runtime_transformers_returns_snapshot() {
 		path:   '/admin/runtime/transformers'
 	})
 	assert resp.status == 200
-	snapshot := json.decode(TransformerRuntimeSnapshot, resp.body) or { panic(err) }
+	snapshot := json.decode[TransformerRuntimeSnapshot](resp.body) or { panic(err) }
 	assert snapshot.total == 1
 	assert snapshot.available == 1
 	assert snapshot.vjsx_count == 1

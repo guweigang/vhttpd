@@ -4,7 +4,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-VHTTPD_BIN="${REPO_ROOT}/vhttpd"
+VHTTPD_BIN="${VHTTPD_BIN:-${REPO_ROOT}/vhttpd}"
 PASS=0
 FAIL=0
 

@@ -3,106 +3,66 @@ module main
 import api.mcp.protocol as mcp_protocol
 import api.openai
 import config
-import json
+import json2 as json
 import plugin
 import runtime_plan
-import state_store
 
 struct ProtocolRuntimePlanUpdate {
 	runtime_plan_json string
 	plugin_configs    map[string]config.PluginConfig
-	mcp               mcp_protocol.McpState
-	openai            openai.OpenaiState
+	mcp               mcp_protocol.Settings
+	openai            openai.Settings
 }
 
 fn ProtocolRuntimeHub.from_plan(cfg config.VhttpdConfig, plan runtime_plan.RuntimePlan, listener_id string) ProtocolRuntimeHub {
 	plugin_configs := plugin_configs_from_plan(plan)
 	update := protocol_runtime_plan_update_from_plan(plan, listener_id)
 	return ProtocolRuntimeHub{
-		runtime_config_json: json.encode(cfg)
+		runtime_config_json: json.encode(cfg, escape_unicode: true, time_as_unix: true)
 		runtime_plan_json:   update.runtime_plan_json
 		plugins:             plugin.PluginState{
 			configs: plugin_configs.clone()
 			vjsx:    build_vjsx_plugin_runtimes(plugin_configs)
 		}
-		mcp:                 update.mcp
-		openai:              update.openai
+		mcp:                 update.mcp.new_state()
+		openai:              update.openai.new_state()
 	}
 }
 
 fn protocol_runtime_plan_update_from_plan(plan runtime_plan.RuntimePlan, listener_id string) ProtocolRuntimePlanUpdate {
 	return ProtocolRuntimePlanUpdate{
-		runtime_plan_json: json.encode(plan)
+		runtime_plan_json: json.encode(plan, escape_unicode: true, time_as_unix: true)
 		plugin_configs:    plugin_configs_from_plan(plan)
-		mcp:               mcp_state_from_plan(plan, listener_id)
-		openai:            openai_state_from_plan(plan, listener_id)
+		mcp:               mcp_settings_from_plan(plan, listener_id)
+		openai:            openai_settings_from_plan(plan, listener_id)
 	}
 }
 
 fn (mut hub ProtocolRuntimeHub) apply_plan_update(update ProtocolRuntimePlanUpdate) {
+	retirement := hub.publish_plan_update(update)
+	hub.plugins.finish_retirement(retirement)
+}
+
+// Publication never waits for plugin calls. The caller drains the retired batch
+// after releasing App.mu, which an active plugin's host callbacks may need.
+fn (mut hub ProtocolRuntimeHub) publish_plan_update(update ProtocolRuntimePlanUpdate) int {
 	hub.runtime_plan_json = update.runtime_plan_json
-	hub.apply_plugin_config_update(update.plugin_configs)
-	hub.mcp = update.mcp
-	hub.openai = update.openai
+	retirement := hub.plugins.publish(update.plugin_configs)
+	hub.mcp.apply_settings(update.mcp)
+	hub.openai.apply_settings(update.openai)
+	return retirement
 }
 
-fn (mut hub ProtocolRuntimeHub) apply_plugin_config_update(configs map[string]config.PluginConfig) {
-	old_configs := hub.plugins.configs.clone()
-	old_vjsx := hub.plugins.vjsx.clone()
-	mut next_vjsx := map[string]InProcVjsxExecutor{}
-	mut names := configs.keys()
-	names.sort()
-	for name in names {
-		cfg := configs[name]
-		old_cfg := old_configs[name] or {
-			built := build_vjsx_plugin_runtimes({
-				name: cfg
-			})
-			if runtime := built[name] {
-				next_vjsx[name] = runtime
-			}
-			continue
-		}
-		if plugin_config_fingerprint(old_cfg) == plugin_config_fingerprint(cfg) {
-			if runtime := old_vjsx[name] {
-				next_vjsx[name] = runtime
-			}
-			continue
-		}
-		if runtime := old_vjsx[name] {
-			runtime.close()
-		}
-		built := build_vjsx_plugin_runtimes({
-			name: cfg
-		})
-		if runtime := built[name] {
-			next_vjsx[name] = runtime
-		}
-	}
-	for name, runtime in old_vjsx {
-		if name !in configs {
-			runtime.close()
-		}
-	}
-	hub.plugins.configs = configs.clone()
-	hub.plugins.vjsx = next_vjsx.clone()
-}
-
-fn plugin_config_fingerprint(cfg config.PluginConfig) string {
-	return json.encode(cfg)
-}
-
-fn mcp_state_from_plan(plan runtime_plan.RuntimePlan, listener_id string) mcp_protocol.McpState {
+fn mcp_settings_from_plan(plan runtime_plan.RuntimePlan, listener_id string) mcp_protocol.Settings {
 	adapter := plan.listener_adapter(listener_id, 'mcp') or {
-		return mcp_protocol.McpState{
+		return mcp_protocol.Settings{
 			max_sessions:               1000
 			max_pending_messages:       128
 			session_ttl_seconds:        900
 			sampling_capability_policy: 'warn'
-			sessions:                   map[string]mcp_protocol.Session{}
 		}
 	}
-	return mcp_protocol.McpState{
+	return mcp_protocol.Settings{
 		max_sessions:               if adapter.options.ints['max_sessions'] > 0 {
 			adapter.options.ints['max_sessions']
 		} else {
@@ -120,17 +80,14 @@ fn mcp_state_from_plan(plan runtime_plan.RuntimePlan, listener_id string) mcp_pr
 		}
 		sampling_capability_policy: mcp_protocol.McpState.normalize_sampling_capability_policy(adapter.options.strings['sampling_capability_policy'])
 		allowed_origins:            adapter.options.string_lists['allowed_origins'].clone()
-		sessions:                   map[string]mcp_protocol.Session{}
 	}
 }
 
-fn openai_state_from_plan(plan runtime_plan.RuntimePlan, listener_id string) openai.OpenaiState {
+fn openai_settings_from_plan(plan runtime_plan.RuntimePlan, listener_id string) openai.Settings {
 	adapter := plan.listener_adapter(listener_id, 'openai') or {
-		return openai.OpenaiState{
-			responses: state_store.MemoryStateStore.new[openai.OpenAIResponseRecord]()
-		}
+		return openai.Settings{}
 	}
-	return openai.OpenaiState{
+	return openai.Settings{
 		enabled:         true
 		base_path:       if adapter.options.strings['base_path'] != '' {
 			adapter.options.strings['base_path']
@@ -147,7 +104,6 @@ fn openai_state_from_plan(plan runtime_plan.RuntimePlan, listener_id string) ope
 		}
 		backends:        openai_backends_from_adapter(adapter)
 		routes:          openai_routes_from_adapter(adapter)
-		responses:       state_store.MemoryStateStore.new[openai.OpenAIResponseRecord]()
 	}
 }
 

@@ -29,8 +29,11 @@ pub:
 	edges []AdminRuntimeGraphEdge
 }
 
-fn (app App) admin_runtime_graph_snapshot() AdminRuntimeGraph {
-	plan := app.plan
+fn (app &App) admin_runtime_graph_snapshot() AdminRuntimeGraph {
+	return admin_graph_from_plan(app.admin_plan_view().plan)
+}
+
+fn admin_graph_from_plan(plan runtime_plan.RuntimePlan) AdminRuntimeGraph {
 	mut graph := AdminRuntimeGraphBuilder.new()
 	for id, listener in plan.listeners {
 		graph.node('listener', id, listener.id, listener.protocol, '', {

@@ -2,135 +2,163 @@ module main
 
 import admin
 import executor
+import relay
 
-// build_admin_context constructs an admin.RuntimeContext whose closures
-// capture App, bridging the admin sub-module to the main program.
+// Publication-sensitive fields are values from one view; live counters retain
+// their actual subsystem owners and never take ownership of native resources.
 fn (mut app App) build_admin_context() admin.RuntimeContext {
+	mut lifecycle := &app.lifecycle
+	mut control := &app.control_plane
+	mut upstreams := &app.upstreams
+	mut mcp := &app.protocols.mcp
+	mut feishu := &app.providers.feishu
+	mut websocket := &app.websocket
+	mut relay_runtime := &app.relay
+	app.mu.@lock()
+	engine_metrics := app.engines.metrics()
+	engine := executor.logic_executor_http_port(app.engines.primary.logic_executor)
+	pipeline := app.pipelines.admin_snapshot()
+	provider_ctx := app.build_provider_runtime_dispatch_context_unlocked()
+	app.mu.unlock()
+	details := engine.admin_details()
+	kind := engine.kind()
+	model := engine.model()
+	provider_name := engine.provider()
 	return admin.RuntimeContext{
-		started_at_unix:                        fn [app] () i64 {
-			return app.lifecycle.started_at_unix
+		started_at_unix:                        fn [mut lifecycle] () i64 {
+			return lifecycle.started_at_unix
 		}
-		http_requests_total:                    fn [app] () i64 {
-			return app.control_plane.http_stats.requests_total
+		http_requests_total:                    fn [mut control] () i64 {
+			return control.http_stats.requests_total
 		}
-		http_errors_total:                      fn [app] () i64 {
-			return app.control_plane.http_stats.errors_total
+		http_errors_total:                      fn [mut control] () i64 {
+			return control.http_stats.errors_total
 		}
-		http_timeouts_total:                    fn [app] () i64 {
-			return app.control_plane.http_stats.timeouts_total
+		http_timeouts_total:                    fn [mut control] () i64 {
+			return control.http_stats.timeouts_total
 		}
-		http_streams_total:                     fn [app] () i64 {
-			return app.control_plane.http_stats.streams_total
+		http_streams_total:                     fn [mut control] () i64 {
+			return control.http_stats.streams_total
 		}
-		http_admin_actions_total:               fn [app] () i64 {
-			return app.control_plane.http_stats.admin_actions_total
+		http_admin_actions_total:               fn [mut control] () i64 {
+			return control.http_stats.admin_actions_total
 		}
-		worker_queue_waits_total:               fn [mut app] () i64 {
-			return app.engines.metrics().queue_waits_total
+		worker_queue_waits_total:               fn [engine_metrics] () i64 {
+			return engine_metrics.queue_waits_total
 		}
-		worker_queue_rejected_total:            fn [mut app] () i64 {
-			return app.engines.metrics().queue_rejected_total
+		worker_queue_rejected_total:            fn [engine_metrics] () i64 {
+			return engine_metrics.queue_rejected_total
 		}
-		worker_queue_timeouts_total:            fn [mut app] () i64 {
-			return app.engines.metrics().queue_timeouts_total
+		worker_queue_timeouts_total:            fn [engine_metrics] () i64 {
+			return engine_metrics.queue_timeouts_total
 		}
-		ws_hub_upstream_plans_total:            fn [mut app] () i64 {
-			total, _ := app.upstreams.totals()
+		ws_hub_upstream_plans_total:            fn [mut upstreams] () i64 {
+			total, _ := upstreams.totals()
 			return total
 		}
-		ws_hub_upstream_plan_errors_total:      fn [mut app] () i64 {
-			_, errors := app.upstreams.totals()
+		ws_hub_upstream_plan_errors_total:      fn [mut upstreams] () i64 {
+			_, errors := upstreams.totals()
 			return errors
 		}
-		mcp_sessions_expired_total:             fn [app] () i64 {
-			return app.protocols.mcp.stat_sessions_expired_total
+		mcp_sessions_expired_total:             fn [mut mcp] () i64 {
+			mcp.mu.@lock()
+			defer { mcp.mu.unlock() }
+			return mcp.stat_sessions_expired_total
 		}
-		mcp_sessions_evicted_total:             fn [app] () i64 {
-			return app.protocols.mcp.stat_sessions_evicted_total
+		mcp_sessions_evicted_total:             fn [mut mcp] () i64 {
+			mcp.mu.@lock()
+			defer { mcp.mu.unlock() }
+			return mcp.stat_sessions_evicted_total
 		}
-		mcp_pending_dropped_total:              fn [app] () i64 {
-			return app.protocols.mcp.stat_pending_dropped_total
+		mcp_pending_dropped_total:              fn [mut mcp] () i64 {
+			mcp.mu.@lock()
+			defer { mcp.mu.unlock() }
+			return mcp.stat_pending_dropped_total
 		}
-		mcp_sampling_capability_warnings_total: fn [app] () i64 {
-			return app.protocols.mcp.stat_sampling_capability_warnings_total
+		mcp_sampling_capability_warnings_total: fn [mut mcp] () i64 {
+			mcp.mu.@lock()
+			defer { mcp.mu.unlock() }
+			return mcp.stat_sampling_capability_warnings_total
 		}
-		mcp_sampling_capability_dropped_total:  fn [app] () i64 {
-			return app.protocols.mcp.stat_sampling_capability_dropped_total
+		mcp_sampling_capability_dropped_total:  fn [mut mcp] () i64 {
+			mcp.mu.@lock()
+			defer { mcp.mu.unlock() }
+			return mcp.stat_sampling_capability_dropped_total
 		}
-		mcp_sampling_capability_errors_total:   fn [app] () i64 {
-			return app.protocols.mcp.stat_sampling_capability_errors_total
+		mcp_sampling_capability_errors_total:   fn [mut mcp] () i64 {
+			mcp.mu.@lock()
+			defer { mcp.mu.unlock() }
+			return mcp.stat_sampling_capability_errors_total
 		}
-		feishu_runtime_totals:                  fn [mut app] () (i64, i64, i64, i64, i64, i64) {
-			return app.providers.feishu.totals()
+		feishu_runtime_totals:                  fn [mut feishu] () (i64, i64, i64, i64, i64, i64) {
+			return feishu.totals()
 		}
-		ws_hub_active_conns:                    fn [mut app] () int {
-			return app.websocket.active_connections()
+		ws_hub_active_conns:                    fn [mut websocket] () int {
+			return websocket.active_connections()
 		}
-		ws_hub_active_upstreams:                fn [mut app] () int {
-			return app.upstreams.active_count()
+		ws_hub_active_upstreams:                fn [mut upstreams] () int {
+			return upstreams.active_count()
 		}
-		mcp_active_sessions:                    fn [mut app] (now i64) int {
-			app.protocols.mcp.mu.@lock()
-			defer { app.protocols.mcp.mu.unlock() }
-			app.protocols.mcp.prune_sessions_locked(now)
-			return app.protocols.mcp.sessions.len
+		mcp_active_sessions:                    fn [mut mcp] (now i64) int {
+			mcp.mu.@lock()
+			defer { mcp.mu.unlock() }
+			mcp.prune_sessions_locked(now)
+			return mcp.sessions.len
 		}
-		worker_queue_depth:                     fn [mut app] () int {
-			return app.engines.metrics().queue_depth
+		worker_queue_depth:                     fn [engine_metrics] () int {
+			return engine_metrics.queue_depth
 		}
-		worker_pool_size:                       fn [mut app] () i64 {
-			return app.engines.metrics().pool_size
+		worker_pool_size:                       fn [engine_metrics] () i64 {
+			return engine_metrics.pool_size
 		}
-		worker_backend_mode:                    fn [mut app] () string {
-			return app.engines.metrics().backend_mode
+		worker_backend_mode:                    fn [engine_metrics] () string {
+			return engine_metrics.backend_mode
 		}
-		worker_queue_capacity:                  fn [mut app] () int {
-			return app.engines.metrics().queue_capacity
+		worker_queue_capacity:                  fn [engine_metrics] () int {
+			return engine_metrics.queue_capacity
 		}
-		worker_queue_timeout_ms:                fn [mut app] () int {
-			return app.engines.metrics().queue_timeout_ms
+		worker_queue_timeout_ms:                fn [engine_metrics] () int {
+			return engine_metrics.queue_timeout_ms
 		}
-		worker_stream_dispatch:                 fn [mut app] () bool {
-			return app.engines.metrics().stream_dispatch
+		worker_stream_dispatch:                 fn [engine_metrics] () bool {
+			return engine_metrics.stream_dispatch
 		}
-		ws_hub_dispatch_mode:                   fn [app] () bool {
-			return app.websocket.dispatch_enabled()
+		ws_hub_dispatch_mode:                   fn [mut websocket] () bool {
+			return websocket.dispatch_enabled()
 		}
-		worker_lifecycle:                       fn [mut app] () string {
-			return app.engines.metrics().lifecycle
+		worker_lifecycle:                       fn [engine_metrics] () string {
+			return engine_metrics.lifecycle
 		}
-		logic_executor_admin_details:           fn [app] () executor.LogicExecutorAdminDetails {
-			return app.logic_executor_admin_details()
+		logic_executor_admin_details:           fn [details] () executor.LogicExecutorAdminDetails {
+			return details
 		}
-		logic_executor_kind:                    fn [app] () string {
-			return app.logic_executor_kind()
+		logic_executor_kind:                    fn [kind] () string { return kind }
+		logic_executor_model:                   fn [model] () executor.LogicExecutorModel {
+			return model
 		}
-		logic_executor_model:                   fn [app] () executor.LogicExecutorModel {
-			return app.logic_executor_model()
+		logic_executor_provider:                fn [provider_name] () string {
+			return provider_name
 		}
-		logic_executor_provider:                fn [app] () string {
-			return app.logic_executor_provider()
-		}
-		pipeline_runtime_snapshot:              fn [app] () executor.AdminPipelineRuntimeSummary {
-			return app.admin_pipeline_runtime_snapshot()
+		pipeline_runtime_snapshot:              fn [pipeline] () executor.AdminPipelineRuntimeSummary {
+			return pipeline
 		}
 		listener_runtime_snapshots:             fn () []executor.AdminListenerRuntimeSummary {
 			return active_runtime_listener_summaries()
 		}
-		provider_runtime_capabilities:          fn [mut app] () map[string]bool {
-			return app.provider_runtime_capabilities()
+		provider_runtime_capabilities:          fn [provider_ctx] () map[string]bool {
+			return provider_ctx.capabilities()
 		}
-		provider_runtime_gateway_count:         fn [mut app] () int {
-			return app.provider_runtime_gateway_count()
+		provider_runtime_gateway_count:         fn [provider_ctx] () int {
+			return provider_ctx.gateway_count()
 		}
-		relay_runtime_snapshot:                 fn [mut app] () executor.AdminRelayRuntimeSummary {
-			return app.admin_relay_runtime_snapshot()
+		relay_runtime_snapshot:                 fn [mut relay_runtime] () executor.AdminRelayRuntimeSummary {
+			return relay_admin_snapshot(mut relay_runtime)
 		}
 	}
 }
 
-fn (app App) admin_pipeline_runtime_snapshot() executor.AdminPipelineRuntimeSummary {
-	routes := app.pipelines.http.rules.map(executor.AdminPipelineRouteSummary{
+fn (runtime PipelineRuntime) admin_snapshot() executor.AdminPipelineRuntimeSummary {
+	routes := runtime.http.rules.map(executor.AdminPipelineRouteSummary{
 		pipeline_id: it.pipeline_id
 		group:       it.pipeline_group
 		ingress:     it.ingress_id
@@ -140,14 +168,14 @@ fn (app App) admin_pipeline_runtime_snapshot() executor.AdminPipelineRuntimeSumm
 		paths:       it.match_path.clone()
 	})
 	return executor.AdminPipelineRuntimeSummary{
-		listener_id: app.pipelines.http.listener_id
+		listener_id: runtime.http.listener_id
 		route_count: routes.len
 		routes:      routes
 	}
 }
 
-fn (mut app App) admin_relay_runtime_snapshot() executor.AdminRelayRuntimeSummary {
-	snapshot := app.relay.snapshot()
+fn relay_admin_snapshot(mut runtime relay.Runtime) executor.AdminRelayRuntimeSummary {
+	snapshot := runtime.snapshot()
 	return executor.AdminRelayRuntimeSummary{
 		descriptor_count: snapshot.descriptor_count
 		agent_count:      snapshot.agent_count
@@ -195,4 +223,14 @@ fn (mut app App) admin_stats_snapshot() executor.AdminRuntimeStats {
 fn (mut app App) admin_runtime_snapshot() executor.AdminRuntimeSummary {
 	ctx := app.build_admin_context()
 	return app.control_plane.runtime_snapshot(ctx)
+}
+
+fn (app &App) admin_pipeline_runtime_snapshot() executor.AdminPipelineRuntimeSummary {
+	app.mu.@lock()
+	defer { app.mu.unlock() }
+	return app.pipelines.admin_snapshot()
+}
+
+fn (mut app App) admin_relay_runtime_snapshot() executor.AdminRelayRuntimeSummary {
+	return relay_admin_snapshot(mut app.relay)
 }

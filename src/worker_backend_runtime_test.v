@@ -3,7 +3,7 @@ module main
 import worker
 import executor
 import admin
-import json
+import json2 as json
 import upstream.transport
 
 fn test_worker_backend_runtime_defaults_to_php_backend() {
@@ -21,7 +21,7 @@ fn test_worker_backend_runtime_enabled_when_sockets_present() {
 
 fn test_engine_runtime_resolves_named_dispatch_and_worker_settings() {
 	runtime := EngineRuntime{
-		primary:    worker.WorkerState{
+		primary:    &worker.WorkerState{
 			worker_backend: worker.WorkerBackendRuntime{
 				read_timeout_ms: 100
 				env:             {
@@ -51,7 +51,7 @@ fn test_engine_runtime_resolves_named_dispatch_and_worker_settings() {
 
 fn test_engine_runtime_resolves_dispatch_by_engine_id_pool_key() {
 	runtime := EngineRuntime{
-		primary:    worker.WorkerState{
+		primary:    &worker.WorkerState{
 			worker_backend: worker.WorkerBackendRuntime{
 				read_timeout_ms: 100
 			}
@@ -65,7 +65,7 @@ fn test_engine_runtime_resolves_dispatch_by_engine_id_pool_key() {
 						'POOL': 'upload-a'
 					}
 				}
-				logic_executor: executor.InProcVjsxExecutor{}
+				logic_executor: executor.new_inproc_vjsx_executor(executor.VjsxRuntimeFacadeConfig{})
 			}
 		}
 	}
@@ -78,7 +78,7 @@ fn test_engine_runtime_resolves_dispatch_by_engine_id_pool_key() {
 
 fn test_engine_runtime_tracks_request_start_across_pools() {
 	mut runtime := EngineRuntime{
-		primary:    worker.WorkerState{
+		primary:    &worker.WorkerState{
 			worker_backend: worker.WorkerBackendRuntime{
 				managed_workers: [
 					transport.ManagedWorker{
@@ -103,34 +103,33 @@ fn test_engine_runtime_tracks_request_start_across_pools() {
 	assert runtime.primary.worker_backend.managed_workers[0].inflight_requests == 0
 	cgi := runtime.additional['php-cgi'] or { panic('missing php-cgi engine') }
 	assert cgi.worker_backend.managed_workers[0].inflight_requests == 1
-	runtime.request_finished(EngineLifecyclePort{}, '/tmp/cgi.sock')
+	runtime.request_finished(worker.LifecyclePort{}, '/tmp/cgi.sock')
 	assert cgi.worker_backend.managed_workers[0].inflight_requests == 0
 	assert cgi.worker_backend.managed_workers[0].served_requests == 1
 }
 
 fn test_engine_runtime_queued_selector_times_out_when_worker_stays_busy() {
-	mut runtime := EngineRuntime{}
 	mut state := worker.WorkerState{
 		worker_backend: worker.WorkerBackendRuntime{
 			sockets:          ['/tmp/vhttpd-busy-worker.sock']
-			autostart:       true
-			queue_capacity:  1
+			autostart:        true
+			queue_capacity:   1
 			queue_timeout_ms: 15
 			queue_poll_ms:    5
-			managed_workers: [
+			managed_workers:  [
 				transport.ManagedWorker{
-					socket_path:        '/tmp/vhttpd-busy-worker.sock'
+					socket_path:       '/tmp/vhttpd-busy-worker.sock'
 					inflight_requests: 1
-					next_retry_ts:      9_223_372_036_854
+					next_retry_ts:     9_223_372_036_854
 				},
 			]
 		}
 	}
-	port := EngineLifecyclePort{
+	port := worker.LifecyclePort{
 		emit_fn: fn (_kind string, _fields map[string]string) {}
 	}
 
-	if _ := runtime.select_socket_queued_for_state(port, 'php', mut state) {
+	if _ := state.select_socket_queued(port, 'php') {
 		assert false
 	} else {
 		assert err.msg() == 'worker queue timeout'
@@ -141,29 +140,28 @@ fn test_engine_runtime_queued_selector_times_out_when_worker_stays_busy() {
 }
 
 fn test_engine_runtime_queued_selector_rejects_when_queue_is_full() {
-	mut runtime := EngineRuntime{}
 	mut state := worker.WorkerState{
 		worker_backend: worker.WorkerBackendRuntime{
 			sockets:                ['/tmp/vhttpd-full-worker.sock']
-			autostart:             true
-			queue_capacity:        1
-			queue_timeout_ms:      15
-			queue_poll_ms:         5
+			autostart:              true
+			queue_capacity:         1
+			queue_timeout_ms:       15
+			queue_poll_ms:          5
 			queue_waiting_requests: 1
-			managed_workers: [
+			managed_workers:        [
 				transport.ManagedWorker{
-					socket_path:        '/tmp/vhttpd-full-worker.sock'
+					socket_path:       '/tmp/vhttpd-full-worker.sock'
 					inflight_requests: 1
-					next_retry_ts:      9_223_372_036_854
+					next_retry_ts:     9_223_372_036_854
 				},
 			]
 		}
 	}
-	port := EngineLifecyclePort{
+	port := worker.LifecyclePort{
 		emit_fn: fn (_kind string, _fields map[string]string) {}
 	}
 
-	if _ := runtime.select_socket_queued_for_state(port, 'php', mut state) {
+	if _ := state.select_socket_queued(port, 'php') {
 		assert false
 	} else {
 		assert err.msg() == 'worker queue full'
@@ -175,15 +173,14 @@ fn test_engine_runtime_queued_selector_rejects_when_queue_is_full() {
 }
 
 fn test_engine_runtime_queued_selector_times_out_after_leased_worker_stays_busy() {
-	mut runtime := EngineRuntime{}
 	mut state := worker.WorkerState{
 		worker_backend: worker.WorkerBackendRuntime{
 			sockets:          ['/tmp/vhttpd-leased-worker.sock']
-			autostart:       true
-			queue_capacity:  1
+			autostart:        true
+			queue_capacity:   1
 			queue_timeout_ms: 15
 			queue_poll_ms:    5
-			managed_workers: [
+			managed_workers:  [
 				transport.ManagedWorker{
 					socket_path:   '/tmp/vhttpd-leased-worker.sock'
 					next_retry_ts: 9_223_372_036_854
@@ -191,14 +188,14 @@ fn test_engine_runtime_queued_selector_times_out_after_leased_worker_stays_busy(
 			]
 		}
 	}
-	port := EngineLifecyclePort{
+	port := worker.LifecyclePort{
 		emit_fn: fn (_kind string, _fields map[string]string) {}
 	}
 
-	socket := runtime.select_socket_queued_for_state(port, 'php', mut state) or { panic(err) }
+	socket := state.select_socket_queued(port, 'php') or { panic(err) }
 	assert socket == '/tmp/vhttpd-leased-worker.sock'
 	assert state.worker_backend.managed_workers[0].inflight_requests == 1
-	if _ := runtime.select_socket_queued_for_state(port, 'php', mut state) {
+	if _ := state.select_socket_queued(port, 'php') {
 		assert false
 	} else {
 		assert err.msg() == 'worker queue timeout'
@@ -206,16 +203,16 @@ fn test_engine_runtime_queued_selector_times_out_after_leased_worker_stays_busy(
 	assert state.stat_queue_waits_total == 1
 	assert state.stat_queue_timeouts_total == 1
 	assert state.worker_backend.queue_waiting_requests == 0
-	runtime.worker_request_finished(port, mut state, socket)
+	state.request_finished(port, socket)
 	assert state.worker_backend.managed_workers[0].inflight_requests == 0
 }
 
 fn test_engine_runtime_release_does_not_count_served_request() {
 	mut runtime := EngineRuntime{
-		primary: worker.WorkerState{
+		primary: &worker.WorkerState{
 			worker_backend: worker.WorkerBackendRuntime{
-				sockets:    ['/tmp/vhttpd-release-worker.sock']
-				autostart: true
+				sockets:         ['/tmp/vhttpd-release-worker.sock']
+				autostart:       true
 				managed_workers: [
 					transport.ManagedWorker{
 						socket_path:   '/tmp/vhttpd-release-worker.sock'
@@ -225,11 +222,11 @@ fn test_engine_runtime_release_does_not_count_served_request() {
 			}
 		}
 	}
-	port := EngineLifecyclePort{
+	port := worker.LifecyclePort{
 		emit_fn: fn (_kind string, _fields map[string]string) {}
 	}
 
-	socket := runtime.select_socket_queued_for_state(port, 'php', mut runtime.primary) or {
+	socket := runtime.primary.select_socket_queued(port, 'php') or {
 		panic(err)
 	}
 	assert socket == '/tmp/vhttpd-release-worker.sock'
@@ -237,7 +234,7 @@ fn test_engine_runtime_release_does_not_count_served_request() {
 	runtime.request_released(socket)
 	assert runtime.primary.worker_backend.managed_workers[0].inflight_requests == 0
 	assert runtime.primary.worker_backend.managed_workers[0].served_requests == 0
-	socket2 := runtime.select_socket_queued_for_state(port, 'php', mut runtime.primary) or {
+	socket2 := runtime.primary.select_socket_queued(port, 'php') or {
 		panic(err)
 	}
 	runtime.request_finished(port, socket2)
@@ -415,7 +412,7 @@ fn test_internal_admin_worker_drain_marks_engine_workers() {
 			'engine': 'php-cgi'
 		}
 	})
-	status := json.decode(EngineDrainStatus, resp.body) or { panic(err) }
+	status := json.decode[worker.DrainStatus](resp.body) or { panic(err) }
 	cgi := app.engines.additional['php-cgi'] or { panic('missing php-cgi engine') }
 
 	assert resp.status == 200

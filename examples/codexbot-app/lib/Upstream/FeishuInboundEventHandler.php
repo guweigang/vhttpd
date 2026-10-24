@@ -23,7 +23,7 @@ final class FeishuInboundEventHandler implements EventHandler
 
     public function handle(Event $event, CommandBus $bus): void
     {
-        $response = $this->router->dispatch($event->payloadArray());
+        $response = $this->router->dispatch($event->payloadArray(), $event->request());
         $this->responseHelper->appendToBus($response, $bus);
     }
 }

@@ -103,7 +103,7 @@ fn add_worker_for_target(cfg config.VhttpdConfig, executor_plan executor.LogicEx
 	}
 	mut sub_ws := worker_state_from_executor_plan(sub_plan, build_cfg, sub_read_timeout_ms,
 		sub_queue_capacity, sub_queue_timeout_ms)
-	add_workers[target.key] = &sub_ws
+	add_workers[target.key] = sub_ws
 }
 
 fn (targets AdditionalEngineTargets) for_event_pipelines() []AdditionalEngineBuildTarget {
@@ -218,8 +218,8 @@ fn additional_engine_executor_name(engine runtime_plan.EnginePlan) string {
 	return engine.id
 }
 
-fn worker_state_from_executor_plan(plan executor.LogicExecutorRuntimePlan, build_cfg server_lifecycle.AppRuntimeBuildConfig, read_timeout_ms int, queue_capacity int, queue_timeout_ms int) worker.WorkerState {
-	return worker.WorkerState{
+fn worker_state_from_executor_plan(plan executor.LogicExecutorRuntimePlan, build_cfg server_lifecycle.AppRuntimeBuildConfig, read_timeout_ms int, queue_capacity int, queue_timeout_ms int) &worker.WorkerState {
+	return &worker.WorkerState{
 		worker_backend:      worker.WorkerBackendRuntime{
 			backend:                worker.PhpWorkerBackend{}
 			sockets:                plan.bootstrap.worker_sockets.clone()

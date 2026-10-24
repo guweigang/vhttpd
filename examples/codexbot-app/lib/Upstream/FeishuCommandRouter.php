@@ -11,12 +11,15 @@ use CodexBot\Repository\SettingsRepository;
 use CodexBot\Repository\TaskRepository;
 use CodexBot\Service\CodexSessionService;
 use CodexBot\Service\CommandFactory;
+use CodexBot\Service\OneShotReplyService;
 use CodexBot\Service\StreamService;
 use CodexBot\Service\TaskStateService;
 use CodexBot\Service\WorkerAdminService;
 
 final class FeishuCommandRouter
 {
+    private string $replyInstance = 'main';
+
     private const DEFAULT_MODEL = 'gpt-5.3-codex';
 
     public function __construct(
@@ -32,7 +35,25 @@ final class FeishuCommandRouter
         private BotContextHelper $contextHelper,
         private BotResponseHelper $responseHelper,
         private ThreadViewHelper $threadViewHelper,
+        private ?OneShotReplyService $replyService = null,
     ) {
+    }
+
+    private function replyText(string $chatId, string $text, string $streamId = '', int $flags = 0, ?\VHttpd\Feishu\CreationLease $creation = null): array
+    {
+        return $this->replyCommand('feishuSendText', $chatId, $text, $streamId, $flags, $creation);
+    }
+
+    private function replyMarkdown(string $chatId, string $text, string $streamId = '', int $flags = 0, ?\VHttpd\Feishu\CreationLease $creation = null): array
+    {
+        return $this->replyCommand('feishuSendMarkdown', $chatId, $text, $streamId, $flags, $creation);
+    }
+
+    private function replyCommand(string $method, string $chatId, string $text, string $streamId, int $flags, ?\VHttpd\Feishu\CreationLease $creation): array
+    {
+        if ($streamId !== '') return CommandFactory::{$method}($chatId, $text, $streamId, $flags, $creation);
+        $replies = ($this->replyService ??= new OneShotReplyService())->forInstance($this->replyInstance);
+        return $method === 'feishuSendText' ? $replies->text($chatId, $text, $flags) : $replies->markdown($chatId, $text, $flags);
     }
 
     public function refreshProjectContext(?array $project): ?array
@@ -60,7 +81,14 @@ final class FeishuCommandRouter
         return $fresh;
     }
 
-    public function dispatch(string $text, ?array &$project, string $chatId, string $sender, array $payload): ?array
+    public function dispatch(string $text, ?array &$project, string $chatId, string $sender, array $payload, string $instance = 'main'): ?array
+    {
+        $scoped = clone $this;
+        $scoped->replyInstance = $instance === '' ? 'main' : $instance;
+        return $scoped->dispatchCommands($text, $project, $chatId, $sender, $payload);
+    }
+
+    private function dispatchCommands(string $text, ?array &$project, string $chatId, string $sender, array $payload): ?array
     {
         $helpResponse = $this->handleHelpCommand($text, $chatId);
         if ($helpResponse !== null) {
@@ -128,7 +156,7 @@ final class FeishuCommandRouter
 
         $this->clearSelectionScope($chatId);
 
-        return $this->responseHelper->command(CommandFactory::feishuSend([
+        return $this->responseHelper->command(($this->replyService ??= new OneShotReplyService())->forInstance($this->replyInstance)->command([
             'target_type' => 'chat_id',
             'target' => $chatId,
             'message_type' => 'interactive',
@@ -174,7 +202,7 @@ final class FeishuCommandRouter
         if (!preg_match('/^\/create\s+(\S+)$/', $text, $matches)) {
             $this->clearSelectionScope($chatId);
             return $this->responseHelper->command(
-                CommandFactory::feishuSendMarkdown(
+                $this->replyMarkdown(
                     $chatId,
                     "⚠️ **创建项目命令格式不正确**\n\n请使用：`/create <project_key>`",
                     '',
@@ -187,7 +215,7 @@ final class FeishuCommandRouter
         if ($this->projectRepo->findByProjectKey($projectKey)) {
             $this->clearSelectionScope($chatId);
             return $this->responseHelper->command(
-                CommandFactory::feishuSendMarkdown(
+                $this->replyMarkdown(
                     $chatId,
                     "⚠️ **项目已存在**\n\n项目：`{$projectKey}` 已经存在，不能重复创建。",
                     '',
@@ -200,7 +228,7 @@ final class FeishuCommandRouter
         if ($projectRootDir === '') {
             $this->clearSelectionScope($chatId);
             return $this->responseHelper->command(
-                CommandFactory::feishuSendMarkdown(
+                $this->replyMarkdown(
                     $chatId,
                     "⚠️ **还没有配置项目根目录**\n\n请先执行：`/setting project_root_dir <path>`",
                     '',
@@ -214,7 +242,7 @@ final class FeishuCommandRouter
         if (!is_dir($repoPath) && !mkdir($repoPath, 0777, true) && !is_dir($repoPath)) {
             $this->clearSelectionScope($chatId);
             return $this->responseHelper->command(
-                CommandFactory::feishuSendMarkdown(
+                $this->replyMarkdown(
                     $chatId,
                     "⚠️ **项目目录创建失败**\n\n目标路径：`{$repoPath}`",
                     '',
@@ -243,7 +271,7 @@ final class FeishuCommandRouter
             "• **默认模型**: `" . self::DEFAULT_MODEL . "`\n\n" .
             "接下来你直接发任务，就会在这个项目里启动。";
 
-        return $this->responseHelper->command(CommandFactory::feishuSendMarkdown($chatId, $md, '', JSON_UNESCAPED_UNICODE));
+        return $this->responseHelper->command($this->replyMarkdown($chatId, $md, '', JSON_UNESCAPED_UNICODE));
     }
 
     private function handleImportCommand(string $text, string $chatId, ?array &$project): ?array
@@ -255,7 +283,7 @@ final class FeishuCommandRouter
         if (!preg_match('/^\/import\s+(\S+)\s+(.+)$/', $text, $matches)) {
             $this->clearSelectionScope($chatId);
             return $this->responseHelper->command(
-                CommandFactory::feishuSendMarkdown(
+                $this->replyMarkdown(
                     $chatId,
                     "⚠️ **导入项目命令格式不正确**\n\n请使用：`/import <project_key> <path>`",
                     '',
@@ -268,7 +296,7 @@ final class FeishuCommandRouter
         if ($this->projectRepo->findByProjectKey($projectKey)) {
             $this->clearSelectionScope($chatId);
             return $this->responseHelper->command(
-                CommandFactory::feishuSendMarkdown(
+                $this->replyMarkdown(
                     $chatId,
                     "⚠️ **项目已存在**\n\n项目：`{$projectKey}` 已经存在，不能重复导入。",
                     '',
@@ -282,7 +310,7 @@ final class FeishuCommandRouter
         if ($repoPath === '' || !is_dir($repoPath)) {
             $this->clearSelectionScope($chatId);
             return $this->responseHelper->command(
-                CommandFactory::feishuSendMarkdown(
+                $this->replyMarkdown(
                     $chatId,
                     "⚠️ **项目目录不存在**\n\n目标路径：`{$rawPath}`",
                     '',
@@ -316,7 +344,7 @@ final class FeishuCommandRouter
             "• **默认模型**: `" . self::DEFAULT_MODEL . "`\n\n" .
             "接下来你直接发任务，就会在这个项目里启动。";
 
-        return $this->responseHelper->command(CommandFactory::feishuSendMarkdown($chatId, $md, '', JSON_UNESCAPED_UNICODE));
+        return $this->responseHelper->command($this->replyMarkdown($chatId, $md, '', JSON_UNESCAPED_UNICODE));
     }
 
     private function handleSettingsCommand(string $text, string $chatId): ?array
@@ -326,7 +354,7 @@ final class FeishuCommandRouter
             $settings = $this->settingsRepo->findAll();
             if ($settings === []) {
                 return $this->responseHelper->command(
-                    CommandFactory::feishuSendMarkdown(
+                    $this->replyMarkdown(
                         $chatId,
                         "⚠️ **当前还没有任何配置**\n\n可以使用 `/setting project_root_dir <path>` 先设置项目根目录。",
                         '',
@@ -342,7 +370,7 @@ final class FeishuCommandRouter
                 $md .= "• `{$name}` = `{$value}`\n";
             }
 
-            return $this->responseHelper->command(CommandFactory::feishuSendMarkdown($chatId, $md, '', JSON_UNESCAPED_UNICODE));
+            return $this->responseHelper->command($this->replyMarkdown($chatId, $md, '', JSON_UNESCAPED_UNICODE));
         }
 
         if (!preg_match('/^\/setting\s+(\S+)\s+(.+)$/', $text, $matches)) {
@@ -355,7 +383,7 @@ final class FeishuCommandRouter
         $this->settingsRepo->upsert($name, $value);
 
         return $this->responseHelper->command(
-            CommandFactory::feishuSendMarkdown(
+            $this->replyMarkdown(
                 $chatId,
                 "⚙️ **配置已更新**\n\n• `{$name}` = `{$value}`",
                 '',
@@ -375,7 +403,7 @@ final class FeishuCommandRouter
         if (!$targetProject) {
             $this->clearSelectionScope($chatId);
             return $this->responseHelper->command(
-                CommandFactory::feishuSendMarkdown(
+                $this->replyMarkdown(
                     $chatId,
                     "⚠️ **项目不存在**\n\n没有找到项目：`{$projectKey}`",
                     '',
@@ -410,7 +438,7 @@ final class FeishuCommandRouter
             "• **是否已存在绑定**: " . ($alreadyBound ? '是，已恢复为激活状态' : '否，已新增绑定') . "\n" .
             "• **当前主项目**: `" . ($primaryProjectKey !== '' ? $primaryProjectKey : '尚未设置') . "`\n\n" .
             "如果要立刻切换到这个项目，请发送 `/project {$projectKey}`。";
-        return $this->responseHelper->command(CommandFactory::feishuSendMarkdown($chatId, $md, '', JSON_UNESCAPED_UNICODE));
+        return $this->responseHelper->command($this->replyMarkdown($chatId, $md, '', JSON_UNESCAPED_UNICODE));
     }
 
     private function handleCancelCommand(string $text, string $chatId): ?array
@@ -423,7 +451,7 @@ final class FeishuCommandRouter
         $task = $this->taskRepo->findLatestCancelableTask('feishu', $chatId);
         if (!$task) {
             return $this->responseHelper->command(
-                CommandFactory::feishuSendMarkdown(
+                $this->replyMarkdown(
                     $chatId,
                     "⚠️ **当前没有可取消的任务**\n\n最近没有处于 `queued` 或 `streaming` 状态的普通任务。",
                     '',
@@ -441,9 +469,10 @@ final class FeishuCommandRouter
             "\n后续如果 Codex 还有迟到事件，我们也会忽略，不再继续刷新这条消息。";
 
         $this->taskStateService->markCancelled($taskId, $streamId, 'Cancelled by user');
+        $clear = CommandFactory::feishuSessionClear($streamId, (string) ($task['stream_generation'] ?? ''));
         $responseMessageId = trim((string) ($task['response_message_id'] ?? ''));
         if ($streamId !== '' && $responseMessageId !== '') {
-            return $this->responseHelper->command(CommandFactory::feishuMessageUpdate([
+            return $this->responseHelper->commands([CommandFactory::feishuMessageUpdate([
                 'stream_id' => $streamId,
                 'target' => $responseMessageId,
                 'message_type' => 'interactive',
@@ -452,10 +481,10 @@ final class FeishuCommandRouter
                         ['tag' => 'markdown', 'content' => $message],
                     ],
                 ], JSON_UNESCAPED_UNICODE),
-            ]));
+            ], $task), $clear]);
         }
 
-        return $this->responseHelper->command(CommandFactory::feishuSendMarkdown($chatId, $message, '', JSON_UNESCAPED_UNICODE));
+        return $this->responseHelper->commands([$this->replyMarkdown($chatId, $message, '', JSON_UNESCAPED_UNICODE), $clear]);
     }
 
     private function handleWorkerCommand(string $text, string $chatId): ?array
@@ -469,7 +498,7 @@ final class FeishuCommandRouter
                 $suffix = $status > 0 ? "\n\nHTTP 状态：`{$status}`" : '';
 
                 return $this->responseHelper->command(
-                    CommandFactory::feishuSendMarkdown(
+                    $this->replyMarkdown(
                         $chatId,
                         "⚠️ **读取 PHP worker 状态失败**\n\n{$error}{$suffix}",
                         '',
@@ -479,7 +508,7 @@ final class FeishuCommandRouter
             }
 
             return $this->responseHelper->command(
-                CommandFactory::feishuSendMarkdown(
+                $this->replyMarkdown(
                     $chatId,
                     $this->renderWorkerStatusMarkdown((array) ($result['data'] ?? [])),
                     '',
@@ -495,7 +524,7 @@ final class FeishuCommandRouter
                 "建议你过 1 到 2 秒后直接重试刚才的命令，确认最新 PHP 代码已经生效。";
 
             return $this->responseHelper->commands([
-                CommandFactory::feishuSendMarkdown($chatId, $md, '', JSON_UNESCAPED_UNICODE),
+                $this->replyMarkdown($chatId, $md, '', JSON_UNESCAPED_UNICODE),
                 CommandFactory::adminRestartAllWorkers(),
             ]);
         }
@@ -503,7 +532,7 @@ final class FeishuCommandRouter
         if (strpos($text, '/worker') === 0) {
             $this->clearSelectionScope($chatId);
             return $this->responseHelper->command(
-                CommandFactory::feishuSendMarkdown(
+                $this->replyMarkdown(
                     $chatId,
                     "⚠️ **不支持的 worker 命令**\n\n请使用：\n- `/worker status`\n- `/worker restart`",
                     '',
@@ -528,7 +557,7 @@ final class FeishuCommandRouter
         } elseif ($text === '/config') {
             $this->clearSelectionScope($chatId);
             return $this->responseHelper->command(
-                CommandFactory::feishuSendMarkdown(
+                $this->replyMarkdown(
                     $chatId,
                     "⚠️ **缺少配置项名称**\n\n请使用 `/config <key>`，例如 `/config profile`。",
                     '',
@@ -542,7 +571,7 @@ final class FeishuCommandRouter
         $this->clearSelectionScope($chatId);
         if (!$project) {
             return $this->responseHelper->command(
-                CommandFactory::feishuSendText($chatId, '⚠️ 当前群尚未绑定项目，无法读取当前 Codex 配置。')
+                $this->replyText($chatId, '⚠️ 当前群尚未绑定项目，无法读取当前 Codex 配置。')
             );
         }
 
@@ -559,7 +588,7 @@ final class FeishuCommandRouter
 
         $streamId = $res['stream_id'];
         return $this->responseHelper->commands([
-            CommandFactory::feishuSendMarkdown($chatId, "🪪 **正在读取 Codex 配置...**\n\n> {$configKey}", $streamId),
+            $this->replyMarkdown($chatId, "🪪 **正在读取 Codex 配置...**\n\n> {$configKey}", $streamId, 0, $res['creation']),
             CommandFactory::codexRpcCall('config/read', [
                 'key' => $configKey,
             ], $streamId),
@@ -596,13 +625,13 @@ final class FeishuCommandRouter
                 $md .= "你可以发送 `/use <project_key>` 或 `/project <project_key>` 进行切换。";
             }
 
-            return $this->responseHelper->command(CommandFactory::feishuSendMarkdown($chatId, $md, '', JSON_UNESCAPED_UNICODE));
+            return $this->responseHelper->command($this->replyMarkdown($chatId, $md, '', JSON_UNESCAPED_UNICODE));
         }
 
         if ($text === '/threads') {
             if (!$project) {
                 $this->clearSelectionScope($chatId);
-                return $this->responseHelper->command(CommandFactory::feishuSendText($chatId, '⚠️ 当前群尚未绑定项目，无法按项目查看 Codex 历史线程。'));
+                return $this->responseHelper->command($this->replyText($chatId, '⚠️ 当前群尚未绑定项目，无法按项目查看 Codex 历史线程。'));
             }
 
             $this->rememberSelectionScope($chatId, 'thread');
@@ -619,7 +648,7 @@ final class FeishuCommandRouter
             $streamId = $res['stream_id'];
             $cwd = ($project['current_cwd'] ?? '') ?: ($project['repo_path'] ?? '');
             return $this->responseHelper->commands([
-                CommandFactory::feishuSendMarkdown($chatId, '🔍 **正在调取 Codex 历史线程列表...**', $streamId),
+                $this->replyMarkdown($chatId, '🔍 **正在调取 Codex 历史线程列表...**', $streamId, 0, $res['creation']),
                 CommandFactory::codexRpcCall('thread/list', [
                     'limit' => 10,
                     'cwd' => $cwd,
@@ -629,9 +658,10 @@ final class FeishuCommandRouter
 
         if ($text === '/models') {
             $this->rememberSelectionScope($chatId, 'model');
-            $streamId = "rpc:models:" . uniqid();
+            $streamId = "rpc:models:" . bin2hex(random_bytes(16));
+            $res = ['creation' => $this->streamService->issueCreation($streamId)];
             return $this->responseHelper->commands([
-                CommandFactory::feishuSendMarkdown($chatId, '🤖 **正在调取 Codex 可用模型列表...**', $streamId),
+                $this->replyMarkdown($chatId, '🤖 **正在调取 Codex 可用模型列表...**', $streamId, 0, $res['creation']),
                 CommandFactory::codexRpcCall('model/list', [
                     'provider' => null,
                     'model' => null,
@@ -693,7 +723,7 @@ final class FeishuCommandRouter
         if ($text === '/use') {
             $this->clearSelectionScope($chatId);
             return $this->responseHelper->command(
-                CommandFactory::feishuSendMarkdown(
+                $this->replyMarkdown(
                     $chatId,
                     "⚠️ **缺少选择目标**\n\n请使用 `/use <value>`，或者直接使用 `/project <key>`、`/thread <id>`、`/model <id>`。",
                     '',
@@ -712,7 +742,7 @@ final class FeishuCommandRouter
 
         if ($value === 'latest' && $scope !== 'thread') {
             return $this->responseHelper->command(
-                CommandFactory::feishuSendMarkdown(
+                $this->replyMarkdown(
                     $chatId,
                     "⚠️ **当前上下文不支持 `/use latest`**\n\n只有在线程列表上下文里，`/use latest` 才表示选择最近一个 thread。",
                     '',
@@ -763,12 +793,12 @@ final class FeishuCommandRouter
         if ($isExplicitReset) {
             if ($newModelId !== '') {
                 return $this->responseHelper->command(
-                    CommandFactory::feishuSendText($chatId, "♻️ **会话已重置并切换模型**\n\n当前模型已切到 `{$newModelId}`，下一条消息会以这个模型启动全新 Codex Thread。")
+                    $this->replyText($chatId, "♻️ **会话已重置并切换模型**\n\n当前模型已切到 `{$newModelId}`，下一条消息会以这个模型启动全新 Codex Thread。")
                 );
             }
 
             return $this->responseHelper->command(
-                CommandFactory::feishuSendText($chatId, "♻️ **会话已重置**\n\n发送任意指令将开启全新 Codex Thread。")
+                $this->replyText($chatId, "♻️ **会话已重置**\n\n发送任意指令将开启全新 Codex Thread。")
             );
         }
 
@@ -788,7 +818,7 @@ final class FeishuCommandRouter
 
         $this->clearSelectionScope($chatId);
         if (!$project) {
-            return $this->responseHelper->command(CommandFactory::feishuSendText($chatId, '⚠️ 请先创建项目、绑定项目，或切换到一个项目。'));
+            return $this->responseHelper->command($this->replyText($chatId, '⚠️ 请先创建项目、绑定项目，或切换到一个项目。'));
         }
 
         $activeThreadId = $this->contextHelper->preferredThreadId($project);
@@ -804,7 +834,7 @@ final class FeishuCommandRouter
 
         $streamId = $res['stream_id'];
         $commands = [
-            CommandFactory::feishuSendMarkdown($chatId, "⚙️ **任务已启动...**\n\n> {$text}", $streamId),
+            $this->replyMarkdown($chatId, "⚙️ **任务已启动...**\n\n> {$text}", $streamId, 0, $res['creation']),
         ];
 
         if (!$activeThreadId) {
@@ -829,7 +859,7 @@ final class FeishuCommandRouter
     {
         if (!$project) {
             return $this->responseHelper->command(
-                CommandFactory::feishuSendMarkdown(
+                $this->replyMarkdown(
                     $chatId,
                     "⚠️ **当前聊天还没有主项目**\n\n可以使用 `/projects` 查看绑定项目，或使用 `/create <project_key>` 新建项目。",
                     '',
@@ -854,7 +884,7 @@ final class FeishuCommandRouter
             $md .= "• **待验证 Thread**: `" . $pendingSelection['thread_id'] . "`\n";
         }
 
-        return $this->responseHelper->command(CommandFactory::feishuSendMarkdown($chatId, $md, '', JSON_UNESCAPED_UNICODE));
+        return $this->responseHelper->command($this->replyMarkdown($chatId, $md, '', JSON_UNESCAPED_UNICODE));
     }
 
     private function renderWorkerStatusMarkdown(array $snapshot): string
@@ -920,7 +950,7 @@ final class FeishuCommandRouter
         $targetProject = $this->projectRepo->findByProjectKey($projectKey);
         if (!$targetProject) {
             return $this->responseHelper->command(
-                CommandFactory::feishuSendMarkdown(
+                $this->replyMarkdown(
                     $chatId,
                     "⚠️ **项目不存在**\n\n没有找到项目：`{$projectKey}`",
                     '',
@@ -943,16 +973,16 @@ final class FeishuCommandRouter
             "• **工作目录**: `{$cwd}`\n\n" .
             "接下来你直接发任务，就会在这个项目上下文里继续。";
 
-        return $this->responseHelper->command(CommandFactory::feishuSendMarkdown($chatId, $md, '', JSON_UNESCAPED_UNICODE));
+        return $this->responseHelper->command($this->replyMarkdown($chatId, $md, '', JSON_UNESCAPED_UNICODE));
     }
 
     private function showCurrentThread(?array $project, string $chatId, string $sender, array $payload): array
     {
         if (!$project) {
-            return $this->responseHelper->command(CommandFactory::feishuSendText($chatId, '⚠️ 当前群尚未绑定项目，无法读取 Codex thread。'));
+            return $this->responseHelper->command($this->replyText($chatId, '⚠️ 当前群尚未绑定项目，无法读取 Codex thread。'));
         }
         if (!$this->contextHelper->preferredThreadId($project)) {
-            return $this->responseHelper->command(CommandFactory::feishuSendMarkdown($chatId, $this->threadViewHelper->missingThreadHint()));
+            return $this->responseHelper->command($this->replyMarkdown($chatId, $this->threadViewHelper->missingThreadHint()));
         }
 
         $threadReadPrompt = '读取当前 thread 详情（name、preview、时间戳等轻量信息）';
@@ -970,7 +1000,7 @@ final class FeishuCommandRouter
 
         $streamId = $res['stream_id'];
         return $this->responseHelper->commands([
-            CommandFactory::feishuSendMarkdown($chatId, "🧵 **正在读取当前 Thread...**\n\n> {$activeThreadId}", $streamId),
+            $this->replyMarkdown($chatId, "🧵 **正在读取当前 Thread...**\n\n> {$activeThreadId}", $streamId, 0, $res['creation']),
             CommandFactory::codexRpcCall('thread/read', [
                 'threadId' => $activeThreadId,
             ], $streamId),
@@ -980,39 +1010,39 @@ final class FeishuCommandRouter
     private function showThreadLatest(?array $project, string $chatId): array
     {
         if (!$project) {
-            return $this->responseHelper->command(CommandFactory::feishuSendText($chatId, '⚠️ 当前群尚未绑定项目，无法查看最近任务。'));
+            return $this->responseHelper->command($this->replyText($chatId, '⚠️ 当前群尚未绑定项目，无法查看最近任务。'));
         }
         $threadId = $this->contextHelper->preferredThreadId($project) ?? '';
         if ($threadId === '') {
-            return $this->responseHelper->command(CommandFactory::feishuSendMarkdown($chatId, $this->threadViewHelper->missingThreadHint()));
+            return $this->responseHelper->command($this->replyMarkdown($chatId, $this->threadViewHelper->missingThreadHint()));
         }
         $latest = $this->threadViewHelper->latestThreadTask($this->taskRepo, $threadId);
         $md = $latest
             ? $this->threadViewHelper->renderThreadLatest($latest, $threadId)
             : "🕘 **当前 Thread 最近任务**\n\n• **Thread**: `{$threadId}`\n\n本地还没有记录到这个 thread 的任务历史。";
-        return $this->responseHelper->command(CommandFactory::feishuSendMarkdown($chatId, $md, '', JSON_UNESCAPED_UNICODE));
+        return $this->responseHelper->command($this->replyMarkdown($chatId, $md, '', JSON_UNESCAPED_UNICODE));
     }
 
     private function showThreadRecent(?array $project, string $chatId): array
     {
         if (!$project) {
-            return $this->responseHelper->command(CommandFactory::feishuSendText($chatId, '⚠️ 当前群尚未绑定项目，无法查看最近任务。'));
+            return $this->responseHelper->command($this->replyText($chatId, '⚠️ 当前群尚未绑定项目，无法查看最近任务。'));
         }
         $threadId = $this->contextHelper->preferredThreadId($project) ?? '';
         if ($threadId === '') {
-            return $this->responseHelper->command(CommandFactory::feishuSendMarkdown($chatId, $this->threadViewHelper->missingThreadHint()));
+            return $this->responseHelper->command($this->replyMarkdown($chatId, $this->threadViewHelper->missingThreadHint()));
         }
         $recent = $this->threadViewHelper->recentThreadTasks($this->taskRepo, $threadId, 3);
         $md = $recent
             ? $this->threadViewHelper->renderThreadRecent($recent, $threadId)
             : "🕘 **当前 Thread 最近几次任务**\n\n• **Thread**: `{$threadId}`\n\n本地还没有记录到这个 thread 的最近任务历史。";
-        return $this->responseHelper->command(CommandFactory::feishuSendMarkdown($chatId, $md, '', JSON_UNESCAPED_UNICODE));
+        return $this->responseHelper->command($this->replyMarkdown($chatId, $md, '', JSON_UNESCAPED_UNICODE));
     }
 
     private function selectLatestThread(?array $project, string $chatId, string $sender, array $payload): array
     {
         if (!$project) {
-            return $this->responseHelper->command(CommandFactory::feishuSendText($chatId, '⚠️ 当前群尚未绑定项目，无法切换 Codex thread。'));
+            return $this->responseHelper->command($this->replyText($chatId, '⚠️ 当前群尚未绑定项目，无法切换 Codex thread。'));
         }
 
         $res = $this->streamService->createStreamTask([
@@ -1029,7 +1059,7 @@ final class FeishuCommandRouter
         $cwd = ($project['current_cwd'] ?? '') ?: ($project['repo_path'] ?? '');
 
         return $this->responseHelper->commands([
-            CommandFactory::feishuSendMarkdown($chatId, '🧭 **正在读取最近一个 Codex Thread...**', $streamId),
+            $this->replyMarkdown($chatId, '🧭 **正在读取最近一个 Codex Thread...**', $streamId, 0, $res['creation']),
             CommandFactory::codexRpcCall('thread/list', [
                 'limit' => 1,
                 'cwd' => $cwd,
@@ -1045,7 +1075,7 @@ final class FeishuCommandRouter
         array $payload
     ): array {
         if (!$project) {
-            return $this->responseHelper->command(CommandFactory::feishuSendText($chatId, '⚠️ 当前群尚未绑定项目，无法切换 Codex thread。'));
+            return $this->responseHelper->command($this->replyText($chatId, '⚠️ 当前群尚未绑定项目，无法切换 Codex thread。'));
         }
 
         $this->contextHelper->createPendingThreadSelection(
@@ -1062,13 +1092,13 @@ final class FeishuCommandRouter
             "• **项目简介**: {$project['name']}\n" .
             "• **工作目录**: `" . (($project['current_cwd'] ?? '') ?: ($project['repo_path'] ?? '')) . "`\n\n" .
             "下一次你直接发任务，或发送 `/thread` 时，我们会先尝试恢复这个线程；只有恢复成功后，才会正式绑定为当前会话。";
-        return $this->responseHelper->command(CommandFactory::feishuSendMarkdown($chatId, $md, '', JSON_UNESCAPED_UNICODE));
+        return $this->responseHelper->command($this->replyMarkdown($chatId, $md, '', JSON_UNESCAPED_UNICODE));
     }
 
     private function showCurrentModel(?array $project, string $chatId): array
     {
         if (!$project) {
-            return $this->responseHelper->command(CommandFactory::feishuSendText($chatId, '⚠️ 当前群尚未绑定项目，无法查看当前模型。'));
+            return $this->responseHelper->command($this->replyText($chatId, '⚠️ 当前群尚未绑定项目，无法查看当前模型。'));
         }
 
         $currentModel = trim((string) ($project['current_model'] ?? ''));
@@ -1076,13 +1106,13 @@ final class FeishuCommandRouter
             "• **项目**: `{$project['project_key']}`\n" .
             "• **模型**: `" . ($currentModel !== '' ? $currentModel : self::DEFAULT_MODEL) . "`\n\n" .
             "可以使用 `/model <model_id>` 切换默认模型。";
-        return $this->responseHelper->command(CommandFactory::feishuSendMarkdown($chatId, $md, '', JSON_UNESCAPED_UNICODE));
+        return $this->responseHelper->command($this->replyMarkdown($chatId, $md, '', JSON_UNESCAPED_UNICODE));
     }
 
     private function selectModel(string $modelId, ?array $project, string $chatId): array
     {
         if (!$project) {
-            return $this->responseHelper->command(CommandFactory::feishuSendText($chatId, '⚠️ 当前群尚未绑定项目，无法设置默认模型。'));
+            return $this->responseHelper->command($this->replyText($chatId, '⚠️ 当前群尚未绑定项目，无法设置默认模型。'));
         }
 
         $projectKey = (string) $project['project_key'];
@@ -1092,7 +1122,7 @@ final class FeishuCommandRouter
             "• **项目**: `{$project['project_key']}`\n" .
             "• **模型**: `{$modelId}`\n\n" .
             "当前 thread 已清空；下一条消息会以这个模型启动全新 Codex Thread。";
-        return $this->responseHelper->command(CommandFactory::feishuSendMarkdown($chatId, $md, '', JSON_UNESCAPED_UNICODE));
+        return $this->responseHelper->command($this->replyMarkdown($chatId, $md, '', JSON_UNESCAPED_UNICODE));
     }
 
     private function resetProjectConversationState(string $projectKey): void

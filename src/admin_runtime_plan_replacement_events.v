@@ -51,3 +51,22 @@ fn (mut app App) emit_runtime_plan_replacement_cancel_rejected(result RuntimePla
 		'status':               result.status
 	})
 }
+
+// Event fields belong to the completed publication, never to the current App.
+fn runtime_plan_publication_event_fields(publication RuntimePlanPublication, preview RuntimePlanReplacementPreview) map[string]string {
+	mut fields := {
+		'config_path':          preview.config_path
+		'changed_pipelines':    preview.changed_pipelines.join(',')
+		'diagnostic_codes':     runtime_plan_diagnostic_codes(publication.plan)
+		'diagnostics_count':    '${publication.plan.diagnostics.len}'
+		'unchanged_pipelines':  preview.unchanged_pipelines.join(',')
+		'replacement_strategy': preview.strategy
+	}
+	if preview.strategy == 'lightweight' {
+		fields['reload_transforms'] = preview.reload_transforms.join(',')
+		fields['replacement_allowed'] = '${preview.allowed}'
+	} else {
+		fields['drain_engines'] = preview.drain_engines.join(',')
+	}
+	return fields
+}

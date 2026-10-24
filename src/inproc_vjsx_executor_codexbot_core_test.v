@@ -19,7 +19,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_handles_help_and_task_flow() {
 		help_resp := harness.dispatch_feishu_message('codexbot_ts_help', 'trace_codexbot_ts_help',
 			'chat_codexbot_ts', 'om_codexbot_help', '/help') or { panic(err) }
 		assert help_resp.handled
-		assert help_resp.commands.len == 1
+		codexbot_ts_assert_single_response(help_resp.commands)
 		assert help_resp.commands[0].type_ == 'provider.message.send'
 		assert help_resp.commands[0].provider == 'feishu'
 		assert help_resp.commands[0].text.contains('/project [project_key]')
@@ -27,7 +27,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_handles_help_and_task_flow() {
 		task_resp, _ := harness.start_task('codexbot_ts_task', 'trace_codexbot_ts_task',
 			'chat_codexbot_ts', 'om_codexbot_task', 'please inspect this bug') or { panic(err) }
 		assert task_resp.handled
-		assert task_resp.commands.len == 1
+		codexbot_ts_assert_single_response(task_resp.commands)
 		assert task_resp.commands[0].type_ == 'provider.rpc.call'
 		assert task_resp.commands[0].provider == 'codex'
 		assert task_resp.commands[0].method == 'thread/start'
@@ -52,7 +52,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_handles_codex_callbacks() {
 			panic(err)
 		}
 		assert rpc_resp.handled
-		assert rpc_resp.commands.len == 1
+		codexbot_ts_assert_single_response(rpc_resp.commands)
 		assert rpc_resp.commands[0].type_ == 'provider.rpc.call'
 		assert rpc_resp.commands[0].method == 'turn/start'
 		assert rpc_resp.commands[0].stream_id == stream_id
@@ -78,6 +78,8 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_handles_codex_callbacks() {
 		assert notif_resp.commands[1].type_ == 'stream.append'
 		assert notif_resp.commands[1].stream_id == stream_id
 		assert notif_resp.commands[1].text == 'hello from codex'
+		assert notif_resp.commands[0].metadata['stream_generation'] != ''
+		assert notif_resp.commands[1].metadata['stream_generation'] == notif_resp.commands[0].metadata['stream_generation']
 	})
 }
 
@@ -182,7 +184,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_message_read_after_codex_notif
 			panic(err)
 		}
 		assert notif_resp.handled
-		assert notif_resp.commands.len == 1
+		codexbot_ts_assert_single_response(notif_resp.commands)
 		assert notif_resp.commands[0].type_ == 'provider.rpc.call'
 		assert notif_resp.commands[0].method == 'turn/start'
 		assert notif_resp.commands[0].params.contains('"threadId":"thread_ts_003"')
@@ -226,7 +228,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_and_new_commands_show_s
 			'trace_codexbot_ts_thread_cmd_query', 'chat_codexbot_ts_thread_cmd',
 			'om_codexbot_thread_cmd_query', '/thread') or { panic(err) }
 		assert thread_resp.handled
-		assert thread_resp.commands.len == 1
+		codexbot_ts_assert_single_response(thread_resp.commands)
 		assert thread_resp.commands[0].text.contains('Current thread: `thread_cmd_001`')
 		assert thread_resp.commands[0].text.contains('Last Stream: `' + stream_id + '`')
 		assert thread_resp.commands[0].text.contains('Last Status: `starting_turn`')
@@ -235,7 +237,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_and_new_commands_show_s
 			'trace_codexbot_ts_thread_cmd_new', 'chat_codexbot_ts_thread_cmd',
 			'om_codexbot_thread_cmd_new', '/new') or { panic(err) }
 		assert new_resp.handled
-		assert new_resp.commands.len == 1
+		codexbot_ts_assert_single_response(new_resp.commands)
 		assert new_resp.commands[0].text.contains('**New Conversation**')
 		assert new_resp.commands[0].text.contains('Previous Thread: `thread_cmd_001`')
 	})
@@ -247,7 +249,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_rejects_parallel_task_in_same_
 			'trace_codexbot_ts_busy_first', 'chat_codexbot_ts_busy', 'om_codexbot_busy_first',
 			'first active task') or { panic(err) }
 		assert first_resp.handled
-		assert first_resp.commands.len == 1
+		codexbot_ts_assert_single_response(first_resp.commands)
 		assert first_resp.commands[0].type_ == 'provider.rpc.call'
 		assert first_resp.commands[0].stream_id != ''
 
@@ -255,9 +257,10 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_rejects_parallel_task_in_same_
 			'trace_codexbot_ts_busy_second', 'chat_codexbot_ts_busy', 'om_codexbot_busy_second',
 			'second overlapping task') or { panic(err) }
 		assert second_resp.handled
-		assert second_resp.commands.len == 1
+		codexbot_ts_assert_single_response(second_resp.commands)
 		assert second_resp.commands[0].type_ == 'provider.message.send'
-		assert second_resp.commands[0].stream_id == ''
+		assert second_resp.commands[0].stream_id.starts_with('feishu:reply:')
+		assert second_resp.commands[0].stream_id != first_resp.commands[0].stream_id
 		assert second_resp.commands[0].text.contains('Still working on the previous request.')
 		assert second_resp.commands[0].text.contains('`/cancel`')
 
@@ -275,7 +278,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_dedupes_replayed_feishu_messag
 			'trace_codexbot_ts_dedup_first', 'chat_codexbot_ts_dedup', 'om_codexbot_dedup_same',
 			'dedupe this inbound event') or { panic(err) }
 		assert first_resp.handled
-		assert first_resp.commands.len == 1
+		codexbot_ts_assert_single_response(first_resp.commands)
 		assert first_resp.commands[0].type_ == 'provider.rpc.call'
 		assert first_resp.commands[0].stream_id != ''
 
@@ -301,7 +304,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_dedupes_replayed_feishu_messag
 			panic(err)
 		}
 		assert first_resp.handled
-		assert first_resp.commands.len == 1
+		codexbot_ts_assert_single_response(first_resp.commands)
 		assert first_resp.commands[0].type_ == 'provider.rpc.call'
 		assert first_resp.commands[0].stream_id != ''
 
@@ -322,7 +325,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_dedupes_replayed_feishu_messag
 			'om_codexbot_dedup_event_first', 'dedupe this inbound event by event id',
 			'evt_codexbot_dedup_event', '1710000000') or { panic(err) }
 		assert first_resp.handled
-		assert first_resp.commands.len == 1
+		codexbot_ts_assert_single_response(first_resp.commands)
 		assert first_resp.commands[0].type_ == 'provider.rpc.call'
 		assert first_resp.commands[0].stream_id != ''
 
@@ -342,7 +345,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_scopes_sessions_by_feishu_thre
 			'om_codexbot_thread_scope_first', 'thread A task', 'om_thread_root_A',
 			'om_thread_parent_A') or { panic(err) }
 		assert first_resp.handled
-		assert first_resp.commands.len == 1
+		codexbot_ts_assert_single_response(first_resp.commands)
 		assert first_resp.commands[0].type_ == 'provider.rpc.call'
 		assert first_resp.commands[0].method == 'thread/start'
 		assert first_resp.commands[0].stream_id != ''
@@ -352,7 +355,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_scopes_sessions_by_feishu_thre
 			'om_codexbot_thread_scope_second', 'thread B task', 'om_thread_root_B',
 			'om_thread_parent_B') or { panic(err) }
 		assert second_resp.handled
-		assert second_resp.commands.len == 1
+		codexbot_ts_assert_single_response(second_resp.commands)
 		assert second_resp.commands[0].type_ == 'provider.rpc.call'
 		assert second_resp.commands[0].method == 'thread/start'
 		assert second_resp.commands[0].stream_id != ''
@@ -380,7 +383,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_stale_busy_stream_does_not_blo
 			'trace_codexbot_ts_stale_busy_first', 'chat_codexbot_ts_stale_busy',
 			'om_codexbot_stale_busy_first', 'first task goes stale') or { panic(err) }
 		assert first_resp.handled
-		assert first_resp.commands.len == 1
+		codexbot_ts_assert_single_response(first_resp.commands)
 		assert first_resp.commands[0].type_ == 'provider.rpc.call'
 		time.sleep(5 * time.millisecond)
 
@@ -388,7 +391,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_stale_busy_stream_does_not_blo
 			'trace_codexbot_ts_stale_busy_second', 'chat_codexbot_ts_stale_busy',
 			'om_codexbot_stale_busy_second', 'second task should proceed') or { panic(err) }
 		assert second_resp.handled
-		assert second_resp.commands.len == 1
+		codexbot_ts_assert_single_response(second_resp.commands)
 		assert second_resp.commands[0].type_ == 'provider.rpc.call'
 
 		state_resp := harness.admin_state('trace_codexbot_ts_stale_busy_state',
@@ -406,7 +409,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_busy_guard_stays_within_same_f
 			'om_codexbot_thread_busy_first', 'thread busy first', 'om_thread_busy_root',
 			'om_thread_busy_parent') or { panic(err) }
 		assert first_resp.handled
-		assert first_resp.commands.len == 1
+		codexbot_ts_assert_single_response(first_resp.commands)
 		assert first_resp.commands[0].type_ == 'provider.rpc.call'
 
 		second_resp := harness.dispatch_feishu_thread_message('codexbot_ts_thread_busy_second',
@@ -414,7 +417,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_busy_guard_stays_within_same_f
 			'om_codexbot_thread_busy_second', 'thread busy second', 'om_thread_busy_root',
 			'om_thread_busy_parent_2') or { panic(err) }
 		assert second_resp.handled
-		assert second_resp.commands.len == 1
+		codexbot_ts_assert_single_response(second_resp.commands)
 		assert second_resp.commands[0].type_ == 'provider.message.send'
 		assert second_resp.commands[0].target_type == 'message_id'
 		assert second_resp.commands[0].target == 'om_codexbot_thread_busy_second'

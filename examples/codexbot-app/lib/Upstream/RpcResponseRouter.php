@@ -93,6 +93,7 @@ final class RpcResponseRouter
 
     private function handleError(string $method, array $resultData, string $streamId): array
     {
+        $binding = $this->streamRepo->findByStreamId($streamId);
         $taskId = str_replace('codex:', '', $streamId);
         $errMsg = null;
 
@@ -133,7 +134,7 @@ final class RpcResponseRouter
                 'stream_id' => $streamId,
                 'message_type' => 'interactive',
                 'content' => $this->errorHelper->buildErrorCard($errMsg),
-            ])
+            ], $binding ?? [])
         );
     }
 }

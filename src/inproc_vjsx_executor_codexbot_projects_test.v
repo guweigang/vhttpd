@@ -28,7 +28,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_projects_and_models_commands_u
 
 			'/setting project_root_dir ' + project_root) or { panic(err) }
 		assert setting_resp.handled
-		assert setting_resp.commands.len == 1
+		codexbot_ts_assert_single_response(setting_resp.commands)
 		assert setting_resp.commands[0].text.contains('**Setting Updated**')
 
 		create_alpha := codexbot_ts_dispatch_feishu_message(mut executor, mut app,
@@ -36,7 +36,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_projects_and_models_commands_u
 			'trace_codexbot_ts_projects_models_create_alpha', 'chat_codexbot_ts_projects_models',
 			'om_codexbot_ts_projects_models_create_alpha', '/create alpha') or { panic(err) }
 		assert create_alpha.handled
-		assert create_alpha.commands.len == 1
+		codexbot_ts_assert_single_response(create_alpha.commands)
 		assert create_alpha.commands[0].text.contains('**Project Created**')
 		assert create_alpha.commands[0].text.contains('Project: `alpha`')
 
@@ -45,7 +45,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_projects_and_models_commands_u
 			'chat_codexbot_ts_projects_models', 'om_codexbot_ts_projects_models_bind_beta',
 			'/bind beta') or { panic(err) }
 		assert bind_beta.handled
-		assert bind_beta.commands.len == 1
+		codexbot_ts_assert_single_response(bind_beta.commands)
 		assert bind_beta.commands[0].text.contains('Project: `beta`')
 
 		alpha_task, alpha_stream_id := codexbot_ts_start_task(mut executor, mut app,
@@ -105,7 +105,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_projects_and_models_commands_u
 			panic(err)
 		}
 		assert projects_resp.handled
-		assert projects_resp.commands.len == 1
+		codexbot_ts_assert_single_response(projects_resp.commands)
 		assert projects_resp.commands[0].text.contains('**Projects**')
 		assert projects_resp.commands[0].text.contains('Chat: `chat_codexbot_ts_projects_models`')
 		assert projects_resp.commands[0].text.contains('alpha')
@@ -117,7 +117,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_projects_and_models_commands_u
 			panic(err)
 		}
 		assert use_project_resp.handled
-		assert use_project_resp.commands.len == 1
+		codexbot_ts_assert_single_response(use_project_resp.commands)
 		assert use_project_resp.commands[0].text.contains('Project: `alpha`')
 
 		use_project_resp_2 := codexbot_ts_dispatch_feishu_message(mut executor, mut app,
@@ -125,7 +125,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_projects_and_models_commands_u
 			'chat_codexbot_ts_projects_models', 'om_codexbot_ts_projects_use_beta_again',
 			'/use beta') or { panic(err) }
 		assert use_project_resp_2.handled
-		assert use_project_resp_2.commands.len == 1
+		codexbot_ts_assert_single_response(use_project_resp_2.commands)
 		assert use_project_resp_2.commands[0].text.contains('Project: `beta`')
 
 		models_resp := codexbot_ts_dispatch_feishu_message(mut executor, mut app,
@@ -134,7 +134,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_projects_and_models_commands_u
 			panic(err)
 		}
 		assert models_resp.handled
-		assert models_resp.commands.len == 1
+		codexbot_ts_assert_single_response(models_resp.commands)
 		assert models_resp.commands[0].text.contains('**Configured Models**')
 		assert models_resp.commands[0].text.contains('`gpt-5.4` current')
 		assert models_resp.commands[0].text.contains('gpt-5.3-codex')
@@ -154,7 +154,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_projects_and_models_commands_u
 				'chat_codexbot_ts_projects_models', 'om_codexbot_ts_models_use')
 		}) or { panic(err) }
 		assert use_model_resp.handled
-		assert use_model_resp.commands.len == 1
+		codexbot_ts_assert_single_response(use_model_resp.commands)
 		assert use_model_resp.commands[0].text.contains('**Model Updated**')
 		assert use_model_resp.commands[0].text.contains('`gpt-5.3-codex`')
 
@@ -173,7 +173,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_projects_and_models_commands_u
 				'chat_codexbot_ts_projects_models', 'om_codexbot_ts_models_use_default_again')
 		}) or { panic(err) }
 		assert use_model_resp_2.handled
-		assert use_model_resp_2.commands.len == 1
+		codexbot_ts_assert_single_response(use_model_resp_2.commands)
 		assert use_model_resp_2.commands[0].text.contains('**Model Updated**')
 		assert use_model_resp_2.commands[0].text.contains('`gpt-5.4`')
 
@@ -192,7 +192,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_projects_and_models_commands_u
 				'om_codexbot_ts_projects_scope_clear')
 		}) or { panic(err) }
 		assert current_project_resp.handled
-		assert current_project_resp.commands.len == 1
+		codexbot_ts_assert_single_response(current_project_resp.commands)
 		assert current_project_resp.commands[0].text.contains('**Current Project**')
 
 		use_after_scope_cleared := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
@@ -245,7 +245,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_projects_and_models_commands_u
 				'chat_codexbot_ts_projects_models', 'om_codexbot_ts_model_applied_task')
 		}) or { panic(err) }
 		assert next_task.handled
-		assert next_task.commands.len == 1
+		codexbot_ts_assert_single_response(next_task.commands)
 		assert next_task.commands[0].method == 'turn/start'
 		assert next_task.commands[0].params.contains('"model":"gpt-5.4"')
 		assert next_task.commands[0].params.contains('"threadId":"alpha"')
@@ -281,7 +281,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_new_command_can_switch_model_a
 			panic(err)
 		}
 		assert reset_resp.handled
-		assert reset_resp.commands.len == 1
+		codexbot_ts_assert_single_response(reset_resp.commands)
 		assert reset_resp.commands[0].text.contains('**New Conversation**')
 		assert reset_resp.commands[0].text.contains('Previous Thread: `thread_new_model_001`')
 		assert reset_resp.commands[0].text.contains('Model switched: `gpt-5.4` -> `gpt-5.3-codex`')
@@ -292,7 +292,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_new_command_can_switch_model_a
 			panic(err)
 		}
 		assert thread_resp.handled
-		assert thread_resp.commands.len == 1
+		codexbot_ts_assert_single_response(thread_resp.commands)
 		assert thread_resp.commands[0].text.contains('No thread is currently bound.')
 
 		model_resp := codexbot_ts_dispatch_feishu_message(mut executor, mut app,
@@ -301,7 +301,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_new_command_can_switch_model_a
 			panic(err)
 		}
 		assert model_resp.handled
-		assert model_resp.commands.len == 1
+		codexbot_ts_assert_single_response(model_resp.commands)
 		assert model_resp.commands[0].text.contains('**Current Model**')
 		assert model_resp.commands[0].text.contains('`gpt-5.3-codex`')
 	})
@@ -331,7 +331,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_create_import_and_bind_project
 
 			'/setting project_root_dir ' + project_root) or { panic(err) }
 		assert setting_resp.handled
-		assert setting_resp.commands.len == 1
+		codexbot_ts_assert_single_response(setting_resp.commands)
 		assert setting_resp.commands[0].text.contains('**Setting Updated**')
 		assert setting_resp.commands[0].text.contains('`project_root_dir` = `' + project_root + '`')
 
@@ -341,7 +341,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_create_import_and_bind_project
 			panic(err)
 		}
 		assert create_resp.handled
-		assert create_resp.commands.len == 1
+		codexbot_ts_assert_single_response(create_resp.commands)
 		assert create_resp.commands[0].text.contains('**Project Created**')
 		assert create_resp.commands[0].text.contains('Project: `alpha`')
 		assert create_resp.commands[0].text.contains(os.join_path(project_root, 'alpha'))
@@ -350,9 +350,9 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_create_import_and_bind_project
 		import_resp := codexbot_ts_dispatch_feishu_message(mut executor, mut app,
 			'codexbot_ts_import_project', 'trace_codexbot_ts_import_project',
 			'chat_codexbot_ts_project_registry', 'om_codexbot_ts_import_project', '/import beta ' +
-			import_root) or { panic(err) }
+				import_root) or { panic(err) }
 		assert import_resp.handled
-		assert import_resp.commands.len == 1
+		codexbot_ts_assert_single_response(import_resp.commands)
 		assert import_resp.commands[0].text.contains('**Command Updated**')
 		assert import_resp.commands[0].text.contains('/import')
 		assert import_resp.commands[0].text.contains('/bind [project_key] [path]')
@@ -372,7 +372,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_create_import_and_bind_project
 				'chat_codexbot_ts_project_registry', 'om_codexbot_ts_bind_import_project')
 		}) or { panic(err) }
 		assert bind_import_resp.handled
-		assert bind_import_resp.commands.len == 1
+		codexbot_ts_assert_single_response(bind_import_resp.commands)
 		assert bind_import_resp.commands[0].text.contains('Project: `beta`')
 		assert bind_import_resp.commands[0].text.contains(import_root)
 
@@ -391,7 +391,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_create_import_and_bind_project
 				'chat_codexbot_ts_project_registry', 'om_codexbot_ts_switch_to_alpha')
 		}) or { panic(err) }
 		assert switch_resp.handled
-		assert switch_resp.commands.len == 1
+		codexbot_ts_assert_single_response(switch_resp.commands)
 		assert switch_resp.commands[0].text.contains('Project: `alpha`')
 
 		bind_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
@@ -409,7 +409,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_create_import_and_bind_project
 				'chat_codexbot_ts_project_registry', 'om_codexbot_ts_bind_beta')
 		}) or { panic(err) }
 		assert bind_resp.handled
-		assert bind_resp.commands.len == 1
+		codexbot_ts_assert_single_response(bind_resp.commands)
 		assert bind_resp.commands[0].text.contains('**Import Path Invalid**')
 		assert bind_resp.commands[0].text.contains(os.join_path(project_root, 'beta'))
 
@@ -428,7 +428,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_create_import_and_bind_project
 				'chat_codexbot_ts_project_registry', 'om_codexbot_ts_project_current')
 		}) or { panic(err) }
 		assert current_resp.handled
-		assert current_resp.commands.len == 1
+		codexbot_ts_assert_single_response(current_resp.commands)
 		assert current_resp.commands[0].text.contains('**Current Project**')
 		assert current_resp.commands[0].text.contains('Project: `alpha`')
 
@@ -447,7 +447,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_create_import_and_bind_project
 				'chat_codexbot_ts_project_registry', 'om_codexbot_ts_project_list')
 		}) or { panic(err) }
 		assert projects_resp.handled
-		assert projects_resp.commands.len == 1
+		codexbot_ts_assert_single_response(projects_resp.commands)
 		assert projects_resp.commands[0].text.contains('`alpha` current')
 		assert projects_resp.commands[0].text.contains('beta')
 
@@ -492,7 +492,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_unbind_blocks_current_project_
 			'codexbot_ts_unbind_setting_project_root',
 			'trace_codexbot_ts_unbind_setting_project_root', 'chat_codexbot_ts_unbind',
 			'om_codexbot_ts_unbind_setting_project_root', '/setting project_root_dir ' +
-			project_root) or { panic(err) }
+				project_root) or { panic(err) }
 
 		create_resp := codexbot_ts_dispatch_feishu_message(mut executor, mut app,
 			'codexbot_ts_unbind_create_alpha', 'trace_codexbot_ts_unbind_create_alpha',
@@ -516,7 +516,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_unbind_blocks_current_project_
 			panic(err)
 		}
 		assert blocked_resp.handled
-		assert blocked_resp.commands.len == 1
+		codexbot_ts_assert_single_response(blocked_resp.commands)
 		assert blocked_resp.commands[0].text.contains('**Cannot Unbind Current Project**')
 		assert blocked_resp.commands[0].text.contains('Project: `alpha`')
 
@@ -524,7 +524,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_unbind_blocks_current_project_
 			'codexbot_ts_unbind_beta', 'trace_codexbot_ts_unbind_beta', 'chat_codexbot_ts_unbind',
 			'om_codexbot_ts_unbind_beta', '/unbind beta') or { panic(err) }
 		assert unbind_resp.handled
-		assert unbind_resp.commands.len == 1
+		codexbot_ts_assert_single_response(unbind_resp.commands)
 		assert unbind_resp.commands[0].text.contains('**Project Unbound**')
 		assert unbind_resp.commands[0].text.contains('Project: `beta`')
 
@@ -534,7 +534,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_unbind_blocks_current_project_
 			panic(err)
 		}
 		assert projects_resp.handled
-		assert projects_resp.commands.len == 1
+		codexbot_ts_assert_single_response(projects_resp.commands)
 		assert projects_resp.commands[0].text.contains('`alpha` current')
 		assert !projects_resp.commands[0].text.contains('`beta`')
 	})
@@ -612,7 +612,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_projects_self_heal_legacy_bind
 				'chat_codexbot_ts_legacy_projects', 'om_codexbot_ts_legacy_bindings_create_alpha')
 		}) or { panic(err) }
 		assert create_resp.handled
-		assert create_resp.commands.len == 1
+		codexbot_ts_assert_single_response(create_resp.commands)
 		assert create_resp.commands[0].text.contains('Project: `alpha`')
 
 		mutator_resp := mutator.dispatch_http(mut app, exec.HttpLogicDispatchRequest{
@@ -645,7 +645,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_projects_self_heal_legacy_bind
 				'om_codexbot_ts_legacy_bindings_project_current')
 		}) or { panic(err) }
 		assert current_resp.handled
-		assert current_resp.commands.len == 1
+		codexbot_ts_assert_single_response(current_resp.commands)
 		assert current_resp.commands[0].text.contains('Project: `alpha`')
 
 		projects_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
@@ -663,7 +663,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_projects_self_heal_legacy_bind
 				'chat_codexbot_ts_legacy_projects', 'om_codexbot_ts_legacy_bindings_projects')
 		}) or { panic(err) }
 		assert projects_resp.handled
-		assert projects_resp.commands.len == 1
+		codexbot_ts_assert_single_response(projects_resp.commands)
 		assert projects_resp.commands[0].text.contains('**Projects**')
 		assert projects_resp.commands[0].text.contains('`alpha` current')
 		assert !projects_resp.commands[0].text.contains('No bound projects yet')
@@ -719,7 +719,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_create_and_bind_failure_paths(
 			panic(err)
 		}
 		assert create_alpha_again.handled
-		assert create_alpha_again.commands.len == 1
+		codexbot_ts_assert_single_response(create_alpha_again.commands)
 		assert create_alpha_again.commands[0].text.contains('**Project Exists**')
 		assert create_alpha_again.commands[0].text.contains('Project: `alpha`')
 		assert create_alpha_again.commands[0].text.contains(os.join_path(project_root, 'alpha'))
@@ -730,7 +730,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_create_and_bind_failure_paths(
 			'chat_codexbot_ts_create_bind_failures',
 			'om_codexbot_ts_create_bind_failures_create_gamma', '/create gamma') or { panic(err) }
 		assert create_gamma.handled
-		assert create_gamma.commands.len == 1
+		codexbot_ts_assert_single_response(create_gamma.commands)
 		assert create_gamma.commands[0].text.contains('**Project Directory Exists**')
 		assert create_gamma.commands[0].text.contains('Project: `gamma`')
 		assert create_gamma.commands[0].text.contains(os.join_path(project_root, 'gamma'))
@@ -743,7 +743,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_create_and_bind_failure_paths(
 			panic(err)
 		}
 		assert bind_beta.handled
-		assert bind_beta.commands.len == 1
+		codexbot_ts_assert_single_response(bind_beta.commands)
 		assert bind_beta.commands[0].text.contains('Project: `beta`')
 		assert bind_beta.commands[0].text.contains(explicit_bind_root)
 
@@ -752,9 +752,9 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_create_and_bind_failure_paths(
 			'trace_codexbot_ts_create_bind_failures_bind_beta_again',
 			'chat_codexbot_ts_create_bind_failures',
 			'om_codexbot_ts_create_bind_failures_bind_beta_again', '/bind beta ' +
-			explicit_bind_root) or { panic(err) }
+				explicit_bind_root) or { panic(err) }
 		assert bind_beta_again.handled
-		assert bind_beta_again.commands.len == 1
+		codexbot_ts_assert_single_response(bind_beta_again.commands)
 		assert bind_beta_again.commands[0].text.contains('**Project Path Already Bound**')
 		assert bind_beta_again.commands[0].text.contains('Project: `beta`')
 		assert bind_beta_again.commands[0].text.contains(explicit_bind_root)
@@ -767,7 +767,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_create_and_bind_failure_paths(
 			panic(err)
 		}
 		assert bind_missing.handled
-		assert bind_missing.commands.len == 1
+		codexbot_ts_assert_single_response(bind_missing.commands)
 		assert bind_missing.commands[0].text.contains('**Import Path Invalid**')
 		assert bind_missing.commands[0].text.contains(missing_bind_root)
 	})
@@ -794,7 +794,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_settings_command_controls_proj
 			panic(err)
 		}
 		assert empty_resp.handled
-		assert empty_resp.commands.len == 1
+		codexbot_ts_assert_single_response(empty_resp.commands)
 		assert empty_resp.commands[0].text.contains('**Settings**')
 		assert empty_resp.commands[0].text.contains('No settings configured yet.')
 
@@ -804,7 +804,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_settings_command_controls_proj
 			panic(err)
 		}
 		assert create_without_setting.handled
-		assert create_without_setting.commands.len == 1
+		codexbot_ts_assert_single_response(create_without_setting.commands)
 		assert create_without_setting.commands[0].text.contains('**Project Root Missing**')
 
 		setting_resp := codexbot_ts_dispatch_feishu_message(mut executor, mut app,
@@ -813,7 +813,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_settings_command_controls_proj
 
 			'/setting project_root_dir ' + project_root) or { panic(err) }
 		assert setting_resp.handled
-		assert setting_resp.commands.len == 1
+		codexbot_ts_assert_single_response(setting_resp.commands)
 		assert setting_resp.commands[0].text.contains('`project_root_dir` = `' + project_root + '`')
 
 		list_resp := codexbot_ts_dispatch_feishu_message(mut executor, mut app,
@@ -822,7 +822,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_settings_command_controls_proj
 			panic(err)
 		}
 		assert list_resp.handled
-		assert list_resp.commands.len == 1
+		codexbot_ts_assert_single_response(list_resp.commands)
 		assert list_resp.commands[0].text.contains('**Current Settings**')
 		assert list_resp.commands[0].text.contains('`project_root_dir` = `' + project_root + '`')
 
@@ -832,7 +832,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_settings_command_controls_proj
 			panic(err)
 		}
 		assert create_resp.handled
-		assert create_resp.commands.len == 1
+		codexbot_ts_assert_single_response(create_resp.commands)
 		assert create_resp.commands[0].text.contains('**Project Created**')
 		assert create_resp.commands[0].text.contains('Project: `gamma`')
 		assert os.is_dir(os.join_path(project_root, 'gamma'))
@@ -925,7 +925,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_instances_command_normalizes_l
 				'chat_codexbot_ts_instances_legacy_alias', 'om_codexbot_ts_instances_legacy_alias')
 		}) or { panic(err) }
 		assert resp.handled
-		assert resp.commands.len == 1
+		codexbot_ts_assert_single_response(resp.commands)
 		assert resp.commands[0].content.contains('**Codex Instances**')
 		assert resp.commands[0].content.contains('`main`')
 		assert resp.commands[0].content.contains('`local4501`')

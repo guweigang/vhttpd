@@ -1,6 +1,6 @@
 module executor
 
-import json
+import json2 as json
 import vjsx
 
 fn InProcVjsxHostApi.bridge_dispatch_builder(mut state VjsxExecutorState, idx int) vjsx.HostValueBuilder {
@@ -13,30 +13,31 @@ fn InProcVjsxHostApi.bridge_dispatch_builder(mut state VjsxExecutorState, idx in
 			if raw == '' {
 				return ctx.js_string('')
 			}
-			req := json.decode(InProcVjsxHostBridgeDispatchRequest, raw) or {
+			req := json.decode[InProcVjsxHostBridgeDispatchRequest](raw) or {
 				return ctx.js_string(json.encode(FeishuCardBridgeResult{
 					error: 'invalid_bridge_dispatch_request'
-				}))
+				}, escape_unicode: true, time_as_unix: true))
 			}
-			mut app_ref := AppFacade(unsafe { nil })
-			mut request_trace_id := ''
-			state.mu.@lock()
-			if idx >= 0 && idx < state.hosts.len && state.hosts[idx].request_ctx.active {
-				app_ref = state.hosts[idx].request_ctx.app
-				request_trace_id = state.hosts[idx].request_ctx.trace_id
-			}
-			state.mu.unlock()
-			if isnil(app_ref) {
+			access := state.request_host(idx, .request_only) or {
 				return ctx.js_string(json.encode(FeishuCardBridgeResult{
 					error: 'bridge_dispatch_app_missing'
-				}))
+				}, escape_unicode: true, time_as_unix: true))
 			}
-			mut app := app_ref
+			mut app := access.host
+			request_trace_id := access.context.trace_id
 			summary := FeishuRuntimeEventSummary.from_payload(req.payload)
-			trace_id := if req.trace_id.trim_space() != '' { req.trace_id } else { request_trace_id }
+			trace_id := if req.trace_id.trim_space() != '' {
+				req.trace_id
+			} else {
+				request_trace_id
+			}
 			result := app.provider_bridge_dispatch_callback('feishu', req.app, trace_id, FeishuRuntimeEventSummary{
 				event_id:        summary.event_id
-				event_kind:      if summary.event_kind != '' { summary.event_kind } else { 'action' }
+				event_kind:      if summary.event_kind != '' {
+					summary.event_kind
+				} else {
+					'action'
+				}
 				event_type:      if req.event_type.trim_space() != '' {
 					req.event_type
 				} else {
@@ -62,9 +63,9 @@ fn InProcVjsxHostApi.bridge_dispatch_builder(mut state VjsxExecutorState, idx in
 			}, req.payload) or {
 				return ctx.js_string(json.encode(FeishuCardBridgeResult{
 					error: err.msg()
-				}))
+				}, escape_unicode: true, time_as_unix: true))
 			}
-			return ctx.js_string(json.encode(result))
+			return ctx.js_string(json.encode(result, escape_unicode: true, time_as_unix: true))
 		})
 	}
 }
@@ -79,27 +80,17 @@ fn InProcVjsxHostApi.websocket_dispatch_builder(mut state VjsxExecutorState, idx
 			if raw == '' {
 				return ctx.js_string('')
 			}
-			req := json.decode(InProcVjsxHostWebSocketDispatchRequest, raw) or {
+			req := json.decode[InProcVjsxHostWebSocketDispatchRequest](raw) or {
 				return ctx.js_string(json.encode(InProcVjsxHostWebSocketDispatchResponse{
 					error: 'invalid_websocket_dispatch_request'
-				}))
+				}, escape_unicode: true, time_as_unix: true))
 			}
-			mut app_ref := AppFacade(unsafe { nil })
-			state.mu.@lock()
-			if idx >= 0 && idx < state.hosts.len {
-				if state.hosts[idx].request_ctx.active {
-					app_ref = state.hosts[idx].request_ctx.app
-				} else {
-					app_ref = state.hosts[idx].app_ref
-				}
-			}
-			state.mu.unlock()
-			if isnil(app_ref) {
+			access := state.request_host(idx, .lane) or {
 				return ctx.js_string(json.encode(InProcVjsxHostWebSocketDispatchResponse{
 					error: 'websocket_dispatch_app_missing'
-				}))
+				}, escape_unicode: true, time_as_unix: true))
 			}
-			mut app := app_ref
+			mut app := access.host
 			result := app.execute_websocket_dispatch_commands_result(req.commands)
 			if result.has_close {
 				return ctx.js_string(json.encode(InProcVjsxHostWebSocketDispatchResponse{
@@ -113,12 +104,12 @@ fn InProcVjsxHostApi.websocket_dispatch_builder(mut state VjsxExecutorState, idx
 						result.close_frame.id
 					}
 					failures:        result.failures
-				}))
+				}, escape_unicode: true, time_as_unix: true))
 			}
 			return ctx.js_string(json.encode(InProcVjsxHostWebSocketDispatchResponse{
 				ok:       true
 				failures: result.failures
-			}))
+			}, escape_unicode: true, time_as_unix: true))
 		})
 	}
 }

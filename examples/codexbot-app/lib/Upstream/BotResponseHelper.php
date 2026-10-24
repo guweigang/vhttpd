@@ -11,7 +11,7 @@ final class BotResponseHelper
     public function commands(array $commands): array
     {
         $bus = new CommandBus();
-        foreach ($commands as $command) {
+        foreach (\CodexBot\Service\OneShotReplyService::completeCommands($commands) as $command) {
             $bus->send($command);
         }
 
@@ -31,7 +31,7 @@ final class BotResponseHelper
 
         $commands = $response['commands'] ?? null;
         if (is_array($commands)) {
-            foreach ($commands as $command) {
+            foreach (\CodexBot\Service\OneShotReplyService::completeCommands($commands) as $command) {
                 if (is_array($command)) {
                     $bus->send($command);
                 }

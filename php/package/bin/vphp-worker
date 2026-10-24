@@ -23,12 +23,7 @@ for ($i = 0; $i < 6; $i++) {
 if ($autoload !== null) {
     require_once $autoload;
 } else {
-    require_once __DIR__ . '/../src/VHttpd/PhpWorker/Request.php';
-    require_once __DIR__ . '/../src/VHttpd/PhpWorker/Response.php';
-    require_once __DIR__ . '/../src/VHttpd/PhpWorker/StreamResponse.php';
-    require_once __DIR__ . '/../src/VHttpd/PhpWorker/StreamApp.php';
-    require_once __DIR__ . '/../src/VHttpd/PhpWorker/Server.php';
-    require_once __DIR__ . '/../src/legacy_aliases.php';
+    require_once __DIR__ . '/../autoload.php';
 }
 
 if (!function_exists('vhttpd_stream_sse')) {

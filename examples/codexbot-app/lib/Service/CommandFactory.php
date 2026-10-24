@@ -2,6 +2,8 @@
 
 namespace CodexBot\Service;
 
+use VHttpd\Feishu\CreationLease;
+
 use VHttpd\Upstream\WebSocket\CommandFactory as PackageCommandFactory;
 
 final class CommandFactory {
@@ -30,11 +32,22 @@ final class CommandFactory {
     }
 
     public static function feishuMessageSend(array $payload): array {
-        return self::providerMessageSend('feishu', $payload);
+        if (trim((string) ($payload['stream_id'] ?? '')) === '' || empty($payload['metadata']['stream_generation']) || empty($payload['metadata']['creation_token'])) {
+            throw new \LogicException('Feishu send requires captured creation context');
+        }
+        return ['type' => 'provider.message.send', 'provider' => 'feishu'] + $payload;
     }
 
-    public static function feishuMessageUpdate(array $payload): array {
-        return self::providerMessageUpdate('feishu', $payload);
+    public static function feishuMessageUpdate(array $payload, array $context = []): array {
+        if ($context !== [] && ($context['stream_id'] ?? '') !== ($payload['stream_id'] ?? '')) {
+            throw new \InvalidArgumentException('Update context does not match stream');
+        }
+        $payload['instance'] = $context['stream_instance'] ?? $payload['instance'] ?? 'main';
+        $payload['metadata'] = array_replace($payload['metadata'] ?? [], [
+            'stream_generation' => (string) ($context['stream_generation'] ?? $payload['metadata']['stream_generation'] ?? ''),
+        ]);
+        // Serialize the captured wire command without consulting mutable registries.
+        return ['type' => 'provider.message.update', 'provider' => 'feishu'] + $payload;
     }
 
     public static function feishuStreamAppend(array $payload): array {
@@ -69,7 +82,7 @@ final class CommandFactory {
         return self::feishuStreamFinish($payload);
     }
 
-    public static function feishuSendText(string $chatId, string $text, string $streamId = '', int $jsonFlags = 0): array {
+    public static function feishuSendText(string $chatId, string $text, string $streamId = '', int $jsonFlags = 0, ?CreationLease $creation = null): array {
         $payload = [
             'target_type' => 'chat_id',
             'target' => $chatId,
@@ -79,10 +92,14 @@ final class CommandFactory {
         if ($streamId !== '') {
             $payload['stream_id'] = $streamId;
         }
-        return self::feishuSend($payload);
+        if ($streamId !== '') {
+            if ($creation === null) throw new \LogicException('Stream creation requires captured credentials');
+            return $creation->command(['type' => 'provider.message.send', 'provider' => 'feishu'] + $payload);
+        }
+        throw new \LogicException('Reply creation requires an explicit trusted context');
     }
 
-    public static function feishuSendMarkdown(string $chatId, string $markdown, string $streamId = '', int $jsonFlags = 0): array {
+    public static function feishuSendMarkdown(string $chatId, string $markdown, string $streamId = '', int $jsonFlags = 0, ?CreationLease $creation = null): array {
         $payload = [
             'target_type' => 'chat_id',
             'target' => $chatId,
@@ -96,19 +113,24 @@ final class CommandFactory {
         if ($streamId !== '') {
             $payload['stream_id'] = $streamId;
         }
-        return self::feishuSend($payload);
+        if ($streamId !== '') {
+            if ($creation === null) throw new \LogicException('Stream creation requires captured credentials');
+            return $creation->command(['type' => 'provider.message.send', 'provider' => 'feishu'] + $payload);
+        }
+        throw new \LogicException('Reply creation requires an explicit trusted context');
     }
 
-    public static function feishuUpdateMarkdown(string $streamId, string $markdown, int $jsonFlags = 0): array {
-        return self::feishuUpdate([
-            'stream_id' => $streamId,
+    public static function feishuUpdateMarkdown(array|string $stream, string $markdown, int $jsonFlags = 0): array {
+        $context = is_array($stream) ? $stream : [];
+        return self::feishuMessageUpdate([
+            'stream_id' => is_array($stream) ? (string) ($stream['stream_id'] ?? '') : $stream,
             'message_type' => 'interactive',
             'content' => json_encode([
                 'elements' => [
                     ['tag' => 'markdown', 'content' => $markdown],
                 ],
             ], $jsonFlags),
-        ]);
+        ], $context);
     }
 
     public static function codexRpcSend(string $method, array|string $params, string $streamId): array {
@@ -117,6 +139,10 @@ final class CommandFactory {
 
     public static function codexTurnStart(string $streamId, string $taskType, string $prompt, array $metadata = []): array {
         return self::codexSessionTurnStart($streamId, $taskType, $prompt, $metadata);
+    }
+
+    public static function feishuSessionClear(string $streamId, string $generation, string $instance = 'main'): array {
+        return ['type' => 'session.clear', 'provider' => 'feishu', 'instance' => $instance, 'stream_id' => $streamId, 'metadata' => ['stream_generation' => $generation]];
     }
 
     public static function adminRestartAllWorkers(): array {

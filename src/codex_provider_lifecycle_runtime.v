@@ -29,10 +29,11 @@ fn (mut app App) codex_provider_reconnect_delay_ms(instance string) int {
 }
 
 fn (mut hub ProviderRuntimeHub) codex_provider_on_connecting(instance string) {
-	mut rt := hub.codex_runtime_ensure_instance(instance)
-	log.info('[codex] connecting instance=${rt.instance} to ${rt.url} ...')
-	rt.note_connecting()
-	hub.codex.update(instance, rt)
+	url := hub.codex_runtime_mutate[string](instance, fn (mut rt codex.ProviderRuntime) string {
+		rt.note_connecting()
+		return rt.url
+	})
+	log.info('[codex] connecting instance=${codex.ProviderRuntime.normalize_instance(instance)} to ${url} ...')
 }
 
 fn (mut app App) codex_provider_on_connecting(instance string) {
@@ -41,9 +42,10 @@ fn (mut app App) codex_provider_on_connecting(instance string) {
 
 fn (mut hub ProviderRuntimeHub) codex_provider_on_connected(instance string, ws_url string) {
 	log.info('[codex] ✅ connected instance=${codex.ProviderRuntime.normalize_instance(instance)} to ${ws_url}')
-	mut rt := hub.codex_runtime_ensure_instance(instance)
-	rt.note_connected(ws_url)
-	hub.codex.update(instance, rt)
+	hub.codex_runtime_mutate[bool](instance, fn [ws_url] (mut rt codex.ProviderRuntime) bool {
+		rt.note_connected(ws_url)
+		return true
+	})
 }
 
 fn (mut app App) codex_provider_on_connected(instance string, ws_url string) {
@@ -52,9 +54,10 @@ fn (mut app App) codex_provider_on_connected(instance string, ws_url string) {
 
 fn (mut hub ProviderRuntimeHub) codex_provider_on_disconnected(instance string, reason string) {
 	log.error('[codex] ❌ disconnected instance=${codex.ProviderRuntime.normalize_instance(instance)}: ${reason}')
-	mut rt := hub.codex_runtime_ensure_instance(instance)
-	rt.note_disconnected(reason)
-	hub.codex.update(instance, rt)
+	hub.codex_runtime_mutate[bool](instance, fn [reason] (mut rt codex.ProviderRuntime) bool {
+		rt.note_disconnected(reason)
+		return true
+	})
 
 	// Connections will be cleaned up by PHP as needed or timed out
 }
@@ -101,5 +104,7 @@ fn (mut hub ProviderRuntimeHub) admin_codex_snapshot(db_transport_enabled bool) 
 }
 
 fn (mut app App) admin_codex_snapshot() codex.AdminRuntimeSnapshot {
+	app.mu.@lock()
+	defer { app.mu.unlock() }
 	return app.providers.admin_codex_snapshot(app.transport.db.enabled)
 }

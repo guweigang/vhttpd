@@ -1,6 +1,15 @@
 module main
 
+import worker
+
 fn (mut app App) cancel_runtime_plan_replacement() RuntimePlanReplacementCancelResult {
+	app.begin_runtime_plan_replacement_operation() or {
+		result := RuntimePlanReplacementCancelResult{ status: 'rejected', error: err.msg() }
+		app.emit_runtime_plan_replacement_cancel_rejected(result)
+		app.record_runtime_plan_replacement_cancel(result)
+		return result
+	}
+	defer { app.end_runtime_plan_replacement_operation() }
 	app.mu.@lock()
 	pending := app.replacement.pending
 	app.mu.unlock()
@@ -14,20 +23,20 @@ fn (mut app App) cancel_runtime_plan_replacement() RuntimePlanReplacementCancelR
 		app.record_runtime_plan_replacement_cancel(result)
 		return result
 	}
-	mut resumed := []EngineDrainStatus{}
-	for engine_id in pending.drain_engines {
-		pool := app.resolve_engine_worker_pool(engine_id) or {
-			result := RuntimePlanReplacementCancelResult{
-				cancelled: false
-				status:    'rejected'
-				error:     err.msg()
-				pending:   pending
-				resumed:   resumed
-			}
-			app.emit_runtime_plan_replacement_cancel_rejected(result)
-			app.record_runtime_plan_replacement_cancel(result)
-			return result
+	mut resumed := []worker.DrainStatus{}
+	pools := app.replacement_worker_pools(pending.drain_engines) or {
+		result := RuntimePlanReplacementCancelResult{
+			cancelled: false
+			status:    'rejected'
+			error:     err.msg()
+			pending:   pending
+			resumed:   resumed
 		}
+		app.emit_runtime_plan_replacement_cancel_rejected(result)
+		app.record_runtime_plan_replacement_cancel(result)
+		return result
+	}
+	for pool in pools {
 		status := app.resume_engine(pool) or {
 			result := RuntimePlanReplacementCancelResult{
 				cancelled: false
@@ -43,7 +52,7 @@ fn (mut app App) cancel_runtime_plan_replacement() RuntimePlanReplacementCancelR
 		resumed << status
 	}
 	app.mu.@lock()
-	app.replacement.pending = RuntimePlanReplacementPendingSnapshot{}
+	app.replacement.clear_pending()
 	app.mu.unlock()
 	app.emit('runtime.plan.replacement.cancelled', {
 		'config_path':          pending.config_path

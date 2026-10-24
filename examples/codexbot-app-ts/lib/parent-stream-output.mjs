@@ -20,12 +20,12 @@ export function createParentStreamOutput(deps) {
 
   function openParentStreamCard(stream, streamId = stream?.streamId || "", text = " ") {
     const { target, targetType } = resolveParentTarget(stream);
-    return deps.feishuText(target, text, streamId, targetType);
+    return deps.feishuText(target, text, { ...stream, streamId }, targetType);
   }
 
   function sendStreamText(stream, text, streamId = stream?.streamId || "") {
     const { target, targetType } = resolveParentTarget(stream);
-    return deps.feishuText(target, text, streamId, targetType);
+    return deps.feishuText(target, text, { ...stream, streamId }, targetType);
   }
 
   return {

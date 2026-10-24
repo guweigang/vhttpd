@@ -15,7 +15,7 @@ final class FeishuInboundRouter
     ) {
     }
 
-    public function dispatch(array $payload): ?array
+    public function dispatch(array $payload, array $request = []): ?array
     {
         $eventType = (string) ($payload['header']['event_type'] ?? '');
         $tenantKey = (string) ($payload['header']['tenant_key'] ?? '');
@@ -44,6 +44,6 @@ final class FeishuInboundRouter
             return ['commands' => []];
         }
 
-        return $this->commandRouter->dispatch($text, $project, $chatId, $sender, $payload);
+        return $this->commandRouter->dispatch($text, $project, $chatId, $sender, $payload, (string) ($request['instance'] ?? 'main'));
     }
 }

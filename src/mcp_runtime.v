@@ -19,7 +19,10 @@ fn mcp_handle_post_http(mut app App, mut ctx Context) veb.Result {
 		return mcp_json_response(mut app, mut ctx, method, path, req_id, trace_id, start_ms, 405,
 			'{"error":"Method Not Allowed"}', '', map[string]string{})
 	}
-	if !app.engines.has_socket_workers() {
+	app.mu.@lock()
+	has_workers := app.engines.has_socket_workers()
+	app.mu.unlock()
+	if (headers['mcp-session-id'] or { '' }) == '' && !has_workers {
 		return mcp_json_response(mut app, mut ctx, method, path, req_id, trace_id, start_ms, 501,
 			'{"error":"MCP requires a configured logic executor"}', 'worker_unavailable',
 			map[string]string{})
@@ -39,9 +42,13 @@ fn mcp_handle_post_http(mut app App, mut ctx Context) veb.Result {
 	}
 	request := app.kernel_mcp_dispatch_request(method, transport.normalize_path(path), headers,
 		protocol_version, body, ctx.ip(), req_id, trace_id, headers['mcp-session-id'] or { '' }, app.protocols.mcp.client_capabilities_for_request(headers['mcp-session-id'] or {
-		''
-	}, body))
-	outcome := app.kernel_dispatch_mcp_handled(request) or {
+			''
+		}, body))
+	route := app.mcp_dispatch_route(request.session_id) or {
+		status := if err.msg() == 'mcp_session_unavailable' { 404 } else { 503 }
+		return mcp_json_response(mut app, mut ctx, method, path, req_id, trace_id, start_ms, status, '{"error":"MCP session unavailable"}', err.msg(), {})
+	}
+	outcome := app.kernel_dispatch_mcp_handled_on_route(request, route) or {
 		err_msg := err.msg()
 		failure := kernel_dispatch_transport_failure(err_msg)
 		app.emit('mcp.dispatch.failed', {
@@ -51,40 +58,18 @@ fn mcp_handle_post_http(mut app App, mut ctx Context) veb.Result {
 			'error_detail': err_msg
 		})
 		return mcp_json_response(mut app, mut ctx, method, path, req_id, trace_id, start_ms,
-			failure.status, '{"error":"Bad Gateway"}', failure.error_class, {
-			'error_detail': err_msg
-		})
+			if err_msg == 'mcp_session_unavailable' { 409 } else { failure.status }, '{"error":"Bad Gateway"}', failure.error_class, {
+				'error_detail': err_msg
+			})
 	}
-	mut response := outcome.response
-	mut session_id := response.session_id
-	if session_id == '' {
-		raw_session_id := headers['mcp-session-id'] or { '' }
-		if raw_session_id != '' {
-			session_id = raw_session_id
-		}
-	}
-	if session_id == '' {
-		if body.contains('"method":"initialize"') || body.contains('"method": "initialize"') {
-			session_id = mcp_protocol.Session.generate_id()
-		}
-	}
-	if session_id != '' {
-		session := app.protocols.mcp.ensure_session(session_id, if response.protocol_version != '' {
-			response.protocol_version
-		} else {
-			protocol_version
-		}, req_id, trace_id, '/mcp')
-		session_id = session.id
-		if body.contains('"method":"initialize"') || body.contains('"method": "initialize"') {
-			client_capabilities_json := mcp_protocol.Session.extract_client_capabilities_json(body)
-			if client_capabilities_json != '' {
-				app.protocols.mcp.set_client_capabilities(session_id, client_capabilities_json)
-			}
-		}
+	response := outcome.response
+	session_id := McpRuntime.complete_dispatch_session(mut app.protocols.mcp, request, response, route) or {
+		return mcp_json_response(mut app, mut ctx, method, path, req_id, trace_id, start_ms, 409,
+			'{"error":"MCP session changed"}', err.msg(), {})
 	}
 	for raw_message in response.messages {
 		if session_id != '' {
-			queue_result := McpRuntime.queue_message(mut app, session_id, raw_message)
+			queue_result := McpRuntime.queue_message_for_dispatch(mut app, session_id, raw_message, route)
 			if queue_result.error {
 				return mcp_json_response(mut app, mut ctx, method, path, req_id, trace_id,
 					start_ms, 409, '{"error":"Sampling capability required"}',

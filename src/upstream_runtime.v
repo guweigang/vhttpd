@@ -1,6 +1,5 @@
 module main
 
-import dispatch
 import net
 import time
 import upstream
@@ -11,11 +10,12 @@ import worker
 struct UpstreamIoBridge {}
 
 struct UpstreamRuntimeContext {
-	register_fn   fn (transport.WorkerUpstreamPlanFrame, string, string, string, string) = unsafe { nil }
-	unregister_fn fn (string)                    = unsafe { nil }
-	note_error_fn fn ()                          = unsafe { nil }
-	emit_fn       fn (string, map[string]string) = unsafe { nil }
-	snapshot_fn   fn (bool, int, int, string, string) AdminUpstreamRuntimeSnapshot = unsafe { nil }
+	render_validation_failure_fn fn (mut Context, HttpIngressRequest, string) veb.Result @[required]
+	register_fn                  fn (transport.WorkerUpstreamPlanFrame, string, string, string, string) ?UpstreamRuntimeRegistration @[required]
+	unregister_fn                fn (UpstreamRuntimeRegistration) @[required]
+	note_error_fn                fn () @[required]
+	emit_fn                      fn (string, map[string]string) @[required]
+	snapshot_fn                  fn (bool, int, int, string, string) AdminUpstreamRuntimeSnapshot @[required]
 }
 
 fn UpstreamIoBridge.build() upstream.Io {
@@ -35,12 +35,12 @@ struct AdminUpstreamRuntimeSnapshot {
 	sessions       []upstream.UpstreamRuntimeSession
 }
 
-fn (rt UpstreamRuntimeContext) register(plan transport.WorkerUpstreamPlanFrame, method string, path string, req_id string, trace_id string) {
-	rt.register_fn(plan, method, path, req_id, trace_id)
+fn (rt UpstreamRuntimeContext) register(plan transport.WorkerUpstreamPlanFrame, method string, path string, req_id string, trace_id string) ?UpstreamRuntimeRegistration {
+	return rt.register_fn(plan, method, path, req_id, trace_id)
 }
 
-fn (rt UpstreamRuntimeContext) unregister(req_id string) {
-	rt.unregister_fn(req_id)
+fn (rt UpstreamRuntimeContext) unregister(registration UpstreamRuntimeRegistration) {
+	rt.unregister_fn(registration)
 }
 
 fn (rt UpstreamRuntimeContext) note_error() {
@@ -55,25 +55,17 @@ fn (rt UpstreamRuntimeContext) snapshot(details bool, limit int, offset int, rol
 	return rt.snapshot_fn(details, limit, offset, role_filter, provider_filter)
 }
 
-fn UpstreamRuntimeContext.execute_plan(rt UpstreamRuntimeContext, mut app App, mut ctx Context, plan transport.WorkerUpstreamPlanFrame, method string, path string, req_id string, trace_id string, start_ms i64) veb.Result {
+fn UpstreamRuntimeContext.execute_plan(rt UpstreamRuntimeContext, mut ctx Context, plan transport.WorkerUpstreamPlanFrame, method string, path string, req_id string, trace_id string, start_ms i64) veb.Result {
 	if error_class := upstream.ExecState.validate_plan(plan) {
 		rt.note_error()
-		return HttpResponseRuntime.delivery_outcome(mut app, mut ctx, http_ingress_request(method,
+		return rt.render_validation_failure_fn(mut ctx, http_ingress_request(method,
 			path, path, '', if isnil(ctx.conn) { '' } else { ctx.conn.peer_ip() or { '' } },
-			req_id, trace_id, start_ms), dispatch.outcome_with_metadata(dispatch.response_outcome(502, {
-			'content-type':          'text/plain; charset=utf-8'
-			'x-vhttpd-error-class':  error_class
-			'x-vhttpd-stream-mode':  'upstream_plan'
-			'x-vhttpd-stream-stage': 'validate'
-		}, 'Bad Gateway'), {
-			'error_class':  error_class
-			'stream_mode':  'upstream_plan'
-			'stream_stage': 'validate'
-		}), none)
+			req_id, trace_id, start_ms), error_class)
 	}
-	rt.register(plan, method, path, req_id, trace_id)
+	mut registration := ?UpstreamRuntimeRegistration(none)
+	if token := rt.register(plan, method, path, req_id, trace_id) { registration = token }
 	defer {
-		rt.unregister(req_id)
+		if token := registration { rt.unregister(token) }
 	}
 	delivery := upstream_plan_delivery_outcome(plan)
 	stream_type := delivery.metadata['stream_type'] or { 'sse' }

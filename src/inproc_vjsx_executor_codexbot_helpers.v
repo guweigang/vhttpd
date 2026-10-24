@@ -3,7 +3,7 @@ module main
 import executor as exec
 import upstream.transport
 import os
-import json
+import json2 as json
 import net.http
 
 struct CodexbotTsTestHarness {
@@ -13,28 +13,38 @@ mut:
 }
 
 fn codexbot_ts_build_root() string {
-	return os.join_path(os.temp_dir(), 'vhttpd_codexbot_ts_test_cache')
+	// V runs test files in separate processes; never share their build publication.
+	return os.join_path(os.temp_dir(), 'vhttpd_codexbot_ts_test_cache_${os.getpid()}')
 }
 
 fn codexbot_ts_feishu_payload(text string, chat_id string, message_id string) string {
 	content_json := json.encode({
 		'text': text
-	})
-	return '{"event":{"sender":{"sender_id":{"open_id":"ou_test_user"}},"message":{"message_id":"${message_id}","chat_id":"${chat_id}","message_type":"text","content":${json.encode(content_json)}}}}'
+	}, escape_unicode: true, time_as_unix: true)
+	return '{"event":{"sender":{"sender_id":{"open_id":"ou_test_user"}},"message":{"message_id":"${message_id}","chat_id":"${chat_id}","message_type":"text","content":${json.encode(content_json,
+		escape_unicode: true
+		time_as_unix:   true
+	)}}}}'
 }
 
 fn codexbot_ts_feishu_thread_payload(text string, chat_id string, message_id string, root_id string, parent_id string) string {
 	content_json := json.encode({
 		'text': text
-	})
-	return '{"event":{"sender":{"sender_id":{"open_id":"ou_test_user"}},"message":{"message_id":"${message_id}","chat_id":"${chat_id}","message_type":"text","root_id":"${root_id}","parent_id":"${parent_id}","content":${json.encode(content_json)}}}}'
+	}, escape_unicode: true, time_as_unix: true)
+	return '{"event":{"sender":{"sender_id":{"open_id":"ou_test_user"}},"message":{"message_id":"${message_id}","chat_id":"${chat_id}","message_type":"text","root_id":"${root_id}","parent_id":"${parent_id}","content":${json.encode(content_json,
+		escape_unicode: true
+		time_as_unix:   true
+	)}}}}'
 }
 
 fn codexbot_ts_feishu_payload_with_event(text string, chat_id string, message_id string, event_id string, create_time string) string {
 	content_json := json.encode({
 		'text': text
-	})
-	return '{"header":{"event_id":"${event_id}","event_type":"im.message.receive_v1"},"event":{"sender":{"sender_id":{"open_id":"ou_test_user"}},"message":{"message_id":"${message_id}","chat_id":"${chat_id}","message_type":"text","create_time":"${create_time}","content":${json.encode(content_json)}}}}'
+	}, escape_unicode: true, time_as_unix: true)
+	return '{"header":{"event_id":"${event_id}","event_type":"im.message.receive_v1"},"event":{"sender":{"sender_id":{"open_id":"ou_test_user"}},"message":{"message_id":"${message_id}","chat_id":"${chat_id}","message_type":"text","create_time":"${create_time}","content":${json.encode(content_json,
+		escape_unicode: true
+		time_as_unix:   true
+	)}}}}'
 }
 
 fn codexbot_ts_feishu_action_payload(request_id string, decision string, open_message_id string, event_id string) string {
@@ -43,7 +53,10 @@ fn codexbot_ts_feishu_action_payload(request_id string, decision string, open_me
 		'requestId': request_id
 		'decision':  decision
 	}
-	return '{"header":{"event_id":"${event_id}","event_type":"card.action.trigger"},"event":{"open_message_id":"${open_message_id}","action":{"tag":"button","value":${json.encode(value_json)}}}}'
+	return '{"header":{"event_id":"${event_id}","event_type":"card.action.trigger"},"event":{"open_message_id":"${open_message_id}","action":{"tag":"button","value":${json.encode(value_json,
+		escape_unicode: true
+		time_as_unix:   true
+	)}}}}'
 }
 
 fn codexbot_ts_with_temp_db(db_name string, run fn (string)) {
@@ -217,4 +230,26 @@ fn codexbot_ts_first_stream_id(commands []transport.WorkerWebSocketUpstreamComma
 		}
 	}
 	return ''
+}
+
+// One-shot replies replace the old single send with send + exact-owner cleanup.
+fn codexbot_ts_assert_single_response(commands []transport.WorkerWebSocketUpstreamCommand) {
+	if commands.len > 0 && commands[0].stream_id.starts_with('feishu:reply:') {
+		codexbot_ts_assert_one_shot_reply(commands)
+	} else {
+		assert commands.len == 1
+	}
+}
+
+fn codexbot_ts_assert_one_shot_reply(commands []transport.WorkerWebSocketUpstreamCommand) {
+	assert commands.len == 2
+	send := commands[0]
+	clear := commands[1]
+	assert send.type_ == 'provider.message.send' && send.provider == 'feishu'
+	assert send.stream_id.starts_with('feishu:reply:')
+	assert (send.metadata['stream_generation'] or { '' }) != ''
+	assert (send.metadata['creation_token'] or { '' }).len == 64
+	assert clear.type_ == 'session.clear' && clear.provider == 'feishu'
+	assert clear.stream_id == send.stream_id
+	assert clear.metadata['stream_generation'] == send.metadata['stream_generation']
 }

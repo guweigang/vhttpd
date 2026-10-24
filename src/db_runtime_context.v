@@ -1,36 +1,30 @@
 module main
 
 import dbx
-import net.unix
 
 $if !enable_db ? {
-	fn db_runtime_context_import_anchor(_ dbx.RuntimeContext, _ &unix.StreamListener) {}
+	fn db_runtime_context_import_anchor(_ dbx.RuntimeContext) {}
 }
 
 $if enable_db ? {
 	fn (mut app App) build_db_runtime_context() dbx.RuntimeContext {
 		return dbx.RuntimeContext{
-			mark_listen_error_fn: fn [mut app] (message string) {
+			lifecycle: &app.transport.db.listener_owner
+			mark_listen_error_fn: fn [mut app] (generation u64, message string) {
 				app.mu.@lock()
-				app.transport.db.mark_listen_error(message)
+				app.transport.db.mark_listen_error(generation, message)
 				app.mu.unlock()
 			}
-			mark_started_fn:      fn [mut app] (started_at i64, listener &unix.StreamListener) string {
+			mark_started_fn:      fn [mut app] (generation u64, started_at i64) ?string {
 				app.mu.@lock()
-				driver := app.transport.db.mark_started(started_at, listener)
+				driver := app.transport.db.mark_started(generation, started_at)
 				app.mu.unlock()
 				return driver
 			}
-			mark_stopped_fn:      fn [mut app] () {
+			mark_stopped_fn:      fn [mut app] (generation u64) {
 				app.mu.@lock()
-				app.transport.db.mark_stopped()
+				app.transport.db.mark_stopped(generation)
 				app.mu.unlock()
-			}
-			stop_requested_fn:    fn [mut app] () bool {
-				app.mu.@lock()
-				flag := app.transport.db.stop_requested_flag()
-				app.mu.unlock()
-				return flag
 			}
 			note_error_fn:        fn [mut app] (message string) {
 				app.db_runtime_note_error(message)
@@ -70,17 +64,18 @@ $if enable_db ? {
 		}
 	}
 
-	fn (mut app App) db_runtime_server_run(socket string) {
+	fn (mut app App) db_runtime_server_start(socket string) bool {
 		ctx := app.build_db_runtime_context()
-		dbx.Server.run(ctx, socket)
+		return dbx.Server.start(ctx, socket)
 	}
 }
 
 $if !enable_db ? {
-	fn (mut app App) db_runtime_server_run(socket string) {
+	fn (mut app App) db_runtime_server_start(socket string) bool {
 		_ = socket
 		app.mu.@lock()
 		app.transport.db.mark_not_compiled()
 		app.mu.unlock()
+		return false
 	}
 }

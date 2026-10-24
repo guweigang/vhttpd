@@ -19,7 +19,7 @@ fn ControlPlaneStartupRuntime.emit_server_started(mut app App, scheme string, ho
 
 fn ControlPlaneStartupRuntime.start_admin_plane(mut app App, admin_enabled bool, admin_host string, admin_port int, admin_token string) {
 	if admin_enabled {
-		go AdminPlaneRuntime.serve(mut app, admin_host, admin_port, admin_token)
+		if !AdminPlaneRuntime.start(mut app, admin_host, admin_port, admin_token) { return }
 		app.emit('admin.started', {
 			'host': admin_host
 			'port': '${admin_port}'

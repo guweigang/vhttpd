@@ -1,7 +1,7 @@
 module relay
 
 import dispatch
-import json
+import json2 as json
 
 pub const wire_version = 1
 pub const response_frame_prefix = 'relay-response:'
@@ -35,6 +35,11 @@ pub:
 	body           string
 }
 
+// Buffer admission and snapshots own mutable containers; strings retain value semantics.
+fn (frame WireFrame) owned_copy() WireFrame {
+	return WireFrame{ ...frame, metadata: frame.metadata.clone(), headers: frame.headers.clone() }
+}
+
 pub fn new_frame(kind WireFrameKind, id string, trace_id string) WireFrame {
 	return WireFrame{
 		version:  wire_version
@@ -64,11 +69,11 @@ pub fn frame_from_exchange(kind WireFrameKind, channel_id string, correlation_id
 
 pub fn encode_frame(frame WireFrame) !string {
 	validate_frame(frame)!
-	return json.encode(frame)
+	return json.encode(frame, escape_unicode: true, time_as_unix: true)
 }
 
 pub fn decode_frame(raw string) !WireFrame {
-	frame := json.decode(WireFrame, raw) or { return error('relay_wire_invalid_json:${err}') }
+	frame := json.decode[WireFrame](raw) or { return error('relay_wire_invalid_json:${err}') }
 	validate_frame(frame)!
 	return frame
 }

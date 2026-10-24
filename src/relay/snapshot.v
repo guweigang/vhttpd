@@ -93,6 +93,9 @@ fn agent_snapshots(agents []AgentState) []AgentSnapshot {
 }
 
 fn build_channel_snapshots(registry ChannelRegistry) []ChannelSnapshot {
+	mut mu := registry.mu
+	mu.@lock()
+	defer { mu.unlock() }
 	mut ids := registry.channels.keys()
 	ids.sort()
 	mut out := []ChannelSnapshot{}
@@ -112,19 +115,23 @@ fn build_channel_snapshots(registry ChannelRegistry) []ChannelSnapshot {
 }
 
 fn build_carrier_snapshots(registry CarrierRegistry) []CarrierSnapshot {
-	mut ids := registry.ids.keys()
+	registered := registry.snapshot_ids()
+	mut ids := registered.keys()
 	ids.sort()
 	mut out := []CarrierSnapshot{}
 	for relay_id in ids {
 		out << CarrierSnapshot{
 			relay_id:   relay_id
-			carrier_id: registry.ids[relay_id]
+			carrier_id: registered[relay_id]
 		}
 	}
 	return out
 }
 
 fn build_session_snapshots(registry SessionRegistry) []SessionSnapshot {
+	mut mu := registry.mu
+	mu.@lock()
+	defer { mu.unlock() }
 	mut ids := registry.sessions.keys()
 	ids.sort()
 	mut out := []SessionSnapshot{}

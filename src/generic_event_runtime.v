@@ -1,7 +1,7 @@
 module main
 
 import dispatch
-import json
+import json2 as json
 import runtime_plan
 import time
 
@@ -31,7 +31,7 @@ pub:
 }
 
 fn (mut app App) dispatch_runtime_event(raw string, fallback_request_id string, fallback_trace_id string) !RuntimeEventDispatchResponse {
-	req := json.decode(RuntimeEventDispatchRequest, raw)!
+	req := json.decode[RuntimeEventDispatchRequest](raw)!
 	return app.dispatch_runtime_event_request(req, fallback_request_id, fallback_trace_id)!
 }
 
@@ -55,11 +55,12 @@ fn (mut app App) dispatch_runtime_event_request(req RuntimeEventDispatchRequest,
 	if topic != '' {
 		metadata['topic'] = topic
 	}
-	pipeline := app.runtime_event_pipeline(req.ingress, req.pipeline, metadata)!
+	view := app.pipeline_dispatch_view()
+	pipeline := view.runtime_event_pipeline(req.ingress, req.pipeline, metadata)!
 	mut exchange := runtime_event_exchange(request_id, trace_id, pipeline.ingress.str(),
 		pipeline.id, topic, name, req.data, metadata)
 	mut services := app_dispatch_services(mut app, trace_id)
-	result := app.run_transform_refs(pipeline.transforms.map(it.str()), mut services, mut exchange) or {
+	result := app.run_transform_refs_on_view(view.transform_dispatch_view(), pipeline.transforms.map(it.str()), mut services, mut exchange) or {
 		app.emit('runtime.event.dispatch_failed', {
 			'request_id': request_id
 			'trace_id':   trace_id
@@ -114,11 +115,15 @@ fn runtime_event_exchange(request_id string, trace_id string, ingress string, pi
 }
 
 fn (app App) runtime_event_pipeline(ingress string, pipeline string, metadata map[string]string) !runtime_plan.PipelinePlan {
+	return app.pipeline_dispatch_view().runtime_event_pipeline(ingress, pipeline, metadata)!
+}
+
+fn (view PipelineDispatchView) runtime_event_pipeline(ingress string, pipeline string, metadata map[string]string) !runtime_plan.PipelinePlan {
 	if pipeline.trim_space() != '' {
-		return app.runtime_event_pipeline_by_id(pipeline.trim_space(), ingress, metadata)!
+		return view.runtime_event_pipeline_by_id(pipeline.trim_space(), ingress, metadata)!
 	}
 	ingress_ref := normalize_event_ingress_ref(ingress)
-	for candidate in app.plan.pipelines {
+	for candidate in view.plan.pipelines {
 		if candidate.ingress.str() != ingress_ref {
 			continue
 		}
@@ -129,9 +134,9 @@ fn (app App) runtime_event_pipeline(ingress string, pipeline string, metadata ma
 	return error('runtime_event_pipeline_not_found:${ingress_ref}')
 }
 
-fn (app App) runtime_event_pipeline_by_id(pipeline string, ingress string, metadata map[string]string) !runtime_plan.PipelinePlan {
+fn (view PipelineDispatchView) runtime_event_pipeline_by_id(pipeline string, ingress string, metadata map[string]string) !runtime_plan.PipelinePlan {
 	pipeline_id := normalize_pipeline_id(pipeline)
-	candidate := app.plan.pipeline(pipeline_id) or {
+	candidate := view.plan.pipeline(pipeline_id) or {
 		return error('runtime_event_pipeline_not_found:${pipeline_id}')
 	}
 	ingress_ref := normalize_event_ingress_ref(ingress)

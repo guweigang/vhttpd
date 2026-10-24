@@ -25,6 +25,22 @@ For bot-style apps, a convenient TS entry shape is:
 
 ## Runtime
 
+### Lane cold-start budget
+
+Compiler/runtime initialization and module graph loading have a separate
+30,000ms default deadline from the 10,000ms startup-hook deadline. On slower or
+busy machines, set `VHTTPD_VJSX_BOOTSTRAP_TIMEOUT_MS` to an integer in
+`1..300000` (for example `120000`). Invalid values reject warmup before a task
+is enqueued. The setting does not change HTTP, function, SQL or hook deadlines;
+expired warmup tasks still use owner-thread cleanup and the interrupt path.
+This is a bounded startup budget, not a way to run unbounded startup hooks.
+
+The local WeChat demo selects 120,000ms per cold start and waits for successful
+login plus SQL-backed `getUser` before reporting READY. A listening HTTP port
+or a 502 / `no_available_lane` response is not readiness.
+
+### Request metadata
+
 `ctx.runtime` exposes read-only execution metadata:
 
 - `provider`
@@ -51,7 +67,7 @@ Methods:
 - `runtime.snapshot(input?, fallbackValue?)`
 - `runtime.readTextFile(path, fallbackValue?)`
 - `runtime.findCodexSessionPath(threadId, fallbackValue?)`
-- `runtime.httpFetch(input, fallbackValue?)`
+- `await runtime.httpFetch(input, fallbackValue?)`
 - `runtime.bridgeDispatch(input, fallbackValue?)`
 - `runtime.websocketDispatch(input, fallbackValue?)`
 
@@ -75,7 +91,7 @@ Current host helpers:
 - `vhttpdHost.snapshot()`
 - `vhttpdHost.readTextFile(path, fallbackValue?)`
 - `vhttpdHost.findCodexSessionPath(threadId, fallbackValue?)`
-- `vhttpdHost.httpFetch(input)`
+- `vhttpdHost.httpFetch(url, init)` (internal native fetch bridge)
 - `vhttpdHost.bridgeDispatch(input)`
 - `vhttpdHost.websocketDispatch(input)`
 
@@ -96,6 +112,142 @@ Current host helpers:
 - `remoteAddr`
 - `ip`
 - `server`
+
+## Asynchronous HTTP Fetch
+
+`runtime.httpFetch()` returns a Promise. Callers previously reading properties
+directly from its result must add `await`, including the network-disabled path.
+It uses vjsx's native background HTTP transport and shared host-async completion
+queue; it does not perform network I/O inside the JS lane.
+
+```js
+const controller = new AbortController();
+const [one, two] = await Promise.all([
+  ctx.runtime.httpFetch({ url: firstUrl, timeoutMs: 2000, signal: controller.signal }),
+  ctx.runtime.httpFetch({ url: secondUrl, timeoutMs: 2000 }),
+]);
+```
+
+Input accepts `url`, `method`, `headers`, `body`, `timeoutMs`, and `signal`.
+`timeoutMs` defaults to 30,000 and must be a finite positive number. The native
+transport also retains its own total deadline and concurrency limit; a larger
+per-call timeout does not extend those host limits. Success resolves to
+`{ ok: true, status, body, headers }`, including HTTP 4xx/5xx responses.
+Transport failures resolve to `{ ok: false, error, errorName }`. Cancellation
+uses `AbortError`; per-call timeout uses `TimeoutError`. A disabled network
+capability resolves to the supplied fallback (undefined by default).
+
+Completion callbacks only enqueue owner-scoped lane work. An idle lane drains
+the completion queue on its worker before pumping Promise continuations. Timer
+wakeups and completion wakeups have separate pending slots; retired session
+callbacks cannot wake a replacement session.
+
+Cancellation ends JS waiting promptly. An already-running V HTTP socket may
+continue until it finishes or reaches its transport timeout, retaining its
+native concurrency slot. The body is buffered before this facade returns.
+
+## Asynchronous SQL Database
+
+Embedded handlers expose `ctx.runtime.db` (MySQL and PostgreSQL). Build with
+`-d enable_db` / `make build WITH_DB=1` and enable the existing `[db]` runtime
+configuration. No new connection configuration is needed. Credentials remain
+inside V; JS cannot choose a driver, connection URL, or another pool. This is an
+optional trusted host capability, independent of `enableNetwork`. Reduced hosts
+without database access reject with `database_unavailable`; disabled/uncompiled
+database access rejects rather than returning a successful empty result.
+Version-2 plans can use their existing `resources.db` configuration; the API
+currently binds the application's active dbx pool, not a JS-selectable pool map.
+
+```js
+const db = ctx.runtime.db;
+// MySQL uses ?; PostgreSQL uses $1, $2, ... . Parameters are strings.
+const users = await db.query("SELECT id, name FROM users WHERE id = $1", ["42"], {
+  timeoutMs: 2000,
+  signal: controller.signal,
+});
+await db.transaction(async tx => {
+  await tx.execute("UPDATE accounts SET balance = balance - 10 WHERE id = $1", ["1"]);
+  await tx.execute("UPDATE accounts SET balance = balance + 10 WHERE id = $1", ["2"]);
+}, { timeoutMs: 5000, signal: controller.signal });
+```
+
+`query(sql, params = [], options = {})` and `execute(...)` return real Promises.
+Results preserve dbx field names: `ok`, `driver`, `columns`, `rows`,
+`affected_rows`, `last_insert_id`, `session_id`. Query values are strings; the
+existing dbx adapter maps SQL NULL to `""` (not a typed/null-preserving API).
+MySQL supplies affected rows and insert ID. PostgreSQL `execute().affected_rows`
+is `null` because the current V pg.Result does not expose command row counts;
+use `query("... RETURNING ...")` when those rows/IDs are required. Use bound
+parameters, never SQL interpolation. Driver errors reject the Promise.
+
+`timeoutMs` defaults to 30,000 and must be a positive signed-32-bit integer.
+Timeout rejects with `TimeoutError`; AbortSignal cancellation uses `AbortError`.
+Deadlines include pool/transaction admission waits and are checked on workers
+as well as the owning JS lane. Workers carry only V data and completion ports;
+completion uses the same host-async queue and owner-scoped lane wakeups as HTTP.
+An owner-only 5ms compatibility pump also supports handlers awaiting results.
+Each lane accepts at most 64 outstanding native DB operations (plus 32 reserved
+rollback-cleanup admissions), with the existing
+shared pool limiting physical connections. Busy admission rejects immediately.
+
+`transaction(callback, options)` pins one pooled connection, serializes its SQL,
+and resolves to the callback result after commit. Submitted operations are
+tracked before commit, even if the callback forgot to await them. A failed,
+timed-out, or cancelled operation dooms the transaction even if the callback
+catches its error. Query-level `timeoutMs` and `signal` are supported within a
+transaction; transaction-level options bound its lifetime, including an idle
+callback. A transaction object cannot be used after completion. Callback failure
+rolls back; lane close rolls back all owned transactions before returning their
+connections. Do not send raw BEGIN/COMMIT/ROLLBACK through query/execute, and do
+not nest transaction callbacks on an exhausted pool.
+Concurrent transaction statements are serialized but do not guarantee submission
+order; use sequential `await` for dependent statements.
+
+Cancellation is **logical cancellation**, not server-side SQL interruption.
+Queued cancelled work never executes. Already-running SQL keeps its lease until
+the native driver returns; cancellation does not release a busy connection for
+reuse. Cancelled transactions then roll back/reset before reuse. Normal writes
+already sent outside a transaction may still take effect; cancellation racing
+COMMIT can have an unknown commit outcome. Do not automatically retry such writes.
+No SQL is automatically replayed. Database/server transport limits remain
+necessary for permanently stalled native calls; KILL QUERY/PQcancel is not yet
+implemented. Cancelling JS waiting does not guarantee database-side cancellation.
+
+### TODO: Driver-supported server-side cancellation (deferred)
+
+Deferred at the user's request until V's database drivers provide the required
+safe cancellation APIs. No driver changes are part of the current implementation;
+the logical-cancellation contract above remains unchanged.
+
+- PostgreSQL: expose an independently owned `PGcancel` handle through `db.pg`,
+  then use `PQcancel` without concurrently accessing the active `PGconn`.
+- MySQL: add a supported cancellation API/connection identity to `db.mysql`,
+  then send `KILL QUERY` through an independent control connection.
+- Keep each lease reserved until its SQL and cancellation work have both ended.
+  Resolve completion/cancellation races without allowing a late cancel to affect
+  rollback, connection reset, or a subsequent borrower's query.
+- Verify actual server-side interruption on timeout and AbortSignal cancellation,
+  transaction rollback, pool recovery/reuse, and cancel-versus-completion races
+  against isolated MySQL and PostgreSQL instances. A prompt JS rejection alone
+  is not evidence that the SQL stopped.
+
+Integration tests require dedicated disposable databases named
+`vhttpd_async_test` (the fixture drops/recreates `vjsx_async_items`). Never point
+them at production. MySQL test user is `root` with no password; PostgreSQL test
+user is `vhttpd_test` with local trust authentication:
+
+```sh
+VHTTPD_TEST_MYSQL_PORT=13316 VHTTPD_TEST_PG_PORT=15442 \
+VJS_QUICKJS_PATH=/path/to/quickjs \
+v -d build_quickjs -d use_openssl -d enable_db -enable-globals \
+  -path 'src|@vlib|@vmodules' -cc clang test src/executor/database_async_test.v
+```
+
+Without explicit test ports (or without `enable_db`) real database tests print
+SKIP. They cover parallel/timer progress, shared pool admission across lanes,
+commit/rollback/parameter binding, transaction serialization, deadlines, aborts,
+pre-aborts, cancelled waiters, worker bounds, recovery, detached completion and
+in-flight lane-close rollback.
 
 ## Request Context
 

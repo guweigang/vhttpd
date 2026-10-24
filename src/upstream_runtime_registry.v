@@ -4,54 +4,39 @@ import time
 import upstream
 import upstream.transport
 import sync
+import veb
+
+// Opaque per-execution ownership; client request IDs are correlation data only.
+struct UpstreamRuntimeRegistration {
+	owner &UpstreamRuntimeRegistry @[required]
+	key   u64
+}
 
 struct UpstreamRuntimeRegistry {
 mut:
 	mu                     sync.Mutex
-	sessions               map[string]upstream.UpstreamRuntimeSession
+	next_registration      u64
+	sessions               map[u64]upstream.UpstreamRuntimeSession
 	stat_plans_total       i64
 	stat_plan_errors_total i64
 }
 
 fn UpstreamRuntimeRegistry.new() UpstreamRuntimeRegistry {
 	return UpstreamRuntimeRegistry{
-		sessions: map[string]upstream.UpstreamRuntimeSession{}
+		sessions: map[u64]upstream.UpstreamRuntimeSession{}
 	}
 }
 
-fn (mut app App) build_upstream_runtime_context() UpstreamRuntimeContext {
-	return UpstreamRuntimeContext{
-		register_fn:   fn [mut app] (plan transport.WorkerUpstreamPlanFrame, method string, path string, req_id string, trace_id string) {
-			app.upstreams.register(plan, method, path, req_id, trace_id)
-		}
-		unregister_fn: fn [mut app] (req_id string) {
-			app.upstreams.unregister(req_id)
-		}
-		note_error_fn: fn [mut app] () {
-			app.upstreams.note_error()
-		}
-		emit_fn:       fn [mut app] (kind string, fields map[string]string) {
-			app.emit(kind, fields)
-		}
-		snapshot_fn:   fn [mut app] (details bool, limit int, offset int, role_filter string, provider_filter string) AdminUpstreamRuntimeSnapshot {
-			return app.upstreams.snapshot(details, limit, offset, role_filter, provider_filter)
-		}
-	}
-}
-
-fn (mut app App) upstream_runtime_register(plan transport.WorkerUpstreamPlanFrame, method string, path string, req_id string, trace_id string) {
-	runtime := app.build_upstream_runtime_context()
-	runtime.register(plan, method, path, req_id, trace_id)
-}
-
-fn (mut registry UpstreamRuntimeRegistry) register(plan transport.WorkerUpstreamPlanFrame, method string, path string, req_id string, trace_id string) {
+fn (mut registry UpstreamRuntimeRegistry) register(plan transport.WorkerUpstreamPlanFrame, method string, path string, req_id string, trace_id string) ?UpstreamRuntimeRegistration {
 	if req_id == '' {
-		return
+		return none
 	}
 	normalized_path, _ := transport.WorkerHttpRequestCodec.normalize_request_target(path)
 	registry.mu.@lock()
 	defer { registry.mu.unlock() }
-	registry.sessions[req_id] = upstream.UpstreamRuntimeSession{
+	registry.next_registration++
+	registration := UpstreamRuntimeRegistration{ owner: &registry, key: registry.next_registration }
+	registry.sessions[registration.key] = upstream.UpstreamRuntimeSession{
 		id:              req_id
 		request_id:      req_id
 		trace_id:        trace_id
@@ -68,25 +53,14 @@ fn (mut registry UpstreamRuntimeRegistry) register(plan transport.WorkerUpstream
 		started_at_unix: time.now().unix()
 	}
 	registry.stat_plans_total++
+	return registration
 }
 
-fn (mut app App) upstream_runtime_unregister(req_id string) {
-	runtime := app.build_upstream_runtime_context()
-	runtime.unregister(req_id)
-}
-
-fn (mut registry UpstreamRuntimeRegistry) unregister(req_id string) {
-	if req_id == '' {
-		return
-	}
+fn (mut registry UpstreamRuntimeRegistry) unregister(registration UpstreamRuntimeRegistration) {
+	if voidptr(registration.owner) != voidptr(&registry) { return }
 	registry.mu.@lock()
-	registry.sessions.delete(req_id)
+	registry.sessions.delete(registration.key)
 	registry.mu.unlock()
-}
-
-fn (mut app App) upstream_runtime_note_error() {
-	runtime := app.build_upstream_runtime_context()
-	runtime.note_error()
 }
 
 fn (mut registry UpstreamRuntimeRegistry) note_error() {
@@ -95,62 +69,36 @@ fn (mut registry UpstreamRuntimeRegistry) note_error() {
 	registry.mu.unlock()
 }
 
-fn (mut app App) admin_upstreams_snapshot(details bool, limit int, offset int, role_filter string, provider_filter string) AdminUpstreamRuntimeSnapshot {
-	runtime := app.build_upstream_runtime_context()
-	return runtime.snapshot(details, limit, offset, role_filter, provider_filter)
-}
-
 fn (mut registry UpstreamRuntimeRegistry) snapshot(details bool, limit int, offset int, role_filter string, provider_filter string) AdminUpstreamRuntimeSnapshot {
 	registry.mu.@lock()
-	defer {
-		registry.mu.unlock()
-	}
-	mut sessions := []upstream.UpstreamRuntimeSession{}
-	for _, session in registry.sessions {
-		if role_filter != '' && session.role != role_filter {
-			continue
-		}
-		if provider_filter != '' && session.provider != provider_filter {
-			continue
-		}
-		sessions << session
-	}
-	mut ordered := []upstream.UpstreamRuntimeSession{}
 	mut sort_keys := []string{}
 	mut session_by_key := map[string]upstream.UpstreamRuntimeSession{}
-	for session in sessions {
-		key := '${session.started_at_unix}_${session.id}'
+	for registration, session in registry.sessions {
+		if role_filter != '' && session.role != role_filter { continue }
+		if provider_filter != '' && session.provider != provider_filter { continue }
+		key := '${session.started_at_unix}_${session.id}_${registration}'
 		sort_keys << key
 		session_by_key[key] = session
 	}
+	registry.mu.unlock()
+	// Project outside the owner lock from one detached set of session values.
 	sort_keys.sort()
-	for key in sort_keys {
-		ordered << session_by_key[key]
-	}
-	if !details {
-		return AdminUpstreamRuntimeSnapshot{
-			active_count:   ordered.len
-			returned_count: 0
-			details:        false
-			limit:          limit
-			offset:         offset
-			sessions:       []upstream.UpstreamRuntimeSession{}
-		}
-	}
-	mut sliced := []upstream.UpstreamRuntimeSession{}
-	if offset < ordered.len {
-		end := if offset + limit < ordered.len { offset + limit } else { ordered.len }
-		for i in offset .. end {
-			sliced << ordered[i]
-		}
+	page_limit := if limit > 0 { limit } else { 0 }
+	page_offset := if offset > 0 { offset } else { 0 }
+	mut sessions := []upstream.UpstreamRuntimeSession{}
+	if details {
+		start := if page_offset < sort_keys.len { page_offset } else { sort_keys.len }
+		remaining := sort_keys.len - start
+		count := if page_limit < remaining { page_limit } else { remaining }
+		for i in start .. start + count { sessions << session_by_key[sort_keys[i]] }
 	}
 	return AdminUpstreamRuntimeSnapshot{
-		active_count:   ordered.len
-		returned_count: sliced.len
-		details:        true
-		limit:          limit
-		offset:         offset
-		sessions:       sliced
+		active_count:   sort_keys.len
+		returned_count: sessions.len
+		details:        details
+		limit:          page_limit
+		offset:         page_offset
+		sessions:       sessions
 	}
 }
 
@@ -164,4 +112,23 @@ fn (mut registry UpstreamRuntimeRegistry) totals() (i64, i64) {
 	registry.mu.@lock()
 	defer { registry.mu.unlock() }
 	return registry.stat_plans_total, registry.stat_plan_errors_total
+}
+
+fn (mut registry UpstreamRuntimeRegistry) build_context(emit_fn fn (string, map[string]string), render_fn fn (mut Context, HttpIngressRequest, string) veb.Result) UpstreamRuntimeContext {
+	return UpstreamRuntimeContext{
+		render_validation_failure_fn: render_fn
+		register_fn:                  fn [mut registry] (plan transport.WorkerUpstreamPlanFrame, method string, path string, req_id string, trace_id string) ?UpstreamRuntimeRegistration {
+			return registry.register(plan, method, path, req_id, trace_id)
+		}
+		unregister_fn:                fn [mut registry] (registration UpstreamRuntimeRegistration) {
+			registry.unregister(registration)
+		}
+		note_error_fn:                fn [mut registry] () {
+			registry.note_error()
+		}
+		emit_fn:                      emit_fn
+		snapshot_fn:                  fn [mut registry] (details bool, limit int, offset int, role_filter string, provider_filter string) AdminUpstreamRuntimeSnapshot {
+			return registry.snapshot(details, limit, offset, role_filter, provider_filter)
+		}
+	}
 }

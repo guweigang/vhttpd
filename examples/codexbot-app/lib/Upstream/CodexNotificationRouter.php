@@ -7,6 +7,7 @@ namespace CodexBot\Upstream;
 use CodexBot\Repository\StreamRepository;
 use CodexBot\Repository\TaskRepository;
 use CodexBot\Service\CommandFactory;
+use CodexBot\Service\OneShotReplyService;
 use CodexBot\Service\TaskStateService;
 
 final class CodexNotificationRouter
@@ -18,6 +19,7 @@ final class CodexNotificationRouter
         private BotErrorHelper $errorHelper,
         private BotResponseHelper $responseHelper,
         private NotificationLifecycleRouter $lifecycleRouter,
+        private ?OneShotReplyService $replyService = null,
     ) {
     }
 
@@ -71,6 +73,7 @@ final class CodexNotificationRouter
 
     private function handleError(string $method, array $params, string $streamId, string $channelHint): ?array
     {
+        $binding = $streamId !== '' ? $this->streamRepo->findByStreamId($streamId) : null;
         $isSystemError = ($method === 'thread/status/changed' && ($params['status']['type'] ?? '') === 'systemError');
         $isLimitUpdate = (strpos($method, 'rateLimits/updated') !== false);
         if ($method !== 'error' && $method !== 'codex/event/error' && !$isSystemError && !$isLimitUpdate) {
@@ -148,13 +151,13 @@ final class CodexNotificationRouter
             return $this->handleRecoveryError($params, $channelHint, $errorMsg);
         }
 
-        $msgId = $this->streamRepo->findMessageIdByStreamId($streamId);
+        $msgId = $binding['response_message_id'] ?? null;
         return $this->responseHelper->command(CommandFactory::feishuMessageUpdate([
             'stream_id' => $streamId,
             'target' => $msgId ?: '',
             'message_type' => 'interactive',
             'content' => $this->errorHelper->buildErrorCard($errorMsg),
-        ]));
+        ], $binding ?? []));
     }
 
     private function handleRecoveryError(array $params, string $channelHint, string $errorMsg): array
@@ -196,11 +199,11 @@ final class CodexNotificationRouter
                     'target' => $messageId,
                     'message_type' => 'interactive',
                     'content' => $this->errorHelper->buildErrorCard($errorMsg),
-                ]);
+                ], $row ?? []);
             }
 
             if ($chatId) {
-                $commands[] = CommandFactory::feishuSend([
+                $commands[] = ($this->replyService ??= new OneShotReplyService())->forInstance((string) ($row['stream_instance'] ?? $request['instance'] ?? 'main'))->command([
                     'target_type' => 'chat_id',
                     'target' => $chatId,
                     'message_type' => 'text',

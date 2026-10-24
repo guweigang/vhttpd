@@ -2,27 +2,48 @@
 # Product-level config acceptance smoke tests for v1/v2 runtime scenarios.
 set -euo pipefail
 
+# These scenarios assert INFO request/trace logs; production defaults to WARN.
+export VHTTPD_LOG_LEVEL=info
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-VHTTPD_BIN="${REPO_ROOT}/vhttpd"
+VHTTPD_BIN="${VHTTPD_BIN:-${REPO_ROOT}/vhttpd}"
 TMP_ROOT="${TMPDIR:-/tmp}/vhttpd-config-acceptance-$$"
 PASS=0
 FAIL=0
 PIDS=()
 LOG_FILES=()
+LAST_VHTTPD_PID=""
 
 ok()  { echo "  [PASS] $*"; PASS=$((PASS + 1)); }
 ko()  { echo "  [FAIL] $*"; FAIL=$((FAIL + 1)); }
 
-cleanup() {
+stop_test_processes() {
     for pid in "${PIDS[@]:-}"; do
         if kill -0 "$pid" >/dev/null 2>&1; then
             kill "$pid" >/dev/null 2>&1 || true
             wait "$pid" >/dev/null 2>&1 || true
         fi
     done
+    PIDS=()
+}
+
+run_scenario() {
+    "$@"
+    # Scenarios are independent. Retaining every server until suite exit keeps
+    # all embedded runtimes and workers alive and makes later deadlines depend
+    # on the accumulated resource load of earlier scenarios.
+    stop_test_processes
+}
+
+cleanup() {
+    stop_test_processes
     rm -f /tmp/vhq-"$$"-*
-    rm -rf "$TMP_ROOT"
+    if [[ "${VHTTPD_E2E_KEEP_TMP:-0}" == "1" ]]; then
+        echo "E2E artifacts retained: $TMP_ROOT"
+    else
+        rm -rf "$TMP_ROOT"
+    fi
 }
 trap cleanup EXIT
 
@@ -44,6 +65,7 @@ start_vhttpd() {
     local log_file="${TMP_ROOT}/${name}.log"
     "$VHTTPD_BIN" "$@" >"$log_file" 2>&1 &
     local pid=$!
+    LAST_VHTTPD_PID="$pid"
     PIDS+=("$pid")
     LOG_FILES+=("$log_file")
     echo "$pid"
@@ -1427,204 +1449,7 @@ EOF
 
 write_provider_websocket_upstream_probe() {
     local file="$1"
-    cat >"$file" <<'EOF'
-import crypto from "node:crypto";
-import fs from "node:fs/promises";
-import http from "node:http";
-
-const openPort = Number(process.argv[2]);
-const wsPort = Number(process.argv[3]);
-const outFile = process.argv[4];
-if (!openPort || !wsPort || !outFile) {
-  console.error("usage: node provider-ws-upstream.mjs <open-port> <ws-port> <out-file>");
-  process.exit(2);
-}
-
-const state = {
-  endpointRequested: false,
-  handshake: "",
-  handshakeType: "",
-  pushed: false,
-  ack: false,
-};
-
-function varint(value) {
-  let current = BigInt(value);
-  const out = [];
-  for (;;) {
-    if ((current & ~0x7fn) === 0n) {
-      out.push(Number(current));
-      return Buffer.from(out);
-    }
-    out.push(Number((current & 0x7fn) | 0x80n));
-    current >>= 7n;
-  }
-}
-
-function fieldKey(field, wire) {
-  return varint((BigInt(field) << 3n) | BigInt(wire));
-}
-
-function bytesField(field, payload) {
-  const body = Buffer.isBuffer(payload) ? payload : Buffer.from(String(payload));
-  return Buffer.concat([fieldKey(field, 2), varint(body.length), body]);
-}
-
-function stringField(field, payload) {
-  return bytesField(field, Buffer.from(String(payload)));
-}
-
-function header(key, value) {
-  return Buffer.concat([stringField(1, key), stringField(2, value)]);
-}
-
-function feishuPushFrame() {
-  const payload = JSON.stringify({
-    schema: "2.0",
-    header: {
-      event_id: "evt-provider-ws-upstream",
-      event_type: "im.message.receive_v1",
-    },
-    event: {
-      sender: {
-        sender_id: { open_id: "ou_provider_ws_upstream" },
-        tenant_key: "tenant_provider_ws_upstream",
-      },
-      message: {
-        message_id: "om-provider-ws-upstream",
-        message_type: "text",
-        chat_id: "oc-provider-ws-upstream",
-        chat_type: "group",
-        create_time: "1710000000",
-        content: JSON.stringify({ text: "hello from fake upstream" }),
-      },
-    },
-  });
-  return Buffer.concat([
-    fieldKey(1, 0), varint(1701),
-    fieldKey(4, 0), varint(1),
-    bytesField(5, header("type", "event")),
-    bytesField(5, header("trace_id", "trace-provider-ws-upstream")),
-    bytesField(5, header("seq", "1701")),
-    stringField(6, "json"),
-    stringField(7, "application/json"),
-    bytesField(8, Buffer.from(payload)),
-    stringField(9, "provider-ws-upstream"),
-  ]);
-}
-
-function wsFrame(opcode, payload) {
-  const body = Buffer.isBuffer(payload) ? payload : Buffer.from(String(payload));
-  const head = [];
-  head.push(0x80 | opcode);
-  if (body.length < 126) {
-    head.push(body.length);
-  } else if (body.length < 65536) {
-    head.push(126, (body.length >> 8) & 0xff, body.length & 0xff);
-  } else {
-    throw new Error("test frame too large");
-  }
-  return Buffer.concat([Buffer.from(head), body]);
-}
-
-function parseClientFrame(buffer) {
-  if (buffer.length < 2) return null;
-  const opcode = buffer[0] & 0x0f;
-  const masked = (buffer[1] & 0x80) !== 0;
-  let length = buffer[1] & 0x7f;
-  let offset = 2;
-  if (length === 126) {
-    if (buffer.length < 4) return null;
-    length = buffer.readUInt16BE(2);
-    offset = 4;
-  } else if (length === 127) {
-    throw new Error("large test frames are unsupported");
-  }
-  const mask = masked ? buffer.subarray(offset, offset + 4) : null;
-  if (masked) offset += 4;
-  if (buffer.length < offset + length) return null;
-  const payload = Buffer.from(buffer.subarray(offset, offset + length));
-  if (mask) {
-    for (let i = 0; i < payload.length; i++) payload[i] ^= mask[i % 4];
-  }
-  return { opcode, payload, consumed: offset + length };
-}
-
-async function finish() {
-  await fs.writeFile(outFile, JSON.stringify(state));
-  openServer.close();
-  wsServer.close();
-  setTimeout(() => process.exit(state.endpointRequested && state.handshake && state.pushed && state.ack ? 0 : 1), 25);
-}
-
-const openServer = http.createServer((req, res) => {
-  if (req.url.includes("/callback/ws/endpoint")) {
-    state.endpointRequested = true;
-    res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
-    res.end(JSON.stringify({
-      code: 0,
-      msg: "ok",
-      data: {
-        URL: `ws://127.0.0.1:${wsPort}/callback`,
-        ClientConfig: { PingInterval: 60, ReconnectInterval: 60, ReconnectNonce: 1, ReconnectCount: 1 },
-      },
-    }));
-    return;
-  }
-  res.writeHead(404);
-  res.end("not found");
-});
-
-const wsServer = http.createServer();
-wsServer.on("upgrade", (req, socket) => {
-  const key = req.headers["sec-websocket-key"];
-  const accept = crypto.createHash("sha1")
-    .update(`${key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`)
-    .digest("base64");
-  socket.write([
-    "HTTP/1.1 101 Switching Protocols",
-    "Upgrade: websocket",
-    "Connection: Upgrade",
-    `Sec-WebSocket-Accept: ${accept}`,
-    "\r\n",
-  ].join("\r\n"));
-  let pending = Buffer.alloc(0);
-  socket.on("data", (chunk) => {
-    pending = Buffer.concat([pending, chunk]);
-    for (;;) {
-      const frame = parseClientFrame(pending);
-      if (!frame) return;
-      pending = pending.subarray(frame.consumed);
-      if (frame.opcode === 1) {
-        state.handshake = frame.payload.toString("utf8");
-        try {
-          state.handshakeType = JSON.parse(state.handshake).type || "";
-        } catch {
-          state.handshakeType = "";
-        }
-        socket.write(wsFrame(2, feishuPushFrame()));
-        state.pushed = true;
-      } else if (frame.opcode === 2) {
-        state.ack = true;
-        finish().catch((err) => {
-          console.error(err);
-          process.exit(1);
-        });
-      }
-    }
-  });
-});
-
-await Promise.all([
-  new Promise((resolve) => openServer.listen(openPort, "127.0.0.1", resolve)),
-  new Promise((resolve) => wsServer.listen(wsPort, "127.0.0.1", resolve)),
-]);
-
-setTimeout(async () => {
-  await fs.writeFile(outFile, JSON.stringify(state));
-  process.exit(1);
-}, 10000);
-EOF
+    cp "${SCRIPT_DIR}/provider_ws_upstream_probe.mjs" "$file"
 }
 
 write_provider_ingress_event_config() {
@@ -1728,6 +1553,8 @@ kind = "vjsx"
 entry = "${handler}"
 runtime_profile = "node"
 thread_count = 1
+# Probe output is runtime state, not an imported JSON source module.
+signature_include = ["${handler##*/}"]
 
 [adapters.health]
 kind = "fixed-response"
@@ -1764,12 +1591,13 @@ EOF
 write_provider_runtime_config() {
     local file="$1"
     local port="$2"
+    local pid_label="${3:-provider-runtime}"
     cat >"$file" <<EOF
 version = 2
 
 [server]
 timezone = "Asia/Shanghai"
-pid_file = "${TMP_ROOT}/provider-runtime.pid"
+pid_file = "${TMP_ROOT}/${pid_label}.pid"
 
 [observability]
 event_log = "${TMP_ROOT}/provider-runtime.events.ndjson"
@@ -2157,8 +1985,10 @@ if (str_starts_with($socket, 'unix://')) {
     $socket = substr($socket, 7);
 }
 $release = $socket . '.release';
+$holding = $socket . '.holding';
 @unlink($socket);
 @unlink($release);
+@unlink($holding);
 $server = stream_socket_server('unix://' . $socket, $errno, $errstr);
 if (!$server) {
     fwrite(STDERR, "listen failed: {$errstr}\n");
@@ -2198,10 +2028,12 @@ while (true) {
     $req = json_decode($raw, true) ?: [];
     $path = (string) ($req['path'] ?? '/');
     if ($path === '/hold') {
+        file_put_contents($holding, 'holding');
         $deadline = microtime(true) + 60.0;
         while (!file_exists($release) && microtime(true) < $deadline) {
             usleep(10_000);
         }
+        @unlink($holding);
         $body = 'held by controlled worker';
     } else {
         $body = 'controlled worker ok';
@@ -2261,10 +2093,16 @@ write_controlled_worker_queue_config() {
     local port="$2"
     local worker_script="$3"
     local worker_socket="$4"
+    local queue_timeout_ms="${5:-2500}"
     cat >"$file" <<EOF
 [server]
 host = "127.0.0.1"
 port = ${port}
+
+[server.ssl]
+enabled = true
+cert = "${TMP_ROOT}/controlled-queue.crt"
+cert_key = "${TMP_ROOT}/controlled-queue.key"
 
 [files]
 pid_file = "${TMP_ROOT}/controlled-worker-queue.pid"
@@ -2275,7 +2113,7 @@ autostart = true
 read_timeout_ms = 5000
 pool_size = 1
 queue_capacity = 1
-queue_timeout_ms = 2500
+queue_timeout_ms = ${queue_timeout_ms}
 queue_poll_ms = 10
 socket = "${worker_socket}"
 cmd = "php ${worker_script}"
@@ -2634,11 +2472,21 @@ test_relay_smoke() {
         "relay public runtime starts"
 
     local agent_pid
-    agent_pid="$(start_vhttpd "relay-agent" --config "$agent_config" --admin-port "$agent_admin_port")"
+    start_vhttpd "relay-agent" --config "$agent_config" --admin-port "$agent_admin_port" >/dev/null
+    agent_pid="$LAST_VHTTPD_PID"
     wait_event_contains "${TMP_ROOT}/relay-agent.events.ndjson" "server.started" \
         "relay agent runtime starts"
     wait_http_contains "http://127.0.0.1:${public_port}/relay?trace_id=e2e-relay" "relay agent ok" \
         "relay request reaches local agent and returns"
+    local started_count
+    started_count="$(grep -c '"type":"server.started"' "${TMP_ROOT}/relay-public.events.ndjson" || true)"
+    if [[ "$started_count" == "1" ]]; then
+        ok "shared relay App initializes exactly once"
+    else
+        ko "shared relay App initializes exactly once"
+        echo "    server.started events: $started_count"
+        return 1
+    fi
     wait_event_contains "${TMP_ROOT}/relay-public.events.ndjson" "e2e-relay" \
         "relay successful request preserves trace id"
     wait_event_contains "${TMP_ROOT}/relay-public.events.ndjson" "response_completion.completed" \
@@ -2667,7 +2515,8 @@ test_relay_smoke() {
         "relay disconnected failure preserves trace id"
     wait_event_contains "${TMP_ROOT}/relay-public.events.ndjson" "relay_carrier_unavailable" \
         "relay disconnected failure records unavailable carrier"
-    agent_pid="$(start_vhttpd "relay-agent-restarted" --config "$agent_config" --admin-port "$agent_admin_port")"
+    start_vhttpd "relay-agent-restarted" --config "$agent_config" --admin-port "$agent_admin_port" >/dev/null
+    agent_pid="$LAST_VHTTPD_PID"
     wait_http_status_contains "http://127.0.0.1:${agent_port}/health" "200" "" \
         "relay agent restarts after disconnect"
     wait_http_contains "http://127.0.0.1:${public_port}/relay?trace_id=e2e-relay-reconnect" "relay agent ok" \
@@ -2687,7 +2536,9 @@ test_websocket_dispatch_smoke() {
     write_websocket_dispatch_config "$config" "$port"
     write_websocket_probe "$probe"
     start_vhttpd "websocket-dispatch" --config "$config" >/dev/null
-    wait_event_contains "${TMP_ROOT}/websocket-dispatch.events.ndjson" "server.started" \
+    # server.started precedes serve_server_runtime; wait for the actual listener
+    # before the one-shot WebSocket probe so startup scheduling cannot refuse it.
+    wait_http_contains "http://127.0.0.1:${port}/health" 'OK' \
         "websocket dispatch runtime starts"
     if node "$probe" "ws://127.0.0.1:${port}/ws?trace_id=e2e-websocket-dispatch" "$probe_out" >/dev/null 2>"${TMP_ROOT}/websocket-probe.err"; then
         ok "websocket dispatch probe receives sync and pong"
@@ -2728,6 +2579,8 @@ test_stream_dispatch_smoke() {
         "stream dispatch config serves metadata"
     wait_http_contains "http://127.0.0.1:${port}/events/sse" "stream complete" \
         "stream dispatch emits SSE through worker open/next"
+    wait_http_contains "http://127.0.0.1:${port}/events/sse" "stream complete" \
+        "stream dispatch can reopen after completion"
     wait_event_contains "${TMP_ROOT}/stream.events.ndjson" "server.started" \
         "stream dispatch emits server.started"
 }
@@ -2870,11 +2723,30 @@ test_provider_runtime_smoke() {
         "provider websocket upstream records transform id"
     wait_http_contains "http://127.0.0.1:${provider_ws_admin_port}/admin/runtime/feishu" '"received_frames":1' \
         "provider websocket upstream admin records received frame"
+    if python3 - "${TMP_ROOT}/provider-ws-upstream.events.ndjson" <<'HANDSHAKE_ORDER'
+import json
+import sys
+with open(sys.argv[1]) as stream:
+    events = [json.loads(line) for line in stream if line.strip()]
+phases = [event['type'] for event in events
+          if event.get('provider') == 'feishu' and event.get('instance') == 'main']
+expected = ['provider.websocket.handshake_prepared',
+            'websocket_upstream.connected',
+            'provider.websocket.handshake_dispatched']
+positions = [phases.index(phase) for phase in expected]
+assert positions == sorted(positions), phases
+HANDSHAKE_ORDER
+    then
+        ok "provider websocket prepares handshake before opening transport"
+    else
+        ko "provider websocket prepares handshake before opening transport"
+        return 1
+    fi
 
     local data_plane_port
     data_plane_port="$(free_port)"
     local data_plane_config="${TMP_ROOT}/provider-runtime-dataplane.toml"
-    write_provider_runtime_config "$data_plane_config" "$data_plane_port"
+    write_provider_runtime_config "$data_plane_config" "$data_plane_port" "provider-runtime-dataplane"
     start_vhttpd "provider-runtime-dataplane" --config "$data_plane_config" >/dev/null
     wait_http_contains "http://127.0.0.1:${data_plane_port}/admin/runtime/feishu" '"app_count":1' \
         "provider data-plane admin exposes feishu runtime"
@@ -3080,6 +2952,19 @@ test_generic_event_pipeline_smoke() {
         "generic event preserves trace id"
 }
 
+# Wait for the fixture itself to acknowledge /hold. An inflight admin snapshot
+# alone can still describe the preceding baseline request while it is retiring.
+wait_controlled_worker_holding() {
+    local marker="$1"
+    for _ in $(seq 1 200); do
+        [[ -f "$marker" ]] && return 0
+        sleep 0.05
+    done
+    ko "controlled worker acknowledges held request"
+    print_logs
+    return 1
+}
+
 test_worker_queue_smoke() {
     echo ""
     echo "15. Worker queue smoke"
@@ -3132,21 +3017,47 @@ test_worker_queue_smoke() {
     local controlled_socket="/tmp/vhq-$$-${RANDOM}.sock"
     local controlled_release="${controlled_socket}.release"
     write_controlled_worker_script "$controlled_worker"
-    write_controlled_worker_queue_config "$controlled_config" "$controlled_port" "$controlled_worker" "$controlled_socket"
+    # Linux fasthttp binds connections to synchronous event-loop workers. A
+    # queued TCP flow can land behind /hold before reaching the worker queue.
+    # TLS dispatches each accepted connection independently on every platform,
+    # so these assertions measure worker admission rather than accept affinity.
+    cat >"${TMP_ROOT}/controlled-queue.cnf" <<'CERT'
+[req]
+distinguished_name = subject
+prompt = no
+x509_extensions = extensions
+[subject]
+CN = 127.0.0.1
+[extensions]
+subjectAltName = IP:127.0.0.1
+basicConstraints = critical,CA:TRUE
+keyUsage = critical,digitalSignature,keyEncipherment,keyCertSign
+CERT
+    openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+        -config "${TMP_ROOT}/controlled-queue.cnf" \
+        -keyout "${TMP_ROOT}/controlled-queue.key" \
+        -out "${TMP_ROOT}/controlled-queue.crt" >"${TMP_ROOT}/controlled-queue-tls.log" 2>&1
+    local CURL_CA_BUNDLE="${TMP_ROOT}/controlled-queue.crt"
+    export CURL_CA_BUNDLE
+    # The successful queue must survive several admin/503 round trips before
+    # release. Test the short timeout separately below, on a fresh runtime.
+    write_controlled_worker_queue_config "$controlled_config" "$controlled_port" "$controlled_worker" "$controlled_socket" 30000
     rm -f "$controlled_release"
     start_vhttpd "controlled-worker-queue" --config "$controlled_config" --admin-port "$controlled_admin_port" >/dev/null
-    local controlled_base_url="http://127.0.0.1:${controlled_port}"
+    local controlled_base_url="https://127.0.0.1:${controlled_port}"
     wait_http_contains "${controlled_base_url}/fast" "controlled worker ok" \
         "controlled worker queue runtime serves baseline request"
-    wait_http_contains "http://127.0.0.1:${controlled_admin_port}/admin/runtime" '"queue_timeout_ms":2500' \
-        "controlled worker admin runtime exposes queue timeout"
+    wait_http_contains "http://127.0.0.1:${controlled_admin_port}/admin/runtime" '"queue_timeout_ms":30000' \
+        "controlled worker admin runtime exposes successful queue budget"
 
-    curl -fsS --max-time 20 "${controlled_base_url}/hold?trace_id=e2e-worker-controlled-hold" >"$controlled_hold_body" 2>/dev/null &
+    curl -fsS --max-time 60 "${controlled_base_url}/hold?trace_id=e2e-worker-controlled-hold" >"$controlled_hold_body" 2>/dev/null &
     local controlled_hold_pid=$!
+    wait_controlled_worker_holding "${controlled_socket}.holding"
     wait_http_contains "http://127.0.0.1:${controlled_admin_port}/admin/workers" '"inflight_requests":1' \
         "controlled worker admin snapshot exposes busy worker"
-    curl -fsS --max-time 20 "${controlled_base_url}/fast?trace_id=e2e-worker-queued-success" >"$controlled_queued_body" 2>/dev/null &
+    curl -fsS --max-time 60 "${controlled_base_url}/fast?trace_id=e2e-worker-queued-success" >"$controlled_queued_body" 2>"${controlled_queued_body}.err" &
     local controlled_queued_pid=$!
+    LOG_FILES+=("${controlled_queued_body}.err")
     wait_http_contains "http://127.0.0.1:${controlled_admin_port}/admin/runtime" '"queue_depth":1' \
         "controlled worker admin runtime exposes queued request"
     expect_http_status_contains_once "${controlled_base_url}/fast?trace_id=e2e-worker-queue-full" \
@@ -3182,9 +3093,16 @@ test_worker_queue_smoke() {
     wait_event_contains "${TMP_ROOT}/controlled-worker-queue.events.ndjson" "e2e-worker-queued-success" \
         "controlled worker queued success preserves trace id"
 
-    rm -f "$controlled_release"
+    stop_test_processes
+    write_controlled_worker_queue_config "$controlled_config" "$controlled_port" "$controlled_worker" "$controlled_socket" 2500
+    start_vhttpd "controlled-worker-timeout" --config "$controlled_config" --admin-port "$controlled_admin_port" >/dev/null
+    wait_http_contains "${controlled_base_url}/fast" "controlled worker ok" \
+        "controlled timeout runtime serves baseline request"
+    wait_http_contains "http://127.0.0.1:${controlled_admin_port}/admin/runtime" '"queue_timeout_ms":2500' \
+        "controlled timeout runtime retains 2500 ms deadline"
     curl -fsS --max-time 20 "${controlled_base_url}/hold?trace_id=e2e-worker-controlled-timeout-hold" >"$controlled_timeout_hold_body" 2>/dev/null &
     local controlled_timeout_hold_pid=$!
+    wait_controlled_worker_holding "${controlled_socket}.holding"
     wait_http_contains "http://127.0.0.1:${controlled_admin_port}/admin/workers" '"inflight_requests":1' \
         "controlled worker admin snapshot exposes busy worker before timeout"
     expect_http_status_contains_once "${controlled_base_url}/fast?trace_id=e2e-worker-queue-timeout" \
@@ -3219,22 +3137,22 @@ require_binary
 mkdir -p "$TMP_ROOT"
 
 echo "=== vhttpd Config Acceptance Smoke Test ==="
-test_v1_compat_smoke
-test_v2_simple_site_smoke
-test_v2_diagnostics_smoke
-test_multisite_smoke
-test_wordpress_v2_smoke
-test_wordpress_installed_v2_smoke
-test_protocol_conversion_smoke
-test_relay_smoke
-test_websocket_dispatch_smoke
-test_provider_runtime_smoke
-test_db_runtime_smoke
-test_cache_runtime_smoke
-test_upload_event_pipeline_smoke
-test_generic_event_pipeline_smoke
-test_stream_dispatch_smoke
-test_worker_queue_smoke
+run_scenario test_v1_compat_smoke
+run_scenario test_v2_simple_site_smoke
+run_scenario test_v2_diagnostics_smoke
+run_scenario test_multisite_smoke
+run_scenario test_wordpress_v2_smoke
+run_scenario test_wordpress_installed_v2_smoke
+run_scenario test_protocol_conversion_smoke
+run_scenario test_relay_smoke
+run_scenario test_websocket_dispatch_smoke
+run_scenario test_provider_runtime_smoke
+run_scenario test_db_runtime_smoke
+run_scenario test_cache_runtime_smoke
+run_scenario test_upload_event_pipeline_smoke
+run_scenario test_generic_event_pipeline_smoke
+run_scenario test_stream_dispatch_smoke
+run_scenario test_worker_queue_smoke
 
 echo ""
 echo "=== Results ==="

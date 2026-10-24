@@ -9,6 +9,11 @@ import os
 import time
 import ws
 import feishu
+import json2
+
+struct InprocSnapshotResponse {
+	snapshot exec.AdminRuntimeSummary
+}
 
 fn inproc_vjsx_test_lane_host_signature(executor InProcVjsxExecutor, _idx int) string {
 	return executor.current_source_signature()
@@ -427,7 +432,8 @@ fn test_inproc_vjsx_executor_dispatch_http_exposes_runtime_snapshot() {
 	assert outcome.response.body.contains('"worker_pool":{"pool_size":0')
 	assert outcome.response.body.contains('"queue_capacity":8')
 	assert outcome.response.body.contains('"queue_timeout_ms":25')
-	assert outcome.response.body.contains('"capabilities":{"http":true')
+	snapshot := json2.decode[InprocSnapshotResponse](outcome.response.body) or { panic(err) }
+	assert snapshot.snapshot.capabilities['http'] or { false }
 	assert outcome.response.body.contains('"stats":{')
 }
 
@@ -2541,7 +2547,7 @@ export default app;
 		request_id: 'req_ws_timer'
 		trace_id:   'trace_ws_timer'
 		path:       '/ws'
-		client:     unsafe { nil }
+		lifecycle: &ws.DispatchConnState{phase: .open}
 	}
 	resp := executor.dispatch_websocket_event(mut facade, transport.WorkerWebSocketFrame{
 		mode:        'websocket_dispatch'
@@ -2618,7 +2624,7 @@ export default app;
 		request_id: 'req_ws_timer_pump'
 		trace_id:   'trace_ws_timer_pump'
 		path:       '/ws'
-		client:     unsafe { nil }
+		lifecycle: &ws.DispatchConnState{phase: .open}
 	}
 	resp := executor.dispatch_websocket_event(mut facade2, transport.WorkerWebSocketFrame{
 		mode:        'websocket_dispatch'
@@ -2636,8 +2642,16 @@ export default app;
 		metadata:    map[string]string{}
 	}) or { panic(err) }
 	assert resp.accepted
-	time.sleep(80 * time.millisecond)
-	after_wakeup := app.websocket.snapshot(true, 10, 0, '', 'ws_timer_pump')
+	// Observe the asynchronous wakeup instead of assuming the worker ran in 80ms.
+	// Do not pump manually: the regression must still prove automatic delivery.
+	deadline := time.now().add(2 * time.second)
+	mut after_wakeup := app.websocket.snapshot(true, 10, 0, '', 'ws_timer_pump')
+	for time.now() < deadline {
+		if after_wakeup.connections.len == 1
+			&& after_wakeup.connections[0].metadata['timer_ready'] == '1' { break }
+		time.sleep(time.millisecond)
+		after_wakeup = app.websocket.snapshot(true, 10, 0, '', 'ws_timer_pump')
+	}
 	assert after_wakeup.connections.len == 1
 	assert after_wakeup.connections[0].metadata['timer_ready'] == '1'
 }
@@ -2697,7 +2711,7 @@ export default app;
 		request_id: 'req_ws_timer_failure'
 		trace_id:   'trace_ws_timer_failure'
 		path:       '/ws'
-		client:     unsafe { nil }
+		lifecycle: &ws.DispatchConnState{phase: .open}
 	}
 	mut facade5 := app.as_facade()
 	resp := executor.dispatch_websocket_event(mut facade5, transport.WorkerWebSocketFrame{
@@ -2988,7 +3002,7 @@ export default app;
 		request_id: 'req_ws_main_failure'
 		trace_id:   'trace_ws_main_failure'
 		path:       '/ws'
-		client:     unsafe { nil }
+		lifecycle: &ws.DispatchConnState{phase: .open}
 	}
 	mut facade6 := app.as_facade()
 	open_resp := executor.dispatch_websocket_event(mut facade6, transport.WorkerWebSocketFrame{
@@ -3045,6 +3059,8 @@ export default app;
 }
 
 fn test_inproc_vjsx_executor_repo_paseo_relay_skeleton_boots() {
+	// HTTP initializes this lane on the caller; WebSocket then reuses it on
+	// its worker thread. Keep both to cover QuickJS stack-anchor handoff.
 	app_file := os.join_path(os.dir(@FILE), '..', 'examples', 'paseo-relay', 'app.mts')
 	assert os.exists(app_file)
 	mut executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{

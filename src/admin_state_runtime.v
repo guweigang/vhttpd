@@ -1,8 +1,9 @@
 module main
 
 import config
+import crypto.sha256
 import admin_state_store
-import json
+import json2 as json
 import os
 import runtime_plan
 import time
@@ -45,17 +46,25 @@ struct AdminDraftPublishResult {
 }
 
 struct AdminDraftMetadata {
-	source_path  string
-	include_path string
+	project_config string
+	source_path    string
+	include_path   string
 }
 
 struct AdminConfigFileEntry {
-	role         string
-	path         string
-	include_path string
-	exists       bool
-	bytes        int
-	draft_id     string
+	parent_path         string
+	relay_ids           []string
+	pipeline_ids        []string
+	websocket_listeners []string
+	adapter_ids         []string
+	engine_ids          []string
+	error               string
+	role                string
+	path                string
+	include_path        string
+	exists              bool
+	bytes               int
+	draft_id            string
 }
 
 struct AdminConfigFileDraftResult {
@@ -114,9 +123,13 @@ fn admin_state_draft_id(raw string) string {
 	return 'draft_${time.now().unix_micro()}'
 }
 
-fn (app App) admin_state_draft_source_path() string {
-	if app.plan.source.config_path.trim_space() != '' {
-		return app.plan.source.config_path
+fn (app &App) admin_state_draft_source_path() string {
+	return admin_source_path_from_plan(app.admin_plan_view().plan)
+}
+
+fn admin_source_path_from_plan(plan runtime_plan.RuntimePlan) string {
+	if plan.source.config_path.trim_space() != '' {
+		return plan.source.config_path
 	}
 	return os.join_path(os.getwd(), 'admin-draft.toml')
 }
@@ -147,13 +160,16 @@ fn (mut app App) admin_state_put_draft(id string, value string) !admin_state_sto
 fn (mut app App) admin_state_put_draft_metadata(id string, metadata AdminDraftMetadata) ! {
 	draft_id := admin_state_draft_id(id)
 	mut store := app.open_admin_state_store()!
-	store.put('draft_meta', draft_id, json.encode(metadata))!
+	store.put('draft_meta', draft_id, json.encode(metadata,
+		escape_unicode: true
+		time_as_unix:   true
+	))!
 }
 
 fn (mut app App) admin_state_get_draft_metadata(id string) ?AdminDraftMetadata {
 	mut store := app.open_admin_state_store() or { return none }
 	entry := store.get('draft_meta', id) or { return none }
-	return json.decode(AdminDraftMetadata, entry.value) or { none }
+	return json.decode[AdminDraftMetadata](entry.value) or { none }
 }
 
 fn (mut app App) admin_state_delete_draft(id string) ! {
@@ -181,6 +197,11 @@ fn (mut app App) admin_state_compile_draft(id string) !runtime_plan.RuntimePlan 
 	} else {
 		app.admin_state_draft_source_path()
 	}
+	if metadata.project_config != '' {
+		return config.load_runtime_plan_with_overrides(metadata.project_config, {
+			source_path: entry.value
+		})!
+	}
 	return config.load_runtime_plan_text(entry.value, source_path)!
 }
 
@@ -207,36 +228,55 @@ fn (mut app App) admin_state_diff_draft(id string) !RuntimePlanReplacementPrevie
 }
 
 fn (mut app App) admin_state_list_config_files() []AdminConfigFileEntry {
-	config_path := os.abs_path(app.admin_state_draft_source_path())
+	return admin_config_files_at_path(app.admin_state_draft_source_path())
+}
+
+fn admin_config_files_at_path(path string) []AdminConfigFileEntry {
+	config_path := os.abs_path(path)
 	config_dir := os.dir(config_path)
-	main_exists := os.exists(config_path)
-	mut files := [
-		AdminConfigFileEntry{
-			role:     'main'
-			path:     config_path
-			exists:   main_exists
-			bytes:    if main_exists { int(os.file_size(config_path)) } else { 0 }
-			draft_id: admin_state_config_draft_id(config_path)
-		},
-	]
-	text := os.read_file(config_path) or { return files }
-	for include_path in admin_state_extract_include_paths(text) {
-		resolved := if os.is_abs_path(include_path) {
-			os.abs_path(include_path)
-		} else {
-			os.abs_path(os.join_path(config_dir, include_path))
-		}
-		exists := os.exists(resolved)
+	sources := config.runtime_config_sources(config_path) or {
+		return [AdminConfigFileEntry{ role: 'main', path: config_path, exists: os.exists(config_path), error: err.msg() }]
+	}
+	mut files := []AdminConfigFileEntry{}
+	for source in sources {
+		is_main := source.path == config_path
 		files << AdminConfigFileEntry{
-			role:         'include'
-			path:         resolved
-			include_path: include_path
-			exists:       exists
-			bytes:        if exists { int(os.file_size(resolved)) } else { 0 }
-			draft_id:     admin_state_config_draft_id(resolved)
+			role:                if is_main { 'main' } else { 'include' }
+			path:                source.path
+			include_path:        if is_main {
+				''
+			} else {
+				admin_state_relative_path(config_dir, source.path)
+			}
+			parent_path:         source.parent_path
+			relay_ids:           source.relay_ids
+			pipeline_ids:        source.pipeline_ids
+			websocket_listeners: source.websocket_listeners
+			adapter_ids:         source.adapter_ids
+			engine_ids: source.engine_ids
+			exists:              os.exists(source.path)
+			bytes:               int(os.file_size(source.path))
+			draft_id:            admin_state_config_draft_id(source.path)
 		}
 	}
 	return files
+}
+
+fn (mut app App) admin_state_put_project_config_draft(id string, raw_path string, value string) !admin_state_store.Entry {
+	if raw_path.trim_space() == '' { return app.admin_state_put_draft(id, value) }
+	project_config := os.abs_path(app.admin_state_draft_source_path())
+	resolved := admin_state_resolve_config_file_path(project_config, raw_path)!
+	sources := config.runtime_config_sources(project_config)!
+	if !sources.any(it.path == resolved.path) {
+		return error('admin_config_source_not_in_project:${raw_path}')
+	}
+	entry := app.admin_state_put_draft(id, value)!
+	app.admin_state_put_draft_metadata(entry.key, AdminDraftMetadata{
+		project_config: project_config
+		source_path:    resolved.path
+		include_path:   resolved.include_path
+	})!
+	return entry
 }
 
 fn (mut app App) admin_state_open_config_file_draft(raw_path string) AdminConfigFileDraftResult {
@@ -273,8 +313,9 @@ fn (mut app App) admin_state_open_config_file_draft(raw_path string) AdminConfig
 		}
 	}
 	app.admin_state_put_draft_metadata(draft_id, AdminDraftMetadata{
-		source_path:  resolved.path
-		include_path: resolved.include_path
+		project_config: os.abs_path(config_path)
+		source_path:    resolved.path
+		include_path:   resolved.include_path
 	}) or {}
 	return AdminConfigFileDraftResult{
 		ok:           true
@@ -286,16 +327,20 @@ fn (mut app App) admin_state_open_config_file_draft(raw_path string) AdminConfig
 }
 
 fn (mut app App) admin_state_list_source_files() []AdminSourceFileEntry {
-	config_path := os.abs_path(app.admin_state_draft_source_path())
+	return admin_source_files_from_plan(app.admin_plan_view().plan)
+}
+
+fn admin_source_files_from_plan(plan runtime_plan.RuntimePlan) []AdminSourceFileEntry {
+	config_path := os.abs_path(admin_source_path_from_plan(plan))
 	config_dir := os.dir(config_path)
 	repo_root := admin_state_repo_root(config_path)
 	mut files := []AdminSourceFileEntry{}
 	mut seen := map[string]bool{}
-	for file in app.admin_state_list_config_files() {
+	for file in admin_config_files_at_path(config_path) {
 		files << admin_state_source_file_entry(repo_root, file.role, file.path, file.include_path)
 		seen[os.abs_path(file.path)] = true
 	}
-	for _, engine in app.plan.engines {
+	for _, engine in plan.engines {
 		entry := engine.options.strings['entry'].trim_space()
 		if entry == '' {
 			continue
@@ -384,46 +429,29 @@ fn (mut app App) admin_state_publish_source_draft(id string, raw_path string) Ad
 			language: admin_state_source_language(resolved.path)
 		}
 	}
-	old_exists := os.exists(resolved.path)
-	old_value := if old_exists { os.read_file(resolved.path) or { '' } } else { '' }
-	os.mkdir_all(os.dir(resolved.path)) or {
-		return AdminSourcePublishResult{
-			draft_id: id
-			ok:       false
-			error:    err.msg()
-			path:     resolved.path
-			language: admin_state_source_language(resolved.path)
+	if metadata.project_config != '' {
+		if resolved.path != metadata.source_path || os.abs_path(app.admin_state_draft_source_path()) != metadata.project_config {
+			return AdminSourcePublishResult{ draft_id: id, error: 'admin_config_draft_target_mismatch' }
 		}
 	}
-	os.write_file(resolved.path, entry.value) or {
-		return AdminSourcePublishResult{
-			draft_id: id
-			ok:       false
-			error:    err.msg()
-			path:     resolved.path
-			language: admin_state_source_language(resolved.path)
-		}
-	}
-	if admin_state_source_language(resolved.path) == 'toml' {
-		config.load_runtime_plan_file(app.admin_state_draft_source_path()) or {
-			admin_state_restore_publish_target(resolved.path, old_value, old_exists)
-			return AdminSourcePublishResult{
-				draft_id: id
-				ok:       false
-				error:    err.msg()
-				path:     resolved.path
-				language: 'toml'
-			}
-		}
+	language := admin_state_source_language(resolved.path)
+	config_path := app.admin_state_draft_source_path()
+	change := admin_state_snapshot_publish_target(resolved.path, entry.value) or {
+		return AdminSourcePublishResult{ draft_id: id, path: resolved.path, language: language, error: err.msg() }
 	}
 	mut store := app.open_admin_state_store() or {
-		return AdminSourcePublishResult{
-			draft_id: id
-			ok:       false
-			error:    err.msg()
-			path:     resolved.path
-			language: admin_state_source_language(resolved.path)
+		return AdminSourcePublishResult{ draft_id: id, path: resolved.path, language: language, error: err.msg() }
+	}
+	// Publication and recovery share the staged transaction, including missing
+	// sources. Callbacks retain immutable request data rather than borrowing App.
+	store.restore_config_files([change], fn [metadata, resolved, entry] () ! {
+		if metadata.project_config != '' {
+			config.load_runtime_plan_with_overrides(metadata.project_config, { resolved.path: entry.value })!
 		}
+	}, fn [language, config_path] () ! {
+		if language == 'toml' { config.load_runtime_plan_file(config_path)! }
+	}) or {
+		return AdminSourcePublishResult{ draft_id: id, path: resolved.path, language: language, error: err.msg() }
 	}
 	store.append_event('admin.source.published', {
 		'draft_id': id
@@ -457,6 +485,17 @@ fn (mut app App) admin_state_publish_draft(id string, raw_path string) AdminDraf
 			config_path: app.admin_state_draft_source_path()
 		}
 	}
+	if metadata.project_config != '' {
+		result := app.admin_state_publish_source_draft(id, target_path)
+		return AdminDraftPublishResult{
+			draft_id: id
+			ok: result.ok
+			error: result.error
+			config_path: metadata.project_config
+			path: result.path
+			include_path: metadata.include_path
+		}
+	}
 	entry := app.admin_state_get_draft(id) or {
 		return AdminDraftPublishResult{
 			draft_id:    id
@@ -484,69 +523,28 @@ fn (mut app App) admin_state_publish_draft(id string, raw_path string) AdminDraf
 			include_path: resolved.include_path
 		}
 	}
-	old_main := os.read_file(config_path) or {
-		return AdminDraftPublishResult{
-			draft_id:    id
-			ok:          false
-			error:       err.msg()
-			config_path: config_path
-		}
+	main_snapshot := admin_state_snapshot_publish_target(config_path, '') or {
+		return AdminDraftPublishResult{ draft_id: id, config_path: config_path, error: err.msg() }
 	}
-	old_target_exists := os.exists(resolved.path)
-	old_target := if old_target_exists { os.read_file(resolved.path) or { '' } } else { '' }
+	if !main_snapshot.original_exists {
+		return AdminDraftPublishResult{ draft_id: id, config_path: config_path, error: 'admin_draft_main_config_missing' }
+	}
+	old_main := main_snapshot.original
 	new_main := admin_state_add_include_to_config(old_main, resolved.include_path)
-	os.mkdir_all(os.dir(resolved.path)) or {
-		return AdminDraftPublishResult{
-			draft_id:     id
-			ok:           false
-			error:        err.msg()
-			config_path:  config_path
-			path:         resolved.path
-			include_path: resolved.include_path
-		}
+	target_change := admin_state_snapshot_publish_target(resolved.path, entry.value) or {
+		return AdminDraftPublishResult{ draft_id: id, config_path: config_path, path: resolved.path, include_path: resolved.include_path, error: err.msg() }
 	}
-	os.write_file(resolved.path, entry.value) or {
-		return AdminDraftPublishResult{
-			draft_id:     id
-			ok:           false
-			error:        err.msg()
-			config_path:  config_path
-			path:         resolved.path
-			include_path: resolved.include_path
-		}
-	}
-	os.write_file(config_path, new_main) or {
-		admin_state_restore_publish_target(resolved.path, old_target, old_target_exists)
-		return AdminDraftPublishResult{
-			draft_id:     id
-			ok:           false
-			error:        err.msg()
-			config_path:  config_path
-			path:         resolved.path
-			include_path: resolved.include_path
-		}
-	}
-	config.load_runtime_plan_file(config_path) or {
-		admin_state_restore_publish_target(resolved.path, old_target, old_target_exists)
-		os.write_file(config_path, old_main) or {}
-		return AdminDraftPublishResult{
-			draft_id:     id
-			ok:           false
-			error:        err.msg()
-			config_path:  config_path
-			path:         resolved.path
-			include_path: resolved.include_path
-		}
-	}
+	main_change := admin_state_store.ConfigFileRestore{ ...main_snapshot, value: new_main }
 	mut store := app.open_admin_state_store() or {
-		return AdminDraftPublishResult{
-			draft_id:     id
-			ok:           false
-			error:        err.msg()
-			config_path:  config_path
-			path:         resolved.path
-			include_path: resolved.include_path
-		}
+		return AdminDraftPublishResult{ draft_id: id, config_path: config_path, path: resolved.path, include_path: resolved.include_path, error: err.msg() }
+	}
+	overrides := { config_path: new_main, resolved.path: entry.value }
+	store.restore_config_files([target_change, main_change], fn [config_path, overrides] () ! {
+		config.load_runtime_plan_with_overrides(config_path, overrides)!
+	}, fn [config_path] () ! {
+		config.load_runtime_plan_file(config_path)!
+	}) or {
+		return AdminDraftPublishResult{ draft_id: id, config_path: config_path, path: resolved.path, include_path: resolved.include_path, error: err.msg() }
 	}
 	store.append_event('admin.draft.published', {
 		'draft_id':     id
@@ -688,7 +686,8 @@ fn admin_state_relative_path(base string, target string) string {
 fn admin_state_config_draft_id(path string) string {
 	name := os.file_name(path)
 	clean := name.trim_space().replace('.toml', '')
-	return 'config.${admin_state_safe_id(clean)}.toml'
+	suffix := sha256.hexhash(os.abs_path(path))[..12]
+	return 'config.${admin_state_safe_id(clean)}.${suffix}.toml'
 }
 
 fn admin_state_source_draft_id(repo_root string, path string) string {
@@ -808,14 +807,27 @@ fn admin_state_add_include_to_config(text string, include_path string) string {
 	return insert + text
 }
 
-fn admin_state_restore_publish_target(path string, old_value string, existed bool) {
-	if existed {
-		os.write_file(path, old_value) or {}
-		return
+// Resolve existing parent aliases (including platform temp-directory aliases)
+// once, then snapshot the final entry without following a replacement symlink.
+fn admin_state_snapshot_publish_target(path string, value string) !admin_state_store.ConfigFileRestore {
+	absolute := os.abs_path(path)
+	mut parent := os.dir(absolute)
+	mut suffix := os.file_name(absolute)
+	for !os.exists(parent) {
+		if os.is_link(parent) { return error('admin_source_publish_symlink_parent:${parent}') }
+		suffix = os.join_path(os.file_name(parent), suffix)
+		next := os.dir(parent)
+		if next == parent { return error('admin_source_publish_parent_missing') }
+		parent = next
 	}
-	if os.exists(path) {
-		os.rm(path) or {}
-	}
+	target := os.join_path(os.real_path(parent), suffix)
+	if os.is_link(target) { return error('admin_source_publish_symlink:${path}') }
+	exists := os.exists(target)
+	if exists && !os.is_file(target) { return error('admin_source_publish_not_regular:${path}') }
+	original := if exists { os.read_file(target)! } else { '' }
+	mode := if exists { int(os.stat(target)!.mode & 0o777) } else { 0o600 }
+	return admin_state_store.ConfigFileRestore{ path: target, original: original,
+		original_exists: exists, value: value, mode: mode }
 }
 
 fn admin_draft_plan_counts(plan runtime_plan.RuntimePlan) AdminDraftPlanCounts {

@@ -19,6 +19,13 @@ pub:
 }
 
 pub fn handle_forward_frame(mut registry ChannelRegistry, frame WireFrame, source_node_id string, default_buffer_limit int) ForwardingOutcome {
+	registry.mu.@lock()
+	defer { registry.mu.unlock() }
+	return handle_forward_frame_unlocked(mut registry, frame, source_node_id, default_buffer_limit)
+}
+
+// Caller holds the channel registry mutex across lookup and publication.
+fn handle_forward_frame_unlocked(mut registry ChannelRegistry, frame WireFrame, source_node_id string, default_buffer_limit int) ForwardingOutcome {
 	validate_frame(frame) or {
 		return forwarding_rejected(frame, err.msg())
 	}
@@ -43,6 +50,13 @@ pub fn handle_forward_frame(mut registry ChannelRegistry, frame WireFrame, sourc
 }
 
 fn handle_open_frame(mut registry ChannelRegistry, frame WireFrame, source_node_id string, default_buffer_limit int) ForwardingOutcome {
+	// Correlation admission must succeed before open replaces the registration,
+	// its queued frames and old correlation ownership. Empty means no binding.
+	if frame.correlation_id != '' {
+		validate_correlation_id(frame.correlation_id) or {
+			return forwarding_rejected(frame, err.msg())
+		}
+	}
 	channel := RelayChannel{
 		id:           frame.channel_id
 		node_id:      source_node_id
@@ -50,11 +64,11 @@ fn handle_open_frame(mut registry ChannelRegistry, frame WireFrame, source_node_
 		trace_id:     frame.trace_id
 		buffer_limit: if default_buffer_limit > 0 { default_buffer_limit } else { 64 }
 	}
-	registry.open_channel(channel) or {
+	registry.open_channel_unlocked(channel) or {
 		return forwarding_rejected(frame, err.msg())
 	}
 	if frame.correlation_id != '' {
-		registry.bind_correlation(frame.correlation_id, frame.channel_id) or {
+		registry.bind_correlation_unlocked(frame.correlation_id, frame.channel_id) or {
 			return forwarding_rejected(frame, err.msg())
 		}
 	}
@@ -71,7 +85,7 @@ fn handle_data_frame(mut registry ChannelRegistry, frame WireFrame) ForwardingOu
 	channel_id := resolve_forward_channel_id(registry, frame) or {
 		return forwarding_rejected(frame, 'relay_forward_unknown_channel')
 	}
-	registry.enqueue(channel_id, frame) or {
+	registry.enqueue_unlocked(channel_id, frame) or {
 		return forwarding_rejected(frame, err.msg())
 	}
 	return ForwardingOutcome{
@@ -87,7 +101,7 @@ fn handle_close_frame(mut registry ChannelRegistry, frame WireFrame) ForwardingO
 	channel_id := resolve_forward_channel_id(registry, frame) or {
 		return forwarding_rejected(frame, 'relay_forward_unknown_channel')
 	}
-	if !registry.close_channel(channel_id) {
+	if !registry.close_channel_unlocked(channel_id) {
 		return forwarding_rejected(frame, 'relay_forward_unknown_channel')
 	}
 	return ForwardingOutcome{
@@ -106,8 +120,8 @@ fn resolve_forward_channel_id(registry ChannelRegistry, frame WireFrame) ?string
 		}
 	}
 	if frame.correlation_id != '' {
-		if channel := registry.channel_for_correlation(frame.correlation_id) {
-			return channel.id
+		if channel_id := registry.channel_id_for_correlation(frame.correlation_id) {
+			return channel_id
 		}
 	}
 	return none

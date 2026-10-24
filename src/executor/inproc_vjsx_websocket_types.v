@@ -16,16 +16,17 @@ struct InProcVjsxWebSocketTaskResult {
 
 struct InProcVjsxWebSocketTaskSlot {
 mut:
-	mu     sync.Mutex
-	result InProcVjsxWebSocketTaskResult
-	ready  bool
+	control &ExecutorTaskControl = &ExecutorTaskControl{}
+	mu      sync.Mutex
+	result  InProcVjsxWebSocketTaskResult
+	ready   bool
 }
 
 struct InProcVjsxWebSocketTask {
-	app               AppFacade = NoOpAppFacade{}
+	app               EmbeddedHost @[required]
 	frame             transport.WorkerWebSocketFrame
-	done              chan bool
-	started           chan bool
+	done              chan bool @[required]
+	started           chan bool @[required]
 	affinity_key      string
 	affinity_priority int
 	actor_key         string
@@ -34,5 +35,5 @@ struct InProcVjsxWebSocketTask {
 	actor_persist     bool
 	actor_serialized  bool
 mut:
-	slot &InProcVjsxWebSocketTaskSlot = unsafe { nil }
+	slot &InProcVjsxWebSocketTaskSlot @[required]
 }

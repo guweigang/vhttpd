@@ -1,6 +1,18 @@
 module relay
 
 import dispatch
+import sync
+
+// One execution attempt owns one captured registration. Copies of the outcome
+// share this capability; public wire IDs cannot recreate it.
+@[heap]
+struct OutboundTracking {
+mut:
+	mu           sync.Mutex
+	attempted    bool
+	channel_id   string
+	registration ?&ChannelRegistration
+}
 
 pub enum OutboundAction {
 	ready
@@ -9,6 +21,7 @@ pub enum OutboundAction {
 }
 
 pub struct OutboundOutcome {
+	tracking &OutboundTracking = &OutboundTracking{}
 pub:
 	action     OutboundAction
 	relay_id   string
@@ -71,10 +84,40 @@ pub fn (mut rt Runtime) track_outbound_delivery(outbound OutboundOutcome, defaul
 			action:   .rejected
 			trace_id: outbound.trace_id
 			frame_id: outbound.frame_id
-			error:    if outbound.error != '' { outbound.error } else { 'relay_outbound_not_ready:${outbound.action}' }
+			error:    if outbound.error != '' {
+				outbound.error
+			} else {
+				'relay_outbound_not_ready:${outbound.action}'
+			}
 		}
 	}
-	return rt.handle_frame(outbound.frame, 'local:${outbound.relay_id}', default_buffer_limit)
+	mut tracking := outbound.tracking
+	tracking.mu.@lock()
+	defer { tracking.mu.unlock() }
+	if tracking.attempted {
+		return ForwardingOutcome{ action: .rejected, trace_id: outbound.trace_id, frame_id: outbound.frame_id, error: 'relay_outbound_already_tracked' }
+	}
+	tracking.attempted = true
+	rt.channels.mu.@lock()
+	defer { rt.channels.mu.unlock() }
+	result := handle_forward_frame_unlocked(mut rt.channels, outbound.frame, 'local:${outbound.relay_id}', default_buffer_limit)
+	if result.action in [.opened, .queued, .closed] {
+		if channel := rt.channels.channels[result.channel_id] {
+			tracking.registration = channel.registration
+			tracking.channel_id = result.channel_id
+		}
+	}
+	return result
+}
+
+// Caller holds tracking.mu and registry.mu, in that order.
+fn (outbound OutboundOutcome) owns_channel_unlocked(registry ChannelRegistry) bool {
+	tracking := outbound.tracking
+	if tracking.channel_id != outbound.frame.channel_id { return false }
+	expected := tracking.registration or { return false }
+	channel := registry.channels[tracking.channel_id] or { return false }
+	current := channel.registration or { return false }
+	return voidptr(expected) == voidptr(current)
 }
 
 pub fn (mut rt Runtime) finish_outbound_delivery(outbound OutboundOutcome) ForwardingOutcome {
@@ -86,7 +129,12 @@ pub fn (mut rt Runtime) finish_outbound_delivery(outbound OutboundOutcome) Forwa
 			error:    'relay_outbound_missing_channel_id'
 		}
 	}
-	if !rt.channels.retire_channel(outbound.frame.channel_id) {
+	mut tracking := outbound.tracking
+	tracking.mu.@lock()
+	defer { tracking.mu.unlock() }
+	rt.channels.mu.@lock()
+	defer { rt.channels.mu.unlock() }
+	if outbound.frame.channel_id !in rt.channels.channels {
 		return ForwardingOutcome{
 			action:     .rejected
 			channel_id: outbound.frame.channel_id
@@ -95,6 +143,10 @@ pub fn (mut rt Runtime) finish_outbound_delivery(outbound OutboundOutcome) Forwa
 			error:      'relay_channel_unknown:${outbound.frame.channel_id}'
 		}
 	}
+	if !outbound.owns_channel_unlocked(rt.channels) {
+		return ForwardingOutcome{ action: .rejected, channel_id: outbound.frame.channel_id, trace_id: outbound.trace_id, frame_id: outbound.frame_id, error: 'relay_outbound_registration_retired:${outbound.frame.channel_id}' }
+	}
+	rt.channels.retire_channel_unlocked(outbound.frame.channel_id)
 	return ForwardingOutcome{
 		action:     .closed
 		channel_id: outbound.frame.channel_id

@@ -1,6 +1,6 @@
 module executor
 
-import json
+import json2 as json
 import vjsx
 
 struct InProcVjsxRuntimeEvent {}
@@ -24,7 +24,7 @@ fn InProcVjsxRuntimeEvent.fields_from_js_value(val vjsx.Value) map[string]string
 	if raw.trim_space() == '' || raw.trim_space() == 'undefined' || raw.trim_space() == 'null' {
 		return map[string]string{}
 	}
-	return json.decode(map[string]string, raw) or {
+	return json.decode[map[string]string](raw) or {
 		map[string]string{}
 	}
 }

@@ -11,10 +11,10 @@ import worker
 // Keep as a free function: static-method callbacks can pass syntax checks and
 // fail later during C generation, as seen with websocket callback symbols.
 fn openai_mapped_progress_body_cb(request &http.Request, chunk []u8, _body_read_so_far u64, _body_expected_size u64, status_code int) ! {
-	mut state := &OpenAIMappedStreamProxyState(unsafe { nil })
-	pstate := unsafe { &voidptr(&state) }
-	unsafe {
-		*pstate = request.user_ptr
+	mut state := unsafe { &OpenAIMappedStreamProxyState(request.user_ptr) }
+	if state.done {
+		state.line_buffer = ''
+		return error(openai_stream_done_fetch_error)
 	}
 	if status_code > 0 {
 		state.status_code = status_code
@@ -33,10 +33,15 @@ fn openai_mapped_progress_body_cb(request &http.Request, chunk []u8, _body_read_
 	for state.line_buffer.contains('\n') {
 		line := state.line_buffer.all_before('\n')
 		state.line_buffer = state.line_buffer.all_after('\n')
-		state.write_mapped_line(line)!
-	}
-	if state.done {
-		return error(openai_stream_done_fetch_error)
+		state.write_mapped_line(line) or {
+			state.done = true
+			state.line_buffer = ''
+			return err
+		}
+		if state.done {
+			state.line_buffer = ''
+			return error(openai_stream_done_fetch_error)
+		}
 	}
 }
 
@@ -76,6 +81,7 @@ fn OpenAIProxyRuntime.mapped_stream(mut app App, mut ctx Context, plan openai.Op
 			trace_id, start_ms, 'missing_backend_base_url',
 			'OpenAI backend ${plan.backend_name} has no base_url')
 	}
+	// veb retains socket ownership in reusable mode, including failure paths.
 	ctx.takeover_conn_reusable()
 	ctx.conn.set_write_timeout(time.infinite)
 	ctx.conn.set_read_timeout(time.infinite)
@@ -85,7 +91,7 @@ fn OpenAIProxyRuntime.mapped_stream(mut app App, mut ctx Context, plan openai.Op
 	headers['x-vhttpd-trace-id'] = trace_id
 	headers['x-vhttpd-openai-backend'] = plan.backend_name
 	mut state := &OpenAIMappedStreamProxyState{
-		app:              unsafe { &app }
+		mapper_host:      OpenAIFrameMapperHost(app)
 		conn:             client_conn
 		method:           method
 		status_code:      200
@@ -122,7 +128,7 @@ fn OpenAIProxyRuntime.mapped_stream(mut app App, mut ctx Context, plan openai.Op
 		}
 		OpenAIErrorResponseWriter.write_conn(mut client_conn, 502, err_headers,
 			'upstream_fetch_failed', fetch_err_msg, 'server_error')
-		client_conn.close() or {}
+		ctx.set_header(.connection, 'close')
 		return veb.no_result()
 	}
 	if state.status_code >= 400 && !state.headers_written {
@@ -143,7 +149,7 @@ fn OpenAIProxyRuntime.mapped_stream(mut app App, mut ctx Context, plan openai.Op
 				}
 				OpenAIErrorResponseWriter.write_conn(mut client_conn, 502, err_headers,
 					'upstream_fetch_failed', fallback_err_msg, 'server_error')
-				client_conn.close() or {}
+				ctx.set_header(.connection, 'close')
 				return veb.no_result()
 			}
 		}
@@ -158,7 +164,7 @@ fn OpenAIProxyRuntime.mapped_stream(mut app App, mut ctx Context, plan openai.Op
 		}
 		OpenAIErrorResponseWriter.write_conn(mut client_conn, state.status_code, err_headers, code,
 			message, typ)
-		client_conn.close() or {}
+		ctx.set_header(.connection, 'close')
 		return veb.no_result()
 	}
 	if state.line_buffer.trim_space() != '' {

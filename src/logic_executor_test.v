@@ -3,7 +3,7 @@ module main
 import admin
 import config
 import executor
-import json
+import json2 as json
 import os
 import relay
 import runtime_plan
@@ -35,7 +35,7 @@ fn test_php_cgi_executor_identity() {
 fn test_app_facade_returns_env_for_named_executor_pool() {
 	mut app := App{
 		engines: EngineRuntime{
-			primary:    worker.WorkerState{
+			primary:    &worker.WorkerState{
 				worker_backend: worker.WorkerBackendRuntime{
 					env: {
 						'VPHP_WP_ROOT': '/main'
@@ -67,7 +67,7 @@ fn test_app_facade_returns_env_for_named_executor_pool() {
 fn test_plan_engine_ids_resolve_to_worker_pools() {
 	app := App{
 		engines: EngineRuntime{
-			primary:    worker.WorkerState{
+			primary:    &worker.WorkerState{
 				logic_executor: executor.SocketWorkerExecutor{}
 			}
 			additional: {
@@ -127,7 +127,7 @@ fn test_plan_engine_without_worker_pool_does_not_resolve_to_primary() {
 			}
 		}
 		engines:   EngineRuntime{
-			primary: worker.WorkerState{
+			primary: &worker.WorkerState{
 				logic_executor: executor.SocketWorkerExecutor{}
 			}
 		}
@@ -153,7 +153,7 @@ fn test_logic_executor_can_hold_inproc_vjsx_executor() {
 fn test_admin_runtime_snapshot_exposes_embedded_logic_executor_identity() {
 	mut app := App{
 		engines: EngineRuntime{
-			primary: worker.WorkerState{
+			primary: &worker.WorkerState{
 				worker_backend_mode: .disabled
 				lifecycle:           'embedded_host'
 				logic_executor:      new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
@@ -189,19 +189,19 @@ fn test_admin_runtime_snapshot_exposes_pipeline_runtime_summary() {
 				listener_id: 'blog'
 				rules:       [
 					RuntimeRouteRule{
-						pipeline_id:  'blog/home'
+						pipeline_id:    'blog/home'
 						pipeline_group: 'site:blog'
-						ingress_id:   'listener:blog'
-						egress_ref:   'adapter:blog-home'
-						match_method: ['GET']
-						match_path:   ['*']
-						executor:     'php'
+						ingress_id:     'listener:blog'
+						egress_ref:     'adapter:blog-home'
+						match_method:   ['GET']
+						match_path:     ['*']
+						executor:       'php'
 					},
 				]
 			}
 		}
 		engines:   EngineRuntime{
-			primary: worker.WorkerState{
+			primary: &worker.WorkerState{
 				logic_executor: executor.SocketWorkerExecutor{}
 			}
 		}
@@ -221,7 +221,7 @@ fn test_admin_runtime_snapshot_exposes_pipeline_runtime_summary() {
 fn test_internal_admin_runtime_exposes_worker_logic_executor_identity() {
 	mut app := App{
 		engines: EngineRuntime{
-			primary: worker.WorkerState{
+			primary: &worker.WorkerState{
 				worker_backend_mode: .required
 				lifecycle:           'php_worker_host'
 				logic_executor:      executor.SocketWorkerExecutor{}
@@ -234,7 +234,7 @@ fn test_internal_admin_runtime_exposes_worker_logic_executor_identity() {
 		path:   '/admin/runtime'
 	})
 	assert resp.status == 200
-	snapshot := json.decode(executor.AdminRuntimeSummary, resp.body) or { panic(err) }
+	snapshot := json.decode[executor.AdminRuntimeSummary](resp.body) or { panic(err) }
 	assert snapshot.logic_executor.kind == 'php'
 	assert snapshot.logic_executor.lifecycle == 'php_worker_host'
 	assert snapshot.logic_executor.model == 'worker'
@@ -308,7 +308,7 @@ egress = "adapter:admin"
 		}
 	})
 	assert resp.status == 200
-	preview := json.decode(RuntimePlanReplacementPreview, resp.body) or { panic(err) }
+	preview := json.decode[RuntimePlanReplacementPreview](resp.body) or { panic(err) }
 	assert !preview.allowed
 	assert preview.strategy == 'engine_drain_required'
 	assert preview.actions.any(it.kind == 'drain_engines' && it.targets == ['app'])
@@ -323,7 +323,7 @@ egress = "adapter:admin"
 		method: 'GET'
 		path:   '/admin/runtime/plan/replacement/state'
 	})
-	state := json.decode(RuntimePlanReplacementRuntimeSnapshot, state_resp.body) or { panic(err) }
+	state := json.decode[RuntimePlanReplacementRuntimeSnapshot](state_resp.body) or { panic(err) }
 	assert state.previews_total == 1
 	assert state.last_preview.kind == 'preview'
 	assert state.last_preview.status == 'previewed'
@@ -378,7 +378,7 @@ egress = "adapter:ws"
 	mut app := App{
 		plan:          current_plan
 		protocols:     ProtocolRuntimeHub{
-			runtime_plan_json: json.encode(current_plan)
+			runtime_plan_json: json.encode(current_plan, escape_unicode: true, time_as_unix: true)
 		}
 		pipelines:     PipelineRuntime.new(current_plan, 'web', runtime_routes_from_plan(current_plan,
 			'web'), '', '', map[string]string{}, map[string]&worker.WorkerState{})
@@ -396,7 +396,7 @@ egress = "adapter:ws"
 		}
 	})
 	assert resp.status == 200
-	result := json.decode(RuntimePlanReplacementApplyResult, resp.body) or { panic(err) }
+	result := json.decode[RuntimePlanReplacementApplyResult](resp.body) or { panic(err) }
 	assert result.applied
 	assert result.status == 'applied'
 	assert result.strategy == 'lightweight'
@@ -473,10 +473,10 @@ egress = "adapter:hello"
 	mut app := App{
 		plan:      current_plan
 		protocols: ProtocolRuntimeHub{
-			runtime_plan_json: json.encode(current_plan)
+			runtime_plan_json: json.encode(current_plan, escape_unicode: true, time_as_unix: true)
 		}
 		engines:   EngineRuntime{
-			primary: worker.WorkerState{
+			primary: &worker.WorkerState{
 				logic_executor: executor.SocketWorkerExecutor{}
 			}
 		}
@@ -492,7 +492,7 @@ egress = "adapter:hello"
 		}
 	})
 	assert resp.status == 409
-	result := json.decode(RuntimePlanReplacementApplyResult, resp.body) or { panic(err) }
+	result := json.decode[RuntimePlanReplacementApplyResult](resp.body) or { panic(err) }
 	assert !result.applied
 	assert result.status == 'rejected'
 	assert result.strategy == 'lightweight'
@@ -545,7 +545,7 @@ egress = "adapter:hello"
 	mut app := App{
 		plan:          current_plan
 		protocols:     ProtocolRuntimeHub{
-			runtime_plan_json: json.encode(current_plan)
+			runtime_plan_json: json.encode(current_plan, escape_unicode: true, time_as_unix: true)
 		}
 		control_plane: ControlPlaneRuntime{
 			event_log: event_log
@@ -565,7 +565,7 @@ egress = "adapter:hello"
 		}
 	})
 	assert resp.status == 409
-	result := json.decode(RuntimePlanReplacementApplyResult, resp.body) or { panic(err) }
+	result := json.decode[RuntimePlanReplacementApplyResult](resp.body) or { panic(err) }
 	assert !result.applied
 	assert result.status == 'rejected'
 	assert result.strategy == 'relay_reload_required'
@@ -618,7 +618,7 @@ egress = "adapter:hello"
 	mut app := App{
 		plan:          current_plan
 		protocols:     ProtocolRuntimeHub{
-			runtime_plan_json: json.encode(current_plan)
+			runtime_plan_json: json.encode(current_plan, escape_unicode: true, time_as_unix: true)
 		}
 		control_plane: ControlPlaneRuntime{
 			event_log: event_log
@@ -638,7 +638,7 @@ egress = "adapter:hello"
 		}
 	})
 	assert resp.status == 409
-	result := json.decode(RuntimePlanReplacementApplyResult, resp.body) or { panic(err) }
+	result := json.decode[RuntimePlanReplacementApplyResult](resp.body) or { panic(err) }
 	assert !result.applied
 	assert result.status == 'rejected'
 	assert result.strategy == 'listener_restart_required'
@@ -703,7 +703,7 @@ egress = "adapter:hello"
 	mut app := App{
 		plan:          current_plan
 		protocols:     ProtocolRuntimeHub{
-			runtime_plan_json: json.encode(current_plan)
+			runtime_plan_json: json.encode(current_plan, escape_unicode: true, time_as_unix: true)
 		}
 		control_plane: ControlPlaneRuntime{
 			event_log: event_log
@@ -723,7 +723,7 @@ egress = "adapter:hello"
 		}
 	})
 	assert resp.status == 409
-	result := json.decode(RuntimePlanReplacementApplyResult, resp.body) or { panic(err) }
+	result := json.decode[RuntimePlanReplacementApplyResult](resp.body) or { panic(err) }
 	assert !result.applied
 	assert result.status == 'rejected'
 	assert result.strategy == 'blocked'
@@ -782,10 +782,10 @@ egress = "adapter:app"
 	mut app := App{
 		plan:      current_plan
 		protocols: ProtocolRuntimeHub{
-			runtime_plan_json: json.encode(current_plan)
+			runtime_plan_json: json.encode(current_plan, escape_unicode: true, time_as_unix: true)
 		}
 		engines:   EngineRuntime{
-			primary: worker.WorkerState{
+			primary: &worker.WorkerState{
 				worker_backend: worker.WorkerBackendRuntime{
 					managed_workers: [
 						transport.ManagedWorker{
@@ -809,7 +809,7 @@ egress = "adapter:app"
 		}
 	})
 	assert resp.status == 202
-	result := json.decode(RuntimePlanReplacementApplyResult, resp.body) or { panic(err) }
+	result := json.decode[RuntimePlanReplacementApplyResult](resp.body) or { panic(err) }
 	assert !result.applied
 	assert result.status == 'draining'
 	assert result.strategy == 'engine_drain_required'
@@ -898,10 +898,10 @@ egress = "terminal:accepted"
 	mut app := App{
 		plan:          current_plan
 		protocols:     ProtocolRuntimeHub{
-			runtime_plan_json: json.encode(current_plan)
+			runtime_plan_json: json.encode(current_plan, escape_unicode: true, time_as_unix: true)
 		}
 		engines:       EngineRuntime{
-			primary: worker.WorkerState{
+			primary: &worker.WorkerState{
 				logic_executor: executor.SocketWorkerExecutor{}
 			}
 		}
@@ -920,7 +920,7 @@ egress = "terminal:accepted"
 		}
 	})
 	assert resp.status == 200
-	result := json.decode(RuntimePlanReplacementApplyResult, resp.body) or { panic(err) }
+	result := json.decode[RuntimePlanReplacementApplyResult](resp.body) or { panic(err) }
 	assert result.applied
 	assert result.status == 'applied'
 	assert result.strategy == 'lightweight'
@@ -990,7 +990,7 @@ fn test_runtime_plan_replacement_snapshot_exposes_pending_refresh_error() {
 			}
 		}
 		engines:     EngineRuntime{
-			primary: worker.WorkerState{
+			primary: &worker.WorkerState{
 				logic_executor: executor.SocketWorkerExecutor{}
 			}
 		}
@@ -1050,10 +1050,10 @@ egress = "adapter:app"
 	mut app := App{
 		plan:      current_plan
 		protocols: ProtocolRuntimeHub{
-			runtime_plan_json: json.encode(current_plan)
+			runtime_plan_json: json.encode(current_plan, escape_unicode: true, time_as_unix: true)
 		}
 		engines:   EngineRuntime{
-			primary: worker.WorkerState{
+			primary: &worker.WorkerState{
 				worker_backend: worker.WorkerBackendRuntime{
 					managed_workers: [
 						transport.ManagedWorker{
@@ -1077,10 +1077,10 @@ egress = "adapter:app"
 		}
 	})
 	assert resp.status == 202
-	result := json.decode(RuntimePlanReplacementApplyResult, resp.body) or { panic(err) }
+	result := json.decode[RuntimePlanReplacementApplyResult](resp.body) or { panic(err) }
 	assert result.status == 'draining'
 
-	app.engines.request_finished(EngineLifecyclePort{}, '/tmp/app-refresh.sock')
+	app.engines.request_finished(worker.LifecyclePort{}, '/tmp/app-refresh.sock')
 	state := app.runtime_plan_replacement_snapshot()
 
 	assert state.pending.active
@@ -1118,7 +1118,7 @@ fn test_internal_admin_runtime_plan_replacement_apply_rejects_when_pending_exist
 			'config': '/tmp/next.toml'
 		}
 	})
-	result := json.decode(RuntimePlanReplacementApplyResult, resp.body) or { panic(err) }
+	result := json.decode[RuntimePlanReplacementApplyResult](resp.body) or { panic(err) }
 
 	assert resp.status == 409
 	assert !result.applied
@@ -1158,7 +1158,7 @@ fn test_internal_admin_runtime_plan_replacement_finalize_requires_pending() {
 		method: 'POST'
 		path:   '/admin/runtime/plan/replacement/finalize'
 	})
-	result := json.decode(RuntimePlanReplacementFinalizeResult, resp.body) or { panic(err) }
+	result := json.decode[RuntimePlanReplacementFinalizeResult](resp.body) or { panic(err) }
 
 	assert resp.status == 409
 	assert !result.applied
@@ -1194,7 +1194,7 @@ fn test_internal_admin_runtime_plan_replacement_cancel_requires_pending() {
 		method: 'POST'
 		path:   '/admin/runtime/plan/replacement/cancel'
 	})
-	result := json.decode(RuntimePlanReplacementCancelResult, resp.body) or { panic(err) }
+	result := json.decode[RuntimePlanReplacementCancelResult](resp.body) or { panic(err) }
 
 	assert resp.status == 409
 	assert !result.cancelled
@@ -1230,7 +1230,7 @@ fn test_internal_admin_runtime_plan_replacement_cancel_resumes_pending_workers()
 			}
 		}
 		engines:       EngineRuntime{
-			primary: worker.WorkerState{
+			primary: &worker.WorkerState{
 				worker_backend: worker.WorkerBackendRuntime{
 					managed_workers: [
 						transport.ManagedWorker{
@@ -1253,7 +1253,7 @@ fn test_internal_admin_runtime_plan_replacement_cancel_resumes_pending_workers()
 		method: 'POST'
 		path:   '/admin/runtime/plan/replacement/cancel'
 	})
-	result := json.decode(RuntimePlanReplacementCancelResult, resp.body) or { panic(err) }
+	result := json.decode[RuntimePlanReplacementCancelResult](resp.body) or { panic(err) }
 
 	assert resp.status == 200
 	assert result.cancelled
@@ -1293,7 +1293,7 @@ fn test_internal_admin_runtime_plan_replacement_finalize_waits_for_drain() {
 			}
 		}
 		engines:       EngineRuntime{
-			primary: worker.WorkerState{
+			primary: &worker.WorkerState{
 				worker_backend: worker.WorkerBackendRuntime{
 					managed_workers: [
 						transport.ManagedWorker{
@@ -1316,7 +1316,7 @@ fn test_internal_admin_runtime_plan_replacement_finalize_waits_for_drain() {
 		method: 'POST'
 		path:   '/admin/runtime/plan/replacement/finalize'
 	})
-	result := json.decode(RuntimePlanReplacementFinalizeResult, resp.body) or { panic(err) }
+	result := json.decode[RuntimePlanReplacementFinalizeResult](resp.body) or { panic(err) }
 
 	assert resp.status == 409
 	assert !result.applied
@@ -1396,7 +1396,7 @@ egress = "adapter:app"
 			}
 		}
 		engines:       EngineRuntime{
-			primary: worker.WorkerState{
+			primary: &worker.WorkerState{
 				worker_backend: worker.WorkerBackendRuntime{
 					managed_workers: [
 						transport.ManagedWorker{
@@ -1418,7 +1418,7 @@ egress = "adapter:app"
 		method: 'POST'
 		path:   '/admin/runtime/plan/replacement/finalize'
 	})
-	result := json.decode(RuntimePlanReplacementFinalizeResult, resp.body) or { panic(err) }
+	result := json.decode[RuntimePlanReplacementFinalizeResult](resp.body) or { panic(err) }
 
 	assert resp.status == 200
 	assert result.applied
@@ -1483,10 +1483,10 @@ egress = "adapter:app"
 	mut app := App{
 		plan:      current_plan
 		protocols: ProtocolRuntimeHub{
-			runtime_plan_json: json.encode(current_plan)
+			runtime_plan_json: json.encode(current_plan, escape_unicode: true, time_as_unix: true)
 		}
 		engines:   EngineRuntime{
-			primary: worker.WorkerState{
+			primary: &worker.WorkerState{
 				worker_backend: worker.WorkerBackendRuntime{
 					managed_workers: [
 						transport.ManagedWorker{
@@ -1508,7 +1508,7 @@ egress = "adapter:app"
 			'config': config_file
 		}
 	})
-	apply_result := json.decode(RuntimePlanReplacementApplyResult, apply_resp.body) or {
+	apply_result := json.decode[RuntimePlanReplacementApplyResult](apply_resp.body) or {
 		panic(err)
 	}
 	assert apply_resp.status == 202
@@ -1522,7 +1522,7 @@ egress = "adapter:app"
 		method: 'POST'
 		path:   '/admin/runtime/plan/replacement/finalize'
 	})
-	finalize_result := json.decode(RuntimePlanReplacementFinalizeResult, finalize_resp.body) or {
+	finalize_result := json.decode[RuntimePlanReplacementFinalizeResult](finalize_resp.body) or {
 		panic(err)
 	}
 
@@ -1598,7 +1598,7 @@ egress = "adapter:app"
 		strategy:    'engine_drain_required'
 	}
 
-	prepared := app.prepare_runtime_plan_replacement_runtime(pending) or { panic(err) }
+	prepared := app.prepare_runtime_plan_replacement_runtime(pending, app.replacement_base_snapshot()) or { panic(err) }
 
 	assert prepared.listener == 'web'
 	assert prepared.plan.engines['app'].options.strings['entry'] == next_entry
@@ -1647,10 +1647,10 @@ egress = "adapter:app"
 	mut app := App{
 		plan:      current_plan
 		protocols: ProtocolRuntimeHub{
-			runtime_plan_json: json.encode(current_plan)
+			runtime_plan_json: json.encode(current_plan, escape_unicode: true, time_as_unix: true)
 		}
 		engines:   EngineRuntime{
-			primary: worker.WorkerState{
+			primary: &worker.WorkerState{
 				worker_backend: worker.WorkerBackendRuntime{
 					managed_workers: [
 						transport.ManagedWorker{
@@ -1673,7 +1673,7 @@ egress = "adapter:app"
 		}
 	})
 	assert resp.status == 202
-	result := json.decode(RuntimePlanReplacementApplyResult, resp.body) or { panic(err) }
+	result := json.decode[RuntimePlanReplacementApplyResult](resp.body) or { panic(err) }
 	assert !result.applied
 	assert result.status == 'drain_ready'
 	assert result.drains[0].ready_count == 1

@@ -26,9 +26,12 @@ fn noop_dispatch_services(trace_id string) dispatch.RuntimeServices {
 }
 
 fn app_dispatch_services(mut app App, trace_id string) dispatch.RuntimeServices {
-	return dispatch.RuntimeServices(AppDispatchServices{
-		app:   &app
-		trace: trace_id
+	mut control := &app.control_plane
+	return dispatch.RuntimeServices(EventDispatchServices{
+		emit_fn: fn [mut control] (event string, fields map[string]string) {
+			control.emit(event, fields)
+		}
+		trace:   trace_id
 	})
 }
 
@@ -56,12 +59,14 @@ fn http_ingress_request_for_rule(method string, path string, dispatch_path strin
 }
 
 fn render_http_terminal_adapter(mut app App, mut ctx Context, method string, path string, normalized_target string, query map[string]string, body_on_head string, remote_addr string, request_id string, trace_id string, start_ms i64, matched_rule ?RuntimeRouteRule, mut adapter dispatch.EgressAdapter) veb.Result {
+	ctx.begin_observed_adapter()
+	defer { ctx.end_observed_adapter() }
 	exchange := http_exchange_from_context(ctx, method, normalized_target, query, remote_addr,
 		request_id, trace_id, if rule := matched_rule { rule.ingress_id } else { '' }, if rule := matched_rule {
-		rule.pipeline_id
-	} else {
-		''
-	})
+			rule.pipeline_id
+		} else {
+			''
+		})
 	mut services := noop_dispatch_services(trace_id)
 	outcome := adapter.deliver(mut services, exchange) or {
 		return HttpResponseRuntime.dispatch_error(mut app, mut ctx, http_ingress_request_for_rule(method,
@@ -73,14 +78,14 @@ fn render_http_terminal_adapter(mut app App, mut ctx Context, method string, pat
 		outcome, matched_rule)
 }
 
-fn run_http_route_transforms(mut app App, mut ctx Context, rule RuntimeRouteRule, req MatchedHttpPipelineRequest) ?veb.Result {
+fn run_http_route_transforms(mut app App, mut ctx Context, rule RuntimeRouteRule, req MatchedHttpPipelineRequest, view TransformDispatchView) ?veb.Result {
 	if rule.transform_refs.len == 0 {
 		return none
 	}
 	mut exchange := http_exchange_from_context(ctx, req.method, req.normalized_target, req.query,
 		req.remote_addr, req.req_id, req.trace_id, rule.ingress_id, rule.pipeline_id)
 	mut services := app_dispatch_services(mut app, req.trace_id)
-	result := app.run_transform_refs(rule.transform_refs, mut services, mut exchange) or {
+	result := app.run_transform_refs_on_view(view, rule.transform_refs, mut services, mut exchange) or {
 		return HttpResponseRuntime.dispatch_error(mut app, mut ctx, http_ingress_request_for_rule(req.method,
 			req.path, req.path, req.body_on_head, req.remote_addr, req.req_id, req.trace_id,
 			req.start_ms, rule), err.msg())

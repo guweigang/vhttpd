@@ -1,6 +1,14 @@
 module main
 
 fn (mut app App) finalize_runtime_plan_replacement() RuntimePlanReplacementFinalizeResult {
+	app.begin_runtime_plan_replacement_operation() or {
+		result := RuntimePlanReplacementFinalizeResult{ status: 'rejected', error: err.msg() }
+		app.emit_runtime_plan_replacement_finalize_rejected(result)
+		app.record_runtime_plan_replacement_finalize(result)
+		return result
+	}
+	defer { app.end_runtime_plan_replacement_operation() }
+	base := app.replacement_base_snapshot()
 	pending := app.refresh_pending_runtime_plan_replacement() or {
 		result := RuntimePlanReplacementFinalizeResult{
 			applied: false
@@ -43,7 +51,7 @@ fn (mut app App) finalize_runtime_plan_replacement() RuntimePlanReplacementFinal
 		app.record_runtime_plan_replacement_finalize(result)
 		return result
 	}
-	mut prepared := app.prepare_runtime_plan_replacement_runtime(pending) or {
+	mut prepared := app.prepare_runtime_plan_replacement_runtime(pending, base) or {
 		result := RuntimePlanReplacementFinalizeResult{
 			config_path: pending.config_path
 			applied:     false
@@ -56,7 +64,7 @@ fn (mut app App) finalize_runtime_plan_replacement() RuntimePlanReplacementFinal
 		app.record_runtime_plan_replacement_finalize(result)
 		return result
 	}
-	app.apply_prepared_runtime_plan_replacement(mut prepared) or {
+	publication := app.apply_prepared_runtime_plan_replacement(mut prepared) or {
 		result := RuntimePlanReplacementFinalizeResult{
 			config_path: pending.config_path
 			applied:     false
@@ -69,15 +77,7 @@ fn (mut app App) finalize_runtime_plan_replacement() RuntimePlanReplacementFinal
 		app.record_runtime_plan_replacement_finalize(result)
 		return result
 	}
-	app.emit('runtime.plan.replaced', {
-		'config_path':          pending.config_path
-		'changed_pipelines':    pending.changed_pipelines.join(',')
-		'diagnostic_codes':     runtime_plan_diagnostic_codes(prepared.plan)
-		'diagnostics_count':    '${prepared.plan.diagnostics.len}'
-		'unchanged_pipelines':  pending.unchanged_pipelines.join(',')
-		'drain_engines':        pending.drain_engines.join(',')
-		'replacement_strategy': pending.strategy
-	})
+	app.emit('runtime.plan.replaced', runtime_plan_publication_event_fields(publication, runtime_plan_replacement_preview_from_pending(pending)))
 	result := RuntimePlanReplacementFinalizeResult{
 		config_path: pending.config_path
 		applied:     true

@@ -48,11 +48,12 @@ final class ProviderEventRouter
             return $this->codexNotificationRouter->dispatch($payload, $request, (string) $streamId);
         }
 
-        if ($eventType === 'feishu.message.sent' || $eventType === 'feishu.message.updated') {
-            $messageId = $payload['message_id'] ?? '';
-            if ($streamId && $messageId) {
-                $this->streamRepo->bindResponseMessageId($streamId, $messageId);
-            }
+        // An update receipt has no resource-creation authority. A late failure
+        // update must never replace a newer message/generation binding.
+        if ($provider === 'feishu' && $eventType === 'feishu.message.sent') {
+            // No trace_id fallback, ID-only update or credential acquisition here.
+            // Only a previously reserved producer publication can bind a receipt.
+            $this->streamRepo->acceptSentReceipt($payload);
         }
 
         return null;

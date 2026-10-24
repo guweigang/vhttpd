@@ -1,7 +1,7 @@
 module main
 
 import executor
-import json
+import json2 as json
 import net.http
 
 struct VjsxEventDispatchRequest {
@@ -27,10 +27,14 @@ fn vjsx_event_path(event string, handler string) string {
 }
 
 fn vjsx_event_payload[T](payload T) string {
-	return json.encode(payload)
+	return json.encode(payload, escape_unicode: true, time_as_unix: true)
 }
 
 fn (mut app App) dispatch_vjsx_event(req VjsxEventDispatchRequest) !executor.HttpLogicDispatchOutcome {
+	return app.dispatch_vjsx_event_on_runtime(req, app.engine_runtime_snapshot())!
+}
+
+fn (mut app App) dispatch_vjsx_event_on_runtime(req VjsxEventDispatchRequest, retained EngineRuntime) !executor.HttpLogicDispatchOutcome {
 	handler := req.handler.trim_space().clone()
 	event := req.event.trim_space().clone()
 	path := vjsx_event_path(event, handler)
@@ -59,17 +63,27 @@ fn (mut app App) dispatch_vjsx_event(req VjsxEventDispatchRequest) !executor.Htt
 		path:          path
 		original_path: path
 		req:           http_req
-		remote_addr:   if req.remote_addr.trim_space() == '' { '127.0.0.1' } else { req.remote_addr }
+		remote_addr:   if req.remote_addr.trim_space() == '' {
+			'127.0.0.1'
+		} else {
+			req.remote_addr
+		}
 		trace_id:      req.trace_id
 		request_id:    req.request_id
 	}
-	return app.engines.dispatch_http_for_kind(app.vjsx_event_dispatch_executor(req.executor), mut
+	mut engines := retained
+	return engines.dispatch_http_for_kind(engines.vjsx_event_dispatch_executor(req.executor), mut
 		facade, dispatch_req)!
 }
 
-fn (app App) vjsx_event_dispatch_executor(executor_name string) string {
+fn (mut app App) vjsx_event_dispatch_executor(executor_name string) string {
+	engines := app.engine_runtime_snapshot()
+	return engines.vjsx_event_dispatch_executor(executor_name)
+}
+
+fn (engines &EngineRuntime) vjsx_event_dispatch_executor(executor_name string) string {
 	clean := executor_name.trim_space()
-	if clean != '' && clean in app.engines.additional {
+	if clean != '' && clean in engines.additional {
 		return clean
 	}
 	return 'vjsx'

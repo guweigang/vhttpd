@@ -6,6 +6,7 @@
 *.db-shm
 *.db-wal
 .runtime/
+.deps/
 tmp/
 .vbuild/
 *.vjsbuild/

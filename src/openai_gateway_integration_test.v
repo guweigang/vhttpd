@@ -1,6 +1,7 @@
 module main
 
 import config
+import json2 as json
 import api.openai
 import provider
 import net
@@ -310,7 +311,6 @@ fn openai_integration_start_gateway(port int, upstream_port int, plugin_file str
 				conn_rooms:       map[string]map[string]bool{}
 				conn_meta:        map[string]map[string]string{}
 				pending:          map[string][]ws.HubPendingMessage{}
-				upstream_started: map[string]bool{}
 				fixture_runtime:  map[string]ws.FixtureRuntime{}
 			}
 		}
@@ -861,6 +861,11 @@ fn test_openai_gateway_stream_passthrough_finishes_on_done_before_upstream_close
 	assert raw.contains('\r\n0\r\n\r\n')
 }
 
+struct OpenAIIntegrationMappedChunk {
+	id     string
+	object string
+}
+
 fn test_openai_gateway_mapped_ollama_ndjson_stream_outputs_openai_sse() {
 	temp_dir := os.join_path(os.temp_dir(), 'vhttpd_openai_gateway_ollama_stream_integration_test')
 	os.rmdir_all(temp_dir) or {}
@@ -886,8 +891,15 @@ fn test_openai_gateway_mapped_ollama_ndjson_stream_outputs_openai_sse() {
 		data:   '{"model":"public-model","stream":true,"messages":[{"role":"user","content":"hi"}]}'
 	) or { panic(err) }
 	assert resp.status_code == 200
-	assert resp.body.contains('data: {"id":"chatcmpl-')
-	assert resp.body.contains('"object":"chat.completion.chunk"')
+	mut mapped_chunks := 0
+	for line in resp.body.split_into_lines() {
+		if !line.starts_with('data: ') || line == 'data: [DONE]' { continue }
+		chunk := json.decode[OpenAIIntegrationMappedChunk](line.all_after('data: ')) or { panic(err) }
+		assert chunk.id.starts_with('chatcmpl-')
+		assert chunk.object == 'chat.completion.chunk'
+		mapped_chunks++
+	}
+	assert mapped_chunks > 0
 	assert resp.body.contains('"content":"你"')
 	assert resp.body.contains('"content":"好"')
 	assert resp.body.contains('data: [DONE]')

@@ -22,11 +22,11 @@ pub:
 pub struct RuntimeContext {
 pub:
 	// route_resolver resolves a normalized command to a routing target.
-	route_resolver fn (NormalizedCommand) ProviderRouteKind = unsafe { nil }
+	route_resolver fn (NormalizedCommand) ProviderRouteKind @[required]
 	// route_handler returns the handler for a given route kind.
-	route_handler fn (ProviderRouteKind) ?Handler = unsafe { nil }
+	route_handler fn (ProviderRouteKind) ?Handler @[required]
 	// instance_upsert_apply creates/updates an instance and applies it.
-	instance_upsert_apply fn (string, string, string, string) !InstanceOutcome = unsafe { nil }
+	instance_upsert_apply fn (string, string, string, string) !InstanceOutcome @[required]
 	// instance_ensure ensures an instance exists.
-	instance_ensure fn (string, string) !InstanceOutcome = unsafe { nil }
+	instance_ensure fn (string, string) !InstanceOutcome @[required]
 }

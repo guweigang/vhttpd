@@ -54,8 +54,9 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_codex_query_command_runs_rpc_a
 			payload:    '{"method":"model/list","result":{"models":[{"id":"gpt-5.4","provider":"openai"},{"id":"gpt-5.3-codex","provider":"openai"}]},"has_error":false}'
 		}) or { panic(err) }
 		assert rpc_resp.handled
-		assert rpc_resp.commands.len == 1
+		codexbot_ts_assert_single_response(rpc_resp.commands)
 		assert rpc_resp.commands[0].type_ == 'provider.message.update'
+		assert rpc_resp.commands[0].metadata['stream_generation'] != ''
 		assert rpc_resp.commands[0].content.contains('**Codex RPC**')
 		assert rpc_resp.commands[0].content.contains('Method: `model/list`')
 		assert rpc_resp.commands[0].content.contains('gpt-5.4')
@@ -164,8 +165,9 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_empty_and_error_ar
 			payload:    '{"method":"thread/read","result":{"thread":{"id":"thread_read_fallback_001","turns":[]}},"has_error":false}'
 		}) or { panic(err) }
 		assert empty_rpc.handled
-		assert empty_rpc.commands.len == 1
+		codexbot_ts_assert_single_response(empty_rpc.commands)
 		assert empty_rpc.commands[0].type_ == 'provider.message.update'
+		assert empty_rpc.commands[0].metadata['stream_generation'] != ''
 		assert empty_rpc.commands[0].content.contains('**Thread Read**')
 		assert empty_rpc.commands[0].content.contains('thread_read_fallback_001')
 		assert empty_rpc.commands[0].content.contains('No assistant reply was found in this thread yet.')
@@ -201,8 +203,9 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_empty_and_error_ar
 			payload:    '{"method":"thread/read","has_error":true,"error_message":"thread read failed"}'
 		}) or { panic(err) }
 		assert error_rpc.handled
-		assert error_rpc.commands.len == 1
+		codexbot_ts_assert_single_response(error_rpc.commands)
 		assert error_rpc.commands[0].type_ == 'provider.message.update'
+		assert error_rpc.commands[0].metadata['stream_generation'] != ''
 		assert error_rpc.commands[0].content.contains('**Codex RPC Error**')
 		assert error_rpc.commands[0].content.contains('Method: `thread/read`')
 		assert error_rpc.commands[0].content.contains('thread read failed')
@@ -287,7 +290,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_codex_thread_read_uses_bound_t
 				'chat_codexbot_ts_codex_thread', 'om_codexbot_ts_codex_bad_json')
 		}) or { panic(err) }
 		assert bad_json_resp.handled
-		assert bad_json_resp.commands.len == 1
+		codexbot_ts_assert_single_response(bad_json_resp.commands)
 		assert bad_json_resp.commands[0].text.contains('Invalid JSON params.')
 	})
 }
@@ -341,7 +344,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_codex_alias_commands_are_mobil
 				'chat_codexbot_ts_codex_aliases', 'om_codexbot_ts_codex_thread_alias_no_thread')
 		}) or { panic(err) }
 		assert no_thread_resp.handled
-		assert no_thread_resp.commands.len == 1
+		codexbot_ts_assert_single_response(no_thread_resp.commands)
 		assert no_thread_resp.commands[0].text.contains('**Thread Required**')
 
 		seed_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
@@ -406,7 +409,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_codex_alias_commands_are_mobil
 				'chat_codexbot_ts_codex_aliases', 'om_codexbot_ts_codex_unsupported')
 		}) or { panic(err) }
 		assert unsupported_resp.handled
-		assert unsupported_resp.commands.len == 1
+		codexbot_ts_assert_single_response(unsupported_resp.commands)
 		assert unsupported_resp.commands[0].text.contains('**Unsupported Codex Method**')
 		assert unsupported_resp.commands[0].text.contains('Method: `turn/start`')
 	})
@@ -489,6 +492,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_projects_assistant
 		assert read_resp.handled
 		assert read_resp.commands.len == 5
 		assert read_resp.commands[0].type_ == 'provider.message.update'
+		assert read_resp.commands[0].metadata['stream_generation'] != ''
 		assert read_resp.commands[1].type_ == 'stream.finish'
 		assert read_resp.commands[2].type_ == 'provider.message.send'
 		assert read_resp.commands[3].type_ == 'stream.append'
@@ -565,6 +569,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_prefers_current_tu
 		assert read_resp.handled
 		assert read_resp.commands.len == 5
 		assert read_resp.commands[0].type_ == 'provider.message.update'
+		assert read_resp.commands[0].metadata['stream_generation'] != ''
 		assert read_resp.commands[1].type_ == 'stream.finish'
 		assert read_resp.commands[2].type_ == 'provider.message.send'
 		assert read_resp.commands[3].type_ == 'stream.append'
@@ -641,6 +646,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_combines_multiple_
 		assert read_resp.handled
 		assert read_resp.commands.len == 8
 		assert read_resp.commands[0].type_ == 'provider.message.update'
+		assert read_resp.commands[0].metadata['stream_generation'] != ''
 		assert read_resp.commands[1].type_ == 'stream.finish'
 		assert read_resp.commands[2].type_ == 'provider.message.send'
 		assert read_resp.commands[3].type_ == 'stream.append'

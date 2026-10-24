@@ -4,28 +4,37 @@ import executor as exec
 import upstream.transport
 import net.http
 import os
-import json
+import json2 as json
 import time
 
 fn codexbot_semantics_payload(text string, chat_id string, message_id string) string {
 	content_json := json.encode({
 		'text': text
-	})
-	return '{"event":{"sender":{"sender_id":{"open_id":"ou_test_user"}},"message":{"message_id":"${message_id}","chat_id":"${chat_id}","message_type":"text","content":${json.encode(content_json)}}}}'
+	}, escape_unicode: true, time_as_unix: true)
+	return '{"event":{"sender":{"sender_id":{"open_id":"ou_test_user"}},"message":{"message_id":"${message_id}","chat_id":"${chat_id}","message_type":"text","content":${json.encode(content_json,
+		escape_unicode: true
+		time_as_unix:   true
+	)}}}}'
 }
 
 fn codexbot_semantics_thread_payload(text string, chat_id string, message_id string, root_id string, parent_id string) string {
 	content_json := json.encode({
 		'text': text
-	})
-	return '{"event":{"sender":{"sender_id":{"open_id":"ou_test_user"}},"message":{"message_id":"${message_id}","chat_id":"${chat_id}","message_type":"text","root_id":"${root_id}","parent_id":"${parent_id}","content":${json.encode(content_json)}}}}'
+	}, escape_unicode: true, time_as_unix: true)
+	return '{"event":{"sender":{"sender_id":{"open_id":"ou_test_user"}},"message":{"message_id":"${message_id}","chat_id":"${chat_id}","message_type":"text","root_id":"${root_id}","parent_id":"${parent_id}","content":${json.encode(content_json,
+		escape_unicode: true
+		time_as_unix:   true
+	)}}}}'
 }
 
 fn codexbot_semantics_payload_with_event(text string, chat_id string, message_id string, event_id string, create_time string) string {
 	content_json := json.encode({
 		'text': text
-	})
-	return '{"header":{"event_id":"${event_id}","event_type":"im.message.receive_v1"},"event":{"sender":{"sender_id":{"open_id":"ou_test_user"}},"message":{"message_id":"${message_id}","chat_id":"${chat_id}","message_type":"text","create_time":"${create_time}","content":${json.encode(content_json)}}}}'
+	}, escape_unicode: true, time_as_unix: true)
+	return '{"header":{"event_id":"${event_id}","event_type":"im.message.receive_v1"},"event":{"sender":{"sender_id":{"open_id":"ou_test_user"}},"message":{"message_id":"${message_id}","chat_id":"${chat_id}","message_type":"text","create_time":"${create_time}","content":${json.encode(content_json,
+		escape_unicode: true
+		time_as_unix:   true
+	)}}}}'
 }
 
 fn codexbot_semantics_with_temp_db(db_name string, run fn ()) {
@@ -178,7 +187,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_structured_error_notification_
 			payload:    '{"method":"error","params":{"threadId":"thread_semantics_error_001","turnId":"turn_semantics_error_001","willRetry":false,"error":{"message":"request failed","codexErrorInfo":{"responseStreamConnectionFailed":{"httpStatusCode":502}},"additionalDetails":"gateway dropped"}}}'
 		}) or { panic(err) }
 		assert error_resp.handled
-		assert error_resp.commands.len == 1
+		codexbot_ts_assert_single_response(error_resp.commands)
 		assert error_resp.commands[0].type_ == 'provider.message.send'
 		assert error_resp.commands[0].content.contains('request failed')
 		assert error_resp.commands[0].content.contains('Response Stream Connection Failed')
@@ -247,7 +256,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_realtime_error_is_treat
 			payload:    '{"method":"thread/realtime/error","params":{"threadId":"thread_semantics_realtime_error_001","message":"realtime transport failed"}}'
 		}) or { panic(err) }
 		assert error_resp.handled
-		assert error_resp.commands.len == 1
+		codexbot_ts_assert_single_response(error_resp.commands)
 		assert error_resp.commands[0].type_ == 'provider.message.send'
 		assert error_resp.commands[0].content.contains('realtime transport failed')
 
@@ -313,7 +322,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_system_error_status_uses_threa
 			payload:    '{"method":"thread/status/changed","params":{"threadId":"thread_semantics_system_error_001","status":{"type":"systemError"}}}'
 		}) or { panic(err) }
 		assert error_resp.handled
-		assert error_resp.commands.len == 1
+		codexbot_ts_assert_single_response(error_resp.commands)
 		assert error_resp.commands[0].type_ == 'provider.message.send'
 		assert error_resp.commands[0].content.contains('systemError')
 		assert error_resp.commands[0].content.contains('did not include structured error details')
@@ -532,7 +541,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_start_continues_into_tu
 			payload:    '{"method":"thread/start","result":{"threadId":"thread_semantics_continue_001"},"has_error":false}'
 		}) or { panic(err) }
 		assert rpc_resp.handled
-		assert rpc_resp.commands.len == 1
+		codexbot_ts_assert_single_response(rpc_resp.commands)
 		assert rpc_resp.commands[0].type_ == 'provider.rpc.call'
 		assert rpc_resp.commands[0].method == 'turn/start'
 		assert rpc_resp.commands[0].stream_id == stream_id
@@ -627,6 +636,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_prefers_current_tu
 		assert read_resp.handled
 		assert read_resp.commands.len == 2
 		assert read_resp.commands[0].type_ == 'provider.message.update'
+		assert read_resp.commands[0].metadata['stream_generation'] != ''
 		assert read_resp.commands[0].text.contains('new answer from current turn')
 		assert !read_resp.commands[0].text.contains('old final answer')
 		assert read_resp.commands[1].type_ == 'stream.finish'
@@ -689,7 +699,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_stale_busy_stream_detaches_bef
 				'om_codexbot_ts_semantics_stale_busy_first')
 		}) or { panic(err) }
 		assert first_resp.handled
-		assert first_resp.commands.len == 1
+		codexbot_ts_assert_single_response(first_resp.commands)
 
 		time.sleep(5 * time.millisecond)
 
@@ -709,7 +719,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_stale_busy_stream_detaches_bef
 				'om_codexbot_ts_semantics_stale_busy_second')
 		}) or { panic(err) }
 		assert second_resp.handled
-		assert second_resp.commands.len == 1
+		codexbot_ts_assert_single_response(second_resp.commands)
 		assert second_resp.commands[0].type_ == 'provider.rpc.call'
 
 		state_resp := executor.dispatch_http(mut app, exec.HttpLogicDispatchRequest{
@@ -762,7 +772,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_busy_guard_isolated_to_same_fe
 				'om_semantics_thread_busy_parent')
 		}) or { panic(err) }
 		assert first_resp.handled
-		assert first_resp.commands.len == 1
+		codexbot_ts_assert_single_response(first_resp.commands)
 
 		second_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
 			mode:        'websocket_upstream'
@@ -781,7 +791,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_busy_guard_isolated_to_same_fe
 				'om_semantics_thread_busy_parent_2')
 		}) or { panic(err) }
 		assert second_resp.handled
-		assert second_resp.commands.len == 1
+		codexbot_ts_assert_single_response(second_resp.commands)
 		assert second_resp.commands[0].type_ == 'provider.message.send'
 		assert second_resp.commands[0].target_type == 'message_id'
 		assert second_resp.commands[0].target == 'om_codexbot_ts_semantics_thread_busy_second'
@@ -819,7 +829,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_dedupes_replayed_feishu_messag
 				'chat_codexbot_ts_semantics_dedup_message', 'om_codexbot_ts_semantics_dedup_same')
 		}) or { panic(err) }
 		assert first_resp.handled
-		assert first_resp.commands.len == 1
+		codexbot_ts_assert_single_response(first_resp.commands)
 		assert first_resp.commands[0].stream_id != ''
 
 		replay_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
@@ -889,7 +899,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_dedupes_replayed_feishu_messag
 				'evt_codexbot_ts_semantics_dedup_event', '1710000000')
 		}) or { panic(err) }
 		assert first_resp.handled
-		assert first_resp.commands.len == 1
+		codexbot_ts_assert_single_response(first_resp.commands)
 		assert first_resp.commands[0].stream_id != ''
 
 		replay_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
@@ -1119,7 +1129,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_rename_error_restores_p
 				'om_codexbot_ts_semantics_rename_pending_view')
 		}) or { panic(err) }
 		assert pending_thread_view.handled
-		assert pending_thread_view.commands.len == 1
+		codexbot_ts_assert_single_response(pending_thread_view.commands)
 		assert pending_thread_view.commands[0].text.contains('Broken Name')
 
 		error_resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
@@ -1133,8 +1143,9 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_rename_error_restores_p
 			payload:    '{"method":"thread/name/set","result":{"thread":{"id":"thread_semantics_rename_001"}},"has_error":true,"error":{"message":"rename failed"}}'
 		}) or { panic(err) }
 		assert error_resp.handled
-		assert error_resp.commands.len == 1
+		codexbot_ts_assert_single_response(error_resp.commands)
 		assert error_resp.commands[0].type_ == 'provider.message.update'
+		assert error_resp.commands[0].metadata['stream_generation'] != ''
 		assert error_resp.commands[0].content.contains('rename failed')
 
 		thread_view := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
@@ -1152,7 +1163,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_rename_error_restores_p
 				'om_codexbot_ts_semantics_rename_view_after_error')
 		}) or { panic(err) }
 		assert thread_view.handled
-		assert thread_view.commands.len == 1
+		codexbot_ts_assert_single_response(thread_view.commands)
 		assert thread_view.commands[0].text.contains('- Name: Original Name')
 		assert !thread_view.commands[0].text.contains('- Name: Broken Name')
 	})

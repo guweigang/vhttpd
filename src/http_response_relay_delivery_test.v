@@ -63,9 +63,9 @@ fn test_relay_delivery_http_outcome_reports_wait_target_unavailable_without_trac
 	}
 	mut adapter := dispatch.EgressAdapter(dispatch.relay_delivery_adapter('relay-edge',
 		'relay:edge', 'wait', 1000, {
-		'frame_kind': 'open'
-		'route':      'relay/local-response'
-	}))
+			'frame_kind': 'open'
+			'route':      'relay/local-response'
+		}))
 	delivery := adapter.deliver(mut services, public_exchange) or { panic(err) }
 	rt := relay.empty_runtime()
 	outbound := rt.prepare_outbound_delivery(delivery)
@@ -206,6 +206,7 @@ fn test_relay_delivery_send_http_outcome_can_complete_wait_from_returned_frame()
 		'channel_id': 'chan_1'
 	}, 'wait', 1000))
 
+	assert rt.track_outbound_delivery(projection, 4).action == .queued
 	outcome := relay_delivery_send_http_outcome(mut rt, projection, relay.CarrierSendResult{
 		ok:       true
 		trace_id: 'trace_1'
@@ -227,8 +228,9 @@ fn test_relay_delivery_send_http_outcome_times_out_wait_without_returned_frame()
 		'trace_id':   'trace_1'
 		'request_id': 'req_1'
 		'channel_id': 'chan_1'
+		'frame_kind': 'open'
 	}, 'wait', 1))
-	rt.track_outbound_delivery(projection, 4)
+	assert rt.track_outbound_delivery(projection, 4).action == .opened
 
 	outcome := relay_delivery_send_http_outcome(mut rt, projection, relay.CarrierSendResult{
 		ok:       true

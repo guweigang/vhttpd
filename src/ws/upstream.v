@@ -9,6 +9,11 @@ pub fn (mut h HubState) fixture_ensure(name string) FixtureRuntime {
 	defer {
 		h.upstream_mu.unlock()
 	}
+	return h.fixture_ensure_locked(name).snapshot_copy()
+}
+
+// Only the hub owner borrows this value; mutations stay under upstream_mu.
+fn (mut h HubState) fixture_ensure_locked(name string) FixtureRuntime {
 	if name in h.fixture_runtime {
 		return h.fixture_runtime[name]
 	}
@@ -23,12 +28,26 @@ pub fn (mut h HubState) fixture_ensure(name string) FixtureRuntime {
 	return runtime
 }
 
+fn (runtime FixtureRuntime) snapshot_copy() FixtureRuntime {
+	mut events := []UpstreamEventSnapshot{cap: runtime.recent_events.len}
+	for event in runtime.recent_events {
+		events << UpstreamEventSnapshot{
+			...event
+			metadata: event.metadata.clone()
+		}
+	}
+	return FixtureRuntime{
+		...runtime
+		recent_events: events
+	}
+}
+
 pub fn (mut h HubState) fixture_update(name string, runtime FixtureRuntime) {
 	h.upstream_mu.@lock()
 	defer {
 		h.upstream_mu.unlock()
 	}
-	h.fixture_runtime[name] = runtime
+	h.fixture_runtime[name] = runtime.snapshot_copy()
 }
 
 pub fn (mut h HubState) fixture_app_names() []string {
@@ -60,17 +79,21 @@ pub fn (mut h HubState) fixture_snapshot(name string) UpstreamSnapshot {
 }
 
 pub fn (mut h HubState) fixture_note_send(instance string, ok bool) {
-	mut runtime := h.fixture_ensure(instance)
+	h.upstream_mu.@lock()
+	defer { h.upstream_mu.unlock() }
+	mut runtime := h.fixture_ensure_locked(instance)
 	if ok {
 		runtime.messages_sent++
 	} else {
 		runtime.send_errors++
 	}
-	h.fixture_update(instance, runtime)
+	h.fixture_runtime[instance] = runtime
 }
 
 pub fn (mut h HubState) fixture_push_event(instance string, event UpstreamEventSnapshot, recent_event_limit int) {
-	mut runtime := h.fixture_ensure(instance)
+	h.upstream_mu.@lock()
+	defer { h.upstream_mu.unlock() }
+	mut runtime := h.fixture_ensure_locked(instance)
 	mut events := runtime.recent_events.clone()
 	events << event
 	limit := if recent_event_limit > 0 { recent_event_limit } else { 20 }
@@ -79,7 +102,7 @@ pub fn (mut h HubState) fixture_push_event(instance string, event UpstreamEventS
 	}
 	runtime.received_frames++
 	runtime.recent_events = events
-	h.fixture_update(instance, runtime)
+	h.fixture_runtime[instance] = runtime
 }
 
 pub fn (mut h HubState) fixture_send(instance string) UpstreamSendResult {

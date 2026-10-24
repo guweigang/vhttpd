@@ -51,14 +51,37 @@ pub fn (mut rt ProviderRuntime) clear_stream_targets(stream_id string) bool {
 	if stream_id == '' {
 		return false
 	}
-	if stream_id !in rt.stream_map {
-		return false
+	// The active route exists independently of optional message targets. In
+	// particular, removing the last target must not make later release a no-op.
+	mut cleared := false
+	if stream_id in rt.stream_map {
+		rt.stream_map.delete(stream_id)
+		cleared = true
 	}
-	rt.stream_map.delete(stream_id)
 	if rt.active_stream_id == stream_id {
 		rt.active_stream_id = ''
+		cleared = true
 	}
-	return true
+	// Thread routes and fallback records belong to the stream even when its
+	// last message target is already gone. Keep the reusable thread itself.
+	for thread_id, bound_stream_id in rt.thread_stream_map {
+		if bound_stream_id == stream_id {
+			rt.thread_stream_map.delete(thread_id)
+			cleared = true
+		}
+	}
+	if rt.clear_read_fallback(stream_id) {
+		cleared = true
+	}
+	// Retain a response tombstone so a late result cannot become an unscoped
+	// response or fall back to a newer active stream. Sending is retired too.
+	for id, pending in rt.pending_rpcs {
+		if pending.stream_id == stream_id && !pending.routing_retired {
+			rt.pending_rpcs[id] = PendingRpc{ ...pending, routing_retired: true }
+			cleared = true
+		}
+	}
+	return cleared
 }
 
 pub fn (mut rt ProviderRuntime) clear_thread_binding(thread_id string) bool {
@@ -154,34 +177,9 @@ pub fn (rt ProviderRuntime) stream_targets(stream_id string) []CodexTarget {
 
 pub fn (rt ProviderRuntime) pending_stream_id() string {
 	for _, p in rt.pending_rpcs {
-		if p.stream_id != '' {
+		if p.stream_id != '' && !p.routing_retired {
 			return p.stream_id
 		}
 	}
 	return ''
-}
-
-pub fn (mut rt ProviderRuntime) queue_error_burst(stream_id string, raw_payload string) bool {
-	mut exists := false
-	for msg in rt.err_bursts[stream_id] {
-		if msg == raw_payload {
-			exists = true
-			break
-		}
-	}
-	if !exists {
-		rt.err_bursts[stream_id] << raw_payload
-	}
-	if rt.err_pending_flushes[stream_id] {
-		return false
-	}
-	rt.err_pending_flushes[stream_id] = true
-	return true
-}
-
-pub fn (mut rt ProviderRuntime) take_error_burst(stream_id string) []string {
-	errors := rt.err_bursts[stream_id].clone()
-	rt.err_bursts.delete(stream_id)
-	rt.err_pending_flushes.delete(stream_id)
-	return errors
 }

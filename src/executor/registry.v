@@ -28,7 +28,7 @@ pub:
 // breaking the circular dependency with module main.
 pub struct ExecutorFactory {
 pub:
-	new_inproc fn (VjsxRuntimeFacadeConfig) LogicExecutor = unsafe { nil }
+	new_inproc fn (VjsxRuntimeFacadeConfig) LogicExecutor @[required]
 }
 
 pub fn ExecutorFactory.new_default() ExecutorFactory {

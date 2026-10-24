@@ -10,15 +10,16 @@ pub enum InboundAction {
 
 pub struct InboundOutcome {
 pub:
-	action       InboundAction
-	relay_id     string
-	carrier_id   string
-	trace_id     string
-	frame_id     string
-	frame        WireFrame
-	registration RegistrationResult
-	forwarding   ForwardingOutcome
-	error        string
+	action          InboundAction
+	relay_id        string
+	carrier_id      string
+	trace_id        string
+	frame_id        string
+	frame           WireFrame
+	registration    RegistrationResult
+	carrier_binding ?&CarrierBinding
+	forwarding      ForwardingOutcome
+	error           string
 }
 
 pub fn (mut rt Runtime) handle_inbound_frame(carrier_id string, frame WireFrame, default_buffer_limit int) InboundOutcome {
@@ -76,8 +77,9 @@ fn (mut rt Runtime) handle_inbound_registration(carrier_id string, frame WireFra
 			error:      err.msg()
 		}
 	}
+	mut binding := ?&CarrierBinding(none)
 	if result.accepted {
-		rt.register_carrier(result.relay_id, carrier_id) or {
+		binding = rt.carriers.bind(result.relay_id, carrier_id) or {
 			return InboundOutcome{
 				action:       .rejected
 				relay_id:     result.relay_id
@@ -91,14 +93,19 @@ fn (mut rt Runtime) handle_inbound_registration(carrier_id string, frame WireFra
 		}
 	}
 	return InboundOutcome{
-		action:       if result.accepted { InboundAction.registered } else { InboundAction.rejected }
-		relay_id:     result.relay_id
-		carrier_id:   carrier_id
-		trace_id:     frame.trace_id
-		frame_id:     frame.id
-		frame:        frame
-		registration: result
-		error:        result.error
+		action:          if result.accepted {
+			InboundAction.registered
+		} else {
+			InboundAction.rejected
+		}
+		relay_id:        result.relay_id
+		carrier_id:      carrier_id
+		trace_id:        frame.trace_id
+		frame_id:        frame.id
+		frame:           frame
+		registration:    result
+		carrier_binding: binding
+		error:           result.error
 	}
 }
 

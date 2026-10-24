@@ -1,10 +1,10 @@
 module feishu
 
 import config
+import connection_runtime
 import executor
 import sync
 import time
-import net.websocket
 
 // ── HTTP Lane Types (shared references) ──
 
@@ -215,10 +215,32 @@ pub fn (mut rt ProviderRuntime) push_event(snapshot RuntimeEventSnapshot, limit 
 
 // ── Stream Buffer ──
 
+@[heap]
+struct StreamBufferIdentity {}
+
 pub struct StreamBuffer {
+mut:
+	sent_publication  ?&SentPublication
+	bridge_gate       ?&BridgeStreamGate
+	message_update    ?&MessageUpdateIdentity
+	message_only      bool
+	bridge_replica    bool
+	bridge_operation  ?&BridgeStreamOperationIdentity
+	bind_pending      bool
+	bridge_generation string
+	bridge_stream     string
+	bridge_app        string
+	bridge_owner      ?&BridgeAuthority
+	identity          ?&StreamBufferIdentity
+	next_identity     ?&StreamBufferIdentity
+	failure           ?&StreamFailureIdentity
+	rollover          ?&BufferRolloverIdentity
+	finish            ?&BufferFinishIdentity
+	rollover_content  string
 pub:
 	message_id string
 pub mut:
+	generation       string
 	app              string
 	content          string
 	rendered_content string
@@ -299,13 +321,16 @@ pub:
 
 pub struct BridgeProxyResult {
 pub mut:
-	type_      string @[json: 'type']
-	request_id string @[json: 'request_id']
-	ok         bool
-	provider   string
-	instance   string
-	message_id string @[json: 'message_id']
-	error      string
+	stream_state      string
+	creation_token    string
+	stream_generation string
+	type_             string @[json: 'type']
+	request_id        string @[json: 'request_id']
+	ok                bool
+	provider          string
+	instance          string
+	message_id        string @[json: 'message_id']
+	error             string
 }
 
 // ── App-level Feishu State ──
@@ -330,7 +355,32 @@ pub:
 	bridge                     BridgeSettings
 }
 
+pub struct CardBridgePending {
+pub:
+	sender &connection_runtime.WebSocketSender  @[required]
+	ch     chan executor.FeishuCardBridgeResult @[required]
+}
+
+pub struct CardBridgeProxyPending {
+pub:
+	authority &BridgeAuthority                    @[required]
+	sender    &connection_runtime.WebSocketSender @[required]
+	ch        chan BridgeProxyResult              @[required]
+}
+
 pub struct FeishuState {
+mut:
+	external_creation_epoch string
+	external_creation_memos map[string]&ExternalCreationMemo
+	creation_grants         map[string]CreationGrant
+	creation_issues         map[string]CreationGrant
+	stream_command_owner    &StreamCommandOwner = &StreamCommandOwner{}
+	tenant_token_owners     map[string]&TenantTokenOwner
+	initial_send_owner      &InitialSendOwner = &InitialSendOwner{}
+	initial_send_scopes     map[string]&InitialSendScope
+	initial_send_mutations  map[string]u64
+	initial_send_sequence   u64
+	initial_send_count      int
 pub mut:
 	mu                         sync.Mutex
 	enabled                    bool
@@ -351,17 +401,21 @@ pub mut:
 	http_test_calls            int
 	http_test_message_seq      int
 	// feishu card bridge
-	card_bridge_mu            sync.Mutex
-	card_bridge_send_mu       sync.Mutex
-	card_bridge_clients       map[string]&websocket.Client                    = map[string]&websocket.Client{}
-	card_bridge_pending       map[string]chan executor.FeishuCardBridgeResult = map[string]chan executor.FeishuCardBridgeResult{}
-	card_bridge_proxy_pending map[string]chan BridgeProxyResult               = map[string]chan BridgeProxyResult{}
-	card_bridge_client_conn   &websocket.Client = unsafe { nil }
-	card_bridge_enabled_flag  bool
-	card_bridge_ws_url        string
-	card_bridge_client_id     string
-	card_bridge_token         string
-	card_bridge_target_id     string
+	card_bridge_mu                 sync.Mutex
+	card_bridge_send_mu            sync.Mutex
+	card_bridge_request_seq        u64
+	card_bridge_clients            map[string]&connection_runtime.WebSocketSender = map[string]&connection_runtime.WebSocketSender{}
+	card_bridge_pending            map[string]CardBridgePending                   = map[string]CardBridgePending{}
+	card_bridge_proxy_pending      map[string]CardBridgeProxyPending              = map[string]CardBridgeProxyPending{}
+	card_bridge_client_authority   ?&BridgeAuthority
+	card_bridge_server_authorities map[string]&BridgeAuthority
+	card_bridge_client_conn        ?&connection_runtime.WebSocketSender
+	background_runs                connection_runtime.Registry
+	card_bridge_enabled_flag       bool
+	card_bridge_ws_url             string
+	card_bridge_client_id          string
+	card_bridge_token              string
+	card_bridge_target_id          string
 }
 
 pub fn FeishuState.new(settings StateSettings) FeishuState {

@@ -1,0 +1,42 @@
+version = 2
+
+[server]
+pid_file = "/tmp/vhttpd-wechat-cloud-functions.pid"
+
+[observability]
+event_log = "/tmp/vhttpd-wechat-cloud-functions.events.ndjson"
+
+[listeners.web]
+protocol = "http"
+transport = "tcp"
+host = "127.0.0.1"
+port = 19886
+
+[resources.db.wechat]
+kind = "pgsql"
+host = "${env.WECHAT_DB_HOST:-127.0.0.1}"
+port = 5432
+username = "${env.WECHAT_DB_USER}"
+password = "${env.WECHAT_DB_PASSWORD}"
+database = "${env.WECHAT_DB_NAME}"
+pool_size = 4
+options = {socket = "/tmp/vhttpd-wechat-cloud-functions-db.sock", pool_name = "wechat"}
+
+[engines.wechat]
+kind = "vjsx"
+entry = "./examples/wechat-cloud-functions/app.mts"
+module_root = "./examples/wechat-cloud-functions"
+runtime_profile = "node"
+thread_count = 2
+enable_network = true
+resources = ["resource:db/wechat"]
+
+[adapters.wechat]
+kind = "http-handler"
+engine = "engine:wechat"
+
+[[pipelines]]
+id = "wechat"
+ingress = "listener:web"
+match.paths = ["*"]
+egress = "adapter:wechat"

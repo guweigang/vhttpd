@@ -1,9 +1,10 @@
 module main
 
 import admin
+import http_runtime
 import dispatch
 import feishu
-import json
+import json2 as json
 import log
 import os
 import time
@@ -18,7 +19,9 @@ pub:
 	admin_port  int
 	admin_token string
 pub mut:
-	shared &App = unsafe { nil }
+	shared       &App @[required]
+	workbench_focus &admin.WorkbenchFocusStore = &admin.WorkbenchFocusStore{}
+	browser_auth &admin.BrowserAuth = &admin.BrowserAuth{}
 }
 
 struct AdminPlaneRuntime {}
@@ -93,7 +96,10 @@ fn admin_ui_file_path(name string) string {
 fn admin_plane_forbidden(mut admin_app AdminApp, mut ctx Context, method string, req AdminPlaneRequest) veb.Result {
 	return admin_plane_json_response(mut admin_app, mut ctx, method, req, 403, json.encode(admin.AdminErrorResponse{
 		error: 'forbidden'
-	}), {
+	},
+		escape_unicode: true
+		time_as_unix:   true
+	), {
 		'error': 'forbidden'
 	})
 }
@@ -101,6 +107,7 @@ fn admin_plane_forbidden(mut admin_app AdminApp, mut ctx Context, method string,
 fn (app AdminApp) admin_authorized(ctx Context) bool {
 	headers := transport.header_map_from_request(ctx.req)
 	return admin.AdminAuth.authorized(app.admin_token, headers, ctx.query)
+		|| app.browser_session_authorized(ctx)
 }
 
 fn (app &App) api_authorized(ctx Context) bool {
@@ -122,7 +129,10 @@ pub fn (mut app AdminApp) admin_workers(mut ctx Context) veb.Result {
 			'error': 'forbidden'
 		})
 	}
-	body := json.encode(app.shared.worker_admin_snapshot())
+	body := json.encode(app.shared.worker_admin_snapshot(),
+		escape_unicode: true
+		time_as_unix:   true
+	)
 	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, body, {
 		'admin_endpoint': 'workers'
 	})
@@ -134,7 +144,7 @@ pub fn (mut app AdminApp) admin_stats(mut ctx Context) veb.Result {
 	if !app.admin_authorized(ctx) {
 		return admin_plane_forbidden(mut app, mut ctx, 'GET', req)
 	}
-	body := json.encode(app.shared.admin_stats_snapshot())
+	body := json.encode(app.shared.admin_stats_snapshot(), escape_unicode: true, time_as_unix: true)
 	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, body, {
 		'admin_endpoint': 'stats'
 	})
@@ -146,7 +156,10 @@ pub fn (mut app AdminApp) admin_runtime(mut ctx Context) veb.Result {
 	if !app.admin_authorized(ctx) {
 		return admin_plane_forbidden(mut app, mut ctx, 'GET', req)
 	}
-	body := json.encode(app.shared.admin_runtime_snapshot())
+	body := json.encode(app.shared.admin_runtime_snapshot(),
+		escape_unicode: true
+		time_as_unix:   true
+	)
 	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, body, {
 		'admin_endpoint': 'runtime'
 	})
@@ -158,7 +171,7 @@ pub fn (mut app AdminApp) admin_runtime_plan(mut ctx Context) veb.Result {
 	if !app.admin_authorized(ctx) {
 		return admin_plane_forbidden(mut app, mut ctx, 'GET', req)
 	}
-	body := app.shared.protocols.runtime_plan_json
+	body := app.shared.admin_plan_view().json
 	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, body, {
 		'admin_endpoint': 'runtime_plan'
 	})
@@ -174,12 +187,18 @@ pub fn (mut app AdminApp) admin_events(mut ctx Context) veb.Result {
 	events := app.shared.admin_state_list_events(limit) or {
 		return admin_plane_json_response(mut app, mut ctx, 'GET', req, 500, json.encode(admin.AdminErrorResponse{
 			error: err.msg()
-		}), {
+		},
+			escape_unicode: true
+			time_as_unix:   true
+		), {
 			'admin_endpoint': 'events'
 			'error':          err.msg()
 		})
 	}
-	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, json.encode(events), {
+	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, json.encode(events,
+		escape_unicode: true
+		time_as_unix:   true
+	), {
 		'admin_endpoint': 'events'
 	})
 }
@@ -190,7 +209,10 @@ pub fn (mut app AdminApp) admin_runtime_graph(mut ctx Context) veb.Result {
 	if !app.admin_authorized(ctx) {
 		return admin_plane_forbidden(mut app, mut ctx, 'GET', req)
 	}
-	body := json.encode(app.shared.admin_runtime_graph_snapshot())
+	body := json.encode(app.shared.admin_runtime_graph_snapshot(),
+		escape_unicode: true
+		time_as_unix:   true
+	)
 	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, body, {
 		'admin_endpoint': 'runtime_graph'
 	})
@@ -202,7 +224,7 @@ pub fn (mut app AdminApp) admin_apps(mut ctx Context) veb.Result {
 	if !app.admin_authorized(ctx) {
 		return admin_plane_forbidden(mut app, mut ctx, 'GET', req)
 	}
-	body := json.encode(app.shared.admin_apps_snapshot())
+	body := json.encode(app.shared.admin_apps_snapshot(), escape_unicode: true, time_as_unix: true)
 	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, body, {
 		'admin_endpoint': 'apps'
 	})
@@ -214,7 +236,7 @@ pub fn (mut app AdminApp) admin_applications(mut ctx Context) veb.Result {
 	if !app.admin_authorized(ctx) {
 		return admin_plane_forbidden(mut app, mut ctx, 'GET', req)
 	}
-	body := json.encode(app.shared.admin_apps_snapshot())
+	body := json.encode(app.shared.admin_apps_snapshot(), escape_unicode: true, time_as_unix: true)
 	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, body, {
 		'admin_endpoint': 'applications'
 	})
@@ -226,7 +248,7 @@ pub fn (mut app AdminApp) admin_sites(mut ctx Context) veb.Result {
 	if !app.admin_authorized(ctx) {
 		return admin_plane_forbidden(mut app, mut ctx, 'GET', req)
 	}
-	body := json.encode(app.shared.admin_apps_snapshot())
+	body := json.encode(app.shared.admin_apps_snapshot(), escape_unicode: true, time_as_unix: true)
 	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, body, {
 		'admin_endpoint': 'sites'
 	})
@@ -239,9 +261,9 @@ pub fn (mut app AdminApp) admin_schema(mut ctx Context) veb.Result {
 		return admin_plane_forbidden(mut app, mut ctx, 'GET', req)
 	}
 	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200,
-		json.encode(admin_schema_catalog()), {
-		'admin_endpoint': 'schema'
-	})
+		json.encode(admin_schema_catalog(), escape_unicode: true, time_as_unix: true), {
+			'admin_endpoint': 'schema'
+		})
 }
 
 @['/admin/schema/:domain'; get]
@@ -253,12 +275,18 @@ pub fn (mut app AdminApp) admin_schema_domain(mut ctx Context, domain string) ve
 	item := admin_schema_domain(domain) or {
 		return admin_plane_json_response(mut app, mut ctx, 'GET', req, 404, json.encode(admin.AdminErrorResponse{
 			error: 'schema_domain_not_found'
-		}), {
+		},
+			escape_unicode: true
+			time_as_unix:   true
+		), {
 			'admin_endpoint': 'schema_domain'
 			'error':          'schema_domain_not_found'
 		})
 	}
-	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, json.encode(item), {
+	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, json.encode(item,
+		escape_unicode: true
+		time_as_unix:   true
+	), {
 		'admin_endpoint': 'schema_domain'
 		'domain':         domain
 	})
@@ -273,12 +301,18 @@ pub fn (mut app AdminApp) admin_schema_kind(mut ctx Context, domain string, kind
 	item := admin_schema_kind(domain, kind) or {
 		return admin_plane_json_response(mut app, mut ctx, 'GET', req, 404, json.encode(admin.AdminErrorResponse{
 			error: 'schema_kind_not_found'
-		}), {
+		},
+			escape_unicode: true
+			time_as_unix:   true
+		), {
 			'admin_endpoint': 'schema_kind'
 			'error':          'schema_kind_not_found'
 		})
 	}
-	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, json.encode(item), {
+	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, json.encode(item,
+		escape_unicode: true
+		time_as_unix:   true
+	), {
 		'admin_endpoint': 'schema_kind'
 		'domain':         domain
 		'kind':           kind
@@ -294,12 +328,18 @@ pub fn (mut app AdminApp) admin_drafts(mut ctx Context) veb.Result {
 	drafts := app.shared.admin_state_list_drafts() or {
 		return admin_plane_json_response(mut app, mut ctx, 'GET', req, 500, json.encode(admin.AdminErrorResponse{
 			error: err.msg()
-		}), {
+		},
+			escape_unicode: true
+			time_as_unix:   true
+		), {
 			'admin_endpoint': 'drafts'
 			'error':          err.msg()
 		})
 	}
-	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, json.encode(drafts), {
+	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, json.encode(drafts,
+		escape_unicode: true
+		time_as_unix:   true
+	), {
 		'admin_endpoint': 'drafts'
 	})
 }
@@ -311,7 +351,10 @@ pub fn (mut app AdminApp) admin_config_files(mut ctx Context) veb.Result {
 		return admin_plane_forbidden(mut app, mut ctx, 'GET', req)
 	}
 	files := app.shared.admin_state_list_config_files()
-	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, json.encode(files), {
+	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, json.encode(files,
+		escape_unicode: true
+		time_as_unix:   true
+	), {
 		'admin_endpoint': 'config_files'
 	})
 }
@@ -325,7 +368,10 @@ pub fn (mut app AdminApp) admin_config_file_draft(mut ctx Context) veb.Result {
 	target_path := (ctx.query['path'] or { ctx.query['include_path'] or { '' } }).trim_space()
 	result := app.shared.admin_state_open_config_file_draft(target_path)
 	status := if result.ok { 200 } else { 422 }
-	return admin_plane_json_response(mut app, mut ctx, 'POST', req, status, json.encode(result), {
+	return admin_plane_json_response(mut app, mut ctx, 'POST', req, status, json.encode(result,
+		escape_unicode: true
+		time_as_unix:   true
+	), {
 		'admin_endpoint': 'config_file_draft'
 		'admin_action':   'config_file_draft'
 		'draft_id':       result.draft_id
@@ -340,7 +386,10 @@ pub fn (mut app AdminApp) admin_source_files(mut ctx Context) veb.Result {
 		return admin_plane_forbidden(mut app, mut ctx, 'GET', req)
 	}
 	files := app.shared.admin_state_list_source_files()
-	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, json.encode(files), {
+	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, json.encode(files,
+		escape_unicode: true
+		time_as_unix:   true
+	), {
 		'admin_endpoint': 'source_files'
 	})
 }
@@ -354,7 +403,10 @@ pub fn (mut app AdminApp) admin_source_file_draft(mut ctx Context) veb.Result {
 	target_path := (ctx.query['path'] or { ctx.query['include_path'] or { '' } }).trim_space()
 	result := app.shared.admin_state_open_source_file_draft(target_path)
 	status := if result.ok { 200 } else { 400 }
-	return admin_plane_json_response(mut app, mut ctx, 'POST', req, status, json.encode(result), {
+	return admin_plane_json_response(mut app, mut ctx, 'POST', req, status, json.encode(result,
+		escape_unicode: true
+		time_as_unix:   true
+	), {
 		'admin_endpoint': 'source_file_draft'
 		'admin_action':   'source_file_draft'
 		'draft_id':       result.draft_id
@@ -369,15 +421,22 @@ pub fn (mut app AdminApp) admin_drafts_create(mut ctx Context) veb.Result {
 		return admin_plane_forbidden(mut app, mut ctx, 'POST', req)
 	}
 	id := ctx.query['id'] or { '' }
-	entry := app.shared.admin_state_put_draft(id, ctx.req.data) or {
+	source := ctx.query['config_source'] or { '' }
+	entry := app.shared.admin_state_put_project_config_draft(id, source, ctx.req.data) or {
 		return admin_plane_json_response(mut app, mut ctx, 'POST', req, 400, json.encode(admin.AdminErrorResponse{
 			error: err.msg()
-		}), {
+		},
+			escape_unicode: true
+			time_as_unix:   true
+		), {
 			'admin_endpoint': 'drafts'
 			'error':          err.msg()
 		})
 	}
-	return admin_plane_json_response(mut app, mut ctx, 'POST', req, 200, json.encode(entry), {
+	return admin_plane_json_response(mut app, mut ctx, 'POST', req, 200, json.encode(entry,
+		escape_unicode: true
+		time_as_unix:   true
+	), {
 		'admin_endpoint': 'drafts'
 		'admin_action':   'draft_save'
 		'draft_id':       entry.key
@@ -393,7 +452,10 @@ pub fn (mut app AdminApp) admin_source_draft_publish(mut ctx Context, id string)
 	target_path := (ctx.query['path'] or { ctx.query['include_path'] or { '' } }).trim_space()
 	result := app.shared.admin_state_publish_source_draft(id, target_path)
 	status := if result.ok { 200 } else { 422 }
-	return admin_plane_json_response(mut app, mut ctx, 'POST', req, status, json.encode(result), {
+	return admin_plane_json_response(mut app, mut ctx, 'POST', req, status, json.encode(result,
+		escape_unicode: true
+		time_as_unix:   true
+	), {
 		'admin_endpoint': 'source_draft_publish'
 		'admin_action':   'source_draft_publish'
 		'draft_id':       id
@@ -411,12 +473,18 @@ pub fn (mut app AdminApp) admin_draft_get(mut ctx Context, id string) veb.Result
 	entry := app.shared.admin_state_get_draft(id) or {
 		return admin_plane_json_response(mut app, mut ctx, 'GET', req, 404, json.encode(admin.AdminErrorResponse{
 			error: err.msg()
-		}), {
+		},
+			escape_unicode: true
+			time_as_unix:   true
+		), {
 			'admin_endpoint': 'draft'
 			'error':          err.msg()
 		})
 	}
-	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, json.encode(entry), {
+	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, json.encode(entry,
+		escape_unicode: true
+		time_as_unix:   true
+	), {
 		'admin_endpoint': 'draft'
 		'draft_id':       entry.key
 	})
@@ -431,12 +499,18 @@ pub fn (mut app AdminApp) admin_draft_put(mut ctx Context, id string) veb.Result
 	entry := app.shared.admin_state_put_draft(id, ctx.req.data) or {
 		return admin_plane_json_response(mut app, mut ctx, 'PUT', req, 400, json.encode(admin.AdminErrorResponse{
 			error: err.msg()
-		}), {
+		},
+			escape_unicode: true
+			time_as_unix:   true
+		), {
 			'admin_endpoint': 'draft'
 			'error':          err.msg()
 		})
 	}
-	return admin_plane_json_response(mut app, mut ctx, 'PUT', req, 200, json.encode(entry), {
+	return admin_plane_json_response(mut app, mut ctx, 'PUT', req, 200, json.encode(entry,
+		escape_unicode: true
+		time_as_unix:   true
+	), {
 		'admin_endpoint': 'draft'
 		'admin_action':   'draft_save'
 		'draft_id':       entry.key
@@ -452,7 +526,10 @@ pub fn (mut app AdminApp) admin_draft_delete(mut ctx Context, id string) veb.Res
 	app.shared.admin_state_delete_draft(id) or {
 		return admin_plane_json_response(mut app, mut ctx, 'DELETE', req, 400, json.encode(admin.AdminErrorResponse{
 			error: err.msg()
-		}), {
+		},
+			escape_unicode: true
+			time_as_unix:   true
+		), {
 			'admin_endpoint': 'draft'
 			'error':          err.msg()
 		})
@@ -460,7 +537,10 @@ pub fn (mut app AdminApp) admin_draft_delete(mut ctx Context, id string) veb.Res
 	return admin_plane_json_response(mut app, mut ctx, 'DELETE', req, 200, json.encode(AdminDraftDeleteResponse{
 		ok:       true
 		draft_id: id
-	}), {
+	},
+		escape_unicode: true
+		time_as_unix:   true
+	), {
 		'admin_endpoint': 'draft'
 		'admin_action':   'draft_delete'
 		'draft_id':       id
@@ -477,12 +557,18 @@ pub fn (mut app AdminApp) admin_runtime_plan_replacement(mut ctx Context) veb.Re
 	preview := app.shared.preview_runtime_plan_replacement(config_path) or {
 		return admin_plane_json_response(mut app, mut ctx, 'GET', req, 400, json.encode({
 			'error': err.msg()
-		}), {
+		},
+			escape_unicode: true
+			time_as_unix:   true
+		), {
 			'admin_endpoint': 'runtime_plan_replacement'
 			'error':          err.msg()
 		})
 	}
-	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, json.encode(preview), {
+	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, json.encode(preview,
+		escape_unicode: true
+		time_as_unix:   true
+	), {
 		'admin_endpoint': 'runtime_plan_replacement'
 		'allowed':        '${preview.allowed}'
 	})
@@ -494,7 +580,10 @@ pub fn (mut app AdminApp) admin_runtime_plan_replacement_state(mut ctx Context) 
 	if !app.admin_authorized(ctx) {
 		return admin_plane_forbidden(mut app, mut ctx, 'GET', req)
 	}
-	body := json.encode(app.shared.runtime_plan_replacement_snapshot())
+	body := json.encode(app.shared.runtime_plan_replacement_snapshot(),
+		escape_unicode: true
+		time_as_unix:   true
+	)
 	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, body, {
 		'admin_endpoint': 'runtime_plan_replacement_state'
 	})
@@ -510,13 +599,19 @@ pub fn (mut app AdminApp) admin_runtime_plan_replacement_apply(mut ctx Context) 
 	result := app.shared.apply_runtime_plan_replacement(config_path) or {
 		return admin_plane_json_response(mut app, mut ctx, 'POST', req, 400, json.encode({
 			'error': err.msg()
-		}), {
+		},
+			escape_unicode: true
+			time_as_unix:   true
+		), {
 			'admin_endpoint': 'runtime_plan_replacement_apply'
 			'error':          err.msg()
 		})
 	}
 	status := runtime_plan_replacement_apply_status_code(result)
-	return admin_plane_json_response(mut app, mut ctx, 'POST', req, status, json.encode(result), {
+	return admin_plane_json_response(mut app, mut ctx, 'POST', req, status, json.encode(result,
+		escape_unicode: true
+		time_as_unix:   true
+	), {
 		'admin_endpoint': 'runtime_plan_replacement_apply'
 		'applied':        '${result.applied}'
 		'status':         result.status
@@ -532,7 +627,10 @@ pub fn (mut app AdminApp) admin_runtime_plan_replacement_finalize(mut ctx Contex
 	}
 	result := app.shared.finalize_runtime_plan_replacement()
 	status := runtime_plan_replacement_finalize_status_code(result)
-	return admin_plane_json_response(mut app, mut ctx, 'POST', req, status, json.encode(result), {
+	return admin_plane_json_response(mut app, mut ctx, 'POST', req, status, json.encode(result,
+		escape_unicode: true
+		time_as_unix:   true
+	), {
 		'admin_endpoint': 'runtime_plan_replacement_finalize'
 		'applied':        '${result.applied}'
 		'status':         result.status
@@ -548,7 +646,10 @@ pub fn (mut app AdminApp) admin_runtime_plan_replacement_cancel(mut ctx Context)
 	}
 	result := app.shared.cancel_runtime_plan_replacement()
 	status := runtime_plan_replacement_cancel_status_code(result)
-	return admin_plane_json_response(mut app, mut ctx, 'POST', req, status, json.encode(result), {
+	return admin_plane_json_response(mut app, mut ctx, 'POST', req, status, json.encode(result,
+		escape_unicode: true
+		time_as_unix:   true
+	), {
 		'admin_endpoint': 'runtime_plan_replacement_cancel'
 		'cancelled':      '${result.cancelled}'
 		'status':         result.status
@@ -562,7 +663,10 @@ pub fn (mut app AdminApp) admin_runtime_transformers(mut ctx Context) veb.Result
 	if !app.admin_authorized(ctx) {
 		return admin_plane_forbidden(mut app, mut ctx, 'GET', req)
 	}
-	body := json.encode(app.shared.transformers.snapshot())
+	body := json.encode(app.shared.admin_transformer_snapshot(),
+		escape_unicode: true
+		time_as_unix:   true
+	)
 	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, body, {
 		'admin_endpoint': 'runtime_transformers'
 	})
@@ -578,7 +682,7 @@ pub fn (mut app AdminApp) admin_providers(mut ctx Context) veb.Result {
 		return admin_plane_forbidden(mut app, mut ctx, 'GET', req)
 	}
 	// provider_names returns []string
-	body := json.encode(app.shared.provider_names())
+	body := json.encode(app.shared.provider_names(), escape_unicode: true, time_as_unix: true)
 	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, body, {
 		'admin_endpoint': 'providers'
 	})
@@ -590,7 +694,10 @@ pub fn (mut app AdminApp) admin_executors(mut ctx Context) veb.Result {
 	if !app.admin_authorized(ctx) {
 		return admin_plane_forbidden(mut app, mut ctx, 'GET', req)
 	}
-	body := json.encode(app.shared.admin_logic_executor_specs_snapshot())
+	body := json.encode(app.shared.admin_logic_executor_specs_snapshot(),
+		escape_unicode: true
+		time_as_unix:   true
+	)
 	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, body, {
 		'admin_endpoint': 'executors'
 	})
@@ -602,7 +709,10 @@ pub fn (mut app AdminApp) admin_provider_specs(mut ctx Context) veb.Result {
 	if !app.admin_authorized(ctx) {
 		return admin_plane_forbidden(mut app, mut ctx, 'GET', req)
 	}
-	body := json.encode(app.shared.admin_provider_specs_snapshot())
+	body := json.encode(app.shared.admin_provider_specs_snapshot(),
+		escape_unicode: true
+		time_as_unix:   true
+	)
 	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, body, {
 		'admin_endpoint': 'provider_specs'
 	})
@@ -614,7 +724,10 @@ pub fn (mut app AdminApp) admin_provider_runtimes(mut ctx Context) veb.Result {
 	if !app.admin_authorized(ctx) {
 		return admin_plane_forbidden(mut app, mut ctx, 'GET', req)
 	}
-	body := json.encode(app.shared.admin_provider_runtimes_snapshot())
+	body := json.encode(app.shared.admin_provider_runtimes_snapshot(),
+		escape_unicode: true
+		time_as_unix:   true
+	)
 	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, body, {
 		'admin_endpoint': 'provider_runtimes'
 	})
@@ -632,7 +745,7 @@ pub fn (mut app AdminApp) admin_runtime_upstreams(mut ctx Context) veb.Result {
 	role_filter := (ctx.query['role'] or { '' }).trim_space()
 	provider_filter := (ctx.query['provider'] or { '' }).trim_space()
 	body := json.encode(app.shared.admin_upstreams_snapshot(details, limit, offset, role_filter,
-		provider_filter))
+		provider_filter), escape_unicode: true, time_as_unix: true)
 	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, body, {
 		'admin_endpoint': 'runtime_upstreams'
 	})
@@ -650,7 +763,7 @@ pub fn (mut app AdminApp) admin_runtime_websockets(mut ctx Context) veb.Result {
 	room_filter := (ctx.query['room'] or { '' }).trim_space()
 	conn_filter := (ctx.query['conn_id'] or { '' }).trim_space()
 	body := json.encode(app.shared.websocket.snapshot(details, limit, offset, room_filter,
-		conn_filter))
+		conn_filter), escape_unicode: true, time_as_unix: true)
 	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, body, {
 		'admin_endpoint': 'runtime_websockets'
 	})
@@ -668,7 +781,7 @@ pub fn (mut app AdminApp) admin_runtime_mcp(mut ctx Context) veb.Result {
 	session_filter := (ctx.query['session_id'] or { '' }).trim_space()
 	protocol_filter := (ctx.query['protocol_version'] or { '' }).trim_space()
 	body := json.encode(app.shared.protocols.mcp.snapshot(details, limit, offset, session_filter,
-		protocol_filter))
+		protocol_filter), escape_unicode: true, time_as_unix: true)
 	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, body, {
 		'admin_endpoint': 'runtime_mcp'
 	})
@@ -681,7 +794,10 @@ pub fn (mut app AdminApp) admin_runtime_provider_instances(mut ctx Context) veb.
 		return admin_plane_forbidden(mut app, mut ctx, 'GET', req)
 	}
 	provider_filter := (ctx.query['provider'] or { '' }).trim_space()
-	body := json.encode(app.shared.admin_provider_instance_snapshots(provider_filter))
+	body := json.encode(app.shared.admin_provider_instance_snapshots(provider_filter),
+		escape_unicode: true
+		time_as_unix:   true
+	)
 	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, body, {
 		'admin_endpoint': 'runtime_provider_instances'
 	})
@@ -701,13 +817,19 @@ pub fn (mut app AdminApp) admin_runtime_provider_instance_upsert(mut ctx Context
 		}
 		return admin_plane_json_response(mut app, mut ctx, 'POST', req, status, json.encode(admin.AdminErrorResponse{
 			error: err.msg()
-		}), {
+		},
+			escape_unicode: true
+			time_as_unix:   true
+		), {
 			'admin_endpoint': 'runtime_provider_instances'
 			'admin_action':   'provider_instance_upsert'
 			'error':          err.msg()
 		})
 	}
-	return admin_plane_json_response(mut app, mut ctx, 'POST', req, 200, json.encode(result), {
+	return admin_plane_json_response(mut app, mut ctx, 'POST', req, 200, json.encode(result,
+		escape_unicode: true
+		time_as_unix:   true
+	), {
 		'admin_endpoint': 'runtime_provider_instances'
 		'admin_action':   'provider_instance_upsert'
 		'provider':       result.snapshot.provider
@@ -724,13 +846,19 @@ pub fn (mut app AdminApp) admin_runtime_events_dispatch(mut ctx Context) veb.Res
 	result := app.shared.dispatch_runtime_event(ctx.req.data, req.req_id, req.trace_id) or {
 		return admin_plane_json_response(mut app, mut ctx, 'POST', req, 400, json.encode(admin.AdminErrorResponse{
 			error: err.msg()
-		}), {
+		},
+			escape_unicode: true
+			time_as_unix:   true
+		), {
 			'admin_endpoint': 'runtime_events'
 			'admin_action':   'event_dispatch'
 			'error':          err.msg()
 		})
 	}
-	return admin_plane_json_response(mut app, mut ctx, 'POST', req, 202, json.encode(result), {
+	return admin_plane_json_response(mut app, mut ctx, 'POST', req, 202, json.encode(result,
+		escape_unicode: true
+		time_as_unix:   true
+	), {
 		'admin_endpoint': 'runtime_events'
 		'admin_action':   'event_dispatch'
 		'pipeline':       result.pipeline
@@ -799,7 +927,7 @@ pub fn (mut app AdminApp) admin_runtime_feishu_chats(mut ctx Context) veb.Result
 	chat_type_filter := (ctx.query['chat_type'] or { '' }).trim_space()
 	chat_id_filter := (ctx.query['chat_id'] or { '' }).trim_space()
 	body := json.encode(app.shared.providers.feishu.chats_snapshot(limit, offset, instance_filter,
-		chat_type_filter, chat_id_filter))
+		chat_type_filter, chat_id_filter), escape_unicode: true, time_as_unix: true)
 	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, body, {
 		'admin_endpoint': 'runtime_feishu_chats'
 	})
@@ -811,10 +939,13 @@ pub fn (mut app AdminApp) admin_runtime_feishu_send(mut ctx Context) veb.Result 
 	if !app.admin_authorized(ctx) {
 		return admin_plane_forbidden(mut app, mut ctx, 'POST', req)
 	}
-	send_req := json.decode(feishu.SendMessageRequest, ctx.req.data) or {
+	send_req := json.decode[feishu.SendMessageRequest](ctx.req.data) or {
 		return admin_plane_json_response(mut app, mut ctx, 'POST', req, 400, json.encode(admin.AdminErrorResponse{
 			error: 'invalid_json'
-		}), {
+		},
+			escape_unicode: true
+			time_as_unix:   true
+		), {
 			'admin_endpoint': 'runtime_feishu_messages'
 			'error':          'invalid_json'
 		})
@@ -823,7 +954,10 @@ pub fn (mut app AdminApp) admin_runtime_feishu_send(mut ctx Context) veb.Result 
 		return admin_plane_json_response(mut app, mut ctx, 'POST', req, 502, json.encode(admin.AdminFeishuSendResponse{
 			ok:    false
 			error: err.msg()
-		}), {
+		},
+			escape_unicode: true
+			time_as_unix:   true
+		), {
 			'admin_endpoint': 'runtime_feishu_messages'
 			'error':          err.msg()
 		})
@@ -831,7 +965,10 @@ pub fn (mut app AdminApp) admin_runtime_feishu_send(mut ctx Context) veb.Result 
 	return admin_plane_json_response(mut app, mut ctx, 'POST', req, 200, json.encode(admin.AdminFeishuSendResponse{
 		ok:         true
 		message_id: result.message_id
-	}), {
+	},
+		escape_unicode: true
+		time_as_unix:   true
+	), {
 		'admin_endpoint': 'runtime_feishu_messages'
 	})
 }
@@ -846,7 +983,10 @@ pub fn (mut app AdminApp) admin_restart_worker(mut ctx Context) veb.Result {
 	if id_raw == '' {
 		return admin_plane_json_response(mut app, mut ctx, 'POST', req, 400, json.encode(admin.AdminErrorResponse{
 			error: 'missing worker id, use ?id=<worker_id>'
-		}), {
+		},
+			escape_unicode: true
+			time_as_unix:   true
+		), {
 			'admin_endpoint': 'workers_restart'
 			'error':          'missing_worker_id'
 		})
@@ -855,7 +995,10 @@ pub fn (mut app AdminApp) admin_restart_worker(mut ctx Context) veb.Result {
 	status := app.shared.restart_worker_by_id(worker_id) or {
 		return admin_plane_json_response(mut app, mut ctx, 'POST', req, 404, json.encode(admin.AdminErrorResponse{
 			error: err.msg()
-		}), {
+		},
+			escape_unicode: true
+			time_as_unix:   true
+		), {
 			'admin_endpoint': 'workers_restart'
 			'error':          err.msg()
 		})
@@ -864,7 +1007,7 @@ pub fn (mut app AdminApp) admin_restart_worker(mut ctx Context) veb.Result {
 		ok:     true
 		mode:   'single'
 		worker: status
-	})
+	}, escape_unicode: true, time_as_unix: true)
 	app.shared.emit('admin.worker.restart', {
 		'request_id': req.req_id
 		'trace_id':   req.trace_id
@@ -890,7 +1033,7 @@ pub fn (mut app AdminApp) admin_restart_all_workers(mut ctx Context) veb.Result 
 		mode:      'all'
 		restarted: restarted
 		force:     force
-	})
+	}, escape_unicode: true, time_as_unix: true)
 	app.shared.emit('admin.worker.restart', {
 		'request_id': req.req_id
 		'trace_id':   req.trace_id
@@ -913,12 +1056,18 @@ pub fn (mut app AdminApp) admin_drain_workers(mut ctx Context) veb.Result {
 	status := app.shared.drain_engine(engine) or {
 		return admin_plane_json_response(mut app, mut ctx, 'POST', req, 404, json.encode(admin.AdminErrorResponse{
 			error: err.msg()
-		}), {
+		},
+			escape_unicode: true
+			time_as_unix:   true
+		), {
 			'admin_endpoint': 'workers_drain'
 			'error':          err.msg()
 		})
 	}
-	return admin_plane_json_response(mut app, mut ctx, 'POST', req, 200, json.encode(status), {
+	return admin_plane_json_response(mut app, mut ctx, 'POST', req, 200, json.encode(status,
+		escape_unicode: true
+		time_as_unix:   true
+	), {
 		'admin_endpoint':    'workers_drain'
 		'admin_action':      'worker_drain'
 		'engine':            status.engine
@@ -935,7 +1084,10 @@ pub fn (mut app AdminApp) admin_draft_validate(mut ctx Context, id string) veb.R
 	}
 	result := app.shared.admin_state_validate_draft(id)
 	status := if result.ok { 200 } else { 422 }
-	return admin_plane_json_response(mut app, mut ctx, 'POST', req, status, json.encode(result), {
+	return admin_plane_json_response(mut app, mut ctx, 'POST', req, status, json.encode(result,
+		escape_unicode: true
+		time_as_unix:   true
+	), {
 		'admin_endpoint': 'draft_validate'
 		'draft_id':       id
 		'ok':             '${result.ok}'
@@ -952,13 +1104,19 @@ pub fn (mut app AdminApp) admin_draft_diff(mut ctx Context, id string) veb.Resul
 	preview := app.shared.admin_state_diff_draft(id) or {
 		return admin_plane_json_response(mut app, mut ctx, 'GET', req, 422, json.encode(admin.AdminErrorResponse{
 			error: err.msg()
-		}), {
+		},
+			escape_unicode: true
+			time_as_unix:   true
+		), {
 			'admin_endpoint': 'draft_diff'
 			'draft_id':       id
 			'error':          err.msg()
 		})
 	}
-	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, json.encode(preview), {
+	return admin_plane_json_response(mut app, mut ctx, 'GET', req, 200, json.encode(preview,
+		escape_unicode: true
+		time_as_unix:   true
+	), {
 		'admin_endpoint': 'draft_diff'
 		'draft_id':       id
 		'allowed':        '${preview.allowed}'
@@ -975,7 +1133,10 @@ pub fn (mut app AdminApp) admin_draft_publish(mut ctx Context, id string) veb.Re
 	target_path := (ctx.query['path'] or { ctx.query['include_path'] or { '' } }).trim_space()
 	result := app.shared.admin_state_publish_draft(id, target_path)
 	status := if result.ok { 200 } else { 422 }
-	return admin_plane_json_response(mut app, mut ctx, 'POST', req, status, json.encode(result), {
+	return admin_plane_json_response(mut app, mut ctx, 'POST', req, status, json.encode(result,
+		escape_unicode: true
+		time_as_unix:   true
+	), {
 		'admin_endpoint': 'draft_publish'
 		'admin_action':   'draft_publish'
 		'draft_id':       id
@@ -984,44 +1145,58 @@ pub fn (mut app AdminApp) admin_draft_publish(mut ctx Context, id string) veb.Re
 	})
 }
 
-fn run_admin_server(mut shared_app App, host string, port int, token string) {
-	mut admin_app := &AdminApp{
-		admin_host:  host
-		admin_port:  port
-		admin_token: token
-		shared:      unsafe { shared_app }
-	}
-	admin_app.mount_static_folder_at(admin_ui_dir_path(), '/admin/ui') or {
-		log.error('admin ui mount failed: ${err}')
-	}
-	admin_app.serve_static('/admin/ui', admin_ui_file_path('index.html')) or {
-		log.error('admin ui index alias failed: ${err}')
-	}
-	admin_app.serve_static('/', admin_ui_file_path('index.html')) or {
-		log.error('admin ui root alias failed: ${err}')
-	}
-	admin_app.serve_static('/admin/ui/app', admin_ui_file_path('app.js')) or {
-		log.error('admin ui app alias failed: ${err}')
-	}
-	admin_app.serve_static('/admin/ui/style', admin_ui_file_path('style.css')) or {
-		log.error('admin ui style alias failed: ${err}')
-	}
-	veb.run_at[AdminApp, Context](mut admin_app,
-		host:                 host
-		port:                 port
-		family:               .ip
-		show_startup_message: false
-	) or {
-		err_msg := err.msg()
-		shared_app.emit('admin.failed', {
-			'host':  host
-			'port':  '${port}'
-			'error': err_msg
-		})
-		log.error('admin server failed: ${err_msg}')
-	}
+fn run_admin_server(mut shared_app App, host string, port int, token string, mut run http_runtime.Run) {
+	mut owner := shared_app.lifecycle.admin_http
+	owner.serve(mut run, fn [mut shared_app, host, port, token, mut owner] () {
+		mut admin_app := &AdminApp{
+			admin_host:  host
+			admin_port:  port
+			admin_token: token
+			shared:      unsafe { shared_app }
+		}
+		admin_app.use(
+			handler: fn [mut owner] (mut ctx Context) bool {
+				return http_ingress_admitted(mut owner, mut ctx)
+			}
+		)
+		admin_app.mount_static_folder_at(admin_ui_dir_path(), '/admin/ui') or {
+			log.error('admin ui mount failed: ${err}')
+		}
+		admin_app.serve_static('/admin/ui', admin_ui_file_path('index.html')) or {
+			log.error('admin ui index alias failed: ${err}')
+		}
+		admin_app.serve_static('/', admin_ui_file_path('index.html')) or {
+			log.error('admin ui root alias failed: ${err}')
+		}
+		admin_app.serve_static('/admin/ui/app', admin_ui_file_path('app.js')) or {
+			log.error('admin ui app alias failed: ${err}')
+		}
+		admin_app.serve_static('/admin/ui/style', admin_ui_file_path('style.css')) or {
+			log.error('admin ui style alias failed: ${err}')
+		}
+		veb.run_at[AdminApp, Context](mut admin_app,
+			host:                 host
+			port:                 port
+			family:               .ip
+			show_startup_message: false
+		) or {
+			err_msg := err.msg()
+			shared_app.emit('admin.failed', {
+				'host':  host
+				'port':  '${port}'
+				'error': err_msg
+			})
+			log.error('admin server failed: ${err_msg}')
+		}
+	})
 }
 
-fn AdminPlaneRuntime.serve(mut shared_app App, host string, port int, token string) {
-	run_admin_server(mut shared_app, host, port, token)
+fn AdminPlaneRuntime.serve(mut shared_app App, host string, port int, token string, mut run http_runtime.Run) {
+	run_admin_server(mut shared_app, host, port, token, mut run)
+}
+
+fn AdminPlaneRuntime.start(mut shared_app App, host string, port int, token string) bool {
+	mut run := shared_app.lifecycle.admin_http.reserve('admin') or { return false }
+	go AdminPlaneRuntime.serve(mut shared_app, host, port, token, mut run)
+	return true
 }

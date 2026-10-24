@@ -1,6 +1,7 @@
 module main
 
 import dispatch
+import executor
 import log
 import time
 import upstream.transport
@@ -30,13 +31,22 @@ fn HttpRouteRequest.from_context(ctx Context, method string, path string) HttpRo
 
 fn HttpIngressRuntime.route(mut app App, mut ctx Context, method string, path string) veb.Result {
 	req := HttpRouteRequest.from_context(ctx, method, path)
+	// Upgrade sessions have their own WebSocket metrics. Ordinary HTTP responses
+	// are observed once around routing, including cache hits and early failures.
+	started := time.sys_mono_now()
+	observe := !is_websocket_upgrade(ctx.req)
+	observation_id := 'http-${time.now().unix_micro()}'
+	if observe { ctx.set_custom_header('x-vhttpd-observation-id', observation_id) or {} }
+	if observe { ctx.observed_timing = &executor.HttpRequestTiming{} }
+	defer { if observe { app.complete_http_observation(ctx, started, observation_id) } }
 	if is_websocket_upgrade(ctx.req) {
 		return proxy_worker_websocket(mut app, mut ctx, req.method, req.target)
 	}
-	if result := app.protocols.try_route_http(mut app, mut ctx, req.method, req.target) {
+	view := app.http_dispatch_view()
+	if result := app.protocols.try_route_http(mut app, mut ctx, req.method, req.target, view) {
 		return result
 	}
-	return HttpIngressRuntime.handle(mut app, mut ctx, req.method, req.target, '')
+	return HttpIngressRuntime.handle_on_view(mut app, mut ctx, req.method, req.target, '', view)
 }
 
 fn HttpIngressRuntime.no_logic_executor_response(mut app App, mut ctx Context, method string, target string) veb.Result {
@@ -54,11 +64,15 @@ fn proxy_worker_response(mut app App, mut ctx Context, method string, path strin
 }
 
 fn HttpIngressRuntime.handle(mut app App, mut ctx Context, method string, path string, body_on_head string) veb.Result {
+	return HttpIngressRuntime.handle_on_view(mut app, mut ctx, method, path, body_on_head, app.http_dispatch_view())
+}
+
+fn HttpIngressRuntime.handle_on_view(mut app App, mut ctx Context, method string, path string, body_on_head string, view HttpDispatchView) veb.Result {
 	start_ms := time.now().unix_milli()
 	if is_websocket_upgrade(ctx.req) {
 		return proxy_worker_websocket(mut app, mut ctx, method, path)
 	}
-	apply_data_plane_scheme(mut ctx, app.lifecycle.data_plane_scheme)
+	apply_data_plane_scheme(mut ctx, view.scheme)
 	remote_addr := if isnil(ctx.conn) { '' } else { ctx.conn.peer_ip() or { '' } }
 	req_id := resolve_request_id(ctx, path)
 	trace_id := resolve_trace_id(ctx, path)
@@ -69,7 +83,7 @@ fn HttpIngressRuntime.handle(mut app App, mut ctx Context, method string, path s
 	headers := transport.header_map_from_request(ctx.req)
 
 	if method.to_upper() in ['GET', 'HEAD'] {
-		if location := app.pipelines.http_directory_slash_redirect(normalized_target, query_string) {
+		if location := view.pipelines.http_directory_slash_redirect(normalized_target, query_string) {
 			log.info('[http] ⇠ directory slash redirect location=${location} trace_id=${trace_id}')
 			return HttpResponseRuntime.delivery_outcome(mut app, mut ctx, http_ingress_request(method,
 				path, path, body_on_head, remote_addr, req_id, trace_id, start_ms), dispatch.response_outcome(301, {
@@ -79,7 +93,7 @@ fn HttpIngressRuntime.handle(mut app App, mut ctx Context, method string, path s
 	}
 
 	// 1. Match the compiled RuntimePlan pipeline for this HTTP exchange.
-	matched_rule := app.pipelines.match_http_request(HttpPipelineMatchRequest{
+	matched_rule := view.pipelines.match_http_request(HttpPipelineMatchRequest{
 		method:            method
 		normalized_target: normalized_target
 		query:             query
@@ -90,52 +104,53 @@ fn HttpIngressRuntime.handle(mut app App, mut ctx Context, method string, path s
 		trace_id:          trace_id
 		start_ms:          start_ms
 	})
-	dispatch_plan := app.pipelines.http_dispatch_plan(matched_rule, path)
+	dispatch_plan := view.pipelines.http_dispatch_plan(matched_rule, path)
+	ctx.observed_pipeline = dispatch_plan.pipeline_id
 
-	if result := app.pipelines.try_handle_http_dispatch_plan(mut app, mut ctx, dispatch_plan,
+	if result := view.try_handle_http_dispatch_plan(mut app, mut ctx, dispatch_plan,
 		MatchedHttpPipelineRequest{
-		method:            method
-		path:              path
-		normalized_target: normalized_target
-		query:             query
-		body_on_head:      body_on_head
-		remote_addr:       remote_addr
-		req_id:            req_id
-		trace_id:          trace_id
-		start_ms:          start_ms
-	}, headers)
+			method:            method
+			path:              path
+			normalized_target: normalized_target
+			query:             query
+			body_on_head:      body_on_head
+			remote_addr:       remote_addr
+			req_id:            req_id
+			trace_id:          trace_id
+			start_ms:          start_ms
+		}, headers)
 	{
 		return result
 	}
 
-	ingress_req := app.pipelines.http_ingress_request(method, path, dispatch_plan, body_on_head,
+	ingress_req := view.pipelines.http_ingress_request(method, path, dispatch_plan, body_on_head,
 		remote_addr, req_id, trace_id, start_ms)
-	if cached_hit := app.pipelines.http_response_cache_hit(mut app.transport.cache, dispatch_plan,
+	if cached_hit := view.pipelines.http_response_cache_hit(mut app.transport.cache, dispatch_plan,
 		method, ctx.req) {
 		return HttpResponseRuntime.cache_hit(mut app, mut ctx, ingress_req, cached_hit)
 	}
-	if !app.engines.has_http_logic_executor() {
+	has_executor := view.engines.has_http_logic_executor()
+	mut engine_selection := view.engines.dispatch_selection(dispatch_plan.executor)
+	if !has_executor {
 		return HttpIngressRuntime.no_logic_executor_response(mut app, mut ctx, method, path)
 	}
 
-	// 3. 动态切换活动的后端执行器
-	mut engine_selection := app.engines.dispatch_selection(dispatch_plan.executor)
-
 	log.info('[http] ⇢ dispatch method=${method.to_upper()} path=${path} target=${dispatch_plan.target} trace_id=${trace_id} request_id=${req_id} pipeline=${dispatch_plan.pipeline_id} body_len=${ctx.req.data.len} executor=${engine_selection.executor_kind()} pool=${engine_selection.pool}')
 	if engine_selection.should_try_primary_stream_dispatch() {
-		if result := HttpStreamRuntime.via_dispatch(mut app, mut ctx, method, dispatch_plan.target,
+		if result := HttpStreamRuntime.via_dispatch(mut app, mut ctx, engine_selection, method, dispatch_plan.target,
 			req_id, trace_id, remote_addr)
 		{
 			return result
 		}
 	}
 	mut facade := app.as_facade()
-	dispatch_req := app.pipelines.http_logic_dispatch_request(method, path, dispatch_plan, ctx.req,
+	base_dispatch_req := view.pipelines.http_logic_dispatch_request(method, path, dispatch_plan, ctx.req,
 		remote_addr, trace_id, req_id)
+	dispatch_req := executor.HttpLogicDispatchRequest{...base_dispatch_req, timing:ctx.observed_timing}
 	mut outcome := engine_selection.dispatch_http(mut facade, dispatch_req) or {
 		return HttpResponseRuntime.dispatch_error(mut app, mut ctx, ingress_req, err.msg())
 	}
-	return HttpResponseRuntime.render(mut app, mut ctx, ingress_req, mut outcome, dispatch_plan)
+	return HttpResponseRuntime.render(mut app, mut ctx, ingress_req, mut outcome, dispatch_plan, view.pipelines)
 }
 
 fn apply_data_plane_scheme(mut ctx Context, scheme string) {

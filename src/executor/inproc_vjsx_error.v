@@ -17,20 +17,26 @@ pub fn InProcVjsxError.normalize_message(err_msg string, fallback string) string
 }
 
 fn InProcVjsxError.context_message(ctx &vjsx.Context, err_msg string, fallback string) string {
-	js_err := ctx.js_exception()
-	js_msg := js_err.msg().trim_space()
-	if js_msg != '' && js_msg != '{}' {
-		return js_msg
-	}
-
+	// Take the exception once. SDK calls may already have consumed the slot;
+	// converting its empty value would hide the supplied V error.
 	val := ctx.js_exception_value()
-	defer {
-		val.free()
-	}
-	json_msg := val.json_stringify()
-	if json_msg != '' && json_msg != 'undefined' && json_msg != 'null' && json_msg != '{}' {
-		eprintln('[vhttpd] DEBUG: captured raw js exception json=${json_msg}')
-		return json_msg
+	defer { val.free() }
+	if !val.is_null() && !val.is_undefined() && !val.is_uninitialized() {
+		js_msg := val.to_error().msg().trim_space()
+		// Diagnostic coercion can itself throw. It must not leave a new error
+		// owned by the context after the original has been consumed.
+		inspection_error := ctx.js_exception_value()
+		inspection_error.free()
+		if js_msg != '' && js_msg != '{}'
+			&& (js_msg != '[object Object]' || !val.is_object()) {
+			return js_msg
+		}
+		json_msg := val.json_stringify()
+		serialization_error := ctx.js_exception_value()
+		serialization_error.free()
+		if json_msg != '' && json_msg != 'undefined' && json_msg != 'null' && json_msg != '{}' {
+			return json_msg
+		}
 	}
 
 	normalized := InProcVjsxError.normalize_message(err_msg, '')

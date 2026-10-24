@@ -1,7 +1,7 @@
 module openai
 
 import config
-import json
+import json2 as json
 import net.http
 import os
 import x.json2
@@ -45,7 +45,7 @@ pub fn error_body_json(code string, message string, typ string) string {
 			typ:     typ
 			code:    code
 		}
-	})
+	}, escape_unicode: true, time_as_unix: true)
 }
 
 pub fn OpenAIErrorResponse.body_json(code string, message string, typ string) string {

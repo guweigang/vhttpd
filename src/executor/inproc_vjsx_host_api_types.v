@@ -2,21 +2,6 @@ module executor
 
 import upstream.transport
 
-struct InProcVjsxHostHttpFetchResponse {
-	ok      bool
-	status  int
-	body    string
-	headers map[string]string
-	error   string
-}
-
-struct InProcVjsxHostHttpFetchRequest {
-	url     string
-	method  string
-	body    string
-	headers map[string]string
-}
-
 struct InProcVjsxHostBridgeDispatchRequest {
 	app         string
 	trace_id    string @[json: 'trace_id']

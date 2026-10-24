@@ -1,0 +1,60 @@
+name: Set up pinned vhttpd runtime toolchain
+description: Install native libraries and fixed language/source dependencies for runtime CI
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      with:
+        node-version: '22.14.0'
+    - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+      with:
+        python-version: '3.12.9'
+    - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
+      with:
+        # setup-php parses only major.minor; record its resolved patch version.
+        php-version: '8.4'
+        coverage: none
+        tools: composer:2.8.8
+        extensions: dom, mbstring, xml, xmlwriter, sqlite3, pdo_sqlite, sockets, posix, pcntl
+    - name: Install native libraries (Linux)
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        set -euo pipefail
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends build-essential ca-certificates default-libmysqlclient-dev libpq-dev libsqlite3-dev libgc-dev patchelf pkg-config libssl-dev zlib1g-dev ripgrep
+    - name: Install native libraries (macOS)
+      if: runner.os == 'macOS'
+      shell: bash
+      run: |
+        set -euo pipefail
+        brew install bdw-gc libpq mysql-client openssl@3 pkg-config sqlite ripgrep
+        mysql_prefix="$(brew --prefix mysql-client)"
+        libpq_prefix="$(brew --prefix libpq)"
+        openssl_prefix="$(brew --prefix openssl@3)"
+        sqlite_prefix="$(brew --prefix sqlite)"
+        {
+          echo "PKG_CONFIG_PATH=${mysql_prefix}/lib/pkgconfig:${libpq_prefix}/lib/pkgconfig:${openssl_prefix}/lib/pkgconfig:${sqlite_prefix}/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+          echo "CPPFLAGS=-I${mysql_prefix}/include/mysql -I${libpq_prefix}/include -I${openssl_prefix}/include -I${sqlite_prefix}/include ${CPPFLAGS:-}"
+          echo "LDFLAGS=-L${mysql_prefix}/lib -L${libpq_prefix}/lib -L${openssl_prefix}/lib -L${sqlite_prefix}/lib ${LDFLAGS:-}"
+        } >> "$GITHUB_ENV"
+    - name: Generate PHP package Composer loader
+      shell: bash
+      run: |
+        set -euo pipefail
+        mkdir -p ci-results
+        # setup-php writes runner-global auth; public fixtures need no credentials.
+        export COMPOSER_HOME="${RUNNER_TEMP}/vhttpd-ci-composer"
+        export COMPOSER_AUTH='{}'
+        mkdir -p "$COMPOSER_HOME"
+        {
+          echo "COMPOSER_HOME=$COMPOSER_HOME"
+          echo 'COMPOSER_AUTH={}'
+        } >> "$GITHUB_ENV"
+        composer dump-autoload --working-dir=php/package --no-interaction 2>&1 | tee ci-results/php-autoload.log
+    - name: Build fixed V/vjsx/QuickJS dependencies
+      shell: bash
+      run: |
+        set -euo pipefail
+        mkdir -p ci-results
+        bash scripts/ci/prepare-toolchain.sh 2>&1 | tee ci-results/setup.log

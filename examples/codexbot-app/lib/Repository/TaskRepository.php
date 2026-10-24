@@ -45,7 +45,7 @@ class TaskRepository {
 
     public function findRecent(int $limit = 20): array {
         $stmt = $this->db->prepare(
-            "SELECT t.*, s.response_message_id
+            "SELECT t.*, s.response_message_id, s.stream_generation, s.stream_instance
              FROM tasks t
              LEFT JOIN streams s ON t.stream_id = s.stream_id
              ORDER BY t.created_at DESC, t.task_id DESC
@@ -70,7 +70,7 @@ class TaskRepository {
 
     public function findLatestCancelableTask(string $platform, string $channelId): ?array {
         $stmt = $this->db->prepare(
-            "SELECT t.*, s.response_message_id
+            "SELECT t.*, s.response_message_id, s.stream_generation, s.stream_instance
              FROM tasks t
              LEFT JOIN streams s ON t.stream_id = s.stream_id
              WHERE t.platform = ?
@@ -150,7 +150,7 @@ class TaskRepository {
 
     public function findLatestByThreadId(string $threadId): ?array {
         $stmt = $this->db->prepare(
-            "SELECT t.task_id, t.project_key, t.thread_id, t.stream_id, t.task_type, t.prompt, t.status, t.codex_turn_id, t.error_message, t.created_at, t.updated_at, s.response_message_id
+            "SELECT t.task_id, t.project_key, t.thread_id, t.stream_id, t.task_type, t.prompt, t.status, t.codex_turn_id, t.error_message, t.created_at, t.updated_at, s.response_message_id, s.stream_generation, s.stream_instance
              FROM tasks t
              LEFT JOIN streams s ON t.stream_id = s.stream_id
              WHERE t.thread_id = ?
@@ -164,7 +164,7 @@ class TaskRepository {
 
     public function findRecentByThreadId(string $threadId, int $limit = 3): array {
         $stmt = $this->db->prepare(
-            "SELECT t.task_id, t.project_key, t.thread_id, t.stream_id, t.task_type, t.prompt, t.status, t.codex_turn_id, t.error_message, t.created_at, t.updated_at, s.response_message_id
+            "SELECT t.task_id, t.project_key, t.thread_id, t.stream_id, t.task_type, t.prompt, t.status, t.codex_turn_id, t.error_message, t.created_at, t.updated_at, s.response_message_id, s.stream_generation, s.stream_instance
              FROM tasks t
              LEFT JOIN streams s ON t.stream_id = s.stream_id
              WHERE t.thread_id = ?
@@ -193,7 +193,7 @@ class TaskRepository {
 
     public function resolveStreamContext(?string $streamId, ?string $threadId = null, ?string $turnId = null, ?string $channelId = null): ?array {
         $channelId = trim((string) ($channelId ?? ''));
-        $sql = "SELECT t.task_id, t.stream_id, t.channel_id, t.thread_id, t.status, s.response_message_id
+        $sql = "SELECT t.task_id, t.stream_id, t.channel_id, t.thread_id, t.status, s.response_message_id, s.stream_generation, s.stream_instance
                 FROM tasks t
                 LEFT JOIN streams s ON t.stream_id = s.stream_id";
 

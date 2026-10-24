@@ -1,6 +1,6 @@
 module executor
 
-import json
+import json2 as json
 import log
 import upstream.transport
 import vjsx
@@ -40,7 +40,7 @@ fn (e InProcVjsxExecutor) websocket_callback_input(lane VjsxExecutionLane, frame
 
 struct InProcVjsxWebSocketCallback {}
 
-fn InProcVjsxWebSocketCallback.build_payload(ctx &vjsx.Context, input InProcVjsxWebSocketCallbackInput, runtime_config_json string, mut app AppFacade) (vjsx.Value, vjsx.Value) {
+fn InProcVjsxWebSocketCallback.build_payload(ctx &vjsx.Context, input InProcVjsxWebSocketCallbackInput, runtime_config_json string, mut app EmbeddedHost) (vjsx.Value, vjsx.Value) {
 	mut js_runtime :=
 		InProcVjsxWebSocketJs.runtime(ctx, input.runtime_meta, runtime_config_json, mut app)
 	create_frame_fn := ctx.js_global('__vhttpd_create_websocket_frame')
@@ -51,7 +51,7 @@ fn InProcVjsxWebSocketCallback.build_payload(ctx &vjsx.Context, input InProcVjsx
 		bundle_obj := ctx.json_parse(json.encode(InProcVjsxWebSocketFrameBundle{
 			raw:     input.frame
 			runtime: input.runtime_meta
-		}))
+		}, escape_unicode: true, time_as_unix: true))
 		defer {
 			bundle_obj.free()
 		}
@@ -64,7 +64,7 @@ fn InProcVjsxWebSocketCallback.build_payload(ctx &vjsx.Context, input InProcVjsx
 	return js_runtime, js_frame
 }
 
-fn (e InProcVjsxExecutor) prepare_websocket_callback_on_lane(mut app AppFacade, frame transport.WorkerWebSocketFrame, lane VjsxExecutionLane) !InProcVjsxWebSocketCallbackContext {
+fn (e InProcVjsxExecutor) prepare_websocket_callback_on_lane(mut app EmbeddedHost, frame transport.WorkerWebSocketFrame, lane VjsxExecutionLane) !InProcVjsxWebSocketCallbackContext {
 	idx := e.lane_index_by_id(lane.id)
 	if idx < 0 {
 		e.record_lane_error(lane.id, 'inproc_vjsx_executor_lane_not_found')

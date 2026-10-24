@@ -1,13 +1,33 @@
 <?php
 declare(strict_types=1);
 
+function codex_bot_sent_publication(string $streamId): array {
+    $row = (new CodexBot\Repository\StreamRepository())->findByStreamId($streamId);
+    return ['stream_generation' => $row['stream_generation'], 'instance' => $row['stream_instance'],
+        'publication_id' => $row['stream_publication_id'], 'publication_sequence' => 1];
+}
+
+
+function codex_bot_expect_single_response(array $commands): void {
+    if (str_starts_with((string) ($commands[0]['stream_id'] ?? ''), 'feishu:reply:')) {
+        expect($commands)->toHaveCount(2);
+        expect($commands[0]['metadata']['creation_token'] ?? '')->toMatch('/^[a-f0-9]{64}$/');
+        expect($commands[1]['type'] ?? '')->toBe('session.clear');
+        expect($commands[1]['stream_id'] ?? '')->toBe($commands[0]['stream_id']);
+        expect($commands[1]['instance'] ?? 'main')->toBe($commands[0]['instance'] ?? 'main');
+        expect($commands[1]['metadata']['stream_generation'] ?? '')->toBe($commands[0]['metadata']['stream_generation']);
+    } else {
+        expect($commands)->toHaveCount(1);
+    }
+}
+
 it('handles inbound help and regular task bootstrap', function (): void {
     $fixture = codex_bot_test_fixture();
     $fixture->bootstrap();
     $handler = $fixture->handler();
 
     $helpResp = $handler(codex_bot_test_inbound('/help'));
-    expect($helpResp['commands'])->toBeArray()->toHaveCount(1);
+    codex_bot_expect_single_response($helpResp['commands']);
     expect($helpResp['commands'][0]['type'] ?? null)->toBe('provider.message.send');
     expect($helpResp['commands'][0]['provider'] ?? null)->toBe('feishu');
 
@@ -26,7 +46,7 @@ it('renders help with new command semantics', function (): void {
     $handler = $fixture->handler();
 
     $resp = $handler(codex_bot_test_inbound('/help'));
-    expect($resp['commands'])->toBeArray()->toHaveCount(1);
+    codex_bot_expect_single_response($resp['commands']);
     $text = codex_bot_test_fixture()->commandText($resp['commands'][0]);
     expect($text)->toContain('/project [project_key]');
     expect($text)->toContain('/thread [thread_id]');
@@ -234,9 +254,13 @@ it('restarts all workers through the worker admin command', function (): void {
     $resp = $handler(codex_bot_test_inbound('/worker restart'));
     $text = codex_bot_test_fixture()->commandText($resp['commands'][0]);
 
-    expect($resp['commands'])->toHaveCount(2);
+    expect($resp['commands'])->toHaveCount(3);
     expect($text)->toContain('PHP worker 即将重启');
-    expect($resp['commands'][1]['type'] ?? null)->toBe('admin.worker.restart_all');
+    expect($resp['commands'][1]['type'] ?? null)->toBe('session.clear');
+    expect($resp['commands'][1]['stream_id'])->toBe($resp['commands'][0]['stream_id']);
+    expect($resp['commands'][1]['metadata']['stream_generation'])
+        ->toBe($resp['commands'][0]['metadata']['stream_generation']);
+    expect($resp['commands'][2]['type'] ?? null)->toBe('admin.worker.restart_all');
 });
 
 it('updates project session defaults through the admin mutation service', function (): void {
@@ -393,7 +417,7 @@ it('migrates legacy projects table to add current_model column', function (): vo
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
     )");
-    $pdo->exec("CREATE TABLE streams (
+    $pdo->exec("CREATE TABLE streams (stream_generation TEXT NOT NULL DEFAULT '',
         stream_id TEXT PRIMARY KEY,
         task_id TEXT NOT NULL UNIQUE,
         platform TEXT NOT NULL,
@@ -444,7 +468,7 @@ it('dispatches feishu inbound events through named event handlers', function ():
 
     $response = $router->dispatch($event)->export();
 
-    expect($response['commands'])->toBeArray()->toHaveCount(1);
+    codex_bot_expect_single_response($response['commands']);
     expect($response['commands'][0]['type'] ?? null)->toBe('provider.message.send');
     expect($response['commands'][0]['provider'] ?? null)->toBe('feishu');
 });
@@ -605,16 +629,16 @@ it('formats rate-limit and system errors through error helper', function (): voi
 it('wraps single and multiple commands through response helper', function (): void {
     $helper = codex_bot_test_fixture()->responseHelper();
 
-    $single = $helper->command(CodexBot\Service\CommandFactory::feishuSendText('chat_ut_001', 'hello'));
+    $single = $helper->command(codex_bot_test_fixture()->replyService()->text('chat_ut_001', 'hello'));
     $multiple = $helper->commands([
-        CodexBot\Service\CommandFactory::feishuSendText('chat_ut_001', 'hello'),
+        codex_bot_test_fixture()->replyService()->text('chat_ut_001', 'hello'),
         CodexBot\Service\CommandFactory::codexRpcCall('model/list', [], 'rpc:test_models_001'),
     ]);
 
-    expect($single['commands'] ?? [])->toBeArray()->toHaveCount(1);
+    codex_bot_expect_single_response($single['commands'] ?? []);
     expect($single['commands'][0]['type'] ?? null)->toBe('provider.message.send');
-    expect($multiple['commands'] ?? [])->toBeArray()->toHaveCount(2);
-    expect($multiple['commands'][1]['method'] ?? null)->toBe('model/list');
+    expect($multiple['commands'] ?? [])->toBeArray()->toHaveCount(3);
+    expect($multiple['commands'][2]['method'] ?? null)->toBe('model/list');
 });
 
 it('appends commands into command bus through response helper', function (): void {
@@ -623,13 +647,15 @@ it('appends commands into command bus through response helper', function (): voi
 
     $result = $helper->appendToBus([
         'commands' => [
-            CodexBot\Service\CommandFactory::feishuSendText('chat_ut_001', 'hello'),
-            CodexBot\Service\CommandFactory::feishuSendText('chat_ut_001', 'world'),
+            codex_bot_test_fixture()->replyService()->text('chat_ut_001', 'hello'),
+            codex_bot_test_fixture()->replyService()->text('chat_ut_001', 'world'),
         ],
     ], $bus);
 
     expect($result)->toBeTrue();
-    expect($bus->export()['commands'] ?? [])->toBeArray()->toHaveCount(2);
+    expect($bus->export()['commands'] ?? [])->toBeArray()->toHaveCount(4);
+    expect($bus->export()['commands'][1]['type'] ?? '')->toBe('session.clear');
+    expect($bus->export()['commands'][3]['type'] ?? '')->toBe('session.clear');
 });
 
 it('decodes nested json payload through json helper', function (): void {
@@ -673,7 +699,7 @@ it('handles rpc thread start response and persists thread binding', function ():
         ], JSON_UNESCAPED_UNICODE),
     ]);
 
-    expect($rpcResp['commands'])->toBeArray()->toHaveCount(1);
+    codex_bot_expect_single_response($rpcResp['commands']);
     expect($rpcResp['commands'][0]['type'] ?? null)->toBe('session.turn.start');
     expect($rpcResp['commands'][0]['provider'] ?? null)->toBe('codex');
     expect($rpcResp['commands'][0]['metadata']['thread_id'] ?? null)->toBe('thread_ut_001');
@@ -713,7 +739,7 @@ it('dispatches provider upstream events through named event handlers', function 
 
     $response = $router->dispatch($rpcEvent)->export();
 
-    expect($response['commands'])->toBeArray()->toHaveCount(1);
+    codex_bot_expect_single_response($response['commands']);
     expect($response['commands'][0]['type'] ?? null)->toBe('session.turn.start');
     expect($response['commands'][0]['provider'] ?? null)->toBe('codex');
     expect($response['commands'][0]['metadata']['thread_id'] ?? null)->toBe('thread_ut_001');
@@ -736,7 +762,7 @@ it('dispatches rpc responses through named rpc router', function (): void {
     ], 'thread/start', $streamId);
 
     expect($response)->toBeArray();
-    expect($response['commands'])->toBeArray()->toHaveCount(1);
+    codex_bot_expect_single_response($response['commands']);
     expect($response['commands'][0]['type'] ?? null)->toBe('session.turn.start');
     expect($response['commands'][0]['metadata']['thread_id'] ?? null)->toBe('thread_ut_001');
 });
@@ -752,7 +778,7 @@ it('dispatches codex notifications through named notification router', function 
     ], [], 'codex:task_notification_router_001');
 
     expect($response)->toBeArray();
-    expect($response['commands'])->toBeArray()->toHaveCount(1);
+    codex_bot_expect_single_response($response['commands']);
     expect($response['commands'][0]['type'] ?? null)->toBe('provider.message.update');
     expect($response['commands'][0]['provider'] ?? null)->toBe('feishu');
     expect((string) ($response['commands'][0]['stream_id'] ?? ''))->toBe('codex:task_notification_router_001');
@@ -771,7 +797,7 @@ it('renders out-of-credits notification through named notification router', func
     ], [], 'codex:task_notification_router_credit_001');
 
     expect($response)->toBeArray();
-    expect($response['commands'])->toBeArray()->toHaveCount(1);
+    codex_bot_expect_single_response($response['commands']);
     expect($response['commands'][0]['type'] ?? null)->toBe('provider.message.update');
     expect((string) ($response['commands'][0]['content'] ?? ''))->toContain('额度已耗尽');
 });
@@ -788,7 +814,7 @@ it('renders rpc list responses through named rpc result projector', function ():
     ]);
 
     expect($response)->toBeArray();
-    expect($response['commands'])->toBeArray()->toHaveCount(1);
+    codex_bot_expect_single_response($response['commands']);
     expect($response['commands'][0]['type'] ?? null)->toBe('provider.message.update');
     expect(codex_bot_test_fixture()->commandText($response['commands'][0]))->toContain('Codex 可用模型列表');
     expect(codex_bot_test_fixture()->commandText($response['commands'][0]))->toContain('gpt-5.3-codex');
@@ -825,7 +851,7 @@ it('renders config value responses through named rpc result projector', function
     ]);
 
     expect($response)->toBeArray();
-    expect($response['commands'])->toBeArray()->toHaveCount(1);
+    codex_bot_expect_single_response($response['commands']);
     expect($response['commands'][0]['type'] ?? null)->toBe('provider.message.update');
     expect(codex_bot_test_fixture()->commandText($response['commands'][0]))->toContain('Codex 当前配置值');
     expect(codex_bot_test_fixture()->commandText($response['commands'][0]))->toContain('`profile`');
@@ -847,6 +873,7 @@ it('handles notification lifecycle through named lifecycle router', function ():
         'event_type' => 'feishu.message.sent',
         'payload' => json_encode([
             'stream_id' => $streamId,
+            ...codex_bot_sent_publication($streamId),
             'message_id' => 'om_helper_finish_001',
         ], JSON_UNESCAPED_UNICODE),
     ]);
@@ -888,7 +915,7 @@ it('handles notification lifecycle through named lifecycle router', function ():
     );
 
     expect($response)->toBeArray();
-    expect($response['commands'])->toBeArray()->toHaveCount(1);
+    codex_bot_expect_single_response($response['commands']);
     expect($response['commands'][0]['type'] ?? null)->toBe('stream.finish');
     expect($response['commands'][0]['provider'] ?? null)->toBe('feishu');
     expect((string) ($response['commands'][0]['target'] ?? ''))->toBe('om_helper_finish_001');
@@ -909,6 +936,7 @@ it('resolves stream context by turn and channel through context helper', functio
         'event_type' => 'feishu.message.sent',
         'payload' => json_encode([
             'stream_id' => $streamId,
+            ...codex_bot_sent_publication($streamId),
             'message_id' => 'om_context_stream_001',
         ], JSON_UNESCAPED_UNICODE),
     ]);
@@ -977,7 +1005,7 @@ it('resets current thread on /new command', function (): void {
     );
 
     $resp = $handler(codex_bot_test_inbound('/new'));
-    expect($resp['commands'])->toBeArray()->toHaveCount(1);
+    codex_bot_expect_single_response($resp['commands']);
     expect($resp['commands'][0]['type'] ?? null)->toBe('provider.message.send');
     expect((string) ($resp['commands'][0]['message_type'] ?? ''))->toBe('text');
     expect(codex_bot_test_fixture()->commandText($resp['commands'][0]))->toContain('会话已重置');
@@ -1011,7 +1039,7 @@ it('clears current thread when rpc response returns thread not found', function 
         ], JSON_UNESCAPED_UNICODE),
     ]);
 
-    expect($errorResp['commands'])->toBeArray()->toHaveCount(1);
+    codex_bot_expect_single_response($errorResp['commands']);
     expect($errorResp['commands'][0]['type'] ?? null)->toBe('provider.message.update');
     expect((string) ($errorResp['commands'][0]['content'] ?? ''))->toContain('已自动清除当前绑定线程');
 
@@ -1043,7 +1071,7 @@ it('returns missing-thread hint for /thread when no thread bound', function (): 
     $handler = $fixture->handler();
 
     $resp = $handler(codex_bot_test_inbound('/thread'));
-    expect($resp['commands'])->toBeArray()->toHaveCount(1);
+    codex_bot_expect_single_response($resp['commands']);
     expect($resp['commands'][0]['type'] ?? null)->toBe('provider.message.send');
     expect((string) ($resp['commands'][0]['message_type'] ?? ''))->toBe('interactive');
     expect(codex_bot_test_fixture()->commandText($resp['commands'][0]))->toContain('当前还没有绑定 Codex Thread');
@@ -1055,7 +1083,7 @@ it('stores pending thread selection for /use <thread_id>', function (): void {
     $handler = $fixture->handler();
 
     $resp = $handler(codex_bot_test_inbound('/use thread_custom_123'));
-    expect($resp['commands'])->toBeArray()->toHaveCount(1);
+    codex_bot_expect_single_response($resp['commands']);
     expect($resp['commands'][0]['type'] ?? null)->toBe('provider.message.send');
     expect(codex_bot_test_fixture()->commandText($resp['commands'][0]))->toContain('已暂存待验证 Codex Thread');
     expect(codex_bot_test_fixture()->commandText($resp['commands'][0]))->toContain('thread_custom_123');
@@ -1099,7 +1127,7 @@ it('shows pending thread in /current context output', function (): void {
     $handler(codex_bot_test_inbound('/use thread_pending_ctx'));
     $resp = $handler(codex_bot_test_inbound('/current'));
 
-    expect($resp['commands'])->toBeArray()->toHaveCount(1);
+    codex_bot_expect_single_response($resp['commands']);
     expect($resp['commands'][0]['type'] ?? null)->toBe('provider.message.send');
 
     $text = codex_bot_test_fixture()->commandText($resp['commands'][0]);
@@ -1181,7 +1209,7 @@ it('returns project-not-found hint for /bind on unknown project', function (): v
     $handler = $fixture->handler();
 
     $resp = $handler(codex_bot_test_inbound('/bind unknown_project'));
-    expect($resp['commands'])->toBeArray()->toHaveCount(1);
+    codex_bot_expect_single_response($resp['commands']);
     expect($resp['commands'][0]['type'] ?? null)->toBe('provider.message.send');
     expect(codex_bot_test_fixture()->commandText($resp['commands'][0]))->toContain('项目不存在');
     expect(codex_bot_test_fixture()->commandText($resp['commands'][0]))->toContain('unknown_project');
@@ -1195,7 +1223,7 @@ it('binds secondary project without switching primary via /bind', function (): v
     $fixture->seedProject($pdo, 'api', 'API Project', '/tmp/api-repo', 'develop');
 
     $resp = $handler(codex_bot_test_inbound('/bind api'));
-    expect($resp['commands'])->toBeArray()->toHaveCount(1);
+    codex_bot_expect_single_response($resp['commands']);
     expect($resp['commands'][0]['type'] ?? null)->toBe('provider.message.send');
     expect(codex_bot_test_fixture()->commandText($resp['commands'][0]))->toContain('项目已绑定到当前聊天');
     expect(codex_bot_test_fixture()->commandText($resp['commands'][0]))->toContain('当前主项目');
@@ -1226,7 +1254,7 @@ it('switches primary project with /switch and subsequent task uses switched proj
     $fixture->seedProject($pdo, 'api', 'API Project', '/tmp/api-repo', 'develop');
 
     $switchResp = $handler(codex_bot_test_inbound('/switch api'));
-    expect($switchResp['commands'])->toBeArray()->toHaveCount(1);
+    codex_bot_expect_single_response($switchResp['commands']);
     expect($switchResp['commands'][0]['type'] ?? null)->toBe('provider.message.send');
     expect(codex_bot_test_fixture()->commandText($switchResp['commands'][0]))->toContain('已切换当前项目');
     expect(codex_bot_test_fixture()->commandText($switchResp['commands'][0]))->toContain('api');
@@ -1263,7 +1291,7 @@ it('lists all bound projects in /projects output', function (): void {
     $handler(codex_bot_test_inbound('/bind api'));
 
     $resp = $handler(codex_bot_test_inbound('/projects'));
-    expect($resp['commands'])->toBeArray()->toHaveCount(1);
+    codex_bot_expect_single_response($resp['commands']);
     expect($resp['commands'][0]['type'] ?? null)->toBe('provider.message.send');
     $text = codex_bot_test_fixture()->commandText($resp['commands'][0]);
     expect($text)->toContain('当前聊天已绑定项目');
@@ -1325,7 +1353,7 @@ it('requires a key for /config command', function (): void {
     $handler = $fixture->handler();
 
     $resp = $handler(codex_bot_test_inbound('/config'));
-    expect($resp['commands'])->toBeArray()->toHaveCount(1);
+    codex_bot_expect_single_response($resp['commands']);
     expect(codex_bot_test_fixture()->commandText($resp['commands'][0]))->toContain('缺少配置项名称');
     expect(codex_bot_test_fixture()->commandText($resp['commands'][0]))->toContain('/config <key>');
 });
@@ -1336,7 +1364,7 @@ it('shows current project via /project without args', function (): void {
     $handler = $fixture->handler();
 
     $resp = $handler(codex_bot_test_inbound('/project'));
-    expect($resp['commands'])->toBeArray()->toHaveCount(1);
+    codex_bot_expect_single_response($resp['commands']);
     $text = codex_bot_test_fixture()->commandText($resp['commands'][0]);
     expect($text)->toContain('当前项目');
     expect($text)->toContain('`demo`');
@@ -1351,7 +1379,7 @@ it('switches project via /project <key>', function (): void {
     $fixture->seedProject($pdo, 'api', 'API Project', '/tmp/api-repo', 'develop');
 
     $switchResp = $handler(codex_bot_test_inbound('/project api'));
-    expect($switchResp['commands'])->toBeArray()->toHaveCount(1);
+    codex_bot_expect_single_response($switchResp['commands']);
     expect(codex_bot_test_fixture()->commandText($switchResp['commands'][0]))->toContain('已切换当前项目');
     expect(codex_bot_test_fixture()->commandText($switchResp['commands'][0]))->toContain('`api`');
 
@@ -1375,7 +1403,7 @@ it('uses /use project key after /projects context', function (): void {
     $handler(codex_bot_test_inbound('/projects'));
     $resp = $handler(codex_bot_test_inbound('/use api'));
 
-    expect($resp['commands'])->toBeArray()->toHaveCount(1);
+    codex_bot_expect_single_response($resp['commands']);
     expect(codex_bot_test_fixture()->commandText($resp['commands'][0]))->toContain('已切换当前项目');
     expect(codex_bot_test_fixture()->commandText($resp['commands'][0]))->toContain('`api`');
 });
@@ -1396,12 +1424,12 @@ it('shows and updates current model through /model commands', function (): void 
     );
 
     $showResp = $handler(codex_bot_test_inbound('/model'));
-    expect($showResp['commands'])->toBeArray()->toHaveCount(1);
+    codex_bot_expect_single_response($showResp['commands']);
     expect(codex_bot_test_fixture()->commandText($showResp['commands'][0]))->toContain('当前模型');
     expect(codex_bot_test_fixture()->commandText($showResp['commands'][0]))->toContain('`gpt-5.3-codex`');
 
     $setResp = $handler(codex_bot_test_inbound('/model gpt-5.4-codex'));
-    expect($setResp['commands'])->toBeArray()->toHaveCount(1);
+    codex_bot_expect_single_response($setResp['commands']);
     expect(codex_bot_test_fixture()->commandText($setResp['commands'][0]))->toContain('模型已更新并立即生效');
     expect(codex_bot_test_fixture()->commandText($setResp['commands'][0]))->toContain('gpt-5.4-codex');
 
@@ -1430,7 +1458,7 @@ it('uses /use model id after /models context', function (): void {
     $handler(codex_bot_test_inbound('/models'));
     $resp = $handler(codex_bot_test_inbound('/use gpt-5.5-codex'));
 
-    expect($resp['commands'])->toBeArray()->toHaveCount(1);
+    codex_bot_expect_single_response($resp['commands']);
     expect(codex_bot_test_fixture()->commandText($resp['commands'][0]))->toContain('模型已更新并立即生效');
     expect(codex_bot_test_fixture()->commandText($resp['commands'][0]))->toContain('gpt-5.5-codex');
 
@@ -1454,7 +1482,7 @@ it('resets conversation and applies model through /new <model_id>', function ():
     );
 
     $resp = $handler(codex_bot_test_inbound('/new gpt-5.5-codex'));
-    expect($resp['commands'])->toBeArray()->toHaveCount(1);
+    codex_bot_expect_single_response($resp['commands']);
     expect(codex_bot_test_fixture()->commandText($resp['commands'][0]))->toContain('会话已重置并切换模型');
     expect(codex_bot_test_fixture()->commandText($resp['commands'][0]))->toContain('gpt-5.5-codex');
 
@@ -1482,7 +1510,7 @@ it('stores and lists settings through /setting and /settings', function (): void
     $pdo = $fixture->db();
 
     $setResp = $handler(codex_bot_test_inbound('/setting project_root_dir /tmp/codex-projects-test'));
-    expect($setResp['commands'])->toBeArray()->toHaveCount(1);
+    codex_bot_expect_single_response($setResp['commands']);
     expect(codex_bot_test_fixture()->commandText($setResp['commands'][0]))->toContain('配置已更新');
     expect(codex_bot_test_fixture()->commandText($setResp['commands'][0]))->toContain('project_root_dir');
 
@@ -1490,7 +1518,7 @@ it('stores and lists settings through /setting and /settings', function (): void
     expect((string) ($row['value'] ?? ''))->toBe('/tmp/codex-projects-test');
 
     $listResp = $handler(codex_bot_test_inbound('/settings'));
-    expect($listResp['commands'])->toBeArray()->toHaveCount(1);
+    codex_bot_expect_single_response($listResp['commands']);
     $text = codex_bot_test_fixture()->commandText($listResp['commands'][0]);
     expect($text)->toContain('当前配置');
     expect($text)->toContain('project_root_dir');
@@ -1506,7 +1534,7 @@ it('creates and switches project via /create', function (): void {
     $handler(codex_bot_test_inbound('/setting project_root_dir ' . $projectRootDir));
 
     $resp = $handler(codex_bot_test_inbound('/create lab'));
-    expect($resp['commands'])->toBeArray()->toHaveCount(1);
+    codex_bot_expect_single_response($resp['commands']);
     expect(codex_bot_test_fixture()->commandText($resp['commands'][0]))->toContain('项目已创建并切换');
     expect(codex_bot_test_fixture()->commandText($resp['commands'][0]))->toContain('`lab`');
 
@@ -1540,7 +1568,7 @@ it('imports existing project directory and switches current project', function (
     }
 
     $resp = $handler(codex_bot_test_inbound('/import outside ' . $repoPath));
-    expect($resp['commands'])->toBeArray()->toHaveCount(1);
+    codex_bot_expect_single_response($resp['commands']);
     expect(codex_bot_test_fixture()->commandText($resp['commands'][0]))->toContain('项目已导入并切换');
     expect(codex_bot_test_fixture()->commandText($resp['commands'][0]))->toContain('`outside`');
 
@@ -1553,7 +1581,7 @@ it('imports existing project directory and switches current project', function (
     expect((string) ($project['default_branch'] ?? ''))->toBe('main');
 
     $currentResp = $handler(codex_bot_test_inbound('/project'));
-    expect($currentResp['commands'])->toBeArray()->toHaveCount(1);
+    codex_bot_expect_single_response($currentResp['commands']);
     $currentText = codex_bot_test_fixture()->commandText($currentResp['commands'][0]);
     expect($currentText)->toContain('`outside`');
     expect($currentText)->toContain(realpath($repoPath) ?: $repoPath);
@@ -1578,12 +1606,20 @@ it('cancels latest task and ignores late completion events', function (): void {
         'event_type' => 'feishu.message.sent',
         'payload' => json_encode([
             'stream_id' => $created['stream_id'],
+            ...codex_bot_sent_publication($created['stream_id']),
             'message_id' => 'om_cancel_target_001',
         ], JSON_UNESCAPED_UNICODE),
     ]);
 
+    $streamStmt = $pdo->prepare('SELECT stream_generation FROM streams WHERE stream_id = ?');
+    $streamStmt->execute([$created['stream_id']]);
+    $stream = $streamStmt->fetch(PDO::FETCH_ASSOC);
+    // Release this connection's read snapshot before another connection cancels.
+    $streamStmt->closeCursor();
     $cancelResp = $handler(codex_bot_test_inbound('/cancel'));
-    expect($cancelResp['commands'])->toBeArray()->toHaveCount(1);
+    expect($cancelResp['commands'])->toBeArray()->toHaveCount(2);
+    expect($cancelResp['commands'][1]['type'])->toBe('session.clear');
+    expect($cancelResp['commands'][1]['metadata']['stream_generation'])->toBe($stream['stream_generation']);
     expect($cancelResp['commands'][0]['type'] ?? null)->toBe('provider.message.update');
     expect((string) ($cancelResp['commands'][0]['target'] ?? ''))->toBe('om_cancel_target_001');
     expect((string) ($cancelResp['commands'][0]['content'] ?? ''))->toContain('任务已取消');
@@ -1677,6 +1713,7 @@ it('binds response message id on feishu.message.sent provider event', function (
         'event_type' => 'feishu.message.sent',
         'payload' => json_encode([
             'stream_id' => $created['stream_id'],
+            ...codex_bot_sent_publication($created['stream_id']),
             'message_id' => 'om_reply_001',
         ], JSON_UNESCAPED_UNICODE),
     ]);
@@ -1707,7 +1744,7 @@ it('returns feishu update command for codex.notification error with stream id', 
         ], JSON_UNESCAPED_UNICODE),
     ]);
 
-    expect($resp['commands'])->toBeArray()->toHaveCount(1);
+    codex_bot_expect_single_response($resp['commands']);
     expect($resp['commands'][0]['type'] ?? null)->toBe('provider.message.update');
     expect((string) ($resp['commands'][0]['stream_id'] ?? ''))->toBe($created['stream_id']);
     expect((string) ($resp['commands'][0]['content'] ?? ''))->toContain('simulated upstream failure');
@@ -1725,6 +1762,7 @@ it('streams delta patches and final flush after the placeholder message is bound
         'event_type' => 'feishu.message.sent',
         'payload' => json_encode([
             'stream_id' => $created['stream_id'],
+            ...codex_bot_sent_publication($created['stream_id']),
             'message_id' => 'om_reply_stream_001',
         ], JSON_UNESCAPED_UNICODE),
     ]);
@@ -1772,7 +1810,7 @@ it('streams delta patches and final flush after the placeholder message is bound
         ], JSON_UNESCAPED_UNICODE),
     ]);
 
-    expect($deltaResp['commands'])->toBeArray()->toHaveCount(1);
+    codex_bot_expect_single_response($deltaResp['commands']);
     expect($deltaResp['commands'][0]['type'] ?? null)->toBe('stream.append');
     expect($deltaResp['commands'][0]['provider'] ?? null)->toBe('feishu');
     expect((string) ($deltaResp['commands'][0]['target'] ?? ''))->toBe('om_reply_stream_001');
@@ -1792,7 +1830,7 @@ it('streams delta patches and final flush after the placeholder message is bound
         ], JSON_UNESCAPED_UNICODE),
     ]);
 
-    expect($flushResp['commands'])->toBeArray()->toHaveCount(1);
+    codex_bot_expect_single_response($flushResp['commands']);
     expect($flushResp['commands'][0]['type'] ?? null)->toBe('stream.finish');
     expect($flushResp['commands'][0]['provider'] ?? null)->toBe('feishu');
     expect((string) ($flushResp['commands'][0]['target'] ?? ''))->toBe('om_reply_stream_001');
@@ -1814,7 +1852,7 @@ it('renders latest thread summary for /thread latest when thread is active', fun
     $fixture->startThread($handler);
 
     $resp = $handler(codex_bot_test_inbound('/thread latest'));
-    expect($resp['commands'])->toBeArray()->toHaveCount(1);
+    codex_bot_expect_single_response($resp['commands']);
     expect($resp['commands'][0]['type'] ?? null)->toBe('provider.message.send');
     expect((string) ($resp['commands'][0]['message_type'] ?? ''))->toBe('interactive');
     expect(codex_bot_test_fixture()->commandText($resp['commands'][0]))->toContain('当前 Thread 最近一次本地任务');
@@ -1831,7 +1869,7 @@ it('renders recent thread history for /thread recent when thread is active', fun
     $handler(codex_bot_test_inbound('继续第二个任务'));
 
     $resp = $handler(codex_bot_test_inbound('/thread recent'));
-    expect($resp['commands'])->toBeArray()->toHaveCount(1);
+    codex_bot_expect_single_response($resp['commands']);
     expect($resp['commands'][0]['type'] ?? null)->toBe('provider.message.send');
     expect((string) ($resp['commands'][0]['message_type'] ?? ''))->toBe('interactive');
     expect(codex_bot_test_fixture()->commandText($resp['commands'][0]))->toContain('当前 Thread 最近几次本地任务');
@@ -1862,7 +1900,7 @@ it('handles /use latest rpc thread/list response and creates pending bind task',
         ], JSON_UNESCAPED_UNICODE),
     ]);
 
-    expect($rpcResp['commands'])->toBeArray()->toHaveCount(1);
+    codex_bot_expect_single_response($rpcResp['commands']);
     expect($rpcResp['commands'][0]['type'] ?? null)->toBe('provider.message.update');
     expect(codex_bot_test_fixture()->commandText($rpcResp['commands'][0]))->toContain('已暂存最近一个 Codex Thread');
     expect(codex_bot_test_fixture()->commandText($rpcResp['commands'][0]))->toContain('thread_latest_001');
@@ -1906,7 +1944,7 @@ it('returns no-history hint when /use latest rpc thread/list has empty data', fu
         ], JSON_UNESCAPED_UNICODE),
     ]);
 
-    expect($rpcResp['commands'])->toBeArray()->toHaveCount(1);
+    codex_bot_expect_single_response($rpcResp['commands']);
     expect($rpcResp['commands'][0]['type'] ?? null)->toBe('provider.message.update');
     expect(codex_bot_test_fixture()->commandText($rpcResp['commands'][0]))->toContain('没有可用的历史 Thread');
 });
@@ -1956,7 +1994,7 @@ it('renders thread/read result card and marks thread_read task completed', funct
         ], JSON_UNESCAPED_UNICODE),
     ]);
 
-    expect($rpcResp['commands'])->toBeArray()->toHaveCount(1);
+    codex_bot_expect_single_response($rpcResp['commands']);
     expect($rpcResp['commands'][0]['type'] ?? null)->toBe('provider.message.update');
     expect(codex_bot_test_fixture()->commandText($rpcResp['commands'][0]))->toContain('当前 Thread 详情');
     expect(codex_bot_test_fixture()->commandText($rpcResp['commands'][0]))->toContain('thread_ut_001');
@@ -1997,7 +2035,7 @@ it('updates current session thread when thread/read resolves to a different thre
         ], JSON_UNESCAPED_UNICODE),
     ]);
 
-    expect($rpcResp['commands'])->toBeArray()->toHaveCount(1);
+    codex_bot_expect_single_response($rpcResp['commands']);
     expect(codex_bot_test_fixture()->commandText($rpcResp['commands'][0]))->toContain('thread_resolved_002');
 
     $pdo = $fixture->db();
@@ -2044,7 +2082,7 @@ it('clears stale pending selection after thread/read resolves to a different thr
         ], JSON_UNESCAPED_UNICODE),
     ]);
 
-    expect($rpcResp['commands'])->toBeArray()->toHaveCount(1);
+    codex_bot_expect_single_response($rpcResp['commands']);
     expect(codex_bot_test_fixture()->commandText($rpcResp['commands'][0]))->toContain('thread_resolved_from_read_002');
 
     $pdo = $fixture->db();

@@ -79,12 +79,12 @@ $http = static function (mixed $request, array $envelope = []) use ($html): arra
 };
 
 $stream = StreamFactory::dispatchSse(
-    (static function (): iterable {
+    static function (): iterable {
         for ($i = 0; $i < 5; $i++) {
             yield ['event' => 'tick', 'data' => (string) $i];
         }
         yield ['event' => 'done', 'data' => 'stream complete'];
-    })(),
+    },
     200,
     [
         'cache-control' => 'no-cache',

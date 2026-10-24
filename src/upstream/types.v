@@ -99,15 +99,18 @@ pub mut:
 
 pub struct UpstreamSendResult {
 pub:
-	ok         bool
-	provider   string
-	instance   string
-	message_id string @[json: 'message_id']
-	error      string
+	stream_generation string
+	ok                bool
+	provider          string
+	instance          string
+	message_id        string @[json: 'message_id']
+	error             string
 }
 
 pub struct UpstreamUpdateResult {
 pub:
+	stream_generation string
+	stream_state string
 	ok         bool
 	provider   string
 	instance   string
@@ -192,12 +195,32 @@ pub:
 
 pub fn (req UpstreamFixtureEmitRequest) normalized(received_at i64, seed i64) UpstreamFixtureEmitPlan {
 	return UpstreamFixtureEmitPlan{
-		instance:    if req.instance.trim_space() == '' { 'main' } else { req.instance.trim_space() }
-		trace_id:    if req.trace_id.trim_space() == '' { 'fixture-trace-${seed}' } else { req.trace_id.trim_space() }
+		instance:    if req.instance.trim_space() == '' {
+			'main'
+		} else {
+			req.instance.trim_space()
+		}
+		trace_id:    if req.trace_id.trim_space() == '' {
+			'fixture-trace-${seed}'
+		} else {
+			req.trace_id.trim_space()
+		}
 		activity_id: 'fixture-activity-${seed}'
-		event_type:  if req.event_type.trim_space() == '' { 'fixture.message' } else { req.event_type.trim_space() }
-		message_id:  if req.message_id.trim_space() == '' { 'fixture-event-${seed}' } else { req.message_id.trim_space() }
-		target_type: if req.target_type.trim_space() == '' { 'fixture_target' } else { req.target_type.trim_space() }
+		event_type:  if req.event_type.trim_space() == '' {
+			'fixture.message'
+		} else {
+			req.event_type.trim_space()
+		}
+		message_id:  if req.message_id.trim_space() == '' {
+			'fixture-event-${seed}'
+		} else {
+			req.message_id.trim_space()
+		}
+		target_type: if req.target_type.trim_space() == '' {
+			'fixture_target'
+		} else {
+			req.target_type.trim_space()
+		}
 		target:      req.target
 		payload:     req.payload
 		received_at: received_at
@@ -301,16 +324,16 @@ pub fn UpstreamSendRequest.from_feishu_command(normalized command.NormalizedComm
 // Io bridges transport-level I/O from the main App to upstream sub-module.
 pub struct Io {
 pub:
-	write_sse_message                fn (mut net.TcpConn, transport.WorkerStreamFrame) !             = unsafe { nil }
-	write_chunk                      fn (mut net.TcpConn, string) !                                  = unsafe { nil }
-	write_http_stream_headers_conn   fn (mut net.TcpConn, int, string, map[string]string, bool) !   = unsafe { nil }
+	write_sse_message              fn (mut net.TcpConn, transport.WorkerStreamFrame) !          @[required]
+	write_chunk                    fn (mut net.TcpConn, string) !                               @[required]
+	write_http_stream_headers_conn fn (mut net.TcpConn, int, string, map[string]string, bool) ! @[required]
 }
 
 // ExecState tracks the lifecycle of a single upstream stream execution.
 @[heap]
 pub struct ExecState {
 pub mut:
-	io                  Io
+	io                  Io @[required]
 	conn                net.TcpConn
 	method              string
 	stream_type         string
@@ -324,4 +347,6 @@ pub mut:
 	headers_written     bool
 	line_buf            string
 	token_index         int
+mut:
+	completed bool
 }

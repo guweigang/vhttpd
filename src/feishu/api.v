@@ -1,7 +1,7 @@
 module feishu
 
 import encoding.base64
-import json
+import json2 as json
 import net.http
 
 // ── Send Message API ──
@@ -46,14 +46,14 @@ pub fn build_send_message_payload(msg_type string, content string, receive_id st
 			'msg_type': msg_type
 			'content':  content
 			'uuid':     uuid
-		})
+		}, escape_unicode: true, time_as_unix: true)
 	}
 	return json.encode({
 		'receive_id': receive_id
 		'msg_type':   msg_type
 		'content':    content
 		'uuid':       uuid
-	})
+	}, escape_unicode: true, time_as_unix: true)
 }
 
 pub fn SendMessageRequest.api_payload(msg_type string, content string, receive_id string, uuid string, receive_id_type string) string {
@@ -103,7 +103,7 @@ pub fn build_update_message_request(base_url string, message_id_type string, tar
 			'msg_type': msg_type
 			'content':  content
 			'uuid':     uuid
-		})
+		}, escape_unicode: true, time_as_unix: true)
 		url := '${base_url}/im/v1/messages/${target}'
 		return url, UpdateMessageRequest.http_method_for(msg_type), payload
 	}
@@ -168,7 +168,7 @@ pub fn build_tenant_token_request_body(app_id string, app_secret string) string 
 	return json.encode({
 		'app_id':     app_id
 		'app_secret': app_secret
-	})
+	}, escape_unicode: true, time_as_unix: true)
 }
 
 pub fn TenantTokenResponse.request_body(app_id string, app_secret string) string {
@@ -177,7 +177,7 @@ pub fn TenantTokenResponse.request_body(app_id string, app_secret string) string
 
 // parse_tenant_token_response parses the tenant access token response.
 pub fn parse_tenant_token_response(body string) !(string, i64) {
-	decoded := json.decode(TenantTokenResponse, body)!
+	decoded := json.decode[TenantTokenResponse](body)!
 	if decoded.code != 0 || decoded.tenant_access_token.trim_space() == '' {
 		return error('feishu tenant token error: ${decoded.msg}')
 	}

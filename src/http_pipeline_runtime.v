@@ -18,7 +18,7 @@ struct MatchedHttpPipelineRequest {
 	start_ms          i64
 }
 
-fn (rt PipelineRuntime) try_handle_matched_http(mut app App, mut ctx Context, rule RuntimeRouteRule, req MatchedHttpPipelineRequest, headers map[string]string) ?veb.Result {
+fn (view HttpDispatchView) try_handle_matched_http(mut app App, mut ctx Context, rule RuntimeRouteRule, req MatchedHttpPipelineRequest, headers map[string]string) ?veb.Result {
 	header_name := route_required_headers_failure(rule, headers)
 	if header_name != '' {
 		log.warn('[http] ⇠ pipeline required header failed method=${req.method.to_upper()} path=${req.path} trace_id=${req.trace_id} request_id=${req.req_id} pipeline=${rule.pipeline_id} header=${header_name}')
@@ -45,7 +45,7 @@ fn (rt PipelineRuntime) try_handle_matched_http(mut app App, mut ctx Context, ru
 			req.normalized_target, req.query, req.body_on_head, req.remote_addr, req.req_id,
 			req.trace_id, req.start_ms, rule, mut terminal_adapter)
 	}
-	if result := run_http_route_transforms(mut app, mut ctx, rule, req) {
+	if result := run_http_route_transforms(mut app, mut ctx, rule, req, view.transform_dispatch_view()) {
 		return result
 	}
 	if rule.status > 0 {
@@ -73,7 +73,7 @@ fn (rt PipelineRuntime) try_handle_matched_http(mut app App, mut ctx Context, ru
 				req.normalized_target, req.query, req.body_on_head, req.remote_addr, req.req_id,
 				req.trace_id, req.start_ms, rule, mut terminal_adapter)
 		}
-		root_dir := rt.http_static_root(rule)
+		root_dir := view.pipelines.http_static_root(rule)
 		file_path := os.join_path(root_dir, req.normalized_target.trim_left('/'))
 		if os.exists(file_path) && !os.is_dir(file_path) {
 			mut file_headers := map[string]string{}
@@ -94,12 +94,12 @@ fn (rt PipelineRuntime) try_handle_matched_http(mut app App, mut ctx Context, ru
 			req.trace_id, req.start_ms, rule, mut terminal_adapter)
 	}
 	if rule.executor == 'upload' {
-		return handle_upload_route(mut app, mut ctx, rule, req.method, req.normalized_target,
+		return handle_upload_route_on_view(mut app, mut ctx, view.transform_dispatch_view(), rule, req.method, req.normalized_target,
 			req.req_id, req.trace_id, req.start_ms, req.query, req.body_on_head, req.remote_addr)
 	}
 	if rule.executor == 'relay-delivery' {
 		adapter_id := rule.egress_ref.trim_string_left('adapter:')
-		adapter_plan := app.plan.adapters[adapter_id] or {
+		adapter_plan := view.plan.adapters[adapter_id] or {
 			return HttpResponseRuntime.dispatch_error(mut app, mut ctx, http_ingress_request_for_rule(req.method,
 				req.path, req.path, req.body_on_head, req.remote_addr, req.req_id, req.trace_id,
 				req.start_ms, rule), 'relay_delivery_adapter_missing:${adapter_id}')
@@ -115,14 +115,16 @@ fn (rt PipelineRuntime) try_handle_matched_http(mut app App, mut ctx Context, ru
 	}
 	if rule.executor == 'provider-action' {
 		adapter_id := rule.egress_ref.trim_string_left('adapter:')
-		adapter_plan := app.plan.adapters[adapter_id] or {
+		adapter_plan := view.plan.adapters[adapter_id] or {
 			return HttpResponseRuntime.dispatch_error(mut app, mut ctx, http_ingress_request_for_rule(req.method,
 				req.path, req.path, req.body_on_head, req.remote_addr, req.req_id, req.trace_id,
 				req.start_ms, rule), 'provider_action_adapter_missing:${adapter_id}')
 		}
 		payload := provider_action_payload(adapter_plan, ctx.req.data)
-		resp := rt.dispatch_http_provider_action(mut app, adapter_plan, adapter_id, rule, req,
+		ctx.begin_observed_adapter()
+		resp := view.pipelines.dispatch_http_provider_action(mut app, adapter_plan, adapter_id, rule, req,
 			payload)
+		ctx.end_observed_adapter()
 		if !resp.ok {
 			return HttpResponseRuntime.dispatch_error(mut app, mut ctx, http_ingress_request_for_rule(req.method,
 				req.path, req.path, req.body_on_head, req.remote_addr, req.req_id, req.trace_id,
@@ -149,13 +151,13 @@ fn (rt PipelineRuntime) try_handle_matched_http(mut app App, mut ctx Context, ru
 fn (rt PipelineRuntime) dispatch_http_provider_action(mut app App, adapter_plan runtime_plan.AdapterPlan, adapter_id string, rule RuntimeRouteRule, req MatchedHttpPipelineRequest, payload string) ProviderRuntimeActionResponse {
 	return app.dispatch_provider_action_adapter(adapter_plan, adapter_id, payload, req.req_id,
 		req.trace_id, {
-		'pipeline_id': rule.pipeline_id
-		'method':      req.method
-		'path':        req.normalized_target
-	})
+			'pipeline_id': rule.pipeline_id
+			'method':      req.method
+			'path':        req.normalized_target
+		})
 }
 
-fn (rt PipelineRuntime) try_handle_http_dispatch_plan(mut app App, mut ctx Context, plan HttpPipelineDispatchPlan, req MatchedHttpPipelineRequest, headers map[string]string) ?veb.Result {
+fn (view HttpDispatchView) try_handle_http_dispatch_plan(mut app App, mut ctx Context, plan HttpPipelineDispatchPlan, req MatchedHttpPipelineRequest, headers map[string]string) ?veb.Result {
 	rule := plan.rule or { return none }
-	return rt.try_handle_matched_http(mut app, mut ctx, rule, req, headers)
+	return view.try_handle_matched_http(mut app, mut ctx, rule, req, headers)
 }

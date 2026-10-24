@@ -33,7 +33,16 @@ pub fn RuntimeLogger.effective_level() log.Level {
 	return RuntimeLogger.default_level()
 }
 
+pub fn RuntimeLogger.json_enabled() bool {
+	return os.getenv('VHTTPD_LOG_FORMAT').trim_space().to_lower() == 'json'
+}
+
 pub fn RuntimeLogger.configure() {
+	if RuntimeLogger.json_enabled() {
+		logger := &JsonLogger{ level: RuntimeLogger.effective_level() }
+		log.set_logger(logger)
+		return
+	}
 	mut local_logger := &log.Log{}
 	local_logger.set_level(RuntimeLogger.effective_level())
 	local_logger.set_local_time(true)

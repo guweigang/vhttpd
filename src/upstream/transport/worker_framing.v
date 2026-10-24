@@ -1,6 +1,6 @@
 module transport
 
-import json
+import json2 as json
 import net.http
 import net.unix
 import net.urllib
@@ -199,7 +199,7 @@ pub fn WorkerHttpRequestCodec.encode_request(method string, path string, req htt
 		attributes:       map[string]string{}
 		server:           server
 		uploaded_files:   []string{}
-	})
+	}, escape_unicode: true, time_as_unix: true)
 }
 
 // ── Stream / Upstream plan decoding ──
@@ -209,7 +209,7 @@ pub fn try_decode_stream_start(raw string) ?WorkerStreamFrame {
 }
 
 pub fn WorkerStreamFrame.try_decode_start(raw string) ?WorkerStreamFrame {
-	frame := json.decode(WorkerStreamFrame, raw) or { return none }
+	frame := json.decode[WorkerStreamFrame](raw) or { return none }
 	if frame.mode == 'stream' && frame.event == 'start' {
 		return frame
 	}
@@ -221,7 +221,7 @@ pub fn try_decode_upstream_plan(raw string) ?WorkerUpstreamPlanFrame {
 }
 
 pub fn WorkerUpstreamPlanFrame.try_decode_start(raw string) ?WorkerUpstreamPlanFrame {
-	frame := json.decode(WorkerUpstreamPlanFrame, raw) or { return none }
+	frame := json.decode[WorkerUpstreamPlanFrame](raw) or { return none }
 	if ((frame.mode == 'stream' && frame.strategy == 'upstream_plan')
 		|| frame.mode == 'upstream_plan') && frame.event == 'start' {
 		return frame

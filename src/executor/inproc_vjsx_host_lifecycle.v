@@ -6,10 +6,19 @@ import vjsx
 import vjsx.runtimejs
 
 pub fn (e InProcVjsxExecutor) ensure_lane_host(idx int) ! {
-	if isnil(e.state) {
-		return error('inproc_vjsx_executor_state_missing')
-	}
 	mut state := e.state
+	state.mu.@lock()
+	if state.stopping {
+		state.mu.unlock()
+		return error('inproc_vjsx_executor_closed')
+	}
+	state.host_builders++
+	state.mu.unlock()
+	defer {
+		state.mu.@lock()
+		state.host_builders--
+		state.mu.unlock()
+	}
 	config := e.facade_snapshot().config
 	source_signature := e.current_source_signature()
 	mut needs_reset := false
@@ -20,7 +29,7 @@ pub fn (e InProcVjsxExecutor) ensure_lane_host(idx int) ! {
 		return error('inproc_vjsx_executor_invalid_lane')
 	}
 	host := state.hosts[idx]
-	if host.initialized && !host.dirty && !isnil(host.session) && !host.session.is_closed()
+	if host.initialized && !host.dirty && host.session_handle() != none
 		&& host.source_signature == source_signature {
 		state.mu.unlock()
 		return
@@ -34,16 +43,37 @@ pub fn (e InProcVjsxExecutor) ensure_lane_host(idx int) ! {
 	}
 
 	as_module := VjsxHostLoader.entry_runs_as_module(config.app_entry)!
-	temp_root := config.lane_temp_root(idx, source_signature)
+	mut directory := VjsxBuildDirectory.reserve(config.lane_temp_root(idx, source_signature))!
+	// Builders may recreate their output directory; retain an untouched parent.
+	temp_root := directory.output_path()
+	mut owned_by_lane := false
+	defer { if !owned_by_lane { directory.release() } }
 	mut session := InProcVjsxRuntimeSessionFactory.new(config)!
+	wake_owner := state.new_lane_wakeup_owner(lane_id) or {
+		if !session.is_closed() { session.close() }
+		return err
+	}
+	e.attach_task_session(lane_id, session)
+	defer {
+		if !owned_by_lane {
+			wake_owner.retire()
+			state.mu.@lock()
+			state.detach_task_session_locked(lane_id)
+			state.mu.unlock()
+			if !session.is_closed() { session.close() }
+		}
+	}
 	session.set_diagnostic_handler(inproc_vjsx_runtime_session_diagnostic_handler)
 	session.configure_event_loop(vjsx.RuntimeSessionEventLoopConfig{
 		session_id:     lane_id
-		wake_fn:        fn [mut state, lane_id] (req vjsx.RuntimeSessionWakeRequest) {
-			state.schedule_lane_wakeup(lane_id, req.wake_at_ms, req.generation)
+		wake_fn:        fn [wake_owner] (req vjsx.RuntimeSessionWakeRequest) {
+			wake_owner.schedule(req.wake_at_ms, req.generation)
 		}
-		cancel_wake_fn: fn [mut state, lane_id] (req vjsx.RuntimeSessionWakeCancelRequest) {
-			state.cancel_lane_wakeup(lane_id, req.generation)
+		cancel_wake_fn: fn [wake_owner] (req vjsx.RuntimeSessionWakeCancelRequest) {
+			wake_owner.cancel(req.generation)
+		}
+		async_ready_fn: fn [wake_owner] (_req vjsx.RuntimeHostAsyncReadyRequest) {
+			wake_owner.schedule_async()
 		}
 	})
 	log.debug('[vhttpd] ensure_lane_host runtime ready lane=${lane_id} idx=${idx} module=${as_module} temp_root=${temp_root}')
@@ -51,7 +81,7 @@ pub fn (e InProcVjsxExecutor) ensure_lane_host(idx int) ! {
 	InProcVjsxHostApi.install_http_facade(mut ctx)!
 	InProcVjsxHostApi.install(mut ctx, mut state, idx)
 	InProcVjsxRuntimeProfileLog.write(lane_id, idx, config.runtime_profile, ctx)
-	mut module_binding_ptr := &vjsx.ScriptModule(unsafe { nil })
+	mut module_binding_ptr := ?&vjsx.ScriptModule(none)
 	mut has_http_handler := false
 	mut has_websocket_handler := false
 	mut has_upstream_handler := false
@@ -67,31 +97,27 @@ pub fn (e InProcVjsxExecutor) ensure_lane_host(idx int) ! {
 		defer {
 			js_flag_eval.free()
 		}
-		module_entry_path := runtimejs.build_runtime_module_entry(ctx, config.app_entry, true,
+		module_entry_path := runtimejs.build_runtime_module_entry(ctx, os.real_path(config.app_entry), true,
 			temp_root) or {
-			session.close()
-			os.rmdir_all(temp_root) or {} // safe to ignore: temp dir may already be removed
 			return error('inproc_vjsx_executor_bootstrap_failed:${err.msg()}')
 		}
-		module_binding_value := session.import_module(module_entry_path) or {
-			session.close()
-			os.rmdir_all(temp_root) or {} // safe to ignore: temp dir may already be removed
+		module_binding_value := VjsxHostLoader.import_prepared_entry(mut session, module_entry_path) or {
 			return error('inproc_vjsx_executor_module_import_failed:${err.msg()}')
 		}
 		has_http_handler =
 			InProcVjsxEntryResolver.module_has_callable(&module_binding_value, 'http')
-			|| InProcVjsxEntryResolver.global_has_callable(ctx, 'http')
+				|| InProcVjsxEntryResolver.global_has_callable(ctx, 'http')
 		has_websocket_handler =
 			InProcVjsxEntryResolver.module_has_callable(&module_binding_value, 'websocket')
-			|| InProcVjsxEntryResolver.global_has_callable(ctx, 'websocket')
+				|| InProcVjsxEntryResolver.global_has_callable(ctx, 'websocket')
 		has_upstream_handler =
 			InProcVjsxEntryResolver.module_has_callable(&module_binding_value, 'websocket_upstream')
-			|| InProcVjsxEntryResolver.global_has_callable(ctx, 'websocket_upstream')
+				|| InProcVjsxEntryResolver.global_has_callable(ctx, 'websocket_upstream')
 		has_plugin_handler =
 			InProcVjsxEntryResolver.module_has_callable(&module_binding_value, 'plugin')
-			|| InProcVjsxEntryResolver.module_has_callable(&module_binding_value, 'openai')
-			|| InProcVjsxEntryResolver.global_has_callable(ctx, 'plugin')
-			|| InProcVjsxEntryResolver.global_has_callable(ctx, 'openai')
+				|| InProcVjsxEntryResolver.module_has_callable(&module_binding_value, 'openai')
+				|| InProcVjsxEntryResolver.global_has_callable(ctx, 'plugin')
+				|| InProcVjsxEntryResolver.global_has_callable(ctx, 'openai')
 		bind_handlers := ctx.js_global('__vhttpd_bind_handlers')
 		defer {
 			bind_handlers.free()
@@ -100,8 +126,6 @@ pub fn (e InProcVjsxExecutor) ensure_lane_host(idx int) ! {
 			entry_exports := module_binding_value.namespace() or {
 				mut cleanup_binding := module_binding_value
 				cleanup_binding.close()
-				session.close()
-				os.rmdir_all(temp_root) or {} // safe to ignore: temp dir may already be removed
 				return error('inproc_vjsx_executor_module_namespace_failed:${err.msg()}')
 			}
 			defer {
@@ -110,22 +134,20 @@ pub fn (e InProcVjsxExecutor) ensure_lane_host(idx int) ! {
 			mut bound := session.call(bind_handlers, entry_exports) or {
 				mut cleanup_binding := module_binding_value
 				cleanup_binding.close()
-				session.close()
-				os.rmdir_all(temp_root) or {} // safe to ignore: temp dir may already be removed
 				return error('inproc_vjsx_executor_export_bind_failed:${err.msg()}')
 			}
 			defer {
 				bound.free()
 			}
 		}
-		mut module_binding := module_binding_value
-		module_binding_ptr = &module_binding
+		// The lane outlives this function; allocate its module binding on the heap.
+		module_binding_ptr = &vjsx.ScriptModule{
+			...module_binding_value
+		}
 	} else {
 		log.debug('[vhttpd] ensure_lane_host loading script entry lane=${lane_id} idx=${idx}')
-		mut entry_exports := VjsxHostLoader.load_entry(mut ctx, config, idx, source_signature,
+		mut entry_exports := VjsxHostLoader.load_entry(mut ctx, config, temp_root,
 			false) or {
-			session.close()
-			os.rmdir_all(temp_root) or {} // safe to ignore: temp dir may already be removed
 			return error('inproc_vjsx_executor_bootstrap_failed:${err.msg()}')
 		}
 		defer {
@@ -141,8 +163,6 @@ pub fn (e InProcVjsxExecutor) ensure_lane_host(idx int) ! {
 		}
 		if !bind_handlers.is_undefined() && bind_handlers.is_function() {
 			mut bound := session.call(bind_handlers, entry_exports) or {
-				session.close()
-				os.rmdir_all(temp_root) or {} // safe to ignore: temp dir may already be removed
 				return error('inproc_vjsx_executor_export_bind_failed:${err.msg()}')
 			}
 			defer {
@@ -166,8 +186,6 @@ pub fn (e InProcVjsxExecutor) ensure_lane_host(idx int) ! {
 		openai_handler.free()
 		if !has_http_handler && !has_websocket_handler && !has_upstream_handler
 			&& !has_plugin_handler {
-			session.close()
-			os.rmdir_all(temp_root) or {} // safe to ignore: temp dir may already be removed
 			return error('inproc_vjsx_executor_missing_handler')
 		}
 	}
@@ -182,10 +200,14 @@ pub fn (e InProcVjsxExecutor) ensure_lane_host(idx int) ! {
 		dirty:             false
 		source_signature:  source_signature
 		is_module_entry:   as_module
-		temp_root:         temp_root
+		build_directory:   directory
+		wakeup_owner:      wake_owner
 		session:           session
 		module_binding:    module_binding_ptr
 	}
+	mut published_wake_owner := unsafe { wake_owner }
+	published_wake_owner.published = true
+	owned_by_lane = true
 	state.lanes[idx].healthy = true
 	state.lanes[idx].dirty = false
 	log.debug('[vhttpd] ensure_lane_host ready lane=${lane_id} idx=${idx} http=${has_http_handler} websocket=${has_websocket_handler} upstream=${has_upstream_handler} plugin=${has_plugin_handler}')

@@ -3,17 +3,15 @@ module executor
 import time
 import state_store
 
-pub fn (e InProcVjsxExecutor) remember_app(mut app AppFacade) {
-	if isnil(e.state) {
-		return
-	}
+pub fn (e InProcVjsxExecutor) remember_app(mut app EmbeddedHost) {
 	mut state := e.state
 	state.mu.@lock()
-	state.app_ref = app
+	if !state.stopping { state.app_ref = app }
 	state.mu.unlock()
 }
 
-pub fn new_inproc_vjsx_executor(config VjsxRuntimeFacadeConfig) InProcVjsxExecutor {
+pub fn new_inproc_vjsx_executor(input VjsxRuntimeFacadeConfig) InProcVjsxExecutor {
+	config := input.owned_copy()
 	mut lanes := []VjsxExecutionLane{}
 	if config.thread_count > 0 {
 		for i in 0 .. config.thread_count {
@@ -66,8 +64,8 @@ pub fn new_inproc_vjsx_executor(config VjsxRuntimeFacadeConfig) InProcVjsxExecut
 			websocket_connection_actor_class_by_id:  map[string]string{}
 			websocket_mailbox_by_key:                map[string][]InProcVjsxWebSocketTask{}
 			websocket_mailbox_pending_keys:          []string{}
-			websocket_mailbox_running_by_key:        map[string]bool{}
-			lane_wakeup_by_id:                       map[string]VjsxLaneWakeup{}
+			websocket_mailbox_running_by_key:        map[string]u64{}
+			lane_wakeup_by_id:                       map[string]&VjsxLaneWakeup{}
 			cached_source_probe:                     initial_probe
 			cached_source_signature:                 initial_signature
 			signature_last_checked_at:               if initial_signature != '' {
@@ -118,9 +116,6 @@ pub fn (e InProcVjsxExecutor) admin_details() LogicExecutorAdminDetails {
 }
 
 pub fn (e InProcVjsxExecutor) lane_count() int {
-	if isnil(e.state) {
-		return 0
-	}
 	mut state := e.state
 	state.mu.@lock()
 	defer {
@@ -130,21 +125,15 @@ pub fn (e InProcVjsxExecutor) lane_count() int {
 }
 
 pub fn (e InProcVjsxExecutor) facade_snapshot() VjsxRuntimeFacade {
-	if isnil(e.state) {
-		return VjsxRuntimeFacade{}
-	}
 	mut state := e.state
 	state.mu.@lock()
 	defer {
 		state.mu.unlock()
 	}
-	return state.facade
+	return VjsxRuntimeFacade{ ...state.facade, config: state.facade.config.owned_copy() }
 }
 
 pub fn (e InProcVjsxExecutor) lane_snapshot() []VjsxExecutionLane {
-	if isnil(e.state) {
-		return []VjsxExecutionLane{}
-	}
 	mut state := e.state
 	state.mu.@lock()
 	defer {

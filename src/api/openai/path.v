@@ -3,9 +3,9 @@ module openai
 // PathContext bridges HTTP path utilities from main to the openai sub-module.
 pub struct PathContext {
 pub:
-	normalize_path           fn (string) string                = unsafe { nil }
-	normalize_request_target fn (string) (string, string)      = unsafe { nil }
-	parse_query_map          fn (string) map[string]string     = unsafe { nil }
+	normalize_path           fn (string) string            @[required]
+	normalize_request_target fn (string) (string, string)  @[required]
+	parse_query_map          fn (string) map[string]string @[required]
 }
 
 // normalize_base_path canonicalizes an OpenAI API base path.
