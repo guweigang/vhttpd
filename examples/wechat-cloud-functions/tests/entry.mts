@@ -11,4 +11,10 @@ const exchangeCode = async (code, config, signal) => {
   return JSON.parse(await response.text());
 };
 
-export default createApplication({getUser: getUser.main, ...fixtures}, config, {exchangeCode});
+const functions = {getUser: getUser.main, ...fixtures};
+const application = createApplication(functions, config, {exchangeCode});
+// Only the deliberate timeout cases use a short deadline. Ordinary SQL and
+// restart checks retain the production default under GC and machine load.
+const timeoutApplication = createApplication(functions, {...config, functionTimeoutMs: 500}, {exchangeCode});
+export default ctx => ["/functions/timeout", "/functions/late"].includes(ctx.path)
+  ? timeoutApplication(ctx) : application(ctx);

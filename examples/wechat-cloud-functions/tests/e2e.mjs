@@ -180,7 +180,7 @@ egress = "adapter:wechat"
 `);
     const serverEnvironment = {...process.env,
       WECHAT_APP_ID: "test-app", WECHAT_APP_SECRET: "fixture-secret", WECHAT_DB_DRIVER: driver,
-      WECHAT_FUNCTION_TIMEOUT_MS: "500", WECHAT_DATABASE_TIMEOUT_MS: "5000", WCF_TEST_WECHAT_URL: peerUrl,
+      WECHAT_FUNCTION_TIMEOUT_MS: "3000", WECHAT_DATABASE_TIMEOUT_MS: "5000", WCF_TEST_WECHAT_URL: peerUrl,
     };
     vhttpd = background(binary, ["--config", config], serverEnvironment);
     const base = "http://127.0.0.1:" + httpPort;
