@@ -11,7 +11,8 @@ fn test_bootstrap_budget_preserves_default_and_accepts_bounded_milliseconds() {
 }
 
 fn test_bootstrap_budget_rejects_unbounded_or_malformed_values() {
-	for value in ['0', '-1', '300001', '1.5', '1e3', 'NaN', '120000ms', '+1', '9999999999999999999999999'] {
+	for value in ['0', '-1', '300001', '1.5', '1e3', 'NaN', '120000ms', '+1',
+		'9999999999999999999999999'] {
 		mut rejected := false
 		inproc_vjsx_bootstrap_budget(value) or {
 			rejected = true
