@@ -151,6 +151,50 @@ fn wakeup_js_number(mut session_context vjsx.Context) int {
 	return value.to_int()
 }
 
+fn wakeup_prepare_cross_thread_completion(host VjsxLaneHost) vjsx.RuntimeHostAsyncCompletionPort {
+	ctx := host.context()
+	mut session := host.session_handle() or { panic('missing session') }
+	operation := session.start_host_async_operation(kind: 'cross-thread-wakeup') or { panic(err) }
+	global := ctx.js_global()
+	global.set('__wakeupPromise', operation.promise)
+	global.free()
+	operation.promise.free()
+	setup := ctx.eval('globalThis.pumped = 0; __wakeupPromise.then(() => { globalThis.pumped = 1; });') or { panic(err) }
+	setup.free()
+	return operation.completion
+}
+
+fn wakeup_complete_on_another_thread(exec InProcVjsxExecutor, port vjsx.RuntimeHostAsyncCompletionPort) {
+	assert port.resolve_text('ready')
+	mut task := InProcVjsxLanePumpTask{ slot: &InProcVjsxLanePumpTaskSlot{}, done: chan bool{cap: 1} }
+	InProcVjsxLaneWorkerRuntime.handle_pump_task(exec, 'lane_0', mut task)
+	assert task.slot.ready && task.slot.result.ok
+	host := exec.state.hosts[0]
+	mut ctx := host.context()
+	assert wakeup_js_number(mut ctx) == 1
+}
+
+fn test_idle_async_completion_refreshes_stack_when_lane_changes_native_thread() {
+	exec := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{ thread_count: 1 })
+	defer { exec.close() }
+	session := InProcVjsxRuntimeSessionFactory.new(VjsxRuntimeFacadeConfig{ runtime_profile: 'script' }) or { panic(err) }
+	// Keep a real stack guard, small enough that distinct native thread stacks
+	// cannot accidentally share the default 16 MiB allowance on ARM runners.
+	session.runtime().set_max_stack_size_bytes(128 * 1024)
+	mut state := exec.state
+	state.mu.@lock()
+	state.hosts[0] = VjsxLaneHost{ session: session }
+	host := state.hosts[0]
+	state.mu.unlock()
+	port := wakeup_prepare_cross_thread_completion(host)
+	worker := spawn wakeup_complete_on_another_thread(exec, port)
+	worker.wait()
+	// Exercise the reverse transfer too: stack address ordering varies by OS.
+	producer := spawn wakeup_prepare_cross_thread_completion(host)
+	next := producer.wait()
+	wakeup_complete_on_another_thread(exec, next)
+}
+
 fn test_queued_old_scope_pump_cannot_run_replacement_session_jobs() {
 	exec := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{ thread_count: 1 })
 	defer { exec.close() }
