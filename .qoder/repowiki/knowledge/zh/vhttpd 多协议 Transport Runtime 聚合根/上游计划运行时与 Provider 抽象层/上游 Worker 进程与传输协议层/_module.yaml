@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: upstream_system/transport
+title: 上游 Worker 进程与传输协议层
+scope:
+    - src/upstream/transport/
+source_files: []
+depends_on: []
+related_to: []

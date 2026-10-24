@@ -1,0 +1,11 @@
+schema_version: 1
+module_path: runtime_executors/inproc_vjsx_runtime/sessions_lifecycle
+title: VJSX 内嵌执行器生命周期与会话管理
+scope:
+    - src/executor/inproc_vjsx_codex_sessions.v
+    - src/executor/inproc_vjsx_runtime_session.v
+    - src/executor/inproc_vjsx_lifecycle.v
+    - src/executor/lifecycle.v
+source_files: []
+depends_on: []
+related_to: []

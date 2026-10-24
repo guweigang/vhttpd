@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: runtime_executors/inproc_vjsx_runtime/websocket_layer/affinity_callback
+title: In-Process VJSX WebSocket 亲和性回调运行时
+scope:
+    - src/executor/inproc_vjsx_websocket_affinity_runtime.v
+    - src/executor/inproc_vjsx_websocket_affinity_state.v
+    - src/executor/inproc_vjsx_websocket_callback_runtime.v
+source_files: []
+depends_on: []
+related_to: []

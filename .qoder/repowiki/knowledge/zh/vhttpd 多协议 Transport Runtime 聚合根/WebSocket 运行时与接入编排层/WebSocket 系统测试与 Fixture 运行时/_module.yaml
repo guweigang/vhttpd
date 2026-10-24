@@ -1,0 +1,11 @@
+schema_version: 1
+module_path: websocket_system/tests_and_fixtures
+title: WebSocket 系统测试与 Fixture 运行时
+scope:
+    - src/websocket_binary_support_test.v
+    - src/websocket_dispatch_lifecycle_test.v
+    - src/websocket_upstream_fixture_runtime.v
+    - src/websocket_upstream_runtime_test.v
+source_files: []
+depends_on: []
+related_to: []

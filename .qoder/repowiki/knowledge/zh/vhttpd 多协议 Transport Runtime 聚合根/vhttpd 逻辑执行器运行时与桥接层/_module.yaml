@@ -1,0 +1,12 @@
+schema_version: 1
+module_path: runtime_executors
+title: vhttpd 逻辑执行器运行时与桥接层
+scope:
+    - src/executor/
+    - src/executor_bridge.v
+    - src/logic_executor_test.v
+    - src/executor_capability_interfaces_test.v
+    - src/executor_registry.v
+source_files: []
+depends_on: []
+related_to: []
