@@ -108,6 +108,13 @@ ui2 固定到 [ui2.commit](./ui2.commit) 中的版本。已有依赖 checkout �
 
 实现见[远端连接与状态](./host/remote_instances.v)、[本机认证代理](./host/remote_proxy.v)、[原生界面](./remote_instances.v)、[远端手工重启](../src/admin_remote_control.v)和[回归](./host/remote_instances_test.v)。
 
+本次开发验收（2026-10-24）：
+
+- macOS 27 上用系统 OpenSSH 的独立回环测试服务跑通真实 SSH、一次性登录、两份 include 一起发布、远端手工重启、整个项目运行计划与文件版本确认、业务响应变化、重复操作编号保护、重连和错误 Token；未改动系统或用户的 SSH 配置。
+- 完整 Mac 包通过解压搬移、签名和库路径检查、新建与启动失败重试、配置发布与恢复、运行包安装，以及全新 HOME、仅系统 PATH、禁止读取开发目录和执行编译器的沙箱验收。最低系统声明及所有二进制的构建目标仍为 macOS 15.0；不等于本次新增 SSH 功能已在 macOS 15/26 实际运行。
+- [SSH 验收脚本](./ci/verify_remote_ssh_macos.py)已接入 Mac CI 的构建阶段，针对包内的运行程序执行；本次尚未触发新版源码的 GitHub CI。开发者可先编译上述 host 回归文件，再给脚本传入 `--runtime` 和 `--host-test` 执行。
+- Linux VM 保留原有 `local-dev`：源码为 `6b0886a`（2026-06-19），原二进制为 `4f3082f`，与 Mac 的 `e21021d`（2026-10-23）及 Mac CI 固定提交不同。完整服务遇到 JSON 模块路径与 C 声明兼容错误；按现有源码重建 V 时又在标准库 `C.open` 重复声明处失败。共享进程模块 3 组测试通过，另 1 组遇到旧编译器的 Option 断言代码生成错误。未切换 V 分支或替换原编译器，Linux 整服务运行验收仍未完成。
+
 ## 共享远端 Relay 连接
 
 左侧“远端 Relay”维护可跨项目复用的连接库。新建连接时填写名称、Hub 的 WebSocket 地址、远端 Relay ID 和 Token。Relay ID 必须与远端 Hub 配置一致；Token 独立填写，地址不接受认证信息或查询参数。Token 输入隐藏，本地 `shared-relays.json` 使用仅当前用户可读写的权限保存，不加密；请勿公开分享数据目录。
