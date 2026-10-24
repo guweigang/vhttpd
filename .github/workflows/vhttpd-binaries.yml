@@ -1,4 +1,4 @@
-name: Focused inbound lifecycle diagnostic
+name: Focused metrics admission diagnostic
 on:
   workflow_dispatch:
     inputs:
@@ -10,64 +10,68 @@ permissions:
   contents: read
 jobs:
   diagnostic:
-    runs-on: macos-15
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
     env:
       VJOBS: 2
-      VTEST_FAIL_FAST: '1'
-      VTEST_FAIL_FLAKY: '1'
-      VTEST_HIDE_OK: '0'
-      VTEST_HIDE_SKIP: '0'
       V_MACOS_V3_NO_FALLBACK: '1'
       WITH_DB: 1
+      VHTTPD_BIN: ${{ github.workspace }}/tmp/ci/vhttpd
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ inputs.source_ref }}
       - uses: ./.github/actions/setup-runtime
-      - name: Compile the unchanged inbound lifecycle test
+      - name: Build exact-source production binary
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p ci-results
-          unset GITHUB_ACTIONS
-          v -cc cc -d build_quickjs -path "$PWD/src|@vlib|@vmodules" -d use_openssl -enable-globals -nocache -d vjsx_sqlite -d enable_db -o "$PWD/ci-results/inbound_lifecycle_test" src/inbound_websocket_lifecycle_test.v 2>&1 | tee ci-results/inbound-build.log
-      - name: Repeat real signals and bound orphan admission
+          mkdir -p ci-results tmp/ci
+          git rev-parse HEAD 'HEAD^{tree}' | tee ci-results/checked-out-source.log
+          make prod V_CC=cc VPHP_V_GC=boehm WITH_DB=1 2>&1 | tee ci-results/prod.log
+          git fetch --depth=1 origin 87a1c7050c05e9afd02e1a7ca642f4c65c0367ab
+      - name: Replay original admission fixture and repeat fixed assertions
         shell: bash
         run: |
           set -euo pipefail
-          unset GITHUB_ACTIONS
           python3 - <<'PY'
-          import json,os,signal,subprocess,tempfile,time
+          import hashlib,json,os,subprocess,time
           from pathlib import Path
-          out=Path('ci-results');binary=out.resolve()/'inbound_lifecycle_test';results=[]
-          for i in range(20):
-           start=time.monotonic();proc=subprocess.Popen([str(binary)],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,start_new_session=True)
-           try:stdout,_=proc.communicate(timeout=30)
-           except subprocess.TimeoutExpired:
-            rows=[]
-            for line in subprocess.check_output(['ps','-axo','pid=,ppid=,pgid=,etime=,comm='],text=True).splitlines():
-             fields=line.split(None,4)
-             if len(fields)==5 and int(fields[2])==proc.pid:rows.append(fields)
-            (out/'blocked-process-group.json').write_text(json.dumps(rows,indent=2)+'\n')
-            for row in rows:
-             if row[-1]=='<defunct>':continue
-             subprocess.run(['/usr/bin/sample',row[0],'3','-file',str(out/f'sample-{row[0]}.txt')],timeout=20,check=False)
-            os.killpg(proc.pid,signal.SIGKILL);stdout,_=proc.communicate(timeout=10);(out/f'inbound-repeat-{i+1}.log').write_bytes(stdout);print('STALLED',i+1,stdout.decode(errors='replace'),flush=True);raise SystemExit(124)
-           (out/f'inbound-repeat-{i+1}.log').write_bytes(stdout);elapsed=time.monotonic()-start;results.append({'iteration':i+1,'exit':proc.returncode,'seconds':elapsed});print('INBOUND',results[-1],flush=True)
-           if proc.returncode:print(stdout.decode(errors='replace'),flush=True);raise SystemExit(proc.returncode)
-          with tempfile.TemporaryDirectory(prefix='inbound-no-parent-') as root:
-           start=time.monotonic();r=subprocess.run([str(binary),'--inbound-signal',root],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=10);elapsed=time.monotonic()-start;(out/'no-parent.log').write_bytes(r.stdout);assert r.returncode!=0 and elapsed<8 and Path(root,'address').read_text().strip();boundary={'exit':r.returncode,'seconds':elapsed};print('BOUNDED CHILD',boundary,flush=True)
-          (out/'inbound-focused-result.json').write_text(json.dumps({'status':'passed','repeats':results,'no_parent':boundary},indent=2)+'\n');print('INBOUND20/20 AND BOUNDED CHILD PASSED',flush=True)
+          out=Path('ci-results');out.mkdir(exist_ok=True)
+          old='87a1c7050c05e9afd02e1a7ca642f4c65c0367ab'
+          file='tests/e2e/admin_http_metrics_test.mjs'
+          source=subprocess.check_output(['git','show',old+':'+file],text=True)
+          probe=source.replace("await until(async()=>selectedExecutor(await api('http/executors')).load.queue_timeouts_total>settled.queue_timeouts_total,5000);", "await until(async()=>{const load=selectedExecutor(await api('http/executors')).load;console.error('TIMEOUT_QUEUE_PROBE',JSON.stringify(load));return load.queue_timeouts_total>settled.queue_timeouts_total;},5000);")
+          probe=probe.replace(".then(async r=>{await r.text();return {status:r.status};}).catch(error=>({error}));", ".then(async r=>{await r.text();console.error('TIMEOUT_RESPONSE',r.status);return {status:r.status};}).catch(error=>({error}));")
+          assert probe!=source
+          (out/'metrics-original-probe.mjs').write_text(probe)
+          original=[];fixed=[]
+          with (out/'metrics-original-replay.log').open('w') as log:
+           for i in range(20):
+            r=subprocess.run(['node','--test',str(out/'metrics-original-probe.mjs')],stdout=log,stderr=subprocess.STDOUT,timeout=190);original.append(r.returncode);log.flush();print('ORIGINAL',i+1,r.returncode,flush=True)
+            if r.returncode:break
+          with (out/'metrics-fixed20.log').open('w') as log:
+           for i in range(20):
+            r=subprocess.run(['node','--test',file],stdout=log,stderr=subprocess.STDOUT,timeout=190);fixed.append(r.returncode);log.flush();print('FIXED',i+1,r.returncode,flush=True)
+            if r.returncode:break
+          result={'original_commit':old,'original_source_sha256':hashlib.sha256(source.encode()).hexdigest(),'original_instrumentation':'queue load and result logging only; assertions and deadlines unchanged','original_exits':original,'original_failure_observed':any(original),'fixed_commit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'fixed_source_sha256':hashlib.sha256(Path(file).read_bytes()).hexdigest(),'fixed_exits':fixed}
+          (out/'metrics-admission-result.json').write_text(json.dumps(result,indent=2)+'\n')
+          assert len(fixed)==20 and all(x==0 for x in fixed),result
+          print('FIXED METRICS20/20 PASSED; ORIGINAL FAILURE OBSERVED',any(original),flush=True)
           PY
-      - name: Preserve focused results and samples
+      - name: Full production E2E
+        shell: bash
+        run: |
+          set -euo pipefail
+          VHTTPD_E2E_KEEP_TMP=1 make test-e2e 2>&1 | tee ci-results/e2e.log
+      - name: Preserve original and fixed results
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: inbound-lifecycle-focused-logs
+          name: metrics-admission-focused-logs
           path: |
             ci-results/*.log
             ci-results/*.json
-            ci-results/*.txt
+            ci-results/*.mjs
           if-no-files-found: error
           retention-days: 14
