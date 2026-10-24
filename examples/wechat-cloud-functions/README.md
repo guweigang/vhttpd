@@ -62,6 +62,47 @@ export WECHAT_DB_NAME='your-db-name'
 
 ## 小程序端
 
+### 可直接运行的最小页面
+
+`miniprogram/` 包含 app.js/app.json、config.js、客户端副本和独立页面
+`pages/vhttpd-demo/index`，无 npm 依赖。复用已有小程序时，将 config.js、utils/vhttpd.js
+和 pages/vhttpd-demo 复制到小程序源码目录，并在原有 app.json.pages **追加**页面路径，
+不要覆盖原有 App 或首页。客户端副本与 client/vhttpd.js 保持一致，有测试检查。
+
+页面提供四个按钮：登录、Promise 查询、回调查询、清除本地会话；显示当前用户、requestId
+和回调顺序，但不显示或打印 code、token、AppSecret。不自动发请求、不自动重试业务调用。
+清除会话后查询按钮禁用；401 时清空身份展示并提示重新登录。
+
+### 无远端地址 / AppSecret 时的本地调试
+
+从 vhttpd 仓库根目录启动（需要 PostgreSQL 工具和 DB-enabled 二进制）：
+
+```sh
+VHTTPD_BIN="$PWD/vhttpd" node examples/wechat-cloud-functions/tests/dev-local.mjs
+```
+
+等待 `LOCAL DEMO READY`。脚本仅监听 `127.0.0.1:19886`，创建全新的临时 PostgreSQL
+和本例表，真实使用 vhttpd + vjsx + 异步 SQL，不连接已有数据库。按 Ctrl-C 停止两项
+服务并删除该次临时数据；每次重启后，页面需要重新登录。可用 `WCF_LOCAL_PORT` 换端口，
+并同步修改页面地址。PostgreSQL 工具可用 WCF_INITDB / WCF_PG_CTL / WCF_PSQL 指定。
+
+开发者工具关闭本机“校验合法域名”（个人 project.private.config.json 的
+setting.urlCheck=false），编译打开 `pages/vhttpd-demo/index`。页面默认请求
+`http://127.0.0.1:19886`；依次点登录、Promise 查询、回调查询。真机上的 127.0.0.1
+指向手机自己，因此这套回环地址模式只用于本机模拟器。
+
+**本地入口 tests/local-entry.mjs 完全不校验微信 code**，固定映射到 `local-demo-user`；
+页面仍会调用 wx.login，但身份是模拟的，所有客户端共享该假用户。这只验证客户端、HTTP、
+函数调用和数据库链路，不验证微信真实登录、双用户隔离或生产安全。该入口要求固定假配置，
+且只接受回环 Host，但这些不是公网安全边界；绝不能将它暴露到公网、加隧道或用生产反代代理。
+生产 app.mts 不导入该入口，也不支持通过环境变量启用模拟身份。
+
+切换真实远端：部署生产 app.mts，服务端配置当前小程序的 AppID/AppSecret 与数据库；
+把 config.js.baseURL（或页面地址输入框）改成自有 HTTPS 域名，配置小程序 request 合法域名，
+恢复 urlCheck=true，再重新登录。不要把 AppSecret 放进小程序。
+
+### 客户端代码
+
 将 `client/vhttpd.js` 复制进小程序，统一将客户端实例命名为 `vhttpd`。
 先登录，再直连远端服务调用业务函数：
 
@@ -195,7 +236,7 @@ PostgreSQL affected_rows 暂无精确计数。这不是 ORM 或云数据库兼�
 无第三方 npm 依赖：
 
 ```sh
-node --test examples/wechat-cloud-functions/tests/unit.test.mjs
+node --test --test-concurrency=1 examples/wechat-cloud-functions/tests/unit.test.mjs examples/wechat-cloud-functions/tests/miniprogram.test.mjs
 VHTTPD_BIN="$PWD/vhttpd" node examples/wechat-cloud-functions/tests/e2e.mjs
 ```
 
