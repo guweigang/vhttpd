@@ -175,11 +175,23 @@ Linux 测试程序旁按正常运行包布局放置 `admin/ui/`，从独立临�
 
 侧栏显示当前所选 vhttpd 的实际程序版本和来源（App 内置、已下载或本地选择）；版本读取自该程序的 `--version`，与 Desktop 的 App 版本分别处理。“管理运行环境”显示完整路径，并提供下载、取消、重试、选择本地程序和切回 App 内置版本。项目运行期间不允许切换运行包。选择结果保存在本机 `runtime-selection.json`，重新打开工作台后仍使用该路径；路径失效时明确显示不可用，不悄悄退回开发 checkout。
 
-官方下载安装复用 [tag 发布流程](../.github/workflows/workbench-macos-runtime.yml)的完整 Mac zip 与同版本 SHA256SUMS 文件，从 GitHub 最新正式 Release 下载，校验后仅安装其中的运行程序、Admin UI 和动态库到 Application Support 下的 `runtimes/`。用户无需 V、Node、Python、npm、Homebrew 或编译工具；下载、解压和检查使用 macOS 系统工具。安装前检查路径、符号链接、解压体积、arm64 架构、macOS 15.0 最低版本兼容性、代码签名及动态库相对依赖。架构、版本和依赖通过 V 原生 Mach-O 解析完成，不调用可能依赖 Xcode 的 lipo/otool。校验通过才提交新的选择，旧运行包保留。完整 App 已内置运行包，首次使用通常不需要下载。
+“运行环境 → 下载官方运行包”先打开[版本选择](./runtime_downloads.v)：可筛选全部、稳定版或开发版，显示适配当前目标平台的最近 30 个公开版本；也可输入 `v1.2.3`、`v0.1.0-dev.g提交号` 等版本号，或官方 Release 页面链接查询旧版本。列表只保留包含完整包和 SHA256 校验文件的版本，选中后点击“安装所选版本”才会安装。用户不需要 GitHub 登录、Token 或 GitHub CLI；版本和附件都通过公开 Release 入口读取，CI Artifacts 仅供维护者构建验收使用。
 
-新建或启动项目时如发现运行包缺失，会直接进入运行环境页；安装或选择有效运行包后继续启动该项目并打开 Admin UI。失败后可重试，项目源码保持不变。仓库尚未提供正式 Release 或网络不可达时会显示对应提示，保留本地选择入口；CI Artifact 不作为公开下载源，也不会在用户电脑上执行源码构建。官方包延续当前 unsigned 预览的系统首次打开限制，见上文安装说明。
+Mac 下载采用[tag 发布流程](../.github/workflows/workbench-macos-runtime.yml)和下文开发版流程的完整 zip 及同版本 SHA256SUMS，校验后仅安装其中的运行程序、Admin UI 和动态库到 Application Support 下的 `runtimes/`。安装来源标签与程序 `--version` 分别显示，来源标签持久化保存在该运行包的 `.release-tag`，不把相同基础程序版本误当成同一开发包。用户无需 V、Node、Python、npm、Homebrew 或编译工具；下载、解压和检查使用 macOS 系统工具。安装前检查路径、符号链接、解压体积、arm64 架构、macOS 15.0 最低版本兼容性、代码签名及动态库相对依赖。架构、版本和依赖通过 V 原生 Mach-O 解析完成，不调用可能依赖 Xcode 的 lipo/otool。校验通过才提交新的选择，旧运行包保留。完整 App 已内置运行包，首次使用通常不需要下载。
+
+新建或启动项目时如发现运行包缺失，会直接进入运行环境页；安装或选择有效运行包后继续启动该项目并打开 Admin UI。失败后可重试，项目源码保持不变。尚无适配平台的公开完整版本、指定标签不存在、API 限流或网络不可达时会显示提示，保留本地选择入口；CI Artifact 不作为公开下载源，也不会在用户电脑上执行源码构建。官方包延续当前 unsigned 预览的系统首次打开限制，见上文安装说明。
 
 实现见[版本与下载安装](./host/runtime_package.v)、[运行环境界面](./runtime_settings.v)和[安装后真实模板回归](./runtime_smoke.v)。Mac 安装包验收加入 `--runtime-smoke`，使用真实包检查安装、选择持久化、校验失败保护，并用安装到本机数据目录的运行程序执行两个 vjsx 模板与失败重试流程；目标系统验收继续使用全新 HOME、系统 PATH 和禁止开发目录/编译器的沙箱。
+
+## CI 自动发布开发版
+
+[开发版发布工作流](../.github/workflows/development-release.yml)监听 Mac 工作台和运行程序 CI 的成功结果，按同一个完整源码提交收集经过 macOS 15/26 验收的 Mac 下载包与 Linux amd64/arm64 完整运行包。两边都成功且产物未过期后才发布。发布端从默认分支读取受信任的发布脚本，下载的产物只按数据校验，不执行其中程序；PR、外部仓库及失败结果不能进入发布。维护者在本仓库分支手动运行时，需要两套 CI 都在同一提交完成构建；只有单边结果会等待另一边。
+
+开发包版本格式为 `0.1.0-dev.g<提交前12位>`，CI 自动创建对应 `v` 标签并发布为 Pre-release；不用手工打正式版本 tag。该标签绑定完整提交，校验 CI Artifact 的 SHA256、Mac 验收来源、平台、App 版本、Linux ELF 架构及内层包校验文件。先上传到带来源标记的 Draft，全部上传成功后才公开，上传失败保留 Draft 供重试；标签变化、无关 Draft 或已公开附件变化会被拒绝。已公开开发版不可覆盖。开发版不设置为 latest，不改变稳定版发布路径。实现与失败回归见[发布器](./ci/development_release.py)、[发布测试](./ci/test_development_release.py)及[版本解析](./workbench_version.py)。
+
+新增的 `workflow_run` 工作流需要先进入仓库默认分支，之后主分支源码变更会自动构建并发布。它使用发布任务自带的 `GITHUB_TOKEN`（contents: write、actions: read），不需要新增用户下载凭据。公开附件包含 Mac 完整包、安装说明、验收记录、Linux 两种架构包与校验文件，以及 `runtime-release.json` 来源记录和总 SHA256SUMS。普通用户在 Desktop 中选择或指定公开版本即可；首次新 CI 发布前没有版本时，界面保持空状态并保留本地包入口。
+
+远端 Linux 同样使用[公开版本目录](./host/runtime_catalog.v)，按连接服务器的架构筛选并执行上传前后校验；第一版远端仍不覆盖升级已安装运行包。Mac unsigned/Gatekeeper 边界沿用前述安装说明，不将 CI 运行验收等同于系统下载放行。
 
 ## 升级、移除与数据位置
 
