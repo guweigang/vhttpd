@@ -48,7 +48,15 @@ if [[ "$selected_tcc" == system-cc ]]; then
   export VFLAGS="${VFLAGS:+$VFLAGS }-d use_bundled_libgc"
   echo "VFLAGS=$VFLAGS" >> "$GITHUB_ENV"
 fi
-printf 'fn main() { println("Boehm GC ready") }\n' > "$toolchain/gc-smoke.v"
+cat > "$toolchain/gc-smoke.v" <<'GC_SMOKE'
+import os
+fn main() {
+  mut values := []string{}
+  for i in 0 .. os.args.len + 32 { values << i.str() }
+  assert values.len >= 33
+  println('Boehm GC ready: ' + values.join(','))
+}
+GC_SMOKE
 "$toolchain/v/v" -cc cc -gc boehm -o "$toolchain/gc-smoke" "$toolchain/gc-smoke.v"
 "$toolchain/gc-smoke"
 mkdir -p "$toolchain/modules"

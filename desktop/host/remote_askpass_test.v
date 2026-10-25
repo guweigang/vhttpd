@@ -72,6 +72,16 @@ fn test_password_wait_can_be_cancelled_without_writing_a_secret_file() ! {
 	}
 }
 
+fn test_silent_askpass_peer_does_not_prevent_session_cancellation() ! {
+	mut session := new_remote_prompts('cancel-silent-peer', true)!
+	mut connection := unix.connect_stream(session.path)!
+	defer { connection.close() or {} }
+	// Let the server enter its capability read, then cancel without sending data.
+	time.sleep(50 * time.millisecond)
+	session.close()
+	assert !os.exists(session.directory)
+}
+
 fn test_bundled_workbench_can_reply_as_askpass_without_opening_a_window() ! {
 	executable := os.getenv('VHTTPD_REMOTE_ASKPASS_TEST_EXECUTABLE')
 	if executable == '' { return }

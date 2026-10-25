@@ -1,6 +1,7 @@
 module host
 
 import crypto.rand
+import net
 import net.unix
 import os
 import time
@@ -38,6 +39,9 @@ fn new_remote_prompts(password string, allow_password bool) !&RemoteAskpass {
 	defer { if !ready { os.rmdir_all(directory) or {} } }
 	session := &RemoteAskpass{directory: directory, path: os.join_path(directory, 'auth'), capability: rand.bytes(32)!.hex()}
 	mut listener := unix.listen_stream(session.path, unix.ListenOptions{})!
+	// V's Unix socket timeouts apply after EWOULDBLOCK. A blocking accept()
+	// otherwise prevents cancellation and leaves the session directory alive.
+	net.set_blocking(listener.sock.handle, false) or { listener.close() or {}; return err }
 	os.chmod(session.path, 0o600)!
 	listener.set_accept_timeout(100 * time.millisecond)
 	spawn session.serve(mut listener, password, allow_password)
@@ -96,6 +100,7 @@ fn (s &RemoteAskpass) serve(mut listener unix.StreamListener, password string, a
 	for time.ticks() < deadline {
 		select { _ := <-s.stop { return } else {} }
 		mut connection := listener.accept() or { continue }
+		net.set_blocking(connection.sock.handle, false) or { connection.close() or {}; continue }
 		connection.set_read_timeout(500 * time.millisecond)
 		connection.set_write_timeout(500 * time.millisecond)
 		capability := read_askpass_line(mut connection, 64) or { connection.close() or {}; continue }
