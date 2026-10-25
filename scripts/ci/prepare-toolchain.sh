@@ -34,7 +34,11 @@ if [[ "$selected_tcc" != system-cc ]]; then
   checkout_pinned "$TCC_REPO" "$selected_tcc" "$toolchain/v/thirdparty/tcc"
   file "$toolchain/v/thirdparty/tcc/tcc.exe"
 fi
-checkout_pinned "$QUICKJS_REPO" "$QUICKJS_COMMIT" "$toolchain/quickjs"
+quickjs_path="$(VJS_QUICKJS_WORK_ROOT="$toolchain" \
+  "$toolchain/vjsx/scripts/ensure-quickjs.sh")"
+quickjs_commit="$(git -C "$quickjs_path" rev-parse HEAD)"
+quickjs_expected="$(tr -d '[:space:]' < "$toolchain/vjsx/.quickjs-version")"
+[[ "$quickjs_commit" == "$quickjs_expected" ]]
 make -C "$toolchain/v" local=1 CC=cc VFLAGS="-prod -cc cc"
 "$toolchain/v/v" version
 mkdir -p "$toolchain/modules"
@@ -43,12 +47,13 @@ echo "$toolchain/v" >> "$GITHUB_PATH"
 {
   echo "VMODULES=$toolchain/modules"
   echo "VJSX_DIR=$toolchain/vjsx"
-  echo "VJS_QUICKJS_PATH=$toolchain/quickjs"
+  echo "VJS_QUICKJS_PATH=$quickjs_path"
 } >> "$GITHUB_ENV"
 mkdir -p "$root/ci-results"
 {
   cat "$root/scripts/ci/toolchain.env"
   echo "TCC_SELECTED_COMMIT=$selected_tcc"
+  echo "QUICKJS_COMMIT=$quickjs_commit"
   git -C "$root" rev-parse HEAD
   "$toolchain/v/v" version
   cc --version
