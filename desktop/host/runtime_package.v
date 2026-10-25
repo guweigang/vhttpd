@@ -31,6 +31,7 @@ struct RuntimeReleaseAsset {
 }
 
 struct RuntimeRelease {
+	published_at string
 	tag_name   string
 	draft      bool
 	prerelease bool
@@ -132,12 +133,16 @@ fn runtime_version_text(value string) !string {
 
 pub fn inspect_runtime(path string, executable string, job RuntimeJob) RuntimeInfo {
 	bundled := os.real_path(os.join_path(os.dir(executable), '..', 'Resources', 'runtime', 'vhttpd'))
-	source := if os.real_path(path) == bundled {
+	mut source := if os.real_path(path) == bundled {
 		'App 内置'
 	} else if os.real_path(path).starts_with(os.real_path(os.join_path(workbench_data_dir(), 'runtimes')) + os.path_separator) {
 		'已下载'
 	} else {
 		'本地选择'
+	}
+	marker := os.join_path(os.dir(path), '.release-tag')
+	if os.is_file(marker) && !os.is_link(marker) && os.file_size(marker) < 256 {
+		if tag := normalize_runtime_tag(os.read_file(marker) or { '' }) { source += ' · ' + tag }
 	}
 	if !os.is_executable(path) {
 		return RuntimeInfo{ path: path, source: source, message: '未找到可用运行包。可下载官方完整运行包，或选择本地 vhttpd。' }
@@ -170,7 +175,11 @@ fn (job RuntimeJob) fetch(url string, path string, max_size i64) ! {
 }
 
 fn runtime_assets(release RuntimeRelease) !(RuntimeReleaseAsset, RuntimeReleaseAsset) {
-	if release.draft || release.prerelease || !release.tag_name.starts_with('v') {
+	return runtime_assets_for(release, false)
+}
+
+fn runtime_assets_for(release RuntimeRelease, allow_preview bool) !(RuntimeReleaseAsset, RuntimeReleaseAsset) {
+	if release.draft || (release.prerelease && !allow_preview) || !release.tag_name.starts_with('v') {
 		return error('尚无可用的正式运行包。')
 	}
 	version := runtime_version_text(release.tag_name)!
@@ -183,7 +192,7 @@ fn runtime_assets(release RuntimeRelease) !(RuntimeReleaseAsset, RuntimeReleaseA
 		if asset.name == checks { sums = asset }
 	}
 	if archive.size < 1 || archive.size > 268435456 || sums.size < 1 || sums.size > 1048576 || !official_asset_url(archive.browser_download_url) || !official_asset_url(sums.browser_download_url) {
-		return error('正式 Release 尚未提供完整的 Apple Silicon Mac 运行包及 SHA256 校验文件。')
+		return error('该版本尚未提供完整的 Apple Silicon Mac 运行包及 SHA256 校验文件。')
 	}
 	return archive, sums
 }
@@ -204,6 +213,10 @@ fn checksum_for(text string, filename string) !string {
 }
 
 pub fn download_runtime(job RuntimeJob) !string {
+	return download_runtime_release('', job)
+}
+
+pub fn download_runtime_release(tag string, job RuntimeJob) !string {
 	$if !arm64 {
 		return error('当前官方 Desktop 运行包仅支持 Apple Silicon Mac。')
 	}
@@ -213,27 +226,10 @@ pub fn download_runtime(job RuntimeJob) !string {
 	os.mkdir(temp)!
 	os.chmod(temp, 0o700)!
 	defer { os.rmdir_all(temp) or {} }
-	job.stage('正在查找官方最新正式运行包…')
-	metadata := os.join_path(temp, 'release.json')
-	job.fetch('https://api.github.com/repos/guweigang/vhttpd/releases/latest', metadata, 1048576) or {
-		if err.msg() == '操作已取消。' { return err }
-		return error('尚无可下载的正式 Release，或 GitHub 暂时不可达。可重试或选择本地 vhttpd。')
-	}
-	release := json.decode[RuntimeRelease](os.read_file(metadata)!) or { return error('官方 Release 信息无法读取，请稍后重试。') }
-	archive, sums := runtime_assets(release)!
-	job.stage('正在下载 ${release.tag_name} 完整运行包（含 Admin UI 和动态库）…')
-	zip := os.join_path(temp, archive.name)
-	job.fetch(archive.browser_download_url, zip, 268435456) or {
-		if err.msg() == '操作已取消。' { return err }
-		return error('运行包下载失败，请检查网络后重试。当前运行包未改变。')
-	}
-	checksum := os.join_path(temp, 'checksums.txt')
-	job.fetch(sums.browser_download_url, checksum, 1048576) or {
-		if err.msg() == '操作已取消。' { return err }
-		return error('校验文件下载失败，未安装运行包。')
-	}
-	expected := checksum_for(os.read_file(checksum)!, archive.name)!
-	return install_runtime_archive(zip, expected, job)
+	choice := resolve_runtime_download('macos-arm64', tag, job)!
+	zip := download_runtime_files(choice, temp, job)!
+	expected := checksum_for(os.read_file(zip + '.sha256')!, choice.archive.name)!
+	return install_runtime_archive_tag(zip, expected, choice.tag, job)
 }
 
 fn validate_archive_listing(names string, details string) ! {
@@ -263,6 +259,10 @@ fn validate_archive_listing(names string, details string) ! {
 // Shared by the downloader and the installed-app regression. Selection is
 // committed only after every check succeeds; prior packages remain untouched.
 pub fn install_runtime_archive(archive string, expected string, job RuntimeJob) !string {
+	return install_runtime_archive_tag(archive, expected, '', job)
+}
+
+fn install_runtime_archive_tag(archive string, expected string, tag string, job RuntimeJob) !string {
 	if expected.len != 64 || !expected.bytes().all(it.is_hex_digit()) {
 		return error('缺少有效的 SHA256 校验值。')
 	}
@@ -312,6 +312,7 @@ pub fn install_runtime_archive(archive string, expected string, job RuntimeJob) 
 	info := inspect_runtime(binary, '', job)
 	if !info.ready { return error(info.message) }
 	job.command(binary, ['--help'], 10000)!
+	if tag != '' { write_project_contents(create_project_file(os.join_path(source, '.release-tag'))!, normalize_runtime_tag(tag)!)! }
 	final := os.join_path(root, 'vhttpd-' + info.version + '-' + rand.bytes(6)!.hex())
 	os.mv(source, final)!
 	installed := os.join_path(final, 'vhttpd')

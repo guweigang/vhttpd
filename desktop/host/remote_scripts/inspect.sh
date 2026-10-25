@@ -14,4 +14,5 @@ if [ -x "$root/runtime/vhttpd" ]; then
     echo 'VHTTPD_ERROR:已安装运行包无法执行，请检查架构、系统版本及动态库。'; exit 1;
   }
   printf 'VHTTPD_VERSION:%s\n' "$version"
+  if [ -f "$root/runtime/.release-tag" ]; then printf 'VHTTPD_RELEASE:%s\n' "$(head -c 128 "$root/runtime/.release-tag")"; fi
 fi

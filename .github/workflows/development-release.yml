@@ -1,0 +1,43 @@
+name: Publish verified development runtime
+
+on:
+  workflow_run:
+    workflows: [Build and verify Mac workbench, Build vhttpd binaries]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      (github.event.workflow_run.event == 'workflow_dispatch' ||
+       (github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_branch == github.event.repository.default_branch))
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: read
+    concurrency:
+      group: development-runtime-${{ github.event.workflow_run.head_sha }}
+      cancel-in-progress: false
+    steps:
+      # Privileged publisher code is always from the trusted default branch.
+      # Artifact files are validated as data and never executed here.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+          sparse-checkout: desktop
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Verify source/artifacts and publish a public prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -m unittest discover -s desktop/ci -p 'test_development_release.py'
+          python3 desktop/ci/development_release.py

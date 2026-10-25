@@ -23,8 +23,8 @@ fn runtime_inspect_task(path string, executable string, select_path bool, result
 	results <- RuntimeResult{ info: info, path: path, select_path: select_path }
 }
 
-fn runtime_download_task(executable string, results chan RuntimeResult, job host.RuntimeJob) {
-	path := host.download_runtime(job) or {
+fn runtime_download_task(tag string, executable string, results chan RuntimeResult, job host.RuntimeJob) {
+	path := host.download_runtime_release(tag, job) or {
 		results <- RuntimeResult{ error: err.msg() }
 		return
 	}
@@ -81,25 +81,23 @@ fn (mut app Workshop) poll_runtime() {
 }
 
 fn (mut app Workshop) handle_runtime_event(event string) bool {
+	if app.handle_runtime_catalog_event(event) { return true }
 	if event == 'runtime' || event == 'runtime_download' {
 		app.show_runtime = true
 		app.show_shared_relays = false
-		if event == 'runtime' { return true }
+		if event == 'runtime' { app.show_runtime_downloads = false; return true }
 		if app.runtime_busy || app.snapshot.pid != 0 || app.snapshot.phase in [
 			.starting,
 			.stopping,
 		] {
 			return true
 		}
-		app.runtime_busy = true
-		app.runtime_error = false
-		app.runtime_job = host.RuntimeJob{}
-		app.runtime_message = '正在查找官方运行包…'
-		spawn runtime_download_task(os.executable(), app.runtime_results, app.runtime_job)
+		app.open_runtime_downloads()
 		return true
 	}
 	if event == 'runtime_close' {
 		app.show_runtime = false
+		app.show_runtime_downloads = false
 		app.runtime_resume_start = false
 		return true
 	}

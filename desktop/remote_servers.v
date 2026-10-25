@@ -23,7 +23,7 @@ fn (mut app Workshop) select_server(server host.RemoteServer) {
 fn (mut app Workshop) server_command(action host.ServerAction, archive string) {
 	next := app.server_sequence + 1
 	command := host.ServerCommand{sequence: next, action: action, server: app.server_form(), password: if action == .connect { app.remote_password } else { '' },
-		host_key_id: app.server_snapshot.host_key.id, archive: archive, name: app.server_instance_name.trim_space(),
+		host_key_id: app.server_snapshot.host_key.id, archive: archive, release_tag: if action == .install { app.runtime_selected_tag } else { '' }, name: app.server_instance_name.trim_space(),
 		template: host.project_templates()[app.server_template].id, web_port: app.server_web_port.int(), admin_port: app.server_admin_port.int()}
 	select {
 		app.server_worker.commands <- command {
@@ -86,6 +86,8 @@ fn (mut app Workshop) handle_server_event(event string) bool {
 	}
 	if event.starts_with('runtime_target_') {
 		app.runtime_server_id = event.all_after('runtime_target_')
+		app.show_runtime_downloads = false
+		app.runtime_selected_tag = ''
 		return true
 	}
 	if event == 'server_instances' {
@@ -134,6 +136,7 @@ fn (mut app Workshop) handle_server_event(event string) bool {
 				return true
 			}
 			app.runtime_server_id = app.remote_id
+			app.show_runtime_downloads = false
 			app.show_remote = false
 			app.show_runtime = true
 		}
@@ -144,7 +147,7 @@ fn (mut app Workshop) handle_server_event(event string) bool {
 			app.show_servers = true
 		}
 		'server_refresh' { app.server_command(.inspect, '') }
-		'server_install' { app.server_command(.install, '') }
+		'server_install' { app.open_runtime_downloads() }
 		'server_package' {
 			files := ui2.open_file_dialog(title: '选择官方 CI 的 vhttpd-linux-*.tar.gz（旁边需有同名 .sha256）')
 			if files.len > 0 { app.server_command(.install, files[0]) }
@@ -255,7 +258,7 @@ fn runtime_settings_view(app &Workshop, width f64) []ui2.Element {
 		selector << sidebar_button('runtime_target_${server.id}', server.name, ui2.rect(10, y, list_width - 20, 34), false, app.runtime_server_id == server.id, !app.server_busy, .left)
 		y += 42
 	}
-	body := if app.runtime_server_id == '' { runtime_local_view(app, width - x) } else { runtime_remote_view(app, width - x) }
+	body := if app.show_runtime_downloads { runtime_downloads_view(app, width - x) } else if app.runtime_server_id == '' { runtime_local_view(app, width - x) } else { runtime_remote_view(app, width - x) }
 	return [label('runtime_page_heading', '运行环境', 0, 26, width - 120, 24, workbench_ink),
 		label('runtime_page_help', '选择目标主机，查看版本、安装运行包或创建远端实例。', 0, 62, width, 12, workbench_muted),
 		button('runtime_close', '返回项目', width - 100, 26, 100, false, true),
@@ -283,8 +286,8 @@ fn runtime_remote_view(app &Workshop, width f64) []ui2.Element {
 		return rows
 	}
 	rows << label('server_runtime_version', if state.version == '' { '尚未安装 vhttpd' } else { 'vhttpd ' + state.version + ' · ' + state.platform }, 0, y, width, 20, workbench_ink)
-	rows << label('server_runtime_path', state.root, 0, y + 38, width, 11, workbench_muted)
-	y += 76
+	rows << ui2.label('server_runtime_path', if state.release_tag != '' { state.release_tag + '\n' + state.root } else { state.root }, ui2.rect(0, y + 38, width, 48), ui2.TextStyle{size: 11, color: workbench_muted, lines: 3})
+	y += 94
 	rows << button('server_install', '下载并安装官方包', 0, y, 175, true, !busy && state.version == '')
 	rows << button('server_package', '选择 CI 下载包…', 0, y + 44, 175, false, !busy && state.version == '')
 	rows << button('server_refresh', '刷新', width - 72, y, 72, false, !busy)

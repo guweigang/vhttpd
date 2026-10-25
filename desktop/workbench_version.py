@@ -7,6 +7,11 @@ import re
 def version_metadata(env):
     tag = env.get('GITHUB_REF_NAME', '') if env.get('GITHUB_REF_TYPE') == 'tag' else ''
     version = tag[1:] if tag.startswith('v') else env.get('VHTTPD_WORKBENCH_VERSION', '0.1.0')
+    if not tag and env.get('VHTTPD_DEVELOPMENT_BUILD') == '1':
+        sha = env.get('GITHUB_SHA', '')
+        if not re.fullmatch('[0-9a-f]{40}', sha):
+            raise ValueError('A development build requires a full source commit')
+        version = version.split('-')[0].split('+')[0] + '-dev.g' + sha[:12]
     match = re.fullmatch(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?', version)
     if (not match or len(version) > 100 or (tag and tag != 'v' + version)
             or (match[4] and any(p.isdigit() and len(p) > 1 and p.startswith('0') for p in match[4].split('.')))):

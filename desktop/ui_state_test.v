@@ -4,6 +4,28 @@ import host
 import time
 import ui2
 
+fn test_runtime_version_picker_requires_explicit_compatible_selection() ! {
+	mut app := unsafe { workshop }
+	app.runtime_server_id = ''
+	app.runtime_busy = false
+	app.runtime_catalog_busy = false
+	app.snapshot = host.Snapshot{}
+	app.runtime_selected_tag = ''
+	app.runtime_downloads = [host.RuntimeDownload{tag: 'v0.1.0-dev.gaaaaaaaaaaaa', channel: 'development', platform: 'macos-arm64', published_at: '2026-10-25T00:00:00Z'}]
+	assert !app.can_install_selected_runtime()
+	app.handle_runtime_catalog_event('runtime_release_0')
+	assert app.can_install_selected_runtime()
+	for width in [320.0, 510.0] { ui2.validate_element_tree(ui2.screen(workbench_paper, runtime_downloads_view(app, width)))! }
+	app.snapshot = host.Snapshot{pid: 123, phase: .running}
+	assert !app.can_install_selected_runtime()
+	app.snapshot = host.Snapshot{}
+	app.runtime_server_id = 'different-server'
+	assert !app.can_install_selected_runtime()
+	app.runtime_server_id = ''
+	app.runtime_downloads = []host.RuntimeDownload{}
+	app.runtime_selected_tag = ''
+}
+
 fn test_keyboard_focus_order_skips_unavailable_controls_and_reverses() ! {
 	root := ui2.screen(workbench_paper, [
 		ui2.view('workbench_sidebar', ui2.rect(0, 0, 200, 500), ui2.BoxStyle{}, [button('nav', 'Navigation', 0, 0, 100, false, true)]),

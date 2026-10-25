@@ -67,6 +67,7 @@ pub:
 	password string
 	host_key_id string
 	archive string
+	release_tag string
 	name string
 	template string = 'vjsx-http'
 	web_port int = 19881
@@ -86,6 +87,7 @@ pub:
 	platform string
 	root string
 	version string
+	release_tag string
 	control_path string
 	// Creation remains visible until the UI acknowledges it with inspect.
 	created RemoteProfile
@@ -226,13 +228,15 @@ fn (mut s ServerSession) inspect() ! {
 	mut platform := ''
 	mut root := ''
 	mut version := ''
+	mut release_tag := ''
 	for line in output.split_into_lines() {
 		if line.starts_with('VHTTPD_PLATFORM:') { platform = line.all_after(':') }
 		if line.starts_with('VHTTPD_ROOT:') { root = base64.decode_str(line.all_after(':')) }
 		if line.starts_with('VHTTPD_VERSION:') { version = runtime_version_text(line.all_after(':'))! }
+		if line.starts_with('VHTTPD_RELEASE:') { release_tag = normalize_runtime_tag(line.all_after(':'))! }
 	}
 	if platform !in ['linux-amd64', 'linux-arm64'] || !root.starts_with('/') || root.contains('\n') { return error('当前只支持 Linux amd64 / arm64 服务器。') }
-	s.state = ServerSnapshot{...s.state, platform: platform, root: root, version: version, error: false, created: RemoteProfile{},
+	s.state = ServerSnapshot{...s.state, platform: platform, root: root, version: version, release_tag: release_tag, error: false, created: RemoteProfile{},
 		message: if version == '' { '服务器已连接，尚未安装运行包。先安装，再创建实例。' } else { '运行环境已就绪。创建实例后可直接打开 Admin UI。' }}
 }
 
@@ -296,24 +300,21 @@ fn (mut s ServerSession) create(command ServerCommand) ! {
 fn shell_quote(value string) string { return "'" + value.replace("'", "'\"'\"'") + "'" }
 
 fn (mut s ServerSession) install(archive_path string) ! {
+	s.install_release(archive_path, '')!
+}
+
+fn (mut s ServerSession) install_release(archive_path string, tag string) ! {
 	if s.state.platform == '' { return error('请先连接并识别服务器。') }
 	if s.state.version != '' { return error('运行包已安装；第一版暂不提供远端升级。') }
 	temp := '/tmp/vh-package-' + new_remote_id()!
 	os.mkdir(temp, mode: 0o700)!
 	defer { os.rmdir_all(temp) or {} }
 	mut archive := archive_path
+	mut release_tag := ''
 	if archive == '' {
-		metadata := temp + '/release.json'
-		s.job.fetch('https://api.github.com/repos/guweigang/vhttpd/releases/latest', metadata, 2097152) or { return error('暂未找到可下载的正式 Release。可以选择 GitHub CI 构建的 Linux 包及同名 .sha256 校验文件。') }
-		release := json.decode[RuntimeRelease](os.read_file(metadata)!)!
-		name := 'vhttpd-${s.state.platform}.tar.gz'
-		packages := release.assets.filter(it.name == name)
-		checks := release.assets.filter(it.name == name + '.sha256')
-		if release.draft || release.prerelease || packages.len != 1 || checks.len != 1 { return error('正式 Release 尚未提供该 Linux 架构的运行包和校验文件。请选择官方 CI 下载包。') }
-		if !official_asset_url(packages[0].browser_download_url) || !official_asset_url(checks[0].browser_download_url) { return error('下载地址不是官方 Release。') }
-		archive = temp + '/' + name
-		s.job.fetch(packages[0].browser_download_url, archive, 268435456)!
-		s.job.fetch(checks[0].browser_download_url, archive + '.sha256', 1048576)!
+		choice := resolve_runtime_download(s.state.platform, tag, s.job)!
+		archive = download_runtime_files(choice, temp, s.job)!
+		release_tag = choice.tag
 	}
 	validate_remote_archive(archive, s.state.platform, s.job)!
 	// scp uses only the authenticated master; it cannot prompt or fall back.
@@ -324,7 +325,7 @@ fn (mut s ServerSession) install(archive_path string) ! {
 	args << [os.real_path(archive), destination + ':' + remote_name]
 	s.job.command(s.scp_executable, args, 120000)!
 	expected := checksum_for(os.read_file(archive + '.sha256')!, os.file_name(archive))!
-	s.shell('set -eu\numask 077\nupload=' + shell_quote(remote_name) + '\nexpected=' + shell_quote(expected) + '\nplatform=' + shell_quote(s.state.platform) + '\n' + $embed_file('remote_scripts/install.sh').to_string(), 30000)!
+	s.shell('set -eu\numask 077\nrelease_tag=' + shell_quote(release_tag) + '\nupload=' + shell_quote(remote_name) + '\nexpected=' + shell_quote(expected) + '\nplatform=' + shell_quote(s.state.platform) + '\n' + $embed_file('remote_scripts/install.sh').to_string(), 30000)!
 	s.inspect()!
 }
 
@@ -368,7 +369,7 @@ fn server_supervise(w ServerWorker) {
 					}
 					.disconnect { s.close() }
 					.inspect { s.inspect() or { failure = err.msg() } }
-					.install { s.install(command.archive) or { failure = err.msg() } }
+					.install { s.install_release(command.archive, command.release_tag) or { failure = err.msg() } }
 					.create { s.create(command) or { failure = err.msg() } }
 					.shutdown { s.close(); w.done <- true; return }
 				}

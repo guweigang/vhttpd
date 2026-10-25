@@ -32,6 +32,15 @@ mut:
 	server_snapshot host.ServerSnapshot
 	server_busy bool
 	runtime_server_id string
+	show_runtime_downloads bool
+	runtime_catalog_busy bool
+	runtime_catalog_error string
+	runtime_catalog_channel string = 'all'
+	runtime_catalog_ref string
+	runtime_selected_tag string
+	runtime_downloads []host.RuntimeDownload
+	runtime_catalog_job host.RuntimeJob
+	runtime_catalog_results chan RuntimeCatalogResult = chan RuntimeCatalogResult{cap: 1}
 	server_instance_name string = 'hello-vjsx'
 	server_web_port string = '19881'
 	server_admin_port string = '2018'
@@ -205,6 +214,7 @@ fn cleanup() {
 	if !app.worker_started || app.quitting { return }
 	app.quitting = true
 	app.refresh_stop <- true
+	select { app.runtime_catalog_job.cancel <- true {} else {} }
 	if app.runtime_busy {
 		select {
 			app.runtime_job.cancel <- true {
@@ -243,6 +253,7 @@ fn poll_worker() {
 		app.send_remote(.open_admin)
 	}
 	app.poll_runtime()
+	app.poll_runtime_catalog()
 	app.poll_server()
 	app.poll_creation()
 	select {
@@ -341,6 +352,8 @@ fn (mut app Workshop) launch_with_browser(open_browser bool) {
 		return
 	}
 	if app.runtime_busy || (app.runtime_checked && !app.runtime_info.ready) {
+		app.runtime_server_id = ''
+		app.show_runtime_downloads = false
 		app.show_runtime = true
 		app.show_shared_relays = false
 		app.runtime_resume_start = true

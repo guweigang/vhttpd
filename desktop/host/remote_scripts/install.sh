@@ -18,6 +18,7 @@ package="$stage/vhttpd-$platform"
   echo 'VHTTPD_ERROR:运行包无法执行；请检查 CPU 架构、glibc 版本及动态库兼容性。'; exit 1;
 }
 # A lock makes the final rename exclusive across Desktop sessions.
+if [ -n "$release_tag" ]; then printf %s "$release_tag" > "$package/.release-tag"; fi
 mkdir "$root/.install-lock" || { echo 'VHTTPD_ERROR:另一安装正在进行，请稍后刷新。'; exit 1; }
 trap 'rmdir "$root/.install-lock"; rm -f "$archive"; rm -rf "$stage"' EXIT HUP INT TERM
 [ ! -e "$root/runtime" ] || exit 1

@@ -19,7 +19,9 @@ on:
       - "examples/**"
       - "assets/**"
       - "scripts/**"
-      - "desktop/ci/**"
+      - "desktop/**"
+      - "!desktop/**/*.md"
+      - "admin/ui/**"
       - "Makefile"
       - "v.mod"
       - ".github/**"
@@ -97,6 +99,13 @@ jobs:
           bundle="vhttpd-${{ matrix.target }}"
           mkdir -p "$bundle/scripts" "$bundle/runtime"
           cp "$VHTTPD_BIN" "$bundle/vhttpd"
+          python3 - "$bundle/runtime-manifest.json" "${{ matrix.target }}" <<'PY_MANIFEST'
+          import json, os, pathlib, subprocess, sys
+          pathlib.Path(sys.argv[1]).write_text(json.dumps({
+              'source_commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
+              'platform': sys.argv[2], 'run_id': os.environ['GITHUB_RUN_ID'],
+          }) + '\n')
+          PY_MANIFEST
           mkdir -p "$bundle/admin"
           cp -R ./admin/ui "$bundle/admin/ui"
           bash ./scripts/bundle_runtime_libs.sh "$bundle/vhttpd" "$bundle/runtime/libs"

@@ -7,10 +7,14 @@ on:
         description: 'unsigned preview (no Apple credentials required); signed is optional'
         type: choice
         default: unsigned
-        options: [unsigned, signed]
+        options: [unsigned, signed, publish-development]
+      source_commit:
+        description: 'For publish-development only: full commit SHA of successful Mac and Linux builds'
+        type: string
+        required: false
   push:
     branches: [main, codex/mac-workbench-runtime-checks]
-    tags: ['v[0-9]*']
+    tags: ['v[0-9]*', '!v*-dev.g*']
     paths:
       - .github/workflows/workbench-macos-runtime.yml
       - desktop/**
@@ -19,6 +23,13 @@ on:
       - admin/ui/**
       - Makefile
       - v.mod
+      - dbsrc/**
+      - php/**
+      - tests/**
+      - examples/**
+      - assets/**
+      - scripts/**
+      - .github/**
   pull_request:
     paths:
       - .github/workflows/workbench-macos-runtime.yml
@@ -28,13 +39,24 @@ on:
       - admin/ui/**
       - Makefile
       - v.mod
+      - dbsrc/**
+      - php/**
+      - tests/**
+      - examples/**
+      - assets/**
+      - scripts/**
+      - .github/**
 
 permissions:
   contents: read
 
+env:
+  VHTTPD_DEVELOPMENT_BUILD: ${{ github.ref_type != 'tag' && github.event_name != 'pull_request' && '1' || '0' }}
+
 jobs:
   build:
     name: Build candidate from source (macOS 15 arm64)
+    if: github.event_name != 'workflow_dispatch' || inputs.release_mode != 'publish-development'
     runs-on: macos-15
     timeout-minutes: 45
     outputs:
@@ -52,6 +74,7 @@ jobs:
       - name: Check signing release contract
         run: |
           python3 -m unittest discover -s desktop/ci -p 'test_macos_*.py'
+          python3 -m unittest discover -s desktop/ci -p 'test_development_release.py'
           bash -n desktop/ci/verify_installed_macos.sh
       - name: Install build-only pkg-config
         run: brew install pkgconf
@@ -80,6 +103,12 @@ jobs:
             -path "$PWD/src|@vlib|@vmodules" \
             -o "$RUNNER_TEMP/workbench-sdk-timeout-test" src/executor/host_async_timeout_test.v
           "$RUNNER_TEMP/workbench-sdk-timeout-test"
+      - name: Verify public stable and development runtime catalog
+        run: |
+          v -w -d build_quickjs -enable-globals \
+            -path "$PWD/desktop|$PWD/src|$PWD/.deps|@vlib|@vmodules" \
+            -o "$RUNNER_TEMP/runtime-catalog-test" desktop/host/runtime_catalog_test.v
+          "$RUNNER_TEMP/runtime-catalog-test"
       - name: Verify SSH manual-instance workflow
         shell: bash
         run: |
@@ -206,6 +235,32 @@ jobs:
           **No Apple credentials required.** This is an ad-hoc signed preview, without Apple notarization.
           Gatekeeper assessment is recorded separately; GUI/Finder/browser first launch is not covered by these runtime checks.
           SUMMARY
+
+  publish-development:
+    name: Publish previously verified development build
+    if: github.event_name == 'workflow_dispatch' && inputs.release_mode == 'publish-development'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: read
+    concurrency:
+      group: development-runtime-${{ inputs.source_commit }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          sparse-checkout: desktop
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Verify source artifacts and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -m unittest discover -s desktop/ci -p 'test_development_release.py'
+          python3 desktop/ci/development_release.py
 
   publish-release:
     name: Publish accepted unsigned Mac assets
