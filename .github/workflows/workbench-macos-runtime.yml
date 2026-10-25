@@ -59,6 +59,48 @@ jobs:
         run: bash desktop/ci/prepare_toolchain.sh
       - name: Build and verify the complete app
         run: bash desktop/build.sh
+      - name: Verify native workbench UI states
+        shell: bash
+        run: |
+          v -w -nocache -d build_quickjs -d use_bundled_libgc -enable-globals \
+            -path "$PWD/desktop|$PWD/src|$PWD/.deps|@vlib|@vmodules" \
+            -o "$RUNNER_TEMP/workbench-ui-state-test" desktop/ui_state_test.v
+          "$RUNNER_TEMP/workbench-ui-state-test"
+      - name: Verify server registration and deployment guards
+        shell: bash
+        run: |
+          v -w -d build_quickjs -enable-globals \
+            -path "$PWD/desktop|$PWD/src|$PWD/.deps|@vlib|@vmodules" \
+            -o "$RUNNER_TEMP/workbench-server-test" desktop/host/remote_servers_test.v
+          "$RUNNER_TEMP/workbench-server-test"
+      - name: Verify fixed SDK timeout compatibility
+        shell: bash
+        run: |
+          v -w -nocache -gc none -d build_quickjs -enable-globals \
+            -path "$PWD/src|@vlib|@vmodules" \
+            -o "$RUNNER_TEMP/workbench-sdk-timeout-test" src/executor/host_async_timeout_test.v
+          "$RUNNER_TEMP/workbench-sdk-timeout-test"
+      - name: Verify SSH manual-instance workflow
+        shell: bash
+        run: |
+          v -w -d build_quickjs -enable-globals \
+            -path "$PWD/desktop|$PWD/src|$PWD/.deps|@vlib|@vmodules" \
+            -o "$RUNNER_TEMP/workbench-remote-host-test" desktop/host/remote_instances_test.v
+          python3 desktop/ci/verify_remote_ssh_macos.py --unknown-host \
+            --runtime desktop/bin/vhttpd-workbench.app/Contents/Resources/runtime/vhttpd \
+            --host-test "$RUNNER_TEMP/workbench-remote-host-test"
+      - name: Verify session-only SSH password authentication
+        shell: bash
+        run: |
+          python3 -m pip install -r desktop/ci/requirements-ssh-test.txt
+          v -w -d build_quickjs -enable-globals \
+            -path "$PWD/desktop|$PWD/src|$PWD/.deps|@vlib|@vmodules" \
+            -o "$RUNNER_TEMP/workbench-askpass-test" desktop/host/remote_askpass_test.v
+          VHTTPD_REMOTE_ASKPASS_TEST_EXECUTABLE="$PWD/desktop/bin/vhttpd-workbench.app/Contents/MacOS/vhttpd-workbench" \
+            "$RUNNER_TEMP/workbench-askpass-test"
+          python3 desktop/ci/verify_remote_ssh_macos.py --password --unknown-host \
+            --runtime desktop/bin/vhttpd-workbench.app/Contents/Resources/runtime/vhttpd \
+            --host-test "$RUNNER_TEMP/workbench-remote-host-test"
       - name: Record candidate identity
         id: package
         shell: bash
