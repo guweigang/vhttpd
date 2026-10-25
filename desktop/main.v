@@ -32,6 +32,8 @@ mut:
 	server_snapshot host.ServerSnapshot
 	server_busy bool
 	runtime_server_id string
+	environment_id string
+	environment_menu ui2.DropdownMenuState
 	show_runtime_downloads bool
 	runtime_catalog_busy bool
 	runtime_catalog_error string
@@ -46,11 +48,14 @@ mut:
 	server_admin_port string = '2018'
 	server_template int
 	server_created_id string
+	server_discovery_revision u64
+	remote_pending_connect string
 	remote_sequence u64
 	show_remote bool
 	remote_worker host.RemoteWorker
 	remote_connected_form host.RemoteProfile
 	remote_snapshot host.RemoteSnapshot
+	remote_profiles_error string
 	remote_profiles []host.RemoteProfile
 	remote_id string
 	remote_name string
@@ -186,7 +191,7 @@ fn main() {
 		app.shared_message = app.notice
 		[]host.SharedRelay{}
 	}
-	app.remote_profiles = host.load_remote_profiles() or { app.notice = '远端连接记录读取失败，请保留 remote-instances.json 后检查文件。'; []host.RemoteProfile{} }
+	app.reload_remote_profiles()
 	app.remote_worker = host.new_remote_worker()
 	app.remote_servers = host.load_remote_servers() or { app.notice = err.msg(); []host.RemoteServer{} }
 	app.server_worker = host.new_server_worker()
@@ -247,7 +252,7 @@ fn cleanup() {
 fn poll_worker() {
 	mut app := unsafe { workshop }
 	if app.quitting { return }
-	select { status := <-app.remote_worker.snapshots { if status.sequence >= app.remote_sequence { app.remote_snapshot = status } } else {} }
+	select { status := <-app.remote_worker.snapshots { if status.sequence >= app.remote_sequence && app.remote_pending_connect == '' { app.remote_snapshot = status } } else {} }
 	if app.remote_auto_open && app.remote_snapshot.connected && !app.remote_snapshot.busy && app.remote_snapshot.profile_id == app.remote_id {
 		app.remote_auto_open = false
 		app.send_remote(.open_admin)
@@ -377,7 +382,7 @@ fn handle_event(event string) {
 	if event == 'form_submit' { submit_active_form(); return }
 	defer {
 		focus_id := match event {
-			'new', 'empty_new' { 'new_name' }
+			'new', 'empty_new' { if app.environment_id == '' { 'new_name' } else { 'server_instance_name' } }
 			'server_new' { 'server_name' }
 			'remote_new' { 'remote_name' }
 			'shared_new' { 'shared_name' }
@@ -391,6 +396,7 @@ fn handle_event(event string) {
 	if event in ['server_home', 'server_back', 'shared_relays', 'runtime'] || event.starts_with('project_') {
 		app.new_project = false
 	}
+	if app.handle_environment_event(event) { ui2.refresh(); return }
 	if app.handle_server_event(event) { ui2.refresh(); return }
 	if app.handle_remote_event(event) { ui2.refresh(); return }
 	if app.handle_runtime_event(event) {
@@ -580,6 +586,7 @@ fn (mut app Workshop) activate_project(index int) {
 }
 
 fn (mut app Workshop) choose_project(index int) {
+	app.set_environment('')
 	if app.new_project || index < 0 || index >= app.projects.len { return }
 	if index == app.selected && app.pending_project < 0 { return }
 	app.request_open = false
@@ -733,6 +740,20 @@ fn project_button(id string, title string, badge string, frame ui2.Rect, selecte
 }
 
 fn build_window() ui2.Element {
+	root := build_window_content()
+	app := unsafe { workshop }
+	if !app.environment_menu.open { return root }
+	menu := ui2.dropdown_menu(ui2.DropdownMenuConfig{
+		id: 'environment_menu', state: app.environment_menu, items: app.environment_menu_items(),
+		anchor: ui2.rect(16, 82, 180, 34), window: ui2.bounds(), width: 260,
+		label: '选择运行环境'
+	}) or { return root }
+	mut children := root.children.clone()
+	children << menu
+	return ui2.Element{...root, children: children}
+}
+
+fn build_window_content() ui2.Element {
 	app := unsafe { workshop }
 	if app.worker_started && !app.quitting { poll_worker() }
 	b := ui2.bounds()
@@ -744,10 +765,12 @@ fn build_window() ui2.Element {
 		ui2.Element{ ...ui2.image('brand_mark', app.brand_mark, ui2.rect(22, 18, 38, 38)), accessibility_label: 'vhttpd 品牌标志' },
 		ui2.label('brand', 'vhttpd', ui2.rect(70, 16, 120, 30), ui2.TextStyle{ size: 23, color: workbench_ink, bold: true }),
 		label('local_label', '开发工作台', 70, 45, 120, 11, workbench_muted),
-		label('project_label', '本地项目', 22, 155, 160, 12, workbench_muted),
+		app.environment_selector(),
+		label('project_label', if app.environment_id == '' { '本地项目' } else { '远端项目' }, 22, 197, 160, 12, workbench_muted),
 	]
 	mut project_rows := []ui2.Element{}
 	mut y := 0.0
+	if app.environment_id == '' {
 	for i, project in app.projects {
 		status := app.config_statuses[project.config_path] or { host.ConfigStatus{} }
 		badge := match status.state {
@@ -760,18 +783,26 @@ fn build_window() ui2.Element {
 		project_rows << project_button('project_${i}', project.name, badge, ui2.rect(0, y, 190, 52), i == app.selected, !app.new_project && !app.creating)
 		y += 59
 	}
-	side << ui2.scroll('project_list', ui2.rect(12, 183, 190, h - 396), workbench_sidebar, project_rows)
-	can_choose := !app.new_project && !app.runtime_busy && app.snapshot.pid == 0 && app.snapshot.phase !in [
+	} else {
+		for p in app.environment_profiles() {
+			badge := if p.id == app.remote_snapshot.profile_id && app.remote_snapshot.connected { if app.remote_snapshot.restarting { '正在重启' } else if app.remote_snapshot.instance.startup_failed() { '重启失败 · 待修复' } else if !app.remote_snapshot.instance.ready { '业务未就绪' } else if app.remote_snapshot.config_status.pending { '配置待生效' } else { 'SSH 已连接' } } else { '远端实例' }
+			project_rows << project_button('remote_select_${p.id}', p.name, badge, ui2.rect(0, y, 190, 52), p.id == app.remote_id && !app.show_servers, !app.remote_snapshot.busy && !app.server_busy)
+			y += 59
+		}
+	}
+	if project_rows.len == 0 { project_rows << label('project_list_empty', if app.environment_id == '' { '暂无本地项目' } else if app.remote_profiles_error != '' { '项目列表读取失败，请刷新重试' } else { '此环境暂无已登记项目' }, 10, 8, 170, 11, workbench_muted) }
+	side << ui2.scroll('project_list', ui2.rect(12, 225, 190, h - 438), workbench_sidebar, project_rows)
+	can_choose := if app.environment_id != '' { !app.server_busy && !app.remote_snapshot.busy } else { !app.new_project && !app.runtime_busy && app.snapshot.pid == 0 && app.snapshot.phase !in [
 		.starting,
 		.stopping,
-	]
-	side << sidebar_button('new', '+ 新建', ui2.rect(16, 99, 85, 34), true, false, can_choose, .center)
-	side << sidebar_button('import', '导入…', ui2.rect(111, 99, 85, 34), false, false, can_choose, .center)
+	] }
+	side << sidebar_button('new', '+ 新建', ui2.rect(16, 143, 85, 34), true, false, can_choose, .center)
+	side << sidebar_button('import', '导入…', ui2.rect(111, 143, 85, 34), false, false, can_choose, .center)
 	side << sidebar_button('shared_relays', '共享 Relay', ui2.rect(16, h - 125, 180, 34), false, app.show_shared_relays, !app.creating, .left)
 	side << sidebar_button('server_home', '服务器与实例', ui2.rect(16, h - 167, 180, 34), false, app.show_remote, !app.creating, .left)
 	side << label('env_label', '管理', 22, h - 195, 170, 11, workbench_muted)
 	side << sidebar_button('runtime', '运行环境', ui2.rect(16, h - 83, 180, 34), false, app.show_runtime, !app.creating, .left)
-	side << label('binary_label', if app.runtime_info.ready { '本机 vhttpd ' + app.runtime_info.version } else if app.runtime_busy { '正在检查运行包…' } else { '本机运行包不可用' }, 22, h - 32, 170, 11, workbench_muted)
+	side << label('binary_label', app.environment_version_label(), 22, h - 32, 170, 11, workbench_muted)
 	mut children := [ui2.view('workbench_sidebar', ui2.rect(0, 0, 214, h), ui2.BoxStyle{
 		bg:           workbench_sidebar
 		border_color: workbench_line
@@ -787,6 +818,10 @@ fn build_window() ui2.Element {
 	}
 	if app.show_shared_relays {
 		children << ui2.scroll('shared_relays_page', ui2.rect(content_x, 0, cw, h), workbench_paper, shared_relays_view(app, cw))
+		return ui2.screen(workbench_paper, children)
+	}
+	if app.environment_id != '' {
+		children << ui2.scroll('environment_projects_page', ui2.rect(content_x, 0, cw, h), workbench_paper, remote_instances_view(app, cw))
 		return ui2.screen(workbench_paper, children)
 	}
 	if app.show_rollback && !app.new_project && app.projects.len > 0 {

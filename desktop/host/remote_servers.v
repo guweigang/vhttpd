@@ -91,6 +91,9 @@ pub:
 	control_path string
 	// Creation remains visible until the UI acknowledges it with inspect.
 	created RemoteProfile
+	projects []RemoteProfile
+	discovery_revision u64
+	discovery_message string
 }
 pub struct ServerWorker {
 pub:
@@ -180,6 +183,10 @@ fn (s &ServerSession) mux_args() []string {
 }
 
 fn (s &ServerSession) shell(script string, timeout i64) !string {
+	return s.shell_limited(script, timeout, 65536)
+}
+
+fn (s &ServerSession) shell_limited(script string, timeout i64, max_output int) !string {
 	if !s.state.connected || !os.exists(s.directory + '/control') { return error('请先连接服务器。') }
 	// Bounded scripts fit in the SSH stdin pipe. Secrets never become files or arguments.
 	if script.len > 16000 { return error('部署配置过大。') }
@@ -202,7 +209,7 @@ fn (s &ServerSession) shell(script string, timeout i64) !string {
 			if !child.is_pending(.stdout) { break }
 			output += child.stdout_read()
 		}
-		if output.len > 65536 || time.ticks() > until {
+		if output.len > max_output || time.ticks() > until {
 			child.signal_pgkill(); child.signal_kill(); child.wait()
 			return error('服务器操作超时或输出过多；请刷新运行环境确认结果。')
 		}
@@ -212,6 +219,7 @@ fn (s &ServerSession) shell(script string, timeout i64) !string {
 	}
 	child.wait()
 	for child.is_pending(.stdout) { part := child.stdout_read(); if part == '' { break }; output += part }
+	if output.len > max_output { return error('服务器返回数据过多，请缩小项目管理范围。') }
 	if child.code != 0 {
 		// Raw shell/config output is never rendered: it can contain credentials.
 		mut reason := '远端命令失败，请检查服务器权限、磁盘空间和运行包兼容性。'
@@ -238,6 +246,7 @@ fn (mut s ServerSession) inspect() ! {
 	if platform !in ['linux-amd64', 'linux-arm64'] || !root.starts_with('/') || root.contains('\n') { return error('当前只支持 Linux amd64 / arm64 服务器。') }
 	s.state = ServerSnapshot{...s.state, platform: platform, root: root, version: version, release_tag: release_tag, error: false, created: RemoteProfile{},
 		message: if version == '' { '服务器已连接，尚未安装运行包。先安装，再创建实例。' } else { '运行环境已就绪。创建实例后可直接打开 Admin UI。' }}
+	s.discover_projects()!
 }
 
 fn (mut s ServerSession) tick() {
@@ -276,6 +285,7 @@ fn validate_remote_project(command ServerCommand) ! {
 
 fn (mut s ServerSession) create(command ServerCommand) ! {
 	validate_remote_project(command)!
+	s.discover_projects()!
 	if s.state.version == '' { return error('请先安装远端运行包。') }
 	template := project_templates().filter(it.id == command.template)[0]
 	mut profiles := load_remote_profiles()!
@@ -288,12 +298,13 @@ fn (mut s ServerSession) create(command ServerCommand) ! {
 		.replace('port = ${template.admin_port}', 'port = ${command.admin_port}')
 		.replace('local-development-only', token)
 	profile := if previous.len > 0 { previous[0] } else { RemoteProfile{id: new_remote_id()!, server_id: s.server.id, name: command.name, ssh_host: s.server.ssh_host, ssh_user: s.server.ssh_user,
-		ssh_port: s.server.ssh_port, auth_method: s.server.auth_method, identity_file: s.server.identity_file, admin_port: command.admin_port, token: token}
+		ssh_port: s.server.ssh_port, auth_method: s.server.auth_method, identity_file: s.server.identity_file, admin_port: command.admin_port, token: token, config_path: s.state.root + '/instances/' + command.name + '/vhttpd.toml'}
 	}
 	// Persist before reporting success, so reconnect does not require copying a token.
 	if previous.len == 0 { profiles << profile; save_remote_profiles(profiles)! }
 	script := 'set -eu\numask 077\ninstance_id=' + shell_quote(profile.id) + '\nreuse=' + if previous.len > 0 { '1' } else { '0' } + '\nname=' + shell_quote(command.name) + '\nconfig=' + shell_quote(base64.encode_str(config)) + '\nsource=' + shell_quote(base64.encode_str(template.source_text)) + '\n' + $embed_file('remote_scripts/create.sh').to_string()
 	s.shell(script, 20000)!
+	s.discover_projects()!
 	s.state = ServerSnapshot{...s.state, created: profile, message: '实例已创建并启动，正在连接 Admin UI 并检查整项目生效状态。'}
 }
 

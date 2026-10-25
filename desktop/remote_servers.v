@@ -9,6 +9,7 @@ fn (app &Workshop) server_form() host.RemoteServer {
 }
 
 fn (mut app Workshop) select_server(server host.RemoteServer) {
+	if app.remote_servers.any(it.id == server.id) { app.set_environment(server.id) }
 	app.remote_id = server.id
 	app.remote_name = server.name
 	app.remote_host = server.ssh_host
@@ -40,13 +41,37 @@ fn (mut app Workshop) poll_server() {
 	select {
 		status := <-app.server_worker.snapshots {
 			if status.sequence < app.server_sequence { return }
+			discovered := status.discovery_revision != app.server_discovery_revision
+			completed := !status.busy && (app.server_busy || app.server_snapshot.busy || (status.connected && !app.server_snapshot.connected))
+			if completed || discovered { app.reload_remote_profiles() }
+			if discovered { app.server_discovery_revision = status.discovery_revision }
 			app.server_snapshot = status
 			// The worker emits completion after each blocking operation.
 			if !status.busy { app.server_busy = false }
+			if app.remote_pending_connect != '' && status.host_key.id != '' && !status.error {
+				// First use on another computer must expose the server's trust UI.
+				app.select_server(status.server)
+				app.show_remote = true
+				app.show_servers = true
+				app.show_runtime = false
+			}
+			if !status.busy && app.remote_pending_connect != '' {
+				pending := app.remote_pending_connect
+				app.remote_pending_connect = ''
+				if status.connected && !status.error {
+					for profile in app.remote_profiles {
+						if profile.id == pending { app.select_remote_profile(profile); app.send_remote(.connect); break }
+					}
+				} else { app.remote_auto_open = false; app.remote_snapshot = host.RemoteSnapshot{profile_id: pending, message: status.message}; app.remote_message = status.message }
+			} else if discovered && app.show_remote && !app.show_servers && !app.show_runtime && !app.remote_snapshot.connected && !app.remote_snapshot.busy {
+				for profile in app.remote_profiles { if profile.id == app.remote_id { app.select_remote_profile(profile); break } }
+			}
+
 			if status.created.id != '' && status.created.id != app.server_created_id {
 				app.server_created_id = status.created.id
-				app.remote_profiles = host.load_remote_profiles() or { app.remote_profiles }
+				app.reload_remote_profiles()
 				p := status.created
+				app.set_environment(profile_environment(p))
 				app.remote_id = p.id
 				app.remote_server_id = p.server_id
 				app.remote_name = p.name
@@ -74,18 +99,23 @@ fn (mut app Workshop) poll_server() {
 
 fn (mut app Workshop) handle_server_event(event string) bool {
 	if event in ['server_home', 'server_back'] {
+		app.reload_remote_profiles()
 		was_servers := app.show_servers
 		app.show_remote = true
 		app.show_servers = true
 		app.show_runtime = false
 		app.show_shared_relays = false
 		if !app.server_busy && !app.server_snapshot.busy && (!was_servers || app.remote_id == '') {
-			if app.remote_servers.len > 0 { app.select_server(app.remote_servers[0]) } else { app.select_server(host.RemoteServer{}) }
+			mut selected := false
+			for server in app.remote_servers { if server.id == app.environment_id { app.select_server(server); selected = true; break } }
+			if !selected { if app.remote_servers.len > 0 { app.select_server(app.remote_servers[0]) } else { app.select_server(host.RemoteServer{}) } }
 		}
 		return true
 	}
 	if event.starts_with('runtime_target_') {
-		app.runtime_server_id = event.all_after('runtime_target_')
+		if !app.can_switch_environment() { return true }
+		app.set_environment(event.all_after('runtime_target_'))
+		for server in app.remote_servers { if server.id == app.environment_id { app.select_server(server) } }
 		app.show_runtime_downloads = false
 		app.runtime_selected_tag = ''
 		return true
@@ -119,6 +149,7 @@ fn (mut app Workshop) handle_server_event(event string) bool {
 			items << s
 			host.save_remote_servers(items) or { app.remote_message = err.msg(); return true }
 			app.remote_servers = items
+			app.set_environment(s.id)
 			app.remote_message = '服务器已保存。连接后可在运行环境中安装运行包并创建实例。'
 			if event == 'server_connect' { app.server_command(.connect, '') }
 		}
@@ -128,6 +159,7 @@ fn (mut app Workshop) handle_server_event(event string) bool {
 			host.save_remote_servers(items) or { app.remote_message = err.msg(); return true }
 			if app.server_snapshot.server_id == app.remote_id { app.server_command(.disconnect, '') }
 			app.remote_servers = items
+			if !app.environment_choices().any(it.id == app.environment_id) { app.set_environment('') }
 			app.select_server(host.RemoteServer{})
 		}
 		'server_runtime' {
@@ -135,7 +167,7 @@ fn (mut app Workshop) handle_server_event(event string) bool {
 				app.remote_message = '请先保存并连接这台服务器，再管理运行环境。'
 				return true
 			}
-			app.runtime_server_id = app.remote_id
+			app.set_environment(app.remote_id)
 			app.show_runtime_downloads = false
 			app.show_remote = false
 			app.show_runtime = true
@@ -146,7 +178,7 @@ fn (mut app Workshop) handle_server_event(event string) bool {
 			app.show_remote = true
 			app.show_servers = true
 		}
-		'server_refresh' { app.server_command(.inspect, '') }
+		'server_refresh' { app.reload_remote_profiles(); app.server_command(.inspect, '') }
 		'server_install' { app.open_runtime_downloads() }
 		'server_package' {
 			files := ui2.open_file_dialog(title: '选择官方 CI 的 vhttpd-linux-*.tar.gz（旁边需有同名 .sha256）')
@@ -252,10 +284,10 @@ fn runtime_settings_view(app &Workshop, width f64) []ui2.Element {
 	list_width := if width >= 620 { 174.0 } else { 144.0 }
 	x := list_width + 24
 	mut selector := [label('runtime_target_label', '目标主机', 10, 12, list_width - 20, 11, workbench_muted),
-		sidebar_button('runtime_target_', '本机 Mac', ui2.rect(10, 40, list_width - 20, 34), false, app.runtime_server_id == '', !app.server_busy, .left)]
+		sidebar_button('runtime_target_', '本机 Mac', ui2.rect(10, 40, list_width - 20, 34), false, app.runtime_server_id == '', app.can_switch_environment(), .left)]
 	mut y := 86.0
 	for server in app.remote_servers {
-		selector << sidebar_button('runtime_target_${server.id}', server.name, ui2.rect(10, y, list_width - 20, 34), false, app.runtime_server_id == server.id, !app.server_busy, .left)
+		selector << sidebar_button('runtime_target_${server.id}', server.name, ui2.rect(10, y, list_width - 20, 34), false, app.runtime_server_id == server.id, app.can_switch_environment(), .left)
 		y += 42
 	}
 	body := if app.show_runtime_downloads { runtime_downloads_view(app, width - x) } else if app.runtime_server_id == '' { runtime_local_view(app, width - x) } else { runtime_remote_view(app, width - x) }
@@ -294,7 +326,7 @@ fn runtime_remote_view(app &Workshop, width f64) []ui2.Element {
 	y += 94
 	rows << label('server_install_hint', '安装到 SSH 用户目录，无需 sudo、V、Node 或编译工具；第一版不覆盖升级。', 0, y, width, 11, workbench_muted)
 	y += 37
-	rows << state_notice('server_runtime_state', if busy { '正在准备远端运行环境…' } else if state.error { '操作未完成' } else { '远端运行环境' }, if app.remote_message != '' { app.remote_message } else { state.message }, ui2.rect(0, y, width, 112), if state.error { 'warning' } else { 'info' })
+	rows << state_notice('server_runtime_state', if busy { '正在准备远端运行环境…' } else if state.error { '操作未完成' } else { '远端运行环境' }, if app.remote_message != '' { app.remote_message } else { state.message + if state.discovery_message != '' { '\n' + state.discovery_message } else { '' } }, ui2.rect(0, y, width, 112), if state.error { 'warning' } else { 'info' })
 	y += 130
 	if busy { rows << button('server_cancel', '取消操作', 0, y, 110, false, true); return rows }
 	if state.version == '' { return rows }

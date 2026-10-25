@@ -117,7 +117,9 @@ tar -czf "$1/vhttpd-linux-arm64.tar.gz" -C "$1/package" vhttpd-linux-arm64
                           'archive_sha256':hashlib.sha256(archive.read_bytes()).hexdigest(),
                           'coverage':['empty HOME','bundled ELF dependencies','SHA256','vjsx create/start','browser SSO',
                                       'cross-include validate/publish','manual restart','whole-project effectiveness','SSH session reuse',
-                                      'first fingerprint cancel/confirm','changed fingerprint blocked','port conflict and same-instance retry']}
+                                      'first fingerprint cancel/confirm','changed fingerprint blocked','port conflict and same-instance retry', 'fresh-computer project discovery',
+                                      'stale Admin token repair', 'cross-include discovery', 'browser Admin HTTP 200',
+                                      'terminal project discovery', 'running process CLI token override']}
                 if args.output:
                     args.output.parent.mkdir(parents=True,exist_ok=True)
                     args.output.write_text(json.dumps(result,indent=2)+'\n')

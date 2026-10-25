@@ -4,7 +4,9 @@ import host
 import ui2
 
 fn (app &Workshop) remote_form() host.RemoteProfile {
-	return host.RemoteProfile{ id: app.remote_id, server_id: app.remote_server_id, name: app.remote_name.trim_space(), ssh_host: app.remote_host.trim_space(), ssh_user: app.remote_user.trim_space(), ssh_port: app.remote_port.int(), admin_port: app.remote_admin_port.int(), identity_file: app.remote_identity, auth_method: app.remote_auth, token: app.remote_token }
+	mut config_path := ''
+	for profile in app.remote_profiles { if profile.id == app.remote_id { config_path = profile.config_path; break } }
+	return host.RemoteProfile{ config_path: config_path, id: app.remote_id, server_id: app.remote_server_id, name: app.remote_name.trim_space(), ssh_host: app.remote_host.trim_space(), ssh_user: app.remote_user.trim_space(), ssh_port: app.remote_port.int(), admin_port: app.remote_admin_port.int(), identity_file: app.remote_identity, auth_method: app.remote_auth, token: app.remote_token }
 }
 
 fn (mut app Workshop) send_remote(action host.RemoteAction) {
@@ -56,7 +58,8 @@ fn (mut app Workshop) handle_remote_event(event string) bool {
 	if !event.starts_with('remote_') { return false }
 	if event == 'remote_edit' && !app.remote_snapshot.busy { app.remote_edit_connection = true; return true }
 	if event == 'remote_close' {
-		app.show_remote = false
+		app.show_remote = app.environment_id != ''
+		if app.environment_id != '' { app.remote_id = '' }
 		app.remote_password = ''
 		return true
 	}
@@ -85,6 +88,15 @@ fn (mut app Workshop) handle_remote_event(event string) bool {
 			app.remote_identity = ''
 			app.remote_auth = 'key'
 			app.remote_password = ''
+			app.remote_edit_connection = true
+			for server in app.remote_servers { if server.id == app.environment_id {
+				app.remote_server_id = server.id
+				app.remote_host = server.ssh_host
+				app.remote_user = server.ssh_user
+				app.remote_port = if server.ssh_port == 0 { '' } else { server.ssh_port.str() }
+				app.remote_identity = server.identity_file
+				app.remote_auth = server.auth_method
+			} }
 			app.remote_message = '填写已运行实例的 SSH 和 Admin 连接。Token 保存在本机权限保护的文件中。'
 		}
 		'remote_name' { app.remote_name = ui2.text(event) }
@@ -127,10 +139,11 @@ fn (mut app Workshop) handle_remote_event(event string) bool {
 				return true
 			}
 			app.remote_profiles = saved
+			app.set_environment(profile_environment(profile))
 			app.remote_message = '连接已保存。'
 			if event == 'remote_connect' {
 				app.remote_message = ''
-				app.send_remote(.connect)
+				app.connect_remote_project(profile)
 			}
 		}
 		'remote_delete' {
@@ -149,7 +162,7 @@ fn (mut app Workshop) handle_remote_event(event string) bool {
 		}
 		'remote_open' {
 			app.remote_message = ''
-			app.send_remote(.open_admin)
+			if app.remote_snapshot.connected && app.remote_snapshot.profile_id == app.remote_id { app.send_remote(.open_admin) } else { app.remote_auto_open = true; app.connect_remote_project(app.remote_form()) }
 		}
 		'remote_check' {
 			app.remote_message = ''
@@ -166,28 +179,7 @@ fn (mut app Workshop) handle_remote_event(event string) bool {
 				id := event.all_after('remote_select_')
 				for p in app.remote_profiles {
 					if p.id == id {
-						app.remote_edit_connection = false
-						app.remote_id = p.id
-						app.remote_server_id = p.server_id
-						app.remote_name = p.name
-						app.remote_host = p.ssh_host
-						app.remote_user = p.ssh_user
-						app.remote_port = if p.ssh_port == 0 { '' } else { p.ssh_port.str() }
-						app.remote_admin_port = p.admin_port.str()
-						app.remote_token = p.token
-						app.remote_identity = p.identity_file
-						app.remote_auth = p.auth_method
-						for server in app.remote_servers {
-							if server.id == p.server_id {
-								app.remote_host = server.ssh_host
-								app.remote_user = server.ssh_user
-								app.remote_port = if server.ssh_port == 0 { '' } else { server.ssh_port.str() }
-								app.remote_identity = server.identity_file
-								app.remote_auth = server.auth_method
-							}
-						}
-						app.remote_password = ''
-						app.remote_message = ''
+						app.select_remote_profile(p)
 					}
 				}
 			}
@@ -198,14 +190,15 @@ fn (mut app Workshop) handle_remote_event(event string) bool {
 
 fn remote_instances_view(app &Workshop, width f64) []ui2.Element {
 	mut rows := [
-		label('remote_heading', '远端实例', 0, 28, width, 26, workbench_ink),
+		label('remote_heading', if app.environment_id == '' { '远端实例' } else { app.environment_name() + ' · 项目' }, 0, 28, width - 120, 26, workbench_ink),
 		label('remote_description', 'SSH 连接已运行的 vhttpd，配置在 Admin UI 编辑，重启和生效检查在这里完成。', 0, 68, width, 12, workbench_muted),
-		button('remote_close', '返回项目', width - 100, 103, 100, false, true),
-		button('server_back', '服务器', 145, 103, 95, false, !app.remote_snapshot.busy),
-		button('remote_new', '+ 添加实例', 0, 103, 130, true, !app.remote_snapshot.busy),
+		button('remote_close', '项目概览', width - 100, 25, 100, false, true),
+		button(if app.environment_id == '' { 'server_back' } else { 'remote_new' }, if app.environment_id == '' { '服务器' } else { '导入已有实例' }, 145, 103, 130, false, !app.remote_snapshot.busy),
+		button(if app.environment_id == '' { 'remote_new' } else { 'remote_create_project' }, if app.environment_id == '' { '+ 添加实例' } else { '+ 新建项目' }, 0, 103, 130, true, !app.remote_snapshot.busy),
 	]
 	mut y := 153.0
 	for p in app.remote_profiles {
+		if app.environment_id != '' { continue }
 		rows << sidebar_button('remote_select_${p.id}', p.name + ' · ' + p.ssh_host + if p.id == app.remote_snapshot.profile_id {
 			if app.remote_snapshot.busy {
 				' · 正在处理'
@@ -220,7 +213,7 @@ fn remote_instances_view(app &Workshop, width f64) []ui2.Element {
 		y += 42
 	}
 	if app.remote_id == '' {
-		rows << label('remote_empty', '添加远端实例后，先连接，再打开 Admin UI 发布配置。', 0, y + 12, width, 14, workbench_muted)
+		rows << label('remote_empty', '从左侧选择远端项目；新建项目会使用当前环境的运行包，导入可登记已运行的实例。', 0, y + 12, width, 14, workbench_muted)
 		return rows
 	}
 	if app.remote_snapshot.connected && app.remote_snapshot.profile_id == app.remote_id && app.remote_form() == app.remote_connected_form && !app.remote_edit_connection {
@@ -301,6 +294,10 @@ fn remote_instances_view(app &Workshop, width f64) []ui2.Element {
 	}
 	rows << label('remote_status', message, 0, y, width, 13, workbench_ink)
 	y += 38
+	if instance.version == '' && app.remote_form().config_path != '' {
+		rows << ui2.label('remote_discovered_source', '远端配置：' + app.remote_form().config_path, ui2.rect(0, y, width, 44), ui2.TextStyle{size: 11, color: workbench_muted, lines: 2})
+		y += 50
+	}
 	if active && instance.version != '' {
 		rows << label('remote_version', 'vhttpd ${instance.version} · ${instance.platform} · ' + if instance.ready {
 			'业务就绪'
@@ -310,11 +307,11 @@ fn remote_instances_view(app &Workshop, width f64) []ui2.Element {
 		rows << label('remote_config_source', instance.config_path, 0, y + 27, width, 11, workbench_muted)
 		y += 65
 	}
-	rows << button('remote_open', '打开 Admin UI', 0, y, 145, true, connected && !app.remote_snapshot.busy)
-	rows << button('remote_restart', '重启并检查生效', 157, y, 170, false, connected && !app.remote_snapshot.busy && instance.manual_restart)
-	rows << button('remote_check', '检查', 339, y, 65, false, connected && !app.remote_snapshot.busy)
+	rows << button('remote_open', if connected { '打开 Admin UI' } else { '连接并打开 Admin UI' }, 0, y, 175, true, (connected || app.remote_control_path() != '') && !app.remote_snapshot.busy && !app.server_busy)
+	rows << button('remote_restart', '重启并检查生效', 0, y + 49, 170, false, connected && !app.remote_snapshot.busy && instance.manual_restart)
+	rows << button('remote_check', '检查', 182, y + 49, 65, false, connected && !app.remote_snapshot.busy)
 	rows << button('remote_disconnect', '断开', width - 70, y, 70, false, active)
-	y += 49
+	y += 98
 	rows << label('remote_restart_hint', if connected && !instance.manual_restart {
 		'此实例未启用手工重启；远端需使用 --manual-restart 启动。'
 	} else {
@@ -336,13 +333,50 @@ fn remote_instance_summary(app &Workshop, width f64, y f64) []ui2.Element {
 	mut rows := [label('remote_connected_name', app.remote_name, 0, y, width, 22, workbench_ink),
 		label('remote_connected_host', app.remote_host + ' · Admin ' + app.remote_admin_port, 0, y + 37, width, 12, workbench_muted),
 		label('remote_version', 'vhttpd ' + state.instance.version + ' · ' + state.instance.platform, 0, y + 70, width, 13, workbench_ink),
-		state_notice('remote_state_summary', if state.restarting { '正在重启并检查生效' } else if state.config_status.pending { '配置待重启生效' } else if state.instance.ready { '已连接 · 业务就绪' } else { '已连接 · 等待就绪' }, state.message, ui2.rect(0, y + 112, width, 100), if state.config_status.pending { 'warning' } else { 'good' }),
-		button('remote_open', '打开 Admin UI ↗', 0, y + 234, 180, true, !state.busy),
-		button('remote_restart', '重启并检查生效', 192, y + 234, 175, false, !state.busy && state.instance.manual_restart),
+		state_notice('remote_state_summary', if state.restarting { '正在重启并检查生效' } else if state.instance.startup_failed() { '重启失败 · 需修复配置' } else if !state.instance.ready { '业务尚未就绪' } else if state.config_status.pending { '配置待重启生效' } else { '已连接 · 业务就绪' }, if app.remote_message != '' { app.remote_message } else { state.message }, ui2.rect(0, y + 112, width, 100), if state.restarting { 'info' } else if state.instance.startup_failed() { 'danger' } else if state.config_status.pending || !state.instance.ready { 'warning' } else { 'good' }),
+		button('remote_open', if state.instance.startup_failed() { '打开 Admin UI 修复配置' } else { '打开远端 Admin UI ↗' }, 0, y + 234, 180, true, !state.busy),
+		button('remote_restart', if state.instance.startup_failed() { '修复后重试重启' } else { '重启并检查生效' }, 192, y + 234, 175, false, !state.busy && state.instance.manual_restart),
 		button('remote_check', '检查生效', 0, y + 283, 110, false, !state.busy),
 		button('remote_edit', '编辑连接…', 122, y + 283, 125, false, !state.busy),
 		button('remote_disconnect', '断开', width - 75, y + 283, 75, false, true),
 		ui2.label('remote_config_source', state.instance.config_path, ui2.rect(0, y + 341, width, 52), ui2.TextStyle{size: 11, color: workbench_muted, lines: 3}),
-		label('remote_restart_hint', '配置在 Admin UI 编辑；发布后回到这里重启和检查生效。', 0, y + 408, width, 11, workbench_muted)]
+		label('remote_restart_hint', '配置在 Admin UI 编辑；发布后回到这里重启和检查生效。', 0, y + 408, width, 11, workbench_muted),
+		remote_access_notice(app, width, y + 445)]
 	return rows
+}
+
+fn remote_access_notice(app &Workshop, width f64, y f64) ui2.Element {
+	bg, ink := state_colors('info')
+	height := if width < 420 { 188.0 } else { 152.0 }
+	url := if app.remote_snapshot.admin_url == '' { '由工作台分配本机入口' } else { app.remote_snapshot.admin_url }
+	detail := '目标：' + app.remote_host + ' 的 127.0.0.1:' + app.remote_admin_port + '\n浏览器入口：' + url + '\n本机地址仅是 SSH 代理入口，配置修改仍发生在远端实例。'
+	return ui2.view('remote_access', ui2.rect(0, y, width, height), ui2.BoxStyle{bg: bg, radius: 8, border_color: ink, border_left: 3}, [
+		ui2.label('remote_access_title', '通过 SSH 隧道访问远端 Admin', ui2.rect(16, 11, width - 32, 24), ui2.TextStyle{size: 13, bold: true, color: ink}),
+		ui2.label('remote_access_detail', detail, ui2.rect(16, 39, width - 32, height - 48), ui2.TextStyle{size: 12, color: workbench_muted, lines: 8}),
+	])
+}
+
+// Reuse one authenticated server session for discovery and all project tunnels.
+// A stale cached token is replaced before connecting to the Admin API.
+fn (mut app Workshop) connect_remote_project(profile host.RemoteProfile) {
+	if profile.server_id != '' && app.remote_control_path() == '' {
+		for server in app.remote_servers {
+			if server.id != profile.server_id { continue }
+			next := app.server_sequence + 1
+			command := host.ServerCommand{sequence: next, action: .connect, server: server, password: app.remote_password}
+			select {
+				app.server_worker.commands <- command {
+					app.server_sequence = next
+					app.server_busy = true
+					app.remote_pending_connect = profile.id
+					app.remote_snapshot = host.RemoteSnapshot{profile_id: profile.id, busy: true, message: '正在通过 SSH 同步远端项目…'}
+					app.remote_password = ''
+					app.remote_message = '正在连接服务器并同步远端项目，再连接 Admin UI…'
+				}
+				else { app.remote_message = '服务器操作正在处理，请稍候。' }
+			}
+			return
+		}
+	}
+	app.send_remote(.connect)
 }

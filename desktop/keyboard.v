@@ -69,6 +69,16 @@ fn workbench_key(key string) {
 // NSTextField handles Escape itself unless it is consumed before the field
 // editor. Tab keeps using ui2's text-command hook; editing keys remain native.
 fn workbench_physical_key(event ui2.KeyEvent) {
+	mut app := unsafe { workshop }
+	if app.environment_menu.open {
+		if step := ui2.dropdown_menu_key(app.environment_menu_items(), app.environment_menu, event) {
+			if step.chosen { app.reload_remote_profiles() }
+			app.apply_environment_menu(step)
+			ui2.consume_key()
+			ui2.refresh()
+		}
+		return
+	}
 	if event.code == .escape {
 		workbench_key('escape')
 		ui2.consume_key()
