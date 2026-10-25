@@ -14,6 +14,7 @@ pub struct RemoteProfile {
 pub:
 	id            string
 	server_id     string
+	config_path   string
 	name          string
 	ssh_host      string
 	ssh_user      string
@@ -125,8 +126,28 @@ pub:
 	error              string
 }
 
+// A failed operation must outrank a matching configuration manifest: loading
+// every include is not the same as successfully starting the business runtime.
+pub fn (instance RemoteInstance) startup_failed() bool {
+	return instance.operation.state == 'failed' && (!instance.ready || instance.operation.error == 'executor_warmup_failed')
+}
+
+fn remote_restart_failure_is_current(instance RemoteInstance, restarting bool, expected_boot string) bool {
+	// During a retry, a response from the previous failed boot is not the result
+	// of the new restart operation. Keep reconciling until a new boot responds.
+	return instance.startup_failed() && (!restarting || instance.boot_id != expected_boot)
+}
+
+fn remote_failed_startup_snapshot(profile_id string, instance RemoteInstance, status ConfigStatus) RemoteSnapshot {
+	reason := if instance.operation.error == 'executor_warmup_failed' { '执行器初始化失败' } else { '业务进程启动失败' }
+	return RemoteSnapshot{profile_id: profile_id, connected: true, instance: instance,
+		config_status: ConfigStatus{...status, state: .pending, pending: true, message: '业务启动失败，尚未确认整个项目生效。'},
+		message: '远端重启失败：' + reason + '。请打开 Admin UI 修复配置、重新校验并发布，再点击“修复后重试重启”。不会自动重复重启。'}
+}
+
 pub struct RemoteSnapshot {
 pub:
+	admin_url string
 	sequence      u64
 	profile_id    string
 	connected     bool
@@ -174,6 +195,15 @@ pub fn new_remote_worker() RemoteWorker {
 	return worker
 }
 
+// A browser endpoint is bound to one exact profile for this Desktop session.
+// Inactive endpoints return 410 rather than silently forwarding old tabs to
+// another project. Reconnecting the same profile resets its browser login.
+struct RemoteBrowserEndpoint {
+	profile RemoteProfile
+	server &http.Server
+	proxy &RemoteProxy
+}
+
 @[heap]
 struct RemoteManager {
 mut:
@@ -192,6 +222,7 @@ mut:
 	ssh_diagnostics string
 	control_path string
 	mux_forward string
+	browser_endpoints []RemoteBrowserEndpoint
 }
 
 fn (mut m RemoteManager) disconnect() {
@@ -288,11 +319,16 @@ fn (mut m RemoteManager) connect_with_session(profile RemoteProfile, password st
 		ssh.run()
 		m.ssh = ssh
 	}
-	if isnil(m.server) {
+	mut existing_endpoint := false
+	for endpoint in m.browser_endpoints {
+		if endpoint.profile == profile { m.server = endpoint.server; m.proxy = endpoint.proxy; existing_endpoint = true; break }
+	}
+	if !existing_endpoint {
 		mut listener := net.listen_tcp(.ip, '127.0.0.1:0')!
 		origin := 'http://127.0.0.1:${listener.addr()!.port()!}'
 		m.proxy = &RemoteProxy{ origin: origin, target: 'http://127.0.0.1:${port}', token: profile.token }
 		m.server = &http.Server{ listener: listener, handler: m.proxy, show_startup_message: false, accept_timeout: 100 * time.millisecond, read_timeout: 20 * time.second, worker_num: 4 }
+		m.browser_endpoints << RemoteBrowserEndpoint{profile: profile, server: m.server, proxy: m.proxy}
 		spawn m.server.listen_and_serve()
 	} else {
 		m.proxy.mu.@lock()
@@ -431,12 +467,15 @@ fn (mut m RemoteManager) tick() {
 		m.snapshot = RemoteSnapshot{ ...m.snapshot, connected: false, busy: false, restarting: false, message: '远端未提供项目配置来源，请使用 --config、VHTTPD_CONFIG 或 TOML 位置参数启动。' }
 		return
 	}
-	status := check_config_status(m.proxy.target + '/admin/ui/', m.profile.token, instance.config_path)
+	mut status := check_config_status(m.proxy.target + '/admin/ui/', m.profile.token, instance.config_path)
+	if !instance.ready && status.state == .effective {
+		status = ConfigStatus{...status, state: .pending, pending: true, message: '业务尚未就绪，尚未确认整个项目生效。'}
+	}
+	if remote_restart_failure_is_current(instance, m.snapshot.restarting, m.expected_boot) {
+		m.snapshot = remote_failed_startup_snapshot(m.profile.id, instance, status)
+		return
+	}
 	if m.snapshot.restarting {
-		if instance.boot_id != m.expected_boot && instance.operation.state == 'failed' {
-			m.snapshot = RemoteSnapshot{ profile_id: m.profile.id, connected: true, instance: instance, config_status: status, message: '重启后的执行器初始化失败，请在 Admin UI 修复配置后重试，并检查远端运行日志。' }
-			return
-		}
 		if instance.boot_id != m.expected_boot && instance.ready && instance.effective_revision == m.expected_revision && instance.disk_revision == m.expected_revision && status.state == .effective {
 			m.snapshot = RemoteSnapshot{ profile_id: m.profile.id, connected: true, instance: instance, config_status: status, message: '远端已重启，整个项目配置已生效。' }
 		} else if time.ticks() > m.deadline {
@@ -494,7 +533,7 @@ fn remote_supervise(worker RemoteWorker) {
 					.check { manager.next_probe = 0 }
 					.shutdown {
 						manager.disconnect()
-						if !isnil(manager.server) { manager.server.stop() }
+						for endpoint in manager.browser_endpoints { mut server := endpoint.server; server.stop() }
 						worker.done <- true
 						return
 					}
@@ -505,7 +544,7 @@ fn remote_supervise(worker RemoteWorker) {
 		}
 		manager.tick()
 		select {
-			worker.snapshots <- RemoteSnapshot{ ...manager.snapshot, sequence: sequence } {
+			worker.snapshots <- RemoteSnapshot{ ...manager.snapshot, sequence: sequence, admin_url: if manager.snapshot.connected && !isnil(manager.proxy) { manager.proxy.origin + '/admin/ui/' } else { '' } } {
 			}
 			else {
 			}

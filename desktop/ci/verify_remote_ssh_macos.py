@@ -153,7 +153,8 @@ LogLevel VERBOSE
             with urllib.request.urlopen(f"http://127.0.0.1:{web}/", timeout=5) as response:
                 assert response.read() == b"after"
             if password_auth:
-                assert password_server.auth_attempts == 4, 'Unexpected authentication before trust or after key change'
+                # Initial login, reconnect, two instance-origin checks, wrong Admin token, wrong password.
+                assert password_server.auth_attempts == 6, f'Unexpected authentication before trust or after key change: {password_server.auth_attempts}'
                 print('PASS no password authentication before host trust or after changed-key rejection')
             print("PASS actual business response after browser publication + SSH restart")
     finally:
