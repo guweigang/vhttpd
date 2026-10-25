@@ -2,3 +2,7 @@
 bin/
 examples/*/runtime.pid
 examples/*/events.ndjson
+
+# Local compiler output and generated acceptance reports
+/build
+/ci/results/
