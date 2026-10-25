@@ -426,6 +426,11 @@ pub fn default_vhttpd_config() VhttpdConfig {
 	return VhttpdConfig{}
 }
 
+// Resolve configuration identity consistently for runtime management as well as startup.
+pub fn source_config_path(args []string) string {
+	return config_path_from_args(args)
+}
+
 fn config_path_from_args(args []string) string {
 	mut config_path := CliArgs.string_or(args, '--config', '')
 	if config_path == '' {

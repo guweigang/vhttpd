@@ -148,6 +148,7 @@ fn active_runtime_is_shutting_down() bool {
 	}
 }
 
+@[markused]
 fn active_runtime_config_snapshot() []server_lifecycle.ServerRuntimeConfig {
 	unsafe {
 		return g_active_runtime_registry.config_snapshot()
@@ -250,6 +251,7 @@ fn print_vhttpd_help() {
 	println('Common options:')
 	println('  --help, -h')
 	println('  --version, -v')
+	println('  --manual-restart   Enable authenticated manual-process restart')
 	println('  --config <path>              TOML config file')
 	println('  --host <host>                Data plane host')
 	println('  --port <port>                Data plane port')
@@ -407,7 +409,11 @@ fn configure_runtime_timezone(config_tz string) {
 fn main() {
 	// Configuration errors precede timezone setup; honor explicit JSON output there too.
 	if logging.RuntimeLogger.json_enabled() { logging.RuntimeLogger.configure() }
-	args := os.args[1..]
+	if os.args.len == 3 && os.args[1] == '--workbench-restart-helper' {
+		run_manual_restart_helper(os.args[2]) or { eprintln('restart_helper_failed'); exit(1) }; return
+	}
+	manual_restart := '--manual-restart' in os.args
+	args := os.args[1..].filter(it != '--manual-restart')
 	if has_flag(args, ['--help', '-h']) {
 		print_vhttpd_help()
 		return
@@ -421,6 +427,7 @@ fn main() {
 		eprintln('run `vhttpd --help` for usage.')
 		exit(2)
 	}
+	remote_control_initialize(args, manual_restart) or { eprintln('workbench_metadata_unavailable') }
 	run_server(args) or { exit(1) }
 }
 

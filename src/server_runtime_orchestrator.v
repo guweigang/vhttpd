@@ -87,6 +87,10 @@ fn (mut lifecycle ProcessLifecycle) start(mut app App, runtime_cfg server_lifecy
 		runtime_cfg.admin_host, runtime_cfg.admin_port, runtime_cfg.admin_token)
 	log.debug('[vhttpd] start_server_runtime: starting upstream providers')
 	ProviderStartupRuntime.start_upstreams(mut app)
+	remote_control_note_startup()
+	app.mu.@lock()
+	lifecycle.startup_ready = !app.engines.startup_failed
+	app.mu.unlock()
 	log_runtime_endpoints(app, scheme, runtime_cfg.host, runtime_cfg.port)
 }
 

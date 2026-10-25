@@ -8,6 +8,7 @@ import upstream.transport
 fn (mut runtime EngineRuntime) start(primary_lifecycle executor.LogicExecutorLifecycle, port worker.LifecyclePort, mut facade executor.AppFacade) {
 	runtime.primary.start_backend(primary_lifecycle, port)
 	runtime.primary.logic_executor.warmup(mut facade) or {
+		runtime.startup_failed = true
 		err_msg := executor.InProcVjsxError.normalize_message(err.msg(),
 			'logic_executor_warmup_failed')
 		log.error('[vhttpd] logic executor warmup failed: ${err_msg}')
@@ -17,6 +18,7 @@ fn (mut runtime EngineRuntime) start(primary_lifecycle executor.LogicExecutorLif
 		spec := executor.builtin_executor_spec_find(kind) or { continue }
 		state.start_backend(spec.lifecycle, port)
 		state.logic_executor.warmup(mut facade) or {
+			runtime.startup_failed = true
 			log.error('[vhttpd] additional logic executor warmup failed pool=${name} kind=${kind}: ${err.msg()}')
 		}
 	}

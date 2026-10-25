@@ -44,6 +44,7 @@ mut:
 
 struct ProcessLifecycle {
 mut:
+	startup_ready bool
 	shutdown                 &process_runtime.ShutdownOwner = &process_runtime.ShutdownOwner{}
 	http_admission_installed bool
 	http                     &http_runtime.Owner   = &http_runtime.Owner{}
