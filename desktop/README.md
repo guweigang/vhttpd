@@ -105,7 +105,7 @@ ui2 固定到 [ui2.commit](./ui2.commit) 中的版本。已有依赖 checkout �
 
 1. 点击“添加服务器”，选择密码或密钥，保存并连接；首次连接核对工作台展示的指纹。
 2. 点击“管理此服务器运行环境”，或在“管理运行环境”选择本机 Mac / 已登记服务器。连接成功后显示远端 Linux 架构、实际运行版本和安装目录。
-3. 尚未安装时，可下载官方 Release 完整包；没有正式 Release 或该架构附件时，可选择官方 GitHub CI 的 `vhttpd-linux-amd64.tar.gz` / `vhttpd-linux-arm64.tar.gz`，同名 `.sha256` 放在旁边。CI Artifact 外层 zip 需先解压。安装前在本机校验 SHA256、归档路径和文件类型，上传后再次校验；运行程序实际可执行且 Admin UI 完整才提交安装。运行包由[CI 构建](../.github/workflows/vhttpd-binaries.yml)，不上传开发机构建包。
+3. 尚未安装时，点击“下载并安装官方包”，选择公开的稳定版、开发版或指定版本；尚无公开版本时，也可选择已下载的官方 GitHub CI 的 `vhttpd-linux-amd64.tar.gz` / `vhttpd-linux-arm64.tar.gz`，同名 `.sha256` 放在旁边。CI Artifact 外层 zip 需先解压。安装前在本机校验 SHA256、归档路径和文件类型，上传后再次校验；运行程序实际可执行且 Admin UI 完整才提交安装。运行包由[CI 构建](../.github/workflows/vhttpd-binaries.yml)，不上传开发机构建包。
 4. 安装位置固定为 SSH 用户的 `~/.local/share/vhttpd-workbench/runtime`；使用用户权限，无需 sudo、V、Node、Python 或编译工具。远端需有 OpenSSH/scp、POSIX shell、tar、base64、sha256sum 等基础系统工具，并兼容构建包的 Linux/glibc；架构正确不代表任意发行版都兼容。第一版不覆盖升级已安装运行包。
 5. 选择内置 vjsx 模板、实例名称和不同的业务/Admin 端口，点击“创建、启动并打开 Admin UI”。项目位于同一目录下的 `instances/<名称>`；自动生成并保存 Admin Token，使用 `--manual-restart` 脱离 SSH 启动，再通过 SSH 回环转发自动登录和检查整个项目的生效状态。初始业务与 Admin 均只监听远端 127.0.0.1，不自动对公网开放。失败时保留项目与私有实例记录；排除端口占用后用原名称和端口重试，不覆盖配置。
 
