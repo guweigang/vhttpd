@@ -105,9 +105,9 @@ ui2 固定到 [ui2.commit](./ui2.commit) 中的版本。已有依赖 checkout �
 
 1. 点击“添加服务器”，选择密码或密钥，保存并连接；首次连接核对工作台展示的指纹。
 2. 点击“管理此服务器运行环境”，或在“管理运行环境”选择本机 Mac / 已登记服务器。连接成功后显示远端 Linux 架构、实际运行版本和安装目录。
-3. 尚未安装时，点击“下载并安装官方包”，选择公开的稳定版、开发版或指定版本；尚无公开版本时，也可选择已下载的官方 GitHub CI 的 `vhttpd-linux-amd64.tar.gz` / `vhttpd-linux-arm64.tar.gz`，同名 `.sha256` 放在旁边。CI Artifact 外层 zip 需先解压。安装前在本机校验 SHA256、归档路径和文件类型，上传后再次校验；运行程序实际可执行且 Admin UI 完整才提交安装。运行包由[CI 构建](../.github/workflows/vhttpd-binaries.yml)，不上传开发机构建包。
-4. 安装位置固定为 SSH 用户的 `~/.local/share/vhttpd-workbench/runtime`；使用用户权限，无需 sudo、V、Node、Python 或编译工具。远端需有 OpenSSH/scp、POSIX shell、tar、base64、sha256sum 等基础系统工具，并兼容构建包的 Linux/glibc；架构正确不代表任意发行版都兼容。第一版不覆盖升级已安装运行包。
-5. 选择内置 vjsx 模板、实例名称和不同的业务/Admin 端口，点击“创建、启动并打开 Admin UI”。项目位于同一目录下的 `instances/<名称>`；自动生成并保存 Admin Token，使用 `--manual-restart` 脱离 SSH 启动，再通过 SSH 回环转发自动登录和检查整个项目的生效状态。初始业务与 Admin 均只监听远端 127.0.0.1，不自动对公网开放。失败时保留项目与私有实例记录；排除端口占用后用原名称和端口重试，不覆盖配置。
+3. 点击“下载并安装官方包”，选择公开的稳定版、开发版或指定版本；尚无公开版本时，也可选择已下载的官方 GitHub CI 的 `vhttpd-linux-amd64.tar.gz` / `vhttpd-linux-arm64.tar.gz`，同名 `.sha256` 放在旁边。CI Artifact 外层 zip 需先解压。安装前在本机校验 SHA256、归档路径和文件类型，上传后再次校验；运行程序实际可执行且 Admin UI 完整才提交安装。运行包由[CI 构建](../.github/workflows/vhttpd-binaries.yml)，不上传开发机构建包。
+4. 新运行包按归档 SHA256 独立保存在 SSH 用户的 `~/.local/share/vhttpd-workbench/runtimes/sha256-<校验值>`，同一个包重复安装复用已有目录。原有 `runtime` 目录继续保留，已有进程及重启路径不变。运行环境列出已安装版本与绑定实例，下载安装不会切换或重启任何实例。使用用户权限，无需 sudo、V、Node、Python 或编译工具；远端需有 OpenSSH/scp、POSIX shell、tar、base64、sha256sum 等基础工具，并兼容构建包的 Linux/glibc。当前阶段支持多版本安装和新实例绑定，已有实例的停机升级与回退另行接入。
+5. 在已安装运行包列表选择新实例使用的版本，再选择内置 vjsx 模板、实例名称和不同的业务/Admin 端口，点击“创建、启动并打开 Admin UI”。项目位于同一目录下的 `instances/<名称>`；自动生成并保存 Admin Token，使用 `--manual-restart` 脱离 SSH 启动，再通过 SSH 回环转发自动登录和检查整个项目的生效状态。初始业务与 Admin 均只监听远端 127.0.0.1，不自动对公网开放。失败时保留项目与私有实例记录；排除端口占用后用原名称和端口重试，不覆盖配置。
 
 服务器连接复用本次已认证的 SSH 会话；断开或退出 Desktop 会释放本机转发，远端实例继续运行。重新打开后可先连接服务器，再从“已运行实例”选中实例，复用服务器会话打开 Admin UI。当前同时连接一台服务器和一个实例；Windows/Linux Desktop、systemd、Docker/Compose、远端升级适配不在本次范围。
 
@@ -191,7 +191,7 @@ Mac 下载采用[tag 发布流程](../.github/workflows/workbench-macos-runtime.
 
 新增的 `workflow_run` 工作流需要先进入仓库默认分支，之后主分支源码变更会自动构建并发布。它使用发布任务自带的 `GITHUB_TOKEN`（contents: write、actions: read），不需要新增用户下载凭据。公开附件包含 Mac 完整包、安装说明、验收记录、Linux 两种架构包与校验文件，以及 `runtime-release.json` 来源记录和总 SHA256SUMS。普通用户在 Desktop 中选择或指定公开版本即可；首次新 CI 发布前没有版本时，界面保持空状态并保留本地包入口。
 
-远端 Linux 同样使用[公开版本目录](./host/runtime_catalog.v)，按连接服务器的架构筛选并执行上传前后校验；第一版远端仍不覆盖升级已安装运行包。Mac unsigned/Gatekeeper 边界沿用前述安装说明，不将 CI 运行验收等同于系统下载放行。
+远端 Linux 同样使用[公开版本目录](./host/runtime_catalog.v)，按连接服务器的架构筛选并执行上传前后校验；远端支持多版本并存及新实例版本绑定，下载安装不影响已有实例；已有实例停机升级与回退尚未接入。Mac unsigned/Gatekeeper 边界沿用前述安装说明，不将 CI 运行验收等同于系统下载放行。
 
 ## 升级、移除与数据位置
 
