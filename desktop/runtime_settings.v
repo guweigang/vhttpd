@@ -130,56 +130,19 @@ fn (mut app Workshop) handle_runtime_event(event string) bool {
 	return false
 }
 
-fn runtime_settings_view(app &Workshop, width f64) []ui2.Element {
-	can_switch := !app.runtime_busy && app.snapshot.pid == 0 && app.snapshot.phase !in [
-		.starting,
-		.stopping,
-	]
-	version := if app.runtime_info.ready {
-		'vhttpd ' + app.runtime_info.version
-	} else if app.runtime_checked {
-		'运行包不可用'
-	} else {
-		'正在识别版本…'
-	}
-	mut rows := [
-		label('runtime_title', 'vhttpd 运行环境', 0, 30, width, 25, workbench_ink),
-		label('runtime_intro', '使用 App 内置运行包，或下载官方完整包；无需 V、Node、Homebrew 或编译工具。', 0, 76, width, 12, workbench_muted),
-		button('runtime_close', '返回工作台', 0, 112, 112, false, true),
-		label('runtime_version', version, 0, 177, width, 22, workbench_ink),
-		label('runtime_source', '来源：' + app.runtime_info.source, 0, 219, width, 13, workbench_muted),
-		label('runtime_path', app.binary, 0, 253, width, 11, workbench_muted),
-		button('runtime_download', if app.runtime_busy {
-			'正在处理…'
-		} else {
-			'下载安装官方运行包'
-		}, 0, 311, 210, true, can_switch),
-		button('binary', '选择本地 vhttpd…', 223, 311, 160, false, can_switch),
-		button('runtime_refresh', '刷新版本', 0, 363, 108, false, !app.runtime_busy),
-		button('runtime_bundled', '使用 App 内置版本', 121, 363, 170, false, can_switch),
-		label('runtime_release_hint', '下载来自 guweigang/vhttpd 的最新正式 Release，自动校验 SHA256、架构与动态库。', 0, 424, width, 11, workbench_muted),
-		label('runtime_keep_hint', '仅在项目停止时切换；下载失败或取消不会替换当前运行包。', 0, 451, width, 11, workbench_muted),
-		state_notice('runtime_notice', if app.runtime_busy {
-			'正在准备运行环境'
-		} else if app.runtime_error {
-			'运行环境未就绪'
-		} else if app.runtime_info.ready {
-			'运行环境已就绪'
-		} else {
-			'准备运行包'
-		}, app.runtime_message, ui2.rect(0, 501, width, 118), if app.runtime_error {
-			'warning'
-		} else if app.runtime_info.ready && !app.runtime_busy {
-			'good'
-		} else {
-			'info'
-		}),
-	]
-	if app.runtime_busy {
-		rows << button('runtime_cancel', '取消操作', 0, 639, 110, false, true)
-	}
-	if app.runtime_resume_start {
-		rows << label('runtime_resume', '项目已保留。运行包安装成功后，将自动启动并打开 Admin UI。', 0, 690, width, 12, workbench_ink)
-	}
+fn runtime_local_view(app &Workshop, width f64) []ui2.Element {
+	can_switch := !app.runtime_busy && app.snapshot.pid == 0 && app.snapshot.phase !in [.starting, .stopping]
+	mut rows := [label('runtime_title', '本机 Mac', 0, 0, width, 20, workbench_ink),
+		label('runtime_version', if app.runtime_info.ready { 'vhttpd ' + app.runtime_info.version } else if app.runtime_checked { '运行包不可用' } else { '正在识别版本…' }, 0, 36, width, 16, workbench_ink),
+		label('runtime_source', '来源：' + app.runtime_info.source, 0, 68, width, 12, workbench_muted),
+		ui2.label('runtime_path', app.binary, ui2.rect(0, 94, width, 52), ui2.TextStyle{size: 11, color: workbench_muted, lines: 3}),
+		state_notice('runtime_notice', if app.runtime_busy { '正在准备运行环境' } else if app.runtime_error { '运行环境未就绪' } else if app.runtime_info.ready { '运行环境已就绪' } else { '准备运行包' }, app.runtime_message, ui2.rect(0, 158, width, 96), if app.runtime_error { 'warning' } else if app.runtime_info.ready && !app.runtime_busy { 'good' } else { 'info' }),
+		button('runtime_download', if app.runtime_busy { '正在处理…' } else { '下载官方运行包' }, 0, 276, width, !app.runtime_info.ready, can_switch),
+		button('binary', '选择本地 vhttpd…', 0, 322, width, false, can_switch),
+		button('runtime_refresh', '刷新版本', 0, 378, (width - 12) / 2, false, !app.runtime_busy),
+		button('runtime_bundled', '使用内置版本', (width + 12) / 2, 378, (width - 12) / 2, false, can_switch),
+		ui2.label('runtime_release_hint', '官方完整包包含运行程序与依赖，无需安装开发环境。仅在本机项目停止时切换。', ui2.rect(0, 432, width, 54), ui2.TextStyle{size: 11, color: workbench_muted, lines: 3})]
+	if app.runtime_busy { rows << button('runtime_cancel', '取消操作', 0, 500, 110, false, true) }
+	if app.runtime_resume_start { rows << ui2.label('runtime_resume', '项目已保留。运行包就绪后自动继续启动。', ui2.rect(0, 550, width, 48), ui2.TextStyle{size: 12, color: workbench_ink, lines: 2}) }
 	return rows
 }

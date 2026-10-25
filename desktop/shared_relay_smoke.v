@@ -17,7 +17,7 @@ fn shared_smoke_port() !int {
 fn shared_smoke_call(base string, token string, path string, method http.Method, body string) !http.Response {
 	mut request := http.Request{ url: base + path, method: method, data: body, read_timeout: 4 * time.second, write_timeout: 4 * time.second, allow_redirect: false }
 	request.add_custom_header('x-vhttpd-admin-token', token)!
-	request.add_custom_header('content-type', 'application/json')!
+	if body != '' { request.add_custom_header('content-type', 'application/json')! }
 	return request.do()!
 }
 

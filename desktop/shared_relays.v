@@ -134,49 +134,43 @@ fn test_shared_connection(r host.SharedRelay, results chan host.RelayProbeResult
 }
 
 fn shared_relays_view(app &Workshop, width f64) []ui2.Element {
-	mut rows := [
-		label('shared_title', '远端 Relay 连接库', 0, 30, width, 25, workbench_ink),
-		label('shared_intro', '跨项目复用连接；测试结果与项目实际连接状态分别显示。', 0, 76, width, 12, workbench_muted),
-		button('shared_close', '返回工作台', 0, 108, 112, false, true),
-		button('shared_new', '新建连接', 125, 108, 108, true, !app.shared_testing),
-	]
+	list_width := if width >= 620 { 174.0 } else { 144.0 }
+	x := list_width + 24
+	mut selector := [button('shared_new', '+ 新建连接', 10, 10, list_width - 20, false, !app.shared_testing)]
 	mut connections := []ui2.Element{}
-	for i, r in app.shared_relays {
-		connections << sidebar_button('shared_pick_' + r.id, r.name + ' · ' + r.url, ui2.rect(0, f64(i * 42), width - 12, 36), false, app.shared_id == r.id, !app.shared_testing, .left)
+	for i, relay in app.shared_relays {
+		connections << sidebar_button('shared_pick_' + relay.id, relay.name, ui2.rect(0, f64(i * 42), list_width - 20, 36), false, app.shared_id == relay.id, !app.shared_testing, .left)
 	}
-	if connections.len == 0 {
-		connections << label('shared_empty', '还没有共享连接。点击“新建连接”，填写远端 Hub 的 WebSocket 地址。', 0, 0, width - 12, 12, workbench_muted)
+	selector << ui2.scroll('shared_list', ui2.rect(10, 58, list_width - 20, 340), workbench_sidebar, connections)
+	body := shared_relay_detail(app, width - x)
+	return [label('shared_title', '共享 Relay', 0, 26, width - 120, 24, workbench_ink),
+		label('shared_intro', '维护跨项目复用的连接；项目绑定与配置发布在 Admin UI 完成。', 0, 62, width, 12, workbench_muted),
+		button('shared_close', '返回项目', width - 100, 26, 100, false, true),
+		ui2.view('shared_selector', ui2.rect(0, 106, list_width, 414), ui2.BoxStyle{bg: workbench_sidebar, radius: 8}, selector),
+		ui2.view('shared_detail', ui2.rect(x, 106, width - x, elements_height(body)), ui2.BoxStyle{transparent: true}, body)]
+}
+
+fn shared_relay_detail(app &Workshop, width f64) []ui2.Element {
+	if app.shared_id == '' {
+		return [label('shared_empty', '先创建一个共享连接', 0, 18, width, 20, workbench_ink),
+			ui2.label('shared_empty_help', '填写远端 Hub 地址，测试通过后供项目选择使用。连接测试与项目运行状态分别显示。', ui2.rect(0, 60, width, 90), ui2.TextStyle{size: 13, color: workbench_muted, lines: 4})]
 	}
-	rows << ui2.scroll('shared_list', ui2.rect(0, 158, width, 135), workbench_sidebar, connections)
-	if app.shared_id != '' {
-		rows << label('shared_name_label', '连接名称', 0, 312, width, 12, workbench_ink)
-		rows << input('shared_name', app.shared_name, '例如：开发环境 Hub', 0, 337, width, !app.shared_testing)
-		rows << label('shared_url_label', 'Hub 地址（ws:// 或 wss://）', 0, 390, width, 12, workbench_ink)
-		rows << input('shared_url', app.shared_url, 'wss://example.com/vhttpd/relay', 0, 415, width, !app.shared_testing)
-		rows << label('shared_remote_label', '远端 Relay ID（与 Hub 配置一致）', 0, 468, width, 12, workbench_ink)
-		rows << input('shared_remote_id', app.shared_remote_id, 'hub', 0, 493, width, !app.shared_testing)
-		rows << label('shared_token_label', 'Token（不放入 URL）', 0, 546, width, 12, workbench_ink)
-		rows << ui2.Element{ ...input('shared_token', app.shared_token, '远端认证 Token，可留空', 0, 571, width, !app.shared_testing), secure: true }
-		rows << button('shared_save', '保存连接', 0, 629, 100, true, !app.shared_testing)
-		rows << button('shared_test', if app.shared_testing {
-			'测试中…'
-		} else {
-			'测试连接'
-		}, 112, 629, 100, false, !app.shared_testing)
-		rows << button('shared_delete', '删除', 224, 629, 75, false, !app.shared_testing && app.shared_saved())
-		project := if app.projects.len > 0 {
-			app.projects[app.selected].name
-		} else {
-			'请先创建或选择项目'
-		}
-		rows << label('shared_project_label', '选入项目：' + project, 0, 688, width, 13, workbench_ink)
-		rows << button('shared_use', '在项目中使用 ↗', 0, 720, 180, true, !app.shared_testing && app.shared_saved() && app.projects.len > 0 && app.snapshot.phase == .running)
-		rows << label('shared_use_hint', '先保存连接并启动项目。仅生成草稿；来源、Pipeline 绑定与发布在 Admin UI 完成。', 0, 766, width, 11, workbench_muted)
-	}
-	rows << state_notice('shared_notice', if app.shared_testing {
-		'正在测试'
-	} else {
-		'连接库'
-	}, app.shared_message, ui2.rect(0, if app.shared_id != '' { 811.0 } else { 330.0 }, width, 100), 'info')
+	mut rows := [label('shared_detail_title', '连接设置', 0, 0, width, 20, workbench_ink),
+		label('shared_name_label', '显示名称', 0, 44, width, 11, workbench_muted),
+		input('shared_name', app.shared_name, '例如：开发环境 Hub', 0, 65, width, !app.shared_testing),
+		label('shared_url_label', 'Hub 地址（ws:// 或 wss://）', 0, 118, width, 11, workbench_muted),
+		input('shared_url', app.shared_url, 'wss://example.com/vhttpd/relay', 0, 139, width, !app.shared_testing),
+		label('shared_remote_label', '远端 Relay ID', 0, 192, width, 11, workbench_muted),
+		input('shared_remote_id', app.shared_remote_id, '与 Hub 配置保持一致', 0, 213, width, !app.shared_testing),
+		label('shared_token_label', '认证 Token（可选）', 0, 266, width, 11, workbench_muted),
+		ui2.Element{...input('shared_token', app.shared_token, '不放入 URL', 0, 287, width, !app.shared_testing), secure: true},
+		button('shared_save', '保存连接', 0, 345, 100, !app.shared_saved(), !app.shared_testing),
+		button('shared_test', if app.shared_testing { '测试中…' } else { '测试连接' }, 112, 345, 100, false, !app.shared_testing),
+		button('shared_delete', '移除…', width - 78, 345, 78, false, !app.shared_testing && app.shared_saved()),
+		state_notice('shared_notice', if app.shared_testing { '正在测试连接' } else { '连接状态' }, if app.shared_message == '' { '保存后测试连接，再选择用于项目。' } else { app.shared_message }, ui2.rect(0, 404, width, 100), 'info')]
+	project := if app.projects.len > 0 { app.projects[app.selected].name } else { '请先创建或选择本地项目' }
+	rows << label('shared_project_label', '用于项目 · ' + project, 0, 528, width, 13, workbench_ink)
+	rows << button('shared_use', '在项目中使用 ↗', 0, 562, width, app.shared_saved(), !app.shared_testing && app.shared_saved() && app.projects.len > 0 && app.snapshot.phase == .running)
+	rows << ui2.label('shared_use_hint', '先保存连接并启动项目。此操作仅生成草稿，仍需在 Admin UI 校验和发布。', ui2.rect(0, 612, width, 56), ui2.TextStyle{size: 11, color: workbench_muted, lines: 3})
 	return rows
 }

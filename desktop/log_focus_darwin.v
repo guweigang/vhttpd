@@ -2,6 +2,14 @@ module main
 
 import macos
 
+#include "@VMODROOT/desktop/workbench_window.h"
+
+fn C.vhttpd_workbench_window_minimum(f64, f64)
+
+fn configure_workbench_window(_handle voidptr) {
+	C.vhttpd_workbench_window_minimum(760, 660)
+}
+
 fn bring_workbench_forward() {
 	app := macos.msg_id(macos.get_class('NSApplication'), 'sharedApplication')
 	mut window := macos.msg_id(app, 'mainWindow')

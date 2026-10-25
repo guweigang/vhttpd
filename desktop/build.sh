@@ -55,7 +55,13 @@ app="$build_dir/vhttpd-workbench.app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp "$root/desktop/assets/vhttpd-macos.icns" "$app/Contents/Resources/vhttpd-macos.icns"
 cp "$root/admin/ui/brand/mark.png" "$app/Contents/Resources/vhttpd-mark.png"
-v -prod -nocache -cc "$build_dir/clang-compatible" -d use_bundled_libgc -w -enable-globals -path "$root/desktop|$root/src|$root/.deps|@vlib|@vmodules" \
+# The Relay probe imports the current relay protocol module and its vjsx types.
+# Compile that dependency using the same pinned QuickJS source as the runtime.
+if [[ -z "${VJS_QUICKJS_PATH:-}" ]]; then
+  vjsx_source="${VJSX_DIR:-$HOME/.vmodules/vjsx}"
+  export VJS_QUICKJS_PATH="$(VJS_QUICKJS_WORK_ROOT="$root" "$vjsx_source/scripts/ensure-quickjs.sh")"
+fi
+v -prod -nocache -cc "$build_dir/clang-compatible" -d build_quickjs -d use_bundled_libgc -w -enable-globals -path "$root/desktop|$root/src|$root/.deps|@vlib|@vmodules" \
   -o "$build_dir/vhttpd-workbench" "$root/desktop"
 # Replace the directory entry atomically; never truncate the executable that
 # a running workbench has mapped into memory.

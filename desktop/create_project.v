@@ -84,10 +84,21 @@ fn (mut app Workshop) poll_creation() {
 }
 
 fn input(id string, value string, placeholder string, x f64, y f64, width f64, enabled bool) ui2.Element {
-	el := ui2.text_field_with_change(id, placeholder, value, ui2.rect(x, y, width, 36),
-		ui2.BoxStyle{ bg: workbench_paper, radius: 6, border_color: workbench_line, border_left: 1, border_right: 1, border_top: 1, border_bottom: 1 },
+	el := ui2.text_field_with_change_and_submit(id, 'form_submit', placeholder, value, ui2.rect(x, y, width, 36),
+		ui2.BoxStyle{ bg: workbench_paper, radius: 6, border_color: if ui2.focused_id() == id { workbench_accent } else { workbench_line }, border_left: 1, border_right: 1, border_top: 1, border_bottom: 1 },
 		ui2.TextStyle{ size: 13, color: workbench_ink }, 0)
-	return ui2.Element{ ...el, enabled: enabled }
+	return ui2.Element{ ...el, enabled: enabled, accessibility_label: match id {
+		'new_name' { '项目名称' }
+		'new_parent' { '项目存放目录' }
+		'server_name', 'remote_name', 'shared_name' { '显示名称' }
+		'server_host', 'remote_host' { 'SSH 主机' }
+		'server_user', 'remote_user' { 'SSH 用户' }
+		'server_port', 'remote_port' { 'SSH 端口' }
+		'server_password', 'remote_password' { 'SSH 登录密码（仅本次会话）' }
+		'remote_token' { 'Admin Token' }
+		'server_admin_port', 'remote_admin_port' { 'Admin 端口' }
+		else { placeholder }
+	} }
 }
 
 fn new_project_view(app &Workshop, x f64, width f64) []ui2.Element {
@@ -128,14 +139,14 @@ fn new_project_view(app &Workshop, x f64, width f64) []ui2.Element {
 	elements << label('new_target', '将创建：${target}', x, 470, width, 11, workbench_muted)
 	check := ui2.checkbox('new_auto_start', '创建后立即启动，并打开浏览器 Admin UI', app.new_auto_start, ui2.rect(x, 500, width, 26), ui2.TextStyle{ size: 13, color: workbench_ink })
 	elements << ui2.Element{ ...check, enabled: !app.creating }
-	elements << button('new_cancel', '取消', x, 662, 78, false, !app.creating)
+	elements << button('new_cancel', '取消', x, if app.new_error != '' || app.creating { 658.0 } else { 584.0 }, 78, false, !app.creating)
 	elements << button('new_submit', if app.creating {
 		'正在创建…'
 	} else if app.new_auto_start {
 		'创建并启动'
 	} else {
 		'创建项目'
-	}, x + width - 136, 662, 136, true, !app.creating)
+	}, x + width - 136, if app.new_error != '' || app.creating { 658.0 } else { 584.0 }, 136, true, !app.creating)
 	message := if app.new_error != '' {
 		app.new_error
 	} else {
@@ -145,12 +156,11 @@ fn new_project_view(app &Workshop, x f64, width f64) []ui2.Element {
 			'项目保存在上方目录。创建时自动选择可用端口，已有目录不会覆盖。'
 		}
 	}
-	elements << state_notice('new_message', if app.new_error != '' {
-		'创建未完成'
-	} else if app.creating {
-		'正在创建项目'
+	if app.new_error != '' || app.creating {
+		elements << state_notice('new_message', if app.new_error != '' { '创建未完成' } else { '正在创建项目' }, message, ui2.rect(x, 541, width, 104), if app.new_error != '' { 'danger' } else { 'info' })
 	} else {
-		'准备好后即可创建'
-	}, message, ui2.rect(x, 541, width, 104), if app.new_error != '' { 'danger' } else { 'info' })
+		elements << label('new_message', '自动选择可用端口；已有目录不会覆盖。', x, 541, width, 12, workbench_muted)
+		elements << label('new_keyboard_help', 'Tab 切换输入 · Return 创建 · Esc 返回', x, 638, width, 11, workbench_muted)
+	}
 	return elements
 }

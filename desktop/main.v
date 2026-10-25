@@ -22,6 +22,38 @@ const workbench_soft_accent = u32(0xeaf1ff)
 @[heap]
 struct Workshop {
 mut:
+	show_servers bool
+	server_sequence u64
+	remote_server_id string
+	remote_auto_open bool
+	remote_edit_connection bool
+	remote_servers []host.RemoteServer
+	server_worker host.ServerWorker
+	server_snapshot host.ServerSnapshot
+	server_busy bool
+	runtime_server_id string
+	server_instance_name string = 'hello-vjsx'
+	server_web_port string = '19881'
+	server_admin_port string = '2018'
+	server_template int
+	server_created_id string
+	remote_sequence u64
+	show_remote bool
+	remote_worker host.RemoteWorker
+	remote_connected_form host.RemoteProfile
+	remote_snapshot host.RemoteSnapshot
+	remote_profiles []host.RemoteProfile
+	remote_id string
+	remote_name string
+	remote_host string
+	remote_user string
+	remote_port string
+	remote_admin_port string
+	remote_identity string
+	remote_auth string = 'key'
+	remote_password string
+	remote_token string
+	remote_message string
 	config_statuses      map[string]host.ConfigStatus
 	projects             []host.Project
 	selected             int
@@ -44,6 +76,7 @@ mut:
 	pending_project      int = -1
 	restart_after        bool
 	worker_started       bool
+	refresh_stop         chan bool = chan bool{cap: 1}
 	quitting             bool
 	sequence             u64
 	history_custom_base  bool
@@ -81,6 +114,10 @@ mut:
 const workshop = &Workshop{}
 
 fn main() {
+	if os.getenv('VHTTPD_SSH_ASKPASS') == '1' {
+		host.run_remote_askpass() or { exit(1) }
+		return
+	}
 	$if !macos {
 		eprintln('此 ui2 宿主原型当前只验证并交付 macOS。')
 		exit(1)
@@ -140,6 +177,10 @@ fn main() {
 		app.shared_message = app.notice
 		[]host.SharedRelay{}
 	}
+	app.remote_profiles = host.load_remote_profiles() or { app.notice = '远端连接记录读取失败，请保留 remote-instances.json 后检查文件。'; []host.RemoteProfile{} }
+	app.remote_worker = host.new_remote_worker()
+	app.remote_servers = host.load_remote_servers() or { app.notice = err.msg(); []host.RemoteServer{} }
+	app.server_worker = host.new_server_worker()
 	app.worker = host.new_worker()
 	app.worker_started = true
 	if app.projects.len > 0 { app.select_current() }
@@ -150,27 +191,20 @@ fn main() {
 			ui2.menu_item('folder', '打开项目目录'), ui2.menu_separator(),
 			ui2.menu_item('quit', '退出工作台')]
 	}])
-	ui2.after(0.5, poll_worker)
+	spawn workbench_refresh_loop(app.refresh_stop, ui2.request_refresh)
+	ui2.on_key(workbench_key)
+	ui2.on_key_event(workbench_physical_key)
+	ui2.on_window_ready(configure_workbench_window)
 	ui2.run_window('vhttpd · 本地工作台', 980, 740, build_window, handle_event)
 	cleanup()
 }
 
-fn default_projects(root string) []host.Project {
-	return [host.Project{
-		name:        'hello-vjsx'
-		config_path: os.join_path(root, 'desktop', 'examples', 'hello-vjsx', 'vhttpd.toml')
-		workdir:     root
-	}, host.Project{
-		name:        'api-playground'
-		config_path: os.join_path(root, 'desktop', 'examples', 'api-playground', 'vhttpd.toml')
-		workdir:     root
-	}]
-}
 
 fn cleanup() {
 	mut app := unsafe { workshop }
 	if !app.worker_started || app.quitting { return }
 	app.quitting = true
+	app.refresh_stop <- true
 	if app.runtime_busy {
 		select {
 			app.runtime_job.cancel <- true {
@@ -185,6 +219,11 @@ fn cleanup() {
 			}
 		}
 	}
+	app.remote_worker.commands <- host.RemoteCommand{action: .shutdown}
+	select { _ := <-app.remote_worker.done {} 5 * time.second {} }
+	select { app.server_worker.job.cancel <- true {} else {} }
+	app.server_worker.commands <- host.ServerCommand{action: .shutdown}
+	select { _ := <-app.server_worker.done {} 5 * time.second {} }
 	app.worker.commands <- host.Command{ action: .shutdown }
 	select {
 		_ := <-app.worker.done {
@@ -198,7 +237,13 @@ fn cleanup() {
 fn poll_worker() {
 	mut app := unsafe { workshop }
 	if app.quitting { return }
+	select { status := <-app.remote_worker.snapshots { if status.sequence >= app.remote_sequence { app.remote_snapshot = status } } else {} }
+	if app.remote_auto_open && app.remote_snapshot.connected && !app.remote_snapshot.busy && app.remote_snapshot.profile_id == app.remote_id {
+		app.remote_auto_open = false
+		app.send_remote(.open_admin)
+	}
 	app.poll_runtime()
+	app.poll_server()
 	app.poll_creation()
 	select {
 		result := <-app.shared_results {
@@ -211,7 +256,6 @@ fn poll_worker() {
 	select {
 		s := <-app.worker.snapshots {
 			if s.sequence < app.sequence {
-				ui2.after(0.5, poll_worker)
 				return
 			}
 			if s.project != '' {
@@ -240,7 +284,17 @@ fn poll_worker() {
 		else {
 		}
 	}
-	ui2.after(0.5, poll_worker)
+}
+
+// The host owns background polling. ui2 only schedules a rebuild on the UI
+// thread; worker results are consumed there, never by this waiting thread.
+fn workbench_refresh_loop(stop chan bool, request_refresh fn ()) {
+	for {
+		select {
+			_ := <-stop { return }
+			500 * time.millisecond { request_refresh() }
+		}
+	}
 }
 
 fn (mut app Workshop) continue_lifecycle(s host.Snapshot) {
@@ -307,15 +361,36 @@ fn (mut app Workshop) launch_with_browser(open_browser bool) {
 
 fn handle_event(event string) {
 	mut app := unsafe { workshop }
+	if event == 'form_submit' { submit_active_form(); return }
+	defer {
+		focus_id := match event {
+			'new', 'empty_new' { 'new_name' }
+			'server_new' { 'server_name' }
+			'remote_new' { 'remote_name' }
+			'shared_new' { 'shared_name' }
+			'server_password_mode' { 'server_password' }
+			'remote_auth_password' { 'remote_password' }
+			else { '' }
+		}
+		if focus_id != '' && !app.creating { ui2.focus(focus_id) }
+	}
 	if app.creating { return }
+	if event in ['server_home', 'server_back', 'shared_relays', 'runtime'] || event.starts_with('project_') {
+		app.new_project = false
+	}
+	if app.handle_server_event(event) { ui2.refresh(); return }
+	if app.handle_remote_event(event) { ui2.refresh(); return }
 	if app.handle_runtime_event(event) {
+		app.show_remote = false
 		ui2.refresh()
 		return
 	}
 	if app.handle_shared_relay_event(event) {
 		app.show_runtime = false
+		app.show_remote = false
 		return
 	}
+	if event == 'new' || event == 'import' || event.starts_with('project_') || event == 'runtime' { app.show_remote = false }
 	match event {
 		'new', 'empty_new' {
 			app.show_shared_relays = false
@@ -564,6 +639,7 @@ fn label(id string, text string, x f64, y f64, width f64, size f64, color u32) u
 // Keep text independent of NSButton's disabled-title drawing, while retaining
 // a real native button over the entire frame for clicks, keyboard and AX actions.
 fn painted_button(id string, title string, frame ui2.Rect, box ui2.BoxStyle, color u32, enabled bool, align ui2.Align, inset f64) ui2.Element {
+	focus_box := if enabled && ui2.focused_id() == id { ui2.BoxStyle{...box, border_color: u32(0x1e40af), border_left: 2, border_right: 2, border_top: 2, border_bottom: 2} } else { box }
 	caption := ui2.label('${id}_caption', title, ui2.rect(inset, 0, frame.width - inset * 2, frame.height), ui2.TextStyle{
 		size:  13
 		color: color
@@ -572,7 +648,7 @@ fn painted_button(id string, title string, frame ui2.Rect, box ui2.BoxStyle, col
 	hit := ui2.button(id, '', ui2.rect(0, 0, frame.width, frame.height), ui2.BoxStyle{
 		transparent: true
 	}, ui2.TextStyle{ size: 13 })
-	return ui2.view('${id}_container', frame, box, [caption, ui2.Element{
+	return ui2.view('${id}_container', frame, focus_box, [caption, ui2.Element{
 		...hit
 		enabled:             enabled
 		accessibility_label: title
@@ -645,6 +721,7 @@ fn project_button(id string, title string, badge string, frame ui2.Rect, selecte
 
 fn build_window() ui2.Element {
 	app := unsafe { workshop }
+	if app.worker_started && !app.quitting { poll_worker() }
 	b := ui2.bounds()
 	w := if b.width > 760 { b.width } else { 760.0 }
 	h := if b.height > 660 { b.height } else { 660.0 }
@@ -653,8 +730,8 @@ fn build_window() ui2.Element {
 	mut side := [
 		ui2.Element{ ...ui2.image('brand_mark', app.brand_mark, ui2.rect(22, 18, 38, 38)), accessibility_label: 'vhttpd 品牌标志' },
 		ui2.label('brand', 'vhttpd', ui2.rect(70, 16, 120, 30), ui2.TextStyle{ size: 23, color: workbench_ink, bold: true }),
-		label('local_label', '本地工作台', 70, 45, 120, 11, workbench_muted),
-		label('project_label', '项目', 22, 96, 160, 12, workbench_muted),
+		label('local_label', '开发工作台', 70, 45, 120, 11, workbench_muted),
+		label('project_label', '本地项目', 22, 155, 160, 12, workbench_muted),
 	]
 	mut project_rows := []ui2.Element{}
 	mut y := 0.0
@@ -670,32 +747,27 @@ fn build_window() ui2.Element {
 		project_rows << project_button('project_${i}', project.name, badge, ui2.rect(0, y, 190, 52), i == app.selected, !app.new_project && !app.creating)
 		y += 59
 	}
-	side << ui2.scroll('project_list', ui2.rect(12, 130, 190, h - 445), workbench_sidebar, project_rows)
+	side << ui2.scroll('project_list', ui2.rect(12, 183, 190, h - 396), workbench_sidebar, project_rows)
 	can_choose := !app.new_project && !app.runtime_busy && app.snapshot.pid == 0 && app.snapshot.phase !in [
 		.starting,
 		.stopping,
 	]
-	side << sidebar_button('new', '+  新建项目', ui2.rect(16, h - 300, 180, 34), true, false, can_choose, .center)
-	side << sidebar_button('import', '导入已有项目', ui2.rect(16, h - 257, 180, 34), false, false, can_choose, .center)
-	side << sidebar_button('shared_relays', '远端 Relay', ui2.rect(16, h - 214, 180, 34), false, app.show_shared_relays, !app.creating, .center)
-	side << label('env_label', '运行环境 · ' + app.runtime_info.source, 22, h - 161, 170, 12, workbench_muted)
-	side << label('binary_label', if app.runtime_info.ready {
-		'vhttpd ' + app.runtime_info.version
-	} else if app.runtime_busy {
-		'正在检查运行包…'
-	} else {
-		'运行包不可用'
-	}, 22, h - 134, 170, 13, workbench_ink)
-	side << sidebar_button('runtime', if app.runtime_checked && !app.runtime_info.ready {
-		'安装 / 选择运行包'
-	} else {
-		'管理运行环境'
-	}, ui2.rect(16, h - 94, 180, 34), false, app.show_runtime, !app.creating, .center)
+	side << sidebar_button('new', '+ 新建', ui2.rect(16, 99, 85, 34), true, false, can_choose, .center)
+	side << sidebar_button('import', '导入…', ui2.rect(111, 99, 85, 34), false, false, can_choose, .center)
+	side << sidebar_button('shared_relays', '共享 Relay', ui2.rect(16, h - 125, 180, 34), false, app.show_shared_relays, !app.creating, .left)
+	side << sidebar_button('server_home', '服务器与实例', ui2.rect(16, h - 167, 180, 34), false, app.show_remote, !app.creating, .left)
+	side << label('env_label', '管理', 22, h - 195, 170, 11, workbench_muted)
+	side << sidebar_button('runtime', '运行环境', ui2.rect(16, h - 83, 180, 34), false, app.show_runtime, !app.creating, .left)
+	side << label('binary_label', if app.runtime_info.ready { '本机 vhttpd ' + app.runtime_info.version } else if app.runtime_busy { '正在检查运行包…' } else { '本机运行包不可用' }, 22, h - 32, 170, 11, workbench_muted)
 	mut children := [ui2.view('workbench_sidebar', ui2.rect(0, 0, 214, h), ui2.BoxStyle{
 		bg:           workbench_sidebar
 		border_color: workbench_line
 		border_right: 1
 	}, side)]
+	if app.show_remote {
+		children << ui2.scroll('remote_instances_page', ui2.rect(content_x, 0, cw, h), workbench_paper, if app.show_servers { remote_servers_view(app, cw) } else { remote_instances_view(app, cw) })
+		return ui2.screen(workbench_paper, children)
+	}
 	if app.show_runtime {
 		children << ui2.scroll('runtime_page', ui2.rect(content_x, 0, cw, h), workbench_paper, runtime_settings_view(app, cw))
 		return ui2.screen(workbench_paper, children)
@@ -775,18 +847,18 @@ fn build_window() ui2.Element {
 	])
 	children << label('path', os.dir(project.config_path), content_x, 108, cw, 12, workbench_muted)
 	if s.pid == 0 && !busy {
-		children << button('start', if s.phase == .failed { '重新启动' } else { '启动项目' }, content_x, 155, 103, true, true)
+		children << button('start', if s.phase == .failed { '重新启动' } else { '启动项目' }, content_x, 155, 96, true, true)
 	} else {
 		children << button(if s.can_force { 'force' } else { 'stop' }, if s.can_force {
 			'强制停止'
 		} else {
 			'停止'
-		}, content_x, 155, 103, false, s.phase != .stopping || s.can_force)
+		}, content_x, 155, 96, false, s.phase != .stopping || s.can_force)
 	}
-	children << button('restart', '重启', content_x + 115, 155, 77, false, s.phase == .running)
-	children << button('folder', '打开项目目录', content_x + 204, 155, 123, false, true)
-	children << button('details', '配置 / Relay', content_x + 339, 155, 110, false, true)
-	children << button('edit_source', '打开源码', content_x + 461, 155, 90, false, s.entry != '')
+	children << button('restart', '重启', content_x + 106, 155, 60, false, s.phase == .running)
+	children << button('folder', '打开项目目录', content_x + 176, 155, 104, false, true)
+	children << button('details', '配置 / Relay', content_x + 290, 155, 96, false, true)
+	children << button('edit_source', '打开源码', content_x + 396, 155, 76, false, s.entry != '')
 	children << label('admin_section', '管理界面', content_x, 215, cw, 13, workbench_ink)
 	children << ui2.view('admin_card', ui2.rect(content_x, 250, cw, 105), ui2.BoxStyle{
 		bg:            workbench_paper
