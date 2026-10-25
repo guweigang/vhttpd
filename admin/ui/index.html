@@ -114,7 +114,15 @@
           <div id="overviewStates" class="overview-states" aria-live="polite"></div>
           <div id="overviewAttention" class="overview-attention" aria-live="polite"></div>
           <div id="metrics" class="grid metrics"></div>
-          <div class="panel" id="executorPanel"><div class="panel-header"><h3>执行器负载与共享路由</h3></div><p class="panel-hint">当前采样与历史累计分开显示；同名配置在不同监听中可能为独立实例。槽占用包含共享任务，排队人数统计 HTTP 请求。</p><p id="executorStatus" class="value-text"></p><div id="executorInstances"></div><details><summary>配置与状态口径</summary><p>共享关系来自当前运行的 HTTP handler 绑定。执行槽占用也可能来自插件、WebSocket 等共享任务。并发与超时的高级选项可在来源 TOML 中调整，发布后仍须整项目校验并由工作台重启检查生效。内嵌排队期限当前固定，不套用 worker 队列配置；未采集的超时状态不显示为零。</p></details></div>
+          <div class="panel" id="executorPanel">
+            <div class="panel-header"><h3>执行器负载与共享路由</h3></div>
+            <div class="panel-body">
+              <p class="panel-hint">当前采样与历史累计分开显示；同名配置在不同监听中可能为独立实例。槽占用包含共享任务，排队人数统计 HTTP 请求。</p>
+              <p id="executorStatus" class="value-text"></p>
+              <div id="executorInstances"></div>
+              <details><summary>配置与状态口径</summary><p>共享关系来自当前运行的 HTTP handler 绑定。执行槽占用也可能来自插件、WebSocket 等共享任务。并发与超时的高级选项可在来源 TOML 中调整，发布后仍须整项目校验并由工作台重启检查生效。内嵌排队期限当前固定，不套用 worker 队列配置；未采集的超时状态不显示为零。</p></details>
+            </div>
+          </div>
           <div class="panel" id="trafficPanel">
             <div class="panel-header"><div><h3>业务监听与路由</h3><p class="panel-hint">服务端保留最近 15 分钟，按 10 秒分段。统计已完成的 HTTP 路由请求；耗时含流结束，不含网络传输、WebSocket 和框架直出资产。</p></div></div>
             <div class="panel-body">
