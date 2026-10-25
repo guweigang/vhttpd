@@ -247,7 +247,7 @@ fn task_is_pending(control &ExecutorTaskControl) bool {
 fn (mut state VjsxExecutorState) pending_mailbox_controls_locked(key string) []&ExecutorTaskControl {
 	mut pending := []&ExecutorTaskControl{}
 	for _, control in state.tasks {
-		mut task := control
+		mut task := unsafe { control }
 		task.mu.@lock()
 		if task.mailbox_key == key && task.phase == .pending { pending << task }
 		task.mu.unlock()

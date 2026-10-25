@@ -56,11 +56,9 @@ fn dispatch_session_close_current(state &DispatchBridgeState, code int, reason s
 	if isnil(state) {
 		return
 	}
-	unsafe {
-		mut current := state
-		dispatch_session_begin_local_close(mut current)
-		current.rt.close_owned_target(current.conn_id, current.lifecycle, code, reason)
-	}
+	mut current := unsafe { state }
+	dispatch_session_begin_local_close(mut current)
+	current.rt.close_owned_target(current.conn_id, current.lifecycle, code, reason)
 }
 
 fn dispatch_session_followup_close(state &DispatchBridgeState, failures []transport.WorkerWebSocketDispatchCommandFailure) ?transport.WorkerWebSocketFrame {
@@ -196,7 +194,7 @@ pub fn dispatch_payload_from_message(msg &websocket.Message) (string, string, bo
 	}
 }
 
-fn dispatch_session_close_cb(mut ws_client websocket.Client, reported_code int, reported_reason string, ref voidptr) ! {
+fn dispatch_session_close_cb(mut _ws_client websocket.Client, reported_code int, reported_reason string, ref voidptr) ! {
 	state := unsafe { &DispatchBridgeState(ref) }
 	dispatch_session_finalize_with_details(state, reported_code, reported_reason)
 }

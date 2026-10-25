@@ -135,7 +135,7 @@ fn test_feishu_runtime_build_pong_preserves_frame_metadata() {
 		seq_id:           7
 		log_id:           3
 		service:          11
-		method:           feishu_runtime_frame_type_control
+		method:           feishu.frame_type_control
 		log_id_str:       'log-3'
 		payload_encoding: 'json'
 		payload_type:     'application/json'

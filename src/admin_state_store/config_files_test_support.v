@@ -3,6 +3,7 @@ module admin_state_store
 import os
 import rand
 
+@[markused]
 fn changeset_test_files() (string, []ConfigFileChange) {
 	root := os.join_path(os.temp_dir(), 'vhttpd-config-set-' + rand.hex(8))
 	os.mkdir_all(root) or { panic(err) }
@@ -15,4 +16,5 @@ fn changeset_test_files() (string, []ConfigFileChange) {
 		ConfigFileChange{ path: b, original: 'old-b', value: 'new-b' }]
 }
 
+@[markused]
 fn config_check_ok() ! {}

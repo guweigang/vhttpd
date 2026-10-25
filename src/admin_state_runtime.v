@@ -750,39 +750,7 @@ fn admin_state_safe_id(raw string) string {
 	return clean
 }
 
-fn admin_state_extract_include_paths(text string) []string {
-	mut paths := []string{}
-	mut in_include := false
-	for line in text.split_into_lines() {
-		clean := line.trim_space()
-		if clean.starts_with('include') && clean.contains('[') {
-			in_include = true
-		}
-		if in_include {
-			paths << admin_state_extract_quoted_values(clean)
-			if clean.contains(']') {
-				in_include = false
-			}
-		}
-	}
-	return paths
-}
 
-fn admin_state_extract_quoted_values(line string) []string {
-	mut values := []string{}
-	mut start := -1
-	for idx, ch in line {
-		if ch == `"` {
-			if start < 0 {
-				start = idx + 1
-			} else {
-				values << line[start..idx]
-				start = -1
-			}
-		}
-	}
-	return values
-}
 
 fn admin_state_add_include_to_config(text string, include_path string) string {
 	needle := '"${include_path}"'

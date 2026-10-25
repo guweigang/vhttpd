@@ -265,6 +265,7 @@ fn FeishuCardBridgeRuntime.client_dispatch_loop(mut state FeishuCardBridgeClient
 }
 
 // C callback trampoline; keep as a free function, see note above.
+@[markused]
 fn feishu_card_bridge_client_error_cb(mut _ws websocket.Client, err string, ref voidptr) ! {
 	_ = _ws
 	mut state := unsafe { &FeishuCardBridgeClientState(ref) }
@@ -274,6 +275,7 @@ fn feishu_card_bridge_client_error_cb(mut _ws websocket.Client, err string, ref 
 }
 
 // C callback trampoline; keep as a free function, see note above.
+@[markused]
 fn feishu_card_bridge_client_close_cb(mut _ws websocket.Client, code int, reason string, ref voidptr) ! {
 	_ = _ws
 	mut state := unsafe { &FeishuCardBridgeClientState(ref) }

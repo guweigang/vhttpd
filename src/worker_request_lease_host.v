@@ -39,14 +39,13 @@ fn (mut host WorkerRequestLeaseHost) select_socket() !string {
 
 fn (mut host WorkerRequestLeaseHost) connect(path string) !&unix.StreamConn {
 	host.mu.@lock()
-	lease := host.lease or {
+	mut lease := host.lease or {
 		host.mu.unlock()
 		return error('worker_request_not_selected')
 	}
 	host.mu.unlock()
 	if lease.socket_path != path { return error('worker_request_socket_mismatch') }
-	mut owned := lease
-	return owned.connect()
+	return lease.connect()
 }
 
 fn (mut host WorkerRequestLeaseHost) release(path string) {

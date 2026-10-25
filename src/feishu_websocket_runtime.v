@@ -8,8 +8,6 @@ import time
 import upstream
 import feishu
 
-@[markused]
-const feishu_runtime_frame_type_control = feishu.frame_type_control
 const feishu_runtime_header_type = feishu.header_type
 const feishu_runtime_header_seq = feishu.header_seq
 const feishu_runtime_header_trace = feishu.header_trace
