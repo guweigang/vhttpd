@@ -1,4 +1,4 @@
-module admin
+module browser_auth
 
 fn test_browser_ticket_single_use_and_session_lifecycle() {
 	mut auth := BrowserAuth{}

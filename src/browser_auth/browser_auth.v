@@ -1,4 +1,4 @@
-module admin
+module browser_auth
 
 import crypto.rand
 import crypto.sha256
