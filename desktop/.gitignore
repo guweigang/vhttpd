@@ -6,3 +6,5 @@ examples/*/events.ndjson
 # Local compiler output and generated acceptance reports
 /build
 /ci/results/
+/host/*_test
+/ui_state_test

@@ -1,8 +1,0 @@
-ProductName:		macOS
-ProductVersion:		15.7.9
-BuildVersion:		24G830
-arm64
-archive_sha256=563e890758f8aa4cae1c5904efba47dccf0bc617db2a02d47138e2da764661c3
-coverage=archive extraction, bundle relocation, native host manager and runtime, HTTP, cross-include publication/restart/effectiveness/history
-not_covered=Finder opening, GUI controls, browser interaction
-require_notarization=0
