@@ -50,6 +50,8 @@ jobs:
         include:
           - os: ubuntu-24.04
             target: linux-amd64
+          - os: ubuntu-24.04-arm
+            target: linux-arm64
           - os: macos-15-intel
             target: macos-amd64
           - os: macos-15
@@ -95,6 +97,8 @@ jobs:
           bundle="vhttpd-${{ matrix.target }}"
           mkdir -p "$bundle/scripts" "$bundle/runtime"
           cp "$VHTTPD_BIN" "$bundle/vhttpd"
+          mkdir -p "$bundle/admin"
+          cp -R ./admin/ui "$bundle/admin/ui"
           bash ./scripts/bundle_runtime_libs.sh "$bundle/vhttpd" "$bundle/runtime/libs"
           cp ./README.md "$bundle/README.md"
           cp ./scripts/install_runtime.sh "$bundle/scripts/install_runtime.sh"
@@ -102,12 +106,19 @@ jobs:
           cp ./scripts/bundle_runtime_libs.sh "$bundle/scripts/bundle_runtime_libs.sh"
           chmod +x "$bundle/scripts/install_runtime.sh" "$bundle/scripts/runtime_doctor.sh" "$bundle/scripts/bundle_runtime_libs.sh"
           tar -czf "$bundle.tar.gz" "$bundle"
+          if command -v sha256sum >/dev/null; then
+            sha256sum "$bundle.tar.gz" > "$bundle.tar.gz.sha256"
+          else
+            shasum -a 256 "$bundle.tar.gz" > "$bundle.tar.gz.sha256"
+          fi
 
       - name: Upload artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: vhttpd-${{ matrix.target }}
-          path: vhttpd-${{ matrix.target }}.tar.gz
+          path: |
+            vhttpd-${{ matrix.target }}.tar.gz
+            vhttpd-${{ matrix.target }}.tar.gz.sha256
           if-no-files-found: error
 
       - name: Upload validation logs

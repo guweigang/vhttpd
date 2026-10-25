@@ -25,12 +25,15 @@ checkout_pinned "$VJSX_REPO" "$VJSX_COMMIT" "$toolchain/vjsx"
 checkout_pinned "$VC_REPO" "$VC_COMMIT" "$toolchain/v/vc"
 case "$(uname -s):$(uname -m)" in
   Linux:x86_64) selected_tcc="$TCC_LINUX_AMD64_COMMIT" ;;
+  Linux:aarch64|Linux:arm64) selected_tcc=system-cc ;;
   Darwin:x86_64) selected_tcc="$TCC_MACOS_AMD64_COMMIT" ;;
   Darwin:arm64) selected_tcc="$TCC_MACOS_ARM64_COMMIT" ;;
   *) echo 'No pinned TCC bundle for this platform' >&2; exit 1 ;;
 esac
-checkout_pinned "$TCC_REPO" "$selected_tcc" "$toolchain/v/thirdparty/tcc"
-file "$toolchain/v/thirdparty/tcc/tcc.exe"
+if [[ "$selected_tcc" != system-cc ]]; then
+  checkout_pinned "$TCC_REPO" "$selected_tcc" "$toolchain/v/thirdparty/tcc"
+  file "$toolchain/v/thirdparty/tcc/tcc.exe"
+fi
 checkout_pinned "$QUICKJS_REPO" "$QUICKJS_COMMIT" "$toolchain/quickjs"
 make -C "$toolchain/v" local=1 CC=cc VFLAGS="-prod -cc cc"
 "$toolchain/v/v" version

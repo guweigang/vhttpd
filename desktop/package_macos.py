@@ -72,7 +72,9 @@ def package(root, app):
     libs.mkdir()
     copied = {}
     names = {}
-    pending = [(runtime_source, binary)]
+    host = app / 'Contents/MacOS/vhttpd-workbench'
+    executables = {binary, host}
+    pending = [(runtime_source, binary), (host, host)]
     modified = []
     while pending:
         source, target = pending.pop()
@@ -101,9 +103,11 @@ def package(root, app):
                 shutil.copy2(resolved, dest)
                 copied[resolved] = dest
                 pending.append((resolved, dest))
-            relative = '@loader_path/' + ('lib/' if target == binary else '') + name
+            relative = '@loader_path/' + (
+                '../Resources/runtime/lib/' if target == host else 'lib/' if target == binary else ''
+            ) + name
             run('/usr/bin/install_name_tool', '-change', dependency, relative, str(target))
-        if target != binary:
+        if target not in executables:
             run('/usr/bin/install_name_tool', '-id', '@loader_path/' + target.name, str(target))
         modified.append(target)
     for target in modified:
@@ -113,7 +117,7 @@ def package(root, app):
         for dependency in dependencies(target):
             if not dependency.startswith(('/usr/lib/', '/System/Library/', '@loader_path/')):
                 raise RuntimeError(f'Non-portable dependency: {dependency}')
-    minimum = stamp_minimum_macos(app, [app / 'Contents/MacOS/vhttpd-workbench', *modified])
+    minimum = stamp_minimum_macos(app, modified)
     guide = (root / 'desktop/assets/INSTALL-zh.txt').read_text()
     info = plistlib.loads((app / 'Contents/Info.plist').read_bytes())
     (app / 'Contents/Resources/INSTALL-zh.txt').write_text(guide.replace('@VERSION@', info['VHTTPDReleaseVersion']))

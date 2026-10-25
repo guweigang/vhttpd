@@ -31,6 +31,15 @@ should_bundle_dependency() {
   local path="$1"
   local base
   base="$(basename "$path")"
+  if [ "$os_name" = Linux ]; then
+    # Bundle the complete non-glibc dependency tree, including libpq/MySQL's
+    # transitive dependencies. A target server must not need development packages.
+    case "$base" in
+      libc.so.*|libm.so.*|libdl.so.*|libpthread.so.*|librt.so.*|ld-linux*|libresolv.so.*|libutil.so.*)
+        return 1 ;;
+      *) return 0 ;;
+    esac
+  fi
   case "$base" in
     libmysqlclient.*|libmariadb.*|libpq.*|libssl.*|libcrypto.*|libgc.*)
       return 0
