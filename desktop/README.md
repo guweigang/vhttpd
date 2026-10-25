@@ -106,10 +106,14 @@ ui2 固定到 [ui2.commit](./ui2.commit) 中的版本。已有依赖 checkout �
 1. 点击“添加服务器”，选择密码或密钥，保存并连接；首次连接核对工作台展示的指纹。
 2. 点击“管理此服务器运行环境”，或在“管理运行环境”选择本机 Mac / 已登记服务器。连接成功后显示远端 Linux 架构、实际运行版本和安装目录。
 3. 点击“下载并安装官方包”，选择公开的稳定版、开发版或指定版本；尚无公开版本时，也可选择已下载的官方 GitHub CI 的 `vhttpd-linux-amd64.tar.gz` / `vhttpd-linux-arm64.tar.gz`，同名 `.sha256` 放在旁边。CI Artifact 外层 zip 需先解压。安装前在本机校验 SHA256、归档路径和文件类型，上传后再次校验；运行程序实际可执行且 Admin UI 完整才提交安装。运行包由[CI 构建](../.github/workflows/vhttpd-binaries.yml)，不上传开发机构建包。
-4. 新运行包按归档 SHA256 独立保存在 SSH 用户的 `~/.local/share/vhttpd-workbench/runtimes/sha256-<校验值>`，同一个包重复安装复用已有目录。原有 `runtime` 目录继续保留，已有进程及重启路径不变。运行环境列出已安装版本与绑定实例，下载安装不会切换或重启任何实例。使用用户权限，无需 sudo、V、Node、Python 或编译工具；远端需有 OpenSSH/scp、POSIX shell、tar、base64、sha256sum 等基础工具，并兼容构建包的 Linux/glibc。当前阶段支持多版本安装和新实例绑定，已有实例的停机升级与回退另行接入。
+4. 新运行包按归档 SHA256 独立保存在 SSH 用户的 `~/.local/share/vhttpd-workbench/runtimes/sha256-<校验值>`，同一个包重复安装复用已有目录。原有 `runtime` 目录继续保留，已有进程及重启路径不变。运行环境列出已安装版本与绑定实例，下载安装不会切换或重启任何实例。使用用户权限，无需 sudo、V、Node、Python 或编译工具；远端需有 OpenSSH/scp、POSIX shell、tar、base64、sha256sum 等基础工具，并兼容构建包的 Linux/glibc。支持多版本安装、新实例绑定和已有手工实例的停机升级。下载安装与实例升级是分开的操作。
 5. 在已安装运行包列表选择新实例使用的版本，再选择内置 vjsx 模板、实例名称和不同的业务/Admin 端口，点击“创建、启动并打开 Admin UI”。项目位于同一目录下的 `instances/<名称>`；自动生成并保存 Admin Token，使用 `--manual-restart` 脱离 SSH 启动，再通过 SSH 回环转发自动登录和检查整个项目的生效状态。初始业务与 Admin 均只监听远端 127.0.0.1，不自动对公网开放。失败时保留项目与私有实例记录；排除端口占用后用原名称和端口重试，不覆盖配置。
 
-服务器连接复用本次已认证的 SSH 会话；断开或退出 Desktop 会释放本机转发，远端实例继续运行。重新打开后可先连接服务器，再从“已运行实例”选中实例，复用服务器会话打开 Admin UI。当前同时连接一台服务器和一个实例；Windows/Linux Desktop、systemd、Docker/Compose、远端升级适配不在本次范围。
+服务器连接复用本次已认证的 SSH 会话；断开或退出 Desktop 会释放本机转发，远端实例继续运行。重新打开后可先连接服务器，再从“已运行实例”选中实例，复用服务器会话打开 Admin UI。当前同时连接一台服务器和一个实例；Windows/Linux Desktop、systemd、Docker/Compose 适配不在本次范围。
+
+在运行环境选择目标运行包和已有实例，点击“停机升级所选实例…”并确认。必须先让当前配置完整生效；目标包须包含 `--workbench-upgrade-check` 和远端升级助手协议，旧包缺少协议时会在停机前拒绝。升级仅支持工作台用户目录内的 Linux 手工实例，使用 Linux pidfd 核对并停止准确的原进程，再启动目标版本；确认新启动编号、实际运行版本、业务就绪及主配置与全部 include 的一致版本后，才更新实例绑定。升级不会修改配置文件。
+
+升级由远端独立助手执行，断开 SSH 或退出 Desktop 后仍继续。重连会读取远端保存的结果。目标版本退出或未能通过就绪与生效检查时自动恢复原运行包；界面分别显示升级成功、正在回退、原版本已恢复或恢复未完成。日志位于实例目录 `.desktop-upgrades/<操作编号>/runtime.log`。升级期间不要改配置；若有外部配置变化，保留文件并要求人工处理，避免覆盖新修改或误报恢复成功。运行过程中使用的 Admin 凭据只写入权限为 600 的私有请求文件，操作结束后删除；SSH 密码不写入该文件。
 
 [隔离 Linux 部署验收记录](./ci/results/remote-deploy-20261024/verification.json)覆盖空 HOME、完整 ELF 依赖、运行包校验、vjsx 创建启动、浏览器一次性登录、两份 include 校验发布、手工重启、整项目生效、SSH 会话复用、首次指纹取消/确认、指纹变化拦截，以及真实端口冲突后原实例重试。该记录来自本机 Mac 管理器连接 OrbStack ARM64 Linux，与公开 Release 或 GitHub CI 运行记录分别对待；本次没有触发 GitHub CI，也没有公开上传本机构建包。复验入口为[部署驱动](./ci/verify_remote_deploy_linux_vm.py)和[宿主测试](./host/remote_servers_test.v)，给驱动传入 Linux 完整运行程序、私有 sshd 工具路径及已编译的 Mac host 测试。
 
