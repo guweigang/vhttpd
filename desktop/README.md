@@ -195,7 +195,7 @@ Mac 下载采用[tag 发布流程](../.github/workflows/workbench-macos-runtime.
 
 新增的 `workflow_run` 工作流需要先进入仓库默认分支，之后主分支源码变更会自动构建并发布。它使用发布任务自带的 `GITHUB_TOKEN`（contents: write、actions: read），不需要新增用户下载凭据。公开附件包含 Mac 完整包、安装说明、验收记录、Linux 两种架构包与校验文件，以及 `runtime-release.json` 来源记录和总 SHA256SUMS。普通用户在 Desktop 中选择或指定公开版本即可；首次新 CI 发布前没有版本时，界面保持空状态并保留本地包入口。
 
-远端 Linux 同样使用[公开版本目录](./host/runtime_catalog.v)，按连接服务器的架构筛选并执行上传前后校验；远端支持多版本并存及新实例版本绑定，下载安装不影响已有实例；已有实例停机升级与回退尚未接入。Mac unsigned/Gatekeeper 边界沿用前述安装说明，不将 CI 运行验收等同于系统下载放行。
+远端 Linux 同样使用[公开版本目录](./host/runtime_catalog.v)，按连接服务器的架构筛选并执行上传前后校验；远端支持多版本并存及新实例版本绑定，下载安装不影响已有实例；已有手工实例通过目标包的安全升级协议完成整项目校验、停机切换和失败自动回退。Mac unsigned/Gatekeeper 边界沿用前述安装说明，不将 CI 运行验收等同于系统下载放行。
 
 ## 升级、移除与数据位置
 
