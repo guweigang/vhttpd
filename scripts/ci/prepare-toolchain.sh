@@ -41,6 +41,16 @@ quickjs_expected="$(tr -d '[:space:]' < "$toolchain/vjsx/.quickjs-version")"
 [[ "$quickjs_commit" == "$quickjs_expected" ]]
 make -C "$toolchain/v" local=1 CC=cc VFLAGS="-prod -cc cc"
 "$toolchain/v/v" version
+# Linux arm64 deliberately uses the system C compiler without a TCC bundle.
+# Non-production V builds otherwise look for libgc.a inside that absent bundle.
+# Keep Boehm enabled and compile the collector from the pinned V source instead.
+if [[ "$selected_tcc" == system-cc ]]; then
+  export VFLAGS="${VFLAGS:+$VFLAGS }-d use_bundled_libgc"
+  echo "VFLAGS=$VFLAGS" >> "$GITHUB_ENV"
+fi
+printf 'fn main() { println("Boehm GC ready") }\n' > "$toolchain/gc-smoke.v"
+"$toolchain/v/v" -cc cc -gc boehm -o "$toolchain/gc-smoke" "$toolchain/gc-smoke.v"
+"$toolchain/gc-smoke"
 mkdir -p "$toolchain/modules"
 ln -s "$toolchain/vjsx" "$toolchain/modules/vjsx"
 echo "$toolchain/v" >> "$GITHUB_PATH"
