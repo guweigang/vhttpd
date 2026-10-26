@@ -1,6 +1,7 @@
 module host
 
 import config
+import json2 as json
 import crypto.sha256
 import encoding.base64
 import os
@@ -11,6 +12,8 @@ struct RemoteProjectCandidate {
 	marker string
 	token  string
 	port   int
+	runtime_id string
+	runtime_path string
 }
 
 fn remote_absolute_path(cwd string, path string) !string {
@@ -24,6 +27,7 @@ fn remote_absolute_path(cwd string, path string) !string {
 
 fn running_project_candidate(cwd string, command string) !RemoteProjectCandidate {
 	args := command.split('\x00')
+	if args.any(it in ['--workbench-restart-helper', '--workbench-upgrade-helper', '--workbench-upgrade-check']) { return error('management_helper_process') }
 	mut path := ''
 	mut token := ''
 	mut port := 0
@@ -132,6 +136,8 @@ fn discovered_profile(server RemoteServer, candidate RemoteProjectCandidate, sou
 		auth_method:   server.auth_method
 		admin_port:    port
 		token:         token
+		runtime_id:    candidate.runtime_id
+		runtime_path:  candidate.runtime_path
 		config_path:   candidate.path
 	}
 	profile.validate()!
@@ -166,13 +172,17 @@ fn merge_discovered_profiles(existing []RemoteProfile, discovered []RemoteProfil
 
 fn (mut s ServerSession) discover_projects() ! {
 	inventory := s.shell_limited($embed_file('remote_scripts/discover.sh').to_string(), 12000, 524288)!
+	mut upgrades := []RemoteRuntimeUpgrade{}
 	mut candidates := map[string]RemoteProjectCandidate{}
 	mut warnings := 0
 	mut issues := []string{}
 	for line in inventory.split_into_lines() {
-		if line.starts_with('VHTTPD_PROJECT:') {
+		if line.starts_with('VHTTPD_UPGRADE:') {
+			status := json.decode[RemoteRuntimeUpgrade](base64.decode_str(line.all_after(':'))) or { warnings++; continue }
+			if status.id.len == 24 && status.id.bytes().all(it.is_hex_digit()) && candidates.keys().contains(status.config_path) { upgrades << status }
+		} else if line.starts_with('VHTTPD_PROJECT:') {
 			parts := line.split(':')
-			if parts.len != 3 {
+			if parts.len != 4 {
 				warnings++
 				continue
 			}
@@ -180,19 +190,24 @@ fn (mut s ServerSession) discover_projects() ! {
 				warnings++
 				continue
 			}
-			candidates[path] = RemoteProjectCandidate{ path: path, marker: parts[2] }
+			binding := parts[3]
+			if binding != '' && !remote_runtime_id_valid(binding) { warnings++; continue }
+			candidates[path] = RemoteProjectCandidate{ path: path, marker: parts[2], runtime_id: binding }
 		} else if line.starts_with('VHTTPD_RUNNING:') {
 			parts := line.split(':')
-			if parts.len != 3 {
+			if parts.len != 4 {
 				warnings++
 				continue
 			}
 			running := running_project_candidate(base64.decode_str(parts[1]), base64.decode_str(parts[2])) or {
-				warnings++
+				if err.msg() != 'management_helper_process' { warnings++ }
 				continue
 			}
 			old := candidates[running.path] or { RemoteProjectCandidate{} }
-			candidates[running.path] = RemoteProjectCandidate{ ...running, marker: old.marker }
+			executable := base64.decode_str(parts[3])
+			mut binding := old.runtime_id
+			for runtime in s.state.runtimes { if executable == runtime.path + '/vhttpd' && binding == '' { binding = runtime.id } }
+			candidates[running.path] = RemoteProjectCandidate{ ...running, marker: old.marker, runtime_id: binding, runtime_path: executable }
 		}
 	}
 	mut discovered := []RemoteProfile{}
@@ -221,6 +236,7 @@ fn (mut s ServerSession) discover_projects() ! {
 	save_remote_profiles(merged) or { return error('无法保存本机项目缓存，请检查数据目录权限。') }
 	s.state = ServerSnapshot{
 		...s.state
+		upgrades:           upgrades
 		projects:           discovered
 		discovery_revision: s.state.discovery_revision + 1
 		discovery_message:  '已从服务器同步 ${discovered.len} 个项目。' + if warnings > 0 {

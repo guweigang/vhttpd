@@ -1,7 +1,9 @@
 module host
 
 import json2 as json
+import encoding.base64
 import net.http
+import net
 import os
 import time
 
@@ -72,11 +74,23 @@ fn test_empty_linux_server_install_create_publish_restart() ! {
 	}
 	s.install(archive)!
 	assert s.state.version != ''
-	s.install(archive) or { assert err.msg().contains('已安装') }
-	command := ServerCommand{action: .create, name: 'hello-vjsx', web_port: os.getenv('VHTTPD_SERVER_TEST_WEB').int(), admin_port: os.getenv('VHTTPD_SERVER_TEST_ADMIN').int()}
+	assert s.state.runtimes.len == 1
+	mut first_runtime := s.state.runtimes[0]
+	s.install(archive)!
+	assert s.state.runtimes.len == 1 && s.state.runtimes[0] == first_runtime
+ if os.getenv('VHTTPD_SERVER_TEST_UPGRADE') == '1' {
+  // Match an existing Desktop installation: a legacy runtime directory remains
+  // in place, and the old instance has no per-instance version marker yet.
+  s.shell('set -eu\ncp -R ' + shell_quote(first_runtime.path) + ' "$HOME/.local/share/vhttpd-workbench/runtime"\n',10000)!
+  s.inspect()!
+  first_runtime = s.state.runtimes.filter(it.id == 'legacy')[0]
+ }
+	command := ServerCommand{action: .create, runtime_id: first_runtime.id, name: 'hello-vjsx', web_port: os.getenv('VHTTPD_SERVER_TEST_WEB').int(), admin_port: os.getenv('VHTTPD_SERVER_TEST_ADMIN').int()}
 	s.create(command)!
 	p := s.state.created
 	assert p.server_id == server.id && p.token.len == 64
+	assert p.runtime_id == first_runtime.id && p.runtime_path == first_runtime.path + '/vhttpd'
+ if first_runtime.id == 'legacy' { s.shell('rm ' + shell_quote(os.dir(p.config_path) + '/.desktop-runtime-id'),5000)! }
 	assert load_remote_profiles()!.any(it.id == p.id)
 	// Simulate another computer: there is no local instance registration.
 	save_remote_profiles([]RemoteProfile{})!
@@ -84,6 +98,7 @@ fn test_empty_linux_server_install_create_publish_restart() ! {
 	restored := load_remote_profiles()!
 	assert restored.len == 1 && restored[0].config_path.ends_with('/instances/hello-vjsx/vhttpd.toml'), s.state.discovery_message + ' names=' + restored.map(it.name).str()
 	assert restored[0].token == p.token
+	assert restored[0].runtime_id == p.runtime_id
 	// A failed older attempt may have cached a different token for the same port.
 	save_remote_profiles([RemoteProfile{...restored[0], token: 'stale-local-token', config_path: ''}])!
 	s.inspect()!
@@ -149,8 +164,90 @@ fn test_empty_linux_server_install_create_publish_restart() ! {
 	m.connect_with_session(p, '', s.state.control_path)!
 	server_wait_instance(mut m)!
 	assert m.snapshot.config_status.state == .effective
+	// Installing a second immutable package must not alter the first running instance.
+	before_install_boot := m.snapshot.instance.boot_id
+	second_archive := os.getenv('VHTTPD_SERVER_TEST_SECOND_PACKAGE')
+	mut retry_runtime := first_runtime
+	if second_archive != '' {
+		s.install_release(second_archive, 'v0.1.0-dev.fixture')!
+		assert s.state.runtimes.len == if first_runtime.id == 'legacy' { 3 } else { 2 }
+		retry_runtime = s.state.runtimes.filter(it.release_tag == 'v0.1.0-dev.fixture')[0]
+		assert retry_runtime.path != first_runtime.path
+		assert retry_runtime.release_tag == 'v0.1.0-dev.fixture'
+		m.next_probe = 0
+		m.tick()
+		assert m.snapshot.instance.boot_id == before_install_boot && m.snapshot.instance.ready
+		assert load_remote_profiles()!.filter(it.name == p.name)[0].runtime_path == p.runtime_path
+		mut refused_rebind := false
+		s.create(ServerCommand{...command, runtime_id: retry_runtime.id}) or { refused_rebind = true; assert err.msg().contains('绑定其他运行包') }
+		assert refused_rebind
+	}
+ if os.getenv('VHTTPD_SERVER_TEST_UPGRADE') == '1' {
+  // Pending include changes must be refused without stopping the healthy process.
+  s.shell('set -eu\np=' + shell_quote(os.dir(p.config_path) + '/app.toml') + '\ncp "$p" "$p.before-upgrade"\nprintf "\\n# pending-upgrade-fixture\\n" >> "$p"\n', 5000)!
+  mut pending_refused := false
+  s.upgrade(ServerCommand{action: .upgrade, project_id: p.id, runtime_id: retry_runtime.id}) or { pending_refused = true }
+  assert pending_refused
+  m.next_probe = 0; m.tick()
+  assert m.snapshot.instance.boot_id == before_install_boot && m.snapshot.instance.ready
+  s.shell('set -eu\np=' + shell_quote(os.dir(p.config_path) + '/app.toml') + '\nmv "$p.before-upgrade" "$p"\n', 5000)!
+  // The original runtime predates the upgrade protocol. Automatic recovery must
+  // still be able to launch it without requiring a helper in that old package.
+  legacy_failure_archive := os.getenv('VHTTPD_SERVER_TEST_FAILURE_PACKAGE')
+  assert legacy_failure_archive != ''
+  s.install_release(legacy_failure_archive, 'v0.0.0-dev.failure-fixture') or { archive_fixture_diagnostic(legacy_failure_archive); return error('initial rollback fixture package: ' + err.msg()) }
+  legacy_failing := s.state.runtimes.filter(it.version == '0.0.0-failure-fixture')[0]
+  s.upgrade(ServerCommand{action: .upgrade, project_id: p.id, runtime_id: legacy_failing.id})!
+  legacy_operation := s.state.upgrades.filter(it.config_path == p.config_path)[0].id
+  server_wait_upgrade(mut s, legacy_operation, 'rolled_back')!
+  assert s.state.projects.filter(it.id == p.id)[0].runtime_id == first_runtime.id
+  server_wait_instance(mut m)!
+  assert server_upgrade_business(s, command.web_port)!.status_code == 200
+  s.upgrade(ServerCommand{action: .upgrade, project_id: p.id, runtime_id: retry_runtime.id})!
+  operation := s.state.upgrades.filter(it.config_path == p.config_path)[0].id
+  m.disconnect()
+  // Recovery belongs to the remote helper, rather than the Desktop SSH session.
+  s.close()
+  s.connect(server, '')!
+  reconnect_until := time.ticks() + 20000
+  for !s.state.connected && time.ticks() < reconnect_until { s.tick(); time.sleep(100 * time.millisecond) }
+  assert s.state.connected
+  server_wait_upgrade(mut s, operation, 'completed')!
+  updated := s.state.projects.filter(it.id == p.id)[0]
+  assert updated.runtime_id == retry_runtime.id && updated.runtime_path == retry_runtime.path + '/vhttpd'
+  m.connect_with_session(updated, '', s.state.control_path)!
+  server_wait_instance(mut m)!
+  assert m.snapshot.instance.boot_id != before_install_boot
+  assert server_upgrade_business(s, command.web_port)!.status_code == 200
+  assert m.snapshot.config_status.state == .effective
+  upgrade_boot := m.snapshot.instance.boot_id
+  upgrade_revision := m.snapshot.instance.effective_revision
+  // An old target without the safety protocol must be rejected before downtime.
+  mut unsupported := false
+  s.upgrade(ServerCommand{action: .upgrade, project_id: p.id, runtime_id: first_runtime.id}) or { unsupported = true }
+  assert unsupported
+  m.next_probe = 0; m.tick()
+  assert m.snapshot.instance.boot_id == upgrade_boot
+  failing_archive := os.getenv('VHTTPD_SERVER_TEST_FAILURE_PACKAGE')
+  assert failing_archive != ''
+  s.install_release(failing_archive, 'v0.0.0-dev.failure-fixture') or { archive_fixture_diagnostic(failing_archive); return error('second rollback fixture package: ' + err.msg()) }
+  failing := s.state.runtimes.filter(it.version == '0.0.0-failure-fixture')[0]
+  s.upgrade(ServerCommand{action: .upgrade, project_id: p.id, runtime_id: failing.id})!
+  failure_operation := s.state.upgrades.filter(it.config_path == p.config_path)[0].id
+  server_wait_upgrade(mut s, failure_operation, 'rolled_back')!
+  assert s.state.projects.filter(it.id == p.id)[0].runtime_id == retry_runtime.id
+  m.next_probe = 0; server_wait_instance(mut m)!
+  assert m.snapshot.instance.ready && m.snapshot.config_status.state == .effective
+  assert m.snapshot.instance.effective_revision == upgrade_revision
+  assert m.snapshot.instance.boot_id != upgrade_boot
+  assert server_upgrade_business(s, command.web_port)!.status_code == 200
+  // Credentials are removed when a transaction ends; public outcome has no token.
+  secret_path := os.dir(p.config_path) + '/.desktop-upgrades/' + failure_operation + '/request.json'
+  assert s.shell('[ ! -e ' + shell_quote(secret_path) + ' ] && printf clean', 5000)! == 'clean'
+  println('PASS detached runtime upgrade, reconnect, unsupported target refusal, failed-start automatic rollback and unchanged whole-project revision')
+ }
 	// Keep the first instance running to force a real listener conflict.
-	retry := ServerCommand{...command, name: 'retry-fixture'}
+	retry := ServerCommand{...command, name: 'retry-fixture', runtime_id: retry_runtime.id}
 	mut failed := false
 	s.create(retry) or { failed = true; assert !err.msg().contains(p.token) }
 	assert failed
@@ -158,11 +255,17 @@ fn test_empty_linux_server_install_create_publish_restart() ! {
 	m.disconnect()
 	s.shell('set -eu\ncd "$HOME/.local/share/vhttpd-workbench/instances/hello-vjsx"\nkill "$(cat runtime.pid)"\nsleep 2\n', 10000)!
 	s.create(retry)!
+	assert s.state.created.runtime_id == retry_runtime.id
 	assert load_remote_profiles()!.filter(it.name == 'retry-fixture').len == 1
 	m.connect_with_session(s.state.created, '', s.state.control_path)!
 	server_wait_instance(mut m)!
 	assert m.snapshot.config_status.state == .effective
 	m.disconnect()
+	// Keep the legacy directory and its stopped projects recognizable alongside new packages.
+	s.shell('set -eu\nif [ ! -d "$HOME/.local/share/vhttpd-workbench/runtime" ]; then cp -R ' + shell_quote(first_runtime.path) + ' "$HOME/.local/share/vhttpd-workbench/runtime"; fi\nmkdir "$HOME/.local/share/vhttpd-workbench/instances/legacy-stopped"\ncp "$HOME/.local/share/vhttpd-workbench/instances/retry-fixture/vhttpd.toml" "$HOME/.local/share/vhttpd-workbench/instances/legacy-stopped/"\n', 10000)!
+	s.inspect()!
+	assert s.state.runtimes.any(it.id == 'legacy')
+	assert s.state.projects.filter(it.name == 'legacy-stopped')[0].runtime_id == 'legacy'
 	// A terminal-started project outside the managed directory is also found.
 	s.shell('set -eu\nkill "$(cat "$HOME/.local/share/vhttpd-workbench/instances/retry-fixture/runtime.pid")"\nsleep 2\nmkdir -p "$HOME/terminal-demo"\ncp "$HOME/.local/share/vhttpd-workbench/instances/retry-fixture/vhttpd.toml" "$HOME/terminal-demo/"\ncp "$HOME/.local/share/vhttpd-workbench/instances/retry-fixture/main.mjs" "$HOME/terminal-demo/"\ncd "$HOME/terminal-demo"\nnohup "$HOME/.local/share/vhttpd-workbench/runtime/vhttpd" --config "$HOME/terminal-demo/vhttpd.toml" --admin-token terminal-runtime-only --manual-restart > process.log 2>&1 < /dev/null &\nsleep 2\n', 12000)!
 	save_remote_profiles([]RemoteProfile{})!
@@ -207,4 +310,72 @@ fn test_process_discovery_and_cache_reconciliation_preserve_project_identity() !
 	assert merged.len == 2 && merged[0].id == a.id && merged[0].token == 'actual'
 	assert merged[0].admin_port == 9090 && merged[1] == b
 	assert merge_discovered_profiles(merged, [remote]) == merged
+}
+
+fn test_remote_runtime_inventory_requires_explicit_version_selection() ! {
+	id := 'sha256-' + 'ab'.repeat(32)
+	lines := ['VHTTPD_RUNTIME:legacy:' + base64.encode_str('vhttpd 0.1.0') + ':', 'VHTTPD_RUNTIME:' + id + ':' + base64.encode_str('vhttpd 0.1.0') + ':' + base64.encode_str('v0.1.0-dev.fixture')]
+	items := parse_remote_runtimes(lines, '/home/fixture/.local/share/vhttpd-workbench')!
+	assert items.len == 2 && items[0].path.ends_with('/runtime') && items[1].path.ends_with('/runtimes/' + id)
+	assert select_remote_runtime([items[0]], '')! == items[0]
+	assert select_remote_runtime(items, id)! == items[1]
+	mut rejected := false
+	select_remote_runtime(items, '') or { rejected = true }
+	assert rejected
+	for invalid in ['../runtime', 'sha256-bad', ''] { assert !remote_runtime_id_valid(invalid) }
+	rejected = false
+	parse_remote_runtimes([lines[0], lines[0]], '/fixture') or { rejected = true }
+	assert rejected
+}
+
+fn server_wait_upgrade(mut s ServerSession, id string, expected string) ! {
+ until := time.ticks() + 240000
+ for time.ticks() < until {
+  s.poll_upgrades()!
+  matches := s.state.upgrades.filter(it.id == id)
+  if matches.len == 1 && matches[0].finished() {
+   if matches[0].phase != expected {
+    log_path := os.dir(matches[0].config_path) + '/.desktop-upgrades/' + id + '/runtime.log'
+    encoded := s.shell('tail -c 8192 ' + shell_quote(log_path) + ' | base64', 5000) or { '' }
+    mut diagnostics := base64.decode_str(encoded.replace('\n',''))
+    for profile in s.state.projects { diagnostics = diagnostics.replace(profile.token, '[redacted]') }
+    eprintln('UPGRADE_FIXTURE_LOG: ' + diagnostics)
+   }
+   assert matches[0].phase == expected, matches[0].str()
+   return
+  }
+  time.sleep(200 * time.millisecond)
+ }
+ return error('remote upgrade did not finish')
+}
+
+fn server_upgrade_business(s &ServerSession, remote_port int) !http.Response {
+ mut listener := net.listen_tcp(.ip, '127.0.0.1:0')!
+ port := listener.addr()!.port()!
+ listener.close()!
+ binding := '127.0.0.1:${port}:127.0.0.1:${remote_port}'
+ mut args := s.mux_args()
+ args << ['-O','forward','-L',binding]
+ args << s.destination_args()
+ s.job.command(s.ssh_executable,args,6000)!
+ defer {
+  mut cancel := s.mux_args()
+  cancel << ['-O','cancel','-L',binding]
+  cancel << s.destination_args()
+  s.job.command(s.ssh_executable,cancel,6000) or {}
+ }
+ return http.get('http://127.0.0.1:${port}/')
+}
+
+fn test_upgrade_helpers_are_not_discovered_as_serving_instances() {
+ for flag in ['--workbench-upgrade-check','--workbench-upgrade-helper','--workbench-restart-helper'] {
+  mut refused := false
+  running_project_candidate('/remote', 'vhttpd\x00' + flag + '\x00/remote/vhttpd.toml\x00') or { refused = true }
+  assert refused
+ }
+}
+
+fn archive_fixture_diagnostic(path string) {
+ result := os.execute('/usr/bin/tar -tvzf ' + shell_quote(path))
+ eprintln('FIXTURE_ARCHIVE_CHECK code=' + result.exit_code.str() + ' ' + result.output.limit(1200))
 }

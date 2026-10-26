@@ -58,7 +58,7 @@ pub fn save_remote_servers(items []RemoteServer) ! {
 	os.mv(temp, path)!
 }
 
-pub enum ServerAction { connect trust disconnect inspect install create shutdown }
+pub enum ServerAction { connect trust disconnect inspect install create upgrade shutdown }
 pub struct ServerCommand {
 pub:
 	sequence u64
@@ -68,11 +68,29 @@ pub:
 	host_key_id string
 	archive string
 	release_tag string
+	runtime_id string
+	project_id string
 	name string
 	template string = 'vjsx-http'
 	web_port int = 19881
 	admin_port int = 2018
 }
+pub struct RemoteRuntime {
+pub:
+	id string
+	version string
+	release_tag string
+	path string
+}
+
+pub fn (runtime RemoteRuntime) label() string {
+	return 'vhttpd ' + runtime.version + if runtime.release_tag != '' { ' · ' + runtime.release_tag } else if runtime.id == 'legacy' { ' · 原有运行包' } else { ' · ' + runtime.id[..if runtime.id.len > 19 { 19 } else { runtime.id.len }] }
+}
+
+fn remote_runtime_id_valid(id string) bool {
+	return id == 'legacy' || (id.len == 71 && id.starts_with('sha256-') && id[7..].bytes().all(it.is_hex_digit()))
+}
+
 pub struct ServerSnapshot {
 pub:
 	sequence u64
@@ -87,6 +105,8 @@ pub:
 	platform string
 	root string
 	version string
+	upgrades []RemoteRuntimeUpgrade
+	runtimes []RemoteRuntime
 	release_tag string
 	control_path string
 	// Creation remains visible until the UI acknowledges it with inspect.
@@ -118,6 +138,7 @@ mut:
 	prompts &RemoteAskpass = unsafe { nil }
 	directory string
 	diagnostics string
+	next_upgrade_probe i64
 	deadline i64
 	state ServerSnapshot
 	job RuntimeJob
@@ -235,17 +256,17 @@ fn (mut s ServerSession) inspect() ! {
 	output := s.shell($embed_file('remote_scripts/inspect.sh').to_string(), 12000)!
 	mut platform := ''
 	mut root := ''
-	mut version := ''
-	mut release_tag := ''
+	mut records := []string{}
 	for line in output.split_into_lines() {
 		if line.starts_with('VHTTPD_PLATFORM:') { platform = line.all_after(':') }
 		if line.starts_with('VHTTPD_ROOT:') { root = base64.decode_str(line.all_after(':')) }
-		if line.starts_with('VHTTPD_VERSION:') { version = runtime_version_text(line.all_after(':'))! }
-		if line.starts_with('VHTTPD_RELEASE:') { release_tag = normalize_runtime_tag(line.all_after(':'))! }
+		if line.starts_with('VHTTPD_RUNTIME:') { records << line }
 	}
 	if platform !in ['linux-amd64', 'linux-arm64'] || !root.starts_with('/') || root.contains('\n') { return error('当前只支持 Linux amd64 / arm64 服务器。') }
-	s.state = ServerSnapshot{...s.state, platform: platform, root: root, version: version, release_tag: release_tag, error: false, created: RemoteProfile{},
-		message: if version == '' { '服务器已连接，尚未安装运行包。先安装，再创建实例。' } else { '运行环境已就绪。创建实例后可直接打开 Admin UI。' }}
+	runtimes := parse_remote_runtimes(records, root)!
+	first := if runtimes.len > 0 { runtimes[0] } else { RemoteRuntime{} }
+	s.state = ServerSnapshot{...s.state, platform: platform, root: root, version: first.version, runtimes: runtimes, release_tag: first.release_tag, error: false, created: RemoteProfile{},
+		message: if runtimes.len == 0 { '服务器已连接，尚未安装运行包。先安装，再创建实例。' } else { '运行包已就绪。新建实例时选择版本；下载其他版本不会影响已有实例。' }}
 	s.discover_projects()!
 }
 
@@ -264,7 +285,10 @@ fn (mut s ServerSession) tick() {
 			message: if changed { '主机指纹已变化，连接已阻止；请核对服务器，不会自动覆盖信任记录。' } else { 'SSH 连接失败或已断开。请检查主机、端口及认证信息后重试。' }}
 		return
 	}
-	if s.state.connected { return }
+	if s.state.connected {
+  if time.ticks() > s.next_upgrade_probe && s.state.upgrades.any(!it.finished()) { s.poll_upgrades() or { s.state = ServerSnapshot{...s.state, error: true, message: '升级仍由远端执行，暂时无法读取结果；请重新连接查看。'}; s.next_upgrade_probe = time.ticks() + 5000 } }
+  return
+ }
 	if s.state.host_key.id != '' { return }
 	if os.exists(s.directory + '/control') {
 		s.state = ServerSnapshot{...s.state, connected: true, busy: false, control_path: s.directory + '/control'}
@@ -286,10 +310,12 @@ fn validate_remote_project(command ServerCommand) ! {
 fn (mut s ServerSession) create(command ServerCommand) ! {
 	validate_remote_project(command)!
 	s.discover_projects()!
-	if s.state.version == '' { return error('请先安装远端运行包。') }
+	runtime := select_remote_runtime(s.state.runtimes, command.runtime_id)!
+
 	template := project_templates().filter(it.id == command.template)[0]
 	mut profiles := load_remote_profiles()!
 	previous := profiles.filter(it.server_id == s.server.id && it.name == command.name)
+	if previous.len > 0 && previous[0].runtime_id != '' && previous[0].runtime_id != runtime.id { return error('该实例已绑定其他运行包，请选择原版本重试。') }
 	if previous.len > 0 && previous[0].admin_port != command.admin_port { return error('该实例已创建；请使用原 Admin 端口重试，或换一个实例名称。') }
 	token := if previous.len > 0 { previous[0].token } else { rand.bytes(32)!.hex() }
 	config := template.config_text.replace('entry = "main.mts"', 'entry = "main.mjs"')
@@ -298,11 +324,11 @@ fn (mut s ServerSession) create(command ServerCommand) ! {
 		.replace('port = ${template.admin_port}', 'port = ${command.admin_port}')
 		.replace('local-development-only', token)
 	profile := if previous.len > 0 { previous[0] } else { RemoteProfile{id: new_remote_id()!, server_id: s.server.id, name: command.name, ssh_host: s.server.ssh_host, ssh_user: s.server.ssh_user,
-		ssh_port: s.server.ssh_port, auth_method: s.server.auth_method, identity_file: s.server.identity_file, admin_port: command.admin_port, token: token, config_path: s.state.root + '/instances/' + command.name + '/vhttpd.toml'}
+		ssh_port: s.server.ssh_port, auth_method: s.server.auth_method, identity_file: s.server.identity_file, admin_port: command.admin_port, token: token, config_path: s.state.root + '/instances/' + command.name + '/vhttpd.toml', runtime_id: runtime.id, runtime_path: runtime.path + '/vhttpd'}
 	}
 	// Persist before reporting success, so reconnect does not require copying a token.
 	if previous.len == 0 { profiles << profile; save_remote_profiles(profiles)! }
-	script := 'set -eu\numask 077\ninstance_id=' + shell_quote(profile.id) + '\nreuse=' + if previous.len > 0 { '1' } else { '0' } + '\nname=' + shell_quote(command.name) + '\nconfig=' + shell_quote(base64.encode_str(config)) + '\nsource=' + shell_quote(base64.encode_str(template.source_text)) + '\n' + $embed_file('remote_scripts/create.sh').to_string()
+	script := 'set -eu\numask 077\nruntime_id=' + shell_quote(runtime.id) + '\ninstance_id=' + shell_quote(profile.id) + '\nreuse=' + if previous.len > 0 { '1' } else { '0' } + '\nname=' + shell_quote(command.name) + '\nconfig=' + shell_quote(base64.encode_str(config)) + '\nsource=' + shell_quote(base64.encode_str(template.source_text)) + '\n' + $embed_file('remote_scripts/create.sh').to_string()
 	s.shell(script, 20000)!
 	s.discover_projects()!
 	s.state = ServerSnapshot{...s.state, created: profile, message: '实例已创建并启动，正在连接 Admin UI 并检查整项目生效状态。'}
@@ -316,12 +342,11 @@ fn (mut s ServerSession) install(archive_path string) ! {
 
 fn (mut s ServerSession) install_release(archive_path string, tag string) ! {
 	if s.state.platform == '' { return error('请先连接并识别服务器。') }
-	if s.state.version != '' { return error('运行包已安装；第一版暂不提供远端升级。') }
 	temp := '/tmp/vh-package-' + new_remote_id()!
 	os.mkdir(temp, mode: 0o700)!
 	defer { os.rmdir_all(temp) or {} }
 	mut archive := archive_path
-	mut release_tag := ''
+	mut release_tag := if tag != '' { normalize_runtime_tag(tag)! } else { '' }
 	if archive == '' {
 		choice := resolve_runtime_download(s.state.platform, tag, s.job)!
 		archive = download_runtime_files(choice, temp, s.job)!
@@ -364,7 +389,7 @@ fn server_supervise(w ServerWorker) {
 			command := <-w.commands {
 				sequence = command.sequence
 				s.state = ServerSnapshot{...s.state, sequence: command.sequence}
-				if command.action in [.install, .create, .inspect] {
+				if command.action in [.install, .create, .upgrade, .inspect] {
 					s.state = ServerSnapshot{...s.state, busy: true}
 					select { w.snapshots <- s.state {} else {} }
 				}
@@ -380,6 +405,7 @@ fn server_supervise(w ServerWorker) {
 					}
 					.disconnect { s.close() }
 					.inspect { s.inspect() or { failure = err.msg() } }
+					.upgrade { s.upgrade(command) or { failure = err.msg() } }
 					.install { s.install_release(command.archive, command.release_tag) or { failure = err.msg() } }
 					.create { s.create(command) or { failure = err.msg() } }
 					.shutdown { s.close(); w.done <- true; return }
@@ -394,4 +420,23 @@ fn server_supervise(w ServerWorker) {
 		select { w.snapshots <- s.state {} else {} }
 		time.sleep(80 * time.millisecond)
 	}
+}
+
+fn parse_remote_runtimes(records []string, root string) ![]RemoteRuntime {
+	mut runtimes := []RemoteRuntime{}
+	for line in records {
+		parts := line.split(':')
+		if parts.len != 4 || !remote_runtime_id_valid(parts[1]) || runtimes.any(it.id == parts[1]) || runtimes.len >= 65 { return error('远端运行包目录无效，请检查后刷新。') }
+		version := runtime_version_text(base64.decode_str(parts[2]))!
+		tag := base64.decode_str(parts[3])
+		if tag != '' { normalize_runtime_tag(tag)! }
+		runtimes << RemoteRuntime{id: parts[1], version: version, release_tag: tag, path: root + if parts[1] == 'legacy' { '/runtime' } else { '/runtimes/' + parts[1] }}
+	}
+	return runtimes
+}
+
+fn select_remote_runtime(runtimes []RemoteRuntime, selected string) !RemoteRuntime {
+	if selected == '' && runtimes.len == 1 { return runtimes[0] }
+	for runtime in runtimes { if runtime.id == selected { return runtime } }
+	return error('请选择服务器上已安装的运行包版本。')
 }

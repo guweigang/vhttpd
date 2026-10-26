@@ -14,6 +14,8 @@ pub struct RemoteProfile {
 pub:
 	id            string
 	server_id     string
+	runtime_id    string
+	runtime_path  string
 	config_path   string
 	name          string
 	ssh_host      string

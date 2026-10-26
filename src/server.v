@@ -23,6 +23,8 @@ module main
 //   - Never hold L0 while calling into user-provided callbacks (plugins, executors).
 // ═══════════════════════════════════════════════════════════════════════
 import config
+import runtime_upgrade
+import json2 as json
 import executor
 import log
 import os
@@ -411,6 +413,13 @@ fn main() {
 	if logging.RuntimeLogger.json_enabled() { logging.RuntimeLogger.configure() }
 	if os.args.len == 3 && os.args[1] == '--workbench-restart-helper' {
 		run_manual_restart_helper(os.args[2]) or { eprintln('restart_helper_failed'); exit(1) }; return
+	}
+	if os.args.len == 3 && os.args[1] == '--workbench-upgrade-check' {
+		result := runtime_upgrade.check(os.args[2], vhttpd_version) or { eprintln('whole_project_validation_failed'); exit(2) }
+		println(json.encode(result)); return
+	}
+	if os.args.len == 3 && os.args[1] == '--workbench-upgrade-helper' {
+		runtime_upgrade.run(os.args[2]) or { eprintln('runtime_upgrade_failed'); exit(1) }; return
 	}
 	manual_restart := '--manual-restart' in os.args
 	args := os.args[1..].filter(it != '--manual-restart')

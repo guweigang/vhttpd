@@ -112,8 +112,8 @@ fn test_remote_server_and_runtime_target_states() ! {
 	assert runtime_test_enabled(runtime_settings_view(app, 700), 'server_go_connect')!
 	app.server_snapshot = host.ServerSnapshot{server: app.server_form(), server_id: app.remote_id, connected: true, platform: 'linux-arm64', root: '/home/fixture/.local/share/vhttpd-workbench'}
 	assert runtime_test_enabled(runtime_settings_view(app, 700), 'server_install')!
-	app.server_snapshot = host.ServerSnapshot{...app.server_snapshot, version: '0.1.0'}
-	assert !runtime_test_enabled(runtime_settings_view(app, 700), 'server_install')!
+	app.server_snapshot = host.ServerSnapshot{...app.server_snapshot, version: '0.1.0', runtimes: [host.RemoteRuntime{id: 'legacy', version: '0.1.0', path: '/fixture/runtime'}]}
+	assert runtime_test_enabled(runtime_settings_view(app, 700), 'server_install')!
 	assert runtime_test_enabled(runtime_settings_view(app, 700), 'server_create')!
 	ui2.validate_element_tree(ui2.screen(workbench_paper, runtime_settings_view(app, 700)))!
 	app.remote_servers = [host.RemoteServer{...app.remote_servers[0], ssh_host: 'changed-host'}]
@@ -617,4 +617,62 @@ fn test_remote_failed_startup_has_persistent_failure_and_recovery_actions() ! {
 	}
 	app.remote_snapshot = host.RemoteSnapshot{profile_id: profile.id, connected: true, config_status: host.ConfigStatus{state: .effective}, instance: host.RemoteInstance{ready: true, manual_restart: true, operation: host.RemoteOperation{state: 'completed'}}}
 	assert failure_test_element(remote_instance_summary(app, 700, 0), 'remote_state_summary_title')!.text == '已连接 · 业务就绪'
+}
+
+fn test_remote_runtime_selection_is_explicit_and_does_not_rebind_instances() ! {
+	mut app := unsafe { workshop }
+	old_state := app.server_snapshot
+	defer { app.server_snapshot = old_state; app.server_runtime_selection = '' }
+	app.server_busy = false
+	app.server_snapshot = host.ServerSnapshot{server: app.server_form(), server_id: app.remote_id, connected: true, version: '0.1.0', runtimes: [host.RemoteRuntime{id: 'legacy', version: '0.1.0'}, host.RemoteRuntime{id: 'sha256-' + 'ab'.repeat(32), version: '0.1.1'}]}
+	app.server_runtime_selection = ''
+	assert app.selected_server_runtime() == ''
+	app.handle_server_event('server_runtime_choice_legacy')
+	assert app.selected_server_runtime() == 'legacy'
+	app.server_worker = host.ServerWorker{}
+	app.server_command(.create, '')
+	command := <-app.server_worker.commands
+	assert command.runtime_id == 'legacy'
+	app.server_busy = false
+	app.server_runtime_selection = 'missing'
+	assert app.selected_server_runtime() == ''
+	for width in [360.0, 700.0] { ui2.validate_element_tree(ui2.screen(workbench_paper, runtime_remote_view(app, width)))! }
+}
+
+fn test_runtime_upgrade_controls_and_recovery_states() ! {
+ mut app := unsafe { workshop }
+ previous := app.server_snapshot
+ defer { app.server_snapshot = previous; app.server_upgrade_project = ''; app.server_runtime_selection = '' }
+ app.server_busy = false
+ app.remote_id = 'ab'.repeat(12)
+ app.runtime_server_id = app.remote_id
+ app.remote_name = 'fixture'
+ app.remote_host = 'fixture'
+ project := host.RemoteProfile{id:'cd'.repeat(12), server_id:app.remote_id, name:'app', runtime_id:'legacy', config_path:'/fixture/instances/app/vhttpd.toml'}
+ target := 'sha256-' + 'ab'.repeat(32)
+ app.server_snapshot = host.ServerSnapshot{server:app.server_form(),server_id:app.remote_id,connected:true,root:'/fixture',version:'0.1.0',runtimes:[host.RemoteRuntime{id:'legacy',version:'0.1.0'},host.RemoteRuntime{id:target,version:'0.2.0'}],projects:[project]}
+ app.server_upgrade_project = project.id
+ app.server_runtime_selection = 'legacy'
+ assert !app.can_upgrade_selected_project()
+ app.server_runtime_selection = target
+ assert app.can_upgrade_selected_project()
+ operation := host.RemoteRuntimeUpgrade{id:'ef'.repeat(12),config_path:project.config_path,phase:'starting'}
+ app.server_snapshot = host.ServerSnapshot{...app.server_snapshot,upgrades:[operation]}
+ assert !app.can_upgrade_selected_project()
+ assert host.upgrade_phase_title(operation).contains('检查生效')
+ for phase in ['completed','rolled_back','rollback_failed'] {
+  status := host.RemoteRuntimeUpgrade{...operation,phase:phase,error:if phase == 'rolled_back' { 'new_process_exited' } else { '' }}
+  app.server_snapshot = host.ServerSnapshot{...app.server_snapshot,upgrades:[status]}
+  for width in [360.0,700.0] { ui2.validate_element_tree(ui2.screen(workbench_paper,runtime_remote_view(app,width)))! }
+ }
+ assert host.upgrade_phase_title(host.RemoteRuntimeUpgrade{phase:'rolled_back'}).contains('原版本已恢复')
+ assert host.upgrade_phase_title(host.RemoteRuntimeUpgrade{phase:'rollback_failed'}).contains('需要处理')
+}
+
+fn test_runtime_binding_refresh_does_not_require_ssh_reauthentication() {
+ before := host.RemoteProfile{id:'ab'.repeat(12),server_id:'cd'.repeat(12),ssh_host:'fixture',token:'fixture-only',runtime_id:'legacy',runtime_path:'/fixture/runtime/vhttpd'}
+ after := host.RemoteProfile{...before,runtime_id:'sha256-' + 'ab'.repeat(32),runtime_path:'/fixture/runtimes/new/vhttpd'}
+ assert same_remote_connection(before,after)
+ assert !same_remote_connection(before,host.RemoteProfile{...after,token:'changed'})
+ assert !same_remote_connection(before,host.RemoteProfile{...after,admin_port:2020})
 }

@@ -80,7 +80,7 @@ fn (app &Workshop) environment_version_label() string {
 		}
 		if app.server_snapshot.connected && app.server_snapshot.server_id == app.environment_id {
 			return if app.server_snapshot.version != '' {
-				'远端 vhttpd ' + app.server_snapshot.version
+				'远端 · ' + app.server_snapshot.runtimes.len.str() + ' 个运行包'
 			} else {
 				'远端 · 尚未安装运行包'
 			}

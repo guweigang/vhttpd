@@ -6,6 +6,7 @@ change user SSH configuration, or access any saved Desktop credentials.
 """
 import argparse
 import base64
+import fcntl
 import hashlib
 import json
 import os
@@ -21,6 +22,8 @@ def main():
     parser.add_argument('--runtime', required=True)
     parser.add_argument('--host-test', type=Path, required=True)
     parser.add_argument('--sshd-tools', required=True)
+    parser.add_argument('--upgrade-runtime')
+    parser.add_argument('--failing-runtime')
     parser.add_argument('--output', type=Path)
     args = parser.parse_args()
 
@@ -86,6 +89,20 @@ tar -czf "$1/vhttpd-linux-arm64.tar.gz" -C "$1/package" vhttpd-linux-arm64
             archive.write_bytes(base64.b64decode(py('from pathlib import Path;import base64,sys;print(base64.b64encode(Path(sys.argv[1]).read_bytes()).decode())',root+'/'+archive.name)))
             subprocess.run(['/usr/bin/tar','-tzf',str(archive)],stdout=subprocess.DEVNULL,check=True)
             (local/(archive.name+'.sha256')).write_text(hashlib.sha256(archive.read_bytes()).hexdigest()+'  '+archive.name+'\n')
+            # A distinct package with the same binary models separate development builds.
+            second_dir = local/'second';second_dir.mkdir()
+            second_archive = second_dir/archive.name
+            vm('/bin/sh', '-c', 'if [ -n "$2" ]; then cp "$2" "$1/package/vhttpd-linux-arm64/vhttpd"; bash "$3/scripts/bundle_runtime_libs.sh" "$1/package/vhttpd-linux-arm64/vhttpd" "$1/package/vhttpd-linux-arm64/runtime/libs"; fi; printf fixture-second-build > "$1/package/vhttpd-linux-arm64/.fixture-build"; tar -czf "$1/second.tar.gz" -C "$1/package" vhttpd-linux-arm64', 'fixture', root, args.upgrade_runtime or '', repo)
+            second_archive.write_bytes(base64.b64decode(py('from pathlib import Path;import base64,sys;print(base64.b64encode(Path(sys.argv[1]).read_bytes()).decode())',root+'/second.tar.gz')))
+            (second_dir/(archive.name+'.sha256')).write_text(hashlib.sha256(second_archive.read_bytes()).hexdigest()+'  '+archive.name+'\n')
+            failure_archive = None
+            if args.failing_runtime:
+                failure_dir=local/'failure';failure_dir.mkdir();failure_archive=failure_dir/archive.name
+                vm('/bin/sh','-c','cp "$2" "$1/package/vhttpd-linux-arm64/vhttpd"; tar -czf "$1/failure.tar.gz" -C "$1/package" vhttpd-linux-arm64','fixture',root,args.failing_runtime)
+                failure_archive.write_bytes(base64.b64decode(py('from pathlib import Path;import base64,sys;print(base64.b64encode(Path(sys.argv[1]).read_bytes()).decode())',root+'/failure.tar.gz')))
+                (failure_dir/(archive.name+'.sha256')).write_text(hashlib.sha256(failure_archive.read_bytes()).hexdigest()+'  '+archive.name+'\n')
+            for candidate in [second_archive] + ([failure_archive] if failure_archive else []):
+                subprocess.run(['/usr/bin/tar','-tzf',str(candidate)],stdout=subprocess.DEVNULL,check=True)
             (local/'known_hosts').write_text('')
             (local/'changed_hosts').write_text(f'[127.0.0.1]:{ssh_port} '+ ' '.join((local/'client.pub').read_text().split()[:2])+'\n')
             (local/'ssh_config').write_text(f'''Host vhttpd-fixture
@@ -107,7 +124,7 @@ tar -czf "$1/vhttpd-linux-arm64.tar.gz" -C "$1/package" vhttpd-linux-arm64
                 time.sleep(1)
                 assert sshd.poll() is None, (local/'sshd.log').read_text()
                 env = dict(os.environ, VHTTPD_SERVER_TEST_SSH=str(local/'ssh'), VHTTPD_SERVER_TEST_SCP=str(local/'scp'),
-                           VHTTPD_SERVER_TEST_PACKAGE=str(archive), VHTTPD_SERVER_TEST_WEB=str(web), VHTTPD_SERVER_TEST_ADMIN=str(admin),
+                           VHTTPD_SERVER_TEST_PACKAGE=str(archive), VHTTPD_SERVER_TEST_SECOND_PACKAGE=str(second_archive), VHTTPD_SERVER_TEST_UPGRADE='1' if args.upgrade_runtime else '', VHTTPD_SERVER_TEST_FAILURE_PACKAGE=str(failure_archive) if failure_archive else '', VHTTPD_SERVER_TEST_WEB=str(web), VHTTPD_SERVER_TEST_ADMIN=str(admin),
                            VHTTPD_SERVER_TEST_KNOWN_HOSTS=str(local/'known_hosts'), VHTTPD_SERVER_TEST_CHANGED_HOST=str(local/'changed_hosts'),
                            VHTTPD_DESKTOP_DATA_DIR=str(local/'registry'))
                 subprocess.run([str(args.host_test.resolve())], env=env, check=True, timeout=240)
@@ -119,7 +136,9 @@ tar -czf "$1/vhttpd-linux-arm64.tar.gz" -C "$1/package" vhttpd-linux-arm64
                                       'cross-include validate/publish','manual restart','whole-project effectiveness','SSH session reuse',
                                       'first fingerprint cancel/confirm','changed fingerprint blocked','port conflict and same-instance retry', 'fresh-computer project discovery',
                                       'stale Admin token repair', 'cross-include discovery', 'browser Admin HTTP 200',
-                                      'terminal project discovery', 'running process CLI token override']}
+                                      'terminal project discovery', 'running process CLI token override', 'immutable multiversion packages', 'idempotent installation', 'explicit instance runtime binding', 'legacy runtime discovery', 'install preserves running boot']}
+                if args.upgrade_runtime:
+                    result['coverage'] += ['target-binary whole-project preflight', 'stop and upgrade actual service', 'SSH disconnect during detached upgrade', 'reconnect discovers persisted outcome', 'target startup failure automatic rollback', 'same configuration revision after rollback']
                 if args.output:
                     args.output.parent.mkdir(parents=True,exist_ok=True)
                     args.output.write_text(json.dumps(result,indent=2)+'\n')
@@ -143,4 +162,10 @@ tar -czf "$1/vhttpd-linux-arm64.tar.gz" -C "$1/package" vhttpd-linux-arm64
 
 
 if __name__ == '__main__':
-    main()
+    # Discovery intentionally scans all same-user processes in the VM. Separate
+    # fixture HOMEs therefore still share an inventory: serialize these runs.
+    fd = os.open('/private/tmp/vhttpd-linux-vm-deploy-acceptance.lock',
+                 os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(fd, 'r+') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        main()

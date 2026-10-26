@@ -62,7 +62,7 @@ fn (app &Workshop) can_install_selected_runtime() bool {
 	if app.runtime_catalog_busy || app.runtime_selected_tag == '' { return false }
 	if !app.runtime_downloads.any(it.tag == app.runtime_selected_tag && it.platform == app.download_platform()) { return false }
 	if app.runtime_server_id == '' { return !app.runtime_busy && app.snapshot.pid == 0 && app.snapshot.phase !in [.starting, .stopping] }
-	return !app.server_busy && !app.server_snapshot.busy && app.server_snapshot.version == '' && app.remote_servers.any(it.id == app.runtime_server_id && it == app.server_snapshot.server)
+	return app.server_snapshot.connected && !app.server_busy && !app.server_snapshot.busy && app.remote_servers.any(it.id == app.runtime_server_id && it == app.server_snapshot.server)
 }
 
 fn (mut app Workshop) handle_runtime_catalog_event(event string) bool {

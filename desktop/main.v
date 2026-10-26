@@ -46,6 +46,8 @@ mut:
 	server_instance_name string = 'hello-vjsx'
 	server_web_port string = '19881'
 	server_admin_port string = '2018'
+	server_upgrade_project string
+	server_runtime_selection string
 	server_template int
 	server_created_id string
 	server_discovery_revision u64

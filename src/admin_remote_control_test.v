@@ -90,3 +90,18 @@ fn test_remote_config_source_matches_env_positional_and_symlink_loading() ! {
 	remote_control_initialize([entry], true)!
 	assert state.root == os.abs_path(entry)
 }
+
+fn test_manual_restart_is_blocked_during_runtime_upgrade() ! {
+ root := os.join_path(os.temp_dir(),'restart-upgrade-lock-' + time.now().unix_micro().str())
+ os.mkdir(root)!
+ defer { os.rmdir_all(root) or {} }
+ path := os.join_path(root,'vhttpd.toml')
+ os.write_file(path,'version=2\n')!
+ remote_control_initialize(['--config',path],true)!
+ mut state := unsafe { &g_manual_remote }
+ defer { state.root=''; state.manual=false; state.effective_revision='' }
+ os.mkdir(os.join_path(root,'.desktop-runtime-lock'))!
+ mut rejected := false
+ remote_begin_restart(RemoteRestartRequest{operation_id:'ab'.repeat(12)}) or { rejected=true; assert err.msg() == 'runtime_upgrade_in_progress' }
+ assert rejected
+}

@@ -6,7 +6,9 @@ import ui2
 fn (app &Workshop) remote_form() host.RemoteProfile {
 	mut config_path := ''
 	for profile in app.remote_profiles { if profile.id == app.remote_id { config_path = profile.config_path; break } }
-	return host.RemoteProfile{ config_path: config_path, id: app.remote_id, server_id: app.remote_server_id, name: app.remote_name.trim_space(), ssh_host: app.remote_host.trim_space(), ssh_user: app.remote_user.trim_space(), ssh_port: app.remote_port.int(), admin_port: app.remote_admin_port.int(), identity_file: app.remote_identity, auth_method: app.remote_auth, token: app.remote_token }
+	mut binding := host.RemoteProfile{}
+	for profile in app.remote_profiles { if profile.id == app.remote_id { binding = profile; break } }
+	return host.RemoteProfile{ runtime_id: binding.runtime_id, runtime_path: binding.runtime_path, config_path: config_path, id: app.remote_id, server_id: app.remote_server_id, name: app.remote_name.trim_space(), ssh_host: app.remote_host.trim_space(), ssh_user: app.remote_user.trim_space(), ssh_port: app.remote_port.int(), admin_port: app.remote_admin_port.int(), identity_file: app.remote_identity, auth_method: app.remote_auth, token: app.remote_token }
 }
 
 fn (mut app Workshop) send_remote(action host.RemoteAction) {
@@ -68,7 +70,7 @@ fn (mut app Workshop) handle_remote_event(event string) bool {
 		return true
 	}
 	if event == 'remote_trust_host' {
-		if app.remote_snapshot.profile_id == app.remote_id && app.remote_form() == app.remote_connected_form && !app.remote_snapshot.host_key_changed {
+		if app.remote_snapshot.profile_id == app.remote_id && same_remote_connection(app.remote_form(), app.remote_connected_form) && !app.remote_snapshot.host_key_changed {
 			app.remote_message = ''
 			app.send_remote(.confirm_host_key)
 		}
@@ -169,6 +171,7 @@ fn (mut app Workshop) handle_remote_event(event string) bool {
 			app.send_remote(.check)
 		}
 		'remote_restart' {
+			if app.remote_upgrade_running() { app.remote_message = '远端正在切换运行包或恢复原版本，请等待升级结果。'; return true }
 			if ui2.confirm('重启远端 vhttpd', '将先校验整个项目，再重启远端手工实例。重启期间连接会短暂中断，随后自动检查所有 include 配置是否生效。') {
 				app.remote_message = ''
 				app.send_remote(.restart)
@@ -216,7 +219,16 @@ fn remote_instances_view(app &Workshop, width f64) []ui2.Element {
 		rows << label('remote_empty', '从左侧选择远端项目；新建项目会使用当前环境的运行包，导入可登记已运行的实例。', 0, y + 12, width, 14, workbench_muted)
 		return rows
 	}
-	if app.remote_snapshot.connected && app.remote_snapshot.profile_id == app.remote_id && app.remote_form() == app.remote_connected_form && !app.remote_edit_connection {
+	if app.remote_upgrade_running() {
+		for profile in app.remote_profiles { if profile.id == app.remote_id {
+			for upgrade in app.server_snapshot.upgrades { if upgrade.config_path == profile.config_path && !upgrade.finished() {
+				rows << state_notice('remote_upgrade_progress', host.upgrade_phase_title(upgrade), '业务正在停机切换或恢复。SSH 认证没有变化，无需重复输入密码；结果保存在远端。', ui2.rect(0, y, width, 124), 'info')
+				rows << button('runtime', '查看运行包升级状态', 0, y + 140, 190, true, true)
+				return rows
+			} }
+		} }
+	}
+	if app.remote_snapshot.connected && app.remote_snapshot.profile_id == app.remote_id && same_remote_connection(app.remote_form(), app.remote_connected_form) && !app.remote_edit_connection {
 		rows << remote_instance_summary(app, width, y)
 		return rows
 	}
@@ -280,7 +292,7 @@ fn remote_instances_view(app &Workshop, width f64) []ui2.Element {
 	rows << button('remote_delete', '移除连接', width - 105, y, 105, false, editable)
 	y += 54
 	active := app.remote_snapshot.profile_id == app.remote_id
-	same_connection := app.remote_form() == app.remote_connected_form
+	same_connection := same_remote_connection(app.remote_form(), app.remote_connected_form)
 	connected := active && app.remote_snapshot.connected && same_connection
 	instance := app.remote_snapshot.instance
 	message := if active && app.remote_snapshot.connected && !same_connection {
@@ -335,7 +347,7 @@ fn remote_instance_summary(app &Workshop, width f64, y f64) []ui2.Element {
 		label('remote_version', 'vhttpd ' + state.instance.version + ' · ' + state.instance.platform, 0, y + 70, width, 13, workbench_ink),
 		state_notice('remote_state_summary', if state.restarting { '正在重启并检查生效' } else if state.instance.startup_failed() { '重启失败 · 需修复配置' } else if !state.instance.ready { '业务尚未就绪' } else if state.config_status.pending { '配置待重启生效' } else { '已连接 · 业务就绪' }, if app.remote_message != '' { app.remote_message } else { state.message }, ui2.rect(0, y + 112, width, 100), if state.restarting { 'info' } else if state.instance.startup_failed() { 'danger' } else if state.config_status.pending || !state.instance.ready { 'warning' } else { 'good' }),
 		button('remote_open', if state.instance.startup_failed() { '打开 Admin UI 修复配置' } else { '打开远端 Admin UI ↗' }, 0, y + 234, 180, true, !state.busy),
-		button('remote_restart', if state.instance.startup_failed() { '修复后重试重启' } else { '重启并检查生效' }, 192, y + 234, 175, false, !state.busy && state.instance.manual_restart),
+		button('remote_restart', if state.instance.startup_failed() { '修复后重试重启' } else { '重启并检查生效' }, 192, y + 234, 175, false, !state.busy && state.instance.manual_restart && !app.remote_upgrade_running()),
 		button('remote_check', '检查生效', 0, y + 283, 110, false, !state.busy),
 		button('remote_edit', '编辑连接…', 122, y + 283, 125, false, !state.busy),
 		button('remote_disconnect', '断开', width - 75, y + 283, 75, false, true),
@@ -347,9 +359,15 @@ fn remote_instance_summary(app &Workshop, width f64, y f64) []ui2.Element {
 
 fn remote_access_notice(app &Workshop, width f64, y f64) ui2.Element {
 	bg, ink := state_colors('info')
-	height := if width < 420 { 188.0 } else { 152.0 }
+	height := if width < 420 { 244.0 } else { 208.0 }
 	url := if app.remote_snapshot.admin_url == '' { '由工作台分配本机入口' } else { app.remote_snapshot.admin_url }
-	detail := '目标：' + app.remote_host + ' 的 127.0.0.1:' + app.remote_admin_port + '\n浏览器入口：' + url + '\n本机地址仅是 SSH 代理入口，配置修改仍发生在远端实例。'
+	mut binding := host.RemoteProfile{}
+	for profile in app.remote_profiles { if profile.id == app.remote_id { binding = profile; break } }
+	mut runtime := if binding.runtime_id == 'legacy' { '原有运行包' } else if binding.runtime_id != '' { binding.runtime_id[..if binding.runtime_id.len > 19 { 19 } else { binding.runtime_id.len }] } else { '外部启动，未绑定工作台运行包' }
+	if app.server_snapshot.server_id == binding.server_id {
+		for installed in app.server_snapshot.runtimes { if installed.id == binding.runtime_id { runtime = installed.label(); break } }
+	}
+	detail := '运行包：' + runtime + if binding.runtime_path != '' { '\n进程路径：' + binding.runtime_path } else { '' } + '\n目标：'  + app.remote_host + ' 的 127.0.0.1:' + app.remote_admin_port + '\n浏览器入口：' + url + '\n本机地址仅是 SSH 代理入口，配置修改仍发生在远端实例。'
 	return ui2.view('remote_access', ui2.rect(0, y, width, height), ui2.BoxStyle{bg: bg, radius: 8, border_color: ink, border_left: 3}, [
 		ui2.label('remote_access_title', '通过 SSH 隧道访问远端 Admin', ui2.rect(16, 11, width - 32, 24), ui2.TextStyle{size: 13, bold: true, color: ink}),
 		ui2.label('remote_access_detail', detail, ui2.rect(16, 39, width - 32, height - 48), ui2.TextStyle{size: 12, color: workbench_muted, lines: 8}),
@@ -379,4 +397,15 @@ fn (mut app Workshop) connect_remote_project(profile host.RemoteProfile) {
 		}
 	}
 	app.send_remote(.connect)
+}
+
+fn (app &Workshop) remote_upgrade_running() bool {
+ for profile in app.remote_profiles {
+  if profile.id == app.remote_id && profile.server_id == app.server_snapshot.server_id { return app.server_snapshot.upgrades.any(it.config_path == profile.config_path && !it.finished()) }
+ }
+ return false
+}
+
+fn same_remote_connection(a host.RemoteProfile, b host.RemoteProfile) bool {
+ return host.RemoteProfile{...a,runtime_id:'',runtime_path:''} == host.RemoteProfile{...b,runtime_id:'',runtime_path:''}
 }

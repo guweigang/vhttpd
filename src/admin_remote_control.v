@@ -233,7 +233,7 @@ fn remote_instance_status() RemoteInstanceStatus {
 		ready:              ready
 		manual_restart:     manual
 		operation:          operation
-		error:              if disk == '' {
+		error:              if startup_failure != '' { startup_failure } else if disk == '' {
 			'whole_project_invalid'
 		} else {
 			''
@@ -292,6 +292,7 @@ fn remote_begin_restart(request RemoteRestartRequest) !RemoteRestartOperation {
 	if !remote_id_valid(request.operation_id) { return error('invalid_operation') }
 	status := remote_instance_status()
 	if !status.manual_restart { return error('manual_restart_not_enabled') }
+	if status.config_path != '' && os.exists(os.join_path(os.dir(status.config_path), '.desktop-runtime-lock')) { return error('runtime_upgrade_in_progress') }
 	mut g := unsafe { &g_manual_remote }
 	g.mu.@lock()
 	defer { g.mu.unlock() }
