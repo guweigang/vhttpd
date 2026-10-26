@@ -170,12 +170,12 @@ const updated = await vhttpd.callFunction({
 ## 无真实微信凭证的本地演示
 
 ```sh
-VJSX_BIN=vjsx VHTTPD_BIN="$PWD/vhttpd" bash examples/wechat-cloud-functions/tests/dev-local.sh
+VHTTPD_BIN="$PWD/vhttpd" make -C examples/wechat-cloud-functions dev-local
 ```
 
 shell 只负责原生进程生命周期和信号清理，JavaScript 探测由 vjsx CLI 执行，无需 Node/npm。脚本创建全新临时 PostgreSQL，应用两份 schema，启动本机 vhttpd/vjsx；登录及文档读取成功后输出 LOCAL DEMO READY。Ctrl-C 停止两项服务并删除临时数据。可通过 WCF_LOCAL_PORT 换端口，通过 WCF_INITDB/WCF_PG_CTL/WCF_PSQL 指定 PostgreSQL 工具；设置 WCF_SMOKE_ONLY=1 可在就绪后自动清理退出。
 
-VJSX_BIN 可设为 vjsx CLI 的绝对路径。vhttpd.toml 中 runtime_profile="node" 和源码中的 node:fs/node:crypto 是 vjsx 提供的兼容 API 名称，执行器始终是 vjsx。应用继续使用 vhttpd.toml 和源码入口，不编译成独立应用二进制。
+默认使用相邻 vjsx 仓库已编译的 bin/vjsx，或 PATH 中的 vjsx；也可通过 VJSX_BIN 指定 CLI 的绝对路径。vhttpd.toml 中 runtime_profile="node" 和源码中的 node:fs/node:crypto 是 vjsx 提供的兼容 API 名称，执行器始终是 vjsx。应用继续使用 vhttpd.toml 和源码入口，不编译成独立应用二进制。
 
 脚本冷启动预算默认为 VHTTPD_VJSX_BOOTSTRAP_TIMEOUT_MS=120000，可设 1–300000ms；不改变函数/SQL 期限。开发者工具里使用 http://127.0.0.1:19886，并只在本机调试时关闭合法域名校验。真机上的 127.0.0.1 指向手机自身。
 
@@ -192,8 +192,8 @@ VJSX_BIN 可设为 vjsx CLI 的绝对路径。vhttpd.toml 中 runtime_profile="n
 ## 验证
 
 ```sh
-make -C examples/wechat-cloud-functions test VJSX_BIN=vjsx
-make -C examples/wechat-cloud-functions test-e2e VJSX_BIN=vjsx VHTTPD_BIN="$PWD/vhttpd"
+make -C examples/wechat-cloud-functions test
+make -C examples/wechat-cloud-functions test-e2e VHTTPD_BIN="$PWD/vhttpd"
 ```
 
 26 项单元与小程序页面测试全部在 vjsx 中运行，使用轻量断言入口 tests/run.mjs，不依赖 node:test 或 node:vm。
