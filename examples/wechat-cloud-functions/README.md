@@ -167,6 +167,20 @@ const updated = await vhttpd.callFunction({
 
 `miniprogram/` 带现有登录和 getUser 页面，可复制 config.js、utils/vhttpd.js、pages/vhttpd-demo 到已有小程序并追加页面路径，不覆盖原有 App。
 
+## vhttpd Desktop 本机项目
+
+`desktop-local/` 是可导入 Desktop 的独立本机项目，使用同一套云函数和兼容 SDK：
+
+1. 执行 `bash examples/wechat-cloud-functions/desktop-local/database.sh start`，创建或启动专属 PostgreSQL。
+2. 在 Desktop 切到“本机 Mac”，导入 `desktop-local/vhttpd.toml`，工作目录选择 `desktop-local/`。
+3. 点击“启动项目”，等待“运行中”和“配置已生效”。后续启停、重启、日志和 Admin UI 均由 Desktop 操作。
+
+业务地址为 `http://127.0.0.1:19886`，管理地址为 `http://127.0.0.1:19986/admin/ui/`，数据库仅监听 `127.0.0.1:19896`。本地管理 token 由 Desktop 在每次启动时替换为临时凭据。
+
+数据库数据保存在 `desktop-local/.runtime/postgres/`（被 Git 忽略），独立于现有 Postgres 数据库，重启应用后保留。Desktop 只管理 vhttpd 实例；数据库由 `database.sh start|stop|status` 管理，不随 Desktop 停止而删除。不要与临时演示脚本同时占用 19886 端口。
+
+**此入口固定使用 desktop-demo-user 模拟身份，不校验微信 code。** 仅用于本机 Desktop 联调，不能公开部署。真实微信登录仍使用生产 app.mts，需服务端 AppID/AppSecret 及实际小程序联调。
+
 ## 无真实微信凭证的本地演示
 
 ```sh
