@@ -170,10 +170,12 @@ const updated = await vhttpd.callFunction({
 ## 无真实微信凭证的本地演示
 
 ```sh
-VHTTPD_BIN="$PWD/vhttpd" node examples/wechat-cloud-functions/tests/dev-local.mjs
+VJSX_BIN=vjsx VHTTPD_BIN="$PWD/vhttpd" bash examples/wechat-cloud-functions/tests/dev-local.sh
 ```
 
-脚本创建全新临时 PostgreSQL，应用两份 schema，启动本机 vhttpd/vjsx；登录及文档读取成功后输出 LOCAL DEMO READY。Ctrl-C 停止两项服务并删除临时数据。可通过 WCF_LOCAL_PORT 换端口，通过 WCF_INITDB/WCF_PG_CTL/WCF_PSQL 指定 PostgreSQL 工具。
+shell 只负责原生进程生命周期和信号清理，JavaScript 探测由 vjsx CLI 执行，无需 Node/npm。脚本创建全新临时 PostgreSQL，应用两份 schema，启动本机 vhttpd/vjsx；登录及文档读取成功后输出 LOCAL DEMO READY。Ctrl-C 停止两项服务并删除临时数据。可通过 WCF_LOCAL_PORT 换端口，通过 WCF_INITDB/WCF_PG_CTL/WCF_PSQL 指定 PostgreSQL 工具；设置 WCF_SMOKE_ONLY=1 可在就绪后自动清理退出。
+
+VJSX_BIN 可设为 vjsx CLI 的绝对路径。vhttpd.toml 中 runtime_profile="node" 和源码中的 node:fs/node:crypto 是 vjsx 提供的兼容 API 名称，执行器始终是 vjsx。应用继续使用 vhttpd.toml 和源码入口，不编译成独立应用二进制。
 
 脚本冷启动预算默认为 VHTTPD_VJSX_BOOTSTRAP_TIMEOUT_MS=120000，可设 1–300000ms；不改变函数/SQL 期限。开发者工具里使用 http://127.0.0.1:19886，并只在本机调试时关闭合法域名校验。真机上的 127.0.0.1 指向手机自身。
 
@@ -190,12 +192,14 @@ VHTTPD_BIN="$PWD/vhttpd" node examples/wechat-cloud-functions/tests/dev-local.mj
 ## 验证
 
 ```sh
-npm --prefix examples/wechat-cloud-functions test
-VHTTPD_BIN="$PWD/vhttpd" node examples/wechat-cloud-functions/tests/e2e.mjs --pgsql-only --cloud
+make -C examples/wechat-cloud-functions test VJSX_BIN=vjsx
+make -C examples/wechat-cloud-functions test-e2e VJSX_BIN=vjsx VHTTPD_BIN="$PWD/vhttpd"
 ```
 
-E2E 创建全新的临时数据库和微信登录 HTTP 替身，不连接现有业务数据库，也不使用真实 AppSecret。覆盖原有 SQL 身份/回滚测试和新 SDK 的并发身份、函数互调、JSONB CRUD、原子增量、显式事务回滚、普通写入独立提交、超时后禁止写入、进程重启后的文档与会话持久化。生产入口不加载测试函数。
+26 项单元与小程序页面测试全部在 vjsx 中运行，使用轻量断言入口 tests/run.mjs，不依赖 node:test 或 node:vm。
 
-不带 --cloud 可运行原有 MySQL/PostgreSQL SQL 回归；MySQL 重启验证使用 legacy-app.mts。需要相应 PostgreSQL/MySQL 服务端及客户端工具，支持 WCF_INITDB/WCF_PG_CTL/WCF_PSQL/WCF_MYSQLD/WCF_MYSQL/WCF_MYSQLADMIN 指定路径。
+E2E 由 shell 创建全新 PostgreSQL 并启动真实 vhttpd，HTTP 断言全部由 vjsx CLI 执行。测试入口使用固定的 alice/bob 假登录身份，不连接现有业务数据库，不使用真实 AppSecret，也不声称验证微信 code 的一次性语义。覆盖并发身份、函数互调、JSONB CRUD、原子增量、显式事务异常/超时回滚、普通写入独立提交、迟到写入拒绝，以及生产入口重启后的文档与会话持久化。生产入口不加载测试函数。
+
+当前 E2E 仅验证 PostgreSQL；legacy-app.mts 的 MySQL 路径未在这套 vjsx E2E 中覆盖。PostgreSQL 工具路径通过 WCF_INITDB/WCF_PG_CTL/WCF_PSQL 配置。
 
 设置 WCF_KEEP_TEST_FILES=1 可保留该次临时测试文件；默认退出时清理。真实微信平台联调还需有效小程序及 wx.login 产生的 code，本地替身通过不代表已完成真实平台联调。
