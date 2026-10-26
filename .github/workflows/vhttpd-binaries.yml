@@ -114,12 +114,18 @@ jobs:
           cp ./scripts/runtime_doctor.sh "$bundle/scripts/runtime_doctor.sh"
           cp ./scripts/bundle_runtime_libs.sh "$bundle/scripts/bundle_runtime_libs.sh"
           chmod +x "$bundle/scripts/install_runtime.sh" "$bundle/scripts/runtime_doctor.sh" "$bundle/scripts/bundle_runtime_libs.sh"
-          tar -czf "$bundle.tar.gz" "$bundle"
+          COPYFILE_DISABLE=1 tar -czf "$bundle.tar.gz" "$bundle"
           if command -v sha256sum >/dev/null; then
             sha256sum "$bundle.tar.gz" > "$bundle.tar.gz.sha256"
           else
             shasum -a 256 "$bundle.tar.gz" > "$bundle.tar.gz.sha256"
           fi
+
+      - name: Verify extracted standalone runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/ci/verify-runtime-package.py "vhttpd-${{ matrix.target }}.tar.gz" 2>&1 | tee ci-results/package.log
 
       - name: Upload artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

@@ -40,13 +40,13 @@ should_bundle_dependency() {
       *) return 0 ;;
     esac
   fi
-  case "$base" in
-    libmysqlclient.*|libmariadb.*|libpq.*|libssl.*|libcrypto.*|libgc.*)
-      return 0
-      ;;
-    *)
-      return 1
-      ;;
+  # Homebrew DB clients also depend on compression and Kerberos libraries.
+  # Bundle every non-system dependency rather than a fixed library-name list.
+  case "$path" in
+    /usr/lib/*|/System/Library/*|/Library/Apple/System/Library/*)
+      return 1 ;;
+    /*) return 0 ;;
+    *) return 1 ;;
   esac
 }
 
@@ -152,6 +152,7 @@ case "$os_name" in
   Darwin)
     need_cmd otool
     need_cmd install_name_tool
+    need_cmd codesign
     ;;
   Linux)
     need_cmd ldd
@@ -177,6 +178,14 @@ case "$os_name" in
       [ -f "$staged_lib" ] || continue
       rewrite_macos_staged_lib "$staged_lib"
     done
+    # Relocation changes signed Mach-O load commands. Sign after all rewrites.
+    for staged_lib in "$runtime_dir"/*; do
+      [ -f "$staged_lib" ] || continue
+      codesign --force --sign - "$staged_lib"
+      codesign --verify --strict "$staged_lib"
+    done
+    codesign --force --sign - "$bin_path"
+    codesign --verify --strict "$bin_path"
     ;;
   Linux)
     rewrite_linux_rpaths
