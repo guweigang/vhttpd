@@ -1,15 +1,15 @@
 # vhttpd 自托管微信云函数兼容层
 
-本例由 vhttpd + vjsx 提供函数调用、微信登录鉴权和 PostgreSQL 文档数据库。现有云函数可以保留 `const cloud = require('wx-server-sdk')`、`cloud.init()` 和 `exports.main` 的常用写法。
+本例由 vhttpd + vjsx 提供函数调用、微信登录鉴权和 MySQL 8.0 / PostgreSQL 文档数据库。现有云函数可以保留 `const cloud = require('wx-server-sdk')`、`cloud.init()` 和 `exports.main` 的常用写法。
 
 `wx-server-sdk` 在本例函数加载器中映射到自托管兼容实现，**不加载腾讯官方 npm 包、不连接 CloudBase，也不是完整 SDK 替代品**。小程序仍通过 `wx.request` 直连自己的 HTTPS 服务，使用 `vhttpd.callFunction()`。
 
 ## 入口与目录
 
-- `app.mts`：生产兼容入口，仅支持 PostgreSQL；加载 `cloudfunctions/<name>/index.js`。
+- `app.mts`：生产兼容入口，支持 MySQL 8.0 和 PostgreSQL；加载 `cloudfunctions/<name>/index.js`。
 - `cloudfunctions/getUser/index.js`：通过 SDK 查询当前用户文档；无文档时返回默认资料，不产生写入。
 - `cloudfunctions/updateProfile/index.js`：保存当前用户资料，再通过 `cloud.callFunction()` 调用 getUser。
-- `lib/cloud/`：CommonJS 加载器、调用生命周期、SDK 和 JSONB 查询编译器。
+- `lib/cloud/`：CommonJS 加载器、调用生命周期、SDK 和双数据库查询编译器。
 - `legacy-app.mts`、`functions/get-user.js`：保留原来的 SQL 示例，支持 MySQL/PostgreSQL、自定义 context.db 和整次函数事务。
 - `tests/local-entry.mjs`：只用于回环地址的假身份演示，不能部署到公网。
 
@@ -65,7 +65,9 @@ export WECHAT_DB_NAME='your-db-name'
 
 首版每个应用只配置一个云环境。其他 env 明确返回 ENV_NOT_FOUND；文档表按 AppID、环境、collection 和文档 ID 分区。多个环境可以运行多个配置实例，共享同一数据库。
 
-继续使用旧 MySQL 示例时，复制 TOML，将 entry 改为 `legacy-app.mts`，同步修改数据库资源 kind/port 及 WECHAT_DB_DRIVER；只应用 schema.sql。兼容入口会拒绝 MySQL，避免误用 PostgreSQL SQL。
+使用 MySQL 8.0 时，应用 `schema-auth-mysql.sql` 和 `schema-cloud-mysql.sql`，设置 `WECHAT_DB_DRIVER=mysql`，启动配置改为 `vhttpd.mysql.toml`（默认数据库端口 3306）。MySQL 使用 InnoDB、utf8mb4 和区分大小写的文档键；需要 MySQL 8.0.16+ 的约束支持。PostgreSQL 继续使用上面的两份建表脚本和原配置。切换配置不会自动复制既有数据。
+
+MySQL 事务要求连接使用 REPEATABLE READ（MySQL 默认值）或 SERIALIZABLE；配置为 READ COMMITTED 等其他级别时，兼容层明确拒绝事务。需要包含本次长度安全 MySQL 结果读取修复的新版 DB-enabled vhttpd。
 
 ## SDK 支持范围
 
@@ -117,7 +119,7 @@ await db.runTransaction(async transaction => {
 
 - 数据仅支持 JSON：对象、数组、字符串、布尔、有限数字、null；不支持 Date、Geo、RegExp、二进制、BigInt、undefined、serverDate。文档/结果最大 1 MiB，嵌套最多 32 层。
 - collection、环境和 ID 使用 1–128 位字母/数字/下划线/连字符；字段点路径只支持标识符段，不支持数组下标。
-- 精确 JSON 匹配不会模拟 MongoDB 的数组元素匹配。比较只允许同类型字符串或数字；字符串排序采用 PostgreSQL JSONB 行为，不承诺腾讯数据库全部排序语义。
+- 精确 JSON 匹配不会模拟 MongoDB 的数组元素匹配。比较只允许同类型字符串或数字；字符串排序采用所选数据库的 JSON 行为，不承诺两种数据库或腾讯数据库的全部排序语义完全一致。
 - 同一次 update 中不能出现重叠路径，例如 a 与 a.b；嵌套字段父节点应为对象。分页/排序后的写操作明确拒绝。
 - 不支持字段投影、聚合、实时监听、批量 add、跨环境调用、手动 startTransaction、事务冲突重试。
 - 云存储与微信 OpenAPI 尚未实现；已暴露占位入口会抛 NOT_SUPPORTED。其他未列出的 SDK 属性不构成兼容承诺。
@@ -139,7 +141,7 @@ await db.runTransaction(async transaction => {
 
 - 显式事务的普通异常和函数超时走等待回滚的路径；事务对象在完成后关闭。
 - 不支持嵌套事务或事务期间函数互调。事务中应始终使用传入的 transaction；不要使用外部 db 开独立操作。
-- 显式事务使用 PostgreSQL SERIALIZABLE 隔离，语句串行执行；冲突会导致事务失败，不自动重试回调。inc/mul 在单条 SQL 中原子更新。事务期间使用外部 db 的操作会被拒绝。
+- PostgreSQL 显式事务使用 SERIALIZABLE；MySQL 使用 REPEATABLE READ / SERIALIZABLE，并对事务文档读取加 FOR UPDATE 行锁。语句串行执行；冲突会导致事务失败，不自动重试回调。PostgreSQL inc/mul 使用原子 SQL；MySQL 更新在同一原生事务内锁定、验证并写回文档，计数包含匹配但未变化的文档。事务期间使用外部 db 的操作会被拒绝。
 - 嵌套函数最多 8 层，继承外层截止时间；事件和结果通过 JSON 复制，避免调用之间共享可变对象。
 - 函数结束后拒绝新 SDK 操作；已提交的操作会被等待。已发生的 SQL 错误即使在业务中捕获，也可能使当前调用失败，事务内会回滚；应 await 所有操作。
 - 不支持可靠的 detached 后台任务。迟到回调中的 SDK 被关闭，但任意 JS 代码仍可能继续运行。
@@ -214,10 +216,10 @@ make -C examples/wechat-cloud-functions test
 make -C examples/wechat-cloud-functions test-e2e VHTTPD_BIN="$PWD/vhttpd"
 ```
 
-26 项单元与小程序页面测试全部在 vjsx 中运行，使用轻量断言入口 tests/run.mjs，不依赖 node:test 或 node:vm。
+31 项单元、数据库编译和小程序页面测试全部在 vjsx 中运行，使用轻量断言入口 tests/run.mjs，不依赖 node:test 或 node:vm。
 
 E2E 由 shell 创建全新 PostgreSQL 并启动真实 vhttpd，HTTP 断言全部由 vjsx CLI 执行。测试入口使用固定的 alice/bob 假登录身份，不连接现有业务数据库，不使用真实 AppSecret，也不声称验证微信 code 的一次性语义。覆盖并发身份、函数互调、JSONB CRUD、原子增量、显式事务异常/超时回滚、普通写入独立提交、迟到写入拒绝，以及生产入口重启后的文档与会话持久化。生产入口不加载测试函数。
 
-当前 E2E 仅验证 PostgreSQL；legacy-app.mts 的 MySQL 路径未在这套 vjsx E2E 中覆盖。PostgreSQL 工具路径通过 WCF_INITDB/WCF_PG_CTL/WCF_PSQL 配置。
+本示例 `test-e2e` 仍创建临时 PostgreSQL；MySQL 8.0 和体测项目的双数据库验收使用体测项目 `server/tests/run.sh`，设置 `BODYTEST_DB_DRIVER=mysql` 或 `pgsql`。覆盖原云函数、并发增量、JSON 查询、事务回滚、大体积备份及签名发货幂等。PostgreSQL 工具路径通过 WCF_INITDB/WCF_PG_CTL/WCF_PSQL 配置。
 
 设置 WCF_KEEP_TEST_FILES=1 可保留该次临时测试文件；默认退出时清理。真实微信平台联调还需有效小程序及 wx.login 产生的 code，本地替身通过不代表已完成真实平台联调。
