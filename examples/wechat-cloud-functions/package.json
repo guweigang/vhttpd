@@ -2,8 +2,9 @@
   "name": "vhttpd-wechat-cloud-functions-example",
   "private": true,
   "scripts": {
-    "test": "node --test --test-concurrency=1 tests/unit.test.mjs tests/miniprogram.test.mjs",
+    "test": "node --test --test-concurrency=1 tests/unit.test.mjs tests/miniprogram.test.mjs tests/cloud.test.mjs",
     "test:e2e": "node tests/e2e.mjs",
+    "test:cloud": "node tests/e2e.mjs --pgsql-only --cloud",
     "dev:local": "node tests/dev-local.mjs"
   }
 }
