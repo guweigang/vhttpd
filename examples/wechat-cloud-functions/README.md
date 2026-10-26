@@ -179,7 +179,11 @@ const updated = await vhttpd.callFunction({
 
 数据库数据保存在 `desktop-local/.runtime/postgres/`（被 Git 忽略），独立于现有 Postgres 数据库，重启应用后保留。Desktop 只管理 vhttpd 实例；数据库由 `database.sh start|stop|status` 管理，不随 Desktop 停止而删除。不要与临时演示脚本同时占用 19886 端口。
 
-**此入口固定使用 desktop-demo-user 模拟身份，不校验微信 code。** 仅用于本机 Desktop 联调，不能公开部署。真实微信登录仍使用生产 app.mts，需服务端 AppID/AppSecret 及实际小程序联调。
+Desktop 项目当前配置使用 `real.mts`，从 `.runtime/wechat-credentials.json` 读取 `WECHAT_APP_ID` 和 `WECHAT_APP_SECRET`，经固定微信 jscode2session 接口校验真实 code。该文件应保持 0600 权限并被 Git 忽略；AppID 与 AppSecret 必须属于同一个小程序。更新凭据后在 Desktop 点击“重启”，入口不会回退到模拟身份。
+
+需要模拟模式时，将 desktop-local/vhttpd.toml 的 entry 改为 `app.mts`；该文件固定使用 desktop-demo-user，不校验微信 code，不能公开部署。正式远端部署仍使用 examples/wechat-cloud-functions/app.mts，通过服务端环境变量提供凭据。
+
+独立小程序示例位于 miniprogram/；project.config.json 只包含公开 AppID，不包含 AppSecret。本机 127.0.0.1 联调使用 Git 忽略的 project.private.config.json 中 setting.urlCheck=false；切换公网 HTTPS 部署时恢复域名校验并配置合法域名。
 
 ## 无真实微信凭证的本地演示
 
