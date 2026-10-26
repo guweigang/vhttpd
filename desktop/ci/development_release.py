@@ -18,7 +18,8 @@ from macos_release import prepare, digest
 from workbench_version import version_metadata
 
 WORKFLOWS = ('workbench-macos-runtime.yml', 'vhttpd-binaries.yml')
-ARTIFACTS = ('workbench-macos-arm64-unsigned-verified', 'vhttpd-linux-amd64', 'vhttpd-linux-arm64')
+RUNTIME_PLATFORMS = ('linux-amd64', 'linux-arm64', 'macos-amd64', 'macos-arm64')
+ARTIFACTS = ('workbench-macos-arm64-unsigned-verified',) + tuple('vhttpd-' + p for p in RUNTIME_PLATFORMS)
 
 
 def eligible(run, repo, default_branch):
@@ -46,34 +47,41 @@ def safe_unpack(archive, destination):
         bundle.extractall(destination)
 
 
-def validate_linux(directory, platform, sha):
+def validate_runtime(directory, platform, sha):
+    if platform not in RUNTIME_PLATFORMS:
+        raise ValueError('Unsupported runtime platform')
     archive = directory / ('vhttpd-' + platform + '.tar.gz')
     sums = directory / (archive.name + '.sha256')
     if archive.stat().st_size > 268435456 or sums.read_text().split() != [digest(archive), archive.name]:
-        raise ValueError('Linux checksum mismatch')
+        raise ValueError('Runtime checksum mismatch')
     prefix = 'vhttpd-' + platform
     with tarfile.open(archive) as bundle:
         members = bundle.getmembers()
         if len(members) > 20000 or sum(m.size for m in members) > 536870912:
-            raise ValueError('Linux expansion limit exceeded')
+            raise ValueError('Runtime expansion limit exceeded')
         names = [m.name for m in members]
         if len(set(names)) != len(names):
-            raise ValueError('Duplicate Linux package path')
+            raise ValueError('Duplicate runtime package path')
         for member in members:
             path = PurePosixPath(member.name)
             if (path.is_absolute() or '..' in path.parts or '\\' in member.name
                     or path.parts[0] != prefix or not (member.isfile() or member.isdir())):
-                raise ValueError('Unsafe Linux package')
+                raise ValueError('Unsafe runtime package')
         manifest = bundle.getmember(prefix + '/runtime-manifest.json')
         if manifest.size > 16384:
-            raise ValueError('Linux manifest too large')
+            raise ValueError('Runtime manifest too large')
         identity = json.load(bundle.extractfile(manifest))
         if identity.get('source_commit') != sha or identity.get('platform') != platform:
-            raise ValueError('Linux package source/platform mismatch')
-        elf = bundle.extractfile(prefix + '/vhttpd').read(20)
-        machine = 62 if platform == 'linux-amd64' else 183
-        if elf[:6] != b'\x7fELF\x02\x01' or int.from_bytes(elf[18:20], 'little') != machine:
-            raise ValueError('Linux ELF architecture mismatch')
+            raise ValueError('Runtime package source/platform mismatch')
+        header = bundle.extractfile(prefix + '/vhttpd').read(20)
+        if platform.startswith('linux-'):
+            machine = 62 if platform == 'linux-amd64' else 183
+            if header[:6] != b'\x7fELF\x02\x01' or int.from_bytes(header[18:20], 'little') != machine:
+                raise ValueError('Linux ELF architecture mismatch')
+        else:
+            cpu = 0x01000007 if platform == 'macos-amd64' else 0x0100000c
+            if header[:4] != b'\xcf\xfa\xed\xfe' or int.from_bytes(header[4:8], 'little') != cpu:
+                raise ValueError('macOS Mach-O architecture mismatch')
         bundle.getmember(prefix + '/admin/ui/index.html')
     return [archive, sums]
 
@@ -132,12 +140,12 @@ class Publisher:
                 safe_unpack(archive, destination)
                 directories[name] = destination
         if set(directories) != set(ARTIFACTS):
-            raise ValueError('CI run is missing the verified Mac or complete Linux artifacts')
+            raise ValueError('CI run is missing the verified Workbench or complete Linux/macOS runtime artifacts')
         version = version_metadata({'VHTTPD_DEVELOPMENT_BUILD': '1', 'GITHUB_SHA': sha})['version']
         output = self.work / 'assets'
         _, assets = prepare(directories[ARTIFACTS[0]], output, {'GITHUB_SHA': sha, 'VHTTPD_WORKBENCH_VERSION': version})
-        for platform in ('linux-amd64', 'linux-arm64'):
-            for file in validate_linux(directories['vhttpd-' + platform], platform, sha):
+        for platform in RUNTIME_PLATFORMS:
+            for file in validate_runtime(directories['vhttpd-' + platform], platform, sha):
                 target = output / file.name
                 shutil.copyfile(file, target)
                 assets.append(target)
@@ -170,7 +178,8 @@ class Publisher:
                 return
         notes = self.work / 'development-notes.txt'
         notes.write_text('vhttpd 开发版 ' + tag + '\n\n源码提交：' + sha + '\n'
-            '由同一提交的 Mac 和 Linux CI 成功构建。Mac 包通过 macOS 15/26 运行验收。\n'
+            '由同一提交的 CI 成功构建：vhttpd Linux/macOS（amd64、arm64），Workbench macOS arm64。\n'
+            'Workbench 包通过 macOS 15/26 运行验收。每个平台运行包均附独立 SHA256 校验文件。\n'
             '公开附件无需 GitHub 登录，可在 Desktop 选择版本或指定此标签。下载后校验 SHA256。\n'
             'Mac 为 unsigned/ad-hoc 开发者预览，首次打开限制见 INSTALL-zh.txt；未承诺 Gatekeeper 放行。\n'
             '开发版可能包含未稳定变更。此版本固定到该提交，不覆盖历史附件。\n\n' + marker + '\n')

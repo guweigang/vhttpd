@@ -9,7 +9,7 @@ import tempfile
 import unittest
 import zipfile
 
-from development_release import ARTIFACTS, Publisher, digest, eligible, safe_unpack, validate_linux
+from development_release import ARTIFACTS, Publisher, digest, eligible, safe_unpack, validate_runtime, RUNTIME_PLATFORMS
 from workbench_version import version_metadata
 
 
@@ -60,12 +60,15 @@ class GitHub:
         return result()
 
 
-def linux_package(directory, platform, sha=SHA):
+def runtime_package(directory, platform, sha=SHA):
     directory.mkdir()
     archive = directory / ('vhttpd-'+platform+'.tar.gz')
     elf = bytearray(20)
     elf[:6] = b'\x7fELF\x02\x01'
     elf[18:20] = (62 if platform == 'linux-amd64' else 183).to_bytes(2,'little')
+    if platform.startswith('macos-'):
+        elf[:4] = b'\xcf\xfa\xed\xfe'
+        elf[4:8] = (0x01000007 if platform == 'macos-amd64' else 0x0100000c).to_bytes(4, 'little')
     files = {'vhttpd': bytes(elf), 'admin/ui/index.html': b'admin',
              'runtime-manifest.json': json.dumps({'platform':platform,'source_commit':sha}).encode()}
     with tarfile.open(archive, 'w:gz') as bundle:
@@ -117,8 +120,8 @@ class DevelopmentTests(unittest.TestCase):
 
     def publisher(self):
         directories = [self.mac_package()]
-        for platform in ['linux-amd64','linux-arm64']:
-            linux_package(self.root/platform,platform)
+        for platform in RUNTIME_PLATFORMS:
+            runtime_package(self.root/platform,platform)
             directories.append(self.root/platform)
         uploads = {}
         for i,(name,directory) in enumerate(zip(ARTIFACTS,directories),1):
@@ -143,6 +146,31 @@ class DevelopmentTests(unittest.TestCase):
         assets[0].write_bytes(b'changed')
         with self.assertRaises(ValueError):publisher.publish(tag,SHA,assets)
 
+    def test_requires_all_runtime_platforms_and_checks_macos_architecture(self):
+        publisher, github, _, assets = self.publisher()
+        names = {p.name for p in assets}
+        for platform in RUNTIME_PLATFORMS:
+            self.assertIn('vhttpd-' + platform + '.tar.gz', names)
+            self.assertIn('vhttpd-' + platform + '.tar.gz.sha256', names)
+        del github.uploads[5]
+        with self.assertRaises(ValueError):
+            Publisher(REPO, self.root/'missing-mac', github).assemble(
+                [{'id':1,'html_url':'mac'},{'id':2,'html_url':'runtime'}], SHA)
+        self.assertIsNone(github.release)
+        archive = runtime_package(self.root/'bad-mac', 'macos-arm64')
+        data = archive.read_bytes()
+        # Repack a valid-checksum archive with the wrong CPU type.
+        with tarfile.open(fileobj=io.BytesIO(data)) as bundle:
+            files = [(m, bundle.extractfile(m).read()) for m in bundle.getmembers()]
+        with tarfile.open(archive, 'w:gz') as bundle:
+            for member, content in files:
+                if member.name.endswith('/vhttpd'):
+                    content = content[:4] + (0x01000007).to_bytes(4,'little') + content[8:]
+                bundle.addfile(member, io.BytesIO(content))
+        archive.with_name(archive.name+'.sha256').write_text(digest(archive)+'  '+archive.name+'\n')
+        with self.assertRaisesRegex(ValueError, 'Mach-O architecture'):
+            validate_runtime(archive.parent, 'macos-arm64', SHA)
+
     def test_interrupted_upload_or_moved_tag_never_exposes_a_partial_release(self):
         publisher,github,tag,assets = self.publisher()
         github.fail_upload = True
@@ -161,8 +189,8 @@ class DevelopmentTests(unittest.TestCase):
         self.assertIsNone(github.release)
 
     def test_linux_commit_mismatch_and_unsafe_artifacts_are_rejected(self):
-        archive = linux_package(self.root/'wrong','linux-arm64','b'*40)
-        with self.assertRaises(ValueError):validate_linux(archive.parent,'linux-arm64',SHA)
+        archive = runtime_package(self.root/'wrong','linux-arm64','b'*40)
+        with self.assertRaises(ValueError):validate_runtime(archive.parent,'linux-arm64',SHA)
         unsafe = self.root/'unsafe.zip'
         with zipfile.ZipFile(unsafe,'w') as bundle:bundle.writestr('../escape','bad')
         with self.assertRaises(ValueError):safe_unpack(unsafe,self.root/'unpack')
