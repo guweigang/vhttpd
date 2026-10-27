@@ -1,6 +1,6 @@
 # vhttpd 自托管微信云函数兼容层
 
-本例由 vhttpd + vjsx 提供函数调用、微信登录鉴权和 MySQL 8.0 / PostgreSQL 文档数据库。现有云函数可以保留 `const cloud = require('wx-server-sdk')`、`cloud.init()` 和 `exports.main` 的常用写法。
+本例由 vhttpd + vjsx 提供函数调用、微信登录鉴权、MySQL 8.0 / PostgreSQL 文档数据库和本地磁盘云存储。现有云函数可以保留 `const cloud = require('wx-server-sdk')`、`cloud.init()` 和 `exports.main` 的常用写法。
 
 `wx-server-sdk` 在本例函数加载器中映射到自托管兼容实现，**不加载腾讯官方 npm 包、不连接 CloudBase，也不是完整 SDK 替代品**。小程序仍通过 `wx.request` 直连自己的 HTTPS 服务，使用 `vhttpd.callFunction()`。
 
@@ -122,8 +122,58 @@ await db.runTransaction(async transaction => {
 - 精确 JSON 匹配不会模拟 MongoDB 的数组元素匹配。比较只允许同类型字符串或数字；字符串排序采用所选数据库的 JSON 行为，不承诺两种数据库或腾讯数据库的全部排序语义完全一致。
 - 同一次 update 中不能出现重叠路径，例如 a 与 a.b；嵌套字段父节点应为对象。分页/排序后的写操作明确拒绝。
 - 不支持字段投影、聚合、实时监听、批量 add、跨环境调用、手动 startTransaction、事务冲突重试。
-- 云存储与微信 OpenAPI 尚未实现；已暴露占位入口会抛 NOT_SUPPORTED。其他未列出的 SDK 属性不构成兼容承诺。
+- 云存储支持本地磁盘后端，详见下节；微信 OpenAPI 尚未实现，调用会抛 NOT_SUPPORTED。S3 尚未实现，仅预留后端接口。其他未列出的 SDK 属性不构成兼容承诺。
 - HTTP 错误只暴露稳定错误码；SDK 错误码为本实现的字符串，不承诺腾讯数字错误码一致。
+
+## 本地磁盘云存储
+
+配置以下服务端环境变量后启用；未配置存储时文件 API 仍明确返回 NOT_SUPPORTED：
+
+```sh
+export WECHAT_STORAGE_ROOT='/absolute/private/path/wechat-files'
+export WECHAT_STORAGE_BASE_URL='https://your-api.example.com'
+export WECHAT_STORAGE_MAX_FILE_BYTES=10485760
+export WECHAT_STORAGE_URL_TTL_SECONDS=600
+```
+
+重新应用所选数据库的 schema-cloud-pgsql.sql 或 schema-cloud-mysql.sql，其中已包含 wcf_files 文件元数据表。文件字节位于私有目录 objects/，不写入数据库、不通过静态目录公开。该目录由服务用户独占（0700）；文件与自动生成的 .signing-key 为 0600。备份时同时保存数据库、objects/ 和 .signing-key；保留签名密钥可让未过期链接跨应用重启继续工作。
+
+云函数保留原 SDK 写法：
+
+```js
+const cloud = require('wx-server-sdk');
+const fs = require('fs');
+cloud.init({env: cloud.DYNAMIC_CURRENT_ENV});
+
+exports.main = async () => {
+  const {fileID} = await cloud.uploadFile({
+    cloudPath: 'reports/report.bin',
+    fileContent: fs.createReadStream('./report.bin'),
+  });
+  const {fileContent} = await cloud.downloadFile({fileID}); // Buffer
+  return cloud.getTempFileURL({fileList: [{fileID, maxAge: 600}]});
+  // cloud.deleteFile({fileList: [fileID]}) 返回逐文件 status/errMsg
+};
+```
+
+uploadFile 接受 Buffer、Uint8Array 和可读字节流；vjsx 的 fs.createReadStream 兼容常用上传写法。文件内容应在云函数内处理，不能直接把 Buffer 当成函数 JSON 返回值。当前按大小上限整体缓冲，尚未提供大文件分片、进度任务或无限大小流式传输。
+
+默认按 AppID、环境和可信 OPENID 隔离，当前用户只能管理自己的文件。与微信服务端管理员权限并非完全一致，暂不提供跨用户管理员文件操作或公共桶规则。相同用户重复上传同一 cloudPath 会保持 fileID、替换物理版本；其他用户同名路径互不影响。fileID 为自托管 cloud://vhttpd/... 标识，不包含磁盘路径；腾讯原有 cloud:// 标识需要另行迁移，不能直接读取。
+
+getTempFileURL 默认 600 秒，允许 1–3600 秒。持有链接者可在有效期内下载；链接属于临时访问凭证，日志和分享也应按此管理。签名绑定文件版本，覆盖或删除后旧链接立即失效。下载使用 nosniff 和 attachment，图片类型有限白名单，其他文件按 application/octet-stream 返回。
+
+文件写入、删除各自提交，不和业务数据库事务组成跨资源事务；数据库 runTransaction 内调用文件 API 会明确拒绝。元数据发布先于旧版本清理，删除先撤销元数据访问。进程崩溃、提交结果未知或物理清理失败可能留下不可访问的孤立文件，清理失败输出 STORAGE_CLEANUP_PENDING；不要在未核对数据库有效引用前手动批量删除 objects/。
+
+小程序仍用同一 createClient()，四个文件方法支持 Promise 与 success/fail/complete：
+
+```js
+const {fileID} = await vhttpd.uploadFile({cloudPath: 'avatars/photo.jpg', filePath: localTempFilePath});
+const {tempFilePath} = await vhttpd.downloadFile({fileID});
+```
+
+上传通过微信文件系统有界读取及鉴权 JSON 通道；下载通过签名 URL 与 wx.downloadFile 返回本机临时路径。默认单文件 10 MiB，服务端可配置到 64 MiB；如提高服务端上限，客户端 createClient({maxUploadBytes}) 也需同步。对外部署配置 HTTPS 及微信 request/upload/download 合法域名。上传、删除不会自动重试。
+
+后端边界为 initialize()、put(key, bytes, guard)、get(key, maxBytes, guard)、remove(key, guard)；对象键为服务端生成的不可变版本，不接收用户路径。后端 get 返回 Buffer/Uint8Array，guard 提供截止状态检查及 AbortSignal。createStorageService({backend, signingKey, publicBaseURL}) 可注入未来 S3 实现；默认文件系统后端持久化签名密钥，自定义后端需提供至少 32 字节的稳定 signingKey。仅设置 kind=s3 会明确拒绝，不会假装已接通 S3。迁换后端还需搬迁真实对象，不能只修改配置。
 
 ## CommonJS 与身份隔离
 
@@ -217,7 +267,7 @@ make -C examples/wechat-cloud-functions test-e2e VHTTPD_BIN="$PWD/vhttpd"
 make -C examples/wechat-cloud-functions test-e2e-mysql VHTTPD_BIN="$PWD/vhttpd"
 ```
 
-31 项单元、数据库编译和小程序页面测试全部在 vjsx 中运行，使用轻量断言入口 tests/run.mjs，不依赖 node:test 或 node:vm。
+37 项单元、存储、数据库编译和小程序页面测试全部在 vjsx 中运行，使用轻量断言入口 tests/run.mjs，不依赖 node:test 或 node:vm。
 
 E2E 由 shell 创建全新 PostgreSQL 并启动真实 vhttpd，HTTP 断言全部由 vjsx CLI 执行。测试入口使用固定的 alice/bob 假登录身份，不连接现有业务数据库，不使用真实 AppSecret，也不声称验证微信 code 的一次性语义。覆盖并发身份、函数互调、JSONB CRUD、原子增量、显式事务异常/超时回滚、普通写入独立提交、迟到写入拒绝，以及生产入口重启后的文档与会话持久化。生产入口不加载测试函数。
 
