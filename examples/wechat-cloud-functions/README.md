@@ -214,12 +214,13 @@ shell 只负责原生进程生命周期和信号清理，JavaScript 探测由 vj
 ```sh
 make -C examples/wechat-cloud-functions test
 make -C examples/wechat-cloud-functions test-e2e VHTTPD_BIN="$PWD/vhttpd"
+make -C examples/wechat-cloud-functions test-e2e-mysql VHTTPD_BIN="$PWD/vhttpd"
 ```
 
 31 项单元、数据库编译和小程序页面测试全部在 vjsx 中运行，使用轻量断言入口 tests/run.mjs，不依赖 node:test 或 node:vm。
 
 E2E 由 shell 创建全新 PostgreSQL 并启动真实 vhttpd，HTTP 断言全部由 vjsx CLI 执行。测试入口使用固定的 alice/bob 假登录身份，不连接现有业务数据库，不使用真实 AppSecret，也不声称验证微信 code 的一次性语义。覆盖并发身份、函数互调、JSONB CRUD、原子增量、显式事务异常/超时回滚、普通写入独立提交、迟到写入拒绝，以及生产入口重启后的文档与会话持久化。生产入口不加载测试函数。
 
-本示例 `test-e2e` 仍创建临时 PostgreSQL；MySQL 8.0 和体测项目的双数据库验收使用体测项目 `server/tests/run.sh`，设置 `BODYTEST_DB_DRIVER=mysql` 或 `pgsql`。覆盖原云函数、并发增量、JSON 查询、事务回滚、大体积备份及签名发货幂等。PostgreSQL 工具路径通过 WCF_INITDB/WCF_PG_CTL/WCF_PSQL 配置。
+本示例 `test-e2e` 创建临时 PostgreSQL，`test-e2e-mysql` 使用 Docker 创建官方 MySQL 8.0 隔离容器并在退出时删除容器及测试卷，JavaScript 全部由 vjsx 执行。体测项目的双数据库验收使用 `server/tests/run.sh`，设置 `BODYTEST_DB_DRIVER=mysql` 或 `pgsql`。覆盖原云函数、并发增量、JSON 查询、事务回滚、大体积备份及签名发货幂等。PostgreSQL 工具路径通过 WCF_INITDB/WCF_PG_CTL/WCF_PSQL 配置。
 
 设置 WCF_KEEP_TEST_FILES=1 可保留该次临时测试文件；默认退出时清理。真实微信平台联调还需有效小程序及 wx.login 产生的 code，本地替身通过不代表已完成真实平台联调。

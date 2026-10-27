@@ -20,6 +20,7 @@ username = "${env.WECHAT_DB_USER}"
 password = "${env.WECHAT_DB_PASSWORD}"
 database = "${env.WECHAT_DB_NAME}"
 pool_size = 4
+init_sql = ["SET NAMES utf8mb4", "SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ"]
 options = {socket = "/tmp/vhttpd-wechat-cloud-functions-mysql-db.sock", pool_name = "wechat"}
 
 [engines.wechat]
