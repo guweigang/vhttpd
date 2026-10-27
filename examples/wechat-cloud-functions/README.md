@@ -213,7 +213,7 @@ const updated = await vhttpd.callFunction({
 });
 ```
 
-原有 `wx.cloud.callFunction({name, data})` 可改成 `vhttpd.callFunction({name, data})`；保留 Promise、success/fail/complete 和 result 的用法。客户端数据库、文件 API 尚未提供。不要全局替换 wx 前缀，wx.login、wx.request、导航和支付仍使用微信接口。
+原有 `wx.cloud.callFunction({name, data})` 可改成 `vhttpd.callFunction({name, data})`；保留 Promise、success/fail/complete 和 result 的用法。文件 API 使用同一客户端提供的 uploadFile、downloadFile、deleteFile、getTempFileURL；客户端数据库 API 尚未提供。不要全局替换 wx 前缀，wx.login、wx.request、导航和支付仍使用微信接口。
 
 客户端失败不自动重试业务写入；401 清除会话，调用方重新登录。clearSession 只删除本地缓存，不撤销服务端令牌。回调先执行 success 或 fail，再执行一次 complete；回调模式也返回 Promise，忽略它不会产生未处理拒绝。
 
