@@ -268,6 +268,8 @@ make build-prod
 `make vhttpd` now builds with `-d use_openssl` and DB support by default.
 If you need the previous mbedtls path, use `make vhttpd V_TLS_BACKEND=mbedtls`; that path still adds `-d mbedtls_client_read_timeout_ms=120000` for long-lived Feishu websocket connections.
 `make prod` / `make build-prod` use the same TLS backend selection and additionally enable V `-prod`.
+
+Runtime builds enable Boehm GC by default (`VPHP_V_GC=boehm`). Legacy `auto` and empty values also select Boehm; missing GC dependencies never select `-gc none`. Install the dependencies with `make deps-core` if compilation reports missing GC libraries. Runtime build targets reject `VPHP_V_GC=none` before staging or compilation, because long-running hosts require collection of temporary native allocations. `make test-build-gc` checks the build entry points and is included in `make test-fast`.
 `prod` build defaults runtime logs to `warn` (warnings + errors). You can override with `VHTTPD_LOG_LEVEL=debug|info|warn|error|fatal`.
 
 If you want to turn DB support off explicitly:
