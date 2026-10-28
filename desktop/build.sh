@@ -5,6 +5,8 @@ if [[ "$(uname -s)" != Darwin ]]; then
   exit 1
 fi
 root="$(cd "$(dirname "$0")/.." && pwd)"
+export VJSX_DIR="${VJSX_DIR:-$root/.deps/vjsx}"
+bash "$root/scripts/ensure-vjsx.sh" >/dev/null
 version="$(python3 "$root/desktop/workbench_version.py" --field version)"
 bundle_version="$(python3 "$root/desktop/workbench_version.py" --field bundle_version)"
 archive_name="vhttpd-workbench-macos-arm64-$version.zip"
@@ -51,6 +53,7 @@ else
     V_FLAGS="-w -d use_openssl -d use_bundled_libgc -enable-globals"
   export VHTTPD_PACKAGE_RUNTIME="$build_dir/vhttpd"
 fi
+python3 "$root/scripts/ci/verify_gc_runtime.py" "$VHTTPD_PACKAGE_RUNTIME"
 app="$build_dir/vhttpd-workbench.app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp "$root/desktop/assets/vhttpd-macos.icns" "$app/Contents/Resources/vhttpd-macos.icns"
@@ -61,7 +64,7 @@ if [[ -z "${VJS_QUICKJS_PATH:-}" ]]; then
   vjsx_source="${VJSX_DIR:-$HOME/.vmodules/vjsx}"
   export VJS_QUICKJS_PATH="$(VJS_QUICKJS_WORK_ROOT="$root" "$vjsx_source/scripts/ensure-quickjs.sh")"
 fi
-v -prod -nocache -cc "$build_dir/clang-compatible" -d build_quickjs -d use_bundled_libgc -w -enable-globals -path "$root/desktop|$root/src|$root/.deps|@vlib|@vmodules" \
+v -prod -nocache -gc boehm -cc "$build_dir/clang-compatible" -d build_quickjs -d use_bundled_libgc -w -enable-globals -path "$root/desktop|$root/src|$(dirname "$VJSX_DIR")|$root/.deps|@vlib|@vmodules" \
   -o "$build_dir/vhttpd-workbench" "$root/desktop"
 # Replace the directory entry atomically; never truncate the executable that
 # a running workbench has mapped into memory.

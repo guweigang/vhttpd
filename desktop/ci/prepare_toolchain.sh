@@ -21,25 +21,18 @@ checkout_pinned() {
 }
 checkout_pinned "$V_REPO" "$V_COMMIT" "$toolchain/v"
 checkout_pinned "$VJSX_REPO" "$VJSX_COMMIT" "$toolchain/vjsx"
-# Freeze the dependency changes used by this workspace, rather than relying on
-# unpublished edits in a developer's V/vjsx checkout.
-git -C "$toolchain/v" apply --check "$root/desktop/ci/patches/v-websocket.patch"
-git -C "$toolchain/v" apply "$root/desktop/ci/patches/v-websocket.patch"
-git -C "$toolchain/vjsx" apply --check "$root/desktop/ci/patches/vjsx-runtime.patch"
-git -C "$toolchain/vjsx" apply "$root/desktop/ci/patches/vjsx-runtime.patch"
+# These changes are included in the pinned upstream commits; do not reapply
+# historical workspace patches to a newer dependency.
 checkout_pinned "$VC_REPO" "$VC_COMMIT" "$toolchain/v/vc"
 checkout_pinned "$TCC_REPO" "$TCC_COMMIT" "$toolchain/v/thirdparty/tcc"
 make -C "$toolchain/v" local=1 CC=cc
 "$toolchain/v/v" version
-mkdir -p "$HOME/.vmodules"
-if [[ -e "$HOME/.vmodules/vjsx" || -L "$HOME/.vmodules/vjsx" ]]; then
-  echo 'Refusing to replace an existing vjsx module in the build environment.' >&2
-  exit 1
-fi
-ln -s "$toolchain/vjsx" "$HOME/.vmodules/vjsx"
+mkdir -p "$toolchain/modules"
+ln -s "$toolchain/vjsx" "$toolchain/modules/vjsx"
 quickjs="$(VJS_QUICKJS_WORK_ROOT="$root" "$toolchain/vjsx/scripts/ensure-quickjs.sh")"
 echo "$toolchain/v" >> "$GITHUB_PATH"
 {
   echo "VJSX_DIR=$toolchain/vjsx"
+  echo "VMODULES=$toolchain/modules"
   echo "VJS_QUICKJS_PATH=$quickjs"
 } >> "$GITHUB_ENV"

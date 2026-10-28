@@ -5,6 +5,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+from verify_gc_runtime import verify_gc_runtime
 
 
 def run(command, **kwargs):
@@ -33,6 +34,10 @@ def verify_macos(root):
 
 
 def verify_linux(root):
+    header = (root / 'vhttpd').read_bytes()[:20]
+    machine = {'vhttpd-linux-amd64': 62, 'vhttpd-linux-arm64': 183}.get(root.name)
+    if machine is None or header[:4] != b'\x7fELF' or int.from_bytes(header[18:20], 'little') != machine:
+        raise ValueError('Runtime ELF architecture does not match the package name')
     system = ('libc.so.', 'libm.so.', 'libdl.so.', 'libpthread.so.', 'librt.so.',
               'ld-linux', 'libresolv.so.', 'libutil.so.')
     for file in [root / 'vhttpd', *sorted((root / 'runtime/libs').iterdir())]:
@@ -73,6 +78,7 @@ def main():
                               '(deny file-read* (subpath "/opt/homebrew") (subpath "/usr/local"))')
             command = ['/usr/bin/sandbox-exec', '-f', str(policy), binary]
         print('Extracted runtime version:', run([*command, '--version'], env=env, cwd=home).strip())
+        verify_gc_runtime(command, env=env, cwd=home)
         run([*command, '--help'], env=env, cwd=home)
         if not (root / 'admin/ui/index.html').is_file():
             raise ValueError('Packaged Admin UI is missing')

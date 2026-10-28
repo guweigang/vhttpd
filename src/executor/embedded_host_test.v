@@ -64,6 +64,38 @@ fn test_embedded_http_runs_with_only_embedded_services_and_live_config() {
 	assert host.events == 2
 }
 
+fn test_prepared_typescript_and_commonjs_do_not_retain_compiler_in_execution_lane() ! {
+	dir := os.join_path(os.temp_dir(), 'vhttpd_compiler_scope_${os.getpid()}')
+	os.mkdir_all(dir)!
+	defer { os.rmdir_all(dir) or {} }
+	entry := os.join_path(dir, 'handler.mts')
+	os.write_file(os.join_path(dir, 'answer.ts'), 'export const answer: number = 40;')!
+	os.write_file(os.join_path(dir, 'common.cjs'), 'module.exports = {n: 2};')!
+	os.write_file(entry, 'import {answer} from "./answer.ts"; import common from "./common.cjs"; export default ctx => ctx.json({value: answer + common.n, compilerResident: globalThis.__vjs_typescript_runtime_ready === true}, 200);')!
+	exec := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
+		thread_count:    1
+		app_entry:       entry
+		module_root:     dir
+		runtime_profile: 'node'
+	})
+	defer { exec.close() }
+	mut host := &EmbeddedOnlyHost{}
+	request := HttpLogicDispatchRequest{
+		method:     'GET'
+		path:       '/compiler-scope'
+		req:        http.Request{ method: .get, url: '/compiler-scope', host: 'example.test' }
+		request_id: 'compiler-scope'
+		trace_id:   'compiler-scope'
+	}
+	for _ in 0 .. 2 {
+		result := exec.dispatch_http_with_host(mut host, request)!
+		assert result.response.status == 200
+		assert result.response.body.contains('"value":42')
+		assert result.response.body.contains('"compilerResident":false')
+	}
+}
+
+
 fn test_request_host_lookup_absence_priority_and_request_end() {
 	mut state := &VjsxExecutorState{
 		hosts: [VjsxLaneHost.empty()]

@@ -1,14 +1,15 @@
 .PHONY: build vhttpd prod build-prod build-db prepare-build-src deps-core deps-vjsx deps-db deps-full doctor demo-vslim demo-ai demo-symfony demo-laravel demo-wordpress package-wp-plugin psr-matrix test test-fast test-php test-e2e test-inproc test-codexbot test-codexbot-fast test-codexbot-lifecycle test-profile-codexbot test-all
-.PHONY: lint-safety
+.PHONY: lint-safety check-build-gc test-build-gc
+.DEFAULT_GOAL := build
 
 ROOT := $(CURDIR)
 SRC_DIR := $(ROOT)/src
 VHTTPD_BIN ?= $(ROOT)/vhttpd
 V_CC ?= cc
-VPHP_V_GC ?= auto
+VPHP_V_GC ?= boehm
 VPHP_V_GC_STRIPPED := $(strip $(VPHP_V_GC))
-RESOLVED_VPHP_V_GC := $(shell if [ -n "$(VPHP_V_GC_STRIPPED)" ] && [ "$(VPHP_V_GC_STRIPPED)" != "auto" ]; then printf "%s" "$(VPHP_V_GC_STRIPPED)"; elif pkg-config --exists bdw-gc 2>/dev/null; then printf boehm; else printf none; fi)
-V_GC_FLAG := -gc $(RESOLVED_VPHP_V_GC)
+RESOLVED_VPHP_V_GC := $(if $(filter-out auto,$(VPHP_V_GC_STRIPPED)),$(VPHP_V_GC_STRIPPED),boehm)
+override V_GC_FLAG := -gc $(RESOLVED_VPHP_V_GC)
 V_TLS_BACKEND ?= openssl
 ifeq ($(V_TLS_BACKEND),openssl)
 V_TLS_FLAGS := -d use_openssl
@@ -17,15 +18,14 @@ V_TLS_FLAGS := -d mbedtls_client_read_timeout_ms=120000
 endif
 # Prefer project modules over same-named standard-library modules (e.g. config).
 # Keep stdlib and isolated dependencies in the explicit search path.
-V_MODULE_PATH ?= $(SRC_DIR)|@vlib|@vmodules
+V_MODULE_PATH ?= $(SRC_DIR)|$(abspath $(VJSX_DIR)/..)|@vlib|@vmodules
 V_MODULE_FLAGS = -path "$(V_MODULE_PATH)"
 V_FLAGS ?= $(V_TLS_FLAGS) -enable-globals
 V_PROD_FLAGS ?= -prod
 V_NOCACHE_FLAGS ?= -nocache
 WITH_DB ?= 1
-VJSX_DIR ?= $(shell if [ -x "$(ROOT)/../vjsx/scripts/ensure-quickjs.sh" ]; then printf "%s" "$(abspath $(ROOT)/../vjsx)"; else printf "%s" "$(HOME)/.vmodules/vjsx"; fi)
-LOCAL_QUICKJS ?= $(abspath $(ROOT)/../quickjs)
-VJS_QUICKJS_PATH ?= $(shell if [ -f "$(LOCAL_QUICKJS)/quickjs.c" ] && [ -f "$(LOCAL_QUICKJS)/quickjs-c-atomics.h" ] && grep -q 'QJS_VERSION_MAJOR' "$(LOCAL_QUICKJS)/quickjs.h" 2>/dev/null; then printf "%s" "$(LOCAL_QUICKJS)"; else VJS_QUICKJS_WORK_ROOT="$(ROOT)" "$(VJSX_DIR)/scripts/ensure-quickjs.sh"; fi)
+VJSX_DIR ?= $(ROOT)/.deps/vjsx
+VJS_QUICKJS_PATH ?= $(shell VJS_QUICKJS_WORK_ROOT="$(ROOT)" "$(VJSX_DIR)/scripts/ensure-quickjs.sh")
 VJSX_FLAGS ?= -d build_quickjs
 V_TEST_FLAGS ?= $(V_NOCACHE_FLAGS) -d vjsx_sqlite $(V_DB_FLAGS)
 V_ENV = VJS_QUICKJS_PATH="$(VJS_QUICKJS_PATH)"
@@ -85,7 +85,23 @@ CODEXBOT_LIFECYCLE_TEST_FILES := $(shell find $(SRC_DIR) -name '*codexbot_lifecy
 CODEXBOT_FAST_TEST_FILES := $(shell find $(SRC_DIR) -name 'inproc_*codexbot*_test.v' \
 	! -name '*codexbot_lifecycle_test.v')
 
-prepare-build-src:
+# A long-running host requires GC. Missing GC libraries must fail compilation,
+# never silently produce an executable that accumulates native allocations.
+# Keep this check on build staging only, so diagnostic test settings stay usable.
+check-build-gc:
+	@case '$(RESOLVED_VPHP_V_GC)' in \
+		boehm) ;; \
+		*) echo 'vhttpd runtime builds require Boehm GC; use VPHP_V_GC=boehm. GC-disabled builds are not supported.' >&2; exit 1 ;; \
+	esac
+
+test-build-gc:
+	@python3 $(ROOT)/scripts/ci/test_build_gc.py
+
+.PHONY: check-build-vjsx
+check-build-vjsx: check-build-gc
+	@VJSX_DIR="$(VJSX_DIR)" bash $(ROOT)/scripts/ensure-vjsx.sh >/dev/null
+
+prepare-build-src: check-build-vjsx
 	@rm -rf $(BUILD_STAGE_ROOT)
 	@mkdir -p $(BUILD_STAGE_DIR)
 	@if command -v rsync >/dev/null 2>&1; then \
@@ -99,15 +115,17 @@ prepare-build-src:
 	fi
 
 # Production imports must use the staged tree, where test helpers are removed.
-build prod: V_MODULE_PATH = $(BUILD_STAGE_DIR)|@vlib|@vmodules
+build prod: V_MODULE_PATH = $(BUILD_STAGE_DIR)|$(abspath $(VJSX_DIR)/..)|@vlib|@vmodules
 
 build: prepare-build-src
 	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_MODULE_FLAGS) $(V_FLAGS) $(V_DB_FLAGS) $(V_GC_FLAG) -o $(VHTTPD_BIN) $(BUILD_STAGE_DIR)
+	@python3 $(ROOT)/scripts/ci/verify_gc_runtime.py $(VHTTPD_BIN)
 
 vhttpd: build
 
 prod: prepare-build-src
 	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_MODULE_FLAGS) $(V_FLAGS) $(V_DB_FLAGS) $(V_GC_FLAG) $(V_PROD_FLAGS) $(V_NOCACHE_FLAGS) -o $(VHTTPD_BIN) $(BUILD_STAGE_DIR)
+	@python3 $(ROOT)/scripts/ci/verify_gc_runtime.py $(VHTTPD_BIN)
 
 build-prod: prod
 
@@ -171,7 +189,7 @@ test: $(TEST_TARGETS)
 test-e2e:
 	@bash $(ROOT)/tests/e2e/run.sh
 
-test-fast: lint-safety
+test-fast: lint-safety test-build-gc
 	@VJOBS="$${VJOBS:-2}" $(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_MODULE_FLAGS) $(V_FLAGS) $(V_TEST_FLAGS) test $(FAST_TEST_FILES) $(FAST_TEST_MODULE_DIRS)
 
 test-php:

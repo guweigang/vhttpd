@@ -436,6 +436,8 @@ fn (mut app App) admin_state_publish_source_draft(id string, raw_path string) Ad
 	}
 	language := admin_state_source_language(resolved.path)
 	config_path := app.admin_state_draft_source_path()
+	deployment_lock := admin_project_write_lock(config_path) or { return AdminSourcePublishResult{draft_id:id,error:err.msg()} }
+	defer { os.rmdir(deployment_lock) or {} }
 	change := admin_state_snapshot_publish_target(resolved.path, entry.value) or {
 		return AdminSourcePublishResult{ draft_id: id, path: resolved.path, language: language, error: err.msg() }
 	}
@@ -505,6 +507,8 @@ fn (mut app App) admin_state_publish_draft(id string, raw_path string) AdminDraf
 		}
 	}
 	config_path := app.admin_state_draft_source_path()
+	deployment_lock := admin_project_write_lock(config_path) or { return AdminDraftPublishResult{draft_id:id,error:err.msg()} }
+	defer { os.rmdir(deployment_lock) or {} }
 	resolved := admin_state_resolve_publish_path(config_path, target_path) or {
 		return AdminDraftPublishResult{
 			draft_id:    id

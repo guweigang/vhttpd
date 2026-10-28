@@ -92,32 +92,11 @@ pub fn (config VjsxRuntimeFacadeConfig) lane_temp_root(idx int, source_signature
 		'${entry_name}.${source_signature}.pid_${os.getpid()}.lane_${idx}.vjsxbuild')
 }
 
-fn VjsxHostLoader.load_entry(mut ctx vjsx.Context, config VjsxRuntimeFacadeConfig, temp_root string, as_module bool) !vjsx.Value {
-	if !as_module {
-		entry := os.real_path(config.app_entry)
-		runtimejs.install_typescript_runtime(ctx)!
-		if runtimejs.is_commonjs_module(ctx, entry)! {
-			// The generic runner deletes its mirror as soon as evaluation returns.
-			// Lane handlers may import later: retain this tree until host.destroy().
-			emitted := runtimejs.build_runtime_module_entry(ctx, entry, true, temp_root)!
-			return ctx.run_file(emitted, vjsx.type_module)
-		}
-		// Ordinary .js entries keep global-script scope and completion semantics.
-		return ctx.run_file(entry, vjsx.type_global)
-	}
-	if vjsx.is_typescript_file(config.app_entry) || vjsx.is_runtime_module_file(config.app_entry) {
-		runtimejs.install_typescript_runtime(ctx)!
-	}
-	entry_path := runtimejs.build_runtime_module_entry(ctx, os.real_path(config.app_entry), true, temp_root)!
-	loader_path := os.join_path(temp_root, '__vhttpd_loader__.mjs')
-	loader_source :=
-		'import * as __vhttpd_exports from "${VjsxHostPath.import_specifier(loader_path, entry_path)}";\n' +
-			'globalThis.__vhttpd_module_exports = __vhttpd_exports;\n' +
-			'export default __vhttpd_exports.default;\n'
-	os.write_file(loader_path, loader_source)!
-	mut entry_result := ctx.run_file(loader_path, vjsx.type_module)!
-	entry_result.free()
-	return ctx.js_global('__vhttpd_module_exports')
+// Script entries keep global completion semantics; CommonJS mirrors live with
+// the lane so deferred imports remain available after bootstrap.
+fn VjsxHostLoader.load_prepared_script(mut ctx vjsx.Context, config VjsxRuntimeFacadeConfig, prepared_entry string) !vjsx.Value {
+	if prepared_entry != '' { return ctx.run_file(prepared_entry, vjsx.type_module) }
+	return ctx.run_file(os.real_path(config.app_entry), vjsx.type_global)
 }
 
 // Only the already prepared entry crosses this bridge. RuntimeSession still

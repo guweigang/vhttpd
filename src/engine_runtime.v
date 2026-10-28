@@ -62,6 +62,11 @@ fn (selection EngineDispatchSelection) executor_kind() string {
 }
 
 fn (selection EngineDispatchSelection) dispatch_http(mut facade executor.AppFacade, req executor.HttpLogicDispatchRequest) !executor.HttpLogicDispatchOutcome {
+	// Worker hosts own native callbacks. In-process executors do not use them,
+	// so do not create a fresh pair of retained closures for every HTTP request.
+	if !selection.http_port.uses_worker_transport() {
+		return selection.http_port.dispatch_http(mut facade, req)
+	}
 	mut host := worker_request_host(selection.state, mut facade)
 	return selection.http_port.dispatch_http_with_worker_ports(mut facade, mut host, host, req)
 }
@@ -161,8 +166,12 @@ fn (mut runtime EngineRuntime) open_websocket_session(mut facade executor.AppFac
 fn (mut runtime EngineRuntime) dispatch_http_for_kind(kind string, mut facade executor.AppFacade, req executor.HttpLogicDispatchRequest) !executor.HttpLogicDispatchOutcome {
 	selected := runtime.lookup_engine(kind, .executor_kind) or { return error('${kind}_executor_unavailable') }
 	mut state := selected.state
+	port := executor.logic_executor_http_port(state.logic_executor)
+	if !port.uses_worker_transport() {
+		return port.dispatch_http(mut facade, req)
+	}
 	mut host := worker_request_host(state, mut facade)
-	return executor.logic_executor_http_port(state.logic_executor).dispatch_http_with_worker_ports(mut facade, mut host, host, req)
+	return port.dispatch_http_with_worker_ports(mut facade, mut host, host, req)
 }
 
 fn (mut runtime EngineRuntime) set_primary_env(key string, value string) {

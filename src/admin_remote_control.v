@@ -364,6 +364,12 @@ fn run_manual_restart_helper(descriptor string) ! {
 		os.rm(descriptor + '.armed') or {}
 		os.rm(descriptor + '.go') or {}
 	}
+	deployment_lock := admin_project_write_lock(root) or {
+		remote_write_operation(root, RemoteRestartOperation{...launch.operation,state:'failed',error:'runtime_operation_in_progress'})!
+		return
+	}
+	mut lock_held := true
+	defer { if lock_held { os.rmdir(deployment_lock) or {} } }
 	process_runtime.detach_restart_helper(launch.operation.log_path)!
 	remote_private_write(descriptor + '.armed', 'armed')!
 	deadline := time.ticks() + 6000
@@ -395,6 +401,8 @@ fn run_manual_restart_helper(descriptor string) ! {
 	mut child := os.new_process(launch.executable)
 	child.set_args(launch.args)
 	child.run()
+	os.rmdir(deployment_lock)!
+	lock_held = false
 	remote_write_operation(root, RemoteRestartOperation{ ...launch.operation, state: 'starting', pid: child.pid })!
 	time.sleep(1500 * time.millisecond)
 	if !child.is_alive() {
@@ -402,4 +410,12 @@ fn run_manual_restart_helper(descriptor string) ! {
 		remote_write_operation(root, RemoteRestartOperation{ ...launch.operation, state: 'failed', error: 'new_process_exited' })!
 	}
 	child.close()
+}
+
+// Configuration publication and Desktop file switches share one filesystem lock.
+fn admin_project_write_lock(config_path string) !string {
+ if config_path == '' { return '' }
+ path := os.join_path(os.dir(os.abs_path(config_path)), '.desktop-runtime-lock')
+ os.mkdir(path, mode: 0o700) or { return error('application_operation_in_progress') }
+ return path
 }

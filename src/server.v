@@ -182,6 +182,7 @@ const vhttpd_version = '0.1.0'
 const known_long_flags = [
 	'--help',
 	'--version',
+	'--build-info',
 	'--config',
 	'--host',
 	'--port',
@@ -253,6 +254,7 @@ fn print_vhttpd_help() {
 	println('Common options:')
 	println('  --help, -h')
 	println('  --version, -v')
+	println('  --build-info      Show compiled GC mode and runtime GC status as JSON')
 	println('  --manual-restart   Enable authenticated manual-process restart')
 	println('  --config <path>              TOML config file')
 	println('  --host <host>                Data plane host')
@@ -408,7 +410,18 @@ fn configure_runtime_timezone(config_tz string) {
 	log.info('vhttpd timezone: ${tz}')
 }
 
+fn runtime_gc_kind() string {
+	$if gcboehm ? { return 'boehm' }
+	$if vgc ? { return 'vgc' }
+	return 'none'
+}
+
 fn main() {
+	configure_process_allocator()
+	if os.args.len == 2 && os.args[1] == '--build-info' {
+		println(json.encode({'version': json.Any(vhttpd_version), 'gc': json.Any(runtime_gc_kind()), 'gc_enabled': json.Any(gc_is_enabled())}))
+		return
+	}
 	// Configuration errors precede timezone setup; honor explicit JSON output there too.
 	if logging.RuntimeLogger.json_enabled() { logging.RuntimeLogger.configure() }
 	if os.args.len == 3 && os.args[1] == '--workbench-restart-helper' {
@@ -420,6 +433,14 @@ fn main() {
 	}
 	if os.args.len == 3 && os.args[1] == '--workbench-upgrade-helper' {
 		runtime_upgrade.run(os.args[2]) or { eprintln('runtime_upgrade_failed'); exit(1) }; return
+	}
+	if os.args.len == 2 && os.args[1] == '--workbench-deploy-version' { println('1'); return }
+	if os.args.len == 3 && os.args[1] == '--workbench-deploy-prepare' {
+		result := runtime_upgrade.prepare_deployment(os.args[2]) or { eprintln(runtime_upgrade.deployment_safe_error(err.msg())); exit(2) }
+		println(json.encode(result)); return
+	}
+	if os.args.len == 3 && os.args[1] == '--workbench-deploy-helper' {
+		runtime_upgrade.run_deployment(os.args[2]) or { eprintln(runtime_upgrade.deployment_safe_error(err.msg())); exit(1) }; return
 	}
 	manual_restart := '--manual-restart' in os.args
 	args := os.args[1..].filter(it != '--manual-restart')

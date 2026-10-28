@@ -32,6 +32,10 @@ pub fn (port LogicExecutorHttpPort) dispatch_http(mut app AppFacade, req HttpLog
 	return port.inner.dispatch_http(mut app, req)
 }
 
+pub fn (port LogicExecutorHttpPort) uses_worker_transport() bool {
+	return port.inner is SocketWorkerExecutor || port.inner is PhpCgiExecutor
+}
+
 // Worker transports receive the exact pool selected by the owning runtime.
 pub fn (port LogicExecutorHttpPort) dispatch_http_with_worker_ports(mut app AppFacade, mut sockets WorkerSocketFacade, config WorkerBackendConfigFacade, req HttpLogicDispatchRequest) !HttpLogicDispatchOutcome {
 	if port.inner is SocketWorkerExecutor {
