@@ -73,7 +73,7 @@ fn (job RuntimeJob) command_with_environment(executable string, args []string, l
 	mut child := os.new_process(executable)
 	child.set_args(args)
  if environment.len > 0 { child.set_environment(environment) }
- $if windows { child.create_no_window = true }
+ $if windows { child.create_no_window = true; if 'VHTTPD_SSH_ASKPASS_SOCKET' in environment { child.set_work_folder(os.dir(os.executable())) } }
 	child.set_redirect_stdio_merged()
 	child.use_pgroup = true
 	child.run()

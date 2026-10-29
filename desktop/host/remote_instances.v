@@ -321,6 +321,7 @@ fn (mut m RemoteManager) connect_with_session(profile RemoteProfile, password st
 		if !isnil(m.askpass) { ssh.set_environment(m.askpass.environment()) }
   $if windows {
    ssh.create_no_window = true
+   ssh.set_work_folder(os.dir(os.executable()))
    if control_path != '' { ssh.set_environment(windows_session_environment(control_path, profile)!); m.control_path = control_path }
   }
 		ssh.run()

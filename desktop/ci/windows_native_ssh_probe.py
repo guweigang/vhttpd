@@ -1,5 +1,4 @@
 """Fast real-client test, independent of V/bootstrap. Uses only local fixtures."""
-import ctypes
 import json
 import os
 from pathlib import Path
@@ -40,15 +39,13 @@ try:
                     reply = "CI-only $ quote' \" test password"
                 connection.sendall((reply + '\n').encode())
     threading.Thread(target=serve, daemon=True).start()
-    short = ctypes.create_unicode_buffer(32768)
-    assert ctypes.windll.kernel32.GetShortPathNameW(str(helper), short, len(short))
-    environment = dict(os.environ, SSH_ASKPASS=short.value, SSH_ASKPASS_REQUIRE='force', DISPLAY='fixture',
+    environment = dict(os.environ, SSH_ASKPASS='.\\' + Path(helper).name, SSH_ASKPASS_REQUIRE='force', DISPLAY='fixture',
                        VHTTPD_SSH_ASKPASS_SOCKET=f'tcp://127.0.0.1:{broker.getsockname()[1]}',
                        VHTTPD_SSH_ASKPASS_CAPABILITY=capability)
     result = subprocess.run([ssh, '-vvv', '-T', '-o', 'StrictHostKeyChecking=ask', '-o', f'UserKnownHostsFile="{work / "known_hosts"}"',
                              '-o', 'PreferredAuthentications=password', '-o', 'PubkeyAuthentication=no', '-o', 'KbdInteractiveAuthentication=no',
                              '-o', 'ConnectTimeout=5', '-p', str(info['port']), '-l', 'fixture', '127.0.0.1', '/bin/sh -s'],
-                            input=b'printf VHTTPD_FIXTURE_COMMAND\nexit\n', capture_output=True, env=environment, timeout=25)
+                            input=b'printf VHTTPD_FIXTURE_COMMAND\nexit\n', capture_output=True, env=environment, timeout=25, cwd=Path(helper).parent)
     if result.returncode or result.stdout.strip() != b'VHTTPD_FIXTURE_COMMAND':
         print(result.stderr.decode('utf-8', 'replace'))
         raise SystemExit(f'Native SSH failed: exit={result.returncode}, prompts={requests}')

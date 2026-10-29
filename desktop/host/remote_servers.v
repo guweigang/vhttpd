@@ -214,6 +214,7 @@ fn (mut s ServerSession) connect(server RemoteServer, password string) ! {
 	s.process.set_redirect_stdio()
  $if windows { s.process.create_no_window = true }
 	s.process.set_environment(s.prompts.environment())
+ $if windows { s.process.set_work_folder(os.dir(os.executable())) }
 	s.process.run()
 	s.diagnostics = ''
 	s.deadline = time.ticks() + 15000
@@ -239,7 +240,7 @@ fn (s &ServerSession) shell_limited(script string, timeout i64, max_output int) 
 	args << s.destination_args()
 	args << '/bin/sh -s'
 	child.set_args(args)
- $if windows { child.set_environment(windows_session(s.windows_ticket)!.broker.environment()); child.create_no_window = true }
+ $if windows { child.set_environment(windows_session(s.windows_ticket)!.broker.environment()); child.set_work_folder(os.dir(os.executable())); child.create_no_window = true }
 	child.set_redirect_stdio_merged()
 	child.use_pgroup = true
 	child.run()

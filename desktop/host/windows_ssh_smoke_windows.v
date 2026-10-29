@@ -23,7 +23,7 @@ pub fn run_windows_ssh_smoke() ! {
 		return error('password_leaked_to_environment')
 	}
 	for attempt in 0 .. 2 {
-		mut child := os.new_process(environment['SSH_ASKPASS'])
+		mut child := os.new_process(os.join_path(os.dir(os.executable()), 'vhttpd-ssh-askpass.exe'))
 		mut child_environment := environment.clone()
 		// Win32 OpenSSH may retain the confirm hint in its parent after spawning
 		// the fingerprint helper; the following actual password prompt still works.
@@ -52,7 +52,7 @@ pub fn run_windows_ssh_smoke() ! {
 	}
 	mut trust := new_remote_prompts('', false)!
 	defer { trust.close() }
-	mut helper := os.new_process(trust.environment()['SSH_ASKPASS'])
+	mut helper := os.new_process(os.join_path(os.dir(os.executable()), 'vhttpd-ssh-askpass.exe'))
 	helper.set_environment(trust.environment())
 	helper.set_args(["The authenticity of host 'fixture' can't be established.\nED25519 key fingerprint is SHA256:abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG.\nAre you sure you want to continue connecting (yes/no/[fingerprint])? "])
 	helper.set_redirect_stdio()
