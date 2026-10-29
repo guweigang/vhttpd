@@ -139,7 +139,14 @@ fn main() {
 		return
 	}
  $if windows {
-  if '--windows-ssh-smoke' in os.args { host.run_windows_ssh_smoke() or { eprintln(err); exit(1) }; return }
+  if '--windows-ssh-smoke' in os.args {
+   host.run_windows_ssh_smoke() or {
+    if result := os.getenv_opt('VHTTPD_WINDOWS_SMOKE_RESULT') { os.write_file(result, 'FAIL: ' + err.msg()) or {} }
+    exit(1)
+   }
+   if result := os.getenv_opt('VHTTPD_WINDOWS_SMOKE_RESULT') { os.write_file(result, 'PASS') or {} }
+   return
+  }
  }
 	$if !macos && !linux && !windows {
 		eprintln('当前交付 macOS 和 Linux；Windows 适配尚未完成。')

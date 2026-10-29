@@ -36,6 +36,9 @@ fn new_remote_prompts(password string, allow_password bool) !&RemoteAskpass {
 
 fn new_remote_prompt_session(password string, allow_password bool, persistent bool) !&RemoteAskpass {
 	if allow_password { validate_ssh_password(password)! }
+ $if windows {
+  if !os.is_file(os.join_path(os.dir(os.executable()), 'vhttpd-ssh-askpass.exe')) { return error('缺少 SSH 密码辅助程序，请完整解压测试包后重试。') }
+ }
 	// /tmp keeps the path below Darwin's Unix socket length limit, regardless
 	// of the user's Application Support or temporary-directory path length.
 	directory := os.join_path($if windows { os.temp_dir() } $else { '/tmp' }, 'vh-ssh-' + new_remote_id()!)
@@ -64,7 +67,7 @@ fn new_remote_prompt_session(password string, allow_password bool, persistent bo
 
 fn (s &RemoteAskpass) environment() map[string]string {
 	mut env := os.environ()
-	env['SSH_ASKPASS'] = os.executable()
+	env['SSH_ASKPASS'] = $if windows { os.join_path(os.dir(os.executable()), 'vhttpd-ssh-askpass.exe') } $else { os.executable() }
 	env['SSH_ASKPASS_REQUIRE'] = 'force'
 	env['DISPLAY'] = 'vhttpd-workbench'
 	env['LC_ALL'] = 'C'

@@ -23,7 +23,7 @@ pub fn run_windows_ssh_smoke() ! {
 		return error('password_leaked_to_environment')
 	}
 	for attempt in 0 .. 2 {
-		mut child := os.new_process(os.executable())
+		mut child := os.new_process(environment['SSH_ASKPASS'])
 		mut child_environment := environment.clone()
 		// Win32 OpenSSH may retain the confirm hint in its parent after spawning
 		// the fingerprint helper; the following actual password prompt still works.
@@ -52,7 +52,7 @@ pub fn run_windows_ssh_smoke() ! {
 	}
 	mut trust := new_remote_prompts('', false)!
 	defer { trust.close() }
-	mut helper := os.new_process(os.executable())
+	mut helper := os.new_process(trust.environment()['SSH_ASKPASS'])
 	helper.set_environment(trust.environment())
 	helper.set_args(["The authenticity of host 'fixture' can't be established.\nED25519 key fingerprint is SHA256:abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG.\nAre you sure you want to continue connecting (yes/no/[fingerprint])? "])
 	helper.set_redirect_stdio()
@@ -97,7 +97,7 @@ pub fn run_windows_ssh_smoke() ! {
 	}
 	revoke_windows_session(ticket)
 	if windows_session_alive(ticket) { return error('revoked_session_available') }
-	println('PASS packaged Windows password helper, repeated session authentication, host fingerprint confirmation, credential revocation and Linux include paths')
+	windows_smoke_note('PASS packaged Windows password helper, repeated session authentication, host fingerprint confirmation, credential revocation and Linux include paths')
 }
 
 fn run_windows_native_ssh_fixture(server RemoteServer, password string) ! {
@@ -151,5 +151,12 @@ fn run_windows_native_ssh_fixture(server RemoteServer, password string) ! {
 	if manager.snapshot.connected || manager.control_path != '' || !isnil(manager.ssh) {
 		return error('revoked_native_tunnel_survived')
 	}
-	println('PASS bundled native OpenSSH first fingerprint, password authentication, subsequent command, HTTP forwarding and disconnected-session tunnel cleanup')
+	windows_smoke_note('PASS bundled native OpenSSH first fingerprint, password authentication, subsequent command, HTTP forwarding and disconnected-session tunnel cleanup')
+}
+
+fn windows_smoke_note(message string) {
+ if path := os.getenv_opt('VHTTPD_WINDOWS_SMOKE_LOG') {
+  previous := os.read_file(path) or { '' }
+  os.write_file(path, previous + message + '\n') or {}
+ }
 }

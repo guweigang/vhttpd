@@ -9,6 +9,7 @@ $stage = Join-Path $OutputDirectory $name
 if (Test-Path $stage) { throw 'Package staging directory must be new' }
 New-Item -ItemType Directory -Force "$stage/resources", "$stage/tools/openssh", "$stage/licenses" | Out-Null
 Copy-Item $Executable "$stage/vhttpd-workbench.exe"
+Copy-Item (Join-Path (Split-Path $Executable) 'vhttpd-ssh-askpass.exe') "$stage/vhttpd-ssh-askpass.exe"
 Copy-Item "$root/admin/ui/brand/mark.png" "$stage/resources/vhttpd-mark.png"
 foreach ($pattern in @('libcrypto-*.dll','libssl-*.dll')) {
  $dlls = @(Get-ChildItem "$env:OPENSSL_ROOT_DIR/bin" -Filter $pattern -File)

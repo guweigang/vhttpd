@@ -46,10 +46,12 @@ try {
  $env:VHTTPD_WINDOWS_SSH_FIXTURE_PORT = $info.port
  $env:VHTTPD_WINDOWS_SSH_FIXTURE_HTTP_PORT = $info.http_port
  $env:VHTTPD_WINDOWS_SSH_FIXTURE_FINGERPRINT = $info.fingerprint
+ $env:VHTTPD_WINDOWS_SMOKE_RESULT = "$ResultDirectory/ssh-smoke-result.txt"
+ $env:VHTTPD_WINDOWS_SMOKE_LOG = "$ResultDirectory/ssh-native-check.log"
  $smoke = Start-Process "$package/vhttpd-workbench.exe" -WorkingDirectory $extract -ArgumentList '--windows-ssh-smoke' -PassThru -RedirectStandardOutput "$ResultDirectory/ssh-helper.log" -RedirectStandardError "$ResultDirectory/ssh-helper-stderr.log"
  try {
   if (!$smoke.WaitForExit(60000)) { throw 'Packaged SSH helper smoke timed out' }
-  if ($smoke.ExitCode -ne 0) { throw 'Packaged SSH helper smoke failed' }
+  if ($smoke.ExitCode -ne 0 -or !(Test-Path $env:VHTTPD_WINDOWS_SMOKE_RESULT) -or (Get-Content $env:VHTTPD_WINDOWS_SMOKE_RESULT -Raw) -ne 'PASS') { throw "Packaged SSH smoke failed (exit $($smoke.ExitCode)); see ssh-smoke-result.txt" }
  } finally { if (!$smoke.HasExited) { Stop-Process -Id $smoke.Id -Force } }
 } finally {
  if (!$fixture.HasExited) { Stop-Process -Id $fixture.Id -Force }

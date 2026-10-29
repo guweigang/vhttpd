@@ -106,6 +106,9 @@ jobs:
           & v -prod -new-compiler -cc msvc -gc boehm -cflags $sdkCompatibility -subsystem windows -d link_quickjs -d use_openssl -w -enable-globals `
             -path $path -o "$output/vhttpd-workbench.exe" desktop 2>&1 | Tee-Object "$output/desktop-build.log"
           if ($LASTEXITCODE -ne 0) { throw 'Full Desktop is not yet Windows-compatible; see desktop-build.log' }
+          & cl /nologo /O2 /W4 /utf-8 desktop/ci/windows_askpass.c /Fe:"$output/vhttpd-ssh-askpass.exe" /link /SUBSYSTEM:WINDOWS Ws2_32.lib Shell32.lib
+          if ($LASTEXITCODE -ne 0) { throw 'Native GUI SSH helper build failed' }
+
           New-Item -ItemType Directory -Force "$output/resources" | Out-Null
           Copy-Item admin/ui/brand/mark.png "$output/resources/vhttpd-mark.png"
           foreach ($pattern in @('libcrypto-*.dll', 'libssl-*.dll')) {
