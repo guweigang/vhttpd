@@ -59,6 +59,14 @@ jobs:
             if (!$process.WaitForExit(10000)) { throw 'Native window did not exit' }
             if ($process.ExitCode -ne 0) { throw "Native window exited $($process.ExitCode)" }
           } finally { if (!$process.HasExited) { Stop-Process -Id $process.Id -Force } }
+      - name: Verify Windows storage ownership and project publication
+        id: storage
+        run: |
+          $output = "$PWD/desktop/ci/results/windows-build"
+          & v -new-compiler -cc msvc -gc boehm -w -enable-globals -path "$PWD/src|@vlib|@vmodules" -o "$output/storage-probe.exe" desktop/ci/windows_storage_probe.v 2>&1 | Tee-Object "$output/storage-build.log"
+          if ($LASTEXITCODE -ne 0) { throw 'Windows storage build failed' }
+          & "$output/storage-probe.exe" 2>&1 | Tee-Object "$output/storage-check.log"
+          if ($LASTEXITCODE -ne 0) { throw 'Windows storage checks failed' }
       - name: Build and launch full Desktop
         id: desktop
         if: ${{ !cancelled() && steps.toolchain.outcome == 'success' }}
@@ -91,11 +99,11 @@ jobs:
       - name: Record supported scope and enforce result
         if: ${{ !cancelled() && steps.toolchain.outcome == 'success' }}
         run: |
-          $result = @{ compiler = 'MSVC'; ui2 = '${{ steps.ui2.outcome }}'; desktop = '${{ steps.desktop.outcome }}';
+          $result = @{ compiler = 'MSVC'; ui2 = '${{ steps.ui2.outcome }}'; desktop = '${{ steps.desktop.outcome }}'; storage = '${{ steps.storage.outcome }}';
             scope = 'Full MSVC Desktop native startup and clean exit; no Windows vhttpd runtime bundled, SSH password and lifecycle not accepted, no release published';
             commit = '${{ github.sha }}' }
           $result | ConvertTo-Json | Set-Content desktop/ci/results/windows-build/result.json
-          if ($result.ui2 -ne 'success' -or $result.desktop -ne 'success') { throw 'Windows is not ready for delivery; diagnostic artifacts retained' }
+          if ($result.ui2 -ne 'success' -or $result.desktop -ne 'success' -or $result.storage -ne 'success') { throw 'Windows is not ready for delivery; diagnostic artifacts retained' }
       - uses: actions/upload-artifact@v4
         if: always()
         with:
