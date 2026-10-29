@@ -1,7 +1,6 @@
 module admin_state_store
 
 import os
-
 import windows_files
 
 #include "@VMODROOT/src/windows_files/native.h"
@@ -27,7 +26,9 @@ fn lock_directory(root string, exclusive bool) !DirectoryLease {
 	}
 	// The fd may have waited on an inode retired while another request acquired
 	// the replacement lock. Only publish a lease for the current regular entry.
-	if C.vh_matches(path.str, dev, ino) == 0 { return error('admin_state_store_lock_ownership_changed') }
+	if C.vh_matches(path.str, dev, ino) == 0 {
+		return error('admin_state_store_lock_ownership_changed')
+	}
 	admitted = true
 	return DirectoryLease{ fd: fd }
 }

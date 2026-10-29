@@ -2,7 +2,9 @@ module process_runtime
 
 import os
 import sync
+$if !windows {
 import time
+}
 
 // glibc exposes the SO_PEERCRED payload only with GNU feature visibility.
 #flag linux -D_GNU_SOURCE

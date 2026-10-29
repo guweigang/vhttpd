@@ -28,5 +28,7 @@ fn (file TemporaryFile) matches() bool {
 
 fn (file TemporaryFile) release() {
 	defer { C.vh_close(file.fd) }
-	if file.matches() { C.vh_remove_owned(file.fd, file.path.str, file.identity.dev, file.identity.inode) }
+	if file.matches() {
+		C.vh_remove_owned(file.fd, file.path.str, file.identity.dev, file.identity.inode)
+	}
 }

@@ -1,7 +1,9 @@
 module process_runtime
 
 import os
+$if !windows {
 import sync
+}
 
 $if !windows {
 @[typedef]

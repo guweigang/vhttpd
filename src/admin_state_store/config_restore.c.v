@@ -64,7 +64,11 @@ fn retain_created_config_directory(path string, identity os.Stat) !CreatedConfig
 	$if windows {
 		fd := C.vh_open_dir(path.str)
 		if fd < 0 { return error('config_restore_directory_open_failed') }
-		return CreatedConfigDirectory{path: path, fd: fd, identity: os.Stat{dev: C.vh_dev(fd), inode: C.vh_ino(fd)}}
+		if C.vh_dev(fd) != identity.dev || C.vh_ino(fd) != identity.inode || C.vh_matches_dir(path.str, identity.dev, identity.inode) == 0 {
+            C.vh_close(fd)
+            return error('config_restore_directory_changed:' + path)
+        }
+        return CreatedConfigDirectory{path: path, fd: fd, identity: identity}
 	} $else {
 	fd := C.open(&char(path.str), C.O_RDONLY | C.O_DIRECTORY | C.O_NOFOLLOW | C.O_CLOEXEC)
 	if fd < 0 { return os.last_error() }
@@ -95,14 +99,11 @@ fn restore_parent_dirs(path string, mut created []CreatedConfigDirectory) ! {
 	}
 	for i := missing.len - 1; i >= 0; i-- {
 		os.mkdir(missing[i], mode: 0o700)!
-		identity := os.lstat(missing[i])!
+		identity := config_directory_identity(missing[i])!
 		owned := retain_created_config_directory(missing[i], identity) or {
 			// No retained descriptor is available on failure; remove only a verified
 			// directory entry, rather than acquiring a replacement by its name.
-			current := os.lstat(missing[i]) or { return err }
-			if current.get_filetype() == .directory && current.dev == identity.dev && current.inode == identity.inode {
-				os.rmdir(missing[i]) or {}
-			}
+            if config_directory_matches(missing[i], identity) { os.rmdir(missing[i]) or {} }
 			return err
 		}
 		created << owned
@@ -184,4 +185,20 @@ fn restore_compensate(changes []ConfigFileRestore, modes []int, committed int) !
 		file.release()
 	}
 	if failed { return error('config_restore_compensation_failed') }
+}
+
+fn config_directory_identity(path string) !os.Stat {
+ $if windows {
+  fd := C.vh_open_dir(path.str)
+  if fd < 0 { return error('config_restore_directory_open_failed') }
+  defer { C.vh_close(fd) }
+  return os.Stat{dev:C.vh_dev(fd), inode:C.vh_ino(fd)}
+ } $else { return os.lstat(path)! }
+}
+
+fn config_directory_matches(path string, identity os.Stat) bool {
+ $if windows { return C.vh_matches_dir(path.str, identity.dev, identity.inode) != 0 } $else {
+  current := os.lstat(path) or { return false }
+  return current.get_filetype() == .directory && current.dev == identity.dev && current.inode == identity.inode
+ }
 }

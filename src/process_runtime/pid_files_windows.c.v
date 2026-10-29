@@ -2,7 +2,6 @@ module process_runtime
 
 import os
 import sync
-
 import windows_files
 
 #include "@VMODROOT/src/windows_files/native.h"

@@ -1,6 +1,5 @@
 module host
 
-
 import windows_files
 
 #include "@VMODROOT/src/windows_files/native.h"
@@ -29,7 +28,10 @@ fn replace_recovery_data(source string, target string) ! {
 fn lock_recovery_archive(path string) !int {
 	fd := C.vh_open(path.str, C.VH_O_RDWR | C.VH_O_CREAT | C.VH_O_NOFOLLOW | C.VH_O_CLOEXEC, 0o600)
 	if fd < 0 { return error('history_lock_open_failed') }
-	if C.vh_flock(fd, C.VH_LOCK_EX | C.VH_LOCK_NB) != 0 { C.vh_close(fd); return error('history_in_use') }
+	if C.vh_flock(fd, C.VH_LOCK_EX | C.VH_LOCK_NB) != 0 {
+		C.vh_close(fd)
+		return error('history_in_use')
+	}
 	return fd
 }
 

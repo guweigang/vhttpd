@@ -19,10 +19,17 @@
 #define VH_LOCK_NB 4
 #define VH_LOCK_UN 8
 static wchar_t *vh_wide(const char *s) {
+ // Restrict this API to ordinary filesystem paths, never device names or ADS.
+ if ((s[0]=='\\' && s[1]=='\\' && (s[2]=='.'||s[2]=='?')) ||
+     (s[0]=='/' && s[1]=='/' && (s[2]=='.'||s[2]=='?'))) { errno=EINVAL;SetLastError(ERROR_INVALID_NAME);return NULL; }
+ for (size_t i=0;s[i];++i) {
+  if (s[i]==':' && !(i==1 && ((s[0]>='A'&&s[0]<='Z')||(s[0]>='a'&&s[0]<='z')) && (s[2]=='\\'||s[2]=='/'))) {errno=EINVAL;SetLastError(ERROR_INVALID_NAME);return NULL;}
+ }
+
  int n=MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,s,-1,NULL,0);
  if (!n) { errno=EINVAL; return NULL; }
  wchar_t *w=(wchar_t*)malloc(n*sizeof(wchar_t));
- if (!w) { errno=ENOMEM; return NULL; }
+ if (!w) { errno=ENOMEM; SetLastError(ERROR_NOT_ENOUGH_MEMORY); return NULL; }
  MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,s,-1,w,n); return w;
 }
 static HANDLE vh_handle(int64_t fd) { return (HANDLE)_get_osfhandle((int)fd); }
@@ -37,7 +44,7 @@ static int vh_open(const char *path,int flags,...) {
  (flags&VH_O_EXCL)?CREATE_NEW:((flags&VH_O_CREAT)?OPEN_ALWAYS:OPEN_EXISTING),FILE_FLAG_OPEN_REPARSE_POINT|FILE_FLAG_BACKUP_SEMANTICS,NULL);
  free(w);
  if(h==INVALID_HANDLE_VALUE){errno=EACCES;return -1;}
- if(!vh_regular(h)){CloseHandle(h);errno=EINVAL;return -1;}
+ if(!vh_regular(h)){CloseHandle(h);errno=EINVAL;SetLastError(ERROR_INVALID_DATA);return -1;}
  int fd=_open_osfhandle((intptr_t)h,_O_BINARY|_O_NOINHERIT|((flags&VH_O_RDWR)?_O_RDWR:_O_WRONLY));
  if(fd<0)CloseHandle(h);
  return fd;
@@ -79,7 +86,7 @@ static int vh_rename(const char *source,const char *target) {
  wchar_t *s=vh_wide(source),*t=vh_wide(target);if(!s||!t){free(s);free(t);return -1;}
  DWORD attr=GetFileAttributesW(t);BOOL ok=FALSE;
  if(attr!=INVALID_FILE_ATTRIBUTES){
-  if(attr&(FILE_ATTRIBUTE_DIRECTORY|FILE_ATTRIBUTE_REPARSE_POINT))goto done;
+  if(attr&(FILE_ATTRIBUTE_DIRECTORY|FILE_ATTRIBUTE_REPARSE_POINT)){SetLastError(ERROR_ACCESS_DENIED);goto done;}
   DWORD n=0;GetFileSecurityW(t,DACL_SECURITY_INFORMATION,NULL,0,&n);
   if(!n)goto done;
   PSECURITY_DESCRIPTOR sd=(PSECURITY_DESCRIPTOR)malloc(n);if(!sd)goto done;
@@ -89,7 +96,7 @@ static int vh_rename(const char *source,const char *target) {
   free(sd);if(!ok)goto done;
  }
  ok=MoveFileExW(s,t,MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH);
- done:free(s);free(t);if(!ok){errno=EACCES;return -1;}return 0;
+ done:{DWORD failure=GetLastError();free(s);free(t);if(!ok){errno=EACCES;SetLastError(failure);return -1;}return 0;}
 }
 static void vh_remove_owned(int64_t fd,const char *path,uint64_t dev,uint64_t ino){
  if(vh_matches(path,dev,ino)){FILE_DISPOSITION_INFO d={TRUE};SetFileInformationByHandle(vh_handle(fd),FileDispositionInfo,&d,sizeof(d));}

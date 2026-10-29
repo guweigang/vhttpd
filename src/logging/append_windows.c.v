@@ -1,7 +1,6 @@
 module logging
 
 import os
-
 import windows_files
 
 #include "@VMODROOT/src/windows_files/native.h"
