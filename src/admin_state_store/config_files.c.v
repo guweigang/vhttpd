@@ -27,6 +27,7 @@ fn (file StagedConfigFile) publish(commit fn (string, string) !) ! {
 		return error('config_staged_file_ownership_changed:' + file.path)
 	}
 	commit(file.temporary.path, file.path)!
+	$if windows { file.temporary.close_published() }
 }
 
 fn stage_config_file(path string, value string, mode int) !StagedConfigFile {

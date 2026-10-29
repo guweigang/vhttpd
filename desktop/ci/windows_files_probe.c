@@ -25,9 +25,12 @@ int main(void) {
  require(vh_rename("include.tmp","include.toml")==0,"publish include");
  contents("main.toml","new a");contents("include.toml","new b");
  int ar=stage("main.restore","old a"),br=stage("include.restore","old b");
- require(vh_rename("include.restore","include.toml")==0,"rollback include with published handle retained");
- require(vh_rename("main.restore","main.toml")==0,"rollback main with published handle retained");
+ require(vh_rename("include.restore","include.toml")!=0,"Windows retains published target handle");
+ contents("main.toml","new a");contents("include.toml","new b");
+ vh_close(a);vh_close(b);
+ require(vh_rename("include.restore","include.toml")==0,"rollback include after ownership transfer");
+ require(vh_rename("main.restore","main.toml")==0,"rollback main after ownership transfer");
  contents("main.toml","old a");contents("include.toml","old b");
- vh_close(a);vh_close(b);vh_close(ar);vh_close(br);
- puts("PASS MSVC native publication and rollback with retained handles");return 0;
+ vh_close(ar);vh_close(br);
+ puts("PASS MSVC native publication and rollback with explicit ownership transfer");return 0;
 }
