@@ -94,4 +94,8 @@ static int vh_rename(const char *source,const char *target) {
 static void vh_remove_owned(int64_t fd,const char *path,uint64_t dev,uint64_t ino){
  if(vh_matches(path,dev,ino)){FILE_DISPOSITION_INFO d={TRUE};SetFileInformationByHandle(vh_handle(fd),FileDispositionInfo,&d,sizeof(d));}
 }
+static int vh_publish_new(const char *source,const char *target){
+ wchar_t *s=vh_wide(source),*t=vh_wide(target);if(!s||!t){free(s);free(t);return -1;}
+ BOOL ok=MoveFileExW(s,t,MOVEFILE_WRITE_THROUGH);free(s);free(t);return ok?0:-1;
+}
 #endif

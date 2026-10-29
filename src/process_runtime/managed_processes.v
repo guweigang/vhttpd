@@ -7,11 +7,13 @@ import time
 // glibc exposes the SO_PEERCRED payload only with GNU feature visibility.
 #flag linux -D_GNU_SOURCE
 
+$if !windows {
 #include "@VMODROOT/src/process_runtime/posix_process.h"
 
 fn C.vhttpd_child_state(int) int
 fn C.vhttpd_child_owns_socket(int, int) int
 fn C.kill(int, int) int
+}
 
 __global (
 	g_managed_process_registry ManagedProcessRegistry
@@ -37,8 +39,11 @@ fn (mut r ManagedProcessRegistry) launch(config LaunchConfig) !&os.Process {
 	r.mu.@lock()
 	defer { r.mu.unlock() }
 	if r.stopping { return error('managed_process_registry_stopping') }
-	mut proc := os.new_process('/bin/sh')
-	proc.set_args(['-lc', config.command])
+	mut proc := os.new_process($if windows { os.getenv_opt('COMSPEC') or { 'cmd.exe' } } $else { '/bin/sh' })
+	$if windows {
+		proc.set_args(['/d', '/s', '/c', config.command])
+		proc.create_no_window = true
+	} $else { proc.set_args(['-lc', config.command]) }
 	proc.set_environment(config.environment)
 	proc.set_work_folder(config.workdir)
 	proc.use_pgroup = true
@@ -60,6 +65,12 @@ fn (r &ManagedProcessRegistry) owns(proc &os.Process) bool {
 fn (mut r ManagedProcessRegistry) retire_locked(mut proc os.Process, graceful bool) {
 	if !r.owns(proc) { return }
 	r.processes.delete(proc.pid)
+	$if windows {
+		if proc.is_alive() {
+			proc.signal_pgkill()
+			proc.wait()
+		}
+	} $else {
 	state := C.vhttpd_child_state(proc.pid)
 	if state >= 0 {
 		if graceful && state == 1 {
@@ -68,6 +79,8 @@ fn (mut r ManagedProcessRegistry) retire_locked(mut proc os.Process, graceful bo
 		}
 		if C.kill(-proc.pid, 9) != 0 { C.kill(proc.pid, 9) }
 		proc.wait()
+	}
+
 	}
 	proc.close()
 }
@@ -82,7 +95,7 @@ fn (mut r ManagedProcessRegistry) alive(mut proc os.Process) bool {
 	r.mu.@lock()
 	defer { r.mu.unlock() }
 	if !r.owns(proc) { return false }
-	if C.vhttpd_child_state(proc.pid) == 1 { return true }
+	if managed_child_alive(mut proc) { return true }
 	r.retire_locked(mut proc, false)
 	return false
 }
@@ -93,7 +106,7 @@ fn (mut r ManagedProcessRegistry) snapshot() []int {
 	mut pids := []int{}
 	for pid in r.processes.keys() {
 		mut proc := r.processes[pid] or { continue }
-		if C.vhttpd_child_state(pid) == 1 {
+		if managed_child_alive(mut proc) {
 			pids << pid
 		} else {
 			r.retire_locked(mut proc, false)
@@ -140,10 +153,19 @@ pub fn shutdown_managed_processes() {
 
 // Keep identity and the unreaped child PID stable across the native peer check.
 pub fn managed_process_owns_socket(proc &os.Process, fd int) bool {
+	$if windows {
+		// POSIX Unix-socket peer credential admission is not a Windows capability.
+		return false
+	} $else {
 	unsafe {
 		g_managed_process_registry.mu.@lock()
 		defer { g_managed_process_registry.mu.unlock() }
 		if !g_managed_process_registry.owns(proc) || C.vhttpd_child_state(proc.pid) != 1 { return false }
 		return C.vhttpd_child_owns_socket(proc.pid, fd) == 1
 	}
+}
+}
+
+fn managed_child_alive(mut proc os.Process) bool {
+ $if windows { return proc.is_alive() } $else { return C.vhttpd_child_state(proc.pid) == 1 }
 }

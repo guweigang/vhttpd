@@ -1,5 +1,7 @@
 module upload_store
 
+$if !windows {
+
 import os
 import rand
 
@@ -79,4 +81,6 @@ fn write_all(fd int, data string) ! {
 		if n == 0 { return error('upload_short_write') }
 		offset += int(n)
 	}
+}
+
 }

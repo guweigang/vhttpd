@@ -1,6 +1,5 @@
 module host
 
-import os
 
 import windows_files
 

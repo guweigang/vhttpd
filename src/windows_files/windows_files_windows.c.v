@@ -18,3 +18,5 @@ fn C.vh_ftruncate(int, u64) int
 
 fn C.vh_open_dir(&char) int
 fn C.vh_matches_dir(&char, u64, u64) int
+
+fn C.vh_publish_new(&char, &char) int

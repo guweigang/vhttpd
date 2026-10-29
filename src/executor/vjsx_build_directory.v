@@ -27,7 +27,7 @@ fn VjsxBuildDirectory.reserve(prefix string) !&VjsxBuildDirectory {
 			if os.exists(path) { continue }
 			return err
 		}
-		identity := os.lstat(path)!
+		identity := $if windows { windows_build_directory_identity(path)! } $else { os.lstat(path)! }
 		fd := retain_build_directory(path, identity) or {
 			if owns_build_directory(path, identity) { os.rmdir(path) or {} }
 			return err
@@ -42,9 +42,13 @@ fn (directory VjsxBuildDirectory) output_path() string {
 }
 
 fn owns_build_directory(path string, identity os.Stat) bool {
+	$if windows {
+		return C.vh_matches_dir(path.str, identity.dev, identity.inode) != 0
+	} $else {
 	current := os.lstat(path) or { return false }
 	return current.get_filetype() == .directory && current.dev == identity.dev
 		&& current.inode == identity.inode
+	}
 }
 
 fn (mut directory VjsxBuildDirectory) release() {

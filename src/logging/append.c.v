@@ -1,5 +1,7 @@
 module logging
 
+$if !windows {
+
 import os
 
 #include <fcntl.h>
@@ -36,4 +38,6 @@ fn write_log_bytes(fd int, data string) ! {
 		if n == 0 { return error('log_short_write') }
 		offset += int(n)
 	}
+}
+
 }
