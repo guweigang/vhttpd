@@ -22,7 +22,7 @@ if [[ -e "$destination" ]]; then
   exit 1
 fi
 mkdir -p "$(dirname "$destination")"
-git clone --quiet --shared --no-checkout "$source_dir" "$destination"
+git clone --quiet --shared --no-checkout --config core.autocrlf=false "$source_dir" "$destination"
 git -C "$destination" checkout --quiet --detach "$revision"
 for patch_file in "$root/desktop/patches/ui2-native-pointer-uint.patch" \
                   "$root/desktop/patches/ui2-custom-text-shortcuts.patch"; do
