@@ -169,6 +169,12 @@ fn (mut app Workshop) open_environment_runtime() {
 }
 
 fn (mut app Workshop) handle_environment_event(event string) bool {
+ $if windows {
+  if event == ui2.dropdown_menu_toggle_action('environment_menu') {
+   app.choose_windows_environment()
+   return true
+  }
+ }
 	if step := ui2.dropdown_menu_update('environment_menu', app.environment_menu_items(), app.environment_menu, event) {
 		if !app.can_switch_environment() { return true }
 		if step.chosen { app.reload_remote_profiles() }

@@ -53,6 +53,37 @@ static void vhttpd_workbench_configure_windows(void *window) {
     if(small) SendMessageW((HWND)window,WM_SETICON,ICON_SMALL,(LPARAM)small);
 }
 
+// Native popups own dismissal, keyboard navigation and accessibility without
+// placing an opaque HWND over the application's existing sibling controls.
+static int vhttpd_workbench_choose_environment(void *window, void *label_table,
+        int count, int selected, int x, int y) {
+    HWND owner = (HWND)window;
+    const wchar_t *const *labels = (const wchar_t *const *)label_table;
+    if (!owner || !IsWindow(owner) || !labels || count <= 0) return 0;
+    HMENU menu = CreatePopupMenu();
+    if (!menu) return 0;
+    for (int i = 0; i < count; ++i) {
+        MENUITEMINFOW item = {sizeof(MENUITEMINFOW)};
+        item.fMask = MIIM_STRING | MIIM_ID | MIIM_STATE | MIIM_FTYPE;
+        item.fType = MFT_STRING | MFT_RADIOCHECK;
+        item.fState = i == selected ? MFS_CHECKED : MFS_UNCHECKED;
+        item.wID = (UINT)(i + 1);
+        item.dwTypeData = (LPWSTR)labels[i];
+        if (!InsertMenuItemW(menu, (UINT)i, TRUE, &item)) {
+            DestroyMenu(menu);
+            return 0;
+        }
+    }
+    POINT anchor = {x,y};
+    ClientToScreen(owner,&anchor);
+    SetForegroundWindow(owner);
+    UINT chosen = TrackPopupMenuEx(menu,TPM_RETURNCMD | TPM_NONOTIFY | TPM_LEFTALIGN | TPM_TOPALIGN,
+        anchor.x,anchor.y,owner,NULL);
+    DestroyMenu(menu);
+    PostMessageW(owner,WM_NULL,0,0);
+    return chosen <= (UINT)count ? (int)chosen : 0;
+}
+
 static void vhttpd_workbench_activate_windows(void *native_window) {
     HWND window = (HWND)native_window;
     if (!window || !IsWindow(window)) return;

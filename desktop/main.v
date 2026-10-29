@@ -799,6 +799,7 @@ fn build_window() ui2.Element {
 fn build_window_tree() ui2.Element {
 	root := build_window_content()
 	app := unsafe { workshop }
+ $if windows { return root }
 	if !app.environment_menu.open { return root }
 	menu := ui2.dropdown_menu(ui2.DropdownMenuConfig{
 		id: 'environment_menu', state: app.environment_menu, items: app.environment_menu_items(),

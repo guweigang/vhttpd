@@ -150,6 +150,8 @@ jobs:
 
           $env:VHTTPD_DESKTOP_DATA_DIR = "$output/isolated-data"
           $env:VHTTPD_DESKTOP_REGISTRY = "$output/isolated-data/projects.json"
+          New-Item -ItemType Directory -Force $env:VHTTPD_DESKTOP_DATA_DIR | Out-Null
+          '[{"id":"aaaaaaaaaaaaaaaaaaaaaaaa","name":"CI Menu Host","ssh_host":"127.0.0.1","ssh_user":"fixture","ssh_port":22,"auth_method":"password"}]' | Set-Content "$env:VHTTPD_DESKTOP_DATA_DIR/remote-servers.json" -Encoding utf8
           $env:VHTTPD_DESKTOP_CI_READY = "$output/desktop-window-ready.txt"
           $process = Start-Process "$output/vhttpd-workbench.exe" -WorkingDirectory $output -PassThru -RedirectStandardOutput "$output/desktop-stdout.log" -RedirectStandardError "$output/desktop-stderr.log"
           try {

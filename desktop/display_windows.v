@@ -54,3 +54,28 @@ fn windows_brand_asset(path string) string {
 	candidate := path.replace('.bmp', '-${percent}.bmp')
 	return if percent != 100 && os.is_file(candidate) { candidate } else { path }
 }
+
+fn C.vhttpd_workbench_choose_environment(voidptr, voidptr, int, int, int, int) int
+
+fn (mut app Workshop) choose_windows_environment() {
+	app.environment_menu = ui2.DropdownMenuState{}
+	if !app.can_switch_environment() { return }
+	choices := app.environment_choices()
+	mut labels := []&u16{cap: choices.len}
+	mut current := -1
+	for i, choice in choices {
+		labels << choice.title.replace('&', '&&').to_wide()
+		if choice.id == app.environment_id { current = i }
+	}
+	defer {
+		for label in labels {
+			unsafe { free(label) }
+		}
+	}
+	scale := windows_display_scale()
+	chosen := C.vhttpd_workbench_choose_environment(ui2.native_window_handle(), labels.data, labels.len, current, int(16 * scale), int(116 * scale))
+	if chosen > 0 && chosen <= choices.len && app.can_switch_environment() {
+		app.reload_remote_profiles()
+		app.open_environment_projects(choices[chosen - 1].id)
+	}
+}
