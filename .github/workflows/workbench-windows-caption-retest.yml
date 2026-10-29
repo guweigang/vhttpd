@@ -24,25 +24,45 @@ jobs:
           run-id: 40857516672
           github-token: ${{ github.token }}
           path: ${{ runner.temp }}/compiled-caption-fix
-      - uses: actions/cache@v4
+      - uses: actions/download-artifact@v4
         with:
-          path: .cache/vcpkg-binary-cache
-          key: windows-workbench-openssl-msvc-${{ hashFiles('desktop/ci/windows-vcpkg.commit') }}
-      - name: Prepare matching packaging dependencies
-        run: ./desktop/ci/prepare_windows_openssl.ps1
-      - name: Package the attested MSVC binary
+          name: vhttpd-workbench-windows-amd64-test
+          run-id: 40853163884
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/verified-runtime-bundle
+      - name: Package the attested MSVC binary with verified runtime files
         id: package
         run: |
           $build = "$env:RUNNER_TEMP/compiled-caption-fix/windows-build"
+          $previous = "$env:RUNNER_TEMP/verified-runtime-bundle"
           $attestation = Get-Content "$build/result.json" -Raw | ConvertFrom-Json
           if ($attestation.commit -ne 'aa8dfcad6482a5040748256f44172eb94328fa4f') { throw 'Unexpected binary source revision' }
-          # Only the UI test's real cursor placement changed after this build.
-          # Product binary/source revision is retained in package metadata.
-          $head = $env:GITHUB_SHA
-          try {
-            $env:GITHUB_SHA = $attestation.commit
-            ./desktop/ci/package_windows.ps1 -Executable "$build/vhttpd-workbench.exe"
-          } finally { $env:GITHUB_SHA = $head }
+          & "$previous/Verify-Package.ps1"
+          # Only Win32 painting code changed. Keep the already verified runtime
+          # DLLs, SSH clients and licenses; validate dependency closure again.
+          $name = 'vhttpd-workbench-windows-amd64-test-' + $attestation.commit.Substring(0,12)
+          $output = "$PWD/desktop/ci/results/windows-package"
+          $stage = "$output/$name"
+          New-Item -ItemType Directory -Force $stage | Out-Null
+          Copy-Item "$previous/*" $stage -Recurse
+          Copy-Item "$build/vhttpd-workbench.exe" "$stage/vhttpd-workbench.exe" -Force
+          Copy-Item "$build/vhttpd-ssh-askpass.exe" "$stage/vhttpd-ssh-askpass.exe" -Force
+          $info = Get-Content "$stage/build-info.json" -Raw | ConvertFrom-Json
+          $original = $info.commit
+          $info.commit = $attestation.commit
+          $info.run = $env:GITHUB_RUN_ID
+          $info | Add-Member -NotePropertyName binary_build_run -NotePropertyValue '40857516672'
+          $info | Add-Member -NotePropertyName runtime_bundle_commit -NotePropertyValue $original
+          $info | ConvertTo-Json | Set-Content "$stage/build-info.json" -Encoding utf8
+          $files = @(Get-ChildItem $stage -File -Recurse | Where-Object { $_.FullName -ne "$stage/files.json" -and $_.Name -ne 'files.json' } | ForEach-Object {
+            @{path=[IO.Path]::GetRelativePath($stage,$_.FullName).Replace('\','/');sha256=(Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()}
+          } | Sort-Object { $_.path })
+          ConvertTo-Json -InputObject $files | Set-Content "$stage/files.json" -Encoding utf8
+          & "$stage/Verify-Package.ps1"
+          $archive = "$stage.zip"
+          Compress-Archive $stage $archive
+          ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant() + "  $name.zip") | Set-Content "$archive.sha256" -Encoding ascii
+          "package_dir=$stage", "archive=$archive" | Add-Content $env:GITHUB_OUTPUT
       - name: Check pressed caption, release, form focus and Tab
         run: |
           $output = "$PWD/desktop/ci/results/caption-retest"
