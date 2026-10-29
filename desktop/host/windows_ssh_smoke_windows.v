@@ -120,7 +120,7 @@ fn run_windows_native_ssh_fixture(server RemoteServer, password string) ! {
 		}
 		part := session.process.stdout_read()
 		session.ready_output += part
-		if !session.process.is_alive() { return error('native_ssh_initial_auth_failed') }
+		if !session.process.is_alive() { windows_smoke_note('Native loopback SSH: ' + session.process.stderr_slurp()); return error('native_ssh_initial_auth_failed') }
 		time.sleep(20 * time.millisecond)
 	}
 	if !session.transport_ready() || !confirmed { return error('native_ssh_initial_auth_timeout') }

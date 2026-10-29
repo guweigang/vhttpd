@@ -38,6 +38,23 @@ jobs:
             [Management.Automation.Language.Parser]::ParseFile("$PWD/$file", [ref]$tokens, [ref]$errors) | Out-Null
             if ($errors.Count) { $errors | Format-List; throw "PowerShell parse failed: $file" }
           }
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check actual OpenSSH password helper without V bootstrap
+        shell: pwsh
+        run: |
+          python -m pip install --disable-pip-version-check paramiko==5.1.0
+          if ($LASTEXITCODE -ne 0) { throw 'Fixture dependency setup failed' }
+          $pin = Get-Content desktop/ci/windows-openssh.json -Raw | ConvertFrom-Json
+          $folder = "$env:RUNNER_TEMP/SSH 用户 native probe"
+          New-Item -ItemType Directory -Force $folder | Out-Null
+          Invoke-WebRequest $pin.url -OutFile "$folder/ssh.zip"
+          if ((Get-FileHash "$folder/ssh.zip" -Algorithm SHA256).Hash.ToLowerInvariant() -ne $pin.sha256) { throw 'OpenSSH checksum mismatch' }
+          Expand-Archive "$folder/ssh.zip" "$folder/ssh"
+          Copy-Item askpass-compile-probe.exe "$folder/askpass.exe"
+          python desktop/ci/windows_native_ssh_probe.py "$folder/ssh/OpenSSH-Win64/ssh.exe" "$folder/askpass.exe" "$folder/state"
+          if ($LASTEXITCODE -ne 0) { throw 'Real OpenSSH/helper test failed' }
   windows-amd64:
     runs-on: windows-2022
     timeout-minutes: 45
