@@ -76,6 +76,15 @@ fn (mut app Workshop) handle_remote_event(event string) bool {
 		}
 		return true
 	}
+	if event == 'remote_start' {
+		if !app.can_start_remote_project() { return true }
+		app.server_created_id = ''
+		app.server_sequence++
+		app.server_worker.commands <- host.ServerCommand{sequence: app.server_sequence, action: .start, project_id: app.remote_id}
+		app.server_busy = true
+		app.remote_message = '正在通过 SSH 启动已有实例…'
+		return true
+	}
 	if app.remote_snapshot.busy { return true }
 	match event {
 		'remote_new' {
@@ -171,7 +180,7 @@ fn (mut app Workshop) handle_remote_event(event string) bool {
 			app.send_remote(.check)
 		}
 		'remote_restart' {
-			if app.remote_upgrade_running() { app.remote_message = '远端正在切换运行包或恢复原版本，请等待升级结果。'; return true }
+			if app.remote_upgrade_running() || app.deployment_running() { app.remote_message = '远端正在升级或部署应用，请等待操作结果。'; return true }
 			if ui2.confirm('重启远端 vhttpd', '将先校验整个项目，再重启远端手工实例。重启期间连接会短暂中断，随后自动检查所有 include 配置是否生效。') {
 				app.remote_message = ''
 				app.send_remote(.restart)
@@ -194,7 +203,7 @@ fn (mut app Workshop) handle_remote_event(event string) bool {
 fn remote_instances_view(app &Workshop, width f64) []ui2.Element {
 	mut rows := [
 		label('remote_heading', if app.environment_id == '' { '远端实例' } else { app.environment_name() + ' · 项目' }, 0, 28, width - 120, 26, workbench_ink),
-		label('remote_description', 'SSH 连接已运行的 vhttpd，配置在 Admin UI 编辑，重启和生效检查在这里完成。', 0, 68, width, 12, workbench_muted),
+		label('remote_description', 'SSH 管理远端实例；停止后可启动，运行后可编辑配置、重启和检查生效。', 0, 68, width, 12, workbench_muted),
 		button('remote_close', '项目概览', width - 100, 25, 100, false, true),
 		button(if app.environment_id == '' { 'server_back' } else { 'remote_new' }, if app.environment_id == '' { '服务器' } else { '导入已有实例' }, 145, 103, 130, false, !app.remote_snapshot.busy),
 		button(if app.environment_id == '' { 'remote_new' } else { 'remote_create_project' }, if app.environment_id == '' { '+ 添加实例' } else { '+ 新建项目' }, 0, 103, 130, true, !app.remote_snapshot.busy),
@@ -228,6 +237,13 @@ fn remote_instances_view(app &Workshop, width f64) []ui2.Element {
 			} }
 		} }
 	}
+	if app.deployment_running() {
+		for status in app.server_snapshot.deployments { if !status.finished() && status.config_path==app.remote_form().config_path {
+			rows << state_notice('remote_deployment',host.application_deployment_title(status),'正在切换应用或恢复原应用。SSH 认证不变，无需重复输入密码。',ui2.rect(0,y,width,110),'info')
+			rows << button('deploy_open','查看应用部署状态',0,y+130,190,true,true)
+			return rows
+		} }
+	}
 	if app.remote_snapshot.connected && app.remote_snapshot.profile_id == app.remote_id && same_remote_connection(app.remote_form(), app.remote_connected_form) && !app.remote_edit_connection {
 		rows << remote_instance_summary(app, width, y)
 		return rows
@@ -246,6 +262,27 @@ fn remote_instances_view(app &Workshop, width f64) []ui2.Element {
 		rows << state_notice('remote_host_key_changed', '主机指纹已变化 · 连接已阻止',
 			'当前指纹：${challenge.fingerprint}\n已保存的信任记录不会自动覆盖。\n请通过可信渠道核对服务器是否重装或更换密钥。', ui2.rect(0, y, width, 124), 'danger')
 		y += 140
+	}
+	if !app.remote_edit_connection && app.remote_form().config_path != '' && app.remote_form().runtime_id != '' {
+		rows << label('remote_existing_name', app.remote_name, 0, y, width, 22, workbench_ink)
+		rows << state_notice('remote_existing_state', if app.remote_control_path() == '' { '服务器未连接' } else { '实例未连接' }, '先连接服务器，再点击启动已有实例。启动使用原配置和绑定的运行包，并检查残留 PID；运行中的实例不会重复启动。', ui2.rect(0, y + 42, width, 110), 'info')
+		rows << button('remote_start', '启动已有实例', 0, y + 170, 175, true, app.can_start_remote_project())
+		mut detail_y := y + 220
+		if app.remote_control_path() == '' {
+			if app.remote_auth == 'password' {
+				rows << ui2.Element{ ...input('remote_password', app.remote_password, 'SSH 登录密码（仅本次会话）', 0, detail_y, width, !app.remote_snapshot.busy && !app.server_busy), secure: true }
+				detail_y += 48
+			}
+			rows << button('remote_connect', '连接服务器', 0, detail_y, 175, false, !app.remote_snapshot.busy && !app.server_busy)
+		} else {
+			rows << button('remote_open', '连接运行中的实例', 0, detail_y, 175, false, !app.remote_snapshot.busy && !app.server_busy)
+		}
+		detail_y += 50
+		rows << button('remote_edit', '编辑连接…', 0, detail_y, 125, false, !app.remote_snapshot.busy && !app.server_busy)
+		rows << ui2.label('remote_existing_source', app.remote_form().config_path, ui2.rect(0, detail_y + 55, width, 60), ui2.TextStyle{size: 11, color: workbench_muted, lines: 3})
+		message := if app.server_snapshot.error { app.server_snapshot.message } else if app.remote_message != '' { app.remote_message } else { app.remote_snapshot.message }
+		if message != '' { rows << ui2.label('remote_existing_message', message, ui2.rect(0, detail_y + 130, width, 90), ui2.TextStyle{size: 12, color: workbench_ink, lines: 4}) }
+		return rows
 	}
 	editable := !app.remote_snapshot.busy
 	half := (width - 16) / 2
@@ -347,13 +384,14 @@ fn remote_instance_summary(app &Workshop, width f64, y f64) []ui2.Element {
 		label('remote_version', 'vhttpd ' + state.instance.version + ' · ' + state.instance.platform, 0, y + 70, width, 13, workbench_ink),
 		state_notice('remote_state_summary', if state.restarting { '正在重启并检查生效' } else if state.instance.startup_failed() { '重启失败 · 需修复配置' } else if !state.instance.ready { '业务尚未就绪' } else if state.config_status.pending { '配置待重启生效' } else { '已连接 · 业务就绪' }, if app.remote_message != '' { app.remote_message } else { state.message }, ui2.rect(0, y + 112, width, 100), if state.restarting { 'info' } else if state.instance.startup_failed() { 'danger' } else if state.config_status.pending || !state.instance.ready { 'warning' } else { 'good' }),
 		button('remote_open', if state.instance.startup_failed() { '打开 Admin UI 修复配置' } else { '打开远端 Admin UI ↗' }, 0, y + 234, 180, true, !state.busy),
-		button('remote_restart', if state.instance.startup_failed() { '修复后重试重启' } else { '重启并检查生效' }, 192, y + 234, 175, false, !state.busy && state.instance.manual_restart && !app.remote_upgrade_running()),
+		button('remote_restart', if state.instance.startup_failed() { '修复后重试重启' } else { '重启并检查生效' }, 192, y + 234, 175, false, !state.busy && state.instance.manual_restart && !app.remote_upgrade_running() && !app.deployment_running()),
 		button('remote_check', '检查生效', 0, y + 283, 110, false, !state.busy),
 		button('remote_edit', '编辑连接…', 122, y + 283, 125, false, !state.busy),
 		button('remote_disconnect', '断开', width - 75, y + 283, 75, false, true),
 		ui2.label('remote_config_source', state.instance.config_path, ui2.rect(0, y + 341, width, 52), ui2.TextStyle{size: 11, color: workbench_muted, lines: 3}),
 		label('remote_restart_hint', '配置在 Admin UI 编辑；发布后回到这里重启和检查生效。', 0, y + 408, width, 11, workbench_muted),
-		remote_access_notice(app, width, y + 445)]
+		remote_access_notice(app, width, y + 445),
+		button('deploy_open','部署本地应用…',0,y + 445 + (if width < 420 { 244.0 } else { 208.0 }) + 20,180,true,!state.busy)]
 	return rows
 }
 
@@ -408,4 +446,9 @@ fn (app &Workshop) remote_upgrade_running() bool {
 
 fn same_remote_connection(a host.RemoteProfile, b host.RemoteProfile) bool {
  return host.RemoteProfile{...a,runtime_id:'',runtime_path:''} == host.RemoteProfile{...b,runtime_id:'',runtime_path:''}
+}
+
+fn (app &Workshop) can_start_remote_project() bool {
+	p := app.remote_form()
+	return app.remote_control_path() != '' && !app.remote_snapshot.busy && !app.server_busy && !app.server_snapshot.busy && !app.remote_upgrade_running() && !app.deployment_running() && p.runtime_id != '' && p.config_path == app.server_snapshot.root + '/instances/' + p.name + '/vhttpd.toml'
 }

@@ -12,7 +12,7 @@ struct RuntimeCatalogResult {
 }
 
 fn (app &Workshop) download_platform() string {
-	if app.runtime_server_id == '' { return 'macos-arm64' }
+	if app.runtime_server_id == '' { return host.local_runtime_platform() }
 	if app.server_snapshot.connected && app.server_snapshot.server_id == app.runtime_server_id { return app.server_snapshot.platform }
 	return ''
 }

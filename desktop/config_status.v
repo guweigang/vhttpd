@@ -66,7 +66,7 @@ fn config_diff_view(app &Workshop, width f64) []ui2.Element {
 		'受影响 Relay：' + if status.relays.len > 0 { status.relays.join(', ') } else { '无' },
 		'受影响 Pipeline：' + if status.pipelines.len > 0 { status.pipelines.join(', ') } else { '无' },
 		'文件与上次确认已生效的版本比较。']
-	body := ui2.text_area('diff_summary', lines.join('\n'), ui2.rect(0, 159, width, 132), ui2.BoxStyle{bg: workbench_sidebar, radius: 6}, ui2.TextStyle{size: 11, color: workbench_ink, font_family: 'Menlo'})
+	body := ui2.text_area('diff_summary', lines.join('\n'), ui2.rect(0, 159, width, 132), ui2.BoxStyle{bg: workbench_sidebar, radius: 6}, ui2.TextStyle{size: 11, color: workbench_ink, font_family: workbench_detail_font()})
 	rows << ui2.Element{...body, readonly: true}
 	mut y := 311.0
 	if status.pending {
@@ -84,7 +84,7 @@ fn config_diff_view(app &Workshop, width f64) []ui2.Element {
 		}
 		if field_lines.len == 0 { field_lines << 'Relay / Pipeline 字段未变，差异来自其他组件。' }
 		height := f64(if field_lines.len * 15 + 20 > 300 { 300 } else { field_lines.len * 15 + 20 })
-		field_body := ui2.text_area('diff_field_values', field_lines.join('\n'), ui2.rect(0, y, width, height), ui2.BoxStyle{bg: workbench_sidebar, radius: 6}, ui2.TextStyle{size: 11, color: workbench_ink, font_family: 'Menlo'})
+		field_body := ui2.text_area('diff_field_values', field_lines.join('\n'), ui2.rect(0, y, width, height), ui2.BoxStyle{bg: workbench_sidebar, radius: 6}, ui2.TextStyle{size: 11, color: workbench_ink, font_family: workbench_detail_font()})
 		rows << ui2.Element{...field_body, readonly: true}
 		y += height + 24
 	}

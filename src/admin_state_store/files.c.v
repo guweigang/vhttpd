@@ -12,7 +12,7 @@ import os
 fn C.open(&char, int, ...int) int
 fn C.close(int) int
 fn C.flock(int, int) int
-fn C.write(int, voidptr, usize) isize
+fn C.write(int, voidptr, uint) int
 fn C.rename(&char, &char) int
 fn C.lseek(int, i64, int) i64
 fn C.ftruncate(i32, u64) i32
@@ -60,7 +60,7 @@ fn write_all(fd int, data string) ! {
 	mut offset := 0
 	for offset < data.len {
 		remaining := data[offset..]
-		written := C.write(fd, remaining.str, usize(remaining.len))
+		written := C.write(fd, remaining.str, uint(remaining.len))
 		if written < 0 {
 			if C.errno == C.EINTR { continue }
 			return os.last_error()

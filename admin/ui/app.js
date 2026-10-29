@@ -182,7 +182,7 @@ const endpoints = {
     }
     function renderStatus() {
       const runtimeOK = !!state.data.runtime && !state.errors.runtime && !state.authRequired;
-      $("status").textContent = state.authRequired ? "登录已失效，请从 Mac 工作台重新打开管理界面。" :
+      $("status").textContent = state.authRequired ? "登录已失效，请从工作台重新打开管理界面。" :
         (runtimeOK ? "管理接口已连接" : "管理接口未连接，以下状态无法确认") +
         (state.refreshedAt ? " · 最近检查 " + state.refreshedAt.toLocaleTimeString() : "");
       $("stateDot").className = "state-dot " + (runtimeOK ? "ok" : "error");

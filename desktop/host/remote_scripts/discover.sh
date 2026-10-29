@@ -19,6 +19,14 @@ for target in "$root"/*; do
       printf 'VHTTPD_UPGRADE:%s\n' "$(base64 < "$status" | tr -d '\n')"
     fi
   fi
+  if [ -f "$target/.desktop-deploy-current" ] && [ ! -L "$target/.desktop-deploy-current" ]; then
+    operation=$(head -c 24 "$target/.desktop-deploy-current")
+    case "$operation" in *[!0-9a-f]*|'') continue ;; esac
+    status="$target/.desktop-deployments/$operation/status.json"
+    if [ ! -L "$status" ] && [ -f "$status" ] && [ "$(wc -c < "$status")" -le 16384 ]; then
+      printf 'VHTTPD_DEPLOYMENT:%s\n' "$(base64 < "$status" | tr -d '\n')"
+    fi
+  fi
 done
 # Discover only this SSH user's running vhttpd processes. Arguments travel over
 # SSH and are parsed in memory; they must never be displayed as diagnostics.

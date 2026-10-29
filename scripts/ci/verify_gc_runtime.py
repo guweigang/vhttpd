@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Reject a runtime whose compiler silently omitted or disabled Boehm GC."""
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -20,7 +21,13 @@ def verify_gc_runtime(command, **kwargs):
 
 if __name__ == '__main__':
     try:
-        verify_gc_runtime([str(Path(sys.argv[1]).resolve())])
+        # Unpackaged macOS bottles retain Homebrew relocation placeholders.
+        # Scope the library override to this probe, never the packaged app.
+        probe_options = {}
+        library_path = os.environ.get('VHTTPD_GC_PROBE_LIBRARY_PATH')
+        if sys.platform == 'darwin' and library_path:
+            probe_options['env'] = {**os.environ, 'DYLD_LIBRARY_PATH': library_path}
+        verify_gc_runtime([str(Path(sys.argv[1]).resolve())], **probe_options)
     except ValueError as error:
         sys.exit(str(error))
     print('Verified actual runtime: Boehm GC enabled')

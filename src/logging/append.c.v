@@ -8,7 +8,7 @@ import os
 
 fn C.open(&char, i32, ...int) i32
 fn C.close(i32) i32
-fn C.write(i32, voidptr, usize) isize
+fn C.write(i32, voidptr, uint) int
 
 // Each append owns its descriptor from allocation through the last write.
 // O_CLOEXEC excludes it from worker exec even while the write is in progress.
@@ -28,7 +28,7 @@ fn write_log_bytes(fd int, data string) ! {
 	mut offset := 0
 	for offset < data.len {
 		remaining := data[offset..]
-		n := C.write(i32(fd), remaining.str, usize(remaining.len))
+		n := C.write(i32(fd), remaining.str, uint(remaining.len))
 		if n < 0 {
 			if C.errno == C.EINTR { continue }
 			return os.last_error()

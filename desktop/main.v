@@ -22,6 +22,10 @@ const workbench_soft_accent = u32(0xeaf1ff)
 @[heap]
 struct Workshop {
 mut:
+	owner_pid int
+	show_deployment bool
+	deployment_local int
+	deployment_remote string
 	show_servers bool
 	server_sequence u64
 	remote_server_id string
@@ -134,8 +138,8 @@ fn main() {
 		host.run_remote_askpass() or { exit(1) }
 		return
 	}
-	$if !macos {
-		eprintln('此 ui2 宿主原型当前只验证并交付 macOS。')
+	$if !macos && !linux {
+		eprintln('当前交付 macOS 和 Linux；Windows 适配尚未完成。')
 		exit(1)
 	}
 	root := os.real_path(os.join_path(os.dir(@FILE), '..'))
@@ -168,11 +172,12 @@ fn main() {
 		return
 	}
 	mut app := unsafe { workshop }
+	app.owner_pid = os.getpid()
 	app.binary = host.selected_runtime(os.executable(), root) or {
 		app.notice = err.msg()
 		host.workbench_binary(os.executable(), root)
 	}
-	app.inspect_binary(app.binary, false)
+	$if !linux { app.inspect_binary(app.binary, false) }
 	app.brand_mark = host.workbench_brand_mark(os.executable(), root)
 	app.registry = os.getenv_opt('VHTTPD_DESKTOP_REGISTRY') or { os.join_path(host.workbench_data_dir(), 'projects.json') }
 	// Existing checkout users keep their registrations when upgrading to the app.
@@ -199,7 +204,9 @@ fn main() {
 	app.server_worker = host.new_server_worker()
 	app.worker = host.new_worker()
 	app.worker_started = true
-	if app.projects.len > 0 { app.select_current() }
+	$if !linux {
+		if app.projects.len > 0 { app.select_current() }
+	}
 	C.atexit(cleanup)
 	ui2.set_menu_bar([ui2.Menu{
 		title: '项目'
@@ -211,14 +218,21 @@ fn main() {
 	ui2.on_key(workbench_key)
 	ui2.on_key_event(workbench_physical_key)
 	ui2.on_window_ready(configure_workbench_window)
-	ui2.run_window('vhttpd · 本地工作台', 980, 740, build_window, handle_event)
+	$if linux {
+		configure_linux_fonts()
+		ui2.run_window_with_options(ui2.WindowOptions{title:'vhttpd · 本地工作台',width:980,height:740,min_width:760,min_height:660}, build_window, handle_event)
+	} $else {
+		ui2.run_window('vhttpd · 本地工作台', 980, 740, build_window, handle_event)
+	}
 	cleanup()
 }
 
 
 fn cleanup() {
 	mut app := unsafe { workshop }
-	if !app.worker_started || app.quitting { return }
+	// Graphics drivers may fork while initializing. Inherited atexit hooks
+	// must never send commands to the parent's copied worker channels.
+	if app.owner_pid != os.getpid() || !app.worker_started || app.quitting { return }
 	app.quitting = true
 	app.refresh_stop <- true
 	select { app.runtime_catalog_job.cancel <- true {} else {} }
@@ -398,6 +412,8 @@ fn handle_event(event string) {
 	if event in ['server_home', 'server_back', 'shared_relays', 'runtime'] || event.starts_with('project_') {
 		app.new_project = false
 	}
+	if app.handle_deployment_event(event) { ui2.refresh(); return }
+	if event in ['server_home','runtime','new','import'] || event.starts_with('project_') { app.show_deployment=false }
 	if app.handle_environment_event(event) { ui2.refresh(); return }
 	if app.handle_server_event(event) { ui2.refresh(); return }
 	if app.handle_remote_event(event) { ui2.refresh(); return }
@@ -432,9 +448,14 @@ fn handle_event(event string) {
 		}
 		'new_auto_start' { app.new_auto_start = !app.new_auto_start }
 		'new_choose_parent' {
+			// Zenity treats a filename without a trailing slash as a proposed
+			// file, even for a folder picker. Pass an actual directory path.
+			parent := if os.is_dir(app.new_parent) && !app.new_parent.ends_with(os.path_separator) {
+				app.new_parent + os.path_separator
+			} else { app.new_parent }
 			dirs := ui2.open_folder_dialog(
 				title:     '选择项目存放目录'
-				directory: app.new_parent
+				directory: parent
 			)
 			if dirs.len > 0 {
 				app.new_parent = dirs[0]
@@ -654,8 +675,19 @@ fn (mut app Workshop) import_project() {
 	app.select_current()
 }
 
+fn workbench_detail_font() string {
+	// The custom backend's mono fallback has no CJK glyphs. Use the shipped
+	// primary face so error messages and redacted diffs remain readable.
+	$if linux { return '' }
+	return 'Menlo'
+}
+
 fn label(id string, text string, x f64, y f64, width f64, size f64, color u32) ui2.Element {
-	return ui2.label(id, text, ui2.rect(x, y, width, 25), ui2.TextStyle{ size: size, color: color })
+	mut height := 25.0
+	$if linux {
+		if size > 20 { height = size + 8 }
+	}
+	return ui2.label(id, text, ui2.rect(x, y, width, height), ui2.TextStyle{ size: size, color: color })
 }
 
 // Keep text independent of NSButton's disabled-title drawing, while retaining
@@ -742,6 +774,12 @@ fn project_button(id string, title string, badge string, frame ui2.Rect, selecte
 }
 
 fn build_window() ui2.Element {
+	root := build_window_tree()
+	$if linux { return linux_pixel_layout(root) }
+	return root
+}
+
+fn build_window_tree() ui2.Element {
 	root := build_window_content()
 	app := unsafe { workshop }
 	if !app.environment_menu.open { return root }
@@ -762,6 +800,7 @@ fn build_window_content() ui2.Element {
 	w := if b.width > 760 { b.width } else { 760.0 }
 	h := if b.height > 660 { b.height } else { 660.0 }
 	content_x := 242.0
+	// Content keeps its inset; page scroll viewports extend to the window edge.
 	cw := w - content_x - 30
 	mut side := [
 		ui2.Element{ ...ui2.image('brand_mark', app.brand_mark, ui2.rect(22, 18, 38, 38)), accessibility_label: 'vhttpd 品牌标志' },
@@ -810,40 +849,43 @@ fn build_window_content() ui2.Element {
 		border_color: workbench_line
 		border_right: 1
 	}, side)]
+	if app.show_deployment {
+		children << ui2.scroll('deployment_page',ui2.rect(content_x,0,cw + 30,h),workbench_paper,application_deployment_view(app,cw)); return ui2.screen(workbench_paper,children)
+	}
 	if app.show_remote {
-		children << ui2.scroll('remote_instances_page', ui2.rect(content_x, 0, cw, h), workbench_paper, if app.show_servers { remote_servers_view(app, cw) } else { remote_instances_view(app, cw) })
+		children << ui2.scroll('remote_instances_page', ui2.rect(content_x, 0, cw + 30, h), workbench_paper, if app.show_servers { remote_servers_view(app, cw) } else { remote_instances_view(app, cw) })
 		return ui2.screen(workbench_paper, children)
 	}
 	if app.show_runtime {
-		children << ui2.scroll('runtime_page', ui2.rect(content_x, 0, cw, h), workbench_paper, runtime_settings_view(app, cw))
+		children << ui2.scroll('runtime_page', ui2.rect(content_x, 0, cw + 30, h), workbench_paper, runtime_settings_view(app, cw))
 		return ui2.screen(workbench_paper, children)
 	}
 	if app.show_shared_relays {
-		children << ui2.scroll('shared_relays_page', ui2.rect(content_x, 0, cw, h), workbench_paper, shared_relays_view(app, cw))
+		children << ui2.scroll('shared_relays_page', ui2.rect(content_x, 0, cw + 30, h), workbench_paper, shared_relays_view(app, cw))
 		return ui2.screen(workbench_paper, children)
 	}
 	if app.environment_id != '' {
-		children << ui2.scroll('environment_projects_page', ui2.rect(content_x, 0, cw, h), workbench_paper, remote_instances_view(app, cw))
+		children << ui2.scroll('environment_projects_page', ui2.rect(content_x, 0, cw + 30, h), workbench_paper, remote_instances_view(app, cw))
 		return ui2.screen(workbench_paper, children)
 	}
 	if app.show_rollback && !app.new_project && app.projects.len > 0 {
-		children << ui2.scroll('config_rollback_page', ui2.rect(content_x, 0, cw, h), workbench_paper, config_rollback_view(app, cw))
+		children << ui2.scroll('config_rollback_page', ui2.rect(content_x, 0, cw + 30, h), workbench_paper, config_rollback_view(app, cw))
 		return ui2.screen(workbench_paper, children)
 	}
 	if app.show_history && !app.new_project && app.projects.len > 0 {
-		children << ui2.scroll('version_history_page', ui2.rect(content_x, 0, cw, h), workbench_paper, version_history_view(app, cw))
+		children << ui2.scroll('version_history_page', ui2.rect(content_x, 0, cw + 30, h), workbench_paper, version_history_view(app, cw))
 		return ui2.screen(workbench_paper, children)
 	}
 	if app.show_config_diff && !app.new_project && app.projects.len > 0 {
-		children << ui2.scroll('config_diff_page', ui2.rect(content_x, 0, cw, h), workbench_paper, config_diff_view(app, cw))
+		children << ui2.scroll('config_diff_page', ui2.rect(content_x, 0, cw + 30, h), workbench_paper, config_diff_view(app, cw))
 		return ui2.screen(workbench_paper, children)
 	}
 	if app.show_details && !app.new_project && app.projects.len > 0 {
-		children << ui2.scroll('project_details', ui2.rect(content_x, 0, cw, h), workbench_paper, project_details_view(app, cw))
+		children << ui2.scroll('project_details', ui2.rect(content_x, 0, cw + 30, h), workbench_paper, project_details_view(app, cw))
 		return ui2.screen(workbench_paper, children)
 	}
 	if app.new_project {
-		children << ui2.scroll('new_project_form', ui2.rect(content_x, 0, cw, h), workbench_paper, new_project_view(app, 0, cw))
+		children << ui2.scroll('new_project_form', ui2.rect(content_x, 0, cw + 30, h), workbench_paper, new_project_view(app, 0, cw))
 		return ui2.screen(workbench_paper, children)
 	}
 	if app.projects.len == 0 {
@@ -857,6 +899,11 @@ fn build_window_content() ui2.Element {
 		}
 		return ui2.screen(workbench_paper, children)
 	}
+	mut project_h := h
+	$if linux {
+		if project_h < 780 { project_h = 780 }
+	}
+	project_start := children.len
 	project := app.projects[app.selected]
 	s := app.snapshot
 	phase := match s.phase {
@@ -909,6 +956,7 @@ fn build_window_content() ui2.Element {
 	children << button('folder', '打开项目目录', content_x + 176, 155, 104, false, true)
 	children << button('details', '配置 / Relay', content_x + 290, 155, 96, false, true)
 	children << button('edit_source', '打开源码', content_x + 396, 155, 76, false, s.entry != '')
+	children << button('deploy_open','部署到远端…', content_x+cw-160,204,160,false,!busy)
 	children << label('admin_section', '管理界面', content_x, 215, cw, 13, workbench_ink)
 	children << ui2.view('admin_card', ui2.rect(content_x, 250, cw, 105), ui2.BoxStyle{
 		bg:            workbench_paper
@@ -955,7 +1003,7 @@ fn build_window_content() ui2.Element {
 		}
 	} else {
 		s.logs
-	}, ui2.rect(content_x, 560, cw, h - 645), ui2.BoxStyle{ bg: workbench_sidebar, radius: 7 }, ui2.TextStyle{ size: 11, color: workbench_ink, font_family: 'Menlo' })
+	}, ui2.rect(content_x, 560, cw, project_h - 645), ui2.BoxStyle{ bg: workbench_sidebar, radius: 7 }, ui2.TextStyle{ size: 11, color: workbench_ink, font_family: workbench_detail_font() })
 	children << ui2.Element{ ...logs, readonly: true }
 	message := if app.notice != '' {
 		app.notice
@@ -964,7 +1012,7 @@ fn build_window_content() ui2.Element {
 	} else {
 		'关闭浏览器不影响运行；退出工作台时停止实例。'
 	}
-	children << ui2.label('message', message, ui2.rect(content_x, h - 73, cw, 56), ui2.TextStyle{
+	children << ui2.label('message', message, ui2.rect(content_x, project_h - 73, cw, 56), ui2.TextStyle{
 		size:  12
 		color: if s.phase == .failed {
 			workbench_danger
@@ -973,5 +1021,15 @@ fn build_window_content() ui2.Element {
 		}
 		lines: 2
 	})
+	$if linux {
+		if project_h > h {
+			mut body := []ui2.Element{}
+			for child in children[project_start..] {
+				body << ui2.Element{...child, frame: ui2.Rect{...child.frame, x: child.frame.x - content_x}}
+			}
+			children = children[..project_start].clone()
+			children << ui2.scroll('project_overview_page', ui2.rect(content_x, 0, cw + 30, h), workbench_paper, body)
+		}
+	}
 	return ui2.screen(workbench_paper, children)
 }

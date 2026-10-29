@@ -5,6 +5,7 @@ import crypto.sha256
 import encoding.base64
 import json2 as json
 import os
+import runtime_upgrade
 import time
 
 // A server is SSH access, independent of any installed runtime or Admin token.
@@ -58,7 +59,7 @@ pub fn save_remote_servers(items []RemoteServer) ! {
 	os.mv(temp, path)!
 }
 
-pub enum ServerAction { connect trust disconnect inspect install create upgrade shutdown }
+pub enum ServerAction { connect trust disconnect inspect install create start upgrade prepare_deploy deploy discard_deploy shutdown }
 pub struct ServerCommand {
 pub:
 	sequence u64
@@ -69,6 +70,8 @@ pub:
 	archive string
 	release_tag string
 	runtime_id string
+	local_project Project
+	deployment_id string
 	project_id string
 	name string
 	template string = 'vjsx-http'
@@ -105,6 +108,8 @@ pub:
 	platform string
 	root string
 	version string
+	deployment_preview ApplicationDeploymentPreview
+	deployments []ApplicationDeploymentStatus
 	upgrades []RemoteRuntimeUpgrade
 	runtimes []RemoteRuntime
 	release_tag string
@@ -138,6 +143,10 @@ mut:
 	prompts &RemoteAskpass = unsafe { nil }
 	directory string
 	diagnostics string
+	pending_deployment runtime_upgrade.DeploymentRequest
+	deployment_local_project Project
+	deployment_fingerprint string
+	next_deployment_probe i64
 	next_upgrade_probe i64
 	deadline i64
 	state ServerSnapshot
@@ -145,6 +154,10 @@ mut:
 }
 
 fn (mut s ServerSession) close() {
+	if s.pending_deployment.id!='' && s.state.connected { s.discard_deployment() or {} }
+	s.pending_deployment=runtime_upgrade.DeploymentRequest{}
+	s.deployment_fingerprint=''
+	s.deployment_local_project=Project{}
 	if !isnil(s.prompts) { s.prompts.close(); s.prompts = unsafe { nil } }
 	if !isnil(s.process) {
 		s.process.signal_term()
@@ -287,6 +300,7 @@ fn (mut s ServerSession) tick() {
 	}
 	if s.state.connected {
   if time.ticks() > s.next_upgrade_probe && s.state.upgrades.any(!it.finished()) { s.poll_upgrades() or { s.state = ServerSnapshot{...s.state, error: true, message: '升级仍由远端执行，暂时无法读取结果；请重新连接查看。'}; s.next_upgrade_probe = time.ticks() + 5000 } }
+  if time.ticks()>s.next_deployment_probe && s.state.deployments.any(!it.finished()) { s.poll_deployments() or { s.state = ServerSnapshot{...s.state,error:true,message:'部署仍由远端执行，暂时无法读取结果；请重新连接查看。'}; s.next_deployment_probe=time.ticks()+5000 } }
   return
  }
 	if s.state.host_key.id != '' { return }
@@ -389,7 +403,8 @@ fn server_supervise(w ServerWorker) {
 			command := <-w.commands {
 				sequence = command.sequence
 				s.state = ServerSnapshot{...s.state, sequence: command.sequence}
-				if command.action in [.install, .create, .upgrade, .inspect] {
+				if command.action == .start { s.state = ServerSnapshot{ ...s.state, created: RemoteProfile{} } }
+				if command.action in [.install, .create, .start, .upgrade, .inspect, .prepare_deploy, .deploy, .discard_deploy] {
 					s.state = ServerSnapshot{...s.state, busy: true}
 					select { w.snapshots <- s.state {} else {} }
 				}
@@ -405,9 +420,13 @@ fn server_supervise(w ServerWorker) {
 					}
 					.disconnect { s.close() }
 					.inspect { s.inspect() or { failure = err.msg() } }
+					.prepare_deploy { s.prepare_application(command) or { failure=err.msg() } }
+					.deploy { s.deploy_application(command) or { failure=err.msg() } }
+					.discard_deploy { s.discard_deployment() or { failure=err.msg() } }
 					.upgrade { s.upgrade(command) or { failure = err.msg() } }
 					.install { s.install_release(command.archive, command.release_tag) or { failure = err.msg() } }
 					.create { s.create(command) or { failure = err.msg() } }
+					.start { s.start_project(command) or { failure = err.msg() } }
 					.shutdown { s.close(); w.done <- true; return }
 				}
 				if failure != '' { s.state = ServerSnapshot{...s.state, server_id: s.server.id, error: true, busy: false, message: failure} }

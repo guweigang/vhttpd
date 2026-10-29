@@ -1,6 +1,7 @@
 module main
 
 import ui2
+import os
 
 struct FocusTarget {
 	id string
@@ -36,7 +37,8 @@ fn next_focus_target(targets []FocusTarget, current string, reverse bool) ?Focus
 	return targets[(index + if reverse { targets.len - 1 } else { 1 }) % targets.len]
 }
 
-fn workbench_key(key string) {
+fn workbench_key(raw_key string) {
+	key := if os.user_os() != 'macos' { raw_key.replace('ctrl+', 'cmd+') } else { raw_key }
 	mut app := unsafe { workshop }
 	if key in ['tab', 'shift+tab'] {
 		if ui2.focused_text_area_id() != '' { return }
@@ -56,7 +58,8 @@ fn workbench_key(key string) {
 			if app.show_remote && app.show_servers && app.server_snapshot.host_key.id != '' { handle_event('server_disconnect'); return }
 			if app.show_remote && !app.show_servers && app.remote_snapshot.host_key.id != '' { handle_event('remote_disconnect'); return }
 			if app.creating || app.server_busy || app.server_snapshot.busy || app.remote_snapshot.busy { return }
-			if app.new_project { handle_event('new_cancel') }
+			if app.show_deployment { handle_event('deploy_close') }
+			else if app.new_project { handle_event('new_cancel') }
 			else if app.show_remote { handle_event('remote_close') }
 			else if app.show_runtime { handle_event('runtime_close') }
 			else if app.show_shared_relays { handle_event('shared_close') }

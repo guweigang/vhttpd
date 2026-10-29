@@ -267,8 +267,8 @@ fn (mut m RemoteManager) connect_with_password(profile RemoteProfile, password s
 }
 
 fn (mut m RemoteManager) connect_with_session(profile RemoteProfile, password string, control_path string) ! {
-	$if !macos {
-		return error('当前 Desktop SSH 传输仅验证了 macOS；其他平台适配尚未启用。')
+	$if !macos && !linux {
+		return error('当前 SSH 传输支持 macOS / Linux；Windows 适配尚未启用。')
 	}
 	profile.validate()!
 	if profile.auth_method == 'password' && control_path == '' { validate_ssh_password(password)! }
@@ -358,7 +358,7 @@ fn (mut m RemoteManager) confirm_host_key(id string) ! {
 
 fn (m &RemoteManager) request(method http.Method, path string, data string) !http.Response {
 	if isnil(m.proxy) { return error('请先连接远端实例。') }
-	mut request := http.Request{ method: method, url: m.proxy.target + path, data: data, read_timeout: 2 * time.second, write_timeout: 2 * time.second, max_retries: 1, allow_redirect: false, disable_connection_reuse: true }
+	mut request := http.Request{ method: method, url: m.proxy.target + path, data: if method == .post && data == '' { '{}' } else { data }, read_timeout: 2 * time.second, write_timeout: 2 * time.second, max_retries: 1, allow_redirect: false, disable_connection_reuse: true }
 	request.add_custom_header('x-vhttpd-admin-token', m.profile.token)!
 	if method == .post { request.header.set(.content_type, 'application/json') }
 	return request.do()!

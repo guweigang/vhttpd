@@ -1,0 +1,104 @@
+name: Workbench Linux Runtime
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths: ['desktop/**', 'src/**', 'admin/ui/**', 'scripts/**', '.github/workflows/workbench-linux-runtime.yml']
+  push:
+    branches: [main, feature/desktop-workbench, 'codex/linux-workbench-*']
+    paths: ['desktop/**', 'src/**', 'admin/ui/**', 'scripts/**', '.github/workflows/workbench-linux-runtime.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: amd64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build and test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential ca-certificates \
+            pkg-config libssl-dev libgc-dev default-libmysqlclient-dev libpq-dev libsqlite3-dev \
+            libx11-dev libxi-dev libxcursor-dev libxrandr-dev libgl1-mesa-dev \
+            fonts-noto-cjk python3-fonttools python3-venv php-cli composer nodejs patchelf bubblewrap xvfb xauth \
+            openssh-client libwrap0 curl xdg-utils zenity xclip
+          mkdir -p "$RUNNER_TEMP/sshd-tools"
+          cd "$RUNNER_TEMP/sshd-tools"
+          apt-get download openssh-server
+          for archive in ./*.deb; do dpkg-deb -x "$archive" root; done
+          sudo install -d -m 0755 /run/sshd
+      - name: Prepare pinned native toolchain
+        run: bash scripts/ci/prepare-toolchain.sh
+      - name: Build native service and complete workbench package
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/service"
+          cp v.mod "$RUNNER_TEMP/service/v.mod"
+          make prod BUILD_STAGE_ROOT="$RUNNER_TEMP/service/src" \
+            BUILD_STAGE_DIR="$RUNNER_TEMP/service/src" VHTTPD_BIN="$RUNNER_TEMP/service/vhttpd" \
+            V_CC=gcc VPHP_V_GC=boehm \
+            V_FLAGS="-w -d use_openssl -d use_bundled_libgc -enable-globals"
+          service="$RUNNER_TEMP/service/vhttpd-linux-${{ matrix.arch }}"
+          mkdir -p "$service/admin"
+          cp "$RUNNER_TEMP/service/vhttpd" "$service/vhttpd"
+          cp -R admin/ui "$service/admin/ui"
+          bash scripts/bundle_runtime_libs.sh "$service/vhttpd" "$service/runtime/libs"
+          VHTTPD_LINUX_RUNTIME_PACKAGE="$service" bash desktop/build-linux.sh
+      - name: Verify UI states and SSH manager
+        shell: bash
+        run: |
+          bash desktop/prepare-ui2.sh "$RUNNER_TEMP/ui-test-modules/ui2"
+          path="$PWD/desktop|$PWD/src|$RUNNER_TEMP/ui-test-modules|$(dirname "$VJSX_DIR")|$PWD/.deps|@vlib|@vmodules"
+          v -prod -cc gcc -gc boehm -w -nocache -enable-globals -d use_bundled_libgc -d build_quickjs \
+            -path "$path" -o "$RUNNER_TEMP/ui-state-test" desktop/ui_state_test.v
+          "$RUNNER_TEMP/ui-state-test"
+          cp desktop/ci/ui2_linux_input_test.v "$RUNNER_TEMP/ui-test-modules/ui2/ui/workbench_input_test.v"
+          v -cc gcc -gc boehm -w -enable-globals -d use_bundled_libgc \
+            -path "$path" -o "$RUNNER_TEMP/input-test" \
+            "$RUNNER_TEMP/ui-test-modules/ui2/ui/workbench_input_test.v"
+          xvfb-run -a "$RUNNER_TEMP/input-test"
+          v -cc gcc -gc boehm -w -enable-globals -d use_bundled_libgc -d build_quickjs \
+            -path "$path" -o "$RUNNER_TEMP/opener-test" desktop/host/open_local_test.v
+          "$RUNNER_TEMP/opener-test"
+          v -cc gcc -gc boehm -w -enable-globals -d use_bundled_libgc -d build_quickjs \
+            -path "$path" -o "$RUNNER_TEMP/remote-host-test" desktop/host/remote_instances_test.v
+          runtime="$RUNNER_TEMP/service/vhttpd-linux-${{ matrix.arch }}/vhttpd"
+          python3 -m venv "$RUNNER_TEMP/ssh-fixture-env"
+          "$RUNNER_TEMP/ssh-fixture-env/bin/pip" install -r desktop/ci/requirements-ssh-test.txt
+          python3 desktop/ci/verify_remote_ssh_macos.py --unknown-host --runtime "$runtime" \
+            --host-test "$RUNNER_TEMP/remote-host-test" --sshd-tools "$RUNNER_TEMP/sshd-tools/root"
+          "$RUNNER_TEMP/ssh-fixture-env/bin/python" desktop/ci/verify_remote_ssh_macos.py \
+            --password --unknown-host --runtime "$runtime" --host-test "$RUNNER_TEMP/remote-host-test"
+      - name: Verify extracted package without developer directories
+        shell: bash
+        run: |
+          archive="$(find "$PWD/desktop/bin" -maxdepth 1 -name 'vhttpd-workbench-linux-${{ matrix.arch }}-*.tar.gz' -print -quit)"
+          sudo env PATH=/usr/bin:/bin python3 desktop/verify_linux_release.py "$archive"
+          mkdir -p "$RUNNER_TEMP/gui-package" "$RUNNER_TEMP/gui-home"
+          tar -xzf "$archive" -C "$RUNNER_TEMP/gui-package"
+          executable="$(find "$RUNNER_TEMP/gui-package" -maxdepth 2 -name vhttpd-workbench -type f -print -quit)"
+          set +e
+          env -i HOME="$RUNNER_TEMP/gui-home" PATH=/usr/bin:/bin UI2_GL_VENDOR=mesa_only \
+            VHTTPD_DESKTOP_REGISTRY="$RUNNER_TEMP/gui-home/projects.json" \
+            timeout 8 xvfb-run -a "$executable" > "$RUNNER_TEMP/gui-startup.log" 2>&1
+          result=$?
+          set -e
+          test "$result" -eq 124
+      - uses: actions/upload-artifact@v4
+        with:
+          name: workbench-linux-${{ matrix.arch }}
+          path: |
+            desktop/bin/vhttpd-workbench-linux-${{ matrix.arch }}-*.tar.gz
+            desktop/bin/vhttpd-workbench-linux-${{ matrix.arch }}-*.tar.gz.sha256
+            ${{ runner.temp }}/gui-startup.log

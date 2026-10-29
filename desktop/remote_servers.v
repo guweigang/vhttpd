@@ -105,7 +105,7 @@ fn (app &Workshop) selected_server_runtime() string {
 }
 
 fn (app &Workshop) can_upgrade_selected_project() bool {
- if app.server_snapshot.server_id != app.runtime_server_id || app.server_snapshot.server != app.server_form() || app.server_busy || app.server_snapshot.busy || !app.server_snapshot.connected || app.server_snapshot.upgrades.any(!it.finished()) { return false }
+ if app.server_snapshot.server_id != app.runtime_server_id || app.server_snapshot.server != app.server_form() || app.server_busy || app.server_snapshot.busy || !app.server_snapshot.connected || app.server_snapshot.upgrades.any(!it.finished()) || app.deployment_running() { return false }
  selected := app.server_snapshot.projects.filter(it.id == app.server_upgrade_project)
  return selected.len == 1 && selected[0].runtime_id != '' && app.selected_server_runtime() != '' && selected[0].runtime_id != app.selected_server_runtime() && selected[0].config_path == app.server_snapshot.root + '/instances/' + selected[0].name + '/vhttpd.toml'
 }
@@ -317,7 +317,7 @@ fn runtime_settings_view(app &Workshop, width f64) []ui2.Element {
 	list_width := if width >= 620 { 174.0 } else { 144.0 }
 	x := list_width + 24
 	mut selector := [label('runtime_target_label', '目标主机', 10, 12, list_width - 20, 11, workbench_muted),
-		sidebar_button('runtime_target_', '本机 Mac', ui2.rect(10, 40, list_width - 20, 34), false, app.runtime_server_id == '', app.can_switch_environment(), .left)]
+		sidebar_button('runtime_target_', host.local_environment_name(), ui2.rect(10, 40, list_width - 20, 34), false, app.runtime_server_id == '', app.can_switch_environment(), .left)]
 	mut y := 86.0
 	for server in app.remote_servers {
 		selector << sidebar_button('runtime_target_${server.id}', server.name, ui2.rect(10, y, list_width - 20, 34), false, app.runtime_server_id == server.id, app.can_switch_environment(), .left)

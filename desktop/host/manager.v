@@ -389,9 +389,36 @@ pub fn open_local(target string) ! {
 		opener.wait()
 		defer { opener.close() }
 		if opener.code != 0 { return error('系统无法打开目标：${target}') }
+	} $else $if linux {
+		opener_path := if os.is_executable('/usr/bin/xdg-open') { '/usr/bin/xdg-open' } else { 'xdg-open' }
+		dispatch_linux_open(opener_path, target)!
 	} $else {
-		return error('当前宿主原型仅交付 macOS。')
+		return error('当前宿主原型仅交付 macOS / Linux。')
 	}
+}
+
+fn dispatch_linux_open(executable string, target string) ! {
+	mut opener := os.new_process(executable)
+	opener.set_args([target])
+	opener.run()
+	deadline := time.ticks() + 250
+	for opener.is_alive() && time.ticks() < deadline {
+		time.sleep(10 * time.millisecond)
+	}
+	if !opener.is_alive() {
+		opener.wait()
+		defer { opener.close() }
+		if opener.code != 0 { return error('系统无法打开目标，请检查 xdg-open 和默认应用。') }
+		return
+	}
+	// Some default applications keep xdg-open alive for their entire window
+	// lifetime. Reap it separately so lifecycle commands keep being processed.
+	spawn reap_linux_opener(mut opener)
+}
+
+fn reap_linux_opener(mut opener os.Process) {
+	opener.wait()
+	opener.close()
 }
 
 fn strip_ansi(text string) string {

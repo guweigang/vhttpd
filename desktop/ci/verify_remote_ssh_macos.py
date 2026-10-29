@@ -32,8 +32,8 @@ def stop(child):
         child.wait()
 
 
-def run(runtime, host_test, password_auth=False, unknown_host=False):
-    root = pathlib.Path(tempfile.mkdtemp(prefix="vhttpd-ssh-e2e-", dir="/private/tmp"))
+def run(runtime, host_test, password_auth=False, unknown_host=False, sshd_tools=None):
+    root = pathlib.Path(tempfile.mkdtemp(prefix="vhttpd-ssh-e2e-"))
     app = sshd = test = None
     password_server = None
     password = secrets.token_urlsafe(24) if password_auth else ''
@@ -86,6 +86,10 @@ AllowUsers {getpass.getuser()}
 AllowTcpForwarding local
 LogLevel VERBOSE
 ''')
+        if sshd_tools is not None and (sshd_tools / 'usr/lib/openssh/sshd-session').is_file():
+            with (root / "sshd_config").open('a') as config:
+                config.write(f'SshdSessionPath {sshd_tools}/usr/lib/openssh/sshd-session\n'
+                             f'SshdAuthPath {sshd_tools}/usr/lib/openssh/sshd-auth\n')
         key = (root / "host.pub").read_text().split()
         (root / "known_hosts").write_text(
             f"[127.0.0.1]:{ssh_port} {key[0]} {key[1]}\n"
@@ -121,7 +125,8 @@ LogLevel VERBOSE
             ], stdout=log, stderr=log)
             if not password_auth:
                 sshd = subprocess.Popen([
-                    "/usr/sbin/sshd", "-D", "-e", "-f", str(root / "sshd_config"),
+                    str(sshd_tools / 'usr/sbin/sshd') if sshd_tools else "/usr/sbin/sshd",
+                    "-D", "-e", "-f", str(root / "sshd_config"),
                 ], stdout=ssh_log, stderr=subprocess.STDOUT)
             time.sleep(1)
             if sshd is not None and sshd.poll() is not None:
@@ -149,7 +154,7 @@ LogLevel VERBOSE
                     raise RuntimeError("host integration timed out")
                 time.sleep(0.1)
             if test.returncode:
-                raise RuntimeError("host integration failed")
+                raise RuntimeError("host integration failed\n" + (root / "ssh.log").read_text()[-4000:])
             with urllib.request.urlopen(f"http://127.0.0.1:{web}/", timeout=5) as response:
                 assert response.read() == b"after"
             if password_auth:
@@ -178,12 +183,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--runtime", required=True, type=pathlib.Path)
     parser.add_argument("--host-test", required=True, type=pathlib.Path)
+    parser.add_argument("--sshd-tools", type=pathlib.Path,
+                        help="Optional extracted Linux OpenSSH package; no system SSH changes")
     parser.add_argument('--password', action='store_true', help='Use a password-only SSH fixture')
     parser.add_argument('--unknown-host', action='store_true', help='Verify in-workbench first-use confirmation and cancellation')
     args = parser.parse_args()
     if not args.runtime.is_file() or not args.host_test.is_file():
         parser.error("build the runtime and host test executable first")
-    run(args.runtime, args.host_test, args.password, args.unknown_host)
+    run(args.runtime, args.host_test, args.password, args.unknown_host, args.sshd_tools)
 
 
 if __name__ == "__main__":

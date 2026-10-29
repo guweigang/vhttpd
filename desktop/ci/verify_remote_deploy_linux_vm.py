@@ -22,6 +22,7 @@ def main():
     parser.add_argument('--runtime', required=True)
     parser.add_argument('--host-test', type=Path, required=True)
     parser.add_argument('--sshd-tools', required=True)
+    parser.add_argument('--application-deploy', action='store_true')
     parser.add_argument('--upgrade-runtime')
     parser.add_argument('--failing-runtime')
     parser.add_argument('--output', type=Path)
@@ -51,7 +52,7 @@ def main():
             wrapper = f'''#!/bin/sh
 export HOME={shlex.quote(root+'/home')}
 export PATH=/usr/bin:/bin
-unset VJS_QUICKJS_PATH VJS_QUICKJS_LIB_PATH VMODULES LD_LIBRARY_PATH
+unset VJS_QUICKJS_PATH VJS_QUICKJS_LIB_PATH VJSX_DIR VMODULES LD_LIBRARY_PATH
 cd "$HOME"
 exec /bin/sh -c "$SSH_ORIGINAL_COMMAND"
 '''
@@ -123,11 +124,11 @@ tar -czf "$1/vhttpd-linux-arm64.tar.gz" -C "$1/package" vhttpd-linux-arm64
                     args.sshd_tools+'/usr/sbin/sshd','-D','-e','-f',root+'/sshd_config'],stdout=log,stderr=log)
                 time.sleep(1)
                 assert sshd.poll() is None, (local/'sshd.log').read_text()
-                env = dict(os.environ, VHTTPD_SERVER_TEST_SSH=str(local/'ssh'), VHTTPD_SERVER_TEST_SCP=str(local/'scp'),
+                env = dict(os.environ, VHTTPD_SERVER_TEST_DEPLOY='1' if args.application_deploy else '', VHTTPD_SERVER_TEST_SSH=str(local/'ssh'), VHTTPD_SERVER_TEST_SCP=str(local/'scp'),
                            VHTTPD_SERVER_TEST_PACKAGE=str(archive), VHTTPD_SERVER_TEST_SECOND_PACKAGE=str(second_archive), VHTTPD_SERVER_TEST_UPGRADE='1' if args.upgrade_runtime else '', VHTTPD_SERVER_TEST_FAILURE_PACKAGE=str(failure_archive) if failure_archive else '', VHTTPD_SERVER_TEST_WEB=str(web), VHTTPD_SERVER_TEST_ADMIN=str(admin),
                            VHTTPD_SERVER_TEST_KNOWN_HOSTS=str(local/'known_hosts'), VHTTPD_SERVER_TEST_CHANGED_HOST=str(local/'changed_hosts'),
                            VHTTPD_DESKTOP_DATA_DIR=str(local/'registry'))
-                subprocess.run([str(args.host_test.resolve())], env=env, check=True, timeout=240)
+                subprocess.run([str(args.host_test.resolve())], env=env, check=True, timeout=420)
                 result = json.loads(py('import urllib.request,json,sys;'
                     'print(json.dumps(json.load(urllib.request.urlopen("http://127.0.0.1:"+sys.argv[1]+"/",timeout=5))))',web))
                 result = {'ok':True,'linux':vm('uname','-srm').strip(),'response':result,
@@ -137,6 +138,8 @@ tar -czf "$1/vhttpd-linux-arm64.tar.gz" -C "$1/package" vhttpd-linux-arm64
                                       'first fingerprint cancel/confirm','changed fingerprint blocked','port conflict and same-instance retry', 'fresh-computer project discovery',
                                       'stale Admin token repair', 'cross-include discovery', 'browser Admin HTTP 200',
                                       'terminal project discovery', 'running process CLI token override', 'immutable multiversion packages', 'idempotent installation', 'explicit instance runtime binding', 'legacy runtime discovery', 'install preserves running boot']}
+                if args.application_deploy:
+                    result['coverage'] += ['local source and binary/static assets', 'cross-include app deployment', 'remote ports/auth/env/data preservation', 'stale preview refusal', 'SSH-disconnected deployment completion', 'warmup failure whole-app automatic rollback', 'fixed source retry and managed-file deletion']
                 if args.upgrade_runtime:
                     result['coverage'] += ['target-binary whole-project preflight', 'stop and upgrade actual service', 'SSH disconnect during detached upgrade', 'reconnect discovers persisted outcome', 'target startup failure automatic rollback', 'same configuration revision after rollback']
                 if args.output:

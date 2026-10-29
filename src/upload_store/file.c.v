@@ -10,7 +10,7 @@ import rand
 
 fn C.open(&char, int, ...int) int
 fn C.close(int) int
-fn C.write(int, voidptr, usize) isize
+fn C.write(int, voidptr, uint) int
 fn C.link(&char, &char) int
 fn C.fstat(int, &C.stat) int
 fn C.fcntl(int, int, ...voidptr) int
@@ -71,7 +71,7 @@ fn write_all(fd int, data string) ! {
 	mut offset := 0
 	for offset < data.len {
 		remaining := data[offset..]
-		n := C.write(fd, remaining.str, usize(remaining.len))
+		n := C.write(fd, remaining.str, uint(remaining.len))
 		if n < 0 {
 			if C.errno == C.EINTR { continue }
 			return os.last_error()

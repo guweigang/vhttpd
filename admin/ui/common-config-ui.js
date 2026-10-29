@@ -121,7 +121,7 @@
     const result=await apiRequest('/admin/config/changesets/'+draft.id+'/publish',{method:'POST'});
     if (!result.ok) throw Error(result.error || '发布失败。');
     published=true; draft=null;
-    stage('配置已发布，待重启生效。回到 Mac 工作台点击“重启并生效”，完成后自动检查整个项目并重新登录 Admin UI。继续修改请点“重新读取”。','warning');
+    stage('配置已发布，待重启生效。回到工作台点击“重启并生效”，完成后自动检查整个项目并重新登录 Admin UI。继续修改请点“重新读取”。','warning');
     await refresh();
   }
   function changed(event) {

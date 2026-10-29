@@ -23,6 +23,25 @@ fn run_runtime_smoke(root string) ! {
 			os.unsetenv('VHTTPD_DESKTOP_BINARY')
 		}
 	}
+	$if linux {
+		archive := os.getenv('VHTTPD_RUNTIME_TEST_ARCHIVE')
+		if archive == '' {
+			return error('Linux 运行包验收需要官方 tar.gz 夹具。')
+		}
+		installed := host.install_runtime_archive(archive, host.linux_archive_checksum(archive)!, job)!
+		if host.selected_runtime(os.executable(), root)! != installed {
+			return error('Linux 运行包选择未持久化。')
+		}
+		mut rejected := false
+		host.install_runtime_archive(archive, '0'.repeat(64), job) or { rejected = true }
+		if !rejected || host.selected_runtime(os.executable(), root)! != installed {
+			return error('错误校验值覆盖了原有运行包选择。')
+		}
+		os.setenv('VHTTPD_DESKTOP_BINARY', installed, true)
+		run_smoke(root)!
+		println('PASS Linux runtime install, checksum, version, persisted selection and both templates')
+		return
+	}
 	mut archive := os.getenv('VHTTPD_RUNTIME_TEST_ARCHIVE')
 	if archive == '' {
 		app := os.real_path(os.join_path(os.dir(os.executable()), '..', '..'))

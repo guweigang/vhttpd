@@ -80,7 +80,7 @@ fn history_comparison_view(app &Workshop, width f64) []ui2.Element {
 	} else {
 		lines << if app.snapshot.message != '' { app.snapshot.message } else { '正在读取版本变化…' }
 	}
-	body := ui2.text_area('history_diff', lines.join('\n'), ui2.rect(0, 159, width, 480), ui2.BoxStyle{bg: workbench_sidebar, radius: 6}, ui2.TextStyle{size: 11, color: workbench_ink, font_family: 'Menlo'})
+	body := ui2.text_area('history_diff', lines.join('\n'), ui2.rect(0, 159, width, 480), ui2.BoxStyle{bg: workbench_sidebar, radius: 6}, ui2.TextStyle{size: 11, color: workbench_ink, font_family: workbench_detail_font()})
 	rows << ui2.Element{...body, readonly: true}
 	return rows
 }

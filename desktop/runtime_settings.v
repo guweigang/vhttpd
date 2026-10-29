@@ -130,7 +130,7 @@ fn (mut app Workshop) handle_runtime_event(event string) bool {
 
 fn runtime_local_view(app &Workshop, width f64) []ui2.Element {
 	can_switch := !app.runtime_busy && app.snapshot.pid == 0 && app.snapshot.phase !in [.starting, .stopping]
-	mut rows := [label('runtime_title', '本机 Mac', 0, 0, width, 20, workbench_ink),
+	mut rows := [label('runtime_title', host.local_environment_name(), 0, 0, width, 20, workbench_ink),
 		label('runtime_version', if app.runtime_info.ready { 'vhttpd ' + app.runtime_info.version } else if app.runtime_checked { '运行包不可用' } else { '正在识别版本…' }, 0, 36, width, 16, workbench_ink),
 		label('runtime_source', '来源：' + app.runtime_info.source, 0, 68, width, 12, workbench_muted),
 		ui2.label('runtime_path', app.binary, ui2.rect(0, 94, width, 52), ui2.TextStyle{size: 11, color: workbench_muted, lines: 3}),

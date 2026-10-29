@@ -6,6 +6,34 @@ import json2 as json
 import time
 import ui2
 
+fn test_linux_title_fits_existing_logical_frame() {
+	$if linux {
+		original := label('title', '运行环境', 0, 0, 400, 24, workbench_ink)
+		adapted := linux_pixel_layout(original)
+		assert adapted.text_style.size * 96.0 / 72.0 <= adapted.frame.height
+		assert adapted.frame == original.frame
+		assert adapted.text == original.text
+	}
+}
+
+fn test_linux_small_project_window_preserves_readable_logs() ! {
+	$if linux {
+		mut app := unsafe { workshop }
+		saved := *app
+		defer { unsafe { *app = saved } }
+		unsafe {
+			*app = Workshop{projects: [host.Project{name: 'small-window', config_path: '/tmp/fixture/vhttpd.toml', workdir: '/tmp/fixture'}]}
+		}
+		root := build_window()
+		page := root.children.filter(it.id == 'project_overview_page')
+		assert page.len == 1
+		logs := page[0].children.filter(it.id == 'logs')
+		assert logs.len == 1 && logs[0].readonly
+		assert logs[0].frame.height >= 120
+		ui2.validate_element_tree(root)!
+	}
+}
+
 fn test_runtime_version_picker_requires_explicit_compatible_selection() ! {
 	mut app := unsafe { workshop }
 	app.environment_id = ''
@@ -14,7 +42,7 @@ fn test_runtime_version_picker_requires_explicit_compatible_selection() ! {
 	app.runtime_catalog_busy = false
 	app.snapshot = host.Snapshot{}
 	app.runtime_selected_tag = ''
-	app.runtime_downloads = [host.RuntimeDownload{tag: 'v0.1.0-dev.gaaaaaaaaaaaa', channel: 'development', platform: 'macos-arm64', published_at: '2026-10-25T00:00:00Z'}]
+	app.runtime_downloads = [host.RuntimeDownload{tag: 'v0.1.0-dev.gaaaaaaaaaaaa', channel: 'development', platform: host.local_runtime_platform(), published_at: '2026-10-25T00:00:00Z'}]
 	assert !app.can_install_selected_runtime()
 	app.handle_runtime_catalog_event('runtime_release_0')
 	assert app.can_install_selected_runtime()
@@ -675,4 +703,55 @@ fn test_runtime_binding_refresh_does_not_require_ssh_reauthentication() {
  assert same_remote_connection(before,after)
  assert !same_remote_connection(before,host.RemoteProfile{...after,token:'changed'})
  assert !same_remote_connection(before,host.RemoteProfile{...after,admin_port:2020})
+}
+
+fn test_application_deployment_preview_is_bound_to_selected_target_and_status_disables_commit() ! {
+ mut app := unsafe { workshop }
+ original_projects := app.projects.clone(); original_profiles := app.remote_profiles.clone()
+ defer { app.projects=original_projects; app.remote_profiles=original_profiles; app.server_snapshot=host.ServerSnapshot{}; app.show_deployment=false }
+ app.projects=[host.Project{name:'local app',config_path:'/local/vhttpd.toml',workdir:'/local'}]
+ app.deployment_local=0; app.deployment_remote='a'.repeat(24); app.server_busy=false
+ app.remote_profiles=[host.RemoteProfile{id:app.deployment_remote,server_id:'b'.repeat(24),name:'test instance',ssh_host:'fixture',token:'do-not-render',config_path:'/server/instances/test/vhttpd.toml'}]
+ app.server_snapshot=host.ServerSnapshot{connected:true,server_id:'b'.repeat(24),deployment_preview:host.ApplicationDeploymentPreview{id:'c'.repeat(24),config_path:'/server/instances/test/vhttpd.toml',files:[]}}
+ for width in [360.0,488.0,708.0] {
+  tree := ui2.screen(workbench_paper,application_deployment_view(app,width))
+  ui2.validate_element_tree(tree)!
+  assert focus_targets(tree).any(it.id=='deploy_commit')
+ }
+ app.server_snapshot=host.ServerSnapshot{...app.server_snapshot,deployments:[host.ApplicationDeploymentStatus{id:'c'.repeat(24),config_path:'/server/instances/test/vhttpd.toml',phase:'starting'}]}
+ assert !focus_targets(ui2.screen(workbench_paper,application_deployment_view(app,488))).any(it.id=='deploy_commit')
+ app.server_snapshot=host.ServerSnapshot{...app.server_snapshot,deployments:[],deployment_preview:host.ApplicationDeploymentPreview{id:'c'.repeat(24),config_path:'/other/instance.toml'}}
+ assert !focus_targets(ui2.screen(workbench_paper,application_deployment_view(app,488))).any(it.id=='deploy_commit')
+}
+
+fn test_stopped_managed_remote_has_start_action_without_admin_connection() ! {
+ mut app := unsafe { workshop }
+ server := host.RemoteServer{id:'ab'.repeat(12), name:'Linux', ssh_host:'fixture'}
+ profile := host.RemoteProfile{id:'cd'.repeat(12), server_id:server.id, name:'bodytest', ssh_host:'fixture', token:'fixture-private', runtime_id:'legacy', config_path:'/remote/instances/bodytest/vhttpd.toml'}
+ app.server_worker = host.ServerWorker{}
+ app.remote_profiles = [profile]
+ app.remote_servers = [server]
+ app.server_snapshot = host.ServerSnapshot{server:server, server_id:server.id, connected:true, control_path:'/fixture/control', root:'/remote'}
+ app.server_busy = false
+ app.select_remote_profile(profile)
+ app.remote_snapshot = host.RemoteSnapshot{}
+ app.remote_edit_connection = false
+ assert app.can_start_remote_project()
+ for width in [320.0,700.0] {
+  rows := remote_instances_view(app,width)
+  assert runtime_test_enabled(rows,'remote_start')!
+  ui2.validate_element_tree(ui2.screen(workbench_paper,rows))!
+ }
+ app.handle_remote_event('remote_start')
+ command := <-app.server_worker.commands
+ assert command.action == .start && command.project_id == profile.id
+ assert command.password == '' && app.server_busy
+ app.server_busy = false
+ app.server_snapshot = host.ServerSnapshot{}
+ assert !app.can_start_remote_project()
+ assert !runtime_test_enabled(remote_instances_view(app,700),'remote_start')!
+ assert runtime_test_enabled(remote_instances_view(app,700),'remote_connect')!
+ app.remote_profiles = []host.RemoteProfile{}
+ app.remote_servers = []host.RemoteServer{}
+ app.remote_id = ''
 }

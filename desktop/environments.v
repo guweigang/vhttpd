@@ -25,7 +25,7 @@ fn (mut app Workshop) reload_remote_profiles() {
 }
 
 fn (app &Workshop) environment_choices() []EnvironmentChoice {
-	mut choices := [EnvironmentChoice{ title: '本机 Mac' }]
+	mut choices := [EnvironmentChoice{ title: host.local_environment_name() }]
 	for server in app.remote_servers {
 		mut title := '远端 · ' + server.name
 		for choices.any(it.title == title) { title += ' · ' + server.ssh_host }

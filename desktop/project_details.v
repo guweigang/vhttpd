@@ -53,7 +53,7 @@ fn project_details_view(app &Workshop, width f64) []ui2.Element {
 	if app.details_error != '' {
 		lines = [app.details_error, '', '原始文件保留，可点击“打开配置”修复。']
 	}
-	body := ui2.text_area('details_body', lines.join('\n'), ui2.rect(0, 214, width, 450), ui2.BoxStyle{ bg: workbench_sidebar, radius: 7 }, ui2.TextStyle{ size: 12, color: workbench_ink, font_family: 'Menlo' })
+	body := ui2.text_area('details_body', lines.join('\n'), ui2.rect(0, 214, width, 450), ui2.BoxStyle{ bg: workbench_sidebar, radius: 7 }, ui2.TextStyle{ size: 12, color: workbench_ink, font_family: workbench_detail_font() })
 	elements << ui2.Element{ ...body, readonly: true }
 	return elements
 }

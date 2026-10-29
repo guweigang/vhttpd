@@ -27,7 +27,7 @@ fn remote_absolute_path(cwd string, path string) !string {
 
 fn running_project_candidate(cwd string, command string) !RemoteProjectCandidate {
 	args := command.split('\x00')
-	if args.any(it in ['--workbench-restart-helper', '--workbench-upgrade-helper', '--workbench-upgrade-check']) { return error('management_helper_process') }
+	if args.any(it in ['--workbench-restart-helper', '--workbench-upgrade-helper', '--workbench-upgrade-check','--workbench-deploy-helper','--workbench-deploy-prepare','--workbench-deploy-version']) { return error('management_helper_process') }
 	mut path := ''
 	mut token := ''
 	mut port := 0
@@ -172,12 +172,16 @@ fn merge_discovered_profiles(existing []RemoteProfile, discovered []RemoteProfil
 
 fn (mut s ServerSession) discover_projects() ! {
 	inventory := s.shell_limited($embed_file('remote_scripts/discover.sh').to_string(), 12000, 524288)!
+	mut deployments := []ApplicationDeploymentStatus{}
 	mut upgrades := []RemoteRuntimeUpgrade{}
 	mut candidates := map[string]RemoteProjectCandidate{}
 	mut warnings := 0
 	mut issues := []string{}
 	for line in inventory.split_into_lines() {
-		if line.starts_with('VHTTPD_UPGRADE:') {
+		if line.starts_with('VHTTPD_DEPLOYMENT:') {
+			status := json.decode[ApplicationDeploymentStatus](base64.decode_str(line.all_after(':'))) or { warnings++; continue }
+			if status.id.len==24 && status.id.bytes().all(it.is_hex_digit()) && candidates.keys().contains(status.config_path) { deployments << status }
+		} else if line.starts_with('VHTTPD_UPGRADE:') {
 			status := json.decode[RemoteRuntimeUpgrade](base64.decode_str(line.all_after(':'))) or { warnings++; continue }
 			if status.id.len == 24 && status.id.bytes().all(it.is_hex_digit()) && candidates.keys().contains(status.config_path) { upgrades << status }
 		} else if line.starts_with('VHTTPD_PROJECT:') {
@@ -236,6 +240,7 @@ fn (mut s ServerSession) discover_projects() ! {
 	save_remote_profiles(merged) or { return error('无法保存本机项目缓存，请检查数据目录权限。') }
 	s.state = ServerSnapshot{
 		...s.state
+		deployments: deployments
 		upgrades:           upgrades
 		projects:           discovered
 		discovery_revision: s.state.discovery_revision + 1

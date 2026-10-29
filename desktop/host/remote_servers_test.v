@@ -78,7 +78,7 @@ fn test_empty_linux_server_install_create_publish_restart() ! {
 	mut first_runtime := s.state.runtimes[0]
 	s.install(archive)!
 	assert s.state.runtimes.len == 1 && s.state.runtimes[0] == first_runtime
- if os.getenv('VHTTPD_SERVER_TEST_UPGRADE') == '1' {
+ if os.getenv('VHTTPD_SERVER_TEST_UPGRADE') == '1' || os.getenv('VHTTPD_SERVER_TEST_DEPLOY') == '1' {
   // Match an existing Desktop installation: a legacy runtime directory remains
   // in place, and the old instance has no per-instance version marker yet.
   s.shell('set -eu\ncp -R ' + shell_quote(first_runtime.path) + ' "$HOME/.local/share/vhttpd-workbench/runtime"\n',10000)!
@@ -148,7 +148,7 @@ fn test_empty_linux_server_install_create_publish_restart() ! {
 	id := 'deploy-' + new_remote_id()!
 	for path in ['/admin/config/changesets?id=${id}', '/admin/config/changesets/${id}/validate', '/admin/config/changesets/${id}/publish'] {
 		result := m.request(.post, path, if path.contains('?') { body } else { '' })!
-		assert result.status_code == 200
+		assert result.status_code == 200, path + ": " + result.body
 		assert json.decode[json.Any](result.body)!.as_map()['ok']!.bool()
 	}
 	m.next_probe = 0
@@ -182,6 +182,7 @@ fn test_empty_linux_server_install_create_publish_restart() ! {
 		s.create(ServerCommand{...command, runtime_id: retry_runtime.id}) or { refused_rebind = true; assert err.msg().contains('绑定其他运行包') }
 		assert refused_rebind
 	}
+ if os.getenv('VHTTPD_SERVER_TEST_DEPLOY')=='1' { server_application_acceptance(mut s,p,command.web_port)! }
  if os.getenv('VHTTPD_SERVER_TEST_UPGRADE') == '1' {
   // Pending include changes must be refused without stopping the healthy process.
   s.shell('set -eu\np=' + shell_quote(os.dir(p.config_path) + '/app.toml') + '\ncp "$p" "$p.before-upgrade"\nprintf "\\n# pending-upgrade-fixture\\n" >> "$p"\n', 5000)!
@@ -368,7 +369,7 @@ fn server_upgrade_business(s &ServerSession, remote_port int) !http.Response {
 }
 
 fn test_upgrade_helpers_are_not_discovered_as_serving_instances() {
- for flag in ['--workbench-upgrade-check','--workbench-upgrade-helper','--workbench-restart-helper'] {
+ for flag in ['--workbench-upgrade-check','--workbench-upgrade-helper','--workbench-restart-helper','--workbench-deploy-helper','--workbench-deploy-prepare','--workbench-deploy-version'] {
   mut refused := false
   running_project_candidate('/remote', 'vhttpd\x00' + flag + '\x00/remote/vhttpd.toml\x00') or { refused = true }
   assert refused
@@ -378,4 +379,110 @@ fn test_upgrade_helpers_are_not_discovered_as_serving_instances() {
 fn archive_fixture_diagnostic(path string) {
  result := os.execute('/usr/bin/tar -tvzf ' + shell_quote(path))
  eprintln('FIXTURE_ARCHIVE_CHECK code=' + result.exit_code.str() + ' ' + result.output.limit(1200))
+}
+
+struct ApplicationTestSource { path string }
+struct ApplicationTestFile { source ApplicationTestSource
+ value string }
+struct ApplicationTestWorkspace { files []ApplicationTestFile }
+
+fn application_wait(mut s ServerSession,id string,phase string) ! {
+ until := time.ticks()+110000
+ for time.ticks()<until {
+  s.poll_deployments()!
+  statuses := s.state.deployments.filter(it.id==id)
+  if statuses.len==1 && statuses[0].finished() {
+   if statuses[0].phase!=phase { return error('unexpected application deployment result: '+statuses[0].phase+' '+statuses[0].error) }
+   return
+  }
+  time.sleep(100*time.millisecond)
+ }
+ return error('application deployment timeout')
+}
+fn server_application_acceptance(mut s ServerSession,p RemoteProfile,port int) ! {
+ root := os.join_path(os.real_path(os.temp_dir()),'vh-deploy-client-'+new_remote_id()!)
+ os.mkdir(root,mode:0o700)!
+ defer { os.rmdir_all(root) or {} }
+ original := root+'/original'; local := root+'/local'
+ for dir in [original,local] { os.mkdir_all(dir)! }
+ mut manager := &RemoteManager{}
+ manager.connect_with_session(p,'',s.state.control_path)!
+ defer { manager.disconnect() }
+ server_wait_instance(mut manager)!
+ workspace := json.decode[ApplicationTestWorkspace](manager.request(.get,'/admin/config/workspace','')!.body)!
+ for file in workspace.files { os.write_file(os.join_path(original,os.file_name(file.source.path)),file.value)! }
+ source := s.shell('base64 < '+shell_quote(os.dir(p.config_path)+'/main.mjs'),5000)!
+ os.write_file(original+'/main.mjs',base64.decode_str(source.replace('\n','')))!
+ os.mkdir_all(local+'/config')!; os.mkdir_all(local+'/public')!
+ template := project_templates()[0]
+ config_text := template.config_text.replace('entry = "main.mts"','entry = "main.mjs"').replace('runtime_profile = "node"','runtime_profile = "node"')
+ pos := config_text.index('[engines.app]') or { return error('missing engine') }
+ routes := config_text.index('[[pipelines]]') or { return error('missing route') }
+ os.write_file(local+'/vhttpd.toml','include=["config/engines.toml","config/routes.toml"]\n'+config_text[..pos])!
+ os.write_file(local+'/config/engines.toml',config_text[pos..routes].replace('entry = "main.mjs"','entry = "../main.mjs"'))!
+ os.write_file(local+'/config/routes.toml',config_text[routes..])!
+ code_a := 'import fs from "fs"; export default function(c) { return c.json({release:"A",asset:fs.readFileSync("public/banner.txt").toString("utf8")},200); }'
+ code_b := code_a.replace('release:"A"','release:"B"')
+ os.write_file(local+'/main.mjs',code_a)!
+ os.write_file(local+'/public/banner.txt','asset-A')!; os.write_file(local+'/public/obsolete.txt','obsolete-A')!
+ os.write_file(local+'/.env','LOCAL-ENV-MUST-NOT-UPLOAD')!
+ s.shell('printf REMOTE-ENV > '+shell_quote(os.dir(p.config_path)+'/.env')+'\nprintf REMOTE-DATA > '+shell_quote(os.dir(p.config_path)+'/user-data.txt'),5000)!
+ project := Project{name:'local application',workdir:local,config_path:local+'/vhttpd.toml'}
+ prepare := ServerCommand{action:.prepare_deploy,project_id:p.id,local_project:project}
+ baseline := manager.snapshot.instance
+ s.prepare_application(prepare)!
+ assert s.state.deployment_preview.files.any(it.path=='config/routes.toml')
+ assert !s.state.deployment_preview.files.any(it.path=='.env')
+ // Local changes after preview must be rejected before any remote stop.
+ os.write_file(local+'/main.mjs',code_a+'\n// after preview')!
+ mut refused := false
+ s.deploy_application(ServerCommand{deployment_id:s.state.deployment_preview.id}) or { refused=true }
+ assert refused
+ manager.next_probe=0; manager.tick(); assert manager.snapshot.instance.boot_id==baseline.boot_id
+ os.write_file(local+'/main.mjs',code_a)!
+ s.prepare_application(prepare)!
+ first := s.state.deployment_preview.id
+ s.deploy_application(ServerCommand{deployment_id:first})!
+ // Deployment is independent of the SSH master and Desktop lifecycle.
+ server := s.server
+ s.close(); s.connect(server,'')!
+ until := time.ticks()+20000
+ for !s.state.connected && time.ticks()<until { s.tick(); time.sleep(80*time.millisecond) }
+ assert s.state.connected
+ application_wait(mut s,first,'completed')!
+ manager.disconnect(); manager.connect_with_session(p,'',s.state.control_path)!; server_wait_instance(mut manager)!
+ assert manager.snapshot.instance.boot_id!=baseline.boot_id
+ assert manager.snapshot.config_status.state==.effective
+ assert manager.profile.admin_port==p.admin_port && manager.profile.token==p.token
+ response_a := server_upgrade_business(s,port)!
+ assert response_a.status_code==200 && response_a.body.contains('asset-A')
+ revision_a := manager.snapshot.instance.effective_revision
+ // A valid config with an app warmup failure must restore ALL file kinds,
+ // including a removed asset and a newly introduced asset.
+ os.write_file(local+'/main.mjs','throw new Error("intentional deployment warmup failure"); export default c=>c.text("bad");')!
+ os.write_file(local+'/public/banner.txt','asset-B')!; os.rm(local+'/public/obsolete.txt')!; os.write_file(local+'/public/new.txt','new-B')!
+ s.prepare_application(prepare)!
+ failed := s.state.deployment_preview.id
+ s.deploy_application(ServerCommand{deployment_id:failed})!
+ application_wait(mut s,failed,'rolled_back')!
+ manager.next_probe=0; manager.tick(); server_wait_instance(mut manager)!
+ assert manager.snapshot.instance.effective_revision==revision_a
+ assert server_upgrade_business(s,port)!.body.contains('asset-A')
+ assert s.shell('cat '+shell_quote(os.dir(p.config_path)+'/public/obsolete.txt'),5000)! == 'obsolete-A'
+ assert s.shell('test ! -f '+shell_quote(os.dir(p.config_path)+'/public/new.txt')+' && printf yes',5000)! == 'yes'
+ // Fix the source, redeploy, and ensure removed managed files stay removed.
+ os.write_file(local+'/main.mjs',code_b)!
+ s.prepare_application(prepare)!
+ retry := s.state.deployment_preview.id
+ s.deploy_application(ServerCommand{deployment_id:retry})!
+ application_wait(mut s,retry,'completed')!
+ assert server_upgrade_business(s,port)!.body.contains('asset-B')
+ assert s.shell('test ! -f '+shell_quote(os.dir(p.config_path)+'/public/obsolete.txt')+' && printf yes',5000)! == 'yes'
+ assert s.shell('cat '+shell_quote(os.dir(p.config_path)+'/.env')+'; cat '+shell_quote(os.dir(p.config_path)+'/user-data.txt'),5000)! == 'REMOTE-ENVREMOTE-DATA'
+ // Restore the original test app through the same verified deployment flow.
+ s.prepare_application(ServerCommand{action:.prepare_deploy,project_id:p.id,local_project:Project{workdir:original,config_path:original+'/vhttpd.toml'}})!
+ restore := s.state.deployment_preview.id
+ s.deploy_application(ServerCommand{deployment_id:restore})!
+ application_wait(mut s,restore,'completed')!
+ println('PASS application deploy: cross-include, source/assets, remote ports/auth/data, stale preview refusal, detached SSH, warmup rollback, retry and managed asset deletion')
 }

@@ -26,7 +26,7 @@ pub fn WebSocketSender.new(client &websocket.Client) &WebSocketSender {
 		// never copy a mutex or depend on a hard-coded Client layout. The template
 		// keeps the original frame-write lock and TCP/TLS references.
 		offset := __offsetof(websocket.Client, client_state)
-		unsafe { vmemcpy(&u8(&template) + offset, &u8(&fresh) + offset, sizeof(voidptr)) }
+		unsafe { vmemcpy(&u8(&template) + offset, &u8(&fresh) + offset, int(sizeof(voidptr))) }
 
 		return &WebSocketSender{ client: unsafe { client }, template: template }
 	}

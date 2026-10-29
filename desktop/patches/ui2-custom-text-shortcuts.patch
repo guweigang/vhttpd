@@ -1,0 +1,173 @@
+diff --git a/ui/clipboard_nix.v b/ui/clipboard_nix.v
+index 33ef410..5b1291e 100644
+--- a/ui/clipboard_nix.v
++++ b/ui/clipboard_nix.v
+@@ -9,6 +9,7 @@ module ui2
+ 
+ $if linux || freebsd || openbsd || netbsd || dragonfly || solaris {
+ 	import os
++	import rand
+ 
+ 	struct LinuxClipboardTool {
+ 		copy  []string // arguments of the tool reading the text from its stdin
+@@ -52,24 +53,21 @@ $if linux || freebsd || openbsd || netbsd || dragonfly || solaris {
+ 
+ 	fn native_set_clipboard_text(text string) bool {
+ 		tool := linux_clipboard_tool() or { return false }
+-		path := os.join_path(os.temp_dir(), 'ui2-clipboard-${os.getpid()}.txt')
++		directory := os.join_path(os.temp_dir(), 'ui2-clipboard-' + (rand.bytes(16) or { return false }).hex())
++		os.mkdir(directory) or { return false }
++		defer { os.rmdir_all(directory) or {} }
++		os.chmod(directory, 0o700) or { return false }
++		path := os.join_path(directory, 'text')
+ 		os.write_file(path, text) or { return false }
+-		defer {
+-			os.rm(path) or {}
+-		}
+-		// The tool reads the file before it forks to keep serving the selection;
+-		// its streams are captured and dropped, so the background copy does not
+-		// hold the pipes this call waits on.
+-		mut p := os.new_process(tool.copy[0])
+-		p.set_args(tool.copy[1..])
+-		p.set_redirect_stdio()
+-		p.set_stdin_path(path)
+-		p.run()
+-		_ = p.stdout_slurp()
+-		_ = p.stderr_slurp()
+-		p.wait()
+-		p.close()
+-		return p.code == 0
++		// Background selection owners must not inherit captured stdout/stderr:
++		// xclip keeps them open until the next copy, blocking the UI's slurp.
++		// Pass all paths/arguments positionally; clipboard text is never shell code.
++		mut arguments := ['/bin/sh', '-c',
++			'input=$1; shift; exec "$@" < "$input" >/dev/null 2>&1',
++			'ui2-clipboard', path]
++		arguments << tool.copy
++		result := os.exec(arguments)
++		return result.exit_code == 0
+ 	}
+ 
+ 	fn native_clipboard_text() ?string {
+diff --git a/ui/ui_immediate.c.v b/ui/ui_immediate.c.v
+index b71e092..f64e8de 100644
+--- a/ui/ui_immediate.c.v
++++ b/ui/ui_immediate.c.v
+@@ -24,6 +24,8 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
+ 		long_press     bool
+ 		swipe_left     bool
+ 		text_field     bool
++		readonly       bool
++		secure         bool
+ 		text_area      bool
+ 		checkbox       bool
+ 		checkbox_state bool
+@@ -1399,7 +1401,7 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
+ 				cancel_touch()
+ 			}
+ 			.char {
+-				handle_char_input(e.char_code)
++				handle_char_event(e.char_code, e.modifiers)
+ 			}
+ 			.key_down {
+ 				g_tooltip.dismiss()
+@@ -1955,10 +1957,32 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
+ 		return key
+ 	}
+ 
++	// Shortcut character events must not overwrite the selection made by key_down.
++	// Ctrl+Alt remains printable for AltGr; Shift and composed Unicode stay intact.
++	fn handle_char_event(ch u32, modifiers u32) {
++		if text_navigation_primary_modifier(modifiers & u32(gg.Modifier.ctrl) != 0,
++			modifiers & u32(gg.Modifier.alt) != 0, modifiers & u32(gg.Modifier.super) != 0) {
++			return
++		}
++		handle_char_input(ch)
++	}
++
++	fn focused_text_target() ?HitTarget {
++		for target in g_hit_targets {
++			if target.id == g_focused_field && (target.text_field || target.text_area) {
++				return target
++			}
++		}
++		return none
++	}
++
+ 	fn handle_char_input(ch u32) {
+ 		if g_focused_field.len == 0 {
+ 			return
+ 		}
++		if target := focused_text_target() {
++			if target.readonly { return }
++		}
+ 		if ch < 32 {
+ 			return
+ 		}
+@@ -1978,6 +2002,30 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
+ 		mut editor := g_text_editors[g_focused_field] or {
+ 			text_editor((g_text_values[g_focused_field] or { '' }).clone())
+ 		}
++		focused_target := focused_text_target() or { HitTarget{} }
++		primary := text_navigation_primary_modifier(modifiers & u32(gg.Modifier.ctrl) != 0,
++			modifiers & u32(gg.Modifier.alt) != 0, modifiers & u32(gg.Modifier.super) != 0)
++		if primary && key in [.c, .x, .v] {
++			_ := focused_text_target() or { return }
++			if key == .v {
++				if focused_target.readonly { return }
++				mut value := clipboard_text() or { return }
++				if !focused_target.text_area { value = value.replace('\r\n', ' ').replace('\n', ' ').replace('\r', ' ') }
++				editor.insert_text(value)
++			} else {
++				// Password fields never put their contents on the system clipboard.
++				if focused_target.secure || (key == .x && focused_target.readonly) || editor.selection.collapsed() { return }
++				start, end := editor.selection.ordered()
++				if !set_clipboard_text(editor.text.runes()[start..end].string()) { return }
++				if key == .c { return }
++				editor.replace_selection('')
++			}
++			replace_text_value(g_focused_field, editor.text)
++			replace_text_editor(g_focused_field, editor)
++			fire_field_change(g_focused_field)
++			return
++		}
++		if focused_target.readonly && key in [.backspace, .delete, .enter, .kp_enter] { return }
+ 		if key == .backspace {
+ 			if editor.backspace() {
+ 				replace_text_value(g_focused_field, editor.text)
+@@ -3221,7 +3269,7 @@ fn page_focused_text_area(direction int) {
+ 					}
+ 					apply_clip(ctx, clip)
+ 				}
+-				if el.enabled && !el.readonly {
++				if el.enabled {
+ 					add_hit_target(HitTarget{
+ 						id: el.id
+ 						action_id: element_action_id(el)
+@@ -3231,6 +3279,8 @@ fn page_focused_text_area(direction int) {
+ 						w: el.frame.width
+ 						h: el.frame.height
+ 						text_field: true
++						readonly: el.readonly
++						secure: el.secure
+ 						emit_change: el.emit_change
+ 					}, clip)
+ 				}
+@@ -3262,7 +3312,7 @@ fn page_focused_text_area(direction int) {
+ 						g_focused_field == el.id, el.enabled)
+ 				}
+ 				draw_text_area_content(ctx, el, current_text, x, y, clip, scroll_parent_id)
+-				if el.enabled && !el.readonly {
++				if el.enabled {
+ 					add_hit_target(HitTarget{
+ 						id: el.id
+ 						action_id: element_action_id(el)
+@@ -3271,6 +3321,8 @@ fn page_focused_text_area(direction int) {
+ 						w: el.frame.width
+ 						h: el.frame.height
+ 						text_area: true
++						readonly: el.readonly
++						secure: el.secure
+ 						emit_change: true
+ 					}, clip)
+ 				}
