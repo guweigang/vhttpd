@@ -10,6 +10,21 @@ permissions:
   contents: read
 
 jobs:
+  windows-files:
+    runs-on: windows-2022
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756
+        with:
+          arch: x64
+      - name: Check native Windows publication and rollback
+        shell: pwsh
+        run: |
+          & cl /nologo /utf-8 /W4 /std:c11 desktop/ci/windows_files_probe.c /Fe:windows-files-probe.exe /link Advapi32.lib
+          if ($LASTEXITCODE -ne 0) { throw 'MSVC native file probe build failed' }
+          & ./windows-files-probe.exe
+          if ($LASTEXITCODE -ne 0) { throw 'Native file publication probe failed' }
   windows-amd64:
     runs-on: windows-2022
     timeout-minutes: 45
