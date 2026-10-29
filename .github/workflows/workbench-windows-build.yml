@@ -45,7 +45,8 @@ jobs:
         run: |
           $output = "$PWD/desktop/ci/results/windows-build"
           $path = "$env:WORKBENCH_WINDOWS_MODULES|@vlib|@vmodules"
-          & v -prod -new-compiler -cc msvc -gc boehm -w -enable-globals -path $path `
+          $sdkCompatibility = '/FI"' + "$PWD/desktop/ci/msvc_sdk_compat.h" + '"'
+          & v -prod -new-compiler -cc msvc -gc boehm -cflags $sdkCompatibility -w -enable-globals -path $path `
             -o "$output/ui2-windows-probe.exe" desktop/ci/windows_ui_probe.v 2>&1 | Tee-Object "$output/ui2-build.log"
           if ($LASTEXITCODE -ne 0) { throw 'ui2 native build failed' }
           $env:VHTTPD_WINDOWS_PROBE_READY = "$output/native-window-ready.txt"
@@ -65,7 +66,8 @@ jobs:
         run: |
           $output = "$PWD/desktop/ci/results/windows-build"
           $path = "$PWD/desktop|$PWD/src|$env:WORKBENCH_WINDOWS_MODULES|$env:WORKBENCH_WINDOWS_SDK_PARENT|$PWD/.deps|@vlib|@vmodules"
-          & v -prod -new-compiler -cc msvc -gc boehm -d link_quickjs -w -enable-globals `
+          $sdkCompatibility = '/FI"' + "$PWD/desktop/ci/msvc_sdk_compat.h" + '"'
+          & v -prod -new-compiler -cc msvc -gc boehm -cflags $sdkCompatibility -d link_quickjs -w -enable-globals `
             -path $path -o "$output/vhttpd-workbench.exe" desktop 2>&1 | Tee-Object "$output/desktop-build.log"
           if ($LASTEXITCODE -ne 0) { throw 'Full Desktop is not yet Windows-compatible; see desktop-build.log' }
       - name: Record supported scope and enforce result
