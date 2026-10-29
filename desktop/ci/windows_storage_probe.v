@@ -12,9 +12,9 @@ fn main() {
  root := os.join_path(os.temp_dir(), 'vhttpd Windows 验收 ${os.getpid()}')
  os.mkdir_all(root)!
  defer { os.rmdir_all(root) or {} }
- lock := os.join_path(root, 'lock')
- first := C.vh_open(lock.str, C.VH_O_RDWR | C.VH_O_CREAT, 0o600)
- second := C.vh_open(lock.str, C.VH_O_RDWR | C.VH_O_CREAT, 0o600)
+ lock_path := os.join_path(root, 'lock')
+ first := C.vh_open(lock_path.str, C.VH_O_RDWR | C.VH_O_CREAT, 0o600)
+ second := C.vh_open(lock_path.str, C.VH_O_RDWR | C.VH_O_CREAT, 0o600)
  assert first >= 0 && second >= 0
  assert C.vh_flock(first, C.VH_LOCK_SH) == 0
  assert C.vh_flock(second, C.VH_LOCK_SH | C.VH_LOCK_NB) == 0

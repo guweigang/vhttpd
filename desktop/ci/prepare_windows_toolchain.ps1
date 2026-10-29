@@ -60,6 +60,8 @@ Checkout-Pinned 'https://github.com/vlang/ui2' ((Get-Content (Join-Path $root 'd
 $modules = Join-Path $toolchain 'modules'
 & bash ((Join-Path $root 'desktop/prepare-ui2.sh') -replace '\\','/') ((Join-Path $modules 'ui2') -replace '\\','/')
 if ($LASTEXITCODE -ne 0) { throw 'Build-local ui2 staging failed' }
+& git -C $ui2 diff --exit-code
+if ($LASTEXITCODE -ne 0) { throw 'Upstream ui2 checkout was modified' }
 Add-Content $env:GITHUB_PATH $v
 Add-Content $env:GITHUB_ENV "VJSX_DIR=$sdk"
 Add-Content $env:GITHUB_ENV "VJS_QUICKJS_PATH=$quickjs"

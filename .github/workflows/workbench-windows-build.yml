@@ -65,8 +65,11 @@ jobs:
           $output = "$PWD/desktop/ci/results/windows-build"
           & v -new-compiler -cc msvc -gc boehm -w -enable-globals -path "$PWD/src|@vlib|@vmodules" -o "$output/storage-probe.exe" desktop/ci/windows_storage_probe.v 2>&1 | Tee-Object "$output/storage-build.log"
           if ($LASTEXITCODE -ne 0) { throw 'Windows storage build failed' }
-          & "$output/storage-probe.exe" 2>&1 | Tee-Object "$output/storage-check.log"
-          if ($LASTEXITCODE -ne 0) { throw 'Windows storage checks failed' }
+          $storage = Start-Process "$output/storage-probe.exe" -PassThru -RedirectStandardOutput "$output/storage-check.log" -RedirectStandardError "$output/storage-stderr.log"
+          try {
+            if (!$storage.WaitForExit(30000)) { throw 'Windows storage checks timed out' }
+            if ($storage.ExitCode -ne 0) { throw 'Windows storage checks failed' }
+          } finally { if (!$storage.HasExited) { Stop-Process -Id $storage.Id -Force } }
       - name: Build and launch full Desktop
         id: desktop
         if: ${{ !cancelled() && steps.toolchain.outcome == 'success' }}
@@ -80,6 +83,11 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Full Desktop is not yet Windows-compatible; see desktop-build.log' }
           New-Item -ItemType Directory -Force "$output/resources" | Out-Null
           Copy-Item admin/ui/brand/mark.png "$output/resources/vhttpd-mark.png"
+          Copy-Item 'C:/Program Files/OpenSSL/bin/libcrypto-3-x64.dll' $output
+          Copy-Item 'C:/Program Files/OpenSSL/bin/libssl-3-x64.dll' $output
+          & dumpbin /DEPENDENTS "$output/vhttpd-workbench.exe" | Set-Content "$output/desktop-dependencies.txt"
+          $env:PATH = "$output;$env:WINDIR/System32;$env:WINDIR"
+
           $env:VHTTPD_DESKTOP_DATA_DIR = "$output/isolated-data"
           $env:VHTTPD_DESKTOP_REGISTRY = "$output/isolated-data/projects.json"
           $env:VHTTPD_DESKTOP_CI_READY = "$output/desktop-window-ready.txt"
@@ -91,6 +99,17 @@ jobs:
             Start-Sleep -Seconds 2
             $process.Refresh()
             if ($process.HasExited) { throw 'Full Desktop exited before close request' }
+            Add-Type -AssemblyName System.Drawing
+            Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class WorkbenchWindow { [StructLayout(LayoutKind.Sequential)] public struct Rect { public int Left, Top, Right, Bottom; } [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hwnd, out Rect rect); }'
+            $rect = New-Object WorkbenchWindow+Rect
+            if (![WorkbenchWindow]::GetWindowRect($process.MainWindowHandle, [ref]$rect)) { throw 'Full Desktop window bounds unavailable' }
+            $bitmap = New-Object Drawing.Bitmap ($rect.Right - $rect.Left), ($rect.Bottom - $rect.Top)
+            $graphics = [Drawing.Graphics]::FromImage($bitmap)
+            try {
+              $graphics.CopyFromScreen($rect.Left, $rect.Top, 0, 0, $bitmap.Size)
+              $bitmap.Save("$output/desktop-window.png", [Drawing.Imaging.ImageFormat]::Png)
+            } finally { $graphics.Dispose(); $bitmap.Dispose() }
+
             if (!$process.CloseMainWindow()) { throw 'Full Desktop did not accept close request' }
             if (!$process.WaitForExit(15000)) { throw 'Full Desktop did not exit cleanly' }
             if ($process.ExitCode -ne 0) { throw "Full Desktop exited $($process.ExitCode)" }
@@ -100,7 +119,7 @@ jobs:
         if: ${{ !cancelled() && steps.toolchain.outcome == 'success' }}
         run: |
           $result = @{ compiler = 'MSVC'; ui2 = '${{ steps.ui2.outcome }}'; desktop = '${{ steps.desktop.outcome }}'; storage = '${{ steps.storage.outcome }}';
-            scope = 'Full MSVC Desktop native startup and clean exit; no Windows vhttpd runtime bundled, SSH password and lifecycle not accepted, no release published';
+            scope = 'Checks: full MSVC Desktop native startup and clean exit; no Windows vhttpd runtime bundled, SSH password and lifecycle not accepted, no release published';
             commit = '${{ github.sha }}' }
           $result | ConvertTo-Json | Set-Content desktop/ci/results/windows-build/result.json
           if ($result.ui2 -ne 'success' -or $result.desktop -ne 'success' -or $result.storage -ne 'success') { throw 'Windows is not ready for delivery; diagnostic artifacts retained' }
