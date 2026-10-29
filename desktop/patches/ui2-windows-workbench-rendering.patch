@@ -61,7 +61,31 @@
  			return 0
 --- a/windows/native_helpers_windows.h
 +++ b/windows/native_helpers_windows.h
-@@ -803,6 +803,10 @@
+@@ -213,6 +213,12 @@
+ 	} else {
+ 		RemovePropW(hwnd, ui2_win_accessible_button_property());
+ 	}
++	// Buffer this button's small subtree, so focus/background and transparent
++	// captions are presented together. Inputs and the rest of the window keep
++	// their ordinary native paint path.
++	LONG_PTR extended = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
++	LONG_PTR next_extended = active ? extended | WS_EX_COMPOSITED : extended & ~((LONG_PTR)WS_EX_COMPOSITED);
++	if (extended != next_extended) SetWindowLongPtrW(hwnd, GWL_EXSTYLE, next_extended);
+ 	LONG_PTR style = GetWindowLongPtrW(hwnd, GWL_STYLE);
+ 	LONG_PTR next_style = active ? style | WS_TABSTOP : style & ~((LONG_PTR)WS_TABSTOP);
+ 	if (style != next_style) {
+@@ -405,7 +411,9 @@
+ 	}
+ 	if ((message == WM_SETFOCUS || message == WM_KILLFOCUS)
+ 		&& ui2_win_is_accessible_button(hwnd)) {
+-		InvalidateRect(hwnd, NULL, FALSE);
++		// The caption/badges are transparent STATIC children. Invalidating only
++		// their parent clears their glyphs until a later declaration refresh.
++		RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_NOERASE);
+ 	}
+ 	if ((message == WM_MOUSEWHEEL || message == WM_MOUSEHWHEEL)
+ 		&& (GetWindowLongPtrW(hwnd, GWL_STYLE) & ui2_win_wheel_scroll_style(message, wparam)) == 0
+@@ -803,6 +811,10 @@
  	PostQuitMessage(code);
  }
  
@@ -72,7 +96,7 @@
  static inline void ui2_win_post_refresh(void *hwnd) {
  	if (hwnd != NULL) PostMessageW((HWND)hwnd, UI2_WM_REFRESH, 0, 0);
  }
-@@ -833,6 +837,12 @@
+@@ -833,6 +845,12 @@
  
  static inline void ui2_win_set_frame(void *hwnd, int x, int y, int width, int height) {
  	if (hwnd != NULL) {

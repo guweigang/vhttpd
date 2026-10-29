@@ -1,4 +1,4 @@
-param([Parameter(Mandatory=$true)][int]$DesktopProcessId, [Parameter(Mandatory=$true)][string]$OutputDirectory)
+param([Parameter(Mandatory=$true)][int]$DesktopProcessId, [Parameter(Mandatory=$true)][string]$OutputDirectory, [switch]$CaptionOnly)
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 Add-Type -TypeDefinition @'
@@ -15,6 +15,7 @@ public static class WorkbenchUiCheck {
  [DllImport("user32.dll",CharSet=CharSet.Unicode)] public static extern int GetWindowTextW(IntPtr hwnd,StringBuilder text,int count);
  [DllImport("user32.dll",CharSet=CharSet.Unicode)] public static extern int GetClassNameW(IntPtr hwnd,StringBuilder text,int count);
  [DllImport("user32.dll")] public static extern IntPtr SendMessageW(IntPtr hwnd,uint message,IntPtr wparam,IntPtr lparam);
+ [DllImport("user32.dll")] public static extern bool UpdateWindow(IntPtr hwnd);
  [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hwnd,out Rect rect);
  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hwnd,IntPtr id);
  [DllImport("user32.dll")] public static extern bool GetGUIThreadInfo(uint id,ref Gui info);
@@ -52,7 +53,44 @@ $titleRect = New-Object WorkbenchUiCheck+Rect
 [WorkbenchUiCheck]::GetWindowRect($title,[ref]$titleRect) | Out-Null
 try { if (($titleRect.Bottom-$titleRect.Top) -lt [Math]::Ceiling($font.GetHeight())) { throw 'Heading frame clips the actual font height' } } finally { $font.Dispose() }
 Save-Window $window 'desktop-home'
-[WorkbenchUiCheck]::SendMessageW($create,0xF5,[IntPtr]::Zero,[IntPtr]::Zero) | Out-Null
+# Sample actual screen pixels while a real mouse press holds focus on the
+# button. Checking only HWND text or the final post-click image misses this bug.
+function Measure-Caption($handle, $name) {
+ $r = New-Object WorkbenchUiCheck+Rect
+ [WorkbenchUiCheck]::GetWindowRect($handle,[ref]$r) | Out-Null
+ $bitmap = New-Object Drawing.Bitmap ($r.Right-$r.Left-12), ($r.Bottom-$r.Top-10)
+ $graphics = [Drawing.Graphics]::FromImage($bitmap)
+ try {
+  $graphics.CopyFromScreen($r.Left+6,$r.Top+5,0,0,$bitmap.Size)
+  $bitmap.Save("$OutputDirectory/$name.png",[Drawing.Imaging.ImageFormat]::Png)
+  $white = 0
+  for ($y=0; $y -lt $bitmap.Height; $y++) {
+   for ($x=0; $x -lt $bitmap.Width; $x++) {
+    $color = $bitmap.GetPixel($x,$y)
+    if ($color.R -ge 225 -and $color.G -ge 225 -and $color.B -ge 225) { $white++ }
+   }
+  }
+  return $white
+ } finally { $graphics.Dispose(); $bitmap.Dispose() }
+}
+$baseline = Measure-Caption $create 'caption-idle'
+if ($baseline -lt 12) { throw 'Button caption was already missing before the press' }
+$measurements = @()
+$position = [IntPtr]((15 -shl 16) -bor 20)
+try {
+ [WorkbenchUiCheck]::SendMessageW($create,0x201,[IntPtr]1,$position) | Out-Null
+ [WorkbenchUiCheck]::UpdateWindow($create) | Out-Null
+ for ($frame=0; $frame -lt 12; $frame++) {
+  Start-Sleep -Milliseconds 16
+  $pixels = Measure-Caption $create ("caption-held-{0:D2}" -f $frame)
+  $measurements += $pixels
+  @{idle_white_pixels=$baseline;held_white_pixels=$measurements} | ConvertTo-Json | Set-Content "$OutputDirectory/caption-frames.json"
+  if ($pixels -lt [Math]::Max(8,[Math]::Floor($baseline*0.6))) { throw 'Button caption disappeared while pressed; see caption-frames.json' }
+ }
+} finally {
+ [WorkbenchUiCheck]::SendMessageW($create,0x202,[IntPtr]::Zero,$position) | Out-Null
+}
+if ($CaptionOnly) { return }
 Start-Sleep -Milliseconds 500
 $first = [WorkbenchUiCheck]::Focus($window)
 if ($first -eq [IntPtr]::Zero -or [WorkbenchUiCheck]::Class($first) -ne 'Edit') { throw 'New-project form did not focus its first input' }
@@ -61,4 +99,4 @@ Start-Sleep -Milliseconds 300
 $next = [WorkbenchUiCheck]::Focus($window)
 if ($next -eq $first -or [WorkbenchUiCheck]::Class($next) -ne 'Edit') { throw 'Tab did not advance to the next form input' }
 Save-Window $window 'desktop-new-project'
-@{ work_area='passed'; title_font_bounds='passed'; window_icons='passed'; create_button='passed'; initial_form_focus='passed'; tab_navigation='passed' } | ConvertTo-Json | Set-Content "$OutputDirectory/ui-acceptance.json"
+@{ work_area='passed'; title_font_bounds='passed'; window_icons='passed'; create_button='passed'; initial_form_focus='passed'; tab_navigation='passed'; pressed_caption_frames='passed' } | ConvertTo-Json | Set-Content "$OutputDirectory/ui-acceptance.json"
