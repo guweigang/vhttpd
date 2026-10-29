@@ -12,7 +12,16 @@ fn windows_display_scale() f64 {
 
 // Layout stays in logical pixels. Win32 fonts consume points and already apply
 // system DPI, whereas native child frames consume physical pixels.
-fn windows_pixel_layout(element ui2.Element, scale f64) ui2.Element {
+fn windows_pixel_layout(original ui2.Element, scale f64) ui2.Element {
+	mut element := original
+	// Native view buttons retain all captions/badges without an empty Win32
+	// BUTTON painting over its sibling labels. ui2 supplies keyboard and AX actions.
+	if element.kind == .view && element.children.len > 0 {
+		hit := element.children.last()
+		if hit.kind == .button && hit.text == '' && hit.box.transparent && hit.frame.x == 0 && hit.frame.y == 0 && hit.frame.width == element.frame.width && hit.frame.height == element.frame.height {
+			element = ui2.Element{ ...element, id: hit.id, action_id: hit.action_id, button_behavior: true, enabled: element.enabled && hit.enabled, accessibility_role: 'button', accessibility_label: hit.accessibility_label, children: element.children[..element.children.len - 1].clone() }
+		}
+	}
 	mut children := []ui2.Element{cap: element.children.len}
 	for child in element.children { children << windows_pixel_layout(child, scale) }
 	pixel_size := if element.text_style.size < 12 {

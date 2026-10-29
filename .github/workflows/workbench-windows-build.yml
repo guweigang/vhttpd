@@ -170,6 +170,7 @@ jobs:
               $bitmap.Save("$output/desktop-window.png", [Drawing.Imaging.ImageFormat]::Png)
             } finally { $graphics.Dispose(); $bitmap.Dispose() }
 
+            ./desktop/ci/verify_windows_ui.ps1 -DesktopProcessId $process.Id -OutputDirectory $output
             if (!$process.CloseMainWindow()) { throw 'Full Desktop did not accept close request' }
             if (!$process.WaitForExit(15000)) { throw 'Full Desktop did not exit cleanly' }
             if ($process.ExitCode -ne 0) { throw "Full Desktop exited $($process.ExitCode)" }

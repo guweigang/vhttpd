@@ -13,8 +13,8 @@ struct FocusTarget {
 // Follow the actual rendered tree, so hidden/disabled controls never trap Tab.
 fn collect_focus_targets(element ui2.Element, scroll string, x f64, y f64, mut targets []FocusTarget) {
 	if !element.enabled || element.id in ['workbench_sidebar', 'server_list', 'shared_list'] { return }
-	if element.kind in [.text_field, .button, .checkbox] && !element.readonly && element.id != '' {
-		targets << FocusTarget{id: element.id, kind: element.kind, scroll: scroll, frame: ui2.rect(x + element.frame.x, y + element.frame.y, element.frame.width, element.frame.height)}
+	if (element.kind in [.text_field, .button, .checkbox] || (element.kind == .view && element.button_behavior)) && !element.readonly && element.id != '' {
+		targets << FocusTarget{id: element.id, kind: if element.button_behavior { ui2.Kind.button } else { element.kind }, scroll: scroll, frame: ui2.rect(x + element.frame.x, y + element.frame.y, element.frame.width, element.frame.height)}
 	}
 	if element.kind == .scroll {
 		for child in element.children { collect_focus_targets(child, element.id, 0, 0, mut targets) }
