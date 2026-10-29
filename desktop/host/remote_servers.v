@@ -136,8 +136,8 @@ pub fn new_server_worker() ServerWorker {
 @[heap]
 struct ServerSession {
 mut:
-	ssh_executable string = '/usr/bin/ssh'
-	scp_executable string = '/usr/bin/scp'
+	ssh_executable string = ssh_tool('ssh')
+	scp_executable string = ssh_tool('scp')
 	server RemoteServer
 	process &os.Process = unsafe { nil }
 	prompts &RemoteAskpass = unsafe { nil }

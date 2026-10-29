@@ -33,7 +33,7 @@ fn new_remote_prompts(password string, allow_password bool) !&RemoteAskpass {
 	if allow_password { validate_ssh_password(password)! }
 	// /tmp keeps the path below Darwin's Unix socket length limit, regardless
 	// of the user's Application Support or temporary-directory path length.
-	directory := os.join_path('/tmp', 'vh-ssh-' + new_remote_id()!)
+	directory := os.join_path($if windows { os.temp_dir() } $else { '/tmp' }, 'vh-ssh-' + new_remote_id()!)
 	os.mkdir(directory, mode: 0o700)!
 	mut ready := false
 	defer { if !ready { os.rmdir_all(directory) or {} } }

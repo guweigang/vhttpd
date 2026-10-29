@@ -210,7 +210,7 @@ struct RemoteBrowserEndpoint {
 struct RemoteManager {
 mut:
 	profile           RemoteProfile
-	ssh_executable    string       = '/usr/bin/ssh'
+	ssh_executable    string       = ssh_tool('ssh')
 	ssh               &os.Process  = unsafe { nil }
 	server            &http.Server = unsafe { nil }
 	proxy             &RemoteProxy = unsafe { nil }
