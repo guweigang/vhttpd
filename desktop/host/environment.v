@@ -42,7 +42,7 @@ fn default_workbench_data_dir() string {
 
 fn workbench_resources(executable string) string {
 	$if macos {
-		return os.join_path(os.dir(executable), '..', 'Resources')
+		return os.norm_path(os.join_path(os.dir(executable), '..', 'Resources'))
 	} $else {
 		return os.join_path(os.dir(executable), 'resources')
 	}

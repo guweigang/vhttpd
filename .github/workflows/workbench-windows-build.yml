@@ -32,6 +32,7 @@ jobs:
           }
           if (!(Test-Path "$lib/libcrypto.lib") -or !(Test-Path "$lib/libssl.lib")) { throw 'OpenSSL import libraries missing' }
           Copy-Item "$lib/libcrypto.lib" "$lib/crypto.lib"
+          Copy-Item "$lib/libssl.lib" "$lib/ssl.lib"
           Add-Content $env:GITHUB_PATH 'C:\Program Files\OpenSSL\bin'
       - name: Prepare pinned native V, QuickJS and build-local ui2
         id: toolchain
@@ -70,6 +71,12 @@ jobs:
             if (!$storage.WaitForExit(30000)) { throw 'Windows storage checks timed out' }
             if ($storage.ExitCode -ne 0) { throw 'Windows storage checks failed' }
           } finally { if (!$storage.HasExited) { Stop-Process -Id $storage.Id -Force } }
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() && steps.toolchain.outcome == 'success' }}
+        with:
+          name: workbench-windows-storage-diagnostics
+          path: |
+            desktop/ci/results/windows-build/storage-*.log
       - name: Build and launch full Desktop
         id: desktop
         if: ${{ !cancelled() && steps.toolchain.outcome == 'success' }}
