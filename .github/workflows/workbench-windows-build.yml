@@ -148,6 +148,13 @@ jobs:
         if: ${{ !cancelled() && steps.desktop.outcome == 'success' && steps.storage.outcome == 'success' }}
         run: |
           ./desktop/ci/package_windows.ps1 -Executable "$PWD/desktop/ci/results/windows-build/vhttpd-workbench.exe" 2>&1 | Tee-Object "$PWD/desktop/ci/results/windows-build/package.log"
+      - uses: actions/setup-python@v5
+        if: ${{ !cancelled() && steps.package.outcome == 'success' }}
+        with:
+          python-version: '3.12'
+      - name: Prepare loopback-only SSH acceptance fixture
+        if: ${{ !cancelled() && steps.package.outcome == 'success' }}
+        run: python -m pip install --disable-pip-version-check paramiko==5.1.0
       - name: Verify extracted archive without development environment
         id: portable
         if: ${{ !cancelled() && steps.package.outcome == 'success' }}
