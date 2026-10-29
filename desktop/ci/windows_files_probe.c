@@ -25,7 +25,8 @@ int main(void) {
  require(vh_rename("include.tmp","include.toml")==0,"publish include");
  contents("main.toml","new a");contents("include.toml","new b");
  int ar=stage("main.restore","old a"),br=stage("include.restore","old b");
- require(vh_rename("include.restore","include.toml")!=0,"Windows retains published target handle");
+ FILE *reader=fopen("main.toml","rb");
+ require(reader!=NULL,"CRT reader with retained owner");fclose(reader);
  contents("main.toml","new a");contents("include.toml","new b");
  vh_close(a);vh_close(b);
  require(vh_rename("include.restore","include.toml")==0,"rollback include after ownership transfer");

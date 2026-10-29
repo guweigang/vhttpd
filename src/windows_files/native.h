@@ -40,7 +40,7 @@ static int vh_regular(HANDLE h) {
 static int vh_open(const char *path,int flags,...) {
  wchar_t *w=vh_wide(path); if(!w)return -1;
  DWORD access=(flags&VH_O_RDWR)?(GENERIC_READ|GENERIC_WRITE):GENERIC_WRITE;
- HANDLE h=CreateFileW(w,access|DELETE,FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE,NULL,
+ HANDLE h=CreateFileW(w,access,FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE,NULL,
  (flags&VH_O_EXCL)?CREATE_NEW:((flags&VH_O_CREAT)?OPEN_ALWAYS:OPEN_EXISTING),FILE_FLAG_OPEN_REPARSE_POINT|FILE_FLAG_BACKUP_SEMANTICS,NULL);
  free(w);
  if(h==INVALID_HANDLE_VALUE){errno=EACCES;return -1;}
@@ -60,7 +60,7 @@ static int vh_matches(const char *path,uint64_t dev,uint64_t ino) {
 }
 static int vh_open_dir(const char *path){
  wchar_t *w=vh_wide(path);if(!w)return -1;
- HANDLE h=CreateFileW(w,FILE_READ_ATTRIBUTES|DELETE,FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE,NULL,OPEN_EXISTING,FILE_FLAG_OPEN_REPARSE_POINT|FILE_FLAG_BACKUP_SEMANTICS,NULL);free(w);
+ HANDLE h=CreateFileW(w,FILE_READ_ATTRIBUTES,FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE,NULL,OPEN_EXISTING,FILE_FLAG_OPEN_REPARSE_POINT|FILE_FLAG_BACKUP_SEMANTICS,NULL);free(w);
  if(h==INVALID_HANDLE_VALUE)return -1;
  BY_HANDLE_FILE_INFORMATION i;
  if(!GetFileInformationByHandle(h,&i)||!(i.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY)||(i.dwFileAttributes&FILE_ATTRIBUTE_REPARSE_POINT)){CloseHandle(h);return -1;}
@@ -98,9 +98,21 @@ static int vh_rename(const char *source,const char *target) {
  ok=MoveFileExW(s,t,MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH);
  done:{DWORD failure=GetLastError();free(s);free(t);if(!ok){errno=EACCES;SetLastError(failure);return -1;}return 0;}
 }
+// Retained writer handles do not request DELETE access: CRT readers would
+// otherwise fail because fopen does not grant FILE_SHARE_DELETE. Acquire a
+// separate deletion handle only for cleanup, and verify its pinned identity.
 static void vh_remove_owned(int64_t fd,const char *path,uint64_t dev,uint64_t ino){
- if(vh_matches(path,dev,ino)){FILE_DISPOSITION_INFO d={TRUE};SetFileInformationByHandle(vh_handle(fd),FileDispositionInfo,&d,sizeof(d));}
+ (void)fd;
+ wchar_t *w=vh_wide(path);if(!w)return;
+ HANDLE h=CreateFileW(w,DELETE|FILE_READ_ATTRIBUTES,FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE,NULL,OPEN_EXISTING,FILE_FLAG_OPEN_REPARSE_POINT|FILE_FLAG_BACKUP_SEMANTICS,NULL);free(w);
+ if(h==INVALID_HANDLE_VALUE)return;
+ BY_HANDLE_FILE_INFORMATION i;
+ if(vh_regular(h)&&GetFileInformationByHandle(h,&i)&&i.dwVolumeSerialNumber==dev&&(((uint64_t)i.nFileIndexHigh<<32)|i.nFileIndexLow)==ino){
+  FILE_DISPOSITION_INFO d={TRUE};SetFileInformationByHandle(h,FileDispositionInfo,&d,sizeof(d));
+ }
+ CloseHandle(h);
 }
+
 static int vh_publish_new(const char *source,const char *target){
  wchar_t *s=vh_wide(source),*t=vh_wide(target);if(!s||!t){free(s);free(t);return -1;}
  BOOL ok=MoveFileExW(s,t,MOVEFILE_WRITE_THROUGH);free(s);free(t);return ok?0:-1;
