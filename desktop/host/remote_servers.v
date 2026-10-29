@@ -298,7 +298,7 @@ fn (mut s ServerSession) inspect() ! {
 
 fn (mut s ServerSession) tick() {
 	if isnil(s.process) { return }
- $if windows { for _ in 0 .. 8 { part := s.process.stdout_read(); if part == "" { break }; s.ready_output = (s.ready_output + part).limit(4096) } }
+ $if windows { for _ in 0 .. 8 { part := s.process.stdout_read(); if part == "" { break }; joined := s.ready_output + part; s.ready_output = if joined.len > 4096 { joined[joined.len-4096..] } else { joined } } }
 	for _ in 0 .. 8 { part := s.process.stderr_read(); if part == '' { break }; s.diagnostics = (s.diagnostics + part).limit(16384) }
 	if !isnil(s.prompts) {
 		select { key := <-s.prompts.challenges { s.state = ServerSnapshot{...s.state, host_key: key, message: '首次连接：请核对并确认主机指纹。'} } else {} }

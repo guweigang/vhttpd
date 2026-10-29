@@ -78,5 +78,5 @@ fn (s &ServerSession) windows_scp(args []string, limit i64) !string {
 
 // Called only after the initial SSH process emits its authenticated marker.
 fn (s &ServerSession) windows_ready() bool {
-	return s.ready_output.contains('VHTTPD_SSH_READY\n')
+	return s.ready_output.replace('\r\n','\n').contains('VHTTPD_SSH_READY\n')
 }

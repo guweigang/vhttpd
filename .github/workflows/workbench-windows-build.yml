@@ -25,6 +25,14 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'MSVC native file probe build failed' }
           & ./windows-files-probe.exe
           if ($LASTEXITCODE -ne 0) { throw 'Native file publication probe failed' }
+      - name: Parse portable package scripts
+        shell: pwsh
+        run: |
+          foreach ($file in @('desktop/ci/package_windows.ps1','desktop/ci/verify_windows_package.ps1')) {
+            $tokens = $null; $errors = $null
+            [Management.Automation.Language.Parser]::ParseFile("$PWD/$file", [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count) { $errors | Format-List; throw "PowerShell parse failed: $file" }
+          }
   windows-amd64:
     runs-on: windows-2022
     timeout-minutes: 45

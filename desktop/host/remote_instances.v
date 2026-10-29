@@ -432,6 +432,12 @@ fn (mut m RemoteManager) tick() {
 	if m.snapshot.host_key.id != '' && !isnil(m.ssh) && m.ssh.is_alive() { return }
 	if time.ticks() < m.next_probe { return }
 	m.next_probe = time.ticks() + 1500
+ if m.control_path != '' && !ssh_control_exists(m.control_path) {
+  id := m.profile.id
+  m.disconnect()
+  m.snapshot = RemoteSnapshot{profile_id:id, message:'服务器会话已断开，请重新连接；远端实例继续运行。'}
+  return
+ }
 	if (m.control_path != '' && !ssh_control_exists(m.control_path)) || (!isnil(m.ssh) && !m.ssh.is_alive()) {
 		if !isnil(m.askpass) { m.askpass.close(); m.askpass = unsafe { nil } }
 		if m.ssh_diagnostics.contains('REMOTE HOST IDENTIFICATION HAS CHANGED') || m.ssh_diagnostics.contains('REVOKED HOST KEY') || m.ssh_diagnostics.contains('POSSIBLE DNS SPOOFING DETECTED') {
