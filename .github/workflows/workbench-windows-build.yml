@@ -23,17 +23,12 @@ jobs:
       - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756
         with:
           arch: x64
-      - name: Prepare OpenSSL for MSVC
-        run: |
-          $lib = 'C:\Program Files\OpenSSL\lib\VC\x64\MD'
-          if (!(Test-Path "$lib/libcrypto.lib") -or !(Test-Path "$lib/libssl.lib")) {
-            choco install openssl --version=3.5.4 --allow-downgrade -y --no-progress
-            if ($LASTEXITCODE -ne 0) { throw 'OpenSSL installation failed' }
-          }
-          if (!(Test-Path "$lib/libcrypto.lib") -or !(Test-Path "$lib/libssl.lib")) { throw 'OpenSSL import libraries missing' }
-          Copy-Item "$lib/libcrypto.lib" "$lib/crypto.lib"
-          Copy-Item "$lib/libssl.lib" "$lib/ssl.lib"
-          Add-Content $env:GITHUB_PATH 'C:\Program Files\OpenSSL\bin'
+      - uses: actions/cache@v4
+        with:
+          path: .cache/vcpkg-binary-cache
+          key: windows-workbench-openssl-msvc-${{ hashFiles('desktop/ci/windows-vcpkg.commit') }}
+      - name: Prepare OpenSSL SDK using vjsx MSVC contract
+        run: ./desktop/ci/prepare_windows_openssl.ps1
       - name: Prepare pinned native V, QuickJS and build-local ui2
         id: toolchain
         run: |
@@ -85,13 +80,16 @@ jobs:
           $output = "$PWD/desktop/ci/results/windows-build"
           $path = "$PWD/desktop|$PWD/src|$env:WORKBENCH_WINDOWS_MODULES|$env:WORKBENCH_WINDOWS_SDK_PARENT|$PWD/.deps|@vlib|@vmodules"
           $sdkCompatibility = '/FI"' + "$PWD/desktop/ci/msvc_sdk_compat.h" + '"'
-          & v -prod -new-compiler -cc msvc -gc boehm -cflags $sdkCompatibility -d link_quickjs -w -enable-globals `
+          & v -prod -new-compiler -cc msvc -gc boehm -cflags $sdkCompatibility -d link_quickjs -d use_openssl -w -enable-globals `
             -path $path -o "$output/vhttpd-workbench.exe" desktop 2>&1 | Tee-Object "$output/desktop-build.log"
           if ($LASTEXITCODE -ne 0) { throw 'Full Desktop is not yet Windows-compatible; see desktop-build.log' }
           New-Item -ItemType Directory -Force "$output/resources" | Out-Null
           Copy-Item admin/ui/brand/mark.png "$output/resources/vhttpd-mark.png"
-          Copy-Item 'C:/Program Files/OpenSSL/bin/libcrypto-3-x64.dll' $output
-          Copy-Item 'C:/Program Files/OpenSSL/bin/libssl-3-x64.dll' $output
+          foreach ($pattern in @('libcrypto-*.dll', 'libssl-*.dll')) {
+            $dlls = @(Get-ChildItem "$env:OPENSSL_ROOT_DIR/bin" -Filter $pattern -File)
+            if ($dlls.Count -eq 0) { throw "Missing OpenSSL runtime DLL: $pattern" }
+            $dlls | Copy-Item -Destination $output
+          }
           & dumpbin /DEPENDENTS "$output/vhttpd-workbench.exe" | Set-Content "$output/desktop-dependencies.txt"
           $env:PATH = "$output;$env:WINDIR/System32;$env:WINDIR"
 

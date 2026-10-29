@@ -43,7 +43,10 @@ fn main() {
 		admin_state_store.ConfigFileChange{ path: b, original: 'old b', value: 'new b' },
 	]
 	mut failed := false
-	store.publish_config_files(changes, accept, reject) or { failed = true }
+	store.publish_config_files(changes, accept, reject) or {
+ failed = true
+ assert err.msg() == 'intentional_postcheck_failure'
+ }
 	assert failed
 	assert os.read_file(a)! == 'old a'
 	assert os.read_file(b)! == 'old b'

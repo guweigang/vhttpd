@@ -33,6 +33,13 @@ $patch = Join-Path $root 'desktop/patches/v-windows-msvc-build.patch'
 if ($LASTEXITCODE -ne 0) { throw 'Pinned MSVC build patch no longer applies' }
 & git -C $v apply $patch
 if ($LASTEXITCODE -ne 0) { throw 'MSVC build patch failed' }
+# Resolve headers and libraries only from the vcpkg SDK, never an unrelated
+# system OpenSSL under Program Files (same rule as vjsx Windows CI).
+foreach ($relative in @('vlib/net/openssl/openssl.c.v', 'vlib/crypto/ecdsa/ecdsa_d_use_openssl.c.v')) {
+ $file = Join-Path $v $relative
+ $lines = Get-Content $file | Where-Object { $_ -notmatch '^#flag windows -[IL]\s*"?C:/Program Files/OpenSSL' }
+ [IO.File]::WriteAllLines($file, [string[]]$lines, [Text.UTF8Encoding]::new($false))
+}
 $env:VFLAGS = '-cc msvc -gc boehm'
 # Disable the launcher's legacy compiler retry so errors belong to the pinned V.
 $env:V_MACOS_V3_NO_FALLBACK = '1'

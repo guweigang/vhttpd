@@ -46,7 +46,7 @@ fn stage_config_file(path string, value string, mode int) !StagedConfigFile {
 
 fn rename_config_file(source string, target string) ! {
 	$if windows {
-		if C.vh_rename(source.str, target.str) != 0 { return error('config_replace_failed') }
+		if C.vh_rename(source.str, target.str) != 0 { return error('config_replace_failed:${os.last_error()}') }
 	} $else {
 		if C.rename(&char(source.str), &char(target.str)) != 0 { return os.last_error() }
 	}
@@ -114,16 +114,16 @@ fn rollback_config_files(changes []ConfigFileChange, modes []int, committed int)
 	for i := committed - 1; i >= 0; i-- {
 		change := changes[i]
 		verify_config_file(change.path, change.value) or {
-			failures << change.path
+			failures << '${change.path}: ${err.msg()}'
 			continue
 		}
 		file := stage_config_file(change.path, change.original, modes[i]) or {
-			failures << change.path
+			failures << '${change.path}: ${err.msg()}'
 			continue
 		}
 		file.publish(rename_config_file) or {
 			file.release()
-			failures << change.path
+			failures << '${change.path}: ${err.msg()}'
 			continue
 		}
 		file.release()
