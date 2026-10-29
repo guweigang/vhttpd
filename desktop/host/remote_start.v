@@ -1,6 +1,5 @@
 module host
 
-import config
 import os
 
 // Starting a stopped process must use SSH, since its Admin API is unavailable.
@@ -12,14 +11,14 @@ fn (mut s ServerSession) start_project(command ServerCommand) ! {
 	matches := s.state.projects.filter(it.id == command.project_id)
 	if matches.len != 1 { return error('请选择服务器上已登记的实例。') }
 	p := matches[0]
-	if p.config_path != os.join_path(s.state.root, 'instances', p.name, 'vhttpd.toml') || p.runtime_id == '' {
+	if p.config_path != s.state.root + '/instances/' + p.name + '/vhttpd.toml' || p.runtime_id == '' {
 		return error('仅支持启动工作台管理且已绑定运行包的实例。')
 	}
 	runtime := select_remote_runtime(s.state.runtimes, p.runtime_id)!
 	mut sources := map[string]string{}
 	mut visiting := map[string]bool{}
 	s.read_project_sources(p.config_path, mut sources, mut visiting) or { return error('无法读取远端实例配置，请检查文件和 include。') }
-	plan := config.load_runtime_plan_with_overrides(p.config_path, sources) or { return error('远端实例配置无效，请修复后再启动。') }
+	plan := remote_runtime_plan(p.config_path, sources) or { return error('远端实例配置无效，请修复后再启动。') }
 	project := os.dir(p.config_path)
 	pid_path := if plan.server.pid_file == '' { '' } else { remote_absolute_path(project, plan.server.pid_file)! }
 	if pid_path != '' && !pid_path.starts_with(project + '/') {

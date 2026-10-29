@@ -89,6 +89,8 @@ pub fn local_runtime_platform() string {
 // OpenSSH is an OS capability on Windows; do not assume Unix installation paths.
 fn ssh_tool(executable string) string {
  $if windows {
+  bundled := os.join_path(os.dir(os.executable()), 'tools', 'openssh', executable + '.exe')
+  if os.is_file(bundled) { return bundled }
   system := os.join_path(os.getenv_opt('WINDIR') or { 'C:\\Windows' }, 'System32', 'OpenSSH', executable + '.exe')
   if os.is_file(system) { return system }
   return executable + '.exe'

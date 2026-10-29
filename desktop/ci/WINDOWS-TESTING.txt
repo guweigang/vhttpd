@@ -1,0 +1,46 @@
+vhttpd Desktop · Windows x64 测试包
+
+安装与打开
+1. 推荐下载 Actions 的 vhttpd-workbench-windows-amd64-test Artifact。
+   将下载的 ZIP 完整解压到普通目录（可包含空格和中文）。
+2. 可在解压目录打开 PowerShell，校验包内文件：
+   powershell -NoProfile -ExecutionPolicy Bypass -File .\Verify-Package.ps1
+   这个选项只影响本次校验进程，不修改系统执行策略。
+3. 若下载的是后缀 -archive 的 Artifact，先解压 Artifact，再取出里面的
+   版本 ZIP 和同名 .sha256，用 Get-FileHash <版本ZIP> -Algorithm SHA256
+   核对后再解压版本 ZIP。不要在压缩包里直接运行。
+4. 双击 vhttpd-workbench.exe。无需安装 V、Node、Git、OpenSSL、VC 开发工具或 SSH。
+   EXE、DLL、resources 和 tools 必须一起保留，不能只复制 EXE。
+   也可用包内 Verify-Package.ps1 检查解压后的文件完整性。
+
+首次使用
+数据保存在 %LOCALAPPDATA%\vhttpd-workbench；换包不会删除服务器登记。
+本测试包未签名。若 Windows 显示未知发布者，请先核对 CI 来源和 SHA256。
+只连接自己的测试服务器；以下重启操作会短暂中断目标实例，请使用测试项目。
+本包提供 Windows Desktop，通过 SSH 管理已经运行的 Linux vhttpd。
+尚未提供 Windows 本地 vhttpd 运行包，不把本机新建/启动作为本轮验收范围。
+
+建议验收顺序
+1. 添加远端服务器：填写主机、SSH 用户、端口，选择密码认证。
+   密码仅用于本次连接，不保存到文件；重开工作台需要重新输入。
+2. 首次连接核对主机指纹，在工作台确认；取消时应停止连接。
+   若提示指纹变化，应阻止连接，不应自动覆盖原记录。
+3. 检查远端项目自动发现；选择一个已有的 SSH 手工启动测试实例。
+4. 点击打开 Admin UI：浏览器地址是本地 SSH 隧道/代理地址 127.0.0.1，
+   实际访问远端实例；应自动登录，URL 中不应出现 Admin Token。
+5. 在 Admin UI 修改一处无风险配置，最好涉及主配置与 include 文件。
+   整项目校验、发布后，Desktop 应显示待重启/待生效状态。
+6. 在 Desktop 点击远端重启；检查新的启动编号、配置已生效状态，
+   并访问一条业务路由确认应用正常。Admin UI 只负责配置编辑。
+7. 断开重连、退出并重新打开，检查项目发现、配置状态和自动登录。
+8. 错误密码、SSH 端口不可达等场景，应有明确提示，且不能停止远端实例。
+
+反馈请附
+build-info.json 中的构建编号、Windows 版本、卡住的步骤、脱敏截图。
+不要发送 SSH 密码、私钥、Admin Token 或包含凭据的配置文件。
+
+本轮 CI 会检查
+MSVC 构建、依赖闭包、ZIP 校验、带空格/中文目录解压、隔离 PATH 启动与退出、
+实际 GUI 程序的密码辅助进程、主机指纹确认、会话凭据撤销、远端 include 路径。
+实际服务器的 SSH 登录、浏览器、远端重启和业务生效由本次真机验收确认。
+Windows UI 仍处于测试阶段，可能存在字体、图片或布局细节差异。

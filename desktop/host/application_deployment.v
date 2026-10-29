@@ -67,7 +67,8 @@ fn (mut s ServerSession) prepare_application(command ServerCommand) ! {
 	defer { if !prepared { s.shell('rm -rf -- ' + shell_quote(dir), 3000) or {} } }
 	mut args := ['-O', '-o', 'ControlPath=' + s.directory + '/control', '-o', 'ControlMaster=no',
 		'-o', 'BatchMode=yes', '-o', 'ProxyCommand=false']
-	if s.server.ssh_port > 0 { args << ['-P', s.server.ssh_port.str()] }
+	$if windows { args = windows_auth_options(s.server); args.insert(0, '-O') }
+ if s.server.ssh_port > 0 { args << ['-P', s.server.ssh_port.str()] }
 	destination := if s.server.ssh_user == '' {
 		s.server.ssh_host
 	} else {
@@ -75,7 +76,7 @@ fn (mut s ServerSession) prepare_application(command ServerCommand) ! {
 	}
 	// All paths are quoted for legacy scp's remote shell; no password is an argument.
 	args << [archive, destination + ':' + shell_quote(dir + '/payload.json')]
-	s.job.command(s.scp_executable, args, 120000)!
+	$if windows { s.windows_scp(args, 120000)! } $else { s.job.command(s.scp_executable, args, 120000)! }
 	script := 'set -eu\numask 077\nprintf %s ' + shell_quote(base64.encode_str(json.encode(request))) + ' | base64 -d > ' + shell_quote(dir + '/request.json') + '\n' + shell_quote(runtime.path + '/vhttpd') + ' --workbench-deploy-prepare ' + shell_quote(dir + '/request.json')
 	response := s.shell_limited(script, 30000, 8 * 1024 * 1024) or { return error('远端整项目部署预检失败：请检查监听绑定、远端认证配置和本地入口文件。原实例仍在运行。') }
 	preview := json.decode[ApplicationDeploymentPreview](response.trim_space()) or { return error('部署预览无效，未停止目标实例。') }

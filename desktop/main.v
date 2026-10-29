@@ -138,6 +138,9 @@ fn main() {
 		host.run_remote_askpass() or { exit(1) }
 		return
 	}
+ $if windows {
+  if '--windows-ssh-smoke' in os.args { host.run_windows_ssh_smoke() or { eprintln(err); exit(1) }; return }
+ }
 	$if !macos && !linux && !windows {
 		eprintln('当前交付 macOS 和 Linux；Windows 适配尚未完成。')
 		exit(1)

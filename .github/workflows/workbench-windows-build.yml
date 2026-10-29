@@ -1,4 +1,4 @@
-name: Workbench Windows MSVC Build Probe
+name: Workbench Windows Desktop Test Package
 
 on:
   workflow_dispatch:
@@ -95,7 +95,7 @@ jobs:
           $output = "$PWD/desktop/ci/results/windows-build"
           $path = "$PWD/desktop|$PWD/src|$env:WORKBENCH_WINDOWS_MODULES|$env:WORKBENCH_WINDOWS_SDK_PARENT|$PWD/.deps|@vlib|@vmodules"
           $sdkCompatibility = '/FI"' + "$PWD/desktop/ci/msvc_sdk_compat.h" + '"'
-          & v -prod -new-compiler -cc msvc -gc boehm -cflags $sdkCompatibility -d link_quickjs -d use_openssl -w -enable-globals `
+          & v -prod -new-compiler -cc msvc -gc boehm -cflags $sdkCompatibility -subsystem windows -d link_quickjs -d use_openssl -w -enable-globals `
             -path $path -o "$output/vhttpd-workbench.exe" desktop 2>&1 | Tee-Object "$output/desktop-build.log"
           if ($LASTEXITCODE -ne 0) { throw 'Full Desktop is not yet Windows-compatible; see desktop-build.log' }
           New-Item -ItemType Directory -Force "$output/resources" | Out-Null
@@ -135,16 +135,42 @@ jobs:
             if ($process.ExitCode -ne 0) { throw "Full Desktop exited $($process.ExitCode)" }
           } finally { if (!$process.HasExited) { Stop-Process -Id $process.Id -Force } }
 
+      - name: Create portable Windows test archive
+        id: package
+        if: ${{ !cancelled() && steps.desktop.outcome == 'success' && steps.storage.outcome == 'success' }}
+        run: |
+          ./desktop/ci/package_windows.ps1 -Executable "$PWD/desktop/ci/results/windows-build/vhttpd-workbench.exe" 2>&1 | Tee-Object "$PWD/desktop/ci/results/windows-build/package.log"
+      - name: Verify extracted archive without development environment
+        id: portable
+        if: ${{ !cancelled() && steps.package.outcome == 'success' }}
+        run: |
+          ./desktop/ci/verify_windows_package.ps1 -Archive '${{ steps.package.outputs.archive }}' -ResultDirectory "$PWD/desktop/ci/results/windows-portable"
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() && steps.portable.outcome == 'success' }}
+        with:
+          name: vhttpd-workbench-windows-amd64-test
+          path: ${{ steps.package.outputs.package_dir }}/
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() && steps.portable.outcome == 'success' }}
+        with:
+          name: vhttpd-workbench-windows-amd64-test-archive
+          path: |
+            desktop/ci/results/windows-package/vhttpd-workbench-*.zip
+            desktop/ci/results/windows-package/vhttpd-workbench-*.zip.sha256
+          retention-days: 30
       - name: Record supported scope and enforce result
         if: ${{ !cancelled() && steps.toolchain.outcome == 'success' }}
         run: |
-          $result = @{ compiler = 'MSVC'; ui2 = '${{ steps.ui2.outcome }}'; desktop = '${{ steps.desktop.outcome }}'; storage = '${{ steps.storage.outcome }}';
-            scope = 'Checks: full MSVC Desktop native startup and clean exit; no Windows vhttpd runtime bundled, SSH password and lifecycle not accepted, no release published';
+          $result = @{ compiler = 'MSVC'; ui2 = '${{ steps.ui2.outcome }}'; desktop = '${{ steps.desktop.outcome }}'; storage = '${{ steps.storage.outcome }}'; portable = '${{ steps.portable.outcome }}';
+            scope = 'Portable MSVC Desktop test archive; bundled OpenSSL, VC runtime and OpenSSH; extracted startup and password helper checked; real-server Windows acceptance pending; no Windows vhttpd runtime';
             commit = '${{ github.sha }}' }
           $result | ConvertTo-Json | Set-Content desktop/ci/results/windows-build/result.json
-          if ($result.ui2 -ne 'success' -or $result.desktop -ne 'success' -or $result.storage -ne 'success') { throw 'Windows is not ready for delivery; diagnostic artifacts retained' }
+          if ($result.ui2 -ne 'success' -or $result.desktop -ne 'success' -or $result.storage -ne 'success' -or $result.portable -ne 'success') { throw 'Windows is not ready for delivery; diagnostic artifacts retained' }
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: workbench-windows-amd64-build-probe
-          path: desktop/ci/results/windows-build/
+          path: |
+            desktop/ci/results/windows-build/
+            desktop/ci/results/windows-portable/

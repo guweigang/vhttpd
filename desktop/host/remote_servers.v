@@ -142,6 +142,8 @@ mut:
 	process &os.Process = unsafe { nil }
 	prompts &RemoteAskpass = unsafe { nil }
 	directory string
+ windows_ticket string
+ ready_output string
 	diagnostics string
 	pending_deployment runtime_upgrade.DeploymentRequest
 	deployment_local_project Project
@@ -158,6 +160,9 @@ fn (mut s ServerSession) close() {
 	s.pending_deployment=runtime_upgrade.DeploymentRequest{}
 	s.deployment_fingerprint=''
 	s.deployment_local_project=Project{}
+ $if windows { revoke_windows_session(s.windows_ticket) }
+ s.windows_ticket = ''
+ s.ready_output = ''
 	if !isnil(s.prompts) { s.prompts.close(); s.prompts = unsafe { nil } }
 	if !isnil(s.process) {
 		s.process.signal_term()
@@ -187,23 +192,27 @@ fn (mut s ServerSession) connect(server RemoteServer, password string) ! {
 	if server.auth_method == 'key' && server.identity_file != '' && !os.is_file(server.identity_file) { return error('SSH 私钥不存在。') }
 	s.close()
 	s.server = server
-	s.directory = '/tmp/vh-host-' + new_remote_id()!
+	s.directory = os.join_path($if windows { os.temp_dir() } $else { '/tmp' }, 'vh-host-' + new_remote_id()!)
 	os.mkdir(s.directory, mode: 0o700)!
 	mut args := ['-N', '-T', '-M', '-S', s.directory + '/control', '-o', 'ControlPersist=no',
 		'-o', 'StrictHostKeyChecking=ask', '-o', 'FingerprintHash=sha256', '-o', 'UpdateHostKeys=no',
 		'-o', 'ForwardAgent=no', '-o', 'ForkAfterAuthentication=no', '-o', 'ConnectTimeout=8', '-o', 'ServerAliveInterval=10', '-o', 'ServerAliveCountMax=2']
-	if server.auth_method == 'password' {
+	 $if windows { args = ['-T', '-o', 'ControlMaster=no', '-o', 'ControlPath=none', '-o','StrictHostKeyChecking=ask', '-o','FingerprintHash=sha256','-o','UpdateHostKeys=no','-o','ForwardAgent=no','-o','ConnectTimeout=8','-o','ServerAliveInterval=10','-o','ServerAliveCountMax=2'] }
+ if server.auth_method == 'password' {
 		args << ['-o', 'BatchMode=no', '-o', 'PasswordAuthentication=yes', '-o', 'PreferredAuthentications=password', '-o', 'PubkeyAuthentication=no',
 			'-o', 'KbdInteractiveAuthentication=no', '-o', 'NumberOfPasswordPrompts=1']
 	} else {
 		args << ['-o', 'BatchMode=no', '-o', 'PasswordAuthentication=no', '-o', 'KbdInteractiveAuthentication=no']
 		if server.identity_file != '' { args << ['-i', server.identity_file] }
 	}
-	s.prompts = new_remote_prompts(password, server.auth_method == 'password')!
+	s.prompts = new_remote_prompt_session(password, server.auth_method == 'password', os.user_os() == 'windows')!
+ $if windows { s.windows_ticket = register_windows_session(server, s.prompts)! }
 	args << s.destination_args()
+ $if windows { args << "printf 'VHTTPD_SSH_READY\n'; while :; do sleep 60; done" }
 	s.process = os.new_process(s.ssh_executable)
 	s.process.set_args(args)
 	s.process.set_redirect_stdio()
+ $if windows { s.process.create_no_window = true }
 	s.process.set_environment(s.prompts.environment())
 	s.process.run()
 	s.diagnostics = ''
@@ -213,7 +222,8 @@ fn (mut s ServerSession) connect(server RemoteServer, password string) ! {
 
 // Mux commands cannot fall back to another SSH authentication when disconnected.
 fn (s &ServerSession) mux_args() []string {
-	return ['-T', '-S', s.directory + '/control', '-o', 'ControlMaster=no', '-o', 'BatchMode=yes', '-o', 'ProxyCommand=false']
+	 $if windows { mut args := windows_auth_options(s.server); args.insert(0, '-T'); return args }
+ return ['-T', '-S', s.directory + '/control', '-o', 'ControlMaster=no', '-o', 'BatchMode=yes', '-o', 'ProxyCommand=false']
 }
 
 fn (s &ServerSession) shell(script string, timeout i64) !string {
@@ -221,7 +231,7 @@ fn (s &ServerSession) shell(script string, timeout i64) !string {
 }
 
 fn (s &ServerSession) shell_limited(script string, timeout i64, max_output int) !string {
-	if !s.state.connected || !os.exists(s.directory + '/control') { return error('请先连接服务器。') }
+	if !s.state.connected || !s.session_available() { return error('请先连接服务器。') }
 	// Bounded scripts fit in the SSH stdin pipe. Secrets never become files or arguments.
 	if script.len > 16000 { return error('部署配置过大。') }
 	mut child := os.new_process(s.ssh_executable)
@@ -229,13 +239,16 @@ fn (s &ServerSession) shell_limited(script string, timeout i64, max_output int) 
 	args << s.destination_args()
 	args << '/bin/sh -s'
 	child.set_args(args)
+ $if windows { child.set_environment(windows_session(s.windows_ticket)!.broker.environment()); child.create_no_window = true }
 	child.set_redirect_stdio_merged()
 	child.use_pgroup = true
 	child.run()
 	defer { child.close() }
 	child.stdin_write(script + '\nexit\n')
-	os.fd_close(child.stdio_fd[0])
-	child.stdio_fd[0] = -1
+	$if !windows {
+ os.fd_close(child.stdio_fd[0])
+ child.stdio_fd[0] = -1
+ }
 	until := time.ticks() + timeout
 	mut output := ''
 	for {
@@ -285,6 +298,7 @@ fn (mut s ServerSession) inspect() ! {
 
 fn (mut s ServerSession) tick() {
 	if isnil(s.process) { return }
+ $if windows { for _ in 0 .. 8 { part := s.process.stdout_read(); if part == "" { break }; s.ready_output = (s.ready_output + part).limit(4096) } }
 	for _ in 0 .. 8 { part := s.process.stderr_read(); if part == '' { break }; s.diagnostics = (s.diagnostics + part).limit(16384) }
 	if !isnil(s.prompts) {
 		select { key := <-s.prompts.challenges { s.state = ServerSnapshot{...s.state, host_key: key, message: '首次连接：请核对并确认主机指纹。'} } else {} }
@@ -304,9 +318,9 @@ fn (mut s ServerSession) tick() {
   return
  }
 	if s.state.host_key.id != '' { return }
-	if os.exists(s.directory + '/control') {
-		s.state = ServerSnapshot{...s.state, connected: true, busy: false, control_path: s.directory + '/control'}
-		if !isnil(s.prompts) { s.prompts.close(); s.prompts = unsafe { nil } }
+	if s.transport_ready() {
+		s.state = ServerSnapshot{...s.state, connected: true, busy: false, control_path: s.session_reference()}
+		$if !windows { if !isnil(s.prompts) { s.prompts.close(); s.prompts = unsafe { nil } } }
 		s.inspect() or { s.state = ServerSnapshot{...s.state, error: true, message: err.msg()} }
 	} else if time.ticks() > s.deadline {
 		s.close()
@@ -370,10 +384,11 @@ fn (mut s ServerSession) install_release(archive_path string, tag string) ! {
 	// scp uses only the authenticated master; it cannot prompt or fall back.
 	remote_name := 'vhttpd-upload-' + new_remote_id()! + '.tar.gz'
 	mut args := ['-O', '-o', 'ControlPath=' + s.directory + '/control', '-o', 'ControlMaster=no', '-o', 'BatchMode=yes', '-o', 'ProxyCommand=false']
-	if s.server.ssh_port > 0 { args << ['-P', s.server.ssh_port.str()] }
+	$if windows { args = windows_auth_options(s.server); args.insert(0, '-O') }
+ if s.server.ssh_port > 0 { args << ['-P', s.server.ssh_port.str()] }
 	destination := if s.server.ssh_user == '' { s.server.ssh_host } else { s.server.ssh_user + '@' + s.server.ssh_host }
 	args << [os.real_path(archive), destination + ':' + remote_name]
-	s.job.command(s.scp_executable, args, 120000)!
+	$if windows { s.windows_scp(args, 120000)! } $else { s.job.command(s.scp_executable, args, 120000)! }
 	expected := checksum_for(os.read_file(archive + '.sha256')!, os.file_name(archive))!
 	s.shell('set -eu\numask 077\nrelease_tag=' + shell_quote(release_tag) + '\nupload=' + shell_quote(remote_name) + '\nexpected=' + shell_quote(expected) + '\nplatform=' + shell_quote(s.state.platform) + '\n' + $embed_file('remote_scripts/install.sh').to_string(), 30000)!
 	s.inspect()!
@@ -458,4 +473,17 @@ fn select_remote_runtime(runtimes []RemoteRuntime, selected string) !RemoteRunti
 	if selected == '' && runtimes.len == 1 { return runtimes[0] }
 	for runtime in runtimes { if runtime.id == selected { return runtime } }
 	return error('请选择服务器上已安装的运行包版本。')
+}
+
+fn (s &ServerSession) session_reference() string {
+ $if windows { return s.windows_ticket } $else { return s.directory + '/control' }
+}
+fn (s &ServerSession) session_available() bool {
+ $if windows { return windows_session_alive(s.windows_ticket) } $else { return os.exists(s.directory + '/control') }
+}
+fn (s &ServerSession) transport_ready() bool {
+ $if windows { return s.windows_ready() } $else { return os.exists(s.directory + '/control') }
+}
+fn ssh_control_exists(reference string) bool {
+ $if windows { return windows_session_alive(reference) } $else { return os.exists(reference) }
 }

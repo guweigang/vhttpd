@@ -6,6 +6,7 @@ import crypto.sha256
 import encoding.base64
 import os
 import toml
+import runtime_plan
 
 struct RemoteProjectCandidate {
 	path   string
@@ -20,9 +21,15 @@ fn remote_absolute_path(cwd string, path string) !string {
 	if path == '' || path.contains('\n') || path.contains('\r') || path.contains('\x00') {
 		return error('invalid remote path')
 	}
-	resolved := config.resolve_config_path(cwd, path)
-	if !resolved.starts_with('/') { return error('invalid remote path') }
-	return resolved
+ if !cwd.starts_with('/') { return error('invalid remote directory') }
+ full := if path.starts_with('/') { path } else { cwd + '/' + path }
+ mut parts := []string{}
+ for part in full.split('/') {
+  if part == '' || part == '.' { continue }
+  if part == '..' { if parts.len > 0 { parts.delete_last() }; continue }
+  parts << part
+ }
+ return '/' + parts.join('/')
 }
 
 fn running_project_candidate(cwd string, command string) !RemoteProjectCandidate {
@@ -99,7 +106,7 @@ fn discovered_profile(server RemoteServer, candidate RemoteProjectCandidate, sou
 		}
 	}
 	if doc.value('version').int() == 2 {
-		plan := config.load_runtime_plan_with_overrides(candidate.path, sources)!
+		plan := remote_runtime_plan(candidate.path, sources)!
 		ref := plan.control.listener or { return error('missing control listener') }
 		listener := plan.listeners[ref.id] or { return error('missing control listener') }
 		if listener.protocol != 'http' || listener.tls.enabled {
@@ -254,4 +261,23 @@ fn (mut s ServerSession) discover_projects() ! {
 			''
 		}
 	}
+}
+
+// The Windows host parses a Linux project without applying Windows path rules
+// to discovery or reading any of its includes from this computer.
+fn remote_runtime_plan(path string, sources map[string]string) !runtime_plan.RuntimePlan {
+ $if windows {
+  mut native := map[string]string{}
+  for key, text in sources { native[os.abs_path(key)] = text }
+  for key, text in sources {
+   doc := toml.parse_text(text)!
+   if includes := doc.value_opt('include') {
+    for include in includes.array() {
+     resolved := config.resolve_config_path(os.dir(os.abs_path(key)), include.string())
+     if resolved !in native { return error('remote_include_not_available') }
+    }
+   }
+  }
+  return config.load_runtime_plan_with_overrides(path, native)!
+ } $else { return config.load_runtime_plan_with_overrides(path, sources)! }
 }
