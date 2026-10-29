@@ -78,7 +78,7 @@ jobs:
             while (!(Test-Path $env:VHTTPD_DESKTOP_CI_READY) -and !$process.HasExited -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 100; $process.Refresh() }
             if (!(Test-Path $env:VHTTPD_DESKTOP_CI_READY)) { throw 'Packaged window did not start' }
             Start-Sleep -Seconds 2
-            ./desktop/ci/verify_windows_ui.ps1 -DesktopProcessId $process.Id -OutputDirectory $output -RootCompositedDiagnostic
+            ./.github/windows_environment_ui_retest.ps1 -DesktopProcessId $process.Id -OutputDirectory $output -RootCompositedDiagnostic
             if (!$process.CloseMainWindow() -or !$process.WaitForExit(15000) -or $process.ExitCode -ne 0) { throw 'Window did not close normally' }
           } finally { if (!$process.HasExited) { Stop-Process -Id $process.Id -Force } }
       - uses: actions/setup-python@v5
