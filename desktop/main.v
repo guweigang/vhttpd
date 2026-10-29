@@ -699,9 +699,10 @@ fn workbench_detail_font() string {
 
 fn label(id string, text string, x f64, y f64, width f64, size f64, color u32) ui2.Element {
 	mut height := 25.0
-	$if linux || windows {
+	$if linux {
 		if size > 20 { height = size + 8 }
 	}
+ $if windows { if size > 20 { height = size*1.3+8 } }
 	return ui2.label(id, text, ui2.rect(x, y, width, height), ui2.TextStyle{ size: size, color: color })
 }
 
