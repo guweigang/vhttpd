@@ -1,5 +1,6 @@
 module host
 
+$if !windows {
 import os
 
 #include <fcntl.h>
@@ -43,4 +44,5 @@ fn lock_recovery_archive(path string) !int {
 fn release_recovery_archive(fd int) {
 	C.flock(fd, C.LOCK_UN)
 	os.fd_close(fd)
+}
 }

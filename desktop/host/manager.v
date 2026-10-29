@@ -392,8 +392,10 @@ pub fn open_local(target string) ! {
 	} $else $if linux {
 		opener_path := if os.is_executable('/usr/bin/xdg-open') { '/usr/bin/xdg-open' } else { 'xdg-open' }
 		dispatch_linux_open(opener_path, target)!
+	} $else $if windows {
+		open_windows_target(target)!
 	} $else {
-		return error('当前宿主原型仅交付 macOS / Linux。')
+		return error('当前平台不支持打开目标。')
 	}
 }
 

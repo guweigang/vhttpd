@@ -1,5 +1,6 @@
 module process_runtime
 
+$if !windows {
 import os
 import sync
 
@@ -116,4 +117,5 @@ pub fn acquire_pid_files(paths []string) ! {
 
 pub fn close_pid_files() {
 	unsafe { g_pid_files.close() }
+}
 }

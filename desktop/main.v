@@ -138,7 +138,7 @@ fn main() {
 		host.run_remote_askpass() or { exit(1) }
 		return
 	}
-	$if !macos && !linux {
+	$if !macos && !linux && !windows {
 		eprintln('当前交付 macOS 和 Linux；Windows 适配尚未完成。')
 		exit(1)
 	}

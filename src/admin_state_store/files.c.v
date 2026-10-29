@@ -1,5 +1,6 @@
 module admin_state_store
 
+$if !windows {
 import os
 
 #include <sys/file.h>
@@ -106,4 +107,5 @@ fn append_line_with(path string, line string, writer fn (int, string) !) ! {
 		}
 		return write_error
 	}
+}
 }

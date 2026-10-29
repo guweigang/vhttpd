@@ -59,7 +59,7 @@ jobs:
             if (!$process.WaitForExit(10000)) { throw 'Native window did not exit' }
             if ($process.ExitCode -ne 0) { throw "Native window exited $($process.ExitCode)" }
           } finally { if (!$process.HasExited) { Stop-Process -Id $process.Id -Force } }
-      - name: Attempt full Desktop build
+      - name: Build and launch full Desktop
         id: desktop
         if: ${{ !cancelled() && steps.toolchain.outcome == 'success' }}
         continue-on-error: true
@@ -70,11 +70,29 @@ jobs:
           & v -prod -new-compiler -cc msvc -gc boehm -cflags $sdkCompatibility -d link_quickjs -w -enable-globals `
             -path $path -o "$output/vhttpd-workbench.exe" desktop 2>&1 | Tee-Object "$output/desktop-build.log"
           if ($LASTEXITCODE -ne 0) { throw 'Full Desktop is not yet Windows-compatible; see desktop-build.log' }
+          New-Item -ItemType Directory -Force "$output/resources" | Out-Null
+          Copy-Item admin/ui/brand/mark.png "$output/resources/vhttpd-mark.png"
+          $env:VHTTPD_DESKTOP_DATA_DIR = "$output/isolated-data"
+          $env:VHTTPD_DESKTOP_REGISTRY = "$output/isolated-data/projects.json"
+          $env:VHTTPD_DESKTOP_CI_READY = "$output/desktop-window-ready.txt"
+          $process = Start-Process "$output/vhttpd-workbench.exe" -WorkingDirectory $output -PassThru -RedirectStandardOutput "$output/desktop-stdout.log" -RedirectStandardError "$output/desktop-stderr.log"
+          try {
+            $deadline = (Get-Date).AddSeconds(30)
+            while (!(Test-Path $env:VHTTPD_DESKTOP_CI_READY) -and !$process.HasExited -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 200; $process.Refresh() }
+            if (!(Test-Path $env:VHTTPD_DESKTOP_CI_READY)) { throw 'Full Desktop HWND did not become ready' }
+            Start-Sleep -Seconds 2
+            $process.Refresh()
+            if ($process.HasExited) { throw 'Full Desktop exited before close request' }
+            if (!$process.CloseMainWindow()) { throw 'Full Desktop did not accept close request' }
+            if (!$process.WaitForExit(15000)) { throw 'Full Desktop did not exit cleanly' }
+            if ($process.ExitCode -ne 0) { throw "Full Desktop exited $($process.ExitCode)" }
+          } finally { if (!$process.HasExited) { Stop-Process -Id $process.Id -Force } }
+
       - name: Record supported scope and enforce result
         if: ${{ !cancelled() && steps.toolchain.outcome == 'success' }}
         run: |
           $result = @{ compiler = 'MSVC'; ui2 = '${{ steps.ui2.outcome }}'; desktop = '${{ steps.desktop.outcome }}';
-            scope = 'Build probe only; no Windows vhttpd runtime bundled, SSH password and lifecycle not accepted, no release published';
+            scope = 'Full MSVC Desktop native startup and clean exit; no Windows vhttpd runtime bundled, SSH password and lifecycle not accepted, no release published';
             commit = '${{ github.sha }}' }
           $result | ConvertTo-Json | Set-Content desktop/ci/results/windows-build/result.json
           if ($result.ui2 -ne 'success' -or $result.desktop -ne 'success') { throw 'Windows is not ready for delivery; diagnostic artifacts retained' }

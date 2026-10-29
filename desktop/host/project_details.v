@@ -106,7 +106,7 @@ pub fn open_text_file(path string) ! {
 		process.wait()
 		defer { process.close() }
 		if process.code != 0 { return error('系统文本编辑器无法打开文件。') }
-	} $else $if linux {
+	} $else $if linux || windows {
 		open_local(os.real_path(path))!
 	} $else {
 		return error('当前平台尚未实现外部编辑器入口。')

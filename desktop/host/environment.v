@@ -13,7 +13,7 @@ pub fn workbench_binary(executable string, development_root string) string {
 	if os.is_executable(bundled) { return os.real_path(bundled) }
 	// A broken installed app must not fall back to a developer checkout.
 	if executable.contains('.app/Contents/MacOS/') { return bundled }
-	$if linux {
+	$if linux || windows {
 		if os.is_dir(workbench_resources(executable)) { return bundled }
 	}
 	return os.join_path(development_root, 'vhttpd')

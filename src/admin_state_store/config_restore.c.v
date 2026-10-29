@@ -4,7 +4,9 @@ import os
 
 #include <sys/stat.h>
 
+$if !windows {
 fn C.fstat(int, &C.stat) int
+}
 
 // Separate from publication: recovery may recreate a missing, previously trusted source.
 pub struct ConfigFileRestore {
@@ -43,16 +45,27 @@ struct CreatedConfigDirectory {
 }
 
 fn (directory CreatedConfigDirectory) matches() bool {
+	$if windows {
+		return C.vh_matches_dir(directory.path.str, directory.identity.dev, directory.identity.inode) != 0
+	} $else {
 	current := os.lstat(directory.path) or { return false }
 	return current.get_filetype() == .directory && current.dev == directory.identity.dev && current.inode == directory.identity.inode
+	}
 }
 
 fn (directory CreatedConfigDirectory) release() {
-	defer { C.close(directory.fd) }
+	defer {
+ $if windows { C.vh_close(directory.fd) } $else { C.close(directory.fd) }
+}
 	if directory.matches() { os.rmdir(directory.path) or {} }
 }
 
 fn retain_created_config_directory(path string, identity os.Stat) !CreatedConfigDirectory {
+	$if windows {
+		fd := C.vh_open_dir(path.str)
+		if fd < 0 { return error('config_restore_directory_open_failed') }
+		return CreatedConfigDirectory{path: path, fd: fd, identity: os.Stat{dev: C.vh_dev(fd), inode: C.vh_ino(fd)}}
+	} $else {
 	fd := C.open(&char(path.str), C.O_RDONLY | C.O_DIRECTORY | C.O_NOFOLLOW | C.O_CLOEXEC)
 	if fd < 0 { return os.last_error() }
 	mut native := C.stat{}
@@ -68,6 +81,7 @@ fn retain_created_config_directory(path string, identity os.Stat) !CreatedConfig
 		return error('config_restore_directory_changed:' + path)
 	}
 	return owned
+	}
 }
 
 fn restore_parent_dirs(path string, mut created []CreatedConfigDirectory) ! {
@@ -92,7 +106,7 @@ fn restore_parent_dirs(path string, mut created []CreatedConfigDirectory) ! {
 			return err
 		}
 		created << owned
-		if C.fchmod(owned.fd, 0o700) != 0 { return os.last_error() }
+		$if !windows { if C.fchmod(owned.fd, 0o700) != 0 { return os.last_error() } }
 	}
 }
 
