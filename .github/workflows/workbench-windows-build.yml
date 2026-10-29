@@ -22,10 +22,6 @@ jobs:
       - name: Preserve LF for reproducible dependency patches
         run: git config --global core.autocrlf false
       - uses: actions/checkout@v4
-      # Same immutable MSVC environment action used by the pinned V source CI.
-      - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756
-        with:
-          arch: x64
       - name: Prepare pinned native V, QuickJS and build-local ui2
         id: toolchain
         run: |
@@ -38,7 +34,7 @@ jobs:
         run: |
           $output = "$PWD/desktop/ci/results/windows-build"
           $path = "$env:WORKBENCH_WINDOWS_MODULES|@vlib|@vmodules"
-          & v -prod -cc msvc -gc boehm -d use_bundled_libgc -w -enable-globals -path $path `
+          & v -prod -cc gcc -gc boehm -d use_bundled_libgc -w -enable-globals -path $path `
             -o "$output/ui2-windows-probe.exe" desktop/ci/windows_ui_probe.v 2>&1 | Tee-Object "$output/ui2-build.log"
           if ($LASTEXITCODE -ne 0) { throw 'ui2 native build failed' }
           $env:VHTTPD_WINDOWS_PROBE_READY = "$output/native-window-ready.txt"
@@ -58,7 +54,7 @@ jobs:
         run: |
           $output = "$PWD/desktop/ci/results/windows-build"
           $path = "$PWD/desktop|$PWD/src|$env:WORKBENCH_WINDOWS_MODULES|$env:WORKBENCH_WINDOWS_SDK_PARENT|$PWD/.deps|@vlib|@vmodules"
-          & v -prod -cc msvc -gc boehm -d use_bundled_libgc -d link_quickjs -w -enable-globals `
+          & v -prod -cc gcc -gc boehm -d use_bundled_libgc -d link_quickjs -w -enable-globals `
             -path $path -o "$output/vhttpd-workbench.exe" desktop 2>&1 | Tee-Object "$output/desktop-build.log"
           if ($LASTEXITCODE -ne 0) { throw 'Full Desktop is not yet Windows-compatible; see desktop-build.log' }
       - name: Record supported scope and enforce result
