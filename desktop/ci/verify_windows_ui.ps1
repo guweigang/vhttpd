@@ -15,6 +15,7 @@ public static class WorkbenchUiCheck {
  [DllImport("user32.dll",CharSet=CharSet.Unicode)] public static extern int GetWindowTextW(IntPtr hwnd,StringBuilder text,int count);
  [DllImport("user32.dll",CharSet=CharSet.Unicode)] public static extern int GetClassNameW(IntPtr hwnd,StringBuilder text,int count);
  [DllImport("user32.dll")] public static extern IntPtr SendMessageW(IntPtr hwnd,uint message,IntPtr wparam,IntPtr lparam);
+ [DllImport("user32.dll")] public static extern bool SetCursorPos(int x,int y);
  [DllImport("user32.dll")] public static extern bool UpdateWindow(IntPtr hwnd);
  [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hwnd,out Rect rect);
  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hwnd,IntPtr id);
@@ -73,6 +74,11 @@ function Measure-Caption($handle, $name) {
   return $white
  } finally { $graphics.Dispose(); $bitmap.Dispose() }
 }
+# Keep real captured WM_MOUSEMOVE coordinates consistent with the simulated press.
+$pressRect = New-Object WorkbenchUiCheck+Rect
+[WorkbenchUiCheck]::GetWindowRect($create,[ref]$pressRect) | Out-Null
+[WorkbenchUiCheck]::SetCursorPos($pressRect.Left+20,$pressRect.Top+15) | Out-Null
+Start-Sleep -Milliseconds 150
 $baseline = Measure-Caption $create 'caption-idle'
 if ($baseline -lt 12) { throw 'Button caption was already missing before the press' }
 $measurements = @()

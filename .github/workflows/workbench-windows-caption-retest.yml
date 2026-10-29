@@ -1,0 +1,86 @@
+name: Windows Caption Repaint Acceptance
+on:
+  push:
+    branches: ['codex/windows-workbench-build-ci']
+    paths: ['.github/workflows/workbench-windows-caption-retest.yml']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  portable:
+    runs-on: windows-2022
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756
+        with:
+          arch: x64
+      - uses: actions/download-artifact@v4
+        with:
+          name: workbench-windows-amd64-build-probe
+          run-id: 40857516672
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/compiled-caption-fix
+      - uses: actions/cache@v4
+        with:
+          path: .cache/vcpkg-binary-cache
+          key: windows-workbench-openssl-msvc-${{ hashFiles('desktop/ci/windows-vcpkg.commit') }}
+      - name: Prepare matching packaging dependencies
+        run: ./desktop/ci/prepare_windows_openssl.ps1
+      - name: Package the attested MSVC binary
+        id: package
+        run: |
+          $build = "$env:RUNNER_TEMP/compiled-caption-fix/windows-build"
+          $attestation = Get-Content "$build/result.json" -Raw | ConvertFrom-Json
+          if ($attestation.commit -ne 'aa8dfcad6482a5040748256f44172eb94328fa4f') { throw 'Unexpected binary source revision' }
+          # Only the UI test's real cursor placement changed after this build.
+          # Product binary/source revision is retained in package metadata.
+          $head = $env:GITHUB_SHA
+          try {
+            $env:GITHUB_SHA = $attestation.commit
+            ./desktop/ci/package_windows.ps1 -Executable "$build/vhttpd-workbench.exe"
+          } finally { $env:GITHUB_SHA = $head }
+      - name: Check pressed caption, release, form focus and Tab
+        run: |
+          $output = "$PWD/desktop/ci/results/caption-retest"
+          New-Item -ItemType Directory -Force $output | Out-Null
+          $env:VHTTPD_DESKTOP_DATA_DIR = "$output/data"
+          $env:VHTTPD_DESKTOP_REGISTRY = "$output/data/projects.json"
+          $env:VHTTPD_DESKTOP_CI_READY = "$output/ready.txt"
+          $process = Start-Process '${{ steps.package.outputs.package_dir }}/vhttpd-workbench.exe' -PassThru
+          try {
+            $deadline = (Get-Date).AddSeconds(30)
+            while (!(Test-Path $env:VHTTPD_DESKTOP_CI_READY) -and !$process.HasExited -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 100; $process.Refresh() }
+            if (!(Test-Path $env:VHTTPD_DESKTOP_CI_READY)) { throw 'Packaged window did not start' }
+            Start-Sleep -Seconds 2
+            ./desktop/ci/verify_windows_ui.ps1 -DesktopProcessId $process.Id -OutputDirectory $output
+            if (!$process.CloseMainWindow() -or !$process.WaitForExit(15000) -or $process.ExitCode -ne 0) { throw 'Window did not close normally' }
+          } finally { if (!$process.HasExited) { Stop-Process -Id $process.Id -Force } }
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --disable-pip-version-check paramiko==5.1.0
+      - name: Verify extracted archive without development environment
+        run: ./desktop/ci/verify_windows_package.ps1 -Archive '${{ steps.package.outputs.archive }}' -ResultDirectory "$PWD/desktop/ci/results/windows-portable"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vhttpd-workbench-windows-amd64-test
+          path: ${{ steps.package.outputs.package_dir }}/
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vhttpd-workbench-windows-amd64-test-archive
+          path: |
+            desktop/ci/results/windows-package/vhttpd-workbench-*.zip
+            desktop/ci/results/windows-package/vhttpd-workbench-*.zip.sha256
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-caption-retest-diagnostics
+          path: |
+            desktop/ci/results/caption-retest/
+            desktop/ci/results/windows-portable/

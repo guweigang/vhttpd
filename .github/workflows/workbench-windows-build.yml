@@ -8,7 +8,6 @@ on:
 
 permissions:
   contents: read
-  actions: read
 
 jobs:
   windows-files:
@@ -39,45 +38,6 @@ jobs:
             [Management.Automation.Language.Parser]::ParseFile("$PWD/$file", [ref]$tokens, [ref]$errors) | Out-Null
             if ($errors.Count) { $errors | Format-List; throw "PowerShell parse failed: $file" }
           }
-      - uses: actions/download-artifact@v4
-        with:
-          name: vhttpd-workbench-windows-amd64-test
-          run-id: 40853163884
-          github-token: ${{ github.token }}
-          path: ${{ runner.temp }}/caption-baseline
-      - name: Check reported caption flicker in previous test package
-        shell: pwsh
-        run: |
-          $package = "$env:RUNNER_TEMP/caption-baseline"
-          $output = "$env:RUNNER_TEMP/caption-baseline-results"
-          New-Item -ItemType Directory -Force $output | Out-Null
-          $env:VHTTPD_DESKTOP_DATA_DIR = "$output/data"
-          $env:VHTTPD_DESKTOP_REGISTRY = "$output/data/projects.json"
-          $env:VHTTPD_DESKTOP_CI_READY = "$output/ready.txt"
-          $process = Start-Process "$package/vhttpd-workbench.exe" -PassThru
-          try {
-            $deadline = (Get-Date).AddSeconds(30)
-            while (!(Test-Path $env:VHTTPD_DESKTOP_CI_READY) -and !$process.HasExited -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 100; $process.Refresh() }
-            if (!(Test-Path $env:VHTTPD_DESKTOP_CI_READY)) { throw 'Baseline package did not start' }
-            Start-Sleep -Seconds 2
-            $reproduced = $false
-            try { ./desktop/ci/verify_windows_ui.ps1 -DesktopProcessId $process.Id -OutputDirectory $output -CaptionOnly }
-            catch {
-              if ($_.Exception.Message -notlike 'Button caption disappeared while pressed*') { throw }
-              $reproduced = $true
-              Write-Host 'Reproduced reported caption loss in the previous package.'
-            }
-            @{previous_package_regression_reproduced=$reproduced} | ConvertTo-Json | Set-Content "$output/baseline-result.json"
-          } finally {
-            if (!$process.HasExited) { Stop-Process -Id $process.Id -Force }
-            Remove-Item Env:VHTTPD_DESKTOP_DATA_DIR, Env:VHTTPD_DESKTOP_REGISTRY, Env:VHTTPD_DESKTOP_CI_READY -ErrorAction SilentlyContinue
-          }
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: workbench-windows-caption-baseline
-          path: ${{ runner.temp }}/caption-baseline-results/
-          retention-days: 7
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
