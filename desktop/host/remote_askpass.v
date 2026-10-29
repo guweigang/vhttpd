@@ -174,7 +174,7 @@ pub fn run_remote_askpass() ! {
 	prompt := os.args.last()
 	kind := if prompt.contains('Are you sure you want to continue connecting') && prompt.contains('SHA256:') {
 		'host_key'
-	} else if os.getenv('SSH_ASKPASS_PROMPT') != 'confirm' && prompt.to_lower().contains('password') {
+	} else if (os.getenv('SSH_ASKPASS_PROMPT') != 'confirm' || os.user_os() == 'windows') && prompt.to_lower().trim_space().ends_with('password:') {
 		'password'
 	} else { return error('ssh_askpass_prompt_rejected') }
 	path := os.getenv('VHTTPD_SSH_ASKPASS_SOCKET')

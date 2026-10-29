@@ -17,9 +17,13 @@ pub fn run_windows_ssh_smoke() ! {
 	if environment.values().any(it.contains(password)) {
 		return error('password_leaked_to_environment')
 	}
-	for _ in 0 .. 2 {
+	for attempt in 0 .. 2 {
 		mut child := os.new_process(os.executable())
-		child.set_environment(environment)
+		mut child_environment := environment.clone()
+  // Win32 OpenSSH may retain the confirm hint in its parent after spawning
+  // the fingerprint helper; the following actual password prompt still works.
+  if attempt == 1 { child_environment['SSH_ASKPASS_PROMPT'] = 'confirm' }
+  child.set_environment(child_environment)
 		child.set_args(['fixture password:'])
 		child.set_redirect_stdio()
 		child.create_no_window = true
