@@ -50,7 +50,7 @@ index 33ef410..5b1291e 100644
  
  	fn native_clipboard_text() ?string {
 diff --git a/ui/ui_immediate.c.v b/ui/ui_immediate.c.v
-index b71e092..f64e8de 100644
+index b71e092..7521005 100644
 --- a/ui/ui_immediate.c.v
 +++ b/ui/ui_immediate.c.v
 @@ -24,6 +24,8 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
@@ -104,7 +104,7 @@ index b71e092..f64e8de 100644
  		if ch < 32 {
  			return
  		}
-@@ -1978,6 +2002,30 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
+@@ -1978,6 +2002,31 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
  		mut editor := g_text_editors[g_focused_field] or {
  			text_editor((g_text_values[g_focused_field] or { '' }).clone())
  		}
@@ -116,6 +116,7 @@ index b71e092..f64e8de 100644
 +			if key == .v {
 +				if focused_target.readonly { return }
 +				mut value := clipboard_text() or { return }
++				if value.len == 0 { return }
 +				if !focused_target.text_area { value = value.replace('\r\n', ' ').replace('\n', ' ').replace('\r', ' ') }
 +				editor.insert_text(value)
 +			} else {
@@ -135,7 +136,7 @@ index b71e092..f64e8de 100644
  		if key == .backspace {
  			if editor.backspace() {
  				replace_text_value(g_focused_field, editor.text)
-@@ -3221,7 +3269,7 @@ fn page_focused_text_area(direction int) {
+@@ -3221,7 +3270,7 @@ fn page_focused_text_area(direction int) {
  					}
  					apply_clip(ctx, clip)
  				}
@@ -144,7 +145,7 @@ index b71e092..f64e8de 100644
  					add_hit_target(HitTarget{
  						id: el.id
  						action_id: element_action_id(el)
-@@ -3231,6 +3279,8 @@ fn page_focused_text_area(direction int) {
+@@ -3231,6 +3280,8 @@ fn page_focused_text_area(direction int) {
  						w: el.frame.width
  						h: el.frame.height
  						text_field: true
@@ -153,7 +154,7 @@ index b71e092..f64e8de 100644
  						emit_change: el.emit_change
  					}, clip)
  				}
-@@ -3262,7 +3312,7 @@ fn page_focused_text_area(direction int) {
+@@ -3262,7 +3313,7 @@ fn page_focused_text_area(direction int) {
  						g_focused_field == el.id, el.enabled)
  				}
  				draw_text_area_content(ctx, el, current_text, x, y, clip, scroll_parent_id)
@@ -162,7 +163,7 @@ index b71e092..f64e8de 100644
  					add_hit_target(HitTarget{
  						id: el.id
  						action_id: element_action_id(el)
-@@ -3271,6 +3321,8 @@ fn page_focused_text_area(direction int) {
+@@ -3271,6 +3322,8 @@ fn page_focused_text_area(direction int) {
  						w: el.frame.width
  						h: el.frame.height
  						text_area: true

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# Apply the temporary latest-V compatibility fix only to a build-local copy.
+# Apply reviewed compiler/input workarounds only to a build-local copy.
 # The pinned upstream checkout stays clean; an upstream update must recheck it.
 root="$(cd "$(dirname "$0")/.." && pwd)"
 source_dir="$root/.deps/ui2"

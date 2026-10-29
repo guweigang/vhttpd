@@ -1,6 +1,7 @@
 module ui2
 
 import gg
+import os
 
 fn input_fixture(value string, readonly bool, secure bool, multiline bool) {
  g_text_values = map[string]string{}
@@ -67,4 +68,15 @@ fn test_clipboard_selection_cut_paste_readonly_and_password() {
  assert text('input') == 'session-only'
  // Do not leave even synthetic credentials on the fixture clipboard.
  assert set_clipboard_text('')
+ input_fixture('keep selected text', false, false, false)
+ handle_key_down(.a, ctrl)
+ handle_key_down(.v, ctrl)
+ assert text('input') == 'keep selected text'
+ original_path := os.getenv('PATH')
+ os.setenv('PATH', '/ui2-fixture-no-clipboard-tools', true)
+ defer { os.setenv('PATH', original_path, true) }
+ handle_key_down(.x, ctrl)
+ handle_key_down(.v, ctrl)
+ assert text('input') == 'keep selected text'
 }
+
