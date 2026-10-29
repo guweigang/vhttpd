@@ -28,7 +28,10 @@ jobs:
           arch: x64
       - name: Prepare pinned native V, QuickJS and build-local ui2
         id: toolchain
-        run: ./desktop/ci/prepare_windows_toolchain.ps1
+        run: |
+          $output = "$PWD/desktop/ci/results/windows-build"
+          New-Item -ItemType Directory -Force $output | Out-Null
+          ./desktop/ci/prepare_windows_toolchain.ps1 2>&1 | Tee-Object "$output/toolchain-build.log"
       - name: Build and launch native ui2 window
         id: ui2
         continue-on-error: true

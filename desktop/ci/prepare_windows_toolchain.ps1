@@ -28,7 +28,7 @@ if ($LASTEXITCODE -ne 0) { throw 'QuickJS patch failed' }
 $env:VFLAGS = '-cc msvc -gc boehm -d use_bundled_libgc'
 Push-Location $v
 try {
- & .\makev.bat -msvc -local
+ & .\makev.bat -msvc --local
  if ($LASTEXITCODE -ne 0) { throw 'Native Windows V bootstrap failed' }
  & .\v.exe version
  if ($LASTEXITCODE -ne 0) { throw 'Native V unavailable' }
