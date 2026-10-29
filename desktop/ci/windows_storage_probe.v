@@ -45,6 +45,7 @@ fn main() {
 	mut failed := false
 	store.publish_config_files(changes, accept, reject) or {
  failed = true
+ eprintln('Windows publication probe: ' + err.msg())
  assert err.msg() == 'intentional_postcheck_failure'
  }
 	assert failed
