@@ -125,7 +125,13 @@ jobs:
           $output = "$PWD/desktop/ci/results/windows-build"
           $path = "$PWD/desktop|$PWD/src|$env:WORKBENCH_WINDOWS_MODULES|$env:WORKBENCH_WINDOWS_SDK_PARENT|$PWD/.deps|@vlib|@vmodules"
           $sdkCompatibility = '/FI"' + "$PWD/desktop/ci/msvc_sdk_compat.h" + '"'
-          & v -prod -new-compiler -cc msvc -gc boehm -cflags $sdkCompatibility -subsystem windows -d link_quickjs -d use_openssl -w -enable-globals `
+          Push-Location desktop/assets
+          try {
+            & rc /nologo /fo "$output/workbench.res" workbench.rc
+            if ($LASTEXITCODE -ne 0) { throw 'Windows icon resource compilation failed' }
+          } finally { Pop-Location }
+          $iconResource = '"' + "$output/workbench.res" + '"'
+          & v -prod -new-compiler -cc msvc -gc boehm -cflags $sdkCompatibility -ldflags $iconResource -subsystem windows -d link_quickjs -d use_openssl -w -enable-globals `
             -path $path -o "$output/vhttpd-workbench.exe" desktop 2>&1 | Tee-Object "$output/desktop-build.log"
           if ($LASTEXITCODE -ne 0) { throw 'Full Desktop is not yet Windows-compatible; see desktop-build.log' }
           & cl /nologo /O2 /W4 /utf-8 /std:c11 desktop/ci/windows_askpass.c /Fe:"$output/vhttpd-ssh-askpass.exe" /link /SUBSYSTEM:WINDOWS Ws2_32.lib Shell32.lib

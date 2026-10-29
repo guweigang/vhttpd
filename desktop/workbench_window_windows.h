@@ -28,7 +28,13 @@ static LRESULT CALLBACK vhttpd_workbench_size_proc(HWND hwnd, UINT message, WPAR
     return DefSubclassProc(hwnd,message,wparam,lparam);
 }
 static void vhttpd_workbench_configure_windows(void *window) {
-    if(window) SetWindowSubclass((HWND)window,vhttpd_workbench_size_proc,73,0);
+    if (!window) return;
+    SetWindowSubclass((HWND)window,vhttpd_workbench_size_proc,73,0);
+    HINSTANCE module = GetModuleHandleW(NULL);
+    HICON large = (HICON)LoadImageW(module,MAKEINTRESOURCEW(1),IMAGE_ICON,GetSystemMetrics(SM_CXICON),GetSystemMetrics(SM_CYICON),LR_SHARED);
+    HICON small = (HICON)LoadImageW(module,MAKEINTRESOURCEW(1),IMAGE_ICON,GetSystemMetrics(SM_CXSMICON),GetSystemMetrics(SM_CYSMICON),LR_SHARED);
+    if(large) SendMessageW((HWND)window,WM_SETICON,ICON_BIG,(LPARAM)large);
+    if(small) SendMessageW((HWND)window,WM_SETICON,ICON_SMALL,(LPARAM)small);
 }
 
 static void vhttpd_workbench_activate_windows(void *native_window) {

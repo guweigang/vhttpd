@@ -9,6 +9,7 @@ $stage = Join-Path $OutputDirectory $name
 if (Test-Path $stage) { throw 'Package staging directory must be new' }
 New-Item -ItemType Directory -Force "$stage/resources", "$stage/tools/openssh", "$stage/licenses" | Out-Null
 Copy-Item $Executable "$stage/vhttpd-workbench.exe"
+Copy-Item "$root/desktop/assets/vhttpd-windows.ico" "$stage/resources/vhttpd-windows.ico"
 Copy-Item (Join-Path (Split-Path $Executable) 'vhttpd-ssh-askpass.exe') "$stage/vhttpd-ssh-askpass.exe"
 Copy-Item "$root/admin/ui/brand/mark.png" "$stage/resources/vhttpd-mark.png"
 & "$PSScriptRoot/prepare_windows_brand.ps1" -Source "$root/admin/ui/brand/mark.png" -Destination "$stage/resources/vhttpd-mark.bmp"

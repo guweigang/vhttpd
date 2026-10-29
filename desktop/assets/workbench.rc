@@ -1,0 +1,2 @@
+// Main executable icon. Keep resource ID 1 in sync with the window icon loader.
+1 ICON "vhttpd-windows.ico"
