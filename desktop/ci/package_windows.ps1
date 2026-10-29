@@ -11,6 +11,7 @@ New-Item -ItemType Directory -Force "$stage/resources", "$stage/tools/openssh", 
 Copy-Item $Executable "$stage/vhttpd-workbench.exe"
 Copy-Item (Join-Path (Split-Path $Executable) 'vhttpd-ssh-askpass.exe') "$stage/vhttpd-ssh-askpass.exe"
 Copy-Item "$root/admin/ui/brand/mark.png" "$stage/resources/vhttpd-mark.png"
+& "$PSScriptRoot/prepare_windows_brand.ps1" -Source "$root/admin/ui/brand/mark.png" -Destination "$stage/resources/vhttpd-mark.bmp"
 foreach ($pattern in @('libcrypto-*.dll','libssl-*.dll')) {
  $dlls = @(Get-ChildItem "$env:OPENSSL_ROOT_DIR/bin" -Filter $pattern -File)
  if (!$dlls.Count) { throw "Missing OpenSSL DLL: $pattern" }

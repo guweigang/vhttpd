@@ -88,7 +88,7 @@ jobs:
           $path = "$env:WORKBENCH_WINDOWS_MODULES|@vlib|@vmodules"
           $sdkCompatibility = '/FI"' + "$PWD/desktop/ci/msvc_sdk_compat.h" + '"'
           & v -prod -new-compiler -cc msvc -gc boehm -cflags $sdkCompatibility -w -enable-globals -path $path `
-            -o "$output/ui2-windows-probe.exe" desktop/ci/windows_ui_probe.v 2>&1 | Tee-Object "$output/ui2-build.log"
+            -o "$output/ui2-windows-probe.exe" desktop/ci/windows_display_probe.v 2>&1 | Tee-Object "$output/ui2-build.log"
           if ($LASTEXITCODE -ne 0) { throw 'ui2 native build failed' }
           $env:VHTTPD_WINDOWS_PROBE_READY = "$output/native-window-ready.txt"
           $process = Start-Process "$output/ui2-windows-probe.exe" -PassThru -RedirectStandardOutput "$output/ui2-stdout.log" -RedirectStandardError "$output/ui2-stderr.log"
@@ -133,6 +133,7 @@ jobs:
 
           New-Item -ItemType Directory -Force "$output/resources" | Out-Null
           Copy-Item admin/ui/brand/mark.png "$output/resources/vhttpd-mark.png"
+          ./desktop/ci/prepare_windows_brand.ps1 -Source "$PWD/admin/ui/brand/mark.png" -Destination "$output/resources/vhttpd-mark.bmp"
           foreach ($pattern in @('libcrypto-*.dll', 'libssl-*.dll')) {
             $dlls = @(Get-ChildItem "$env:OPENSSL_ROOT_DIR/bin" -Filter $pattern -File)
             if ($dlls.Count -eq 0) { throw "Missing OpenSSL runtime DLL: $pattern" }

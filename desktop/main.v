@@ -218,17 +218,21 @@ fn main() {
 		if app.projects.len > 0 { app.select_current() }
 	}
 	C.atexit(cleanup)
+ $if windows { C.vhttpd_workbench_prepare_windows_display(); app.brand_mark = windows_brand_asset(app.brand_mark) }
 	ui2.set_menu_bar([ui2.Menu{
 		title: '项目'
 		items: [ui2.menu_item('new', '新建项目…'), ui2.menu_item('import', '导入配置…'),
 			ui2.menu_item('folder', '打开项目目录'), ui2.menu_separator(),
 			ui2.menu_item('quit', '退出工作台')]
 	}])
-	spawn workbench_refresh_loop(app.refresh_stop, ui2.request_refresh)
+	$if windows { spawn workbench_refresh_loop(app.refresh_stop, ui2.request_poll_refresh) } $else { spawn workbench_refresh_loop(app.refresh_stop, ui2.request_refresh) }
 	ui2.on_key(workbench_key)
 	ui2.on_key_event(workbench_physical_key)
 	ui2.on_window_ready(configure_workbench_window)
-	$if linux {
+	$if windows {
+  scale := windows_display_scale()
+  ui2.run_window('vhttpd · 本地工作台',int(980*scale),int(740*scale),build_window,handle_event)
+ } $else $if linux {
 		configure_linux_fonts()
 		ui2.run_window_with_options(ui2.WindowOptions{title:'vhttpd · 本地工作台',width:980,height:740,min_width:760,min_height:660}, build_window, handle_event)
 	} $else {
@@ -689,12 +693,13 @@ fn workbench_detail_font() string {
 	// The custom backend's mono fallback has no CJK glyphs. Use the shipped
 	// primary face so error messages and redacted diffs remain readable.
 	$if linux { return '' }
+ $if windows { return 'Consolas' }
 	return 'Menlo'
 }
 
 fn label(id string, text string, x f64, y f64, width f64, size f64, color u32) ui2.Element {
 	mut height := 25.0
-	$if linux {
+	$if linux || windows {
 		if size > 20 { height = size + 8 }
 	}
 	return ui2.label(id, text, ui2.rect(x, y, width, height), ui2.TextStyle{ size: size, color: color })
@@ -786,6 +791,7 @@ fn project_button(id string, title string, badge string, frame ui2.Rect, selecte
 fn build_window() ui2.Element {
 	root := build_window_tree()
 	$if linux { return linux_pixel_layout(root) }
+ $if windows { return windows_pixel_layout(root, windows_display_scale()) }
 	return root
 }
 
@@ -795,7 +801,7 @@ fn build_window_tree() ui2.Element {
 	if !app.environment_menu.open { return root }
 	menu := ui2.dropdown_menu(ui2.DropdownMenuConfig{
 		id: 'environment_menu', state: app.environment_menu, items: app.environment_menu_items(),
-		anchor: ui2.rect(16, 82, 180, 34), window: ui2.bounds(), width: 260,
+		anchor: ui2.rect(16, 82, 180, 34), window: workbench_bounds(), width: 260,
 		label: '选择运行环境'
 	}) or { return root }
 	mut children := root.children.clone()
@@ -806,7 +812,7 @@ fn build_window_tree() ui2.Element {
 fn build_window_content() ui2.Element {
 	app := unsafe { workshop }
 	if app.worker_started && !app.quitting { poll_worker() }
-	b := ui2.bounds()
+	b := workbench_bounds()
 	w := if b.width > 760 { b.width } else { 760.0 }
 	h := if b.height > 660 { b.height } else { 660.0 }
 	content_x := 242.0
@@ -1042,4 +1048,10 @@ fn build_window_content() ui2.Element {
 		}
 	}
 	return ui2.screen(workbench_paper, children)
+}
+
+fn workbench_bounds() ui2.Rect {
+ b := ui2.bounds()
+ $if windows { scale := windows_display_scale(); return ui2.rect(0,0,b.width/scale,b.height/scale) }
+ return b
 }
