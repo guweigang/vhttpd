@@ -57,8 +57,12 @@ def verify(archive):
         home.mkdir()
         env = {'HOME': str(home), 'PATH': '/usr/bin:/bin', 'LANG': 'C.UTF-8',
                'VHTTPD_DESKTOP_REGISTRY': str(home / 'projects.json')}
-        isolated = ['bwrap', '--ro-bind', '/', '/', '--bind', '/tmp', '/tmp',
-                    '--tmpfs', '/Users', '--tmpfs', '/home', '--tmpfs', '/usr/local']
+        isolated = ['bwrap', '--ro-bind', '/', '/', '--bind', '/tmp', '/tmp']
+        # Orb mounts /Users; GitHub's Ubuntu runners do not have that directory.
+        # Creating a missing mount point under the read-only root is invalid.
+        for developer_tree in ('/Users', '/home', '/usr/local'):
+            if Path(developer_tree).is_dir():
+                isolated += ['--tmpfs', developer_tree]
         hidden_tools = set()
         for tool in ('v', 'vlang', 'node', 'nodejs', 'npm', 'npx', 'cc', 'gcc', 'g++',
                      'c++', 'clang', 'make', 'cmake'):
@@ -76,9 +80,13 @@ def verify(archive):
             hashlib.sha256(service_archive.read_bytes()).hexdigest() + '  ' + service_archive.name + '\n')
         env['VHTTPD_RUNTIME_TEST_ARCHIVE'] = str(service_archive)
         for mode in ('--smoke', '--persistent-status-smoke', '--shared-relay-smoke', '--runtime-smoke'):
-            output = subprocess.check_output([*isolated, '--', str(host), mode],
-                                             env=env, cwd=root, text=True,
-                                             stderr=subprocess.STDOUT, timeout=240)
+            try:
+                output = subprocess.check_output([*isolated, '--', str(host), mode],
+                                                 env=env, cwd=root, text=True,
+                                                 stderr=subprocess.STDOUT, timeout=240)
+            except subprocess.CalledProcessError as error:
+                print(error.output, end='', flush=True)
+                raise RuntimeError(f'Isolated {mode} failed with exit {error.returncode}') from error
             print(output, end='', flush=True)
         print('PASS SHA256, safe extraction, moved ELF dependencies, packaged fonts and licenses')
         print('PASS fresh HOME, system PATH, developer trees and compiler/Node access hidden by bubblewrap')

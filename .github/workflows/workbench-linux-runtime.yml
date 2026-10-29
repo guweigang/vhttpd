@@ -96,6 +96,7 @@ jobs:
           set -e
           test "$result" -eq 124
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: workbench-linux-${{ matrix.arch }}
           path: |
