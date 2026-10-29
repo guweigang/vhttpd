@@ -67,7 +67,7 @@ fn new_remote_prompt_session(password string, allow_password bool, persistent bo
 
 fn (s &RemoteAskpass) environment() map[string]string {
 	mut env := os.environ()
-	env['SSH_ASKPASS'] = $if windows { os.join_path(os.dir(os.executable()), 'vhttpd-ssh-askpass.exe') } $else { os.executable() }
+	env['SSH_ASKPASS'] = $if windows { os.short_path(os.join_path(os.dir(os.executable()), 'vhttpd-ssh-askpass.exe')) } $else { os.executable() }
 	env['SSH_ASKPASS_REQUIRE'] = 'force'
 	env['DISPLAY'] = 'vhttpd-workbench'
 	env['LC_ALL'] = 'C'
