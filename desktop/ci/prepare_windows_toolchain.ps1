@@ -25,27 +25,32 @@ $quickjsCommit = (Get-Content (Join-Path $sdk '.quickjs-version') -Raw).Trim()
 Checkout-Pinned 'https://github.com/quickjs-ng/quickjs' $quickjsCommit $quickjs
 & bash ((Join-Path $sdk 'scripts/patch-quickjs.sh') -replace '\\','/') ($quickjs -replace '\\','/')
 if ($LASTEXITCODE -ne 0) { throw 'QuickJS patch failed' }
-$gccDir = 'C:\mingw64\bin'
-$gcc = Join-Path $gccDir 'gcc.exe'
-if (!(Test-Path $gcc)) { throw 'Runner MinGW GCC is missing' }
-$env:PATH = "$gccDir;$env:PATH"
-& $gcc --version
-$target = (& $gcc -dumpmachine | Out-String).Trim()
-if ($target -ne 'x86_64-w64-mingw32') { throw "Unexpected GCC target: $target" }
-$env:VFLAGS = '-cc gcc -gc boehm -d use_bundled_libgc'
+# The current amalgamation enables GNU atomics unconditionally. MSVC must
+# use V's existing libatomic_ops branch instead; this patch affects only this
+# disposable toolchain checkout, never the developer's V installation.
+$patch = Join-Path $root 'desktop/patches/v-windows-msvc-build.patch'
+& git -C $v apply --check $patch
+if ($LASTEXITCODE -ne 0) { throw 'Pinned MSVC build patch no longer applies' }
+& git -C $v apply $patch
+if ($LASTEXITCODE -ne 0) { throw 'MSVC build patch failed' }
+$env:VFLAGS = '-cc msvc -gc boehm'
+# Disable the launcher's legacy compiler retry so errors belong to the pinned V.
+$env:V_MACOS_V3_NO_FALLBACK = '1'
 Push-Location $v
 try {
- & .\makev.bat -gcc --local
+ & .\makev.bat -msvc --local
  if ($LASTEXITCODE -ne 0) { throw 'Native Windows V bootstrap failed' }
- & .\v.exe version
+ $version = (& .\v.exe version | Out-String).Trim()
+ Write-Host $version
+ if (!$version.Contains($lock.V_COMMIT.Substring(0,7))) { throw "Unexpected compiler version: $version" }
  if ($LASTEXITCODE -ne 0) { throw 'Native V unavailable' }
 } finally { Pop-Location }
 $qbuild = Join-Path $toolchain 'quickjs-build'
-& cmake -S $quickjs -B $qbuild -G Ninja "-DCMAKE_C_COMPILER=$gcc" -DCMAKE_BUILD_TYPE=Release -DQJS_BUILD_LIBC=ON -DBUILD_SHARED_LIBS=OFF
+& cmake -S $quickjs -B $qbuild -G 'Visual Studio 17 2022' -A x64 -DQJS_BUILD_LIBC=ON -DBUILD_SHARED_LIBS=OFF
 if ($LASTEXITCODE -ne 0) { throw 'QuickJS configure failed' }
 & cmake --build $qbuild --config Release --target qjs_exe --parallel 2
 if ($LASTEXITCODE -ne 0) { throw 'QuickJS build failed' }
-$qlib = Get-ChildItem $qbuild -Filter libqjs.a -File -Recurse | Select-Object -First 1
+$qlib = Get-ChildItem $qbuild -Filter qjs.lib -File -Recurse | Select-Object -First 1
 $qexe = Get-ChildItem $qbuild -Filter qjs.exe -File -Recurse | Select-Object -First 1
 if (!$qlib -or !$qexe) { throw 'QuickJS output missing' }
 $result = (& $qexe.FullName -e 'print(1 + 1)' | Out-String).Trim()
@@ -56,13 +61,15 @@ $modules = Join-Path $toolchain 'modules'
 & bash ((Join-Path $root 'desktop/prepare-ui2.sh') -replace '\\','/') ((Join-Path $modules 'ui2') -replace '\\','/')
 if ($LASTEXITCODE -ne 0) { throw 'Build-local ui2 staging failed' }
 Add-Content $env:GITHUB_PATH $v
-Add-Content $env:GITHUB_PATH $gccDir
 Add-Content $env:GITHUB_ENV "VJSX_DIR=$sdk"
 Add-Content $env:GITHUB_ENV "VJS_QUICKJS_PATH=$quickjs"
 Add-Content $env:GITHUB_ENV "VJS_QUICKJS_LIB_PATH=$($qlib.FullName)"
 Add-Content $env:GITHUB_ENV "WORKBENCH_WINDOWS_MODULES=$modules"
 Add-Content $env:GITHUB_ENV "WORKBENCH_WINDOWS_SDK_PARENT=$toolchain"
-Add-Content $env:GITHUB_ENV "VFLAGS=-cc gcc -gc boehm -d use_bundled_libgc"
+Add-Content $env:GITHUB_ENV "VFLAGS=-cc msvc -gc boehm"
 New-Item -ItemType Directory -Force (Join-Path $root 'desktop/ci/results/windows-build') | Out-Null
 Get-Content (Join-Path $root 'scripts/ci/toolchain.env') | Set-Content (Join-Path $root 'desktop/ci/results/windows-build/toolchain.txt')
 Add-Content (Join-Path $root 'desktop/ci/results/windows-build/toolchain.txt') "QUICKJS_COMMIT=$quickjsCommit"
+Add-Content $env:GITHUB_ENV "V_MACOS_V3_NO_FALLBACK=1"
+Add-Content (Join-Path $root 'desktop/ci/results/windows-build/toolchain.txt') "C_COMPILER=MSVC"
+Add-Content (Join-Path $root 'desktop/ci/results/windows-build/toolchain.txt') "V_BUILD_PATCH=desktop/patches/v-windows-msvc-build.patch"

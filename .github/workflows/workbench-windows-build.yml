@@ -1,11 +1,9 @@
-name: Workbench Windows Build Probe
+name: Workbench Windows MSVC Build Probe
 
 on:
   workflow_dispatch:
   push:
     branches: ['codex/windows-workbench-*']
-    paths: ['desktop/**', 'src/**', 'scripts/**', '.github/workflows/workbench-windows-build.yml']
-  pull_request:
     paths: ['desktop/**', 'src/**', 'scripts/**', '.github/workflows/workbench-windows-build.yml']
 
 permissions:
@@ -22,6 +20,19 @@ jobs:
       - name: Preserve LF for reproducible dependency patches
         run: git config --global core.autocrlf false
       - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756
+        with:
+          arch: x64
+      - name: Prepare OpenSSL for MSVC
+        run: |
+          $lib = 'C:\Program Files\OpenSSL\lib\VC\x64\MD'
+          if (!(Test-Path "$lib/libcrypto.lib") -or !(Test-Path "$lib/libssl.lib")) {
+            choco install openssl --version=3.5.4 --allow-downgrade -y --no-progress
+            if ($LASTEXITCODE -ne 0) { throw 'OpenSSL installation failed' }
+          }
+          if (!(Test-Path "$lib/libcrypto.lib") -or !(Test-Path "$lib/libssl.lib")) { throw 'OpenSSL import libraries missing' }
+          Copy-Item "$lib/libcrypto.lib" "$lib/crypto.lib"
+          Add-Content $env:GITHUB_PATH 'C:\Program Files\OpenSSL\bin'
       - name: Prepare pinned native V, QuickJS and build-local ui2
         id: toolchain
         run: |
@@ -34,7 +45,7 @@ jobs:
         run: |
           $output = "$PWD/desktop/ci/results/windows-build"
           $path = "$env:WORKBENCH_WINDOWS_MODULES|@vlib|@vmodules"
-          & v -prod -cc gcc -gc boehm -d use_bundled_libgc -w -enable-globals -path $path `
+          & v -prod -new-compiler -cc msvc -gc boehm -w -enable-globals -path $path `
             -o "$output/ui2-windows-probe.exe" desktop/ci/windows_ui_probe.v 2>&1 | Tee-Object "$output/ui2-build.log"
           if ($LASTEXITCODE -ne 0) { throw 'ui2 native build failed' }
           $env:VHTTPD_WINDOWS_PROBE_READY = "$output/native-window-ready.txt"
@@ -54,13 +65,13 @@ jobs:
         run: |
           $output = "$PWD/desktop/ci/results/windows-build"
           $path = "$PWD/desktop|$PWD/src|$env:WORKBENCH_WINDOWS_MODULES|$env:WORKBENCH_WINDOWS_SDK_PARENT|$PWD/.deps|@vlib|@vmodules"
-          & v -prod -cc gcc -gc boehm -d use_bundled_libgc -d link_quickjs -w -enable-globals `
+          & v -prod -new-compiler -cc msvc -gc boehm -d link_quickjs -w -enable-globals `
             -path $path -o "$output/vhttpd-workbench.exe" desktop 2>&1 | Tee-Object "$output/desktop-build.log"
           if ($LASTEXITCODE -ne 0) { throw 'Full Desktop is not yet Windows-compatible; see desktop-build.log' }
       - name: Record supported scope and enforce result
         if: ${{ !cancelled() && steps.toolchain.outcome == 'success' }}
         run: |
-          $result = @{ ui2 = '${{ steps.ui2.outcome }}'; desktop = '${{ steps.desktop.outcome }}';
+          $result = @{ compiler = 'MSVC'; ui2 = '${{ steps.ui2.outcome }}'; desktop = '${{ steps.desktop.outcome }}';
             scope = 'Build probe only; no Windows vhttpd runtime bundled, SSH password and lifecycle not accepted, no release published';
             commit = '${{ github.sha }}' }
           $result | ConvertTo-Json | Set-Content desktop/ci/results/windows-build/result.json
