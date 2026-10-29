@@ -29,6 +29,11 @@ static LRESULT CALLBACK vhttpd_workbench_size_proc(HWND hwnd, UINT message, WPAR
 }
 static void vhttpd_workbench_configure_windows(void *window) {
     if (!window) return;
+    // All painted hit-test overlays have been replaced by native button
+    // surfaces/popups. Present container backgrounds and transparent labels
+    // as one composed frame rather than exposing partially painted siblings.
+    LONG_PTR extended = GetWindowLongPtrW((HWND)window,GWL_EXSTYLE);
+    SetWindowLongPtrW((HWND)window,GWL_EXSTYLE,extended | WS_EX_COMPOSITED);
     SetWindowSubclass((HWND)window,vhttpd_workbench_size_proc,73,0);
     MONITORINFO monitor = {sizeof(MONITORINFO)};
     RECT frame;
@@ -51,6 +56,7 @@ static void vhttpd_workbench_configure_windows(void *window) {
     HICON small = (HICON)LoadImageW(module,MAKEINTRESOURCEW(1),IMAGE_ICON,GetSystemMetrics(SM_CXSMICON),GetSystemMetrics(SM_CYSMICON),LR_SHARED);
     if(large) SendMessageW((HWND)window,WM_SETICON,ICON_BIG,(LPARAM)large);
     if(small) SendMessageW((HWND)window,WM_SETICON,ICON_SMALL,(LPARAM)small);
+    RedrawWindow((HWND)window,NULL,NULL,RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_FRAME | RDW_UPDATENOW | RDW_ERASE);
 }
 
 // Native popups own dismissal, keyboard navigation and accessibility without

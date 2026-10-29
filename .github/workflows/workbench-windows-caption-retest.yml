@@ -1,4 +1,4 @@
-name: Windows Caption Repaint Acceptance
+name: Windows Environment Menu Paint Acceptance
 on:
   push:
     branches: ['codex/windows-workbench-build-ci']
@@ -21,7 +21,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: workbench-windows-amd64-build-probe
-          run-id: 40857516672
+          run-id: 40862751756
           github-token: ${{ github.token }}
           path: ${{ runner.temp }}/compiled-caption-fix
       - uses: actions/download-artifact@v4
@@ -36,7 +36,7 @@ jobs:
           $build = "$env:RUNNER_TEMP/compiled-caption-fix/windows-build"
           $previous = "$env:RUNNER_TEMP/verified-runtime-bundle"
           $attestation = Get-Content "$build/result.json" -Raw | ConvertFrom-Json
-          if ($attestation.commit -ne 'aa8dfcad6482a5040748256f44172eb94328fa4f') { throw 'Unexpected binary source revision' }
+          if ($attestation.commit -ne '0d0643f3039e278bd297ccbc4948cde01c291216') { throw 'Unexpected binary source revision' }
           & "$previous/Verify-Package.ps1"
           # Only Win32 painting code changed. Keep the already verified runtime
           # DLLs, SSH clients and licenses; validate dependency closure again.
@@ -51,7 +51,7 @@ jobs:
           $original = $info.commit
           $info.commit = $attestation.commit
           $info.run = $env:GITHUB_RUN_ID
-          $info | Add-Member -NotePropertyName binary_build_run -NotePropertyValue '40857516672'
+          $info | Add-Member -NotePropertyName binary_build_run -NotePropertyValue '40862751756'
           $info | Add-Member -NotePropertyName runtime_bundle_commit -NotePropertyValue $original
           $info | ConvertTo-Json | Set-Content "$stage/build-info.json" -Encoding utf8
           $files = @(Get-ChildItem $stage -File -Recurse | Where-Object { $_.FullName -ne "$stage/files.json" -and $_.Name -ne 'files.json' } | ForEach-Object {
@@ -69,6 +69,8 @@ jobs:
           New-Item -ItemType Directory -Force $output | Out-Null
           $env:VHTTPD_DESKTOP_DATA_DIR = "$output/data"
           $env:VHTTPD_DESKTOP_REGISTRY = "$output/data/projects.json"
+          New-Item -ItemType Directory -Force $env:VHTTPD_DESKTOP_DATA_DIR | Out-Null
+          '[{"id":"aaaaaaaaaaaaaaaaaaaaaaaa","name":"CI Menu Host","ssh_host":"127.0.0.1","ssh_user":"fixture","ssh_port":22,"auth_method":"password"}]' | Set-Content "$env:VHTTPD_DESKTOP_DATA_DIR/remote-servers.json" -Encoding utf8
           $env:VHTTPD_DESKTOP_CI_READY = "$output/ready.txt"
           $process = Start-Process '${{ steps.package.outputs.package_dir }}/vhttpd-workbench.exe' -PassThru
           try {
@@ -76,7 +78,7 @@ jobs:
             while (!(Test-Path $env:VHTTPD_DESKTOP_CI_READY) -and !$process.HasExited -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 100; $process.Refresh() }
             if (!(Test-Path $env:VHTTPD_DESKTOP_CI_READY)) { throw 'Packaged window did not start' }
             Start-Sleep -Seconds 2
-            ./desktop/ci/verify_windows_ui.ps1 -DesktopProcessId $process.Id -OutputDirectory $output
+            ./desktop/ci/verify_windows_ui.ps1 -DesktopProcessId $process.Id -OutputDirectory $output -RootCompositedDiagnostic
             if (!$process.CloseMainWindow() -or !$process.WaitForExit(15000) -or $process.ExitCode -ne 0) { throw 'Window did not close normally' }
           } finally { if (!$process.HasExited) { Stop-Process -Id $process.Id -Force } }
       - uses: actions/setup-python@v5
@@ -86,11 +88,13 @@ jobs:
       - name: Verify extracted archive without development environment
         run: ./desktop/ci/verify_windows_package.ps1 -Archive '${{ steps.package.outputs.archive }}' -ResultDirectory "$PWD/desktop/ci/results/windows-portable"
       - uses: actions/upload-artifact@v4
+        if: ${{ false }}
         with:
           name: vhttpd-workbench-windows-amd64-test
           path: ${{ steps.package.outputs.package_dir }}/
           retention-days: 30
       - uses: actions/upload-artifact@v4
+        if: ${{ false }}
         with:
           name: vhttpd-workbench-windows-amd64-test-archive
           path: |

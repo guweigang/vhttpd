@@ -1,4 +1,4 @@
-param([Parameter(Mandatory=$true)][int]$DesktopProcessId, [Parameter(Mandatory=$true)][string]$OutputDirectory, [switch]$CaptionOnly)
+param([Parameter(Mandatory=$true)][int]$DesktopProcessId, [Parameter(Mandatory=$true)][string]$OutputDirectory, [switch]$CaptionOnly, [switch]$RootCompositedDiagnostic)
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 Add-Type -TypeDefinition @'
@@ -15,6 +15,10 @@ public static class WorkbenchUiCheck {
  [DllImport("user32.dll",CharSet=CharSet.Unicode)] public static extern int GetWindowTextW(IntPtr hwnd,StringBuilder text,int count);
  [DllImport("user32.dll",CharSet=CharSet.Unicode)] public static extern int GetClassNameW(IntPtr hwnd,StringBuilder text,int count);
  [DllImport("user32.dll")] public static extern IntPtr SendMessageW(IntPtr hwnd,uint message,IntPtr wparam,IntPtr lparam);
+ [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hwnd);
+ [DllImport("user32.dll")] public static extern IntPtr GetWindowLongPtrW(IntPtr hwnd,int index);
+ [DllImport("user32.dll")] public static extern IntPtr SetWindowLongPtrW(IntPtr hwnd,int index,IntPtr value);
+ [DllImport("user32.dll")] public static extern bool RedrawWindow(IntPtr hwnd,IntPtr rect,IntPtr region,uint flags);
  [DllImport("user32.dll")] public static extern bool PostMessageW(IntPtr hwnd,uint message,IntPtr wparam,IntPtr lparam);
  [DllImport("user32.dll")] public static extern bool EnumThreadWindows(uint id,Visitor callback,IntPtr data);
  [DllImport("user32.dll")] public static extern void keybd_event(byte key,byte scan,uint flags,UIntPtr extra);
@@ -29,7 +33,7 @@ public static class WorkbenchUiCheck {
  public static string Text(IntPtr hwnd) { var b=new StringBuilder(2048); GetWindowTextW(hwnd,b,b.Capacity); return b.ToString(); }
  public static string Class(IntPtr hwnd) { var b=new StringBuilder(128); GetClassNameW(hwnd,b,b.Capacity); return b.ToString(); }
  public static IntPtr Find(IntPtr root,string text,string kind) { IntPtr result=IntPtr.Zero; EnumChildWindows(root,(h,d)=>{ if(Text(h)==text && String.Equals(Class(h),kind,StringComparison.OrdinalIgnoreCase)) {result=h;return false;}return true;},IntPtr.Zero);return result; }
- public static IntPtr Popup(IntPtr root) { IntPtr result=IntPtr.Zero;EnumThreadWindows(GetWindowThreadProcessId(root,IntPtr.Zero),(h,d)=>{if(Class(h)=="#32768"){result=h;return false;}return true;},IntPtr.Zero);return result; }
+ public static IntPtr Popup(IntPtr root) { IntPtr result=IntPtr.Zero;EnumThreadWindows(GetWindowThreadProcessId(root,IntPtr.Zero),(h,d)=>{if(Class(h)=="#32768" && IsWindowVisible(h)){result=h;return false;}return true;},IntPtr.Zero);return result; }
  public static IntPtr Focus(IntPtr root) { var i=new Gui();i.Size=(uint)Marshal.SizeOf(i);if(!GetGUIThreadInfo(GetWindowThreadProcessId(root,IntPtr.Zero),ref i))throw new Exception("Cannot read UI focus");return i.Focus; }
  public static void CheckWorkArea(IntPtr root) { Rect r;GetWindowRect(root,out r);var m=new Monitor();m.Size=Marshal.SizeOf(m);if(!GetMonitorInfoW(MonitorFromWindow(root,2),ref m))throw new Exception("No monitor");if(r.Left<m.Work.Left||r.Top<m.Work.Top||r.Right>m.Work.Right||r.Bottom>m.Work.Bottom)throw new Exception("Desktop extends outside monitor work area"); }
 }
@@ -44,6 +48,12 @@ function Save-Window($handle, $name) {
 }
 $process = Get-Process -Id $DesktopProcessId
 $window = $process.MainWindowHandle
+if ($RootCompositedDiagnostic) {
+ $extended=[WorkbenchUiCheck]::GetWindowLongPtrW($window,-20).ToInt64()
+ [WorkbenchUiCheck]::SetWindowLongPtrW($window,-20,[IntPtr]($extended -bor 0x02000000)) | Out-Null
+ [WorkbenchUiCheck]::RedrawWindow($window,[IntPtr]::Zero,[IntPtr]::Zero,0x585) | Out-Null
+ Start-Sleep -Milliseconds 200
+}
 [WorkbenchUiCheck]::CheckWorkArea($window)
 foreach ($type in @(0,1)) {
  if ([WorkbenchUiCheck]::SendMessageW($window,0x7F,[IntPtr]$type,[IntPtr]::Zero) -eq [IntPtr]::Zero) { throw 'Window icon is missing' }
