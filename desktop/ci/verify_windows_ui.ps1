@@ -22,7 +22,7 @@ public static class WorkbenchUiCheck {
  [DllImport("user32.dll",CharSet=CharSet.Unicode)] public static extern bool GetMonitorInfoW(IntPtr monitor,ref Monitor info);
  public static string Text(IntPtr hwnd) { var b=new StringBuilder(2048); GetWindowTextW(hwnd,b,b.Capacity); return b.ToString(); }
  public static string Class(IntPtr hwnd) { var b=new StringBuilder(128); GetClassNameW(hwnd,b,b.Capacity); return b.ToString(); }
- public static IntPtr Find(IntPtr root,string text,string kind) { IntPtr result=IntPtr.Zero; EnumChildWindows(root,(h,d)=>{ if(Text(h)==text && Class(h)==kind) {result=h;return false;}return true;},IntPtr.Zero);return result; }
+ public static IntPtr Find(IntPtr root,string text,string kind) { IntPtr result=IntPtr.Zero; EnumChildWindows(root,(h,d)=>{ if(Text(h)==text && String.Equals(Class(h),kind,StringComparison.OrdinalIgnoreCase)) {result=h;return false;}return true;},IntPtr.Zero);return result; }
  public static IntPtr Focus(IntPtr root) { var i=new Gui();i.Size=(uint)Marshal.SizeOf(i);if(!GetGUIThreadInfo(GetWindowThreadProcessId(root,IntPtr.Zero),ref i))throw new Exception("Cannot read UI focus");return i.Focus; }
  public static void CheckWorkArea(IntPtr root) { Rect r;GetWindowRect(root,out r);var m=new Monitor();m.Size=Marshal.SizeOf(m);if(!GetMonitorInfoW(MonitorFromWindow(root,2),ref m))throw new Exception("No monitor");if(r.Left<m.Work.Left||r.Top<m.Work.Top||r.Right>m.Work.Right||r.Bottom>m.Work.Bottom)throw new Exception("Desktop extends outside monitor work area"); }
 }
@@ -41,7 +41,7 @@ $window = $process.MainWindowHandle
 foreach ($type in @(0,1)) {
  if ([WorkbenchUiCheck]::SendMessageW($window,0x7F,[IntPtr]$type,[IntPtr]::Zero) -eq [IntPtr]::Zero) { throw 'Window icon is missing' }
 }
-$create = [WorkbenchUiCheck]::Find($window,'新建 vjsx 项目','UI2View')
+$create = [WorkbenchUiCheck]::Find($window,'新建 vjsx 项目','UI2Container')
 if ($create -eq [IntPtr]::Zero) { throw 'Accessible create-project surface missing' }
 $title = [WorkbenchUiCheck]::Find($window,'还没有项目','Static')
 if ($title -eq [IntPtr]::Zero) { throw 'Empty-project title missing' }
