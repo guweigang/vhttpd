@@ -41,6 +41,7 @@ fn workbench_key(raw_key string) {
 	$if macos { if raw_key == 'escape' && C.vhttpd_workbench_menu_tracking() != 0 { return } }
 	key := if os.user_os() != 'macos' { raw_key.replace('ctrl+', 'cmd+') } else { raw_key }
 	mut app := unsafe { workshop }
+	if route_workbench_menu_key(key) { ui2.consume_key(); return }
 	if key in ['tab', 'shift+tab'] {
 		if ui2.focused_text_area_id() != '' { return }
 		target := next_focus_target(focus_targets(build_window()), ui2.focused_id(), key == 'shift+tab') or { return }
@@ -51,9 +52,6 @@ fn workbench_key(raw_key string) {
 		return
 	}
 	match key {
-		'cmd+n' { handle_workbench_menu('menu:new') }
-		'cmd+o' { handle_workbench_menu('menu:import') }
-		'cmd+comma', 'cmd+,' { handle_workbench_menu('menu:runtime') }
 		'cmd+enter', 'cmd+return' { submit_active_form() }
 		'escape' {
 			if app.show_remote && app.show_servers && app.server_snapshot.host_key.id != '' { handle_event('server_disconnect'); return }

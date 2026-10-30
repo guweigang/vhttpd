@@ -17,7 +17,7 @@ fn test_menu_structure_empty_and_local_lifecycle_states() ! {
 	assert menus[1].title == '编辑'
 	assert menus[2].title == '运行'
 	assert fixture_menu_item(menus, 'new').enabled
-	assert fixture_menu_item(menus, 'new').shortcut == ''
+	assert fixture_menu_item(menus, 'new').shortcut == 'cmd+n'
 	for action in ['start', 'stop', 'restart', 'admin', 'folder', 'config_diff', 'history_open'] {
 		assert !fixture_menu_item(menus, action).enabled
 	}
@@ -86,4 +86,30 @@ fn test_environment_project_menu_is_scoped_and_busy_gated() ! {
 	assert !fixture_menu_item(busy_menus, 'remote_select_' + profile_id).enabled
 	assert !fixture_menu_item(busy_menus, 'environment:').enabled
 	assert !fixture_menu_item(busy_menus, 'remote_restart').enabled
+}
+
+fn test_menu_shortcuts_share_the_current_enabled_state() {
+	root := ui2.screen(workbench_paper, [])
+	mut app := Workshop{}
+	menus := app.workbench_menus(root)
+	for key, action in {'cmd+n': 'new', 'cmd+o': 'import', 'cmd+comma': 'runtime'} {
+		item := workbench_menu_key_command(menus, key) or { panic('missing shortcut') }
+		assert item.id == 'menu:' + action
+		assert item.enabled
+	}
+	app.new_project = true
+	blocked := workbench_menu_key_command(app.workbench_menus(root), 'cmd+n') or { panic('disabled shortcut disappeared') }
+	assert !blocked.enabled
+	assert workbench_menu_key_command(menus, 'cmd+shift+n') == none
+	assert workbench_menu_key_command(menus, 'n') == none
+	assert workbench_menu_key_command(menus, 'cmd+r') == none
+	$if macos { assert workbench_menu_key_command(menus, 'ctrl+n') == none }
+	$if !macos {
+		item := workbench_menu_key_command(menus, 'ctrl+n') or { panic('Control shortcut missing') }
+		assert item.id == 'menu:new'
+	}
+	for row in edit_menu_rows_for(ui2.Element{...input('secret', 'fixture', '', 0, 0, 200, true), secure: true}, true) {
+		if row.id in ['menu:edit_cut', 'menu:edit_copy'] { assert !row.enabled }
+		assert row.shortcut != ''
+	}
 }

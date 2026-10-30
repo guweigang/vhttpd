@@ -32,6 +32,11 @@ function Menu-Invoke($menu,$title) {
  [WorkbenchUiCheck]::PostMessageW($window,0x111,[IntPtr]$id,[IntPtr]::Zero) | Out-Null
  Start-Sleep -Milliseconds 650
 }
+function Menu-Shortcut([byte]$key) {
+ [WorkbenchUiCheck]::keybd_event(0x11,0,0,[UIntPtr]::Zero)
+ try {Menu-Key $key} finally {[WorkbenchUiCheck]::keybd_event(0x11,0,2,[UIntPtr]::Zero)}
+ Start-Sleep -Milliseconds 500
+}
 $bar=[WorkbenchMenuCheck]::GetMenu($window)
 if ([WorkbenchMenuCheck]::GetMenuItemCount($bar) -ne 6) {throw 'Expected six top-level workbench menus'}
 foreach ($title in @('项目','编辑','运行','环境','查看','帮助')) {Menu-Index $bar $title | Out-Null}
@@ -51,15 +56,19 @@ $id=[WorkbenchMenuCheck]::GetMenuItemID((Menu-At 0),(Menu-Index (Menu-At 0) '新
 [WorkbenchUiCheck]::PostMessageW($window,0x111,[IntPtr]$id,[IntPtr]::Zero) | Out-Null
 Start-Sleep -Milliseconds 300
 if ([WorkbenchMenuCheck]::EditorText($field) -ne 'menu-shortcut-fixture') {throw 'Disabled command bypassed state validation'}
-Menu-Invoke (Menu-At 1) '全选'
+Menu-Shortcut 0x4E
+if ([WorkbenchMenuCheck]::EditorText($field) -ne 'menu-shortcut-fixture') {throw 'Disabled Ctrl+N changed the active form'}
+Menu-Shortcut 0x41
 if (!(Menu-Enabled (Menu-At 1) '复制')) {throw 'Selection did not enable Copy'}
-Menu-Invoke (Menu-At 1) '剪切'
+Menu-Shortcut 0x58
 if ([WorkbenchMenuCheck]::EditorText($field) -ne '') {throw 'Menu Cut did not edit the focused field'}
-Menu-Invoke (Menu-At 1) '粘贴'
+Menu-Shortcut 0x56
 if ([WorkbenchMenuCheck]::EditorText($field) -ne 'menu-shortcut-fixture') {throw 'Menu Paste did not restore fixture text'}
 Menu-Key 0x1B
 Start-Sleep -Milliseconds 500
 if (!(Menu-Enabled (Menu-At 0) '新建项目…')) {throw 'Returning from the form did not re-enable New'}
-Menu-Invoke (Menu-At 0) '新建项目…'
+Menu-Shortcut 0x4E
+$field=[WorkbenchUiCheck]::Focus($window)
+if ([WorkbenchUiCheck]::Class($field) -ne 'Edit' -or (Menu-Enabled (Menu-At 0) '新建项目…')) {throw 'Ctrl+N did not open one active form'}
 Save-Window $window 'menus-new-project'
-@{structure='passed';environment_checkmark='passed';empty_state='passed';native_menu_actions='passed';native_shortcuts='deferred';disabled_dispatch='passed';editing='passed'} | ConvertTo-Json | Set-Content "$OutputDirectory/menu-acceptance.json"
+@{structure='passed';environment_checkmark='passed';empty_state='passed';native_menu_actions='passed';native_shortcuts='passed';disabled_dispatch='passed';editing='passed'} | ConvertTo-Json | Set-Content "$OutputDirectory/menu-acceptance.json"
