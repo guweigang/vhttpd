@@ -29,7 +29,6 @@ public static class WorkbenchUiCheck {
  [DllImport("user32.dll")] public static extern void mouse_event(uint flags,uint x,uint y,uint data,UIntPtr extra);
  [DllImport("user32.dll")] public static extern bool SetCursorPos(int x,int y);
  [DllImport("user32.dll")] public static extern bool UpdateWindow(IntPtr hwnd);
- [DllImport("user32.dll")] public static extern IntPtr SetFocus(IntPtr hwnd);
  [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hwnd,out Rect rect);
  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hwnd,IntPtr id);
  [DllImport("user32.dll")] public static extern bool GetGUIThreadInfo(uint id,ref Gui info);
@@ -194,9 +193,16 @@ Save-Window $window 'environment-local-restored'
 $selector=[WorkbenchUiCheck]::Find($window,'本机 Windows ▾','UI2Container')
 $focusRect=New-Object WorkbenchUiCheck+Rect
 [WorkbenchUiCheck]::GetWindowRect($selector,[ref]$focusRect) | Out-Null
-[WorkbenchUiCheck]::SetFocus($selector) | Out-Null
+# Obtain focus through a real user click, not SetFocus across GUI threads.
+[WorkbenchUiCheck]::SetCursorPos($focusRect.Left+20,$focusRect.Top+15) | Out-Null
+[WorkbenchUiCheck]::mouse_event(2,0,0,0,[UIntPtr]::Zero)
+[WorkbenchUiCheck]::mouse_event(4,0,0,0,[UIntPtr]::Zero)
+$deadline=(Get-Date).AddSeconds(5)
+while ([WorkbenchUiCheck]::Popup($window) -eq [IntPtr]::Zero -and (Get-Date) -lt $deadline) {Start-Sleep -Milliseconds 50}
+if ([WorkbenchUiCheck]::Popup($window) -eq [IntPtr]::Zero) {throw 'Pointer did not open the environment selector'}
+Menu-Key 0x1B
+Wait-Environment '本机 Windows ▾'
 [WorkbenchUiCheck]::UpdateWindow($selector) | Out-Null
-Start-Sleep -Milliseconds 150
 Save-Window $selector 'environment-focus-outline'
 $bitmap=New-Object Drawing.Bitmap ($focusRect.Right-$focusRect.Left),($focusRect.Bottom-$focusRect.Top)
 $graphics=[Drawing.Graphics]::FromImage($bitmap)
