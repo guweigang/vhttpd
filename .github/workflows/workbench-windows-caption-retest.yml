@@ -1,4 +1,4 @@
-name: Windows Environment Menu Paint Acceptance
+name: Windows Bundled CJK Font Acceptance
 on:
   push:
     branches: ['codex/windows-workbench-build-ci']
@@ -21,13 +21,13 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: workbench-windows-amd64-build-probe
-          run-id: 40865264858
+          run-id: 41000007924
           github-token: ${{ github.token }}
           path: ${{ runner.temp }}/compiled-caption-fix
       - uses: actions/download-artifact@v4
         with:
           name: vhttpd-workbench-windows-amd64-test
-          run-id: 40853163884
+          run-id: 40990769694
           github-token: ${{ github.token }}
           path: ${{ runner.temp }}/verified-runtime-bundle
       - name: Package the attested MSVC binary with verified runtime files
@@ -36,9 +36,9 @@ jobs:
           $build = "$env:RUNNER_TEMP/compiled-caption-fix/windows-build"
           $previous = "$env:RUNNER_TEMP/verified-runtime-bundle"
           $attestation = Get-Content "$build/result.json" -Raw | ConvertFrom-Json
-          if ($attestation.commit -ne 'dcb8606d28f198a4200bb24019550fe1bff5eb9d') { throw 'Unexpected binary source revision' }
+          if ($attestation.commit -ne '13f59ef621c71d2cb0945cc02bbfbabb2ade7426') { throw 'Unexpected binary source revision' }
           & "$previous/Verify-Package.ps1"
-          # Only Win32 painting code changed. Keep the already verified runtime
+          # The UI now loads locked, process-private CJK fonts. Keep the already verified runtime
           # DLLs, SSH clients and licenses; validate dependency closure again.
           $name = 'vhttpd-workbench-windows-amd64-test-' + $attestation.commit.Substring(0,12)
           $output = "$PWD/desktop/ci/results/windows-package"
@@ -47,12 +47,14 @@ jobs:
           Copy-Item "$previous/*" $stage -Recurse
           Copy-Item "$build/vhttpd-workbench.exe" "$stage/vhttpd-workbench.exe" -Force
           Copy-Item "$build/vhttpd-ssh-askpass.exe" "$stage/vhttpd-ssh-askpass.exe" -Force
+          Copy-Item "$build/resources/fonts" "$stage/resources/fonts" -Recurse
+          Copy-Item "$PWD/desktop/ci/WINDOWS-TESTING.txt" "$stage/README-Windows.txt" -Force
           $info = Get-Content "$stage/build-info.json" -Raw | ConvertFrom-Json
           $original = $info.commit
           $info.commit = $attestation.commit
           $info.run = $env:GITHUB_RUN_ID
-          $info | Add-Member -NotePropertyName binary_build_run -NotePropertyValue '40865264858'
-          $info | Add-Member -NotePropertyName runtime_bundle_commit -NotePropertyValue $original
+          $info | Add-Member -NotePropertyName binary_build_run -NotePropertyValue '41000007924' -Force
+          $info | Add-Member -NotePropertyName runtime_bundle_commit -NotePropertyValue $original -Force
           $info | ConvertTo-Json | Set-Content "$stage/build-info.json" -Encoding utf8
           $files = @(Get-ChildItem $stage -File -Recurse | Where-Object { $_.FullName -ne "$stage/files.json" -and $_.Name -ne 'files.json' } | ForEach-Object {
             @{path=[IO.Path]::GetRelativePath($stage,$_.FullName).Replace('\','/');sha256=(Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()}
@@ -63,7 +65,7 @@ jobs:
           Compress-Archive $stage $archive
           ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant() + "  $name.zip") | Set-Content "$archive.sha256" -Encoding ascii
           "package_dir=$stage", "archive=$archive" | Add-Content $env:GITHUB_OUTPUT
-      - name: Check pressed caption, release, form focus and Tab
+      - name: Verify bundled CJK faces, forms, native menus and caption stability
         run: |
           $output = "$PWD/desktop/ci/results/caption-retest"
           New-Item -ItemType Directory -Force $output | Out-Null
@@ -78,7 +80,7 @@ jobs:
             while (!(Test-Path $env:VHTTPD_DESKTOP_CI_READY) -and !$process.HasExited -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 100; $process.Refresh() }
             if (!(Test-Path $env:VHTTPD_DESKTOP_CI_READY)) { throw 'Packaged window did not start' }
             Start-Sleep -Seconds 2
-            ./.github/windows_environment_ui_retest.ps1 -DesktopProcessId $process.Id -OutputDirectory $output
+            ./desktop/ci/verify_windows_ui.ps1 -DesktopProcessId $process.Id -OutputDirectory $output
             if (!$process.CloseMainWindow() -or !$process.WaitForExit(15000) -or $process.ExitCode -ne 0) { throw 'Window did not close normally' }
           } finally { if (!$process.HasExited) { Stop-Process -Id $process.Id -Force } }
       - uses: actions/setup-python@v5

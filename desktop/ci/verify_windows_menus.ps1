@@ -6,6 +6,8 @@ using System.Text;
 using System.Runtime.InteropServices;
 public static class WorkbenchMenuCheck {
  [DllImport("user32.dll")] public static extern IntPtr GetMenu(IntPtr hwnd);
+ [DllImport("user32.dll",EntryPoint="SendMessageW",CharSet=CharSet.Unicode)] static extern IntPtr ReadText(IntPtr hwnd,uint message,IntPtr count,StringBuilder text);
+ public static string EditorText(IntPtr hwnd) {var text=new StringBuilder(4096);ReadText(hwnd,0x0D,(IntPtr)text.Capacity,text);return text.ToString();}
  [DllImport("user32.dll")] public static extern IntPtr GetSubMenu(IntPtr menu,int position);
  [DllImport("user32.dll")] public static extern int GetMenuItemCount(IntPtr menu);
  [DllImport("user32.dll")] public static extern uint GetMenuItemID(IntPtr menu,int position);
@@ -48,13 +50,13 @@ try {[WorkbenchUiCheck]::SendMessageW($field,0x0C,[IntPtr]::Zero,$fixture) | Out
 $id=[WorkbenchMenuCheck]::GetMenuItemID((Menu-At 0),(Menu-Index (Menu-At 0) '新建项目…'))
 [WorkbenchUiCheck]::PostMessageW($window,0x111,[IntPtr]$id,[IntPtr]::Zero) | Out-Null
 Start-Sleep -Milliseconds 300
-if ([WorkbenchUiCheck]::Text($field) -ne 'menu-shortcut-fixture') {throw 'Disabled command bypassed state validation'}
+if ([WorkbenchMenuCheck]::EditorText($field) -ne 'menu-shortcut-fixture') {throw 'Disabled command bypassed state validation'}
 Menu-Invoke (Menu-At 1) '全选'
 if (!(Menu-Enabled (Menu-At 1) '复制')) {throw 'Selection did not enable Copy'}
 Menu-Invoke (Menu-At 1) '剪切'
-if ([WorkbenchUiCheck]::Text($field) -ne '') {throw 'Menu Cut did not edit the focused field'}
+if ([WorkbenchMenuCheck]::EditorText($field) -ne '') {throw 'Menu Cut did not edit the focused field'}
 Menu-Invoke (Menu-At 1) '粘贴'
-if ([WorkbenchUiCheck]::Text($field) -ne 'menu-shortcut-fixture') {throw 'Menu Paste did not restore fixture text'}
+if ([WorkbenchMenuCheck]::EditorText($field) -ne 'menu-shortcut-fixture') {throw 'Menu Paste did not restore fixture text'}
 Menu-Key 0x1B
 Start-Sleep -Milliseconds 500
 if (!(Menu-Enabled (Menu-At 0) '新建项目…')) {throw 'Returning from the form did not re-enable New'}
