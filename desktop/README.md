@@ -97,6 +97,9 @@ ui2 固定到 [ui2.commit](./ui2.commit) 中的版本。已有依赖 checkout �
 
 快捷键统一使用菜单中显示的按键：macOS 为 `⌘N` 新建项目、`⌘O` 导入、`⌘,` 管理运行环境；Windows / Linux 对应 `Ctrl+N`、`Ctrl+O`、`Ctrl+,`。`⌘ / Ctrl+X/C/V/A` 作用于当前输入框；密码框禁止复制和剪切。`Tab / Shift+Tab` 切换控件，`⌘ / Ctrl+Return` 提交当前表单，`Esc` 返回或取消。菜单与快捷键共用当前环境、项目和禁用状态；启动、停止、重启暂不绑定快捷键。窗口最小内容尺寸为 760 × 660；较长详情可滚动。实现见[键盘与焦点](./keyboard.v)、[菜单与命令](./menus.v)和[窗口适配](./workbench_window.h)。ui2 依赖源码保持不变。
 
+菜单与键盘的实机验收见[Mac Esc 对照复现与 Linux 快捷键验收](./ci/repro_macos_menu_escape/README.md)。当前 macOS 27.0.1 环境中，原生菜单展开时 Esc 仍未通过；完全不使用 ui2 的 AppKit 对照程序也复现菜单无法关闭，尚不能归因于 ui2。请先用鼠标关闭菜单，再取消表单。
+
+
 [桌面交互验收记录](./ci/results/desktop-ux-20261025/verification.json)保存本机生产构建实际打开、Tab/Shift+Tab、密码框顺序、禁用按钮跳过、Return 校验、Space 操作与 Esc 返回的结果，以及安装包完整主流程回归。验收使用独立数据目录和虚构服务器，未连接用户实际服务器。紧凑布局的边界测试通过；拖动缩放到原生最小尺寸没有取得可确认的自动化证据，不把它算作已通过的手动缩放验收。本轮未触发 GitHub CI，也未将本机 GUI 结果扩展为 macOS 15/26 目标系统的 GUI 验收。
 
 ## 远端服务器与运行环境
