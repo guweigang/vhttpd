@@ -18,7 +18,6 @@ websocket_dispatch = true
 [adapters.paseo]
 kind = "http-handler"
 engine = "engine:paseo"
-options.debug = false
 
 [policies.concurrency.paseo_websocket]
 queue_timeout_ms = 30000
