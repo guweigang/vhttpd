@@ -70,9 +70,14 @@ OrbStack `ubuntu` VM：Ubuntu 26.04 LTS / aarch64，Xvfb + Openbox + x11vnc + no
   不是只验证 V 函数或菜单数据。
 
 已验证：Ctrl+N 新建、禁用时再次 Ctrl+N 保留测试值、Ctrl+O 文件选择及取消、
-Ctrl+, 运行环境、Ctrl+A 全选、Ctrl+X 剪切、Ctrl+V 恢复、Tab 切换输入框。
+Ctrl+, 运行环境、Ctrl+A 全选、Ctrl+X 剪切、Ctrl+C 复制、Ctrl+V 恢复、Tab 切换输入框。
+复制验收使用 `z → 复制 → 替换为 b → 粘贴得到 bz`，确认使用 Linux 原生剪贴板，
+而非浏览器自动化工具的虚拟剪贴板。
 展开 Project 后第一次 Esc 只关闭菜单，第二次 Esc 才取消表单。
 
 补查发现并在宿主修复：新表单渲染前调用 ui2.focus 会被立即渲染后端忽略。
 宿主保留尚未完成的表单聚焦请求，在后续 UI 渲染帧检查目标仍在当前页面后重试，
 成功后立即清除；不修改 ui2.focus，也不从后台线程操纵焦点。
+
+修复后的 Linux 完整 Desktop 构建通过；Mac 上 `desktop/menus_test.v` 编译并执行通过。
+两个 Mac 最小复现应用均由 `build.sh` 成功构建。当前 `.deps/ui2` 保持干净。
