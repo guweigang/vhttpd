@@ -1054,3 +1054,4 @@ fn workbench_bounds() ui2.Rect {
  $if windows { scale := windows_display_scale(); return ui2.rect(0,0,b.width/scale,b.height/scale) }
  return b
 }
+fn (mut app Workshop) close_auxiliary_project_views() {}

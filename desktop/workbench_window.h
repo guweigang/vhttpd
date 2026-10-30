@@ -29,3 +29,7 @@ static void vhttpd_workbench_configure_app_menu(void) {
         break;
     }
 }
+
+static int vhttpd_workbench_menu_tracking(void) {
+    return [[[NSRunLoop currentRunLoop] currentMode] isEqualToString:NSEventTrackingRunLoopMode];
+}

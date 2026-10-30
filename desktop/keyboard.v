@@ -38,6 +38,7 @@ fn next_focus_target(targets []FocusTarget, current string, reverse bool) ?Focus
 }
 
 fn workbench_key(raw_key string) {
+	$if macos { if raw_key == 'escape' && C.vhttpd_workbench_menu_tracking() != 0 { return } }
 	key := if os.user_os() != 'macos' { raw_key.replace('ctrl+', 'cmd+') } else { raw_key }
 	mut app := unsafe { workshop }
 	if key in ['tab', 'shift+tab'] {
@@ -69,6 +70,7 @@ fn workbench_key(raw_key string) {
 // NSTextField handles Escape itself unless it is consumed before the field
 // editor. Tab keeps using ui2's text-command hook; editing keys remain native.
 fn workbench_physical_key(event ui2.KeyEvent) {
+	$if macos { if event.code == .escape && C.vhttpd_workbench_menu_tracking() != 0 { return } }
 	mut app := unsafe { workshop }
 	if app.environment_menu.open {
 		if step := ui2.dropdown_menu_key(app.environment_menu_items(), app.environment_menu, event) {

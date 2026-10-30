@@ -8,7 +8,7 @@ fn menu_text_has_selection() bool {
 	window := macos.Id(ui2.native_window_handle())
 	if window == unsafe { nil } { return false }
 	responder := macos.msg_id(window, 'firstResponder')
-	if responder == unsafe { nil } { return false }
+	if responder == unsafe { nil } || !macos.msg_bool_id(responder, 'respondsToSelector:', macos.Id(voidptr(macos.sel('selectedRange')))) { return false }
 	return macos.msg_range(responder, 'selectedRange').length > 0
 }
 
@@ -19,6 +19,7 @@ fn menu_text_edit(action string) {
 }
 
 fn C.vhttpd_workbench_configure_app_menu()
+fn C.vhttpd_workbench_menu_tracking() int
 
 fn configure_platform_menus() { C.vhttpd_workbench_configure_app_menu() }
 

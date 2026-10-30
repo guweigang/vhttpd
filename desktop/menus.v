@@ -139,8 +139,7 @@ fn (mut app Workshop) menu_overview() {
 	app.show_runtime = false
 	app.show_deployment = false
 	app.show_shared_relays = false
-	app.show_takeover = false
-	app.show_relay_monitor = false
+	app.close_auxiliary_project_views()
 	app.show_servers = false
 	app.show_remote = app.environment_id != ''
 	app.remote_edit_connection = false
