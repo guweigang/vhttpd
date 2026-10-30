@@ -81,3 +81,10 @@ Ctrl+, 运行环境、Ctrl+A 全选、Ctrl+X 剪切、Ctrl+C 复制、Ctrl+V 恢
 
 修复后的 Linux 完整 Desktop 构建通过；Mac 上 `desktop/menus_test.v` 编译并执行通过。
 两个 Mac 最小复现应用均由 `build.sh` 成功构建。当前 `.deps/ui2` 保持干净。
+
+### 反向 Tab 的传输对照
+
+自动化直接发送 Shift+Tab 时，临时 X11 专用窗口记录到：Shift 按下 → Shift 松开 →
+Tab 按下（`state=0`）→ Shift 按下 → Tab 松开（`ISO_Left_Tab`）。
+也就是 Tab 按下时没有 Shift 修饰键，不能将该次自动化观察归为宿主反向遍历失败。
+该探针只接收自身窗口的测试按键，不监听其他窗口；验收后关闭。
