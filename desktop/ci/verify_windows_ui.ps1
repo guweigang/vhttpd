@@ -213,7 +213,7 @@ try {
   $run=0
   for ($x=12;$x -lt $bitmap.Width-12;$x++) {
    $c=$bitmap.GetPixel($x,$y)
-   if ($c.B -gt 180 -and $c.R -lt 100 -and $c.G -gt 50 -and $c.G -lt 160) {$run++;if ($run -gt $longest) {$longest=$run}} else {$run=0}
+   if ($c.B -ge 160 -and $c.R -lt 100 -and $c.G -ge 40 -and $c.G -lt 160) {$run++;if ($run -gt $longest) {$longest=$run}} else {$run=0}
   }
  }
  if ($longest -lt ($bitmap.Width-24)*0.85) {throw 'Environment focus outline is dotted or missing'}
