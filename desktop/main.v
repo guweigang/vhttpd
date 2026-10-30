@@ -408,6 +408,7 @@ fn (mut app Workshop) launch_with_browser(open_browser bool) {
 }
 
 fn handle_event(event string) {
+	$if windows { if handle_windows_field_event(event) { return } }
 	mut app := unsafe { workshop }
 	if event == 'form_submit' { submit_active_form(); return }
 	defer {

@@ -15,6 +15,25 @@ static double vhttpd_workbench_windows_scale(void) {
     return scale > 0 ? scale : 1.0;
 }
 
+// Match ui2's 10.5pt (=14 logical px) body font and its native DPI rounding.
+static double vhttpd_workbench_field_line_height(void) {
+    static double cached = 0;
+    if (cached > 0) return cached;
+    HDC dc = GetDC(NULL);
+    if (!dc) return 18;
+    int dpi = GetDeviceCaps(dc, LOGPIXELSY);
+    HFONT font = CreateFontW(-MulDiv(105,dpi,720),0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,
+        DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,
+        DEFAULT_PITCH | FF_DONTCARE,L"Microsoft YaHei UI");
+    HGDIOBJ previous = font ? SelectObject(dc,font) : NULL;
+    TEXTMETRICW metrics;
+    cached = GetTextMetricsW(dc,&metrics) ? (metrics.tmHeight + 2) * 96.0 / dpi : 18;
+    if (previous) SelectObject(dc,previous);
+    if (font) DeleteObject(font);
+    ReleaseDC(NULL,dc);
+    return cached;
+}
+
 static LRESULT CALLBACK vhttpd_workbench_size_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam, UINT_PTR id, DWORD_PTR data) {
     if (message == WM_GETMINMAXINFO) {
         double scale = vhttpd_workbench_windows_scale();

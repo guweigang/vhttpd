@@ -30,12 +30,14 @@ public static class WorkbenchUiCheck {
  [DllImport("user32.dll")] public static extern bool SetCursorPos(int x,int y);
  [DllImport("user32.dll")] public static extern bool UpdateWindow(IntPtr hwnd);
  [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hwnd,out Rect rect);
+ [DllImport("user32.dll")] public static extern IntPtr GetParent(IntPtr hwnd);
  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hwnd,IntPtr id);
  [DllImport("user32.dll")] public static extern bool GetGUIThreadInfo(uint id,ref Gui info);
  [DllImport("user32.dll")] public static extern IntPtr MonitorFromWindow(IntPtr hwnd,uint flags);
  [DllImport("user32.dll",CharSet=CharSet.Unicode)] public static extern bool GetMonitorInfoW(IntPtr monitor,ref Monitor info);
  public static string Text(IntPtr hwnd) { var b=new StringBuilder(2048); GetWindowTextW(hwnd,b,b.Capacity); return b.ToString(); }
  public static string Class(IntPtr hwnd) { var b=new StringBuilder(128); GetClassNameW(hwnd,b,b.Capacity); return b.ToString(); }
+ public static IntPtr[] Children(IntPtr root) {var items=new List<IntPtr>();EnumChildWindows(root,(h,d)=>{items.Add(h);return true;},IntPtr.Zero);return items.ToArray();}
  public static IntPtr Find(IntPtr root,string text,string kind) { IntPtr result=IntPtr.Zero; EnumChildWindows(root,(h,d)=>{ if(Text(h)==text && String.Equals(Class(h),kind,StringComparison.OrdinalIgnoreCase)) {result=h;return false;}return true;},IntPtr.Zero);return result; }
  public static IntPtr Popup(IntPtr root) { IntPtr result=IntPtr.Zero;EnumThreadWindows(GetWindowThreadProcessId(root,IntPtr.Zero),(h,d)=>{if(Class(h)=="#32768" && IsWindowVisible(h)){result=h;return false;}return true;},IntPtr.Zero);return result; }
  public static IntPtr Focus(IntPtr root) { var i=new Gui();i.Size=(uint)Marshal.SizeOf(i);if(!GetGUIThreadInfo(GetWindowThreadProcessId(root,IntPtr.Zero),ref i))throw new Exception("Cannot read UI focus");return i.Focus; }
@@ -278,10 +280,67 @@ $first = [WorkbenchUiCheck]::Focus($window)
 if ($first -eq [IntPtr]::Zero -or [WorkbenchUiCheck]::Class($first) -ne 'Edit') { throw 'New-project form did not focus its first input' }
 if (([WorkbenchUiCheck]::GetWindowLongPtrW($first,-20).ToInt64() -band 0x200) -ne 0) {throw 'Input has an extra native client-edge border'}
 if (([WorkbenchUiCheck]::GetWindowLongPtrW($first,-16).ToInt64() -band 0x800000) -ne 0) {throw 'Input has an extra native rectangular border'}
-Save-Window $first 'input-single-rounded-border'
+Save-Window ([WorkbenchUiCheck]::GetParent($first)) 'input-single-rounded-border'
 [WorkbenchUiCheck]::SendMessageW($first,0x100,[IntPtr]9,[IntPtr]::Zero) | Out-Null
 Start-Sleep -Milliseconds 300
 $next = [WorkbenchUiCheck]::Focus($window)
 if ($next -eq $first -or [WorkbenchUiCheck]::Class($next) -ne 'Edit') { throw 'Tab did not advance to the next form input' }
 Save-Window $window 'desktop-new-project'
 @{ single_input_border='passed'; solid_focus_outline='passed'; work_area='passed'; title_font_bounds='passed'; window_icons='passed'; create_button='passed'; initial_form_focus='passed'; tab_navigation='passed'; pressed_caption_frames='passed' } | ConvertTo-Json | Set-Content "$OutputDirectory/ui-acceptance.json"
+
+function Invoke-WorkbenchButton($title) {
+ $button=[WorkbenchUiCheck]::Find($window,$title,'UI2Container')
+ if ($button -eq [IntPtr]::Zero) {throw "Button unavailable: $title"}
+ [WorkbenchUiCheck]::PostMessageW($button,0xF5,[IntPtr]::Zero,[IntPtr]::Zero) | Out-Null
+ Start-Sleep -Milliseconds 500
+}
+$script:formChecks=@()
+function Assert-FormLayout($page,[int]$minimum) {
+ $count=0
+ foreach ($field in [WorkbenchUiCheck]::Children($window)) {
+  if ([WorkbenchUiCheck]::Class($field) -ne 'Edit' -or ![WorkbenchUiCheck]::IsWindowVisible($field)) {continue}
+  if (([WorkbenchUiCheck]::GetWindowLongPtrW($field,-16).ToInt64() -band 4) -ne 0) {continue} # multiline logs stay top aligned
+  $frame=[WorkbenchUiCheck]::GetParent($field)
+  if ([WorkbenchUiCheck]::Class($frame) -ne 'UI2Container') {throw "Unframed input on $page"}
+  $inner=New-Object WorkbenchUiCheck+Rect; $outer=New-Object WorkbenchUiCheck+Rect
+  [WorkbenchUiCheck]::GetWindowRect($field,[ref]$inner) | Out-Null
+  [WorkbenchUiCheck]::GetWindowRect($frame,[ref]$outer) | Out-Null
+  $top=$inner.Top-$outer.Top; $bottom=$outer.Bottom-$inner.Bottom
+  if ([Math]::Abs($top-$bottom) -gt 1 -or $top -lt 4) {throw "Input text is not vertically centred on $page"}
+  if (($inner.Left-$outer.Left) -ne 10 -or ($outer.Right-$inner.Right) -ne 10) {throw "Input horizontal padding is inconsistent on $page"}
+  if (($outer.Bottom-$outer.Top) -ne 36) {throw "Input control height differs on $page"}
+  if (([WorkbenchUiCheck]::GetWindowLongPtrW($field,-20).ToInt64() -band 0x200) -ne 0) {throw 'Duplicate native input edge'}
+  $fontHandle=[WorkbenchUiCheck]::SendMessageW($field,0x31,[IntPtr]::Zero,[IntPtr]::Zero)
+  $font=[Drawing.Font]::FromHfont($fontHandle)
+  try {
+   if ([Math]::Abs($font.SizeInPoints-10.5) -gt 0.3) {throw "Input font differs on $page"}
+   if ($font.GetHeight() -gt ($inner.Bottom-$inner.Top)+2) {throw "Native input font is clipped on $page"}
+  } finally {$font.Dispose()}
+  $count++
+ }
+ if ($count -lt $minimum) {throw "Too few input fields inspected on $page ($count)"}
+ Save-Window $window ("form-"+$page)
+ $script:formChecks+=@{page=$page;inputs=$count;vertical_alignment='passed';font='passed';padding='passed'}
+}
+Assert-FormLayout 'new-project' 2
+# Clicking the padding around the native editor must focus the field too.
+$frame=[WorkbenchUiCheck]::GetParent($first)
+$paddingPoint=[IntPtr]((3 -shl 16) -bor 3)
+[WorkbenchUiCheck]::SendMessageW($frame,0x201,[IntPtr]1,$paddingPoint) | Out-Null
+[WorkbenchUiCheck]::SendMessageW($frame,0x202,[IntPtr]::Zero,$paddingPoint) | Out-Null
+Start-Sleep -Milliseconds 200
+if ([WorkbenchUiCheck]::Focus($window) -ne $first) {throw 'Clicking input padding did not focus the editor'}
+Invoke-WorkbenchButton '服务器与实例'
+Invoke-WorkbenchButton '+ 添加服务器'
+Assert-FormLayout 'ssh-key' 4
+Invoke-WorkbenchButton '密码'
+Assert-FormLayout 'ssh-password' 5
+# Only verify native ES_PASSWORD; never enter or capture a user credential.
+$secure=@([WorkbenchUiCheck]::Children($window) | Where-Object { [WorkbenchUiCheck]::Class($_) -eq 'Edit' -and ([WorkbenchUiCheck]::GetWindowLongPtrW($_,-16).ToInt64() -band 0x20) -ne 0 })
+if ($secure.Count -ne 1) {throw 'Password input lost native masking'}
+Invoke-WorkbenchButton '共享 Relay'
+Invoke-WorkbenchButton '+ 新建连接'
+Assert-FormLayout 'shared-relay' 4
+Invoke-WorkbenchButton '运行环境'
+Save-Window $window 'form-runtime'
+$script:formChecks | ConvertTo-Json -Depth 4 | Set-Content "$OutputDirectory/form-layout-acceptance.json"
