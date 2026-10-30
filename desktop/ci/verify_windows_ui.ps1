@@ -344,3 +344,5 @@ Assert-FormLayout 'shared-relay' 4
 Invoke-WorkbenchButton '运行环境'
 Save-Window $window 'form-runtime'
 $script:formChecks | ConvertTo-Json -Depth 4 | Set-Content "$OutputDirectory/form-layout-acceptance.json"
+
+. "$PSScriptRoot/verify_windows_menus.ps1" -DesktopProcessId $DesktopProcessId -OutputDirectory $OutputDirectory
