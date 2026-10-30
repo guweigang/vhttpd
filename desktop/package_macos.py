@@ -9,6 +9,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+from prepare_fonts import package as package_fonts
 
 
 def run(*args):
@@ -62,6 +63,7 @@ def archive(app, output):
 
 
 def package(root, app):
+    package_fonts(app / 'Contents/Resources/fonts')
     runtime = app / 'Contents/Resources/runtime'
     runtime.mkdir(parents=True)
     binary = runtime / 'vhttpd'

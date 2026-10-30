@@ -313,6 +313,7 @@ function Assert-FormLayout($page,[int]$minimum) {
   $fontHandle=[WorkbenchUiCheck]::SendMessageW($field,0x31,[IntPtr]::Zero,[IntPtr]::Zero)
   $font=[Drawing.Font]::FromHfont($fontHandle)
   try {
+   if ($font.Name -ne 'Noto Sans CJK SC') {throw "Packaged CJK font was not loaded on $page"}
    if ([Math]::Abs($font.SizeInPoints-10.5) -gt 0.3) {throw "Input font differs on $page"}
    if ($font.GetHeight() -gt ($inner.Bottom-$inner.Top)+2) {throw "Native input font is clipped on $page"}
   } finally {$font.Dispose()}

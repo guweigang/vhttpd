@@ -184,6 +184,7 @@ fn main() {
 	}
 	mut app := unsafe { workshop }
 	app.owner_pid = os.getpid()
+	configure_workbench_fonts() or { app.notice = err.msg() }
 	app.binary = host.selected_runtime(os.executable(), root) or {
 		app.notice = err.msg()
 		host.workbench_binary(os.executable(), root)
@@ -696,11 +697,7 @@ fn workbench_detail_font() string {
 }
 
 fn label(id string, text string, x f64, y f64, width f64, size f64, color u32) ui2.Element {
-	mut height := 25.0
-	$if linux {
-		if size > 20 { height = size + 8 }
-	}
- $if windows { if size > 20 { height = size*1.3+8 } }
+	height := if size * 1.5 + 4 > 25 { size * 1.5 + 4 } else { 25.0 }
 	return ui2.label(id, text, ui2.rect(x, y, width, height), ui2.TextStyle{ size: size, color: color })
 }
 
@@ -788,7 +785,7 @@ fn project_button(id string, title string, badge string, frame ui2.Rect, selecte
 }
 
 fn build_window() ui2.Element {
-	root := build_window_tree()
+	root := workbench_font_layout(build_window_tree())
 	mut app := unsafe { workshop }
 	app.refresh_workbench_menus(root)
 	$if linux { return linux_pixel_layout(root) }

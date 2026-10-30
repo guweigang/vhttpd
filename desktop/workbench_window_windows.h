@@ -3,6 +3,11 @@
 #include <windows.h>
 #include <commctrl.h>
 
+static int vhttpd_workbench_register_font_windows(const wchar_t *path) {
+    return AddFontResourceExW(path, FR_PRIVATE, NULL);
+}
+
+
 static void vhttpd_workbench_prepare_windows_display(void) {
     // Use one system-DPI coordinate space throughout the native ui2 tree.
     SetProcessDPIAware();
@@ -24,7 +29,7 @@ static double vhttpd_workbench_field_line_height(void) {
     int dpi = GetDeviceCaps(dc, LOGPIXELSY);
     HFONT font = CreateFontW(-MulDiv(105,dpi,720),0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,
         DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,
-        DEFAULT_PITCH | FF_DONTCARE,L"Microsoft YaHei UI");
+        DEFAULT_PITCH | FF_DONTCARE,L"Noto Sans CJK SC");
     HGDIOBJ previous = font ? SelectObject(dc,font) : NULL;
     TEXTMETRICW metrics;
     cached = GetTextMetricsW(dc,&metrics) ? (metrics.tmHeight + 2) * 96.0 / dpi : 18;
@@ -166,7 +171,7 @@ static int vhttpd_workbench_choose_environment(void *window, void *label_table,
     style.scale = vhttpd_workbench_windows_scale();
     style.font = CreateFontW(-(int)(14*style.scale),0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,
         DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,
-        DEFAULT_PITCH,L"Microsoft YaHei UI");
+        DEFAULT_PITCH,L"Noto Sans CJK SC");
     style.width = (UINT)(220*style.scale);
     HDC dc = GetDC(owner);
     if (dc) {

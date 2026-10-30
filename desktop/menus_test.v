@@ -17,7 +17,7 @@ fn test_menu_structure_empty_and_local_lifecycle_states() ! {
 	assert menus[1].title == '编辑'
 	assert menus[2].title == '运行'
 	assert fixture_menu_item(menus, 'new').enabled
-	assert fixture_menu_item(menus, 'new').shortcut == 'cmd+n'
+	assert fixture_menu_item(menus, 'new').shortcut == ''
 	for action in ['start', 'stop', 'restart', 'admin', 'folder', 'config_diff', 'history_open'] {
 		assert !fixture_menu_item(menus, action).enabled
 	}

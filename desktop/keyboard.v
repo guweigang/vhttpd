@@ -51,6 +51,9 @@ fn workbench_key(raw_key string) {
 		return
 	}
 	match key {
+		'cmd+n' { handle_workbench_menu('menu:new') }
+		'cmd+o' { handle_workbench_menu('menu:import') }
+		'cmd+comma', 'cmd+,' { handle_workbench_menu('menu:runtime') }
 		'cmd+enter', 'cmd+return' { submit_active_form() }
 		'escape' {
 			if app.show_remote && app.show_servers && app.server_snapshot.host_key.id != '' { handle_event('server_disconnect'); return }

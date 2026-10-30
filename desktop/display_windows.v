@@ -48,9 +48,9 @@ fn windows_pixel_layout(original ui2.Element, scale f64) ui2.Element {
 		element.text_style.size
 	}
 	family := if element.text_style.font_family in ['Menlo', 'monospace', 'mono'] {
-		'Consolas'
+		workbench_mono_font
 	} else if element.text_style.font_family == '' {
-		'Microsoft YaHei UI'
+		workbench_ui_font
 	} else {
 		element.text_style.font_family
 	}

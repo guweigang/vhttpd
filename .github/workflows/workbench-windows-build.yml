@@ -138,6 +138,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Native GUI SSH helper build failed' }
 
           New-Item -ItemType Directory -Force "$output/resources" | Out-Null
+          python desktop/prepare_fonts.py "$output/resources/fonts"
+          if ($LASTEXITCODE -ne 0) { throw 'Bundled font staging failed' }
           Copy-Item admin/ui/brand/mark.png "$output/resources/vhttpd-mark.png"
           ./desktop/ci/prepare_windows_brand.ps1 -Source "$PWD/admin/ui/brand/mark.png" -Destination "$output/resources/vhttpd-mark.bmp"
           foreach ($pattern in @('libcrypto-*.dll', 'libssl-*.dll')) {
