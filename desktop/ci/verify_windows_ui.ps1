@@ -19,6 +19,10 @@ public static class WorkbenchUiCheck {
  [DllImport("user32.dll")] public static extern IntPtr GetWindowLongPtrW(IntPtr hwnd,int index);
  [DllImport("user32.dll")] public static extern IntPtr SetWindowLongPtrW(IntPtr hwnd,int index,IntPtr value);
  [DllImport("user32.dll")] public static extern bool RedrawWindow(IntPtr hwnd,IntPtr rect,IntPtr region,uint flags);
+ [DllImport("user32.dll")] public static extern uint GetMenuState(IntPtr menu,uint item,uint flags);
+ [DllImport("user32.dll")] public static extern int GetMenuItemCount(IntPtr menu);
+ [DllImport("user32.dll",CharSet=CharSet.Unicode)] public static extern int GetMenuStringW(IntPtr menu,uint item,StringBuilder text,int count,uint flags);
+ [DllImport("user32.dll")] public static extern bool GetMenuItemRect(IntPtr owner,IntPtr menu,uint item,out Rect rect);
  [DllImport("user32.dll")] public static extern bool PostMessageW(IntPtr hwnd,uint message,IntPtr wparam,IntPtr lparam);
  [DllImport("user32.dll")] public static extern bool EnumThreadWindows(uint id,Visitor callback,IntPtr data);
  [DllImport("user32.dll")] public static extern void keybd_event(byte key,byte scan,uint flags,UIntPtr extra);
@@ -85,6 +89,8 @@ function Wait-MenuClosed {
  $deadline=(Get-Date).AddSeconds(5)
  while ([WorkbenchUiCheck]::Popup($window) -ne [IntPtr]::Zero -and (Get-Date) -lt $deadline) {Start-Sleep -Milliseconds 50}
  if ([WorkbenchUiCheck]::Popup($window) -ne [IntPtr]::Zero) {throw 'Environment popup did not dismiss'}
+ # Let the physical outside-click button-up finish before posting a new invoke.
+ Start-Sleep -Milliseconds 200
 }
 function Open-Environment($caption,$name) {
  $selector=[WorkbenchUiCheck]::Find($window,$caption,'UI2Container')
@@ -106,9 +112,66 @@ function Wait-Environment($caption) {
  while ([WorkbenchUiCheck]::Find($window,$caption,'UI2Container') -eq [IntPtr]::Zero -and (Get-Date) -lt $deadline) {Start-Sleep -Milliseconds 50}
  if ([WorkbenchUiCheck]::Find($window,$caption,'UI2Container') -eq [IntPtr]::Zero) {throw "Environment selection did not apply: $caption"}
 }
+function Native-EnvironmentMenu {
+ $popup=[WorkbenchUiCheck]::Popup($window)
+ # Documented MN_GETHMENU: https://learn.microsoft.com/windows/win32/winmsg/mn-gethmenu
+ $menu=[WorkbenchUiCheck]::SendMessageW($popup,0x1E1,[IntPtr]::Zero,[IntPtr]::Zero)
+ if ($menu -eq [IntPtr]::Zero) {throw 'Cannot inspect active environment menu'}
+ return $menu
+}
+function Find-EnvironmentItem($menu,$title) {
+ $count=[WorkbenchUiCheck]::GetMenuItemCount($menu)
+ for ($i=0;$i -lt $count;$i++) {
+  $label=New-Object Text.StringBuilder 256
+  [WorkbenchUiCheck]::GetMenuStringW($menu,[uint32]$i,$label,$label.Capacity,0x400) | Out-Null
+  if ($label.ToString() -eq $title) {return $i}
+ }
+ throw "Native menu item missing: $title"
+}
+function Select-EnvironmentKey($title) {
+ $menu=Native-EnvironmentMenu
+ $index=Find-EnvironmentItem $menu $title
+ $count=[WorkbenchUiCheck]::GetMenuItemCount($menu)
+ # Move until the native menu reports the desired item highlighted. Do not
+ # assume a Home key or the checked radio item defines initial keyboard focus.
+ for ($attempt=0;$attempt -le $count+1;$attempt++) {
+  $state=[WorkbenchUiCheck]::GetMenuState($menu,[uint32]$index,0x400)
+  if ($state -ne [uint32]::MaxValue -and ($state -band 0x80)) {Menu-Key 0x0D;return}
+  Menu-Key 0x28
+ }
+ throw 'Arrow navigation failed to highlight the environment'
+}
+function Select-EnvironmentMouse($title) {
+ $menu=Native-EnvironmentMenu
+ $index=Find-EnvironmentItem $menu $title
+ $r=New-Object WorkbenchUiCheck+Rect
+ if (![WorkbenchUiCheck]::GetMenuItemRect([IntPtr]::Zero,$menu,[uint32]$index,[ref]$r)) {throw 'Cannot locate native environment menu item'}
+ [WorkbenchUiCheck]::SetCursorPos([int](($r.Left+$r.Right)/2),[int](($r.Top+$r.Bottom)/2)) | Out-Null
+ [WorkbenchUiCheck]::mouse_event(2,0,0,0,[UIntPtr]::Zero)
+ [WorkbenchUiCheck]::mouse_event(4,0,0,0,[UIntPtr]::Zero)
+}
 $script:brandInk=Measure-BrandInk 'environment-before'
 if ($script:brandInk -lt 30) {throw 'Initial page content is already blank'}
 Open-Environment '本机 Windows ▾' 'environment-open-escape'
+# Verify the Windows-only presentation, not just that a native popup exists.
+$menu=Native-EnvironmentMenu
+$state=[WorkbenchUiCheck]::GetMenuState($menu,0,0x400)
+if (($state -band 0x100) -eq 0) {throw 'Environment menu lost workbench row rendering'}
+$row=New-Object WorkbenchUiCheck+Rect
+if (![WorkbenchUiCheck]::GetMenuItemRect([IntPtr]::Zero,$menu,0,[ref]$row)) {throw 'Environment row bounds unavailable'}
+if (($row.Bottom-$row.Top) -lt 36) {throw 'Environment menu rows are too cramped'}
+Save-Window ([WorkbenchUiCheck]::Popup($window)) 'environment-styled-popup'
+$bitmap=New-Object Drawing.Bitmap ($row.Right-$row.Left),($row.Bottom-$row.Top)
+$graphics=[Drawing.Graphics]::FromImage($bitmap)
+try {
+ $graphics.CopyFromScreen($row.Left,$row.Top,0,0,$bitmap.Size)
+ $blue=0
+ for ($y=0;$y -lt $bitmap.Height;$y++) {for ($x=0;$x -lt $bitmap.Width;$x++) {
+  $c=$bitmap.GetPixel($x,$y)
+  if ($c.B -gt 180 -and $c.R -lt 100 -and $c.G -gt 50 -and $c.G -lt 160) {$blue++}
+ }}
+ if ($blue -lt 10) {throw 'Selected environment is missing its brand-blue text and checkmark'}
+} finally {$graphics.Dispose();$bitmap.Dispose()}
 Menu-Key 0x1B
 Wait-Environment '本机 Windows ▾'
 Open-Environment '本机 Windows ▾' 'environment-open-outside'
@@ -119,17 +182,14 @@ $r=New-Object WorkbenchUiCheck+Rect
 [WorkbenchUiCheck]::mouse_event(4,0,0,0,[UIntPtr]::Zero)
 Wait-Environment '本机 Windows ▾'
 Open-Environment '本机 Windows ▾' 'environment-open-select'
-Menu-Key 0x24
-Menu-Key 0x28
-Menu-Key 0x0D
+Select-EnvironmentKey '远端 · CI Menu Host'
 Wait-Environment '远端 · CI Menu Host ▾'
 Save-Window $window 'environment-remote'
 Open-Environment '远端 · CI Menu Host ▾' 'environment-open-return'
-Menu-Key 0x24
-Menu-Key 0x0D
+Select-EnvironmentMouse '本机 Windows'
 Wait-Environment '本机 Windows ▾'
 Save-Window $window 'environment-local-restored'
-@{open='passed';page_content_preserved='passed';escape='passed';outside_dismiss='passed';remote_selection='passed';return_local='passed'} | ConvertTo-Json | Set-Content "$OutputDirectory/environment-menu-acceptance.json"
+@{workbench_style='passed';open='passed';page_content_preserved='passed';escape='passed';outside_dismiss='passed';remote_selection='passed';return_local='passed'} | ConvertTo-Json | Set-Content "$OutputDirectory/environment-menu-acceptance.json"
 $create = [WorkbenchUiCheck]::Find($window,'新建 vjsx 项目','UI2Container')
 if ($create -eq [IntPtr]::Zero) { throw 'Accessible create-project surface missing' }
 $title = [WorkbenchUiCheck]::Find($window,'还没有项目','Static')
