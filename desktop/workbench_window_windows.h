@@ -220,6 +220,28 @@ static int vhttpd_workbench_choose_environment(void *window, void *label_table,
     return chosen <= (UINT)count ? (int)chosen : 0;
 }
 
+// Editing targets the focused native EDIT, including its normal change events.
+static int vhttpd_workbench_edit_selection(void) {
+    HWND field = GetFocus();
+    wchar_t kind[32] = {0};
+    if (!field || !GetClassNameW(field,kind,32) || wcscmp(kind,L"Edit") != 0) return 0;
+    DWORD start=0,end=0;
+    SendMessageW(field,EM_GETSEL,(WPARAM)&start,(LPARAM)&end);
+    return end > start;
+}
+static void vhttpd_workbench_edit_command(int command) {
+    HWND field = GetFocus();
+    wchar_t kind[32] = {0};
+    if (!field || !GetClassNameW(field,kind,32) || wcscmp(kind,L"Edit") != 0) return;
+    LONG_PTR style=GetWindowLongPtrW(field,GWL_STYLE);
+    if ((command == 1 || command == 2) && (style & ES_PASSWORD)) return;
+    if ((command == 1 || command == 3) && (style & ES_READONLY)) return;
+    if (command == 0) SendMessageW(field,EM_SETSEL,0,-1);
+    if (command == 1) SendMessageW(field,WM_CUT,0,0);
+    if (command == 2) SendMessageW(field,WM_COPY,0,0);
+    if (command == 3) SendMessageW(field,WM_PASTE,0,0);
+}
+
 static void vhttpd_workbench_activate_windows(void *native_window) {
     HWND window = (HWND)native_window;
     if (!window || !IsWindow(window)) return;

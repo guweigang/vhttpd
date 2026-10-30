@@ -14,8 +14,8 @@ fn config_status_view(app &Workshop, x f64, y f64, width f64) ui2.Element {
 		ui2.label('config_effectiveness', title, ui2.rect(16, 8, width - 236, 20), ui2.TextStyle{size: 13, bold: true, color: color}),
 		label('config_changes', detail, 16, 31, width - 236, 11, workbench_muted),
 		label('config_checked', if running && status.checked_at != '' { '整项目检查 ${status.checked_at} · 每 2 秒刷新' } else { '仅检查工作台拥有的实例' }, 12, 53, width - 24, 10, workbench_muted),
-		button(if status.recovery_available && !status.pending && status.state != .unavailable { 'history_open' } else { 'config_diff' }, if status.recovery_available && !status.pending && status.state != .unavailable { '版本历史' } else { '差异详情' }, width - 208, 9, 94, false, status.pending || status.state == .unavailable || status.recovery_available),
-		button(if status.pending { 'apply_restart' } else { 'check_config' }, if status.pending { '重启并生效' } else { '检查生效' }, width - 106, 9, 94, status.pending, running),
+		button(if status.recovery_available && !status.pending && status.state != .unavailable { 'history_open' } else { 'config_diff' }, if status.recovery_available && !status.pending && status.state != .unavailable { '版本历史' } else { '差异详情' }, width - 208, 9, 94, false, app.local_command_enabled(if status.recovery_available && !status.pending && status.state != .unavailable { 'history_open' } else { 'config_diff' })),
+		button(if status.pending { 'apply_restart' } else { 'check_config' }, if status.pending { '重启并生效' } else { '检查生效' }, width - 106, 9, 94, status.pending, app.local_command_enabled(if status.pending { 'apply_restart' } else { 'check_config' })),
 	])
 }
 

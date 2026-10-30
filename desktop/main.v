@@ -22,6 +22,7 @@ const workbench_soft_accent = u32(0xeaf1ff)
 @[heap]
 struct Workshop {
 mut:
+	declared_menus []ui2.Menu
 	owner_pid int
 	show_deployment bool
 	deployment_local int
@@ -219,12 +220,7 @@ fn main() {
 	}
 	C.atexit(cleanup)
  $if windows { C.vhttpd_workbench_prepare_windows_display(); app.brand_mark = windows_brand_asset(app.brand_mark) }
-	ui2.set_menu_bar([ui2.Menu{
-		title: '项目'
-		items: [ui2.menu_item('new', '新建项目…'), ui2.menu_item('import', '导入配置…'),
-			ui2.menu_item('folder', '打开项目目录'), ui2.menu_separator(),
-			ui2.menu_item('quit', '退出工作台')]
-	}])
+	app.refresh_workbench_menus(ui2.screen(workbench_paper, []))
 	$if windows { spawn workbench_refresh_loop(app.refresh_stop, ui2.request_poll_refresh) } $else { spawn workbench_refresh_loop(app.refresh_stop, ui2.request_refresh) }
 	ui2.on_key(workbench_key)
 	ui2.on_key_event(workbench_physical_key)
@@ -408,6 +404,7 @@ fn (mut app Workshop) launch_with_browser(open_browser bool) {
 }
 
 fn handle_event(event string) {
+	if handle_workbench_menu(event) { return }
 	$if windows { if handle_windows_field_event(event) { return } }
 	mut app := unsafe { workshop }
 	if event == 'form_submit' { submit_active_form(); return }
@@ -792,6 +789,8 @@ fn project_button(id string, title string, badge string, frame ui2.Rect, selecte
 
 fn build_window() ui2.Element {
 	root := build_window_tree()
+	mut app := unsafe { workshop }
+	app.refresh_workbench_menus(root)
 	$if linux { return linux_pixel_layout(root) }
  $if windows { return windows_pixel_layout(root, windows_display_scale()) }
 	return root
@@ -852,10 +851,7 @@ fn build_window_content() ui2.Element {
 	}
 	if project_rows.len == 0 { project_rows << label('project_list_empty', if app.environment_id == '' { '暂无本地项目' } else if app.remote_profiles_error != '' { '项目列表读取失败，请刷新重试' } else { '此环境暂无已登记项目' }, 10, 8, 170, 11, workbench_muted) }
 	side << ui2.scroll('project_list', ui2.rect(12, 225, 190, h - 438), workbench_sidebar, project_rows)
-	can_choose := if app.environment_id != '' { !app.server_busy && !app.remote_snapshot.busy } else { !app.new_project && !app.runtime_busy && app.snapshot.pid == 0 && app.snapshot.phase !in [
-		.starting,
-		.stopping,
-	] }
+	can_choose := app.can_new_or_import()
 	side << sidebar_button('new', '+ 新建', ui2.rect(16, 143, 85, 34), true, false, can_choose, .center)
 	side << sidebar_button('import', '导入…', ui2.rect(111, 143, 85, 34), false, false, can_choose, .center)
 	side << sidebar_button('shared_relays', '共享 Relay', ui2.rect(16, h - 125, 180, 34), false, app.show_shared_relays, !app.creating, .left)
@@ -969,9 +965,9 @@ fn build_window_content() ui2.Element {
 			'强制停止'
 		} else {
 			'停止'
-		}, content_x, 155, 96, false, s.phase != .stopping || s.can_force)
+		}, content_x, 155, 96, false, app.local_command_enabled(if s.can_force { 'force' } else { 'stop' }))
 	}
-	children << button('restart', '重启', content_x + 106, 155, 60, false, s.phase == .running)
+	children << button('restart', '重启', content_x + 106, 155, 60, false, app.local_command_enabled('restart'))
 	children << button('folder', '打开项目目录', content_x + 176, 155, 104, false, true)
 	children << button('details', '配置 / Relay', content_x + 290, 155, 96, false, true)
 	children << button('edit_source', '打开源码', content_x + 396, 155, 76, false, s.entry != '')
@@ -992,7 +988,7 @@ fn build_window_content() ui2.Element {
 		} else {
 			'启动就绪后打开默认浏览器'
 		}, 18, 65, cw - 190, 11, workbench_muted),
-		button('admin', '打开浏览器 ↗', cw - 153, 12, 134, true, s.phase == .running),
+		button('admin', '打开浏览器 ↗', cw - 153, 12, 134, true, app.local_command_enabled('admin')),
 		button('open_app', '访问业务服务 ↗', cw - 153, 55, 134, false, s.phase == .running && s.app_url != '')])
 	children << config_status_view(app, content_x, 367, cw)
 	children << label('config_label', '配置文件', content_x, 460, cw / 2, 11, workbench_muted)
