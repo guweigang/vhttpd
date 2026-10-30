@@ -26,7 +26,8 @@ git clone --quiet --shared --no-checkout --config core.autocrlf=false "$source_d
 git -C "$destination" checkout --quiet --detach "$revision"
 for patch_file in "$root/desktop/patches/ui2-native-pointer-uint.patch" \
                   "$root/desktop/patches/ui2-custom-text-shortcuts.patch" \
-                  "$root/desktop/patches/ui2-windows-workbench-rendering.patch"; do
+                  "$root/desktop/patches/ui2-windows-workbench-rendering.patch" \
+                  "$root/desktop/patches/ui2-windows-focus-borders.patch"; do
   git -C "$destination" apply --check "$patch_file"
   git -C "$destination" apply "$patch_file"
 done

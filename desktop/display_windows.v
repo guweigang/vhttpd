@@ -43,7 +43,7 @@ fn windows_pixel_layout(original ui2.Element, scale f64) ui2.Element {
 		frame:        ui2.rect(element.frame.x * scale, element.frame.y * scale, element.frame.width * scale, element.frame.height * scale)
 		text_style:   ui2.TextStyle{ ...element.text_style, size: pixel_size * 0.75, font_family: family }
 		box:          ui2.BoxStyle{ ...element.box, radius: element.box.radius * scale, border_left: element.box.border_left * scale, border_top: element.box.border_top * scale, border_right: element.box.border_right * scale, border_bottom: element.box.border_bottom * scale }
-		padding_left: element.padding_left * scale
+		padding_left: (if element.kind in [.text_field, .text_area] && element.padding_left < 10 { 10.0 } else { element.padding_left }) * scale
 		padding:      element.padding * scale
 		children:     children
 	}

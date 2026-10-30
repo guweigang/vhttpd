@@ -29,6 +29,7 @@ public static class WorkbenchUiCheck {
  [DllImport("user32.dll")] public static extern void mouse_event(uint flags,uint x,uint y,uint data,UIntPtr extra);
  [DllImport("user32.dll")] public static extern bool SetCursorPos(int x,int y);
  [DllImport("user32.dll")] public static extern bool UpdateWindow(IntPtr hwnd);
+ [DllImport("user32.dll")] public static extern IntPtr SetFocus(IntPtr hwnd);
  [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hwnd,out Rect rect);
  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hwnd,IntPtr id);
  [DllImport("user32.dll")] public static extern bool GetGUIThreadInfo(uint id,ref Gui info);
@@ -189,6 +190,28 @@ Open-Environment '远端 · CI Menu Host ▾' 'environment-open-return'
 Select-EnvironmentMouse '本机 Windows'
 Wait-Environment '本机 Windows ▾'
 Save-Window $window 'environment-local-restored'
+# Focus remains visible, but it must be a continuous brand-blue outline.
+$selector=[WorkbenchUiCheck]::Find($window,'本机 Windows ▾','UI2Container')
+$focusRect=New-Object WorkbenchUiCheck+Rect
+[WorkbenchUiCheck]::GetWindowRect($selector,[ref]$focusRect) | Out-Null
+[WorkbenchUiCheck]::SetFocus($selector) | Out-Null
+[WorkbenchUiCheck]::UpdateWindow($selector) | Out-Null
+Start-Sleep -Milliseconds 150
+Save-Window $selector 'environment-focus-outline'
+$bitmap=New-Object Drawing.Bitmap ($focusRect.Right-$focusRect.Left),($focusRect.Bottom-$focusRect.Top)
+$graphics=[Drawing.Graphics]::FromImage($bitmap)
+try {
+ $graphics.CopyFromScreen($focusRect.Left,$focusRect.Top,0,0,$bitmap.Size)
+ $longest=0
+ for ($y=1;$y -lt [Math]::Min(8,$bitmap.Height);$y++) {
+  $run=0
+  for ($x=12;$x -lt $bitmap.Width-12;$x++) {
+   $c=$bitmap.GetPixel($x,$y)
+   if ($c.B -gt 180 -and $c.R -lt 100 -and $c.G -gt 50 -and $c.G -lt 160) {$run++;if ($run -gt $longest) {$longest=$run}} else {$run=0}
+  }
+ }
+ if ($longest -lt ($bitmap.Width-24)*0.85) {throw 'Environment focus outline is dotted or missing'}
+} finally {$graphics.Dispose();$bitmap.Dispose()}
 @{workbench_style='passed';open='passed';page_content_preserved='passed';escape='passed';outside_dismiss='passed';remote_selection='passed';return_local='passed'} | ConvertTo-Json | Set-Content "$OutputDirectory/environment-menu-acceptance.json"
 $create = [WorkbenchUiCheck]::Find($window,'新建 vjsx 项目','UI2Container')
 if ($create -eq [IntPtr]::Zero) { throw 'Accessible create-project surface missing' }
@@ -247,9 +270,12 @@ if ($CaptionOnly) { return }
 Start-Sleep -Milliseconds 500
 $first = [WorkbenchUiCheck]::Focus($window)
 if ($first -eq [IntPtr]::Zero -or [WorkbenchUiCheck]::Class($first) -ne 'Edit') { throw 'New-project form did not focus its first input' }
+if (([WorkbenchUiCheck]::GetWindowLongPtrW($first,-20).ToInt64() -band 0x200) -ne 0) {throw 'Input has an extra native client-edge border'}
+if (([WorkbenchUiCheck]::GetWindowLongPtrW($first,-16).ToInt64() -band 0x800000) -ne 0) {throw 'Input has an extra native rectangular border'}
+Save-Window $first 'input-single-rounded-border'
 [WorkbenchUiCheck]::SendMessageW($first,0x100,[IntPtr]9,[IntPtr]::Zero) | Out-Null
 Start-Sleep -Milliseconds 300
 $next = [WorkbenchUiCheck]::Focus($window)
 if ($next -eq $first -or [WorkbenchUiCheck]::Class($next) -ne 'Edit') { throw 'Tab did not advance to the next form input' }
 Save-Window $window 'desktop-new-project'
-@{ work_area='passed'; title_font_bounds='passed'; window_icons='passed'; create_button='passed'; initial_form_focus='passed'; tab_navigation='passed'; pressed_caption_frames='passed' } | ConvertTo-Json | Set-Content "$OutputDirectory/ui-acceptance.json"
+@{ single_input_border='passed'; solid_focus_outline='passed'; work_area='passed'; title_font_bounds='passed'; window_icons='passed'; create_button='passed'; initial_form_focus='passed'; tab_navigation='passed'; pressed_caption_frames='passed' } | ConvertTo-Json | Set-Content "$OutputDirectory/ui-acceptance.json"
