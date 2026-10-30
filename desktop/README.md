@@ -261,3 +261,7 @@ node --test tests/admin-ui/*.test.cjs
 ## 第一版边界
 
 同时管理一个本地实例；不接管外部服务。第一版主路径为 vjsx HTTP 项目与本机 HTTP 管理监听。常用配置表单之外保留源码编辑。近期指标和慢请求样本有内存保留上限；内嵌 vjsx 的独立执行超时尚未采集，不能把未采集显示为零。Windows/Linux、WebView、自动更新、后台常驻和崩溃后接管不属于本版验收范围。
+
+## 独立应用安装
+
+运行环境与应用已分开初始化。应用页通过组件包增加代码目录与 include，本地及 SSH 远端均可操作；多个应用共用同一个 vhttpd 进程。详见[独立应用安装说明](./APP-INSTALLATION.md)，可使用 `examples/application-component/component.toml` 试用。
