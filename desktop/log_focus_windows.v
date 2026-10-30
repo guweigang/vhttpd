@@ -7,13 +7,19 @@ import os
 
 fn C.vhttpd_workbench_activate_windows(voidptr)
 fn C.vhttpd_workbench_configure_windows(voidptr)
+fn C.vhttpd_workbench_verify_private_fonts() int
 
 // ui2's Win32 backend has already created and shown the HWND at this point.
 fn configure_workbench_window(handle voidptr) {
 	if handle != unsafe { nil } {
   C.vhttpd_workbench_configure_windows(handle)
 		if marker := os.getenv_opt('VHTTPD_DESKTOP_CI_READY') {
-			os.write_file(marker, 'ready') or {}
+			if C.vhttpd_workbench_verify_private_fonts() == 0 {
+				eprintln('Bundled CJK/mono font probe failed')
+				ui2.quit()
+				return
+			}
+			os.write_file(marker, 'ready; Noto Sans CJK SC regular/bold; Roboto Mono; CJK glyphs verified') or {}
 		}
 	}
 }

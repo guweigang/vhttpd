@@ -39,6 +39,35 @@ static double vhttpd_workbench_field_line_height(void) {
     return cached;
 }
 
+// CI probes run inside the Desktop process: private faces must not be looked
+// up in PowerShell's separate font collection, which cannot see FR_PRIVATE.
+static int vhttpd_workbench_verify_private_fonts(void) {
+    HDC dc = GetDC(NULL);
+    if (!dc) return 0;
+    int valid = 1;
+    const wchar_t *families[] = {L"Noto Sans CJK SC", L"Noto Sans CJK SC", L"Roboto Mono"};
+    for (int i=0;i<3;++i) {
+        HFONT font = CreateFontW(-14,0,0,0,i==1 ? FW_BOLD : FW_NORMAL,FALSE,FALSE,FALSE,
+            DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,DEFAULT_QUALITY,DEFAULT_PITCH,families[i]);
+        HGDIOBJ previous = SelectObject(dc,font);
+        wchar_t actual[128] = {0};
+        TEXTMETRICW metrics;
+        GetTextFaceW(dc,128,actual);
+        if (wcscmp(actual,families[i]) != 0 || !GetTextMetricsW(dc,&metrics) || (i==1 && metrics.tmWeight < 700)) valid=0;
+        if (i<2) {
+            const wchar_t sample[] = L"项目 中文 日本語 한국어 SSH vjsx 123";
+            WORD glyphs[sizeof(sample)/sizeof(wchar_t)] = {0};
+            int count = (int)(sizeof(sample)/sizeof(wchar_t))-1;
+            if (GetGlyphIndicesW(dc,sample,count,glyphs,GGI_MARK_NONEXISTING_GLYPHS)==GDI_ERROR) valid=0;
+            for (int j=0;j<count;++j) if (glyphs[j]==0xffff) valid=0;
+        }
+        SelectObject(dc,previous);
+        DeleteObject(font);
+    }
+    ReleaseDC(NULL,dc);
+    return valid;
+}
+
 static LRESULT CALLBACK vhttpd_workbench_size_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam, UINT_PTR id, DWORD_PTR data) {
     if (message == WM_GETMINMAXINFO) {
         double scale = vhttpd_workbench_windows_scale();

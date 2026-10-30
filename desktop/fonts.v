@@ -8,11 +8,11 @@ const workbench_mono_font = 'Roboto Mono'
 
 fn workbench_fonts_dir() !string {
 	base := os.dir(os.executable())
-	for directory in [os.join_path(base, '..', 'Resources', 'fonts'), os.join_path(base, 'resources', 'fonts'), os.join_path(base, 'fonts')] {
-		if os.is_file(os.join_path(directory, 'NotoSansCJKsc-Regular.otf')) && os.is_file(os.join_path(directory, 'NotoSansCJKsc-Bold.otf')) {
-			return os.real_path(directory)
-		}
-	}
+	mut directory := os.join_path(base, 'fonts')
+	$if macos { directory = os.join_path(base, '..', 'Resources', 'fonts') }
+	$if windows { directory = os.join_path(base, 'resources', 'fonts') }
+	if os.is_file(os.join_path(directory, 'NotoSansCJKsc-Regular.otf')) && os.is_file(os.join_path(directory, 'NotoSansCJKsc-Bold.otf')) { return os.real_path(directory) }
+
 	return error('字体资源缺失，请重新解压完整工作台安装包。')
 }
 
@@ -32,7 +32,9 @@ fn workbench_font_layout(element ui2.Element) ui2.Element {
 	mut children := []ui2.Element{cap: element.children.len}
 	for child in element.children { children << workbench_font_layout(child) }
 	family := if element.text_style.font_family in ['Menlo', 'Consolas', 'monospace', 'mono', 'Roboto Mono'] {
-		workbench_mono_font
+		// Roboto Mono has no Han/Kana/Hangul glyphs. Keep mixed logs readable
+		// with our bundled CJK face instead of an OS-specific fallback.
+		if element.text.runes().any(it >= 0x2e80) { workbench_ui_font } else { workbench_mono_font }
 	} else if element.text_style.font_family in ['', 'Microsoft YaHei UI', 'Segoe UI'] {
 		workbench_ui_font
 	} else { element.text_style.font_family }
