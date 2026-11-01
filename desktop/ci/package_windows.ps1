@@ -3,11 +3,14 @@ $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path "$PSScriptRoot/../..").Path
 New-Item -ItemType Directory -Force $OutputDirectory | Out-Null
 $OutputDirectory = (Resolve-Path $OutputDirectory).Path
-$short = if ($env:GITHUB_SHA) { $env:GITHUB_SHA.Substring(0,12) } else { 'local' }
-$name = "vhttpd-workbench-windows-amd64-test-$short"
+$metadataJson = & python "$root/desktop/workbench_version.py"
+if ($LASTEXITCODE -ne 0) { throw 'Desktop version resolution failed' }
+$desktopMetadata = $metadataJson | ConvertFrom-Json
+$name = "vhttpd-workbench-windows-amd64-$($desktopMetadata.version)"
 $stage = Join-Path $OutputDirectory $name
 if (Test-Path $stage) { throw 'Package staging directory must be new' }
 New-Item -ItemType Directory -Force "$stage/resources", "$stage/tools/openssh", "$stage/licenses" | Out-Null
+if ((Get-Item $Executable).VersionInfo.ProductVersion -ne $desktopMetadata.version) { throw 'Executable and package Desktop versions differ' }
 Copy-Item $Executable "$stage/vhttpd-workbench.exe"
 python "$root/desktop/prepare_fonts.py" "$stage/resources/fonts"
 if ($LASTEXITCODE -ne 0) { throw 'Bundled font staging failed' }
@@ -43,6 +46,7 @@ Get-ChildItem $crt -Filter '*.dll' -File | Copy-Item -Destination $stage
 Get-ChildItem $crt -Filter '*.dll' -File | Copy-Item -Destination "$stage/tools/openssh"
 if (!(Test-Path "$stage/vcruntime140.dll")) { throw 'App-local VC runtime missing' }
 Copy-Item "$PSScriptRoot/WINDOWS-TESTING.txt" "$stage/README-Windows.txt"
+"Desktop $($desktopMetadata.version)" | Set-Content "$stage/VERSION.txt" -Encoding ascii
 # User-facing verifier runs in Windows PowerShell 5 as well as PowerShell 7.
 @'
 $ErrorActionPreference = 'Stop'
@@ -55,7 +59,7 @@ foreach ($entry in $manifest) {
 }
 Write-Host 'PASS: package files are complete and match SHA256.'
 '@ | Set-Content "$stage/Verify-Package.ps1" -Encoding utf8
-@{commit=$env:GITHUB_SHA; run=$env:GITHUB_RUN_ID; compiler='MSVC'; architecture='amd64'; channel='test'; openssh_tag=$pin.tag;
+@{version=$desktopMetadata.version; bundle_version=$desktopMetadata.bundle_version; commit=$env:GITHUB_SHA; run=$env:GITHUB_RUN_ID; compiler='MSVC'; architecture='amd64'; channel='test'; openssh_tag=$pin.tag;
  v=(Get-Content "$root/scripts/ci/toolchain.env" | Select-String '^V_COMMIT=').ToString().Split('=')[1];
  ui2=(Get-Content "$root/desktop/ui2.commit" -Raw).Trim(); windows_vhttpd_runtime=$false} | ConvertTo-Json | Set-Content "$stage/build-info.json" -Encoding utf8
 $files = @(Get-ChildItem $stage -File -Recurse | ForEach-Object {

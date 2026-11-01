@@ -7,6 +7,7 @@ import subprocess
 import tarfile
 import tempfile
 import unittest
+from unittest.mock import patch
 import zipfile
 
 from development_release import ARTIFACTS, Publisher, digest, eligible, safe_unpack, validate_runtime, RUNTIME_PLATFORMS
@@ -60,7 +61,7 @@ class GitHub:
         return result()
 
 
-def runtime_package(directory, platform, sha=SHA):
+def runtime_package(directory, platform, sha=SHA, version='0.9.0'):
     directory.mkdir()
     archive = directory / ('vhttpd-'+platform+'.tar.gz')
     elf = bytearray(20)
@@ -70,7 +71,7 @@ def runtime_package(directory, platform, sha=SHA):
         elf[:4] = b'\xcf\xfa\xed\xfe'
         elf[4:8] = (0x01000007 if platform == 'macos-amd64' else 0x0100000c).to_bytes(4, 'little')
     files = {'vhttpd': bytes(elf), 'admin/ui/index.html': b'admin',
-             'runtime-manifest.json': json.dumps({'platform':platform,'source_commit':sha}).encode()}
+             'runtime-manifest.json': json.dumps({'platform':platform,'source_commit':sha,'build_info':{'version':version}}).encode()}
     with tarfile.open(archive, 'w:gz') as bundle:
         for name, data in files.items():
             info = tarfile.TarInfo('vhttpd-'+platform+'/'+name)
@@ -89,7 +90,7 @@ class DevelopmentTests(unittest.TestCase):
 
     def test_development_version_is_deterministic_and_stable_tags_keep_their_identity(self):
         self.assertEqual(self.version['version'], repository_version()+'-dev.g'+SHA[:12])
-        stable = version_metadata({'GITHUB_REF_TYPE':'tag','GITHUB_REF_NAME':'v1.2.3','VHTTPD_DEVELOPMENT_BUILD':'1'})
+        stable = version_metadata({'GITHUB_REF_TYPE':'tag','GITHUB_REF_NAME':'desktop-v1.2.3','VHTTPD_DEVELOPMENT_BUILD':'1'})
         self.assertEqual(stable['version'],'1.2.3')
         self.assertEqual(stable['prerelease'],'false')
         with self.assertRaises(ValueError):
@@ -118,10 +119,10 @@ class DevelopmentTests(unittest.TestCase):
         (directory/'验收说明.txt').write_text('15/26 accepted; Gatekeeper separate')
         return directory
 
-    def publisher(self):
+    def publisher(self, versions=None):
         directories = [self.mac_package()]
         for platform in RUNTIME_PLATFORMS:
-            runtime_package(self.root/platform,platform)
+            runtime_package(self.root/platform,platform,version=(versions or {}).get(platform, '0.9.0'))
             directories.append(self.root/platform)
         uploads = {}
         for i,(name,directory) in enumerate(zip(ARTIFACTS,directories),1):
@@ -134,6 +135,29 @@ class DevelopmentTests(unittest.TestCase):
         publisher = Publisher(REPO,self.root/'publish',github)
         tag,assets = publisher.assemble([{'id':1,'html_url':'mac'},{'id':2,'html_url':'linux'}],SHA)
         return publisher,github,tag,assets
+
+    def test_desktop_and_runtime_versions_are_independent_in_one_release(self):
+        publisher, github, tag, assets = self.publisher()
+        self.assertEqual(tag, 'v0.9.0-dev.g' + SHA[:12])
+        manifest = json.loads(next(p for p in assets if p.name == 'runtime-release.json').read_text())
+        self.assertEqual(manifest['runtime_version'], '0.9.0')
+        self.assertEqual(manifest['desktop_version'], '0.1.0-dev.g' + SHA[:12])
+        self.assertTrue(any(p.name == 'vhttpd-workbench-macos-arm64-0.1.0-dev.g' + SHA[:12] + '.zip' for p in assets))
+
+    def test_publisher_uses_accepted_versions_when_default_branch_has_moved(self):
+        with patch('workbench_version.repository_version', return_value='9.8.7'):
+            _, _, tag, assets = self.publisher()
+        self.assertEqual(tag, 'v0.9.0-dev.g' + SHA[:12])
+        self.assertTrue(any(p.name.endswith('-0.1.0-dev.g' + SHA[:12] + '.zip') for p in assets))
+
+    def test_mixed_runtime_versions_cannot_be_published(self):
+        with self.assertRaisesRegex(ValueError, 'Runtime versions differ'):
+            self.publisher({'macos-arm64': '0.9.1'})
+
+    def test_missing_runtime_version_is_rejected(self):
+        runtime_package(self.root/'invalid-version', 'linux-arm64', version='')
+        with self.assertRaisesRegex(ValueError, 'SemVer'):
+            validate_runtime(self.root/'invalid-version', 'linux-arm64', SHA)
 
     def test_collects_same_commit_verified_platforms_and_publishes_prerelease_only_after_upload(self):
         publisher,github,tag,assets = self.publisher()

@@ -1,4 +1,4 @@
-vhttpd Mac 工作台 @VERSION@ — 本地开发者预览
+vhttpd Desktop · Mac 工作台 @VERSION@ — 本地开发者预览
 
 适用范围
 - Apple Silicon Mac（arm64），构建目标为 macOS 15.0（Sequoia）及以上。

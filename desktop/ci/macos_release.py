@@ -93,14 +93,14 @@ def publish(download, output, env, command=gh):
             raise ValueError('Refusing to replace a published release or an unrelated draft')
     elif 'HTTP 404' in existing.stderr:
         checked(['release', 'create', tag, '--repo', repo, '--verify-tag', '--target', sha,
-                 '--draft', '--title', 'vhttpd ' + tag, '--notes-file', str(notes),
-                 '--prerelease=' + version['prerelease']])
+                 '--draft', '--title', 'vhttpd Desktop ' + version['version'], '--notes-file', str(notes),
+                 '--prerelease=' + version['prerelease'], *(['--latest=false'] if tag.startswith('desktop-v') else [])])
     else:
         raise RuntimeError('Unable to inspect existing GitHub release: ' + existing.stderr)
     checked(['release', 'upload', tag, '--repo', repo, '--clobber', *map(str, assets)])
     verify_tag()
     checked(['release', 'edit', tag, '--repo', repo, '--notes-file', str(notes),
-             '--draft=false', '--prerelease=' + version['prerelease']])
+             '--draft=false', '--prerelease=' + version['prerelease'], *(['--latest=false'] if tag.startswith('desktop-v') else [])])
 
 
 if __name__ == '__main__':

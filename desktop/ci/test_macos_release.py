@@ -8,7 +8,7 @@ from unittest.mock import patch
 import zipfile
 
 from macos_release import digest, prepare, publish
-from workbench_version import version_metadata
+from workbench_version import version_metadata, windows_resource
 
 
 class GitHub:
@@ -39,7 +39,7 @@ class ReleaseTests(unittest.TestCase):
         self.root = Path(self.directory.name)
         self.download = self.root / 'download'
         self.download.mkdir()
-        self.env = {'GITHUB_EVENT_NAME': 'push', 'GITHUB_REF_TYPE': 'tag', 'GITHUB_REF_NAME': 'v2.3.4-rc.1',
+        self.env = {'GITHUB_EVENT_NAME': 'push', 'GITHUB_REF_TYPE': 'tag', 'GITHUB_REF_NAME': 'desktop-v2.3.4-rc.1',
                     'GITHUB_SHA': 'a' * 40, 'GITHUB_REPOSITORY': 'example/vhttpd'}
         self.version = version_metadata(self.env)
         self.archive = self.download / self.version['archive']
@@ -56,12 +56,12 @@ class ReleaseTests(unittest.TestCase):
         (self.download / '验收说明.txt').write_text('15/26 passed; Gatekeeper not verified')
 
     def test_default_and_development_versions_follow_the_manifest(self):
-        with patch('workbench_version.Path.read_text', return_value="Module {\n version: '0.9.7'\n}"):
-            self.assertEqual(version_metadata({})['version'], '0.9.7')
+        with patch('workbench_version.Path.read_text', return_value='0.1.7\n'):
+            self.assertEqual(version_metadata({})['version'], '0.1.7')
             development = version_metadata({'VHTTPD_DEVELOPMENT_BUILD': '1', 'GITHUB_SHA': 'a' * 40})
-            self.assertEqual(development['version'], '0.9.7-dev.gaaaaaaaaaaaa')
-            self.assertEqual(development['bundle_version'], '0.9.7')
-        for manifest in ["Module {}", "version: '0.9.7'\nversion: '0.9.8'", "version: 'not-semver'"]:
+            self.assertEqual(development['version'], '0.1.7-dev.gaaaaaaaaaaaa')
+            self.assertEqual(development['bundle_version'], '0.1.7')
+        for manifest in ["", "0.1.7\n0.1.8", "not-semver"]:
             with self.subTest(manifest=manifest), patch('workbench_version.Path.read_text', return_value=manifest):
                 with self.assertRaises(ValueError):
                     version_metadata({})
@@ -71,10 +71,26 @@ class ReleaseTests(unittest.TestCase):
             self.assertEqual(version_metadata(self.env)['version'], '2.3.4-rc.1')
             self.assertEqual(version_metadata({'VHTTPD_WORKBENCH_VERSION': '0.9.8'})['version'], '0.9.8')
 
+    def test_runtime_release_tag_does_not_set_desktop_version(self):
+        metadata = version_metadata({'GITHUB_REF_TYPE': 'tag', 'GITHUB_REF_NAME': 'v0.9.0'})
+        self.assertEqual(metadata['version'], '0.1.0')
+        self.assertEqual(metadata['tag'], 'v0.9.0')
+        self.assertEqual(metadata['archive'], 'vhttpd-workbench-macos-arm64-0.1.0.zip')
+
+    def test_windows_resource_carries_numeric_and_full_desktop_versions(self):
+        metadata = version_metadata({'VHTTPD_WORKBENCH_VERSION': '0.1.0-dev.gaaaaaaaaaaaa'})
+        resource = windows_resource(metadata)
+        self.assertIn('FILEVERSION 0,1,0,0', resource)
+        self.assertIn('PRODUCTVERSION 0,1,0,0', resource)
+        self.assertIn('"ProductVersion", "0.1.0-dev.gaaaaaaaaaaaa', resource)
+        self.assertNotIn('0.9.0', resource)
+        with self.assertRaises(ValueError):
+            windows_resource(version_metadata({'VHTTPD_WORKBENCH_VERSION': '65536.1.0'}))
+
     def test_tag_versions_and_prerelease(self):
         self.assertEqual(self.version['bundle_version'], '2.3.4')
         self.assertEqual(self.version['prerelease'], 'true')
-        self.assertEqual(version_metadata(dict(self.env, GITHUB_REF_NAME='v1.2.3'))['prerelease'], 'false')
+        self.assertEqual(version_metadata(dict(self.env, GITHUB_REF_NAME='desktop-v1.2.3'))['prerelease'], 'false')
         for tag in ['v1.2', 'v01.2.3', 'v1.2.3-01', 'not-a-version', 'v1.2.3/../../bad']:
             with self.subTest(tag=tag), self.assertRaises(ValueError):
                 version_metadata(dict(self.env, GITHUB_REF_NAME=tag))
@@ -119,6 +135,8 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn('--verify-tag', writes[0])
         self.assertIn('--draft=false', writes[-1])
         self.assertIn('--prerelease=true', writes[-1])
+        self.assertIn('--latest=false', writes[0])
+        self.assertIn('--latest=false', writes[-1])
         self.assertEqual(github.tag_reads, 2)
 
     def test_interrupted_upload_keeps_release_private_and_owned_draft_can_retry(self):

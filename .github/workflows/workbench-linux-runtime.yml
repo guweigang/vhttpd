@@ -11,6 +11,9 @@ on:
 permissions:
   contents: read
 
+env:
+  VHTTPD_DEVELOPMENT_BUILD: ${{ github.ref_type != 'tag' && github.event_name != 'pull_request' && '1' || '0' }}
+
 jobs:
   package:
     strategy:

@@ -22,7 +22,7 @@ package="$stage/$name"
 mkdir -p "$package/resources" "$package/runtime/admin" "$package/runtime/runtime"
 python3 "$root/desktop/package_linux_fonts.py" "$package/fonts"
 python3 "$root/desktop/build_font_decoder.py" "$package/vhttpd-fontdecode"
-"$compiler" -prod -nocache -gc boehm -cc gcc -d build_quickjs -d use_bundled_libgc -w -enable-globals \
+"$compiler" -prod -nocache -gc boehm -cc gcc -d build_quickjs -d "vhttpd_desktop_version=$version" -d use_bundled_libgc -w -enable-globals \
  -path "$root/desktop|$root/src|$stage/modules|$(dirname "$VJSX_DIR")|$root/.deps|@vlib|@vmodules" -o "$package/vhttpd-workbench" "$root/desktop"
 cp "$root/admin/ui/brand/mark.png" "$package/resources/vhttpd-mark.png"
 cp "$service/vhttpd" "$package/runtime/vhttpd"
@@ -31,6 +31,7 @@ cp -R "$service/runtime/libs" "$package/runtime/runtime/libs"
 bash "$root/scripts/bundle_runtime_libs.sh" "$package/runtime/vhttpd" "$package/runtime/runtime/libs"
 bash "$root/scripts/bundle_runtime_libs.sh" "$package/vhttpd-workbench" "$package/runtime/libs"
 bash "$root/scripts/bundle_runtime_libs.sh" "$package/vhttpd-fontdecode" "$package/runtime/libs"
+printf 'Desktop %s\n' "$version" > "$package/VERSION.txt"
 python3 -c 'import platform; print("构建基线：" + platform.freedesktop_os_release()["PRETTY_NAME"] + " / " + platform.machine() + " / " + " ".join(platform.libc_ver()))' > "$package/安装说明.txt"
 cat >> "$package/安装说明.txt" <<'GUIDE'
 vhttpd Workbench Linux 开发预览

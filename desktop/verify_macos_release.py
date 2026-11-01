@@ -83,6 +83,9 @@ def verify(archive):
             raise RuntimeError('The zip must include installation instructions beside the app')
         run('/usr/bin/codesign', '--verify', '--deep', '--strict', str(app))
         info = plistlib.loads((app / 'Contents/Info.plist').read_bytes())
+        host = app / 'Contents/MacOS/vhttpd-workbench'
+        if run(str(host), '--version').strip() != 'vhttpd Desktop ' + info['VHTTPDReleaseVersion']:
+            raise RuntimeError('Desktop executable and bundle version disagree')
         if not info.get('LSMinimumSystemVersion'):
             raise RuntimeError('The app must declare its actual minimum macOS')
         if info['LSMinimumSystemVersion'] != '15.0':

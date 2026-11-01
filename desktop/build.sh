@@ -55,7 +55,7 @@ if [[ -z "${VJS_QUICKJS_PATH:-}" ]]; then
   vjsx_source="${VJSX_DIR:-$HOME/.vmodules/vjsx}"
   export VJS_QUICKJS_PATH="$(VJS_QUICKJS_WORK_ROOT="$root" "$vjsx_source/scripts/ensure-quickjs.sh")"
 fi
-v -prod -nocache -gc boehm -cc "$build_dir/clang-compatible" -d build_quickjs -d use_bundled_libgc -w -enable-globals -path "$root/desktop|$root/src|$build_dir/modules|$(dirname "$VJSX_DIR")|$root/.deps|@vlib|@vmodules" \
+v -prod -nocache -gc boehm -cc "$build_dir/clang-compatible" -d build_quickjs -d "vhttpd_desktop_version=$version" -d use_bundled_libgc -w -enable-globals -path "$root/desktop|$root/src|$build_dir/modules|$(dirname "$VJSX_DIR")|$root/.deps|@vlib|@vmodules" \
   -o "$build_dir/vhttpd-workbench" "$root/desktop"
 # Replace the directory entry atomically; never truncate the executable that
 # a running workbench has mapped into memory.

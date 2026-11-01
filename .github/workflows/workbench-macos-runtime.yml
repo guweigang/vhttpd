@@ -14,7 +14,7 @@ on:
         required: false
   push:
     branches: [main, codex/mac-workbench-runtime-checks]
-    tags: ['v[0-9]*', '!v*-dev.g*']
+    tags: ['v[0-9]*', '!v*-dev.g*', 'desktop-v[0-9]*', '!desktop-v*-dev.g*']
     paths:
       - .github/workflows/workbench-macos-runtime.yml
       - desktop/**
@@ -80,6 +80,8 @@ jobs:
         run: brew install pkgconf
       - name: Prepare pinned V, vjsx and QuickJS toolchain
         run: bash desktop/ci/prepare_toolchain.sh
+      - name: Verify embedded Desktop version and package override
+        run: python3 -m unittest discover -s desktop/ci -p 'test_desktop_version.py'
       - name: Build and verify the complete app
         run: bash desktop/build.sh
       - name: Verify native workbench UI states

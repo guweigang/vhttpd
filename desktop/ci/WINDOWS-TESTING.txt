@@ -13,6 +13,10 @@ vhttpd Desktop · Windows x64 测试包
    EXE、DLL、resources 和 tools 必须一起保留，不能只复制 EXE。
    也可用包内 Verify-Package.ps1 检查解压后的文件完整性。
 
+版本确认
+Desktop 版本见 VERSION.txt、EXE 属性和“关于”；远端 vhttpd 版本单独显示。
+包名使用 Desktop 自己的版本，不跟随运行程序版本。
+
 首次使用
 数据保存在 %LOCALAPPDATA%\vhttpd-workbench；换包不会删除服务器登记。
 本测试包未签名。若 Windows 显示未知发布者，请先核对 CI 来源和 SHA256。

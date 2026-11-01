@@ -15,7 +15,7 @@ import tarfile
 import zipfile
 
 from macos_release import prepare, digest
-from workbench_version import version_metadata
+from workbench_version import parse_version, version_metadata
 
 WORKFLOWS = ('workbench-macos-runtime.yml', 'vhttpd-binaries.yml')
 RUNTIME_PLATFORMS = ('linux-amd64', 'linux-arm64', 'macos-amd64', 'macos-arm64')
@@ -73,6 +73,8 @@ def validate_runtime(directory, platform, sha):
         identity = json.load(bundle.extractfile(manifest))
         if identity.get('source_commit') != sha or identity.get('platform') != platform:
             raise ValueError('Runtime package source/platform mismatch')
+        runtime_version = identity.get('build_info', {}).get('version', '')
+        parse_version(runtime_version)
         header = bundle.extractfile(prefix + '/vhttpd').read(20)
         if platform.startswith('linux-'):
             machine = 62 if platform == 'linux-amd64' else 183
@@ -83,7 +85,7 @@ def validate_runtime(directory, platform, sha):
             if header[:4] != b'\xcf\xfa\xed\xfe' or int.from_bytes(header[4:8], 'little') != cpu:
                 raise ValueError('macOS Mach-O architecture mismatch')
         bundle.getmember(prefix + '/admin/ui/index.html')
-    return [archive, sums]
+    return runtime_version, [archive, sums]
 
 
 def gh(args, output=None):
@@ -141,16 +143,34 @@ class Publisher:
                 directories[name] = destination
         if set(directories) != set(ARTIFACTS):
             raise ValueError('CI run is missing the verified Workbench or complete Linux/macOS runtime artifacts')
-        version = version_metadata({'VHTTPD_DEVELOPMENT_BUILD': '1', 'GITHUB_SHA': sha})['version']
+        accepted = json.loads((directories[ARTIFACTS[0]] / 'acceptance.json').read_text())
+        archive_name = accepted.get('archive', '')
+        prefix = 'vhttpd-workbench-macos-arm64-'
+        if not archive_name.startswith(prefix) or not archive_name.endswith('.zip'):
+            raise ValueError('Invalid accepted Desktop archive name')
+        desktop_version = archive_name[len(prefix):-4]
+        desktop_metadata = version_metadata({'VHTTPD_WORKBENCH_VERSION': desktop_version})
+        expected_desktop = version_metadata({'VHTTPD_WORKBENCH_VERSION': desktop_version,
+            'VHTTPD_DEVELOPMENT_BUILD': '1', 'GITHUB_SHA': sha})['version']
+        if desktop_version != expected_desktop:
+            raise ValueError('Desktop development version must identify the accepted source commit')
         output = self.work / 'assets'
-        _, assets = prepare(directories[ARTIFACTS[0]], output, {'GITHUB_SHA': sha, 'VHTTPD_WORKBENCH_VERSION': version})
+        _, assets = prepare(directories[ARTIFACTS[0]], output,
+            {'GITHUB_SHA': sha, 'VHTTPD_WORKBENCH_VERSION': desktop_metadata['version']})
+        runtime_version = None
         for platform in RUNTIME_PLATFORMS:
-            for file in validate_runtime(directories['vhttpd-' + platform], platform, sha):
+            platform_version, runtime_assets = validate_runtime(directories['vhttpd-' + platform], platform, sha)
+            if runtime_version is not None and runtime_version != platform_version:
+                raise ValueError('Runtime versions differ across platforms')
+            runtime_version = platform_version
+            for file in runtime_assets:
                 target = output / file.name
                 shutil.copyfile(file, target)
                 assets.append(target)
+        version = version_metadata({'VHTTPD_WORKBENCH_VERSION': runtime_version,
+            'VHTTPD_DEVELOPMENT_BUILD': '1', 'GITHUB_SHA': sha})['version']
         manifest = output / 'runtime-release.json'
-        manifest.write_text(json.dumps({'tag': 'v' + version, 'source_commit': sha,
+        manifest.write_text(json.dumps({'tag': 'v' + version, 'source_commit': sha, 'runtime_version': runtime_version, 'desktop_version': desktop_version,
             'runs': [{'id': r['id'], 'url': r['html_url']} for r in runs],
             'assets': {p.name: digest(p) for p in assets}}, indent=2) + '\n')
         assets.append(manifest)
@@ -177,7 +197,9 @@ class Publisher:
                     raise ValueError('Published development versions are immutable')
                 return
         notes = self.work / 'development-notes.txt'
+        release_info = json.loads(next(p for p in assets if p.name == 'runtime-release.json').read_text())
         notes.write_text('vhttpd 开发版 ' + tag + '\n\n源码提交：' + sha + '\n'
+            'Desktop：' + release_info['desktop_version'] + '；vhttpd：' + release_info['runtime_version'] + '\n'
             '由同一提交的 CI 成功构建：vhttpd Linux/macOS（amd64、arm64），Workbench macOS arm64。\n'
             'Workbench 包通过 macOS 15/26 运行验收。每个平台运行包均附独立 SHA256 校验文件。\n'
             '公开附件无需 GitHub 登录，可在 Desktop 选择版本或指定此标签。下载后校验 SHA256。\n'

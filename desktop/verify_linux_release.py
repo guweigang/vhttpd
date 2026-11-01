@@ -31,6 +31,10 @@ def verify(archive):
         app = root / top.pop()
         host = app / 'vhttpd-workbench'
         runtime = app / 'runtime/vhttpd'
+        version = (app / 'VERSION.txt').read_text().strip()
+        actual = subprocess.check_output([str(host), '--version'], text=True, timeout=15).strip()
+        if actual != 'vhttpd ' + version or not app.name.endswith('-' + version.removeprefix('Desktop ')):
+            raise RuntimeError('Desktop executable, archive and VERSION.txt disagree')
         for executable in (host, runtime, app / 'vhttpd-fontdecode'):
             if not os.access(executable, os.X_OK):
                 raise RuntimeError(f'Executable permission missing: {executable.name}')

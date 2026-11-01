@@ -183,6 +183,10 @@ mut:
 const workshop = &Workshop{}
 
 fn main() {
+	if os.args.len == 2 && os.args[1] == '--version' && os.getenv('VHTTPD_SSH_ASKPASS') != '1' {
+		println('vhttpd Desktop ' + desktop_version)
+		return
+	}
 	if os.getenv('VHTTPD_SSH_ASKPASS') == '1' {
 		host.run_remote_askpass() or { exit(1) }
 		return

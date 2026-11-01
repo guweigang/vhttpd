@@ -188,15 +188,27 @@ fn runtime_assets_for(release RuntimeRelease, allow_preview bool) !(RuntimeRelea
 	if release.draft || (release.prerelease && !allow_preview) || !release.tag_name.starts_with('v') {
 		return error('尚无可用的正式运行包。')
 	}
-	version := runtime_version_text(release.tag_name)!
-	name := 'vhttpd-workbench-macos-arm64-${version}.zip'
-	checks := 'vhttpd-workbench-macos-arm64-${version}-SHA256SUMS.txt'
+	// Release tags identify vhttpd; a bundled Desktop ZIP has its own version.
+	_ := runtime_version_text(release.tag_name)!
+	prefix := 'vhttpd-workbench-macos-arm64-'
 	mut archive := RuntimeReleaseAsset{}
 	mut sums := RuntimeReleaseAsset{}
+	mut candidates := 0
 	for asset in release.assets {
-		if asset.name == name { archive = asset }
-		if asset.name == checks { sums = asset }
+		if !asset.name.starts_with(prefix) || !asset.name.ends_with('.zip') { continue }
+		candidate := asset.name[prefix.len..asset.name.len - 4]
+		version := runtime_version_text(candidate) or { continue }
+		if version != candidate { continue }
+		candidates++
+		archive = asset
 	}
+	if candidates != 1 { return error('Mac 运行包缺失或存在多个候选包。') }
+	checks := archive.name[..archive.name.len - 4] + '-SHA256SUMS.txt'
+	mut checksum_candidates := 0
+	for asset in release.assets {
+		if asset.name == checks { sums = asset; checksum_candidates++ }
+	}
+	if checksum_candidates != 1 { return error('Mac 运行包校验文件缺失或存在多个候选。') }
 	if archive.size < 1 || archive.size > 268435456 || sums.size < 1 || sums.size > 1048576 || !official_asset_url(archive.browser_download_url) || !official_asset_url(sums.browser_download_url) {
 		return error('该版本尚未提供完整的 Apple Silicon Mac 运行包及 SHA256 校验文件。')
 	}

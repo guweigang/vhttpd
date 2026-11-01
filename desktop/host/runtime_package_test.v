@@ -29,6 +29,24 @@ fn test_runtime_versions_and_official_release_contract() ! {
 	assert checksum_for('a'.repeat(64) + '  package.zip\n', 'package.zip')! == 'a'.repeat(64)
 }
 
+fn test_runtime_release_accepts_independently_versioned_desktop_archive() ! {
+	archive := RuntimeReleaseAsset{ name: 'vhttpd-workbench-macos-arm64-0.1.0.zip', size: 100, browser_download_url: 'https://github.com/guweigang/vhttpd/releases/download/v0.9.0/package.zip' }
+	checks := RuntimeReleaseAsset{ name: 'vhttpd-workbench-macos-arm64-0.1.0-SHA256SUMS.txt', size: 100, browser_download_url: 'https://github.com/guweigang/vhttpd/releases/download/v0.9.0/checksums.txt' }
+	release := RuntimeRelease{ tag_name: 'v0.9.0', assets: [archive, checks] }
+	selected, sums := runtime_assets(release)!
+	assert selected.name == archive.name && sums.name == checks.name
+	for bad in [
+		RuntimeRelease{ ...release, tag_name: 'desktop-v0.1.0' },
+		RuntimeRelease{ ...release, assets: [archive] },
+		RuntimeRelease{ ...release, assets: [archive, archive, checks] },
+		RuntimeRelease{ ...release, assets: [archive, checks, checks] },
+		RuntimeRelease{ ...release, assets: [archive, RuntimeReleaseAsset{ ...checks, name: 'vhttpd-workbench-macos-arm64-0.9.0-SHA256SUMS.txt' }] },
+	] {
+		runtime_assets(bad) or { continue }
+		assert false, 'ambiguous or mismatched runtime release accepted'
+	}
+}
+
 fn test_archive_paths_symlinks_and_expansion_limit() ! {
 	details := '-rwxr-xr-x  2.0 unx 1000 b- defN 26-Oct-19 vhttpd-workbench.app/Contents/Resources/runtime/vhttpd'
 	validate_archive_listing('vhttpd-workbench.app/Contents/Resources/runtime/vhttpd', details)!
