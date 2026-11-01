@@ -263,6 +263,9 @@ node tests/protocol/probe.mjs --config /path/to/config/bot.local.json --provider
 node tests/protocol/probe.mjs --config /path/to/config/bot.local.json --provider feishu
 # Opt-in model execution: ephemeral, read-only task; no Feishu message is sent.
 node tests/protocol/probe.mjs --config /path/to/config/bot.local.json --provider codex --turn
+# Persistent fixture on an isolated local app-server: restart, resume the same ID,
+# verify remembered history, then archive the fixture; no Feishu message is sent.
+node tests/protocol/probe-thread-resume.mjs --config /path/to/config/bot.local.json --isolated-server
 ```
 
 The default probes check Codex initialization/model-list and Feishu authentication/endpoint shape. The optional turn probe also requires streamed output and a completed turn. Actual Feishu delivery, callback permissions and card interactions still require the designated private-chat integration test; authentication success does not certify those paths. After deploying a new runtime and application, repeat that private-chat check before considering the running installation upgraded.
