@@ -10,7 +10,7 @@ import unittest
 import zipfile
 
 from development_release import ARTIFACTS, Publisher, digest, eligible, safe_unpack, validate_runtime, RUNTIME_PLATFORMS
-from workbench_version import version_metadata
+from workbench_version import repository_version, version_metadata
 
 
 SHA = 'a' * 40
@@ -88,7 +88,7 @@ class DevelopmentTests(unittest.TestCase):
         self.version = version_metadata({'VHTTPD_DEVELOPMENT_BUILD':'1','GITHUB_SHA':SHA})
 
     def test_development_version_is_deterministic_and_stable_tags_keep_their_identity(self):
-        self.assertEqual(self.version['version'], '0.1.0-dev.g'+SHA[:12])
+        self.assertEqual(self.version['version'], repository_version()+'-dev.g'+SHA[:12])
         stable = version_metadata({'GITHUB_REF_TYPE':'tag','GITHUB_REF_NAME':'v1.2.3','VHTTPD_DEVELOPMENT_BUILD':'1'})
         self.assertEqual(stable['version'],'1.2.3')
         self.assertEqual(stable['prerelease'],'false')
@@ -110,7 +110,7 @@ class DevelopmentTests(unittest.TestCase):
         with zipfile.ZipFile(archive,'w') as bundle:
             bundle.writestr('安装说明.txt', '解压 '+archive.name)
             bundle.writestr('vhttpd-workbench.app/Contents/Info.plist',plistlib.dumps({
-                'CFBundleShortVersionString':'0.1.0','VHTTPDReleaseVersion':self.version['version']}))
+                'CFBundleShortVersionString':self.version['bundle_version'],'VHTTPDReleaseVersion':self.version['version']}))
         (directory/'SHA256SUMS').write_text(digest(archive)+'  '+archive.name+'\n')
         (directory/'acceptance.json').write_text(json.dumps({'archive':archive.name,'sha256':digest(archive),
             'source_commit':SHA,'release_mode':'unsigned','signature':'ad-hoc',

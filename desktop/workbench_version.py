@@ -2,11 +2,21 @@
 import json
 import os
 import re
+from pathlib import Path
+
+
+def repository_version():
+    """Read the same build manifest embedded in the vhttpd runtime."""
+    manifest = Path(__file__).resolve().parent.parent / 'v.mod'
+    matches = re.findall(r"(?m)^\s*version\s*:\s*(['\"])([^'\"]+)\1", manifest.read_text())
+    if len(matches) != 1:
+        raise ValueError('Expected one version in v.mod')
+    return matches[0][1]
 
 
 def version_metadata(env):
     tag = env.get('GITHUB_REF_NAME', '') if env.get('GITHUB_REF_TYPE') == 'tag' else ''
-    version = tag[1:] if tag.startswith('v') else env.get('VHTTPD_WORKBENCH_VERSION', '0.1.0')
+    version = tag[1:] if tag.startswith('v') else (env['VHTTPD_WORKBENCH_VERSION'] if 'VHTTPD_WORKBENCH_VERSION' in env else repository_version())
     if not tag and env.get('VHTTPD_DEVELOPMENT_BUILD') == '1':
         sha = env.get('GITHUB_SHA', '')
         if not re.fullmatch('[0-9a-f]{40}', sha):

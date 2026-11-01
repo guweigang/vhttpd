@@ -4,6 +4,7 @@ import plistlib
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 import zipfile
 
 from macos_release import digest, prepare, publish
@@ -53,6 +54,22 @@ class ReleaseTests(unittest.TestCase):
         (self.download / 'acceptance.json').write_text(json.dumps(self.acceptance))
         (self.download / 'SHA256SUMS').write_text(digest(self.archive) + '  ' + self.archive.name + '\n')
         (self.download / '验收说明.txt').write_text('15/26 passed; Gatekeeper not verified')
+
+    def test_default_and_development_versions_follow_the_manifest(self):
+        with patch('workbench_version.Path.read_text', return_value="Module {\n version: '0.9.7'\n}"):
+            self.assertEqual(version_metadata({})['version'], '0.9.7')
+            development = version_metadata({'VHTTPD_DEVELOPMENT_BUILD': '1', 'GITHUB_SHA': 'a' * 40})
+            self.assertEqual(development['version'], '0.9.7-dev.gaaaaaaaaaaaa')
+            self.assertEqual(development['bundle_version'], '0.9.7')
+        for manifest in ["Module {}", "version: '0.9.7'\nversion: '0.9.8'", "version: 'not-semver'"]:
+            with self.subTest(manifest=manifest), patch('workbench_version.Path.read_text', return_value=manifest):
+                with self.assertRaises(ValueError):
+                    version_metadata({})
+
+    def test_explicit_versions_do_not_require_a_checkout_manifest(self):
+        with patch('workbench_version.repository_version', side_effect=AssertionError('Unexpected manifest read')):
+            self.assertEqual(version_metadata(self.env)['version'], '2.3.4-rc.1')
+            self.assertEqual(version_metadata({'VHTTPD_WORKBENCH_VERSION': '0.9.8'})['version'], '0.9.8')
 
     def test_tag_versions_and_prerelease(self):
         self.assertEqual(self.version['bundle_version'], '2.3.4')

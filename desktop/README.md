@@ -15,7 +15,7 @@ tags:
 
 兼容构建目标为 Apple Silicon（arm64）、**macOS 15.0（Sequoia）及以上**。宿主、运行程序及包内每个动态库均按实际 Mach-O 最低版本检查，超过 15.0 的候选包会被拒绝，App 声明同步写入 `LSMinimumSystemVersion`。同一份 CI 源码构建候选包已在 GitHub 的 macOS 15.7.9 和 26.6.2 arm64 runner 上通过解压、搬移、新建、失败重试、配置发布、重启生效及恢复回归，见[目标系统运行证据](./ci/results/39132490236/verification.json)。这是两个真实目标系统虚拟机上的自动化运行验证；Finder、GUI 控件和浏览器交互尚未完成目标系统验收，本机 macOS 27 的原生手动验收也不能替代这些环节。两个目标系统的 Gatekeeper 策略评估均拒绝当前 ad-hoc 包；当前沿用 aidatastudio 的 unsigned 预览交付方式，不要求 Apple 证书，不将此策略拒绝混同为运行失败或自动放行。Intel Mac、实体 Mac 默认设置下的首次安装尚未验证；macOS 14 及以下不在当前目标范围。实现见[依赖封装](./package_macos.py)与[安装包检查](./verify_macos_release.py)。
 
-1. 解压 `vhttpd-workbench-macos-arm64-0.1.0.zip`，得到 `vhttpd-workbench.app` 和 `安装说明.txt`。
+1. 解压 `vhttpd-workbench-macos-arm64-0.9.0.zip`，得到 `vhttpd-workbench.app` 和 `安装说明.txt`。
 2. 把整个 `.app` 拖入“应用程序”或自己的“应用程序”目录；保留完整包，不要只复制其中的可执行文件。建议先放到固定位置，再创建或导入项目。
 3. 在 Finder 中打开应用。无需运行安装脚本、构建命令或先打开终端。包内包含 vhttpd、Admin UI、品牌素材和所需非系统动态库；内置两个 vjsx script 模板不要求安装 V、Node、npm、Homebrew 或 Xcode。导入使用其他执行器、原生扩展或外部服务的项目，仍需其对应依赖。
 4. 打开后按下文“第一次使用”创建项目；源码保存到自己选择的可写目录，与 `.app` 分开。
@@ -194,7 +194,7 @@ Mac 下载采用[tag 发布流程](../.github/workflows/workbench-macos-runtime.
 
 [开发版发布工作流](../.github/workflows/development-release.yml)监听 Mac 工作台和运行程序 CI 的成功结果，按同一个完整源码提交收集经过 macOS 15/26 验收的 Mac 下载包与 Linux amd64/arm64 完整运行包。两边都成功且产物未过期后才发布。发布端从默认分支读取受信任的发布脚本，下载的产物只按数据校验，不执行其中程序；PR、外部仓库及失败结果不能进入发布。维护者在本仓库分支手动运行时，需要两套 CI 都在同一提交完成构建；只有单边结果会等待另一边。
 
-开发包版本格式为 `0.1.0-dev.g<提交前12位>`，CI 自动创建对应 `v` 标签并发布为 Pre-release；不用手工打正式版本 tag。该标签绑定完整提交，校验 CI Artifact 的 SHA256、Mac 验收来源、平台、App 版本、Linux ELF 架构及内层包校验文件。先上传到带来源标记的 Draft，全部上传成功后才公开，上传失败保留 Draft 供重试；标签变化、无关 Draft 或已公开附件变化会被拒绝。已公开开发版不可覆盖。开发版不设置为 latest，不改变稳定版发布路径。实现与失败回归见[发布器](./ci/development_release.py)、[发布测试](./ci/test_development_release.py)及[版本解析](./workbench_version.py)。
+默认基础版本统一读取仓库根目录的 `v.mod`，当前为 `0.9.0`；vhttpd 在编译时嵌入该清单，安装后不需要读取源码文件。Desktop 的本地打包也使用同一基础版本，显式构建版本与正式 tag 仍按原规则覆盖。开发包版本格式为 `0.9.0-dev.g<提交前12位>`，CI 自动创建对应 `v` 标签并发布为 Pre-release；不用手工打正式版本 tag。该标签绑定完整提交，校验 CI Artifact 的 SHA256、Mac 验收来源、平台、App 版本、Linux ELF 架构及内层包校验文件。先上传到带来源标记的 Draft，全部上传成功后才公开，上传失败保留 Draft 供重试；标签变化、无关 Draft 或已公开附件变化会被拒绝。已公开开发版不可覆盖。开发版不设置为 latest，不改变稳定版发布路径。实现与失败回归见[发布器](./ci/development_release.py)、[发布测试](./ci/test_development_release.py)及[版本解析](./workbench_version.py)。
 
 新增的 `workflow_run` 工作流需要先进入仓库默认分支，之后主分支源码变更会自动构建并发布。它使用发布任务自带的 `GITHUB_TOKEN`（contents: write、actions: read），不需要新增用户下载凭据。公开附件包含 Mac 完整包、安装说明、验收记录、Linux 两种架构包与校验文件，以及 `runtime-release.json` 来源记录和总 SHA256SUMS。普通用户在 Desktop 中选择或指定公开版本即可；首次新 CI 发布前没有版本时，界面保持空状态并保留本地包入口。
 
@@ -234,7 +234,7 @@ Mac 下载采用[tag 发布流程](../.github/workflows/workbench-macos-runtime.
 交付构建会先验证候选 zip，再替换上一份 `.app` 和 zip。也可独立复跑安装包检查：
 
 ```bash
-python3 desktop/verify_macos_release.py desktop/bin/vhttpd-workbench-macos-arm64-0.1.0.zip
+python3 desktop/verify_macos_release.py desktop/bin/vhttpd-workbench-macos-arm64-0.9.0.zip
 ```
 
 该检查从 zip 解压到仓库外含空格的目录，核对签名、arm64、动态库相对路径、最低系统版本与离线说明；随后使用全新 HOME、仅系统工具的 PATH，禁止读取开发目录、Homebrew 和 V 模块，并禁止执行 Xcode 编译工具，运行两个真实模板及启动失败后重试流程，执行跨 include 发布、待重启、重启生效及持久化恢复检查，并验证 32 个并发首次草稿请求不会因创建目录竞争而失败。它验证开发环境独立性，不模拟另一台 Mac，也不代表 Gatekeeper 已放行。见[安装包回归](./verify_macos_release.py)。

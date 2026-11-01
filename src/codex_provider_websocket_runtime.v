@@ -13,7 +13,7 @@ import connection_runtime
 fn (mut app App) codex_send_initialize(instance string, mut conn net_ws.Client) ! {
 	log.info('[codex] 🤝 sending initialize instance=${codex.ProviderRuntime.normalize_instance(instance)} ...')
 	id := app.codex_next_rpc_id(instance)
-	params := '{"clientInfo":{"name":"codex_vhttpd","title":"vhttpd Codex Integration","version":"0.1.0"},"capabilities":{"experimentalApi":true}}'
+	params := '{"clientInfo":{"name":"codex_vhttpd","title":"vhttpd Codex Integration","version":"${vhttpd_version}"},"capabilities":{"experimentalApi":true}}'
 	msg := codex.RpcFrame.request('initialize', id, params)
 	log.info('[codex]    → ${msg}')
 	codex.RpcDebug.log('rpc.send.params.initialize', params)

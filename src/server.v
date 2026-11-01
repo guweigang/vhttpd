@@ -177,8 +177,6 @@ fn vhttpd_shutdown_runtime(sig os.Signal) {
 	exit(128 + int(sig))
 }
 
-const vhttpd_version = '0.1.0'
-
 const known_long_flags = [
 	'--help',
 	'--version',
