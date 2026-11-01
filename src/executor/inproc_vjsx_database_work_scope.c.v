@@ -33,7 +33,7 @@ fn run_scoped_database_work(work &VjsxDatabaseWork) ! {
 	mut lifetime := closure.new_lifetime()
 	defer { lifetime.dispose() or { log.error('database callback cleanup: ${err}') } }
 	C.vhttpd_database_scope_set(voidptr(work))
-	defer { C.vhttpd_database_scope_set(unsafe { nil }) }
+	defer { C.vhttpd_database_scope_set(voidptr(0)) }
 	lifetime.frame(vjsx_database_scoped_callback)!
 }
 

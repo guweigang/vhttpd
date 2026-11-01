@@ -2,8 +2,10 @@ module admin_state_store
 
 import os
 
+$if !windows {
 fn C.fchmod(int, int) int
 fn C.fsync(int) int
+}
 
 pub struct ConfigFileChange {
 pub:
@@ -25,6 +27,7 @@ fn (file StagedConfigFile) publish(commit fn (string, string) !) ! {
 		return error('config_staged_file_ownership_changed:' + file.path)
 	}
 	commit(file.temporary.path, file.path)!
+	$if windows { file.temporary.close_published() }
 }
 
 fn stage_config_file(path string, value string, mode int) !StagedConfigFile {
@@ -32,14 +35,22 @@ fn stage_config_file(path string, value string, mode int) !StagedConfigFile {
 	mut ready := false
 	defer { if !ready { temporary.release() } }
 	write_all(temporary.fd, value)!
-	if C.fchmod(temporary.fd, mode) != 0 { return os.last_error() }
-	if C.fsync(temporary.fd) != 0 { return os.last_error() }
+	$if windows {
+		if C.vh_fsync(temporary.fd) != 0 { return error('config_sync_failed') }
+	} $else {
+		if C.fchmod(temporary.fd, mode) != 0 { return os.last_error() }
+		if C.fsync(temporary.fd) != 0 { return os.last_error() }
+	}
 	ready = true
 	return StagedConfigFile{ path: path, temporary: temporary }
 }
 
 fn rename_config_file(source string, target string) ! {
-	if C.rename(&char(source.str), &char(target.str)) != 0 { return os.last_error() }
+	$if windows {
+		if C.vh_rename(source.str, target.str) != 0 { return error('config_replace_failed:${os.last_error()}') }
+	} $else {
+		if C.rename(&char(source.str), &char(target.str)) != 0 { return os.last_error() }
+	}
 }
 
 // Content equality does not transfer ownership of a replacement symlink.
@@ -104,16 +115,16 @@ fn rollback_config_files(changes []ConfigFileChange, modes []int, committed int)
 	for i := committed - 1; i >= 0; i-- {
 		change := changes[i]
 		verify_config_file(change.path, change.value) or {
-			failures << change.path
+			failures << '${change.path}: ${err.msg()}'
 			continue
 		}
 		file := stage_config_file(change.path, change.original, modes[i]) or {
-			failures << change.path
+			failures << '${change.path}: ${err.msg()}'
 			continue
 		}
 		file.publish(rename_config_file) or {
 			file.release()
-			failures << change.path
+			failures << '${change.path}: ${err.msg()}'
 			continue
 		}
 		file.release()

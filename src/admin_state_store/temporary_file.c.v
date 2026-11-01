@@ -1,5 +1,6 @@
 module admin_state_store
 
+$if !windows {
 import os
 import rand
 
@@ -33,4 +34,5 @@ fn (file TemporaryFile) matches() bool {
 fn (file TemporaryFile) release() {
 	defer { C.close(file.fd) }
 	if file.matches() { os.rm(file.path) or {} }
+}
 }

@@ -1,6 +1,8 @@
 module process_runtime
 
+$if !windows {
 import os
+}
 
 $if !windows {
 	#include "@VMODROOT/src/process_runtime/restart_helper.h"

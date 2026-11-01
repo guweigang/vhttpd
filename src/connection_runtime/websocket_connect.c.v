@@ -4,8 +4,12 @@ import net
 import net.websocket
 import time
 
+// These native transports belong to the Unix service. Desktop only imports
+// the protocol/configuration graph, so do not require Unix headers on Windows.
+$if !windows {
 #include <poll.h>
 #include <netinet/tcp.h>
+}
 
 struct C.pollfd {
 	fd      i32
