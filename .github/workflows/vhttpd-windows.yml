@@ -24,13 +24,31 @@ jobs:
         with:
           python-version: '3.12'
       - uses: actions/cache@v4
+        id: sdk-cache
         with:
           path: .cache/vcpkg-binary-cache
           key: windows-runtime-sdk-msvc-${{ hashFiles('desktop/ci/windows-vcpkg.commit') }}
       - name: Prepare shared OpenSSL and database SDK
         run: ./desktop/ci/prepare_windows_openssl.ps1 -WithDatabase
+      - name: Save successful SDK build before native checks
+        if: steps.sdk-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .cache/vcpkg-binary-cache
+          key: windows-runtime-sdk-msvc-${{ hashFiles('desktop/ci/windows-vcpkg.commit') }}
+      - uses: actions/cache@v4
+        id: toolchain-cache
+        with:
+          path: ${{ runner.temp }}/workbench-windows-toolchain
+          key: windows-runtime-toolchain-${{ hashFiles('scripts/ci/toolchain.env', 'desktop/ci/prepare_windows_toolchain.ps1', 'desktop/patches/v-windows-msvc-build.patch', 'desktop/ci/msvc_sdk_compat.h', 'desktop/ci/windows-vcpkg.commit') }}
       - name: Reuse Desktop pinned V and QuickJS toolchain without ui2
-        run: ./desktop/ci/prepare_windows_toolchain.ps1 -RuntimeOnly
+        run: ./desktop/ci/prepare_windows_toolchain.ps1 -RuntimeOnly -ReuseCached:('${{ steps.toolchain-cache.outputs.cache-hit }}' -eq 'true')
+      - name: Save verified native compiler before runtime checks
+        if: steps.toolchain-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/workbench-windows-toolchain
+          key: windows-runtime-toolchain-${{ hashFiles('scripts/ci/toolchain.env', 'desktop/ci/prepare_windows_toolchain.ps1', 'desktop/patches/v-windows-msvc-build.patch', 'desktop/ci/msvc_sdk_compat.h', 'desktop/ci/windows-vcpkg.commit') }}
       - name: Verify native shutdown and socket ownership
         run: |
           & cl /nologo /O2 /W4 /utf-8 /std:c11 scripts/ci/windows_runtime_probe.c /Fe:windows-runtime-probe.exe /link Ws2_32.lib

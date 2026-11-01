@@ -1,10 +1,11 @@
-param([switch]$RuntimeOnly)
+param([switch]$RuntimeOnly, [switch]$ReuseCached)
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 $lock = Get-Content (Join-Path $root 'scripts/ci/toolchain.env') -Raw | ConvertFrom-StringData
 $toolchain = Join-Path $env:RUNNER_TEMP 'workbench-windows-toolchain'
-if (Test-Path $toolchain) { throw 'Toolchain directory must be new' }
-New-Item -ItemType Directory $toolchain | Out-Null
+if ($ReuseCached -and !$RuntimeOnly) { throw 'Toolchain reuse is limited to standalone runtime CI' }
+if (!$ReuseCached -and (Test-Path $toolchain)) { throw 'Toolchain directory must be new' }
+if (!$ReuseCached) { New-Item -ItemType Directory $toolchain | Out-Null }
 function Checkout-Pinned($url, $revision, $destination) {
  & git init -q $destination
  if ($LASTEXITCODE -ne 0) { throw 'git init failed' }
@@ -18,10 +19,12 @@ function Checkout-Pinned($url, $revision, $destination) {
 }
 $v = Join-Path $toolchain 'v'
 $sdk = Join-Path $toolchain 'vjsx'
+$quickjs = Join-Path $toolchain 'quickjs'
+$qbuild = Join-Path $toolchain 'quickjs-build'
+if (!$ReuseCached) {
 Checkout-Pinned $lock.V_REPO $lock.V_COMMIT $v
 Checkout-Pinned $lock.VC_REPO $lock.VC_COMMIT (Join-Path $v 'vc')
 Checkout-Pinned $lock.VJSX_REPO $lock.VJSX_COMMIT $sdk
-$quickjs = Join-Path $toolchain 'quickjs'
 $quickjsCommit = (Get-Content (Join-Path $sdk '.quickjs-version') -Raw).Trim()
 Checkout-Pinned 'https://github.com/quickjs-ng/quickjs' $quickjsCommit $quickjs
 & bash ((Join-Path $sdk 'scripts/patch-quickjs.sh') -replace '\\','/') ($quickjs -replace '\\','/')
@@ -56,6 +59,9 @@ module mysql
 $env:VFLAGS = '-cc msvc -gc boehm'
 # Disable the launcher's legacy compiler retry so errors belong to the pinned V.
 $env:V_MACOS_V3_NO_FALLBACK = '1'
+# Same SDK macro hygiene as the full Desktop compile, scoped to V bootstrap.
+$formerClFlags = $env:CL
+$env:CL = '/FI"' + (Join-Path $root 'desktop/ci/msvc_sdk_compat.h') + '" ' + $formerClFlags
 Push-Location $v
 try {
  & .\makev.bat -msvc --local
@@ -64,8 +70,7 @@ try {
  Write-Host $version
  if (!$version.Contains($lock.V_COMMIT.Substring(0,7))) { throw "Unexpected compiler version: $version" }
  if ($LASTEXITCODE -ne 0) { throw 'Native V unavailable' }
-} finally { Pop-Location }
-$qbuild = Join-Path $toolchain 'quickjs-build'
+} finally { Pop-Location; $env:CL = $formerClFlags }
 & cmake -S $quickjs -B $qbuild -G 'Visual Studio 17 2022' -A x64 -DQJS_BUILD_LIBC=ON -DBUILD_SHARED_LIBS=OFF
 if ($LASTEXITCODE -ne 0) { throw 'QuickJS configure failed' }
 & cmake --build $qbuild --config Release --target qjs_exe --parallel 2
@@ -87,6 +92,15 @@ if (!$RuntimeOnly) {
  if ($LASTEXITCODE -ne 0) { throw 'Upstream ui2 checkout was modified' }
  Add-Content $env:GITHUB_ENV "WORKBENCH_WINDOWS_MODULES=$modules"
 }
+}
+# Check cached compiler/SDK identity too; cache lookup never substitutes a pin.
+$version = (& (Join-Path $v 'v.exe') version | Out-String).Trim()
+if ($LASTEXITCODE -ne 0 -or !$version.Contains($lock.V_COMMIT.Substring(0,7))) { throw 'Cached V compiler pin mismatch' }
+if ((& git -C $sdk rev-parse HEAD).Trim() -ne $lock.VJSX_COMMIT) { throw 'Cached vjsx pin mismatch' }
+if ((& git -C $sdk status --porcelain | Out-String).Trim()) { throw 'Cached vjsx source is dirty' }
+$quickjsCommit = (Get-Content (Join-Path $sdk '.quickjs-version') -Raw).Trim()
+$qlib = Get-ChildItem $qbuild -Filter qjs.lib -File -Recurse | Select-Object -First 1
+if (!$qlib) { throw 'QuickJS library missing from toolchain' }
 Add-Content $env:GITHUB_PATH $v
 Add-Content $env:GITHUB_ENV "VJSX_DIR=$sdk"
 Add-Content $env:GITHUB_ENV "VJS_QUICKJS_PATH=$quickjs"

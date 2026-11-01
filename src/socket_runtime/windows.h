@@ -23,6 +23,9 @@ static int vhttpd_socket_duplicate(int fd) {
     if (alias == INVALID_SOCKET) return -1;
     /* V's net.Socket uses int. Never silently truncate an out-of-range handle. */
     if ((uintptr_t)alias > INT_MAX) { closesocket(alias); WSASetLastError(WSAEMFILE); return -1; }
+    /* Duplicated protocol providers may preserve inheritance despite the
+       creation flag. Enforce it on the returned alias before publication. */
+    if (!vhttpd_socket_protect((int)alias)) { closesocket(alias); WSASetLastError(WSAEINVAL); return -1; }
     return (int)alias;
 }
 static int vhttpd_socket_wait_writable(int fd, int milliseconds) {
