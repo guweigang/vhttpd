@@ -179,6 +179,7 @@ fn portable_tree(value toml.Any, prefix []string, base string, p Payload) ! {
 					return error('absolute_application_path')
 				}
 				resolved := os.norm_path(os.join_path(base, val))
+				if p.component_id != '' && val != '' && resolved != 'apps/' + p.component_id && !resolved.starts_with('apps/' + p.component_id + '/') { return error('absolute_application_path') }
 				if val != '' && resolved != '.' && !safe_path(resolved) {
 					return error('absolute_application_path')
 				}

@@ -4,5 +4,5 @@ import relay
 
 interface RelayIngressDispatchHost {
 mut:
-	dispatch_and_send_relay_ingress_frame(string, string, relay.WireFrame, i64) []RelayPipelineDispatchOutcome
+	dispatch_and_send_relay_ingress_owned(string, string, relay.WireFrame, i64, relay.InboundLease) []RelayPipelineDispatchOutcome
 }

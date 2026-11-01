@@ -10,6 +10,7 @@ pub enum ForwardingAction {
 
 pub struct ForwardingOutcome {
 pub:
+	lease InboundLease
 	action         ForwardingAction
 	channel_id     string
 	correlation_id string
@@ -73,6 +74,7 @@ fn handle_open_frame(mut registry ChannelRegistry, frame WireFrame, source_node_
 		}
 	}
 	return ForwardingOutcome{
+        lease: InboundLease{channel_id:frame.channel_id,registration:registry.channels[frame.channel_id].registration}
 		action:         .opened
 		channel_id:     frame.channel_id
 		correlation_id: frame.correlation_id

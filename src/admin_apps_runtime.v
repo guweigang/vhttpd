@@ -267,6 +267,24 @@ fn (builder AdminAppsBuilder) app_id_from_listener(id string) string {
 }
 
 fn (builder AdminAppsBuilder) app_id_from_pipeline(pipeline runtime_plan.PipelinePlan) string {
+	// A Relay debug ingress executes the existing application's engine. It is
+	// not a second application just because its control route has another ID.
+	if pipeline.ingress.domain == .relay {
+		engine := builder.pipeline_engine_ref(pipeline)
+		mut owners := []string{}
+		if engine != '' {
+			for candidate in builder.plan.pipelines {
+				if candidate.ingress.domain == .relay || builder.pipeline_engine_ref(candidate) != engine { continue }
+				owner := admin_pipeline_declared_app(candidate)
+				if owner !in owners { owners << owner }
+			}
+			if owners.len == 1 { return owners[0] }
+		}
+	}
+	return admin_pipeline_declared_app(pipeline)
+}
+
+fn admin_pipeline_declared_app(pipeline runtime_plan.PipelinePlan) string {
 	if pipeline.group.starts_with('site:') {
 		return admin_app_id(pipeline.group.all_after('site:'))
 	}

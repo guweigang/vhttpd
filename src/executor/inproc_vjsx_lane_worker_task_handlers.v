@@ -135,15 +135,9 @@ fn InProcVjsxLaneWorkerRuntime.handle_pump_task(worker_executor InProcVjsxExecut
 	state_pump.mu.unlock()
 	mut pump_error := ''
 	if current {
-		if mut session := host.session_handle() {
-			// HTTP turns and idle wakeups can own the same lane on different
-			// native threads. Settling a completion already enters QuickJS;
-			// refresh its stack guard before draining, not only before pumping.
-			session.runtime().update_stack_top()
-			session.drain_host_async_events() or { pump_error = err.msg() }
-		}
-		if pump_error == '' { host.pump_until_idle() }
+		host.pump_ready_events() or { pump_error = err.msg() }
 	}
+	if pump_error != '' { state_pump.write_application_log(idx,'error',pump_error,map[string]string{}) }
 	task.slot.mu.@lock()
 	task.slot.result = InProcVjsxLanePumpTaskResult{
 		ok: pump_error == ''

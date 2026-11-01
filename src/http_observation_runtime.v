@@ -4,6 +4,7 @@ import executor
 import json2 as json
 import log
 import time
+import application_logs
 
 // Bounded per-listener state; owned by ControlPlaneRuntime.mu. Keys are pipeline
 // IDs, never request URLs. Empty ID covers requests without a compiled route.
@@ -73,6 +74,16 @@ fn (mut app App) complete_http_observation(ctx Context, started i64, observation
 	pipeline := if ctx.observed_pipeline in app.control_plane.http_observations.routes || app.control_plane.http_observations.routes.len < 512 { ctx.observed_pipeline } else { '@overflow' }
 	app.control_plane.http_observations.record_staged(ctx.observed_pipeline, ctx.req.method.str(), status, duration_ms, observation_id, at_unix, stages)
 	app.control_plane.mu.unlock()
+	scope := app.control_plane.application_log_scope(ctx.observed_pipeline, app.app_build_cfg.plan_listener_id)
+	mut application_log := application_logs.shared()
+	application_log.append(scope, application_logs.Record{
+		pipeline_id:ctx.observed_pipeline
+		request_id:if ctx.observed_request_id != '' { ctx.observed_request_id } else { observation_id }
+		trace_id:ctx.observed_trace_id
+		level:if status >= 500 { 'error' } else if status >= 400 { 'warn' } else { 'info' }
+		source:'request'
+		message:'${ctx.req.method} ${status} ${duration_ms} ms'
+	})
 	if duration_ms >= 1 || status >= 400 {
 		entry := executor.AdminHttpObservationError{stages:stages,pipeline_id: pipeline, method: ctx.req.method.str(), status: status, duration_ms: duration_ms, observation_id: observation_id, at_unix: at_unix}
 		line := http_observation_log(app.app_build_cfg.plan_listener_id, entry)

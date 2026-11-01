@@ -5,6 +5,12 @@ import executor
 
 // Optional EmbeddedHost capability. Credentials never enter JavaScript.
 pub fn (mut app App) vjsx_database_backend() !executor.DatabaseBackend {
+	view := app.pipeline_dispatch_view()
+	if resource := view.plan.listener_resource(app.app_build_cfg.plan_listener_id, 'db') {
+		if resource.options.strings['relay'] != '' {
+			return app.relay_database_backend(resource)
+		}
+	}
 	app.mu.@lock()
 	if !app.transport.db.enabled {
 		app.mu.unlock()

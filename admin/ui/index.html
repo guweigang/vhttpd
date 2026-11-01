@@ -55,10 +55,17 @@
       <main class="main">
         <div id="status" class="status">Idle</div>
         <section id="view-relay" class="view grid hidden">
-          <div class="panel"><div class="panel-header"><h3>Project Relay Runtime</h3></div><div class="panel-body">
-            <p>Relay belongs to this project's runtime plan. Agent and hub are roles; local and remote describe deployment locations. Edit relays and pipeline bindings in the project configuration.</p>
+          <div class="panel"><div class="panel-header"><h3>Relay 运行状态与日志</h3></div><div class="panel-body">
+            <p>查看连接变化、请求执行位置和通道历史；配置编辑位于页面下方。</p>
             <p id="relayAvailability" role="status"></p>
           </div></div>
+          <div class="grid metrics" id="relayMetrics"></div>
+          <div class="panel"><div class="panel-header"><h3>接管请求执行记录</h3></div><div class="panel-body"><p id="relayDiagnosticStatus" role="status"></p><div id="relayRequests"></div></div></div>
+          <div class="panel"><div class="panel-header"><h3>Relay 连接与数据库事件</h3></div><div class="panel-body" id="relayHistory"></div></div>
+          <div class="panel"><div class="panel-header"><h3>Agents</h3></div><div class="panel-body" id="relayAgents"></div></div>
+          <div class="panel"><div class="panel-header"><h3>Carriers</h3></div><div class="panel-body" id="relayCarriers"></div></div>
+          <div class="panel"><div class="panel-header"><h3>Channels</h3></div><div class="panel-body" id="relayChannels"></div></div>
+          <div class="panel"><div class="panel-header"><h3>Sessions</h3></div><div class="panel-body" id="relaySessions"></div></div>
           <div class="panel">
             <div class="panel-header"><h3>Relay 配置</h3><button id="relayLoad" class="button">载入项目配置</button></div>
             <div class="panel-body">
@@ -103,11 +110,7 @@
               <p id="relayEditError" role="alert"></p>
             </div>
           </div>
-          <div class="grid metrics" id="relayMetrics"></div>
-          <div class="panel"><div class="panel-header"><h3>Agents</h3></div><div class="panel-body" id="relayAgents"></div></div>
-          <div class="panel"><div class="panel-header"><h3>Carriers</h3></div><div class="panel-body" id="relayCarriers"></div></div>
-          <div class="panel"><div class="panel-header"><h3>Channels</h3></div><div class="panel-body" id="relayChannels"></div></div>
-          <div class="panel"><div class="panel-header"><h3>Sessions</h3></div><div class="panel-body" id="relaySessions"></div></div>
+
         </section>
         <section id="view-dashboard" class="view grid">
           <div class="overview-intro"><div><span class="eyebrow">PROJECT OVERVIEW</span><h3 id="overviewProject">当前项目</h3><p id="overviewPath" class="value-text"></p></div><label class="refresh-choice"><input id="autoRefresh" type="checkbox" checked>每 5 秒更新状态</label></div>

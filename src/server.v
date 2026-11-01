@@ -351,6 +351,10 @@ fn run_single_server_with_config(cfg config.VhttpdConfig, runtime_cfg server_lif
 
 	start_server_runtime(mut app, runtime_cfg)
 	serve_server_runtime(mut app, runtime_cfg)
+	// An empty environment still owns its Admin plane and must remain alive.
+	if !runtime_cfg.serve_data_plane {
+		for !active_runtime_is_shutting_down() { time.sleep(50 * time.millisecond) }
+	}
 	wait_for_active_runtime_shutdown()
 }
 
@@ -434,6 +438,7 @@ fn main() {
 	if os.args.len == 3 && os.args[1] == '--workbench-upgrade-helper' {
 		runtime_upgrade.run(os.args[2]) or { eprintln('runtime_upgrade_failed'); exit(1) }; return
 	}
+	if os.args.len == 2 && os.args[1] == '--workbench-component-version' { println('1'); return }
 	if os.args.len == 2 && os.args[1] == '--workbench-deploy-version' { println('1'); return }
 	if os.args.len == 3 && os.args[1] == '--workbench-deploy-prepare' {
 		result := runtime_upgrade.prepare_deployment(os.args[2]) or { eprintln(runtime_upgrade.deployment_safe_error(err.msg())); exit(2) }

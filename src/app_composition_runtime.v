@@ -11,6 +11,7 @@ import executor
 import runtime_plan
 import http_runtime
 import process_runtime
+import application_logs
 
 struct DataPlaneRuntime {
 mut:
@@ -35,11 +36,13 @@ mut:
 
 struct ControlPlaneRuntime {
 mut:
+	application_log_scopes map[string]application_logs.Scope
 	mu                sync.Mutex
 	admin             admin.AdminState
 	http_stats        HttpStats
 	http_observations HttpObservations
 	event_log         string
+	relay_diagnostics executor.AdminRelayDiagnostics
 }
 
 struct ProcessLifecycle {
@@ -56,6 +59,7 @@ mut:
 
 fn (mut control ControlPlaneRuntime) emit(kind string, fields map[string]string) {
 	control.mu.@lock()
+	if kind.starts_with('relay.') { control.record_relay_event(kind, fields) }
 	if kind == 'http.request' {
 		control.http_stats.inc_requests()
 		status := (fields['status'] or { '0' }).int()

@@ -27,6 +27,7 @@ pub mut:
 	trace_id        string
 	carrier_mu      sync.Mutex
 	carrier_binding ?&relay.CarrierBinding
+	resource_close_fn ?fn (string)
 }
 
 fn relay_websocket_attached_cb(mut sc websocket.ServerClient, ref voidptr) ! {
@@ -69,8 +70,8 @@ fn relay_websocket_message_cb(mut ws_client websocket.Client, msg &websocket.Mes
 	if outcome.action == .forwarded {
 		if relay_frame_should_dispatch_pipeline(outcome.frame) {
 			mut host := state.dispatch_host
-			for dispatch_outcome in host.dispatch_and_send_relay_ingress_frame(state.descriptor.id,
-				state.conn_id, outcome.frame, time.now().unix_milli()) {
+			for dispatch_outcome in host.dispatch_and_send_relay_ingress_owned(state.descriptor.id,
+				state.conn_id, outcome.frame, time.now().unix_milli(), outcome.forwarding.lease) {
 				state.emit_fn('relay.pipeline.dispatch', relay_websocket_event_fields(relay_pipeline_dispatch_event_fields(dispatch_outcome),
 					state))
 			}
@@ -121,6 +122,7 @@ fn relay_websocket_finalize(mut state RelayWebSocketBridgeState) {
 	state.lifecycle.mark_closing()
 	relay_websocket_detach(mut state)
 	if state.lifecycle.begin_cleanup() {
+		if close := state.resource_close_fn { close(state.conn_id) }
 		state.websocket_rt.cleanup_conn(state.conn_id, state.lifecycle)
 	}
 }

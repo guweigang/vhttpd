@@ -71,11 +71,6 @@ fn (host VjsxLaneHost) resolve_value(val vjsx.Value) !vjsx.Value {
 	return session.resolve_value(val)
 }
 
-fn (host VjsxLaneHost) pump_until_idle() {
-	session := host.session_handle() or { return }
-	session.pump_until_idle()
-}
-
 fn (host VjsxLaneHost) call_handler(handler vjsx.Value, args ...vjsx.AnyValue) !vjsx.Value {
 	session := host.session_handle() or { return error('inproc_vjsx_executor_session_missing') }
 	return session.call(handler, ...args)

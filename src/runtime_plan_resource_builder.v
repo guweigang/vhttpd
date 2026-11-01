@@ -16,6 +16,11 @@ fn TransportRuntimeHub.from_plan(plan runtime_plan.RuntimePlan, listener_id stri
 
 fn db_runtime_settings_from_plan(plan runtime_plan.RuntimePlan, listener_id string) provider.DbRuntimeSettings {
 	resource := plan.listener_resource(listener_id, 'db') or { return provider.DbRuntimeSettings{} }
+	if resource.options.strings['relay'] != '' { return provider.DbRuntimeSettings{} }
+	return db_runtime_settings_from_resource(resource)
+}
+
+fn db_runtime_settings_from_resource(resource runtime_plan.ResourcePlan) provider.DbRuntimeSettings {
 	driver := provider.normalize_db_driver(resource.kind)
 	return provider.DbRuntimeSettings{
 		enabled:      true

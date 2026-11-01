@@ -676,9 +676,43 @@ fn validate_runtime_plan_references(plan runtime_plan.RuntimePlan) ! {
 		}
 	}
 	validate_adapter_semantics(plan)!
+	validate_relay_database_semantics(plan)!
 	validate_engine_semantics(plan)!
 	validate_transform_semantics(plan)!
 	validate_listener_pipeline_coverage(plan)!
+}
+
+fn validate_relay_database_semantics(plan runtime_plan.RuntimePlan) ! {
+	for id, resource in plan.resources {
+		if resource.category != 'db' || resource.options.strings['relay'] == '' { continue }
+		reference := runtime_plan.parse_ref(resource.options.strings['relay'])!
+		if reference.domain != .relay { return error('relay_db_invalid_relay_reference:${id}') }
+		validate_plan_ref_exists(reference, plan)!
+		relay := plan.relays[reference.id]
+		if relay.mode != 'agent' || relay.options.strings['token'] == '' || resource.kind != 'mysql' {
+			return error('relay_db_requires_authenticated_agent:${id}')
+		}
+		if resource.options.strings['route'] == '' || !resource.options.strings['remote_resource'].starts_with('db/') {
+			return error('relay_db_missing_resource_route:${id}')
+		}
+		for key in ['host', 'database', 'username', 'password'] {
+			if resource.options.strings[key] != '' { return error('relay_db_local_credentials_forbidden:${id}:${key}') }
+		}
+	}
+	for id, adapter in plan.adapters {
+		if adapter.kind != 'db-resource' { continue }
+		resource := plan.resources[adapter.options.strings['resource']] or { return error('relay_db_unknown_export:${id}') }
+		if resource.category != 'db' || resource.kind != 'mysql' || resource.options.strings['relay'] != '' {
+			return error('relay_db_invalid_export:${id}')
+		}
+		if adapter.options.strings['access'] !in ['', 'read-only', 'read-write'] { return error('relay_db_invalid_access:${id}') }
+		for pipeline in plan.pipelines {
+			if pipeline.egress.domain != .adapter || pipeline.egress.id != id { continue }
+			if pipeline.ingress.domain != .relay { return error('relay_db_requires_relay_ingress:${id}') }
+			relay := plan.relays[pipeline.ingress.id]
+			if relay.mode != 'hub' || relay.options.strings['token'] == '' { return error('relay_db_requires_authenticated_hub:${id}') }
+		}
+	}
 }
 
 fn validate_plan_ref_exists(reference runtime_plan.ResourceRef, plan runtime_plan.RuntimePlan) ! {
@@ -703,6 +737,27 @@ fn validate_plan_ref_exists(reference runtime_plan.ResourceRef, plan runtime_pla
 fn validate_adapter_semantics(plan runtime_plan.RuntimePlan) ! {
 	for id, adapter in plan.adapters {
 		match adapter.kind {
+            'debug-control', 'debug-http' {
+                if adapter.kind == 'debug-control' && adapter.options.strings['route'] != 'debug/http' {
+                    return error('takeover_invalid_receiver_route:${id}')
+                }
+                if adapter.kind == 'debug-http' {
+                    engine_ref := adapter.engine or { return error('takeover_engine_missing:${id}') }
+                    engine := plan.engines[engine_ref.id] or { return error('takeover_engine_missing:${id}') }
+                    if engine.kind != 'vjsx' { return error('takeover_requires_vjsx:${id}') }
+                }
+                mut bound := false
+                for pipeline in plan.pipelines {
+                    if pipeline.egress.str() != 'adapter:${id}' { continue }
+                    bound = true
+                    if pipeline.ingress.domain != .relay { return error('takeover_requires_relay_ingress:${id}') }
+                    descriptor := plan.relays[pipeline.ingress.id] or { return error('takeover_unknown_relay:${id}') }
+                    expected := if adapter.kind == 'debug-control' { 'hub' } else { 'agent' }
+                    if descriptor.mode != expected || descriptor.options.strings['token'] == '' { return error('takeover_requires_authenticated_${expected}:${id}') }
+                    if adapter.kind == 'debug-http' && pipeline.id != 'debug/http' { return error('takeover_invalid_receiver_route:${id}') }
+                }
+                if !bound { return error('takeover_unbound_adapter:${id}') }
+            }
 			'http-handler' {
 				if adapter.engine == none {
 					return error('runtime_plan_adapter_missing_engine:${id}')

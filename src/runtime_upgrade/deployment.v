@@ -63,6 +63,7 @@ struct DeploymentPlan {
 	files             []DeploymentFile
 	configs           []string
 	previous_manifest string
+	component_id string
 }
 
 fn (r DeploymentRequest) runtime_request(rev string) Request {
@@ -163,15 +164,17 @@ pub fn prepare_deployment(path string) !DeploymentPreview {
 	}
 	raw := os.read_file(raw_path)!
 	if sha256.hexhash(raw) != r.payload_hash { return error('bundle_checksum_mismatch') }
-	payload := json.decode[app_bundle.Payload](raw)!
+	mut payload := json.decode[app_bundle.Payload](raw)!
 	payload.validate()!
 	app_bundle.check_portable(payload)!
 	if payload.id != r.id { return error('invalid_application_bundle') }
+	component_id := payload.component_id
+	if component_id != '' { payload = app_bundle.compose_component(payload, r.config_path)! }
 	candidate := os.join_path(dir, 'candidate')
 	if os.exists(candidate) { return error('deployment_preview_exists') }
 	os.mkdir(candidate, mode: 0o700)!
 	app_bundle.materialize(payload, candidate)!
-	preserved := app_bundle.preserve_remote(candidate, payload, r.config_path)!
+	preserved := if component_id == '' { app_bundle.preserve_remote(candidate, payload, r.config_path)! } else { ['environment', 'other-applications', 'resources', 'credentials'] }
 	stage_sources := deployment_sources(candidate, payload)!
 	mut target_sources := map[string]string{}
 	for source, value in stage_sources {
@@ -179,7 +182,7 @@ pub fn prepare_deployment(path string) !DeploymentPreview {
 	}
 	config.load_runtime_plan_with_overrides(r.config_path, target_sources) or { return error('whole_project_validation_failed') }
 	config.load_runtime_plan_file(os.join_path(candidate, 'vhttpd.toml')) or { return error('whole_project_validation_failed') }
-	previous_manifest := read_application_manifest(project)!
+	previous_manifest := if component_id == '' { read_application_manifest(project)! } else { '' }
 	mut paths := payload.files.map(it.path)
 	if previous_manifest != '' {
 		previous := json.decode[ApplicationManifest](previous_manifest)!
@@ -196,7 +199,7 @@ pub fn prepare_deployment(path string) !DeploymentPreview {
 			''
 		}
 		file := DeploymentFile{ ...before, after_hash: after_hash, after_mode: if matches.len > 0 {
-			matches[0].mode
+			if component_id != '' && before.before_exists { before.before_mode } else { matches[0].mode }
 		} else {
 			0
 		} }
@@ -226,13 +229,14 @@ pub fn prepare_deployment(path string) !DeploymentPreview {
 		}
 	}
 	preview := DeploymentPreview{ id: r.id, config_path: r.config_path, files: views, preserved: preserved, revision: deployment_revision(target_sources) }
-	private_write(os.join_path(dir, 'plan.json'), json.encode(DeploymentPlan{ preview: preview, files: files, configs: payload.configs, previous_manifest: previous_manifest }))!
+	private_write(os.join_path(dir, 'plan.json'), json.encode(DeploymentPlan{ preview: preview, files: files, configs: payload.configs, previous_manifest: previous_manifest, component_id: component_id }))!
 	private_write(os.join_path(dir, 'preview.json'), json.encode(preview))!
 	return preview
 }
 
 fn write_deployment_files(project string, dir string, files []DeploymentFile, restore bool) ! {
 	for file in files {
+		if file.before_exists && file.before_hash == file.after_hash { continue }
 		target := app_bundle.safe_target(project, file.path)!
 		exists := if restore { file.before_exists } else { file.after_hash != '' }
 		if !exists {
@@ -293,7 +297,13 @@ fn deployment_restore(dir string, r DeploymentRequest, plan DeploymentPlan, old 
 		}
 	}
 	write_deployment_files(os.dir(r.config_path), dir, plan.files, true)!
-	marker := os.join_path(os.dir(r.config_path), '.desktop-application.json')
+	if plan.component_id != '' {
+		for file in plan.files.filter(!it.before_exists) {
+			mut empty_dir := os.dir(os.join_path(os.dir(r.config_path), file.path))
+			for empty_dir.starts_with(os.join_path(os.dir(r.config_path), 'apps', plan.component_id)) { os.rmdir(empty_dir) or { break }; empty_dir = os.dir(empty_dir) }
+		}
+	}
+	marker := os.join_path(os.dir(r.config_path), if plan.component_id == '' { '.desktop-application.json' } else { '.desktop-installed-' + plan.component_id + '.json' })
 	if plan.previous_manifest == '' {
 		if os.exists(marker) { os.rm(marker)! }
 	} else {
@@ -351,7 +361,7 @@ fn deployment_perform(dir string, r DeploymentRequest, plan DeploymentPlan, mut 
 		return error('invalid_deployment_plan')
 	}
 	verify_deployment_inputs(os.dir(r.config_path), plan.files)!
-	if read_application_manifest(os.dir(r.config_path))! != plan.previous_manifest {
+	if plan.component_id == '' && read_application_manifest(os.dir(r.config_path))! != plan.previous_manifest {
 		return error('deployment_preview_stale')
 	}
 	instance := probe(r.runtime_request(r.expected_revision))!
@@ -393,7 +403,7 @@ fn deployment_perform(dir string, r DeploymentRequest, plan DeploymentPlan, mut 
 	target = launch(old.executable, old)!
 	effective := wait_ready(r.runtime_request(plan.preview.revision), target, '')!
 	check_deployed_files(os.dir(r.config_path), plan.files)!
-	private_write(os.join_path(os.dir(r.config_path), '.desktop-application.json'), json.encode(ApplicationManifest{ id: r.id, files: plan.files.filter(it.after_hash != '') }))!
+	private_write(os.join_path(os.dir(r.config_path), if plan.component_id == '' { '.desktop-application.json' } else { '.desktop-installed-' + plan.component_id + '.json' }), json.encode(ApplicationManifest{ id: r.id, files: plan.files.filter(it.after_hash != '') }))!
 	deployment_status(dir, r, 'completed', '', effective, '')!
 }
 

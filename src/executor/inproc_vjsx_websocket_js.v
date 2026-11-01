@@ -8,6 +8,17 @@ import vjsx
 
 struct InProcVjsxWebSocketJs {}
 
+fn InProcVjsxWebSocketJs.write_log(ctx &vjsx.Context, meta InProcVjsxRuntimeMeta, level string, args []vjsx.Value) {
+	host := ctx.js_global('vhttpdHost')
+	defer { host.free() }
+	callback := host.get('log')
+	defer { callback.free() }
+	identity := ctx.json_parse(json.encode({'requestId':meta.request_id,'traceId':meta.trace_id}))
+	defer { identity.free() }
+	result := ctx.call(callback,level,InProcVjsxWebSocketJs.log_args(args),identity) or { return }
+	result.free()
+}
+
 fn InProcVjsxWebSocketJs.value_from_json(ctx &vjsx.Context, raw string) vjsx.Value {
 	if raw.trim_space() == '' {
 		return ctx.js_object()
@@ -86,19 +97,19 @@ fn InProcVjsxWebSocketJs.runtime(ctx &vjsx.Context, runtime_meta InProcVjsxRunti
 	defer { now_fn.free() }
 	runtime.set('now', now_fn)
 	log_fn := ctx.js_function(fn [ctx, runtime_meta] (args []vjsx.Value) vjsx.Value {
-		println('[vhttpd] ${runtime_meta.lane_id} ${runtime_meta.request_id} ${runtime_meta.trace_id} ${InProcVjsxWebSocketJs.log_args(args)}')
+		InProcVjsxWebSocketJs.write_log(ctx,runtime_meta,'info',args)
 		return ctx.js_undefined()
 	})
 	defer { log_fn.free() }
 	runtime.set('log', log_fn)
 	warn_fn := ctx.js_function(fn [ctx, runtime_meta] (args []vjsx.Value) vjsx.Value {
-		eprintln('[vhttpd] ${runtime_meta.lane_id} ${runtime_meta.request_id} ${runtime_meta.trace_id} ${InProcVjsxWebSocketJs.log_args(args)}')
+		InProcVjsxWebSocketJs.write_log(ctx,runtime_meta,'warn',args)
 		return ctx.js_undefined()
 	})
 	defer { warn_fn.free() }
 	runtime.set('warn', warn_fn)
 	error_fn := ctx.js_function(fn [ctx, runtime_meta] (args []vjsx.Value) vjsx.Value {
-		eprintln('[vhttpd] ${runtime_meta.lane_id} ${runtime_meta.request_id} ${runtime_meta.trace_id} ${InProcVjsxWebSocketJs.log_args(args)}')
+		InProcVjsxWebSocketJs.write_log(ctx,runtime_meta,'error',args)
 		return ctx.js_undefined()
 	})
 	defer { error_fn.free() }

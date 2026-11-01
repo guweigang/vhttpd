@@ -1,0 +1,12 @@
+import {readFileSync} from 'node:fs';
+const source = readFileSync('src/inproc_vjsx_http_facade.js','utf8');
+new Function(readFileSync('admin/ui/app.js','utf8'));
+new Function(source);
+new Function(source.slice(0,source.indexOf('globalThis.__vhttpd_create_runtime')))();
+const requests=[];
+const host={database(raw){if(raw==='__drain')return '';requests.push(JSON.parse(raw));return Promise.resolve(JSON.stringify({ok:true,driver:'mysql',rows:[]}));}};
+const left=globalThis.__vhttpd_database_api(host,{requestId:'request-left',traceId:'trace-left'});
+const right=globalThis.__vhttpd_database_api(host,{requestId:'request-right',traceId:'trace-right'});
+await Promise.all([left.query('SELECT 1',[]),right.execute('UPDATE fixture SET n=1',[])]);
+if(requests.length!==2||requests[0].request_id!=='request-left'||requests[1].request_id!=='request-right'||requests[0].trace_id!=='trace-left'||requests[1].trace_id!=='trace-right')throw Error('database request correlation crossed contexts');
+console.log('PASS JavaScript syntax and independent database request correlation (vjsx)');

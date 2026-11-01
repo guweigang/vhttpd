@@ -21,6 +21,8 @@ pub:
 pub struct Payload {
 pub:
 	protocol    int = 1
+	component_id string
+	component_entry string
 	id          string
 	files       []File
 	configs     []string
@@ -265,7 +267,10 @@ pub fn collect(root string, config_path string, id string) !Payload {
 }
 
 pub fn (p Payload) validate() ! {
-	if p.protocol != 1 || p.id.len != 24 || !p.id.bytes().all(it.is_hex_digit()) || p.files.len < 1 || p.files.len > max_files || p.configs.len < 1 || 'vhttpd.toml' !in p.configs {
+	if p.component_id != '' {
+		if !valid_component_id(p.component_id) || p.component_entry !in p.configs || !p.files.all(it.path.starts_with('apps/' + p.component_id + '/')) { return error('invalid_component_bundle') }
+	}
+	if p.protocol != 1 || p.id.len != 24 || !p.id.bytes().all(it.is_hex_digit()) || p.files.len < 1 || p.files.len > max_files || p.configs.len < 1 || (p.component_id == '' && 'vhttpd.toml' !in p.configs) {
 		return error('invalid_application_bundle')
 	}
 	mut seen := map[string]bool{}

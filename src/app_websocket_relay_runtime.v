@@ -7,9 +7,11 @@ import ws
 
 fn (mut app App) build_relay_websocket_state(descriptor relay.RelayDescriptor, method string, path string, query map[string]string, headers map[string]string, remote_addr string, req_id string, trace_id string) &RelayWebSocketBridgeState {
 	mut control := &app.control_plane
+	mut databases := app.relay_databases
 	return &RelayWebSocketBridgeState{
 		relay_runtime: &app.relay
 		dispatch_host: app
+		resource_close_fn: fn [mut databases] (owner string) { spawn databases.close_owner(owner) }
 		emit_fn:       fn [mut control] (kind string, fields map[string]string) {
 			control.emit(kind, fields)
 		}

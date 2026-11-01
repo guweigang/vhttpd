@@ -3,6 +3,7 @@ module executor
 import sync
 import config as app_config
 import state_store
+import application_logs
 
 pub struct VjsxRuntimeFacadeConfig {
 pub:
@@ -60,6 +61,7 @@ pub struct VjsxExecutorState {
 pub mut:
 	mu sync.Mutex
 mut:
+	application_log_scope application_logs.Scope
 	http_waiting                            int
 	http_queue_waits                        i64
 	http_queue_timeouts                     i64
