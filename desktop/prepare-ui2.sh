@@ -30,7 +30,8 @@ for patch_file in "$root/desktop/patches/ui2-native-pointer-uint.patch" \
                   "$root/desktop/patches/ui2-windows-focus-borders.patch" \
                   "$root/desktop/patches/ui2-workbench-menu-edit.patch" \
                   "$root/desktop/patches/ui2-macos-dropdown-refresh.patch" \
-                  "$root/desktop/patches/ui2-macos-explicit-line-breaks.patch"; do
+                  "$root/desktop/patches/ui2-macos-explicit-line-breaks.patch" \
+                  "$root/desktop/patches/ui2-macos-input-focus-ring.patch"; do
   git -C "$destination" apply --check "$patch_file"
   git -C "$destination" apply "$patch_file"
 done
