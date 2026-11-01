@@ -231,6 +231,39 @@ Add additional named entries to `codex.instances` or `feishu.instances` in the l
 
 Project routing remains in SQLite under `project_registry.default_codex_instance`. Use `/project-instance <project_key> <instance>` to set a project default and `/instance <name>` to override the current session.
 
+## Protocol ownership and compatibility
+
+Provider instances emitted by this application set `application_messages: true`. Native providers retain connection/authentication, heartbeat/reconnect, Feishu protobuf/fragments/ACK, and Codex initialization and RPC correlation. They forward Feishu JSON as `feishu.event` and Codex notification/request envelopes without interpreting thread/turn/item/approval messages. The application adapter in [message-protocol.mjs](./lib/message-protocol.mjs) selects Feishu events and resolves Codex thread/turn messages using instance-scoped SQLite state. It never guesses an unrelated active stream. Thread creation starts from the application's task flow, after the connection is initialized.
+
+This is an incremental migration. Instances without the flag retain the legacy native routing and eager thread creation. Native stream command execution and the existing legacy implementation remain available; this change does not claim to have removed all native session facilities. Desktop uses its ordinary installation, configuration, start/stop and log facilities.
+
+The authenticated application `/admin/state` response includes `protocol`: bounded counters for unknown methods, invalid consumed fields and unrouted threads. Its `scope: worker_lane` is explicit: these counters are local to the responding worker, not a process-wide aggregate. Diagnostics retain no message body. Native provider snapshots expose separate `protocol` metadata for handshake and wire decoding failures. A transport connection alone is not proof of message compatibility.
+
+From the repository root:
+
+```bash
+make test-protocol
+npm ci --prefix tests/protocol --ignore-scripts --no-audit --no-fund
+make test-protocol-feishu
+make check-protocol-codex
+make test src/inproc_vjsx_executor_codexbot_core_test.v src/inproc_vjsx_executor_codexbot_lifecycle_test.v src/inproc_vjsx_executor_codexbot_approval_test.v
+```
+
+The [Codex contract manifest](../../tests/protocol/codex-contract.mjs) separates transport initialization from application thread/turn/approval fields. Its reviewed baseline records the exporting CLI version. The checker exports schemas from the installed CLI, tolerates added optional fields outside consumed paths, and fails on consumed shape changes or newly required top-level request fields. It is a focused contract gate, not a complete equivalence proof for every Codex API. To compare another executable, pass `--codex /path/to/codex`; an existing export can be checked with `--schema-dir /path/to/schemas`. Updating requires an explicit `--update-baseline` and review of the JSON diff. CI can compare a candidate CLI version through the Protocol contracts workflow.
+
+The [Feishu differential check](../../tests/protocol/check-feishu-codec.mjs) uses the lockfile-pinned official SDK as an independent protobuf oracle for synthetic frames in both directions, including zero-valued required fields, ACK and pong. The SDK is a test dependency only. Native tests separately cover malformed frames, optional extension fields and bounded, ordered fragment assembly.
+
+Live checks are explicitly invoked with an application's private JSON file; they do not read provider environment variables or print tokens:
+
+```bash
+node tests/protocol/probe.mjs --config /path/to/config/bot.local.json --provider codex
+node tests/protocol/probe.mjs --config /path/to/config/bot.local.json --provider feishu
+# Opt-in model execution: ephemeral, read-only task; no Feishu message is sent.
+node tests/protocol/probe.mjs --config /path/to/config/bot.local.json --provider codex --turn
+```
+
+The default probes check Codex initialization/model-list and Feishu authentication/endpoint shape. The optional turn probe also requires streamed output and a completed turn. Actual Feishu delivery, callback permissions and card interactions still require the designated private-chat integration test; authentication success does not certify those paths. After deploying a new runtime and application, repeat that private-chat check before considering the running installation upgraded.
+
 ## Verification
 
 ```bash
