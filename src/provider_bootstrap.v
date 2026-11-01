@@ -7,9 +7,15 @@ import provider
 // application-level adapters.
 
 fn (mut app App) bootstrap_providers() {
+	for name in ['feishu', 'codex', 'db', 'ollama'] {
+		app.bootstrap_provider(name)
+	}
+}
+
+fn (mut app App) bootstrap_provider(name string) {
 	// Feishu
 	$if !no_feishu_routes ? {
-		if app.provider_bootstrap_enabled('feishu') {
+		if name == 'feishu' && app.provider_bootstrap_enabled('feishu') {
 			mut p := FeishuProvider{}
 			h := FeishuCommandHandler.new(mut app)
 			mut spec := ProviderSpec{
@@ -38,7 +44,7 @@ fn (mut app App) bootstrap_providers() {
 
 	// Codex
 	$if !no_codex_routes ? {
-		if app.provider_bootstrap_enabled('codex') {
+		if name == 'codex' && app.provider_bootstrap_enabled('codex') {
 			mut p := CodexProvider{}
 			h := CodexCommandHandler.new(mut app)
 			mut spec := ProviderSpec{
@@ -66,7 +72,7 @@ fn (mut app App) bootstrap_providers() {
 	}
 
 	// Database upstream (runtime skeleton)
-	if app.provider_bootstrap_enabled('db') {
+	if name == 'db' && app.provider_bootstrap_enabled('db') {
 		mut p := DbProvider{}
 		mut spec := ProviderSpec{
 			name:             'db'
@@ -88,7 +94,7 @@ fn (mut app App) bootstrap_providers() {
 
 	// Ollama (currently skeleton adapter)
 	$if !no_ollama_routes ? {
-		if app.provider_bootstrap_enabled('ollama') {
+		if name == 'ollama' && app.provider_bootstrap_enabled('ollama') {
 			mut p := OllamaProvider{}
 			h := GenericUpstreamCommandHandler.new(mut app)
 			mut spec := ProviderSpec{

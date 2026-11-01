@@ -28,3 +28,9 @@ __pycache__/
 
 # Locally compiled V test executable
 /src/relay/connection_probe_test
+
+# Application-local Codexbot configuration and state
+examples/codexbot-app-ts/config/bot.local.json
+examples/codexbot-app-ts/.var/
+
+/tests/protocol/node_modules/

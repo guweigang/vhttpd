@@ -85,6 +85,14 @@ jobs:
           # V disables ownership tests whenever GITHUB_ACTIONS=true.
           env -u GITHUB_ACTIONS make test-fast V_CC=cc 2>&1 | tee ci-results/fast.log
 
+      - name: Feishu official SDK wire compatibility
+        if: matrix.target == 'linux-amd64'
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --prefix tests/protocol --ignore-scripts --no-audit --no-fund
+          make test-protocol-feishu 2>&1 | tee ci-results/feishu-protocol.log
+
       - name: Build production binary
         shell: bash
         run: |

@@ -22,8 +22,9 @@ fn (mut app App) feishu_provider_handle_binary_message(instance string, mut conn
 		return
 	}
 	app_name := app.providers.feishu.resolve_app_name(instance)!
-	frame := feishu.RuntimeProtoFrame.decode(msg.payload) or {
-		log.error('[feishu] ❌ proto decode failed: ${err}')
+	mut frame := feishu.RuntimeProtoFrame.decode(msg.payload) or {
+		app.providers.feishu.note_protocol_failure(app_name, 'invalid_protobuf')
+		log.error('[feishu] proto decode failed')
 		return err
 	}
 	app.providers.feishu.note_frame(app_name)
@@ -40,7 +41,8 @@ fn (mut app App) feishu_provider_handle_binary_message(instance string, mut conn
 		log.info('[feishu] 💓 heartbeat pong received')
 		if frame.payload.len > 0 {
 			cfg := json.decode[feishu.RuntimeClientConfig](frame.payload.bytestr()) or {
-				feishu.RuntimeClientConfig{}
+				app.providers.feishu.note_protocol_failure(app_name, 'invalid_client_config')
+				return error('invalid feishu client config')
 			}
 			app.providers.feishu.note_client_config(app_name, cfg)
 		}
@@ -48,9 +50,35 @@ fn (mut app App) feishu_provider_handle_binary_message(instance string, mut conn
 	}
 	if msg_type !in [feishu_runtime_message_data, feishu_runtime_message_event,
 		feishu_runtime_message_card] {
+		app.providers.feishu.note_protocol_unknown(app_name, msg_type)
 		return
 	}
+	merged := app.providers.feishu.fragments.merge(app_name, frame, time.now().unix_milli()) or {
+		app.providers.feishu.note_protocol_failure(app_name, 'invalid_payload')
+		return err
+	}
+	if !merged.ready { return }
+	frame = merged.frame
 	payload := frame.payload.bytestr()
+	json.decode[map[string]json.Any](payload) or {
+		app.providers.feishu.note_protocol_failure(app_name, 'invalid_payload')
+		return error('invalid feishu JSON payload')
+	}
+	app.providers.feishu.note_protocol_passed(app_name)
+	if app.providers.feishu.application_message_mode(app_name) {
+		// Event meaning and callback content belong to the application adapter.
+		outcome := app.kernel_dispatch_websocket_upstream_handled(app.kernel_websocket_upstream_dispatch_request(
+			seq_id, 'feishu', app_name, trace_id, 'feishu.event', '', '', '', payload,
+			time.now().unix(), map[string]string{}))!
+		if outcome.response.error != '' || outcome.command_error != '' {
+			return error('feishu application dispatch failed')
+		}
+		resp := outcome.response
+		ack := frame.ack(if resp.status > 0 { resp.status } else { 200 }, resp.headers, resp.body)
+		conn.write(ack.encode(), .binary_frame)!
+		app.providers.feishu.note_ack(app_name)
+		return
+	}
 	summary := feishu.RuntimeEventSnapshot.summary_from_payload(payload)
 	app.providers.feishu.push_event(app_name, feishu.RuntimeEventSnapshot{
 		seq_id:            seq_id

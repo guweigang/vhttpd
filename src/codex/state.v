@@ -17,6 +17,7 @@ pub fn ProviderRuntime.normalize_instance(instance string) string {
 pub fn (base ProviderRuntime) for_instance(instance string) ProviderRuntime {
 	resolved := ProviderRuntime.normalize_instance(instance)
 	return ProviderRuntime{
+		application_messages: base.application_messages
 		instance:           resolved
 		enabled:            base.enabled
 		url:                base.url
@@ -80,6 +81,7 @@ pub fn (mut s CodexState) update(instance string, rt ProviderRuntime) {
 	next := if current.configuration_generation > rt.configuration_generation {
 		ProviderRuntime{
 			...rt
+			application_messages: current.application_messages
 			configuration_generation: current.configuration_generation
 			enabled:                  current.enabled
 			url:                      current.url

@@ -15,7 +15,7 @@ fn ProviderStartupRuntime.initialize(mut app App) {
 }
 
 fn ProviderStartupRuntime.start_feishu_background(mut app App) {
-	if app.providers.feishu.enabled {
+	if app.providers.feishu_runtime_enabled() {
 		if mut run := app.providers.feishu.background_runs.reserve('buffer-flusher') {
 			go app.feishu_runtime_run_buffer_flusher(mut run)
 		}

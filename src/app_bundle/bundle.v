@@ -46,7 +46,7 @@ pub fn safe_path(path string) bool {
 
 pub fn excluded(name string) bool {
 	return name in ['.git', '.deps', '.var', '.cache', '.bin', '.DS_Store', 'process.log', 'runtime.pid',
-		'credentials.json', 'secrets.json', 'id_rsa', 'id_ed25519'] || name == '.env' || name.starts_with('.env.') || name.starts_with('.desktop-') || name.ends_with('.log') || name.ends_with('.sqlite') || name.contains('.sqlite-') || name.ends_with('.db') || name.ends_with('.pem') || name.ends_with('.key') || name.ends_with('.p12') || name.ends_with('.pfx')
+		'credentials.json', 'secrets.json', 'bot.local.json', 'id_rsa', 'id_ed25519'] || name == '.env' || name.starts_with('.env.') || name.starts_with('.desktop-') || name.ends_with('.log') || name.ends_with('.sqlite') || name.contains('.sqlite-') || name.ends_with('.db') || name.ends_with('.pem') || name.ends_with('.key') || name.ends_with('.p12') || name.ends_with('.pfx')
 }
 
 pub fn sensitive(key string) bool {

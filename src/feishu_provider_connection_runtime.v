@@ -15,11 +15,9 @@ fn FeishuRuntimeHeartbeat.loop(state &feishu.FeishuState, instance string, ws_ur
 	if service_id <= 0 {
 		return
 	}
-	mut interval_seconds := state.ping_interval_seconds(instance)
-	if interval_seconds <= 0 {
-		interval_seconds = 5
-	}
 	for !session.stopped() && client.get_state() == .open {
+		// A pong can update ClientConfig; use the latest transport interval.
+		interval_seconds := state.ping_interval_seconds(instance)
 		ping := feishu.RuntimeProtoFrame.client_ping(service_id)
 		client.write(ping.encode(), .binary_frame) or {
 			log.error('[feishu] ❌ ping send failed: ${err}')

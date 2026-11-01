@@ -262,7 +262,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_use_latest_and_thread_switch_r
 		assert second_task.handled
 		codexbot_ts_assert_single_response(second_task.commands)
 		assert second_task.commands[0].type_ == 'provider.rpc.call'
-		assert second_task.commands[0].method == 'turn/start'
+		assert second_task.commands[0].method == 'thread/resume'
 		assert second_task.commands[0].params.contains('"threadId":"thread_use_latest_001"')
 
 		thread_switch_resp := harness.dispatch_feishu_message('codexbot_ts_thread_switch_cmd',

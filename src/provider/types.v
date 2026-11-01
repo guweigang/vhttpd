@@ -1,5 +1,6 @@
 module provider
 
+import protocol_diagnostics
 import x.json2
 import command
 import sync
@@ -104,6 +105,7 @@ pub fn (spec ProviderInstanceSpec) config_fields() []string {
 // AdminProviderInstanceSnapshot exposes instance state for admin APIs.
 pub struct AdminProviderInstanceSnapshot {
 pub:
+	protocol protocol_diagnostics.Snapshot
 	provider           string
 	instance           string
 	source             string

@@ -38,24 +38,11 @@ fn codexbot_semantics_payload_with_event(text string, chat_id string, message_id
 }
 
 fn codexbot_semantics_with_temp_db(db_name string, run fn ()) {
-	prev_db := os.getenv('CODEXBOT_TS_DB_PATH')
-	db_path := os.join_path(os.temp_dir(), '${time.now().unix_micro()}_${db_name}')
-	os.setenv('CODEXBOT_TS_DB_PATH', db_path, true)
-	defer {
-		if prev_db == '' {
-			os.unsetenv('CODEXBOT_TS_DB_PATH')
-		} else {
-			os.setenv('CODEXBOT_TS_DB_PATH', prev_db, true)
-		}
-		os.rm(db_path) or {}
-		os.rm('${db_path}-shm') or {}
-		os.rm('${db_path}-wal') or {}
-	}
-	run()
+	codexbot_ts_with_temp_db(db_name, fn [run] (_ string) { run() })
 }
 
 fn codexbot_semantics_app_file() string {
-	return os.real_path(os.join_path(os.dir(@FILE), '..', 'examples', 'codexbot-app-ts', 'app.mts'))
+	return codexbot_ts_app_file()
 }
 
 fn test_inproc_vjsx_executor_repo_codexbot_app_ts_active_thread_status_does_not_overwrite_run_status() {
@@ -131,6 +118,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_active_thread_status_does_not_
 			req:         http.Request{
 				method: .get
 				url:    '/admin/state'
+				header: codexbot_ts_test_header()
 				host:   'example.test'
 			}
 			remote_addr: '127.0.0.1'
@@ -200,6 +188,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_structured_error_notification_
 			req:         http.Request{
 				method: .get
 				url:    '/admin/state'
+				header: codexbot_ts_test_header()
 				host:   'example.test'
 			}
 			remote_addr: '127.0.0.1'
@@ -266,6 +255,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_realtime_error_is_treat
 			req:         http.Request{
 				method: .get
 				url:    '/admin/state'
+				header: codexbot_ts_test_header()
 				host:   'example.test'
 			}
 			remote_addr: '127.0.0.1'
@@ -334,6 +324,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_system_error_status_uses_threa
 			req:         http.Request{
 				method: .get
 				url:    '/admin/state'
+				header: codexbot_ts_test_header()
 				host:   'example.test'
 			}
 			remote_addr: '127.0.0.1'
@@ -484,6 +475,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_commentary_after_final_answer_
 			req:         http.Request{
 				method: .get
 				url:    '/admin/state'
+				header: codexbot_ts_test_header()
 				host:   'example.test'
 			}
 			remote_addr: '127.0.0.1'
@@ -553,6 +545,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_start_continues_into_tu
 			req:         http.Request{
 				method: .get
 				url:    '/admin/state'
+				header: codexbot_ts_test_header()
 				host:   'example.test'
 			}
 			remote_addr: '127.0.0.1'
@@ -647,6 +640,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_prefers_current_tu
 			req:         http.Request{
 				method: .get
 				url:    '/admin/state'
+				header: codexbot_ts_test_header()
 				host:   'example.test'
 			}
 			remote_addr: '127.0.0.1'
@@ -660,15 +654,6 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_thread_read_prefers_current_tu
 }
 
 fn test_inproc_vjsx_executor_repo_codexbot_app_ts_stale_busy_stream_detaches_before_next_prompt() {
-	prev_stale := os.getenv('CODEXBOT_TS_ACTIVE_STREAM_STALE_MS')
-	os.setenv('CODEXBOT_TS_ACTIVE_STREAM_STALE_MS', '1', true)
-	defer {
-		if prev_stale == '' {
-			os.unsetenv('CODEXBOT_TS_ACTIVE_STREAM_STALE_MS')
-		} else {
-			os.setenv('CODEXBOT_TS_ACTIVE_STREAM_STALE_MS', prev_stale, true)
-		}
-	}
 	codexbot_semantics_with_temp_db('codexbot_ts_semantics_stale_busy.sqlite', fn () {
 		app_file := codexbot_semantics_app_file()
 		assert os.exists(app_file)
@@ -728,6 +713,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_stale_busy_stream_detaches_bef
 			req:         http.Request{
 				method: .get
 				url:    '/admin/state'
+				header: codexbot_ts_test_header()
 				host:   'example.test'
 			}
 			remote_addr: '127.0.0.1'
@@ -855,6 +841,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_dedupes_replayed_feishu_messag
 			req:         http.Request{
 				method: .get
 				url:    '/admin/state'
+				header: codexbot_ts_test_header()
 				host:   'example.test'
 			}
 			remote_addr: '127.0.0.1'
@@ -1008,6 +995,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_turn_completed_prefers_final_a
 			req:         http.Request{
 				method: .get
 				url:    '/admin/state'
+				header: codexbot_ts_test_header()
 				host:   'example.test'
 			}
 			remote_addr: '127.0.0.1'

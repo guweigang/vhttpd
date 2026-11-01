@@ -26,8 +26,8 @@ V_NOCACHE_FLAGS ?= -nocache
 WITH_DB ?= 1
 VJSX_DIR ?= $(ROOT)/.deps/vjsx
 VJS_QUICKJS_PATH ?= $(shell VJS_QUICKJS_WORK_ROOT="$(ROOT)" "$(VJSX_DIR)/scripts/ensure-quickjs.sh")
-VJSX_FLAGS ?= -d build_quickjs
-V_TEST_FLAGS ?= $(V_NOCACHE_FLAGS) -d vjsx_sqlite $(V_DB_FLAGS)
+VJSX_FLAGS ?= -d build_quickjs -d vjsx_sqlite
+V_TEST_FLAGS ?= $(V_NOCACHE_FLAGS) $(V_DB_FLAGS)
 V_ENV = VJS_QUICKJS_PATH="$(VJS_QUICKJS_PATH)"
 
 BUILD_STAGE_ROOT := $(ROOT)/tmp/vbuildsrc
@@ -218,3 +218,19 @@ test-profile-codexbot:
 
 test-all:
 	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_MODULE_FLAGS) $(V_FLAGS) $(V_TEST_FLAGS) test $(SRC_DIR)
+
+.PHONY: test-protocol test-protocol-feishu check-protocol-codex
+# No provider credentials or live messages are needed for these checks.
+test-protocol:
+	@node --test $(ROOT)/examples/codexbot-app-ts/tests/*.test.mjs $(ROOT)/tests/protocol/*.test.mjs
+	@$(MAKE) test src/codex/handshake_test.v src/feishu/protocol_test.v src/protocol_diagnostics/diagnostics_test.v
+
+check-protocol-codex:
+	@node $(ROOT)/tests/protocol/check-codex-schema.mjs
+
+PROTOCOL_DRIVER ?= $(ROOT)/.runtime/protocol-tests/feishu-codec
+
+test-protocol-feishu:
+	@mkdir -p $(dir $(PROTOCOL_DRIVER))
+	$(V_ENV) v -cc $(V_CC) $(VJSX_FLAGS) $(V_MODULE_FLAGS) $(V_FLAGS) $(V_TEST_FLAGS) -o $(PROTOCOL_DRIVER) $(ROOT)/tests/protocol/feishu_codec_driver.v
+	@node $(ROOT)/tests/protocol/check-feishu-codec.mjs $(PROTOCOL_DRIVER)

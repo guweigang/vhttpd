@@ -73,6 +73,8 @@ function feishuPushFrame() {
   });
   return Buffer.concat([
     fieldKey(1, 0), varint(1701),
+    fieldKey(2, 0), varint(0),
+    fieldKey(3, 0), varint(0),
     fieldKey(4, 0), varint(1),
     bytesField(5, header("type", "event")),
     bytesField(5, header("trace_id", "trace-provider-ws-upstream")),

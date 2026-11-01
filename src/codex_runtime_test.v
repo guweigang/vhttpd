@@ -590,3 +590,23 @@ fn test_codex_error_burst_process_shutdown_joins_reserved_job_before_executor_cl
 	assert state.dispatch_count == 0
 	assert state.close_count == 1
 }
+
+fn test_codex_application_mode_transparently_dispatches_known_and_unknown_messages() {
+	mut state := &CodexRuntimeTestDispatchState{}
+	mut app := &App{}
+	app.engines.primary.logic_executor = CodexRuntimeTestExecutor{state: state}
+	app.providers.codex.runtime.application_messages = true
+	app.providers.codex.runtime.active_stream_id = 'legacy-unrelated-stream'
+	for raw in ['{"method":"thread/started","params":{"thread":{"id":"application-thread"}}}', '{"method":"future/method","params":{"threadId":"application-thread"}}', '{"id":"approval-1","method":"future/request","params":{"threadId":"application-thread"}}'] {
+		app.codex_provider_handle_text_message('main', raw)
+		assert state.last_req.payload == raw
+		assert state.last_req.trace_id == ''
+	}
+	assert state.dispatch_count == 3
+	assert state.last_req.event_type == 'codex.server_request'
+	assert app.providers.codex.snapshot('main').thread_id == ''
+	assert app.providers.codex.snapshot('main').thread_stream_map.len == 0
+	app.codex_provider_handle_text_message('main', '{bad json')
+	assert state.dispatch_count == 3
+	assert app.providers.codex.snapshot('main').protocol.decode_errors == 1
+}

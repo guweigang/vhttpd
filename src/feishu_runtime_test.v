@@ -1,5 +1,6 @@
 module main
 
+import encoding.base64
 import executor
 import feishu
 import upstream
@@ -126,7 +127,8 @@ fn test_feishu_runtime_build_ack_carries_custom_response_payload() {
 	ack := frame.ack(200, {
 		'content-type': 'application/json'
 	}, '{"elements":[]}')
-	assert ack.payload.bytestr().contains('"data":"{\\"elements\\":[]}"')
+	payload := json.decode[feishu.WsResponsePayload](ack.payload.bytestr()) or { panic(err) }
+	assert base64.decode(payload.data).bytestr() == '{"elements":[]}'
 	assert ack.payload.bytestr().contains('"content-type":"application/json"')
 }
 

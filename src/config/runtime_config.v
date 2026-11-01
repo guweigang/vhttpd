@@ -379,6 +379,7 @@ pub fn (base FeishuConfig) merge(override FeishuConfig) FeishuConfig {
 pub fn (base CodexConfig) merge(override CodexConfig) CodexConfig {
 	defaults := default_vhttpd_config().codex
 	mut cfg := base
+	if override.application_messages { cfg.application_messages = true }
 	if override.enabled != defaults.enabled {
 		cfg.enabled = override.enabled
 	}

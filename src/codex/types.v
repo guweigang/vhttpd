@@ -1,5 +1,6 @@
 module codex
 
+import protocol_diagnostics
 import sync
 import time
 import net.websocket as ws
@@ -58,6 +59,7 @@ pub:
 
 pub struct AdminRuntimeSnapshot {
 pub:
+	protocol protocol_diagnostics.Snapshot
 	enabled            bool
 	connected          bool
 	initialized        bool
@@ -76,7 +78,11 @@ pub:
 // ── Provider Runtime ──
 
 pub struct ProviderRuntime {
+mut:
+	handshake ?&Handshake
 pub mut:
+	protocol protocol_diagnostics.Snapshot
+	application_messages bool
 	configuration_generation u64
 	instance                 string
 	enabled                  bool
@@ -171,6 +177,10 @@ pub fn (mut rt ProviderRuntime) note_connected(ws_url string) {
 }
 
 pub fn (mut rt ProviderRuntime) note_disconnected(reason string) {
+	if mut h := rt.handshake {
+		if !rt.initialized { h.settle(HandshakeResult{ failure: 'transport_disconnected' }) }
+	}
+	rt.handshake = none
 	rt.connected = false
 	rt.initialized = false
 	rt.last_disconnect_at_unix = time.now().unix()
@@ -223,6 +233,7 @@ pub fn (mut rt ProviderRuntime) bind_stream_to_thread(thread_id string, stream_i
 
 pub struct RuntimeStateView {
 pub:
+	protocol protocol_diagnostics.Snapshot
 	connected          bool
 	initialized        bool
 	ws_url             string
@@ -237,6 +248,7 @@ pub:
 
 pub fn (rt &ProviderRuntime) state_view() RuntimeStateView {
 	return RuntimeStateView{
+		protocol: rt.protocol
 		connected:          rt.connected
 		initialized:        rt.initialized
 		ws_url:             rt.ws_url
@@ -254,6 +266,7 @@ pub fn (rt &ProviderRuntime) state_view() RuntimeStateView {
 
 pub struct RuntimeSettings {
 pub:
+	application_messages bool
 	enabled            bool
 	url                string
 	model              string
@@ -285,6 +298,7 @@ pub fn CodexState.new(settings RuntimeSettings) CodexState {
 
 pub fn ProviderRuntime.new(settings RuntimeSettings) ProviderRuntime {
 	return ProviderRuntime{
+		application_messages: settings.application_messages
 		enabled:            settings.enabled
 		url:                settings.url
 		model:              settings.model
