@@ -146,7 +146,7 @@ Current bot flow:
 3. `/settings` and `/setting` manage runtime config in SQLite
 4. `/codex` can issue query-style Codex RPC calls from chat
 5. `/create`, `/bind`, and `/unbind` manage chat-local project contexts in TypeScript
-6. plain text -> `provider.message.send` + `provider.rpc.call(thread/start)`
+6. plain text -> `provider.message.send`; a new session uses `thread/start`, while a saved thread uses lightweight `thread/resume` (`excludeTurns: true`) before `turn/start`
 7. Codex `codex.rpc.response` binds returned `threadId`
 8. Codex `codex.notification` updates the same Feishu stream message
 9. SQLite persists chat binding, stream draft, final result, lifecycle status, and settings
@@ -156,6 +156,9 @@ Current bot flow:
 Notes:
 
 - state is persisted in SQLite
+- saved threads are resumed before each new task; `notLoaded` means history needs loading, not that it has disappeared
+- only an explicit `thread/resume` missing-rollout error for the requested ID permits automatic replacement; network, authentication, timeout and unknown errors preserve the original binding for retry or an explicit `/new`
+- duplicate or late resume responses cannot submit the task again or restore a binding cleared by cancellation or `/new`
 - default DB path is `.var/codexbot.sqlite` inside the application; its parent directory is created automatically
 - current TS-first runtime tables are `chat_state`, `stream_state`, and `command_context_state`
 - SQLite also keeps `project_registry` and `project_binding_state` so `/projects` can survive project switching
