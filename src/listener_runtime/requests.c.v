@@ -1,10 +1,9 @@
 module listener_runtime
 
 import net
+import socket_runtime
 import time
 
-#include <fcntl.h>
-fn C.fcntl(fd i32, cmd i32, arg ...voidptr) i32
 
 struct AcceptedRequest {
 	interrupt int
@@ -18,8 +17,7 @@ pub fn (mut owner Owner) accept_request(generation u64, socket int) ?u64 {
 	owner.mu.@lock()
 	defer { owner.mu.unlock() }
 	if !owner.active || owner.stopping || owner.generation != generation { return none }
-	fd := C.fcntl(socket, C.F_DUPFD_CLOEXEC, 0)
-	if fd < 0 { return none }
+	fd := socket_runtime.duplicate(socket) or { return none }
 	owner.request_counter++
 	owner.requests[owner.request_counter] = AcceptedRequest{interrupt: fd}
 	return owner.request_counter

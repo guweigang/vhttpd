@@ -38,6 +38,7 @@ import time
 #include <signal.h>
 
 fn C.tzset()
+fn C._tzset()
 
 __global (
 	g_active_runtime_registry ActiveRuntimeRegistry
@@ -363,7 +364,7 @@ fn run_server(args []string) ! {
 	}
 	configure_runtime_timezone(runtime_timezone_from_plan_or_config(args, cfg))
 	log.debug('[vhttpd] run_server: timezone configured')
-	os.signal_ignore(.pipe)
+	$if !windows { os.signal_ignore(.pipe) }
 	process_runtime.install_shutdown_signal_handler(vhttpd_shutdown_runtime)!
 	defer {
 		process_runtime.shutdown_managed_processes()
@@ -407,7 +408,7 @@ fn configure_runtime_timezone(config_tz string) {
 		tz = 'Asia/Shanghai'
 	}
 	os.setenv('TZ', tz, true)
-	C.tzset()
+	$if windows { C._tzset() } $else { C.tzset() }
 	logging.RuntimeLogger.configure()
 	log.info('vhttpd timezone: ${tz}')
 }

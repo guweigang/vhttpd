@@ -15,7 +15,7 @@ import provider
 import time
 
 $if enable_db ? {
-	fn C.mysql_fetch_lengths(res &C.MYSQL_RES) &u64
+	fn C.v_mysql_fetch_column_length(res &C.MYSQL_RES, column u32) u64
 }
 
 // ── Shared types (both enable_db and !enable_db) ──
@@ -786,7 +786,6 @@ $if enable_db ? {
 			if row == unsafe { nil } {
 				break
 			}
-			lengths := C.mysql_fetch_lengths(result.result)
 			mut item := map[string]string{}
 			for i in 0 .. field_count {
 				key := if i < columns.len && columns[i] != '' { columns[i] } else { '${i}' }
@@ -794,7 +793,7 @@ $if enable_db ? {
 					item[key] = ''
 					continue
 				}
-				length := if lengths == unsafe { nil } { 0 } else { int(unsafe { lengths[i] }) }
+				length := int(C.v_mysql_fetch_column_length(result.result, u32(i)))
 				item[key] = unsafe { (&u8(row[i])).vstring_with_len(length).clone() }
 			}
 			rows << item

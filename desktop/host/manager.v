@@ -3,6 +3,7 @@ module host
 import net
 import net.http
 import os
+import process_runtime
 import crypto.rand as crypto_rand
 import time
 
@@ -191,6 +192,7 @@ fn (mut m Manager) prepare_start(project Project, binary string) ! {
 	child.set_args(['--config', project.config_path, '--admin-token', m.token])
 	child.set_redirect_stdio_merged()
 	child.use_pgroup = true
+	$if windows { child.create_no_window = true }
 	child.run()
 	m.process = child
 	m.phase = .starting
@@ -207,7 +209,9 @@ pub fn (mut m Manager) stop() {
 	m.ready_event = false
 	m.message = '正在正常关闭实例…'
 	m.log('向宿主拥有的实例发送终止请求。')
-	m.process.signal_term()
+	process_runtime.request_owned_process_stop(mut m.process) or {
+		m.log('无法请求正常关闭：${err}；可等待后选择强制停止。')
+	}
 	m.deadline = time.ticks() + m.stop_timeout
 }
 
@@ -248,7 +252,9 @@ pub fn (mut m Manager) tick() {
 		if now >= m.deadline {
 			m.message = if m.startup_failure { '执行器初始化失败且启动未完成，正在关闭实例；请检查日志。' } else { '启动超时，正在关闭实例；请检查日志。' }
 			m.log(m.message)
-			m.process.signal_term()
+			process_runtime.request_owned_process_stop(mut m.process) or {
+				m.log('无法请求正常关闭：${err}；可等待后选择强制停止。')
+			}
 			m.phase = .failed
 			m.deadline = now + m.stop_timeout
 		} else if now >= m.next_probe {
@@ -262,7 +268,9 @@ pub fn (mut m Manager) tick() {
 					// Let initialization release its locks before normal shutdown.
 					m.phase = .failed
 					m.message = '执行器初始化失败，正在关闭本次实例；请修正下方日志中的问题后重新启动。'
-					m.process.signal_term()
+					process_runtime.request_owned_process_stop(mut m.process) or {
+						m.log('无法请求正常关闭：${err}；可等待后选择强制停止。')
+					}
 					m.deadline = now + m.stop_timeout
 					return
 				}

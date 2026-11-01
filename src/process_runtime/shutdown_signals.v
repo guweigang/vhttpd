@@ -1,7 +1,8 @@
 module process_runtime
 
-import os
+
 $if !windows {
+import os
 import sync
 }
 
@@ -81,8 +82,4 @@ pub fn install_shutdown_signal_handler(handler fn (os.Signal)) ! {
 	unsafe { g_shutdown_signals.install(handler, os.signal_opt)! }
 }
 
-} $else {
-pub fn install_shutdown_signal_handler(handler fn (os.Signal)) ! {
- return error("shutdown_signal_platform_unsupported")
-}
 }

@@ -1,13 +1,12 @@
 module ws
 
 import net
+import socket_runtime
 import net.websocket
 import sync
 import time
 
-#include <fcntl.h>
 
-fn C.fcntl(int, int, ...voidptr) int
 
 // Sessions and asynchronous writes reserve before spawn. Only the serving
 // scope closes original sockets; cancellation owns separate CLOEXEC handles.
@@ -45,14 +44,7 @@ pub fn (mut run IngressRun) attach(fd int) bool {
 	run.mu.@lock()
 	defer { run.mu.unlock() }
 	if run.stopping || run.done { return false }
-	owned := C.fcntl(fd, C.F_DUPFD_CLOEXEC, 0)
-	if owned < 0 { return false }
-	// Protect the caller-owned socket too before publishing this attachment.
-	flags := C.fcntl(fd, C.F_GETFD, 0)
-	if flags < 0 || C.fcntl(fd, C.F_SETFD, flags | C.FD_CLOEXEC) < 0 {
-		net.close(owned) or {}
-		return false
-	}
+	owned := socket_runtime.retain(fd) or { return false }
 	run.handles << owned
 	return true
 }
