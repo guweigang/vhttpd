@@ -11,6 +11,7 @@ port = 19883
 kind = "vjsx"
 entry = "app.mts"
 module_root = "."
+signature_exclude = [".var/**", "config/bot.local.json", "tests/**", "codex/ts/**"]
 runtime_profile = "node"
 thread_count = 2
 enable_fs = true
