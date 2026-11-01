@@ -156,7 +156,7 @@ Current bot flow:
 Notes:
 
 - state is persisted in SQLite
-- default DB path is `data/codexbot.sqlite` inside the application; its parent directory is created automatically
+- default DB path is `.var/codexbot.sqlite` inside the application; its parent directory is created automatically
 - current TS-first runtime tables are `chat_state`, `stream_state`, and `command_context_state`
 - SQLite also keeps `project_registry` and `project_binding_state` so `/projects` can survive project switching
 - runtime settings live in the same SQLite file under the `settings` table
@@ -171,7 +171,7 @@ Notes:
 - in thread scope, `/use latest` or `/use <thread_id>` also triggers a `thread/read`, so the latest assistant reply is shown immediately
 - `/settings` shows persisted config, and `/setting <name> <value>` updates it
 - `/codex <method> [json]` allows guarded query-style Codex RPC calls from chat
-- `/create <project_key>` now reads `project_root_dir` from the `settings` table, matching the PHP bot; it fails if the project already exists in SQLite or if the target directory already exists
+- `/create <project_key>` uses `bot.project_root` unless `project_root_dir` is overridden in the `settings` table; it fails if the project already exists in SQLite or if the target directory already exists
 - `/bind <project_key> [path]` binds a project record to the chat without switching the current session; if `path` is omitted, the bot resolves it from `project_root_dir/<project_key>`
 - `/unbind <project_key>` removes the explicit chat binding, but it refuses to unbind the current session project
 - `/new [model_id]` clears the current thread and optionally switches model for the next run
@@ -197,7 +197,7 @@ Copy `config/bot.example.json` to `config/bot.local.json` and edit:
 
 The local JSON file is authoritative. If it does not exist, the application uses the checked-in template, which has no Feishu credentials. Invalid JSON, unknown default instances, and invalid policies fail startup without printing secret values.
 
-Every relative configured path resolves against the `config/` directory, using the original application entry rather than the process working directory or a temporary compilation directory. For example, `../data/codexbot.sqlite` and `../projects` stay inside this application after installation. Point `codex.cwd` at an existing workspace accessible to the Codex server. Codex itself must already be installed, authenticated, and serving the configured WebSocket endpoint.
+Every relative configured path resolves against the `config/` directory, using the original application entry rather than the process working directory or a temporary compilation directory. For example, `../.var/codexbot.sqlite` and `../.var/projects` stay inside this application after installation. The reserved `.var/` directory is excluded from code bundles, including managed workspaces. Point `codex.cwd` at an existing workspace accessible to the Codex server. Codex itself must already be installed, authenticated, and serving the configured WebSocket endpoint.
 
 In Desktop:
 
@@ -206,7 +206,7 @@ In Desktop:
 3. In the installed application directory `apps/<installation-id>/`, copy `config/bot.example.json` to `config/bot.local.json` and fill in the actual settings.
 4. Restart the runtime environment to load the configuration, then send `/help` from Feishu.
 
-The component uses a dedicated listener and engine. Provider instances are registered dynamically by `app_startup`; credentials do not go into the environment's root TOML. Private `bot.local.json` and SQLite files are excluded from installation/deployment bundles, so configure each target locally. Subsequent code deployment does not overwrite those files. Do not commit or share the local file.
+The component uses a dedicated listener and engine. Provider instances are registered dynamically by `app_startup`; credentials do not go into the environment's root TOML. Private `bot.local.json`, `.var/`, and SQLite files are excluded from installation/deployment bundles, so configure each target locally. Subsequent code deployment does not overwrite those files. Do not commit or share the local file.
 
 To install another copy in the same environment, give its listener, engine, adapter, pipeline IDs/group, and HTTP port distinct values in its source `component.toml`. The installation directory alone does not rename resource IDs. Each copy reads its own JSON file and database.
 
@@ -220,6 +220,8 @@ cp examples/codexbot-app-ts/config/bot.example.json examples/codexbot-app-ts/con
 make vhttpd
 ./vhttpd --config examples/codexbot-app-ts/codexbot.toml
 ```
+
+Build a new runtime for this version: normal builds now enable vjsx SQLite support, which Codexbot requires. To reuse an existing session database, explicitly set `bot.db_path` to that database; no legacy environment setting is consulted.
 
 The standalone launcher includes the same component and adds its own control listener. Change the standalone control token in `codexbot.toml` before using it.
 
