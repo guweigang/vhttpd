@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "id": "890ab68c-2426-469a-9c9f-0eada037b94f",
+  "name": "paseo",
+  "display_name": "Paseo Relay",
+  "version": "0.1.0",
+  "description": "Paseo 的 WebSocket Relay 应用，连接状态由运行环境管理。",
+  "entry": "component.toml"
+}
