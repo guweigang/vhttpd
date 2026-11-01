@@ -8,56 +8,42 @@ tags:
 ---
 # Desktop MCP 开发服务
 
-Desktop 使用 V 官方 `vlib/mcp` 提供本机 Streamable HTTP 服务。模型可以创建本地 vjsx 工程、读取源码、修改源码及跨 include 配置、启停运行环境、查询配置 schema 和日志，以及发送业务测试请求。
+Desktop 使用 V 官方 `vlib/mcp` 提供本机 Streamable HTTP 服务。开发对象是当前运行环境中的应用，源码位置由 Desktop 定位，用户无需选择开发目录。
 
-## 开启和连接
+## 创建应用
 
-1. 从 Desktop 的“帮助 → 模型开发 · MCP…”打开设置页。
-2. 在当前本机运行环境中选择应用，再点击“开启 MCP”。无需选择目录；应用源码和组件配置由 Desktop 定位。没有应用时，可先从应用页“新建应用”，选择 HTTP 或 JSON API 模板，预览后安装。该创建入口也支持向已连接的远端环境安装应用；本版 MCP 开发仍仅支持本机应用。
-3. 将页面显示的 URL 和 Authorization Bearer 凭据填入受信任的 MCP 客户端。页面提供 `mcpServers` JSON 示例；客户端的外层配置格式可能不同。
-4. 关闭 MCP 或退出 Desktop 后连接失效。重新开启会生成新端口和凭据；切换运行包后也需要重新开启。
+应用页提供“新建应用”和“安装已有应用”。新建时填写应用标识、选择 HTTP / JSON API 模板和业务端口（0 表示自动选择），点击预览，再确认安装。Desktop 自动生成源码与 component.toml，复用独立应用安装的完整校验、冲突检查和失败恢复。本机和已连接的远端环境使用同一安装流程。实现见[模板生成](./host/application_creation.v)与[安装页面](./component_installation.v)。
 
-服务默认关闭，只监听 `127.0.0.1` 的随机端口。地址、凭据和授权目录不持久化。不接受带 Origin 的浏览器请求。此版面向能够连接本机 HTTP MCP 的原生客户端，不提供远程云端直连或 stdio 桥接。
+“新建运行环境（独立进程）”仍用于创建 vhttpd 进程、管理入口和环境配置；一个运行环境可以承载多个应用。它与应用页的新建应用是不同操作。
 
-## 开发流程
+## 开启和切换
 
-可以向模型描述：“在开发目录创建一个 JSON API，启动并验证响应；失败时查看日志并修复。”
+1. 选择本机运行环境，从“帮助 → 模型开发 · MCP…”进入。
+2. 在应用下拉框选择开发对象。默认使用当前应用，应用列表也支持在环境停止时读取。
+3. 开启 MCP，将页面显示的 URL 和 Authorization Bearer 凭据填入受信任的 MCP 客户端。
+4. 在 MCP 页面切换应用即可继续开发；没有每应用的开发按钮。正在执行的操作先完成，排队的旧上下文请求会被拒绝，旧预览失效。URL、凭据与 MCP 会话保持稳定。
+5. 跨运行环境切换时，可使用“切换到当前环境”；若原环境仍有运行进程，需先停止。页面始终显示 MCP 当前绑定的运行环境和应用。
 
-模型应按以下流程工作：
+关闭 MCP 或退出 Desktop 后连接失效。重新开启生成新端口与凭据。服务默认关闭，仅监听 127.0.0.1，拒绝带 Origin 的网站请求。本版 MCP 开发只支持本机应用；远端应用可在应用页新建、安装，尚无远端源码编辑工具或 stdio 桥接。
 
-1. 使用 `templates_list` 查看内置模板，使用 `project_create` 创建项目，或用 `project_select` 选择开发目录内已有的 TOML。路径相对于授权目录。
-2. 使用 `context_get`、`files_list`、`files_read` 了解工程。文件路径相对于当前工程；读取返回内容和 revision。
-3. 使用 `changes_prepare` 提交文件内容和 revision，获得变更编号及前后内容。新增文件的 revision 必须为空；已有文件必须提供读取时的 revision。保留 `<vhttpd-secret-…>` 占位符，服务在内部还原已知凭据。
-4. 使用 `changes_validate` 校验完整 version 2 配置，包括 include、引用和冲突。运行环境启动后，可用 `schema_get` 获取该运行包真实的配置领域、组件种类、字段和默认值；可按 domain、kind 逐层查询。
-5. 使用 `runtime_stop` 停止共享进程，再用 `changes_apply` 应用变更。运行中的环境拒绝直接写入；配置发布、应用安装和 MCP 写入使用同一运行环境锁。
-6. 使用 `runtime_start` 启动并等待就绪，再用 `application_request` 验证业务响应。源码语法和初始化错误通过实际启动发现，配置校验通过不等于业务通过。
-7. 失败时查询 `logs_query`，停止后修正代码，或用 `changes_restore` 恢复该次变更，再启动验证。确认不再需要的预览或恢复记录可通过 `changes_discard` 释放；它不会修改文件。
+## 模型开发流程
 
-也可用 `runtime_status` 查询状态，或用 `runtime_restart` 重启当前环境。启停和重启影响同一进程中的全部应用。
+模型先用 context_get 读取当前应用与环境，再使用 files_list、files_read 获取应用相对路径、内容和 revision。changes_prepare 创建预览，changes_validate 对整个环境及跨 include 配置进行校验；随后 runtime_stop、changes_apply、runtime_start，最后用 application_request 验证业务响应。
 
-基础环境可通过同一变更集新增应用源码、组件 TOML，并修改主配置 include；已有应用可直接修改其源码和配置。此版没有应用市场、依赖安装、远端部署或独立卸载工具。
+源码错误通过真实启动发现，配置校验通过不等于业务通过。失败时查询 logs_query，停止后修改或用 changes_restore 恢复；changes_discard 可释放不再需要的预览与恢复记录。运行中的 schema_get 返回当前运行包的真实配置 schema。启停与重启影响环境中的全部应用。
 
-## 文件和恢复边界
+应用绑定模式不会向模型提供 project_create/project_select；创建和选择开发对象由 Desktop 负责。已有工程型应用在配置有明确源码归属时也可以选择；多个应用共用同一源码目录的情况需要先整理为独立应用。
 
-- 文件操作仅支持工程内列出的文本格式；拒绝绝对路径、路径穿越、符号链接、隐藏目录、凭据文件、数据库、日志和构建依赖目录。配置 include 同样限制在工程内。
-- 管理监听器和 control 配置受到保护；模型不能通过变更集替换管理凭据和管理入口。常规应用、业务监听器和资源配置可参与整项目校验。
-- 最多扫描 4096 个文本文件，目录深度最多 16。每个文件最多 1 MiB；每个变更集最多 32 个文件，变更前后内容合计最多 4 MiB。
-- 每次 Desktop 会话最多保留 16 个预览或恢复记录。预览后工程文件有变化时必须重新准备；恢复前也会检查已应用的文件，外部编辑不会被静默覆盖。
-- 写入失败时尝试恢复本次已写入的文件；恢复失败会保留错误并明确报告。恢复记录仅在内存中，不能用于 Desktop 或系统崩溃后的恢复，也不提供数据库回滚。
-- 已知运行凭据在文件、日志和错误结果中脱敏；这不是任意源码或业务数据的全面敏感信息识别。授权目录中的普通源码和业务响应会交给客户端。
-- 文件访问边界不等于应用运行沙箱：启动的应用仍具有当前用户进程的正常系统和网络权限。
+## 范围和恢复
 
-`application_request` 只访问所选环境中声明的本机 HTTP 业务监听器，不访问管理监听器，也不跟随重定向。POST、PUT、PATCH、DELETE 请求可能修改业务数据。
+- 文件路径相对于所选应用。拒绝目录穿越、符号链接、私有文件和其他应用源码；应用配置不能覆盖共享环境设置、管理入口和凭据。旧工程的环境 include 同样受到保护。
+- application_request 只访问所选应用的本机业务监听器，不访问 Admin，也不跟随重定向。写请求可能改变业务数据。运行中的日志查询使用应用日志。
+- 最多扫描 4096 个文本文件、16 层目录；单文件最多 1 MiB。每个变更集最多 32 个文件，前后内容合计最多 4 MiB，每次 Desktop 会话最多保留 16 个预览或恢复记录。
+- 预览后文件变化需重新准备。恢复前检查已应用的内容，遇到外部修改会报告冲突。恢复材料仅在内存中，不覆盖 Desktop 或系统崩溃恢复，也不回滚数据库。
+- 已知凭据在返回内容中脱敏，编辑时保留 vhttpd-secret 占位符。此能力不识别任意业务数据中的敏感信息；应用执行也不属于操作系统沙箱。
 
 ## 实现与验证
 
-协议、传输、版本协商和工具分发复用 V 官方库。认证入口见 [MCP 服务](./devmcp/server.v)，业务调用与 GUI 共用 [Worker](./host/worker.v) 中的同一个 Manager；MCP 使用独立回复通道，不读取 GUI 的快照通道。变更边界和补偿见 [文件变更实现](./host/development_files.v)。
+MCP 与 GUI 共用[同一个 Worker](./host/worker.v)，使用独立回复通道。应用发现、绑定和切换见[应用上下文](./host/development_application.v)，HTTP 接入见[MCP 服务](./devmcp/server.v)，写入边界见[文件变更](./host/development_files.v)。
 
-针对性回归：
-
-- [HTTP 集成测试](./devmcp/server_test.v)：真实握手、认证、Origin 拒绝、工具发现、工程创建、凭据脱敏、GUI 快照保留与权限撤销。
-- [开发流程测试](./host/development_test.v)：新增 include、源码和配置修改、过期预览、外部进程保护、管理配置保护、恢复冲突。
-- [设置页测试](./development_mcp_test.v)：目录授权、开启状态和只读连接配置。
-- 为开发流程测试设置 `VHTTPD_COMPONENT_TEST_BIN`，可使用支持当前 Desktop 管理协议的真实运行包验证请求、错误源码启动失败和恢复重试。
-
-现有项目构建仍使用 [固定工具链](./ci/toolchain.env)，无需为了 MCP 升级编译器。首版源码接口以本机运行包为准；Windows/Linux 和具体模型客户端的完整交付验收需要分别验证。
+针对性测试覆盖[模板安装与作用域](./host/application_creation_test.v)、[真实 HTTP 切换](./devmcp/server_test.v)、[MCP 页面](./development_mcp_test.v)和[新建表单](./component_installation_test.v)。运行包与工具链继续按[固定提交](./ci/toolchain.env)管理。
