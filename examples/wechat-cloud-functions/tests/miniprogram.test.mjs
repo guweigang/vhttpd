@@ -1,10 +1,9 @@
-import test from 'node:test';
-import assert from 'node:assert/strict';
+import test, {assert, exampleRoot} from './support.mjs';
 import {readFileSync} from 'node:fs';
-import vm from 'node:vm';
+import {join} from 'node:path';
 import clientModule from '../client/vhttpd.js';
 
-const demo = new URL('../miniprogram/', import.meta.url);
+const demo = join(exampleRoot, 'miniprogram');
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 function page() {
   let definition, session;
@@ -22,14 +21,12 @@ function page() {
         : {result: {user: {display_name: 'Local user'}, openid: 'local-demo-user'}, requestId: 'demo-request'}});
     },
   };
-  vm.runInNewContext(readFileSync(new URL('pages/vhttpd-demo/index.js', demo), 'utf8'), {
-    wx, Page: value => { definition = value; },
-    require: path => {
+  new Function('wx', 'Page', 'require', readFileSync(join(demo, 'pages/vhttpd-demo/index.js'), 'utf8'))(
+    wx, value => { definition = value; }, path => {
       if (path === '../../utils/vhttpd') return clientModule;
       if (path === '../../config') return {baseURL: 'http://127.0.0.1:19886'};
       throw Error('unexpected require ' + path);
-    },
-  });
+    });
   const instance = {...definition, data: JSON.parse(JSON.stringify(definition.data)),
     setData(patch) { Object.assign(this.data, patch); }};
   instance.onLoad();
@@ -37,9 +34,9 @@ function page() {
 }
 
 test('Mini Program ships the same client and valid page registration', () => {
-  assert.equal(readFileSync(new URL('utils/vhttpd.js', demo), 'utf8'),
-    readFileSync(new URL('../client/vhttpd.js', import.meta.url), 'utf8'));
-  const app = JSON.parse(readFileSync(new URL('app.json', demo), 'utf8'));
+  assert.equal(readFileSync(join(demo, 'utils/vhttpd.js'), 'utf8'),
+    readFileSync(join(exampleRoot, 'client/vhttpd.js'), 'utf8'));
+  const app = JSON.parse(readFileSync(join(demo, 'app.json'), 'utf8'));
   assert.ok(app.pages.includes('pages/vhttpd-demo/index'));
 });
 

@@ -1,0 +1,18 @@
+# Local project fragment: replace its existing db/wechat declaration with this
+# binding. Keep the engine's resources = ["resource:db/wechat"] unchanged.
+# The database password stays on the remote host. The Relay token authorizes
+# database access; keep it in private environment/configuration.
+[resources.db.wechat]
+kind = "mysql"
+options.relay = "relay:database"
+options.route = "resource/database"
+options.remote_resource = "db/wechat"
+
+[relays.database]
+mode = "agent"
+carrier = "websocket"
+url = "${env.VHTTPD_DATABASE_RELAY_URL:-ws://127.0.0.1:19898/relay}"
+node_id = "local-database-debugger"
+token = "${env.VHTTPD_DATABASE_RELAY_TOKEN}"
+autostart = true
+reconnect_delay_ms = 1000

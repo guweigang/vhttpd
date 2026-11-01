@@ -1,0 +1,11 @@
+# Include alongside mysql-hub.toml on the remote server. Reuses the same
+# authenticated Relay; there is no additional public HTTP management endpoint.
+# The cloud application's SDK entry must contain the authenticated takeover hook.
+[adapters.cloud_debug_control]
+kind = "debug-control"
+options.route = "debug/http"
+
+[[pipelines]]
+id = "debug/control"
+ingress = "relay:database"
+egress = "adapter:cloud_debug_control"
