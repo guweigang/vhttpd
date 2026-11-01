@@ -16,6 +16,12 @@ pub enum Phase {
 
 pub struct Snapshot {
 pub:
+	component_result OperationResult
+	component_preview ApplicationDeploymentPreview
+	workspace RuntimeWorkspace
+	relay_live RelayLiveStatus
+	takeover_relay_id string
+	takeover_status TakeoverStatus
 	recovery_history []RecoveryVersionView
 	history_comparison HistoryComparison
 	recovery_saved bool
@@ -42,6 +48,15 @@ pub:
 @[heap]
 pub struct Manager {
 mut:
+	component_preview ApplicationDeploymentPreview
+	pending_component ?PendingComponent
+	workspace RuntimeWorkspace
+	workspace_next_probe i64
+	relay_live RelayLiveStatus
+	relay_next_probe i64
+	takeover_status TakeoverStatus
+	takeover_selection TakeoverSelection
+	takeover_next_probe i64
 	recovery_history []RecoveryVersion
 	recovery_persisted_ids []string
 	recovery_disk_revision string
@@ -92,6 +107,14 @@ pub fn new_manager() &Manager {
 
 pub fn (mut m Manager) select_project(project Project) ! {
 	if !isnil(m.process) { return error('请先停止当前实例。') }
+	m.component_preview = ApplicationDeploymentPreview{}
+	m.pending_component = none
+	m.workspace = RuntimeWorkspace{}
+	m.workspace_next_probe = 0
+	m.relay_live = RelayLiveStatus{}
+	m.relay_next_probe = 0
+	m.takeover_status = TakeoverStatus{}
+	m.takeover_selection = TakeoverSelection{}
 	m.project = project
 	m.phase = .stopped
 	m.lines = []string{}
@@ -107,6 +130,10 @@ pub fn (mut m Manager) start(project Project, binary string) ! {
 	if !isnil(m.process) {
 		return error('请先停止当前实例。')
 	}
+	m.relay_live = RelayLiveStatus{}
+	m.relay_next_probe = 0
+	m.takeover_status = TakeoverStatus{}
+	m.takeover_selection = TakeoverSelection{}
 	m.project = project
 	m.lines = []string{}
 	m.ready_event = false
@@ -207,12 +234,16 @@ pub fn (mut m Manager) tick() {
 		return
 	}
 	m.read_output()
-	if m.phase == .running { m.poll_log_focus() }
+	if m.phase == .running { m.poll_log_focus(); m.poll_relay_diagnostics(); m.poll_workspace() }
 	if !m.process.is_alive() {
 		m.finish(m.phase == .stopping)
 		return
 	}
 	now := time.ticks()
+    if m.phase == .running && m.takeover_selection.relay_id != '' && now >= m.takeover_next_probe {
+        m.takeover_next_probe = now + 5000
+        m.control_takeover('status',m.takeover_selection) or {}
+    }
 	if m.phase == .starting {
 		if now >= m.deadline {
 			m.message = if m.startup_failure { '执行器初始化失败且启动未完成，正在关闭实例；请检查日志。' } else { '启动超时，正在关闭实例；请检查日志。' }
@@ -320,6 +351,11 @@ fn (mut m Manager) finish(expected bool) {
 
 pub fn (m &Manager) snapshot() Snapshot {
 	return Snapshot{
+		component_preview: m.component_preview
+		workspace: if m.phase == .running { m.workspace } else { RuntimeWorkspace{} }
+		relay_live: if m.phase == .running { m.relay_live } else { RelayLiveStatus{} }
+		takeover_status: if m.phase == .running {m.takeover_status} else {TakeoverStatus{}}
+		takeover_relay_id: m.takeover_selection.relay_id
 		recovery_history: m.recovery_history_views()
 		history_comparison: m.history_comparison
 		recovery_saved: m.recovery_saved
@@ -389,9 +425,38 @@ pub fn open_local(target string) ! {
 		opener.wait()
 		defer { opener.close() }
 		if opener.code != 0 { return error('系统无法打开目标：${target}') }
+	} $else $if linux {
+		opener_path := if os.is_executable('/usr/bin/xdg-open') { '/usr/bin/xdg-open' } else { 'xdg-open' }
+		dispatch_linux_open(opener_path, target)!
+	} $else $if windows {
+		open_windows_target(target)!
 	} $else {
-		return error('当前宿主原型仅交付 macOS。')
+		return error('当前平台不支持打开目标。')
 	}
+}
+
+fn dispatch_linux_open(executable string, target string) ! {
+	mut opener := os.new_process(executable)
+	opener.set_args([target])
+	opener.run()
+	deadline := time.ticks() + 250
+	for opener.is_alive() && time.ticks() < deadline {
+		time.sleep(10 * time.millisecond)
+	}
+	if !opener.is_alive() {
+		opener.wait()
+		defer { opener.close() }
+		if opener.code != 0 { return error('系统无法打开目标，请检查 xdg-open 和默认应用。') }
+		return
+	}
+	// Some default applications keep xdg-open alive for their entire window
+	// lifetime. Reap it separately so lifecycle commands keep being processed.
+	spawn reap_linux_opener(mut opener)
+}
+
+fn reap_linux_opener(mut opener os.Process) {
+	opener.wait()
+	opener.close()
 }
 
 fn strip_ansi(text string) string {

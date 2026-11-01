@@ -1,5 +1,6 @@
 module host
 
+$if !windows {
 import os
 
 #include <fcntl.h>
@@ -26,4 +27,5 @@ fn write_project_contents(fd int, content string) ! {
 		if written == 0 { return error('项目文件未完整写入。') }
 		offset += int(written)
 	}
+}
 }

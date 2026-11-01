@@ -9,6 +9,8 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+from prepare_fonts import package as package_fonts
+from build_font_decoder import build as build_font_decoder
 
 
 def run(*args):
@@ -62,6 +64,8 @@ def archive(app, output):
 
 
 def package(root, app):
+    package_fonts(app / 'Contents/Resources/fonts')
+    decoder = build_font_decoder(app / 'Contents/Resources/vhttpd-fontdecode')
     runtime = app / 'Contents/Resources/runtime'
     runtime.mkdir(parents=True)
     binary = runtime / 'vhttpd'
@@ -73,8 +77,8 @@ def package(root, app):
     copied = {}
     names = {}
     host = app / 'Contents/MacOS/vhttpd-workbench'
-    executables = {binary, host}
-    pending = [(runtime_source, binary), (host, host)]
+    executables = {binary, host, decoder}
+    pending = [(runtime_source, binary), (host, host), (decoder, decoder)]
     modified = []
     while pending:
         source, target = pending.pop()

@@ -6,6 +6,7 @@ import crypto.sha256
 import encoding.base64
 import os
 import toml
+import runtime_plan
 
 struct RemoteProjectCandidate {
 	path   string
@@ -20,14 +21,20 @@ fn remote_absolute_path(cwd string, path string) !string {
 	if path == '' || path.contains('\n') || path.contains('\r') || path.contains('\x00') {
 		return error('invalid remote path')
 	}
-	resolved := config.resolve_config_path(cwd, path)
-	if !resolved.starts_with('/') { return error('invalid remote path') }
-	return resolved
+ if !cwd.starts_with('/') { return error('invalid remote directory') }
+ full := if path.starts_with('/') { path } else { cwd + '/' + path }
+ mut parts := []string{}
+ for part in full.split('/') {
+  if part == '' || part == '.' { continue }
+  if part == '..' { if parts.len > 0 { parts.delete_last() }; continue }
+  parts << part
+ }
+ return '/' + parts.join('/')
 }
 
 fn running_project_candidate(cwd string, command string) !RemoteProjectCandidate {
 	args := command.split('\x00')
-	if args.any(it in ['--workbench-restart-helper', '--workbench-upgrade-helper', '--workbench-upgrade-check']) { return error('management_helper_process') }
+	if args.any(it in ['--workbench-restart-helper', '--workbench-upgrade-helper', '--workbench-upgrade-check','--workbench-deploy-helper','--workbench-deploy-prepare','--workbench-deploy-version']) { return error('management_helper_process') }
 	mut path := ''
 	mut token := ''
 	mut port := 0
@@ -99,7 +106,7 @@ fn discovered_profile(server RemoteServer, candidate RemoteProjectCandidate, sou
 		}
 	}
 	if doc.value('version').int() == 2 {
-		plan := config.load_runtime_plan_with_overrides(candidate.path, sources)!
+		plan := remote_runtime_plan(candidate.path, sources)!
 		ref := plan.control.listener or { return error('missing control listener') }
 		listener := plan.listeners[ref.id] or { return error('missing control listener') }
 		if listener.protocol != 'http' || listener.tls.enabled {
@@ -172,12 +179,16 @@ fn merge_discovered_profiles(existing []RemoteProfile, discovered []RemoteProfil
 
 fn (mut s ServerSession) discover_projects() ! {
 	inventory := s.shell_limited($embed_file('remote_scripts/discover.sh').to_string(), 12000, 524288)!
+	mut deployments := []ApplicationDeploymentStatus{}
 	mut upgrades := []RemoteRuntimeUpgrade{}
 	mut candidates := map[string]RemoteProjectCandidate{}
 	mut warnings := 0
 	mut issues := []string{}
 	for line in inventory.split_into_lines() {
-		if line.starts_with('VHTTPD_UPGRADE:') {
+		if line.starts_with('VHTTPD_DEPLOYMENT:') {
+			status := json.decode[ApplicationDeploymentStatus](base64.decode_str(line.all_after(':'))) or { warnings++; continue }
+			if status.id.len==24 && status.id.bytes().all(it.is_hex_digit()) && candidates.keys().contains(status.config_path) { deployments << status }
+		} else if line.starts_with('VHTTPD_UPGRADE:') {
 			status := json.decode[RemoteRuntimeUpgrade](base64.decode_str(line.all_after(':'))) or { warnings++; continue }
 			if status.id.len == 24 && status.id.bytes().all(it.is_hex_digit()) && candidates.keys().contains(status.config_path) { upgrades << status }
 		} else if line.starts_with('VHTTPD_PROJECT:') {
@@ -236,6 +247,7 @@ fn (mut s ServerSession) discover_projects() ! {
 	save_remote_profiles(merged) or { return error('无法保存本机项目缓存，请检查数据目录权限。') }
 	s.state = ServerSnapshot{
 		...s.state
+		deployments: deployments
 		upgrades:           upgrades
 		projects:           discovered
 		discovery_revision: s.state.discovery_revision + 1
@@ -249,4 +261,23 @@ fn (mut s ServerSession) discover_projects() ! {
 			''
 		}
 	}
+}
+
+// The Windows host parses a Linux project without applying Windows path rules
+// to discovery or reading any of its includes from this computer.
+fn remote_runtime_plan(path string, sources map[string]string) !runtime_plan.RuntimePlan {
+ $if windows {
+  mut native := map[string]string{}
+  for key, text in sources { native[os.abs_path(key)] = text }
+  for key, text in sources {
+   doc := toml.parse_text(text)!
+   if includes := doc.value_opt('include') {
+    for include in includes.array() {
+     resolved := config.resolve_config_path(os.dir(os.abs_path(key)), include.string())
+     if resolved !in native { return error('remote_include_not_available') }
+    }
+   }
+  }
+  return config.load_runtime_plan_with_overrides(path, native)!
+ } $else { return config.load_runtime_plan_with_overrides(path, sources)! }
 }

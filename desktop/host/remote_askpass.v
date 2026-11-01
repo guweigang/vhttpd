@@ -15,6 +15,7 @@ struct RemoteAskpass {
 	directory string
 	path string
 	capability string
+ persistent bool
 	stop chan bool = chan bool{cap: 1}
 	done chan bool = chan bool{cap: 1}
 	challenges chan RemoteHostKey = chan RemoteHostKey{cap: 1}
@@ -30,28 +31,43 @@ pub fn validate_ssh_password(password string) ! {
 }
 
 fn new_remote_prompts(password string, allow_password bool) !&RemoteAskpass {
+ return new_remote_prompt_session(password, allow_password, false)
+}
+
+fn new_remote_prompt_session(password string, allow_password bool, persistent bool) !&RemoteAskpass {
 	if allow_password { validate_ssh_password(password)! }
+ $if windows {
+  if !os.is_file(os.join_path(os.dir(os.executable()), 'vhttpd-ssh-askpass.exe')) { return error('缺少 SSH 密码辅助程序，请完整解压测试包后重试。') }
+ }
 	// /tmp keeps the path below Darwin's Unix socket length limit, regardless
 	// of the user's Application Support or temporary-directory path length.
-	directory := os.join_path('/tmp', 'vh-ssh-' + new_remote_id()!)
+	directory := os.join_path($if windows { os.temp_dir() } $else { '/tmp' }, 'vh-ssh-' + new_remote_id()!)
 	os.mkdir(directory, mode: 0o700)!
 	mut ready := false
 	defer { if !ready { os.rmdir_all(directory) or {} } }
-	session := &RemoteAskpass{directory: directory, path: os.join_path(directory, 'auth'), capability: rand.bytes(32)!.hex()}
-	mut listener := unix.listen_stream(session.path, unix.ListenOptions{})!
-	// V's Unix socket timeouts apply after EWOULDBLOCK. A blocking accept()
-	// otherwise prevents cancellation and leaves the session directory alive.
-	net.set_blocking(listener.sock.handle, false) or { listener.close() or {}; return err }
-	os.chmod(session.path, 0o600)!
-	listener.set_accept_timeout(100 * time.millisecond)
-	spawn session.serve(mut listener, password, allow_password)
+	capability := rand.bytes(32)!.hex()
+ $if windows {
+  mut listener := net.listen_tcp(.ip, '127.0.0.1:0')!
+  session := &RemoteAskpass{directory:directory, path:'tcp://127.0.0.1:${listener.addr()!.port()!}', capability:capability, persistent:persistent}
+  listener.set_accept_timeout(100 * time.millisecond)
+  spawn session.serve(mut listener, password, allow_password)
+  ready = true
+  return session
+ } $else {
+  session := &RemoteAskpass{directory:directory, path:os.join_path(directory,'auth'), capability:capability, persistent:persistent}
+  mut listener := unix.listen_stream(session.path, unix.ListenOptions{})!
+  net.set_blocking(listener.sock.handle, false) or { listener.close() or {}; return err }
+  os.chmod(session.path, 0o600)!
+  listener.set_accept_timeout(100 * time.millisecond)
+  spawn session.serve(mut listener, password, allow_password)
 	ready = true
 	return session
+ }
 }
 
 fn (s &RemoteAskpass) environment() map[string]string {
 	mut env := os.environ()
-	env['SSH_ASKPASS'] = os.executable()
+	env['SSH_ASKPASS'] = $if windows { '.\\vhttpd-ssh-askpass.exe' } $else { os.executable() }
 	env['SSH_ASKPASS_REQUIRE'] = 'force'
 	env['DISPLAY'] = 'vhttpd-workbench'
 	env['LC_ALL'] = 'C'
@@ -89,7 +105,7 @@ fn parse_remote_host_key(prompt string) !RemoteHostKey {
 	return error('ssh_host_fingerprint_missing')
 }
 
-fn (s &RemoteAskpass) serve(mut listener unix.StreamListener, password string, allow_password bool) {
+fn (s &RemoteAskpass) serve[T](mut listener T, password string, allow_password bool) {
 	defer {
 		listener.close() or {}
 		os.rmdir_all(s.directory) or {}
@@ -97,10 +113,10 @@ fn (s &RemoteAskpass) serve(mut listener unix.StreamListener, password string, a
 	}
 	mut deadline := time.ticks() + 15000
 	mut confirmed := false
-	for time.ticks() < deadline {
+	for s.persistent || time.ticks() < deadline {
 		select { _ := <-s.stop { return } else {} }
 		mut connection := listener.accept() or { continue }
-		net.set_blocking(connection.sock.handle, false) or { connection.close() or {}; continue }
+		net.set_blocking(connection.sock.handle, os.user_os() == 'windows') or { connection.close() or {}; continue }
 		connection.set_read_timeout(500 * time.millisecond)
 		connection.set_write_timeout(500 * time.millisecond)
 		capability := read_askpass_line(mut connection, 64) or { connection.close() or {}; continue }
@@ -129,7 +145,8 @@ fn (s &RemoteAskpass) serve(mut listener unix.StreamListener, password string, a
 		if request.kind == 'password' && allow_password {
 			connection.write_string(password + '\n') or {}
 			connection.close() or {}
-			return
+   if !s.persistent { return }
+   continue
 		}
 		connection.close() or {}
 	}
@@ -142,7 +159,7 @@ fn (mut s RemoteAskpass) close() {
 	select { _ := <-s.done {} 2 * time.second {} }
 }
 
-fn read_askpass_line(mut connection unix.StreamConn, limit int) !string {
+fn read_askpass_line[T](mut connection T, limit int) !string {
 	mut bytes := []u8{}
 	mut byte := []u8{len: 1}
 	for bytes.len <= limit {
@@ -160,13 +177,16 @@ pub fn run_remote_askpass() ! {
 	prompt := os.args.last()
 	kind := if prompt.contains('Are you sure you want to continue connecting') && prompt.contains('SHA256:') {
 		'host_key'
-	} else if os.getenv('SSH_ASKPASS_PROMPT') != 'confirm' && prompt.to_lower().contains('password') {
+	} else if (os.getenv('SSH_ASKPASS_PROMPT') != 'confirm' || os.user_os() == 'windows') && prompt.to_lower().trim_space().ends_with('password:') {
 		'password'
 	} else { return error('ssh_askpass_prompt_rejected') }
 	path := os.getenv('VHTTPD_SSH_ASKPASS_SOCKET')
 	capability := os.getenv('VHTTPD_SSH_ASKPASS_CAPABILITY')
 	if path == '' || capability.len != 64 { return error('ssh_askpass_unavailable') }
-	mut connection := unix.connect_stream(path)!
+	mut connection := $if windows {
+  if !path.starts_with('tcp://127.0.0.1:') { return error('ssh_askpass_invalid_endpoint') }
+  net.dial_tcp(path.all_after('tcp://'))!
+ } $else { unix.connect_stream(path)! }
 	defer { connection.close() or {} }
 	connection.set_read_timeout(if kind == 'host_key' { 11 * time.minute } else { 2 * time.second })
 	connection.set_write_timeout(2 * time.second)

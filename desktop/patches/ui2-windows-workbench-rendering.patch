@@ -1,0 +1,111 @@
+--- a/windows/ui_windows.v
++++ b/windows/ui_windows.v
+@@ -398,6 +398,11 @@
+ @[heap]
+ struct WindowsState {
+ mut:
++	polling_refresh bool
++	has_declared_tree bool
++	last_declared_tree Element
++	poll_skipped u64
++	rendered_frames u64
+ 	symbol_font_attempted bool
+ 	hover_bindings        map[u64]string // window handle -> action of a hoverable element
+ 	hovered               []string       // hovered actions, outermost first
+@@ -756,6 +761,12 @@
+ 		return
+ 	}
+ 	declared := st.build_screen()
++	// Timer polls still consume host worker results, but an unchanged declaration
++	// must not move/repaint every native child or disturb text selection.
++	if st.polling_refresh && st.has_declared_tree && declared == st.last_declared_tree { st.poll_skipped++; return }
++	st.rendered_frames++
++	st.last_declared_tree = declared
++	st.has_declared_tree = true
+ 	root := windows_symbol_images_as_labels(apply_widget_animations(declared))
+ 	validate_element_tree(root) or {
+ 		eprintln('ui2: ${err}')
+@@ -795,6 +806,20 @@
+ 	windows_update_hover()
+ }
+ 
++// Host status polls are distinct from input, scrolling and animation refreshes.
++pub fn request_poll_refresh() {
++	st := windows_state()
++	if st.root != unsafe { nil } { C.ui2_win_post_poll_refresh(st.root) }
++}
++
++fn C.ui2_win_post_poll_refresh(voidptr)
++
++// Diagnostics used by the native build regression probe.
++pub fn windows_poll_refresh_stats() (u64, u64) {
++ st := windows_state()
++ return st.rendered_frames, st.poll_skipped
++}
++
+ pub fn request_refresh() {
+ 	st := windows_state()
+ 	if st.root != unsafe { nil } {
+@@ -2337,6 +2362,12 @@
+ 			}
+ 			return 0
+ 		}
++		u32(0x8000 + 88) {
++			st.polling_refresh = true
++			refresh()
++			st.polling_refresh = false
++			return 0
++		}
+ 		win_wm_refresh {
+ 			refresh()
+ 			return 0
+--- a/windows/native_helpers_windows.h
++++ b/windows/native_helpers_windows.h
+@@ -213,6 +213,12 @@
+ 	} else {
+ 		RemovePropW(hwnd, ui2_win_accessible_button_property());
+ 	}
++	// Buffer this button's small subtree, so focus/background and transparent
++	// captions are presented together. Inputs and the rest of the window keep
++	// their ordinary native paint path.
++	LONG_PTR extended = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
++	LONG_PTR next_extended = active ? extended | WS_EX_COMPOSITED : extended & ~((LONG_PTR)WS_EX_COMPOSITED);
++	if (extended != next_extended) SetWindowLongPtrW(hwnd, GWL_EXSTYLE, next_extended);
+ 	LONG_PTR style = GetWindowLongPtrW(hwnd, GWL_STYLE);
+ 	LONG_PTR next_style = active ? style | WS_TABSTOP : style & ~((LONG_PTR)WS_TABSTOP);
+ 	if (style != next_style) {
+@@ -405,7 +411,9 @@
+ 	}
+ 	if ((message == WM_SETFOCUS || message == WM_KILLFOCUS)
+ 		&& ui2_win_is_accessible_button(hwnd)) {
+-		InvalidateRect(hwnd, NULL, FALSE);
++		// The caption/badges are transparent STATIC children. Invalidating only
++		// their parent clears their glyphs until a later declaration refresh.
++		RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_NOERASE);
+ 	}
+ 	if ((message == WM_MOUSEWHEEL || message == WM_MOUSEHWHEEL)
+ 		&& (GetWindowLongPtrW(hwnd, GWL_STYLE) & ui2_win_wheel_scroll_style(message, wparam)) == 0
+@@ -803,6 +811,10 @@
+ 	PostQuitMessage(code);
+ }
+ 
++static inline void ui2_win_post_poll_refresh(void *hwnd) {
++ if (hwnd != NULL) PostMessageW((HWND)hwnd, WM_APP + 88, 0, 0);
++}
++
+ static inline void ui2_win_post_refresh(void *hwnd) {
+ 	if (hwnd != NULL) PostMessageW((HWND)hwnd, UI2_WM_REFRESH, 0, 0);
+ }
+@@ -833,6 +845,12 @@
+ 
+ static inline void ui2_win_set_frame(void *hwnd, int x, int y, int width, int height) {
+ 	if (hwnd != NULL) {
++		RECT current;
++		if (GetWindowRect((HWND)hwnd, &current)) {
++			POINT origin = {current.left, current.top};
++			MapWindowPoints(NULL, GetParent((HWND)hwnd), &origin, 1);
++			if (origin.x == x && origin.y == y && current.right-current.left == width && current.bottom-current.top == height) return;
++		}
+ 		SetWindowPos((HWND)hwnd, NULL, x, y, width, height,
+ 			SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOCOPYBITS);
+ 	}

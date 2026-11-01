@@ -85,6 +85,7 @@ pub fn probe_shared_relay(r SharedRelay) RelayProbeResult {
 			}
 		}
 	}
+	if !r.is_native() {return RelayProbeResult{ok:true, stage:'WebSocket', message:'WebSocket 握手通过；应用协议和业务认证需由应用验证。测试会话已关闭。', elapsed_ms:time.ticks()-start}}
 	return RelayProbeResult{ ok: true, stage: 'Relay 认证', message: '测试通过：WebSocket 与 Relay 认证握手完成；测试会话已断开，不代表项目已连接。', elapsed_ms: time.ticks() - start }
 }
 
@@ -104,18 +105,21 @@ fn probe_shared_relay_session(r SharedRelay, mut progress ProbeProgress) ! {
 	tcp.set_write_timeout(3 * time.second)
 	tcp.set_read_timeout(3 * time.second)
 	mut p := ProbeSocket{ tcp: tcp, secure: secure, deadline: time.ticks() + 6000 }
+	// V defers execute at block exit. Keep TLS alive through the upgrade and
+	// optional Relay authentication, then close it at function exit.
+	defer { if !isnil(p.tls) { p.tls.shutdown() or {} } }
 	if secure {
 		progress.stage = 'TLS'
 		// Use the OS-provided CA bundle rather than development/Homebrew paths.
 		ca := if os.is_file('/etc/ssl/cert.pem') { '/etc/ssl/cert.pem' } else { '' }
 		p.tls = ssl.new_ssl_conn(validate: true, verify: ca)!
-		defer { p.tls.shutdown() or {} }
 		p.tls.connect(mut tcp, u.hostname())!
 	}
 	progress.stage = 'WebSocket'
 	key := base64.encode(rand.bytes(16)!)
-	path := if u.escaped_path() == '' { '/' } else { u.escaped_path() }
-	p.write(('GET ${path} HTTP/1.1\r\nHost: ${authority_host}:${port}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: ${key}\r\nSec-WebSocket-Version: 13\r\n\r\n').bytes())!
+	path := (if u.escaped_path() == '' { '/' } else { u.escaped_path() }) + if u.raw_query != '' {'?' + u.raw_query} else {''}
+	auth := if !r.is_native() && r.token != '' {'Authorization: Bearer ' + r.token + '\r\n'} else {''}
+	p.write(('GET ${path} HTTP/1.1\r\nHost: ${authority_host}:${port}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: ${key}\r\nSec-WebSocket-Version: 13\r\n${auth}\r\n').bytes())!
 	mut header := []u8{}
 	for header.len < 16384 {
 		header << p.read_exact(1)!
@@ -135,6 +139,7 @@ fn probe_shared_relay_session(r SharedRelay, mut progress ProbeProgress) ! {
 		return error('upgrade')
 	}
 	defer { p.write(masked_probe_frame(8, [u8(3), 232]) or { []u8{} }) or {} }
+	if !r.is_native() {return}
 	progress.stage = 'Relay 认证'
 	id := 'workbench-test-' + rand.bytes(12)!.hex()
 	registration := relay.registration_hello_frame(relay.RegistrationRequest{ node_id: id, relay_id: r.relay_id, mode: .agent, carrier: 'websocket', token: r.token, trace_id: id, max_channels: 1 })!

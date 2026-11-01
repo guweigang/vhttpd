@@ -12,8 +12,12 @@ if mkdir -m 700 "$target"; then
 fresh=1
 printf %s "$instance_id" > "$target/.desktop-instance-id"
 printf %s "$config" | base64 -d > "$target/vhttpd.toml"
-printf %s "$source" | base64 -d > "$target/main.mjs"
-chmod 600 "$target/vhttpd.toml" "$target/main.mjs"
+if [ -n "$source" ]; then
+  printf %s "$source" | base64 -d > "$target/main.mjs"
+  chmod 600 "$target/main.mjs"
+fi
+chmod 600 "$target/vhttpd.toml"
+mkdir -m 700 "$target/apps" "$target/.runtime"
 elif [ "$reuse" != 1 ] || [ ! -f "$target/vhttpd.toml" ] || [ "$(cat "$target/.desktop-instance-id" 2>/dev/null)" != "$instance_id" ]; then
   echo 'VHTTPD_ERROR:实例目录已存在或无法写入，请换一个名称。'; exit 1
 fi

@@ -36,7 +36,13 @@ pub fn project_templates() []ProjectTemplate {
 		source_name: 'api-playground'
 		web_port:    '19882'
 		admin_port:  '19982'
-	}]
+	}, ProjectTemplate{
+        id: 'environment'
+        title: '基础运行环境（推荐）'
+        description: '仅初始化管理入口、独立凭据和日志；应用随后单独安装。'
+        config_text: 'version = 2\ninclude = []\n\n[server]\npid_file = "runtime.pid"\n\n[observability]\nevent_log = "events.ndjson"\n\n[listeners.admin]\nprotocol = "http"\ntransport = "tcp"\nhost = "127.0.0.1"\nport = 19983\n\n[control]\nlistener = "listener:admin"\ntoken = "local-development-only"\n'
+        admin_port: '19983'
+    }]
 }
 
 pub struct CreateProjectOptions {
@@ -84,6 +90,7 @@ pub fn create_project(options CreateProjectOptions) !Project {
 			// Remove only files written by this operation. Never recursively
 			// delete a directory someone else may have populated concurrently.
 			for path in written { os.rm(path) or {} }
+			for name in ['apps', '.runtime'] { os.rmdir(os.join_path(target, name)) or {} }
 			os.rmdir(target) or {}
 		}
 	}
@@ -100,20 +107,25 @@ pub fn create_project(options CreateProjectOptions) !Project {
 	config_text := template.config_text
 		.replace('entry = "main.mts"', 'entry = "main.mjs"')
 		.replace('runtime_profile = "node"', 'runtime_profile = "script"')
-		.replace('port = ${template.web_port}', 'port = ${web_port}')
+		.replace('port = ${if template.web_port == '' {'__unused__'} else {template.web_port}}', 'port = ${web_port}')
 		.replace('port = ${template.admin_port}', 'port = ${admin_port}')
 		.replace('local-development-only', credential)
 	source_text := template.source_text.replace('"${template.source_name}"', json2.encode(options.name.trim_space()))
-	files := {
+	mut files := {
 		'vhttpd.toml': config_text
 		'main.mjs':    source_text
 		'.gitignore':  'runtime.pid\nevents.ndjson\n'
 	}
+	if template.id == 'environment' { files.delete('main.mjs') }
 	for name, content in files {
 		path := os.join_path(target, name)
 		fd := create_project_file(path)!
 		written << path
 		write_project_contents(fd, content)!
+	}
+	if template.id == 'environment' {
+		os.mkdir(os.join_path(target, 'apps'), mode: 0o700)!
+		os.mkdir(os.join_path(target, '.runtime'), mode: 0o700)!
 	}
 	project := project_from_file(os.join_path(target, 'vhttpd.toml'), target)!
 	inspect_project(project)!

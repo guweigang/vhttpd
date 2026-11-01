@@ -149,6 +149,7 @@ fn remote_failed_startup_snapshot(profile_id string, instance RemoteInstance, st
 
 pub struct RemoteSnapshot {
 pub:
+	workspace RuntimeWorkspace
 	admin_url string
 	sequence      u64
 	profile_id    string
@@ -209,8 +210,10 @@ struct RemoteBrowserEndpoint {
 @[heap]
 struct RemoteManager {
 mut:
+	workspace RuntimeWorkspace
+	workspace_next_probe i64
 	profile           RemoteProfile
-	ssh_executable    string       = '/usr/bin/ssh'
+	ssh_executable    string       = ssh_tool('ssh')
 	ssh               &os.Process  = unsafe { nil }
 	server            &http.Server = unsafe { nil }
 	proxy             &RemoteProxy = unsafe { nil }
@@ -228,6 +231,8 @@ mut:
 }
 
 fn (mut m RemoteManager) disconnect() {
+	m.workspace = RuntimeWorkspace{}
+	m.workspace_next_probe = 0
 	if m.control_path != '' && m.mux_forward != '' && os.exists(m.control_path) {
 		mut args := ['-S', m.control_path, '-o', 'BatchMode=yes', '-o', 'ProxyCommand=false', '-O', 'cancel', '-L', m.mux_forward]
 		if m.profile.ssh_port > 0 { args << ['-p', m.profile.ssh_port.str()] }
@@ -267,10 +272,11 @@ fn (mut m RemoteManager) connect_with_password(profile RemoteProfile, password s
 }
 
 fn (mut m RemoteManager) connect_with_session(profile RemoteProfile, password string, control_path string) ! {
-	$if !macos {
-		return error('当前 Desktop SSH 传输仅验证了 macOS；其他平台适配尚未启用。')
+	$if !macos && !linux && !windows {
+		return error('当前 SSH 传输支持 macOS / Linux；Windows 适配尚未启用。')
 	}
 	profile.validate()!
+ can_mux := control_path != '' && os.user_os() != 'windows'
 	if profile.auth_method == 'password' && control_path == '' { validate_ssh_password(password)! }
 	if profile.auth_method == 'key' && profile.identity_file != '' && !os.is_file(profile.identity_file) {
 		return error('SSH 私钥文件不存在，请重新选择或使用 SSH 配置。')
@@ -283,13 +289,13 @@ fn (mut m RemoteManager) connect_with_session(profile RemoteProfile, password st
 	port := reserve.addr()!.port()!
 	reserve.close()!
 	mut args := ['-N', '-T', '-o', 'ControlMaster=no',
-		'-o', 'StrictHostKeyChecking=ask', '-o', 'FingerprintHash=sha256', '-o', 'UpdateHostKeys=no', '-o', 'ExitOnForwardFailure=yes', '-o', 'ConnectTimeout=8',
+		'-o', 'StrictHostKeyChecking=' + if control_path != '' { 'yes' } else { 'ask' }, '-o', 'FingerprintHash=sha256', '-o', 'UpdateHostKeys=no', '-o', 'ExitOnForwardFailure=yes', '-o', 'ConnectTimeout=8',
 		'-o', 'ServerAliveInterval=10', '-o', 'ServerAliveCountMax=2', '-o', 'ForwardAgent=no',
 		'-L', '127.0.0.1:${port}:127.0.0.1:${profile.admin_port}']
 	if profile.ssh_port > 0 { args << ['-p', profile.ssh_port.str()] }
 	if profile.ssh_user != '' { args << ['-l', profile.ssh_user] }
-	if control_path != '' {
-		if !os.exists(control_path) { return error('服务器会话已断开，请重新连接服务器。') }
+	if can_mux {
+		if !ssh_control_exists(control_path) { return error('服务器会话已断开，请重新连接服务器。') }
 		args << ['-S', control_path, '-o', 'BatchMode=yes', '-o', 'ProxyCommand=false']
 	} else if profile.auth_method == 'password' {
 		args << ['-o', 'BatchMode=no', '-o', 'PreferredAuthentications=password',
@@ -301,7 +307,7 @@ fn (mut m RemoteManager) connect_with_session(profile RemoteProfile, password st
 	}
 	if control_path == '' { m.askpass = new_remote_prompts(password, profile.auth_method == 'password')! }
 	args << profile.ssh_host
-	if control_path != '' {
+	if can_mux {
 		// A mux client with -N exits after creating forwards. Own the forward
 		// explicitly; the server session owns and supervises the master process.
 		mut forward_args := ['-S', control_path, '-o', 'BatchMode=yes', '-o', 'ProxyCommand=false', '-O', 'forward', '-L', '127.0.0.1:${port}:127.0.0.1:${profile.admin_port}']
@@ -318,6 +324,11 @@ fn (mut m RemoteManager) connect_with_session(profile RemoteProfile, password st
 		ssh.set_args(args)
 		ssh.set_redirect_stdio()
 		if !isnil(m.askpass) { ssh.set_environment(m.askpass.environment()) }
+  $if windows {
+   ssh.create_no_window = true
+   ssh.set_work_folder(os.dir(os.executable()))
+   if control_path != '' { ssh.set_environment(windows_session_environment(control_path, profile)!); m.control_path = control_path }
+  }
 		ssh.run()
 		m.ssh = ssh
 	}
@@ -358,7 +369,7 @@ fn (mut m RemoteManager) confirm_host_key(id string) ! {
 
 fn (m &RemoteManager) request(method http.Method, path string, data string) !http.Response {
 	if isnil(m.proxy) { return error('请先连接远端实例。') }
-	mut request := http.Request{ method: method, url: m.proxy.target + path, data: data, read_timeout: 2 * time.second, write_timeout: 2 * time.second, max_retries: 1, allow_redirect: false, disable_connection_reuse: true }
+	mut request := http.Request{ method: method, url: m.proxy.target + path, data: if method == .post && data == '' { '{}' } else { data }, read_timeout: 2 * time.second, write_timeout: 2 * time.second, max_retries: 1, allow_redirect: false, disable_connection_reuse: true }
 	request.add_custom_header('x-vhttpd-admin-token', m.profile.token)!
 	if method == .post { request.header.set(.content_type, 'application/json') }
 	return request.do()!
@@ -427,7 +438,13 @@ fn (mut m RemoteManager) tick() {
 	if m.snapshot.host_key.id != '' && !isnil(m.ssh) && m.ssh.is_alive() { return }
 	if time.ticks() < m.next_probe { return }
 	m.next_probe = time.ticks() + 1500
-	if (m.control_path != '' && !os.exists(m.control_path)) || (m.control_path == '' && !m.ssh.is_alive()) {
+ if m.control_path != '' && !ssh_control_exists(m.control_path) {
+  id := m.profile.id
+  m.disconnect()
+  m.snapshot = RemoteSnapshot{profile_id:id, message:'服务器会话已断开，请重新连接；远端实例继续运行。'}
+  return
+ }
+	if (m.control_path != '' && !ssh_control_exists(m.control_path)) || (!isnil(m.ssh) && !m.ssh.is_alive()) {
 		if !isnil(m.askpass) { m.askpass.close(); m.askpass = unsafe { nil } }
 		if m.ssh_diagnostics.contains('REMOTE HOST IDENTIFICATION HAS CHANGED') || m.ssh_diagnostics.contains('REVOKED HOST KEY') || m.ssh_diagnostics.contains('POSSIBLE DNS SPOOFING DETECTED') {
 			mut fingerprint := ''
@@ -545,8 +562,9 @@ fn remote_supervise(worker RemoteWorker) {
 			}
 		}
 		manager.tick()
+		manager.poll_workspace()
 		select {
-			worker.snapshots <- RemoteSnapshot{ ...manager.snapshot, sequence: sequence, admin_url: if manager.snapshot.connected && !isnil(manager.proxy) { manager.proxy.origin + '/admin/ui/' } else { '' } } {
+			worker.snapshots <- RemoteSnapshot{ ...manager.snapshot, workspace: manager.workspace, sequence: sequence, admin_url: if manager.snapshot.connected && !isnil(manager.proxy) { manager.proxy.origin + '/admin/ui/' } else { '' } } {
 			}
 			else {
 			}

@@ -3,6 +3,8 @@ module host
 import time
 
 pub enum Action {
+	preview_component
+	install_component
 	select_project
 	start
 	stop
@@ -12,6 +14,11 @@ pub enum Action {
 	open_admin
 	open_config
 	use_shared_relay
+	use_relay_database
+	takeover_start
+	takeover_stop
+	takeover_status
+	takeover_prepare
 	check_config
 	preview_rollback
 	compare_history
@@ -21,6 +28,8 @@ pub enum Action {
 
 pub struct Command {
 pub:
+	component_id string
+	component_source Project
 	sequence u64
 	action   Action
 	project  Project
@@ -30,6 +39,8 @@ pub:
 	config_source string
 	binary   string
 	shared_relay SharedRelay
+	relay_database RelayDatabaseSelection
+	takeover TakeoverSelection
 }
 
 pub struct Worker {
@@ -49,11 +60,21 @@ fn supervise(w Worker) {
 	mut manager := new_persistent_manager()
 	mut notice := ''
 	mut sequence := u64(0)
+	mut component_result := OperationResult{}
 	for {
 		select {
 			command := <-w.commands {
 				sequence = command.sequence
 				match command.action {
+                    .preview_component, .install_component {
+                        notice = ''
+                        if command.action == .preview_component {
+                            manager.preview_component(command.component_source, command.component_id) or { notice = err.msg() }
+                        } else {
+                            manager.install_component(command.version_id, command.binary) or { notice = err.msg() }
+                        }
+                        component_result = OperationResult{sequence:command.sequence, action:if command.action == .preview_component {'preview'} else {'install'}, target:manager.project.config_path, preview_id:manager.component_preview.id, error:notice != '', message:if notice != '' {notice} else {manager.message}}
+                    }
 					.select_project {
 						notice = ''
 						manager.select_project(command.project) or { notice = err.msg() }
@@ -70,6 +91,19 @@ fn supervise(w Worker) {
 						notice = ''
 						manager.use_shared_relay(command.shared_relay) or { notice = err.msg() }
 					}
+					.use_relay_database {
+						notice = ''
+						manager.use_relay_database(command.shared_relay, command.relay_database) or { notice = err.msg() }
+					}
+                    .takeover_start, .takeover_stop, .takeover_status {
+                        notice = ''
+                        action := if command.action == .takeover_start {'start'} else if command.action == .takeover_stop {'stop'} else {'status'}
+                        manager.control_takeover(action,command.takeover) or {notice=err.msg()}
+                    }
+                    .takeover_prepare {
+                        notice = ''
+                        manager.prepare_takeover_receiver(command.takeover) or {notice=err.msg()}
+                    }
 					.preview_rollback {
 						notice = ''
 						if command.version_id == '' { manager.preview_config_rollback() or { notice = err.msg() } } else { manager.preview_history_rollback(command.version_id) or { notice = err.msg() } }
@@ -106,7 +140,7 @@ fn supervise(w Worker) {
 		manager.tick()
 		s := manager.snapshot()
 		message := if notice != '' { notice } else { s.message }
-		snapshot := Snapshot{ ...s, sequence: sequence, message: message }
+		snapshot := Snapshot{ ...s, sequence: sequence, message: message, component_result:component_result }
 		select {
 			w.snapshots <- snapshot {
 			}

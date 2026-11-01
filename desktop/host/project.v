@@ -4,6 +4,8 @@ import config
 import json2
 import os
 
+// Legacy registry name: a vhttpd launch/configuration registration.
+// Business applications are RuntimeApplication entries owned by this environment.
 pub struct Project {
 pub:
 	name        string

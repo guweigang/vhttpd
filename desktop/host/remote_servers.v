@@ -5,6 +5,7 @@ import crypto.sha256
 import encoding.base64
 import json2 as json
 import os
+import runtime_upgrade
 import time
 
 // A server is SSH access, independent of any installed runtime or Admin token.
@@ -58,9 +59,11 @@ pub fn save_remote_servers(items []RemoteServer) ! {
 	os.mv(temp, path)!
 }
 
-pub enum ServerAction { connect trust disconnect inspect install create upgrade shutdown }
+pub enum ServerAction { relay_logs relay_load relay_save relay_delete connect trust disconnect inspect install create start upgrade prepare_deploy deploy discard_deploy shutdown }
 pub struct ServerCommand {
 pub:
+	shared_relay SharedRelay
+	relay_revision string
 	sequence u64
 	action ServerAction
 	server RemoteServer
@@ -69,9 +72,13 @@ pub:
 	archive string
 	release_tag string
 	runtime_id string
+	initialize_environment bool
+	component_id string
+	local_project Project
+	deployment_id string
 	project_id string
 	name string
-	template string = 'vjsx-http'
+	template string = 'environment'
 	web_port int = 19881
 	admin_port int = 2018
 }
@@ -93,6 +100,12 @@ fn remote_runtime_id_valid(id string) bool {
 
 pub struct ServerSnapshot {
 pub:
+	component_result OperationResult
+	runtime_result OperationResult
+	relay_catalog RelayCatalog
+	relay_logs string
+	relay_logs_project string
+	relay_logs_error string
 	sequence u64
 	server RemoteServer
 	server_id string
@@ -105,6 +118,8 @@ pub:
 	platform string
 	root string
 	version string
+	deployment_preview ApplicationDeploymentPreview
+	deployments []ApplicationDeploymentStatus
 	upgrades []RemoteRuntimeUpgrade
 	runtimes []RemoteRuntime
 	release_tag string
@@ -131,13 +146,20 @@ pub fn new_server_worker() ServerWorker {
 @[heap]
 struct ServerSession {
 mut:
-	ssh_executable string = '/usr/bin/ssh'
-	scp_executable string = '/usr/bin/scp'
+	ssh_executable string = ssh_tool('ssh')
+	scp_executable string = ssh_tool('scp')
 	server RemoteServer
 	process &os.Process = unsafe { nil }
 	prompts &RemoteAskpass = unsafe { nil }
 	directory string
+ windows_ticket string
+ ready_output string
 	diagnostics string
+	pending_deployment runtime_upgrade.DeploymentRequest
+	deployment_local_project Project
+	deployment_fingerprint string
+	deployment_component_id string
+	next_deployment_probe i64
 	next_upgrade_probe i64
 	deadline i64
 	state ServerSnapshot
@@ -145,6 +167,13 @@ mut:
 }
 
 fn (mut s ServerSession) close() {
+	if s.pending_deployment.id!='' && s.state.connected { s.discard_deployment() or {} }
+	s.pending_deployment=runtime_upgrade.DeploymentRequest{}
+	s.deployment_fingerprint=''
+	s.deployment_local_project=Project{}
+ $if windows { revoke_windows_session(s.windows_ticket) }
+ s.windows_ticket = ''
+ s.ready_output = ''
 	if !isnil(s.prompts) { s.prompts.close(); s.prompts = unsafe { nil } }
 	if !isnil(s.process) {
 		s.process.signal_term()
@@ -174,24 +203,29 @@ fn (mut s ServerSession) connect(server RemoteServer, password string) ! {
 	if server.auth_method == 'key' && server.identity_file != '' && !os.is_file(server.identity_file) { return error('SSH 私钥不存在。') }
 	s.close()
 	s.server = server
-	s.directory = '/tmp/vh-host-' + new_remote_id()!
+	s.directory = os.join_path($if windows { os.temp_dir() } $else { '/tmp' }, 'vh-host-' + new_remote_id()!)
 	os.mkdir(s.directory, mode: 0o700)!
 	mut args := ['-N', '-T', '-M', '-S', s.directory + '/control', '-o', 'ControlPersist=no',
 		'-o', 'StrictHostKeyChecking=ask', '-o', 'FingerprintHash=sha256', '-o', 'UpdateHostKeys=no',
 		'-o', 'ForwardAgent=no', '-o', 'ForkAfterAuthentication=no', '-o', 'ConnectTimeout=8', '-o', 'ServerAliveInterval=10', '-o', 'ServerAliveCountMax=2']
-	if server.auth_method == 'password' {
+	 $if windows { args = ['-T', '-o', 'ControlMaster=no', '-o', 'ControlPath=none', '-o','StrictHostKeyChecking=ask', '-o','FingerprintHash=sha256','-o','UpdateHostKeys=no','-o','ForwardAgent=no','-o','ConnectTimeout=8','-o','ServerAliveInterval=10','-o','ServerAliveCountMax=2'] }
+ if server.auth_method == 'password' {
 		args << ['-o', 'BatchMode=no', '-o', 'PasswordAuthentication=yes', '-o', 'PreferredAuthentications=password', '-o', 'PubkeyAuthentication=no',
 			'-o', 'KbdInteractiveAuthentication=no', '-o', 'NumberOfPasswordPrompts=1']
 	} else {
 		args << ['-o', 'BatchMode=no', '-o', 'PasswordAuthentication=no', '-o', 'KbdInteractiveAuthentication=no']
 		if server.identity_file != '' { args << ['-i', server.identity_file] }
 	}
-	s.prompts = new_remote_prompts(password, server.auth_method == 'password')!
+	s.prompts = new_remote_prompt_session(password, server.auth_method == 'password', os.user_os() == 'windows')!
+ $if windows { s.windows_ticket = register_windows_session(server, s.prompts)! }
 	args << s.destination_args()
+ $if windows { args << "printf 'VHTTPD_SSH_READY\n'; while :; do sleep 60; done" }
 	s.process = os.new_process(s.ssh_executable)
 	s.process.set_args(args)
 	s.process.set_redirect_stdio()
+ $if windows { s.process.create_no_window = true }
 	s.process.set_environment(s.prompts.environment())
+ $if windows { s.process.set_work_folder(os.dir(os.executable())) }
 	s.process.run()
 	s.diagnostics = ''
 	s.deadline = time.ticks() + 15000
@@ -200,7 +234,8 @@ fn (mut s ServerSession) connect(server RemoteServer, password string) ! {
 
 // Mux commands cannot fall back to another SSH authentication when disconnected.
 fn (s &ServerSession) mux_args() []string {
-	return ['-T', '-S', s.directory + '/control', '-o', 'ControlMaster=no', '-o', 'BatchMode=yes', '-o', 'ProxyCommand=false']
+	 $if windows { mut args := windows_auth_options(s.server); args.insert(0, '-T'); return args }
+ return ['-T', '-S', s.directory + '/control', '-o', 'ControlMaster=no', '-o', 'BatchMode=yes', '-o', 'ProxyCommand=false']
 }
 
 fn (s &ServerSession) shell(script string, timeout i64) !string {
@@ -208,7 +243,7 @@ fn (s &ServerSession) shell(script string, timeout i64) !string {
 }
 
 fn (s &ServerSession) shell_limited(script string, timeout i64, max_output int) !string {
-	if !s.state.connected || !os.exists(s.directory + '/control') { return error('请先连接服务器。') }
+	if !s.state.connected || !s.session_available() { return error('请先连接服务器。') }
 	// Bounded scripts fit in the SSH stdin pipe. Secrets never become files or arguments.
 	if script.len > 16000 { return error('部署配置过大。') }
 	mut child := os.new_process(s.ssh_executable)
@@ -216,13 +251,16 @@ fn (s &ServerSession) shell_limited(script string, timeout i64, max_output int) 
 	args << s.destination_args()
 	args << '/bin/sh -s'
 	child.set_args(args)
+ $if windows { child.set_environment(windows_session(s.windows_ticket)!.broker.environment()); child.set_work_folder(os.dir(os.executable())); child.create_no_window = true }
 	child.set_redirect_stdio_merged()
 	child.use_pgroup = true
 	child.run()
 	defer { child.close() }
 	child.stdin_write(script + '\nexit\n')
-	os.fd_close(child.stdio_fd[0])
-	child.stdio_fd[0] = -1
+	$if !windows {
+ os.fd_close(child.stdio_fd[0])
+ child.stdio_fd[0] = -1
+ }
 	until := time.ticks() + timeout
 	mut output := ''
 	for {
@@ -272,6 +310,7 @@ fn (mut s ServerSession) inspect() ! {
 
 fn (mut s ServerSession) tick() {
 	if isnil(s.process) { return }
+ $if windows { for _ in 0 .. 8 { part := s.process.stdout_read(); if part == "" { break }; joined := s.ready_output + part; s.ready_output = if joined.len > 4096 { joined[joined.len-4096..] } else { joined } } }
 	for _ in 0 .. 8 { part := s.process.stderr_read(); if part == '' { break }; s.diagnostics = (s.diagnostics + part).limit(16384) }
 	if !isnil(s.prompts) {
 		select { key := <-s.prompts.challenges { s.state = ServerSnapshot{...s.state, host_key: key, message: '首次连接：请核对并确认主机指纹。'} } else {} }
@@ -287,12 +326,13 @@ fn (mut s ServerSession) tick() {
 	}
 	if s.state.connected {
   if time.ticks() > s.next_upgrade_probe && s.state.upgrades.any(!it.finished()) { s.poll_upgrades() or { s.state = ServerSnapshot{...s.state, error: true, message: '升级仍由远端执行，暂时无法读取结果；请重新连接查看。'}; s.next_upgrade_probe = time.ticks() + 5000 } }
+  if time.ticks()>s.next_deployment_probe && s.state.deployments.any(!it.finished()) { s.poll_deployments() or { s.state = ServerSnapshot{...s.state,error:true,message:'部署仍由远端执行，暂时无法读取结果；请重新连接查看。'}; s.next_deployment_probe=time.ticks()+5000 } }
   return
  }
 	if s.state.host_key.id != '' { return }
-	if os.exists(s.directory + '/control') {
-		s.state = ServerSnapshot{...s.state, connected: true, busy: false, control_path: s.directory + '/control'}
-		if !isnil(s.prompts) { s.prompts.close(); s.prompts = unsafe { nil } }
+	if s.transport_ready() {
+		s.state = ServerSnapshot{...s.state, connected: true, busy: false, control_path: s.session_reference()}
+		$if !windows { if !isnil(s.prompts) { s.prompts.close(); s.prompts = unsafe { nil } } }
 		s.inspect() or { s.state = ServerSnapshot{...s.state, error: true, message: err.msg()} }
 	} else if time.ticks() > s.deadline {
 		s.close()
@@ -303,7 +343,8 @@ fn (mut s ServerSession) tick() {
 fn validate_remote_project(command ServerCommand) ! {
 	name := command.name
 	if name.len < 1 || name.len > 64 || !name.bytes().all(it.is_alnum() || it in [u8(`-`), `_`]) || !name[0].is_alnum() { return error('实例名称使用 1–64 位字母、数字、短横线或下划线，并以字母或数字开头。') }
-	if command.web_port < 1024 || command.web_port > 65535 || command.admin_port < 1024 || command.admin_port > 65535 || command.web_port == command.admin_port { return error('监听与 Admin 使用不同的 1024–65535 端口。') }
+	if command.template != 'environment' && (command.web_port < 1024 || command.web_port > 65535 || command.admin_port < 1024 || command.admin_port > 65535 || command.web_port == command.admin_port) { return error('监听与 Admin 使用不同的 1024–65535 端口。') }
+	if command.admin_port < 1024 || command.admin_port > 65535 { return error('Admin 端口使用 1024–65535。') }
 	if !project_templates().any(it.id == command.template) { return error('请选择 vjsx 模板。') }
 }
 
@@ -313,6 +354,10 @@ fn (mut s ServerSession) create(command ServerCommand) ! {
 	runtime := select_remote_runtime(s.state.runtimes, command.runtime_id)!
 
 	template := project_templates().filter(it.id == command.template)[0]
+	if template.id == 'environment' {
+		version := s.shell(shell_quote(runtime.path + '/vhttpd') + ' --workbench-component-version', 8000) or {return error('基础环境需要支持独立应用的新运行包，请先升级。')}
+		if version.trim_space() != '1' {return error('基础环境需要支持独立应用的新运行包，请先升级。')}
+	}
 	mut profiles := load_remote_profiles()!
 	previous := profiles.filter(it.server_id == s.server.id && it.name == command.name)
 	if previous.len > 0 && previous[0].runtime_id != '' && previous[0].runtime_id != runtime.id { return error('该实例已绑定其他运行包，请选择原版本重试。') }
@@ -320,7 +365,7 @@ fn (mut s ServerSession) create(command ServerCommand) ! {
 	token := if previous.len > 0 { previous[0].token } else { rand.bytes(32)!.hex() }
 	config := template.config_text.replace('entry = "main.mts"', 'entry = "main.mjs"')
 		.replace('runtime_profile = "node"', 'runtime_profile = "script"')
-		.replace('port = ${template.web_port}', 'port = ${command.web_port}')
+		.replace('port = ${if template.web_port == '' {'__unused__'} else {template.web_port}}', 'port = ${command.web_port}')
 		.replace('port = ${template.admin_port}', 'port = ${command.admin_port}')
 		.replace('local-development-only', token)
 	profile := if previous.len > 0 { previous[0] } else { RemoteProfile{id: new_remote_id()!, server_id: s.server.id, name: command.name, ssh_host: s.server.ssh_host, ssh_user: s.server.ssh_user,
@@ -356,10 +401,11 @@ fn (mut s ServerSession) install_release(archive_path string, tag string) ! {
 	// scp uses only the authenticated master; it cannot prompt or fall back.
 	remote_name := 'vhttpd-upload-' + new_remote_id()! + '.tar.gz'
 	mut args := ['-O', '-o', 'ControlPath=' + s.directory + '/control', '-o', 'ControlMaster=no', '-o', 'BatchMode=yes', '-o', 'ProxyCommand=false']
-	if s.server.ssh_port > 0 { args << ['-P', s.server.ssh_port.str()] }
+	$if windows { args = windows_auth_options(s.server); args.insert(0, '-O') }
+ if s.server.ssh_port > 0 { args << ['-P', s.server.ssh_port.str()] }
 	destination := if s.server.ssh_user == '' { s.server.ssh_host } else { s.server.ssh_user + '@' + s.server.ssh_host }
 	args << [os.real_path(archive), destination + ':' + remote_name]
-	s.job.command(s.scp_executable, args, 120000)!
+	$if windows { s.windows_scp(args, 120000)! } $else { s.job.command(s.scp_executable, args, 120000)! }
 	expected := checksum_for(os.read_file(archive + '.sha256')!, os.file_name(archive))!
 	s.shell('set -eu\numask 077\nrelease_tag=' + shell_quote(release_tag) + '\nupload=' + shell_quote(remote_name) + '\nexpected=' + shell_quote(expected) + '\nplatform=' + shell_quote(s.state.platform) + '\n' + $embed_file('remote_scripts/install.sh').to_string(), 30000)!
 	s.inspect()!
@@ -389,12 +435,15 @@ fn server_supervise(w ServerWorker) {
 			command := <-w.commands {
 				sequence = command.sequence
 				s.state = ServerSnapshot{...s.state, sequence: command.sequence}
-				if command.action in [.install, .create, .upgrade, .inspect] {
+				if command.action == .start { s.state = ServerSnapshot{ ...s.state, created: RemoteProfile{} } }
+				if command.action in [.relay_load, .relay_save, .relay_delete, .install, .create, .start, .upgrade, .inspect, .prepare_deploy, .deploy, .discard_deploy] {
 					s.state = ServerSnapshot{...s.state, busy: true}
 					select { w.snapshots <- s.state {} else {} }
 				}
 				mut failure := ''
 				match command.action {
+					.relay_logs {s.read_relay_logs(command) or {s.state = ServerSnapshot{...s.state, relay_logs_error:'远端进程日志暂时不可用。'}}}
+					.relay_load, .relay_save, .relay_delete {s.relay_catalog_operation(command) or {failure = err.msg()}}
 					.connect { s.connect(command.server, command.password) or { s.close(); failure = err.msg() } }
 					.trust {
 						if !isnil(s.prompts) && command.host_key_id != '' && command.host_key_id == s.state.host_key.id && !s.state.host_key_changed {
@@ -405,12 +454,25 @@ fn server_supervise(w ServerWorker) {
 					}
 					.disconnect { s.close() }
 					.inspect { s.inspect() or { failure = err.msg() } }
+					.prepare_deploy { s.prepare_application(command) or { failure=err.msg() } }
+					.deploy { s.deploy_application(command) or { failure=err.msg() } }
+					.discard_deploy { s.discard_deployment() or { failure=err.msg() } }
 					.upgrade { s.upgrade(command) or { failure = err.msg() } }
-					.install { s.install_release(command.archive, command.release_tag) or { failure = err.msg() } }
+					.install {
+						s.install_release(command.archive, command.release_tag) or { failure = err.msg() }
+						if failure == '' && command.initialize_environment && s.state.projects.len == 0 { s.initialize_environment() or {failure = err.msg()} }
+					}
 					.create { s.create(command) or { failure = err.msg() } }
+					.start { s.start_project(command) or { failure = err.msg() } }
 					.shutdown { s.close(); w.done <- true; return }
 				}
 				if failure != '' { s.state = ServerSnapshot{...s.state, server_id: s.server.id, error: true, busy: false, message: failure} }
+				if command.action in [.prepare_deploy, .deploy] {
+					s.state = ServerSnapshot{...s.state, component_result:OperationResult{sequence:sequence, action:if command.action == .prepare_deploy {'preview'} else {'install'}, target:command.project_id, preview_id:s.state.deployment_preview.id, message:if failure != '' {failure} else {s.state.message}, error:failure != ''}}
+				}
+				if command.action in [.install, .create, .upgrade] {
+					s.state = ServerSnapshot{...s.state, runtime_result:OperationResult{sequence:sequence, action:command.action.str(), target:command.project_id, message:if failure != '' {failure} else {s.state.message}, error:failure != ''}}
+				}
 				s.state = ServerSnapshot{...s.state, sequence: sequence, busy: if command.action in [.connect, .trust] { s.state.busy } else { false }}
 			}
 			else {}
@@ -439,4 +501,28 @@ fn select_remote_runtime(runtimes []RemoteRuntime, selected string) !RemoteRunti
 	if selected == '' && runtimes.len == 1 { return runtimes[0] }
 	for runtime in runtimes { if runtime.id == selected { return runtime } }
 	return error('请选择服务器上已安装的运行包版本。')
+}
+
+fn (s &ServerSession) session_reference() string {
+ $if windows { return s.windows_ticket } $else { return s.directory + '/control' }
+}
+fn (s &ServerSession) session_available() bool {
+ $if windows { return windows_session_alive(s.windows_ticket) } $else { return os.exists(s.directory + '/control') }
+}
+fn (s &ServerSession) transport_ready() bool {
+ $if windows { return s.windows_ready() } $else { return os.exists(s.directory + '/control') }
+}
+fn ssh_control_exists(reference string) bool {
+ $if windows { return windows_session_alive(reference) } $else { return os.exists(reference) }
+}
+
+fn (mut s ServerSession) initialize_environment() ! {
+    // Bind only a fresh environment; installing/upgrading a runtime never changes
+    // the configuration or binding of any existing environment.
+    if s.state.projects.len != 0 || s.state.runtimes.len == 0 { return }
+    runtime := s.state.runtimes[0]
+    version := s.shell(shell_quote(runtime.path + '/vhttpd') + ' --workbench-component-version', 8000)!
+    if version.trim_space() != '1' { return error('运行包已安装；初始化基础环境需要支持独立应用的新运行包。') }
+    port := s.shell("python3 -c 'import socket; s=socket.socket(); s.bind((\"127.0.0.1\",0)); print(s.getsockname()[1])'", 5000)!.trim_space().int()
+    s.create(ServerCommand{name: 'default', template: 'environment', admin_port: port, runtime_id: runtime.id})!
 }

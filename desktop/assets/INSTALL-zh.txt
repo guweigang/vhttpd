@@ -61,3 +61,7 @@ vhttpd Mac 工作台 @VERSION@ — 本地开发者预览
 同时管理一个本地实例；不接管外部服务。高级配置保留源码编辑。
 未匹配的 HTTP 路径仍可能交给运行时默认处理器；路径匹配不等于访问限制。
 不包含后台常驻、崩溃后接管、Windows/Linux 或嵌入式 WebView。
+
+字体：工作台自带 Noto Sans CJK SC（常规 / 粗体）及 Roboto Mono，无需安装系统字体。字体授权文件位于 App 内 Contents/Resources/fonts。
+
+已内置中文等宽字体，无需联网下载或安装系统字体。

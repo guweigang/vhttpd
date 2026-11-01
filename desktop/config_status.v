@@ -14,8 +14,8 @@ fn config_status_view(app &Workshop, x f64, y f64, width f64) ui2.Element {
 		ui2.label('config_effectiveness', title, ui2.rect(16, 8, width - 236, 20), ui2.TextStyle{size: 13, bold: true, color: color}),
 		label('config_changes', detail, 16, 31, width - 236, 11, workbench_muted),
 		label('config_checked', if running && status.checked_at != '' { '整项目检查 ${status.checked_at} · 每 2 秒刷新' } else { '仅检查工作台拥有的实例' }, 12, 53, width - 24, 10, workbench_muted),
-		button(if status.recovery_available && !status.pending && status.state != .unavailable { 'history_open' } else { 'config_diff' }, if status.recovery_available && !status.pending && status.state != .unavailable { '版本历史' } else { '差异详情' }, width - 208, 9, 94, false, status.pending || status.state == .unavailable || status.recovery_available),
-		button(if status.pending { 'apply_restart' } else { 'check_config' }, if status.pending { '重启并生效' } else { '检查生效' }, width - 106, 9, 94, status.pending, running),
+		button(if status.recovery_available && !status.pending && status.state != .unavailable { 'history_open' } else { 'config_diff' }, if status.recovery_available && !status.pending && status.state != .unavailable { '版本历史' } else { '差异详情' }, width - 208, 9, 94, false, app.local_command_enabled(if status.recovery_available && !status.pending && status.state != .unavailable { 'history_open' } else { 'config_diff' })),
+		button(if status.pending { 'apply_restart' } else { 'check_config' }, if status.pending { '重启并生效' } else { '检查生效' }, width - 106, 9, 94, status.pending, app.local_command_enabled(if status.pending { 'apply_restart' } else { 'check_config' })),
 	])
 }
 
@@ -66,7 +66,7 @@ fn config_diff_view(app &Workshop, width f64) []ui2.Element {
 		'受影响 Relay：' + if status.relays.len > 0 { status.relays.join(', ') } else { '无' },
 		'受影响 Pipeline：' + if status.pipelines.len > 0 { status.pipelines.join(', ') } else { '无' },
 		'文件与上次确认已生效的版本比较。']
-	body := ui2.text_area('diff_summary', lines.join('\n'), ui2.rect(0, 159, width, 132), ui2.BoxStyle{bg: workbench_sidebar, radius: 6}, ui2.TextStyle{size: 11, color: workbench_ink, font_family: 'Menlo'})
+	body := ui2.text_area('diff_summary', lines.join('\n'), ui2.rect(0, 159, width, 132), ui2.BoxStyle{bg: workbench_sidebar, radius: 6}, ui2.TextStyle{size: 11, color: workbench_ink, font_family: workbench_detail_font()})
 	rows << ui2.Element{...body, readonly: true}
 	mut y := 311.0
 	if status.pending {
@@ -84,7 +84,7 @@ fn config_diff_view(app &Workshop, width f64) []ui2.Element {
 		}
 		if field_lines.len == 0 { field_lines << 'Relay / Pipeline 字段未变，差异来自其他组件。' }
 		height := f64(if field_lines.len * 15 + 20 > 300 { 300 } else { field_lines.len * 15 + 20 })
-		field_body := ui2.text_area('diff_field_values', field_lines.join('\n'), ui2.rect(0, y, width, height), ui2.BoxStyle{bg: workbench_sidebar, radius: 6}, ui2.TextStyle{size: 11, color: workbench_ink, font_family: 'Menlo'})
+		field_body := ui2.text_area('diff_field_values', field_lines.join('\n'), ui2.rect(0, y, width, height), ui2.BoxStyle{bg: workbench_sidebar, radius: 6}, ui2.TextStyle{size: 11, color: workbench_ink, font_family: workbench_detail_font()})
 		rows << ui2.Element{...field_body, readonly: true}
 		y += height + 24
 	}

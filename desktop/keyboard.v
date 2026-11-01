@@ -1,6 +1,7 @@
 module main
 
 import ui2
+import os
 
 struct FocusTarget {
 	id string
@@ -12,8 +13,8 @@ struct FocusTarget {
 // Follow the actual rendered tree, so hidden/disabled controls never trap Tab.
 fn collect_focus_targets(element ui2.Element, scroll string, x f64, y f64, mut targets []FocusTarget) {
 	if !element.enabled || element.id in ['workbench_sidebar', 'server_list', 'shared_list'] { return }
-	if element.kind in [.text_field, .button, .checkbox] && !element.readonly && element.id != '' {
-		targets << FocusTarget{id: element.id, kind: element.kind, scroll: scroll, frame: ui2.rect(x + element.frame.x, y + element.frame.y, element.frame.width, element.frame.height)}
+	if (element.kind in [.text_field, .button, .checkbox] || (element.kind == .view && element.button_behavior)) && !element.readonly && element.id != '' {
+		targets << FocusTarget{id: element.id, kind: if element.button_behavior { ui2.Kind.button } else { element.kind }, scroll: scroll, frame: ui2.rect(x + element.frame.x, y + element.frame.y, element.frame.width, element.frame.height)}
 	}
 	if element.kind == .scroll {
 		for child in element.children { collect_focus_targets(child, element.id, 0, 0, mut targets) }
@@ -36,8 +37,11 @@ fn next_focus_target(targets []FocusTarget, current string, reverse bool) ?Focus
 	return targets[(index + if reverse { targets.len - 1 } else { 1 }) % targets.len]
 }
 
-fn workbench_key(key string) {
+fn workbench_key(raw_key string) {
+	$if macos { if raw_key == 'escape' && C.vhttpd_workbench_menu_tracking() != 0 { return } }
+	key := if os.user_os() != 'macos' { raw_key.replace('ctrl+', 'cmd+') } else { raw_key }
 	mut app := unsafe { workshop }
+	if route_workbench_menu_key(key) { ui2.consume_key(); return }
 	if key in ['tab', 'shift+tab'] {
 		if ui2.focused_text_area_id() != '' { return }
 		target := next_focus_target(focus_targets(build_window()), ui2.focused_id(), key == 'shift+tab') or { return }
@@ -48,15 +52,13 @@ fn workbench_key(key string) {
 		return
 	}
 	match key {
-		'cmd+n' { handle_event('new') }
-		'cmd+o' { handle_event('import') }
-		'cmd+comma', 'cmd+,' { handle_event('runtime') }
 		'cmd+enter', 'cmd+return' { submit_active_form() }
 		'escape' {
 			if app.show_remote && app.show_servers && app.server_snapshot.host_key.id != '' { handle_event('server_disconnect'); return }
 			if app.show_remote && !app.show_servers && app.remote_snapshot.host_key.id != '' { handle_event('remote_disconnect'); return }
 			if app.creating || app.server_busy || app.server_snapshot.busy || app.remote_snapshot.busy { return }
-			if app.new_project { handle_event('new_cancel') }
+			if app.show_deployment { handle_event('deploy_close') }
+			else if app.new_project { handle_event('new_cancel') }
 			else if app.show_remote { handle_event('remote_close') }
 			else if app.show_runtime { handle_event('runtime_close') }
 			else if app.show_shared_relays { handle_event('shared_close') }
@@ -69,6 +71,7 @@ fn workbench_key(key string) {
 // NSTextField handles Escape itself unless it is consumed before the field
 // editor. Tab keeps using ui2's text-command hook; editing keys remain native.
 fn workbench_physical_key(event ui2.KeyEvent) {
+	$if macos { if event.code == .escape && C.vhttpd_workbench_menu_tracking() != 0 { return } }
 	mut app := unsafe { workshop }
 	if app.environment_menu.open {
 		if step := ui2.dropdown_menu_key(app.environment_menu_items(), app.environment_menu, event) {
@@ -117,4 +120,17 @@ fn choice_button(id string, title string, x f64, y f64, width f64, selected bool
 		border_top: 1
 		border_bottom: 1
 	}, if !enabled { u32(0x596575) } else if selected { workbench_accent } else { workbench_ink }, enabled, .center, 6)
+}
+
+// Retry only on the UI thread and only while the destination field remains on
+// the current page. focus() cannot target an immediate-mode field until the
+// previous render has registered it; the regular refresh supplies that frame.
+fn (mut app Workshop) restore_pending_form_focus(root ui2.Element) {
+	if app.pending_form_focus == '' { return }
+	if menu_focused_element(root, app.pending_form_focus) == none {
+		app.pending_form_focus = ''
+		return
+	}
+	ui2.focus(app.pending_form_focus)
+	if ui2.focused_id() == app.pending_form_focus { app.pending_form_focus = '' }
 }

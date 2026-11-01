@@ -7,6 +7,7 @@ import os
 
 pub struct SharedRelay {
 pub:
+	protocol string = 'vhttpd'
 	relay_id string
 	id       string
 	name     string
@@ -15,10 +16,11 @@ pub:
 }
 
 pub fn (r SharedRelay) validate() ! {
-	if r.relay_id == '' || r.relay_id.len > 100 || !r.relay_id.bytes().all(it.is_letter() || it.is_digit() || it in [
+	if r.protocol !in ['', 'vhttpd', 'websocket'] { return error('请选择连接协议。') }
+	if r.is_native() && (r.relay_id == '' || r.relay_id.len > 100 || !r.relay_id.bytes().all(it.is_letter() || it.is_digit() || it in [
 		`-`,
 		`_`,
-	]) {
+	])) {
 		return error('请填写远端 Hub 配置中的 Relay ID（字母、数字、横线或下划线）。')
 	}
 	if r.name.trim_space() == '' || r.name.len > 100 {
@@ -32,13 +34,23 @@ pub fn (r SharedRelay) validate() ! {
 	}
 	u := urllib.parse(r.url) or { return error('请填写有效的 ws:// 或 wss:// 地址。') }
 	has_user := if user := u.user { user.username != '' || user.password_set } else { false }
-	if u.scheme !in ['ws', 'wss'] || u.hostname() == '' || has_user || r.url.all_after('://').all_before('/').contains('@') || u.raw_query != '' || u.fragment != '' || r.url.contains(r'${') || r.url.contains('\n') || r.url.contains('\r') {
+	if u.scheme !in ['ws', 'wss'] || u.hostname() == '' || has_user || r.url.all_after('://').all_before('/').contains('@') || (r.is_native() && u.raw_query != '') || u.fragment != '' || r.url.contains(r'${') || r.url.contains('\n') || r.url.contains('\r') {
 		return error('地址需使用 ws:// 或 wss://，认证请填写 Token，不放入地址、查询参数或片段。')
+	}
+	if !r.is_native() {
+		query := urllib.parse_query(u.raw_query) or {return error('查询参数无效。')}
+		for value in query.data {
+			clean := value.key.to_lower().replace('_', '').replace('-', '')
+			if ['token', 'secret', 'password', 'authorization', 'apikey', 'accesskey', 'credential'].any(clean.contains(it)) { return error('认证信息请填写到独立 Token 字段，不要放入 URL。') }
+		}
+		if r.token.bytes().any(it < 32 || it == 127) { return error('HTTP Bearer Token 不能包含控制字符。') }
 	}
 	if r.token.len > 4096 || r.token.contains(r'${') {
 		return error('请填写实际 Token（最多 4096 字符），连接库不使用环境变量表达式。')
 	}
 }
+
+pub fn (r SharedRelay) is_native() bool { return r.protocol in ['', 'vhttpd'] }
 
 pub fn new_shared_relay_id() !string { return rand.bytes(12)!.hex() }
 
@@ -81,6 +93,7 @@ pub fn save_shared_relays(items []SharedRelay) ! {
 // path owns validation, publication, source conflicts and effectiveness.
 pub fn shared_relay_toml(r SharedRelay, relay_id string, node_id string) !string {
 	r.validate()!
+	if !r.is_native() {return error('WebSocket 应用连接不能作为 vhttpd Relay 导入。')}
 	if relay_id != r.relay_id { return error('项目 Relay ID 必须与远端 Hub 一致。') }
 	if !relay_id.bytes().all(it.is_letter() || it.is_digit() || it in [`-`, `_`]) || relay_id == '' {
 		return error('Relay ID 无效。')

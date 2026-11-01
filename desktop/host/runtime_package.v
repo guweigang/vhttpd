@@ -66,8 +66,14 @@ pub fn save_runtime_selection(path string) ! {
 }
 
 fn (job RuntimeJob) command(executable string, args []string, limit_ms i64) !string {
+ return job.command_with_environment(executable, args, limit_ms, map[string]string{})
+}
+
+fn (job RuntimeJob) command_with_environment(executable string, args []string, limit_ms i64, environment map[string]string) !string {
 	mut child := os.new_process(executable)
 	child.set_args(args)
+ if environment.len > 0 { child.set_environment(environment) }
+ $if windows { child.create_no_window = true; if 'VHTTPD_SSH_ASKPASS_SOCKET' in environment { child.set_work_folder(os.dir(os.executable())) } }
 	child.set_redirect_stdio_merged()
 	child.use_pgroup = true
 	child.run()
@@ -132,7 +138,7 @@ fn runtime_version_text(value string) !string {
 }
 
 pub fn inspect_runtime(path string, executable string, job RuntimeJob) RuntimeInfo {
-	bundled := os.real_path(os.join_path(os.dir(executable), '..', 'Resources', 'runtime', 'vhttpd'))
+	bundled := os.real_path(bundled_workbench_binary(executable))
 	mut source := if os.real_path(path) == bundled {
 		'App 内置'
 	} else if os.real_path(path).starts_with(os.real_path(os.join_path(workbench_data_dir(), 'runtimes')) + os.path_separator) {
@@ -217,16 +223,15 @@ pub fn download_runtime(job RuntimeJob) !string {
 }
 
 pub fn download_runtime_release(tag string, job RuntimeJob) !string {
-	$if !arm64 {
-		return error('当前官方 Desktop 运行包仅支持 Apple Silicon Mac。')
-	}
+	platform := local_runtime_platform()
+	if platform == '' { return error('此系统暂无完整官方运行包。') }
 	root := os.join_path(workbench_data_dir(), 'runtimes')
 	os.mkdir_all(root)!
 	temp := os.join_path(root, '.download-' + rand.bytes(12)!.hex())
 	os.mkdir(temp)!
 	os.chmod(temp, 0o700)!
 	defer { os.rmdir_all(temp) or {} }
-	choice := resolve_runtime_download('macos-arm64', tag, job)!
+	choice := resolve_runtime_download(platform, tag, job)!
 	zip := download_runtime_files(choice, temp, job)!
 	expected := checksum_for(os.read_file(zip + '.sha256')!, choice.archive.name)!
 	return install_runtime_archive_tag(zip, expected, choice.tag, job)
@@ -263,6 +268,7 @@ pub fn install_runtime_archive(archive string, expected string, job RuntimeJob) 
 }
 
 fn install_runtime_archive_tag(archive string, expected string, tag string, job RuntimeJob) !string {
+	$if linux { return install_linux_runtime(archive, expected, tag, job) }
 	if expected.len != 64 || !expected.bytes().all(it.is_hex_digit()) {
 		return error('缺少有效的 SHA256 校验值。')
 	}

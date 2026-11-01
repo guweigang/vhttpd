@@ -39,3 +39,18 @@ fn test_shared_connection_rejects_credential_urls_and_environment_expressions() 
 		assert false, 'Unsafe URL was accepted'
 	}
 }
+
+fn test_application_websocket_connection_keeps_protocol_and_rejects_secret_urls() ! {
+	r := SharedRelay{protocol:'websocket',id:'ab'.repeat(12),name:'Paseo',url:'wss://paseo.example/ws?serverId=desktop-test&role=client&v=2'}
+	r.validate()!
+	assert !r.is_native()
+	for url in ['wss://example/ws?access_token=secret','wss://example/ws?API-Key=secret','wss://example/ws?%74oken=secret','wss://user:secret@example/ws'] {
+		SharedRelay{...r,url:url}.validate() or {continue}
+		assert false, 'Secret URL accepted'
+	}
+	SharedRelay{...r,token:'bad\r\nInjected: value'}.validate() or {
+		shared_relay_toml(r,'hub','test') or {return}
+		assert false, 'Application protocol imported as native Relay'
+	}
+	assert false, 'Header injection accepted'
+}

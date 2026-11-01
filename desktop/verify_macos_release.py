@@ -88,7 +88,7 @@ def verify(archive):
         if info['LSMinimumSystemVersion'] != '15.0':
             raise RuntimeError('Release deployment target must be macOS 15.0')
         runtime = app / 'Contents/Resources/runtime'
-        binaries = [app / 'Contents/MacOS/vhttpd-workbench', runtime / 'vhttpd', *(runtime / 'lib').iterdir()]
+        binaries = [app / 'Contents/MacOS/vhttpd-workbench', runtime / 'vhttpd', app / 'Contents/Resources/vhttpd-fontdecode', *(runtime / 'lib').iterdir()]
         for binary in binaries:
             if 'arm64' not in run('/usr/bin/lipo', '-archs', str(binary)).split():
                 raise RuntimeError(f'Missing arm64: {binary.name}')
@@ -113,6 +113,19 @@ def verify(archive):
         policy = root / 'no-development.sb'
         policy.write_text(profile)
         env = {'HOME': str(home), 'PATH': '/usr/bin:/bin:/usr/sbin:/sbin', 'TMPDIR': str(tmp) + '/', 'LANG': 'en_US.UTF-8'}
+        def font_start(_):
+            return run('/usr/bin/sandbox-exec', '-f', str(policy), str(binaries[0]), '--font-smoke', env=env, cwd=root)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+            for result in pool.map(font_start, range(2)):
+                print(result, end='')
+        cached_fonts = list(home.rglob('*.ttf'))
+        if len(cached_fonts) != 2:
+            raise RuntimeError('Expected regular and bold font cache files in fresh HOME')
+        cached_fonts[0].write_bytes(b'corrupt cache fixture')
+        result = run('/usr/bin/sandbox-exec', '-f', str(policy), str(binaries[0]), '--font-smoke', env=env, cwd=root)
+        print(result, end='')
+        result = run('/usr/bin/sandbox-exec', '-f', str(policy), str(binaries[0]), '--font-smoke', env=env, cwd=root)
+        print(result, end='')
         result = run('/usr/bin/sandbox-exec', '-f', str(policy), str(binaries[0]), '--smoke', env=env, cwd=root)
         print(result, end='')
         result = run('/usr/bin/sandbox-exec', '-f', str(policy), str(binaries[0]), '--persistent-status-smoke', env=env, cwd=root)

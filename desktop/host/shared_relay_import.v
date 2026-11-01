@@ -34,12 +34,16 @@ pub fn (mut m Manager) prepare_shared_relay_login(r SharedRelay) !string {
 	node := 'agent-' + rand.bytes(12)!.hex()
 	original := os.read_file(m.project.config_path)!
 	value := original + shared_relay_toml(r, id, node)!
-	draft_id := 'shared-relay-' + rand.bytes(12)!.hex()
+	return m.prepare_config_changeset_login(SharedRelayChangeset{ config_path: m.project.config_path, files: [SharedRelayFile{ path: m.project.config_path, original: original, value: value }] }, 'shared-relay-')
+}
+
+fn (mut m Manager) prepare_config_changeset_login(bundle SharedRelayChangeset, prefix string) !string {
+	draft_id := prefix + rand.bytes(12)!.hex()
 	origin := m.info.admin_url.all_before('/admin/ui/')
 	mut request := http.Request{
 		method:                   .post
 		url:                      '${origin}/admin/config/changesets?id=${draft_id}'
-		data:                     json.encode(SharedRelayChangeset{ config_path: m.project.config_path, files: [SharedRelayFile{ path: m.project.config_path, original: original, value: value }] })
+		data:                     json.encode(bundle)
 		read_timeout:             3 * time.second
 		write_timeout:            3 * time.second
 		allow_redirect:           false

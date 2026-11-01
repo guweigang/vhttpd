@@ -10,30 +10,19 @@ bash "$root/scripts/ensure-vjsx.sh" >/dev/null
 version="$(python3 "$root/desktop/workbench_version.py" --field version)"
 bundle_version="$(python3 "$root/desktop/workbench_version.py" --field bundle_version)"
 archive_name="vhttpd-workbench-macos-arm64-$version.zip"
-ui2_root="$root/.deps/ui2"
-revision="$(cat "$root/desktop/ui2.commit")"
-if [[ ! -d "$ui2_root/.git" ]]; then
-  mkdir -p "$root/.deps"
-  git clone https://github.com/vlang/ui2.git "$ui2_root"
-  git -C "$ui2_root" checkout --detach "$revision"
-fi
-if [[ "$(git -C "$ui2_root" rev-parse HEAD)" != "$revision" ]]; then
-  echo 'ui2 checkout differs from desktop/ui2.commit; refusing to change an existing checkout.' >&2
-  exit 1
-fi
-if [[ -n "$(git -C "$ui2_root" status --porcelain --untracked-files=no)" ]]; then
-  echo 'ui2 has local source changes; refusing an unreproducible prototype build.' >&2
-  exit 1
-fi
 target_app="$root/desktop/bin/vhttpd-workbench.app"
 mkdir -p "$root/desktop/bin"
 build_dir="$(mktemp -d "$root/desktop/bin/.build.XXXXXX")"
 trap 'rm -rf "$build_dir"' EXIT
+bash "$root/desktop/prepare-ui2.sh" "$build_dir/modules/ui2" >/dev/null
 python3 "$root/desktop/macos_dependencies.py"
 export MACOSX_DEPLOYMENT_TARGET=15.0
 export VHTTPD_MACOS_DEPS="$root/.deps/macos-sequoia"
 export PKG_CONFIG_LIBDIR="$VHTTPD_MACOS_DEPS/opt/mysql-client/lib/pkgconfig:$VHTTPD_MACOS_DEPS/opt/libpq/lib/pkgconfig:$VHTTPD_MACOS_DEPS/opt/openssl@4/lib/pkgconfig"
 export PKG_CONFIG_PATH="$PKG_CONFIG_LIBDIR"
+# Only the pre-package GC probe needs the bottles' unrelocated libraries.
+# Packaging rewrites their install names, then checks the archive in isolation.
+export VHTTPD_GC_PROBE_LIBRARY_PATH="$(python3 -c 'import os,pathlib; print(":".join(str(p) for p in pathlib.Path(os.environ["VHTTPD_MACOS_DEPS"]).glob("opt/*/lib")))')"
 cat > "$build_dir/clang-compatible" <<EOF
 #!/bin/sh
 exec python3 "$root/desktop/macos_dependencies.py" --cc "\$@"
@@ -47,13 +36,15 @@ if [[ -n "${VHTTPD_PACKAGE_RUNTIME:-}" ]]; then
     exit 1
   fi
 else
-  make -C "$root" prod BUILD_STAGE_ROOT="$build_dir/runtime-src" \
-    BUILD_STAGE_DIR="$build_dir/runtime-src" VHTTPD_BIN="$build_dir/vhttpd" \
+  cp "$root/v.mod" "$build_dir/v.mod"
+  make -C "$root" prod BUILD_STAGE_ROOT="$build_dir/src" \
+    BUILD_STAGE_DIR="$build_dir/src" VHTTPD_BIN="$build_dir/vhttpd" \
     V_CC="$build_dir/clang-compatible" VPHP_V_GC=boehm \
     V_FLAGS="-w -d use_openssl -d use_bundled_libgc -enable-globals"
   export VHTTPD_PACKAGE_RUNTIME="$build_dir/vhttpd"
 fi
 python3 "$root/scripts/ci/verify_gc_runtime.py" "$VHTTPD_PACKAGE_RUNTIME"
+unset VHTTPD_GC_PROBE_LIBRARY_PATH
 app="$build_dir/vhttpd-workbench.app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp "$root/desktop/assets/vhttpd-macos.icns" "$app/Contents/Resources/vhttpd-macos.icns"
@@ -64,7 +55,7 @@ if [[ -z "${VJS_QUICKJS_PATH:-}" ]]; then
   vjsx_source="${VJSX_DIR:-$HOME/.vmodules/vjsx}"
   export VJS_QUICKJS_PATH="$(VJS_QUICKJS_WORK_ROOT="$root" "$vjsx_source/scripts/ensure-quickjs.sh")"
 fi
-v -prod -nocache -gc boehm -cc "$build_dir/clang-compatible" -d build_quickjs -d use_bundled_libgc -w -enable-globals -path "$root/desktop|$root/src|$(dirname "$VJSX_DIR")|$root/.deps|@vlib|@vmodules" \
+v -prod -nocache -gc boehm -cc "$build_dir/clang-compatible" -d build_quickjs -d use_bundled_libgc -w -enable-globals -path "$root/desktop|$root/src|$build_dir/modules|$(dirname "$VJSX_DIR")|$root/.deps|@vlib|@vmodules" \
   -o "$build_dir/vhttpd-workbench" "$root/desktop"
 # Replace the directory entry atomically; never truncate the executable that
 # a running workbench has mapped into memory.

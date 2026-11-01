@@ -17,8 +17,8 @@ fn (mut app Workshop) show_new_project() {
 	}
 	if app.snapshot.pid != 0 || app.snapshot.phase in [.starting, .stopping] { return }
 	app.new_project = true
-	app.new_name = 'my-vjsx-app'
-	app.new_template = 0
+	app.new_name = 'my-vhttpd'
+	app.new_template = 2
 	app.new_error = ''
 	if app.new_parent == '' { app.new_parent = os.home_dir() }
 }
@@ -44,10 +44,17 @@ fn (mut app Workshop) submit_new_project() {
 }
 
 fn create_and_register(options host.CreateProjectOptions, registry string, projects []host.Project, results chan CreationResult) {
-	project := host.create_project(options) or {
-		results <- CreationResult{ error: '创建失败：${err}' }
-		return
-	}
+    existing := os.join_path(options.parent_dir, options.name, 'vhttpd.toml')
+    project := if options.template == 'environment' && os.is_file(existing) {
+        loaded := host.project_from_file(existing, '') or {results <- CreationResult{error: err.msg()}; return}
+        host.inspect_project(loaded) or {results <- CreationResult{error: err.msg()}; return}
+        loaded
+    } else {
+        host.create_project(options) or {
+            results <- CreationResult{error: '创建失败：${err}'}
+            return
+        }
+    }
 	mut next := projects.clone()
 	next << project
 	host.save_projects(registry, next) or {
@@ -62,6 +69,7 @@ fn (mut app Workshop) poll_creation() {
 		result := <-app.creation_results {
 			app.creating = false
 			if !result.registered {
+				app.new_project = true
 				app.new_error = result.error
 				return
 			}
@@ -104,13 +112,13 @@ fn input(id string, value string, placeholder string, x f64, y f64, width f64, e
 fn new_project_view(app &Workshop, x f64, width f64) []ui2.Element {
 	templates := host.project_templates()
 	mut elements := [
-		label('new_breadcrumb', '本地项目  /  新建项目', x, 25, width, 12, workbench_muted),
-		label('new_title', '新建 vjsx 项目', x, 73, width, 26, workbench_ink),
-		label('new_intro', '选择模板和存放目录，创建后即可启动并打开 Admin UI。', x, 110, width, 13, workbench_muted),
-		label('template_label', '1  选择项目模板', x, 154, width, 13, workbench_ink),
+		label('new_breadcrumb', '本地  /  新建运行环境', x, 25, width, 12, workbench_muted),
+		label('new_title', '新建运行环境', x, 73, width, 26, workbench_ink),
+		label('new_intro', '先创建基础运行环境，再从应用页独立安装应用。', x, 110, width, 13, workbench_muted),
+		label('template_label', '1  选择初始化方式', x, 154, width, 13, workbench_ink),
 	]
 	for i, template in templates {
-		y := 184.0 + f64(i) * 66
+		y := 184.0 + f64(i) * 54
 		selected := i == app.new_template
 		el := painted_button('new_template_${i}', if selected {
 			'●  ${template.title}'
@@ -130,23 +138,23 @@ fn new_project_view(app &Workshop, x f64, width f64) []ui2.Element {
 		elements << el
 		elements << label('template_description_${i}', template.description, x + 4, y + 35, width - 8, 12, workbench_muted)
 	}
-	elements << label('new_name_label', '2  填写项目名称', x, 326, width, 13, workbench_ink)
-	elements << input('new_name', app.new_name, 'my-vjsx-app', x, 353, width, !app.creating)
-	elements << label('new_parent_label', '3  选择存放目录', x, 401, width, 13, workbench_ink)
-	elements << input('new_parent', app.new_parent, '选择已有文件夹', x, 428, width - 103, !app.creating)
-	elements << button('new_choose_parent', '选择目录…', x + width - 92, 428, 92, false, !app.creating)
+	elements << label('new_name_label', '2  填写项目名称', x, 356, width, 13, workbench_ink)
+	elements << input('new_name', app.new_name, 'my-vjsx-app', x, 383, width, !app.creating)
+	elements << label('new_parent_label', '3  选择存放目录', x, 431, width, 13, workbench_ink)
+	elements << input('new_parent', app.new_parent, '选择已有文件夹', x, 458, width - 103, !app.creating)
+	elements << button('new_choose_parent', '选择目录…', x + width - 92, 458, 92, false, !app.creating)
 	target := os.join_path(app.new_parent, app.new_name.trim_space())
-	elements << label('new_target', '将创建：${target}', x, 470, width, 11, workbench_muted)
-	check := ui2.checkbox('new_auto_start', '创建后立即启动，并打开浏览器 Admin UI', app.new_auto_start, ui2.rect(x, 500, width, 26), ui2.TextStyle{ size: 13, color: workbench_ink })
+	elements << label('new_target', '将创建：${target}', x, 500, width, 11, workbench_muted)
+	check := ui2.checkbox('new_auto_start', '创建后立即启动，并打开浏览器 Admin UI', app.new_auto_start, ui2.rect(x, 530, width, 26), ui2.TextStyle{ size: 13, color: workbench_ink })
 	elements << ui2.Element{ ...check, enabled: !app.creating }
-	elements << button('new_cancel', '取消', x, if app.new_error != '' || app.creating { 658.0 } else { 584.0 }, 78, false, !app.creating)
+	elements << button('new_cancel', '取消', x, if app.new_error != '' || app.creating { 688.0 } else { 614.0 }, 78, false, !app.creating)
 	elements << button('new_submit', if app.creating {
 		'正在创建…'
 	} else if app.new_auto_start {
 		'创建并启动'
 	} else {
 		'创建项目'
-	}, x + width - 136, if app.new_error != '' || app.creating { 658.0 } else { 584.0 }, 136, true, !app.creating)
+	}, x + width - 136, if app.new_error != '' || app.creating { 688.0 } else { 614.0 }, 136, true, !app.creating)
 	message := if app.new_error != '' {
 		app.new_error
 	} else {
@@ -157,10 +165,10 @@ fn new_project_view(app &Workshop, x f64, width f64) []ui2.Element {
 		}
 	}
 	if app.new_error != '' || app.creating {
-		elements << state_notice('new_message', if app.new_error != '' { '创建未完成' } else { '正在创建项目' }, message, ui2.rect(x, 541, width, 104), if app.new_error != '' { 'danger' } else { 'info' })
+		elements << state_notice('new_message', if app.new_error != '' { '创建未完成' } else { '正在创建项目' }, message, ui2.rect(x, 571, width, 104), if app.new_error != '' { 'danger' } else { 'info' })
 	} else {
-		elements << label('new_message', '自动选择可用端口；已有目录不会覆盖。', x, 541, width, 12, workbench_muted)
-		elements << label('new_keyboard_help', 'Tab 切换输入 · Return 创建 · Esc 返回', x, 638, width, 11, workbench_muted)
+		elements << label('new_message', '自动选择可用端口；已有目录不会覆盖。', x, 571, width, 12, workbench_muted)
+		elements << label('new_keyboard_help', 'Tab 切换输入 · Return 创建 · Esc 返回', x, 588, width, 11, workbench_muted)
 	}
 	return elements
 }

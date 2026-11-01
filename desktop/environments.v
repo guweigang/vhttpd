@@ -25,7 +25,7 @@ fn (mut app Workshop) reload_remote_profiles() {
 }
 
 fn (app &Workshop) environment_choices() []EnvironmentChoice {
-	mut choices := [EnvironmentChoice{ title: '本机 Mac' }]
+	mut choices := [EnvironmentChoice{ title: host.local_environment_name() }]
 	for server in app.remote_servers {
 		mut title := '远端 · ' + server.name
 		for choices.any(it.title == title) { title += ' · ' + server.ssh_host }
@@ -54,7 +54,7 @@ fn (app &Workshop) environment_profiles() []host.RemoteProfile {
 }
 
 fn (app &Workshop) can_switch_environment() bool {
-	return !app.creating && !app.new_project && !app.runtime_busy && !app.server_busy && !app.server_snapshot.busy && !app.remote_snapshot.busy && app.snapshot.phase !in [
+	return app.snapshot.sequence >= app.sequence && !app.creating && !app.new_project && !app.runtime_busy && !app.server_busy && !app.server_snapshot.busy && !app.remote_snapshot.busy && app.snapshot.phase !in [
 		.starting,
 		.stopping,
 	]
@@ -97,7 +97,9 @@ fn (app &Workshop) environment_version_label() string {
 }
 
 fn (mut app Workshop) set_environment(id string) {
+	app.show_component_install = false
 	app.environment_id = id
+	app.reset_workspace()
 	app.runtime_server_id = if id.starts_with('profile:') { '' } else { id }
 	app.show_runtime_downloads = false
 	app.runtime_selected_tag = ''
@@ -105,6 +107,7 @@ fn (mut app Workshop) set_environment(id string) {
 
 fn (mut app Workshop) select_remote_profile(p host.RemoteProfile) {
 	app.set_environment(profile_environment(p))
+	app.environment_runtime_selection[app.environment_id] = p.id
 	app.remote_edit_connection = false
 	app.remote_id = p.id
 	app.remote_server_id = p.server_id
@@ -140,13 +143,25 @@ fn (mut app Workshop) open_environment_projects(id string) {
 	app.show_remote = id != ''
 	app.show_servers = false
 	if id != '' {
+		preferred := app.environment_runtime_selection[id]
 		app.remote_id = ''
 		profiles := app.environment_profiles()
-		if profiles.len > 0 { app.select_remote_profile(profiles[0]) }
+		if profiles.len > 0 {
+			mut selected_profile := profiles[0]
+			for profile in profiles { if profile.id == preferred { selected_profile = profile; break } }
+			app.select_remote_profile(selected_profile)
+		}
 	}
 }
 
 fn (mut app Workshop) open_environment_runtime() {
+	if !app.show_runtime {
+		app.runtime_operation_sequence = 0
+		app.runtime_form_error = ''
+		app.runtime_history_open = false
+		app.server_upgrade_project = ''
+		app.server_runtime_selection = ''
+	}
 	app.show_shared_relays = false
 	app.show_runtime_downloads = false
 	if app.environment_id == '' {
@@ -169,6 +184,12 @@ fn (mut app Workshop) open_environment_runtime() {
 }
 
 fn (mut app Workshop) handle_environment_event(event string) bool {
+ $if windows {
+  if event == ui2.dropdown_menu_toggle_action('environment_menu') {
+   app.choose_windows_environment()
+   return true
+  }
+ }
 	if step := ui2.dropdown_menu_update('environment_menu', app.environment_menu_items(), app.environment_menu, event) {
 		if !app.can_switch_environment() { return true }
 		if step.chosen { app.reload_remote_profiles() }
@@ -177,6 +198,7 @@ fn (mut app Workshop) handle_environment_event(event string) bool {
 	}
 
 	if event == 'runtime' {
+		app.runtime_create_open = false
 		app.open_environment_runtime()
 		return true
 	}
@@ -192,6 +214,7 @@ fn (mut app Workshop) handle_environment_event(event string) bool {
 	}
 	if app.environment_id != '' && event in ['new', 'empty_new', 'remote_create_project'] {
 		app.open_environment_runtime()
+		app.runtime_create_open = true
 		return true
 	}
 	if app.environment_id != '' && event in ['import', 'empty_import'] {
@@ -202,4 +225,30 @@ fn (mut app Workshop) handle_environment_event(event string) bool {
 		return true
 	}
 	return false
+}
+
+// Prefer the connected instance's actual version. Offline entries can show the
+// version of their bound package, scoped to that server's discovered inventory.
+fn (app &Workshop) remote_environment_version(profile host.RemoteProfile) string {
+ if app.remote_snapshot.connected && app.remote_snapshot.profile_id == profile.id && app.remote_snapshot.instance.version != '' {
+  return app.remote_snapshot.instance.version
+ }
+ if app.server_snapshot.server_id != profile_environment(profile) { return '' }
+ mut runtime_id := profile.runtime_id
+ for discovered in app.server_snapshot.projects {
+  if discovered.id == profile.id { runtime_id = discovered.runtime_id; break }
+ }
+ if runtime_id == '' { return '' }
+ for runtime in app.server_snapshot.runtimes {
+  if runtime.id == runtime_id { return runtime.version }
+ }
+ return ''
+}
+
+fn (app &Workshop) local_environment_version() string {
+ return if app.runtime_info.ready { app.runtime_info.version } else { '' }
+}
+
+fn environment_runtime_badge(version string, state string) string {
+ return (if version != '' { 'vhttpd ' + version } else { '版本待确认' }) + ' · ' + state
 }

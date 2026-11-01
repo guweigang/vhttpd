@@ -13,6 +13,12 @@ fn test_create_templates_are_portable_and_have_distinct_local_ports() ! {
 		assert project.workdir == os.join_path(dir, 'test-app-${i}')
 		assert project.name == 'test-app-${i}'
 		info := inspect_project(project)!
+		if template.id == 'environment' {
+			assert info.executor == '' && info.entry == '' && info.app_url == ''
+			assert info.config_token.len == 64
+			assert !os.exists(os.join_path(project.workdir, 'main.mjs'))
+			continue
+		}
 		assert info.executor == 'vjsx'
 		assert info.entry == os.join_path(project.workdir, 'main.mjs')
 		assert info.config_token.len == 64

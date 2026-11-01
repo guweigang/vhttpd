@@ -16,8 +16,8 @@ fn (mut app Workshop) inspect_current_project() {
 fn project_details_view(app &Workshop, width f64) []ui2.Element {
 	project := app.projects[app.selected]
 	mut elements := [
-		label('details_breadcrumb', '本地项目  /  ${project.name}', 0, 25, width, 12, workbench_muted),
-		label('details_title', '项目配置 / Relay', 0, 73, width, 25, workbench_ink),
+		label('details_breadcrumb', '运行环境  /  ${project.name}', 0, 25, width, 12, workbench_muted),
+		label('details_title', '配置组成', 0, 73, width, 25, workbench_ink),
 		label('details_intro', '以下来自磁盘配置；连接、重连与通道状态请查看 Admin UI → Relay。', 0, 111, width, 12, workbench_muted),
 		button('details_close', '返回工作台', 0, 157, 100, false, true),
 		button('details_refresh', '重新读取', 112, 157, 90, false, true),
@@ -25,7 +25,7 @@ fn project_details_view(app &Workshop, width f64) []ui2.Element {
 		button('edit_source', '打开源码', 316, 157, 90, false, app.details.entry != ''),
 		button('admin', 'Admin UI ↗', 418, 157, 115, true, app.snapshot.phase == .running),
 	]
-	mut lines := ['项目：${project.name}', '配置文件：${project.config_path}',
+	mut lines := ['运行环境：${project.name}', '配置文件：${project.config_path}',
 		'工作目录：${project.workdir}', '', '监听器']
 	lines << app.details.listeners
 	lines << ['', '源码入口']
@@ -34,10 +34,10 @@ fn project_details_view(app &Workshop, width f64) []ui2.Element {
 	} else {
 		app.details.sources
 	}
-	lines << ['', 'Relay 配置（项目级）',
+	lines << ['', 'Relay 配置（运行环境）',
 		'agent 主动连接 hub；local / remote 表示部署位置，不是运行角色。']
 	if app.details.relays.len == 0 {
-		lines << '本项目没有声明 Relay。可在项目 TOML / Admin UI 中配置 relays 与关联 pipeline。'
+		lines << '此运行环境没有声明 Relay。可在项目 TOML / Admin UI 中配置 relays 与关联 pipeline。'
 	}
 	for relay in app.details.relays {
 		lines << ['', '${relay.id} · ${relay.mode} / ${relay.carrier}', '地址：${relay.endpoint}',
@@ -53,7 +53,7 @@ fn project_details_view(app &Workshop, width f64) []ui2.Element {
 	if app.details_error != '' {
 		lines = [app.details_error, '', '原始文件保留，可点击“打开配置”修复。']
 	}
-	body := ui2.text_area('details_body', lines.join('\n'), ui2.rect(0, 214, width, 450), ui2.BoxStyle{ bg: workbench_sidebar, radius: 7 }, ui2.TextStyle{ size: 12, color: workbench_ink, font_family: 'Menlo' })
+	body := ui2.text_area('details_body', lines.join('\n'), ui2.rect(0, 214, width, 450), ui2.BoxStyle{ bg: workbench_sidebar, radius: 7 }, ui2.TextStyle{ size: 12, color: workbench_ink, font_family: workbench_detail_font() })
 	elements << ui2.Element{ ...body, readonly: true }
 	return elements
 }

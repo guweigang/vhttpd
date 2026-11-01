@@ -12,7 +12,7 @@ struct RuntimeCatalogResult {
 }
 
 fn (app &Workshop) download_platform() string {
-	if app.runtime_server_id == '' { return 'macos-arm64' }
+	if app.runtime_server_id == '' { return host.local_runtime_platform() }
 	if app.server_snapshot.connected && app.server_snapshot.server_id == app.runtime_server_id { return app.server_snapshot.platform }
 	return ''
 }
@@ -103,7 +103,7 @@ fn (mut app Workshop) handle_runtime_catalog_event(event string) bool {
 
 fn runtime_downloads_view(app &Workshop, width f64) []ui2.Element {
 	busy := app.runtime_catalog_busy
-	mut rows := [button('runtime_catalog_close', '← 返回运行环境', 0, 0, 150, false, true),
+	mut rows := [button('runtime_catalog_close', '← 返回运行包', 0, 0, 150, false, true),
 		label('runtime_download_heading', '选择运行包版本', 0, 52, width, 20, workbench_ink),
 		label('runtime_download_platform', app.download_platform() + ' · 公开下载，无需 GitHub 登录', 0, 84, width, 11, workbench_muted),
 		ui2.Element{...input('runtime_ref', app.runtime_catalog_ref, '版本号或官方 Release 链接', 0, 114, width - 90, !busy), submit_id: 'runtime_catalog_load'},
@@ -122,7 +122,7 @@ fn runtime_downloads_view(app &Workshop, width f64) []ui2.Element {
 	}
 	rows << ui2.scroll('runtime_release_list', ui2.rect(0, 210, width, 180), workbench_sidebar, choices)
 	rows << state_notice('runtime_catalog_notice', if busy { '正在读取版本列表' } else if app.runtime_catalog_error != '' { '版本查询未完成' } else if choices.len == 0 { '暂无可安装版本' } else { '选择后再安装' }, if app.runtime_catalog_error != '' { app.runtime_catalog_error } else if choices.len == 0 && !busy { '仅列出包含完整运行包和校验文件的公开版本。可指定旧版本，或选择本地包。' } else if app.runtime_selected_tag != '' { app.runtime_selected_tag } else { '最近 30 个公开版本，按目标平台筛选。开发版来自通过 CI 的预发布。' }, ui2.rect(0, 410, width, 92), if app.runtime_catalog_error != '' { 'warning' } else { 'info' })
-	rows << button('runtime_install_selected', '安装所选版本', 0, 524, width, true, app.can_install_selected_runtime())
-	rows << ui2.label('runtime_download_hint', '安装前校验 SHA256、完整性和平台兼容性。选择不会替换当前运行包。', ui2.rect(0, 574, width, 52), ui2.TextStyle{size: 11, color: workbench_muted, lines: 3})
+	rows << button('runtime_install_selected', if app.runtime_server_id == '' {'安装并设为本机默认版本'} else {'下载到此主机的运行包库'}, 0, 524, width, true, app.can_install_selected_runtime())
+	rows << ui2.label('runtime_download_hint', if app.runtime_server_id == '' {'安装前校验 SHA256 和完整性，安装后用于之后启动的本机运行环境。'} else {'安装前校验 SHA256 和兼容性。下载完成后，回到运行包页选择运行环境并确认切换。'}, ui2.rect(0, 574, width, 52), ui2.TextStyle{size: 11, color: workbench_muted, lines: 3})
 	return rows
 }

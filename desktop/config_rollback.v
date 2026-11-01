@@ -38,7 +38,7 @@ fn config_rollback_view(app &Workshop, width f64) []ui2.Element {
 		}
 		lines << ['恢复前会再次检查文件，预览后发生外部修改将拒绝覆盖。', if app.snapshot.phase == .running { '恢复后自动按整个项目检查生效；若仍有运行差异，可回工作台重启。' } else { '恢复后校验整个项目；当前项目未运行，启动后自动检查生效。' }]
 	}
-	body := ui2.text_area('rollback_details', lines.join('\n'), ui2.rect(0, 159, width, 480), ui2.BoxStyle{bg: workbench_sidebar, radius: 6}, ui2.TextStyle{size: 11, color: workbench_ink, font_family: 'Menlo'})
+	body := ui2.text_area('rollback_details', lines.join('\n'), ui2.rect(0, 159, width, 480), ui2.BoxStyle{bg: workbench_sidebar, radius: 6}, ui2.TextStyle{size: 11, color: workbench_ink, font_family: workbench_detail_font()})
 	rows << ui2.Element{...body, readonly: true}
 	return rows
 }

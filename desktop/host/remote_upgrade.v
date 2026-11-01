@@ -54,7 +54,7 @@ pub fn upgrade_error_hint(status RemoteRuntimeUpgrade) string {
 
 fn (mut s ServerSession) upgrade(command ServerCommand) ! {
 	s.inspect()!
-	if s.state.upgrades.any(!it.finished()) {
+	if s.state.upgrades.any(!it.finished()) || s.state.deployments.any(!it.finished()) {
 		return error('该服务器有升级正在进行，请等待完成或重连查看结果。')
 	}
 	matches := s.state.projects.filter(it.id == command.project_id)

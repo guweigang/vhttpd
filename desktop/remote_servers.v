@@ -24,12 +24,18 @@ fn (mut app Workshop) select_server(server host.RemoteServer) {
 
 fn (mut app Workshop) server_command(action host.ServerAction, archive string) {
 	next := app.server_sequence + 1
-	command := host.ServerCommand{sequence: next, action: action, server: app.server_form(), password: if action == .connect { app.remote_password } else { '' },
+	command := host.ServerCommand{initialize_environment: action == .install && app.server_snapshot.projects.len == 0, sequence: next, action: action, server: app.server_form(), password: if action == .connect { app.remote_password } else { '' },
 		host_key_id: app.server_snapshot.host_key.id, archive: archive, release_tag: if action == .install { app.runtime_selected_tag } else { '' }, name: app.server_instance_name.trim_space(),
 		project_id: app.server_upgrade_project, runtime_id: app.selected_server_runtime(), template: host.project_templates()[app.server_template].id, web_port: app.server_web_port.int(), admin_port: app.server_admin_port.int()}
 	select {
 		app.server_worker.commands <- command {
 			app.server_sequence = next
+			if action in [.install, .create, .upgrade] {
+				app.runtime_operation_sequence = next
+				app.runtime_operation_server = app.runtime_server_id
+				app.runtime_form_error = ''
+				if action == .upgrade { app.runtime_upgrade_before = app.server_snapshot.upgrades.map(it.id) }
+			}
 			if action == .connect { app.remote_password = '' }
 			if action in [.connect, .install, .create, .upgrade, .inspect] { app.server_busy = true }
 			app.remote_message = ''
@@ -47,6 +53,11 @@ fn (mut app Workshop) poll_server() {
 			if completed || discovered { app.reload_remote_profiles() }
 			if discovered { app.server_discovery_revision = status.discovery_revision }
 			app.server_snapshot = status
+			if app.shared_catalog_pending && !status.busy {
+				app.shared_catalog_pending = false
+				if app.shared_scope == app.environment_id {app.shared_message = status.message}
+				if !status.error && app.shared_scope == app.environment_id && app.show_shared_relays {app.select_initial_shared_relay()}
+			}
 			// The worker emits completion after each blocking operation.
 			if !status.busy { app.server_busy = false }
 			if app.remote_pending_connect != '' && status.host_key.id != '' && !status.error {
@@ -100,34 +111,46 @@ fn (mut app Workshop) poll_server() {
 
 fn (app &Workshop) selected_server_runtime() string {
 	if app.server_snapshot.runtimes.any(it.id == app.server_runtime_selection) { return app.server_runtime_selection }
+	for project in app.managed_runtime_projects() {
+		if project.id == app.selected_upgrade_project() && app.server_snapshot.runtimes.any(it.id == project.runtime_id) { return project.runtime_id }
+	}
 	if app.server_snapshot.runtimes.len == 1 { return app.server_snapshot.runtimes[0].id }
 	return ''
 }
 
 fn (app &Workshop) can_upgrade_selected_project() bool {
- if app.server_snapshot.server_id != app.runtime_server_id || app.server_snapshot.server != app.server_form() || app.server_busy || app.server_snapshot.busy || !app.server_snapshot.connected || app.server_snapshot.upgrades.any(!it.finished()) { return false }
- selected := app.server_snapshot.projects.filter(it.id == app.server_upgrade_project)
+ if app.server_snapshot.server_id != app.runtime_server_id || app.server_snapshot.server != app.server_form() || app.server_busy || app.server_snapshot.busy || !app.server_snapshot.connected || app.server_snapshot.upgrades.any(!it.finished()) || app.deployment_running() { return false }
+ selected := app.managed_runtime_projects().filter(it.id == app.selected_upgrade_project())
  return selected.len == 1 && selected[0].runtime_id != '' && app.selected_server_runtime() != '' && selected[0].runtime_id != app.selected_server_runtime() && selected[0].config_path == app.server_snapshot.root + '/instances/' + selected[0].name + '/vhttpd.toml'
 }
 
 fn (mut app Workshop) handle_server_event(event string) bool {
+ if event == 'server_upgrade_environment' {
+  if !app.server_busy && !app.server_snapshot.busy {
+   for project in app.managed_runtime_projects() { if project.name == ui2.text(event) {app.server_upgrade_project=project.id;app.server_runtime_selection='';app.runtime_history_open=false;app.runtime_operation_sequence=0;app.runtime_form_error='';break} }
+  }
+  return true
+ }
+ if event == 'runtime_history_toggle' { app.runtime_history_open = !app.runtime_history_open; return true }
+ if event == 'runtime_create_open' { app.runtime_create_open = true; app.runtime_form_error=''; return true }
+ if event == 'runtime_create_back' { app.runtime_create_open = false; app.runtime_form_error=''; app.runtime_operation_sequence=0; return true }
  if event.starts_with('server_upgrade_project_') {
   if !app.server_busy && !app.server_snapshot.busy { app.server_upgrade_project = event.all_after('server_upgrade_project_') }
   return true
  }
  if event == 'server_upgrade' {
   if !app.can_upgrade_selected_project() { return true }
-  project := app.server_snapshot.projects.filter(it.id == app.server_upgrade_project)[0]
+  project := app.managed_runtime_projects().filter(it.id == app.selected_upgrade_project())[0]
   target := app.server_snapshot.runtimes.filter(it.id == app.selected_server_runtime())[0]
   previous := app.server_snapshot.runtimes.filter(it.id == project.runtime_id)
   previous_label := if previous.len == 1 { previous[0].label() } else { '当前运行包' }
-  if ui2.confirm('停机升级远端实例', project.name + ' 将从 ' + previous_label + ' 切换到 ' + target.label() + '。业务会短暂中断；先用目标版本校验整个项目，失败时远端自动恢复原运行包。升级期间请勿修改配置。') { app.server_command(.upgrade, '') }
+  if ui2.confirm('切换运行环境版本', project.name + ' 将从 ' + previous_label + ' 切换到 ' + target.label() + '。该环境内全部应用会短暂停机；先校验完整配置，失败时自动恢复原运行包。') { app.server_upgrade_project=project.id; app.server_command(.upgrade, '') }
   return true
  }
 
 	if event.starts_with('server_runtime_choice_') {
 		id := event.all_after('server_runtime_choice_')
-		if !app.server_busy && !app.server_snapshot.busy && app.server_snapshot.runtimes.any(it.id == id) { app.server_runtime_selection = id }
+		if !app.server_busy && !app.server_snapshot.busy && !app.server_snapshot.upgrades.any(!it.finished()) && app.server_snapshot.runtimes.any(it.id == id) { app.server_runtime_selection = id; app.runtime_operation_sequence=0; app.runtime_form_error='' }
 		return true
 	}
 
@@ -220,10 +243,12 @@ fn (mut app Workshop) handle_server_event(event string) bool {
 		'server_instance_name' { app.server_instance_name = ui2.text(event) }
 		'server_web_port' { app.server_web_port = ui2.text(event) }
 		'server_admin_port' { app.server_admin_port = ui2.text(event) }
+		'server_template_environment' { app.server_template = 2 }
 		'server_template_http' { app.server_template = 0 }
 		'server_template_api' { app.server_template = 1 }
 		'server_create' {
-			if !app.server_web_port.bytes().all(it.is_digit()) || !app.server_admin_port.bytes().all(it.is_digit()) { app.remote_message = '监听和 Admin 端口请填写数字。'; return true }
+			if app.server_busy || app.server_snapshot.busy { return true }
+			if !app.server_web_port.bytes().all(it.is_digit()) || !app.server_admin_port.bytes().all(it.is_digit()) { app.runtime_form_error = '监听和 Admin 端口请填写数字。'; return true }
 			app.server_command(.create, '')
 		}
 		else {
@@ -239,8 +264,8 @@ fn remote_servers_view(app &Workshop, width f64) []ui2.Element {
 	list_width := if width >= 620 { 174.0 } else { 144.0 }
 	detail_x := list_width + 24
 	mut rows := [label('server_title', '远端服务器', 0, 26, width - 120, 24, workbench_ink),
-		label('server_intro', '连接服务器 → 准备运行环境 → 创建实例', 0, 62, width, 12, workbench_muted),
-		button('remote_close', '返回项目', width - 100, 26, 100, false, true)]
+		label('server_intro', '连接服务器 → 安装运行包 → 创建运行环境', 0, 62, width, 12, workbench_muted),
+		button('remote_close', '返回运行环境', width - 100, 26, 100, false, true)]
 	busy := app.server_busy || app.server_snapshot.busy
 	mut selector := [button('server_new', '+ 添加服务器', 10, 10, list_width - 20, false, !busy)]
 	mut items := []ui2.Element{}
@@ -317,16 +342,16 @@ fn runtime_settings_view(app &Workshop, width f64) []ui2.Element {
 	list_width := if width >= 620 { 174.0 } else { 144.0 }
 	x := list_width + 24
 	mut selector := [label('runtime_target_label', '目标主机', 10, 12, list_width - 20, 11, workbench_muted),
-		sidebar_button('runtime_target_', '本机 Mac', ui2.rect(10, 40, list_width - 20, 34), false, app.runtime_server_id == '', app.can_switch_environment(), .left)]
+		sidebar_button('runtime_target_', host.local_environment_name(), ui2.rect(10, 40, list_width - 20, 34), false, app.runtime_server_id == '', app.can_switch_environment(), .left)]
 	mut y := 86.0
 	for server in app.remote_servers {
 		selector << sidebar_button('runtime_target_${server.id}', server.name, ui2.rect(10, y, list_width - 20, 34), false, app.runtime_server_id == server.id, app.can_switch_environment(), .left)
 		y += 42
 	}
 	body := if app.show_runtime_downloads { runtime_downloads_view(app, width - x) } else if app.runtime_server_id == '' { runtime_local_view(app, width - x) } else { runtime_remote_view(app, width - x) }
-	return [label('runtime_page_heading', '运行环境', 0, 26, width - 120, 24, workbench_ink),
-		label('runtime_page_help', '选择目标主机，查看版本、安装运行包或创建远端实例。', 0, 62, width, 12, workbench_muted),
-		button('runtime_close', '返回项目', width - 100, 26, 100, false, true),
+	return [label('runtime_page_heading', '运行包', 0, 26, width - 120, 24, workbench_ink),
+		label('runtime_page_help', '运行包提供 vhttpd 程序与依赖；运行环境保存配置、应用和数据。', 0, 62, width, 12, workbench_muted),
+		button('runtime_close', '返回运行环境', width - 100, 26, 100, false, true),
 		ui2.view('runtime_selector', ui2.rect(0, 106, list_width, if y > 200 { y + 16 } else { 200.0 }), ui2.BoxStyle{bg: workbench_sidebar, radius: 8}, selector),
 		ui2.view('runtime_detail', ui2.rect(x, 106, width - x, elements_height(body)), ui2.BoxStyle{transparent: true}, body)]
 }
@@ -335,78 +360,4 @@ fn elements_height(elements []ui2.Element) f64 {
 	mut height := 0.0
 	for element in elements { if element.frame.y + element.frame.height > height { height = element.frame.y + element.frame.height } }
 	return height + 24
-}
-
-fn runtime_remote_view(app &Workshop, width f64) []ui2.Element {
-	mut rows := []ui2.Element{}
-	mut y := 0.0
-	state := app.server_snapshot
-	active := state.server_id == app.runtime_server_id && state.connected && app.remote_servers.any(it.id == app.runtime_server_id && it == state.server)
-	busy := app.server_busy || state.busy
-	rows << label('server_runtime_title', '远端 Linux 运行环境', 0, y + 16, width, 24, workbench_ink)
-	y += 61
-	if !active {
-		rows << state_notice('server_need_connect', '先连接目标服务器', '通过已保存的 SSH 连接管理运行环境，不需要预先安装 vhttpd。密码仅本次会话使用。', ui2.rect(0, y, width, 112), 'info')
-		rows << button('server_go_connect', '连接此服务器', 0, y + 130, 160, true, !busy)
-		return rows
-	}
-	rows << label('server_runtime_version', if state.version == '' { '尚未安装 vhttpd' } else { '已安装 ' + state.runtimes.len.str() + ' 个运行包 · ' + state.platform }, 0, y, width, 20, workbench_ink)
-	rows << ui2.label('server_runtime_path', if state.release_tag != '' { state.release_tag + '\n' + state.root } else { state.root }, ui2.rect(0, y + 38, width, 48), ui2.TextStyle{size: 11, color: workbench_muted, lines: 3})
-	y += 94
-	rows << button('server_install', '下载并安装官方包', 0, y, 175, true, !busy)
-	rows << button('server_package', '选择 CI 下载包…', 0, y + 44, 175, false, !busy)
-	rows << button('server_refresh', '刷新', width - 72, y, 72, false, !busy)
-	y += 94
-	rows << label('server_install_hint', '新版本独立安装，保留已有版本；下载不会切换或重启现有实例。', 0, y, width, 11, workbench_muted)
-	y += 37
-	rows << state_notice('server_runtime_state', if busy { '正在准备远端运行环境…' } else if state.error { '操作未完成' } else { '远端运行环境' }, if app.remote_message != '' { app.remote_message } else { state.message + if state.discovery_message != '' { '\n' + state.discovery_message } else { '' } }, ui2.rect(0, y, width, 112), if state.error { 'warning' } else { 'info' })
-	y += 130
-	if busy { rows << button('server_cancel', '取消操作', 0, y, 110, false, true); return rows }
-	if state.runtimes.len == 0 { return rows }
-	rows << label('server_runtime_list_heading', '已安装运行包 · 选择要使用的版本', 0, y, width, 16, workbench_ink)
-	y += 32
-	for runtime in state.runtimes {
-		rows << choice_button('server_runtime_choice_' + runtime.id, runtime.label(), 0, y, width, app.selected_server_runtime() == runtime.id, true)
-		y += 42
-		users := state.projects.filter(it.runtime_id == runtime.id).map(it.name)
-		rows << ui2.label('runtime_users_' + runtime.id, if users.len == 0 { '尚无实例绑定' } else { '绑定实例：' + users.join('、') }, ui2.rect(8, y, width - 16, 38), ui2.TextStyle{size: 11, color: workbench_muted, lines: 2})
-		y += 48
-	}
-	if app.selected_server_runtime() == '' {
-		rows << label('server_runtime_select_hint', '请选择一个运行包版本，再创建实例。', 0, y, width, 12, workbench_muted)
-		y += 32
-	}
-
- rows << label('server_upgrade_heading', '升级已有实例 · 使用上方所选版本', 0, y, width, 16, workbench_ink)
- y += 34
- for project in state.projects {
-  if project.runtime_id == '' || project.config_path != state.root + '/instances/' + project.name + '/vhttpd.toml' { continue }
-  rows << choice_button('server_upgrade_project_' + project.id, project.name, 0, y, width, app.server_upgrade_project == project.id, true)
-  y += 42
- }
- rows << button('server_upgrade', '停机升级所选实例…', 0, y, 200, true, app.can_upgrade_selected_project())
- y += 52
- for upgrade in state.upgrades {
-  name := state.projects.filter(it.config_path == upgrade.config_path).map(it.name).join('、')
-  tone := if upgrade.phase == 'completed' { 'good' } else if upgrade.phase == 'rollback_failed' { 'danger' } else if upgrade.phase in ['rolled_back', 'failed'] { 'warning' } else { 'info' }
-  rows << state_notice('upgrade_status_' + upgrade.id, name + ' · ' + host.upgrade_phase_title(upgrade), host.upgrade_error_hint(upgrade) + '\n状态保存在远端，重新连接可继续查看。', ui2.rect(0, y, width, 120), tone)
-  y += 134
-  rows << ui2.label('upgrade_log_' + upgrade.id, '远端日志：' + upgrade.config_path.all_before_last('/') + '/.desktop-upgrades/' + upgrade.id + '/runtime.log', ui2.rect(8,y,width - 16,76), ui2.TextStyle{size:11,color:workbench_muted,lines:4})
-  y += 90
- }
-
-	rows << label('server_create_heading', '新建远端实例', 0, y, width, 20, workbench_ink)
-	y += 38
-	rows << input('server_instance_name', app.server_instance_name, '实例名称', 0, y, width, true)
-	y += 51
-	rows << choice_button('server_template_http', 'HTTP 入门', 0, y, (width - 12) / 2, app.server_template == 0, true)
-	rows << choice_button('server_template_api', 'JSON API', (width + 12) / 2, y, (width - 12) / 2, app.server_template == 1, true)
-	y += 53
-	rows << label('server_ports_label', '业务监听端口 / Admin 端口（均通过 SSH 访问）', 0, y, width, 12, workbench_muted)
-	rows << input('server_web_port', app.server_web_port, '19881', 0, y + 24, 150, true)
-	rows << input('server_admin_port', app.server_admin_port, '2018', 166, y + 24, 150, true)
-	y += 79
-	rows << label('server_instance_path', state.root + '/instances/' + app.server_instance_name, 0, y, width, 11, workbench_muted)
-	rows << button('server_create', '创建、启动并打开 Admin UI', 0, y + 30, 260, true, app.selected_server_runtime() != '')
-	return rows
 }

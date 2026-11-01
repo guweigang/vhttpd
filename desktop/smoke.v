@@ -59,17 +59,38 @@ fn run_smoke(root string) ! {
 			manager.tick()
 			time.sleep(60 * time.millisecond)
 		}
-		ready := manager.snapshot()
+		mut ready := manager.snapshot()
 		if ready.phase != .running {
 			return error('${name} failed: ${ready.message}\n${ready.logs}')
 		}
 		if host.admin_ready(ready.admin_url, 'incorrect-token') {
 			return error('Incorrect token accepted')
 		}
-		response := http.get('${info.app_url}/hello?name=workbench')!
-		if response.status_code != 200 || !response.body.contains(name) {
-			return error('Application request failed: ${response.body}')
-		}
+        if template.id == 'environment' {
+            if info.app_url != '' { return error('Empty environment unexpectedly has a business listener') }
+            mut ports := []int{}
+            for i in 0 .. 2 {
+                mut reservation := net.listen_tcp(.ip, '127.0.0.1:0')!
+                port := reservation.addr()!.port()!
+                reservation.close()!
+                ports << port
+                source := os.join_path(dir, 'component-${i}')
+                os.mkdir(source)!
+                os.write_file(source + '/component.toml', '[listeners.demo${i}]\nprotocol="http"\nhost="127.0.0.1"\nport=${port}\n[engines.demo${i}]\nkind="vjsx"\nentry="main.mjs"\nruntime_profile="script"\nthread_count=1\n[adapters.demo${i}]\nkind="http-handler"\nengine="engine:demo${i}"\n[[pipelines]]\nid="demo${i}"\ningress="listener:demo${i}"\negress="adapter:demo${i}"\n')!
+                os.write_file(source + '/main.mjs', 'export default c => c.json({application:"demo${i}"},200)')!
+                manager.preview_component(host.project_from_file(source + '/component.toml', source)!, 'demo${i}')!
+                manager.install_component(manager.snapshot().component_preview.id, binary)!
+                for j, active in ports {
+                    response := http.get('http://127.0.0.1:${active}/')!
+                    if response.status_code != 200 || !response.body.contains('demo${j}') { return error('Independent component request failed') }
+                }
+            }
+            ready = manager.snapshot()
+            println('PASS empty environment: Admin-only ready, independently installed two vjsx applications, both responding after shared runtime restart')
+        } else {
+            response := http.get('${info.app_url}/hello?name=workbench')!
+            if response.status_code != 200 || !response.body.contains(name) { return error('Application request failed: ${response.body}') }
+        }
 		ui := http.get(ready.admin_url)!
 		if ui.status_code != 200 || !ui.body.contains('vhttpd Admin') {
 			return error('Admin UI did not load: ${ui.status_code}')
