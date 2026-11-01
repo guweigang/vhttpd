@@ -265,3 +265,7 @@ node --test tests/admin-ui/*.test.cjs
 ## 独立应用安装
 
 运行环境与应用已分开初始化。应用页通过组件包增加代码目录与 include，本地及 SSH 远端均可操作；多个应用共用同一个 vhttpd 进程。详见[独立应用安装说明](./APP-INSTALLATION.md)，可使用 `examples/application-component/component.toml` 试用。
+
+## 模型开发服务（MCP）
+
+通过“帮助 → 模型开发 · MCP…”选择开发目录并开启本机服务，允许受信任的 MCP 客户端创建 vjsx 工程、生成源码与配置变更、校验、启停并验证业务请求。协议复用 V 官方 `vlib/mcp`；操作与 GUI 共用本地 Manager。连接、工具流程和恢复限制见[Desktop MCP 开发服务](./MCP.md)。
