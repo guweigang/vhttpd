@@ -1,0 +1,68 @@
+name: vhttpd Windows MSVC acceptance
+
+# Explicit pre-release validation; no tag, public release or automatic push.
+on:
+  workflow_dispatch:
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  windows-amd64:
+    runs-on: windows-2022
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Preserve dependency patch line endings
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756
+        with:
+          arch: x64
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/cache@v4
+        with:
+          path: .cache/vcpkg-binary-cache
+          key: windows-runtime-sdk-msvc-${{ hashFiles('desktop/ci/windows-vcpkg.commit') }}
+      - name: Prepare shared OpenSSL and database SDK
+        run: ./desktop/ci/prepare_windows_openssl.ps1 -WithDatabase
+      - name: Reuse Desktop pinned V and QuickJS toolchain without ui2
+        run: ./desktop/ci/prepare_windows_toolchain.ps1 -RuntimeOnly
+      - name: Verify native shutdown and socket ownership
+        run: |
+          & cl /nologo /O2 /W4 /utf-8 /std:c11 scripts/ci/windows_runtime_probe.c /Fe:windows-runtime-probe.exe /link Ws2_32.lib
+          if ($LASTEXITCODE -ne 0) { throw 'Windows runtime probe compilation failed' }
+          & ./windows-runtime-probe.exe
+          if ($LASTEXITCODE -ne 0) { throw 'Windows shutdown/socket ownership check failed' }
+          & v -new-compiler -cc msvc -gc boehm -w -enable-globals -path "$PWD/src|@vlib|@vmodules" -o "$env:RUNNER_TEMP/socket-tests.exe" src/socket_runtime/ownership_test.v
+          if ($LASTEXITCODE -ne 0) { throw 'Socket V test compilation failed' }
+          & "$env:RUNNER_TEMP/socket-tests.exe"
+          if ($LASTEXITCODE -ne 0) { throw 'Socket V ownership regression failed' }
+      - name: Build complete production runtime with DB and TLS
+        id: build
+        run: ./scripts/build_windows.ps1
+      - name: Package complete relocatable Windows runtime
+        id: package
+        run: ./scripts/ci/package_windows_runtime.ps1 -Executable '${{ steps.build.outputs.executable }}'
+      - name: Verify extracted runtime without developer tools
+        run: python scripts/ci/verify_windows_runtime.py '${{ steps.package.outputs.archive }}' --output tmp/ci/windows-runtime-acceptance.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vhttpd-windows-amd64
+          path: |
+            tmp/ci/windows-package/vhttpd-windows-amd64.zip
+            tmp/ci/windows-package/vhttpd-windows-amd64.zip.sha256
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: vhttpd-windows-amd64-diagnostics
+          path: |
+            tmp/ci/windows-runtime/*.log
+            tmp/ci/windows-runtime-acceptance.json
+            tmp/ci/run-*.log
+            desktop/ci/results/windows-build/toolchain.txt
+          if-no-files-found: warn

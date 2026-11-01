@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       validation:
-        description: 'PR gates, full nightly matrix, or production E2E preflight'
+        description: 'PR gates, full nightly matrix, production E2E, or Windows MSVC acceptance'
         type: choice
-        options: [pr, nightly, e2e]
+        options: [pr, nightly, e2e, windows]
         default: pr
   push:
     branches:
@@ -32,6 +32,10 @@ permissions:
   contents: read
 
 jobs:
+  windows-acceptance:
+    if: github.event_name == 'workflow_dispatch' && inputs.validation == 'windows'
+    uses: ./.github/workflows/vhttpd-windows.yml
+
   build:
     if: github.event_name != 'workflow_dispatch' || inputs.validation == 'pr'
     name: ${{ matrix.target }}

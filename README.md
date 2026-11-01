@@ -265,6 +265,16 @@ make prod
 make build-prod
 ```
 
+Windows/MSVC runtime preparation and standalone package acceptance are documented in
+[scripts/ci/WINDOWS-RUNTIME.txt](scripts/ci/WINDOWS-RUNTIME.txt). The manual
+[vhttpd Windows workflow](.github/workflows/vhttpd-windows.yml) reuses Desktop's pinned
+V, QuickJS and OpenSSL setup, adds database clients, and builds a complete `vhttpd.exe`
+with Boehm GC. It can also be invoked through **Build vhttpd binaries → validation: windows**
+on the branch under review. Its ZIP acceptance checks HTTP/vjsx, Admin UI, two include sources
+published together, graceful Desktop-owned shutdown, restart and whole-project activation
+under a system-only PATH. This is a validation workflow, not an automatic public release;
+Windows native acceptance must pass before declaring Windows supported.
+
 `make vhttpd` now builds with `-d use_openssl` and DB support by default.
 If you need the previous mbedtls path, use `make vhttpd V_TLS_BACKEND=mbedtls`; that path still adds `-d mbedtls_client_read_timeout_ms=120000` for long-lived Feishu websocket connections.
 `make prod` / `make build-prod` use the same TLS backend selection and additionally enable V `-prod`.

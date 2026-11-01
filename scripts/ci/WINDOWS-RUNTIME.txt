@@ -1,0 +1,26 @@
+vhttpd · Windows x64 测试包（MSVC）
+
+完整解压 ZIP，保留 EXE、DLL、admin 和 licenses，再运行：
+  .\vhttpd.exe --version
+  .\vhttpd.exe --config C:\path\to\project\vhttpd.toml
+
+项目目录应可写；源码、静态文件和 include 配置保留在项目内。
+程序版本见 --version 和 runtime-manifest.json，与 Desktop 版本分别管理。
+不需要安装 V、QuickJS、Node、数据库开发 SDK 或 MSVC 开发工具。
+数据库服务器不包含在包中；客户端 DLL 随包提供。
+退出可按 Ctrl+C；Desktop 拥有的进程通过共享的正常退出接口关闭。
+
+维护者可运行 Build vhttpd binaries，选择 validation=windows 构建并验收此包。
+
+本包用于 Windows 10/11 x64 验收，未经签名，不代表正式版本已通过验收。
+目前重点验收：原生启动、HTTP/vjsx、Admin UI、跨 include 配置发布、
+正常退出后重启、整项目生效检查，以及无开发环境运行。
+SSH 远端管理仍针对 Linux 手工实例；systemd/Docker 不属于 Windows 服务功能。
+Windows 的服务端 --manual-restart、自升级和应用部署助手尚不支持，
+对应能力应明确拒绝。正常停止/重新启动由本地 Desktop 宿主负责。
+Unix socket 外部进程的 peer credential 验证不能套用 POSIX 实现，尚待专项验收。
+不要把 Windows 构建成功等同于这些功能已完成跨平台验收。
+
+校验：同名 .sha256 为 ZIP 的 SHA256。可使用：
+  Get-FileHash .\vhttpd-windows-amd64.zip -Algorithm SHA256
+反馈请附版本、系统、失败步骤和脱敏日志，不要提供密码或 Admin Token。

@@ -1,3 +1,4 @@
+param([switch]$WithDatabase)
 $ErrorActionPreference = 'Stop'
 # Match vjsx's MSVC/vcpkg SDK contract: one SDK, both import-library spellings,
 # and matching DLLs. Pin the ports repository so CI inputs stay reproducible.
@@ -15,7 +16,9 @@ if ($LASTEXITCODE -ne 0) { throw 'Pinned vcpkg fetch failed' }
 if ($LASTEXITCODE -ne 0) { throw 'Pinned vcpkg checkout failed' }
 & (Join-Path $vcpkg 'bootstrap-vcpkg.bat') -disableMetrics
 if ($LASTEXITCODE -ne 0) { throw 'vcpkg bootstrap failed' }
-& (Join-Path $vcpkg 'vcpkg.exe') install openssl:x64-windows
+$ports = @('openssl:x64-windows')
+if ($WithDatabase) { $ports += @('libmariadb:x64-windows','libpq:x64-windows','sqlite3:x64-windows') }
+& (Join-Path $vcpkg 'vcpkg.exe') install @ports
 if ($LASTEXITCODE -ne 0) { throw 'MSVC OpenSSL SDK build failed' }
 $sdk = Join-Path $vcpkg 'installed/x64-windows'
 $lib = Join-Path $sdk 'lib'
@@ -28,7 +31,18 @@ foreach ($name in @('crypto', 'ssl')) {
  }
 }
 Add-Content $env:GITHUB_ENV "OPENSSL_ROOT_DIR=$sdk"
-Add-Content $env:GITHUB_ENV "INCLUDE=$(Join-Path $sdk 'include');$env:INCLUDE"
+$includes = @((Join-Path $sdk 'include'))
+if ($WithDatabase) {
+ foreach ($header in @('mysql.h','libpq-fe.h')) {
+  $headerMatches = @(Get-ChildItem (Join-Path $sdk 'include') -Filter $header -File -Recurse)
+  if ($headerMatches.Count -ne 1) { throw "Expected exactly one SDK header: $header" }
+  $includes += $headerMatches[0].DirectoryName
+ }
+ foreach ($library in @('libmariadb.lib','libpq.lib')) {
+  if (!(Test-Path (Join-Path $lib $library))) { throw "Database import library missing: $library" }
+ }
+}
+Add-Content $env:GITHUB_ENV "INCLUDE=$($includes -join ';');$env:INCLUDE"
 Add-Content $env:GITHUB_ENV "LIB=$lib;$env:LIB"
 Add-Content $env:GITHUB_ENV "LIBRARY_PATH=$lib;$env:LIBRARY_PATH"
 Add-Content $env:GITHUB_ENV "PKG_CONFIG_LIBDIR=$(Join-Path $lib 'pkgconfig')"

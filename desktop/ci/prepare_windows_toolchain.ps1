@@ -1,3 +1,4 @@
+param([switch]$RuntimeOnly)
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 $lock = Get-Content (Join-Path $root 'scripts/ci/toolchain.env') -Raw | ConvertFrom-StringData
@@ -40,6 +41,18 @@ foreach ($relative in @('vlib/net/openssl/openssl.c.v', 'vlib/crypto/ecdsa/ecdsa
  $lines = Get-Content $file | Where-Object { $_ -notmatch '^#flag windows -[IL]\s*"?C:/Program Files/OpenSSL' }
  [IO.File]::WriteAllLines($file, [string[]]$lines, [Text.UTF8Encoding]::new($false))
 }
+if ($RuntimeOnly) {
+ $pg = Join-Path $v 'vlib/db/pg/pg.c.v'
+ $pgLines = Get-Content $pg | Where-Object { $_ -notmatch '^\s*#flag windows -[IL] .*@VEXEROOT/thirdparty/pg' }
+ [IO.File]::WriteAllLines($pg, [string[]]$pgLines, [Text.UTF8Encoding]::new($false))
+ $mysql = Join-Path $v 'vlib/db/mysql/_cdefs_windows.c.v'
+ [IO.File]::WriteAllText($mysql, @'
+module mysql
+#flag windows -llibmariadb
+#include <mysql.h>
+#include "@VMODROOT/vlib/db/mysql/mysql_compat.h"
+'@, [Text.UTF8Encoding]::new($false))
+}
 $env:VFLAGS = '-cc msvc -gc boehm'
 # Disable the launcher's legacy compiler retry so errors belong to the pinned V.
 $env:V_MACOS_V3_NO_FALLBACK = '1'
@@ -62,19 +75,22 @@ $qexe = Get-ChildItem $qbuild -Filter qjs.exe -File -Recurse | Select-Object -Fi
 if (!$qlib -or !$qexe) { throw 'QuickJS output missing' }
 $result = (& $qexe.FullName -e 'print(1 + 1)' | Out-String).Trim()
 if ($LASTEXITCODE -ne 0 -or $result -ne '2') { throw 'QuickJS smoke failed' }
-$ui2 = Join-Path $root '.deps/ui2'
-Checkout-Pinned 'https://github.com/vlang/ui2' ((Get-Content (Join-Path $root 'desktop/ui2.commit') -Raw).Trim()) $ui2
-$modules = Join-Path $toolchain 'modules'
-$env:VHTTPD_DESKTOP_V = Join-Path $v 'v.exe'
-& bash ((Join-Path $root 'desktop/prepare-ui2.sh') -replace '\\','/') ((Join-Path $modules 'ui2') -replace '\\','/')
-if ($LASTEXITCODE -ne 0) { throw 'Build-local ui2 staging failed' }
-& git -C $ui2 diff --exit-code
-if ($LASTEXITCODE -ne 0) { throw 'Upstream ui2 checkout was modified' }
+# Runtime builds share the same pinned V/QuickJS preparation, without ui2.
+if (!$RuntimeOnly) {
+ $ui2 = Join-Path $root '.deps/ui2'
+ Checkout-Pinned 'https://github.com/vlang/ui2' ((Get-Content (Join-Path $root 'desktop/ui2.commit') -Raw).Trim()) $ui2
+ $modules = Join-Path $toolchain 'modules'
+ $env:VHTTPD_DESKTOP_V = Join-Path $v 'v.exe'
+ & bash ((Join-Path $root 'desktop/prepare-ui2.sh') -replace '\\','/') ((Join-Path $modules 'ui2') -replace '\\','/')
+ if ($LASTEXITCODE -ne 0) { throw 'Build-local ui2 staging failed' }
+ & git -C $ui2 diff --exit-code
+ if ($LASTEXITCODE -ne 0) { throw 'Upstream ui2 checkout was modified' }
+ Add-Content $env:GITHUB_ENV "WORKBENCH_WINDOWS_MODULES=$modules"
+}
 Add-Content $env:GITHUB_PATH $v
 Add-Content $env:GITHUB_ENV "VJSX_DIR=$sdk"
 Add-Content $env:GITHUB_ENV "VJS_QUICKJS_PATH=$quickjs"
 Add-Content $env:GITHUB_ENV "VJS_QUICKJS_LIB_PATH=$($qlib.FullName)"
-Add-Content $env:GITHUB_ENV "WORKBENCH_WINDOWS_MODULES=$modules"
 Add-Content $env:GITHUB_ENV "WORKBENCH_WINDOWS_SDK_PARENT=$toolchain"
 Add-Content $env:GITHUB_ENV "VFLAGS=-cc msvc -gc boehm"
 New-Item -ItemType Directory -Force (Join-Path $root 'desktop/ci/results/windows-build') | Out-Null
