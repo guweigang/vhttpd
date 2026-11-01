@@ -25,7 +25,7 @@ checkout_pinned "$VJSX_REPO" "$VJSX_COMMIT" "$toolchain/vjsx"
 # historical workspace patches to a newer dependency.
 checkout_pinned "$VC_REPO" "$VC_COMMIT" "$toolchain/v/vc"
 checkout_pinned "$TCC_REPO" "$TCC_COMMIT" "$toolchain/v/thirdparty/tcc"
-make -C "$toolchain/v" local=1 CC=cc
+make -C "$toolchain/v" local=1 CC=cc VFLAGS="-cc cc -gc boehm -d use_bundled_libgc"
 "$toolchain/v/v" version
 mkdir -p "$toolchain/modules"
 ln -s "$toolchain/vjsx" "$toolchain/modules/vjsx"

@@ -39,7 +39,7 @@ quickjs_path="$(VJS_QUICKJS_WORK_ROOT="$toolchain" \
 quickjs_commit="$(git -C "$quickjs_path" rev-parse HEAD)"
 quickjs_expected="$(tr -d '[:space:]' < "$toolchain/vjsx/.quickjs-version")"
 [[ "$quickjs_commit" == "$quickjs_expected" ]]
-make -C "$toolchain/v" local=1 CC=cc VFLAGS="-prod -cc cc"
+make -C "$toolchain/v" local=1 CC=cc VFLAGS="-cc cc -gc boehm -d use_bundled_libgc"
 "$toolchain/v/v" version
 # Linux arm64 deliberately uses the system C compiler without a TCC bundle.
 # Non-production V builds otherwise look for libgc.a inside that absent bundle.
