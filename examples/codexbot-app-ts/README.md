@@ -5,9 +5,11 @@ TypeScript-first `vjsx` bot example scaffold for `vhttpd`.
 Current files:
 
 - `app.mts`: app entry
-- `codexbot.toml`: example site-based `vjsx` bot config
-- `config/config.mts`: base TS runtime defaults
-- `config/provider-config.mts`: explicit TS-side Codex and Feishu provider instance config plus project mapping
+- `codexbot.toml`: standalone v2 launcher; `component.toml`: Desktop application component
+- `config/config.mts`: cached application configuration and path helpers
+- `config/bot.example.json`: configuration template; copy to private `config/bot.local.json`
+- `config/loader.mjs`: configuration validation and paths relative to the configuration directory
+- `config/provider-config.mts`: provider configuration adapter
 - `codex/`: vendored Codex protocol subset plus local semantic adapter
 - `feishu/`: Feishu inbound and card-policy package boundary for the TS app
 - `lib/bot-runtime.mjs`: bot composition root
@@ -131,12 +133,11 @@ For this example bot:
 - `startup(runtime)` is currently lane-local and does no side effects
 - `app_startup(runtime)` preflights provider instances for `codex` and `feishu`
 - `app_startup(runtime)` may emit `provider.instance.upsert` and `provider.instance.ensure`
-- checked-in `codexbot.toml` uses the site DSL: global `[files]`, `[admin]`, and `[codex]` plus per-app `[sites.codexbot]`
-- additional Codex instances come from `config/provider-config.mts`; `[codex]` in `codexbot.toml` remains the base runtime default
-- Feishu instance config also comes from `config/provider-config.mts`, while sensitive values still come from env-backed defaults in `config/config.mts`
-- `feishu` is now started only from TS-side dynamic config; static `feishu.main` is no longer used by this example
-- `app_startup(runtime)` only emits Feishu startup commands for instances declared in `config/provider-config.mts`
-- the checked-in Feishu example declares `feishu.main`, with credentials coming from `FEISHU_APP_ID`, `FEISHU_APP_SECRET`, `FEISHU_VERIFICATION_TOKEN`, and `FEISHU_ENCRYPT_KEY`
+- `component.toml` contains only the application's v2 listener, engine, adapter, and pipeline
+- Codex and Feishu instances come exclusively from the application's JSON configuration
+- `startup: false` disables startup of that instance, including the default instance
+- Feishu instances without credentials are skipped; a partial app ID / secret pair is rejected
+- each lane reads configuration once when it loads; restart the application after editing it
 
 Current bot flow:
 
@@ -155,14 +156,14 @@ Current bot flow:
 Notes:
 
 - state is persisted in SQLite
-- default DB path is `tmp/codexbot-app-ts.sqlite`
+- default DB path is `data/codexbot.sqlite` inside the application; its parent directory is created automatically
 - current TS-first runtime tables are `chat_state`, `stream_state`, and `command_context_state`
 - SQLite also keeps `project_registry` and `project_binding_state` so `/projects` can survive project switching
 - runtime settings live in the same SQLite file under the `settings` table
 - Feishu session scope is now thread-aware: when inbound messages carry `root_id` or `parent_id`, the bot isolates state by thread root instead of collapsing the whole chat into one session
 - when a Feishu message arrives from a thread, the initial bot reply is sent back via `message_id` targeting so the placeholder stays in the same conversation branch
-- use `CODEXBOT_TS_DB_PATH` to override the DB file path
-- `/admin/state` is for runtime inspection of the bot session store, not a separate product target
+- set `bot.db_path` in `config/bot.local.json` to change the DB path
+- `/admin/state` requires `Authorization: Bearer <admin.token>`; an empty token disables access, and instance credentials are redacted
 - chat rows now expose `sessionKey`; stream rows now expose `sessionKey`, `status`, `resultText`, and `lastEvent`; command context rows expose the last `/use` selection scope per session
 - `cancelled` is a normal terminal status when `/cancel` is used
 - interrupt is best-effort: the bot sends `turn/interrupt`, then detaches the Feishu/Codex stream bindings so the next prompt is not blocked
@@ -174,7 +175,7 @@ Notes:
 - `/bind <project_key> [path]` binds a project record to the chat without switching the current session; if `path` is omitted, the bot resolves it from `project_root_dir/<project_key>`
 - `/unbind <project_key>` removes the explicit chat binding, but it refuses to unbind the current session project
 - `/new [model_id]` clears the current thread and optionally switches model for the next run
-- `config/provider-config.mts` is the explicit place to add extra local Codex servers and Feishu instances
+- add extra Codex servers and Feishu applications under `codex.instances` and `feishu.instances` in `config/bot.local.json`
 - project-to-Codex routing now comes from `project_registry.default_codex_instance`, managed by chat commands instead of static config
 - Feishu rendering now uses a hybrid model:
 - the parent bot stream still owns the session-level status card and state bookkeeping
@@ -183,66 +184,58 @@ Notes:
 - parent stream state remains the canonical place for `/thread`, admin snapshots, and project/thread continuity
 - Codex status semantics are intentionally aligned with `~/codex/ts`: thread-level `active/systemError` are not treated as turn-level busy states, and structured turn errors are rendered from `TurnError` / `CodexErrorInfo`
 
-## Run
+## Configuration and Desktop installation
 
-Build and start:
+All bot, Feishu, and Codex settings belong to this application. Environment variables are never read as configuration or as fallbacks.
+
+Copy `config/bot.example.json` to `config/bot.local.json` and edit:
+
+- `feishu.instances.main.app_id` and `app_secret`; optionally `verification_token` and `encrypt_key`
+- `codex.url`, `model`, `supported_models`, `effort`, `cwd`, `approval_policy`, and `sandbox`
+- `bot.project_root`, `default_project`, `db_path`, `active_stream_stale_ms`, and `enable_provider_instance_preflight`
+- `admin.token` for authenticated state inspection; leave empty to disable it
+
+The local JSON file is authoritative. If it does not exist, the application uses the checked-in template, which has no Feishu credentials. Invalid JSON, unknown default instances, and invalid policies fail startup without printing secret values.
+
+Every relative configured path resolves against the `config/` directory, using the original application entry rather than the process working directory or a temporary compilation directory. For example, `../data/codexbot.sqlite` and `../projects` stay inside this application after installation. Point `codex.cwd` at an existing workspace accessible to the Codex server. Codex itself must already be installed, authenticated, and serving the configured WebSocket endpoint.
+
+In Desktop:
+
+1. Select the destination runtime environment and choose the application installation action.
+2. Select this directory's `component.toml`, preview the changes, and install.
+3. In the installed application directory `apps/<installation-id>/`, copy `config/bot.example.json` to `config/bot.local.json` and fill in the actual settings.
+4. Restart the runtime environment to load the configuration, then send `/help` from Feishu.
+
+The component uses a dedicated listener and engine. Provider instances are registered dynamically by `app_startup`; credentials do not go into the environment's root TOML. Private `bot.local.json` and SQLite files are excluded from installation/deployment bundles, so configure each target locally. Subsequent code deployment does not overwrite those files. Do not commit or share the local file.
+
+To install another copy in the same environment, give its listener, engine, adapter, pipeline IDs/group, and HTTP port distinct values in its source `component.toml`. The installation directory alone does not rename resource IDs. Each copy reads its own JSON file and database.
+
+## Standalone run
+
+From the repository root:
 
 ```bash
-cd /Users/guweigang/Source/vhttpd
+cp examples/codexbot-app-ts/config/bot.example.json examples/codexbot-app-ts/config/bot.local.json
+# Edit bot.local.json before starting.
 make vhttpd
-export FEISHU_APP_ID=...
-export FEISHU_APP_SECRET=...
-export FEISHU_VERIFICATION_TOKEN=...
-export FEISHU_ENCRYPT_KEY=...
-./vhttpd --config /Users/guweigang/Source/vhttpd/examples/codexbot-app-ts/codexbot.toml
+./vhttpd --config examples/codexbot-app-ts/codexbot.toml
 ```
 
-Required env vars:
+The standalone launcher includes the same component and adds its own control listener. Change the standalone control token in `codexbot.toml` before using it.
 
-- `FEISHU_APP_ID`
-- `FEISHU_APP_SECRET`
-- `FEISHU_VERIFICATION_TOKEN`
-- `FEISHU_ENCRYPT_KEY`
+## Multiple instances
 
-Usually optional:
+Add additional named entries to `codex.instances` or `feishu.instances` in the local JSON file. Codex instance entries can override URL, model, effort, cwd, approval policy, sandbox, reconnect delay, and flush interval. Feishu entries contain their own credential set. Use `startup: false` when an instance should be connected only when selected through preflight.
 
-- `CODEX_URL`: defaults to `ws://127.0.0.1:4500` in `codexbot.toml`
-- `CODEXBOT_TS_DEFAULT_CWD`: defaults to `process.cwd()`
-- `CODEXBOT_TS_DEFAULT_PROJECT`: defaults to `vhttpd`
-- `CODEXBOT_TS_DEFAULT_MODEL`: defaults to `gpt-5.4`
-- `CODEXBOT_TS_DEFAULT_CODEX_INSTANCE`: defaults to `main`
-- `CODEXBOT_TS_DEFAULT_FEISHU_INSTANCE`: defaults to `main`
-- `CODEXBOT_TS_SUPPORTED_MODELS`: defaults to `gpt-5.4,gpt-5.3-codex`
-- `CODEXBOT_TS_DB_PATH`: defaults to `tmp/codexbot-app-ts.sqlite`
-- `CODEXBOT_TS_APPROVAL_POLICY`: defaults to `never`
-- `CODEXBOT_TS_SANDBOX`: defaults to `workspace-write`
+Project routing remains in SQLite under `project_registry.default_codex_instance`. Use `/project-instance <project_key> <instance>` to set a project default and `/instance <name>` to override the current session.
 
-## Multi-Codex Example
+## Verification
 
-This example keeps only one static `[codex]` block in `codexbot.toml`.
-Treat that block as the base runtime default for `codex.main`.
-
-Additional local Codex servers are configured in `config/provider-config.mts`.
-The checked-in example includes:
-
-- `codex.main` -> `ws://127.0.0.1:4500`
-- `codex.local_4501` -> `ws://127.0.0.1:4501`
-- `codex.local_4502` -> `ws://127.0.0.1:4502`
-
-By default only `main` is started during `app_startup()`.
-Set `startup: true` on additional instances when you want them connected immediately at boot.
-Even with `startup: false`, configured non-default instances can still be materialized by TS-side preflight before the first routed request that uses them.
-
-Project routing no longer lives in static config.
-Each project stores its default Codex instance in SQLite under `project_registry.default_codex_instance`.
-Use `/project-instance [project_key] [instance]` to update that default, and `/instance [name]` to override only the current session.
-
-## Feishu Example
-
-The checked-in example also declares `feishu.main` in `config/provider-config.mts`.
-That instance is started from TS-side config, while credentials still come from env via `config/config.mts`.
-
-If you later need multiple Feishu apps, add more instances in `config/provider-config.mts` the same way as Codex.
+```bash
+node --test examples/codexbot-app-ts/tests/config.test.mjs
+make test-codexbot
+make test src/app_bundle/codexbot_test.v
+```
 
 ## Commands
 
@@ -278,7 +271,7 @@ Useful checks:
 ```bash
 curl --noproxy '*' -sS http://127.0.0.1:19883/health
 curl --noproxy '*' -sS 'http://127.0.0.1:19883/dispatch?path=/health'
-curl --noproxy '*' -sS http://127.0.0.1:19883/admin/state
+curl --noproxy '*' -sS -H 'Authorization: Bearer <application-admin-token>' http://127.0.0.1:19883/admin/state
 curl --noproxy '*' -sS -H 'x-vhttpd-admin-token: change-me' http://127.0.0.1:19983/admin/runtime
 ```
 
