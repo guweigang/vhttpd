@@ -73,7 +73,7 @@ fn VjsxHostPath.import_specifier(from_path string, to_path string) string {
 }
 
 fn VjsxHostLoader.default_build_root() string {
-	return os.join_path(os.temp_dir(), 'vhttpd_vjsx')
+	return os.join_path(os.temp_dir(), $if windows { 'vh' } $else { 'vhttpd_vjsx' })
 }
 
 fn (config VjsxRuntimeFacadeConfig) build_root_path() string {
@@ -88,6 +88,7 @@ pub fn (config VjsxRuntimeFacadeConfig) lane_temp_root(idx int, source_signature
 	entry_abs := os.abs_path(config.app_entry)
 	entry_name := os.base(entry_abs).trim_space().replace(' ', '_')
 	cache_root := config.build_root_path()
+	$if windows { return os.join_path(cache_root, 'b${idx}') }
 	return os.join_path(cache_root,
 		'${entry_name}.${source_signature}.pid_${os.getpid()}.lane_${idx}.vjsxbuild')
 }

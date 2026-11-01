@@ -118,8 +118,10 @@ def exercise_runtime(binary, root, output, metadata=None):
     engines = '[engines.app]\nkind="vjsx"\nentry="main.mjs"\nruntime_profile="node"\nthread_count=1\n[adapters.app]\nkind="http-handler"\nengine="engine:app"\n'
     routes = '[[pipelines]]\nid="hello"\ningress="listener:web"\negress="adapter:app"\nmatch.paths=["/before"]\n'
     for name, text in {'vhttpd.toml': config, 'engines.toml': engines, 'routes.toml': routes,
-                       'main.mjs': 'export default c=>c.json({ok:true,platform:"fixture"},200);'}.items():
+                       'main.mjs': 'import { platform } from "./lib/value.mjs"; export default c=>c.json({ok:true,platform},200);'}.items():
         (project / name).write_text(text, encoding='utf-8')
+    (project / 'lib').mkdir()
+    (project / 'lib/value.mjs').write_text('export const platform = "fixture";', encoding='utf-8')
     children = []
     logs = []
 
@@ -154,10 +156,13 @@ def exercise_runtime(binary, root, output, metadata=None):
                 raise RuntimeError('Runtime exited during startup; inspect isolated runtime log')
             try:
                 state = request(admin, '/admin/workbench/instance')
-                if state['ready']:
-                    return state
             except (OSError, ValueError, RuntimeError, http.client.HTTPException):
-                pass
+                time.sleep(.1)
+                continue
+            if state.get('error'):
+                raise RuntimeError('Runtime startup failed; inspect isolated log: ' + state['error'].split(':', 1)[0])
+            if state['ready']:
+                return state
             time.sleep(.1)
         raise RuntimeError('Runtime readiness timed out')
 

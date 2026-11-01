@@ -222,5 +222,11 @@ fn (e InProcVjsxExecutor) prepare_inproc_vjsx_module(config VjsxRuntimeFacadeCon
 	if !as_module {
 		if !runtimejs.is_commonjs_module(compiler.context(), entry)! { return '' }
 	}
+	$if windows {
+		// Do not append the entire absolute project path beneath the private cache.
+		// The SDK rewrites graph imports relative to this mirror base.
+		base := if config.module_root.trim_space() != '' { os.real_path(config.module_root) } else { os.dir(entry) }
+		return runtimejs.build_runtime_module_entry_with_mirror_base(compiler.context(), entry, true, temp_root, base)
+	}
 	return runtimejs.build_runtime_module_entry(compiler.context(), entry, true, temp_root)
 }

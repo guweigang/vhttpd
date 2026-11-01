@@ -38,7 +38,7 @@ fn VjsxBuildDirectory.reserve(prefix string) !&VjsxBuildDirectory {
 }
 
 fn (directory VjsxBuildDirectory) output_path() string {
-	return os.join_path(directory.path, 'output')
+	return os.join_path(directory.path, $if windows { 'o' } $else { 'output' })
 }
 
 fn owns_build_directory(path string, identity os.Stat) bool {
