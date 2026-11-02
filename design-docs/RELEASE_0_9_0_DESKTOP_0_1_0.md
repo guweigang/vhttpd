@@ -180,9 +180,20 @@ updated: 2026-11-02
 - [x] P0-02 局部：[独立压测脚本](../scripts/ci/remote_soak.py)已实现并完成 60 秒远端预检：1214 次 HTTP、15 轮 Paseo 文本/二进制/连接回收验证，均零错误；cgroup 无 OOM。部分请求超过 1 秒，最高约 4.96 秒，需要在长测中继续观察，不能仅凭零错误判为性能合格。
 - [x] P0-02 局部：systemd/cgroup 内存上限 512 MiB、CPU 上限 1 核、TasksMax=128；整机可用内存连续三次低于 256 MiB 则停止测试。只监听独立回环端口，不向现有业务发压力请求。
 - [x] P0-02 局部：记录 RSS/匿名内存、CPU ticks、线程、FD、cgroup 内存/OOM、现有实例资源和响应延迟；最终脚本增加日志轮转与每增长 64 MiB 的映射/匿名内存快照。增长触发诊断不自动判定泄漏。
-- [ ] P0-02 待验收：最终脚本 30 秒短跑已启动，但尚未取回结束结果。
-- [ ] P0-02 受阻：启动 24 小时任务前 SSH 2222 连续拒绝 TCP 连接，尚未确认长测启动。连接失败在认证之前，原因未确定；不能宣称长测已运行。
+- [x] P0-02 局部：最终脚本 30 秒短跑完成，551 次 HTTP、7 轮 Paseo 验证均零错误，systemd Result=success；见[最终短跑结果](./release-evidence/2026-11-02/remote-final-smoke-result.json)。
+- [x] P0-02 局部：SSH 中断已恢复。维护者反馈曾断网；重连后确认现有实例仍在运行，并已启动长测，见[长测运行证据](./release-evidence/2026-11-02/remote-soak-running.json)。
 - [ ] P0-02 待验收：计划持续负载 86400 秒，另加前后各 600 秒采样，总计 87600 秒。范围仅含独立 HTTP/JSON 与 Paseo WebSocket，不包含数据库、真实微信/Codex Provider 或 Desktop GUI。
 - [ ] P0-02 待验收：当前发行包没有 DWARF 调试段；资源趋势和快照可用于缩小问题范围，精确到分配点仍可能需要相同源码/依赖的带符号构建和可复现负载。
 
-接续时先确认 SSH 恢复并取回 final-smoke 的 result.json；仅当状态 completed 且无负载错误时启动 vhttpd-soak-24h-20261102.service。测试目录为 /root/vhttpd-release-tests/20261102-soak，结束后应取回 state/result、samples、诊断与 systemd 退出/OOM 状态。不得因任务存活或 GC 已启用而直接判定无泄漏。
+长测由 vhttpd-soak-24h-20261102.service 托管，SSH 断开后继续运行。测试目录为 /root/vhttpd-release-tests/20261102-soak；结束后取回 state/result、samples、诊断与 systemd 退出/OOM 状态。不得因任务存活或 GC 已启用而直接判定无泄漏。
+
+### 24 小时压力任务已启动（仍待完成）
+
+- [x] 启动并验证 systemd ActiveState=active、SubState=running；测试实例 PID 29230，原 bodytest PID 9303 及进程启动标识未改变。
+- [x] 核对短跑与正式长测四个脚本/资产的 SHA256 一致，防止未经短跑验证的脚本进入长测。
+- [x] 确认 cgroup MemoryMax=536870912、CPUQuota=1 核、TasksMax=128 生效，初始整机可用内存约 803 MiB。
+- [ ] 等待完整持续负载及冷却阶段完成，再审核资源收敛、延迟、错误与 OOM 记录；当前仍未核销 P0-02 长稳验收。
+
+北京时间 2026-11-02 16:11:18 启动，先进行约 10 分钟基线采样，再进行约 24 小时负载和 10 分钟冷却；预计 2026-11-03 16:31 左右结束。HTTP 目标上限 40 RPS、并发 4，每轮新建连接；另每约 2 秒完成一轮 Paseo 连接与文本/二进制验证。资源上限可能限制实际速率，必须按实际计数与延迟评估，不把目标速率当作实测吞吐。
+
+证据：[启动及资源限制](./release-evidence/2026-11-02/remote-soak-running.json)、[初始采样](./release-evidence/2026-11-02/remote-soak-initial-samples.ndjson)、[首轮预检](./release-evidence/2026-11-02/remote-preflight-result.json)、[最终脚本短跑](./release-evidence/2026-11-02/remote-final-smoke-result.json)。压力请求只发往本次新增的回环监听器，不修改现有应用配置、数据库或外部服务。
