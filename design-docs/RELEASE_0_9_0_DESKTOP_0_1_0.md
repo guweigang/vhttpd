@@ -230,7 +230,7 @@ updated: 2026-11-02
 - [x] 已实现：移除正常 WebSocket 帧路径中未使用的原生 runtime/回调构造，保持兼容回退路径。
 - [x] 本机修复前后回归：同一 1024 帧测试，旧实现 V 堆保留从 401408 字节增到 5394432 字节，超过 1 MiB 增长预算而失败；新实现两个测试均通过，JS 对象数量也有上限检查。见[回归测试](../src/executor/websocket_payload_memory_test.v)及[本机观测记录](./release-evidence/2026-11-02/split-load/host-regression.json)。
 - [x] 最小复现对照：脱离 HTTP 服务及热重载，6 批各 1000 次纯 JS facade 调用后，V 堆保留 299008 字节、QuickJS 保留 326409 字节、对象数 216，批次间不增长。不能把之前混合负载的 RSS 曲线直接解释成 JSON 序列化泄漏。
-- [ ] 待验收：以与服务器匹配的基础源码、固定工具链/SDK，构建标准生产参数修复包；明确记录补丁摘要。验证包不是公开发行附件，不替换 bodytest。
+- [x] 已构建：与服务器匹配的 d260cecd 基础源码加 WebSocket 补丁，使用固定工具链/SDK 和标准生产参数构建 Linux amd64 修复包；构建容器退出码 0，实际 Boehm GC enabled，27 个运行库已打包。见[构建日志](./release-evidence/2026-11-02/fixed-soak/build.txt)、[构建信息](./release-evidence/2026-11-02/fixed-soak/build-info.json)、[补丁溯源](./release-evidence/2026-11-02/fixed-soak/provenance.json)和[文件摘要](./release-evidence/2026-11-02/fixed-soak/upload-manifest.json)。验证包不是公开发行附件，不替换 bodytest。
 - [ ] 待验收：修复包重复 Paseo/HTTP/混合负载，核对错误、资源趋势及原实例存活。
 - [ ] 待验收：只有上述修复验证通过后，重新从零开始完整 24 小时压力；首轮失败的时长不累计。
 
@@ -240,7 +240,7 @@ updated: 2026-11-02
 
 - [x] 已实现：[分阶段验证脚本](../scripts/ci/remote_soak_sequence.py)按 Paseo 240 秒、HTTP 240 秒、混合 900 秒依次运行；冷却后 RSS 相对负载初期增长不超过 32 MiB、负载期 RSS 不超过 256 MiB、FD 增长不超过 8，要求实际产生流量且零请求错误。任一条件失败则保存结果并停止，不启动长测。
 - [x] 已验证：[阶段门槛测试](../scripts/ci/test_remote_soak_sequence.py)的 5 项测试通过，覆盖正常收敛、旧 Paseo 增长、错误/空流量、采样不足及 RSS/FD 超限；Python 编译检查通过。
-- [ ] Linux 修复包仍在本机 amd64 容器执行标准生产编译。自动权限审批在只读 Docker 检查上连续超时，SSH 检查及一次重试也因自动审批超时未执行；这是执行检查阻碍，不能据此判断编译成功或失败。
+- [x] Linux amd64 生产修复包于 2026-11-02 18:31:52（北京时间）完成构建，容器退出码 0。19:23 后 Docker/SSH 执行恢复，远端 35 个文件摘要、Boehm GC、动态库完整性及原 bodytest PID/启动标识校验通过，见[远端包校验](./release-evidence/2026-11-02/fixed-soak/remote-package-verification.json)。独立服务 vhttpd-soak-fixed-validation-20261102 已启动分阶段验证。
 - [ ] 远端修复包分阶段验证尚未完成，新的 24 小时任务尚未启动；P0-02 保持阻断。通过全部阶段后才创建全新长测服务，总时长 87600 秒，包含完整 24 小时负载及前后采样。
 
 当前状态与接续步骤见[验证状态记录](./release-evidence/2026-11-02/split-load/verification-state.json)。源代码修复与本机回归已完成，远端修复后稳定性仍待实测，不把脚本已实现当作验收通过。
