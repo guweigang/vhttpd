@@ -17,6 +17,8 @@ It is no longer just a PHP app server.
 
 Documentation entry:
 
+- 联合发布筹备：[vhttpd 0.9.0 / Desktop 0.1.0 发布清单](./design-docs/RELEASE_0_9_0_DESKTOP_0_1_0.md)
+
 - overview: [docs/OVERVIEW.md](/Users/guweigang/Source/vhttpd/docs/OVERVIEW.md)
 
 - HTTP server runs as a standalone V CLI process.
