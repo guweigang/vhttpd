@@ -244,3 +244,11 @@ updated: 2026-11-02
 - [ ] 远端修复包分阶段验证尚未完成，新的 24 小时任务尚未启动；P0-02 保持阻断。通过全部阶段后才创建全新长测服务，总时长 87600 秒，包含完整 24 小时负载及前后采样。
 
 当前状态与接续步骤见[验证状态记录](./release-evidence/2026-11-02/split-load/verification-state.json)。源代码修复与本机回归已完成，远端修复后稳定性仍待实测，不把脚本已实现当作验收通过。
+
+### 修复包首轮验证：继续补齐路由查询路径
+
+- [x] 首个修复包远端 HTTP：6392 次请求，零错误，负载初期 RSS 中位 50252 KiB、冷却后 50036 KiB，基本稳定。
+- [x] 首个修复包远端 Paseo：78 轮、零错误；负载初期 RSS 中位 59124 KiB、冷却后 89740 KiB，仍保留 30616 KiB 增长。虽低于短跑阶段 32 MiB 门槛，但接近上限，不能据此核销长稳。
+- [x] 主动停止 vhttpd-soak-fixed-validation-20261102，保留[原始阶段结果](./release-evidence/2026-11-02/fixed-soak/first-validation/sequence.json)与[停止原因](./release-evidence/2026-11-02/fixed-soak/first-validation/intervention.json)；24 小时服务尚未创建，原 bodytest PID 9303 继续运行。
+- [ ] 补齐 actor/affinity 查询路径：该路径仍为每次查询构造原生 runtime 回调。已改为复用 JS 帧的 runtime，正在进行 1024 轮真实路由查询的修复前后内存及返回值回归；测试通过后重建 Linux 包并重新执行完整阶段验证。
+
