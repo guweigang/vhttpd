@@ -32,10 +32,13 @@ updated: 2026-11-02
 
 ## P0-02 GC、内存与资源生命周期
 
+**当前进展（2026-11-03 07:13，北京时间）**：第五包三项预检通过后的长测仍在运行，累计约 118.5 万次 HTTP、1.45 万轮 Paseo，零错误、无 OOM；但 RSS 从约 64 MiB 增到约 163 MiB，前八小时约增长 13 MiB/小时，最近回落尚不足以证明收敛。内存稳定性仍为发布阻断，预计今日 23:07 完成含冷却的全过程。见[中途检查证据](./release-evidence/2026-11-02/fixed-soak/fifth-validation/checkpoint-20261103-0713.json)和[启动记录](./release-evidence/2026-11-02/fixed-soak/fifth-validation/launch.json)。
+
 - [x] 已实现：GC 构建门禁及实际二进制检查，见 [GC 构建回归](../scripts/ci/test_build_gc.py)和[实际 GC 检查](../scripts/ci/verify_gc_runtime.py)。
 - [ ] 待验收：每份发行包的 --build-info 证明启用 Boehm GC；启用 GC 不能替代泄漏检查。
 - [ ] 缺失（尚未找到发布级证据）：为最终候选包建立至少 24 小时稳定性记录，覆盖 HTTP、WebSocket/Relay、数据库、Provider、取消与超时。
-- [ ] 缺失（尚未找到统一门禁）：固定负载、预热/采样/冷却时长和各资源预算；在运行前记录判定阈值，不能看到结果后调整。
+- [x] 已实现（Linux HTTP/Paseo 范围）：[隔离长测脚本](../scripts/ci/remote_soak.py)和[阶段门禁](../scripts/ci/remote_soak_sequence.py)固定负载、预热/采样/冷却时长及资源预算；16 MiB 冷却增长、256 MiB 压力 RSS、FD 增量 8 的门槛在第五包运行前已固定，超标不启动长测。
+- [ ] 待验收：为数据库、Provider、取消/超时及其他平台补齐对应负载、资源预算和最终候选包证据。
 - [ ] 待验收：重复连接/断开、应用启停/重载、Provider 创建/销毁后，RSS/私有内存、句柄或 FD、线程、队列和连接池均无未解释的持续增长。
 - [ ] 待验收：结合平台适用诊断工具检查原生和 JS 资源；保存分配/释放证据，区分 GC 高水位与真实泄漏。
 - [ ] 待验收：停止流量后资源收敛，慢客户端、断线、超时和异常路径均能释放。
@@ -252,3 +255,85 @@ updated: 2026-11-02
 - [x] 主动停止 vhttpd-soak-fixed-validation-20261102，保留[原始阶段结果](./release-evidence/2026-11-02/fixed-soak/first-validation/sequence.json)与[停止原因](./release-evidence/2026-11-02/fixed-soak/first-validation/intervention.json)；24 小时服务尚未创建，原 bodytest PID 9303 继续运行。
 - [ ] 补齐 actor/affinity 查询路径：该路径仍为每次查询构造原生 runtime 回调。已改为复用 JS 帧的 runtime，正在进行 1024 轮真实路由查询的修复前后内存及返回值回归；测试通过后重建 Linux 包并重新执行完整阶段验证。
 
+### 路由查询回归已通过，第二个修复包构建中
+
+- [x] actor/affinity 查询复用 JS 帧持有的 runtime，[修复位置](../src/executor/inproc_vjsx_websocket_lane_query_runtime.v)。同一 1024 轮查询对照，旧实现 GC 后 V 堆保留从 950272 字节增长至 11362304 字节而失败；新实现 3 个测试全部通过，覆盖帧 runtime 身份、事件构造及真实 actor/affinity 查询的内存和路由返回值。见[旧实现原始测试结果](./release-evidence/2026-11-02/fixed-soak/query-before-test.txt)、[修复后原始测试结果](./release-evidence/2026-11-02/fixed-soak/query-after-test.txt)及[回归摘要](./release-evidence/2026-11-02/fixed-soak/query-regression.json)。
+- [x] 将下一轮阶段验证的冷却后 RSS 增长预算收紧为 **16 MiB**，保留负载峰值 256 MiB 和 FD 增长 8 的限制；加入首个补丁仍增长约 30 MiB 的拒绝用例，6 项门槛测试通过。此前首个包的原始记录仍保留当时 32 MiB 门槛。
+- [x] 第二个 Linux amd64 生产修复包构建成功，实际 Boehm GC enabled、27 个运行库已打包，二进制 SHA256 为 de8d8ea1a3aa2fd82b81124ef39f1947ec91525e8cc7553a1674b39abe083c7e；[构建日志](./release-evidence/2026-11-02/fixed-soak/build-fixed2.txt)、[源码补丁摘要](./release-evidence/2026-11-02/fixed-soak/fixed2-provenance.json)、[输入对照](./release-evidence/2026-11-02/fixed-soak/fixed2-snapshot-check.json)。远端[35 个文件及运行依赖校验](./release-evidence/2026-11-02/fixed-soak/fixed2-remote-verification.json)通过，已在 /root/vhttpd-release-tests/20261102-fixed2 启动新一轮阶段验证。
+
+### 第二个修复包：短跑 RSS 门槛未过，继续分配保留诊断
+
+- [ ] 第二个包的 Paseo 78 轮零错误，但冷却后 RSS 从 49068 KiB 增至 79332 KiB，未通过 16 MiB 门槛；阶段脚本正确停止，24 小时服务未启动。见[原始判定](./release-evidence/2026-11-02/fixed-soak/second-validation/20261102-fixed2/sequence.json)。
+- [x] 诊断基线：Boehm 堆约 9.6 MiB、空闲约 6.4 MiB；malloc_stats 显示分配器 arena 共约 98 MiB，其中在用约 4.7 MiB，说明 RSS 包含明显的分配器保留，不能将全部增长等同于存活对象泄漏。
+- [x] 一次 GDB 函数注入被 Boehm 线程信号打断，诊断进程随后栈错误退出；该次诊断有调试干扰，不用于稳定性验收，也不能归因为自然业务崩溃。原 bodytest PID 9303 继续运行。见[诊断退出结果](./release-evidence/2026-11-02/fixed-soak/second-validation/20261102-fixed2-paseo-diagnosis/result.json)和[调试器输出](./release-evidence/2026-11-02/fixed-soak/second-validation/20261102-fixed2-paseo-diagnosis/load-js-usage-gdb.txt)。
+- [ ] 已重开无函数注入的独立 15 分钟 Paseo 观察，目录 /root/vhttpd-release-tests/20261102-fixed2-paseo-observe；继续区分预热/分配器保留和持续增长，再决定后续修复或长测放行。
+
+### 剩余增长定位：hub/kernel 上下文的原生闭包
+
+第二个修复包的[15 分钟观察](./release-evidence/2026-11-02/fixed-soak/second-long-observe/result.json)完成 293 轮 Paseo、零错误，但冷却后 RSS 仍为 179980 KiB。被动统计在 69 轮时显示 QuickJS 分配约 1.8 MiB，Boehm 堆约 33.9 MiB、空闲约 3.7 MiB；到 156 轮，GC 已继续运行，Boehm 堆约 59.2 MiB、空闲约 10.1 MiB。见[中途堆统计](./release-evidence/2026-11-02/fixed-soak/second-long-observe/passive-heaps-middle.txt)、[GC 计数及原生函数创建观察](./release-evidence/2026-11-02/fixed-soak/second-long-observe/native-cfunction-hit.txt)。这不能仅以 QuickJS 存活对象或初始预热解释。
+
+- [ ] 已实现、待回归：将[hub/kernel 上下文](../src/websocket_runtime.v)从每次连接/命令新建捕获闭包，改为普通 GC 对象接口持有；[连接派发对象](../src/ws/types.v)同样持有原始 kernel 对象，避免按连接产生新的原生函数 trampoline。显式函数字段仍优先，保留已有注入/覆盖行为。
+- [ ] 待验收：[512 次上下文构造与命令派发内存回归](../src/websocket_context_memory_test.v)，以及连接关闭、广播、日志与 multi-RPC 代际隔离测试；第三个 Linux 包同时构建中，见[补丁摘要](./release-evidence/2026-11-02/fixed-soak/fixed3-provenance.json)。
+- [ ] 待验收：第三个包重新执行阶段验证，全部通过才启动全新 24 小时任务。此前任何短跑、失败及调试运行均不累计到长测时长。
+
+### hub/kernel 对象接口修复：本机回归通过
+
+- [x] 修复前后同一 512 次上下文构造/命令派发内存回归：旧实现 GC 后保留从 548864 字节增到 4255744 字节，超过 1 MiB 预算而失败；新实现通过。见[旧实现原始输出](./release-evidence/2026-11-02/fixed-soak/context-before-final-test.txt)、[修复后组合套件原始输出](./release-evidence/2026-11-02/fixed-soak/context-suite-final-test.txt)及[回归摘要](./release-evidence/2026-11-02/fixed-soak/context-regression.json)。
+- [x] 同一组合套件覆盖上下文内存、连接关闭/回收、广播目标及关闭所有权、日志和 multi-RPC 原始代际隔离，全部通过；[输入文件摘要](./release-evidence/2026-11-02/fixed-soak/context-suite-inputs.json)可对应仓库中的六个测试文件。
+- [ ] 第三个 Linux 生产包仍在构建，远端分阶段验证及新的 24 小时长测尚未启动。
+
+### 第三个修复包：已构建并进入远端阶段验证
+
+- [x] Linux amd64 生产构建退出码 0，实际 Boehm GC enabled，27 个依赖已打包；二进制 SHA256 为 cc0d22074332ef3027d299d1c4efea3550f6b40a17f04bcca56b1c2964bf7580。见[构建日志](./release-evidence/2026-11-02/fixed-soak/build-fixed3.txt)、[构建信息](./release-evidence/2026-11-02/fixed-soak/fixed3-build-info.json)、[补丁溯源](./release-evidence/2026-11-02/fixed-soak/fixed3-provenance.json)和[上传清单](./release-evidence/2026-11-02/fixed-soak/fixed3-upload-manifest.json)。七个运行时补丁文件与构建快照摘要一致。
+- [x] 本机 41 项组合回归及格式检查通过；[远端 35 文件/GC/动态库校验](./release-evidence/2026-11-02/fixed-soak/fixed3-remote-verification.json)通过，原 bodytest PID 9303/启动标识 601054 保持。
+- [ ] 已启动 vhttpd-soak-fixed3-validation-20261102，目录 /root/vhttpd-release-tests/20261102-fixed3；按原顺序执行 Paseo、HTTP、混合负载，保留 16 MiB 冷却后增长门槛。全部通过后才启动 vhttpd-soak-fixed3-24h-20261102。
+
+### 握手 client holder 持有问题：修复前后真实握手回归通过
+
+第三个包的[阶段判定](./release-evidence/2026-11-02/fixed-soak/third-validation/sequence.json)仍未通过，未启动 24 小时任务。继续定位到[握手捕获回调](../src/ws/ingress_owner.c.v)：每次 managed_server 创建捕获 HandshakeClient 的原生闭包，握手结束后 holder 仍持有已关闭 client，连同其缓冲区和回调引用被全局 trampoline 保留。
+
+- [x] 已实现：使用静态 accept 回调，managed_handshake 在同步调用期间以线程本地指针提供 holder，结束时恢复先前指针、清空 client；保持 holder 对 Boehm 可达。线程本地实现采用仓库既有的 MSVC/GCC/Clang 兼容方式，见[头文件](../src/ws/handshake_callback_scope.h)和[实现](../src/ws/handshake_callback_scope.c)。
+- [x] [真实握手回归](../src/ws/handshake_memory_test.v)：旧实现 256 次握手后 GC 保留从 466944 字节增至 4395008 字节，同时 client 清空断言失败；新实现两个测试通过，覆盖 101 升级响应、正常关闭、client 释放及并行捕获隔离。见[旧输出](./release-evidence/2026-11-02/fixed-soak/handshake-before-final-test.txt)、[新输出](./release-evidence/2026-11-02/fixed-soak/handshake-after-final-test.txt)及[摘要](./release-evidence/2026-11-02/fixed-soak/handshake-regression.json)。
+- [ ] 入站生命周期回归及第四个 Linux 生产包构建中；见[完整补丁摘要](./release-evidence/2026-11-02/fixed-soak/fixed4-provenance.json)。完成后重新从 Paseo 分离阶段开始验证，仍不放宽资源或增长门槛。
+
+- [x] 握手修复后的入站生命周期 5 项回归通过，包含失败升级清理、停止前拒绝升级、连接回收和真实 SIGTERM/SIGINT 信号下会话收尾；信号子进程运行的是本次测试可执行文件。见[生命周期原始输出](./release-evidence/2026-11-02/fixed-soak/handshake-inbound-lifecycle-test.txt)。
+- [x] 第四包十个运行时补丁文件摘要与工作区一致；握手 V 文件格式检查通过。
+
+### 第四个修复包已进入远端验证
+
+- [x] Linux amd64 生产构建退出码 0、实际 Boehm GC enabled，27 个运行库打包完成；二进制 SHA256 为 b26060c5aaf1eaa2ce505a4eb8b60f97808fae95daf216c5bb1153280437bb50。见[构建日志](./release-evidence/2026-11-02/fixed-soak/build-fixed4.txt)、[构建信息](./release-evidence/2026-11-02/fixed-soak/fixed4-build-info.json)、[十文件补丁摘要](./release-evidence/2026-11-02/fixed-soak/fixed4-provenance.json)。
+- [x] [上传清单](./release-evidence/2026-11-02/fixed-soak/fixed4-upload-manifest.json)及[远端文件/运行依赖校验](./release-evidence/2026-11-02/fixed-soak/fixed4-remote-verification.json)通过。原 bodytest PID 9303/启动标识 601054 仍保持。
+- [ ] vhttpd-soak-fixed4-validation-20261102 已启动，目录 /root/vhttpd-release-tests/20261102-fixed4；使用与前轮相同负载和 16 MiB 冷却后增长门槛。通过后自动启动 vhttpd-soak-fixed4-24h-20261102，不累计前轮时长。
+
+### 第四包混合负载阻断与原生 TLS 释放修复
+
+- [x] 第四包 Paseo 78 轮、HTTP 6390 次分别零错误并通过阶段内存门槛；混合负载冷却后 RSS 从 64376 KiB 增至 86704 KiB，超过 16 MiB 门槛，已阻断 24 小时任务。见[阶段原始判定](./release-evidence/2026-11-02/fixed-soak/fourth-validation/sequence.json)。
+- [x] 在独立诊断进程通过 heaptrack 定位：779 轮 Paseo、零业务错误，关闭连接时 `Client.reset_state()` 创建的 `SSL_new`/`SSL_CTX_new` 对象保留。该路径即使 `ws://` 也会分配；`close()` 保留重连状态，终止所有者需调用已有的 `dispose()`。见[原生分配堆栈](./release-evidence/2026-11-02/fixed-soak/heaptrack/leaks.txt)、[诊断运行结果](./release-evidence/2026-11-02/fixed-soak/heaptrack/result.json)。诊断运行不计入验收或长测时长。
+- [x] 已修复：[managed_handshake](../src/ws/ingress_owner.c.v) 收尾调用 `client.dispose()`，释放为重连创建的原生 TLS 对象。本机[握手回归](./release-evidence/2026-11-02/fixed-soak/tls-dispose-handshake-test.txt)和[入站生命周期回归](./release-evidence/2026-11-02/fixed-soak/tls-dispose-inbound-test.txt)通过。
+- [ ] Linux 原生分配器回归、第五个 Linux 生产包正在构建/验证；通过后在新目录重新执行 Paseo、HTTP、混合负载，全部通过才自动启动完整 24 小时有效压力。此前测试时长不累计；原 bodytest 保持运行。
+
+- [x] Linux amd64 原生分配器回归完成：同一 256 次真实握手，旧实现原生在用内存从 721488 增到 6344496 字节而失败，`dispose()` 修复后同一测试通过；同时检查 GC 保留、holder 释放和并行线程隔离。见[旧实现输出](./release-evidence/2026-11-02/fixed-soak/linux-tls-before-handshake-test.txt)、[修复输出](./release-evidence/2026-11-02/fixed-soak/linux-fixed5-handshake-test.txt)、[回归摘要](./release-evidence/2026-11-02/fixed-soak/tls-dispose-linux-regression.json)。该检查通过 glibc `mallinfo2()` 覆盖 GC 统计之外的原生分配；其他平台返回 0，不能作为其原生内存验收结论。
+
+### 第五个修复包：构建完成、隔离阶段验证已启动
+
+- [x] Linux amd64 生产构建完成，退出码 0，实际 Boehm GC enabled、27 个运行库已打包。二进制 SHA256 为 `36884c13ad7c03ea66d70e8a561e5a865986e6b34df8dcbaa85ac1ced0ec0080`；十个运行时补丁文件与构建快照摘要一致。见[构建日志](./release-evidence/2026-11-02/fixed-soak/build-fixed5.txt)、[构建信息](./release-evidence/2026-11-02/fixed-soak/fixed5-build-info.json)、[补丁摘要](./release-evidence/2026-11-02/fixed-soak/fixed5-provenance.json)。
+- [x] [上传清单](./release-evidence/2026-11-02/fixed-soak/fixed5-upload-manifest.json)与[远端 35 文件/GC/动态库校验](./release-evidence/2026-11-02/fixed-soak/fixed5-remote-verification.json)通过，原 bodytest PID 9303/启动标识 601054 保持。远端测试目录 `/root/vhttpd-release-tests/20261102-fixed5`。
+- [ ] 北京时间 2026-11-02 22:24:15 启动 `vhttpd-soak-fixed5-validation-20261102.service`：依次执行 Paseo 240 秒、HTTP 240 秒和混合负载 900 秒，使用原有 16 MiB 冷却后增长门槛。全部通过后自动启动 `vhttpd-soak-fixed5-24h-20261102.service`；内存限制 512 MiB、CPU 1 核、无 swap。完整压力阶段尚未开始。
+
+- [x] 第五包 Paseo 78 轮零错误，RSS 基线 62124 KiB、冷却后 62568 KiB，增长 444 KiB；HTTP 6392 次零错误，基线 49940 KiB、冷却后 49804 KiB。两项均通过原门槛，见[阶段判定](./release-evidence/2026-11-02/fixed-soak/fifth-validation/sequence.json)。
+- [ ] 混合负载 900 秒正在执行；原先阻断长测的这一阶段尚未验收，24 小时服务仍未启动。
+
+### 第五包验收通过，完整长测已重新启动（北京时间 2026-11-02 22:47）
+
+- [x] Paseo、HTTP、混合负载三项全部通过既定门槛，所有业务错误数为 0；混合阶段 23961 次 HTTP、293 轮 Paseo，RSS 基线 83276 KiB、冷却后 79440 KiB、压力采样峰值 83464 KiB。见[完整阶段判定](./release-evidence/2026-11-02/fixed-soak/fifth-validation/sequence.json)、[混合运行结果](./release-evidence/2026-11-02/fixed-soak/fifth-validation/mixed/result.json)及[混合采样](./release-evidence/2026-11-02/fixed-soak/fifth-validation/mixed/samples.ndjson)。
+- [x] `vhttpd-soak-fixed5-24h-20261102.service` 实际为 active/running，独立运行进程 PID 108824，当前处于前置基线阶段；二进制为上述第五包。见[启动时刻及预计时间](./release-evidence/2026-11-02/fixed-soak/fifth-validation/launch.json)、[systemd 原始状态](./release-evidence/2026-11-02/fixed-soak/fifth-validation/launch-unit-status.txt)、[长测初始状态](./release-evidence/2026-11-02/fixed-soak/fifth-validation/full24/state.json)和[初始采样](./release-evidence/2026-11-02/fixed-soak/fifth-validation/full24/samples.ndjson)。本地文件是启动快照，实时状态以服务器目录为准。
+- [x] 资源限制保持 MemoryMax 512 MiB、MemorySwapMax 0、CPUQuota 100%、TasksMax 128；原 bodytest PID 9303/启动标识 601054 保持运行。测试由 systemd 托管，SSH 断开不停止任务。
+- [ ] 待验收：完整 24 小时有效压力及资源稳定性。前置基线 22:47:27–22:57:27，压力 2026-11-02 22:57:27 至 2026-11-03 22:57:27，冷却结束预计 2026-11-03 23:07:27（全部北京时间）。此前任何测试时长均未累计。完成后需核对全量 RSS/FD/线程、错误率、延迟、OOM/退出及冷却收敛，不能因服务已启动而关闭 P0-02。
+
+实时结果目录：`/root/vhttpd-release-tests/20261102-fixed5/full24`，状态为 `state.json`，采样为 `samples.ndjson`，结束结果为 `result.json`。本轮范围是 Ubuntu amd64、隔离 HTTP JSON 与 Paseo 重连/文本/二进制；数据库、Provider、应用重载、其他操作系统及最终正式候选包仍需单独验收。
+
+### 长测中途检查：2026-11-03 07:13（北京时间）
+
+- [x] 服务仍 active/running，进程 PID 108824，已运行约 8 小时 25 分钟（有效压力约 8 小时 15 分钟）；累计约 118.5 万次 HTTP、1.45 万轮 Paseo，错误数均为 0，无 OOM。原 bodytest PID 9303/启动标识 601054 保持。
+- [ ] 内存稳定性仍为发布阻断：RSS 从压力初期 65560 KiB 上升至约 167248 KiB，前八个小时约增加 13 MiB/小时，最近一段出现回落，尚不能证明已经收敛，也不能仅凭 RSS 判断具体泄漏来源。当前 FD 22、线程 22。见[本次原始状态与逐小时趋势](./release-evidence/2026-11-02/fixed-soak/fifth-validation/checkpoint-20261103-0713.json)。
+- [ ] 继续原有资源限制下的长测，不重启、不累计其他测试时长；预计仍于今日 23:07 完成含冷却的全过程。24 小时结束后需结合原生/GC 分配、全量趋势和冷却结果判定，不因零业务错误放行。
