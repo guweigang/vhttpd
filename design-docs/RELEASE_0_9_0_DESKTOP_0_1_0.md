@@ -148,10 +148,25 @@ updated: 2026-11-02
 本轮基于本机 macOS arm64 的未冻结工作区执行，不代表 CI 或最终候选包通过。运行时基线 HEAD 为 b35c572ddb9401fc59411920f914c08e4ef52d70，分支 feature/desktop-workbench；完整命令、退出码和日志摘要见[本地预检记录](./release-evidence/2026-11-02/preflight.json)。
 
 - [x] P0-01 局部：运行时声明版本 0.9.0、Desktop 声明版本 0.1.0 已核对；候选提交和安装包仍未冻结。
-- [x] P0-02 局部：GC 构建门禁回归 5/5，通过（含禁止关闭 GC 和编译器静默遗漏 GC 的拒绝路径），见[原始日志](./release-evidence/2026-11-02/01-test_build_gc.log)。
-- [x] P0-02 局部：所有权静态检查通过，见[原始日志](./release-evidence/2026-11-02/02-lint_safety.log)。
-- [x] P0-01 局部：Mac 验收记录汇总回归 4/4、正式发布门禁回归 11/11、开发版发布门禁回归 11/11，通过；均为夹具测试，不是实际发布。见[验收元数据日志](./release-evidence/2026-11-02/03-test_macos_acceptance.log)、[正式发布门禁日志](./release-evidence/2026-11-02/04-test_macos_release.log)、[开发发布门禁日志](./release-evidence/2026-11-02/05-test_development_release.log)。
-- [ ] P0-02 当前输入不合格：根目录已有 ./vhttpd 不支持 --build-info，返回 unknown option、退出码 2，无法据此证明实际 GC 状态。见[原始日志](./release-evidence/2026-11-02/06-build-info.log)。保留原二进制，另行构建隔离程序。
+- [x] P0-02 局部：GC 构建门禁回归 5/5，通过（含禁止关闭 GC 和编译器静默遗漏 GC 的拒绝路径），见[原始日志](./release-evidence/2026-11-02/01-test_build_gc.txt)。
+- [x] P0-02 局部：所有权静态检查通过，见[原始日志](./release-evidence/2026-11-02/02-lint_safety.txt)。
+- [x] P0-01 局部：Mac 验收记录汇总回归 4/4、正式发布门禁回归 11/11、开发版发布门禁回归 11/11，通过；均为夹具测试，不是实际发布。见[验收元数据日志](./release-evidence/2026-11-02/03-test_macos_acceptance.txt)、[正式发布门禁日志](./release-evidence/2026-11-02/04-test_macos_release.txt)、[开发发布门禁日志](./release-evidence/2026-11-02/05-test_development_release.txt)。
+- [x] P0-02 局部：识别并隔离不合格验收输入。根目录已有 ./vhttpd 不支持 --build-info，返回 unknown option、退出码 2，不能用作 GC 验收，见[原始日志](./release-evidence/2026-11-02/06-build-info.txt)。原文件保持不变，已另行构建并验证隔离程序，结果见下方。
 - [ ] P1-06 追加缺口：给仓库首页增加发布清单入口时，链接检查发现其既有开发机绝对路径链接无法在知识库中解析；后续需核对迁移后的文档位置并修复，不将新发布清单的零死链结果扩展为整个站点通过。
 
 下一步顺序：隔离生产构建并核验实际 GC → 冻结输入、设计长稳负载和阈值 → P0-03 故障恢复回归。长稳、三平台发行包及真实 MCP/平台联调均未核销。
+
+### 隔离生产构建结果
+
+- [x] P0-02 局部：make prod WITH_DB=1 VPHP_V_GC=boehm 隔离构建成功；VHTTPD_BIN 与 BUILD_STAGE_ROOT 均指向 .runtime/release-090-preflight，不覆盖根目录旧二进制。
+- [x] P0-02 局部：新程序 --build-info 返回 version=0.9.0、gc=boehm、gc_enabled=true，退出码 0。二进制 SHA256 为 c23137f5fe27ec58acdfa001b340c89d1a74ddce041384295cb975ad5cebb60a。
+- [x] P0-01 局部：记录 547 个暂存源码文件摘要，检查时与当前 src 一致；V 编译器为 0.5.2 d13ccdd，vjsx 为 259620f1981a3573777ec8cda72883b1866404a7，vjsx 工作区干净。
+
+证据：[生产构建结果](./release-evidence/2026-11-02/isolated-build.json)、[构建日志](./release-evidence/2026-11-02/07-isolated-prod-build.txt)、[源码与依赖输入摘要](./release-evidence/2026-11-02/build-inputs.json)。仅验证本机生产程序可以构建且实际启用 GC，不核销发行包、Linux/Windows 或 24 小时长稳。
+
+### 当前接续点
+
+1. P0-01：将功能改动收敛到可冻结候选，生成完整依赖与发行包清单。
+2. P0-02：基于候选包建立资源采样/阈值和长稳负载，先短跑验证采样，再执行 24 小时验收。
+3. P0-03：执行部署/升级/接管恢复测试，特别检查多应用隔离与断线后的处理状态。
+4. P1：按前述编号补齐承诺功能和交付，不将文档明确缺失项直接改为“待验收”。
