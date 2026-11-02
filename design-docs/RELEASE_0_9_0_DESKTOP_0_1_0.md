@@ -187,7 +187,7 @@ updated: 2026-11-02
 
 长测由 vhttpd-soak-24h-20261102.service 托管，SSH 断开后继续运行。测试目录为 /root/vhttpd-release-tests/20261102-soak；结束后取回 state/result、samples、诊断与 systemd 退出/OOM 状态。不得因任务存活或 GC 已启用而直接判定无泄漏。
 
-### 24 小时压力任务已启动（仍待完成）
+### 24 小时压力任务启动记录（首轮已因 OOM 提前失败）
 
 - [x] 启动并验证 systemd ActiveState=active、SubState=running；测试实例 PID 29230，原 bodytest PID 9303 及进程启动标识未改变。
 - [x] 核对短跑与正式长测四个脚本/资产的 SHA256 一致，防止未经短跑验证的脚本进入长测。
@@ -197,3 +197,15 @@ updated: 2026-11-02
 北京时间 2026-11-02 16:11:18 启动，先进行约 10 分钟基线采样，再进行约 24 小时负载和 10 分钟冷却；预计 2026-11-03 16:31 左右结束。HTTP 目标上限 40 RPS、并发 4，每轮新建连接；另每约 2 秒完成一轮 Paseo 连接与文本/二进制验证。资源上限可能限制实际速率，必须按实际计数与延迟评估，不把目标速率当作实测吞吐。
 
 证据：[启动及资源限制](./release-evidence/2026-11-02/remote-soak-running.json)、[初始采样](./release-evidence/2026-11-02/remote-soak-initial-samples.ndjson)、[首轮预检](./release-evidence/2026-11-02/remote-preflight-result.json)、[最终脚本短跑](./release-evidence/2026-11-02/remote-final-smoke-result.json)。压力请求只发往本次新增的回环监听器，不修改现有应用配置、数据库或外部服务。
+
+### 2026-11-02 17:22 检查：首轮长测失败，阻断发布
+
+- [ ] **P0-02 未通过**：任务于北京时间 16:30:45 发生 cgroup OOM，16:30:53 结束；总运行约 19 分 30 秒，其中前 10 分钟为基线，实际压力约 9 分 30 秒，未完成 24 小时。见[最终结果](./release-evidence/2026-11-02/remote-soak-failure/result.json)和[systemd 状态](./release-evidence/2026-11-02/remote-soak-failure/systemd-status.txt)。
+- [x] 已确认终止对象：内核记录 CONSTRAINT_MEMCG，杀死本次测试 vhttpd PID 29230。触发的是测试组 512 MiB 上限，不是整机 OOM；原 bodytest PID 9303 仍存活。见[内核 OOM 证据](./release-evidence/2026-11-02/remote-soak-failure/kernel-oom.txt)。
+- [x] 已归档 117 次采样：负载开始 RSS 66600 KiB，最后采样 358544 KiB；最后采样历史峰值 534028 KiB，内核终止记录匿名 RSS 508956 KiB、文件 RSS 25216 KiB。线程维持约 21–22、FD 约 22–24，增长主要表现为匿名内存，不是已证实的句柄或线程数量增长。见[完整采样](./release-evidence/2026-11-02/remote-soak-failure/samples.ndjson)。
+- [x] 负载计数归档：HTTP 成功 18500 次、Paseo 成功 223 轮；终止结果累计 HTTP 错误 4、Paseo 错误 1。终止前最后采样错误计数仍为零，不能把最终连接中断错误直接认定为独立业务错误。见[最终结果](./release-evidence/2026-11-02/remote-soak-failure/result.json)和[日志尾部](./release-evidence/2026-11-02/remote-soak-failure/runtime-tail.txt)。
+- [ ] 根因尚未确定：目前证明此负载和资源上限下出现不可接受的内存增长及 OOM；仍须区分持续泄漏、GC/分配峰值、缓存保留及组合负载影响。不得提高上限后直接核销失败。
+- [x] 修正诊断脚本的提前失败盲区：原脚本等待负载开始后再过 10 分钟才设置增长基线，首轮在此前 OOM，未产生 growth 快照。现改为第一个负载采样建立基线；仅为诊断改进，不是运行时内存修复，尚未部署重跑。
+- [ ] 后续顺序：保持失败现场 → 分别运行 HTTP-only 与 Paseo-only 有界复现 → 对增长路径使用匹配源码与依赖的诊断构建定位 → 修复后回归 → 重新开始完整 24 小时。
+
+原始 [systemd 日志](./release-evidence/2026-11-02/remote-soak-failure/systemd-journal.txt)已保存。此前预计 11/3 16:31 的结束时间已失效；当前没有正在继续的 24 小时任务。
