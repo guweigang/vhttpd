@@ -1,9 +1,9 @@
 ---
 title: vhttpd 0.9.0 与 Desktop 0.1.0 联合发布清单
 description: 2026-11-02 至 11-08 发布范围、实现状态、验收证据、阻断项及执行顺序。
-tags: [release, vhttpd, desktop, acceptance]
+tags: [ release, vhttpd, desktop, acceptance ]
 status: in-progress
-updated: 2026-11-02
+updated: 2026-11-03
 ---
 # vhttpd 0.9.0 / Desktop 0.1.0 发布清单
 
