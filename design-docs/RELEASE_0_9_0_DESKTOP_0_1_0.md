@@ -32,7 +32,7 @@ updated: 2026-11-03
 
 ## P0-02 GC、内存与资源生命周期
 
-**当前进展（2026-11-03 10:40，北京时间）**：第六包已完成替换，Paseo、HTTP、混合负载三项门禁全部通过，零业务错误；混合冷却 RSS 从 69412 KiB 降至 68740 KiB。新 24 小时服务 10:39:20 启动，实际 PID 697847、包摘要及 active/running 均已核验；有效压力为 11 月 3 日 10:49:20 至 11 月 4 日 10:49:20，含冷却预计 10:59:20 结束。旧第五包已按维护者要求停止，旧时长不累计，原业务 PID 9303 保持。官方最新 master 的新后端仍有同一不可回收分配；最新正式版 0.5.2 的旧后端使用 `memdup`，不能等同当前工具链兼容性验收。新包使用已验证的 vlang 补丁，vjsx 未改。Windows、完整编译器套件和第六包 24 小时结果仍待验收，P0-02 继续阻断。见[上游核对](./release-evidence/2026-11-03/runtime-replacement/upstream-verification.json)、[新包溯源](./release-evidence/2026-11-03/runtime-replacement/fixed6-provenance.json)和[实际启动核验](./release-evidence/2026-11-03/runtime-replacement/launch-verification.json)。
+**当前进展（2026-11-03 14:53，北京时间）**：延长对照已完成，HTTP 47786 次、Paseo 582 轮零错误，冷却 RSS 从 72560 KiB 降至 66792 KiB。剩余增长已缩小到随 V 打包的 Boehm GC 在 GCC `-O3`、并发 GC 与短线程创建/退出组合下的不可回收小对象块滞留；精确生产 GC 对象和最小程序可复现。已按维护者授权在 vlang GC 源码中为优化的 GCC 构建固定该编译单元为 `-O2`，生成的 V 代码及其他 C 辅助文件保持原优化；Linux 生产负例、修复后冷/暖缓存、shared 与 4096 次真实握手，以及 macOS Clang shared 回归已核对。vjsx 未改。当前远端长测仍为原第六包/PID 697847，未停止、暂停或重启，业务 PID 9303 保持；本次修复未部署到该实例。新候选运行时及完整 24 小时、其他平台与完整工具链放行仍待验收，P0-02 不关闭。见[延长对照结果](./release-evidence/2026-11-03/remaining-growth/20261103-fixed6-gc-extended/mixed/result.json)、[优化路径与修复证据](./release-evidence/2026-11-03/remaining-growth/gc-optimization/finding.json)和[服务身份核验](./release-evidence/2026-11-03/remaining-growth/20261103-fixed6-gc-extended/final-process-verification.json)。
 
 - [x] 已实现：GC 构建门禁及实际二进制检查，见 [GC 构建回归](../scripts/ci/test_build_gc.py)和[实际 GC 检查](../scripts/ci/verify_gc_runtime.py)。
 - [ ] 待验收：每份发行包的 --build-info 证明启用 Boehm GC；启用 GC 不能替代泄漏检查。
