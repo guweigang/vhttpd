@@ -32,6 +32,8 @@ updated: 2026-11-03
 
 ## P0-02 GC、内存与资源生命周期
 
+**新包独立对照（2026-11-03 15:30，北京时间）**：fixed7 已用修复后的工具链完成构建，实际 `--build-info` 为 0.9.0、Boehm GC 启用，二进制 SHA256 为 `aaa1475c97b9bd003986c8d4f81ae10f7315ec3c544580085139f990151bf4a6`。此前仍处于构建阶段，并无新包压力结果。现已启动两个全新实例：fixed6/PID 981231 与 fixed7/PID 982002，使用相同冻结运行时源码、SDK、测试资产和混合负载；每个实例 256 MiB、30% CPU，错开一分钟启动，10 分钟基线、20 分钟压力、2 分钟冷却，预计约 16:03 完成。目前仅进入基线采样，不能判定修复后是否仍增长。保护器只会停止独立对照实例；原长测 PID 697847/start_ticks 9646788、业务 PID 9303/start_ticks 601054 均核验未变，长测重启次数为 0。见[构建记录](./release-evidence/2026-11-03/fixed7-comparison/build.txt)、[构建来源](./release-evidence/2026-11-03/fixed7-comparison/provenance.json)、[对照状态](./release-evidence/2026-11-03/fixed7-comparison/comparison.json)及[身份检查](./release-evidence/2026-11-03/fixed7-comparison/checkpoint.json)。本记录不是通过结论，P0-02 保持待验收。
+
 **当前进展（2026-11-03 14:53，北京时间）**：延长对照已完成，HTTP 47786 次、Paseo 582 轮零错误，冷却 RSS 从 72560 KiB 降至 66792 KiB。剩余增长已缩小到随 V 打包的 Boehm GC 在 GCC `-O3`、并发 GC 与短线程创建/退出组合下的不可回收小对象块滞留；精确生产 GC 对象和最小程序可复现。已按维护者授权在 vlang GC 源码中为优化的 GCC 构建固定该编译单元为 `-O2`，生成的 V 代码及其他 C 辅助文件保持原优化；Linux 生产负例、修复后冷/暖缓存、shared 与 4096 次真实握手，以及 macOS Clang shared 回归已核对。vjsx 未改。当前远端长测仍为原第六包/PID 697847，未停止、暂停或重启，业务 PID 9303 保持；本次修复未部署到该实例。新候选运行时及完整 24 小时、其他平台与完整工具链放行仍待验收，P0-02 不关闭。见[延长对照结果](./release-evidence/2026-11-03/remaining-growth/20261103-fixed6-gc-extended/mixed/result.json)、[优化路径与修复证据](./release-evidence/2026-11-03/remaining-growth/gc-optimization/finding.json)和[服务身份核验](./release-evidence/2026-11-03/remaining-growth/20261103-fixed6-gc-extended/final-process-verification.json)。
 
 - [x] 已实现：GC 构建门禁及实际二进制检查，见 [GC 构建回归](../scripts/ci/test_build_gc.py)和[实际 GC 检查](../scripts/ci/verify_gc_runtime.py)。
