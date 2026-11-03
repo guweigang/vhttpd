@@ -32,7 +32,7 @@ updated: 2026-11-03
 
 ## P0-02 GC、内存与资源生命周期
 
-**当前进展（2026-11-03 上午，北京时间）**：按维护者要求保留第五包长测继续运行，尚未替换或重启。剩余增长已定位到 vlang `shared` 包装对象使用不可回收分配，按明确授权修复本地 vlang；macOS/Linux 的最小复现、普通/生产模式共享别名/持锁与工作线程 GC、4096 次真实握手的修复前后对照已通过；编译器错误诊断 1876 项通过、1 项跳过。Windows、完整编译器套件和新候选包长测仍待验收。vjsx 未改。本轮原包和新工具链的稳定性不能混算，P0-02 仍阻断发布。见[根因及补丁溯源](./release-evidence/2026-11-03/shared-gc/finding.json)和[原长测启动记录](./release-evidence/2026-11-02/fixed-soak/fifth-validation/launch.json)。
+**当前进展（2026-11-03 10:21，北京时间）**：维护者已明确要求换新版长测。使用已验证的 vlang `shared` GC 补丁构建第六包，实际 Boehm GC 与上传摘要校验通过；60 秒混合冒烟零错误，已于 10:16 停止原第五包测试实例，正在运行 Paseo、HTTP、混合负载门禁，全部通过后自动从零启动 24 小时有效压力。原业务 PID 9303 保持。官方最新 master 的新后端仍有同一不可回收分配；最新正式版 0.5.2 的旧后端使用 `memdup`，不能等同当前工具链兼容性验收。vjsx 未改。Windows、完整编译器套件和第六包 24 小时结果仍待验收，P0-02 继续阻断。见[上游核对](./release-evidence/2026-11-03/runtime-replacement/upstream-verification.json)、[新包溯源](./release-evidence/2026-11-03/runtime-replacement/fixed6-provenance.json)和[替换快照](./release-evidence/2026-11-03/runtime-replacement/snapshot.json)。
 
 - [x] 已实现：GC 构建门禁及实际二进制检查，见 [GC 构建回归](../scripts/ci/test_build_gc.py)和[实际 GC 检查](../scripts/ci/verify_gc_runtime.py)。
 - [ ] 待验收：每份发行包的 --build-info 证明启用 Boehm GC；启用 GC 不能替代泄漏检查。
