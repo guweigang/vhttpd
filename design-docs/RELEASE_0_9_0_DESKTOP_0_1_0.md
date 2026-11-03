@@ -372,3 +372,5 @@ updated: 2026-11-03
 - [ ] 待验收：第六包完整 24 小时有效压力、冷却收敛、全量 RSS/FD/线程趋势、错误与延迟、OOM/退出结果。任务已启动不等于稳定性验收通过，P0-02 不关闭。
 
 远端新目录：`/root/vhttpd-release-tests/20261103-fixed6`；预检服务 `vhttpd-soak-fixed6-validation-20261103.service`，通过后启动 `vhttpd-soak-fixed6-24h-20261103.service`。24 小时有效压力前后各有 600 秒基线/冷却，总时长 87600 秒。服务使用 512 MiB、1 核、无 swap 限制，由 systemd 托管，不依赖 SSH 会话。P0-02 保持未关闭；数据库、Provider、其他平台和最终正式候选包的证据仍需补齐。
+
+第六包首轮检查（北京时间 2026-11-03 11:24）：PID 697847 保持，已运行约 45 分钟，实际压力约 35 分钟；HTTP 83066 次、Paseo 1013 轮，零错误、无 OOM，RSS 69904 KiB、FD 22、线程 22。原业务启动标识 601054 保持。见[长测状态快照](./release-evidence/2026-11-03/runtime-replacement/full24/state.json)及[采样](./release-evidence/2026-11-03/runtime-replacement/full24/samples.ndjson)。这是早期观察，仍待完整 24 小时与冷却结果。
