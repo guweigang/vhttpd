@@ -337,3 +337,11 @@ updated: 2026-11-02
 - [x] 服务仍 active/running，进程 PID 108824，已运行约 8 小时 25 分钟（有效压力约 8 小时 15 分钟）；累计约 118.5 万次 HTTP、1.45 万轮 Paseo，错误数均为 0，无 OOM。原 bodytest PID 9303/启动标识 601054 保持。
 - [ ] 内存稳定性仍为发布阻断：RSS 从压力初期 65560 KiB 上升至约 167248 KiB，前八个小时约增加 13 MiB/小时，最近一段出现回落，尚不能证明已经收敛，也不能仅凭 RSS 判断具体泄漏来源。当前 FD 22、线程 22。见[本次原始状态与逐小时趋势](./release-evidence/2026-11-02/fixed-soak/fifth-validation/checkpoint-20261103-0713.json)。
 - [ ] 继续原有资源限制下的长测，不重启、不累计其他测试时长；预计仍于今日 23:07 完成含冷却的全过程。24 小时结束后需结合原生/GC 分配、全量趋势和冷却结果判定，不因零业务错误放行。
+
+### 剩余增长定位：vlang `shared` 包装对象不可回收（2026-11-03）
+
+- [x] 长测保持原服务、PID 108824/启动标识 5375404 继续运行；只读 `/proc` 获取 GC 计数/标记，没有挂接调试器、暂停进程或注入函数调用。统计对象布局已用实际二进制反汇编核对；这是运行中的非原子样本。约 5.4 万份共享状态，与累计连接数量相符，GC kind 2 为不可回收分配；[对象大小与容器统计](./release-evidence/2026-11-03/shared-gc/20261103-fixed5-profiles/long-passive-object-hist.json)。
+- [x] 分离诊断：加速纯 Paseo 复现增长；独立 HTTP 42565 次、零错误，RSS 基本持平。Paseo 堆跟踪有 3 次诊断超时，且旧包路径校验导致收尾信号未发出，随后仅对核验过的诊断 PID 发出 SIGTERM；这些运行只用于定位，不能计作稳定性验收。见[分项诊断元数据](./release-evidence/2026-11-03/shared-gc/20261103-fixed5-profiles/paseo/profiling.json)、[收尾说明](./release-evidence/2026-11-03/shared-gc/20261103-fixed5-profiles/paseo/intervention.json)、[HTTP 结果](./release-evidence/2026-11-03/shared-gc/20261103-fixed5-profiles/http/result.json)。
+- [x] 根因：V 的 `shared_dup_fns` 用 `malloc_uncollectable` 创建共享包装对象。WebSocket 每连接的 ClientState、WriteLock 和 ServerState 因此成为永久 GC 根，连带保留状态内的容器等对象。最小复现 4096 个失去引用的共享对象，完整 GC 后从 53248 字节增到 4415488 字节并失败，见[修复前原始输出](./release-evidence/2026-11-03/shared-gc/shared-gc-before.txt)。
+- [x] 已按维护者明确授权修改本地 vlang 仓库 `/Users/guweigang/local/v`：常规共享包装对象改用可回收、会扫描引用的 `memdup`；保留原预分配分支。已 `./v self` 重建。新增内存、共享别名/持锁 GC、只有工作线程持有引用时的 GC 回归，macOS 三项通过。见[完整编译器补丁](./release-evidence/2026-11-03/shared-gc/vlang-shared-gc.patch.txt)、[重建输出](./release-evidence/2026-11-03/shared-gc/v-shared-self-build.txt)、[修复后原始输出](./release-evidence/2026-11-03/shared-gc/shared-gc-after-final.txt)及[溯源摘要](./release-evidence/2026-11-03/shared-gc/finding.json)。本项未修改 vjsx。
+- [ ] 待验收：Linux amd64 修复前后对照、4096 次真实 WebSocket 握手回归及编译器测试。当前长测仍用原第五包，不会自动替换或重启；新工具链/新包验证通过后，再另行安排修复版长测。
