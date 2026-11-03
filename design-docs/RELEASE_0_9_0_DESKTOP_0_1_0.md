@@ -349,3 +349,14 @@ updated: 2026-11-02
 - [x] 真实握手回归已扩大到 4096 次，保持原 1 MiB GC、2 MiB 原生 malloc 门槛。macOS 旧编译器完整 GC 后从 253952 字节增至 5853184 字节而失败，修复工具链通过；Linux 旧编译器同样从 249856 字节增至 4075520 字节而失败。见[macOS 旧输出](./release-evidence/2026-11-03/shared-gc/shared-handshake-mac-before-final.txt)、[macOS 修复后输出](./release-evidence/2026-11-03/shared-gc/shared-handshake-mac-after-final.txt)。Linux 修复后仍在验证，不提前勾选。
 - [x] vlang 定向[锁代码生成回归](./release-evidence/2026-11-03/shared-gc/v-shared-lock-codegen-test.txt)通过。
 - [ ] 全量编译器和完整 C 生成套件尚未完成：本机 16 GiB 内存、约 6.5 GiB swap 已在使用，结束了本任务重叠启动的两个广泛测试进程组，保留定向验证与原始输出。见[具体测试进程与原因](./release-evidence/2026-11-03/shared-gc/broad-suite-intervention.json)。这不是正式工具链放行记录，广泛回归仍待补齐。
+
+### `shared` 修复定向验证完成，原长测保持运行
+
+- [x] Linux amd64 工具链已完成自举，三项 `shared` 回归通过；4096 次真实握手的旧工具链 GC 保留从 249856 增至 4075520 字节而失败，修复后通过原 GC 和原生 malloc 门槛。见[Linux 旧握手输出](./release-evidence/2026-11-03/shared-gc/linux-shared-handshake-before.txt)、[新握手输出](./release-evidence/2026-11-03/shared-gc/linux-shared-handshake-after.txt)、[工具链重建](./release-evidence/2026-11-03/shared-gc/linux-shared-self.txt)。
+- [x] 生产优化模式也已校验：`-prod` 会删除断言，最初把通道接收写在断言内的测试因此自行互等；只结束该本机测试，改为显式同步和 `panic` 校验。旧编译器在生产模式仍因同一泄漏失败，修复后的 macOS/Linux 普通和生产模式三项均通过。见[旧生产模式负例](./release-evidence/2026-11-03/shared-gc/shared-gc-before-prod-final.txt)、[macOS 生产模式](./release-evidence/2026-11-03/shared-gc/shared-gc-after-prod-final.txt)、[Linux 普通模式](./release-evidence/2026-11-03/shared-gc/linux-shared-strict-after.txt)、[Linux 生产模式](./release-evidence/2026-11-03/shared-gc/linux-shared-prod-strict-after.txt)及[最终测试源码](./release-evidence/2026-11-03/shared-gc/shared-gc-memory-test-source.txt)。
+- [x] 编译器错误诊断回归完成：1876 项通过、1 项跳过，见[完整诊断输出](./release-evidence/2026-11-03/shared-gc/v-shared-compiler-errors-test.txt)；锁代码生成定向回归也通过。上述不是完整编译器套件放行。
+- [x] vlang 共修改三个文件：`vlib/v/gen/c/struct.v`、`vlib/v/compiler_tests/lock_codegen_test.v`、`vlib/v/tests/concurrency/shared_gc_memory_test.v`；完整[补丁](./release-evidence/2026-11-03/shared-gc/vlang-shared-gc.patch.txt)和[摘要](./release-evidence/2026-11-03/shared-gc/finding.json)已刷新。vjsx 未修改，仍为 `259620f1981a3573777ec8cda72883b1866404a7`。
+- [x] 原长测服务/PID 108824/启动标识 5375404 均保持，最近检查约 155.7 万次 HTTP、1.9 万轮 Paseo，零错误、无 OOM，原业务进程 PID 9303 保持运行。见[检查快照](./release-evidence/2026-11-03/shared-gc/latest-fixed5-status.txt)。当前跑的是原第五包，尚未部署新工具链构建的运行时。
+- [ ] 待验收：Windows、完整编译器/C 生成套件、合并前性能核对，以及新工具链构建候选包后的分项和完整长测。本轮原第五包长测继续至既定结束时间，不能计作修复版的稳定性证明；P0-02 不关闭。
+
+补充诊断局限：独立 GC 快照辅助线程的 `sleep()` 被 Boehm 信号提前唤醒，三份对象快照都位于基线阶段，因此未用作压力后保留量对比。根因证据采用实际长测只读标记统计及独立修复前后回归；没有为补采快照暂停或修改原长测。
