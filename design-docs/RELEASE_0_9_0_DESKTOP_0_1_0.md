@@ -345,3 +345,7 @@ updated: 2026-11-02
 - [x] 根因：V 的 `shared_dup_fns` 用 `malloc_uncollectable` 创建共享包装对象。WebSocket 每连接的 ClientState、WriteLock 和 ServerState 因此成为永久 GC 根，连带保留状态内的容器等对象。最小复现 4096 个失去引用的共享对象，完整 GC 后从 53248 字节增到 4415488 字节并失败，见[修复前原始输出](./release-evidence/2026-11-03/shared-gc/shared-gc-before.txt)。
 - [x] 已按维护者明确授权修改本地 vlang 仓库 `/Users/guweigang/local/v`：常规共享包装对象改用可回收、会扫描引用的 `memdup`；保留原预分配分支。已 `./v self` 重建。新增内存、共享别名/持锁 GC、只有工作线程持有引用时的 GC 回归，macOS 三项通过。见[完整编译器补丁](./release-evidence/2026-11-03/shared-gc/vlang-shared-gc.patch.txt)、[重建输出](./release-evidence/2026-11-03/shared-gc/v-shared-self-build.txt)、[修复后原始输出](./release-evidence/2026-11-03/shared-gc/shared-gc-after-final.txt)及[溯源摘要](./release-evidence/2026-11-03/shared-gc/finding.json)。本项未修改 vjsx。
 - [ ] 待验收：Linux amd64 修复前后对照、4096 次真实 WebSocket 握手回归及编译器测试。当前长测仍用原第五包，不会自动替换或重启；新工具链/新包验证通过后，再另行安排修复版长测。
+
+- [x] 真实握手回归已扩大到 4096 次，保持原 1 MiB GC、2 MiB 原生 malloc 门槛。macOS 旧编译器完整 GC 后从 253952 字节增至 5853184 字节而失败，修复工具链通过；Linux 旧编译器同样从 249856 字节增至 4075520 字节而失败。见[macOS 旧输出](./release-evidence/2026-11-03/shared-gc/shared-handshake-mac-before-final.txt)、[macOS 修复后输出](./release-evidence/2026-11-03/shared-gc/shared-handshake-mac-after-final.txt)。Linux 修复后仍在验证，不提前勾选。
+- [x] vlang 定向[锁代码生成回归](./release-evidence/2026-11-03/shared-gc/v-shared-lock-codegen-test.txt)通过。
+- [ ] 全量编译器和完整 C 生成套件尚未完成：本机 16 GiB 内存、约 6.5 GiB swap 已在使用，结束了本任务重叠启动的两个广泛测试进程组，保留定向验证与原始输出。见[具体测试进程与原因](./release-evidence/2026-11-03/shared-gc/broad-suite-intervention.json)。这不是正式工具链放行记录，广泛回归仍待补齐。
