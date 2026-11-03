@@ -360,3 +360,13 @@ updated: 2026-11-03
 - [ ] 待验收：Windows、完整编译器/C 生成套件、合并前性能核对，以及新工具链构建候选包后的分项和完整长测。本轮原第五包长测继续至既定结束时间，不能计作修复版的稳定性证明；P0-02 不关闭。
 
 补充诊断局限：独立 GC 快照辅助线程的 `sleep()` 被 Boehm 信号提前唤醒，三份对象快照都位于基线阶段，因此未用作压力后保留量对比。根因证据采用实际长测只读标记统计及独立修复前后回归；没有为补采快照暂停或修改原长测。
+
+### 上游版本核对与第六包替换（2026-11-03）
+
+- [x] 核对官方最新 master `d126ca3fd329aa7be68efcc2f61d074f8b5dfd3f` 与维护者 fork 最新 `01a8af98dc66c2f19194a516de43acfadc289681`：新后端的 `shared_dup_fns` 仍生成 `malloc_uncollectable`。fork 的提交修复的是共享载荷可被 GC 扫描，不代表包装对象能被回收。官方最新正式版 0.5.2 的旧后端 `Gen.write_shareds` 原本使用可回收 `builtin__memdup`，须与当前新后端区分。核对时间、固定源码 URL 和结论见[核对元数据](./release-evidence/2026-11-03/runtime-replacement/upstream-verification.json)，原始函数逐行摘录及完整源文件摘要见[上游源码摘录](./release-evidence/2026-11-03/runtime-replacement/upstream-source-excerpts.json)。
+- [x] 已修复工具链继续通过上游已有的共享载荷 GC 可见性回归，见[定向回归输出](./release-evidence/2026-11-03/runtime-replacement/shared-upstream-visibility-test.txt)。新包保持已验证的 `d13ccdd` 加本地补丁，不在本次替换中切换整套后端。隔离尝试官方 0.5.2 二进制时，当前 macOS 的 vtest 自举编译未成功并派生诊断助手，已停止该测试树；不计作兼容性通过，见[旧正式版运行测试局限](./release-evidence/2026-11-03/runtime-replacement/upstream-stable-runtime-intervention.json)。
+- [x] 第六包 Linux amd64 生产构建完成：版本 0.9.0、实际 Boehm GC enabled、27 个运行库，二进制 SHA256 `dd079b74542580f7ed7acdbdeb372b671c006c9c687b5158e908fa63dabf5c7d`。十个运行时补丁文件与第五包快照相同，变化集中于修复后的编译器。见[包与工具链溯源](./release-evidence/2026-11-03/runtime-replacement/fixed6-provenance.json)、[上传清单](./release-evidence/2026-11-03/runtime-replacement/fixed6-upload-manifest.json)、[远端摘要/GC/动态库校验](./release-evidence/2026-11-03/runtime-replacement/fixed6-remote-verification.json)。这是诊断候选包，不是已冻结正式发行包。
+- [x] 新包 60 秒混合冒烟完成，HTTP 1600 次、Paseo 20 轮，零错误，见[冒烟结果](./release-evidence/2026-11-03/runtime-replacement/smoke/result.json)。按维护者本次明确要求，核对旧测试 PID/启动标识/二进制摘要/cgroup 后，于北京时间 10:16 停止第五包测试服务。旧运行由操作员换包中止，结果中的 SIGTERM 不当作自然崩溃；旧时长不计入新 24 小时。原业务 PID 9303/启动标识 601054 保持，见[替换控制记录](./release-evidence/2026-11-03/runtime-replacement/replacement.json)、[旧运行结束结果](./release-evidence/2026-11-03/runtime-replacement/old-after-stop-result.json)和[控制脚本](./release-evidence/2026-11-03/runtime-replacement/replacement-controller-source.txt)。本条取代前文“原长测不替换、按原时间结束”的当前执行安排，历史检查记录保留。
+- [ ] 待验收：第六包 Paseo 240 秒、HTTP 240 秒、混合 900 秒三项门禁及随后完整 24 小时有效压力。保持冷却 RSS 增长 16 MiB、压力 RSS 256 MiB、FD 增量 8、零业务错误的原门槛，失败即阻断长测。最新状态见[阶段记录](./release-evidence/2026-11-03/runtime-replacement/sequence.json)和[systemd 快照](./release-evidence/2026-11-03/runtime-replacement/units.txt)。
+
+远端新目录：`/root/vhttpd-release-tests/20261103-fixed6`；预检服务 `vhttpd-soak-fixed6-validation-20261103.service`，通过后启动 `vhttpd-soak-fixed6-24h-20261103.service`。24 小时有效压力前后各有 600 秒基线/冷却，总时长 87600 秒。服务使用 512 MiB、1 核、无 swap 限制，由 systemd 托管，不依赖 SSH 会话。P0-02 保持未关闭；数据库、Provider、其他平台和最终正式候选包的证据仍需补齐。
