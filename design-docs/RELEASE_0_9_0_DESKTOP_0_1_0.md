@@ -32,6 +32,8 @@ updated: 2026-11-03
 
 ## P0-02 GC、内存与资源生命周期
 
+**bodytest 兼容候选通过隔离验证（11 月 4 日 14:02，北京时间）**。在 fixed7 冻结源码上仅加入 `applicationInfo()` 的宿主 API 注册与实现，沿用已核对的 GCC/Boehm 工具链和 vjsx。候选二进制 SHA256 为 `789c29cffdee25c1950b8505710a1575c36e5490fbe98679ec8e0c5afa4aba18`。在独立网络及文件系统、虚拟凭据和隔离数据库端点下，先断言源码入口和根目录，再启动未插入探针的应用副本。两次 Admin 均就绪，HTTP 健康与业务应用路由均返回预期结果。业务 PID 2134650 与 fixed7 压测 PID 2134953 保持运行。因长测绑定并观察业务 PID，安排 11 月 5 日 11:40 复核自然完成状态后按工作台升级流程切换，预热失败自动回滚。业务切换与完整验收仍待结果。[构建来源](./release-evidence/2026-11-04/bodytest-fixed7-candidate/provenance.json) · [API 断言](./release-evidence/2026-11-04/bodytest-fixed7-candidate/candidate.json) · [原样应用验证](./release-evidence/2026-11-04/bodytest-fixed7-candidate/candidate-original.json)
+
 **业务兼容性与 fixed7 重跑（11 月 4 日 11:12，北京时间）**。归档已停止的 Desktop E2E 应用，保留有历史部署引用的运行时包。fixed6 通过 bodytest 配置预检，实际启动时业务模块调用 `vhttpdHost.applicationInfo()` 失败，工作台完成自动回滚。原包重新启动后 Admin 就绪，三个本地监听端口的健康检查均返回 200。fixed6 业务替换仍受宿主 API 兼容性阻断。主机恢复约 998–1002 MiB 可用内存后，独立启动已验证 SHA 的 fixed7 重跑，PID 2134953，10 分钟基线、24 小时加压、10 分钟冷却，沿用 256 MiB、30% CPU 和 512 MiB 主机余量保护，预计 11 月 5 日 11:33 完成。[业务回滚](./release-evidence/2026-11-04/fixed7-retry/bodytest-rollback.json) · [新长测元数据](./release-evidence/2026-11-04/fixed7-retry/metadata.json)
 
 **fixed6 完整长测结果（11 月 4 日 10:59，北京时间）**。自然完成 24 小时加压及 10 分钟冷却，HTTP 3,449,515 次，Paseo 42,067 轮，零错误、零 OOM。按各阶段末一分钟中位数，匿名内存从空闲基线 32.5 MiB 升到加压末 56.3 MiB，冷却末 56.0 MiB，回落 0.28 MiB，仍比空闲基线高 23.6 MiB。既有门槛按首三个加压样本和末三个冷却样本计算，RSS 残留 +4.56 MiB（限 16 MiB），加压峰值 76.6 MiB（限 256 MiB），FD 增量 5（限 8），本轮通过既有门槛。匿名内存残留继续作为诊断发现跟踪。fixed7 上一轮触发主机余量保护，尚待完整验收。fixed6 完成后主机可用内存约 470 MiB，低于 fixed7 启动门槛 640 MiB。P0-02 保持待验收。[结果](./release-evidence/2026-11-04/fixed6-full24/result.json)
