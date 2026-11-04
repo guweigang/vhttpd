@@ -1040,5 +1040,9 @@ fn (mut app Workshop) close_auxiliary_project_views() {
 }
 
 fn tray_ci_trace(stage string) {
-	if os.getenv('VHTTPD_DESKTOP_CI_READY') != '' { eprintln(stage) }
+	if marker := os.getenv_opt('VHTTPD_DESKTOP_CI_READY') {
+		mut trace := os.open_append(marker + '.trace') or { return }
+		trace.writeln(stage) or {}
+		trace.close()
+	}
 }
