@@ -26,6 +26,12 @@ Desktop 使用 V 官方 `vlib/mcp` 提供本机 Streamable HTTP 服务。开发�
 
 关闭 MCP 或退出 Desktop 后连接失效。重新开启生成新端口与凭据。服务默认关闭，仅监听 127.0.0.1，拒绝带 Origin 的网站请求。本版 MCP 开发只支持本机应用；远端应用可在应用页新建、安装，尚无远端源码编辑工具或 stdio 桥接。
 
+## Relay 接入测试
+
+在本机 MCP 页面确认项目目录后，可以签发单独的 Relay 只读或编辑授权。授权有效期为一小时，绑定切换、关闭 MCP 或手动撤销会使它失效。只读授权只开放只读工具，编辑授权包含对整个选定运行环境的启停。Relay 调用先执行 `context_get`，后续应用调用带上返回的 `binding_revision`。
+
+当前可手动使用 [Hub 示例](../examples/config/mcp-relay-public-v2.toml) 和 [Agent 上游示例](../examples/config/mcp-relay-local-upstream-v2.toml) 联调。Agent 和 Desktop 运行在同一主机，Agent 的 MCP 上游 URL 填 Desktop 显示的 Relay loopback URL，Web Agent 的 URL 填受信任的 HTTPS 入口，认证使用 Relay 授权的 Bearer。公网联调还需要在入口配置 TLS、请求限流与授权策略。Desktop 页面目前签发和撤销本机授权，Hub 路由仍需单独配置。
+
 ## 模型开发流程
 
 模型先用 context_get 读取当前应用与环境，再使用 files_list、files_read 获取应用相对路径、内容和 revision。changes_prepare 创建预览，changes_validate 对整个环境及跨 include 配置进行校验；随后 runtime_stop、changes_apply、runtime_start，最后用 application_request 验证业务响应。
