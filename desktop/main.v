@@ -278,6 +278,7 @@ fn main() {
 	C.atexit(cleanup)
  $if windows { C.vhttpd_workbench_prepare_windows_display(); app.brand_mark = windows_brand_asset(app.brand_mark) }
 	app.refresh_workbench_menus(ui2.screen(workbench_paper, []))
+	configure_workbench_tray(app.brand_mark, root)
 	$if windows { spawn workbench_refresh_loop(app.refresh_stop, ui2.request_poll_refresh) } $else { spawn workbench_refresh_loop(app.refresh_stop, ui2.request_refresh) }
 	ui2.on_key(workbench_key)
 	ui2.on_key_event(workbench_physical_key)
@@ -467,6 +468,10 @@ fn (mut app Workshop) launch_with_browser(open_browser bool) {
 }
 
 fn handle_event(event string) {
+	if event == 'tray:open' {
+		bring_workbench_forward()
+		return
+	}
 	if handle_workbench_menu(event) { return }
 	$if windows { if handle_windows_field_event(event) { return } }
 	mut app := unsafe { workshop }
@@ -648,7 +653,8 @@ fn handle_event(event string) {
 				app.inspect_binary(os.real_path(files[0]), true)
 			}
 		}
-		'quit' {
+		'quit', 'tray:quit' {
+			if ui2.tray_visible() { ui2.remove_tray() }
 			cleanup()
 			ui2.quit()
 		}
