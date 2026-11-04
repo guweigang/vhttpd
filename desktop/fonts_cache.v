@@ -68,6 +68,9 @@ fn cached_workbench_font(directory string, cache string, decoder string, asset W
 	ensure_workbench_font_cache(cache)!
 	target := os.join_path(cache, '${asset.decoded_sha256}-${asset.decoded_file}')
 	if valid_workbench_font(target, asset.decoded_bytes, asset.decoded_sha256) { return target }
+	if !os.is_file(decoder) {
+		return error('字体解码器缺失，请重新解压完整工作台安装包。')
+	}
 	temporary := target + '.${rand.ulid()}.tmp'
 	defer { os.rm(temporary) or {} }
 	mut child := os.new_process(decoder)
