@@ -14,7 +14,7 @@ ChatGPT 负责理解需求、编辑应用和根据运行证据迭代。Desktop �
 
 ## 现有实现
 
-Desktop 的开发 MCP 默认关闭，开启后在本机提供带 Bearer 凭据的 Streamable HTTP。应用绑定模式由 Desktop 选定本地运行环境和应用，再从配置推导应用源码目录。MCP 和 GUI 共用 Worker，应用切换会递增选择代次并清空预览。源码修改已有基于 revision 的预览、配置校验、停机应用及会话内恢复；schema 查询依赖正在运行的目标。配置校验和业务验证是两个独立步骤。 [Desktop MCP 开发服务](../desktop/MCP.md) · [应用上下文实现](../desktop/host/development_application.v) · [Worker 开发入口](../desktop/host/development.v)
+Desktop 的开发 MCP 默认关闭，开启后在本机提供带 Bearer 凭据的 Streamable HTTP。应用绑定模式由 Desktop 选定本地运行环境和应用，再从配置推导应用源码目录。MCP 和 GUI 共用 Worker，应用切换会递增选择代次并清空预览。源码修改已有基于 revision 的预览、配置校验、停机应用及会话内恢复；`schema_get` 在运行时使用 Admin 查询并返回 `source: live_admin`。停止时通过所选运行包的 `vhttpd --schema` 读取同一份目录，返回 `source: runtime_package` 和运行包版本。旧运行包缺少该命令时返回 `runtime_schema_unavailable`。配置校验和业务验证是两个独立步骤。 [Desktop MCP 开发服务](../desktop/MCP.md) · [应用上下文实现](../desktop/host/development_application.v) · [Worker 开发入口](../desktop/host/development.v)
 
 本文规划的是 Desktop 的开发与运维工具。应用自身通过 vhttpd 提供的业务 MCP 属于另一条接口。 [vhttpd MCP](./MCP.md)
 
