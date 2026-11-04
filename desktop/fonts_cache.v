@@ -131,7 +131,15 @@ fn run_font_smoke() ! {
 	for bold in [false, true] {
 		for size in [12.0, 14.0, 15.0, 18.0] {
 			element := workbench_font_layout(ui2.label('font-check', '', ui2.rect(0, 0, 0, 0), ui2.TextStyle{ font_family: 'monospace', size: size, bold: bold }))
-			style := element.text_style
+			mut style := element.text_style
+			$if windows {
+				// Before the window starts, ui2 measures with fontstash.
+				// Pass the verified file so it measures the bundled face.
+				style = ui2.TextStyle{
+					...style
+					font_family: if bold { workbench_bold_font_path } else { workbench_regular_font_path }
+				}
+			}
 			a := ui2.measure_layout_text('AA'.repeat(32), style, -1)!
 			b := ui2.measure_layout_text('中'.repeat(32), style, -1)!
 			c := ui2.measure_layout_text('A中'.repeat(32), style, -1)!
