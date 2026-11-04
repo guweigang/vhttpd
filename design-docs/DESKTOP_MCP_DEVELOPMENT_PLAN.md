@@ -10,7 +10,7 @@ status: draft
 ---
 # Desktop MCP 应用开发与远端运维设计
 
-ChatGPT 负责理解需求、编辑应用和根据运行证据迭代。Desktop 掌管工作区授权、主机连接、配置校验和运行时操作。第一阶段的交付标准是，用户在 Desktop 选定应用后，ChatGPT 网页能独立完成一次 vjsx 应用修改、业务验证和失败恢复。
+ChatGPT 负责理解需求、编辑应用和根据运行证据迭代。Desktop 掌管工作区授权、主机连接、配置校验和运行时操作。第一阶段的交付标准是，用户在 Desktop 选定应用后，ChatGPT 网页能独立完成一次 vjsx 应用修改、业务验证和失败恢复，其他 Web Agent 能通过公网 Relay 直接调用同一个 Desktop MCP。
 
 ## 现有实现
 
@@ -34,7 +34,15 @@ Desktop 提供「绑定项目目录」入口。已有应用从环境与应用选
 
 每次文件操作仍经现有边界检查。只接受应用相对路径，拒绝目录穿越、符号链接、其他应用、凭据和共享环境配置。预览记录绑定工作区、目标和文件 revision，应用时再次校验。Desktop 关闭服务后撤销访问；持久化的绑定配置只用于重新选择，用户重新开启服务后获得新会话凭据。
 
-ChatGPT 网页经 Secure MCP Tunnel 到本机服务；Desktop 到远端主机使用 Desktop 自己管理的连接。第一阶段应使用目标 ChatGPT 工作区实测写工具、认证转发和重新连接。桌面本地客户端可继续直连本机 MCP。 [OpenAI Secure MCP Tunnel](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels) · [Desktop 主机管理](../desktop/host/remote_servers.v)
+## MCP 公网接入
+
+首期支持三种入口。桌面客户端直连本机 MCP。ChatGPT 可经 Secure MCP Tunnel 接入，也可在工作区支持相应认证方式时走公网入口。其他 Web Agent 可直接配置 Relay 提供的 HTTPS Streamable HTTP URL 和客户端凭据。Desktop 到远端运行目标的主机连接独立于这三种入口。 [OpenAI Secure MCP Tunnel](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels) · [Desktop 主机管理](../desktop/host/remote_servers.v)
+
+公网路径为 `Web Agent → HTTPS MCP 入口 /mcp/<route_id> → Relay Hub → Desktop 侧 Relay Agent → 本机 Desktop MCP /mcp`。用户在 Desktop 的 MCP 页面选定应用后，选择已有可信 Relay，并单独开启「通过 Relay 发布」。Desktop 侧主动连接 Hub，只为当前绑定发布一条有期限的路由，界面提供可复制的 URL、客户端认证配置、到期时间及撤销入口。Desktop MCP 继续监听 loopback。可复用现有 Hub/Agent、`relay-delivery` 和 `mcp-upstream`，但现有示例仅展示本机监听以及 POST/DELETE 转发，公网 TLS、客户端认证、路由生命周期和 Desktop 端到端兼容性需要实现与实测。 [Relay Hub 示例](../examples/config/mcp-relay-public-v2.toml) · [Relay Agent 与 MCP 上游示例](../examples/config/mcp-relay-local-upstream-v2.toml)
+
+- **身份与范围**。Hub 对客户端认证并执行路由级限流。Relay 连接凭据、Web Agent 凭据和本机 MCP 凭据分别管理。首期支持 HTTPS 下的短期、可撤销 Bearer 凭据，按路由和权限签发，默认只读。开启编辑时在 Desktop 明确授权源码写入、启动和停止的范围。Desktop 在 Worker 执行前再次检查路由授权、工具权限和绑定代次。客户端凭据、Relay Token 和本机 MCP Token 不写入工具结果或日志。只接受 OAuth 的客户端需另行适配。
+- **转发与会话**。只开放登记的 MCP 路径，目的地固定为该 Desktop 实例的 loopback MCP。转发初始化、POST 和会话终止所需的头、状态与响应；按 Desktop 宣告的能力处理 SSE，若未提供 GET 事件流则保留正确的 HTTP 语义。路由、客户端身份与 MCP 会话关联。断线时返回可识别的不可用状态，重新连接后允许重新初始化，变更调用由客户端先查状态再决定是否重试。
+- **撤销**。绑定切换、凭据撤销、路由到期或关闭 MCP 后，旧路由拒绝新调用。Hub 发现 Desktop 离线时停止转发；Desktop 也独立拒绝失效授权。重新发布签发新路由和客户端凭据。公网接入复用现有工作区文件边界及共享运行时保护。
 
 ## 第一阶段的 MCP 工具
 
@@ -81,7 +89,7 @@ ChatGPT 网页经 Secure MCP Tunnel 到本机服务；Desktop 到远端主机使
 
 ## 第一阶段验收
 
-在具备写工具权限的 ChatGPT 网页工作区运行以下用例。保留脱敏后的 Desktop 版本、运行包标识、绑定 ID、工具记录和实际响应。
+在具备写工具权限的 ChatGPT 网页工作区运行以下用例，并从独立网络使用一个支持 HTTPS MCP 和 Bearer 认证的非 ChatGPT Web Agent 验证公网 Relay。保留脱敏后的 Desktop 版本、运行包标识、绑定 ID、工具记录和实际响应。
 
 | 用例 | 操作 | 通过标准 |
 | --- | --- | --- |
@@ -91,5 +99,7 @@ ChatGPT 网页经 Secure MCP Tunnel 到本机服务；Desktop 到远端主机使
 | 启动失败与恢复 | 保存上述可运行基线，再通过 MCP 引入一个能通过配置校验但无法启动的源码错误 | 启动报告失败，日志支持定位；同一 Desktop 会话内恢复后重新启动，业务响应与基线一致 |
 | 边界与冲突 | 尝试越界路径、符号链接、访问另一应用或共享配置；预览后外部修改文件；切换绑定后重用旧代次和预览 | 全部请求被拒绝，原文件与其他应用保持原样；模型能按错误提示重读上下文或重新预览 |
 | 会话撤销 | 关闭 Desktop MCP，再用原连接发起调用 | 原连接无法继续访问；重新开启后可在新会话重新获取绑定 |
+| Relay 公网直连 | 开启 Relay 发布，从独立网络让 Web Agent 通过公开 HTTPS URL 初始化、列出工具并调用 `context_get`。在专用测试环境显式开启编辑后执行一次修改及业务验证 | 只读凭据调用写工具被拒绝，编辑授权可跑通同一开发闭环；凭据缺失、失效或属于另一条路由时拒绝访问；会话头和所用响应模式正常传递 |
+| Relay 断开与撤销 | 暂断 Desktop 到 Hub 的连接，重连后重新初始化。随后切换绑定或撤销路由 | 离线时返回明确的不可用状态，恢复后可重新连接。撤销后旧 URL、凭据和会话无法调用，也无法访问新绑定 |
 
-第一阶段交付包括 Desktop 绑定入口、工具契约增量、版本化开发参考、模板 `AGENTS.md`、`vhttpd-develop` Skill 和上述验收记录。远端发布、运行时升级与接管采用后续阶段各自的验收。
+第一阶段交付包括 Desktop 绑定入口、Relay 公网发布与撤销、工具契约增量、版本化开发参考、模板 `AGENTS.md`、`vhttpd-develop` Skill 和上述验收记录。远端发布、运行时升级与接管采用后续阶段各自的验收。
