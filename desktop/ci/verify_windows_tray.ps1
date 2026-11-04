@@ -4,6 +4,7 @@ $ErrorActionPreference = 'Stop'
 Add-Type -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
+using System.Text;
 
 public static class TrayCheck {
     [StructLayout(LayoutKind.Sequential)]
@@ -24,12 +25,29 @@ public static class TrayCheck {
     public static extern bool IsIconic(IntPtr hwnd);
     [DllImport("user32.dll")]
     public static extern IntPtr GetForegroundWindow();
+    public delegate bool WindowVisitor(IntPtr hwnd, IntPtr data);
+    [DllImport("user32.dll")]
+    private static extern bool EnumThreadWindows(uint thread, WindowVisitor visit, IntPtr data);
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr hwnd, IntPtr process);
+    [DllImport("user32.dll")]
+    private static extern bool IsWindowVisible(IntPtr hwnd);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    public static extern IntPtr FindWindow(string type, string title);
+    private static extern int GetClassNameW(IntPtr hwnd, StringBuilder name, int size);
     [DllImport("user32.dll")]
     private static extern bool PostMessageW(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam);
     [DllImport("user32.dll")]
-    private static extern void keybd_event(byte key, byte scan, uint flags, UIntPtr extra);
+    private static extern IntPtr SendMessageW(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam);
+    [DllImport("user32.dll")]
+    private static extern int GetMenuItemCount(IntPtr menu);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int GetMenuStringW(IntPtr menu, uint item, StringBuilder title, int size, uint flags);
+    [DllImport("user32.dll")]
+    private static extern bool GetMenuItemRect(IntPtr hwnd, IntPtr menu, uint item, out Rect rect);
+    [DllImport("user32.dll")]
+    private static extern bool SetCursorPos(int x, int y);
+    [DllImport("user32.dll")]
+    private static extern void mouse_event(uint flags, uint x, uint y, uint data, UIntPtr extra);
 
     public static bool HasIcon(IntPtr window) {
         var icon = new IconId { Window = window, Id = 1 };
@@ -40,9 +58,34 @@ public static class TrayCheck {
     public static bool OpenMenu(IntPtr window) {
         return PostMessageW(window, 0x8000 + 78, new IntPtr(1), new IntPtr(0x202));
     }
-    public static void Key(byte key) {
-        keybd_event(key, 0, 0, UIntPtr.Zero);
-        keybd_event(key, 0, 2, UIntPtr.Zero);
+    public static IntPtr Popup(IntPtr owner) {
+        var found = IntPtr.Zero;
+        EnumThreadWindows(GetWindowThreadProcessId(owner, IntPtr.Zero), (window, data) => {
+            var name = new StringBuilder(32);
+            GetClassNameW(window, name, name.Capacity);
+            if (name.ToString() != "#32768" || !IsWindowVisible(window)) return true;
+            found = window;
+            return false;
+        }, IntPtr.Zero);
+        return found;
+    }
+    public static void ClickMenuItem(IntPtr popup, string title) {
+        var menu = SendMessageW(popup, 0x1E1, IntPtr.Zero, IntPtr.Zero); // MN_GETHMENU
+        int count = GetMenuItemCount(menu);
+        for (uint i = 0; i < count; ++i) {
+            var label = new StringBuilder(128);
+            GetMenuStringW(menu, i, label, label.Capacity, 0x400); // MF_BYPOSITION
+            if (label.ToString() != title) continue;
+            Rect rect;
+            if (!GetMenuItemRect(IntPtr.Zero, menu, i, out rect) ||
+                !SetCursorPos((rect.Left + rect.Right) / 2, (rect.Top + rect.Bottom) / 2)) {
+                throw new Exception("Cannot locate tray menu row: " + title);
+            }
+            mouse_event(2, 0, 0, 0, UIntPtr.Zero);
+            mouse_event(4, 0, 0, 0, UIntPtr.Zero);
+            return;
+        }
+        throw new Exception("Missing tray menu row: " + title);
     }
 }
 '@
@@ -54,13 +97,11 @@ function Wait-TrayCondition([scriptblock]$Condition, [string]$Failure, [int]$Sec
     } while ((Get-Date) -lt $deadline)
     throw $Failure
 }
-function Invoke-TrayItem([byte]$NavigationKey) {
+function Invoke-TrayItem([string]$Title) {
     if (![TrayCheck]::OpenMenu($window)) { throw 'Cannot deliver shell click callback' }
-    Wait-TrayCondition { [TrayCheck]::FindWindow('#32768', $null) -ne [IntPtr]::Zero } 'Native tray popup did not appear'
-    [TrayCheck]::Key($NavigationKey)
-    Start-Sleep -Milliseconds 200
-    [TrayCheck]::Key(0x0D)
-    Wait-TrayCondition { [TrayCheck]::FindWindow('#32768', $null) -eq [IntPtr]::Zero } 'Native tray popup did not close'
+    Wait-TrayCondition { [TrayCheck]::Popup($window) -ne [IntPtr]::Zero } 'Native tray popup did not appear'
+    [TrayCheck]::ClickMenuItem([TrayCheck]::Popup($window), $Title)
+    Wait-TrayCondition { [TrayCheck]::Popup($window) -eq [IntPtr]::Zero } "Native tray popup did not close after clicking $Title"
 }
 
 $Process.Refresh()
@@ -69,14 +110,14 @@ if ($window -eq [IntPtr]::Zero) { throw 'Extracted Desktop HWND is missing' }
 Wait-TrayCondition { [TrayCheck]::HasIcon($window) } 'Windows Shell did not register the tray icon'
 [TrayCheck]::ShowWindowAsync($window, 6) | Out-Null
 Wait-TrayCondition { [TrayCheck]::IsIconic($window) } 'Workbench did not minimize'
-Invoke-TrayItem 0x24
+Invoke-TrayItem '打开工作台'
 Wait-TrayCondition { ![TrayCheck]::IsIconic($window) -and [TrayCheck]::GetForegroundWindow() -eq $window } 'Tray Open did not restore the foreground window'
-Invoke-TrayItem 0x23
+Invoke-TrayItem '退出工作台'
 if (!$Process.WaitForExit(30000) -or $Process.ExitCode -ne 0) { throw 'Tray Quit did not exit cleanly' }
 Wait-TrayCondition { ![TrayCheck]::HasIcon($window) } 'Tray icon remained registered after Quit'
 @{
     shell_icon = 'passed'
-    menu = 'native popup opened via shell click callback'
+    menu = 'native popup opened via shell click callback; menu rows selected by pointer'
     restore_foreground = 'passed'
     quit_and_remove_icon = 'passed'
 } | ConvertTo-Json | Set-Content "$ResultDirectory/tray-acceptance.json"
