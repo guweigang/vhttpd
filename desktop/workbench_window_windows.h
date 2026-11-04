@@ -3,6 +3,8 @@
 #include <windows.h>
 #include <commctrl.h>
 
+static const wchar_t vhttpd_workbench_font_family[] = L"Sarasa Term SC";
+
 static int vhttpd_workbench_register_font_windows(const wchar_t *path) {
     return AddFontResourceExW(path, FR_PRIVATE, NULL);
 }
@@ -29,7 +31,7 @@ static double vhttpd_workbench_field_line_height(void) {
     int dpi = GetDeviceCaps(dc, LOGPIXELSY);
     HFONT font = CreateFontW(-MulDiv(105,dpi,720),0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,
         DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,
-        DEFAULT_PITCH | FF_DONTCARE,L"Noto Sans CJK SC");
+        DEFAULT_PITCH | FF_DONTCARE,vhttpd_workbench_font_family);
     HGDIOBJ previous = font ? SelectObject(dc,font) : NULL;
     TEXTMETRICW metrics;
     cached = GetTextMetricsW(dc,&metrics) ? (metrics.tmHeight + 2) * 96.0 / dpi : 18;
@@ -45,22 +47,19 @@ static int vhttpd_workbench_verify_private_fonts(void) {
     HDC dc = GetDC(NULL);
     if (!dc) return 0;
     int valid = 1;
-    const wchar_t *families[] = {L"Noto Sans CJK SC", L"Noto Sans CJK SC", L"Roboto Mono"};
-    for (int i=0;i<3;++i) {
+    for (int i=0;i<2;++i) {
         HFONT font = CreateFontW(-14,0,0,0,i==1 ? FW_BOLD : FW_NORMAL,FALSE,FALSE,FALSE,
-            DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,DEFAULT_QUALITY,DEFAULT_PITCH,families[i]);
+            DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,DEFAULT_QUALITY,DEFAULT_PITCH,vhttpd_workbench_font_family);
         HGDIOBJ previous = SelectObject(dc,font);
         wchar_t actual[128] = {0};
         TEXTMETRICW metrics;
         GetTextFaceW(dc,128,actual);
-        if (wcscmp(actual,families[i]) != 0 || !GetTextMetricsW(dc,&metrics) || (i==1 && metrics.tmWeight < 700)) valid=0;
-        if (i<2) {
-            const wchar_t sample[] = L"项目 中文 日本語 한국어 SSH vjsx 123";
-            WORD glyphs[sizeof(sample)/sizeof(wchar_t)] = {0};
-            int count = (int)(sizeof(sample)/sizeof(wchar_t))-1;
-            if (GetGlyphIndicesW(dc,sample,count,glyphs,GGI_MARK_NONEXISTING_GLYPHS)==GDI_ERROR) valid=0;
-            for (int j=0;j<count;++j) if (glyphs[j]==0xffff) valid=0;
-        }
+        if (wcscmp(actual,vhttpd_workbench_font_family) != 0 || !GetTextMetricsW(dc,&metrics) || (i==1 && metrics.tmWeight < 700)) valid=0;
+        const wchar_t sample[] = L"\u9879\u76ee \u4e2d\u6587 \u65e5\u672c\u8a9e \ud55c\uad6d\uc5b4 SSH vjsx 123";
+        WORD glyphs[sizeof(sample)/sizeof(wchar_t)] = {0};
+        int count = (int)(sizeof(sample)/sizeof(wchar_t))-1;
+        if (GetGlyphIndicesW(dc,sample,count,glyphs,GGI_MARK_NONEXISTING_GLYPHS)==GDI_ERROR) valid=0;
+        for (int j=0;j<count;++j) if (glyphs[j]==0xffff) valid=0;
         SelectObject(dc,previous);
         DeleteObject(font);
     }
@@ -200,7 +199,7 @@ static int vhttpd_workbench_choose_environment(void *window, void *label_table,
     style.scale = vhttpd_workbench_windows_scale();
     style.font = CreateFontW(-(int)(14*style.scale),0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,
         DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,
-        DEFAULT_PITCH,L"Noto Sans CJK SC");
+        DEFAULT_PITCH,vhttpd_workbench_font_family);
     style.width = (UINT)(220*style.scale);
     HDC dc = GetDC(owner);
     if (dc) {
