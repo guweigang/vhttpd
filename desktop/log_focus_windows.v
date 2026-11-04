@@ -13,6 +13,10 @@ fn C.vhttpd_workbench_verify_private_fonts() int
 fn configure_workbench_window(handle voidptr) {
 	if handle != unsafe { nil } {
   C.vhttpd_workbench_configure_windows(handle)
+		tray_ci_trace('window ready, register tray')
+		app := unsafe { workshop }
+		configure_workbench_tray(app.brand_mark, @VMODROOT)
+		tray_ci_trace('tray registered')
 		if marker := os.getenv_opt('VHTTPD_DESKTOP_CI_READY') {
 			if C.vhttpd_workbench_verify_private_fonts() == 0 {
 				eprintln('Bundled CJK/mono font probe failed')

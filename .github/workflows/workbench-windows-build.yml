@@ -166,7 +166,12 @@ jobs:
           try {
             $deadline = (Get-Date).AddSeconds(30)
             while (!(Test-Path $env:VHTTPD_DESKTOP_CI_READY) -and !$process.HasExited -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 200; $process.Refresh() }
-            if (!(Test-Path $env:VHTTPD_DESKTOP_CI_READY)) { throw 'Full Desktop HWND did not become ready' }
+            if (!(Test-Path $env:VHTTPD_DESKTOP_CI_READY)) {
+              $process.Refresh()
+              if ($process.HasExited) { Write-Host "Desktop exit code: $($process.ExitCode)" }
+              Get-Content "$output/desktop-stderr.log" -ErrorAction SilentlyContinue
+              throw 'Full Desktop HWND did not become ready'
+            }
             Start-Sleep -Seconds 2
             $process.Refresh()
             if ($process.HasExited) { throw 'Full Desktop exited before close request' }

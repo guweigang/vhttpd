@@ -183,6 +183,7 @@ mut:
 const workshop = &Workshop{}
 
 fn main() {
+	tray_ci_trace('entered main')
 	if os.args.len == 2 && os.args[1] == '--version' && os.getenv('VHTTPD_SSH_ASKPASS') != '1' {
 		println('vhttpd Desktop ' + desktop_version)
 		return
@@ -239,13 +240,16 @@ fn main() {
 		return
 	}
 	mut app := unsafe { workshop }
+	tray_ci_trace('configured startup')
 	app.owner_pid = os.getpid()
+	tray_ci_trace('configure fonts')
 	configure_workbench_fonts() or { app.notice = err.msg() }
 	app.binary = host.selected_runtime(os.executable(), root) or {
 		app.notice = err.msg()
 		host.workbench_binary(os.executable(), root)
 	}
 	$if !linux { app.inspect_binary(app.binary, false) }
+	tray_ci_trace('resolved runtime')
 	app.brand_mark = host.workbench_brand_mark(os.executable(), root)
 	app.registry = os.getenv_opt('VHTTPD_DESKTOP_REGISTRY') or { os.join_path(host.workbench_data_dir(), 'projects.json') }
 	// Existing checkout users keep their registrations when upgrading to the app.
@@ -267,6 +271,7 @@ fn main() {
 		[]host.SharedRelay{}
 	}
 	app.reload_remote_profiles()
+	tray_ci_trace('loaded data')
 	app.remote_worker = host.new_remote_worker()
 	app.remote_servers = host.load_remote_servers() or { app.notice = err.msg(); []host.RemoteServer{} }
 	app.server_worker = host.new_server_worker()
@@ -275,16 +280,19 @@ fn main() {
 	$if !linux {
 		if app.projects.len > 0 { app.select_current() }
 	}
+	tray_ci_trace('started workers')
 	C.atexit(cleanup)
  $if windows { C.vhttpd_workbench_prepare_windows_display(); app.brand_mark = windows_brand_asset(app.brand_mark) }
+	tray_ci_trace('declare menus')
 	app.refresh_workbench_menus(ui2.screen(workbench_paper, []))
-	configure_workbench_tray(app.brand_mark, root)
+	$if !windows { configure_workbench_tray(app.brand_mark, root) }
 	$if windows { spawn workbench_refresh_loop(app.refresh_stop, ui2.request_poll_refresh) } $else { spawn workbench_refresh_loop(app.refresh_stop, ui2.request_refresh) }
 	ui2.on_key(workbench_key)
 	ui2.on_key_event(workbench_physical_key)
 	ui2.on_window_ready(configure_workbench_window)
 	$if windows {
-  scale := windows_display_scale()
+  tray_ci_trace('launch window')
+	scale := windows_display_scale()
   ui2.run_window('vhttpd · 本地工作台',int(980*scale),int(740*scale),build_window,handle_event)
  } $else $if linux {
 		configure_linux_fonts()
@@ -1029,4 +1037,8 @@ fn workbench_bounds() ui2.Rect {
 fn (mut app Workshop) close_auxiliary_project_views() {
 	app.show_takeover = false
 	app.show_relay_monitor = false
+}
+
+fn tray_ci_trace(stage string) {
+	if os.getenv('VHTTPD_DESKTOP_CI_READY') != '' { eprintln(stage) }
 }
