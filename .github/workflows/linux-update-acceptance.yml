@@ -1,16 +1,12 @@
 name: Linux Workbench update fixture
 
 on:
-  workflow_dispatch:
-    inputs:
-      build_run:
-        description: Successful ordinary Linux build run
-        required: true
-        type: string
-      source_sha:
-        description: Full source SHA of ordinary Linux build
-        required: true
-        type: string
+  push:
+    branches: [codex/linux-update-fixture-20261105]
+
+env:
+  BUILD_RUN: '41971175916'
+  SOURCE_SHA: 53ec4abbfd3ca17ee9cbe2961efe942d89f57db3
 
 permissions:
   contents: read
@@ -27,23 +23,22 @@ jobs:
           - runner: ubuntu-24.04-arm
             arch: arm64
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 15
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
       - name: Verify ordinary build identity
         env:
           GH_TOKEN: ${{ github.token }}
-          BUILD_RUN: ${{ inputs.build_run }}
-          SOURCE_SHA: ${{ inputs.source_sha }}
         run: |
           [[ "$BUILD_RUN" =~ ^[0-9]+$ && "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          gh run watch "$BUILD_RUN" --repo "$GITHUB_REPOSITORY" --interval 30 --exit-status
           gh run view "$BUILD_RUN" --repo "$GITHUB_REPOSITORY" --json headSha,conclusion,workflowName |
             jq -e --arg sha "$SOURCE_SHA" '.headSha == $sha and .conclusion == "success" and .workflowName == "Workbench Linux Runtime"'
       - uses: actions/download-artifact@v4
         with:
           name: workbench-linux-${{ matrix.arch }}
           path: candidate
-          run-id: ${{ inputs.build_run }}
+          run-id: ${{ env.BUILD_RUN }}
           github-token: ${{ github.token }}
       - name: Install test-only X11 and browser tools
         run: |
