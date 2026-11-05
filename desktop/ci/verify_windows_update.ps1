@@ -7,7 +7,19 @@ using System;
 using System.Runtime.InteropServices;
 using System.Text;
 public static class UpdateCheck {
+    [StructLayout(LayoutKind.Sequential)] struct Rect { public int Left, Top, Right, Bottom; }
     public delegate bool Visitor(IntPtr hwnd, IntPtr data);
+    [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr window, out Rect rect);
+    [DllImport("user32.dll")] static extern bool SetCursorPos(int x, int y);
+    [DllImport("user32.dll")] static extern void mouse_event(uint flags, uint x, uint y, uint data, UIntPtr extra);
+    public static bool Click(IntPtr control) {
+        Rect rect;
+        if (!GetWindowRect(control, out rect) || rect.Right <= rect.Left || rect.Bottom <= rect.Top) return false;
+        if (!SetCursorPos((rect.Left+rect.Right)/2, (rect.Top+rect.Bottom)/2)) return false;
+        mouse_event(2, 0, 0, 0, UIntPtr.Zero);
+        mouse_event(4, 0, 0, 0, UIntPtr.Zero);
+        return true;
+    }
     [DllImport("user32.dll")] static extern IntPtr GetMenu(IntPtr hwnd);
     [DllImport("user32.dll")] static extern IntPtr GetSubMenu(IntPtr menu, int pos);
     [DllImport("user32.dll")] static extern int GetMenuItemCount(IntPtr menu);
@@ -61,7 +73,7 @@ do {
 } while ((Get-Date) -lt $deadline)
 if ($version -eq [IntPtr]::Zero -or $button -eq [IntPtr]::Zero) { throw 'Update version or GitHub button missing' }
 Write-Host 'PASS: native settings displays Desktop 0.2.0 and GitHub button.'
-if (![UpdateCheck]::PostMessageW($button, 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)) { throw 'Cannot click GitHub button' }
+if (![UpdateCheck]::Click($button)) { throw 'Cannot click GitHub button' }
 
 $expected = 'https://github.com/guweigang/vhttpd/releases/tag/desktop-v0.2.0'
 $deadline = (Get-Date).AddSeconds(30)

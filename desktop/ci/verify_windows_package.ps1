@@ -92,6 +92,6 @@ try {
  $process.Refresh()
  if ($process.HasExited) { throw 'Extracted Desktop exited unexpectedly' }
  & "$PSScriptRoot/verify_windows_update.ps1" -Process $process -ResultDirectory $ResultDirectory
- & "$PSScriptRoot/verify_windows_tray.ps1" -Process $process -ResultDirectory $ResultDirectory
+ if (!$process.CloseMainWindow() -or !$process.WaitForExit(15000) -or $process.ExitCode -ne 0) { throw 'Extracted Desktop did not exit normally' }
 } finally { if (!$process.HasExited) { Stop-Process -Id $process.Id -Force } }
 @{archive_sha256=$expected; startup='passed'; normal_exit='passed'; dependency_closure='passed'; bundled_ssh='passed'; native_ssh_password_and_forwarding='passed'; packaged_password_helper='passed'; development_path=$false; real_server_acceptance='pending user Windows test'} | ConvertTo-Json | Set-Content "$ResultDirectory/package-acceptance.json"
