@@ -23,7 +23,7 @@ Agent 需要能发现目标版本提供的能力，查到使用契约，并在�
 | 应用脚本、兼容库与集成 | vjsx 参考，pipeline、微信云开发兼容、Codex Bot 模板和独立 `guidance_get` 主题，三个已安装的 DSH Skills | 微信真实登录、数据库及存储、已有云函数迁移和公网专项验收仍需补齐 |
 | Desktop 主机和环境管理 | 主机登记、连接、断开，环境发现与身份校验接入，以及环境创建、实例启停均已有 MCP 工具，并通过当前 Desktop 与 DSH 隔离环境验收 | 密码认证仍须在 Desktop 完成，首次主机指纹确认继续由 Desktop 管理；工具不接收私钥路径或密码 |
 | 运行包与发布 | 本地启停，远端应用发布及回滚、运行时升级及回滚；官方运行包发现、下载、安装、本机选择及恢复已通过当前 Desktop 与 DSH 验收；配置兼容性预检、应用安装与历史查询、共享 pipeline 路径变更及恢复 | 超出 pipeline 精确路径的共享配置变更 |
-| Relay 与流量接管 | 公网 MCP Relay 发布与回收、账号接管与释放；普通 Relay 连接库、配置、启停和恢复；已有手工 Relay 的字段编辑、独立预检、应用及 include 精确恢复；MySQL 数据库 Relay 专项探针，均有实际 Desktop 与 DSH 验收 | Relay 模式转换、字段删除、跨多个来源拆分定义的编辑；业务表、迁移及具体应用数据的专项验证 |
+| Relay 与流量接管 | 公网 MCP Relay 发布与回收、账号接管与释放；普通 Relay 连接库、配置、启停和恢复；手工 Relay 的字段编辑、Hub/Agent 转换、字段删除、多 include 来源变更及精确恢复；MySQL 专项探针，均有实际 Desktop 与 DSH 验收 | 非 WebSocket 载体、任意嵌套 options 修改及业务表、迁移和具体应用数据的专项验证 |
 | 运维诊断与恢复 | 本机和远端运行图、worker、provider、Relay、进程级 WebSocket 统计；远端应用日志、事件、安装身份、发布及升级历史、业务 GET/HEAD 验证 | 配置历史恢复、流式 HTTP 与 WebSocket 业务协议探针，以及更完整的受控运行计划替换 |
 
 ### MCP、指引与 Skills 的分工
@@ -158,6 +158,38 @@ DSH 安装包内的 `dsh-mcp-client` 通过本机 Streamable HTTP 调用 `applic
 - `vhttpd-debug` 按运行图、worker、provider 和 Relay 状态给出排查顺序。`vhttpd-deploy` 说明如何区分本机复现所用的包与远端包。
 - DSH 安装包内的 MCP 客户端通过 Streamable HTTP 实测。停机时读到运行包 0.9.0，诊断调用返回 `runtime_not_running`。启动后运行图返回 5 个节点、3 条边，另三类接口均返回结构化状态。测试环境未配置独立 worker、provider 实例或 Relay Agent，三类列表均为空。随后默认 Desktop MCP 自动回归通过。真实 Relay 的历史回归曾在长连接握手成功后遇到运行时启动请求 HTTP 504，根因和修复后的公网验收见下文。任意 Admin 路径作为 topic 被拒绝，测试实例已停止。
 
+### 2026-11-05 Relay 模式转换、字段删除与多文件编辑验收
+
+本批扩展既有 5 个编辑工具，绑定管理会话仍列出 93 个工具。实现见 [Relay 源编辑器](../desktop/host/mcp_relay_edit.v)、[执行与多文件恢复](../desktop/host/mcp_relays.v)、[本机停机恢复](../desktop/host/mcp_relays_local.v)、[工具参数与确认](../desktop/devmcp/ordinary_relays.v) 和 [运行时 include 合并](../src/config/runtime_plan_loader.v)。公开应用 Relay 不因此获得管理权限。
+
+| 入口 | 本批新增契约 |
+| --- | --- |
+| relay_config_get | 返回 sources 和 field_sources，定位同一 Relay 在多个 include 中各字段的物理来源；凭据和完整载体 URL 不返回。 |
+| relay_config_edit_prepare | updates 增加 mode 和 carrier；remove_fields 删除已有标量赋值，不用空值模拟删除。已有字段在原文件编辑，新字段进入 mode 所在文件；无 mode 时使用首次声明源。计划列出全部改变的 sources、自动删除字段及安全前后值。 |
+| relay_config_edit_preflight | 使用同一个 Admin changeset 预检完整多文件候选，固定完整源 revision、boot、目标和凭据引用；未预检不能应用。 |
+| relay_config_edit_apply / restore | 确认后先受理，再查询 relay_operation_get。发布、重启、生效检查及精确恢复覆盖全部改变的文件；本机和受管远端均支持运行时已停止时恢复。 |
+
+agent → hub 要有有效监听引用和认证，使用 WebSocket carrier，自动移除 url、autostart、reconnect_delay_ms。hub → agent 必须提供匹配 Relay ID 的已保存 connection_id，私下复制 Token 和 Agent URL，自动移除 listener、path、auth；按目标连接意图选择 autostart。只支持运行时已有的 hub/agent 角色与 WebSocket 载体，没有新增其他传输协议。数据库导出、接管或管线对角色的约束仍由完整预检检查。
+
+remove_fields 支持 mode、carrier、node_id、path、listener、autostart、max_channels、channel_buffer、reconnect_delay_ms、token、url、auth。删除与更新同一字段、重复删除、字段不存在及原始凭据/URL 输入均拒绝。必填字段删除仍须通过整环境校验。auth 认证引用参与安全预览，凭据只展示存在与否。普通表、带引号表名、inline 与 dotted 赋值的编辑/删除均用完整 TOML 语义比对约束；保留未编辑内容与注释。任意嵌套 options 修改、创建/删除物理文件及环境目录外来源不在工具范围。
+
+原运行时按 Relay ID 拒绝任何重复声明，不能读取字段分散的配置。本批增加字段来源记录，允许不同 include 贡献同一个 Relay 的不同顶层字段；重复字段即使值相等也拒绝，false/zero 不因默认值丢失。其他命名配置仍沿用原重复 ID 检查。Desktop 验证器与目标运行包均须包含该支持，旧包不能直接读取这种配置。运行包版本号仍为开发中的 0.9.0，验收以具体二进制摘要区分。
+
+多文件候选通过既有 Admin changeset 校验与发布。停机本机恢复复用 FileStore 的全量暂存、原文复查及普通失败补偿；远端恢复在核对全部成员、路径、完整 revision 和原文后先暂存全部文件，再替换，普通失败回退已替换文件。它们不声明跨文件崩溃原子性或 Desktop 重启后的恢复能力。计划和恢复记录仍限当前 Desktop 会话；全部应用和恢复会重启整个目标环境。
+
+实际验收使用更新后的 Workbench Update QA.app，界面绑定原 pipeqa 并签发管理连接；已安装 DSH 的真实 dsh-mcp-client 经 Streamable HTTP 执行写流程。DSH 桌面对话另实际调用 skill 重新加载新版 [vhttpd-deploy](../desktop/skills/vhttpd-deploy/SKILL.md) 与 [vhttpd-debug](../desktop/skills/vhttpd-debug/SKILL.md)，正确解释转换条件、自动删除、来源定位、冲突、旧包兼容性和恢复，并给出不含凭据的示例。完整写流程属于连接器验收，不将它记为模型自主执行全部写操作。
+
+- 复用本机原隔离环境与 Ubuntu 已有 mcp-shared-config-qa 实例，没有新建 VM、远端实例或独立 Hub 进程，没有改动 bodytest。两端 legacyedit 都预置为手工 mode.toml + options.toml，不带 MCP 标记。Relay 载体仍由本机 vhttpd 主动连接远端 55311 WebSocket；SSH 只用于 Desktop 管理。
+- DSH 经正常运行包预检、升级和回滚流程，在同一远端实例临时选择本批 Linux Boehm 构建。基线 HTTP → 远端 Hub → WebSocket → 本机 pipeqa 返回 200 / pipeline-ok。
+- 一次远端计划修改 mode.toml 中 path、options.toml 中 node_id，并删除 max_channels，发布后旧 Agent 流量失效。一次本机计划更新私有连接引用与 node_id/reconnect_delay_ms，并删除 channel_buffer；两个来源同计划发布，注册及 200 / pipeline-ok 恢复。读取确认两个字段的赋值均已删除。
+- 本机 Agent 转成 Hub 后，远端业务不再返回 200；对新本机路径执行非注册式认证 WebSocket 探测成功。再将 Hub 转回 Agent，恢复 registered 和真实业务 200。嵌套转换计划按逆序恢复，并核对相应角色及业务状态。
+- 重复提交返回同一操作 ID。旧多源计划在另一计划修改 node_id 后执行失败，temporary 值没有被覆盖。12 项拒绝用例覆盖未预检应用、非法模式/载体、原始 Token/URL、更新与删除冲突、未知或不存在字段、重复删除、小数数值、未知监听和来源路径注入。
+- 分别停止本机与远端运行时后，通过 MCP 恢复原多文件计划。完整 source_revision 都回到各自基线，Relay 业务和两端其他业务监听恢复。独立字节比对确认四个原 TOML 文件（含注释、凭据）完全一致；所有 MCP 结果中均未出现测试载体凭据。
+
+macOS 编辑、普通 Relay、片段合并与原有 include 覆盖测试通过；HTTP MCP 集成在允许本机监听的环境通过。Ubuntu 编辑、普通 Relay、片段合并与 include 覆盖四套测试通过，使用 /home/guweigang/v/v 0.5.2 d13ccdd、local-dev、GCC、gc none 和 -nocache。Linux 原 /usr/local/share/vhttpd/vjsx 版本与当前锁定提交不同，未修改它；复用已有干净的 /home/guweigang/vhttpd-db-probe-qa/vjsx 259620f 和原生 Linux QuickJS。Linux 交付验收包另以 GCC、Boehm 构建并通过 GC 校验。两份 Skill 格式检查和 DSH 实际加载通过。
+
+Desktop 主程序、内置运行时和两份 Skills 已更新，更新前包保留为 Workbench Before Structural Relay Edit.app。收尾通过 DSH 回滚远端原包并停止两端隔离运行时，恢复原根配置和连接库、移除测试 include，测试包保留在安装目录之外。临时 MCP、测试 SSH 与 Relay 监听回收后恢复原 default 环境。详见 [结构编辑验收证据](release-evidence/desktop-mcp-relay-structural-edit-2026-11-05.json)。
+
 ### 2026-11-05 已有手工 Relay 编辑与恢复验收
 
 本批新增 5 个本机管理 MCP 工具，当前绑定应用会话可列出 93 个工具。已有 Relay 不再要求 MCP 归属标记。实现见 [已有 Relay 编辑](../desktop/host/mcp_relay_edit.v)、[MCP 契约与确认](../desktop/devmcp/ordinary_relays.v)、[统一执行与恢复](../desktop/host/mcp_relays.v) 和 [本机恢复](../desktop/host/mcp_relays_local.v)。
@@ -170,7 +202,7 @@ DSH 安装包内的 `dsh-mcp-client` 通过本机 Streamable HTTP 调用 `applic
 | `relay_config_edit_apply` | Desktop 确认后先返回受理，查询 relay_operation_get 到终态；发布并重启整个已有环境，核对磁盘与生效版本。重复提交返回同一操作 ID。 |
 | `relay_config_edit_restore` | 在完整当前源仍匹配时恢复原始字节并验证生效。受管实例停止后也能恢复经过边界检查的 include 源，不需要先删除手工配置。 |
 
-本批支持 node_id、path、listener、autostart、max_channels、channel_buffer 和 reconnect_delay_ms。凭据与 Agent URL 只能通过匹配 Relay ID 的已保存 native connection_id 引用更新；源凭据默认原样保留。预检和应用会复查引用，防止批准后连接库变化导致使用错误凭据。mode/carrier 转换、字段删除、同一个 Relay 分散定义在多个源文件及环境目录外源文件不在本批范围，工具明确拒绝，整体 coverage 仍为 partial。
+本批支持 node_id、path、listener、autostart、max_channels、channel_buffer 和 reconnect_delay_ms。凭据与 Agent URL 只能通过匹配 Relay ID 的已保存 native connection_id 引用更新；源凭据默认原样保留。预检和应用会复查引用，防止批准后连接库变化导致使用错误凭据。该批结束时，模式转换、字段删除及同一 Relay 的多源定义尚不支持；这三项已由上方后续结构编辑批次完成。环境目录外源文件仍拒绝，整体 coverage 仍为 partial。
 
 编辑采用 TOML 标量位置替换，并用完整解析结果核对选定字段以外的配置保持一致。普通表、带引号的表名、inline 和 dotted 写法均有验证；缺少的允许字段会在对应作用域插入。保留注释、空白、私有值和其他配置。恢复保留整个原文件字节，并固定全环境版本，避免覆盖并发修改。应用、恢复和既有启停一样会重启环境中的全部应用；公开应用 Relay 不获得这些管理权限。
 
@@ -237,7 +269,7 @@ DSH 安装包内的 `dsh-mcp-client` 通过本机 Streamable HTTP 调用 `applic
 - 11 个拒绝用例涵盖错误认证、缺少凭据引用、Token/URL 输入、未知连接、非法标识、端口冲突、未知 Agent/计划、无效恢复和过期绑定。首轮实际 Desktop 探测曾短暂返回网络不可达，后续同地址探测及完整重跑通过；未将其误归因为认证或协议修复。
 - macOS 的 Relay 编排、共享连接库、远端目标和 MCP 服务四个测试套件通过，另补默认不创建 HTTP 转发路径的回归用例；Ubuntu Relay 编排和共享连接库两个套件通过，新增默认不暴露 HTTP 转发路径用例也已在 Ubuntu 复验。两份 Skill 的格式校验和已安装 DSH 加载通过。归属块保护、端口冲突、配置编译及启停后精确恢复均有单测。
 
-当前 Desktop 已更新为此生产构建，原包备份为 Workbench Before Ordinary Relay.app。部署 Skill 同时安装到 DSH 并由其实际加载。验收结束后已关闭临时 MCP，恢复原 default 0.9.0 环境并在界面确认运行中；隔离远端实例与测试 SSH 管理入口已停止，本机临时监听和远端 55311 监听均已关闭。结构化证据见 [普通 Relay 验收](release-evidence/desktop-mcp-ordinary-relay-2026-11-05.json)。该批次结束时数据库 Relay 专项探针尚未完成，其后续验收见上方记录；已有非 MCP 配置的字段编辑与恢复已由上方后续批次验收，模式转换等结构变更仍未完成，整体能力目录保持 partial。
+当前 Desktop 已更新为此生产构建，原包备份为 Workbench Before Ordinary Relay.app。部署 Skill 同时安装到 DSH 并由其实际加载。验收结束后已关闭临时 MCP，恢复原 default 0.9.0 环境并在界面确认运行中；隔离远端实例与测试 SSH 管理入口已停止，本机临时监听和远端 55311 监听均已关闭。结构化证据见 [普通 Relay 验收](release-evidence/desktop-mcp-ordinary-relay-2026-11-05.json)。该批次结束时数据库 Relay 专项探针尚未完成，其后续验收见上方记录；已有非 MCP 配置的字段编辑与恢复已由上方后续批次验收，模式转换、标量字段删除和分散 include 定义的后续验收见上方结构编辑记录，整体能力目录因其他未覆盖项保持 partial。
 
 ### 2026-11-05 运行包下载、安装与选择验收
 
