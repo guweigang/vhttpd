@@ -23,7 +23,7 @@ Agent 需要能发现目标版本提供的能力，查到使用契约，并在�
 | 应用脚本、兼容库与集成 | vjsx 参考，pipeline、微信云开发兼容、Codex Bot 模板和独立 `guidance_get` 主题，三个已安装的 DSH Skills | 微信真实登录、数据库及存储、已有云函数迁移和公网专项验收仍需补齐 |
 | Desktop 主机和环境管理 | 主机登记、连接、断开，环境发现与身份校验接入，以及环境创建、实例启停均已有 MCP 工具，并通过当前 Desktop 与 DSH 隔离环境验收 | 密码认证仍须在 Desktop 完成，首次主机指纹确认继续由 Desktop 管理；工具不接收私钥路径或密码 |
 | 运行包与发布 | 本地启停，远端应用发布及回滚、运行时升级及回滚；官方运行包发现、下载、安装、本机选择及恢复已通过当前 Desktop 与 DSH 验收；配置兼容性预检、应用安装与历史查询、共享 pipeline 路径变更及恢复 | 超出 pipeline 精确路径的共享配置变更 |
-| Relay 与流量接管 | 公网 MCP Relay 发布与回收、账号接管与释放；普通 Relay 本机及远端连接库写入、探测、Hub/Agent 配置、启停、状态与精确基线恢复；运行时 Relay 诊断 | 数据库 Relay 专项探针；既有非 MCP 管理配置的通用编辑 |
+| Relay 与流量接管 | 公网 MCP Relay 发布与回收、账号接管与释放；普通 Relay 连接库、配置、启停和恢复；MySQL 数据库 Relay 资源/导出发现、固定查询专项探针与分层失败诊断，已通过实际 Desktop 和 DSH 验收 | 既有非 MCP 管理配置的通用编辑；业务表、迁移及具体应用数据的专项验证 |
 | 运维诊断与恢复 | 本机和远端运行图、worker、provider、Relay、进程级 WebSocket 统计；远端应用日志、事件、安装身份、发布及升级历史、业务 GET/HEAD 验证 | 配置历史恢复、流式 HTTP 与 WebSocket 业务协议探针，以及更完整的受控运行计划替换 |
 
 ### MCP、指引与 Skills 的分工
@@ -158,6 +158,32 @@ DSH 安装包内的 `dsh-mcp-client` 通过本机 Streamable HTTP 调用 `applic
 - `vhttpd-debug` 按运行图、worker、provider 和 Relay 状态给出排查顺序。`vhttpd-deploy` 说明如何区分本机复现所用的包与远端包。
 - DSH 安装包内的 MCP 客户端通过 Streamable HTTP 实测。停机时读到运行包 0.9.0，诊断调用返回 `runtime_not_running`。启动后运行图返回 5 个节点、3 条边，另三类接口均返回结构化状态。测试环境未配置独立 worker、provider 实例或 Relay Agent，三类列表均为空。随后默认 Desktop MCP 自动回归通过。真实 Relay 的历史回归曾在长连接握手成功后遇到运行时启动请求 HTTP 504，根因和修复后的公网验收见下文。任意 Admin 路径作为 topic 被拒绝，测试实例已停止。
 
+### 2026-11-05 数据库 Relay 专项探针验收
+
+本批新增两个本机管理 MCP 工具，当前绑定会话共 88 个工具。实现见 [数据库 Relay 编排](../desktop/host/mcp_database_relays.v)、[工具契约](../desktop/devmcp/ordinary_relays.v)、[专用 Admin 入口](../src/admin_relay_database.v) 和 [固定查询结果校验](../src/relaydb/probe.v)。
+
+| 工具 | 契约 |
+| --- | --- |
+| `relay_database_resources_list` | 读取运行中的生效配置，列出数据库 Relay 客户端资源及 Hub 的 db-resource 导出。返回资源、Relay、路由、远端资源和导出访问模式，不返回数据库地址或凭据。 |
+| `relay_database_probe` | 只接受 resource_id 和目标绑定，通过已有 vhttpd Agent 载体执行固定 SELECT 1 AS relay_probe，验证 MySQL 常量结果。拒绝任意 SQL、URL、Token 和旧绑定。 |
+
+专项探针复用本机主动建立的全双工 WebSocket 连接，不注册第二个 Agent。查询与临时数据库客户端的关闭固定在同一载体代次；已发送的查询不自动重放，不修改配置、不重启。运行时只允许 Admin Token 认证访问 POST /admin/runtime/relay/database/probe，拒绝额外参数；未经认证的实际请求返回 403。原始驱动错误、SQL 和凭据不进入 MCP 结果。
+
+失败以 configuration、carrier、transport、database、response、runtime 分层。database 表示数据库连接、认证或执行失败的安全合并类别，不能仅凭此类别断言密码错误。transport 表示路由、远端导出、载体变化或超时等未完成交付，结果不明时先检查运行事件。固定查询成功证明链路和驱动能够执行常量查询，不代表应用表结构、迁移、其他语句权限或业务数据正确。
+
+已更新 [vhttpd-deploy](../desktop/skills/vhttpd-deploy/SKILL.md) 与 [vhttpd-debug](../desktop/skills/vhttpd-debug/SKILL.md)，并安装到 DSH。DSH 桌面对话实际调用 skill 工具重新加载两份文案，正确说明固定查询、载体复用、临时客户端关闭、六层诊断及业务验证边界。两份 Skill 格式校验与 DSH 安装包的实际 Skill 加载器均通过，Desktop guidance_get(debug) 也返回新流程。
+
+实际 MCP 验收使用更新后的 Workbench Update QA.app 界面绑定隔离 pipeqa 并签发的连接，DSH 安装包内真实 dsh-mcp-client 经 Streamable HTTP 调用工具。该部分属于连接器执行，模型对话另验收 Skills，不将全部写流程记作模型自主完成。测试配置由受控脚本预置。
+
+- 复用本机既有工作流和 Ubuntu 的 mcp-shared-config-qa，没有新建 VM、远端实例或独立 Hub 进程，没有修改 bodytest。远端临时 Relay 监听 55311，本机主动连接 /vhttpd/relay。数据库使用一次性 MySQL 8 容器，仅绑定 OrbStack 私有网卡，测试用户只有 SELECT 权限。
+- 实际发现 4 个本机 Relay 数据库资源及 2 个远端导出。正常资源返回 ok=true、stage=query；MySQL 自身的语句统计确认 SELECT ? AS relay_probe 共执行 3 次。
+- 错误数据库凭据返回 database；错误路由、未导出的远端资源返回 transport；未知本机资源返回 configuration。停止 Agent 后返回 carrier，重新启动同一环境并注册后查询再次成功。SQL、Token、URL 参数和旧绑定共 4 项拒绝用例通过。
+- 两端原业务监听仍返回 HTTP 200，本机响应包含 pipeline-ok。查询与启停恢复均通过，最后由 DSH 停止两端隔离运行时。
+- 远端旧 0.9.1 测试包缺少专用 Admin 入口，实际返回 runtime_probe_endpoint_unavailable_upgrade_required。测试中还观察到其路由及载体标识异常，未将当时的传输失败误记为数据库认证失败。通过 DSH 的运行包预检、切换和回滚工具，在同一个实例临时切换到当前源码的 Linux Boehm 构建完成全部验收，随后回滚原包。当前源码版本字符串为 0.9.0，隔离包标签为 v0.9.0-dev.g0e984283；这是测试构建，不是新的官方发布。支持与否以专用入口实际响应判断。
+- macOS 四个 relaydb 测试套件通过，MCP HTTP 服务套件因 loopback 沙箱限制重跑后通过。Ubuntu 五个套件、完整运行时类型检查通过；MySQL 启用的 Linux 与 macOS 运行包均验证 Boehm GC。Linux 使用 /home/guweigang/v/v 0.5.2 d13ccdd、local-dev 与 GCC；独立原生依赖副本固定到项目要求的 vjsx 提交，未改变 VM 原有 V/vjsx 工作区。
+
+当前 Desktop 的生产主程序、内置运行时与 Skills 已更新，旧应用备份为 Workbench Before Database Relay.app。最终恢复原 default 环境并在界面确认运行中；远端运行包标记及配置摘要恢复原值，两端临时端口关闭，MySQL 容器、测试 SSH 入口及临时 MCP 凭据已回收。新增 Linux 测试包保留在已安装目录之外。详见 [数据库 Relay 结构化验收证据](release-evidence/desktop-mcp-database-relay-2026-11-05.json)。
+
 ### 2026-11-05 普通 Relay 连接库、配置与启停验收
 
 本批新增 12 个本机管理 MCP 工具，已绑定会话当前提供 86 个工具。实现见 [普通 Relay 工具契约](../desktop/devmcp/ordinary_relays.v)、[Host 编排](../desktop/host/mcp_relays.v)、[配置生成](../desktop/host/mcp_relays_config.v) 和 [本机 Worker](../desktop/host/mcp_relays_local.v)。
@@ -182,7 +208,7 @@ DSH 安装包内的 `dsh-mcp-client` 通过本机 Streamable HTTP 调用 `applic
 - 11 个拒绝用例涵盖错误认证、缺少凭据引用、Token/URL 输入、未知连接、非法标识、端口冲突、未知 Agent/计划、无效恢复和过期绑定。首轮实际 Desktop 探测曾短暂返回网络不可达，后续同地址探测及完整重跑通过；未将其误归因为认证或协议修复。
 - macOS 的 Relay 编排、共享连接库、远端目标和 MCP 服务四个测试套件通过，另补默认不创建 HTTP 转发路径的回归用例；Ubuntu Relay 编排和共享连接库两个套件通过，新增默认不暴露 HTTP 转发路径用例也已在 Ubuntu 复验。两份 Skill 的格式校验和已安装 DSH 加载通过。归属块保护、端口冲突、配置编译及启停后精确恢复均有单测。
 
-当前 Desktop 已更新为此生产构建，原包备份为 Workbench Before Ordinary Relay.app。部署 Skill 同时安装到 DSH 并由其实际加载。验收结束后已关闭临时 MCP，恢复原 default 0.9.0 环境并在界面确认运行中；隔离远端实例与测试 SSH 管理入口已停止，本机临时监听和远端 55311 监听均已关闭。结构化证据见 [普通 Relay 验收](release-evidence/desktop-mcp-ordinary-relay-2026-11-05.json)。数据库 Relay 专项探针和既有非 MCP 配置的通用编辑仍未完成，能力目录保持 partial。
+当前 Desktop 已更新为此生产构建，原包备份为 Workbench Before Ordinary Relay.app。部署 Skill 同时安装到 DSH 并由其实际加载。验收结束后已关闭临时 MCP，恢复原 default 0.9.0 环境并在界面确认运行中；隔离远端实例与测试 SSH 管理入口已停止，本机临时监听和远端 55311 监听均已关闭。结构化证据见 [普通 Relay 验收](release-evidence/desktop-mcp-ordinary-relay-2026-11-05.json)。该批次结束时数据库 Relay 专项探针尚未完成，其后续验收见上方记录；既有非 MCP 配置的通用编辑仍未完成，整体能力目录保持 partial。
 
 ### 2026-11-05 运行包下载、安装与选择验收
 
@@ -294,7 +320,7 @@ DSH 安装包内的 MCP 客户端使用实际新版 Desktop 界面签发的本�
 
 验收后关闭临时 MCP 并清除客户端凭据，停止隔离 Ubuntu 实例和测试管理监听。更新后的 Desktop 已回到原数据目录，原 `default` 实例恢复运行。
 
-仍待完成的范围以本节上方能力清单和 MCP 的 `coverage.remaining` 为准。当前仍包括普通 Relay 写入及数据库链路探针、更广的共享配置变更、配置历史恢复和流式协议探针。主机与实例、本机运行包下载、安装及选择的后续验收见上方记录；密码认证和首次指纹确认仍由 Desktop 提供。微信真实账号、数据库及存储与已有项目迁移属于待完成的专项验收。
+仍待完成的范围以本节上方能力清单和 MCP 的 `coverage.remaining` 为准。该批次结束时普通 Relay 写入与数据库链路探针尚未完成，后续验收见上方对应记录。当前仍待补齐更广的共享配置变更、配置历史恢复和流式协议探针。主机与实例、本机运行包下载、安装及选择的后续验收见上方记录；密码认证和首次指纹确认仍由 Desktop 提供。微信真实账号、数据库及存储与已有项目迁移属于待完成的专项验收。
 
 ### 远端共享环境配置
 
