@@ -71,12 +71,18 @@ jobs:
       - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756
         with:
           arch: x64
-      - uses: actions/cache@v4
+      - uses: actions/cache/restore@v4
+        id: openssl-cache
         with:
           path: .cache/vcpkg-binary-cache
           key: windows-workbench-openssl-msvc-${{ hashFiles('desktop/ci/windows-vcpkg.commit') }}
       - name: Prepare OpenSSL SDK using vjsx MSVC contract
         run: ./desktop/ci/prepare_windows_openssl.ps1
+      - uses: actions/cache/save@v4
+        if: steps.openssl-cache.outputs.cache-hit != 'true'
+        with:
+          path: .cache/vcpkg-binary-cache
+          key: ${{ steps.openssl-cache.outputs.cache-primary-key }}
       - name: Prepare pinned native V, QuickJS and build-local ui2
         id: toolchain
         run: |
@@ -138,9 +144,16 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw 'Windows icon resource compilation failed' }
           } finally { Pop-Location }
           $iconResource = '"' + "$output/workbench.res" + '"'
-          & v -prod -new-compiler -cc msvc -gc boehm -cflags $sdkCompatibility -ldflags $iconResource -subsystem windows -d "vhttpd_desktop_version=$desktopVersion" -d link_quickjs -d use_openssl -w -enable-globals `
+          & v -prod -new-compiler -cc msvc -gc boehm -cflags $sdkCompatibility -ldflags $iconResource -subsystem console -d "vhttpd_desktop_version=$desktopVersion" -d link_quickjs -d use_openssl -w -enable-globals `
             -path $path -o "$output/vhttpd-workbench.exe" desktop 2>&1 | Tee-Object "$output/desktop-build.log"
           if ($LASTEXITCODE -ne 0) { throw 'Full Desktop is not yet Windows-compatible; see desktop-build.log' }
+          # Use the wide CRT entry point so redirected CLI output survives.
+          # The GUI PE subsystem controls double-click launch without a console.
+          & editbin /SUBSYSTEM:WINDOWS "$output/vhttpd-workbench.exe"
+          if ($LASTEXITCODE -ne 0) { throw 'Windows GUI subsystem selection failed' }
+          if ((& dumpbin /HEADERS "$output/vhttpd-workbench.exe" | Out-String) -notmatch '\(Windows GUI\)') {
+            throw 'Desktop executable does not have the Windows GUI subsystem'
+          }
           & cl /nologo /O2 /W4 /utf-8 /std:c11 desktop/ci/windows_askpass.c /Fe:"$output/vhttpd-ssh-askpass.exe" /link /SUBSYSTEM:WINDOWS Ws2_32.lib Shell32.lib
           if ($LASTEXITCODE -ne 0) { throw 'Native GUI SSH helper build failed' }
 

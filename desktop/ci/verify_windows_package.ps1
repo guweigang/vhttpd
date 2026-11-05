@@ -18,7 +18,7 @@ $versionProcess = Start-Process $hostExe -ArgumentList '--version' -PassThru -Re
 try {
  if (!$versionProcess.WaitForExit(10000) -or $versionProcess.ExitCode -ne 0) { throw 'Desktop --version failed' }
 } finally { if (!$versionProcess.HasExited) { Stop-Process -Id $versionProcess.Id -Force } }
-if ((Get-Content $versionOutput -Raw).Trim() -ne "vhttpd Desktop $($metadata.version)") { throw 'Desktop CLI and package version disagree' }
+if (([string](Get-Content $versionOutput -Raw)).Trim() -ne "vhttpd Desktop $($metadata.version)") { throw 'Desktop CLI and package version disagree' }
 # Inspect every executable and DLL, not only the host's direct imports.
 $report = @()
 foreach ($binary in (Get-ChildItem $package -File -Recurse | Where-Object { $_.Extension -in @('.exe','.dll') })) {

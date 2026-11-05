@@ -5,21 +5,6 @@
 
 static const wchar_t vhttpd_workbench_font_family[] = L"Sarasa Term SC";
 
-/* The V GUI entry point reopens CRT stdout. For --version, preserve the
-   original pipe or file supplied by the process launcher. */
-static int vhttpd_workbench_write_redirected_stdout(const char *text, int len) {
-    STARTUPINFOW startup = {0};
-    startup.cb = sizeof(startup);
-    GetStartupInfoW(&startup);
-    if (!(startup.dwFlags & STARTF_USESTDHANDLES) || !startup.hStdOutput ||
-        startup.hStdOutput == INVALID_HANDLE_VALUE) return 0;
-    DWORD kind = GetFileType(startup.hStdOutput);
-    if (kind != FILE_TYPE_PIPE && kind != FILE_TYPE_DISK) return 0;
-    DWORD written = 0;
-    return WriteFile(startup.hStdOutput, text, (DWORD)len, &written, NULL) &&
-        written == (DWORD)len;
-}
-
 static int vhttpd_workbench_register_font_windows(const wchar_t *path) {
     return AddFontResourceExW(path, FR_PRIVATE, NULL);
 }

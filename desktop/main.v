@@ -191,12 +191,7 @@ const workshop = &Workshop{}
 
 fn main() {
 	if os.args.len == 2 && os.args[1] == '--version' && os.getenv('VHTTPD_SSH_ASKPASS') != '1' {
-		version_line := 'vhttpd Desktop ' + desktop_version
-		$if windows {
-			output := version_line + '\n'
-			if C.vhttpd_workbench_write_redirected_stdout(output.str, output.len) != 0 { return }
-		}
-		println(version_line)
+		println('vhttpd Desktop ' + desktop_version)
 		return
 	}
 	if os.getenv('VHTTPD_SSH_ASKPASS') == '1' {
