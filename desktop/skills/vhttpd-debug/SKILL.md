@@ -18,6 +18,10 @@ For a TOML pipeline, compare a matching and an unmatched request, then inspect t
 
 For shared remote pipeline changes, use the deployment Skill's `shared_config_diff` and `shared_config_preflight` tools. Record the expected status for both the old and new paths before applying. After a timeout, compare the target's loaded and on-disk revisions before retrying or restoring.
 
+## Compare and restore local runtime packages
+
+Keep the baseline package ID from `runtime_packages_list`. Use `runtime_package_probe` before selecting an alternative. Download and install through the deployment Skill's explicit official tag, SHA256 and platform checks; installation alone does not change the selected runtime. Stop the local runtime, prepare/select the installed package, refresh `context_get` for its new binding revision and poll `runtime_package_operation_get`. Check both startup and actual business HTTP before attributing a fault to a version change. To restore the baseline, stop and select its saved package ID, refresh context and verify again. Existing change previews and old public Relay grants cannot be reused across a selection.
+
 ## Discover and verify an existing remote environment
 
 Use `environment_discover` to refresh the connected host's candidates. A cached profile is not proof of a working Admin connection. Use `environment_adopt_prepare` and `environment_adopt_apply` to verify authenticated Admin identity and the reviewed configuration before diagnosing an existing target. Read `host_operation_get`, then verify business HTTP. Adoption never rewrites configuration or converts external processes to Desktop ownership. If a different host is needed, finish or inspect pending writes, call `host_disconnect`, and connect the new saved host. Disconnect does not stop its remote applications.
