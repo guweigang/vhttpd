@@ -21,7 +21,7 @@ Agent 需要能发现目标版本提供的能力，查到使用契约，并在�
 | 工作区、应用与模板 | `context_get`、模板发现与创建、`application_install_prepare/apply`、文件 revision 变更和 Desktop 应用绑定 | 任意源码工作区与已安装应用解耦。工作区、应用和管理会话已分别执行授权检查 |
 | vhttpd 配置与数据面 | 停机或实时 `schema_get` 覆盖九个配置域，应用变更校验与业务 HTTP 请求，远端 `target_request` | 流式 HTTP、WebSocket 和应用业务 MCP 的协议级验证工具。共享配置当前只支持 pipeline 的精确匹配路径 |
 | 应用脚本、兼容库与集成 | vjsx 参考，pipeline、微信云开发兼容、Codex Bot 模板和独立 `guidance_get` 主题，三个已安装的 DSH Skills | 微信真实登录、数据库及存储、已有云函数迁移和公网专项验收仍需补齐 |
-| Desktop 主机和环境管理 | `targets_list`、`target_status`、`host_inventory_get` 区分登记目标、发现环境、连接状态和主机运行包 | 主机登记与连接操作、发现环境接入、环境创建及实例生命周期写工具。凭据继续由 Desktop 管理 |
+| Desktop 主机和环境管理 | `targets_list`、`target_status`、`host_inventory_get` 查询登记与发现状态；`host_connect`、`host_operation_get`、`instance_status` 及环境创建、实例启停的 prepare/apply 工具已通过 DSH 隔离环境验收 | 主机登记、发现环境接入、主机断开及密码认证的 MCP 自动化仍待补齐；密码与首次指纹确认继续由 Desktop 管理 |
 | 运行包与发布 | 本地启停，远端应用发布与回滚、运行时升级与回滚；运行包及官方版本发现、配置兼容性预检；应用安装与历史查询；共享 pipeline 路径变更及恢复 | 运行包下载、安装和选择的 MCP 操作，以及超出 pipeline 精确路径的共享配置变更 |
 | Relay 与流量接管 | 公网 MCP Relay 发布与回收、账号接管与释放；`relay_connections_list` 查询本机及远端保存的连接，运行时 Relay 诊断 | 普通及共享 Relay 配置写入、生命周期与数据库 Relay 专项探针 |
 | 运维诊断与恢复 | 本机和远端运行图、worker、provider、Relay、进程级 WebSocket 统计；远端应用日志、事件、安装身份、发布及升级历史、业务 GET/HEAD 验证 | 配置历史恢复、流式 HTTP 与 WebSocket 业务协议探针，以及更完整的受控运行计划替换 |
