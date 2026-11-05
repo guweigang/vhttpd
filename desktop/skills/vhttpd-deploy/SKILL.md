@@ -6,6 +6,18 @@ description: Use Desktop Workbench to prepare, review and verify remote vhttpd a
 
 Use the local management MCP. Start with `context_get` and keep the returned `binding_revision` for the rest of the workflow. Call `targets_list` and select a target by its ID. Call `target_status` to check the registered environment, runtime version, readiness, application inventory and known operations. Use `target_applications_list` for live installation IDs and versions and `target_history_list` for known release and upgrade records. `target_diagnostics_get` and `target_logs_query` provide runtime and application evidence after publication. If the host or runtime is disconnected, connect through Desktop. Use the Desktop trust prompt for a first connection.
 
+## Connect a host and manage an environment
+
+Call `targets_list` for saved host IDs. Use `host_connect` for a saved key-authenticated host, confirm in Desktop, and poll `host_operation_get` until completed. Unknown host fingerprints require the existing Desktop trust prompt; password hosts must first authenticate in Desktop. Never send passwords, SSH keys or trust decisions through MCP. A connected different host must be disconnected in Desktop before switching.
+
+Call `host_inventory_get` for installed runtime IDs. To create an isolated environment, use `environment_create_prepare` with host ID, unused name, installed runtime ID, Admin port, and template. The `environment` template exposes only Admin; `vjsx-http` and `vjsx-api` also require a different business port. Review the five-minute plan and call `environment_create_apply` with host ID and plan ID, then confirm in Desktop. Existing directories are rejected rather than adopted. Creation registers and starts the environment.
+
+For a registered managed target, call `instance_status` independently of its Admin API. Use `instance_stop_prepare` or `instance_start_prepare` with target ID; review the environment-wide impact, then call the corresponding apply tool with the returned host ID and plan ID. Configuration or process changes invalidate a plan. Stop sends graceful SIGTERM only to the exact owned process; it never force-kills an arbitrary PID.
+
+Apply returns an accepted operation ID before remote work. Poll `host_operation_get`, retaining that ID even if the request times out. Reusing the current applied plan returns the same operation ID. Prepare a new plan only after checking the previous outcome. A new preparation replaces the previous plan. Operation records are bounded to 128 per Desktop session and do not survive Desktop restart. After reconnect, use host inventory and live instance status to reconcile.
+
+After completion, verify `instance_status`, then use `target_applications_list` and `target_request` for an actual business response. A running process does not establish business readiness. For stop, verify the process is stopped and the test endpoint no longer serves. Keep the original environment and unrelated applications untouched.
+
 ## Release an application
 
 For TOML pipeline, WeChat cloud compatibility and Codex Bot, bind the installed component and confirm `app.json` and `component.toml` describe the same source. Choose a test request from the template guide. Inspect the preview for all runtime source and library files. Configure target resources and credentials through Desktop. Check both the business response and the operation record after release and rollback. A first install has no previous artifact. To verify rollback, publish a baseline, publish a second revision to the same installation ID, then roll back the second operation.
