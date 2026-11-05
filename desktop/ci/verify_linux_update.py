@@ -206,8 +206,11 @@ def main():
                 capture(window, "help-menu"), "检查更新", (0, 26, 900, 140)))
             click(window, update_menu)
             wait("Mock GitHub release response was not requested", lambda: requests)
-            wait("New version 0.2.0 not displayed", lambda: locate(
-                capture(window, "new-version"), "0.2.0", (0, 100, 600, 260), "eng"))
+            # Retain the version row as screenshot evidence. The slashed zero in
+            # Sarasa is read as 8 by Tesseract, so OCR locates the row by
+            # Desktop; the browser's exact release URL is checked below.
+            wait("New Desktop version row not displayed", lambda: locate(
+                capture(window, "new-version"), "Desktop", (0, 210, 600, 80), "eng"))
             button = wait("GitHub button not displayed", lambda: locate(
                 capture(window, "new-version"), "GitHub", (600, 140, 380, 270), "eng"))
             click(window, button)
