@@ -221,9 +221,9 @@ try {
  if ($longest -lt ($bitmap.Width-24)*0.85) {throw 'Environment focus outline is dotted or missing'}
 } finally {$graphics.Dispose();$bitmap.Dispose()}
 @{workbench_style='passed';open='passed';page_content_preserved='passed';escape='passed';outside_dismiss='passed';remote_selection='passed';return_local='passed'} | ConvertTo-Json | Set-Content "$OutputDirectory/environment-menu-acceptance.json"
-$create = [WorkbenchUiCheck]::Find($window,'新建 vjsx 项目','UI2Container')
+$create = [WorkbenchUiCheck]::Find($window,'新建运行环境','UI2Container')
 if ($create -eq [IntPtr]::Zero) { throw 'Accessible create-project surface missing' }
-$title = [WorkbenchUiCheck]::Find($window,'还没有项目','Static')
+$title = [WorkbenchUiCheck]::Find($window,'还没有 vhttpd 运行环境','Static')
 if ($title -eq [IntPtr]::Zero) { throw 'Empty-project title missing' }
 # GDI reports the same actual font the native STATIC draws, including CJK fallback.
 $fontHandle = [WorkbenchUiCheck]::SendMessageW($title,0x31,[IntPtr]::Zero,[IntPtr]::Zero)
@@ -330,7 +330,7 @@ $paddingPoint=[IntPtr]((3 -shl 16) -bor 3)
 [WorkbenchUiCheck]::SendMessageW($frame,0x202,[IntPtr]::Zero,$paddingPoint) | Out-Null
 Start-Sleep -Milliseconds 200
 if ([WorkbenchUiCheck]::Focus($window) -ne $first) {throw 'Clicking input padding did not focus the editor'}
-Invoke-WorkbenchButton '服务器与实例'
+Invoke-WorkbenchButton '连接与服务器'
 Invoke-WorkbenchButton '+ 添加服务器'
 Assert-FormLayout 'ssh-key' 4
 Invoke-WorkbenchButton '密码'
@@ -338,10 +338,10 @@ Assert-FormLayout 'ssh-password' 5
 # Only verify native ES_PASSWORD; never enter or capture a user credential.
 $secure=@([WorkbenchUiCheck]::Children($window) | Where-Object { [WorkbenchUiCheck]::Class($_) -eq 'Edit' -and ([WorkbenchUiCheck]::GetWindowLongPtrW($_,-16).ToInt64() -band 0x20) -ne 0 })
 if ($secure.Count -ne 1) {throw 'Password input lost native masking'}
-Invoke-WorkbenchButton '共享 Relay'
+Invoke-WorkbenchButton 'Relay 连接库'
 Invoke-WorkbenchButton '+ 新建连接'
 Assert-FormLayout 'shared-relay' 4
-Invoke-WorkbenchButton '运行环境'
+Invoke-WorkbenchButton '运行包'
 Save-Window $window 'form-runtime'
 $script:formChecks | ConvertTo-Json -Depth 4 | Set-Content "$OutputDirectory/form-layout-acceptance.json"
 

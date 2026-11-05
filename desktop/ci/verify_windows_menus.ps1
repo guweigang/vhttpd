@@ -39,20 +39,20 @@ function Menu-Shortcut([byte]$key) {
 }
 $bar=[WorkbenchMenuCheck]::GetMenu($window)
 if ([WorkbenchMenuCheck]::GetMenuItemCount($bar) -ne 6) {throw 'Expected six top-level workbench menus'}
-foreach ($title in @('项目','编辑','运行','环境','查看','帮助')) {Menu-Index $bar $title | Out-Null}
+foreach ($title in @('运行环境','编辑','进程','位置与连接','查看','帮助')) {Menu-Index $bar $title | Out-Null}
 $environments=[WorkbenchMenuCheck]::GetSubMenu((Menu-At 3),0)
 Menu-Invoke $environments '本机 Windows'
 $environments=[WorkbenchMenuCheck]::GetSubMenu((Menu-At 3),0)
 if (([WorkbenchMenuCheck]::GetMenuState($environments,0,0x400) -band 8) -eq 0) {throw 'Environment menu checkmark did not update'}
 if (Menu-Enabled (Menu-At 2) '启动') {throw 'Empty project enables start'}
-Menu-Invoke (Menu-At 0) '新建项目…'
+Menu-Invoke (Menu-At 0) '新建运行环境…'
 $field=[WorkbenchUiCheck]::Focus($window)
 if ([WorkbenchUiCheck]::Class($field) -ne 'Edit') {throw 'Menu New did not focus the project form'}
-if (Menu-Enabled (Menu-At 0) '新建项目…') {throw 'Menu New stayed enabled while a project form is active'}
+if (Menu-Enabled (Menu-At 0) '新建运行环境…') {throw 'Menu New stayed enabled while a project form is active'}
 $fixture=[Runtime.InteropServices.Marshal]::StringToHGlobalUni('menu-shortcut-fixture')
 try {[WorkbenchUiCheck]::SendMessageW($field,0x0C,[IntPtr]::Zero,$fixture) | Out-Null} finally {[Runtime.InteropServices.Marshal]::FreeHGlobal($fixture)}
 # Direct WM_COMMAND must also be rejected for a currently disabled command.
-$id=[WorkbenchMenuCheck]::GetMenuItemID((Menu-At 0),(Menu-Index (Menu-At 0) '新建项目…'))
+$id=[WorkbenchMenuCheck]::GetMenuItemID((Menu-At 0),(Menu-Index (Menu-At 0) '新建运行环境…'))
 [WorkbenchUiCheck]::PostMessageW($window,0x111,[IntPtr]$id,[IntPtr]::Zero) | Out-Null
 Start-Sleep -Milliseconds 300
 if ([WorkbenchMenuCheck]::EditorText($field) -ne 'menu-shortcut-fixture') {throw 'Disabled command bypassed state validation'}
@@ -66,9 +66,9 @@ Menu-Shortcut 0x56
 if ([WorkbenchMenuCheck]::EditorText($field) -ne 'menu-shortcut-fixture') {throw 'Menu Paste did not restore fixture text'}
 Menu-Key 0x1B
 Start-Sleep -Milliseconds 500
-if (!(Menu-Enabled (Menu-At 0) '新建项目…')) {throw 'Returning from the form did not re-enable New'}
+if (!(Menu-Enabled (Menu-At 0) '新建运行环境…')) {throw 'Returning from the form did not re-enable New'}
 Menu-Shortcut 0x4E
 $field=[WorkbenchUiCheck]::Focus($window)
-if ([WorkbenchUiCheck]::Class($field) -ne 'Edit' -or (Menu-Enabled (Menu-At 0) '新建项目…')) {throw 'Ctrl+N did not open one active form'}
+if ([WorkbenchUiCheck]::Class($field) -ne 'Edit' -or (Menu-Enabled (Menu-At 0) '新建运行环境…')) {throw 'Ctrl+N did not open one active form'}
 Save-Window $window 'menus-new-project'
 @{structure='passed';environment_checkmark='passed';empty_state='passed';native_menu_actions='passed';native_shortcuts='passed';disabled_dispatch='passed';editing='passed'} | ConvertTo-Json | Set-Content "$OutputDirectory/menu-acceptance.json"
