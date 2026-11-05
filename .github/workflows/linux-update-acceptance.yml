@@ -44,7 +44,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends xvfb xauth xdotool imagemagick \
-            tesseract-ocr tesseract-ocr-chi-sim gir1.2-webkit2-4.1 python3-gi \
+            tesseract-ocr tesseract-ocr-chi-sim gir1.2-webkit2-4.1 python3-gi dbus-x11 \
             xdg-utils libgl1-mesa-dri libxrandr2 libxcursor1 libxi6 ca-certificates curl
       - name: Open the normal package without a tray and check update navigation
         shell: bash
@@ -56,7 +56,7 @@ jobs:
           exe="$(find extracted -maxdepth 2 -type f -name vhttpd-workbench -print -quit)"
           "$exe" --version
           xvfb-run -a -s '-screen 0 1280x900x24 -dpi 96' \
-            python3 desktop/ci/verify_linux_update.py "$exe" evidence
+            dbus-run-session -- python3 desktop/ci/verify_linux_update.py "$exe" evidence
       - uses: actions/upload-artifact@v4
         if: always()
         with:

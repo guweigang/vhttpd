@@ -156,15 +156,34 @@ def main():
     browser.chmod(0o700)
     home = OUT / "home"
     home.mkdir(exist_ok=True)
+    config = home / "vhttpd.toml"
+    config.write_text('schema_version = 2\n')
+    (home / "projects.json").write_text(json.dumps([{
+        "name": "Update acceptance", "config_path": str(config), "workdir": str(home),
+    }]))
+    applications = home / ".local/share/applications"
+    applications.mkdir(parents=True, exist_ok=True)
+    (applications / "workbench-update-browser.desktop").write_text(
+        "[Desktop Entry]\nType=Application\nName=Workbench Update Browser\n"
+        f"Exec={browser} %u\nTerminal=false\n"
+        "MimeType=x-scheme-handler/http;x-scheme-handler/https;\n")
+    settings = home / ".config"
+    settings.mkdir(exist_ok=True)
+    (settings / "mimeapps.list").write_text(
+        "[Default Applications]\nx-scheme-handler/https=workbench-update-browser.desktop\n"
+        "x-scheme-handler/http=workbench-update-browser.desktop\n")
     proxy = f"http://127.0.0.1:{server.server_port}"
     env = {
         "PATH": "/usr/bin:/bin", "DISPLAY": os.environ["DISPLAY"],
         "XAUTHORITY": os.environ["XAUTHORITY"], "HOME": str(home),
+        "XDG_CONFIG_HOME": str(settings), "XDG_DATA_HOME": str(home / ".local/share"),
         "LANG": "C.UTF-8", "UI2_GL_VENDOR": "mesa_only", "LIBGL_ALWAYS_SOFTWARE": "1",
         "HTTPS_PROXY": proxy, "https_proxy": proxy, "CURL_CA_BUNDLE": str(cert),
         "BROWSER": str(browser), "VHTTPD_UPDATE_BROWSER_EVIDENCE": str(OUT),
         "VHTTPD_DESKTOP_REGISTRY": str(home / "projects.json"),
     }
+    if "DBUS_SESSION_BUS_ADDRESS" in os.environ:
+        env["DBUS_SESSION_BUS_ADDRESS"] = os.environ["DBUS_SESSION_BUS_ADDRESS"]
     with (OUT / "workbench.log").open("w") as log:
         app = subprocess.Popen([str(EXE)], env=env, cwd=home, stdout=log, stderr=log)
         try:
