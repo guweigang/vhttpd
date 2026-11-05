@@ -1,6 +1,6 @@
 ---
 name: vhttpd-deploy
-description: Manage vhttpd hosts and environments, download and install official runtime packages, select local packages, and verify or roll back application releases and runtime upgrades with Desktop MCP.
+description: Manage vhttpd hosts, runtime packages, application releases and ordinary Relay connections through Desktop MCP. Use for configuring, verifying and recovering these deployments.
 ---
 # Deploy with vhttpd Desktop
 
