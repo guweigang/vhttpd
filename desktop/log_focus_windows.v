@@ -8,6 +8,7 @@ import os
 fn C.vhttpd_workbench_activate_windows(voidptr)
 fn C.vhttpd_workbench_configure_windows(voidptr)
 fn C.vhttpd_workbench_verify_private_fonts() int
+fn C.vhttpd_workbench_write_redirected_stdout(&char, int) int
 
 // ui2's Win32 backend has already created and shown the HWND at this point.
 fn configure_workbench_window(handle voidptr) {

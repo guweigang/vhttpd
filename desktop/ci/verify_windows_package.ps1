@@ -13,8 +13,12 @@ $metadata = Get-Content "$package/build-info.json" -Raw | ConvertFrom-Json
 $hostExe = Join-Path $package 'vhttpd-workbench.exe'
 if ((Get-Item $hostExe).VersionInfo.ProductVersion -ne $metadata.version) { throw 'Desktop executable and package version disagree' }
 if ((Get-Content "$package/VERSION.txt" -Raw).Trim() -ne "Desktop $($metadata.version)") { throw 'Desktop VERSION.txt disagrees with package metadata' }
-$reportedVersion = (& $hostExe --version | Out-String).Trim()
-if ($LASTEXITCODE -ne 0 -or $reportedVersion -ne "vhttpd Desktop $($metadata.version)") { throw 'Desktop CLI and package version disagree' }
+$versionOutput = Join-Path $ResultDirectory 'desktop-version.txt'
+$versionProcess = Start-Process $hostExe -ArgumentList '--version' -PassThru -RedirectStandardOutput $versionOutput
+try {
+ if (!$versionProcess.WaitForExit(10000) -or $versionProcess.ExitCode -ne 0) { throw 'Desktop --version failed' }
+} finally { if (!$versionProcess.HasExited) { Stop-Process -Id $versionProcess.Id -Force } }
+if ((Get-Content $versionOutput -Raw).Trim() -ne "vhttpd Desktop $($metadata.version)") { throw 'Desktop CLI and package version disagree' }
 # Inspect every executable and DLL, not only the host's direct imports.
 $report = @()
 foreach ($binary in (Get-ChildItem $package -File -Recurse | Where-Object { $_.Extension -in @('.exe','.dll') })) {
