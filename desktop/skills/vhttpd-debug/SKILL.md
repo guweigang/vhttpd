@@ -26,6 +26,23 @@ After `relay_agent_control_apply`, poll `relay_operation_get` before checking re
 
 For a startup or publish failure, retain the config plan ID. `relay_config_restore` accepts the exact known baseline and refuses concurrent config changes; guarded recovery can restore a published plan when its managed runtime is no longer ready. Reclaim the Agent config, Hub listener and temporary catalog records separately, then verify baseline business and closed test ports. Raw tokens and arbitrary credential-bearing URLs do not belong in tool arguments.
 
+## Diagnose a database Relay
+
+Use local management MCP and call `relay_database_resources_list` on the bound runtime. For the connected remote environment, supply target_id to inspect its database exports. Match the local resource_id, Relay ID, route and remote_resource to the remote export. This inventory reads the effective configuration; it does not prove database connectivity. Credentials and database addresses stay in configuration.
+
+Call `relay_runtime_status` for the selected Relay, then `relay_database_probe` with the configured local resource_id. The runtime uses its existing Agent carrier, creates a short-lived database client and evaluates only the fixed SELECT 1 AS relay_probe expression; it closes that client after the probe without replacing the carrier. No SQL, URL, credential, transaction handle or arbitrary query is accepted. Successful stage query proves the request crossed the Relay and the MySQL driver returned the expected constant. It does not validate application tables, migrations, permissions for other statements or business data; verify the relevant application separately.
+
+Use the returned stage to choose the next step:
+
+- configuration: inspect resource kind, authenticated Agent binding, export resource and route.
+- carrier: inspect Agent registration and the ordinary Relay connection probe before querying again.
+- transport: compare route/resource identities with the remote export, inspect remote events and carrier generation. The sent query is not replayed automatically; an uncertain result is not a database authentication diagnosis.
+- database: remote database execution failed. Check its configured database, user privileges, service availability and private driver logs in Desktop. This category intentionally does not distinguish authentication from SQL execution without evidence.
+- response: the response was malformed or not the expected MySQL constant.
+- runtime: check readiness and installed runtime support. runtime_probe_endpoint_unavailable_upgrade_required means the selected runtime lacks this Admin endpoint; use the normal package/upgrade workflow and retain the old package for recovery.
+
+A healthy carrier and a failed database probe can coexist. Keep tokens and raw driver errors out of reports. Re-run the fixed probe after a correction, then verify the actual business request. Probes never change configuration or restart the environment.
+
 ## Compare and restore local runtime packages
 
 Keep the baseline package ID from `runtime_packages_list`. Use `runtime_package_probe` before selecting an alternative. Download and install through the deployment Skill's explicit official tag, SHA256 and platform checks; installation alone does not change the selected runtime. Stop the local runtime, prepare/select the installed package, refresh `context_get` for its new binding revision and poll `runtime_package_operation_get`. Check both startup and actual business HTTP before attributing a fault to a version change. To restore the baseline, stop and select its saved package ID, refresh context and verify again. Existing change previews and old public Relay grants cannot be reused across a selection.

@@ -53,6 +53,14 @@ Use these ordinary Relay tools through local management MCP; they are separate f
 
 Plans expire after five minutes before first execution, with up to 64 retained plans and 128 operation records per Desktop session. Reusing a successfully applied current plan returns its operation ID. A restored plan requires a fresh preparation before applying again. After a failed or uncertain publication, query the operation and live state first; do not blindly retry. A plan that already published preserves restore eligibility, including guarded source restoration if its managed runtime is no longer ready. Concurrent source changes block restoration. Never show tokens or full configuration fragments in a report.
 
+## Verify a database Relay deployment
+
+For a MySQL Relay binding configured through Desktop, call `relay_database_resources_list` locally and on the connected remote target. Check the local resource, Relay ID, route and remote_resource against the Hub's db-resource export, including its read-only or read-write access. These are configuration identities, not proof of connection. Database credentials remain on the remote host and carrier credentials remain in Desktop configuration.
+
+Use the ordinary Relay status and authentication probe to verify its carrier, then call `relay_database_probe` with the local resource_id. A successful fixed SELECT 1 probe establishes end-to-end connectivity and query execution through the existing vhttpd connection. It never accepts arbitrary SQL, database URLs or raw credentials and does not register another Agent. The debug Skill explains configuration, carrier, transport, database, response and runtime failure stages. A probe does not test application schema or authorize data changes; follow it with the agreed application verification.
+
+Older runtimes report runtime_probe_endpoint_unavailable_upgrade_required. Upgrade using an explicitly reviewed package, retaining the baseline. After validation, restore temporary configuration, stop isolated runtimes and reclaim test database resources. Probe execution itself does not modify configuration or restart the instance.
+
 ## Upgrade a runtime
 
 Use `runtime_package_get` to check the local selection before reproducing a target issue. `runtime_packages_list` discovers installed local package IDs, `runtime_package_probe` validates a package against the bound environment, and `runtime_releases_list` queries complete official releases for the desired platform and channel. Use `runtime_download_prepare` with an explicit tag from `runtime_releases_list` and a supported platform. Review and confirm `runtime_download_apply`, retain the operation ID, and poll `runtime_package_operation_get` until completed. The result provides a download ID after SHA256 verification. No arbitrary download URLs or local archive paths are accepted. Downloads last for this Desktop session, expire after one hour and are capped at four per session.
