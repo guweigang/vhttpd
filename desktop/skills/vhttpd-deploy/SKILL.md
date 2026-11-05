@@ -11,7 +11,7 @@ Use the local management MCP. Start with `context_get` and keep the returned `bi
 For TOML pipeline, WeChat cloud compatibility and Codex Bot, bind the installed component and confirm `app.json` and `component.toml` describe the same source. Choose a test request from the template guide. Inspect the preview for all runtime source and library files. Configure target resources and credentials through Desktop. Check both the business response and the operation record after release and rollback. A first install has no previous artifact. To verify rollback, publish a baseline, publish a second revision to the same installation ID, then roll back the second operation.
 
 1. Call `application_release_prepare` with the target ID and component slot. Omit `installation_id` for a new installation. For an update, use the existing installation ID. Review the version, file actions and restart scope.
-2. Call `application_release_apply` with the returned plan ID and confirm in Desktop. Poll `operation_get` with the operation ID. After `completed`, verify the target and make the agreed business request.
+2. Call `application_release_apply` with the returned plan ID and confirm in Desktop. Poll `operation_get` with the operation ID. After `completed`, verify the target and make the agreed business request. Use `target_request` with a business listener ID from `target_applications_list` for GET or HEAD verification. Check status and body. The probe bounds the response and preserves redirect status.
 3. To roll back, prepare with `rollback_from` set to the current completed release operation ID and omit `installation_id`. Review the recovered version and call `application_release_rollback` with that plan. The previous artifact must still be retained. Verify the business response again.
 
 ## Change shared remote routing
@@ -26,7 +26,7 @@ If the tool reports a pending restart, check the target state before calling it 
 
 ## Upgrade a runtime
 
-Use `runtime_package_get` to check the local selection before reproducing a target issue. Use `target_status` for the remote package inventory and version. After an upgrade, verify business behavior and use `runtime_diagnostics_get` to inspect the running local reproduction if it differs from the target.
+Use `runtime_package_get` to check the local selection before reproducing a target issue. `runtime_packages_list` discovers installed local package IDs, `runtime_package_probe` validates a package against the bound environment, and `runtime_releases_list` queries complete official releases for the desired platform and channel. Package download and selection use Desktop's runtime page. Use `host_inventory_get` with a host ID from `targets_list` to distinguish registered targets, discovered environments and the connected host's installed packages. Use `target_status` for the remote package inventory and version. After an upgrade, verify business behavior and use `runtime_diagnostics_get` to inspect the running local reproduction if it differs from the target.
 
 Use `target_status` to choose an installed package ID. Call `runtime_upgrade_prepare` with `target_runtime_id`, review the version and affected applications, then use `runtime_upgrade_apply` and confirm in Desktop. Track the operation with `operation_get` and verify the active package and business behavior.
 
