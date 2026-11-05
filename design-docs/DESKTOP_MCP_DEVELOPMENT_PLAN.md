@@ -82,7 +82,7 @@ Desktop 提供「绑定项目目录」入口。已有应用从环境与应用选
 
 首期支持三种入口。桌面客户端直连本机 MCP。ChatGPT 可经 Secure MCP Tunnel 接入，也可在工作区支持相应认证方式时走公网入口。其他 Web Agent 可直接配置 Relay 提供的 HTTPS Streamable HTTP URL 和客户端凭据。Desktop 到远端运行目标的主机连接独立于这三种入口。 [OpenAI Secure MCP Tunnel](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels) · [Desktop 主机管理](../desktop/host/remote_servers.v)
 
-公网路径为 `Web Agent → HTTPS MCP 入口 /mcp/<route_id> → Relay Hub → Desktop 侧 Relay Agent → 本机 Desktop MCP /mcp`。用户在 Desktop 的 MCP 页面选定应用后，选择已有可信 Relay，并单独开启「通过 Relay 发布」。Desktop 侧主动连接 Hub，只为当前绑定发布一条有期限的路由，界面提供可复制的 URL、客户端认证配置、到期时间及撤销入口。Desktop MCP 继续监听 loopback。可复用现有 Hub/Agent、`relay-delivery` 和 `mcp-upstream`，但现有示例仅展示本机监听以及 POST/DELETE 转发，公网 TLS、客户端认证、路由生命周期和 Desktop 端到端兼容性需要实现与实测。 [Relay Hub 示例](../examples/config/mcp-relay-public-v2.toml) · [Relay Agent 与 MCP 上游示例](../examples/config/mcp-relay-local-upstream-v2.toml)
+公网 MCP 经过两段连接。Web Agent 使用 HTTPS Streamable HTTP 访问远端 vhttpd Hub 的 MCP 入口，bodytest 单端口部署使用 `/mcp`。Relay 两端都运行 vhttpd。本机 Desktop 管理的 vhttpd Relay Agent 主动连接远端 Hub 的 `/vhttpd/relay/desktop-mcp`，建立全双工 WebSocket 长连接。Hub 沿这条已建立的连接把请求交给本机 Agent，由 `mcp-upstream` 转到 loopback 上的 Desktop MCP `/mcp`，响应沿同一连接返回。远端向本机发送请求时复用这条长连接。用户在 Desktop 选定应用后，选择可信 Relay 并开启「通过 Relay 发布」，为当前绑定发布有期限的路由。界面提供 URL、客户端认证配置、到期时间及撤销入口。 [Relay Hub 示例](../examples/config/mcp-relay-public-v2.toml) · [Relay Agent 与 MCP 上游示例](../examples/config/mcp-relay-local-upstream-v2.toml)
 
 - **身份与范围**。Hub 对客户端认证并执行路由级限流。Relay 连接凭据、Web Agent 凭据和本机 MCP 凭据分别管理。首期支持 HTTPS 下的短期、可撤销 Bearer 凭据，按路由和权限签发，默认只读。开启编辑时在 Desktop 明确授权源码写入、启动和停止的范围。Desktop 在 Worker 执行前再次检查路由授权、工具权限和绑定代次。客户端凭据、Relay Token 和本机 MCP Token 不写入工具结果或日志。只接受 OAuth 的客户端需另行适配。
 - **转发与会话**。只开放登记的 MCP 路径，目的地固定为该 Desktop 实例的 loopback MCP。转发初始化、POST 和会话终止所需的头、状态与响应；按 Desktop 宣告的能力处理 SSE，若未提供 GET 事件流则保留正确的 HTTP 语义。路由、客户端身份与 MCP 会话关联。断线时返回可识别的不可用状态，重新连接后允许重新初始化，变更调用由客户端先查状态再决定是否重试。
@@ -156,7 +156,7 @@ DSH 安装包内的 `dsh-mcp-client` 通过本机 Streamable HTTP 调用 `applic
 - `runtime_package_get` 返回所选本机运行包的版本、来源和可用性。文件系统路径留在 Desktop。远端运行包继续通过 `target_status` 查询。
 - `runtime_diagnostics_get` 从运行中的本机 Admin 读取 `graph`、`workers`、`providers`、`relay` 四类状态，使用固定查询和受限字段。诊断面覆盖整个本机环境，所以需要本机 MCP 会话。停机时可以查询运行包和 schema。
 - `vhttpd-debug` 按运行图、worker、provider 和 Relay 状态给出排查顺序。`vhttpd-deploy` 说明如何区分本机复现所用的包与远端包。
-- DSH 安装包内的 MCP 客户端通过 Streamable HTTP 实测。停机时读到运行包 0.9.0，诊断调用返回 `runtime_not_running`。启动后运行图返回 5 个节点、3 条边，另三类接口均返回结构化状态。测试环境未配置独立 worker、provider 实例或 Relay Agent，三类列表均为空。随后默认 Desktop MCP 自动回归通过。启用真实 Relay 的可选回归已结束，运行时启动请求超过 Relay 的 30 秒等待上限并返回 HTTP 504，该项未通过。任意 Admin 路径作为 topic 被拒绝，测试实例已停止。
+- DSH 安装包内的 MCP 客户端通过 Streamable HTTP 实测。停机时读到运行包 0.9.0，诊断调用返回 `runtime_not_running`。启动后运行图返回 5 个节点、3 条边，另三类接口均返回结构化状态。测试环境未配置独立 worker、provider 实例或 Relay Agent，三类列表均为空。随后默认 Desktop MCP 自动回归通过。启用真实 Relay 的可选回归中，本机 Agent 到远端 Hub 的 WebSocket 握手成功，此前经 Relay 的 MCP 请求也已返回 HTTP 200。随后运行时启动请求等待约 30 秒后返回 HTTP 504，日志记录 `relay_returned_frame_not_found`，该项未通过。长连接握手与单次请求的响应分别验收。任意 Admin 路径作为 topic 被拒绝，测试实例已停止。
 
 ### 远端共享环境配置
 
