@@ -21,7 +21,7 @@ Agent 需要能发现目标版本提供的能力，查到使用契约，并在�
 | 工作区、应用与模板 | `context_get`、模板发现与创建、`application_install_prepare/apply`、文件 revision 变更和 Desktop 应用绑定 | 任意源码工作区与已安装应用解耦。工作区、应用和管理会话已分别执行授权检查 |
 | vhttpd 配置与数据面 | 停机或实时 `schema_get` 覆盖九个配置域，应用变更校验与业务 HTTP 请求，远端 `target_request` | 流式 HTTP、WebSocket 和应用业务 MCP 的协议级验证工具。共享配置当前只支持 pipeline 的精确匹配路径 |
 | 应用脚本、兼容库与集成 | vjsx 参考，pipeline、微信云开发兼容、Codex Bot 模板和独立 `guidance_get` 主题，三个已安装的 DSH Skills | 微信真实登录、数据库及存储、已有云函数迁移和公网专项验收仍需补齐 |
-| Desktop 主机和环境管理 | `targets_list`、`target_status`、`host_inventory_get` 查询登记与发现状态；`host_connect`、`host_operation_get`、`instance_status` 及环境创建、实例启停的 prepare/apply 工具已通过 DSH 隔离环境验收 | 主机登记、发现环境接入、主机断开及密码认证的 MCP 自动化仍待补齐；密码与首次指纹确认继续由 Desktop 管理 |
+| Desktop 主机和环境管理 | 主机登记、连接、断开，环境发现与身份校验接入，以及环境创建、实例启停均已有 MCP 工具，并通过当前 Desktop 与 DSH 隔离环境验收 | 密码认证仍须在 Desktop 完成，首次主机指纹确认继续由 Desktop 管理；工具不接收私钥路径或密码 |
 | 运行包与发布 | 本地启停，远端应用发布与回滚、运行时升级与回滚；运行包及官方版本发现、配置兼容性预检；应用安装与历史查询；共享 pipeline 路径变更及恢复 | 运行包下载、安装和选择的 MCP 操作，以及超出 pipeline 精确路径的共享配置变更 |
 | Relay 与流量接管 | 公网 MCP Relay 发布与回收、账号接管与释放；`relay_connections_list` 查询本机及远端保存的连接，运行时 Relay 诊断 | 普通及共享 Relay 配置写入、生命周期与数据库 Relay 专项探针 |
 | 运维诊断与恢复 | 本机和远端运行图、worker、provider、Relay、进程级 WebSocket 统计；远端应用日志、事件、安装身份、发布及升级历史、业务 GET/HEAD 验证 | 配置历史恢复、流式 HTTP 与 WebSocket 业务协议探针，以及更完整的受控运行计划替换 |
@@ -158,6 +158,31 @@ DSH 安装包内的 `dsh-mcp-client` 通过本机 Streamable HTTP 调用 `applic
 - `vhttpd-debug` 按运行图、worker、provider 和 Relay 状态给出排查顺序。`vhttpd-deploy` 说明如何区分本机复现所用的包与远端包。
 - DSH 安装包内的 MCP 客户端通过 Streamable HTTP 实测。停机时读到运行包 0.9.0，诊断调用返回 `runtime_not_running`。启动后运行图返回 5 个节点、3 条边，另三类接口均返回结构化状态。测试环境未配置独立 worker、provider 实例或 Relay Agent，三类列表均为空。随后默认 Desktop MCP 自动回归通过。真实 Relay 的历史回归曾在长连接握手成功后遇到运行时启动请求 HTTP 504，根因和修复后的公网验收见下文。任意 Admin 路径作为 topic 被拒绝，测试实例已停止。
 
+### 2026-11-05 主机登记、环境接入与断开验收
+
+本批补齐 5 个本机管理 MCP 工具，当前绑定会话可列出 67 个工具。实现沿用 [主机登记与身份校验](../desktop/host/mcp_host_registry.v) 和 [MCP 生命周期分发](../desktop/devmcp/lifecycle.v)，公网应用 Relay 不增加这些管理权限。
+
+| 工具 | 操作与边界 |
+| --- | --- |
+| `host_register` | Desktop 确认后保存密钥认证主机记录，不自动连接或授予信任。可使用本机 SSH 配置，或以 credential_host_id 引用已保存主机的密钥；不接受私钥路径或密码。同样的名称、地址、用户、端口和密钥引用重复登记返回同一主机 ID；冲突设置不覆盖原记录 |
+| `environment_discover` | 刷新受管目录及运行进程发现的环境，返回候选 ID、名称、运行包与缓存标记，省略配置路径和凭据。沿用 Desktop 自动缓存行为；cached 不等于已验证真实 Admin 身份 |
+| `environment_adopt_prepare` | 对候选环境验证正在运行、已认证且就绪的 Admin，核对配置路径并固定配置版本和启动身份，生成五分钟计划 |
+| `environment_adopt_apply` | Desktop 确认后复查计划并保存连接目标，返回受理操作 ID，由 host_operation_get 查询完成；相同当前计划幂等返回原操作 ID |
+| `host_disconnect` | Desktop 确认后关闭指定主机的 SSH 管理连接，清除未提交计划；拒绝正在处理的操作、未完成发布或升级，以及断开另一已连接主机。已断开时重复调用安全返回；远端实例不停止 |
+
+“接入”仅验证并登记连接目标，不改写远端配置、不添加所有权标记、不重启，也不将外部管理的进程转换为 Desktop 受管实例。停止状态或不兼容的 Admin 不能跳过身份校验。新主机登记会刷新当前 Desktop 的主机清单。发现结果现已使用本机保存的稳定目标 ID，修复同一物理实例通过另一主机记录发现时，候选 ID 与后续目标查询不一致的问题。
+
+实际验收使用当前安装并运行的 Desktop 界面签发的连接配置，DSH 安装包内的实际 MCP 插件经本机 Streamable HTTP 完成调用；不是以测试程序代替 Desktop 提供服务。本记录不将连接器验证记为模型会话执行全部写操作。复用 OrbStack Ubuntu 和已有 `mcp-shared-config-qa` 实例，没有新建 VM、运行环境或 Relay Hub，没有改动 bodytest。
+
+- 通过 MCP 登记测试主机记录 `MCP Host Registration QA`，重复登记返回相同 ID；随后实际连接新记录并发现已有环境。
+- 接入预检与执行完成，重复提交返回相同操作 ID，业务请求 `GET /shared-before` 返回 HTTP 200。
+- 断开后主机清单显示未连接，环境发现被拒绝；独立 Ubuntu 探针确认业务仍返回 HTTP 200，且进程 PID 与启动时间完全一致。重复断开安全返回。重连后目标 ID 一致，MCP 业务探针再次返回 HTTP 200。
+- 9 项拒绝用例通过：SSH 选项注入、password 参数、私钥路径参数、未知密钥来源、未知候选环境、未预检计划、错误绑定代次、未知主机，以及断开后的发现请求。
+- 四项自动检查通过：主机登记与断开、生命周期、远端目标、官方 HTTP MCP 的权限和撤销集成。DSH 实际 Skill 加载器成功读取已安装 Skill；部署与调试 Skill 的官方格式验证器均通过。
+- DSH 桌面现有验收会话实际调用 skill 工具重新加载新版 vhttpd-deploy 和 vhttpd-debug，正确识别登记与信任的区别、cached 与身份校验接入的区别、接入不转换进程所有权，以及主机断开不停止业务的约束。包内 guidance_get(deploy) 也返回新版流程。
+
+当前 Desktop 已更新，原包保留为 Workbench Before Host Registry.app。收尾恢复原 default 环境，隔离业务实例停止，临时本机 MCP 和测试 SSH 入口关闭。结果见 [结构化验收证据](release-evidence/desktop-mcp-host-registry-2026-11-05.json)；详细日志保留在本机 /private/tmp/vhttpd-host-registry-qa/desktop-dsh-result.log、tests.log 和 skills-result.log。密码认证和首次指纹信任仍须在 Desktop 完成。
+
 ### 2026-11-05 主机连接、环境创建与实例启停验收
 
 本批新增 9 个有类型的本机管理 MCP 工具，复用 Desktop 已保存主机、SSH 会话、运行包目录和 ServerWorker，不接收任意命令、私钥或密码。公网应用 Relay 不暴露这些管理写工具。
@@ -183,7 +208,7 @@ DSH 安装包内的 `dsh-mcp-client` 通过本机 Streamable HTTP 调用 `applic
 - DSH 桌面现有验收会话实际调用 skill 工具重新加载最新安装的 vhttpd-deploy 和 vhttpd-debug，识别新增工具、accepted 后的轮询、进程与业务就绪区别，以及密码和首次指纹留在 Desktop 的约束。包内 guidance_get(deploy) 也读取到了新流程。
 - 四项 V 检查通过：生命周期、远端诊断、远端目标及官方 HTTP MCP 集成。HTTP 集成因沙箱禁止监听本机端口，已在允许网络的环境重跑通过。Python 语法及创建脚本 shell 语法检查通过。
 
-当前 Desktop 已安装包含这些能力的生产构建；原应用包保留为 Workbench Before Lifecycle.app。测试环境文件保留，实例最终停止。验收证据见本机 `/private/tmp/vhttpd-lifecycle-qa/desktop-dsh-final.log`、`tests.log`、`network-tests.log` 和 `skills-result.log`。主机登记、发现环境接入、主机断开及密码认证自动化仍不属于已完成项。
+当前 Desktop 已安装包含这些能力的生产构建；原应用包保留为 Workbench Before Lifecycle.app。测试环境文件保留，实例最终停止。验收证据见本机 `/private/tmp/vhttpd-lifecycle-qa/desktop-dsh-final.log`、`tests.log`、`network-tests.log` 和 `skills-result.log`。该批验收时主机登记、发现环境接入和主机断开尚未完成；这三项的后续验收见本次主机登记与环境接入记录。密码认证仍由 Desktop 界面处理。
 
 ### 2026-11-05 能力核对与诊断入口验收
 
