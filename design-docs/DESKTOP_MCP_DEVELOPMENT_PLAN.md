@@ -23,7 +23,7 @@ Agent 需要能发现目标版本提供的能力，查到使用契约，并在�
 | 应用脚本、兼容库与集成 | vjsx 参考，pipeline、微信云开发兼容、Codex Bot 模板和独立 `guidance_get` 主题，三个已安装的 DSH Skills | 微信真实登录、数据库及存储、已有云函数迁移和公网专项验收仍需补齐 |
 | Desktop 主机和环境管理 | 主机登记、连接、断开，环境发现与身份校验接入，以及环境创建、实例启停均已有 MCP 工具，并通过当前 Desktop 与 DSH 隔离环境验收 | 密码认证仍须在 Desktop 完成，首次主机指纹确认继续由 Desktop 管理；工具不接收私钥路径或密码 |
 | 运行包与发布 | 本地启停，远端应用发布及回滚、运行时升级及回滚；官方运行包发现、下载、安装、本机选择及恢复已通过当前 Desktop 与 DSH 验收；配置兼容性预检、应用安装与历史查询、共享 pipeline 路径变更及恢复 | 超出 pipeline 精确路径的共享配置变更 |
-| Relay 与流量接管 | 公网 MCP Relay 发布与回收、账号接管与释放；`relay_connections_list` 查询本机及远端保存的连接，运行时 Relay 诊断 | 普通及共享 Relay 配置写入、生命周期与数据库 Relay 专项探针 |
+| Relay 与流量接管 | 公网 MCP Relay 发布与回收、账号接管与释放；普通 Relay 本机及远端连接库写入、探测、Hub/Agent 配置、启停、状态与精确基线恢复；运行时 Relay 诊断 | 数据库 Relay 专项探针；既有非 MCP 管理配置的通用编辑 |
 | 运维诊断与恢复 | 本机和远端运行图、worker、provider、Relay、进程级 WebSocket 统计；远端应用日志、事件、安装身份、发布及升级历史、业务 GET/HEAD 验证 | 配置历史恢复、流式 HTTP 与 WebSocket 业务协议探针，以及更完整的受控运行计划替换 |
 
 ### MCP、指引与 Skills 的分工
