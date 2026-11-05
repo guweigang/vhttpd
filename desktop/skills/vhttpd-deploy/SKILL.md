@@ -1,6 +1,6 @@
 ---
 name: vhttpd-deploy
-description: Use Desktop Workbench to prepare, review and verify remote vhttpd application releases and runtime upgrades. Use for target discovery, component preflight, deployment status and recovery checks.
+description: Manage remote vhttpd hosts, discover and adopt environments, start and stop instances, and prepare, verify or roll back application releases and runtime upgrades with Desktop MCP.
 ---
 # Deploy with vhttpd Desktop
 
@@ -8,7 +8,11 @@ Use the local management MCP. Start with `context_get` and keep the returned `bi
 
 ## Connect a host and manage an environment
 
-Call `targets_list` for saved host IDs. Use `host_connect` for a saved key-authenticated host, confirm in Desktop, and poll `host_operation_get` until completed. Unknown host fingerprints require the existing Desktop trust prompt; password hosts must first authenticate in Desktop. Never send passwords, SSH keys or trust decisions through MCP. A connected different host must be disconnected in Desktop before switching.
+Call `targets_list` for saved host IDs. Use `host_connect` for a saved key-authenticated host, confirm in Desktop, and poll `host_operation_get` until completed. Unknown host fingerprints require the existing Desktop trust prompt; password hosts must first authenticate in Desktop. Never send passwords, SSH keys or trust decisions through MCP. Use `host_disconnect` with the current host ID and confirm in Desktop before switching hosts. It closes only the host management connection; remote instances continue running. Unfinished deployment or upgrade operations block disconnect. Repeating a completed disconnect is safe.
+
+If the host is not saved, call `host_register` with a name, SSH host, user and port. Omit `credential_host_id` to use local SSH configuration, or select a saved key-authenticated host ID as the key-reference source. Review the exact endpoint and credential source in Desktop. The tool saves a connection record without connecting or granting host trust. It accepts neither passwords nor private-key paths. Repeating the exact name, endpoint and credential settings returns the same host ID; conflicting existing settings require Desktop editing.
+
+For an existing remote environment, call `environment_discover` on the connected host and select a returned candidate ID. Discovery automatically refreshes Desktop's profile cache; `cached` does not establish live Admin identity or business readiness. Call `environment_adopt_prepare` with host ID and candidate target ID. It requires a running, authenticated Admin endpoint and pins its boot identity and configuration revision. Confirm `environment_adopt_apply` with the returned plan and poll `host_operation_get`. This verifies and saves a connection target without changing remote configuration, ownership markers or processes. Externally managed instances remain externally managed; adoption does not authorize Desktop lifecycle operations. Verify a business listener using `target_request`. If Admin is stopped or identity/configuration changed, inspect the target and prepare again rather than bypassing validation.
 
 Call `host_inventory_get` for installed runtime IDs. To create an isolated environment, use `environment_create_prepare` with host ID, unused name, installed runtime ID, Admin port, and template. The `environment` template exposes only Admin; `vjsx-http` and `vjsx-api` also require a different business port. Review the five-minute plan and call `environment_create_apply` with host ID and plan ID, then confirm in Desktop. Existing directories are rejected rather than adopted. Creation registers and starts the environment.
 

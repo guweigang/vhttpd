@@ -18,6 +18,10 @@ For a TOML pipeline, compare a matching and an unmatched request, then inspect t
 
 For shared remote pipeline changes, use the deployment Skill's `shared_config_diff` and `shared_config_preflight` tools. Record the expected status for both the old and new paths before applying. After a timeout, compare the target's loaded and on-disk revisions before retrying or restoring.
 
+## Discover and verify an existing remote environment
+
+Use `environment_discover` to refresh the connected host's candidates. A cached profile is not proof of a working Admin connection. Use `environment_adopt_prepare` and `environment_adopt_apply` to verify authenticated Admin identity and the reviewed configuration before diagnosing an existing target. Read `host_operation_get`, then verify business HTTP. Adoption never rewrites configuration or converts external processes to Desktop ownership. If a different host is needed, finish or inspect pending writes, call `host_disconnect`, and connect the new saved host. Disconnect does not stop its remote applications.
+
 ## Diagnose a stopped remote instance
 
 Use `host_connect` for a saved key-authenticated host and poll `host_operation_get`. Password authentication and first-use host trust stay in Desktop. Query `instance_status` over SSH even when Admin is unavailable. A stopped instance can be started with `instance_start_prepare` and `instance_start_apply` after reviewing the plan and confirming in Desktop. Poll the returned operation ID, then wait for a successful business `target_request`; process existence alone is not readiness. To stop an isolated test instance, prepare and confirm `instance_stop_apply` and check live status again. This affects the entire environment. Stop never escalates from graceful SIGTERM to force kill. If stopping remains pending, inspect Desktop and query status before another action.
