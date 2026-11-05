@@ -13,6 +13,16 @@
         "name": "vhttpd-workbench-windows-amd64-0.2.0.zip",
         "size": 100,
         "browser_download_url": "https://github.com/guweigang/vhttpd/releases/download/desktop-v0.2.0/vhttpd-workbench-windows-amd64-0.2.0.zip"
+      },
+      {
+        "name": "vhttpd-workbench-linux-amd64-0.2.0.tar.gz",
+        "size": 100,
+        "browser_download_url": "https://github.com/guweigang/vhttpd/releases/download/desktop-v0.2.0/vhttpd-workbench-linux-amd64-0.2.0.tar.gz"
+      },
+      {
+        "name": "vhttpd-workbench-linux-arm64-0.2.0.tar.gz",
+        "size": 100,
+        "browser_download_url": "https://github.com/guweigang/vhttpd/releases/download/desktop-v0.2.0/vhttpd-workbench-linux-arm64-0.2.0.tar.gz"
       }
     ]
   }
