@@ -158,6 +158,32 @@ DSH 安装包内的 `dsh-mcp-client` 通过本机 Streamable HTTP 调用 `applic
 - `vhttpd-debug` 按运行图、worker、provider 和 Relay 状态给出排查顺序。`vhttpd-deploy` 说明如何区分本机复现所用的包与远端包。
 - DSH 安装包内的 MCP 客户端通过 Streamable HTTP 实测。停机时读到运行包 0.9.0，诊断调用返回 `runtime_not_running`。启动后运行图返回 5 个节点、3 条边，另三类接口均返回结构化状态。测试环境未配置独立 worker、provider 实例或 Relay Agent，三类列表均为空。随后默认 Desktop MCP 自动回归通过。真实 Relay 的历史回归曾在长连接握手成功后遇到运行时启动请求 HTTP 504，根因和修复后的公网验收见下文。任意 Admin 路径作为 topic 被拒绝，测试实例已停止。
 
+### 2026-11-05 普通 Relay 连接库、配置与启停验收
+
+本批新增 12 个本机管理 MCP 工具，已绑定会话当前提供 86 个工具。实现见 [普通 Relay 工具契约](../desktop/devmcp/ordinary_relays.v)、[Host 编排](../desktop/host/mcp_relays.v)、[配置生成](../desktop/host/mcp_relays_config.v) 和 [本机 Worker](../desktop/host/mcp_relays_local.v)。
+
+| 流程 | MCP 工具 |
+| --- | --- |
+| 连接库创建、更新与删除 | `relay_connection_save_prepare/apply`、`relay_connection_delete_prepare/apply` |
+| 临时认证探测 | `relay_connection_probe` |
+| Hub / Agent 配置与恢复 | `relay_config_prepare`、`relay_config_apply`、`relay_config_restore` |
+| Agent 启停 | `relay_agent_control_prepare`、`relay_agent_control_apply` |
+| 运行状态与异步操作 | `relay_runtime_status`、`relay_operation_get` |
+
+连接库支持本机与已连接主机的共享目录。保存凭据只能引用已验证环境中的 Hub 或已有本机连接 ID；工具不接受 Token 明文、任意端点 URL。保存、临时认证探测、配置副本和已注册 Agent 分别验证。目录删除不改变已部署副本。Hub 使用现有环境中的一个 HTTP/WebSocket 监听器，默认只开放载体端点；只有显式指定 verify_path 时才增加 HTTP 业务转发路径。Agent 默认不自动连接，由本机 vhttpd 主动向远端 vhttpd 发起全双工 WebSocket 长连接；载体不使用 SSH 转发。
+
+预检编译整个环境并固定配置 revision、boot identity、目标和授权代次。配置与启停需要 Desktop 确认，先返回 accepted，再查询操作终态。当前运行包没有单 Agent 的 Admin 启停接口，因此工具持久化 autostart 并重启整个既有环境，影响其中全部应用。只编辑带有 MCP 归属标记的配置块；已有人工配置需要在 Desktop 明确编辑。配置恢复保留精确原始字节，要求当前完整源 revision 与预期一致；两端均支持托管实例停机后的受保护恢复。首次提交前计划有效五分钟，每个会话最多 64 个计划、128 条操作；重启 Desktop 后需重新对账。
+
+实际验收使用更新后的 Workbench Update QA.app，由界面绑定隔离 pipeqa 应用并签发连接配置。已安装 DSH 的 dsh-mcp-client 通过 Streamable HTTP 执行完整写流程；模型对话另外实际调用 skill 工具重新加载了新版 [vhttpd-deploy](../desktop/skills/vhttpd-deploy/SKILL.md) 和 [vhttpd-debug](../desktop/skills/vhttpd-debug/SKILL.md)，核对工具组合、主动连接方向、环境重启、凭据引用和恢复要求。本轮写流程证据属于 DSH 客户端连接器层，不将其描述为模型自主执行全部写操作。
+
+- 复用本机既有 0.9.0 运行包和 Ubuntu 既有 mcp-shared-config-qa 0.9.1 实例。未新建 VM、Hub 进程或远端实例，也未改动 bodytest。远端临时增加 55311 单端口，WebSocket 路径 /vhttpd/relay，HTTP 验证路径 /__relay/ordinaryqa。
+- DSH 创建并更新本机连接记录、复制到远端共享连接库；正确凭据探测通过，错误凭据被拒绝。创建 Agent 配置后验证未注册；启动后验证 registered；远端 HTTP 请求经过 WebSocket Relay 到本机 pipeqa，返回 HTTP 200 和 pipeline-ok。活跃连接期间再次探测，没有替换业务载体。
+- 停止 Agent 后，远端请求不再到达本机。先停止本机运行时再恢复 Agent 配置；先停止远端实例再恢复 Hub 配置。两端原业务响应均恢复，目录记录回收，完整源基线恢复。
+- 11 个拒绝用例涵盖错误认证、缺少凭据引用、Token/URL 输入、未知连接、非法标识、端口冲突、未知 Agent/计划、无效恢复和过期绑定。首轮实际 Desktop 探测曾短暂返回网络不可达，后续同地址探测及完整重跑通过；未将其误归因为认证或协议修复。
+- macOS 的 Relay 编排、共享连接库、远端目标和 MCP 服务四个测试套件通过，另补默认不创建 HTTP 转发路径的回归用例；Ubuntu Relay 编排和共享连接库两个套件通过。归属块保护、端口冲突、配置编译及启停后精确恢复均有单测。
+
+当前 Desktop 已更新为此生产构建，原包备份为 Workbench Before Ordinary Relay.app。部署 Skill 同时安装到 DSH 并由其实际加载。结构化证据见 [普通 Relay 验收](release-evidence/desktop-mcp-ordinary-relay-2026-11-05.json)。数据库 Relay 专项探针和既有非 MCP 配置的通用编辑仍未完成，能力目录保持 partial。
+
 ### 2026-11-05 运行包下载、安装与选择验收
 
 本批新增 7 个本机管理 MCP 工具，当前绑定会话列出 74 个工具。运行包能力域的 coverage.remaining 已清空，整体能力覆盖仍为 partial。实现见 [运行包操作](../desktop/host/mcp_packages.v) 和 [MCP 工具契约](../desktop/devmcp/packages.v)。
