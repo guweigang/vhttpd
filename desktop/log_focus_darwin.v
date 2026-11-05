@@ -1,6 +1,7 @@
 module main
 
 import macos
+import ui2
 
 #include "@VMODROOT/desktop/workbench_window.h"
 
@@ -12,12 +13,9 @@ fn configure_workbench_window(_handle voidptr) {
 }
 
 fn bring_workbench_forward() {
+	window := macos.Id(ui2.native_window_handle())
+	if window == unsafe { nil } { return }
 	app := macos.msg_id(macos.get_class('NSApplication'), 'sharedApplication')
-	mut window := macos.msg_id(app, 'mainWindow')
-	if window == unsafe { nil } {
-		windows := macos.msg_id(app, 'windows')
-		if macos.msg_u64(windows, 'count') > 0 { window = macos.msg_id_u64(windows, 'objectAtIndex:', 0) }
-	}
 	macos.msg_void1(window, 'deminiaturize:', unsafe { nil })
 	macos.msg_void1(window, 'makeKeyAndOrderFront:', unsafe { nil })
 	macos.msg_void_bool(app, 'activateIgnoringOtherApps:', true)

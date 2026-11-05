@@ -12,7 +12,9 @@ fn C.vhttpd_workbench_verify_private_fonts() int
 // ui2's Win32 backend has already created and shown the HWND at this point.
 fn configure_workbench_window(handle voidptr) {
 	if handle != unsafe { nil } {
-  C.vhttpd_workbench_configure_windows(handle)
+		C.vhttpd_workbench_configure_windows(handle)
+		app := unsafe { workshop }
+		configure_workbench_tray(app.brand_mark, @VMODROOT)
 		if marker := os.getenv_opt('VHTTPD_DESKTOP_CI_READY') {
 			if C.vhttpd_workbench_verify_private_fonts() == 0 {
 				eprintln('Bundled CJK/mono font probe failed')
