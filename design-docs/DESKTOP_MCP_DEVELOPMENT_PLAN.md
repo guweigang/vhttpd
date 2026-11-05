@@ -299,6 +299,8 @@ macOS 和 OrbStack Ubuntu 均通过 Desktop MCP 集成测试。Ubuntu 使用 GCC
 
 - macOS 的 `desktop/devmcp/server_test.v` 通过。用本机 vhttpd Hub、Agent 和同样的 34 秒启动延迟验证了编辑、启动受理、就绪、业务响应、停止、源文件恢复和撤销。
 
+- 当前安装的 `Workbench Update QA.app` 已替换为包含修复的生产构建，保留旧应用包供回退。通过实际 Desktop 界面绑定隔离应用 `relayqa`、加载 bodytest 的 `edge` Relay 并发布编辑授权。DSH 安装包内的 MCP 客户端使用界面刚签发的 Bearer，经公网 HTTPS Streamable HTTP 调用 `runtime_start`，170 毫秒收到受理，5 次等待查询后在 6.73 秒确认 `readiness: ready`，`/api/hello` 返回 HTTP 200。本轮使用实际 vhttpd 启动耗时。测试后停止隔离实例、在界面撤销临时发布并清除临时客户端凭据，重新打开更新后的 Desktop，恢复原 `default` 实例运行。
+
 ### WorkBuddy 公网开发验收
 
 按用户选择使用 WorkBuddy 5.9.3。WorkBuddy 桌面端在本机通过公网 HTTPS Streamable HTTP 连接 `mcp.bullsoft.org/mcp`，由 Relay 转发到 Desktop 绑定的隔离应用 `releaseqa`。确认信任自定义连接器后，WorkBuddy 实际调用 `context_get`、`guidance_get`（`develop` 和 `vjsx`）、`files_read`，并用文件 revision 完成变更 `21abaa0ebbc334dba86d1f3b` 的预检、校验、应用和启动。新接口 `GET /api/public-qa` 返回 HTTP 200 和 `{"message":"public-relay-ok"}`，首页仍返回 `{"release":"B2"}`。
