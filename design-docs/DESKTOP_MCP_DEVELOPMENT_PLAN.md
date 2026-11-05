@@ -151,6 +151,13 @@ DSH 安装包内的 `dsh-mcp-client` 通过本机 Streamable HTTP 调用 `applic
 
 `vhttpd-develop`、`vhttpd-deploy` 和 `vhttpd-debug` 增加三类项目的操作与验证流程。自动测试验证模板安装、无脚本组件可绑定、私有文件排除和跨会话安装计划拒绝。此次验收在 DSH 客户端连接器层执行，远端业务请求直接由 Ubuntu 测试监听器响应。测试实例已停止。
 
+### 本机运行包与运行时诊断
+
+- `runtime_package_get` 返回所选本机运行包的版本、来源和可用性。文件系统路径留在 Desktop。远端运行包继续通过 `target_status` 查询。
+- `runtime_diagnostics_get` 从运行中的本机 Admin 读取 `graph`、`workers`、`providers`、`relay` 四类状态，使用固定查询和受限字段。诊断面覆盖整个本机环境，所以需要本机 MCP 会话。停机时可以查询运行包和 schema。
+- `vhttpd-debug` 按运行图、worker、provider 和 Relay 状态给出排查顺序。`vhttpd-deploy` 说明如何区分本机复现所用的包与远端包。
+- DSH 安装包内的 MCP 客户端通过 Streamable HTTP 实测。停机时读到运行包 0.9.0，诊断调用返回 `runtime_not_running`。启动后运行图返回 5 个节点、3 条边，另三类接口均返回结构化状态。测试环境未配置独立 worker、provider 实例或 Relay Agent，三类列表均为空。任意 Admin 路径作为 topic 被拒绝，测试实例已停止。
+
 ## 后续远端工具
 
 下表中的名字是提案。各工具复用 Desktop 主机、组件安装和接管实现，由 Desktop 保管凭据与执行授权。
