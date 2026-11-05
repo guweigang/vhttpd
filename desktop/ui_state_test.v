@@ -147,7 +147,8 @@ fn test_remote_server_and_runtime_target_states() ! {
 	assert runtime_test_enabled(runtime_settings_view(app, 700), 'server_install')!
 	assert runtime_test_enabled(runtime_settings_view(app, 700), 'runtime_create_open')!
 	assert !menu_button_enabled(ui2.screen(workbench_paper, runtime_settings_view(app, 700)), 'server_create')
-	assert app.handle_server_event('runtime_create_open')
+	handled := app.handle_server_event('runtime_create_open')
+	assert handled
 	assert app.runtime_create_open
 	assert runtime_test_enabled(runtime_settings_view(app, 700), 'server_create')!
 	ui2.validate_element_tree(ui2.screen(workbench_paper, runtime_settings_view(app, 700)))!

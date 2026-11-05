@@ -88,7 +88,7 @@ jobs:
         shell: bash
         run: |
           bash desktop/prepare-ui2.sh "$RUNNER_TEMP/workbench-test-modules/ui2"
-          v -prod -gc boehm -w -nocache -d build_quickjs -d use_bundled_libgc -enable-globals \
+          v -gc boehm -w -nocache -d build_quickjs -d use_bundled_libgc -enable-globals \
             -path "$PWD/desktop|$PWD/src|$RUNNER_TEMP/workbench-test-modules|$PWD/.deps|@vlib|@vmodules" \
             -o "$RUNNER_TEMP/workbench-ui-state-test" desktop/ui_state_test.v
           "$RUNNER_TEMP/workbench-ui-state-test"
