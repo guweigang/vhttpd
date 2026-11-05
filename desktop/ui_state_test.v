@@ -116,7 +116,10 @@ fn test_leaving_new_project_does_not_disable_future_navigation() {
 
 fn test_remote_server_and_runtime_target_states() ! {
 	mut app := unsafe { workshop }
+	saved := *app
+	defer { unsafe { *app = saved } }
 	app.environment_id = ''
+	app.runtime_create_open = false
 	app.server_worker = host.ServerWorker{}
 	app.server_snapshot = host.ServerSnapshot{}
 	app.server_busy = false
@@ -142,6 +145,10 @@ fn test_remote_server_and_runtime_target_states() ! {
 	assert runtime_test_enabled(runtime_settings_view(app, 700), 'server_install')!
 	app.server_snapshot = host.ServerSnapshot{...app.server_snapshot, version: '0.1.0', runtimes: [host.RemoteRuntime{id: 'legacy', version: '0.1.0', path: '/fixture/runtime'}]}
 	assert runtime_test_enabled(runtime_settings_view(app, 700), 'server_install')!
+	assert runtime_test_enabled(runtime_settings_view(app, 700), 'runtime_create_open')!
+	assert !menu_button_enabled(ui2.screen(workbench_paper, runtime_settings_view(app, 700)), 'server_create')
+	assert app.handle_server_event('runtime_create_open')
+	assert app.runtime_create_open
 	assert runtime_test_enabled(runtime_settings_view(app, 700), 'server_create')!
 	ui2.validate_element_tree(ui2.screen(workbench_paper, runtime_settings_view(app, 700)))!
 	app.remote_servers = [host.RemoteServer{...app.remote_servers[0], ssh_host: 'changed-host'}]
