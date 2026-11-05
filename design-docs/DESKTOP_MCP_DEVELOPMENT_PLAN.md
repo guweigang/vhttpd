@@ -158,6 +158,40 @@ DSH 安装包内的 `dsh-mcp-client` 通过本机 Streamable HTTP 调用 `applic
 - `vhttpd-debug` 按运行图、worker、provider 和 Relay 状态给出排查顺序。`vhttpd-deploy` 说明如何区分本机复现所用的包与远端包。
 - DSH 安装包内的 MCP 客户端通过 Streamable HTTP 实测。停机时读到运行包 0.9.0，诊断调用返回 `runtime_not_running`。启动后运行图返回 5 个节点、3 条边，另三类接口均返回结构化状态。测试环境未配置独立 worker、provider 实例或 Relay Agent，三类列表均为空。随后默认 Desktop MCP 自动回归通过。真实 Relay 的历史回归曾在长连接握手成功后遇到运行时启动请求 HTTP 504，根因和修复后的公网验收见下文。任意 Admin 路径作为 topic 被拒绝，测试实例已停止。
 
+### 2026-11-05 共享配置编辑与持久化历史恢复验收
+
+本批新增 12 个管理工具，绑定管理会话共 105 个工具。实现见 [共享字段编辑器](../desktop/host/mcp_config_edit.v)、[历史归档与恢复](../desktop/host/mcp_config_history.v)、[工具规格](../desktop/devmcp/config_edit.v) 和 [统一执行器](../desktop/host/mcp_relays.v)。本机与已连接的受管远端复用既有 Admin 多文件 changeset、Worker 重启与停机恢复；公开应用 Relay 不开放这些管理工具。
+
+| 流程 | 工具 |
+| --- | --- |
+| 发现配置与安全字段 | shared_config_get |
+| 预览、独立预检、应用、本次变更恢复 | shared_config_edit_prepare / preflight / apply / restore |
+| 查询异步操作 | shared_config_operation_get |
+| 持久化版本保存与列出 | config_history_capture、config_history_list |
+| 按版本预览、预检、恢复与撤销恢复 | config_history_restore_prepare / preflight / apply / undo |
+
+编辑按 domain、component、field 键段数组与 value 或 remove 定位；一次最多 32 项，支持标量、数组及已存在组件中的可选字段插入/删除。域覆盖 listeners、resources、engines、adapters、transforms、policies、providers、pipelines、server、observability。pipeline 使用稳定 ID，resources/policies 使用 category/id。已有字段在真实来源原地修改，多个 include 合并为同一个计划；不接收 raw TOML、文件路径或整个对象。候选与预期完整 TOML 树必须一致，删除最后一个 dotted 子字段时允许其隐式空父表随之消失。数组替换覆盖数组值内部内容与注释，未改动的周边内容保留。Relay 角色和凭据操作继续走专用工具。
+
+配置发现和预览只输出安全值，敏感值、未知私有选项和原始凭据不返回。凭据、secret resource 身份、可执行/存储路径、应用组件来源、include 关系、Control/Admin 监听及其管线受保护；完整配置及引用必须校验通过。历史恢复也拒绝改变这些保护内容，要求当前和历史来源成员及组件身份一致。缺失/改名源文件、来源拓扑变化或受保护值恢复仍使用 Desktop 专用恢复流程，本批不是任意 TOML 文件读写入口。
+
+config_history_capture 可保存手工维护、正在运行且确认生效的配置；准备编辑前也保存生效基线，发布就绪后保存结果。相同 revision 去重。每个环境归档最多 20 个版本、16 MiB，由用户私有目录和文件权限保护，包含精确原文但不向 MCP 输出。远端历史保存在当前 Desktop，以保存主机、实例和配置根目录隔离。本机列表同时读取已有 Desktop GUI 历史，不要求版本由 MCP 创建。列表可在运行时停止时查询；远端主机须已连接。
+
+历史 version_id 在 Desktop 关闭重开后保留，旧 plan_id 和操作记录不保留。新恢复准备要求当前环境运行且生效，通过版本 ID 生成五分钟计划，展示安全前后配置，固定完整源 revision、boot、目标和授权代次。独立预检后经 Desktop 确认执行，先返回 accepted，再轮询；每次应用和恢复重启整个环境。恢复原变更或撤销历史恢复支持受管实例停止后的精确源恢复。并发修改不覆盖。历史写入失败时须核对实时状态，不能把“已生效但保存历史失败”当成已回滚。
+
+DSH 实测分两段完成，服务端始终为实际安装运行的 Workbench Update QA.app，连接由界面签发。写流程使用已安装 DSH 的真实 dsh-mcp-client、Streamable HTTP；模型对话另实际调用 skill 重新加载 [vhttpd-deploy](../desktop/skills/vhttpd-deploy/SKILL.md) 与 [vhttpd-debug](../desktop/skills/vhttpd-debug/SKILL.md)，正确说明新工具、历史持久化/会话计划的区别、已有 GUI/手工配置、异步验证、全环境重启和受保护范围。未将连接器写流程描述为模型自主完成。
+
+- 复用原本机隔离 pipeqa 环境、现有 Ubuntu mcp-shared-config-qa 实例和两端运行包（本机 0.9.0、远端 0.9.1），未升级运行包、创建实例/VM/Hub 或改动 bodytest。手工设置 qa-shared/routes.toml 与 response.toml，不含 MCP 创建标记。
+- DSH 从完整基线保存版本，在一次两文件计划中修改匹配路径、插入 GET 方法、修改 fixed-response 响应并删除可选数值字段。旧路径变为 404，新路径返回 200 / shared-after；HEAD 返回 404。本机与远端均验证。
+- 预检旧计划后，另一个计划把状态改为 201。旧计划执行失败，201 保留；恢复临时计划后回到 200。15 项拒绝覆盖未预检执行、Admin 监听、应用来源、敏感/执行字段、对象值、未解析引用、重复编辑、缺失删除、原始 URL、外层/嵌套来源注入、value/remove 冲突及错误/跨目标历史 ID。
+- 真正关闭并重开 Desktop，使用新签发的管理连接。旧编辑计划被拒绝，持久化版本仍可列出。以已有本机 GUI 版本和远端保存的手工版本各创建新恢复计划，恢复后旧业务路径及响应回到基线，完整 source_revision 与最初一致。
+- 分别停止本机及远端运行时，再用 config_history_restore_undo 撤销历史恢复。两端恢复修改后的路径和响应；随后重新按版本生成新计划，最终恢复基线并停止测试实例。四份源文件的独立字节比对及收尾结果见结构化证据。
+
+过程中两次界面确认超时，分别发生在重复提交和实例启动，返回 management_request_expired；没有因此额外发布配置。核对生效状态后继续，保留初始历史基线，没有盲目重放写入。最终证据单独记录成功流程。
+
+macOS 的编辑/持久化历史、既有 Relay 编排及 HTTP MCP 集成通过；Ubuntu 的新编辑与历史、既有 Relay 编辑和已有 GUI 恢复测试通过。最后的 secret resource 保护回归也在两端通过。Linux 使用原 /home/guweigang/v/v 0.5.2 d13ccdd、local-dev、GCC、gc none、-nocache，复用既有锁定 vjsx 259620f 与原生 QuickJS，未修改原依赖。两份 Skills 格式检查和 DSH 实际加载通过。
+
+当前 Desktop 主程序及随包/DSH Skills 已更新，内置运行包沿用上一批构建；原应用保留为 Workbench Before Shared Config History.app。恢复测试根配置、移除临时 include、关闭 MCP 与测试管理监听后恢复原 default 环境。历史文件仍留在隔离 Desktop 数据目录供复核，不进入应用发布制品。详见 [共享配置与历史恢复验收证据](release-evidence/desktop-mcp-shared-config-history-2026-11-05.json)。
+
 ### 2026-11-05 Relay 模式转换、字段删除与多文件编辑验收
 
 本批扩展既有 5 个编辑工具，绑定管理会话仍列出 93 个工具。实现见 [Relay 源编辑器](../desktop/host/mcp_relay_edit.v)、[执行与多文件恢复](../desktop/host/mcp_relays.v)、[本机停机恢复](../desktop/host/mcp_relays_local.v)、[工具参数与确认](../desktop/devmcp/ordinary_relays.v) 和 [运行时 include 合并](../src/config/runtime_plan_loader.v)。公开应用 Relay 不因此获得管理权限。
