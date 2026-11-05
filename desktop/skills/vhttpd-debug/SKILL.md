@@ -18,6 +18,10 @@ For a TOML pipeline, compare a matching and an unmatched request, then inspect t
 
 For shared remote pipeline changes, use the deployment Skill's `shared_config_diff` and `shared_config_preflight` tools. Record the expected status for both the old and new paths before applying. After a timeout, compare the target's loaded and on-disk revisions before retrying or restoring.
 
+## Diagnose a stopped remote instance
+
+Use `host_connect` for a saved key-authenticated host and poll `host_operation_get`. Password authentication and first-use host trust stay in Desktop. Query `instance_status` over SSH even when Admin is unavailable. A stopped instance can be started with `instance_start_prepare` and `instance_start_apply` after reviewing the plan and confirming in Desktop. Poll the returned operation ID, then wait for a successful business `target_request`; process existence alone is not readiness. To stop an isolated test instance, prepare and confirm `instance_stop_apply` and check live status again. This affects the entire environment. Stop never escalates from graceful SIGTERM to force kill. If stopping remains pending, inspect Desktop and query status before another action.
+
 ## Use account-scoped takeover
 
 In Desktop, bind the local source to the remote installation and start the local receiver. The remote Hub and business listener must share a runtime owner. Use the local management MCP.
