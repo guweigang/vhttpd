@@ -18,13 +18,13 @@ Agent 需要能发现目标版本提供的能力，查到使用契约，并在�
 
 | 能力域 | 已有 MCP 入口 | 需要补齐 |
 | --- | --- | --- |
-| 工作区、应用与模板 | `context_get`、`templates_list`、`project_create`、`project_select`、文件读取及 revision 变更；应用绑定由 Desktop 选择 | 工作区授权后的模板创建与已有项目接入、独立应用创建与绑定、可发现的模板依赖和版本。区分工作区授权、应用授权和目标环境授权 |
-| vhttpd 配置与数据面 | `schema_get`、配置校验、启动和业务 HTTP 请求 | 让 Agent 发现目标版本支持的 listener、ingress、pipeline、adapter、transform、policy、engine、provider 和资源类型。提供按能力的例子与验证契约，覆盖 HTTP、流式请求、WebSocket、Relay 和应用业务 MCP |
-| 应用脚本、兼容库与集成 | vjsx 指引和 HTTP/JSON 模板 | 按 profile 交付标准库、宿主 API、可用模块、版本限制和验证样例。纳入微信云开发兼容库、仓库中的 Codex Bot 应用组件和纯 TOML pipeline |
-| Desktop 主机和环境管理 | `targets_list`、`target_status` | 主机登记与连接状态、远端实例发现和接入、环境创建和实例生命周期；连接凭据由 Desktop 管理。明确区分正在管理的实例、已发现实例和当前源码绑定 |
-| 运行包与发布 | 本地启停、远端应用发布与回滚、运行时升级与回滚、`operation_get` | 运行包发现、下载与安装、版本选择和兼容性查询；应用安装清单和历史查询；共享环境配置的 diff、预检、应用与恢复 |
-| Relay 与流量接管 | 公网 MCP Relay 创建、状态、撤销；接管预检、启动、状态、释放 | 普通 Relay、共享 Relay、数据库 Relay 和链路探测的发现与诊断；按具体操作开放配置及生命周期管理，保留现有发布与接管工具 |
-| 运维诊断与恢复 | 本地运行状态、日志、业务请求、会话内源码恢复 | 运行图、配置与发布历史、远端应用日志和事件、worker 和 provider 状态、协议级探测。已有 Admin 配置变更与运行计划替换通过明确的受控操作接入，并报告适用版本和影响范围 |
+| 工作区、应用与模板 | `context_get`、模板发现与创建、`application_install_prepare/apply`、文件 revision 变更和 Desktop 应用绑定 | 任意源码工作区与已安装应用解耦。工作区、应用和管理会话已分别执行授权检查 |
+| vhttpd 配置与数据面 | 停机或实时 `schema_get` 覆盖九个配置域，应用变更校验与业务 HTTP 请求，远端 `target_request` | 流式 HTTP、WebSocket 和应用业务 MCP 的协议级验证工具。共享配置当前只支持 pipeline 的精确匹配路径 |
+| 应用脚本、兼容库与集成 | vjsx 参考，pipeline、微信云开发兼容、Codex Bot 模板和独立 `guidance_get` 主题，三个已安装的 DSH Skills | 微信真实登录、数据库及存储、已有云函数迁移和公网专项验收仍需补齐 |
+| Desktop 主机和环境管理 | `targets_list`、`target_status`、`host_inventory_get` 区分登记目标、发现环境、连接状态和主机运行包 | 主机登记与连接操作、发现环境接入、环境创建及实例生命周期写工具。凭据继续由 Desktop 管理 |
+| 运行包与发布 | 本地启停，远端应用发布与回滚、运行时升级与回滚；运行包及官方版本发现、配置兼容性预检；应用安装与历史查询；共享 pipeline 路径变更及恢复 | 运行包下载、安装和选择的 MCP 操作，以及超出 pipeline 精确路径的共享配置变更 |
+| Relay 与流量接管 | 公网 MCP Relay 发布与回收、账号接管与释放；`relay_connections_list` 查询本机及远端保存的连接，运行时 Relay 诊断 | 普通及共享 Relay 配置写入、生命周期与数据库 Relay 专项探针 |
+| 运维诊断与恢复 | 本机和远端运行图、worker、provider、Relay、进程级 WebSocket 统计；远端应用日志、事件、安装身份、发布及升级历史、业务 GET/HEAD 验证 | 配置历史恢复、流式 HTTP 与 WebSocket 业务协议探针，以及更完整的受控运行计划替换 |
 
 ### MCP、指引与 Skills 的分工
 
@@ -157,6 +157,38 @@ DSH 安装包内的 `dsh-mcp-client` 通过本机 Streamable HTTP 调用 `applic
 - `runtime_diagnostics_get` 从运行中的本机 Admin 读取 `graph`、`workers`、`providers`、`relay` 四类状态，使用固定查询和受限字段。诊断面覆盖整个本机环境，所以需要本机 MCP 会话。停机时可以查询运行包和 schema。
 - `vhttpd-debug` 按运行图、worker、provider 和 Relay 状态给出排查顺序。`vhttpd-deploy` 说明如何区分本机复现所用的包与远端包。
 - DSH 安装包内的 MCP 客户端通过 Streamable HTTP 实测。停机时读到运行包 0.9.0，诊断调用返回 `runtime_not_running`。启动后运行图返回 5 个节点、3 条边，另三类接口均返回结构化状态。测试环境未配置独立 worker、provider 实例或 Relay Agent，三类列表均为空。随后默认 Desktop MCP 自动回归通过。真实 Relay 的历史回归曾在长连接握手成功后遇到运行时启动请求 HTTP 504，根因和修复后的公网验收见下文。任意 Admin 路径作为 topic 被拒绝，测试实例已停止。
+
+### 2026-11-05 能力核对与诊断入口验收
+
+本批新增 11 个 MCP 工具。管理工具沿用已登记目标、当前 Desktop 主机连接和绑定代次。已安装的 Desktop 生产构建包含这些入口，旧应用包已保留供回退。
+
+| 入口 | 可执行行为与范围 |
+| --- | --- |
+| `host_inventory_get` | 查询登记主机的连接快照、发现环境和已安装运行包，标明环境是否已经登记 |
+| `runtime_packages_list`、`runtime_releases_list`、`runtime_package_probe` | 查询本机已安装包 ID、官方完整版本及校验文件，再以目标包校验整个绑定环境。预检核对返回协议、版本和配置 revision |
+| `target_applications_list` | 查询远端实时应用、安装身份、版本和业务监听 ID |
+| `target_request` | 对配置中确定的远端业务 HTTP 监听发 GET 或 HEAD 请求，限制响应大小并保留重定向状态。拒绝管理监听和 Admin 路径 |
+| `target_diagnostics_get` | 查询远端 graph、workers、providers、relay 和 websocket 五类状态，投影受限字段 |
+| `target_logs_query` | 按实时应用 ID 查询日志，支持数量、搜索和游标。验证应用归属，脱敏目标配置中的已知凭据，排除存储路径 |
+| `target_events_query` | 查询有数量上限的运行事件，只返回标识、状态和请求关联字段 |
+| `target_history_list` | 查询当前主机已发现的应用发布及运行时升级记录，与 `operation_get` 配合使用 |
+| `relay_connections_list` | 读取本机连接库，或通过现有主机连接刷新远端连接库，返回连接标识、协议与认证是否已配置 |
+
+`capabilities_list` 新增 `coverage_version`、`coverage_status` 和逐域 `coverage`。目录给出该域工具、指引主题和仍缺少的操作，整体状态当前为 `partial`。工具可调用与工作流验收分别记录。测试检查每个注册工具均归属已知能力域，并遍历 `tools/list` 的全部分页与会话可用项比对。
+
+`guidance_get` 新增 `workflow`、`pipeline`、`wechat-cloud-functions`、`codexbot`、`deploy`、`debug`。这些主题来自 Desktop 生产构建，返回 `source: desktop_package`、Desktop 版本、指引版本和目标运行包版本。空工作区也能读取新主题。原有 `develop`、`vjsx` 继续由目标运行包提供版本化 API。三个 DSH Skills 已更新，其中开发 Skill增加三份项目契约，并要求在 Relay 启动受理后查询就绪。
+
+DSH 安装包内的 MCP 客户端使用实际新版 Desktop 界面签发的本机管理配置进行验收，注册全部 53 个会话可用工具，与能力目录完全一致。复用隔离 Ubuntu 环境 `mcp-shared-config-qa` 和应用 `qa`，得到以下结果。
+
+- 六个 Desktop 指引主题均可读取，来源与版本字段可核对。DSH 的 filesystem provider 从实际已安装目录发现三份 Skill，使用 DSH `skill` 工具逐一加载成功。
+- 运行包预检返回兼容，官方版本查询返回两个完整 Linux amd64 版本。主机、已安装运行包和本机及远端 Relay 连接库查询成功，测试连接的 Token 和 URL 未出现在结果中。
+- 业务探针分别返回 HTTP 200 和 404。应用日志返回 14 条同属 `qa` 的记录，游标续读通过；运行事件返回 2 条。五类诊断均返回结构化结果。历史查询读取到 1 条已有操作，并通过 `operation_get` 核对终态。
+- 7 个拒绝用例通过，覆盖任意 Admin topic、管理监听、越界 URL、通配及未知应用日志、未知主机和未知运行包。
+- 三组 V 测试通过，覆盖日志归属、字段投影、能力目录、HTTP 会话、分页、指引、绑定切换和授权隔离。六份 Skill 及项目参考的 OpenKnowledge lint 均为零错误、零警告。
+
+验收后关闭临时 MCP 并清除客户端凭据，停止隔离 Ubuntu 实例和测试管理监听。更新后的 Desktop 已回到原数据目录，原 `default` 实例恢复运行。
+
+仍待完成的范围以本节上方能力清单和 MCP 的 `coverage.remaining` 为准。包括主机与实例写操作、运行包下载安装及选择、普通 Relay 写入及数据库链路探针、更广的共享配置变更、配置历史恢复和流式协议探针。微信真实账号、数据库及存储与已有项目迁移属于待完成的专项验收。
 
 ### 远端共享环境配置
 
