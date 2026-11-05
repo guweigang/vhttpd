@@ -22,6 +22,13 @@ const workbench_soft_accent = u32(0xeaf1ff)
 @[heap]
 struct Workshop {
 mut:
+	desktop_update_open bool
+	desktop_update_busy bool
+	desktop_update_checked bool
+	desktop_update_settings ui2.SettingsState
+	desktop_update_job host.RuntimeJob
+	desktop_update_result DesktopUpdateResult
+	desktop_update_results chan DesktopUpdateResult = chan DesktopUpdateResult{cap: 1}
 	confirm_restart fn (string, string) bool = ui2.confirm
 	workspace_page WorkspacePage
 	workspace_application string
@@ -302,6 +309,9 @@ fn cleanup() {
 	// must never send commands to the parent's copied worker channels.
 	if app.owner_pid != os.getpid() || !app.worker_started || app.quitting { return }
 	app.quitting = true
+	if app.desktop_update_busy {
+		select { app.desktop_update_job.cancel <- true {} else {} }
+	}
 	app.refresh_stop <- true
 	select { app.runtime_catalog_job.cancel <- true {} else {} }
 	if app.runtime_busy {
@@ -336,6 +346,7 @@ fn cleanup() {
 fn poll_worker() {
 	mut app := unsafe { workshop }
 	if app.quitting { return }
+	app.poll_desktop_update()
 	select { status := <-app.remote_worker.snapshots { if status.sequence >= app.remote_sequence && app.remote_pending_connect == '' { app.remote_snapshot = status } } else {} }
 	if app.remote_auto_open && app.remote_snapshot.connected && !app.remote_snapshot.busy && app.remote_snapshot.profile_id == app.remote_id {
 		app.remote_auto_open = false
@@ -475,6 +486,7 @@ fn handle_event(event string) {
 	if handle_workbench_menu(event) { return }
 	$if windows { if handle_windows_field_event(event) { return } }
 	mut app := unsafe { workshop }
+	if app.handle_desktop_update_event(event) { return }
 	if event == 'form_submit' { submit_active_form(); return }
 	defer {
 		focus_id := match event {
@@ -910,6 +922,15 @@ fn build_window_content() ui2.Element {
 	b := workbench_bounds()
 	w := if b.width > 760 { b.width } else { 760.0 }
 	h := if b.height > 660 { b.height } else { 660.0 }
+	if app.desktop_update_open {
+		settings := ui2.settings(app.update_settings_config()) or {
+			label('desktop_update_error', '无法打开软件更新。', 24, 70, w - 48, 14, workbench_ink)
+		}
+		return ui2.screen(workbench_paper, [
+			button('desktop_update_back', '返回工作台', 16, 12, 132, false, true),
+			settings,
+		])
+	}
 	content_x := 242.0
 	// Content keeps its inset; page scroll viewports extend to the window edge.
 	cw := w - content_x - 30
