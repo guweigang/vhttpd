@@ -68,6 +68,9 @@ fn cached_workbench_font(directory string, cache string, decoder string, asset W
 	ensure_workbench_font_cache(cache)!
 	target := os.join_path(cache, '${asset.decoded_sha256}-${asset.decoded_file}')
 	if valid_workbench_font(target, asset.decoded_bytes, asset.decoded_sha256) { return target }
+	if !os.is_file(decoder) {
+		return error('字体解码器缺失，请重新解压完整工作台安装包。')
+	}
 	temporary := target + '.${rand.ulid()}.tmp'
 	defer { os.rm(temporary) or {} }
 	mut child := os.new_process(decoder)
@@ -128,7 +131,15 @@ fn run_font_smoke() ! {
 	for bold in [false, true] {
 		for size in [12.0, 14.0, 15.0, 18.0] {
 			element := workbench_font_layout(ui2.label('font-check', '', ui2.rect(0, 0, 0, 0), ui2.TextStyle{ font_family: 'monospace', size: size, bold: bold }))
-			style := element.text_style
+			mut style := element.text_style
+			$if windows {
+				// Before the window starts, ui2 measures with fontstash.
+				// Pass the verified file so it measures the bundled face.
+				style = ui2.TextStyle{
+					...style
+					font_family: if bold { workbench_bold_font_path } else { workbench_regular_font_path }
+				}
+			}
 			a := ui2.measure_layout_text('AA'.repeat(32), style, -1)!
 			b := ui2.measure_layout_text('中'.repeat(32), style, -1)!
 			c := ui2.measure_layout_text('A中'.repeat(32), style, -1)!
