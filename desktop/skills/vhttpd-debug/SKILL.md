@@ -8,6 +8,8 @@ Call `context_get` to confirm the bound application and capture its `binding_rev
 
 ## Reproduce and identify the failing layer
 
+For a running local environment, call `runtime_diagnostics_get` with `graph` to trace listeners, pipelines and adapters. Use `workers` for process health and load, `providers` for desired versus connected state, and `relay` for carrier counts, agent states and pending frames. These snapshots cover the whole environment, so use a local Desktop session. If the runtime is stopped, use `runtime_package_get` and `schema_get` to confirm the package and its supported configuration before starting.
+
 1. Read `runtime_status` and query a narrow set of recent entries with `logs_query`. Search by the request or trace ID when available. For a remote installation, select the application in Desktop and use its application logs. Record the target, application, time, request method, path, response status and correlation ID.
 2. Reproduce locally using the bound business listener and `application_request`. Prefer a read-only request where it reproduces the issue. Confirm the request's data effects before using a write method.
 3. Compare the local response with the remote evidence. Use `guidance_get` and `schema_get` for the bound runtime's supported APIs and configuration. If a source fix is needed, follow the revision-based workflow in `vhttpd-develop`.

@@ -132,7 +132,7 @@ Desktop 提供「绑定项目目录」入口。已有应用从环境与应用选
 
 这类应用以 `examples/wechat-cloud-functions` 为参考，云函数和业务接口由 vhttpd 运行。现有示例包含 `lib/cloud` 服务端兼容库和小程序 `utils/vhttpd.js` 客户端。开发入口按项目现状区分。
 
-- 空工作区通过 `templates_list` 发现 `wechat-cloud-functions` 模板，再用 `project_create` 生成最小可运行项目。模板复用示例中的兼容库与客户端，提供应用入口、vhttpd 配置、最小云函数和验证请求。基础库随模板和应用制品交付，并记录版本。
+- 空工作区用 `project_create` 的 `environment` 模板创建环境。通过 `application_templates_list` 发现 `wechat-cloud-functions`，再用 `application_install_prepare` 和 `application_install_apply` 生成并安装最小可运行组件。模板复用示例中的兼容库与客户端，提供应用入口、vhttpd 配置、最小云函数和验证请求。基础库随模板和应用制品交付，并记录版本。
 - 已有项目先调用 `context_get`，检查应用入口、`cloudfunctions/` 和现有兼容库。保留业务代码与目录结构，按缺少的依赖生成变更，经 diff 和校验后应用。已绑定应用的公网会话继续操作绑定范围内的文件。
 - `vhttpd-develop` 增加微信云开发兼容项目的触发条件与操作步骤。先识别项目是初始化还是接入，再查与运行包及兼容库版本匹配的开发契约。契约通过 `guidance_get` 的独立主题提供给 Web Agent，覆盖 `wx-server-sdk` 兼容接口、身份上下文、函数互调、数据库和存储、客户端接入、已支持的选项及错误行为。项目 `AGENTS.md` 只记录该应用实际使用的入口、库版本和验证方式。
 - 本地验证沿用文件 revision、变更校验、启动和 `application_request`。发布沿用 `vhttpd-deploy` 与应用发布工具，预检确认制品包含应用入口、云函数和服务端兼容库。业务验证调用真实云函数入口并检查返回，失败时用 `vhttpd-debug` 查应用日志，按变更或发布记录恢复。

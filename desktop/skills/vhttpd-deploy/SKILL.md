@@ -16,6 +16,8 @@ For TOML pipeline, WeChat cloud compatibility and Codex Bot, bind the installed 
 
 ## Upgrade a runtime
 
+Use `runtime_package_get` to check the local selection before reproducing a target issue. Use `target_status` for the remote package inventory and version. After an upgrade, verify business behavior and use `runtime_diagnostics_get` to inspect the running local reproduction if it differs from the target.
+
 Use `target_status` to choose an installed package ID. Call `runtime_upgrade_prepare` with `target_runtime_id`, review the version and affected applications, then use `runtime_upgrade_apply` and confirm in Desktop. Track the operation with `operation_get` and verify the active package and business behavior.
 
 To return to the previous package, call `runtime_upgrade_prepare` with the current completed upgrade ID in `rollback_from`, then call `runtime_upgrade_rollback` with the returned plan and confirm in Desktop.
