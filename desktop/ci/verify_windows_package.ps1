@@ -78,6 +78,10 @@ try {
 }
 $ssh = Start-Process "$package/tools/openssh/ssh.exe" -ArgumentList '-V' -PassThru -RedirectStandardOutput "$ResultDirectory/ssh-version.log" -RedirectStandardError "$ResultDirectory/ssh-version-stderr.log"
 if (!$ssh.WaitForExit(10000) -or $ssh.ExitCode -ne 0) { if (!$ssh.HasExited) { Stop-Process $ssh.Id -Force }; throw 'Bundled OpenSSH did not run' }
+$env:VHTTPD_DESKTOP_UPDATE_FIXTURE = "$PSScriptRoot/desktop-update-fixture.json"
+$policy = 'HKLM:\SOFTWARE\Policies\Microsoft\Edge'
+New-Item -Force $policy | Out-Null
+New-ItemProperty -Path $policy -Name HideFirstRunExperience -PropertyType DWord -Value 1 -Force | Out-Null
 $env:VHTTPD_DESKTOP_CI_READY = "$ResultDirectory/packaged-window-ready.txt"
 $process = Start-Process "$package/vhttpd-workbench.exe" -WorkingDirectory $extract -PassThru -RedirectStandardOutput "$ResultDirectory/packaged-stdout.log" -RedirectStandardError "$ResultDirectory/packaged-stderr.log"
 try {
@@ -87,6 +91,7 @@ try {
  Start-Sleep -Seconds 2
  $process.Refresh()
  if ($process.HasExited) { throw 'Extracted Desktop exited unexpectedly' }
+ & "$PSScriptRoot/verify_windows_update.ps1" -Process $process -ResultDirectory $ResultDirectory
  & "$PSScriptRoot/verify_windows_tray.ps1" -Process $process -ResultDirectory $ResultDirectory
 } finally { if (!$process.HasExited) { Stop-Process -Id $process.Id -Force } }
 @{archive_sha256=$expected; startup='passed'; normal_exit='passed'; dependency_closure='passed'; bundled_ssh='passed'; native_ssh_password_and_forwarding='passed'; packaged_password_helper='passed'; development_path=$false; real_server_acceptance='pending user Windows test'} | ConvertTo-Json | Set-Content "$ResultDirectory/package-acceptance.json"

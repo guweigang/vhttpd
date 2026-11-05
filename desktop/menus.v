@@ -108,7 +108,7 @@ fn (app &Workshop) workbench_menus(root ui2.Element) []ui2.Menu {
 		ui2.Menu{title: '查看', items: [menu_row('overview', '运行环境总览' + target, available && !app.new_project && selected != '', ''),
 			menu_row('logs', '运行日志' + target, available && selected != '', ''), ui2.menu_separator(),
 			menu_row('config_diff', '待生效配置差异' + target, app.local_command_enabled('config_diff'), ''), menu_row('history_open', '已生效版本历史' + target, app.local_command_enabled('history_open'), '')]},
-		ui2.Menu{title: '帮助', items: [menu_row('help', '使用说明', true, ''), menu_row('shortcuts', '快捷键说明', true, ''), ui2.menu_separator(), menu_row('about', '关于 vhttpd Workbench', true, '')]}]
+		ui2.Menu{title: '帮助', items: [menu_row('help', '使用说明', true, ''), menu_row('shortcuts', '快捷键说明', true, ''), ui2.menu_separator(), menu_row('desktop_updates', '检查更新…', true, ''), menu_row('about', '关于 vhttpd Workbench', true, '')]}]
 	$if macos { menus.insert(menus.len - 1, ui2.Menu{title: '窗口', items: [menu_row('minimize', '最小化', true, 'cmd+m'), menu_row('zoom', '缩放', true, ''), menu_row('fullscreen', '进入 / 退出全屏', true, 'ctrl+cmd+f')]}) }
 	return menus
 }
@@ -171,6 +171,13 @@ fn handle_workbench_menu(event string) bool {
 		'config_diff', 'history_open' { app.menu_overview(); handle_event(action) }
 		'help' { ui2.alert('使用说明', '选择本地或远端位置 → 选择 vhttpd 运行环境 → 查看应用、Relay、配置和日志。\n\n配置在 Admin UI 编辑、校验和发布；发布后回到工作台，重启并检查整个项目生效。\n\n远端服务器通过 SSH 连接，密码仅用于本次会话。一个运行环境可承载多个应用；启停和重启影响整个进程。运行包用于安装或升级 vhttpd。') }
 		'shortcuts' { ui2.alert('快捷键说明', '⌘（macOS）/ Ctrl（Windows、Linux）\n\nN：新建项目    O：导入项目    ,：管理运行环境\nX / C / V / A：剪切 / 复制 / 粘贴 / 全选\n\nTab / Shift+Tab：下一个 / 上一个控件\n⌘ / Ctrl+Return：提交当前表单\nEsc：返回或取消（主机指纹不会通过 Return 自动接受）') }
+		'desktop_updates' {
+			app.desktop_update_open = true
+			app.environment_menu = ui2.DropdownMenuState{}
+			app.desktop_update_settings = ui2.SettingsState{}
+			app.start_desktop_update_check()
+			ui2.refresh()
+		}
 		'about' { ui2.alert('关于 vhttpd Workbench', app.workbench_about_text()) }
 		'minimize', 'zoom', 'fullscreen' { menu_window_action(action) }
 		else { handle_event(action) }

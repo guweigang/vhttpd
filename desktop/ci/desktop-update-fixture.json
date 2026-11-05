@@ -1,0 +1,19 @@
+[
+  {
+    "tag_name": "desktop-v0.2.0",
+    "draft": false,
+    "prerelease": false,
+    "assets": [
+      {
+        "name": "vhttpd-workbench-macos-arm64-0.2.0.zip",
+        "size": 100,
+        "browser_download_url": "https://github.com/guweigang/vhttpd/releases/download/desktop-v0.2.0/vhttpd-workbench-macos-arm64-0.2.0.zip"
+      },
+      {
+        "name": "vhttpd-workbench-windows-amd64-0.2.0.zip",
+        "size": 100,
+        "browser_download_url": "https://github.com/guweigang/vhttpd/releases/download/desktop-v0.2.0/vhttpd-workbench-windows-amd64-0.2.0.zip"
+      }
+    ]
+  }
+]
