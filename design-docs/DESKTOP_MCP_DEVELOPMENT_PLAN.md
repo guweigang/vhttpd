@@ -22,7 +22,7 @@ Agent 需要能发现目标版本提供的能力，查到使用契约，并在�
 | vhttpd 配置与数据面 | 停机或实时 `schema_get` 覆盖九个配置域，应用变更校验与业务 HTTP 请求，远端 `target_request` | 流式 HTTP、WebSocket 和应用业务 MCP 的协议级验证工具。共享配置当前只支持 pipeline 的精确匹配路径 |
 | 应用脚本、兼容库与集成 | vjsx 参考，pipeline、微信云开发兼容、Codex Bot 模板和独立 `guidance_get` 主题，三个已安装的 DSH Skills | 微信真实登录、数据库及存储、已有云函数迁移和公网专项验收仍需补齐 |
 | Desktop 主机和环境管理 | 主机登记、连接、断开，环境发现与身份校验接入，以及环境创建、实例启停均已有 MCP 工具，并通过当前 Desktop 与 DSH 隔离环境验收 | 密码认证仍须在 Desktop 完成，首次主机指纹确认继续由 Desktop 管理；工具不接收私钥路径或密码 |
-| 运行包与发布 | 本地启停，远端应用发布与回滚、运行时升级与回滚；运行包及官方版本发现、配置兼容性预检；应用安装与历史查询；共享 pipeline 路径变更及恢复 | 运行包下载、安装和选择的 MCP 操作，以及超出 pipeline 精确路径的共享配置变更 |
+| 运行包与发布 | 本地启停，远端应用发布及回滚、运行时升级及回滚；官方运行包发现、下载、安装、本机选择及恢复已通过当前 Desktop 与 DSH 验收；配置兼容性预检、应用安装与历史查询、共享 pipeline 路径变更及恢复 | 超出 pipeline 精确路径的共享配置变更 |
 | Relay 与流量接管 | 公网 MCP Relay 发布与回收、账号接管与释放；`relay_connections_list` 查询本机及远端保存的连接，运行时 Relay 诊断 | 普通及共享 Relay 配置写入、生命周期与数据库 Relay 专项探针 |
 | 运维诊断与恢复 | 本机和远端运行图、worker、provider、Relay、进程级 WebSocket 统计；远端应用日志、事件、安装身份、发布及升级历史、业务 GET/HEAD 验证 | 配置历史恢复、流式 HTTP 与 WebSocket 业务协议探针，以及更完整的受控运行计划替换 |
 
@@ -158,6 +158,34 @@ DSH 安装包内的 `dsh-mcp-client` 通过本机 Streamable HTTP 调用 `applic
 - `vhttpd-debug` 按运行图、worker、provider 和 Relay 状态给出排查顺序。`vhttpd-deploy` 说明如何区分本机复现所用的包与远端包。
 - DSH 安装包内的 MCP 客户端通过 Streamable HTTP 实测。停机时读到运行包 0.9.0，诊断调用返回 `runtime_not_running`。启动后运行图返回 5 个节点、3 条边，另三类接口均返回结构化状态。测试环境未配置独立 worker、provider 实例或 Relay Agent，三类列表均为空。随后默认 Desktop MCP 自动回归通过。真实 Relay 的历史回归曾在长连接握手成功后遇到运行时启动请求 HTTP 504，根因和修复后的公网验收见下文。任意 Admin 路径作为 topic 被拒绝，测试实例已停止。
 
+### 2026-11-05 运行包下载、安装与选择验收
+
+本批新增 7 个本机管理 MCP 工具，当前绑定会话列出 74 个工具。运行包能力域的 coverage.remaining 已清空，整体能力覆盖仍为 partial。实现见 [运行包操作](../desktop/host/mcp_packages.v) 和 [MCP 工具契约](../desktop/devmcp/packages.v)。
+
+| 工具 | 契约 |
+| --- | --- |
+| `runtime_download_prepare/apply` | 固定官方发布标签与平台，复用官方 GitHub 元数据、资产地址约束和 SHA256 校验；返回异步操作 ID，完成后取得不含路径的 download_id。不接收任意 URL |
+| `runtime_install_prepare/apply` | 以 download_id 安装。本机省略 host_id；远端须连接已保存、平台匹配的主机。复用现有归档、签名或架构、完整性及版本检查，保留当前选择和实例绑定 |
+| `runtime_package_select_prepare/apply` | 选择已知本机 package_id，预检整个绑定配置并固定配置版本和二进制摘要；执行时要求本机运行时停止。更新 Desktop 选择和 MCP 上下文，清除旧变更预览并递增绑定代次 |
+| `runtime_package_operation_get` | 查询下载、安装或选择的异步结果；选择后先重新 context_get，再用新 binding_revision 查询完成状态 |
+
+下载、安装与选择分离，原 Desktop 界面的“下载安装并选择”行为保持原样。MCP 安装调用复用相同安装校验，但不会自动选择。远端实例选择包继续使用已有 runtime_upgrade_prepare/apply/rollback，保留环境级升级与回滚的影响预览。
+
+包计划有效期五分钟，新预检替换旧包计划；相同当前执行计划幂等返回同一操作 ID。成功的本机选择将该计划和操作记录更新到新绑定代次。下载 ID 属于当前开发授权，缓存有效期一小时，每个会话最多四个下载；操作记录最多 128 条。正常退出清理会话下载缓存，已安装运行包保留。工具不公开缓存路径或接受本机归档路径。仅本机管理 MCP 提供这些写入口，公网应用 Relay 不扩展管理权限。
+
+本轮实际发现并修正两项恢复问题：本机 context_get 若排在运行包选择后执行，可读取最新代次，旧公网授权仍受固定代次检查；会话保留先前由 Desktop 授权的运行包引用，避免原内置或外部包在切换后从清单消失而无法恢复。当前 Desktop 的运行包显示也随 MCP 选择更新。
+
+验收使用当前安装、实际运行的 Desktop 界面签发的本机连接，DSH 安装包内真实 MCP 插件经 Streamable HTTP 完成调用，不以测试程序替代 Desktop 服务，也不将连接器流程记为模型会话自动执行全部写操作。DSH 桌面会话另实际调用 skill 工具重新加载 vhttpd-deploy 与 vhttpd-debug，正确说明安装不切换、选择后刷新上下文、本机恢复和远端升级/回滚的区别。两份 Skill 的格式验证及 DSH 实际加载器检查通过。
+
+- 官方发布标签为 v0.1.0-dev.g4aac0fb950d8，实际下载 macos-arm64 Workbench ZIP 与 linux-arm64 TAR.GZ。两个文件均通过发布的 SHA256 校验。重复下载和选择提交返回原操作 ID。
+- 本机隔离测试应用为纯 TOML pipeline，监听 55302，GET /healthz 返回 pipeline-ok。安装后原包仍为当前选择；切换官方包、刷新上下文、启动并验证业务成功，随后停止、恢复原包、再次验证同样响应，最后停止。本机新包版本显示为 0.1.0，恢复后显示 QA 基线 0.9.0。
+- 远端复用 OrbStack Ubuntu 及已有 mcp-shared-config-qa。安装官方 Linux 包后，所有既有实例运行包绑定不变；MCP 在安装前后请求 55172 /shared-before 均得到 HTTP 200。没有新建 VM、Hub 或远端实例，没有改动 bodytest。远端安装按归档摘要命名，同包重复安装保留已有目录。
+- 下载执行期间，本机 runtime_status 实测响应约 17 毫秒，未阻塞于下载 Worker。
+- 9 个拒绝用例通过：任意第三方地址作为标签、不支持的平台、未知下载 ID、平台不匹配、注入归档路径、未知 package_id、未预检计划、未知操作 ID、旧绑定代次。真实归档的额外回归验证安装不改选择、错误 SHA256 不替换选择，以及切换后原包仍可发现。
+- macOS 五项基础检查通过，覆盖包操作、原有安装、官方目录、能力清单与 HTTP MCP 的权限隔离；恢复问题修正后，包恢复与 HTTP MCP 检查重新通过。Ubuntu 使用 /home/guweigang/v/v 0.5.2 d13ccdd、local-dev 分支、GCC 与 gc none 原生验证 Linux 官方包安装保留原选择，并拒绝错误校验值。复用既有 Linux 运行环境，没有替换 VM 编译器或重新构建其运行时。
+
+当前 Desktop 已安装此生产构建，原包保留为 Workbench Before Runtime Packages.app。验收收尾恢复原 default 运行环境，停止隔离测试进程，关闭临时 MCP 和 SSH 入口。结果见 [结构化验收证据](release-evidence/desktop-mcp-runtime-packages-2026-11-05.json)，详细日志位于本机 /private/tmp/vhttpd-package-qa/desktop-dsh-result.log、tests.log、package-recovery-tests-final.log、recovery-tests.log 和 linux-tests.log。
+
 ### 2026-11-05 主机登记、环境接入与断开验收
 
 本批补齐 5 个本机管理 MCP 工具，当前绑定会话可列出 67 个工具。实现沿用 [主机登记与身份校验](../desktop/host/mcp_host_registry.v) 和 [MCP 生命周期分发](../desktop/devmcp/lifecycle.v)，公网应用 Relay 不增加这些管理权限。
@@ -240,7 +268,7 @@ DSH 安装包内的 MCP 客户端使用实际新版 Desktop 界面签发的本�
 
 验收后关闭临时 MCP 并清除客户端凭据，停止隔离 Ubuntu 实例和测试管理监听。更新后的 Desktop 已回到原数据目录，原 `default` 实例恢复运行。
 
-仍待完成的范围以本节上方能力清单和 MCP 的 `coverage.remaining` 为准。包括主机与实例写操作、运行包下载安装及选择、普通 Relay 写入及数据库链路探针、更广的共享配置变更、配置历史恢复和流式协议探针。微信真实账号、数据库及存储与已有项目迁移属于待完成的专项验收。
+仍待完成的范围以本节上方能力清单和 MCP 的 `coverage.remaining` 为准。当前仍包括普通 Relay 写入及数据库链路探针、更广的共享配置变更、配置历史恢复和流式协议探针。主机与实例、本机运行包下载、安装及选择的后续验收见上方记录；密码认证和首次指纹确认仍由 Desktop 提供。微信真实账号、数据库及存储与已有项目迁移属于待完成的专项验收。
 
 ### 远端共享环境配置
 
