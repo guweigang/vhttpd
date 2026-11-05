@@ -14,6 +14,16 @@ For TOML pipeline, WeChat cloud compatibility and Codex Bot, bind the installed 
 2. Call `application_release_apply` with the returned plan ID and confirm in Desktop. Poll `operation_get` with the operation ID. After `completed`, verify the target and make the agreed business request.
 3. To roll back, prepare with `rollback_from` set to the current completed release operation ID and omit `installation_id`. Review the recovered version and call `application_release_rollback` with that plan. The previous artifact must still be retained. Verify the business response again.
 
+## Change shared remote routing
+
+Use the local management MCP and confirm the target ID and binding revision. For an existing shared HTTP pipeline with a single-line `match.paths` assignment, call `shared_config_diff` with the pipeline ID and the desired exact paths. Review the relative configuration source and the before and after paths.
+
+1. Call `shared_config_preflight` with the plan ID to compile the whole proposed environment.
+2. Call `shared_config_apply` with the same plan ID and confirm the restart in Desktop. Verify both the old and new paths at the business listener.
+3. To restore the baseline, call `shared_config_rollback` with that plan ID and confirm in Desktop. Verify both paths again. Keep the same Desktop management session and binding until verification is complete.
+
+If the tool reports a pending restart, check the target state before calling it again with the same plan ID. If the configuration changed since preview, inspect it and prepare a new diff.
+
 ## Upgrade a runtime
 
 Use `runtime_package_get` to check the local selection before reproducing a target issue. Use `target_status` for the remote package inventory and version. After an upgrade, verify business behavior and use `runtime_diagnostics_get` to inspect the running local reproduction if it differs from the target.

@@ -16,6 +16,8 @@ For a running local environment, call `runtime_diagnostics_get` with `graph` to 
 
 For a TOML pipeline, compare a matching and an unmatched request, then inspect the configured listener, match and adapter. For WeChat, verify the compatibility hello route first and diagnose authenticated calls through login, function lookup and resource configuration. For Codex Bot, verify the application JSON at GET /, then inspect provider startup and connection state separately. Record any provider or resource that was disabled during the test.
 
+For shared remote pipeline changes, use the deployment Skill's `shared_config_diff` and `shared_config_preflight` tools. Record the expected status for both the old and new paths before applying. After a timeout, compare the target's loaded and on-disk revisions before retrying or restoring.
+
 ## Use account-scoped takeover
 
 In Desktop, bind the local source to the remote installation and start the local receiver. The remote Hub and business listener must share a runtime owner. Use the local management MCP.
