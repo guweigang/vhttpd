@@ -26,6 +26,12 @@ After `relay_agent_control_apply`, poll `relay_operation_get` before checking re
 
 For a startup or publish failure, retain the config plan ID. `relay_config_restore` accepts the exact known baseline and refuses concurrent config changes; guarded recovery can restore a published plan when its managed runtime is no longer ready. Reclaim the Agent config, Hub listener and temporary catalog records separately, then verify baseline business and closed test ports. Raw tokens and arbitrary credential-bearing URLs do not belong in tool arguments.
 
+## Recover edits to existing Relay definitions
+
+Existing manual configurations use the deployment Skill's `relay_config_get` and `relay_config_edit_prepare/preflight/apply/restore` workflow; they do not require an MCP ownership marker. Check the real relative source and complete configuration revision, especially when the Relay is defined in an include file. The preview masks tokens and URLs, preserving private credentials unless an explicit saved connection reference is selected.
+
+After apply, poll `relay_operation_get`, inspect `relay_runtime_status` and verify real traffic. A running process alone does not prove a changed Hub path or Agent setting is effective. An autostart edit restarts the whole environment; validate its other business listeners. Retain the original plan for exact restoration, including when the managed runtime has stopped. Do not overwrite concurrent changes or reuse a restored plan for another apply.
+
 ## Diagnose a database Relay
 
 Use local management MCP and call `relay_database_resources_list` on the bound runtime. For the connected remote environment, supply target_id to inspect its database exports. Match the local resource_id, Relay ID, route and remote_resource to the remote export. This inventory reads the effective configuration; it does not prove database connectivity. Credentials and database addresses stay in configuration.
