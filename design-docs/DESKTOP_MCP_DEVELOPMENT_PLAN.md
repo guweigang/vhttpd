@@ -158,6 +158,17 @@ DSH 安装包内的 `dsh-mcp-client` 通过本机 Streamable HTTP 调用 `applic
 - `vhttpd-debug` 按运行图、worker、provider 和 Relay 状态给出排查顺序。`vhttpd-deploy` 说明如何区分本机复现所用的包与远端包。
 - DSH 安装包内的 MCP 客户端通过 Streamable HTTP 实测。停机时读到运行包 0.9.0，诊断调用返回 `runtime_not_running`。启动后运行图返回 5 个节点、3 条边，另三类接口均返回结构化状态。测试环境未配置独立 worker、provider 实例或 Relay Agent，三类列表均为空。任意 Admin 路径作为 topic 被拒绝，测试实例已停止。
 
+### 远端共享环境配置
+
+通过本机 Desktop 管理会话对已登记、支持手工重启的远端环境操作。本批支持共享 HTTP pipeline 的单行 `match.paths` 精确路径修改。组件源码仍走应用发布流程。
+
+1. `shared_config_diff` 返回配置相对路径、pipeline、原匹配路径、新匹配路径及计划 ID。预览不会改写配置。
+2. `shared_config_preflight` 使用远端 Admin changeset 校验完整项目。应用前再次核对目标、绑定、配置原文和整项目版本。
+3. `shared_config_apply` 经 Desktop 确认后发布并重启远端实例，等待新实例的磁盘与生效版本一致。
+4. `shared_config_rollback` 在同一管理会话中用计划 ID 恢复原文，再重启并核对版本。若目标配置已被其他操作修改，则拒绝覆盖。
+
+DSH 安装包内的 MCP 客户端在隔离 Ubuntu 实例 `mcp-shared-config-qa` 依次完成 `preview`、`prepared`、`applied` 和 `rolled_back`，计划 ID 为 `4b0979d3fe445cdff824ecf7`。对 `qa.shared` 直接发起业务请求。预检前后，`/shared-before` 与 `/shared-after` 分别返回 HTTP 200、404。应用后为 404、200。回滚后恢复 200、404。部署与调试 Skills 已补上对应流程。
+
 ## 后续远端工具
 
 下表中的名字是提案。各工具复用 Desktop 主机、组件安装和接管实现，由 Desktop 保管凭据与执行授权。
