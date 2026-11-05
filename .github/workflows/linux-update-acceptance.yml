@@ -1,0 +1,73 @@
+name: Linux Workbench update fixture
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_run:
+        description: Successful ordinary Linux build run
+        required: true
+        type: string
+      source_sha:
+        description: Full source SHA of ordinary Linux build
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  fixture:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: amd64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify ordinary build identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILD_RUN: ${{ inputs.build_run }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          [[ "$BUILD_RUN" =~ ^[0-9]+$ && "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          gh run view "$BUILD_RUN" --repo "$GITHUB_REPOSITORY" --json headSha,conclusion,workflowName |
+            jq -e --arg sha "$SOURCE_SHA" '.headSha == $sha and .conclusion == "success" and .workflowName == "Workbench Linux Runtime"'
+      - uses: actions/download-artifact@v4
+        with:
+          name: workbench-linux-${{ matrix.arch }}
+          path: candidate
+          run-id: ${{ inputs.build_run }}
+          github-token: ${{ github.token }}
+      - name: Install test-only X11 and browser tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends xvfb xauth xdotool imagemagick \
+            tesseract-ocr tesseract-ocr-chi-sim gir1.2-webkit2-4.1 python3-gi \
+            xdg-utils libgl1-mesa-dri libxrandr2 libxcursor1 libxi6 ca-certificates curl
+      - name: Open the normal package without a tray and check update navigation
+        shell: bash
+        run: |
+          archive="$(find candidate -type f -name '*.tar.gz' -print -quit)"
+          (cd "$(dirname "$archive")" && sha256sum -c "$(basename "$archive").sha256")
+          mkdir extracted evidence
+          tar -xzf "$archive" -C extracted
+          exe="$(find extracted -maxdepth 2 -type f -name vhttpd-workbench -print -quit)"
+          "$exe" --version
+          xvfb-run -a -s '-screen 0 1280x900x24 -dpi 96' \
+            python3 desktop/ci/verify_linux_update.py "$exe" evidence
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: linux-update-evidence-${{ matrix.arch }}
+          path: |
+            evidence/*.png
+            evidence/*.json
+            evidence/*.log
+            evidence/*.txt
