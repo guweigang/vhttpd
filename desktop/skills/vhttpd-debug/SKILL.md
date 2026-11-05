@@ -18,6 +18,14 @@ For a TOML pipeline, compare a matching and an unmatched request, then inspect t
 
 For shared remote pipeline changes, use the deployment Skill's `shared_config_diff` and `shared_config_preflight` tools. Record the expected status for both the old and new paths before applying. After a timeout, compare the target's loaded and on-disk revisions before retrying or restoring.
 
+## Verify an ordinary Relay carrier
+
+Use the deployment Skill's ordinary Relay configuration flow. A saved connection, a successful temporary `relay_connection_probe`, and a registered live Agent are different states. The Agent must initiate its own WebSocket connection from local vhttpd to remote vhttpd; no SSH forwarding replaces this channel. `relay_runtime_status` exposes selected Agent states and explicitly process-wide counts. It also indicates whether the Relay remains configured.
+
+After `relay_agent_control_apply`, poll `relay_operation_get` before checking registered state. Exercise the actual Hub forwarding path and check the expected response from the local adapter. Repeat after stop to establish that traffic no longer reaches it. Probe again while connected and check that the original carrier remains registered. The current lifecycle persists autostart and restarts the whole selected environment; inspect its other business listeners after each restart.
+
+For a startup or publish failure, retain the config plan ID. `relay_config_restore` accepts the exact known baseline and refuses concurrent config changes; guarded recovery can restore a published plan when its managed runtime is no longer ready. Reclaim the Agent config, Hub listener and temporary catalog records separately, then verify baseline business and closed test ports. Raw tokens and arbitrary credential-bearing URLs do not belong in tool arguments.
+
 ## Compare and restore local runtime packages
 
 Keep the baseline package ID from `runtime_packages_list`. Use `runtime_package_probe` before selecting an alternative. Download and install through the deployment Skill's explicit official tag, SHA256 and platform checks; installation alone does not change the selected runtime. Stop the local runtime, prepare/select the installed package, refresh `context_get` for its new binding revision and poll `runtime_package_operation_get`. Check both startup and actual business HTTP before attributing a fault to a version change. To restore the baseline, stop and select its saved package ID, refresh context and verify again. Existing change previews and old public Relay grants cannot be reused across a selection.
