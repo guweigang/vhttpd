@@ -180,7 +180,7 @@ DSH 安装包内的 `dsh-mcp-client` 通过本机 Streamable HTTP 调用 `applic
 - DSH 创建并更新本机连接记录、复制到远端共享连接库；正确凭据探测通过，错误凭据被拒绝。创建 Agent 配置后验证未注册；启动后验证 registered；远端 HTTP 请求经过 WebSocket Relay 到本机 pipeqa，返回 HTTP 200 和 pipeline-ok。活跃连接期间再次探测，没有替换业务载体。
 - 停止 Agent 后，远端请求不再到达本机。先停止本机运行时再恢复 Agent 配置；先停止远端实例再恢复 Hub 配置。两端原业务响应均恢复，目录记录回收，完整源基线恢复。
 - 11 个拒绝用例涵盖错误认证、缺少凭据引用、Token/URL 输入、未知连接、非法标识、端口冲突、未知 Agent/计划、无效恢复和过期绑定。首轮实际 Desktop 探测曾短暂返回网络不可达，后续同地址探测及完整重跑通过；未将其误归因为认证或协议修复。
-- macOS 的 Relay 编排、共享连接库、远端目标和 MCP 服务四个测试套件通过，另补默认不创建 HTTP 转发路径的回归用例；Ubuntu Relay 编排和共享连接库两个套件通过。归属块保护、端口冲突、配置编译及启停后精确恢复均有单测。
+- macOS 的 Relay 编排、共享连接库、远端目标和 MCP 服务四个测试套件通过，另补默认不创建 HTTP 转发路径的回归用例；Ubuntu Relay 编排和共享连接库两个套件通过，新增默认不暴露 HTTP 转发路径用例也已在 Ubuntu 复验。两份 Skill 的格式校验和已安装 DSH 加载通过。归属块保护、端口冲突、配置编译及启停后精确恢复均有单测。
 
 当前 Desktop 已更新为此生产构建，原包备份为 Workbench Before Ordinary Relay.app。部署 Skill 同时安装到 DSH 并由其实际加载。验收结束后已关闭临时 MCP，恢复原 default 0.9.0 环境并在界面确认运行中；隔离远端实例与测试 SSH 管理入口已停止，本机临时监听和远端 55311 监听均已关闭。结构化证据见 [普通 Relay 验收](release-evidence/desktop-mcp-ordinary-relay-2026-11-05.json)。数据库 Relay 专项探针和既有非 MCP 配置的通用编辑仍未完成，能力目录保持 partial。
 
