@@ -108,7 +108,7 @@ Desktop 提供「绑定项目目录」入口。已有应用从环境与应用选
 | 扩展 | `schema_get` | 运行中读取目标实时 schema。停止时可读取与目标包匹配的随包 schema，并标明来源。包内缺失时明确返回不可用 |
 | 复用 | `templates_list`、`files_list`、`files_read` | 返回模板和应用范围内的内容与 revision。模板带适用版本或 profile，限制与当前行为一致 |
 | 复用并加固 | `changes_prepare`、`changes_validate`、`changes_apply`、`changes_restore`、`changes_discard` | diff、配置校验、应用和恢复沿用现有流程；对预览和变更检查绑定与 revision，冲突时重新读取并预览 |
-| 复用并补充结果 | `runtime_status`、`runtime_start`、`runtime_stop`、`logs_query`、`application_request` | 状态和启停结果报告作用范围。日志尽可能返回应用标识及请求关联信息。业务验证只调用选定应用的业务监听器 |
+| 复用并补充结果 | `runtime_status`、`runtime_start`、`runtime_stop`、`logs_query`、`application_request` | 状态和启停结果报告作用范围。经 Relay 启动或重启时先返回受理，轮询 `runtime_status.readiness` 为 `ready` 后调用 `application_request`。本机直连启动等待就绪。日志尽可能返回应用标识及请求关联信息。业务验证只调用选定应用的业务监听器 |
 
 启动、停止及源码写入遵循 Desktop 授权。第一阶段验收使用专用本地测试环境。若环境承载多个应用，执行停机前必须按该环境的授权策略核对影响范围。保留已知凭据脱敏与占位符检查。恢复使用现有会话内记录，其覆盖范围是应用文件，Desktop 退出后恢复记录失效。
 
@@ -156,7 +156,7 @@ DSH 安装包内的 `dsh-mcp-client` 通过本机 Streamable HTTP 调用 `applic
 - `runtime_package_get` 返回所选本机运行包的版本、来源和可用性。文件系统路径留在 Desktop。远端运行包继续通过 `target_status` 查询。
 - `runtime_diagnostics_get` 从运行中的本机 Admin 读取 `graph`、`workers`、`providers`、`relay` 四类状态，使用固定查询和受限字段。诊断面覆盖整个本机环境，所以需要本机 MCP 会话。停机时可以查询运行包和 schema。
 - `vhttpd-debug` 按运行图、worker、provider 和 Relay 状态给出排查顺序。`vhttpd-deploy` 说明如何区分本机复现所用的包与远端包。
-- DSH 安装包内的 MCP 客户端通过 Streamable HTTP 实测。停机时读到运行包 0.9.0，诊断调用返回 `runtime_not_running`。启动后运行图返回 5 个节点、3 条边，另三类接口均返回结构化状态。测试环境未配置独立 worker、provider 实例或 Relay Agent，三类列表均为空。随后默认 Desktop MCP 自动回归通过。启用真实 Relay 的可选回归中，本机 Agent 到远端 Hub 的 WebSocket 握手成功，此前经 Relay 的 MCP 请求也已返回 HTTP 200。随后运行时启动请求等待约 30 秒后返回 HTTP 504，日志记录 `relay_returned_frame_not_found`，该项未通过。长连接握手与单次请求的响应分别验收。任意 Admin 路径作为 topic 被拒绝，测试实例已停止。
+- DSH 安装包内的 MCP 客户端通过 Streamable HTTP 实测。停机时读到运行包 0.9.0，诊断调用返回 `runtime_not_running`。启动后运行图返回 5 个节点、3 条边，另三类接口均返回结构化状态。测试环境未配置独立 worker、provider 实例或 Relay Agent，三类列表均为空。随后默认 Desktop MCP 自动回归通过。真实 Relay 的历史回归曾在长连接握手成功后遇到运行时启动请求 HTTP 504，根因和修复后的公网验收见下文。任意 Admin 路径作为 topic 被拒绝，测试实例已停止。
 
 ### 远端共享环境配置
 
@@ -273,7 +273,7 @@ DSH 通过本机 `vhttpd_release_qa` MCP 对 OrbStack Ubuntu 上已有的 `relea
 | 已有 Hub 的 Relay 发布和回收 | 本机绑定会话提供 `relay_create_prepare`、`relay_create_apply`、`relay_status` 和 `relay_revoke`。先在 Desktop 选择已有可信 WSS Relay 并填入 HTTPS MCP 地址。计划有效期五分钟，提交时由 Desktop 确认，授权有效期一小时。撤销需提交发布 ID，以防旧请求影响新发布。Bearer 只在 Desktop 展示。 |
 | 远端专用 Hub | 已实现。先绑定本机应用，再切到已连接的远端环境，在 MCP 页面选择该环境作为 Hub 目标。回到本机 MCP 页面填写公网 HTTPS 地址。提交发布计划后，Desktop 使用目标环境的已安装运行包启动独立 Hub，返回两个远端 loopback 端口。网关将公开 MCP 路径代理到 `hub_http_port` 的 `/mcp`，并将 `/vhttpd/relay/desktop-mcp` 的 WebSocket Upgrade 转发到 `hub_carrier_port`。撤销先使本机授权失效，再回收本次 Hub。 |
 | bodytest 单端口部署 | 复用 bodytest 现有 vhttpd 实例。网关把 HTTPS 和 WebSocket Upgrade 都回源到 `127.0.0.1:58595`。`/mcp` 由 `mcp_web` ingress 转发，`/vhttpd/relay/desktop-mcp` 在同一监听器建立 Relay WebSocket。`relays.edge.listener` 指向 `listener:mcp_web`。已移除 `56481` 监听。 |
-| 公网客户端验收 | DSH 已在 bodytest 单端口部署上经公网 HTTPS Streamable HTTP 实际调用 `context_get` 和 `files_list`。此前还验证了运行时停止时查询 `engines/vjsx` schema。WorkBuddy 桌面端已通过公网 Relay 验证编辑和恢复，详见下文。独立网络出口未验收，ChatGPT 网页本轮按用户回复跳过。 |
+| 公网客户端验收 | DSH 已在 bodytest 单端口部署上经公网 HTTPS Streamable HTTP 实际调用 `context_get` 和 `files_list`。还验证了运行时停止时查询 `engines/vjsx` schema，以及在启动耗时超过 30 秒时通过 `runtime_start` 受理、`runtime_status` 确认就绪并验证业务响应。WorkBuddy 桌面端已通过公网 Relay 验证编辑和恢复，详见下文。独立网络出口未验收，ChatGPT 网页本轮按用户回复跳过。 |
 
 ### 2026-11-04 本机与 Ubuntu 验收
 
@@ -290,6 +290,13 @@ macOS 和 OrbStack Ubuntu 均通过 Desktop MCP 集成测试。Ubuntu 使用 GCC
 - 网关配置将整个域名代理到 `http://127.0.0.1:58595`，并传递 WebSocket Upgrade。公网客户端 POST 到 `/mcp`，Mac Relay Agent 则连接 `/vhttpd/relay/desktop-mcp`。bodytest 将 MCP 请求通过该 WebSocket 交给 Mac 上的 `mcp-upstream`，再由本机 Desktop MCP 处理。
 - 远端 `ss` 确认 bodytest 的 `58595` 正在监听并有已建立连接，`56481` 无监听。公网 MCP 初始化此前已返回 HTTP 200。
 - 17:44（上海时间），DSH 用只读凭据发起新一轮公网调用。`context_get` 返回 `binding_revision: 1` 和应用 `hello`，`files_list` 带同一代次调用成功，返回 `main.mts` 和 `vhttpd.toml`。
+### 2026-11-05 Relay 运行时启动 504 修复
+
+- 历史失败中的同一请求在 Mac Agent 侧约 30 秒触发 `mcp_upstream_fetch_failed`，原因是等待 Desktop MCP 响应时读取超时。Hub 的等待预算同为 30 秒，最终返回 HTTP 504 并记录 `relay_returned_frame_not_found`。当时 WebSocket 已完成握手，最后一个业务监听约 40 秒才启动。
+- 经 Relay 的 `runtime_start` 和 `runtime_restart` 在 Desktop 接管启动进程后返回 `accepted: true` 和 `phase: starting`。客户端用相同的 `binding_revision` 轮询 `runtime_status`，确认完整环境就绪且磁盘版本与生效版本一致后，状态返回 `readiness: ready`。接着调用 `application_request` 验证业务响应。启动失败或停止时结束轮询。
+- 公网验收复用 bodytest 的 `58595` 和 Mac 上已有的 vhttpd 运行包。Mac Agent 采用 bodytest 对应的 `edge` Relay 配置，主动连接公网 `/vhttpd/relay/desktop-mcp` 并建立全双工 WebSocket 长连接。DSH 安装包内的 MCP 客户端使用临时编辑 Bearer，从公网 HTTPS `/mcp` 走 Streamable HTTP 调用隔离测试应用。
+- 在隔离应用启动前人为延迟 34 秒。DSH 在 115 毫秒收到受理，29 次查询返回等待状态，38.46 秒后确认 `running` 和 `ready`。`application_request` 请求 `/api/hello` 返回 HTTP 200。随后通过 DSH 停止运行时并确认 `stopped`。临时发布撤销后，公网入口在无已连接 Agent 时返回 HTTP 503。
+
 ### WorkBuddy 公网开发验收
 
 按用户选择使用 WorkBuddy 5.9.3。WorkBuddy 桌面端在本机通过公网 HTTPS Streamable HTTP 连接 `mcp.bullsoft.org/mcp`，由 Relay 转发到 Desktop 绑定的隔离应用 `releaseqa`。确认信任自定义连接器后，WorkBuddy 实际调用 `context_get`、`guidance_get`（`develop` 和 `vjsx`）、`files_read`，并用文件 revision 完成变更 `21abaa0ebbc334dba86d1f3b` 的预检、校验、应用和启动。新接口 `GET /api/public-qa` 返回 HTTP 200 和 `{"message":"public-relay-ok"}`，首页仍返回 `{"release":"B2"}`。
