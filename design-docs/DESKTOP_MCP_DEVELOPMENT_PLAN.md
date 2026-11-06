@@ -158,6 +158,24 @@ DSH 安装包内的 `dsh-mcp-client` 通过本机 Streamable HTTP 调用 `applic
 - `vhttpd-debug` 按运行图、worker、provider 和 Relay 状态给出排查顺序。`vhttpd-deploy` 说明如何区分本机复现所用的包与远端包。
 - DSH 安装包内的 MCP 客户端通过 Streamable HTTP 实测。停机时读到运行包 0.9.0，诊断调用返回 `runtime_not_running`。启动后运行图返回 5 个节点、3 条边，另三类接口均返回结构化状态。测试环境未配置独立 worker、provider 实例或 Relay Agent，三类列表均为空。随后默认 Desktop MCP 自动回归通过。真实 Relay 的历史回归曾在长连接握手成功后遇到运行时启动请求 HTTP 504，根因和修复后的公网验收见下文。任意 Admin 路径作为 topic 被拒绝，测试实例已停止。
 
+### 2026-11-06 应用业务协议探针
+
+新增 application_protocol_probe 与 target_protocol_probe，绑定管理会话列出 107 项工具。参数为 protocol（stream/websocket/mcp）、配置中的业务 listener ID、相对 path，以及可选 message、timeout_ms 和 max_items。本机检查应用归属，远端从已登记且已连接的目标完整配置解析监听器，并在 Worker 执行前后校验绑定和授权。只允许明文 IPv4 loopback HTTP 或 WebSocket 监听；不接收 URL、认证头、凭据或任意 Admin 路径，也不跟随重定向。
+
+- stream 对 GET 响应采样，支持 Content-Length、连接结束和 HTTP chunked framing。采集预算 100–5000 ms、最多 64 KiB，SSE 只计算完整 data 事件，最多 1–8 条。截止时保留已收到的样本，达到事件数后主动关闭连接。有限 SSE 响应和持久在线流是不同证据，200 普通 JSON 不等于流式验证通过。
+- websocket 验证升级与 Sec-WebSocket-Accept，发送可选的单条受限文本，处理 Ping/Pong，收集有界文本帧并发 Close。握手成功和 received_text/messages 分别报告，调用者仍须核对业务预期。当前不处理分片、压缩、二进制或超大帧。
+- mcp 使用应用业务端点的 Streamable HTTP：initialize（2025-03-26）、notifications/initialized、tools/list，接受 JSON 或 SSE JSON-RPC，允许响应之前出现通知，返回有界工具名和总数。会话 ID 保留在内部，退出及失败时尽力 DELETE，不保证服务端确认删除。无需会话的服务同样可查。未实现认证、tools/call 和完整工具目录分页。
+
+两个工具均归为需要编辑授权的探针，因为 WebSocket 消息可能修改业务状态；只读 Relay 不提供本机探针。远端另由 Desktop 确认具体目标、监听器、协议及路径。协议失败不会重启或修改配置，不自动重放已发送的消息。已知配置秘密继续由既有脱敏逻辑处理，业务样本本身仍按应用数据看待。
+
+实现见 [本机协议传输](../desktop/host/protocol_probe.v)、[远端执行](../desktop/host/mcp_inspect.v)、[远端 stdlib 传输](../desktop/host/remote_scripts/protocol_probe.py)、[工具规格](../desktop/devmcp/protocol_probe.v) 和 [调试 Skill](../desktop/skills/vhttpd-debug/SKILL.md)。远端执行复用 Desktop 的 SSH 管理会话；这不改变公网 MCP 的 HTTP → vhttpd WebSocket Relay → 本机 Desktop 链路。
+
+已安装 DSH 的真实 dsh-mcp-client 使用实际 Desktop 界面签发的本机 Streamable HTTP 连接，对本机及原 Ubuntu mcp-shared-config-qa 均调用三种探针：SSE 返回 protocol-first/protocol-second，WebSocket 返回 echo:connected 与 echo:protocol-qa，业务 MCP 初始化并发现 echo。两端复用原 0.9.0/0.9.1 运行包；未新建实例、VM 或 Hub，未修改 bodytest。业务接口由临时 vjsx 应用提供；这里的 SSE 为有限响应，持续 chunked 和截止采样另由真实 socket 回归覆盖。本机另验证 7 项参数/归属/路径拒绝和一个错误 MCP 路径的结构化失败。
+
+DSH 模型第 18 轮实际通过 skill 重新加载新版 vhttpd-debug，解释了三种模式、授权、上限、握手与回包的区别、清理和不支持范围；业务调用由客户端连接器层执行，未描述成模型自主完成。首次 PHP 示例验收因原运行包报告 worker socket ownership mismatch 返回 503，保留失败证据后改为 vjsx；本批未修复或声称验收 PHP Worker。
+
+最终发布构建复验及清理正在进行，完成后在本节及 [脱敏验收证据](release-evidence/desktop-mcp-protocol-probes-2026-11-06.json) 更新结果。配置凭据/源成员变更、任意源码绑定、微信专项和独立网络出口等其他待办仍按能力清单跟踪。
+
 ### 2026-11-05 共享配置编辑与持久化历史恢复验收
 
 本批新增 12 个管理工具，绑定管理会话共 105 个工具。实现见 [共享字段编辑器](../desktop/host/mcp_config_edit.v)、[历史归档与恢复](../desktop/host/mcp_config_history.v)、[工具规格](../desktop/devmcp/config_edit.v) 和 [统一执行器](../desktop/host/mcp_relays.v)。本机与已连接的受管远端复用既有 Admin 多文件 changeset、Worker 重启与停机恢复；公开应用 Relay 不开放这些管理工具。
