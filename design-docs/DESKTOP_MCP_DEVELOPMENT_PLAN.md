@@ -181,7 +181,7 @@ DSH 另通过 11 项拒绝检查，覆盖绝对/越界路径、符号链接、�
 
 绑定变化要求先停止自有实例，并恢复或明确 discard 已应用变更；解绑只释放绑定，不删除文件、不撤销初始化。源码授权根不能由 MCP 扩大，四个源码绑定工具仅本机可用。公开编辑 Relay 可以使用当前绑定的文件和运行工具，但不能切换目录；绑定代次改变使旧授权失效。源码登记、计划及编辑恢复记录只在当前 Desktop 会话内有效。远端发布仍走独立组件/app.json 与管理授权流程，不因源码绑定自动开放。
 
-当前 Workbench Update QA.app 已更新为生产构建并通过严格签名验证，旧包保留为 Workbench Before Source Binding.app；内置 0.9.0 运行时字节保持不变。验收复用原隔离 Desktop 数据和本机运行包，没有创建远端实例、VM 或 Hub，未修改 bodytest。所有测试实例均停止，临时 MCP 关闭、旧连接被拒绝、凭据文件清除；原隔离根配置与登记表未变，临时源码目录已回收并保留私有证据副本。详细结果见 [脱敏验收证据](release-evidence/desktop-mcp-source-binding-2026-11-06.json)。能力整体仍为 partial，其他能力域的待办继续按上方清单跟踪。
+当前 Workbench Update QA.app 已更新为生产构建并通过严格签名验证，旧包保留为 Workbench Before Source Binding.app；内置 0.9.0 运行时字节保持不变。验收复用原隔离 Desktop 数据和本机运行包，没有创建远端实例、VM 或 Hub，未修改 bodytest。所有测试实例均停止，临时 MCP 关闭、旧连接被拒绝、凭据文件清除；原隔离根配置与登记表未变，临时源码目录已回收并保留私有证据副本。新版 Desktop 已返回原数据目录，界面确认 default 运行 0.9.0、已加载 0 个应用。详细结果见 [脱敏验收证据](release-evidence/desktop-mcp-source-binding-2026-11-06.json)。能力整体仍为 partial，其他能力域的待办继续按上方清单跟踪。
 
 ### 2026-11-06 应用业务协议探针
 
