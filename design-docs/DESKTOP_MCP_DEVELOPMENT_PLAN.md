@@ -174,7 +174,13 @@ DSH 安装包内的 `dsh-mcp-client` 通过本机 Streamable HTTP 调用 `applic
 
 DSH 模型第 18 轮实际通过 skill 重新加载新版 vhttpd-debug，解释了三种模式、授权、上限、握手与回包的区别、清理和不支持范围；业务调用由客户端连接器层执行，未描述成模型自主完成。首次 PHP 示例验收因原运行包报告 worker socket ownership mismatch 返回 503，保留失败证据后改为 vjsx；本批未修复或声称验收 PHP Worker。
 
-最终发布构建复验及清理正在进行，完成后在本节及 [脱敏验收证据](release-evidence/desktop-mcp-protocol-probes-2026-11-06.json) 更新结果。配置凭据/源成员变更、任意源码绑定、微信专项和独立网络出口等其他待办仍按能力清单跟踪。
+最终生产构建已安装到实际 Workbench Update QA.app，严格签名验证通过，保留 Workbench Before Protocol Probes.app；内置运行包字节与原包一致。最终包重新通过 DSH 本机三种探针、7 项拒绝和错误 MCP 路径验证，远端三种探针也再次通过，具体目标确认框已在界面核对。一次远端复验在 Worker 正在刷新时于入队前被拒绝，未发送业务消息；读取 host_inventory_get 确认连接和空闲后重新确认提交，未盲目重放已发送消息。
+
+macOS 与 Ubuntu 的真实 socket 回归通过，覆盖持续 chunked SSE、在下一 chunk 边界截止时保留已收事件、WebSocket 掩码/Ping/文本交换、无效握手、MCP JSON/SSE（含前置通知）与 DELETE 会话清理。两端工具授权和 JSON schema 回归通过；远端 Python stdlib 另有成功及 RPC 错误两条会话清理回归。Linux 使用既有 /home/guweigang/v/v 0.5.2 d13ccdd、local-dev、GCC、gc none 和 -nocache，复用 vjsx 259620f1981a3573777ec8cda72883b1866404a7 及原生 QuickJS，依赖工作区未修改。没有因本批改动重建或升级运行时。Skill 格式与 V 格式检查通过。
+
+本机与远端均由 DSH 停止隔离实例，独立检查业务和测试管理端口关闭后逐字节恢复原根配置，移除临时 qa-protocol include 和组件，确认控制凭据未出现在 MCP 响应。界面关闭 MCP 并清除临时客户端凭据，回收本批 SSH 管理监听和测试公钥。已回到原 default 数据目录，核对上批留存的同一空 default 进程身份后正常停止并由新版 Desktop 启动，界面确认运行中；未强杀其他实例。详细结果见 [脱敏验收证据](release-evidence/desktop-mcp-protocol-probes-2026-11-06.json)。
+
+本批完成上述有界基础协议入口，整体能力仍为 partial。配置凭据/源成员变更、任意源码绑定、微信专项、完整受控运行计划替换和独立网络出口等其他待办仍按能力清单跟踪；认证、TLS、IPv6 及高级协议行为未由这些探针覆盖。
 
 ### 2026-11-05 共享配置编辑与持久化历史恢复验收
 
