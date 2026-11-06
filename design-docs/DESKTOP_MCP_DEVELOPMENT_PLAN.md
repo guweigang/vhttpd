@@ -609,6 +609,18 @@ macOS 和 OrbStack Ubuntu 均通过 Desktop MCP 集成测试。Ubuntu 使用 GCC
 
 - 当前安装的 `Workbench Update QA.app` 已替换为包含修复的生产构建，保留旧应用包供回退。通过实际 Desktop 界面绑定隔离应用 `relayqa`、加载 bodytest 的 `edge` Relay 并发布编辑授权。DSH 安装包内的 MCP 客户端使用界面刚签发的 Bearer，经公网 HTTPS Streamable HTTP 调用 `runtime_start`，170 毫秒收到受理，5 次等待查询后在 6.73 秒确认 `readiness: ready`，`/api/hello` 返回 HTTP 200。本轮使用实际 vhttpd 启动耗时。测试后停止隔离实例、在界面撤销临时发布并清除临时客户端凭据，重新打开更新后的 Desktop，恢复原 `default` 实例运行。
 
+### 2026-11-06 WorkBuddy 源码公网验收状态（待完成）
+
+本轮要求由 WorkBuddy 实际对话，经公网 Streamable HTTP 分别完成空目录及已有项目的读取指引、编辑、校验、运行和恢复，再在撤销后用旧授权调用工具。当前没有通过这项验收，不用连接器脚本替代模型对话记录。此前 WorkBuddy 对已安装应用的公网开发验收仍作为历史证据保留。
+
+实际 Desktop 已选定隔离空目录、以源码模式开启 MCP，并在现有公网地址发布编辑 Relay。但初始化返回 HTTP 501：MCP requires a configured logic executor。bodytest 的 58595 直接请求同样返回 501；已认证实时运行图确认 public/mcp-relay 管线、mcp_web 监听及 relay-delivery 已配置，说明不能只凭磁盘配置或运行图判断公网链路可用。现场观察符合请求先进入内置 MCP 处理而未转交 Relay 的行为，尚未完成修复包验证。
+
+另查到 bodytest 的实际执行运行包 ID 为 sha256-51086217838889ddaccbcf2a7d734341fa38db0b9b7c128c1104677a90960d07，与 Desktop 登记的 sha256-f4b10b11fb3e562a78cfbcb309137804639256bf3b53bff6385e535fa13aa159 不同，二进制仍只报告 0.9.0。当前文件 SHA-256 为 3ab787a026a18c8aef38d5bbb70ec97708cb4b014014d5e01571db7413562940。同时，Mac 原连接库保存的 carrier Token 与远端 Hub 现值不一致，实时 carrier 数为零。未确定是哪次操作或何时改变了运行包与凭据，不将此推断为已经查明的变更历史。
+
+后续换包验收须固定实际执行二进制路径、校验值、构建标识及对应能力；版本字符串一致不代表修复仍存在。更新后必须验证原公网入口 initialize、工具发现及调用，并在实际客户端验证撤销。Hub 的 carrier Token、本机 MCP Token 和公网客户端 Bearer 分别管理；Hub 凭据变化后同步受信连接引用，重新发布客户端授权，不能仅重试旧 Bearer。切换前先在隔离监听验证候选包及完整配置，保留现有实例的回退包和配置基线。
+
+本轮中途桌面操作工具不可用，WorkBuddy 两条开发闭环及对话内撤销复验尚未执行。未切换远端运行包、未重启 bodytest、未改网关、未创建新 Hub 或 SSH 转发。隔离连接库已恢复，临时 Desktop/Agent 进程在检查时均不存在，临时 MCP 与 Agent 端口关闭、Bearer 文件清除；空目录仍为空，已有项目及原环境登记基线未变。诊断与未完成项见 [本轮未验收证据](release-evidence/desktop-mcp-workbuddy-source-public-2026-11-06.json)。
+
 ### WorkBuddy 公网开发验收
 
 按用户选择使用 WorkBuddy 5.9.3。WorkBuddy 桌面端在本机通过公网 HTTPS Streamable HTTP 连接 `mcp.bullsoft.org/mcp`，由 Relay 转发到 Desktop 绑定的隔离应用 `releaseqa`。确认信任自定义连接器后，WorkBuddy 实际调用 `context_get`、`guidance_get`（`develop` 和 `vjsx`）、`files_read`，并用文件 revision 完成变更 `21abaa0ebbc334dba86d1f3b` 的预检、校验、应用和启动。新接口 `GET /api/public-qa` 返回 HTTP 200 和 `{"message":"public-relay-ok"}`，首页仍返回 `{"release":"B2"}`。
