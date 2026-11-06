@@ -22,6 +22,12 @@ For persisted recovery, call config_history_list, select the intended version_id
 
 A missing source, include topology change, changed protected credentials/paths, app source or control/Admin identity requires Desktop recovery. A new restore preparation requires a running effective configuration; listing history does not. Do not retry a failed/uncertain write blindly or overwrite concurrent edits. configuration_effective_history_save_failed_check_status means a publication may already be effective even though the new snapshot could not be saved: inspect live state and retain the earlier baseline. The old shared_config_diff flow still works for its exact path-only case.
 
+## Diagnose a source workspace
+
+A context with mode source_workspace uses an original directory without installation. Start with source_workspace_get: distinguish missing/invalid configuration from a runnable configuration and from a changed directory identity. An empty directory or an existing repository without vhttpd.toml can be edited before it is runnable. Add or repair the configured relative entry, validate its includes inside the bound source root, then verify startup and business requests. An installed application identity is not required for local source development.
+
+Keep changes recovery records while debugging. Stop before changes_restore, verify the original bytes and response, then restore or deliberately discard every applied record before source_workspace_unbind or binding another project. Unbind releases access to that project; it does not delete source or undo the scaffold. Old revisions and previews cannot be reused. A plan/source conflict requires a fresh preview, and a replaced directory requires a new binding. Do not use source binding to widen the Desktop-selected authorization root. Source-only sessions do not grant platform management or remote installation; use their existing authorized workflows separately.
+
 ## Verify application protocols
 
 Use application_protocol_probe on the bound local business listener, or target_protocol_probe on a connected registered target. Select protocol stream, websocket or mcp, a configured listener ID and a relative path. These tools require editing authorization because a WebSocket message can change business state; remote execution also requires Desktop confirmation. Use a disposable message and check its expected response. Never use this to probe the Relay carrier path or the Admin listener.
