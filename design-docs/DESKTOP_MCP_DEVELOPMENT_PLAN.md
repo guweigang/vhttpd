@@ -619,7 +619,14 @@ macOS 和 OrbStack Ubuntu 均通过 Desktop MCP 集成测试。Ubuntu 使用 GCC
 
 后续换包验收须固定实际执行二进制路径、校验值、构建标识及对应能力；版本字符串一致不代表修复仍存在。更新后必须验证原公网入口 initialize、工具发现及调用，并在实际客户端验证撤销。Hub 的 carrier Token、本机 MCP Token 和公网客户端 Bearer 分别管理；Hub 凭据变化后同步受信连接引用，重新发布客户端授权，不能仅重试旧 Bearer。切换前先在隔离监听验证候选包及完整配置，保留现有实例的回退包和配置基线。
 
-本轮中途桌面操作工具不可用，WorkBuddy 两条开发闭环及对话内撤销复验尚未执行。未切换远端运行包、未重启 bodytest、未改网关、未创建新 Hub 或 SSH 转发。隔离连接库已恢复，临时 Desktop/Agent 进程在检查时均不存在，临时 MCP 与 Agent 端口关闭、Bearer 文件清除；空目录仍为空，已有项目及原环境登记基线未变。诊断与未完成项见 [本轮未验收证据](release-evidence/desktop-mcp-workbuddy-source-public-2026-11-06.json)。
+此前中断时未切换远端运行包，诊断记录保留在 [最初未验收证据](release-evidence/desktop-mcp-workbuddy-source-public-2026-11-06.json)。随后按用户授权完成以下修复，当前仍未通过 WorkBuddy 源码公网验收：
+
+- 在隔离环境验证 linux/amd64 候选包：Boehm GC 启用；真实 HTTP `GET/POST/DELETE /mcp` 均进入 Relay，无 Agent 时返回 503，不再误入内置 MCP 的 501 分支。既有 OrbStack Ubuntu 的 `src/relay_pipeline_runtime_test.v` 通过（1/1），未修改依赖。
+- 用运行时升级助手原地升级 bodytest 现有实例，状态 `completed`，就绪为真，新 boot ID 为 `05576580e410c6a21f66637a8bd744bb`。新包 ID 为 `sha256-506c0e2fc8560547fb9935469b8644b86ea07758f66b5ede73d16dcf6c9e1041`，二进制 SHA-256 为 `0890d93135156b2ad77ae25e1bc6ac833cd5b09cc226ff15145aaed1c6288baa`。保留原包供回滚；配置与 ingress 文件校验值、配置修订号均未改变，原业务 GET 探针仍为基线的 405 / `METHOD_NOT_ALLOWED`。Desktop 的 bodytest 包登记已对齐实际执行包。首次助手启动因额外会话分离而提前退出，原实例未变；按助手自身分离机制重试成功。
+- 本机保存的 `bullsoft Desktop MCP` 连接已同步远端 Hub 当前 Token，Relay ID 从 `desktop-mcp` 修正为 `edge`；私下比对两项均匹配，未在证据中保存凭据。未改网关，仍使用现有 58595，未新建 Hub、未使用 SSH 转发。
+- 当前实际 Desktop 的本机 MCP 可初始化并调用 `context_get`，绑定隔离空目录且运行时停止；临时公网编辑授权已到期，Agent 已停，远端 carrier 数为零，公网初始化现为 503。需要从实际 Desktop 重新发布，然后完成公网握手、WorkBuddy 空目录/已有项目实际对话、恢复及撤销后的旧授权调用。当前 Computer Use 工具不可用，已请求恢复；以上待办不得视为通过。
+
+修复包、升级及仍待完成的验收见 [bodytest 修复进展证据](release-evidence/desktop-mcp-bodytest-runtime-repair-2026-11-06.json)。
 
 ### WorkBuddy 公网开发验收
 
