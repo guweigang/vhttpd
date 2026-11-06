@@ -159,6 +159,30 @@ DSH 安装包内的 `dsh-mcp-client` 通过本机 Streamable HTTP 调用 `applic
 - `vhttpd-debug` 按运行图、worker、provider 和 Relay 状态给出排查顺序。`vhttpd-deploy` 说明如何区分本机复现所用的包与远端包。
 - DSH 安装包内的 MCP 客户端通过 Streamable HTTP 实测。停机时读到运行包 0.9.0，诊断调用返回 `runtime_not_running`。启动后运行图返回 5 个节点、3 条边，另三类接口均返回结构化状态。测试环境未配置独立 worker、provider 实例或 Relay Agent，三类列表均为空。随后默认 Desktop MCP 自动回归通过。真实 Relay 的历史回归曾在长连接握手成功后遇到运行时启动请求 HTTP 504，根因和修复后的公网验收见下文。任意 Admin 路径作为 topic 被拒绝，测试实例已停止。
 
+### 2026-11-06 无需安装的源码工作区验收
+
+当前 Desktop 新增「打开源码目录（无需安装）…」。选定已有目录并授权后，本机 MCP 直接绑定其源码，不要求 `app.json`、安装槽或有效的 `vhttpd.toml`。新增 `source_workspace_get`、`source_workspace_prepare`、`source_workspace_bind`、`source_workspace_unbind`，源码会话实际注册 29 项工具，与 `capabilities_list` 的可用项一致。实现见 [源码绑定与边界](../desktop/host/source_workspace.v)、[工具规格](../desktop/devmcp/source_workspace.v) 和 [Desktop 入口](../desktop/development_mcp.v)。
+
+`prepare` 接受授权根内的相对目录、可选相对 TOML entry；`bind` 使用五分钟计划并复查目录身份及源码 revision。空目录可用 vjsx-http、vjsx-api 或 environment 模板预览初始化，预检不在目标写文件，提交独占创建；已有项目省略模板，所有文件留在原位。未安装项目的普通 `app.json` 不强制解释为 vhttpd 组件清单。目录穿越、符号链接、越界 include 和目录被替换均拒绝。模板初始化对普通失败有补偿，不承诺进程崩溃时的原子恢复。
+
+源码上下文单独报告绑定与配置就绪：缺少配置、配置无效、可运行配置及目录身份变化。没有 TOML entry 时仍可编辑和恢复支持的文本文件；要启动须新增或修复所选入口并提供认证的本机 Control。校验成功仍须启动并请求业务接口。源码模式可编辑项目内部配置与 include，私有文件、大小及支持类型的限制继续保留，运行脚本不构成操作系统沙箱。启停影响整个源码项目。
+
+本批使用已安装 DSH 的真实 dsh-mcp-client，通过实际更新后的 Desktop 界面签发的本机 Streamable HTTP 配置完成以下流程；没有用测试程序代替 Desktop 提供服务。
+
+| 项目起点 | 实际调用及结果 |
+| --- | --- |
+| 空目录 | prepare 预检后目标仍为空，bind 初始化但不安装；通过文件 revision 同时编辑 main.mjs 与 AGENTS.md，校验、应用、启动，业务返回 HTTP 200 和 source_qa=empty。停机恢复源码与 AGENTS 字节，重启后恢复模板基线 HTTP 200，再停止并解绑 |
+| 已有业务源码、无 TOML entry | 原位绑定，保留 business.js 与普通项目 app.json；先验证无配置时可编辑与恢复文本、运行被拒绝，再通过 MCP 补配置和入口。实际运行返回 HTTP 200、source_qa=existing、preserved=original；恢复后新增配置和入口均不存在，业务及元数据逐字节一致 |
+| 已有无效配置、自定义 dev.toml | 绑定后明确显示 configuration_invalid；MCP 修复配置并修改入口后运行，返回 HTTP 200 和 source_qa=repaired。随后恢复原始无效配置与入口字节，状态重新显示 configuration_invalid，停止并解绑 |
+
+DSH 另通过 11 项拒绝检查，覆盖绝对/越界路径、符号链接、已有目录套用模板、未知参数、旧绑定代次、越界文件、未恢复就解绑、运行中切换、无配置启动，以及预检后发生外部修改。Host 自动回归补充检查越界 include、目录 inode 被替换和源码登记不写入项目注册表；新源码与原应用模式的真实 HTTP 回归均通过，包含公共编辑授权可读当前源码、本机绑定工具不向 Relay 注册及旧 Relay 不能跟随新绑定。
+
+`vhttpd-develop` 与 `vhttpd-debug` 已更新并安装到当前 Desktop 和 DSH。Desktop 的 guidance_get(workflow) 返回同源版本 2，develop/vjsx API 继续从原目标运行包获取。DSH 桌面会话第 19 轮实际调用 skill 重新加载两份新版，正确说明初始化、绑定、校验、就绪、恢复、解绑与安装/发布的差别。业务写入由已安装连接器层执行，不记为模型自主完成全部开发；本批没有新增公网或独立网络出口验收。
+
+绑定变化要求先停止自有实例，并恢复或明确 discard 已应用变更；解绑只释放绑定，不删除文件、不撤销初始化。源码授权根不能由 MCP 扩大，四个源码绑定工具仅本机可用。公开编辑 Relay 可以使用当前绑定的文件和运行工具，但不能切换目录；绑定代次改变使旧授权失效。源码登记、计划及编辑恢复记录只在当前 Desktop 会话内有效。远端发布仍走独立组件/app.json 与管理授权流程，不因源码绑定自动开放。
+
+当前 Workbench Update QA.app 已更新为生产构建并通过严格签名验证，旧包保留为 Workbench Before Source Binding.app；内置 0.9.0 运行时字节保持不变。验收复用原隔离 Desktop 数据和本机运行包，没有创建远端实例、VM 或 Hub，未修改 bodytest。所有测试实例均停止，临时 MCP 关闭、旧连接被拒绝、凭据文件清除；原隔离根配置与登记表未变，临时源码目录已回收并保留私有证据副本。详细结果见 [脱敏验收证据](release-evidence/desktop-mcp-source-binding-2026-11-06.json)。能力整体仍为 partial，其他能力域的待办继续按上方清单跟踪。
+
 ### 2026-11-06 应用业务协议探针
 
 新增 application_protocol_probe 与 target_protocol_probe，绑定管理会话列出 107 项工具。参数为 protocol（stream/websocket/mcp）、配置中的业务 listener ID、相对 path，以及可选 message、timeout_ms 和 max_items。本机检查应用归属，远端从已登记且已连接的目标完整配置解析监听器，并在 Worker 执行前后校验绑定和授权。只允许明文 IPv4 loopback HTTP 或 WebSocket 监听；不接收 URL、认证头、凭据或任意 Admin 路径，也不跟随重定向。
@@ -551,7 +575,7 @@ DSH 通过本机 `vhttpd_release_qa` MCP 对 OrbStack Ubuntu 上已有的 `relea
 
 | 交付项 | 状态与证据 |
 | --- | --- |
-| 应用绑定与项目指引 | Desktop 绑定应用源码根，公开会话要求 `binding_revision`。模板生成项目 `AGENTS.md`，集成用例覆盖项目主题、应用切换及旧代次、旧预览和越界路径拒绝。 |
+| 应用绑定与项目指引 | Desktop 保留已安装应用绑定，另提供无需安装的源码目录入口及四个 source_workspace 工具，覆盖空目录、已有无配置及无效配置项目。源码会话要求 binding_revision，支持 AGENTS.md 与 revision 编辑、运行和恢复；已通过实际 Desktop 与 DSH 验收，见 2026-11-06 源码工作区记录 |
 | 随运行包发布的开发指引 | `vhttpd --development-guide develop` 和 `vhttpd --development-guide vjsx` 返回运行包版本、来源、profile 和正文。Desktop 的 `guidance_get` 从所选二进制读取，拒绝版本不匹配或缺少指引的包。macOS 生产构建 0.9.0 已验证两个主题及未知主题错误。 |
 | `vhttpd-develop` Skill | 源码与发布包共用同一份 Skill 和 vjsx 参考。Unix 与 Windows 独立运行包放在 `skills/vhttpd-develop`，macOS Desktop 内置运行包放在 `Contents/Resources/runtime/skills/vhttpd-develop`。支持 Skills 的客户端可安装整个目录。已从本地测试归档核对 Markdown 与运行时嵌入内容逐字一致。2026-11-04 17:47（上海时间）在 DSH 安装并用 `skill` 工具加载该目录，随后实际调用公网 MCP `context_get` 和 `guidance_get`，确认 `hello-vjsx` 的 `develop` 指引来源为 `runtime_package`，版本为 0.9.0。 |
 | 已有 Hub 的 Relay 发布和回收 | 本机绑定会话提供 `relay_create_prepare`、`relay_create_apply`、`relay_status` 和 `relay_revoke`。先在 Desktop 选择已有可信 WSS Relay 并填入 HTTPS MCP 地址。计划有效期五分钟，提交时由 Desktop 确认，授权有效期一小时。撤销需提交发布 ID，以防旧请求影响新发布。Bearer 只在 Desktop 展示。 |
