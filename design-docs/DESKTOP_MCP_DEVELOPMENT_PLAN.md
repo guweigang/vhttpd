@@ -575,13 +575,13 @@ DSH 通过本机 `vhttpd_release_qa` MCP 对 OrbStack Ubuntu 上已有的 `relea
 
 | 交付项 | 状态与证据 |
 | --- | --- |
-| 应用绑定与项目指引 | Desktop 保留已安装应用绑定，另提供无需安装的源码目录入口及四个 source_workspace 工具，覆盖空目录、已有无配置及无效配置项目。源码会话要求 binding_revision，支持 AGENTS.md 与 revision 编辑、运行和恢复；已通过实际 Desktop 与 DSH 验收，见 2026-11-06 源码工作区记录 |
+| 应用绑定与项目指引 | Desktop 保留已安装应用绑定，另提供无需安装的源码目录入口及四个 source_workspace 工具，覆盖空目录、已有无配置及无效配置项目。源码会话要求 binding_revision，支持 AGENTS.md 与 revision 编辑、运行和恢复；已通过实际 Desktop 与 DSH 验收；WorkBuddy 实际对话另经公网 Relay 完成空目录及已有项目的完整指引、开发、恢复与撤销，见 2026-11-06 两项源码验收记录 |
 | 随运行包发布的开发指引 | `vhttpd --development-guide develop` 和 `vhttpd --development-guide vjsx` 返回运行包版本、来源、profile 和正文。Desktop 的 `guidance_get` 从所选二进制读取，拒绝版本不匹配或缺少指引的包。macOS 生产构建 0.9.0 已验证两个主题及未知主题错误。 |
 | `vhttpd-develop` Skill | 源码与发布包共用同一份 Skill 和 vjsx 参考。Unix 与 Windows 独立运行包放在 `skills/vhttpd-develop`，macOS Desktop 内置运行包放在 `Contents/Resources/runtime/skills/vhttpd-develop`。支持 Skills 的客户端可安装整个目录。已从本地测试归档核对 Markdown 与运行时嵌入内容逐字一致。2026-11-04 17:47（上海时间）在 DSH 安装并用 `skill` 工具加载该目录，随后实际调用公网 MCP `context_get` 和 `guidance_get`，确认 `hello-vjsx` 的 `develop` 指引来源为 `runtime_package`，版本为 0.9.0。 |
 | 已有 Hub 的 Relay 发布和回收 | 本机绑定会话提供 `relay_create_prepare`、`relay_create_apply`、`relay_status` 和 `relay_revoke`。先在 Desktop 选择已有可信 WSS Relay 并填入 HTTPS MCP 地址。计划有效期五分钟，提交时由 Desktop 确认，授权有效期一小时。撤销需提交发布 ID，以防旧请求影响新发布。Bearer 只在 Desktop 展示。 |
 | 远端专用 Hub | 已实现。先绑定本机应用，再切到已连接的远端环境，在 MCP 页面选择该环境作为 Hub 目标。回到本机 MCP 页面填写公网 HTTPS 地址。提交发布计划后，Desktop 使用目标环境的已安装运行包启动独立 Hub，返回两个远端 loopback 端口。网关将公开 MCP 路径代理到 `hub_http_port` 的 `/mcp`，并将 `/vhttpd/relay/desktop-mcp` 的 WebSocket Upgrade 转发到 `hub_carrier_port`。撤销先使本机授权失效，再回收本次 Hub。 |
 | bodytest 单端口部署 | 复用 bodytest 现有 vhttpd 实例。网关把 HTTPS 和 WebSocket Upgrade 都回源到 `127.0.0.1:58595`。`/mcp` 由 `mcp_web` ingress 转发，`/vhttpd/relay/desktop-mcp` 在同一监听器建立 Relay WebSocket。`relays.edge.listener` 指向 `listener:mcp_web`。已移除 `56481` 监听。 |
-| 公网客户端验收 | DSH 已在 bodytest 单端口部署上经公网 HTTPS Streamable HTTP 实际调用 `context_get` 和 `files_list`。还验证了运行时停止时查询 `engines/vjsx` schema，以及在启动耗时超过 30 秒时通过 `runtime_start` 受理、`runtime_status` 确认就绪并验证业务响应。WorkBuddy 桌面端已通过公网 Relay 验证编辑和恢复，详见下文。独立网络出口未验收，ChatGPT 网页本轮按用户回复跳过。 |
+| 公网客户端验收 | DSH 已在 bodytest 单端口部署上经公网 HTTPS Streamable HTTP 实际调用 `context_get` 和 `files_list`。还验证了运行时停止时查询 `engines/vjsx` schema，以及在启动耗时超过 30 秒时通过 `runtime_start` 受理、`runtime_status` 确认就绪并验证业务响应。WorkBuddy 桌面端已通过公网 Relay 验证已安装应用，以及无需安装的空目录和已有源码项目；后两者在实际对话中完成指引读取、校验、运行、恢复及撤销后旧工具调用失败，详见下文。独立网络出口未验收，ChatGPT 网页本轮按用户回复跳过。 |
 
 ### 2026-11-04 本机与 Ubuntu 验收
 
@@ -609,24 +609,32 @@ macOS 和 OrbStack Ubuntu 均通过 Desktop MCP 集成测试。Ubuntu 使用 GCC
 
 - 当前安装的 `Workbench Update QA.app` 已替换为包含修复的生产构建，保留旧应用包供回退。通过实际 Desktop 界面绑定隔离应用 `relayqa`、加载 bodytest 的 `edge` Relay 并发布编辑授权。DSH 安装包内的 MCP 客户端使用界面刚签发的 Bearer，经公网 HTTPS Streamable HTTP 调用 `runtime_start`，170 毫秒收到受理，5 次等待查询后在 6.73 秒确认 `readiness: ready`，`/api/hello` 返回 HTTP 200。本轮使用实际 vhttpd 启动耗时。测试后停止隔离实例、在界面撤销临时发布并清除临时客户端凭据，重新打开更新后的 Desktop，恢复原 `default` 实例运行。
 
-### 2026-11-06 WorkBuddy 源码公网验收状态（待完成）
+### 2026-11-06 WorkBuddy 源码公网验收（已通过）
 
-本轮要求由 WorkBuddy 实际对话，经公网 Streamable HTTP 分别完成空目录及已有项目的读取指引、编辑、校验、运行和恢复，再在撤销后用旧授权调用工具。当前没有通过这项验收，不用连接器脚本替代模型对话记录。此前 WorkBuddy 对已安装应用的公网开发验收仍作为历史证据保留。
+实际 Desktop 发布 Relay，WorkBuddy 5.9.3 的真实对话通过公网 HTTPS Streamable HTTP 完成空目录与已有项目两条开发、恢复和撤销验收。对话保留在 WorkBuddy 的「vhttpd MCP 验收 vjsx 项目测试」。客户端没有使用本机文件、终端或 HTTP 脚本替代 MCP 开发操作；独立文件比较与 HTTP 探针仅作为补充检查。[验收记录与对话摘录](release-evidence/desktop-mcp-workbuddy-source-public-acceptance-2026-11-06.json)
 
-实际 Desktop 已选定隔离空目录、以源码模式开启 MCP，并在现有公网地址发布编辑 Relay。但初始化返回 HTTP 501：MCP requires a configured logic executor。bodytest 的 58595 直接请求同样返回 501；已认证实时运行图确认 public/mcp-relay 管线、mcp_web 监听及 relay-delivery 已配置，说明不能只凭磁盘配置或运行图判断公网链路可用。现场观察符合请求先进入内置 MCP 处理而未转交 Relay 的行为，尚未完成修复包验证。
+本轮先修复并复用 bodytest 原实例：网关仍回源 `127.0.0.1:58595`，本机 vhttpd Agent 主动连接公网 WebSocket Relay，公网客户端使用 `https://mcp.bullsoft.org/mcp`。未创建新 Hub，未使用 SSH 转发。候选 amd64 包确认启用 Boehm GC，真实 HTTP 路由测试和既有 OrbStack Ubuntu Relay 回归通过；升级助手切换现有实例成功、就绪为真，配置及 ingress 文件校验值和配置修订号保持不变，旧包保留供回滚。新包 ID 为 `sha256-506c0e2fc8560547fb9935469b8644b86ea07758f66b5ede73d16dcf6c9e1041`，二进制 SHA-256 为 `0890d93135156b2ad77ae25e1bc6ac833cd5b09cc226ff15145aaed1c6288baa`，Desktop 登记已对齐。[运行包修复与升级证据](release-evidence/desktop-mcp-bodytest-runtime-repair-2026-11-06.json)
 
-另查到 bodytest 的实际执行运行包 ID 为 sha256-51086217838889ddaccbcf2a7d734341fa38db0b9b7c128c1104677a90960d07，与 Desktop 登记的 sha256-f4b10b11fb3e562a78cfbcb309137804639256bf3b53bff6385e535fa13aa159 不同，二进制仍只报告 0.9.0。当前文件 SHA-256 为 3ab787a026a18c8aef38d5bbb70ec97708cb4b014014d5e01571db7413562940。同时，Mac 原连接库保存的 carrier Token 与远端 Hub 现值不一致，实时 carrier 数为零。未确定是哪次操作或何时改变了运行包与凭据，不将此推断为已经查明的变更历史。
+本机保存的 carrier Token 已同步远端 Hub，Relay ID 从 `desktop-mcp` 修正为 `edge`。实际 Desktop 重新发布后，公网 `initialize` 返回 200，发现 21 个工具，`context_get` 正确返回 `source_workspace`、`installed=false` 和当前绑定。初次运行仍选中了旧 schema 测试运行包，缺少 `develop/vjsx` 指引；已在 Desktop 界面切换至 App 内置完整运行包，再重新发布并完整复跑。两类项目均实际读到 `workflow` 的 Desktop 指引版本 2，以及 `develop/vjsx` 的 `source=runtime_package`、运行时版本 0.9.0、`profile=script`。两份隔离目录均未放置 AGENTS.md，project topic 按约定返回空内容。
 
-后续换包验收须固定实际执行二进制路径、校验值、构建标识及对应能力；版本字符串一致不代表修复仍存在。更新后必须验证原公网入口 initialize、工具发现及调用，并在实际客户端验证撤销。Hub 的 carrier Token、本机 MCP Token 和公网客户端 Bearer 分别管理；Hub 凭据变化后同步受信连接引用，重新发布客户端授权，不能仅重试旧 Bearer。切换前先在隔离监听验证候选包及完整配置，保留现有实例的回退包和配置基线。
+| 验收项 | 空目录源码项目 | 已有源码项目 |
+| --- | --- | --- |
+| 接入 | 原目录绑定、未安装，初始源码列表为空 | 原目录绑定、未安装，保留普通 app.json 和业务模块 |
+| 编辑与校验 | 新增 vhttpd.toml、main.mjs；prepare → validate → apply | 只替换 main.mjs；使用读取的 revision 完成 prepare → validate → apply |
+| 真实运行 | start 受理后查询 ready；GET / 返回 200、empty_public_ok | 基线、修改后、恢复后均 start → ready → GET / 200 |
+| 业务响应 | `{"source_qa":"empty_public_ok"}` | `existing_base → existing_public_ok → existing_base`，preserved 始终为 original |
+| 恢复与停止 | changes_restore 成功，files_list=[]，phase=stopped、pid=0 | changes_restore 成功；原配置、主文件、业务模块、app.json 与 .git/KEEP 校验值均与基线相同，最终 stopped、pid=0 |
+| 撤销复验 | Desktop 撤销后，WorkBuddy 用原配置实际调用 context_get 失败，无上下文返回 | Desktop 撤销后，WorkBuddy 用原配置实际调用 context_get 失败，无上下文返回 |
 
-此前中断时未切换远端运行包，诊断记录保留在 [最初未验收证据](release-evidence/desktop-mcp-workbuddy-source-public-2026-11-06.json)。随后按用户授权完成以下修复，当前仍未通过 WorkBuddy 源码公网验收：
+空目录完整复验的变更 ID 为 `9be42eabfd89631dae9e8c14`；已有项目为 `d64c103dc5660ed37a6b3ed0`。空目录首次尝试 `81fd0ef9fd7596da51b4cda1` 虽完成开发恢复，但缺少完整运行包指引，单独保留为发现问题的记录，不替代修正后的完整验收。已有项目一次因界面尺寸变化导致新凭据未保存、工具索引不可用的尝试已取消；仅在界面保存成功、配置匹配当前发布后执行的闭环计为通过。
 
-- 在隔离环境验证 linux/amd64 候选包：Boehm GC 启用；真实 HTTP `GET/POST/DELETE /mcp` 均进入 Relay，无 Agent 时返回 503，不再误入内置 MCP 的 501 分支。既有 OrbStack Ubuntu 的 `src/relay_pipeline_runtime_test.v` 通过（1/1），未修改依赖。
-- 用运行时升级助手原地升级 bodytest 现有实例，状态 `completed`，就绪为真，新 boot ID 为 `05576580e410c6a21f66637a8bd744bb`。新包 ID 为 `sha256-506c0e2fc8560547fb9935469b8644b86ea07758f66b5ede73d16dcf6c9e1041`，二进制 SHA-256 为 `0890d93135156b2ad77ae25e1bc6ac833cd5b09cc226ff15145aaed1c6288baa`。保留原包供回滚；配置与 ingress 文件校验值、配置修订号均未改变，原业务 GET 探针仍为基线的 405 / `METHOD_NOT_ALLOWED`。Desktop 的 bodytest 包登记已对齐实际执行包。首次助手启动因额外会话分离而提前退出，原实例未变；按助手自身分离机制重试成功。
-- 本机保存的 `bullsoft Desktop MCP` 连接已同步远端 Hub 当前 Token，Relay ID 从 `desktop-mcp` 修正为 `edge`；私下比对两项均匹配，未在证据中保存凭据。未改网关，仍使用现有 58595，未新建 Hub、未使用 SSH 转发。
-- 当前实际 Desktop 的本机 MCP 可初始化并调用 `context_get`，绑定隔离空目录且运行时停止；临时公网编辑授权已到期，Agent 已停，远端 carrier 数为零，公网初始化现为 503。需要从实际 Desktop 重新发布，然后完成公网握手、WorkBuddy 空目录/已有项目实际对话、恢复及撤销后的旧授权调用。当前 Computer Use 工具不可用，已请求恢复；以上待办不得视为通过。
+撤销后 WorkBuddy 实际工具返回 Streamable HTTP POST 失败。独立检查进一步确认：旧授权在新发布有效时初始化返回 401，新发布返回 200；最终撤销、Agent 停止后旧授权返回 503。503 证明该通道已不可达，401 补充证明旧 Bearer 不能复用。四个测试端口 63441–63444 均关闭；临时 WorkBuddy 连接器与本机 MCP 已回收，实际 Desktop 保留完整内置运行包选择并返回原 hello-vjsx 停止视图。
 
-修复包、升级及仍待完成的验收见 [bodytest 修复进展证据](release-evidence/desktop-mcp-bodytest-runtime-repair-2026-11-06.json)。
+MCP 恢复的是项目源码；运行时生成的事件日志、应用日志和锁文件不属于 changes_restore 源码变更集。本轮停止后将这些运行产物另存到私有验收目录，再清理测试目录。最终空目录物理为空，已有目录恰好恢复五个原文件。最初诊断记录继续保留在 [首次未验收证据](release-evidence/desktop-mcp-workbuddy-source-public-2026-11-06.json)。
+
+运行包选择不能只比较版本字符串：旧 schema 包和完整包均显示 0.9.0，应核对实际路径、校验值和指引能力。重新发布后须在客户端保存新 Bearer 并重读 context_get，不能复用旧授权或变更 ID。本次使用 QuickJS script / main.mjs；模板默认的 node / main.mts 应按所选 profile 使用，不能直接混用。
+
+本项验收已通过；覆盖同一台 Mac 上 WorkBuddy 经公网 Relay 开发源码工作区。独立网络出口仍未验收，ChatGPT 网页按用户要求由 WorkBuddy 替代，此结果不代表其他设计功能全部完成。
 
 ### WorkBuddy 公网开发验收
 
