@@ -103,6 +103,7 @@ Desktop 提供两种入口。已有应用从环境与应用选择器进入，按
 
 | 改动 | 工具 | 契约 |
 | --- | --- | --- |
+| 新增 | `source_workspace_get`、`source_workspace_prepare`、`source_workspace_bind`、`source_workspace_unbind` | 本机源码会话查询、预检、原位绑定和释放。支持空目录及缺少或无效配置的已有项目；模板初始化只接受完全空目录，计划有效期五分钟。所有切换在 Desktop 授权根内执行，不安装应用 |
 | 扩展 | `context_get` | 返回结构化绑定、代次、运行包与脚本 profile、能力、影响范围、指引目录和可用模板。以应用相对路径代替本机绝对路径 |
 | 新增 | `guidance_get` | 按主题读取项目指引、开发工作流和版本化 API 参考。返回来源、版本及正文。未知版本或主题返回明确错误 |
 | 扩展 | `schema_get` | 运行中读取目标实时 schema。停止时可读取与目标包匹配的随包 schema，并标明来源。包内缺失时明确返回不可用 |
