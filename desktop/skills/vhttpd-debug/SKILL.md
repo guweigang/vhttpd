@@ -22,6 +22,18 @@ For persisted recovery, call config_history_list, select the intended version_id
 
 A missing source, include topology change, changed protected credentials/paths, app source or control/Admin identity requires Desktop recovery. A new restore preparation requires a running effective configuration; listing history does not. Do not retry a failed/uncertain write blindly or overwrite concurrent edits. configuration_effective_history_save_failed_check_status means a publication may already be effective even though the new snapshot could not be saved: inspect live state and retain the earlier baseline. The old shared_config_diff flow still works for its exact path-only case.
 
+## Verify application protocols
+
+Use application_protocol_probe on the bound local business listener, or target_protocol_probe on a connected registered target. Select protocol stream, websocket or mcp, a configured listener ID and a relative path. These tools require editing authorization because a WebSocket message can change business state; remote execution also requires Desktop confirmation. Use a disposable message and check its expected response. Never use this to probe the Relay carrier path or the Admin listener.
+
+For stream, inspect status, content_type, complete SSE events and the bounded sample. max_items (1–8) limits complete data events; timeout_ms (100–5000) and 64 KiB limit collection. Sampling returns before a persistent stream ends. Partial bytes do not count as a complete SSE event. A 200 JSON response alone does not prove SSE or continuous delivery; verify the expected content type and data.
+
+For websocket, message is an optional single text frame (up to 4096 bytes). Inspect handshake separately from received_text and messages: a successful upgrade without a reply is not an echo success. The probe answers Ping, samples at most eight unfragmented text frames and sends Close on exit. Fragmented, compressed, binary or oversized frames are outside this bounded probe; use application-specific verification for those protocols.
+
+For mcp, the tool uses Streamable HTTP, negotiates 2025-03-26, sends notifications/initialized and tools/list, and reports bounded tool names/count without session headers. It accepts JSON or SSE JSON-RPC responses and attempts DELETE for a created session, including on errors. It does not invoke business tools, paginate the full catalog, supply credentials or prove arbitrary MCP business operations. An authenticated endpoint requires its existing application-specific workflow. MCP here is the application's business interface, separate from the Desktop MCP being used by the agent.
+
+No custom URL, headers or credentials are accepted. Configuration-selected plaintext loopback HTTP/WebSocket listeners are supported; TLS, IPv6-only listeners and advanced WebSocket framing require separate coverage. Results redact known configuration secrets, but application samples are still business data: use an isolated fixture. A protocol failure does not restart or modify configuration and must not trigger an automatic replay of a sent message. Correlate application logs before retrying.
+
 ## Verify an ordinary Relay carrier
 
 Use the deployment Skill's ordinary Relay configuration flow. A saved connection, a successful temporary `relay_connection_probe`, and a registered live Agent are different states. The Agent must initiate its own WebSocket connection from local vhttpd to remote vhttpd; no SSH forwarding replaces this channel. `relay_runtime_status` exposes selected Agent states and explicitly process-wide counts. It also indicates whether the Relay remains configured.
