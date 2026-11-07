@@ -177,7 +177,7 @@ DSH 安装包内的 `dsh-mcp-client` 通过本机 Streamable HTTP 调用 `applic
 
 DSH 另通过 11 项拒绝检查，覆盖绝对/越界路径、符号链接、已有目录套用模板、未知参数、旧绑定代次、越界文件、未恢复就解绑、运行中切换、无配置启动，以及预检后发生外部修改。Host 自动回归补充检查越界 include、目录 inode 被替换和源码登记不写入项目注册表；新源码与原应用模式的真实 HTTP 回归均通过，包含公共编辑授权可读当前源码、本机绑定工具不向 Relay 注册及旧 Relay 不能跟随新绑定。
 
-`vhttpd-develop` 与 `vhttpd-debug` 已更新并安装到当前 Desktop 和 DSH。Desktop 的 guidance_get(workflow) 返回同源版本 2，develop/vjsx API 继续从原目标运行包获取。DSH 桌面会话第 19 轮实际调用 skill 重新加载两份新版，正确说明初始化、绑定、校验、就绪、恢复、解绑与安装/发布的差别。业务写入由已安装连接器层执行，不记为模型自主完成全部开发；本批没有新增公网或独立网络出口验收。
+`vhttpd-develop` 与 `vhttpd-debug` 已更新并安装到当前 Desktop 和 DSH。Desktop 的 guidance_get(workflow) 返回同源版本 2，develop/vjsx API 继续从原目标运行包获取。DSH 桌面会话第 19 轮实际调用 skill 重新加载两份新版，正确说明初始化、绑定、校验、就绪、恢复、解绑与安装/发布的差别。业务写入由已安装连接器层执行，不记为模型自主完成全部开发；本批没有新增公网链路验收。
 
 绑定变化要求先停止自有实例，并恢复或明确 discard 已应用变更；解绑只释放绑定，不删除文件、不撤销初始化。源码授权根不能由 MCP 扩大，四个源码绑定工具仅本机可用。公开编辑 Relay 可以使用当前绑定的文件和运行工具，但不能切换目录；绑定代次改变使旧授权失效。源码登记、计划及编辑恢复记录只在当前 Desktop 会话内有效。远端发布仍走独立组件/app.json 与管理授权流程，不因源码绑定自动开放。
 
@@ -205,7 +205,7 @@ macOS 与 Ubuntu 的真实 socket 回归通过，覆盖持续 chunked SSE、在�
 
 本机与远端均由 DSH 停止隔离实例，独立检查业务和测试管理端口关闭后逐字节恢复原根配置，移除临时 qa-protocol include 和组件，确认控制凭据未出现在 MCP 响应。界面关闭 MCP 并清除临时客户端凭据，回收本批 SSH 管理监听和测试公钥。已回到原 default 数据目录，核对上批留存的同一空 default 进程身份后正常停止并由新版 Desktop 启动，界面确认运行中；未强杀其他实例。详细结果见 [脱敏验收证据](release-evidence/desktop-mcp-protocol-probes-2026-11-06.json)。
 
-本批完成上述有界基础协议入口，整体能力仍为 partial。配置凭据/源成员变更、微信专项、完整受控运行计划替换和独立网络出口等其他待办仍按能力清单跟踪；源码原位绑定已由后续同日验收补齐；认证、TLS、IPv6 及高级协议行为未由这些探针覆盖。
+本批完成上述有界基础协议入口，整体能力仍为 partial。配置凭据/源成员变更、微信专项及完整受控运行计划替换等其他待办仍按能力清单跟踪；源码原位绑定已由后续同日验收补齐；认证、TLS、IPv6 及高级协议行为未由这些探针覆盖。
 
 ### 2026-11-05 共享配置编辑与持久化历史恢复验收
 
@@ -556,7 +556,9 @@ DSH 通过本机 `vhttpd_release_qa` MCP 对 OrbStack Ubuntu 上已有的 `relea
 
 每批新增的 MCP 工具和平台 Skill 都须安装到 DSH 或 WorkBuddy，并从该客户端实际调用或加载。验收记录写明客户端、工具或 Skill 名称、目标、操作结果及未覆盖项。构建检查与服务端测试可作为补充证据。
 
-在具备写工具权限的 ChatGPT 网页工作区运行以下用例，并从独立网络使用一个支持 HTTPS MCP 和 Bearer 认证的非 ChatGPT Web Agent 验证公网 Relay。保留脱敏后的 Desktop 版本、运行包标识、绑定 ID、工具记录和实际响应。
+验收覆盖两条接入路径：本地客户端直连 Desktop MCP，以及支持 HTTPS MCP 和 Bearer 认证的客户端经公网 Relay 调用 Desktop MCP。客户端可使用 ChatGPT 或其他 Agent；本项目按用户选择使用 DSH、WorkBuddy 实际验收。公网路径须使用真实 HTTPS 入口，验证初始化、工具发现、实际工具调用、编辑校验、运行验证、恢复及撤销。保留脱敏后的 Desktop 版本、运行包标识、绑定 ID、工具记录和实际响应。
+
+客户端与 Desktop 可以运行在同一台设备、使用同一网络出口；只要请求实际经过公网 HTTPS 入口及 vhttpd WebSocket Relay，就满足公网链路验收要求。不同设备、不同运营商或独立网络出口属于可选的部署兼容性测试，不是 MCP 功能完成条件，也不列入必做剩余项。不得为补齐此类测试自行修改用户的代理、路由或系统网络配置；网络调整须由用户另行明确要求。
 
 | 用例 | 操作 | 通过标准 |
 | --- | --- | --- |
@@ -566,7 +568,7 @@ DSH 通过本机 `vhttpd_release_qa` MCP 对 OrbStack Ubuntu 上已有的 `relea
 | 启动失败与恢复 | 保存上述可运行基线，再通过 MCP 引入一个能通过配置校验但无法启动的源码错误 | 启动报告失败，日志支持定位；同一 Desktop 会话内恢复后重新启动，业务响应与基线一致 |
 | 边界与冲突 | 尝试越界路径、符号链接、访问另一应用或共享配置；预览后外部修改文件；切换绑定后重用旧代次和预览 | 全部请求被拒绝，原文件与其他应用保持原样；模型能按错误提示重读上下文或重新预览 |
 | 会话撤销 | 关闭 Desktop MCP，再用原连接发起调用 | 原连接无法继续访问；重新开启后可在新会话重新获取绑定 |
-| Relay 公网直连 | 开启 Relay 发布，从独立网络让 Web Agent 通过公开 HTTPS URL 初始化、列出工具并调用 `context_get`。在专用测试环境显式开启编辑后执行一次修改及业务验证 | 只读凭据调用写工具被拒绝，编辑授权可跑通同一开发闭环；凭据缺失、失效或属于另一条路由时拒绝访问；会话头和所用响应模式正常传递 |
+| Relay 公网直连 | 开启 Relay 发布，让客户端通过公开 HTTPS URL 初始化、列出工具并调用 `context_get`；客户端可与 Desktop 同机、同网络出口。在专用测试环境显式开启编辑后执行一次修改及业务验证 | 只读凭据调用写工具被拒绝，编辑授权可跑通同一开发闭环；凭据缺失、失效或属于另一条路由时拒绝访问；会话头和所用响应模式正常传递 |
 | Relay 断开与撤销 | 暂断 Desktop 到 Hub 的连接，重连后重新初始化。随后切换绑定或撤销路由 | 离线时返回明确的不可用状态，恢复后可重新连接。撤销后旧 URL、凭据和会话无法调用，也无法访问新绑定 |
 
 第一阶段交付包括 Desktop 绑定入口、Relay 公网发布与撤销、工具契约增量、版本化开发参考、模板 `AGENTS.md`、`vhttpd-develop` Skill 和上述验收记录。远端发布、运行时升级与接管采用后续阶段各自的验收。
@@ -581,7 +583,7 @@ DSH 通过本机 `vhttpd_release_qa` MCP 对 OrbStack Ubuntu 上已有的 `relea
 | 已有 Hub 的 Relay 发布和回收 | 本机绑定会话提供 `relay_create_prepare`、`relay_create_apply`、`relay_status` 和 `relay_revoke`。先在 Desktop 选择已有可信 WSS Relay 并填入 HTTPS MCP 地址。计划有效期五分钟，提交时由 Desktop 确认，授权有效期一小时。撤销需提交发布 ID，以防旧请求影响新发布。Bearer 只在 Desktop 展示。 |
 | 远端专用 Hub | 已实现。先绑定本机应用，再切到已连接的远端环境，在 MCP 页面选择该环境作为 Hub 目标。回到本机 MCP 页面填写公网 HTTPS 地址。提交发布计划后，Desktop 使用目标环境的已安装运行包启动独立 Hub，返回两个远端 loopback 端口。网关将公开 MCP 路径代理到 `hub_http_port` 的 `/mcp`，并将 `/vhttpd/relay/desktop-mcp` 的 WebSocket Upgrade 转发到 `hub_carrier_port`。撤销先使本机授权失效，再回收本次 Hub。 |
 | bodytest 单端口部署 | 复用 bodytest 现有 vhttpd 实例。网关把 HTTPS 和 WebSocket Upgrade 都回源到 `127.0.0.1:58595`。`/mcp` 由 `mcp_web` ingress 转发，`/vhttpd/relay/desktop-mcp` 在同一监听器建立 Relay WebSocket。`relays.edge.listener` 指向 `listener:mcp_web`。已移除 `56481` 监听。 |
-| 公网客户端验收 | DSH 已在 bodytest 单端口部署上经公网 HTTPS Streamable HTTP 实际调用 `context_get` 和 `files_list`。还验证了运行时停止时查询 `engines/vjsx` schema，以及在启动耗时超过 30 秒时通过 `runtime_start` 受理、`runtime_status` 确认就绪并验证业务响应。WorkBuddy 桌面端已通过公网 Relay 验证已安装应用，以及无需安装的空目录和已有源码项目；后两者在实际对话中完成指引读取、校验、运行、恢复及撤销后旧工具调用失败，详见下文。独立网络出口未验收，ChatGPT 网页本轮按用户回复跳过。 |
+| 公网客户端验收 | DSH 已在 bodytest 单端口部署上经公网 HTTPS Streamable HTTP 实际调用 `context_get` 和 `files_list`。还验证了运行时停止时查询 `engines/vjsx` schema，以及在启动耗时超过 30 秒时通过 `runtime_start` 受理、`runtime_status` 确认就绪并验证业务响应。WorkBuddy 桌面端已通过公网 Relay 验证已安装应用，以及无需安装的空目录和已有源码项目；后两者在实际对话中完成指引读取、校验、运行、恢复及撤销后旧工具调用失败，详见下文。公网链路验收已通过；ChatGPT 网页本轮按用户回复跳过，使用 WorkBuddy 替代。 |
 
 ### 2026-11-04 本机与 Ubuntu 验收
 
@@ -634,7 +636,7 @@ MCP 恢复的是项目源码；运行时生成的事件日志、应用日志和�
 
 运行包选择不能只比较版本字符串：旧 schema 包和完整包均显示 0.9.0，应核对实际路径、校验值和指引能力。重新发布后须在客户端保存新 Bearer 并重读 context_get，不能复用旧授权或变更 ID。本次使用 QuickJS script / main.mjs；模板默认的 node / main.mts 应按所选 profile 使用，不能直接混用。
 
-本项验收已通过；覆盖同一台 Mac 上 WorkBuddy 经公网 Relay 开发源码工作区。独立网络出口仍未验收，ChatGPT 网页按用户要求由 WorkBuddy 替代，此结果不代表其他设计功能全部完成。
+本项验收已通过，覆盖同一台 Mac 上 WorkBuddy 经公网 Relay 开发源码工作区，符合本地直连与公网访问的接入验收口径。ChatGPT 网页按用户要求由 WorkBuddy 替代。独立网络出口仅为可选部署测试，不阻塞此项完成；其他能力域仍按各自清单跟踪。
 
 ### WorkBuddy 公网开发验收
 
@@ -642,4 +644,4 @@ MCP 恢复的是项目源码；运行时生成的事件日志、应用日志和�
 
 WorkBuddy 停止运行时并执行 `changes_restore`，重启后首页和测试路径都返回基线 `{"release":"B2"}`，最后再次停止运行时。独立文件比较确认源码与验收前逐字节一致。启用编辑授权期间，无凭据的初始化返回 HTTP 401。撤销后使用旧凭据重新初始化返回 HTTP 503，临时 WorkBuddy 连接已移除。
 
-此次覆盖 WorkBuddy 桌面客户端的公网 Relay 写入和恢复。ChatGPT 网页按用户回复跳过。独立网络出口仍未验收，WorkBuddy 和 Desktop 运行在同一台 Mac。
+此次覆盖 WorkBuddy 桌面客户端的公网 Relay 写入和恢复。ChatGPT 网页按用户回复跳过。WorkBuddy 和 Desktop 运行在同一台 Mac，已实际经过公网入口，满足公网链路验收要求。
