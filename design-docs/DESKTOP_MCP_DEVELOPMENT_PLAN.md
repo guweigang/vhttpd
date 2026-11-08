@@ -52,6 +52,20 @@ Agent 需要能发现目标版本提供的能力，查到使用契约，并在�
 
 本节是后续覆盖范围与验收契约。下文保留已实现工具和既有验收记录。
 
+### 当前剩余工作与边界（2026-11-08 核对）
+
+已通过的本地及公网开发、部署、升级、接管与恢复验收继续有效。独立网络出口不属于剩余工作。以下项目分批补工具、指引及 Skill，再用 DSH 或 WorkBuddy 实际验收；实现、自动测试、客户端调用与业务验收分别记录，不以其中一项替代其他项。
+
+| 项目 | 当前状态 | 完成条件 |
+| --- | --- | --- |
+| IPv6 业务协议探针 | 本批进行中：两个现有探针已扩展配置选定的 IPv6 回环地址，macOS 与 Ubuntu 探针回归通过，新版 debug Skill 已在 DSH 实际加载；Desktop、运行包及业务闭环验收仍在进行 | 实际 Desktop 使用更新运行包，由客户端分别验证 IPv4、IPv6 响应、修改与恢复，并关闭临时授权 |
+| 认证、TLS 与高级协议 | 待补专用参数和凭据引用契约、诊断工具及 Skill；现有明文有界探针不代表这些能力通过 | 在隔离应用验证认证成功/拒绝、证书校验与相应协议数据；失败不泄露凭据或盲目重放 |
+| 受保护配置与运行计划 | 凭据、可执行/存储路径、include 来源成员及组件身份变更仍受限；更完整的受控运行计划替换待补专用契约 | 预览影响、预检、明确授权、应用、生效验证、冲突拒绝及精确恢复 |
+| 微信兼容专项 | 模板、兼容项目入口和基本调用已验收；真实登录、数据库、存储、已有云函数迁移及公网业务专项仍待验收 | 使用真实已授权测试资源逐项验证，不以模拟登录或常量探针替代业务验证 |
+| Relay 与数据库扩展 | 非 WebSocket 载体、任意嵌套 options 及具体业务表/迁移/应用数据验证仍在上表扩展范围中 | 按运行时真实支持能力增加配置契约和验证，保持既有载体及其他路由可恢复 |
+
+密码认证、首次主机指纹确认、授权授予和凭据展示继续由 Desktop 管理。这些是现有交互边界，不表示应把密码、私钥路径或授权提升能力开放给模型。是否扩展边界须另有明确设计。
+
 第一批已实现只读 `capabilities_list`。Desktop 目录从工具注册规格生成，返回能力域、权限、会话可用性和不可用原因。传入 `include_runtime: true` 时，通过现有 `schema_get` 路径返回目标实时或随包 schema，无法读取时仍返回 Desktop 目录并附上原因。`desktop/devmcp/server_test.v` 将目录中的可用项与实际 `tools/list` 比对，覆盖工作区、已绑定管理会话和只读 Relay。使用支持 Relay 的 0.9.0 测试运行包通过了该测试文件，包括停机 schema、应用切换和实际 Relay 编辑回归。`vhttpd-develop` 已加入能力发现步骤。运行时注册表以外的操作与上表未接入的 Desktop 能力仍按后续批次实施。
 
 DSH 客户端验收通过安装包内的 `dsh-mcp-client`，在隔离工作区使用 Streamable HTTP 实际完成工具注册、`capabilities_list`、`project_create` 和带 `include_runtime` 的目录查询。目录版本为 1，共 37 项，当前可用 20 项，与 DSH 注册结果一致。未授权应用发布显示 `management_session_required`。vhttpd 0.9.0 停机时从 `runtime_package` 读取了 listeners、resources、engines、adapters、transforms、policies、providers、pipelines、relays 九个域。重建测试运行包后，在独立的已绑定管理会话复验。DSH 实际注册 35 项，与目录可用项一致。应用发布可见，`project_create` 返回 `workspace_session_required`。`guidance_get(develop)` 从新构建的 0.9.0 运行包返回包含 `capabilities_list` 步骤的指引。本轮证据覆盖 DSH 客户端连接器层，模型对话因模型路由不可用未通过。
