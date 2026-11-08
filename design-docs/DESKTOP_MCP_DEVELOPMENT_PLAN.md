@@ -19,7 +19,7 @@ Agent 需要能发现目标版本提供的能力，查到使用契约，并在�
 | 能力域 | 已有 MCP 入口 | 需要补齐 |
 | --- | --- | --- |
 | 工作区、应用与模板 | `context_get`、模板发现与创建、`application_install_prepare/apply`、文件 revision 变更和 Desktop 应用绑定；`source_workspace_get/prepare/bind/unbind` 原位绑定空目录及已有源码，无需安装，已通过实际 Desktop 与 DSH 验收 | 源码绑定、已安装应用和平台管理分别授权。源码会话不自动授予安装或远端发布权限；文件类型与私有文件限制沿用开发工具边界 |
-| vhttpd 配置与数据面 | 停机或实时 `schema_get` 覆盖九个配置域，应用变更校验与业务 HTTP 请求，远端 `target_request`；共享配置多字段、多文件编辑及恢复；`application_protocol_probe`/`target_protocol_probe` 提供有界 stream/SSE、WebSocket 文本及业务 MCP 初始化/工具发现 | 认证、TLS、高级协议及 IPv6 远端目标客户端复验；凭据、可执行/存储路径及来源成员变更仍须使用 Desktop 专用流程 |
+| vhttpd 配置与数据面 | 停机或实时 `schema_get` 覆盖九个配置域，应用变更校验与业务 HTTP 请求，远端 `target_request`；共享配置多字段、多文件编辑及恢复；`application_protocol_probe`/`target_protocol_probe` 提供有界 stream/SSE、WebSocket 文本及业务 MCP 初始化/工具发现 | 专用 Bearer、TLS 和 IPv6 远端目标已完成客户端复验；非 Bearer 认证、高级协议及远端变量引用待补。凭据、可执行/存储路径及来源成员变更仍须使用 Desktop 专用流程 |
 | 应用脚本、兼容库与集成 | vjsx 参考，pipeline、微信云开发兼容、Codex Bot 模板和独立 `guidance_get` 主题，三个已安装的 DSH Skills | 微信真实登录、数据库及存储、已有云函数迁移和公网专项验收仍需补齐 |
 | Desktop 主机和环境管理 | 主机登记、连接、断开，环境发现与身份校验接入，以及环境创建、实例启停均已有 MCP 工具，并通过当前 Desktop 与 DSH 隔离环境验收 | 密码认证仍须在 Desktop 完成，首次主机指纹确认继续由 Desktop 管理；工具不接收私钥路径或密码 |
 | 运行包与发布 | 本地启停，远端应用发布及回滚、运行时升级及回滚；官方运行包管理、应用安装及历史查询；共享多字段配置修改和跨会话历史恢复均已通过当前 Desktop 与 DSH 验收 | 配置中受保护值、来源成员及组件身份变更的 MCP 专用契约 |
