@@ -173,6 +173,29 @@ DSH 安装包内的 `dsh-mcp-client` 通过本机 Streamable HTTP 调用 `applic
 - `vhttpd-debug` 按运行图、worker、provider 和 Relay 状态给出排查顺序。`vhttpd-deploy` 说明如何区分本机复现所用的包与远端包。
 - DSH 安装包内的 MCP 客户端通过 Streamable HTTP 实测。停机时读到运行包 0.9.0，诊断调用返回 `runtime_not_running`。启动后运行图返回 5 个节点、3 条边，另三类接口均返回结构化状态。测试环境未配置独立 worker、provider 实例或 Relay Agent，三类列表均为空。随后默认 Desktop MCP 自动回归通过。真实 Relay 的历史回归曾在长连接握手成功后遇到运行时启动请求 HTTP 504，根因和修复后的公网验收见下文。任意 Admin 路径作为 topic 被拒绝，测试实例已停止。
 
+### 2026-11-08 IPv6 协议探针与客户端验收
+
+`application_protocol_probe` 和 `target_protocol_probe` 复用既有权限、监听器选择和有界协议流程，新增配置驱动的 IPv6 回环连接。IPv4 绑定使用 127.0.0.1，::1 或 :: 绑定使用 ::1，HTTP Host 使用带方括号的 IPv6 authority。结果返回 `address_family`，不新增任意地址、URL、请求头或凭据参数。远端 Python 载体使用相同选择。本批同时修正 vhttpd HTTP 监听的绑定预检与服务启动，使其按配置选择 IPv4/IPv6 地址族，而非固定使用 IPv4。
+
+实际 WorkBuddy 5.9.3 对话「vhttpd MCP 验收 vjsx 项目测试」通过本机 Streamable HTTP 连接实际 Desktop 的隔离源码工作区 `project`。服务名称为 `vhttpd_ipv6_qa`，未使用测试程序启动 Desktop MCP。工具操作均在客户端实际对话中执行：
+
+| 步骤 | 实际结果 |
+| --- | --- |
+| 指引与基线 | `context_get` 返回 source_workspace、installed=false；`guidance_get(debug)` 读到新增地址族指引。web4 与 web6 的 `stream /probe` 分别返回 HTTP 200、ipv4/ipv6 及 ipv6-baseline |
+| 控制面隔离 | admin 探针被 `listener_belongs_to_another_application` 拒绝；运行 PID 保持不变 |
+| 编辑与校验 | 变更 `a9e6f15064c7cd48facb6768` 仅替换 options.body 一行，保留凭据占位符；prepare、validate、apply 成功 |
+| 生效 | 启动就绪后两条监听均返回 HTTP 200、各自正确地址族及 ipv6-edited |
+| 恢复 | 停止、changes_restore、重新启动后，两条监听均恢复 HTTP 200 和 ipv6-baseline |
+| 停止与授权关闭 | 最终 stopped、pid=0，配置 revision 恢复为 `5566fa918a1d794b9fa57607c862be81c7c8a06792ae71246afccfe4acccac78`；独立逐字节比较一致。Desktop 关闭 MCP 后，WorkBuddy 单次旧 context_get 失败、无上下文，独立 TCP 检查确认 MCP、IPv4、IPv6 与 Admin 测试端口全部关闭 |
+
+WorkBuddy 的关闭后错误经客户端封装为 Streamable HTTP POST failure，附 `{"error":"internal_error"}`，不据此断言服务端返回了 401。端口关闭检查补充证明该临时服务已停止。临时连接器已从 WorkBuddy 回收，原有连接器保留。
+
+新版 `vhttpd-debug` 已安装到 DSH；其既有 vhttpd 验收对话第 20 轮实际重新加载 Skill，正确说明地址族选择、Host 方括号、联合核对协议数据、TLS/高级帧边界及失败不重放。macOS 和 Ubuntu 均通过原生探针及监听地址单元测试；远端脚本的 MCP 成功/失败会话清理在两平台通过，macOS 另验证 IPv4/IPv6 SSE 数据、WebSocket 回声及 Host authority。真实 vhttpd 双回环监听测试通过。常规 make 的整体 lint-safety 被既有回调注入检查阻断，本批直接执行的相关测试通过。
+
+交付候选由当前 V 编译器生成，生产构建开启 Boehm GC，显式禁用自动回退；旧编译器核对已取消，不纳入交付或验收证据。标准 macOS 15 发布打包仍在进行，完成前不宣称当前安装包更新完成。[脱敏验收记录](release-evidence/desktop-mcp-ipv6-2026-11-08.json)
+
+客户端业务 fixture 是 text/plain 固定响应，events 为空，不计为 SSE 连续推送验收。本批尚未在客户端对话中对已登记远端目标调用 IPv6 target_protocol_probe；该入口目前由原生选择逻辑和远端脚本回归覆盖。认证、TLS、IPv6 高级协议及运行计划等其他待办继续按能力清单跟踪。全程未修改代理、路由或系统网络配置。
+
 ### 2026-11-06 无需安装的源码工作区验收
 
 当前 Desktop 新增「打开源码目录（无需安装）…」。选定已有目录并授权后，本机 MCP 直接绑定其源码，不要求 `app.json`、安装槽或有效的 `vhttpd.toml`。新增 `source_workspace_get`、`source_workspace_prepare`、`source_workspace_bind`、`source_workspace_unbind`，源码会话实际注册 29 项工具，与 `capabilities_list` 的可用项一致。实现见 [源码绑定与边界](../desktop/host/source_workspace.v)、[工具规格](../desktop/devmcp/source_workspace.v) 和 [Desktop 入口](../desktop/development_mcp.v)。
