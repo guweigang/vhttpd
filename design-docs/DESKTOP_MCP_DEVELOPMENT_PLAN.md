@@ -66,6 +66,22 @@ Agent 需要能发现目标版本提供的能力，查到使用契约，并在�
 
 密码认证、首次主机指纹确认、授权授予和凭据展示继续由 Desktop 管理。这些是现有交互边界，不表示应把密码、私钥路径或授权提升能力开放给模型。是否扩展边界须另有明确设计。
 
+### 远端 IPv6、专用 Bearer 与 TLS 探针（2026-11-08）
+
+新增只读 `application_probe_options_get`、`target_probe_options_get`。它们按绑定范围返回业务监听器、地址族、TLS 状态、可用认证引用和证书信任选项，排除 Admin，不返回令牌、证书文件内容或私有路径。`source=configuration` 只表示配置发现，不能替代实际连接证据。
+
+`application_protocol_probe`、`target_protocol_probe` 增加 `auth_ref`、`tls_trust` 与 `tls_server_name`，沿用有界 stream/WebSocket/业务 MCP 探针。认证引用仅选择当前业务路由对应 adapter 的专用 `options.probe_bearer_token`，工具不接收原始令牌、任意 Authorization、URL、CA 路径或私钥。TLS 默认系统信任，可显式选择所选 listener 的证书为信任源；始终验证证书链和身份，身份参数不改变固定回环连接目标。结果区分 connect、tls、authentication、protocol 阶段，401/403 和证书错误返回固定诊断，凭据回显遮盖。Linux 同时处理 TLS 对端关闭导致的 SIGPIPE，避免探针退出整个进程。
+
+远端凭据必须来自远端实际配置的字面量，环境变量引用在连接前返回 `remote_probe_credential_requires_literal_value`；远端显式证书信任路径使用变量时返回 `remote_probe_tls_trust_requires_literal_path`。发现结果隐藏不可用引用及 Desktop 环境展开的证书主机名。此处是明确拒绝规则，尚不表示已实现远端密钥解析。
+
+WorkBuddy 5.9.3 的实际对话“vhttpd MCP 验收 vjsx 项目测试”完成本机与现有 Ubuntu `release-qa` 各六次调用：IPv6 无凭据返回 401；IPv6 专用 Bearer 返回 200 与 `secure-probe-event`；系统信任拒绝自签证书；显式 listener 证书信任且身份 localhost 时 IPv6 TLS 验证成功；wrong.invalid 身份被拒；IPv4 TLS 对照成功。最终已安装 Desktop 再次完成远端正例、两个变量引用反例与恢复复验。反例是连接前工具错误，不冒充带 stage 的业务响应。本批响应为 text/plain、events 为空，不计作持续 SSE、认证 WSS 或业务 MCP 的客户端专项验收。
+
+同时修复只取首个 `tools/list` 页面导致客户端找不到远端工具的问题：初次 JSON 列表聚合授权范围内的完整目录，显式 cursor 保留分页；鉴权、撤销和边界保持有效。WorkBuddy 界面实际显示 109/109，并成功调用此前不在前 50 项中的 targets/status/options 工具。自动回归覆盖 121 项目录、显式分页、未授权与撤销。
+
+`vhttpd-debug` 随最终包发布，DSH 实际 `skill(name="vhttpd-debug")` 加载验证发现步骤、认证与 TLS 参数、远端字面量约束及失败不盲重放。macOS 原生两种 TLS 后端、Ubuntu 原生和 Python IPv4/IPv6 TLS/认证矩阵通过；最终标准 macOS 包通过签名、归档提取、全新 HOME、无开发树/编译器环境的运行验证。全部使用当前 V 与 `-new-compiler`，禁用回退，未使用 v_old。当前实际 Desktop 已更新。隔离应用和运行进程验收后回收，原配置及实例身份恢复，临时 MCP 连接器移除；未修改系统网络、代理、路由或 OrbStack 网络配置。
+
+详细记录见[本批验收证据](./release-evidence/desktop-mcp-secure-probes-2026-11-08.json)。非 Bearer 认证、高级协议、远端变量凭据与证书解析，以及上表其他能力域仍按后续批次推进。
+
 第一批已实现只读 `capabilities_list`。Desktop 目录从工具注册规格生成，返回能力域、权限、会话可用性和不可用原因。传入 `include_runtime: true` 时，通过现有 `schema_get` 路径返回目标实时或随包 schema，无法读取时仍返回 Desktop 目录并附上原因。`desktop/devmcp/server_test.v` 将目录中的可用项与实际 `tools/list` 比对，覆盖工作区、已绑定管理会话和只读 Relay。使用支持 Relay 的 0.9.0 测试运行包通过了该测试文件，包括停机 schema、应用切换和实际 Relay 编辑回归。`vhttpd-develop` 已加入能力发现步骤。运行时注册表以外的操作与上表未接入的 Desktop 能力仍按后续批次实施。
 
 DSH 客户端验收通过安装包内的 `dsh-mcp-client`，在隔离工作区使用 Streamable HTTP 实际完成工具注册、`capabilities_list`、`project_create` 和带 `include_runtime` 的目录查询。目录版本为 1，共 37 项，当前可用 20 项，与 DSH 注册结果一致。未授权应用发布显示 `management_session_required`。vhttpd 0.9.0 停机时从 `runtime_package` 读取了 listeners、resources、engines、adapters、transforms、policies、providers、pipelines、relays 九个域。重建测试运行包后，在独立的已绑定管理会话复验。DSH 实际注册 35 项，与目录可用项一致。应用发布可见，`project_create` 返回 `workspace_session_required`。`guidance_get(develop)` 从新构建的 0.9.0 运行包返回包含 `capabilities_list` 步骤的指引。本轮证据覆盖 DSH 客户端连接器层，模型对话因模型路由不可用未通过。
