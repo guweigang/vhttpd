@@ -1,6 +1,6 @@
 ---
 title: Desktop MCP 应用开发与远端运维设计
-description: 定义项目目录与运行目标绑定、MCP 工具增量、项目与平台指引，以及第一阶段的 ChatGPT 验收。
+description: 定义项目目录与运行目标绑定、MCP 工具增量、项目与平台指引，以及 Agent 客户端分阶段验收。
 tags:
   - desktop
   - mcp
