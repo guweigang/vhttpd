@@ -19,7 +19,7 @@ Agent 需要能发现目标版本提供的能力，查到使用契约，并在�
 | 能力域 | 已有 MCP 入口 | 需要补齐 |
 | --- | --- | --- |
 | 工作区、应用与模板 | `context_get`、模板发现与创建、`application_install_prepare/apply`、文件 revision 变更和 Desktop 应用绑定；`source_workspace_get/prepare/bind/unbind` 原位绑定空目录及已有源码，无需安装，已通过实际 Desktop 与 DSH 验收 | 源码绑定、已安装应用和平台管理分别授权。源码会话不自动授予安装或远端发布权限；文件类型与私有文件限制沿用开发工具边界 |
-| vhttpd 配置与数据面 | 停机或实时 `schema_get` 覆盖九个配置域，应用变更校验与业务 HTTP 请求，远端 `target_request`；共享配置多字段、多文件编辑及恢复；`application_protocol_probe`/`target_protocol_probe` 提供有界 stream/SSE、WebSocket 文本及业务 MCP 初始化/工具发现 | 认证、TLS、IPv6 和高级协议专项；凭据、可执行/存储路径及来源成员变更仍须使用 Desktop 专用流程 |
+| vhttpd 配置与数据面 | 停机或实时 `schema_get` 覆盖九个配置域，应用变更校验与业务 HTTP 请求，远端 `target_request`；共享配置多字段、多文件编辑及恢复；`application_protocol_probe`/`target_protocol_probe` 提供有界 stream/SSE、WebSocket 文本及业务 MCP 初始化/工具发现 | 认证、TLS、高级协议及 IPv6 远端目标客户端复验；凭据、可执行/存储路径及来源成员变更仍须使用 Desktop 专用流程 |
 | 应用脚本、兼容库与集成 | vjsx 参考，pipeline、微信云开发兼容、Codex Bot 模板和独立 `guidance_get` 主题，三个已安装的 DSH Skills | 微信真实登录、数据库及存储、已有云函数迁移和公网专项验收仍需补齐 |
 | Desktop 主机和环境管理 | 主机登记、连接、断开，环境发现与身份校验接入，以及环境创建、实例启停均已有 MCP 工具，并通过当前 Desktop 与 DSH 隔离环境验收 | 密码认证仍须在 Desktop 完成，首次主机指纹确认继续由 Desktop 管理；工具不接收私钥路径或密码 |
 | 运行包与发布 | 本地启停，远端应用发布及回滚、运行时升级及回滚；官方运行包管理、应用安装及历史查询；共享多字段配置修改和跨会话历史恢复均已通过当前 Desktop 与 DSH 验收 | 配置中受保护值、来源成员及组件身份变更的 MCP 专用契约 |
@@ -58,7 +58,7 @@ Agent 需要能发现目标版本提供的能力，查到使用契约，并在�
 
 | 项目 | 当前状态 | 完成条件 |
 | --- | --- | --- |
-| IPv6 业务协议探针 | 业务验收已通过：两个现有探针已扩展配置选定的 IPv6 回环地址，macOS 与 Ubuntu 回归通过；新版 debug Skill 已在 DSH 实际加载，实际 Desktop 与 WorkBuddy 已完成双地址族修改、校验、生效、恢复及关闭后旧调用失败。当前编译器的 macOS 15 标准发布打包仍在进行 | 实际 Desktop 使用更新运行包，由客户端分别验证 IPv4、IPv6 响应、修改与恢复，并关闭临时授权 |
+| IPv6 远端目标对话复验 | 本机工具、两端原生/脚本回归、DSH Skill、WorkBuddy 开发恢复与撤销，以及当前编译器的标准发布包均已通过；本机批次完成 | 复用已登记的隔离远端目标，在客户端实际调用 IPv6 target_protocol_probe，核对地址族、协议数据和失败诊断 |
 | 认证、TLS 与高级协议 | 待补专用参数和凭据引用契约、诊断工具及 Skill；现有明文有界探针不代表这些能力通过 | 在隔离应用验证认证成功/拒绝、证书校验与相应协议数据；失败不泄露凭据或盲目重放 |
 | 受保护配置与运行计划 | 凭据、可执行/存储路径、include 来源成员及组件身份变更仍受限；更完整的受控运行计划替换待补专用契约 | 预览影响、预检、明确授权、应用、生效验证、冲突拒绝及精确恢复 |
 | 微信兼容专项 | 模板、兼容项目入口和基本调用已验收；真实登录、数据库、存储、已有云函数迁移及公网业务专项仍待验收 | 使用真实已授权测试资源逐项验证，不以模拟登录或常量探针替代业务验证 |
@@ -192,7 +192,7 @@ WorkBuddy 的关闭后错误经客户端封装为 Streamable HTTP POST failure�
 
 新版 `vhttpd-debug` 已安装到 DSH；其既有 vhttpd 验收对话第 20 轮实际重新加载 Skill，正确说明地址族选择、Host 方括号、联合核对协议数据、TLS/高级帧边界及失败不重放。macOS 和 Ubuntu 均通过原生探针及监听地址单元测试；远端脚本的 MCP 成功/失败会话清理在两平台通过，macOS 另验证 IPv4/IPv6 SSE 数据、WebSocket 回声及 Host authority。真实 vhttpd 双回环监听测试通过。常规 make 的整体 lint-safety 被既有回调注入检查阻断，本批直接执行的相关测试通过。
 
-交付候选由当前 V 编译器生成，生产构建开启 Boehm GC，显式禁用自动回退；旧编译器核对已取消，不纳入交付或验收证据。标准 macOS 15 发布打包仍在进行，完成前不宣称当前安装包更新完成。[脱敏验收记录](release-evidence/desktop-mcp-ipv6-2026-11-08.json)
+Desktop 与运行包均由当前 V 编译器通过标准 desktop/build.sh 生成，生产构建开启 Boehm GC，并以 V_MACOS_V3_NO_FALLBACK=1 禁用自动回退；旧编译器核对已取消，不纳入交付或验收证据。macOS 15.0 最低版本、可迁移依赖、深度严格签名、归档安装与内置应用运行检查通过；打包后的真实双回环监听测试再次通过。仓库 Desktop 包与当前实际 Workbench IPv6 QA.app 均已更新，随包 debug Skill 核对通过；实际界面重新打开后保持隔离环境停止。原包保留为 Workbench Before IPv6.app。[脱敏验收记录](release-evidence/desktop-mcp-ipv6-2026-11-08.json)
 
 客户端业务 fixture 是 text/plain 固定响应，events 为空，不计为 SSE 连续推送验收。本批尚未在客户端对话中对已登记远端目标调用 IPv6 target_protocol_probe；该入口目前由原生选择逻辑和远端脚本回归覆盖。认证、TLS、IPv6 高级协议及运行计划等其他待办继续按能力清单跟踪。全程未修改代理、路由或系统网络配置。
 
