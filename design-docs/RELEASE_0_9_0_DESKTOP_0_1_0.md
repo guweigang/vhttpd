@@ -1,9 +1,9 @@
 ---
 title: vhttpd 0.9.0 与 Desktop 0.1.0 联合发布清单
-description: 2026-11-02 至 11-08 发布范围、实现状态、验收证据、阻断项及执行顺序。
+description: 2026-11-02 至 11-09 发布范围、实现状态、验收证据、阻断项及执行顺序。
 tags: [ release, vhttpd, desktop, acceptance ]
 status: in-progress
-updated: 2026-11-03
+updated: 2026-11-09
 ---
 # vhttpd 0.9.0 / Desktop 0.1.0 发布清单
 
@@ -418,3 +418,21 @@ updated: 2026-11-03
 - [x] 驻留分类：Boehm 对象堆约 90.3 MiB、glibc arena 27.9 MiB、可确认线程栈 3.4 MiB、其余 4.7 MiB。自然 GC 后 Boehm 整块空闲页约 76.7 MiB、标记对象约 5.35 MiB；glibc 另有约 15.7 MiB 空闲 top 区仍驻留。其余页面中约 2.7 MiB 含已验证的 GC 元数据；各层计数和逻辑对象量口径不同，不可重复相加。见[自然 GC 快照](./release-evidence/2026-11-09/body-attribution/natural-gc-census.ndjson)、[分配区与运行时计数](./release-evidence/2026-11-09/body-attribution/layers-3-quickjs.json)。
 - [x] 当前分配热点定位：约 30 分钟请求活动计数不变，但后台累计分配约 5.5 GiB，匿名驻留基本不变。20 秒内四个线程执行源码探测 796 次、完整签名扫描 78 次；扫描函数时间区间并集覆盖同期 99.85% 的全局 GC 分配增量。该比例是时间覆盖，不能当作每笔分配的独占调用者归属。四个匹配的 QuickJS 运行时合计逻辑记账约 8.02 MiB，短时三次复测不变。见[函数范围计数及局限](./release-evidence/2026-11-09/body-attribution/scope-analysis.json)、[QuickJS 复测](./release-evidence/2026-11-09/body-attribution/quickjs-repeat.ndjson)。
 - [ ] 待验收：以贴近真实四运行时的源码规模独立验证已有低分配扫描候选，比较驻留峰值、持续请求、冷却和延迟，再安排业务替换；本轮不替换 bodytest，不把先前候选的修复效果计入当前业务。约 1 MiB 其他驻留页及剩余原生分配的精确所有者尚未完全明确；一次后续快照因一致性检查失败已排除。尚无全业务无泄漏或正式 24 小时放行结论，P0-02 保持阻断。
+
+### 源码检测四运行时对照完成，新增复用增量撤回（2026-11-09）
+
+本节更新上文独立对照的执行状态；业务替换和正式内存放行仍未完成。
+
+- [x] 按真实元数据建立两个源码目录，复现四个 QuickJS 运行时及四个扫描线程。实际旧包后台分配约 3.16–3.22 MiB/秒，接近 bodytest 的约 3.10 MiB/秒。源码内容和请求处理器为合成夹具，没有重放数据库、云服务及真实业务依赖。主对照按旧→新→新→旧自然跑完，另串行跑一轮上一版缓存包控制；每轮 60 秒基线、240 秒压力、300 秒冷却，并单独验证长请求及恢复加压。全部保持 256 MiB、30% CPU、无 swap、640 MiB 启动门槛与 512 MiB 主机保护。见[结论与完整身份核验](./release-evidence/2026-11-09/source-four-runtime/finding.json)。
+- [x] 测试了目录成员与排序列表复用。相同编译器的四配置微基准指纹全部一致；相对上一版缓存额外减少约 3.25% 分配，但未获得驻留改善，因此已仅撤回本轮新增复用代码，恢复扫描器摘要 `041e8955`。保留等数量路径重命名、排序与根目录删除回归。最终源码的 macOS/Linux 扫描与签名两模块回归均通过；本轮没有新增 vlang/vjsx 修改。见[增量决策](./release-evidence/2026-11-09/source-four-runtime/increment-decision.json)、[微基准](./release-evidence/2026-11-09/source-four-runtime/bench-summary.json)、[最终验证范围](./release-evidence/2026-11-09/source-four-runtime/validation-summary.json)。
+- [x] 五轮累计 HTTP 95577 次、Paseo 577 轮，零校验错误、无 OOM；新候选与缓存控制在持续压力期间没有增加空闲 GC 或编译器 allocator maintenance 尝试。压力、冷却均采用末 60 秒中位数；主对照每种包两次，增量控制只有一次，不能作统计放行。见[逐轮统计与口径](./release-evidence/2026-11-09/source-four-runtime/analysis.json)和[全量曲线](./release-evidence/2026-11-09/source-four-runtime/comparison.png)。
+
+| 包 | 后台分配 MiB/秒 | 压力匿名内存 MiB | 冷却匿名内存 MiB |
+| --- | ---: | ---: | ---: |
+| 当前业务旧包 `0890d931`，两轮 | 3.16–3.22 | 40.4–43.5 | 32.9–33.2 |
+| 本轮试验包 `767456d2`，两轮，已拒绝该增量 | 0.075 | 59.9–67.4 | 34.6–41.7 |
+| 上一版缓存包 `323cb5af`，单轮控制 | 0.080 | 50.0 | 30.2 |
+
+- [x] bodytest PID 3730524/启动标识 39645663、包 SHA 保持，匿名内存 126.3 MiB、三个健康检查均为 200，连续监测 active；两个有效对照单元自然退出。最早两个脚本预检及七扫描线程的配置预检均单独排除，未计入以上结果。见[最终业务核验](./release-evidence/2026-11-09/source-four-runtime/final-business-check.json)与[排除记录](./release-evidence/2026-11-09/source-four-runtime/excluded-preflights.json)。
+- [ ] P0-02 保持阻断：已证明降低后台分配，不代表压力驻留改善。整包比较还包含既有 HTTP 观察与空闲 GC 改动，不能把所有 RSS 差异归因于源码检测；单次增量控制也未确证更大保留量的具体根因。下一步应固定扫描器，拆开这些继承改动与 GC/glibc 池保留路径。基线与冷却差额包含请求历史、缓存及堆几何变化，不能直接称作泄漏。本轮未切换业务、未启动新的 24 小时验收，也未获得全业务或 Windows 放行。
+
