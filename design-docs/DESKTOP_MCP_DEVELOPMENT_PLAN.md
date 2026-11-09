@@ -19,7 +19,7 @@ Agent 需要能发现目标版本提供的能力，查到使用契约，并在�
 | 能力域 | 已有 MCP 入口 | 需要补齐 |
 | --- | --- | --- |
 | 工作区、应用与模板 | `context_get`、模板发现与创建、`application_install_prepare/apply`、文件 revision 变更和 Desktop 应用绑定；`source_workspace_get/prepare/bind/unbind` 原位绑定空目录及已有源码，无需安装，已通过实际 Desktop 与 DSH 验收 | 源码绑定、已安装应用和平台管理分别授权。源码会话不自动授予安装或远端发布权限；文件类型与私有文件限制沿用开发工具边界 |
-| vhttpd 配置与数据面 | 停机或实时 `schema_get` 覆盖九个配置域，应用变更校验与业务 HTTP 请求，远端 `target_request`；共享配置多字段、多文件编辑及恢复；`application_protocol_probe`/`target_protocol_probe` 提供有界 stream/SSE、WebSocket 文本及业务 MCP 初始化/工具发现 | 专用 Bearer、TLS 和 IPv6 远端目标已完成客户端复验；非 Bearer 认证、高级协议及远端变量引用待补。凭据、可执行/存储路径及来源成员变更仍须使用 Desktop 专用流程 |
+| vhttpd 配置与数据面 | 停机或实时 `schema_get` 覆盖九个配置域，应用变更校验与业务 HTTP 请求，远端 `target_request`；共享配置多字段、多文件编辑及恢复；`application_protocol_probe`/`target_protocol_probe` 提供有界 stream/SSE、WebSocket 文本及业务 MCP 初始化/工具发现 | Bearer、TLS 和 IPv6 已完成客户端复验；Basic、X-API-Key 及 Linux 远端变量引用已实现并自动验证，最终包客户端实调因锁屏待续。其他认证与高级协议待扩展。凭据、可执行/存储路径及来源成员变更仍须使用 Desktop 专用流程 |
 | 应用脚本、兼容库与集成 | vjsx 参考，pipeline、微信云开发兼容、Codex Bot 模板和独立 `guidance_get` 主题，三个已安装的 DSH Skills | 微信真实登录、数据库及存储、已有云函数迁移和公网专项验收仍需补齐 |
 | Desktop 主机和环境管理 | 主机登记、连接、断开，环境发现与身份校验接入，以及环境创建、实例启停均已有 MCP 工具，并通过当前 Desktop 与 DSH 隔离环境验收 | 密码认证仍须在 Desktop 完成，首次主机指纹确认继续由 Desktop 管理；工具不接收私钥路径或密码 |
 | 运行包与发布 | 本地启停，远端应用发布及回滚、运行时升级及回滚；官方运行包管理、应用安装及历史查询；共享多字段配置修改和跨会话历史恢复均已通过当前 Desktop 与 DSH 验收 | 配置中受保护值、来源成员及组件身份变更的 MCP 专用契约 |
@@ -59,12 +59,24 @@ Agent 需要能发现目标版本提供的能力，查到使用契约，并在�
 | 项目 | 当前状态 | 完成条件 |
 | --- | --- | --- |
 | IPv6 远端目标对话复验 | 已完成：WorkBuddy 对现有 `release-qa` 实际调用 IPv6 业务探针，认证成功/401 拒绝及 TLS 正反例均通过；最终 Desktop 包再次复验通过 | 已核对真实 `address_family=ipv6`、200 正文、TLS 校链校名与固定失败码，未改网络配置 |
-| 认证、TLS 与高级协议 | 专用 Bearer 引用及验证 TLS 已完成，新增安全选项发现工具并更新 `vhttpd-debug`；DSH 实际加载、WorkBuddy 本机和远端实调通过 | 非 Bearer 认证、高级协议、远端环境变量或密钥引用解析仍待扩展；本轮 text/plain 响应不计作 SSE 持续流或业务 MCP/WSS 对话验收 |
+| 认证、TLS 与高级协议 | 11/8 Bearer/TLS 客户端批次已通过；11/9 Basic、X-API-Key、Linux 目标进程变量凭据/证书引用的实现与自动回归通过，Desktop 已更新，DSH 新 Skill 已实际加载 | WorkBuddy 对最终包的成功、拒绝和恢复调用待 Mac 解锁后补验，本批不能标记验收完成；其他认证方案、外部密钥服务及高级协议仍待扩展 |
 | 受保护配置与运行计划 | 凭据、可执行/存储路径、include 来源成员及组件身份变更仍受限；更完整的受控运行计划替换待补专用契约 | 预览影响、预检、明确授权、应用、生效验证、冲突拒绝及精确恢复 |
 | 微信兼容专项 | 模板、兼容项目入口和基本调用已验收；真实登录、数据库、存储、已有云函数迁移及公网业务专项仍待验收 | 使用真实已授权测试资源逐项验证，不以模拟登录或常量探针替代业务验证 |
 | Relay 与数据库扩展 | 非 WebSocket 载体、任意嵌套 options 及具体业务表/迁移/应用数据验证仍在上表扩展范围中 | 按运行时真实支持能力增加配置契约和验证，保持既有载体及其他路由可恢复 |
 
 密码认证、首次主机指纹确认、授权授予和凭据展示继续由 Desktop 管理。这些是现有交互边界，不表示应把密码、私钥路径或授权提升能力开放给模型。是否扩展边界须另有明确设计。
+
+### 非 Bearer 与远端变量引用（2026-11-09，客户端工具验收待续）
+
+实现与自动回归已经通过，但本批尚未验收闭环：正式 Desktop 包已生成并通过全部标准发布检查，实际安装目录及 `desktop/bin` 应用与 ZIP 已更新；DSH 已实际加载新版 `vhttpd-debug`。随后桌面控制工具报告 Mac 锁屏且无法自动解锁，WorkBuddy 对最终包的成功、拒绝和恢复工具调用尚未执行，不能记作通过。已请求人工解锁。等待期间已恢复 `release-qa` 原配置、实例标记和 Desktop 原环境，回收专用夹具并释放测试端口；私有资料保留，解锁后可继续同一隔离验收。
+
+现有 `application_protocol_probe`、`target_protocol_probe` 的 `auth_ref` 新增 Basic 与固定 `X-API-Key` 两种方案：路由对应 adapter 通过 `probe_auth_kind=basic` 配置 `probe_basic_username`/`probe_basic_password`，或通过 `probe_auth_kind=api_key` 配置 `probe_api_key`。默认 Bearer 保持兼容。MCP 不接收原始凭据、自选认证头或证书路径；选项发现返回认证类型及可用性诊断，响应遮盖原始、Basic 编码及反射凭据。
+
+远端探针已改为在目标主机解析引用和执行传输，避免在 Desktop 编译远端配置时展开 Mac 环境。支持 `${env.NAME}`、`${env.NAME:-default}`、`${config.dir}` 和 `${paths.root}`，目录按声明所在 include 文件计算。环境取自同用户、精确配置路径唯一匹配的运行中 vhttpd 进程；没有匹配、不可读或有歧义时拒绝，需要环境的调用返回 `remote_probe_runtime_environment_unavailable`。缺失或不支持的表达式返回 `remote_probe_reference_unavailable`。不读取任意 PID，不使用 SSH 登录或 Desktop 环境作替代，不执行 shell、不自动加载 `.env`。远端公钥证书引用在该主机解析和读取；不返回解析后的私有值、证书文件或路径，TLS 仍校验链、有效期和名称。
+
+macOS 已通过原生认证文件及三份协议/TLS/schema 测试文件；macOS 和现有 Ubuntu 各通过 10 项 Python 回归，覆盖三种认证、IPv4/IPv6、TLS 拒绝、反射遮盖和恢复。实际目标 `/proc` 环境选择补充检查验证唯一匹配成功、歧义/未匹配拒绝及恢复。Linux V 目录有其他任务的既有变更，本批未使用或修改该编译器；远端产品变更为 Python，使用原有隔离运行时验证。正式 macOS 包使用当前 V、新编译器及 Boehm，禁用回退；未使用 v_old，运行时二进制与更新前完全一致。
+
+[本批证据与待验状态](./release-evidence/desktop-mcp-auth-references-2026-11-09.json)记录了实际结果及锁屏阻塞。后续仍需实际 WorkBuddy 工具矩阵与恢复验收；Digest、OAuth 交换、Cookie/query 认证、mTLS、外部密钥服务与高级协议不在本批已经验证的范围内。下节 11 月 8 日的字面量拒绝是当时版本记录，当前实现已由上述目标主机引用解析取代，客户端验收尚待补齐。
 
 ### 远端 IPv6、专用 Bearer 与 TLS 探针（2026-11-08）
 
