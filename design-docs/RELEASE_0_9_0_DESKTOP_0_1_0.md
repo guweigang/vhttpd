@@ -462,4 +462,19 @@ updated: 2026-11-09
 
 原始采样、阶段诊断、构建审计、复现脚本和源码已归档，[文件摘要清单](./release-evidence/2026-11-09/gc-http-factorial/artifact-sha256.json)可核对完整性。
 
+### 线程级分配归因与首处复制修复（2026-11-09）
+
+- [x] 使用相同 `684281b1` 包，改做 20 秒基线、40 秒 HTTP、40 秒 Paseo、45 秒冷却的短诊断，不再构建整包或追加长测。按同一线程的函数进入/退出，将分配 API 请求字节归到函数范围；有效基线、HTTP、Paseo 记录窗口分别约 0.91、2.01、4.00 秒，全部零丢事件、零嵌套错序。范围外事件另按直接返回地址归因，不能称为已覆盖全部高层路径。见[结论与验证范围](./release-evidence/2026-11-09/gc-alloc-attribution/finding.json)及[线程级统计](./release-evidence/2026-11-09/gc-alloc-attribution/runs/08-scope-short/scope-analysis.json)。
+- [x] HTTP 窗口记录 70441 次分配请求、约 8.99 MiB；分发函数范围含嵌套调用约占 26.16%，响应转换约 7.31%，应用请求日志链约 10.18%。这些包含关系不能相加。直接调用地址还确认了 veb 路由中两份约 8 KiB 上下文，以及响应转换、发送、保留阶段的约 7.4 KiB 响应体复制；它们属于明确的分配工作量，不是已证实的泄漏。
+- [x] **修复一处确定可消除的复制：** `src/http_observation_runtime.v` 的 `complete_http_observation` 将同步只读参数改成 `&Context`。旧包调用点每次请求分配 8168 字节，窗口内 81 次、661608 字节，约占全部已记录请求量 7.02%。旧生产 C 会对按值传入的 Context 做 `memdup` 堆装箱；修改后生产 C 参数为指针，该 Context 复制消失。见[生成代码检查](./release-evidence/2026-11-09/gc-alloc-attribution/context-codegen-check.json)、[旧代码](./release-evidence/2026-11-09/gc-alloc-attribution/context-codegen-before.txt)、[新代码](./release-evidence/2026-11-09/gc-alloc-attribution/context-codegen-after.txt)和[补丁](./release-evidence/2026-11-09/gc-alloc-attribution/context-reference.patch.txt)。尚未构建或部署修复包，不能据此宣称 RSS 已降低。
+- [x] Paseo 窗口记录 33521 次分配请求、约 3.73 MiB；`InProcVjsxHostApi.config_lookup` 27 次调用累计 2063043 字节，占 52.76%。源码每次 getter 都 `json2.decode[json2.Any]` 整份配置，然后沿路径查找；这是下一处明确的重复解析热点。不能用无界全局缓存处理，后续需按运行时/配置版本限定缓存和失效。该处本轮尚未改动。
+- [x] 完整 GC/unmap 后，atomic 的 16、32 字节两类块合计驻留约 3.03 MiB，标记对象仅约 0.30 MiB，但零标记块数为 0。它们是稀疏的非空对象块，不能按整块空闲页归还。标记可能包含收集器缓存或保守假根，尚未证明每个保留引用的所有者，不能把标记量全部认作业务存活。见[回收后大小类别与驻留](./release-evidence/2026-11-09/gc-alloc-attribution/runs/08-scope-short/03-unmap-twice-blocks.json)。
+- [x] 本轮仅修改上述 vhttpd 只读参数，未改 vlang/vjsx。macOS V 0.5.2 d13ccdd/cc 定向观察回归通过；Ubuntu VM 的 `/home/guweigang/v/v`、local-dev、相同 V 版本、GCC、`gc none` 定向回归通过，使用原生冻结 SDK/QuickJS，未切换或覆盖依赖。源码变更很小，但整体 `make test` 先被已有 `src/ws/hub_runtime.v` 回调 nil 默认值安全检查阻断；因此另行运行了实际定向测试，未声称全仓门禁通过。见[macOS 输出](./release-evidence/2026-11-09/gc-alloc-attribution/macos-observation-test.txt)和[Linux 输出](./release-evidence/2026-11-09/gc-alloc-attribution/linux-observation-test.txt)。
+- [x] 明确保留失败记录：首次全栈流超过 128 MiB 文件预算并丢事件，仅用有效栈作路径线索，未用其计算占比；第二次因 perf 自动增加返回事件后缀，在压力前失败，未计入结论。有效运行校验实际事件名称，改用轻量事件后完成；所有本任务探针已清理。见[首轮失败](./release-evidence/2026-11-09/gc-alloc-attribution/runs/06-profile-short/driver-state.json)、[事件命名失败](./release-evidence/2026-11-09/gc-alloc-attribution/runs/07-scope-short/driver-state.json)和[有效运行](./release-evidence/2026-11-09/gc-alloc-attribution/runs/08-scope-short/driver-state.json)。这些诊断都保持原资源和主机保护限制，未中断业务。
+- [x] bodytest PID 3730524/启动标识 39645663、包 SHA `0890d931` 保持，匿名内存 126.3 MiB、三个健康检查均为 200、连续监测 active。见[最终业务核验](./release-evidence/2026-11-09/gc-alloc-attribution/runs/08-scope-short/final-business-check.json)。
+- [ ] P0-02 仍未关闭：分配 API 请求字节包含 realloc 的目标容量，不是净新增或保留内存；剖析也会影响吞吐。本轮没有逐对象代际到 GC 根的完整所有权证明，也没有修复包的 RSS/24 小时验收。接下来优先处理配置 getter 的重复解析，并按生命周期验证 veb 剩余复制；有具体分配改善后再构建候选包。
+
+原始事件文本、符号表、脚本、源码与排除记录已归档；原始 perf 二进制在[远端数据摘要](./release-evidence/2026-11-09/gc-alloc-attribution/runs/raw-manifest.json)所列位置保留，[归档摘要](./release-evidence/2026-11-09/gc-alloc-attribution/artifact-sha256.json)可核验完整性。
+
+
 
