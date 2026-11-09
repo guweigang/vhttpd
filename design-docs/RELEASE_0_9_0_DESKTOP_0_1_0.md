@@ -476,5 +476,18 @@ updated: 2026-11-09
 
 原始事件文本、符号表、脚本、源码与排除记录已归档；原始 perf 二进制在[远端数据摘要](./release-evidence/2026-11-09/gc-alloc-attribution/runs/raw-manifest.json)所列位置保留，[归档摘要](./release-evidence/2026-11-09/gc-alloc-attribution/artifact-sha256.json)可核验完整性。
 
+### 配置 getter 有界缓存完成（2026-11-09）
+
+本节推进上一节的重复解析热点；此前 HTTP Context 引用修复保留，业务仍未换包。
+
+- [x] 已实现每个运行时独立的配置 getter 缓存：按原始配置内容变化失效，包含缺失键的缓存结果；最多 32 项、键和值合计 64 KiB，快照最多 256 KiB、路径最多 1 KiB，超限走原解析逻辑。只保留有界序列化字符串，不保留解析树或 JS Value。lane 销毁、构建失败时显式清空，关闭后不得重新保留数据；请求作用域检查仍先于缓存读取。正常 HTTP/Paseo 共用的持久 host.config 已接入，原生 WebSocket 回退解析路径仍不缓存。见[实现与验证范围](./release-evidence/2026-11-09/config-cache/finding.json)和[完整补丁](./release-evidence/2026-11-09/config-cache/changes.patch.txt)。
+- [x] macOS 与 Ubuntu VM 的缓存边界及真实 JS 回调测试均通过，覆盖配置更新、负缓存失效、无效输入、运行时隔离、请求到期拒绝读取、并发读取及销毁清空。既有 embedded 请求回归在 macOS 通过。V 0.5.2 d13ccdd；Linux 使用 local-dev/GCC/gc none 与冻结原生 SDK/QuickJS。本轮未改 vlang/vjsx，未声称既有全仓门禁阻断已解除。见[macOS 输出](./release-evidence/2026-11-09/config-cache/macos-final-tests.txt)、[Linux 输出](./release-evidence/2026-11-09/config-cache/linux-tests.txt)、[既有请求回归](./release-evidence/2026-11-09/config-cache/macos-embedded-regression.txt)。
+- [x] 三次独立进程微基准：13,222 字节配置、四条预热路径（含缺失键）、每组 1000 次读取。旧解析路径累计 GC 分配约 120,618,064–120,620,592 字节，新缓存路径 19,952–22,960 字节，减少约 99.98%，结果校验一致。测量的是预热重复 getter 的累计分配，不是净存活量、全 Paseo 吞吐或 RSS；冷读取仍解析并增加有界缓存负载。见[基准源码](./release-evidence/2026-11-09/config-cache/bench.v)和[三轮结果](./release-evidence/2026-11-09/config-cache/bench-results.json)。
+- [x] bodytest PID 3730524、启动标识 39645663、包 SHA `0890d931` 保持；匿名内存 126.3 MiB、RSS 135.1 MiB、swap 为零，三个健康检查均为 200、连续监测 active。本轮仅做身份、状态与健康只读核验，未重启、换包或注入调试器。见[最终业务核验](./release-evidence/2026-11-09/config-cache/final-business-check.json)。
+- [ ] **P0-02 继续阻断：** 尚未构建包含 Context 引用和 getter 缓存两处修复的整包，未验证实际压力驻留或冷却改善。下一步固定扫描器与工具链构建候选，先短测 HTTP/Paseo 的分配、RSS、匿名内存、GC 堆及自然冷却；之后再决定业务替换与正式 24 小时验收。本轮没有启动新长测，也未获得全业务或 Windows 放行。
+
+[归档文件摘要](./release-evidence/2026-11-09/config-cache/artifact-sha256.json)包含源码、补丁、测试输出与基准结果。
+
+
 
 
