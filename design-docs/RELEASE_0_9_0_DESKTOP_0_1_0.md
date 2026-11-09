@@ -436,3 +436,30 @@ updated: 2026-11-09
 - [x] bodytest PID 3730524/启动标识 39645663、包 SHA 保持，匿名内存 126.3 MiB、三个健康检查均为 200，连续监测 active；两个有效对照单元自然退出。最早两个脚本预检及七扫描线程的配置预检均单独排除，未计入以上结果。见[最终业务核验](./release-evidence/2026-11-09/source-four-runtime/final-business-check.json)与[排除记录](./release-evidence/2026-11-09/source-four-runtime/excluded-preflights.json)。
 - [ ] P0-02 保持阻断：已证明降低后台分配，不代表压力驻留改善。整包比较还包含既有 HTTP 观察与空闲 GC 改动，不能把所有 RSS 差异归因于源码检测；单次增量控制也未确证更大保留量的具体根因。下一步应固定扫描器，拆开这些继承改动与 GC/glibc 池保留路径。基线与冷却差额包含请求历史、缓存及堆几何变化，不能直接称作泄漏。本轮未切换业务、未启动新的 24 小时验收，也未获得全业务或 Windows 放行。
 
+### 固定扫描器的 GC/HTTP 拆分完成：增量主要在 GC 池驻留（2026-11-09）
+
+本节完成上节提出的拆分；没有切换 bodytest，也没有将诊断结果计作正式长测放行。
+
+- [x] 四组均固定扫描器 `041e8955`、SDK `259620f1` 和相同 Boehm 对象 `d59d73ed`。G 因素是新增空闲回收协调器及请求活动接入，H 因素是五文件 HTTP 观察改动；**G 关闭时仍启用正常 Boehm GC**。冻结源码基点 `9c155bf7`，不能将结果说成已验证当前工作区全部改动。见[完整溯源与结论](./release-evidence/2026-11-09/gc-http-factorial/finding.json)、[源码摘要](./release-evidence/2026-11-09/gc-http-factorial/source-manifest.json)、[公共构建源码](./release-evidence/2026-11-09/gc-http-factorial/frozen-common-source.tar.gz)、[G 差异](./release-evidence/2026-11-09/gc-http-factorial/gc-factor.patch.txt)和[H 差异](./release-evidence/2026-11-09/gc-http-factorial/http-factor.patch.txt)。
+- [x] 四组加相同 SHA 新候选复跑，共五轮完整 60 秒基线、240 秒混合压力、300 秒自然冷却；两个源码根、四个预热运行时，HTTP 80 RPS、Paseo 每 2 秒一轮。合计 HTTP 95685 次、Paseo 577 轮，零意外校验错误、无 OOM；HTTP 夹具含预期 503，不能称为零错误状态码。持续压力和 35 秒长请求保护均未误触发空闲强制回收。保持 256 MiB、30% CPU、无 swap、640 MiB 稳定启动门槛与 512 MiB 主机保护，逐轮结束后串行启动。见[逐轮统计](./release-evidence/2026-11-09/gc-http-factorial/analysis.json)、[运行校验与采样局限](./release-evidence/2026-11-09/gc-http-factorial/census-validation.json)及[完整自然曲线](./release-evidence/2026-11-09/gc-http-factorial/comparison.png)。
+
+| 空闲协调器 | HTTP 观察 | 压力匿名 MiB | 自然冷却匿名 MiB | 冷却后额外 GC/unmap 的匿名 MiB |
+| --- | --- | ---: | ---: | ---: |
+| 关 | 旧 | 39.26 | 38.98 | 25.59 |
+| 关 | 新 | 50.29 | 50.23 | 26.64 |
+| 开 | 旧 | 53.68 | 32.34 | 26.54 |
+| 开 | 新，首轮 | 58.75 | 33.27 | 27.40 |
+| 开 | 新，同 SHA 复跑 | 50.55 | 33.36 | 27.68 |
+
+压力与自然冷却列均为末 60 秒中位数。最后一列来自自然阶段结束后的独立诊断干预：完整 GC、两次 GC/unmap，再单独 libc trim；**不是自然回收验收数据**。调试器和辅助库会扰动根及原生分配，因此不能将诊断下限当作真实业务承诺。
+
+- [x] **大部分增量已定位到 GC 对象堆驻留。** 关闭协调器的一对样本中，冷却差额 11.25 MiB，GC 区域实际驻留差额 11.08 MiB，堆外只差 0.18 MiB；完整 GC/unmap 后差额缩为 1.05 MiB。单做完整 GC 可增加可复用整块，但匿名内存不降；解除空闲页映射才回落。五轮完整 GC 后标记对象仅 5.41–5.51 MiB，libc 在用块约 8.56–8.61 MiB，额外 trim 均没有再降匿名内存。因此尚无“新观察代码多保留十几 MiB 必须存活对象”的证据。
+- [x] **为什么没有立即归还：空闲页年龄和回收触发条件。** 在 G 开/H 旧及完整新包复跑中，32 份有效只读样本最多见到约 21.75 MiB 已驻留空闲页，均未达到配置的 7 轮 GC 年龄；这里是 GC 轮次，不是秒。停止请求后后台约 0.08 MiB/秒分配使正常 GC 变慢。空闲协调器在安静 30 秒后回收，随后受 16 MiB 最小堆、8 MiB 增长和 60 秒冷却门槛约束，出现缓慢回升后再回落的周期。它改善自然冷却，不控制压力期间的池高水位。见[空闲页年龄](./release-evidence/2026-11-09/gc-http-factorial/age-analysis.json)和[固定 GC 实现摘录](./release-evidence/2026-11-09/gc-http-factorial/gc-collector-policy-excerpts.txt)。
+- [x] 回收后的 GC 实际驻留仍约 10.0–11.5 MiB，而标记对象约 5.4–5.5 MiB，整块空闲只余 0–32 KiB。差额与仍分配给对象大小类别的块、块内空槽及保守标记/收集器缓存相符；这些不等同于可整页归还的空闲块，精确槽位所有者尚未逐一证明。所有数字不能重复相加，堆容量也不能当作物理驻留量。
+- [x] H 开时全进程压力分配约 11.27–11.41 MiB/秒，H 关约 13.87–14.02，下降约 18–19%；但同 SHA 压力驻留相差约 8.2 MiB，不能根据每格单轮结果将压力池增大唯一归因到某一 HTTP 子改动。完整 GC 后标记量接近，比单看 RSS 更支持“池与回收节奏变化”的解释；保守可达仍不等于精确业务存活。
+- [x] macOS/Linux 扫描与签名两模块回归、空闲策略 C 并发/取消/门槛回归均通过。本次拆分没有新增 vlang/vjsx 修改，也没有将独立因素回退写入主工作区运行时代码。bodytest PID 3730524/启动标识 39645663、包 SHA `0890d931` 保持，匿名 126.3 MiB、三个健康检查 200、连续监测 active；主机 MemAvailable 879.2 MiB，五个诊断进程均自然结束。见[最终业务与收尾核验](./release-evidence/2026-11-09/gc-http-factorial/final-business-check.json)。
+- [ ] **P0-02 继续阻断。** 本轮解释了这批驻留增量的位置和大块未归还机制，未证明长期全业务无泄漏，也未验证最终候选 24 小时或 Windows。下一优先项是在固定扫描器、保留已验证空闲门禁的基础上，继续拆解压力期约 11 MiB/秒的短命分配与 GC 块占用，降低压力池高水位；HTTP 子改动的精确峰值贡献仍需更充分重复/分配归因。不能仅凭本轮数据全局下调 GC 参数或切换业务。
+
+原始采样、阶段诊断、构建审计、复现脚本和源码已归档，[文件摘要清单](./release-evidence/2026-11-09/gc-http-factorial/artifact-sha256.json)可核对完整性。
+
+
