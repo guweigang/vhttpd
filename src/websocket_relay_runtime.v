@@ -1,5 +1,6 @@
 module main
 
+import memidle
 import log
 import net.websocket
 import relay
@@ -45,6 +46,8 @@ fn relay_websocket_attached_cb(mut sc websocket.ServerClient, ref voidptr) ! {
 }
 
 fn relay_websocket_message_cb(mut ws_client websocket.Client, msg &websocket.Message, ref voidptr) ! {
+	memidle.begin()
+	defer { memidle.end() }
 	mut state := unsafe { &RelayWebSocketBridgeState(ref) }
 	if !state.lifecycle.can_process_messages() {
 		return

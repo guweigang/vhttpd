@@ -1,11 +1,14 @@
 module executor
 
 import log
+import memidle
 import os
 import vjsx
 import vjsx.runtimejs
 
 pub fn (e InProcVjsxExecutor) ensure_lane_host(idx int) ! {
+	memidle.begin()
+	defer { memidle.end() }
 	mut state := e.state
 	state.mu.@lock()
 	if state.stopping {

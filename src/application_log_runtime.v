@@ -1,5 +1,6 @@
 module main
 
+import application_catalog
 import application_logs
 import executor
 import runtime_plan
@@ -8,7 +9,7 @@ import runtime_plan
 // unambiguous application owner logs at environment scope rather than leaking
 // output into every application that happens to share a listener/engine.
 fn application_log_scopes(plan runtime_plan.RuntimePlan) map[string]application_logs.Scope {
-	builder := AdminAppsBuilder.new(plan)
+	builder := application_catalog.Builder.new(plan)
 	mut scopes := map[string]application_logs.Scope{}
 	for pipeline in plan.pipelines {
 		app_id := builder.app_id_from_pipeline(pipeline)

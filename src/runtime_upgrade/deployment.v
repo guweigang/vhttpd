@@ -37,6 +37,7 @@ pub fn (s DeploymentStatus) finished() bool {
 
 pub struct DeploymentPreview {
 pub:
+ installation app_bundle.Installation
 	id          string
 	config_path string
 	files       []app_bundle.FileView
@@ -127,7 +128,12 @@ fn verify_deployment_inputs(project string, files []DeploymentFile) ! {
 }
 
 fn read_application_manifest(project string) !string {
-	path := os.join_path(project, '.desktop-application.json')
+ return read_deployment_manifest(project,'')
+}
+
+fn read_deployment_manifest(project string, component string) !string {
+ if component != '' && !app_bundle.valid_component_id(component) {return error('unsafe_application_manifest')}
+ path := os.join_path(project,if component == '' {'.desktop-application.json'} else {'.desktop-installed-'+component+'.json'})
 	if !os.exists(path) { return '' }
 	if os.is_link(path) || os.file_size(path) > 2097152 {
 		return error('unsafe_application_manifest')
@@ -182,7 +188,7 @@ pub fn prepare_deployment(path string) !DeploymentPreview {
 	}
 	config.load_runtime_plan_with_overrides(r.config_path, target_sources) or { return error('whole_project_validation_failed') }
 	config.load_runtime_plan_file(os.join_path(candidate, 'vhttpd.toml')) or { return error('whole_project_validation_failed') }
-	previous_manifest := if component_id == '' { read_application_manifest(project)! } else { '' }
+	previous_manifest := read_deployment_manifest(project,component_id)!
 	mut paths := payload.files.map(it.path)
 	if previous_manifest != '' {
 		previous := json.decode[ApplicationManifest](previous_manifest)!
@@ -192,7 +198,7 @@ pub fn prepare_deployment(path string) !DeploymentPreview {
 	mut views := []app_bundle.FileView{}
 	for relative in paths {
 		before := deployment_file(project, relative)!
-		matches := payload.files.filter(it.path == relative)
+		matches := payload.files.filter(it.path == relative && !it.remove)
 		after_hash := if matches.len > 0 {
 			sha256.sum(os.read_bytes(app_bundle.safe_target(candidate, relative)!)!).hex()
 		} else {
@@ -228,7 +234,7 @@ pub fn prepare_deployment(path string) !DeploymentPreview {
 			os.chmod(backup, 0o600)!
 		}
 	}
-	preview := DeploymentPreview{ id: r.id, config_path: r.config_path, files: views, preserved: preserved, revision: deployment_revision(target_sources) }
+	preview := DeploymentPreview{ installation: app_bundle.payload_installation(payload)!, id: r.id, config_path: r.config_path, files: views, preserved: preserved, revision: deployment_revision(target_sources) }
 	private_write(os.join_path(dir, 'plan.json'), json.encode(DeploymentPlan{ preview: preview, files: files, configs: payload.configs, previous_manifest: previous_manifest, component_id: component_id }))!
 	private_write(os.join_path(dir, 'preview.json'), json.encode(preview))!
 	return preview
@@ -361,7 +367,7 @@ fn deployment_perform(dir string, r DeploymentRequest, plan DeploymentPlan, mut 
 		return error('invalid_deployment_plan')
 	}
 	verify_deployment_inputs(os.dir(r.config_path), plan.files)!
-	if plan.component_id == '' && read_application_manifest(os.dir(r.config_path))! != plan.previous_manifest {
+	if read_deployment_manifest(os.dir(r.config_path),plan.component_id)! != plan.previous_manifest {
 		return error('deployment_preview_stale')
 	}
 	instance := probe(r.runtime_request(r.expected_revision))!
@@ -414,7 +420,8 @@ pub fn deployment_safe_error(reason string) string {
 		'deployment_preview_stale', 'application_changed_during_deployment',
 		'project_changed_during_deployment', 'deployment_snapshot_changed', 'deployment_file_conflict',
 		'target_process_still_alive', 'new_process_exited', 'startup_or_effectiveness_timeout',
-		'process_identity_unavailable', 'old_process_still_alive', 'runtime_binding_changed'] {
+		'process_identity_unavailable', 'old_process_still_alive', 'runtime_binding_changed',
+        'application_binding_missing','application_binding_mismatch','application_binding_invalid','application_identity_changed','application_source_modified','application_unowned_file_conflict','app_meta_required','app_meta_entry_mismatch'] {
 		return reason
 	}
 	return 'application_deployment_failed'

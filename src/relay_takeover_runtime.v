@@ -1,6 +1,8 @@
 module main
 
 import crypto.rand
+import app_bundle
+import os
 import dispatch
 import executor
 import json2 as json
@@ -12,6 +14,9 @@ import time
 import ws
 
 struct TakeoverRequest {
+ local_engine_id string
+ application_id string
+ installation_id string
 	app_id  string
 	account string
 	method  string
@@ -28,6 +33,10 @@ struct TakeoverResponse {
 }
 
 struct TakeoverControl {
+ application_id string
+ installation_id string
+ component string
+ local_engine_id string
 	action   string
 	relay_id string
 	route    string = 'debug/control'
@@ -38,6 +47,9 @@ struct TakeoverControl {
 }
 
 struct TakeoverStatus {
+ binding_protocol int
+ application_id string
+ installation_id string
 	local_in_flight int
 	active          bool
 	lease_id        string
@@ -58,10 +70,21 @@ fn takeover_function_path(path string) bool {
 // Called only from trusted JS after its authentication step. This interface is
 // deliberately not an HTTP endpoint accepting an identity from the client.
 pub fn (mut app App) vjsx_takeover_request(raw string) !string {
+ return app.vjsx_takeover_request_owned(raw,'','')
+}
+
+pub fn (mut app App) vjsx_takeover_identity_required() bool {
+ mut registry := app.takeovers
+ if lease := registry.status(time.now().unix_milli()) {return lease.application_id != ''}
+ return false
+}
+
+pub fn (mut app App) vjsx_takeover_request_owned(raw string, application_id string, installation_id string) !string {
 	mut registry := app.takeovers
 	if registry.status(time.now().unix_milli()) == none { return '{"handled":false}' }
-	input := json.decode[TakeoverRequest](raw)!
-	lease := registry.admit(input.app_id, input.account, time.now().unix_milli())!
+	decoded := json.decode[TakeoverRequest](raw)!
+ input := TakeoverRequest{...decoded,application_id:application_id,installation_id:installation_id}
+	lease := registry.admit_identity(input.app_id,input.account,input.application_id,input.installation_id,time.now().unix_milli())!
 	if lease.id == '' { return '{"handled":false}' }
 	defer { registry.finish() }
 	if raw.len > 2097152 {
@@ -72,7 +95,8 @@ pub fn (mut app App) vjsx_takeover_request(raw string) !string {
 	if input.method != 'POST' || !takeover_function_path(input.path) {
 		return error('takeover_path_forbidden')
 	}
-	response := app.request_takeover_relay(lease.relay_id, lease.route, raw, 60000, lease.binding)!
+	forward := if lease.application_id != '' {json.encode(TakeoverRequest{...input,local_engine_id:lease.local_engine_id})} else {raw}
+ response := app.request_takeover_relay(lease.relay_id, lease.route, forward, 60000, lease.binding)!
 	if response.body.len > 2097152 { return error('takeover_response_limit') }
 	return json.encode(TakeoverResponse{ handled: true, status: response.status, headers: response.headers, body: response.body })
 }
@@ -152,12 +176,19 @@ fn (mut app App) dispatch_takeover_control(view PipelineDispatchView, adapter ru
 	mut registry := app.takeovers
 	now := time.now().unix_milli()
 	if input.action == 'start' {
+        if input.application_id != '' || input.installation_id != '' {
+            record := app_bundle.read_installation(os.dir(view.plan.source.config_path),input.component) or {return relay_pipeline_failure(exchange,409,'application_binding_mismatch','application_binding_mismatch')}
+            if record.app_id != input.application_id || record.id != input.installation_id {return relay_pipeline_failure(exchange,409,'application_binding_mismatch','application_binding_mismatch')}
+        }
 		if input.ttl_ms < 1000 || input.ttl_ms > 900000 {
 			return relay_pipeline_failure(exchange, 400, 'takeover_invalid_ttl', 'takeover_invalid_ttl')
 		}
 		id := rand.bytes(16) or { return relay_pipeline_failure(exchange, 500, 'takeover_random_failed', 'takeover_random_failed') }
 		registry.start(takeover.Lease{
-			id:         id.hex()
+			application_id:input.application_id
+            installation_id:input.installation_id
+            local_engine_id:input.local_engine_id
+            id:         id.hex()
 			app_id:     input.app_id
 			accounts:   input.accounts
 			relay_id:   binding.relay_id
@@ -170,12 +201,12 @@ fn (mut app App) dispatch_takeover_control(view PipelineDispatchView, adapter ru
 	} else if input.action != 'status' {
 		return relay_pipeline_failure(exchange, 400, 'takeover_invalid_action', 'takeover_invalid_action')
 	}
-	mut status := TakeoverStatus{}
+	mut status := TakeoverStatus{binding_protocol:2}
 	if lease := registry.status(now) {
 		if lease.binding.carrier_id != binding.carrier_id {
 			return relay_pipeline_failure(exchange, 409, 'takeover_owned_elsewhere', 'takeover_owned_elsewhere')
 		}
-		status = TakeoverStatus{ active: true, lease_id: lease.id, app_id: lease.app_id, accounts: lease.accounts, expires_ms: lease.expires_ms }
+		status = TakeoverStatus{ binding_protocol:2, application_id:lease.application_id,installation_id:lease.installation_id, active: true, lease_id: lease.id, app_id: lease.app_id, accounts: lease.accounts, expires_ms: lease.expires_ms }
 	}
 	return relay_pipeline_success_with_body(exchange, 'response', 200, json.encode(status), {})
 }
@@ -221,7 +252,12 @@ fn (mut app App) dispatch_takeover_http_once(view PipelineDispatchView, adapter 
 	// remote session DB. Never trust the envelope's account as a wx context.
 	req.header.set(.authorization, input.headers['authorization'])
 	engine := adapter.engine or { return relay_pipeline_failure(exchange, 500, 'takeover_engine_missing', 'takeover_engine_missing') }
-	selection := view.engines.dispatch_selection(engine.id)
+	if input.application_id != '' {
+        if input.local_engine_id != engine.id {return relay_pipeline_failure(exchange,409,'application_binding_mismatch','application_binding_mismatch')}
+        meta := app_bundle.engine_manifest(view.plan.source.config_path,engine.id) or {return relay_pipeline_failure(exchange,409,'application_binding_mismatch','application_binding_mismatch')}
+        if meta.id != input.application_id {return relay_pipeline_failure(exchange,409,'application_binding_mismatch','application_binding_mismatch')}
+    }
+ selection := view.engines.dispatch_selection(engine.id)
 	mut facade := app.as_facade()
 	mut response := selection.dispatch_http(mut facade, executor.HttpLogicDispatchRequest{
 		method:        'POST'

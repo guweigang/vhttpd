@@ -1,5 +1,6 @@
 module main
 
+import memidle
 import net.websocket
 import time
 import relay
@@ -198,6 +199,8 @@ pub mut:
 }
 
 fn relay_agent_message_cb(mut client websocket.Client, msg &websocket.Message, ref voidptr) ! {
+	memidle.begin()
+	defer { memidle.end() }
 	mut state := unsafe { &RelayAgentSocketState(ref) }
 	if state.session.stopped() { return }
 	RelayAgentRuntime.handle_message(state.ctx, state.descriptor, mut client, msg)!

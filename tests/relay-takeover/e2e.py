@@ -12,6 +12,7 @@ import tempfile
 import time
 import urllib.error
 import urllib.request
+import uuid
 sys.path.insert(0,str(pathlib.Path(__file__).resolve().parents[1]/'relay-db'))
 from e2e import ROOT, BINARY, CONTAINER, DOCKER, REMOTE_COMMAND, REMOTE_BINARY, DATABASE_HOST, RELAY_HOST, RELAY_LISTEN_HOST, port, sql, wait
 from fault_link import FaultLink
@@ -38,6 +39,10 @@ def run():
         remoteport,localport,remoteadmin,localadmin=port(),port(),port(),port()
         link=FaultLink(RELAY_HOST,remoteport)
         configs=[]
+        bound=os.environ.get('RELAY_TAKEOVER_BOUND')=='1'
+        app_uuid=str(uuid.uuid4())
+        installation_uuid=str(uuid.uuid4())
+        local_meta=None
         paseo_port=port() if os.environ.get('RELAY_TAKEOVER_PASEO')=='1' else 0
         for side,web,adm in [('remote',remoteport,remoteadmin),('local',localport,localadmin)]:
             config=work/(side+'.toml')
@@ -134,13 +139,29 @@ egress="adapter:app"
                 if REMOTE_COMMAND:component=component.replace('host = "127.0.0.1"','host = "0.0.0.0"')
                 (paseo/'component.toml').write_text(component)
                 base=base.replace('version=2\n','version=2\ninclude=["paseo/component.toml"]\n',1)
+            if bound:
+                environment=work/side
+                component=environment/'apps'/'fixture'
+                component.mkdir(parents=True)
+                config=environment/'vhttpd.toml'
+                entry=component/'main.mts'
+                entry.write_text(f"import app from {json.dumps(str(ROOT/'tests/relay-takeover'/(side+'.mts')))}; export default app;\n")
+                marker=base.index('[engines.app]')
+                app_config=base[marker:].replace(f'entry="{ROOT}/tests/relay-takeover/{side}.mts"',f'entry="{entry}"').replace(f'module_root="{ROOT}/tests/relay-takeover"',f'module_root="{environment}"')
+                base=base[:marker].replace('version=2\n','version=2\ninclude=["apps/fixture/component.toml"]\n',1)
+                (component/'component.toml').write_text(app_config)
+                meta={'schema_version':1,'id':app_uuid,'name':'fixture','version':'0.1.0','entry':'component.toml'}
+                (component/'app.json').write_text(json.dumps(meta))
+                record={'schema_version':1,'id':installation_uuid if side=='remote' else str(uuid.uuid4()),'app_id':app_uuid,'component':'fixture','entry':'apps/fixture/component.toml','version':'0.1.0','deployment_id':'a'*24,'fingerprint':'0'*64,'engines':['app'],'files':[]}
+                (component/'.vhttpd-installation.json').write_text(json.dumps(record))
+                if side=='local':local_meta=component/'app.json'
             config.write_text(base)
-            configs.append(config)
+            configs.append((side,config))
         processes=[];logs=[]
         try:
-            for config in configs:
-                log=(work/(config.stem+'.log')).open('ab');logs.append(log)
-                cmd=REMOTE_COMMAND+[REMOTE_BINARY] if config.stem=='remote' else [str(BINARY)]
+            for side,config in configs:
+                log=(work/(side+'.log')).open('ab');logs.append(log)
+                cmd=REMOTE_COMMAND+[REMOTE_BINARY] if side=='remote' else [str(BINARY)]
                 processes.append(subprocess.Popen(cmd+['--config',str(config)],cwd=ROOT,stdout=log,stderr=log,
                     env={**os.environ,'VHTTPD_VJSX_BOOTSTRAP_TIMEOUT_MS':'120000'}))
             remote=f'http://{RELAY_HOST}:{remoteport}'
@@ -151,7 +172,8 @@ egress="adapter:app"
             if paseo_port:
                 assert request(f'http://{RELAY_HOST}:{paseo_port}/meta')[1]['app']=='paseo-relay'
                 assert verify_paseo(RELAY_HOST,paseo_port)['bidirectional_binary']
-            def ctl(action,**kw):return request(control,{'action':action,'relay_id':'database',**kw},'fixture-admin',True)
+            binding={'application_id':app_uuid,'installation_id':installation_uuid,'component':'fixture','local_engine_id':'app'} if bound else {}
+            def ctl(action,**kw):return request(control,{**binding,'action':action,'relay_id':'database',**kw},'fixture-admin',True)
             wait(lambda:ctl('status')[0]==200,60)
             assert request(control,{'action':'start'})[0]==403
             # More requests than the default 1024-channel capacity: completed
@@ -164,9 +186,20 @@ egress="adapter:app"
             def call(token,**event):return request(remote+'/functions/probe',event,token)
             result=call(alice,action='write',id='before',value='remote')
             assert result[0]==200 and result[1]['result']['side']=='remote',result
+            if bound:
+                assert ctl('start',app_id='fixture-app',accounts=['alice'],installation_id=str(uuid.uuid4()))[0]==409
+                assert not ctl('status')[1]['active']
+                assert ctl('start',app_id='fixture-app',accounts=['alice'],local_engine_id='wrong-engine')[0]==409
+                original_meta=local_meta.read_text()
+                wrong=json.loads(original_meta);wrong['id']=str(uuid.uuid4());local_meta.write_text(json.dumps(wrong))
+                assert ctl('start',app_id='fixture-app',accounts=['alice'])[0]==409
+                local_meta.write_text(original_meta)
+                assert not ctl('status')[1]['active']
             started=ctl('start',app_id='fixture-app',accounts=['alice'])
             assert started[0]==200 and started[1]['active'],started
             lease=started[1]['lease_id']
+            if bound:
+                assert started[1]['application_id']==app_uuid and started[1]['installation_id']==installation_uuid
             began=time.monotonic()
             assert ctl('start',app_id='fixture-app',accounts=['bob'])[0]!=200
             assert time.monotonic()-began<2, 'Correlated control errors must not wait for timeout'
@@ -237,7 +270,7 @@ egress="adapter:app"
                 deadline=time.monotonic()+300
                 while time.monotonic()<deadline and pathlib.Path(qa_path).exists():
                     time.sleep(.5)
-            print(json.dumps({'passed':True,'remote_http_local_vjsx_remote_mysql':True,'account_filter':True,
+            print(json.dumps({'passed':True,'bound_application_identity':bound,'wrong_source_and_installation_rejected':bound,'remote_http_local_vjsx_remote_mysql':True,'account_filter':True,
                 'spoofed_identity_rejected':True,'explicit_end':True,'expiry':True,'disconnect_fallback':True,
                 'uncertain_result_no_replay':True,'reconnect_does_not_reenable':True,'processes_unchanged':True,'control_requests':1100,'local_channels_after_completion':0,'non_selected_large_requests_unaffected':True,'diagnostics_request_database_link':True,'diagnostics_connection_history':True,'diagnostics_authenticated_and_bounded':True,'paseo_same_remote_process':bool(paseo_port)}))
         except BaseException:

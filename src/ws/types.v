@@ -147,7 +147,8 @@ pub fn (state &DispatchConnState) begin_cleanup() bool {
 
 pub struct EventDispatch {
 pub:
-	call_fn fn (transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse @[required]
+	owner   ?EventDispatcher
+	call_fn fn (transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse = unsafe { nil }
 }
 
 pub struct HubConn {
@@ -460,4 +461,15 @@ pub fn UpstreamSendRequest.from_normalized(normalized command.NormalizedCommand,
 
 pub fn UpstreamSendRequest.from_feishu_command(normalized command.NormalizedCommand) UpstreamSendRequest {
 	return UpstreamSendRequest.from_normalized(normalized, 'feishu')
+}
+
+// A connection can retain its origin dispatcher without a native closure.
+pub interface EventDispatcher {
+	dispatch_event(frame transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse
+}
+
+pub fn (dispatch EventDispatch) dispatch_event(frame transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse {
+	if dispatch.call_fn != unsafe { nil } { return dispatch.call_fn(frame) }
+	if owner := dispatch.owner { return owner.dispatch_event(frame) }
+	return error('websocket_dispatch_missing')
 }

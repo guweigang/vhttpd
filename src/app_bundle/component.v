@@ -1,5 +1,6 @@
 module app_bundle
 
+import app_meta
 import config
 import crypto.sha256
 import encoding.base64
@@ -22,7 +23,7 @@ fn component_includes(value map[string]toml.Any) []toml.Any {
 	return []toml.Any{}
 }
 
-fn validate_component_config(text string) ! {
+pub fn validate_component_config(text string) ! {
 	doc := toml.parse_text(text)!
 	for key, _ in doc.to_any().as_map() {
 		if key !in ['version', 'include', 'listeners', 'engines', 'adapters', 'transforms', 'policies',
@@ -65,7 +66,7 @@ fn component_walk(root string, relative string, configs map[string]bool, prefix 
 	mut names := os.ls(os.join_path(root, relative))!
 	names.sort()
 	for name in names {
-		if excluded(name) || name in ['.runtime', 'node_modules', 'bin', '.ok'] { continue }
+		if name == '.vhttpd-installation.json' || excluded(name) || name in ['.runtime', 'node_modules', 'bin', '.ok'] { continue }
 		rel := if relative == '' { name } else { relative + '/' + name }
 		path := safe_target(root, rel)!
 		if os.is_dir(path) {
@@ -92,6 +93,10 @@ pub fn collect_component(root string, entry string, operation string, id string)
 	if !valid_component_id(id) || os.real_path(root) != root || os.is_link(root) || os.dir(entry) != root {
 		return error('invalid_component_source')
 	}
+	if os.exists(os.join_path(root, 'app.json')) || os.is_link(os.join_path(root, 'app.json')) {
+        meta := app_meta.read(root)!
+        if meta.entry != os.file_name(entry) { return error('app_meta_entry_mismatch') }
+    }
 	mut configs := map[string]bool{}
 	component_configs(root, entry, mut configs)!
 	mut files := []File{}
@@ -156,26 +161,28 @@ pub fn compose_component(p Payload, config_path string) !Payload {
 	if os.file_name(config_path) != 'vhttpd.toml' {
 		return error('component_requires_environment_root')
 	}
-	if os.exists(safe_target(root, 'apps/' + p.component_id)!) {
-		return error('component_already_installed')
-	}
-	mut files := p.files.clone()
+	installation := component_installation(p, root)!
+    updating := p.target_installation_id != ''
+    adopting := p.adopt_engines.len > 0
+    if adopting {validate_adoption(p,config_path)!}
+	mut files := component_update_files(p, root, installation)!
+    if adopting {files = adoption_files(p,root,installation)!}
 	mut configs := p.configs.clone()
 	mut overrides := map[string]string{}
-	for file in p.files {
+	for file in files {
 		if file.path in p.configs {
 			overrides[os.join_path(root, file.path)] = base64.decode_str(file.data)
 		}
 	}
 	for source in config.runtime_config_sources(config_path)! {
+        if (updating || adopting) && source.path.starts_with(os.join_path(root, 'apps', p.component_id) + '/') { continue }
 		if !source.path.starts_with(root + '/') { return error('include_outside_project') }
 		rel := source.path[root.len + 1..]
 		before := os.read_file(safe_target(root, rel)!)!
-		after := if source.path == config_path {
-			append_component_include(before, p.component_entry)!
-		} else {
-			before
-		}
+		stripped := if adopting {remove_adopted_definitions(before,p)!} else {before}
+        after := if source.path == config_path {
+            if updating || (adopting && component_includes(toml.parse_text(before)!.to_any().as_map()).any(it.string() == p.component_entry)) {stripped} else {append_component_include(stripped,p.component_entry)!}
+        } else {stripped}
 		files << File{ path: rel, data: base64.encode_str(after), hash: sha256.hexhash(after), mode: if os.stat(source.path)!.mode & 0o111 != 0 {
 			0o700
 		} else {

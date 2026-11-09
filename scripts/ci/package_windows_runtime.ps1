@@ -39,7 +39,9 @@ while ($pending.Count) {
  }
 }
 $report | Set-Content "$package/dependencies.txt"
-New-Item -ItemType Directory "$package/admin", "$package/licenses" | Out-Null
+New-Item -ItemType Directory "$package/admin", "$package/licenses", "$package/skills" | Out-Null
+Copy-Item "$root/src/development_guidance/vhttpd-develop" "$package/skills/" -Recurse
+Copy-Item "$root/desktop/skills/vhttpd-deploy", "$root/desktop/skills/vhttpd-debug" "$package/skills/" -Recurse
 Copy-Item "$root/admin/ui" "$package/admin/ui" -Recurse
 Get-ChildItem "$env:OPENSSL_ROOT_DIR/share" -Filter copyright -File -Recurse | ForEach-Object {
  Copy-Item $_.FullName (Join-Path "$package/licenses" ($_.Directory.Name + '.txt'))

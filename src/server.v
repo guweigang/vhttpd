@@ -111,12 +111,12 @@ fn (r &ActiveRuntimeRegistry) listener_summaries() []executor.AdminListenerRunti
 		cfg := cfgs[i] or { continue }
 		pipelines := app.admin_pipeline_runtime_snapshot()
 		app.control_plane.mu.@lock()
-		metrics := app.control_plane.http_observations.total
+		metrics := app.control_plane.http_observations.total.snapshot()
 		mut route_metrics := []executor.AdminHttpRouteMetrics{}
 		mut ids := app.control_plane.http_observations.routes.keys()
 		ids.sort()
-		for id in ids { route_metrics << executor.AdminHttpRouteMetrics{pipeline_id: id, metrics: app.control_plane.http_observations.routes[id]} }
-		errors := app.control_plane.http_observations.errors.clone()
+		for id in ids { route_metrics << executor.AdminHttpRouteMetrics{pipeline_id: id, metrics: app.control_plane.http_observations.routes[id].snapshot()} }
+		errors := app.control_plane.http_observations.errors.snapshot()
 		app.control_plane.mu.unlock()
 		summaries << executor.AdminListenerRuntimeSummary{
 			listener_id: cfg.plan_listener_id
@@ -253,6 +253,8 @@ fn print_vhttpd_help() {
 	println('Common options:')
 	println('  --help, -h')
 	println('  --version, -v')
+	println('  --development-guide <topic> Print packaged develop or vjsx guidance as JSON')
+	println('  --schema                    Print the packaged configuration schema as JSON')
 	println('  --build-info      Show compiled GC mode and runtime GC status as JSON')
 	println('  --manual-restart   Enable authenticated manual-process restart')
 	println('  --config <path>              TOML config file')
@@ -437,7 +439,7 @@ fn main() {
 	if os.args.len == 3 && os.args[1] == '--workbench-upgrade-helper' {
 		runtime_upgrade.run(os.args[2]) or { eprintln('runtime_upgrade_failed'); exit(1) }; return
 	}
-	if os.args.len == 2 && os.args[1] == '--workbench-component-version' { println('1'); return }
+	if os.args.len == 2 && os.args[1] == '--workbench-component-version' { println('3'); return }
 	if os.args.len == 2 && os.args[1] == '--workbench-deploy-version' { println('1'); return }
 	if os.args.len == 3 && os.args[1] == '--workbench-deploy-prepare' {
 		result := runtime_upgrade.prepare_deployment(os.args[2]) or { eprintln(runtime_upgrade.deployment_safe_error(err.msg())); exit(2) }
@@ -445,6 +447,15 @@ fn main() {
 	}
 	if os.args.len == 3 && os.args[1] == '--workbench-deploy-helper' {
 		runtime_upgrade.run_deployment(os.args[2]) or { eprintln(runtime_upgrade.deployment_safe_error(err.msg())); exit(1) }; return
+	}
+	if os.args.len == 2 && os.args[1] == '--schema' {
+		println(packaged_schema_json())
+		return
+	}
+	if os.args.len == 3 && os.args[1] == '--development-guide' {
+		guide := packaged_development_guide(os.args[2]) or { eprintln(err.msg()); exit(2) }
+		println(guide)
+		return
 	}
 	manual_restart := '--manual-restart' in os.args
 	args := os.args[1..].filter(it != '--manual-restart')

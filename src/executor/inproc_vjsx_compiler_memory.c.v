@@ -3,6 +3,11 @@ module executor
 #include "@VMODROOT/src/executor/vjsx_compiler_memory.h"
 
 fn C.vhttpd_trim_compiler_allocator()
+fn C.vhttpd_maintain_allocator(active bool) int
+
+fn maintain_inproc_vjsx_allocator(active bool) {
+	C.vhttpd_maintain_allocator(active)
+}
 
 $if gcboehm ? {
 	#include <gc.h>

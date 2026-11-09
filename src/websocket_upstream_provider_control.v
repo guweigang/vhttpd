@@ -1,5 +1,6 @@
 module main
 
+import memidle
 import log
 import net.websocket
 
@@ -51,6 +52,8 @@ fn (mut app App) websocket_upstream_provider_reconnect_delay_ms(provider string,
 }
 
 fn (mut app App) websocket_upstream_provider_handle_message(provider string, instance string, mut ws_client websocket.Client, msg &websocket.Message) ! {
+	memidle.begin()
+	defer { memidle.end() }
 	if provider == websocket_upstream_provider_codex {
 		mut payload_preview := ''
 		if msg.opcode == .text_frame || msg.opcode == .binary_frame || msg.opcode == .continuation {

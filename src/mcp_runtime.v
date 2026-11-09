@@ -118,5 +118,5 @@ fn mcp_handle_post_http(mut app App, mut ctx Context) veb.Result {
 
 @['/mcp'; post]
 pub fn (mut app App) mcp_post(mut ctx Context) veb.Result {
-	return mcp_handle_post_http(mut app, mut ctx)
+	return HttpIngressRuntime.route(mut app, mut ctx, 'POST', ctx.req.url)
 }

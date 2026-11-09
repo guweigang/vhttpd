@@ -1,6 +1,7 @@
 module main
 
 import admin
+import app_bundle
 import json2 as json
 import relay
 import upstream.transport
@@ -42,16 +43,31 @@ fn (mut app App) control_local_takeover(input TakeoverControl) !string {
 				continue
 			}
 			adapter := view.plan.adapters[pipeline.egress.id] or { continue }
-			if adapter.kind == 'debug-http' { receiver = true }
+			if adapter.kind == 'debug-http' {
+                if input.application_id != '' {
+                    engine := adapter.engine or {return error('application_binding_mismatch')}
+                    if engine.id != input.local_engine_id {return error('application_binding_mismatch')}
+                    meta := app_bundle.engine_manifest(view.plan.source.config_path,engine.id)!
+                    if meta.id != input.application_id {return error('application_binding_mismatch')}
+                }
+                receiver = true
+            }
 		}
 		if !receiver { return error('takeover_receiver_missing') }
 	}
 	binding := relay.carrier_dispatch_plan(app.relay.carriers, input.relay_id, relay.WireFrame{})
-	result := app.request_takeover_relay(input.relay_id, input.route, json.encode(input), 5000, binding)!
+	if input.action == 'start' && input.application_id != '' {
+        probe_input := TakeoverControl{...input,action:'status'}
+        probe_result := app.request_takeover_relay(input.relay_id,input.route,json.encode(probe_input),5000,binding)!
+        probe_status := json.decode[TakeoverStatus](probe_result.body)!
+        if probe_status.binding_protocol != 2 {return error('application_binding_protocol_unsupported')}
+    }
+ result := app.request_takeover_relay(input.relay_id, input.route, json.encode(input), 5000, binding)!
 	value := json.decode[json.Any](result.body)!.as_map()
 	active := value['active'] or { return error('takeover_invalid_control_response') }
 	if active !is bool { return error('takeover_invalid_control_response') }
 	status := json.decode[TakeoverStatus](result.body)!
+    if input.action == 'start' && input.application_id != '' && (status.application_id != input.application_id || status.installation_id != input.installation_id) {return error('application_binding_protocol_unsupported')}
 	if input.action != 'status' {
 		app.emit('relay.takeover.control', {'relay_id': input.relay_id, 'route': input.route,
 			'action': input.action, 'state': if status.active { 'active' } else { 'remote' }})

@@ -1,6 +1,7 @@
 module executor
 
 import sync
+import memidle
 import time
 import vjsx
 
@@ -68,6 +69,7 @@ fn (e InProcVjsxExecutor) begin_task(mut control ExecutorTaskControl, lane_id st
 				return false
 			}
 			state.lanes[idx].inflight++
+			memidle.begin()
 			control.owns_lane = true
 			break
 		}
@@ -114,7 +116,7 @@ fn (e InProcVjsxExecutor) finish_task(mut control ExecutorTaskControl) {
 	state.mu.@lock()
 	if owns_lane {
 		for i, lane in state.lanes {
-			if lane.id == lane_id && lane.inflight > 0 { state.lanes[i].inflight-- }
+			if lane.id == lane_id && lane.inflight > 0 { state.lanes[i].inflight--; memidle.end() }
 		}
 	}
 	state.release_websocket_mailbox_claim_locked(control.mailbox_key, control)
@@ -142,7 +144,7 @@ fn (e InProcVjsxExecutor) cancel_task(mut control ExecutorTaskControl, reason st
 		state.release_websocket_mailbox_claim_locked(control.mailbox_key, control)
 		if control.owns_lane {
 			for i, lane in state.lanes {
-				if lane.id == control.lane_id && lane.inflight > 0 { state.lanes[i].inflight-- }
+				if lane.id == control.lane_id && lane.inflight > 0 { state.lanes[i].inflight--; memidle.end() }
 			}
 			control.owns_lane = false
 		}

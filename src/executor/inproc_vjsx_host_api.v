@@ -20,7 +20,10 @@ fn InProcVjsxHostApi.builder(mut state VjsxExecutorState, idx int) vjsx.HostValu
 		name: 'log'
 		value: InProcVjsxHostApi.log_builder(mut state, idx)
 	}, vjsx.HostObjectField{
-		name: 'takeover'
+		name: 'applicationInfo'
+        value:InProcVjsxHostApi.application_info_builder(mut state)
+    }, vjsx.HostObjectField{
+        name: 'takeover'
 		value: InProcVjsxHostApi.takeover_builder(mut state, idx)
 	}, vjsx.HostObjectField{
 		name:  'database'

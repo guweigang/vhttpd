@@ -12,6 +12,7 @@ pub const max_files = 4096
 
 pub struct File {
 pub:
+ remove bool
 	path string
 	data string
 	hash string
@@ -23,6 +24,8 @@ pub:
 	protocol    int = 1
 	component_id string
 	component_entry string
+ target_installation_id string
+ adopt_engines []string
 	id          string
 	files       []File
 	configs     []string
@@ -203,7 +206,7 @@ fn walk(root string, relative string, configs map[string]bool, root_config strin
 	mut names := os.ls(os.join_path(root, relative))!
 	names.sort()
 	for name in names {
-		if excluded(name) { continue }
+		if excluded(name) || name == '.vhttpd-installation.json' { continue }
 		rel := if relative == '' { name } else { relative + '/' + name }
 		path := os.join_path(root, rel)
 		if os.is_link(path) { return error('project_symlink_not_supported') }
@@ -268,6 +271,7 @@ pub fn collect(root string, config_path string, id string) !Payload {
 
 pub fn (p Payload) validate() ! {
 	if p.component_id != '' {
+		if p.files.any(it.remove || os.file_name(it.path) == '.vhttpd-installation.json') { return error('invalid_component_bundle') }
 		if !valid_component_id(p.component_id) || p.component_entry !in p.configs || !p.files.all(it.path.starts_with('apps/' + p.component_id + '/')) { return error('invalid_component_bundle') }
 	}
 	if p.protocol != 1 || p.id.len != 24 || !p.id.bytes().all(it.is_hex_digit()) || p.files.len < 1 || p.files.len > max_files || p.configs.len < 1 || (p.component_id == '' && 'vhttpd.toml' !in p.configs) {
@@ -318,6 +322,7 @@ pub fn materialize(p Payload, root string) ! {
 	p.validate()!
 	for file in p.files {
 		path := safe_target(root, file.path)!
+		if file.remove { continue }
 		os.mkdir_all(os.dir(path), mode: 0o700)!
 		os.write_file_array(path, base64.decode(file.data))!
 		os.chmod(path, file.mode)!

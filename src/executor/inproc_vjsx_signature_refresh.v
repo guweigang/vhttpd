@@ -5,15 +5,17 @@ import time
 struct InProcVjsxSignatureRefresh {}
 
 fn InProcVjsxSignatureRefresh.loop(mut state VjsxExecutorState) {
+	state.mu.@lock()
+	config := state.facade.config
+	state.mu.unlock()
+	mut scanner := VjsxSourceScanner.new(config)
 	mut last_probe := ''
 	mut pending_since := i64(0)
 	for {
 		mut stop := false
-		mut config := VjsxRuntimeFacadeConfig{}
 		mut last_checked_at := i64(0)
 		state.mu.@lock()
 		stop = state.signature_refresh_stop
-		config = state.facade.config
 		last_probe = if last_probe != '' { last_probe } else { state.cached_source_probe }
 		pending_since = if pending_since > 0 { pending_since } else { state.signature_pending_since }
 		last_checked_at = state.signature_last_checked_at
@@ -22,8 +24,8 @@ fn InProcVjsxSignatureRefresh.loop(mut state VjsxExecutorState) {
 			return
 		}
 		now := time.now().unix_milli()
-		next_probe := if config.app_entry.trim_space() != '' {
-			config.source_probe()
+		mut next_probe := if config.app_entry.trim_space() != '' {
+			scanner.probe()
 		} else {
 			''
 		}
@@ -38,11 +40,16 @@ fn InProcVjsxSignatureRefresh.loop(mut state VjsxExecutorState) {
 			|| now - last_checked_at >= inproc_vjsx_signature_full_refresh_ms)
 		mut next_signature := ''
 		if needs_full_refresh {
+			// Full refresh also discovers topology changes. This preserves the
+			// one-second content check, including same-size/same-mtime edits.
+			scanner.refresh_files()
 			next_signature = if config.app_entry.trim_space() != '' {
-				config.source_signature()
+				scanner.signature()
 			} else {
 				''
 			}
+			next_probe = scanner.probe()
+			last_probe = next_probe
 		}
 		state.mu.@lock()
 		if state.signature_refresh_stop {
@@ -59,7 +66,18 @@ fn InProcVjsxSignatureRefresh.loop(mut state VjsxExecutorState) {
 			pending_since = 0
 		}
 		state.signature_last_error = ''
+		mut allocator_busy := false
+		if needs_full_refresh {
+			allocator_busy = state.host_builders > 0 || state.warmup_running
+				|| state.app_startup_running || state.tasks.len > 0
+			for lane in state.lanes {
+				allocator_busy = allocator_busy || lane.inflight > 0
+			}
+		}
 		state.mu.unlock()
+		// Allocator maintenance can take libc locks. Keep it outside state.mu
+		// and off dispatch threads; the native helper rate-limits all engines.
+		if needs_full_refresh { maintain_inproc_vjsx_allocator(allocator_busy) }
 		time.sleep(time.millisecond * inproc_vjsx_signature_probe_poll_ms)
 	}
 }
