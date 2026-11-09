@@ -52,18 +52,30 @@ pub fn upgrade_error_hint(status RemoteRuntimeUpgrade) string {
 	}
 }
 
+struct PreparedRuntimeUpgrade {
+	request       runtime_upgrade.Request
+	target_binary string
+	binary_digest string
+	applications  []UpgradeApplication
+}
+
 fn (mut s ServerSession) upgrade(command ServerCommand) ! {
 	s.inspect()!
+	plan := s.prepare_runtime_upgrade(command.project_id, command.runtime_id, new_remote_id()!, false)!
+	s.submit_runtime_upgrade(plan)!
+}
+
+fn (mut s ServerSession) prepare_runtime_upgrade(project_id string, runtime_id string, id string, mcp bool) !PreparedRuntimeUpgrade {
 	if s.state.upgrades.any(!it.finished()) || s.state.deployments.any(!it.finished()) {
 		return error('该服务器有升级正在进行，请等待完成或重连查看结果。')
 	}
-	matches := s.state.projects.filter(it.id == command.project_id)
+	matches := s.state.projects.filter(it.id == project_id)
 	if matches.len != 1 { return error('项目已变化，请刷新后重新选择。') }
 	profile := matches[0]
 	if profile.config_path != os.join_path(s.state.root, 'instances', profile.name, 'vhttpd.toml') || profile.runtime_id == '' {
 		return error('仅支持工作台管理且已绑定运行包的手工实例。')
 	}
-	target := select_remote_runtime(s.state.runtimes, command.runtime_id)!
+	target := select_remote_runtime(s.state.runtimes, runtime_id)!
 	if target.id == profile.runtime_id { return error('该实例已使用所选运行包。') }
 	mut manager := &RemoteManager{}
 	manager.connect_with_session(profile, '', s.state.control_path)!
@@ -84,12 +96,37 @@ fn (mut s ServerSession) upgrade(command ServerCommand) ! {
 	if check.protocol != 1 || check.version != target.version || check.revision != instance.effective_revision {
 		return error('项目在校验期间已变化，请刷新后重试。原实例未停止。')
 	}
-	id := new_remote_id()!
+	binary := target.path + '/vhttpd'
+	mut applications := []UpgradeApplication{}
+	mut digest := ''
+	if mcp {
+		response := manager.request(.get, '/admin/apps', '')!
+		if response.status_code != 200 || response.body.len > 2097152 {
+			return error('upgrade_application_inventory_unavailable')
+		}
+		inventory := json.decode[ApplicationsResponse](response.body)!
+		for app in inventory.apps {
+			if app.listeners.any(!it.control) || app.pipelines.any(it.engine != '') {
+				applications << UpgradeApplication{ id: app.id, label: app.label }
+			}
+		}
+		output_fields := s.shell('sha256sum -- ' + shell_quote(binary), 15000)!.fields()
+		if output_fields.len == 0 || output_fields[0].len != 64 || !output_fields[0].bytes().all(it.is_hex_digit()) {
+			return error('upgrade_package_digest_unavailable')
+		}
+		digest = output_fields[0]
+	}
 	request := runtime_upgrade.Request{ id: id, server_root: s.state.root, config_path: profile.config_path, previous_version: instance.version, target_version: check.version, previous_id: profile.runtime_id, target_id: target.id, admin_port: profile.admin_port, token: profile.token, expected_boot: instance.boot_id, expected_revision: instance.effective_revision }
-	queued := RemoteRuntimeUpgrade{ id: id, config_path: profile.config_path, previous_id: profile.runtime_id, target_id: target.id, phase: 'queued' }
-	script := 'set -eu\numask 077\nproject=' + shell_quote(os.dir(profile.config_path)) + '\nid=' + shell_quote(id) + '\nrequest=' + shell_quote(base64.encode_str(json.encode(request))) + '\nstatus=' + shell_quote(base64.encode_str(json.encode(queued))) + '\nbinary=' + shell_quote(target.path + '/vhttpd') + '\n' + $embed_file('remote_scripts/upgrade.sh').to_string()
+	return PreparedRuntimeUpgrade{ request: request, target_binary: binary, binary_digest: digest, applications: applications }
+}
+
+fn (mut s ServerSession) submit_runtime_upgrade(plan PreparedRuntimeUpgrade) ! {
+	request := plan.request
+	id := request.id
+	queued := RemoteRuntimeUpgrade{ id: id, config_path: request.config_path, previous_id: request.previous_id, target_id: request.target_id, phase: 'queued' }
+	script := 'set -eu\numask 077\nproject=' + shell_quote(os.dir(request.config_path)) + '\nid=' + shell_quote(id) + '\nrequest=' + shell_quote(base64.encode_str(json.encode(request))) + '\nstatus=' + shell_quote(base64.encode_str(json.encode(queued))) + '\nbinary=' + shell_quote(plan.target_binary) + '\n' + $embed_file('remote_scripts/upgrade.sh').to_string()
 	s.shell(script, 8000)!
-	mut statuses := s.state.upgrades.filter(it.config_path != profile.config_path)
+	mut statuses := s.state.upgrades.filter(it.config_path != request.config_path)
 	statuses << queued
 	s.state = ServerSnapshot{ ...s.state, upgrades: statuses, message: '升级已交由远端执行。断开 SSH 或退出工作台后，仍会继续检查和失败回退。' }
 }

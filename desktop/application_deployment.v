@@ -73,7 +73,7 @@ fn (mut app Workshop) handle_deployment_event(event string) bool {
 	} else if event == 'deploy_commit' {
 		preview := app.server_snapshot.deployment_preview
 		selected := app.remote_profiles.filter(it.id == app.deployment_remote)
-		if preview.id != '' && selected.len == 1 && preview.config_path == selected[0].config_path && ui2.confirm('部署并重启应用', '将把整个工程（包含全部应用、静态资源和 include）一起部署到 ' + selected[0].name + '。远端端口与认证保持不变；目标运行环境中的全部应用会短暂中断，失败时恢复原工程。') {
+		if preview.id != '' && selected.len == 1 && preview.config_path == selected[0].config_path && ui_confirm('部署并重启应用', '将把整个工程（包含全部应用、静态资源和 include）一起部署到 ' + selected[0].name + '。远端端口与认证保持不变；目标运行环境中的全部应用会短暂中断，失败时恢复原工程。') {
 			app.deployment_command(.deploy)
 		}
 	}

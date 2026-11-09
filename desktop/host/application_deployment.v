@@ -19,7 +19,8 @@ fn (mut s ServerSession) discard_deployment() ! {
 	path := os.join_path(os.dir(s.pending_deployment.config_path), '.desktop-deployments', s.pending_deployment.id)
 	s.shell('set -eu\np=' + shell_quote(path) + '\n[ ! -L "$p" ] && rm -rf -- "$p"\n', 5000)!
 	s.pending_deployment = runtime_upgrade.DeploymentRequest{}
-	s.state = ServerSnapshot{ ...s.state, deployment_preview: ApplicationDeploymentPreview{} }
+	s.deployment_rollback = false
+	s.state = ServerSnapshot{ ...s.state, deployment_preview: ApplicationDeploymentPreview{}, mcp_release_preview: McpReleasePreview{} }
 }
 
 fn (mut s ServerSession) prepare_application(command ServerCommand) ! {
@@ -30,7 +31,7 @@ fn (mut s ServerSession) prepare_application(command ServerCommand) ! {
 	matches := s.state.projects.filter(it.id == command.project_id)
 	if matches.len != 1 { return error('请选择目标服务器上的实例。') }
 	p := matches[0]
-	if p.config_path != os.join_path(s.state.root, 'instances', p.name, 'vhttpd.toml') || p.runtime_id == '' {
+	if p.config_path != os.join_path(s.state.root, 'instances', p.name, 'vhttpd.toml') || p.runtime_id == '' || (command.runtime_id != '' && p.runtime_id != command.runtime_id) {
 		return error('当前仅支持工作台管理的 SSH 手工实例。')
 	}
 	runtime := select_remote_runtime(s.state.runtimes, p.runtime_id)!
@@ -40,7 +41,9 @@ fn (mut s ServerSession) prepare_application(command ServerCommand) ! {
 	}
 	if command.component_id != '' {
 		version := s.shell(shell_quote(runtime.path + '/vhttpd') + ' --workbench-component-version', 8000) or { return error('请先升级目标运行包，以支持独立应用安装。') }
-		if version.trim_space() != '1' { return error('独立应用安装协议不兼容。') }
+		if version.trim_space() !in ['1','2','3'] { return error('独立应用安装协议不兼容。') }
+        if command.adopt_engines.len > 0 && version.trim_space() != '3' {return error('旧应用身份迁移需要新版运行包，请先升级运行环境。')}
+        if (command.target_installation_id != '' || os.exists(os.join_path(command.local_project.workdir,'app.json'))) && version.trim_space() !in ['2','3'] { return error('应用身份与更新部署需要新版运行包，请先升级目标运行环境。') }
 	}
 	s.discard_deployment()!
 	mut manager := &RemoteManager{}
@@ -57,18 +60,50 @@ fn (mut s ServerSession) prepare_application(command ServerCommand) ! {
 		return error('请先让目标实例业务就绪、配置全部生效，再部署应用。')
 	}
 	id := new_remote_id()!
-	payload := deployment_payload(command.local_project, id, command.component_id)!
+	dir := os.join_path(os.dir(p.config_path), '.desktop-deployments', id)
+	s.shell('set -eu\numask 077\np=' + shell_quote(os.dir(p.config_path)) + '\n[ ! -L "$p/.desktop-deployments" ]\nmkdir -p "$p/.desktop-deployments"\nmkdir -m 700 ' + shell_quote(dir) + '\n', 5000)!
+	mut prepared := false
+	defer { if !prepared { s.shell('rm -rf -- ' + shell_quote(dir), 3000) or {} } }
+	mut fingerprint := ''
+	mut checksum := ''
+	if command.rollback_from != '' {
+		checksum = s.stage_application_rollback(command, p, dir, id)!
+	} else {
+		fingerprint, checksum = s.upload_application_payload(command, dir, id)!
+	}
+	request := runtime_upgrade.DeploymentRequest{ id: id, server_root: s.state.root, config_path: p.config_path, runtime_id: p.runtime_id, admin_port: p.admin_port, token: p.token, expected_boot: instance.boot_id, expected_revision: instance.effective_revision, payload_hash: checksum }
+	script := 'set -eu\numask 077\nprintf %s ' + shell_quote(base64.encode_str(json.encode(request))) + ' | base64 -d > ' + shell_quote(dir + '/request.json') + '\n' + shell_quote(runtime.path + '/vhttpd') + ' --workbench-deploy-prepare ' + shell_quote(dir + '/request.json')
+	response := s.shell_limited(script, 30000, 8 * 1024 * 1024) or { return error('远端安装预检失败：请检查应用标识、监听端口、资源引用和入口文件；独立应用不能声明环境配置。原实例仍在运行。') }
+	preview := json.decode[ApplicationDeploymentPreview](response.trim_space()) or { return error('部署预览无效，未停止目标实例。') }
+	if preview.id != id || preview.config_path != p.config_path {
+		return error('部署目标发生变化，请重新预览。')
+	}
+	// The runtime removes transient request and staging metadata on completion.
+	// Save the portable artifact and its lineage for explicit MCP rollback.
+	if command.release_app_id != '' {
+		s.shell(application_artifact_script('retain ' + shell_quote(dir) + ' ' + shell_quote(checksum)), 30000) or {
+			return error('release_artifact_retention_failed')
+		}
+	}
+	prepared = true
+	s.pending_deployment = request
+	s.deployment_local_project = command.local_project
+	s.deployment_fingerprint = fingerprint
+	s.deployment_rollback = command.rollback_from != ''
+	s.deployment_component_id = command.component_id
+ s.deployment_installation_id = command.target_installation_id
+ s.deployment_adopt_engines=command.adopt_engines.clone()
+	s.state = ServerSnapshot{ ...s.state, deployment_preview: preview, message: '预检通过。源码、静态资源和 include 将一起部署；监听端口与认证沿用远端。' }
+}
+
+fn (s &ServerSession) upload_application_payload(command ServerCommand, dir string, id string) !(string, string) {
+	payload := if command.adopt_engines.len > 0 {app_bundle.collect_component_adoption(command.local_project.workdir,command.local_project.config_path,id,command.component_id,command.adopt_engines)!} else {deployment_payload_target(command.local_project,id,command.component_id,command.target_installation_id)!}
 	text := json.encode(app_bundle.Payload{ ...payload, fingerprint: '' })
-	request := runtime_upgrade.DeploymentRequest{ id: id, server_root: s.state.root, config_path: p.config_path, runtime_id: p.runtime_id, admin_port: p.admin_port, token: p.token, expected_boot: instance.boot_id, expected_revision: instance.effective_revision, payload_hash: sha256.hexhash(text) }
 	local := os.join_path(os.temp_dir(), 'vh-application-' + id)
 	os.mkdir(local, mode: 0o700)!
 	defer { os.rmdir_all(local) or {} }
 	archive := os.join_path(local, 'payload.json')
 	write_project_contents(create_project_file(archive)!, text)!
-	dir := os.join_path(os.dir(p.config_path), '.desktop-deployments', id)
-	s.shell('set -eu\numask 077\np=' + shell_quote(os.dir(p.config_path)) + '\n[ ! -L "$p/.desktop-deployments" ]\nmkdir -p "$p/.desktop-deployments"\nmkdir -m 700 ' + shell_quote(dir) + '\n', 5000)!
-	mut prepared := false
-	defer { if !prepared { s.shell('rm -rf -- ' + shell_quote(dir), 3000) or {} } }
 	mut args := ['-O', '-o', 'ControlPath=' + s.directory + '/control', '-o', 'ControlMaster=no',
 		'-o', 'BatchMode=yes', '-o', 'ProxyCommand=false']
 	$if windows { args = windows_auth_options(s.server); args.insert(0, '-O') }
@@ -81,18 +116,7 @@ fn (mut s ServerSession) prepare_application(command ServerCommand) ! {
 	// All paths are quoted for legacy scp's remote shell; no password is an argument.
 	args << [archive, destination + ':' + shell_quote(dir + '/payload.json')]
 	$if windows { s.windows_scp(args, 120000)! } $else { s.job.command(s.scp_executable, args, 120000)! }
-	script := 'set -eu\numask 077\nprintf %s ' + shell_quote(base64.encode_str(json.encode(request))) + ' | base64 -d > ' + shell_quote(dir + '/request.json') + '\n' + shell_quote(runtime.path + '/vhttpd') + ' --workbench-deploy-prepare ' + shell_quote(dir + '/request.json')
-	response := s.shell_limited(script, 30000, 8 * 1024 * 1024) or { return error('远端安装预检失败：请检查应用标识、监听端口、资源引用和入口文件；独立应用不能声明环境配置。原实例仍在运行。') }
-	preview := json.decode[ApplicationDeploymentPreview](response.trim_space()) or { return error('部署预览无效，未停止目标实例。') }
-	if preview.id != id || preview.config_path != p.config_path {
-		return error('部署目标发生变化，请重新预览。')
-	}
-	prepared = true
-	s.pending_deployment = request
-	s.deployment_local_project = command.local_project
-	s.deployment_fingerprint = payload.fingerprint
-	s.deployment_component_id = command.component_id
-	s.state = ServerSnapshot{ ...s.state, deployment_preview: preview, message: '预检通过。源码、静态资源和 include 将一起部署；监听端口与认证沿用远端。' }
+	return payload.fingerprint, sha256.hexhash(text)
 }
 
 fn (mut s ServerSession) deploy_application(command ServerCommand) ! {
@@ -100,15 +124,33 @@ fn (mut s ServerSession) deploy_application(command ServerCommand) ! {
 	if r.id == '' || command.deployment_id != r.id {
 		return error('部署预览已失效，请重新预览。')
 	}
-	payload := deployment_payload(s.deployment_local_project, r.id, s.deployment_component_id)!
-	if payload.fingerprint != s.deployment_fingerprint {
-		return error('本地项目在预览后发生变化，请重新预览后部署。')
+	if r.id == s.mcp_release_plan.id && command.mcp_release.plan_id != r.id {
+		return error('MCP release requires approval through its apply tool')
+	}
+	if !s.deployment_rollback {
+		payload := if s.deployment_adopt_engines.len > 0 {app_bundle.collect_component_adoption(s.deployment_local_project.workdir,s.deployment_local_project.config_path,r.id,s.deployment_component_id,s.deployment_adopt_engines)!} else {deployment_payload_target(s.deployment_local_project,r.id,s.deployment_component_id,s.deployment_installation_id)!}
+		if payload.fingerprint != s.deployment_fingerprint {
+			return error('本地项目在预览后发生变化，请重新预览后部署。')
+		}
+	}
+	if command.action == .mcp_release {
+		req := command.mcp_release
+		if req.deadline <= time.now().unix() || s.mcp_release_plan.expires <= time.now().unix()
+			|| req.access.is_revoked() || req.access.selection().generation != req.generation {
+			return error('stale_release_plan: prepare again')
+		}
 	}
 	runtime := select_remote_runtime(s.state.runtimes, r.runtime_id)!
 	dir := os.join_path(os.dir(r.config_path), '.desktop-deployments', r.id)
 	status := ApplicationDeploymentStatus{ id: r.id, config_path: r.config_path, phase: 'validating' }
 	script := 'set -eu\numask 077\nstatus=' + shell_quote(base64.encode_str(json.encode(status))) + '\nproject=' + shell_quote(os.dir(r.config_path)) + '\nid=' + shell_quote(r.id) + '\ndir=' + shell_quote(dir) + '\nrequest=' + shell_quote(base64.encode_str(json.encode(r))) + '\nbinary=' + shell_quote(runtime.path + '/vhttpd') + '\n' + $embed_file('remote_scripts/deploy.sh').to_string()
-	s.state = ServerSnapshot{ ...s.state, deployment_preview: ApplicationDeploymentPreview{}, deployments: s.state.deployments.filter(it.config_path != r.config_path), message: '部署已交由远端执行。短暂停机后自动检查整项目生效；失败时恢复原应用。' }
+	installation := s.state.deployment_preview.installation
+ if installation.id != '' {
+  profiles := s.state.projects.filter(it.config_path == r.config_path)
+  if profiles.len != 1 {return error('application_binding_ambiguous')}
+  record_application_binding(ApplicationBinding{app_id:installation.app_id,installation_id:installation.id,source:s.deployment_local_project,server_id:s.server.id,environment_id:profiles[0].id,config_path:r.config_path,component:installation.component,engines:installation.engines,operation_id:r.id,fingerprint:installation.fingerprint,version:installation.version,phase:'pending'})!
+ }
+ s.state = ServerSnapshot{ ...s.state, deployment_preview: ApplicationDeploymentPreview{}, deployments: s.state.deployments.filter(it.config_path != r.config_path), message: '部署已交由远端执行。短暂停机后自动检查整项目生效；失败时恢复原应用。' }
 	mut statuses := s.state.deployments.clone()
 	statuses << status
 	s.state = ServerSnapshot{ ...s.state, deployments: statuses }
@@ -133,7 +175,10 @@ fn (mut s ServerSession) poll_deployments() ! {
 		if status.id != prior.id || status.config_path != prior.config_path {
 			return error('部署状态不匹配，请重新连接服务器。')
 		}
-		if status.finished() { completed = true }
+		if status.finished() {
+            complete_application_binding(status.id,status.phase == 'completed')!
+            completed = true
+        }
 		statuses << status
 	}
 	s.state = ServerSnapshot{ ...s.state, deployments: statuses }
@@ -163,7 +208,7 @@ pub fn application_deployment_hint(reason string) string {
 		}
 		'invalid_component_source', 'invalid_component_bundle' { '请选择应用根目录中的组件入口，并使用 1–64 位字母、数字、短横线或下划线作为安装目录名。' }
 		'component_environment_definition_forbidden' { '组件不能声明 Admin、共享资源或进程配置，请移至目标运行环境的配置中。' }
-		'component_already_installed' { '同名应用目录已存在，独立安装不会覆盖它。请使用新的安装目录名。' }
+		'component_already_installed' { '目标安装目录已存在。请从已关联应用的“更新应用”入口更新，或选择新的安装目录。' }
 		'invalid_component_include', 'component_include_format' { '请检查组件内相对 include 和主配置的 include 声明。' }
 		'component_listener_conflict' { '业务监听与已有应用或 Admin 端口冲突，请调整组件监听后重新预览。' }
 		'deployment_requires_v2' { '应用部署目前支持 version = 2 的项目。' }
@@ -187,6 +232,8 @@ pub fn application_deployment_hint(reason string) string {
 			'新应用未能启动或就绪，已尝试恢复原应用；请核对部署结果和日志。'
 		}
 		else {
+            hint := application_identity_hint(reason)
+            if hint != reason {return hint}
 			'请检查项目来源、完整 include 及远端运行日志，然后重新预览部署。'
 		}
 	}
@@ -195,4 +242,11 @@ pub fn application_deployment_hint(reason string) string {
 fn deployment_payload(project Project, id string, component string) !app_bundle.Payload {
     if component != '' { return app_bundle.collect_component(project.workdir, project.config_path, id, component) or {return error(application_deployment_hint(err.msg()))} }
     return app_bundle.collect(project.workdir, project.config_path, id)
+}
+
+fn deployment_payload_target(project Project, id string, component string, installation_id string) !app_bundle.Payload {
+ if installation_id != '' {
+  return app_bundle.collect_component_update(project.workdir,project.config_path,id,component,installation_id)!
+ }
+ return deployment_payload(project,id,component)
 }

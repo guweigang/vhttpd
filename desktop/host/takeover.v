@@ -1,6 +1,8 @@
 module host
 
 import config
+import app_bundle
+import toml
 import json2 as json
 import net.http
 import os
@@ -8,14 +10,21 @@ import time
 
 pub struct TakeoverSelection {
 pub:
-	relay_id string
+	application_id string
+ installation_id string
+ component string
+ local_engine_id string
+ relay_id string
 	app_id   string
 	accounts []string
 }
 
 pub struct TakeoverStatus {
 pub:
-	local_in_flight int
+ binding_protocol int
+	application_id string
+ installation_id string
+ local_in_flight int
 	known           bool
 	active          bool
 	lease_id        string
@@ -38,7 +47,11 @@ pub fn (mut m Manager) control_takeover(action string, selection TakeoverSelecti
 		return error('请先检查接管状态，再结束当前接管。')
 	}
 	body := json.encode({
-		'action':   json.Any(action)
+		'application_id':json.Any(selection.application_id)
+        'installation_id':json.Any(selection.installation_id)
+        'component':json.Any(selection.component)
+        'local_engine_id':json.Any(selection.local_engine_id)
+        'action':   json.Any(action)
 		'relay_id': json.Any(selection.relay_id)
 		'route':    json.Any('debug/control')
 		'app_id':   json.Any(selection.app_id)
@@ -80,18 +93,42 @@ pub fn (mut m Manager) control_takeover(action string, selection TakeoverSelecti
 // A reviewable first-use draft; the receiver can only dispatch cloud function
 // paths through the selected project's existing vjsx engine.
 fn takeover_receiver_changeset(path string, relay_id string) !SharedRelayChangeset {
+ return takeover_receiver_for_engine(path,relay_id,'')
+}
+
+fn takeover_receiver_for_engine(path string, relay_id string, selected_engine string) !SharedRelayChangeset {
 	root := os.abs_path(path)
 	plan := config.load_runtime_plan_file(root)!
 	descriptor := plan.relays[relay_id] or { return error('项目中没有此 Relay。请先绑定远端数据库。') }
 	if descriptor.mode != 'agent' || descriptor.options.strings['token'] == '' {
 		return error('接收入口需要带 Token 的 agent Relay。')
 	}
-	if plan.pipelines.any(it.id == 'debug/http') {
-		return error('本地接收入口已存在，请检查配置是否生效。')
-	}
-	mut engine_id := ''
+	for pipeline in plan.pipelines {
+        if pipeline.id != 'debug/http' {continue}
+        if selected_engine == '' {return error('本地接收入口已存在，请检查配置是否生效。')}
+        if pipeline.ingress.str() != 'relay:' + relay_id || pipeline.egress.domain != .adapter {return error('application_binding_mismatch')}
+        adapter := plan.adapters[pipeline.egress.id] or {return error('application_binding_mismatch')}
+        if adapter.kind != 'debug-http' {return error('application_binding_mismatch')}
+        if selected_engine !in plan.engines || plan.engines[selected_engine].kind != 'vjsx' {return error('application_binding_mismatch')}
+        for source in config.runtime_config_sources(root)! {
+            original := os.read_file(source.path)!
+            mut data := toml.parse_text(original)!.to_any().as_map()
+            mut adapters := (data['adapters'] or {toml.Any(map[string]toml.Any{})}).as_map()
+            if pipeline.egress.id !in adapters {continue}
+            mut item := (adapters[pipeline.egress.id] or {return error('application_binding_mismatch')}).as_map()
+            item['engine']=toml.Any('engine:'+selected_engine)
+            adapters[pipeline.egress.id]=toml.Any(item)
+            data['adapters']=toml.Any(adapters)
+            value := app_bundle.encode_config(data)!
+            config.load_runtime_plan_with_overrides(root,{source.path:value})!
+            return SharedRelayChangeset{config_path:root,files:[SharedRelayFile{path:source.path,original:original,value:value}]}
+        }
+        return error('application_binding_mismatch')
+    }
+	mut engine_id := selected_engine
+    if selected_engine != '' && (selected_engine !in plan.engines || plan.engines[selected_engine].kind != 'vjsx') {return error('application_binding_mismatch')}
 	for id, engine in plan.engines {
-		if engine.kind == 'vjsx' {
+		if engine.kind == 'vjsx' && selected_engine == '' {
 			if engine_id != '' {
 				return error('项目有多个 vjsx 引擎，请在配置中指定接收引擎。')
 			}
@@ -111,7 +148,8 @@ fn takeover_receiver_changeset(path string, relay_id string) !SharedRelayChanges
 
 pub fn (mut m Manager) prepare_takeover_receiver(selection TakeoverSelection) ! {
 	if m.phase != .running || m.token == '' { return error('请先启动所选本地项目。') }
-	bundle := takeover_receiver_changeset(m.project.config_path, selection.relay_id)!
+    if m.takeover_status.active {return error('请先结束本地接管，再调整接收入口。')}
+	bundle := takeover_receiver_for_engine(m.project.config_path,selection.relay_id,selection.local_engine_id)!
 	path := m.prepare_config_changeset_login(bundle, 'relay-takeover-')!
 	open_local(path)!
 	m.message = '本地接收入口草稿已打开；校验、发布并重启本地项目后可开启接管。'

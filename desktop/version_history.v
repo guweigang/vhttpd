@@ -38,47 +38,47 @@ fn version_history_view(app &Workshop, width f64) []ui2.Element {
 	if app.show_history_diff { return history_comparison_view(app, width) }
 	versions := app.snapshot.recovery_history
 	mut rows := [
-		label('history_breadcrumb', app.projects[app.selected].name + ' / 已生效版本', 0, 25, width, 12, workbench_muted),
-		label('history_title', '版本历史', 0, 65, width, 24, workbench_ink),
-		button('history_close', '返回工作台', 0, 108, 125, false, true),
-		label('history_help', '查看变化只读 · 恢复前可预览', 143, 116, width - 143, 11, workbench_muted),
-		label('history_retention', '只记录已确认生效的配置，自动保留最近最多 20 个版本。', 0, 157, width, 11, workbench_muted),
+		label('history_breadcrumb', app.projects[app.selected].name + ui_text(' / 已生效版本'), 0, 25, width, 12, workbench_muted),
+		label('history_title', ui_text('版本历史'), 0, 65, width, 24, workbench_ink),
+		button('history_close', ui_text('返回工作台'), 0, 108, 125, false, true),
+		label('history_help', ui_text('查看变化只读 · 恢复前可预览'), 143, 116, width - 143, 11, workbench_muted),
+		label('history_retention', ui_text('只记录已确认生效的配置，自动保留最近最多 20 个版本。'), 0, 157, width, 11, workbench_muted),
 	]
 	mut y := 190.0
 	for v in versions {
-		rows << label('version_' + v.id, '版本 ${v.number} · ' + v.confirmed_at + if v.latest { ' · 最近生效' } else { '' }, 0, y, width, 13, workbench_ink)
-		rows << label('version_state_' + v.id, '${v.file_count} 个配置来源 · ' + if v.saved { '已保存' } else { '尚未保存' }, 0, y + 23, width, 10, workbench_muted)
-		rows << button('history_before_' + v.id, if app.history_before == v.id { '对比基准 ✓' } else { '设为对比基准' }, 0, y + 44, 128, false, true)
-		rows << button('history_view_' + v.id, '查看变化', 140, y + 44, 112, false, true)
-		rows << button('history_restore_' + v.id, if !history_can_restore(app, v.id) && v.latest { '当前已生效' } else { '恢复此版本' }, 264, y + 44, 148, false, history_can_restore(app, v.id))
+		rows << label('version_' + v.id, ui_text('版本 ${v.number} · ') + v.confirmed_at + if v.latest { ui_text(' · 最近生效') } else { '' }, 0, y, width, 13, workbench_ink)
+		rows << label('version_state_' + v.id, ui_text('${v.file_count} 个配置来源 · ') + if v.saved { ui_text('已保存') } else { ui_text('尚未保存') }, 0, y + 23, width, 10, workbench_muted)
+		rows << button('history_before_' + v.id, if app.history_before == v.id { ui_text('对比基准 ✓') } else { ui_text('设为对比基准') }, 0, y + 44, 128, false, true)
+		rows << button('history_view_' + v.id, ui_text('查看变化'), 140, y + 44, 112, false, true)
+		rows << button('history_restore_' + v.id, if !history_can_restore(app, v.id) && v.latest { ui_text('当前已生效') } else { ui_text('恢复此版本') }, 264, y + 44, 148, false, history_can_restore(app, v.id))
 		y += 94
 	}
-	if versions.len == 0 { rows << label('history_empty', '首次启动并确认配置生效后，会自动记录版本。', 0, y, width, 12, workbench_muted) }
+	if versions.len == 0 { rows << label('history_empty', ui_text('首次启动并确认配置生效后，会自动记录版本。'), 0, y, width, 12, workbench_muted) }
 	return rows
 }
 
 fn history_comparison_view(app &Workshop, width f64) []ui2.Element {
 	mut rows := [
-		label('compare_breadcrumb', app.projects[app.selected].name + ' / 版本历史', 0, 25, width, 12, workbench_muted),
-		label('compare_title', '版本变化', 0, 65, width, 24, workbench_ink),
-		button('history_list', '返回版本列表', 0, 108, 125, false, true),
+		label('compare_breadcrumb', app.projects[app.selected].name + ui_text(' / 版本历史'), 0, 25, width, 12, workbench_muted),
+		label('compare_title', ui_text('版本变化'), 0, 65, width, 24, workbench_ink),
+		button('history_list', ui_text('返回版本列表'), 0, 108, 125, false, true),
 		button('history_restore_' + app.history_before, history_restore_title(app, app.history_before), 137, 108, 150, false, history_can_restore(app, app.history_before)),
 		button('history_restore_' + app.history_after, history_restore_title(app, app.history_after), 299, 108, 150, false, history_can_restore(app, app.history_after)),
 	]
 	mut lines := []string{}
 	comparison := app.snapshot.history_comparison
 	if comparison.before_id == app.history_before && comparison.after_id == app.history_after && comparison.before_id != '' {
-		lines << [comparison.message, '对比基准：' + comparison.before_label, '查看版本：' + comparison.after_label, '', '配置来源变化：']
-		for file in comparison.files { lines << file.change + ' · ' + file.path }
-		lines << ['', '字段变化（对比基准 → 查看版本）：']
+		lines << [ui_text(comparison.message), ui_text('对比基准：') + ui_text(comparison.before_label), ui_text('查看版本：') + ui_text(comparison.after_label), '', ui_text('配置来源变化：')]
+		for file in comparison.files { lines << ui_text(file.change) + ' · ' + file.path }
+		lines << ['', ui_text('字段变化（对比基准 → 查看版本）：')]
 		for field in comparison.fields {
 			name := if field.kind == 'Relay' && field.field.starts_with('options.') { field.field.all_after('options.') } else { field.field }
 			source := if field.source_before == field.source_after { field.source_after } else { field.source_before + ' → ' + field.source_after }
-			lines << ['${field.kind} ${field.component} · ${name}' + if field.redacted { '（已脱敏）' } else { '' }, '修改前：' + field.before, '修改后：' + field.after, '来源：' + source, '']
+			lines << ['${ui_text(field.kind)} ${field.component} · ${name}' + if field.redacted { ui_text('（已脱敏）') } else { '' }, ui_text('修改前：') + field.before, ui_text('修改后：') + field.after, ui_text('来源：') + source, '']
 		}
-		if comparison.files.len == 0 && comparison.fields.len == 0 { lines << '两个版本没有文件或字段差异。' }
+		if comparison.files.len == 0 && comparison.fields.len == 0 { lines << ui_text('两个版本没有文件或字段差异。') }
 	} else {
-		lines << if app.snapshot.message != '' { app.snapshot.message } else { '正在读取版本变化…' }
+		lines << if app.snapshot.message != '' { ui_text(app.snapshot.message) } else { ui_text('正在读取版本变化…') }
 	}
 	body := ui2.text_area('history_diff', lines.join('\n'), ui2.rect(0, 159, width, 480), ui2.BoxStyle{bg: workbench_sidebar, radius: 6}, ui2.TextStyle{size: 11, color: workbench_ink, font_family: workbench_detail_font()})
 	rows << ui2.Element{...body, readonly: true}

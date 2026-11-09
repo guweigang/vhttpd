@@ -88,3 +88,19 @@ fn test_real_empty_runtime_two_app_install_and_failed_warmup_rollback() ! {
 		assert http.get('http://127.0.0.1:${port}/')!.status_code == 200
 	}
 }
+
+fn test_installation_uses_config_root_when_process_workdir_is_parent() ! {
+ root := os.join_path(os.real_path(os.temp_dir()),'install-parent-${os.getpid()}-${time.sys_mono_now()}')
+ os.mkdir(root)!
+ defer {os.rmdir_all(root) or {}}
+ environment := create_project(CreateProjectOptions{name:'server',parent_dir:root,template:'environment'})!
+ project := project_from_file(environment.config_path,root)!
+ source,_ := installation_source(root,'alpha')!
+ mut manager := new_manager()
+ manager.select_project(project)!
+ manager.preview_component(source,'alpha')!
+ manager.install_component(manager.component_preview.id,'')!
+ assert os.exists(os.dir(project.config_path)+'/apps/alpha/main.mjs')
+ assert !os.exists(root+'/apps/alpha/main.mjs')
+ assert os.read_file(project.config_path)!.contains('apps/alpha/component.toml')
+}

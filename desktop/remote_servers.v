@@ -52,6 +52,11 @@ fn (mut app Workshop) poll_server() {
 			completed := !status.busy && (app.server_busy || app.server_snapshot.busy || (status.connected && !app.server_snapshot.connected))
 			if completed || discovered { app.reload_remote_profiles() }
 			if discovered { app.server_discovery_revision = status.discovery_revision }
+			if status.mcp_registered_host.id != '' && !app.remote_servers.any(it.id == status.mcp_registered_host.id) { app.remote_servers = host.load_remote_servers() or { app.remote_servers } }
+			if status.mcp_relay_catalog_serial != app.development_relay_catalog_serial {
+				app.development_relay_catalog_serial = status.mcp_relay_catalog_serial
+				app.shared_relays = host.load_shared_relays() or { app.shared_relays }
+			}
 			app.server_snapshot = status
 			if app.shared_catalog_pending && !status.busy {
 				app.shared_catalog_pending = false
@@ -144,7 +149,7 @@ fn (mut app Workshop) handle_server_event(event string) bool {
   target := app.server_snapshot.runtimes.filter(it.id == app.selected_server_runtime())[0]
   previous := app.server_snapshot.runtimes.filter(it.id == project.runtime_id)
   previous_label := if previous.len == 1 { previous[0].label() } else { '当前运行包' }
-  if ui2.confirm('切换运行环境版本', project.name + ' 将从 ' + previous_label + ' 切换到 ' + target.label() + '。该环境内全部应用会短暂停机；先校验完整配置，失败时自动恢复原运行包。') { app.server_upgrade_project=project.id; app.server_command(.upgrade, '') }
+  if ui_confirm('切换运行环境版本', project.name + ' 将从 ' + previous_label + ' 切换到 ' + target.label() + '。该环境内全部应用会短暂停机；先校验完整配置，失败时自动恢复原运行包。') { app.server_upgrade_project=project.id; app.server_command(.upgrade, '') }
   return true
  }
 
@@ -194,7 +199,7 @@ fn (mut app Workshop) handle_server_event(event string) bool {
 		'server_password' { app.remote_password = ui2.text(event) }
 		'server_key' { app.remote_auth = 'key'; app.remote_password = '' }
 		'server_password_mode' { app.remote_auth = 'password'; app.remote_password = '' }
-		'server_identity' { files := ui2.open_file_dialog(title: '选择 SSH 私钥'); if files.len > 0 { app.remote_identity = files[0] } }
+		'server_identity' { files := ui2.open_file_dialog(title: ui_text('选择 SSH 私钥')); if files.len > 0 { app.remote_identity = files[0] } }
 		'server_identity_clear' { app.remote_identity = '' }
 		'server_save', 'server_connect' {
 			if app.remote_port != '' && !app.remote_port.bytes().all(it.is_digit()) { app.remote_message = 'SSH 端口请填写数字。'; return true }
@@ -210,7 +215,7 @@ fn (mut app Workshop) handle_server_event(event string) bool {
 			if event == 'server_connect' { app.server_command(.connect, '') }
 		}
 		'server_delete' {
-			if !ui2.confirm('移除服务器', '仅移除本机服务器记录；远端运行包、实例和已保存的实例连接继续保留。') { return true }
+			if !ui_confirm('移除服务器', '仅移除本机服务器记录；远端运行包、实例和已保存的实例连接继续保留。') { return true }
 			items := app.remote_servers.filter(it.id != app.remote_id)
 			host.save_remote_servers(items) or { app.remote_message = err.msg(); return true }
 			if app.server_snapshot.server_id == app.remote_id { app.server_command(.disconnect, '') }
@@ -237,7 +242,7 @@ fn (mut app Workshop) handle_server_event(event string) bool {
 		'server_refresh' { app.reload_remote_profiles(); app.server_command(.inspect, '') }
 		'server_install' { app.open_runtime_downloads() }
 		'server_package' {
-			files := ui2.open_file_dialog(title: '选择官方 CI 的 vhttpd-linux-*.tar.gz（旁边需有同名 .sha256）')
+			files := ui2.open_file_dialog(title: ui_text('选择官方 CI 的 vhttpd-linux-*.tar.gz（旁边需有同名 .sha256）'))
 			if files.len > 0 { app.server_command(.install, files[0]) }
 		}
 		'server_instance_name' { app.server_instance_name = ui2.text(event) }
@@ -290,7 +295,7 @@ fn server_detail_view(app &Workshop, width f64) []ui2.Element {
 	active := state.server_id == app.remote_id
 	busy := app.server_busy || state.busy
 	connected := active && state.connected && app.server_form() == state.server
-	mut rows := [label('server_detail_title', if app.remote_servers.any(it.id == app.remote_id) { app.remote_name } else { '添加服务器' }, 0, 0, width, 20, workbench_ink)]
+	mut rows := [label('server_detail_title', if app.remote_servers.any(it.id == app.remote_id) { app.remote_name } else { ui_text('添加服务器') }, 0, 0, width, 20, workbench_ink)]
 	if active && state.host_key.id != '' {
 		rows << state_notice('server_fingerprint', '首次连接 · 核对主机指纹', app.remote_host + '\n' + state.host_key.algorithm + '\n' + state.host_key.fingerprint, ui2.rect(0, 44, width, 145), 'warning')
 		rows << ui2.label('server_fingerprint_help', '通过管理员或可信渠道核对后再信任。取消不会保存信任记录。', ui2.rect(0, 204, width, 54), ui2.TextStyle{size: 12, color: workbench_muted, lines: 3})
@@ -326,7 +331,7 @@ fn server_detail_view(app &Workshop, width f64) []ui2.Element {
 	} else {
 		rows << button('server_identity', '选择私钥…', 0, y, half, false, !busy)
 		rows << button('server_identity_clear', '使用 SSH 配置', half + 14, y, half, false, !busy)
-		rows << label('server_identity_path', if app.remote_identity == '' { '使用系统密钥和 ssh-agent。' } else { app.remote_identity }, 0, y + 44, width, 11, workbench_muted)
+		rows << label('server_identity_path', if app.remote_identity == '' { ui_text('使用系统密钥和 ssh-agent。') } else { app.remote_identity }, 0, y + 44, width, 11, workbench_muted)
 	}
 	y += 86
 	rows << button('server_save', '保存', 0, y, 75, false, !busy)

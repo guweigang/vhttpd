@@ -8,6 +8,7 @@ import os
 // Business applications are RuntimeApplication entries owned by this environment.
 pub struct Project {
 pub:
+	source_workspace bool @[omitempty]
 	name        string
 	config_path string
 	workdir     string
@@ -86,8 +87,14 @@ pub fn inspect_project(project Project) !ProjectInfo {
 	return ProjectInfo{
 		state_root: if plan.observability.event_log != '' {
 			log_dir := os.dir(plan.observability.event_log)
-			if os.is_abs_path(log_dir) { os.join_path(log_dir, 'admin') } else { os.join_path(project.workdir, log_dir, 'admin') }
-		} else { os.join_path(project.workdir, '.var', 'vhttpd', 'admin') }
+			if os.is_abs_path(log_dir) {
+				os.join_path(log_dir, 'admin')
+			} else {
+				os.join_path(project.workdir, log_dir, 'admin')
+			}
+		} else {
+			os.join_path(project.workdir, '.var', 'vhttpd', 'admin')
+		}
 		admin_host:   bind_host
 		admin_port:   port
 		admin_url:    'http://${url_host(bind_host)}:${port}/admin/ui/'
@@ -120,7 +127,7 @@ pub fn load_projects(path string, defaults []Project) ![]Project {
 pub fn save_projects(path string, projects []Project) ! {
 	os.mkdir_all(os.dir(path))!
 	tmp := path + '.tmp'
-	os.write_file(tmp, json2.encode(projects,
+	os.write_file(tmp, json2.encode(projects.filter(!it.source_workspace),
 		prettify:       true
 		legacy_layout:  true
 		escape_unicode: true

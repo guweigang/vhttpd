@@ -84,6 +84,12 @@ jobs:
         run: python3 -m unittest discover -s desktop/ci -p 'test_desktop_version.py'
       - name: Build and verify the complete app
         run: bash desktop/build.sh
+      - name: Verify Mac window constraints during background startup
+        shell: bash
+        run: |
+          clang -I. -framework AppKit -framework CoreText \
+            desktop/ci/verify_macos_window_constraints.m -o "$RUNNER_TEMP/workbench-window-constraints"
+          "$RUNNER_TEMP/workbench-window-constraints"
       - name: Verify native workbench UI states
         shell: bash
         run: |

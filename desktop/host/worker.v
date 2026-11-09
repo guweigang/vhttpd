@@ -29,6 +29,8 @@ pub enum Action {
 pub struct Command {
 pub:
 	component_id string
+ target_installation_id string
+ adopt_engines []string
 	component_source Project
 	sequence u64
 	action   Action
@@ -45,6 +47,9 @@ pub:
 
 pub struct Worker {
 pub:
+	ordinary_relay chan OrdinaryLocalRequest = chan OrdinaryLocalRequest{cap: 4}
+	mcp_takeover chan McpTakeoverRequest = chan McpTakeoverRequest{cap: 4}
+	development chan DevelopmentCall = chan DevelopmentCall{cap: 8}
 	commands  chan Command  = chan Command{cap: 8}
 	snapshots chan Snapshot = chan Snapshot{cap: 1}
 	done      chan bool     = chan bool{cap: 1}
@@ -58,18 +63,33 @@ pub fn new_worker() Worker {
 
 fn supervise(w Worker) {
 	mut manager := new_persistent_manager()
+	mut development := DevelopmentState{}
 	mut notice := ''
 	mut sequence := u64(0)
 	mut component_result := OperationResult{}
 	for {
 		select {
+			req := <-w.ordinary_relay {
+				value := manager.ordinary_local(req) or { req.reply <- OrdinaryLocalReply{error: true}; continue }
+				req.reply <- value
+			}
+			req := <-w.mcp_takeover {
+				value := manager.mcp_takeover(req) or {
+					req.reply <- DevelopmentReply{error: true, value: err.msg()}
+					continue
+				}
+				req.reply <- DevelopmentReply{value: value}
+			}
+			call := <-w.development {
+				call.reply <- development.execute(mut manager, call)
+			}
 			command := <-w.commands {
 				sequence = command.sequence
 				match command.action {
                     .preview_component, .install_component {
                         notice = ''
                         if command.action == .preview_component {
-                            manager.preview_component(command.component_source, command.component_id) or { notice = err.msg() }
+                            manager.preview_component_mode(command.component_source,command.component_id,command.target_installation_id,command.adopt_engines) or { notice = application_identity_hint(err.msg()) }
                         } else {
                             manager.install_component(command.version_id, command.binary) or { notice = err.msg() }
                         }

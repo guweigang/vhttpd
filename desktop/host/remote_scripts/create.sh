@@ -33,12 +33,4 @@ else
   printf %s "$runtime_id" > "$target/.desktop-runtime-id"
   chmod 600 "$target/.desktop-runtime-id"
 fi
-cd "$target"
-# Detach from SSH; the runtime owns authenticated manual restart and project validation.
-nohup "$runtime/vhttpd" --config "$target/vhttpd.toml" --manual-restart > "$target/process.log" 2>&1 < /dev/null &
-pid=$!
-sleep 2
-if ! kill -0 "$pid" 2>/dev/null; then
-  echo 'VHTTPD_ERROR:实例启动失败，可能端口占用或配置无法加载。项目已保留，请检查实例 process.log 后重试。'
-  exit 1
-fi
+# Process startup is centralized in start.sh after discovery, including retry ownership checks.

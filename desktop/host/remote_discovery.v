@@ -245,11 +245,20 @@ fn (mut s ServerSession) discover_projects() ! {
 	existing := load_remote_profiles() or { return error('无法读取本机项目缓存，请检查权限或保留缓存文件后重试。') }
 	merged := merge_discovered_profiles(existing, discovered)
 	save_remote_profiles(merged) or { return error('无法保存本机项目缓存，请检查数据目录权限。') }
-	s.state = ServerSnapshot{
+	mut stable_discovered := []RemoteProfile{}
+	for candidate in discovered {
+		for cached in merged {
+			if cached.server_id == candidate.server_id && cached.config_path == candidate.config_path { stable_discovered << RemoteProfile{...candidate, id: cached.id}; break }
+		}
+	}
+	for status in deployments {
+        if status.finished() {complete_application_binding(status.id,status.phase == 'completed')!}
+    }
+ s.state = ServerSnapshot{
 		...s.state
 		deployments: deployments
 		upgrades:           upgrades
-		projects:           discovered
+		projects:           stable_discovered
 		discovery_revision: s.state.discovery_revision + 1
 		discovery_message:  '已从服务器同步 ${discovered.len} 个项目。' + if warnings > 0 {
 			'${warnings} 个项目或进程无法自动识别。' + issues[..if issues.len > 3 {

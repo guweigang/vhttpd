@@ -280,7 +280,15 @@ pub fn install_runtime_archive(archive string, expected string, job RuntimeJob) 
 }
 
 fn install_runtime_archive_tag(archive string, expected string, tag string, job RuntimeJob) !string {
-	$if linux { return install_linux_runtime(archive, expected, tag, job) }
+ return install_runtime_archive_mode(archive, expected, tag, job, true)
+}
+
+pub fn install_runtime_without_selection(archive string, expected string, tag string, job RuntimeJob) !string {
+ return install_runtime_archive_mode(archive, expected, tag, job, false)
+}
+
+fn install_runtime_archive_mode(archive string, expected string, tag string, job RuntimeJob, select_package bool) !string {
+	$if linux { return install_linux_runtime_mode(archive, expected, tag, job, select_package) }
 	if expected.len != 64 || !expected.bytes().all(it.is_hex_digit()) {
 		return error('缺少有效的 SHA256 校验值。')
 	}
@@ -334,9 +342,11 @@ fn install_runtime_archive_tag(archive string, expected string, tag string, job 
 	final := os.join_path(root, 'vhttpd-' + info.version + '-' + rand.bytes(6)!.hex())
 	os.mv(source, final)!
 	installed := os.join_path(final, 'vhttpd')
-	save_runtime_selection(installed) or {
-		os.rmdir_all(final) or {}
-		return err
+	if select_package {
+		save_runtime_selection(installed) or {
+			os.rmdir_all(final) or {}
+			return err
+		}
 	}
 	return installed
 }

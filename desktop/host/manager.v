@@ -23,6 +23,7 @@ pub:
 	relay_live RelayLiveStatus
 	takeover_relay_id string
 	takeover_status TakeoverStatus
+	mcp_takeover_preview McpTakeoverPreview
 	recovery_history []RecoveryVersionView
 	history_comparison HistoryComparison
 	recovery_saved bool
@@ -53,9 +54,12 @@ mut:
 	pending_component ?PendingComponent
 	workspace RuntimeWorkspace
 	workspace_next_probe i64
+	configured_workspace RuntimeWorkspace
+	configured_next_probe i64
 	relay_live RelayLiveStatus
 	relay_next_probe i64
 	takeover_status TakeoverStatus
+	mcp_takeover_plan McpTakeoverPlan
 	takeover_selection TakeoverSelection
 	takeover_next_probe i64
 	recovery_history []RecoveryVersion
@@ -117,6 +121,8 @@ pub fn (mut m Manager) select_project(project Project) ! {
 	m.takeover_status = TakeoverStatus{}
 	m.takeover_selection = TakeoverSelection{}
 	m.project = project
+	m.configured_workspace = configured_workspace(project.config_path)
+	m.configured_next_probe = 0
 	m.phase = .stopped
 	m.lines = []string{}
 	m.reset_log_focus()
@@ -136,6 +142,9 @@ pub fn (mut m Manager) start(project Project, binary string) ! {
 	m.takeover_status = TakeoverStatus{}
 	m.takeover_selection = TakeoverSelection{}
 	m.project = project
+	m.workspace = RuntimeWorkspace{}
+	m.workspace_next_probe = 0
+	m.configured_workspace = configured_workspace(project.config_path)
 	m.lines = []string{}
 	m.ready_event = false
 	m.startup_failure = false
@@ -234,6 +243,10 @@ pub fn (mut m Manager) clear_logs() {
 pub fn (mut m Manager) tick() {
 	m.cleanup_browser_handoffs(false)
 	m.ready_event = false
+	if m.phase != .running && time.ticks() >= m.configured_next_probe {
+		m.configured_next_probe = time.ticks() + 3000
+		m.configured_workspace = configured_workspace(m.project.config_path)
+	}
 	if isnil(m.process) {
 		return
 	}
@@ -341,6 +354,7 @@ fn (mut m Manager) finish(expected bool) {
 	m.process.close()
 	m.process = unsafe { nil }
 	m.token = ''
+	m.configured_workspace = configured_workspace(m.project.config_path)
 	m.pending_rollback = none
 	m.rollback_preview = RollbackPreview{}
 	m.offline_recovery_status()
@@ -360,10 +374,11 @@ fn (mut m Manager) finish(expected bool) {
 pub fn (m &Manager) snapshot() Snapshot {
 	return Snapshot{
 		component_preview: m.component_preview
-		workspace: if m.phase == .running { m.workspace } else { RuntimeWorkspace{} }
+		workspace: if m.phase == .running && (m.workspace.known || m.workspace.error != '') { m.workspace } else { m.configured_workspace }
 		relay_live: if m.phase == .running { m.relay_live } else { RelayLiveStatus{} }
 		takeover_status: if m.phase == .running {m.takeover_status} else {TakeoverStatus{}}
 		takeover_relay_id: m.takeover_selection.relay_id
+		mcp_takeover_preview: m.mcp_takeover_plan.preview
 		recovery_history: m.recovery_history_views()
 		history_comparison: m.history_comparison
 		recovery_saved: m.recovery_saved

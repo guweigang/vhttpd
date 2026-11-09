@@ -19,4 +19,12 @@ fn test_takeover_receiver_is_reviewable_and_does_not_change_database_binding() !
 	assert plan.adapters['local_debug'].kind == 'debug-http'
 	assert plan.resources['db/app'].options.strings['relay'] == 'relay:database'
 	assert plan.pipelines.any(it.id == 'debug/http' && it.ingress.str() == 'relay:database')
+ configured := bundle.files[0].value + '\n[engines.other]\nkind="vjsx"\nentry="other.mts"\n'
+ os.write_file(root,configured)!
+ repointed := takeover_receiver_for_engine(root,'database','other')!
+ assert os.read_file(root)! == configured
+ switched := config.load_runtime_plan_with_overrides(root,{root:repointed.files[0].value})!
+ assert switched.adapters['local_debug'].engine?.id == 'other'
+ assert switched.resources['db/app'].options.strings['relay'] == 'relay:database'
+
 }

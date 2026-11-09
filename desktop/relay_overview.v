@@ -32,10 +32,10 @@ fn relay_service_rows(data host.RuntimeWorkspace) []RelayServiceRow {
 				else { agent.state }
 			}
 			tone = if agent.state in ['registered','connected','ready'] { 'good' } else if agent.state == 'backoff' { 'warning' } else { 'info' }
-			if agent.attempt > 0 { detail += ' · 尝试 ' + agent.attempt.str() + ' 次' }
+			if agent.attempt > 0 { detail = ui_text(detail) + ui_text(' · 尝试 ') + agent.attempt.str() + ui_text(' 次') }
 			if agent.last_error != '' { tone = 'warning' }
 		}
-		rows << RelayServiceRow{id:'native_' + item.id, name:item.id, kind:'原生 Relay · ' + if item.kind == 'hub' { 'Hub 接收端' } else { 'Agent 主动连接' }, detail:detail, status:status, tone:tone, metrics:'请求通道与数据库等资源转发'}
+		rows << RelayServiceRow{id:'native_' + item.id, name:item.id, kind:ui_text('原生 Relay · ') + if item.kind == 'hub' { ui_text('Hub 接收端') } else { ui_text('Agent 主动连接') }, detail:detail, status:status, tone:tone, metrics:'请求通道与数据库等资源转发'}
 	}
 	mut seen := map[string]bool{}
 	mut linked_apps := map[string]bool{}
@@ -51,12 +51,12 @@ fn relay_service_rows(data host.RuntimeWorkspace) []RelayServiceRow {
 					if listener.id !in count.listener_ids { continue }
 					status = if count.active_connections > 0 { '有活动连接' } else { '等待连接' }
 					tone = if count.active_connections > 0 { 'good' } else { 'info' }
-					metrics = count.active_connections.str() + ' 个连接   ·   ' + count.active_rooms.str() + ' 个房间'
+					metrics = ui_text('${count.active_connections} 个连接') + ' · ' + ui_text('${count.active_rooms} 个房间')
 				}
 			}
 			application_action := if linked_apps[application.id] { '' } else { application.id }
 			linked_apps[application.id] = true
-			rows << RelayServiceRow{id:'websocket_' + listener.id, name:if application.label != '' { application.label } else { application.id }, kind:'应用 WebSocket', detail:listener.host + ':' + listener.port.str() + ' · 监听 ' + listener.id, status:status, tone:tone, metrics:metrics, application:application_action}
+			rows << RelayServiceRow{id:'websocket_' + listener.id, name:if application.label != '' { application.label } else { application.id }, kind:'应用 WebSocket', detail:listener.host + ':' + listener.port.str() + ui_text(' · 监听 ') + listener.id, status:status, tone:tone, metrics:metrics, application:application_action}
 		}
 	}
 	return rows

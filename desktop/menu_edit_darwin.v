@@ -18,10 +18,10 @@ fn menu_text_edit(action string) {
 	macos.msg_bool_sel_id_id(app, 'sendAction:to:from:', macos.sel(selector), unsafe { nil }, unsafe { nil })
 }
 
-fn C.vhttpd_workbench_configure_app_menu()
+fn C.vhttpd_workbench_configure_app_menu(&char, &char)
 fn C.vhttpd_workbench_menu_tracking() int
 
-fn configure_platform_menus() { C.vhttpd_workbench_configure_app_menu() }
+fn configure_platform_menus() { C.vhttpd_workbench_configure_app_menu(ui_text('关于 vhttpd Workbench').str, ui_text('退出工作台').str) }
 
 fn menu_window_action(action string) {
 	window := macos.Id(ui2.native_window_handle())

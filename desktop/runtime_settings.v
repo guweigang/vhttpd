@@ -139,7 +139,7 @@ fn runtime_local_view(app &Workshop, width f64) []ui2.Element {
 	can_switch := !app.runtime_busy && app.snapshot.pid == 0 && app.snapshot.phase !in [.starting, .stopping]
 	mut rows := [label('runtime_title', host.local_environment_name()+' · 默认运行包', 0, 0, width, 20, workbench_ink),
 		label('runtime_version', if app.runtime_info.ready { 'vhttpd ' + app.runtime_info.version } else if app.runtime_checked { '运行包不可用' } else { '正在识别版本…' }, 0, 36, width, 16, workbench_ink),
-		label('runtime_source', '来源：' + app.runtime_info.source, 0, 68, width, 12, workbench_muted),
+		label('runtime_source', '来源：' + ui_text(app.runtime_info.source), 0, 68, width, 12, workbench_muted),
 		ui2.label('runtime_path', app.binary, ui2.rect(0, 94, width, 52), ui2.TextStyle{size: 11, color: workbench_muted, lines: 3}),
 		state_notice('runtime_notice', if app.runtime_busy { '正在准备运行包' } else if app.runtime_error { '运行包未就绪' } else if app.runtime_info.ready { '运行包已就绪' } else { '准备运行包' }, app.runtime_message, ui2.rect(0, 158, width, 96), if app.runtime_error { 'warning' } else if app.runtime_info.ready && !app.runtime_busy { 'good' } else { 'info' }),
 		button('runtime_download', if app.runtime_busy { '正在处理…' } else { '下载官方运行包' }, 0, 276, width, !app.runtime_info.ready, can_switch),

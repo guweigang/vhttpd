@@ -13,9 +13,9 @@ fn test_menu_structure_empty_and_local_lifecycle_states() ! {
 	root := ui2.screen(workbench_paper, [])
 	menus := app.workbench_menus(root)
 	ui2.validate_menus(menus)!
-	assert menus[0].title == '运行环境'
+	assert menus[0].title == '文件'
 	assert menus[1].title == '编辑'
-	assert menus[2].title == '进程'
+	assert menus[2].title == '运行环境'
 	assert fixture_menu_item(menus, 'new').enabled
 	assert fixture_menu_item(menus, 'new').shortcut == 'cmd+n'
 	for action in ['start', 'stop', 'restart', 'admin', 'folder', 'config_diff', 'history_open'] {
@@ -28,7 +28,7 @@ fn test_menu_structure_empty_and_local_lifecycle_states() ! {
 	assert !fixture_menu_item(running, 'start').enabled
 	assert fixture_menu_item(running, 'stop').enabled
 	assert fixture_menu_item(running, 'restart').enabled
-	assert fixture_menu_item(running, 'admin').title.ends_with(' · A')
+	assert fixture_menu_item(running, 'admin').title == '打开 Admin UI'
 	assert fixture_menu_item(running, 'project_0').checked
 	assert !fixture_menu_item(running, 'project_1').checked
 	assert !fixture_menu_item(running, 'import').enabled
@@ -46,7 +46,7 @@ fn test_menu_structure_empty_and_local_lifecycle_states() ! {
 	assert fixture_menu_item(stopped, 'start').enabled
 	assert fixture_menu_item(stopped, 'project_1').checked
 	assert !fixture_menu_item(stopped, 'project_0').checked
-	assert fixture_menu_item(stopped, 'start').title.ends_with(' · B')
+	assert fixture_menu_item(stopped, 'start').title == '启动运行环境'
 	app.new_project = true
 	assert !fixture_menu_item(app.workbench_menus(root), 'start').enabled
 }
@@ -112,4 +112,88 @@ fn test_menu_shortcuts_share_the_current_enabled_state() {
 		if row.id in ['menu:edit_cut', 'menu:edit_copy'] { assert !row.enabled }
 		assert row.shortcut != ''
 	}
+}
+
+// A language change may replace labels, never commands or their placement.
+fn menu_identity_rows(rows []ui2.MenuItem) []ui2.MenuItem {
+	return rows.map(ui2.MenuItem{...it, title: '', items: menu_identity_rows(it.items)})
+}
+
+fn menu_identity(menus []ui2.Menu) []ui2.Menu {
+	return menus.map(ui2.Menu{...it, title: '', items: menu_identity_rows(it.items)})
+}
+
+fn assert_menu_labels_translated(rows []ui2.MenuItem) {
+	for row in rows {
+		if row.id.starts_with('menu:project_') || row.id.starts_with('menu:remote_select_')
+			|| row.id.starts_with('menu:environment:') || row.id == 'menu:language:zh-CN'
+			|| row.title == 'Language / 语言' { continue }
+		assert !row.title.runes().any(it >= 0x4e00 && it <= 0x9fff), row.title
+		assert_menu_labels_translated(row.items)
+	}
+}
+
+fn test_bilingual_menu_structure_state_and_shortcuts_are_identical() ! {
+	previous := workbench_language
+	previous_preference := workbench_language_preference
+	defer { workbench_language = previous; workbench_language_preference = previous_preference }
+	server_id := 'a'.repeat(24)
+	profile_id := 'b'.repeat(24)
+	base := Workshop{projects: [host.Project{name: '运行环境', config_path: '/tmp/menu.toml'}]}
+	remote := Workshop{environment_id: server_id, remote_id: profile_id,
+		remote_servers: [host.RemoteServer{id: server_id, name: '文件', ssh_host: 'fixture'}],
+		remote_profiles: [host.RemoteProfile{id: profile_id, name: '管理', server_id: server_id}]}
+	fixtures := [Workshop{}, base,
+		Workshop{...base, snapshot: host.Snapshot{phase: .running, pid: 42}},
+		Workshop{...base, snapshot: host.Snapshot{phase: .starting}},
+		Workshop{...base, snapshot: host.Snapshot{phase: .failed, can_force: true, pid: 42}},
+		Workshop{...base, new_project: true},
+		Workshop{...base, show_runtime: true},
+		Workshop{...base, workspace_page: .applications},
+		remote, Workshop{...remote, server_busy: true}]
+	for preference in ['auto', 'zh-CN', 'en'] {
+		workbench_language_preference = preference
+		for app in fixtures {
+			root := ui2.screen(workbench_paper, [])
+			workbench_language = 'zh-CN'
+			chinese := app.workbench_menus(root)
+			workbench_language = 'en'
+			english := app.workbench_menus(root)
+			ui2.validate_menus(chinese)!
+			ui2.validate_menus(english)!
+			assert menu_identity(chinese) == menu_identity(english)
+			for menu in english { assert_menu_labels_translated(menu.items) }
+			assert fixture_menu_item(english, 'language:' + preference).checked
+			assert english.map(it.title) == chinese.map(ui_text(it.title))
+		}
+	}
+}
+
+fn test_menu_groups_and_workspace_navigation_follow_concepts() {
+	previous := workbench_language
+	defer { workbench_language = previous }
+	workbench_language = 'zh-CN'
+	mut app := Workshop{projects: [host.Project{name: 'bodytest'}],
+		snapshot: host.Snapshot{phase: .running, pid: 42}, show_runtime: true, show_development: true, show_component_install: true,
+		workspace_application: 'wechat', workspace_log_application: 'wechat', workspace_log_source: 'stdout'}
+	menus := app.workbench_menus(ui2.screen(workbench_paper, []))
+	assert menus[0].items.any(it.id == 'menu:new')
+	assert menus[2].items.any(it.id == 'menu:start')
+	assert menus[4].items.any(it.id == 'menu:runtime')
+	assert menus[4].items.any(it.id == 'menu:mcp_settings')
+	assert !fixture_menu_item(menus, 'overview').checked
+	assert menus[3].items.filter(it.title == 'Language / 语言').len == 1
+	before := app.snapshot
+	for i, action in ['overview', 'applications', 'relay', 'configuration', 'logs'] {
+		app.menu_workspace_page(action)
+		assert int(app.workspace_page) == i
+		assert !app.show_runtime && !app.show_development && !app.show_component_install
+		current := app.workbench_menus(ui2.screen(workbench_paper, []))
+		assert fixture_menu_item(current, action).checked
+		assert current[3].items.filter(it.checked).len == 1
+		assert app.snapshot == before
+		assert app.workspace_application == 'wechat'
+	}
+	assert app.workspace_log_application == ''
+	assert app.workspace_log_source == ''
 }

@@ -2,6 +2,7 @@
 module main
 
 import host
+import devmcp
 import os
 import time
 import ui2
@@ -22,6 +23,7 @@ const workbench_soft_accent = u32(0xeaf1ff)
 @[heap]
 struct Workshop {
 mut:
+	keyboard_navigation_focus string
 	desktop_update_open bool
 	desktop_update_busy bool
 	desktop_update_checked bool
@@ -29,6 +31,26 @@ mut:
 	desktop_update_job host.RuntimeJob
 	desktop_update_result DesktopUpdateResult
 	desktop_update_results chan DesktopUpdateResult = chan DesktopUpdateResult{cap: 1}
+	show_development                 bool
+	development_apps                 []host.DevelopmentApplication
+	development_application          string
+	development_project              host.Project
+	development_catalog_project      host.Project
+	development_relay_choices        []host.SharedRelay
+	development_relay_id             string
+	development_relay_url            string
+	development_remote_hub           host.McpHubTarget
+	development_relay_catalog_serial u64
+	development_runtime_generation   u64
+	development_pending              bool
+	development_results              chan DevelopmentConnectionResult = chan DevelopmentConnectionResult{cap: 1}
+	component_adopt_engines          []string
+	component_installation_id        string
+	component_new                    bool
+	component_template               string = 'vjsx-http'
+	component_port                   string = '0'
+	development_message              string
+	development_service              &devmcp.Service          = unsafe { nil }
 	confirm_restart fn (string, string) bool = ui2.confirm
 	workspace_page WorkspacePage
 	workspace_application string
@@ -158,6 +180,7 @@ mut:
 	creation_results     chan CreationResult = chan CreationResult{cap: 1}
 	show_takeover bool
 	show_relay_monitor bool
+	takeover_binding_id              string
 	takeover_relay string
 	takeover_app_id string
 	takeover_account string
@@ -201,10 +224,14 @@ fn main() {
  $if windows {
   if '--windows-ssh-smoke' in os.args {
    host.run_windows_ssh_smoke() or {
-    if result := os.getenv_opt('VHTTPD_WINDOWS_SMOKE_RESULT') { os.write_file(result, 'FAIL: ' + err.msg()) or {} }
+				if result := os.getenv_opt('VHTTPD_WINDOWS_SMOKE_RESULT') {
+					os.write_file(result, 'FAIL: ' + err.msg()) or {}
+				}
     exit(1)
    }
-   if result := os.getenv_opt('VHTTPD_WINDOWS_SMOKE_RESULT') { os.write_file(result, 'PASS') or {} }
+			if result := os.getenv_opt('VHTTPD_WINDOWS_SMOKE_RESULT') {
+				os.write_file(result, 'PASS') or {}
+			}
    return
   }
  }
@@ -235,7 +262,10 @@ fn main() {
 		return
 	}
 	if '--font-smoke' in os.args {
-		run_font_smoke() or { eprintln(err); exit(1) }
+		run_font_smoke() or {
+			eprintln(err)
+			exit(1)
+		}
 		return
 	}
 	if '--smoke' in os.args {
@@ -247,12 +277,15 @@ fn main() {
 	}
 	mut app := unsafe { workshop }
 	app.owner_pid = os.getpid()
+	initialize_language()
 	configure_workbench_fonts() or { app.notice = err.msg() }
 	app.binary = host.selected_runtime(os.executable(), root) or {
 		app.notice = err.msg()
 		host.workbench_binary(os.executable(), root)
 	}
-	$if !linux { app.inspect_binary(app.binary, false) }
+	$if !linux {
+		app.inspect_binary(app.binary, false)
+	}
 	app.brand_mark = host.workbench_brand_mark(os.executable(), root)
 	app.registry = os.getenv_opt('VHTTPD_DESKTOP_REGISTRY') or { os.join_path(host.workbench_data_dir(), 'projects.json') }
 	// Existing checkout users keep their registrations when upgrading to the app.
@@ -275,7 +308,10 @@ fn main() {
 	}
 	app.reload_remote_profiles()
 	app.remote_worker = host.new_remote_worker()
-	app.remote_servers = host.load_remote_servers() or { app.notice = err.msg(); []host.RemoteServer{} }
+	app.remote_servers = host.load_remote_servers() or {
+		app.notice = err.msg()
+		[]host.RemoteServer{}
+	}
 	app.server_worker = host.new_server_worker()
 	app.worker = host.new_worker()
 	app.worker_started = true
@@ -283,25 +319,33 @@ fn main() {
 		if app.projects.len > 0 { app.select_current() }
 	}
 	C.atexit(cleanup)
- $if windows { C.vhttpd_workbench_prepare_windows_display(); app.brand_mark = windows_brand_asset(app.brand_mark) }
+	$if windows {
+		C.vhttpd_workbench_prepare_windows_display()
+		app.brand_mark = windows_brand_asset(app.brand_mark)
+	}
 	app.refresh_workbench_menus(ui2.screen(workbench_paper, []))
-	$if !windows { configure_workbench_tray(app.brand_mark, root) }
-	$if windows { spawn workbench_refresh_loop(app.refresh_stop, ui2.request_poll_refresh) } $else { spawn workbench_refresh_loop(app.refresh_stop, ui2.request_refresh) }
+	$if !windows {
+		configure_workbench_tray(app.brand_mark, root)
+	}
+	$if windows {
+		spawn workbench_refresh_loop(app.refresh_stop, ui2.request_poll_refresh)
+	} $else {
+		spawn workbench_refresh_loop(app.refresh_stop, ui2.request_refresh)
+	}
 	ui2.on_key(workbench_key)
 	ui2.on_key_event(workbench_physical_key)
 	ui2.on_window_ready(configure_workbench_window)
 	$if windows {
   scale := windows_display_scale()
-  ui2.run_window('vhttpd · 本地工作台',int(980*scale),int(740*scale),build_window,handle_event)
+		ui2.run_window(ui_text('vhttpd · 本地工作台'), int(980 * scale), int(740 * scale), build_window, handle_event)
  } $else $if linux {
 		configure_linux_fonts()
-		ui2.run_window_with_options(ui2.WindowOptions{title:'vhttpd · 本地工作台',width:980,height:740,min_width:760,min_height:660}, build_window, handle_event)
+		ui2.run_window_with_options(ui2.WindowOptions{ title: ui_text('vhttpd · 本地工作台'), width: 980, height: 740, min_width: 760, min_height: 660 }, build_window, handle_event)
 	} $else {
-		ui2.run_window('vhttpd · 本地工作台', 980, 740, build_window, handle_event)
+		ui2.run_window(ui_text('vhttpd · 本地工作台'), 980, 740, build_window, handle_event)
 	}
 	cleanup()
 }
-
 
 fn cleanup() {
 	mut app := unsafe { workshop }
@@ -310,10 +354,21 @@ fn cleanup() {
 	if app.owner_pid != os.getpid() || !app.worker_started || app.quitting { return }
 	app.quitting = true
 	if app.desktop_update_busy {
-		select { app.desktop_update_job.cancel <- true {} else {} }
+		select {
+			app.desktop_update_job.cancel <- true {
 	}
+			else {
+			}
+		}
+	}
+	if !isnil(app.development_service) { app.development_service.close() }
 	app.refresh_stop <- true
-	select { app.runtime_catalog_job.cancel <- true {} else {} }
+	select {
+		app.runtime_catalog_job.cancel <- true {
+		}
+		else {
+		}
+	}
 	if app.runtime_busy {
 		select {
 			app.runtime_job.cancel <- true {
@@ -329,10 +384,25 @@ fn cleanup() {
 		}
 	}
 	app.remote_worker.commands <- host.RemoteCommand{action: .shutdown}
-	select { _ := <-app.remote_worker.done {} 5 * time.second {} }
-	select { app.server_worker.job.cancel <- true {} else {} }
+	select {
+		_ := <-app.remote_worker.done {
+		}
+		5 * time.second {
+		}
+	}
+	select {
+		app.server_worker.job.cancel <- true {
+		}
+		else {
+		}
+	}
 	app.server_worker.commands <- host.ServerCommand{action: .shutdown}
-	select { _ := <-app.server_worker.done {} 5 * time.second {} }
+	select {
+		_ := <-app.server_worker.done {
+		}
+		5 * time.second {
+		}
+	}
 	app.worker.commands <- host.Command{ action: .shutdown }
 	select {
 		_ := <-app.worker.done {
@@ -347,14 +417,28 @@ fn poll_worker() {
 	mut app := unsafe { workshop }
 	if app.quitting { return }
 	app.poll_desktop_update()
-	select { status := <-app.remote_worker.snapshots { if status.sequence >= app.remote_sequence && app.remote_pending_connect == '' { app.remote_snapshot = status } } else {} }
+	// Consume worker previews before accepting the next MCP apply request.
+	app.poll_server()
+	app.poll_development()
+	if app.component_new && app.component_action == 'install' {
+		_, _, tone := app.component_feedback()
+		if tone == 'good' { app.workspace_application = app.component_name }
+	}
+	select {
+		status := <-app.remote_worker.snapshots {
+			if status.sequence >= app.remote_sequence && app.remote_pending_connect == '' {
+				app.remote_snapshot = status
+			}
+		}
+		else {
+		}
+	}
 	if app.remote_auto_open && app.remote_snapshot.connected && !app.remote_snapshot.busy && app.remote_snapshot.profile_id == app.remote_id {
 		app.remote_auto_open = false
 		app.send_remote(.open_admin)
 	}
 	app.poll_runtime()
 	app.poll_runtime_catalog()
-	app.poll_server()
 	app.poll_relay_process_logs()
 	app.poll_creation()
 	select {
@@ -364,7 +448,9 @@ fn poll_worker() {
 			app.shared_status[app.shared_test_scope + ':' + app.shared_test_id] = line
 			app.shared_probe_logs << app.shared_test_scope + ':' + app.shared_test_id + ' · ' + line
 			if app.shared_probe_logs.len > 100 { app.shared_probe_logs.delete(0) }
-			if app.shared_test_scope == app.environment_id && app.shared_test_id == app.shared_id { app.shared_message = line }
+			if app.shared_test_scope == app.environment_id && app.shared_test_id == app.shared_id {
+				app.shared_message = line
+			}
 		}
 		else {
 		}
@@ -375,6 +461,19 @@ fn poll_worker() {
 				return
 			}
 			if s.project != '' {
+				if !app.projects.any(it.config_path == s.project) {
+					if !isnil(app.development_service) && app.development_service.selection().source_workspace && app.development_service.selection().project.config_path == s.project {
+						app.projects << app.development_service.selection().project
+					} else if project := host.project_from_file(s.project, '') {
+						mut projects := app.projects.clone()
+						projects << project
+						host.save_projects(app.registry, projects) or { app.notice = err.msg() }
+						app.projects = projects
+					}
+				}
+				for i, project in app.projects {
+					if project.config_path == s.project { app.selected = i }
+				}
 				app.config_statuses[s.project] = s.config_status
 			}
 			if s.log_focus_serial > app.snapshot.log_focus_serial {
@@ -479,18 +578,32 @@ fn (mut app Workshop) launch_with_browser(open_browser bool) {
 }
 
 fn handle_event(event string) {
+	mut navigation_app := unsafe { workshop }
+	navigation_app.keyboard_navigation_focus = ''
 	if event == 'tray:open' {
 		bring_workbench_forward()
 		return
 	}
+	mut development_app := unsafe { workshop }
+	if development_app.handle_development_event(event) {
+		ui2.refresh()
+		return
+	}
 	if handle_workbench_menu(event) { return }
-	$if windows { if handle_windows_field_event(event) { return } }
+	$if windows {
+		if handle_windows_field_event(event) { return }
+	}
 	mut app := unsafe { workshop }
 	if app.handle_desktop_update_event(event) { return }
-	if event == 'form_submit' { submit_active_form(); return }
+	if event == 'form_submit' {
+		submit_active_form()
+		return
+	}
 	defer {
 		focus_id := match event {
-			'new', 'empty_new' { if app.environment_id == '' { 'new_name' } else { 'server_instance_name' } }
+			'new', 'empty_new' {
+				if app.environment_id == '' { 'new_name' } else { 'server_instance_name' }
+			}
 			'server_new' { 'server_name' }
 			'remote_new' { 'remote_name' }
 			'shared_new' { 'shared_name' }
@@ -507,9 +620,15 @@ fn handle_event(event string) {
 		}
 	}
 	if app.creating { return }
-	if app.handle_workspace_event(event) { ui2.refresh(); return }
-	if event.starts_with('project_') || event.starts_with('remote_select_') { app.reset_workspace() }
+	if app.handle_workspace_event(event) {
+		ui2.refresh()
+		return
+	}
+	if event.starts_with('project_') || event.starts_with('remote_select_') {
+		app.reset_workspace()
+	}
 	if event.starts_with('project_') {
+		app.takeover_binding_id = ''
 		app.takeover_relay = ''
 		app.takeover_app_id = ''
 		app.takeover_account = ''
@@ -519,26 +638,50 @@ fn handle_event(event string) {
 		app.show_relay_monitor = false
 		app.new_project = false
 	}
-	if app.handle_component_event(event) { ui2.refresh(); return }
-	if event in ['server_home','runtime','new','import'] || event.starts_with('project_') || event.starts_with('remote_select_') { app.show_component_install = false }
-	if app.handle_deployment_event(event) { ui2.refresh(); return }
-	if event in ['server_home','runtime','new','import'] || event.starts_with('project_') { app.show_deployment=false }
-	if app.handle_environment_event(event) { ui2.refresh(); return }
-	if app.handle_server_event(event) { ui2.refresh(); return }
-	if app.handle_remote_event(event) { ui2.refresh(); return }
+	if app.handle_component_event(event) {
+		ui2.refresh()
+		return
+	}
+	if event in ['server_home', 'runtime', 'new', 'import'] || event.starts_with('project_') || event.starts_with('remote_select_') {
+		app.show_component_install = false
+	}
+	if app.handle_deployment_event(event) {
+		ui2.refresh()
+		return
+	}
+	if event in ['server_home', 'runtime', 'new', 'import'] || event.starts_with('project_') {
+		app.show_deployment = false
+	}
+	if app.handle_environment_event(event) {
+		ui2.refresh()
+		return
+	}
+	if app.handle_server_event(event) {
+		ui2.refresh()
+		return
+	}
+	if app.handle_remote_event(event) {
+		ui2.refresh()
+		return
+	}
 	if app.handle_runtime_event(event) {
 		app.show_remote = false
 		ui2.refresh()
 		return
 	}
-	if app.handle_takeover_event(event) { ui2.refresh(); return }
+	if app.handle_takeover_event(event) {
+		ui2.refresh()
+		return
+	}
 	if app.handle_shared_relay_event(event) {
 		app.show_runtime = false
 		if event == 'shared_close' {app.show_remote = app.environment_id != ''}
 		ui2.refresh()
 		return
 	}
-	if event == 'new' || event == 'import' || event.starts_with('project_') || event == 'runtime' { app.show_remote = false }
+	if event == 'new' || event == 'import' || event.starts_with('project_') || event == 'runtime' {
+		app.show_remote = false
+	}
 	match event {
 		'new', 'empty_new' {
 			app.show_shared_relays = false
@@ -563,9 +706,11 @@ fn handle_event(event string) {
 			// file, even for a folder picker. Pass an actual directory path.
 			parent := if os.is_dir(app.new_parent) && !app.new_parent.ends_with(os.path_separator) {
 				app.new_parent + os.path_separator
-			} else { app.new_parent }
+			} else {
+				app.new_parent
+			}
 			dirs := ui2.open_folder_dialog(
-				title:     '选择项目存放目录'
+				title:     ui_text('选择项目存放目录')
 				directory: parent
 			)
 			if dirs.len > 0 {
@@ -600,14 +745,16 @@ fn handle_event(event string) {
 			app.send(.stop)
 		}
 		'force' {
-			if ui2.confirm('强制停止', '仅强制结束此工作台启动的实例及其进程组。未完成的工作可能中断。') {
+			if ui_confirm('强制停止', '仅强制结束此工作台启动的实例及其进程组。未完成的工作可能中断。') {
 				app.restart_after = false
 				app.send(.force_stop)
 			}
 		}
 		'restart', 'apply_restart' {
 			if app.snapshot.phase != .running { return }
-			if !app.confirm_restart('重启运行环境', '将重启当前 vhttpd 进程，其中全部应用会短暂中断。是否继续？') { return }
+			if !app.confirm_restart('重启运行环境', '将重启当前 vhttpd 进程，其中全部应用会短暂中断。是否继续？') {
+				return
+			}
 			app.show_config_diff = false
 			app.show_history = false
 			app.show_history_diff = false
@@ -643,7 +790,12 @@ fn handle_event(event string) {
 			}
 		}
 		'clear' { app.send(.clear_logs) }
-		'all_logs' { app.workspace_logs_follow=true; app.workspace_logs_ready=false; app.workspace_logs_text=''; app.send(.show_all_logs) }
+		'all_logs' {
+			app.workspace_logs_follow = true
+			app.workspace_logs_ready = false
+			app.workspace_logs_text = ''
+			app.send(.show_all_logs)
+		}
 		'folder' {
 			if app.projects.len > 0 {
 				host.open_local(os.dir(app.projects[app.selected].config_path)) or { app.notice = err.msg() }
@@ -658,7 +810,7 @@ fn handle_event(event string) {
 				return
 			}
 			files := ui2.open_file_dialog(
-				title:     '选择 vhttpd 可执行文件'
+				title:     ui_text('选择 vhttpd 可执行文件')
 				directory: os.dir(app.binary)
 			)
 			if files.len > 0 && app.snapshot.pid == 0 && !app.runtime_busy {
@@ -747,7 +899,7 @@ fn (mut app Workshop) import_project() {
 		return
 	}
 	files := ui2.open_file_dialog(
-		title:   '选择 vhttpd TOML 配置'
+		title:   ui_text('选择 vhttpd TOML 配置')
 		filters: [ui2.FileDialogFilter{
 			name:       'vhttpd 配置'
 			extensions: ['toml']
@@ -756,7 +908,10 @@ fn (mut app Workshop) import_project() {
 	if files.len == 0 { return }
 	// Existing v2 projects may resolve relative entries from a chosen working
 	// directory. Do not silently assume the config's directory is that root.
-	dirs := ui2.open_folder_dialog(title: '选择项目工作目录', directory: os.dir(files[0]))
+	dirs := ui2.open_folder_dialog(
+		title:     ui_text('选择项目工作目录')
+		directory: os.dir(files[0])
+	)
 	if dirs.len == 0 { return }
 	project := host.project_from_file(files[0], dirs[0]) or {
 		app.notice = err.msg()
@@ -804,7 +959,7 @@ fn label(id string, text string, x f64, y f64, width f64, size f64, color u32) u
 // Keep text independent of NSButton's disabled-title drawing, while retaining
 // a real native button over the entire frame for clicks, keyboard and AX actions.
 fn painted_button(id string, title string, frame ui2.Rect, box ui2.BoxStyle, color u32, enabled bool, align ui2.Align, inset f64) ui2.Element {
-	focus_box := if enabled && ui2.focused_id() == id { ui2.BoxStyle{...box, border_color: u32(0x1e40af), border_left: 2, border_right: 2, border_top: 2, border_bottom: 2} } else { box }
+	focus_box := if enabled && workbench_focused_id() == id { ui2.BoxStyle{...box, border_color: u32(0x1e40af), border_left: 2, border_right: 2, border_top: 2, border_bottom: 2} } else { box }
 	caption := ui2.label('${id}_caption', title, ui2.rect(inset, 0, frame.width - inset * 2, frame.height), ui2.TextStyle{
 		size:  13
 		color: color
@@ -888,27 +1043,43 @@ fn project_button(id string, title string, badge string, frame ui2.Rect, selecte
 			''
 		}
 	}
-	return ui2.view('${id}_container', frame, ui2.BoxStyle{ bg: bg, radius: 6 }, children)
+	focused := enabled && workbench_focused_id() == id
+	return ui2.view('${id}_container', frame, ui2.BoxStyle{ bg: bg, radius: 6,
+		border_color: if focused { workbench_accent } else { bg },
+		border_left: if focused { 2.0 } else { 0.0 }, border_right: if focused { 2.0 } else { 0.0 },
+		border_top: if focused { 2.0 } else { 0.0 }, border_bottom: if focused { 2.0 } else { 0.0 } }, children)
 }
 
 fn build_window() ui2.Element {
-	root := workbench_font_layout(build_window_tree())
+	root := workbench_text_layout(localize_element(workbench_font_layout(build_window_tree())))
 	mut app := unsafe { workshop }
-	$if linux { app.restore_pending_form_focus(root) }
+	$if linux {
+		app.restore_pending_form_focus(root)
+	}
 	app.refresh_workbench_menus(root)
-	$if linux { return linux_pixel_layout(root) }
- $if windows { return windows_pixel_layout(root, windows_display_scale()) }
+	$if linux {
+		return linux_pixel_layout(root)
+	}
+	$if windows {
+		return windows_pixel_layout(root, windows_display_scale())
+	}
 	return root
 }
 
 fn build_window_tree() ui2.Element {
 	root := build_window_content()
 	app := unsafe { workshop }
- $if windows { return root }
+	$if windows {
+		return root
+	}
 	if !app.environment_menu.open { return root }
 	menu := ui2.dropdown_menu(ui2.DropdownMenuConfig{
-		id: 'environment_menu', state: app.environment_menu, items: app.environment_menu_items(),
-		anchor: ui2.rect(16, 82, 180, 34), window: workbench_bounds(), width: 260,
+		id:     'environment_menu'
+		state:  app.environment_menu
+		items:  app.environment_menu_items()
+		anchor: ui2.rect(16, 82, 180, 34)
+		window: workbench_bounds()
+		width:  260
 		label: '选择运行环境'
 	}) or { return root }
 	mut children := root.children.clone()
@@ -951,17 +1122,45 @@ fn build_window_content() ui2.Element {
 			}
 			else { '' }
 		}
-		project_rows << project_button('project_${i}', project.name, environment_runtime_badge(app.local_environment_version(), if badge!='' { badge } else if app.snapshot.project==project.config_path && app.snapshot.phase==.running { '运行中' } else { '配置入口' }), ui2.rect(0, y, 190, 52), i == app.selected, !app.new_project && !app.creating && app.snapshot.sequence >= app.sequence)
+			project_rows << project_button('project_${i}', project.name, environment_runtime_badge(app.local_environment_version(), if badge != '' {
+				badge
+			} else if app.snapshot.project == project.config_path && app.snapshot.phase == .running {
+				'运行中'
+			} else {
+				'配置入口'
+			}), ui2.rect(0, y, 190, 52), i == app.selected, !app.new_project && !app.creating && app.snapshot.sequence >= app.sequence)
 		y += 59
 	}
 	} else {
 		for p in app.environment_profiles() {
-			badge := if p.id == app.remote_snapshot.profile_id && app.remote_snapshot.connected { if app.remote_snapshot.restarting { '正在重启' } else if app.remote_snapshot.instance.startup_failed() { '重启失败 · 待修复' } else if !app.remote_snapshot.instance.ready { '业务未就绪' } else if app.remote_snapshot.config_status.pending { '配置待生效' } else { 'SSH 已连接' } } else { '未连接' }
+			badge := if p.id == app.remote_snapshot.profile_id && app.remote_snapshot.connected {
+				if app.remote_snapshot.restarting {
+					'正在重启'
+				} else if app.remote_snapshot.instance.startup_failed() {
+					'重启失败 · 待修复'
+				} else if !app.remote_snapshot.instance.ready {
+					'业务未就绪'
+				} else if app.remote_snapshot.config_status.pending {
+					'配置待生效'
+				} else {
+					'SSH 已连接'
+				}
+			} else {
+				'未连接'
+			}
 			project_rows << project_button('remote_select_${p.id}', p.name, environment_runtime_badge(app.remote_environment_version(p), badge), ui2.rect(0, y, 190, 52), p.id == app.remote_id && !app.show_servers, !app.remote_snapshot.busy && !app.server_busy)
 			y += 59
 		}
 	}
-	if project_rows.len == 0 { project_rows << label('project_list_empty', if app.environment_id == '' { '暂无运行环境' } else if app.remote_profiles_error != '' { '项目列表读取失败，请刷新重试' } else { '此位置暂无运行环境' }, 10, 8, 170, 11, workbench_muted) }
+	if project_rows.len == 0 {
+		project_rows << label('project_list_empty', if app.environment_id == '' {
+			'暂无运行环境'
+		} else if app.remote_profiles_error != '' {
+			'项目列表读取失败，请刷新重试'
+		} else {
+			'此位置暂无运行环境'
+		}, 10, 8, 170, 11, workbench_muted)
+	}
 	side << ui2.scroll('project_list', ui2.rect(12, 225, 190, h - 438), workbench_sidebar, project_rows)
 	can_choose := app.can_new_or_import()
 	side << sidebar_button('new', '+ 新建', ui2.rect(16, 143, 85, 34), true, false, can_choose, .center)
@@ -976,22 +1175,33 @@ fn build_window_content() ui2.Element {
 		border_color: workbench_line
 		border_right: 1
 	}, side)]
+	if app.show_development {
+		app.sync_development_apps()
+		children << ui2.scroll('development_mcp_page', ui2.rect(content_x, 0, cw + 30, h), workbench_paper, development_mcp_view(app, cw))
+		return ui2.screen(workbench_paper, children)
+	}
 	if app.show_shared_relays {
 		children << ui2.scroll('shared_relays_page', ui2.rect(content_x, 0, cw + 30, h), workbench_paper, shared_relays_view(app, cw))
 		return ui2.screen(workbench_paper, children)
 	}
 	if app.show_component_install {
-		children << ui2.scroll('component_page', ui2.rect(content_x, 0, cw + 30, h), workbench_paper, component_installation_view(app, cw)); return ui2.screen(workbench_paper, children)
+		children << ui2.scroll('component_page', ui2.rect(content_x, 0, cw + 30, h), workbench_paper, component_installation_view(app, cw))
+		return ui2.screen(workbench_paper, children)
 	}
 	if app.show_deployment {
-		children << ui2.scroll('deployment_page',ui2.rect(content_x,0,cw + 30,h),workbench_paper,application_deployment_view(app,cw)); return ui2.screen(workbench_paper,children)
+		children << ui2.scroll('deployment_page', ui2.rect(content_x, 0, cw + 30, h), workbench_paper, application_deployment_view(app, cw))
+		return ui2.screen(workbench_paper, children)
 	}
 	if app.show_remote && !app.show_servers && !app.remote_edit_connection && app.remote_snapshot.connected && app.remote_snapshot.profile_id==app.remote_id && same_remote_connection(app.remote_form(),app.remote_connected_form) && !app.show_runtime {
 		children << ui2.scroll('runtime_workspace_page',ui2.rect(content_x,0,cw+30,h),workbench_paper,runtime_workspace_view(mut app,cw,h))
 		return ui2.screen(workbench_paper,children)
 	}
 	if app.show_remote {
-		children << ui2.scroll('remote_instances_page', ui2.rect(content_x, 0, cw + 30, h), workbench_paper, if app.show_servers { remote_servers_view(app, cw) } else { remote_instances_view(app, cw) })
+		children << ui2.scroll('remote_instances_page', ui2.rect(content_x, 0, cw + 30, h), workbench_paper, if app.show_servers {
+			remote_servers_view(app, cw)
+		} else {
+			remote_instances_view(app, cw)
+		})
 		return ui2.screen(workbench_paper, children)
 	}
 	if app.show_runtime {
@@ -999,7 +1209,11 @@ fn build_window_content() ui2.Element {
 		return ui2.screen(workbench_paper, children)
 	}
 	if app.show_takeover && app.environment_id == '' {
-		children << ui2.scroll('takeover_page',ui2.rect(content_x,0,cw+30,h),workbench_paper,if app.show_relay_monitor { relay_monitor_view(app,cw) } else { takeover_view(app,cw) })
+		children << ui2.scroll('takeover_page', ui2.rect(content_x, 0, cw + 30, h), workbench_paper, if app.show_relay_monitor {
+			relay_monitor_view(app, cw)
+		} else {
+			takeover_view(app, cw)
+		})
 		return ui2.screen(workbench_paper,children)
 	}
 	if app.environment_id != '' {
@@ -1043,7 +1257,10 @@ fn build_window_content() ui2.Element {
 
 fn workbench_bounds() ui2.Rect {
  b := ui2.bounds()
- $if windows { scale := windows_display_scale(); return ui2.rect(0,0,b.width/scale,b.height/scale) }
+	$if windows {
+		scale := windows_display_scale()
+		return ui2.rect(0, 0, b.width / scale, b.height / scale)
+	}
  return b
 }
 

@@ -72,6 +72,9 @@ def package(root, app):
     runtime_source = Path(os.environ.get('VHTTPD_PACKAGE_RUNTIME', str(root / 'vhttpd'))).resolve(strict=True)
     shutil.copy2(runtime_source, binary)
     shutil.copytree(root / 'admin/ui', runtime / 'admin/ui')
+    shutil.copytree(root / 'src/development_guidance/vhttpd-develop', runtime / 'skills/vhttpd-develop')
+    for skill in ('vhttpd-deploy', 'vhttpd-debug'):
+        shutil.copytree(root / 'desktop/skills' / skill, runtime / 'skills' / skill)
     libs = runtime / 'lib'
     libs.mkdir()
     copied = {}

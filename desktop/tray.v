@@ -20,9 +20,9 @@ fn set_workbench_tray(icon string) {
 		icon: icon
 		tooltip: 'vhttpd Workbench'
 		menu: [
-			ui2.menu_item('tray:open', '打开工作台'),
+			ui2.menu_item('tray:open', ui_text('打开工作台')),
 			ui2.menu_separator(),
-			ui2.menu_item('tray:quit', '退出工作台'),
+			ui2.menu_item('tray:quit', ui_text('退出工作台')),
 		]
 	})
 }

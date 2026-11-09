@@ -98,7 +98,7 @@ fn (mut app Workshop) handle_shared_relay_event(event string) bool {
 			app.shared_message = '连接已保存；已有项目保持原配置。可点击测试连接。'
 		}
 		'shared_delete' {
-			if !ui2.confirm('删除共享连接', '仅从连接库删除；不会修改或删除任何项目中的 Relay 配置。') {
+			if !ui_confirm('删除共享连接', '仅从连接库删除；不会修改或删除任何项目中的 Relay 配置。') {
 				return true
 			}
 			if app.environment_id != '' { app.catalog_command(.relay_delete); return true }
@@ -185,7 +185,7 @@ fn shared_connection_row(relay host.SharedRelay, selected bool, width f64, y f64
 		ui2.label(id+'_probe',status,ui2.rect(12,76,width-24,38),ui2.TextStyle{size:10,color:workbench_muted,lines:2}),
 	]
 	hit := ui2.button(id,'',ui2.rect(0,0,width,120),ui2.BoxStyle{transparent:true},ui2.TextStyle{})
-	rows << ui2.Element{...hit,enabled:enabled,accessibility_label:relay.name + ' · ' + if relay.is_native() {'原生 Relay'} else {'应用 WebSocket'}}
+	rows << ui2.Element{...hit,enabled:enabled,accessibility_label:relay.name + ' · ' + if relay.is_native() {ui_text('原生 Relay')} else {ui_text('应用 WebSocket')}}
 	return ui2.view(id+'_row',ui2.rect(0,y,width,120),ui2.BoxStyle{bg:if selected {workbench_soft_accent} else {workbench_sidebar},radius:7,border_color:workbench_accent,border_left:if selected {3.0} else {0.0}},rows)
 }
 
@@ -193,7 +193,7 @@ fn shared_relays_view(app &Workshop, width f64) []ui2.Element {
 	items := app.catalog_items()
 	mut rows := [
 		label('shared_title','Relay 连接库',0,26,width-148,24,workbench_ink),
-		label('shared_intro',app.environment_name() + ' · 私有连接配置',0,64,width,12,workbench_muted),
+		label('shared_intro',app.display_environment_name() + ui_text(' · 私有连接配置'),0,64,width,12,workbench_muted),
 		button('shared_close','返回运行环境',width-136,26,136,false,true),
 		choice_button('shared_tab_connections','已保存连接 · '+items.len.str(),0,104,146,!app.shared_services_tab,true),
 		choice_button('shared_tab_services','环境服务',158,104,112,app.shared_services_tab,true),
@@ -205,7 +205,7 @@ fn shared_relays_view(app &Workshop, width f64) []ui2.Element {
 	}
 	list_width := if width >= 620 {190.0} else {144.0}
 	x := list_width+24
-	mut list := [label('shared_list_title','连接',12,10,list_width-88,12,workbench_muted),
+	mut list := [label('shared_list_title','列表',12,10,list_width-88,12,workbench_muted),
 		button('shared_refresh','刷新',list_width-68,6,56,false,!app.shared_catalog_pending && !app.shared_testing)]
 	mut connections := []ui2.Element{}
 	for i,relay in items {
@@ -260,10 +260,10 @@ fn shared_relay_detail(app &Workshop, width f64) []ui2.Element {
 	binding := native && app.environment_id == ''
 	section := if app.shared_detail_tab == 'binding' && !binding {'connection'} else {app.shared_detail_tab}
 	mut rows := [
-		label('shared_detail_title',if app.shared_name.trim_space() != '' {app.shared_name} else {'新建连接'},0,0,width-88,18,workbench_ink),
+		label('shared_detail_title',if app.shared_name.trim_space() != '' {app.shared_name} else {ui_text('新建连接')},0,0,width-88,18,workbench_ink),
 		relay_status_badge('shared_saved_badge',if app.shared_saved() {'已保存'} else {'未保存'},'info',width-80,0,80),
 		button('shared_save','保存',0,42,84,!app.shared_saved(),!app.shared_testing && !app.shared_catalog_pending && app.catalog_ready()),
-		button('shared_test',if app.shared_testing {'测试中…'} else {'测试连接'},96,42,100,false,!app.shared_testing),
+		button('shared_test',if app.shared_testing {'测试中…'} else {'测试连接'},96,42,108,false,!app.shared_testing),
 		button('shared_delete','移除…',width-72,42,72,false,!app.shared_testing && !app.shared_catalog_pending && app.shared_saved()),
 	]
 	tabs := if binding {['connection','history','binding']} else {['connection','history']}
@@ -276,7 +276,7 @@ fn shared_relay_detail(app &Workshop, width f64) []ui2.Element {
 		rows << state_notice('shared_notice',if app.shared_testing {'正在测试'} else {'最近操作'},if app.shared_message != '' {app.shared_message} else {'尚未测试连接。'},ui2.rect(0,146,width,104),'info')
 		logs := app.shared_probe_logs.filter(it.starts_with(app.environment_id+':'+app.shared_id+' · ')).join('\n')
 		rows << label('shared_probe_title','本次会话的测试记录',0,272,width,13,workbench_ink)
-		rows << workspace_text('shared_probe_history',if logs != '' {logs} else {'暂无测试记录。点击上方“测试连接”进行探测。'},306,width,190)
+		rows << workspace_text('shared_probe_history',if logs != '' {logs} else {ui_text('暂无测试记录。点击上方“测试连接”进行探测。')},306,width,190)
 		rows << ui2.label('shared_probe_scope','测试从本机发起，结束后自动关闭探测连接；持续连接状态请查看“环境服务”。',ui2.rect(0,514,width,66),ui2.TextStyle{size:11,color:workbench_muted,lines:3})
 		return rows
 	}

@@ -21,6 +21,12 @@ fn (mut app Workshop) handle_takeover_event(event string) bool {
 		'takeover_relay' { app.takeover_relay = ui2.text(event) }
 		'takeover_app_id' { app.takeover_app_id = ui2.text(event) }
 		'takeover_account' { app.takeover_account = ui2.text(event) }
+        'takeover_binding' {
+            app.takeover_binding_id = ''
+            for target in app.takeover_targets() {
+                if target.label == ui2.text(event) {app.takeover_binding_id=target.key()}
+            }
+        }
 		'takeover_start', 'takeover_stop', 'takeover_status', 'takeover_prepare' {
 			action := match event {
 				'takeover_start' { host.Action.takeover_start }
@@ -28,9 +34,11 @@ fn (mut app Workshop) handle_takeover_event(event string) bool {
 				'takeover_prepare' { host.Action.takeover_prepare }
 				else { host.Action.takeover_status }
 			}
-			next := app.sequence + 1
+			target := app.selected_takeover_target()
+            if event == 'takeover_start' && app.takeover_requires_binding() && target.binding.installation_id == '' {app.notice='请先关联远端安装并选择接管应用。';return true}
+            next := app.sequence + 1
 			select {
-				app.worker.commands <- host.Command{ action: action, sequence: next, takeover: host.TakeoverSelection{ relay_id: app.takeover_relay.trim_space(), app_id: app.takeover_app_id.trim_space(), accounts: [app.takeover_account.trim_space()] } } {
+				app.worker.commands <- host.Command{ action: action, sequence: next, takeover: host.TakeoverSelection{ application_id:target.binding.app_id,installation_id:target.binding.installation_id,component:target.binding.component,local_engine_id:target.local_engine, relay_id: app.takeover_relay.trim_space(), app_id: app.takeover_app_id.trim_space(), accounts: [app.takeover_account.trim_space()] } } {
 					app.sequence = next
 				}
 				else {
@@ -52,6 +60,7 @@ fn takeover_view(app &Workshop, width f64) []ui2.Element {
 	ready := app.snapshot.phase == .running
 	can_start := ready && status.known && !status.active && status.local_in_flight == 0
 		&& app.takeover_app_id.trim_space() != '' && app.takeover_account.trim_space() != ''
+        && (!app.takeover_requires_binding() || app.selected_takeover_target().binding.installation_id != '')
 	mut elements := [
 		label('takeover_title', '远端调试 / 本地接管', 0, 26, width - 120, 24, workbench_ink),
 		button('takeover_close', '返回应用', width - 100, 26, 100, false, true),
@@ -69,14 +78,14 @@ fn takeover_view(app &Workshop, width f64) []ui2.Element {
 		} else if !status.known {
 			'选择 Relay 后检查连接状态。'
 		} else if status.active {
-			status.app_id + ' · ' + status.accounts.join(', ') + '。最长 15 分钟；结束、到期或断线后，新请求恢复远端执行。'
+			status.app_id + ' · ' + status.accounts.join(', ') + ui_text('。最长 15 分钟；结束、到期或断线后，新请求恢复远端执行。')
 		} else {
-			'后续请求由远端执行。' + if status.local_in_flight > 0 { '本地正在收尾，请稍后再开启。' } else { '' } + '上次检查 ' + status.checked_at
+			ui_text('后续请求由远端执行。') + if status.local_in_flight > 0 { ui_text('本地正在收尾，请稍后再开启。') } else { '' } + ui_text('上次检查 ') + status.checked_at
 		}, ui2.rect(0, 148, width, 96), if status.known && status.active { 'good' } else { 'info' }),
 		label('takeover_relay_label', 'Relay 连接', 0, 270, width, 12, workbench_ink),
 		input('takeover_relay', app.takeover_relay, '项目中已配置的 Relay ID', 0, 294, width - 156, !status.active),
 		button('takeover_status', '检查连接', width - 140, 294, 140, false, ready),
-		label('takeover_app_id_label', '应用标识', 0, 354, width, 12, workbench_ink),
+		label('takeover_app_id_label', '认证应用标识', 0, 354, width, 12, workbench_ink),
 		input('takeover_app_id', app.takeover_app_id, '远端认证使用的应用标识', 0, 378, width, !status.active),
 		label('takeover_account_label', '账号标识', 0, 438, width, 12, workbench_ink),
 		input('takeover_account', app.takeover_account, '远端认证确认的用户标识', 0, 462, width, !status.active),
@@ -92,15 +101,49 @@ fn takeover_view(app &Workshop, width f64) []ui2.Element {
 		button('takeover_prepare', '配置接收入口…', 0, 1492, 164, false, ready && !status.active),
 		ui2.label('takeover_message', app.snapshot.message, ui2.rect(0, 1550, width, 80), ui2.TextStyle{ size: 12, color: workbench_ink, lines: 4 }),
 	]
+targets := app.takeover_targets()
+    if targets.len > 0 || app.takeover_requires_binding() {
+        mut shifted := []ui2.Element{}
+        for element in elements {
+            shifted << if element.frame.y >= 148 {ui2.Element{...element,frame:ui2.Rect{...element.frame,y:element.frame.y+90}}} else {element}
+        }
+        selected := app.selected_takeover_target()
+        title := if selected.binding.installation_id == '' {ui_text('请选择已部署应用。')} else {selected.label}
+        if targets.len == 0 {
+            shifted << state_notice('takeover_binding_missing','尚未关联远端应用','请先在远端应用详情中关联同一份源码，再配置本地接收入口。应用 UUID 和目标安装 UUID 一致后才能接管。',ui2.rect(0,142,width,78),'warning')
+        } else {
+        shifted << label('takeover_binding_label','已关联的远端应用',0,144,width,12,workbench_muted)
+        mut choices := if selected.binding.installation_id == '' {[title]} else {[]string{}}
+        choices << targets.map(it.label)
+        shifted << form_select('takeover_binding',title,choices,ui2.rect(0,168,width,36),!status.active)
+        }
+        elements=shifted.clone()
+    }
 	if !ready {
 		mut shifted := []ui2.Element{}
 		for element in elements {
-			shifted << if element.frame.y >= 148 {
+			shifted << if element.frame.y >= (if targets.len > 0 || app.takeover_requires_binding() {238.0} else {148.0}) {
 				ui2.Element{...element,frame:ui2.Rect{...element.frame,y:element.frame.y+54}}
 			} else {element}
 		}
-		shifted << button('takeover_runtime_start',if app.snapshot.phase == .starting {'正在启动…'} else {'启动本地运行环境'},0,148,188,true,app.environment_id == '' && app.local_command_enabled('start'))
+		shifted << button('takeover_runtime_start',if app.snapshot.phase == .starting {'正在启动…'} else {'启动本地运行环境'},0,if targets.len > 0 || app.takeover_requires_binding() {238.0} else {148.0},188,true,app.environment_id == '' && app.local_command_enabled('start'))
 		return shifted
 	}
 	return elements
+}
+
+fn (app &Workshop) takeover_targets() []host.TakeoverApplicationTarget {
+ if app.selected < 0 || app.selected >= app.projects.len {return []host.TakeoverApplicationTarget{}}
+ return host.takeover_application_targets(app.projects[app.selected].config_path) or {[]host.TakeoverApplicationTarget{}}
+}
+
+fn (app &Workshop) selected_takeover_target() host.TakeoverApplicationTarget {
+ targets := app.takeover_targets()
+ for target in targets {if target.key() == app.takeover_binding_id {return target}}
+ return if targets.len == 1 {targets[0]} else {host.TakeoverApplicationTarget{}}
+}
+
+fn (app &Workshop) takeover_requires_binding() bool {
+ if app.selected < 0 || app.selected >= app.projects.len {return false}
+ return host.project_uses_application_meta(app.projects[app.selected].config_path)
 }

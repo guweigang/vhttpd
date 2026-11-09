@@ -12,6 +12,6 @@ fn compiled_desktop_version() string {
 
 fn (app &Workshop) workbench_about_text() string {
 	return 'vhttpd Workbench\nDesktop ' + desktop_version +
-		'\n基于 V / ui2 的开发工作台\n\n当前环境：' + app.environment_name() +
-		'\n' + app.environment_version_label()
+		ui_text('\n基于 V / ui2 的开发工作台\n\n当前环境：') + ui_text(app.environment_name()) +
+		'\n' + ui_text(app.environment_version_label())
 }

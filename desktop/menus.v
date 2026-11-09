@@ -26,7 +26,7 @@ fn (app &Workshop) local_command_enabled(action string) bool {
 		'restart', 'apply_restart', 'check_config', 'admin' { s.phase == .running }
 		'config_diff' { status.pending || status.state == .unavailable || status.recovery_available }
 		'history_open' { status.recovery_available }
-		'folder', 'details', 'overview', 'logs' { !app.new_project }
+		'folder', 'details', 'overview', 'applications', 'relay', 'configuration', 'logs' { !app.new_project }
 		'deploy_open' { s.phase !in [.starting, .stopping] }
 		else { false }
 	}
@@ -86,31 +86,65 @@ fn (app &Workshop) workbench_menus(root ui2.Element) []ui2.Menu {
 	mut selected := ''
 	if local && app.projects.len > 0 && app.selected >= 0 && app.selected < app.projects.len { selected = app.projects[app.selected].name }
 	if !local { for profile in app.environment_profiles() { if profile.id == app.remote_id { selected = profile.name } } }
-	target := if selected == '' { '' } else { ' · ' + selected }
 	remote_controls := if !local && selected != '' { ui2.screen(workbench_paper, remote_instances_view(app, 708)) } else { ui2.screen(workbench_paper, []) }
 	can_remote := available && !app.server_busy && !app.remote_snapshot.busy && selected != ''
-	mut project_items := [menu_row('new', '新建运行环境…', available && app.can_new_or_import(), 'cmd+n'),
+	can_view := available && !app.new_project && selected != ''
+	mut file_items := [
+		menu_row('new', '新建运行环境…', available && app.can_new_or_import(), 'cmd+n'),
 		menu_row('import', if local { '导入运行配置…' } else { '导入远端运行环境…' }, available && app.can_new_or_import(), 'cmd+o'),
-		ui2.submenu('切换运行环境', choices), ui2.menu_separator(),
-		menu_row('folder', '打开工程目录' + target, app.local_command_enabled('folder'), ''),
-		menu_row('deploy_open', '部署工程到远端…', app.local_command_enabled('deploy_open'), '')]
-	$if !macos { project_items << [ui2.menu_separator(), menu_row('quit', '退出工作台', available, 'cmd+q')] }
+		ui2.menu_separator(),
+		menu_row('folder', '打开工程目录', app.local_command_enabled('folder'), ''),
+		menu_row('deploy_open', '部署工程到远端…', app.local_command_enabled('deploy_open'), ''),
+	]
+	$if !macos { file_items << [ui2.menu_separator(), menu_row('quit', '退出工作台', available, 'cmd+q')] }
 	stop := if local && app.snapshot.can_force { 'force' } else { 'stop' }
-	mut menus := [ui2.Menu{title: '运行环境', items: project_items}, ui2.Menu{title: '编辑', items: edit_menu_rows(root)},
-		ui2.Menu{title: '进程', items: [
-			menu_row(if local { 'start' } else { 'remote_start' }, '启动' + target, if local { app.local_command_enabled('start') } else { can_remote && menu_button_enabled(remote_controls, 'remote_start') }, ''),
-			menu_row(stop, (if stop == 'force' { '强制停止…' } else { '停止' }) + target, local && app.local_command_enabled(stop), ''),
-			menu_row(if local { 'restart' } else { 'remote_restart' }, '重启并检查生效' + target, if local { app.local_command_enabled('restart') } else { can_remote && menu_button_enabled(remote_controls, 'remote_restart') }, ''),
-			menu_row(if local { 'check_config' } else { 'remote_check' }, '检查生效' + target, if local { app.local_command_enabled('check_config') } else { can_remote && menu_button_enabled(remote_controls, 'remote_check') }, ''),
-			ui2.menu_separator(), menu_row(if local { 'admin' } else { 'remote_open' }, '打开 Admin UI' + target, if local { app.local_command_enabled('admin') } else { can_remote && menu_button_enabled(remote_controls, 'remote_open') }, '')]},
-		ui2.Menu{title: '位置与连接', items: [ui2.submenu('切换位置', environments), ui2.menu_separator(),
-			menu_row('server_home', '连接与服务器…', available, ''), menu_row('runtime', '管理运行包…', available, 'cmd+,'), menu_row('shared_relays', 'Relay 连接库…', available, '')]},
-		ui2.Menu{title: '查看', items: [menu_row('overview', '运行环境总览' + target, available && !app.new_project && selected != '', ''),
-			menu_row('logs', '运行日志' + target, available && selected != '', ''), ui2.menu_separator(),
-			menu_row('config_diff', '待生效配置差异' + target, app.local_command_enabled('config_diff'), ''), menu_row('history_open', '已生效版本历史' + target, app.local_command_enabled('history_open'), '')]},
-		ui2.Menu{title: '帮助', items: [menu_row('help', '使用说明', true, ''), menu_row('shortcuts', '快捷键说明', true, ''), ui2.menu_separator(), menu_row('desktop_updates', '检查更新…', available, ''), menu_row('about', '关于 vhttpd Workbench', true, '')]}]
+	language_items := [
+		ui2.MenuItem{...menu_row('language:auto', '跟随系统', true, ''), checked: workbench_language_preference == 'auto'},
+		ui2.MenuItem{...menu_row('language:zh-CN', '简体中文', true, ''), checked: workbench_language_preference == 'zh-CN'},
+		ui2.MenuItem{...menu_row('language:en', 'English', true, ''), checked: workbench_language_preference == 'en'},
+	]
+	mut view_items := []ui2.MenuItem{}
+	for i, action in ['overview', 'applications', 'relay', 'configuration', 'logs'] {
+		title := ['运行环境总览', '应用', 'Relay', '配置', '运行日志'][i]
+		view_items << ui2.MenuItem{...menu_row(action, title, can_view, ''), checked: can_view && app.workspace_menu_visible() && int(app.workspace_page) == i}
+	}
+	view_items << [ui2.menu_separator(),
+		menu_row('config_diff', '待生效配置差异', app.local_command_enabled('config_diff'), ''),
+		menu_row('history_open', '已生效版本历史', app.local_command_enabled('history_open'), ''),
+		ui2.menu_separator(), ui2.submenu('Language / 语言', language_items)]
+	mut menus := [
+		ui2.Menu{title: '文件', items: file_items},
+		ui2.Menu{title: '编辑', items: edit_menu_rows(root)},
+		ui2.Menu{title: '运行环境', items: [
+			ui2.submenu('选择本机或服务器', environments),
+			ui2.submenu('选择运行环境', choices), ui2.menu_separator(),
+			menu_row(if local { 'start' } else { 'remote_start' }, '启动运行环境', if local { app.local_command_enabled('start') } else { can_remote && menu_button_enabled(remote_controls, 'remote_start') }, ''),
+			menu_row(stop, if stop == 'force' { '强制停止运行环境…' } else { '停止运行环境' }, local && app.local_command_enabled(stop), ''),
+			menu_row(if local { 'restart' } else { 'remote_restart' }, '重启并检查生效', if local { app.local_command_enabled('restart') } else { can_remote && menu_button_enabled(remote_controls, 'remote_restart') }, ''),
+			menu_row(if local { 'check_config' } else { 'remote_check' }, '检查生效', if local { app.local_command_enabled('check_config') } else { can_remote && menu_button_enabled(remote_controls, 'remote_check') }, ''),
+			ui2.menu_separator(), menu_row(if local { 'admin' } else { 'remote_open' }, '打开 Admin UI', if local { app.local_command_enabled('admin') } else { can_remote && menu_button_enabled(remote_controls, 'remote_open') }, ''),
+		]},
+		ui2.Menu{title: '查看', items: view_items},
+		ui2.Menu{title: '管理', items: [
+			menu_row('server_home', '连接与服务器…', available, ''),
+			menu_row('runtime', '管理运行包…', available, 'cmd+,'),
+			menu_row('shared_relays', 'Relay 连接库…', available, ''),
+			ui2.menu_separator(), menu_row('mcp_settings', '模型开发 · MCP…', available, ''),
+		]},
+		ui2.Menu{title: '帮助', items: [menu_row('help', '使用说明', true, ''), menu_row('shortcuts', '快捷键说明', true, ''), ui2.menu_separator(), menu_row('desktop_updates', '检查更新…', available, ''), menu_row('about', '关于 vhttpd Workbench', true, '')]},
+	]
 	$if macos { menus.insert(menus.len - 1, ui2.Menu{title: '窗口', items: [menu_row('minimize', '最小化', true, 'cmd+m'), menu_row('zoom', '缩放', true, ''), menu_row('fullscreen', '进入 / 退出全屏', true, 'ctrl+cmd+f')]}) }
-	return menus
+
+	return localize_menus(menus)
+}
+
+fn (app &Workshop) workspace_menu_visible() bool {
+	return !app.show_runtime && !app.show_servers && !app.show_shared_relays && !app.show_deployment
+		&& !app.show_details && !app.show_config_diff && !app.show_history && !app.show_history_diff
+		&& !app.show_rollback && !app.show_component_install && !app.show_development && !app.show_takeover
+		&& (app.environment_id == '' || (app.remote_snapshot.connected && !app.remote_edit_connection
+			&& app.remote_snapshot.profile_id == app.remote_id
+			&& same_remote_connection(app.remote_form(), app.remote_connected_form)))
 }
 
 fn menu_find(items []ui2.MenuItem, id string) ?ui2.MenuItem {
@@ -140,10 +174,29 @@ fn (mut app Workshop) menu_overview() {
 	app.show_runtime = false
 	app.show_deployment = false
 	app.show_shared_relays = false
+	app.show_development = false
+	app.show_component_install = false
 	app.close_auxiliary_project_views()
 	app.show_servers = false
 	app.show_remote = app.environment_id != ''
 	app.remote_edit_connection = false
+}
+
+fn (mut app Workshop) menu_workspace_page(action string) {
+	app.menu_overview()
+	app.workspace_page = match action {
+		'applications' { .applications }
+		'relay' { .relay }
+		'configuration' { .configuration }
+		'logs' { .logs }
+		else { .environment }
+	}
+	if action == 'logs' {
+		app.workspace_log_application = ''
+		app.workspace_log_source = ''
+		app.workspace_logs_text = ''
+	}
+	app.workspace_logs_ready = false
 }
 
 fn handle_workbench_menu(event string) bool {
@@ -156,9 +209,10 @@ fn handle_workbench_menu(event string) bool {
 	action := event['menu:'.len..]
 	if app.desktop_update_open && action != 'desktop_updates'
 		&& action !in ['about', 'help', 'shortcuts', 'minimize', 'zoom', 'fullscreen']
-		&& !action.starts_with('edit_') {
+		&& !action.starts_with('language:') && !action.starts_with('edit_') {
 		app.desktop_update_open = false
 	}
+	if action.starts_with('language:') { choose_language(action.all_after('language:')); return true }
 	if action.starts_with('edit_') { menu_text_edit(action.all_after('edit_')); ui2.refresh(); return true }
 	if action.starts_with('environment:') {
 		app.reload_remote_profiles()
@@ -167,15 +221,14 @@ fn handle_workbench_menu(event string) bool {
 		return true
 	}
 	match action {
-		'overview', 'logs' {
-			app.menu_overview()
+		'overview', 'applications', 'relay', 'configuration', 'logs' {
+			app.menu_workspace_page(action)
 			ui2.refresh()
-			app.workspace_page = if action == 'logs' { .logs } else { .environment }
-			app.workspace_logs_ready = false
 		}
 		'config_diff', 'history_open' { app.menu_overview(); handle_event(action) }
-		'help' { ui2.alert('使用说明', '选择本地或远端位置 → 选择 vhttpd 运行环境 → 查看应用、Relay、配置和日志。\n\n配置在 Admin UI 编辑、校验和发布；发布后回到工作台，重启并检查整个项目生效。\n\n远端服务器通过 SSH 连接，密码仅用于本次会话。一个运行环境可承载多个应用；启停和重启影响整个进程。运行包用于安装或升级 vhttpd。') }
-		'shortcuts' { ui2.alert('快捷键说明', '⌘（macOS）/ Ctrl（Windows、Linux）\n\nN：新建项目    O：导入项目    ,：管理运行环境\nX / C / V / A：剪切 / 复制 / 粘贴 / 全选\n\nTab / Shift+Tab：下一个 / 上一个控件\n⌘ / Ctrl+Return：提交当前表单\nEsc：返回或取消（主机指纹不会通过 Return 自动接受）') }
+		'help' { ui_alert('使用说明', '选择本地或远端位置 → 选择 vhttpd 运行环境 → 查看应用、Relay、配置和日志。\n\n配置在 Admin UI 编辑、校验和发布；发布后回到工作台，重启并检查整个项目生效。\n\n远端服务器通过 SSH 连接，密码仅用于本次会话。一个运行环境可承载多个应用；启停和重启影响整个进程。运行包用于安装或升级 vhttpd。') }
+		'shortcuts' { ui_alert('快捷键说明', '⌘（macOS）/ Ctrl（Windows、Linux）\n\nN：新建运行环境    O：导入运行配置    ,：管理运行包\nX / C / V / A：剪切 / 复制 / 粘贴 / 全选\n\nTab / Shift+Tab：下一个 / 上一个控件\n⌘ / Ctrl+Return：提交当前表单\nEsc：返回或取消（主机指纹不会通过 Return 自动接受）') }
+		'about' { ui_alert('关于 vhttpd Workbench', app.workbench_about_text()) }
 		'desktop_updates' {
 			app.desktop_update_open = true
 			app.environment_menu = ui2.DropdownMenuState{}
@@ -183,7 +236,6 @@ fn handle_workbench_menu(event string) bool {
 			app.start_desktop_update_check()
 			ui2.refresh()
 		}
-		'about' { ui2.alert('关于 vhttpd Workbench', app.workbench_about_text()) }
 		'minimize', 'zoom', 'fullscreen' { menu_window_action(action) }
 		else { handle_event(action) }
 	}

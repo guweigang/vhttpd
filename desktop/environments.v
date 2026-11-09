@@ -48,6 +48,12 @@ fn (app &Workshop) environment_name() string {
 	return '远端环境'
 }
 
+fn (app &Workshop) display_environment_name() string {
+	title:=app.environment_name()
+	if app.environment_id=='' {return ui_text(title)}
+	return if title.starts_with('远端 · ') {ui_text('远端 · ')+title['远端 · '.len..]} else {title}
+}
+
 fn (app &Workshop) environment_profiles() []host.RemoteProfile {
 	if app.environment_id == '' { return []host.RemoteProfile{} }
 	return app.remote_profiles.filter(profile_environment(it) == app.environment_id)
@@ -65,7 +71,7 @@ fn (app &Workshop) environment_menu_items() []ui2.DropdownMenuItem {
 }
 
 fn (app &Workshop) environment_selector() ui2.Element {
-	return painted_button(ui2.dropdown_menu_toggle_action('environment_menu'), app.environment_name() + ' ▾', ui2.rect(16, 82, 180, 34), ui2.BoxStyle{bg: workbench_paper, radius: 6}, workbench_ink, app.can_switch_environment(), .left, 10)
+	return painted_button(ui2.dropdown_menu_toggle_action('environment_menu'), app.display_environment_name() + ' ▾', ui2.rect(16, 82, 180, 34), ui2.BoxStyle{bg: workbench_paper, radius: 6}, workbench_ink, app.can_switch_environment(), .left, 10)
 }
 
 fn (mut app Workshop) apply_environment_menu(step ui2.DropdownMenuStep) {

@@ -88,3 +88,15 @@ fn test_stopped_environment_still_offers_independent_install() ! {
 	ui2.validate_element_tree(root)!
 	assert component_action(root, 'component_open')
 }
+
+fn test_new_application_form_uses_templates_instead_of_source_picker() ! {
+ for remote in [false,true] {
+  app:=Workshop{component_new:true,component_name:'demo',component_port:'0',component_template:'vjsx-http',environment_id:if remote {'server'} else {''}}
+  root:=ui2.screen(workbench_paper,component_installation_view(app,510))
+  ui2.validate_element_tree(root)!
+  assert component_action(root,'component_prepare')
+  assert component_action(root,'component_template_http')
+  assert !component_action(root,'component_choose')
+  assert component_text(root).contains('新建应用')
+ }
+}

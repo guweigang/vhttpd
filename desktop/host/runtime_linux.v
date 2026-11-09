@@ -5,6 +5,10 @@ import crypto.sha256
 import os
 
 fn install_linux_runtime(archive string, expected string, tag string, job RuntimeJob) !string {
+ return install_linux_runtime_mode(archive, expected, tag, job, true)
+}
+
+fn install_linux_runtime_mode(archive string, expected string, tag string, job RuntimeJob, select_package bool) !string {
 	if expected.len != 64 || !expected.bytes().all(it.is_hex_digit()) {
 		return error('缺少有效的 SHA256 校验值。')
 	}
@@ -52,9 +56,11 @@ fn install_linux_runtime(archive string, expected string, tag string, job Runtim
 	final := os.join_path(root, 'vhttpd-' + info.version + '-' + rand.bytes(6)!.hex())
 	os.mv(source, final)!
 	installed := os.join_path(final, 'vhttpd')
-	save_runtime_selection(installed) or {
-		os.rmdir_all(final) or {}
-		return err
+	if select_package {
+		save_runtime_selection(installed) or {
+			os.rmdir_all(final) or {}
+			return err
+		}
 	}
 	return installed
 }

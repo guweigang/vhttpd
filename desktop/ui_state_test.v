@@ -67,16 +67,16 @@ fn test_keyboard_focus_order_skips_unavailable_controls_and_reverses() ! {
 			button('submit', 'Connect', 0, 760, 100, true, true),
 		])])
 	targets := focus_targets(root)
-	assert targets.map(it.id) == ['first', 'secret', 'submit']
+	assert targets.map(it.id) == ['nav', 'first', 'secret', 'submit']
 	forward := next_focus_target(targets, 'first', false) or { return error('missing forward focus') }
 	assert forward.id == 'secret'
 	reverse := next_focus_target(targets, 'secret', true) or { return error('missing reverse focus') }
 	assert reverse.id == 'first'
 	wrap := next_focus_target(targets, 'submit', false) or { return error('missing wrap focus') }
-	assert wrap.id == 'first'
-	back := next_focus_target(targets, 'first', true) or { return error('missing backward wrap') }
+	assert wrap.id == 'nav'
+	back := next_focus_target(targets, 'nav', true) or { return error('missing backward wrap') }
 	assert back.id == 'submit'
-	assert targets[1].scroll == 'form' && targets[1].frame.y == 700
+	assert targets[2].scroll == 'form' && targets[2].frame.y == 700
 	assert root.children[1].children[0].submit_id == 'form_submit'
 }
 
@@ -765,4 +765,149 @@ fn test_stopped_managed_remote_has_start_action_without_admin_connection() ! {
  app.remote_profiles = []host.RemoteProfile{}
  app.remote_servers = []host.RemoteServer{}
  app.remote_id = ''
+}
+
+// Native-feel navigation, responsive rows and configuration state regressions.
+fn test_keyboard_reaches_navigation_selectors_and_readonly_content() {
+	root := ui2.screen(workbench_paper, [
+		ui2.view('workbench_sidebar', ui2.rect(0, 0, 200, 500), ui2.BoxStyle{}, [button('project_0', '项目', 0, 0, 180, false, true), button('project_1', '第二个项目', 0, 40, 180, false, true)]),
+		ui2.scroll('form', ui2.rect(220, 0, 500, 500), workbench_paper, [
+			form_select('application', '应用', ['应用'], ui2.rect(0, 20, 200, 36), true),
+			ui2.Element{...workspace_text('connection', 'readonly', 70, 300, 100), readonly: true},
+			ui2.Element{...button('hidden', 'Hidden', 0, 180, 100, false, true), hidden: true},
+			button('disabled', 'Disabled', 0, 220, 100, false, false),
+			button('back', 'Back', 0, 260, 100, false, true),
+		])])
+	targets := focus_targets(root)
+	assert targets.map(it.id) == ['project_0', 'application', 'connection', 'back']
+	assert (next_focus_target(targets, 'application', false) or { panic('missing readonly') }).id == 'connection'
+	assert (next_focus_target(targets, 'connection', true) or { panic('missing select') }).id == 'application'
+	assert (next_focus_target(targets, 'project_0', true) or { panic('missing wrap') }).id == 'back'
+	assert targets[2].kind == .text_area && targets[2].scroll == 'form'
+}
+
+fn test_selection_arrows_stay_in_the_current_group_and_never_edit_fields() {
+	targets := all_focus_targets(ui2.screen(workbench_paper, [
+		button('workspace_tab_environment', '总览', 0, 0, 90, false, true),
+		button('workspace_tab_applications', '应用', 100, 0, 90, false, true),
+		button('project_0', 'One', 0, 60, 90, false, true),
+		button('project_1', 'Two', 0, 100, 90, false, true),
+		input('name', '', '', 0, 140, 100, true),
+	]))
+	assert (next_selection_target(targets, 'workspace_tab_environment', .right) or { panic('missing tab') }).id == 'workspace_tab_applications'
+	assert (next_selection_target(targets, 'project_0', .down) or { panic('missing project') }).id == 'project_1'
+	assert (next_selection_target(targets, 'project_1', .down) or { panic('missing boundary') }).id == 'project_1'
+	assert next_selection_target(targets, 'name', .left) == none
+	assert next_selection_target(targets, 'workspace_tab_environment', .down) == none
+}
+
+fn test_local_remote_overview_share_config_severity_and_never_confirm_disconnected_state() {
+	for status in [host.ConfigStatus{state: .effective}, host.ConfigStatus{state: .pending, pending: true}, host.ConfigStatus{state: .unavailable}, host.ConfigStatus{}] {
+		local := Workshop{projects: [host.Project{config_path: '/fixture/config.toml'}], snapshot: host.Snapshot{phase: .running}, config_statuses: {'/fixture/config.toml': status}}
+		remote := Workshop{environment_id: 'fixture', remote_snapshot: host.RemoteSnapshot{connected: true, instance: host.RemoteInstance{ready: true}, config_status: status}}
+		a := workspace_runtime_status(&local)
+		b := workspace_runtime_status(&remote)
+		assert a.title == b.title && a.tone == b.tone
+		if status.pending { assert a.title.contains('待重启') && a.tone == 'warning' }
+	}
+	lost := Workshop{environment_id: 'fixture', remote_snapshot: host.RemoteSnapshot{instance: host.RemoteInstance{ready: true}, config_status: host.ConfigStatus{state: .effective}}}
+	assert workspace_runtime_status(&lost).tone == 'warning'
+	assert !workspace_runtime_status(&lost).title.contains('已生效')
+	failed := Workshop{snapshot: host.Snapshot{phase: .failed}}
+	assert workspace_runtime_status(&failed).tone == 'danger'
+	restarting := Workshop{environment_id: 'fixture', remote_snapshot: host.RemoteSnapshot{restarting: true, config_status: host.ConfigStatus{state: .effective}}}
+	assert workspace_runtime_status(&restarting).title == '正在重启并检查生效'
+	assert workspace_runtime_status(&restarting).tone != 'good'
+}
+
+fn test_buttons_measure_single_line_titles_wrap_rows_and_keep_trailing_header_action() ! {
+	$if macos {
+		for _, path in load_workbench_fonts(os.join_path(@VMODROOT, 'desktop/bin/vhttpd-workbench.app/Contents/Resources/fonts'))! { register_workbench_font(path)! }
+	}
+	for width in [320.0, 488.0, 708.0] {
+		root := ui2.view('form', ui2.rect(0, 0, width, 180), ui2.BoxStyle{}, [
+			label('heading', '服务器', 0, 0, width - 120, 24, workbench_ink),
+			button('back', '返回运行环境', width - 100, 0, 100, false, true),
+			button('restart', '重启并检查整个项目生效', 0, 60, 150, true, true),
+			button('check', 'Check configuration', 162, 60, 140, false, false),
+			label('detail', 'Following content', 0, 108, width, 12, workbench_muted),
+		])
+		layout := workbench_text_layout(workbench_font_layout(root))
+		back := layout.children[1]
+		assert back.frame.x + back.frame.width <= width
+		assert back.children[0].text == '返回运行环境'
+		assert back.children[0].text_style.lines == 1
+		first := layout.children[2]
+		second := layout.children[3]
+		assert first.frame.x + first.frame.width <= width
+		assert second.frame.x + second.frame.width <= width
+		assert second.frame.y >= first.frame.y + first.frame.height || second.frame.x >= first.frame.x + first.frame.width
+		assert layout.children[4].frame.y >= second.frame.y + second.frame.height
+		assert second.children.last().enabled == false
+		assert first.children.last().frame.width == first.frame.width
+		ui2.validate_element_tree(layout)!
+	}
+}
+
+fn test_arrowing_runtime_list_never_stops_the_running_process() {
+	mut app := unsafe { workshop }
+	saved := *app
+	defer { unsafe { *app = saved } }
+	unsafe {
+		*app = Workshop{
+			projects: [host.Project{name: 'A', config_path: '/fixture/a.toml'}, host.Project{name: 'B', config_path: '/fixture/b.toml'}]
+			selected: 0
+			snapshot: host.Snapshot{phase: .running, pid: 123, project: '/fixture/a.toml'}
+			keyboard_navigation_focus: 'project_0'
+		}
+	}
+	workbench_physical_key(ui2.KeyEvent{code: .down})
+	assert app.keyboard_navigation_focus == 'project_1'
+	assert app.selected == 0 && app.snapshot.pid == 123 && app.snapshot.phase == .running
+	assert app.sequence == 0 && app.pending_project == -1
+	select {
+		_ := <-app.worker.commands { assert false, 'arrow navigation dispatched a lifecycle command' }
+		else {}
+	}
+}
+
+fn test_standalone_trailing_button_grows_left_and_preserves_full_title() ! {
+	$if macos {
+		for _, path in load_workbench_fonts(os.join_path(@VMODROOT, 'desktop/bin/vhttpd-workbench.app/Contents/Resources/fonts'))! { register_workbench_font(path)! }
+	}
+	for width in [320.0, 488.0, 583.0, 708.0] {
+		root := ui2.view('remote_page', ui2.rect(0, 0, width, 150), ui2.BoxStyle{}, [
+			label('heading', '远端运行环境', 0, 0, width - 120, 24, workbench_ink),
+			button('back', '运行环境概览', width - 100, 8, 100, false, true),
+			label('hint', 'Following content', 0, 62, width, 12, workbench_muted),
+		])
+		layout := workbench_text_layout(workbench_font_layout(root))
+		back := layout.children[1]
+		assert back.children[0].text == '运行环境概览'
+		assert back.children[0].text_style.lines == 1
+		assert back.frame.x + back.frame.width == width
+		assert back.children.last().frame.width == back.frame.width
+		assert back.frame.x >= 0
+	}
+	root := ui2.view('actions', ui2.rect(0, 0, 488, 100), ui2.BoxStyle{}, [
+		button('save', '保存', 0, 0, 75, false, true),
+		button('connect', '保存并连接', 324, 0, 164, true, true),
+	])
+	layout := workbench_text_layout(workbench_font_layout(root))
+	assert layout.children[1].frame.x == 324
+	assert layout.children[1].frame.y == 0
+}
+
+fn test_cjk_wrapping_does_not_orphan_closing_punctuation() ! {
+	$if macos {
+		for _, path in load_workbench_fonts(os.join_path(@VMODROOT, 'desktop/bin/vhttpd-workbench.app/Contents/Resources/fonts'))! { register_workbench_font(path)! }
+	}
+	style := ui2.TextStyle{size: 14, font_family: workbench_ui_font}
+	for punctuation in ['。', '，', '）', '】'] {
+		source := '实例' + punctuation
+		wrapped := workbench_wrap_label(source, style, workbench_label_width('实例', style))
+		assert wrapped.text.replace('\n', '') == source
+		assert !wrapped.text.split('\n').any(it == punctuation)
+		for line in wrapped.text.split('\n') { assert workbench_label_width(line, style) <= workbench_label_width('实例', style) }
+	}
 }

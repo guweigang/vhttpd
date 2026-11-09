@@ -1,16 +1,19 @@
 module host
 
 import json2 as json
+import app_bundle
 import net.http
 import net.urllib
 import time
 import application_logs
 
 // A registration identifies a vhttpd configuration/process, never an application.
-// Applications are projected by that process's authenticated /admin/apps API.
+// Applications use the same plan projection offline and through /admin/apps.
 pub struct RuntimeApplication {
 pub:
-	id        string
+	identity app_bundle.ApplicationIdentity
+ identity_error string
+ id        string
 	label     string
 	status    string
 	listeners []ApplicationListener
@@ -76,6 +79,8 @@ pub:
 
 pub struct RuntimeWorkspace {
 pub:
+	inventory_known bool
+	from_configuration bool
 	application_logs_unsupported bool
 	application_logs map[string]application_logs.Snapshot
 	application_logs_errors map[string]string
@@ -93,6 +98,10 @@ pub:
 	applications []RuntimeApplication
 	events       []RuntimeEvent
 	relay        RelayLiveStatus
+}
+
+pub fn (data RuntimeWorkspace) applications_available() bool {
+	return data.known || data.inventory_known
 }
 
 pub struct WorkspaceWebSocketListener {
@@ -220,7 +229,13 @@ fn application_log_fetch_error(message string) string {
 fn (mut m Manager) poll_workspace() {
 	if m.token == '' || time.ticks() < m.workspace_next_probe { return }
 	m.workspace_next_probe = time.ticks() + 3000
-	m.workspace = fetch_workspace(m.info.admin_url.all_before('/admin/ui/'), m.token, m.relay_live, false)
+	live := fetch_workspace(m.info.admin_url.all_before('/admin/ui/'), m.token, m.relay_live, false)
+	if live.known {
+		m.workspace = live
+	} else {
+		configured := configured_workspace(m.project.config_path)
+		m.workspace = RuntimeWorkspace{ ...configured, error: if configured.inventory_known { live.error } else { configured.error } }
+	}
 }
 
 fn (mut m RemoteManager) poll_workspace() {

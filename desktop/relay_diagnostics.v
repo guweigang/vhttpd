@@ -37,8 +37,8 @@ fn relay_monitor_elements(app &Workshop, width f64, y f64, relay_id string) []ui
 	mut connections := []string{}
 	for agent in live.data.agents {
 		if relay_id != '' && agent.relay_id != relay_id { continue }
-		connections << agent.relay_id + ' · ' + agent.state + ' · 连接尝试 ' + agent.attempt.str()
-			+ if agent.state == 'backoff' { ' · 等待自动重连' } else { '' }
+		connections << agent.relay_id + ' · ' + agent.state + ui_text(' · 连接尝试 ') + agent.attempt.str()
+			+ if agent.state == 'backoff' { ui_text(' · 等待自动重连') } else { '' }
 	}
 	mut requests := []string{}
 	mut events := []string{}
@@ -52,12 +52,12 @@ fn relay_monitor_elements(app &Workshop, width f64, y f64, relay_id string) []ui
 	mut channels := []string{}
 	for channel in live.data.channels {
 		channels << channel.id + ' · ' + channel.route + ' · ' + if channel.open { 'open' } else { 'closed' }
-			+ ' · 缓冲 ' + channel.buffered_len.str() + ' · 返回 ' + channel.returned_len.str()
+			+ ui_text(' · 缓冲 ') + channel.buffered_len.str() + ui_text(' · 返回 ') + channel.returned_len.str()
 	}
-	detail := if !live.known { if live.error != '' { live.error } else { '等待运行时诊断；尚未确认连接。' } }
-		else { connections.join(' / ') + '\n活动通道 ' + live.data.open_channels.str() + ' · 待处理帧 ' + live.data.pending_frames.str()
-			+ ' · 已完成 ' + live.data.diagnostics.completed.str() + ' · 失败 ' + live.data.diagnostics.failed.str()
-			+ ' · 每 2 秒刷新 · ' + live.checked_at }
+	detail := if !live.known { if live.error != '' { ui_text(live.error) } else { ui_text('等待运行时诊断；尚未确认连接。') } }
+		else { connections.join(' / ') + ui_text('\n活动通道 ') + live.data.open_channels.str() + ui_text(' · 待处理帧 ') + live.data.pending_frames.str()
+			+ ui_text(' · 已完成 ') + live.data.diagnostics.completed.str() + ui_text(' · 失败 ') + live.data.diagnostics.failed.str()
+			+ ui_text(' · 每 2 秒刷新 · ') + live.checked_at }
 	mut result := [
 		label('relay_monitor_title', '执行日志与 Relay 状态', 0, y, width - 160, 16, workbench_ink),
 		button('takeover_monitor_all', '全部 Relay…', width - 144, y - 6, 144, false, true),
@@ -66,9 +66,9 @@ fn relay_monitor_elements(app &Workshop, width f64, y f64, relay_id string) []ui
 		label('relay_transport_title', '通道与数据库事件 · 最近记录', 0, y+386, width, 13, workbench_ink),
 	]
 	for item in [
-		RelayLogPane{name:'relay_request_logs',value:if requests.len > 0 { requests.join('\n\n') } else { '暂无接管记录；开启接管后，此处显示实际请求的执行位置、结果、耗时和请求 ID。' },offset:152.0,height:214.0},
-		RelayLogPane{name:'relay_transport_logs',value:if events.len > 0 { events.join('\n\n') } else { '暂无 Relay 事件。只记录连接变化、资源操作与失败，不记录数据内容。' },offset:416.0,height:166.0},
-		RelayLogPane{name:'relay_active_channels',value:if channels.len > 0 { channels.join('\n') } else { '当前没有活动通道；短请求完成后通道会正常释放，可在事件记录中查看历史。' },offset:598.0,height:52.0},
+		RelayLogPane{name:'relay_request_logs',value:if requests.len > 0 { requests.join('\n\n') } else { ui_text('暂无接管记录；开启接管后，此处显示实际请求的执行位置、结果、耗时和请求 ID。') },offset:152.0,height:214.0},
+		RelayLogPane{name:'relay_transport_logs',value:if events.len > 0 { events.join('\n\n') } else { ui_text('暂无 Relay 事件。只记录连接变化、资源操作与失败，不记录数据内容。') },offset:416.0,height:166.0},
+		RelayLogPane{name:'relay_active_channels',value:if channels.len > 0 { channels.join('\n') } else { ui_text('当前没有活动通道；短请求完成后通道会正常释放，可在事件记录中查看历史。') },offset:598.0,height:52.0},
 	] {
 		field := ui2.text_area(item.name,item.value,ui2.rect(0,y+item.offset,width,item.height),ui2.BoxStyle{bg:workbench_sidebar,radius:7},ui2.TextStyle{size:11,color:workbench_ink,font_family:workbench_detail_font()})
 		result << ui2.Element{...field,readonly:true}

@@ -115,7 +115,7 @@ fn runtime_downloads_view(app &Workshop, width f64) []ui2.Element {
 	mut choices := []ui2.Element{}
 	for i, choice in app.runtime_downloads {
 		mut row := [label('runtime_release_name_${i}', choice.tag, 10, 3, width - 40, 12, workbench_ink),
-			label('runtime_release_meta_${i}', if choice.channel == 'stable' { '稳定版' } else { '开发版 · 预发布' } + ' · ' + choice.published_at.all_before('T'), 10, 27, width - 40, 10, workbench_muted)]
+			label('runtime_release_meta_${i}', ui_text(if choice.channel == 'stable' { '稳定版' } else { '开发版 · 预发布' }) + ' · ' + choice.published_at.all_before('T'), 10, 27, width - 40, 10, workbench_muted)]
 		row << ui2.Element{...ui2.button('runtime_release_${i}', '', ui2.rect(0, 0, width - 12, 52), ui2.BoxStyle{transparent: true}, ui2.TextStyle{}), enabled: !busy, accessibility_label: choice.tag + ' · ' + choice.channel}
 		focused := ui2.focused_id() == 'runtime_release_${i}'
 		choices << ui2.view('runtime_release_row_${i}', ui2.rect(0, f64(i * 58), width - 12, 52), ui2.BoxStyle{bg: if app.runtime_selected_tag == choice.tag { workbench_soft_accent } else { workbench_sidebar }, radius: 6, border_color: workbench_accent, border_left: if focused { 2.0 } else { 0.0 }, border_right: if focused { 2.0 } else { 0.0 }, border_top: if focused { 2.0 } else { 0.0 }, border_bottom: if focused { 2.0 } else { 0.0 }}, row)

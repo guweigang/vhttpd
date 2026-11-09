@@ -59,9 +59,19 @@ pub fn save_remote_servers(items []RemoteServer) ! {
 	os.mv(temp, path)!
 }
 
-pub enum ServerAction { relay_logs relay_load relay_save relay_delete connect trust disconnect inspect install create start upgrade prepare_deploy deploy discard_deploy shutdown }
+pub enum ServerAction { mcp_ordinary_relay mcp_package mcp_lifecycle mcp_inspect mcp_shared_config mcp_runtime_upgrade mcp_release mcp_hub relay_logs relay_load relay_save relay_delete connect trust disconnect inspect install create start upgrade prepare_deploy deploy discard_deploy shutdown }
 pub struct ServerCommand {
 pub:
+	mcp_ordinary_relay McpOrdinaryRelayRequest
+	mcp_package McpPackageRequest
+	mcp_lifecycle McpLifecycleRequest
+	mcp_inspect McpInspectRequest
+	mcp_shared_config McpSharedConfigRequest
+	mcp_hub McpHubRequest
+	mcp_release McpReleaseRequest
+	mcp_runtime_upgrade McpUpgradeRequest
+	rollback_from string
+	release_app_id string
 	shared_relay SharedRelay
 	relay_revision string
 	sequence u64
@@ -74,6 +84,8 @@ pub:
 	runtime_id string
 	initialize_environment bool
 	component_id string
+ target_installation_id string
+ adopt_engines []string
 	local_project Project
 	deployment_id string
 	project_id string
@@ -100,6 +112,15 @@ fn remote_runtime_id_valid(id string) bool {
 
 pub struct ServerSnapshot {
 pub:
+	mcp_relay_previews []McpRelayPreview
+	mcp_relay_preview McpRelayPreview
+	mcp_relay_operations []McpRelayOperation
+	mcp_relay_catalog_serial u64
+	mcp_package_preview McpPackagePreview
+	mcp_package_operations []McpPackageOperation
+	mcp_registered_host RemoteServer
+	mcp_lifecycle_preview McpLifecycleReport
+	mcp_host_operations []McpHostOperation
 	component_result OperationResult
 	runtime_result OperationResult
 	relay_catalog RelayCatalog
@@ -119,6 +140,9 @@ pub:
 	root string
 	version string
 	deployment_preview ApplicationDeploymentPreview
+	mcp_release_preview McpReleasePreview
+	mcp_upgrade_preview McpUpgradePreview
+	mcp_shared_config_preview McpSharedConfigReport
 	deployments []ApplicationDeploymentStatus
 	upgrades []RemoteRuntimeUpgrade
 	runtimes []RemoteRuntime
@@ -156,9 +180,24 @@ mut:
  ready_output string
 	diagnostics string
 	pending_deployment runtime_upgrade.DeploymentRequest
+	deployment_rollback bool
+	mcp_release_plan McpReleasePlan
+	mcp_upgrade_plan McpUpgradePlan
+	mcp_config_plan McpSharedConfigPlan
+	mcp_relay_plans map[string]McpOrdinaryRelayPlan
+	mcp_relay_operations []McpRelayOperation
+	mcp_relay_catalog_serial u64
+	mcp_package_plan McpPackagePlan
+	mcp_package_artifacts map[string]McpPackageArtifact
+	mcp_package_operations []McpPackageOperation
+	mcp_lifecycle_plan McpLifecyclePlan
+	mcp_host_operations []McpHostOperation
+	mcp_connect_request McpLifecycleRequest
 	deployment_local_project Project
 	deployment_fingerprint string
 	deployment_component_id string
+ deployment_installation_id string
+ deployment_adopt_engines []string
 	next_deployment_probe i64
 	next_upgrade_probe i64
 	deadline i64
@@ -170,6 +209,9 @@ fn (mut s ServerSession) close() {
 	if s.pending_deployment.id!='' && s.state.connected { s.discard_deployment() or {} }
 	s.pending_deployment=runtime_upgrade.DeploymentRequest{}
 	s.deployment_fingerprint=''
+	s.mcp_release_plan = McpReleasePlan{}
+	s.mcp_upgrade_plan = McpUpgradePlan{}
+	s.mcp_config_plan = McpSharedConfigPlan{}
 	s.deployment_local_project=Project{}
  $if windows { revoke_windows_session(s.windows_ticket) }
  s.windows_ticket = ''
@@ -356,7 +398,7 @@ fn (mut s ServerSession) create(command ServerCommand) ! {
 	template := project_templates().filter(it.id == command.template)[0]
 	if template.id == 'environment' {
 		version := s.shell(shell_quote(runtime.path + '/vhttpd') + ' --workbench-component-version', 8000) or {return error('基础环境需要支持独立应用的新运行包，请先升级。')}
-		if version.trim_space() != '1' {return error('基础环境需要支持独立应用的新运行包，请先升级。')}
+		if version.trim_space() !in ['1','2','3'] {return error('基础环境需要支持独立应用的新运行包，请先升级。')}
 	}
 	mut profiles := load_remote_profiles()!
 	previous := profiles.filter(it.server_id == s.server.id && it.name == command.name)
@@ -376,6 +418,7 @@ fn (mut s ServerSession) create(command ServerCommand) ! {
 	script := 'set -eu\numask 077\nruntime_id=' + shell_quote(runtime.id) + '\ninstance_id=' + shell_quote(profile.id) + '\nreuse=' + if previous.len > 0 { '1' } else { '0' } + '\nname=' + shell_quote(command.name) + '\nconfig=' + shell_quote(base64.encode_str(config)) + '\nsource=' + shell_quote(base64.encode_str(template.source_text)) + '\n' + $embed_file('remote_scripts/create.sh').to_string()
 	s.shell(script, 20000)!
 	s.discover_projects()!
+	s.start_project(ServerCommand{project_id: profile.id})!
 	s.state = ServerSnapshot{...s.state, created: profile, message: '实例已创建并启动，正在连接 Admin UI 并检查整项目生效状态。'}
 }
 
@@ -430,9 +473,71 @@ fn validate_remote_archive(path string, platform string, job RuntimeJob) ! {
 fn server_supervise(w ServerWorker) {
 	mut s := &ServerSession{job: w.job}
 	mut sequence := u64(0)
+	defer { s.clear_mcp_downloads() }
 	for {
 		select {
 			command := <-w.commands {
+				if command.action == .mcp_ordinary_relay {
+					s.handle_ordinary_relay(command.mcp_ordinary_relay, w)
+					continue
+				}
+				if command.action == .mcp_package {
+					s.handle_mcp_package(command.mcp_package, w)
+					continue
+				}
+				if command.action == .mcp_lifecycle {
+					s.handle_mcp_lifecycle(command.mcp_lifecycle, w)
+					continue
+				}
+				if command.action == .mcp_inspect {
+					req := command.mcp_inspect
+					value := s.mcp_inspect(req) or {
+						req.reply <- DevelopmentReply{error: true, value: err.msg()}
+						continue
+					}
+					req.reply <- DevelopmentReply{value: value}
+					continue
+				}
+				if command.action == .mcp_shared_config {
+					req := command.mcp_shared_config
+					mut result := DevelopmentReply{}
+					if value := s.mcp_shared_config(req) {
+						result = DevelopmentReply{value: value}
+					} else {
+						result = DevelopmentReply{error: true, value: err.msg()}
+					}
+					s.state = ServerSnapshot{...s.state, mcp_shared_config_preview: s.mcp_config_plan.report}
+					select { w.snapshots <- s.state {} else {} }
+					req.reply <- result
+					continue
+				}
+				if command.action == .mcp_hub {
+					value := s.mcp_hub(command) or {
+						command.mcp_hub.reply <- DevelopmentReply{error: true, value: err.msg()}
+						continue
+					}
+					command.mcp_hub.reply <- DevelopmentReply{value: value}
+					continue
+				}
+				if command.action == .mcp_runtime_upgrade {
+					req := command.mcp_runtime_upgrade
+					result := s.mcp_runtime_upgrade(req) or {
+						req.reply <- DevelopmentReply{error: true, value: err.msg()}
+						continue
+					}
+					req.reply <- DevelopmentReply{value: result}
+					select { w.snapshots <- s.state {} else {} }
+					continue
+				}
+				if command.action == .mcp_release {
+					result := s.mcp_release(command.mcp_release) or {
+						command.mcp_release.reply <- DevelopmentReply{error: true, value: err.msg()}
+						continue
+					}
+					command.mcp_release.reply <- DevelopmentReply{value: result}
+					select { w.snapshots <- s.state {} else {} }
+					continue
+				}
 				sequence = command.sequence
 				s.state = ServerSnapshot{...s.state, sequence: command.sequence}
 				if command.action == .start { s.state = ServerSnapshot{ ...s.state, created: RemoteProfile{} } }
@@ -442,6 +547,7 @@ fn server_supervise(w ServerWorker) {
 				}
 				mut failure := ''
 				match command.action {
+					.mcp_ordinary_relay, .mcp_package, .mcp_lifecycle, .mcp_inspect, .mcp_hub, .mcp_release, .mcp_runtime_upgrade, .mcp_shared_config {}
 					.relay_logs {s.read_relay_logs(command) or {s.state = ServerSnapshot{...s.state, relay_logs_error:'远端进程日志暂时不可用。'}}}
 					.relay_load, .relay_save, .relay_delete {s.relay_catalog_operation(command) or {failure = err.msg()}}
 					.connect { s.connect(command.server, command.password) or { s.close(); failure = err.msg() } }
@@ -464,7 +570,7 @@ fn server_supervise(w ServerWorker) {
 					}
 					.create { s.create(command) or { failure = err.msg() } }
 					.start { s.start_project(command) or { failure = err.msg() } }
-					.shutdown { s.close(); w.done <- true; return }
+					.shutdown { s.clear_mcp_downloads(); s.close(); w.done <- true; return }
 				}
 				if failure != '' { s.state = ServerSnapshot{...s.state, server_id: s.server.id, error: true, busy: false, message: failure} }
 				if command.action in [.prepare_deploy, .deploy] {
@@ -478,7 +584,8 @@ fn server_supervise(w ServerWorker) {
 			else {}
 		}
 		s.tick()
-		s.state = ServerSnapshot{...s.state, sequence: sequence}
+		s.tick_mcp_connect()
+		s.state = ServerSnapshot{...s.state, sequence: sequence, mcp_host_operations: s.mcp_host_operations.clone(), mcp_package_preview: s.mcp_package_plan.preview, mcp_package_operations: s.mcp_package_operations.clone(), mcp_relay_operations: s.mcp_relay_operations.clone(), mcp_relay_catalog_serial: s.mcp_relay_catalog_serial}
 		select { w.snapshots <- s.state {} else {} }
 		time.sleep(80 * time.millisecond)
 	}
@@ -522,7 +629,7 @@ fn (mut s ServerSession) initialize_environment() ! {
     if s.state.projects.len != 0 || s.state.runtimes.len == 0 { return }
     runtime := s.state.runtimes[0]
     version := s.shell(shell_quote(runtime.path + '/vhttpd') + ' --workbench-component-version', 8000)!
-    if version.trim_space() != '1' { return error('运行包已安装；初始化基础环境需要支持独立应用的新运行包。') }
+    if version.trim_space() !in ['1','2','3'] { return error('运行包已安装；初始化基础环境需要支持独立应用的新运行包。') }
     port := s.shell("python3 -c 'import socket; s=socket.socket(); s.bind((\"127.0.0.1\",0)); print(s.getsockname()[1])'", 5000)!.trim_space().int()
     s.create(ServerCommand{name: 'default', template: 'environment', admin_port: port, runtime_id: runtime.id})!
 }

@@ -44,8 +44,8 @@ fn runtime_remote_view(app &Workshop, width f64) []ui2.Element {
 		rows << label('runtime_environment_label', '1. 选择运行环境', 0, y, width, 15, workbench_ink)
 		y += 30
 		if projects.len > 0 {
-			name := if selected.len == 1 { selected[0].name } else { '请选择运行环境' }
-			rows << ui2.Element{ ...ui2.dropdown('server_upgrade_environment', name, projects.map(it.name), ui2.rect(0, y, width, 36), ui2.BoxStyle{ bg: workbench_sidebar, radius: 6 }, ui2.TextStyle{ size: 14, color: workbench_ink }), enabled: !busy }
+			name := if selected.len == 1 { selected[0].name } else { ui_text('请选择运行环境') }
+			rows << form_select('server_upgrade_environment', name, projects.map(it.name), ui2.rect(0, y, width, 36), !busy)
 			y += 48
 			rows << ui2.label('runtime_current_binding', '当前运行包：' + if selected.len == 1 {
 				app.runtime_label(selected[0].runtime_id)
@@ -81,11 +81,11 @@ fn runtime_remote_view(app &Workshop, width f64) []ui2.Element {
 		current := !app.runtime_create_open && selected.len == 1 && selected[0].runtime_id == runtime.id
 		users := state.projects.filter(it.runtime_id == runtime.id).map(it.name)
 		meta := if current {
-			'此环境正在使用'
+			ui_text('此环境正在使用')
 		} else if users.len > 0 {
-			'使用环境：' + users.join('、')
+			ui_text('使用环境：') + users.join(', ')
 		} else {
-			'尚无运行环境使用'
+			ui_text('尚无运行环境使用')
 		}
 		packages << ui2.view('runtime_package_row_' + runtime.id, ui2.rect(0, f64(i) * 72, width - 12, 64), ui2.BoxStyle{
 			bg:           if chosen {
@@ -103,9 +103,9 @@ fn runtime_remote_view(app &Workshop, width f64) []ui2.Element {
 				...ui2.button('server_runtime_choice_' + runtime.id, '', ui2.rect(0, 0, width - 12, 64), ui2.BoxStyle{ transparent: true }, ui2.TextStyle{})
 				enabled:             !busy
 				accessibility_label: runtime.label() + ' · ' + meta + if chosen {
-					' · 已选择'
+					ui_text(' · 已选择')
 				} else {
-					' · 点击选择'
+					ui_text(' · 点击选择')
 				}
 			},
 		])
@@ -177,7 +177,7 @@ fn runtime_remote_view(app &Workshop, width f64) []ui2.Element {
 					} else {
 						'该次切换未完成'
 					}
-					rows << ui2.label('upgrade_status_' + upgrade.id, '历史记录 · ' + selected[0].name + ' · ' + result + '\n' + app.runtime_label(upgrade.previous_id) + ' → ' + app.runtime_label(upgrade.target_id), ui2.rect(0, y, width, 72), ui2.TextStyle{ size: 12, color: workbench_muted, lines: 3 })
+					rows << ui2.label('upgrade_status_' + upgrade.id, '历史记录 · ' + selected[0].name + ' · ' + ui_text(result) + '\n' + app.runtime_label(upgrade.previous_id) + ' → ' + app.runtime_label(upgrade.target_id), ui2.rect(0, y, width, 72), ui2.TextStyle{ size: 12, color: workbench_muted, lines: 3 })
 					y += 82
 					rows << ui2.label('upgrade_log_' + upgrade.id, '该次操作日志：' + upgrade.config_path.all_before_last('/') + '/.desktop-upgrades/' + upgrade.id + '/runtime.log', ui2.rect(0, y, width, 56), ui2.TextStyle{ size: 11, color: workbench_muted, lines: 3 })
 					y += 68
@@ -213,7 +213,7 @@ fn runtime_create_form(app &Workshop, width f64, top f64) []ui2.Element {
 	mut y := top
 	state := app.server_snapshot
 	editable := !app.server_busy && !state.busy && !state.upgrades.any(!it.finished()) && !app.deployment_running()
-	rows << label('server_create_heading', '新建远端运行环境', 0, y, width, 20, workbench_ink)
+	rows << label('server_create_heading', '新建运行环境（独立进程）', 0, y, width, 20, workbench_ink)
 	y += 38
 	rows << input('server_instance_name', app.server_instance_name, '运行环境名称', 0, y, width, editable)
 	y += 51

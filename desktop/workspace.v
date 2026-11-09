@@ -42,6 +42,47 @@ fn (mut app Workshop) reset_workspace() {
 }
 
 fn (mut app Workshop) handle_workspace_event(event string) bool {
+ if event.starts_with('workspace_app_adopt_') {
+  id := event.all_after('workspace_app_adopt_')
+  for application in app.workspace_data().applications {
+   if application.id != id {continue}
+   if application.identity.app_id != '' {app.notice='此应用已有身份，请使用关联源码或更新应用。';return true}
+   app.handle_component_event('component_open')
+   app.component_name=application.id
+   app.component_adopt_engines=application.engines.map(it.id)
+   return true
+  }
+  return true
+ }
+ if event.starts_with('workspace_app_source_') {
+  id := event.all_after('workspace_app_source_')
+  for application in app.workspace_data().applications {
+   if application.id != id {continue}
+   files := ui2.open_file_dialog(title:ui_text('选择应用源码中的组件配置'))
+   if files.len == 0 {return true}
+   source := host.application_source_from_file(files[0]) or {app.notice=host.application_identity_hint(err.msg());return true}
+   path := if app.environment_id != '' {app.remote_form().config_path} else {app.projects[app.selected].config_path}
+   host.associate_application_source(app.environment_id,if app.environment_id != '' {app.remote_id} else {''},path,application,source) or {app.notice=host.application_identity_hint(err.msg());return true}
+   app.notice='应用源码已关联，更新部署和本地接管将复用此关系。'
+  }
+  return true
+ }
+ if event.starts_with('workspace_app_update_') {
+  id := event.all_after('workspace_app_update_')
+  for application in app.workspace_data().applications {
+   if application.id != id {continue}
+   binding := app.workspace_application_binding(application) or {app.notice=host.application_identity_hint(err.msg());return true}
+   if binding.installation_id == '' {app.notice='此应用尚未关联本地源码。';return true}
+   source := host.validate_binding_source(binding) or {app.notice=host.application_identity_hint(err.msg());return true}
+   app.handle_component_event('component_open')
+   app.component_installation_id=binding.installation_id
+   app.component_file=source.config_path
+   app.component_name=binding.component
+   return true
+  }
+  return true
+ }
+
 	if event.starts_with('workspace_tab_') || event.starts_with('workspace_go_') {
 		app.workspace_page = match if event.starts_with('workspace_tab_') {
 			event.all_after('workspace_tab_')
@@ -122,7 +163,7 @@ fn runtime_workspace_view(mut app Workshop, width f64, height f64) []ui2.Element
 		label('workspace_title', app.workspace_name(), 0, 60, width, 26, workbench_ink),
 	]
 	for i, item in ['environment', 'applications', 'relay', 'configuration', 'logs'] {
-		title := ['运行环境', '应用', 'Relay', '配置', '日志'][i]
+		title := ui_text_in('workspace-tab',['运行环境', '应用', 'Relay', '配置', '日志'][i])
 		rows << choice_button('workspace_tab_' + item, title, f64(i) * 96, 110, 88, int(app.workspace_page) == i, true)
 	}
 	match app.workspace_page {
@@ -132,36 +173,11 @@ fn runtime_workspace_view(mut app Workshop, width f64, height f64) []ui2.Element
 			} else {
 				app.snapshot.phase == .running
 			}
-			state := if remote && app.remote_snapshot.restarting {
-				'正在重启并检查生效'
-			} else if remote && app.remote_snapshot.instance.startup_failed() {
-				'重启失败 · 需修复配置'
-			} else if ready && remote && app.remote_snapshot.config_status.pending {
-				'配置待重启生效'
-			} else if ready && remote && app.remote_snapshot.config_status.state == .unavailable {
-				'运行中 · 配置检查失败'
-			} else if ready {
-				'运行中'
-			} else if remote {
-				'未连接或未就绪'
-			} else {
-				match app.snapshot.phase {
-					.starting { '启动中' }
-					.stopping { '停止中' }
-					.failed { '运行失败' }
-					else { '已停止' }
-				}
-			}
-			rows << state_notice('workspace_runtime_state', 'vhttpd · ' + state, '一个运行环境承载多个应用，共用一个 vhttpd 进程。启停、重启和运行包升级作用于整个运行环境。', ui2.rect(0, 168, width, 102), if ready {
-				if remote && app.remote_snapshot.instance.startup_failed() { 'danger' }
-				else if remote && (app.remote_snapshot.config_status.pending || app.remote_snapshot.config_status.state == .unavailable) { 'warning' }
-				else { 'good' }
-			} else {
-				if remote && app.remote_snapshot.instance.startup_failed() { 'danger' } else { 'info' }
-			})
+			status := workspace_runtime_status(app)
+			rows << state_notice('workspace_runtime_state', 'vhttpd · ' + status.title, status.detail, ui2.rect(0, 168, width, 102), status.tone)
 			if remote {
 				rows << button('remote_open', 'Admin UI ↗', 0, 290, 136, true, !app.remote_snapshot.busy)
-				rows << button('remote_restart', '重启运行环境', 148, 290, 150, false, !app.remote_snapshot.busy && app.remote_snapshot.instance.manual_restart && !app.remote_upgrade_running() && !app.deployment_running())
+				rows << button('remote_restart', if app.remote_snapshot.instance.startup_failed() { '修复后重试重启' } else { '重启运行环境' }, 148, 290, 150, false, !app.remote_snapshot.busy && app.remote_snapshot.instance.manual_restart && !app.remote_upgrade_running() && !app.deployment_running())
 				rows << button('remote_check', '检查生效', 310, 290, 110, false, !app.remote_snapshot.busy)
 				rows << button('remote_edit', '连接设置…', 0, 338, 136, false, !app.remote_snapshot.busy)
 				rows << button('remote_disconnect', '断开管理连接', 148, 338, 150, false, true)
@@ -176,7 +192,7 @@ fn runtime_workspace_view(mut app Workshop, width f64, height f64) []ui2.Element
 				} else {
 					'stop'
 				}))
-				rows << button('restart', '重启运行环境', 324, 290, 150, false, app.local_command_enabled('restart'))
+				rows << button('restart', if app.selected >= 0 && app.selected < app.projects.len && (app.config_statuses[app.projects[app.selected].config_path] or { host.ConfigStatus{} }).pending { '重启并检查生效' } else { '重启运行环境' }, 324, 290, 150, false, app.local_command_enabled('restart'))
 				rows << button('admin', 'Admin UI ↗', 0, 338, 136, false, ready)
 				rows << button('folder', '打开工程目录', 148, 338, 150, false, true)
 				rows << label('workspace_process', if app.snapshot.pid > 0 {
@@ -185,8 +201,8 @@ fn runtime_workspace_view(mut app Workshop, width f64, height f64) []ui2.Element
 					'进程尚未启动'
 				}, 0, 400, width, 13, workbench_ink)
 			}
-			rows << label('workspace_app_count', if data.known {
-				'已加载 ' + data.applications.len.str() + ' 个应用 · ' + data.checked_at + ' 更新'
+			rows << label('workspace_app_count', if data.applications_available() {
+				if data.from_configuration { '已安装 ' + data.applications.len.str() + ' 个应用 · 本地配置，运行状态未确认' } else { '已加载 ' + data.applications.len.str() + ' 个应用 · ' + data.checked_at + ' 更新' }
 			} else {
 				if data.error != '' {
 					data.error
@@ -214,10 +230,10 @@ fn runtime_workspace_view(mut app Workshop, width f64, height f64) []ui2.Element
 
 		.configuration {
 			rows << label('workspace_configuration_hint', '配置按所属对象组织；发布后在运行环境页检查和重启生效。', 0, 168, width, 12, workbench_muted)
-			mut lines := ['运行环境配置',
-				'监听地址、端口、执行器、管理认证与公共资源。', '', '应用配置',
-				'应用入口、请求管线及数据库/存储等资源绑定。', '', 'Relay 配置',
-				'通道端点、认证、自动重连和路由。', '', '配置入口：']
+			mut lines := [ui_text('运行环境配置'),
+				ui_text('监听地址、端口、执行器、管理认证与公共资源。'), '', ui_text('应用配置'),
+				ui_text('应用入口、请求管线及数据库/存储等资源绑定。'), '', ui_text('Relay 配置'),
+				ui_text('通道端点、认证、自动重连和路由。'), '', ui_text('配置入口：')]
 			lines << if remote {
 				app.remote_form().config_path
 			} else {
@@ -259,12 +275,13 @@ fn workspace_applications_view(app &Workshop, data host.RuntimeWorkspace, width 
   title := if application.label != '' {application.label} else {application.id}
   items << project_button('workspace_application_'+application.id,title,ports,ui2.rect(0,f64(i)*64,list_width-20,58),application.id==selected,true)
  }
- mut selector := [label('workspace_apps_count','已安装应用 · '+data.applications.len.str(),10,14,list_width-20,12,workbench_muted),
-  ui2.scroll('workspace_app_list',ui2.rect(10,46,list_width-20,pane_height-110),workbench_sidebar,items),
-  button('component_open','安装应用…',10,pane_height-48,list_width-20,true,!app.server_busy)]
+ mut selector := [label('workspace_apps_count',if data.applications_available() {'已安装应用 · '+data.applications.len.str()} else {'已安装应用 · 未确认'},10,14,list_width-20,12,workbench_muted),
+  ui2.scroll('workspace_app_list',ui2.rect(10,46,list_width-20,pane_height-154),workbench_sidebar,items),
+  button('application_new_open','新建应用…',10,pane_height-94,list_width-20,true,!app.server_busy),
+  button('component_open','安装已有应用…',10,pane_height-48,list_width-20,false,!app.server_busy)]
  rows << ui2.view('workspace_app_selector',ui2.rect(0,210,list_width,pane_height),ui2.BoxStyle{bg:workbench_sidebar,radius:8},selector)
  mut details := []ui2.Element{}
- if !data.known {
+ if !data.applications_available() {
   details << state_notice('workspace_apps_unknown','应用列表尚未确认',if data.error!='' {data.error} else {'请先启动或连接运行环境。'},ui2.rect(0,0,detail_width,130),'info')
  } else if data.applications.len == 0 {
   details << label('workspace_apps_empty','当前运行环境未声明业务应用。',0,12,detail_width,13,workbench_muted)
@@ -274,17 +291,32 @@ fn workspace_applications_view(app &Workshop, data host.RuntimeWorkspace, width 
    title := if application.label!='' {application.label} else {application.id}
    details << label('workspace_application_name',title,0,0,detail_width,22,workbench_ink)
    details << label('workspace_application_id','应用标识：'+application.id,0,42,detail_width,12,workbench_muted)
-   mut lines := ['所属运行环境：'+app.workspace_name(),'','监听入口']
+   binding := app.workspace_application_binding(application) or {host.ApplicationBinding{}}
+   mut lines := [ui_text('所属运行环境：')+app.workspace_name()]
+   if data.from_configuration {
+    lines << ['',ui_text('来源：本地配置；运行状态未确认。')]
+    if data.error != '' {lines << ui_text(data.error)}
+   }
+   if application.identity.app_id != '' {
+    lines << ['',ui_text('应用身份：')+application.identity.app_id,ui_text('安装身份：')+application.identity.installation_id,ui_text('已部署版本：')+application.identity.version]
+   }
+   if application.identity_error != '' {lines << ['',ui_text('应用身份读取失败，请检查 app.json 和安装记录。')]}
+   if binding.installation_id != '' {
+    lines << [ui_text('本地源码：')+binding.source.workdir]
+   } else {lines << ['',ui_text('此应用尚未关联本地源码。')]}
+   lines << ['',ui_text('监听入口')]
    for l in application.listeners {if !l.control {lines << '${l.protocol} · ${l.host}:${l.port} · ${l.id}'}}
-   lines << ['','执行器']
+   lines << ['',ui_text('执行器')]
    for e in application.engines {lines << e.id+' · '+e.kind}
-   lines << ['','资源绑定']
+   lines << ['',ui_text('资源绑定')]
    for r in application.resources {lines << r.id+' · '+r.kind}
-   if application.resources.len==0 {lines << '未声明资源绑定'}
-   lines << ['','请求管线']
+   if application.resources.len==0 {lines << ui_text('未声明资源绑定')}
+   lines << ['',ui_text('请求管线')]
    for p in application.pipelines {lines << p.id+' · '+p.ingress+' → '+p.egress}
-   details << workspace_text('workspace_application_details',lines.join('\n'),80,detail_width,pane_height-184)
-   details << button('workspace_app_logs_'+application.id,'查看应用日志',0,pane_height-82,if detail_width<160 {detail_width} else {160.0},true,true)
+   details << workspace_text('workspace_application_details',lines.join('\n'),80,detail_width,pane_height-224)
+   details << button(if application.identity.installation_id == '' {'workspace_app_adopt_'+application.id} else {'workspace_app_source_'+application.id},if application.identity.installation_id == '' {'迁移旧安装身份…'} else if binding.installation_id == '' {'关联本地源码…'} else {'更换源码位置…'},0,pane_height-126,detail_width,false,true)
+   details << button('workspace_app_logs_'+application.id,'查看应用日志',0,pane_height-82,(detail_width-12)/2,true,true)
+   details << button('workspace_app_update_'+application.id,'更新应用…',(detail_width+12)/2,pane_height-82,(detail_width-12)/2,false,binding.installation_id != '')
    details << ui2.label('workspace_application_scope','启停和升级由运行环境统一管理。',ui2.rect(0,pane_height-32,detail_width,32),ui2.TextStyle{size:11,color:workbench_muted,lines:2})
   }
  }
@@ -304,10 +336,10 @@ fn workspace_event_line(event host.RuntimeEvent) string {
 }
 
 fn application_log_lines(data host.RuntimeWorkspace, app_id string, source string) []string {
-	if error := data.application_logs_errors[app_id] { return [error] }
-	batch := data.application_logs[app_id] or { return ['应用日志尚未读取；不会显示其他应用或进程输出。'] }
+	if error := data.application_logs_errors[app_id] { return [ui_text(error)] }
+	batch := data.application_logs[app_id] or { return [ui_text('应用日志尚未读取；不会显示其他应用或进程输出。')] }
 	mut lines := []string{}
-	if batch.dropped > 0 { lines << '当前窗口未显示较早的 ${batch.dropped} 条记录，可查看本应用独立日志文件。' }
+	if batch.dropped > 0 { lines << ui_text('当前窗口未显示较早的 ${batch.dropped} 条记录，可查看本应用独立日志文件。') }
 	for record in batch.records {
 		if record.app_id != app_id { continue }
 		if source == 'runtime' && record.source != 'request' { continue }
@@ -315,7 +347,7 @@ fn application_log_lines(data host.RuntimeWorkspace, app_id string, source strin
 		if source == 'relay' && record.source != 'relay' { continue }
 		lines << application_log_line(record)
 	}
-	if lines.len == 0 { lines << '本应用暂无此来源的日志。' }
+	if lines.len == 0 { lines << ui_text('本应用暂无此来源的日志。') }
 	return lines
 }
 
@@ -339,7 +371,7 @@ fn workspace_logs_view(mut app Workshop, width f64, height f64) []ui2.Element {
 	} else if app.workspace_log_source == 'application' {
 		if all_batch := data.application_logs['*'] {
 			lines = all_batch.records.map(application_log_line(it))
-		} else { lines << '结构化应用日志接口不可用，请更新运行包或检查连接。' }
+		} else { lines << ui_text('结构化应用日志接口不可用，请更新运行包或检查连接。') }
 	} else if app.workspace_log_source == 'relay' {
 		lines << app.relay_process_logs().split_into_lines()
 		for e in data.relay.data.diagnostics.events { lines << relay_event_line(e) }
@@ -362,7 +394,7 @@ fn workspace_logs_view(mut app Workshop, width f64, height f64) []ui2.Element {
 	candidate_text := if lines.len > 0 {
 		lines.join('\n')
 	} else {
-		'暂无匹配日志。应用日志按明确的应用/监听/管线标识筛选；无法归属的日志保留在运行环境日志中。'
+		ui_text('暂无匹配日志。应用日志按明确的应用/监听/管线标识筛选；无法归属的日志保留在运行环境日志中。')
 	}
 	// Pause when the reader scrolls upward. Updating log data must not steal
 	// their reading position; Resume explicitly returns to the latest output.
@@ -385,15 +417,15 @@ fn workspace_logs_view(mut app Workshop, width f64, height f64) []ui2.Element {
 			'运行环境日志 · ' + if app.workspace_log_source == 'relay' {
 				'Relay'
 			} else if app.workspace_log_source == 'application' {
-				'全部应用结构化日志'
+				ui_text('全部应用结构化日志')
 			} else if app.workspace_log_source == 'stdout' {
 				if app.snapshot.log_filter != '' {
-					'请求 ' + app.snapshot.log_filter
+					ui_text('请求 ') + app.snapshot.log_filter
 				} else {
-					'本地进程输出'
+					ui_text('本地进程输出')
 				}
 			} else {
-				'全部应用运行事件'
+				ui_text('全部应用运行事件')
 			}
 		} else {
 			'应用日志 · ' + app.workspace_log_application
@@ -472,9 +504,15 @@ fn (mut app Workshop) focus_request_logs() {
 }
 
 fn (app &Workshop) relay_process_logs() string {
-	if app.environment_id == '' {return if app.snapshot.logs == '' {'暂无本地进程输出。'} else {app.snapshot.logs}}
-	if app.server_snapshot.server_id != app.environment_id || app.server_snapshot.relay_logs_project != app.remote_snapshot.profile_id {return '等待所选远端环境的进程日志…'}
-	if !app.server_snapshot.connected {return 'SSH 已断开，进程日志状态未确认。'}
-	if app.server_snapshot.relay_logs_error != '' {return app.server_snapshot.relay_logs_error}
-	return if app.server_snapshot.relay_logs == '' {'暂无进程输出。'} else {app.server_snapshot.relay_logs}
+	if app.environment_id == '' {return if app.snapshot.logs == '' {ui_text('暂无本地进程输出。')} else {app.snapshot.logs}}
+	if app.server_snapshot.server_id != app.environment_id || app.server_snapshot.relay_logs_project != app.remote_snapshot.profile_id {return ui_text('等待所选远端环境的进程日志…')}
+	if !app.server_snapshot.connected {return ui_text('SSH 已断开，进程日志状态未确认。')}
+	if app.server_snapshot.relay_logs_error != '' {return ui_text(app.server_snapshot.relay_logs_error)}
+	return if app.server_snapshot.relay_logs == '' {ui_text('暂无进程输出。')} else {app.server_snapshot.relay_logs}
+}
+
+fn (app &Workshop) workspace_application_binding(application host.RuntimeApplication) !host.ApplicationBinding {
+ path := if app.environment_id != '' {app.remote_form().config_path} else if app.selected >= 0 && app.selected < app.projects.len {app.projects[app.selected].config_path} else {''}
+ if path == '' {return host.ApplicationBinding{}}
+ return host.binding_for_application(app.environment_id,path,application)
 }
