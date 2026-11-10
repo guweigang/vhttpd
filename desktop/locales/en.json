@@ -1,4 +1,10 @@
 {
+  "绑定目录并开启 MCP": "Bind Directory and Start MCP",
+  "开启本机工作区 MCP": "Start Local Workspace MCP",
+  "打开源码目录（无需安装）…": "Open Source Folder (No Install)…",
+  "配置：": "Configuration: ",
+  "微信云函数": "WeChat Cloud Function",
+  "已安装应用 · 未确认": "Apps · Unconfirmed",
   "从已保存连接选择…": "Choose Saved Connection…",
   "已保存的 Relay 连接": "Saved Relay Connections",
   "返回 Relay": "Back to Relay",

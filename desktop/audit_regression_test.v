@@ -10,18 +10,27 @@ fn audit_text(e ui2.Element) string {
 }
 
 fn test_workspace_preserves_remote_configuration_and_failure_feedback() ! {
+ previous := workbench_language
+ defer { workbench_language = previous }
+ workbench_language = 'zh-CN'
  mut app := Workshop{environment_id:'server',remote_name:'bodytest',remote_message:'配置预检失败：端口冲突',remote_snapshot:host.RemoteSnapshot{connected:true,instance:host.RemoteInstance{ready:true,manual_restart:true},config_status:host.ConfigStatus{pending:true}}}
  for width in [488.0,708.0] {
   root := ui2.screen(workbench_paper,runtime_workspace_view(mut app,width,740))
   ui2.validate_element_tree(root)!
   text := audit_text(root)
-  assert text.contains('配置待重启生效') && text.contains('配置预检失败：端口冲突')
+  // The workspace shares its status copy with the local overview, rather than
+  // the legacy remote connection summary.
+  assert text.contains('运行中 · 待重启生效') && text.contains('配置预检失败：端口冲突')
+  assert workspace_runtime_status(&app).tone == 'warning'
   assert text.contains('通过 SSH 隧道访问远端 Admin')
   assert menu_button_enabled(root,'remote_restart')
  }
  app.remote_snapshot = host.RemoteSnapshot{connected:true,instance:host.RemoteInstance{ready:false,manual_restart:true,operation:host.RemoteOperation{state:'failed',error:'executor_warmup_failed'}}}
  root := ui2.screen(workbench_paper,runtime_workspace_view(mut app,488,740))
- assert audit_text(root).contains('重启失败 · 需修复配置')
+ assert audit_text(root).contains('启动或运行失败')
+ assert audit_text(root).contains('修复后重试重启')
+ assert audit_text(root).contains('配置预检失败：端口冲突')
+ assert workspace_runtime_status(&app).tone == 'danger'
 }
 
 fn test_all_application_logs_clear_relay_source_and_stale_text() {
