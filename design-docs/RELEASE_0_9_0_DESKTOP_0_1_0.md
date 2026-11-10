@@ -1,9 +1,9 @@
 ---
 title: vhttpd 0.9.0 与 Desktop 0.1.0 联合发布清单
-description: 2026-11-02 至 11-09 发布范围、实现状态、验收证据、阻断项及执行顺序。
+description: 2026-11-02 至 11-10 发布范围、实现状态、验收证据、阻断项及执行顺序。
 tags: [ release, vhttpd, desktop, acceptance ]
 status: in-progress
-updated: 2026-11-09
+updated: 2026-11-10
 ---
 # vhttpd 0.9.0 / Desktop 0.1.0 发布清单
 
@@ -487,6 +487,31 @@ updated: 2026-11-09
 - [ ] **P0-02 继续阻断：** 尚未构建包含 Context 引用和 getter 缓存两处修复的整包，未验证实际压力驻留或冷却改善。下一步固定扫描器与工具链构建候选，先短测 HTTP/Paseo 的分配、RSS、匿名内存、GC 堆及自然冷却；之后再决定业务替换与正式 24 小时验收。本轮没有启动新长测，也未获得全业务或 Windows 放行。
 
 [归档文件摘要](./release-evidence/2026-11-09/config-cache/artifact-sha256.json)包含源码、补丁、测试输出与基准结果。
+
+### 两处分配修复整包对照完成（2026-11-10）
+
+本节完成上一节的整包构建和独立短测；不将微基准的 99.98% 改善外推到整包或真实业务。
+
+- [x] 已构建 amd64/Boehm 候选 `60da360c10cc76bc5f37c609b95dc275bec98f88c256f31cf7c491c31ef43faf`，对照包为 `684281b1`。在既有冻结 g1h1 源码上，仅加入 Context 引用、有界配置 getter 缓存及其测试；扫描器 `041e8955`、SDK `259620f1`、GC 对象 `d59d73ed` 和参数不变，不包含当前工作区其他并行变更。Linux VM 使用既有 local-dev/V 0.5.2 d13ccdd、原生 GCC 13 交叉工具链、O2/Boehm；本轮未新增 vlang/vjsx 补丁，已有 veb 活动钩子摘要与基线一致。见[结论和构建命令](./release-evidence/2026-11-10/hotpath-pair/finding.json)、[完整链接审计](./release-evidence/2026-11-10/hotpath-pair/packages/after/cross-audit.json)、[源码摘要](./release-evidence/2026-11-10/hotpath-pair/source-manifest.json)和[冻结候选源码](./release-evidence/2026-11-10/hotpath-pair/frozen-candidate-source.tar.gz)。
+- [x] 沿用此前验证的两源码根、四运行时配置夹具，按旧→新→新→旧串行自然跑完，每轮全新进程和目录：预热后 30 秒基线、60 秒 HTTP、60 秒 Paseo、120 秒混合加压、180 秒自然冷却。夹具源码和请求为合成数据，未重放真实业务依赖。累计 HTTP 57452 次、Paseo 350 轮，零校验失败、无 OOM；HTTP 包含预期且校验通过的 503，不能称为所有响应均为 2xx。保持 256 MiB、30% CPU、无 swap、独立网络、640 MiB 稳定启动门槛及 512 MiB 主机保护；采样中主机余量最低约 765.2 MiB。四轮压力期间空闲回收尝试增量均为零；冷却中各自然触发两次。本轮没有调试器、注入辅助库或强制 GC。见[协议](./release-evidence/2026-11-10/hotpath-pair/manifest.json)、[逐轮统计](./release-evidence/2026-11-10/hotpath-pair/analysis.json)和[控制器完成状态](./release-evidence/2026-11-10/hotpath-pair/runs/controller-state.json)。
+- [x] **分配改善可重复：** 两次均值中，HTTP 从 9.842 降到 9.210 MiB/秒（减少 6.43%），Paseo 从 1.727 降到 0.802（53.60%），混合从 11.396 降到 9.921（12.94%）。累计分配是工作量，不是净新增或保留内存；未把两个修复包的 RSS 差额全部归到某一函数。见[分配汇总及解释](./release-evidence/2026-11-10/hotpath-pair/finding.json)。
+
+以下压力值取混合阶段末 30 秒中位数，冷却值取自然冷却末 30 秒中位数；完整各阶段、峰值和 GC 堆/空闲量在逐轮统计中保留。
+
+| 包与轮次 | 混合分配 MiB/秒 | 压力 RSS MiB | 压力匿名 MiB | 冷却 RSS MiB | 冷却匿名 MiB |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 旧包 01 | 11.403 | 76.90 | 55.56 | 58.43 | 37.08 |
+| 新包 02 | 9.938 | 73.37 | 46.25 | 62.96 | 35.83 |
+| 新包 03 | 9.904 | 66.24 | 38.95 | 54.70 | 27.41 |
+| 旧包 04 | 11.389 | 70.74 | 43.62 | 55.01 | 27.89 |
+
+- [x] **驻留改善需限定：** 相邻 AB/BA 配对中新包压力匿名内存较低，但四轮区间有交叉；新包首轮甚至高于末轮旧包，不能保证每次 RSS 都更低。冷却匿名差额只有约 0.48–1.25 MiB；旧包压力到冷却回落 15.73–18.48 MiB，新包回落 10.41–11.54 MiB，回落量较小也包含压力起点较低的影响。压力末 GC 映射堆由旧包约 27.0–30.1 MiB 降至新包 21.0–22.4 MiB，冷却后均约 10.7–11.8 MiB；空闲量在持续分配和 GC 轮次中反复变化，堆得以复用。冷却中仍出现堆增长到门槛后再自然回落的周期；短测不能证明长期无泄漏。见[完整自然曲线](./release-evidence/2026-11-10/hotpath-pair/comparison.png)及[逐轮数据](./release-evidence/2026-11-10/hotpath-pair/analysis.json)。
+- [x] **总 RSS 与匿名内存分开核对：** 自然结束时，首轮旧包文件页 21,860 KiB，末轮同 SHA 旧包 27,776 KiB；新包两轮为 27,772/27,944 KiB。独立进程 smaps 显示可执行文件与共享库的干净文件页；两包 text 段仅相差 2816 字节、rodata 反而减少 8928 字节。首轮约 5.8 MiB 文件页差额的具体触发因素尚未确认，不能称作匿名泄漏或代码膨胀。映射快照有各自采样时刻，不能代替尾段中位数。见[ELF 段大小](./release-evidence/2026-11-10/hotpath-pair/elf-sections.json)、[新包冷却映射](./release-evidence/2026-11-10/hotpath-pair/runs/03-after/cool-mapping.json)和[旧包冷却映射](./release-evidence/2026-11-10/hotpath-pair/runs/04-before/cool-mapping.json)。
+- [x] bodytest PID 3730524、启动标识 39645663、业务包 `0890d931` 保持，匿名内存 126.3 MiB、swap 为零、三个健康检查均为 200，连续监测 active；最终主机余量约 855.5 MiB。四个测试进程全部退出，测试单元自然结束、exit 0、inactive。未替换、重启或调试业务，也未将候选效果计入当前业务。见[最终业务和收尾核验](./release-evidence/2026-11-10/hotpath-pair/final-business-check.json)。
+- [ ] **P0-02 继续阻断：** 保留两处分配修复；下一优先项是已测得的剩余 HTTP Context/响应体复制，以源码、生成代码和短验证逐项推进。最终候选的真实业务内存收益、完整 24 小时与 Windows 验收仍缺失。本轮没有切换业务或启动新长测，也没有声称全仓门禁通过；此前 macOS/Linux 定向测试范围仍按上一节记录。
+
+[文件摘要清单](./release-evidence/2026-11-10/hotpath-pair/artifact-sha256.json)可核对源码、构建/运行脚本、原始曲线和测试输出；原始 .log 归档为 .txt，转换关系保留在[日志文件名映射](./release-evidence/2026-11-10/hotpath-pair/log-name-map.json)。
+
 
 
 
