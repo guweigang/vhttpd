@@ -161,6 +161,7 @@ fn (mut app Workshop) refresh_workbench_menus(root ui2.Element) {
 	app.declared_menus = menus
 	ui2.set_menu_bar(menus)
 	configure_platform_menus()
+	app.refresh_workbench_tray()
 }
 
 fn (mut app Workshop) menu_overview() {

@@ -586,6 +586,11 @@ fn handle_event(event string) {
 		bring_workbench_forward()
 		return
 	}
+	if event == 'tray:updates' {
+		bring_workbench_forward()
+		handle_workbench_menu('menu:desktop_updates')
+		return
+	}
 	mut development_app := unsafe { workshop }
 	if development_app.handle_development_event(event) {
 		ui2.refresh()

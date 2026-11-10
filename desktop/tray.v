@@ -16,13 +16,26 @@ fn configure_workbench_tray(brand_mark string, root string) {
 }
 
 fn set_workbench_tray(icon string) {
+	app := unsafe { workshop }
 	ui2.set_tray(ui2.TrayConfig{
 		icon: icon
 		tooltip: 'vhttpd Workbench'
-		menu: [
-			ui2.menu_item('tray:open', ui_text('打开工作台')),
-			ui2.menu_separator(),
-			ui2.menu_item('tray:quit', ui_text('退出工作台')),
-		]
+		menu: workbench_tray_menu(!app.creating)
 	})
+}
+
+fn workbench_tray_menu(available bool) []ui2.MenuItem {
+	return [
+		ui2.menu_item('tray:open', ui_text('打开工作台')),
+		ui2.MenuItem{...ui2.menu_item('tray:updates', ui_text('检查更新…')), enabled: available},
+		ui2.menu_separator(),
+		ui2.menu_item('tray:quit', ui_text('退出工作台')),
+	]
+}
+
+fn (app &Workshop) refresh_workbench_tray() {
+	if !ui2.tray_visible() { return }
+	current := ui2.tray()
+	menu := workbench_tray_menu(!app.creating)
+	if current.menu != menu { ui2.set_tray(ui2.TrayConfig{...current, menu: menu}) }
 }
