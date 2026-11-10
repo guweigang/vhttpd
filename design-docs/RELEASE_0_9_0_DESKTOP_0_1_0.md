@@ -547,6 +547,37 @@ updated: 2026-11-10
 
 [本轮证据摘要](./release-evidence/2026-11-10/upstream-gc-handoff/artifact-sha256.json)包含源码、编译/运行脚本、原始曲线与日志；[日志文件名映射](./release-evidence/2026-11-10/upstream-gc-handoff/log-name-map.json)记录 .log 到 .txt 的归档转换。
 
+### Context 分配优化、业务映射归因与整包验证（2026-11-10）
+
+- [x] 两个约 8 KiB 对象承担不同职责：应用 Context 可以被 handler 保留，writer 需要独立响应快照，不能直接合并或复用应用 Context。本轮仅改 vlang 的 veb_fasthttp.v，新增 response_writer_state_test.v：普通 Boehm fasthttp 路径用已有 make_state 钩子为每 worker 分配私有 writer 存储，应用 Context 仍每请求独立分配。正常、错误、接管及展开返回后清空存储的全部字节，避免长期保留请求引用；忙状态回退到独立分配。controller 保守禁用复用，TLS、render_request、nil state 及门控不允许的模式保留原 Context 构造式。所有权以 voidptr 地址身份判断，避免 V 对结构指针执行深比较。GC 策略及 vjsx 未改。见[源码与边界](./release-evidence/2026-11-10/context-lifetime/finding.json)、[最小补丁](./release-evidence/2026-11-10/context-lifetime/veb-state.patch.txt)、[回归源码](./release-evidence/2026-11-10/context-lifetime/response_writer_state_test.v)及[生成 C 核验](./release-evidence/2026-11-10/context-lifetime/codegen-proof.json)。
+- [x] macOS/Boehm/OpenSSL 与 Ubuntu local-dev/GCC/gc none/OpenSSL 各六份定向测试通过：新状态生命周期、原响应体别名、中间件、controller/static、panic，以及真实持久连接和 reusable takeover。Linux 另以最终源码运行 Boehm 状态/并发与真实连接专项，运行各限时 30 秒，退出为零。覆盖保留整个应用 Context、32 次连续复用、四线程隔离、解析错误、独立错误 Context、文件路径、接管和忙状态。初版夹具返回栈上 routes 地址、对清零 map 调用 len 等失败未计入通过；对应生成 C 和排除记录保留。见[macOS 最终输出](./release-evidence/2026-11-10/context-lifetime/macos-final-regressions.txt)、[Linux 最终输出](./release-evidence/2026-11-10/context-lifetime/linux-final-regressions.txt)、[Linux Boehm 输出](./release-evidence/2026-11-10/context-lifetime/linux-final-boehm.txt)和[排除的实验](./release-evidence/2026-11-10/context-lifetime/excluded-attempts.json)。
+- [x] 同补丁内 nil state 兼容分配路径与复用路径的最小 append 基准，三次独立进程按 AB/BA/AB 顺序，每种响应每组 256 次。0、1 KiB、8 KiB body 每请求少分配 7931–8053 字节，与少一份 7984 字节 Context 相符；每 worker 固定状态为 7992 字节。初始化/输出缓冲在测量外，局部基准在每组前执行 GC；这是累计分配（含取整），不是自然冷却或 RSS。临时基准源已从 V 树清理，正式测试保留。见[原始三轮](./release-evidence/2026-11-10/context-lifetime/final-bench-results.json)、[统计边界](./release-evidence/2026-11-10/context-lifetime/final-bench-summary.json)、[复跑脚本](./release-evidence/2026-11-10/context-lifetime/reproduce_benchmark.py)与[最终 V 状态](./release-evidence/2026-11-10/context-lifetime/final-vlang-state.json)。
+
+#### bodytest 真实进程的只读映射定位
+
+- [x] 13:39 快照：仍为业务包 0890d931/PID 3730524，匿名内存 126.3 MiB。编译同源、同宏的 GC 布局探针，只读取业务 GC 段表及 smaps/pagemap；22 段大小之和必须等于 collector heapsize，段表、轮次和计数保持稳定。混合匿名映射逐页只统计 present/anonymous 位，不提取或保存 PFN；分页总数须精确匹配 smaps，才接受分区。得到 **GC 管理段匿名驻留 90.3 MiB、段外匿名驻留 36.0 MiB**，不是用匿名内存减映射堆估算。段外包含原生堆、栈、GC 元数据、QuickJS 和库数据，尚不能全部称为 glibc 在用块，更不能直接归因 vjsx。见[原始映射及一致性校验](./release-evidence/2026-11-10/context-lifetime/body-mapping.json)、[布局探针](./release-evidence/2026-11-10/context-lifetime/gc_layout_probe.c)、[偏移和编译命令](./release-evidence/2026-11-10/context-lifetime/gc-layout.json)。
+- [x] 同次一致快照中，GC 已映射堆 105.5 MiB、记录为空闲的已映射空间 33.9 MiB；按“非空闲映射最多全部驻留”保守估算，约 18.7 MiB 的 GC 驻留页已被记为空闲，但仍驻留。此前空闲为 87.1 MiB，而匿名内存同为 126.3 MiB，支持已有管理空间正被消耗复用。非空闲计数包含未收集垃圾等，不能当作业务存活量；这仍不是分配栈或保留根归因。监测脚本只读审计未发现 HTTP 健康轮询；业务未暴露新候选同名 idle_state，另有旧 last_activity/last_attempt 符号，未据此推断业务无空闲回收。未停止、重启、注入或触发业务 GC。见[内存分区解释和空闲估算](./release-evidence/2026-11-10/context-lifetime/body-memory-summary.json)、[此前快照](./release-evidence/2026-11-10/context-lifetime/body-mapping-earlier-pagemap.json)、[监测审计](./release-evidence/2026-11-10/context-lifetime/observer-read-audit.json)。
+
+#### 完整候选的独立短测
+
+- [x] 已构建 amd64/Boehm 候选 dca8844f0725b08e22d3a6ce5adf63ed51c9aaaceb5ce3360aaaba1dc9c61d9d，对照为 f6144d09…。vhttpd 冻结源码、SDK、扫描器、编译器及原生对象不变，仅加入上述 veb 优化；两包链接完全相同的上游 O2 GC 对象 7592c15d…。生成 C 另确认 App/AdminApp 实际注册并启用状态工厂。见[候选元数据](./release-evidence/2026-11-10/context-pool-package/after-package-info.json)、[链接审计](./release-evidence/2026-11-10/context-pool-package/packages/after/cross-audit.json)、[源码一致性](./release-evidence/2026-11-10/context-pool-package/source-manifest.json)和[工厂核验](./release-evidence/2026-11-10/context-pool-package/codegen-check.json)。
+- [x] 单次旧→新串行对照自然结束，每轮 30 秒基线、60 秒 HTTP、60 秒 Paseo、120 秒混合、180 秒冷却，仍是合成四运行时拓扑，未重放业务依赖。累计 HTTP 28849 次、Paseo 176 轮，零校验错误、零 OOM；压力期间空闲回收尝试均为零，冷却各自然触发两次。保持 256 MiB、30% CPU、无 swap、独立网络、640 MiB 启动门槛及 512 MiB 主机保护；采样主机余量最低 788.9 MiB。新增阶段末只读映射采样有时间开销，不以本轮计数推断吞吐提升。见[逐轮统计](./release-evidence/2026-11-10/context-pool-package/analysis.json)、[协议](./release-evidence/2026-11-10/context-pool-package/manifest.json)、[运行中限制](./release-evidence/2026-11-10/context-pool-package/active-unit-properties.json)和[自然退出日志](./release-evidence/2026-11-10/context-pool-package/unit-journal.txt)。
+- [x] **整包分配下降得到验证：** HTTP 累计分配速率约 8.486→7.800 MiB/秒，混合约 9.175→8.574（下降 6.55%）。考虑采样开销，在同一首末计数区间按已完成 HTTP 请求数归一化，约 111705→103737 字节/请求，减少约 7968 字节（7.13%），与微基准和生成代码相互印证。Paseo 仅约 1.07% 速率差异，不宣称显著收益。见[分配量、匹配计数区间和映射汇总](./release-evidence/2026-11-10/context-pool-package/finding.json)。
+
+以下是各阶段末 30 秒中位数；基线在预热之后，尚不是充分稳定的空闲基线。
+
+| 包 | 基线匿名 MiB | 混合 RSS MiB | 混合匿名 MiB | 冷却 RSS MiB | 冷却匿名 MiB |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| f6144d09 对照 | 52.46 | 65.56 | 38.55 | 54.69 | 27.68 |
+| dca8844f 候选 | 65.88 | 78.93 | 51.97 | 55.68 | 28.72 |
+
+- [ ] **未证明驻留改善：** 新包本轮加压匿名内存反而更高，压力到冷却回落 23.25 MiB，旧包回落 10.88 MiB；冷却末仅相差约 1.04 MiB。阶段末精确分区显示，混合时 GC 管理段匿名驻留约 21.32→36.11 MiB，段外约 17.25→15.86；新包起始 GC 驻留也更大（约 35.75→51.27）。这将主要差额定位到 GC 段，而不是额外原生段增长，但尚不能认定由复用、启动垃圾或保守根中的哪一项造成。候选与对照冷却曲线接近，单对样本也不能证明长期无泄漏。见[完整曲线](./release-evidence/2026-11-10/context-pool-package/comparison.png)、[阶段映射](./release-evidence/2026-11-10/context-pool-package/runs/02-after/mixed-gc-mapping.json)及[GC 触发计数观察](./release-evidence/2026-11-10/context-pool-package/gc-trigger-comparison.json)；映射快照为阶段末单点，与上表中位数口径不同。
+- [x] 14:19 收尾核验：两个测试进程均退出，单元自然成功结束；bodytest 包、PID/启动标识保持，匿名内存仍 126.3 MiB、swap 为零，三个健康检查 200，连续监测 active，主机可用约 879.8 MiB。业务没有换包、重启或承受本轮压力。见[最终业务及任务状态](./release-evidence/2026-11-10/context-pool-package/final-business-check.json)。
+- [ ] **P0-02 保持阻断：** 每请求 writer 分配已降为每 worker 固定开销，分配收益通过整包校验；RSS 收益、真实业务候选运行、完整 24 小时、Windows 及完整门禁仍未验收。本轮不切换业务、不启动新 24 小时。下一步固定启动/预热条件重复对照，并定位 GC 在用块与保留根，区分启动峰值、空闲堆驻留和真实存活；不以调 GC 参数替代归因。
+
+[源码与业务映射证据摘要](./release-evidence/2026-11-10/context-lifetime/artifact-sha256.json)和[整包证据摘要](./release-evidence/2026-11-10/context-pool-package/artifact-sha256.json)保留补丁、最终测试、生成代码、脚本、曲线与原始快照。
+
+
 
 
 
