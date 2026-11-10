@@ -512,6 +512,19 @@ updated: 2026-11-10
 
 [文件摘要清单](./release-evidence/2026-11-10/hotpath-pair/artifact-sha256.json)可核对源码、构建/运行脚本、原始曲线和测试输出；原始 .log 归档为 .txt，转换关系保留在[日志文件名映射](./release-evidence/2026-11-10/hotpath-pair/log-name-map.json)。
 
+### veb 响应体交接优化与生命周期验证（2026-11-10）
+
+- [x] 本轮修改 vlang/veb 的 context.v、veb.v、veb_fasthttp.v、controller.v 四个生产文件及五处私有调用，新增两份回归测试。未修改 vjsx 或 GC 策略参数，也未改变 bodytest。保留调用者到响应的第一次复制；普通 Boehm 构建在交给 writer 时复用已知响应缓冲，消除第二次 body clone。见[补丁](./release-evidence/2026-11-10/response-handoff/owner-final.patch.txt)、[源码摘要](./release-evidence/2026-11-10/response-handoff/owner-source-manifest.json)与[结论及边界](./release-evidence/2026-11-10/response-handoff/finding.json)。
+- [x] 生命周期采用真实强 owner 指针保留原缓冲到交接，防止直接替换 body 后地址复用误判；交接后清除源与 writer 的 owner 字段，源 body 及应用保留的别名继续有效。共享缓冲由 GC 管理，writer 不手动释放；未知、替换及切片 body 走复制。非 GC、prealloc、autofree、ownership 保留原复制分支。已撤回无条件移动和仅地址标记方案，不将中间版本结果算作最终验收。见[生成 C 摘录](./release-evidence/2026-11-10/response-handoff/owner-codegen-after.txt)、[生成代码核验](./release-evidence/2026-11-10/response-handoff/owner-codegen-proof.json)、[交接回归](./release-evidence/2026-11-10/response-handoff/response_writer_transfer_test.v)和[排除的实验](./release-evidence/2026-11-10/response-handoff/excluded-attempts.json)。
+- [x] macOS/Boehm/OpenSSL 与 Ubuntu local-dev/GCC/gc none/OpenSSL 各五份定向测试通过，覆盖既有响应、中间件生命周期和静态 controller 回归；Linux 另以最终源码独立构建并运行 Boehm 交接及真实 fasthttp append 测试，运行限时 30 秒，编译前后源码摘要一致，退出均为零。append 测试覆盖 keep-alive/close、NUL body、重复 cookie 与保留别名的写后有效性。见[macOS 输出](./release-evidence/2026-11-10/response-handoff/macos-owner-final.txt)、[Linux 输出](./release-evidence/2026-11-10/response-handoff/linux-owner-final.txt)、[Linux Boehm 身份和结果](./release-evidence/2026-11-10/response-handoff/linux-owner-boehm-results.json)及[写出测试](./release-evidence/2026-11-10/response-handoff/response_writer_append_test.v)。
+- [x] 三次独立进程、每种 body 每组 256 次交接的微基准中，8 KiB/64 KiB 响应每次约少分配同等大小的缓冲；基础 Context 实测从 7976 增至 7984 字节，仅增加一个指针，没有单独 owner 对象。指标为 GC_get_total_bytes 累计分配（含分配器取整），不是存活量、RSS 或自然冷却回收；两次 Context 分配、JS 到 V 字符串转换和网络序列化仍存在。见[原始结果](./release-evidence/2026-11-10/response-handoff/owner-bench-results.json)、[统计与限制](./release-evidence/2026-11-10/response-handoff/owner-bench-summary.json)、[基准源码](./release-evidence/2026-11-10/response-handoff/response_writer_allocation_test.v)和[复跑脚本](./release-evidence/2026-11-10/response-handoff/reproduce_benchmark.py)。
+- [ ] autofree 尚未验收：测试启动器实验中止；直接运行既有中间件生命周期测试出现 Invalid header key，隔离的未修改基线也复现同类错误。根因未确认，不能据此宣称最终候选在 autofree 下无独立回归。见[基线对照](./release-evidence/2026-11-10/response-handoff/autofree-baseline-comparison.json)、[基线运行输出](./release-evidence/2026-11-10/response-handoff/autofree-baseline-path-run.txt)与[复现命令](./release-evidence/2026-11-10/response-handoff/commands.json)。
+- [x] 北京时间 12:05 只读核验：bodytest PID 3730524、启动标识 39645663、业务包 SHA 0890d931 保持；匿名内存 129344 KiB（126.3 MiB）、RSS 138204 KiB、swap 为零，三个健康检查均为 200，监测 active。未换包、重启、调试或对业务加压。临时基准文件已清理，正式补丁和测试保留。见[业务核验](./release-evidence/2026-11-10/response-handoff/final-business-check.json)、[本地状态](./release-evidence/2026-11-10/response-handoff/final-local-state.json)和[Linux 工具链状态](./release-evidence/2026-11-10/response-handoff/final-linux-state.txt)。
+- [ ] **P0-02 继续阻断：** 此补丁尚未构建成 vhttpd 整包，未获得整包匿名内存、冷却、真实业务、完整 24 小时及 Windows 验收。下一步在冻结候选中加入本补丁，先做独立短对照，确认兼容与驻留改善，再决定业务与长测。此次没有启动新长测，不能称为泄漏已经解决。
+
+[本轮归档摘要](./release-evidence/2026-11-10/response-handoff/artifact-sha256.json)可核对最终补丁、测试和原始结果。
+
+
 
 
 
