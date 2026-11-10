@@ -19,7 +19,7 @@ Agent 需要能发现目标版本提供的能力，查到使用契约，并在�
 | 能力域 | 已有 MCP 入口 | 需要补齐 |
 | --- | --- | --- |
 | 工作区、应用与模板 | `context_get`、模板发现与创建、`application_install_prepare/apply`、文件 revision 变更和 Desktop 应用绑定；`source_workspace_get/prepare/bind/unbind` 原位绑定空目录及已有源码，无需安装，已通过实际 Desktop 与 DSH 验收 | 源码绑定、已安装应用和平台管理分别授权。源码会话不自动授予安装或远端发布权限；文件类型与私有文件限制沿用开发工具边界 |
-| vhttpd 配置与数据面 | 停机或实时 `schema_get` 覆盖九个配置域，应用变更校验与业务 HTTP 请求，远端 `target_request`；共享配置多字段、多文件编辑及恢复；`application_protocol_probe`/`target_protocol_probe` 提供有界 stream/SSE、WebSocket 文本及业务 MCP 初始化/工具发现 | Bearer、TLS 和 IPv6 已完成客户端复验；Basic、X-API-Key 及 Linux 远端变量凭据/证书引用的探针与选项发现已通过 WorkBuddy 成功、拒绝、恢复实调，DSH 已加载新版 Skill。其他认证与高级协议待扩展。凭据、可执行/存储路径及来源成员变更仍须使用 Desktop 专用流程 |
+| vhttpd 配置与数据面 | 停机或实时 `schema_get` 覆盖九个配置域，应用变更校验与业务 HTTP 请求，远端 `target_request`；共享配置多字段、多文件编辑及恢复；`application_protocol_probe`/`target_protocol_probe` 提供有界 stream/SSE、WebSocket 文本及业务 MCP 初始化/工具发现 | Bearer、TLS 和 IPv6 已完成客户端复验；Basic、X-API-Key 及 Linux 远端变量引用已通过实调；11/10 Digest GET 与 mTLS stream 探针及随包 Skill 已通过 WorkBuddy 成功、拒绝、恢复验收。Digest 其他模式、mTLS 其他协议专项及其他认证与高级协议待扩展。凭据、可执行/存储路径及来源成员变更仍须使用 Desktop 专用流程 |
 | 应用脚本、兼容库与集成 | vjsx 参考，pipeline、微信云开发兼容、Codex Bot 模板和独立 `guidance_get` 主题，三个已安装的 DSH Skills | 微信真实登录、数据库及存储、已有云函数迁移和公网专项验收仍需补齐 |
 | Desktop 主机和环境管理 | 主机登记、连接、断开，环境发现与身份校验接入，以及环境创建、实例启停均已有 MCP 工具，并通过当前 Desktop 与 DSH 隔离环境验收 | 密码认证仍须在 Desktop 完成，首次主机指纹确认继续由 Desktop 管理；工具不接收私钥路径或密码 |
 | 运行包与发布 | 本地启停，远端应用发布及回滚、运行时升级及回滚；官方运行包管理、应用安装及历史查询；共享多字段配置修改和跨会话历史恢复均已通过当前 Desktop 与 DSH 验收 | 配置中受保护值、来源成员及组件身份变更的 MCP 专用契约 |
@@ -59,12 +59,33 @@ Agent 需要能发现目标版本提供的能力，查到使用契约，并在�
 | 项目 | 当前状态 | 完成条件 |
 | --- | --- | --- |
 | IPv6 远端目标对话复验 | 已完成：WorkBuddy 对现有 `release-qa` 实际调用 IPv6 业务探针，认证成功/401 拒绝及 TLS 正反例均通过；最终 Desktop 包再次复验通过 | 已核对真实 `address_family=ipv6`、200 正文、TLS 校链校名与固定失败码，未改网络配置 |
-| 认证、TLS 与高级协议 | 11/8 Bearer/TLS 客户端批次已通过；11/9 Basic、X-API-Key、Linux 目标进程变量凭据/证书引用的探针与选项发现已通过自动回归及 WorkBuddy 成功、拒绝、恢复、遮盖验收，Desktop 已更新，DSH 新 Skill 已实际加载 | Digest、OAuth、Cookie/query、mTLS、外部密钥服务及高级协议仍待扩展；其他远端配置/部署路径不因此获得探针专用的引用解析能力 |
+| 认证、TLS 与高级协议 | 11/8 Bearer/TLS、11/9 Basic/X-API-Key 与 Linux 引用解析批次已通过；11/10 Digest（MD5/SHA-256、qop=auth、GET）及 mTLS stream 的 WorkBuddy 成功、拒绝、恢复和随包 Skill 验收通过，当前 Desktop 与发布包已更新 | Digest auth-int/sess/userhash/非 ASCII 及其他协议、mTLS WebSocket/MCP 与其他 TLS 协商版本的客户端专项、加密私钥、OAuth、Cookie/query、外部密钥服务及高级协议仍待扩展；入站服务端认证策略和其他远端配置/部署路径不由探针能力代替 |
 | 受保护配置与运行计划 | 凭据、可执行/存储路径、include 来源成员及组件身份变更仍受限；更完整的受控运行计划替换待补专用契约 | 预览影响、预检、明确授权、应用、生效验证、冲突拒绝及精确恢复 |
 | 微信兼容专项 | 模板、兼容项目入口和基本调用已验收；真实登录、数据库、存储、已有云函数迁移及公网业务专项仍待验收 | 使用真实已授权测试资源逐项验证，不以模拟登录或常量探针替代业务验证 |
 | Relay 与数据库扩展 | 非 WebSocket 载体、任意嵌套 options 及具体业务表/迁移/应用数据验证仍在上表扩展范围中 | 按运行时真实支持能力增加配置契约和验证，保持既有载体及其他路由可恢复 |
 
 密码认证、首次主机指纹确认、授权授予和凭据展示继续由 Desktop 管理。这些是现有交互边界，不表示应把密码、私钥路径或授权提升能力开放给模型。是否扩展边界须另有明确设计。
+
+### Digest 与 mTLS 客户端探针（2026-11-10，本批已验收）
+
+现有 `application_protocol_probe`、`target_protocol_probe` 沿用 `auth_ref`，新增 `probe_auth_kind=digest` 与 `mtls`。Digest 使用配置中的 `probe_digest_username`、`probe_digest_password`，支持 ASCII 凭据、MD5/SHA-256、`qop=auth` 的 `protocol=stream` GET 探针。在原超时预算内先取一次 401 挑战，再至多发送一次认证 GET；不降级 Basic、不跟随重定向、不刷新 nonce，不重放 POST 或 WebSocket 操作。缺失、重复、格式错误或不支持的挑战被拒绝；选择 Digest 后直接收到无挑战的 200 也不算通过。
+
+mTLS 的引用选择同一路由 adapter 中的 `probe_client_cert`、`probe_client_key`，由配置所属主机加载 PEM 证书和私钥，工具参数不接受路径、文件内容或口令。远端沿用 Linux 目标主机引用解析，支持按声明文件计算的相对路径；本机要求配置展开后的绝对路径。服务端证书链、有效期及身份仍强制校验，显式 `listener_certificate` 信任与客户端证书呈现分别处理。发现结果增加 `authentication.protocols`，Digest 声明 stream，mTLS 声明现有 stream/WebSocket/MCP 传输；配置可用性不等于每种协议都已实测。
+
+WorkBuddy 5.9.3 / Hy4 在现有「vhttpd MCP 验收 vjsx 项目测试」实际对话中，使用实际 Desktop 界面签发的本机 Streamable HTTP 会话，发现 109 项工具，读取随包 `guidance_get(debug)` 的新版 Skill，再查询现有 `release-qa` 的认证引用。原 vhttpd 实例保持停止，配置临时指向 IPv4 回环上的专用 Python 协议对端；本批验证客户端认证传输，不表示为 vhttpd 服务端新增了入站 Digest/mTLS 策略，也不计作公网 Relay 或 IPv6 复验。
+
+| 实际工具矩阵 | 通过结果 |
+| --- | --- |
+| Digest 六次 | SHA-256 路径返回 200 与 `digest-peer-ok` SSE 事件；错误凭据、无凭据均返回 `probe_authentication_rejected_401`；不支持挑战返回 `probe_digest_challenge_unsupported`；MD5 路径成功；最后恢复 SHA-256 路径再次成功 |
+| mTLS 新轮次五次 | 正确客户端证书返回 200 与 `mtls-peer-ok` SSE 事件；无客户端证书、不受信客户端证书、错误服务端身份均返回 `stage=tls`、`probe_tls_verification_failed`、`tls_verified=false`；恢复正确证书后再次成功 |
+
+算法名由对端按路径验证的散列及独立原生标准向量共同核对，工具结果本身不返回算法字段。mTLS 对端此次使用 TLS 1.2，三个反例共用固定 TLS 错误码，不能仅从该码推断更细的服务端判决，也不能写成 HTTP 401。对端无凭据审计记录为 Digest 10 个 HTTP 请求、3 次认证成功，mTLS 2 次业务成功，与客户端有效调用矩阵一致。mTLS 的 WebSocket/MCP、其他 TLS 协商版本仍需专项客户端验收。
+
+失败轮次单独保留：夹具最初将 `cert_key` 误写为 `key`，导致目标发现失败，修正后重新发现通过；首次 mTLS 调用返回 `target_redaction_context_unavailable`，未取得 TLS 结果。其后核对配置未变，并通过 Desktop 同一 SSH 主连接读取两份源文件，编码与 TOML 均正常；该次失败原因未确定，不宣称已定位修复。明确发起的新选项查询及五项矩阵才计作通过。客户端两次无效的 deferred 工具名没有到达 Desktop，亦不计作有效探针。锁屏中断期间先恢复配置、关闭对端，人工解锁后重新建立夹具再验收。
+
+原生 Digest 标准向量、默认 mbedTLS 与 OpenSSL 的真实对端正反例、既有协议及有界远端信封回归均通过；最终交付源码在 macOS、现有 Ubuntu 各通过 9 项 Python 回归。新版 `vhttpd-debug` 已随 Desktop 发布，并由 WorkBuddy 实际读取和使用；DSH 安装目录同步更新，但本批不另宣称 DSH 对话加载通过。当前实际 Desktop、`desktop/bin` 应用和 ZIP 已更新并通过标准签名、归档与隔离运行检查，原运行时二进制保持一致。继续使用当前 V 与新编译器，禁用回退，未使用 v_old，未修改网络配置；Ubuntu V 的既有 veb 修改未使用或变更。
+
+收尾已恢复远端原配置和实例标记、停止专用对端并释放端口。实际 Desktop 关闭 MCP 后，WorkBuddy 用旧连接仅调用一次 `context_get`，返回 Streamable HTTP 的 `internal_error`，没有上下文，不宣称 HTTP 401；临时连接器已移除，原 miora 插件 8 项工具保留。更新后的 Desktop 已回到原 `ipv6-probe-qa` 环境停止视图、MCP 关闭。详见[本批结构化验收证据](./release-evidence/desktop-mcp-digest-mtls-2026-11-10.json)。Digest 的 auth-int、sess、userhash、非 ASCII 和其他协议，以及加密私钥、硬件或外部密钥服务、其他认证方案仍待扩展。
 
 ### 非 Bearer 与远端变量引用（2026-11-09，本批已验收）
 
@@ -78,7 +99,7 @@ Agent 需要能发现目标版本提供的能力，查到使用契约，并在�
 
 macOS 已通过原生认证文件、三份协议/TLS/schema 测试文件及远端信封/已知凭据遮盖测试文件；macOS 和现有 Ubuntu 各通过 10 项 Python 回归，覆盖三种认证、IPv4/IPv6、TLS 拒绝、反射遮盖和恢复。实际目标 `/proc` 环境选择补充检查验证唯一匹配成功、歧义/未匹配拒绝及恢复。Linux V 目录有其他任务的既有变更，本批未使用或修改该编译器；远端产品变更为 Python，使用原有隔离运行时验证。正式 macOS 包使用当前 V、新编译器及 Boehm，禁用回退；未使用 v_old，运行时二进制与更新前完全一致。
 
-[本批验收证据](./release-evidence/desktop-mcp-auth-references-2026-11-09.json)记录了最终包的成功、拒绝、恢复、遮盖及旧连接失效结果，也保留了修复前失败轮次、一次人工确认超时和客户端无效工具名；这些失败不计作通过。Digest、OAuth 交换、Cookie/query 认证、mTLS、外部密钥服务与高级协议仍待扩展。下节 11 月 8 日的字面量拒绝是当时版本记录，探针路径现已由上述目标主机引用解析取代。
+[本批验收证据](./release-evidence/desktop-mcp-auth-references-2026-11-09.json)记录了最终包的成功、拒绝、恢复、遮盖及旧连接失效结果，也保留了修复前失败轮次、一次人工确认超时和客户端无效工具名；这些失败不计作通过。该批次结束时 Digest、mTLS 及其他认证仍待扩展；Digest/mTLS 后续实现与验收范围见上节 11 月 10 日记录，OAuth 交换、Cookie/query、外部密钥服务与高级协议仍在待办中。下节 11 月 8 日的字面量拒绝是当时版本记录，探针路径现已由上述目标主机引用解析取代。
 
 ### 远端 IPv6、专用 Bearer 与 TLS 探针（2026-11-08）
 
