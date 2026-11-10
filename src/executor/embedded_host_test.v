@@ -156,7 +156,8 @@ fn test_embedded_host_callbacks_report_absence_and_expired_request() {
 		hosts: [VjsxLaneHost.empty()]
 		lanes: [VjsxExecutionLane{ id: 'lane_0' }]
 	}
-	InProcVjsxHostApi.install(mut ctx, mut state, 0)
+	mut config_cache := InProcVjsxHostApi.install(mut ctx, mut state, 0)
+	defer { config_cache.close() }
 	empty := ctx.eval('JSON.stringify({creation: vhttpdHost.issueFeishuStream("stream", "main"), config: vhttpdHost.config(), emitted: vhttpdHost.emit("test"), snapshot: typeof vhttpdHost.snapshot(), bridge: vhttpdHost.bridgeDispatch("{}"), websocket: vhttpdHost.websocketDispatch("{}")})') or { panic(err) }
 	defer { empty.free() }
 	assert empty.to_string().contains('"creation":""')

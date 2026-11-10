@@ -82,7 +82,8 @@ pub fn (e InProcVjsxExecutor) ensure_lane_host(idx int) ! {
 	log.debug('[vhttpd] ensure_lane_host runtime ready lane=${lane_id} idx=${idx} module=${as_module} temp_root=${temp_root}')
 	mut ctx := session.context()
 	InProcVjsxHostApi.install_http_facade(mut ctx)!
-	InProcVjsxHostApi.install(mut ctx, mut state, idx)
+	mut config_cache := InProcVjsxHostApi.install(mut ctx, mut state, idx)
+	defer { if !owned_by_lane { config_cache.close() } }
 	InProcVjsxRuntimeProfileLog.write(lane_id, idx, config.runtime_profile, ctx)
 	mut module_binding_ptr := ?&vjsx.ScriptModule(none)
 	mut has_http_handler := false
@@ -202,6 +203,7 @@ pub fn (e InProcVjsxExecutor) ensure_lane_host(idx int) ! {
 		wakeup_owner:      wake_owner
 		session:           session
 		module_binding:    module_binding_ptr
+		config_cache:      config_cache
 	}
 	mut published_wake_owner := unsafe { wake_owner }
 	published_wake_owner.published = true
