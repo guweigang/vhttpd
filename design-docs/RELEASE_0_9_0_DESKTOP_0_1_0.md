@@ -47,6 +47,8 @@ updated: 2026-11-10
 
 **关闭条件：** A–E 及原 P0-02 全部适用验收项有最终候选证据后才能关闭；没有要求所有空闲页立即归还操作系统，但必须区分可复用高水位与真实泄漏。若发现持续增长，记录具体负载、分配/保留路径和复现方式后修复重验。当前状态仍为阻断，不能预先勾选“完整 24 小时通过”。
 
+**14:53 收尾核验：** bodytest PID 1974907 与独立长测 PID 1979291 的实际二进制 SHA 均匹配；业务 ready、配置 revision 一致、三个健康检查 200，新监测和长测单元均 active。业务当时匿名内存约 29.8 MiB、映射 GC 堆约 13.9 MiB，主机可用约 933 MiB；这是切换后初期快照，不与旧进程长期高水位直接比较，也不代表长测通过。长测处于基线，尚未产生加压请求。见[启动后核验](./release-evidence/2026-11-10/release-closeout/post-launch-check.json)及[归档文件摘要](./release-evidence/2026-11-10/release-closeout/artifact-sha256.json)。
+
 ### 历史进度与基线
 
 **bodytest 切换与 fixed7 新长测（11 月 4 日 14:40，北京时间）**。按维护者指令主动结束此前 fixed7 轮次，约 3 小时 17 分加压，HTTP 471731 次、Paseo 5752 轮，零错误、零 OOM。首末 10 分钟匿名内存中位数 53.01 → 51.02 MiB，无冷却样本，不能作为完整 24 小时验收。bodytest 已通过工作台切换至带 GC 修复和 applicationInfo 的候选，实际 PID 2287326，Admin、健康及应用路由验证通过。原定次日切换的定时任务已删除。新一轮独立 fixed7 使用原压测二进制，PID 2287646，10 分钟基线、24 小时加压、10 分钟冷却，预计 11 月 5 日 15:01 完成。保留原资源限制和主机余量保护，压测采样与业务 PID 解耦。[旧轮汇总](./release-evidence/2026-11-04/fixed7-post-bodytest-switch/previous-summary.json) · [业务切换验证](./release-evidence/2026-11-04/fixed7-post-bodytest-switch/bodytest-switch.json) · [新长测](./release-evidence/2026-11-04/fixed7-post-bodytest-switch/metadata.json)
