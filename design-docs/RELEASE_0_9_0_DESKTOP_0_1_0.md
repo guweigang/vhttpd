@@ -32,6 +32,23 @@ updated: 2026-11-10
 
 ## P0-02 GC、内存与资源生命周期
 
+### 当前收尾清单（2026-11-10，优先于下方历史进度）
+
+本轮按维护者授权推进：冻结已有候选，先验证真实应用兼容，再通过升级流程替换 bodytest，恢复连续观察，最后启动独立 24 小时压力与冷却。不再以追加零散优化替代发布验收，也不把“降低分配”写成“内存泄漏已解决”。下方历史“不切换/不启动”仅描述当时轮次，不限制本次授权。
+
+- [x] 已实现并验证：上游 GC 源码/策略恢复，GC 编译单元使用已对照的 GCC O2；响应体交接与 per-worker writer Context 优化通过定向 macOS/Linux 回归。vjsx 未因本轮修改。见[源码及回归](./release-evidence/2026-11-10/context-lifetime/finding.json)。
+- [x] 已实现并验证：Linux amd64/Boehm 候选二进制 SHA256 为 dca8844f0725b08e22d3a6ce5adf63ed51c9aaaceb5ce3360aaaba1dc9c61d9d；整包短测每 HTTP 请求少分配约 7968 字节。冷却匿名内存旧/新约 27.7/28.7 MiB，尚未证实驻留改善。见[整包证据](./release-evidence/2026-11-10/context-pool-package/finding.json)。
+- [ ] 待验收 A：核对相同 SHA、实际 Boehm 与构建来源；以 bodytest 源码副本隔离验证 applicationInfo、应用预热、健康及应用路由，不访问真实数据库/云服务。
+- [ ] 待验收 B：通过现有升级助手切换 bodytest；保存原运行时及回滚记录，核验实际可执行文件 SHA、配置 revision、监听端口和应用路由。切换失败须回滚，不能继续当作成功启动长测。
+- [ ] 待验收 C：连续监测绑定新业务 PID 和启动标识，保存 RSS、匿名内存、Boehm 堆/空闲及轮次；业务观察与独立负载分开统计，不把合成请求冒充真实业务。
+- [ ] 待验收 D：主机 MemAvailable 连续达到 640 MiB 启动门槛且有余量后，用相同候选 SHA、全新目录和 systemd 单元独立运行 10 分钟基线、完整 24 小时 HTTP/Paseo 加压、10 分钟自然冷却。保留 256 MiB 内存、30% CPU、无 swap、512 MiB 主机保护，保护只终止独立任务。
+- [ ] 待验收 E：自然结束后归档完整曲线、错误/OOM、FD/线程、GC 堆/空闲、加压是否误触发空闲回收及冷却残留。既有 Linux HTTP/Paseo 门槛保持 RSS 残留不超过 16 MiB、压力 RSS 不超过 256 MiB、FD 增量不超过 8；达到数值门槛也不能掩盖未解释的持续增长。
+- [ ] 缺失/待补齐：最终发行包在数据库、Provider、取消/超时、连接断开和应用启停/重载上的生命周期证据，以及其他目标平台的对应验证。Linux 单轮长测通过不能自动关闭这些项目。
+
+**关闭条件：** A–E 及原 P0-02 全部适用验收项有最终候选证据后才能关闭；没有要求所有空闲页立即归还操作系统，但必须区分可复用高水位与真实泄漏。若发现持续增长，记录具体负载、分配/保留路径和复现方式后修复重验。当前状态仍为阻断，不能预先勾选“完整 24 小时通过”。
+
+### 历史进度与基线
+
 **bodytest 切换与 fixed7 新长测（11 月 4 日 14:40，北京时间）**。按维护者指令主动结束此前 fixed7 轮次，约 3 小时 17 分加压，HTTP 471731 次、Paseo 5752 轮，零错误、零 OOM。首末 10 分钟匿名内存中位数 53.01 → 51.02 MiB，无冷却样本，不能作为完整 24 小时验收。bodytest 已通过工作台切换至带 GC 修复和 applicationInfo 的候选，实际 PID 2287326，Admin、健康及应用路由验证通过。原定次日切换的定时任务已删除。新一轮独立 fixed7 使用原压测二进制，PID 2287646，10 分钟基线、24 小时加压、10 分钟冷却，预计 11 月 5 日 15:01 完成。保留原资源限制和主机余量保护，压测采样与业务 PID 解耦。[旧轮汇总](./release-evidence/2026-11-04/fixed7-post-bodytest-switch/previous-summary.json) · [业务切换验证](./release-evidence/2026-11-04/fixed7-post-bodytest-switch/bodytest-switch.json) · [新长测](./release-evidence/2026-11-04/fixed7-post-bodytest-switch/metadata.json)
 
 **bodytest 兼容候选通过隔离验证（11 月 4 日 14:02，北京时间）**。在 fixed7 冻结源码上仅加入 `applicationInfo()` 的宿主 API 注册与实现，沿用已核对的 GCC/Boehm 工具链和 vjsx。候选二进制 SHA256 为 `789c29cffdee25c1950b8505710a1575c36e5490fbe98679ec8e0c5afa4aba18`。在独立网络及文件系统、虚拟凭据和隔离数据库端点下，先断言源码入口和根目录，再启动未插入探针的应用副本。两次 Admin 均就绪，HTTP 健康与业务应用路由均返回预期结果。业务 PID 2134650 与 fixed7 压测 PID 2134953 保持运行。因长测绑定并观察业务 PID，安排 11 月 5 日 11:40 复核自然完成状态后按工作台升级流程切换，预热失败自动回滚。业务切换与完整验收仍待结果。[构建来源](./release-evidence/2026-11-04/bodytest-fixed7-candidate/provenance.json) · [API 断言](./release-evidence/2026-11-04/bodytest-fixed7-candidate/candidate.json) · [原样应用验证](./release-evidence/2026-11-04/bodytest-fixed7-candidate/candidate-original.json)
