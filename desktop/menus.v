@@ -128,7 +128,6 @@ fn (app &Workshop) workbench_menus(root ui2.Element) []ui2.Menu {
 		ui2.Menu{title: '管理', items: [
 			menu_row('server_home', '连接与服务器…', available, ''),
 			menu_row('runtime', '管理运行包…', available, 'cmd+,'),
-			menu_row('shared_relays', 'Relay 连接库…', available, ''),
 			ui2.menu_separator(), menu_row('mcp_settings', '模型开发 · MCP…', available, ''),
 		]},
 		ui2.Menu{title: '帮助', items: [menu_row('help', '使用说明', true, ''), menu_row('shortcuts', '快捷键说明', true, ''), ui2.menu_separator(), menu_row('desktop_updates', '检查更新…', available, ''), menu_row('about', '关于 vhttpd Workbench', true, '')]},

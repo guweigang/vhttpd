@@ -88,8 +88,6 @@ fn language_page_fixtures(width f64) []LanguagePage {
 	pages << LanguagePage{'shared-history',shared_relays_view(app,width)}
 	app.shared_detail_tab='binding';app.shared_protocol='vhttpd'
 	pages << LanguagePage{'shared-binding',shared_relays_view(app,width)}
-	app.shared_services_tab=true
-	pages << LanguagePage{'shared-services',shared_relays_view(app,width)}
 	for active in [false,true] {
 		app.snapshot=host.Snapshot{...app.snapshot,takeover_relay_id:'bodytest_database',takeover_status:host.TakeoverStatus{known:true,active:active,app_id:'wechat',accounts:['fixture-account'],checked_at:'12:00:00',local_in_flight:1}}
 		pages << LanguagePage{'takeover-'+active.str(),takeover_view(app,width)}
@@ -106,7 +104,7 @@ fn language_page_fixtures(width f64) []LanguagePage {
 	pages << LanguagePage{'takeover-stopped',takeover_view(app,width)}
 	app.component_target='bodytest'
 	pages << LanguagePage{'remote-component-install',component_installation_view(app,width)}
-	app.remote_id='';app.shared_id='';app.environment_id='';app.shared_services_tab=false
+	app.remote_id='';app.shared_id='';app.environment_id=''
 	pages << LanguagePage{'server-empty',remote_servers_view(app,width)}
 	pages << LanguagePage{'shared-empty',shared_relays_view(app,width)}
 	app.creating=true

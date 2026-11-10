@@ -1,5 +1,7 @@
 module main
 
+import crypto.sha256
+import json2 as json
 import host
 import time
 
@@ -23,8 +25,8 @@ fn (mut app Workshop) open_relay_catalog() {
 		app.shared_message = ''
 		app.shared_scope = app.environment_id
 	}
+	app.workspace_page = .relay
 	app.show_shared_relays = true
-	app.shared_services_tab = false
 	app.show_remote = false
 	app.show_runtime = false
 	app.show_component_install = false
@@ -137,4 +139,56 @@ fn (mut app Workshop) poll_relay_process_logs() {
 		else {
 		}
 	}
+}
+
+fn shared_status_key(scope string, entry host.SharedRelay) string {
+	// A successful saved connection must never lend its result to an edited draft.
+	return scope + ':' + entry.id + ':' + sha256.hexhash(json.encode(entry))
+}
+
+fn (app &Workshop) shared_probe_available() bool {
+	if app.shared_testing { return false }
+	if app.environment_id == '' { return true }
+	return app.server_snapshot.connected && app.server_snapshot.server_id == app.environment_id
+		&& !app.server_busy && !app.server_snapshot.busy && !app.shared_catalog_pending
+}
+
+fn (app &Workshop) shared_probe_host() string {
+	if app.environment_id == '' { return ui_text('本机') }
+	for server in app.remote_servers {
+		if server.id == app.environment_id { return server.name + ' (' + server.ssh_host + ')' }
+	}
+	if app.server_snapshot.server_id == app.environment_id {
+		server := app.server_snapshot.server
+		return server.name + ' (' + server.ssh_host + ')'
+	}
+	return app.display_environment_name()
+}
+
+fn (app &Workshop) shared_probe_description() string {
+	if app.environment_id != '' && !app.shared_probe_available() && !app.shared_testing {
+		return ui_text('请先连接所选远端主机，并等待当前操作完成后测试。')
+	}
+	return ui_text('测试发起主机：') + app.shared_probe_host() + ui_text('。未保存的草稿也可测试；测试结束自动断开，不代表配置已发布或正在连接。')
+}
+
+fn (mut app Workshop) start_shared_relay_test(entry host.SharedRelay) {
+	if !app.shared_probe_available() {
+		app.shared_message = app.shared_probe_description()
+		return
+	}
+	if app.environment_id != '' {
+		select {
+			app.server_worker.commands <- host.ServerCommand{action: .relay_probe, server: app.server_snapshot.server, shared_relay: entry, relay_probe_reply: app.shared_results} {}
+			else { app.shared_message = '服务器操作队列繁忙，请稍后重试。'; return }
+		}
+	} else {
+		spawn test_shared_connection(entry, app.shared_results)
+	}
+	app.shared_testing = true
+	app.shared_test_scope = app.environment_id
+	app.shared_test_id = entry.id
+	app.shared_test_form = entry
+	app.shared_test_host = app.shared_probe_host()
+	app.shared_message = ui_text('正在测试 · ') + app.shared_test_host
 }

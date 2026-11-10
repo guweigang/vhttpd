@@ -100,8 +100,8 @@ fn relay_metric(id string, title string, value string, hint string, frame ui2.Re
 fn relay_overview_view(app &Workshop, width f64, remote bool) []ui2.Element {
 	data := app.workspace_data()
 	live := data.relay
-	mut rows := [label('relay_overview_title','连接与通道',0,164,width-158,18,workbench_ink),
-		button('workspace_relay_library','管理连接库…',width-146,160,146,false,true),
+	mut rows := [label('relay_overview_title','连接与通道',0,164,width-196,18,workbench_ink),
+		button('workspace_relay_library','从已保存连接选择…',width-184,160,184,false,true),
 		label('relay_overview_hint','运行中的服务与连接状态 · 自动刷新',0,194,width,12,workbench_muted)]
 	columns := if width >= 620 { 4 } else { 2 }
 	cell := (width - f64(columns-1)*12)/f64(columns)

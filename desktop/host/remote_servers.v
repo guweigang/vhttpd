@@ -59,7 +59,7 @@ pub fn save_remote_servers(items []RemoteServer) ! {
 	os.mv(temp, path)!
 }
 
-pub enum ServerAction { mcp_ordinary_relay mcp_package mcp_lifecycle mcp_inspect mcp_shared_config mcp_runtime_upgrade mcp_release mcp_hub relay_logs relay_load relay_save relay_delete connect trust disconnect inspect install create start upgrade prepare_deploy deploy discard_deploy shutdown }
+pub enum ServerAction { relay_probe mcp_ordinary_relay mcp_package mcp_lifecycle mcp_inspect mcp_shared_config mcp_runtime_upgrade mcp_release mcp_hub relay_logs relay_load relay_save relay_delete connect trust disconnect inspect install create start upgrade prepare_deploy deploy discard_deploy shutdown }
 pub struct ServerCommand {
 pub:
 	mcp_ordinary_relay McpOrdinaryRelayRequest
@@ -72,6 +72,7 @@ pub:
 	mcp_runtime_upgrade McpUpgradeRequest
 	rollback_from string
 	release_app_id string
+	relay_probe_reply chan RelayProbeResult = chan RelayProbeResult{cap: 1}
 	shared_relay SharedRelay
 	relay_revision string
 	sequence u64
@@ -538,6 +539,11 @@ fn server_supervise(w ServerWorker) {
 					select { w.snapshots <- s.state {} else {} }
 					continue
 				}
+				if command.action == .relay_probe {
+					result := s.probe_relay_draft(command) or { RelayProbeResult{stage: 'SSH', message: '远端测试未完成，请检查 SSH 连接、Python 3 和服务器状态后重试。'} }
+					command.relay_probe_reply <- result
+					continue
+				}
 				sequence = command.sequence
 				s.state = ServerSnapshot{...s.state, sequence: command.sequence}
 				if command.action == .start { s.state = ServerSnapshot{ ...s.state, created: RemoteProfile{} } }
@@ -547,7 +553,7 @@ fn server_supervise(w ServerWorker) {
 				}
 				mut failure := ''
 				match command.action {
-					.mcp_ordinary_relay, .mcp_package, .mcp_lifecycle, .mcp_inspect, .mcp_hub, .mcp_release, .mcp_runtime_upgrade, .mcp_shared_config {}
+					.relay_probe, .mcp_ordinary_relay, .mcp_package, .mcp_lifecycle, .mcp_inspect, .mcp_hub, .mcp_release, .mcp_runtime_upgrade, .mcp_shared_config {}
 					.relay_logs {s.read_relay_logs(command) or {s.state = ServerSnapshot{...s.state, relay_logs_error:'远端进程日志暂时不可用。'}}}
 					.relay_load, .relay_save, .relay_delete {s.relay_catalog_operation(command) or {failure = err.msg()}}
 					.connect { s.connect(command.server, command.password) or { s.close(); failure = err.msg() } }

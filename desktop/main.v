@@ -185,7 +185,6 @@ mut:
 	takeover_app_id string
 	takeover_account string
 	show_shared_relays   bool
-	shared_services_tab  bool
 	shared_detail_tab    string = 'connection'
 	shared_relays        []host.SharedRelay
 	shared_protocol string = 'vhttpd'
@@ -193,6 +192,8 @@ mut:
 	relay_logs_next i64
 	shared_catalog_pending bool
 	shared_test_id string
+	shared_test_host string
+	shared_test_form host.SharedRelay
 	shared_test_scope string
 	shared_status map[string]string
 	shared_probe_logs []string
@@ -444,11 +445,12 @@ fn poll_worker() {
 	select {
 		result := <-app.shared_results {
 			app.shared_testing = false
-			line := time.now().format_ss() + ' · ' + result.stage + ' · ' + result.message + ' (${result.elapsed_ms} ms)'
-			app.shared_status[app.shared_test_scope + ':' + app.shared_test_id] = line
+			line := time.now().format_ss() + ' · ' + app.shared_test_host + ' · ' + result.stage + ' · ' + result.message + ' (${result.elapsed_ms} ms)'
+			if app.shared_status.len >= 512 { app.shared_status.clear() }
+			app.shared_status[shared_status_key(app.shared_test_scope, app.shared_test_form)] = line
 			app.shared_probe_logs << app.shared_test_scope + ':' + app.shared_test_id + ' · ' + line
 			if app.shared_probe_logs.len > 100 { app.shared_probe_logs.delete(0) }
-			if app.shared_test_scope == app.environment_id && app.shared_test_id == app.shared_id {
+			if app.shared_test_scope == app.environment_id && app.shared_test_id == app.shared_id && app.shared_test_form == app.shared_form() {
 				app.shared_message = line
 			}
 		}
@@ -1161,13 +1163,12 @@ fn build_window_content() ui2.Element {
 			'此位置暂无运行环境'
 		}, 10, 8, 170, 11, workbench_muted)
 	}
-	side << ui2.scroll('project_list', ui2.rect(12, 225, 190, h - 438), workbench_sidebar, project_rows)
+	side << ui2.scroll('project_list', ui2.rect(12, 225, 190, h - 396), workbench_sidebar, project_rows)
 	can_choose := app.can_new_or_import()
 	side << sidebar_button('new', '+ 新建', ui2.rect(16, 143, 85, 34), true, false, can_choose, .center)
 	side << sidebar_button('import', '导入…', ui2.rect(111, 143, 85, 34), false, false, can_choose, .center)
-	side << sidebar_button('shared_relays', 'Relay 连接库', ui2.rect(16, h - 125, 180, 34), false, app.show_shared_relays, !app.creating, .left)
-	side << sidebar_button('server_home', '连接与服务器', ui2.rect(16, h - 167, 180, 34), false, app.show_remote, !app.creating, .left)
-	side << sidebar_section_heading('env_label', '管理', h - 205)
+	side << sidebar_button('server_home', '连接与服务器', ui2.rect(16, h - 125, 180, 34), false, app.show_remote, !app.creating, .left)
+	side << sidebar_section_heading('env_label', '管理', h - 163)
 	side << sidebar_button('runtime', '运行包', ui2.rect(16, h - 83, 180, 34), false, app.show_runtime, !app.creating, .left)
 	side << label('binary_label', app.environment_version_label(), 22, h - 32, 170, 11, workbench_muted)
 	mut children := [ui2.view('workbench_sidebar', ui2.rect(0, 0, 214, h), ui2.BoxStyle{

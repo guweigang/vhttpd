@@ -39,7 +39,7 @@ fn test_relay_overview_exposes_takeover_before_local_start() ! {
 
 fn test_catalog_results_remain_scoped_to_connection_and_location() ! {
  entry := host.SharedRelay{id:'ab'.repeat(12),name:'Paseo',protocol:'websocket',url:'wss://example.invalid/ws'}
- mut app := Workshop{shared_relays:[entry],shared_status:{':'+entry.id:'本机探测成功','server:'+entry.id:'远端记录不可混入'}}
+ mut app := Workshop{shared_relays:[entry],shared_status:{shared_status_key('',entry):'本机探测成功',shared_status_key('server',entry):'远端记录不可混入'}}
  root := ui2.screen(workbench_paper,shared_relays_view(&app,488))
  ui2.validate_element_tree(root)!
  assert audit_text(root).contains('本机探测成功')

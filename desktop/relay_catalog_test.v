@@ -82,11 +82,11 @@ fn test_empty_catalog_displays_remote_connection_errors() ! {
 	}
 }
 
-fn test_library_separates_saved_settings_services_and_binding() ! {
+fn test_saved_connections_do_not_duplicate_runtime_service_inventory() ! {
 	entry := host.SharedRelay{id:'ef'.repeat(12),name:'Socket',protocol:'websocket',url:'wss://example.org/ws?v=2'}
 	mut app := Workshop{shared_relays:[entry],snapshot:host.Snapshot{workspace:host.RuntimeWorkspace{known:true,relays:[host.ApplicationItem{id:'hub',kind:'hub'}]}}}
 	app.open_relay_catalog()
-	assert app.shared_id == entry.id && !app.shared_services_tab
+	assert app.shared_id == entry.id
 	for width in [488.0,708.0] {
 		root := ui2.screen(workbench_paper,shared_relays_view(&app,width))
 		ui2.validate_element_tree(root)!
@@ -94,12 +94,7 @@ fn test_library_separates_saved_settings_services_and_binding() ! {
 		assert !catalog_has_id(root,'shared_remote_id') && !catalog_has_id(root,'shared_db_local')
 		assert !catalog_has_id(root,'shared_service_native_hub')
 	}
-	assert app.handle_shared_relay_event('shared_tab_services')
-	root := ui2.screen(workbench_paper,shared_relays_view(&app,488))
-	ui2.validate_element_tree(root)!
-	assert catalog_has_id(root,'shared_service_native_hub') && !catalog_has_id(root,'shared_name')
-	assert app.shared_id == entry.id
-	assert app.handle_shared_relay_event('shared_tab_connections')
+	assert !catalog_has_id(ui2.screen(workbench_paper,shared_relays_view(&app,488)), 'shared_tab_services')
 	assert app.handle_shared_relay_event('shared_detail_history')
 	assert catalog_has_id(ui2.screen(workbench_paper,shared_relays_view(&app,488)),'shared_probe_history')
 	assert app.sequence == 0
@@ -108,4 +103,52 @@ fn test_library_separates_saved_settings_services_and_binding() ! {
 fn catalog_has_id(element ui2.Element, id string) bool {
 	if element.id == id {return true}
 	return element.children.any(catalog_has_id(it,id))
+}
+
+fn test_unsaved_remote_draft_is_sent_only_to_its_ssh_host() {
+	entry := host.SharedRelay{id:'12'.repeat(12),name:'Draft',url:'ws://127.0.0.1:19881/relay',relay_id:'hub',token:'draft-private-token'}
+	mut app := Workshop{environment_id:'server',server_snapshot:host.ServerSnapshot{connected:true,server_id:'server',server:host.RemoteServer{id:'server',name:'Linux QA',ssh_host:'qa.example'}}}
+	app.start_shared_relay_test(entry)
+	assert app.shared_testing && app.shared_test_scope == 'server'
+	assert app.shared_test_form == entry && app.shared_test_host.contains('qa.example')
+	command := <-app.server_worker.commands
+	assert command.action == .relay_probe && command.server.id == 'server'
+	assert command.shared_relay == entry
+	command.relay_probe_reply <- host.RelayProbeResult{ok:true,stage:'Relay 认证',message:'fixture'}
+	assert (<-app.shared_results).ok
+	assert app.catalog_items().len == 0, 'Testing must not save the draft'
+	select { _ := <-app.worker.commands { assert false, 'Remote probe dispatched a local project operation' } else {} }
+}
+
+fn test_remote_probe_requires_matching_connected_idle_host_without_local_fallback() {
+	entry := host.SharedRelay{id:'34'.repeat(12),name:'Draft',url:'ws://127.0.0.1/relay',relay_id:'hub'}
+	for snapshot in [host.ServerSnapshot{},host.ServerSnapshot{connected:true,server_id:'other'},host.ServerSnapshot{connected:true,server_id:'server',busy:true}] {
+		mut app := Workshop{environment_id:'server',server_snapshot:snapshot,shared_id:entry.id,shared_message:'连接已修改，保存或测试后再使用。'}
+		app.start_shared_relay_test(entry)
+		assert !app.shared_testing
+		assert app.shared_message.contains('远端主机')
+		root := ui2.screen(workbench_paper,shared_relays_view(&app,488))
+		assert catalog_text(root).contains('请先连接所选远端主机')
+		assert !menu_button_enabled(root,'shared_test')
+		select { _ := <-app.server_worker.commands { assert false, 'Disconnected/busy/wrong host must not receive a probe' } else {} }
+		select { _ := <-app.shared_results { assert false, 'Must not fall back to a local probe' } else {} }
+	}
+}
+
+fn test_probe_results_are_bound_to_parameters_and_library_returns_to_relay() {
+	entry := host.SharedRelay{id:'56'.repeat(12),name:'Draft',url:'ws://127.0.0.1/relay',relay_id:'hub',token:'old'}
+	assert shared_status_key('host',entry) != shared_status_key('other',entry)
+	assert shared_status_key('host',entry) != shared_status_key('host',host.SharedRelay{...entry,token:'new'})
+	assert shared_status_key('host',entry) != shared_status_key('host',host.SharedRelay{...entry,url:'ws://127.0.0.1/other'})
+	mut app := Workshop{environment_id:'host',show_shared_relays:true}
+	assert app.handle_shared_relay_event('shared_close')
+	assert !app.show_shared_relays && app.show_remote && app.workspace_page == .relay
+	menus := app.workbench_menus(ui2.screen(workbench_paper,[]))
+	for menu in menus { assert menu_find(menu.items,'menu:shared_relays') == none }
+}
+
+fn catalog_text(element ui2.Element) string {
+	mut text := element.text
+	for child in element.children { text += catalog_text(child) }
+	return text
 }
