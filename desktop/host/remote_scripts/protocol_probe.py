@@ -1,6 +1,6 @@
 # Embedded by Desktop; p is validated by the configuration-owning host before execution.
 # Python stdlib is already required for remote environment management.
-import socket, http.client, time, json, os, base64, hashlib, struct, ssl
+import socket, http.client, time, json, os, base64, hashlib, struct, ssl, re
 
 host = p.get('host', '127.0.0.1')
 if host not in ('127.0.0.1', '::1'):
@@ -11,7 +11,14 @@ class ProbeFailure(Exception): pass
 
 def tls_context():
     # Config-selected public certificate or system roots, never an insecure mode.
-    return ssl.create_default_context(cafile=p.get('ca_file') or None)
+    ctx=ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    if p.get('ca_file'): ctx.load_verify_locations(cafile=p['ca_file'])
+    else: ctx.load_default_certs()
+    # Explicit context avoids environment-enabled TLS session key export.
+    if p.get('client_cert'):
+        try: ctx.load_cert_chain(p['client_cert'],p['client_key'],password=lambda: b'')
+        except (OSError,ValueError,ssl.SSLError): raise ProbeFailure('probe_client_certificate_unavailable') from None
+    return ctx
 
 def connect():
     try: sock = socket.create_connection((host, p['port']), timeout=remaining())
@@ -19,6 +26,8 @@ def connect():
     if p.get('secure'):
         try:
             sock = tls_context().wrap_socket(sock, server_hostname=p.get('tls_name') or host)
+        except ProbeFailure:
+            sock.close();raise
         except (ssl.SSLError, OSError, ValueError):
             sock.close()
             raise ProbeFailure('probe_tls_verification_failed') from None
@@ -43,21 +52,56 @@ def events(body):
         if data: result.append('\n'.join(data))
     return result
 
-def request(method, body='', session=''):
+def digest_header(challenge,method,path):
+    # One challenge, auth quality only; no auth-int, sess, userhash or downgrade.
+    if len(challenge)>8192 or challenge.rstrip().endswith(',') or not challenge.startswith('Digest '): raise ProbeFailure('probe_digest_challenge_unsupported')
+    tail=challenge[7:];fields={}
+    pattern=r'\s*([A-Za-z][A-Za-z0-9_-]*)\s*=\s*("(?:[^"\\\r\n]|\\[ -~])*"|[A-Za-z0-9_-]+)\s*(?:,|$)'
+    while tail:
+        match=re.match(pattern,tail)
+        if not match or match[1].lower() in fields: raise ProbeFailure('probe_digest_challenge_unsupported')
+        value=match[2]
+        if value.startswith('"'): value=re.sub(r'\\(.)',r'\1',value[1:-1])
+        fields[match[1].lower()]=value;tail=tail[match.end():]
+    algorithm=fields.get('algorithm','MD5').upper()
+    if algorithm not in ('MD5','SHA-256') or 'auth' not in [v.strip() for v in fields.get('qop','').split(',')] or not fields.get('nonce') or 'realm' not in fields or fields.get('userhash','false')!='false' or fields.get('charset','UTF-8').upper()!='UTF-8':
+        raise ProbeFailure('probe_digest_challenge_unsupported')
+    if any(ord(c)<32 or ord(c)>126 for v in fields.values() for c in v): raise ProbeFailure('probe_digest_challenge_unsupported')
+    def H(value): return hashlib.new('md5' if algorithm=='MD5' else 'sha256',value.encode()).hexdigest()
+    def quote(value): return '"'+value.replace('\\','\\\\').replace('"','\\"')+'"'
+    user=p['digest_user'];realm=fields['realm'];nonce=fields['nonce'];cnonce=os.urandom(16).hex()
+    ha1=H(user+':'+realm+':'+p['digest_password']);ha2=H(method+':'+path)
+    response=H(ha1+':'+nonce+':00000001:'+cnonce+':auth:'+ha2)
+    header='Digest '+', '.join(k+'='+quote(v) for k,v in dict(username=user,realm=realm,nonce=nonce,uri=path,response=response,cnonce=cnonce).items())+', algorithm='+algorithm+', qop=auth, nc=00000001'
+    if 'opaque' in fields: header+=', opaque='+quote(fields['opaque'])
+    p['probe_secrets'] += [header,response,ha1,cnonce,nonce]
+    return header
+
+def request(method, body='', session='', digest=''):
+
     c = ProbeHTTPConnection(host, p['port'], timeout=remaining())
     headers = {'Accept': 'application/json, text/event-stream', 'Content-Type': 'application/json',
                'MCP-Protocol-Version': '2025-03-26', 'Connection': 'close'}
     if session: headers['Mcp-Session-Id'] = session
-    if p.get('authorization'): headers['Authorization'] = p['authorization'].removeprefix('Authorization: ').strip()
+    if p.get('authorization'):
+        name,value=p['authorization'].strip().split(': ',1)
+        if name not in ('Authorization','X-API-Key'): raise ValueError('credential header')
+        headers[name]=value
+    if digest: headers['Authorization']=digest
     try:
         c.request(method, p['path'], body=body.encode(), headers=headers)
         r = c.getresponse()
-        reject_auth(r.status)
         h = {}
         for k,v in r.getheaders():
             if k.lower() in h: raise ValueError('duplicate header')
             h[k.lower()] = v
         if sum(len(k)+len(v) for k,v in h.items()) > 16384: raise ValueError('headers')
+        if p.get('auth_kind')=='digest' and not digest:
+            if r.status!=401: raise ProbeFailure('probe_digest_challenge_required')
+            value=digest_header(h.get('www-authenticate',''),method,p['path'])
+            c.close()
+            return request(method,body,session,value)
+        reject_auth(r.status)
         data = bytearray()
         streaming = p['protocol'] == 'stream' or h.get('content-type','').split(';')[0].strip() == 'text/event-stream'
         if method != 'DELETE' and r.status not in (202,204):
@@ -192,8 +236,23 @@ except ProbeFailure as e:
     failure=str(e)
 except Exception:
     failure={'stream':'http_stream_unavailable','websocket':'websocket_handshake_or_frame_unavailable','mcp':'mcp_initialize_or_tools_list_failed'}[p['protocol']]
-output=json.dumps(dict(ok=not failure,protocol=p['protocol'],listener=p['listener'],source='business_protocol',address_family='ipv6' if host=='::1' else 'ipv4',tls=bool(p.get('secure')),tls_verified=bool(p.get('secure')) and failure not in ('probe_tls_verification_failed','probe_tcp_connect_failed'),auth_configured=bool(p.get('authorization')),stage='tls' if failure=='probe_tls_verification_failed' else 'connect' if failure=='probe_tcp_connect_failed' else 'authentication' if failure.startswith('probe_authentication_rejected_') else 'protocol',elapsed_ms=int((time.monotonic()-start)*1000),failure=failure,result=result))
-secret=p.get('authorization','').removeprefix('Authorization: Bearer ').strip()
-if secret:
-    output=output.replace(json.dumps(secret)[1:-1], '<probe-credential>').replace(secret, '<probe-credential>')
-print(output)
+output=dict(ok=not failure,protocol=p['protocol'],listener=p['listener'],source='business_protocol',address_family='ipv6' if host=='::1' else 'ipv4',tls=bool(p.get('secure')),tls_verified=bool(p.get('secure')) and failure not in ('probe_tls_verification_failed','probe_tcp_connect_failed','probe_client_certificate_unavailable'),auth_configured=bool(p.get('authorization') or p.get('auth_kind') in ('digest','mtls')),stage='tls' if failure in ('probe_tls_verification_failed','probe_client_certificate_unavailable') else 'connect' if failure=='probe_tcp_connect_failed' else 'authentication' if failure.startswith(('probe_authentication_rejected_','probe_digest_')) else 'protocol',elapsed_ms=int((time.monotonic()-start)*1000),failure=failure,result=result)
+secrets=list(p.get('probe_secrets',[]))
+header=p.get('authorization','').strip()
+if header:
+    value=header.split(': ',1)[1];secrets.append(value)
+    if value.startswith('Bearer '): secrets.append(value[len('Bearer '):])
+    if value.startswith('Basic '):
+        encoded=value[len('Basic '):];decoded=base64.b64decode(encoded).decode()
+        secrets += [encoded,decoded,*decoded.split(':',1)]
+def redact(value):
+    if isinstance(value,str):
+        for secret in sorted(set(secrets),key=len,reverse=True):
+            if secret: value=value.replace(secret,'<probe-credential>')
+        return value
+    if isinstance(value,list): return [redact(v) for v in value]
+    if isinstance(value,dict): return {k:redact(v) for k,v in value.items()}
+    return value
+# Redact sampled application data without corrupting JSON keys or fixed diagnostics.
+output['result']=redact(output['result'])
+print(json.dumps(output))

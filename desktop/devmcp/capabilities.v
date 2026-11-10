@@ -32,7 +32,7 @@ fn capability_coverage(entries []CapabilityEntry) []CapabilityCoverage {
 		'runtime_configuration': ['configuration_secrets_executable_paths_and_source_membership_changes_require_desktop']
 		'remote_management':     ['password_host_connection_requires_desktop']
 		'relay_management':      []string{}
-		'diagnostics':           ['non_bearer_authentication_and_advanced_protocol_probes', 'remote_environment_secret_and_tls_references']
+		'diagnostics':           ['advanced_protocol_probes', 'external_secret_stores_and_additional_auth_schemes']
 	}
 	mut domains := []string{}
 	for entry in entries {

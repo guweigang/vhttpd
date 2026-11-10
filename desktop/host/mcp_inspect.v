@@ -56,13 +56,16 @@ fn (mut s ServerSession) mcp_inspect(req McpInspectRequest) !string {
 	mut sources := map[string]string{}
 	mut visiting := map[string]bool{}
 	s.read_project_sources(target.config_path, mut sources, mut visiting) or { return error('target_redaction_context_unavailable') }
-	mut probe_credential := ''
-	if req.tool == 'target_protocol_probe' && req.auth_ref != '' {
-		probe_credential = remote_probe_literal_credential(sources, req.auth_ref)!
-	}
-	if req.tool == 'target_protocol_probe' && req.tls_trust == 'listener_certificate' {
-		remote_probe_literal_tls_trust(sources, req.listener)!
-	}
+	if req.tool in ['target_probe_options_get', 'target_protocol_probe'] {
+        a := ProtocolProbeArgs{protocol: req.protocol, listener: req.listener, path: req.path, message: req.message, timeout_ms: req.timeout_ms, max_items: req.max_items, auth_ref: req.auth_ref, tls_trust: req.tls_trust, tls_server_name: req.tls_server_name}
+        if req.tool == 'target_protocol_probe' { a.validate()! }
+        script := remote_protocol_probe_script(target.config_path, sources, a, req.tool == 'target_probe_options_get')!
+        body := s.shell_limited(script, 8000, 2097152) or { return error('target_protocol_probe_transport_failed') }
+        result := json.decode[json.Any](body) or { return error('invalid_protocol_probe_response') }
+        req.check()!
+        if failure := result.as_map()['probe_error'] { return error(failure.str()) }
+        return remote_protocol_probe_safe_result(result, sources, target.token)!
+    }
 	plan := remote_runtime_plan(target.config_path, sources) or { return error('target_redaction_context_unavailable') }
 	mut secrets := [target.token]
 	development_collect_secrets(json.decode[json.Any](json.encode(plan))!, false, mut secrets)
@@ -70,28 +73,6 @@ fn (mut s ServerSession) mcp_inspect(req McpInspectRequest) !string {
 	for secret in secrets {
 		if secret != '' { safe.secrets['<vhttpd-secret-' + sha256.hexhash(secret)[..16] + '>'] = secret }
 	}
-	if req.tool == 'target_probe_options_get' {
-		req.check()!
-		return remote_probe_options(plan, sources)!
-	}
-	if req.tool == 'target_protocol_probe' {
-        a := ProtocolProbeArgs{protocol: req.protocol, listener: req.listener, path: req.path, message: req.message, timeout_ms: req.timeout_ms, max_items: req.max_items, auth_ref: req.auth_ref, tls_trust: req.tls_trust, tls_server_name: req.tls_server_name}
-        endpoint := protocol_probe_endpoint(plan, a)!
-        if req.auth_ref != '' && endpoint.authorization != 'Authorization: Bearer ' + probe_credential + '\r\n' { return error('remote_probe_credential_source_changed') }
-        mut payload := json.decode[json.Any](json.encode(a))!.as_map()
-        payload['port'] = json.Any(endpoint.port)
-        payload['host'] = json.Any(endpoint.host)
-        payload['secure'] = json.Any(endpoint.secure)
-        payload['tls_name'] = json.Any(endpoint.tls_name)
-        payload['ca_file'] = json.Any(endpoint.ca_file)
-        payload['authorization'] = json.Any(endpoint.authorization)
-        encoded := base64.encode(json.encode(payload).bytes())
-        script := "import base64,json\np=json.loads(base64.b64decode('" + encoded + "'))\n" + $embed_file('remote_scripts/protocol_probe.py').to_string()
-        body := s.shell_limited("python3 - <<'VHTTPD_PROTOCOL_PROBE'\n" + script + "\nVHTTPD_PROTOCOL_PROBE\n", 8000, 2097152) or { return error('target_protocol_probe_transport_failed') }
-        result := json.decode[json.Any](body) or { return error('invalid_protocol_probe_response') }
-        req.check()!
-        return json.encode(safe.safe_json(result))
-    }
 	if req.tool == 'target_request' {
 		listener := plan.listeners[req.listener] or { return error('unknown_business_listener') }
 		if control := plan.control.listener {

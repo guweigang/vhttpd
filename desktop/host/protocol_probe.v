@@ -63,6 +63,11 @@ struct ProbeEndpoint {
 	tls_name string
 	ca_file string
 	authorization string
+    auth_kind string
+    digest_user string
+    digest_password string
+    client_cert string
+    client_key string
 }
 
 fn (e ProbeEndpoint) authority() string {
@@ -80,6 +85,7 @@ fn protocol_probe_endpoint(plan runtime_plan.RuntimePlan, a ProtocolProbeArgs) !
 		return error('http_loopback_listener_required')
 	}
 	mut authorization := ''
+    mut options := map[string]string{}
 	if a.auth_ref != '' {
 		adapter := plan.adapters[a.auth_ref] or { return error('unknown_probe_auth_ref') }
 		// Explicit opt-in credential, never Control/Relay/provider credentials. It must
@@ -87,13 +93,12 @@ fn protocol_probe_endpoint(plan runtime_plan.RuntimePlan, a ProtocolProbeArgs) !
 		if !plan.pipelines.any(it.ingress.domain == .listener && it.ingress.id == a.listener && it.egress.domain == .adapter && it.egress.id == a.auth_ref) {
 			return error('probe_auth_ref_listener_mismatch')
 		}
-		token := adapter.options.strings['probe_bearer_token']
-		if token == '' || token.len > 4096 || token.bytes().any(it <= 32 || it >= 127) {
-			return error('probe_bearer_credential_unavailable')
-		}
-		authorization = 'Authorization: Bearer ' + token + '\r\n'
+		options = adapter.options.strings
+        authorization = protocol_probe_auth_header(options)!
 	}
-	if !l.tls.enabled && (a.tls_trust != 'system' || a.tls_server_name != '') {
+	if protocol_probe_auth_kind(options) == 'digest' && a.auth_ref != '' && a.protocol != 'stream' { return error('probe_digest_stream_get_required') }
+    if protocol_probe_auth_kind(options) == 'mtls' && !l.tls.enabled { return error('probe_client_certificate_requires_tls') }
+    if !l.tls.enabled && (a.tls_trust != 'system' || a.tls_server_name != '') {
 		return error('probe_tls_listener_required')
 	}
 	mut ca_file := ''
@@ -106,7 +111,7 @@ fn protocol_probe_endpoint(plan runtime_plan.RuntimePlan, a ProtocolProbeArgs) !
 		}
 		if ca_file == '' { return error('probe_listener_certificate_unavailable') }
 	}
-	return ProbeEndpoint{ secure: l.tls.enabled, tls_name: a.tls_server_name, ca_file: ca_file, authorization: authorization, host: if l.host in ['::1', '::'] { '::1' } else { '127.0.0.1' }, port: l.port }
+	return ProbeEndpoint{ secure: l.tls.enabled, tls_name: a.tls_server_name, ca_file: ca_file, authorization: authorization, auth_kind: if a.auth_ref == '' { '' } else { protocol_probe_auth_kind(options) }, digest_user: options['probe_digest_username'], digest_password: options['probe_digest_password'], client_cert: if protocol_probe_auth_kind(options) == 'mtls' { options['probe_client_cert'] } else { '' }, client_key: if protocol_probe_auth_kind(options) == 'mtls' { options['probe_client_key'] } else { '' }, host: if l.host in ['::1', '::'] { '::1' } else { '127.0.0.1' }, port: l.port }
 }
 
 fn local_protocol_probe(m &Manager, a ProtocolProbeArgs) !string {
@@ -136,7 +141,12 @@ fn probe_connect(endpoint ProbeEndpoint, deadline i64) !ProbeSocket {
 	mut p := ProbeSocket{ tcp: conn, deadline: deadline, secure: endpoint.secure }
 	if endpoint.secure {
 		ca := if endpoint.ca_file != '' { endpoint.ca_file } else if os.is_file('/etc/ssl/cert.pem') { '/etc/ssl/cert.pem' } else { '' }
-		p.tls = ssl.new_ssl_conn(validate: true, verify: ca) or {
+		if endpoint.client_cert != '' {
+            if os.file_size(endpoint.client_key) > 65536 { conn.close() or {}; return error('probe_client_certificate_unavailable') }
+            key := os.read_file(endpoint.client_key) or { conn.close() or {}; return error('probe_client_certificate_unavailable') }
+            if key.contains('ENCRYPTED') || !key.contains('PRIVATE KEY-----') { conn.close() or {}; return error('probe_client_certificate_unavailable') }
+        }
+        p.tls = ssl.new_ssl_conn(validate: true, verify: ca, cert: endpoint.client_cert, cert_key: endpoint.client_key) or {
 			conn.close() or {}; return error('probe_tls_verification_failed')
 		}
 		p.tls.connect(mut conn, if endpoint.tls_name == '' { endpoint.host } else { endpoint.tls_name }) or {
@@ -161,6 +171,10 @@ fn (mut p ProbeSocket) probe_line() !string {
 }
 
 fn (mut p ProbeSocket) probe_headers() !ProbeHttp {
+    return p.probe_headers_allow_challenge(false)
+}
+
+fn (mut p ProbeSocket) probe_headers_allow_challenge(challenge bool) !ProbeHttp {
 	line := p.probe_line()!
 	parts := line.split(' ')
 	if parts.len < 2 || parts[0] !in ['HTTP/1.1', 'HTTP/1.0'] { return error('http_status') }
@@ -171,7 +185,7 @@ fn (mut p ProbeSocket) probe_headers() !ProbeHttp {
 		size += h.len
 		if size > 16384 { return error('headers_limit') }
 		if h == '' {
-			if r.status in [401, 403] { return error('probe_authentication_rejected_' + r.status.str()) }
+			if r.status in [401, 403] && !challenge { return error('probe_authentication_rejected_' + r.status.str()) }
 			return r
 		}
 		if !h.contains(':') { return error('http_header') }
@@ -250,7 +264,16 @@ fn probe_sse_events(body string) []string {
 }
 
 fn probe_http(endpoint ProbeEndpoint, a ProtocolProbeArgs, deadline i64, method string, body string, session string) !ProbeHttp {
-	mut p := probe_connect(endpoint, deadline)!
+	if endpoint.auth_kind == 'digest' && endpoint.authorization == '' {
+        mut first := probe_connect(endpoint, deadline)!
+        first.write(('GET ${a.path} HTTP/1.1\r\nHost: ${endpoint.authority()}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n').bytes()) or { first.probe_close(); return err }
+        response := first.probe_headers_allow_challenge(true) or { first.probe_close(); return err }
+        first.probe_close()
+        if response.status != 401 { return error('probe_digest_challenge_required') }
+        header := probe_digest_header(response.headers['www-authenticate'], endpoint.digest_user, endpoint.digest_password, a.path, rand.bytes(16)!.hex())!
+        return probe_http(ProbeEndpoint{...endpoint, authorization: header}, a, deadline, method, body, session)
+    }
+    mut p := probe_connect(endpoint, deadline)!
 	defer { p.probe_close() }
 	sid := if session != '' { 'Mcp-Session-Id: ${session}\r\n' } else { '' }
 	p.write(('${method} ${a.path} HTTP/1.1\r\nHost: ${endpoint.authority()}\r\nConnection: close\r\nAccept: application/json, text/event-stream\r\nContent-Type: application/json\r\nMCP-Protocol-Version: 2025-03-26\r\n${sid}${endpoint.authorization}Content-Length: ${body.len}\r\n\r\n${body}').bytes())!
@@ -259,6 +282,9 @@ fn probe_http(endpoint ProbeEndpoint, a ProtocolProbeArgs, deadline i64, method 
 	streaming := a.protocol == 'stream' || r.headers['content-type'].all_before(';').trim_space() == 'text/event-stream'
 	rpc_id := if a.protocol == 'mcp' && body != '' { probe_event_id(body) } else { 0 }
 	r.body = p.probe_body(r, streaming, a.max_items, rpc_id)!
+    if endpoint.auth_kind == 'digest' {
+        for secret in protocol_probe_header_secrets(endpoint.authorization) { if secret != '' { r.body = r.body.replace(secret, '<probe-credential>') } }
+    }
 	return r
 }
 
@@ -409,8 +435,11 @@ fn protocol_probe(endpoint ProbeEndpoint, a ProtocolProbeArgs) string {
 		}
 	}
 	mut safe := DevelopmentState{}
-	secret := endpoint.authorization.trim_string_left('Authorization: Bearer ').trim_space()
-	if endpoint.authorization != '' { safe.secrets['<probe-credential>'] = secret }
+	mut probe_secrets := protocol_probe_header_secrets(endpoint.authorization)
+    probe_secrets << [endpoint.digest_user, endpoint.digest_password, endpoint.client_cert, endpoint.client_key]
+    for secret in probe_secrets {
+		if secret != '' { safe.secrets['<probe-credential-' + sha1.hexhash(secret)[..12] + '>'] = secret }
+	}
 	return json.encode(safe.safe_json(json.Any({
 		'ok':             json.Any(failure == '')
 		'protocol':       json.Any(a.protocol)
@@ -418,8 +447,8 @@ fn protocol_probe(endpoint ProbeEndpoint, a ProtocolProbeArgs) string {
 		'source':         json.Any('business_protocol')
 		'address_family': json.Any(if endpoint.host == '::1' { 'ipv6' } else { 'ipv4' })
 		'tls': json.Any(endpoint.secure)
-		'tls_verified': json.Any(endpoint.secure && failure !in ['probe_tls_verification_failed', 'probe_tcp_connect_failed'])
-		'auth_configured': json.Any(endpoint.authorization != '')
+		'tls_verified': json.Any(endpoint.secure && failure !in ['probe_tls_verification_failed', 'probe_client_certificate_unavailable', 'probe_tcp_connect_failed'])
+		'auth_configured': json.Any(endpoint.authorization != '' || endpoint.auth_kind in ['digest', 'mtls'])
 		'stage': json.Any(probe_failure_stage(failure))
 		'elapsed_ms':     json.Any(time.ticks() - start)
 		'failure':        json.Any(failure)
@@ -428,11 +457,11 @@ fn protocol_probe(endpoint ProbeEndpoint, a ProtocolProbeArgs) string {
 }
 
 fn probe_failure(message string, fallback string) string {
-	return if message in ['probe_tls_verification_failed', 'probe_tcp_connect_failed', 'probe_authentication_rejected_401', 'probe_authentication_rejected_403'] { message } else { fallback }
+	return if message in ['probe_tls_verification_failed', 'probe_client_certificate_unavailable', 'probe_tcp_connect_failed', 'probe_authentication_rejected_401', 'probe_authentication_rejected_403', 'probe_digest_challenge_required', 'probe_digest_challenge_unsupported'] { message } else { fallback }
 }
 
 fn probe_failure_stage(failure string) string {
-	return if failure == 'probe_tls_verification_failed' { 'tls' } else if failure == 'probe_tcp_connect_failed' { 'connect' } else if failure.starts_with('probe_authentication_rejected_') { 'authentication' } else { 'protocol' }
+	return if failure in ['probe_tls_verification_failed', 'probe_client_certificate_unavailable'] { 'tls' } else if failure == 'probe_tcp_connect_failed' { 'connect' } else if failure.starts_with('probe_authentication_rejected_') || failure.starts_with('probe_digest_') { 'authentication' } else { 'protocol' }
 }
 
 // Safe configuration inventory; no sockets, paths, certificate bytes or secrets.
@@ -447,7 +476,7 @@ fn protocol_probe_options(plan runtime_plan.RuntimePlan, allowed []string) strin
 		l := plan.listeners[id] or { continue }
 		mut refs := []string{}
 		for adapter_id, adapter in plan.adapters {
-			if adapter.options.strings['probe_bearer_token'] != '' && plan.pipelines.any(it.ingress.domain == .listener && it.ingress.id == id && it.egress.domain == .adapter && it.egress.id == adapter_id) { refs << adapter_id }
+			if protocol_probe_auth_available(adapter.options.strings) && (protocol_probe_auth_kind(adapter.options.strings) != 'mtls' || endpoint.secure) && plan.pipelines.any(it.ingress.domain == .listener && it.ingress.id == id && it.egress.domain == .adapter && it.egress.id == adapter_id) { refs << adapter_id }
 		}
 		refs.sort()
 		mut names := []string{}
@@ -460,6 +489,7 @@ fn protocol_probe_options(plan runtime_plan.RuntimePlan, allowed []string) strin
 			'listener_certificate_available': json.Any(l.tls.cert != '' || l.tls.certificates.len > 0)
 			'certificate_hosts': json.Any(names.map(json.Any(it)))
 			'auth_refs': json.Any(refs.map(json.Any(it)))
+			'authentication': json.Any(refs.map(json.Any({'auth_ref': json.Any(it), 'kind': json.Any(protocol_probe_auth_kind(plan.adapters[it].options.strings)), 'protocols': json.Any((if protocol_probe_auth_kind(plan.adapters[it].options.strings) == 'digest' { ['stream'] } else if l.protocol == 'websocket' { ['websocket'] } else { ['stream', 'websocket', 'mcp'] }).map(json.Any(it)))})))
 		})
 	}
 	return json.encode({'source': json.Any('configuration'), 'listeners': json.Any(listeners)})
