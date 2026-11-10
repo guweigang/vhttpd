@@ -524,6 +524,30 @@ updated: 2026-11-10
 
 [本轮归档摘要](./release-evidence/2026-11-10/response-handoff/artifact-sha256.json)可核对最终补丁、测试和原始结果。
 
+### 恢复上游 GC 源码与响应体优化整包验证（2026-11-10）
+
+- [x] 按维护者建议恢复冻结 V d13ccdd 的上游 GC 源码：撤回 thirdparty/libgc/gc.c 的 GCC O2 pragma，gc.c 与该上游基线逐字节一致（SHA 71133692…），GC 启动代码也未修改。保留 shared 对象生命周期正确性修复和上一节四个 veb 文件的响应体交接优化；vjsx 未改。此前称“GC 策略调整”不够准确：实际源码改动是编译规避，脚本覆盖的三个值 1/7/0 恰好与上游 V/Boehm 的有效默认值一致。本轮删除全部 GC_* 环境覆盖，并只读核验独立进程的真实值仍为 1/7/0。Boehm C 初始 divisor=3 会被上游 V 初始化改为 1，不能只看 C 默认值。见[源码一致性](./release-evidence/2026-11-10/upstream-gc-handoff/upstream-source-check.json)、[撤回补丁](./release-evidence/2026-11-10/upstream-gc-handoff/gc-rollback.patch.txt)和[实际参数核验](./release-evidence/2026-11-10/upstream-gc-handoff/runtime-policy-probe.json)。
+- [x] 新候选 SHA f6144d0928fd5bcea4b75277f018ce4dedad62259d41c6888ecf820b80fd4fc9 已构建并独立运行，实际 build-info 为 0.9.0/Boehm。沿用冻结 V、SDK、扫描器和 vhttpd 源码，加入上一节 veb 补丁；上游 gc.c 以原生 GCC 13 显式 O2 重建，没有复用旧 GC 缓存。未变更的 QuickJS 等原生对象复用且记录摘要。源码恢复不等于取消构建条件：本轮并未放行此前复现滞留的无保护 O3 构建。见[构建及链接审计](./release-evidence/2026-11-10/upstream-gc-handoff/packages/after/cross-audit.json)、[源码溯源](./release-evidence/2026-11-10/upstream-gc-handoff/source-provenance.json)、[候选元数据](./release-evidence/2026-11-10/upstream-gc-handoff/after-package-info.json)和[生成代码核验](./release-evidence/2026-11-10/upstream-gc-handoff/codegen-proof.json)。
+- [x] 为分离 GC 重建与复制优化，另外用旧候选主程序对象链接与新候选完全相同的 GC 对象（7592c15d…），得到控制包 249bf929…。四轮顺序为旧主程序/旧 GC → 新候选 → 新候选 → 旧主程序/新 GC 控制包；**不是重复旧控制的 ABBA**，同 GC 控制仅一轮。首轮旧包 60da360c…单独保留，不能把它与新包的差额全部归于复制。见[控制包审计](./release-evidence/2026-11-10/upstream-gc-handoff/packages/control/cross-audit.json)和[协议修订](./release-evidence/2026-11-10/upstream-gc-handoff/protocol-amendment.json)。
+- [x] 每轮自然完成预热后 30 秒基线、60 秒 HTTP、60 秒 Paseo、120 秒混合加压和 180 秒冷却；合成两源码根、四运行时拓扑，不是业务流量重放。累计 HTTP 57491 次、Paseo 352 轮，零校验错误、零 OOM；HTTP 包含按协议验证的 503。四轮压力期间空闲回收尝试均未增加，冷却中各自然触发两次；没有外部强制 GC 或调试器。保持 256 MiB、30% CPU、无 swap、独立网络、640 MiB 稳定启动门槛与 512 MiB 主机保护，采样主机余量最低 768.5 MiB。初次错误断言 divisor=3 的尝试在加压前退出，已排除并保留原始失败记录。见[逐轮统计](./release-evidence/2026-11-10/upstream-gc-handoff/analysis.json)、[运行协议](./release-evidence/2026-11-10/upstream-gc-handoff/manifest.json)、[启动参数](./release-evidence/2026-11-10/upstream-gc-handoff/launch-r2.json)和[断言更正](./release-evidence/2026-11-10/upstream-gc-handoff/default-value-correction.json)。
+- [x] **分配收益可重复：** 同 GC 控制包 HTTP 为 9.221 MiB/秒，新包两轮均约 8.506–8.507，均值减少 7.75%；混合为 9.930 → 9.200–9.207，均值减少 7.31%。Paseo 仅约 0.61% 差异，不能宣称有显著收益。指标是累计 GC 分配量，不是存活或泄漏字节；也不能称为恢复默认参数的收益。见[结论与对照统计](./release-evidence/2026-11-10/upstream-gc-handoff/finding.json)。
+
+以下均为各阶段末 30 秒中位数；短基线包含预热遗留，不能把冷却低于基线解释成“负残留”。
+
+| 轮次 | 混合 RSS MiB | 混合匿名 MiB | 冷却 RSS MiB | 冷却匿名 MiB | 压力到冷却匿名回落 MiB |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 旧主程序/旧 GC | 75.57 | 48.75 | 55.40 | 28.58 | 20.17 |
+| 新候选 1 | 62.89 | 36.21 | 52.35 | 25.68 | 10.54 |
+| 新候选 2 | 83.46 | 56.69 | 55.05 | 28.28 | 28.41 |
+| 旧主程序/同一上游 GC 控制 | 75.49 | 48.65 | 62.10 | 35.26 | 13.39 |
+
+- [x] **驻留改善仍需限定：** 两轮新包的压力匿名区间跨过控制包，第二轮甚至高于控制，不能保证每轮 RSS 更低。第二轮较高的堆在加压期间由普通 GC 缩小，空闲块反复复用，冷却后大部分回落；其具体预热/驻留差异尚未完成归因，不能定性为泄漏或已确认的保守根问题。两轮新包冷却值较同 GC 控制低约 6.98–9.58 MiB，但只有一个控制样本，首轮旧 GC 包冷却也只有 28.58 MiB；因此保留分配优化，不把全部冷却差额算成确定收益。Boehm 映射堆不是驻留内存，不能直接从匿名内存相减就认定“堆外增长”。见[完整曲线](./release-evidence/2026-11-10/upstream-gc-handoff/comparison.png)和[逐轮原始数据与结束状态](./release-evidence/2026-11-10/upstream-gc-handoff/runs/controller-state.json)。
+- [x] 13:01 只读收尾：四个独立测试进程均已退出，控制器 completed；journal 确认单元自然成功退出。成功的 transient 单元卸载后，systemctl show 返回默认限制，不能把它当作运行时限制；启动参数和运行时 memory.max 断言另存。bodytest PID 3730524/启动标识 39645663、包 SHA 0890d931 保持；匿名内存 129344 KiB（126.3 MiB）、RSS 140228 KiB、swap 为零，三个健康检查均为 200，连续监测 active，主机余量约 875.7 MiB。业务未换包、重启或接受本轮压力。见[业务及收尾核验](./release-evidence/2026-11-10/upstream-gc-handoff/final-business-check.json)、[单元日志](./release-evidence/2026-11-10/upstream-gc-handoff/unit-journal.txt)、[本地状态](./release-evidence/2026-11-10/upstream-gc-handoff/final-local-state.json)和[Linux 工具链状态](./release-evidence/2026-11-10/upstream-gc-handoff/final-linux-state.txt)。
+- [ ] **P0-02 继续阻断：** 响应体优化已完成整包短测；当前仅证明分配收益与短期可回收性。两次约 8 KiB 的 Context 分配及驻留波动仍待定位，真实业务收益、完整 24 小时、Windows 与最终构建链路尚未验收；上一节 autofree 问题也未关闭。本轮未部署业务或启动新 24 小时，不以调 GC 参数替代生命周期与分配问题的定位。
+
+[本轮证据摘要](./release-evidence/2026-11-10/upstream-gc-handoff/artifact-sha256.json)包含源码、编译/运行脚本、原始曲线与日志；[日志文件名映射](./release-evidence/2026-11-10/upstream-gc-handoff/log-name-map.json)记录 .log 到 .txt 的归档转换。
+
+
 
 
 
