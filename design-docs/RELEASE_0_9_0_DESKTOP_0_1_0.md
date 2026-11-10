@@ -38,10 +38,10 @@ updated: 2026-11-10
 
 - [x] 已实现并验证：上游 GC 源码/策略恢复，GC 编译单元使用已对照的 GCC O2；响应体交接与 per-worker writer Context 优化通过定向 macOS/Linux 回归。vjsx 未因本轮修改。见[源码及回归](./release-evidence/2026-11-10/context-lifetime/finding.json)。
 - [x] 已实现并验证：Linux amd64/Boehm 候选二进制 SHA256 为 dca8844f0725b08e22d3a6ce5adf63ed51c9aaaceb5ce3360aaaba1dc9c61d9d；整包短测每 HTTP 请求少分配约 7968 字节。冷却匿名内存旧/新约 27.7/28.7 MiB，尚未证实驻留改善。见[整包证据](./release-evidence/2026-11-10/context-pool-package/finding.json)。
-- [ ] 待验收 A：核对相同 SHA、实际 Boehm 与构建来源；以 bodytest 源码副本隔离验证 applicationInfo、应用预热、健康及应用路由，不访问真实数据库/云服务。
-- [ ] 待验收 B：通过现有升级助手切换 bodytest；保存原运行时及回滚记录，核验实际可执行文件 SHA、配置 revision、监听端口和应用路由。切换失败须回滚，不能继续当作成功启动长测。
-- [ ] 待验收 C：连续监测绑定新业务 PID 和启动标识，保存 RSS、匿名内存、Boehm 堆/空闲及轮次；业务观察与独立负载分开统计，不把合成请求冒充真实业务。
-- [ ] 待验收 D：主机 MemAvailable 连续达到 640 MiB 启动门槛且有余量后，用相同候选 SHA、全新目录和 systemd 单元独立运行 10 分钟基线、完整 24 小时 HTTP/Paseo 加压、10 分钟自然冷却。保留 256 MiB 内存、30% CPU、无 swap、512 MiB 主机保护，保护只终止独立任务。
+- [x] 已验收 A：核对相同 SHA、实际 Boehm 与构建来源；bodytest 副本在独立网络/文件系统内通过 applicationInfo 根目录/入口断言与原样应用预热，健康、业务路由及配置 revision 一致，未访问真实数据库/云服务。初次夹具缺少新增 MCP include，未计为候选失败；补齐后两项通过。见[API 断言](./release-evidence/2026-11-10/release-closeout/validation-application-info.json)、[原样应用](./release-evidence/2026-11-10/release-closeout/validation-original-app.json)。
+- [x] 已验收 B：14:45（北京时间）升级助手完成 bodytest 切换，新 PID 1974907、start_ticks 71602815，实际二进制为上述 dca8844f 候选；安装归档 SHA256 为 c72f262d578b0567d74265815f74628b88d912c796e0533bdccc82fc3b60ed93。三个健康检查 200、业务路由通过，四个监听端口和配置 revision 保持；原包与私有回滚操作记录保留，未归档凭据。见[切换结果](./release-evidence/2026-11-10/release-closeout/bodytest-switch.json)。
+- [x] 已实现并启动 C：新连续监测 vhttpd-bodytest-memory-observer-20261110.service 已绑定新 PID/启动标识及准确二进制 SHA；先验证对应符号布局再读取 RSS、匿名内存、Boehm 堆/空闲和回收轮次。只读采样不发送健康请求、不注入 GC。启动快照不代表长期改善；业务观察与独立负载分开统计。见[监测身份](./release-evidence/2026-11-10/release-closeout/business-identity.json)、[计数预检](./release-evidence/2026-11-10/release-closeout/business-counter-preflight.json)、[监测脚本](./release-evidence/2026-11-10/release-closeout/observe.py)。
+- [x] 已启动 D（尚未完成验收）：独立控制器先完成短流程，HTTP 1213、Paseo 15，零错误/OOM，自然进入冷却并退出。主机六次 MemAvailable 为约 980.5–994.2 MiB，均高于 640 MiB 启动门槛；随后在全新目录/单元启动同一 SHA 的完整长测。单元 vhttpd-soak-dca8844f-full24-20261110.service、运行时 PID 1979291/start_ticks 71633275，实际 Boehm 与 SHA 已核验。10 分钟基线 + 完整 24 小时 HTTP/Paseo 加压 + 10 分钟自然冷却，预计 11 月 10 日 15:00 开始加压、11 月 11 日 15:10 冷却结束。实际单元限制核对为 256 MiB、30% CPU、无 swap、独立网络；保留 512 MiB 主机保护，只终止独立任务。使用合成四运行时扫描拓扑，不能冒充真实业务或数据库负载。见[短流程结果](./release-evidence/2026-11-10/release-closeout/harness-smoke/result.json)、[长测元数据及脚本摘要](./release-evidence/2026-11-10/release-closeout/full24/metadata.json)、[实际单元属性](./release-evidence/2026-11-10/release-closeout/full24/active-unit-properties.txt)。
 - [ ] 待验收 E：自然结束后归档完整曲线、错误/OOM、FD/线程、GC 堆/空闲、加压是否误触发空闲回收及冷却残留。既有 Linux HTTP/Paseo 门槛保持 RSS 残留不超过 16 MiB、压力 RSS 不超过 256 MiB、FD 增量不超过 8；达到数值门槛也不能掩盖未解释的持续增长。
 - [ ] 缺失/待补齐：最终发行包在数据库、Provider、取消/超时、连接断开和应用启停/重载上的生命周期证据，以及其他目标平台的对应验证。Linux 单轮长测通过不能自动关闭这些项目。
 
@@ -590,7 +590,7 @@ updated: 2026-11-10
 
 - [ ] **未证明驻留改善：** 新包本轮加压匿名内存反而更高，压力到冷却回落 23.25 MiB，旧包回落 10.88 MiB；冷却末仅相差约 1.04 MiB。阶段末精确分区显示，混合时 GC 管理段匿名驻留约 21.32→36.11 MiB，段外约 17.25→15.86；新包起始 GC 驻留也更大（约 35.75→51.27）。这将主要差额定位到 GC 段，而不是额外原生段增长，但尚不能认定由复用、启动垃圾或保守根中的哪一项造成。候选与对照冷却曲线接近，单对样本也不能证明长期无泄漏。见[完整曲线](./release-evidence/2026-11-10/context-pool-package/comparison.png)、[阶段映射](./release-evidence/2026-11-10/context-pool-package/runs/02-after/mixed-gc-mapping.json)及[GC 触发计数观察](./release-evidence/2026-11-10/context-pool-package/gc-trigger-comparison.json)；映射快照为阶段末单点，与上表中位数口径不同。
 - [x] 14:19 收尾核验：两个测试进程均退出，单元自然成功结束；bodytest 包、PID/启动标识保持，匿名内存仍 126.3 MiB、swap 为零，三个健康检查 200，连续监测 active，主机可用约 879.8 MiB。业务没有换包、重启或承受本轮压力。见[最终业务及任务状态](./release-evidence/2026-11-10/context-pool-package/final-business-check.json)。
-- [ ] **P0-02 保持阻断：** 每请求 writer 分配已降为每 worker 固定开销，分配收益通过整包校验；RSS 收益、真实业务候选运行、完整 24 小时、Windows 及完整门禁仍未验收。本轮不切换业务、不启动新 24 小时。下一步固定启动/预热条件重复对照，并定位 GC 在用块与保留根，区分启动峰值、空闲堆驻留和真实存活；不以调 GC 参数替代归因。
+- [ ] **P0-02 保持阻断：** 每请求 writer 分配已降为每 worker 固定开销，分配收益通过整包校验；RSS 收益、真实业务候选运行、完整 24 小时、Windows 及完整门禁仍未验收。此处为 14:19 收尾的历史短测，当时未切换业务或启动 24 小时。之后已按本页 P0-02「当前收尾清单」完成候选应用验证和业务切换，并启动独立长测；完整结果仍待验收。
 
 [源码与业务映射证据摘要](./release-evidence/2026-11-10/context-lifetime/artifact-sha256.json)和[整包证据摘要](./release-evidence/2026-11-10/context-pool-package/artifact-sha256.json)保留补丁、最终测试、生成代码、脚本、曲线与原始快照。
 
