@@ -32,6 +32,9 @@ test('real PHP and TS one-shot reply producers spend trusted credentials and can
  try{
   await new Promise(r=>api.listen(0,'127.0.0.1',r));await new Promise(r=>proxy.listen(0,'127.0.0.1',r));
   const web=await port();let admin;do{admin=await port();}while(admin===web);adminOrigin=`http://127.0.0.1:${admin}`;
+  const configDir=path.join(root,'config');
+  fs.mkdirSync(configDir);
+  fs.copyFileSync(path.join(repo,'examples/codexbot-app-ts/config/bot.example.json'),path.join(configDir,'bot.example.json'));
   const entry=path.join(root,'reply-app.mts');
   fs.writeFileSync(entry,`import {createReplyContext} from ${JSON.stringify(path.join(repo,'examples/codexbot-app-ts/lib/state.mjs'))};
 import {createFeishuSessionHelpers,completeReplyResponse} from ${JSON.stringify(path.join(repo,'examples/codexbot-app-ts/lib/feishu-session-helpers.mjs'))};

@@ -125,8 +125,15 @@ jobs:
 
       - name: Smoke test
         shell: bash
+        env:
+          ACCEPTANCE_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.validation == 'package' && inputs.source_commit && github.sha || '' }}
         run: |
           set -euo pipefail
+          if [[ -n "$ACCEPTANCE_REF" ]]; then
+            # Build the requested source and exercise it with this workflow's E2E fixtures.
+            git fetch --no-tags --depth=1 origin "$ACCEPTANCE_REF"
+            git archive "$ACCEPTANCE_REF" tests/e2e | tar -x
+          fi
           VHTTPD_E2E_KEEP_TMP=1 make test-e2e 2>&1 | tee ci-results/e2e.log
           "$VHTTPD_BIN" --help >/dev/null
           if "$VHTTPD_BIN" -1 >/dev/null 2>&1; then
@@ -153,6 +160,7 @@ jobs:
           pathlib.Path(sys.argv[1]).write_text(json.dumps({
               'source_commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
               'source_tree': subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], text=True).strip(),
+              'acceptance_commit': os.environ['GITHUB_SHA'],
               'v_commit': lock['V_COMMIT'], 'vjsx_commit': sdk_commit,
               'quickjs_commit': (sdk / '.quickjs-version').read_text().strip(),
               'build_info': json.loads(subprocess.check_output([os.environ['VHTTPD_BIN'], '--build-info'], text=True)),
