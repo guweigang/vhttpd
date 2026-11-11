@@ -80,6 +80,14 @@ jobs:
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.validation == 'package' && inputs.source_commit || github.event.pull_request.head.sha || github.sha }}
 
+      - name: Prepare development package acceptance fixtures
+        if: github.event_name == 'workflow_dispatch' && inputs.validation == 'package' && inputs.source_commit != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin "$GITHUB_SHA"
+          git archive "$GITHUB_SHA" .github/actions/setup-runtime tests/e2e tests/admin-ui | tar -x
+
       - uses: ./.github/actions/setup-runtime
 
       - name: Verify dependency and GC build guards
@@ -125,15 +133,8 @@ jobs:
 
       - name: Smoke test
         shell: bash
-        env:
-          ACCEPTANCE_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.validation == 'package' && inputs.source_commit && github.sha || '' }}
         run: |
           set -euo pipefail
-          if [[ -n "$ACCEPTANCE_REF" ]]; then
-            # Build the requested source and exercise it with this workflow's E2E fixtures.
-            git fetch --no-tags --depth=1 origin "$ACCEPTANCE_REF"
-            git archive "$ACCEPTANCE_REF" tests/e2e | tar -x
-          fi
           VHTTPD_E2E_KEEP_TMP=1 make test-e2e 2>&1 | tee ci-results/e2e.log
           "$VHTTPD_BIN" --help >/dev/null
           if "$VHTTPD_BIN" -1 >/dev/null 2>&1; then

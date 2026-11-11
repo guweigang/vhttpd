@@ -23,9 +23,9 @@ test('failed or missing telemetry is unknown rather than healthy zero',()=>{
  assert.equal(failed.metrics[0].value,'—');assert.equal(failed.states[2].title,'未确认');
  assert.equal(failed.states[1].title,'未确认');
 });
-test('whole-project plan needs valid identity and evidence, pending points to Mac restart',()=>{
+test('whole-project plan needs valid identity and evidence, pending points to Workbench restart',()=>{
  const f=fixture();f.plan.actions=['restart_listener'];f.plan.restart_listeners=['web'];
- assert.equal(build(f).states[2].title,'待重启生效');assert.match(build(f).notices[0].detail,/Mac 工作台/);
+ assert.equal(build(f).states[2].title,'待重启生效');assert.match(build(f).notices[0].detail,/回到工作台点击“重启并生效”/);
  for(const plan of [null,{}, {...f.plan,config_path:'/foreign/vhttpd.toml'},{...f.plan,actions:null}]) {
   assert.equal(build({...f,plan}).states[2].title,'未确认');
  }
