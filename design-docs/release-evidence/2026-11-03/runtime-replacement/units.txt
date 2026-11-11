@@ -1,0 +1,17 @@
+MainPID=0
+Result=success
+Id=vhttpd-soak-fixed6-validation-20261103.service
+ActiveState=inactive
+SubState=dead
+
+MainPID=697845
+Result=success
+Id=vhttpd-soak-fixed6-24h-20261103.service
+ActiveState=active
+SubState=running
+
+MainPID=0
+Result=exit-code
+Id=vhttpd-soak-fixed5-24h-20261102.service
+ActiveState=failed
+SubState=failed

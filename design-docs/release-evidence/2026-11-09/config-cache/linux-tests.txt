@@ -1,0 +1,12 @@
+---- Testing... ----------------------------------------------------------------
+OK    [1/2] C: 38840.616 ms, R:    16.588 ms /Users/guweigang/Source/vhttpd/src/configcache/cache_test.v
+src/memidle/runtime.c.v:3:8: warning: module 'time' is imported but never used. Use `import time as _`, to silence this warning, or just remove the unused import line
+    1 | module memidle
+    2 | 
+    3 | import time
+      |        ~~~~
+    4 | 
+    5 | #flag @VMODROOT/src/memidle/idle.c
+OK    [2/2] C: 67641.352 ms, R:    15.610 ms /Users/guweigang/Source/vhttpd/src/executor/config_cache_host_test.v
+--------------------------------------------------------------------------------
+Summary for all V _test.v files: 2 passed, 2 total. Elapsed time: 106522 ms, on 1 job. Comptime: 106481 ms. Runtime: 32 ms.

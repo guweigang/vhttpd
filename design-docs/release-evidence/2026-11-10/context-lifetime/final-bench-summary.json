@@ -1,0 +1,74 @@
+{
+  "rows": [
+    {
+      "run": 1,
+      "body_bytes": 0,
+      "nil_bytes_per_request": 20111.75,
+      "reuse_bytes_per_request": 12112.0625,
+      "saved_bytes_per_request": 7999.6875
+    },
+    {
+      "run": 1,
+      "body_bytes": 1024,
+      "nil_bytes_per_request": 21417.3125,
+      "reuse_bytes_per_request": 13483.1875,
+      "saved_bytes_per_request": 7934.125
+    },
+    {
+      "run": 1,
+      "body_bytes": 8192,
+      "nil_bytes_per_request": 28299.5625,
+      "reuse_bytes_per_request": 20310.5625,
+      "saved_bytes_per_request": 7989.0
+    },
+    {
+      "run": 2,
+      "body_bytes": 0,
+      "nil_bytes_per_request": 20088.6875,
+      "reuse_bytes_per_request": 12110.0625,
+      "saved_bytes_per_request": 7978.625
+    },
+    {
+      "run": 2,
+      "body_bytes": 1024,
+      "nil_bytes_per_request": 21455.6875,
+      "reuse_bytes_per_request": 13456.8125,
+      "saved_bytes_per_request": 7998.875
+    },
+    {
+      "run": 2,
+      "body_bytes": 8192,
+      "nil_bytes_per_request": 28311.0,
+      "reuse_bytes_per_request": 20330.375,
+      "saved_bytes_per_request": 7980.625
+    },
+    {
+      "run": 3,
+      "body_bytes": 0,
+      "nil_bytes_per_request": 20140.3125,
+      "reuse_bytes_per_request": 12087.25,
+      "saved_bytes_per_request": 8053.0625
+    },
+    {
+      "run": 3,
+      "body_bytes": 1024,
+      "nil_bytes_per_request": 21421.1875,
+      "reuse_bytes_per_request": 13458.875,
+      "saved_bytes_per_request": 7962.3125
+    },
+    {
+      "run": 3,
+      "body_bytes": 8192,
+      "nil_bytes_per_request": 28284.25,
+      "reuse_bytes_per_request": 20352.8125,
+      "saved_bytes_per_request": 7931.4375
+    }
+  ],
+  "context_size_bytes": 7984,
+  "worker_state_size_bytes": 7992,
+  "saved_range_bytes_per_request": [
+    7931.4375,
+    8053.0625
+  ],
+  "scope": "Patched minimal append pipeline: nil compatibility state vs reuse, not two complete vhttpd packages. Three processes AB/BA/AB,256 requests per body/arm; initial state/routes/output buffer excluded. GC setup before arms; cumulative GC allocator accounting including rounding, not live/RSS or natural cooling."
+}

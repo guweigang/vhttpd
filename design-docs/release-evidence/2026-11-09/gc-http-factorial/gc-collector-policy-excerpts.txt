@@ -1,0 +1,519 @@
+Pinned collector source .runtime/gc-unmap-policy-20261109/gc-pinned.c
+SHA256 6dc2f3273b6b72269f5f7be7646b28fcc5ce613420ed157edb12aba089f19bce
+GC object used by all packages: d59d73ed9f3b18383d7098c64cdd5835300f63e7504c50671fe4889a59eea7cf
+
+--- source lines 12498-12572 ---
+12498:       if (hhdr == wanted)
+12499:         return i;
+12500:     }
+12501:   }
+12502:   return -1;
+12503: }
+12504: 
+12505: GC_API void GC_CALL
+12506: GC_foreach_heap_section_inner(GC_heap_section_proc fn, void *client_data)
+12507: {
+12508:   size_t i;
+12509: 
+12510:   /*
+12511:    * The collector memory is organized in heap sections that are split in
+12512:    * blocks.  Each such block has a header (obtained by `HDR(p)`) and the
+12513:    * block size is aligned to `HBLKSIZE`.  The block headers are kept
+12514:    * separately from the memory they point to.
+12515:    */
+12516:   for (i = 0; i < GC_n_heap_sects; ++i) {
+12517:     ptr_t start = GC_heap_sects[i].hs_start;
+12518:     ptr_t finish = start + GC_heap_sects[i].hs_bytes;
+12519:     ptr_t p;
+12520: 
+12521:     /* Merge in contiguous sections. */
+12522:     while (i + 1 < GC_n_heap_sects
+12523:            && GC_heap_sects[i + 1].hs_start == finish) {
+12524:       ++i;
+12525:       finish = GC_heap_sects[i].hs_start + GC_heap_sects[i].hs_bytes;
+12526:     }
+12527: 
+12528:     fn(start, finish, GC_HEAP_SECTION_TYPE_WHOLE_SECT, client_data);
+12529:     for (p = start; ADDR_LT(p, finish);) {
+12530:       /*
+12531:        * Lookup into 2-level tree data structure which uses address
+12532:        * as a hash key to find the block header.
+12533:        */
+12534:       hdr *hhdr = HDR(p);
+12535: 
+12536:       if (IS_FORWARDING_ADDR_OR_NIL(hhdr)) {
+12537:         /*
+12538:          * The pointer has no header registered in the headers cache.
+12539:          * Skip one `HBLKSIZE` and retry.  Might be mapped or not.
+12540:          */
+12541:         fn(p, p + HBLKSIZE, GC_HEAP_SECTION_TYPE_FORWARDING, client_data);
+12542:         p += HBLKSIZE;
+12543:         continue;
+12544:       }
+12545: 
+12546:       if (HBLK_IS_FREE(hhdr)) {
+12547:         /*
+12548:          * The block is marked as free.  Note: `hb_sz` is the size in bytes
+12549:          * of the whole block.
+12550:          */
+12551:         fn(p, p + hhdr->hb_sz,
+12552:            IS_MAPPED(hhdr) ? GC_HEAP_SECTION_TYPE_FREE
+12553:                            : GC_HEAP_SECTION_TYPE_UNMAPPED,
+12554:            client_data);
+12555:         p += hhdr->hb_sz;
+12556:       } else {
+12557:         /*
+12558:          * This heap block is used.  Report also the padding, if any.
+12559:          * Note: `hb_sz` is the size (in bytes) of objects in the block.
+12560:          */
+12561:         ptr_t blockEnd = p + HBLKSIZE * OBJ_SZ_TO_BLOCKS(hhdr->hb_sz);
+12562:         ptr_t usedBlockEnd = p + hhdr->hb_sz;
+12563: 
+12564:         fn(p, usedBlockEnd, GC_HEAP_SECTION_TYPE_USED, client_data);
+12565:         if (ADDR_LT(usedBlockEnd, blockEnd))
+12566:           fn(usedBlockEnd, blockEnd, GC_HEAP_SECTION_TYPE_PADDING,
+12567:              client_data);
+12568:         p = blockEnd;
+12569:       }
+12570:     }
+12571:   }
+12572: }
+
+--- source lines 12899-12958 ---
+12899:   UNUSED_ARG(hhdr);
+12900: #  endif
+12901: }
+12902: 
+12903: GC_INNER void
+12904: GC_unmap_old(unsigned threshold)
+12905: {
+12906:   size_t i;
+12907: 
+12908: #  ifdef COUNT_UNMAPPED_REGIONS
+12909:   /*
+12910:    * Skip unmapping if we have already exceeded the soft limit.
+12911:    * This forgoes any opportunities to merge unmapped regions though.
+12912:    */
+12913:   if (GC_num_unmapped_regions >= GC_UNMAPPED_REGIONS_SOFT_LIMIT)
+12914:     return;
+12915: #  endif
+12916: 
+12917:   for (i = 0; i <= N_HBLK_FLS; ++i) {
+12918:     struct hblk *h;
+12919:     hdr *hhdr;
+12920: 
+12921:     for (h = GC_hblkfreelist[i]; h != NULL; h = hhdr->hb_next) {
+12922:       hhdr = HDR(h);
+12923:       if (!IS_MAPPED(hhdr))
+12924:         continue;
+12925: 
+12926:       /*
+12927:        * Check that the interval is not smaller than the `threshold`.
+12928:        * The truncated counter value wrapping is handled correctly.
+12929:        */
+12930:       if ((unsigned short)(GC_gc_no - hhdr->hb_last_reclaimed)
+12931:           >= (unsigned short)threshold) {
+12932: #  ifdef COUNT_UNMAPPED_REGIONS
+12933:         /*
+12934:          * Continue with unmapping the block only if it will not create
+12935:          * too many unmapped regions, or if unmapping reduces the number
+12936:          * of regions.
+12937:          */
+12938:         int delta = calc_num_unmapped_regions_delta(h, hhdr);
+12939:         GC_signed_word regions = GC_num_unmapped_regions + delta;
+12940: 
+12941:         if (delta >= 0 && regions >= GC_UNMAPPED_REGIONS_SOFT_LIMIT) {
+12942:           GC_COND_LOG_PRINTF("Unmapped regions limit reached!\n");
+12943:           return;
+12944:         }
+12945:         GC_num_unmapped_regions = regions;
+12946: #  endif
+12947:         GC_unmap((ptr_t)h, hhdr->hb_sz);
+12948:         hhdr->hb_flags |= WAS_UNMAPPED;
+12949:       }
+12950:     }
+12951:   }
+12952: }
+12953: 
+12954: GC_INNER GC_bool
+12955: GC_merge_unmapped(void)
+12956: {
+12957:   size_t i;
+12958:   GC_bool merged = FALSE;
+
+--- source lines 13939-14047 ---
+13939: GC_API void GC_CALL
+13940: GC_set_min_bytes_allocd(size_t value)
+13941: {
+13942:   GC_ASSERT(value > 0);
+13943:   min_bytes_allocd_minimum = value;
+13944: }
+13945: 
+13946: GC_API size_t GC_CALL
+13947: GC_get_min_bytes_allocd(void)
+13948: {
+13949:   return min_bytes_allocd_minimum;
+13950: }
+13951: 
+13952: /*
+13953:  * Return the minimum number of bytes that must be allocated between
+13954:  * collections to amortize the cost of the latter.  Should be nonzero.
+13955:  */
+13956: static word
+13957: min_bytes_allocd(void)
+13958: {
+13959:   word result;
+13960:   word stack_size;
+13961:   /*
+13962:    * Total size of roots, it includes double stack size, since the stack
+13963:    * is expensive to scan.
+13964:    */
+13965:   word total_root_size;
+13966:   /* Estimate of memory to be scanned during normal collection. */
+13967:   word scan_size;
+13968: 
+13969:   GC_ASSERT(I_HOLD_LOCK());
+13970: #ifdef THREADS
+13971:   if (GC_need_to_lock) {
+13972:     /* We are multi-threaded... */
+13973:     stack_size = GC_total_stacksize;
+13974:     /*
+13975:      * For now, we just use the value computed during the latest garbage
+13976:      * collection.
+13977:      */
+13978: #  ifdef DEBUG_THREADS
+13979:     GC_log_printf("Total stacks size: %lu\n", (unsigned long)stack_size);
+13980: #  endif
+13981:   } else
+13982: #endif
+13983:   /* else */ {
+13984: #ifdef STACK_NOT_SCANNED
+13985:     stack_size = 0;
+13986: #elif defined(STACK_GROWS_UP)
+13987:     stack_size = (word)(GC_approx_sp() - GC_stackbottom);
+13988: #else
+13989:     stack_size = (word)(GC_stackbottom - GC_approx_sp());
+13990: #endif
+13991:   }
+13992: 
+13993:   total_root_size = 2 * stack_size + GC_root_size;
+13994:   scan_size = 2 * GC_composite_in_use + GC_atomic_in_use / 4 + total_root_size;
+13995:   result = scan_size / GC_free_space_divisor;
+13996:   if (GC_incremental) {
+13997:     result /= 2;
+13998:   }
+13999:   return result > min_bytes_allocd_minimum ? result : min_bytes_allocd_minimum;
+14000: }
+14001: 
+14002: /*
+14003:  * Return the number of bytes allocated, adjusted for explicit storage
+14004:  * management, etc.  This number is used in deciding when to trigger
+14005:  * collections.
+14006:  */
+14007: STATIC word
+14008: GC_adj_bytes_allocd(void)
+14009: {
+14010:   GC_signed_word result;
+14011:   GC_signed_word expl_managed = (GC_signed_word)GC_non_gc_bytes
+14012:                                 - (GC_signed_word)GC_non_gc_bytes_at_gc;
+14013: 
+14014:   /*
+14015:    * Do not count what was explicitly freed, or newly allocated for
+14016:    * explicit management.  Note that deallocating an explicitly managed
+14017:    * object should not alter result, assuming the client is playing by
+14018:    * the rules.
+14019:    */
+14020:   result = (GC_signed_word)GC_bytes_allocd + (GC_signed_word)GC_bytes_dropped
+14021:            - (GC_signed_word)GC_bytes_freed
+14022:            + (GC_signed_word)GC_finalizer_bytes_freed - expl_managed;
+14023:   if (result > (GC_signed_word)GC_bytes_allocd) {
+14024:     /* Probably a client bug or unfortunate scheduling. */
+14025:     result = (GC_signed_word)GC_bytes_allocd;
+14026:   }
+14027:   /*
+14028:    * We count objects enqueued for finalization as though they had been
+14029:    * reallocated this round.  Finalization is visible to user.
+14030:    * And if we do not count this, we have stability problems for programs
+14031:    * that finalize all objects.
+14032:    */
+14033:   result += (GC_signed_word)GC_bytes_finalized;
+14034:   if (result < (GC_signed_word)(GC_bytes_allocd >> 3)) {
+14035:     /*
+14036:      * Always count at least 1/8 of the allocations.  We do not want to
+14037:      * collect too infrequently, since that would inhibit coalescing of
+14038:      * free storage blocks.  This also makes us partially robust against
+14039:      * client bugs.
+14040:      */
+14041:     result = (GC_signed_word)(GC_bytes_allocd >> 3);
+14042:   }
+14043:   return (word)result;
+14044: }
+14045: 
+14046: /*
+14047:  * Clear up a few frames worth of garbage left at the top of the stack.
+
+--- source lines 14077-14105 ---
+14077: }
+14078: 
+14079: GC_INNER GC_bool
+14080: GC_should_collect(void)
+14081: {
+14082:   static word last_min_bytes_allocd, last_gc_no;
+14083: 
+14084:   GC_ASSERT(I_HOLD_LOCK());
+14085:   if (last_gc_no != GC_gc_no) {
+14086:     last_min_bytes_allocd = min_bytes_allocd();
+14087:     last_gc_no = GC_gc_no;
+14088:   }
+14089: #ifndef GC_DISABLE_INCREMENTAL
+14090:   if (GC_should_start_incremental_collection) {
+14091:     GC_should_start_incremental_collection = FALSE;
+14092:     return TRUE;
+14093:   }
+14094: #endif
+14095:   if (GC_disable_automatic_collection)
+14096:     return FALSE;
+14097: 
+14098:   if (GC_last_heap_growth_gc_no == GC_gc_no) {
+14099:     /* Avoid expanding past limits used by black-listing. */
+14100:     return TRUE;
+14101:   }
+14102: 
+14103:   return GC_adj_bytes_allocd() >= last_min_bytes_allocd;
+14104: }
+14105: 
+
+--- source lines 14965-14983 ---
+14965:    * accidentally marking a free list is not a problem; but some objects
+14966:    * on the list itself might be marked, and the given function call
+14967:    * fixes it.
+14968:    */
+14969:   clear_all_fl_marks();
+14970: 
+14971:   GC_VERBOSE_LOG_PRINTF("Bytes recovered before sweep - f.l. count = %ld\n",
+14972:                         (long)GC_bytes_found);
+14973: 
+14974:   /* Reconstruct free lists to contain everything not marked. */
+14975:   GC_start_reclaim(FALSE);
+14976: 
+14977: #ifdef USE_MUNMAP
+14978:   if (GC_unmap_threshold > 0    /*< memory unmapping enabled? */
+14979:       && LIKELY(GC_gc_no != 1)) /*< do not unmap during `GC_init` */
+14980:     GC_unmap_old(GC_unmap_threshold);
+14981: 
+14982:   GC_ASSERT(GC_heapsize >= GC_unmapped_bytes);
+14983: #endif
+
+--- source lines 15031-15072 ---
+15031:     GC_print_finalization_stats();
+15032: #endif
+15033: }
+15034: 
+15035: /* Note: if `stop_func` is 0, then `GC_default_stop_func` is used instead. */
+15036: STATIC GC_bool
+15037: GC_try_to_collect_general(GC_stop_func stop_func, GC_bool force_unmap)
+15038: {
+15039:   GC_bool result;
+15040: #ifdef USE_MUNMAP
+15041:   unsigned old_unmap_threshold;
+15042: #endif
+15043:   IF_CANCEL(int cancel_state;)
+15044: 
+15045:   if (UNLIKELY(!GC_is_initialized))
+15046:     GC_init();
+15047:   if (GC_debugging_started)
+15048:     GC_print_all_smashed();
+15049:   GC_notify_or_invoke_finalizers();
+15050:   LOCK();
+15051:   if (force_unmap) {
+15052:     /*
+15053:      * Record current heap size to make heap growth more conservative
+15054:      * afterwards (as if the heap is growing from zero size again).
+15055:      */
+15056:     GC_heapsize_at_forced_unmap = GC_heapsize;
+15057:   }
+15058:   DISABLE_CANCEL(cancel_state);
+15059: #ifdef USE_MUNMAP
+15060:   old_unmap_threshold = GC_unmap_threshold;
+15061:   if (force_unmap || (GC_force_unmap_on_gcollect && old_unmap_threshold > 0))
+15062:     GC_unmap_threshold = 1; /*< unmap as much as possible */
+15063: #endif
+15064:   /* Minimize junk left in my registers. */
+15065:   GC_noop6(0, 0, 0, 0, 0, 0);
+15066:   result = GC_try_to_collect_inner(stop_func != 0 ? stop_func
+15067:                                                   : GC_default_stop_func);
+15068: #ifdef USE_MUNMAP
+15069:   /* Restore it. */
+15070:   GC_unmap_threshold = old_unmap_threshold;
+15071: #endif
+15072:   RESTORE_CANCEL(cancel_state);
+
+--- source lines 15448-15490 ---
+15448: GC_collect_or_expand(word needed_blocks, unsigned flags, GC_bool retry)
+15449: {
+15450:   static word last_fo_entries, last_bytes_finalized;
+15451: 
+15452:   GC_bool gc_not_stopped = TRUE;
+15453:   word blocks_to_get;
+15454:   IF_CANCEL(int cancel_state;)
+15455: 
+15456:   GC_ASSERT(I_HOLD_LOCK());
+15457:   GC_ASSERT(GC_is_initialized);
+15458:   DISABLE_CANCEL(cancel_state);
+15459:   if (!GC_incremental && !GC_dont_gc
+15460:       && ((GC_dont_expand && GC_bytes_allocd > 0)
+15461:           || (GC_fo_entries > last_fo_entries
+15462:               && (last_bytes_finalized | GC_bytes_finalized) != 0
+15463:               && (GC_fo_entries - last_fo_entries)
+15464:                          * GC_allocd_bytes_per_finalizer
+15465:                      > GC_bytes_allocd)
+15466:           || GC_should_collect())) {
+15467:     /*
+15468:      * Try to do a full collection using "default" `stop_func` (unless
+15469:      * nothing has been allocated since the latest collection or heap
+15470:      * expansion is disabled).
+15471:      */
+15472:     gc_not_stopped = GC_try_to_collect_inner(
+15473:         GC_bytes_allocd > 0 && (!GC_dont_expand || !retry)
+15474:             ? GC_default_stop_func
+15475:             : GC_never_stop_func);
+15476:     if (gc_not_stopped || !retry) {
+15477:       /*
+15478:        * Either the collection has not been aborted or this is the
+15479:        * first attempt (in a loop).
+15480:        */
+15481:       last_fo_entries = GC_fo_entries;
+15482:       last_bytes_finalized = GC_bytes_finalized;
+15483:       RESTORE_CANCEL(cancel_state);
+15484:       return TRUE;
+15485:     }
+15486:   }
+15487: 
+15488:   blocks_to_get = (GC_heapsize - GC_heapsize_at_forced_unmap)
+15489:                       / (HBLKSIZE * GC_free_space_divisor)
+15490:                   + needed_blocks;
+
+--- source lines 15600-15648 ---
+15600:       /*
+15601:        * True incremental mode, not just generational.
+15602:        * Do our share of marking work.
+15603:        */
+15604:       GC_collect_a_little_inner(1);
+15605:     }
+15606: #endif
+15607:     /* Sweep blocks for objects of this size. */
+15608:     GC_ASSERT(!GC_is_full_gc || NULL == GC_obj_kinds[kind].ok_reclaim_list
+15609:               || NULL == GC_obj_kinds[kind].ok_reclaim_list[lg]);
+15610:     GC_continue_reclaim(lg, kind);
+15611: #if defined(CPPCHECK)
+15612:     GC_noop1_ptr(&flh);
+15613: #endif
+15614:     if (*flh != NULL)
+15615:       break;
+15616: 
+15617:     GC_new_hblk(lg, kind);
+15618: #if defined(CPPCHECK)
+15619:     GC_noop1_ptr(&flh);
+15620: #endif
+15621:     if (*flh != NULL)
+15622:       break;
+15623: 
+15624: #ifndef GC_DISABLE_INCREMENTAL
+15625:     if (GC_incremental && GC_time_limit == GC_TIME_UNLIMITED && !tried_minor
+15626:         && !GC_dont_gc) {
+15627:       GC_collect_a_little_inner(1);
+15628:       tried_minor = TRUE;
+15629:       continue;
+15630:     }
+15631: #endif
+15632:     if (UNLIKELY(!GC_collect_or_expand(1, 0 /* flags */, retry_cnt > 0)))
+15633:       return NULL;
+15634:     retry_cnt++;
+15635:   }
+15636:   /* Successful allocation; reset failure count. */
+15637:   GC_alloc_fail_count = 0;
+15638:   return (ptr_t)(*flh);
+15639: }
+15640: 
+15641: /*
+15642:  * Copyright 1988, 1989 Hans-J. Boehm, Alan J. Demers
+15643:  * Copyright (c) 1991-1995 by Xerox Corporation.  All rights reserved.
+15644:  * Copyright (c) 1997 by Silicon Graphics.  All rights reserved.
+15645:  * Copyright (c) 1999-2004 Hewlett-Packard Development Company, L.P.
+15646:  * Copyright (c) 2007 Free Software Foundation, Inc.
+15647:  * Copyright (c) 2008-2025 Ivan Maidanski
+15648:  *
+
+--- small-object reclaim, source lines 23995-24066 ---
+23995:   } else {
+23996:     GC_bool empty = GC_block_empty(hhdr);
+23997: 
+23998: #ifdef PARALLEL_MARK
+23999:     /*
+24000:      * Count can be low or one too high because we sometimes have to
+24001:      * ignore decrements.  Objects can also potentially be repeatedly
+24002:      * marked by each marker.  Here we assume 3 markers at most, but
+24003:      * this is extremely unlikely to fail spuriously with more.
+24004:      * And if it does, it should be looked at.
+24005:      */
+24006:     GC_ASSERT(sz != 0
+24007:               && (GC_markers_m1 > 1 ? 3 : GC_markers_m1 + 1)
+24008:                              * (HBLKSIZE / sz + 1)
+24009:                          + 16
+24010:                      >= hhdr->hb_n_marks);
+24011: #else
+24012:     GC_ASSERT(sz * hhdr->hb_n_marks <= HBLKSIZE);
+24013: #endif
+24014: #ifdef VALGRIND_TRACKING
+24015:     /*
+24016:      * Call `GC_free_profiler_hook()` on freed objects so that
+24017:      * a profiling tool could track the allocations.
+24018:      */
+24019:     {
+24020:       ptr_t p = hbp->hb_body;
+24021:       ptr_t plim = p + HBLKSIZE - sz;
+24022:       size_t bit_no;
+24023: 
+24024:       for (bit_no = 0; ADDR_GE(plim, p);
+24025:            bit_no += MARK_BIT_OFFSET(sz), p += sz) {
+24026:         if (!mark_bit_from_hdr(hhdr, bit_no))
+24027:           FREE_PROFILER_HOOK(p);
+24028:       }
+24029:     }
+24030: #endif
+24031:     GC_ASSERT(hbp == hhdr->hb_block);
+24032:     if (report_if_found) {
+24033:       GC_reclaim_small_nonempty_block(hbp, sz, TRUE /* `report_if_found` */);
+24034:     } else if (empty) {
+24035: #ifdef ENABLE_DISCLAIM
+24036:       if ((hhdr->hb_flags & HAS_DISCLAIM) != 0) {
+24037:         GC_disclaim_and_reclaim_or_free_small_block(hbp);
+24038:       } else
+24039: #endif
+24040:       /* else */ {
+24041:         GC_bytes_found += (GC_signed_word)HBLKSIZE;
+24042:         GC_freehblk(hbp);
+24043:         FREE_PROFILER_HOOK(hbp);
+24044:       }
+24045:     } else if (GC_find_leak_inner || !GC_block_nearly_full(hhdr, sz)) {
+24046:       /* Group of smaller objects, enqueue the real work. */
+24047:       struct hblk **rlh = ok->ok_reclaim_list;
+24048: 
+24049:       if (rlh != NULL) {
+24050:         rlh += BYTES_TO_GRANULES(sz);
+24051:         hhdr->hb_next = *rlh;
+24052:         *rlh = hbp;
+24053:       }
+24054:     } else {
+24055:       /* Not worth salvaging. */
+24056:     }
+24057:     /*
+24058:      * We used to do the `GC_block_nearly_full` check later, but we
+24059:      * already have the right cache context here.  Also doing it here
+24060:      * avoids some silly lock contention in `GC_malloc_many()`.
+24061:      */
+24062:     if (IS_PTRFREE_SAFE(hhdr)) {
+24063:       GC_atomic_in_use += (word)sz * hhdr->hb_n_marks;
+24064:     } else {
+24065:       GC_composite_in_use += (word)sz * hhdr->hb_n_marks;
+24066:     }

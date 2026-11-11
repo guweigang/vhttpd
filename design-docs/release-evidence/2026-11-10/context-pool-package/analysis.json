@@ -1,0 +1,181 @@
+{
+  "scope": "Single serial old/new pair, same SDK/scanner/compiler/native objects and exact upstream O2 GC object; ordinary Boehm, GC environment defaults. Synthetic topology, not real business replay. Additional read-only mapped-region snapshots at phase ends. One pair cannot establish general resident-memory benefit.",
+  "runs": [
+    {
+      "run": "01-before",
+      "variant": "before",
+      "role": "f6144d09 prior response-handoff candidate; writer allocated per request",
+      "sha256": "f6144d0928fd5bcea4b75277f018ce4dedad62259d41c6888ecf820b80fd4fc9",
+      "counts": {
+        "http_ok": 14442,
+        "http_errors": 0,
+        "paseo_ok": 88,
+        "paseo_errors": 0
+      },
+      "phases": {
+        "baseline": {
+          "samples": 6,
+          "rss_tail_mib": 79.4765625,
+          "anon_tail_mib": 52.46484375,
+          "anon_peak_mib": 52.5,
+          "anon_early_mib": 52.48828125,
+          "gc_heap_tail_mib": 42.390625,
+          "gc_free_tail_mib": 18.279296875,
+          "gc_allocated_mib_per_second": 0.07949452003555732,
+          "gc_epoch_increase": 0,
+          "min_host_available_mib": 821.5078125
+        },
+        "http": {
+          "samples": 12,
+          "rss_tail_mib": 67.0,
+          "anon_tail_mib": 39.98828125,
+          "anon_peak_mib": 52.91015625,
+          "anon_early_mib": 52.90625,
+          "gc_heap_tail_mib": 23.1796875,
+          "gc_free_tail_mib": 10.16796875,
+          "gc_allocated_mib_per_second": 8.48554890398014,
+          "gc_epoch_increase": 28,
+          "min_host_available_mib": 813.66796875
+        },
+        "paseo": {
+          "samples": 12,
+          "rss_tail_mib": 66.5703125,
+          "anon_tail_mib": 39.55859375,
+          "anon_peak_mib": 39.5625,
+          "anon_early_mib": 39.546875,
+          "gc_heap_tail_mib": 22.66015625,
+          "gc_free_tail_mib": 9.294921875,
+          "gc_allocated_mib_per_second": 0.7939265964573584,
+          "gc_epoch_increase": 3,
+          "min_host_available_mib": 818.09765625
+        },
+        "mixed": {
+          "samples": 24,
+          "rss_tail_mib": 65.564453125,
+          "anon_tail_mib": 38.552734375,
+          "anon_peak_mib": 39.55078125,
+          "anon_early_mib": 39.00390625,
+          "gc_heap_tail_mib": 21.33203125,
+          "gc_free_tail_mib": 8.650390625,
+          "gc_allocated_mib_per_second": 9.17490984199794,
+          "gc_epoch_increase": 68,
+          "min_host_available_mib": 816.796875
+        },
+        "cooldown": {
+          "samples": 36,
+          "rss_tail_mib": 54.689453125,
+          "anon_tail_mib": 27.677734375,
+          "anon_peak_mib": 38.6796875,
+          "anon_early_mib": 38.64453125,
+          "gc_heap_tail_mib": 10.5859375,
+          "gc_free_tail_mib": 0.001953125,
+          "gc_allocated_mib_per_second": 0.07830373076900797,
+          "gc_epoch_increase": 4,
+          "min_host_available_mib": 823.171875
+        }
+      },
+      "pressure_idle_attempt_increase": 0,
+      "natural_recovery_mib": 10.875,
+      "cooldown_above_baseline_mib": -24.787109375,
+      "natural_status_kib": {
+        "VmRSS": 56704,
+        "RssAnon": 29044,
+        "RssFile": 27660,
+        "RssShmem": 0,
+        "VmSwap": 0
+      },
+      "oom_free": true,
+      "gc_divisors": [
+        1
+      ]
+    },
+    {
+      "run": "02-after",
+      "variant": "after",
+      "role": "same vhttpd source plus per-worker private writer slot",
+      "sha256": "dca8844f0725b08e22d3a6ce5adf63ed51c9aaaceb5ce3360aaaba1dc9c61d9d",
+      "counts": {
+        "http_ok": 14407,
+        "http_errors": 0,
+        "paseo_ok": 88,
+        "paseo_errors": 0
+      },
+      "phases": {
+        "baseline": {
+          "samples": 6,
+          "rss_tail_mib": 92.84765625,
+          "anon_tail_mib": 65.8828125,
+          "anon_peak_mib": 66.90234375,
+          "anon_early_mib": 65.265625,
+          "gc_heap_tail_mib": 54.64453125,
+          "gc_free_tail_mib": 3.955078125,
+          "gc_allocated_mib_per_second": 0.07865860971913757,
+          "gc_epoch_increase": 0,
+          "min_host_available_mib": 814.9140625
+        },
+        "http": {
+          "samples": 12,
+          "rss_tail_mib": 80.390625,
+          "anon_tail_mib": 53.42578125,
+          "anon_peak_mib": 70.27734375,
+          "anon_early_mib": 70.2578125,
+          "gc_heap_tail_mib": 37.79296875,
+          "gc_free_tail_mib": 19.42578125,
+          "gc_allocated_mib_per_second": 7.799793568276105,
+          "gc_epoch_increase": 14,
+          "min_host_available_mib": 788.9375
+        },
+        "paseo": {
+          "samples": 12,
+          "rss_tail_mib": 80.5,
+          "anon_tail_mib": 53.53515625,
+          "anon_peak_mib": 53.546875,
+          "anon_early_mib": 53.5234375,
+          "gc_heap_tail_mib": 37.79296875,
+          "gc_free_tail_mib": 19.37890625,
+          "gc_allocated_mib_per_second": 0.7854467424240491,
+          "gc_epoch_increase": 2,
+          "min_host_available_mib": 807.99609375
+        },
+        "mixed": {
+          "samples": 24,
+          "rss_tail_mib": 78.93359375,
+          "anon_tail_mib": 51.96875,
+          "anon_peak_mib": 53.546875,
+          "anon_early_mib": 53.5390625,
+          "gc_heap_tail_mib": 36.55859375,
+          "gc_free_tail_mib": 15.384765625,
+          "gc_allocated_mib_per_second": 8.574138279227059,
+          "gc_epoch_increase": 32,
+          "min_host_available_mib": 808.83203125
+        },
+        "cooldown": {
+          "samples": 36,
+          "rss_tail_mib": 55.681640625,
+          "anon_tail_mib": 28.716796875,
+          "anon_peak_mib": 51.984375,
+          "anon_early_mib": 51.94921875,
+          "gc_heap_tail_mib": 13.08203125,
+          "gc_free_tail_mib": 0.001953125,
+          "gc_allocated_mib_per_second": 0.07863056408153889,
+          "gc_epoch_increase": 4,
+          "min_host_available_mib": 816.4296875
+        }
+      },
+      "pressure_idle_attempt_increase": 0,
+      "natural_recovery_mib": 23.251953125,
+      "cooldown_above_baseline_mib": -37.166015625,
+      "natural_status_kib": {
+        "VmRSS": 57388,
+        "RssAnon": 29776,
+        "RssFile": 27612,
+        "RssShmem": 0,
+        "VmSwap": 0
+      },
+      "oom_free": true,
+      "gc_divisors": [
+        1
+      ]
+    }
+  ]
+}

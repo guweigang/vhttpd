@@ -1,0 +1,452 @@
+diff --git a/src/executor/embedded_host_test.v b/src/executor/embedded_host_test.v
+index d7c7a585..9508f8f5 100644
+--- a/src/executor/embedded_host_test.v
++++ b/src/executor/embedded_host_test.v
+@@ -156,7 +156,8 @@ fn test_embedded_host_callbacks_report_absence_and_expired_request() {
+ 		hosts: [VjsxLaneHost.empty()]
+ 		lanes: [VjsxExecutionLane{ id: 'lane_0' }]
+ 	}
+-	InProcVjsxHostApi.install(mut ctx, mut state, 0)
++	mut config_cache := InProcVjsxHostApi.install(mut ctx, mut state, 0)
++	defer { config_cache.close() }
+ 	empty := ctx.eval('JSON.stringify({creation: vhttpdHost.issueFeishuStream("stream", "main"), config: vhttpdHost.config(), emitted: vhttpdHost.emit("test"), snapshot: typeof vhttpdHost.snapshot(), bridge: vhttpdHost.bridgeDispatch("{}"), websocket: vhttpdHost.websocketDispatch("{}")})') or { panic(err) }
+ 	defer { empty.free() }
+ 	assert empty.to_string().contains('"creation":""')
+diff --git a/src/executor/inproc_vjsx_host_api.v b/src/executor/inproc_vjsx_host_api.v
+index 3f74791f..b8239eaf 100644
+--- a/src/executor/inproc_vjsx_host_api.v
++++ b/src/executor/inproc_vjsx_host_api.v
+@@ -1,6 +1,7 @@
+ module executor
+ 
+ import vjsx
++import configcache
+ 
+ struct InProcVjsxHostApi {}
+ 
+@@ -15,7 +16,7 @@ fn InProcVjsxHostApi.install_http_facade(mut ctx vjsx.Context) ! {
+ 	ctx.end()
+ }
+ 
+-fn InProcVjsxHostApi.builder(mut state VjsxExecutorState, idx int) vjsx.HostValueBuilder {
++fn InProcVjsxHostApi.builder(mut state VjsxExecutorState, idx int, mut cache configcache.Cache) vjsx.HostValueBuilder {
+ 	return vjsx.host_object(vjsx.HostObjectField{
+ 		name: 'log'
+ 		value: InProcVjsxHostApi.log_builder(mut state, idx)
+@@ -42,7 +43,7 @@ fn InProcVjsxHostApi.builder(mut state VjsxExecutorState, idx int) vjsx.HostValu
+ 		value: InProcVjsxHostApi.session_store_builder(mut state, idx)
+ 	}, vjsx.HostObjectField{
+ 		name:  'config'
+-		value: InProcVjsxHostApi.config_builder(mut state, idx)
++		value: InProcVjsxHostApi.config_builder(mut state, idx, mut cache)
+ 	}, vjsx.HostObjectField{
+ 		name:  'readTextFile'
+ 		value: InProcVjsxHostApi.read_text_file_builder(mut state, idx)
+@@ -61,14 +62,16 @@ fn InProcVjsxHostApi.builder(mut state VjsxExecutorState, idx int) vjsx.HostValu
+ 	})
+ }
+ 
+-fn InProcVjsxHostApi.install(mut ctx vjsx.Context, mut state VjsxExecutorState, idx int) {
++fn InProcVjsxHostApi.install(mut ctx vjsx.Context, mut state VjsxExecutorState, idx int) &configcache.Cache {
++	mut cache := &configcache.Cache{}
+ 	InProcVjsxHostApi.install_application_console(ctx, mut state, idx)
+ 	ctx.install_host_api(vjsx.HostApiConfig{
+ 		globals: [
+ 			vjsx.HostGlobalBinding{
+ 				name:  'vhttpdHost'
+-				value: InProcVjsxHostApi.builder(mut state, idx)
++				value: InProcVjsxHostApi.builder(mut state, idx, mut cache)
+ 			},
+ 		]
+ 	})
++	return cache
+ }
+diff --git a/src/executor/inproc_vjsx_host_config_api.v b/src/executor/inproc_vjsx_host_config_api.v
+index 3f4f6aec..d5639c07 100644
+--- a/src/executor/inproc_vjsx_host_config_api.v
++++ b/src/executor/inproc_vjsx_host_config_api.v
+@@ -1,38 +1,19 @@
+ module executor
+ 
+ import vjsx
+-import x.json2
++import configcache
+ 
+ fn InProcVjsxHostApi.config_lookup(raw_json string, path string) string {
+-	if raw_json.trim_space() == '' {
+-		return ''
+-	}
+-	if path.trim_space() == '' {
+-		return raw_json
+-	}
+-	parsed := json2.decode[json2.Any](raw_json) or { return '' }
+-	mut current := parsed
+-	for raw_part in path.split('.') {
+-		part := raw_part.trim_space()
+-		if part == '' {
+-			continue
+-		}
+-		root := current.as_map()
+-		if part !in root {
+-			return ''
+-		}
+-		current = root[part] or { return '' }
+-	}
+-	return current.json_str()
++	return configcache.resolve(raw_json, path)
+ }
+ 
+-fn InProcVjsxHostApi.config_builder(mut state VjsxExecutorState, idx int) vjsx.HostValueBuilder {
+-	return fn [mut state, idx] (ctx &vjsx.Context) vjsx.Value {
+-		return ctx.js_function(fn [ctx, mut state, idx] (args []vjsx.Value) vjsx.Value {
++fn InProcVjsxHostApi.config_builder(mut state VjsxExecutorState, idx int, mut cache configcache.Cache) vjsx.HostValueBuilder {
++	return fn [mut state, idx, mut cache] (ctx &vjsx.Context) vjsx.Value {
++		return ctx.js_function(fn [ctx, mut state, idx, mut cache] (args []vjsx.Value) vjsx.Value {
+ 			access := state.request_host(idx, .request_only) or { return ctx.js_string('') }
+ 			mut app := access.host
+ 			path := if args.len > 0 { args[0].to_string().trim_space() } else { '' }
+-			return ctx.js_string(InProcVjsxHostApi.config_lookup(app.get_runtime_config_json(),
++			return ctx.js_string(cache.lookup(app.get_runtime_config_json(),
+ 				path))
+ 		})
+ 	}
+diff --git a/src/executor/inproc_vjsx_host_lifecycle.v b/src/executor/inproc_vjsx_host_lifecycle.v
+index 2a8e0364..6a5ab269 100644
+--- a/src/executor/inproc_vjsx_host_lifecycle.v
++++ b/src/executor/inproc_vjsx_host_lifecycle.v
+@@ -82,7 +82,8 @@ pub fn (e InProcVjsxExecutor) ensure_lane_host(idx int) ! {
+ 	log.debug('[vhttpd] ensure_lane_host runtime ready lane=${lane_id} idx=${idx} module=${as_module} temp_root=${temp_root}')
+ 	mut ctx := session.context()
+ 	InProcVjsxHostApi.install_http_facade(mut ctx)!
+-	InProcVjsxHostApi.install(mut ctx, mut state, idx)
++	mut config_cache := InProcVjsxHostApi.install(mut ctx, mut state, idx)
++	defer { if !owned_by_lane { config_cache.close() } }
+ 	InProcVjsxRuntimeProfileLog.write(lane_id, idx, config.runtime_profile, ctx)
+ 	mut module_binding_ptr := ?&vjsx.ScriptModule(none)
+ 	mut has_http_handler := false
+@@ -202,6 +203,7 @@ pub fn (e InProcVjsxExecutor) ensure_lane_host(idx int) ! {
+ 		wakeup_owner:      wake_owner
+ 		session:           session
+ 		module_binding:    module_binding_ptr
++		config_cache:      config_cache
+ 	}
+ 	mut published_wake_owner := unsafe { wake_owner }
+ 	published_wake_owner.published = true
+diff --git a/src/executor/inproc_vjsx_lane_host.v b/src/executor/inproc_vjsx_lane_host.v
+index d162d708..a97363d7 100644
+--- a/src/executor/inproc_vjsx_lane_host.v
++++ b/src/executor/inproc_vjsx_lane_host.v
+@@ -1,6 +1,7 @@
+ module executor
+ 
+ import vjsx
++import configcache
+ 
+ struct VjsxLaneHost {
+ mut:
+@@ -15,6 +16,7 @@ mut:
+ 	session           ?&vjsx.RuntimeSession
+ 	module_binding    ?&vjsx.ScriptModule
+ 	request_ctx       InProcVjsxRequestContext
++	config_cache      ?&configcache.Cache
+ }
+ 
+ fn VjsxLaneHost.empty() VjsxLaneHost {
+@@ -22,6 +24,8 @@ fn VjsxLaneHost.empty() VjsxLaneHost {
+ }
+ 
+ fn (mut host VjsxLaneHost) destroy() {
++	if mut cache := host.config_cache { cache.close() }
++	host.config_cache = none
+ 	if owner := host.wakeup_owner { owner.retire() }
+ 	host.wakeup_owner = none
+ 	// Module values depend on the session context: release them first.
+diff --git a/src/http_observation_runtime.v b/src/http_observation_runtime.v
+index 4e5d2a56..4d3e9fcd 100644
+--- a/src/http_observation_runtime.v
++++ b/src/http_observation_runtime.v
+@@ -61,7 +61,9 @@ fn (mut observations HttpObservations) record_staged(pipeline string, method str
+ 	}
+ }
+ 
+-fn (mut app App) complete_http_observation(ctx Context, started i64, observation_id string) {
++// Read synchronously while the request context is alive. Borrowing avoids an
++// otherwise boxed copy of the large context on every completed request.
++fn (mut app App) complete_http_observation(ctx &Context, started i64, observation_id string) {
+ 	status := if ctx.res.status_code > 0 { ctx.res.status_code } else { 200 }
+ 	total_ns := time.sys_mono_now() - started
+ 	duration_ms := total_ns / 1000000
+diff --git a/src/configcache/cache.v b/src/configcache/cache.v
+new file mode 100644
+index 00000000..ad9f5de5
+--- /dev/null
++++ b/src/configcache/cache.v
+@@ -0,0 +1,88 @@
++module configcache
++
++import sync
++import x.json2
++
++const max_snapshot_bytes = 256 * 1024
++const max_path_bytes = 1024
++const max_entries = 32
++const max_entry_bytes = 64 * 1024
++
++// One owner, one configuration snapshot, bounded serialized lookup results.
++// No parsed JSON tree or JS value survives a miss. The owner must close this
++// cache when its runtime is retired, even if a callback still references it.
++pub struct Cache {
++mut:
++	mu          sync.Mutex
++	snapshot    string
++	ready       bool
++	values      map[string]string
++	entry_bytes int
++	closed      bool
++}
++
++pub fn resolve(raw_json string, path string) string {
++	if raw_json.trim_space() == '' { return '' }
++	if path.trim_space() == '' { return raw_json }
++	parsed := json2.decode[json2.Any](raw_json) or { return '' }
++	mut current := parsed
++	for raw_part in path.split('.') {
++		part := raw_part.trim_space()
++		if part == '' { continue }
++		root := current.as_map()
++		current = root[part] or { return '' }
++	}
++	return current.json_str()
++}
++
++fn (mut c Cache) clear_locked() {
++	c.snapshot = ''
++	c.ready = false
++	c.values = map[string]string{}
++	c.entry_bytes = 0
++}
++
++pub fn (mut c Cache) close() {
++	c.mu.@lock()
++	defer { c.mu.unlock() }
++	c.clear_locked()
++	c.closed = true
++}
++
++pub fn (mut c Cache) is_closed() bool {
++	c.mu.@lock()
++	defer { c.mu.unlock() }
++	return c.closed
++}
++
++pub fn (mut c Cache) entry_count() int {
++	c.mu.@lock()
++	defer { c.mu.unlock() }
++	return c.values.len
++}
++
++pub fn (mut c Cache) lookup(raw_json string, path string) string {
++	c.mu.@lock()
++	if c.closed || raw_json.len > max_snapshot_bytes || path.len > max_path_bytes {
++		c.clear_locked()
++		c.mu.unlock()
++		return resolve(raw_json, path)
++	}
++	defer { c.mu.unlock() }
++	if !c.ready || c.snapshot != raw_json {
++		c.clear_locked()
++		// Own the bounded bytes, rather than retaining a slice of a larger buffer.
++		c.snapshot = raw_json.clone()
++		c.ready = true
++	}
++	// Preserve the existing raw-document contract, including invalid JSON.
++	if path.trim_space() == '' { return resolve(raw_json, path) }
++	if value := c.values[path] { return value }
++	value := resolve(raw_json, path)
++	bytes := path.len + value.len
++	if c.values.len < max_entries && bytes <= max_entry_bytes - c.entry_bytes {
++		c.values[path.clone()] = value.clone()
++		c.entry_bytes += bytes
++	}
++	return value
++}
+diff --git a/src/configcache/cache_test.v b/src/configcache/cache_test.v
+new file mode 100644
+index 00000000..53bc2673
+--- /dev/null
++++ b/src/configcache/cache_test.v
+@@ -0,0 +1,88 @@
++module configcache
++
++fn test_lookup_values_and_paths_preserve_serialized_contract() {
++	mut c := Cache{}
++	raw := '{"relay":{"debug":false,"ttl":0,"empty":"","nil":null,"list":[1,"x"]},"escaped":"a\\nb"}'
++	for path in ['relay.debug', 'relay.ttl', 'relay.empty', 'relay.nil', 'relay.list',
++		' relay .. debug ', 'missing', 'relay.missing', 'relay.ttl.child', '.', '', '  ', 'escaped'] {
++		assert c.lookup(raw, path) == resolve(raw, path), path
++		assert c.lookup(raw, path) == resolve(raw, path), path
++	}
++	assert c.lookup(raw, 'relay.debug') == 'false'
++	assert c.lookup(raw, 'relay.ttl') == '0'
++	assert c.lookup(raw, 'relay.empty') == '""'
++	assert c.lookup(raw, 'relay.nil') == 'null'
++}
++
++fn test_snapshot_changes_invalidate_positive_and_negative_entries() {
++	mut c := Cache{}
++	for _ in 0 .. 4 {
++		assert c.lookup('{"value":1}', 'value') == '1'
++		assert c.lookup('{"value":1}', 'new') == ''
++		assert c.lookup('{"value":2,"new":true}', 'value') == '2'
++		assert c.lookup('{"value":2,"new":true}', 'new') == 'true'
++		assert c.lookup('{"new":false}', 'value') == ''
++		assert c.lookup('{"new":false}', 'new') == 'false'
++	}
++}
++
++fn test_invalid_empty_and_non_object_snapshots_do_not_serve_old_values() {
++	mut c := Cache{}
++	for raw in ['{', '', ' \n\t', '[]', 'null', '42'] {
++		assert c.lookup('{"value":1}', 'value') == '1'
++		assert c.lookup(raw, 'value') == resolve(raw, 'value')
++		assert c.lookup(raw, 'value') == resolve(raw, 'value')
++		assert c.lookup(raw, '') == resolve(raw, '')
++	}
++}
++
++fn test_unique_paths_and_large_values_have_bounded_retention() {
++	mut c := Cache{}
++	for i in 0 .. 1000 { assert c.lookup('{}', 'missing_${i}') == '' }
++	assert c.values.len == max_entries
++	assert c.entry_bytes <= max_entry_bytes
++	large := '{"value":"' + 'x'.repeat(max_entry_bytes) + '"}'
++	assert c.lookup(large, 'value') == resolve(large, 'value')
++	assert c.values.len == 0
++	assert c.entry_bytes == 0
++	assert c.lookup('{"value":7}', 'value') == '7'
++	oversized := '{"value":8,"padding":"' + 'x'.repeat(max_snapshot_bytes) + '"}'
++	assert c.lookup(oversized, 'value') == '8'
++	assert c.snapshot == '' && c.values.len == 0
++	assert c.lookup('{"value":7}', 'x'.repeat(max_path_bytes + 1)) == ''
++	assert c.snapshot == '' && c.values.len == 0
++}
++
++fn test_close_releases_snapshot_and_entries_even_if_callback_keeps_cache() {
++	mut c := Cache{}
++	assert c.lookup('{"value":1}', 'value') == '1'
++	c.close()
++	c.close()
++	assert c.snapshot == '' && c.values.len == 0 && c.entry_bytes == 0
++	assert c.lookup('{"value":2}', 'value') == '2'
++	assert c.snapshot == '' && c.values.len == 0 && c.entry_bytes == 0
++}
++
++fn test_returned_values_remain_valid_after_invalidation_and_close() {
++	mut c := Cache{}
++	assert c.lookup('{"value":"first"}', 'value') == '"first"'
++	borrowed := c.lookup('{"value":"first"}', 'value')
++	assert c.lookup('{"value":"second"}', 'value') == '"second"'
++	c.close()
++	assert borrowed == '"first"'
++}
++
++fn cache_reader(mut c Cache, version int) {
++	raw := '{"value":${version}}'
++	for _ in 0 .. 100 {
++		if c.lookup(raw, 'value') != version.str() { panic('cross-snapshot cache value') }
++	}
++}
++
++fn test_concurrent_snapshot_changes_keep_results_associated_with_input() {
++	mut c := &Cache{}
++	mut jobs := []thread{}
++	for i in 0 .. 4 { jobs << spawn cache_reader(mut c, i) }
++	jobs.wait()
++	assert c.values.len <= max_entries && c.entry_bytes <= max_entry_bytes
++}
+diff --git a/src/executor/config_cache_host_test.v b/src/executor/config_cache_host_test.v
+new file mode 100644
+index 00000000..d0d7950a
+--- /dev/null
++++ b/src/executor/config_cache_host_test.v
+@@ -0,0 +1,80 @@
++module executor
++
++import vjsx
++
++struct ConfigCacheTestHost {
++	NoOpAppFacade
++mut:
++	config_json string
++}
++
++fn (h ConfigCacheTestHost) get_runtime_config_json() string { return h.config_json }
++
++fn config_cache_eval(ctx &vjsx.Context, code string) string {
++	value := ctx.eval(code) or { panic(err) }
++	defer { value.free() }
++	return value.to_string()
++}
++
++fn test_config_callback_cache_keeps_live_config_and_request_access_rules() {
++	mut session := vjsx.new_runtime_session()
++	defer { session.close() }
++	mut ctx := session.context()
++	mut state := &VjsxExecutorState{
++		hosts: [VjsxLaneHost.empty()]
++		lanes: [VjsxExecutionLane{ id: 'lane_0' }]
++	}
++	mut cache := InProcVjsxHostApi.install(mut ctx, mut state, 0)
++	defer { cache.close() }
++	exec := InProcVjsxExecutor{ state: state }
++	mut host := &ConfigCacheTestHost{ config_json: '{"value":1}' }
++	exec.activate_lane_request_context(0, mut host, 'lane_0', HttpLogicDispatchRequest{})
++	assert config_cache_eval(ctx, 'vhttpdHost.config("value")') == '1'
++	assert config_cache_eval(ctx, 'vhttpdHost.config("value")') == '1'
++	assert cache.entry_count() == 1
++	assert config_cache_eval(ctx, 'vhttpdHost.config("new")') == ''
++	host.config_json = '{"value":2,"new":false}'
++	assert config_cache_eval(ctx, 'vhttpdHost.config("value")') == '2'
++	assert config_cache_eval(ctx, 'vhttpdHost.config("new")') == 'false'
++	assert cache.entry_count() == 2
++	host.config_json = '{'
++	assert config_cache_eval(ctx, 'vhttpdHost.config("value")') == ''
++	host.config_json = '{"value":3}'
++	exec.clear_lane_request_context(0)
++	assert config_cache_eval(ctx, 'vhttpdHost.config("value")') == ''
++	exec.activate_lane_request_context(0, mut host, 'lane_0', HttpLogicDispatchRequest{})
++	assert config_cache_eval(ctx, 'vhttpdHost.config("value")') == '3'
++	// Teardown drops retained data even if a native callback keeps the cache alive.
++	state.hosts[0].config_cache = cache
++	state.hosts[0].destroy()
++	assert cache.is_closed()
++	assert cache.entry_count() == 0
++}
++
++fn test_config_callback_caches_are_not_shared_between_runtime_sessions() {
++	mut first := vjsx.new_runtime_session()
++	defer { first.close() }
++	mut second := vjsx.new_runtime_session()
++	defer { second.close() }
++	mut first_ctx := first.context()
++	mut second_ctx := second.context()
++	mut a := &VjsxExecutorState{ hosts: [VjsxLaneHost.empty()], lanes: [VjsxExecutionLane{ id: 'a' }] }
++	mut b := &VjsxExecutorState{ hosts: [VjsxLaneHost.empty()], lanes: [VjsxExecutionLane{ id: 'b' }] }
++	mut ca := InProcVjsxHostApi.install(mut first_ctx, mut a, 0)
++	defer { ca.close() }
++	mut cb := InProcVjsxHostApi.install(mut second_ctx, mut b, 0)
++	defer { cb.close() }
++	ea := InProcVjsxExecutor{ state: a }
++	eb := InProcVjsxExecutor{ state: b }
++	mut ha := &ConfigCacheTestHost{ config_json: '{"value":11}' }
++	mut hb := &ConfigCacheTestHost{ config_json: '{"value":22}' }
++	ea.activate_lane_request_context(0, mut ha, 'a', HttpLogicDispatchRequest{})
++	eb.activate_lane_request_context(0, mut hb, 'b', HttpLogicDispatchRequest{})
++	for _ in 0 .. 3 {
++		assert config_cache_eval(first_ctx, 'vhttpdHost.config("value")') == '11'
++		assert config_cache_eval(second_ctx, 'vhttpdHost.config("value")') == '22'
++	}
++	ca.close()
++	assert ca.entry_count() == 0 && cb.entry_count() == 1
++	assert config_cache_eval(second_ctx, 'vhttpdHost.config("value")') == '22'
++}

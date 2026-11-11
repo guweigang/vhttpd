@@ -1,0 +1,22 @@
+{
+  "health": {
+    "19887": 200,
+    "19901": 200,
+    "19987": 200
+  },
+  "pid": 1974907,
+  "start_ticks": "71602815",
+  "binary_sha256": "dca8844f0725b08e22d3a6ce5adf63ed51c9aaaceb5ce3360aaaba1dc9c61d9d",
+  "package_sha256": "c72f262d578b0567d74265815f74628b88d912c796e0533bdccc82fc3b60ed93",
+  "runtime_id": "sha256-c72f262d578b0567d74265815f74628b88d912c796e0533bdccc82fc3b60ed93",
+  "previous_id": "sha256-506c0e2fc8560547fb9935469b8644b86ea07758f66b5ede73d16dcf6c9e1041",
+  "upgrade_id": "8354eaddd8e701768b256668",
+  "listeners": [
+    "127.0.0.1:19887",
+    "127.0.0.1:19901",
+    "127.0.0.1:19987",
+    "127.0.0.1:58595"
+  ],
+  "revision": "10b4306f17dd757da1be8db6bc8060ad4de5bcf3f4f13722817b848c15301da2",
+  "utc": "2026-11-10T06:45:24.857144+00:00"
+}

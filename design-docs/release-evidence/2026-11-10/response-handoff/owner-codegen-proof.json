@@ -1,0 +1,4 @@
+{
+  "generated_c_sha256": "6b5780bf97c86225e3b12b34e3bab1cf3d78886cea0333551e4e70fec11bb658",
+  "review": "Ordinary Boehm known body shares; fallback clones. Both owner roots cleared; source body unchanged. Shared cleanup skips string_free. Original caller clone retained. See extracted C."
+}

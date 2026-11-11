@@ -1,0 +1,27 @@
+{
+  "time_utc": "2026-11-10T01:54:18.215297+00:00",
+  "pid": 3730524,
+  "start_ticks": "39645663",
+  "sha256": "0890d93135156b2ad77ae25e1bc6ac833cd5b09cc226ff15145aaed1c6288baa",
+  "memory_kib": {
+    "VmRSS": 138204,
+    "RssAnon": 129344,
+    "RssFile": 8860,
+    "VmSwap": 0
+  },
+  "health": {
+    "19887": 200,
+    "19901": 200,
+    "19987": 200
+  },
+  "host_available_kib": 876080,
+  "observer": "active",
+  "unit": "Result=success\nExecMainStatus=0\nActiveState=inactive\nSubState=dead\n",
+  "test_runtime_pids": {
+    "1711091": false,
+    "1730244": false,
+    "1738891": false,
+    "1747536": false
+  },
+  "actions": "Read-only business identity, proc status, health, unit status. No business restart, replacement, debugger or forced GC."
+}

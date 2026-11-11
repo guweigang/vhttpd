@@ -1,0 +1,50 @@
+[
+  {
+    "case": "transfer",
+    "argv": [
+      "/home/guweigang/v/v",
+      "-cc",
+      "gcc",
+      "-gc",
+      "boehm",
+      "-d",
+      "use_openssl",
+      "-o",
+      "/Users/guweigang/Source/vhttpd/.runtime/response-transfer-20261110/linux-owner-boehm-transfer",
+      "/home/guweigang/v/vlib/veb/response_writer_transfer_test.v"
+    ],
+    "source_sha256": {
+      "context.v": "8021ca6752def491888a9094aae268e09890c12f909260c6a169d961df71172e",
+      "veb.v": "570c3ce0ea0bb065631cd23aad181818ed1db20a6f013b8e0725e2ee739912d6",
+      "veb_fasthttp.v": "4e4c746bd993d181b01fa35c5038a6244765eb8421111b8ffd3ec7c0f56de7fe",
+      "controller.v": "6829a37a9034b348bdfa040e3bd90ccaa47e2a8bb26c56a54e4d32641fd2e65d",
+      "response_writer_transfer_test.v": "f90c5c27ca0fb6bad24687b386227eee27269cfa346f01019ed7a157267a2a07"
+    },
+    "build_exit": 0,
+    "run_exit": 0
+  },
+  {
+    "case": "append",
+    "argv": [
+      "/home/guweigang/v/v",
+      "-cc",
+      "gcc",
+      "-gc",
+      "boehm",
+      "-d",
+      "use_openssl",
+      "-o",
+      "/Users/guweigang/Source/vhttpd/.runtime/response-transfer-20261110/linux-owner-boehm-append",
+      "/home/guweigang/v/vlib/veb/response_writer_append_test.v"
+    ],
+    "source_sha256": {
+      "context.v": "8021ca6752def491888a9094aae268e09890c12f909260c6a169d961df71172e",
+      "veb.v": "570c3ce0ea0bb065631cd23aad181818ed1db20a6f013b8e0725e2ee739912d6",
+      "veb_fasthttp.v": "4e4c746bd993d181b01fa35c5038a6244765eb8421111b8ffd3ec7c0f56de7fe",
+      "controller.v": "6829a37a9034b348bdfa040e3bd90ccaa47e2a8bb26c56a54e4d32641fd2e65d",
+      "response_writer_append_test.v": "9d9fd2be57f1e89642a815752439976b0db3e84944364cccf691839838b2658a"
+    },
+    "build_exit": 0,
+    "run_exit": 0
+  }
+]

@@ -1,0 +1,22 @@
+{
+  "checked_utc": "2026-11-03T02:05:43.147462+00:00",
+  "official_master": {
+    "commit": "d126ca3fd329aa7be68efcc2f61d074f8b5dfd3f",
+    "date": "2026-11-03T01:29:04Z",
+    "source_url": "https://github.com/vlang/v/blob/d126ca3fd329aa7be68efcc2f61d074f8b5dfd3f/vlib/v/gen/c/struct.v#L4380-L4397",
+    "finding": "FlatGen shared_dup_fns still emits malloc_uncollectable; this allocation-lifetime issue is not fixed in latest master."
+  },
+  "official_latest_release": {
+    "tag": "0.5.2",
+    "published_at": "2026-07-12T22:56:06Z",
+    "source_url": "https://github.com/vlang/v/blob/0.5.2/vlib/v/gen/c/cgen.v#L2095-L2114",
+    "finding": "Legacy Gen.write_shareds uses builtin__memdup; it does not have this uncollectable-wrapper allocation path. This is a different backend, not verification that current vhttpd builds on it."
+  },
+  "fork_master": {
+    "commit": "01a8af98dc66c2f19194a516de43acfadc289681",
+    "date": "2026-09-18T10:51:10Z",
+    "source_url": "https://github.com/guweigang/vlang/blob/01a8af98dc66c2f19194a516de43acfadc289681/vlib/v/gen/c/struct.v#L3591-L3608",
+    "finding": "Still emits malloc_uncollectable. Commit fixes GC visibility of payload, not eventual reclamation."
+  },
+  "build_decision": "Keep tested d13ccdd plus shared GC fix; do not switch entire backend/compiler branch during soak replacement. Build fixed6 with patched, previously validated Linux toolchain image."
+}

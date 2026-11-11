@@ -1,0 +1,22 @@
+{
+  "06-profile-short/load-1.data": {
+    "bytes": 220234258,
+    "sha256": "181fe63f050f7fc9b1eeab17577d4d8bdd5e73ecbadaee9fe55f6324e1317b44",
+    "remote_only": true
+  },
+  "08-scope-short/paseo.data": {
+    "bytes": 4342691,
+    "sha256": "7e9c3e81bf422c307c5c7a279b624c5f6b75d809efcd0677f06f712a801d8764",
+    "remote_only": true
+  },
+  "08-scope-short/http.data": {
+    "bytes": 7940139,
+    "sha256": "9037865b96401e94d13ba35cfdc1803630087136a2863c3564feac22ac71ef5b",
+    "remote_only": true
+  },
+  "08-scope-short/baseline.data": {
+    "bytes": 1149435,
+    "sha256": "faee1dc30428141223238d411af5a375a6c425efc94f7a575b7e669724bc1e26",
+    "remote_only": true
+  }
+}

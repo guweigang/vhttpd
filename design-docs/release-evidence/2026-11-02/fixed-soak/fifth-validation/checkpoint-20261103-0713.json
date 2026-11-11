@@ -1,0 +1,167 @@
+{
+  "checked_utc": "2026-11-02T23:13:12.578355+00:00",
+  "state": {
+    "status": "running",
+    "started_utc": "2026-11-02T14:47:27Z",
+    "duration_seconds": 87600,
+    "build_info": {
+      "gc": "boehm",
+      "gc_enabled": true,
+      "version": "0.9.0"
+    },
+    "binary": "/root/vhttpd-release-tests/20261102-fixed5/package/vhttpd",
+    "binary_sha256": "36884c13ad7c03ea66d70e8a561e5a865986e6b34df8dcbaa85ac1ced0ec0080",
+    "scope": "isolated HTTP JSON and Paseo reconnect/text/binary; no DB/providers/production traffic",
+    "workload": "mixed",
+    "http_variant": "json",
+    "signature_mode": "isolated",
+    "http_target_rps": 40,
+    "http_concurrency": 4,
+    "paseo_cycle_interval_seconds": 2,
+    "sample_seconds": 10,
+    "host_available_min_kib": 262144,
+    "cgroup_required_memory_max_bytes": 536870912,
+    "http_port": 59841,
+    "ws_port": 48295,
+    "observed_pid": 9303,
+    "http_ok": 1186498,
+    "http_errors": 0,
+    "paseo_ok": 14468,
+    "paseo_errors": 0,
+    "latency_buckets_ms": {
+      "10": 1177468,
+      "50": 9005,
+      "100": 24,
+      "500": 1,
+      "1000": 0,
+      "over1000": 0
+    },
+    "max_latency_ms": 117.765,
+    "recent_errors": [],
+    "samples": 3032,
+    "log_rotation_count": 9,
+    "cgroup": "/sys/fs/cgroup/system.slice/vhttpd-soak-fixed5-24h-20261102.service",
+    "baseline_seconds": 600,
+    "cooldown_seconds": 600,
+    "load_duration_seconds": 86400,
+    "runtime_pid": 108824,
+    "phase": "load",
+    "elapsed_seconds": 30315.81,
+    "rss_growth_diagnostic_kib": 65552
+  },
+  "latest_sample": {
+    "elapsed_seconds": 30315.81,
+    "phase": "load",
+    "runtime": {
+      "VmHWM": 174776,
+      "VmRSS": 160568,
+      "RssAnon": 150004,
+      "VmSwap": 0,
+      "Threads": 22,
+      "fd_count": 22,
+      "cpu_ticks": 260162,
+      "start_ticks": 5375404
+    },
+    "host_available_kib": 726352,
+    "cgroup_memory_bytes": 253939712,
+    "cgroup_memory_events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0",
+    "existing_runtime": {
+      "VmHWM": 288076,
+      "VmRSS": 249876,
+      "RssAnon": 242660,
+      "VmSwap": 0,
+      "Threads": 24,
+      "fd_count": 29,
+      "cpu_ticks": 727630,
+      "start_ticks": 601054
+    },
+    "http_ok": 1186498,
+    "http_errors": 0,
+    "paseo_ok": 14468,
+    "paseo_errors": 0
+  },
+  "hourly_rss": [
+    {
+      "elapsed_hour": 0,
+      "samples": 300,
+      "rss_first_kib": 65560,
+      "rss_last_kib": 79084,
+      "rss_min_kib": 65560,
+      "rss_max_kib": 79356,
+      "rss_median_kib": 72754.0
+    },
+    {
+      "elapsed_hour": 1,
+      "samples": 360,
+      "rss_first_kib": 79052,
+      "rss_last_kib": 92444,
+      "rss_min_kib": 78984,
+      "rss_max_kib": 93200,
+      "rss_median_kib": 85956.0
+    },
+    {
+      "elapsed_hour": 2,
+      "samples": 360,
+      "rss_first_kib": 92444,
+      "rss_last_kib": 105576,
+      "rss_min_kib": 92336,
+      "rss_max_kib": 105684,
+      "rss_median_kib": 98988.0
+    },
+    {
+      "elapsed_hour": 3,
+      "samples": 360,
+      "rss_first_kib": 105768,
+      "rss_last_kib": 119096,
+      "rss_min_kib": 105768,
+      "rss_max_kib": 119240,
+      "rss_median_kib": 112548.0
+    },
+    {
+      "elapsed_hour": 4,
+      "samples": 360,
+      "rss_first_kib": 119076,
+      "rss_last_kib": 132256,
+      "rss_min_kib": 118636,
+      "rss_max_kib": 132268,
+      "rss_median_kib": 125556.0
+    },
+    {
+      "elapsed_hour": 5,
+      "samples": 360,
+      "rss_first_kib": 132260,
+      "rss_last_kib": 145016,
+      "rss_min_kib": 132096,
+      "rss_max_kib": 145220,
+      "rss_median_kib": 138724.0
+    },
+    {
+      "elapsed_hour": 6,
+      "samples": 360,
+      "rss_first_kib": 144920,
+      "rss_last_kib": 158556,
+      "rss_min_kib": 144904,
+      "rss_max_kib": 158576,
+      "rss_median_kib": 151924.0
+    },
+    {
+      "elapsed_hour": 7,
+      "samples": 360,
+      "rss_first_kib": 158552,
+      "rss_last_kib": 171676,
+      "rss_min_kib": 158552,
+      "rss_max_kib": 171676,
+      "rss_median_kib": 164774.0
+    },
+    {
+      "elapsed_hour": 8,
+      "samples": 152,
+      "rss_first_kib": 171656,
+      "rss_last_kib": 160568,
+      "rss_min_kib": 160252,
+      "rss_max_kib": 174588,
+      "rss_median_kib": 167246.0
+    }
+  ],
+  "assessment": "NOT ACCEPTED: first eight elapsed hours show about 13 MiB/hour RSS growth, recent decline insufficient to establish convergence; workload continues under original resource limits."
+}

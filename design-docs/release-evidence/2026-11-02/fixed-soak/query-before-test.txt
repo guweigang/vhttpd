@@ -1,0 +1,8 @@
+---- Testing... ----------------------------------------------------------------
+FAIL  1404.507 ms /Users/guweigang/Source/vhttpd/.runtime/soak-memory-20261102/query-before/src/executor/websocket_payload_memory_test.v
+/Users/guweigang/Source/vhttpd/.runtime/soak-memory-20261102/query-before/src/executor/websocket_payload_memory_test.v:101: fn test_websocket_routing_queries_do_not_retain_per_query_native_callbacks
+    assert !gc_is_enabled() || after <= before + 1024 * 1024, 'Routing queries retained native callbacks: ${before} -> ${after}'
+        Message: Routing queries retained native callbacks: 950272 -> 11362304
+--------------------------------------------------------------------------------
+To reproduce just failure 1 run:    /Users/guweigang/local/v/v -gc boehm -d use_bundled_libgc -d build_quickjs -enable-globals -path '/Users/guweigang/Source/vhttpd/.runtime/soak-memory-20261102/query-before/src|/Users/guweigang/Source/vhttpd/.deps|@vlib|@vmodules' /Users/guweigang/Source/vhttpd/.runtime/soak-memory-20261102/query-before/src/executor/websocket_payload_memory_test.v
+Summary for all V _test.v files: 1 failed, 1 total. Elapsed time: 103241 ms, on 1 job. Comptime: 101832 ms. Runtime: 1404 ms.

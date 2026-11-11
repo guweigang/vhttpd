@@ -1,0 +1,15 @@
+diff --git a/src/http_observation_runtime.v b/src/http_observation_runtime.v
+index 4e5d2a56..4d3e9fcd 100644
+--- a/src/http_observation_runtime.v
++++ b/src/http_observation_runtime.v
+@@ -61,7 +61,9 @@ fn (mut observations HttpObservations) record_staged(pipeline string, method str
+ 	}
+ }
+ 
+-fn (mut app App) complete_http_observation(ctx Context, started i64, observation_id string) {
++// Read synchronously while the request context is alive. Borrowing avoids an
++// otherwise boxed copy of the large context on every completed request.
++fn (mut app App) complete_http_observation(ctx &Context, started i64, observation_id string) {
+ 	status := if ctx.res.status_code > 0 { ctx.res.status_code } else { 200 }
+ 	total_ns := time.sys_mono_now() - started
+ 	duration_ms := total_ns / 1000000

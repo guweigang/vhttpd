@@ -1,0 +1,14 @@
+{
+  "platform": "linux/amd64",
+  "compiler": "V d13ccdd / gcc / boehm enabled / bundled libgc / OpenSSL",
+  "before_exit": 1,
+  "after_exit": 0,
+  "before_native_bytes": 721488,
+  "after_native_bytes_before_fix": 6344496,
+  "measured_handshakes": 256,
+  "native_growth_budget_bytes": 2097152,
+  "gc_growth_budget_bytes": 1048576,
+  "fix": "terminal accepted WebSocket client.dispose()",
+  "test_sha256": "76a01b55a47eb0776b596d51ea06475d633fef2dacb5a9cc72e21a56691d9782",
+  "native_probe_sha256": "34271d3cda1bfa697a917b7989f0dd7689db12e233a118a912f50f8dfa097562"
+}

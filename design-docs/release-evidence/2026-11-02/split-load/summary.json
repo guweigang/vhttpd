@@ -1,0 +1,74 @@
+[
+  {
+    "case": "20261102-isolate-v1-http",
+    "status": "completed",
+    "http_ok": 5549,
+    "paseo_ok": 0,
+    "http_errors": 0,
+    "paseo_errors": 0,
+    "initial_rss_kib": 56032,
+    "first_load_rss_kib": 53124,
+    "final_rss_kib": 205884,
+    "max_sample_rss_kib": 205884
+  },
+  {
+    "case": "20261102-isolate-v1-paseo",
+    "status": "completed",
+    "http_ok": 0,
+    "paseo_ok": 70,
+    "http_errors": 0,
+    "paseo_errors": 0,
+    "initial_rss_kib": 60864,
+    "first_load_rss_kib": 57172,
+    "final_rss_kib": 146024,
+    "max_sample_rss_kib": 146024
+  },
+  {
+    "case": "20261102-isolate-v2-native",
+    "status": "completed",
+    "http_ok": 4788,
+    "paseo_ok": 0,
+    "http_errors": 0,
+    "paseo_errors": 0,
+    "initial_rss_kib": 46616,
+    "first_load_rss_kib": 46928,
+    "final_rss_kib": 56808,
+    "max_sample_rss_kib": 56808
+  },
+  {
+    "case": "20261102-isolate-v2-small",
+    "status": "completed",
+    "http_ok": 4119,
+    "paseo_ok": 0,
+    "http_errors": 0,
+    "paseo_errors": 0,
+    "initial_rss_kib": 46384,
+    "first_load_rss_kib": 64752,
+    "final_rss_kib": 182100,
+    "max_sample_rss_kib": 182100
+  },
+  {
+    "case": "20261102-isolate-v3-http",
+    "status": "completed",
+    "http_ok": 6392,
+    "paseo_ok": 0,
+    "http_errors": 0,
+    "paseo_errors": 0,
+    "initial_rss_kib": 55248,
+    "first_load_rss_kib": 62492,
+    "final_rss_kib": 53248,
+    "max_sample_rss_kib": 62608
+  },
+  {
+    "case": "20261102-isolate-v3-paseo",
+    "status": "completed",
+    "http_ok": 0,
+    "paseo_ok": 78,
+    "http_errors": 0,
+    "paseo_errors": 0,
+    "initial_rss_kib": 61100,
+    "first_load_rss_kib": 57992,
+    "final_rss_kib": 100092,
+    "max_sample_rss_kib": 100092
+  }
+]

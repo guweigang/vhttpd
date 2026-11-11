@@ -1,0 +1,65 @@
+{
+  "observations_mib": {
+    "01-before": {
+      "baseline": {
+        "cached_threshold_bytes": 13.899078369140625,
+        "composite_accounting_bytes": 3.473724365234375,
+        "atomic_accounting_bytes": 7.7066650390625,
+        "root_bytes": 4.31475830078125,
+        "stack_scanned_bytes": 0.3551025390625
+      },
+      "http": {
+        "cached_threshold_bytes": 12.677572250366211,
+        "composite_accounting_bytes": 3.5230712890625,
+        "atomic_accounting_bytes": 1.2747573852539062,
+        "root_bytes": 4.31475830078125,
+        "stack_scanned_bytes": 0.4630279541015625
+      },
+      "mixed": {
+        "cached_threshold_bytes": 13.401998519897461,
+        "composite_accounting_bytes": 3.9863510131835938,
+        "atomic_accounting_bytes": 1.5161590576171875,
+        "root_bytes": 4.31475830078125,
+        "stack_scanned_bytes": 0.369354248046875
+      },
+      "cooldown": {
+        "cached_threshold_bytes": 12.980621337890625,
+        "composite_accounting_bytes": 3.971466064453125,
+        "atomic_accounting_bytes": 1.551971435546875,
+        "root_bytes": 4.31475830078125,
+        "stack_scanned_bytes": 0.1814117431640625
+      }
+    },
+    "02-after": {
+      "baseline": {
+        "cached_threshold_bytes": 10.88399887084961,
+        "composite_accounting_bytes": 3.038909912109375,
+        "atomic_accounting_bytes": 0.6049652099609375,
+        "root_bytes": 4.31475830078125,
+        "stack_scanned_bytes": 0.1700897216796875
+      },
+      "http": {
+        "cached_threshold_bytes": 12.890504837036133,
+        "composite_accounting_bytes": 3.7693710327148438,
+        "atomic_accounting_bytes": 1.6063385009765625,
+        "root_bytes": 4.31475830078125,
+        "stack_scanned_bytes": 0.30344390869140625
+      },
+      "mixed": {
+        "cached_threshold_bytes": 14.008344650268555,
+        "composite_accounting_bytes": 4.2843475341796875,
+        "atomic_accounting_bytes": 1.8669815063476562,
+        "root_bytes": 4.31475830078125,
+        "stack_scanned_bytes": 0.298858642578125
+      },
+      "cooldown": {
+        "cached_threshold_bytes": 13.627887725830078,
+        "composite_accounting_bytes": 4.235015869140625,
+        "atomic_accounting_bytes": 1.8618011474609375,
+        "root_bytes": 4.31475830078125,
+        "stack_scanned_bytes": 0.1812896728515625
+      }
+    }
+  },
+  "scope": "Read-only collector accounting in same pinned layout, not allocation stacks or business live-object counts. Startup and pressure GC triggers differ; no root cause assigned."
+}

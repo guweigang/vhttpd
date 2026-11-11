@@ -1,0 +1,12 @@
+{
+  "status": "stopped_not_passed",
+  "utc": "2026-11-03T02:20:12.084262+00:00",
+  "reason": "Official 0.5.2 vtest bootstrap failed to compile on current macOS toolchain and spawned bug-report helper; stopped isolated process tree before further retries. No compatibility claim; source inspection is separate.",
+  "pids": [
+    28177,
+    34115,
+    34277,
+    35833,
+    36103
+  ]
+}

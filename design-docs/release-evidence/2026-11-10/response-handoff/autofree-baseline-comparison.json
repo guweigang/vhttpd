@@ -1,0 +1,10 @@
+[
+  {
+    "name": "autofree-baseline-path",
+    "exit": 1
+  },
+  {
+    "name": "autofree-retained-test",
+    "exit": 1
+  }
+]

@@ -1,0 +1,63 @@
+{
+  "recorded_at": "2026-11-02T02:20:13.292631+00:00",
+  "head": "b35c572ddb9401fc59411920f914c08e4ef52d70",
+  "branch": "feature/desktop-workbench",
+  "scope": "dirty working tree; local preflight only; not candidate acceptance",
+  "platform": "Darwin arm64",
+  "results": [
+    {
+      "command": [
+        "python3",
+        "scripts/ci/test_build_gc.py"
+      ],
+      "exit_code": 0,
+      "log": "01-test_build_gc.txt",
+      "log_sha256": "93e1226d8d6256640114c9548d393fa8db9eadc223d882aac7317a9b7a9f02ab"
+    },
+    {
+      "command": [
+        "bash",
+        "scripts/lint_safety.sh"
+      ],
+      "exit_code": 0,
+      "log": "02-lint_safety.txt",
+      "log_sha256": "1c2f9232d98a8cc4e0821cd78305e170b896141dec1d72237b806bec0e25103b"
+    },
+    {
+      "command": [
+        "python3",
+        "desktop/ci/test_macos_acceptance.py"
+      ],
+      "exit_code": 0,
+      "log": "03-test_macos_acceptance.txt",
+      "log_sha256": "66d6e314674f6e6ea71cf48674237688347597b068c9457453dcd6ce6dfe124b"
+    },
+    {
+      "command": [
+        "python3",
+        "desktop/ci/test_macos_release.py"
+      ],
+      "exit_code": 0,
+      "log": "04-test_macos_release.txt",
+      "log_sha256": "5d6a2ed72d8a1044039f59b095e83dd79012334938689baf3ff6307d63217d0d"
+    },
+    {
+      "command": [
+        "python3",
+        "desktop/ci/test_development_release.py"
+      ],
+      "exit_code": 0,
+      "log": "05-test_development_release.txt",
+      "log_sha256": "7a10cf4c4326985375cc6ecd124c516babaca4661adc3a1b09fa57eb919eaeeb"
+    },
+    {
+      "command": [
+        "./vhttpd",
+        "--build-info"
+      ],
+      "exit_code": 2,
+      "log": "06-build-info.txt",
+      "log_sha256": "1b264e28850142679cef50aa6e9c7f8cb314615271fddd3a76c1e74fa3cbd184"
+    }
+  ]
+}

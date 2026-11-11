@@ -1,0 +1,143 @@
+{
+  "status": "completed",
+  "started_utc": "2026-11-02T07:58:12Z",
+  "duration_seconds": 30,
+  "build_info": {
+    "gc": "boehm",
+    "gc_enabled": true,
+    "version": "0.9.0"
+  },
+  "binary": "/root/.local/share/vhttpd-workbench/runtimes/sha256-f4b10b11fb3e562a78cfbcb309137804639256bf3b53bff6385e535fa13aa159/vhttpd",
+  "binary_sha256": "f35c819beee5d426695603d38404548b4fc3bbc20190c3f3aab7c5afa4e8e720",
+  "scope": "isolated HTTP JSON and Paseo reconnect/text/binary; no DB/providers/production traffic",
+  "http_target_rps": 40,
+  "http_concurrency": 4,
+  "paseo_cycle_interval_seconds": 2,
+  "sample_seconds": 10,
+  "host_available_min_kib": 262144,
+  "cgroup_required_memory_max_bytes": 536870912,
+  "http_port": 38107,
+  "ws_port": 55961,
+  "observed_pid": 9303,
+  "http_ok": 551,
+  "http_errors": 0,
+  "paseo_ok": 7,
+  "paseo_errors": 0,
+  "latency_buckets_ms": {
+    "10": 539,
+    "50": 3,
+    "100": 0,
+    "500": 1,
+    "1000": 0,
+    "over1000": 8
+  },
+  "max_latency_ms": 4836.387,
+  "recent_errors": [],
+  "samples": 3,
+  "log_rotation_count": 0,
+  "cgroup": "/sys/fs/cgroup/system.slice/vhttpd-soak-final-smoke-20261102.service",
+  "baseline_seconds": 5,
+  "cooldown_seconds": 5,
+  "load_duration_seconds": 20,
+  "runtime_pid": 28563,
+  "phase": "load",
+  "elapsed_seconds": 30.32,
+  "failure": null,
+  "interrupted_signals": [],
+  "ended_utc": "2026-11-02T07:58:48Z",
+  "last_samples": [
+    {
+      "elapsed_seconds": 0.0,
+      "phase": "baseline",
+      "runtime": {
+        "VmHWM": 138712,
+        "VmRSS": 57820,
+        "RssAnon": 32832,
+        "VmSwap": 0,
+        "Threads": 25,
+        "fd_count": 25,
+        "cpu_ticks": 510,
+        "start_ticks": 2920000
+      },
+      "host_available_kib": 762700,
+      "cgroup_memory_bytes": 56020992,
+      "cgroup_memory_events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0",
+      "existing_runtime": {
+        "VmHWM": 288076,
+        "VmRSS": 276024,
+        "RssAnon": 248604,
+        "VmSwap": 0,
+        "Threads": 24,
+        "fd_count": 29,
+        "cpu_ticks": 229108,
+        "start_ticks": 601054
+      },
+      "http_ok": 0,
+      "http_errors": 0,
+      "paseo_ok": 0,
+      "paseo_errors": 0
+    },
+    {
+      "elapsed_seconds": 10.0,
+      "phase": "load",
+      "runtime": {
+        "VmHWM": 138712,
+        "VmRSS": 67596,
+        "RssAnon": 42252,
+        "VmSwap": 0,
+        "Threads": 21,
+        "fd_count": 24,
+        "cpu_ticks": 552,
+        "start_ticks": 2920000
+      },
+      "host_available_kib": 811140,
+      "cgroup_memory_bytes": 65622016,
+      "cgroup_memory_events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0",
+      "existing_runtime": {
+        "VmHWM": 288076,
+        "VmRSS": 276024,
+        "RssAnon": 248604,
+        "VmSwap": 0,
+        "Threads": 24,
+        "fd_count": 29,
+        "cpu_ticks": 229202,
+        "start_ticks": 601054
+      },
+      "http_ok": 0,
+      "http_errors": 0,
+      "paseo_ok": 0,
+      "paseo_errors": 0
+    },
+    {
+      "elapsed_seconds": 20.01,
+      "phase": "load",
+      "runtime": {
+        "VmHWM": 301476,
+        "VmRSS": 97400,
+        "RssAnon": 71992,
+        "VmSwap": 0,
+        "Threads": 22,
+        "fd_count": 22,
+        "cpu_ticks": 1147,
+        "start_ticks": 2920000
+      },
+      "host_available_kib": 753000,
+      "cgroup_memory_bytes": 96882688,
+      "cgroup_memory_events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0",
+      "existing_runtime": {
+        "VmHWM": 288076,
+        "VmRSS": 276024,
+        "RssAnon": 248604,
+        "VmSwap": 0,
+        "Threads": 24,
+        "fd_count": 29,
+        "cpu_ticks": 229302,
+        "start_ticks": 601054
+      },
+      "http_ok": 214,
+      "http_errors": 0,
+      "paseo_ok": 3,
+      "paseo_errors": 0
+    }
+  ]
+}

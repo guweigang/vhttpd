@@ -1,0 +1,111 @@
+{
+  "status": "Source fix and targeted tests complete; whole-package comparison archived separately under context-pool-package",
+  "production_changes": [
+    "vlib/veb/veb_fasthttp.v"
+  ],
+  "new_regression": [
+    "vlib/veb/response_writer_state_test.v"
+  ],
+  "source_sha256": {
+    "context.v": "8021ca6752def491888a9094aae268e09890c12f909260c6a169d961df71172e",
+    "veb.v": "323e90512c458cf26a9e527785219e8b0aaed2d1c783acaade6c0b629e8d5adb",
+    "controller.v": "6829a37a9034b348bdfa040e3bd90ccaa47e2a8bb26c56a54e4d32641fd2e65d",
+    "veb_fasthttp.v": "27bfe3413538b51fc8a2652f607cb7181850e2a5d182f6b60523d485398c1a8a",
+    "response_writer_state_test.v": "0e176413fcc4af80280be66b117e6c13aae093843c514e1084fb766b1dfb24f9"
+  },
+  "behavior": "Ordinary Boehm, non-controller fasthttp servers allocate one private writer slot per worker. Application Context remains distinct per request and may escape; writer is byte-cleared on append returns and unwind, with busy-slot fallback. TLS, render_request, controller, nil state and nonordinary GC retain original constructor/allocation ownership shape. File paths copied before reset. Pointer ownership uses voidptr identity, not deep struct equality. No GC policy/vjsx changes.",
+  "tests": {
+    "macos_final": "6 files passed, Boehm/OpenSSL; includes state lifetime, old body alias, middleware/controller/panic and real persistent connections/takeover",
+    "linux_final": "Same6 files passed GCC/gc none/OpenSSL; final Boehm state and real persistent connection tests build/run exit0, each runtime timeout30s",
+    "limits": "No Windows/autofree/prealloc acceptance claimed; full vhttpd tests/24h not part of source-test validation. Existing autofree issue remains open."
+  },
+  "allocation": {
+    "rows": [
+      {
+        "run": 1,
+        "body_bytes": 0,
+        "nil_bytes_per_request": 20111.75,
+        "reuse_bytes_per_request": 12112.0625,
+        "saved_bytes_per_request": 7999.6875
+      },
+      {
+        "run": 1,
+        "body_bytes": 1024,
+        "nil_bytes_per_request": 21417.3125,
+        "reuse_bytes_per_request": 13483.1875,
+        "saved_bytes_per_request": 7934.125
+      },
+      {
+        "run": 1,
+        "body_bytes": 8192,
+        "nil_bytes_per_request": 28299.5625,
+        "reuse_bytes_per_request": 20310.5625,
+        "saved_bytes_per_request": 7989.0
+      },
+      {
+        "run": 2,
+        "body_bytes": 0,
+        "nil_bytes_per_request": 20088.6875,
+        "reuse_bytes_per_request": 12110.0625,
+        "saved_bytes_per_request": 7978.625
+      },
+      {
+        "run": 2,
+        "body_bytes": 1024,
+        "nil_bytes_per_request": 21455.6875,
+        "reuse_bytes_per_request": 13456.8125,
+        "saved_bytes_per_request": 7998.875
+      },
+      {
+        "run": 2,
+        "body_bytes": 8192,
+        "nil_bytes_per_request": 28311.0,
+        "reuse_bytes_per_request": 20330.375,
+        "saved_bytes_per_request": 7980.625
+      },
+      {
+        "run": 3,
+        "body_bytes": 0,
+        "nil_bytes_per_request": 20140.3125,
+        "reuse_bytes_per_request": 12087.25,
+        "saved_bytes_per_request": 8053.0625
+      },
+      {
+        "run": 3,
+        "body_bytes": 1024,
+        "nil_bytes_per_request": 21421.1875,
+        "reuse_bytes_per_request": 13458.875,
+        "saved_bytes_per_request": 7962.3125
+      },
+      {
+        "run": 3,
+        "body_bytes": 8192,
+        "nil_bytes_per_request": 28284.25,
+        "reuse_bytes_per_request": 20352.8125,
+        "saved_bytes_per_request": 7931.4375
+      }
+    ],
+    "context_size_bytes": 7984,
+    "worker_state_size_bytes": 7992,
+    "saved_range_bytes_per_request": [
+      7931.4375,
+      8053.0625
+    ],
+    "scope": "Patched minimal append pipeline: nil compatibility state vs reuse, not two complete vhttpd packages. Three processes AB/BA/AB,256 requests per body/arm; initial state/routes/output buffer excluded. GC setup before arms; cumulative GC allocator accounting including rounding, not live/RSS or natural cooling."
+  },
+  "business_mapping": {
+    "utc": "2026-11-10T05:39:48.555615+00:00",
+    "gc_managed_anon_mib": 90.28515625,
+    "outside_gc_managed_anon_mib": 36.02734375,
+    "mapped_gc_heap_mib": 105.4609375,
+    "mapped_gc_free_mib": 33.87890625,
+    "mapped_gc_nonfree_mib": 71.58203125,
+    "gc_resident_free_lower_bound_mib": 18.703125,
+    "earlier_mapped_gc_free_mib": 87.13671875,
+    "earlier_RssAnon_kib": 129344,
+    "current_RssAnon_kib": 129344,
+    "basis": "Stable epoch, count/table and heap/free/unmapped counters. Sum sections=collector heapsize. Every mixed anonymous mapping pagemap total=smaps Anonymous. No PFNs collected. At most all mapped nonfree bytes can be resident; consistent-snapshot resident-free lower estimate=GC-managed anon minus mapped nonfree. Nonfree includes uncollected garbage/fragmentation and is not precise business live bytes.",
+    "limits": "Maps partition storage, not allocation stacks or root owners. Outside GC segments includes metadata, stacks, native arenas, libraries and QuickJS; not all libc live blocks. Business0890d931 did not receive new writer patch."
+  },
+  "scope": "Business unchanged. Mapping attribution distinguishes managed segments from exterior storage, not allocation stacks or live-object roots. No collector tuning, gdb, injection or forced business GC."
+}

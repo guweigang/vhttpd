@@ -1,0 +1,82 @@
+{
+  "updated_utc": "2026-11-02T14:20:00Z",
+  "status": "fixed5_full24_running_shared_gc_fix_validated_separately",
+  "regression": {
+    "fixed_native_v_tests": "passed: 2 functions",
+    "old_implementation_control": "failed as expected: retained native heap 401408 -> 5394432 bytes",
+    "sequence_gate_tests": "5 passed",
+    "python_compile": "passed"
+  },
+  "build": {
+    "container": "vhttpd-soak-memory-fixed4-20261102",
+    "base_commit": "d260cecd415a8640fb655819efd52caee32e5fc2",
+    "log": ".runtime/soak-memory-20261102/build-fixed4.log",
+    "package_directory": ".runtime/soak-memory-20261102/fixed4-package",
+    "latest_observation": "production V/GCC compile started; package not yet produced; final build status unconfirmed",
+    "status": "completed",
+    "container_exit_code": 0,
+    "finished_utc": null,
+    "binary_sha256": "b26060c5aaf1eaa2ce505a4eb8b60f97808fae95daf216c5bb1153280437bb50",
+    "build_info": {
+      "gc": "boehm",
+      "gc_enabled": true,
+      "version": "0.9.0"
+    }
+  },
+  "blocker": null,
+  "next_steps": [
+    "Verify completed Linux/amd64 Boehm production package and dependency bundle",
+    "Upload into fresh isolated remote test directory; preserve PID 9303",
+    "Run scripts/ci/remote_soak_sequence.py with 512MiB and 1CPU limits",
+    "Start fresh 87600-second run only after Paseo/HTTP/mixed validation passes"
+  ],
+  "full_24h_restart": "NOT STARTED",
+  "release_p0_02": "NOT ACCEPTED",
+  "remote_validation": {
+    "status": "running",
+    "directory": "/root/vhttpd-release-tests/20261102-fixed4",
+    "unit": "vhttpd-soak-fixed4-validation-20261102.service",
+    "retained_rss_budget_kib": 16384,
+    "automatic_full_unit": "vhttpd-soak-fixed4-24h-20261102.service"
+  },
+  "full24_started": true,
+  "launch": {
+    "started_cst": "2026-11-02 22:47:27+08:00",
+    "pressure_starts_cst": "2026-11-02 22:57:27+08:00",
+    "pressure_ends_cst": "2026-11-03 22:57:27+08:00",
+    "expected_end_cst": "2026-11-03 23:07:27+08:00",
+    "unit": "vhttpd-soak-fixed5-24h-20261102",
+    "binary_sha256": "36884c13ad7c03ea66d70e8a561e5a865986e6b34df8dcbaa85ac1ced0ec0080",
+    "status": "running",
+    "cases": [
+      {
+        "workload": "paseo",
+        "baseline_rss_kib": 62124,
+        "settled_rss_kib": 62568,
+        "max_load_rss_kib": 62332,
+        "http_ok": 0,
+        "paseo_ok": 78
+      },
+      {
+        "workload": "http",
+        "baseline_rss_kib": 49940,
+        "settled_rss_kib": 49804,
+        "max_load_rss_kib": 50304,
+        "http_ok": 6392,
+        "paseo_ok": 0
+      },
+      {
+        "workload": "mixed",
+        "baseline_rss_kib": 83276,
+        "settled_rss_kib": 79440,
+        "max_load_rss_kib": 83464,
+        "http_ok": 23961,
+        "paseo_ok": 293
+      }
+    ],
+    "acceptance": "24h memory stability remains pending"
+  },
+  "memory_assessment": "Remaining growth traced to vlang uncollectable shared wrappers. Fix and targeted normal/production regressions passed on macOS/Linux; original fixed5 soak remains running and unchanged. Release acceptance pending.",
+  "latest_checkpoint": "fifth-validation/checkpoint-20261103-0713.json",
+  "shared_gc_finding": "../../2026-11-03/shared-gc/finding.json"
+}

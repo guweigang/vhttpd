@@ -1,0 +1,33 @@
+{
+  "host_branch": "feature/desktop-workbench",
+  "source_scope": "Frozen 9c155bf snapshot with inherited candidate fixes, plus this scanner patch; current desktop workspace is not the tested package source.",
+  "linux_v": "V 0.5.2 d13ccdd, /home/guweigang/v/v, local-dev",
+  "vjsx_commit": "259620f1981a3573777ec8cda72883b1866404a7",
+  "gc_build": "boehm for packages and allocation benchmark; none for targeted Linux/macOS tests. Same pinned GC object and default parameters as previous candidate.",
+  "macos_tests": "scanner and signature modules passed",
+  "linux_tests": "scanner and signature modules passed",
+  "changes": [
+    "src/executor/vjsx_source_scanner.v",
+    "src/executor/vjsx_source_scanner_test.v"
+  ],
+  "no_additional_vlang_or_vjsx_changes": true,
+  "no_dependencies_installed": true,
+  "skips": [
+    "Windows not run; full repository suite not run for this bounded scanner change."
+  ],
+  "files": {
+    "vjsx_source_scanner.v": "b713e5eedfbb3142831ab135fccb2ea615ccd8a14319f8a0e3b73d6ac14c5c75",
+    "vjsx_source_scanner_test.v": "ffa37174a998248d318a80c20e84e09dd50599db7d2b5e1d73fe378e708a9f52"
+  },
+  "frozen_snapshot_head": "9c155bf7d9313500f08d984e38c470d4eec0a922",
+  "inherited_changes_relative_to_business": "HTTP observation allocation fixes, prior scanner caching and idle-only reclamation/hooks; whole package comparison is not scanner-only.",
+  "host_workspace_head_at_report": "815e66fcc272842b3329c0bbbf449d1350f6960c",
+  "microbenchmark_signature_source_matches_package": true,
+  "frozen_source_archive_sha256": "3354f60625583988f69a03b878c82269b75ed333d8da2e18200a2735dfc4a414",
+  "final_source_state": "This turn traversal/membership increment reverted to prior scanner041e8955; added path-order/membership regression retained. Experimental frozen b713 source and7674 package are archived as rejected.",
+  "final_scanner_sha256": "041e89551cbd5c180bfba82684c6631a294c08c3ab4d59b8edaf099a30c42cc5",
+  "final_tests": {
+    "macos": "scanner and signature modules2/2 passed, gc none",
+    "linux": "scanner and signature modules2/2 passed, gc none"
+  }
+}

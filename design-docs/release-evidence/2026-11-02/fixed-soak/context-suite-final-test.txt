@@ -1,0 +1,120 @@
+---- Testing... ----------------------------------------------------------------
+
+       >>>>> 2026-11-02 20:39:30.069626 | period  1 | started:   5:00.006 ago | vjobs: 8 | _test.v files:     1 | C:   1 | R:   0
+       >>>>> compiling  1/1 , T:  0, started:   5:00.003 ago, `/Users/guweigang/Source/vhttpd/.runtime/soak-memory-20261102/context-suite/src/combined_websocket_owner_test.v`
+
+.runtime/soak-memory-20261102/context-suite/src/combined_websocket_owner_test.v:252:54: notice: unused parameter: `app`
+  250 | fn (e MultiRpcExecutor) provider() string { return e.label }
+  251 | 
+  252 | fn (e MultiRpcExecutor) dispatch_websocket_event(mut app executor.AppFacade, req transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse {
+      |                                                      ~~~
+  253 |     mut p := e.probe
+  254 |     p.mu.@lock()
+.runtime/soak-memory-20261102/context-suite/src/combined_websocket_owner_test.v:266:42: notice: unused parameter: `app`
+  264 | }
+  265 | 
+  266 | fn (e MultiRpcExecutor) dispatch_mcp(mut app executor.AppFacade, req transport.WorkerMcpDispatchRequest) !transport.WorkerMcpDispatchResponse {
+      |                                          ~~~
+  267 |     mut p := e.probe
+  268 |     p.mu.@lock()
+.runtime/soak-memory-20261102/context-suite/src/combined_websocket_owner_test.v:266:66: notice: unused parameter: `req`
+  264 | }
+  265 | 
+  266 | fn (e MultiRpcExecutor) dispatch_mcp(mut app executor.AppFacade, req transport.WorkerMcpDispatchRequest) !transport.WorkerMcpDispatchResponse {
+      |                                                                  ~~~
+  267 |     mut p := e.probe
+  268 |     p.mu.@lock()
+.runtime/soak-memory-20261102/context-suite/src/combined_websocket_owner_test.v:646:58: notice: unused parameter: `app`
+  644 | }
+  645 | 
+  646 | fn (e MultiRpcNativeExecutor) open_websocket_session(mut app executor.AppFacade, req executor.WebSocketSessionOpenRequest) !executor.WebSocketSessionOpenOutcome {
+      |                                                          ~~~
+  647 |     if !req.register_conn_fn(e.conn.sock.handle) { return error('session_stopping') }
+  648 |     e.probe.on_open()
+.runtime/soak-memory-20261102/context-suite/src/admin_state_runtime_test_support.v:6:4: notice: unused function: `admin_state_runtime_test_root`
+    4 | import time
+    5 | 
+    6 | fn admin_state_runtime_test_root(name string) string {
+      |    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    7 |     return os.join_path(os.temp_dir(), '${name}_${time.now().unix_micro()}')
+    8 | }
+.runtime/soak-memory-20261102/context-suite/src/admin_state_runtime_test_support.v:10:4: notice: unused function: `admin_state_runtime_plan_text`
+    8 | }
+    9 | 
+   10 | fn admin_state_runtime_plan_text(body string) string {
+      |    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   11 |     return admin_state_named_runtime_plan_text('web', 18080, body)
+   12 | }
+.runtime/soak-memory-20261102/context-suite/src/feishu_bridge_authority_test_support.v:5:4: notice: unused function: `bridge_authority_test_server`
+    3 | import net.websocket
+    4 | 
+    5 | fn bridge_authority_test_server(mut host FeishuBridgeProxyHost, client &websocket.Client) &FeishuCardBridgeServerState {
+      |    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    6 |     mut bridge := host.bridge_context()
+    7 |     bridge.register_client('fixture', client) or { panic('missing connection') }
+.runtime/soak-memory-20261102/context-suite/src/feishu_reply_test_support.v:22:4: notice: unused function: `feishu_test_sent_request`
+   20 | // it at that point can legitimately cancel sending. A simulated reply must wait
+   21 | // until the peer has actually received the complete request frame.
+   22 | fn feishu_test_sent_request(mut bridge FeishuCardBridgeContext, mut peer net.TcpConn) string {
+      |    ~~~~~~~~~~~~~~~~~~~~~~~~
+   23 |     peer.set_read_timeout(2500 * time.millisecond)
+   24 |     header := feishu_test_read_wire_bytes(mut peer, 2)
+.runtime/soak-memory-20261102/context-suite/src/http_worker_session_test_support.v:9:4: notice: unused function: `origin_pool`
+    7 | import time
+    8 | 
+    9 | fn origin_pool(path string, cgi bool, inflight i64) &worker.WorkerState {
+      |    ~~~~~~~~~~~
+   10 |     mut state := &worker.WorkerState{
+   11 |         worker_backend: worker.WorkerBackendRuntime{
+.runtime/soak-memory-20261102/context-suite/src/http_worker_session_test_support.v:30:4: notice: unused function: `origin_wait`
+   28 | }
+   29 | 
+   30 | fn origin_wait(done chan bool) {
+      |    ~~~~~~~~~~~
+   31 |     select {
+   32 |         _ := <-done {
+.runtime/soak-memory-20261102/context-suite/src/http_worker_session_test_support.v:40:4: notice: unused function: `origin_peer`
+   38 | }
+   39 | 
+   40 | fn origin_peer(mut listener unix.StreamListener, cgi bool, stream bool, entered chan bool, release chan bool, done chan bool) {
+      |    ~~~~~~~~~~~
+   41 |     mut peer := listener.accept() or { panic(err) }
+   42 |     defer {
+.runtime/soak-memory-20261102/context-suite/src/inproc_vjsx_executor_codexbot_helpers.v:115:4: notice: unused function: `codexbot_ts_new_executor`
+  113 | }
+  114 | 
+  115 | fn codexbot_ts_new_executor(enable_fs bool) InProcVjsxExecutor {
+      |    ~~~~~~~~~~~~~~~~~~~~~~~~
+  116 |     return codexbot_ts_new_executor_with_options(1, enable_fs)
+  117 | }
+.runtime/soak-memory-20261102/context-suite/src/inproc_vjsx_executor_codexbot_helpers.v:119:4: notice: unused function: `codexbot_ts_with_harness`
+  117 | }
+  118 | 
+  119 | fn codexbot_ts_with_harness(db_name string, enable_fs bool, run fn (mut CodexbotTsTestHarness)) {
+      |    ~~~~~~~~~~~~~~~~~~~~~~~~
+  120 |     codexbot_ts_with_harness_config(db_name, 1, enable_fs, run)
+  121 | }
+.runtime/soak-memory-20261102/context-suite/src/inproc_vjsx_executor_codexbot_helpers.v:267:4: notice: unused function: `codexbot_ts_assert_single_response`
+  265 | 
+  266 | // One-shot replies replace the old single send with send + exact-owner cleanup.
+  267 | fn codexbot_ts_assert_single_response(commands []transport.WorkerWebSocketUpstreamCommand) {
+      |    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  268 |     if commands.len > 0 && commands[0].stream_id.starts_with('feishu:reply:') {
+  269 |         codexbot_ts_assert_one_shot_reply(commands)
+.runtime/soak-memory-20261102/context-suite/src/sqlite_test_support.v:17:4: notice: unused function: `with_temp_sqlite_db_env`
+   15 | }
+   16 | 
+   17 | fn with_temp_sqlite_db_env(env_key string, db_name string, run fn (string)) {
+      |    ~~~~~~~~~~~~~~~~~~~~~~~
+   18 |     db_path := temp_sqlite_db_path(db_name)
+   19 |     cleanup_sqlite_files(db_path)
+.runtime/soak-memory-20261102/context-suite/src/runtime_upgrade/deployment.v:130:4: notice: unused function: `read_application_manifest`
+  128 | }
+  129 | 
+  130 | fn read_application_manifest(project string) !string {
+      |    ~~~~~~~~~~~~~~~~~~~~~~~~~
+  131 |  return read_deployment_manifest(project,'')
+  132 | }
+OK     767.233 ms /Users/guweigang/Source/vhttpd/.runtime/soak-memory-20261102/context-suite/src/combined_websocket_owner_test.v
+--------------------------------------------------------------------------------
+Summary for all V _test.v files: 1 passed, 1 total. Elapsed time: 330419 ms, on 1 job. Comptime: 329646 ms. Runtime: 767 ms.

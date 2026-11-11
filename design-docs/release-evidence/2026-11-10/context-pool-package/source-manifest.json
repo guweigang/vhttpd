@@ -1,0 +1,16 @@
+{
+  "vhttpd_source_identical_to_f614": true,
+  "vlang_production_changes": [
+    "vlib/veb/veb_fasthttp.v"
+  ],
+  "veb_files": {
+    "controller.v": "6829a37a9034b348bdfa040e3bd90ccaa47e2a8bb26c56a54e4d32641fd2e65d",
+    "veb_fasthttp.v": "27bfe3413538b51fc8a2652f607cb7181850e2a5d182f6b60523d485398c1a8a",
+    "veb.v": "323e90512c458cf26a9e527785219e8b0aaed2d1c783acaade6c0b629e8d5adb",
+    "context.v": "8021ca6752def491888a9094aae268e09890c12f909260c6a169d961df71172e"
+  },
+  "gc_source_sha256": "711336923f4288267a459a9567e054f46e0ef8fc4e1d6d0ba810efd65d480714",
+  "gc_object_sha256": "7592c15d86847012199c9db03df624ab85d20b9e23e274a614a8f9be08c6e36c",
+  "vhttpd_head": "951a88346dea96e4a5228c8a543b774250457670",
+  "vhttpd_branch": "feature/desktop-workbench"
+}

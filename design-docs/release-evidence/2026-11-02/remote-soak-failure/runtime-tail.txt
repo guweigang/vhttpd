@@ -1,0 +1,627 @@
+9Z [[33mWARN [39m] [http.observation] {"adapter_ms":"0.043","adapter_observed":"true","at_unix":"1793608215","duration_ms":"0","listener":"http","method":"POST","observation_id":"http-1793608215322232","other_ms":"0.235","pipeline":"soak.http","queue_ms":"0.001","queue_observed":"true","stages_available":"true","status":"503","vjsx_ms":"0.219","vjsx_observed":"true"}
+2026-11-02T08:30:15.732048Z [[33mWARN [39m] [http.observation] {"adapter_ms":"0.111","adapter_observed":"true","at_unix":"1793608215","duration_ms":"0","listener":"http","method":"POST","observation_id":"http-1793608215731356","other_ms":"0.247","pipeline":"soak.http","queue_ms":"0.000","queue_observed":"true","stages_available":"true","status":"503","vjsx_ms":"0.232","vjsx_observed":"true"}
+2026-11-02T08:30:15.830465Z [[33mWARN [39m] [http.observation] {"adapter_ms":"0.050","adapter_observed":"true","at_unix":"1793608215","duration_ms":"1","listener":"http","method":"POST","observation_id":"http-1793608215829328","other_ms":"0.629","pipeline":"soak.http","queue_ms":"0.001","queue_observed":"true","stages_available":"true","status":"503","vjsx_ms":"0.377","vjsx_observed":"true"}
+2026-11-02T08:30:16.671648Z [[37mINFO [39m] Starting client listener, server(true)...
+2026-11-02T08:30:16.674252Z [[37mINFO [39m] Starting client listener, server(true)...
+2026-11-02T08:30:16.674276Z [[35mDEBUG[39m] server-> got message: text_frame
+2026-11-02T08:30:16.674280Z [[35mDEBUG[39m] server-> read: text
+2026-11-02T08:30:16.674283Z [[35mDEBUG[39m] server-> sending on_message event
+2026-11-02T08:30:16.679685Z [[37mINFO [39m] Starting client listener, server(true)...
+2026-11-02T08:30:16.679709Z [[35mDEBUG[39m] server-> got message: text_frame
+2026-11-02T08:30:16.679713Z [[35mDEBUG[39m] server-> read: text
+2026-11-02T08:30:16.679716Z [[35mDEBUG[39m] server-> sending on_message event
+2026-11-02T08:30:16.681604Z [[35mDEBUG[39m] server-> got message: binary_frame
+2026-11-02T08:30:16.681617Z [[35mDEBUG[39m] server-> read: binary
+2026-11-02T08:30:16.681620Z [[35mDEBUG[39m] server-> sending on_message event
+2026-11-02T08:30:16.682993Z [[35mDEBUG[39m] server-> got message: binary_frame
+2026-11-02T08:30:16.683003Z [[35mDEBUG[39m] server-> read: binary
+2026-11-02T08:30:16.683006Z [[35mDEBUG[39m] server-> sending on_message event
+2026-11-02T08:30:16.723073Z [[35mDEBUG[39m] server-> got message: close
+2026-11-02T08:30:16.723097Z [[35mDEBUG[39m] server-> read: close
+2026-11-02T08:30:16.723102Z [[35mDEBUG[39m] server-> close with reason, code: 1000, reason: []
+2026-11-02T08:30:16.723105Z [[35mDEBUG[39m] server-> sending close, 1000, 
+2026-11-02T08:30:16.723110Z [[35mDEBUG[39m] server-> send control frame close, frame_type: CLOSE
+2026-11-02T08:30:16.723144Z [[35mDEBUG[39m] server-> shutting down socket
+2026-11-02T08:30:16.723413Z [[35mDEBUG[39m] server-> got message: close
+2026-11-02T08:30:16.723418Z [[35mDEBUG[39m] server-> read: close
+2026-11-02T08:30:16.723421Z [[35mDEBUG[39m] server-> close with reason, code: 1000, reason: []
+2026-11-02T08:30:16.723425Z [[35mDEBUG[39m] server-> sending close, 1000, 
+2026-11-02T08:30:16.723428Z [[35mDEBUG[39m] server-> send control frame close, frame_type: CLOSE
+2026-11-02T08:30:16.723492Z [[35mDEBUG[39m] server-> got message: close
+2026-11-02T08:30:16.723503Z [[35mDEBUG[39m] server-> read: close
+2026-11-02T08:30:16.723509Z [[35mDEBUG[39m] server-> close with reason, code: 1000, reason: []
+2026-11-02T08:30:16.723523Z [[35mDEBUG[39m] server-> sending close, 1000, 
+2026-11-02T08:30:16.723528Z [[35mDEBUG[39m] server-> send control frame close, frame_type: CLOSE
+2026-11-02T08:30:16.723560Z [[35mDEBUG[39m] server-> shutting down socket
+2026-11-02T08:30:16.723827Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:16.723930Z [[35mDEBUG[39m] server-> shutting down socket
+2026-11-02T08:30:16.724050Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:16.729396Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:16.733440Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:16.733450Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:16.733453Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:16.733456Z [[37mINFO [39m] Quit client listener, server(true)...
+2026-11-02T08:30:16.734457Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:16.734468Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:16.734473Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:16.734475Z [[37mINFO [39m] Quit client listener, server(true)...
+2026-11-02T08:30:16.735036Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:16.735046Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:16.735051Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:16.735053Z [[37mINFO [39m] Quit client listener, server(true)...
+2026-11-02T08:30:17.207675Z [[33mWARN [39m] [http.observation] {"adapter_ms":"0.074","adapter_observed":"true","at_unix":"1793608217","duration_ms":"0","listener":"http","method":"POST","observation_id":"http-1793608217206752","other_ms":"0.406","pipeline":"soak.http","queue_ms":"0.001","queue_observed":"true","stages_available":"true","status":"503","vjsx_ms":"0.349","vjsx_observed":"true"}
+2026-11-02T08:30:17.239248Z [[33mWARN [39m] [http.observation] {"adapter_ms":"0.101","adapter_observed":"true","at_unix":"1793608217","duration_ms":"1","listener":"http","method":"POST","observation_id":"http-1793608217238040","other_ms":"0.371","pipeline":"soak.http","queue_ms":"0.001","queue_observed":"true","stages_available":"true","status":"503","vjsx_ms":"0.623","vjsx_observed":"true"}
+2026-11-02T08:30:17.744280Z [[33mWARN [39m] [http.observation] {"adapter_ms":"0.064","adapter_observed":"true","at_unix":"1793608217","duration_ms":"0","listener":"http","method":"POST","observation_id":"http-1793608217743565","other_ms":"0.337","pipeline":"soak.http","queue_ms":"0.001","queue_observed":"true","stages_available":"true","status":"503","vjsx_ms":"0.241","vjsx_observed":"true"}
+2026-11-02T08:30:17.845863Z [[33mWARN [39m] [http.observation] {"adapter_ms":"0.062","adapter_observed":"true","at_unix":"1793608217","duration_ms":"0","listener":"http","method":"POST","observation_id":"http-1793608217845182","other_ms":"0.254","pipeline":"soak.http","queue_ms":"0.001","queue_observed":"true","stages_available":"true","status":"503","vjsx_ms":"0.218","vjsx_observed":"true"}
+2026-11-02T08:30:18.726846Z [[37mINFO [39m] Starting client listener, server(true)...
+2026-11-02T08:30:18.729581Z [[37mINFO [39m] Starting client listener, server(true)...
+2026-11-02T08:30:18.729603Z [[35mDEBUG[39m] server-> got message: text_frame
+2026-11-02T08:30:18.729607Z [[35mDEBUG[39m] server-> read: text
+2026-11-02T08:30:18.729615Z [[35mDEBUG[39m] server-> sending on_message event
+2026-11-02T08:30:18.734668Z [[37mINFO [39m] Starting client listener, server(true)...
+2026-11-02T08:30:18.734689Z [[35mDEBUG[39m] server-> got message: text_frame
+2026-11-02T08:30:18.734693Z [[35mDEBUG[39m] server-> read: text
+2026-11-02T08:30:18.734695Z [[35mDEBUG[39m] server-> sending on_message event
+2026-11-02T08:30:18.736006Z [[35mDEBUG[39m] server-> got message: binary_frame
+2026-11-02T08:30:18.736017Z [[35mDEBUG[39m] server-> read: binary
+2026-11-02T08:30:18.736026Z [[35mDEBUG[39m] server-> sending on_message event
+2026-11-02T08:30:18.737202Z [[35mDEBUG[39m] server-> got message: binary_frame
+2026-11-02T08:30:18.737222Z [[35mDEBUG[39m] server-> read: binary
+2026-11-02T08:30:18.737225Z [[35mDEBUG[39m] server-> sending on_message event
+2026-11-02T08:30:18.778055Z [[35mDEBUG[39m] server-> got message: close
+2026-11-02T08:30:18.778092Z [[35mDEBUG[39m] server-> read: close
+2026-11-02T08:30:18.778096Z [[35mDEBUG[39m] server-> close with reason, code: 1000, reason: []
+2026-11-02T08:30:18.778105Z [[35mDEBUG[39m] server-> sending close, 1000, 
+2026-11-02T08:30:18.778109Z [[35mDEBUG[39m] server-> send control frame close, frame_type: CLOSE
+2026-11-02T08:30:18.778143Z [[35mDEBUG[39m] server-> shutting down socket
+2026-11-02T08:30:18.778566Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:18.778699Z [[35mDEBUG[39m] server-> got message: close
+2026-11-02T08:30:18.778708Z [[35mDEBUG[39m] server-> read: close
+2026-11-02T08:30:18.778711Z [[35mDEBUG[39m] server-> close with reason, code: 1000, reason: []
+2026-11-02T08:30:18.778715Z [[35mDEBUG[39m] server-> sending close, 1000, 
+2026-11-02T08:30:18.778718Z [[35mDEBUG[39m] server-> send control frame close, frame_type: CLOSE
+2026-11-02T08:30:18.778760Z [[35mDEBUG[39m] server-> shutting down socket
+2026-11-02T08:30:18.779132Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:18.779915Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:18.779923Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:18.779926Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:18.779929Z [[37mINFO [39m] Quit client listener, server(true)...
+2026-11-02T08:30:18.779943Z [[35mDEBUG[39m] server-> got message: close
+2026-11-02T08:30:18.779954Z [[35mDEBUG[39m] server-> read: close
+2026-11-02T08:30:18.780065Z [[35mDEBUG[39m] server-> close with reason, code: 1000, reason: []
+2026-11-02T08:30:18.780073Z [[35mDEBUG[39m] server-> sending close, 1000, 
+2026-11-02T08:30:18.780077Z [[35mDEBUG[39m] server-> send control frame close, frame_type: CLOSE
+2026-11-02T08:30:18.780098Z [[35mDEBUG[39m] server-> shutting down socket
+2026-11-02T08:30:18.780476Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:18.781297Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:18.781309Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:18.781313Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:18.781315Z [[37mINFO [39m] Quit client listener, server(true)...
+2026-11-02T08:30:18.781817Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:18.781823Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:18.781826Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:18.781828Z [[37mINFO [39m] Quit client listener, server(true)...
+2026-11-02T08:30:19.209792Z [[33mWARN [39m] [http.observation] {"adapter_ms":"0.070","adapter_observed":"true","at_unix":"1793608219","duration_ms":"0","listener":"http","method":"POST","observation_id":"http-1793608219209092","other_ms":"0.308","pipeline":"soak.http","queue_ms":"0.002","queue_observed":"true","stages_available":"true","status":"503","vjsx_ms":"0.233","vjsx_observed":"true"}
+2026-11-02T08:30:19.242034Z [[33mWARN [39m] [http.observation] {"adapter_ms":"0.174","adapter_observed":"true","at_unix":"1793608219","duration_ms":"1","listener":"http","method":"POST","observation_id":"http-1793608219240831","other_ms":"0.564","pipeline":"soak.http","queue_ms":"0.001","queue_observed":"true","stages_available":"true","status":"503","vjsx_ms":"0.297","vjsx_observed":"true"}
+2026-11-02T08:30:19.746639Z [[33mWARN [39m] [http.observation] {"adapter_ms":"0.086","adapter_observed":"true","at_unix":"1793608219","duration_ms":"0","listener":"http","method":"POST","observation_id":"http-1793608219745646","other_ms":"0.445","pipeline":"soak.http","queue_ms":"0.001","queue_observed":"true","stages_available":"true","status":"503","vjsx_ms":"0.370","vjsx_observed":"true"}
+2026-11-02T08:30:19.848038Z [[33mWARN [39m] [http.observation] {"adapter_ms":"0.046","adapter_observed":"true","at_unix":"1793608219","duration_ms":"0","listener":"http","method":"POST","observation_id":"http-1793608219847429","other_ms":"0.254","pipeline":"soak.http","queue_ms":"0.000","queue_observed":"true","stages_available":"true","status":"503","vjsx_ms":"0.228","vjsx_observed":"true"}
+2026-11-02T08:30:20.782289Z [[37mINFO [39m] Starting client listener, server(true)...
+2026-11-02T08:30:20.784930Z [[37mINFO [39m] Starting client listener, server(true)...
+2026-11-02T08:30:20.784947Z [[35mDEBUG[39m] server-> got message: text_frame
+2026-11-02T08:30:20.784953Z [[35mDEBUG[39m] server-> read: text
+2026-11-02T08:30:20.784955Z [[35mDEBUG[39m] server-> sending on_message event
+2026-11-02T08:30:20.788581Z [[37mINFO [39m] Starting client listener, server(true)...
+2026-11-02T08:30:20.788597Z [[35mDEBUG[39m] server-> got message: text_frame
+2026-11-02T08:30:20.788602Z [[35mDEBUG[39m] server-> read: text
+2026-11-02T08:30:20.788605Z [[35mDEBUG[39m] server-> sending on_message event
+2026-11-02T08:30:20.789905Z [[35mDEBUG[39m] server-> got message: binary_frame
+2026-11-02T08:30:20.789913Z [[35mDEBUG[39m] server-> read: binary
+2026-11-02T08:30:20.789915Z [[35mDEBUG[39m] server-> sending on_message event
+2026-11-02T08:30:20.791072Z [[35mDEBUG[39m] server-> got message: binary_frame
+2026-11-02T08:30:20.791080Z [[35mDEBUG[39m] server-> read: binary
+2026-11-02T08:30:20.791086Z [[35mDEBUG[39m] server-> sending on_message event
+2026-11-02T08:30:20.832054Z [[35mDEBUG[39m] server-> got message: close
+2026-11-02T08:30:20.832081Z [[35mDEBUG[39m] server-> read: close
+2026-11-02T08:30:20.832104Z [[35mDEBUG[39m] server-> close with reason, code: 1000, reason: []
+2026-11-02T08:30:20.832108Z [[35mDEBUG[39m] server-> sending close, 1000, 
+2026-11-02T08:30:20.832114Z [[35mDEBUG[39m] server-> send control frame close, frame_type: CLOSE
+2026-11-02T08:30:20.832145Z [[35mDEBUG[39m] server-> shutting down socket
+2026-11-02T08:30:20.832323Z [[35mDEBUG[39m] server-> got message: close
+2026-11-02T08:30:20.832344Z [[35mDEBUG[39m] server-> read: close
+2026-11-02T08:30:20.832348Z [[35mDEBUG[39m] server-> close with reason, code: 1000, reason: []
+2026-11-02T08:30:20.832350Z [[35mDEBUG[39m] server-> sending close, 1000, 
+2026-11-02T08:30:20.832353Z [[35mDEBUG[39m] server-> send control frame close, frame_type: CLOSE
+2026-11-02T08:30:20.832367Z [[35mDEBUG[39m] server-> shutting down socket
+2026-11-02T08:30:20.832562Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:20.832764Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:20.832932Z [[35mDEBUG[39m] server-> got message: close
+2026-11-02T08:30:20.832943Z [[35mDEBUG[39m] server-> read: close
+2026-11-02T08:30:20.832953Z [[35mDEBUG[39m] server-> close with reason, code: 1000, reason: []
+2026-11-02T08:30:20.832994Z [[35mDEBUG[39m] server-> sending close, 1000, 
+2026-11-02T08:30:20.833002Z [[35mDEBUG[39m] server-> send control frame close, frame_type: CLOSE
+2026-11-02T08:30:20.833031Z [[35mDEBUG[39m] server-> shutting down socket
+2026-11-02T08:30:20.833338Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:20.835021Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:20.835033Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:20.835036Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:20.835039Z [[37mINFO [39m] Quit client listener, server(true)...
+2026-11-02T08:30:20.835055Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:20.835066Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:20.835081Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:20.835084Z [[37mINFO [39m] Quit client listener, server(true)...
+2026-11-02T08:30:20.835639Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:20.835647Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:20.835650Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:20.835652Z [[37mINFO [39m] Quit client listener, server(true)...
+2026-11-02T08:30:21.212530Z [[33mWARN [39m] [http.observation] {"adapter_ms":"0.099","adapter_observed":"true","at_unix":"1793608221","duration_ms":"0","listener":"http","method":"POST","observation_id":"http-1793608221211522","other_ms":"0.535","pipeline":"soak.http","queue_ms":"0.001","queue_observed":"true","stages_available":"true","status":"503","vjsx_ms":"0.287","vjsx_observed":"true"}
+2026-11-02T08:30:21.244429Z [[33mWARN [39m] [http.observation] {"adapter_ms":"0.082","adapter_observed":"true","at_unix":"1793608221","duration_ms":"1","listener":"http","method":"POST","observation_id":"http-1793608221243216","other_ms":"0.746","pipeline":"soak.http","queue_ms":"0.001","queue_observed":"true","stages_available":"true","status":"503","vjsx_ms":"0.288","vjsx_observed":"true"}
+2026-11-02T08:30:21.748410Z [[33mWARN [39m] [http.observation] {"adapter_ms":"0.065","adapter_observed":"true","at_unix":"1793608221","duration_ms":"0","listener":"http","method":"POST","observation_id":"http-1793608221747597","other_ms":"0.355","pipeline":"soak.http","queue_ms":"0.001","queue_observed":"true","stages_available":"true","status":"503","vjsx_ms":"0.316","vjsx_observed":"true"}
+2026-11-02T08:30:21.851171Z [[33mWARN [39m] [http.observation] {"adapter_ms":"0.047","adapter_observed":"true","at_unix":"1793608221","duration_ms":"0","listener":"http","method":"POST","observation_id":"http-1793608221850445","other_ms":"0.299","pipeline":"soak.http","queue_ms":"0.001","queue_observed":"true","stages_available":"true","status":"503","vjsx_ms":"0.279","vjsx_observed":"true"}
+2026-11-02T08:30:22.835363Z [[37mINFO [39m] Starting client listener, server(true)...
+2026-11-02T08:30:22.837687Z [[37mINFO [39m] Starting client listener, server(true)...
+2026-11-02T08:30:22.837708Z [[35mDEBUG[39m] server-> got message: text_frame
+2026-11-02T08:30:22.837717Z [[35mDEBUG[39m] server-> read: text
+2026-11-02T08:30:22.837719Z [[35mDEBUG[39m] server-> sending on_message event
+2026-11-02T08:30:22.842349Z [[37mINFO [39m] Starting client listener, server(true)...
+2026-11-02T08:30:22.842370Z [[35mDEBUG[39m] server-> got message: text_frame
+2026-11-02T08:30:22.842379Z [[35mDEBUG[39m] server-> read: text
+2026-11-02T08:30:22.842382Z [[35mDEBUG[39m] server-> sending on_message event
+2026-11-02T08:30:22.843620Z [[35mDEBUG[39m] server-> got message: binary_frame
+2026-11-02T08:30:22.843628Z [[35mDEBUG[39m] server-> read: binary
+2026-11-02T08:30:22.843630Z [[35mDEBUG[39m] server-> sending on_message event
+2026-11-02T08:30:22.845090Z [[35mDEBUG[39m] server-> got message: binary_frame
+2026-11-02T08:30:22.845103Z [[35mDEBUG[39m] server-> read: binary
+2026-11-02T08:30:22.845106Z [[35mDEBUG[39m] server-> sending on_message event
+2026-11-02T08:30:22.886068Z [[35mDEBUG[39m] server-> got message: close
+2026-11-02T08:30:22.886103Z [[35mDEBUG[39m] server-> read: close
+2026-11-02T08:30:22.886108Z [[35mDEBUG[39m] server-> close with reason, code: 1000, reason: []
+2026-11-02T08:30:22.886114Z [[35mDEBUG[39m] server-> sending close, 1000, 
+2026-11-02T08:30:22.886118Z [[35mDEBUG[39m] server-> send control frame close, frame_type: CLOSE
+2026-11-02T08:30:22.886150Z [[35mDEBUG[39m] server-> shutting down socket
+2026-11-02T08:30:22.886304Z [[35mDEBUG[39m] server-> got message: close
+2026-11-02T08:30:22.886329Z [[35mDEBUG[39m] server-> read: close
+2026-11-02T08:30:22.886333Z [[35mDEBUG[39m] server-> close with reason, code: 1000, reason: []
+2026-11-02T08:30:22.886335Z [[35mDEBUG[39m] server-> sending close, 1000, 
+2026-11-02T08:30:22.886338Z [[35mDEBUG[39m] server-> send control frame close, frame_type: CLOSE
+2026-11-02T08:30:22.886354Z [[35mDEBUG[39m] server-> shutting down socket
+2026-11-02T08:30:22.886585Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:22.886756Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:22.887833Z [[35mDEBUG[39m] server-> got message: close
+2026-11-02T08:30:22.887848Z [[35mDEBUG[39m] server-> read: close
+2026-11-02T08:30:22.887858Z [[35mDEBUG[39m] server-> close with reason, code: 1000, reason: []
+2026-11-02T08:30:22.887868Z [[35mDEBUG[39m] server-> sending close, 1000, 
+2026-11-02T08:30:22.887870Z [[35mDEBUG[39m] server-> send control frame close, frame_type: CLOSE
+2026-11-02T08:30:22.887897Z [[35mDEBUG[39m] server-> shutting down socket
+2026-11-02T08:30:22.888127Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:22.888140Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:22.888144Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:22.888146Z [[37mINFO [39m] Quit client listener, server(true)...
+2026-11-02T08:30:22.888317Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:22.889162Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:22.889175Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:22.889180Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:22.889191Z [[37mINFO [39m] Quit client listener, server(true)...
+2026-11-02T08:30:22.889736Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:22.889757Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:22.889759Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:22.889761Z [[37mINFO [39m] Quit client listener, server(true)...
+2026-11-02T08:30:23.214701Z [[33mWARN [39m] [http.observation] {"adapter_ms":"0.106","adapter_observed":"true","at_unix":"1793608223","duration_ms":"0","listener":"http","method":"POST","observation_id":"http-1793608223213820","other_ms":"0.347","pipeline":"soak.http","queue_ms":"0.001","queue_observed":"true","stages_available":"true","status":"503","vjsx_ms":"0.243","vjsx_observed":"true"}
+2026-11-02T08:30:23.246789Z [[33mWARN [39m] [http.observation] {"adapter_ms":"0.080","adapter_observed":"true","at_unix":"1793608223","duration_ms":"0","listener":"http","method":"POST","observation_id":"http-1793608223245893","other_ms":"0.373","pipeline":"soak.http","queue_ms":"0.001","queue_observed":"true","stages_available":"true","status":"503","vjsx_ms":"0.316","vjsx_observed":"true"}
+2026-11-02T08:30:25.793824Z [[33mWARN [39m] [http.observation] {"adapter_ms":"0.075","adapter_observed":"true","at_unix":"1793608225","duration_ms":"10","listener":"http","method":"POST","observation_id":"http-1793608225782867","other_ms":"10.307","pipeline":"soak.http","queue_ms":"0.001","queue_observed":"true","stages_available":"true","status":"503","vjsx_ms":"0.443","vjsx_observed":"true"}
+2026-11-02T08:30:25.798043Z [[33mWARN [39m] [http.observation] {"adapter_ms":"0.045","adapter_observed":"true","at_unix":"1793608225","duration_ms":"0","listener":"http","method":"POST","observation_id":"http-1793608225797318","other_ms":"0.271","pipeline":"soak.http","queue_ms":"0.000","queue_observed":"true","stages_available":"true","status":"503","vjsx_ms":"0.248","vjsx_observed":"true"}
+2026-11-02T08:30:26.726353Z [[37mINFO [39m] Starting client listener, server(true)...
+2026-11-02T08:30:26.728697Z [[37mINFO [39m] Starting client listener, server(true)...
+2026-11-02T08:30:26.728718Z [[35mDEBUG[39m] server-> got message: text_frame
+2026-11-02T08:30:26.728722Z [[35mDEBUG[39m] server-> read: text
+2026-11-02T08:30:26.728725Z [[35mDEBUG[39m] server-> sending on_message event
+2026-11-02T08:30:26.730064Z [[37mINFO [39m] Starting client listener, server(true)...
+2026-11-02T08:30:26.730645Z [[35mDEBUG[39m] server-> got message: text_frame
+2026-11-02T08:30:26.730652Z [[35mDEBUG[39m] server-> read: text
+2026-11-02T08:30:26.730655Z [[35mDEBUG[39m] server-> sending on_message event
+2026-11-02T08:30:26.732004Z [[35mDEBUG[39m] server-> got message: binary_frame
+2026-11-02T08:30:26.732013Z [[35mDEBUG[39m] server-> read: binary
+2026-11-02T08:30:26.732015Z [[35mDEBUG[39m] server-> sending on_message event
+2026-11-02T08:30:26.733003Z [[35mDEBUG[39m] server-> got message: binary_frame
+2026-11-02T08:30:26.733011Z [[35mDEBUG[39m] server-> read: binary
+2026-11-02T08:30:26.733013Z [[35mDEBUG[39m] server-> sending on_message event
+2026-11-02T08:30:26.774089Z [[35mDEBUG[39m] server-> got message: close
+2026-11-02T08:30:26.774112Z [[35mDEBUG[39m] server-> read: close
+2026-11-02T08:30:26.774130Z [[35mDEBUG[39m] server-> close with reason, code: 1000, reason: []
+2026-11-02T08:30:26.774133Z [[35mDEBUG[39m] server-> sending close, 1000, 
+2026-11-02T08:30:26.774136Z [[35mDEBUG[39m] server-> send control frame close, frame_type: CLOSE
+2026-11-02T08:30:26.774170Z [[35mDEBUG[39m] server-> shutting down socket
+2026-11-02T08:30:26.774336Z [[35mDEBUG[39m] server-> got message: close
+2026-11-02T08:30:26.774351Z [[35mDEBUG[39m] server-> read: close
+2026-11-02T08:30:26.774355Z [[35mDEBUG[39m] server-> close with reason, code: 1000, reason: []
+2026-11-02T08:30:26.774358Z [[35mDEBUG[39m] server-> sending close, 1000, 
+2026-11-02T08:30:26.774361Z [[35mDEBUG[39m] server-> send control frame close, frame_type: CLOSE
+2026-11-02T08:30:26.774376Z [[35mDEBUG[39m] server-> shutting down socket
+2026-11-02T08:30:26.774862Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:26.775067Z [[35mDEBUG[39m] server-> got message: close
+2026-11-02T08:30:26.775073Z [[35mDEBUG[39m] server-> read: close
+2026-11-02T08:30:26.775077Z [[35mDEBUG[39m] server-> close with reason, code: 1000, reason: []
+2026-11-02T08:30:26.775080Z [[35mDEBUG[39m] server-> sending close, 1000, 
+2026-11-02T08:30:26.775083Z [[35mDEBUG[39m] server-> send control frame close, frame_type: CLOSE
+2026-11-02T08:30:26.775095Z [[35mDEBUG[39m] server-> shutting down socket
+2026-11-02T08:30:26.775241Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:26.775386Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:26.777129Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:26.777139Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:26.777142Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:26.777144Z [[37mINFO [39m] Quit client listener, server(true)...
+2026-11-02T08:30:26.777692Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:26.777699Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:26.777702Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:26.777704Z [[37mINFO [39m] Quit client listener, server(true)...
+2026-11-02T08:30:26.778343Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:26.778350Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:26.778353Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:26.778356Z [[37mINFO [39m] Quit client listener, server(true)...
+2026-11-02T08:30:27.105556Z [[33mWARN [39m] [http.observation] {"adapter_ms":"0.056","adapter_observed":"true","at_unix":"1793608227","duration_ms":"0","listener":"http","method":"POST","observation_id":"http-1793608227104777","other_ms":"0.282","pipeline":"soak.http","queue_ms":"0.001","queue_observed":"true","stages_available":"true","status":"503","vjsx_ms":"0.271","vjsx_observed":"true"}
+2026-11-02T08:30:27.197558Z [[33mWARN [39m] [http.observation] {"adapter_ms":"0.112","adapter_observed":"true","at_unix":"1793608227","duration_ms":"1","listener":"http","method":"POST","observation_id":"http-1793608227196198","other_ms":"0.534","pipeline":"soak.http","queue_ms":"0.001","queue_observed":"true","stages_available":"true","status":"503","vjsx_ms":"0.492","vjsx_observed":"true"}
+2026-11-02T08:30:27.699949Z [[33mWARN [39m] [http.observation] {"adapter_ms":"0.052","adapter_observed":"true","at_unix":"1793608227","duration_ms":"0","listener":"http","method":"POST","observation_id":"http-1793608227699286","other_ms":"0.264","pipeline":"soak.http","queue_ms":"0.001","queue_observed":"true","stages_available":"true","status":"503","vjsx_ms":"0.261","vjsx_observed":"true"}
+2026-11-02T08:30:27.803506Z [[33mWARN [39m] [http.observation] {"adapter_ms":"0.070","adapter_observed":"true","at_unix":"1793608227","duration_ms":"0","listener":"http","method":"POST","observation_id":"http-1793608227802727","other_ms":"0.380","pipeline":"soak.http","queue_ms":"0.001","queue_observed":"true","stages_available":"true","status":"503","vjsx_ms":"0.236","vjsx_observed":"true"}
+2026-11-02T08:30:28.779380Z [[37mINFO [39m] Starting client listener, server(true)...
+2026-11-02T08:30:28.781490Z [[37mINFO [39m] Starting client listener, server(true)...
+2026-11-02T08:30:28.781506Z [[35mDEBUG[39m] server-> got message: text_frame
+2026-11-02T08:30:28.781509Z [[35mDEBUG[39m] server-> read: text
+2026-11-02T08:30:28.781515Z [[35mDEBUG[39m] server-> sending on_message event
+2026-11-02T08:30:28.785624Z [[37mINFO [39m] Starting client listener, server(true)...
+2026-11-02T08:30:28.785643Z [[35mDEBUG[39m] server-> got message: text_frame
+2026-11-02T08:30:28.785646Z [[35mDEBUG[39m] server-> read: text
+2026-11-02T08:30:28.785648Z [[35mDEBUG[39m] server-> sending on_message event
+2026-11-02T08:30:28.786856Z [[35mDEBUG[39m] server-> got message: binary_frame
+2026-11-02T08:30:28.786864Z [[35mDEBUG[39m] server-> read: binary
+2026-11-02T08:30:28.786866Z [[35mDEBUG[39m] server-> sending on_message event
+2026-11-02T08:30:28.788086Z [[35mDEBUG[39m] server-> got message: binary_frame
+2026-11-02T08:30:28.788093Z [[35mDEBUG[39m] server-> read: binary
+2026-11-02T08:30:28.788095Z [[35mDEBUG[39m] server-> sending on_message event
+2026-11-02T08:30:28.829083Z [[35mDEBUG[39m] server-> got message: close
+2026-11-02T08:30:28.829105Z [[35mDEBUG[39m] server-> read: close
+2026-11-02T08:30:28.829110Z [[35mDEBUG[39m] server-> close with reason, code: 1000, reason: []
+2026-11-02T08:30:28.829113Z [[35mDEBUG[39m] server-> sending close, 1000, 
+2026-11-02T08:30:28.829121Z [[35mDEBUG[39m] server-> send control frame close, frame_type: CLOSE
+2026-11-02T08:30:28.829157Z [[35mDEBUG[39m] server-> shutting down socket
+2026-11-02T08:30:28.829620Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:28.829740Z [[35mDEBUG[39m] server-> got message: close
+2026-11-02T08:30:28.829759Z [[35mDEBUG[39m] server-> read: close
+2026-11-02T08:30:28.829764Z [[35mDEBUG[39m] server-> close with reason, code: 1000, reason: []
+2026-11-02T08:30:28.829767Z [[35mDEBUG[39m] server-> sending close, 1000, 
+2026-11-02T08:30:28.829771Z [[35mDEBUG[39m] server-> send control frame close, frame_type: CLOSE
+2026-11-02T08:30:28.829800Z [[35mDEBUG[39m] server-> shutting down socket
+2026-11-02T08:30:28.830237Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:28.830954Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:28.830961Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:28.830964Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:28.830966Z [[37mINFO [39m] Quit client listener, server(true)...
+2026-11-02T08:30:28.830975Z [[35mDEBUG[39m] server-> got message: close
+2026-11-02T08:30:28.831003Z [[35mDEBUG[39m] server-> read: close
+2026-11-02T08:30:28.831030Z [[35mDEBUG[39m] server-> close with reason, code: 1000, reason: []
+2026-11-02T08:30:28.831033Z [[35mDEBUG[39m] server-> sending close, 1000, 
+2026-11-02T08:30:28.831036Z [[35mDEBUG[39m] server-> send control frame close, frame_type: CLOSE
+2026-11-02T08:30:28.831057Z [[35mDEBUG[39m] server-> shutting down socket
+2026-11-02T08:30:28.831404Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:28.832353Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:28.832363Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:28.832366Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:28.832368Z [[37mINFO [39m] Quit client listener, server(true)...
+2026-11-02T08:30:28.832944Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:28.832950Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:28.832952Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:28.832954Z [[37mINFO [39m] Quit client listener, server(true)...
+2026-11-02T08:30:29.106612Z [[33mWARN [39m] [http.observation] {"adapter_ms":"0.063","adapter_observed":"true","at_unix":"1793608229","duration_ms":"0","listener":"http","method":"POST","observation_id":"http-1793608229105840","other_ms":"0.319","pipeline":"soak.http","queue_ms":"0.001","queue_observed":"true","stages_available":"true","status":"503","vjsx_ms":"0.299","vjsx_observed":"true"}
+2026-11-02T08:30:29.199889Z [[33mWARN [39m] [http.observation] {"adapter_ms":"0.087","adapter_observed":"true","at_unix":"1793608229","duration_ms":"0","listener":"http","method":"POST","observation_id":"http-1793608229199013","other_ms":"0.432","pipeline":"soak.http","queue_ms":"0.001","queue_observed":"true","stages_available":"true","status":"503","vjsx_ms":"0.278","vjsx_observed":"true"}
+2026-11-02T08:30:29.701940Z [[33mWARN [39m] [http.observation] {"adapter_ms":"0.051","adapter_observed":"true","at_unix":"1793608229","duration_ms":"0","listener":"http","method":"POST","observation_id":"http-1793608229701261","other_ms":"0.308","pipeline":"soak.http","queue_ms":"0.001","queue_observed":"true","stages_available":"true","status":"503","vjsx_ms":"0.253","vjsx_observed":"true"}
+2026-11-02T08:30:29.805562Z [[33mWARN [39m] [http.observation] {"adapter_ms":"0.076","adapter_observed":"true","at_unix":"1793608229","duration_ms":"0","listener":"http","method":"POST","observation_id":"http-1793608229804809","other_ms":"0.352","pipeline":"soak.http","queue_ms":"0.001","queue_observed":"true","stages_available":"true","status":"503","vjsx_ms":"0.219","vjsx_observed":"true"}
+2026-11-02T08:30:30.833942Z [[37mINFO [39m] Starting client listener, server(true)...
+2026-11-02T08:30:30.836343Z [[37mINFO [39m] Starting client listener, server(true)...
+2026-11-02T08:30:30.836367Z [[35mDEBUG[39m] server-> got message: text_frame
+2026-11-02T08:30:30.836371Z [[35mDEBUG[39m] server-> read: text
+2026-11-02T08:30:30.836374Z [[35mDEBUG[39m] server-> sending on_message event
+2026-11-02T08:30:30.840293Z [[37mINFO [39m] Starting client listener, server(true)...
+2026-11-02T08:30:30.840309Z [[35mDEBUG[39m] server-> got message: text_frame
+2026-11-02T08:30:30.840312Z [[35mDEBUG[39m] server-> read: text
+2026-11-02T08:30:30.840316Z [[35mDEBUG[39m] server-> sending on_message event
+2026-11-02T08:30:30.841625Z [[35mDEBUG[39m] server-> got message: binary_frame
+2026-11-02T08:30:30.841636Z [[35mDEBUG[39m] server-> read: binary
+2026-11-02T08:30:30.841642Z [[35mDEBUG[39m] server-> sending on_message event
+2026-11-02T08:30:30.843001Z [[35mDEBUG[39m] server-> got message: binary_frame
+2026-11-02T08:30:30.843010Z [[35mDEBUG[39m] server-> read: binary
+2026-11-02T08:30:30.843017Z [[35mDEBUG[39m] server-> sending on_message event
+2026-11-02T08:30:30.884081Z [[35mDEBUG[39m] server-> got message: close
+2026-11-02T08:30:30.884111Z [[35mDEBUG[39m] server-> read: close
+2026-11-02T08:30:30.884116Z [[35mDEBUG[39m] server-> close with reason, code: 1000, reason: []
+2026-11-02T08:30:30.884122Z [[35mDEBUG[39m] server-> sending close, 1000, 
+2026-11-02T08:30:30.884126Z [[35mDEBUG[39m] server-> send control frame close, frame_type: CLOSE
+2026-11-02T08:30:30.884150Z [[35mDEBUG[39m] server-> shutting down socket
+2026-11-02T08:30:30.884610Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:30.884728Z [[35mDEBUG[39m] server-> got message: close
+2026-11-02T08:30:30.884775Z [[35mDEBUG[39m] server-> read: close
+2026-11-02T08:30:30.884780Z [[35mDEBUG[39m] server-> close with reason, code: 1000, reason: []
+2026-11-02T08:30:30.884783Z [[35mDEBUG[39m] server-> sending close, 1000, 
+2026-11-02T08:30:30.884787Z [[35mDEBUG[39m] server-> send control frame close, frame_type: CLOSE
+2026-11-02T08:30:30.884818Z [[35mDEBUG[39m] server-> shutting down socket
+2026-11-02T08:30:30.885347Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:30.885557Z [[35mDEBUG[39m] server-> got message: close
+2026-11-02T08:30:30.885600Z [[35mDEBUG[39m] server-> read: close
+2026-11-02T08:30:30.885606Z [[35mDEBUG[39m] server-> close with reason, code: 1000, reason: []
+2026-11-02T08:30:30.885609Z [[35mDEBUG[39m] server-> sending close, 1000, 
+2026-11-02T08:30:30.885613Z [[35mDEBUG[39m] server-> send control frame close, frame_type: CLOSE
+2026-11-02T08:30:30.885639Z [[35mDEBUG[39m] server-> shutting down socket
+2026-11-02T08:30:30.886176Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:30.886571Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:30.886583Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:30.886586Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:30.886589Z [[37mINFO [39m] Quit client listener, server(true)...
+2026-11-02T08:30:30.887397Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:30.887409Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:30.887413Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:30.887429Z [[37mINFO [39m] Quit client listener, server(true)...
+2026-11-02T08:30:30.888043Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:30.888055Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:30.888059Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:30.888062Z [[37mINFO [39m] Quit client listener, server(true)...
+2026-11-02T08:30:31.108608Z [[33mWARN [39m] [http.observation] {"adapter_ms":"0.045","adapter_observed":"true","at_unix":"1793608231","duration_ms":"0","listener":"http","method":"POST","observation_id":"http-1793608231108049","other_ms":"0.252","pipeline":"soak.http","queue_ms":"0.001","queue_observed":"true","stages_available":"true","status":"503","vjsx_ms":"0.199","vjsx_observed":"true"}
+2026-11-02T08:30:31.201925Z [[33mWARN [39m] [http.observation] {"adapter_ms":"0.162","adapter_observed":"true","at_unix":"1793608231","duration_ms":"0","listener":"http","method":"POST","observation_id":"http-1793608231201036","other_ms":"0.309","pipeline":"soak.http","queue_ms":"0.001","queue_observed":"true","stages_available":"true","status":"503","vjsx_ms":"0.226","vjsx_observed":"true"}
+2026-11-02T08:30:31.704428Z [[33mWARN [39m] [http.observation] {"adapter_ms":"0.066","adapter_observed":"true","at_unix":"1793608231","duration_ms":"0","listener":"http","method":"POST","observation_id":"http-1793608231703658","other_ms":"0.354","pipeline":"soak.http","queue_ms":"0.001","queue_observed":"true","stages_available":"true","status":"503","vjsx_ms":"0.244","vjsx_observed":"true"}
+2026-11-02T08:30:31.807235Z [[33mWARN [39m] [http.observation] {"adapter_ms":"0.047","adapter_observed":"true","at_unix":"1793608231","duration_ms":"0","listener":"http","method":"POST","observation_id":"http-1793608231806611","other_ms":"0.283","pipeline":"soak.http","queue_ms":"0.001","queue_observed":"true","stages_available":"true","status":"503","vjsx_ms":"0.220","vjsx_observed":"true"}
+2026-11-02T08:30:32.888528Z [[37mINFO [39m] Starting client listener, server(true)...
+2026-11-02T08:30:32.891032Z [[37mINFO [39m] Starting client listener, server(true)...
+2026-11-02T08:30:32.891052Z [[35mDEBUG[39m] server-> got message: text_frame
+2026-11-02T08:30:32.891058Z [[35mDEBUG[39m] server-> read: text
+2026-11-02T08:30:32.891060Z [[35mDEBUG[39m] server-> sending on_message event
+2026-11-02T08:30:32.895227Z [[37mINFO [39m] Starting client listener, server(true)...
+2026-11-02T08:30:32.895264Z [[35mDEBUG[39m] server-> got message: text_frame
+2026-11-02T08:30:32.895269Z [[35mDEBUG[39m] server-> read: text
+2026-11-02T08:30:32.895272Z [[35mDEBUG[39m] server-> sending on_message event
+2026-11-02T08:30:32.897034Z [[35mDEBUG[39m] server-> got message: binary_frame
+2026-11-02T08:30:32.897044Z [[35mDEBUG[39m] server-> read: binary
+2026-11-02T08:30:32.897046Z [[35mDEBUG[39m] server-> sending on_message event
+2026-11-02T08:30:32.898268Z [[35mDEBUG[39m] server-> got message: binary_frame
+2026-11-02T08:30:32.898284Z [[35mDEBUG[39m] server-> read: binary
+2026-11-02T08:30:32.898287Z [[35mDEBUG[39m] server-> sending on_message event
+2026-11-02T08:30:32.939071Z [[35mDEBUG[39m] server-> got message: close
+2026-11-02T08:30:32.939104Z [[35mDEBUG[39m] server-> read: close
+2026-11-02T08:30:32.939111Z [[35mDEBUG[39m] server-> close with reason, code: 1000, reason: []
+2026-11-02T08:30:32.939113Z [[35mDEBUG[39m] server-> sending close, 1000, 
+2026-11-02T08:30:32.939118Z [[35mDEBUG[39m] server-> send control frame close, frame_type: CLOSE
+2026-11-02T08:30:32.939171Z [[35mDEBUG[39m] server-> shutting down socket
+2026-11-02T08:30:32.939594Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:32.939719Z [[35mDEBUG[39m] server-> got message: close
+2026-11-02T08:30:32.939726Z [[35mDEBUG[39m] server-> read: close
+2026-11-02T08:30:32.939730Z [[35mDEBUG[39m] server-> close with reason, code: 1000, reason: []
+2026-11-02T08:30:32.939735Z [[35mDEBUG[39m] server-> sending close, 1000, 
+2026-11-02T08:30:32.939758Z [[35mDEBUG[39m] server-> send control frame close, frame_type: CLOSE
+2026-11-02T08:30:32.939783Z [[35mDEBUG[39m] server-> shutting down socket
+2026-11-02T08:30:32.940109Z [[35mDEBUG[39m] server-> got message: close
+2026-11-02T08:30:32.940127Z [[35mDEBUG[39m] server-> read: close
+2026-11-02T08:30:32.940145Z [[35mDEBUG[39m] server-> close with reason, code: 1000, reason: []
+2026-11-02T08:30:32.940148Z [[35mDEBUG[39m] server-> sending close, 1000, 
+2026-11-02T08:30:32.940153Z [[35mDEBUG[39m] server-> send control frame close, frame_type: CLOSE
+2026-11-02T08:30:32.940196Z [[35mDEBUG[39m] server-> shutting down socket
+2026-11-02T08:30:32.940513Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:32.940129Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:32.941807Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:32.941818Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:32.941824Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:32.941826Z [[37mINFO [39m] Quit client listener, server(true)...
+2026-11-02T08:30:32.942476Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:32.942486Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:32.942489Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:32.942491Z [[37mINFO [39m] Quit client listener, server(true)...
+2026-11-02T08:30:32.943066Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:32.943076Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:32.943080Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:32.943082Z [[37mINFO [39m] Quit client listener, server(true)...
+2026-11-02T08:30:33.110954Z [[33mWARN [39m] [http.observation] {"adapter_ms":"0.068","adapter_observed":"true","at_unix":"1793608233","duration_ms":"1","listener":"http","method":"POST","observation_id":"http-1793608233109815","other_ms":"0.592","pipeline":"soak.http","queue_ms":"0.001","queue_observed":"true","stages_available":"true","status":"503","vjsx_ms":"0.364","vjsx_observed":"true"}
+2026-11-02T08:30:33.205075Z [[33mWARN [39m] [http.observation] {"adapter_ms":"0.065","adapter_observed":"true","at_unix":"1793608233","duration_ms":"0","listener":"http","method":"POST","observation_id":"http-1793608233204308","other_ms":"0.355","pipeline":"soak.http","queue_ms":"0.001","queue_observed":"true","stages_available":"true","status":"503","vjsx_ms":"0.242","vjsx_observed":"true"}
+2026-11-02T08:30:33.708950Z [[33mWARN [39m] [http.observation] {"adapter_ms":"0.053","adapter_observed":"true","at_unix":"1793608233","duration_ms":"0","listener":"http","method":"POST","observation_id":"http-1793608233708020","other_ms":"0.583","pipeline":"soak.http","queue_ms":"0.001","queue_observed":"true","stages_available":"true","status":"503","vjsx_ms":"0.222","vjsx_observed":"true"}
+2026-11-02T08:30:35.640724Z [[33mWARN [39m] [http.observation] {"adapter_ms":"0.045","adapter_observed":"true","at_unix":"1793608235","duration_ms":"0","listener":"http","method":"POST","observation_id":"http-1793608235639397","other_ms":"0.284","pipeline":"soak.http","queue_ms":"0.001","queue_observed":"true","stages_available":"true","status":"503","vjsx_ms":"0.225","vjsx_observed":"true"}
+2026-11-02T08:30:36.636673Z [[37mINFO [39m] Starting client listener, server(true)...
+2026-11-02T08:30:36.639379Z [[37mINFO [39m] Starting client listener, server(true)...
+2026-11-02T08:30:36.639396Z [[35mDEBUG[39m] server-> got message: text_frame
+2026-11-02T08:30:36.639400Z [[35mDEBUG[39m] server-> read: text
+2026-11-02T08:30:36.639411Z [[35mDEBUG[39m] server-> sending on_message event
+2026-11-02T08:30:36.641249Z [[37mINFO [39m] Starting client listener, server(true)...
+2026-11-02T08:30:36.642355Z [[35mDEBUG[39m] server-> got message: text_frame
+2026-11-02T08:30:36.642364Z [[35mDEBUG[39m] server-> read: text
+2026-11-02T08:30:36.642366Z [[35mDEBUG[39m] server-> sending on_message event
+2026-11-02T08:30:36.643561Z [[35mDEBUG[39m] server-> got message: binary_frame
+2026-11-02T08:30:36.643571Z [[35mDEBUG[39m] server-> read: binary
+2026-11-02T08:30:36.643574Z [[35mDEBUG[39m] server-> sending on_message event
+2026-11-02T08:30:36.644927Z [[35mDEBUG[39m] server-> got message: binary_frame
+2026-11-02T08:30:36.644938Z [[35mDEBUG[39m] server-> read: binary
+2026-11-02T08:30:36.644940Z [[35mDEBUG[39m] server-> sending on_message event
+2026-11-02T08:30:36.685056Z [[35mDEBUG[39m] server-> got message: close
+2026-11-02T08:30:36.685079Z [[35mDEBUG[39m] server-> read: close
+2026-11-02T08:30:36.685084Z [[35mDEBUG[39m] server-> close with reason, code: 1000, reason: []
+2026-11-02T08:30:36.685087Z [[35mDEBUG[39m] server-> sending close, 1000, 
+2026-11-02T08:30:36.685090Z [[35mDEBUG[39m] server-> send control frame close, frame_type: CLOSE
+2026-11-02T08:30:36.685124Z [[35mDEBUG[39m] server-> shutting down socket
+2026-11-02T08:30:36.685286Z [[35mDEBUG[39m] server-> got message: close
+2026-11-02T08:30:36.685296Z [[35mDEBUG[39m] server-> read: close
+2026-11-02T08:30:36.685300Z [[35mDEBUG[39m] server-> close with reason, code: 1000, reason: []
+2026-11-02T08:30:36.685303Z [[35mDEBUG[39m] server-> sending close, 1000, 
+2026-11-02T08:30:36.685306Z [[35mDEBUG[39m] server-> send control frame close, frame_type: CLOSE
+2026-11-02T08:30:36.685320Z [[35mDEBUG[39m] server-> shutting down socket
+2026-11-02T08:30:36.685766Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:36.687027Z [[35mDEBUG[39m] server-> got message: close
+2026-11-02T08:30:36.687039Z [[35mDEBUG[39m] server-> read: close
+2026-11-02T08:30:36.687046Z [[35mDEBUG[39m] server-> close with reason, code: 1000, reason: []
+2026-11-02T08:30:36.687049Z [[35mDEBUG[39m] server-> sending close, 1000, 
+2026-11-02T08:30:36.687052Z [[35mDEBUG[39m] server-> send control frame close, frame_type: CLOSE
+2026-11-02T08:30:36.687083Z [[35mDEBUG[39m] server-> shutting down socket
+2026-11-02T08:30:36.687439Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:36.687703Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:36.687821Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:36.687829Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:36.687832Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:36.687834Z [[37mINFO [39m] Quit client listener, server(true)...
+2026-11-02T08:30:36.688535Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:36.688545Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:36.688549Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:36.688562Z [[37mINFO [39m] Quit client listener, server(true)...
+2026-11-02T08:30:36.689277Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:36.689290Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:36.689294Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:36.689296Z [[37mINFO [39m] Quit client listener, server(true)...
+2026-11-02T08:30:36.753701Z [[33mWARN [39m] [http.observation] {"adapter_ms":"0.115","adapter_observed":"true","at_unix":"1793608236","duration_ms":"0","listener":"http","method":"POST","observation_id":"http-1793608236752802","other_ms":"0.374","pipeline":"soak.http","queue_ms":"0.001","queue_observed":"true","stages_available":"true","status":"503","vjsx_ms":"0.331","vjsx_observed":"true"}
+2026-11-02T08:30:36.855626Z [[33mWARN [39m] [http.observation] {"adapter_ms":"0.047","adapter_observed":"true","at_unix":"1793608236","duration_ms":"0","listener":"http","method":"POST","observation_id":"http-1793608236854649","other_ms":"0.282","pipeline":"soak.http","queue_ms":"0.001","queue_observed":"true","stages_available":"true","status":"503","vjsx_ms":"0.259","vjsx_observed":"true"}
+2026-11-02T08:30:37.448678Z [[33mWARN [39m] [http.observation] {"adapter_ms":"0.067","adapter_observed":"true","at_unix":"1793608237","duration_ms":"0","listener":"http","method":"POST","observation_id":"http-1793608237447961","other_ms":"0.328","pipeline":"soak.http","queue_ms":"0.001","queue_observed":"true","stages_available":"true","status":"503","vjsx_ms":"0.236","vjsx_observed":"true"}
+2026-11-02T08:30:37.562119Z [[33mWARN [39m] [http.observation] {"adapter_ms":"0.074","adapter_observed":"true","at_unix":"1793608237","duration_ms":"0","listener":"http","method":"POST","observation_id":"http-1793608237561469","other_ms":"0.265","pipeline":"soak.http","queue_ms":"0.001","queue_observed":"true","stages_available":"true","status":"503","vjsx_ms":"0.245","vjsx_observed":"true"}
+2026-11-02T08:30:38.691019Z [[37mINFO [39m] Starting client listener, server(true)...
+2026-11-02T08:30:38.693707Z [[37mINFO [39m] Starting client listener, server(true)...
+2026-11-02T08:30:38.693730Z [[35mDEBUG[39m] server-> got message: text_frame
+2026-11-02T08:30:38.693749Z [[35mDEBUG[39m] server-> read: text
+2026-11-02T08:30:38.693752Z [[35mDEBUG[39m] server-> sending on_message event
+2026-11-02T08:30:38.698151Z [[37mINFO [39m] Starting client listener, server(true)...
+2026-11-02T08:30:38.698170Z [[35mDEBUG[39m] server-> got message: text_frame
+2026-11-02T08:30:38.698175Z [[35mDEBUG[39m] server-> read: text
+2026-11-02T08:30:38.698177Z [[35mDEBUG[39m] server-> sending on_message event
+2026-11-02T08:30:38.699392Z [[35mDEBUG[39m] server-> got message: binary_frame
+2026-11-02T08:30:38.699402Z [[35mDEBUG[39m] server-> read: binary
+2026-11-02T08:30:38.699404Z [[35mDEBUG[39m] server-> sending on_message event
+2026-11-02T08:30:38.700682Z [[35mDEBUG[39m] server-> got message: binary_frame
+2026-11-02T08:30:38.700692Z [[35mDEBUG[39m] server-> read: binary
+2026-11-02T08:30:38.700694Z [[35mDEBUG[39m] server-> sending on_message event
+2026-11-02T08:30:38.741055Z [[35mDEBUG[39m] server-> got message: close
+2026-11-02T08:30:38.741079Z [[35mDEBUG[39m] server-> read: close
+2026-11-02T08:30:38.741085Z [[35mDEBUG[39m] server-> close with reason, code: 1000, reason: []
+2026-11-02T08:30:38.741087Z [[35mDEBUG[39m] server-> sending close, 1000, 
+2026-11-02T08:30:38.741093Z [[35mDEBUG[39m] server-> send control frame close, frame_type: CLOSE
+2026-11-02T08:30:38.741129Z [[35mDEBUG[39m] server-> shutting down socket
+2026-11-02T08:30:38.741588Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:38.741699Z [[35mDEBUG[39m] server-> got message: close
+2026-11-02T08:30:38.741707Z [[35mDEBUG[39m] server-> read: close
+2026-11-02T08:30:38.741711Z [[35mDEBUG[39m] server-> close with reason, code: 1000, reason: []
+2026-11-02T08:30:38.741714Z [[35mDEBUG[39m] server-> sending close, 1000, 
+2026-11-02T08:30:38.741716Z [[35mDEBUG[39m] server-> send control frame close, frame_type: CLOSE
+2026-11-02T08:30:38.741748Z [[35mDEBUG[39m] server-> shutting down socket
+2026-11-02T08:30:38.742104Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:38.742203Z [[35mDEBUG[39m] server-> got message: close
+2026-11-02T08:30:38.742209Z [[35mDEBUG[39m] server-> read: close
+2026-11-02T08:30:38.742214Z [[35mDEBUG[39m] server-> close with reason, code: 1000, reason: []
+2026-11-02T08:30:38.742217Z [[35mDEBUG[39m] server-> sending close, 1000, 
+2026-11-02T08:30:38.742221Z [[35mDEBUG[39m] server-> send control frame close, frame_type: CLOSE
+2026-11-02T08:30:38.742251Z [[35mDEBUG[39m] server-> shutting down socket
+2026-11-02T08:30:38.742570Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:38.743348Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:38.743360Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:38.743373Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:38.743376Z [[37mINFO [39m] Quit client listener, server(true)...
+2026-11-02T08:30:38.744006Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:38.744017Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:38.744020Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:38.744022Z [[37mINFO [39m] Quit client listener, server(true)...
+2026-11-02T08:30:38.744706Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:38.744713Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:38.744716Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:38.744718Z [[37mINFO [39m] Quit client listener, server(true)...
+2026-11-02T08:30:38.755431Z [[33mWARN [39m] [http.observation] {"adapter_ms":"0.059","adapter_observed":"true","at_unix":"1793608238","duration_ms":"0","listener":"http","method":"POST","observation_id":"http-1793608238754748","other_ms":"0.335","pipeline":"soak.http","queue_ms":"0.001","queue_observed":"true","stages_available":"true","status":"503","vjsx_ms":"0.218","vjsx_observed":"true"}
+2026-11-02T08:30:38.857506Z [[33mWARN [39m] [http.observation] {"adapter_ms":"0.049","adapter_observed":"true","at_unix":"1793608238","duration_ms":"0","listener":"http","method":"POST","observation_id":"http-1793608238856829","other_ms":"0.305","pipeline":"soak.http","queue_ms":"0.001","queue_observed":"true","stages_available":"true","status":"503","vjsx_ms":"0.250","vjsx_observed":"true"}
+2026-11-02T08:30:39.451020Z [[33mWARN [39m] [http.observation] {"adapter_ms":"0.078","adapter_observed":"true","at_unix":"1793608239","duration_ms":"0","listener":"http","method":"POST","observation_id":"http-1793608239450218","other_ms":"0.340","pipeline":"soak.http","queue_ms":"0.002","queue_observed":"true","stages_available":"true","status":"503","vjsx_ms":"0.288","vjsx_observed":"true"}
+2026-11-02T08:30:39.563965Z [[33mWARN [39m] [http.observation] {"adapter_ms":"0.060","adapter_observed":"true","at_unix":"1793608239","duration_ms":"0","listener":"http","method":"POST","observation_id":"http-1793608239563307","other_ms":"0.288","pipeline":"soak.http","queue_ms":"0.001","queue_observed":"true","stages_available":"true","status":"503","vjsx_ms":"0.212","vjsx_observed":"true"}
+2026-11-02T08:30:40.744851Z [[37mINFO [39m] Starting client listener, server(true)...
+2026-11-02T08:30:40.747523Z [[37mINFO [39m] Starting client listener, server(true)...
+2026-11-02T08:30:40.747555Z [[35mDEBUG[39m] server-> got message: text_frame
+2026-11-02T08:30:40.747559Z [[35mDEBUG[39m] server-> read: text
+2026-11-02T08:30:40.747565Z [[35mDEBUG[39m] server-> sending on_message event
+2026-11-02T08:30:40.751716Z [[37mINFO [39m] Starting client listener, server(true)...
+2026-11-02T08:30:40.752141Z [[35mDEBUG[39m] server-> got message: text_frame
+2026-11-02T08:30:40.752150Z [[35mDEBUG[39m] server-> read: text
+2026-11-02T08:30:40.752154Z [[35mDEBUG[39m] server-> sending on_message event
+2026-11-02T08:30:40.753695Z [[35mDEBUG[39m] server-> got message: binary_frame
+2026-11-02T08:30:40.753708Z [[35mDEBUG[39m] server-> read: binary
+2026-11-02T08:30:40.753710Z [[35mDEBUG[39m] server-> sending on_message event
+2026-11-02T08:30:40.755013Z [[35mDEBUG[39m] server-> got message: binary_frame
+2026-11-02T08:30:40.755023Z [[35mDEBUG[39m] server-> read: binary
+2026-11-02T08:30:40.755025Z [[35mDEBUG[39m] server-> sending on_message event
+2026-11-02T08:30:40.757554Z [[33mWARN [39m] [http.observation] {"adapter_ms":"0.061","adapter_observed":"true","at_unix":"1793608240","duration_ms":"0","listener":"http","method":"POST","observation_id":"http-1793608240756852","other_ms":"0.338","pipeline":"soak.http","queue_ms":"0.001","queue_observed":"true","stages_available":"true","status":"503","vjsx_ms":"0.233","vjsx_observed":"true"}
+2026-11-02T08:30:40.796121Z [[35mDEBUG[39m] server-> got message: close
+2026-11-02T08:30:40.796149Z [[35mDEBUG[39m] server-> read: close
+2026-11-02T08:30:40.796154Z [[35mDEBUG[39m] server-> close with reason, code: 1000, reason: []
+2026-11-02T08:30:40.796156Z [[35mDEBUG[39m] server-> sending close, 1000, 
+2026-11-02T08:30:40.796168Z [[35mDEBUG[39m] server-> send control frame close, frame_type: CLOSE
+2026-11-02T08:30:40.796329Z [[35mDEBUG[39m] server-> shutting down socket
+2026-11-02T08:30:40.796443Z [[35mDEBUG[39m] server-> got message: close
+2026-11-02T08:30:40.796458Z [[35mDEBUG[39m] server-> read: close
+2026-11-02T08:30:40.796462Z [[35mDEBUG[39m] server-> close with reason, code: 1000, reason: []
+2026-11-02T08:30:40.796466Z [[35mDEBUG[39m] server-> sending close, 1000, 
+2026-11-02T08:30:40.796469Z [[35mDEBUG[39m] server-> send control frame close, frame_type: CLOSE
+2026-11-02T08:30:40.796503Z [[35mDEBUG[39m] server-> shutting down socket
+2026-11-02T08:30:40.796836Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:40.797077Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:40.797153Z [[35mDEBUG[39m] server-> got message: close
+2026-11-02T08:30:40.797176Z [[35mDEBUG[39m] server-> read: close
+2026-11-02T08:30:40.797219Z [[35mDEBUG[39m] server-> close with reason, code: 1000, reason: []
+2026-11-02T08:30:40.797222Z [[35mDEBUG[39m] server-> sending close, 1000, 
+2026-11-02T08:30:40.797225Z [[35mDEBUG[39m] server-> send control frame close, frame_type: CLOSE
+2026-11-02T08:30:40.797303Z [[35mDEBUG[39m] server-> shutting down socket
+2026-11-02T08:30:40.797758Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:40.799672Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:40.799685Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:40.799689Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:40.799691Z [[37mINFO [39m] Quit client listener, server(true)...
+2026-11-02T08:30:40.800329Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:40.800341Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:40.800344Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:40.800347Z [[37mINFO [39m] Quit client listener, server(true)...
+2026-11-02T08:30:40.800995Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:40.801004Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:40.801007Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:40.801009Z [[37mINFO [39m] Quit client listener, server(true)...
+2026-11-02T08:30:40.860159Z [[33mWARN [39m] [http.observation] {"adapter_ms":"0.060","adapter_observed":"true","at_unix":"1793608240","duration_ms":"0","listener":"http","method":"POST","observation_id":"http-1793608240859471","other_ms":"0.303","pipeline":"soak.http","queue_ms":"0.001","queue_observed":"true","stages_available":"true","status":"503","vjsx_ms":"0.258","vjsx_observed":"true"}
+2026-11-02T08:30:41.453649Z [[33mWARN [39m] [http.observation] {"adapter_ms":"0.074","adapter_observed":"true","at_unix":"1793608241","duration_ms":"0","listener":"http","method":"POST","observation_id":"http-1793608241452855","other_ms":"0.388","pipeline":"soak.http","queue_ms":"0.001","queue_observed":"true","stages_available":"true","status":"503","vjsx_ms":"0.211","vjsx_observed":"true"}
+2026-11-02T08:30:41.565832Z [[33mWARN [39m] [http.observation] {"adapter_ms":"0.064","adapter_observed":"true","at_unix":"1793608241","duration_ms":"0","listener":"http","method":"POST","observation_id":"http-1793608241565144","other_ms":"0.254","pipeline":"soak.http","queue_ms":"0.001","queue_observed":"true","stages_available":"true","status":"503","vjsx_ms":"0.269","vjsx_observed":"true"}
+2026-11-02T08:30:42.759840Z [[33mWARN [39m] [http.observation] {"adapter_ms":"0.088","adapter_observed":"true","at_unix":"1793608242","duration_ms":"0","listener":"http","method":"POST","observation_id":"http-1793608242759014","other_ms":"0.388","pipeline":"soak.http","queue_ms":"0.001","queue_observed":"true","stages_available":"true","status":"503","vjsx_ms":"0.264","vjsx_observed":"true"}
+2026-11-02T08:30:42.800071Z [[37mINFO [39m] Starting client listener, server(true)...
+2026-11-02T08:30:42.802636Z [[37mINFO [39m] Starting client listener, server(true)...
+2026-11-02T08:30:42.802654Z [[35mDEBUG[39m] server-> got message: text_frame
+2026-11-02T08:30:42.802664Z [[35mDEBUG[39m] server-> read: text
+2026-11-02T08:30:42.802667Z [[35mDEBUG[39m] server-> sending on_message event
+2026-11-02T08:30:42.807504Z [[37mINFO [39m] Starting client listener, server(true)...
+2026-11-02T08:30:42.807519Z [[35mDEBUG[39m] server-> got message: text_frame
+2026-11-02T08:30:42.807564Z [[35mDEBUG[39m] server-> read: text
+2026-11-02T08:30:42.807566Z [[35mDEBUG[39m] server-> sending on_message event
+2026-11-02T08:30:42.808754Z [[35mDEBUG[39m] server-> got message: binary_frame
+2026-11-02T08:30:42.808766Z [[35mDEBUG[39m] server-> read: binary
+2026-11-02T08:30:42.808769Z [[35mDEBUG[39m] server-> sending on_message event
+2026-11-02T08:30:42.809899Z [[35mDEBUG[39m] server-> got message: binary_frame
+2026-11-02T08:30:42.809908Z [[35mDEBUG[39m] server-> read: binary
+2026-11-02T08:30:42.809910Z [[35mDEBUG[39m] server-> sending on_message event
+2026-11-02T08:30:42.851082Z [[35mDEBUG[39m] server-> got message: close
+2026-11-02T08:30:42.851123Z [[35mDEBUG[39m] server-> read: close
+2026-11-02T08:30:42.851129Z [[35mDEBUG[39m] server-> close with reason, code: 1000, reason: []
+2026-11-02T08:30:42.851138Z [[35mDEBUG[39m] server-> sending close, 1000, 
+2026-11-02T08:30:42.851143Z [[35mDEBUG[39m] server-> send control frame close, frame_type: CLOSE
+2026-11-02T08:30:42.851177Z [[35mDEBUG[39m] server-> shutting down socket
+2026-11-02T08:30:42.851330Z [[35mDEBUG[39m] server-> got message: close
+2026-11-02T08:30:42.851357Z [[35mDEBUG[39m] server-> read: close
+2026-11-02T08:30:42.851360Z [[35mDEBUG[39m] server-> close with reason, code: 1000, reason: []
+2026-11-02T08:30:42.851363Z [[35mDEBUG[39m] server-> sending close, 1000, 
+2026-11-02T08:30:42.851366Z [[35mDEBUG[39m] server-> send control frame close, frame_type: CLOSE
+2026-11-02T08:30:42.851385Z [[35mDEBUG[39m] server-> shutting down socket
+2026-11-02T08:30:42.851680Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:42.851882Z [[35mDEBUG[39m] server-> got message: close
+2026-11-02T08:30:42.851888Z [[35mDEBUG[39m] server-> read: close
+2026-11-02T08:30:42.851895Z [[35mDEBUG[39m] server-> close with reason, code: 1000, reason: []
+2026-11-02T08:30:42.851897Z [[35mDEBUG[39m] server-> sending close, 1000, 
+2026-11-02T08:30:42.851900Z [[35mDEBUG[39m] server-> send control frame close, frame_type: CLOSE
+2026-11-02T08:30:42.851906Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:42.853080Z [[35mDEBUG[39m] server-> shutting down socket
+2026-11-02T08:30:42.853294Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:42.853302Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:42.853305Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:42.853307Z [[37mINFO [39m] Quit client listener, server(true)...
+2026-11-02T08:30:42.853503Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:42.854604Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:42.854618Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:42.854620Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:42.854627Z [[37mINFO [39m] Quit client listener, server(true)...
+2026-11-02T08:30:42.855285Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:42.855294Z [[35mDEBUG[39m] server-> sending on_close event
+2026-11-02T08:30:42.855297Z [[35mDEBUG[39m] server-> Delete client
+2026-11-02T08:30:42.855299Z [[37mINFO [39m] Quit client listener, server(true)...
+2026-11-02T08:30:42.861745Z [[33mWARN [39m] [http.observation] {"adapter_ms":"0.046","adapter_observed":"true","at_unix":"1793608242","duration_ms":"0","listener":"http","method":"POST","observation_id":"http-1793608242861165","other_ms":"0.258","pipeline":"soak.http","queue_ms":"0.001","queue_observed":"true","stages_available":"true","status":"503","vjsx_ms":"0.197","vjsx_observed":"true"}
+2026-11-02T08:30:43.455703Z [[33mWARN [39m] [http.observation] {"adapter_ms":"0.068","adapter_observed":"true","at_unix":"1793608243","duration_ms":"0","listener":"http","method":"POST","observation_id":"http-1793608243454997","other_ms":"0.314","pipeline":"soak.http","queue_ms":"0.001","queue_observed":"true","stages_available":"true","status":"503","vjsx_ms":"0.250","vjsx_observed":"true"}
+2026-11-02T08:30:43.567844Z [[33mWARN [39m] [http.observation] {"adapter_ms":"0.082","adapter_observed":"true","at_unix":"1793608243","duration_ms":"0","listener":"http","method":"POST","observation_id":"http-1793608243567030","other_ms":"0.359","pipeline":"soak.http","queue_ms":"0.001","queue_observed":"true","stages_available":"true","status":"503","vjsx_ms":"0.291","vjsx_observed":"true"}

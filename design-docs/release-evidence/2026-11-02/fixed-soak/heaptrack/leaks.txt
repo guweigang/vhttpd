@@ -1,0 +1,1823 @@
+reading file "/root/vhttpd-release-tests/20261102-fixed4-heaptrack/allocations.zst" - please wait, this might take some time...
+Debuggee command was: /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd --config /root/vhttpd-release-tests/20261102-fixed4-heaptrack/vhttpd.toml --manual-restart
+finished reading file, now analyzing data:
+
+MEMORY LEAKS
+27.23M leaked over 175624 calls from
+CRYPTO_zalloc
+  in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+17.84M leaked over 2340 calls from:
+    SSL_new
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libssl.so.3
+    openssl__SSLConn__init
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    openssl__new_ssl_conn
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__reset_state
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__close
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__listen
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Server__handle_handshake
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__managed_handshake
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__handle_dispatch_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__run_dispatch_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__run_dispatch_session_args_thread_wrapper_detached
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v_detached_thread_start
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_pthread_start_inner
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_call_with_stack_base
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    start_thread
+      at ./nptl/pthread_create.c:447
+      in /lib/x86_64-linux-gnu/libc.so.6
+    __clone3
+      at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
+      in /lib/x86_64-linux-gnu/libc.so.6
+3.78M leaked over 2340 calls from:
+    SSL_CTX_new_ex
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libssl.so.3
+    openssl__SSLConn__init
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    openssl__new_ssl_conn
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__reset_state
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__close
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__listen
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Server__handle_handshake
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__managed_handshake
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__handle_dispatch_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__run_dispatch_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__run_dispatch_session_args_thread_wrapper_detached
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v_detached_thread_start
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_pthread_start_inner
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_call_with_stack_base
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    start_thread
+      at ./nptl/pthread_create.c:447
+      in /lib/x86_64-linux-gnu/libc.so.6
+    __clone3
+      at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
+      in /lib/x86_64-linux-gnu/libc.so.6
+1.25M leaked over 2340 calls from:
+    0x715877d997e3
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libssl.so.3
+    SSL_CTX_new_ex
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libssl.so.3
+    openssl__SSLConn__init
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    openssl__new_ssl_conn
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__reset_state
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__close
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__listen
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Server__handle_handshake
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__managed_handshake
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__handle_dispatch_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__run_dispatch_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__run_dispatch_session_args_thread_wrapper_detached
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v_detached_thread_start
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_pthread_start_inner
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_call_with_stack_base
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    start_thread
+      at ./nptl/pthread_create.c:447
+      in /lib/x86_64-linux-gnu/libc.so.6
+    __clone3
+      at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
+      in /lib/x86_64-linux-gnu/libc.so.6
+  and 4.35M from 248 other places
+
+9.24M leaked over 21060 calls from
+0x715877db4e8d
+  in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libssl.so.3
+6.57M leaked over 9360 calls from:
+    0x715877b903a4
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    0x715877db30a9
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libssl.so.3
+    0x715877a2f0f6
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    0x715877db4106
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libssl.so.3
+    SSL_CTX_new_ex
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libssl.so.3
+    openssl__SSLConn__init
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    openssl__new_ssl_conn
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__reset_state
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__close
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__listen
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Server__handle_handshake
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__managed_handshake
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__handle_dispatch_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__run_dispatch_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__run_dispatch_session_args_thread_wrapper_detached
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v_detached_thread_start
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_pthread_start_inner
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_call_with_stack_base
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    start_thread
+      at ./nptl/pthread_create.c:447
+      in /lib/x86_64-linux-gnu/libc.so.6
+    __clone3
+      at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
+      in /lib/x86_64-linux-gnu/libc.so.6
+2.62M leaked over 2340 calls from:
+    SSL_CTX_new_ex
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libssl.so.3
+    openssl__SSLConn__init
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    openssl__new_ssl_conn
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__reset_state
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__close
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__listen
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Server__handle_handshake
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__managed_handshake
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__handle_dispatch_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__run_dispatch_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__run_dispatch_session_args_thread_wrapper_detached
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v_detached_thread_start
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_pthread_start_inner
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_call_with_stack_base
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    start_thread
+      at ./nptl/pthread_create.c:447
+      in /lib/x86_64-linux-gnu/libc.so.6
+    __clone3
+      at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
+      in /lib/x86_64-linux-gnu/libc.so.6
+46.80K leaked over 2340 calls from:
+    SSL_CTX_new_ex
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libssl.so.3
+    openssl__SSLConn__init
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    openssl__new_ssl_conn
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__reset_state
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__close
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__listen
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Server__handle_handshake
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__managed_handshake
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__handle_dispatch_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__run_dispatch_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__run_dispatch_session_args_thread_wrapper_detached
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v_detached_thread_start
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_pthread_start_inner
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_call_with_stack_base
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    start_thread
+      at ./nptl/pthread_create.c:447
+      in /lib/x86_64-linux-gnu/libc.so.6
+    __clone3
+      at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
+      in /lib/x86_64-linux-gnu/libc.so.6
+  and 0B from 3 other places
+
+2.62M leaked over 426013 calls from
+CRYPTO_strdup
+  in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+1.20M leaked over 117000 calls from:
+    0x715877db3378
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libssl.so.3
+    0x715877b903a4
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    0x715877db30a9
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libssl.so.3
+    0x715877a2f0f6
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    0x715877db4106
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libssl.so.3
+    SSL_CTX_new_ex
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libssl.so.3
+    openssl__SSLConn__init
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    openssl__new_ssl_conn
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__reset_state
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__close
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__listen
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Server__handle_handshake
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__managed_handshake
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__handle_dispatch_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__run_dispatch_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__run_dispatch_session_args_thread_wrapper_detached
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v_detached_thread_start
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_pthread_start_inner
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_call_with_stack_base
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    start_thread
+      at ./nptl/pthread_create.c:447
+      in /lib/x86_64-linux-gnu/libc.so.6
+    __clone3
+      at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
+      in /lib/x86_64-linux-gnu/libc.so.6
+1.05M leaked over 117000 calls from:
+    0x715877db3260
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libssl.so.3
+    0x715877b903a4
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    0x715877db30a9
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libssl.so.3
+    0x715877a2f0f6
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    0x715877db4106
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libssl.so.3
+    SSL_CTX_new_ex
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libssl.so.3
+    openssl__SSLConn__init
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    openssl__new_ssl_conn
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__reset_state
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__close
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__listen
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Server__handle_handshake
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__managed_handshake
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__handle_dispatch_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__run_dispatch_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__run_dispatch_session_args_thread_wrapper_detached
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v_detached_thread_start
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_pthread_start_inner
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_call_with_stack_base
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    start_thread
+      at ./nptl/pthread_create.c:447
+      in /lib/x86_64-linux-gnu/libc.so.6
+    __clone3
+      at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
+      in /lib/x86_64-linux-gnu/libc.so.6
+365.04K leaked over 117000 calls from:
+    0x715877db346b
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libssl.so.3
+    0x715877b903a4
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    0x715877db30a9
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libssl.so.3
+    0x715877a2f0f6
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    0x715877db4106
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libssl.so.3
+    SSL_CTX_new_ex
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libssl.so.3
+    openssl__SSLConn__init
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    openssl__new_ssl_conn
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__reset_state
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__close
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__listen
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Server__handle_handshake
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__managed_handshake
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__handle_dispatch_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__run_dispatch_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__run_dispatch_session_args_thread_wrapper_detached
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v_detached_thread_start
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_pthread_start_inner
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_call_with_stack_base
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    start_thread
+      at ./nptl/pthread_create.c:447
+      in /lib/x86_64-linux-gnu/libc.so.6
+    __clone3
+      at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
+      in /lib/x86_64-linux-gnu/libc.so.6
+  and 27B from 18 other places
+
+1.40M leaked over 88994 calls from
+OPENSSL_sk_dup
+  in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+1.18M leaked over 2340 calls from:
+    0x715877d9e7bc
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libssl.so.3
+    SSL_CTX_new_ex
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libssl.so.3
+    openssl__SSLConn__init
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    openssl__new_ssl_conn
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__reset_state
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__close
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__listen
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Server__handle_handshake
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__managed_handshake
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__handle_dispatch_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__run_dispatch_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__run_dispatch_session_args_thread_wrapper_detached
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v_detached_thread_start
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_pthread_start_inner
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_call_with_stack_base
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    start_thread
+      at ./nptl/pthread_create.c:447
+      in /lib/x86_64-linux-gnu/libc.so.6
+    __clone3
+      at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
+      in /lib/x86_64-linux-gnu/libc.so.6
+74.88K leaked over 2340 calls from:
+    SSL_new
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libssl.so.3
+    openssl__SSLConn__init
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    openssl__new_ssl_conn
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__reset_state
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__close
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__listen
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Server__handle_handshake
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__managed_handshake
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__handle_dispatch_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__run_dispatch_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__run_dispatch_session_args_thread_wrapper_detached
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v_detached_thread_start
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_pthread_start_inner
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_call_with_stack_base
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    start_thread
+      at ./nptl/pthread_create.c:447
+      in /lib/x86_64-linux-gnu/libc.so.6
+    __clone3
+      at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
+      in /lib/x86_64-linux-gnu/libc.so.6
+74.88K leaked over 2340 calls from:
+    SSL_new
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libssl.so.3
+    openssl__SSLConn__init
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    openssl__new_ssl_conn
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__reset_state
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__close
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__listen
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Server__handle_handshake
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__managed_handshake
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__handle_dispatch_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__run_dispatch_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__run_dispatch_session_args_thread_wrapper_detached
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v_detached_thread_start
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_pthread_start_inner
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_call_with_stack_base
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    start_thread
+      at ./nptl/pthread_create.c:447
+      in /lib/x86_64-linux-gnu/libc.so.6
+    __clone3
+      at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
+      in /lib/x86_64-linux-gnu/libc.so.6
+  and 74.88K from 31 other places
+
+1.18M leaked over 84906 calls from
+0x715877a21681
+  in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+1.18M leaked over 16380 calls from:
+    OPENSSL_sk_insert
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    0x715877d9e67e
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libssl.so.3
+    SSL_CTX_new_ex
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libssl.so.3
+    openssl__SSLConn__init
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    openssl__new_ssl_conn
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__reset_state
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__close
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__listen
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Server__handle_handshake
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__managed_handshake
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__handle_dispatch_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__run_dispatch_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__run_dispatch_session_args_thread_wrapper_detached
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v_detached_thread_start
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_pthread_start_inner
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_call_with_stack_base
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    start_thread
+      at ./nptl/pthread_create.c:447
+      in /lib/x86_64-linux-gnu/libc.so.6
+    __clone3
+      at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
+      in /lib/x86_64-linux-gnu/libc.so.6
+2B leaked over 1 calls from:
+    0x715877a1f5cf
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    0x715877a1f266
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    0x715877a2f0f6
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    0x715877a1f3b7
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    0x715877a1f758
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    0x7158779fa804
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    0x7158779faae3
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    EVP_SIGNATURE_fetch
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    0x715877d9c8d7
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libssl.so.3
+    SSL_CTX_new_ex
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libssl.so.3
+    openssl__SSLConn__init
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    openssl__new_ssl_conn
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__reset_state
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__close
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__listen
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Server__handle_handshake
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__managed_handshake
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__handle_dispatch_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__run_dispatch_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__run_dispatch_session_args_thread_wrapper_detached
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v_detached_thread_start
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_pthread_start_inner
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_call_with_stack_base
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    start_thread
+      at ./nptl/pthread_create.c:447
+      in /lib/x86_64-linux-gnu/libc.so.6
+    __clone3
+      at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
+      in /lib/x86_64-linux-gnu/libc.so.6
+  and 0B from 75 other places
+
+733.42K leaked over 168643 calls from
+arena_malloc_large.isra.0
+  in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+158.96K leaked over 28 calls from:
+    js_malloc
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_function_decl2.constprop.0
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_postfix_expr
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_unary
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_expr_binary
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_expr_binary
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_expr_binary
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_expr_binary
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_expr_binary
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_expr_binary
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_expr_binary
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_expr_binary
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_logical_and_or
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_logical_and_or
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_assign_expr2
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_assign_expr2
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_expr2
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_statement_or_decl
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_source_element
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __JS_EvalInternal
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    JS_Eval
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    vjsx__Context__js_eval_core
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    vjsx__Context__eval
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v3_internal_symbol_static_6578656375746f722e496e50726f63566a7378486f73744170694073746174696340696e7374616c6c5f687474705f666163616465
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    executor__InProcVjsxExecutor__ensure_lane_host
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v3_internal_symbol_static_6578656375746f722e496e50726f63566a73784c616e65576f726b657252756e74696d65407374617469634068616e646c655f7761726d75705f7461736b
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v3_internal_symbol_static_6578656375746f722e496e50726f63566a73784c616e65576f726b657252756e74696d6540737461746963406c6f6f70
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v3_internal_symbol_source___v3_internal_symbol_static_6578656375746f722e496e50726f63566a73784c616e65576f726b657252756e74696d6540737461746963406c6f6f70_args_thread_wrapper
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_pthread_start_inner
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_call_with_stack_base
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    start_thread
+      at ./nptl/pthread_create.c:447
+      in /lib/x86_64-linux-gnu/libc.so.6
+    __clone3
+      at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
+      in /lib/x86_64-linux-gnu/libc.so.6
+70.84K leaked over 46 calls from:
+    js_malloc
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_function_decl2.constprop.0
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_source_element
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __JS_EvalInternal
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    JS_Eval
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_module_load
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_host_resolve_imported_module
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_host_resolve_imported_module_atom
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_resolve_module
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __JS_EvalInternal
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    JS_Eval
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    vjsx__Context__js_eval_core
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    executor__vjsx_host_load_prepared_module
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    vjsx__RuntimeSession__load_module
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    vjsx__RuntimeSession__import_module
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v3_internal_symbol_static_6578656375746f722e566a7378486f73744c6f616465724073746174696340696d706f72745f70726570617265645f656e747279
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    executor__InProcVjsxExecutor__ensure_lane_host
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v3_internal_symbol_static_6578656375746f722e496e50726f63566a73784c616e65576f726b657252756e74696d65407374617469634068616e646c655f7761726d75705f7461736b
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v3_internal_symbol_static_6578656375746f722e496e50726f63566a73784c616e65576f726b657252756e74696d6540737461746963406c6f6f70
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v3_internal_symbol_source___v3_internal_symbol_static_6578656375746f722e496e50726f63566a73784c616e65576f726b657252756e74696d6540737461746963406c6f6f70_args_thread_wrapper
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_pthread_start_inner
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_call_with_stack_base
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    start_thread
+      at ./nptl/pthread_create.c:447
+      in /lib/x86_64-linux-gnu/libc.so.6
+    __clone3
+      at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
+      in /lib/x86_64-linux-gnu/libc.so.6
+37.26K leaked over 26 calls from:
+    js_malloc
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_class
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_postfix_expr
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_unary
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_expr_binary
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_expr_binary
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_expr_binary
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_expr_binary
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_expr_binary
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_expr_binary
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_expr_binary
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_expr_binary
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_logical_and_or
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_logical_and_or
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_assign_expr2
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_var
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_statement_or_decl
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_source_element
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __JS_EvalInternal
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    JS_Eval
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    vjsx__vjsx_runtime_module_loader
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_host_resolve_imported_module
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_host_resolve_imported_module_atom
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_resolve_module
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __JS_EvalInternal
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    JS_Eval
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    vjsx__Context__js_eval_core
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    vjsx__Context__eval_runtime_file
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    vjsx__Context__try_install_fetch_globals_policy
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    vjsx__Context__try_install_node_compat
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    vjsx__Context__try_install_node_runtime
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    vjsx__try_new_node_runtime_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    runtimejs__try_new_node_runtime_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    runtimejs__new_node_runtime_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v3_internal_symbol_static_6578656375746f722e496e50726f63566a737852756e74696d6553657373696f6e466163746f727940737461746963406e6577
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    executor__InProcVjsxExecutor__ensure_lane_host
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v3_internal_symbol_static_6578656375746f722e496e50726f63566a73784c616e65576f726b657252756e74696d65407374617469634068616e646c655f7761726d75705f7461736b
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v3_internal_symbol_static_6578656375746f722e496e50726f63566a73784c616e65576f726b657252756e74696d6540737461746963406c6f6f70
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v3_internal_symbol_source___v3_internal_symbol_static_6578656375746f722e496e50726f63566a73784c616e65576f726b657252756e74696d6540737461746963406c6f6f70_args_thread_wrapper
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_pthread_start_inner
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_call_with_stack_base
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    start_thread
+      at ./nptl/pthread_create.c:447
+      in /lib/x86_64-linux-gnu/libc.so.6
+    __clone3
+      at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
+      in /lib/x86_64-linux-gnu/libc.so.6
+  and 466.36K from 5259 other places
+
+311.45K leaked over 56262 calls from
+arena_calloc_large.isra.0
+  in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+38.86K leaked over 24 calls from:
+    js_calloc_rt
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_mallocz
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_create_function
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_create_function
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __JS_EvalInternal
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    JS_Eval
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    vjsx__Context__js_eval_core
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    vjsx__Context__eval
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v3_internal_symbol_static_6578656375746f722e496e50726f63566a7378486f73744170694073746174696340696e7374616c6c5f687474705f666163616465
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    executor__InProcVjsxExecutor__ensure_lane_host
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v3_internal_symbol_static_6578656375746f722e496e50726f63566a73784c616e65576f726b657252756e74696d65407374617469634068616e646c655f7761726d75705f7461736b
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v3_internal_symbol_static_6578656375746f722e496e50726f63566a73784c616e65576f726b657252756e74696d6540737461746963406c6f6f70
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v3_internal_symbol_source___v3_internal_symbol_static_6578656375746f722e496e50726f63566a73784c616e65576f726b657252756e74696d6540737461746963406c6f6f70_args_thread_wrapper
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_pthread_start_inner
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_call_with_stack_base
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    start_thread
+      at ./nptl/pthread_create.c:447
+      in /lib/x86_64-linux-gnu/libc.so.6
+    __clone3
+      at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
+      in /lib/x86_64-linux-gnu/libc.so.6
+26.64K leaked over 6 calls from:
+    js_calloc_rt
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_mallocz
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_create_function
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __JS_EvalInternal
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    JS_Eval
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    vjsx__vjsx_runtime_module_loader
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_host_resolve_imported_module
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_host_resolve_imported_module_atom
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_resolve_module
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __JS_EvalInternal
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    JS_Eval
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    vjsx__Context__js_eval_core
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    vjsx__Context__eval_runtime_file
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    vjsx__Context__try_install_fetch_globals_policy
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    vjsx__Context__try_install_node_compat
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    vjsx__Context__try_install_node_runtime
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    vjsx__try_new_node_runtime_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    runtimejs__try_new_node_runtime_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    runtimejs__new_node_runtime_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v3_internal_symbol_static_6578656375746f722e496e50726f63566a737852756e74696d6553657373696f6e466163746f727940737461746963406e6577
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    executor__InProcVjsxExecutor__ensure_lane_host
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v3_internal_symbol_static_6578656375746f722e496e50726f63566a73784c616e65576f726b657252756e74696d65407374617469634068616e646c655f7761726d75705f7461736b
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v3_internal_symbol_static_6578656375746f722e496e50726f63566a73784c616e65576f726b657252756e74696d6540737461746963406c6f6f70
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v3_internal_symbol_source___v3_internal_symbol_static_6578656375746f722e496e50726f63566a73784c616e65576f726b657252756e74696d6540737461746963406c6f6f70_args_thread_wrapper
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_pthread_start_inner
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_call_with_stack_base
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    start_thread
+      at ./nptl/pthread_create.c:447
+      in /lib/x86_64-linux-gnu/libc.so.6
+    __clone3
+      at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
+      in /lib/x86_64-linux-gnu/libc.so.6
+26.06K leaked over 20 calls from:
+    js_calloc_rt
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_mallocz
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_create_function
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_create_function
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __JS_EvalInternal
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    JS_Eval
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    vjsx__vjsx_runtime_module_loader
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_host_resolve_imported_module
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_host_resolve_imported_module_atom
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_resolve_module
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __JS_EvalInternal
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    JS_Eval
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    vjsx__Context__js_eval_core
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    vjsx__Context__eval_runtime_file
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    vjsx__Context__try_install_url_globals
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    vjsx__Context__try_install_runtime_globals
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    vjsx__Context__try_install_node_compat
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    vjsx__Context__try_install_node_runtime
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    vjsx__try_new_node_runtime_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    runtimejs__try_new_node_runtime_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    runtimejs__new_node_runtime_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v3_internal_symbol_static_6578656375746f722e496e50726f63566a737852756e74696d6553657373696f6e466163746f727940737461746963406e6577
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    executor__InProcVjsxExecutor__ensure_lane_host
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v3_internal_symbol_static_6578656375746f722e496e50726f63566a73784c616e65576f726b657252756e74696d65407374617469634068616e646c655f7761726d75705f7461736b
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v3_internal_symbol_static_6578656375746f722e496e50726f63566a73784c616e65576f726b657252756e74696d6540737461746963406c6f6f70
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v3_internal_symbol_source___v3_internal_symbol_static_6578656375746f722e496e50726f63566a73784c616e65576f726b657252756e74696d6540737461746963406c6f6f70_args_thread_wrapper
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_pthread_start_inner
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_call_with_stack_base
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    start_thread
+      at ./nptl/pthread_create.c:447
+      in /lib/x86_64-linux-gnu/libc.so.6
+    __clone3
+      at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
+      in /lib/x86_64-linux-gnu/libc.so.6
+  and 219.89K from 1758 other places
+
+105.07K leaked over 1194 calls from
+asn1_array2tree
+  in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libtasn1.so.6
+83.07K leaked over 472 calls from:
+    0x71587646f449
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libgnutls.so.30
+    0x715876435edf
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libgnutls.so.30
+    call_init
+      at ./elf/dl-init.c:74
+      in /lib64/ld-linux-x86-64.so.2
+    _dl_init::call_init
+      at ./elf/dl-init.c:120
+      in /lib64/ld-linux-x86-64.so.2
+    _dl_init
+      at ./elf/./elf/dl-init.c:121
+    _dl_start_user
+      in /lib64/ld-linux-x86-64.so.2
+22.00K leaked over 125 calls from:
+    0x71587646f544
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libgnutls.so.30
+    0x715876435edf
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libgnutls.so.30
+    call_init
+      at ./elf/dl-init.c:74
+      in /lib64/ld-linux-x86-64.so.2
+    _dl_init::call_init
+      at ./elf/dl-init.c:120
+      in /lib64/ld-linux-x86-64.so.2
+    _dl_init
+      at ./elf/./elf/dl-init.c:121
+    _dl_start_user
+      in /lib64/ld-linux-x86-64.so.2
+  and 0B from 1 other places
+
+85.42K leaked over 112927 calls from
+js_realloc_rt
+  in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+31.03K leaked over 12 calls from:
+    re_emit_range
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    re_emit_string_list
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    re_parse_alternative
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    re_parse_disjunction.part.0
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    lre_compile
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_compile_regexp
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_postfix_expr
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_unary
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_expr_binary
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_expr_binary
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_expr_binary
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_expr_binary
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_expr_binary
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_expr_binary
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_expr_binary
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_expr_binary
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_logical_and_or
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_logical_and_or
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_assign_expr2
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_var
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_statement_or_decl
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_source_element
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __JS_EvalInternal
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    JS_Eval
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    vjsx__vjsx_runtime_module_loader
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_host_resolve_imported_module
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_host_resolve_imported_module_atom
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_resolve_module
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __JS_EvalInternal
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    JS_Eval
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    vjsx__Context__js_eval_core
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    vjsx__Context__eval_runtime_file
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    vjsx__Context__try_install_url_globals
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    vjsx__Context__try_install_runtime_globals
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    vjsx__Context__try_install_node_compat
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    vjsx__Context__try_install_node_runtime
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    vjsx__try_new_node_runtime_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    runtimejs__try_new_node_runtime_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    runtimejs__new_node_runtime_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v3_internal_symbol_static_6578656375746f722e496e50726f63566a737852756e74696d6553657373696f6e466163746f727940737461746963406e6577
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    executor__InProcVjsxExecutor__ensure_lane_host
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v3_internal_symbol_static_6578656375746f722e496e50726f63566a73784c616e65576f726b657252756e74696d65407374617469634068616e646c655f7761726d75705f7461736b
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v3_internal_symbol_static_6578656375746f722e496e50726f63566a73784c616e65576f726b657252756e74696d6540737461746963406c6f6f70
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v3_internal_symbol_source___v3_internal_symbol_static_6578656375746f722e496e50726f63566a73784c616e65576f726b657252756e74696d6540737461746963406c6f6f70_args_thread_wrapper
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_pthread_start_inner
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_call_with_stack_base
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    start_thread
+      at ./nptl/pthread_create.c:447
+      in /lib/x86_64-linux-gnu/libc.so.6
+    __clone3
+      at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
+      in /lib/x86_64-linux-gnu/libc.so.6
+15.51K leaked over 6 calls from:
+    re_emit_range
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    re_emit_string_list
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    re_parse_alternative
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    re_parse_disjunction.part.0
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    lre_compile
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_compile_regexp
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_postfix_expr
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_unary
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_expr_binary
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_expr_binary
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_expr_binary
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_expr_binary
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_expr_binary
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_expr_binary
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_expr_binary
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_expr_binary
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_logical_and_or
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_logical_and_or
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_assign_expr2
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_var
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_statement_or_decl
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_source_element
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_function_decl2.constprop.0
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_parse_source_element
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __JS_EvalInternal
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    JS_Eval
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    vjsx__vjsx_runtime_module_loader
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_host_resolve_imported_module
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_host_resolve_imported_module_atom
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    js_resolve_module
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __JS_EvalInternal
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    JS_Eval
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    vjsx__Context__js_eval_core
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    vjsx__Context__eval_runtime_file
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    vjsx__Context__try_install_url_globals
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    vjsx__Context__try_install_runtime_globals
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    vjsx__Context__try_install_node_compat
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    vjsx__Context__try_install_node_runtime
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    vjsx__try_new_node_runtime_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    runtimejs__try_new_node_runtime_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    runtimejs__new_node_runtime_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v3_internal_symbol_static_6578656375746f722e496e50726f63566a737852756e74696d6553657373696f6e466163746f727940737461746963406e6577
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    executor__InProcVjsxExecutor__ensure_lane_host
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v3_internal_symbol_static_6578656375746f722e496e50726f63566a73784c616e65576f726b657252756e74696d65407374617469634068616e646c655f7761726d75705f7461736b
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v3_internal_symbol_static_6578656375746f722e496e50726f63566a73784c616e65576f726b657252756e74696d6540737461746963406c6f6f70
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v3_internal_symbol_source___v3_internal_symbol_static_6578656375746f722e496e50726f63566a73784c616e65576f726b657252756e74696d6540737461746963406c6f6f70_args_thread_wrapper
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_pthread_start_inner
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_call_with_stack_base
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    start_thread
+      at ./nptl/pthread_create.c:447
+      in /lib/x86_64-linux-gnu/libc.so.6
+    __clone3
+      at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
+      in /lib/x86_64-linux-gnu/libc.so.6
+6.93K leaked over 2 calls from:
+    js_realloc
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    resize_properties
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    add_shape_property
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    add_property
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    JS_SetPropertyInternal2
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    JS_CallInternal
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    JS_CallFree
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    JS_EvalFunctionInternal
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __JS_EvalInternal
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    JS_Eval
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    vjsx__Context__js_eval_core
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    vjsx__Context__eval
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v3_internal_symbol_static_6578656375746f722e496e50726f63566a7378486f73744170694073746174696340696e7374616c6c5f687474705f666163616465
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    executor__InProcVjsxExecutor__ensure_lane_host
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v3_internal_symbol_static_6578656375746f722e496e50726f63566a73784c616e65576f726b657252756e74696d65407374617469634068616e646c655f7761726d75705f7461736b
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v3_internal_symbol_static_6578656375746f722e496e50726f63566a73784c616e65576f726b657252756e74696d6540737461746963406c6f6f70
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v3_internal_symbol_source___v3_internal_symbol_static_6578656375746f722e496e50726f63566a73784c616e65576f726b657252756e74696d6540737461746963406c6f6f70_args_thread_wrapper
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_pthread_start_inner
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_call_with_stack_base
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    start_thread
+      at ./nptl/pthread_create.c:447
+      in /lib/x86_64-linux-gnu/libc.so.6
+    __clone3
+      at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
+      in /lib/x86_64-linux-gnu/libc.so.6
+  and 31.95K from 6012 other places
+
+2.08K leaked over 2514 calls from
+__GI__dl_allocate_tls::allocate_dtv::calloc
+  at ../include/rtld-malloc.h:44
+  in /lib64/ld-linux-x86-64.so.2
+__GI__dl_allocate_tls::allocate_dtv
+  at ./elf/../elf/dl-tls.c:370
+__GI__dl_allocate_tls
+  at ./elf/../elf/dl-tls.c:629
+416B leaked over 1 calls from:
+    __pthread_create_2_1::allocate_stack
+      at ./nptl/allocatestack.c:429
+      in /lib/x86_64-linux-gnu/libc.so.6
+    __pthread_create_2_1
+      at ./nptl/./nptl/pthread_create.c:655
+    GC_pthread_create
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v_thread_spawn_detached.constprop.0
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    process_runtime__ShutdownSignalOwner__install
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    run_server
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    main
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+416B leaked over 1 calls from:
+    __pthread_create_2_1::allocate_stack
+      at ./nptl/allocatestack.c:429
+      in /lib/x86_64-linux-gnu/libc.so.6
+    __pthread_create_2_1
+      at ./nptl/./nptl/pthread_create.c:655
+    GC_pthread_create
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v_thread_spawn.constprop.0
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    executor__InProcVjsxExecutor__start_lane_workers
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    executor__new_inproc_vjsx_executor
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    executor____anon_fn_238
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    executor__BuiltinLogicExecutorSpec__build_executor
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v3_internal_symbol_static_6578656375746f722e4578656375746f7252756e74696d6553656c656374696f6e40737461746963407265736f6c7665
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v3_internal_symbol_static_6578656375746f722e4c6f6769634578656375746f7252756e74696d65506c616e40737461746963407265736f6c7665
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v3_internal_symbol_static_6578656375746f722e4c6f6769634578656375746f7252756e74696d65506c616e40737461746963407265736f6c76655f656e67696e655f66726f6d5f706c616e
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v3_internal_symbol_static_6578656375746f722e4c6f6769634578656375746f7252756e74696d65506c616e40737461746963407265736f6c76655f66726f6d5f706c616e
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v3_internal_symbol_static_7365727665725f6c6966656379636c652e53657276657252756e74696d65436f6e66696740737461746963407265736f6c76655f666f725f7461726765745f776974685f706c616e
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v3_internal_symbol_static_7365727665725f6c6966656379636c652e53657276657252756e74696d65436f6e66696740737461746963407265736f6c7665
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    run_single_server
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    run_server
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    main
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+416B leaked over 1 calls from:
+    __pthread_create_2_1::allocate_stack
+      at ./nptl/allocatestack.c:429
+      in /lib/x86_64-linux-gnu/libc.so.6
+    __pthread_create_2_1
+      at ./nptl/./nptl/pthread_create.c:655
+    GC_pthread_create
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v_thread_spawn.constprop.0
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    executor__InProcVjsxExecutor__start_lane_workers
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    executor__new_inproc_vjsx_executor
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    executor____anon_fn_238
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    executor__BuiltinLogicExecutorSpec__build_executor
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v3_internal_symbol_static_6578656375746f722e4578656375746f7252756e74696d6553656c656374696f6e40737461746963407265736f6c7665
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v3_internal_symbol_static_6578656375746f722e4c6f6769634578656375746f7252756e74696d65506c616e40737461746963407265736f6c7665
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v3_internal_symbol_static_6578656375746f722e4c6f6769634578656375746f7252756e74696d65506c616e40737461746963407265736f6c76655f656e67696e655f66726f6d5f706c616e
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v3_internal_symbol_static_6578656375746f722e4c6f6769634578656375746f7252756e74696d65506c616e40737461746963407265736f6c76655f6164646974696f6e616c5f656e67696e655f66726f6d5f706c616e
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    add_worker_for_target
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    build_additional_engine_workers_with_diagnostics_from_plan
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    build_engine_runtime_with_diagnostics_from_plan
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    build_app_runtime
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    run_single_server_with_config
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    run_single_server
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    run_server
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    main
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+  and 832B from 12 other places
+
+1.61K leaked over 74 calls from
+0x71587669eb67
+  in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libtasn1.so.6
+1.41K leaked over 65 calls from:
+    asn1_array2tree
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libtasn1.so.6
+    0x71587646f449
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libgnutls.so.30
+    0x715876435edf
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libgnutls.so.30
+    call_init
+      at ./elf/dl-init.c:74
+      in /lib64/ld-linux-x86-64.so.2
+    _dl_init::call_init
+      at ./elf/dl-init.c:120
+      in /lib64/ld-linux-x86-64.so.2
+    _dl_init
+      at ./elf/./elf/dl-init.c:121
+    _dl_start_user
+      in /lib64/ld-linux-x86-64.so.2
+199B leaked over 9 calls from:
+    asn1_array2tree
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libtasn1.so.6
+    0x71587646f544
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libgnutls.so.30
+    0x715876435edf
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libgnutls.so.30
+    call_init
+      at ./elf/dl-init.c:74
+      in /lib64/ld-linux-x86-64.so.2
+    _dl_init::call_init
+      at ./elf/dl-init.c:120
+      in /lib64/ld-linux-x86-64.so.2
+    _dl_init
+      at ./elf/./elf/dl-init.c:121
+    _dl_start_user
+      in /lib64/ld-linux-x86-64.so.2
+
+896B leaked over 28 calls from
+0x7158764b13ed
+  in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libgnutls.so.30
+104B leaked over 1 calls from:
+    0x71587646f67b
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libgnutls.so.30
+    0x715876435edf
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libgnutls.so.30
+    call_init
+      at ./elf/dl-init.c:74
+      in /lib64/ld-linux-x86-64.so.2
+    _dl_init::call_init
+      at ./elf/dl-init.c:120
+      in /lib64/ld-linux-x86-64.so.2
+    _dl_init
+      at ./elf/./elf/dl-init.c:121
+    _dl_start_user
+      in /lib64/ld-linux-x86-64.so.2
+88B leaked over 1 calls from:
+    0x71587646f67b
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libgnutls.so.30
+    0x715876435edf
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libgnutls.so.30
+    call_init
+      at ./elf/dl-init.c:74
+      in /lib64/ld-linux-x86-64.so.2
+    _dl_init::call_init
+      at ./elf/dl-init.c:120
+      in /lib64/ld-linux-x86-64.so.2
+    _dl_init
+      at ./elf/./elf/dl-init.c:121
+    _dl_start_user
+      in /lib64/ld-linux-x86-64.so.2
+32B leaked over 1 calls from:
+    0x71587646fb0d
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libgnutls.so.30
+    0x715876435edf
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libgnutls.so.30
+    call_init
+      at ./elf/dl-init.c:74
+      in /lib64/ld-linux-x86-64.so.2
+    _dl_init::call_init
+      at ./elf/dl-init.c:120
+      in /lib64/ld-linux-x86-64.so.2
+    _dl_init
+      at ./elf/./elf/dl-init.c:121
+    _dl_start_user
+      in /lib64/ld-linux-x86-64.so.2
+  and 672B from 22 other places
+
+232B leaked over 1 calls from
+__newlocale
+  at ./locale/newlocale.c:199
+  in /lib/x86_64-linux-gnu/libc.so.6
+232B leaked over 1 calls from:
+    0x71587636397c
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libp11-kit.so.0
+    call_init
+      at ./elf/dl-init.c:74
+      in /lib64/ld-linux-x86-64.so.2
+    _dl_init::call_init
+      at ./elf/dl-init.c:120
+      in /lib64/ld-linux-x86-64.so.2
+    _dl_init
+      at ./elf/./elf/dl-init.c:121
+    _dl_start_user
+      in /lib64/ld-linux-x86-64.so.2
+
+217B leaked over 320368 calls from
+CRYPTO_strndup
+  in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+163B leaked over 124 calls from:
+    0x715877a1f401
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    0x7158779f99bc
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    0x7158779f9f4b
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    0x715877a1f528
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    0x715877a1f23f
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    0x715877a2f0f6
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    0x715877a1f3b7
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    0x715877a1f758
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    0x7158779fa804
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    0x7158779faae3
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    EVP_CIPHER_fetch
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    0x715877da942a
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libssl.so.3
+    0x715877d9c802
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libssl.so.3
+    SSL_CTX_new_ex
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libssl.so.3
+    openssl__SSLConn__init
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    openssl__new_ssl_conn
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__reset_state
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__close
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__listen
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Server__handle_handshake
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__managed_handshake
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__handle_dispatch_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__run_dispatch_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__run_dispatch_session_args_thread_wrapper_detached
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v_detached_thread_start
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_pthread_start_inner
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_call_with_stack_base
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    start_thread
+      at ./nptl/pthread_create.c:447
+      in /lib/x86_64-linux-gnu/libc.so.6
+    __clone3
+      at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
+      in /lib/x86_64-linux-gnu/libc.so.6
+54B leaked over 22 calls from:
+    0x715877a1f401
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    0x7158779e492e
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    0x7158779f9f4b
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    0x715877a1f528
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    0x715877a1f23f
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    0x715877a2f0f6
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    0x715877a1f3b7
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    0x715877a1f758
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    0x7158779fa804
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    0x7158779faae3
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    EVP_MD_fetch
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    0x715877da953a
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libssl.so.3
+    0x715877d9c88e
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libssl.so.3
+    SSL_CTX_new_ex
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libssl.so.3
+    openssl__SSLConn__init
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    openssl__new_ssl_conn
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__reset_state
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__close
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__listen
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Server__handle_handshake
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__managed_handshake
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__handle_dispatch_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__run_dispatch_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__run_dispatch_session_args_thread_wrapper_detached
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v_detached_thread_start
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_pthread_start_inner
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_call_with_stack_base
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    start_thread
+      at ./nptl/pthread_create.c:447
+      in /lib/x86_64-linux-gnu/libc.so.6
+    __clone3
+      at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
+      in /lib/x86_64-linux-gnu/libc.so.6
+  and 0B from 95 other places
+
+168B leaked over 74880 calls from
+ERR_vset_error
+  in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+85B leaked over 21060 calls from:
+    ERR_set_error
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    0x7158779fa9b8
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    0x7158779faae3
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    EVP_CIPHER_fetch
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    0x715877da942a
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libssl.so.3
+    0x715877d9c802
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libssl.so.3
+    SSL_CTX_new_ex
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libssl.so.3
+    openssl__SSLConn__init
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    openssl__new_ssl_conn
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__reset_state
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__close
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__listen
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Server__handle_handshake
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__managed_handshake
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__handle_dispatch_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__run_dispatch_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__run_dispatch_session_args_thread_wrapper_detached
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v_detached_thread_start
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_pthread_start_inner
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_call_with_stack_base
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    start_thread
+      at ./nptl/pthread_create.c:447
+      in /lib/x86_64-linux-gnu/libc.so.6
+    __clone3
+      at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
+      in /lib/x86_64-linux-gnu/libc.so.6
+83B leaked over 16380 calls from:
+    ERR_set_error
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    0x7158779fa9b8
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    0x7158779faae3
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    EVP_MD_fetch
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    0x715877da953a
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libssl.so.3
+    0x715877d9c88e
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libssl.so.3
+    SSL_CTX_new_ex
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libssl.so.3
+    openssl__SSLConn__init
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    openssl__new_ssl_conn
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__reset_state
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__close
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__listen
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Server__handle_handshake
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__managed_handshake
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__handle_dispatch_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__run_dispatch_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__run_dispatch_session_args_thread_wrapper_detached
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v_detached_thread_start
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_pthread_start_inner
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_call_with_stack_base
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    start_thread
+      at ./nptl/pthread_create.c:447
+      in /lib/x86_64-linux-gnu/libc.so.6
+    __clone3
+      at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
+      in /lib/x86_64-linux-gnu/libc.so.6
+  and 0B from 1 other places
+
+104B leaked over 2 calls from
+__add_to_environ
+  at ./stdlib/setenv.c:156
+  in /lib/x86_64-linux-gnu/libc.so.6
+104B leaked over 1 calls from:
+    configure_runtime_timezone
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    run_server
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    main
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+
+48B leaked over 2 calls from
+__GI___tsearch
+  at ./misc/tsearch.c:338
+  in /lib/x86_64-linux-gnu/libc.so.6
+24B leaked over 1 calls from:
+    __add_to_environ
+      at ./stdlib/setenv.c:208
+      in /lib/x86_64-linux-gnu/libc.so.6
+    main
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+24B leaked over 1 calls from:
+    __add_to_environ
+      at ./stdlib/setenv.c:208
+      in /lib/x86_64-linux-gnu/libc.so.6
+    configure_runtime_timezone
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    run_server
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    main
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+
+43B leaked over 2 calls from
+__add_to_environ
+  at ./stdlib/setenv.c:185
+  in /lib/x86_64-linux-gnu/libc.so.6
+26B leaked over 1 calls from:
+    main
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+17B leaked over 1 calls from:
+    configure_runtime_timezone
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    run_server
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    main
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+
+33B leaked over 1 calls from
+set_binding_values
+  at ./intl/bindtextdom.c:203
+  in /lib/x86_64-linux-gnu/libc.so.6
+33B leaked over 1 calls from:
+    __bindtextdomain::set_binding_values
+      at ./intl/bindtextdom.c:322
+      in /lib/x86_64-linux-gnu/libc.so.6
+    __bindtextdomain
+      at ./intl/./intl/bindtextdom.c:320
+    0x71587646f39f
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libgnutls.so.30
+    0x715876435edf
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libgnutls.so.30
+    call_init
+      at ./elf/dl-init.c:74
+      in /lib64/ld-linux-x86-64.so.2
+    _dl_init::call_init
+      at ./elf/dl-init.c:120
+      in /lib64/ld-linux-x86-64.so.2
+    _dl_init
+      at ./elf/./elf/dl-init.c:121
+    _dl_start_user
+      in /lib64/ld-linux-x86-64.so.2
+
+32B leaked over 1 calls from
+OPENSSL_sk_deep_copy
+  in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+32B leaked over 1 calls from:
+    0x715877a2e884
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    0x715877a2ee03
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    0x715877a2eef4
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    0x715877a1f3b7
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    0x715877a1f758
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    0x7158779fa804
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    0x7158779faae3
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    EVP_CIPHER_fetch
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libcrypto.so.3
+    0x715877da942a
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libssl.so.3
+    0x715877d9c802
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libssl.so.3
+    SSL_CTX_new_ex
+      in /root/vhttpd-release-tests/20261102-fixed4/package/runtime/libs/libssl.so.3
+    openssl__SSLConn__init
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    openssl__new_ssl_conn
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__reset_state
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__close
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Client__listen
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    websocket__Server__handle_handshake
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__managed_handshake
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__handle_dispatch_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__run_dispatch_session
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    ws__run_dispatch_session_args_thread_wrapper_detached
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    __v_detached_thread_start
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_pthread_start_inner
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    GC_call_with_stack_base
+      in /root/vhttpd-release-tests/20261102-fixed4/package/vhttpd
+    start_thread
+      at ./nptl/pthread_create.c:447
+      in /lib/x86_64-linux-gnu/libc.so.6
+    __clone3
+      at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
+      in /lib/x86_64-linux-gnu/libc.so.6
+
+
+total runtime: 183.62s.
+calls to allocation functions: 2144986 (11681/s)
+temporary memory allocations: 1225285 (6673/s)
+peak heap memory consumption: 67.89M
+peak RSS (including heaptrack overhead): 167.43M
+total memory leaked: 42.91M
+suppressed leaks: 377B

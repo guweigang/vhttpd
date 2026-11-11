@@ -1,0 +1,28 @@
+{
+  "before": {
+    "status": "expected_failure",
+    "handshakes": 256,
+    "native_retained_before_bytes": 466944,
+    "native_retained_after_bytes": 4395008,
+    "also_failed_client_clear_assertion": true
+  },
+  "after": {
+    "status": "passed",
+    "functions": 2,
+    "native_growth_budget_bytes": 1048576,
+    "checks": [
+      "real 101 response",
+      "normal masked close",
+      "client holder cleared",
+      "parallel thread capture isolation"
+    ]
+  },
+  "inbound_lifecycle": {
+    "status": "passed",
+    "functions": 5,
+    "signal_checks": [
+      "SIGTERM",
+      "SIGINT"
+    ]
+  }
+}

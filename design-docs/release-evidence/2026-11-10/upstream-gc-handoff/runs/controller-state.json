@@ -1,0 +1,21 @@
+{
+  "status": "completed",
+  "started_utc": "2026-11-10T04:26:35Z",
+  "run": "04-before",
+  "variant": "before",
+  "binary_sha256": "249bf9291da23b05f3c26c161bad2f24105420b0b42882e2c4704d803a2d2aa3",
+  "gc_environment": {},
+  "host_available_kib": 831396,
+  "runtime": {
+    "status": "running",
+    "phase": "cooldown",
+    "elapsed_seconds": 445.4898089459166,
+    "runtime_pid": 1887684,
+    "http_ok": 14376,
+    "http_errors": 0,
+    "paseo_ok": 88,
+    "paseo_errors": 0,
+    "failure": null
+  },
+  "ended_utc": "2026-11-10T04:59:47Z"
+}

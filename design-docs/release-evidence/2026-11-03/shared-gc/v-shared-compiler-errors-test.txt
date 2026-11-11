@@ -1,0 +1,2 @@
+Summary for comptime define tests: 8 passed, 8 total. Elapsed time: 31446 ms.
+Summary for all tests: 1876 passed, 1 skipped, 1877 total. Elapsed time: 1305066 ms.

@@ -1,0 +1,10 @@
+---- Testing... ----------------------------------------------------------------
+FAIL   286.126 ms /Users/guweigang/Source/vhttpd/.runtime/soak-memory-20261102/shared_gc_memory_test.v
+/Users/guweigang/Source/vhttpd/.runtime/soak-memory-20261102/shared_gc_memory_test.v:32: fn test_unreachable_shared_wrappers_release_their_payloads
+   > assert after <= before + 1024 * 1024, 'Unreachable shared wrappers retained payloads: ${before} -> ${after}'
+     Left value (len: 7): `4415488`
+    Right value (len: 7): `1101824`
+        Message: Unreachable shared wrappers retained payloads: 53248 -> 4415488
+--------------------------------------------------------------------------------
+To reproduce just failure 1 run:    /Users/guweigang/local/v/v -gc boehm -d use_bundled_libgc -enable-globals -keepc /Users/guweigang/Source/vhttpd/.runtime/soak-memory-20261102/shared_gc_memory_test.v
+Summary for all V _test.v files: 1 failed, 1 total. Elapsed time: 3405 ms, on 1 job. Comptime: 3117 ms. Runtime: 285 ms.

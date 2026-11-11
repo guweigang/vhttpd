@@ -1,0 +1,19 @@
+MainPID=0
+Result=success
+CPUQuotaPerSecUSec=infinity
+MemoryMax=infinity
+MemorySwapMax=infinity
+TasksMax=1890
+ActiveState=inactive
+SubState=dead
+ActiveEnterTimestamp=
+
+MainPID=108822
+Result=success
+CPUQuotaPerSecUSec=1s
+MemoryMax=536870912
+MemorySwapMax=0
+TasksMax=128
+ActiveState=active
+SubState=running
+ActiveEnterTimestamp=Mon 2026-11-02 22:47:26 CST

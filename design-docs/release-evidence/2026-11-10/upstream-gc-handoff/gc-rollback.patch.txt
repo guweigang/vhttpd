@@ -1,0 +1,31 @@
+--- a/thirdparty/libgc/gc.c
++++ b/thirdparty/libgc/gc.c
+@@ -15,19 +15,6 @@
+  * provided the above notices are retained, and a notice that the code was
+  * modified is included with the above copyright notice.
+  */
+-
+-/*
+- * Keep this guard when refreshing the amalgamation.  Concurrent collection
+- * and detached-thread churn retain small UNCOLLECTABLE blocks with GCC -O3;
+- * the same workload reclaims them with -O2.  Restrict this workaround to this
+- * translation unit, leaving generated V code and other native helpers alone.
+- */
+-#if defined(__GNUC__) && !defined(__clang__) && defined(__OPTIMIZE__)
+-#  define V_BDWGC_RESTORE_GCC_OPTIONS
+-#  pragma GCC push_options
+-#  pragma GCC optimize ("O2")
+-#endif
+-
+ 
+ /*
+  * This file could be used for the following purposes:
+@@ -45943,8 +45930,3 @@
+ #endif
+ 
+ /* Note: the files from `extra` folder are not included. */
+-
+-#ifdef V_BDWGC_RESTORE_GCC_OPTIONS
+-#  pragma GCC pop_options
+-#  undef V_BDWGC_RESTORE_GCC_OPTIONS
+-#endif

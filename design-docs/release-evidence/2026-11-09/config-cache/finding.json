@@ -1,0 +1,66 @@
+{
+  "change": "Bounded per-runtime serialized config getter cache with content invalidation and explicit teardown; previous Context reference fix retained.",
+  "bounds": {
+    "snapshot_bytes": 262144,
+    "path_bytes": 1024,
+    "entries": 32,
+    "aggregate_key_value_bytes": 65536
+  },
+  "ownership": "Lane owns cache; close on destroy or failed bootstrap. No parsed tree, JS values or global cache retained. Closed caches cannot retain new entries.",
+  "scope": "Persistent vhttpdHost.config callback used by normal HTTP/Paseo facade. Native WebSocket fallback resolver remains uncached.",
+  "benchmark": {
+    "scope": "Single-process warm repeated getters over four paths, including a negative result. Both arms use the same current resolver semantics; 1000 lookups per arm. GC total allocated bytes, not live bytes/RSS or full-Paseo acceptance. Cold misses still parse and add bounded retained strings.",
+    "runs": [
+      {
+        "cached_gc_allocated_bytes": 19952,
+        "cached_ns": 808750,
+        "checksum": 3000,
+        "fixture_bytes": 13222,
+        "lookups": 1000,
+        "uncached_gc_allocated_bytes": 120620592,
+        "uncached_ns": 255482416,
+        "allocation_reduction": 0.9998345887740295
+      },
+      {
+        "cached_gc_allocated_bytes": 22960,
+        "cached_ns": 878792,
+        "checksum": 3000,
+        "fixture_bytes": 13222,
+        "lookups": 1000,
+        "uncached_gc_allocated_bytes": 120618064,
+        "uncached_ns": 277070708,
+        "allocation_reduction": 0.9998096470856969
+      },
+      {
+        "cached_gc_allocated_bytes": 22960,
+        "cached_ns": 818708,
+        "checksum": 3000,
+        "fixture_bytes": 13222,
+        "lookups": 1000,
+        "uncached_gc_allocated_bytes": 120618064,
+        "uncached_ns": 265821750,
+        "allocation_reduction": 0.9998096470856969
+      }
+    ]
+  },
+  "validation": {
+    "macos": "Final cache module and real JS host integration passed; existing embedded HTTP/scope/expired-request regressions passed. V 0.5.2 d13ccdd, cc.",
+    "ubuntu_vm": "Final cache module and real JS host integration passed. /home/guweigang/v/v local-dev V 0.5.2 d13ccdd, gcc, gc none, native frozen SDK and QuickJS.",
+    "dependencies": "SDK frozen at 259620f1981a3573777ec8cda72883b1866404a7. No vlang or vjsx edits this turn.",
+    "full_repository_gate": "Not claimed: previous make test blocked by existing src/ws/hub_runtime.v callback nil-default safety check.",
+    "package_acceptance": "No full package build, deployment, remote pressure test, RSS reduction acceptance or new 24-hour test this turn."
+  },
+  "next": "Build candidate with Context reference plus config cache fixes; short HTTP/Paseo comparison including natural cooling before any production switch. P0-02 remains open.",
+  "workspace_head_at_archive": "3988de8c1f1fb5bd0047bdca4798316ed3166283",
+  "source_files": [
+    "src/configcache/cache.v",
+    "src/configcache/cache_test.v",
+    "src/executor/config_cache_host_test.v",
+    "src/executor/inproc_vjsx_host_api.v",
+    "src/executor/inproc_vjsx_host_config_api.v",
+    "src/executor/inproc_vjsx_host_lifecycle.v",
+    "src/executor/inproc_vjsx_lane_host.v",
+    "src/executor/embedded_host_test.v",
+    "src/http_observation_runtime.v"
+  ]
+}

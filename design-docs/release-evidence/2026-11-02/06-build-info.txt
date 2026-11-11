@@ -1,0 +1,2 @@
+argument error: unknown option: --build-info
+run `vhttpd --help` for usage.

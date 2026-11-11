@@ -1,0 +1,34 @@
+warning: untracked cache is disabled on this system or location
+find: '/opt/relay-build/soak-fixed7/php/package/tests': No such file or directory
+warning: untracked cache is disabled on this system or location
+VJS_QUICKJS_PATH="/opt/relay-build/deps/quickjs" v -cc gcc -d build_quickjs -d vjsx_sqlite -path "/opt/relay-build/soak-fixed7/tmp/vbuildsrc|/opt/relay-build/soak-fixed7-deps|@vlib|@vmodules" -w -d use_openssl -d use_bundled_libgc -enable-globals -d enable_db -gc boehm -prod -parallel-cc -nocache -o /work/fixed7-package/vhttpd /opt/relay-build/soak-fixed7/tmp/vbuildsrc
+Verified actual runtime: Boehm GC enabled
+[bundle-runtime-libs] bundled libssl.so.3
+[bundle-runtime-libs] bundled libcrypto.so.3
+[bundle-runtime-libs] bundled libmysqlclient.so.21
+[bundle-runtime-libs] bundled libz.so.1
+[bundle-runtime-libs] bundled libzstd.so.1
+[bundle-runtime-libs] bundled libstdc++.so.6
+[bundle-runtime-libs] bundled libgcc_s.so.1
+[bundle-runtime-libs] bundled libpq.so.5
+[bundle-runtime-libs] bundled libgssapi_krb5.so.2
+[bundle-runtime-libs] bundled libkrb5.so.3
+[bundle-runtime-libs] bundled libk5crypto.so.3
+[bundle-runtime-libs] bundled libkrb5support.so.0
+[bundle-runtime-libs] bundled libcom_err.so.2
+[bundle-runtime-libs] bundled libkeyutils.so.1
+[bundle-runtime-libs] bundled libldap.so.2
+[bundle-runtime-libs] bundled liblber.so.2
+[bundle-runtime-libs] bundled libsasl2.so.2
+[bundle-runtime-libs] bundled libgnutls.so.30
+[bundle-runtime-libs] bundled libp11-kit.so.0
+[bundle-runtime-libs] bundled libffi.so.8
+[bundle-runtime-libs] bundled libidn2.so.0
+[bundle-runtime-libs] bundled libunistring.so.5
+[bundle-runtime-libs] bundled libtasn1.so.6
+[bundle-runtime-libs] bundled libnettle.so.8
+[bundle-runtime-libs] bundled libhogweed.so.6
+[bundle-runtime-libs] bundled libgmp.so.10
+[bundle-runtime-libs] bundled libsqlite3.so.0
+[bundle-runtime-libs] done: 27 bundled libraries
+aaa1475c97b9bd003986c8d4f81ae10f7315ec3c544580085139f990151bf4a6  /work/fixed7-package/vhttpd

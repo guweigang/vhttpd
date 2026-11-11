@@ -1,0 +1,11 @@
+{
+  "reason": "New GC object .text differs from old cached object; use old main+new GC control to avoid assigning GC build effects to response handoff.",
+  "roles": {
+    "01-before": "legacy candidate, old GC object",
+    "02-after": "new handoff + upstream/O2 GC",
+    "03-after": "repeat new handoff + upstream/O2 GC",
+    "04-before": "old handoff + exact upstream/O2 GC object used in after"
+  },
+  "safety": "Original before package moves to legacy-before only after initial result completed and PID absent. Final control copy verified by ready SHA. First runtime never modified/restarted.",
+  "initial_attempt": "Raw Boehm3 vs upstream V1 assertion mistake excluded; archived separately."
+}

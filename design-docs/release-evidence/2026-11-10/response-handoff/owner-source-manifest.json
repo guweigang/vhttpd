@@ -1,0 +1,34 @@
+{
+  "host_root": "/Users/guweigang/local/v",
+  "head": "d13ccdd0768496cd6faea9ddfbdd0ddf9e4c4186",
+  "branch": "local-dev",
+  "production_changes": [
+    "context.v",
+    "veb.v",
+    "veb_fasthttp.v",
+    "controller.v"
+  ],
+  "files": {
+    "context.v": {
+      "before_sha256": "0be8c6caed5172733c1bb26680413c2b4d338439f2ceffc44430b4cfb830ed5f",
+      "after_sha256": "8021ca6752def491888a9094aae268e09890c12f909260c6a169d961df71172e"
+    },
+    "veb.v": {
+      "before_sha256": "3d4348e366739efc9ceb00c1e7c2bc0cb0c59a33428f31a33eb2b35dd9162577",
+      "after_sha256": "323e90512c458cf26a9e527785219e8b0aaed2d1c783acaade6c0b629e8d5adb"
+    },
+    "veb_fasthttp.v": {
+      "before_sha256": "ac06d4ca27b93558fe12ab45d53b4c70f0b1aa5e90532c67a70e7af10cf2b383",
+      "after_sha256": "4e757a5c2f8088fb3c85dcbd99949fc61e1f09181a992406b405e43696087257"
+    },
+    "controller.v": {
+      "before_sha256": "0ea27a2aae979426030f1dee5eba8ff8f0b689b67c96b185a43f04a1e022553a",
+      "after_sha256": "6829a37a9034b348bdfa040e3bd90ccaa47e2a8bb26c56a54e4d32641fd2e65d"
+    }
+  },
+  "new_regressions": {
+    "response_writer_transfer_test.v": "f90c5c27ca0fb6bad24687b386227eee27269cfa346f01019ed7a157267a2a07",
+    "response_writer_append_test.v": "9d9fd2be57f1e89642a815752439976b0db3e84944364cccf691839838b2658a"
+  },
+  "purpose": "One retained GC owner reference in Context; cleared at handoff. No separate owner allocation, no address-only heuristic. Original copy path outside ordinary Boehm builds."
+}
