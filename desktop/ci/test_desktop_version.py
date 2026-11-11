@@ -16,6 +16,7 @@ class CompiledVersionTests(unittest.TestCase):
                 shutil.copyfile(desktop / name, root / name)
             (root / 'main.v').write_text('''module main
 struct Workshop {}
+fn ui_text(text string) string { return text }
 fn (app &Workshop) environment_name() string { return 'remote test' }
 fn (app &Workshop) environment_version_label() string { return 'vhttpd 0.9.0' }
 fn main() { println(Workshop{}.workbench_about_text()) }
@@ -24,8 +25,9 @@ fn main() { println(Workshop{}.workbench_about_text()) }
                 expected = override or (root / 'version.txt').read_text().strip()
                 flags = ['-d', 'vhttpd_desktop_version=' + override] if override else []
                 executable = root / 'probe'
-                subprocess.run(['v', '-gc', 'none', *flags, '-o', str(executable), str(root)], check=True,
-                               capture_output=True, text=True)
+                result = subprocess.run(['v', '-gc', 'none', *flags, '-o', str(executable), str(root)],
+                                        capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                 output = subprocess.check_output([str(executable)], text=True)
                 self.assertIn('Desktop ' + expected + '\n', output)
                 self.assertIn('vhttpd 0.9.0', output)
