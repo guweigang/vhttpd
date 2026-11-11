@@ -11,7 +11,7 @@ fn C.vhttpd_database_scope_set(voidptr)
 fn C.vhttpd_database_scope_get() voidptr
 
 $if gcboehm ? {
-	#include <gc.h>
+	#include <gc/gc.h>
 	fn C.GC_reachable_here(voidptr)
 }
 

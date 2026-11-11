@@ -10,7 +10,7 @@ fn maintain_inproc_vjsx_allocator(active bool) {
 }
 
 $if gcboehm ? {
-	#include <gc.h>
+	#include <gc/gc.h>
 	fn C.GC_gcollect_and_unmap()
 }
 

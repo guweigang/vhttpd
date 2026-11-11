@@ -13,7 +13,7 @@ fn C.vhttpd_ws_handshake_set(voidptr)
 fn C.vhttpd_ws_handshake_get() voidptr
 
 $if gcboehm ? {
-	#include <gc.h>
+	#include <gc/gc.h>
 	fn C.GC_reachable_here(voidptr)
 }
 

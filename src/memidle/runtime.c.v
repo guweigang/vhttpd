@@ -18,7 +18,7 @@ pub fn end() { C.vhttpd_memory_end() }
 pub fn touch() { C.vhttpd_memory_touch() }
 
 $if gcboehm ? {
-	#include <gc.h>
+	#include <gc/gc.h>
 	fn C.GC_get_heap_size() uint
 	fn C.GC_gcollect_and_unmap()
 }
