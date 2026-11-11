@@ -219,23 +219,24 @@ fn component_installation_view(app &Workshop, width f64) []ui2.Element {
         rows << choice_button('component_template_pipeline','TOML Pipeline',0,288,third,app.component_template=='pipeline',!busy)
         rows << choice_button('component_template_wechat','微信云函数',third+12,288,third,app.component_template=='wechat-cloud-functions',!busy)
         rows << choice_button('component_template_codexbot','Codex Bot',2*(third+12),288,third,app.component_template=='codexbot',!busy)
-        rows << label('component_port_label','应用端口（0 自动选择）',0,330,width-120,12,workbench_colors.muted)
-        rows << input('component_port',app.component_port,'0',width-100,323,100,!busy)
+        port_top := 336.0
+        rows << label('component_port_label', '应用端口（0 自动选择）', 0, port_top + 7, width - 120, 12, workbench_colors.muted)
+        rows << input('component_port', app.component_port, '0', width - 100, port_top, 100, !busy)
     } else {
 	rows << label('component_file_label', '应用工程中的 app.json 或组件配置', 0, 250, width, 13, workbench_colors.ink)
 	rows << input('component_file', app.component_file, '/path/to/application/component.toml', 0, 278, width - 110, !busy && app.component_installation_id == '')
 	rows << button('component_choose', '选择文件…', width - 100, 278, 100, false, !busy && app.component_installation_id == '')
 
     }
-	offset := if app.component_new { 38 } else { 0 }
-	rows << label('component_name_label', '安装目录名（1–64 位字母、数字、短横线、下划线）', 0, 332 + offset, width, 13, workbench_colors.ink)
-	rows << input('component_name', app.component_name, 'my-app', 0, 360 + offset, width, !busy && app.component_installation_id == '')
+	name_top := if app.component_new { 383.0 } else { 332.0 }
+	rows << label('component_name_label', '安装目录名（1–64 位字母、数字、短横线、下划线）', 0, name_top, width, 13, workbench_colors.ink)
+	rows << input('component_name', app.component_name, 'my-app', 0, name_top + 28, width, !busy && app.component_installation_id == '')
 	rows << button('component_prepare', if busy {
 		'正在处理…'
 	} else {
 		if app.component_installation_id != '' {'预览更新'} else {'预览并检查安装'}
-	}, 0, 414 + offset, 180, true, !busy && (app.component_new || app.component_file != '') && app.component_name != '')
-	mut y := 472.0 + offset
+	}, 0, name_top + 82, 180, true, !busy && (app.component_new || app.component_file != '') && app.component_name != '')
+	mut y := name_top + 140
 	title, message, tone := app.component_feedback()
 	if message != '' {
 		rows << state_notice('component_message', title, message, ui2.rect(0, y, width, 104), tone)
