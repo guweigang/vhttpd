@@ -1,0 +1,37 @@
+{
+  "client": "installed DSH Streamable HTTP connector",
+  "tag": "v0.1.0-dev.g4aac0fb950d8",
+  "downloaded": [
+    "macos-arm64",
+    "linux-arm64"
+  ],
+  "local_package_id": "sha256-bb2401647df025fab60416f5d3be3e116c2981220507b4354cb019863dff698b",
+  "remote_package_id": "sha256-237aacb0a783b123e784a8d6bf108b39713099fca7f477ee8da4b39d07a85e5c",
+  "install_preserved_selection": true,
+  "selection_refreshed_binding": true,
+  "business": "pipeline-ok",
+  "restore": "baseline selected and business verified",
+  "remote_instance_bindings": "unchanged",
+  "negative_cases": 9,
+  "registered_tools": 74,
+  "status_during_download_ms": 17,
+  "final_local_runtime": "stopped",
+  "desktop_sha256": "e5fb92ba3274de8d0698dd4428f25665004d08c56d0a744501c5b398e17658a0",
+  "timestamp": "2026-11-05T18:02:01.000248+08:00",
+  "skills": "DSH desktop skill tool reloaded vhttpd-deploy and vhttpd-debug",
+  "linux_native": "Ubuntu, /home/guweigang/v/v 0.5.2 d13ccdd local-dev, GCC, gc none: install without selection and invalid SHA256 passed",
+  "local_business_listener": "55302 /healthz",
+  "remote_business_listener": "55172 /shared-before returned 200 before and after install",
+  "official_package_checksums": {
+    "macos-arm64": "02143ee5b4dc6314eb291d82b7e06306d6fc69a79b48c8fa4ec794cdb77731f4",
+    "linux-arm64": "237aacb0a783b123e784a8d6bf108b39713099fca7f477ee8da4b39d07a85e5c"
+  },
+  "desktop_restored_environment": "default running, vhttpd 0.9.0",
+  "temporary_mcp": "revoked",
+  "temporary_mcp_config": "removed",
+  "download_cache": "cleared on normal Desktop exit; QA caches removed",
+  "test_ssh_listener": "stopped",
+  "isolated_remote_runtime": "stopped",
+  "installed_packages": "retained",
+  "checks": "five base suites passed; real archive recovery test and HTTP MCP regression passed; Linux native install test passed"
+}

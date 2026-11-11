@@ -1,0 +1,88 @@
+{
+  "date": "2026-11-06",
+  "status": "not_accepted",
+  "request": "WorkBuddy actual dialogue over public Relay for empty and existing source workspaces; revoke and retest old grant",
+  "completed": [
+    "actual installed Desktop selected an entirely empty source directory without installation",
+    "actual Desktop GUI published editing Relay using the existing public endpoint",
+    "public initialize probe performed",
+    "bodytest live graph and Relay status inspected using existing SSH management; no SSH forwarding",
+    "existing source fixture baseline and empty directory preserved"
+  ],
+  "findings": {
+    "public_endpoint": "https://mcp.bullsoft.org/mcp",
+    "public_initialize_status": 501,
+    "public_initialize_body": {
+      "error": "MCP requires a configured logic executor"
+    },
+    "bodytest_origin_port": 58595,
+    "origin_initialize_status": 501,
+    "pipeline_loaded": {
+      "id": "public/mcp-relay",
+      "ingress": "listener:mcp_web",
+      "egress": "adapter:mcp-relay",
+      "methods": [
+        "GET",
+        "POST",
+        "DELETE"
+      ],
+      "paths": [
+        "/mcp"
+      ]
+    },
+    "relay_carrier_count_at_inspection": 0,
+    "saved_local_carrier_credential_matches_hub": false,
+    "registered_runtime_package_id": "sha256-f4b10b11fb3e562a78cfbcb309137804639256bf3b53bff6385e535fa13aa159",
+    "executing_runtime_package_id": "sha256-51086217838889ddaccbcf2a7d734341fa38db0b9b7c128c1104677a90960d07",
+    "executing_binary_sha256": "3ab787a026a18c8aef38d5bbb70ec97708cb4b014014d5e01571db7413562940",
+    "runtime_reported_version": "0.9.0",
+    "pid": 2627804,
+    "root_config_sha256": "53c009f50a7c0d13674ac1214ed8bdd539e00b357ce22780e0a99fd15c25cf04",
+    "mcp_ingress_sha256": "83cf501d84c600cc84c6406971185a811cbeec6a95f42ab6b8118ae37ab52e9b",
+    "inference": "Observed built-in MCP response despite the configured relay pipeline; build/routing provenance must be verified. Who changed runtime/credential and when is not established."
+  },
+  "acceptance": {
+    "workbuddy_dialogue_tool_calls": false,
+    "empty_development_flow": false,
+    "existing_development_flow": false,
+    "revoked_grant_retested_in_workbuddy": false
+  },
+  "blockers": [
+    "public /mcp initialization failed before the source workflow",
+    "CUA tool namespace was removed during the turn; actual WorkBuddy dialogue cannot be operated",
+    "preliminary ARM Linux build failed because isolated stage lacked v.mod; no binary deployed"
+  ],
+  "build_environment": {
+    "ubuntu_v_compiler": "/home/guweigang/v/v",
+    "version": "0.5.2 d13ccdd",
+    "branch": "local-dev",
+    "compiler_dirty": false,
+    "vjsx_commit": "259620f1981a3573777ec8cda72883b1866404a7",
+    "gc": "boehm",
+    "vm_arch": "aarch64",
+    "bodytest_arch": "x86_64",
+    "amd64_cache_inspected": true,
+    "amd64_cache_compiler": "0.5.2 d13ccdd with preexisting GC/compiler modifications; not altered or used for deployment"
+  },
+  "cleanup": {
+    "temporary_desktop_and_agent_processes": "absent on process inspection",
+    "mcp_port_closed": 63871,
+    "agent_port_closed": 64357,
+    "test_business_ports_closed": true,
+    "public_bearer_file_removed": true,
+    "original_relay_library_restored": true,
+    "existing_source_unchanged": true,
+    "empty_source_still_empty": true,
+    "environment_registry_and_runtime_selection_unchanged": true,
+    "remote_runtime_not_changed": true,
+    "workbuddy_dialog_acceptance": "not run; CUA unavailable"
+  },
+  "next_steps": [
+    "recover desktop automation capability",
+    "preflight and verify an amd64 runtime containing MCP pipeline precedence on an isolated listener before any bodytest switch",
+    "synchronize existing saved carrier reference with Hub and republish from actual Desktop",
+    "run both WorkBuddy dialogue workflows and exact restore checks",
+    "revoke the actual publication and make WorkBuddy invoke context_get with the old credential",
+    "record actual runtime fingerprint and public initialized/list/call/revocation results on every runtime switch"
+  ]
+}

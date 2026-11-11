@@ -1,0 +1,90 @@
+{
+  "client": "installed DSH Streamable HTTP connector",
+  "registered_tools": 93,
+  "relay_id": "legacyedit",
+  "source": "manual include files without MCP ownership markers",
+  "hub_change": "node_id, WebSocket path and missing max_channels field",
+  "agent_change": "node_id, reconnect_delay_ms, missing max_channels and saved credential/URL reference",
+  "baseline": "pipeline-ok",
+  "changed_path_broke_old_agent": true,
+  "updated_agent_restored_traffic": true,
+  "business_status": 200,
+  "business_body": "pipeline-ok",
+  "idempotent": true,
+  "conflict": "stale plan failed without overwriting temporary node_id",
+  "restore": "both stopped runtimes recovered exact include source revisions and business traffic",
+  "rejected": 12,
+  "final_local_runtime": "stopped",
+  "final_remote_runtime": "stopped",
+  "original_remote_runtime": "restored",
+  "timestamp": "2026-11-05T20:44:18.799065+08:00",
+  "tools": [
+    "relay_config_get",
+    "relay_config_edit_prepare",
+    "relay_config_edit_preflight",
+    "relay_config_edit_apply",
+    "relay_config_edit_restore"
+  ],
+  "desktop_sha256": "48c6b89987c7f8e2eb7097dc2c0226d468e882ed759963029bfec89114dc34d9",
+  "desktop_backup": "Workbench Before Existing Relay Edit.app",
+  "execution": "actual installed Desktop UI-issued binding; installed DSH connector over Streamable HTTP; model separately invoked Skill tool",
+  "skills": "vhttpd-deploy and vhttpd-debug reloaded by DSH model; installed DSH loader and quick_validate passed",
+  "source_format_checks": [
+    "explicit and quoted table headers",
+    "inline table scalar replacement and missing field insertion",
+    "dotted scalar replacement and missing field insertion",
+    "UTF-8 comments preserved",
+    "private token and URL omitted from returned snapshots"
+  ],
+  "source_hashes": {
+    "local_include_exact_restore": "d19e9d276e10c01142a06807f07ed4f74a6eeb594dc03119688fbe05b3d4be96",
+    "remote_include_exact_restore": "60dc8f60f4363430fb998cdb5013096c32561912d4f72f9b7e2344d6ff1abee9",
+    "remote_root_after_fixture_cleanup": "13353a3a9a31618867f472fb124913368c28a2160807b57016f8cbdeebc05f62"
+  },
+  "preflight_guard": "apply rejected before explicit preflight; runtime boot and complete source revision rechecked before execution",
+  "scope": {
+    "mutable_fields": [
+      "node_id",
+      "path",
+      "listener",
+      "autostart",
+      "max_channels",
+      "channel_buffer",
+      "reconnect_delay_ms"
+    ],
+    "credential_updates": "saved native connection reference; no raw token/URL/TOML",
+    "limitations": [
+      "mode/carrier conversion",
+      "field removal",
+      "Relay split across multiple source files",
+      "source outside environment directory"
+    ]
+  },
+  "checks": {
+    "macos": "3 final base suites passed; after wire-format fix, editor and MCP HTTP suites passed again",
+    "linux": "Relay editor and ordinary Relay suites passed; final dotted and JSON-number regression reruns passed",
+    "linux_v": "/home/guweigang/v/v 0.5.2 d13ccdd local-dev unchanged; GCC gc none for tests",
+    "signature": "codesign --verify --deep --strict passed",
+    "wire_numeric_fix": "generic JSON numbers normalized to bounded integral TOML values; fractional/huge/negative values rejected"
+  },
+  "runtime_reuse": {
+    "local": "existing bundled 0.9.0 retained",
+    "remote_instance": "mcp-shared-config-qa / a3f98d37d0a38b357d18049e",
+    "qa_runtime_id": "sha256-d6f42889dbc826c7b0ca6fc4ab9f97989943454faaad61ad3780e7b94febcd5b",
+    "qa_runtime": "reused previously validated Linux Boehm build; no new build/instance/Hub process",
+    "original_remote_runtime": "sha256-4a494e68c788578bd4884a240a0b04e1df1b20c1d07b4ab3bdbd171c93837adc restored"
+  },
+  "cleanup": {
+    "local_fixture": "root restored; manual test include removed after exact-byte comparison",
+    "remote_fixture": "root restored; test include removed after exact-byte comparison",
+    "test_catalog_records": "removed only from isolated local catalog",
+    "carrier_secret": "removed; absent from all MCP response records",
+    "temporary_mcp": "closed in UI; private client config removed",
+    "test_ssh": "49284 listener stopped and temporary key reference removed",
+    "remote_relay_port": "55311 closed",
+    "remote_test_runtime_package": "retained outside installed catalog",
+    "original_desktop_environment": "default running, vhttpd 0.9.0; observed in updated Desktop UI",
+    "local_test_ports": "55301, 55302 and 59582 closed"
+  },
+  "workspace_head_at_evidence": "6992532c"
+}

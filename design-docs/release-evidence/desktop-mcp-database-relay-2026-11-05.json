@@ -1,0 +1,129 @@
+{
+  "client": "installed DSH Streamable HTTP connector",
+  "registered_tools": 88,
+  "query": {
+    "ok": true,
+    "stage": "query",
+    "error": ""
+  },
+  "failures": {
+    "db/bad_database": {
+      "ok": false,
+      "stage": "database",
+      "error": "database_operation_failed"
+    },
+    "db/bad_route": {
+      "ok": false,
+      "stage": "transport",
+      "error": "relay_database_transport_failed_no_replay"
+    },
+    "db/bad_resource": {
+      "ok": false,
+      "stage": "transport",
+      "error": "relay_database_transport_failed_no_replay"
+    },
+    "db/missing": {
+      "ok": false,
+      "stage": "configuration",
+      "error": "unknown_database_resource"
+    }
+  },
+  "disconnected": {
+    "ok": false,
+    "stage": "carrier",
+    "error": "relay_not_connected"
+  },
+  "rejected": 4,
+  "local_resource_count": 4,
+  "remote_export_count": 2,
+  "carrier": "existing local vhttpd Agent initiates WebSocket to existing remote vhttpd Hub",
+  "recovery": "query succeeds after stop/start; original business endpoints unchanged",
+  "final_local_runtime": "stopped",
+  "final_remote_runtime": "stopped",
+  "native_remote_resource_probe": {
+    "ok": false,
+    "stage": "configuration",
+    "error": "authenticated_mysql_relay_resource_required"
+  },
+  "legacy_runtime_probe": {
+    "ok": false,
+    "stage": "runtime",
+    "error": "runtime_probe_endpoint_unavailable_upgrade_required"
+  },
+  "timestamp": "2026-11-05T19:55:28.279659+08:00",
+  "tools": [
+    "relay_database_resources_list",
+    "relay_database_probe"
+  ],
+  "desktop_sha256": "4b12e10db9f8905bc76d841f9328a83dc37a028aa2100474aea99fdc4b07656f",
+  "embedded_runtime_sha256": "3046fda59f82a816b26a1a698f4fa9175e09e6e5e585912ea22c60e1abaa806e",
+  "desktop_backup": "Workbench Before Database Relay.app",
+  "mcp_source": "actual updated Desktop UI-issued binding; installed bundled runtime",
+  "write_execution_scope": "installed DSH connector exercised probes and lifecycle/upgrade tools; model separately invoked the skill tool",
+  "skills": "DSH model reloaded vhttpd-deploy and vhttpd-debug; installed filesystem loader and quick_validate passed",
+  "query_contract": "Only SELECT 1 AS relay_probe; no SQL/URL/credential input, one pinned carrier generation, no sent-query replay",
+  "mysql_observation": "SELECT ? AS `relay_probe`\t3",
+  "checks": {
+    "macos": "4 relaydb suites passed; MCP HTTP service suite rerun with loopback permission passed",
+    "linux": "5 suites passed; full runtime type check passed; full MySQL-enabled runtime built with GCC/Boehm and verified",
+    "compiler": "/home/guweigang/v/v 0.5.2 d13ccdd, local-dev unchanged",
+    "vjsx": "isolated native Linux copy pinned to 259620f1981a3573777ec8cda72883b1866404a7; existing VM dependency preserved",
+    "desktop_signature": "codesign verification passed before install",
+    "source_revision": "0e984283, feature/desktop-workbench with existing working-tree changes preserved",
+    "linux_worktree": "same mounted host checkout; no branch reset or compiler/dependency workspace replacement"
+  },
+  "remote_upgrade": {
+    "target_id": "a3f98d37d0a38b357d18049e",
+    "original_runtime_id": "sha256-4a494e68c788578bd4884a240a0b04e1df1b20c1d07b4ab3bdbd171c93837adc",
+    "test_runtime_id": "sha256-d6f42889dbc826c7b0ca6fc4ab9f97989943454faaad61ad3780e7b94febcd5b",
+    "test_label": "v0.9.0-dev.g0e984283, local isolated build",
+    "operation": {
+      "plan_id": "16b7a41c3da5515842690bc6",
+      "operation_id": "16b7a41c3da5515842690bc6",
+      "target_id": "a3f98d37d0a38b357d18049e",
+      "previous_runtime_id": "sha256-4a494e68c788578bd4884a240a0b04e1df1b20c1d07b4ab3bdbd171c93837adc",
+      "previous_version": "0.9.1",
+      "target_runtime_id": "sha256-d6f42889dbc826c7b0ca6fc4ab9f97989943454faaad61ad3780e7b94febcd5b",
+      "target_version": "0.9.0",
+      "applications": [
+        {
+          "id": "database_probe",
+          "label": "database_probe"
+        },
+        {
+          "id": "qa",
+          "label": "qa"
+        }
+      ],
+      "kind": "upgrade",
+      "phase": "submitted",
+      "expires_at": 1793879817,
+      "desktop_confirmation_required": true,
+      "runtime_impact": "restarts_entire_environment"
+    },
+    "restored_original_runtime": true,
+    "reason": "old test runtime emitted malformed carrier/route identities after a query; current source build used for full validation; no new instance or Hub process",
+    "initial_failures": "Initial legacy peer emitted relay_pipeline_not_found and malformed carrier identity; no claim of authentication root cause; current-source runtime completed tests"
+  },
+  "cleanup": {
+    "remote_configuration_sha256": "13353a3a9a31618867f472fb124913368c28a2160807b57016f8cbdeebc05f62",
+    "local_configuration": "restored exact baseline",
+    "temporary_mcp": "closed; private client config removed",
+    "test_database_container": "reclaimed",
+    "carrier_secret": "removed",
+    "test_ssh_listener": "49284 stopped; isolated key reference removed",
+    "remote_relay_port": "55311 closed",
+    "test_runtime_package": "retained outside installed catalog",
+    "desktop_original_environment": "default running, 0.9.0 updated bundled runtime; observed in Desktop UI",
+    "temporary_local_ports": "55301, 55302 and 63624 closed"
+  },
+  "limits": [
+    "MySQL Relay resources only",
+    "Fixed constant query proves connectivity, not business schema or data correctness",
+    "Old runtimes require dedicated Admin probe support; endpoint absence is reported explicitly",
+    "Database stage intentionally groups private driver connection/auth/query failures"
+  ],
+  "admin_authentication": {
+    "unauthenticated_status": 403
+  }
+}

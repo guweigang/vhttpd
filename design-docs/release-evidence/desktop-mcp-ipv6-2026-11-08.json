@@ -1,0 +1,135 @@
+{
+  "date": "2026-11-08",
+  "status": "passed_local_workflow_and_standard_package",
+  "compiler": {
+    "binary": "/Users/guweigang/local/v/v",
+    "version": "V 0.5.2 d13ccdd",
+    "mode": "current compiler, -new-compiler and V_MACOS_V3_NO_FALLBACK=1; no fallback",
+    "desktop_production_build": "passed",
+    "runtime_production_build": "passed; Boehm GC enabled",
+    "release_target": "macOS 15.0 standard desktop/build.sh passed; current compiler only; automatic fallback disabled",
+    "standard_build_command": "V_MACOS_V3_NO_FALLBACK=1 VFLAGS=-new-compiler MACOSX_DEPLOYMENT_TARGET=15.0 bash desktop/build.sh"
+  },
+  "client": {
+    "app": "WorkBuddy",
+    "version": "5.9.3",
+    "model": "DeepSeek-V4.1-Flash",
+    "conversation": "vhttpd MCP 验收 vjsx 项目测试",
+    "transport": "local Streamable HTTP",
+    "server": "vhttpd_ipv6_qa",
+    "actual_dialogue": true
+  },
+  "guidance": {
+    "DSH_skill_load": "vhttpd-debug actually reloaded and explained in DSH dialogue round 20",
+    "MCP_debug_topic": "desktop_package, guidance_version 1; IPv6 guidance read through actual MCP"
+  },
+  "binding": {
+    "mode": "source_workspace",
+    "environment": "project",
+    "installed": false,
+    "binding_revision": 1,
+    "listeners": [
+      "web4",
+      "web6"
+    ]
+  },
+  "change_id": "a9e6f15064c7cd48facb6768",
+  "configuration_sha256": "5566fa918a1d794b9fa57607c862be81c7c8a06792ae71246afccfe4acccac78",
+  "workflow": {
+    "baseline": {
+      "web4": {
+        "status": 200,
+        "address_family": "ipv4",
+        "sample": "ipv6-baseline"
+      },
+      "web6": {
+        "status": 200,
+        "address_family": "ipv6",
+        "sample": "ipv6-baseline"
+      }
+    },
+    "admin_rejected": "listener_belongs_to_another_application; pid unchanged",
+    "edit": "only options.body; ipv6-baseline -> ipv6-edited",
+    "validate": true,
+    "apply": true,
+    "changed_response": "HTTP 200, expected family and ipv6-edited on both listeners",
+    "restore": true,
+    "restored_response": "HTTP 200, expected family and ipv6-baseline on both listeners",
+    "final_runtime": "stopped, pid 0",
+    "configuration_restored_exactly": true,
+    "revocation": "Actual Desktop closed MCP; one actual WorkBuddy context_get returned Streamable HTTP POST failure with wrapper internal_error, no context. Independent TCP checks confirmed MCP and all business/admin ports refused connections.",
+    "temporary_connector_removed": true,
+    "original_mcp_configuration_restored": true,
+    "tcp_connect_errno_after_close": {
+      "50727": 61,
+      "63541": 61,
+      "63542": 61,
+      "63543": 61
+    },
+    "final_source_entries": [
+      "vhttpd.toml"
+    ]
+  },
+  "test_scope": {
+    "macOS_host_and_MCP_tests": "2 test files passed",
+    "macOS_and_Ubuntu_listener_unit_tests": "passed",
+    "macOS_and_Ubuntu_remote_transport_tests": "both platforms: 5 tests passed, including IPv4/IPv6 SSE data, WebSocket echo, bracketed Host authority and MCP session cleanup",
+    "real_runtime_dual_loopback": "passed",
+    "skill_validator": "passed",
+    "make_lint_safety": "blocked by existing runtime callback injection checks outside this batch",
+    "packaged_runtime_dual_loopback": "passed; real portable runtime from the standard app serves IPv4 and IPv6 in one process and stops cleanly",
+    "standard_archive_smoke": "passed: package extraction, signatures, libraries, version/history restore, real Relay auth and config editing, vjsx templates, stopped ports, package installation, fresh HOME/system-only PATH"
+  },
+  "not_covered": [
+    "TLS and authenticated probes",
+    "advanced WebSocket frames",
+    "IPv6 target_protocol_probe via a registered remote target in client dialogue",
+    "SSE delivery in the actual WorkBuddy fixture: text/plain fixed response only"
+  ],
+  "network_configuration_changed": false,
+  "raw_credentials_recorded": false,
+  "package": {
+    "canonical_app": "/Users/guweigang/Source/vhttpd/desktop/bin/vhttpd-workbench.app",
+    "actual_app": "/private/tmp/vhttpd-ipv6-probe-qa/Workbench IPv6 QA.app",
+    "backup": "/private/tmp/vhttpd-ipv6-probe-qa/Workbench Before IPv6.app",
+    "codesign": "deep strict verification passed",
+    "minimum_macos": "15.0 package gate passed",
+    "archive": "desktop/bin/vhttpd-workbench-macos-arm64-0.1.0.zip",
+    "runtime_gc": "Boehm",
+    "desktop_sha256": "cb902590ea6606cf74139ca79ede407461cf26ed58ab70cdd98ad00f61147f72",
+    "runtime_sha256": "567841c4f198b1a5e0233bc3f4e3cdd3c4f1d770e2b93a8ed9a710b9efb83518",
+    "actual_desktop_sha256": "6bead7b91c0ca2c6eba219026023b6daaf6f583130f3c5820d366136be4581de",
+    "actual_runtime_sha256": "567841c4f198b1a5e0233bc3f4e3cdd3c4f1d770e2b93a8ed9a710b9efb83518",
+    "archive_sha256": "12b4ec3831e61580c605e8fda3b019960ea4f4fcba543c07b68848b67948fa59",
+    "actual_UI": "updated Desktop reopened, isolated environment stopped",
+    "bundled_debug_skill": "matches source and DSH-installed content; actually read through MCP before packaging",
+    "actual_UI_runtime_selection": "App bundled runtime at Workbench IPv6 QA.app/Contents/Resources/runtime/vhttpd; ready, version 0.9.0"
+  },
+  "source": {
+    "commit": "e6cc46dd",
+    "branch": "feature/desktop-workbench",
+    "worktree": "pre-existing dirty worktree preserved",
+    "file_sha256": {
+      "desktop/host/protocol_probe.v": "476b3b0da9dba4fc39d30f32a08d7f72692d64376bc4386de87830236802f277",
+      "desktop/host/mcp_inspect.v": "fb65a04657722a117114ec8d00f94839e94c4e102bbf3e0fd5ad85fd9ca0fb87",
+      "desktop/host/remote_scripts/protocol_probe.py": "f856022eab6fbbdb563a552290c6d91e9b8ce6b453781229c36a05cbcda0544a",
+      "desktop/devmcp/capabilities.v": "2d9fac214e3445019a1ba8a9bccb7f0eb2ce7bbdbe529809c6e47c7849d9685c",
+      "desktop/devmcp/server.v": "ae340f10c3408462529f52b34c90f16b40d6dfc44c3c9e202f1c4a0df388b9a1",
+      "desktop/devmcp/relay_management.v": "6ec09af28857579618fb2a0617b2c4d2a0a07e45e087a8fb9af4bec48e7fe3dd",
+      "src/server_runtime_orchestrator.v": "a87839daaccaa9e6d5c734f1f618eae22996240d9e00906ceb3de621bb9e672c",
+      "src/server_runtime_orchestrator_test.v": "7ad4453bbf16f92c6be6b0e8c72091be1dd6715b7542fb2e7839500698afe9ef",
+      "desktop/host/protocol_probe_test.v": "0505b9c50886a78402d60a76c4fa64cd2590ba35ccaa5fa75bd8bc0f65287013",
+      "desktop/ci/test_protocol_probe.py": "9767f60f2d2f7c49d218ddabebb43d0180b84ac51190eb1cbb9cd2b32426e2b5",
+      "desktop/ci/test_ipv6_listener.py": "9937465a13c9c1cc88c62cbd33e01db72af1158a7469001072e88687a1125983"
+    }
+  },
+  "validation_environment": {
+    "host_commit": "e6cc46dd",
+    "host_branch": "feature/desktop-workbench",
+    "linux_summary": "warning: untracked cache is disabled on this system or location\nlocal-dev\nV 0.5.2 d13ccdd\n259620f",
+    "linux_compiler_path": "/home/guweigang/v/v",
+    "linux_gc": "none for unit tests",
+    "macOS_production_gc": "Boehm",
+    "state": "original dirty worktree preserved; no compiler source or network settings changed"
+  }
+}

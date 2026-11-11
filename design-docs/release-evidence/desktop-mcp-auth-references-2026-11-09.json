@@ -1,0 +1,282 @@
+{
+  "date": "2026-11-09",
+  "status": "this_batch_accepted",
+  "network_configuration_changed": false,
+  "v_old_used": false,
+  "compiler": "V 0.5.2 d13ccdd, -new-compiler, V_MACOS_V3_NO_FALLBACK=1",
+  "automatic_checks": {
+    "mac_native_auth": "passed 1 file",
+    "mac_native_protocol_and_tls": "passed 3 files; Bearer/Basic/API Key, IPv4/IPv6, trust/name/reflection",
+    "mac_python": "10 tests passed",
+    "ubuntu_python": "10 tests passed",
+    "skill_validator": "valid",
+    "target_process_environment": "actual /proc selection passed; ambiguous and unmatched instances rejected; restored selection passed, temporary process reaped",
+    "bounded_remote_envelope": "native current-V test passed: full embedded script executes via Python, inventory redacts credential, bound retained and oversized incompressible input rejected",
+    "known_source_and_profile_credential_mask": "native final envelope/redaction test file passed both bounded script execution and raw-TOML known secret redaction without Desktop environment expansion"
+  },
+  "linux_compiler": {
+    "used": false,
+    "reason": "local-dev compiler has pre-existing tracked veb changes from another task; left untouched. Remote product changes are Python and tested on existing Ubuntu runtime."
+  },
+  "dsh": {
+    "conversation": "验证vhttpd部署与调试Skill的实际调用",
+    "time": "2026-11-09 21:14 Asia/Shanghai",
+    "tool": "skill(name=\"vhttpd-debug\")",
+    "result": "actual installed latest body loaded; Basic/API Key fields, target process environment, refusal and recovery and mandatory TLS explained"
+  },
+  "scope": {
+    "authentication": [
+      "bearer",
+      "basic",
+      "api_key (X-API-Key)"
+    ],
+    "references": [
+      "env.NAME",
+      "env.NAME:-default",
+      "config.dir",
+      "paths.root"
+    ],
+    "environment": "uniquely matched same-user runtime process for exact target config path; no Desktop/SSH login fallback",
+    "remaining": [
+      "Digest/OAuth exchange/cookie/query/mTLS",
+      "external secret stores",
+      "advanced application protocols"
+    ],
+    "prerequisites": "Remote reference resolver: Linux /proc, Python 3.11+ with tomllib; only protocol probe/options path, not all remote operations"
+  },
+  "credentials_recorded": false,
+  "source_sha256": {
+    "desktop/host/protocol_probe.v": "e0a98eed493ca28da7c7ba38638b5f5b2761d771a8649e0608df7ddca9c2ca26",
+    "desktop/host/protocol_probe_auth.v": "97df05f28eb0ba89a5470e44c30ef9bd48824adf727cf902d6b702a1628611a4",
+    "desktop/host/mcp_inspect.v": "5b500f07fc3238ca49448b724f22dacebfe8d1749d05e4a72cbc0d2416c1f4dc",
+    "desktop/host/remote_scripts/protocol_probe.py": "c8f6e758b74b38b1aea3f780031041ee9e9fe1be3ca949496adb3ef3262cd6f8",
+    "desktop/host/remote_scripts/protocol_probe_config.py": "deb0d2f7fea74bf36134ab9735d0866c37aa7e4b6a74d3384451c414d7913cea",
+    "desktop/devmcp/protocol_probe.v": "440da5cebc962825885ff926e12c7685e798b6a1f6c776dbd5be25b5cce9a3eb",
+    "desktop/devmcp/relay_management.v": "8247bdabff71f904b0763facc6f5c7ac9a71b55b7f5bbaf24d3be4025cc9a737",
+    "desktop/devmcp/capabilities.v": "c80fd2a95a266051d65b7f4051aed6fce02d5e232944923ffcd57c9a8f0c3ccf",
+    "desktop/skills/vhttpd-debug/SKILL.md": "e604883763b24de9a4141686b1fb912d4bee3017020d36818264e348c21bf433",
+    "desktop/devmcp/server.v": "734fce29f5c98e22602d07cc1d67b14c4de8dd37197b4cb0822d8592249f9f26",
+    "desktop/host/protocol_probe_remote.v": "4a1fe945435f8fd9b85bb0fee2d2d9f6362d0bd280dd35324d6af374f61f947b",
+    "desktop/host/protocol_probe_remote_test.v": "f2c265a0bdd265977ed276450acfb546e75c04634d055177bd5ba0651338305a"
+  },
+  "source_snapshot_matches_workspace": true,
+  "build": {
+    "standard_release_checks": "passed",
+    "initial_nested_sandbox_attempt": "artifact generated, verifier sandbox creation blocked; not counted as accepted",
+    "final_release_attempt": "final envelope and known-source/profile redaction build passed all standard release gates",
+    "canonical": {
+      "canonical_app_updated": true,
+      "archive_updated": true,
+      "runtime_unchanged": true,
+      "desktop_sha256": "d578b2631522e270b41ee8731272af751adbbd4d74b94993eff1c9a4fa360d96",
+      "archive_sha256": "36dd2e76d16118a502e2b8bbda79359f43c9d2dc3186e2d538ffb446280a3d48",
+      "includes_bounded_envelope_fix": true,
+      "includes_known_source_and_profile_mask": true
+    },
+    "actual_qa_installed_sha256": {
+      "Contents/MacOS/vhttpd-workbench": "ae2c280ba289a4dc78aef90b45d0573f4805069c4a2246d5c0f4ecc2d14ba124",
+      "Contents/Resources/runtime/vhttpd": "567841c4f198b1a5e0233bc3f4e3cdd3c4f1d770e2b93a8ed9a710b9efb83518",
+      "Contents/Resources/runtime/skills/vhttpd-debug/SKILL.md": "e604883763b24de9a4141686b1fb912d4bee3017020d36818264e348c21bf433"
+    },
+    "runtime_changed": false,
+    "final_release_log": "desktop-final-redaction-release.log"
+  },
+  "workbuddy": {
+    "status": "accepted",
+    "queries": {
+      "context_get": "passed",
+      "guidance_get(debug)": "passed, source desktop_package",
+      "targets_list": "passed",
+      "target_probe_options_get": "initial bound failure fixed; actual corrected and final-package discovery passed"
+    },
+    "failure": "target_protocol_probe_transport_failed",
+    "root_cause": "combined script exceeds existing 16000-byte SSH stdin bound; target was not contacted for probe",
+    "fix": "compress embedded trusted implementation and request, retain bound and refuse oversized envelopes",
+    "final_acceptance": "passed actual final installed Desktop",
+    "transport_fix_discovery": {
+      "time": "2026-11-09 21:53 Asia/Shanghai",
+      "result": "passed actual context_get and target_probe_options_get once each",
+      "source": "remote_configuration",
+      "reference_resolution": "remote_runtime_environment",
+      "business_listeners": [
+        "web4",
+        "web6",
+        "secure6"
+      ],
+      "auth_types": [
+        "basic",
+        "api_key"
+      ],
+      "admin_excluded": true
+    },
+    "initial_protocol_matrix": {
+      "status": "not_accepted",
+      "actual_calls": 5,
+      "first_four": "TLS verified, HTTP404, no expected data or rejection; auth_configured did not prove authentication",
+      "wrong_name": "TLS rejection matched expectation",
+      "client_invalid_tool_name": "one nonexistent deferred tool name before third probe; did not reach Desktop/remote",
+      "fixture_cause": "fixed-response status was supplied as TOML numeric option while this existing runtime projects status from string options; pipeline did match but terminal status was zero",
+      "fixture_correction": "private dedicated fixture uses supported string status options; valid manifest and namespaced IDs retained; same instance restarted; credentials/paths unchanged",
+      "setup_preflight": [
+        200,
+        200,
+        401,
+        401
+      ],
+      "actual_client_rerun": "passed corrected five-case matrix at 22:04"
+    },
+    "corrected_protocol_matrix": {
+      "time": "2026-11-09 22:04 Asia/Shanghai",
+      "client": "WorkBuddy 5.9.3 / Hy4",
+      "server": "vhttpd_secure_qa",
+      "target_id": "4d9ea135d2b70f160ff47641",
+      "binding_revision": 1,
+      "actual_calls": 5,
+      "result": "all expected success/refusal results passed",
+      "cases": [
+        {
+          "path": "/basic",
+          "auth_ref": "basic",
+          "status": 200,
+          "tls_verified": true,
+          "body": "auth-reference-event"
+        },
+        {
+          "path": "/api",
+          "auth_ref": "api",
+          "status": 200,
+          "tls_verified": true,
+          "body": "auth-reference-event"
+        },
+        {
+          "path": "/basic",
+          "auth_ref": "",
+          "failure": "probe_authentication_rejected_401",
+          "stage": "authentication"
+        },
+        {
+          "path": "/wrong",
+          "auth_ref": "wrong",
+          "failure": "probe_authentication_rejected_401",
+          "stage": "authentication"
+        },
+        {
+          "path": "/basic",
+          "auth_ref": "basic",
+          "identity": "wrong.invalid",
+          "failure": "probe_tls_verification_failed",
+          "stage": "tls"
+        }
+      ],
+      "address_family": "ipv6",
+      "content_type": "text/plain",
+      "sse_acceptance": false,
+      "automatic_retries": false
+    },
+    "reference_refusals": {
+      "credential_missing": {
+        "actual_calls": 1,
+        "discovery": "missing excluded from usable refs, basic/api remain",
+        "result": "remote_probe_reference_unavailable",
+        "time": "2026-11-09 22:07 Asia/Shanghai"
+      },
+      "certificate_missing": {
+        "actual_calls": 1,
+        "discovery": "secure6 listener_certificate_available=false, auth refs unaffected",
+        "result": "remote_probe_reference_unavailable",
+        "time": "2026-11-09 22:11 Asia/Shanghai"
+      },
+      "runtime_stopped": {
+        "actual_calls": 1,
+        "result": "remote_probe_runtime_environment_unavailable",
+        "time": "2026-11-09 22:15 Asia/Shanghai"
+      },
+      "response_shape": "pre-connection tool errors, not structured stage/protocol responses",
+      "automatic_retries": false
+    },
+    "client": "WorkBuddy 5.9.3 / Hy4",
+    "conversation": "vhttpd MCP 验收 vjsx 项目测试",
+    "transport": "localhost Streamable HTTP; not public Relay acceptance",
+    "catalog_tools": 109,
+    "final_package_recovery": {
+      "time": "2026-11-09 22:29–22:30 Asia/Shanghai",
+      "discovery": "fresh context revision 1 and target options passed, refs and certificate restored",
+      "basic": {
+        "status": 200,
+        "body": "auth-reference-event",
+        "tls_verified": true,
+        "address_family": "ipv6",
+        "elapsed_ms": 26,
+        "time": "22:30"
+      },
+      "api_key": {
+        "status": 200,
+        "body": "auth-reference-event",
+        "tls_verified": true,
+        "address_family": "ipv6",
+        "elapsed_ms": 19
+      },
+      "known_source_mask": {
+        "status": 200,
+        "body": "auth-reference-event <vhttpd-secret-fb8a6509078129c4>",
+        "tls_verified": true,
+        "address_family": "ipv6",
+        "elapsed_ms": 34,
+        "expected_marker_independently_verified": true
+      },
+      "first_basic_attempt": "management confirmation timed out due delayed UI approval; not counted; fresh context and one explicitly authorized independent Basic GET passed",
+      "automatic_retries": false
+    },
+    "client_errors": [
+      "two nonexistent deferred tool names never reached Desktop or remote; not counted as probes",
+      "one final Basic management approval timeout not counted as pass"
+    ],
+    "final_revocation": {
+      "time": "2026-11-09 22:33 Asia/Shanghai",
+      "action": "actual Desktop quit via menu",
+      "actual_calls": 1,
+      "tool": "context_get using old connection",
+      "result": "Streamable HTTP error: Error POSTing to endpoint: {\"error\":\"internal_error\"}",
+      "context_returned": false,
+      "http_401_claimed": false,
+      "automatic_retries": false
+    }
+  },
+  "desktop_environment_contrast": {
+    "running_final_binary_verified": true,
+    "scoped_dummy_environment_active": {
+      "VHTTPD_PROBE_USER": true,
+      "VHTTPD_PROBE_PASSWORD": true,
+      "VHTTPD_PROBE_API_KEY": true
+    },
+    "raw_environment_recorded": false,
+    "scoped_dummy_environment_removed_after_acceptance": true
+  },
+  "client_tool_acceptance_passed": true,
+  "cleanup": {
+    "original_desktop_environment_restored": true,
+    "final_binary_retained": true,
+    "strict_signature": true,
+    "scoped_dummy_environment_removed": true,
+    "final_mcp_port_closed": true,
+    "actual_signed_binary_before_environment_restore": "ae2c280ba289a4dc78aef90b45d0573f4805069c4a2246d5c0f4ecc2d14ba124",
+    "actual_signed_binary_after_environment_restore": "75ad4ddb648e1c9f12be3fdc44f02262014a5579c819332a9e9f436c267021b9",
+    "system_network_configuration_changed": false,
+    "remote_original_config_sha256": "bcf1d19224489e1da6d37654463cf7cdb10ea94f6f0dacd3f54f040f99501c67",
+    "remote_instance_and_runtime_markers_preserved": true,
+    "remote_owned_fixture_archived": true,
+    "remote_test_ports_closed": [
+      63610,
+      63611,
+      63613,
+      63614
+    ],
+    "remote_test_runtime_stopped": true,
+    "actual_desktop_relaunched": true,
+    "actual_desktop_environment": "ipv6-probe-qa",
+    "actual_desktop_runtime": "stopped",
+    "actual_desktop_mcp": "off",
+    "workbuddy_temporary_connector_removed": true,
+    "workbuddy_original_miora_tools_retained": 8
+  }
+}
